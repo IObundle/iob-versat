@@ -1,0 +1,3 @@
+dumptcf -scope xtop_axi_tb:uut -overwrite -output xtop.tcf
+run
+dumptcf -end
