@@ -118,7 +118,7 @@ module xversat
 	       // Control bus interface
 	       .ctr_req(conf_req),
 	       .ctr_rnw(ctr_rnw),
-	       .ctr_addr(ctr_addr[`CONF_ADDR_W-1:0]),
+	       .ctr_addr(ctr_addr[`CONF_REG_ADDR_W-1:0]),
 	       .ctr_data(ctr_data_to_wr[`DADDR_W-1:0]),
 
 	       // configuration for engine

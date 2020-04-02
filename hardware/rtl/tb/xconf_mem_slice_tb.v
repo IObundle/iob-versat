@@ -6,22 +6,22 @@ module xconf_mem_slice_tb;
    parameter clk_period = 20;
 
    // Inputs
-   reg                                     clk;
-   reg 					   en;
+   reg                        clk;
+   reg                        en;
 
    // DMA
-   reg 					   dma_req;
-   reg 					   dma_rnw;
-   reg [`CONF_ADDR_W-1:0] 		   dma_addr;
-   reg [`DATA_W-1:0] 			   dma_data_in;
-   wire [`DATA_W-1:0] 			   dma_data_out;
+   reg 					      dma_req;
+   reg 					      dma_rnw;
+   reg [`CONF_REG_ADDR_W-1:0] dma_addr;
+   reg [`DATA_W-1:0]          dma_data_in;
+   wire [`DATA_W-1:0]         dma_data_out;
 
    // Configuration register
-   reg 					   conf_req;
-   reg 					   conf_rnw;
-   reg [`CONF_ADDR_W-1:0] 		   conf_addr;
-   reg [`DATA_W-1:0] 			   conf_data_in;
-   wire [`DATA_W-1:0] 			   conf_data_out;
+   reg                        conf_req;
+   reg                        conf_rnw;
+   reg [`CONF_REG_ADDR_W-1:0] conf_addr;
+   reg [`DATA_W-1:0]          conf_data_in;
+   wire [`DATA_W-1:0]         conf_data_out;
 
    // Instantiate the Unit Under Test (UUT)
    xconf_mem_slice uut (
@@ -60,7 +60,7 @@ module xconf_mem_slice_tb;
       dma_addr = 0;
       dma_data_in = 0;
 
-      for (i=0; i < 2**`CONF_ADDR_W-1; i=i+1) begin
+      for (i=0; i < 2**`CONF_REG_ADDR_W-1; i=i+1) begin
 	 #clk_period
 	 dma_addr = dma_addr + 1'b1;
 	 dma_data_in = dma_data_in + 1'b1;
@@ -76,7 +76,7 @@ module xconf_mem_slice_tb;
       dma_req = 1'b1;
       dma_addr = 0;
 
-      for (i=0; i < 2**`CONF_ADDR_W-1; i=i+1) begin
+      for (i=0; i < 2**`CONF_REG_ADDR_W-1; i=i+1) begin
 	 #clk_period
 	 dma_addr = dma_addr + 1'b1;
       end
@@ -84,7 +84,7 @@ module xconf_mem_slice_tb;
       #clk_period
       dma_req = 1'b0;
       dma_rnw = 1'bx;
-      dma_addr = `CONF_ADDR_W'bx;
+      dma_addr = `CONF_REG_ADDR_W'bx;
 
       // Testing configuration register write in all slice positions
       #clk_period
@@ -93,7 +93,7 @@ module xconf_mem_slice_tb;
       conf_addr = 0;
       conf_data_in = 0;
 
-      for (i=0; i < 2**`CONF_ADDR_W-1; i=i+1) begin
+      for (i=0; i < 2**`CONF_REG_ADDR_W-1; i=i+1) begin
 	 #clk_period
 	 conf_addr = conf_addr + 1'b1;
 	 conf_data_in = conf_data_in + 1'b1;
@@ -109,7 +109,7 @@ module xconf_mem_slice_tb;
       conf_req = 1'b1;
       conf_addr = 0;
 
-      for (i=0; i < 2**`CONF_ADDR_W-1; i=i+1) begin
+      for (i=0; i < 2**`CONF_REG_ADDR_W-1; i=i+1) begin
 	 #clk_period
 	 conf_addr = conf_addr + 1'b1;
       end
@@ -117,7 +117,7 @@ module xconf_mem_slice_tb;
       #clk_period
       conf_rnw = 1'bx;
       conf_req = 1'bx;
-      conf_addr = `CONF_ADDR_W'bx;
+      conf_addr = `CONF_REG_ADDR_W'bx;
 
       // End simulation
       #(2*clk_period)
