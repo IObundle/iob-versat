@@ -4,49 +4,49 @@
 `ifdef CONF_MEM
 
 module xconf_mem_slice (
-			input 			 clk,
-			input 			 en,
+			input                        clk,
+			input                        en,
 
 			// Flags
-			input 			 databus_req,
-			input 			 databus_rnw,
-			input 			 conf_req,
-			input 			 conf_rnw,
+			input                        databus_req,
+			input                        databus_rnw,
+			input                        conf_req,
+			input                        conf_rnw,
 
 			// Adresses
-			input [`CONF_ADDR_W-1:0] databus_addr,
-			input [`CONF_ADDR_W-1:0] conf_addr,
+			input [`CONF_REG_ADDR_W-1:0] databus_addr,
+			input [`CONF_REG_ADDR_W-1:0] conf_addr,
 
 			// Data in/out
-			input [`DATA_W-1:0] 	 databus_data_in,
-			output [`DATA_W-1:0] 	 databus_data_out,
-			input [`DATA_W-1:0] 	 conf_data_in,
-			output [`DATA_W-1:0] 	 conf_data_out
+			input [`DATA_W-1:0]          databus_data_in,
+			output [`DATA_W-1:0]         databus_data_out,
+			input [`DATA_W-1:0]          conf_data_in,
+			output [`DATA_W-1:0]         conf_data_out
 			);
 
 `ifndef ASIC
-   reg [`DATA_W-1:0] 				 conf_mem_slice [2**`CONF_ADDR_W-1:0];
+   reg [`DATA_W-1:0]                     conf_mem_slice [2**`CONF_REG_ADDR_W-1:0];
 
-   reg [`DATA_W-1:0] 				 databus_data_out_int;
-   reg [`DATA_W-1:0] 				 conf_data_out_int;
+   reg [`DATA_W-1:0]                     databus_data_out_int;
+   reg [`DATA_W-1:0]                     conf_data_out_int;
 `else
-   wire 					 en_int;
-   wire 					 we;
+   wire                                  en_int;
+   wire                                  we;
    
-   wire [`CONF_ADDR_W-1:0] 			 addr;
+   wire [`CONF_REG_ADDR_W-1:0] 			 addr;
    
-   wire [`DATA_W-1:0] 				 data_in;
-   wire [`DATA_W-1:0] 				 data_out;
+   wire [`DATA_W-1:0]                    data_in;
+   wire [`DATA_W-1:0]                    data_out;
 
-   wire [`DATA_W-1:0] 				 databus_data_out_int;
-   wire [`DATA_W-1:0] 				 conf_data_out_int;
+   wire [`DATA_W-1:0]                    databus_data_out_int;
+   wire [`DATA_W-1:0]                    conf_data_out_int;
 `endif
    
-   wire 					 en_databus;
-   wire 					 en_conf;
+   wire                                  en_databus;
+   wire                                  en_conf;
    
-   wire 					 wr_databus;
-   wire 					 wr_conf;
+   wire                                  wr_databus;
+   wire                                  wr_conf;
 
    assign databus_data_out = databus_data_out_int;
    assign conf_data_out = conf_data_out_int;

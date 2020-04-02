@@ -7,25 +7,25 @@
 
 module xaddr_decoder (
 		      // data engine
-		      output reg 	       eng_req,
+		      output reg               eng_req,
 		      input [`DATA_W-1:0]      eng_data_to_rd,
 
 		      // configuration module (write only)
-		      output reg 	       conf_req,
+		      output reg               conf_req,
 
 		      // bus request, address and data to be read
-		      input 		       clk,
-		      input 		       rst,
-		      input 		       ctr_req,
-		      input 		       ctr_rnw,
+		      input                    clk,
+		      input                    rst,
+		      input                    ctr_req,
+		      input                    ctr_rnw,
 		      input [`DATA_W-1:0]      data_to_wr,
 		      input [`ADDR_W-1:0]      ctr_addr,
 		      output reg [`DATA_W-1:0] data_to_rd
 		      );
 
    //Signals
-   reg [31:0]         dummy_reg;
-   reg                dummy_reg_en;
+   reg [31:0]                          dummy_reg;
+   reg                                 dummy_reg_en;
 
    //compute requests
    always @ * begin
@@ -33,9 +33,9 @@ module xaddr_decoder (
       eng_req = 1'b0;
       dummy_reg_en = 0;
 
-      if (`DUMMY_REG == (ctr_addr & ({`ADDR_W{1'b1}}<<`CONF_ADDR_W))) begin
+      if (`DUMMY_REG == (ctr_addr & ({`ADDR_W{1'b1}}<<`CONF_REG_ADDR_W))) begin
          dummy_reg_en = ctr_req & ~ctr_rnw;
-      end else if (`CONF_BASE == (ctr_addr & ({`ADDR_W{1'b1}}<<`CONF_ADDR_W))) begin
+      end else if (`CONF_BASE == (ctr_addr & ({`ADDR_W{1'b1}}<<`CONF_REG_ADDR_W))) begin
 	       conf_req = ctr_req;
       end else if (`ENG_BASE == (ctr_addr & ({`ADDR_W{1'b1}}<<(`ENG_ADDR_W)))) begin
          eng_req = ctr_req;
@@ -48,9 +48,9 @@ module xaddr_decoder (
    always @ * begin
       data_to_rd = `DADDR_W'd0;
       
-      if (`DUMMY_REG == (ctr_addr & ({`ADDR_W{1'b1}}<<`CONF_ADDR_W))) begin
+      if (`DUMMY_REG == (ctr_addr & ({`ADDR_W{1'b1}}<<`CONF_REG_ADDR_W))) begin
         data_to_rd = dummy_reg;
-      end else if (`CONF_BASE == (ctr_addr & ({`ADDR_W{1'b1}}<<`CONF_ADDR_W))) begin
+      end else if (`CONF_BASE == (ctr_addr & ({`ADDR_W{1'b1}}<<`CONF_REG_ADDR_W))) begin
      data_to_rd = `DATA_W'd0;
       end else if (`ENG_BASE == (ctr_addr & ({`ADDR_W{1'b1}}<<(`ENG_ADDR_W)))) begin
          data_to_rd = eng_data_to_rd;

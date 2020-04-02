@@ -1,5 +1,5 @@
 // Address width
-`define CONF_ADDR_W 8
+`define CONF_REG_ADDR_W 8
 
 // Total conf_reg bits
 `define CONF_BITS (2*`nMEM*`MEMP_CONF_BITS + `nALU*`ALU_CONF_BITS + `nALULITE*`ALULITE_CONF_BITS + `nMUL*`MUL_CONF_BITS + `nMULADD*`MULADD_CONF_BITS + `nBS*`BS_CONF_BITS)
@@ -39,7 +39,7 @@
 `define CONF_MULADD0 (`CONF_MUL0  + `nMUL*`MUL_CONF_OFFSET)
 `define CONF_BS0 (`CONF_MULADD0  + `nMULADD*`MULADD_CONF_OFFSET)
 // Configuration cache memory
-`define CONF_MEM `CONF_ADDR_W'h40
+`define CONF_MEM `CONF_REG_ADDR_W'h40
 
 // Total conf_reg addresses
 `define CONF_REG_OFFSET (`CONF_BS0  + `nBS*`BS_CONF_OFFSET)

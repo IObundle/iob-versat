@@ -10,25 +10,25 @@
 `include "xbsdefs.vh"
 
 module xconf (
-        input                     clk,
-        input                     rst,
+              input                        clk,
+              input                        rst,
         
-        // Control bus interface
-        input                     ctr_req,
-        input                     ctr_rnw,
-        input [`CONF_ADDR_W-1:0]    ctr_addr,
-        input [`DADDR_W-1:0]      ctr_data,
+              // Control bus interface
+              input                        ctr_req,
+              input                        ctr_rnw,
+              input [`CONF_REG_ADDR_W-1:0] ctr_addr,
+              input [`DADDR_W-1:0]         ctr_data,
         
-        // configuration output to data engine
-        output [`CONF_BITS-1:0]   conf_out
-        );
+              // configuration output to data engine
+              output [`CONF_BITS-1:0]      conf_out
+              );
 
-   reg 				       conf_reg_req;
+   reg                                     conf_reg_req;
 
 `ifdef CONF_MEM_USE
-   reg 				       conf_mem_req;
-   wire 			       conf_ld;
-   wire [`CONF_BITS-1:0] 	       conf_from_mem;
+   reg                                     conf_mem_req;
+   wire                                    conf_ld;
+   wire [`CONF_BITS-1:0]                   conf_from_mem;
 `endif
    
 
@@ -41,7 +41,7 @@ module xconf (
      if (ctr_addr < `CONF_REG_OFFSET)  
         conf_reg_req = ctr_req;
 `ifdef CONF_MEM_USE
-     else if(`CONF_MEM == (ctr_addr & ({`CONF_ADDR_W{1'b1}}<<`CONF_MEM_ADDR_W)))
+     else if(`CONF_MEM == (ctr_addr & ({`CONF_REG_ADDR_W{1'b1}}<<`CONF_MEM_ADDR_W)))
         conf_mem_req = ctr_req;
 `endif
      else if (ctr_req)
