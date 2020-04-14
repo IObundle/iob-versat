@@ -1,62 +1,66 @@
 `timescale 1ns/1ps
-`include "xdefs.vh"
-`include "xdata_engdefs.vh"
+`include "xversat.vh"
+
 `include "xmuladddefs.vh"
 
 /*
- Module: Muladd
 
  Description: multiply (accumulate) functions
 
  */
 
 module xmuladd (
-        input                         rst,
-        input                         clk,
-        
-        // Data IO
-        input [`N*`DATA_W-1:0]        data_bus,
-        input [`N*`DATA_W-1:0]        data_bus_prev,
-        output [`DATA_W-1:0]          result,
-        
-        // Configuration data
-        input [`MULADD_CONF_BITS-1:0] configdata
-        );
+                input                         rst,
+                input                         clk,
+                //flow interface
+                input [2*`N*`DATA_W-1:0]      flow_in,
+                output [2*`DATA_W-1:0]        flow_out,
 
-   reg                                rst_reg;
+                // config interface
+                input [`MULADD_CONF_BITS-1:0] configdata
+                );
 
-   wire [`MULADD_FNS_W:0] 			      opcode;
-   wire signed [2*`DATA_W-1:0] 			  result_mult;
-   reg [2*`DATA_W-1:0]                result64;
-   reg [2*`DATA_W-1:0]                acc;
+   //flow interface
+   wire [`N*`DATA_W-1:0]          data_bus_prev = flow_in[2*`N*`DATA_W-1:`N*`DATA_W];
+   
+   reg signed [`DATA_W-1:0]       result;
+   
+   assign flow_out = result;
+
+   reg                                        rst_reg;
+
+   wire [`MULADD_FNS_W:0]                     opcode;
+   wire signed [2*`DATA_W-1:0]                result_mult;
+   reg [2*`DATA_W-1:0]                        result64;
+   reg [2*`DATA_W-1:0]                        acc;
 
    //data
-   wire signed [`DATA_W-1:0] 			   op_a;
-   wire signed [`DATA_W-1:0] 			   op_b;
-   wire [`DATA_W-1:0]                op_o;
+   wire signed [`DATA_W-1:0]                  op_a;
+   wire signed [`DATA_W-1:0]                  op_b;
+   wire [`DATA_W-1:0]                         op_o;
 
    //config data
-   wire [`N_W-1: 0] 				         sela;
-   wire [`N_W-1: 0] 				         selb;
-   wire [`N_W-1: 0] 				         selo;
+   wire [`N_W-1: 0]                           sela;
+   wire [`N_W-1: 0]                           selb;
+   wire [`N_W-1: 0]                           selo;
 
    // enabled operands and result
-   wire 					                   enablea;
-   wire 					                   enableb;
-   wire 					                   enableo;
-   wire 					                   enabled;
+   wire                                       enablea;
+   wire                                       enableb;
+   wire                                       enableo;
+   wire                                       enabled;
 
    // register muladd control
-   reg [`DATA_W-1:0]                 op_o_reg;
+   reg [`DATA_W-1:0]                          op_o_reg;
 
    // accumulator load signal
-   wire                              ld_acc;
+   wire                                       ld_acc;
    //combinatorial
-   wire                              ld_acc0;
+   wire                                       ld_acc0;
    //pipelined
 `ifndef MULADD_COMB
-   reg                               ld_acc1;
-   reg                               ld_acc2;
+   reg                                        ld_acc1;
+   reg                                        ld_acc2;
 `endif
 
 
@@ -72,7 +76,7 @@ module xmuladd (
                 .data_bus(data_bus),
                 .data_bus_prev(data_bus_prev),
                 .data_out(op_a),
-		            .enabled(enablea)
+		.enabled(enablea)
  		);
 
    xinmux muxb (
@@ -80,7 +84,7 @@ module xmuladd (
                 .data_bus(data_bus),
                 .data_bus_prev(data_bus_prev),
                 .data_out(op_b),
-		            .enabled(enableb)
+		.enabled(enableb)
 		);
 
    xinmux muxo (
@@ -88,7 +92,7 @@ module xmuladd (
                 .data_bus(data_bus),
                 .data_bus_prev(data_bus_prev),
                 .data_out(op_o),
-		            .enabled(enableo)
+		.enabled(enableo)
 		);
 
    // compute output enable
@@ -101,19 +105,19 @@ module xmuladd (
    always @ (posedge clk)
      if (rst_reg) begin
         acc <= {2*`DATA_W{1'b0}};
-	      op_o_reg <= `DATA_W'd0;
+     op_o_reg <= `DATA_W'd0;
 `ifndef MULADD_COMB                             //pipelined
-	ld_acc1 <= 1'b0;
-	ld_acc2 <= 1'b0;
- `endif
-    end else if (enabled) begin
-	acc <= result64;
-	op_o_reg <= op_o;
+     ld_acc1 <= 1'b0;
+     ld_acc2 <= 1'b0;
+`endif
+  end else if (enabled) begin
+     acc <= result64;
+     op_o_reg <= op_o;
 `ifndef MULADD_COMB                             //pipelined
-	ld_acc1 <= ld_acc0;
-	ld_acc2 <= ld_acc1;
- `endif
-    end
+     ld_acc1 <= ld_acc0;
+     ld_acc2 <= ld_acc1;
+`endif
+  end
 
    assign ld_acc0 = (op_o_reg==`DATA_W'd0);
 
@@ -182,7 +186,7 @@ module xmuladd (
 	  result64 =  result_mult<<32;
 
 	`MULADD_MUL_LOW_MACC: begin
-		result64 = acc + (result_mult << 32);
+	   result64 = acc + (result_mult << 32);
 	end
 
 	default: //MACC

@@ -1,6 +1,6 @@
 `timescale 1ns / 1ps
-`include "xdefs.vh"
-`include "xdata_engdefs.vh"
+`include "xversat.vh"
+
 `include "xconfdefs.vh"
 `include "xmemdefs.vh"
 `include "xaludefs.vh"

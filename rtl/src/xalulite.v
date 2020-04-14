@@ -1,51 +1,68 @@
 `timescale 1ns / 1ps
-`include "xdefs.vh"
-`include "xdata_engdefs.vh"
+`include "xversat.vh"
+
 `include "xalulitedefs.vh"
 
+
+/*
+
+ Description: simpler ALU with feedback
+
+ */
+
+
+
 module xalulite (
-        // Control
-        input 				                   clk,
-        input                            rst,
-        
-        // Data
-        input [`N*`DATA_W-1:0] 		       data_bus,
-        input [`N*`DATA_W-1:0] 		       data_bus_prev,
-        output reg signed [`DATA_W-1:0]  result,
-        
-        // Config data
-        input [`ALULITE_CONF_BITS - 1:0] configdata
-        );
+                 input                            clk,
+                 input                            rst,
 
-   reg 					     rst_reg;
-   reg 					     rst_reg2;
-   wire 				     rst_int;
+                 //flow interface
+                 input [2*`N*`DATA_W-1:0]         flow_in,
+                 output [2*`DATA_W-1:0]           flow_out,
 
-   reg [`DATA_W:0]   ai;
-   reg [`DATA_W:0]   bz;
-   wire [`DATA_W:0]  temp_adder;
-   wire [5:0] 		   data_out_clz_i;
-   reg 					     cin;
+                 // config interface
+                 input [`ALULITE_CONF_BITS - 1:0] configdata
+                 );
 
-   reg signed [`DATA_W-1:0] 		     result_int;
-
-   wire [`N_W-1: 0] 			     sela;
-   wire [`N_W-1: 0] 			     selb;
-
-   wire [`DATA_W-1:0]          op_a;
-   wire [`DATA_W-1:0]          op_b;
-   reg                         op_a_msb;
-   reg 					               op_b_msb;
-   wire [`DATA_W-1:0] 			   op_a_int;
-   reg [`DATA_W-1:0] 			     op_a_reg;
-   reg [`DATA_W-1:0] 			     op_b_reg;
-   wire [`ALULITE_FNS_W-2:0]   fns;
-   wire                        self_loop;
+   //flow interface
+   wire [`N*`DATA_W-1:0]          data_bus_prev = flow_in[2*`N*`DATA_W-1:`N*`DATA_W];
+   
+   reg signed [`DATA_W-1:0]       result;
+   
+   assign flow_out = result;
 
 
-   wire 				     enablea;
-   wire 				     enableb;
-   wire 				     enabled;
+
+
+   reg                                            rst_reg;
+   reg                                            rst_reg2;
+   wire                                           rst_int;
+
+   reg [`DATA_W:0]                                ai;
+   reg [`DATA_W:0]                                bz;
+   wire [`DATA_W:0]                               temp_adder;
+   wire [5:0]                                     data_out_clz_i;
+   reg                                            cin;
+
+   reg signed [`DATA_W-1:0]                       result_int;
+
+   wire [`N_W-1: 0]                               sela;
+   wire [`N_W-1: 0]                               selb;
+
+   wire [`DATA_W-1:0]                             op_a;
+   wire [`DATA_W-1:0]                             op_b;
+   reg                                            op_a_msb;
+   reg                                            op_b_msb;
+   wire [`DATA_W-1:0]                             op_a_int;
+   reg [`DATA_W-1:0]                              op_a_reg;
+   reg [`DATA_W-1:0]                              op_b_reg;
+   wire [`ALULITE_FNS_W-2:0]                      fns;
+   wire                                           self_loop;
+
+
+   wire                                           enablea;
+   wire                                           enableb;
+   wire                                           enabled;
 
    // Unpack config data
    assign sela = configdata[`ALULITE_CONF_BITS-1 -: `N_W];
@@ -55,19 +72,19 @@ module xalulite (
 
    // Input selection
    xinmux muxa (
-    .sel(sela),
-    .data_bus_prev(data_bus_prev),
-    .data_bus(data_bus),
-    .data_out(op_a),
-    .enabled(enablea)
+                .sel(sela),
+                .data_bus_prev(data_bus_prev),
+                .data_bus(data_bus),
+                .data_out(op_a),
+                .enabled(enablea)
 		);
 
    xinmux muxb (
-    .sel(selb),
-    .data_bus_prev(data_bus_prev),
-    .data_bus(data_bus),
-    .data_out(op_b),
-    .enabled(enableb)		
+                .sel(selb),
+                .data_bus_prev(data_bus_prev),
+                .data_bus(data_bus),
+                .data_out(op_b),
+                .enabled(enableb)		
 		);
 
    assign enabled = enablea & enableb;
@@ -108,18 +125,18 @@ module xalulite (
 	   result_int = op_b_reg;
 
 	   if(~op_a_reg[31]) begin
-	     if(self_loop)
-	       result_int = result;
-	     else
-	       result_int = `DATA_W'b0;
+	      if(self_loop)
+	        result_int = result;
+	      else
+	        result_int = `DATA_W'b0;
 	   end
 	end
 	`ALULITE_SUB : begin
 	end
 	`ALULITE_ADD : begin
 	   if(self_loop) begin
-	     if(op_a_reg[31])
-	       result_int = op_b_reg;
+	      if(op_a_reg[31])
+	        result_int = op_b_reg;
 	   end
 	end
 	`ALULITE_MAX : begin
@@ -130,8 +147,8 @@ module xalulite (
            end
 
 	   if(self_loop) begin
-	     if(op_a_reg[31])
-	       result_int = result;
+	      if(op_a_reg[31])
+	        result_int = result;
 	   end
 	end
 	`ALULITE_MIN : begin
@@ -142,8 +159,8 @@ module xalulite (
            end
 
 	   if(self_loop) begin
-	     if(op_a_reg[31])
-	       result_int = result;
+	      if(op_a_reg[31])
+	        result_int = result;
 	   end
 	end
 	default : begin

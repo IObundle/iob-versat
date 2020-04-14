@@ -1,43 +1,51 @@
 `timescale 1ns / 1ps
-`include "xdefs.vh"
-`include "xdata_engdefs.vh"
+`include "xversat.vh"
+
 `include "xbsdefs.vh"
 
 module xbs(
-      //control 
-      input 			                    clk,
-      input 			                    rst,
-      
-      //data 
-      input [`N*`DATA_W-1:0] 	        data_bus,
-      input [`N*`DATA_W-1:0] 	        data_bus_prev,
-      output reg signed [`DATA_W-1:0] result,
-      
-      //config data
-      input [`BS_CONF_BITS-1:0] 	    configdata
-      );
+           //control 
+           input                     clk,
+           input                     rst,
+
+           //flow interface
+           input [2*`N*`DATA_W-1:0]  flow_in,
+           output [2*`DATA_W-1:0]    flow_out,
+
+           //config data
+           input [`BS_CONF_BITS-1:0] configdata
+           );
    
-   reg 					              rst_reg;
+   //flow interface
+   wire [`N*`DATA_W-1:0]          data_bus_prev = flow_in[2*`N*`DATA_W-1:`N*`DATA_W];
+   
+   reg signed [`DATA_W-1:0]       result;
+   
+   assign flow_out = result;
+
+
+
+   reg                               rst_reg;
 
    // extract the 2 inputs
-   wire signed [`DATA_W-1:0] 	data_in; //data to shift 
-   wire [`DATA_W-1:0] 			  shift; //shift value
+   wire signed [`DATA_W-1:0]         data_in; //data to shift 
+   wire [`DATA_W-1:0]                shift; //shift value
    
-   reg [`DATA_W-1:0] 			    res;
+   reg [`DATA_W-1:0]                 res;
 
    //wiring config data
-   wire [`N_W-1: 0] 			    seldata;
-   wire [`N_W-1: 0] 			    selshift;
-   wire [`BS_FNS_W-1:0] 		  fns;
+   wire [`N_W-1: 0]                  seldata;
+   wire [`N_W-1: 0]                  selshift;
+   wire [`BS_FNS_W-1:0]              fns;
 
    //enables
-   wire 				   enablea;
-   wire 				   enables;
-   wire 				   enabled;
+   wire                              enablea;
+   wire                              enables;
+   wire                              enabled;
 
    // register input mux outputs
-   reg [`DATA_W-1:0] 			    data_in_reg;
-   reg [`DATA_W-1:0] 			    shift_reg;
+   reg [`DATA_W-1:0]                 data_in_reg;
+   reg [`DATA_W-1:0]                 shift_reg;
 
    
    //unpack config bits
@@ -71,8 +79,8 @@ module xbs(
 
    always @ (posedge clk)
      if (rst_reg) begin
-	      data_in_reg <= `DATA_W'h00000000;
-	      shift_reg <= `DATA_W'h00000000;
+	data_in_reg <= `DATA_W'h00000000;
+	shift_reg <= `DATA_W'h00000000;
      end else begin
         data_in_reg <= data_in;
         shift_reg <= shift;
@@ -83,7 +91,7 @@ module xbs(
         `BS_SHR_A: res = data_in_reg >>> shift_reg[4:0];
         `BS_SHR_L: res = data_in_reg >> shift_reg[4:0];
         `BS_SHL: res = data_in_reg << shift_reg[4:0];
-	    default: res = data_in_reg;
+	default: res = data_in_reg;
       endcase
    end
 

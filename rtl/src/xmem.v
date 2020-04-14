@@ -1,6 +1,6 @@
 `timescale 1ns / 1ps
-`include "xdefs.vh"
-`include "xdata_engdefs.vh"
+`include "xversat.vh"
+
 `include "xmemdefs.vh"
 
 module xmem #(
@@ -31,15 +31,24 @@ module xmem #(
     input                         databus_mem_req,
 
     //input / output data
-    input [`N*`DATA_W-1:0]        data_bus,
-    input [`N*`DATA_W-1:0]        data_bus_prev,
-    output [`DATA_W-1:0]          outA,
-    output [`DATA_W-1:0]          outB,
+    input [2*`N*`DATA_W-1:0]      flow_in,
+    output [2*`DATA_W-1:0]        flow_out,
 
     //configurations
     input [2*`MEMP_CONF_BITS-1:0] config_bits
     );
 
+   //flow interface
+   wire [`N*`DATA_W-1:0]          data_bus_prev = flow_in[2*`N*`DATA_W-1:`N*`DATA_W];
+   
+   wire [`DATA_W-1:0]             outA;
+   wire [`DATA_W-1:0]             outB;
+   
+   assign flow_out = {outA, outB};
+
+
+
+   
    function [`DADDR_W-1:0] reverseBits;
       input [`DADDR_W-1:0]        word;
       integer                     i;
