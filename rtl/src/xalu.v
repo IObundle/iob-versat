@@ -7,7 +7,7 @@ module xalu (
              input                        rst, 
 
              //flow interface
-             input [2*`N*`DATA_W-1:0]     flow_in,
+             input [2*`DATABUS_W-1:0]     flow_in,
              output reg [`DATA_W-1:0]     flow_out,
 
              // config interface

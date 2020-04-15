@@ -36,9 +36,9 @@
 `define ADDR_W 16
 
 // Number of data bus entries
-`define N         (`nMEM + `nALU + `nALULITE + `nMUL + `nMULADD + `nBS)
+`define N         (2 + 2*`nMEM + `nALU + `nALULITE + `nMUL + `nMULADD + `nBS)
 // Number of bits required for N
-`define N_W       $clog2(`N)
+`define N_W       ($clog2(`N)+1)
 
 // Data bus size
 `define DATABUS_W (`N *`DATA_W) //internal data bus

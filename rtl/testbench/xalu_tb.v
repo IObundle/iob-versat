@@ -1,24 +1,19 @@
 `timescale 1ns / 1ps
-`include "xdefs.vh"
 `include "xaludefs.vh"
+`include "xversat.vh"
 
 module xalu_tb;
    parameter clk_per = 10;
    integer k;
    integer 	  file;
+
    // control 
    reg 		  clk;
    reg 		  rst;
    
-   //controller interface
-   reg 		  rw_req;
-   reg 		  rw_rnw;
-   reg [`DATA_W-1:0] rw_data_to_wr;
-
    //data
-   wire [`N*`DATA_W-1:0] data_bus;
-   wire [31:0] 		alu_result;
-   wire 		c_out;
+   wire [2*`DATABUS_W-1:0] data_bus;
+   wire [`DATA_W-1:0]    alu_result;
    
    //config data
    wire [`ALU_CONF_BITS - 1:0] configdata;
@@ -26,12 +21,8 @@ module xalu_tb;
    xalu uut (
              .clk(clk),
              .rst(rst),
-	     .rw_req(rw_req),
-	     .rw_rnw(rw_rnw),
-   	     .rw_data_to_wr(rw_data_to_wr),
-	     .data_bus(data_bus),
-	     .alu_result(alu_result),
-	     .c_out(c_out),
+	     .flow_in(data_bus),
+	     .flow_out(alu_result),
 	     .configdata(configdata)
 	     );
 
@@ -43,15 +34,13 @@ module xalu_tb;
 
    integer 			err_tb ;
 
+   //use least significant DATABUS_W bits
    assign configdata[`ALU_FNS_W-1:0]= alu_fns;
-   assign configdata[`ALU_CONF_BITS-1 -:`N_W]=`s0;
-   assign configdata[`ALU_CONF_BITS-`N_W-1-:`N_W]=`s1;
+   assign configdata[`ALU_CONF_BITS-1 -:`N_W] = 0; //s0
+   assign configdata[`ALU_CONF_BITS-`N_W-1-:`N_W] = 1; //s1
+   assign data_bus[`DATA_S0_B -: `DATA_W]= opa_comp;
+   assign data_bus[`DATA_S1_B -: `DATA_W]= opb_comp;
 
-   assign data_bus[`DATABUS_W-`DATA_W*(`s0-1)-1 -: `DATA_W]= opa_comp;
-   assign data_bus[`DATABUS_W-`DATA_W*(`s1-1)-1 -: `DATA_W]= opb_comp;
-
-
-   
    initial begin
       
 `ifdef DEBUG
@@ -63,23 +52,13 @@ module xalu_tb;
       
       err_tb=0;
       clk = 0;
-      rw_req=0;
-      rw_rnw=0;
       k=-1;
-      rw_data_to_wr=32'h0000;
       rst=1;
 
-      #(clk_per/2+1);
       //reset tested, turn off reset
-      rst=0;
-
-      //rw_req=1 and rw_rnw=0
-      rw_req=1;
-      rw_data_to_wr=32'd20;
       #clk_per
-        rst=0;
-      rw_rnw=1;
-
+      rst=0;
+      #clk_per
       opa_comp = 25;
       opb_comp = 26;
       
@@ -105,17 +84,17 @@ module xalu_tb;
       if (rst == 1'b1)
         result_compare=32'd0;
       else
-        if ( rw_req & ~rw_rnw )
-          result_compare <= rw_data_to_wr;
-        else
           case(alu_fns)
-            `ALU_LOGIC_OR:        result_compare <= opa_comp | opb_comp ;
+            `ALU_OR:        result_compare <= opa_comp | opb_comp ;
 
-            `ALU_LOGIC_AND:       result_compare <= (opa_comp & opb_comp ) ;
+            `ALU_AND:       result_compare <= (opa_comp & opb_comp ) ;
 	    
-            `ALU_LOGIC_ANDN:      result_compare <= (opa_comp & ~opb_comp ) ;
+	    `ALU_MUX: begin
+	      result_compare <= opb_comp;
+	      if(opa_comp[31]) result_compare <= `DATA_W'b0;
+	    end
 
-            `ALU_LOGIC_XOR:       result_compare <= (opa_comp ^ opb_comp ) ;
+            `ALU_XOR:       result_compare <= (opa_comp ^ opb_comp ) ;
 
             `ALU_SEXT8:           result_compare[31:0] <= {{24{opa_comp[7]}}, opa_comp[7:0]}; 
             
@@ -181,6 +160,8 @@ module xalu_tb;
         $display ("Expected value %d, Got Value %d", result_compare, alu_result);
         err_tb = 1;
      end
+     else if(k > 0) 
+       $display("Operation number %d is correct. Expected %d, got %d", k, result_compare, alu_result);
 
    always
      #(clk_per/2)  clk =  ~ clk;
