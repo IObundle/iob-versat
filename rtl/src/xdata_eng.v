@@ -13,44 +13,43 @@
 
 `timescale 1ns / 1ps
 `include "xversat.vh"
-
-`include "xconfdefs.vh"
 `include "xmemdefs.vh"
 `include "xaludefs.vh"
 `include "xalulitedefs.vh"
 `include "xmuldefs.vh"
 `include "xmuladddefs.vh"
 `include "xbsdefs.vh"
+`include "xconfdefs.vh"
 
 module xdata_eng (
-                  input                        clk,
-                  input                        rst,
+                  input                           clk,
+                  input                           rst,
 
                   // control interface
-                  input                        ctr_valid,
-                  input                        ctr_we,
-                  input [`nMEM_W+`DADDR_W:0]   ctr_addr,
-                  input [`DATA_W-1:0]          ctr_data_in,
-                  output reg [`DATA_W-1:0]     ctr_data_out,
+                  input                           ctr_valid,
+                  input                           ctr_we,
+                  input [`nMEM_W+`MEM_ADDR_W:0]   ctr_addr,
+                  input [`DATA_W-1:0]             ctr_data_in,
+                  output reg [`DATA_W-1:0]        ctr_data_out,
 
                   // data interface
-                  input                        data_valid,
-                  input                        data_we,
-                  input [`nMEM_W+`DADDR_W-1:0] data_addr,
-                  input [`DATA_W-1:0]          data_data_in,
-                  output reg [`DATA_W-1:0]     data_data_out,
+                  input                           data_valid,
+                  input                           data_we,
+                  input [`nMEM_W+`MEM_ADDR_W-1:0] data_addr,
+                  input [`DATA_W-1:0]             data_data_in,
+                  output reg [`DATA_W-1:0]        data_data_out,
 
                   //flow interface
-                  input [`DATABUS_W-1:0]       flow_in, 
-                  output [`DATABUS_W-1:0]      flow_out,          
+                  input [`DATABUS_W-1:0]          flow_in, 
+                  output [`DATABUS_W-1:0]         flow_out, 
 
                   // configuration bus
-                  input [`CONF_BITS-1:0]       config_bus
+                  input [`CONF_BITS-1:0]          config_bus
 
                   );
 
    //WIDE ENGINE DATA BUS
-   wire [2*`DATABUS_W-1:0]                     data_bus;
+   wire [2*`DATABUS_W-1:0]                        data_bus;
    
    //assign special data bus entries: constants 0 and 1
    assign data_bus[`DATA_S0_B -: `DATA_W] = `DATA_W'd0; //zero constant
@@ -66,18 +65,18 @@ module xdata_eng (
    //
 
    //select control/status register or data memory 
-   reg                                         control_valid;
-   reg [`nMEM-1:0]                             mem_valid;
+   reg                                            control_valid;
+   reg [`nMEM-1:0]                                mem_valid;
    
    always @ * begin
       integer j;
       control_valid = 1'b0;
       mem_valid = `nMEM'b0;
-      if (ctr_addr[`nMEM_W+`DADDR_W])
+      if (ctr_addr[`nMEM_W+`MEM_ADDR_W])
         control_valid = ctr_valid;
       else
         for(j=0; j<`nMEM; j=j+1)
-	  if ( j[`nMEM_W-1:0] == ctr_addr[`nMEM_W+`DADDR_W -: `nMEM_W] )
+	  if ( j[`nMEM_W-1:0] == ctr_addr[`nMEM_W+`MEM_ADDR_W -: `nMEM_W] )
 	    mem_valid[j] = ctr_valid;
    end
 
@@ -101,7 +100,7 @@ module xdata_eng (
    end
 
 
-  // write
+   // write
    always @ (posedge rst, posedge clk)
      if(rst) 
        ctr_reg <= 1'b0;
@@ -118,12 +117,12 @@ module xdata_eng (
    //
 
    // address register
-   reg [`nMEM_W-1:0]                           data_addr_reg;
+   reg [`nMEM_W-1:0] data_addr_reg;
    always @ (posedge rst, posedge clk) begin
       if (rst) begin
-	 data_addr_reg <= `nMEM_W'd0;
+	 data_addr_reg <= 0;
       end else begin
-	 data_addr_reg <= data_addr[`nMEM_W + `DADDR_W -1 -: `nMEM_W];
+	 data_addr_reg <= data_addr[`nMEM_W + `MEM_ADDR_W -1 -: `nMEM_W];
       end
    end
    
@@ -133,7 +132,7 @@ module xdata_eng (
       integer j;
       data_mem_valid = {`nMEM{1'b0}};
       for (j = 0; j < `nMEM; j = j+1)
-	if(data_addr[`nMEM_W + `DADDR_W -1 -: `nMEM_W] == j[`nMEM_W-1:0])
+	if(data_addr[`nMEM_W + `MEM_ADDR_W -1 -: `nMEM_W] == j[`nMEM_W-1:0])
 	  data_mem_valid[j] = data_valid;
    end
 
@@ -146,7 +145,7 @@ module xdata_eng (
 	  data_data_out = data_bus[`DATA_MEM0A_B - 2*j*`DATA_W  -: `DATA_W];
    end
 
- 
+   
    // 
    // CONFIGURATION SHADOW REGISTER
    //
@@ -175,13 +174,9 @@ module xdata_eng (
    //ICARUS does not support parameter arrays
    //parameter integer mem_size=4096;
 
-   parameter integer MEM_ADDR_W[0 : `nMEM-1] =  `MEM_ADDR_W_DEF;
-   parameter reg [`MEM_NAME_NCHARS*8-1:0] MEM_INIT_FILE[0:`nMEM-1] = `MEM_INIT_FILE_DEF;
-   
    generate for (i=0; i < `nMEM; i=i+1) begin : mem_array
       //xmem  #(.mem_size(mem_size))  //for icarus
       xmem  #(
-              .MEM_INIT_FILE(MEM_INIT_FILE[i]),
               .ADDR_W(MEM_ADDR_W[i])
               )
       mem (
@@ -283,7 +278,7 @@ module xdata_eng (
 		         .rst(run_reg),
 
 			 // flow interface
-	                 .flow_in(data_bus_prev),
+	                 .flow_in(data_bus),
 			 .flow_out(data_bus[`DATA_MULADD0_B - i*`DATA_W -: `DATA_W]),
 			 // configuration interface
 			 .configdata(config_reg_shadow[`CONF_MULADD0_B - i*`MULADD_CONF_BITS -: `MULADD_CONF_BITS])
@@ -301,7 +296,7 @@ module xdata_eng (
 		 .rst(run_reg),
 
 		 // flow interface
-	         .flow_in(data_bus_prev),
+	         .flow_in(data_bus),
 		 .flow_out(data_bus[`DATA_BS0_B - i*`DATA_W -: `DATA_W]),
 
 		 // configuration interface

@@ -10,7 +10,7 @@ module xmem_tb;
    // Inputs
    reg clk;
    reg rst;
-   //reg [`DADDR_W-1:0] addr;
+   //reg [`MEM_ADDR_W-1:0] addr;
    
    //control 
    reg  	        initA;
@@ -24,12 +24,12 @@ module xmem_tb;
    
    reg 			rw_mem_req;
    reg 			rw_rnw;
-   reg [`DADDR_W-1:0] 	rw_addr;
+   reg [`MEM_ADDR_W-1:0] 	rw_addr;
    reg [`DATA_W-1:0] 	rw_data_to_wr;
    
    //dma interface
    reg 			dma_rnw;
-   reg [`DADDR_W-1:0] 	dma_addr;
+   reg [`MEM_ADDR_W-1:0] 	dma_addr;
    reg [`DATA_W-1:0] 	dma_data_in;
    reg 			dma_mem_req;
    

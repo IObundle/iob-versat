@@ -8,7 +8,7 @@ module xconf_mem_tb;
    parameter clk_period = 40;
 
    //sizes
-   parameter MEM_SIZE = 2**`DADDR_W;
+   parameter MEM_SIZE = 2**`MEM_ADDR_W;
    
    reg clk;
    reg rst;
@@ -38,13 +38,13 @@ module xconf_mem_tb;
    reg [`N_W-1:0] 		sela;
    reg [`N_W-1:0] 		selb;
    
-   reg [`DADDR_W-1:0] 		iterations;
+   reg [`MEM_ADDR_W-1:0] 		iterations;
    reg [`PERIOD_W-1:0] 		period;
    reg [`PERIOD_W-1:0] 		duty;
 
-   reg [`DADDR_W-1:0] 		start;
-   reg signed [`DADDR_W-1:0] 	shift;
-   reg signed [`DADDR_W-1:0] 	incr;
+   reg [`MEM_ADDR_W-1:0] 		start;
+   reg signed [`MEM_ADDR_W-1:0] 	shift;
+   reg signed [`MEM_ADDR_W-1:0] 	incr;
    reg [`PERIOD_W-1:0] 		delay;
    reg 				reverse;
    reg 				ext;

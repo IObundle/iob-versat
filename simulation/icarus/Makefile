@@ -1,9 +1,11 @@
-#paths 
+#source paths 
+MEM_DIR := ../../submodules/mem/tdp_mem
 RTL_DIR := ../../rtl
-INC_DIR := $(RTL_DIR)/include
-SRC := $(RTL_DIR)/src/*.v
-INC := $(INC_DIR)/*.vh
+SRC := $(RTL_DIR)/src/*.v $(MEM_DIR)/*.v
 
+#include paths
+INC_DIR := $(RTL_DIR)/include
+INC := $(INC_DIR)/*.vh
 
 #icarus simulator and flags
 VC := iverilog

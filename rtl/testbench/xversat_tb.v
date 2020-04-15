@@ -10,6 +10,16 @@
 
 `timescale 1ns / 1ps
 `include "xversat.vh"
+//total versat memory
+`define MEM_DATA_SZ (nMEM * 2**`MEM_ADDR_W)
+
+//
+// MEMORY MAP
+//
+`define CTR_ENG_CTR_ADDR (1<<(`nMEM_W+`MEM_ADDR_W))
+`define CTR_CONF_REG_ADDR (2'b10<<(`nMEM_W+`MEM_ADDR_W-1))
+`define CTR_CONF_REG_CTR_ADDR (3'b101<<(`nMEM_W+`MEM_ADDR_W-2))
+`define CTR_CONF_MEM_ADDR (3'b110<<(`nMEM_W+`MEM_ADDR_W-2))
 
 module xtop_tb;
 
@@ -124,7 +134,7 @@ module xtop_tb;
       // Start Versat (write non-zero value to R0)
       //
 
-      ctr_control_addr = `CTR_CTR_ADDR;
+      ctr_control_addr = `CTR_ENG_CTR_ADDR;
       ctr_data_in = 1;
       ctr_we = 1;
       #clk_period ctr_we = 0;

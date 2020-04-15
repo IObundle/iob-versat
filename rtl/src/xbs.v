@@ -16,17 +16,6 @@ module xbs(
            input [`BS_CONF_BITS-1:0] configdata
            );
    
-   //flow interface
-   wire [`N*`DATA_W-1:0]          data_bus_prev = flow_in[2*`N*`DATA_W-1:`N*`DATA_W];
-   
-   reg signed [`DATA_W-1:0]       result;
-   
-   assign flow_out = result;
-
-
-
-   reg                               rst_reg;
-
    // extract the 2 inputs
    wire signed [`DATA_W-1:0]         data_in; //data to shift 
    wire [`DATA_W-1:0]                shift; //shift value
@@ -38,10 +27,6 @@ module xbs(
    wire [`N_W-1: 0]                  selshift;
    wire [`BS_FNS_W-1:0]              fns;
 
-   //enables
-   wire                              enablea;
-   wire                              enables;
-   wire                              enabled;
 
    // register input mux outputs
    reg [`DATA_W-1:0]                 data_in_reg;
@@ -53,34 +38,23 @@ module xbs(
    assign selshift = configdata[`BS_CONF_BITS-1-`N_W -: `N_W];
    assign fns = configdata[`BS_CONF_BITS-1-2*`N_W -: `BS_FNS_W];
    
-
    //input selection 
    xinmux muxdata (
 		   .sel(seldata),
-		   .data_bus(data_bus),
-		   .data_bus_prev(data_bus_prev),
-		   .data_out(data_in),
-		   .enabled(enablea)
+		   .data_in(flow_in),
+		   .data_out(data_in)
 		   );
    
    xinmux muxshift (
 		    .sel(selshift),
-		    .data_bus(data_bus),
-		    .data_bus_prev(data_bus_prev),
-		    .data_out(shift),
-		    .enabled(enables)
+		    .data_in(flow_in),
+		    .data_out(shift)
 		    );
    
-   // compute output enable
-   assign enabled = enablea & enables;
-
-   always @ (posedge clk)
-     rst_reg <= rst;
-
-   always @ (posedge clk)
-     if (rst_reg) begin
-	data_in_reg <= `DATA_W'h00000000;
-	shift_reg <= `DATA_W'h00000000;
+   always @ (posedge clk, posedge rst)
+     if (rst) begin
+	data_in_reg <= `DATA_W'h0;
+	shift_reg <= `DATA_W'h0;
      end else begin
         data_in_reg <= data_in;
         shift_reg <= shift;
@@ -95,10 +69,11 @@ module xbs(
       endcase
    end
 
-   always @ (posedge rst_reg, posedge clk) 
-     if (rst_reg)
-       result <= `DATA_W'h00000000;
-     else if (enabled)
-       result <= res;
+   always @ (posedge clk, posedge rst) 
+     if (rst)
+       flow_out <= `DATA_W'h0;
+     else begin
+	flow_out <= res;
+     end
 
 endmodule

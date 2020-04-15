@@ -1,8 +1,6 @@
 `timescale 1ns / 1ps
 `include "xversat.vh"
-
 `include "xalulitedefs.vh"
-
 
 /*
 
@@ -10,33 +8,18 @@
 
  */
 
-
-
 module xalulite (
                  input                            clk,
                  input                            rst,
 
                  //flow interface
                  input [2*`N*`DATA_W-1:0]         flow_in,
-                 output [2*`DATA_W-1:0]           flow_out,
+                 output reg [2*`DATA_W-1:0]       flow_out,
 
                  // config interface
                  input [`ALULITE_CONF_BITS - 1:0] configdata
                  );
 
-   //flow interface
-   wire [`N*`DATA_W-1:0]          data_bus_prev = flow_in[2*`N*`DATA_W-1:`N*`DATA_W];
-   
-   reg signed [`DATA_W-1:0]       result;
-   
-   assign flow_out = result;
-
-
-
-
-   reg                                            rst_reg;
-   reg                                            rst_reg2;
-   wire                                           rst_int;
 
    reg [`DATA_W:0]                                ai;
    reg [`DATA_W:0]                                bz;
@@ -63,7 +46,7 @@ module xalulite (
    wire                                           enablea;
    wire                                           enableb;
    wire                                           enabled;
-
+ 
    // Unpack config data
    assign sela = configdata[`ALULITE_CONF_BITS-1 -: `N_W];
    assign selb = configdata[`ALULITE_CONF_BITS-`N_W-1 -: `N_W];
@@ -73,38 +56,26 @@ module xalulite (
    // Input selection
    xinmux muxa (
                 .sel(sela),
-                .data_bus_prev(data_bus_prev),
-                .data_bus(data_bus),
-                .data_out(op_a),
-                .enabled(enablea)
+                .data_in(flow_in),
+                .data_out(op_a)
 		);
 
    xinmux muxb (
                 .sel(selb),
-                .data_bus_prev(data_bus_prev),
-                .data_bus(data_bus),
-                .data_out(op_b),
-                .enabled(enableb)		
+                .data_in(flow_in),
+                .data_out(op_b)
 		);
 
-   assign enabled = enablea & enableb;
-   
-   always @ (posedge clk) begin
-      rst_reg <= rst;
-      rst_reg2 <= rst_reg;
-   end
-
-   always @ (posedge clk)
-     if (rst_reg) begin
+   always @ (posedge clk, posedge rst)
+     if (rst) begin
 	op_b_reg <= `DATA_W'h00000000;
 	op_a_reg <= `DATA_W'h00000000;
      end else begin
 	op_b_reg <= op_b;
 	op_a_reg <= op_a;
-     end // else: !if(rst)
+     end
 
    assign op_a_int = self_loop? result : op_a_reg;
-   assign rst_int = self_loop? rst_reg2 : rst_reg;
 
    // Computes result_int
    always @ * begin
@@ -209,11 +180,11 @@ module xalulite (
 
    end
 
-   always @ (posedge clk)
-     if (rst_int)
-       result <= `DATA_W'h00000000;
+   always @ (posedge clk, posedge rst)
+     if (rst)
+       flow_out <= `DATA_W'h0;
      else if (enabled) begin
-	result <= result_int;
+	flow_out <= result_int;
      end
 
 endmodule

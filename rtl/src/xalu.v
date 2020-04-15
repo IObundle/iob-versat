@@ -8,41 +8,30 @@ module xalu (
 
              //flow interface
              input [2*`N*`DATA_W-1:0]     flow_in,
-             output [`DATA_W-1:0]         flow_out,
+             output reg [`DATA_W-1:0]     flow_out,
 
              // config interface
              input [`ALU_CONF_BITS - 1:0] configdata	
              );
 
-   
-   reg signed [`DATA_W-1:0]       result;   
-   assign flow_out = result;
-   
-   reg                                       rst_reg;
-   
-   reg [`DATA_W:0]                           ai;
-   reg [`DATA_W:0]                           bz;
-   wire [`DATA_W:0]                          temp_adder;
-   wire [5:0]                                data_out_clz_i;
-   reg                                       cin;
+   reg [`DATA_W:0]                        ai;
+   reg [`DATA_W:0]                        bz;
+   wire [`DATA_W:0]                       temp_adder;
+   wire [5:0]                             data_out_clz_i;
+   reg                                    cin;
 
-   reg signed [`DATA_W-1:0]                  result_int;
+   wire [`N_W-1: 0]                       sela;
+   wire [`N_W-1: 0]                       selb;
 
-   wire [`N_W-1: 0]                          sela;
-   wire [`N_W-1: 0]                          selb;
-
-   wire [`DATA_W-1:0]                        op_a;
-   wire [`DATA_W-1:0]                        op_b;
-   reg                                       op_a_msb;
-   reg                                       op_b_msb;
-   reg [`DATA_W-1:0]                         op_a_reg;
-   reg [`DATA_W-1:0]                         op_b_reg;
-   wire [`ALU_FNS_W-1:0]                     fns;
-
-   wire                                      enablea;
-   wire                                      enableb;
-   wire                                      enabled;
+   wire [`DATA_W-1:0]                     op_a;
+   wire [`DATA_W-1:0]                     op_b;
+   reg                                    op_a_msb;
+   reg                                    op_b_msb;
+   reg [`DATA_W-1:0]                      op_a_reg;
+   reg [`DATA_W-1:0]                      op_b_reg;
+   wire [`ALU_FNS_W-1:0]                  fns;
    
+
    // Unpack config data
    assign sela = configdata[`ALU_CONF_BITS-1 -: `N_W];
    assign selb = configdata[`ALU_CONF_BITS-`N_W-1 -: `N_W];
@@ -52,91 +41,84 @@ module xalu (
    xinmux muxa (
 		.sel(sela),
 		.data_in(flow_in),
-		.data_out(op_a),
-                .enabled(enablea)
+		.data_out(op_a)
 		);
    
    xinmux muxb (
 		.sel(selb),
 		.data_in(flow_in),
-		.data_out(op_b),
-                .enabled(enableb)
+		.data_out(op_b)
 		);
 
-   assign enabled = enablea & enableb;
    
-   always @ (posedge clk)
-     rst_reg <= rst;
-   
-   always @ (posedge clk)
-     if (rst_reg) begin
-	op_b_reg <= `DATA_W'h00000000;
-	op_a_reg <= `DATA_W'h00000000;
+   always @ (posedge clk, posedge rst)
+     if (rst) begin
+	op_b_reg <= `DATA_W'h0;
+	op_a_reg <= `DATA_W'h0;
      end else begin
 	op_b_reg <= op_b;
 	op_a_reg <= op_a;
-     end // else: !if(rst)
+     end
    
-   // Computes result_int
-   always @ * begin
-      
-      result_int = temp_adder[31:0] ;
-
+   // Computes result
+   reg [`DATA_W-1:0]                         result;
+   always @ * begin   
+      result = temp_adder[31:0] ;
       case (fns)
 	`ALU_OR : begin
-	   result_int = op_a_reg | op_b_reg;
+	   result = op_a_reg | op_b_reg;
 	end
 	`ALU_AND : begin
-	   result_int = op_a_reg & op_b_reg;
+	   result = op_a_reg & op_b_reg;
 	end
 	`ALU_XOR : begin
-	   result_int = op_a_reg ^ op_b_reg;
+	   result = op_a_reg ^ op_b_reg;
 	end 	
 	`ALU_SEXT8 : begin      
-	   result_int = {{24{op_a_reg[7]}}, op_a_reg[7:0]};
+	   result = {{24{op_a_reg[7]}}, op_a_reg[7:0]};
 	end
 	`ALU_SEXT16 : begin
-	   result_int = {{16{op_a_reg[15]}}, op_a_reg[15:0]};  
+	   result = {{16{op_a_reg[15]}}, op_a_reg[15:0]};  
 	end
 	`ALU_SHIFTR_ARTH : begin
-	   result_int = {op_a_reg[31] ,op_a_reg[31:1] };
+	   result = {op_a_reg[31] ,op_a_reg[31:1] };
 	end
 	`ALU_SHIFTR_LOG : begin
-	   result_int = {1'b 0,op_a_reg[31:1] };
+	   result = {1'b 0,op_a_reg[31:1] };
 	end
 	`ALU_CMP_SIG : begin
-	   result_int[31] = temp_adder[32] ;
+	   result[31] = temp_adder[32] ;
 	end
 	`ALU_CMP_UNS : begin
-	   result_int[31] = temp_adder[32] ;
+	   result[31] = temp_adder[32] ;
 	end
 	`ALU_MUX : begin
-	   result_int = op_b_reg;
+	   result = op_b_reg;
 	   
 	   if(op_a_reg[31])
-	     result_int = `DATA_W'b0;
+	     result = `DATA_W'b0;
 	end
 	`ALU_SUB : begin
 	end
 	`ALU_ADD : begin
 	end
 	`ALU_CLZ : begin
-           result_int = {{26{1'b0}},data_out_clz_i};
+           result = {{26{1'b0}},data_out_clz_i};
 	end
 	`ALU_MAX : begin
            if (temp_adder[32] == 1'b 0) begin
-              result_int = op_b_reg;
+              result = op_b_reg;
            end
            else begin
-              result_int = op_a_reg;
+              result = op_a_reg;
            end
 	end
 	`ALU_MIN : begin
            if (temp_adder[32] == 1'b 0) begin
-              result_int = op_a_reg;
+              result = op_a_reg;
            end
            else begin
-              result_int = op_b_reg;
+              result = op_b_reg;
            end
 	end
 	default : begin
@@ -202,11 +184,10 @@ module xalu (
 	     .data_out(data_out_clz_i)
 	     );
 
-   always @ (posedge clk)
-     if (rst_reg)
-       result <= `DATA_W'h00000000;
-     else if (enabled) begin
-	result <= result_int;
-     end
-   
+   always @ (posedge clk, posedge rst) 
+     if (rst)
+       flow_out <= `DATA_W'h0;
+     else 
+       flow_out <= result;
+
 endmodule

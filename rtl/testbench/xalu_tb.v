@@ -47,8 +47,8 @@ module xalu_tb;
    assign configdata[`ALU_CONF_BITS-1 -:`N_W]=`s0;
    assign configdata[`ALU_CONF_BITS-`N_W-1-:`N_W]=`s1;
 
-   assign data_bus[`DATA_BITS-`DATA_W*(`s0-1)-1 -: `DATA_W]= opa_comp;
-   assign data_bus[`DATA_BITS-`DATA_W*(`s1-1)-1 -: `DATA_W]= opb_comp;
+   assign data_bus[`DATABUS_W-`DATA_W*(`s0-1)-1 -: `DATA_W]= opa_comp;
+   assign data_bus[`DATABUS_W-`DATA_W*(`s1-1)-1 -: `DATA_W]= opb_comp;
 
 
    

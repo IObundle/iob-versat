@@ -10,16 +10,16 @@ module xaddrgen (
 		 input                         run,
 
 		 //configurations 
-		 input [`DADDR_W - 1:0]        iterations,
+		 input [`MEM_ADDR_W - 1:0]        iterations,
 		 input [`PERIOD_W - 1:0]       period,
 		 input [`PERIOD_W - 1:0]       duty,
 		 input [`PERIOD_W - 1:0]       delay,
-		 input [`DADDR_W - 1:0]        start,
-		 input signed [`DADDR_W - 1:0] shift,
-		 input signed [`DADDR_W - 1:0] incr,
+		 input [`MEM_ADDR_W - 1:0]        start,
+		 input signed [`MEM_ADDR_W - 1:0] shift,
+		 input signed [`MEM_ADDR_W - 1:0] incr,
 
 		 //outputs 
-		 output reg [`DADDR_W - 1:0]   addr,
+		 output reg [`MEM_ADDR_W - 1:0]   addr,
 		 output reg                    mem_en,
 		 output reg                    done
 		 );
@@ -27,9 +27,9 @@ module xaddrgen (
    reg signed [`PERIOD_W :0]                   per_cnt, per_cnt_nxt; //period count
    wire [`PERIOD_W :0]                         period_int, duty_int;
    
-   reg [`DADDR_W - 1:0]                        addr_nxt;
+   reg [`MEM_ADDR_W - 1:0]                        addr_nxt;
    
-   reg [`DADDR_W - 1:0]                        iter, iter_nxt; //iterations count 
+   reg [`MEM_ADDR_W - 1:0]                        iter, iter_nxt; //iterations count 
 
 
    reg 					       mem_en_nxt;
@@ -57,7 +57,7 @@ module xaddrgen (
 	 if (init) begin 
 	    per_cnt_nxt = -{{1'b0}, delay}+1'b1;
 	    addr_nxt = start;
-	    iter_nxt = `DADDR_W'd1;
+	    iter_nxt = `MEM_ADDR_W'd1;
 	 end 
 
 	 if(run) begin
@@ -115,9 +115,9 @@ module xaddrgen (
 	state <= IDLE;
 	mem_en <= 1'b0;
 	done <= 1'b1;
-	addr <= `DADDR_W'b0;
+	addr <= `MEM_ADDR_W'b0;
 	per_cnt <= `PERIOD_W'b0;
-	iter <= `DADDR_W'b0;
+	iter <= `MEM_ADDR_W'b0;
      end else begin 
 	state <= state_nxt;
 	mem_en <= mem_en_nxt;

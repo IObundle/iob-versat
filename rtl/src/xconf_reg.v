@@ -25,7 +25,7 @@ module xconf_reg (
       input                         req,
       input                         rnw,
       input [`CONF_REG_ADDR_W:0]    addr,
-      input [`DADDR_W-1:0]          data_in
+      input [`MEM_ADDR_W-1:0]          data_in
       );
 
       reg [`CONF_BITS-1:0]          conf_reg;
@@ -55,32 +55,32 @@ module xconf_reg (
 	  for (i=0; i<2*`nMEM; i=i+1) begin 
 	     
 	     if(addr == (`CONF_MEM0A + i*`MEMP_CONF_OFFSET + `MEMP_CONF_ITER))
-	       conf_reg[`CONF_MEM0A_B-i*`MEMP_CONF_BITS -: `DADDR_W] <= data_in[`DADDR_W-1:0];
+	       conf_reg[`CONF_MEM0A_B-i*`MEMP_CONF_BITS -: `MEM_ADDR_W] <= data_in[`MEM_ADDR_W-1:0];
 
 	     if(addr == (`CONF_MEM0A + i*`MEMP_CONF_OFFSET + `MEMP_CONF_PER))
-	       conf_reg[`CONF_MEM0A_B-i*`MEMP_CONF_BITS-`DADDR_W -: `PERIOD_W] <= data_in[`PERIOD_W-1:0];
+	       conf_reg[`CONF_MEM0A_B-i*`MEMP_CONF_BITS-`MEM_ADDR_W -: `PERIOD_W] <= data_in[`PERIOD_W-1:0];
 	     if(addr == (`CONF_MEM0A + i*`MEMP_CONF_OFFSET + `MEMP_CONF_DUTY))
-	       conf_reg[`CONF_MEM0A_B-i*`MEMP_CONF_BITS-`DADDR_W-`PERIOD_W -: `PERIOD_W] <= data_in[`PERIOD_W-1:0];
+	       conf_reg[`CONF_MEM0A_B-i*`MEMP_CONF_BITS-`MEM_ADDR_W-`PERIOD_W -: `PERIOD_W] <= data_in[`PERIOD_W-1:0];
 
 	     if(addr == (`CONF_MEM0A + i*`MEMP_CONF_OFFSET + `MEMP_CONF_SEL))
-	       conf_reg[`CONF_MEM0A_B-i*`MEMP_CONF_BITS-`DADDR_W-2*`PERIOD_W -: `N_W] <= data_in[`N_W-1:0];
+	       conf_reg[`CONF_MEM0A_B-i*`MEMP_CONF_BITS-`MEM_ADDR_W-2*`PERIOD_W -: `N_W] <= data_in[`N_W-1:0];
 	     if(addr == (`CONF_MEM0A + i*`MEMP_CONF_OFFSET + `MEMP_CONF_START))
-	       conf_reg[`CONF_MEM0A_B-i*`MEMP_CONF_BITS-`DADDR_W-2*`PERIOD_W -`N_W -: `DADDR_W] <= data_in[`DADDR_W-1:0];
+	       conf_reg[`CONF_MEM0A_B-i*`MEMP_CONF_BITS-`MEM_ADDR_W-2*`PERIOD_W -`N_W -: `MEM_ADDR_W] <= data_in[`MEM_ADDR_W-1:0];
 
 	     if(addr == (`CONF_MEM0A + i*`MEMP_CONF_OFFSET + `MEMP_CONF_SHIFT))
-	       conf_reg[`CONF_MEM0A_B-i*`MEMP_CONF_BITS-2*`DADDR_W-2*`PERIOD_W -`N_W -: `DADDR_W] <= data_in[`DADDR_W-1:0];
+	       conf_reg[`CONF_MEM0A_B-i*`MEMP_CONF_BITS-2*`MEM_ADDR_W-2*`PERIOD_W -`N_W -: `MEM_ADDR_W] <= data_in[`MEM_ADDR_W-1:0];
 
 	     if(addr == (`CONF_MEM0A + i*`MEMP_CONF_OFFSET + `MEMP_CONF_INCR))
-	       conf_reg[`CONF_MEM0A_B-i*`MEMP_CONF_BITS-3*`DADDR_W-2*`PERIOD_W -`N_W -: `DADDR_W] <= data_in[`DADDR_W-1:0];
+	       conf_reg[`CONF_MEM0A_B-i*`MEMP_CONF_BITS-3*`MEM_ADDR_W-2*`PERIOD_W -`N_W -: `MEM_ADDR_W] <= data_in[`MEM_ADDR_W-1:0];
 
 	     if(addr == (`CONF_MEM0A + i*`MEMP_CONF_OFFSET + `MEMP_CONF_DELAY))
-	       conf_reg[`CONF_MEM0A_B-i*`MEMP_CONF_BITS-4*`DADDR_W-2*`PERIOD_W -`N_W -: `PERIOD_W] <= data_in[`PERIOD_W-1:0];
+	       conf_reg[`CONF_MEM0A_B-i*`MEMP_CONF_BITS-4*`MEM_ADDR_W-2*`PERIOD_W -`N_W -: `PERIOD_W] <= data_in[`PERIOD_W-1:0];
 
 	     if(addr == (`CONF_MEM0A + i*`MEMP_CONF_OFFSET + `MEMP_CONF_RVRS))
-	       conf_reg[`CONF_MEM0A_B-i*`MEMP_CONF_BITS-4*`DADDR_W-3*`PERIOD_W -`N_W -: 1] <= data_in[0];
+	       conf_reg[`CONF_MEM0A_B-i*`MEMP_CONF_BITS-4*`MEM_ADDR_W-3*`PERIOD_W -`N_W -: 1] <= data_in[0];
 
 	     if(addr == (`CONF_MEM0A + i*`MEMP_CONF_OFFSET + `MEMP_CONF_EXT))
-	       conf_reg[`CONF_MEM0A_B-i*`MEMP_CONF_BITS-4*`DADDR_W-3*`PERIOD_W -`N_W-1 -: 1] <= data_in[0];
+	       conf_reg[`CONF_MEM0A_B-i*`MEMP_CONF_BITS-4*`MEM_ADDR_W-3*`PERIOD_W -`N_W-1 -: 1] <= data_in[0];
 
 	   end // for (i=0; i<2*`nMEM; i=i+1)
 	

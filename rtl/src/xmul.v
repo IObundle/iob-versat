@@ -3,27 +3,16 @@
 `include "xmuldefs.vh"
 
 module xmul (
-             input                           clk,
-             input                           rst,
+             input                      clk,
+             input                      rst,
 
              //flow interface
-             input [2*`N*`DATA_W-1:0]        flow_in,
-             output [2*`DATA_W-1:0]          flow_out,
+             input [2*`N*`DATA_W-1:0]   flow_in,
+             output reg [2*`DATA_W-1:0] flow_out,
 
              //config interface
-             input [`MUL_CONF_BITS-1:0]      configdata
+             input [`MUL_CONF_BITS-1:0] configdata
              );
-   
-
-   //flow interface
-   wire [`N*`DATA_W-1:0]                     data_bus_prev = flow_in[2*`N*`DATA_W-1:`N*`DATA_W];
-   
-   reg signed [`DATA_W-1:0]                  result;
-   
-   assign flow_out = result;
-
-
-   reg 					     rst_reg;
 
    // 2*`DATA_W MUL RESULT AND REGISTERED RESULT
    wire signed [2*`DATA_W-1:0]               res2;
@@ -41,11 +30,6 @@ module xmul (
    wire [`N_W-1: 0]                          selb;
    wire [`MUL_FNS_W-1: 0]                    fns;
    
-   wire 				     enablea;
-   wire 				     enableb;
-   wire 				     enabled;
-
-   
    //unpack config bits 
    assign sela = configdata[`MUL_CONF_BITS-1 -: `N_W];
    assign selb = configdata[`MUL_CONF_BITS-1-`N_W -: `N_W];
@@ -54,35 +38,24 @@ module xmul (
    //input selection 
    xinmux muxa (
 		.sel(sela),
-		.data_bus(data_bus),
-		.data_bus_prev(data_bus_prev),
-		.data_out(op_a),
-                .enabled(enablea)
+		.data_in(flow_in),
+		.data_out(op_a)
 		);
    
    xinmux muxb (
                 .sel(selb),
-                .data_bus(data_bus),
-                .data_bus_prev(data_bus_prev),
-                .data_out(op_b),
-                .enabled(enableb)
+                .data_bus(flow_in),
+                .data_out(op_b)
   	        );
 
-   assign enabled = enablea & enableb;
-   
-   always @ (posedge clk)
-     rst_reg <= rst;
-   
-   always @ (posedge rst_reg, posedge clk)
-     if (rst_reg) begin
-	res2_reg <= {2*`DATA_W{1'b0}};
-     op_a_reg <= `DATA_W'd0;
-     op_b_reg <= `DATA_W'd0;
-  end else begin
-     res2_reg <= res2;
-     op_a_reg <= op_a;
-     op_b_reg <= op_b;
-  end
+   always @ (posedge clk, posedge rst) 
+     if(rst) begin 
+        op_a_reg <= `DATA_W'd0;
+        op_b_reg <= `DATA_W'd0;
+     end else begin
+        op_a_reg <= op_a;
+        op_b_reg <= op_b;
+     end
    
    assign res2 = op_a_reg * op_b_reg;
 
@@ -94,11 +67,11 @@ module xmul (
        default: res = res2_reg[`DATA_W-1 -: `DATA_W];
      endcase 
 
-   always @ (posedge rst_reg, posedge clk) 
-     if (rst_reg)
-       result <= `DATA_W'h00000000;
+   always @ (posedge clk, posedge rst) 
+     if (rst)
+       flow_out <= `DATA_W'h0;
      else if (enabled) begin
-	result <= res;
+	flow_out <= res;
      end
    
 endmodule

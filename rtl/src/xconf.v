@@ -1,24 +1,23 @@
 `timescale 1ns / 1ps
 `include "xversat.vh"
-
-`include "xconfdefs.vh"
 `include "xmemdefs.vh"
 `include "xaludefs.vh"
 `include "xalulitedefs.vh"
 `include "xmuldefs.vh"
 `include "xmuladddefs.vh"
 `include "xbsdefs.vh"
+`include "xconfdefs.vh"
 
 module xconf (
               input                        clk,
               input                        rst,
-        
+
               // Control bus interface
               input                        ctr_req,
               input                        ctr_rnw,
               input [`CONF_REG_ADDR_W-1:0] ctr_addr,
-              input [`DADDR_W-1:0]         ctr_data,
-        
+              input [`MEM_ADDR_W-1:0]         ctr_data,
+
               // configuration output to data engine
               output [`CONF_BITS-1:0]      conf_out
               );
@@ -35,20 +34,23 @@ module xconf (
    // address decoder
    always @ * begin
 `ifdef CONF_MEM_USE
-     conf_mem_req = 1'b0;
+      conf_mem_req = 1'b0;
 `endif
-     conf_reg_req = 1'b0;
-     if (ctr_addr < `CONF_REG_OFFSET)  
+      conf_reg_req = 1'b0;
+//      if (ctr_addr < `CONF_REG_OFFSET)
+//      if (ctr_addr <  (`CONF_BS0  + `nBS*`BS_CONF_OFFSET))
+      if (ctr_addr <  (`CONF_BS0))
+//      if (ctr_addr < 1)
         conf_reg_req = ctr_req;
 `ifdef CONF_MEM_USE
-     else if(`CONF_MEM == (ctr_addr & ({`CONF_REG_ADDR_W{1'b1}}<<`CONF_MEM_ADDR_W)))
+      else if(`CONF_MEM == (ctr_addr & ({`CONF_REG_ADDR_W{1'b1}}<<`CONF_MEM_ADDR_W)))
         conf_mem_req = ctr_req;
 `endif
-     else if (ctr_req)
+      else if (ctr_req)
         $display("Warning: unmapped config address %x at time %f", ctr_addr, $time);
    end
    
- 
+   
    //instantiate configuration register 
    xconf_reg xconf_reg (
 			.clk(clk),

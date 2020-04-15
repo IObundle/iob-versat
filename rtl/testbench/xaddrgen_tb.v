@@ -8,16 +8,16 @@ module addrgen_tb;
    reg rst;
    reg en;
    
-   reg [`DADDR_W - 1:0]  iterations;
+   reg [`MEM_ADDR_W - 1:0]  iterations;
    reg [`PERIOD_W - 1:0] period;
    reg [`PERIOD_W - 1:0] duty;
    reg [`PERIOD_W - 1:0] delay;
-   reg [`DADDR_W - 1:0]  start;
-   reg [`DADDR_W - 1:0]  end_loop;
-   reg [`DADDR_W - 1:0]  incr;
+   reg [`MEM_ADDR_W - 1:0]  start;
+   reg [`MEM_ADDR_W - 1:0]  end_loop;
+   reg [`MEM_ADDR_W - 1:0]  incr;
 
    //Outputs 
-   wire [`DADDR_W - 1:0] addr;
+   wire [`MEM_ADDR_W - 1:0] addr;
    wire 		 mem_en;
    wire 		 done;
    

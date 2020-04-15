@@ -1,9 +1,8 @@
 `timescale 1ns / 1ps
 
-// top defines
+// Top defines
 `include "xversat.vh"
 `include "xconfdefs.vh"
-
 
 // FU defines              
 `include "xmemdefs.vh"
@@ -12,7 +11,6 @@
 `include "xmuldefs.vh"
 `include "xmuladddefs.vh"
 `include "xbsdefs.vh"
-`include "xdivdefs.vh"
 
 module xversat (
                  input                    clk,

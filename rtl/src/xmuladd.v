@@ -1,6 +1,5 @@
 `timescale 1ns/1ps
 `include "xversat.vh"
-
 `include "xmuladddefs.vh"
 
 /*
@@ -19,15 +18,6 @@ module xmuladd (
                 // config interface
                 input [`MULADD_CONF_BITS-1:0] configdata
                 );
-
-   //flow interface
-   wire [`N*`DATA_W-1:0]          data_bus_prev = flow_in[2*`N*`DATA_W-1:`N*`DATA_W];
-   
-   reg signed [`DATA_W-1:0]       result;
-   
-   assign flow_out = result;
-
-   reg                                        rst_reg;
 
    wire [`MULADD_FNS_W:0]                     opcode;
    wire signed [2*`DATA_W-1:0]                result_mult;
@@ -63,7 +53,6 @@ module xmuladd (
    reg                                        ld_acc2;
 `endif
 
-
    //unpack config bits
    assign sela   = configdata[`MULADD_CONF_BITS-1 -: `N_W];
    assign selb   = configdata[`MULADD_CONF_BITS-1-`N_W -: `N_W];
@@ -73,44 +62,32 @@ module xmuladd (
    //input selection
    xinmux muxa (
                 .sel(sela),
-                .data_bus(data_bus),
-                .data_bus_prev(data_bus_prev),
-                .data_out(op_a),
-		.enabled(enablea)
+                .data_in(flow_in),
+                .data_out(op_a)
  		);
 
    xinmux muxb (
                 .sel(selb),
-                .data_bus(data_bus),
-                .data_bus_prev(data_bus_prev),
-                .data_out(op_b),
-		.enabled(enableb)
+                .data_in(flow_in),
+                .data_out(op_b)
 		);
 
    xinmux muxo (
                 .sel(selo),
-                .data_bus(data_bus),
-                .data_bus_prev(data_bus_prev),
-                .data_out(op_o),
-		.enabled(enableo)
+                .data_in(flow_in),
+                .data_out(op_o)
 		);
 
-   // compute output enable
-   assign enabled = enablea & enableb & enableo;
-
-   always @ (posedge clk)
-     rst_reg <= rst;
-
    //update registers
-   always @ (posedge clk)
-     if (rst_reg) begin
+   always @ (posedge clk, posedge rst)
+     if (rst) begin
         acc <= {2*`DATA_W{1'b0}};
      op_o_reg <= `DATA_W'd0;
 `ifndef MULADD_COMB                             //pipelined
      ld_acc1 <= 1'b0;
      ld_acc2 <= 1'b0;
 `endif
-  end else if (enabled) begin
+  end else begin
      acc <= result64;
      op_o_reg <= op_o;
 `ifndef MULADD_COMB                             //pipelined
@@ -133,7 +110,7 @@ module xmuladd (
    assign result_mult = op_a * op_b;
 `else                                          //2-stage pipeline
    xmul_pipe xmul_pipe (
-		        .rst(rst_reg),
+		        .rst(rst),
 		        .clk(clk),
 		        .op_a(op_a),
 		        .op_b(op_b),
@@ -194,6 +171,6 @@ module xmuladd (
       endcase // case (opcode)
    end
 
-   assign result = result64[2*`DATA_W-1 : `DATA_W];
+   assign flow_out = result64[2*`DATA_W-1 : `DATA_W];
 
 endmodule
