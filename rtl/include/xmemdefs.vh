@@ -17,7 +17,7 @@
 // mode = 00 = {en,we}
 
 // Number of config bits
-`define MEMP_CONF_BITS (`N_W + 4*`MEM_ADDR_W + 3*`PERIOD_W + 1 + 1)
+`define MEMP_CONF_BITS (`N_W + 4*`MEM_ADDR_W + 3*`PERIOD_W + 1 + 1 + 1 + 1)
 
 //MEM configuration offsets
 `define MEMP_CONF_ITER 4'd0
