@@ -29,7 +29,7 @@ module xmem #(
     input                         databus_mem_req,
 
     //input / output data
-    input [2*`N*`DATA_W-1:0]      flow_in,
+    input [2*`DATABUS_W-1:0]      flow_in,
     output [2*`DATA_W-1:0]        flow_out,
 
     //configurations
