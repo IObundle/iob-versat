@@ -17,16 +17,16 @@ module xmem #(
     output                        doneB,
 
     //controller interface
-    input                         ctr_mem_req,
+    input                         ctr_mem_valid,
     input                         ctr_we,
     input [`MEM_ADDR_W-1:0]       ctr_addr,
-    input [`DATA_W-1:0]           ctr_data_to_wr,
+    input [`DATA_W-1:0]           ctr_data_in,
 
     //databus interface
-    input                         databus_we,
-    input [`MEM_ADDR_W-1:0]       databus_addr,
-    input [`DATA_W-1:0]           databus_data_in,
-    input                         databus_mem_req,
+    input                         data_we,
+    input [`MEM_ADDR_W-1:0]       data_addr,
+    input [`DATA_W-1:0]           data_data_in,
+    input                         data_mem_valid,
 
     //input / output data
     input [2*`DATABUS_W-1:0]      flow_in,
@@ -86,13 +86,13 @@ module xmem #(
    //mem enables output by addr gen
    wire enA_int, enB_int;
 
-   wire enA = enA_int|databus_mem_req;
-   wire enB = enB_int|ctr_mem_req;
+   wire enA = enA_int|data_mem_valid;
+   wire enB = enB_int|ctr_mem_valid;
 
    wire [`DATA_W-1:0]     outA_int, outB_int;
 
-   wire wrA = databus_mem_req? databus_we : (enA_int & inA_wr & ~extA); //addrgen on & input on & input isn't address
-   wire wrB = ctr_mem_req? ctr_we : (enB_int & inB_wr & ~extB);
+   wire wrA = data_mem_valid? data_we : (enA_int & inA_wr & ~extA); //addrgen on & input on & input isn't address
+   wire wrB = ctr_mem_valid? ctr_we : (enB_int & inB_wr & ~extB);
 
 
    //port addresses and enables
@@ -119,8 +119,8 @@ module xmem #(
 		 .data_out(inB)
 		 );
 
-   wire [`DATA_W-1:0]     data_to_wrA = databus_mem_req? databus_data_in : inA ;
-   wire [`DATA_W-1:0]     data_to_wrB  = ctr_mem_req?  ctr_data_to_wr : inB;
+   wire [`DATA_W-1:0]     data_to_wrA = data_mem_valid? data_data_in : inA ;
+   wire [`DATA_W-1:0]     data_to_wrB  = ctr_mem_valid?  ctr_data_in : inB;
 
    //address generators
    xaddrgen addrgenA (
@@ -157,8 +157,8 @@ module xmem #(
 		      .done(doneB)
 		      );
 
-   assign addrA = databus_mem_req? databus_addr[`MEM_ADDR_W-1:0] : extB? inB[`MEM_ADDR_W-1:0] : addrA_int2[`MEM_ADDR_W-1:0];
-   assign addrB = ctr_mem_req? ctr_addr : extA? inA[`MEM_ADDR_W-1:0] : addrB_int2[`MEM_ADDR_W-1:0];
+   assign addrA = data_mem_valid? data_addr[`MEM_ADDR_W-1:0] : extB? inB[`MEM_ADDR_W-1:0] : addrA_int2[`MEM_ADDR_W-1:0];
+   assign addrB = ctr_mem_valid? ctr_addr : extA? inA[`MEM_ADDR_W-1:0] : addrB_int2[`MEM_ADDR_W-1:0];
 
    assign addrA_int2 = reverseA? reverseBits(addrA_int) : addrA_int;
    assign addrB_int2 = reverseB? reverseBits(addrB_int) : addrB_int;

@@ -16,16 +16,16 @@ module xmem_tb;
    wire 			doneA, doneB;
 
    //controller interface
-   reg 				ctr_mem_req;
+   reg 				ctr_mem_valid;
    reg 				ctr_we;
    reg [`MEM_ADDR_W-1:0]	ctr_addr;
-   reg [`DATA_W-1:0] 		ctr_data_to_wr;
+   reg [`DATA_W-1:0] 		ctr_data_in;
    
    //dma interface
-   reg 				databus_we;
-   reg [`MEM_ADDR_W-1:0] 	databus_addr;
-   reg [`DATA_W-1:0] 		databus_data_in;
-   reg 				databus_mem_req;
+   reg 				data_we;
+   reg [`MEM_ADDR_W-1:0] 	data_addr;
+   reg [`DATA_W-1:0] 		data_data_in;
+   reg 				data_mem_valid;
    
    //input / output data
    reg [2*`DATABUS_W-1:0] 	flow_in;
@@ -47,16 +47,16 @@ module xmem_tb;
 	     .doneB(doneB),
 
 	     //controller interface
-	     .ctr_mem_req(ctr_mem_req),
+	     .ctr_mem_valid(ctr_mem_valid),
 	     .ctr_we(ctr_we),
 	     .ctr_addr(ctr_addr),
-	     .ctr_data_to_wr(ctr_data_to_wr),
+	     .ctr_data_in(ctr_data_in),
 	     
 	     //dma interface
- 	     .databus_we(databus_we),
-	     .databus_addr(databus_addr),
-	     .databus_data_in(databus_data_in),
-	     .databus_mem_req(databus_mem_req),
+ 	     .data_we(data_we),
+	     .data_addr(data_addr),
+	     .data_data_in(data_data_in),
+	     .data_mem_valid(data_mem_valid),
 
 	     //input / output data
 	     .flow_in(flow_in),
@@ -84,15 +84,15 @@ module xmem_tb;
       runA = 0;
       runB = 0;
 
-      ctr_mem_req = 0;
+      ctr_mem_valid = 0;
       ctr_we = 0;
       ctr_addr = 0;
-      ctr_data_to_wr = 0;
+      ctr_data_in = 0;
 
-      databus_we = 0;
-      databus_addr = 0;
-      databus_data_in = 0;
-      databus_mem_req = 0;
+      data_we = 0;
+      data_addr = 0;
+      data_data_in = 0;
+      data_mem_valid = 0;
      
       flow_in = 0;
       config_bits = 0;
@@ -100,30 +100,30 @@ module xmem_tb;
       //Global reset (100ns)
       #(clk_period*5) rst = 0;
 
-      //Testing databus and control interfaces
-      $display("\nTesting databus and control interfaces");
+      //Testing data and control interfaces
+      $display("\nTesting data and control interfaces");
       
       //Write values to memory
-      #clk_period ctr_mem_req = 1;
+      #clk_period ctr_mem_valid = 1;
       ctr_we = 1;
       ctr_addr = 10;
-      ctr_data_to_wr = 32'hF0F0F0F0;
-      databus_mem_req = 1;
-      databus_we = 1;
-      databus_addr = 16;
-      databus_data_in = 32'h6789ABCD;   
+      ctr_data_in = 32'hF0F0F0F0;
+      data_mem_valid = 1;
+      data_we = 1;
+      data_addr = 16;
+      data_data_in = 32'h6789ABCD;   
       $display("Value written in memA: %x", 32'h6789ABCD);
       $display("Value written in memB: %x", 32'hF0F0F0F0);
 
       //Read values back from memory
-      #clk_period ctr_mem_req = 0;
-      databus_mem_req = 0;
-      #clk_period ctr_mem_req = 1;
+      #clk_period ctr_mem_valid = 0;
+      data_mem_valid = 0;
+      #clk_period ctr_mem_valid = 1;
       ctr_we = 0;
-      databus_mem_req = 1;
-      databus_we = 0;
-      #clk_period ctr_mem_req = 0;
-      databus_mem_req = 0;
+      data_mem_valid = 1;
+      data_we = 0;
+      #clk_period ctr_mem_valid = 0;
+      data_mem_valid = 0;
       $display("Value read from memA: %x", flow_out[2*`DATA_W-1 -: `DATA_W]);
       $display("Value read from memB: %x", flow_out[`DATA_W-1:0]);
 
