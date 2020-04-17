@@ -12,8 +12,8 @@ module xmuladd (
                 input                         rst,
                 input                         clk,
                 //flow interface
-                input [2*`N*`DATA_W-1:0]      flow_in,
-                output [2*`DATA_W-1:0]        flow_out,
+                input [2*`DATABUS_W-1:0]      flow_in,
+                output [`DATA_W-1:0] 	      flow_out,
 
                 // config interface
                 input [`MULADD_CONF_BITS-1:0] configdata
@@ -82,7 +82,7 @@ module xmuladd (
    always @ (posedge clk, posedge rst)
      if (rst) begin
         acc <= {2*`DATA_W{1'b0}};
-     op_o_reg <= `DATA_W'd0;
+        op_o_reg <= `DATA_W'd0;
 `ifndef MULADD_COMB                             //pipelined
      ld_acc1 <= 1'b0;
      ld_acc2 <= 1'b0;

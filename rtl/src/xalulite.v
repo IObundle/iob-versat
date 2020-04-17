@@ -14,7 +14,7 @@ module xalulite (
 
                  //flow interface
                  input [2*`DATABUS_W-1:0]         flow_in,
-                 output reg [2*`DATA_W-1:0]       flow_out,
+                 output reg [`DATA_W-1:0]    	  flow_out,
 
                  // config interface
                  input [`ALULITE_CONF_BITS - 1:0] configdata
@@ -42,11 +42,6 @@ module xalulite (
    wire [`ALULITE_FNS_W-2:0]                      fns;
    wire                                           self_loop;
 
-
-   wire                                           enablea;
-   wire                                           enableb;
-   wire                                           enabled;
- 
    // Unpack config data
    assign sela = configdata[`ALULITE_CONF_BITS-1 -: `N_W];
    assign selb = configdata[`ALULITE_CONF_BITS-`N_W-1 -: `N_W];
@@ -75,7 +70,7 @@ module xalulite (
 	op_a_reg <= op_a;
      end
 
-   assign op_a_int = self_loop? result : op_a_reg;
+   assign op_a_int = self_loop? flow_out : op_a_reg;
 
    // Computes result_int
    always @ * begin
@@ -97,7 +92,7 @@ module xalulite (
 
 	   if(~op_a_reg[31]) begin
 	      if(self_loop)
-	        result_int = result;
+	        result_int = flow_out;
 	      else
 	        result_int = `DATA_W'b0;
 	   end
@@ -119,7 +114,7 @@ module xalulite (
 
 	   if(self_loop) begin
 	      if(op_a_reg[31])
-	        result_int = result;
+	        result_int = flow_out;
 	   end
 	end
 	`ALULITE_MIN : begin
@@ -131,7 +126,7 @@ module xalulite (
 
 	   if(self_loop) begin
 	      if(op_a_reg[31])
-	        result_int = result;
+	        result_int = flow_out;
 	   end
 	end
 	default : begin
@@ -183,8 +178,7 @@ module xalulite (
    always @ (posedge clk, posedge rst)
      if (rst)
        flow_out <= `DATA_W'h0;
-     else if (enabled) begin
-	flow_out <= result_int;
-     end
+     else 
+       flow_out <= result_int;
 
 endmodule
