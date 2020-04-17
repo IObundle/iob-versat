@@ -36,6 +36,13 @@ module xdata_eng_tb;
    reg [`CONF_BITS-1:0]			config_bus;
    
    parameter clk_per = 20;
+   parameter sMEM0A = 0;
+   parameter sALU0 = sMEM0A + 2*`nMEM;
+   parameter sALULITE0 = sALU0 + `nALU;
+   parameter sMUL0 = sALULITE0 + `nALULITE;
+   parameter sMULADD0 = sMUL0 + `nMUL;
+   parameter sBS0 = sMULADD0 + `nMULADD;
+ 
    integer i, j, k, l, res;
    reg signed [`DATA_W-1:0] acc;
    integer pixels[24:0], weights[8:0], bias;
@@ -179,14 +186,14 @@ module xdata_eng_tb;
      config_bus[`CONF_MEM0A_B - 3*`MEMP_CONF_BITS - `MEM_ADDR_W-2*`PERIOD_W-`N_W-3*`MEM_ADDR_W-`PERIOD_W-1-1-1 -: 1] = 1; //s_addr 
 
      //configure muladd
-     config_bus[`CONF_MULADD0_B -: `N_W] = `sMEM0A; //sela+2
-     config_bus[`CONF_MULADD0_B - `N_W -: `N_W] = `sMEM0A+2; //selb
-     config_bus[`CONF_MULADD0_B - 2*`N_W -: `N_W] = `sMEM0A+3; //selo
+     config_bus[`CONF_MULADD0_B -: `N_W] = sMEM0A; //sela+2
+     config_bus[`CONF_MULADD0_B - `N_W -: `N_W] = sMEM0A+2; //selb
+     config_bus[`CONF_MULADD0_B - 2*`N_W -: `N_W] = sMEM0A+3; //selo
      config_bus[`CONF_MULADD0_B - 3*`N_W -: `MULADD_FNS_W] = `MULADD_MUL_LOW_MACC; //fns
 
      //configure ALULite to add bias to muladd result
-     config_bus[`CONF_ALULITE0_B -: `N_W] = `sMEM0A+2; //sela
-     config_bus[`CONF_ALULITE0_B - `N_W -: `N_W] = `sMULADD0; //selb
+     config_bus[`CONF_ALULITE0_B -: `N_W] = sMEM0A+2; //sela
+     config_bus[`CONF_ALULITE0_B - `N_W -: `N_W] = sMULADD0; //selb
      config_bus[`CONF_ALULITE0_B - 2*`N_W - 1] = `ALULITE_ADD; //fns
 
      //config mem2A to store ALULite output
@@ -197,7 +204,7 @@ module xdata_eng_tb;
      config_bus[`CONF_MEM0A_B - 4*`MEMP_CONF_BITS - `MEM_ADDR_W-2*`PERIOD_W-`N_W-`MEM_ADDR_W -: `MEM_ADDR_W] = 0; //shift
      config_bus[`CONF_MEM0A_B - 4*`MEMP_CONF_BITS - `MEM_ADDR_W-2*`PERIOD_W-`N_W-2*`MEM_ADDR_W -: `MEM_ADDR_W] = 1; //incr 
      config_bus[`CONF_MEM0A_B - 4*`MEMP_CONF_BITS - `MEM_ADDR_W-2*`PERIOD_W-`N_W-3*`MEM_ADDR_W-`PERIOD_W-1-1 -: 1] = 1; //wr_en
-     config_bus[`CONF_MEM0A_B - 4*`MEMP_CONF_BITS - `MEM_ADDR_W-2*`PERIOD_W -: `N_W] = `sALULITE0; //sel
+     config_bus[`CONF_MEM0A_B - 4*`MEMP_CONF_BITS - `MEM_ADDR_W-2*`PERIOD_W -: `N_W] = sALULITE0; //sel
 
      //Loop for performing convolution
      $display("\nActual convolution result");

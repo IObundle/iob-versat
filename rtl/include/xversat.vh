@@ -36,30 +36,17 @@
 `define ADDR_W 16
 
 // Number of data bus entries
-`define N         (2 + 2*`nMEM + `nALU + `nALULITE + `nMUL + `nMULADD + `nBS)
+`define N         (2*`nMEM + `nALU + `nALULITE + `nMUL + `nMULADD + `nBS)
 // Number of bits required for N
 `define N_W       ($clog2(`N)+1)
 
 // Data bus size
 `define DATABUS_W (`N *`DATA_W) //internal data bus
 
-// Selection codes for data bus entries
-`define s0          0
-`define s1          1
-`define sMEM0A 	    2
-`define sALU0       (`sMEM0A + 2*`nMEM)
-`define sALULITE0   (`sALU0 + `nALU)
-`define sMUL0       (`sALULITE0 + `nALULITE)
-`define sMULADD0    (`sMUL0 + `nMUL)
-`define sBS0        (`sMULADD0 + `nMULADD)
-`define sADDR       (`sBS0 + `nBS) //only used by memory ports to select its own address
-
 //
 // Data bus bit map
 //
-`define DATA_S0_B       (`DATABUS_W-1)
-`define DATA_S1_B       (`DATA_S0_B - `DATA_W)
-`define DATA_MEM0A_B    (`DATA_S1_B - `DATA_W )
+`define DATA_MEM0A_B    (`DATABUS_W-1)
 `define DATA_ALU0_B     (`DATA_MEM0A_B - 2*`nMEM*`DATA_W)
 `define DATA_ALULITE0_B (`DATA_ALU0_B - `nALU*`DATA_W)
 `define DATA_MUL0_B     (`DATA_ALULITE0_B - `nALULITE*`DATA_W)

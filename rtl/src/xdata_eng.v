@@ -50,15 +50,10 @@ module xdata_eng (
 
    //WIDE ENGINE DATA BUS
    wire [2*`DATABUS_W-1:0]                        data_bus;
-   
-   //assign special data bus entries: constants 0 and 1
-   assign data_bus[`DATA_S0_B -: `DATA_W] = `DATA_W'd0; //zero constant
-   assign data_bus[`DATA_S1_B -: `DATA_W] = `DATA_W'd1; //one constant
 
    //flow interface
    assign data_bus[2*`DATABUS_W-1:`DATABUS_W] = flow_in;
    assign flow_out = data_bus[`DATABUS_W-1:0] ;
-
 
    //
    // CONTROL INTERFACE ADDRESS DECODER
