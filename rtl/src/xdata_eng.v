@@ -50,15 +50,10 @@ module xdata_eng (
 
    //WIDE ENGINE DATA BUS
    wire [2*`DATABUS_W-1:0]                        data_bus;
-   
-   //assign special data bus entries: constants 0 and 1
-   assign data_bus[`DATA_S0_B -: `DATA_W] = `DATA_W'd0; //zero constant
-   assign data_bus[`DATA_S1_B -: `DATA_W] = `DATA_W'd1; //one constant
 
    //flow interface
    assign data_bus[2*`DATABUS_W-1:`DATABUS_W] = flow_in;
    assign flow_out = data_bus[`DATABUS_W-1:0] ;
-
 
    //
    // CONTROL INTERFACE ADDRESS DECODER
@@ -101,12 +96,18 @@ module xdata_eng (
 
 
    // write
-   always @ (posedge rst, posedge clk)
-     if(rst) 
+   reg ctr_reg, rst_reg;
+   always @ (posedge rst, posedge clk) begin
+     if(rst) begin
        ctr_reg <= 1'b0;
-     else if(ctr_we)
+       rst_reg <= 1'b0;
+     end else if(ctr_we) begin
        if(control_valid)
          ctr_reg <= ctr_data_in[0];
+     end else
+       ctr_reg <= 1'b0;
+     rst_reg <= ctr_reg;
+   end
 
    wire run = control_valid & ctr_we &  ctr_data_in[0];
    wire run_reg = ctr_reg;
@@ -176,10 +177,7 @@ module xdata_eng (
 
    generate for (i=0; i < `nMEM; i=i+1) begin : mem_array
       //xmem  #(.mem_size(mem_size))  //for icarus
-      xmem  #(
-              .ADDR_W(MEM_ADDR_W[i])
-              )
-      mem (
+      xmem mem (
 	   .clk(clk),
 	   .rst(rst),
 	   .initA(run_reg),
@@ -192,17 +190,17 @@ module xdata_eng (
 	   // control interface
 	   .ctr_mem_valid(mem_valid[i]),
 	   .ctr_we(ctr_we),
-	   .ctr_addr(ctr_addr[MEM_ADDR_W[i]-1:0]),
+	   .ctr_addr(ctr_addr[`MEM_ADDR_W-1:0]),
 	   .ctr_data_in(ctr_data_in),
            
 	   // data interface
-	   .data_addr(data_addr[MEM_ADDR_W[i]-1:0]),
+	   .data_addr(data_addr[`MEM_ADDR_W-1:0]),
 	   .data_we(data_we),
 	   .data_mem_valid(data_mem_valid[i]),
 	   .data_data_in(data_data_in),
            
 	   // flow interface
-	   .databus_in(data_bus),
+	   .flow_in(data_bus),
 	   .flow_out(data_bus[`DATA_MEM0A_B - 2*i*`DATA_W -: 2*`DATA_W]),
            
 	   // configuration interface
@@ -237,10 +235,10 @@ module xdata_eng (
       for (i=0; i < `nALULITE; i=i+1) begin : add_LITE_array
 	 xalulite aluLITE (
 			   .clk(clk),
-			   .rst(run_reg),
+			   .rst(rst_reg),
 
 			   // flow interface
-	                   .databus_in(data_bus),
+	                   .flow_in(data_bus),
 			   .flow_out(data_bus[`DATA_ALULITE0_B - i*`DATA_W  -: `DATA_W]),
 
 			   // configuration interface
@@ -275,7 +273,7 @@ module xdata_eng (
       for (i=0; i < `nMULADD; i=i+1) begin : muladd_array
 	 xmuladd muladd (
 		         .clk(clk),
-		         .rst(run_reg),
+		         .rst(rst_reg),
 
 			 // flow interface
 	                 .flow_in(data_bus),

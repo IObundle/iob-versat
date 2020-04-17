@@ -5,7 +5,7 @@
 module xmem_tb;
 
    //parameters 
-   parameter clk_period = 20;
+   parameter clk_per = 20;
    integer i, j, aux_addr, print_flag = 0;
    
    //control 
@@ -98,13 +98,13 @@ module xmem_tb;
       config_bits = 0;
       
       //Global reset (100ns)
-      #(clk_period*5) rst = 0;
+      #(clk_per*5) rst = 0;
 
       //Testing data and control interfaces
       $display("\nTesting data and control interfaces");
       
       //Write values to memory
-      #clk_period ctr_mem_valid = 1;
+      #clk_per ctr_mem_valid = 1;
       ctr_we = 1;
       ctr_addr = 10;
       ctr_data_in = 32'hF0F0F0F0;
@@ -116,13 +116,13 @@ module xmem_tb;
       $display("Value written in memB: %x", 32'hF0F0F0F0);
 
       //Read values back from memory
-      #clk_period ctr_mem_valid = 0;
+      #clk_per ctr_mem_valid = 0;
       data_mem_valid = 0;
-      #clk_period ctr_mem_valid = 1;
+      #clk_per ctr_mem_valid = 1;
       ctr_we = 0;
       data_mem_valid = 1;
       data_we = 0;
-      #clk_period ctr_mem_valid = 0;
+      #clk_per ctr_mem_valid = 0;
       data_mem_valid = 0;
       $display("Value read from memA: %x", flow_out[2*`DATA_W-1 -: `DATA_W]);
       $display("Value read from memB: %x", flow_out[`DATA_W-1:0]);
@@ -155,25 +155,25 @@ module xmem_tb;
 
       //define start address
       initA = 1;
-      #(clk_period) initA = 0;
+      #(clk_per) initA = 0;
 
       //run
       runA = 1;
-      #(clk_period) runA = 0;
+      #(clk_per) runA = 0;
 
       //wait until done
-      #(clk_period) print_flag = 1;
+      #clk_per print_flag = 1;
       do
-        @(posedge clk) #1;
+        @(posedge clk) #clk_per;
       while(doneA == 0);
-      $finish;
+      print_flag = 0;
 
       //End simulation
       $finish;
    end
 	
    always 
-     #(clk_period/2) clk = ~clk;
+     #(clk_per/2) clk = ~clk;
 
    always @ (posedge clk) begin
       if(print_flag)

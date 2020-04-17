@@ -36,7 +36,7 @@
 `define ADDR_W 16
 
 // Number of data bus entries
-`define N         (2 + 2*`nMEM + `nALU + `nALULITE + `nMUL + `nMULADD + `nBS)
+`define N         (2*`nMEM + `nALU + `nALULITE + `nMUL + `nMULADD + `nBS)
 // Number of bits required for N
 `define N_W       ($clog2(`N)+1)
 
@@ -46,9 +46,7 @@
 //
 // Data bus bit map
 //
-`define DATA_S0_B       (`DATABUS_W-1)
-`define DATA_S1_B       (`DATA_S0_B - `DATA_W)
-`define DATA_MEM0A_B    (`DATA_S1_B - `DATA_W )
+`define DATA_MEM0A_B    (`DATABUS_W-1)
 `define DATA_ALU0_B     (`DATA_MEM0A_B - 2*`nMEM*`DATA_W)
 `define DATA_ALULITE0_B (`DATA_ALU0_B - `nALU*`DATA_W)
 `define DATA_MUL0_B     (`DATA_ALULITE0_B - `nALULITE*`DATA_W)

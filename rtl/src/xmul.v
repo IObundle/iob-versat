@@ -7,8 +7,8 @@ module xmul (
              input                      rst,
 
              //flow interface
-             input [2*`N*`DATA_W-1:0]   flow_in,
-             output reg [2*`DATA_W-1:0] flow_out,
+             input [2*`DATABUS_W-1:0]   flow_in,
+             output reg [`DATA_W-1:0] 	flow_out,
 
              //config interface
              input [`MUL_CONF_BITS-1:0] configdata
@@ -70,8 +70,7 @@ module xmul (
    always @ (posedge clk, posedge rst) 
      if (rst)
        flow_out <= `DATA_W'h0;
-     else if (enabled) begin
-	flow_out <= res;
-     end
+     else 
+       flow_out <= res;
    
 endmodule

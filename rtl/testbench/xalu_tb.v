@@ -36,10 +36,10 @@ module xalu_tb;
 
    //use least significant DATABUS_W bits
    assign configdata[`ALU_FNS_W-1:0]= alu_fns;
-   assign configdata[`ALU_CONF_BITS-1 -:`N_W] = 0; //s0
-   assign configdata[`ALU_CONF_BITS-`N_W-1-:`N_W] = 1; //s1
-   assign data_bus[`DATA_S0_B -: `DATA_W]= opa_comp;
-   assign data_bus[`DATA_S1_B -: `DATA_W]= opb_comp;
+   assign configdata[`ALU_CONF_BITS-1 -:`N_W] = 0; 
+   assign configdata[`ALU_CONF_BITS-`N_W-1-:`N_W] = 1;
+   assign data_bus[`DATA_MEM0A_B -: `DATA_W]= opa_comp;
+   assign data_bus[`DATA_MEM0A_B - `DATA_W -: `DATA_W]= opb_comp;
 
    initial begin
       
