@@ -1,3 +1,6 @@
+//use xconf_mem
+//`define CONF_MEM_USE
+
 // Total conf_reg bits
 `define CONF_BITS (2*`nMEM*`MEMP_CONF_BITS + `nALU*`ALU_CONF_BITS + `nALULITE*`ALULITE_CONF_BITS + `nMUL*`MUL_CONF_BITS + `nMULADD*`MULADD_CONF_BITS + `nBS*`BS_CONF_BITS)
 
@@ -33,3 +36,6 @@
 
 // clear config register
 `define CONF_CLEAR (1<<`CONF_REG_ADDR_W)
+
+//only used if CONF_MEM_USE is defined (ensures no conflict with FU configs)
+`define CONF_MEM (`CONF_CLEAR + (1<<(`CONF_REG_ADDR_W-1)))

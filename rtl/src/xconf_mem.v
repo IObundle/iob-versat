@@ -31,7 +31,7 @@ module xconf_mem(
 	.ADDR_W(`CONF_MEM_ADDR_W))
    mem (
    	.clk(clk),
-	.en(ctr_valid),
+	.en(1'b1),
 	.we(ctr_we),
 	.addr(ctr_addr),
 	.data_out(conf_out),

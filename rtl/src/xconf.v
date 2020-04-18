@@ -40,8 +40,9 @@ module xconf (
       if (ctr_addr <  (`CONF_BS0  + `nBS*`BS_CONF_OFFSET) || ctr_addr == `CONF_CLEAR)
         conf_reg_valid = ctr_valid;
 `ifdef CONF_MEM_USE
-      else if(`CONF_MEM == (ctr_addr & ({`CONF_REG_ADDR_W{1'b1}}<<`CONF_MEM_ADDR_W)))
+      else if(`CONF_MEM == (ctr_addr & ({`CONF_REG_ADDR_W+1{1'b1}}<<`CONF_MEM_ADDR_W))) begin
         conf_mem_valid = ctr_valid;
+      end
 `endif
       else if (ctr_valid)
         $display("Warning: unmapped config address %x at time %f", ctr_addr, $time);
@@ -80,7 +81,7 @@ module xconf (
 		       // control interface
 		       .ctr_valid(conf_mem_valid),
 		       .ctr_we(ctr_we),
-		       .ctr_addr(ctr_addr),
+		       .ctr_addr(ctr_addr[`CONF_MEM_ADDR_W-1:0]),
 		       .conf_ld(conf_ld)
 		       );
 `endif
