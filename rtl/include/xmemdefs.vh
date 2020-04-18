@@ -14,7 +14,8 @@
 // delay width = PERIOD_W
 // reverse = 1
 // ext = 1
-// mode = 00 = {en,we}
+// in_wr = 1
+// addr_out_en = 1
 
 // Number of config bits
 `define MEMP_CONF_BITS (`N_W + 4*`MEM_ADDR_W + 3*`PERIOD_W + 1 + 1 + 1 + 1)
@@ -30,8 +31,9 @@
 `define MEMP_CONF_DELAY 4'd7
 `define MEMP_CONF_RVRS 4'd8
 `define MEMP_CONF_EXT 4'd9
-`define MEMP_CONF_MODE 4'd10
-`define MEMP_CONF_OFFSET 4'd10
+`define MEMP_CONF_IN_WR 4'd10
+`define MEMP_CONF_ADDR_OUT_EN 4'd11
+`define MEMP_CONF_OFFSET 4'd12
 
 //MEM latency
 `define MEMP_LAT 1

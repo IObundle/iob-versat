@@ -2,7 +2,7 @@
 `include "xversat.vh"
 `include "xconfdefs.vh"
 
-module xconf_reg_tb;
+module xconf_tb;
 
 	parameter            		clk_per = 20;
         integer				i;
@@ -13,10 +13,6 @@ module xconf_reg_tb;
 
         //config interface
 	wire [`CONF_BITS-1:0]		conf_out;
-`ifdef CONF_MEM_USE
-	reg [`CONF_BITS-1:0]		conf_in;
-	reg 				conf_ld;
-`endif
   
         //control interface
 	reg 				ctr_valid;
@@ -24,7 +20,7 @@ module xconf_reg_tb;
 	reg [`CONF_REG_ADDR_W:0]	ctr_addr;
 	reg [`MEM_ADDR_W-1:0]  		ctr_data_in;
 
-	xconf_reg uut (
+	xconf uut (
 
   		//inputs
           	.clk(clk),
@@ -32,10 +28,6 @@ module xconf_reg_tb;
 
 		//config interface
                 .conf_out(conf_out),
-	`ifdef CONF_MEM_USE
-	        .conf_in(conf_in),
-	        .conf_ld(conf_ld),
-	`endif
 
 		//control interface
 		.ctr_valid(ctr_valid),
@@ -47,10 +39,10 @@ module xconf_reg_tb;
       initial begin
 	 
 `ifdef DEBUG
-         $dumpfile("xconf_reg.vcd");
+         $dumpfile("xconf.vcd");
          $dumpvars();
 `endif
-	 
+	
          //initialize Inputs
          clk = 0;
          rst = 1;
@@ -137,6 +129,11 @@ module xconf_reg_tb;
            else
 	     $display("ERROR: Not all BS config bits set to one");
          end
+
+         //trying to access out of range config position
+         $display("\nTrying to access out of range config position");
+         ctr_addr = `CONF_BS0  + `nBS*`BS_CONF_OFFSET;
+	 #clk_per;
 
          //clear configs
          $display("\nClearing all configs");

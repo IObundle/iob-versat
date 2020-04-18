@@ -1,9 +1,3 @@
-// Address widths
-//log2(max number of configuration fields)
-`define CONF_REG_ADDR_W 8
-//log2(size of conf cache)
-`define CONF_MEM_ADDR_W 3
-
 // Total conf_reg bits
 `define CONF_BITS (2*`nMEM*`MEMP_CONF_BITS + `nALU*`ALU_CONF_BITS + `nALULITE*`ALULITE_CONF_BITS + `nMUL*`MUL_CONF_BITS + `nMULADD*`MULADD_CONF_BITS + `nBS*`BS_CONF_BITS)
 
@@ -28,5 +22,14 @@
 `define CONF_MUL0 (`CONF_ALULITE0 + `nALULITE*`ALULITE_CONF_OFFSET)
 `define CONF_MULADD0 (`CONF_MUL0  + `nMUL*`MUL_CONF_OFFSET)
 `define CONF_BS0 (`CONF_MULADD0  + `nMULADD*`MULADD_CONF_OFFSET)
+
+//
+// Address widths
+//
+//log2(max number of configuration fields)
+`define CONF_REG_ADDR_W ($clog2(`CONF_BS0  + `nBS*`BS_CONF_OFFSET))
+//log2(size of conf cache)
+`define CONF_MEM_ADDR_W 3
+
 // clear config register
-`define CONF_CLEAR (1<<CONF_REG_ADDR_W)
+`define CONF_CLEAR (1<<`CONF_REG_ADDR_W)
