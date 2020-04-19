@@ -44,7 +44,6 @@ module xdata_eng_tb;
    parameter sBS0 = sMULADD0 + `nMULADD;
  
    integer i, j, k, l, res;
-   reg signed [`DATA_W-1:0] acc;
    integer pixels[24:0], weights[8:0], bias;
 
    // Instantiate the Unit Under Test (UUT)
@@ -223,21 +222,27 @@ module xdata_eng_tb;
          #clk_per ctr_we = 0;
          ctr_data_in = 0;
 
-         //wait until mem0B is done
+         //wait until config is done
          do begin
            #clk_per;
          end while(ctr_data_out == 0);
-     
-         //read result
-         acc = flow_out[`DATA_MEM0A_B - 4*`DATA_W -: `DATA_W];
-         $write("%d", acc);
        end
-       $write("\n");
      end
 
-     //end simulation
+     //read results
      ctr_valid = 0;
      ctr_addr[`nMEM_W+`MEM_ADDR_W] = 0;
+     data_valid = 1; 
+     for(i = 0; i < 3; i++) begin
+       for(j = 0; j < 3; j++) begin
+         data_addr = 2**(`MEM_ADDR_W+1) + 3*i + j;
+         #clk_per $write("%d ", data_data_out);
+       end
+       $write("\n"); 
+     end
+     
+     //end simulation
+     data_valid = 0;
      $finish;
    end
 	
