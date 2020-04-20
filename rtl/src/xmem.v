@@ -3,7 +3,7 @@
 `include "xmemdefs.vh"
 
 module xmem #(
-              parameter MEM_INIT_FILE=0
+              parameter MEM_INIT_FILE="none"
               )
    (
     //control

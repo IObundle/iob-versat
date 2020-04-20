@@ -2,7 +2,7 @@
 `include "xversat.vh"
 `include "xconfdefs.vh"
 
-module xconf_reg_tb;
+module xconf_tb;
 
 	parameter            		clk_per = 20;
         integer				i;
@@ -13,10 +13,6 @@ module xconf_reg_tb;
 
         //config interface
 	wire [`CONF_BITS-1:0]		conf_out;
-`ifdef CONF_MEM_USE
-	reg [`CONF_BITS-1:0]		conf_in;
-	reg 				conf_ld;
-`endif
   
         //control interface
 	reg 				ctr_valid;
@@ -24,7 +20,7 @@ module xconf_reg_tb;
 	reg [`CONF_REG_ADDR_W:0]	ctr_addr;
 	reg [`MEM_ADDR_W-1:0]  		ctr_data_in;
 
-	xconf_reg uut (
+	xconf uut (
 
   		//inputs
           	.clk(clk),
@@ -32,10 +28,6 @@ module xconf_reg_tb;
 
 		//config interface
                 .conf_out(conf_out),
-	`ifdef CONF_MEM_USE
-	        .conf_in(conf_in),
-	        .conf_ld(conf_ld),
-	`endif
 
 		//control interface
 		.ctr_valid(ctr_valid),
@@ -44,13 +36,18 @@ module xconf_reg_tb;
 		.ctr_data_in(ctr_data_in)
        );
 
+`ifdef CONF_MEM_USE
+       reg [`CONF_MEM_ADDR_W-1:0]	conf_mem_last_addr;
+       reg [`CONF_BITS-1:0]		conf_mem_last_data;
+`endif
+
       initial begin
 	 
 `ifdef DEBUG
-         $dumpfile("xconf_reg.vcd");
+         $dumpfile("xconf.vcd");
          $dumpvars();
 `endif
-	 
+
          //initialize Inputs
          clk = 0;
          rst = 1;
@@ -138,6 +135,17 @@ module xconf_reg_tb;
 	     $display("ERROR: Not all BS config bits set to one");
          end
 
+`ifdef CONF_MEM_USE
+	 //save the last config and conf_mem address
+	 conf_mem_last_addr = ctr_addr[`CONF_MEM_ADDR_W-1:0];
+	 conf_mem_last_data = conf_out;
+`endif
+
+         //trying to access out of range config position
+         $display("\nTrying to access out of range config position");
+         ctr_addr = `CONF_BS0  + `nBS*`BS_CONF_OFFSET;
+	 #clk_per;
+
          //clear configs
          $display("\nClearing all configs");
          ctr_addr = `CONF_CLEAR;
@@ -146,6 +154,18 @@ module xconf_reg_tb;
 	   $display("OK: All configs cleared\n"); 
          else
 	   $display("ERROR: Not all configs cleared\n");
+
+`ifdef CONF_MEM_USE
+	 //load conf from xconf_mem to xconf_reg
+	 $display("Load last config saved in xconf_mem to xconf_reg");
+	 ctr_we = 0;
+         ctr_addr = `CONF_MEM + conf_mem_last_addr;
+         #(clk_per*2);
+         if(conf_out == conf_mem_last_data)
+	   $display("OK: Last config saved in mem loaded to reg\n");
+         else
+	   $display("ERROR: Last config saved in mem NOT loaded to reg\n");
+`endif
 
          //end simulation
 	 ctr_valid = 0;

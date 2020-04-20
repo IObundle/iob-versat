@@ -1,19 +1,19 @@
 `timescale 1ns / 1ps
 `include "xversat.vh"
-`include "xmuldefs.vh"
-`include "xmuladddefs.vh"
 `include "xconfdefs.vh"
 
 module xconf_mem(
 		 input 			      clk,
 		 input 			      rst,
 
-		 //configuration port
-		 input 			      req,
-		 input 			      rnw,
-		 input [`CONF_MEM_ADDR_W-1:0] addr,
-		 input [`CONF_BITS-1:0]       data_in,
-		 output reg [`CONF_BITS-1:0]  data_out,
+                 //data interface
+		 input [`CONF_BITS-1:0]       conf_in,
+		 output reg [`CONF_BITS-1:0]  conf_out,
+
+		 //control interface
+		 input 			      ctr_valid,
+		 input 			      ctr_we,
+		 input [`CONF_MEM_ADDR_W-1:0] ctr_addr,
 		 output reg 		      conf_ld
 		 );
 
@@ -22,18 +22,20 @@ module xconf_mem(
       if(rst)
 	conf_ld <= 1'b0;
       else
-	conf_ld <= req & rnw;
+	conf_ld <= ctr_valid & ~ctr_we;
    end
 
    //instantiate the config cache memory
-`ifdef ALTERA
-   reg [`CONF_BITS-1:0] mem [(2**`CONF_MEM_ADDR_W)-1:0];
-   always @ (posedge clk) begin
-      if (~rnw)
-        mem[addr] <= data_in;
-      data_out <= mem[addr];
-   end
-`endif
+   iob_1p_mem #(
+	.DATA_W(`CONF_BITS),
+	.ADDR_W(`CONF_MEM_ADDR_W))
+   mem (
+   	.clk(clk),
+	.en(1'b1),
+	.we(ctr_we),
+	.addr(ctr_addr),
+	.data_out(conf_out),
+	.data_in(conf_in)
+   );
 
 endmodule
-
