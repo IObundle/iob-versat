@@ -3,13 +3,14 @@
 //
 
 // VERSAT DATA WIDTH
-`define DATA_W 32 // bits
+`ifndef DATA_W
+  `define DATA_W 32 // bits
+`endif
 
 // NUMBER OF STAGES
 `define nSTAGE 5
 
 // Number of functional units in each stage
-
 `define nMEM      6
 `define nALU      0
 `define nALULITE  2
@@ -19,21 +20,21 @@
 
 // Data memories address width
 `define MEM_ADDR_W 10
+`define PERIOD_W 10  //LOG2 of max period and duty cicle
 
 //
 // DO NOT EDIT BEYOND THIS POINT
 //
-// Number of data bus entries
-// (note 2 special entries for constants 0 and 1)
 
+//Number of bits required for nSTAGE
 `define nSTAGE_W $clog2(`nSTAGE)
 
 // Number of bits to select memory
 `define nMEM_W $clog2(`nMEM)
 
-//`define ADDR_W (`nSTAGE_W+1+`nMEM_W+`MEM_ADDR_W)
-//need to enter value by hand
-`define ADDR_W 16
+//VERSAT ADDRESS WIDTH
+//2 extra bits are to select xdata_eng/xconf and run/done
+`define VERSAT_ADDR_W (`nSTAGE_W+2+`nMEM_W+`MEM_ADDR_W)
 
 // Number of data bus entries
 `define N         (2*`nMEM + `nALU + `nALULITE + `nMUL + `nMULADD + `nBS)

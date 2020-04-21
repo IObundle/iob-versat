@@ -1,8 +1,3 @@
-//main defines
-
-//MEM_ADDR_W must be defined in xversat.vh 
-`define PERIOD_W 10  //LOG2 of max period and duty cicle
-
 // MEM port config bits
 // input selection  bits = N_W
 // start width = MEM_ADDR_W
@@ -21,20 +16,19 @@
 `define MEMP_CONF_BITS (`N_W + 4*`MEM_ADDR_W + 3*`PERIOD_W + 1 + 1 + 1 + 1)
 
 //MEM configuration offsets
-`define MEMP_CONF_ITER 4'd0
-`define MEMP_CONF_PER 4'd1
-`define MEMP_CONF_DUTY 4'd2
-`define MEMP_CONF_SEL 4'd3
-`define MEMP_CONF_START 4'd4
-`define MEMP_CONF_SHIFT 4'd5
-`define MEMP_CONF_INCR 4'd6
-`define MEMP_CONF_DELAY 4'd7
-`define MEMP_CONF_RVRS 4'd8
-`define MEMP_CONF_EXT 4'd9
-`define MEMP_CONF_IN_WR 4'd10
-`define MEMP_CONF_ADDR_OUT_EN 4'd11
-`define MEMP_CONF_OFFSET 4'd12
+`define MEMP_CONF_ITER 		{`VERSAT_ADDR_W{1'd0}}
+`define MEMP_CONF_PER 		(`MEMP_CONF_ITER  	+ 1'd1)
+`define MEMP_CONF_DUTY 		(`MEMP_CONF_PER   	+ 1'd1)
+`define MEMP_CONF_SEL 		(`MEMP_CONF_DUTY  	+ 1'd1)
+`define MEMP_CONF_START 	(`MEMP_CONF_SEL   	+ 1'd1)
+`define MEMP_CONF_SHIFT 	(`MEMP_CONF_START 	+ 1'd1) 
+`define MEMP_CONF_INCR 		(`MEMP_CONF_SHIFT 	+ 1'd1)
+`define MEMP_CONF_DELAY 	(`MEMP_CONF_INCR  	+ 1'd1)
+`define MEMP_CONF_RVRS 		(`MEMP_CONF_DELAY 	+ 1'd1)
+`define MEMP_CONF_EXT 		(`MEMP_CONF_RVRS        + 1'd1)
+`define MEMP_CONF_IN_WR 	(`MEMP_CONF_EXT         + 1'd1)
+`define MEMP_CONF_ADDR_OUT_EN 	(`MEMP_CONF_IN_WR       + 1'd1)
+`define MEMP_CONF_OFFSET 	(`MEMP_CONF_ADDR_OUT_EN + 1'd1)
 
 //MEM latency
 `define MEMP_LAT 1
-
