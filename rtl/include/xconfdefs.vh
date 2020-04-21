@@ -19,7 +19,7 @@
 // Memory map
 //
 // FU configurations 
-`define CONF_MEM0A {`VERSAT_ADDR_W{1'b0}}
+`define CONF_MEM0A 0
 `define CONF_ALU0 (`CONF_MEM0A + 2*`nMEM*`MEMP_CONF_OFFSET)
 `define CONF_ALULITE0 (`CONF_ALU0 + `nALU*`ALU_CONF_OFFSET)
 `define CONF_MUL0 (`CONF_ALULITE0 + `nALULITE*`ALULITE_CONF_OFFSET)

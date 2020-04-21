@@ -14,10 +14,10 @@
 `define BS_SHL     `BS_FNS_W'd2
 
 //BS configuration offsets
-`define BS_CONF_SELD   {`VERSAT_ADDR_W{1'd0}}
-`define BS_CONF_SELS   (`BS_CONF_SELD + 1'd1)
-`define BS_CONF_FNS    (`BS_CONF_SELS + 1'd1)
-`define BS_CONF_OFFSET (`BS_CONF_FNS  + 1'd1)
+`define BS_CONF_SELD   0
+`define BS_CONF_SELS   1
+`define BS_CONF_FNS    2
+`define BS_CONF_OFFSET 3
 
 //BS latency
 `define BS_LAT 2

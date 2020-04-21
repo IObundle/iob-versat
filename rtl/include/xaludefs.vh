@@ -22,10 +22,10 @@
 `define ALU_ABS           `ALU_FNS_W'd15
 
 //ALU internal configuration address offsets
-`define ALU_CONF_SELA 	  {`VERSAT_ADDR_W{1'd0}}
-`define ALU_CONF_SELB     (`ALU_CONF_SELA + 1'd1)
-`define ALU_CONF_FNS      (`ALU_CONF_SELB + 1'd1)
-`define ALU_CONF_OFFSET   (`ALU_CONF_FNS  + 1'd1)
+`define ALU_CONF_SELA 	  0
+`define ALU_CONF_SELB     1
+`define ALU_CONF_FNS      2
+`define ALU_CONF_OFFSET   3
 
 //ALU latency
 `define ALU_LAT 2

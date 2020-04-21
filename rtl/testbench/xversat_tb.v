@@ -16,7 +16,7 @@ module xversat_tb;
 
    //ctr interface
    reg 			   	ctr_valid;
-   reg [`VERSAT_ADDR_W-1:0]  	ctr_addr;
+   reg [`CTR_ADDR_W-1:0]  	ctr_addr;
    reg 			   	ctr_we;
    reg [`DATA_W-1:0]       	ctr_data_in;
    wire [`DATA_W-1:0]     	ctr_data_out;
@@ -24,17 +24,17 @@ module xversat_tb;
    //data interface
    reg 			   	data_valid;
    reg 			   	data_we;
-   reg [`VERSAT_ADDR_W-1:0] 	data_addr;
+   reg [`CTR_ADDR_W-1:0] 	data_addr;
    reg [`DATA_W-1:0] 	   	data_data_in;
    wire signed [`DATA_W-1:0]   	data_data_out;
 
    //parameters
    parameter 			clk_per     = 20;
-   parameter			VERSAT_1    = (0<<(`VERSAT_ADDR_W-`nSTAGE_W));
-   parameter			VERSAT_2    = (1<<(`VERSAT_ADDR_W-`nSTAGE_W));
-   parameter			VERSAT_3    = (2<<(`VERSAT_ADDR_W-`nSTAGE_W));
-   parameter			VERSAT_4    = (3<<(`VERSAT_ADDR_W-`nSTAGE_W));
-   parameter			VERSAT_5    = (4<<(`VERSAT_ADDR_W-`nSTAGE_W));
+   parameter			VERSAT_1    = (0<<(`CTR_ADDR_W-`nSTAGE_W));
+   parameter			VERSAT_2    = (1<<(`CTR_ADDR_W-`nSTAGE_W));
+   parameter			VERSAT_3    = (2<<(`CTR_ADDR_W-`nSTAGE_W));
+   parameter			VERSAT_4    = (3<<(`CTR_ADDR_W-`nSTAGE_W));
+   parameter			VERSAT_5    = (4<<(`CTR_ADDR_W-`nSTAGE_W));
    parameter			MEM0        = (0<<`MEM_ADDR_W);
    parameter			MEM1        = (1<<`MEM_ADDR_W);
    parameter			MEM2        = (2<<`MEM_ADDR_W);

@@ -14,10 +14,10 @@
 `define MUL_DIV2_HI 2'd3
 
 // MUL configuration offsets
-`define MUL_CONF_SELA 	  {`VERSAT_ADDR_W{1'd0}}
-`define MUL_CONF_SELB 	  (`MUL_CONF_SELA + 1'd1)
-`define MUL_CONF_FNS 	  (`MUL_CONF_SELB + 1'd1)
-`define MUL_CONF_OFFSET   (`MUL_CONF_FNS  + 1'd1)
+`define MUL_CONF_SELA 	  0
+`define MUL_CONF_SELB 	  1
+`define MUL_CONF_FNS 	  2
+`define MUL_CONF_OFFSET   3
 
 // MUL latency
 `define MUL_LAT 3

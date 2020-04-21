@@ -17,12 +17,12 @@
 
 
 //MULADD configuration offsets
-`define MULADD_CONF_SELA      {`VERSAT_ADDR_W{1'd0}}
-`define MULADD_CONF_SELB      (`MULADD_CONF_SELA   + 1'd1)
-`define MULADD_CONF_SELO      (`MULADD_CONF_SELB   + 1'd1)
-`define MULADD_CONF_FNS       (`MULADD_CONF_SELO   + 1'd1)
-`define MULADD_CONF_DELAY     (`MULADD_CONF_FNS    + 1'd1)
-`define MULADD_CONF_OFFSET    (`MULADD_CONF_DELAY  + 1'd1)
+`define MULADD_CONF_SELA      0
+`define MULADD_CONF_SELB      1
+`define MULADD_CONF_SELO      2
+`define MULADD_CONF_FNS       3
+`define MULADD_CONF_DELAY     4
+`define MULADD_CONF_OFFSET    5
 
 //MULADD combinational architecture
 //`define MULADD_COMB

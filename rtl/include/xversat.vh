@@ -3,9 +3,7 @@
 //
 
 // VERSAT DATA WIDTH
-`ifndef DATA_W
-  `define DATA_W 32 // bits
-`endif
+`define DATA_W 32 // bits
 
 // NUMBER OF STAGES
 `define nSTAGE 5
@@ -32,9 +30,9 @@
 // Number of bits to select memory
 `define nMEM_W $clog2(`nMEM)
 
-//VERSAT ADDRESS WIDTH
+//CONTROL ADDRESS WIDTH
 //2 extra bits are to select xdata_eng/xconf and run/done
-`define VERSAT_ADDR_W (`nSTAGE_W+2+`nMEM_W+`MEM_ADDR_W)
+`define CTR_ADDR_W (`nSTAGE_W+2+`nMEM_W+`MEM_ADDR_W)
 
 // Number of data bus entries
 `define N         (2*`nMEM + `nALU + `nALULITE + `nMUL + `nMULADD + `nBS)

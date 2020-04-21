@@ -18,14 +18,14 @@ module xversat (
 
                  //control interface
                  input                    	ctr_valid,
-                 input [`VERSAT_ADDR_W-1:0]     ctr_addr,
+                 input [`CTR_ADDR_W-1:0]     ctr_addr,
                  input                    	ctr_we,
                  input [`DATA_W-1:0]      	ctr_data_in,
                  output reg [`DATA_W-1:0]	ctr_data_out,
 
                  //data interface
                  input                    	data_valid,
-                 input [`VERSAT_ADDR_W-1:0]    	data_addr,
+                 input [`CTR_ADDR_W-1:0]    	data_addr,
                  input                    	data_we,
                  input [`DATA_W-1:0]      	data_data_in,
                  output reg [`DATA_W-1:0] 	data_data_out
@@ -49,7 +49,7 @@ module xversat (
      integer j;
      stage_ctr_valid = `nSTAGE'b0;
        for(j=0; j<`nSTAGE; j=j+1)
-          if (ctr_addr[`VERSAT_ADDR_W-1 -: `nSTAGE_W] == j[`nSTAGE_W-1:0])
+          if (ctr_addr[`CTR_ADDR_W-1 -: `nSTAGE_W] == j[`nSTAGE_W-1:0])
             stage_ctr_valid[j] = ctr_valid;
    end 
 
@@ -74,7 +74,7 @@ module xversat (
      integer j;
      stage_data_valid = `nSTAGE'b0;
        for(j=0; j<`nSTAGE; j=j+1)
-          if (data_addr[`VERSAT_ADDR_W-1 -: `nSTAGE_W] == j[`nSTAGE_W-1:0])
+          if (data_addr[`CTR_ADDR_W-1 -: `nSTAGE_W] == j[`nSTAGE_W-1:0])
             stage_data_valid[j] = data_valid;
    end 
 
@@ -104,14 +104,14 @@ module xversat (
                       //control interface
                       .ctr_valid(stage_ctr_valid[i]),
                       .ctr_we(ctr_we),
-                      .ctr_addr(ctr_addr[`VERSAT_ADDR_W-`nSTAGE_W-1:0]),
+                      .ctr_addr(ctr_addr[`CTR_ADDR_W-`nSTAGE_W-1:0]),
                       .ctr_data_in(ctr_data_in),
                       .ctr_data_out(stage_ctr_data_out[i]),
                       
                       //data  interface
                       .data_valid(stage_data_valid[i]),
                       .data_we(data_we),
-                      .data_addr(data_addr[`VERSAT_ADDR_W-`nSTAGE_W-3:0]),
+                      .data_addr(data_addr[`CTR_ADDR_W-`nSTAGE_W-3:0]),
                       .data_data_in(data_data_in),
                       .data_data_out(stage_data_data_out[i]),
                       

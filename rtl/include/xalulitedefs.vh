@@ -16,10 +16,10 @@
 `define ALULITE_AND              3'd7
 
 //ALULITE internal configuration address offsets
-`define ALULITE_CONF_SELA        {`VERSAT_ADDR_W{1'd0}}
-`define ALULITE_CONF_SELB        (`ALULITE_CONF_SELA + 1'd1)
-`define ALULITE_CONF_FNS         (`ALULITE_CONF_SELB + 1'd1)
-`define ALULITE_CONF_OFFSET      (`ALULITE_CONF_FNS  + 1'd1)
+`define ALULITE_CONF_SELA        0
+`define ALULITE_CONF_SELB        1
+`define ALULITE_CONF_FNS         2
+`define ALULITE_CONF_OFFSET      3
 
 //ALULITE latency
 `define ALULITE_LAT            	 2
