@@ -1,63 +1,71 @@
-/* ****************************************************************************
-
-  Description: Testbench to run Versat
-               Loads configuration and data from file
-               Starts the program
-               Detects program end
-               Dumps data to file
-
-***************************************************************************** */
-
 `timescale 1ns / 1ps
 `include "xversat.vh"
-//total versat memory
-`define MEM_DATA_SZ (nMEM * 2**`MEM_ADDR_W)
+`include "xmemdefs.vh"
+`include "xaludefs.vh"
+`include "xalulitedefs.vh"
+`include "xmuldefs.vh"
+`include "xmuladddefs.vh"
+`include "xbsdefs.vh"
+`include "xconfdefs.vh"
 
-//
-// MEMORY MAP
-//
-`define CTR_ENG_CTR_ADDR (1<<(`nMEM_W+`MEM_ADDR_W))
-`define CTR_CONF_REG_ADDR (2'b10<<(`nMEM_W+`MEM_ADDR_W-1))
-`define CTR_CONF_REG_CTR_ADDR (3'b101<<(`nMEM_W+`MEM_ADDR_W-2))
-`define CTR_CONF_MEM_ADDR (3'b110<<(`nMEM_W+`MEM_ADDR_W-2))
+module xversat_tb;
 
-module xtop_tb;
-
-   //parameters
-   parameter clk_period = 10;
-
-   reg clk;
-   reg rst;
+   //inputs
+   reg 			   	clk;
+   reg 			   	rst;
 
    //ctr interface
-   reg 			   ctr_valid;
-   reg [`ADDR_W:0]         ctr_addr;
-   reg 			   ctr_we;
-   reg [`DATA_W-1:0]       ctr_data_in;
-   wire [`DATA_W-1:0]      ctr_data_out;
+   reg 			   	ctr_valid;
+   reg [`VERSAT_ADDR_W-1:0]  	ctr_addr;
+   reg 			   	ctr_we;
+   reg [`DATA_W-1:0]       	ctr_data_in;
+   wire [`DATA_W-1:0]     	ctr_data_out;
 
    //data interface
-   reg 			   data_valid;
-   reg 			   data_we;
-   reg [`ADDR_W-1:0] 	   data_addr;
-   reg [`DATA_W-1:0] 	   data_data_in;
-   wire [`DATA_W-1:0] 	   data_data_out;
+   reg 			   	data_valid;
+   reg 			   	data_we;
+   reg [`VERSAT_ADDR_W-1:0] 	data_addr;
+   reg [`DATA_W-1:0] 	   	data_data_in;
+   wire signed [`DATA_W-1:0]   	data_data_out;
 
+   //parameters
+   parameter 			clk_per     = 20;
+   parameter			VERSAT_1    = (0<<(`VERSAT_ADDR_W-`nSTAGE_W));
+   parameter			VERSAT_2    = (1<<(`VERSAT_ADDR_W-`nSTAGE_W));
+   parameter			VERSAT_3    = (2<<(`VERSAT_ADDR_W-`nSTAGE_W));
+   parameter			VERSAT_4    = (3<<(`VERSAT_ADDR_W-`nSTAGE_W));
+   parameter			VERSAT_5    = (4<<(`VERSAT_ADDR_W-`nSTAGE_W));
+   parameter			MEM0        = (0<<`MEM_ADDR_W);
+   parameter			MEM1        = (1<<`MEM_ADDR_W);
+   parameter			MEM2        = (2<<`MEM_ADDR_W);
+   parameter			RUN_DONE    = (1<<(`nMEM_W+`MEM_ADDR_W));
+   parameter			CONF_BASE   = (1<<(`nMEM_W+`MEM_ADDR_W+1));
+   parameter 			sMEM0A      = 0;
+   parameter 			sALU0       = sMEM0A + 2*`nMEM;
+   parameter 			sALULITE0   = sALU0 + `nALU;
+   parameter 			sMUL0       = sALULITE0 + `nALULITE;
+   parameter 			sMULADD0    = sMUL0 + `nMUL;
+   parameter 			sBS0        = sMULADD0 + `nMULADD;
+   parameter 			sMEM0A_p    = 0 + (1<<(`N_W-1));
+   parameter 			sALU0_p     = sMEM0A + 2*`nMEM + (1<<(`N_W-1));
+   parameter 			sALULITE0_p = sALU0 + `nALU + (1<<(`N_W-1));
+   parameter 			sMUL0_p     = sALULITE0 + `nALULITE + (1<<(`N_W-1));
+   parameter 			sMULADD0_p  = sMUL0 + `nMUL + (1<<(`N_W-1));
+   parameter 			sBS0_p      = sMULADD0 + `nMULADD + (1<<(`N_W-1));
 
-   // Testbench data
-   // memory
-   reg [`DATA_W-1:0] 	   data [`MEM_DATA_SZ-1:0];
+   //integer variables
+   integer i, j, k, l, m; 
+   integer pixels[25*5-1:0], weights[9*5-1:0], bias, res;
 
    // Instantiate the Unit Under Test (UUT)
    xversat uut (
 	     .clk(clk),
 	     .rst(rst),
-	     // parallel interface
+	     .ctr_valid(ctr_valid),
 	     .ctr_addr(ctr_addr),
 	     .ctr_we(ctr_we),
 	     .ctr_data_in(ctr_data_in),
 	     .ctr_data_out(ctr_data_out),
-
 	     .data_valid(data_valid),
 	     .data_we(data_we),
 	     .data_addr(data_addr),
@@ -65,124 +73,675 @@ module xtop_tb;
 	     .data_data_out(data_data_out)
 	     );
 
-/*
-
- BEGIN TEST PROGRAM
-
- */
-   wire 		   sys_timer_en;
-   integer 		   k, sys_timer;
-   integer                 start_time = $time;
-
    initial begin
 
 `ifdef DEBUG
-      $dumpfile("xtop_tb.vcd");
+      $dumpfile("xversat.vcd");
       $dumpvars();
 `endif
+	
+      $display("\nTesting one 3D convolution with five 5x5 input FMs and five 3x3 kernels");
 
-      // Initialize clk and rst
-      clk = 1;
-      rst = 0;
-
-      // Initialize control interface
+      //initialize inputs
+      clk = 0;
+      rst = 1;
+      ctr_valid = 0;
       ctr_we = 0;
-      ctr_addr = 1;
-
-      // Initialize data interface
+      ctr_addr = 0;
+      ctr_data_in = 0;
       data_valid = 0;
-      data_we = 1;
+      data_we = 0;
       data_addr = 0;
       data_data_in = 0;
 
-      // Pulse reset
-      #(clk_period*1.1) rst = 1;
-      #clk_period rst = 0;
+      // Wait 100 ns for global reset to finish
+      #(clk_per*5) rst = 0;
 
-`ifdef PROG_MEM_USE
-      //
-      // Load RAM program
-      //
-
-      // insert code here to load RAM program via DMA
-`endif
-
-
-      //
-      // Load data from infile
-      //
-
-      // Read data from input file
-      $display("Engine memory size: ", `MEM_DATA_SZ);
-      //$readmemh("./data_in.hex", data, 0,  `MEM_DATA_SZ - 1);
-
-      // Load data memories using data interface
-      /*
-       data_valid = 1;
-       data_we = 0;
-
-       for (k = 0; k < `MEM_DATA_SZ; k=k+1) begin
-       data_data_in = data[k];
-       #clk_period data_addr = data_addr + 1;
+      //write 5x5 feature map in mem0 for VERSAT 1
+      data_valid = 1;
+      data_we = 1;
+      for(i = 0; i < 25; i++) begin
+        data_addr = VERSAT_1 + MEM0 + i;
+        data_data_in = $random%50;
+        pixels[i] = data_data_in;
+        #clk_per;
       end
-       
-       data_valid = 0;
-       data_we = 1;
-       */
 
-      //
-      // Start Versat (write non-zero value to R0)
-      //
+      //write 3x3 kernel and bias in mem1 for VERSAT1
+      for(i = 0; i < 9; i++) begin
+        data_addr = VERSAT_1 + MEM1 + i;
+        data_data_in = $random%10;
+        weights[i] = data_data_in;
+        #clk_per;
+      end
 
-      ctr_control_addr = `CTR_ENG_CTR_ADDR;
-      ctr_data_in = 1;
+      //write bias after weights of VERSAT1
+      data_addr++;
+      data_data_in = $random%20;
+      bias = data_data_in;
+      #clk_per;
+
+      //write 5x5 feature map in mem0 for VERSAT 2
+      for(i = 0; i < 25; i++) begin
+        data_addr = VERSAT_2 + MEM0 + i;
+        data_data_in = $random%50;
+        pixels[25+i] = data_data_in;
+        #clk_per;
+      end
+
+      //write 3x3 kernel and bias in mem1 for VERSAT2
+      for(i = 0; i < 9; i++) begin
+        data_addr = VERSAT_2 + MEM1 + i;
+        data_data_in = $random%10;
+        weights[9+i] = data_data_in;
+        #clk_per;
+      end
+
+      //write 5x5 feature map in mem0 for VERSAT 3
+      for(i = 0; i < 25; i++) begin
+        data_addr = VERSAT_3 + MEM0 + i;
+        data_data_in = $random%50;
+        pixels[50+i] = data_data_in;
+        #clk_per;
+      end
+
+      //write 3x3 kernel and bias in mem1 for VERSAT3
+      for(i = 0; i < 9; i++) begin
+        data_addr = VERSAT_3 + MEM1 + i;
+        data_data_in = $random%10;
+        weights[18+i] = data_data_in;
+        #clk_per;
+      end
+
+      //write 5x5 feature map in mem0 for VERSAT 4
+      for(i = 0; i < 25; i++) begin
+        data_addr = VERSAT_4 + MEM0 + i;
+        data_data_in = $random%50;
+        pixels[75+i] = data_data_in;
+        #clk_per;
+      end
+
+      //write 3x3 kernel and bias in mem1 for VERSAT4
+      for(i = 0; i < 9; i++) begin
+        data_addr = VERSAT_4 + MEM1 + i;
+        data_data_in = $random%10;
+        weights[27+i] = data_data_in;
+        #clk_per;
+      end
+
+      //write 5x5 feature map in mem0 for VERSAT 5
+      for(i = 0; i < 25; i++) begin
+        data_addr = VERSAT_5 + MEM0 + i;
+        data_data_in = $random%50;
+        pixels[100+i] = data_data_in;
+        #clk_per;
+      end
+
+      //write 3x3 kernel and bias in mem1 for VERSAT5
+      for(i = 0; i < 9; i++) begin
+        data_addr = VERSAT_5 + MEM1 + i;
+        data_data_in = $random%10;
+        weights[36+i] = data_data_in;
+        #clk_per;
+      end
+
+      //stop writing
+      data_valid = 0;
+      data_we = 0;
+
+      //expected result of 3D convolution
+      $display("\nExpected result of 3D convolution"); 
+      for(i = 0; i < 3; i++) begin
+        for(j = 0; j < 3; j++) begin
+          res = bias;
+          for(k = 0; k < 5; k++) begin
+            for(l = 0; l < 3; l++) begin
+              for(m = 0; m < 3; m++) begin
+                res += pixels[i*5+j+k*25+l*5+m] * weights[9*k+l*3+m];
+              end
+            end
+          end
+          $write("%d", res);
+        end
+        $write("\n");
+      end
+
+      ///////////////////////////////////////////////////////////////////////////////
+      // VERSAT 1
+      ///////////////////////////////////////////////////////////////////////////////
+
+      ctr_valid = 1;
       ctr_we = 1;
-      #clk_period ctr_we = 0;
 
+      //configure mem0A to read 3x3 block from feature map
+      ctr_addr = VERSAT_1 + CONF_BASE + `CONF_MEM0A + 0*`MEMP_CONF_OFFSET + `MEMP_CONF_ITER;
+      ctr_data_in = 3; //iterations
+      #clk_per;
+      ctr_addr = VERSAT_1 + CONF_BASE + `CONF_MEM0A + 0*`MEMP_CONF_OFFSET + `MEMP_CONF_PER;
+      ctr_data_in = 3; //period
+      #clk_per;
+      ctr_addr = VERSAT_1 + CONF_BASE + `CONF_MEM0A + 0*`MEMP_CONF_OFFSET + `MEMP_CONF_DUTY;
+      ctr_data_in = 3; //duty
+      #clk_per;
+      ctr_addr = VERSAT_1 + CONF_BASE + `CONF_MEM0A + 0*`MEMP_CONF_OFFSET + `MEMP_CONF_SHIFT;
+      ctr_data_in = 5-3; //shift
+      #clk_per;
+      ctr_addr = VERSAT_1 + CONF_BASE + `CONF_MEM0A + 0*`MEMP_CONF_OFFSET + `MEMP_CONF_INCR;
+      ctr_data_in = 1; //incr
+      #clk_per;
 
-      $display("Total engine run time: %0d",($time-start_time)/clk_period);
-      $display("Controller Clocks: %0d", sys_timer);
+      //configure mem1A to read kernel
+      ctr_addr = VERSAT_1 + CONF_BASE + `CONF_MEM0A + 2*`MEMP_CONF_OFFSET + `MEMP_CONF_ITER;
+      ctr_data_in = 10; //iterations
+      #clk_per;
+      ctr_addr = VERSAT_1 + CONF_BASE + `CONF_MEM0A + 2*`MEMP_CONF_OFFSET + `MEMP_CONF_PER;
+      ctr_data_in = 1; //period
+      #clk_per;
+      ctr_addr = VERSAT_1 + CONF_BASE + `CONF_MEM0A + 2*`MEMP_CONF_OFFSET + `MEMP_CONF_DUTY;
+      ctr_data_in = 1; //duty
+      #clk_per;
+      ctr_addr = VERSAT_1 + CONF_BASE + `CONF_MEM0A + 2*`MEMP_CONF_OFFSET + `MEMP_CONF_INCR;
+      ctr_data_in = 1; //incr
+      #clk_per;
+      
+      //configure mem1B to generate counter between 0 and 8 for muladd
+      ctr_addr = VERSAT_1 + CONF_BASE + `CONF_MEM0A + 3*`MEMP_CONF_OFFSET + `MEMP_CONF_ITER;
+      ctr_data_in = 8; //iterations
+      #clk_per;
+      ctr_addr = VERSAT_1 + CONF_BASE + `CONF_MEM0A + 3*`MEMP_CONF_OFFSET + `MEMP_CONF_PER;
+      ctr_data_in = 1; //period
+      #clk_per;
+      ctr_addr = VERSAT_1 + CONF_BASE + `CONF_MEM0A + 3*`MEMP_CONF_OFFSET + `MEMP_CONF_DUTY;
+      ctr_data_in = 1; //duty
+      #clk_per;
+      ctr_addr = VERSAT_1 + CONF_BASE + `CONF_MEM0A + 3*`MEMP_CONF_OFFSET + `MEMP_CONF_INCR;
+      ctr_data_in = 1; //incr
+      #clk_per;
+      ctr_addr = VERSAT_1 + CONF_BASE + `CONF_MEM0A + 3*`MEMP_CONF_OFFSET + `MEMP_CONF_DELAY;
+      ctr_data_in = `MEMP_LAT; //delay
+      #clk_per;
+      ctr_addr = VERSAT_1 + CONF_BASE + `CONF_MEM0A + 3*`MEMP_CONF_OFFSET + `MEMP_CONF_ADDR_OUT_EN;
+      ctr_data_in = 1; //sADDR
+      #clk_per;
 
-      //
-      // Dump data to outfile
-      //
+      //configure muladd0
+      ctr_addr = VERSAT_1 + CONF_BASE + `CONF_MULADD0 + `MULADD_CONF_SELA;
+      ctr_data_in = sMEM0A; //selA
+      #clk_per;
+      ctr_addr = VERSAT_1 + CONF_BASE + `CONF_MULADD0 + `MULADD_CONF_SELB;
+      ctr_data_in = sMEM0A+2; //selB
+      #clk_per;
+      ctr_addr = VERSAT_1 + CONF_BASE + `CONF_MULADD0 + `MULADD_CONF_SELO;
+      ctr_data_in = sMEM0A+3; //selO
+      #clk_per;
+      ctr_addr = VERSAT_1 + CONF_BASE + `CONF_MULADD0 + `MULADD_CONF_FNS;
+      ctr_data_in = `MULADD_MUL_LOW_MACC; //fns
+      #clk_per;
+      ctr_addr = VERSAT_1 + CONF_BASE + `CONF_MULADD0 + `MULADD_CONF_DELAY;
+      ctr_data_in = 1; //delay
+      #clk_per;
 
-      /*
-       data_valid = 1;
-       data_addr = `ENG_BASE;
-       for (k = 0; k < `MEM_DATA_SZ; k=k+1) begin
-       #clk_period data[k] = data_data_out;
-       data_addr = data_addr + 1;
+      //configure ALULite0 to add bias to muladd result
+      ctr_addr = VERSAT_1 + CONF_BASE + `CONF_ALULITE0 + `ALULITE_CONF_SELA;
+      ctr_data_in = sMEM0A+2; //selA
+      #clk_per;
+      ctr_addr = VERSAT_1 + CONF_BASE + `CONF_ALULITE0 + `ALULITE_CONF_SELB;
+      ctr_data_in = sMULADD0; //selB
+      #clk_per;
+      ctr_addr = VERSAT_1 + CONF_BASE + `CONF_ALULITE0 + `ALULITE_CONF_FNS;
+      ctr_data_in = `ALULITE_ADD; //fns
+      #clk_per;
+
+      ///////////////////////////////////////////////////////////////////////////////
+      // VERSAT 2
+      ///////////////////////////////////////////////////////////////////////////////
+
+      //configure mem0A to read 3x3 block from feature map
+      ctr_addr = VERSAT_2 + CONF_BASE + `CONF_MEM0A + 0*`MEMP_CONF_OFFSET + `MEMP_CONF_ITER;
+      ctr_data_in = 3; //iterations
+      #clk_per;
+      ctr_addr = VERSAT_2 + CONF_BASE + `CONF_MEM0A + 0*`MEMP_CONF_OFFSET + `MEMP_CONF_PER;
+      ctr_data_in = 3; //period
+      #clk_per;
+      ctr_addr = VERSAT_2 + CONF_BASE + `CONF_MEM0A + 0*`MEMP_CONF_OFFSET + `MEMP_CONF_DUTY;
+      ctr_data_in = 3; //duty
+      #clk_per;
+      ctr_addr = VERSAT_2 + CONF_BASE + `CONF_MEM0A + 0*`MEMP_CONF_OFFSET + `MEMP_CONF_SHIFT;
+      ctr_data_in = 5-3; //shift
+      #clk_per;
+      ctr_addr = VERSAT_2 + CONF_BASE + `CONF_MEM0A + 0*`MEMP_CONF_OFFSET + `MEMP_CONF_INCR;
+      ctr_data_in = 1; //incr
+      #clk_per;
+      ctr_addr = VERSAT_2 + CONF_BASE + `CONF_MEM0A + 0*`MEMP_CONF_OFFSET + `MEMP_CONF_DELAY;
+      ctr_data_in = 2 - 1; //delay
+      #clk_per;
+
+      //configure mem1A to read kernel
+      ctr_addr = VERSAT_2 + CONF_BASE + `CONF_MEM0A + 2*`MEMP_CONF_OFFSET + `MEMP_CONF_ITER;
+      ctr_data_in = 10; //iterations
+      #clk_per;
+      ctr_addr = VERSAT_2 + CONF_BASE + `CONF_MEM0A + 2*`MEMP_CONF_OFFSET + `MEMP_CONF_PER;
+      ctr_data_in = 1; //period
+      #clk_per;
+      ctr_addr = VERSAT_2 + CONF_BASE + `CONF_MEM0A + 2*`MEMP_CONF_OFFSET + `MEMP_CONF_DUTY;
+      ctr_data_in = 1; //duty
+      #clk_per;
+      ctr_addr = VERSAT_2 + CONF_BASE + `CONF_MEM0A + 2*`MEMP_CONF_OFFSET + `MEMP_CONF_INCR;
+      ctr_data_in = 1; //incr
+      #clk_per;
+      ctr_addr = VERSAT_2 + CONF_BASE + `CONF_MEM0A + 2*`MEMP_CONF_OFFSET + `MEMP_CONF_DELAY;
+      ctr_data_in = 2 - 1; //delay
+      #clk_per;
+      
+      //configure mem1B to generate counter between 0 and 8 for muladd
+      ctr_addr = VERSAT_2 + CONF_BASE + `CONF_MEM0A + 3*`MEMP_CONF_OFFSET + `MEMP_CONF_ITER;
+      ctr_data_in = 8; //iterations
+      #clk_per;
+      ctr_addr = VERSAT_2 + CONF_BASE + `CONF_MEM0A + 3*`MEMP_CONF_OFFSET + `MEMP_CONF_PER;
+      ctr_data_in = 1; //period
+      #clk_per;
+      ctr_addr = VERSAT_2 + CONF_BASE + `CONF_MEM0A + 3*`MEMP_CONF_OFFSET + `MEMP_CONF_DUTY;
+      ctr_data_in = 1; //duty
+      #clk_per;
+      ctr_addr = VERSAT_2 + CONF_BASE + `CONF_MEM0A + 3*`MEMP_CONF_OFFSET + `MEMP_CONF_INCR;
+      ctr_data_in = 1; //incr
+      #clk_per;
+      ctr_addr = VERSAT_2 + CONF_BASE + `CONF_MEM0A + 3*`MEMP_CONF_OFFSET + `MEMP_CONF_DELAY;
+      ctr_data_in = `MEMP_LAT + 2 - 1; //delay
+      #clk_per;
+      ctr_addr = VERSAT_2 + CONF_BASE + `CONF_MEM0A + 3*`MEMP_CONF_OFFSET + `MEMP_CONF_ADDR_OUT_EN;
+      ctr_data_in = 1; //sADDR
+      #clk_per;
+
+      //configure muladd0
+      ctr_addr = VERSAT_2 + CONF_BASE + `CONF_MULADD0 + `MULADD_CONF_SELA;
+      ctr_data_in = sMEM0A; //selA
+      #clk_per;
+      ctr_addr = VERSAT_2 + CONF_BASE + `CONF_MULADD0 + `MULADD_CONF_SELB;
+      ctr_data_in = sMEM0A+2; //selB
+      #clk_per;
+      ctr_addr = VERSAT_2 + CONF_BASE + `CONF_MULADD0 + `MULADD_CONF_SELO;
+      ctr_data_in = sMEM0A+3; //selO
+      #clk_per;
+      ctr_addr = VERSAT_2 + CONF_BASE + `CONF_MULADD0 + `MULADD_CONF_FNS;
+      ctr_data_in = `MULADD_MUL_LOW_MACC; //fns
+      #clk_per;
+      ctr_addr = VERSAT_2 + CONF_BASE + `CONF_MULADD0 + `MULADD_CONF_DELAY;
+      ctr_data_in = 3-1; //delay
+      #clk_per;
+
+      //configure ALULite0 to add bias to muladd result
+      ctr_addr = VERSAT_2 + CONF_BASE + `CONF_ALULITE0 + `ALULITE_CONF_SELA;
+      ctr_data_in = sALULITE0_p; //selA
+      #clk_per;
+      ctr_addr = VERSAT_2 + CONF_BASE + `CONF_ALULITE0 + `ALULITE_CONF_SELB;
+      ctr_data_in = sMULADD0; //selB
+      #clk_per;
+      ctr_addr = VERSAT_2 + CONF_BASE + `CONF_ALULITE0 + `ALULITE_CONF_FNS;
+      ctr_data_in = `ALULITE_ADD; //fns
+      #clk_per;
+
+      ///////////////////////////////////////////////////////////////////////////////
+      // VERSAT 3
+      ///////////////////////////////////////////////////////////////////////////////
+
+      //configure mem0A to read 3x3 block from feature map
+      ctr_addr = VERSAT_3 + CONF_BASE + `CONF_MEM0A + 0*`MEMP_CONF_OFFSET + `MEMP_CONF_ITER;
+      ctr_data_in = 3; //iterations
+      #clk_per;
+      ctr_addr = VERSAT_3 + CONF_BASE + `CONF_MEM0A + 0*`MEMP_CONF_OFFSET + `MEMP_CONF_PER;
+      ctr_data_in = 3; //period
+      #clk_per;
+      ctr_addr = VERSAT_3 + CONF_BASE + `CONF_MEM0A + 0*`MEMP_CONF_OFFSET + `MEMP_CONF_DUTY;
+      ctr_data_in = 3; //duty
+      #clk_per;
+      ctr_addr = VERSAT_3 + CONF_BASE + `CONF_MEM0A + 0*`MEMP_CONF_OFFSET + `MEMP_CONF_SHIFT;
+      ctr_data_in = 5-3; //shift
+      #clk_per;
+      ctr_addr = VERSAT_3 + CONF_BASE + `CONF_MEM0A + 0*`MEMP_CONF_OFFSET + `MEMP_CONF_INCR;
+      ctr_data_in = 1; //incr
+      #clk_per;
+      ctr_addr = VERSAT_3 + CONF_BASE + `CONF_MEM0A + 0*`MEMP_CONF_OFFSET + `MEMP_CONF_DELAY;
+      ctr_data_in = 4 - 2; //delay
+      #clk_per;
+
+      //configure mem1A to read kernel
+      ctr_addr = VERSAT_3 + CONF_BASE + `CONF_MEM0A + 2*`MEMP_CONF_OFFSET + `MEMP_CONF_ITER;
+      ctr_data_in = 10; //iterations
+      #clk_per;
+      ctr_addr = VERSAT_3 + CONF_BASE + `CONF_MEM0A + 2*`MEMP_CONF_OFFSET + `MEMP_CONF_PER;
+      ctr_data_in = 1; //period
+      #clk_per;
+      ctr_addr = VERSAT_3 + CONF_BASE + `CONF_MEM0A + 2*`MEMP_CONF_OFFSET + `MEMP_CONF_DUTY;
+      ctr_data_in = 1; //duty
+      #clk_per;
+      ctr_addr = VERSAT_3 + CONF_BASE + `CONF_MEM0A + 2*`MEMP_CONF_OFFSET + `MEMP_CONF_INCR;
+      ctr_data_in = 1; //incr
+      #clk_per;
+      ctr_addr = VERSAT_3 + CONF_BASE + `CONF_MEM0A + 2*`MEMP_CONF_OFFSET + `MEMP_CONF_DELAY;
+      ctr_data_in = 4 - 2; //delay
+      #clk_per;
+      
+      //configure mem1B to generate counter between 0 and 8 for muladd
+      ctr_addr = VERSAT_3 + CONF_BASE + `CONF_MEM0A + 3*`MEMP_CONF_OFFSET + `MEMP_CONF_ITER;
+      ctr_data_in = 8; //iterations
+      #clk_per;
+      ctr_addr = VERSAT_3 + CONF_BASE + `CONF_MEM0A + 3*`MEMP_CONF_OFFSET + `MEMP_CONF_PER;
+      ctr_data_in = 1; //period
+      #clk_per;
+      ctr_addr = VERSAT_3 + CONF_BASE + `CONF_MEM0A + 3*`MEMP_CONF_OFFSET + `MEMP_CONF_DUTY;
+      ctr_data_in = 1; //duty
+      #clk_per;
+      ctr_addr = VERSAT_3 + CONF_BASE + `CONF_MEM0A + 3*`MEMP_CONF_OFFSET + `MEMP_CONF_INCR;
+      ctr_data_in = 1; //incr
+      #clk_per;
+      ctr_addr = VERSAT_3 + CONF_BASE + `CONF_MEM0A + 3*`MEMP_CONF_OFFSET + `MEMP_CONF_DELAY;
+      ctr_data_in = `MEMP_LAT + 4 - 2; //delay
+      #clk_per;
+      ctr_addr = VERSAT_3 + CONF_BASE + `CONF_MEM0A + 3*`MEMP_CONF_OFFSET + `MEMP_CONF_ADDR_OUT_EN;
+      ctr_data_in = 1; //sADDR
+      #clk_per;
+
+      //configure muladd0
+      ctr_addr = VERSAT_3 + CONF_BASE + `CONF_MULADD0 + `MULADD_CONF_SELA;
+      ctr_data_in = sMEM0A; //selA
+      #clk_per;
+      ctr_addr = VERSAT_3 + CONF_BASE + `CONF_MULADD0 + `MULADD_CONF_SELB;
+      ctr_data_in = sMEM0A+2; //selB
+      #clk_per;
+      ctr_addr = VERSAT_3 + CONF_BASE + `CONF_MULADD0 + `MULADD_CONF_SELO;
+      ctr_data_in = sMEM0A+3; //selO
+      #clk_per;
+      ctr_addr = VERSAT_3 + CONF_BASE + `CONF_MULADD0 + `MULADD_CONF_FNS;
+      ctr_data_in = `MULADD_MUL_LOW_MACC; //fns
+      #clk_per;
+      ctr_addr = VERSAT_3 + CONF_BASE + `CONF_MULADD0 + `MULADD_CONF_DELAY;
+      ctr_data_in = 5-2; //delay
+      #clk_per;
+
+      //configure ALULite0 to add bias to muladd result
+      ctr_addr = VERSAT_3 + CONF_BASE + `CONF_ALULITE0 + `ALULITE_CONF_SELA;
+      ctr_data_in = sALULITE0_p; //selA
+      #clk_per;
+      ctr_addr = VERSAT_3 + CONF_BASE + `CONF_ALULITE0 + `ALULITE_CONF_SELB;
+      ctr_data_in = sMULADD0; //selB
+      #clk_per;
+      ctr_addr = VERSAT_3 + CONF_BASE + `CONF_ALULITE0 + `ALULITE_CONF_FNS;
+      ctr_data_in = `ALULITE_ADD; //fns
+      #clk_per;
+
+      ///////////////////////////////////////////////////////////////////////////////
+      // VERSAT 4
+      ///////////////////////////////////////////////////////////////////////////////
+
+      //configure mem0A to read 3x3 block from feature map
+      ctr_addr = VERSAT_4 + CONF_BASE + `CONF_MEM0A + 0*`MEMP_CONF_OFFSET + `MEMP_CONF_ITER;
+      ctr_data_in = 3; //iterations
+      #clk_per;
+      ctr_addr = VERSAT_4 + CONF_BASE + `CONF_MEM0A + 0*`MEMP_CONF_OFFSET + `MEMP_CONF_PER;
+      ctr_data_in = 3; //period
+      #clk_per;
+      ctr_addr = VERSAT_4 + CONF_BASE + `CONF_MEM0A + 0*`MEMP_CONF_OFFSET + `MEMP_CONF_DUTY;
+      ctr_data_in = 3; //duty
+      #clk_per;
+      ctr_addr = VERSAT_4 + CONF_BASE + `CONF_MEM0A + 0*`MEMP_CONF_OFFSET + `MEMP_CONF_SHIFT;
+      ctr_data_in = 5-3; //shift
+      #clk_per;
+      ctr_addr = VERSAT_4 + CONF_BASE + `CONF_MEM0A + 0*`MEMP_CONF_OFFSET + `MEMP_CONF_INCR;
+      ctr_data_in = 1; //incr
+      #clk_per;
+      ctr_addr = VERSAT_4 + CONF_BASE + `CONF_MEM0A + 0*`MEMP_CONF_OFFSET + `MEMP_CONF_DELAY;
+      ctr_data_in = 6 - 3; //delay
+      #clk_per;
+
+      //configure mem1A to read kernel
+      ctr_addr = VERSAT_4 + CONF_BASE + `CONF_MEM0A + 2*`MEMP_CONF_OFFSET + `MEMP_CONF_ITER;
+      ctr_data_in = 10; //iterations
+      #clk_per;
+      ctr_addr = VERSAT_4 + CONF_BASE + `CONF_MEM0A + 2*`MEMP_CONF_OFFSET + `MEMP_CONF_PER;
+      ctr_data_in = 1; //period
+      #clk_per;
+      ctr_addr = VERSAT_4 + CONF_BASE + `CONF_MEM0A + 2*`MEMP_CONF_OFFSET + `MEMP_CONF_DUTY;
+      ctr_data_in = 1; //duty
+      #clk_per;
+      ctr_addr = VERSAT_4 + CONF_BASE + `CONF_MEM0A + 2*`MEMP_CONF_OFFSET + `MEMP_CONF_INCR;
+      ctr_data_in = 1; //incr
+      #clk_per;
+      ctr_addr = VERSAT_4 + CONF_BASE + `CONF_MEM0A + 2*`MEMP_CONF_OFFSET + `MEMP_CONF_DELAY;
+      ctr_data_in = 6 - 3; //delay
+      #clk_per;
+      
+      //configure mem1B to generate counter between 0 and 8 for muladd
+      ctr_addr = VERSAT_4 + CONF_BASE + `CONF_MEM0A + 3*`MEMP_CONF_OFFSET + `MEMP_CONF_ITER;
+      ctr_data_in = 8; //iterations
+      #clk_per;
+      ctr_addr = VERSAT_4 + CONF_BASE + `CONF_MEM0A + 3*`MEMP_CONF_OFFSET + `MEMP_CONF_PER;
+      ctr_data_in = 1; //period
+      #clk_per;
+      ctr_addr = VERSAT_4 + CONF_BASE + `CONF_MEM0A + 3*`MEMP_CONF_OFFSET + `MEMP_CONF_DUTY;
+      ctr_data_in = 1; //duty
+      #clk_per;
+      ctr_addr = VERSAT_4 + CONF_BASE + `CONF_MEM0A + 3*`MEMP_CONF_OFFSET + `MEMP_CONF_INCR;
+      ctr_data_in = 1; //incr
+      #clk_per;
+      ctr_addr = VERSAT_4 + CONF_BASE + `CONF_MEM0A + 3*`MEMP_CONF_OFFSET + `MEMP_CONF_DELAY;
+      ctr_data_in = `MEMP_LAT + 6 - 3; //delay
+      #clk_per;
+      ctr_addr = VERSAT_4 + CONF_BASE + `CONF_MEM0A + 3*`MEMP_CONF_OFFSET + `MEMP_CONF_ADDR_OUT_EN;
+      ctr_data_in = 1; //sADDR
+      #clk_per;
+
+      //configure muladd0
+      ctr_addr = VERSAT_4 + CONF_BASE + `CONF_MULADD0 + `MULADD_CONF_SELA;
+      ctr_data_in = sMEM0A; //selA
+      #clk_per;
+      ctr_addr = VERSAT_4 + CONF_BASE + `CONF_MULADD0 + `MULADD_CONF_SELB;
+      ctr_data_in = sMEM0A+2; //selB
+      #clk_per;
+      ctr_addr = VERSAT_4 + CONF_BASE + `CONF_MULADD0 + `MULADD_CONF_SELO;
+      ctr_data_in = sMEM0A+3; //selO
+      #clk_per;
+      ctr_addr = VERSAT_4 + CONF_BASE + `CONF_MULADD0 + `MULADD_CONF_FNS;
+      ctr_data_in = `MULADD_MUL_LOW_MACC; //fns
+      #clk_per;
+      ctr_addr = VERSAT_4 + CONF_BASE + `CONF_MULADD0 + `MULADD_CONF_DELAY;
+      ctr_data_in = 7-3; //delay
+      #clk_per;
+
+      //configure ALULite0 to add bias to muladd result
+      ctr_addr = VERSAT_4 + CONF_BASE + `CONF_ALULITE0 + `ALULITE_CONF_SELA;
+      ctr_data_in = sALULITE0_p; //selA
+      #clk_per;
+      ctr_addr = VERSAT_4 + CONF_BASE + `CONF_ALULITE0 + `ALULITE_CONF_SELB;
+      ctr_data_in = sMULADD0; //selB
+      #clk_per;
+      ctr_addr = VERSAT_4 + CONF_BASE + `CONF_ALULITE0 + `ALULITE_CONF_FNS;
+      ctr_data_in = `ALULITE_ADD; //fns
+      #clk_per;
+
+      ///////////////////////////////////////////////////////////////////////////////
+      // VERSAT 5
+      ///////////////////////////////////////////////////////////////////////////////
+
+      //configure mem0A to read 3x3 block from feature map
+      ctr_addr = VERSAT_5 + CONF_BASE + `CONF_MEM0A + 0*`MEMP_CONF_OFFSET + `MEMP_CONF_ITER;
+      ctr_data_in = 3; //iterations
+      #clk_per;
+      ctr_addr = VERSAT_5 + CONF_BASE + `CONF_MEM0A + 0*`MEMP_CONF_OFFSET + `MEMP_CONF_PER;
+      ctr_data_in = 3; //period
+      #clk_per;
+      ctr_addr = VERSAT_5 + CONF_BASE + `CONF_MEM0A + 0*`MEMP_CONF_OFFSET + `MEMP_CONF_DUTY;
+      ctr_data_in = 3; //duty
+      #clk_per;
+      ctr_addr = VERSAT_5 + CONF_BASE + `CONF_MEM0A + 0*`MEMP_CONF_OFFSET + `MEMP_CONF_SHIFT;
+      ctr_data_in = 5-3; //shift
+      #clk_per;
+      ctr_addr = VERSAT_5 + CONF_BASE + `CONF_MEM0A + 0*`MEMP_CONF_OFFSET + `MEMP_CONF_INCR;
+      ctr_data_in = 1; //incr
+      #clk_per;
+      ctr_addr = VERSAT_5 + CONF_BASE + `CONF_MEM0A + 0*`MEMP_CONF_OFFSET + `MEMP_CONF_DELAY;
+      ctr_data_in = 8 - 4; //delay
+      #clk_per;
+
+      //configure mem1A to read kernel
+      ctr_addr = VERSAT_5 + CONF_BASE + `CONF_MEM0A + 2*`MEMP_CONF_OFFSET + `MEMP_CONF_ITER;
+      ctr_data_in = 10; //iterations
+      #clk_per;
+      ctr_addr = VERSAT_5 + CONF_BASE + `CONF_MEM0A + 2*`MEMP_CONF_OFFSET + `MEMP_CONF_PER;
+      ctr_data_in = 1; //period
+      #clk_per;
+      ctr_addr = VERSAT_5 + CONF_BASE + `CONF_MEM0A + 2*`MEMP_CONF_OFFSET + `MEMP_CONF_DUTY;
+      ctr_data_in = 1; //duty
+      #clk_per;
+      ctr_addr = VERSAT_5 + CONF_BASE + `CONF_MEM0A + 2*`MEMP_CONF_OFFSET + `MEMP_CONF_INCR;
+      ctr_data_in = 1; //incr
+      #clk_per;
+      ctr_addr = VERSAT_5 + CONF_BASE + `CONF_MEM0A + 2*`MEMP_CONF_OFFSET + `MEMP_CONF_DELAY;
+      ctr_data_in = 8 - 4; //delay
+      #clk_per;
+      
+      //configure mem1B to generate counter between 0 and 8 for muladd
+      ctr_addr = VERSAT_5 + CONF_BASE + `CONF_MEM0A + 3*`MEMP_CONF_OFFSET + `MEMP_CONF_ITER;
+      ctr_data_in = 8; //iterations
+      #clk_per;
+      ctr_addr = VERSAT_5 + CONF_BASE + `CONF_MEM0A + 3*`MEMP_CONF_OFFSET + `MEMP_CONF_PER;
+      ctr_data_in = 1; //period
+      #clk_per;
+      ctr_addr = VERSAT_5 + CONF_BASE + `CONF_MEM0A + 3*`MEMP_CONF_OFFSET + `MEMP_CONF_DUTY;
+      ctr_data_in = 1; //duty
+      #clk_per;
+      ctr_addr = VERSAT_5 + CONF_BASE + `CONF_MEM0A + 3*`MEMP_CONF_OFFSET + `MEMP_CONF_INCR;
+      ctr_data_in = 1; //incr
+      #clk_per;
+      ctr_addr = VERSAT_5 + CONF_BASE + `CONF_MEM0A + 3*`MEMP_CONF_OFFSET + `MEMP_CONF_DELAY;
+      ctr_data_in = `MEMP_LAT + 8 - 4; //delay
+      #clk_per;
+      ctr_addr = VERSAT_5 + CONF_BASE + `CONF_MEM0A + 3*`MEMP_CONF_OFFSET + `MEMP_CONF_ADDR_OUT_EN;
+      ctr_data_in = 1; //sADDR
+      #clk_per;
+
+      //configure muladd0
+      ctr_addr = VERSAT_5 + CONF_BASE + `CONF_MULADD0 + `MULADD_CONF_SELA;
+      ctr_data_in = sMEM0A; //selA
+      #clk_per;
+      ctr_addr = VERSAT_5 + CONF_BASE + `CONF_MULADD0 + `MULADD_CONF_SELB;
+      ctr_data_in = sMEM0A+2; //selB
+      #clk_per;
+      ctr_addr = VERSAT_5 + CONF_BASE + `CONF_MULADD0 + `MULADD_CONF_SELO;
+      ctr_data_in = sMEM0A+3; //selO
+      #clk_per;
+      ctr_addr = VERSAT_5 + CONF_BASE + `CONF_MULADD0 + `MULADD_CONF_FNS;
+      ctr_data_in = `MULADD_MUL_LOW_MACC; //fns
+      #clk_per;
+      ctr_addr = VERSAT_5 + CONF_BASE + `CONF_MULADD0 + `MULADD_CONF_DELAY;
+      ctr_data_in = 9-4; //delay
+      #clk_per;
+
+      //configure ALULite0 to add bias to muladd result
+      ctr_addr = VERSAT_5 + CONF_BASE + `CONF_ALULITE0 + `ALULITE_CONF_SELA;
+      ctr_data_in = sALULITE0_p; //selA
+      #clk_per;
+      ctr_addr = VERSAT_5 + CONF_BASE + `CONF_ALULITE0 + `ALULITE_CONF_SELB;
+      ctr_data_in = sMULADD0; //selB
+      #clk_per;
+      ctr_addr = VERSAT_5 + CONF_BASE + `CONF_ALULITE0 + `ALULITE_CONF_FNS;
+      ctr_data_in = `ALULITE_ADD; //fns
+      #clk_per;
+
+      //config mem2A to store ALULite output
+      ctr_addr = VERSAT_5 + CONF_BASE + `CONF_MEM0A + 4*`MEMP_CONF_OFFSET + `MEMP_CONF_ITER;
+      ctr_data_in = 1; //iterations
+      #clk_per;
+      ctr_addr = VERSAT_5 + CONF_BASE + `CONF_MEM0A + 4*`MEMP_CONF_OFFSET + `MEMP_CONF_PER;
+      ctr_data_in = 1; //period
+      #clk_per;
+      ctr_addr = VERSAT_5 + CONF_BASE + `CONF_MEM0A + 4*`MEMP_CONF_OFFSET + `MEMP_CONF_DUTY;
+      ctr_data_in = 1; //duty
+      #clk_per;
+      ctr_addr = VERSAT_5 + CONF_BASE + `CONF_MEM0A + 4*`MEMP_CONF_OFFSET + `MEMP_CONF_INCR;
+      ctr_data_in = 1; //incr
+      #clk_per;
+      ctr_addr = VERSAT_5 + CONF_BASE + `CONF_MEM0A + 4*`MEMP_CONF_OFFSET + `MEMP_CONF_DELAY;
+      ctr_data_in = `MEMP_LAT + 8 + `MULADD_LAT + `ALULITE_LAT + 8 - 4; //delay
+      #clk_per;
+      ctr_addr = VERSAT_5 + CONF_BASE + `CONF_MEM0A + 4*`MEMP_CONF_OFFSET + `MEMP_CONF_SEL;
+      ctr_data_in = sALULITE0; //sel
+      #clk_per;
+      ctr_addr = VERSAT_5 + CONF_BASE + `CONF_MEM0A + 4*`MEMP_CONF_OFFSET + `MEMP_CONF_IN_WR;
+      ctr_data_in = 1; //wr_en
+      #clk_per;
+
+      ///////////////////////////////////////////////////////////////////////////////
+      // Convolution loop
+      ///////////////////////////////////////////////////////////////////////////////
+
+      $display("\nActual convolution result");
+      for(i = 0; i < 3; i++) begin
+        for(j = 0; j < 3; j++) begin
+          
+          //configure start values of memories
+          ctr_we = 1;
+          ctr_addr = VERSAT_1 + CONF_BASE + `CONF_MEM0A + 0*`MEMP_CONF_OFFSET + `MEMP_CONF_START;
+          ctr_data_in = i*5+j; //start
+          #clk_per;
+          ctr_addr = VERSAT_2 + CONF_BASE + `CONF_MEM0A + 0*`MEMP_CONF_OFFSET + `MEMP_CONF_START;
+          #clk_per;
+          ctr_addr = VERSAT_3 + CONF_BASE + `CONF_MEM0A + 0*`MEMP_CONF_OFFSET + `MEMP_CONF_START;
+          #clk_per;
+          ctr_addr = VERSAT_4 + CONF_BASE + `CONF_MEM0A + 0*`MEMP_CONF_OFFSET + `MEMP_CONF_START;
+          #clk_per;
+          ctr_addr = VERSAT_5 + CONF_BASE + `CONF_MEM0A + 0*`MEMP_CONF_OFFSET + `MEMP_CONF_START;
+          #clk_per;
+          ctr_addr = VERSAT_5 + CONF_BASE + `CONF_MEM0A + 4*`MEMP_CONF_OFFSET + `MEMP_CONF_START;
+          ctr_data_in = i*3+j; //start
+          #clk_per;
+
+          //run configurations
+          ctr_addr = VERSAT_1 + RUN_DONE;
+          ctr_data_in[0] = 1;
+          #clk_per;
+          ctr_addr = VERSAT_2 + RUN_DONE;
+          #clk_per;
+          ctr_addr = VERSAT_3 + RUN_DONE;
+          #clk_per;
+          ctr_addr = VERSAT_4 + RUN_DONE;
+          #clk_per;
+          ctr_addr = VERSAT_5 + RUN_DONE;
+          #clk_per;
+
+          //wait until config is done
+          ctr_we = 0;
+          ctr_data_in = 0;
+          do begin
+           #clk_per;
+          end while(ctr_data_out == 0);
+        end
       end
-       data_valid = 0;
 
-       $writememh("data_out.hex", data, 0, `MEM_DATA_SZ - 1);
-       */
+      ///////////////////////////////////////////////////////////////////////////////
+      // DISPLAY RESULTS
+      ///////////////////////////////////////////////////////////////////////////////
+     
+      //stop controlling
+      ctr_valid = 0;
+      data_valid = 1;
 
-      //
-      // End simulation
-      //
-      $display("Total run time: %d",$time/clk_period);
-      #clk_period $finish;
+      for(i = 0; i < 3; i++) begin
+        for(j = 0; j < 3; j++) begin
+          data_addr = VERSAT_5 + MEM2 + i*3 + j;
+          #clk_per $write("%d ", data_data_out);
+        end
+        $write("\n"); 
+      end
+
+      //end simulation
+      data_valid = 0;
+      $finish;
 
    end // initial begin
 
-
-   //Measure unhidden controller time
-   assign sys_timer_en = (& uut.data_eng.mem_done) & ~data_valid;
-   
-
-   //system timer                 
-   always @ (posedge clk) begin
-      if(rst == 1)
-	ctr_timer = 0;
-      else if (ctr_timer_en)
-	ctr_timer = ctr_timer+1;
-   end
-
    // Clock generation
    always
-     #(clk_period/2) clk = ~clk;
-
+     #(clk_per/2) clk = ~clk;
  
 endmodule
