@@ -37,7 +37,6 @@ module xconf_tb;
        );
 
 `ifdef CONF_MEM_USE
-       reg [`CONF_MEM_ADDR_W-1:0]	conf_mem_last_addr;
        reg [`CONF_BITS-1:0]		conf_mem_last_data;
 `endif
 
@@ -136,9 +135,10 @@ module xconf_tb;
          end
 
 `ifdef CONF_MEM_USE
-	 //save the last config and conf_mem address
-	 conf_mem_last_addr = ctr_addr[`CONF_MEM_ADDR_W-1:0];
+	 //save the last config
 	 conf_mem_last_data = conf_out;
+         ctr_addr = `CONF_MEM;
+         #clk_per;
 `endif
 
          //trying to access out of range config position
@@ -157,9 +157,9 @@ module xconf_tb;
 
 `ifdef CONF_MEM_USE
 	 //load conf from xconf_mem to xconf_reg
-	 $display("Load last config saved in xconf_mem to xconf_reg");
+	 $display("Loading last config saved in xconf_mem to xconf_reg");
 	 ctr_we = 0;
-         ctr_addr = `CONF_MEM + conf_mem_last_addr;
+         ctr_addr = `CONF_MEM;
          #(clk_per*2);
          if(conf_out == conf_mem_last_data)
 	   $display("OK: Last config saved in mem loaded to reg\n");
