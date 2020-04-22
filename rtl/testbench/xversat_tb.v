@@ -278,7 +278,7 @@ module xversat_tb;
       ctr_data_in = `MULADD_MUL_LOW_MACC; //fns
       #clk_per;
       ctr_addr = VERSAT_1 + CONF_BASE + `CONF_MULADD0 + `MULADD_CONF_DELAY;
-      ctr_data_in = 1; //delay
+      ctr_data_in = `MEMP_LAT; //delay
       #clk_per;
 
       //configure ALULite0 to add bias to muladd result
@@ -313,7 +313,7 @@ module xversat_tb;
       ctr_data_in = 1; //incr
       #clk_per;
       ctr_addr = VERSAT_2 + CONF_BASE + `CONF_MEM0A + 0*`MEMP_CONF_OFFSET + `MEMP_CONF_DELAY;
-      ctr_data_in = 2 - 1; //delay
+      ctr_data_in = 2; //delay
       #clk_per;
 
       //configure mem1A to read kernel
@@ -330,7 +330,7 @@ module xversat_tb;
       ctr_data_in = 1; //incr
       #clk_per;
       ctr_addr = VERSAT_2 + CONF_BASE + `CONF_MEM0A + 2*`MEMP_CONF_OFFSET + `MEMP_CONF_DELAY;
-      ctr_data_in = 2 - 1; //delay
+      ctr_data_in = 2; //delay
       #clk_per;
       
       //configure mem1B to generate counter between 0 and 8 for muladd
@@ -347,7 +347,7 @@ module xversat_tb;
       ctr_data_in = 1; //incr
       #clk_per;
       ctr_addr = VERSAT_2 + CONF_BASE + `CONF_MEM0A + 3*`MEMP_CONF_OFFSET + `MEMP_CONF_DELAY;
-      ctr_data_in = `MEMP_LAT + 2 - 1; //delay
+      ctr_data_in = `MEMP_LAT + 2; //delay
       #clk_per;
       ctr_addr = VERSAT_2 + CONF_BASE + `CONF_MEM0A + 3*`MEMP_CONF_OFFSET + `MEMP_CONF_ADDR_OUT_EN;
       ctr_data_in = 1; //sADDR
@@ -367,7 +367,7 @@ module xversat_tb;
       ctr_data_in = `MULADD_MUL_LOW_MACC; //fns
       #clk_per;
       ctr_addr = VERSAT_2 + CONF_BASE + `CONF_MULADD0 + `MULADD_CONF_DELAY;
-      ctr_data_in = 3-1; //delay
+      ctr_data_in = `MEMP_LAT + 2; //delay
       #clk_per;
 
       //configure ALULite0 to add bias to muladd result
@@ -402,7 +402,7 @@ module xversat_tb;
       ctr_data_in = 1; //incr
       #clk_per;
       ctr_addr = VERSAT_3 + CONF_BASE + `CONF_MEM0A + 0*`MEMP_CONF_OFFSET + `MEMP_CONF_DELAY;
-      ctr_data_in = 4 - 2; //delay
+      ctr_data_in = 4; //delay
       #clk_per;
 
       //configure mem1A to read kernel
@@ -419,7 +419,7 @@ module xversat_tb;
       ctr_data_in = 1; //incr
       #clk_per;
       ctr_addr = VERSAT_3 + CONF_BASE + `CONF_MEM0A + 2*`MEMP_CONF_OFFSET + `MEMP_CONF_DELAY;
-      ctr_data_in = 4 - 2; //delay
+      ctr_data_in = 4; //delay
       #clk_per;
       
       //configure mem1B to generate counter between 0 and 8 for muladd
@@ -436,7 +436,7 @@ module xversat_tb;
       ctr_data_in = 1; //incr
       #clk_per;
       ctr_addr = VERSAT_3 + CONF_BASE + `CONF_MEM0A + 3*`MEMP_CONF_OFFSET + `MEMP_CONF_DELAY;
-      ctr_data_in = `MEMP_LAT + 4 - 2; //delay
+      ctr_data_in = `MEMP_LAT + 4; //delay
       #clk_per;
       ctr_addr = VERSAT_3 + CONF_BASE + `CONF_MEM0A + 3*`MEMP_CONF_OFFSET + `MEMP_CONF_ADDR_OUT_EN;
       ctr_data_in = 1; //sADDR
@@ -456,7 +456,7 @@ module xversat_tb;
       ctr_data_in = `MULADD_MUL_LOW_MACC; //fns
       #clk_per;
       ctr_addr = VERSAT_3 + CONF_BASE + `CONF_MULADD0 + `MULADD_CONF_DELAY;
-      ctr_data_in = 5-2; //delay
+      ctr_data_in = `MEMP_LAT + 4; //delay
       #clk_per;
 
       //configure ALULite0 to add bias to muladd result
@@ -491,7 +491,7 @@ module xversat_tb;
       ctr_data_in = 1; //incr
       #clk_per;
       ctr_addr = VERSAT_4 + CONF_BASE + `CONF_MEM0A + 0*`MEMP_CONF_OFFSET + `MEMP_CONF_DELAY;
-      ctr_data_in = 6 - 3; //delay
+      ctr_data_in = 6; //delay
       #clk_per;
 
       //configure mem1A to read kernel
@@ -508,7 +508,7 @@ module xversat_tb;
       ctr_data_in = 1; //incr
       #clk_per;
       ctr_addr = VERSAT_4 + CONF_BASE + `CONF_MEM0A + 2*`MEMP_CONF_OFFSET + `MEMP_CONF_DELAY;
-      ctr_data_in = 6 - 3; //delay
+      ctr_data_in = 6; //delay
       #clk_per;
       
       //configure mem1B to generate counter between 0 and 8 for muladd
@@ -525,7 +525,7 @@ module xversat_tb;
       ctr_data_in = 1; //incr
       #clk_per;
       ctr_addr = VERSAT_4 + CONF_BASE + `CONF_MEM0A + 3*`MEMP_CONF_OFFSET + `MEMP_CONF_DELAY;
-      ctr_data_in = `MEMP_LAT + 6 - 3; //delay
+      ctr_data_in = `MEMP_LAT + 6; //delay
       #clk_per;
       ctr_addr = VERSAT_4 + CONF_BASE + `CONF_MEM0A + 3*`MEMP_CONF_OFFSET + `MEMP_CONF_ADDR_OUT_EN;
       ctr_data_in = 1; //sADDR
@@ -545,7 +545,7 @@ module xversat_tb;
       ctr_data_in = `MULADD_MUL_LOW_MACC; //fns
       #clk_per;
       ctr_addr = VERSAT_4 + CONF_BASE + `CONF_MULADD0 + `MULADD_CONF_DELAY;
-      ctr_data_in = 7-3; //delay
+      ctr_data_in = `MEMP_LAT + 6; //delay
       #clk_per;
 
       //configure ALULite0 to add bias to muladd result
@@ -580,7 +580,7 @@ module xversat_tb;
       ctr_data_in = 1; //incr
       #clk_per;
       ctr_addr = VERSAT_5 + CONF_BASE + `CONF_MEM0A + 0*`MEMP_CONF_OFFSET + `MEMP_CONF_DELAY;
-      ctr_data_in = 8 - 4; //delay
+      ctr_data_in = 8; //delay
       #clk_per;
 
       //configure mem1A to read kernel
@@ -597,7 +597,7 @@ module xversat_tb;
       ctr_data_in = 1; //incr
       #clk_per;
       ctr_addr = VERSAT_5 + CONF_BASE + `CONF_MEM0A + 2*`MEMP_CONF_OFFSET + `MEMP_CONF_DELAY;
-      ctr_data_in = 8 - 4; //delay
+      ctr_data_in = 8; //delay
       #clk_per;
       
       //configure mem1B to generate counter between 0 and 8 for muladd
@@ -614,7 +614,7 @@ module xversat_tb;
       ctr_data_in = 1; //incr
       #clk_per;
       ctr_addr = VERSAT_5 + CONF_BASE + `CONF_MEM0A + 3*`MEMP_CONF_OFFSET + `MEMP_CONF_DELAY;
-      ctr_data_in = `MEMP_LAT + 8 - 4; //delay
+      ctr_data_in = `MEMP_LAT + 8; //delay
       #clk_per;
       ctr_addr = VERSAT_5 + CONF_BASE + `CONF_MEM0A + 3*`MEMP_CONF_OFFSET + `MEMP_CONF_ADDR_OUT_EN;
       ctr_data_in = 1; //sADDR
@@ -634,7 +634,7 @@ module xversat_tb;
       ctr_data_in = `MULADD_MUL_LOW_MACC; //fns
       #clk_per;
       ctr_addr = VERSAT_5 + CONF_BASE + `CONF_MULADD0 + `MULADD_CONF_DELAY;
-      ctr_data_in = 9-4; //delay
+      ctr_data_in = `MEMP_LAT + 8; //delay
       #clk_per;
 
       //configure ALULite0 to add bias to muladd result
@@ -662,7 +662,7 @@ module xversat_tb;
       ctr_data_in = 1; //incr
       #clk_per;
       ctr_addr = VERSAT_5 + CONF_BASE + `CONF_MEM0A + 4*`MEMP_CONF_OFFSET + `MEMP_CONF_DELAY;
-      ctr_data_in = `MEMP_LAT + 8 + `MULADD_LAT + `ALULITE_LAT + 8 - 4; //delay
+      ctr_data_in = `MEMP_LAT + 8 + `MULADD_LAT + `ALULITE_LAT + 8; //delay
       #clk_per;
       ctr_addr = VERSAT_5 + CONF_BASE + `CONF_MEM0A + 4*`MEMP_CONF_OFFSET + `MEMP_CONF_SEL;
       ctr_data_in = sALULITE0; //sel
@@ -697,16 +697,8 @@ module xversat_tb;
           #clk_per;
 
           //run configurations
-          ctr_addr = VERSAT_1 + RUN_DONE;
+          ctr_addr = RUN_DONE;
           ctr_data_in[0] = 1;
-          #clk_per;
-          ctr_addr = VERSAT_2 + RUN_DONE;
-          #clk_per;
-          ctr_addr = VERSAT_3 + RUN_DONE;
-          #clk_per;
-          ctr_addr = VERSAT_4 + RUN_DONE;
-          #clk_per;
-          ctr_addr = VERSAT_5 + RUN_DONE;
           #clk_per;
 
           //wait until config is done

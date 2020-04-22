@@ -37,7 +37,7 @@ module xversat (
 
    //data buses for each versat   
    wire [`DATABUS_W-1:0] stage_databus [`nSTAGE:0];
-
+   wire run_done = ~ctr_addr[1+`nMEM_W+`MEM_ADDR_W] & ctr_addr[`nMEM_W+`MEM_ADDR_W];
 
    //
    // CONTROL INTERFACE ADDRESS DECODER
@@ -49,18 +49,29 @@ module xversat (
      integer j;
      stage_ctr_valid = `nSTAGE'b0;
        for(j=0; j<`nSTAGE; j=j+1)
-          if (ctr_addr[`CTR_ADDR_W-1 -: `nSTAGE_W] == j[`nSTAGE_W-1:0])
+          if (ctr_addr[`CTR_ADDR_W-1 -: `nSTAGE_W] == j[`nSTAGE_W-1:0] || run_done)
             stage_ctr_valid[j] = ctr_valid;
    end 
+
+   //check done in all stages
+   reg [`nSTAGE-1:0] done;
+   always @ * begin
+     integer j;
+     for(j = 0; j < `nSTAGE; j++)
+       done[j] = stage_ctr_data_out[j][0];
+   end
 
    //select stage ctr data
    reg [`DATA_W-1:0] stage_ctr_data_out [`nSTAGE-1:0];
    always @ * begin
       integer j;
       ctr_data_out = `DATA_W'd0;
-      for(j=0; j<`nSTAGE; j=j+1)
-         if (stage_ctr_valid[j])
+      for(j=0; j<`nSTAGE; j=j+1) begin
+         if(run_done)
+           ctr_data_out = {{`DATA_W-1{1'b0}}, &done};       
+         else if (stage_ctr_valid[j])
            ctr_data_out = stage_ctr_data_out[j];
+      end
    end
 
    
