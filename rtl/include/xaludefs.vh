@@ -19,16 +19,13 @@
 `define ALU_SHIFTR_ARTH   `ALU_FNS_W'd12
 `define ALU_SHIFTR_LOG    `ALU_FNS_W'd13
 `define ALU_CLZ           `ALU_FNS_W'd14
-`define ALU_ABS        	  `ALU_FNS_W'd15
+`define ALU_ABS           `ALU_FNS_W'd15
 
 //ALU internal configuration address offsets
-`define ALU_CONF_SELA `ADDR_W'd0
-`define ALU_CONF_SELB `ADDR_W'd1
-`define ALU_CONF_FNS `ADDR_W'd2
-`define ALU_CONF_OFFSET `ADDR_W'd3
+`define ALU_CONF_SELA 	  0
+`define ALU_CONF_SELB     1
+`define ALU_CONF_FNS      2
+`define ALU_CONF_OFFSET   3
 
 //ALU latency
 `define ALU_LAT 2
-
-
-

@@ -94,19 +94,13 @@ module xdata_eng (
 	ctr_data_out = ctr_data_reg;
    end
 
-
    // write
-   reg ctr_reg, rst_reg;
+   reg ctr_reg;
    always @ (posedge rst, posedge clk) begin
-     if(rst) begin
-       ctr_reg <= 1'b0;
-       rst_reg <= 1'b0;
-     end else if(ctr_we) begin
+     ctr_reg <= 1'b0;
+     if(ctr_we)
        if(control_valid)
          ctr_reg <= ctr_data_in[0];
-     end else
-       ctr_reg <= 1'b0;
-     rst_reg <= ctr_reg;
    end
 
    wire run = control_valid & ctr_we &  ctr_data_in[0];
@@ -235,7 +229,7 @@ module xdata_eng (
       for (i=0; i < `nALULITE; i=i+1) begin : add_LITE_array
 	 xalulite aluLITE (
 			   .clk(clk),
-			   .rst(rst_reg),
+			   .rst(run_reg),
 
 			   // flow interface
 	                   .flow_in(data_bus),
@@ -273,7 +267,7 @@ module xdata_eng (
       for (i=0; i < `nMULADD; i=i+1) begin : muladd_array
 	 xmuladd muladd (
 		         .clk(clk),
-		         .rst(rst_reg),
+		         .rst(run_reg),
 
 			 // flow interface
 	                 .flow_in(data_bus),

@@ -1,6 +1,12 @@
 `timescale 1ns / 1ps
 `include "xversat.vh"
 `include "xconfdefs.vh"
+`include "xmemdefs.vh"
+`include "xaludefs.vh"
+`include "xalulitedefs.vh"
+`include "xmuldefs.vh"
+`include "xmuladddefs.vh"
+`include "xbsdefs.vh"
 
 module xconf_mem(
 		 input 			      clk,

@@ -140,6 +140,9 @@ module xconf_reg (
 
 	      if(ctr_addr == (`CONF_MULADD0 + i*`MULADD_CONF_OFFSET + `MULADD_CONF_FNS))
 		conf_reg[`CONF_MULADD0_B - i*`MULADD_CONF_BITS - 3*`N_W -: `MULADD_FNS_W] <= ctr_data_in[`MULADD_FNS_W-1:0];
+
+	      if(ctr_addr == (`CONF_MULADD0 + i*`MULADD_CONF_OFFSET + `MULADD_CONF_DELAY))
+		conf_reg[`CONF_MULADD0_B - i*`MULADD_CONF_BITS - 3*`N_W - `MULADD_FNS_W -: `PERIOD_W] <= ctr_data_in[`PERIOD_W-1:0];
 	   end
 
 	   // configure BSs

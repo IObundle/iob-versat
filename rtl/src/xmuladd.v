@@ -33,6 +33,7 @@ module xmuladd (
    wire [`N_W-1: 0]                           sela;
    wire [`N_W-1: 0]                           selb;
    wire [`N_W-1: 0]                           selo;
+   wire [`PERIOD_W-1:0]                       delay;
 
    // enabled operands and result
    wire                                       enablea;
@@ -42,6 +43,7 @@ module xmuladd (
 
    // register muladd control
    reg [`DATA_W-1:0]                          op_o_reg;
+   reg [`PERIOD_W-1:0]			      rst_cnt;
 
    // accumulator load signal
    wire                                       ld_acc;
@@ -57,7 +59,8 @@ module xmuladd (
    assign sela   = configdata[`MULADD_CONF_BITS-1 -: `N_W];
    assign selb   = configdata[`MULADD_CONF_BITS-1-`N_W -: `N_W];
    assign selo   = configdata[`MULADD_CONF_BITS-1-2*`N_W -: `N_W];
-   assign opcode = configdata[`MULADD_FNS_W-1: 0];
+   assign opcode = configdata[`MULADD_CONF_BITS-1-3*`N_W -: `MULADD_FNS_W];
+   assign delay  = configdata[`PERIOD_W-1: 0] + `MULADD_LAT;
 
    //input selection
    xinmux muxa (
@@ -79,22 +82,28 @@ module xmuladd (
 		);
 
    //update registers
-   always @ (posedge clk, posedge rst)
+   always @ (posedge clk, posedge rst) begin
      if (rst) begin
-        acc <= {2*`DATA_W{1'b0}};
-        op_o_reg <= `DATA_W'd0;
+       acc <= {2*`DATA_W{1'b0}};
+       op_o_reg <= `DATA_W'd0;
+       rst_cnt <= `PERIOD_W'd0;
 `ifndef MULADD_COMB                             //pipelined
-     ld_acc1 <= 1'b0;
-     ld_acc2 <= 1'b0;
+       ld_acc1 <= 1'b0;
+       ld_acc2 <= 1'b0;
 `endif
-  end else begin
-     acc <= result64;
-     op_o_reg <= op_o;
+     end else begin
+       if(rst_cnt < delay) 
+         rst_cnt += 1'd1; 
+       else begin
+         acc <= result64;
+         op_o_reg <= op_o;
 `ifndef MULADD_COMB                             //pipelined
-     ld_acc1 <= ld_acc0;
-     ld_acc2 <= ld_acc1;
+         ld_acc1 <= ld_acc0;
+         ld_acc2 <= ld_acc1;
 `endif
-  end
+       end
+     end
+   end
 
    assign ld_acc0 = (op_o_reg==`DATA_W'd0);
 

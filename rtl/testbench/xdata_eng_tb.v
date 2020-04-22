@@ -96,7 +96,7 @@ module xdata_eng_tb;
         data_addr = i;
         data_data_in = $random%20;
         pixels[i] = data_data_in;
-        @(posedge clk) #1;
+        #clk_per;
       end
  
       //write 3x3 kernel and bias in mem1B
@@ -110,7 +110,7 @@ module xdata_eng_tb;
           data_data_in = $random%5;
           bias = data_data_in;
         end
-        @(posedge clk) #1;
+        #clk_per;
       end
       data_valid = 0;
       data_we = 0;
@@ -189,6 +189,7 @@ module xdata_eng_tb;
      config_bus[`CONF_MULADD0_B - `N_W -: `N_W] = sMEM0A+2; //selb
      config_bus[`CONF_MULADD0_B - 2*`N_W -: `N_W] = sMEM0A+3; //selo
      config_bus[`CONF_MULADD0_B - 3*`N_W -: `MULADD_FNS_W] = `MULADD_MUL_LOW_MACC; //fns
+     config_bus[`CONF_MULADD0_B - 3*`N_W - `MULADD_FNS_W -: `PERIOD_W] = 1; //delay
 
      //configure ALULite to add bias to muladd result
      config_bus[`CONF_ALULITE0_B -: `N_W] = sMEM0A+2; //sela
@@ -215,7 +216,7 @@ module xdata_eng_tb;
          config_bus[`CONF_MEM0A_B - 4*`MEMP_CONF_BITS - `MEM_ADDR_W-2*`PERIOD_W-`N_W -: `MEM_ADDR_W] = i*3+j;
 
          //run configurations
-         ctr_we = 1;
+	 ctr_we = 1;
          ctr_valid = 1;
          ctr_addr[`nMEM_W+`MEM_ADDR_W] = 1;
          ctr_data_in[0] = 1;
