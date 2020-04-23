@@ -1,5 +1,5 @@
 `timescale 1ns / 1ps
-//`include "xversat.vh"
+`include "xversat.vh"
 
 module addrgen_tb;
 
@@ -82,29 +82,24 @@ module addrgen_tb;
       // Wait 100 ns for global reset to finish
       #(clk_per*5) rst = 0;
       
-      //define start address
-      init = 1;
-      #(clk_per) init = 0;
-
       //run
+      init = 1;
       run = 1;
-      #(clk_per) run = 0;
+      #(clk_per);
+      init = 0;
+      run = 0;
 
       //wait until done
-      do
+      do begin
+        if(mem_en) $display("Address %d", addr);
         @(posedge clk) #1;
-      while(done == 0);
+      end while(done == 0);
       $finish;      
 
    end
 	
    always 
      #(clk_per/2) clk = ~clk;
-
-   always @ (posedge clk) begin
-      if(mem_en)
-        $display("Address %d", addr);
-   end
       	 
 endmodule
 

@@ -6,7 +6,7 @@ module xmem_tb;
 
    //parameters 
    parameter clk_per = 20;
-   integer i, j, aux_addr, print_flag = 0;
+   integer i, j, aux_addr;
    
    //control 
    reg 				clk;
@@ -66,10 +66,10 @@ module xmem_tb;
 	     .config_bits(config_bits)
 	     
 	     );
+
+   reg [`DATA_W-1:0] aux_val;
    
    initial begin
-      
-      #100
       
 `ifdef DEBUG
       $dumpfile("xmem.vcd");
@@ -104,28 +104,16 @@ module xmem_tb;
       $display("\nTesting data and control interfaces");
       
       //Write values to memory
-      #clk_per ctr_mem_valid = 1;
-      ctr_we = 1;
-      ctr_addr = 10;
-      ctr_data_in = 32'hF0F0F0F0;
-      data_mem_valid = 1;
-      data_we = 1;
-      data_addr = 16;
-      data_data_in = 32'h6789ABCD;   
       $display("Value written in memA: %x", 32'h6789ABCD);
+      cpu_data_write(16, 32'h6789ABCD);
       $display("Value written in memB: %x", 32'hF0F0F0F0);
+      cpu_ctr_write(10, 32'hF0F0F0F0);
 
       //Read values back from memory
-      #clk_per ctr_mem_valid = 0;
-      data_mem_valid = 0;
-      #clk_per ctr_mem_valid = 1;
-      ctr_we = 0;
-      data_mem_valid = 1;
-      data_we = 0;
-      #clk_per ctr_mem_valid = 0;
-      data_mem_valid = 0;
-      $display("Value read from memA: %x", flow_out[2*`DATA_W-1 -: `DATA_W]);
-      $display("Value read from memB: %x", flow_out[`DATA_W-1:0]);
+      cpu_data_read(16, aux_val);
+      $display("Value read from memA: %x", aux_val);
+      cpu_ctr_read(10, aux_val);
+      $display("Value read from memB: %x", aux_val);
 
       //Testing address generator and configuration bus
       $display("\nTesting address generator and configuration bus");
@@ -153,20 +141,18 @@ module xmem_tb;
       end
       $display("\nActual addr values");
 
-      //define start address
-      initA = 1;
-      #(clk_per) initA = 0;
-
       //run
+      initA = 1;
       runA = 1;
-      #(clk_per) runA = 0;
+      #(clk_per);
+      initA = 0;
+      runA = 0;
 
       //wait until done
-      #clk_per print_flag = 1;
-      do
-        @(posedge clk) #clk_per;
-      while(doneA == 0);
-      print_flag = 0;
+      do begin
+        $display("Address %d", flow_out[2*`DATA_W-1 -: `DATA_W]);
+        #clk_per;
+      end while(doneA == 0);
 
       //End simulation
       $finish;
@@ -174,10 +160,59 @@ module xmem_tb;
 	
    always 
      #(clk_per/2) clk = ~clk;
-
-   always @ (posedge clk) begin
-      if(print_flag)
-        $display("Address %d", flow_out[2*`DATA_W-1 -: `DATA_W]);
-   end
-      	 
+ 
+   //
+   // CPU TASKS
+   //
+   
+   task cpu_data_write;
+      input [`MEM_ADDR_W-1:0] cpu_address;
+      input [`DATA_W-1:0] cpu_data;
+      data_addr = cpu_address;
+      data_mem_valid = 1;
+      data_we = 1;
+      data_data_in = cpu_data;
+      #clk_per;
+      data_we = 0;
+      data_mem_valid = 0;
+      #clk_per;
+   endtask
+ 
+   task cpu_data_read;
+      input [`MEM_ADDR_W-1:0] cpu_address;
+      output [`DATA_W-1:0] read_reg;
+      data_addr = cpu_address;
+      data_mem_valid = 1;
+      data_we = 0;
+      #clk_per;
+      read_reg = flow_out[2*`DATA_W-1 -: `DATA_W]; 
+      data_mem_valid = 0;
+      #clk_per;
+   endtask
+    	 
+   task cpu_ctr_write;
+      input [`MEM_ADDR_W-1:0] cpu_address;
+      input [`DATA_W-1:0] cpu_data;
+      ctr_addr = cpu_address;
+      ctr_mem_valid = 1;
+      ctr_we = 1;
+      ctr_data_in = cpu_data;
+      #clk_per;
+      ctr_we = 0;
+      ctr_mem_valid = 0;
+      #clk_per;
+   endtask
+ 
+   task cpu_ctr_read;
+      input [`MEM_ADDR_W-1:0] cpu_address;
+      output [`DATA_W-1:0] read_reg;
+      ctr_addr = cpu_address;
+      ctr_mem_valid = 1;
+      ctr_we = 0;
+      #clk_per;
+      read_reg = flow_out[`DATA_W-1 -: `DATA_W]; 
+      ctr_mem_valid = 0;
+      #clk_per;
+   endtask
+    	 
 endmodule

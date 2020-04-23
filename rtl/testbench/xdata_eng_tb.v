@@ -90,38 +90,28 @@ module xdata_eng_tb;
       #(clk_per*5) rst = 0;
 
       //write 5x5 feature map in mem0B
-      data_valid = 1;
-      data_we = 1;
       for(i = 0; i < 25; i++) begin
-        data_addr = i;
-        data_data_in = $random%20;
-        pixels[i] = data_data_in;
-        #clk_per;
+        pixels[i] = $random%20;
+        cpu_data_write(i, pixels[i]);        
       end
  
       //write 3x3 kernel and bias in mem1B
       for(i = 0; i < 10; i++) begin
-        data_addr = i + 2**`MEM_ADDR_W;
         if(i < 9) begin 
-          data_data_in = $random%2;
-          weights[i] = data_data_in;
-        end  
-        else begin
-          data_data_in = $random%5;
-          bias = data_data_in;
+          weights[i] = $random%2;
+          cpu_data_write(i + 2**`MEM_ADDR_W, weights[i]);
+        end else begin
+          bias = $random%5;
+          cpu_data_write(i + 2**`MEM_ADDR_W, bias);
         end
-        #clk_per;
       end
-      data_valid = 0;
-      data_we = 0;
 
       //read feature map
       $display("\nReading input feature map");
-      #clk_per data_valid = 1;
       for(i = 0; i < 5; i++) begin
         for(j = 0; j < 5; j++) begin
-          data_addr = i*5 + j;
-          #clk_per $write("%d ", data_data_out);
+          cpu_data_read(i*5+j, res);
+          $write("%d ", res);
         end
         $write("\n"); 
       end
@@ -130,16 +120,15 @@ module xdata_eng_tb;
       $display("\nReading kernel");
       for(i = 0; i < 3; i++) begin
         for(j = 0; j < 3; j++) begin
-          data_addr = 2**`MEM_ADDR_W + 3*i + j;
-          #clk_per $write("%d ", data_data_out);
+          cpu_data_read(2**`MEM_ADDR_W + 3*i + j, res);
+          $write("%d ", res);
         end
         $write("\n"); 
       end
 
       //reading bias
-      data_addr += 1;
-      #clk_per $display("\nBias: %0d ", data_data_out);
-      data_valid = 0;
+      cpu_data_read(2**`MEM_ADDR_W + 9, res);
+      $display("\nBias: %0d ", res);
 
      //expected result of convolution 
      $display("\nExpected result of convolution");
@@ -189,7 +178,7 @@ module xdata_eng_tb;
      config_bus[`CONF_MULADD0_B - `N_W -: `N_W] = sMEM0A+2; //selb
      config_bus[`CONF_MULADD0_B - 2*`N_W -: `N_W] = sMEM0A+3; //selo
      config_bus[`CONF_MULADD0_B - 3*`N_W -: `MULADD_FNS_W] = `MULADD_MUL_LOW_MACC; //fns
-     config_bus[`CONF_MULADD0_B - 3*`N_W - `MULADD_FNS_W -: `PERIOD_W] = 1; //delay
+     config_bus[`CONF_MULADD0_B - 3*`N_W - `MULADD_FNS_W -: `PERIOD_W] = `MEMP_LAT; //delay
 
      //configure ALULite to add bias to muladd result
      config_bus[`CONF_ALULITE0_B -: `N_W] = sMEM0A+2; //sela
@@ -216,39 +205,83 @@ module xdata_eng_tb;
          config_bus[`CONF_MEM0A_B - 4*`MEMP_CONF_BITS - `MEM_ADDR_W-2*`PERIOD_W-`N_W -: `MEM_ADDR_W] = i*3+j;
 
          //run configurations
-	 ctr_we = 1;
-         ctr_valid = 1;
-         ctr_addr[`nMEM_W+`MEM_ADDR_W] = 1;
-         ctr_data_in[0] = 1;
-         #clk_per ctr_we = 0;
-         ctr_data_in = 0;
+         cpu_ctr_write(1<<(`nMEM_W+`MEM_ADDR_W), 1);
 
          //wait until config is done
-         do begin
-           #clk_per;
-         end while(ctr_data_out == 0);
+         do
+           cpu_ctr_read(1<<(`nMEM_W+`MEM_ADDR_W), res);
+         while(res == 0);
        end
      end
 
      //read results
-     ctr_valid = 0;
-     ctr_addr[`nMEM_W+`MEM_ADDR_W] = 0;
-     data_valid = 1; 
      for(i = 0; i < 3; i++) begin
        for(j = 0; j < 3; j++) begin
-         data_addr = 2**(`MEM_ADDR_W+1) + 3*i + j;
-         #clk_per $write("%d ", data_data_out);
+         cpu_data_read(2**(`MEM_ADDR_W+1) + 3*i + j, res);
+         $write("%d ", res);
        end
        $write("\n"); 
      end
      
      //end simulation
-     data_valid = 0;
      $finish;
    end
 	
    always 
      #(clk_per/2) clk = ~clk;
 
-endmodule
+   //
+   // CPU TASKS
+   //
 
+   task cpu_data_write;
+      input [`nMEM_W+`MEM_ADDR_W-1:0] cpu_address;
+      input [`DATA_W-1:0] cpu_data;
+      data_addr = cpu_address;
+      data_valid = 1;
+      data_we = 1;
+      data_data_in = cpu_data;
+      #clk_per;
+      data_we = 0;
+      data_valid = 0;
+      #clk_per;
+   endtask
+
+   task cpu_data_read;
+      input [`nMEM_W+`MEM_ADDR_W-1:0] cpu_address;
+      output [`DATA_W-1:0] read_reg;
+      data_addr = cpu_address;
+      data_valid = 1;
+      data_we = 0;
+      #clk_per;
+      read_reg = data_data_out;
+      data_valid = 0;
+      #clk_per;
+   endtask
+
+   task cpu_ctr_write;
+      input [`nMEM_W+`MEM_ADDR_W:0] cpu_address;
+      input [`DATA_W-1:0] cpu_data;
+      ctr_addr = cpu_address;
+      ctr_valid = 1;
+      ctr_we = 1;
+      ctr_data_in = cpu_data;
+      #clk_per;
+      ctr_we = 0;
+      ctr_valid = 0;
+      #clk_per;
+   endtask
+
+   task cpu_ctr_read;
+      input [`nMEM_W+`MEM_ADDR_W:0] cpu_address;
+      output [`DATA_W-1:0] read_reg;
+      ctr_addr = cpu_address;
+      ctr_valid = 1;
+      ctr_we = 0;
+      #clk_per;
+      read_reg = ctr_data_out;
+      ctr_valid = 0;
+      #clk_per;
+   endtask
+
+endmodule

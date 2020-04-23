@@ -96,12 +96,11 @@ module xdata_eng (
 
    // write
    reg ctr_reg;
-   always @ (posedge rst, posedge clk) begin
-     ctr_reg <= 1'b0;
-     if(ctr_we)
-       if(control_valid)
-         ctr_reg <= ctr_data_in[0];
-   end
+   always @ (posedge rst, posedge clk)
+     if(rst || ~ctr_we || ~control_valid)
+       ctr_reg <= 1'b0;
+     else
+       ctr_reg <= ctr_data_in[0];
 
    wire run = control_valid & ctr_we &  ctr_data_in[0];
    wire run_reg = ctr_reg;
