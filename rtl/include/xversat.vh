@@ -2,9 +2,6 @@
 // VERSAT DEFINES
 //
 
-// VERSAT DATA WIDTH
-`define DATA_W 32 // bits
-
 // NUMBER OF STAGES
 `define nSTAGE 5
 
@@ -40,14 +37,14 @@
 `define N_W       ($clog2(`N)+1)
 
 // Data bus size
-`define DATABUS_W (`N *`DATA_W) //internal data bus
+`define DATABUS_W (`N * DATA_W) //internal data bus
 
 //
 // Data bus bit map
 //
 `define DATA_MEM0A_B    (`DATABUS_W-1)
-`define DATA_ALU0_B     (`DATA_MEM0A_B - 2*`nMEM*`DATA_W)
-`define DATA_ALULITE0_B (`DATA_ALU0_B - `nALU*`DATA_W)
-`define DATA_MUL0_B     (`DATA_ALULITE0_B - `nALULITE*`DATA_W)
-`define DATA_MULADD0_B  (`DATA_MUL0_B - `nMUL*`DATA_W )
-`define DATA_BS0_B      (`DATA_MULADD0_B - `nMULADD*`DATA_W)
+`define DATA_ALU0_B     (`DATA_MEM0A_B - 2*`nMEM*DATA_W)
+`define DATA_ALULITE0_B (`DATA_ALU0_B - `nALU*DATA_W)
+`define DATA_MUL0_B     (`DATA_ALULITE0_B - `nALULITE*DATA_W)
+`define DATA_MULADD0_B  (`DATA_MUL0_B - `nMUL*DATA_W )
+`define DATA_BS0_B      (`DATA_MULADD0_B - `nMULADD*DATA_W)

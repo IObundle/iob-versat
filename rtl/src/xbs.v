@@ -3,24 +3,26 @@
 
 `include "xbsdefs.vh"
 
-module xbs(
+module xbs # (
+	   parameter		     DATA_W = 32
+	 ) (
            //control 
            input                     clk,
            input                     rst,
 
            //flow interface
            input [2*`DATABUS_W-1:0]  flow_in,
-           output [`DATA_W-1:0]	     flow_out,
+           output [DATA_W-1:0]	     flow_out,
 
            //config data
            input [`BS_CONF_BITS-1:0] configdata
            );
    
    // extract the 2 inputs
-   wire signed [`DATA_W-1:0]         data_in; //data to shift 
-   wire [`DATA_W-1:0]                shift; //shift value
+   wire signed [DATA_W-1:0]          data_in; //data to shift 
+   wire [DATA_W-1:0]                 shift; //shift value
    
-   reg [`DATA_W-1:0]                 res;
+   reg [DATA_W-1:0]                  res;
 
    //wiring config data
    wire [`N_W-1: 0]                  seldata;
@@ -29,8 +31,8 @@ module xbs(
 
 
    // register input mux outputs
-   reg [`DATA_W-1:0]                 data_in_reg;
-   reg [`DATA_W-1:0]                 shift_reg;
+   reg [DATA_W-1:0]                  data_in_reg;
+   reg [DATA_W-1:0]                  shift_reg;
 
    
    //unpack config bits
@@ -39,22 +41,26 @@ module xbs(
    assign fns = configdata[`BS_CONF_BITS-1-2*`N_W -: `BS_FNS_W];
    
    //input selection 
-   xinmux muxdata (
-		   .sel(seldata),
-		   .data_in(flow_in),
-		   .data_out(data_in)
-		   );
+   xinmux # ( 
+	.DATA_W(DATA_W)
+   ) muxdata (
+	.sel(seldata),
+	.data_in(flow_in),
+	.data_out(data_in)
+	);
    
-   xinmux muxshift (
-		    .sel(selshift),
-		    .data_in(flow_in),
-		    .data_out(shift)
-		    );
+   xinmux # ( 
+	.DATA_W(DATA_W)
+   ) muxshift (
+	.sel(selshift),
+	.data_in(flow_in),
+	.data_out(shift)
+	);
    
    always @ (posedge clk, posedge rst)
      if (rst) begin
-	data_in_reg <= `DATA_W'h0;
-	shift_reg <= `DATA_W'h0;
+	data_in_reg <= {DATA_W{1'b0}};
+	shift_reg <= {DATA_W{1'b0}};
      end else begin
         data_in_reg <= data_in;
         shift_reg <= shift;
@@ -71,7 +77,7 @@ module xbs(
 
    always @ (posedge clk, posedge rst) 
      if (rst)
-       flow_out <= `DATA_W'h0;
+        flow_out <= {DATA_W{1'b0}};
      else begin
 	flow_out <= res;
      end

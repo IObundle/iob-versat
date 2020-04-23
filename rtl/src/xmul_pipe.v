@@ -1,41 +1,38 @@
 `timescale 1ns / 1ps
 `include "xversat.vh"
 
-`ifndef DATA_W
- `define DATA_W 32
-`endif
-
-
 /* 
  Module: 2-stage pipeline integer multiplier
  */
 
-module xmul_pipe (
+module xmul_pipe # ( 
+	       parameter		  DATA_W = 32
+	) (
 	       input                      rst,
 	       input                      clk,
 
 	       //data 
-	       input [`DATA_W-1:0]        op_a,
-	       input [`DATA_W-1:0]        op_b,
+	       input [DATA_W-1:0]        op_a,
+	       input [DATA_W-1:0]        op_b,
 
-               output reg [2*`DATA_W-1:0] product
+               output reg [2*DATA_W-1:0] product
 	       );
 
    //input registers
-   reg [`DATA_W-1:0]               op_a_reg;
-   reg [`DATA_W-1:0]               op_b_reg;
+   reg [DATA_W-1:0]               op_a_reg;
+   reg [DATA_W-1:0]               op_b_reg;
 
    // half words
-   wire signed [`DATA_W/2:0]       a_l;
-   wire signed [`DATA_W/2:0]       a_h;
-   wire signed [`DATA_W/2:0]       b_l;
-   wire signed [`DATA_W/2:0]       b_h;
+   wire signed [DATA_W/2:0]       a_l;
+   wire signed [DATA_W/2:0]       a_h;
+   wire signed [DATA_W/2:0]       b_l;
+   wire signed [DATA_W/2:0]       b_h;
 
    //stage 1 registers
-   reg signed [`DATA_W+1:0]        blXal;
-   reg signed [`DATA_W+1:0]        blXah;
-   reg signed [`DATA_W+1:0]        bhXal;
-   reg signed [`DATA_W+1:0]        bhXah;
+   reg signed [DATA_W+1:0]        blXal;
+   reg signed [DATA_W+1:0]        blXah;
+   reg signed [DATA_W+1:0]        bhXal;
+   reg signed [DATA_W+1:0]        bhXah;
    
 
    // compute partial operands
@@ -49,15 +46,15 @@ module xmul_pipe (
    always @ (posedge clk) 
      if (rst) begin
         // stage 0
-        op_a_reg <= `DATA_W'b0;
-        op_b_reg <= `DATA_W'b0;
+        op_a_reg <= {DATA_W{1'b0}};
+        op_b_reg <= {DATA_W{1'b0}};
 	//stage 1
 	blXal <= 34'b0;
 	blXah <= 34'b0;
 	bhXal <= 34'b0;
 	bhXah <= 34'b0;
         //stage 2
-        product <= {2*`DATA_W{1'b0}};
+        product <= {2*DATA_W{1'b0}};
      end else begin
         // stage 0
         op_a_reg <= op_a;   

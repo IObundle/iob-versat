@@ -1,9 +1,11 @@
 `timescale 1ns / 1ps
-`include "xaludefs.vh"
+
 `include "xversat.vh"
+`include "xaludefs.vh"
 
 module xalu_tb;
    parameter clk_per = 10;
+   parameter DATA_W = 32;
    integer k;
    integer 	  file;
 
@@ -13,24 +15,26 @@ module xalu_tb;
    
    //data
    wire [2*`DATABUS_W-1:0] data_bus;
-   wire [`DATA_W-1:0]    alu_result;
+   wire [DATA_W-1:0] alu_result;
    
    //config data
    wire [`ALU_CONF_BITS - 1:0] configdata;
 
-   xalu uut (
-             .clk(clk),
-             .rst(rst),
-	     .flow_in(data_bus),
-	     .flow_out(alu_result),
-	     .configdata(configdata)
-	     );
+   xalu # ( 
+	.DATA_W(DATA_W)
+   ) uut (
+        .clk(clk),
+        .rst(rst),
+	.flow_in(data_bus),
+	.flow_out(alu_result),
+	.configdata(configdata)
+	);
 
-   reg [`DATA_W-1:0] 		result_compare; 
-   wire [`DATA_W-1:0] 		pcmp_comp; 
+   reg [DATA_W-1:0] 		result_compare; 
+   wire [DATA_W-1:0] 		pcmp_comp; 
    reg [`ALU_FNS_W-1:0] 	alu_fns; 
-   reg [`DATA_W-1:0] 		opa_comp; 
-   reg [`DATA_W-1:0] 		opb_comp;
+   reg [DATA_W-1:0] 		opa_comp; 
+   reg [DATA_W-1:0] 		opb_comp;
 
    integer 			err_tb ;
 
@@ -38,8 +42,8 @@ module xalu_tb;
    assign configdata[`ALU_FNS_W-1:0]= alu_fns;
    assign configdata[`ALU_CONF_BITS-1 -:`N_W] = 0; 
    assign configdata[`ALU_CONF_BITS-`N_W-1-:`N_W] = 1;
-   assign data_bus[`DATA_MEM0A_B -: `DATA_W]= opa_comp;
-   assign data_bus[`DATA_MEM0A_B - `DATA_W -: `DATA_W]= opb_comp;
+   assign data_bus[`DATA_MEM0A_B -: DATA_W]= opa_comp;
+   assign data_bus[`DATA_MEM0A_B - DATA_W -: DATA_W]= opb_comp;
 
    initial begin
       
@@ -49,7 +53,6 @@ module xalu_tb;
 `endif
       
       alu_fns = 0;
-      
       err_tb=0;
       clk = 0;
       k=-1;
@@ -82,7 +85,7 @@ module xalu_tb;
    always @ (posedge clk) begin
 
       if (rst == 1'b1)
-        result_compare=32'd0;
+        result_compare = {DATA_W{1'd0}};
       else
           case(alu_fns)
             `ALU_OR:        result_compare <= opa_comp | opb_comp ;
@@ -91,7 +94,7 @@ module xalu_tb;
 	    
 	    `ALU_MUX: begin
 	      result_compare <= opb_comp;
-	      if(opa_comp[31]) result_compare <= `DATA_W'b0;
+	      if(opa_comp[31]) result_compare <= {DATA_W{1'b0}};
 	    end
 
             `ALU_XOR:       result_compare <= (opa_comp ^ opb_comp ) ;
@@ -151,7 +154,7 @@ module xalu_tb;
             .data_in(opa_comp),
 	    .data_out(pcmp_comp[5:0]));
 
-   assign pcmp_comp[`DATA_W-1:6] = 0;
+   assign pcmp_comp[DATA_W-1:6] = 0;
    
    
    always @ (negedge clk)

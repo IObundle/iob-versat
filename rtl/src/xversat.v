@@ -12,24 +12,26 @@
 `include "xmuladddefs.vh"
 `include "xbsdefs.vh"
 
-module xversat (
+module xversat #(
+		 parameter			ADDR_W = 32,
+		 parameter			DATA_W = 32
+	 	)(
                  input                    	clk,
                  input                    	rst,
 
                  //control interface
                  input                    	ctr_valid,
-                 input [`CTR_ADDR_W-1:0]     ctr_addr,
+                 input [ADDR_W-1:0]     	ctr_addr,
                  input                    	ctr_we,
-                 input [`DATA_W-1:0]      	ctr_data_in,
-                 output reg [`DATA_W-1:0]	ctr_data_out,
+                 input [DATA_W-1:0]      	ctr_data_in,
+                 output reg [DATA_W-1:0]	ctr_data_out,
 
                  //data interface
                  input                    	data_valid,
-                 input [`CTR_ADDR_W-1:0]    	data_addr,
+                 input [ADDR_W-1:0]    		data_addr,
                  input                    	data_we,
-                 input [`DATA_W-1:0]      	data_data_in,
-                 output reg [`DATA_W-1:0] 	data_data_out
-                 
+                 input [DATA_W-1:0]      	data_data_in,
+                 output reg [DATA_W-1:0] 	data_data_out
                  );
 
    //Verilator ignores the fact that different array elements
@@ -47,7 +49,7 @@ module xversat (
    reg [`nSTAGE-1:0] stage_ctr_valid;
    always @ * begin
      integer j;
-     stage_ctr_valid = `nSTAGE'b0;
+     stage_ctr_valid = {`nSTAGE{1'b0}};
        for(j=0; j<`nSTAGE; j=j+1)
           if (ctr_addr[`CTR_ADDR_W-1 -: `nSTAGE_W] == j[`nSTAGE_W-1:0] || run_done)
             stage_ctr_valid[j] = ctr_valid;
@@ -62,13 +64,13 @@ module xversat (
    end
 
    //select stage ctr data
-   reg [`DATA_W-1:0] stage_ctr_data_out [`nSTAGE-1:0];
+   reg [DATA_W-1:0] stage_ctr_data_out [`nSTAGE-1:0];
    always @ * begin
       integer j;
-      ctr_data_out = `DATA_W'd0;
+      ctr_data_out = {DATA_W{1'b0}};
       for(j=0; j<`nSTAGE; j=j+1) begin
          if(run_done)
-           ctr_data_out = {{`DATA_W-1{1'b0}}, &done};       
+           ctr_data_out = {{DATA_W-1{1'b0}}, &done};       
          else if (stage_ctr_valid[j])
            ctr_data_out = stage_ctr_data_out[j];
       end
@@ -83,17 +85,17 @@ module xversat (
    reg [`nSTAGE-1:0] stage_data_valid;
    always @ * begin
      integer j;
-     stage_data_valid = `nSTAGE'b0;
+     stage_data_valid = {`nSTAGE{1'b0}};
        for(j=0; j<`nSTAGE; j=j+1)
           if (data_addr[`CTR_ADDR_W-1 -: `nSTAGE_W] == j[`nSTAGE_W-1:0])
             stage_data_valid[j] = data_valid;
    end 
 
    //select stage data data
-   reg [`DATA_W-1:0] stage_data_data_out [`nSTAGE-1:0];
+   reg [DATA_W-1:0] stage_data_data_out [`nSTAGE-1:0];
    always @ * begin
       integer j;
-      data_data_out = `DATA_W'd0;
+      data_data_out = {DATA_W{1'b0}};
       for(j=0; j<`nSTAGE; j=j+1) begin
         if (stage_data_valid[j])
           data_data_out = stage_data_data_out[j];
@@ -108,7 +110,9 @@ module xversat (
    genvar i;
    generate
       for (i=0; i < `nSTAGE; i=i+1) begin : versat_array
-        xstage stage (
+        xstage # (
+		      .DATA_W(DATA_W)
+	) stage (
                       .clk(clk),
                       .rst(rst),
 

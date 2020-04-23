@@ -18,15 +18,15 @@ module xdata_eng_tb;
    reg 					ctr_valid;
    reg					ctr_we;
    reg [`nMEM_W+`MEM_ADDR_W:0]		ctr_addr;
-   reg [`DATA_W-1:0]			ctr_data_in;
-   wire	[`DATA_W-1:0]			ctr_data_out;
+   reg [DATA_W-1:0]			ctr_data_in;
+   wire	[DATA_W-1:0]			ctr_data_out;
 
    //data interface
    reg					data_valid;
    reg					data_we;
    reg [`nMEM_W+`MEM_ADDR_W-1:0]	data_addr;
-   reg [`DATA_W-1:0]			data_data_in;
-   wire	signed [`DATA_W-1:0]		data_data_out;
+   reg [DATA_W-1:0]			data_data_in;
+   wire	signed [DATA_W-1:0]		data_data_out;
 
    //flow interface
    reg [`DATABUS_W-1:0] 		flow_in;
@@ -42,12 +42,15 @@ module xdata_eng_tb;
    parameter sMUL0 = sALULITE0 + `nALULITE;
    parameter sMULADD0 = sMUL0 + `nMUL;
    parameter sBS0 = sMULADD0 + `nMULADD;
+   parameter DATA_W = 32;
  
    integer i, j, k, l, res;
    integer pixels[24:0], weights[8:0], bias;
 
    // Instantiate the Unit Under Test (UUT)
-   xdata_eng uut (
+   xdata_eng # ( 
+		.DATA_W(DATA_W)
+   ) uut (
 		.clk(clk), 
 		.rst(rst),
 		.ctr_valid(ctr_valid),
@@ -236,7 +239,7 @@ module xdata_eng_tb;
 
    task cpu_data_write;
       input [`nMEM_W+`MEM_ADDR_W-1:0] cpu_address;
-      input [`DATA_W-1:0] cpu_data;
+      input [DATA_W-1:0] cpu_data;
       data_addr = cpu_address;
       data_valid = 1;
       data_we = 1;
@@ -249,7 +252,7 @@ module xdata_eng_tb;
 
    task cpu_data_read;
       input [`nMEM_W+`MEM_ADDR_W-1:0] cpu_address;
-      output [`DATA_W-1:0] read_reg;
+      output [DATA_W-1:0] read_reg;
       data_addr = cpu_address;
       data_valid = 1;
       data_we = 0;
@@ -261,7 +264,7 @@ module xdata_eng_tb;
 
    task cpu_ctr_write;
       input [`nMEM_W+`MEM_ADDR_W:0] cpu_address;
-      input [`DATA_W-1:0] cpu_data;
+      input [DATA_W-1:0] cpu_data;
       ctr_addr = cpu_address;
       ctr_valid = 1;
       ctr_we = 1;
@@ -274,7 +277,7 @@ module xdata_eng_tb;
 
    task cpu_ctr_read;
       input [`nMEM_W+`MEM_ADDR_W:0] cpu_address;
-      output [`DATA_W-1:0] read_reg;
+      output [DATA_W-1:0] read_reg;
       ctr_addr = cpu_address;
       ctr_valid = 1;
       ctr_we = 0;

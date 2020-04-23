@@ -8,37 +8,39 @@
 
  */
 
-module xalulite (
+module xalulite # ( 
+		 parameter			  DATA_W = 32
+	) (
                  input                            clk,
                  input                            rst,
 
                  //flow interface
                  input [2*`DATABUS_W-1:0]         flow_in,
-                 output reg [`DATA_W-1:0]    	  flow_out,
+                 output reg [DATA_W-1:0]    	  flow_out,
 
                  // config interface
                  input [`ALULITE_CONF_BITS - 1:0] configdata
                  );
 
 
-   reg [`DATA_W:0]                                ai;
-   reg [`DATA_W:0]                                bz;
-   wire [`DATA_W:0]                               temp_adder;
+   reg [DATA_W:0]                                 ai;
+   reg [DATA_W:0]                                 bz;
+   wire [DATA_W:0]                                temp_adder;
    wire [5:0]                                     data_out_clz_i;
    reg                                            cin;
 
-   reg signed [`DATA_W-1:0]                       result_int;
+   reg signed [DATA_W-1:0]                        result_int;
 
    wire [`N_W-1: 0]                               sela;
    wire [`N_W-1: 0]                               selb;
 
-   wire [`DATA_W-1:0]                             op_a;
-   wire [`DATA_W-1:0]                             op_b;
+   wire [DATA_W-1:0]                              op_a;
+   wire [DATA_W-1:0]                              op_b;
    reg                                            op_a_msb;
    reg                                            op_b_msb;
-   wire [`DATA_W-1:0]                             op_a_int;
-   reg [`DATA_W-1:0]                              op_a_reg;
-   reg [`DATA_W-1:0]                              op_b_reg;
+   wire [DATA_W-1:0]                              op_a_int;
+   reg [DATA_W-1:0]                               op_a_reg;
+   reg [DATA_W-1:0]                               op_b_reg;
    wire [`ALULITE_FNS_W-2:0]                      fns;
    wire                                           self_loop;
 
@@ -49,22 +51,26 @@ module xalulite (
    assign fns = configdata[`ALULITE_FNS_W-2 : 0];
 
    // Input selection
-   xinmux muxa (
-                .sel(sela),
-                .data_in(flow_in),
-                .data_out(op_a)
-		);
+   xinmux # ( 
+	.DATA_W(DATA_W)
+   ) muxa (
+        .sel(sela),
+        .data_in(flow_in),
+        .data_out(op_a)
+	);
 
-   xinmux muxb (
-                .sel(selb),
-                .data_in(flow_in),
-                .data_out(op_b)
-		);
+   xinmux # ( 
+	.DATA_W(DATA_W)
+   ) muxb (
+        .sel(selb),
+        .data_in(flow_in),
+        .data_out(op_b)
+	);
 
    always @ (posedge clk, posedge rst)
      if (rst) begin
-	op_b_reg <= `DATA_W'h00000000;
-	op_a_reg <= `DATA_W'h00000000;
+	op_b_reg <= {DATA_W{1'b0}};
+	op_a_reg <= {DATA_W{1'b0}};
      end else begin
 	op_b_reg <= op_b;
 	op_a_reg <= op_a;
@@ -94,7 +100,7 @@ module xalulite (
 	      if(self_loop)
 	        result_int = flow_out;
 	      else
-	        result_int = `DATA_W'b0;
+	        result_int = {DATA_W{1'b0}};
 	   end
 	end
 	`ALULITE_SUB : begin
@@ -177,7 +183,7 @@ module xalulite (
 
    always @ (posedge clk, posedge rst)
      if (rst)
-       flow_out <= `DATA_W'h0;
+       flow_out <= {DATA_W{1'b0}};
      else 
        flow_out <= result_int;
 
