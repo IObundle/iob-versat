@@ -10,23 +10,26 @@
 
 module xversat_tb;
 
+   parameter			ADDR_W = 32;
+   parameter			DATA_W = 32;
+
    //inputs
    reg 			   	clk;
    reg 			   	rst;
 
    //ctr interface
    reg 			   	ctr_valid;
-   reg [`CTR_ADDR_W-1:0]  	ctr_addr;
+   reg [ADDR_W-1:0]  		ctr_addr;
    reg 			   	ctr_we;
-   reg [`DATA_W-1:0]       	ctr_data_in;
-   wire [`DATA_W-1:0]     	ctr_data_out;
+   reg [DATA_W-1:0]       	ctr_data_in;
+   wire [DATA_W-1:0]     	ctr_data_out;
 
    //data interface
    reg 			   	data_valid;
    reg 			   	data_we;
-   reg [`CTR_ADDR_W-1:0] 	data_addr;
-   reg [`DATA_W-1:0] 	   	data_data_in;
-   wire signed [`DATA_W-1:0]   	data_data_out;
+   reg [ADDR_W-1:0] 		data_addr;
+   reg [DATA_W-1:0] 	   	data_data_in;
+   wire signed [DATA_W-1:0]   	data_data_out;
 
    //parameters
    parameter 			clk_per     = 20;
@@ -58,7 +61,11 @@ module xversat_tb;
    integer pixels[25*5-1:0], weights[9*5-1:0], bias, res;
 
    // Instantiate the Unit Under Test (UUT)
-   xversat uut (
+   xversat #(
+	     .ADDR_W(ADDR_W),
+	     .DATA_W(DATA_W)
+            )
+	uut (
 	     .clk(clk),
 	     .rst(rst),
 	     .ctr_valid(ctr_valid),
@@ -390,8 +397,8 @@ module xversat_tb;
    endtask
 
    task cpu_data_write;
-      input [`CTR_ADDR_W-1:0] cpu_address;
-      input [`DATA_W-1:0] cpu_data;
+      input [ADDR_W-1:0] cpu_address;
+      input [DATA_W-1:0] cpu_data;
       data_addr = cpu_address;
       data_valid = 1;
       data_we = 1;
@@ -403,8 +410,8 @@ module xversat_tb;
    endtask
 
    task cpu_data_read;
-      input [`CTR_ADDR_W-1:0] cpu_address;
-      output [`DATA_W-1:0] read_reg;
+      input [ADDR_W-1:0] cpu_address;
+      output [DATA_W-1:0] read_reg;
       data_addr = cpu_address;
       data_valid = 1;
       data_we = 0;
@@ -415,8 +422,8 @@ module xversat_tb;
    endtask
 
    task cpu_ctr_write;
-      input [`CTR_ADDR_W-1:0] cpu_address;
-      input [`DATA_W-1:0] cpu_data;
+      input [ADDR_W-1:0] cpu_address;
+      input [DATA_W-1:0] cpu_data;
       ctr_addr = cpu_address;
       ctr_valid = 1;
       ctr_we = 1;
@@ -428,8 +435,8 @@ module xversat_tb;
    endtask
 
    task cpu_ctr_read;
-      input [`CTR_ADDR_W-1:0] cpu_address;
-      output [`DATA_W-1:0] read_reg;
+      input [ADDR_W-1:0] cpu_address;
+      output [DATA_W-1:0] read_reg;
       ctr_addr = cpu_address;
       ctr_valid = 1;
       ctr_we = 0;

@@ -6,6 +6,7 @@ module xmem_tb;
 
    //parameters 
    parameter clk_per = 20;
+   parameter DATA_W = 32;
    integer i, j, aux_addr;
    
    //control 
@@ -19,23 +20,25 @@ module xmem_tb;
    reg 				ctr_mem_valid;
    reg 				ctr_we;
    reg [`MEM_ADDR_W-1:0]	ctr_addr;
-   reg [`DATA_W-1:0] 		ctr_data_in;
+   reg [DATA_W-1:0] 		ctr_data_in;
    
    //dma interface
    reg 				data_we;
    reg [`MEM_ADDR_W-1:0] 	data_addr;
-   reg [`DATA_W-1:0] 		data_data_in;
+   reg [DATA_W-1:0] 		data_data_in;
    reg 				data_mem_valid;
    
    //input / output data
    reg [2*`DATABUS_W-1:0] 	flow_in;
-   wire [2*`DATA_W-1:0]   	flow_out;
+   wire [2*DATA_W-1:0]   	flow_out;
    
    //configurations
    reg [2*`MEMP_CONF_BITS-1:0] 	config_bits;
    
    // Instantiate the Unit Under Test (UUT)
-   xmem uut (
+   xmem # ( 
+	     .DATA_W(DATA_W)
+   ) uut (
 	     //control 
 	     .clk(clk),
 	     .rst(rst),
@@ -67,7 +70,7 @@ module xmem_tb;
 	     
 	     );
 
-   reg [`DATA_W-1:0] aux_val;
+   reg [DATA_W-1:0] aux_val;
    
    initial begin
       
@@ -150,7 +153,7 @@ module xmem_tb;
 
       //wait until done
       do begin
-        $display("Address %d", flow_out[2*`DATA_W-1 -: `DATA_W]);
+        $display("Address %d", flow_out[2*DATA_W-1 -: DATA_W]);
         #clk_per;
       end while(doneA == 0);
 
@@ -167,7 +170,7 @@ module xmem_tb;
    
    task cpu_data_write;
       input [`MEM_ADDR_W-1:0] cpu_address;
-      input [`DATA_W-1:0] cpu_data;
+      input [DATA_W-1:0] cpu_data;
       data_addr = cpu_address;
       data_mem_valid = 1;
       data_we = 1;
@@ -180,19 +183,19 @@ module xmem_tb;
  
    task cpu_data_read;
       input [`MEM_ADDR_W-1:0] cpu_address;
-      output [`DATA_W-1:0] read_reg;
+      output [DATA_W-1:0] read_reg;
       data_addr = cpu_address;
       data_mem_valid = 1;
       data_we = 0;
       #clk_per;
-      read_reg = flow_out[2*`DATA_W-1 -: `DATA_W]; 
+      read_reg = flow_out[2*DATA_W-1 -: DATA_W]; 
       data_mem_valid = 0;
       #clk_per;
    endtask
     	 
    task cpu_ctr_write;
       input [`MEM_ADDR_W-1:0] cpu_address;
-      input [`DATA_W-1:0] cpu_data;
+      input [DATA_W-1:0] cpu_data;
       ctr_addr = cpu_address;
       ctr_mem_valid = 1;
       ctr_we = 1;
@@ -205,12 +208,12 @@ module xmem_tb;
  
    task cpu_ctr_read;
       input [`MEM_ADDR_W-1:0] cpu_address;
-      output [`DATA_W-1:0] read_reg;
+      output [DATA_W-1:0] read_reg;
       ctr_addr = cpu_address;
       ctr_mem_valid = 1;
       ctr_we = 0;
       #clk_per;
-      read_reg = flow_out[`DATA_W-1 -: `DATA_W]; 
+      read_reg = flow_out[DATA_W-1 -: DATA_W]; 
       ctr_mem_valid = 0;
       #clk_per;
    endtask

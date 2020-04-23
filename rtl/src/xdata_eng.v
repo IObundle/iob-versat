@@ -21,7 +21,9 @@
 `include "xbsdefs.vh"
 `include "xconfdefs.vh"
 
-module xdata_eng (
+module xdata_eng #(
+		  parameter			  DATA_W = 32
+		  ) (
                   input                           clk,
                   input                           rst,
 
@@ -29,15 +31,15 @@ module xdata_eng (
                   input                           ctr_valid,
                   input                           ctr_we,
                   input [`nMEM_W+`MEM_ADDR_W:0]   ctr_addr,
-                  input [`DATA_W-1:0]             ctr_data_in,
-                  output reg [`DATA_W-1:0]        ctr_data_out,
+                  input [DATA_W-1:0]              ctr_data_in,
+                  output reg [DATA_W-1:0]         ctr_data_out,
 
                   // data interface
                   input                           data_valid,
                   input                           data_we,
                   input [`nMEM_W+`MEM_ADDR_W-1:0] data_addr,
-                  input [`DATA_W-1:0]             data_data_in,
-                  output reg [`DATA_W-1:0]        data_data_out,
+                  input [DATA_W-1:0]              data_data_in,
+                  output reg [DATA_W-1:0]         data_data_out,
 
                   //flow interface
                   input [`DATABUS_W-1:0]          flow_in, 
@@ -76,12 +78,12 @@ module xdata_eng (
    end
 
    //register selected data memory output
-   reg [`DATA_W-1: 0] ctr_data_reg;
+   reg [DATA_W-1: 0] ctr_data_reg;
    always @ (posedge clk) begin
       integer j;
       for (j=0; j < `nMEM; j= j+1)
 	if (mem_valid[j])
-	  ctr_data_reg = data_bus[`DATA_MEM0A_B - (2*j+1)*`DATA_W  -: `DATA_W];
+	  ctr_data_reg = data_bus[`DATA_MEM0A_B - (2*j+1)*DATA_W  -: DATA_W];
    end
 
    
@@ -89,7 +91,7 @@ module xdata_eng (
    wire [2*`nMEM-1:0] mem_done;
    always @ * begin
       if(control_valid)
-	ctr_data_out = {{`DATA_W-1{1'b0}}, &mem_done};
+	ctr_data_out = {{DATA_W-1{1'b0}}, &mem_done};
       else 
 	ctr_data_out = ctr_data_reg;
    end
@@ -124,7 +126,7 @@ module xdata_eng (
    reg [`nMEM-1:0]                             data_mem_valid;
    always @ * begin
       integer j;
-      data_mem_valid = {`nMEM{1'b0}};
+      data_mem_valid = `nMEM'b0;
       for (j = 0; j < `nMEM; j = j+1)
 	if(data_addr[`nMEM_W + `MEM_ADDR_W -1 -: `nMEM_W] == j[`nMEM_W-1:0])
 	  data_mem_valid[j] = data_valid;
@@ -133,10 +135,10 @@ module xdata_eng (
    //read: select output data
    always @ * begin
       integer j;
-      data_data_out = `DATA_W'd0;
+      data_data_out = {DATA_W{1'b0}};
       for (j = 0; j < `nMEM; j = j+1)
 	if(data_addr_reg == j[`nMEM_W-1:0])
-	  data_data_out = data_bus[`DATA_MEM0A_B - 2*j*`DATA_W  -: `DATA_W];
+	  data_data_out = data_bus[`DATA_MEM0A_B - 2*j*DATA_W  -: DATA_W];
    end
 
    
@@ -161,16 +163,10 @@ module xdata_eng (
    // generate iterator
    genvar                                      i;
 
-
-   //
-   // Instantiate the memories
-   //
-   //ICARUS does not support parameter arrays
-   //parameter integer mem_size=4096;
-
    generate for (i=0; i < `nMEM; i=i+1) begin : mem_array
-      //xmem  #(.mem_size(mem_size))  //for icarus
-      xmem mem (
+      xmem # (
+           .DATA_W(DATA_W)
+      ) mem (
 	   .clk(clk),
 	   .rst(rst),
 	   .initA(run_reg),
@@ -194,7 +190,7 @@ module xdata_eng (
            
 	   // flow interface
 	   .flow_in(data_bus),
-	   .flow_out(data_bus[`DATA_MEM0A_B - 2*i*`DATA_W -: 2*`DATA_W]),
+	   .flow_out(data_bus[`DATA_MEM0A_B - 2*i*DATA_W -: 2*DATA_W]),
            
 	   // configuration interface
 	   .config_bits(config_reg_shadow[`CONF_MEM0A_B - 2*i*`MEMP_CONF_BITS -: 2*`MEMP_CONF_BITS])
@@ -205,94 +201,100 @@ module xdata_eng (
    //
    // Instantiate the ALUs
    //
-   generate
-      for (i=0; i < `nALU; i=i+1) begin : add_array
-	 xalu alu (
-		   .clk(clk),
-		   .rst(run_reg),
+   generate for (i=0; i < `nALU; i=i+1) begin : add_array
+      xalu # (
+           .DATA_W(DATA_W)		
+      ) alu (
+	   .clk(clk),
+	   .rst(run_reg),
 
-		   // flow interface
-	           .databus_in(data_bus),
-		   .flow_out(data_bus[`DATA_ALU0_B - i*`DATA_W -: `DATA_W]),
+	   // flow interface
+	   .databus_in(data_bus),
+	   .flow_out(data_bus[`DATA_ALU0_B - i*DATA_W -: DATA_W]),
 
-		   // configuration interface
-		   .configdata(config_reg_shadow[`CONF_ALU0_B - i*`ALU_CONF_BITS -: `ALU_CONF_BITS])
-		   );
+	   // configuration interface
+	   .configdata(config_reg_shadow[`CONF_ALU0_B - i*`ALU_CONF_BITS -: `ALU_CONF_BITS])
+           );
       end
    endgenerate
 
    //
    // Instantiate the ALULITEs
    //
-   generate
-      for (i=0; i < `nALULITE; i=i+1) begin : add_LITE_array
-	 xalulite aluLITE (
-			   .clk(clk),
-			   .rst(run_reg),
+   generate for (i=0; i < `nALULITE; i=i+1) begin : add_LITE_array
+      xalulite # ( 
+	   .DATA_W(DATA_W)
+      ) aluLITE (
+	   .clk(clk),
+	   .rst(run_reg),
 
-			   // flow interface
-	                   .flow_in(data_bus),
-			   .flow_out(data_bus[`DATA_ALULITE0_B - i*`DATA_W  -: `DATA_W]),
+	   // flow interface
+	   .flow_in(data_bus),
+	   .flow_out(data_bus[`DATA_ALULITE0_B - i*DATA_W  -: DATA_W]),
 
-			   // configuration interface
-			   .configdata(config_reg_shadow[`CONF_ALULITE0_B - i*`ALULITE_CONF_BITS -: `ALULITE_CONF_BITS])
-			   );
+	   // configuration interface
+	   .configdata(config_reg_shadow[`CONF_ALULITE0_B - i*`ALULITE_CONF_BITS -: `ALULITE_CONF_BITS])
+	   );
       end
    endgenerate
 
    //
    // Instantiate the MULs
    //
-   generate
-      for (i=0; i < `nMUL; i=i+1) begin : mul_array
-	 xmul mul (
-		   .clk(clk),
-		   .rst(run_reg),
+   generate for (i=0; i < `nMUL; i=i+1) begin : mul_array
+      xmul # ( 
+	   .DATA_W(DATA_W)
+      ) mul (
+	   .clk(clk),
+	   .rst(run_reg),
 
-		   // flow interface
-	           .flow_in(data_bus),
-		   .flow_out(data_bus[`DATA_MUL0_B - i*`DATA_W -: `DATA_W]),
+	   // flow interface
+	   .flow_in(data_bus),
+	   .flow_out(data_bus[`DATA_MUL0_B - i*DATA_W -: DATA_W]),
 
-		   // configuration interface
-		   .configdata(config_reg_shadow[`CONF_MUL0_B - i*`MUL_CONF_BITS -: `MUL_CONF_BITS])
-		   );
+	   // configuration interface
+	   .configdata(config_reg_shadow[`CONF_MUL0_B - i*`MUL_CONF_BITS -: `MUL_CONF_BITS])
+	   );
       end
    endgenerate
 
    //
    // Instantiate the MULADDs
    //
-   generate
-      for (i=0; i < `nMULADD; i=i+1) begin : muladd_array
-	 xmuladd muladd (
-		         .clk(clk),
-		         .rst(run_reg),
+   generate for (i=0; i < `nMULADD; i=i+1) begin : muladd_array
+      xmuladd # ( 
+	   .DATA_W(DATA_W)
+      ) muladd (
+	   .clk(clk),
+	   .rst(run_reg),
 
-			 // flow interface
-	                 .flow_in(data_bus),
-			 .flow_out(data_bus[`DATA_MULADD0_B - i*`DATA_W -: `DATA_W]),
-			 // configuration interface
-			 .configdata(config_reg_shadow[`CONF_MULADD0_B - i*`MULADD_CONF_BITS -: `MULADD_CONF_BITS])
-			 );
+	   // flow interface
+	   .flow_in(data_bus),
+	   .flow_out(data_bus[`DATA_MULADD0_B - i*DATA_W -: DATA_W]),
+
+    	   // configuration interface
+	   .configdata(config_reg_shadow[`CONF_MULADD0_B - i*`MULADD_CONF_BITS -: `MULADD_CONF_BITS])
+	   );
       end
    endgenerate
 
    //
    // Instantiate the BSs
    //
-   generate
-      for (i=0; i < `nBS; i=i+1) begin : bs_array
-	 xbs bs (
-		 .clk(clk),
-		 .rst(run_reg),
+   generate for (i=0; i < `nBS; i=i+1) begin : bs_array
+      xbs # ( 
+	   .DATA_W(DATA_W)
+      ) bs (
+	   .clk(clk),
+	   .rst(run_reg),
 
-		 // flow interface
-	         .flow_in(data_bus),
-		 .flow_out(data_bus[`DATA_BS0_B - i*`DATA_W -: `DATA_W]),
+	   // flow interface
+	   .flow_in(data_bus),
+	   .flow_out(data_bus[`DATA_BS0_B - i*DATA_W -: DATA_W]),
 
-		 // configuration interface
-		 .configdata(config_reg_shadow[`CONF_BS0_B - i*`BS_CONF_BITS -: `BS_CONF_BITS])
-		 );
+	   // configuration interface
+	   .configdata(config_reg_shadow[`CONF_BS0_B - i*`BS_CONF_BITS -: `BS_CONF_BITS])
+	   );
       end
    endgenerate
 

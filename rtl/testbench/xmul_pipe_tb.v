@@ -8,49 +8,50 @@
 ***************************************************************************** */
 
 `timescale 1ns / 1ps
-`define DATA_W 32
 `define NR_RND_VECS 200
 `define NR_SPECIAL_VECS 8
 `define NR_VECS (`NR_RND_VECS + `NR_SPECIAL_VECS)
 `define TEST_DATA_SZ (2*`NR_VECS) //for two operands
 
-
 module xmul_pipe_tb;
 
    //parameters
    parameter clk_period = 12.5;
+   parameter DATA_W = 32;
    
    //loop iterator
    integer i, j;
 
    // product debug register
-   reg [2*`DATA_W-1:0] 	      p_reg;
+   reg [2*DATA_W-1:0] 	      p_reg;
 
 
    // signed results and expected results
-   reg signed [2*`DATA_W-1:0] sres [`NR_VECS-1:0];
-   reg signed [2*`DATA_W-1:0] sexp [`NR_VECS-1:0];
+   reg signed [2*DATA_W-1:0] sres [`NR_VECS-1:0];
+   reg signed [2*DATA_W-1:0] sexp [`NR_VECS-1:0];
 
    reg clk;
    reg rst;
 
    //interface signals
-   reg [`DATA_W-1:0] op_a;
-   reg [`DATA_W-1:0] op_b;
-   wire [2*`DATA_W-1:0] product;
+   reg [DATA_W-1:0] op_a;
+   reg [DATA_W-1:0] op_b;
+   wire [2*DATA_W-1:0] product;
    
    //signed test vectors
-   reg signed [`DATA_W-1:0] a [`NR_VECS-1:0];
-   reg signed [`DATA_W-1:0] b [`NR_VECS-1:0];
+   reg signed [DATA_W-1:0] a [`NR_VECS-1:0];
+   reg signed [DATA_W-1:0] b [`NR_VECS-1:0];
 
    // Instantiate the Unit Under Test (UUT)
-   xmul_pipe uut (
+   xmul_pipe # ( 
+		  .DATA_W(DATA_W)
+   ) uut (
                   .rst                  (rst),
                   .clk                  (clk),
 
-                  .op_a                 (op_a[`DATA_W-1:0]),
-                  .op_b                 (op_b[`DATA_W-1:0]),
-		  .product              (product[2*`DATA_W-1:0])
+                  .op_a                 (op_a[DATA_W-1:0]),
+                  .op_b                 (op_b[DATA_W-1:0]),
+		  .product              (product[2*DATA_W-1:0])
 		  );
    
 /*

@@ -12,8 +12,9 @@
 `include "xmuladddefs.vh"
 `include "xbsdefs.vh"
 
-module xstage
-  (
+module xstage # (
+   parameter				DATA_W = 32
+   ) (
    input                        	clk,
    input                        	rst,
    
@@ -21,15 +22,15 @@ module xstage
    input                        	ctr_valid,
    input                        	ctr_we,
    input [`nMEM_W+`MEM_ADDR_W+1:0] 	ctr_addr,
-   input [`DATA_W-1:0]          	ctr_data_in,
-   output [`DATA_W-1:0]         	ctr_data_out,
+   input [DATA_W-1:0]   	       	ctr_data_in,
+   output [DATA_W-1:0]         		ctr_data_out,
 
    //data slave interface
    input                        	data_valid,
    input                        	data_we,
    input [`nMEM_W+`MEM_ADDR_W-1:0]     	data_addr,
-   input [`DATA_W-1:0]          	data_data_in,
-   output [`DATA_W-1:0]         	data_data_out,
+   input [DATA_W-1:0]          		data_data_in,
+   output [DATA_W-1:0]  	       	data_data_out,
   
    //versat flow interface      
    input [`DATABUS_W-1:0]       	flow_in, 
@@ -59,30 +60,32 @@ module xstage
 	       );
 
    //data engine
-   xdata_eng data_eng (
-		       .clk(clk),
-		       .rst(rst),
+   xdata_eng # ( 
+	       .DATA_W(DATA_W)
+   ) data_eng (
+	       .clk(clk),
+	       .rst(rst),
 
-	               // control interface
-	               .ctr_valid(eng_valid),
-                       .ctr_we(ctr_we),
-		       .ctr_addr(ctr_addr[`nMEM_W+`MEM_ADDR_W:0]),
-		       .ctr_data_in(ctr_data_in),
-		       .ctr_data_out(ctr_data_out),
+	       // control interface
+	       .ctr_valid(eng_valid),
+               .ctr_we(ctr_we),
+	       .ctr_addr(ctr_addr[`nMEM_W+`MEM_ADDR_W:0]),
+	       .ctr_data_in(ctr_data_in),
+	       .ctr_data_out(ctr_data_out),
 
-                       // data interface
- 		       .data_valid(data_valid),
- 		       .data_we(data_we),
- 		       .data_addr(data_addr),
-		       .data_data_in(data_data_in),
-	 	       .data_data_out(data_data_out),
+               // data interface
+ 	       .data_valid(data_valid),
+ 	       .data_we(data_we),
+ 	       .data_addr(data_addr),
+	       .data_data_in(data_data_in),
+	       .data_data_out(data_data_out),
 
-                       //flow interface
-                       .flow_in(flow_in),
-                       .flow_out(flow_out),
+               //flow interface
+               .flow_in(flow_in),
+               .flow_out(flow_out),
 
-                       // configuration bus
-		       .config_bus(config_bus)
-		       );
+               // configuration bus
+	       .config_bus(config_bus)
+	       );
  
 endmodule

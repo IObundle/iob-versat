@@ -8,26 +8,28 @@
 
  */
 
-module xmuladd (
+module xmuladd # ( 
+		parameter		      DATA_W = 32
+	) (
                 input                         rst,
                 input                         clk,
                 //flow interface
                 input [2*`DATABUS_W-1:0]      flow_in,
-                output [`DATA_W-1:0] 	      flow_out,
+                output [DATA_W-1:0] 	      flow_out,
 
                 // config interface
                 input [`MULADD_CONF_BITS-1:0] configdata
                 );
 
    wire [`MULADD_FNS_W:0]                     opcode;
-   wire signed [2*`DATA_W-1:0]                result_mult;
-   reg [2*`DATA_W-1:0]                        result64;
-   reg [2*`DATA_W-1:0]                        acc;
+   wire signed [2*DATA_W-1:0]                 result_mult;
+   reg [2*DATA_W-1:0]                         result64;
+   reg [2*DATA_W-1:0]                         acc;
 
    //data
-   wire signed [`DATA_W-1:0]                  op_a;
-   wire signed [`DATA_W-1:0]                  op_b;
-   wire [`DATA_W-1:0]                         op_o;
+   wire signed [DATA_W-1:0]                   op_a;
+   wire signed [DATA_W-1:0]                   op_b;
+   wire [DATA_W-1:0]                          op_o;
 
    //config data
    wire [`N_W-1: 0]                           sela;
@@ -42,7 +44,7 @@ module xmuladd (
    wire                                       enabled;
 
    // register muladd control
-   reg [`DATA_W-1:0]                          op_o_reg;
+   reg [DATA_W-1:0]                           op_o_reg;
    reg [`PERIOD_W-1:0]			      rst_cnt;
 
    // accumulator load signal
@@ -63,29 +65,35 @@ module xmuladd (
    assign delay  = configdata[`PERIOD_W-1: 0] + `MULADD_LAT;
 
    //input selection
-   xinmux muxa (
-                .sel(sela),
-                .data_in(flow_in),
-                .data_out(op_a)
- 		);
+   xinmux # ( 
+	.DATA_W(DATA_W)
+   ) muxa (
+        .sel(sela),
+        .data_in(flow_in),
+        .data_out(op_a)
+ 	);
 
-   xinmux muxb (
-                .sel(selb),
-                .data_in(flow_in),
-                .data_out(op_b)
-		);
+   xinmux # ( 
+	.DATA_W(DATA_W)
+   ) muxb (
+        .sel(selb),
+        .data_in(flow_in),
+        .data_out(op_b)
+	);
 
-   xinmux muxo (
-                .sel(selo),
-                .data_in(flow_in),
-                .data_out(op_o)
-		);
+   xinmux # ( 
+	.DATA_W(DATA_W)
+   ) muxo (
+        .sel(selo),
+        .data_in(flow_in),
+        .data_out(op_o)
+	);
 
    //update registers
    always @ (posedge clk, posedge rst) begin
      if (rst) begin
-       acc <= {2*`DATA_W{1'b0}};
-       op_o_reg <= `DATA_W'd0;
+       acc <= {2*DATA_W{1'b0}};
+       op_o_reg <= {DATA_W{1'd0}};
        rst_cnt <= `PERIOD_W'd0;
 `ifndef MULADD_COMB                             //pipelined
        ld_acc1 <= 1'b0;
@@ -105,7 +113,7 @@ module xmuladd (
      end
    end
 
-   assign ld_acc0 = (op_o_reg==`DATA_W'd0);
+   assign ld_acc0 = (op_o_reg=={DATA_W{1'd0}});
 
    // compute accumulator load signal
 `ifdef MULADD_COMB                             //combinatorial
@@ -118,13 +126,15 @@ module xmuladd (
 `ifdef MULADD_COMB                             //combinatorial
    assign result_mult = op_a * op_b;
 `else                                          //2-stage pipeline
-   xmul_pipe xmul_pipe (
-		        .rst(rst),
-		        .clk(clk),
-		        .op_a(op_a),
-		        .op_b(op_b),
-		        .product(result_mult)
-		        );
+   xmul_pipe # ( 
+	.DATA_W(DATA_W)
+   ) xmul_pipe (
+	.rst(rst),
+	.clk(clk),
+	.op_a(op_a),
+	.op_b(op_b),
+	.product(result_mult)
+	);
 `endif
 
    // process mult result according to opcode
@@ -180,6 +190,6 @@ module xmuladd (
       endcase // case (opcode)
    end
 
-   assign flow_out = result64[2*`DATA_W-1 : `DATA_W];
+   assign flow_out = result64[2*DATA_W-1 : DATA_W];
 
 endmodule
