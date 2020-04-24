@@ -16,17 +16,11 @@ module xmem_tb;
    reg				runA, runB;
    wire 			doneA, doneB;
 
-   //controller interface
-   reg 				ctr_mem_valid;
-   reg 				ctr_we;
-   reg [`MEM_ADDR_W-1:0]	ctr_addr;
-   reg [DATA_W-1:0] 		ctr_data_in;
-   
-   //dma interface
-   reg 				data_we;
-   reg [`MEM_ADDR_W-1:0] 	data_addr;
-   reg [DATA_W-1:0] 		data_data_in;
-   reg 				data_mem_valid;
+   //mem interface
+   reg 				we;
+   reg [`MEM_ADDR_W-1:0] 	addr;
+   reg [DATA_W-1:0] 		rdata;
+   reg 				valid;
    
    //input / output data
    reg [2*`DATABUS_W-1:0] 	flow_in;
@@ -49,17 +43,11 @@ module xmem_tb;
              .doneA(doneA),
 	     .doneB(doneB),
 
-	     //controller interface
-	     .ctr_mem_valid(ctr_mem_valid),
-	     .ctr_we(ctr_we),
-	     .ctr_addr(ctr_addr),
-	     .ctr_data_in(ctr_data_in),
-	     
-	     //dma interface
- 	     .data_we(data_we),
-	     .data_addr(data_addr),
-	     .data_data_in(data_data_in),
-	     .data_mem_valid(data_mem_valid),
+	     //mem interface
+ 	     .we(we),
+	     .addr(addr),
+	     .rdata(rdata),
+	     .valid(valid),
 
 	     //input / output data
 	     .flow_in(flow_in),
@@ -87,15 +75,10 @@ module xmem_tb;
       runA = 0;
       runB = 0;
 
-      ctr_mem_valid = 0;
-      ctr_we = 0;
-      ctr_addr = 0;
-      ctr_data_in = 0;
-
-      data_we = 0;
-      data_addr = 0;
-      data_data_in = 0;
-      data_mem_valid = 0;
+      we = 0;
+      addr = 0;
+      rdata = 0;
+      valid = 0;
      
       flow_in = 0;
       config_bits = 0;
@@ -108,14 +91,14 @@ module xmem_tb;
       
       //Write values to memory
       $display("Value written in memA: %x", 32'h6789ABCD);
-      cpu_data_write(16, 32'h6789ABCD);
+      cpu_write(16, 32'h6789ABCD);
       $display("Value written in memB: %x", 32'hF0F0F0F0);
-      cpu_ctr_write(10, 32'hF0F0F0F0);
+      cpu_write(10, 32'hF0F0F0F0);
 
       //Read values back from memory
-      cpu_data_read(16, aux_val);
+      cpu_read(16, aux_val);
       $display("Value read from memA: %x", aux_val);
-      cpu_ctr_read(10, aux_val);
+      cpu_read(10, aux_val);
       $display("Value read from memB: %x", aux_val);
 
       //Testing address generator and configuration bus
@@ -168,53 +151,28 @@ module xmem_tb;
    // CPU TASKS
    //
    
-   task cpu_data_write;
+   task cpu_write;
       input [`MEM_ADDR_W-1:0] cpu_address;
       input [DATA_W-1:0] cpu_data;
-      data_addr = cpu_address;
-      data_mem_valid = 1;
-      data_we = 1;
-      data_data_in = cpu_data;
+      addr = cpu_address;
+      valid = 1;
+      we = 1;
+      rdata = cpu_data;
       #clk_per;
-      data_we = 0;
-      data_mem_valid = 0;
+      we = 0;
+      valid = 0;
       #clk_per;
    endtask
  
-   task cpu_data_read;
+   task cpu_read;
       input [`MEM_ADDR_W-1:0] cpu_address;
       output [DATA_W-1:0] read_reg;
-      data_addr = cpu_address;
-      data_mem_valid = 1;
-      data_we = 0;
+      addr = cpu_address;
+      valid = 1;
+      we = 0;
       #clk_per;
       read_reg = flow_out[2*DATA_W-1 -: DATA_W]; 
-      data_mem_valid = 0;
-      #clk_per;
-   endtask
-    	 
-   task cpu_ctr_write;
-      input [`MEM_ADDR_W-1:0] cpu_address;
-      input [DATA_W-1:0] cpu_data;
-      ctr_addr = cpu_address;
-      ctr_mem_valid = 1;
-      ctr_we = 1;
-      ctr_data_in = cpu_data;
-      #clk_per;
-      ctr_we = 0;
-      ctr_mem_valid = 0;
-      #clk_per;
-   endtask
- 
-   task cpu_ctr_read;
-      input [`MEM_ADDR_W-1:0] cpu_address;
-      output [DATA_W-1:0] read_reg;
-      ctr_addr = cpu_address;
-      ctr_mem_valid = 1;
-      ctr_we = 0;
-      #clk_per;
-      read_reg = flow_out[DATA_W-1 -: DATA_W]; 
-      ctr_mem_valid = 0;
+      valid = 0;
       #clk_per;
    endtask
     	 

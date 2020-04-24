@@ -17,19 +17,13 @@ module xversat_tb;
    reg 			   	clk;
    reg 			   	rst;
 
-   //ctr interface
-   reg 			   	ctr_valid;
-   reg [ADDR_W-1:0]  		ctr_addr;
-   reg 			   	ctr_we;
-   reg [DATA_W-1:0]       	ctr_data_in;
-   wire [DATA_W-1:0]     	ctr_data_out;
-
-   //data interface
-   reg 			   	data_valid;
-   reg 			   	data_we;
-   reg [ADDR_W-1:0] 		data_addr;
-   reg [DATA_W-1:0] 	   	data_data_in;
-   wire signed [DATA_W-1:0]   	data_data_out;
+   //data/ctr interface
+   reg 			   	valid;
+   reg [ADDR_W-1:0]  		addr;
+   reg 			   	we;
+   reg [DATA_W-1:0]       	rdata;
+   wire				ready;
+   wire [DATA_W-1:0]     	wdata;
 
    //parameters
    parameter 			clk_per     = 20;
@@ -68,16 +62,12 @@ module xversat_tb;
 	uut (
 	     .clk(clk),
 	     .rst(rst),
-	     .ctr_valid(ctr_valid),
-	     .ctr_addr(ctr_addr),
-	     .ctr_we(ctr_we),
-	     .ctr_data_in(ctr_data_in),
-	     .ctr_data_out(ctr_data_out),
-	     .data_valid(data_valid),
-	     .data_we(data_we),
-	     .data_addr(data_addr),
-	     .data_data_in(data_data_in),
-	     .data_data_out(data_data_out)
+	     .valid(valid),
+	     .addr(addr),
+	     .we(we),
+	     .rdata(rdata),
+	     .ready(ready),
+	     .wdata(wdata)
 	     );
 
    initial begin
@@ -92,14 +82,10 @@ module xversat_tb;
       //initialize inputs
       clk = 0;
       rst = 1;
-      ctr_valid = 0;
-      ctr_we = 0;
-      ctr_addr = 0;
-      ctr_data_in = 0;
-      data_valid = 0;
-      data_we = 0;
-      data_addr = 0;
-      data_data_in = 0;
+      valid = 0;
+      we = 0;
+      addr = 0;
+      rdata = 0;
 
       // Wait 100 ns for global reset to finish
       #(clk_per*5) rst = 0;
@@ -107,65 +93,65 @@ module xversat_tb;
       //write 5x5 feature map in mem0 for VERSAT 1
       for(i = 0; i < 25; i++) begin
         pixels[i] = $random%50;
-        cpu_data_write(VERSAT_1 + MEM0 + i, pixels[i]);
+        cpu_write(VERSAT_1 + MEM0 + i, pixels[i]);
       end
 
       //write 3x3 kernel and bias in mem1 for VERSAT1
       for(i = 0; i < 9; i++) begin
         weights[i] = $random%10;
-        cpu_data_write(VERSAT_1 + MEM1 + i, weights[i]);
+        cpu_write(VERSAT_1 + MEM1 + i, weights[i]);
       end
 
       //write bias after weights of VERSAT1
       bias = $random%20;
-      cpu_data_write(VERSAT_1 + MEM1 + 9, bias);
+      cpu_write(VERSAT_1 + MEM1 + 9, bias);
 
       //write 5x5 feature map in mem0 for VERSAT 2
       for(i = 0; i < 25; i++) begin
         pixels[25+i] = $random%50;
-        cpu_data_write(VERSAT_2 + MEM0 + i, pixels[25+i]);
+        cpu_write(VERSAT_2 + MEM0 + i, pixels[25+i]);
       end
 
       //write 3x3 kernel and bias in mem1 for VERSAT2
       for(i = 0; i < 9; i++) begin
         weights[9+i] = $random%10;
-        cpu_data_write(VERSAT_2 + MEM1 + i, weights[9+i]);
+        cpu_write(VERSAT_2 + MEM1 + i, weights[9+i]);
       end
 
       //write 5x5 feature map in mem0 for VERSAT 3
       for(i = 0; i < 25; i++) begin
         pixels[50+i] = $random%50;
-        cpu_data_write(VERSAT_3 + MEM0 + i, pixels[50+i]);
+        cpu_write(VERSAT_3 + MEM0 + i, pixels[50+i]);
       end
 
       //write 3x3 kernel and bias in mem1 for VERSAT3
       for(i = 0; i < 9; i++) begin
         weights[18+i] = $random%10;
-        cpu_data_write(VERSAT_3 + MEM1 + i, weights[18+i]);
+        cpu_write(VERSAT_3 + MEM1 + i, weights[18+i]);
       end
 
       //write 5x5 feature map in mem0 for VERSAT 4
       for(i = 0; i < 25; i++) begin
         pixels[75+i] = $random%50;
-        cpu_data_write(VERSAT_4 + MEM0 + i, pixels[75+i]);
+        cpu_write(VERSAT_4 + MEM0 + i, pixels[75+i]);
       end
 
       //write 3x3 kernel and bias in mem1 for VERSAT4
       for(i = 0; i < 9; i++) begin
         weights[27+i] = $random%10;
-        cpu_data_write(VERSAT_4 + MEM1 + i, weights[27+i]);
+        cpu_write(VERSAT_4 + MEM1 + i, weights[27+i]);
       end
 
       //write 5x5 feature map in mem0 for VERSAT 5
       for(i = 0; i < 25; i++) begin
         pixels[100+i] = $random%50;
-        cpu_data_write(VERSAT_5 + MEM0 + i, pixels[100+i]);
+        cpu_write(VERSAT_5 + MEM0 + i, pixels[100+i]);
       end
 
       //write 3x3 kernel and bias in mem1 for VERSAT5
       for(i = 0; i < 9; i++) begin
         weights[36+i] = $random%10;
-        cpu_data_write(VERSAT_5 + MEM1 + i, weights[36+i]);
+        cpu_write(VERSAT_5 + MEM1 + i, weights[36+i]);
       end
 
       //expected result of 3D convolution
@@ -300,11 +286,11 @@ module xversat_tb;
           config_mem_start(VERSAT_5, 4, i*3+j);
 
           //run configurations
-          cpu_ctr_write(RUN_DONE, 1);
+          cpu_write(RUN_DONE, 1);
 
           //wait until config is done
           do
-            cpu_ctr_read(RUN_DONE, res);
+            cpu_read(RUN_DONE, res);
           while(res == 0);
         end
       end
@@ -315,7 +301,7 @@ module xversat_tb;
      
       for(i = 0; i < 3; i++) begin
         for(j = 0; j < 3; j++) begin
-          cpu_data_read(VERSAT_5 + MEM2 + i*3 + j, res);
+          cpu_read(VERSAT_5 + MEM2 + i*3 + j, res);
           $write("%d ", res);
         end
         $write("\n"); 
@@ -348,15 +334,15 @@ module xversat_tb;
       input integer in_wr;
       integer base_addr;
       base_addr = stage + CONF_BASE + `CONF_MEM0A + mem_num*`MEMP_CONF_OFFSET;
-      cpu_ctr_write(base_addr + `MEMP_CONF_ITER, iter);
-      cpu_ctr_write(base_addr + `MEMP_CONF_PER, per);
-      cpu_ctr_write(base_addr + `MEMP_CONF_DUTY, duty);
-      cpu_ctr_write(base_addr + `MEMP_CONF_SHIFT, shift);
-      cpu_ctr_write(base_addr + `MEMP_CONF_INCR, incr);
-      cpu_ctr_write(base_addr + `MEMP_CONF_DELAY, delay);
-      cpu_ctr_write(base_addr + `MEMP_CONF_ADDR_OUT_EN, addr_out_en);
-      cpu_ctr_write(base_addr + `MEMP_CONF_SEL, sel);
-      cpu_ctr_write(base_addr + `MEMP_CONF_IN_WR, in_wr);
+      cpu_write(base_addr + `MEMP_CONF_ITER, iter);
+      cpu_write(base_addr + `MEMP_CONF_PER, per);
+      cpu_write(base_addr + `MEMP_CONF_DUTY, duty);
+      cpu_write(base_addr + `MEMP_CONF_SHIFT, shift);
+      cpu_write(base_addr + `MEMP_CONF_INCR, incr);
+      cpu_write(base_addr + `MEMP_CONF_DELAY, delay);
+      cpu_write(base_addr + `MEMP_CONF_ADDR_OUT_EN, addr_out_en);
+      cpu_write(base_addr + `MEMP_CONF_SEL, sel);
+      cpu_write(base_addr + `MEMP_CONF_IN_WR, in_wr);
    endtask   
 
    task config_mem_start;
@@ -365,7 +351,7 @@ module xversat_tb;
       input integer start;
       integer base_addr;
       base_addr = stage + CONF_BASE + `CONF_MEM0A + mem_num*`MEMP_CONF_OFFSET + `MEMP_CONF_START;
-      cpu_ctr_write(base_addr, start);
+      cpu_write(base_addr, start);
    endtask
 
    task config_muladd;
@@ -377,11 +363,11 @@ module xversat_tb;
       input integer delay;
       integer base_addr;
       base_addr = stage + CONF_BASE + `CONF_MULADD0;
-      cpu_ctr_write(base_addr + `MULADD_CONF_SELA, selA);
-      cpu_ctr_write(base_addr + `MULADD_CONF_SELB, selB);
-      cpu_ctr_write(base_addr + `MULADD_CONF_SELO, selO);
-      cpu_ctr_write(base_addr + `MULADD_CONF_FNS, fns);
-      cpu_ctr_write(base_addr + `MULADD_CONF_DELAY, delay);
+      cpu_write(base_addr + `MULADD_CONF_SELA, selA);
+      cpu_write(base_addr + `MULADD_CONF_SELB, selB);
+      cpu_write(base_addr + `MULADD_CONF_SELO, selO);
+      cpu_write(base_addr + `MULADD_CONF_FNS, fns);
+      cpu_write(base_addr + `MULADD_CONF_DELAY, delay);
    endtask
 
    task config_alulite;
@@ -391,58 +377,33 @@ module xversat_tb;
       input integer fns;
       integer base_addr;
       base_addr = stage + CONF_BASE + `CONF_ALULITE0;
-      cpu_ctr_write(base_addr + `ALULITE_CONF_SELA, selA);
-      cpu_ctr_write(base_addr + `ALULITE_CONF_SELB, selB);
-      cpu_ctr_write(base_addr + `ALULITE_CONF_FNS, fns);
+      cpu_write(base_addr + `ALULITE_CONF_SELA, selA);
+      cpu_write(base_addr + `ALULITE_CONF_SELB, selB);
+      cpu_write(base_addr + `ALULITE_CONF_FNS, fns);
    endtask
 
-   task cpu_data_write;
+   task cpu_write;
       input [ADDR_W-1:0] cpu_address;
       input [DATA_W-1:0] cpu_data;
-      data_addr = cpu_address;
-      data_valid = 1;
-      data_we = 1;
-      data_data_in = cpu_data;
+      addr = cpu_address;
+      valid = 1;
+      we = 1;
+      rdata = cpu_data;
       #clk_per;
-      data_we = 0;
-      data_valid = 0;
+      we = 0;
+      valid = 0;
       #clk_per;
    endtask
 
-   task cpu_data_read;
+   task cpu_read;
       input [ADDR_W-1:0] cpu_address;
       output [DATA_W-1:0] read_reg;
-      data_addr = cpu_address;
-      data_valid = 1;
-      data_we = 0;
+      addr = cpu_address;
+      valid = 1;
+      we = 0;
       #clk_per;
-      read_reg = data_data_out;
-      data_valid = 0;
-      #clk_per;
-   endtask
-
-   task cpu_ctr_write;
-      input [ADDR_W-1:0] cpu_address;
-      input [DATA_W-1:0] cpu_data;
-      ctr_addr = cpu_address;
-      ctr_valid = 1;
-      ctr_we = 1;
-      ctr_data_in = cpu_data;
-      #clk_per;
-      ctr_we = 0;
-      ctr_valid = 0;
-      #clk_per;
-   endtask
-
-   task cpu_ctr_read;
-      input [ADDR_W-1:0] cpu_address;
-      output [DATA_W-1:0] read_reg;
-      ctr_addr = cpu_address;
-      ctr_valid = 1;
-      ctr_we = 0;
-      #clk_per;
-      read_reg = ctr_data_out;
-      ctr_valid = 0;
+      read_reg = wdata;
+      valid = 0;
       #clk_per;
    endtask
  

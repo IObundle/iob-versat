@@ -17,17 +17,11 @@ module xmem #(
     output                        doneA,
     output                        doneB,
 
-    //controller interface
-    input                         ctr_mem_valid,
-    input                         ctr_we,
-    input [`MEM_ADDR_W-1:0]       ctr_addr,
-    input [DATA_W-1:0]            ctr_data_in,
-
-    //databus interface
-    input                         data_we,
-    input [`MEM_ADDR_W-1:0]       data_addr,
-    input [DATA_W-1:0]            data_data_in,
-    input                         data_mem_valid,
+    //mem interface
+    input                         we,
+    input [`MEM_ADDR_W-1:0]       addr,
+    input [DATA_W-1:0]            rdata,
+    input                         valid,
 
     //input / output data
     input [2*`DATABUS_W-1:0]      flow_in,
@@ -37,12 +31,12 @@ module xmem #(
     input [2*`MEMP_CONF_BITS-1:0] config_bits
     );
 
+   //output databus
    wire [DATA_W-1:0]              outA;
    wire [DATA_W-1:0]              outB;
-   
    assign flow_out = {outA, outB};
 
-   
+   //function to reverse bits
    function [`MEM_ADDR_W-1:0] reverseBits;
       input [`MEM_ADDR_W-1:0]     word;
       integer                     i;
@@ -85,23 +79,20 @@ module xmem #(
    wire readyB = |iterationsB;
 
    //mem enables output by addr gen
-   wire enA_int, enB_int;
+   wire enA_int;
+   wire enA = enA_int | valid;
+   wire enB;
 
-   wire enA = enA_int|data_mem_valid;
-   wire enB = enB_int|ctr_mem_valid;
-
-   wire [DATA_W-1:0]     outA_int, outB_int;
-
-   wire wrA = data_mem_valid? data_we : (enA_int & inA_wr & ~extA); //addrgen on & input on & input isn't address
-   wire wrB = ctr_mem_valid? ctr_we : (enB_int & inB_wr & ~extB);
-
+   //write enables
+   wire [DATA_W-1:0] outA_int, outB_int;
+   wire wrA = valid? we : (enA_int & inA_wr & ~extA); //addrgen on & input on & input isn't address
+   wire wrB = (enB & inB_wr & ~extB);
 
    //port addresses and enables
    wire [`MEM_ADDR_W-1:0] addrA, addrA_int, addrA_int2;
    wire [`MEM_ADDR_W-1:0] addrB, addrB_int, addrB_int2;
-
    assign outA = addrA_out_en? {{(DATA_W-`MEM_ADDR_W){addrA_int2[`MEM_ADDR_W-1]}}, addrA_int2} : outA_int;
-   assign outB = addrB_out_en? {{(DATA_W-`MEM_ADDR_W){addrB_int2[`MEM_ADDR_W-1]}}, addrB_int2}: outB_int;
+   assign outB = addrB_out_en? {{(DATA_W-`MEM_ADDR_W){addrB_int2[`MEM_ADDR_W-1]}}, addrB_int2} : outB_int;
 
    //data inputs
    wire [DATA_W-1:0]     inA;
@@ -124,8 +115,7 @@ module xmem #(
 	.data_out(inB)
 	);
 
-   wire [DATA_W-1:0]     data_to_wrA = data_mem_valid? data_data_in : inA ;
-   wire [DATA_W-1:0]     data_to_wrB  = ctr_mem_valid?  ctr_data_in : inB;
+   wire [DATA_W-1:0]     data_to_wrA = valid? rdata : inA ;
 
    //address generators
    xaddrgen addrgenA (
@@ -158,13 +148,12 @@ module xmem #(
 		      .incr(incrB),
 		      .delay(delayB),
 		      .addr(addrB_int),
-		      .mem_en(enB_int),
+		      .mem_en(enB),
 		      .done(doneB)
 		      );
 
-   assign addrA = data_mem_valid? data_addr[`MEM_ADDR_W-1:0] : extB? inB[`MEM_ADDR_W-1:0] : addrA_int2[`MEM_ADDR_W-1:0];
-   assign addrB = ctr_mem_valid? ctr_addr : extA? inA[`MEM_ADDR_W-1:0] : addrB_int2[`MEM_ADDR_W-1:0];
-
+   assign addrA = valid? addr[`MEM_ADDR_W-1:0] : extB? inB[`MEM_ADDR_W-1:0] : addrA_int2[`MEM_ADDR_W-1:0];
+   assign addrB = extA? inA[`MEM_ADDR_W-1:0] : addrB_int2[`MEM_ADDR_W-1:0];
    assign addrA_int2 = reverseA? reverseBits(addrA_int) : addrA_int;
    assign addrB_int2 = reverseB? reverseBits(addrB_int) : addrB_int;
 
@@ -175,7 +164,7 @@ module xmem #(
    mem
      (
       .data_a(data_to_wrA),
-      .data_b(data_to_wrB),
+      .data_b(inB),
       .addr_a(addrA[`MEM_ADDR_W-1:0]),
       .addr_b(addrB[`MEM_ADDR_W-1:0]),
       .en_a(enA),
