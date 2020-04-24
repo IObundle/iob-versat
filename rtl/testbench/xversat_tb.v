@@ -22,6 +22,7 @@ module xversat_tb;
    reg [ADDR_W-1:0]  		addr;
    reg 			   	we;
    reg [DATA_W-1:0]       	rdata;
+   wire				ready;
    wire [DATA_W-1:0]     	wdata;
 
    //parameters
@@ -65,6 +66,7 @@ module xversat_tb;
 	     .addr(addr),
 	     .we(we),
 	     .rdata(rdata),
+	     .ready(ready),
 	     .wdata(wdata)
 	     );
 

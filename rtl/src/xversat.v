@@ -24,8 +24,16 @@ module xversat #(
                  input [ADDR_W-1:0]     	addr,
                  input                    	we,
                  input [DATA_W-1:0]      	rdata,
+		 output reg			ready,
                  output reg [DATA_W-1:0]	wdata
                  );
+
+   // interface ready signal
+   always @(posedge clk, posedge rst)
+      if(rst)
+         ready <= 1'b0;
+      else 
+         ready <= valid;
 
    //data buses for each versat   
    wire [`DATABUS_W-1:0] stage_databus [`nSTAGE:0];
