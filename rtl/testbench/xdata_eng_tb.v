@@ -165,7 +165,6 @@ module xdata_eng_tb;
      config_bus[`CONF_MULADD0_B - `N_W -: `N_W] = sMEM0A+2; //selb
      config_bus[`CONF_MULADD0_B - 2*`N_W -: `N_W] = sMEM0A+3; //selo
      config_bus[`CONF_MULADD0_B - 3*`N_W -: `MULADD_FNS_W] = `MULADD_MUL_LOW_MACC; //fns
-     config_bus[`CONF_MULADD0_B - 3*`N_W - `MULADD_FNS_W -: `PERIOD_W] = `MEMP_LAT; //delay
 
      //configure ALULite to add bias to muladd result
      config_bus[`CONF_ALULITE0_B -: `N_W] = sMEM0A+2; //sela

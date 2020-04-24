@@ -13,6 +13,7 @@ module xmuladd # (
 	) (
                 input                         rst,
                 input                         clk,
+
                 //flow interface
                 input [2*`DATABUS_W-1:0]      flow_in,
                 output [DATA_W-1:0] 	      flow_out,
@@ -37,15 +38,8 @@ module xmuladd # (
    wire [`N_W-1: 0]                           selo;
    wire [`PERIOD_W-1:0]                       delay;
 
-   // enabled operands and result
-   wire                                       enablea;
-   wire                                       enableb;
-   wire                                       enableo;
-   wire                                       enabled;
-
    // register muladd control
    reg [DATA_W-1:0]                           op_o_reg;
-   reg [`PERIOD_W-1:0]			      rst_cnt;
 
    // accumulator load signal
    wire                                       ld_acc;
@@ -62,7 +56,6 @@ module xmuladd # (
    assign selb   = configdata[`MULADD_CONF_BITS-1-`N_W -: `N_W];
    assign selo   = configdata[`MULADD_CONF_BITS-1-2*`N_W -: `N_W];
    assign opcode = configdata[`MULADD_CONF_BITS-1-3*`N_W -: `MULADD_FNS_W];
-   assign delay  = configdata[`PERIOD_W-1: 0] + `MULADD_LAT;
 
    //input selection
    xinmux # ( 
@@ -94,22 +87,17 @@ module xmuladd # (
      if (rst) begin
        acc <= {2*DATA_W{1'b0}};
        op_o_reg <= {DATA_W{1'd0}};
-       rst_cnt <= `PERIOD_W'd0;
 `ifndef MULADD_COMB                             //pipelined
        ld_acc1 <= 1'b0;
        ld_acc2 <= 1'b0;
 `endif
      end else begin
-       if(rst_cnt < delay) 
-         rst_cnt += 1'd1; 
-       else begin
-         acc <= result64;
-         op_o_reg <= op_o;
+       acc <= result64;
+       op_o_reg <= op_o;
 `ifndef MULADD_COMB                             //pipelined
-         ld_acc1 <= ld_acc0;
-         ld_acc2 <= ld_acc1;
+       ld_acc1 <= ld_acc0;
+       ld_acc2 <= ld_acc1;
 `endif
-       end
      end
    end
 
@@ -182,7 +170,10 @@ module xmuladd # (
 	  result64 =  result_mult<<32;
 
 	`MULADD_MUL_LOW_MACC: begin
-	   result64 = acc + (result_mult << 32);
+           if(ld_acc)
+	     result64 = result_mult << 32;
+           else
+	     result64 = acc + (result_mult << 32);
 	end
 
 	default: //MACC

@@ -2,7 +2,7 @@
 // input selection bits = 2 * N_W
 // fns = 4 bits
 `define MULADD_FNS_W 4
-`define MULADD_CONF_BITS (3*`N_W + `MULADD_FNS_W + `PERIOD_W)
+`define MULADD_CONF_BITS (3*`N_W + `MULADD_FNS_W)
 
 // MULADD functions
 `define MULADD_MUL            `MULADD_FNS_W'd0
@@ -21,8 +21,7 @@
 `define MULADD_CONF_SELB      1
 `define MULADD_CONF_SELO      2
 `define MULADD_CONF_FNS       3
-`define MULADD_CONF_DELAY     4
-`define MULADD_CONF_OFFSET    5
+`define MULADD_CONF_OFFSET    4
 
 //MULADD combinational architecture
 //`define MULADD_COMB
