@@ -1,8 +1,6 @@
 `timescale 1ns / 1ps
 `include "xversat.vh"
 
-`include "xmemdefs.vh"
-
 module xaddrgen (
 		 input                         clk,
 		 input                         rst,

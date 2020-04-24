@@ -2,7 +2,7 @@
 
  Data bus structure
 
- {0, 1, MEM0A, MEM0B, ..., ALU0, ..., ALULITE0, ..., MUL0, ..., MULADD0, ..., BS0, ...}
+ {MEM0A, MEM0B, ..., ALU0, ..., ALULITE0, ..., MUL0, ..., MULADD0, ..., BS0, ...}
 
 
  Config bus structure
@@ -27,19 +27,12 @@ module xdata_eng #(
                   input                           clk,
                   input                           rst,
 
-                  // control interface
-                  input                           ctr_valid,
-                  input                           ctr_we,
-                  input [`nMEM_W+`MEM_ADDR_W:0]   ctr_addr,
-                  input [DATA_W-1:0]              ctr_data_in,
-                  output reg [DATA_W-1:0]         ctr_data_out,
-
-                  // data interface
-                  input                           data_valid,
-                  input                           data_we,
-                  input [`nMEM_W+`MEM_ADDR_W-1:0] data_addr,
-                  input [DATA_W-1:0]              data_data_in,
-                  output reg [DATA_W-1:0]         data_data_out,
+                  //data/ctr interface
+                  input                           valid,
+                  input                           we,
+                  input [`nMEM_W+`MEM_ADDR_W:0]   addr,
+                  input [DATA_W-1:0]              rdata,
+                  output reg [DATA_W-1:0]         wdata,
 
                   //flow interface
                   input [`DATABUS_W-1:0]          flow_in, 
@@ -58,89 +51,59 @@ module xdata_eng #(
    assign flow_out = data_bus[`DATABUS_W-1:0] ;
 
    //
-   // CONTROL INTERFACE ADDRESS DECODER
+   // ADDRESS DECODER
    //
 
+   //address register
+   reg [`nMEM_W-1:0] addr_reg;
+   always @ (posedge rst, posedge clk)
+      if(rst)
+	 addr_reg <= 0;
+      else
+	 addr_reg <= addr[`nMEM_W + `MEM_ADDR_W -1 -: `nMEM_W];
+
    //select control/status register or data memory 
-   reg                                            control_valid;
-   reg [`nMEM-1:0]                                mem_valid;
-   
+   reg control_valid;
+   reg [`nMEM-1:0] mem_valid;
    always @ * begin
       integer j;
       control_valid = 1'b0;
       mem_valid = `nMEM'b0;
-      if (ctr_addr[`nMEM_W+`MEM_ADDR_W])
-        control_valid = ctr_valid;
+      if (addr[`nMEM_W+`MEM_ADDR_W])
+        control_valid = valid;
       else
         for(j=0; j<`nMEM; j=j+1)
-	  if ( j[`nMEM_W-1:0] == ctr_addr[`nMEM_W+`MEM_ADDR_W -: `nMEM_W] )
-	    mem_valid[j] = ctr_valid;
+	  if ( j[`nMEM_W-1:0] == addr[`nMEM_W+`MEM_ADDR_W-1 -: `nMEM_W] )
+	    mem_valid[j] = valid;
    end
 
    //register selected data memory output
-   reg [DATA_W-1: 0] ctr_data_reg;
-   always @ (posedge clk) begin
+   reg [DATA_W-1: 0] data_reg;
+   always @ * begin
       integer j;
       for (j=0; j < `nMEM; j= j+1)
-	if (mem_valid[j])
-	  ctr_data_reg = data_bus[`DATA_MEM0A_B - (2*j+1)*DATA_W  -: DATA_W];
+	if (addr_reg == j[`nMEM_W-1:0])
+	  data_reg = data_bus[`DATA_MEM0A_B - 2*j*DATA_W  -: DATA_W]; //Port A
    end
-
    
-   //read
+   //read: select output data
    wire [2*`nMEM-1:0] mem_done;
    always @ * begin
       if(control_valid)
-	ctr_data_out = {{DATA_W-1{1'b0}}, &mem_done};
+	wdata = {{DATA_W-1{1'b0}}, &mem_done};
       else 
-	ctr_data_out = ctr_data_reg;
+	wdata = data_reg;
    end
 
-   // write
+   //run 
    reg ctr_reg;
    always @ (posedge rst, posedge clk)
-     if(rst || ~ctr_we || ~control_valid)
+     if(rst || ~we || ~control_valid)
        ctr_reg <= 1'b0;
      else
-       ctr_reg <= ctr_data_in[0];
-
-   wire run = control_valid & ctr_we &  ctr_data_in[0];
+       ctr_reg <= rdata[0];
+   wire run = control_valid & we & rdata[0];
    wire run_reg = ctr_reg;
-   
-   
-   //
-   // DATA INTERFACE ADDRESS DECODER
-   //
-
-   // address register
-   reg [`nMEM_W-1:0] data_addr_reg;
-   always @ (posedge rst, posedge clk) begin
-      if (rst) begin
-	 data_addr_reg <= 0;
-      end else begin
-	 data_addr_reg <= data_addr[`nMEM_W + `MEM_ADDR_W -1 -: `nMEM_W];
-      end
-   end
-   
-   // select memory
-   reg [`nMEM-1:0]                             data_mem_valid;
-   always @ * begin
-      integer j;
-      data_mem_valid = `nMEM'b0;
-      for (j = 0; j < `nMEM; j = j+1)
-	if(data_addr[`nMEM_W + `MEM_ADDR_W -1 -: `nMEM_W] == j[`nMEM_W-1:0])
-	  data_mem_valid[j] = data_valid;
-   end
-
-   //read: select output data
-   always @ * begin
-      integer j;
-      data_data_out = {DATA_W{1'b0}};
-      for (j = 0; j < `nMEM; j = j+1)
-	if(data_addr_reg == j[`nMEM_W-1:0])
-	  data_data_out = data_bus[`DATA_MEM0A_B - 2*j*DATA_W  -: DATA_W];
-   end
-
    
    // 
    // CONFIGURATION SHADOW REGISTER
@@ -154,7 +117,6 @@ module xdata_eng #(
 	 config_reg_shadow <= config_bus;
       end
    end
-   
    
    //
    // INSTANTIATE THE FUNCTIONAL UNITS
@@ -176,17 +138,11 @@ module xdata_eng #(
 	   .doneA(mem_done[2*i]),
 	   .doneB(mem_done[2*i+1]),
 
-	   // control interface
-	   .ctr_mem_valid(mem_valid[i]),
-	   .ctr_we(ctr_we),
-	   .ctr_addr(ctr_addr[`MEM_ADDR_W-1:0]),
-	   .ctr_data_in(ctr_data_in),
-           
-	   // data interface
-	   .data_addr(data_addr[`MEM_ADDR_W-1:0]),
-	   .data_we(data_we),
-	   .data_mem_valid(data_mem_valid[i]),
-	   .data_data_in(data_data_in),
+	   // data/control interface
+	   .valid(mem_valid[i]),
+	   .we(we),
+	   .addr(addr[`MEM_ADDR_W-1:0]),
+	   .rdata(rdata),
            
 	   // flow interface
 	   .flow_in(data_bus),

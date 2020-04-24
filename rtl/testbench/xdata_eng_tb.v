@@ -14,19 +14,12 @@ module xdata_eng_tb;
    reg 					clk;
    reg 					rst;
    
-   //control interface
-   reg 					ctr_valid;
-   reg					ctr_we;
-   reg [`nMEM_W+`MEM_ADDR_W:0]		ctr_addr;
-   reg [DATA_W-1:0]			ctr_data_in;
-   wire	[DATA_W-1:0]			ctr_data_out;
-
-   //data interface
-   reg					data_valid;
-   reg					data_we;
-   reg [`nMEM_W+`MEM_ADDR_W-1:0]	data_addr;
-   reg [DATA_W-1:0]			data_data_in;
-   wire	signed [DATA_W-1:0]		data_data_out;
+   //data/control interface
+   reg 					valid;
+   reg					we;
+   reg [`nMEM_W+`MEM_ADDR_W:0]		addr;
+   reg [DATA_W-1:0]			rdata;
+   wire	signed [DATA_W-1:0]		wdata;
 
    //flow interface
    reg [`DATABUS_W-1:0] 		flow_in;
@@ -53,16 +46,11 @@ module xdata_eng_tb;
    ) uut (
 		.clk(clk), 
 		.rst(rst),
-		.ctr_valid(ctr_valid),
-		.ctr_we(ctr_we),
-		.ctr_addr(ctr_addr),
-		.ctr_data_in(ctr_data_in),
-		.ctr_data_out(ctr_data_out),
-		.data_valid(data_valid),
-		.data_we(data_we),
-		.data_addr(data_addr),
-		.data_data_in(data_data_in),
-		.data_data_out(data_data_out),
+		.valid(valid),
+		.we(we),
+		.addr(addr),
+		.rdata(rdata),
+		.wdata(wdata),
 		.flow_in(flow_in),
 		.flow_out(flow_out),
 		.config_bus(config_bus)
@@ -78,34 +66,30 @@ module xdata_eng_tb;
       // Initialize Inputs
       clk = 0;
       rst = 1;
-      ctr_valid = 0;
-      ctr_we = 0;
-      ctr_addr = 0;
-      ctr_data_in = 0;
-      data_valid = 0;
-      data_we = 0;
-      data_addr = 0;
-      data_data_in = 0;
+      valid = 0;
+      we = 0;
+      addr = 0;
+      rdata = 0;
       flow_in = 0;
       config_bus = 0;
       
       // Wait 100 ns for global reset to finish
       #(clk_per*5) rst = 0;
 
-      //write 5x5 feature map in mem0B
+      //write 5x5 feature map in mem0A
       for(i = 0; i < 25; i++) begin
         pixels[i] = $random%20;
-        cpu_data_write(i, pixels[i]);        
+        cpu_write(i, pixels[i]);        
       end
  
-      //write 3x3 kernel and bias in mem1B
+      //write 3x3 kernel and bias in mem1A
       for(i = 0; i < 10; i++) begin
         if(i < 9) begin 
           weights[i] = $random%2;
-          cpu_data_write(i + 2**`MEM_ADDR_W, weights[i]);
+          cpu_write(i + 2**`MEM_ADDR_W, weights[i]);
         end else begin
           bias = $random%5;
-          cpu_data_write(i + 2**`MEM_ADDR_W, bias);
+          cpu_write(i + 2**`MEM_ADDR_W, bias);
         end
       end
 
@@ -113,7 +97,7 @@ module xdata_eng_tb;
       $display("\nReading input feature map");
       for(i = 0; i < 5; i++) begin
         for(j = 0; j < 5; j++) begin
-          cpu_data_read(i*5+j, res);
+          cpu_read(i*5+j, res);
           $write("%d ", res);
         end
         $write("\n"); 
@@ -123,14 +107,14 @@ module xdata_eng_tb;
       $display("\nReading kernel");
       for(i = 0; i < 3; i++) begin
         for(j = 0; j < 3; j++) begin
-          cpu_data_read(2**`MEM_ADDR_W + 3*i + j, res);
+          cpu_read(2**`MEM_ADDR_W + 3*i + j, res);
           $write("%d ", res);
         end
         $write("\n"); 
       end
 
       //reading bias
-      cpu_data_read(2**`MEM_ADDR_W + 9, res);
+      cpu_read(2**`MEM_ADDR_W + 9, res);
       $display("\nBias: %0d ", res);
 
      //expected result of convolution 
@@ -208,11 +192,11 @@ module xdata_eng_tb;
          config_bus[`CONF_MEM0A_B - 4*`MEMP_CONF_BITS - `MEM_ADDR_W-2*`PERIOD_W-`N_W -: `MEM_ADDR_W] = i*3+j;
 
          //run configurations
-         cpu_ctr_write(1<<(`nMEM_W+`MEM_ADDR_W), 1);
+         cpu_write(1<<(`nMEM_W+`MEM_ADDR_W), 1);
 
          //wait until config is done
          do
-           cpu_ctr_read(1<<(`nMEM_W+`MEM_ADDR_W), res);
+           cpu_read(1<<(`nMEM_W+`MEM_ADDR_W), res);
          while(res == 0);
        end
      end
@@ -220,7 +204,7 @@ module xdata_eng_tb;
      //read results
      for(i = 0; i < 3; i++) begin
        for(j = 0; j < 3; j++) begin
-         cpu_data_read(2**(`MEM_ADDR_W+1) + 3*i + j, res);
+         cpu_read(2**(`MEM_ADDR_W+1) + 3*i + j, res);
          $write("%d ", res);
        end
        $write("\n"); 
@@ -237,53 +221,28 @@ module xdata_eng_tb;
    // CPU TASKS
    //
 
-   task cpu_data_write;
-      input [`nMEM_W+`MEM_ADDR_W-1:0] cpu_address;
-      input [DATA_W-1:0] cpu_data;
-      data_addr = cpu_address;
-      data_valid = 1;
-      data_we = 1;
-      data_data_in = cpu_data;
-      #clk_per;
-      data_we = 0;
-      data_valid = 0;
-      #clk_per;
-   endtask
-
-   task cpu_data_read;
-      input [`nMEM_W+`MEM_ADDR_W-1:0] cpu_address;
-      output [DATA_W-1:0] read_reg;
-      data_addr = cpu_address;
-      data_valid = 1;
-      data_we = 0;
-      #clk_per;
-      read_reg = data_data_out;
-      data_valid = 0;
-      #clk_per;
-   endtask
-
-   task cpu_ctr_write;
+   task cpu_write;
       input [`nMEM_W+`MEM_ADDR_W:0] cpu_address;
       input [DATA_W-1:0] cpu_data;
-      ctr_addr = cpu_address;
-      ctr_valid = 1;
-      ctr_we = 1;
-      ctr_data_in = cpu_data;
+      addr = cpu_address;
+      valid = 1;
+      we = 1;
+      rdata = cpu_data;
       #clk_per;
-      ctr_we = 0;
-      ctr_valid = 0;
+      we = 0;
+      valid = 0;
       #clk_per;
    endtask
 
-   task cpu_ctr_read;
+   task cpu_read;
       input [`nMEM_W+`MEM_ADDR_W:0] cpu_address;
       output [DATA_W-1:0] read_reg;
-      ctr_addr = cpu_address;
-      ctr_valid = 1;
-      ctr_we = 0;
+      addr = cpu_address;
+      valid = 1;
+      we = 0;
       #clk_per;
-      read_reg = ctr_data_out;
-      ctr_valid = 0;
+      read_reg = wdata;
+      valid = 0;
       #clk_per;
    endtask
 

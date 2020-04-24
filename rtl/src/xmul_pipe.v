@@ -1,5 +1,4 @@
 `timescale 1ns / 1ps
-`include "xversat.vh"
 
 /* 
  Module: 2-stage pipeline integer multiplier
