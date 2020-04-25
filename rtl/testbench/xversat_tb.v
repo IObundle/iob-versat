@@ -292,6 +292,25 @@ module xversat_tb;
         $write("\n"); 
       end
 
+      ///////////////////////////////////////////////////////////////////////////////
+      // CONF MEM and CONF CLEAR TEST
+      ///////////////////////////////////////////////////////////////////////////////
+`ifdef CONF_MEM_USE
+
+      //clear conf_reg of VERSAT1
+      cpu_write(VERSAT_1 + CONF_BASE + `CONF_CLEAR, 0);
+
+      //store conf_reg of VERSAT2 in conf_mem (addr 0)
+      cpu_write(VERSAT_2 + CONF_BASE + `CONF_MEM, 0);
+
+      //global conf clear
+      cpu_write(CONF_BASE + `GLOBAL_CONF_CLEAR, 0);
+
+      //store conf_mem (addr 0) in conf_reg of VERSAT2
+      cpu_read(VERSAT_2 + CONF_BASE + `CONF_MEM, res);
+
+`endif
+     
       //end simulation
       $finish;
 
