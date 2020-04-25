@@ -223,6 +223,7 @@ module xdata_eng #(
       ) muladd (
 	   .clk(clk),
 	   .rst(run_reg),
+           .addrgen_rst(rst),
 
 	   // flow interface
 	   .flow_in(data_bus),

@@ -135,11 +135,17 @@ module xconf_reg (
 	      if(ctr_addr == (`CONF_MULADD0 + i*`MULADD_CONF_OFFSET + `MULADD_CONF_SELB))
 		conf_reg[`CONF_MULADD0_B - i*`MULADD_CONF_BITS - `N_W -: `N_W] <= ctr_data_in[`N_W-1:0];
 
-	      if(ctr_addr == (`CONF_MULADD0 + i*`MULADD_CONF_OFFSET + `MULADD_CONF_SELO))
-		conf_reg[`CONF_MULADD0_B - i*`MULADD_CONF_BITS - 2*`N_W -: `N_W] <= ctr_data_in[`N_W-1:0];
-
 	      if(ctr_addr == (`CONF_MULADD0 + i*`MULADD_CONF_OFFSET + `MULADD_CONF_FNS))
-		conf_reg[`CONF_MULADD0_B - i*`MULADD_CONF_BITS - 3*`N_W -: `MULADD_FNS_W] <= ctr_data_in[`MULADD_FNS_W-1:0];
+		conf_reg[`CONF_MULADD0_B - i*`MULADD_CONF_BITS - 2*`N_W -: `MULADD_FNS_W] <= ctr_data_in[`MULADD_FNS_W-1:0];
+
+	      if(ctr_addr == (`CONF_MULADD0 + i*`MULADD_CONF_OFFSET + `MULADD_CONF_ITER))
+		conf_reg[`CONF_MULADD0_B - i*`MULADD_CONF_BITS - 2*`N_W - `MULADD_FNS_W -: `MEM_ADDR_W] <= ctr_data_in[`MEM_ADDR_W-1:0];
+
+	      if(ctr_addr == (`CONF_MULADD0 + i*`MULADD_CONF_OFFSET + `MULADD_CONF_PER))
+		conf_reg[`CONF_MULADD0_B - i*`MULADD_CONF_BITS - 2*`N_W - `MULADD_FNS_W - `MEM_ADDR_W -: `PERIOD_W] <= ctr_data_in[`PERIOD_W-1:0];
+
+	      if(ctr_addr == (`CONF_MULADD0 + i*`MULADD_CONF_OFFSET + `MULADD_CONF_DELAY))
+		conf_reg[`CONF_MULADD0_B - i*`MULADD_CONF_BITS - 2*`N_W - `MULADD_FNS_W - `MEM_ADDR_W - `PERIOD_W -: `PERIOD_W] <= ctr_data_in[`PERIOD_W-1:0];
 	   end
 
 	   // configure BSs
