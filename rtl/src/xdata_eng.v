@@ -131,10 +131,7 @@ module xdata_eng #(
       ) mem (
 	   .clk(clk),
 	   .rst(rst),
-	   .initA(run_reg),
-	   .initB(run_reg),
-	   .runA(run_reg),
-	   .runB(run_reg),
+	   .run(run_reg),
 	   .doneA(mem_done[2*i]),
 	   .doneB(mem_done[2*i+1]),
 
@@ -223,6 +220,7 @@ module xdata_eng #(
       ) muladd (
 	   .clk(clk),
 	   .rst(run_reg),
+           .addrgen_rst(rst),
 
 	   // flow interface
 	   .flow_in(data_bus),

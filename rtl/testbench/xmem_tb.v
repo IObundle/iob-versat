@@ -7,13 +7,13 @@ module xmem_tb;
    //parameters 
    parameter clk_per = 20;
    parameter DATA_W = 32;
-   integer i, j, aux_addr;
+   integer i, j, aux_addr, aux_val;
+   integer pixels[25-1:0];
    
    //control 
    reg 				clk;
    reg 				rst;
-   reg  	        	initA, initB;
-   reg				runA, runB;
+   reg				run;
    wire 			doneA, doneB;
 
    //mem interface
@@ -36,10 +36,7 @@ module xmem_tb;
 	     //control 
 	     .clk(clk),
 	     .rst(rst),
-	     .initA(initA),
-	     .initB(initB),
-	     .runA(runA),
-   	     .runB(runB),
+   	     .run(run),
              .doneA(doneA),
 	     .doneB(doneB),
 
@@ -58,8 +55,6 @@ module xmem_tb;
 	     
 	     );
 
-   reg [DATA_W-1:0] aux_val;
-   
    initial begin
       
 `ifdef DEBUG
@@ -70,10 +65,7 @@ module xmem_tb;
       //inputs
       clk = 0;
       rst = 1;
-      initA = 0;
-      initB = 0;
-      runA = 0;
-      runB = 0;
+      run = 0;
 
       we = 0;
       addr = 0;
@@ -86,20 +78,23 @@ module xmem_tb;
       //Global reset (100ns)
       #(clk_per*5) rst = 0;
 
-      //Testing data and control interfaces
-      $display("\nTesting data and control interfaces");
+      //Testing mem interface
+      $display("\nTesting mem interface. Values read from mem:");
       
       //Write values to memory
-      $display("Value written in memA: %x", 32'h6789ABCD);
-      cpu_write(16, 32'h6789ABCD);
-      $display("Value written in memB: %x", 32'hF0F0F0F0);
-      cpu_write(10, 32'hF0F0F0F0);
+      for(i = 0; i < 25; i++) begin
+        pixels[i] = $random%50;
+        cpu_write(i, pixels[i]);
+      end
 
       //Read values back from memory
-      cpu_read(16, aux_val);
-      $display("Value read from memA: %x", aux_val);
-      cpu_read(10, aux_val);
-      $display("Value read from memB: %x", aux_val);
+      for(i = 0; i < 5; i++) begin
+        for(j = 0; j < 5; j++) begin
+          cpu_read(i*5 + j, aux_val);
+          $write("%d ", aux_val);
+        end
+        $write("\n");
+      end
 
       //Testing address generator and configuration bus
       $display("\nTesting address generator and configuration bus");
@@ -115,29 +110,34 @@ module xmem_tb;
       config_bits[2*`MEMP_CONF_BITS-`MEM_ADDR_W-2*`PERIOD_W-`N_W-2*`MEM_ADDR_W-1 -: `MEM_ADDR_W] = 1; //incr
       config_bits[2*`MEMP_CONF_BITS-`MEM_ADDR_W-2*`PERIOD_W-`N_W-3*`MEM_ADDR_W-`PERIOD_W-1-1-1-1 -: 1] = 1; //output address
 
-      //display addr values that should be generated
-      $display("\nExpected addr values");
+      //display pixels that should be read
+      $display("\nExpected pixels read (first 3x3 block)");
       aux_addr = 0;
       for(i = 0; i < 3; i++) begin
         for(j = 0; j < 3; j++) begin
-          $display("Address %d", aux_addr);
+          $write("%d ", pixels[aux_addr]);
           aux_addr += 1;
         end
+        $write("\n");
         aux_addr += (5-3);
       end
-      $display("\nActual addr values");
+      $display("\nActual pixels read");
 
       //run
-      initA = 1;
-      runA = 1;
+      run = 1;
       #(clk_per);
-      initA = 0;
-      runA = 0;
+      run = 0;
 
       //wait until done
+      i = 0;
       do begin
-        $display("Address %d", flow_out[2*DATA_W-1 -: DATA_W]);
         #clk_per;
+        aux_val = flow_out[2*DATA_W-1 -: DATA_W];
+        $write("%d ", aux_val);
+        if(i == 2) begin
+          i = 0;
+          $write("\n");
+        end else i++;
       end while(doneA == 0);
 
       //End simulation

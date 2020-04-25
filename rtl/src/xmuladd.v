@@ -13,6 +13,8 @@ module xmuladd # (
 	) (
                 input                         rst,
                 input                         clk,
+                input			      addrgen_rst,
+
                 //flow interface
                 input [2*`DATABUS_W-1:0]      flow_in,
                 output [DATA_W-1:0] 	      flow_out,
@@ -29,23 +31,17 @@ module xmuladd # (
    //data
    wire signed [DATA_W-1:0]                   op_a;
    wire signed [DATA_W-1:0]                   op_b;
-   wire [DATA_W-1:0]                          op_o;
+   wire [`MEM_ADDR_W-1:0]                     op_o;
 
    //config data
    wire [`N_W-1: 0]                           sela;
    wire [`N_W-1: 0]                           selb;
-   wire [`N_W-1: 0]                           selo;
+   wire [`MEM_ADDR_W-1:0]		      iterations;
+   wire [`PERIOD_W-1:0]                       period;
    wire [`PERIOD_W-1:0]                       delay;
 
-   // enabled operands and result
-   wire                                       enablea;
-   wire                                       enableb;
-   wire                                       enableo;
-   wire                                       enabled;
-
    // register muladd control
-   reg [DATA_W-1:0]                           op_o_reg;
-   reg [`PERIOD_W-1:0]			      rst_cnt;
+   reg [`MEM_ADDR_W-1:0]                      op_o_reg;
 
    // accumulator load signal
    wire                                       ld_acc;
@@ -60,9 +56,10 @@ module xmuladd # (
    //unpack config bits
    assign sela   = configdata[`MULADD_CONF_BITS-1 -: `N_W];
    assign selb   = configdata[`MULADD_CONF_BITS-1-`N_W -: `N_W];
-   assign selo   = configdata[`MULADD_CONF_BITS-1-2*`N_W -: `N_W];
-   assign opcode = configdata[`MULADD_CONF_BITS-1-3*`N_W -: `MULADD_FNS_W];
-   assign delay  = configdata[`PERIOD_W-1: 0] + `MULADD_LAT;
+   assign opcode = configdata[`MULADD_CONF_BITS-1-2*`N_W -: `MULADD_FNS_W];
+   assign iterations = configdata[`MULADD_CONF_BITS-1-2*`N_W-`MULADD_FNS_W -: `MEM_ADDR_W];
+   assign period = configdata[`MULADD_CONF_BITS-1-2*`N_W-`MULADD_FNS_W-`MEM_ADDR_W -: `PERIOD_W];
+   assign delay = configdata[`MULADD_CONF_BITS-1-2*`N_W-`MULADD_FNS_W-`MEM_ADDR_W-`PERIOD_W -: `PERIOD_W];
 
    //input selection
    xinmux # ( 
@@ -81,39 +78,46 @@ module xmuladd # (
         .data_out(op_b)
 	);
 
-   xinmux # ( 
-	.DATA_W(DATA_W)
-   ) muxo (
-        .sel(selo),
-        .data_in(flow_in),
-        .data_out(op_o)
+   //addr_gen to control macc
+   wire ready = |iterations;
+   wire mem_en, done;
+   xaddrgen addrgen (
+	.clk(clk),
+	.rst(addrgen_rst),
+	.init(rst),
+	.run(rst & ready),
+	.iterations(iterations),
+	.period(period),
+	.duty(period),
+	.start(`MEM_ADDR_W'b0),
+	.shift(-period),
+	.incr(`MEM_ADDR_W'b1),
+	.delay(delay),
+	.addr(op_o),
+	.mem_en(mem_en),
+	.done(done)
 	);
 
    //update registers
    always @ (posedge clk, posedge rst) begin
      if (rst) begin
        acc <= {2*DATA_W{1'b0}};
-       op_o_reg <= {DATA_W{1'd0}};
-       rst_cnt <= `PERIOD_W'd0;
+       op_o_reg <= {`MEM_ADDR_W{1'd0}};
 `ifndef MULADD_COMB                             //pipelined
        ld_acc1 <= 1'b0;
        ld_acc2 <= 1'b0;
 `endif
      end else begin
-       if(rst_cnt < delay) 
-         rst_cnt += 1'd1; 
-       else begin
-         acc <= result64;
-         op_o_reg <= op_o;
+       acc <= result64;
+       op_o_reg <= op_o;
 `ifndef MULADD_COMB                             //pipelined
-         ld_acc1 <= ld_acc0;
-         ld_acc2 <= ld_acc1;
+       ld_acc1 <= ld_acc0;
+       ld_acc2 <= ld_acc1;
 `endif
-       end
      end
    end
 
-   assign ld_acc0 = (op_o_reg=={DATA_W{1'd0}});
+   assign ld_acc0 = (op_o_reg=={`MEM_ADDR_W{1'd0}});
 
    // compute accumulator load signal
 `ifdef MULADD_COMB                             //combinatorial
@@ -182,7 +186,10 @@ module xmuladd # (
 	  result64 =  result_mult<<32;
 
 	`MULADD_MUL_LOW_MACC: begin
-	   result64 = acc + (result_mult << 32);
+           if(ld_acc)
+	     result64 = result_mult << 32;
+           else
+	     result64 = acc + (result_mult << 32);
 	end
 
 	default: //MACC
