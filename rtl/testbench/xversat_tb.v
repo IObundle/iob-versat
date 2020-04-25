@@ -176,10 +176,10 @@ module xversat_tb;
       ///////////////////////////////////////////////////////////////////////////////
 
       //configure mem0A to read 3x3 block from feature map
-      config_mem(VERSAT_1, 0, 3, 3, 3, 5-3, 1, 0, 0, 0, 0);
+      config_mem(VERSAT_1, 0, 3, 3, 3, 5-3, 1, 0, 0, 0);
 
       //configure mem1A to read kernel
-      config_mem(VERSAT_1, 2, 10, 1, 1, 0, 1, 0, 0, 0, 0);
+      config_mem(VERSAT_1, 2, 10, 1, 1, 0, 1, 0, 0, 0);
       
       //configure muladd0
       config_muladd(VERSAT_1, sMEM0A, sMEM0A+2, `MULADD_MUL_LOW_MACC, 2, 9, `MEMP_LAT);
@@ -192,10 +192,10 @@ module xversat_tb;
       ///////////////////////////////////////////////////////////////////////////////
 
       //configure mem0A to read 3x3 block from feature map
-      config_mem(VERSAT_2, 0, 3, 3, 3, 5-3, 1, 2, 0, 0, 0);
+      config_mem(VERSAT_2, 0, 3, 3, 3, 5-3, 1, 2, 0, 0);
 
       //configure mem1A to read kernel
-      config_mem(VERSAT_2, 2, 10, 1, 1, 0, 1, 2, 0, 0, 0);
+      config_mem(VERSAT_2, 2, 10, 1, 1, 0, 1, 2, 0, 0);
       
       //configure muladd0
       config_muladd(VERSAT_2, sMEM0A, sMEM0A+2, `MULADD_MUL_LOW_MACC, 1, 9, `MEMP_LAT+2);
@@ -208,10 +208,10 @@ module xversat_tb;
       ///////////////////////////////////////////////////////////////////////////////
 
       //configure mem0A to read 3x3 block from feature map
-      config_mem(VERSAT_3, 0, 3, 3, 3, 5-3, 1, 4, 0, 0, 0);
+      config_mem(VERSAT_3, 0, 3, 3, 3, 5-3, 1, 4, 0, 0);
 
       //configure mem1A to read kernel
-      config_mem(VERSAT_3, 2, 10, 1, 1, 0, 1, 4, 0, 0, 0);
+      config_mem(VERSAT_3, 2, 10, 1, 1, 0, 1, 4, 0, 0);
       
       //configure muladd0
       config_muladd(VERSAT_3, sMEM0A, sMEM0A+2, `MULADD_MUL_LOW_MACC, 1, 9, `MEMP_LAT+4);
@@ -224,10 +224,10 @@ module xversat_tb;
       ///////////////////////////////////////////////////////////////////////////////
 
       //configure mem0A to read 3x3 block from feature map
-      config_mem(VERSAT_4, 0, 3, 3, 3, 5-3, 1, 6, 0, 0, 0);
+      config_mem(VERSAT_4, 0, 3, 3, 3, 5-3, 1, 6, 0, 0);
 
       //configure mem1A to read kernel
-      config_mem(VERSAT_4, 2, 10, 1, 1, 0, 1, 6, 0, 0, 0);
+      config_mem(VERSAT_4, 2, 10, 1, 1, 0, 1, 6, 0, 0);
 
       //configure muladd0
       config_muladd(VERSAT_4, sMEM0A, sMEM0A+2, `MULADD_MUL_LOW_MACC, 1, 9, `MEMP_LAT+6);
@@ -240,10 +240,10 @@ module xversat_tb;
       ///////////////////////////////////////////////////////////////////////////////
 
       //configure mem0A to read 3x3 block from feature map
-      config_mem(VERSAT_5, 0, 3, 3, 3, 5-3, 1, 8, 0, 0, 0);
+      config_mem(VERSAT_5, 0, 3, 3, 3, 5-3, 1, 8, 0, 0);
 
       //configure mem1A to read kernel
-      config_mem(VERSAT_5, 2, 10, 1, 1, 0, 1, 8, 0, 0, 0);
+      config_mem(VERSAT_5, 2, 10, 1, 1, 0, 1, 8, 0, 0);
       
       //configure muladd0
       config_muladd(VERSAT_5, sMEM0A, sMEM0A+2, `MULADD_MUL_LOW_MACC, 1, 9, `MEMP_LAT+8);
@@ -252,7 +252,7 @@ module xversat_tb;
       config_alulite(VERSAT_5, sALULITE0_p, sMULADD0, `ALULITE_ADD);
 
       //config mem2A to store ALULite output
-      config_mem(VERSAT_5, 4, 1, 1, 1, 0, 1, `MEMP_LAT + 8 + `MULADD_LAT + `ALULITE_LAT + 8, 0, sALULITE0, 1);
+      config_mem(VERSAT_5, 4, 1, 1, 1, 0, 1, `MEMP_LAT + 8 + `MULADD_LAT + `ALULITE_LAT + 8, sALULITE0, 1);
 
       ///////////////////////////////////////////////////////////////////////////////
       // Convolution loop
@@ -314,7 +314,6 @@ module xversat_tb;
       input integer shift;
       input integer incr;
       input integer delay;
-      input integer addr_out_en;
       input integer sel;
       input integer in_wr;
       integer base_addr;
@@ -325,7 +324,6 @@ module xversat_tb;
       cpu_write(base_addr + `MEMP_CONF_SHIFT, shift);
       cpu_write(base_addr + `MEMP_CONF_INCR, incr);
       cpu_write(base_addr + `MEMP_CONF_DELAY, delay);
-      cpu_write(base_addr + `MEMP_CONF_ADDR_OUT_EN, addr_out_en);
       cpu_write(base_addr + `MEMP_CONF_SEL, sel);
       cpu_write(base_addr + `MEMP_CONF_IN_WR, in_wr);
    endtask   

@@ -85,9 +85,6 @@ module xconf_reg (
 	     if(ctr_addr == (`CONF_MEM0A + i*`MEMP_CONF_OFFSET + `MEMP_CONF_IN_WR))
 	       conf_reg[`CONF_MEM0A_B-i*`MEMP_CONF_BITS-4*`MEM_ADDR_W-3*`PERIOD_W -`N_W-2 -: 1] <= ctr_data_in[0];
 
-	     if(ctr_addr == (`CONF_MEM0A + i*`MEMP_CONF_OFFSET + `MEMP_CONF_ADDR_OUT_EN))
-	       conf_reg[`CONF_MEM0A_B-i*`MEMP_CONF_BITS-4*`MEM_ADDR_W-3*`PERIOD_W -`N_W-3 -: 1] <= ctr_data_in[0];
-
 	   end // for (i=0; i<2*`nMEM; i=i+1)
 	
 	   // configure ALUs

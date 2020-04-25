@@ -131,10 +131,7 @@ module xdata_eng #(
       ) mem (
 	   .clk(clk),
 	   .rst(rst),
-	   .initA(run_reg),
-	   .initB(run_reg),
-	   .runA(run_reg),
-	   .runB(run_reg),
+	   .run(run_reg),
 	   .doneA(mem_done[2*i]),
 	   .doneB(mem_done[2*i+1]),
 
