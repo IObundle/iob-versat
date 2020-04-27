@@ -1,471 +1,516 @@
-#include "versat_defs.h"
+#include "versat.h"
 
-#define RAM_SET32(base, location, value) *((volatile int*) (base + (sizeof(int)) * location)) = value
-#define RAM_GET32(base, location)        *((volatile int*) (base + (sizeof(int)) * location))
+//Macro functions to use cpu interface
+#define MEMSET(base, location, value) (*((volatile int*) (base + (sizeof(int)) * location)) = value)
+#define MEMGET(base, location)        (*((volatile int*) (base + (sizeof(int)) * location)))
 
-#define VERSAT_TOP_BASE 0x11000000
+//constants
+#define CONF_BASE (1<<(nMEM_W+MEM_ADDR_W+1))
+#define CONF_MEM_SIZE ((int)pow(2,CONF_MEM_ADDR_W))
+#define MEM_SIZE ((int)pow(2,MEM_ADDR_W))
+#define RUN_DONE (1<<(nMEM_W+MEM_ADDR_W))
 
-//BUG: When using defines from versat_defs.h on RAM_SET32 use parentheses!!!
-//+2 is because RV ignores the 2 lsb since it isn't byte addressable, but 32bit addressable 
-#define VERSAT_1 (VERSAT_TOP_BASE | (0<<(ADDR_W+2)))
-#define VERSAT_2 (VERSAT_TOP_BASE | (1<<(ADDR_W+2)))
-#define VERSAT_3 (VERSAT_TOP_BASE | (2<<(ADDR_W+2)))
-#define VERSAT_4 (VERSAT_TOP_BASE | (3<<(ADDR_W+2)))
-#define VERSAT_5 (VERSAT_TOP_BASE | (4<<(ADDR_W+2)))
+//
+// VERSAT CLASSES
+//
+class CMemPort {
+  public:
+    int versat_base, mem_base, data_base;
+    int iter, per, duty, sel, start, shift, incr, delay, in_wr, rvrs, ext;
 
-//We don't define DMA_BASE since we are assuming that it will be at 0x12000000
-
-#define VERSAT_DUMMY 4096 //0x10
-#define VERSAT_CONF 8192 //0x2000
-
-//VERSAT global variables                                                                             
-int i, ENG_MEM[nMEM], CONF_MEMA[nMEM], CONF_MEMB[nMEM], CONF_ALU[nALU], CONF_ALULITE[nALULITE], CONF_MUL[nMUL], CONF_MULADD[nMULADD], CONF_BS[nBS], sMEMA[nMEM], sMEMA_p[nMEM], sMEMB[nMEM], sMEMB_p[nMEM], sALU[nALU], sALU_p[nALU], sALULITE[nALULITE], sALULITE_p[nALULITE], sMUL[nMUL], sMUL_p[nMUL], sMULADD[nMULADD], sMULADD_p[nMULADD], sBS[nBS], sBS_p[nBS];
-
-//VERSAT FUNCTIONS
-inline void defs() {                                                         
-  //Memories                                                          
-  for(i=0; i<nMEM; i=i+1){                  
-    ENG_MEM[i] = ENG_BASE+i*(1<<DADDR_W);                             
-    CONF_MEMA[i] = 2*i*MEMP_CONF_OFFSET+CONF_BASE+CONF_MEM0A;         
-    CONF_MEMB[i] = (2*i+1)*MEMP_CONF_OFFSET+CONF_BASE+CONF_MEM0A;     
-    sMEMA[i] = sMEM0A+2*i;                                            
-    sMEMA_p[i] = sMEMA[i] | (1<<(N_W-1)); //This is to select previous MEMories                                            
-    sMEMB[i] = sMEM0A+2*i+1;                                          
-  }                                                                    
-                                                                      
-  //ALUs                                                              
-  for (i=0; i<nALU; i=i+1){                                            
-    CONF_ALU[i] = i*ALU_CONF_OFFSET + CONF_BASE+CONF_ALU0;            
-    sALU[i] = sALU0+i;
-    sALU_p[i] = sALU[i] | (1<<(N_W-1)); //This is to select previous ALU                                               
-  }                                          
-                                                                      
-  //ALULITEs                                                          
-  for (i=0; i<nALULITE; i=i+1){                                        
-    CONF_ALULITE[i] = i*ALULITE_CONF_OFFSET + CONF_BASE+CONF_ALULITE0;
-    sALULITE[i] = sALULITE0+i;                                        
-    sALULITE_p[i] = sALULITE[i] | (1<<(N_W-1));                                        
-  }                                                                    
-                                                                      
-  //MULTIPLIERS                                                       
-  for (i=0; i<nMUL; i=i+1){                                            
-    CONF_MUL[i] = i*MUL_CONF_OFFSET + CONF_BASE+CONF_MUL0;            
-    sMUL[i] = sMUL0+i;                                                
-    sMUL_p[i] = sMUL[i] | (1<<(N_W-1)); 
-  }                                                                    
-                                                                      
-  //MULADDS                                                           
-  for (i=0; i<nMULADD; i=i+1){                                        
-    CONF_MULADD[i] = i*MULADD_CONF_OFFSET + CONF_BASE+CONF_MULADD0;   
-    sMULADD[i] = sMULADD0+i;                                          
-    sMULADD_p[i] = sMULADD[i] | (1<<(N_W-1));
-  }                                        
-                                                                      
-  //BARREL SHIFTERS                                                   
-  for (i=0; i<nBS; i=i+1){                                             
-    CONF_BS[i] = i*BS_CONF_OFFSET + CONF_BASE+CONF_BS0;               
-    sBS[i] = sBS0+i;                                                  
-    sBS_p[i] = sBS[i] | (1<<(N_W-1));                                                  
-  }                                            
-}                                                                     
-
-class CMemPort
-{
-    public:
-    //Versat Address Base
-    int versat_base;
-    //Memory Address Base
-    int mem_base;
-    //Conf Regs
-    int iter;
-    int per=1;
-    int duty=per;
-    int sel;
-    int start;
-    int shift=0;
-    int incr;
-    int delay;
-    int ext=0;
+    //Default constructor
+    CMemPort() {
+    }
     
-    //Default Constructor
-    CMemPort () {
-    }
-
     //Constructor with an associated base
-    CMemPort (int versat_base) {
-        this->versat_base = versat_base;
+    CMemPort (int versat_base, int i, int offset) {
+      this->versat_base = versat_base;
+      this->mem_base = CONF_BASE + CONF_MEM0A + (2*i+offset)*MEMP_CONF_OFFSET;
+      this->data_base = (i<<MEM_ADDR_W);
     }
 
-    //Full Configuration (Needed to configure nested loops)
-    void setConf (int mem_base, int start, int iter, int incr, int delay, int per,
-          int duty, int sel, int shift, int ext)
-    {
-        this->mem_base = mem_base;
-        this->iter = iter;
-        this->per = per;
-        this->duty = duty;
-        this->sel = sel;
-        this->start = start;
-        this->shift = shift;
-        this->incr = incr;
-        this->delay = delay;
-        this->ext = ext;
+    //Full Configuration (includes ext and rvrs)
+    void setConf(int start, int iter, int incr, int delay, int per, int duty, int sel, int shift, int in_wr, int rvrs, int ext) {
+      this->iter = iter;
+      this->per = per;
+      this->duty = duty;
+      this->sel = sel;
+      this->start = start;
+      this->shift = shift;
+      this->incr = incr;
+      this->delay = delay;
+      this->in_wr = in_wr;
+      this->rvrs = rvrs;
+      this->ext = ext;
     }
 
-    //Minimum Configuration (Can be used to configure just a single Loop)
-    void setConf (int mem_base, int start, int iter, int incr, int delay, int per,
-          int duty, int sel)
-    {
-        this->mem_base = mem_base;
-        this->iter = iter;
-        this->per = per;
-        this->duty = duty;
-        this->sel = sel;
-        this->start = start;
-        this->incr = incr;
-        this->delay = delay;
+    //Minimum Configuration
+    void setConf(int start, int iter, int incr, int delay, int per, int duty, int sel, int shift, int in_wr) {
+      this->iter = iter;
+      this->per = per;
+      this->duty = duty;
+      this->sel = sel;
+      this->start = start;
+      this->shift = shift;
+      this->incr = incr;
+      this->delay = delay;
+      this->in_wr = in_wr;
     }
 
     void writeConf() {
-        RAM_SET32(versat_base, (mem_base  + MEMP_CONF_ITER), iter);
-        RAM_SET32(versat_base, (mem_base  + MEMP_CONF_START), start);
-        RAM_SET32(versat_base, (mem_base  + MEMP_CONF_PER), per);
-        RAM_SET32(versat_base, (mem_base  + MEMP_CONF_DUTY), duty);
-        RAM_SET32(versat_base, (mem_base  + MEMP_CONF_SEL), sel);
-        RAM_SET32(versat_base, (mem_base  + MEMP_CONF_SHIFT), shift);
-        RAM_SET32(versat_base, (mem_base  + MEMP_CONF_INCR), incr);
-        RAM_SET32(versat_base, (mem_base  + MEMP_CONF_DELAY), delay);
-        RAM_SET32(versat_base, (mem_base  + MEMP_CONF_EXT), ext);
+      MEMSET(versat_base, (mem_base + MEMP_CONF_ITER), iter);
+      MEMSET(versat_base, (mem_base + MEMP_CONF_START), start);
+      MEMSET(versat_base, (mem_base + MEMP_CONF_PER), per);
+      MEMSET(versat_base, (mem_base + MEMP_CONF_DUTY), duty);
+      MEMSET(versat_base, (mem_base + MEMP_CONF_SEL), sel);
+      MEMSET(versat_base, (mem_base + MEMP_CONF_SHIFT), shift);
+      MEMSET(versat_base, (mem_base + MEMP_CONF_INCR), incr);
+      MEMSET(versat_base, (mem_base + MEMP_CONF_DELAY), delay);
+      MEMSET(versat_base, (mem_base + MEMP_CONF_EXT), ext);
+      MEMSET(versat_base, (mem_base + MEMP_CONF_IN_WR), in_wr);
+      MEMSET(versat_base, (mem_base + MEMP_CONF_RVRS), rvrs);
     }
     void setIter(int iter) {
-        RAM_SET32(versat_base, (this->mem_base  + MEMP_CONF_ITER), iter);
-        this->iter = iter;
+      MEMSET(versat_base, (this->mem_base + MEMP_CONF_ITER), iter);
+      this->iter = iter;
     } 
     void setPer(int per) {
-        RAM_SET32(versat_base, (this->mem_base  + MEMP_CONF_PER), per);
-        this->per = per;
+      MEMSET(versat_base, (this->mem_base + MEMP_CONF_PER), per);
+      this->per = per;
     } 
     void setDuty(int duty) {
-        RAM_SET32(versat_base, (this->mem_base  + MEMP_CONF_DUTY), duty);
-        this->duty = duty;
+      MEMSET(versat_base, (this->mem_base + MEMP_CONF_DUTY), duty);
+      this->duty = duty;
     } 
     void setSel(int sel) {
-        RAM_SET32(versat_base, (this->mem_base  + MEMP_CONF_SEL), sel);
-        this->sel = sel;
+      MEMSET(versat_base, (this->mem_base + MEMP_CONF_SEL), sel);
+      this->sel = sel;
     } 
     void setStart(int start) {
-        RAM_SET32(versat_base, (this->mem_base  + MEMP_CONF_START), start);
-        this->start = start;
+      MEMSET(versat_base, (this->mem_base + MEMP_CONF_START), start);
+      this->start = start;
     } 
     void setIncr(int incr) {
-        RAM_SET32(versat_base, (this->mem_base  + MEMP_CONF_START), incr);
-        this->incr = incr;
+      MEMSET(versat_base, (this->mem_base + MEMP_CONF_START), incr);
+      this->incr = incr;
     } 
     void setShift(int shift) {
-        RAM_SET32(versat_base, (this->mem_base  + MEMP_CONF_SHIFT), shift);
-        this->shift = shift;
+      MEMSET(versat_base, (this->mem_base + MEMP_CONF_SHIFT), shift);
+      this->shift = shift;
     } 
     void setDelay(int delay) {
-        RAM_SET32(versat_base, (this->mem_base  + MEMP_CONF_DELAY), delay);
-        this->delay = delay;
+      MEMSET(versat_base, (this->mem_base + MEMP_CONF_DELAY), delay);
+      this->delay = delay;
     } 
     void setExt(int ext) {
-        RAM_SET32(versat_base, (this->mem_base  + MEMP_CONF_EXT), ext);
-        this->ext = ext;
+      MEMSET(versat_base, (this->mem_base + MEMP_CONF_EXT), ext);
+      this->ext = ext;
     } 
+    void setRvrs(int rvrs) {
+      MEMSET(versat_base, (this->mem_base + MEMP_CONF_RVRS), rvrs);
+      this->rvrs = rvrs;
+    } 
+    void setInWr(int in_wr) {
+      MEMSET(versat_base, (this->mem_base + MEMP_CONF_IN_WR), in_wr);
+      this->in_wr = in_wr;
+    } 
+
+    void write(int addr, int val) {
+      MEMSET(versat_base, (this->data_base + addr), val);
+    }
+    int read(int addr) {
+      return MEMGET(versat_base, (this->data_base + addr));
+    }
 };//end class CMEM
 
+#if nALU>0
 class CALU {
-    public:
-
-    int versat_base;
-    int alu_base;
-    int opa;
-    int opb;
-    int fns;
+  public:
+    int versat_base, alu_base;
+    int opa, opb, fns;
     
-    CALU (){
-    }
-
-    CALU (int versat_base){
-        this->versat_base = versat_base;
+    //Default constructor
+    CALU() {
     }
     
-    void setConf (int alu_base, int opa, int opb, int fns) {
-        this->alu_base = alu_base;
-        this->opa = opa;
-        this->opb = opb;
-        this->fns = fns;
+    CALU(int versat_base, int i) {
+      this->versat_base = versat_base;
+      this->alu_base = CONF_BASE + CONF_ALU0 + i*ALU_CONF_OFFSET;
+    }
+    
+    void setConf(int opa, int opb, int fns) {
+      this->opa = opa;
+      this->opb = opb;
+      this->fns = fns;
     }
 
     void writeConf() {
-        RAM_SET32(versat_base, (alu_base  + ALU_CONF_SELA), opa);
-        RAM_SET32(versat_base, (alu_base  + ALU_CONF_SELB), opb);
-        RAM_SET32(versat_base, (alu_base  + ALU_CONF_FNS), fns);
+      MEMSET(versat_base, (alu_base + ALU_CONF_SELA), opa);
+      MEMSET(versat_base, (alu_base + ALU_CONF_SELB), opb);
+      MEMSET(versat_base, (alu_base + ALU_CONF_FNS), fns);
     }
     void setOpA(int opa) {
-        RAM_SET32(versat_base, (this->alu_base  + ALU_CONF_SELA), opa);
-        this->opa = opa; 
+      MEMSET(versat_base, (this->alu_base + ALU_CONF_SELA), opa);
+      this->opa = opa; 
     }
     void setOpB(int opb) {
-        RAM_SET32(versat_base, (this->alu_base  + ALU_CONF_SELB), opb);
-        this->opb = opb; 
+      MEMSET(versat_base, (this->alu_base + ALU_CONF_SELB), opb);
+      this->opb = opb; 
     }
     void setFNS(int fns) {
-        RAM_SET32(versat_base, (this->alu_base  + ALU_CONF_FNS), fns);
-        this->fns = fns; 
+      MEMSET(versat_base, (this->alu_base + ALU_CONF_FNS), fns);
+      this->fns = fns; 
     }
-}; //end class CALI
+}; //end class CALU
+#endif
 
-//Probably we can delete it, since the ALUs are configured in the same way
-//we just need to send the right base independent of being ALU or ALULite
+#if nALULITE>0
 class CALULite {
-    public:
-    int versat_base;
-    int alulite_base;
-    int opa;
-    int opb;
-    int fns;
+  public:
+    int versat_base, alulite_base;
+    int opa, opb, fns;
     
-    //Default Constructor
-    CALULite (){
+    //Default constructor
+    CALULite() {
     }
 
-    CALULite (int versat_base){
-        this->versat_base = versat_base;
+    CALULite(int versat_base, int i) {
+      this->versat_base = versat_base;
+      this->alulite_base = CONF_BASE + CONF_ALULITE0 + i*ALULITE_CONF_OFFSET;   
     }
     
-    void setConf (int alulite_base, int opa, int opb, int fns) {
-        this->alulite_base = alulite_base;
-        this->opa = opa;
-        this->opb = opb;
-        this->fns = fns;
+    void setConf(int opa, int opb, int fns) {
+      this->opa = opa;
+      this->opb = opb;
+      this->fns = fns;
     }
 
     void writeConf() {
-        RAM_SET32(versat_base, (alulite_base  + ALULITE_CONF_SELA), opa);
-        RAM_SET32(versat_base, (alulite_base  + ALULITE_CONF_SELB), opb);
-        RAM_SET32(versat_base, (alulite_base  + ALULITE_CONF_FNS), fns);
+      MEMSET(versat_base, (alulite_base + ALULITE_CONF_SELA), opa);
+      MEMSET(versat_base, (alulite_base + ALULITE_CONF_SELB), opb);
+      MEMSET(versat_base, (alulite_base + ALULITE_CONF_FNS), fns);
     }
     void setOpA(int opa) {
-        RAM_SET32(versat_base, (this->alulite_base  + ALULITE_CONF_SELA), opa);
-        this->opa = opa; 
+      MEMSET(versat_base, (this->alulite_base + ALULITE_CONF_SELA), opa);
+      this->opa = opa; 
     }
     void setOpB(int opb) {
-        RAM_SET32(versat_base, (this->alulite_base  + ALULITE_CONF_SELB), opb);
-        this->opb = opb; 
+      MEMSET(versat_base, (this->alulite_base + ALULITE_CONF_SELB), opb);
+      this->opb = opb; 
     }
     void setFNS(int fns) {
-        RAM_SET32(versat_base, (this->alulite_base  + ALULITE_CONF_FNS), fns);
-        this->fns = fns; 
+      MEMSET(versat_base, (this->alulite_base + ALULITE_CONF_FNS), fns);
+      this->fns = fns; 
     }
 }; //end class CALUALITE
+#endif
 
+#if nBS>0
 class CBS {
-    public:
+  public:
+    int versat_base, bs_base;
+    int data, shift, fns;
     
-    int versat_base;
-    int bs_base;
-    int data;
-    int shift;
-    int fns;
-    
-    CBS (){
+    //Default constructor
+    CBS() {
     }
 
-    CBS (int versat_base){
-        this->versat_base = versat_base;
+    CBS(int versat_base, int i) {
+      this->versat_base = versat_base;
+      this->bs_base = CONF_BASE + CONF_BS0 + i*BS_CONF_OFFSET;
     }
-    void setConf (int bs_base, int data, int shift, int fns) {
-        this->bs_base = bs_base;
-        this->data = data;
-        this->shift = shift;
-        this->fns = fns;
+
+    void setConf(int data, int shift, int fns) {
+      this->data = data;
+      this->shift = shift;
+      this->fns = fns;
     }
 
     void writeConf() {
-        RAM_SET32(versat_base, (bs_base  + BS_CONF_SELD), data);
-        RAM_SET32(versat_base, (bs_base  + BS_CONF_SELS), shift);
-        RAM_SET32(versat_base, (bs_base  + BS_CONF_FNS), fns);
+      MEMSET(versat_base, (bs_base + BS_CONF_SELD), data);
+      MEMSET(versat_base, (bs_base + BS_CONF_SELS), shift);
+      MEMSET(versat_base, (bs_base + BS_CONF_FNS), fns);
     }
     void setData(int data) {
-        RAM_SET32(versat_base, (this->bs_base  + BS_CONF_SELD), data);
-        this->data = data; 
+      MEMSET(versat_base, (this->bs_base + BS_CONF_SELD), data);
+      this->data = data; 
     }
     void setShift(int shift) {
-        RAM_SET32(versat_base, (this->bs_base  + BS_CONF_SELS), shift);
-        this->shift = shift; 
+      MEMSET(versat_base, (this->bs_base + BS_CONF_SELS), shift);
+      this->shift = shift; 
     }
     void setFNS(int fns) {
-        RAM_SET32(versat_base, (this->bs_base  + BS_CONF_FNS), fns);
-        this->fns = fns; 
+      MEMSET(versat_base, (this->bs_base + BS_CONF_FNS), fns);
+      this->fns = fns; 
     }
 };//end class CBS
+#endif
 
-class CMul
-{
-    public:
-    int versat_base;
-    //Address Base
-    int mul_base;
-    //Conf Regs
-    int sela;
-    int selb;
-    int fns;
+#if nMUL>0
+class CMul {
+  public:
+    int versat_base, mul_base;
+    int sela, selb, fns;
 
-    //Default Constructor
-    CMul () {
+    //Default constructor
+    CMul() {
     }
 
-    CMul (int versat_base) {
-        this->versat_base = versat_base;
+    CMul(int versat_base, int i) {
+      this->versat_base = versat_base;
+      this->mul_base = CONF_BASE + CONF_MUL0 + i*MUL_CONF_OFFSET;
     }
     
-    void setConf (int mul_base, int sela, int selb, int fns)
-    {
-        this->mul_base = mul_base;
-        this->sela=sela;
-        this->selb=selb;
-        this->fns=fns;
+    void setConf(int sela, int selb, int fns) {
+      this->sela=sela;
+      this->selb=selb;
+      this->fns=fns;
     }
 
     void writeConf() {
-        RAM_SET32(versat_base, (mul_base  + MUL_CONF_SELA), sela);
-        RAM_SET32(versat_base, (mul_base  + MUL_CONF_SELB), selb);
-        RAM_SET32(versat_base, (mul_base  + MUL_CONF_FNS), fns);
+      MEMSET(versat_base, (mul_base  + MUL_CONF_SELA), sela);
+      MEMSET(versat_base, (mul_base  + MUL_CONF_SELB), selb);
+      MEMSET(versat_base, (mul_base  + MUL_CONF_FNS), fns);
     }
     void setSelA(int sela) {
-        RAM_SET32(versat_base, (this->mul_base  + MUL_CONF_SELA), sela);
-        this->sela = sela; 
+      MEMSET(versat_base, (this->mul_base + MUL_CONF_SELA), sela);
+      this->sela = sela; 
     }
     void setSelB(int selb) {
-        RAM_SET32(versat_base, (this->mul_base  + MUL_CONF_SELB), selb);
-        this->selb = selb; 
+      MEMSET(versat_base, (this->mul_base + MUL_CONF_SELB), selb);
+      this->selb = selb; 
     }
     void setFNS(int fns) {
-        RAM_SET32(versat_base, (this->mul_base  + MUL_CONF_FNS), fns);
-        this->fns = fns; 
+      MEMSET(versat_base, (this->mul_base + MUL_CONF_FNS), fns);
+      this->fns = fns; 
     }
 };//end class CMUL
+#endif
 
-class CMulAdd
-{
-    public:
-    int versat_base;
-    //Address Base
-    int muladd_base;
-    //Conf Regs
-    int sela;
-    int selb;
-    int selo;
-    int fns;
+#if nMULADD>0
+class CMulAdd {
+  public:
+    int versat_base, muladd_base;
+    int sela, selb, fns, iter, per, delay;
 
-    //Default Constructor
-    CMulAdd () {
-    }
-    
-    CMulAdd(int versat_base) {
-        this->versat_base = versat_base;
+    //Default constructor
+    CMulAdd() {
     }
 
-    void setConf(int muladd_base, int sela, int selo, int selb, int fns)
-    {
-        this->muladd_base = muladd_base;
-        this->sela=sela;
-        this->selb=selb;
-        this->selo=selo;
-        this->fns=fns;
+    CMulAdd(int versat_base, int i) {
+      this->versat_base = versat_base;
+      this->muladd_base = CONF_BASE + CONF_MULADD0 + i*MULADD_CONF_OFFSET;
+    }
+
+    void setConf(int sela, int selb, int fns, int iter, int per, int delay) {
+      this->sela = sela;
+      this->selb = selb;
+      this->fns = fns;
+      this->iter = iter;
+      this->per = per;
+      this->delay = delay;
     }
 
     void writeConf() {
-        RAM_SET32(versat_base, (muladd_base  + MULADD_CONF_SELA), sela);
-        RAM_SET32(versat_base, (muladd_base  + MULADD_CONF_SELB), selb);
-        RAM_SET32(versat_base, (muladd_base  + MULADD_CONF_SELO), selo);
-        RAM_SET32(versat_base, (muladd_base  + MULADD_CONF_FNS), fns);
+      MEMSET(versat_base, (muladd_base  + MULADD_CONF_SELA), sela);
+      MEMSET(versat_base, (muladd_base  + MULADD_CONF_SELB), selb);
+      MEMSET(versat_base, (muladd_base  + MULADD_CONF_FNS), fns);
+      MEMSET(versat_base, (muladd_base  + MULADD_CONF_ITER), iter);
+      MEMSET(versat_base, (muladd_base  + MULADD_CONF_PER), per);
+      MEMSET(versat_base, (muladd_base  + MULADD_CONF_DELAY), delay);
     }
     void setSelA(int sela) {
-        RAM_SET32(versat_base, (this->muladd_base  + MULADD_CONF_SELA), sela);
-        this->sela = sela; 
+      MEMSET(versat_base, (this->muladd_base + MULADD_CONF_SELA), sela);
+      this->sela = sela; 
     }
     void setSelB(int selb) {
-        RAM_SET32(versat_base, (this->muladd_base  + MULADD_CONF_SELB), selb);
-        this->selb = selb; 
-    }
-    void setSelO(int selo) {
-        RAM_SET32(versat_base, (this->muladd_base  + MULADD_CONF_SELO), selo);
-        this->selb = selb; 
+      MEMSET(versat_base, (this->muladd_base + MULADD_CONF_SELB), selb);
+      this->selb = selb; 
     }
     void setFNS(int fns) {
-        RAM_SET32(versat_base, (this->muladd_base  + MULADD_CONF_FNS), fns);
-        this->fns = fns; 
+      MEMSET(versat_base, (this->muladd_base + MULADD_CONF_FNS), fns);
+      this->fns = fns; 
+    }
+    void setIter(int iter) {
+      MEMSET(versat_base, (this->muladd_base + MULADD_CONF_ITER), iter);
+      this->iter = iter; 
+    }
+    void setPer(int per) {
+      MEMSET(versat_base, (this->muladd_base + MULADD_CONF_PER), per);
+      this->per = per; 
+    }
+    void setDelay(int delay) {
+      MEMSET(versat_base, (this->muladd_base + MULADD_CONF_PER), delay);
+      this->delay = delay;
     }
 };//end class CMULADD
+#endif
 
-class CVersat
-{
-    public:
+class CVersat {
+
+  public:
     int versat_base;
-    int dma_base;
     //Versat Function Units
-    CMemPort memPort[2*nMEM];
+    CMemPort memA[nMEM];
+    CMemPort memB[nMEM];
+  #if nALU>0
     CALU alu[nALU];
+  #endif
+  #if nALULITE>0
     CALULite alulite[nALULITE];
+  #endif
+  #if nBS>0
     CBS bs[nBS];
+  #endif
+  #if nMUL>0
     CMul mul[nMUL];
+  #endif
+  #if nMULADD>0
     CMulAdd muladd[nMULADD];
+  #endif
 
+    //Default constructor
+    CVersat() {
+    }
+    
     //Default Constructor
-    CVersat (int versat_base) {
+    CVersat(int versat_base) {
 
-	//Define control and databus base address
-        this->versat_base = versat_base;
-        this->dma_base = versat_base & ~(1<<24) | (1<<25);
+      //Define control and databus base address
+      this->versat_base = versat_base;
 
-	//Init functional units
-	for (i=0; i<2*nMEM; i++)
-          memPort[i] = CMemPort (versat_base);
-        for (i=0; i<nALU; i++)
-          alu[i] = CALU (versat_base);
-        for (i=0; i<nALULITE; i++)
-          alulite[i] = CALULite (versat_base);
-        for (i=0; i<nBS; i++)
-          bs[i] = CBS (versat_base);
-        for (i=0; i<nMUL; i++)
-          mul[i] = CMul (versat_base);
-        for (i=0; i<nMULADD; i++)
-          muladd[i] = CMulAdd (versat_base);
+      //Init functional units
+      int i;
+      for (i=0; i<nMEM; i++) memA[i] = CMemPort(versat_base, i, 0);
+      for (i=0; i<nMEM; i++) memB[i] = CMemPort(versat_base, i, 1);
+    #if nALU>0
+      for (i=0; i<nALU; i++) alu[i] = CALU(versat_base, i);
+    #endif
+    #if nALULITE>0
+      for (i=0; i<nALULITE; i++) alulite[i] = CALULite(versat_base, i);
+    #endif
+    #if nBS>0
+      for (i=0; i<nBS; i++) bs[i] = CBS(versat_base, i);
+    #endif
+    #if nMUL>0
+      for (i=0; i<nMUL; i++) mul[i] = CMul(versat_base, i);
+    #endif
+    #if nMULADD>0
+      for (i=0; i<nMULADD; i++) muladd[i] = CMulAdd(versat_base, i);
+    #endif
     }
     
-    //Return 0 (false) if it doesn't init with success, 0 otherwise
-    int Init() {
-        //write dummy register                     
-        RAM_SET32(versat_base, VERSAT_DUMMY, 0xDEADBEEF);
-        // read and check result                                   
-        if (RAM_GET32(versat_base, VERSAT_DUMMY) != 0xDEADBEEF)
-          return 0;
-        else
-          return 1;
-    }
-    
+    //clear Versat config                       
     void clearConf() {
-        //clear Versat config                       
-        RAM_SET32(versat_base, (CONF_CLEAR), 0);
+      MEMSET(versat_base, (CONF_BASE + CONF_CLEAR), 0);
     }
     
-    void Run() {
-        //Wait for ready                                       
-        while (RAM_GET32(versat_base, (ENG_RDY_REG)) == 0);
-        //Run data engine                                      
-        RAM_SET32(versat_base, (ENG_RUN_REG), 1);
+#ifdef CONF_MEM_USE
+    //write current config in conf_mem
+    void confMemWrite(int addr) {
+      if(addr < CONF_MEM_SIZE) MEMSET(versat_base, (CONF_BASE + CONF_MEM + addr), 0);
     }
-    
-    void DMAwrite(int mem, int addr, int val) {
-        //write to databus
-        RAM_SET32(dma_base, (mem  + addr), val);
+
+    //set addressed config in conf_mem as current config
+    void confMemRead(int addr) {
+      if(addr < CONF_MEM_SIZE) MEMGET(versat_base, (CONF_BASE + CONF_MEM + addr));
     }
-    
-    int DMAread(int mem, int addr) {                                             
-        // read from databus                        
-        return (RAM_GET32(dma_base, (mem  + addr)));
-    }                                               
+#endif
 };//end class CVersat
+
+//
+//VERSAT global variables
+//
+static int base;
+CVersat versat[nSTAGE];
+int sMEMA[nMEM], sMEMA_p[nMEM], sMEMB[nMEM], sMEMB_p[nMEM];
+#if nALU>0
+  int sALU[nALU], sALU_p[nALU];
+#endif
+#if nALULITE>0
+  int sALULITE[nALULITE], sALULITE_p[nALULITE];
+#endif
+#if nMUL>0
+  int sMUL[nMUL], sMUL_p[nMUL];
+#endif
+#if nMULADD>0
+  int sMULADD[nMULADD], sMULADD_p[nMULADD];
+#endif
+#if nBS>0
+  int sBS[nBS], sBS_p[nBS];
+#endif
+
+//
+//VERSAT FUNCTIONS
+//
+inline void versat_init(int base_addr) {
+
+  //init versat stages
+  int i;
+  base = base_addr;
+  for(i = 0; i < nSTAGE; i++) versat[i] = CVersat(base_addr + (i<<(CTR_ADDR_W-nSTAGE_W+2))); //+2 as RV32 is not byte addressable
+
+  //prepare sel variables
+  int p_offset = (1<<(N_W-1));
+  int s_cnt = 0;
+
+  //Memories
+  for(i=0; i<nMEM; i=i+1){                  
+    sMEMA[i] = s_cnt + 2*i;                                            
+    sMEMB[i] = sMEMA[i]+1;                                          
+    sMEMA_p[i] = sMEMA[i] + p_offset;
+    sMEMB_p[i] = sMEMB[i] + p_offset;
+  } s_cnt += 2*nMEM;                                               
+
+#if nALU>0                                                                      
+  //ALUs
+  for (i=0; i<nALU; i=i+1){                                            
+    sALU[i] = s_cnt+i;
+    sALU_p[i] = sALU[i] + p_offset;                                               
+  } s_cnt += nALU;                                       
+#endif                                          
+                                                                      
+#if nALULITE>0
+  //ALULITEs
+  for (i=0; i<nALULITE; i=i+1) {                                    
+    sALULITE[i] = s_cnt+i;                                        
+    sALULITE_p[i] = sALULITE[i] + p_offset;                                        
+  } s_cnt += nALULITE;
+#endif                                                         
+    
+#if nMUL>0                                                                  
+  //MULTIPLIERS
+  for (i=0; i<nMUL; i=i+1) {                                             
+    sMUL[i] = s_cnt+i;                                                
+    sMUL_p[i] = sMUL[i] + p_offset; 
+  } s_cnt += nMUL;                                    
+#endif    
+    
+#if nMULADD>0                                                              
+  //MULADDS
+  for (i=0; i<nMULADD; i=i+1) {                                        
+    sMULADD[i] = s_cnt+i;    
+    sMULADD_p[i] = sMULADD[i] + p_offset;
+  } s_cnt += nMULADD;                             
+#endif
+    
+#if nBS>0
+  //BARREL SHIFTERS
+  for (i=0; i<nBS; i=i+1){                                             
+    sBS[i] = s_cnt+i;                                                  
+    sBS_p[i] = sBS[i] + p_offset;
+  }
+#endif                                     
+}                                                                     
+
+inline void run() {
+  MEMSET(base, (RUN_DONE), 1);
+}
+
+inline int done() {
+  return MEMGET(base, (RUN_DONE));
+}
+
+inline void globalClearConf() {
+  MEMSET(base, (CONF_BASE + GLOBAL_CONF_CLEAR), 0);
+}
