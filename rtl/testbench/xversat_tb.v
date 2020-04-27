@@ -182,7 +182,7 @@ module xversat_tb;
       config_mem(VERSAT_1, 2, 10, 1, 1, 0, 1, 0, 0, 0);
       
       //configure muladd0
-      config_muladd(VERSAT_1, sMEM0A, sMEM0A+2, `MULADD_MUL_LOW_MACC, 2, 9, `MEMP_LAT);
+      config_muladd(VERSAT_1, sMEM0A, sMEM0A+2, `MULADD_MUL_LOW_MACC, 1, 9, `MEMP_LAT);
 
       //configure ALULite0 to add bias to muladd result
       config_alulite(VERSAT_1, sMEM0A+2, sMULADD0, `ALULITE_ADD);
@@ -295,20 +295,21 @@ module xversat_tb;
       ///////////////////////////////////////////////////////////////////////////////
       // CONF MEM and CONF CLEAR TEST
       ///////////////////////////////////////////////////////////////////////////////
-`ifdef CONF_MEM_USE
 
       //clear conf_reg of VERSAT1
       cpu_write(VERSAT_1 + CONF_BASE + `CONF_CLEAR, 0);
 
+`ifdef CONF_MEM_USE
       //store conf_reg of VERSAT2 in conf_mem (addr 0)
       cpu_write(VERSAT_2 + CONF_BASE + `CONF_MEM, 0);
+`endif
 
       //global conf clear
       cpu_write(CONF_BASE + `GLOBAL_CONF_CLEAR, 0);
 
+`ifdef CONF_MEM_USE
       //store conf_mem (addr 0) in conf_reg of VERSAT2
       cpu_read(VERSAT_2 + CONF_BASE + `CONF_MEM, res);
-
 `endif
      
       //end simulation

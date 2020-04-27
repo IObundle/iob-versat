@@ -22,10 +22,10 @@
 //
 
 //Number of bits required for nSTAGE
-`define nSTAGE_W $clog2(`nSTAGE)
+`define nSTAGE_W ($clog2(`nSTAGE))
 
 // Number of bits to select memory
-`define nMEM_W $clog2(`nMEM)
+`define nMEM_W ($clog2(`nMEM))
 
 //CONTROL ADDRESS WIDTH
 //2 extra bits are to select xdata_eng/xconf and run/done
