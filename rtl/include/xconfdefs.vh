@@ -36,6 +36,7 @@
 
 // clear config register
 `define CONF_CLEAR (1<<`CONF_REG_ADDR_W)
+`define GLOBAL_CONF_CLEAR (`CONF_CLEAR+1)
 
 //only used if CONF_MEM_USE is defined (ensures no conflict with FU configs)
 `define CONF_MEM (`CONF_CLEAR + (1<<(`CONF_REG_ADDR_W-1)))

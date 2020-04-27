@@ -37,19 +37,25 @@ module xversat #(
 
    //data buses for each versat   
    wire [`DATABUS_W-1:0] stage_databus [`nSTAGE:0];
+
+   //global operations addr
    wire run_done = ~addr[1+`nMEM_W+`MEM_ADDR_W] & addr[`nMEM_W+`MEM_ADDR_W];
+   wire global_conf_clear = addr[1+`nMEM_W+`MEM_ADDR_W] & (addr[`CONF_REG_ADDR_W:0] == `GLOBAL_CONF_CLEAR);
+
+   //select stage address
+   wire [`CTR_ADDR_W-`nSTAGE_W-1:0] stage_addr = {addr[`CTR_ADDR_W-`nSTAGE_W-1:1], addr[0] & ~global_conf_clear};
 
    //
    // ADDRESS DECODER
    //
 
-   //select stage
+   //select stage(s)
    reg [`nSTAGE-1:0] stage_valid;
    always @ * begin
      integer j;
      stage_valid = {`nSTAGE{1'b0}};
        for(j=0; j<`nSTAGE; j=j+1)
-          if (addr[`CTR_ADDR_W-1 -: `nSTAGE_W] == j[`nSTAGE_W-1:0] || run_done)
+          if (addr[`CTR_ADDR_W-1 -: `nSTAGE_W] == j[`nSTAGE_W-1:0] || run_done || global_conf_clear)
             stage_valid[j] = valid;
    end 
 
@@ -61,7 +67,7 @@ module xversat #(
        done[j] = stage_wdata[j][0];
    end
 
-   //select stage ctr data
+   //select stage data
    reg [DATA_W-1:0] stage_wdata [`nSTAGE-1:0];
    always @ * begin
       integer j;
@@ -90,7 +96,7 @@ module xversat #(
                       //data/control interface
                       .valid(stage_valid[i]),
                       .we(we),
-                      .addr(addr[`CTR_ADDR_W-`nSTAGE_W-1:0]),
+                      .addr(stage_addr),
                       .rdata(rdata),
                       .wdata(stage_wdata[i]),
                       
