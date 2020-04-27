@@ -12,7 +12,7 @@ module xbs # (
 
            //flow interface
            input [2*`DATABUS_W-1:0]  flow_in,
-           output [DATA_W-1:0]	     flow_out,
+           output reg [DATA_W-1:0]   flow_out,
 
            //config data
            input [`BS_CONF_BITS-1:0] configdata

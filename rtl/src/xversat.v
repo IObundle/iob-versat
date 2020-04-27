@@ -61,6 +61,7 @@ module xversat #(
 
    //check done in all stages
    reg [`nSTAGE-1:0] done;
+   reg [DATA_W-1:0] stage_wdata [`nSTAGE-1:0];
    always @ * begin
      integer j;
      for(j = 0; j < `nSTAGE; j++)
@@ -68,7 +69,6 @@ module xversat #(
    end
 
    //select stage data
-   reg [DATA_W-1:0] stage_wdata [`nSTAGE-1:0];
    always @ * begin
       integer j;
       wdata = {DATA_W{1'b0}};
