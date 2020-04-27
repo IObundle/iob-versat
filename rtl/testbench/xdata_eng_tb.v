@@ -10,6 +10,15 @@
 
 module xdata_eng_tb;
 
+   parameter clk_per = 20;
+   parameter sMEM0A = 0;
+   parameter sALU0 = sMEM0A + 2*`nMEM;
+   parameter sALULITE0 = sALU0 + `nALU;
+   parameter sMUL0 = sALULITE0 + `nALULITE;
+   parameter sMULADD0 = sMUL0 + `nMUL;
+   parameter sBS0 = sMULADD0 + `nMULADD;
+   parameter DATA_W = 32;
+ 
    // Inputs
    reg 					clk;
    reg 					rst;
@@ -28,15 +37,6 @@ module xdata_eng_tb;
    //configuration bus
    reg [`CONF_BITS-1:0]			config_bus;
    
-   parameter clk_per = 20;
-   parameter sMEM0A = 0;
-   parameter sALU0 = sMEM0A + 2*`nMEM;
-   parameter sALULITE0 = sALU0 + `nALU;
-   parameter sMUL0 = sALULITE0 + `nALULITE;
-   parameter sMULADD0 = sMUL0 + `nMUL;
-   parameter sBS0 = sMULADD0 + `nMULADD;
-   parameter DATA_W = 32;
- 
    integer i, j, k, l, res;
    integer pixels[24:0], weights[8:0], bias;
 

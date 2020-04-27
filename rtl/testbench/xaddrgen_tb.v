@@ -1,7 +1,7 @@
 `timescale 1ns / 1ps
 `include "xversat.vh"
 
-module addrgen_tb;
+module xaddrgen_tb;
 
    // Inputs
    reg clk;
