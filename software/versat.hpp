@@ -16,7 +16,7 @@
 class CMemPort {
   public:
     int versat_base, mem_base, data_base;
-    int iter, per, duty, sel, start, shift, incr, delay, in_wr, rvrs, ext;
+    int iter, per, duty, sel, start, shift, incr, delay, in_wr, rvrs = 0, ext = 0;
 
     //Default constructor
     CMemPort() {
