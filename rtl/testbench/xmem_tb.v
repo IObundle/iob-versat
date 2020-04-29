@@ -7,7 +7,7 @@ module xmem_tb;
    //parameters 
    parameter clk_per = 20;
    parameter DATA_W = 32;
-   integer i, j, aux_addr, aux_val;
+   integer i, j, aux_addr, aux_val, err_cnt = 0;
    integer pixels[25-1:0];
    
    //control 
@@ -79,7 +79,7 @@ module xmem_tb;
       #(clk_per*5) rst = 0;
 
       //Testing mem interface
-      $display("\nTesting mem interface. Values read from mem:");
+      $display("\nTesting mem interface...");
       
       //Write values to memory
       for(i = 0; i < 25; i++) begin
@@ -88,40 +88,28 @@ module xmem_tb;
       end
 
       //Read values back from memory
-      for(i = 0; i < 5; i++) begin
-        for(j = 0; j < 5; j++) begin
-          cpu_read(i*5 + j, aux_val);
-          $write("%d ", aux_val);
-        end
-        $write("\n");
+      for(i = 0; i < 25; i++) begin
+        cpu_read(i, aux_val);
+	if(aux_val != pixels[i]) err_cnt++;
       end
 
+      //Check mem interface
+      if(err_cnt == 0) $display("Mem interface passed test");
+      else $display("Mem interface failed test with %d errors", err_cnt);
+      err_cnt = 0;
+
       //Testing address generator and configuration bus
-      $display("\nTesting address generator and configuration bus");
+      $display("\nTesting address generator and configuration bus...");
 
       //configurations
       //simulate reading first 3x3 block of 5x5 feature map
       config_bits[2*`MEMP_CONF_BITS-1 -: `MEM_ADDR_W] = 3; //iterations
       config_bits[2*`MEMP_CONF_BITS-`MEM_ADDR_W-1 -: `PERIOD_W] = 3; //period
       config_bits[2*`MEMP_CONF_BITS-`MEM_ADDR_W-`PERIOD_W-1 -: `PERIOD_W] = 3; //duty
-      config_bits[2*`MEMP_CONF_BITS-`MEM_ADDR_W-2*`PERIOD_W-`N_W-3*`MEM_ADDR_W-1 -: `PERIOD_W] = 0; //delay
+      config_bits[2*`MEMP_CONF_BITS-4*`MEM_ADDR_W-2*`PERIOD_W-`N_W-1 -: `PERIOD_W] = 0; //delay
       config_bits[2*`MEMP_CONF_BITS-`MEM_ADDR_W-2*`PERIOD_W-`N_W-1 -: `MEM_ADDR_W] = 0; //start
-      config_bits[2*`MEMP_CONF_BITS-`MEM_ADDR_W-2*`PERIOD_W-`N_W-`MEM_ADDR_W-1 -: `MEM_ADDR_W] = 5-3; //shift
-      config_bits[2*`MEMP_CONF_BITS-`MEM_ADDR_W-2*`PERIOD_W-`N_W-2*`MEM_ADDR_W-1 -: `MEM_ADDR_W] = 1; //incr
-      config_bits[2*`MEMP_CONF_BITS-`MEM_ADDR_W-2*`PERIOD_W-`N_W-3*`MEM_ADDR_W-`PERIOD_W-1-1-1-1 -: 1] = 1; //output address
-
-      //display pixels that should be read
-      $display("\nExpected pixels read (first 3x3 block)");
-      aux_addr = 0;
-      for(i = 0; i < 3; i++) begin
-        for(j = 0; j < 3; j++) begin
-          $write("%d ", pixels[aux_addr]);
-          aux_addr += 1;
-        end
-        $write("\n");
-        aux_addr += (5-3);
-      end
-      $display("\nActual pixels read");
+      config_bits[2*`MEMP_CONF_BITS-2*`MEM_ADDR_W-2*`PERIOD_W-`N_W-1 -: `MEM_ADDR_W] = 5-3; //shift
+      config_bits[2*`MEMP_CONF_BITS-3*`MEM_ADDR_W-2*`PERIOD_W-`N_W-1 -: `MEM_ADDR_W] = 1; //incr
 
       //run
       run = 1;
@@ -129,18 +117,22 @@ module xmem_tb;
       run = 0;
 
       //wait until done
-      i = 0;
       do begin
-        #clk_per;
-        aux_val = flow_out[2*DATA_W-1 -: DATA_W];
-        $write("%d ", aux_val);
-        if(i == 2) begin
-          i = 0;
-          $write("\n");
-        end else i++;
+
+	//compare expected and actual values
+	for(i = 0; i < 3; i++) begin
+          for(j = 0; j < 3; j++) begin
+            #clk_per;
+            if(flow_out[2*DATA_W-1 -: DATA_W] != pixels[aux_addr]) err_cnt++;
+            aux_addr += 1;
+          end
+          aux_addr += (5-3);
+        end
       end while(doneA == 0);
 
       //End simulation
+      if(err_cnt == 0) $display("Addr gen and conf bus passed test\n");
+      else $display("Addr gen and conf bus failed test with %d errors\n", err_cnt);
       $finish;
    end
 	

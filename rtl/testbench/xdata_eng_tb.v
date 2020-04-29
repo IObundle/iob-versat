@@ -37,7 +37,7 @@ module xdata_eng_tb;
    //configuration bus
    reg [`CONF_BITS-1:0]			config_bus;
    
-   integer i, j, k, l, res;
+   integer i, j, k, l, res, err_cnt = 0, res_exp;
    integer pixels[24:0], weights[8:0], bias;
 
    // Instantiate the Unit Under Test (UUT)
@@ -93,46 +93,6 @@ module xdata_eng_tb;
         end
       end
 
-      //read feature map
-      $display("\nReading input feature map");
-      for(i = 0; i < 5; i++) begin
-        for(j = 0; j < 5; j++) begin
-          cpu_read(i*5+j, res);
-          $write("%d ", res);
-        end
-        $write("\n"); 
-      end
-
-      //read kernel
-      $display("\nReading kernel");
-      for(i = 0; i < 3; i++) begin
-        for(j = 0; j < 3; j++) begin
-          cpu_read(2**`MEM_ADDR_W + 3*i + j, res);
-          $write("%d ", res);
-        end
-        $write("\n"); 
-      end
-
-      //reading bias
-      cpu_read(2**`MEM_ADDR_W + 9, res);
-      $display("\nBias: %0d ", res);
-
-     //expected result of convolution 
-     $display("\nExpected result of convolution");
-     for(i = 0; i < 3; i++) begin
-       for(j = 0; j < 3; j++) begin
-         res = 0;
-         for(k = 0; k < 3; k++) begin
-           for(l = 0; l < 3; l++) begin
-             res += pixels[i*5+j+k*5+l] * weights[k*3+l];
-           end
-         end
-         res += bias;
-         $write("%d", res);
-       end
-       $write("\n");
-     end
-
      //configure mem0A to read 3x3 block from feature map
      config_bus[`CONF_MEM0A_B -: `MEM_ADDR_W] = 3; //iterations
      config_bus[`CONF_MEM0A_B - `MEM_ADDR_W -: `PERIOD_W] = 3; //period
@@ -174,7 +134,6 @@ module xdata_eng_tb;
      config_bus[`CONF_MEM0A_B - 4*`MEMP_CONF_BITS - `MEM_ADDR_W-2*`PERIOD_W -: `N_W] = sALULITE0; //sel
 
      //Loop for performing convolution
-     $display("\nActual convolution result");
      for(i = 0; i < 3; i++) begin
        for(j = 0; j < 3; j++) begin
          
@@ -192,16 +151,23 @@ module xdata_eng_tb;
        end
      end
 
-     //read results
+     //compare expected and actual results
      for(i = 0; i < 3; i++) begin
        for(j = 0; j < 3; j++) begin
+         res_exp = bias;
+         for(k = 0; k < 3; k++) begin
+           for(l = 0; l < 3; l++) begin
+             res_exp += pixels[i*5+j+k*5+l] * weights[k*3+l];
+           end
+         end
          cpu_read(2**(`MEM_ADDR_W+1) + 3*i + j, res);
-         $write("%d ", res);
+         if(res != res_exp) err_cnt++;
        end
-       $write("\n"); 
      end
      
      //end simulation
+     if(err_cnt == 0) $display("\n2D Convolution test passed\n");
+     else $display("\n2D Convolution test failed\n");
      $finish;
    end
 	

@@ -51,8 +51,8 @@ module xversat_tb;
    parameter 			sBS0_p      = sMULADD0 + `nMULADD + (1<<(`N_W-1));
 
    //integer variables
-   integer i, j, k, l, m; 
-   integer pixels[25*5-1:0], weights[9*5-1:0], bias, res;
+   integer i, j, k, l, m, err_cnt = 0; 
+   integer pixels[25*5-1:0], weights[9*5-1:0], bias, res, res_exp;
 
    // Instantiate the Unit Under Test (UUT)
    xversat #(
@@ -77,8 +77,6 @@ module xversat_tb;
       $dumpvars();
 `endif
 	
-      $display("\nTesting one 3D convolution with five 5x5 input FMs and five 3x3 kernels");
-
       //initialize inputs
       clk = 0;
       rst = 1;
@@ -152,23 +150,6 @@ module xversat_tb;
       for(i = 0; i < 9; i++) begin
         weights[36+i] = $random%10;
         cpu_write(VERSAT_5 + MEM1 + i, weights[36+i]);
-      end
-
-      //expected result of 3D convolution
-      $display("\nExpected result of 3D convolution"); 
-      for(i = 0; i < 3; i++) begin
-        for(j = 0; j < 3; j++) begin
-          res = bias;
-          for(k = 0; k < 5; k++) begin
-            for(l = 0; l < 3; l++) begin
-              for(m = 0; m < 3; m++) begin
-                res += pixels[i*5+j+k*25+l*5+m] * weights[9*k+l*3+m];
-              end
-            end
-          end
-          $write("%d", res);
-        end
-        $write("\n");
       end
 
       ///////////////////////////////////////////////////////////////////////////////
@@ -258,7 +239,6 @@ module xversat_tb;
       // Convolution loop
       ///////////////////////////////////////////////////////////////////////////////
 
-      $display("\nActual convolution result");
       for(i = 0; i < 3; i++) begin
         for(j = 0; j < 3; j++) begin
           
@@ -286,11 +266,21 @@ module xversat_tb;
      
       for(i = 0; i < 3; i++) begin
         for(j = 0; j < 3; j++) begin
+          res_exp = bias;
+          for(k = 0; k < 5; k++) begin
+            for(l = 0; l < 3; l++) begin
+              for(m = 0; m < 3; m++) begin
+                res_exp += pixels[i*5+j+k*25+l*5+m] * weights[9*k+l*3+m];
+              end
+            end
+          end
           cpu_read(VERSAT_5 + MEM2 + i*3 + j, res);
-          $write("%d ", res);
+          if(res != res_exp) err_cnt++;
         end
-        $write("\n"); 
       end
+
+      if(err_cnt == 0) $display("\n3D convolution test passed\n");
+      else $display("\n3D convolution test failed\n");
 
       ///////////////////////////////////////////////////////////////////////////////
       // CONF MEM and CONF CLEAR TEST

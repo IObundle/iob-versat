@@ -59,11 +59,13 @@ module xconf_reg (
 
 	     if(ctr_addr == (`CONF_MEM0A + i*`MEMP_CONF_OFFSET + `MEMP_CONF_PER))
 	       conf_reg[`CONF_MEM0A_B-i*`MEMP_CONF_BITS-`MEM_ADDR_W -: `PERIOD_W] <= ctr_data_in[`PERIOD_W-1:0];
+
 	     if(ctr_addr == (`CONF_MEM0A + i*`MEMP_CONF_OFFSET + `MEMP_CONF_DUTY))
 	       conf_reg[`CONF_MEM0A_B-i*`MEMP_CONF_BITS-`MEM_ADDR_W-`PERIOD_W -: `PERIOD_W] <= ctr_data_in[`PERIOD_W-1:0];
 
 	     if(ctr_addr == (`CONF_MEM0A + i*`MEMP_CONF_OFFSET + `MEMP_CONF_SEL))
 	       conf_reg[`CONF_MEM0A_B-i*`MEMP_CONF_BITS-`MEM_ADDR_W-2*`PERIOD_W -: `N_W] <= ctr_data_in[`N_W-1:0];
+
 	     if(ctr_addr == (`CONF_MEM0A + i*`MEMP_CONF_OFFSET + `MEMP_CONF_START))
 	       conf_reg[`CONF_MEM0A_B-i*`MEMP_CONF_BITS-`MEM_ADDR_W-2*`PERIOD_W -`N_W -: `MEM_ADDR_W] <= ctr_data_in[`MEM_ADDR_W-1:0];
 
@@ -84,6 +86,18 @@ module xconf_reg (
 
 	     if(ctr_addr == (`CONF_MEM0A + i*`MEMP_CONF_OFFSET + `MEMP_CONF_IN_WR))
 	       conf_reg[`CONF_MEM0A_B-i*`MEMP_CONF_BITS-4*`MEM_ADDR_W-3*`PERIOD_W -`N_W-2 -: 1] <= ctr_data_in[0];
+
+	     if(ctr_addr == (`CONF_MEM0A + i*`MEMP_CONF_OFFSET + `MEMP_CONF_ITER2))
+               conf_reg[`CONF_MEM0A_B-i*`MEMP_CONF_BITS-4*`MEM_ADDR_W-3*`PERIOD_W -`N_W-3 -: `MEM_ADDR_W] <= ctr_data_in[`MEM_ADDR_W-1:0];
+
+             if(ctr_addr == (`CONF_MEM0A + i*`MEMP_CONF_OFFSET + `MEMP_CONF_PER2))
+               conf_reg[`CONF_MEM0A_B-i*`MEMP_CONF_BITS-5*`MEM_ADDR_W-3*`PERIOD_W -`N_W-3 -: `PERIOD_W] <= ctr_data_in[`PERIOD_W-1:0];
+
+             if(ctr_addr == (`CONF_MEM0A + i*`MEMP_CONF_OFFSET + `MEMP_CONF_SHIFT2))
+               conf_reg[`CONF_MEM0A_B-i*`MEMP_CONF_BITS-5*`MEM_ADDR_W-4*`PERIOD_W -`N_W-3 -: `MEM_ADDR_W] <= ctr_data_in[`MEM_ADDR_W-1:0];
+
+             if(ctr_addr == (`CONF_MEM0A + i*`MEMP_CONF_OFFSET + `MEMP_CONF_INCR2))
+               conf_reg[`CONF_MEM0A_B-i*`MEMP_CONF_BITS-6*`MEM_ADDR_W-4*`PERIOD_W -`N_W-3 -: `MEM_ADDR_W] <= ctr_data_in[`MEM_ADDR_W-1:0];  
 
 	   end // for (i=0; i<2*`nMEM; i=i+1)
 	
