@@ -2,40 +2,40 @@
 `include "xversat.vh"
 
 module xaddrgen (
-		 input                         clk,
-		 input                         rst,
-		 input                         init,
-		 input                         run,
+		 input                         		clk,
+		 input                         		rst,
+		 input                         		init,
+		 input                        		run,
+		 input 					pause,      
 
 		 //configurations 
-		 input [`MEM_ADDR_W - 1:0]        iterations,
-		 input [`PERIOD_W - 1:0]       period,
-		 input [`PERIOD_W - 1:0]       duty,
-		 input [`PERIOD_W - 1:0]       delay,
-		 input [`MEM_ADDR_W - 1:0]        start,
-		 input signed [`MEM_ADDR_W - 1:0] shift,
-		 input signed [`MEM_ADDR_W - 1:0] incr,
+		 input [`MEM_ADDR_W - 1:0]        	iterations,
+		 input [`PERIOD_W - 1:0]       		period,
+		 input [`PERIOD_W - 1:0]       		duty,
+		 input [`PERIOD_W - 1:0]       		delay,
+		 input [`MEM_ADDR_W - 1:0]        	start,
+		 input signed [`MEM_ADDR_W - 1:0] 	shift,
+		 input signed [`MEM_ADDR_W - 1:0] 	incr,
 
 		 //outputs 
-		 output reg [`MEM_ADDR_W - 1:0]   addr,
-		 output reg                    mem_en,
-		 output reg                    done
+		 output reg [`MEM_ADDR_W - 1:0]   	addr,
+		 output reg                    		mem_en,
+		 output reg                    		done
 		 );
 
-   reg signed [`PERIOD_W :0]                   per_cnt, per_cnt_nxt; //period count
-   wire [`PERIOD_W :0]                         period_int, duty_int;
+   reg signed [`PERIOD_W :0]                   		per_cnt, per_cnt_nxt; //period count
+   wire [`PERIOD_W :0]                         		period_int, duty_int;
    
-   reg [`MEM_ADDR_W - 1:0]                        addr_nxt;
+   reg [`MEM_ADDR_W - 1:0]                        	addr_nxt;
    
-   reg [`MEM_ADDR_W - 1:0]                        iter, iter_nxt; //iterations count 
+   reg [`MEM_ADDR_W - 1:0]                        	iter, iter_nxt; //iterations count 
 
-
-   reg 					       mem_en_nxt;
-   reg 					       done_nxt;
-   
+   reg 					       		mem_en_nxt;
+   reg 					       		done_nxt;
+   reg							run_nxt;
 
    parameter IDLE=1'b0, RUN=1'b1;   
-   reg 					       state, state_nxt;
+   reg 					       		state, state_nxt;
    
    assign period_int = {1'b0, period};
    assign duty_int = {1'b0, duty};
@@ -61,12 +61,19 @@ module xaddrgen (
 	 if(run) begin
 	    state_nxt = RUN;
 	    done_nxt = 1'b0;
+	    run_nxt = 1'b0;
 
 	    if(delay == `PERIOD_W'b0)
 	      mem_en_nxt = 1'b1;
 	    
 	 end 
       end else begin //state = RUN
+
+	 //check for successive run
+	 if(run_nxt) begin
+	   done_nxt = 1'b0;
+	   run_nxt = 1'b0;
+	 end
 
 	 //compute mem_en_nxt
 	 if ( per_cnt == {{1'b0},{`PERIOD_W'b0}}    ||    (per_cnt == period_int && iter != iterations) )
@@ -85,7 +92,6 @@ module xaddrgen (
 	 if (per_cnt == period_int) 
 	   iter_nxt = iter + 1'b1;
 
-
 	 //compute addr_nxt
 	 if(mem_en)
 	   addr_nxt = addr + incr;
@@ -99,8 +105,13 @@ module xaddrgen (
 	 
 	 //compute state_nxt
 	 if(iter == iterations && per_cnt == period_int) begin 
-	    state_nxt = IDLE;
 	    done_nxt = 1'b1;
+	    if(run) begin
+	      addr_nxt = start;
+	      iter_nxt = `MEM_ADDR_W'd1;
+	      mem_en_nxt = 1'b1;
+	      run_nxt = 1'b1;
+	    end else state_nxt = IDLE;
 	 end
 	 
       end // else: !if(state == IDLE)
@@ -116,7 +127,7 @@ module xaddrgen (
 	addr <= `MEM_ADDR_W'b0;
 	per_cnt <= `PERIOD_W'b0;
 	iter <= `MEM_ADDR_W'b0;
-     end else begin 
+     end else if (!pause) begin 
 	state <= state_nxt;
 	mem_en <= mem_en_nxt;
 	done <= done_nxt;

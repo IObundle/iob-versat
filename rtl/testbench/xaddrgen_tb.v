@@ -6,8 +6,8 @@ module xaddrgen_tb;
    // Inputs
    reg clk;
    reg rst;
-   reg init;
    reg run;
+   reg pause;
    
    //configurations
    reg [`MEM_ADDR_W - 1:0]  	iterations;
@@ -24,14 +24,15 @@ module xaddrgen_tb;
    wire 		 	done;
    
    parameter clk_per = 20;
-   integer i, j, aux_addr;
+   integer i, j, aux_addr, cnt_err = 0;
   
    // Instantiate the Unit Under Test (UUT)
    xaddrgen uut (
 		.clk(clk), 
 		.rst(rst), 
-		.init(init),
+		.init(run),
 		.run(run),
+		.pause(pause),
 		.iterations(iterations), 
 		.period(period), 
 		.duty(duty), 
@@ -54,8 +55,8 @@ module xaddrgen_tb;
       // Initialize Inputs
       clk = 0;
       rst = 1;
-      init = 0;
       run = 0;
+      pause = 0;
 
       //configurations
       //simulate reading first 3x3 block of 5x5 feature map
@@ -66,34 +67,33 @@ module xaddrgen_tb;
       start = 0;      
       shift = 5-3;
       incr = 1;
-
-      //display addr values that should be generated
-      $display("\nExpected addr values");
       aux_addr = start;
-      for(i = 0; i < iterations; i++) begin
-        for(j = 0; j < period; j++) begin
-          $display("Address %d", aux_addr);
-          aux_addr += incr;
-        end
-        aux_addr += shift;
-      end
-      $display("\nActual addr values");
-      
+
       // Wait 100 ns for global reset to finish
       #(clk_per*5) rst = 0;
       
       //run
-      init = 1;
       run = 1;
       #(clk_per);
-      init = 0;
       run = 0;
 
       //wait until done
       do begin
-        if(mem_en) $display("Address %d", addr);
-        @(posedge clk) #1;
+
+	//compare expected and actual addr
+        for(i = 0; i < iterations; i++) begin
+          for(j = 0; j < period; j++) begin
+	    if(aux_addr != addr) cnt_err++;
+            aux_addr += incr;
+	    #clk_per;
+          end
+          aux_addr += shift;
+        end
       end while(done == 0);
+
+      //end simulation
+      if(cnt_err == 0) $display("\naddrgen ran successfully\n");
+      else $display("\naddrgen fail with %d errors\n", cnt_err);
       $finish;      
 
    end
