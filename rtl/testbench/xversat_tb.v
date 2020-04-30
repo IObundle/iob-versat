@@ -8,6 +8,16 @@
 `include "xbsdefs.vh"
 `include "xconfdefs.vh"
 
+`define iter    3
+`define per     3
+`define duty    3
+`define shift   (5-3)
+`define incr    1
+`define iter2   3
+`define per2    3
+`define shift2  (5-3)
+`define incr2   1
+
 module xversat_tb;
 
    parameter			ADDR_W = 32;
@@ -26,7 +36,7 @@ module xversat_tb;
    wire [DATA_W-1:0]     	wdata;
 
    //parameters
-   parameter 			clk_per     = 20;
+   parameter 			clk_per     = 10;
    parameter			VERSAT_1    = (0<<(`CTR_ADDR_W-`nSTAGE_W));
    parameter			VERSAT_2    = (1<<(`CTR_ADDR_W-`nSTAGE_W));
    parameter			VERSAT_3    = (2<<(`CTR_ADDR_W-`nSTAGE_W));
@@ -53,6 +63,7 @@ module xversat_tb;
    //integer variables
    integer i, j, k, l, m, err_cnt = 0; 
    integer pixels[25*5-1:0], weights[9*5-1:0], bias, res, res_exp;
+   integer start_t, end_t, delay = 0, alu_sel;
 
    // Instantiate the Unit Under Test (UUT)
    xversat #(
@@ -86,168 +97,67 @@ module xversat_tb;
       rdata = 0;
 
       // Wait 100 ns for global reset to finish
-      #(clk_per*5) rst = 0;
+      #(clk_per*10) rst = 0;
 
-      //write 5x5 feature map in mem0 for VERSAT 1
-      for(i = 0; i < 25; i++) begin
-        pixels[i] = $random%50;
-        cpu_write(VERSAT_1 + MEM0 + i, pixels[i]);
+      //store data in versat mems
+      for(j = 0; j < 5; j++) begin
+
+        //write 5x5 feature map in mem0
+        for(i = 0; i < 25; i++) begin
+          pixels[25*j+i] = $random%50;
+          cpu_write((j<<(`CTR_ADDR_W-`nSTAGE_W)) + MEM0 + i, pixels[25*j+i]);
+        end
+
+        //write 3x3 kernel in mem1
+        for(i = 0; i < 9; i++) begin
+          weights[9*j+i] = $random%10;
+          cpu_write((j<<(`CTR_ADDR_W-`nSTAGE_W)) + MEM1 + i, weights[9*j+i]);
+        end
+
+        //write bias after weights of VERSAT1
+        if(j == 0) begin
+          bias = $random%20;
+          cpu_write(VERSAT_1 + MEM1 + 9, bias);
+        end
       end
 
-      //write 3x3 kernel and bias in mem1 for VERSAT1
-      for(i = 0; i < 9; i++) begin
-        weights[i] = $random%10;
-        cpu_write(VERSAT_1 + MEM1 + i, weights[i]);
-      end
+      ///////////////////////////////////////////////////////////////////////////////////////////////////////////////
+      // 3D convolution with 2-loop addrgen
+      ///////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-      //write bias after weights of VERSAT1
-      bias = $random%20;
-      cpu_write(VERSAT_1 + MEM1 + 9, bias);
+      alu_sel = sMEM0A+2;
+      for(i = 0; i < 5; i++) begin
 
-      //write 5x5 feature map in mem0 for VERSAT 2
-      for(i = 0; i < 25; i++) begin
-        pixels[25+i] = $random%50;
-        cpu_write(VERSAT_2 + MEM0 + i, pixels[25+i]);
-      end
+        //configure mem0A to read 3x3 block from feature map
+        config_mem(i<<(`CTR_ADDR_W-`nSTAGE_W), 0, `iter, `per, `duty, `shift, 1, delay, 0, 0);
 
-      //write 3x3 kernel and bias in mem1 for VERSAT2
-      for(i = 0; i < 9; i++) begin
-        weights[9+i] = $random%10;
-        cpu_write(VERSAT_2 + MEM1 + i, weights[9+i]);
-      end
-
-      //write 5x5 feature map in mem0 for VERSAT 3
-      for(i = 0; i < 25; i++) begin
-        pixels[50+i] = $random%50;
-        cpu_write(VERSAT_3 + MEM0 + i, pixels[50+i]);
-      end
-
-      //write 3x3 kernel and bias in mem1 for VERSAT3
-      for(i = 0; i < 9; i++) begin
-        weights[18+i] = $random%10;
-        cpu_write(VERSAT_3 + MEM1 + i, weights[18+i]);
-      end
-
-      //write 5x5 feature map in mem0 for VERSAT 4
-      for(i = 0; i < 25; i++) begin
-        pixels[75+i] = $random%50;
-        cpu_write(VERSAT_4 + MEM0 + i, pixels[75+i]);
-      end
-
-      //write 3x3 kernel and bias in mem1 for VERSAT4
-      for(i = 0; i < 9; i++) begin
-        weights[27+i] = $random%10;
-        cpu_write(VERSAT_4 + MEM1 + i, weights[27+i]);
-      end
-
-      //write 5x5 feature map in mem0 for VERSAT 5
-      for(i = 0; i < 25; i++) begin
-        pixels[100+i] = $random%50;
-        cpu_write(VERSAT_5 + MEM0 + i, pixels[100+i]);
-      end
-
-      //write 3x3 kernel and bias in mem1 for VERSAT5
-      for(i = 0; i < 9; i++) begin
-        weights[36+i] = $random%10;
-        cpu_write(VERSAT_5 + MEM1 + i, weights[36+i]);
-      end
-
-      ///////////////////////////////////////////////////////////////////////////////
-      // VERSAT 1
-      ///////////////////////////////////////////////////////////////////////////////
-
-      //configure mem0A to read 3x3 block from feature map
-      config_mem(VERSAT_1, 0, 3, 3, 3, 5-3, 1, 0, 0, 0);
-
-      //configure mem1A to read kernel
-      config_mem(VERSAT_1, 2, 10, 1, 1, 0, 1, 0, 0, 0);
+        //configure mem1A to read kernel
+        config_mem(i<<(`CTR_ADDR_W-`nSTAGE_W), 2, 1, 10, 10, 0, 1, delay, 0, 0);
       
-      //configure muladd0
-      config_muladd(VERSAT_1, sMEM0A, sMEM0A+2, `MULADD_MUL_LOW_MACC, 1, 9, `MEMP_LAT);
+        //configure muladd0
+        config_muladd(i<<(`CTR_ADDR_W-`nSTAGE_W), sMEM0A, sMEM0A+2, `MULADD_MUL_LOW_MACC, 1, 9, `MEMP_LAT + delay);
 
-      //configure ALULite0 to add bias to muladd result
-      config_alulite(VERSAT_1, sMEM0A+2, sMULADD0, `ALULITE_ADD);
+        //configure ALULite0 to add bias to muladd result
+        config_alulite(i<<(`CTR_ADDR_W-`nSTAGE_W), alu_sel, sMULADD0, `ALULITE_ADD);
 
-      ///////////////////////////////////////////////////////////////////////////////
-      // VERSAT 2
-      ///////////////////////////////////////////////////////////////////////////////
-
-      //configure mem0A to read 3x3 block from feature map
-      config_mem(VERSAT_2, 0, 3, 3, 3, 5-3, 1, 2, 0, 0);
-
-      //configure mem1A to read kernel
-      config_mem(VERSAT_2, 2, 10, 1, 1, 0, 1, 2, 0, 0);
-      
-      //configure muladd0
-      config_muladd(VERSAT_2, sMEM0A, sMEM0A+2, `MULADD_MUL_LOW_MACC, 1, 9, `MEMP_LAT+2);
-
-      //configure ALULite0 to add bias to muladd result
-      config_alulite(VERSAT_2, sALULITE0_p, sMULADD0, `ALULITE_ADD);
-
-      ///////////////////////////////////////////////////////////////////////////////
-      // VERSAT 3
-      ///////////////////////////////////////////////////////////////////////////////
-
-      //configure mem0A to read 3x3 block from feature map
-      config_mem(VERSAT_3, 0, 3, 3, 3, 5-3, 1, 4, 0, 0);
-
-      //configure mem1A to read kernel
-      config_mem(VERSAT_3, 2, 10, 1, 1, 0, 1, 4, 0, 0);
-      
-      //configure muladd0
-      config_muladd(VERSAT_3, sMEM0A, sMEM0A+2, `MULADD_MUL_LOW_MACC, 1, 9, `MEMP_LAT+4);
-
-      //configure ALULite0 to add bias to muladd result
-      config_alulite(VERSAT_3, sALULITE0_p, sMULADD0, `ALULITE_ADD);
-
-      ///////////////////////////////////////////////////////////////////////////////
-      // VERSAT 4
-      ///////////////////////////////////////////////////////////////////////////////
-
-      //configure mem0A to read 3x3 block from feature map
-      config_mem(VERSAT_4, 0, 3, 3, 3, 5-3, 1, 6, 0, 0);
-
-      //configure mem1A to read kernel
-      config_mem(VERSAT_4, 2, 10, 1, 1, 0, 1, 6, 0, 0);
-
-      //configure muladd0
-      config_muladd(VERSAT_4, sMEM0A, sMEM0A+2, `MULADD_MUL_LOW_MACC, 1, 9, `MEMP_LAT+6);
-
-      //configure ALULite0 to add bias to muladd result
-      config_alulite(VERSAT_4, sALULITE0_p, sMULADD0, `ALULITE_ADD);
-
-      ///////////////////////////////////////////////////////////////////////////////
-      // VERSAT 5
-      ///////////////////////////////////////////////////////////////////////////////
-
-      //configure mem0A to read 3x3 block from feature map
-      config_mem(VERSAT_5, 0, 3, 3, 3, 5-3, 1, 8, 0, 0);
-
-      //configure mem1A to read kernel
-      config_mem(VERSAT_5, 2, 10, 1, 1, 0, 1, 8, 0, 0);
-      
-      //configure muladd0
-      config_muladd(VERSAT_5, sMEM0A, sMEM0A+2, `MULADD_MUL_LOW_MACC, 1, 9, `MEMP_LAT+8);
-
-      //configure mem1A to read kernel
-      config_alulite(VERSAT_5, sALULITE0_p, sMULADD0, `ALULITE_ADD);
+        //update variables
+        if(i != 4) delay += 2;
+        if(i == 0) alu_sel = sALULITE0_p;
+      end
 
       //config mem2A to store ALULite output
-      config_mem(VERSAT_5, 4, 1, 1, 1, 0, 1, `MEMP_LAT + 8 + `MULADD_LAT + `ALULITE_LAT + 8, sALULITE0, 1);
+      config_mem(VERSAT_5, 4, 1, 1, 1, 0, 1, `MEMP_LAT + 8 + `MULADD_LAT + `ALULITE_LAT + delay, sALULITE0, 1);
 
       ///////////////////////////////////////////////////////////////////////////////
       // Convolution loop
       ///////////////////////////////////////////////////////////////////////////////
 
-      for(i = 0; i < 3; i++) begin
-        for(j = 0; j < 3; j++) begin
+      start_t = $time;
+      for(i = 0; i < `iter2; i++) begin
+        for(j = 0; j < `per2; j++) begin
           
           //configure start values of memories
-          config_mem_start(VERSAT_1, 0, i*5+j);
-          config_mem_start(VERSAT_2, 0, i*5+j);
-          config_mem_start(VERSAT_3, 0, i*5+j);
-          config_mem_start(VERSAT_4, 0, i*5+j);
-          config_mem_start(VERSAT_5, 0, i*5+j);
+	  for(k = 0; k < 5; k++) config_mem_start(k<<(`CTR_ADDR_W-`nSTAGE_W), 0, i*5+j);
           config_mem_start(VERSAT_5, 4, i*3+j);
 
           //run configurations
@@ -259,17 +169,18 @@ module xversat_tb;
           while(res == 0);
         end
       end
+      end_t = $time;
 
       ///////////////////////////////////////////////////////////////////////////////
       // DISPLAY RESULTS
       ///////////////////////////////////////////////////////////////////////////////
      
-      for(i = 0; i < 3; i++) begin
-        for(j = 0; j < 3; j++) begin
+      for(i = 0; i < `iter2; i++) begin
+        for(j = 0; j < `per2; j++) begin
           res_exp = bias;
           for(k = 0; k < 5; k++) begin
-            for(l = 0; l < 3; l++) begin
-              for(m = 0; m < 3; m++) begin
+            for(l = 0; l < `iter; l++) begin
+              for(m = 0; m < `per; m++) begin
                 res_exp += pixels[i*5+j+k*25+l*5+m] * weights[9*k+l*3+m];
               end
             end
@@ -279,8 +190,80 @@ module xversat_tb;
         end
       end
 
-      if(err_cnt == 0) $display("\n3D convolution test passed\n");
-      else $display("\n3D convolution test failed\n");
+      if(err_cnt == 0) $display("\n3D convolution test with 2-loop addrgen passed in %0d ns", (end_t-start_t));
+      else $display("\n3D convolution test with 2-loop addrgen failed with %0d errors", err_cnt);
+      err_cnt = 0;
+
+      ///////////////////////////////////////////////////////////////////////////////////////////////////////////////
+      // 3D convolution with 4-loop addrgen
+      ///////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+      alu_sel = sMEM0A+3;
+      delay = 0;
+
+      //configure mem1B to read bias
+      config_mem(VERSAT_1, 3, 1, 1, 1, 0, 0, 0, 0, 0);
+      config_mem_start(VERSAT_1, 3, 9);
+
+      for(i = 0; i < 5; i++) begin
+
+        //configure mem0A to read 3x3 block from feature map
+	config_mem2(i<<(`CTR_ADDR_W-`nSTAGE_W), 0, `iter2, `per2, `shift2, `incr2);
+        config_mem_start(i<<(`CTR_ADDR_W-`nSTAGE_W), 0, 0);
+
+        //configure mem1A to read kernel
+        config_mem(i<<(`CTR_ADDR_W-`nSTAGE_W), 2, 9, 9, 9, -9, 1, delay, 0, 0);
+      
+        //configure muladd0
+        config_muladd(i<<(`CTR_ADDR_W-`nSTAGE_W), sMEM0A, sMEM0A+2, `MULADD_MUL_LOW_MACC, 9, 9, `MEMP_LAT + delay);
+
+        //configure ALULite0 to add bias to muladd result
+        config_alulite(i<<(`CTR_ADDR_W-`nSTAGE_W), alu_sel, sMULADD0, `ALULITE_ADD);
+
+        //update variables
+        if(i != 4) delay += 2;
+        if(i == 0) alu_sel = sALULITE0_p;
+      end
+
+      //config mem2A to store ALULite output
+      config_mem(VERSAT_5, 4, 9, 9, 1, 0, 1, `MEMP_LAT + 8 + `MULADD_LAT + `ALULITE_LAT + delay, sALULITE0, 1);
+      config_mem_start(VERSAT_5, 4, 50);
+
+      ///////////////////////////////////////////////////////////////////////////////
+      // Convolution
+      ///////////////////////////////////////////////////////////////////////////////
+
+      //run configurations
+      start_t = $time;
+      cpu_write(RUN_DONE, 1);
+
+      //wait until config is done
+      do
+        cpu_read(RUN_DONE, res);
+      while(res == 0);
+      end_t = $time;
+
+      ///////////////////////////////////////////////////////////////////////////////
+      // DISPLAY RESULTS
+      ///////////////////////////////////////////////////////////////////////////////
+     
+      for(i = 0; i < `iter2; i++) begin
+        for(j = 0; j < `per2; j++) begin
+          res_exp = bias;
+          for(k = 0; k < 5; k++) begin
+            for(l = 0; l < `iter; l++) begin
+              for(m = 0; m < `per; m++) begin
+                res_exp += pixels[i*5+j+k*25+l*5+m] * weights[9*k+l*3+m];
+              end
+            end
+          end
+          cpu_read(VERSAT_5 + MEM2 + i*3 + j + 50, res);
+          if(res != res_exp) err_cnt++;
+        end
+      end
+
+      if(err_cnt == 0) $display("\n3D convolution test with 4-loop addrgen passed in %0d ns\n", (end_t-start_t));
+      else $display("\n3D convolution test with 4-loop addrgen failed with %0d errors\n", err_cnt);
 
       ///////////////////////////////////////////////////////////////////////////////
       // CONF MEM and CONF CLEAR TEST
@@ -336,6 +319,21 @@ module xversat_tb;
       cpu_write(base_addr + `MEMP_CONF_DELAY, delay);
       cpu_write(base_addr + `MEMP_CONF_SEL, sel);
       cpu_write(base_addr + `MEMP_CONF_IN_WR, in_wr);
+   endtask   
+
+   task config_mem2;
+      input integer stage;
+      input integer mem_num;
+      input integer iter2;
+      input integer per2;
+      input integer shift2;
+      input integer incr2;
+      integer base_addr;
+      base_addr = stage + CONF_BASE + `CONF_MEM0A + mem_num*`MEMP_CONF_OFFSET;
+      cpu_write(base_addr + `MEMP_CONF_ITER2, iter2);
+      cpu_write(base_addr + `MEMP_CONF_PER2, per2);
+      cpu_write(base_addr + `MEMP_CONF_SHIFT2, shift2);
+      cpu_write(base_addr + `MEMP_CONF_INCR2, incr2);
    endtask   
 
    task config_mem_start;

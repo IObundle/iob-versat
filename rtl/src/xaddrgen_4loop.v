@@ -44,6 +44,9 @@ module xaddrgen_4loop (
    //update addrgenB after addrgenA is done
    wire                                                 pause = mem_en_reg_w & ~doneA;
 
+   //after first run, addrgenA start comes from addrgenB addr
+   wire	[`MEM_ADDR_W - 1:0]				startA = run ? start : addrB;
+
    //instantiate address generators
    xaddrgen addrgenA (
         .clk(clk),
@@ -55,7 +58,7 @@ module xaddrgen_4loop (
         .period(period),
         .duty(duty),
         .delay(delay),
-        .start(addrB),
+        .start(startA),
         .shift(shift),
         .incr(incr),
         .addr(addr),
@@ -72,7 +75,7 @@ module xaddrgen_4loop (
         .iterations(iterations2),
         .period(period2),
         .duty(period2),
-        .delay(`PERIOD_W'b0),
+        .delay(delay),
         .start(start),
         .shift(shift2),
         .incr(incr2),

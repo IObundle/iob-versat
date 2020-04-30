@@ -2,12 +2,22 @@
 
 `include "xmemdefs.vh"
 
+`define iter	3
+`define per  	3
+`define duty 	3
+`define shift 	(5-3)
+`define incr	1
+`define iter2	3
+`define per2	3
+`define shift2	(5-3)
+`define incr2	1
+
 module xmem_tb;
 
    //parameters 
    parameter clk_per = 20;
    parameter DATA_W = 32;
-   integer i, j, aux_addr, aux_val, err_cnt = 0;
+   integer i, j, k, l, aux_val, err_cnt = 0;
    integer pixels[25-1:0];
    
    //control 
@@ -102,14 +112,16 @@ module xmem_tb;
       $display("\nTesting address generator and configuration bus...");
 
       //configurations
-      //simulate reading first 3x3 block of 5x5 feature map
-      config_bits[2*`MEMP_CONF_BITS-1 -: `MEM_ADDR_W] = 3; //iterations
-      config_bits[2*`MEMP_CONF_BITS-`MEM_ADDR_W-1 -: `PERIOD_W] = 3; //period
-      config_bits[2*`MEMP_CONF_BITS-`MEM_ADDR_W-`PERIOD_W-1 -: `PERIOD_W] = 3; //duty
-      config_bits[2*`MEMP_CONF_BITS-4*`MEM_ADDR_W-2*`PERIOD_W-`N_W-1 -: `PERIOD_W] = 0; //delay
-      config_bits[2*`MEMP_CONF_BITS-`MEM_ADDR_W-2*`PERIOD_W-`N_W-1 -: `MEM_ADDR_W] = 0; //start
-      config_bits[2*`MEMP_CONF_BITS-2*`MEM_ADDR_W-2*`PERIOD_W-`N_W-1 -: `MEM_ADDR_W] = 5-3; //shift
-      config_bits[2*`MEMP_CONF_BITS-3*`MEM_ADDR_W-2*`PERIOD_W-`N_W-1 -: `MEM_ADDR_W] = 1; //incr
+      //simulate reading all 3x3 blocks of 5x5 feature map
+      config_bits[2*`MEMP_CONF_BITS-1 -: `MEM_ADDR_W] = `iter; //iterations
+      config_bits[2*`MEMP_CONF_BITS-`MEM_ADDR_W-1 -: `PERIOD_W] = `per; //period
+      config_bits[2*`MEMP_CONF_BITS-`MEM_ADDR_W-`PERIOD_W-1 -: `PERIOD_W] = `duty; //duty
+      config_bits[2*`MEMP_CONF_BITS-2*`MEM_ADDR_W-2*`PERIOD_W-`N_W-1 -: `MEM_ADDR_W] = `shift; //shift
+      config_bits[2*`MEMP_CONF_BITS-3*`MEM_ADDR_W-2*`PERIOD_W-`N_W-1 -: `MEM_ADDR_W] = `incr; //incr
+      config_bits[2*`MEMP_CONF_BITS-4*`MEM_ADDR_W-3*`PERIOD_W-`N_W-3-1 -: `MEM_ADDR_W] = `iter2; //iter2
+      config_bits[2*`MEMP_CONF_BITS-5*`MEM_ADDR_W-3*`PERIOD_W-`N_W-3-1 -: `PERIOD_W] = `per2; //per2
+      config_bits[2*`MEMP_CONF_BITS-5*`MEM_ADDR_W-4*`PERIOD_W-`N_W-3-1 -: `MEM_ADDR_W] = `shift2; //shift2
+      config_bits[2*`MEMP_CONF_BITS-6*`MEM_ADDR_W-4*`PERIOD_W-`N_W-3-1 -: `MEM_ADDR_W] = `incr2; //incr2
 
       //run
       run = 1;
@@ -122,11 +134,13 @@ module xmem_tb;
 	//compare expected and actual values
 	for(i = 0; i < 3; i++) begin
           for(j = 0; j < 3; j++) begin
-            #clk_per;
-            if(flow_out[2*DATA_W-1 -: DATA_W] != pixels[aux_addr]) err_cnt++;
-            aux_addr += 1;
+	    for(k = 0; k < 3; k++) begin
+              for(l = 0; l < 3; l++) begin
+                #clk_per;
+                if(flow_out[2*DATA_W-1 -: DATA_W] != pixels[i*5+j+k*5+l]) err_cnt++;
+	      end
+	    end
           end
-          aux_addr += (5-3);
         end
       end while(doneA == 0);
 
