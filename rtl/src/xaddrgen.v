@@ -32,7 +32,7 @@ module xaddrgen (
 
    reg 					       		mem_en_nxt;
    reg 					       		done_nxt;
-   reg							run_nxt;
+   reg							run_reg, run_nxt;
 
    parameter IDLE=1'b0, RUN=1'b1;   
    reg 					       		state, state_nxt;
@@ -41,15 +41,13 @@ module xaddrgen (
    assign duty_int = {1'b0, duty};
 
    always @ *  begin
-
       state_nxt = state;
-      
       done_nxt  = done;
       mem_en_nxt = mem_en;
-      
       per_cnt_nxt = per_cnt;
       addr_nxt = addr;
       iter_nxt = iter;
+      run_nxt = run_reg;
 
       if (state == IDLE) begin 
 	 if (init) begin 
@@ -70,7 +68,7 @@ module xaddrgen (
       end else begin //state = RUN
 
 	 //check for successive run
-	 if(run_nxt) begin
+	 if(run_reg) begin
 	   done_nxt = 1'b0;
 	   run_nxt = 1'b0;
 	 end
@@ -127,6 +125,7 @@ module xaddrgen (
 	addr <= `MEM_ADDR_W'b0;
 	per_cnt <= `PERIOD_W'b0;
 	iter <= `MEM_ADDR_W'b0;
+        run_reg <= 1'b0;
      end else if (!pause) begin 
 	state <= state_nxt;
 	mem_en <= mem_en_nxt;
@@ -134,6 +133,7 @@ module xaddrgen (
 	addr <= addr_nxt;
 	per_cnt <= per_cnt_nxt;
 	iter <= iter_nxt;
+        run_reg <= run_nxt;
      end 
 
 endmodule
