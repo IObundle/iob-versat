@@ -29,7 +29,7 @@
 `define MEMP_CONF_ITER2 	11
 `define MEMP_CONF_PER2 		12
 `define MEMP_CONF_SHIFT2 	13 
-`define MEMP_CONF_INCR2		14
+`define MEMP_CONF_INCR2 	14
 `define MEMP_CONF_OFFSET 	15
 
 //MEM latency
