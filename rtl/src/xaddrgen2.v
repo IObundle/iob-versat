@@ -1,7 +1,7 @@
 `timescale 1ns / 1ps
 `include "xversat.vh"
 
-module xaddrgen_4loop (
+module xaddrgen2 (
 		 input                                  clk,
 		 input                                  rst,
 		 input                                  run,

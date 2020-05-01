@@ -114,7 +114,7 @@ module xmem #(
    wire [DATA_W-1:0]     data_to_wrA = valid? rdata : inA ;
 
    //address generators
-   xaddrgen_4loop addrgenA (
+   xaddrgen2 addrgen2A (
 		      .clk(clk),
 		      .rst(rst),
 		      .run(run),
@@ -134,7 +134,7 @@ module xmem #(
 		      .done(doneA)
 		      );
 
-   xaddrgen_4loop addrgenB (
+   xaddrgen2 addrgen2B (
 		      .clk(clk),
 		      .rst(rst),
 		      .run(run),

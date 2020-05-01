@@ -1,7 +1,7 @@
 `timescale 1ns / 1ps
 `include "xversat.vh"
 
-module xaddrgen_4loop_tb;
+module xaddrgen2_tb;
 
    // Inputs
    reg clk;
@@ -27,7 +27,7 @@ module xaddrgen_4loop_tb;
    integer i, j, k, l, aux_addr, start_aux, cnt_err = 0;
 
    // Instantiate the Unit Under Test (UUT)
-   xaddrgen_4loop addrgen_4loop (
+   xaddrgen2 addrgen2 (
 	.clk(clk),
 	.rst(rst),
 	.run(run),

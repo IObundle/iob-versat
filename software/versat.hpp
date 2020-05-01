@@ -374,7 +374,7 @@ class CMulAdd {
 };//end class CMULADD
 #endif
 
-class CVersat {
+class CStage {
 
   public:
     int versat_base;
@@ -398,11 +398,11 @@ class CVersat {
   #endif
 
     //Default constructor
-    CVersat() {
+    CStage() {
     }
     
     //Default Constructor
-    CVersat(int versat_base) {
+    CStage(int versat_base) {
 
       //Define control and databus base address
       this->versat_base = versat_base;
@@ -444,13 +444,13 @@ class CVersat {
       if(addr < CONF_MEM_SIZE) MEMGET(versat_base, (CONF_BASE + CONF_MEM + addr));
     }
 #endif
-};//end class CVersat
+};//end class CStage
 
 //
 //VERSAT global variables
 //
 static int base;
-CVersat versat[nSTAGE];
+CStage stage[nSTAGE];
 int sMEMA[nMEM], sMEMA_p[nMEM], sMEMB[nMEM], sMEMB_p[nMEM];
 #if nALU>0
   int sALU[nALU], sALU_p[nALU];
@@ -476,7 +476,7 @@ inline void versat_init(int base_addr) {
   //init versat stages
   int i;
   base = base_addr;
-  for(i = 0; i < nSTAGE; i++) versat[i] = CVersat(base_addr + (i<<(CTR_ADDR_W-nSTAGE_W+2))); //+2 as RV32 is not byte addressable
+  for(i = 0; i < nSTAGE; i++) stage[i] = CStage(base_addr + (i<<(CTR_ADDR_W-nSTAGE_W+2))); //+2 as RV32 is not byte addressable
 
   //prepare sel variables
   int p_offset = (1<<(N_W-1));
