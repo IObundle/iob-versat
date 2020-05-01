@@ -73,11 +73,10 @@ module xalu_tb;
       #clk_per
         k=k+1;
 
-      file = $fopen ("xalu_tb_result.txt", "w");
       if(err_tb==1)
-        $fwrite (file, "Failed");
+        $display("\nALU test failed\n");
       else
-        $fwrite (file, "Passed");
+        $display("\nALU test passed\n");
 
       #clk_per $finish;
    end
@@ -163,8 +162,6 @@ module xalu_tb;
         $display ("Expected value %d, Got Value %d", result_compare, alu_result);
         err_tb = 1;
      end
-     else if(k > 0) 
-       $display("Operation number %d is correct. Expected %d, got %d", k, result_compare, alu_result);
 
    always
      #(clk_per/2)  clk =  ~ clk;

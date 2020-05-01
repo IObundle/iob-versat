@@ -86,6 +86,7 @@ module xmuladd # (
 	.rst(addrgen_rst),
 	.init(rst),
 	.run(rst & ready),
+	.pause(1'b0),
 	.iterations(iterations),
 	.period(period),
 	.duty(period),

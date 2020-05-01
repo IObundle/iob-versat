@@ -16,7 +16,8 @@
 class CMemPort {
   public:
     int versat_base, mem_base, data_base;
-    int iter, per, duty, sel, start, shift, incr, delay, in_wr, rvrs, ext;
+    int iter, per, duty, sel, start, shift, incr, delay, in_wr;
+    int rvrs = 0, ext = 0, iter2 = 0, per2 = 0, shift2 = 0, incr2 = 0;
 
     //Default constructor
     CMemPort() {
@@ -57,6 +58,13 @@ class CMemPort {
       this->in_wr = in_wr;
     }
 
+    void setConf(int iter2, int per2, int shift2, int incr2) {
+      this->iter2 = iter2;
+      this->per2 = per2;
+      this->shift2 = shift2;
+      this->incr2 = incr2;
+    }
+
     void writeConf() {
       MEMSET(versat_base, (mem_base + MEMP_CONF_ITER), iter);
       MEMSET(versat_base, (mem_base + MEMP_CONF_START), start);
@@ -69,6 +77,10 @@ class CMemPort {
       MEMSET(versat_base, (mem_base + MEMP_CONF_EXT), ext);
       MEMSET(versat_base, (mem_base + MEMP_CONF_IN_WR), in_wr);
       MEMSET(versat_base, (mem_base + MEMP_CONF_RVRS), rvrs);
+      MEMSET(versat_base, (mem_base + MEMP_CONF_ITER2), iter2);
+      MEMSET(versat_base, (mem_base + MEMP_CONF_PER2), per2);
+      MEMSET(versat_base, (mem_base + MEMP_CONF_SHIFT2), shift2);
+      MEMSET(versat_base, (mem_base + MEMP_CONF_INCR2), incr2);
     }
     void setIter(int iter) {
       MEMSET(versat_base, (this->mem_base + MEMP_CONF_ITER), iter);
@@ -91,7 +103,7 @@ class CMemPort {
       this->start = start;
     } 
     void setIncr(int incr) {
-      MEMSET(versat_base, (this->mem_base + MEMP_CONF_START), incr);
+      MEMSET(versat_base, (this->mem_base + MEMP_CONF_INCR), incr);
       this->incr = incr;
     } 
     void setShift(int shift) {
@@ -113,6 +125,22 @@ class CMemPort {
     void setInWr(int in_wr) {
       MEMSET(versat_base, (this->mem_base + MEMP_CONF_IN_WR), in_wr);
       this->in_wr = in_wr;
+    } 
+    void setIter2(int iter2) {
+      MEMSET(versat_base, (this->mem_base + MEMP_CONF_ITER2), iter2);
+      this->iter2 = iter2;
+    } 
+    void setPer2(int per2) {
+      MEMSET(versat_base, (this->mem_base + MEMP_CONF_PER2), per2);
+      this->per2 = per2;
+    } 
+    void setIncr2(int incr) {
+      MEMSET(versat_base, (this->mem_base + MEMP_CONF_INCR2), incr2);
+      this->incr2 = incr2;
+    } 
+    void setShift2(int shift2) {
+      MEMSET(versat_base, (this->mem_base + MEMP_CONF_SHIFT2), shift2);
+      this->shift2 = shift2;
     } 
 
     void write(int addr, int val) {
@@ -346,7 +374,7 @@ class CMulAdd {
 };//end class CMULADD
 #endif
 
-class CVersat {
+class CStage {
 
   public:
     int versat_base;
@@ -370,11 +398,11 @@ class CVersat {
   #endif
 
     //Default constructor
-    CVersat() {
+    CStage() {
     }
     
     //Default Constructor
-    CVersat(int versat_base) {
+    CStage(int versat_base) {
 
       //Define control and databus base address
       this->versat_base = versat_base;
@@ -416,13 +444,13 @@ class CVersat {
       if(addr < CONF_MEM_SIZE) MEMGET(versat_base, (CONF_BASE + CONF_MEM + addr));
     }
 #endif
-};//end class CVersat
+};//end class CStage
 
 //
 //VERSAT global variables
 //
 static int base;
-CVersat versat[nSTAGE];
+CStage stage[nSTAGE];
 int sMEMA[nMEM], sMEMA_p[nMEM], sMEMB[nMEM], sMEMB_p[nMEM];
 #if nALU>0
   int sALU[nALU], sALU_p[nALU];
@@ -448,7 +476,7 @@ inline void versat_init(int base_addr) {
   //init versat stages
   int i;
   base = base_addr;
-  for(i = 0; i < nSTAGE; i++) versat[i] = CVersat(base_addr + (i<<(CTR_ADDR_W-nSTAGE_W+2))); //+2 as RV32 is not byte addressable
+  for(i = 0; i < nSTAGE; i++) stage[i] = CStage(base_addr + (i<<(CTR_ADDR_W-nSTAGE_W+2))); //+2 as RV32 is not byte addressable
 
   //prepare sel variables
   int p_offset = (1<<(N_W-1));
