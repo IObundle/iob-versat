@@ -124,10 +124,11 @@ module xdata_eng_tb;
      //configure muladd
      config_bus[`CONF_MULADD0_B -: `N_W] = sMEM0A; //sela
      config_bus[`CONF_MULADD0_B - `N_W -: `N_W] = sMEM0A+2; //selb
-     config_bus[`CONF_MULADD0_B - 2*`N_W -: `MULADD_FNS_W] = `MULADD_MUL_LOW_MACC; //fns
+     config_bus[`CONF_MULADD0_B - 2*`N_W -: `MULADD_FNS_W] = `MULADD_MACC; //fns
      config_bus[`CONF_MULADD0_B - 2*`N_W - `MULADD_FNS_W -: `MEM_ADDR_W] = 1; //iterations
      config_bus[`CONF_MULADD0_B - 2*`N_W - `MULADD_FNS_W - `MEM_ADDR_W -: `PERIOD_W] = 9; //period
      config_bus[`CONF_MULADD0_B - 2*`N_W - `MULADD_FNS_W - `MEM_ADDR_W - `PERIOD_W -: `PERIOD_W] = `MEMP_LAT; //delay
+     config_bus[`CONF_MULADD0_B - 2*`N_W - `MULADD_FNS_W - `MEM_ADDR_W - 2*`PERIOD_W -: `SHIFT_W] = 32; //shift
 
      //configure ALULite to add bias to muladd result
      config_bus[`CONF_ALULITE0_B -: `N_W] = sMEM0A+2; //sela

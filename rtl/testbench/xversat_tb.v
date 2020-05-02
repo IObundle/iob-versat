@@ -135,7 +135,7 @@ module xversat_tb;
         config_mem(i<<(`CTR_ADDR_W-`nSTAGE_W), 2, 1, 10, 10, 0, 1, delay, 0, 0);
       
         //configure muladd0
-        config_muladd(i<<(`CTR_ADDR_W-`nSTAGE_W), sMEM0A, sMEM0A+2, `MULADD_MUL_LOW_MACC, 1, 9, `MEMP_LAT + delay);
+        config_muladd(i<<(`CTR_ADDR_W-`nSTAGE_W), sMEM0A, sMEM0A+2, `MULADD_MACC, 1, 9, `MEMP_LAT + delay, 32);
 
         //configure ALULite0 to add bias to muladd result
         config_alulite(i<<(`CTR_ADDR_W-`nSTAGE_W), alu_sel, sMULADD0, `ALULITE_ADD);
@@ -215,7 +215,7 @@ module xversat_tb;
         config_mem(i<<(`CTR_ADDR_W-`nSTAGE_W), 2, 9, 9, 9, -9, 1, delay, 0, 0);
       
         //configure muladd0
-        config_muladd(i<<(`CTR_ADDR_W-`nSTAGE_W), sMEM0A, sMEM0A+2, `MULADD_MUL_LOW_MACC, 9, 9, `MEMP_LAT + delay);
+        config_muladd(i<<(`CTR_ADDR_W-`nSTAGE_W), sMEM0A, sMEM0A+2, `MULADD_MACC, 9, 9, `MEMP_LAT + delay, 32);
 
         //configure ALULite0 to add bias to muladd result
         config_alulite(i<<(`CTR_ADDR_W-`nSTAGE_W), alu_sel, sMULADD0, `ALULITE_ADD);
@@ -353,6 +353,7 @@ module xversat_tb;
       input integer iter;
       input integer per;
       input integer delay;
+      input integer shift;
       integer base_addr;
       base_addr = stage + CONF_BASE + `CONF_MULADD0;
       cpu_write(base_addr + `MULADD_CONF_SELA, selA);
@@ -361,6 +362,7 @@ module xversat_tb;
       cpu_write(base_addr + `MULADD_CONF_ITER, iter);
       cpu_write(base_addr + `MULADD_CONF_PER, per);
       cpu_write(base_addr + `MULADD_CONF_DELAY, delay);
+      cpu_write(base_addr + `MULADD_CONF_SHIFT, shift);
    endtask
 
    task config_alulite;

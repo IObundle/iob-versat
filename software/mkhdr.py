@@ -13,7 +13,7 @@ if len(sys.argv) != 3:
     sys.exit()
 
 #List with defines to ignore
-ignore_list = ["FNS_W", "_BITS", "0_B", "A_B", "PERIOD_W", "DATABUS_W"]
+ignore_list = ["FNS_W", "_BITS", "0_B", "A_B", "PERIOD_W", "DATABUS_W", "SHIFT_W"]
 
 #Write include file
 versat = open(sys.argv[2] + "/versat.h", "w")

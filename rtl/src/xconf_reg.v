@@ -9,7 +9,9 @@
 `include "xmuladddefs.vh"
 `include "xbsdefs.vh"
 
-module xconf_reg (
+module xconf_reg # ( 
+      parameter			    DATA_W = 32
+) (
       input                         clk,
       input                         rst,
       
@@ -157,6 +159,9 @@ module xconf_reg (
 
 	      if(ctr_addr == (`CONF_MULADD0 + i*`MULADD_CONF_OFFSET + `MULADD_CONF_DELAY))
 		conf_reg[`CONF_MULADD0_B - i*`MULADD_CONF_BITS - 2*`N_W - `MULADD_FNS_W - `MEM_ADDR_W - `PERIOD_W -: `PERIOD_W] <= ctr_data_in[`PERIOD_W-1:0];
+
+	      if(ctr_addr == (`CONF_MULADD0 + i*`MULADD_CONF_OFFSET + `MULADD_CONF_SHIFT))
+		conf_reg[`CONF_MULADD0_B - i*`MULADD_CONF_BITS - 2*`N_W - `MULADD_FNS_W - `MEM_ADDR_W - 2*`PERIOD_W -: `SHIFT_W] <= ctr_data_in[`SHIFT_W-1:0];
 	   end
 
 	   // configure BSs

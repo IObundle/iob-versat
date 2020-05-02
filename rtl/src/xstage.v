@@ -38,7 +38,9 @@ module xstage # (
    wire [`CONF_BITS-1:0]   		config_bus;
    
    //configuration module
-   xconf conf (
+   xconf # ( 
+	       .DATA_W(DATA_W)
+   ) conf (
 	       .clk(clk),
 	       .rst(rst),
 

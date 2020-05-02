@@ -8,7 +8,9 @@
 `include "xmuladddefs.vh"
 `include "xbsdefs.vh"
 
-module xconf_mem(
+module xconf_mem # ( 
+		 parameter		      DATA_W = 32
+	) (
 		 input 			      clk,
 		 input 			      rst,
 

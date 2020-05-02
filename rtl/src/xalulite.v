@@ -26,7 +26,6 @@ module xalulite # (
    reg [DATA_W:0]                                 ai;
    reg [DATA_W:0]                                 bz;
    wire [DATA_W:0]                                temp_adder;
-   wire [5:0]                                     data_out_clz_i;
    reg                                            cin;
 
    reg signed [DATA_W-1:0]                        result_int;
@@ -81,7 +80,7 @@ module xalulite # (
    // Computes result_int
    always @ * begin
 
-      result_int = temp_adder[31:0];
+      result_int = temp_adder[DATA_W-1:0];
 
       case (fns)
 	`ALULITE_OR : begin
@@ -91,12 +90,12 @@ module xalulite # (
 	   result_int = op_a_int & op_b_reg;
 	end
 	`ALULITE_CMP_SIG : begin
-	   result_int[31] = temp_adder[32] ;
+	   result_int[DATA_W-1] = temp_adder[DATA_W] ;
 	end
 	`ALULITE_MUX : begin
 	   result_int = op_b_reg;
 
-	   if(~op_a_reg[31]) begin
+	   if(~op_a_reg[DATA_W-1]) begin
 	      if(self_loop)
 	        result_int = flow_out;
 	      else
@@ -107,31 +106,31 @@ module xalulite # (
 	end
 	`ALULITE_ADD : begin
 	   if(self_loop) begin
-	      if(op_a_reg[31])
+	      if(op_a_reg[DATA_W-1])
 	        result_int = op_b_reg;
 	   end
 	end
 	`ALULITE_MAX : begin
-	   if (temp_adder[32] == 1'b0) begin
+	   if (temp_adder[DATA_W] == 1'b0) begin
 	      result_int = op_b_reg;
            end else begin
 	      result_int = op_a_int;
            end
 
 	   if(self_loop) begin
-	      if(op_a_reg[31])
+	      if(op_a_reg[DATA_W-1])
 	        result_int = flow_out;
 	   end
 	end
 	`ALULITE_MIN : begin
-	   if (temp_adder[32] == 1'b0) begin
+	   if (temp_adder[DATA_W] == 1'b0) begin
 	      result_int = op_a_int;
            end else begin
 	      result_int = op_b_reg;
            end
 
 	   if(self_loop) begin
-	      if(op_a_reg[31])
+	      if(op_a_reg[DATA_W-1])
 	        result_int = flow_out;
 	   end
 	end
@@ -141,39 +140,39 @@ module xalulite # (
    end
 
    // Computes temp_adder
-   assign temp_adder = ((bz & ({op_b_msb,op_b_reg}))) + ((ai ^ ({op_a_msb,op_a_int}))) + {{32{1'b0}},cin};
+   assign temp_adder = ((bz & ({op_b_msb,op_b_reg}))) + ((ai ^ ({op_a_msb,op_a_int}))) + {{DATA_W{1'b0}},cin};
 
    // Compute ai, cin, bz
    always @ * begin
       cin = 1'b 0;
-      ai = {33{1'b0}}; // will invert op_a_int if set to all ones
-      bz = {33{1'b1}}; // will zero op_b_reg if set to all zeros
+      ai = {DATA_W+1{1'b0}}; // will invert op_a_int if set to all ones
+      bz = {DATA_W+1{1'b1}}; // will zero op_b_reg if set to all zeros
 
       op_a_msb = 1'b0;
       op_b_msb = 1'b0;
 
       case(fns)
 	`ALULITE_CMP_SIG : begin
-	   ai = {33{1'b1}};
+	   ai = {DATA_W+1{1'b1}};
 	   cin = 1'b 1;
-	   op_a_msb = op_a_reg[31];
-	   op_b_msb = op_b_reg[31];
+	   op_a_msb = op_a_reg[DATA_W-1];
+	   op_b_msb = op_b_reg[DATA_W-1];
 	end
 	`ALULITE_SUB : begin
-	   ai = {33{1'b1}};
+	   ai = {DATA_W+1{1'b1}};
 	   cin = 1'b 1;
 	end
 	`ALULITE_MAX : begin
-           ai = {33{1'b1}};
+           ai = {DATA_W+1{1'b1}};
            cin = 1'b 1;
-	   op_a_msb = op_a_int[31];
-	   op_b_msb = op_b_reg[31];
+	   op_a_msb = op_a_int[DATA_W-1];
+	   op_b_msb = op_b_reg[DATA_W-1];
 	end
 	`ALULITE_MIN : begin
-           ai = {33{1'b1}};
+           ai = {DATA_W+1{1'b1}};
            cin = 1'b 1;
-	   op_a_msb = op_a_int[31];
-	   op_b_msb = op_b_reg[31];
+	   op_a_msb = op_a_int[DATA_W-1];
+	   op_b_msb = op_b_reg[DATA_W-1];
 	end
 	default : begin
 	end

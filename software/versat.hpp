@@ -330,13 +330,14 @@ class CMulAdd {
       this->muladd_base = CONF_BASE + CONF_MULADD0 + i*MULADD_CONF_OFFSET;
     }
 
-    void setConf(int sela, int selb, int fns, int iter, int per, int delay) {
+    void setConf(int sela, int selb, int fns, int iter, int per, int delay, int shift) {
       this->sela = sela;
       this->selb = selb;
       this->fns = fns;
       this->iter = iter;
       this->per = per;
       this->delay = delay;
+      this->shift = shift;
     }
 
     void writeConf() {
@@ -346,6 +347,7 @@ class CMulAdd {
       MEMSET(versat_base, (muladd_base  + MULADD_CONF_ITER), iter);
       MEMSET(versat_base, (muladd_base  + MULADD_CONF_PER), per);
       MEMSET(versat_base, (muladd_base  + MULADD_CONF_DELAY), delay);
+      MEMSET(versat_base, (muladd_base  + MULADD_CONF_SHIFT), shift);
     }
     void setSelA(int sela) {
       MEMSET(versat_base, (this->muladd_base + MULADD_CONF_SELA), sela);
@@ -370,6 +372,10 @@ class CMulAdd {
     void setDelay(int delay) {
       MEMSET(versat_base, (this->muladd_base + MULADD_CONF_PER), delay);
       this->delay = delay;
+    }
+    void setShift(int shift) {
+      MEMSET(versat_base, (this->muladd_base + MULADD_CONF_SHIFT), shift);
+      this->shift = shift;
     }
 };//end class CMULADD
 #endif

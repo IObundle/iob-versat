@@ -8,7 +8,9 @@
 `include "xbsdefs.vh"
 `include "xconfdefs.vh"
 
-module xconf (
+module xconf # (
+	      parameter			   DATA_W = 32
+	) (
               input                        clk,
               input                        rst,
 
@@ -50,7 +52,9 @@ module xconf (
    
    
    //instantiate configuration register 
-   xconf_reg xconf_reg (
+   xconf_reg # ( 
+			.DATA_W(DATA_W)
+   ) xconf_reg (
 			.clk(clk),
 			.rst(rst),
 
@@ -70,7 +74,9 @@ module xconf (
 
 `ifdef CONF_MEM_USE
    //instantiate configuration memory
-   xconf_mem conf_mem (
+   xconf_mem # ( 
+		       .DATA_W(DATA_W)
+   ) conf_mem (
 		       .clk(clk),
 		       .rst(rst),	
 
