@@ -22,9 +22,6 @@
 `define MULADD_CONF_SHIFT     6
 `define MULADD_CONF_OFFSET    7
 
-//MULADD combinational architecture
-//`define MULADD_COMB
-
 //MULADD latency
 `ifdef MULADD_COMB
  `define MULADD_LAT 1

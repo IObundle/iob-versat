@@ -4,7 +4,7 @@ RTL_DIR = ../../rtl
 
 #include paths
 INCLUDE_DIR := $(RTL_DIR)/include
-HW_INCLUDE = -incdir $(INCLUDE_DIR)
+HW_INCLUDE = -incdir $(INCLUDE_DIR) -incdir $(INCLUDE_DIR)/versat
 
 #hardware defines
 HW_DEFINE = -define DEBUG
