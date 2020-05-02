@@ -27,7 +27,7 @@ module xdata_eng_tb;
    parameter sMUL0 = sALULITE0 + `nALULITE;
    parameter sMULADD0 = sMUL0 + `nMUL;
    parameter sBS0 = sMULADD0 + `nMULADD;
-   parameter DATA_W = 32;
+   parameter DATA_W = 16;
  
    // Inputs
    reg 					clk;
@@ -47,9 +47,10 @@ module xdata_eng_tb;
    //configuration bus
    reg [`CONF_BITS-1:0]			config_bus;
    
-   integer i, j, k, l, res, err_cnt = 0, res_exp;
+   integer i, j, k, l, err_cnt = 0;
    integer pixels[24:0], weights[8:0], bias;
    integer start_t, end_t;
+   reg signed [DATA_W-1:0] res, res_exp;
 
    // Instantiate the Unit Under Test (UUT)
    xdata_eng # ( 
@@ -128,7 +129,7 @@ module xdata_eng_tb;
      config_bus[`CONF_MULADD0_B - 2*`N_W - `MULADD_FNS_W -: `MEM_ADDR_W] = 1; //iterations
      config_bus[`CONF_MULADD0_B - 2*`N_W - `MULADD_FNS_W - `MEM_ADDR_W -: `PERIOD_W] = 9; //period
      config_bus[`CONF_MULADD0_B - 2*`N_W - `MULADD_FNS_W - `MEM_ADDR_W - `PERIOD_W -: `PERIOD_W] = `MEMP_LAT; //delay
-     config_bus[`CONF_MULADD0_B - 2*`N_W - `MULADD_FNS_W - `MEM_ADDR_W - 2*`PERIOD_W -: `SHIFT_W] = 32; //shift
+     config_bus[`CONF_MULADD0_B - 2*`N_W - `MULADD_FNS_W - `MEM_ADDR_W - 2*`PERIOD_W -: `SHIFT_W] = DATA_W; //shift
 
      //configure ALULite to add bias to muladd result
      config_bus[`CONF_ALULITE0_B -: `N_W] = sMEM0A+2; //sela

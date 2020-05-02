@@ -21,7 +21,7 @@
 module xversat_tb;
 
    parameter			ADDR_W = 32;
-   parameter			DATA_W = 32;
+   parameter			DATA_W = 16;
 
    //inputs
    reg 			   	clk;
@@ -62,8 +62,9 @@ module xversat_tb;
 
    //integer variables
    integer i, j, k, l, m, err_cnt = 0; 
-   integer pixels[25*5-1:0], weights[9*5-1:0], bias, res, res_exp;
+   integer pixels[25*5-1:0], weights[9*5-1:0], bias;
    integer start_t, end_t, delay = 0, alu_sel;
+   reg signed [DATA_W-1:0] res, res_exp;
 
    // Instantiate the Unit Under Test (UUT)
    xversat #(
@@ -135,7 +136,7 @@ module xversat_tb;
         config_mem(i<<(`CTR_ADDR_W-`nSTAGE_W), 2, 1, 10, 10, 0, 1, delay, 0, 0);
       
         //configure muladd0
-        config_muladd(i<<(`CTR_ADDR_W-`nSTAGE_W), sMEM0A, sMEM0A+2, `MULADD_MACC, 1, 9, `MEMP_LAT + delay, 32);
+        config_muladd(i<<(`CTR_ADDR_W-`nSTAGE_W), sMEM0A, sMEM0A+2, `MULADD_MACC, 1, 9, `MEMP_LAT + delay, DATA_W);
 
         //configure ALULite0 to add bias to muladd result
         config_alulite(i<<(`CTR_ADDR_W-`nSTAGE_W), alu_sel, sMULADD0, `ALULITE_ADD);
@@ -215,7 +216,7 @@ module xversat_tb;
         config_mem(i<<(`CTR_ADDR_W-`nSTAGE_W), 2, 9, 9, 9, -9, 1, delay, 0, 0);
       
         //configure muladd0
-        config_muladd(i<<(`CTR_ADDR_W-`nSTAGE_W), sMEM0A, sMEM0A+2, `MULADD_MACC, 9, 9, `MEMP_LAT + delay, 32);
+        config_muladd(i<<(`CTR_ADDR_W-`nSTAGE_W), sMEM0A, sMEM0A+2, `MULADD_MACC, 9, 9, `MEMP_LAT + delay, DATA_W);
 
         //configure ALULite0 to add bias to muladd result
         config_alulite(i<<(`CTR_ADDR_W-`nSTAGE_W), alu_sel, sMULADD0, `ALULITE_ADD);
