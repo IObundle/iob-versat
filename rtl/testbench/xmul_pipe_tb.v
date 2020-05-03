@@ -11,16 +11,15 @@
 `define NR_RND_VECS 200
 `define NR_SPECIAL_VECS 8
 `define NR_VECS (`NR_RND_VECS + `NR_SPECIAL_VECS)
-`define TEST_DATA_SZ (2*`NR_VECS) //for two operands
 
 module xmul_pipe_tb;
 
    //parameters
-   parameter clk_period = 12.5;
-   parameter DATA_W = 32;
+   parameter clk_period = 10;
+   parameter DATA_W = 16;
    
    //loop iterator
-   integer i, j;
+   integer i, j, ok_flag = 1;
 
    // product debug register
    reg [2*DATA_W-1:0] 	      p_reg;
@@ -142,15 +141,18 @@ module xmul_pipe_tb;
 
       //check results
       for (i = 0; i < `NR_VECS; i=i+1) begin
-	 if(sres[i] != sexp[i])
-	   $display("#%d: failed signed: %d * %d = %d != %d", 
-		    i, a[i], b[i], sexp[i], sres[i]);
+	 if(sres[i] != sexp[i]) begin
+	   $display("#%d: failed signed: %d * %d = %d != %d", i, a[i], b[i], sexp[i], sres[i]);
+	   ok_flag = 0;
+         end 
       end
+      if(ok_flag) $display("\nmul_pipe test passed");
+      else $display("\nmul_pipe test failed");
 
       //
       // End simulation
       //
-      $display("Simulation finished");
+      $display("Simulation finished\n");
       #clk_period $finish;
 
    end

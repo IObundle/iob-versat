@@ -23,9 +23,9 @@ module xmuladd # (
                 input [`MULADD_CONF_BITS-1:0] configdata
                 );
 
-   wire [`MULADD_FNS_W:0]                     opcode;
+   wire [`MULADD_FNS_W-1:0]                   opcode;
    wire signed [2*DATA_W-1:0]                 result_mult;
-   reg [2*DATA_W-1:0]                         result64;
+   reg [2*DATA_W-1:0]                         result;
    reg [2*DATA_W-1:0]                         acc;
 
    //data
@@ -39,6 +39,7 @@ module xmuladd # (
    wire [`MEM_ADDR_W-1:0]		      iterations;
    wire [`PERIOD_W-1:0]                       period;
    wire [`PERIOD_W-1:0]                       delay;
+   wire [`SHIFT_W-1:0]			      shift;
 
    // register muladd control
    reg [`MEM_ADDR_W-1:0]                      op_o_reg;
@@ -60,6 +61,7 @@ module xmuladd # (
    assign iterations = configdata[`MULADD_CONF_BITS-1-2*`N_W-`MULADD_FNS_W -: `MEM_ADDR_W];
    assign period = configdata[`MULADD_CONF_BITS-1-2*`N_W-`MULADD_FNS_W-`MEM_ADDR_W -: `PERIOD_W];
    assign delay = configdata[`MULADD_CONF_BITS-1-2*`N_W-`MULADD_FNS_W-`MEM_ADDR_W-`PERIOD_W -: `PERIOD_W];
+   assign shift = configdata[`MULADD_CONF_BITS-1-2*`N_W-`MULADD_FNS_W-`MEM_ADDR_W-2*`PERIOD_W -: `SHIFT_W];
 
    //input selection
    xinmux # ( 
@@ -109,7 +111,7 @@ module xmuladd # (
        ld_acc2 <= 1'b0;
 `endif
      end else begin
-       acc <= result64;
+       acc <= result;
        op_o_reg <= op_o;
 `ifndef MULADD_COMB                             //pipelined
        ld_acc1 <= ld_acc0;
@@ -146,58 +148,23 @@ module xmuladd # (
    always @ * begin
 
       case (opcode)
-	`MULADD_MUL_DIV2:
-	  result64 = result_mult&64'hFFFFFFFF00000000;
-	`MULADD_MUL:
-	  result64 = result_mult << 1;
-	`MULADD_MACC_DIV2: begin
-           if(ld_acc)
-             result64 =  result_mult&64'hFFFFFFFF00000000;
-           else
-	     result64 =  acc + result_mult&64'hFFFFFFFF00000000;
-	end
-	`MULADD_MSUB_DIV2: begin
-           if(ld_acc)
-             result64 =  result_mult;
-           else
-	     result64 =  acc - result_mult;
- 	end
 	`MULADD_MACC: begin
            if(ld_acc)
-             result64 =  (result_mult<<1)&64'hFFFFFFFF00000000;
+             result = result_mult << shift;
            else
-	     result64 =  acc + (result_mult<<1)&64'hFFFFFFFF00000000;
+	     result = acc + (result_mult << shift);
  	end
-	`MULADD_MACC_16Q16: begin
-           if(ld_acc) begin
-              result64 =  {result_mult[47:16], 32'b0};
-           end
-           else begin
-              result64 =  acc + {result_mult[47:16], 32'b0};
-           end
- 	end
-        
 	`MULADD_MSUB: begin
            if(ld_acc)
-             result64 =  result_mult<<1;
+             result = result_mult << shift;
            else
-	     result64 =  acc - (result_mult<<1);
+	     result =  acc - (result_mult << shift);
         end
-	`MULADD_MUL_LOW:
-	  result64 =  result_mult<<32;
-
-	`MULADD_MUL_LOW_MACC: begin
-           if(ld_acc)
-	     result64 = result_mult << 32;
-           else
-	     result64 = acc + (result_mult << 32);
-	end
-
 	default: //MACC
-          result64 = acc + (result_mult<<1);
+          result = acc + (result_mult << shift);
       endcase // case (opcode)
    end
 
-   assign flow_out = result64[2*DATA_W-1 : DATA_W];
+   assign flow_out = result[2*DATA_W-1 : DATA_W];
 
 endmodule

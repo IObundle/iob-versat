@@ -1,26 +1,3 @@
-//
-// VERSAT DEFINES
-//
-
-// NUMBER OF STAGES
-`define nSTAGE 5
-
-// Number of functional units in each stage
-`define nMEM      6
-`define nALU      0
-`define nALULITE  2
-`define nMUL      0
-`define nMULADD   2
-`define nBS       0
-
-// Data memories address width
-`define MEM_ADDR_W 10
-`define PERIOD_W 10  //LOG2 of max period and duty cicle
-
-//
-// DO NOT EDIT BEYOND THIS POINT
-//
-
 //Number of bits required for nSTAGE
 `define nSTAGE_W ($clog2(`nSTAGE))
 

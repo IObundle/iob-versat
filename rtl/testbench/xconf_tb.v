@@ -5,6 +5,7 @@
 module xconf_tb;
 
 	parameter            		clk_per = 20;
+	parameter			DATA_W = 32;
         integer				i, aux_addr;
 
         //inputs
@@ -20,7 +21,9 @@ module xconf_tb;
 	reg [`CONF_REG_ADDR_W:0]	ctr_addr;
 	reg [`MEM_ADDR_W-1:0]  		ctr_data_in;
 
-	xconf uut (
+	xconf # ( 
+		.DATA_W(DATA_W)
+	) uut (
 
   		//inputs
           	.clk(clk),

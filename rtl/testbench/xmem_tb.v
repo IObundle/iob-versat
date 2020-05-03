@@ -16,9 +16,10 @@ module xmem_tb;
 
    //parameters 
    parameter clk_per = 20;
-   parameter DATA_W = 32;
-   integer i, j, k, l, aux_val, err_cnt = 0;
+   parameter DATA_W = 16;
+   integer i, j, k, l, err_cnt = 0;
    integer pixels[25-1:0];
+   reg signed [DATA_W-1:0] aux_val;
    
    //control 
    reg 				clk;
@@ -137,7 +138,8 @@ module xmem_tb;
 	    for(k = 0; k < 3; k++) begin
               for(l = 0; l < 3; l++) begin
                 #clk_per;
-                if(flow_out[2*DATA_W-1 -: DATA_W] != pixels[i*5+j+k*5+l]) err_cnt++;
+		aux_val = flow_out[2*DATA_W-1 -: DATA_W];
+                if(aux_val != pixels[i*5+j+k*5+l]) err_cnt++;
 	      end
 	    end
           end

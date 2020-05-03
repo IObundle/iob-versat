@@ -1,5 +1,6 @@
 `timescale 1ns / 1ps
 `include "xversat.vh"
+`include "xdefs.vh"
 
 module xinmux # ( 
 	parameter 		 DATA_W = 32
