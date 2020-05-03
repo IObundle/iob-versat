@@ -319,7 +319,7 @@ class CMul {
 class CMulAdd {
   public:
     int versat_base, muladd_base;
-    int sela, selb, fns, iter, per, delay;
+    int sela, selb, fns, iter, per, delay, shift;
 
     //Default constructor
     CMulAdd() {
