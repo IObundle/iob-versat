@@ -28,8 +28,6 @@
 //
 //log2(max number of configuration fields)
 `define CONF_REG_ADDR_W ($clog2(`CONF_BS0  + `nBS*`BS_CONF_OFFSET))
-//log2(size of conf cache)
-`define CONF_MEM_ADDR_W 3
 
 // clear config register
 `define CONF_CLEAR (1<<`CONF_REG_ADDR_W)

@@ -25,6 +25,9 @@ module xmuladd # (
 
    wire [`MULADD_FNS_W-1:0]                   opcode;
    wire signed [2*DATA_W-1:0]                 result_mult;
+`ifdef MULADD_COMB
+   reg signed [2*DATA_W-1:0]		      result_mult_reg;
+`endif
    reg [2*DATA_W-1:0]                         result;
    reg [2*DATA_W-1:0]                         acc;
 
@@ -131,7 +134,12 @@ module xmuladd # (
 
    // select multiplier statically
 `ifdef MULADD_COMB                             //combinatorial
-   assign result_mult = op_a * op_b;
+   always @ (posedge clk, posedge rst)
+     if(rst)
+       result_mult_reg = {2*DATA_W{1'b0}};
+     else
+       result_mult_reg = op_a * op_b;
+   assign result_mult = result_mult_reg;
 `else                                          //2-stage pipeline
    xmul_pipe # ( 
 	.DATA_W(DATA_W)
