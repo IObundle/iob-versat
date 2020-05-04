@@ -2,7 +2,7 @@
 `define nSTAGE 5
 
 // Number of functional units in each stage
-`define nMEM      6
+`define nMEM      4
 `define nALU      0
 `define nALULITE  2
 `define nMUL      0

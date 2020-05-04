@@ -101,7 +101,7 @@ module xversat_tb;
       #(clk_per*10) rst = 0;
 
       //store data in versat mems
-      for(j = 0; j < 5; j++) begin
+      for(j = 0; j < `nSTAGE; j++) begin
 
         //write 5x5 feature map in mem0
         for(i = 0; i < 25; i++) begin
@@ -127,7 +127,7 @@ module xversat_tb;
       ///////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
       alu_sel = sMEM0A+2;
-      for(i = 0; i < 5; i++) begin
+      for(i = 0; i < `nSTAGE; i++) begin
 
         //configure mem0A to read 3x3 block from feature map
         config_mem(i<<(`CTR_ADDR_W-`nSTAGE_W), 0, `iter, `per, `duty, `shift, 1, delay, 0, 0);
@@ -136,18 +136,18 @@ module xversat_tb;
         config_mem(i<<(`CTR_ADDR_W-`nSTAGE_W), 2, 1, 10, 10, 0, 1, delay, 0, 0);
       
         //configure muladd0
-        config_muladd(i<<(`CTR_ADDR_W-`nSTAGE_W), sMEM0A, sMEM0A+2, `MULADD_MACC, 1, 9, `MEMP_LAT + delay, DATA_W);
+        config_muladd(i<<(`CTR_ADDR_W-`nSTAGE_W), sMEM0A, sMEM0A+2, `MULADD_MACC, 1, 9, `MEMP_LAT + delay, 0);
 
         //configure ALULite0 to add bias to muladd result
         config_alulite(i<<(`CTR_ADDR_W-`nSTAGE_W), alu_sel, sMULADD0, `ALULITE_ADD);
 
         //update variables
-        if(i != 4) delay += 2;
+        if(i != `nSTAGE-1) delay += 2;
         if(i == 0) alu_sel = sALULITE0_p;
       end
 
       //config mem2A to store ALULite output
-      config_mem(VERSAT_5, 4, 1, 1, 1, 0, 1, `MEMP_LAT + 8 + `MULADD_LAT + `ALULITE_LAT + delay, sALULITE0, 1);
+      config_mem((`nSTAGE-1)<<(`CTR_ADDR_W-`nSTAGE_W), 4, 1, 1, 1, 0, 1, `MEMP_LAT + 8 + `MULADD_LAT + `ALULITE_LAT + delay, sALULITE0, 1);
 
       ///////////////////////////////////////////////////////////////////////////////
       // Convolution loop
@@ -159,7 +159,7 @@ module xversat_tb;
           
           //configure start values of memories
 	  for(k = 0; k < 5; k++) config_mem_start(k<<(`CTR_ADDR_W-`nSTAGE_W), 0, i*5+j);
-          config_mem_start(VERSAT_5, 4, i*3+j);
+          config_mem_start((`nSTAGE-1)<<(`CTR_ADDR_W-`nSTAGE_W), 4, i*3+j);
 
           //run configurations
           cpu_write(RUN_DONE, 1);
@@ -179,14 +179,14 @@ module xversat_tb;
       for(i = 0; i < `iter2; i++) begin
         for(j = 0; j < `per2; j++) begin
           res_exp = bias;
-          for(k = 0; k < 5; k++) begin
+          for(k = 0; k < `nSTAGE; k++) begin
             for(l = 0; l < `iter; l++) begin
               for(m = 0; m < `per; m++) begin
                 res_exp += pixels[i*5+j+k*25+l*5+m] * weights[9*k+l*3+m];
               end
             end
           end
-          cpu_read(VERSAT_5 + MEM2 + i*3 + j, res);
+          cpu_read(((`nSTAGE-1)<<(`CTR_ADDR_W-`nSTAGE_W)) + MEM2 + i*3 + j, res);
           if(res != res_exp) err_cnt++;
         end
       end
@@ -206,7 +206,7 @@ module xversat_tb;
       config_mem(VERSAT_1, 3, 1, 1, 1, 0, 0, 0, 0, 0);
       config_mem_start(VERSAT_1, 3, 9);
 
-      for(i = 0; i < 5; i++) begin
+      for(i = 0; i < `nSTAGE; i++) begin
 
         //configure mem0A to read 3x3 block from feature map
 	config_mem2(i<<(`CTR_ADDR_W-`nSTAGE_W), 0, `iter2, `per2, `shift2, `incr2);
@@ -216,19 +216,19 @@ module xversat_tb;
         config_mem(i<<(`CTR_ADDR_W-`nSTAGE_W), 2, 9, 9, 9, -9, 1, delay, 0, 0);
       
         //configure muladd0
-        config_muladd(i<<(`CTR_ADDR_W-`nSTAGE_W), sMEM0A, sMEM0A+2, `MULADD_MACC, 9, 9, `MEMP_LAT + delay, DATA_W);
+        config_muladd(i<<(`CTR_ADDR_W-`nSTAGE_W), sMEM0A, sMEM0A+2, `MULADD_MACC, 9, 9, `MEMP_LAT + delay, 0);
 
         //configure ALULite0 to add bias to muladd result
         config_alulite(i<<(`CTR_ADDR_W-`nSTAGE_W), alu_sel, sMULADD0, `ALULITE_ADD);
 
         //update variables
-        if(i != 4) delay += 2;
+        if(i != `nSTAGE-1) delay += 2;
         if(i == 0) alu_sel = sALULITE0_p;
       end
 
       //config mem2A to store ALULite output
-      config_mem(VERSAT_5, 4, 9, 9, 1, 0, 1, `MEMP_LAT + 8 + `MULADD_LAT + `ALULITE_LAT + delay, sALULITE0, 1);
-      config_mem_start(VERSAT_5, 4, 50);
+      config_mem((`nSTAGE-1)<<(`CTR_ADDR_W-`nSTAGE_W), 4, 9, 9, 1, 0, 1, `MEMP_LAT + 8 + `MULADD_LAT + `ALULITE_LAT + delay, sALULITE0, 1);
+      config_mem_start((`nSTAGE-1)<<(`CTR_ADDR_W-`nSTAGE_W), 4, 50);
 
       ///////////////////////////////////////////////////////////////////////////////
       // Convolution
@@ -251,14 +251,14 @@ module xversat_tb;
       for(i = 0; i < `iter2; i++) begin
         for(j = 0; j < `per2; j++) begin
           res_exp = bias;
-          for(k = 0; k < 5; k++) begin
+          for(k = 0; k < `nSTAGE; k++) begin
             for(l = 0; l < `iter; l++) begin
               for(m = 0; m < `per; m++) begin
                 res_exp += pixels[i*5+j+k*25+l*5+m] * weights[9*k+l*3+m];
               end
             end
           end
-          cpu_read(VERSAT_5 + MEM2 + i*3 + j + 50, res);
+          cpu_read(((`nSTAGE-1)<<(`CTR_ADDR_W-`nSTAGE_W)) + MEM2 + i*3 + j + 50, res);
           if(res != res_exp) err_cnt++;
         end
       end

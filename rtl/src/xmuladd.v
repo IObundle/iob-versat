@@ -25,9 +25,7 @@ module xmuladd # (
 
    wire [`MULADD_FNS_W-1:0]                   opcode;
    wire signed [2*DATA_W-1:0]                 result_mult;
-`ifdef MULADD_COMB
    reg signed [2*DATA_W-1:0]		      result_mult_reg;
-`endif
    reg [2*DATA_W-1:0]                         result;
    reg [2*DATA_W-1:0]                         acc;
 
@@ -141,15 +139,25 @@ module xmuladd # (
        result_mult_reg = op_a * op_b;
    assign result_mult = result_mult_reg;
 `else                                          //2-stage pipeline
-   xmul_pipe # ( 
-	.DATA_W(DATA_W)
-   ) xmul_pipe (
-	.rst(rst),
-	.clk(clk),
-	.op_a(op_a),
-	.op_b(op_b),
-	.product(result_mult)
-	);
+   reg signed [DATA_W-1:0] op_a_reg, op_a_reg_reg, op_b_reg, op_b_reg_reg;
+   reg signed [DATA_W*2-1:0] result_mult_reg_reg;
+   always @ (posedge clk, posedge rst)
+     if(rst) begin
+       op_a_reg <= {DATA_W{1'b0}};
+       op_a_reg <= {DATA_W{1'b0}};
+       op_b_reg_reg <= {DATA_W{1'b0}};
+       op_b_reg_reg <= {DATA_W{1'b0}};
+       result_mult_reg <= {2*DATA_W{1'b0}};
+       result_mult_reg_reg <= {2*DATA_W{1'b0}};
+     end else begin
+       op_a_reg <= op_a;
+       op_b_reg <= op_b;
+       op_a_reg_reg <= op_a_reg;
+       op_b_reg_reg <= op_b_reg;
+       result_mult_reg <= op_a_reg * op_b_reg;
+       result_mult_reg_reg <= result_mult_reg;
+    end
+    assign result_mult = result_mult_reg_reg;
 `endif
 
    // process mult result according to opcode
@@ -158,21 +166,21 @@ module xmuladd # (
       case (opcode)
 	`MULADD_MACC: begin
            if(ld_acc)
-             result = result_mult << shift;
+             result = result_mult;
            else
-	     result = acc + (result_mult << shift);
+	     result = acc + result_mult;
  	end
 	`MULADD_MSUB: begin
            if(ld_acc)
-             result = result_mult << shift;
+             result = result_mult;
            else
-	     result =  acc - (result_mult << shift);
+	     result = acc - result_mult;
         end
 	default: //MACC
-          result = acc + (result_mult << shift);
+          result = acc + result_mult;
       endcase // case (opcode)
    end
 
-   assign flow_out = result[2*DATA_W-1 : DATA_W];
+   assign flow_out = result >> shift;
 
 endmodule
