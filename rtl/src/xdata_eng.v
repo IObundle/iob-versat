@@ -81,6 +81,7 @@ module xdata_eng #(
    reg [DATA_W-1: 0] data_reg;
    always @ * begin
       integer j;
+      data_reg = {DATA_W{1'b0}};
       for (j=0; j < `nMEM; j= j+1)
 	if (addr_reg == j[`nMEM_W-1:0])
 	  data_reg = data_bus[`DATA_MEM0A_B - 2*j*DATA_W  -: DATA_W]; //Port A
