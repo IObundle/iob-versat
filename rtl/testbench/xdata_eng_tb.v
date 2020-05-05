@@ -91,7 +91,7 @@ module xdata_eng_tb;
       //write 5x5 feature map in mem0A
       for(i = 0; i < 25; i++) begin
         pixels[i] = $random%20;
-        cpu_write(i, pixels[i]);        
+        cpu_write(i, pixels[i]);
       end
  
       //write 3x3 kernel and bias in mem1A
@@ -271,7 +271,8 @@ module xdata_eng_tb;
       addr = cpu_address;
       valid = 1;
       we = 0;
-      #clk_per;
+      if(addr[`nMEM_W+`MEM_ADDR_W]) #clk_per;
+      else #(clk_per*`MEMP_LAT);
       read_reg = wdata;
       valid = 0;
       #clk_per;

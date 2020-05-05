@@ -14,7 +14,7 @@
 
 module xversat #(
 		 parameter			ADDR_W = 32,
-		 parameter			DATA_W = 32
+		 parameter			DATA_W = 16
 	 	)(
                  input                    	clk,
                  input                    	rst,
@@ -29,11 +29,19 @@ module xversat #(
                  );
 
    // interface ready signal
-   always @(posedge clk, posedge rst)
-      if(rst)
+   reg ready_reg;
+   always @(posedge clk, posedge rst) begin
+      if(rst) begin
+         ready_reg <= 1'b0;
          ready <= 1'b0;
-      else 
-         ready <= valid;
+      end else begin 
+         ready_reg <= valid;
+         if(addr[1+`nMEM_W+`MEM_ADDR_W -: 2] == 2'b0)
+           ready <= ready_reg; //addressing mem
+         else
+           ready <= valid;
+      end
+   end
 
    //data buses for each versat   
    wire [`DATABUS_W-1:0] stage_databus [`nSTAGE:0];

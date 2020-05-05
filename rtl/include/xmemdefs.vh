@@ -33,4 +33,4 @@
 `define MEMP_CONF_OFFSET 	15
 
 //MEM latency
-`define MEMP_LAT 1
+`define MEMP_LAT 2

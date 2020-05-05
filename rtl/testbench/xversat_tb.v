@@ -397,7 +397,8 @@ module xversat_tb;
       addr = cpu_address;
       valid = 1;
       we = 0;
-      #clk_per;
+      if(addr[`nMEM_W+`MEM_ADDR_W+1 -: 2] == 2'b0) #(clk_per*`MEMP_LAT); //wait 2 cycles if addressing mem
+      else #clk_per;
       read_reg = wdata;
       valid = 0;
       #clk_per;

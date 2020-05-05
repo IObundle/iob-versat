@@ -29,9 +29,9 @@ module xmem #(
     );
 
    //output databus
-   wire [DATA_W-1:0]              outA;
-   wire [DATA_W-1:0]              outB;
-   assign flow_out = {outA, outB};
+   wire [DATA_W-1:0]              outA, outB;
+   reg  [DATA_W-1:0]              outA_reg, outB_reg;
+   assign flow_out = {outA_reg, outB_reg};
 
    //function to reverse bits
    function [`MEM_ADDR_W-1:0] reverseBits;
@@ -178,5 +178,15 @@ module xmem #(
       .q_b(outB),
       .clk(clk)
       );
+
+   always @ (posedge clk, posedge rst) begin
+      if(rst) begin
+         outA_reg <= {DATA_W{1'b0}};
+         outB_reg <= {DATA_W{1'b0}};
+      end else begin
+         outA_reg <= outA;
+         outB_reg <= outB;
+      end
+   end
 
 endmodule
