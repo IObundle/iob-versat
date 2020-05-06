@@ -179,14 +179,9 @@ module xmem #(
       .clk(clk)
       );
 
-   always @ (posedge clk, posedge rst) begin
-      if(rst) begin
-         outA_reg <= {DATA_W{1'b0}};
-         outB_reg <= {DATA_W{1'b0}};
-      end else begin
-         outA_reg <= outA;
-         outB_reg <= outB;
-      end
+   always @ (posedge clk) begin
+      outA_reg <= outA;
+      outB_reg <= outB;
    end
 
 endmodule

@@ -108,8 +108,6 @@ module xmuladd # (
        op_o_reg <= {`MEM_ADDR_W{1'd0}};
 `ifdef MULADD_COMB                             //pipelined
        acc <= {2*DATA_W{1'b0}};
-`else
-       ld_acc1 <= 1'b0;
 `endif
      end else begin
        op_o_reg <= op_o;
@@ -140,26 +138,20 @@ module xmuladd # (
    assign result_mult = result_mult_reg;
 `else                                          //2-stage pipeline
    reg signed [DATA_W-1:0] op_a_reg, op_b_reg;
-   reg signed [2*DATA_W-1:0] result_mult_reg_reg;
-   always @ (posedge clk, posedge rst) begin
-     if(rst) begin
-       op_a_reg <= {DATA_W{1'b0}};
-       op_b_reg <= {DATA_W{1'b0}};
-       result_mult_reg <= {2*DATA_W{1'b0}};
-       result_mult_reg_reg <= {2*DATA_W{1'b0}};
-     end else begin
-       op_a_reg <= op_a;
-       op_b_reg <= op_b;
-       result_mult_reg <= op_a_reg * op_b_reg;
-       if(ld_acc)
-         result_mult_reg_reg <= result_mult_reg;
-       else if (opcode == `MULADD_MACC)
-         result_mult_reg_reg <= result_mult_reg_reg + result_mult_reg;
-       else 
-         result_mult_reg_reg <= result_mult_reg_reg - result_mult_reg;
-    end
-  end
-  assign result = result_mult_reg_reg;
+   reg signed [2*DATA_W-1:0] acc;
+   wire signed [2*DATA_W-1:0] acc_w;
+   //DSP48E template
+   always @ (posedge clk) begin
+     op_a_reg <= op_a;
+     op_b_reg <= op_b;
+     result_mult_reg <= op_a_reg * op_b_reg;
+     if(opcode == `MULADD_MACC)
+       acc <= acc_w + result_mult_reg;
+     else
+       acc <= acc_w - result_mult_reg;
+   end
+   assign result = acc;
+   assign acc_w = ld_acc ? {DATA_W*2{1'b0}} : acc;
 `endif
 
    // process mult result according to opcode
