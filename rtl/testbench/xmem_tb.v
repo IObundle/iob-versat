@@ -128,6 +128,7 @@ module xmem_tb;
       run = 1;
       #(clk_per);
       run = 0;
+      #(clk_per*`MEMP_LAT)
 
       //wait until done
       do begin
@@ -137,9 +138,9 @@ module xmem_tb;
           for(j = 0; j < 3; j++) begin
 	    for(k = 0; k < 3; k++) begin
               for(l = 0; l < 3; l++) begin
-                #clk_per;
 		aux_val = flow_out[2*DATA_W-1 -: DATA_W];
                 if(aux_val != pixels[i*5+j+k*5+l]) err_cnt++;
+                #clk_per;
 	      end
 	    end
           end
@@ -178,7 +179,7 @@ module xmem_tb;
       addr = cpu_address;
       valid = 1;
       we = 0;
-      #clk_per;
+      #(clk_per*`MEMP_LAT);
       read_reg = flow_out[2*DATA_W-1 -: DATA_W]; 
       valid = 0;
       #clk_per;

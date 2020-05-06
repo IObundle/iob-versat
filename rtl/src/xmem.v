@@ -29,9 +29,9 @@ module xmem #(
     );
 
    //output databus
-   wire [DATA_W-1:0]              outA;
-   wire [DATA_W-1:0]              outB;
-   assign flow_out = {outA, outB};
+   wire [DATA_W-1:0]              outA, outB;
+   reg  [DATA_W-1:0]              outA_reg, outB_reg;
+   assign flow_out = {outA_reg, outB_reg};
 
    //function to reverse bits
    function [`MEM_ADDR_W-1:0] reverseBits;
@@ -160,23 +160,44 @@ module xmem #(
    assign addrA_int2 = reverseA? reverseBits(addrA_int) : addrA_int;
    assign addrB_int2 = reverseB? reverseBits(addrB_int) : addrB_int;
 
+   //register mem inputs
+   reg [DATA_W-1:0] data_a_reg, data_b_reg;
+   reg [`MEM_ADDR_W-1:0] addr_a_reg, addr_b_reg;
+   reg en_a_reg, en_b_reg, we_a_reg, we_b_reg;
+   always @ (posedge clk) begin
+      data_a_reg <= data_to_wrA;
+      data_b_reg <= inB;
+      addr_a_reg <= addrA;
+      addr_b_reg <= addrB;
+      en_a_reg <= enA;
+      en_b_reg <= enB;
+      we_a_reg <= wrA;
+      we_b_reg <= wrB;
+   end
+
    iob_t2p_mem #(
                    .MEM_INIT_FILE(MEM_INIT_FILE),
 		   .DATA_W(DATA_W),
 		   .ADDR_W(`MEM_ADDR_W))
    mem
      (
-      .data_a(data_to_wrA),
-      .data_b(inB),
-      .addr_a(addrA[`MEM_ADDR_W-1:0]),
-      .addr_b(addrB[`MEM_ADDR_W-1:0]),
-      .en_a(enA),
-      .en_b(enB),
-      .we_a(wrA),
-      .we_b(wrB),
+      .data_a(data_a_reg),
+      .data_b(data_b_reg),
+      .addr_a(addr_a_reg),
+      .addr_b(addr_b_reg),
+      .en_a(en_a_reg),
+      .en_b(en_b_reg),
+      .we_a(we_a_reg),
+      .we_b(we_b_reg),
       .q_a(outA),
       .q_b(outB),
       .clk(clk)
       );
+
+   //register mem outputs
+   always @ (posedge clk) begin
+      outA_reg <= outA;
+      outB_reg <= outB;
+   end
 
 endmodule

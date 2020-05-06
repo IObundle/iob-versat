@@ -81,6 +81,7 @@ module xdata_eng #(
    reg [DATA_W-1: 0] data_reg;
    always @ * begin
       integer j;
+      data_reg = {DATA_W{1'b0}};
       for (j=0; j < `nMEM; j= j+1)
 	if (addr_reg == j[`nMEM_W-1:0])
 	  data_reg = data_bus[`DATA_MEM0A_B - 2*j*DATA_W  -: DATA_W]; //Port A
@@ -88,17 +89,18 @@ module xdata_eng #(
    
    //read: select output data
    wire [2*`nMEM-1:0] mem_done;
-   always @ * begin
+   always @ *
       if(control_valid)
 	wdata = {{DATA_W-1{1'b0}}, &mem_done};
       else 
 	wdata = data_reg;
-   end
 
    //run 
    reg ctr_reg;
    always @ (posedge rst, posedge clk)
-     if(rst || ~we || ~control_valid)
+     if(rst) 
+       ctr_reg <= 1'b0;
+     else if (~we || ~control_valid)
        ctr_reg <= 1'b0;
      else
        ctr_reg <= rdata[0];
@@ -109,14 +111,11 @@ module xdata_eng #(
    // CONFIGURATION SHADOW REGISTER
    //
    reg [`CONF_BITS-1:0] config_reg_shadow;
-   always @ (posedge rst, posedge clk) begin
-      if(rst) begin
+   always @ (posedge rst, posedge clk)
+      if(rst)
 	 config_reg_shadow <= {`CONF_BITS{1'b0}};
-   end
-      else if(run) begin
+      else if(run)
 	 config_reg_shadow <= config_bus;
-      end
-   end
    
    //
    // INSTANTIATE THE FUNCTIONAL UNITS

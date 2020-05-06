@@ -25,8 +25,8 @@ module xmuladd # (
 
    wire [`MULADD_FNS_W-1:0]                   opcode;
    wire signed [2*DATA_W-1:0]                 result_mult;
+   reg signed [2*DATA_W-1:0]		      result_mult_reg;
    reg [2*DATA_W-1:0]                         result;
-   reg [2*DATA_W-1:0]                         acc;
 
    //data
    wire signed [DATA_W-1:0]                   op_a;
@@ -49,9 +49,10 @@ module xmuladd # (
    //combinatorial
    wire                                       ld_acc0;
    //pipelined
-`ifndef MULADD_COMB
+`ifdef MULADD_COMB
+   reg [2*DATA_W-1:0]                         acc;
+`else
    reg                                        ld_acc1;
-   reg                                        ld_acc2;
 `endif
 
    //unpack config bits
@@ -104,18 +105,18 @@ module xmuladd # (
    //update registers
    always @ (posedge clk, posedge rst) begin
      if (rst) begin
-       acc <= {2*DATA_W{1'b0}};
        op_o_reg <= {`MEM_ADDR_W{1'd0}};
-`ifndef MULADD_COMB                             //pipelined
+`ifdef MULADD_COMB                             //pipelined
+       acc <= {2*DATA_W{1'b0}};
+`else
        ld_acc1 <= 1'b0;
-       ld_acc2 <= 1'b0;
 `endif
      end else begin
-       acc <= result;
        op_o_reg <= op_o;
-`ifndef MULADD_COMB                             //pipelined
+`ifdef MULADD_COMB                             //pipelined
+       acc <= result;
+`else
        ld_acc1 <= ld_acc0;
-       ld_acc2 <= ld_acc1;
 `endif
      end
    end
@@ -126,45 +127,59 @@ module xmuladd # (
 `ifdef MULADD_COMB                             //combinatorial
    assign ld_acc = ld_acc0;
 `else                                          //pipelined
-   assign ld_acc = ld_acc2;
+   assign ld_acc = ld_acc1;
 `endif
 
    // select multiplier statically
 `ifdef MULADD_COMB                             //combinatorial
-   assign result_mult = op_a * op_b;
-`else                                          //2-stage pipeline
-   xmul_pipe # ( 
-	.DATA_W(DATA_W)
-   ) xmul_pipe (
-	.rst(rst),
-	.clk(clk),
-	.op_a(op_a),
-	.op_b(op_b),
-	.product(result_mult)
-	);
+   always @ (posedge clk, posedge rst)
+     if(rst)
+       result_mult_reg = {2*DATA_W{1'b0}};
+     else
+       result_mult_reg = op_a * op_b;
+   assign result_mult = result_mult_reg;
+`else                                          //3-stage pipeline
+   reg signed [DATA_W-1:0] op_a_reg, op_b_reg;
+   reg signed [2*DATA_W-1:0] acc, dsp_out;
+   wire signed [2*DATA_W-1:0] acc_w;
+   //DSP48E template
+   always @ (posedge clk) begin
+     op_a_reg <= op_a;
+     op_b_reg <= op_b;
+     result_mult_reg <= op_a_reg * op_b_reg;
+     if(opcode == `MULADD_MACC)
+       acc <= acc_w + result_mult_reg;
+     else
+       acc <= acc_w - result_mult_reg;
+     dsp_out <= acc;
+   end
+   assign result = dsp_out;
+   assign acc_w = ld_acc ? {DATA_W*2{1'b0}} : acc;
 `endif
 
    // process mult result according to opcode
+`ifdef MULADD_COMB
    always @ * begin
 
       case (opcode)
 	`MULADD_MACC: begin
            if(ld_acc)
-             result = result_mult << shift;
+             result = result_mult;
            else
-	     result = acc + (result_mult << shift);
+	     result = acc + result_mult;
  	end
 	`MULADD_MSUB: begin
            if(ld_acc)
-             result = result_mult << shift;
+             result = result_mult;
            else
-	     result =  acc - (result_mult << shift);
+	     result = acc - result_mult;
         end
 	default: //MACC
-          result = acc + (result_mult << shift);
+          result = acc + result_mult;
       endcase // case (opcode)
    end
+`endif
 
-   assign flow_out = result[2*DATA_W-1 : DATA_W];
+   assign flow_out = result >> shift;
 
 endmodule

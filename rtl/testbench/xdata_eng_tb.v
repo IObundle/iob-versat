@@ -91,7 +91,7 @@ module xdata_eng_tb;
       //write 5x5 feature map in mem0A
       for(i = 0; i < 25; i++) begin
         pixels[i] = $random%20;
-        cpu_write(i, pixels[i]);        
+        cpu_write(i, pixels[i]);
       end
  
       //write 3x3 kernel and bias in mem1A
@@ -129,7 +129,6 @@ module xdata_eng_tb;
      config_bus[`CONF_MULADD0_B - 2*`N_W - `MULADD_FNS_W -: `MEM_ADDR_W] = 1; //iterations
      config_bus[`CONF_MULADD0_B - 2*`N_W - `MULADD_FNS_W - `MEM_ADDR_W -: `PERIOD_W] = 9; //period
      config_bus[`CONF_MULADD0_B - 2*`N_W - `MULADD_FNS_W - `MEM_ADDR_W - `PERIOD_W -: `PERIOD_W] = `MEMP_LAT; //delay
-     config_bus[`CONF_MULADD0_B - 2*`N_W - `MULADD_FNS_W - `MEM_ADDR_W - 2*`PERIOD_W -: `SHIFT_W] = DATA_W; //shift
 
      //configure ALULite to add bias to muladd result
      config_bus[`CONF_ALULITE0_B -: `N_W] = sMEM0A+2; //sela
@@ -272,7 +271,8 @@ module xdata_eng_tb;
       addr = cpu_address;
       valid = 1;
       we = 0;
-      #clk_per;
+      if(addr[`nMEM_W+`MEM_ADDR_W]) #clk_per;
+      else #(clk_per*`MEMP_LAT);
       read_reg = wdata;
       valid = 0;
       #clk_per;
