@@ -26,5 +26,5 @@
 `ifdef MULADD_COMB
  `define MULADD_LAT 1
 `else
- `define MULADD_LAT 3
+ `define MULADD_LAT 4
 `endif

@@ -108,6 +108,8 @@ module xmuladd # (
        op_o_reg <= {`MEM_ADDR_W{1'd0}};
 `ifdef MULADD_COMB                             //pipelined
        acc <= {2*DATA_W{1'b0}};
+`else
+       ld_acc1 <= 1'b0;
 `endif
      end else begin
        op_o_reg <= op_o;
@@ -136,9 +138,9 @@ module xmuladd # (
      else
        result_mult_reg = op_a * op_b;
    assign result_mult = result_mult_reg;
-`else                                          //2-stage pipeline
+`else                                          //3-stage pipeline
    reg signed [DATA_W-1:0] op_a_reg, op_b_reg;
-   reg signed [2*DATA_W-1:0] acc;
+   reg signed [2*DATA_W-1:0] acc, dsp_out;
    wire signed [2*DATA_W-1:0] acc_w;
    //DSP48E template
    always @ (posedge clk) begin
@@ -149,8 +151,9 @@ module xmuladd # (
        acc <= acc_w + result_mult_reg;
      else
        acc <= acc_w - result_mult_reg;
+     dsp_out <= acc;
    end
-   assign result = acc;
+   assign result = dsp_out;
    assign acc_w = ld_acc ? {DATA_W*2{1'b0}} : acc;
 `endif
 

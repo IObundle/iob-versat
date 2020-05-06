@@ -29,15 +29,17 @@ module xversat #(
                  );
 
    // interface ready signal
-   reg ready_reg;
+   reg ready_r0, ready_r1;
    always @(posedge clk, posedge rst) begin
       if(rst) begin
-         ready_reg <= 1'b0;
+         ready_r0 <= 1'b0;
+ 	 ready_r1 <= 1'b0;
          ready <= 1'b0;
       end else begin 
-         ready_reg <= valid;
-         if(addr[1+`nMEM_W+`MEM_ADDR_W -: 2] == 2'b0)
-           ready <= ready_reg; //addressing mem
+         ready_r0 <= valid;
+         ready_r1 <= ready_r0;
+         if((addr[1+`nMEM_W+`MEM_ADDR_W -: 2] == 2'b0) && !we)
+           ready <= ready_r1; //read mem
          else
            ready <= valid;
       end
