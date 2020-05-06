@@ -68,9 +68,9 @@ module xmul # (
    //apply function
    always @*
      case(fns)
-       `MUL_HI: res = res2_reg[2*DATA_W-2 -: DATA_W];
-       `MUL_DIV2_HI: res = res2_reg[2*DATA_W-1 -: DATA_W];
-       default: res = res2_reg[DATA_W-1 -: DATA_W];
+       `MUL_HI: res = res2[2*DATA_W-2 -: DATA_W];
+       `MUL_DIV2_HI: res = res2[2*DATA_W-1 -: DATA_W];
+       default: res = res2[DATA_W-1 -: DATA_W];
      endcase 
 
    always @ (posedge clk, posedge rst) 
