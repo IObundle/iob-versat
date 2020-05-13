@@ -14,8 +14,6 @@
 `define nMULADD   2
 `define nBS       0
 
-`define nIO (`nVI+`nVO)
-
 // Configurable address widths
 `define MEM_ADDR_W 10
 `define PERIOD_W 10 //LOG2 of max period and duty cicle
