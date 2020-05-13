@@ -5,7 +5,7 @@
 // period, delay = PERIOD_W
 // shift = SHIFT_W
 `define MULADD_FNS_W 1
-`define SHIFT_W ($clog2(DATA_W)+1)
+`define SHIFT_W ($clog2(`DATAPATH_W)+1)
 `define MULADD_CONF_BITS (2*`N_W + `MULADD_FNS_W + `MEM_ADDR_W + 2*`PERIOD_W + `SHIFT_W)
 
 // MULADD functions

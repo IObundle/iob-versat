@@ -1,3 +1,6 @@
 [submodule "submodules/mem"]
 	path = submodules/mem
 	url = git@bitbucket.org:jjts/iob-mem.git
+[submodule "versat-io"]
+	path = submodules/versat-io
+	url = git@bitbucket.org:jjts/iob-versat-io.git

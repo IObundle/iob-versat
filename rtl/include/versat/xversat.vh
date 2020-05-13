@@ -1,8 +1,13 @@
 // NUMBER OF STAGES
 `define nSTAGE 5
 
+// Datapath width
+`define DATAPATH_W 16
+
 // Number of functional units in each stage
 `define nMEM      4
+`define nVI       0
+`define nVO       0
 `define nALU      0
 `define nALULITE  2
 `define nMUL      0

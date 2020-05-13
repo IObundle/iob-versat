@@ -1,15 +1,17 @@
-#source paths 
-MEM_DIR := ../../submodules/mem
+#source paths
+SUBMODULES_DIR := ../../submodules
+MEM_DIR := $(SUBMODULES_DIR)/mem
+VERSAT_IO := $(SUBMODULES_DIR)/versat-io
 RTL_DIR := ../../rtl
 SRC := $(RTL_DIR)/src/*.v $(MEM_DIR)/tdp_mem/*.v $(MEM_DIR)/sp_mem/*.v
 
 #include paths
 INC_DIR := $(RTL_DIR)/include
-INC := $(INC_DIR)/*.vh $(INC_DIR)/versat/*.vh
+INC := $(INC_DIR)/*.vh $(INC_DIR)/versat/*.vh $(VERSAT_IO)/rtl/include/*.vh
 
 #icarus simulator and flags
 VC := iverilog
-CFLAGS := -W all -I$(INC_DIR) -I$(INC_DIR)/versat -g2005-sv -D DEBUG
+CFLAGS := -W all -I$(INC_DIR) -I$(INC_DIR)/versat -I$(VERSAT_IO)/rtl/include -g2005-sv -D DEBUG
 
 # select testbench file
 ifeq ($(CMDGOALS),)

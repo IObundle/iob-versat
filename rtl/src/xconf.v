@@ -1,6 +1,7 @@
 `timescale 1ns / 1ps
 `include "xversat.vh"
 `include "xmemdefs.vh"
+`include "versat-io.vh"
 `include "xaludefs.vh"
 `include "xalulitedefs.vh"
 `include "xmuldefs.vh"
@@ -11,25 +12,25 @@
 module xconf # (
 	      parameter			   DATA_W = 32
 	) (
-              input                        clk,
-              input                        rst,
+              input                      clk,
+              input                      rst,
 
               // Control bus interface
-              input                        ctr_valid,
-              input                        ctr_we,
-              input [`CONF_REG_ADDR_W:0]   ctr_addr,
-              input [`MEM_ADDR_W-1:0]      ctr_data_in,
+              input                      ctr_valid,
+              input                      ctr_we,
+              input [`CONF_REG_ADDR_W:0] ctr_addr,
+              input [`IO_ADDR_W-1:0]     ctr_data_in,
 
               // configuration output to data engine
-              output [`CONF_BITS-1:0]      conf_out
+              output [`CONF_BITS-1:0]    conf_out
               );
 
-   reg                                     conf_reg_valid;
+   reg                                   conf_reg_valid;
 
 `ifdef CONF_MEM_USE
-   reg                                     conf_mem_valid;
-   wire                                    conf_ld;
-   wire [`CONF_BITS-1:0]                   conf_from_mem;
+   reg                                   conf_mem_valid;
+   wire                                  conf_ld;
+   wire [`CONF_BITS-1:0]                 conf_from_mem;
 `endif
    
 
