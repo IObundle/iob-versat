@@ -22,7 +22,7 @@
 module xversat_tb;
 
    parameter			ADDR_W = 32;
-   parameter			DATA_W = 16;
+   parameter			DATA_W = 32;
 
    //inputs
    reg 			   	clk;
@@ -32,7 +32,7 @@ module xversat_tb;
    reg 			   	    valid;
    reg [ADDR_W-1:0]  	addr;
    reg 			   	    we;
-   reg [2*DATA_W-1:0]   rdata;
+   reg [DATA_W-1:0]     rdata;
    wire				    ready;
    wire [DATA_W-1:0]    wdata;
 
@@ -381,7 +381,7 @@ module xversat_tb;
 
    task cpu_write;
       input [ADDR_W-1:0] cpu_address;
-      input [2*DATA_W-1:0] cpu_data;
+      input [DATA_W-1:0] cpu_data;
       addr = cpu_address;
       valid = 1;
       we = 1;

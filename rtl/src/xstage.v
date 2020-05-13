@@ -24,16 +24,16 @@ module xstage # (
     input                           valid,
     input                           we,
     input [`nMEM_W+`MEM_ADDR_W+1:0] addr,
-    input [2*DATA_W-1:0]            rdata,
+    input [DATA_W-1:0]              rdata,
     output [DATA_W-1:0]             wdata,
 `ifdef IO
     // Databus master interface
     input [`nIO-1:0]                m_databus_ready,
     output [`nIO-1:0]               m_databus_valid,
     output [`nIO*`IO_ADDR_W-1:0]    m_databus_addr,
-    input [`nIO*DATA_W-1:0]         m_databus_rdata,
-    output [`nIO*DATA_W-1:0]        m_databus_wdata,
-    output [`nIO*DATA_W/8-1:0]      m_databus_wstrb,
+    input [`nIO*`DATAPATH_W-1:0]    m_databus_rdata,
+    output [`nIO*`DATAPATH_W-1:0]   m_databus_wdata,
+    output [`nIO*`DATAPATH_W/8-1:0] m_databus_wstrb,
 `endif
     // versat flow interface
     input [`DATABUS_W-1:0]          flow_in,
@@ -77,7 +77,7 @@ module xstage # (
 	         .valid(eng_valid),
              .we(we),
 	         .addr(addr[`nMEM_W+`MEM_ADDR_W:0]),
-	         .rdata(rdata[DATA_W-1:0]),
+	         .rdata(rdata),
 	         .wdata(wdata),
 `ifdef IO
 		     // Databus master interface
