@@ -3,11 +3,15 @@
 
 // Number of functional units in each stage
 `define nMEM      4
+`define nVI       0
+`define nVO       0
 `define nALU      0
 `define nALULITE  2
 `define nMUL      0
 `define nMULADD   2
 `define nBS       0
+
+`define nIO (`nVI+`nVO)
 
 // Configurable address widths
 `define MEM_ADDR_W 10

@@ -2,18 +2,20 @@
 
  Data bus structure
 
- {MEM0A, MEM0B, ..., ALU0, ..., ALULITE0, ..., MUL0, ..., MULADD0, ..., BS0, ...}
+ {MEM0A, MEM0B, ..., VREAD0, ..., ALU0, ..., ALULITE0, ..., MUL0, ..., MULADD0, ..., BS0, ...}
 
 
  Config bus structure
 
- {MEM0A, MEM0B, ..., ALU0, ..., ALULITE0, ..., MUL0, ..., MULADD0, ..., BS0, ...}
+ {MEM0A, MEM0B, ..., VREAD0, ..., VWRITE0, ..., ALU0, ..., ALULITE0, ..., MUL0, ..., MULADD0, ..., BS0, ...}
 
  */
 
 `timescale 1ns / 1ps
+
 `include "xversat.vh"
 `include "xmemdefs.vh"
+`include "versat-io.vh"
 `include "xaludefs.vh"
 `include "xalulitedefs.vh"
 `include "xmuldefs.vh"
@@ -21,32 +23,40 @@
 `include "xbsdefs.vh"
 `include "xconfdefs.vh"
 
-module xdata_eng #(
-		  parameter			  DATA_W = 32
-		  ) (
-                  input                           clk,
-                  input                           rst,
+module xdata_eng # (
+		            parameter	  DATA_W = 32
+		            )
+   (
+    input                          clk,
+    input                          rst,
 
-                  //data/ctr interface
-                  input                           valid,
-                  input                           we,
-                  input [`nMEM_W+`MEM_ADDR_W:0]   addr,
-                  input [DATA_W-1:0]              rdata,
-                  output reg [DATA_W-1:0]         wdata,
+    // data/ctr interface
+    input                          valid,
+    input                          we,
+    input [`nMEM_W+`MEM_ADDR_W:0]  addr,
+    input [DATA_W-1:0]             rdata,
+    output reg [DATA_W-1:0]        wdata,
+`ifdef IO
+    // Databus master interface
+    input [`nIO-1:0]               m_databus_ready,
+    output [`nIO-1:0]              m_databus_valid,
+    output [`nIO*`IO_ADDR_W-1:0]   m_databus_addr,
+    input [`nIO*`IO_DATA_W-1:0]    m_databus_rdata,
+    output [`nIO*`IO_DATA_W-1:0]   m_databus_wdata,
+    output [`nIO*`IO_DATA_W/8-1:0] m_databus_wstrb,
+`endif
+    // flow interface
+    input [`DATABUS_W-1:0]         flow_in,
+    output [`DATABUS_W-1:0]        flow_out,
 
-                  //flow interface
-                  input [`DATABUS_W-1:0]          flow_in, 
-                  output [`DATABUS_W-1:0]         flow_out, 
+    // configuration bus
+    input [`CONF_BITS-1:0]         config_bus
+    );
 
-                  // configuration bus
-                  input [`CONF_BITS-1:0]          config_bus
+   // WIDE ENGINE DATA BUS
+   wire [2*`DATABUS_W-1:0]         data_bus;
 
-                  );
-
-   //WIDE ENGINE DATA BUS
-   wire [2*`DATABUS_W-1:0]                        data_bus;
-
-   //flow interface
+   // flow interface
    assign data_bus[2*`DATABUS_W-1:`DATABUS_W] = flow_in;
    assign flow_out = data_bus[`DATABUS_W-1:0] ;
 
@@ -54,15 +64,15 @@ module xdata_eng #(
    // ADDRESS DECODER
    //
 
-   //address register
+   // address register
    reg [`nMEM_W-1:0] addr_reg;
    always @ (posedge rst, posedge clk)
-      if(rst)
-	 addr_reg <= 0;
-      else
-	 addr_reg <= addr[`nMEM_W + `MEM_ADDR_W -1 -: `nMEM_W];
+     if (rst)
+	   addr_reg <= 0;
+     else
+	   addr_reg <= addr[`nMEM_W + `MEM_ADDR_W -1 -: `nMEM_W];
 
-   //select control/status register or data memory 
+   // select control/status register or data memory
    reg control_valid;
    reg [`nMEM-1:0] mem_valid;
    always @ * begin
@@ -72,35 +82,49 @@ module xdata_eng #(
       if (addr[`nMEM_W+`MEM_ADDR_W])
         control_valid = valid;
       else
-        for(j=0; j<`nMEM; j=j+1)
-	  if ( j[`nMEM_W-1:0] == addr[`nMEM_W+`MEM_ADDR_W-1 -: `nMEM_W] )
-	    mem_valid[j] = valid;
+        for (j=0; j<`nMEM; j=j+1)
+	      if ( j[`nMEM_W-1:0] == addr[`nMEM_W+`MEM_ADDR_W-1 -: `nMEM_W] )
+	        mem_valid[j] = valid;
    end
 
-   //register selected data memory output
+   // register selected data memory output
    reg [DATA_W-1: 0] data_reg;
    always @ * begin
       integer j;
       data_reg = {DATA_W{1'b0}};
       for (j=0; j < `nMEM; j= j+1)
-	if (addr_reg == j[`nMEM_W-1:0])
-	  data_reg = data_bus[`DATA_MEM0A_B - 2*j*DATA_W  -: DATA_W]; //Port A
+	    if (addr_reg == j[`nMEM_W-1:0])
+	      data_reg = data_bus[`DATA_MEM0A_B - 2*j*DATA_W  -: DATA_W]; //Port A
    end
    
-   //read: select output data
+   // read: select output data
    wire [2*`nMEM-1:0] mem_done;
-   always @ *
-      if(control_valid)
-	wdata = {{DATA_W-1{1'b0}}, &mem_done};
-      else 
-	wdata = data_reg;
+   wire               io_done;
+`ifdef IO
+   wire [2*`nVI-1:0]  read_port_done;
+   wire [2*`nVO-1:0]  write_port_done;
+`endif
+   wire               done;
 
-   //run 
+`ifdef IO
+   assign io_done = &{read_port_done, write_port_done};
+`else
+   assign io_done = 1'b1;
+`endif
+   assign done = &{mem_done, io_done};
+
+   always @ *
+     if (control_valid)
+	   wdata = {{DATA_W-1{1'b0}}, done};
+     else
+	   wdata = data_reg;
+
+   // run
    reg ctr_reg;
    always @ (posedge rst, posedge clk)
-     if(rst) 
+     if (rst)
        ctr_reg <= 1'b0;
-     else if (~we || ~control_valid)
+     else if (~we | ~control_valid)
        ctr_reg <= 1'b0;
      else
        ctr_reg <= rdata[0];
@@ -112,10 +136,10 @@ module xdata_eng #(
    //
    reg [`CONF_BITS-1:0] config_reg_shadow;
    always @ (posedge rst, posedge clk)
-      if(rst)
-	 config_reg_shadow <= {`CONF_BITS{1'b0}};
-      else if(run)
-	 config_reg_shadow <= config_bus;
+     if (rst)
+	   config_reg_shadow <= {`CONF_BITS{1'b0}};
+     else if (run)
+	   config_reg_shadow <= config_bus;
    
    //
    // INSTANTIATE THE FUNCTIONAL UNITS
@@ -147,6 +171,67 @@ module xdata_eng #(
 	   // configuration interface
 	   .config_bits(config_reg_shadow[`CONF_MEM0A_B - 2*i*`MEMP_CONF_BITS -: 2*`MEMP_CONF_BITS])
 	   );
+   end
+   endgenerate
+
+   // Instantiate the read ports
+   generate for (i=0; i < `nVI; i=i+1) begin : read_port_array
+      vread # (
+               .DATA_W(DATA_W)
+               )
+      read_port (
+	             .clk(clk),
+	             .rst(rst),
+
+	             .run(run_reg),
+	             .doneA(read_port_done[2*i]),
+	             .doneB(read_port_done[2*i+1]),
+
+                 // Databus interface
+	             .databus_ready(m_databus_ready[`nIO-1 -i -: 1]),
+	             .databus_valid(m_databus_valid[`nIO-1 -i -: 1]),
+	             .databus_addr(m_databus_addr[`nIO*`IO_ADDR_W-1 -i*`IO_ADDR_W -: `IO_ADDR_W]),
+	             .databus_rdata(m_databus_rdata[`nIO*`IO_DATA_W-1 -i*`IO_DATA_W -: `IO_DATA_W]),
+	             .databus_wdata(m_databus_wdata[`nIO*`IO_DATA_W-1 -i*`IO_DATA_W -: `IO_DATA_W]),
+                 .databus_wstrb(m_databus_wstrb[`nIO*`IO_DATA_W/8-1 -i*`IO_DATA_W/8 -: `IO_DATA_W/8]),
+
+	             // flow interface
+		         .flow_in(data_bus),
+		         .flow_out(data_bus[`DATA_VI0_B - i*DATA_W -: DATA_W]),
+
+	             // Configuration interface
+	             .config_bits(config_reg_shadow[`CONF_VI0_B - i*`VI_CONFIG_BITS -: `VI_CONFIG_BITS])
+	             );
+   end
+   endgenerate
+
+   // Instantiate the write ports
+   generate for (i=0; i < `nVO; i=i+1) begin : write_port_array
+      vwrite # (
+                .DATA_W(DATA_W)
+                )
+      write_port (
+	              .clk(clk),
+	              .rst(rst),
+
+	              .run(run_reg),
+	              .doneA(write_port_done[2*i]),
+	              .doneB(write_port_done[2*i+1]),
+
+	              // Databus interface
+	              .databus_ready(m_databus_ready[`nIO-1 -(i+`nVI) -: 1]),
+	              .databus_valid(m_databus_valid[`nIO-1 -(i+`nVI) -: 1]),
+	              .databus_addr(m_databus_addr[`nIO*`IO_ADDR_W-1 -(i+`nVI)*`IO_ADDR_W -: `IO_ADDR_W]),
+	              .databus_rdata(m_databus_rdata[`nIO*`IO_DATA_W-1 -(i+`nVI)*`IO_DATA_W -: `IO_DATA_W]),
+	              .databus_wdata(m_databus_wdata[`nIO*`IO_DATA_W-1 -(i+`nVI)*`IO_DATA_W -: `IO_DATA_W]),
+                  .databus_wstrb(m_databus_wstrb[`nIO*`IO_DATA_W/8-1 -(i+`nVI)*`IO_DATA_W/8 -: `IO_DATA_W/8]),
+
+	              // flow interface
+		          .flow_in(data_bus),
+
+	              // Configuration interface
+	              .config_bits(config_reg_shadow[`CONF_VO0_B - i*`VO_CONFIG_BITS -: `VO_CONFIG_BITS])
+	              );
    end
    endgenerate
 

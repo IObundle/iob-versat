@@ -9,7 +9,7 @@
 `define CTR_ADDR_W (`nSTAGE_W+2+`nMEM_W+`MEM_ADDR_W)
 
 // Number of data bus entries
-`define N         (2*`nMEM + `nALU + `nALULITE + `nMUL + `nMULADD + `nBS)
+`define N         (2*`nMEM + `nVI + `nALU + `nALULITE + `nMUL + `nMULADD + `nBS)
 // Number of bits required for N
 `define N_W       ($clog2(`N)+1)
 
@@ -20,7 +20,8 @@
 // Data bus bit map
 //
 `define DATA_MEM0A_B    (`DATABUS_W-1)
-`define DATA_ALU0_B     (`DATA_MEM0A_B - 2*`nMEM*DATA_W)
+`define DATA_VI0_B      (`DATA_MEM0A_B - 2*`nMEM*DATA_W)
+`define DATA_ALU0_B     (`DATA_VI0_B - `nVI*DATA_W)
 `define DATA_ALULITE0_B (`DATA_ALU0_B - `nALU*DATA_W)
 `define DATA_MUL0_B     (`DATA_ALULITE0_B - `nALULITE*DATA_W)
 `define DATA_MULADD0_B  (`DATA_MUL0_B - `nMUL*DATA_W )
