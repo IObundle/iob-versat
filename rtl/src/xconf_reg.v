@@ -4,6 +4,7 @@
 
 `include "xconfdefs.vh"
 `include "xmemdefs.vh"
+`include "versat-io.vh"
 `include "xaludefs.vh"
 `include "xalulitedefs.vh"
 `include "xmuldefs.vh"
@@ -13,27 +14,27 @@
 module xconf_reg # ( 
       parameter			    DATA_W = 32
 ) (
-      input                         clk,
-      input                         rst,
+      input                      clk,
+      input                      rst,
       
       //config interface
-      output [`CONF_BITS-1:0]       conf_out,
+      output [`CONF_BITS-1:0]    conf_out,
 `ifdef CONF_MEM_USE
       //Config mem interface
-      input [`CONF_BITS-1:0]        conf_in,
-      input                         conf_ld,
+      input [`CONF_BITS-1:0]     conf_in,
+      input                      conf_ld,
 `endif
 
       //control interface
-      input                         ctr_valid,
-      input                         ctr_we,
-      input [`CONF_REG_ADDR_W:0]    ctr_addr,
-      input [`MEM_ADDR_W-1:0]       ctr_data_in
+      input                      ctr_valid,
+      input                      ctr_we,
+      input [`CONF_REG_ADDR_W:0] ctr_addr,
+      input [`IO_ADDR_W-1:0]     ctr_data_in
       );
 
-      reg [`CONF_BITS-1:0]          conf_reg;
-      wire                          conf_we;
-      integer                       i;
+   reg [`CONF_BITS-1:0]          conf_reg;
+   wire                          conf_we;
+   integer                       i;
       
    // assign output 
    assign conf_out=conf_reg;
@@ -103,7 +104,146 @@ module xconf_reg # (
                conf_reg[`CONF_MEM0A_B-i*`MEMP_CONF_BITS-6*`MEM_ADDR_W-4*`PERIOD_W -`N_W-3 -: `MEM_ADDR_W] <= ctr_data_in[`MEM_ADDR_W-1:0];  
 
 	   end // for (i=0; i<2*`nMEM; i=i+1)
-	
+
+      // configure VIs
+	  for (i=0; i<`nVI; i=i+1) begin
+
+         if(ctr_addr == (`CONF_VI0 + i*`VI_CONF_OFFSET + `VI_CONF_EXT_ADDR))
+	       conf_reg[`CONF_VI0_B-i*`VI_CONFIG_BITS -: `IO_ADDR_W] <= ctr_data_in[`IO_ADDR_W-1:0];
+
+	     if(ctr_addr == (`CONF_VI0 + i*`VI_CONF_OFFSET + `VI_CONF_INT_ADDR))
+	       conf_reg[`CONF_VI0_B-i*`VI_CONFIG_BITS-`IO_ADDR_W -: `MEM_ADDR_W] <= ctr_data_in[`MEM_ADDR_W-1:0];
+
+	     if(ctr_addr == (`CONF_VI0 + i*`VI_CONF_OFFSET + `VI_CONF_SIZE))
+	       conf_reg[`CONF_VI0_B-i*`VI_CONFIG_BITS-`IO_ADDR_W-`MEM_ADDR_W -: `IO_SIZE_W] <= ctr_data_in[`IO_SIZE_W-1:0];
+
+         if(ctr_addr == (`CONF_VI0 + i*`VI_CONF_OFFSET + `VI_CONF_ITER_A))
+	       conf_reg[`CONF_VI0_B-i*`VI_CONFIG_BITS-`IO_ADDR_W-`IO_SIZE_W-`MEM_ADDR_W -: `MEM_ADDR_W] <= ctr_data_in[`MEM_ADDR_W-1:0];
+
+	     if(ctr_addr == (`CONF_VI0 + i*`VI_CONF_OFFSET + `VI_CONF_PER_A))
+	       conf_reg[`CONF_VI0_B-i*`VI_CONFIG_BITS-`IO_ADDR_W-`IO_SIZE_W-2*`MEM_ADDR_W -: `PERIOD_W] <= ctr_data_in[`PERIOD_W-1:0];
+
+	     if(ctr_addr == (`CONF_VI0 + i*`VI_CONF_OFFSET + `VI_CONF_DUTY_A))
+	       conf_reg[`CONF_VI0_B-i*`VI_CONFIG_BITS-`IO_ADDR_W-`IO_SIZE_W-2*`MEM_ADDR_W-`PERIOD_W -: `PERIOD_W] <= ctr_data_in[`PERIOD_W-1:0];
+
+	     if(ctr_addr == (`CONF_VI0 + i*`VI_CONF_OFFSET + `VI_CONF_SHIFT_A))
+	       conf_reg[`CONF_VI0_B-i*`VI_CONFIG_BITS-`IO_ADDR_W-`IO_SIZE_W-2*`MEM_ADDR_W-2*`PERIOD_W -: `MEM_ADDR_W] <= ctr_data_in[`MEM_ADDR_W-1:0];
+
+	     if(ctr_addr == (`CONF_VI0 + i*`VI_CONF_OFFSET + `VI_CONF_INCR_A))
+	       conf_reg[`CONF_VI0_B-i*`VI_CONFIG_BITS-`IO_ADDR_W-`IO_SIZE_W-3*`MEM_ADDR_W-2*`PERIOD_W -: `MEM_ADDR_W] <= ctr_data_in[`MEM_ADDR_W-1:0];
+
+	     if(ctr_addr == (`CONF_VI0 + i*`VI_CONF_OFFSET + `VI_CONF_ITER_B))
+	       conf_reg[`CONF_VI0_B-i*`VI_CONFIG_BITS-`IO_ADDR_W-`IO_SIZE_W-4*`MEM_ADDR_W-2*`PERIOD_W -: `MEM_ADDR_W] <= ctr_data_in[`MEM_ADDR_W-1:0];
+
+	     if(ctr_addr == (`CONF_VI0 + i*`VI_CONF_OFFSET + `VI_CONF_PER_B))
+	       conf_reg[`CONF_VI0_B-i*`VI_CONFIG_BITS-`IO_ADDR_W-`IO_SIZE_W-5*`MEM_ADDR_W-2*`PERIOD_W -: `PERIOD_W] <= ctr_data_in[`PERIOD_W-1:0];
+
+	     if(ctr_addr == (`CONF_VI0 + i*`VI_CONF_OFFSET + `VI_CONF_DUTY_B))
+	       conf_reg[`CONF_VI0_B-i*`VI_CONFIG_BITS-`IO_ADDR_W-`IO_SIZE_W-5*`MEM_ADDR_W-3*`PERIOD_W -: `PERIOD_W] <= ctr_data_in[`PERIOD_W-1:0];
+
+	     if(ctr_addr == (`CONF_VI0 + i*`VI_CONF_OFFSET + `VI_CONF_START_B))
+	       conf_reg[`CONF_VI0_B-i*`VI_CONFIG_BITS-`IO_ADDR_W-`IO_SIZE_W-5*`MEM_ADDR_W-4*`PERIOD_W -: `MEM_ADDR_W] <= ctr_data_in[`MEM_ADDR_W-1:0];
+
+	     if(ctr_addr == (`CONF_VI0 + i*`VI_CONF_OFFSET + `VI_CONF_SHIFT_B))
+	       conf_reg[`CONF_VI0_B-i*`VI_CONFIG_BITS-`IO_ADDR_W-`IO_SIZE_W-6*`MEM_ADDR_W-4*`PERIOD_W -: `MEM_ADDR_W] <= ctr_data_in[`MEM_ADDR_W-1:0];
+
+	     if(ctr_addr == (`CONF_VI0 + i*`VI_CONF_OFFSET + `VI_CONF_INCR_B))
+	       conf_reg[`CONF_VI0_B-i*`VI_CONFIG_BITS-`IO_ADDR_W-`IO_SIZE_W-7*`MEM_ADDR_W-4*`PERIOD_W -: `MEM_ADDR_W] <= ctr_data_in[`MEM_ADDR_W-1:0];
+
+	     if(ctr_addr == (`CONF_VI0 + i*`VI_CONF_OFFSET + `VI_CONF_DELAY_B))
+	       conf_reg[`CONF_VI0_B-i*`VI_CONFIG_BITS-`IO_ADDR_W-`IO_SIZE_W-8*`MEM_ADDR_W-4*`PERIOD_W -: `PERIOD_W] <= ctr_data_in[`PERIOD_W-1:0];
+
+	     if(ctr_addr == (`CONF_VI0 + i*`VI_CONF_OFFSET + `VI_CONF_RVRS_B))
+	       conf_reg[`CONF_VI0_B-i*`VI_CONFIG_BITS-`IO_ADDR_W-`IO_SIZE_W-8*`MEM_ADDR_W-5*`PERIOD_W -: 1] <= ctr_data_in[0];
+
+	     if(ctr_addr == (`CONF_VI0 + i*`VI_CONF_OFFSET + `VI_CONF_EXT_B))
+	       conf_reg[`CONF_VI0_B-i*`VI_CONFIG_BITS-`IO_ADDR_W-`IO_SIZE_W-8*`MEM_ADDR_W-5*`PERIOD_W-1 -: 1] <= ctr_data_in[0];
+
+	     if(ctr_addr == (`CONF_VI0 + i*`VI_CONF_OFFSET + `VI_CONF_ITER2_B))
+           conf_reg[`CONF_VI0_B-i*`VI_CONFIG_BITS-`IO_ADDR_W-`IO_SIZE_W-8*`MEM_ADDR_W-5*`PERIOD_W-2 -: `MEM_ADDR_W] <= ctr_data_in[`MEM_ADDR_W-1:0];
+
+         if(ctr_addr == (`CONF_VI0 + i*`VI_CONF_OFFSET + `VI_CONF_PER2_B))
+           conf_reg[`CONF_VI0_B-i*`VI_CONFIG_BITS-`IO_ADDR_W-`IO_SIZE_W-9*`MEM_ADDR_W-5*`PERIOD_W-2 -: `PERIOD_W] <= ctr_data_in[`PERIOD_W-1:0];
+
+         if(ctr_addr == (`CONF_VI0 + i*`VI_CONF_OFFSET + `VI_CONF_SHIFT2_B))
+           conf_reg[`CONF_VI0_B-i*`VI_CONFIG_BITS-`IO_ADDR_W-`IO_SIZE_W-9*`MEM_ADDR_W-6*`PERIOD_W-2 -: `MEM_ADDR_W] <= ctr_data_in[`MEM_ADDR_W-1:0];
+
+         if(ctr_addr == (`CONF_VI0 + i*`VI_CONF_OFFSET + `VI_CONF_INCR2_B))
+           conf_reg[`CONF_VI0_B-i*`VI_CONFIG_BITS-`IO_ADDR_W-`IO_SIZE_W-10*`MEM_ADDR_W-6*`PERIOD_W-2 -: `MEM_ADDR_W] <= ctr_data_in[`MEM_ADDR_W-1:0];
+
+	   end // for (i=0; i<`nVI; i=i+1)
+
+      // configure VOs
+	  for (i=0; i<`nVO; i=i+1) begin
+
+         if(ctr_addr == (`CONF_VO0 + i*`VO_CONF_OFFSET + `VO_CONF_EXT_ADDR))
+	       conf_reg[`CONF_VO0_B-i*`VO_CONFIG_BITS -: `IO_ADDR_W] <= ctr_data_in[`IO_ADDR_W-1:0];
+
+	     if(ctr_addr == (`CONF_VO0 + i*`VO_CONF_OFFSET + `VO_CONF_INT_ADDR))
+	       conf_reg[`CONF_VO0_B-i*`VO_CONFIG_BITS-`IO_ADDR_W -: `MEM_ADDR_W] <= ctr_data_in[`MEM_ADDR_W-1:0];
+
+	     if(ctr_addr == (`CONF_VO0 + i*`VO_CONF_OFFSET + `VO_CONF_SIZE))
+	       conf_reg[`CONF_VO0_B-i*`VO_CONFIG_BITS-`IO_ADDR_W-`MEM_ADDR_W -: `IO_SIZE_W] <= ctr_data_in[`IO_SIZE_W-1:0];
+
+         if(ctr_addr == (`CONF_VO0 + i*`VO_CONF_OFFSET + `VO_CONF_ITER_A))
+	       conf_reg[`CONF_VO0_B-i*`VO_CONFIG_BITS-`IO_ADDR_W-`IO_SIZE_W-`MEM_ADDR_W -: `MEM_ADDR_W] <= ctr_data_in[`MEM_ADDR_W-1:0];
+
+	     if(ctr_addr == (`CONF_VO0 + i*`VO_CONF_OFFSET + `VO_CONF_PER_A))
+	       conf_reg[`CONF_VO0_B-i*`VO_CONFIG_BITS-`IO_ADDR_W-`IO_SIZE_W-2*`MEM_ADDR_W -: `PERIOD_W] <= ctr_data_in[`PERIOD_W-1:0];
+
+	     if(ctr_addr == (`CONF_VO0 + i*`VO_CONF_OFFSET + `VO_CONF_DUTY_A))
+	       conf_reg[`CONF_VO0_B-i*`VO_CONFIG_BITS-`IO_ADDR_W-`IO_SIZE_W-2*`MEM_ADDR_W-`PERIOD_W -: `PERIOD_W] <= ctr_data_in[`PERIOD_W-1:0];
+
+	     if(ctr_addr == (`CONF_VO0 + i*`VO_CONF_OFFSET + `VO_CONF_SHIFT_A))
+	       conf_reg[`CONF_VO0_B-i*`VO_CONFIG_BITS-`IO_ADDR_W-`IO_SIZE_W-2*`MEM_ADDR_W-2*`PERIOD_W -: `MEM_ADDR_W] <= ctr_data_in[`MEM_ADDR_W-1:0];
+
+	     if(ctr_addr == (`CONF_VO0 + i*`VO_CONF_OFFSET + `VO_CONF_INCR_A))
+	       conf_reg[`CONF_VO0_B-i*`VO_CONFIG_BITS-`IO_ADDR_W-`IO_SIZE_W-3*`MEM_ADDR_W-2*`PERIOD_W -: `MEM_ADDR_W] <= ctr_data_in[`MEM_ADDR_W-1:0];
+
+	     if(ctr_addr == (`CONF_VO0 + i*`VO_CONF_OFFSET + `VO_CONF_ITER_B))
+	       conf_reg[`CONF_VO0_B-i*`VO_CONFIG_BITS-`IO_ADDR_W-`IO_SIZE_W-4*`MEM_ADDR_W-2*`PERIOD_W -: `MEM_ADDR_W] <= ctr_data_in[`MEM_ADDR_W-1:0];
+
+	     if(ctr_addr == (`CONF_VO0 + i*`VO_CONF_OFFSET + `VO_CONF_PER_B))
+	       conf_reg[`CONF_VO0_B-i*`VO_CONFIG_BITS-`IO_ADDR_W-`IO_SIZE_W-5*`MEM_ADDR_W-2*`PERIOD_W -: `PERIOD_W] <= ctr_data_in[`PERIOD_W-1:0];
+
+	     if(ctr_addr == (`CONF_VO0 + i*`VO_CONF_OFFSET + `VO_CONF_DUTY_B))
+	       conf_reg[`CONF_VO0_B-i*`VO_CONFIG_BITS-`IO_ADDR_W-`IO_SIZE_W-5*`MEM_ADDR_W-3*`PERIOD_W -: `PERIOD_W] <= ctr_data_in[`PERIOD_W-1:0];
+
+	     if(ctr_addr == (`CONF_VO0 + i*`VO_CONF_OFFSET + `VO_CONF_SEL_B))
+	       conf_reg[`CONF_VO0_B-i*`VO_CONFIG_BITS-`IO_ADDR_W-`IO_SIZE_W-5*`MEM_ADDR_W-4*`PERIOD_W -: `N_W] <= ctr_data_in[`N_W-1:0];
+
+	     if(ctr_addr == (`CONF_VO0 + i*`VO_CONF_OFFSET + `VO_CONF_START_B))
+	       conf_reg[`CONF_VO0_B-i*`VO_CONFIG_BITS-`IO_ADDR_W-`IO_SIZE_W-5*`MEM_ADDR_W-4*`PERIOD_W-`N_W -: `MEM_ADDR_W] <= ctr_data_in[`MEM_ADDR_W-1:0];
+
+	     if(ctr_addr == (`CONF_VO0 + i*`VO_CONF_OFFSET + `VO_CONF_SHIFT_B))
+	       conf_reg[`CONF_VO0_B-i*`VO_CONFIG_BITS-`IO_ADDR_W-`IO_SIZE_W-6*`MEM_ADDR_W-4*`PERIOD_W-`N_W -: `MEM_ADDR_W] <= ctr_data_in[`MEM_ADDR_W-1:0];
+
+	     if(ctr_addr == (`CONF_VO0 + i*`VO_CONF_OFFSET + `VO_CONF_INCR_B))
+	       conf_reg[`CONF_VO0_B-i*`VO_CONFIG_BITS-`IO_ADDR_W-`IO_SIZE_W-7*`MEM_ADDR_W-4*`PERIOD_W-`N_W -: `MEM_ADDR_W] <= ctr_data_in[`MEM_ADDR_W-1:0];
+
+	     if(ctr_addr == (`CONF_VO0 + i*`VO_CONF_OFFSET + `VO_CONF_DELAY_B))
+	       conf_reg[`CONF_VO0_B-i*`VO_CONFIG_BITS-`IO_ADDR_W-`IO_SIZE_W-8*`MEM_ADDR_W-4*`PERIOD_W-`N_W -: `PERIOD_W] <= ctr_data_in[`PERIOD_W-1:0];
+
+	     if(ctr_addr == (`CONF_VO0 + i*`VO_CONF_OFFSET + `VO_CONF_RVRS_B))
+	       conf_reg[`CONF_VO0_B-i*`VO_CONFIG_BITS-`IO_ADDR_W-`IO_SIZE_W-8*`MEM_ADDR_W-5*`PERIOD_W-`N_W -: 1] <= ctr_data_in[0];
+
+	     if(ctr_addr == (`CONF_VO0 + i*`VO_CONF_OFFSET + `VO_CONF_EXT_B))
+	       conf_reg[`CONF_VO0_B-i*`VO_CONFIG_BITS-`IO_ADDR_W-`IO_SIZE_W-8*`MEM_ADDR_W-5*`PERIOD_W-`N_W-1 -: 1] <= ctr_data_in[0];
+
+	     if(ctr_addr == (`CONF_VO0 + i*`VO_CONF_OFFSET + `VO_CONF_ITER2_B))
+           conf_reg[`CONF_VO0_B-i*`VO_CONFIG_BITS-`IO_ADDR_W-`IO_SIZE_W-8*`MEM_ADDR_W-5*`PERIOD_W-`N_W-2 -: `MEM_ADDR_W] <= ctr_data_in[`MEM_ADDR_W-1:0];
+
+         if(ctr_addr == (`CONF_VO0 + i*`VO_CONF_OFFSET + `VO_CONF_PER2_B))
+           conf_reg[`CONF_VO0_B-i*`VO_CONFIG_BITS-`IO_ADDR_W-`IO_SIZE_W-9*`MEM_ADDR_W-5*`PERIOD_W-`N_W-2 -: `PERIOD_W] <= ctr_data_in[`PERIOD_W-1:0];
+
+         if(ctr_addr == (`CONF_VO0 + i*`VO_CONF_OFFSET + `VO_CONF_SHIFT2_B))
+           conf_reg[`CONF_VO0_B-i*`VO_CONFIG_BITS-`IO_ADDR_W-`IO_SIZE_W-9*`MEM_ADDR_W-6*`PERIOD_W-`N_W-2 -: `MEM_ADDR_W] <= ctr_data_in[`MEM_ADDR_W-1:0];
+
+         if(ctr_addr == (`CONF_VO0 + i*`VO_CONF_OFFSET + `VO_CONF_INCR2_B))
+           conf_reg[`CONF_VO0_B-i*`VO_CONFIG_BITS-`IO_ADDR_W-`IO_SIZE_W-10*`MEM_ADDR_W-6*`PERIOD_W-`N_W-2 -: `MEM_ADDR_W] <= ctr_data_in[`MEM_ADDR_W-1:0];
+
+	   end // for (i=0; i<`nVO; i=i+1)
+
 	   // configure ALUs
 	   for (i=0; i<`nALU; i=i+1) begin 
 	      if(ctr_addr == (`CONF_ALU0 + i*`ALU_CONF_OFFSET + `ALU_CONF_SELA))

@@ -27,34 +27,34 @@ module xdata_eng # (
 		            parameter	  DATA_W = 32
 		            )
    (
-    input                          clk,
-    input                          rst,
+    input                         clk,
+    input                         rst,
 
     // data/ctr interface
-    input                          valid,
-    input                          we,
-    input [`nMEM_W+`MEM_ADDR_W:0]  addr,
-    input [DATA_W-1:0]             rdata,
-    output reg [DATA_W-1:0]        wdata,
+    input                         valid,
+    input                         we,
+    input [`nMEM_W+`MEM_ADDR_W:0] addr,
+    input [DATA_W-1:0]            rdata,
+    output reg [DATA_W-1:0]       wdata,
 `ifdef IO
     // Databus master interface
-    input [`nIO-1:0]               m_databus_ready,
-    output [`nIO-1:0]              m_databus_valid,
-    output [`nIO*`IO_ADDR_W-1:0]   m_databus_addr,
-    input [`nIO*`IO_DATA_W-1:0]    m_databus_rdata,
-    output [`nIO*`IO_DATA_W-1:0]   m_databus_wdata,
-    output [`nIO*`IO_DATA_W/8-1:0] m_databus_wstrb,
+    input [`nIO-1:0]              m_databus_ready,
+    output [`nIO-1:0]             m_databus_valid,
+    output [`nIO*`IO_ADDR_W-1:0]  m_databus_addr,
+    input [`nIO*DATA_W-1:0]       m_databus_rdata,
+    output [`nIO*DATA_W-1:0]      m_databus_wdata,
+    output [`nIO*DATA_W/8-1:0]    m_databus_wstrb,
 `endif
     // flow interface
-    input [`DATABUS_W-1:0]         flow_in,
-    output [`DATABUS_W-1:0]        flow_out,
+    input [`DATABUS_W-1:0]        flow_in,
+    output [`DATABUS_W-1:0]       flow_out,
 
     // configuration bus
-    input [`CONF_BITS-1:0]         config_bus
+    input [`CONF_BITS-1:0]        config_bus
     );
 
    // WIDE ENGINE DATA BUS
-   wire [2*`DATABUS_W-1:0]         data_bus;
+   wire [2*`DATABUS_W-1:0]        data_bus;
 
    // flow interface
    assign data_bus[2*`DATABUS_W-1:`DATABUS_W] = flow_in;
@@ -191,9 +191,9 @@ module xdata_eng # (
 	             .databus_ready(m_databus_ready[`nIO-1 -i -: 1]),
 	             .databus_valid(m_databus_valid[`nIO-1 -i -: 1]),
 	             .databus_addr(m_databus_addr[`nIO*`IO_ADDR_W-1 -i*`IO_ADDR_W -: `IO_ADDR_W]),
-	             .databus_rdata(m_databus_rdata[`nIO*`IO_DATA_W-1 -i*`IO_DATA_W -: `IO_DATA_W]),
-	             .databus_wdata(m_databus_wdata[`nIO*`IO_DATA_W-1 -i*`IO_DATA_W -: `IO_DATA_W]),
-                 .databus_wstrb(m_databus_wstrb[`nIO*`IO_DATA_W/8-1 -i*`IO_DATA_W/8 -: `IO_DATA_W/8]),
+	             .databus_rdata(m_databus_rdata[`nIO*DATA_W-1 -i*DATA_W -: DATA_W]),
+	             .databus_wdata(m_databus_wdata[`nIO*DATA_W-1 -i*DATA_W -: DATA_W]),
+                 .databus_wstrb(m_databus_wstrb[`nIO*DATA_W/8-1 -i*DATA_W/8 -: DATA_W/8]),
 
 	             // flow interface
 		         .flow_in(data_bus),
@@ -222,9 +222,9 @@ module xdata_eng # (
 	              .databus_ready(m_databus_ready[`nIO-1 -(i+`nVI) -: 1]),
 	              .databus_valid(m_databus_valid[`nIO-1 -(i+`nVI) -: 1]),
 	              .databus_addr(m_databus_addr[`nIO*`IO_ADDR_W-1 -(i+`nVI)*`IO_ADDR_W -: `IO_ADDR_W]),
-	              .databus_rdata(m_databus_rdata[`nIO*`IO_DATA_W-1 -(i+`nVI)*`IO_DATA_W -: `IO_DATA_W]),
-	              .databus_wdata(m_databus_wdata[`nIO*`IO_DATA_W-1 -(i+`nVI)*`IO_DATA_W -: `IO_DATA_W]),
-                  .databus_wstrb(m_databus_wstrb[`nIO*`IO_DATA_W/8-1 -(i+`nVI)*`IO_DATA_W/8 -: `IO_DATA_W/8]),
+	              .databus_rdata(m_databus_rdata[`nIO*DATA_W-1 -(i+`nVI)*DATA_W -: DATA_W]),
+	              .databus_wdata(m_databus_wdata[`nIO*DATA_W-1 -(i+`nVI)*DATA_W -: DATA_W]),
+                  .databus_wstrb(m_databus_wstrb[`nIO*DATA_W/8-1 -(i+`nVI)*DATA_W/8 -: DATA_W/8]),
 
 	              // flow interface
 		          .flow_in(data_bus),

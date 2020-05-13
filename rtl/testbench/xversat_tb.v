@@ -1,6 +1,7 @@
 `timescale 1ns / 1ps
 `include "xversat.vh"
 `include "xmemdefs.vh"
+`include "versat-io.vh"
 `include "xaludefs.vh"
 `include "xalulitedefs.vh"
 `include "xmuldefs.vh"
@@ -28,12 +29,12 @@ module xversat_tb;
    reg 			   	rst;
 
    //data/ctr interface
-   reg 			   	valid;
-   reg [ADDR_W-1:0]  		addr;
-   reg 			   	we;
-   reg [DATA_W-1:0]       	rdata;
-   wire				ready;
-   wire [DATA_W-1:0]     	wdata;
+   reg 			   	    valid;
+   reg [ADDR_W-1:0]  	addr;
+   reg 			   	    we;
+   reg [2*DATA_W-1:0]   rdata;
+   wire				    ready;
+   wire [DATA_W-1:0]    wdata;
 
    //parameters
    parameter 			clk_per     = 10;
@@ -380,7 +381,7 @@ module xversat_tb;
 
    task cpu_write;
       input [ADDR_W-1:0] cpu_address;
-      input [DATA_W-1:0] cpu_data;
+      input [2*DATA_W-1:0] cpu_data;
       addr = cpu_address;
       valid = 1;
       we = 1;

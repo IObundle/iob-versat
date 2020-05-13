@@ -18,24 +18,24 @@ module xversat # (
 		          parameter  DATA_W = 16
 	 	          )
    (
-    input                                  clk,
-    input                                  rst,
+    input                                clk,
+    input                                rst,
 `ifdef IO
     // Databus master interface
-    input [`nSTAGE*`nIO-1:0]               m_databus_ready,
-    output [`nSTAGE*`nIO-1:0]              m_databus_valid,
-    output [`nSTAGE*`nIO*`IO_ADDR_W-1:0]   m_databus_addr,
-    input [`nSTAGE*`nIO*`IO_DATA_W-1:0]    m_databus_rdata,
-    output [`nSTAGE*`nIO*`IO_DATA_W-1:0]   m_databus_wdata,
-    output [`nSTAGE*`nIO*`IO_DATA_W/8-1:0] m_databus_wstrb,
+    input [`nSTAGE*`nIO-1:0]             m_databus_ready,
+    output [`nSTAGE*`nIO-1:0]            m_databus_valid,
+    output [`nSTAGE*`nIO*`IO_ADDR_W-1:0] m_databus_addr,
+    input [`nSTAGE*`nIO*DATA_W-1:0]      m_databus_rdata,
+    output [`nSTAGE*`nIO*DATA_W-1:0]     m_databus_wdata,
+    output [`nSTAGE*`nIO*DATA_W/8-1:0]   m_databus_wstrb,
 `endif
     // data/control interface
-    input                                  valid,
-    input [ADDR_W-1:0]                     addr,
-    input                                  we,
-    input [DATA_W-1:0]                     rdata,
-	output reg                             ready,
-    output reg [DATA_W-1:0]                wdata
+    input                                valid,
+    input [ADDR_W-1:0]                   addr,
+    input                                we,
+    input [2*DATA_W-1:0]                 rdata,
+	output reg                           ready,
+    output reg [DATA_W-1:0]              wdata
     );
 
    // interface ready signal
@@ -125,9 +125,9 @@ module xversat # (
                 .m_databus_ready(m_databus_ready[`nSTAGE*`nIO-1 -i*`nIO -: `nIO]),
                 .m_databus_valid(m_databus_valid[`nSTAGE*`nIO-1 -i*`nIO -: `nIO]),
                 .m_databus_addr(m_databus_addr[`nSTAGE*`nIO*`IO_ADDR_W-1 -i*`nIO*`IO_ADDR_W -: `nIO*`IO_ADDR_W]),
-                .m_databus_rdata(m_databus_rdata[`nSTAGE*`nIO*`IO_DATA_W-1 -i*`nIO*`IO_DATA_W -: `nIO*`IO_DATA_W]),
-                .m_databus_wdata(m_databus_wdata[`nSTAGE*`nIO*`IO_DATA_W-1 -i*`nIO*`IO_DATA_W -: `nIO*`IO_DATA_W]),
-                .m_databus_wstrb (m_databus_wstrb[`nSTAGE*`nIO*`IO_DATA_W/8-1 -i*`nIO*`IO_DATA_W/8 -: `nIO*`IO_DATA_W/8]),
+                .m_databus_rdata(m_databus_rdata[`nSTAGE*`nIO*DATA_W-1 -i*`nIO*DATA_W -: `nIO*DATA_W]),
+                .m_databus_wdata(m_databus_wdata[`nSTAGE*`nIO*DATA_W-1 -i*`nIO*DATA_W -: `nIO*DATA_W]),
+                .m_databus_wstrb (m_databus_wstrb[`nSTAGE*`nIO*DATA_W/8-1 -i*`nIO*DATA_W/8 -: `nIO*DATA_W/8]),
 `endif
                 // flow interface
                 .flow_in(stage_databus[i]),
