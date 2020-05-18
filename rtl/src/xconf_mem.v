@@ -1,6 +1,7 @@
 `timescale 1ns / 1ps
 `include "xversat.vh"
 `include "xconfdefs.vh"
+`include "versat-io.vh"
 `include "xmemdefs.vh"
 `include "xaludefs.vh"
 `include "xalulitedefs.vh"

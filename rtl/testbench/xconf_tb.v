@@ -19,7 +19,7 @@ module xconf_tb;
 	reg 				ctr_valid;
 	reg 				ctr_we;
 	reg [`CONF_REG_ADDR_W:0]	ctr_addr;
-	reg [`MEM_ADDR_W-1:0]  		ctr_data_in;
+	reg [`IO_ADDR_W-1:0]  		ctr_data_in;
 
 	xconf # ( 
 		.DATA_W(DATA_W)
@@ -187,7 +187,7 @@ module xconf_tb;
 
       task cpu_ctr_write;
         input [`CONF_REG_ADDR_W:0] cpu_address;
-        input [`MEM_ADDR_W-1:0] cpu_data;
+        input [`IO_ADDR_W-1:0] cpu_data;
         ctr_addr = cpu_address;
         ctr_valid = 1;
         ctr_we = 1;
