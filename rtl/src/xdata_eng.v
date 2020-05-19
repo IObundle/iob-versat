@@ -173,6 +173,7 @@ module xdata_eng # (
    end
    endgenerate
 
+`ifdef IO
    // Instantiate the read ports
    generate for (i=0; i < `nVI; i=i+1) begin : read_port_array
       vread # (
@@ -233,6 +234,7 @@ module xdata_eng # (
 	              );
    end
    endgenerate
+`endif
 
    //
    // Instantiate the ALUs

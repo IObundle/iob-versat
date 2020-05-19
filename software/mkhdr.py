@@ -8,15 +8,15 @@ import sys
 import os
 
 #Check command line arguments
-if len(sys.argv) != 4:
-    print("Usage: python mkhdr.py <vh_files_directory> <xversat.vh directory> <h_file_directory>")
+if len(sys.argv) != 5:
+    print("Usage: python mkhdr.py <vh_files_directory> <xversat.vh directory> <versat-io.vh> <h_file_directory>")
     sys.exit()
 
 #List with defines to ignore
 ignore_list = ["FNS_W", "_BITS", "0_B", "A_B", "PERIOD_W", "DATABUS_W", "SHIFT_W"]
 
 #Write include file
-versat = open(sys.argv[3] + "/versat.h", "w")
+versat = open(sys.argv[4] + "/versat.h", "w")
 versat.write('//Versat include file\n#include <math.h>\n')
 versat.write('\n//MACRO to calculate ceil of log2\n#define clog2(x) ((int)ceil(log2(x)))\n')
 
@@ -110,6 +110,7 @@ for file in os.listdir(sys.argv[1]):
     if file.endswith(".vh"):
         convert(sys.argv[1] + "/", file)
 convert(sys.argv[2] + "/", "xversat.vh")
+convert(sys.argv[3] + "/", "versat-io.vh")
 
 #close versat.h
 versat.write('\n//End of Versat include file')

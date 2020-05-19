@@ -155,8 +155,8 @@ module xmem #(
 		      );
 
    //define addresses based on ext and rvrs
-   assign addrA = valid? addr[`MEM_ADDR_W-1:0] : extB? inB[`MEM_ADDR_W-1:0] : addrA_int2[`MEM_ADDR_W-1:0];
-   assign addrB = extA? inA[`MEM_ADDR_W-1:0] : addrB_int2[`MEM_ADDR_W-1:0];
+   assign addrA = valid? addr[`MEM_ADDR_W-1:0] : extA? inA[`MEM_ADDR_W-1:0] : addrA_int2[`MEM_ADDR_W-1:0];
+   assign addrB = extB? inB[`MEM_ADDR_W-1:0] : addrB_int2[`MEM_ADDR_W-1:0];
    assign addrA_int2 = reverseA? reverseBits(addrA_int) : addrA_int;
    assign addrB_int2 = reverseB? reverseBits(addrB_int) : addrB_int;
 
