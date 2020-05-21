@@ -1,4 +1,31 @@
+#ifndef VERSAT_SIM // include guard
+#define VERSAT_SIM
+#include <iostream>
+#include <thread>
 #include "versat.h"
+#include <string.h>
+
+#define nFU nALU+nALULITE+nMEM+nMUL+nMULADD+nBS
+
+#ifndef DATAPATH_W
+#define DATAPATH_W 16
+#endif
+
+#if DATAPATH_W == 16
+typedef int16_t versat_t;
+typedef int32_t mul_t;
+typedef uint32_t shift;
+#elif DATAPATH_W == 8
+typedef int8_t versat_t;
+typedef int16_t mul_t;
+typedef uint16_t shift;
+
+#else
+typedef int32_t versat_t;
+typedef int64_t mul_t;
+typedef uint64_t shift;
+
+#endif
 
 //Macro functions to use cpu interface
 #define MEMSET(base, location, value) (*((volatile int*) (base + (sizeof(int)) * location)) = value)
@@ -23,11 +50,14 @@ class CMemPort {
     CMemPort() {
     }
     
+    versat_t output(){
+      return 0;
+    }
     //Constructor with an associated base
     CMemPort (int versat_base, int i, int offset) {
       this->versat_base = versat_base;
-      this->mem_base = CONF_BASE + CONF_MEM0A + (2*i+offset)*MEMP_CONF_OFFSET;
-      this->data_base = (i<<MEM_ADDR_W);
+      this->mem_base = i;
+      this->data_base = offset;
     }
 
     //Full Configuration (includes ext and rvrs)
@@ -66,80 +96,175 @@ class CMemPort {
     }
 
     void writeConf() {
-      MEMSET(versat_base, (mem_base + MEMP_CONF_ITER), iter);
-      MEMSET(versat_base, (mem_base + MEMP_CONF_START), start);
-      MEMSET(versat_base, (mem_base + MEMP_CONF_PER), per);
-      MEMSET(versat_base, (mem_base + MEMP_CONF_DUTY), duty);
-      MEMSET(versat_base, (mem_base + MEMP_CONF_SEL), sel);
-      MEMSET(versat_base, (mem_base + MEMP_CONF_SHIFT), shift);
-      MEMSET(versat_base, (mem_base + MEMP_CONF_INCR), incr);
-      MEMSET(versat_base, (mem_base + MEMP_CONF_DELAY), delay);
-      MEMSET(versat_base, (mem_base + MEMP_CONF_EXT), ext);
-      MEMSET(versat_base, (mem_base + MEMP_CONF_IN_WR), in_wr);
-      MEMSET(versat_base, (mem_base + MEMP_CONF_RVRS), rvrs);
-      MEMSET(versat_base, (mem_base + MEMP_CONF_ITER2), iter2);
-      MEMSET(versat_base, (mem_base + MEMP_CONF_PER2), per2);
-      MEMSET(versat_base, (mem_base + MEMP_CONF_SHIFT2), shift2);
-      MEMSET(versat_base, (mem_base + MEMP_CONF_INCR2), incr2);
+      if(data_base==1) {
+            conf[versat_base].memB[mem_base].iter=iter;
+            conf[versat_base].memB[mem_base].start=start;
+            conf[versat_base].memB[mem_base].per=per;
+            conf[versat_base].memB[mem_base].duty=duty;
+            conf[versat_base].memB[mem_base].sel=sel;
+            conf[versat_base].memB[mem_base].shift=shift;
+            conf[versat_base].memB[mem_base].incr=incr;
+            conf[versat_base].memB[mem_base].delay=delay;
+            conf[versat_base].memB[mem_base].ext=ext;
+            conf[versat_base].memB[mem_base].in_wr=in_wr;
+            conf[versat_base].memB[mem_base].rvrs=rvrs;
+            conf[versat_base].memB[mem_base].iter2=iter2;
+            conf[versat_base].memB[mem_base].per2=per2;
+            conf[versat_base].memB[mem_base].shift2=shift2;
+            conf[versat_base].memB[mem_base].incr2=incr2;
+      }            
+      else
+      {
+            conf[versat_base].memA[mem_base].iter=iter;
+            conf[versat_base].memA[mem_base].start=start;
+            conf[versat_base].memA[mem_base].per=per;
+            conf[versat_base].memA[mem_base].duty=duty;
+            conf[versat_base].memA[mem_base].sel=sel;
+            conf[versat_base].memA[mem_base].shift=shift;
+            conf[versat_base].memA[mem_base].incr=incr;
+            conf[versat_base].memA[mem_base].delay=delay;
+            conf[versat_base].memA[mem_base].ext=ext;
+            conf[versat_base].memA[mem_base].in_wr=in_wr;
+            conf[versat_base].memA[mem_base].rvrs=rvrs;
+            conf[versat_base].memA[mem_base].iter2=iter2;
+            conf[versat_base].memA[mem_base].per2=per2;
+            conf[versat_base].memA[mem_base].shift2=shift2;
+            conf[versat_base].memA[mem_base].incr2=incr2;
+      }
     }
     void setIter(int iter) {
-      MEMSET(versat_base, (this->mem_base + MEMP_CONF_ITER), iter);
+      if(data_base==1)
+            conf[versat_base].memB[mem_base].iter=iter;
+      else
+      {
+            conf[versat_base].memA[mem_base].iter=iter;
+      }
       this->iter = iter;
     } 
     void setPer(int per) {
-      MEMSET(versat_base, (this->mem_base + MEMP_CONF_PER), per);
+      if(data_base==1)
+            conf[versat_base].memB[mem_base].per=per;
+      else
+      {
+            conf[versat_base].memA[mem_base].per=per;
+      }
       this->per = per;
     } 
     void setDuty(int duty) {
-      MEMSET(versat_base, (this->mem_base + MEMP_CONF_DUTY), duty);
+      if(data_base==1)
+            conf[versat_base].memB[mem_base].duty=duty;
+      else
+      {
+            conf[versat_base].memA[mem_base].duty=duty;
+      }
       this->duty = duty;
     } 
     void setSel(int sel) {
-      MEMSET(versat_base, (this->mem_base + MEMP_CONF_SEL), sel);
+      if(data_base==1)
+            conf[versat_base].memB[mem_base].sel=sel;
+      else
+      {
+            conf[versat_base].memA[mem_base].sel=sel;
+      }
       this->sel = sel;
     } 
     void setStart(int start) {
-      MEMSET(versat_base, (this->mem_base + MEMP_CONF_START), start);
+      if(data_base==1)
+            conf[versat_base].memB[mem_base].start=start;
+      else
+      {
+            conf[versat_base].memA[mem_base].start=start;
+      }
       this->start = start;
     } 
     void setIncr(int incr) {
-      MEMSET(versat_base, (this->mem_base + MEMP_CONF_INCR), incr);
-      this->incr = incr;
+      if(data_base==1)
+      conf[versat_base].memB[mem_base].incr=incr;
+      else
+      {
+      conf[versat_base].memA[mem_base].incr=incr;
+      }
+    this->incr = incr;
     } 
     void setShift(int shift) {
-      MEMSET(versat_base, (this->mem_base + MEMP_CONF_SHIFT), shift);
+      if(data_base==1)
+            conf[versat_base].memB[mem_base].shift=shift;
+      else
+      {
+            conf[versat_base].memA[mem_base].shift=shift;
+      }
       this->shift = shift;
     } 
     void setDelay(int delay) {
-      MEMSET(versat_base, (this->mem_base + MEMP_CONF_DELAY), delay);
+      if(data_base==1)
+      conf[versat_base].memB[mem_base].delay=delay;
+      else
+      {
+            conf[versat_base].memA[mem_base].delay=delay;
+      }
       this->delay = delay;
     } 
     void setExt(int ext) {
-      MEMSET(versat_base, (this->mem_base + MEMP_CONF_EXT), ext);
+      if(data_base==1)
+            conf[versat_base].memB[mem_base].ext=ext;
+      else
+      {
+            conf[versat_base].memA[mem_base].ext=ext;
+      }
       this->ext = ext;
     } 
     void setRvrs(int rvrs) {
-      MEMSET(versat_base, (this->mem_base + MEMP_CONF_RVRS), rvrs);
+      if(data_base==1)
+            conf[versat_base].memB[mem_base].rvrs=rvrs;
+      else
+      {
+            conf[versat_base].memA[mem_base].rvrs=rvrs;
+      }
       this->rvrs = rvrs;
     } 
     void setInWr(int in_wr) {
-      MEMSET(versat_base, (this->mem_base + MEMP_CONF_IN_WR), in_wr);
+      if(data_base==1)
+            conf[versat_base].memB[mem_base].in_wr=in_wr;
+      else
+      {
+            conf[versat_base].memA[mem_base].in_wr=in_wr;
+      }
       this->in_wr = in_wr;
     } 
     void setIter2(int iter2) {
-      MEMSET(versat_base, (this->mem_base + MEMP_CONF_ITER2), iter2);
+      if(data_base==1)
+            conf[versat_base].memB[mem_base].iter2=iter2;
+      else
+      {
+            conf[versat_base].memA[mem_base].iter2=iter2;
+      }
       this->iter2 = iter2;
     } 
     void setPer2(int per2) {
-      MEMSET(versat_base, (this->mem_base + MEMP_CONF_PER2), per2);
+      if(data_base==1)
+            conf[versat_base].memB[mem_base].per2=per2;
+      else
+      {
+            conf[versat_base].memA[mem_base].per2=per2;
+      }
       this->per2 = per2;
     } 
     void setIncr2(int incr) {
-      MEMSET(versat_base, (this->mem_base + MEMP_CONF_INCR2), incr2);
+      if(data_base==1)
+            conf[versat_base].memB[mem_base].incr2=incr2;
+      else
+      {
+            conf[versat_base].memA[mem_base].incr2=incr2;
+      }
       this->incr2 = incr2;
     } 
     void setShift2(int shift2) {
-      MEMSET(versat_base, (this->mem_base + MEMP_CONF_SHIFT2), shift2);
+      if(data_base==1)
+            conf[versat_base].memB[mem_base].shift2=shift2;
+      else
+      {
+            conf[versat_base].memA[mem_base].shift2=shift2;
+      }
       this->shift2 = shift2;
     } 
 
@@ -160,10 +285,12 @@ class CALU {
     //Default constructor
     CALU() {
     }
-    
+    versat_t output(){
+      return 0;
+    }
     CALU(int versat_base, int i) {
       this->versat_base = versat_base;
-      this->alu_base = CONF_BASE + CONF_ALU0 + i*ALU_CONF_OFFSET;
+      this->alu_base = i;
     }
     
     void setConf(int opa, int opb, int fns) {
@@ -173,20 +300,20 @@ class CALU {
     }
 
     void writeConf() {
-      MEMSET(versat_base, (alu_base + ALU_CONF_SELA), opa);
-      MEMSET(versat_base, (alu_base + ALU_CONF_SELB), opb);
-      MEMSET(versat_base, (alu_base + ALU_CONF_FNS), fns);
+      conf[versat_base].alu[alu_base].opa=opa;
+      conf[versat_base].alu[alu_base].opb=opb;
+      conf[versat_base].alu[alu_base].fns=fns;
     }
     void setOpA(int opa) {
-      MEMSET(versat_base, (this->alu_base + ALU_CONF_SELA), opa);
+      conf[versat_base].alu[alu_base].opa=opa;
       this->opa = opa; 
     }
     void setOpB(int opb) {
-      MEMSET(versat_base, (this->alu_base + ALU_CONF_SELB), opb);
+      conf[versat_base].alu[alu_base].opb=opb;
       this->opb = opb; 
     }
     void setFNS(int fns) {
-      MEMSET(versat_base, (this->alu_base + ALU_CONF_FNS), fns);
+      conf[versat_base].alu[alu_base].fns=fns;
       this->fns = fns; 
     }
 }; //end class CALU
@@ -202,9 +329,13 @@ class CALULite {
     CALULite() {
     }
 
+    versat_t output(){
+      return 0;
+    }
+
     CALULite(int versat_base, int i) {
       this->versat_base = versat_base;
-      this->alulite_base = CONF_BASE + CONF_ALULITE0 + i*ALULITE_CONF_OFFSET;   
+      this->alulite_base =i;   
     }
     
     void setConf(int opa, int opb, int fns) {
@@ -214,20 +345,20 @@ class CALULite {
     }
 
     void writeConf() {
-      MEMSET(versat_base, (alulite_base + ALULITE_CONF_SELA), opa);
-      MEMSET(versat_base, (alulite_base + ALULITE_CONF_SELB), opb);
-      MEMSET(versat_base, (alulite_base + ALULITE_CONF_FNS), fns);
+      conf[versat_base].alulite[alulite_base].opa=opa;
+      conf[versat_base].alulite[alulite_base].opb=opb;
+      conf[versat_base].alulite[alulite_base].fns=fns;
     }
     void setOpA(int opa) {
-      MEMSET(versat_base, (this->alulite_base + ALULITE_CONF_SELA), opa);
+      conf[versat_base].alulite[alulite_base].opa=opa;
       this->opa = opa; 
     }
     void setOpB(int opb) {
-      MEMSET(versat_base, (this->alulite_base + ALULITE_CONF_SELB), opb);
+      conf[versat_base].alulite[alulite_base].opb=opb;
       this->opb = opb; 
     }
     void setFNS(int fns) {
-      MEMSET(versat_base, (this->alulite_base + ALULITE_CONF_FNS), fns);
+      conf[versat_base].alulite[alulite_base].fns=fns;
       this->fns = fns; 
     }
 }; //end class CALUALITE
@@ -243,9 +374,14 @@ class CBS {
     CBS() {
     }
 
+    versat_t output()
+    {
+      return 0;
+    }
+
     CBS(int versat_base, int i) {
       this->versat_base = versat_base;
-      this->bs_base = CONF_BASE + CONF_BS0 + i*BS_CONF_OFFSET;
+      this->bs_base =i;
     }
 
     void setConf(int data, int shift, int fns) {
@@ -255,20 +391,20 @@ class CBS {
     }
 
     void writeConf() {
-      MEMSET(versat_base, (bs_base + BS_CONF_SELD), data);
-      MEMSET(versat_base, (bs_base + BS_CONF_SELS), shift);
-      MEMSET(versat_base, (bs_base + BS_CONF_FNS), fns);
+      conf[versat_base].bs[bs_base].data=data;
+      conf[versat_base].bs[bs_base].shift=shift;
+      conf[versat_base].bs[bs_base].fns=fns;
     }
     void setData(int data) {
-      MEMSET(versat_base, (this->bs_base + BS_CONF_SELD), data);
+      conf[versat_base].bs[bs_base].data=data;
       this->data = data; 
     }
     void setShift(int shift) {
-      MEMSET(versat_base, (this->bs_base + BS_CONF_SELS), shift);
+      conf[versat_base].bs[bs_base].shift=shift;
       this->shift = shift; 
     }
     void setFNS(int fns) {
-      MEMSET(versat_base, (this->bs_base + BS_CONF_FNS), fns);
+      conf[versat_base].bs[bs_base].fns=fns;
       this->fns = fns; 
     }
 };//end class CBS
@@ -276,17 +412,44 @@ class CBS {
 
 #if nMUL>0
 class CMul {
+  private:
+  versat_t opa,opb;
   public:
     int versat_base, mul_base;
     int sela, selb, fns;
-
+    versat_t in_a[nFU-1],in_b[nFU-1];
     //Default constructor
     CMul() {
     }
 
     CMul(int versat_base, int i) {
       this->versat_base = versat_base;
-      this->mul_base = CONF_BASE + CONF_MUL0 + i*MUL_CONF_OFFSET;
+      this->mul_base =i;
+    }
+
+    versat_t output() {
+      for(int i=0;i<nFU-1;i++)
+      {
+        if (sela==i)
+          opa=in_a[i];
+        if (selb==i)
+          opb=in_b[i];
+      }
+      mul_t result_mult=opa*opb;
+      versat_t out;
+      if(fns==MUL_HI) //big brain time: to avoid left/right shifts, using a MASK of size mul_t and versat_t
+      {
+        result_mult=result_mult<<1; 
+        out=(versat_t)(result_mult>>(sizeof(versat_t)*8));
+      }
+      else if(fns==MUL_DIV2_HI)
+      {
+      out=(versat_t)(result_mult>>(sizeof(versat_t)*8));
+      }
+      else // MUL_LO
+      { 
+        out=(versat_t)result_mult;
+      }
     }
     
     void setConf(int sela, int selb, int fns) {
@@ -296,20 +459,20 @@ class CMul {
     }
 
     void writeConf() {
-      MEMSET(versat_base, (mul_base  + MUL_CONF_SELA), sela);
-      MEMSET(versat_base, (mul_base  + MUL_CONF_SELB), selb);
-      MEMSET(versat_base, (mul_base  + MUL_CONF_FNS), fns);
+      conf[versat_base].mul[mul_base].sela=sela;
+      conf[versat_base].mul[mul_base].selb=selb;
+      conf[versat_base].mul[mul_base].fns=fns;
     }
     void setSelA(int sela) {
-      MEMSET(versat_base, (this->mul_base + MUL_CONF_SELA), sela);
+      conf[versat_base].mul[mul_base].sela=sela;
       this->sela = sela; 
     }
     void setSelB(int selb) {
-      MEMSET(versat_base, (this->mul_base + MUL_CONF_SELB), selb);
+      conf[versat_base].mul[mul_base].selb=selb;
       this->selb = selb; 
     }
     void setFNS(int fns) {
-      MEMSET(versat_base, (this->mul_base + MUL_CONF_FNS), fns);
+      conf[versat_base].mul[mul_base].fns=fns;
       this->fns = fns; 
     }
 };//end class CMUL
@@ -317,17 +480,45 @@ class CMul {
 
 #if nMULADD>0
 class CMulAdd {
+  private:   
+    //SIM VARIABLES
+    versat_t in_a[nFU-1], in_b[nFU-1]; // number of inputs for MUX
+    versat_t opa,opb,out,acc_w;
+    mul_t acc;
   public:
     int versat_base, muladd_base;
     int sela, selb, fns, iter, per, delay, shift;
-
+    
     //Default constructor
     CMulAdd() {
     }
 
     CMulAdd(int versat_base, int i) {
       this->versat_base = versat_base;
-      this->muladd_base = CONF_BASE + CONF_MULADD0 + i*MULADD_CONF_OFFSET;
+      this->muladd_base = i;
+    }
+
+    versat_t output() //lacks shift,iter and delay implementation aka state machine
+    {
+      for(int i=0;i<nFU-1;i++)
+      {
+        if (sela==i)
+          opa=in_a[i];
+        if (selb==i)
+          opb=in_b[i];
+      }
+      mul_t result_mult=opa*opb;
+      if(fns==MULADD_MACC)
+      {
+        acc=acc_w+result_mult;
+      }
+      else
+      {
+        acc=acc_w-result_mult;
+      }
+      acc_w=(versat_t)(acc>>(sizeof(versat_t)*4));
+
+      return acc_w;
     }
 
     void setConf(int sela, int selb, int fns, int iter, int per, int delay, int shift) {
@@ -341,40 +532,40 @@ class CMulAdd {
     }
 
     void writeConf() {
-      MEMSET(versat_base, (muladd_base  + MULADD_CONF_SELA), sela);
-      MEMSET(versat_base, (muladd_base  + MULADD_CONF_SELB), selb);
-      MEMSET(versat_base, (muladd_base  + MULADD_CONF_FNS), fns);
-      MEMSET(versat_base, (muladd_base  + MULADD_CONF_ITER), iter);
-      MEMSET(versat_base, (muladd_base  + MULADD_CONF_PER), per);
-      MEMSET(versat_base, (muladd_base  + MULADD_CONF_DELAY), delay);
-      MEMSET(versat_base, (muladd_base  + MULADD_CONF_SHIFT), shift);
+      conf[versat_base].muladd[muladd_base].sela=sela;
+      conf[versat_base].muladd[muladd_base].selb=selb;
+      conf[versat_base].muladd[muladd_base].fns=fns;
+      conf[versat_base].muladd[muladd_base].iter=iter;
+      conf[versat_base].muladd[muladd_base].per=per;
+      conf[versat_base].muladd[muladd_base].delay=delay;
+      conf[versat_base].muladd[muladd_base].shift=shift;
     }
     void setSelA(int sela) {
-      MEMSET(versat_base, (this->muladd_base + MULADD_CONF_SELA), sela);
+      conf[versat_base].muladd[muladd_base].sela=sela;
       this->sela = sela; 
     }
     void setSelB(int selb) {
-      MEMSET(versat_base, (this->muladd_base + MULADD_CONF_SELB), selb);
+      conf[versat_base].muladd[muladd_base].selb=selb;
       this->selb = selb; 
     }
     void setFNS(int fns) {
-      MEMSET(versat_base, (this->muladd_base + MULADD_CONF_FNS), fns);
+      conf[versat_base].muladd[muladd_base].fns=fns;
       this->fns = fns; 
     }
     void setIter(int iter) {
-      MEMSET(versat_base, (this->muladd_base + MULADD_CONF_ITER), iter);
+      conf[versat_base].muladd[muladd_base].iter=iter;
       this->iter = iter; 
     }
     void setPer(int per) {
-      MEMSET(versat_base, (this->muladd_base + MULADD_CONF_PER), per);
+      conf[versat_base].muladd[muladd_base].per=per;
       this->per = per; 
     }
     void setDelay(int delay) {
-      MEMSET(versat_base, (this->muladd_base + MULADD_CONF_PER), delay);
+      conf[versat_base].muladd[muladd_base].delay=delay;
       this->delay = delay;
     }
     void setShift(int shift) {
-      MEMSET(versat_base, (this->muladd_base + MULADD_CONF_SHIFT), shift);
+      conf[versat_base].muladd[muladd_base].shift=shift;
       this->shift = shift;
     }
 };//end class CMULADD
@@ -436,7 +627,9 @@ class CStage {
     
     //clear Versat config                       
     void clearConf() {
-      MEMSET(versat_base, (CONF_BASE + CONF_CLEAR), 0);
+      int i=versat_base;
+      memset(&conf[versat_base],0,sizeof(conf[versat_base]));
+      conf[i]=CStage(i);
     }
     
 #ifdef CONF_MEM_USE
@@ -455,8 +648,11 @@ class CStage {
 //
 //VERSAT global variables
 //
+#ifndef VERSAT_cpp // include guard
+#define VERSAT_cpp
 static int base;
 CStage stage[nSTAGE];
+CStage conf[nSTAGE];
 int sMEMA[nMEM], sMEMA_p[nMEM], sMEMB[nMEM], sMEMB_p[nMEM];
 #if nALU>0
   int sALU[nALU], sALU_p[nALU];
@@ -481,8 +677,9 @@ inline void versat_init(int base_addr) {
 
   //init versat stages
   int i;
+  base_addr=0;
   base = base_addr;
-  for(i = 0; i < nSTAGE; i++) stage[i] = CStage(base_addr + (i<<(CTR_ADDR_W-nSTAGE_W+2))); //+2 as RV32 is not byte addressable
+  for(i = 0; i < nSTAGE; i++) stage[i] = CStage(base_addr +i);
 
   //prepare sel variables
   int p_offset = (1<<(N_W-1));
@@ -535,16 +732,34 @@ inline void versat_init(int base_addr) {
     sBS_p[i] = sBS[i] + p_offset;
   }
 #endif                                     
-}                                                                     
+}           
+
+int run_done=0;
+
+void run_sim()
+{
+run_done=1;
+//put simulation here
+}
 
 inline void run() {
-  MEMSET(base, (RUN_DONE), 1);
+  //MEMSET(base, (RUN_DONE), 1);
+  run_done=0;
+  std::thread ti(run_sim);
 }
 
 inline int done() {
-  return MEMGET(base, (RUN_DONE));
+  return run_done;
 }
 
 inline void globalClearConf() {
-  MEMSET(base, (CONF_BASE + GLOBAL_CONF_CLEAR), 0);
+ memset(&conf,0,sizeof(conf));
+ for(int i=0;i<nSTAGE;i++)
+ {
+   conf[i]=CStage(i);
+ }
 }
+#endif
+
+#endif
+
