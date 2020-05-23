@@ -53,11 +53,55 @@ class CMemPort {
     CMemPort() {
     }
 
+  //set MEMPort configuration to shadow register
+  void update_shadow_reg_MEM(){
+      if(data_base==1) {
+	shadow_reg[versat_base].memB[mem_base].iter   = conf[versat_base].memB[mem_base].iter;
+	shadow_reg[versat_base].memB[mem_base].start  = conf[versat_base].memB[mem_base].start;
+	shadow_reg[versat_base].memB[mem_base].per    = conf[versat_base].memB[mem_base].per;
+	shadow_reg[versat_base].memB[mem_base].duty   = conf[versat_base].memB[mem_base].duty;
+	shadow_reg[versat_base].memB[mem_base].sel    = conf[versat_base].memB[mem_base].sel;
+	shadow_reg[versat_base].memB[mem_base].shift  = conf[versat_base].memB[mem_base].shift;
+	shadow_reg[versat_base].memB[mem_base].incr   = conf[versat_base].memB[mem_base].incr;
+	shadow_reg[versat_base].memB[mem_base].delay  = conf[versat_base].memB[mem_base].delay;
+	shadow_reg[versat_base].memB[mem_base].ext    = conf[versat_base].memB[mem_base].ext;
+	shadow_reg[versat_base].memB[mem_base].in_wr  = conf[versat_base].memB[mem_base].in_wr;
+	shadow_reg[versat_base].memB[mem_base].rvrs   = conf[versat_base].memB[mem_base].rvrs;
+	shadow_reg[versat_base].memB[mem_base].iter2  = conf[versat_base].memB[mem_base].iter2;
+	shadow_reg[versat_base].memB[mem_base].per2   = conf[versat_base].memB[mem_base].per2;
+	shadow_reg[versat_base].memB[mem_base].shift2 = conf[versat_base].memB[mem_base].shift2;
+	shadow_reg[versat_base].memB[mem_base].incr2  = conf[versat_base].memB[mem_base].incr2;
+      }            
+      else
+      {
+	shadow_reg[versat_base].memA[mem_base].iter   = conf[versat_base].memA[mem_base].iter;
+	shadow_reg[versat_base].memA[mem_base].start  = conf[versat_base].memA[mem_base].start;
+	shadow_reg[versat_base].memA[mem_base].per    = conf[versat_base].memA[mem_base].per;
+	shadow_reg[versat_base].memA[mem_base].duty   = conf[versat_base].memA[mem_base].duty;
+	shadow_reg[versat_base].memA[mem_base].sel    = conf[versat_base].memA[mem_base].sel;
+	shadow_reg[versat_base].memA[mem_base].shift  = conf[versat_base].memA[mem_base].shift;
+	shadow_reg[versat_base].memA[mem_base].incr   = conf[versat_base].memA[mem_base].incr;
+	shadow_reg[versat_base].memA[mem_base].delay  = conf[versat_base].memA[mem_base].delay;
+	shadow_reg[versat_base].memA[mem_base].ext    = conf[versat_base].memA[mem_base].ext;
+	shadow_reg[versat_base].memA[mem_base].in_wr  = conf[versat_base].memA[mem_base].in_wr;
+	shadow_reg[versat_base].memA[mem_base].rvrs   = conf[versat_base].memA[mem_base].rvrs;
+	shadow_reg[versat_base].memA[mem_base].iter2  = conf[versat_base].memA[mem_base].iter2;
+	shadow_reg[versat_base].memA[mem_base].per2   = conf[versat_base].memA[mem_base].per2;
+	shadow_reg[versat_base].memA[mem_base].shift2 = conf[versat_base].memA[mem_base].shift2;
+	shadow_reg[versat_base].memA[mem_base].incr2  = conf[versat_base].memA[mem_base].incr2;
+      }
+  }
+
 
   //start run
   void start_run(){
     //set run_delay
-    run_delay = this->delay;
+    if(data_base==1){
+      run_delay = shadow_reg[versat_base].memB[mem_base].delay;
+    }
+    else{
+      run_delay = shadow_reg[versat_base].memA[mem_base].delay;
+    }
   }
 
 
@@ -327,6 +371,15 @@ class CALU {
     CALU() {
     }
 
+  //set ALU configuration to shadow register
+  void update_shadow_reg_ALU(){
+    shadow_reg[versat_base].alu[alu_base].opa = conf[versat_base].alu[alu_base].opa;
+    shadow_reg[versat_base].alu[alu_base].opb = conf[versat_base].alu[alu_base].opb;
+    shadow_reg[versat_base].alu[alu_base].fns = conf[versat_base].alu[alu_base].fns;
+  }
+
+
+
   //start run
   void start_run(){
     //CAlu has no delay
@@ -351,8 +404,8 @@ class CALU {
 
 
     versat_t output(){
-      inb=stage[versat_base].databus[opb];
-      ina=stage[versat_base].databus[opa];
+      inb=stage[versat_base].databus[shadow_reg[versat_base].alu[alu_base].opa];
+      ina=stage[versat_base].databus[shadow_reg[versat_base].alu[alu_base].opb];
       switch (fns)
       {
       case ALU_OR:
@@ -445,8 +498,12 @@ class CALULite {
     CALULite() {
     }
 
-  
-
+  //set ALULite configuration to shadow register
+  void update_shadow_reg_ALULite(){
+    shadow_reg[versat_base].alulite[alulite_base].opa = conf[versat_base].alulite[alulite_base].opa;
+    shadow_reg[versat_base].alulite[alulite_base].opb = conf[versat_base].alulite[alulite_base].opb;
+    shadow_reg[versat_base].alulite[alulite_base].fns = conf[versat_base].alulite[alulite_base].fns;
+  }
 
   //start run
   void start_run(){
@@ -472,13 +529,13 @@ class CALULite {
 
 
     versat_t output(){
-      versat_t ina_reg=stage[versat_base].databus[opa];
-      versat_t self_loop= fns<0? 1:0;
+      versat_t ina_reg=stage[versat_base].databus[shadow_reg[versat_base].alulite[alulite_base].opa];
+      versat_t self_loop= shadow_reg[versat_base].alulite[alulite_base].fns <0? 1:0;
       versat_t result=0;
-      inb=stage[versat_base].databus[opb];
+      inb=stage[versat_base].databus[shadow_reg[versat_base].alulite[alulite_base].opb];
       ina=self_loop? out : ina_reg;
 
-      switch (fns)
+      switch (shadow_reg[versat_base].alulite[alulite_base].fns)
       {
       case ALULITE_OR:result=ina|inb;
         break;
@@ -591,20 +648,20 @@ class CBS {
 
     versat_t output()
     {
-      in=stage[versat_base].databus[data];
-      if(fns==BS_SHR_A)
+      in=stage[versat_base].databus[shadow_reg[versat_base].bs[bs_base].data];
+      if(shadow_reg[versat_base].bs[bs_base].fns==BS_SHR_A)
       {
-        in=in>>shift;
+        in=in>>shadow_reg[versat_base].bs[bs_base].shift;
       }
-      else if(fns== BS_SHR_L)
+      else if(shadow_reg[versat_base].bs[bs_base].fns == BS_SHR_L)
       {
         shift_t s=in;
-        s=s>>shift;
+        s=s>>shadow_reg[versat_base].bs[bs_base].shift;
         in=s;
       }
-      else if(fns==BS_SHL)
+      else if(shadow_reg[versat_base].bs[bs_base].fns ==BS_SHL)
       {
-        in=in<<shift;
+        in=in<<shadow_reg[versat_base].bs[bs_base].shift;
       }
       
       out=in;
@@ -693,16 +750,16 @@ class CMul {
 
     versat_t output() {
       //select inputs
-      opa = stage[versat_base].databus[sela];
-      opb = stage[versat_base].databus[selb];      
+      opa = stage[versat_base].databus[shadow_reg[versat_base].mul[mul_base].sela];
+      opb = stage[versat_base].databus[shadow_reg[versat_base].mul[mul_base].selb];      
 
       mul_t result_mult=opa*opb;
-      if(fns==MUL_HI) //big brain time: to avoid left/right shifts, using a MASK of size mul_t and versat_t
+      if(shadow_reg[versat_base].mul[mul_base].fns==MUL_HI) //big brain time: to avoid left/right shifts, using a MASK of size mul_t and versat_t
       {
         result_mult=result_mult<<1; 
         out=(versat_t)(result_mult>>(sizeof(versat_t)*8));
       }
-      else if(fns==MUL_DIV2_HI)
+      else if(shadow_reg[versat_base].mul[mul_base].fns==MUL_DIV2_HI)
       {
       out=(versat_t)(result_mult>>(sizeof(versat_t)*8));
       }
@@ -776,7 +833,7 @@ class CMulAdd {
   //start run
   void start_run(){
     //set run_delay
-    run_delay = this->delay;
+    run_delay = shadow_reg[versat_base].muladd[muladd_base].delay;
   }
 
 
@@ -801,14 +858,14 @@ class CMulAdd {
 
   }
  
-    versat_t output() //lacks shift,iter and delay implementation aka state machine
+    versat_t output() //TO DO: lacks shift,iter and delay implementation aka state machine
     {
       //select inputs
-      opa = stage[versat_base].databus[sela];
-      opb = stage[versat_base].databus[selb];      
+      opa = stage[versat_base].databus[shadow_reg[versat_base].muladd[muladd_base].sela];
+      opb = stage[versat_base].databus[shadow_reg[versat_base].muladd[muladd_base].selb];      
 
       mul_t result_mult=opa*opb;
-      if(fns==MULADD_MACC)
+      if(shadow_reg[versat_base].muladd[muladd_base].fns==MULADD_MACC)
       {
         acc=acc_w+result_mult;
       }
@@ -954,26 +1011,25 @@ class CStage {
 #endif
 
   //update shadow register with current configuration
-  void update_shawdown_reg(){
+  void update_shadow_reg(){
     int i=0;
 
-    //TO DO: update method call
-    for (i=0; i<nMEM; i++) memA[i].start_run();
-    for (i=0; i<nMEM; i++) memB[i].start_run();
+    for (i=0; i<nMEM; i++) memA[i].update_shadow_reg_MEM();
+    for (i=0; i<nMEM; i++) memB[i].update_shadow_reg_MEM();
     #if nALU>0
-      for (i=0; i<nALU; i++) alu[i].start_run();
+      for (i=0; i<nALU; i++) alu[i].update_shadow_reg_ALU();
     #endif
     #if nALULITE>0
-      for (i=0; i<nALULITE; i++) alulite[i].start_run();
+      for (i=0; i<nALULITE; i++) alulite[i].update_shadow_reg_ALULite();
     #endif
     #if nBS>0
-      for (i=0; i<nBS; i++) bs[i].start_run();
+      for (i=0; i<nBS; i++) bs[i].update_shadow_reg_BS();
     #endif
     #if nMUL>0
-      for (i=0; i<nMUL; i++) mul[i].start_run();
+      for (i=0; i<nMUL; i++) mul[i].update_shadow_reg_Mul();
     #endif
     #if nMULADD>0
-      for (i=0; i<nMULADD; i++) muladd[i].start_run();
+      for (i=0; i<nMULADD; i++) muladd[i].update_shadow_reg_MulAdd();
     #endif
   }
 
@@ -1187,7 +1243,15 @@ void run_sim()
 
 inline void run() {
   //MEMSET(base, (RUN_DONE), 1);
+  int i=0;
+
   run_done=0;
+  
+  //update shadow register with current configuration
+  for(i=0;i<nSTAGE;i++){
+    stage[i].update_shadow_reg();
+  }
+
   std::thread ti(run_sim);
 }
 
