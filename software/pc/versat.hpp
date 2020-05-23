@@ -113,14 +113,26 @@ class CMemPort {
       run_delay--;
     }else{
 
-      //update databus - ports A and B
-      if(data_base==0)
-      stage[versat_base].databus[sMEMA[mem_base]] = output_port[MEMP_LAT-1];
+      //update databus
+      if(data_base==0){
+	stage[versat_base].databus[sMEMA[mem_base]] = output_port[MEMP_LAT-1];
+	//special case for stage 0
+	if(versat_base==0){
+	  //2nd copy at the end of global databus
+	  databus[nSTAGE*N + sMEMA[mem_base]] = output[MEMP_LAT-1];
+	}
+      }
       else
       {
         stage[versat_base].databus[sMEMB[mem_base]] = output_port[MEMP_LAT-1];
+	//special case for stage 0
+	if(versat_base==0){
+	  //2nd copy at the end of global databus
+	  databus[nSTAGE*N + sMEMB[mem_base]] = output[MEMP_LAT-1];
+	}
       }
       
+    
       
       //trickle down all outputs in buffer
       for(i=1;i<MEMP_LAT;i++){
@@ -392,7 +404,12 @@ class CALU {
 
     //update databus
     stage[versat_base].databus[sALU[alu_base]] = output[ALU_LAT-1];
-    
+    //special case for stage 0
+    if(versat_base==0){
+      //2nd copy at the end of global databus
+      databus[nSTAGE*N + sALU[alu_base]] = output[ALU_LAT-1];
+    }
+        
     //trickle down all outputs in buffer
     for(i=1;i<ALU_LAT;i++){
       output[i] = output[i-1];
@@ -517,7 +534,12 @@ class CALULite {
 
     //update databus
     stage[versat_base].databus[sALULITE[alulite_base]] = output[ALULITE_LAT-1];
-      
+    //special case for stage 0
+    if(versat_base==0){
+      //2nd copy at the end of global databus
+      databus[nSTAGE*N + sALULITE[alulite_base]] = output[ALULITE_LAT-1];
+    }
+          
     //trickle down all outputs in buffer
     for(i=1;i<ALULITE_LAT;i++){
       output[i] = output[i-1];
@@ -635,7 +657,12 @@ class CBS {
 
     //update databus
     stage[versat_base].databus[sBS[bs_base]] = output[BS_LAT-1];
-      
+    //special case for stage 0
+    if(versat_base==0){
+      //2nd copy at the end of global databus
+      databus[nSTAGE*N + sBS[bs_base]] = output[BS_LAT-1];
+    }
+          
     //trickle down all outputs in buffer
     for(i=1;i<BS_LAT;i++){
       output[i] = output[i-1];
@@ -739,7 +766,12 @@ class CMul {
 
     //update databus
     stage[versat_base].databus[sMUL[mul_base]] = output[MUL_LAT-1];
-      
+    //special case for stage 0
+    if(versat_base==0){
+      //2nd copy at the end of global databus
+      databus[nSTAGE*N + sMUL[mul_base]] = output[MUL_LAT-1];
+    }
+         
     //trickle down all outputs in buffer
     for(i=1;i<MUL_LAT;i++){
       output[i] = output[i-1];
@@ -847,6 +879,11 @@ class CMulAdd {
 
       //update databus
       stage[versat_base].databus[sMULADD[muladd_base]] = output[MULADD_LAT-1];
+      //special case for stage 0
+      if(versat_base==0){
+	//2nd copy at the end of global databus
+	databus[nSTAGE*N + sMULADD[muladd_base]] = output[MULADD_LAT-1];
+      }
       
       //trickle down all outputs in buffer
       for(i=1;i<MULADD_LAT;i++){
