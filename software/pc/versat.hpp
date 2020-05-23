@@ -42,8 +42,8 @@ class CMemPort {
   private:
     //count delay during a run():
     int run_delay = 0;
-    versat_t outputA[MEMP_LAT]; //output FIFO
-    versat_t outputB[MEMP_LAT]; //output FIFO
+    versat_t out;
+    versat_t output_port[MEMP_LAT]; //output FIFO
   public:
     int versat_base, mem_base, data_base;
     int iter, per, duty, sel, start, shift, incr, delay, in_wr;
@@ -70,17 +70,20 @@ class CMemPort {
     }else{
 
       //update databus - ports A and B
-      stage[versat_base].databus[sMEMA[mem_base]] = outputA[MEMP_LAT-1];
-      stage[versat_base].databus[sMEMB[mem_base]] = outputB[MEMP_LAT-1];
+      if(data_base==0)
+      stage[versat_base].databus[sMEMA[mem_base]] = output_port[MEMP_LAT-1];
+      else
+      {
+        stage[versat_base].databus[sMEMB[mem_base]] = output_port[MEMP_LAT-1];
+      }
+      
       
       //trickle down all outputs in buffer
       for(i=1;i<MEMP_LAT;i++){
-	outputA[i] = outputA[i-1];
-	outputB[i] = outputB[i-1];
+	      output_port[i] = output_port[i-1];
       }
       //insert new output
-      outputA[0] = outA; //TO DO: change according to output()
-      outputB[0] = outB;
+      output_port[0] = out; //TO DO: change according to output()
     }
 
   }
@@ -348,8 +351,8 @@ class CALU {
 
 
     versat_t output(){
-      inb=*stage[versat_base].databus[opb];
-      ina=*stage[versat_base].databus[opa];
+      inb=stage[versat_base].databus[opb];
+      ina=stage[versat_base].databus[opa];
       switch (fns)
       {
       case ALU_OR:
@@ -466,10 +469,10 @@ class CALULite {
 
 
     versat_t output(){
-      versat_t ina_reg=*stage[versat_base].databus[opa];
+      versat_t ina_reg=stage[versat_base].databus[opa];
       versat_t self_loop= fns<0? 1:0;
       versat_t result=0;
-      inb=*stage[versat_base].databus[opb];
+      inb=stage[versat_base].databus[opb];
       ina=self_loop? out : ina_reg;
 
       switch (fns)
@@ -577,7 +580,7 @@ class CBS {
 
     versat_t output()
     {
-      in=*stage[versat_base].databus[data];
+      in=stage[versat_base].databus[data];
       if(fns==BS_SHR_A)
       {
         in=in>>shift;
@@ -634,6 +637,7 @@ class CMul {
   private:
     versat_t opa, opb;
     versat_t output[MUL_LAT]; //output FIFO
+    versat_t out;
   public:
     int versat_base, mul_base;
     int sela, selb, fns;
@@ -673,7 +677,6 @@ class CMul {
       opb = stage[versat_base].databus[selb];      
 
       mul_t result_mult=opa*opb;
-      versat_t out;
       if(fns==MUL_HI) //big brain time: to avoid left/right shifts, using a MASK of size mul_t and versat_t
       {
         result_mult=result_mult<<1; 
@@ -839,11 +842,10 @@ class CMulAdd {
 
 class CStage {
   private:
-  versat_t* databus;
-
   public:
     int versat_base;
-    versat_t* databus[N*2];
+    versat_t* databus;
+    //versat_t* databus[N*2];
     //Versat Function Units
     CMemPort memA[nMEM];
     CMemPort memB[nMEM];
@@ -1075,6 +1077,7 @@ inline void versat_init(int base_addr) {
     sMUL_p[i] = sMUL[i] + p_offset; 
   } s_cnt += nMUL;                                    
 #endif    
+    
     
 #if nMULADD>0                                                              
   //MULADDS
