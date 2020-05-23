@@ -5,8 +5,6 @@
 #include "versat.h"
 #include <string.h>
 
-#define nFU nALU+nALULITE+nMEM+nMUL+nMULADD+nBS
-
 #ifndef DATAPATH_W
 #define DATAPATH_W 16
 #endif
@@ -14,16 +12,16 @@
 #if DATAPATH_W == 16
 typedef int16_t versat_t;
 typedef int32_t mul_t;
-typedef uint32_t shift;
+typedef uint32_t shift_t;
 #elif DATAPATH_W == 8
 typedef int8_t versat_t;
 typedef int16_t mul_t;
-typedef uint16_t shift;
+typedef uint16_t shift_t;
 
 #else
 typedef int32_t versat_t;
 typedef int64_t mul_t;
-typedef uint64_t shift;
+typedef uint64_t shift_t;
 
 #endif
 
@@ -41,6 +39,11 @@ typedef uint64_t shift;
 // VERSAT CLASSES
 //
 class CMemPort {
+  private:
+    //count delay during a run():
+    int run_delay = 0;
+    versat_t outputA[MEMP_LAT]; //output FIFO
+    versat_t outputB[MEMP_LAT]; //output FIFO
   public:
     int versat_base, mem_base, data_base;
     int iter, per, duty, sel, start, shift, incr, delay, in_wr;
@@ -49,6 +52,39 @@ class CMemPort {
     //Default constructor
     CMemPort() {
     }
+
+
+  //start run
+  void start_run(){
+    //set run_delay
+    run_delay = this->delay;
+  }
+
+
+  //update output buffer, write results to databus
+  void update(){
+    int i=0;
+    //check for delay
+    if(run_delay > 0){
+      run_delay--;
+    }else{
+
+      //update databus - ports A and B
+      stage[versat_base].databus[sMEMA[mem_base]] = outputA[MEMP_LAT-1];
+      stage[versat_base].databus[sMEMB[mem_base]] = outputB[MEMP_LAT-1];
+      
+      //trickle down all outputs in buffer
+      for(i=1;i<MEMP_LAT;i++){
+	outputA[i] = outputA[i-1];
+	outputB[i] = outputB[i-1];
+      }
+      //insert new output
+      outputA[0] = outA; //TO DO: change according to output()
+      outputB[0] = outB;
+    }
+
+  }
+
     
     versat_t output(){
       return 0;
@@ -278,6 +314,8 @@ class CMemPort {
 
 #if nALU>0
 class CALU {
+  private:versat_t ina,inb,out;
+    versat_t output[ALU_LAT]; //output FIFO
   public:
     int versat_base, alu_base;
     int opa, opb, fns;
@@ -285,8 +323,81 @@ class CALU {
     //Default constructor
     CALU() {
     }
+
+  //start run
+  void start_run(){
+    //CAlu has no delay
+  }
+
+
+  //update output buffer, write results to databus
+  void update(){
+    int i=0;
+
+    //update databus
+    stage[versat_base].databus[sALU[alu_base]] = output[ALU_LAT-1];
+    
+    //trickle down all outputs in buffer
+    for(i=1;i<ALU_LAT;i++){
+      output[i] = output[i-1];
+    }
+    //insert new output
+    output[0] = out;
+
+  }
+
+
     versat_t output(){
-      return 0;
+      inb=*stage[versat_base].databus[opb];
+      ina=*stage[versat_base].databus[opa];
+      switch (fns)
+      {
+      case ALU_OR:
+        /* code */
+        break;
+      case ALU_AND:
+        /* code */
+        break;
+      case ALU_XOR:
+        /* code */
+        break;
+      case ALU_SEXT8:
+        /* code */
+        break;
+      case ALU_SEXT16:
+        /* code */
+        break;
+      case ALU_SHIFTR_ARTH:
+        /* code */
+        break;
+      case ALU_SHIFTR_LOG:
+        /* code */
+        break;
+      case ALU_CMP_SIG:
+        /* code */
+        break;
+      case ALU_CMP_UNS:
+        /* code */
+        break;
+      case ALU_MUX:
+        /* code */
+        break;
+      case ALU_ADD:
+        /* code */
+        break;
+      case ALU_SUB:
+        /* code */
+        break;
+      case ALU_MAX:
+        /* code */
+        break;
+      case ALU_MIN:
+        /* code */
+        break;
+      default:
+        break;
+      }
+      return out;
     }
     CALU(int versat_base, int i) {
       this->versat_base = versat_base;
@@ -321,6 +432,8 @@ class CALU {
 
 #if nALULITE>0
 class CALULite {
+  private:versat_t ina,inb, out;
+    versat_t output[ALULITE_LAT]; //output FIFO
   public:
     int versat_base, alulite_base;
     int opa, opb, fns;
@@ -329,8 +442,71 @@ class CALULite {
     CALULite() {
     }
 
+  //start run
+  void start_run(){
+    //CALULite has no delay
+  }
+
+
+  //update output buffer, write results to databus
+  void update(){
+    int i=0;
+
+    //update databus
+    stage[versat_base].databus[sALULITE[alulite_base]] = output[ALULITE_LAT-1];
+      
+    //trickle down all outputs in buffer
+    for(i=1;i<ALULITE_LAT;i++){
+      output[i] = output[i-1];
+    }
+    //insert new output
+    output[0] = out;
+    
+  }
+
+
     versat_t output(){
-      return 0;
+      versat_t ina_reg=*stage[versat_base].databus[opa];
+      versat_t self_loop= fns<0? 1:0;
+      versat_t result=0;
+      inb=*stage[versat_base].databus[opb];
+      ina=self_loop? out : ina_reg;
+
+      switch (fns)
+      {
+      case ALULITE_OR:result=ina|inb;
+        break;
+      case ALULITE_AND:result=ina&inb;
+        break;
+      case ALULITE_CMP_SIG: //it's a bit more complex TODO
+        break;
+      case ALULITE_MUX:
+        result=inb;
+        if(~ina_reg)
+        {
+          if(self_loop)
+            result=out;
+          else
+          {
+            result=0;
+          }
+        }
+        break;
+      case ALULITE_SUB:
+        break;
+      case ALULITE_ADD: if(self_loop)
+                          if(ina_reg)
+                              result=inb;
+        break;
+      case ALULITE_MAX: //TODO
+        break;
+      case ALULITE_MIN: //TODO
+        break;
+      default:
+        break;
+      }
+
+      return out;
     }
 
     CALULite(int versat_base, int i) {
@@ -366,6 +542,8 @@ class CALULite {
 
 #if nBS>0
 class CBS {
+  private: versat_t in,out;
+    versat_t output[BS_LAT]; //output FIFO
   public:
     int versat_base, bs_base;
     int data, shift, fns;
@@ -374,9 +552,50 @@ class CBS {
     CBS() {
     }
 
+  //start run
+  void start_run(){
+    //CBS has no delay
+  }
+
+
+  //update output buffer, write results to databus
+  void update(){
+    int i=0;
+
+    //update databus
+    stage[versat_base].databus[sBS[bs_base]] = output[BS_LAT-1];
+      
+    //trickle down all outputs in buffer
+    for(i=1;i<BS_LAT;i++){
+      output[i] = output[i-1];
+    }
+    //insert new output
+    output[0] = out;
+  
+  }
+
+
     versat_t output()
     {
-      return 0;
+      in=*stage[versat_base].databus[data];
+      if(fns==BS_SHR_A)
+      {
+        in=in>>shift;
+      }
+      else if(fns== BS_SHR_L)
+      {
+        shift_t s=in;
+        s=s>>shift;
+        in=s;
+      }
+      else if(fns==BS_SHL)
+      {
+        in=in<<shift;
+      }
+      
+      out=in;
+
+      return out;
     }
 
     CBS(int versat_base, int i) {
@@ -413,11 +632,11 @@ class CBS {
 #if nMUL>0
 class CMul {
   private:
-  versat_t opa,opb;
+    versat_t opa, opb;
+    versat_t output[MUL_LAT]; //output FIFO
   public:
     int versat_base, mul_base;
     int sela, selb, fns;
-    versat_t in_a[nFU-1],in_b[nFU-1];
     //Default constructor
     CMul() {
     }
@@ -426,6 +645,27 @@ class CMul {
       this->versat_base = versat_base;
       this->mul_base =i;
     }
+  
+  //start run
+  void start_run(){
+    //CMul has no delay
+  }
+
+
+  //update output buffer, write results to databus
+  void update(){
+    int i=0;
+
+    //update databus
+    stage[versat_base].databus[sMUL[mul_base]] = output[MUL_LAT-1];
+      
+    //trickle down all outputs in buffer
+    for(i=1;i<MUL_LAT;i++){
+      output[i] = output[i-1];
+    }
+    //insert new output
+    output[0] = out;
+  }
 
     versat_t output() {
       //select inputs
@@ -447,6 +687,8 @@ class CMul {
       { 
         out=(versat_t)result_mult;
       }
+
+      return out;
     }
     
     void setConf(int sela, int selb, int fns) {
@@ -479,14 +721,11 @@ class CMul {
 class CMulAdd {
   private:   
     //SIM VARIABLES
-    versat_t in_a[nFU-1], in_b[nFU-1]; // number of inputs for MUX
     versat_t opa,opb,out,acc_w;
     mul_t acc;
-  /* count delay during a run():
-  0: UPDATE output buffer
-  >0:wait for delay*/
+    //count delay during a run():
     int run_delay = 0;
-  versat_t output[MULADD_LAT];
+    versat_t output[MULADD_LAT]; //output FIFO
   public:
     int versat_base, muladd_base;
     int sela, selb, fns, iter, per, delay, shift;
@@ -543,7 +782,7 @@ class CMulAdd {
       {
         acc=acc_w-result_mult;
       }
-      acc_w=(versat_t)(acc>>(sizeof(versat_t)*4));
+      acc_w=(versat_t)(acc>>shift);
 
       return acc_w;
     }
@@ -604,6 +843,7 @@ class CStage {
 
   public:
     int versat_base;
+    versat_t* databus[N*2];
     //Versat Function Units
     CMemPort memA[nMEM];
     CMemPort memB[nMEM];
@@ -625,8 +865,7 @@ class CStage {
 
     //Default constructor
     CStage() {
-    }
-    
+    }    
     //Default Constructor
     CStage(int versat_base) {
 
@@ -660,7 +899,8 @@ class CStage {
       for (i=0; i<nMULADD; i++) muladd[i] = CMulAdd(versat_base, i);
     #endif
     }
-    
+
+
     //clear Versat config                       
     void clearConf() {
       int i=versat_base;
@@ -679,6 +919,77 @@ class CStage {
       if(addr < CONF_MEM_SIZE) MEMGET(versat_base, (CONF_BASE + CONF_MEM + addr));
     }
 #endif
+
+  //set run start on all FUs
+  void start_all_FUs(){
+    int i=0;
+    for (i=0; i<nMEM; i++) memA[i].start_run();
+    for (i=0; i<nMEM; i++) memB[i].start_run();
+    #if nALU>0
+      for (i=0; i<nALU; i++) alu[i].start_run();
+    #endif
+    #if nALULITE>0
+      for (i=0; i<nALULITE; i++) alulite[i].start_run();
+    #endif
+    #if nBS>0
+      for (i=0; i<nBS; i++) bs[i].start_run();
+    #endif
+    #if nMUL>0
+      for (i=0; i<nMUL; i++) mul[i].start_run();
+    #endif
+    #if nMULADD>0
+      for (i=0; i<nMULADD; i++) muladd[i].start_run();
+    #endif
+  }
+
+  
+  //set update output buffers on all FUs
+  void update_all_FUs(){
+    int i=0;
+    for (i=0; i<nMEM; i++) memA[i].update();
+    for (i=0; i<nMEM; i++) memB[i].update();
+    #if nALU>0
+      for (i=0; i<nALU; i++) alu[i].update();
+    #endif
+    #if nALULITE>0
+      for (i=0; i<nALULITE; i++) alulite[i].update();
+    #endif
+    #if nBS>0
+      for (i=0; i<nBS; i++) bs[i].update();
+    #endif
+    #if nMUL>0
+      for (i=0; i<nMUL; i++) mul[i].update();
+    #endif
+    #if nMULADD>0
+      for (i=0; i<nMULADD; i++) muladd[i].update();
+    #endif
+  }
+
+  //calculate new output on all FUs
+  void output_all_FUs(){
+    int i=0;
+    for (i=0; i<nMEM; i++) memA[i].output();
+    for (i=0; i<nMEM; i++) memB[i].output();
+    #if nALU>0
+      for (i=0; i<nALU; i++) alu[i].output();
+    #endif
+    #if nALULITE>0
+      for (i=0; i<nALULITE; i++) alulite[i].output();
+    #endif
+    #if nBS>0
+      for (i=0; i<nBS; i++) bs[i].output();
+    #endif
+    #if nMUL>0
+      for (i=0; i<nMUL; i++) mul[i].output();
+    #endif
+    #if nMULADD>0
+      for (i=0; i<nMULADD; i++) muladd[i].output();
+    #endif
+  }
+
+  
+
+
 };//end class CStage
 
 //
@@ -786,8 +1097,32 @@ int run_done=0;
 
 void run_sim()
 {
-run_done=1;
-//put simulation here
+  run_done=1;
+  int i=0;
+  //put simulation here
+
+  //set run start for all FUs
+  for(i=0;i<nSTAGE;i++){
+    stage[i].start_all_FUs();
+  }
+
+  //main run loop
+  while(run_done){
+    //calculate new outputs
+    for(i=0;i<nSTAGE;i++){
+      stage[i].output_all_FUs();
+    }
+    
+    //update output buffers and datapath
+    for(i=0;i<nSTAGE;i++){
+      stage[i].update_all_FUs();
+    }
+
+    //TO DO: check for run finish
+    //set run_done to 0
+  }
+
+
 }
 
 inline void run() {
