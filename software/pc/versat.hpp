@@ -428,13 +428,10 @@ class CMul {
     }
 
     versat_t output() {
-      for(int i=0;i<nFU-1;i++)
-      {
-        if (sela==i)
-          opa=in_a[i];
-        if (selb==i)
-          opb=in_b[i];
-      }
+      //select inputs
+      opa = stage[versat_base].databus[sela];
+      opb = stage[versat_base].databus[selb];      
+
       mul_t result_mult=opa*opb;
       versat_t out;
       if(fns==MUL_HI) //big brain time: to avoid left/right shifts, using a MASK of size mul_t and versat_t
@@ -485,6 +482,11 @@ class CMulAdd {
     versat_t in_a[nFU-1], in_b[nFU-1]; // number of inputs for MUX
     versat_t opa,opb,out,acc_w;
     mul_t acc;
+  /* count delay during a run():
+  0: UPDATE output buffer
+  >0:wait for delay*/
+    int run_delay = 0;
+  versat_t output[MULADD_LAT];
   public:
     int versat_base, muladd_base;
     int sela, selb, fns, iter, per, delay, shift;
@@ -498,15 +500,40 @@ class CMulAdd {
       this->muladd_base = i;
     }
 
+  //start run
+  void start_run(){
+    //set run_delay
+    run_delay = this->delay;
+  }
+
+
+  //update output buffer, write results to databus
+  void update(){
+    int i=0;
+    //check for delay
+    if(run_delay > 0){
+      run_delay--;
+    }else{
+
+      //update databus
+      stage[versat_base].databus[sMULADD[muladd_base]] = output[MULADD_LAT-1];
+      
+      //trickle down all outputs in buffer
+      for(i=1;i<MULADD_LAT;i++){
+	output[i] = output[i-1];
+      }
+      //insert new output
+      output[0] = out;
+    }
+
+  }
+ 
     versat_t output() //lacks shift,iter and delay implementation aka state machine
     {
-      for(int i=0;i<nFU-1;i++)
-      {
-        if (sela==i)
-          opa=in_a[i];
-        if (selb==i)
-          opb=in_b[i];
-      }
+      //select inputs
+      opa = stage[versat_base].databus[sela];
+      opb = stage[versat_base].databus[selb];      
+
       mul_t result_mult=opa*opb;
       if(fns==MULADD_MACC)
       {
@@ -572,6 +599,8 @@ class CMulAdd {
 #endif
 
 class CStage {
+  private:
+  versat_t* databus;
 
   public:
     int versat_base;
@@ -603,6 +632,13 @@ class CStage {
 
       //Define control and databus base address
       this->versat_base = versat_base;
+
+      //set databus pointer
+      this->databus = &(global_databus[N*(nSTAGE-versat_base)]);
+      //special case for first stage
+      if(versat_base == 0){
+	this->databus = global_databus;
+      }
 
       //Init functional units
       int i;
@@ -653,6 +689,18 @@ class CStage {
 static int base;
 CStage stage[nSTAGE];
 CStage conf[nSTAGE];
+
+/*databus vector
+stage 0 is repeated in the start and at the end
+stage order in databus
+[ 0 | nSTAGE-1 | nSTAGE-2 | ... | 2  | 1 | 0 ]
+^                                    ^
+|                                    |
+stage 0 databus                      stage 1 databus
+
+*/
+versat_t global_databus[(nSTAGE+1)*N]; 
+
 int sMEMA[nMEM], sMEMA_p[nMEM], sMEMB[nMEM], sMEMB_p[nMEM];
 #if nALU>0
   int sALU[nALU], sALU_p[nALU];
