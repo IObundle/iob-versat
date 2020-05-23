@@ -5,8 +5,6 @@
 #include "versat.h"
 #include <string.h>
 
-#define nFU nALU+nALULITE+nMEM+nMUL+nMULADD+nBS
-
 #ifndef DATAPATH_W
 #define DATAPATH_W 16
 #endif
@@ -14,16 +12,16 @@
 #if DATAPATH_W == 16
 typedef int16_t versat_t;
 typedef int32_t mul_t;
-typedef uint32_t shift;
+typedef uint32_t shift_t;
 #elif DATAPATH_W == 8
 typedef int8_t versat_t;
 typedef int16_t mul_t;
-typedef uint16_t shift;
+typedef uint16_t shift_t;
 
 #else
 typedef int32_t versat_t;
 typedef int64_t mul_t;
-typedef uint64_t shift;
+typedef uint64_t shift_t;
 
 #endif
 
@@ -278,6 +276,7 @@ class CMemPort {
 
 #if nALU>0
 class CALU {
+  private:versat_t ina,inb,out;
   public:
     int versat_base, alu_base;
     int opa, opb, fns;
@@ -286,7 +285,56 @@ class CALU {
     CALU() {
     }
     versat_t output(){
-      return 0;
+      inb=*stage[versat_base].databus[opb];
+      ina=*stage[versat_base].databus[opa];
+      switch (fns)
+      {
+      case ALU_OR:
+        /* code */
+        break;
+      case ALU_AND:
+        /* code */
+        break;
+      case ALU_XOR:
+        /* code */
+        break;
+      case ALU_SEXT8:
+        /* code */
+        break;
+      case ALU_SEXT16:
+        /* code */
+        break;
+      case ALU_SHIFTR_ARTH:
+        /* code */
+        break;
+      case ALU_SHIFTR_LOG:
+        /* code */
+        break;
+      case ALU_CMP_SIG:
+        /* code */
+        break;
+      case ALU_CMP_UNS:
+        /* code */
+        break;
+      case ALU_MUX:
+        /* code */
+        break;
+      case ALU_ADD:
+        /* code */
+        break;
+      case ALU_SUB:
+        /* code */
+        break;
+      case ALU_MAX:
+        /* code */
+        break;
+      case ALU_MIN:
+        /* code */
+        break;
+      default:
+        break;
+      }
+      return out;
     }
     CALU(int versat_base, int i) {
       this->versat_base = versat_base;
@@ -321,6 +369,7 @@ class CALU {
 
 #if nALULITE>0
 class CALULite {
+  private:versat_t ina,inb, out;
   public:
     int versat_base, alulite_base;
     int opa, opb, fns;
@@ -330,7 +379,47 @@ class CALULite {
     }
 
     versat_t output(){
-      return 0;
+      versat_t ina_reg=*stage[versat_base].databus[opa];
+      versat_t self_loop= fns<0? 1:0;
+      versat_t result=0;
+      inb=*stage[versat_base].databus[opb];
+      ina=self_loop? out : ina_reg;
+
+      switch (fns)
+      {
+      case ALULITE_OR:result=ina|inb;
+        break;
+      case ALULITE_AND:result=ina&inb;
+        break;
+      case ALULITE_CMP_SIG: //it's a bit more complex TODO
+        break;
+      case ALULITE_MUX:
+        result=inb;
+        if(~ina_reg)
+        {
+          if(self_loop)
+            result=out;
+          else
+          {
+            result=0;
+          }
+        }
+        break;
+      case ALULITE_SUB:
+        break;
+      case ALULITE_ADD: if(self_loop)
+                          if(ina_reg)
+                              result=inb;
+        break;
+      case ALULITE_MAX: //TODO
+        break;
+      case ALULITE_MIN: //TODO
+        break;
+      default:
+        break;
+      }
+
+      return out;
     }
 
     CALULite(int versat_base, int i) {
@@ -366,6 +455,7 @@ class CALULite {
 
 #if nBS>0
 class CBS {
+  private: versat_t in,out;
   public:
     int versat_base, bs_base;
     int data, shift, fns;
@@ -376,7 +466,25 @@ class CBS {
 
     versat_t output()
     {
-      return 0;
+      in=*stage[versat_base].databus[data];
+      if(fns==BS_SHR_A)
+      {
+        in=in>>shift;
+      }
+      else if(fns== BS_SHR_L)
+      {
+        shift_t s=in;
+        s=s>>shift;
+        in=s;
+      }
+      else if(fns==BS_SHL)
+      {
+        in=in<<shift;
+      }
+      
+      out=in;
+
+      return out;
     }
 
     CBS(int versat_base, int i) {
@@ -417,7 +525,6 @@ class CMul {
   public:
     int versat_base, mul_base;
     int sela, selb, fns;
-    versat_t in_a[nFU-1],in_b[nFU-1];
     //Default constructor
     CMul() {
     }
@@ -428,13 +535,8 @@ class CMul {
     }
 
     versat_t output() {
-      for(int i=0;i<nFU-1;i++)
-      {
-        if (sela==i)
-          opa=in_a[i];
-        if (selb==i)
-          opb=in_b[i];
-      }
+      opa=*stage[versat_base].databus[sela];
+      opb=*stage[versat_base].databus[selb];
       mul_t result_mult=opa*opb;
       versat_t out;
       if(fns==MUL_HI) //big brain time: to avoid left/right shifts, using a MASK of size mul_t and versat_t
@@ -450,6 +552,8 @@ class CMul {
       { 
         out=(versat_t)result_mult;
       }
+
+      return out;
     }
     
     void setConf(int sela, int selb, int fns) {
@@ -482,7 +586,6 @@ class CMul {
 class CMulAdd {
   private:   
     //SIM VARIABLES
-    versat_t in_a[nFU-1], in_b[nFU-1]; // number of inputs for MUX
     versat_t opa,opb,out,acc_w;
     mul_t acc;
   public:
@@ -500,13 +603,8 @@ class CMulAdd {
 
     versat_t output() //lacks shift,iter and delay implementation aka state machine
     {
-      for(int i=0;i<nFU-1;i++)
-      {
-        if (sela==i)
-          opa=in_a[i];
-        if (selb==i)
-          opb=in_b[i];
-      }
+      opa=*stage[versat_base].databus[sela];
+      opb=*stage[versat_base].databus[selb];
       mul_t result_mult=opa*opb;
       if(fns==MULADD_MACC)
       {
@@ -516,7 +614,7 @@ class CMulAdd {
       {
         acc=acc_w-result_mult;
       }
-      acc_w=(versat_t)(acc>>(sizeof(versat_t)*4));
+      acc_w=(versat_t)(acc>>shift);
 
       return acc_w;
     }
@@ -575,6 +673,7 @@ class CStage {
 
   public:
     int versat_base;
+    versat_t* databus[N*2];
     //Versat Function Units
     CMemPort memA[nMEM];
     CMemPort memB[nMEM];
@@ -596,8 +695,7 @@ class CStage {
 
     //Default constructor
     CStage() {
-    }
-    
+    }    
     //Default Constructor
     CStage(int versat_base) {
 
