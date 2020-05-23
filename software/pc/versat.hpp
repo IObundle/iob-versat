@@ -442,6 +442,9 @@ class CALULite {
     CALULite() {
     }
 
+  
+
+
   //start run
   void start_run(){
     //CALULite has no delay
@@ -552,6 +555,14 @@ class CBS {
     CBS() {
     }
 
+  //set BS configuration to shadow register
+  void update_shadow_reg_BS(){
+    shadow_reg[versat_base].bs[bs_base].data  = conf[versat_base].bs[bs_base].data;
+    shadow_reg[versat_base].bs[bs_base].fns   = conf[versat_base].bs[bs_base].fns;
+    shadow_reg[versat_base].bs[bs_base].shift = conf[versat_base].bs[bs_base].shift;
+  }
+
+
   //start run
   void start_run(){
     //CBS has no delay
@@ -645,6 +656,15 @@ class CMul {
       this->versat_base = versat_base;
       this->mul_base =i;
     }
+
+  
+  //set Mul configuration to shadow register
+  void update_shadow_reg_Mul(){
+    shadow_reg[versat_base].mul[mul_base].sela  = conf[versat_base].mul[mul_base].sela;
+    shadow_reg[versat_base].mul[mul_base].selb  = conf[versat_base].mul[mul_base].selb;
+    shadow_reg[versat_base].mul[mul_base].fns   = conf[versat_base].mul[mul_base].fns;
+  }
+
   
   //start run
   void start_run(){
@@ -738,6 +758,17 @@ class CMulAdd {
       this->versat_base = versat_base;
       this->muladd_base = i;
     }
+
+  //set MulAdd configuration to shadow register
+  void update_shadow_reg_MulAdd(){
+    shadow_reg[versat_base].muladd[muladd_base].sela  = conf[versat_base].muladd[muladd_base].sela;
+    shadow_reg[versat_base].muladd[muladd_base].selb  = conf[versat_base].muladd[muladd_base].selb;
+    shadow_reg[versat_base].muladd[muladd_base].fns   = conf[versat_base].muladd[muladd_base].fns;
+    shadow_reg[versat_base].muladd[muladd_base].iter  = conf[versat_base].muladd[muladd_base].iter;
+    shadow_reg[versat_base].muladd[muladd_base].per   = conf[versat_base].muladd[muladd_base].per;
+    shadow_reg[versat_base].muladd[muladd_base].delay = conf[versat_base].muladd[muladd_base].delay;
+    shadow_reg[versat_base].muladd[muladd_base].shift = conf[versat_base].muladd[muladd_base].shift;  
+  }
 
   //start run
   void start_run(){
@@ -920,6 +951,31 @@ class CStage {
     }
 #endif
 
+  //update shadow register with current configuration
+  void update_shawdown_reg(){
+    int i=0;
+
+    //TO DO: update method call
+    for (i=0; i<nMEM; i++) memA[i].start_run();
+    for (i=0; i<nMEM; i++) memB[i].start_run();
+    #if nALU>0
+      for (i=0; i<nALU; i++) alu[i].start_run();
+    #endif
+    #if nALULITE>0
+      for (i=0; i<nALULITE; i++) alulite[i].start_run();
+    #endif
+    #if nBS>0
+      for (i=0; i<nBS; i++) bs[i].start_run();
+    #endif
+    #if nMUL>0
+      for (i=0; i<nMUL; i++) mul[i].start_run();
+    #endif
+    #if nMULADD>0
+      for (i=0; i<nMULADD; i++) muladd[i].start_run();
+    #endif
+  }
+
+
   //set run start on all FUs
   void start_all_FUs(){
     int i=0;
@@ -1000,6 +1056,7 @@ class CStage {
 static int base;
 CStage stage[nSTAGE];
 CStage conf[nSTAGE];
+CStage shadow_reg[nSTAGE];
 
 /*databus vector
 stage 0 is repeated in the start and at the end
