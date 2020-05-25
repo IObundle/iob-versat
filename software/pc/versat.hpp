@@ -1,4 +1,4 @@
-#ifndef VERSAT_SIM // include guard
+#ifndef VERSAT_SIM
 #define VERSAT_SIM
 #include <iostream>
 #include <thread>
@@ -115,21 +115,21 @@ class CMemPort {
 
       //update databus
       if(data_base==0){
-	stage[versat_base].databus[sMEMA[mem_base]] = output_port[MEMP_LAT-1];
-	//special case for stage 0
-	if(versat_base==0){
-	  //2nd copy at the end of global databus
-	  databus[nSTAGE*N + sMEMA[mem_base]] = output[MEMP_LAT-1];
+	    stage[versat_base].databus[sMEMA[mem_base]] = output_port[MEMP_LAT-1];
+	    //special case for stage 0
+	    if(versat_base==0){
+	      //2nd copy at the end of global databus
+	      global_databus[nSTAGE*N + sMEMA[mem_base]] = output_port[MEMP_LAT-1];
 	}
       }
       else
       {
         stage[versat_base].databus[sMEMB[mem_base]] = output_port[MEMP_LAT-1];
-	//special case for stage 0
-	if(versat_base==0){
-	  //2nd copy at the end of global databus
-	  databus[nSTAGE*N + sMEMB[mem_base]] = output[MEMP_LAT-1];
-	}
+	      //special case for stage 0
+	      if(versat_base==0){
+	        //2nd copy at the end of global databus
+	        global_databus[nSTAGE*N + sMEMB[mem_base]] = output_port[MEMP_LAT-1];
+	      }
       }
       
     
@@ -407,7 +407,7 @@ class CALU {
     //special case for stage 0
     if(versat_base==0){
       //2nd copy at the end of global databus
-      databus[nSTAGE*N + sALU[alu_base]] = output[ALU_LAT-1];
+      global_databus[nSTAGE*N + sALU[alu_base]] = output[ALU_LAT-1];
     }
         
     //trickle down all outputs in buffer
@@ -537,7 +537,7 @@ class CALULite {
     //special case for stage 0
     if(versat_base==0){
       //2nd copy at the end of global databus
-      databus[nSTAGE*N + sALULITE[alulite_base]] = output[ALULITE_LAT-1];
+      global_databus[nSTAGE*N + sALULITE[alulite_base]] = output[ALULITE_LAT-1];
     }
           
     //trickle down all outputs in buffer
@@ -660,7 +660,7 @@ class CBS {
     //special case for stage 0
     if(versat_base==0){
       //2nd copy at the end of global databus
-      databus[nSTAGE*N + sBS[bs_base]] = output[BS_LAT-1];
+      global_databus[nSTAGE*N + sBS[bs_base]] = output[BS_LAT-1];
     }
           
     //trickle down all outputs in buffer
@@ -769,7 +769,7 @@ class CMul {
     //special case for stage 0
     if(versat_base==0){
       //2nd copy at the end of global databus
-      databus[nSTAGE*N + sMUL[mul_base]] = output[MUL_LAT-1];
+      global_databus[nSTAGE*N + sMUL[mul_base]] = output[MUL_LAT-1];
     }
          
     //trickle down all outputs in buffer
@@ -881,8 +881,8 @@ class CMulAdd {
       stage[versat_base].databus[sMULADD[muladd_base]] = output[MULADD_LAT-1];
       //special case for stage 0
       if(versat_base==0){
-	//2nd copy at the end of global databus
-	databus[nSTAGE*N + sMULADD[muladd_base]] = output[MULADD_LAT-1];
+	      //2nd copy at the end of global databus
+	      global_databus[nSTAGE*N + sMULADD[muladd_base]] = output[MULADD_LAT-1];
       }
       
       //trickle down all outputs in buffer
@@ -897,6 +897,7 @@ class CMulAdd {
  
     versat_t output() //TO DO: lacks shift,iter and delay implementation aka state machine
     {
+
       //select inputs
       opa = stage[versat_base].databus[shadow_reg[versat_base].muladd[muladd_base].sela];
       opb = stage[versat_base].databus[shadow_reg[versat_base].muladd[muladd_base].selb];      
