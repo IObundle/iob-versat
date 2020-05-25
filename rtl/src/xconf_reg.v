@@ -7,6 +7,7 @@
 `include "versat-io.vh"
 `include "xaludefs.vh"
 `include "xalulitedefs.vh"
+`include "xmuladdlitedefs.vh"
 `include "xmuldefs.vh"
 `include "xmuladddefs.vh"
 `include "xbsdefs.vh"
@@ -304,6 +305,39 @@ module xconf_reg # (
 	      if(ctr_addr == (`CONF_MULADD0 + i*`MULADD_CONF_OFFSET + `MULADD_CONF_SHIFT))
 		conf_reg[`CONF_MULADD0_B - i*`MULADD_CONF_BITS - 2*`N_W - `MULADD_FNS_W - `MEM_ADDR_W - 2*`PERIOD_W -: `SHIFT_W] <= ctr_data_in[`SHIFT_W-1:0];
 	   end
+
+	   // configure MULADDLITEs
+	   for (i=0; i<`nMULADDLITE; i=i+1) begin
+              if(ctr_addr == (`CONF_MULADDLITE0 + i*`MULADDLITE_CONF_OFFSET + `MULADDLITE_CONF_SELA))
+                conf_reg[`CONF_MULADDLITE0_B - i*`MULADDLITE_CONF_BITS -: `N_W] <= ctr_data_in[`N_W-1:0];
+
+              if(ctr_addr == (`CONF_MULADDLITE0 + i*`MULADDLITE_CONF_OFFSET + `MULADDLITE_CONF_SELB))
+                conf_reg[`CONF_MULADDLITE0_B - i*`MULADDLITE_CONF_BITS - `N_W -: `N_W] <= ctr_data_in[`N_W-1:0];
+
+              if(ctr_addr == (`CONF_MULADDLITE0 + i*`MULADDLITE_CONF_OFFSET + `MULADDLITE_CONF_SELC))
+                conf_reg[`CONF_MULADDLITE0_B - i*`MULADDLITE_CONF_BITS - 2*`N_W -: `N_W] <= ctr_data_in[`N_W-1:0];
+
+              if(ctr_addr == (`CONF_MULADDLITE0 + i*`MULADDLITE_CONF_OFFSET + `MULADDLITE_CONF_ITER))
+                conf_reg[`CONF_MULADDLITE0_B - i*`MULADDLITE_CONF_BITS - 3*`N_W -: `MEM_ADDR_W] <= ctr_data_in[`MEM_ADDR_W-1:0];
+
+              if(ctr_addr == (`CONF_MULADDLITE0 + i*`MULADDLITE_CONF_OFFSET + `MULADDLITE_CONF_PER))
+                conf_reg[`CONF_MULADDLITE0_B - i*`MULADDLITE_CONF_BITS - 3*`N_W - `MEM_ADDR_W -: `PERIOD_W] <= ctr_data_in[`PERIOD_W-1:0];
+
+              if(ctr_addr == (`CONF_MULADDLITE0 + i*`MULADDLITE_CONF_OFFSET + `MULADDLITE_CONF_DELAY))
+                conf_reg[`CONF_MULADDLITE0_B - i*`MULADDLITE_CONF_BITS - 3*`N_W - `MEM_ADDR_W - `PERIOD_W -: `PERIOD_W] <= ctr_data_in[`PERIOD_W-1:0];
+
+	      if(ctr_addr == (`CONF_MULADDLITE0 + i*`MULADDLITE_CONF_OFFSET + `MULADDLITE_CONF_SHIFT))
+                conf_reg[`CONF_MULADDLITE0_B - i*`MULADDLITE_CONF_BITS - 3*`N_W - `MEM_ADDR_W - 2*`PERIOD_W -: `SHIFT_W] <= ctr_data_in[`SHIFT_W-1:0];
+
+              if(ctr_addr == (`CONF_MULADDLITE0 + i*`MULADDLITE_CONF_OFFSET + `MULADDLITE_CONF_ACCIN))
+                conf_reg[`CONF_MULADDLITE0_B - i*`MULADDLITE_CONF_BITS - 3*`N_W - `MEM_ADDR_W - 2*`PERIOD_W - `SHIFT_W -: 1] <= ctr_data_in[0];
+
+              if(ctr_addr == (`CONF_MULADDLITE0 + i*`MULADDLITE_CONF_OFFSET + `MULADDLITE_CONF_ACCOUT))
+                conf_reg[`CONF_MULADDLITE0_B - i*`MULADDLITE_CONF_BITS - 3*`N_W - `MEM_ADDR_W - 2*`PERIOD_W - `SHIFT_W-1 -: 1] <= ctr_data_in[0];
+
+              if(ctr_addr == (`CONF_MULADDLITE0 + i*`MULADDLITE_CONF_OFFSET + `MULADDLITE_CONF_BATCH))
+                conf_reg[`CONF_MULADDLITE0_B - i*`MULADDLITE_CONF_BITS - 3*`N_W - `MEM_ADDR_W - 2*`PERIOD_W - `SHIFT_W-2 -: 1] <= ctr_data_in[0];
+           end
 
 	   // configure BSs
 	   for (i=0; i<`nBS; i=i+1) begin 
