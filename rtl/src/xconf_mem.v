@@ -5,6 +5,7 @@
 `include "xmemdefs.vh"
 `include "xaludefs.vh"
 `include "xalulitedefs.vh"
+`include "xmuladdlitedefs.vh"
 `include "xmuldefs.vh"
 `include "xmuladddefs.vh"
 `include "xbsdefs.vh"
