@@ -393,7 +393,7 @@ class CMulAddLite {
 
     CMulAddLite(int versat_base, int i) {
       this->versat_base = versat_base;
-      this->muladdlite_base = CONF_BASE + CONF_MULADDLITE0 + i*MULADDLITE_CONF_OF
+      this->muladdlite_base = CONF_BASE + CONF_MULADDLITE0 + i*MULADDLITE_CONF_OFFSET;
     }
 
     void setConf(int sela, int selb, int iter, int per, int delay, int shift) {
@@ -445,23 +445,23 @@ class CMulAddLite {
       this->per = per;
     }
     void setDelay(int delay) {
-      MEMSET(versat_base, (this->muladdlite_base + MULADDLITE_CONF_DELAY), delay)
+      MEMSET(versat_base, (this->muladdlite_base + MULADDLITE_CONF_DELAY), delay);
       this->delay = delay;
     }
     void setShift(int shift) {
-      MEMSET(versat_base, (this->muladdlite_base + MULADDLITE_CONF_SHIFT), shift)
+      MEMSET(versat_base, (this->muladdlite_base + MULADDLITE_CONF_SHIFT), shift);
       this->shift = shift;
     }
     void setAccIN(int accIN) {
-      MEMSET(versat_base, (this->muladdlite_base + MULADDLITE_CONF_ACCIN), accIN)
+      MEMSET(versat_base, (this->muladdlite_base + MULADDLITE_CONF_ACCIN), accIN);
       this->accIN = accIN;
     }
     void setAccOUT(int accOUT) {
-      MEMSET(versat_base, (this->muladdlite_base + MULADDLITE_CONF_ACCOUT), accOU
+      MEMSET(versat_base, (this->muladdlite_base + MULADDLITE_CONF_ACCOUT), accOUT);
       this->accOUT = accOUT;
     }
     void setBatch(int batch) {
-      MEMSET(versat_base, (this->muladdlite_base + MULADDLITE_CONF_BATCH), batch)
+      MEMSET(versat_base, (this->muladdlite_base + MULADDLITE_CONF_BATCH), batch);
       this->batch = batch;
     }
 };//end class CMULADDLITE
