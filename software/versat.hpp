@@ -16,8 +16,6 @@
 class CMemPort {
   public:
     int versat_base, mem_base, data_base;
-    int iter, per, duty, sel, start, shift, incr, delay, in_wr;
-    int rvrs = 0, ext = 0, iter2 = 0, per2 = 0, shift2 = 0, incr2 = 0;
 
     //Default constructor
     CMemPort() {
@@ -30,119 +28,54 @@ class CMemPort {
       this->data_base = (i<<MEM_ADDR_W);
     }
 
-    //Full Configuration (includes ext and rvrs)
-    void setConf(int start, int iter, int incr, int delay, int per, int duty, int sel, int shift, int in_wr, int rvrs, int ext) {
-      this->iter = iter;
-      this->per = per;
-      this->duty = duty;
-      this->sel = sel;
-      this->start = start;
-      this->shift = shift;
-      this->incr = incr;
-      this->delay = delay;
-      this->in_wr = in_wr;
-      this->rvrs = rvrs;
-      this->ext = ext;
-    }
-
-    //Minimum Configuration
-    void setConf(int start, int iter, int incr, int delay, int per, int duty, int sel, int shift, int in_wr) {
-      this->iter = iter;
-      this->per = per;
-      this->duty = duty;
-      this->sel = sel;
-      this->start = start;
-      this->shift = shift;
-      this->incr = incr;
-      this->delay = delay;
-      this->in_wr = in_wr;
-    }
-
-    void setConf(int iter2, int per2, int shift2, int incr2) {
-      this->iter2 = iter2;
-      this->per2 = per2;
-      this->shift2 = shift2;
-      this->incr2 = incr2;
-    }
-
-    void writeConf() {
-      MEMSET(versat_base, (mem_base + MEMP_CONF_ITER), iter);
-      MEMSET(versat_base, (mem_base + MEMP_CONF_START), start);
-      MEMSET(versat_base, (mem_base + MEMP_CONF_PER), per);
-      MEMSET(versat_base, (mem_base + MEMP_CONF_DUTY), duty);
-      MEMSET(versat_base, (mem_base + MEMP_CONF_SEL), sel);
-      MEMSET(versat_base, (mem_base + MEMP_CONF_SHIFT), shift);
-      MEMSET(versat_base, (mem_base + MEMP_CONF_INCR), incr);
-      MEMSET(versat_base, (mem_base + MEMP_CONF_DELAY), delay);
-      MEMSET(versat_base, (mem_base + MEMP_CONF_EXT), ext);
-      MEMSET(versat_base, (mem_base + MEMP_CONF_IN_WR), in_wr);
-      MEMSET(versat_base, (mem_base + MEMP_CONF_RVRS), rvrs);
-      MEMSET(versat_base, (mem_base + MEMP_CONF_ITER2), iter2);
-      MEMSET(versat_base, (mem_base + MEMP_CONF_PER2), per2);
-      MEMSET(versat_base, (mem_base + MEMP_CONF_SHIFT2), shift2);
-      MEMSET(versat_base, (mem_base + MEMP_CONF_INCR2), incr2);
-    }
+    //Methods to set config parameters
     void setIter(int iter) {
       MEMSET(versat_base, (this->mem_base + MEMP_CONF_ITER), iter);
-      this->iter = iter;
     } 
     void setPer(int per) {
       MEMSET(versat_base, (this->mem_base + MEMP_CONF_PER), per);
-      this->per = per;
     } 
     void setDuty(int duty) {
       MEMSET(versat_base, (this->mem_base + MEMP_CONF_DUTY), duty);
-      this->duty = duty;
     } 
     void setSel(int sel) {
       MEMSET(versat_base, (this->mem_base + MEMP_CONF_SEL), sel);
-      this->sel = sel;
     } 
     void setStart(int start) {
       MEMSET(versat_base, (this->mem_base + MEMP_CONF_START), start);
-      this->start = start;
     } 
     void setIncr(int incr) {
       MEMSET(versat_base, (this->mem_base + MEMP_CONF_INCR), incr);
-      this->incr = incr;
     } 
     void setShift(int shift) {
       MEMSET(versat_base, (this->mem_base + MEMP_CONF_SHIFT), shift);
-      this->shift = shift;
     } 
     void setDelay(int delay) {
       MEMSET(versat_base, (this->mem_base + MEMP_CONF_DELAY), delay);
-      this->delay = delay;
     } 
     void setExt(int ext) {
       MEMSET(versat_base, (this->mem_base + MEMP_CONF_EXT), ext);
-      this->ext = ext;
     } 
     void setRvrs(int rvrs) {
       MEMSET(versat_base, (this->mem_base + MEMP_CONF_RVRS), rvrs);
-      this->rvrs = rvrs;
     } 
     void setInWr(int in_wr) {
       MEMSET(versat_base, (this->mem_base + MEMP_CONF_IN_WR), in_wr);
-      this->in_wr = in_wr;
     } 
     void setIter2(int iter2) {
       MEMSET(versat_base, (this->mem_base + MEMP_CONF_ITER2), iter2);
-      this->iter2 = iter2;
     } 
     void setPer2(int per2) {
       MEMSET(versat_base, (this->mem_base + MEMP_CONF_PER2), per2);
-      this->per2 = per2;
     } 
-    void setIncr2(int incr) {
+    void setIncr2(int incr2) {
       MEMSET(versat_base, (this->mem_base + MEMP_CONF_INCR2), incr2);
-      this->incr2 = incr2;
     } 
     void setShift2(int shift2) {
       MEMSET(versat_base, (this->mem_base + MEMP_CONF_SHIFT2), shift2);
-      this->shift2 = shift2;
     } 
 
+    //methods to read/write from/to memory
     void write(int addr, int val) {
       MEMSET(versat_base, (this->data_base + addr), val);
     }
@@ -155,7 +88,6 @@ class CMemPort {
 class CALU {
   public:
     int versat_base, alu_base;
-    int opa, opb, fns;
     
     //Default constructor
     CALU() {
@@ -166,28 +98,15 @@ class CALU {
       this->alu_base = CONF_BASE + CONF_ALU0 + i*ALU_CONF_OFFSET;
     }
     
-    void setConf(int opa, int opb, int fns) {
-      this->opa = opa;
-      this->opb = opb;
-      this->fns = fns;
-    }
-
-    void writeConf() {
-      MEMSET(versat_base, (alu_base + ALU_CONF_SELA), opa);
-      MEMSET(versat_base, (alu_base + ALU_CONF_SELB), opb);
-      MEMSET(versat_base, (alu_base + ALU_CONF_FNS), fns);
-    }
+    //Methods to set config parameters
     void setOpA(int opa) {
       MEMSET(versat_base, (this->alu_base + ALU_CONF_SELA), opa);
-      this->opa = opa; 
     }
     void setOpB(int opb) {
       MEMSET(versat_base, (this->alu_base + ALU_CONF_SELB), opb);
-      this->opb = opb; 
     }
     void setFNS(int fns) {
       MEMSET(versat_base, (this->alu_base + ALU_CONF_FNS), fns);
-      this->fns = fns; 
     }
 }; //end class CALU
 #endif
@@ -196,7 +115,6 @@ class CALU {
 class CALULite {
   public:
     int versat_base, alulite_base;
-    int opa, opb, fns;
     
     //Default constructor
     CALULite() {
@@ -207,28 +125,15 @@ class CALULite {
       this->alulite_base = CONF_BASE + CONF_ALULITE0 + i*ALULITE_CONF_OFFSET;   
     }
     
-    void setConf(int opa, int opb, int fns) {
-      this->opa = opa;
-      this->opb = opb;
-      this->fns = fns;
-    }
-
-    void writeConf() {
-      MEMSET(versat_base, (alulite_base + ALULITE_CONF_SELA), opa);
-      MEMSET(versat_base, (alulite_base + ALULITE_CONF_SELB), opb);
-      MEMSET(versat_base, (alulite_base + ALULITE_CONF_FNS), fns);
-    }
+    //Methods to set config parameters
     void setOpA(int opa) {
       MEMSET(versat_base, (this->alulite_base + ALULITE_CONF_SELA), opa);
-      this->opa = opa; 
     }
     void setOpB(int opb) {
       MEMSET(versat_base, (this->alulite_base + ALULITE_CONF_SELB), opb);
-      this->opb = opb; 
     }
     void setFNS(int fns) {
       MEMSET(versat_base, (this->alulite_base + ALULITE_CONF_FNS), fns);
-      this->fns = fns; 
     }
 }; //end class CALUALITE
 #endif
@@ -237,7 +142,6 @@ class CALULite {
 class CBS {
   public:
     int versat_base, bs_base;
-    int data, shift, fns;
     
     //Default constructor
     CBS() {
@@ -248,28 +152,15 @@ class CBS {
       this->bs_base = CONF_BASE + CONF_BS0 + i*BS_CONF_OFFSET;
     }
 
-    void setConf(int data, int shift, int fns) {
-      this->data = data;
-      this->shift = shift;
-      this->fns = fns;
-    }
-
-    void writeConf() {
-      MEMSET(versat_base, (bs_base + BS_CONF_SELD), data);
-      MEMSET(versat_base, (bs_base + BS_CONF_SELS), shift);
-      MEMSET(versat_base, (bs_base + BS_CONF_FNS), fns);
-    }
+    //Methods to set config parameters
     void setData(int data) {
       MEMSET(versat_base, (this->bs_base + BS_CONF_SELD), data);
-      this->data = data; 
     }
     void setShift(int shift) {
       MEMSET(versat_base, (this->bs_base + BS_CONF_SELS), shift);
-      this->shift = shift; 
     }
     void setFNS(int fns) {
       MEMSET(versat_base, (this->bs_base + BS_CONF_FNS), fns);
-      this->fns = fns; 
     }
 };//end class CBS
 #endif
@@ -278,7 +169,6 @@ class CBS {
 class CMul {
   public:
     int versat_base, mul_base;
-    int sela, selb, fns;
 
     //Default constructor
     CMul() {
@@ -289,28 +179,15 @@ class CMul {
       this->mul_base = CONF_BASE + CONF_MUL0 + i*MUL_CONF_OFFSET;
     }
     
-    void setConf(int sela, int selb, int fns) {
-      this->sela=sela;
-      this->selb=selb;
-      this->fns=fns;
-    }
-
-    void writeConf() {
-      MEMSET(versat_base, (mul_base  + MUL_CONF_SELA), sela);
-      MEMSET(versat_base, (mul_base  + MUL_CONF_SELB), selb);
-      MEMSET(versat_base, (mul_base  + MUL_CONF_FNS), fns);
-    }
+    //Methods to set config parameters
     void setSelA(int sela) {
       MEMSET(versat_base, (this->mul_base + MUL_CONF_SELA), sela);
-      this->sela = sela; 
     }
     void setSelB(int selb) {
       MEMSET(versat_base, (this->mul_base + MUL_CONF_SELB), selb);
-      this->selb = selb; 
     }
     void setFNS(int fns) {
       MEMSET(versat_base, (this->mul_base + MUL_CONF_FNS), fns);
-      this->fns = fns; 
     }
 };//end class CMUL
 #endif
@@ -319,7 +196,6 @@ class CMul {
 class CMulAdd {
   public:
     int versat_base, muladd_base;
-    int sela, selb, fns, iter, per, delay, shift;
 
     //Default constructor
     CMulAdd() {
@@ -330,52 +206,27 @@ class CMulAdd {
       this->muladd_base = CONF_BASE + CONF_MULADD0 + i*MULADD_CONF_OFFSET;
     }
 
-    void setConf(int sela, int selb, int fns, int iter, int per, int delay, int shift) {
-      this->sela = sela;
-      this->selb = selb;
-      this->fns = fns;
-      this->iter = iter;
-      this->per = per;
-      this->delay = delay;
-      this->shift = shift;
-    }
-
-    void writeConf() {
-      MEMSET(versat_base, (muladd_base  + MULADD_CONF_SELA), sela);
-      MEMSET(versat_base, (muladd_base  + MULADD_CONF_SELB), selb);
-      MEMSET(versat_base, (muladd_base  + MULADD_CONF_FNS), fns);
-      MEMSET(versat_base, (muladd_base  + MULADD_CONF_ITER), iter);
-      MEMSET(versat_base, (muladd_base  + MULADD_CONF_PER), per);
-      MEMSET(versat_base, (muladd_base  + MULADD_CONF_DELAY), delay);
-      MEMSET(versat_base, (muladd_base  + MULADD_CONF_SHIFT), shift);
-    }
+    //Methods to set config parameters
     void setSelA(int sela) {
       MEMSET(versat_base, (this->muladd_base + MULADD_CONF_SELA), sela);
-      this->sela = sela; 
     }
     void setSelB(int selb) {
       MEMSET(versat_base, (this->muladd_base + MULADD_CONF_SELB), selb);
-      this->selb = selb; 
     }
     void setFNS(int fns) {
       MEMSET(versat_base, (this->muladd_base + MULADD_CONF_FNS), fns);
-      this->fns = fns; 
     }
     void setIter(int iter) {
       MEMSET(versat_base, (this->muladd_base + MULADD_CONF_ITER), iter);
-      this->iter = iter; 
     }
     void setPer(int per) {
       MEMSET(versat_base, (this->muladd_base + MULADD_CONF_PER), per);
-      this->per = per; 
     }
     void setDelay(int delay) {
       MEMSET(versat_base, (this->muladd_base + MULADD_CONF_DELAY), delay);
-      this->delay = delay;
     }
     void setShift(int shift) {
       MEMSET(versat_base, (this->muladd_base + MULADD_CONF_SHIFT), shift);
-      this->shift = shift;
     }
 };//end class CMULADD
 #endif
@@ -384,8 +235,6 @@ class CMulAdd {
 class CMulAddLite {
   public:
     int versat_base, muladdlite_base;
-    int sela, selb, iter, per, delay, shift;
-    int selc = 0, accIN = 0, accOUT = 0, batch = 0;
 
     //Default constructor
     CMulAddLite() {
@@ -396,73 +245,36 @@ class CMulAddLite {
       this->muladdlite_base = CONF_BASE + CONF_MULADDLITE0 + i*MULADDLITE_CONF_OFFSET;
     }
 
-    void setConf(int sela, int selb, int iter, int per, int delay, int shift) {
-      this->sela = sela;
-      this->selb = selb;
-      this->iter = iter;
-      this->per = per;
-      this->delay = delay;
-      this->shift = shift;
-    }
-
-    void setConf(int selc, int accIN, int accOUT, int batch) {
-      this->selc = selc;
-      this->accIN = accIN;
-      this->accOUT = accOUT;
-      this->batch = batch;
-    }
-
-    void writeConf() {
-      MEMSET(versat_base, (muladdlite_base  + MULADDLITE_CONF_SELA), sela);
-      MEMSET(versat_base, (muladdlite_base  + MULADDLITE_CONF_SELB), selb);
-      MEMSET(versat_base, (muladdlite_base  + MULADDLITE_CONF_SELC), selc);
-      MEMSET(versat_base, (muladdlite_base  + MULADDLITE_CONF_ITER), iter);
-      MEMSET(versat_base, (muladdlite_base  + MULADDLITE_CONF_PER), per);
-      MEMSET(versat_base, (muladdlite_base  + MULADDLITE_CONF_DELAY), delay);
-      MEMSET(versat_base, (muladdlite_base  + MULADDLITE_CONF_SHIFT), shift);
-      MEMSET(versat_base, (muladdlite_base  + MULADDLITE_CONF_ACCIN), accIN);
-      MEMSET(versat_base, (muladdlite_base  + MULADDLITE_CONF_ACCOUT), accOUT);
-      MEMSET(versat_base, (muladdlite_base  + MULADDLITE_CONF_BATCH), batch);
-    }
+    //Methods to set config parameters
     void setSelA(int sela) {
       MEMSET(versat_base, (this->muladdlite_base + MULADDLITE_CONF_SELA), sela);
-      this->sela = sela;
     }
     void setSelB(int selb) {
       MEMSET(versat_base, (this->muladdlite_base + MULADDLITE_CONF_SELB), selb);
-      this->selb = selb;
     }
     void setSelC(int selc) {
       MEMSET(versat_base, (this->muladdlite_base + MULADDLITE_CONF_SELC), selc);
-      this->selc = selc;
     }
     void setIter(int iter) {
       MEMSET(versat_base, (this->muladdlite_base + MULADDLITE_CONF_ITER), iter);
-      this->iter = iter;
     }
     void setPer(int per) {
       MEMSET(versat_base, (this->muladdlite_base + MULADDLITE_CONF_PER), per);
-      this->per = per;
     }
     void setDelay(int delay) {
       MEMSET(versat_base, (this->muladdlite_base + MULADDLITE_CONF_DELAY), delay);
-      this->delay = delay;
     }
     void setShift(int shift) {
       MEMSET(versat_base, (this->muladdlite_base + MULADDLITE_CONF_SHIFT), shift);
-      this->shift = shift;
     }
     void setAccIN(int accIN) {
       MEMSET(versat_base, (this->muladdlite_base + MULADDLITE_CONF_ACCIN), accIN);
-      this->accIN = accIN;
     }
     void setAccOUT(int accOUT) {
       MEMSET(versat_base, (this->muladdlite_base + MULADDLITE_CONF_ACCOUT), accOUT);
-      this->accOUT = accOUT;
     }
     void setBatch(int batch) {
       MEMSET(versat_base, (this->muladdlite_base + MULADDLITE_CONF_BATCH), batch);
-      this->batch = batch;
     }
 };//end class CMULADDLITE
 #endif
