@@ -943,8 +943,9 @@ class CMulAdd
 {
 private:
   //SIM VARIABLES
-  versat_t opa, opb, out, acc_w;
-  mul_t acc;
+  versat_t opa, opb, out;
+  mul_t acc, acc_w;
+  int cnt_iter, cnt_per, cnt_addr;
   //count delay during a run():
   int run_delay = 0;
   versat_t output[MULADD_LAT]; //output FIFO
@@ -980,6 +981,11 @@ public:
   {
     //set run_delay
     run_delay = shadow_reg[versat_base].muladd[muladd_base].delay;
+
+    //set addrgen counter variables
+    cnt_iter = 0;
+    cnt_per = 0;
+    cnt_addr = 0;
   }
 
   //update output buffer, write results to databus
@@ -1013,13 +1019,21 @@ public:
     }
   }
 
-  versat_t output() //TO DO: lacks shift,iter and delay implementation aka state machine
+  versat_t output() //implemented as PIPELINED MULADD
   {
+    //wait for delay to end
+    if(run_delay > 0){
+      return 0;
+    }
 
     //select inputs
     opa = stage[versat_base].databus[shadow_reg[versat_base].muladd[muladd_base].sela];
     opb = stage[versat_base].databus[shadow_reg[versat_base].muladd[muladd_base].selb];
 
+    //select acc_w value
+    acc_w = (cnt_addr==0) ?  0 : acc;
+
+    //perform MAC operation
     mul_t result_mult = opa * opb;
     if (shadow_reg[versat_base].muladd[muladd_base].fns == MULADD_MACC)
     {
@@ -1029,9 +1043,22 @@ public:
     {
       acc = acc_w - result_mult;
     }
-    acc_w = (versat_t)(acc >> shift);
+    out = (versat_t)(acc >> shadow_reg[versat_base].muladd[muladd_base].shift);
 
-    return acc_w;
+    //update addrgen counter - 1 iteration of nested for loop
+    if (cnt_iter < shadow_reg[versat_base].muladd[muladd_base].iter){
+      if (cnt_per < shadow_reg[versat_base].muladd[muladd_base].per){
+	cnt_addr++;
+	cnt_per++;
+      }
+      else{
+	cnt_per = 0;
+	cnt_addr += -(shadow_reg[versat_base].muladd[muladd_base].per);
+	cnt_iter++;
+      }
+    }
+
+    return out;
   }
 
   void setConf(int sela, int selb, int fns, int iter, int per, int delay, int shift)
