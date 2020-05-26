@@ -1093,6 +1093,174 @@ public:
 }; //end class CMULADD
 #endif
 
+
+#if nMULADDLITE>0
+class CMulAddLite {
+  private:
+  //count delay during a run():
+  int run_delay = 0;
+  versat_t output[MULADDLITE_LAT]; //output FIFO
+  public:
+    int versat_base, muladdlite_base;
+    int sela, selb, iter, per, delay, shift;
+    int selc = 0, accIN = 0, accOUT = 0, batch = 0;
+
+    //Default constructor
+    CMulAddLite() {
+    }
+
+    CMulAddLite(int versat_base, int i) {
+      this->versat_base = versat_base;
+      this->muladdlite_base = i;
+    }
+
+  //set MulAdd configuration to shadow register
+  void update_shadow_reg_MulAddLite()
+  {
+    shadow_reg[versat_base].muladdlite[muladdlite_base].sela = conf[versat_base].muladdlite[muladdlite_base].sela;
+    shadow_reg[versat_base].muladdlite[muladdlite_base].selb = conf[versat_base].muladdlite[muladdlite_base].selb;
+    shadow_reg[versat_base].muladdlite[muladdlite_base].selc = conf[versat_base].muladdlite[muladdlite_base].selc;
+    shadow_reg[versat_base].muladdlite[muladdlite_base].iter = conf[versat_base].muladdlite[muladdlite_base].iter;
+    shadow_reg[versat_base].muladdlite[muladdlite_base].per = conf[versat_base].muladdlite[muladdlite_base].per;
+    shadow_reg[versat_base].muladdlite[muladdlite_base].delay = conf[versat_base].muladdlite[muladdlite_base].delay;
+    shadow_reg[versat_base].muladdlite[muladdlite_base].shift = conf[versat_base].muladdlite[muladdlite_base].shift;
+    shadow_reg[versat_base].muladdlite[muladdlite_base].accIN = conf[versat_base].muladdlite[muladdlite_base].accIN;
+    shadow_reg[versat_base].muladdlite[muladdlite_base].accOUT = conf[versat_base].muladdlite[muladdlite_base].accOUT;
+    shadow_reg[versat_base].muladdlite[muladdlite_base].batch = conf[versat_base].muladdlite[muladdlite_base].batch;
+  }
+
+  //start run
+  void start_run()
+  {
+    //set run_delay
+    run_delay = shadow_reg[versat_base].muladdlite[muladdlite_base].delay;
+  }
+
+  //update output buffer, write results to databus
+  void update()
+  {
+    int i = 0;
+    //check for delay
+    if (run_delay > 0)
+    {
+      run_delay--;
+    }
+    else
+    {
+
+      //update databus
+      stage[versat_base].databus[sMULADDLITE[muladdlite_base]] = output[MULADDLITE_LAT - 1];
+      //special case for stage 0
+      if (versat_base == 0)
+      {
+        //2nd copy at the end of global databus
+        global_databus[nSTAGE * N + sMULADDLITE[muladdlite_base]] = output[MULADDLITE_LAT - 1];
+      }
+
+      //trickle down all outputs in buffer
+      for (i = 1; i < MULADDLITE_LAT; i++)
+      {
+        output[i] = output[i - 1];
+      }
+      //insert new output
+      output[0] = out;
+    }
+  }
+
+  versat_t output() //TO DO: need to implemente MulAddLite functionalities
+  {
+
+    //select inputs
+    opa = stage[versat_base].databus[shadow_reg[versat_base].muladdlite[muladdlite_base].sela];
+    opb = stage[versat_base].databus[shadow_reg[versat_base].muladdlite[muladdlite_base].selb];
+
+    mul_t result_mult = opa * opb;
+    if (shadow_reg[versat_base].muladdlite[muladdlite_base].fns == MULADD_MACC)
+    {
+      acc = acc_w + result_mult;
+    }
+    else
+    {
+      acc = acc_w - result_mult;
+    }
+    acc_w = (versat_t)(acc >> shift);
+
+    return acc_w;
+  }
+
+
+    void setConf(int sela, int selb, int iter, int per, int delay, int shift) {
+      this->sela = sela;
+      this->selb = selb;
+      this->iter = iter;
+      this->per = per;
+      this->delay = delay;
+      this->shift = shift;
+    }
+
+    void setConf(int selc, int accIN, int accOUT, int batch) {
+      this->selc = selc;
+      this->accIN = accIN;
+      this->accOUT = accOUT;
+      this->batch = batch;
+    }
+
+    void writeConf() {
+      conf[versat_base].muladdlite[muladdlite_base].sela = sela;
+      conf[versat_base].muladdlite[muladdlite_base].selb = selb;
+      conf[versat_base].muladdlite[muladdlite_base].selc = selc;
+      conf[versat_base].muladdlite[muladdlite_base].iter = iter;
+      conf[versat_base].muladdlite[muladdlite_base].per = per;
+      conf[versat_base].muladdlite[muladdlite_base].delay = delay;
+      conf[versat_base].muladdlite[muladdlite_base].shift = shift;
+      conf[versat_base].muladdlite[muladdlite_base].accIN = accIN;
+      conf[versat_base].muladdlite[muladdlite_base].accOUT = accOUT;
+      conf[versat_base].muladdlite[muladdlite_base].batch = batch;
+    }
+    void setSelA(int sela) {
+      conf[versat_base].muladdlite[muladdlite_base].sela = sela;
+      this->sela = sela;
+    }
+    void setSelB(int selb) {
+      conf[versat_base].muladdlite[muladdlite_base].selb = selb;
+      this->selb = selb;
+    }
+    void setSelC(int selc) {
+      conf[versat_base].muladdlite[muladdlite_base].selc = selc;
+      this->selc = selc;
+    }
+    void setIter(int iter) {
+      conf[versat_base].muladdlite[muladdlite_base].iter = iter;
+      this->iter = iter;
+    }
+    void setPer(int per) {
+      conf[versat_base].muladdlite[muladdlite_base].per = per;
+      this->per = per;
+    }
+    void setDelay(int delay) {
+      conf[versat_base].muladdlite[muladdlite_base].delay = delay;
+      this->delay = delay;
+    }
+    void setShift(int shift) {
+      conf[versat_base].muladdlite[muladdlite_base].shift = shift;
+      this->shift = shift;
+    }
+    void setAccIN(int accIN) {
+      conf[versat_base].muladdlite[muladdlite_base].accIN = accIN;
+      this->accIN = accIN;
+    }
+    void setAccOUT(int accOUT) {
+      conf[versat_base].muladdlite[muladdlite_base].accOUT = accOUT;
+      this->accOUT = accOUT;
+    }
+    void setBatch(int batch) {
+      conf[versat_base].muladdlite[muladdlite_base].batch = batch;
+      this->batch = batch;
+    }
+};//end class CMULADDLITE
+#endif
+
+
 class CStage
 {
 private:
@@ -1118,6 +1286,9 @@ public:
 #endif
 #if nMULADD > 0
   CMulAdd muladd[nMULADD];
+#endif
+#if nMULADDLITE > 0
+  CMulAddLite muladdlite[nMULADDLITE];
 #endif
 
   //Default constructor
@@ -1164,6 +1335,10 @@ public:
 #if nMULADD > 0
     for (i = 0; i < nMULADD; i++)
       muladd[i] = CMulAdd(versat_base, i);
+#endif
+#if nMULADDLITE > 0
+    for (i = 0; i < nMULADDLITE; i++)
+      muladdlite[i] = CMulAddLite(versat_base, i);
 #endif
   }
 
@@ -1220,6 +1395,10 @@ public:
     for (i = 0; i < nMULADD; i++)
       muladd[i].update_shadow_reg_MulAdd();
 #endif
+#if nMULADDLITE > 0
+    for (i = 0; i < nMULADDLITE; i++)
+      muladdlite[i].update_shadow_reg_MulAddLite();
+#endif
   }
 
   //set run start on all FUs
@@ -1249,6 +1428,10 @@ public:
 #if nMULADD > 0
     for (i = 0; i < nMULADD; i++)
       muladd[i].start_run();
+#endif
+#if nMULADDLITE > 0
+    for (i = 0; i < nMULADDLITE; i++)
+      muladdlite[i].start_run();
 #endif
   }
 
@@ -1280,6 +1463,10 @@ public:
     for (i = 0; i < nMULADD; i++)
       muladd[i].update();
 #endif
+#if nMULADDLITE > 0
+    for (i = 0; i < nMULADDLITE; i++)
+      muladdlite[i].update();
+#endif
   }
 
   //calculate new output on all FUs
@@ -1310,6 +1497,11 @@ public:
     for (i = 0; i < nMULADD; i++)
       muladd[i].output();
 #endif
+#if nMULADDLITE > 0
+    for (i = 0; i < nMULADDLITE; i++)
+      muladdlite[i].output();
+#endif
+
   }
 
 }; //end class CStage
@@ -1347,6 +1539,9 @@ int sMUL[nMUL], sMUL_p[nMUL];
 #endif
 #if nMULADD > 0
 int sMULADD[nMULADD], sMULADD_p[nMULADD];
+#endif
+#if nMULADDLITE > 0
+int sMULADDLITE[nMULADDLITE], sMULADDLITE_p[nMULADDLITE];
 #endif
 #if nBS > 0
 int sBS[nBS], sBS_p[nBS];
@@ -1417,6 +1612,16 @@ inline void versat_init(int base_addr)
     sMULADD_p[i] = sMULADD[i] + p_offset;
   }
   s_cnt += nMULADD;
+#endif
+
+#if nMULADDLITE > 0
+  //MULADDLITES
+  for (i = 0; i < nMULADDLITE; i = i + 1)
+  {
+    sMULADDLITE[i] = s_cnt + i;
+    sMULADDLITE_p[i] = sMULADDLITE[i] + p_offset;
+  }
+  s_cnt += nMULADDLITE;
 #endif
 
 #if nBS > 0
