@@ -25,7 +25,7 @@ module xmuladdlite # (
    //data
    wire signed [DATA_W-1:0]                   op_a, op_b, op_c;
    wire [`MEM_ADDR_W-1:0]                     op_o;
-   reg signed [DATA_W-1:0]                    op_c_r0, op_c_r1;
+   reg signed [DATA_W-1:0]                    op_a_r0, op_b_r0, op_c_r0, op_c_r1;
    wire [DATA_W-1:0]                          result;
    reg [DATA_W-1:0]                           result_reg;
 
@@ -38,7 +38,7 @@ module xmuladdlite # (
 
    //accumulator load signal
    wire                                       ld_acc;
-   reg                                        ld_acc0, ld_acc1, ld_acc2, ld_acc3;
+   reg                                        ld_acc0, ld_acc1, ld_acc2, ld_acc3, ld_acc4;
 
    //unpack config bits
    assign sela = configdata[`MULADDLITE_CONF_BITS-1 -: `N_W];
@@ -105,7 +105,10 @@ module xmuladdlite # (
        ld_acc1 <= 1'b0;
        ld_acc2 <= 1'b0;
        ld_acc3 <= 1'b0;
+       ld_acc4 <= 1'b0;
        out_reg <= {2*DATA_W{1'b0}};
+       op_a_r0 <= {DATA_W{1'b0}};
+       op_b_r0 <= {DATA_W{1'b0}};
        op_c_r0 <= {DATA_W{1'b0}};
        op_c_r1 <= {DATA_W{1'b0}};
        result_reg <= {DATA_W{1'b0}};
@@ -114,7 +117,10 @@ module xmuladdlite # (
        ld_acc1 <= ld_acc0;
        ld_acc2 <= ld_acc1;
        ld_acc3 <= ld_acc2;
+       ld_acc4 <= ld_acc3;
        out_reg <= shifted;
+       op_a_r0 <= op_a;
+       op_b_r0 <= op_b;
        op_c_r0 <= op_c;
        op_c_r1 <= op_c_r0;
        result_reg <= result;
@@ -129,27 +135,26 @@ module xmuladdlite # (
 
    //multiplier signals and regs
    reg signed [DATA_W-1:0] op_a_reg, op_b_reg;
-   wire signed [DATA_W-1:0] op_b_sel, act_sel;
    reg signed [2*DATA_W-1:0] acc, dsp_out, op_c_reg;
    wire signed [2*DATA_W-1:0] acc_w, bias_w;
 
    //4-stage multiplier (DSP48E2 template)
    always @ (posedge clk) begin
-     op_a_reg <= op_a;
-     op_b_reg <= op_b;
+     op_a_reg <= op_a_r0;
+     op_b_reg <= op_b_r0;
      result_mult <= op_a_reg * op_b_reg;
      op_c_reg <= bias_w;
      acc <= acc_w + result_mult;
      dsp_out <= acc;
    end
-   assign acc_w = ld_acc1 ? op_c_reg : acc;
+   assign acc_w = ld_acc2 ? op_c_reg : acc;
 
    //select accumulation initial value
-   assign bias_w = accIN | batch ? bias : {2*DATA_W{1'b0}};
+   assign bias_w = batch ? bias << shift : accIN ? bias : {2*DATA_W{1'b0}};
 
    //output 1st or 2nd half
    assign shifted = dsp_out >> shift;
-   assign result = (ld_acc3 & accOUT) ? out_reg[2*DATA_W-1 -: DATA_W] : shifted[DATA_W-1 : 0];
+   assign result = (ld_acc4 & accOUT) ? out_reg[2*DATA_W-1 -: DATA_W] : shifted[DATA_W-1 : 0];
    assign flow_out = result_reg;
 
 endmodule
