@@ -4,6 +4,7 @@
 #include <thread>
 #include "versat.h"
 #include <string.h>
+#include <bitset>
 
 #ifndef DATAPATH_W
 #define DATAPATH_W 16
@@ -24,6 +25,15 @@ typedef int64_t mul_t;
 typedef uint64_t shift_t;
 
 #endif
+using namespace std;
+
+#define SET_BITS(var, val, size) \
+  for (int i = 0; i < size; i++) \
+  {                              \
+    var.set(i, val);             \
+  }
+
+#define MSB(var, size) var >> (size - 1)
 
 //Macro functions to use cpu interface
 #define MEMSET(base, location, value) (*((volatile int *)(base + (sizeof(int)) * location)) = value)
@@ -39,6 +49,7 @@ typedef uint64_t shift_t;
 //
 // VERSAT CLASSES
 //
+
 class CMem
 {
 private:
@@ -632,25 +643,44 @@ public:
 
   versat_t output()
   {
-    versat_t ina_reg = stage[versat_base].databus[shadow_reg[versat_base].alulite[alulite_base].opa];
+    bitset<DATAPATH_W + 1> ai;
+    bitset<DATAPATH_W + 1> bz;
+    SET_BITS(ai, 0, DATAPATH_W + 1);
+    SET_BITS(bz, 1, DATAPATH_W + 1);
+
+    bitset<1> op_a_msb(0x0);
+    bitset<1> cin(0x0);
+    bitset<1> op_b_msb(0x0);
+    //cast to int cin.to_ulong();
+    bitset<DATAPATH_W> op_a_reg(stage[versat_base].databus[shadow_reg[versat_base].alulite[alulite_base].opa]);
     versat_t self_loop = shadow_reg[versat_base].alulite[alulite_base].fns < 0 ? 1 : 0;
-    versat_t result = 0;
-    inb = stage[versat_base].databus[shadow_reg[versat_base].alulite[alulite_base].opb];
-    ina = self_loop ? out : ina_reg;
+    bitset<DATAPATH_W> result;
+    bitset<DATAPATH_W> op_b_reg(stage[versat_base].databus[shadow_reg[versat_base].alulite[alulite_base].opb]);
+    bitset<DATAPATH_W> op_a_int(self_loop ? out : op_a_reg);
 
     switch (shadow_reg[versat_base].alulite[alulite_base].fns)
     {
     case ALULITE_OR:
-      result = ina | inb;
+      result = op_a_int | op_b_reg;
       break;
     case ALULITE_AND:
-      result = ina & inb;
+      result = op_a_int & op_b_reg;
       break;
     case ALULITE_CMP_SIG: //it's a bit more complex TODO
+      SET_BITS(ai, 1, DATAPATH_W + 1);
+      cin.set(0, 1);
+      int aux = (uint)op_a_int.to_ulong();
+      MSB(aux, DATAPATH_W);
+      int aux2 = aux ? 1 : 0;
+      op_a_msb.set(0, aux2);
+      aux = (uint)op_b_reg.to_ulong();
+      MSB(aux, DATAPATH_W);
+      aux2 = aux ? 1 : 0;
+      op_b_msb.set(0, aux2);
       break;
     case ALULITE_MUX:
       result = inb;
-      if (~ina_reg)
+      if (~(int)op_a_reg.to_ulong())
       {
         if (self_loop)
           result = out;
@@ -664,7 +694,7 @@ public:
       break;
     case ALULITE_ADD:
       if (self_loop)
-        if (ina_reg)
+        if (op_a_reg.to_ulong())
           result = inb;
       break;
     case ALULITE_MAX: //TODO
