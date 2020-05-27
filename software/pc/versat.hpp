@@ -33,6 +33,18 @@ using namespace std;
     var.set(i, val);             \
   }
 
+#define SET_BITS_SEXT8(var, val, size) \
+  for (int i = size - 1; i > 7; i--)   \
+  {                                    \
+    var.set(i, val);                   \
+  }
+
+#define SET_BITS_SEXT16(var, val, size) \
+  for (int i = size - 1; i > 15; i--)   \
+  {                                     \
+    var.set(i, val);                    \
+  }
+
 #define MSB(var, size) var >> (size - 1)
 
 //Macro functions to use cpu interface
@@ -506,46 +518,62 @@ public:
     switch (fns)
     {
     case ALU_OR:
-      /* code */
+      out = inb | ina;
       break;
     case ALU_AND:
-      /* code */
+      out = inb & ina;
       break;
     case ALU_XOR:
-      /* code */
+      out = inb ^ ina;
       break;
     case ALU_SEXT8:
-      /* code */
+      bitset<DATAPATH_W> aux_sext;
+      uint8_t aux_a = ina;
+      bool val = MSB(aux_a, 8);
+      SET_BITS_SEXT8(aux_sext, val, DATAPATH_W);
+      out = aux_sext.to_ulong() + aux_a;
       break;
     case ALU_SEXT16:
-      /* code */
+      bitset<DATAPATH_W> aux_sext;
+      uint16_t aux_a = ina;
+      bool val = MSB(aux_a, 16);
+      SET_BITS_SEXT16(aux_sext, val, DATAPATH_W);
+      out = aux_sext.to_ulong() + aux_a;
       break;
     case ALU_SHIFTR_ARTH:
-      /* code */
+      out = ina >> 1;
       break;
     case ALU_SHIFTR_LOG:
-      /* code */
+      shift_t aux = ina;
+      aux = aux >> 1;
+      out = (versat_t)aux;
       break;
     case ALU_CMP_SIG:
-      /* code */
+      bitset<DATAPATH_W> aux_cmp;
+      aux_cmp.set(DATAPATH_W - 1, ina > inb ? 1 : 0);
+      out = (versat_t)aux_cmp.to_ulong();
       break;
     case ALU_CMP_UNS:
-      /* code */
+      shift_t ina_uns = ina;
+      shift_t inb_uns = inb;
+      bitset<DATAPATH_W> aux_cmp;
+      aux_cmp.set(DATAPATH_W - 1, ina_uns > inb_uns ? 1 : 0);
+      out = (versat_t)aux_cmp.to_ulong();
       break;
     case ALU_MUX:
-      /* code */
+      out = ina < 0 ? inb : 0;
       break;
     case ALU_ADD:
-      /* code */
+      out = ina + inb;
       break;
     case ALU_SUB:
-      /* code */
+      out = inb - ina;
       break;
     case ALU_MAX:
-      /* code */
+      out = ina > inb ? ina : inb;
       break;
     case ALU_MIN:
-      /* code */
+      out = ina < inb ? ina : inb;
       break;
     default:
       break;
@@ -648,58 +676,39 @@ public:
     SET_BITS(ai, 0, DATAPATH_W + 1);
     SET_BITS(bz, 1, DATAPATH_W + 1);
 
-    bitset<1> op_a_msb(0x0);
-    bitset<1> cin(0x0);
-    bitset<1> op_b_msb(0x0);
     //cast to int cin.to_ulong();
-    bitset<DATAPATH_W> op_a_reg(stage[versat_base].databus[shadow_reg[versat_base].alulite[alulite_base].opa]);
+    versat_t op_a_reg = stage[versat_base].databus[shadow_reg[versat_base].alulite[alulite_base].opa];
     versat_t self_loop = shadow_reg[versat_base].alulite[alulite_base].fns < 0 ? 1 : 0;
-    bitset<DATAPATH_W> result;
-    bitset<DATAPATH_W> op_b_reg(stage[versat_base].databus[shadow_reg[versat_base].alulite[alulite_base].opb]);
-    bitset<DATAPATH_W> op_a_int(self_loop ? out : op_a_reg);
+    versat_t op_b_reg = stage[versat_base].databus[shadow_reg[versat_base].alulite[alulite_base].opb];
+    versat_t op_a_int = self_loop ? out : op_a_reg;
 
     switch (shadow_reg[versat_base].alulite[alulite_base].fns)
     {
     case ALULITE_OR:
-      result = op_a_int | op_b_reg;
+      out = op_a_int | op_b_reg;
       break;
     case ALULITE_AND:
-      result = op_a_int & op_b_reg;
+      out = op_a_int & op_b_reg;
       break;
-    case ALULITE_CMP_SIG: //it's a bit more complex TODO
-      SET_BITS(ai, 1, DATAPATH_W + 1);
-      cin.set(0, 1);
-      int aux = (uint)op_a_int.to_ulong();
-      MSB(aux, DATAPATH_W);
-      int aux2 = aux ? 1 : 0;
-      op_a_msb.set(0, aux2);
-      aux = (uint)op_b_reg.to_ulong();
-      MSB(aux, DATAPATH_W);
-      aux2 = aux ? 1 : 0;
-      op_b_msb.set(0, aux2);
+    case ALULITE_CMP_SIG:
+      bitset<DATAPATH_W> aux_cmp;
+      aux_cmp.set(DATAPATH_W - 1, ina > inb ? 1 : 0);
+      out = (versat_t)aux_cmp.to_ulong();
       break;
     case ALULITE_MUX:
-      result = inb;
-      if (~(int)op_a_reg.to_ulong())
-      {
-        if (self_loop)
-          result = out;
-        else
-        {
-          result = 0;
-        }
-      }
+      out = op_a_reg < 0 ? op_b_reg : out;
       break;
     case ALULITE_SUB:
+      out = op_a_reg < 0 ? op_b_reg : out - op_b_reg;
       break;
     case ALULITE_ADD:
-      if (self_loop)
-        if (op_a_reg.to_ulong())
-          result = inb;
+      out = op_a_reg < 0 ? op_b_reg : out + op_b_reg;
       break;
-    case ALULITE_MAX: //TODO
+    case ALULITE_MAX:
+      out = op_a_reg < 0 ? out : max(out, op_b_reg);
       break;
-    case ALULITE_MIN: //TODO
+    case ALULITE_MIN:
+      out = op_a_reg < 0 ? out : min(out, op_b_reg);
       break;
     default:
       break;
