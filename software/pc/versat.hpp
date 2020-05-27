@@ -33,7 +33,7 @@ typedef uint64_t shift_t;
 #define CONF_BASE (1 << (nMEM_W + MEM_ADDR_W + 1))
 #define CONF_MEM_SIZE ((int)pow(2, CONF_MEM_ADDR_W))
 //#define MEM_SIZE ((int)pow(2,MEM_ADDR_W))
-#define MEM_SIZE 1 << MEM_ADDR_W
+#define MEM_SIZE (1 << MEM_ADDR_W)
 #define RUN_DONE (1 << (nMEM_W + MEM_ADDR_W))
 
 //
@@ -43,9 +43,7 @@ class CMem
 {
 private:
   versat_t mem[MEM_SIZE];
-
-protected:
-  versat_t read(uint16_t addr)
+  versat_t read(uint32_t addr)
   {
     if (addr >= MEM_SIZE)
     {
@@ -54,7 +52,7 @@ protected:
     }
     return mem[addr];
   }
-  void write(int16_t addr, versat_t data_in)
+  void write(int32_t addr, versat_t data_in)
   {
     if (addr >= MEM_SIZE)
     {
@@ -65,9 +63,12 @@ protected:
       mem[addr] = data_in;
     }
   }
+
+public:
+  friend class CMemPort;
 };
 
-class CMemPort
+class CMemPort // 4 Loop AGU
 {
 private:
   //count delay during a run():
@@ -425,11 +426,13 @@ public:
 
   void write(int addr, int val)
   {
-    MEMSET(versat_base, (this->data_base + addr), val);
+    //MEMSET(versat_base, (this->data_base + addr), val);
+    my_mem->write(addr, val);
   }
   int read(int addr)
   {
-    return MEMGET(versat_base, (this->data_base + addr));
+    //return MEMGET(versat_base, (this->data_base + addr));
+    return my_mem->read(addr);
   }
 }; //end class CMEM
 
@@ -1022,7 +1025,8 @@ public:
   versat_t output() //implemented as PIPELINED MULADD
   {
     //wait for delay to end
-    if(run_delay > 0){
+    if (run_delay > 0)
+    {
       return 0;
     }
 
@@ -1031,7 +1035,7 @@ public:
     opb = stage[versat_base].databus[shadow_reg[versat_base].muladd[muladd_base].selb];
 
     //select acc_w value
-    acc_w = (cnt_addr==0) ?  0 : acc;
+    acc_w = (cnt_addr == 0) ? 0 : acc;
 
     //perform MAC operation
     mul_t result_mult = opa * opb;
@@ -1046,15 +1050,18 @@ public:
     out = (versat_t)(acc >> shadow_reg[versat_base].muladd[muladd_base].shift);
 
     //update addrgen counter - 1 iteration of nested for loop
-    if (cnt_iter < shadow_reg[versat_base].muladd[muladd_base].iter){
-      if (cnt_per < shadow_reg[versat_base].muladd[muladd_base].per){
-	cnt_addr++;
-	cnt_per++;
+    if (cnt_iter < shadow_reg[versat_base].muladd[muladd_base].iter)
+    {
+      if (cnt_per < shadow_reg[versat_base].muladd[muladd_base].per)
+      {
+        cnt_addr++;
+        cnt_per++;
       }
-      else{
-	cnt_per = 0;
-	cnt_addr += -(shadow_reg[versat_base].muladd[muladd_base].per);
-	cnt_iter++;
+      else
+      {
+        cnt_per = 0;
+        cnt_addr += -(shadow_reg[versat_base].muladd[muladd_base].per);
+        cnt_iter++;
       }
     }
 
@@ -1120,26 +1127,28 @@ public:
 }; //end class CMULADD
 #endif
 
-
-#if nMULADDLITE>0
-class CMulAddLite {
-  private:
+#if nMULADDLITE > 0
+class CMulAddLite
+{
+private:
   //count delay during a run():
   int run_delay = 0;
   versat_t output[MULADDLITE_LAT]; //output FIFO
-  public:
-    int versat_base, muladdlite_base;
-    int sela, selb, iter, per, delay, shift;
-    int selc = 0, accIN = 0, accOUT = 0, batch = 0;
+public:
+  int versat_base, muladdlite_base;
+  int sela, selb, iter, per, delay, shift;
+  int selc = 0, accIN = 0, accOUT = 0, batch = 0;
 
-    //Default constructor
-    CMulAddLite() {
-    }
+  //Default constructor
+  CMulAddLite()
+  {
+  }
 
-    CMulAddLite(int versat_base, int i) {
-      this->versat_base = versat_base;
-      this->muladdlite_base = i;
-    }
+  CMulAddLite(int versat_base, int i)
+  {
+    this->versat_base = versat_base;
+    this->muladdlite_base = i;
+  }
 
   //set MulAdd configuration to shadow register
   void update_shadow_reg_MulAddLite()
@@ -1215,78 +1224,89 @@ class CMulAddLite {
     return acc_w;
   }
 
+  void setConf(int sela, int selb, int iter, int per, int delay, int shift)
+  {
+    this->sela = sela;
+    this->selb = selb;
+    this->iter = iter;
+    this->per = per;
+    this->delay = delay;
+    this->shift = shift;
+  }
 
-    void setConf(int sela, int selb, int iter, int per, int delay, int shift) {
-      this->sela = sela;
-      this->selb = selb;
-      this->iter = iter;
-      this->per = per;
-      this->delay = delay;
-      this->shift = shift;
-    }
+  void setConf(int selc, int accIN, int accOUT, int batch)
+  {
+    this->selc = selc;
+    this->accIN = accIN;
+    this->accOUT = accOUT;
+    this->batch = batch;
+  }
 
-    void setConf(int selc, int accIN, int accOUT, int batch) {
-      this->selc = selc;
-      this->accIN = accIN;
-      this->accOUT = accOUT;
-      this->batch = batch;
-    }
-
-    void writeConf() {
-      conf[versat_base].muladdlite[muladdlite_base].sela = sela;
-      conf[versat_base].muladdlite[muladdlite_base].selb = selb;
-      conf[versat_base].muladdlite[muladdlite_base].selc = selc;
-      conf[versat_base].muladdlite[muladdlite_base].iter = iter;
-      conf[versat_base].muladdlite[muladdlite_base].per = per;
-      conf[versat_base].muladdlite[muladdlite_base].delay = delay;
-      conf[versat_base].muladdlite[muladdlite_base].shift = shift;
-      conf[versat_base].muladdlite[muladdlite_base].accIN = accIN;
-      conf[versat_base].muladdlite[muladdlite_base].accOUT = accOUT;
-      conf[versat_base].muladdlite[muladdlite_base].batch = batch;
-    }
-    void setSelA(int sela) {
-      conf[versat_base].muladdlite[muladdlite_base].sela = sela;
-      this->sela = sela;
-    }
-    void setSelB(int selb) {
-      conf[versat_base].muladdlite[muladdlite_base].selb = selb;
-      this->selb = selb;
-    }
-    void setSelC(int selc) {
-      conf[versat_base].muladdlite[muladdlite_base].selc = selc;
-      this->selc = selc;
-    }
-    void setIter(int iter) {
-      conf[versat_base].muladdlite[muladdlite_base].iter = iter;
-      this->iter = iter;
-    }
-    void setPer(int per) {
-      conf[versat_base].muladdlite[muladdlite_base].per = per;
-      this->per = per;
-    }
-    void setDelay(int delay) {
-      conf[versat_base].muladdlite[muladdlite_base].delay = delay;
-      this->delay = delay;
-    }
-    void setShift(int shift) {
-      conf[versat_base].muladdlite[muladdlite_base].shift = shift;
-      this->shift = shift;
-    }
-    void setAccIN(int accIN) {
-      conf[versat_base].muladdlite[muladdlite_base].accIN = accIN;
-      this->accIN = accIN;
-    }
-    void setAccOUT(int accOUT) {
-      conf[versat_base].muladdlite[muladdlite_base].accOUT = accOUT;
-      this->accOUT = accOUT;
-    }
-    void setBatch(int batch) {
-      conf[versat_base].muladdlite[muladdlite_base].batch = batch;
-      this->batch = batch;
-    }
-};//end class CMULADDLITE
+  void writeConf()
+  {
+    conf[versat_base].muladdlite[muladdlite_base].sela = sela;
+    conf[versat_base].muladdlite[muladdlite_base].selb = selb;
+    conf[versat_base].muladdlite[muladdlite_base].selc = selc;
+    conf[versat_base].muladdlite[muladdlite_base].iter = iter;
+    conf[versat_base].muladdlite[muladdlite_base].per = per;
+    conf[versat_base].muladdlite[muladdlite_base].delay = delay;
+    conf[versat_base].muladdlite[muladdlite_base].shift = shift;
+    conf[versat_base].muladdlite[muladdlite_base].accIN = accIN;
+    conf[versat_base].muladdlite[muladdlite_base].accOUT = accOUT;
+    conf[versat_base].muladdlite[muladdlite_base].batch = batch;
+  }
+  void setSelA(int sela)
+  {
+    conf[versat_base].muladdlite[muladdlite_base].sela = sela;
+    this->sela = sela;
+  }
+  void setSelB(int selb)
+  {
+    conf[versat_base].muladdlite[muladdlite_base].selb = selb;
+    this->selb = selb;
+  }
+  void setSelC(int selc)
+  {
+    conf[versat_base].muladdlite[muladdlite_base].selc = selc;
+    this->selc = selc;
+  }
+  void setIter(int iter)
+  {
+    conf[versat_base].muladdlite[muladdlite_base].iter = iter;
+    this->iter = iter;
+  }
+  void setPer(int per)
+  {
+    conf[versat_base].muladdlite[muladdlite_base].per = per;
+    this->per = per;
+  }
+  void setDelay(int delay)
+  {
+    conf[versat_base].muladdlite[muladdlite_base].delay = delay;
+    this->delay = delay;
+  }
+  void setShift(int shift)
+  {
+    conf[versat_base].muladdlite[muladdlite_base].shift = shift;
+    this->shift = shift;
+  }
+  void setAccIN(int accIN)
+  {
+    conf[versat_base].muladdlite[muladdlite_base].accIN = accIN;
+    this->accIN = accIN;
+  }
+  void setAccOUT(int accOUT)
+  {
+    conf[versat_base].muladdlite[muladdlite_base].accOUT = accOUT;
+    this->accOUT = accOUT;
+  }
+  void setBatch(int batch)
+  {
+    conf[versat_base].muladdlite[muladdlite_base].batch = batch;
+    this->batch = batch;
+  }
+}; //end class CMULADDLITE
 #endif
-
 
 class CStage
 {
@@ -1528,7 +1548,6 @@ public:
     for (i = 0; i < nMULADDLITE; i++)
       muladdlite[i].output();
 #endif
-
   }
 
 }; //end class CStage
