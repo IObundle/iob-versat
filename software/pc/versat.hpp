@@ -80,6 +80,8 @@ private:
   int run_delay = 0;
   versat_t out;
   versat_t output_port[MEMP_LAT]; //output FIFO
+  int i, j, k, l;
+
 public:
   CMem *my_mem;
   int versat_base, mem_base, data_base;
@@ -98,6 +100,7 @@ public:
   void update();
 
   versat_t output();
+  int AGU();
   //Full Configuration (includes ext and rvrs)
   void setConf(int start, int iter, int incr, int delay, int per, int duty, int sel, int shift, int in_wr, int rvrs, int ext);
 

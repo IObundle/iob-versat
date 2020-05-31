@@ -122,8 +122,73 @@ void CMemPort::update()
     }
 }
 
+int CMemPort::AGU()
+{
+    /* for (i = 0; i < iter2; i++)
+    {
+        for (j = 0; j < per2; j++)
+        {
+            addr = start2;
+            for (k = 0; k < iter; k++)
+            {
+                for (l = 0; l < per; l++)
+                {
+                    addr += incr;
+                }
+                addr += shift;
+            }
+            start2 += incr2;
+        }
+        start2 += shift2;
+    }*/
+    while (i < iter2)
+    {
+        while (j < per2)
+        {
+            while (k < iter)
+            {
+                while (l < per)
+                {
+                    l++;
+                    return l * incr + k * shift + j * incr2 + i * shift2;
+                }
+                l = 0;
+                k++;
+            }
+            k = 0;
+            j++;
+        }
+        j = 0;
+        i++;
+    }
+    i = 0;
+
+    return 0;
+}
+
 versat_t CMemPort::output()
 {
+    int addr = AGU();
+    versat_t data;
+    if (in_wr)
+    {
+        if (data_base == 0)
+        {
+            write(addr, stage[versat_base].databus[shadow_reg[versat_base].memA[mem_base].sel]);
+            return stage[versat_base].databus[shadow_reg[versat_base].memA[mem_base].sel];
+        }
+        else
+        {
+            write(addr, stage[versat_base].databus[shadow_reg[versat_base].memB[mem_base].sel]);
+            return stage[versat_base].databus[shadow_reg[versat_base].memB[mem_base].sel];
+        }
+    }
+    else
+    {
+        data = read(addr);
+        return data;
+    }
+
     return 0;
 }
 void CMemPort::setConf(int start, int iter, int incr, int delay, int per, int duty, int sel, int shift, int in_wr, int rvrs, int ext)
