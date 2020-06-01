@@ -1,5 +1,5 @@
 #include "versat.hpp"
-
+#if nMEM > 0
 versat_t CMem::read(uint32_t addr)
 {
     if (addr >= MEM_SIZE)
@@ -407,3 +407,4 @@ int CMemPort::read(int addr)
     //return MEMGET(versat_base, (this->data_base + addr));
     return my_mem->read(addr);
 }
+#endif

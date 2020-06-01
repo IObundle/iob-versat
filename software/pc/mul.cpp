@@ -1,5 +1,6 @@
 #include "versat.hpp"
 
+#if nMUL > 0
 CMul::CMul()
 {
 }
@@ -89,3 +90,4 @@ void CMul::setFNS(int fns)
     conf[versat_base].mul[mul_base].fns = fns;
     this->fns = fns;
 }
+#endif

@@ -1,5 +1,5 @@
 #include "versat.hpp"
-
+#if nALU > 0
 CALU::CALU()
 {
 }
@@ -138,3 +138,4 @@ void CALU::setFNS(int fns)
     conf[versat_base].alu[alu_base].fns = fns;
     this->fns = fns;
 }
+#endif

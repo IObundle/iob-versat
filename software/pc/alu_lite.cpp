@@ -1,5 +1,5 @@
 #include "versat.hpp"
-
+#if nALULITE > 0
 CALULite::CALULite()
 {
 }
@@ -116,3 +116,4 @@ void CALULite::setFNS(int fns)
     conf[versat_base].alulite[alulite_base].fns = fns;
     this->fns = fns;
 }
+#endif

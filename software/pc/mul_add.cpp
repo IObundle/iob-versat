@@ -1,5 +1,5 @@
 #include "versat.hpp"
-
+#if nMULADD > 0
 CMulAdd::CMulAdd()
 {
 }
@@ -156,3 +156,4 @@ void CMulAdd::setShift(int shift)
     conf[versat_base].muladd[muladd_base].shift = shift;
     this->shift = shift;
 }
+#endif

@@ -13,7 +13,7 @@ inline void versat_init(int base_addr)
     //prepare sel variables
     int p_offset = (1 << (N_W - 1));
     int s_cnt = 0;
-
+#if nMEM > 0
     //Memories
     for (i = 0; i < nMEM; i = i + 1)
     {
@@ -23,7 +23,7 @@ inline void versat_init(int base_addr)
         sMEMB_p[i] = sMEMB[i] + p_offset;
     }
     s_cnt += 2 * nMEM;
-
+#endif
 #if nALU > 0
     //ALUs
     for (i = 0; i < nALU; i = i + 1)

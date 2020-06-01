@@ -1,5 +1,5 @@
 #include "versat.hpp"
-
+#if nBS > 0
 CBS::CBS()
 {
 }
@@ -91,3 +91,4 @@ void CBS::setFNS(int fns)
     conf[versat_base].bs[bs_base].fns = fns;
     this->fns = fns;
 }
+#endif

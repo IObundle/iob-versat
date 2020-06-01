@@ -61,7 +61,7 @@ using namespace std;
 //
 // VERSAT CLASSES
 //
-
+#if nMEM > 0
 class CMem
 {
 private:
@@ -121,7 +121,7 @@ public:
   void write(int addr, int val);
   int read(int addr);
 }; //end class CMEM
-
+#endif
 #if nALU > 0
 class CALU
 {
@@ -338,9 +338,11 @@ public:
   versat_t *databus;
   //versat_t* databus[N*2];
   //Versat Function Units
+#if nMEM > 0
   CMemPort memA[nMEM];
   CMemPort memB[nMEM];
   CMem mem[nMEM];
+#endif
 #if nALU > 0
   CALU alu[nALU];
 #endif
@@ -408,8 +410,9 @@ stage 0 databus                      stage 1 databus
 
 */
 versat_t global_databus[(nSTAGE + 1) * N];
-
+#if nMEM > 0
 int sMEMA[nMEM], sMEMA_p[nMEM], sMEMB[nMEM], sMEMB_p[nMEM];
+#endif
 #if nALU > 0
 int sALU[nALU], sALU_p[nALU];
 #endif

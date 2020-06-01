@@ -20,10 +20,12 @@ CStage::CStage(int versat_base)
 
     //Init functional units
     int i;
+#if nMEM > 0
     for (i = 0; i < nMEM; i++)
         memA[i] = CMemPort(versat_base, i, 0);
     for (i = 0; i < nMEM; i++)
         memB[i] = CMemPort(versat_base, i, 1);
+#endif
 #if nALU > 0
     for (i = 0; i < nALU; i++)
         alu[i] = CALU(versat_base, i);
