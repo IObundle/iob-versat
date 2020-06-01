@@ -191,40 +191,6 @@ versat_t CMemPort::output()
 
     return 0;
 }
-void CMemPort::setConf(int start, int iter, int incr, int delay, int per, int duty, int sel, int shift, int in_wr, int rvrs, int ext)
-{
-    this->iter = iter;
-    this->per = per;
-    this->duty = duty;
-    this->sel = sel;
-    this->start = start;
-    this->shift = shift;
-    this->incr = incr;
-    this->delay = delay;
-    this->in_wr = in_wr;
-    this->rvrs = rvrs;
-    this->ext = ext;
-}
-void CMemPort::setConf(int start, int iter, int incr, int delay, int per, int duty, int sel, int shift, int in_wr)
-{
-    this->iter = iter;
-    this->per = per;
-    this->duty = duty;
-    this->sel = sel;
-    this->start = start;
-    this->shift = shift;
-    this->incr = incr;
-    this->delay = delay;
-    this->in_wr = in_wr;
-}
-
-void CMemPort::setConf(int iter2, int per2, int shift2, int incr2)
-{
-    this->iter2 = iter2;
-    this->per2 = per2;
-    this->shift2 = shift2;
-    this->incr2 = incr2;
-}
 
 void CMemPort::writeConf()
 {

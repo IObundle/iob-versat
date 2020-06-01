@@ -92,13 +92,6 @@ versat_t CALULite::output()
     return out;
 }
 
-void CALULite::setConf(int opa, int opb, int fns)
-{
-    this->opa = opa;
-    this->opb = opb;
-    this->fns = fns;
-}
-
 void CALULite::writeConf()
 {
     conf[versat_base].alulite[alulite_base].opa = opa;

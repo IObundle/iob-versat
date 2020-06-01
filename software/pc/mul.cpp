@@ -68,13 +68,6 @@ versat_t CMul::output()
     return out;
 }
 
-void CMul::setConf(int sela, int selb, int fns)
-{
-    this->sela = sela;
-    this->selb = selb;
-    this->fns = fns;
-}
-
 void CMul::writeConf()
 {
     conf[versat_base].mul[mul_base].sela = sela;

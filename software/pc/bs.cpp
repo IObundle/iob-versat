@@ -67,13 +67,6 @@ versat_t CBS::output()
     return out;
 }
 
-void CBS::setConf(int data, int shift, int fns)
-{
-    this->data = data;
-    this->shift = shift;
-    this->fns = fns;
-}
-
 void CBS::writeConf()
 {
     conf[versat_base].bs[bs_base].data = data;

@@ -114,13 +114,6 @@ versat_t CALU::output()
     return out;
 }
 
-void CALU::setConf(int opa, int opb, int fns)
-{
-    this->opa = opa;
-    this->opb = opb;
-    this->fns = fns;
-}
-
 void CALU::writeConf()
 {
     conf[versat_base].alu[alu_base].opa = opa;

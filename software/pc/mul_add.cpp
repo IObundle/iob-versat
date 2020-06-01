@@ -111,17 +111,6 @@ versat_t CMulAdd::output() //implemented as PIPELINED MULADD
     return out;
 }
 
-void CMulAdd::setConf(int sela, int selb, int fns, int iter, int per, int delay, int shift)
-{
-    this->sela = sela;
-    this->selb = selb;
-    this->fns = fns;
-    this->iter = iter;
-    this->per = per;
-    this->delay = delay;
-    this->shift = shift;
-}
-
 void CMulAdd::writeConf()
 {
     conf[versat_base].muladd[muladd_base].sela = sela;

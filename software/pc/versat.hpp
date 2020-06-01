@@ -101,14 +101,6 @@ public:
 
   versat_t output();
   int AGU();
-  //Full Configuration (includes ext and rvrs)
-  void setConf(int start, int iter, int incr, int delay, int per, int duty, int sel, int shift, int in_wr, int rvrs, int ext);
-
-  //Minimum Configuration
-  void setConf(int start, int iter, int incr, int delay, int per, int duty, int sel, int shift, int in_wr);
-
-  void setConf(int iter2, int per2, int shift2, int incr2);
-
   void writeConf();
   void setIter(int iter);
   void setPer(int per);
@@ -154,8 +146,6 @@ public:
   void update();
   versat_t output();
 
-  void setConf(int opa, int opb, int fns);
-
   void writeConf();
   void setOpA(int opa);
   void setOpB(int opb);
@@ -185,8 +175,6 @@ public:
   //update output buffer, write results to databus
   void update();
   versat_t output();
-
-  void setConf(int opa, int opb, int fns);
 
   void writeConf();
   void setOpA(int opa);
@@ -220,8 +208,6 @@ public:
 
   versat_t output();
 
-  void setConf(int data, int shift, int fns);
-
   void writeConf();
   void setData(int data);
   void setShift(int shift);
@@ -254,7 +240,6 @@ public:
   void update();
 
   versat_t output();
-  void setConf(int sela, int selb, int fns);
 
   void writeConf();
   void setSelA(int sela);
@@ -292,8 +277,6 @@ public:
   //update output buffer, write results to databus
   void update();
   versat_t output(); //implemented as PIPELINED MULADD
-
-  void setConf(int sela, int selb, int fns, int iter, int per, int delay, int shift);
 
   void writeConf();
   void setSelA(int sela);
@@ -333,8 +316,6 @@ public:
   void update();
   versat_t output(); //TO DO: need to implemente MulAddLite functionalities
 
-  void setConf(int sela, int selb, int iter, int per, int delay, int shift);
-  void setConf(int selc, int accIN, int accOUT, int batch);
   void writeConf();
   void setSelA(int sela);
   void setSelB(int selb);

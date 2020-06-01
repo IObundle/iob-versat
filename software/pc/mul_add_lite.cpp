@@ -84,24 +84,6 @@ versat_t CMulAddLite::output() //TO DO: need to implemente MulAddLite functional
     return acc_w;
 }
 
-void CMulAddLite::setConf(int sela, int selb, int iter, int per, int delay, int shift)
-{
-    this->sela = sela;
-    this->selb = selb;
-    this->iter = iter;
-    this->per = per;
-    this->delay = delay;
-    this->shift = shift;
-}
-
-void CMulAddLite::setConf(int selc, int accIN, int accOUT, int batch)
-{
-    this->selc = selc;
-    this->accIN = accIN;
-    this->accOUT = accOUT;
-    this->batch = batch;
-}
-
 void CMulAddLite::writeConf()
 {
     conf[versat_base].muladdlite[muladdlite_base].sela = sela;
