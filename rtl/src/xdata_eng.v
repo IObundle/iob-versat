@@ -2,12 +2,12 @@
 
  Data bus structure
 
- {MEM0A, MEM0B, ..., VREAD0, ..., ALU0, ..., ALULITE0, ..., MUL0, ..., MULADD0, ..., MULADDLITE0, ..., BS0, ...}
+ {MEM0A, MEM0B, ..., VREAD0, ..., ALU0, ..., ALULITE0, ..., MUL0, ..., MULADD0, ..., BS0, ...}
 
 
  Config bus structure
 
- {MEM0A, MEM0B, ..., VREAD0, ..., VWRITE0, ..., ALU0, ..., ALULITE0, ..., MUL0, ..., MULADD0, ..., MULADDLITE0, ..., BS0, ...}
+ {MEM0A, MEM0B, ..., VREAD0, ..., VWRITE0, ..., ALU0, ..., ALULITE0, ..., MUL0, ..., MULADD0, ..., BS0, ...}
 
  */
 
@@ -20,7 +20,6 @@
 `include "xalulitedefs.vh"
 `include "xmuldefs.vh"
 `include "xmuladddefs.vh"
-`include "xmuladdlitedefs.vh"
 `include "xbsdefs.vh"
 `include "xconfdefs.vh"
 
@@ -319,28 +318,6 @@ module xdata_eng # (
     	      // configuration interface
 	          .configdata(config_reg_shadow[`CONF_MULADD0_B - i*`MULADD_CONF_BITS -: `MULADD_CONF_BITS])
 	          );
-   end
-   endgenerate
-
-   //
-   //  Instantiate the MULADDLITEs
-   //
-   generate for (i=0; i < `nMULADDLITE; i=i+1) begin : muladdlite_array
-      xmuladdlite # (
-                    .DATA_W(`DATAPATH_W)
-                    )
-      muladdlite (
-                 .clk(clk),
-                 .rst(run_reg),
-                 .addrgen_rst(rst),
-
-                 // flow interface
-                 .flow_in(data_bus),
-		 .flow_out(data_bus[`DATA_MULADDLITE0_B - i*`DATAPATH_W -: `DATAPATH_W]),
-
-                 // configuration interface
-                 .configdata(config_reg_shadow[`CONF_MULADDLITE0_B - i*`MULADDLITE_CONF_BITS -: `MULADDLITE_CONF_BITS])
-                 );
    end
    endgenerate
 

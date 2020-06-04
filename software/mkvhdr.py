@@ -21,6 +21,9 @@ for key in versat:
     if(isinstance(versat[key], bool)):
         if(versat[key]):
             f_out.write("`define " + key + '\n')
+    elif key == "include":
+        for inc in versat[key]:
+            f_out.write("`include " + inc + '\n')
     else:
         f_out.write("`define " + key + " " + str(versat[key]) + '\n')
 

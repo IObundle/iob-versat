@@ -12,7 +12,6 @@
 `define nALULITE  	2
 `define nMUL      	0
 `define nMULADD   	2
-`define nMULADDLITE	0
 `define nBS       	0
 
 // Configurable address widths

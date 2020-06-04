@@ -11,7 +11,6 @@
 `include "xalulitedefs.vh"
 `include "xmuldefs.vh"
 `include "xmuladddefs.vh"
-`include "xmuladdlitedefs.vh"
 `include "xbsdefs.vh"
 
 module xversat # (
