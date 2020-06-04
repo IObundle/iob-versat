@@ -49,7 +49,7 @@ module xaddrgen (
       addr_nxt = addr;
       iter_nxt = iter;
       run_nxt = run_reg;
-      rep = rep_nxt;
+      rep_nxt = rep;
 
       if (state == IDLE) begin 
 	 done_nxt = 1'b1;
@@ -135,7 +135,7 @@ module xaddrgen (
 	per_cnt <= `PERIOD_W'b0;
 	iter <= `MEM_ADDR_W'b0;
         run_reg <= 1'b0;
-	rep_nxt <= 1'b1;
+	rep <= 1'b1;
      end else begin 
 	done <= done_nxt;
         run_reg <= run_nxt;
