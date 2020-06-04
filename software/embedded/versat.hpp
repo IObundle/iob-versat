@@ -231,54 +231,6 @@ class CMulAdd {
 };//end class CMULADD
 #endif
 
-#if nMULADDLITE>0
-class CMulAddLite {
-  public:
-    int versat_base, muladdlite_base;
-
-    //Default constructor
-    CMulAddLite() {
-    }
-
-    CMulAddLite(int versat_base, int i) {
-      this->versat_base = versat_base;
-      this->muladdlite_base = CONF_BASE + CONF_MULADDLITE0 + i*MULADDLITE_CONF_OFFSET;
-    }
-
-    //Methods to set config parameters
-    void setSelA(int sela) {
-      MEMSET(versat_base, (this->muladdlite_base + MULADDLITE_CONF_SELA), sela);
-    }
-    void setSelB(int selb) {
-      MEMSET(versat_base, (this->muladdlite_base + MULADDLITE_CONF_SELB), selb);
-    }
-    void setSelC(int selc) {
-      MEMSET(versat_base, (this->muladdlite_base + MULADDLITE_CONF_SELC), selc);
-    }
-    void setIter(int iter) {
-      MEMSET(versat_base, (this->muladdlite_base + MULADDLITE_CONF_ITER), iter);
-    }
-    void setPer(int per) {
-      MEMSET(versat_base, (this->muladdlite_base + MULADDLITE_CONF_PER), per);
-    }
-    void setDelay(int delay) {
-      MEMSET(versat_base, (this->muladdlite_base + MULADDLITE_CONF_DELAY), delay);
-    }
-    void setShift(int shift) {
-      MEMSET(versat_base, (this->muladdlite_base + MULADDLITE_CONF_SHIFT), shift);
-    }
-    void setAccIN(int accIN) {
-      MEMSET(versat_base, (this->muladdlite_base + MULADDLITE_CONF_ACCIN), accIN);
-    }
-    void setAccOUT(int accOUT) {
-      MEMSET(versat_base, (this->muladdlite_base + MULADDLITE_CONF_ACCOUT), accOUT);
-    }
-    void setBatch(int batch) {
-      MEMSET(versat_base, (this->muladdlite_base + MULADDLITE_CONF_BATCH), batch);
-    }
-};//end class CMULADDLITE
-#endif
-
 class CStage {
 
   public:
@@ -300,9 +252,6 @@ class CStage {
   #endif
   #if nMULADD>0
     CMulAdd muladd[nMULADD];
-  #endif
-  #if nMULADDLITE>0
-    CMulAddLite muladdlite[nMULADDLITE];
   #endif
 
     //Default constructor
@@ -333,9 +282,6 @@ class CStage {
     #endif
     #if nMULADD>0
       for (i=0; i<nMULADD; i++) muladd[i] = CMulAdd(versat_base, i);
-    #endif
-    #if nMULADDLITE>0
-      for (i=0; i<nMULADDLITE; i++) muladdlite[i] = CMulAddLite(versat_base, i);
     #endif
     }
     
@@ -374,9 +320,6 @@ int sMEMA[nMEM], sMEMA_p[nMEM], sMEMB[nMEM], sMEMB_p[nMEM];
 #endif
 #if nMULADD>0
   int sMULADD[nMULADD], sMULADD_p[nMULADD];
-#endif
-#if nMULADDLITE>0
-  int sMULADDLITE[nMULADDLITE], sMULADDLITE_p[nMULADDLITE];
 #endif
 #if nBS>0
   int sBS[nBS], sBS_p[nBS];
@@ -436,14 +379,6 @@ inline void versat_init(int base_addr) {
   } s_cnt += nMULADD;                             
 #endif
 
-#if nMULADDLITE>0
-  //MULADDLITES
-  for (i=0; i<nMULADDLITE; i=i+1) {
-    sMULADDLITE[i] = s_cnt+i;
-    sMULADDLITE_p[i] = sMULADDLITE[i] + p_offset;
-  } s_cnt += nMULADDLITE;
-#endif
-    
 #if nBS>0
   //BARREL SHIFTERS
   for (i=0; i<nBS; i=i+1){                                             

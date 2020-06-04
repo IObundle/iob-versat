@@ -33,6 +33,7 @@ module xaddrgen (
    reg 					       		mem_en_nxt;
    reg 					       		done_nxt;
    reg							run_reg, run_nxt;
+   reg							rep, rep_nxt;
 
    parameter IDLE=1'b0, RUN=1'b1;   
    reg 					       		state, state_nxt;
@@ -48,8 +49,11 @@ module xaddrgen (
       addr_nxt = addr;
       iter_nxt = iter;
       run_nxt = run_reg;
+      rep = rep_nxt;
 
       if (state == IDLE) begin 
+	 done_nxt = 1'b1;
+
 	 if (init) begin 
 	    per_cnt_nxt = -{{1'b0}, delay}+1'b1;
 	    addr_nxt = start;
@@ -103,14 +107,19 @@ module xaddrgen (
 	 
 	 //compute state_nxt
 	 if(iter == iterations && per_cnt == period_int) begin 
-	    done_nxt = 1'b1;
+	    if(rep) begin
+	       done_nxt = 1'b1;
+	       rep_nxt = 1'b0;
+	    end else
+	       done_nxt = 1'b0;
 	    if(run) begin
 	      addr_nxt = start;
 	      iter_nxt = `MEM_ADDR_W'd1;
 	      mem_en_nxt = 1'b1;
 	      run_nxt = 1'b1;
 	    end else state_nxt = IDLE;
-	 end
+	 end else
+	    rep_nxt = 1'b1;
 	 
       end // else: !if(state == IDLE)
    end // always @ *
@@ -126,14 +135,18 @@ module xaddrgen (
 	per_cnt <= `PERIOD_W'b0;
 	iter <= `MEM_ADDR_W'b0;
         run_reg <= 1'b0;
-     end else if (!pause) begin 
-	state <= state_nxt;
-	mem_en <= mem_en_nxt;
+	rep_nxt <= 1'b1;
+     end else begin 
 	done <= done_nxt;
-	addr <= addr_nxt;
-	per_cnt <= per_cnt_nxt;
-	iter <= iter_nxt;
         run_reg <= run_nxt;
+	rep <= rep_nxt;
+	if (!pause) begin 
+	   mem_en <= mem_en_nxt;
+	   state <= state_nxt;
+	   addr <= addr_nxt;
+	   per_cnt <= per_cnt_nxt;
+	   iter <= iter_nxt;
+	end
      end 
 
 endmodule
