@@ -50,6 +50,7 @@ versat_t CALULite::output()
     bitset<DATAPATH_W + 1> bz;
     SET_BITS(ai, 0, DATAPATH_W + 1);
     SET_BITS(bz, 1, DATAPATH_W + 1);
+    bitset<DATAPATH_W> aux_cmp;
 
     //cast to int cin.to_ulong();
     versat_t op_a_reg = stage[versat_base].databus[shadow_reg[versat_base].alulite[alulite_base].opa];
@@ -66,7 +67,6 @@ versat_t CALULite::output()
         out = op_a_int & op_b_reg;
         break;
     case ALULITE_CMP_SIG:
-        bitset<DATAPATH_W> aux_cmp;
         aux_cmp.set(DATAPATH_W - 1, op_a_int > op_b_reg ? 1 : 0);
         out = (versat_t)aux_cmp.to_ulong();
         break;

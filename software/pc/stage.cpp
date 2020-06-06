@@ -56,7 +56,6 @@ CStage::CStage(int versat_base)
 void CStage::clearConf()
 {
     int i = versat_base;
-    memset(&conf[versat_base], 0, sizeof(conf[versat_base]));
     conf[i] = CStage(i);
 }
 
