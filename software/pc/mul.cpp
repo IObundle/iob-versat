@@ -52,7 +52,7 @@ versat_t CMul::output()
     opb = stage[versat_base].databus[shadow_reg[versat_base].mul[mul_base].selb];
 
     mul_t result_mult = opa * opb;
-    if (shadow_reg[versat_base].mul[mul_base].fns == MUL_HI) //big brain time: to avoid left/right shifts, using a MASK of size mul_t and versat_t
+    if (shadow_reg[versat_base].mul[mul_base].fns == MUL_HI)
     {
         result_mult = result_mult << 1;
         out = (versat_t)(result_mult >> (sizeof(versat_t) * 8));
@@ -89,5 +89,15 @@ void CMul::setFNS(int fns)
 {
     conf[versat_base].mul[mul_base].fns = fns;
     this->fns = fns;
+}
+
+string CMul::info()
+{
+    string ver = "mul[" + to_string(mul_base) + "]\n";
+    ver += "SelA=       " + to_string(sela) + "\n";
+    ver += "SelB=       " + to_string(selb) + "\n";
+    ver += "FNS =       " + to_string(fns) + "\n";
+    ver += "\n";
+    return ver;
 }
 #endif

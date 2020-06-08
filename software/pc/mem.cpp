@@ -1,23 +1,30 @@
 #include "versat.hpp"
 #if nMEM > 0
+
 versat_t CMem::read(uint32_t addr)
 {
     if (addr >= MEM_SIZE)
     {
-        printf("Invalid MEM ADDR\n");
-        return 0;
+        printf("Invalid READ MEM ADDR=%u\n", addr);
+        print_versat_mems();
+        printf("VERSAT MEMS OUTPUTED AS FILE\n");
+        print_versat_info();
+        printf("VERSAT INFO OUTPUTED AS FILE\n");
+        exit(0);
+        //return 0;
     }
-    return mem[addr];
+    return data[addr];
 }
-void CMem::write(int32_t addr, versat_t data_in)
+void CMem::write(uint32_t addr, versat_t data_in)
 {
     if (addr >= MEM_SIZE)
     {
-        printf("Invalid MEM ADDR\n");
+        printf("Invalid WRITE MEM ADDR=%u\n", addr);
+        exit(0);
     }
     else
     {
-        mem[addr] = data_in;
+        data[addr] = data_in;
     }
 }
 CMemPort::CMemPort() {}
@@ -26,7 +33,30 @@ CMemPort::CMemPort(int versat_base, int i, int offset)
     this->versat_base = versat_base;
     this->mem_base = i;
     this->data_base = offset;
-    this->my_mem = &stage[versat_base].mem[i];
+    this->my_mem = &versat_mem[versat_base][i];
+    this->iter = 0;
+    this->per = 0;
+    this->duty = 0;
+    this->sel = 0;
+    this->start = 0;
+    this->shift = 0;
+    this->incr = 0;
+    this->delay = 0;
+    this->in_wr = 0;
+    this->rvrs = 0;
+    this->ext = 0;
+    this->iter2 = 0;
+    this->per2 = 0;
+    this->shift2 = 0;
+    this->incr2 = 0;
+}
+void CMemPort::reset()
+{
+    i = 0;
+    j = 0;
+    k = 0;
+    l = 0;
+    run_delay = 0;
 }
 void CMemPort::update_shadow_reg_MEM()
 {
@@ -69,6 +99,9 @@ void CMemPort::update_shadow_reg_MEM()
 }
 void CMemPort::start_run()
 {
+
+    done = 0;
+    pos = start;
     //set run_delay
     if (data_base == 1)
     {
@@ -124,23 +157,7 @@ void CMemPort::update()
 
 int CMemPort::AGU()
 {
-    /* for (i = 0; i < iter2; i++)
-    {
-        for (j = 0; j < per2; j++)
-        {
-            addr = start2;
-            for (k = 0; k < iter; k++)
-            {
-                for (l = 0; l < per; l++)
-                {
-                    addr += incr;
-                }
-                addr += shift;
-            }
-            start2 += incr2;
-        }
-        start2 += shift2;
-    }*/
+    uint32_t aux = 0;
     while (i < iter2)
     {
         while (j < per2)
@@ -150,45 +167,64 @@ int CMemPort::AGU()
                 while (l < per)
                 {
                     l++;
-                    return l * incr + k * shift + j * incr2 + i * shift2;
+                    aux = pos;
+                    pos += incr;
+                    return aux;
                 }
                 l = 0;
+                pos += shift;
                 k++;
             }
             k = 0;
+            pos += incr2;
             j++;
         }
+        pos += shift2;
         j = 0;
         i++;
     }
+    done = 1;
+    pos = 0;
     i = 0;
-
+    j = 0;
+    k = 0;
+    l = 0;
     return 0;
 }
 
 versat_t CMemPort::output()
 {
-    int addr = AGU();
+    if (run_delay > 0)
+        return 0;
+
+    int addr = 0;
+    if (done == 0)
+        addr = AGU();
+    else
+    {
+        out = 0;
+        return 0;
+    }
+
     versat_t data;
     if (in_wr)
     {
         if (data_base == 0)
         {
             write(addr, stage[versat_base].databus[shadow_reg[versat_base].memA[mem_base].sel]);
-            return stage[versat_base].databus[shadow_reg[versat_base].memA[mem_base].sel];
+            out = stage[versat_base].databus[shadow_reg[versat_base].memA[mem_base].sel];
         }
         else
         {
             write(addr, stage[versat_base].databus[shadow_reg[versat_base].memB[mem_base].sel]);
-            return stage[versat_base].databus[shadow_reg[versat_base].memB[mem_base].sel];
+            out = stage[versat_base].databus[shadow_reg[versat_base].memB[mem_base].sel];
         }
     }
     else
     {
         data = read(addr);
-        return data;
+        out = data;
     }
-
     return 0;
 }
 
@@ -399,12 +435,47 @@ void CMemPort::setShift2(int shift2)
 void CMemPort::write(int addr, int val)
 {
     //MEMSET(versat_base, (this->data_base + addr), val);
-    my_mem->write(addr, val);
+    if (done == 0)
+        my_mem->write(addr, val);
 }
 
 int CMemPort::read(int addr)
 {
     //return MEMGET(versat_base, (this->data_base + addr));
-    return my_mem->read(addr);
+    if (done == 0)
+        return my_mem->read(addr);
+    else
+    {
+        return 0;
+    }
+}
+string CMemPort::info()
+{
+    string ver = "mem";
+    if (data_base == 0)
+        ver += "A[" + to_string(mem_base) + "]\n";
+    else
+    {
+        ver += "B[" + to_string(mem_base) + "]\n";
+    }
+    ver += "Start=    " + to_string(start) + "\n";
+    ver += "Iter=     " + to_string(iter) + "\n";
+    ver += "Per =     " + to_string(per) + "\n";
+    ver += "Incr=     " + to_string(incr) + "\n";
+    ver += "Delay=    " + to_string(delay) + "\n";
+    ver += "Shift=    " + to_string(shift) + "\n";
+    ver += "Duty=     " + to_string(duty) + "\n";
+    ver += "Sel=      " + to_string(sel) + "\n";
+    ver += "Ext=      " + to_string(ext) + "\n";
+    ver += "Rvrs =    " + to_string(rvrs) + "\n";
+    ver += "InWr=     " + to_string(in_wr) + "\n";
+    ver += "Iter2=    " + to_string(iter2) + "\n";
+    ver += "Per2 =    " + to_string(per2) + "\n";
+    ver += "Shift2=   " + to_string(shift2) + "\n";
+    ver += "Incr2=    " + to_string(incr2) + "\n";
+    ver += "Done=     " + to_string(done) + "\n";
+    ver += "\n";
+
+    return ver;
 }
 #endif

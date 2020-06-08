@@ -61,9 +61,9 @@ using namespace std;
 class CMem
 {
 private:
-  versat_t mem[MEM_SIZE];
+  versat_t data[MEM_SIZE];
   versat_t read(uint32_t addr);
-  void write(int32_t addr, versat_t data_in);
+  void write(uint32_t addr, versat_t data_in);
 
 public:
   friend class CMemPort;
@@ -77,12 +77,14 @@ private:
   versat_t out;
   versat_t output_port[MEMP_LAT]; //output FIFO
   int i, j, k, l;
+  uint32_t pos = 0;
 
 public:
   CMem *my_mem;
   int versat_base, mem_base, data_base;
   int iter, per, duty, sel, start, shift, incr, delay, in_wr;
   int rvrs = 0, ext = 0, iter2 = 0, per2 = 0, shift2 = 0, incr2 = 0;
+  bool done = 0;
 
   //Default constructor
   CMemPort();
@@ -116,6 +118,8 @@ public:
 
   void write(int addr, int val);
   int read(int addr);
+  void reset();
+  string info();
 }; //end class CMEM
 #endif
 #if nALU > 0
@@ -146,6 +150,8 @@ public:
   void setOpA(int opa);
   void setOpB(int opb);
   void setFNS(int fns);
+
+  string info();
 }; //end class CALU
 #endif
 
@@ -176,6 +182,8 @@ public:
   void setOpA(int opa);
   void setOpB(int opb);
   void setFNS(int fns);
+
+  string info();
 }; //end class CALUALITE
 #endif
 
@@ -208,6 +216,8 @@ public:
   void setData(int data);
   void setShift(int shift);
   void setFNS(int fns);
+
+  string info();
 }; //end class CBS
 #endif
 
@@ -241,6 +251,8 @@ public:
   void setSelA(int sela);
   void setSelB(int selb);
   void setFNS(int fns);
+
+  string info();
 }; //end class CMUL
 #endif
 
@@ -282,6 +294,8 @@ public:
   void setPer(int per);
   void setDelay(int delay);
   void setShift(int shift);
+
+  string info();
 }; //end class CMULADD
 #endif
 
@@ -323,6 +337,8 @@ public:
   void setAccIN(int accIN);
   void setAccOUT(int accOUT);
   void setBatch(int batch);
+
+  string info();
 }; //end class CMULADDLITE
 #endif
 
@@ -337,7 +353,6 @@ public:
 #if nMEM > 0
   CMemPort memA[nMEM];
   CMemPort memB[nMEM];
-  CMem mem[nMEM];
 #endif
 #if nALU > 0
   CALU alu[nALU];
@@ -354,7 +369,7 @@ public:
 #if nMULADD > 0
   CMulAdd muladd[nMULADD];
 #endif
-#if nMULADDLITE > 0
+#if nYOLO > 0
   CMulAddLite muladdlite[nMULADDLITE];
 #endif
 
@@ -384,6 +399,11 @@ public:
   //calculate new output on all FUs
   void output_all_FUs();
 
+  string info();
+
+  bool done();
+  void reset();
+
 }; //end class CStage
 
 //
@@ -395,6 +415,7 @@ extern int base;
 extern CStage stage[nSTAGE];
 extern CStage conf[nSTAGE];
 extern CStage shadow_reg[nSTAGE];
+extern CMem versat_mem[nSTAGE][nMEM];
 
 /*databus vector
 stage 0 is repeated in the start and at the end
@@ -443,5 +464,14 @@ int done();
 
 void globalClearConf();
 #endif
+
+#endif
+
+#define INFO 1
+
+#if INFO == 1
+
+void print_versat_mems();
+void print_versat_info();
 
 #endif

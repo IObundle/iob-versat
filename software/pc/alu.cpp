@@ -140,4 +140,13 @@ void CALU::setFNS(int fns)
     conf[versat_base].alu[alu_base].fns = fns;
     this->fns = fns;
 }
+string CALU::info()
+{
+    string ver = "alu[" + to_string(alu_base) + "]\n";
+    ver += "SetOpA=       " + to_string(opa) + "\n";
+    ver += "SelOpB=       " + to_string(opb) + "\n";
+    ver += "FNS =       " + to_string(fns) + "\n";
+    ver += "\n";
+    return ver;
+}
 #endif

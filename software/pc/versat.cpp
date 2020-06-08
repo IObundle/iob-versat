@@ -8,8 +8,11 @@ void versat_init(int base_addr)
     base_addr = 0;
     base = base_addr;
     for (i = 0; i < nSTAGE; i++)
+    {
         stage[i] = CStage(base_addr + i);
-
+        conf[i] = stage[i];
+        shadow_reg[i] = stage[i];
+    }
     //prepare sel variables
     int p_offset = (1 << (N_W - 1));
     int s_cnt = 0;
@@ -84,52 +87,69 @@ void versat_init(int base_addr)
 #endif
 }
 
+int iter = 0;
 void run_sim()
 {
-    run_done = 1;
     int i = 0;
     //put simulation here
-
+    bool run_mem = 0;
+    bool run_mem_stage[nSTAGE] = {0};
+    bool aux;
     //set run start for all FUs
     for (i = 0; i < nSTAGE; i++)
     {
-        stage[i].start_all_FUs();
+        shadow_reg[i].start_all_FUs();
     }
 
     //main run loop
-    while (run_done)
+    while (!run_mem)
     {
         //calculate new outputs
         for (i = 0; i < nSTAGE; i++)
         {
-            stage[i].output_all_FUs();
+            shadow_reg[i].output_all_FUs();
         }
 
         //update output buffers and datapath
         for (i = 0; i < nSTAGE; i++)
         {
-            stage[i].update_all_FUs();
+            shadow_reg[i].update_all_FUs();
         }
 
         //TO DO: check for run finish
         //set run_done to 0
+        for (i = 0; i < nSTAGE; i++)
+        {
+            run_mem_stage[i] = shadow_reg[i].done();
+        }
+        aux = run_mem_stage[0];
+        for (i = 1; i < nSTAGE; i++)
+        {
+            aux = aux && run_mem_stage[i];
+        }
+        run_mem = aux;
+        iter++;
     }
+    run_done = 1;
 }
 
 void run()
 {
     //MEMSET(base, (RUN_DONE), 1);
     int i = 0;
-
     run_done = 0;
+    iter = 0;
 
     //update shadow register with current configuration
     for (i = 0; i < nSTAGE; i++)
     {
-        stage[i].update_shadow_reg();
+        stage[i].reset();
+        shadow_reg[i] = stage[i];
     }
 
-    std::thread ti(run_sim);
+    thread ti(run_sim);
+    ti.join();
+    printf("It took %d Versat Clock Cycles\n", iter);
 }
 
 int done()
@@ -150,6 +170,7 @@ int base;
 CStage stage[nSTAGE];
 CStage conf[nSTAGE];
 CStage shadow_reg[nSTAGE];
+CMem versat_mem[nSTAGE][nMEM];
 int run_done = 0;
 
 /*databus vector
