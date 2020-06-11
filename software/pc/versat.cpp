@@ -10,8 +10,8 @@ void versat_init(int base_addr)
     for (i = 0; i < nSTAGE; i++)
     {
         stage[i] = CStage(base_addr + i);
-        conf[i] = stage[i];
-        shadow_reg[i] = stage[i];
+        conf[i] = CStage(base_addr + i);
+        shadow_reg[i] = CStage(base_addr + i);
     }
     //prepare sel variables
     int p_offset = (1 << (N_W - 1));
@@ -144,7 +144,8 @@ void run()
     for (i = 0; i < nSTAGE; i++)
     {
         stage[i].reset();
-        shadow_reg[i] = stage[i];
+        //shadow_reg[i] = stage[i];
+        stage[i].update_shadow_reg();
     }
 
     thread ti(run_sim);

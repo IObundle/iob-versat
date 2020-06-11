@@ -76,14 +76,17 @@ private:
   int run_delay = 0;
   versat_t out;
   versat_t output_port[MEMP_LAT]; //output FIFO
-  int i, j, k, l;
+  int loop1 = 0, loop2 = 0, loop3 = 0, loop4 = 0;
   uint32_t pos = 0;
+  uint32_t pos2 = 0;
+  uint32_t aux = 0;
+  int duty_cnt = 0;
 
 public:
   CMem *my_mem;
   int versat_base, mem_base, data_base;
-  int iter, per, duty, sel, start, shift, incr, delay, in_wr;
-  int rvrs = 0, ext = 0, iter2 = 0, per2 = 0, shift2 = 0, incr2 = 0;
+  int iter, per, duty, sel, start, shift, incr, delay, in_wr /* read or write*/;
+  int rvrs = 0 /* reverse addr*/, ext = 0 /* use FU to addr MEM*/, iter2 = 0, per2 = 0, shift2 = 0, incr2 = 0;
   bool done = 0;
 
   //Default constructor
@@ -98,7 +101,8 @@ public:
   void update();
 
   versat_t output();
-  int AGU();
+  uint32_t AGU();
+  uint32_t acumulator();
   void writeConf();
   void setIter(int iter);
   void setPer(int per);

@@ -240,8 +240,8 @@ string CStage::info()
 #if nMEM > 0
     for (i = 0; i < nMEM; i++)
     {
-        //string ver2 = ver + memA[i].info();
-        //string ver = ver2 + memB[i].info();
+        ver += memA[i].info();
+        ver += memB[i].info();
     }
 #endif
 #if nALU > 0
