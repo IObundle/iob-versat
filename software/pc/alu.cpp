@@ -48,6 +48,14 @@ versat_t CALU::output()
 {
     inb = stage[versat_base].databus[shadow_reg[versat_base].alu[alu_base].opa];
     ina = stage[versat_base].databus[shadow_reg[versat_base].alu[alu_base].opb];
+    bitset<DATAPATH_W> aux_sext;
+    bitset<DATAPATH_W> aux_cmp;
+    uint8_t aux_a = ina;
+    bool val;
+    shift_t aux = ina;
+    shift_t ina_uns = ina;
+    shift_t inb_uns = inb;
+
     switch (fns)
     {
     case ALU_OR:
@@ -60,16 +68,13 @@ versat_t CALU::output()
         out = inb ^ ina;
         break;
     case ALU_SEXT8:
-        bitset<DATAPATH_W> aux_sext;
-        uint8_t aux_a = ina;
-        bool val = MSB(aux_a, 8);
+        aux_a = ina;
+        val = MSB(aux_a, 8);
         SET_BITS_SEXT8(aux_sext, val, DATAPATH_W);
         out = aux_sext.to_ulong() + aux_a;
         break;
     case ALU_SEXT16:
-        bitset<DATAPATH_W> aux_sext;
-        uint16_t aux_a = ina;
-        bool val = MSB(aux_a, 16);
+        val = MSB(aux_a, 16);
         SET_BITS_SEXT16(aux_sext, val, DATAPATH_W);
         out = aux_sext.to_ulong() + aux_a;
         break;
@@ -77,19 +82,16 @@ versat_t CALU::output()
         out = ina >> 1;
         break;
     case ALU_SHIFTR_LOG:
-        shift_t aux = ina;
         aux = aux >> 1;
         out = (versat_t)aux;
         break;
     case ALU_CMP_SIG:
-        bitset<DATAPATH_W> aux_cmp;
         aux_cmp.set(DATAPATH_W - 1, ina > inb ? 1 : 0);
         out = (versat_t)aux_cmp.to_ulong();
         break;
     case ALU_CMP_UNS:
-        shift_t ina_uns = ina;
-        shift_t inb_uns = inb;
-        bitset<DATAPATH_W> aux_cmp;
+        ina_uns = ina;
+        inb_uns = inb;
         aux_cmp.set(DATAPATH_W - 1, ina_uns > inb_uns ? 1 : 0);
         out = (versat_t)aux_cmp.to_ulong();
         break;
@@ -137,5 +139,14 @@ void CALU::setFNS(int fns)
 {
     conf[versat_base].alu[alu_base].fns = fns;
     this->fns = fns;
+}
+string CALU::info()
+{
+    string ver = "alu[" + to_string(alu_base) + "]\n";
+    ver += "SetOpA=       " + to_string(opa) + "\n";
+    ver += "SelOpB=       " + to_string(opb) + "\n";
+    ver += "FNS =       " + to_string(fns) + "\n";
+    ver += "\n";
+    return ver;
 }
 #endif

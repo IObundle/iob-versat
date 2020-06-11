@@ -56,7 +56,6 @@ CStage::CStage(int versat_base)
 void CStage::clearConf()
 {
     int i = versat_base;
-    memset(&conf[versat_base], 0, sizeof(conf[versat_base]));
     conf[i] = CStage(i);
 }
 
@@ -211,4 +210,75 @@ void CStage::output_all_FUs()
     for (i = 0; i < nMULADDLITE; i++)
         muladdlite[i].output();
 #endif
+}
+
+bool CStage::done()
+{
+    bool auxA, auxB;
+    auxA = memA[0].done;
+    auxB = memB[0].done;
+    for (int i = 1; i < nMEM; i++)
+    {
+        auxA = auxA && memA[i].done;
+        auxB = auxB && memB[i].done;
+    }
+    return auxA && auxB;
+}
+
+void CStage::reset()
+{
+    for (int i = 0; i < nMEM; i++)
+    {
+        memA[i].done = 0;
+        memB[i].done = 0;
+    }
+}
+string CStage::info()
+{
+    int i = 0;
+    string ver = "nStage " + to_string(versat_base) + "\n";
+#if nMEM > 0
+    for (i = 0; i < nMEM; i++)
+    {
+        //string ver2 = ver + memA[i].info();
+        //string ver = ver2 + memB[i].info();
+    }
+#endif
+#if nALU > 0
+    for (i = 0; i < nALU; i++)
+    {
+        ver += alu[i].info();
+    }
+#endif
+#if nALULITE > 0
+    for (i = 0; i < nALULITE; i++)
+    {
+        ver += alulite[i].info();
+    }
+#endif
+#if nBS > 0
+    for (i = 0; i < nBS; i++)
+    {
+        ver += bs[i].info();
+    }
+#endif
+#if nMUL > 0
+    for (i = 0; i < nMUL; i++)
+    {
+        ver += mul[i].info();
+    }
+#endif
+#if nMULADD > 0
+    for (i = 0; i < nMULADD; i++)
+    {
+        ver += muladd[i].info();
+    }
+#endif
+#if nMULADDLITE > 0
+    for (i = 0; i < nYOLO; i++)
+    {
+        ver += muladdlite[i].info();
+    }
+#endif
+    return ver;
 }

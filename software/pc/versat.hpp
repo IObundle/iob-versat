@@ -18,13 +18,13 @@ typedef uint32_t shift_t;
 typedef int8_t versat_t;
 typedef int16_t mul_t;
 typedef uint16_t shift_t;
-
 #else
 typedef int32_t versat_t;
 typedef int64_t mul_t;
 typedef uint64_t shift_t;
 
 #endif
+
 using namespace std;
 
 #define SET_BITS(var, val, size) \
@@ -47,10 +47,6 @@ using namespace std;
 
 #define MSB(var, size) var >> (size - 1)
 
-//Macro functions to use cpu interface
-#define MEMSET(base, location, value) (*((volatile int *)(base + (sizeof(int)) * location)) = value)
-#define MEMGET(base, location) (*((volatile int *)(base + (sizeof(int)) * location)))
-
 //constants
 #define CONF_BASE (1 << (nMEM_W + MEM_ADDR_W + 1))
 #define CONF_MEM_SIZE ((int)pow(2, CONF_MEM_ADDR_W))
@@ -65,9 +61,9 @@ using namespace std;
 class CMem
 {
 private:
-  versat_t mem[MEM_SIZE];
+  versat_t data[MEM_SIZE];
   versat_t read(uint32_t addr);
-  void write(int32_t addr, versat_t data_in);
+  void write(uint32_t addr, versat_t data_in);
 
 public:
   friend class CMemPort;
@@ -81,12 +77,14 @@ private:
   versat_t out;
   versat_t output_port[MEMP_LAT]; //output FIFO
   int i, j, k, l;
+  uint32_t pos = 0;
 
 public:
   CMem *my_mem;
   int versat_base, mem_base, data_base;
   int iter, per, duty, sel, start, shift, incr, delay, in_wr;
   int rvrs = 0, ext = 0, iter2 = 0, per2 = 0, shift2 = 0, incr2 = 0;
+  bool done = 0;
 
   //Default constructor
   CMemPort();
@@ -120,6 +118,8 @@ public:
 
   void write(int addr, int val);
   int read(int addr);
+  void reset();
+  string info();
 }; //end class CMEM
 #endif
 #if nALU > 0
@@ -150,6 +150,8 @@ public:
   void setOpA(int opa);
   void setOpB(int opb);
   void setFNS(int fns);
+
+  string info();
 }; //end class CALU
 #endif
 
@@ -180,6 +182,8 @@ public:
   void setOpA(int opa);
   void setOpB(int opb);
   void setFNS(int fns);
+
+  string info();
 }; //end class CALUALITE
 #endif
 
@@ -212,6 +216,8 @@ public:
   void setData(int data);
   void setShift(int shift);
   void setFNS(int fns);
+
+  string info();
 }; //end class CBS
 #endif
 
@@ -245,6 +251,8 @@ public:
   void setSelA(int sela);
   void setSelB(int selb);
   void setFNS(int fns);
+
+  string info();
 }; //end class CMUL
 #endif
 
@@ -286,6 +294,8 @@ public:
   void setPer(int per);
   void setDelay(int delay);
   void setShift(int shift);
+
+  string info();
 }; //end class CMULADD
 #endif
 
@@ -327,6 +337,8 @@ public:
   void setAccIN(int accIN);
   void setAccOUT(int accOUT);
   void setBatch(int batch);
+
+  string info();
 }; //end class CMULADDLITE
 #endif
 
@@ -341,7 +353,6 @@ public:
 #if nMEM > 0
   CMemPort memA[nMEM];
   CMemPort memB[nMEM];
-  CMem mem[nMEM];
 #endif
 #if nALU > 0
   CALU alu[nALU];
@@ -358,7 +369,7 @@ public:
 #if nMULADD > 0
   CMulAdd muladd[nMULADD];
 #endif
-#if nMULADDLITE > 0
+#if nYOLO > 0
   CMulAddLite muladdlite[nMULADDLITE];
 #endif
 
@@ -388,6 +399,11 @@ public:
   //calculate new output on all FUs
   void output_all_FUs();
 
+  string info();
+
+  bool done();
+  void reset();
+
 }; //end class CStage
 
 //
@@ -395,10 +411,11 @@ public:
 //
 #ifndef VERSAT_cpp // include guard
 #define VERSAT_cpp
-static int base;
-CStage stage[nSTAGE];
-CStage conf[nSTAGE];
-CStage shadow_reg[nSTAGE];
+extern int base;
+extern CStage stage[nSTAGE];
+extern CStage conf[nSTAGE];
+extern CStage shadow_reg[nSTAGE];
+extern CMem versat_mem[nSTAGE][nMEM];
 
 /*databus vector
 stage 0 is repeated in the start and at the end
@@ -409,43 +426,52 @@ stage order in databus
 stage 0 databus                      stage 1 databus
 
 */
-versat_t global_databus[(nSTAGE + 1) * N];
+extern versat_t global_databus[(nSTAGE + 1) * N];
 #if nMEM > 0
-int sMEMA[nMEM], sMEMA_p[nMEM], sMEMB[nMEM], sMEMB_p[nMEM];
+extern int sMEMA[nMEM], sMEMA_p[nMEM], sMEMB[nMEM], sMEMB_p[nMEM];
 #endif
 #if nALU > 0
-int sALU[nALU], sALU_p[nALU];
+extern int sALU[nALU], sALU_p[nALU];
 #endif
 #if nALULITE > 0
-int sALULITE[nALULITE], sALULITE_p[nALULITE];
+extern int sALULITE[nALULITE], sALULITE_p[nALULITE];
 #endif
 #if nMUL > 0
-int sMUL[nMUL], sMUL_p[nMUL];
+extern int sMUL[nMUL], sMUL_p[nMUL];
 #endif
 #if nMULADD > 0
-int sMULADD[nMULADD], sMULADD_p[nMULADD];
+extern int sMULADD[nMULADD], sMULADD_p[nMULADD];
 #endif
 #if nMULADDLITE > 0
-int sMULADDLITE[nMULADDLITE], sMULADDLITE_p[nMULADDLITE];
+extern int sMULADDLITE[nMULADDLITE], sMULADDLITE_p[nMULADDLITE];
 #endif
 #if nBS > 0
-int sBS[nBS], sBS_p[nBS];
+extern int sBS[nBS], sBS_p[nBS];
 #endif
 
 //
 //VERSAT FUNCTIONS
 //
-inline void versat_init(int base_addr);
+void versat_init(int base_addr);
 
-int run_done = 0;
+extern int run_done;
 
 void run_sim();
 
-inline void run();
+void run();
 
-inline int done();
+int done();
 
-inline void globalClearConf();
+void globalClearConf();
 #endif
+
+#endif
+
+#define INFO 1
+
+#if INFO == 1
+
+void print_versat_mems();
+void print_versat_info();
 
 #endif

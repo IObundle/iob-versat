@@ -148,4 +148,8 @@ void CMulAddLite::setBatch(int batch)
     this->batch = batch;
 }
 
+string CMulAddLite::info()
+{
+}
+
 #endif

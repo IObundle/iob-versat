@@ -228,7 +228,7 @@ module xversat_tb;
       end
 
       //config mem2A to store ALULite output
-      config_mem((`nSTAGE-1)<<(`CTR_ADDR_W-`nSTAGE_W), 4, 9, 9, 1, 0, 1, `MEMP_LAT + 8 + `MULADD_LAT + `ALULITE_LAT + delay, sALULITE0, 1);
+      config_mem((`nSTAGE-1)<<(`CTR_ADDR_W-`nSTAGE_W), 4, 9, 9, 1, 0, 1, `MEMP_LAT + `MULADD_LAT + `ALULITE_LAT + delay - 1, sALULITE0, 1);
       config_mem_start((`nSTAGE-1)<<(`CTR_ADDR_W-`nSTAGE_W), 4, 50);
 
       ///////////////////////////////////////////////////////////////////////////////

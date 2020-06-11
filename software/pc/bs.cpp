@@ -91,4 +91,13 @@ void CBS::setFNS(int fns)
     conf[versat_base].bs[bs_base].fns = fns;
     this->fns = fns;
 }
+string CBS::info()
+{
+    string ver = "bs[" + to_string(bs_base) + "]\n";
+    ver += "Data=       " + to_string(data) + "\n";
+    ver += "Shift=      " + to_string(selb) + "\n";
+    ver += "FNS =       " + to_string(fns) + "\n";
+    ver += "\n";
+    return ver;
+}
 #endif

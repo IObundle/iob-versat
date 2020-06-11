@@ -156,4 +156,17 @@ void CMulAdd::setShift(int shift)
     conf[versat_base].muladd[muladd_base].shift = shift;
     this->shift = shift;
 }
+string CMulAdd::info()
+{
+    string ver = "mul_add[" + to_string(muladd_base) + "]\n";
+    ver += "SelA=     " + to_string(sela) + "\n";
+    ver += "SelB=     " + to_string(selb) + "\n";
+    ver += "FNS =     " + to_string(fns) + "\n";
+    ver += "Iter=     " + to_string(iter) + "\n";
+    ver += "Per =     " + to_string(per) + "\n";
+    ver += "Delay=    " + to_string(delay) + "\n";
+    ver += "Shift=    " + to_string(shift) + "\n";
+    ver += "\n";
+    return ver;
+}
 #endif

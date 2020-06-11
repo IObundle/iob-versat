@@ -26,7 +26,7 @@ module xaddrgen (
    reg signed [`PERIOD_W :0]                   		per_cnt, per_cnt_nxt; //period count
    wire [`PERIOD_W :0]                         		period_int, duty_int;
    
-   reg [`MEM_ADDR_W - 1:0]                        	addr_nxt;
+   reg [`MEM_ADDR_W - 1:0]                        	addr_nxt, addr_r0, addr_r1;
    
    reg [`MEM_ADDR_W - 1:0]                        	iter, iter_nxt; //iterations count 
 
@@ -46,13 +46,14 @@ module xaddrgen (
       done_nxt  = done;
       mem_en_nxt = mem_en;
       per_cnt_nxt = per_cnt;
-      addr_nxt = addr;
+      addr_nxt = addr_r0;
       iter_nxt = iter;
       run_nxt = run_reg;
       rep_nxt = rep;
 
       if (state == IDLE) begin 
 	 done_nxt = 1'b1;
+	 mem_en_nxt = 1'b0;
 
 	 if (init) begin 
 	    per_cnt_nxt = -{{1'b0}, delay}+1'b1;
@@ -78,7 +79,7 @@ module xaddrgen (
 	 end
 
 	 //compute mem_en_nxt
-	 if ( per_cnt == {{1'b0},{`PERIOD_W'b0}}    ||    (per_cnt == period_int && iter != iterations) )
+	 if ((per_cnt == {{1'b0},{`PERIOD_W'b0}} && period == duty) || per_cnt == period_int)
 	   mem_en_nxt = 1'b1;
 	 
 	 if (per_cnt == duty_int && (period != duty || iter == iterations))
@@ -96,14 +97,14 @@ module xaddrgen (
 
 	 //compute addr_nxt
 	 if(mem_en)
-	   addr_nxt = addr + incr;
+	   addr_nxt = addr_r0 + incr;
 	 
 	 if (per_cnt == period_int) begin
-	    addr_nxt = addr + incr + shift;
+	    addr_nxt = addr_r0 + incr + shift;
 	 end
 	 
 	 if(mem_en == 1'b1 && per_cnt == duty_int && period != duty)
-	   addr_nxt = addr;
+	   addr_nxt = addr_r0;
 	 
 	 //compute state_nxt
 	 if(iter == iterations && per_cnt == period_int) begin 
@@ -131,7 +132,8 @@ module xaddrgen (
 	state <= IDLE;
 	mem_en <= 1'b0;
 	done <= 1'b1;
-	addr <= `MEM_ADDR_W'b0;
+	addr_r0 <= `MEM_ADDR_W'b0;
+	addr_r1 <= `MEM_ADDR_W'b0;
 	per_cnt <= `PERIOD_W'b0;
 	iter <= `MEM_ADDR_W'b0;
         run_reg <= 1'b0;
@@ -143,10 +145,12 @@ module xaddrgen (
 	if (!pause) begin 
 	   mem_en <= mem_en_nxt;
 	   state <= state_nxt;
-	   addr <= addr_nxt;
+	   addr_r0 <= addr_nxt;
+	   addr_r1 <= addr_r0;
 	   per_cnt <= per_cnt_nxt;
 	   iter <= iter_nxt;
 	end
      end 
+   assign addr = (period == duty) ? addr_r0 : addr_r1;
 
 endmodule
