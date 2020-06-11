@@ -214,6 +214,7 @@ module xdata_eng_tb;
      config_bus[`CONF_MEM0A_B - 4*`MEMP_CONF_BITS - `MEM_ADDR_W-2*`PERIOD_W-`N_W -: `MEM_ADDR_W] = 50; //start
      config_bus[`CONF_MEM0A_B - 4*`MEMP_CONF_BITS -: `MEM_ADDR_W] = 9; //iterations
      config_bus[`CONF_MEM0A_B - 4*`MEMP_CONF_BITS - `MEM_ADDR_W -: `PERIOD_W] = 9; //period
+     config_bus[`CONF_MEM0A_B - 4*`MEMP_CONF_BITS - 4*`MEM_ADDR_W-2*`PERIOD_W-`N_W -: `PERIOD_W] = `MEMP_LAT + `MULADD_LAT + `ALULITE_LAT - 1; //delay
 
      //run configurations
      start_t = $time;
