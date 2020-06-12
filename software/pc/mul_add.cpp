@@ -74,15 +74,15 @@ versat_t CMulAdd::output() //implemented as PIPELINED MULADD
     }
 
     //select inputs
-    opa = stage[versat_base].databus[shadow_reg[versat_base].muladd[muladd_base].sela];
-    opb = stage[versat_base].databus[shadow_reg[versat_base].muladd[muladd_base].selb];
+    opa = stage[versat_base].databus[sela];
+    opb = stage[versat_base].databus[selb];
 
     //select acc_w value
     acc_w = (cnt_addr == 0) ? 0 : acc;
 
     //perform MAC operation
     mul_t result_mult = opa * opb;
-    if (shadow_reg[versat_base].muladd[muladd_base].fns == MULADD_MACC)
+    if (fns == MULADD_MACC)
     {
         acc = acc_w + result_mult;
     }
@@ -90,12 +90,14 @@ versat_t CMulAdd::output() //implemented as PIPELINED MULADD
     {
         acc = acc_w - result_mult;
     }
-    out = (versat_t)(acc >> shadow_reg[versat_base].muladd[muladd_base].shift);
+    out = (versat_t)(acc >> shift);
+    //if (opa != 0 && opb != 0)
+    //  printf("Core=%d,A=%hi,B=%hi,Mul_t=%d,Acc=%d,Out=%hi\n", versat_base, opa, opb, result_mult, acc, out);
 
     //update addrgen counter - 1 iteration of nested for loop
-    if (cnt_iter < shadow_reg[versat_base].muladd[muladd_base].iter)
+    if (cnt_iter < iter)
     {
-        if (cnt_per < shadow_reg[versat_base].muladd[muladd_base].per)
+        if (cnt_per < per)
         {
             cnt_addr++;
             cnt_per++;
@@ -103,7 +105,7 @@ versat_t CMulAdd::output() //implemented as PIPELINED MULADD
         else
         {
             cnt_per = 0;
-            cnt_addr += -(shadow_reg[versat_base].muladd[muladd_base].per);
+            cnt_addr += -per;
             cnt_iter++;
         }
     }

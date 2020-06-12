@@ -300,6 +300,7 @@ public:
   void setShift(int shift);
 
   string info();
+
 }; //end class CMULADD
 #endif
 
@@ -420,6 +421,7 @@ extern CStage stage[nSTAGE];
 extern CStage conf[nSTAGE];
 extern CStage shadow_reg[nSTAGE];
 extern CMem versat_mem[nSTAGE][nMEM];
+extern int versat_iter;
 
 /*databus vector
 stage 0 is repeated in the start and at the end

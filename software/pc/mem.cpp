@@ -256,7 +256,9 @@ versat_t CMemPort::output()
 
     int addr = 0;
     if (done == 0)
+    {
         addr = AGU();
+    }
     else
     {
         out = 0;
@@ -264,17 +266,19 @@ versat_t CMemPort::output()
     }
 
     versat_t data;
-    if (in_wr)
+    if (in_wr == 1)
     {
         if (data_base == 0)
         {
-            write(addr, stage[versat_base].databus[shadow_reg[versat_base].memA[mem_base].sel]);
-            out = stage[versat_base].databus[shadow_reg[versat_base].memA[mem_base].sel];
+            //  if (versat_base == 4 && mem_base == 2 && data_base == 0)
+            //    printf("My addr is %d, value is %d\n", addr, stage[versat_base].databus[sel]);
+            write(addr, stage[versat_base].databus[sel]);
+            out = stage[versat_base].databus[sel];
         }
         else
         {
-            write(addr, stage[versat_base].databus[shadow_reg[versat_base].memB[mem_base].sel]);
-            out = stage[versat_base].databus[shadow_reg[versat_base].memB[mem_base].sel];
+            write(addr, stage[versat_base].databus[sel]);
+            out = stage[versat_base].databus[sel];
         }
     }
     else
@@ -492,41 +496,32 @@ void CMemPort::setShift2(int shift2)
 void CMemPort::write(int addr, int val)
 {
     //MEMSET(versat_base, (this->data_base + addr), val);
-    if (done == 0)
+    if (addr >= MEM_SIZE)
     {
-        if (addr >= MEM_SIZE)
-        {
-            printf("Invalid WRITE MEM ADDR=%u\n", addr);
-            print_versat_info();
-            printf("VERSAT EXITING ON nStage_%d MEM_%d[%d]\n", versat_base, data_base, mem_base);
-            //exit(0);
-        }
-        else
-            my_mem->write(addr, val);
+        printf("Invalid WRITE MEM ADDR=%u\n", addr);
+        print_versat_info();
+        printf("VERSAT EXITING ON nStage_%d MEM_%d[%d]\n", versat_base, data_base, mem_base);
+        //exit(0);
     }
+    else
+        my_mem->write(addr, val);
 }
 
 int CMemPort::read(int addr)
 {
     //return MEMGET(versat_base, (this->data_base + addr));
-    if (done == 0)
+    if (addr >= MEM_SIZE)
     {
-
-        if (addr >= MEM_SIZE)
-        {
-            printf("Invalid READ MEM ADDR=%u\n", addr);
-            print_versat_info();
-            printf("VERSAT EXITING ON nStage_%d MEM_%d[%d]\n", versat_base, data_base, mem_base);
-            //exit(0);
-            return 0;
-        }
-        else
-            return my_mem->read(addr);
-    }
-    else
-    {
+        printf("Invalid READ MEM ADDR=%u\n", addr);
+        print_versat_info();
+        printf("VERSAT EXITING ON nStage_%d MEM_%d[%d]\n", versat_base, data_base, mem_base);
+        //exit(0);
         return 0;
     }
+    else
+        return my_mem->read(addr);
+
+    return 0;
 }
 string CMemPort::info()
 {
