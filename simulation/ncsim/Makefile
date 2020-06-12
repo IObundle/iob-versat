@@ -1,10 +1,12 @@
 #source paths
-MEM_DIR := ../../submodules/mem
+SUBMODULES_DIR := ../../submodules
+MEM_DIR := $(SUBMODULES_DIR)/mem
 RTL_DIR = ../../rtl
+VERSAT_IO := $(SUBMODULES_DIR)/versat-io
 
 #include paths
 INCLUDE_DIR := $(RTL_DIR)/include
-HW_INCLUDE = -incdir $(INCLUDE_DIR) -incdir $(INCLUDE_DIR)/versat
+HW_INCLUDE = -incdir $(INCLUDE_DIR) -incdir $(INCLUDE_DIR)/versat -incdir $(VERSAT_IO)/rtl/include
 
 #hardware defines
 HW_DEFINE = -define DEBUG
