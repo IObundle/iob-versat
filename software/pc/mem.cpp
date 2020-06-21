@@ -40,6 +40,7 @@ void CMemPort::reset()
     loop3 = 0;
     loop4 = 0;
     duty_cnt = 0;
+    enable = 0;
     run_delay = delay;
 }
 void CMemPort::update_shadow_reg_MEM()
@@ -109,6 +110,17 @@ void CMemPort::update()
     }
     else
     {
+        versat_t aux_output = output_port[0];
+        versat_t aux_output2 = 0;
+        //trickle down all outputs in buffer
+        for (i = 1; i < MEMP_LAT; i++)
+        {
+            aux_output2 = output_port[i];
+            output_port[i] = aux_output;
+            aux_output = aux_output2;
+        }
+        //insert new output
+        output_port[0] = out; //TO DO: change according to output()
 
         //update databus
         if (data_base == 0)
@@ -131,14 +143,6 @@ void CMemPort::update()
                 global_databus[nSTAGE * N + sMEMB[mem_base]] = output_port[MEMP_LAT - 1];
             }
         }
-
-        //trickle down all outputs in buffer
-        for (i = 1; i < MEMP_LAT; i++)
-        {
-            output_port[i] = output_port[i - 1];
-        }
-        //insert new output
-        output_port[0] = out; //TO DO: change according to output()
     }
 }
 
@@ -176,9 +180,10 @@ uint32_t CMemPort::acumulator()
             if (loop1 < per)
             {
                 loop1++;
-                aux = 0;
+                enable = 0;
                 if (duty_cnt < duty)
                 {
+                    enable = 1;
                     aux = pos;
                     duty_cnt++;
                     pos += incr;
@@ -209,9 +214,10 @@ uint32_t CMemPort::acumulator()
                     if (loop1 < per)
                     {
                         loop1++;
-                        aux = 0;
+                        enable = 0;
                         if (duty_cnt < duty)
                         {
+                            enable = 1;
                             aux = pos;
                             duty_cnt++;
                             pos += incr;
@@ -261,24 +267,27 @@ versat_t CMemPort::output()
     }
     else
     {
-        out = 0;
-        return 0;
+        return out;
     }
 
     versat_t data;
     if (in_wr == 1)
     {
-        if (data_base == 0)
+
+        if (enable == 1)
         {
-            //  if (versat_base == 4 && mem_base == 2 && data_base == 0)
-            //    printf("My addr is %d, value is %d\n", addr, stage[versat_base].databus[sel]);
-            write(addr, stage[versat_base].databus[sel]);
-            out = stage[versat_base].databus[sel];
-        }
-        else
-        {
-            write(addr, stage[versat_base].databus[sel]);
-            out = stage[versat_base].databus[sel];
+            if (data_base == 0)
+            {
+                //  if (versat_base == 4 && mem_base == 2 && data_base == 0)
+                //    printf("My addr is %d, value is %d\n", addr, stage[versat_base].databus[sel]);
+                write(addr, stage[versat_base].databus[sel]);
+                out = stage[versat_base].databus[sel];
+            }
+            else
+            {
+                write(addr, stage[versat_base].databus[sel]);
+                out = stage[versat_base].databus[sel];
+            }
         }
     }
     else
@@ -548,6 +557,27 @@ string CMemPort::info()
     ver += "Shift2=   " + to_string(shift2) + "\n";
     ver += "Incr2=    " + to_string(incr2) + "\n";
     ver += "Done=     " + to_string(done) + "\n";
+    ver += "\n";
+
+    return ver;
+}
+
+string CMemPort::info_iter()
+{
+    string ver = "mem";
+    if (data_base == 0)
+        ver += "A[" + to_string(mem_base) + "]\n";
+    else
+    {
+        ver += "B[" + to_string(mem_base) + "]\n";
+    }
+    ver += "Out=    " + to_string(out) + "\n";
+    ver += "Addr=    " + to_string(aux) + "\n";
+    ver += "OUTPUT_BUFFER (LATENCY SIM)\n";
+    for (int z = 0; z < MEMP_LAT; z++)
+    {
+        ver += "Output[" + to_string(z) + "]=" + to_string(output_port[z]) + "\n";
+    }
     ver += "\n";
 
     return ver;

@@ -227,6 +227,10 @@ bool CStage::done()
 
 void CStage::reset()
 {
+    for (int i = 0; i < 2 * N; i++)
+    {
+        databus[i] = 0;
+    }
     for (int i = 0; i < nMEM; i++)
     {
         memA[i].done = 0;
@@ -272,6 +276,56 @@ string CStage::info()
     for (i = 0; i < nMULADD; i++)
     {
         ver += muladd[i].info();
+    }
+#endif
+#if nMULADDLITE > 0
+    for (i = 0; i < nYOLO; i++)
+    {
+        ver += muladdlite[i].info();
+    }
+#endif
+    return ver;
+}
+
+string CStage::info_iter()
+{
+    int i = 0;
+    string ver = "nStage " + to_string(versat_base) + "\n";
+#if nMEM > 0
+    for (i = 0; i < nMEM; i++)
+    {
+        ver += memA[i].info_iter();
+        ver += memB[i].info_iter();
+    }
+#endif
+#if nALU > 0
+    for (i = 0; i < nALU; i++)
+    {
+        ver += alu[i].info();
+    }
+#endif
+#if nALULITE > 0
+    for (i = 0; i < nALULITE; i++)
+    {
+        ver += alulite[i].info_iter();
+    }
+#endif
+#if nBS > 0
+    for (i = 0; i < nBS; i++)
+    {
+        ver += bs[i].info();
+    }
+#endif
+#if nMUL > 0
+    for (i = 0; i < nMUL; i++)
+    {
+        ver += mul[i].info();
+    }
+#endif
+#if nMULADD > 0
+    for (i = 0; i < nMULADD; i++)
+    {
+        ver += muladd[i].info_iter();
     }
 #endif
 #if nMULADDLITE > 0

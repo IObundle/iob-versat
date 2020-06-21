@@ -104,6 +104,7 @@ void run_sim()
     //main run loop
     while (!run_mem)
     {
+
         //calculate new outputs
         for (i = 0; i < nSTAGE; i++)
         {
@@ -163,6 +164,8 @@ void globalClearConf()
     for (int i = 0; i < nSTAGE; i++)
     {
         conf[i] = CStage(i);
+        shadow_reg[i] = CStage(i);
+        stage[i] = CStage(i);
     }
 }
 
