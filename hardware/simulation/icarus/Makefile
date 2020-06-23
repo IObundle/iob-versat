@@ -1,25 +1,28 @@
-#source paths
-SUBMODULES_DIR := ../../submodules
-MEM_DIR := $(SUBMODULES_DIR)/mem
-VERSAT_IO := $(SUBMODULES_DIR)/versat-io
-RTL_DIR := ../../rtl
-SRC := $(RTL_DIR)/src/*.v $(MEM_DIR)/tdp_mem/*.v $(MEM_DIR)/sp_mem/*.v
-
-#include paths
+#paths
+ROOT_DIR:=../../..
+SUBMODULES_DIR:=$(ROOT_DIR)/submodules
+MEM_DIR:=$(SUBMODULES_DIR)/mem
+RTL_DIR:=$(ROOT_DIR)/hardware
+TB_DIR := $(RTL_DIR)/testbench
 INC_DIR := $(RTL_DIR)/include
-INC := $(INC_DIR)/*.vh $(INC_DIR)/versat/*.vh $(VERSAT_IO)/rtl/include/*.vh
 
-#icarus simulator and flags
-VC := iverilog
-CFLAGS := -W all -I$(INC_DIR) -I$(INC_DIR)/versat -I$(VERSAT_IO)/rtl/include -g2005-sv -D DEBUG
+
+
+#verilog sources
+SRC := $(RTL_DIR)/src/*.v $(MEM_DIR)/tdp_mem/*.v $(MEM_DIR)/sp_mem/*.v
 
 # select testbench file
 ifeq ($(CMDGOALS),)
-CMDGOALS := xversat
+CMDGOALS:=xversat
 endif
+TB:=$(TB_DIR)/$(CMDGOALS)_tb.v
 
-TB_DIR := $(RTL_DIR)/testbench
-TB := $(TB_DIR)/$(CMDGOALS)_tb.v
+#headers
+INC:=$(INC_DIR)/*.vh
+
+#icarus simulator and flags
+VC := iverilog
+CFLAGS := -W all -I$(INC_DIR) -g2005-sv -D DEBUG
 
 #
 #  VERSAT SIMULATION
@@ -40,7 +43,6 @@ xalu_src := $(RTL_DIR)/src/xclz.v $(RTL_DIR)/src/xalu.v
 xconf_reg_src := $(RTL_DIR)/src/xconf_reg.v
 xconf_src := $(xconf_reg_src) $(RTL_DIR)/src/xconf_mem.v $(RTL_DIR)/src/xconf.v $(MEM_DIR)/sp_mem/*.v
 xmem_src := $(RTL_DIR)/src/xinmux.v $(xaddrgen2_src) $(MEM_DIR)/tdp_mem/*.v $(RTL_DIR)/src/xmem.v
-xmul_pipe_src := $(RTL_DIR)/src/xmul_pipe.v
 xdata_eng_src := $(xmem_src) $(xalu_src) $(xmul_pipe_src) $(RTL_DIR)/src/xalulite.v $(RTL_DIR)/src/xmul.v $(RTL_DIR)/src/xmuladd.v $(RTL_DIR)/src/xbs.v $(RTL_DIR)/src/xdata_eng.v
 
 xaddrgen: $(INC)
@@ -64,10 +66,6 @@ xconf: $(INC)
 	./a.out
 
 xmem: $(INC)
-	$(VC) $(CFLAGS) $($@_src) $(TB_DIR)/$@_tb.v
-	./a.out
-
-xmul_pipe: $(INC)
 	$(VC) $(CFLAGS) $($@_src) $(TB_DIR)/$@_tb.v
 	./a.out
 
