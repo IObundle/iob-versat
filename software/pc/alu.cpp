@@ -36,9 +36,14 @@ void CALU::update()
     }
 
     //trickle down all outputs in buffer
+    versat_t aux_output = output_buff[0];
+    versat_t aux_output2 = 0;
+    //trickle down all outputs in buffer
     for (i = 1; i < ALU_LAT; i++)
     {
-        output_buff[i] = output_buff[i - 1];
+        aux_output2 = output_buff[i];
+        output_buff[i] = aux_output;
+        aux_output = aux_output2;
     }
     //insert new output
     output_buff[0] = out;

@@ -74,16 +74,20 @@ class CMemPort // 4 Loop AGU
 private:
   //count delay during a run():
   int run_delay = 0;
-  versat_t out;
-  versat_t output_port[MEMP_LAT]; //output FIFO
-  int i, j, k, l;
+  versat_t out = 0;
+  int enable = 0;
+  versat_t output_port[MEMP_LAT] = {0}; //output FIFO
+  int loop1 = 0, loop2 = 0, loop3 = 0, loop4 = 0;
   uint32_t pos = 0;
+  uint32_t pos2 = 0;
+  uint32_t aux = 0;
+  int duty_cnt = 0;
 
 public:
   CMem *my_mem;
   int versat_base, mem_base, data_base;
-  int iter, per, duty, sel, start, shift, incr, delay, in_wr;
-  int rvrs = 0, ext = 0, iter2 = 0, per2 = 0, shift2 = 0, incr2 = 0;
+  int iter, per, duty, sel, start, shift, incr, delay, in_wr /* read or write*/;
+  int rvrs = 0 /* reverse addr*/, ext = 0 /* use FU to addr MEM*/, iter2 = 0, per2 = 0, shift2 = 0, incr2 = 0;
   bool done = 0;
 
   //Default constructor
@@ -98,7 +102,8 @@ public:
   void update();
 
   versat_t output();
-  int AGU();
+  uint32_t AGU();
+  uint32_t acumulator();
   void writeConf();
   void setIter(int iter);
   void setPer(int per);
@@ -120,17 +125,18 @@ public:
   int read(int addr);
   void reset();
   string info();
+  string info_iter();
 }; //end class CMEM
 #endif
 #if nALU > 0
 class CALU
 {
 private:
-  versat_t ina, inb, out;
+  versat_t ina = 0, inb = 0, out = 0;
   versat_t output_buff[ALU_LAT]; //output FIFO
 public:
   int versat_base, alu_base;
-  int opa, opb, fns;
+  int opa = 0, opb = 0, fns = 0;
 
   //Default constructor
   CALU();
@@ -159,11 +165,13 @@ public:
 class CALULite
 {
 private:
-  versat_t ina, inb, out;
-  versat_t output_buff[ALULITE_LAT]; //output FIFO
+  versat_t ina = 0, inb = 0, out = 0;
+  versat_t ina_loop = 0;
+  versat_t loop = 0;
+  versat_t output_buff[ALULITE_LAT] = {0}; //output FIFO
 public:
   int versat_base, alulite_base;
-  int opa, opb, fns;
+  int opa = 0, opb = 0, fns = 0;
 
   //Default constructor
   CALULite();
@@ -184,6 +192,7 @@ public:
   void setFNS(int fns);
 
   string info();
+  string info_iter();
 }; //end class CALUALITE
 #endif
 
@@ -191,11 +200,11 @@ public:
 class CBS
 {
 private:
-  versat_t in, out;
+  versat_t in = 0, out = 0;
   versat_t output_buff[BS_LAT]; //output FIFO
 public:
   int versat_base, bs_base;
-  int data, shift, fns;
+  int data = 0, shift = 0, fns = 0;
 
   //Default constructor
   CBS();
@@ -225,13 +234,13 @@ public:
 class CMul
 {
 private:
-  versat_t opa, opb;
+  versat_t opa = 0, opb = 0;
   versat_t output_buff[MUL_LAT]; //output FIFO
-  versat_t out;
+  versat_t out = 0;
 
 public:
   int versat_base, mul_base;
-  int sela, selb, fns;
+  int sela = 0, selb = 0, fns = 0;
   //Default constructor
   CMul();
 
@@ -261,15 +270,18 @@ class CMulAdd
 {
 private:
   //SIM VARIABLES
-  versat_t opa, opb, out;
-  mul_t acc, acc_w;
-  int cnt_iter, cnt_per, cnt_addr;
+  versat_t opa = 0, opb = 0, out = 0;
+  mul_t acc = 0, acc_w = 0;
+  int done = 0, duty = 0;
+  int duty_cnt = 0, enable = 0;
+  int shift_addr = 0, incr = 1, aux = 0, pos = 0;
+  int loop2 = 0, loop1 = 0, cnt_addr = 0;
   //count delay during a run():
   int run_delay = 0;
-  versat_t output_buff[MULADD_LAT]; //output FIFO
+  versat_t output_buff[MULADD_LAT] = {0}; //output FIFO
 public:
   int versat_base, muladd_base;
-  int sela, selb, fns, iter, per, delay, shift;
+  int sela = 0, selb = 0, fns = 0, iter = 0, per = 0, delay = 0, shift = 0;
 
   //Default constructor
   CMulAdd();
@@ -287,6 +299,8 @@ public:
   versat_t output(); //implemented as PIPELINED MULADD
 
   void writeConf();
+  uint32_t acumulator();
+
   void setSelA(int sela);
   void setSelB(int selb);
   void setFNS(int fns);
@@ -296,6 +310,7 @@ public:
   void setShift(int shift);
 
   string info();
+  string info_iter();
 }; //end class CMULADD
 #endif
 
@@ -400,6 +415,7 @@ public:
   void output_all_FUs();
 
   string info();
+  string info_iter();
 
   bool done();
   void reset();
@@ -416,6 +432,7 @@ extern CStage stage[nSTAGE];
 extern CStage conf[nSTAGE];
 extern CStage shadow_reg[nSTAGE];
 extern CMem versat_mem[nSTAGE][nMEM];
+extern int versat_iter;
 
 /*databus vector
 stage 0 is repeated in the start and at the end
@@ -473,5 +490,6 @@ void globalClearConf();
 
 void print_versat_mems();
 void print_versat_info();
+void print_versat_iter();
 
 #endif

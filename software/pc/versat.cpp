@@ -10,8 +10,8 @@ void versat_init(int base_addr)
     for (i = 0; i < nSTAGE; i++)
     {
         stage[i] = CStage(base_addr + i);
-        conf[i] = stage[i];
-        shadow_reg[i] = stage[i];
+        conf[i] = CStage(base_addr + i);
+        shadow_reg[i] = CStage(base_addr + i);
     }
     //prepare sel variables
     int p_offset = (1 << (N_W - 1));
@@ -87,7 +87,7 @@ void versat_init(int base_addr)
 #endif
 }
 
-int iter = 0;
+int versat_iter = 0;
 void run_sim()
 {
     int i = 0;
@@ -104,6 +104,7 @@ void run_sim()
     //main run loop
     while (!run_mem)
     {
+
         //calculate new outputs
         for (i = 0; i < nSTAGE; i++)
         {
@@ -128,7 +129,7 @@ void run_sim()
             aux = aux && run_mem_stage[i];
         }
         run_mem = aux;
-        iter++;
+        versat_iter++;
     }
     run_done = 1;
 }
@@ -138,18 +139,18 @@ void run()
     //MEMSET(base, (RUN_DONE), 1);
     int i = 0;
     run_done = 0;
-    iter = 0;
+    versat_iter = 0;
 
     //update shadow register with current configuration
     for (i = 0; i < nSTAGE; i++)
     {
         stage[i].reset();
-        shadow_reg[i] = stage[i];
+        //shadow_reg[i] = stage[i];
+        stage[i].update_shadow_reg();
     }
 
     thread ti(run_sim);
     ti.join();
-    printf("It took %d Versat Clock Cycles\n", iter);
 }
 
 int done()
@@ -163,6 +164,8 @@ void globalClearConf()
     for (int i = 0; i < nSTAGE; i++)
     {
         conf[i] = CStage(i);
+        shadow_reg[i] = CStage(i);
+        stage[i] = CStage(i);
     }
 }
 
