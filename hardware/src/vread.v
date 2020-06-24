@@ -1,5 +1,6 @@
 `timescale 1ns / 1ps
 
+`include "xdefs.vh"
 `include "xversat.vh"
 `include "xmemdefs.vh"
 `include "versat-io.vh"
@@ -167,13 +168,12 @@ module vread #(
         .clk(clk),
 
         // Writting port
-        .w_port_en(enA),
+        .w_en(enA & wrA),
         .w_addr(addrA),
         .data_in(data_to_wrA),
-        .w_en(wrA),
 
         // Reading port
-        .r_port_en(enB),
+        .r_en(enB),
         .r_addr(addrB),
         .data_out(outB)
         );
