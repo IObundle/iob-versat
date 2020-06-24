@@ -27,6 +27,19 @@ void CALULite::update()
     int i = 0;
 
     //update databus
+    //trickle down all outputs in buffer
+    versat_t aux_output = output_buff[0];
+    versat_t aux_output2 = 0;
+    //trickle down all outputs in buffer
+    for (i = 1; i < ALULITE_LAT; i++)
+    {
+        aux_output2 = output_buff[i];
+        output_buff[i] = aux_output;
+        aux_output = aux_output2;
+    }
+    //insert new output
+    output_buff[0] = out;
+
     stage[versat_base].databus[sALULITE[alulite_base]] = output_buff[ALULITE_LAT - 1];
     //special case for stage 0
     if (versat_base == 0)
@@ -34,14 +47,6 @@ void CALULite::update()
         //2nd copy at the end of global databus
         global_databus[nSTAGE * N + sALULITE[alulite_base]] = output_buff[ALULITE_LAT - 1];
     }
-
-    //trickle down all outputs in buffer
-    for (i = 1; i < ALULITE_LAT; i++)
-    {
-        output_buff[i] = output_buff[i - 1];
-    }
-    //insert new output
-    output_buff[0] = out;
 }
 
 versat_t CALULite::output()
@@ -53,12 +58,17 @@ versat_t CALULite::output()
     bitset<DATAPATH_W> aux_cmp;
 
     //cast to int cin.to_ulong();
-    versat_t op_a_reg = stage[versat_base].databus[shadow_reg[versat_base].alulite[alulite_base].opa];
-    versat_t self_loop = shadow_reg[versat_base].alulite[alulite_base].fns < 0 ? 1 : 0;
-    versat_t op_b_reg = stage[versat_base].databus[shadow_reg[versat_base].alulite[alulite_base].opb];
-    versat_t op_a_int = self_loop ? out : op_a_reg;
+    ina = stage[versat_base].databus[opa];
+    loop = fns < 0 ? 1 : 0;
+    inb = stage[versat_base].databus[opb];
+    ina_loop = loop ? out : ina;
 
-    switch (shadow_reg[versat_base].alulite[alulite_base].fns)
+    versat_t op_a_reg = ina;
+    versat_t self_loop = loop;
+    versat_t op_b_reg = inb;
+    versat_t op_a_int = ina_loop;
+
+    switch (fns)
     {
     case ALULITE_OR:
         out = op_a_int | op_b_reg;
@@ -77,7 +87,9 @@ versat_t CALULite::output()
         out = op_a_reg < 0 ? op_b_reg : op_a_int - op_b_reg;
         break;
     case ALULITE_ADD:
-        out = op_a_reg < 0 ? op_b_reg : op_a_int + op_b_reg;
+        out = op_a_int + op_b_reg;
+        if (self_loop)
+            out = op_a_reg < 0 ? op_b_reg : out;
         break;
     case ALULITE_MAX:
         out = op_a_reg < 0 ? out : max(op_a_int, op_b_reg);
@@ -122,6 +134,25 @@ string CALULite::info()
     ver += "SetOpA=       " + to_string(opa) + "\n";
     ver += "SetOpB=       " + to_string(opb) + "\n";
     ver += "FNS =       " + to_string(fns) + "\n";
+    ver += "\n";
+    return ver;
+}
+
+string CALULite::info_iter()
+{
+    string ver = "alu_lite[" + to_string(alulite_base) + "]\n";
+    ver += "opa=" + to_string(ina) + "\n";
+    ver += "SetOpA=       " + to_string(opa) + "\n";
+    ver += "SetOpB=       " + to_string(opb) + "\n";
+    ver += "opa_loop=" + to_string(ina_loop) + "\n";
+    ver += "opb=" + to_string(inb) + "\n";
+    ver += "self_loop" + to_string(loop) + "\n";
+    ver += "out=" + to_string(out) + "\n";
+    ver += "OUTPUT_BUFFER (LATENCY SIM)\n";
+    for (int z = 0; z < ALULITE_LAT; z++)
+    {
+        ver += "Output[" + to_string(z) + "]=" + to_string(output_buff[z]) + "\n";
+    }
     ver += "\n";
     return ver;
 }
