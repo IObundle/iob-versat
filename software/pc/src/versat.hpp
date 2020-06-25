@@ -5,7 +5,6 @@
 #include "versat.h"
 #include <string.h>
 #include <bitset>
-
 #include "stage.hpp"
 
 //
@@ -42,7 +41,7 @@ void globalClearConf();
 
 #endif
 
-#define INFO 0
+#define INFO 1
 
 #if INFO == 1
 
