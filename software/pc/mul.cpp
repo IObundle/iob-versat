@@ -1,6 +1,12 @@
-#include "versat.hpp"
+#include "mul.hpp"
 
 #if nMUL > 0
+extern CStage stage[nSTAGE];
+extern CStage conf[nSTAGE];
+extern CStage shadow_reg[nSTAGE];
+extern CMem versat_mem[nSTAGE][nMEM];
+extern int versat_iter;
+extern versat_t global_databus[(nSTAGE + 1) * N];
 CMul::CMul()
 {
 }

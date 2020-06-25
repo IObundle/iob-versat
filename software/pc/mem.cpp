@@ -1,4 +1,4 @@
-#include "versat.hpp"
+#include "mem.hpp"
 #if nMEM > 0
 
 versat_t CMem::read(uint32_t addr)
@@ -10,7 +10,7 @@ void CMem::write(uint32_t addr, versat_t data_in)
     data[addr] = data_in;
 }
 CMemPort::CMemPort() {}
-CMemPort::CMemPort(int versat_base, int i, int offset)
+CMemPort::CMemPort(int versat_base, int i, int offset, versat_t *databus)
 {
     this->versat_base = versat_base;
     this->mem_base = i;
@@ -32,6 +32,7 @@ CMemPort::CMemPort(int versat_base, int i, int offset)
     this->shift2 = 0;
     this->incr2 = 0;
     this->duty_cnt = 0;
+    this->databus = databus;
 }
 void CMemPort::reset()
 {
@@ -43,45 +44,7 @@ void CMemPort::reset()
     enable = 0;
     run_delay = delay;
 }
-void CMemPort::update_shadow_reg_MEM()
-{
-    if (data_base == 1)
-    {
-        shadow_reg[versat_base].memB[mem_base].iter = conf[versat_base].memB[mem_base].iter;
-        shadow_reg[versat_base].memB[mem_base].start = conf[versat_base].memB[mem_base].start;
-        shadow_reg[versat_base].memB[mem_base].per = conf[versat_base].memB[mem_base].per;
-        shadow_reg[versat_base].memB[mem_base].duty = conf[versat_base].memB[mem_base].duty;
-        shadow_reg[versat_base].memB[mem_base].sel = conf[versat_base].memB[mem_base].sel;
-        shadow_reg[versat_base].memB[mem_base].shift = conf[versat_base].memB[mem_base].shift;
-        shadow_reg[versat_base].memB[mem_base].incr = conf[versat_base].memB[mem_base].incr;
-        shadow_reg[versat_base].memB[mem_base].delay = conf[versat_base].memB[mem_base].delay;
-        shadow_reg[versat_base].memB[mem_base].ext = conf[versat_base].memB[mem_base].ext;
-        shadow_reg[versat_base].memB[mem_base].in_wr = conf[versat_base].memB[mem_base].in_wr;
-        shadow_reg[versat_base].memB[mem_base].rvrs = conf[versat_base].memB[mem_base].rvrs;
-        shadow_reg[versat_base].memB[mem_base].iter2 = conf[versat_base].memB[mem_base].iter2;
-        shadow_reg[versat_base].memB[mem_base].per2 = conf[versat_base].memB[mem_base].per2;
-        shadow_reg[versat_base].memB[mem_base].shift2 = conf[versat_base].memB[mem_base].shift2;
-        shadow_reg[versat_base].memB[mem_base].incr2 = conf[versat_base].memB[mem_base].incr2;
-    }
-    else
-    {
-        shadow_reg[versat_base].memA[mem_base].iter = conf[versat_base].memA[mem_base].iter;
-        shadow_reg[versat_base].memA[mem_base].start = conf[versat_base].memA[mem_base].start;
-        shadow_reg[versat_base].memA[mem_base].per = conf[versat_base].memA[mem_base].per;
-        shadow_reg[versat_base].memA[mem_base].duty = conf[versat_base].memA[mem_base].duty;
-        shadow_reg[versat_base].memA[mem_base].sel = conf[versat_base].memA[mem_base].sel;
-        shadow_reg[versat_base].memA[mem_base].shift = conf[versat_base].memA[mem_base].shift;
-        shadow_reg[versat_base].memA[mem_base].incr = conf[versat_base].memA[mem_base].incr;
-        shadow_reg[versat_base].memA[mem_base].delay = conf[versat_base].memA[mem_base].delay;
-        shadow_reg[versat_base].memA[mem_base].ext = conf[versat_base].memA[mem_base].ext;
-        shadow_reg[versat_base].memA[mem_base].in_wr = conf[versat_base].memA[mem_base].in_wr;
-        shadow_reg[versat_base].memA[mem_base].rvrs = conf[versat_base].memA[mem_base].rvrs;
-        shadow_reg[versat_base].memA[mem_base].iter2 = conf[versat_base].memA[mem_base].iter2;
-        shadow_reg[versat_base].memA[mem_base].per2 = conf[versat_base].memA[mem_base].per2;
-        shadow_reg[versat_base].memA[mem_base].shift2 = conf[versat_base].memA[mem_base].shift2;
-        shadow_reg[versat_base].memA[mem_base].incr2 = conf[versat_base].memA[mem_base].incr2;
-    }
-}
+
 void CMemPort::start_run()
 {
 
@@ -91,14 +54,7 @@ void CMemPort::start_run()
     if (duty == 0)
         duty = per;
     //set run_delay
-    if (data_base == 1)
-    {
-        run_delay = shadow_reg[versat_base].memB[mem_base].delay;
-    }
-    else
-    {
-        run_delay = shadow_reg[versat_base].memA[mem_base].delay;
-    }
+    run_delay = delay;
 }
 void CMemPort::update()
 {
@@ -125,7 +81,7 @@ void CMemPort::update()
         //update databus
         if (data_base == 0)
         {
-            stage[versat_base].databus[sMEMA[mem_base]] = output_port[MEMP_LAT - 1];
+            databus[sMEMA[mem_base]] = output_port[MEMP_LAT - 1];
             //special case for stage 0
             if (versat_base == 0)
             {
@@ -135,7 +91,7 @@ void CMemPort::update()
         }
         else
         {
-            stage[versat_base].databus[sMEMB[mem_base]] = output_port[MEMP_LAT - 1];
+            databus[sMEMB[mem_base]] = output_port[MEMP_LAT - 1];
             //special case for stage 0
             if (versat_base == 0)
             {
@@ -280,13 +236,13 @@ versat_t CMemPort::output()
             {
                 //  if (versat_base == 4 && mem_base == 2 && data_base == 0)
                 //    printf("My addr is %d, value is %d\n", addr, stage[versat_base].databus[sel]);
-                write(addr, stage[versat_base].databus[sel]);
-                out = stage[versat_base].databus[sel];
+                write(addr, databus[sel]);
+                out = databus[sel];
             }
             else
             {
-                write(addr, stage[versat_base].databus[sel]);
-                out = stage[versat_base].databus[sel];
+                write(addr, databus[sel]);
+                out = databus[sel];
             }
         }
     }
@@ -298,207 +254,78 @@ versat_t CMemPort::output()
     return 0;
 }
 
-void CMemPort::writeConf()
-{
-    if (data_base == 1)
-    {
-        conf[versat_base].memB[mem_base].iter = iter;
-        conf[versat_base].memB[mem_base].start = start;
-        conf[versat_base].memB[mem_base].per = per;
-        conf[versat_base].memB[mem_base].duty = duty;
-        conf[versat_base].memB[mem_base].sel = sel;
-        conf[versat_base].memB[mem_base].shift = shift;
-        conf[versat_base].memB[mem_base].incr = incr;
-        conf[versat_base].memB[mem_base].delay = delay;
-        conf[versat_base].memB[mem_base].ext = ext;
-        conf[versat_base].memB[mem_base].in_wr = in_wr;
-        conf[versat_base].memB[mem_base].rvrs = rvrs;
-        conf[versat_base].memB[mem_base].iter2 = iter2;
-        conf[versat_base].memB[mem_base].per2 = per2;
-        conf[versat_base].memB[mem_base].shift2 = shift2;
-        conf[versat_base].memB[mem_base].incr2 = incr2;
-    }
-    else
-    {
-        conf[versat_base].memA[mem_base].iter = iter;
-        conf[versat_base].memA[mem_base].start = start;
-        conf[versat_base].memA[mem_base].per = per;
-        conf[versat_base].memA[mem_base].duty = duty;
-        conf[versat_base].memA[mem_base].sel = sel;
-        conf[versat_base].memA[mem_base].shift = shift;
-        conf[versat_base].memA[mem_base].incr = incr;
-        conf[versat_base].memA[mem_base].delay = delay;
-        conf[versat_base].memA[mem_base].ext = ext;
-        conf[versat_base].memA[mem_base].in_wr = in_wr;
-        conf[versat_base].memA[mem_base].rvrs = rvrs;
-        conf[versat_base].memA[mem_base].iter2 = iter2;
-        conf[versat_base].memA[mem_base].per2 = per2;
-        conf[versat_base].memA[mem_base].shift2 = shift2;
-        conf[versat_base].memA[mem_base].incr2 = incr2;
-    }
-}
-
 void CMemPort::setIter(int iter)
 {
-    if (data_base == 1)
-        conf[versat_base].memB[mem_base].iter = iter;
-    else
-    {
-        conf[versat_base].memA[mem_base].iter = iter;
-    }
     this->iter = iter;
 }
 
 void CMemPort::setPer(int per)
 {
-    if (data_base == 1)
-        conf[versat_base].memB[mem_base].per = per;
-    else
-    {
-        conf[versat_base].memA[mem_base].per = per;
-    }
     this->per = per;
 }
 
 void CMemPort::setDuty(int duty)
 {
-    if (data_base == 1)
-        conf[versat_base].memB[mem_base].duty = duty;
-    else
-    {
-        conf[versat_base].memA[mem_base].duty = duty;
-    }
     this->duty = duty;
 }
 
 void CMemPort::setSel(int sel)
 {
-    if (data_base == 1)
-        conf[versat_base].memB[mem_base].sel = sel;
-    else
-    {
-        conf[versat_base].memA[mem_base].sel = sel;
-    }
     this->sel = sel;
 }
 
 void CMemPort::setStart(int start)
 {
-    if (data_base == 1)
-        conf[versat_base].memB[mem_base].start = start;
-    else
-    {
-        conf[versat_base].memA[mem_base].start = start;
-    }
     this->start = start;
 }
 void CMemPort::setIncr(int incr)
 {
-    if (data_base == 1)
-        conf[versat_base].memB[mem_base].incr = incr;
-    else
-    {
-        conf[versat_base].memA[mem_base].incr = incr;
-    }
     this->incr = incr;
 }
 
 void CMemPort::setShift(int shift)
 {
-    if (data_base == 1)
-        conf[versat_base].memB[mem_base].shift = shift;
-    else
-    {
-        conf[versat_base].memA[mem_base].shift = shift;
-    }
     this->shift = shift;
 }
 
 void CMemPort::setDelay(int delay)
 {
-    if (data_base == 1)
-        conf[versat_base].memB[mem_base].delay = delay;
-    else
-    {
-        conf[versat_base].memA[mem_base].delay = delay;
-    }
     this->delay = delay;
 }
 
 void CMemPort::setExt(int ext)
 {
-    if (data_base == 1)
-        conf[versat_base].memB[mem_base].ext = ext;
-    else
-    {
-        conf[versat_base].memA[mem_base].ext = ext;
-    }
     this->ext = ext;
 }
 
 void CMemPort::setRvrs(int rvrs)
 {
-    if (data_base == 1)
-        conf[versat_base].memB[mem_base].rvrs = rvrs;
-    else
-    {
-        conf[versat_base].memA[mem_base].rvrs = rvrs;
-    }
+
     this->rvrs = rvrs;
 }
 
 void CMemPort::setInWr(int in_wr)
 {
-    if (data_base == 1)
-        conf[versat_base].memB[mem_base].in_wr = in_wr;
-    else
-    {
-        conf[versat_base].memA[mem_base].in_wr = in_wr;
-    }
     this->in_wr = in_wr;
 }
 
 void CMemPort::setIter2(int iter2)
 {
-    if (data_base == 1)
-        conf[versat_base].memB[mem_base].iter2 = iter2;
-    else
-    {
-        conf[versat_base].memA[mem_base].iter2 = iter2;
-    }
     this->iter2 = iter2;
 }
 
 void CMemPort::setPer2(int per2)
 {
-    if (data_base == 1)
-        conf[versat_base].memB[mem_base].per2 = per2;
-    else
-    {
-        conf[versat_base].memA[mem_base].per2 = per2;
-    }
     this->per2 = per2;
 }
 
 void CMemPort::setIncr2(int incr2)
 {
-    if (data_base == 1)
-        conf[versat_base].memB[mem_base].incr2 = incr2;
-    else
-    {
-        conf[versat_base].memA[mem_base].incr2 = incr2;
-    }
     this->incr2 = incr2;
 }
 
 void CMemPort::setShift2(int shift2)
 {
-    if (data_base == 1)
-        conf[versat_base].memB[mem_base].shift2 = shift2;
-    else
-    {
-        conf[versat_base].memA[mem_base].shift2 = shift2;
-    }
     this->shift2 = shift2;
 }
 
@@ -508,7 +335,6 @@ void CMemPort::write(int addr, int val)
     if (addr >= MEM_SIZE)
     {
         printf("Invalid WRITE MEM ADDR=%u\n", addr);
-        print_versat_info();
         printf("VERSAT EXITING ON nStage_%d MEM_%d[%d]\n", versat_base, data_base, mem_base);
         //exit(0);
     }
@@ -522,7 +348,6 @@ int CMemPort::read(int addr)
     if (addr >= MEM_SIZE)
     {
         printf("Invalid READ MEM ADDR=%u\n", addr);
-        print_versat_info();
         printf("VERSAT EXITING ON nStage_%d MEM_%d[%d]\n", versat_base, data_base, mem_base);
         //exit(0);
         return 0;

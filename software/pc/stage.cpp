@@ -1,4 +1,4 @@
-#include "versat.hpp"
+#include "stage.hpp"
 
 CStage::CStage()
 {
@@ -22,33 +22,33 @@ CStage::CStage(int versat_base)
     int i;
 #if nMEM > 0
     for (i = 0; i < nMEM; i++)
-        memA[i] = CMemPort(versat_base, i, 0);
+        memA[i] = CMemPort(versat_base, i, 0, databus);
     for (i = 0; i < nMEM; i++)
-        memB[i] = CMemPort(versat_base, i, 1);
+        memB[i] = CMemPort(versat_base, i, 1, databus);
 #endif
 #if nALU > 0
     for (i = 0; i < nALU; i++)
-        alu[i] = CALU(versat_base, i);
+        alu[i] = CALU(versat_base, i, databus);
 #endif
 #if nALULITE > 0
     for (i = 0; i < nALULITE; i++)
-        alulite[i] = CALULite(versat_base, i);
+        alulite[i] = CALULite(versat_base, i, databus);
 #endif
 #if nBS > 0
     for (i = 0; i < nBS; i++)
-        bs[i] = CBS(versat_base, i);
+        bs[i] = CBS(versat_base, i, databus);
 #endif
 #if nMUL > 0
     for (i = 0; i < nMUL; i++)
-        mul[i] = CMul(versat_base, i);
+        mul[i] = CMul(versat_base, i, databus);
 #endif
 #if nMULADD > 0
     for (i = 0; i < nMULADD; i++)
-        muladd[i] = CMulAdd(versat_base, i);
+        muladd[i] = CMulAdd(versat_base, i, databus);
 #endif
 #if nMULADDLITE > 0
     for (i = 0; i < nMULADDLITE; i++)
-        muladdlite[i] = CMulAddLite(versat_base, i);
+        muladdlite[i] = CMulAddLite(versat_base, i, databus);
 #endif
 }
 
@@ -56,7 +56,7 @@ CStage::CStage(int versat_base)
 void CStage::clearConf()
 {
     int i = versat_base;
-    conf[i] = CStage(i);
+    stage[i] = CStage(i);
 }
 
 #ifdef CONF_MEM_USE
@@ -79,34 +79,110 @@ void CStage::confMemRead(int addr)
 void CStage::update_shadow_reg()
 {
     int i = 0;
-
+#if nMEM > 0
     for (i = 0; i < nMEM; i++)
-        memA[i].update_shadow_reg_MEM();
+    {
+        //memA[i].update_shadow_reg_MEM();
+        shadow_reg[versat_base].memA[i].iter = stage[versat_base].memA[i].iter;
+        shadow_reg[versat_base].memA[i].start = stage[versat_base].memA[i].start;
+        shadow_reg[versat_base].memA[i].per = stage[versat_base].memA[i].per;
+        shadow_reg[versat_base].memA[i].duty = stage[versat_base].memA[i].duty;
+        shadow_reg[versat_base].memA[i].sel = stage[versat_base].memA[i].sel;
+        shadow_reg[versat_base].memA[i].shift = stage[versat_base].memA[i].shift;
+        shadow_reg[versat_base].memA[i].incr = stage[versat_base].memA[i].incr;
+        shadow_reg[versat_base].memA[i].delay = stage[versat_base].memA[i].delay;
+        shadow_reg[versat_base].memA[i].ext = stage[versat_base].memA[i].ext;
+        shadow_reg[versat_base].memA[i].in_wr = stage[versat_base].memA[i].in_wr;
+        shadow_reg[versat_base].memA[i].rvrs = stage[versat_base].memA[i].rvrs;
+        shadow_reg[versat_base].memA[i].iter2 = stage[versat_base].memA[i].iter2;
+        shadow_reg[versat_base].memA[i].per2 = stage[versat_base].memA[i].per2;
+        shadow_reg[versat_base].memA[i].shift2 = stage[versat_base].memA[i].shift2;
+        shadow_reg[versat_base].memA[i].incr2 = stage[versat_base].memA[i].incr2;
+    }
     for (i = 0; i < nMEM; i++)
-        memB[i].update_shadow_reg_MEM();
+    {
+        //memB[i].update_shadow_reg_MEM();
+        shadow_reg[versat_base].memB[i].iter = stage[versat_base].memB[i].iter;
+        shadow_reg[versat_base].memB[i].start = stage[versat_base].memB[i].start;
+        shadow_reg[versat_base].memB[i].per = stage[versat_base].memB[i].per;
+        shadow_reg[versat_base].memB[i].duty = stage[versat_base].memB[i].duty;
+        shadow_reg[versat_base].memB[i].sel = stage[versat_base].memB[i].sel;
+        shadow_reg[versat_base].memB[i].shift = stage[versat_base].memB[i].shift;
+        shadow_reg[versat_base].memB[i].incr = stage[versat_base].memB[i].incr;
+        shadow_reg[versat_base].memB[i].delay = stage[versat_base].memB[i].delay;
+        shadow_reg[versat_base].memB[i].ext = stage[versat_base].memB[i].ext;
+        shadow_reg[versat_base].memB[i].in_wr = stage[versat_base].memB[i].in_wr;
+        shadow_reg[versat_base].memB[i].rvrs = stage[versat_base].memB[i].rvrs;
+        shadow_reg[versat_base].memB[i].iter2 = stage[versat_base].memB[i].iter2;
+        shadow_reg[versat_base].memB[i].per2 = stage[versat_base].memB[i].per2;
+        shadow_reg[versat_base].memB[i].shift2 = stage[versat_base].memB[i].shift2;
+        shadow_reg[versat_base].memB[i].incr2 = stage[versat_base].memB[i].incr2;
+    }
+#endif
 #if nALU > 0
     for (i = 0; i < nALU; i++)
-        alu[i].update_shadow_reg_ALU();
+    {
+        //alu[i].update_shadow_reg_ALU();
+        shadow_reg[versat_base].alu[i].opa = stage[versat_base].alu[i].opa;
+        shadow_reg[versat_base].alu[i].opb = stage[versat_base].alu[i].opb;
+        shadow_reg[versat_base].alu[i].fns = stage[versat_base].alu[i].fns;
+    }
 #endif
 #if nALULITE > 0
     for (i = 0; i < nALULITE; i++)
-        alulite[i].update_shadow_reg_ALULite();
+    {
+        //alulite[i].update_shadow_reg_ALULite();
+        shadow_reg[versat_base].alulite[i].opa = stage[versat_base].alulite[i].opa;
+        shadow_reg[versat_base].alulite[i].opb = stage[versat_base].alulite[i].opb;
+        shadow_reg[versat_base].alulite[i].fns = stage[versat_base].alulite[i].fns;
+    }
 #endif
 #if nBS > 0
     for (i = 0; i < nBS; i++)
-        bs[i].update_shadow_reg_BS();
+    {
+        //bs[i].update_shadow_reg_BS();
+        shadow_reg[versat_base].bs[i].data = stage[versat_base].bs[i].data;
+        shadow_reg[versat_base].bs[i].fns = stage[versat_base].bs[i].fns;
+        shadow_reg[versat_base].bs[i].shift = stage[versat_base].bs[i].shift;
+    }
 #endif
 #if nMUL > 0
     for (i = 0; i < nMUL; i++)
-        mul[i].update_shadow_reg_Mul();
+    {
+        //mul[i].update_shadow_reg_Mul();
+        shadow_reg[versat_base].mul[i].sela = stage[versat_base].mul[i].sela;
+        shadow_reg[versat_base].mul[i].selb = stage[versat_base].mul[i].selb;
+        shadow_reg[versat_base].mul[i].fns = stage[versat_base].mul[i].fns;
+    }
 #endif
 #if nMULADD > 0
     for (i = 0; i < nMULADD; i++)
-        muladd[i].update_shadow_reg_MulAdd();
+    {
+        //muladd[i].update_shadow_reg_MulAdd();
+        shadow_reg[versat_base].muladd[i].sela = stage[versat_base].muladd[i].sela;
+        shadow_reg[versat_base].muladd[i].selb = stage[versat_base].muladd[i].selb;
+        shadow_reg[versat_base].muladd[i].fns = stage[versat_base].muladd[i].fns;
+        shadow_reg[versat_base].muladd[i].iter = stage[versat_base].muladd[i].iter;
+        shadow_reg[versat_base].muladd[i].per = stage[versat_base].muladd[i].per;
+        shadow_reg[versat_base].muladd[i].delay = stage[versat_base].muladd[i].delay;
+        shadow_reg[versat_base].muladd[i].shift = stage[versat_base].muladd[i].shift;
+    }
 #endif
 #if nMULADDLITE > 0
     for (i = 0; i < nMULADDLITE; i++)
-        muladdlite[i].update_shadow_reg_MulAddLite();
+    {
+        //muladdlite[i].update_shadow_reg_MulAddLite();
+        shadow_reg[versat_base].muladdlite[i].sela = stage[versat_base].muladdlite[i].sela;
+        shadow_reg[versat_base].muladdlite[i].selb = stage[versat_base].muladdlite[i].selb;
+        shadow_reg[versat_base].muladdlite[i].selc = stage[versat_base].muladdlite[i].selc;
+        shadow_reg[versat_base].muladdlite[i].iter = stage[versat_base].muladdlite[i].iter;
+        shadow_reg[versat_base].muladdlite[i].per = stage[versat_base].muladdlite[i].per;
+        shadow_reg[versat_base].muladdlite[i].delay = stage[versat_base].muladdlite[i].delay;
+        shadow_reg[versat_base].muladdlite[i].shift = stage[versat_base].muladdlite[i].shift;
+        shadow_reg[versat_base].muladdlite[i].accIN = stage[versat_base].muladdlite[i].accIN;
+        shadow_reg[versat_base].muladdlite[i].accOUT = stage[versat_base].muladdlite[i].accOUT;
+        shadow_reg[versat_base].muladdlite[i].batch = stage[versat_base].muladdlite[i].batch;
+    }
 #endif
 }
 
@@ -336,3 +412,41 @@ string CStage::info_iter()
 #endif
     return ver;
 }
+
+int base;
+CStage stage[nSTAGE];
+CStage shadow_reg[nSTAGE];
+CMem versat_mem[nSTAGE][nMEM];
+int run_done = 0;
+
+/*databus vector
+stage 0 is repeated in the start and at the end
+stage order in databus
+[ 0 | nSTAGE-1 | nSTAGE-2 | ... | 2  | 1 | 0 ]
+^                                    ^
+|                                    |
+stage 0 databus                      stage 1 databus
+
+*/
+versat_t global_databus[(nSTAGE + 1) * N];
+#if nMEM > 0
+int sMEMA[nMEM], sMEMA_p[nMEM], sMEMB[nMEM], sMEMB_p[nMEM];
+#endif
+#if nALU > 0
+int sALU[nALU], sALU_p[nALU];
+#endif
+#if nALULITE > 0
+int sALULITE[nALULITE], sALULITE_p[nALULITE];
+#endif
+#if nMUL > 0
+int sMUL[nMUL], sMUL_p[nMUL];
+#endif
+#if nMULADD > 0
+int sMULADD[nMULADD], sMULADD_p[nMULADD];
+#endif
+#if nMULADDLITE > 0
+int sMULADDLITE[nMULADDLITE], sMULADDLITE_p[nMULADDLITE];
+#endif
+#if nBS > 0
+int sBS[nBS], sBS_p[nBS];
+#endif
