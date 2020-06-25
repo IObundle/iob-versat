@@ -20,7 +20,6 @@ public:
     CALULite();
     CALULite(int versat_base, int i, versat_t *databus);
 
-    //set ALULite configuration to shadow register
     //start run
     void start_run();
 
@@ -28,7 +27,6 @@ public:
     void update();
     versat_t output();
 
-    void writeConf();
     void setOpA(int opa);
     void setOpB(int opb);
     void setFNS(int fns);

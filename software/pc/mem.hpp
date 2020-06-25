@@ -39,7 +39,6 @@ public:
     //Constructor with an associated base
     CMemPort(int versat_base, int i, int offset, versat_t *databus);
     //set MEMPort configuration to shadow register
-    void update_shadow_reg_MEM();
     //start run
     void start_run();
     //update output buffer, write results to databus
@@ -48,7 +47,6 @@ public:
     versat_t output();
     uint32_t AGU();
     uint32_t acumulator();
-    void writeConf();
     void setIter(int iter);
     void setPer(int per);
     void setDuty(int duty);

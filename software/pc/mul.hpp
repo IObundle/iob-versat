@@ -7,6 +7,7 @@ private:
     versat_t opa = 0, opb = 0;
     versat_t output_buff[MUL_LAT]; //output FIFO
     versat_t out = 0;
+    versat_t *databus = NULL;
 
 public:
     int versat_base, mul_base;
@@ -14,9 +15,8 @@ public:
     //Default constructor
     CMul();
 
-    CMul(int versat_base, int i);
+    CMul(int versat_base, int i, versat_t *databus);
     //set Mul configuration to shadow register
-    void update_shadow_reg_Mul();
 
     //start run
     void start_run();
@@ -26,7 +26,6 @@ public:
 
     versat_t output();
 
-    void writeConf();
     void setSelA(int sela);
     void setSelB(int selb);
     void setFNS(int fns);

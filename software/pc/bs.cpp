@@ -1,26 +1,15 @@
 #include "bs.hpp"
 #if nBS > 0
-extern CStage stage[nSTAGE];
-extern CStage conf[nSTAGE];
-extern CStage shadow_reg[nSTAGE];
-extern CMem versat_mem[nSTAGE][nMEM];
-extern int versat_iter;
-extern versat_t global_databus[(nSTAGE + 1) * N];
+
 CBS::CBS()
 {
 }
 
-CBS::CBS(int versat_base, int i)
+CBS::CBS(int versat_base, int i, versat_t *databus)
 {
     this->versat_base = versat_base;
     this->bs_base = i;
-}
-
-void CBS::update_shadow_reg_BS()
-{
-    shadow_reg[versat_base].bs[bs_base].data = conf[versat_base].bs[bs_base].data;
-    shadow_reg[versat_base].bs[bs_base].fns = conf[versat_base].bs[bs_base].fns;
-    shadow_reg[versat_base].bs[bs_base].shift = conf[versat_base].bs[bs_base].shift;
+    this->databus = databus;
 }
 
 void CBS::start_run()
@@ -33,7 +22,7 @@ void CBS::update()
     int i = 0;
 
     //update databus
-    stage[versat_base].databus[sBS[bs_base]] = output_buff[BS_LAT - 1];
+    databus[sBS[bs_base]] = output_buff[BS_LAT - 1];
     //special case for stage 0
     if (versat_base == 0)
     {
@@ -57,20 +46,20 @@ void CBS::update()
 
 versat_t CBS::output()
 {
-    in = stage[versat_base].databus[shadow_reg[versat_base].bs[bs_base].data];
-    if (shadow_reg[versat_base].bs[bs_base].fns == BS_SHR_A)
+    in = databus[data];
+    if (fns == BS_SHR_A)
     {
-        in = in >> shadow_reg[versat_base].bs[bs_base].shift;
+        in = in >> shift;
     }
-    else if (shadow_reg[versat_base].bs[bs_base].fns == BS_SHR_L)
+    else if (fns == BS_SHR_L)
     {
         shift_t s = in;
-        s = s >> shadow_reg[versat_base].bs[bs_base].shift;
+        s = s >> shift;
         in = s;
     }
-    else if (shadow_reg[versat_base].bs[bs_base].fns == BS_SHL)
+    else if (fns == BS_SHL)
     {
-        in = in << shadow_reg[versat_base].bs[bs_base].shift;
+        in = in << shift;
     }
 
     out = in;
@@ -78,28 +67,18 @@ versat_t CBS::output()
     return out;
 }
 
-void CBS::writeConf()
-{
-    conf[versat_base].bs[bs_base].data = data;
-    conf[versat_base].bs[bs_base].shift = shift;
-    conf[versat_base].bs[bs_base].fns = fns;
-}
-
 void CBS::setData(int data)
 {
-    conf[versat_base].bs[bs_base].data = data;
     this->data = data;
 }
 
 void CBS::setShift(int shift)
 {
-    conf[versat_base].bs[bs_base].shift = shift;
     this->shift = shift;
 }
 
 void CBS::setFNS(int fns)
 {
-    conf[versat_base].bs[bs_base].fns = fns;
     this->fns = fns;
 }
 string CBS::info()

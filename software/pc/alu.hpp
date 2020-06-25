@@ -1,8 +1,7 @@
 #include "type.hpp"
 
 #if nALU > 0
-extern versat_t global_databus[(nSTAGE + 1) * N];
-extern int sALU[nALULITE];
+
 class CALU
 {
 private:
@@ -16,9 +15,6 @@ public:
     CALU();
     CALU(int versat_base, int i);
 
-    //set ALU configuration to shadow register
-    void update_shadow_reg_ALU();
-
     //start run
     void start_run();
 
@@ -26,11 +22,13 @@ public:
     void update();
     versat_t output();
 
-    void writeConf();
     void setOpA(int opa);
     void setOpB(int opb);
     void setFNS(int fns);
 
     string info();
 }; //end class CALU
+
+extern versat_t global_databus[(nSTAGE + 1) * N];
+extern int sALU[nALULITE];
 #endif

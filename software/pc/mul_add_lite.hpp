@@ -16,9 +16,6 @@ public:
 
     CMulAddLite(int versat_base, int i);
 
-    //set MulAdd configuration to shadow register
-    void update_shadow_reg_MulAddLite();
-
     //start run
     void start_run();
 
@@ -26,7 +23,6 @@ public:
     void update();
     versat_t output(); //TO DO: need to implemente MulAddLite functionalities
 
-    void writeConf();
     void setSelA(int sela);
     void setSelB(int selb);
     void setSelC(int selc);
@@ -40,4 +36,7 @@ public:
 
     string info();
 }; //end class CMULADDLITE
+
+extern versat_t global_databus[(nSTAGE + 1) * N];
+extern int sMULADDLITE[nALULITE];
 #endif
