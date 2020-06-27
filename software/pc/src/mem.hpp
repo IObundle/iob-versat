@@ -73,5 +73,5 @@ public:
 extern CMem versat_mem[nSTAGE][nMEM];
 extern int sMEMA[nMEM];
 extern int sMEMB[nMEM];
-extern versat_t global_databus[(nSTAGE + 1) * N];
+extern versat_t global_databus[(nSTAGE + 1) * (1 << (N_W - 1))];
 #endif

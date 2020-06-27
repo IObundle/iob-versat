@@ -27,7 +27,7 @@ void CBS::update()
     if (versat_base == 0)
     {
         //2nd copy at the end of global databus
-        global_databus[nSTAGE * N + sBS[bs_base]] = output_buff[BS_LAT - 1];
+        global_databus[nSTAGE * (1 << (N_W - 1)) + sBS[bs_base]] = output_buff[BS_LAT - 1];
     }
 
     //trickle down all outputs in buffer
@@ -85,7 +85,7 @@ string CBS::info()
 {
     string ver = "bs[" + to_string(bs_base) + "]\n";
     ver += "Data=       " + to_string(data) + "\n";
-    ver += "Shift=      " + to_string(selb) + "\n";
+    ver += "Shift=      " + to_string(shift) + "\n";
     ver += "FNS =       " + to_string(fns) + "\n";
     ver += "\n";
     return ver;

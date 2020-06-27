@@ -59,7 +59,7 @@ void CMulAdd::update()
         if (versat_base == 0)
         {
             //2nd copy at the end of global databus
-            global_databus[nSTAGE * N + sMULADD[muladd_base]] = output_buff[MULADD_LAT - 1];
+            global_databus[nSTAGE * (1 << (N_W - 1)) + sMULADD[muladd_base]] = output_buff[MULADD_LAT - 1];
         }
     }
 }

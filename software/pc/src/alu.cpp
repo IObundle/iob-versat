@@ -5,10 +5,11 @@ CALU::CALU()
 {
 }
 
-CALU::CALU(int versat_base, int i)
+CALU::CALU(int versat_base, int i, versat_t *databus)
 {
     this->versat_base = versat_base;
     this->alu_base = i;
+    this->databus = databus;
 }
 
 void CALU::start_run()
@@ -26,7 +27,7 @@ void CALU::update()
     if (versat_base == 0)
     {
         //2nd copy at the end of global databus
-        global_databus[nSTAGE * N + sALU[alu_base]] = output_buff[ALU_LAT - 1];
+        global_databus[nSTAGE * (1 << (N_W - 1)) + sALU[alu_base]] = output_buff[ALU_LAT - 1];
     }
 
     //trickle down all outputs in buffer

@@ -1,7 +1,7 @@
 #include "type.hpp"
 
 #if nALULITE > 0
-extern versat_t global_databus[(nSTAGE + 1) * N];
+extern versat_t global_databus[(nSTAGE + 1) * (1 << (N_W - 1))];
 extern int sALULITE[nALULITE];
 class CALULite
 {

@@ -115,7 +115,6 @@ void run_sim()
         {
             shadow_reg[i].update_all_FUs();
         }
-
         //TO DO: check for run finish
         //set run_done to 0
         for (i = 0; i < nSTAGE; i++)
@@ -165,3 +164,32 @@ void globalClearConf()
         stage[i] = CStage(i);
     }
 }
+
+versat_t global_databus[(nSTAGE + 1) * (1 << (N_W - 1))];
+#if nMEM > 0
+int sMEMA[nMEM], sMEMA_p[nMEM], sMEMB[nMEM], sMEMB_p[nMEM];
+#endif
+#if nALU > 0
+int sALU[nALU], sALU_p[nALU];
+#endif
+#if nALULITE > 0
+int sALULITE[nALULITE], sALULITE_p[nALULITE];
+#endif
+#if nMUL > 0
+int sMUL[nMUL], sMUL_p[nMUL];
+#endif
+#if nMULADD > 0
+int sMULADD[nMULADD], sMULADD_p[nMULADD];
+#endif
+#if nMULADDLITE > 0
+int sMULADDLITE[nMULADDLITE], sMULADDLITE_p[nMULADDLITE];
+#endif
+#if nBS > 0
+int sBS[nBS], sBS_p[nBS];
+#endif
+
+int base;
+CStage stage[nSTAGE];
+CStage shadow_reg[nSTAGE];
+CMem versat_mem[nSTAGE][nMEM];
+int run_done = 0;

@@ -33,6 +33,6 @@ public:
     string info();
 }; //end class CBS
 
-extern versat_t global_databus[(nSTAGE + 1) * N];
+extern versat_t global_databus[(nSTAGE + 1) * (1 << (N_W - 1))];
 extern int sBS[nALULITE];
 #endif

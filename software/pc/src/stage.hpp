@@ -76,7 +76,7 @@ extern CStage stage[nSTAGE];
 extern CStage shadow_reg[nSTAGE];
 extern CMem versat_mem[nSTAGE][nMEM];
 extern int versat_iter;
-extern versat_t global_databus[(nSTAGE + 1) * N];
+extern versat_t global_databus[(nSTAGE + 1) * (1 << (N_W - 1))];
 /*databus vector
 stage 0 is repeated in the start and at the end
 stage order in databus

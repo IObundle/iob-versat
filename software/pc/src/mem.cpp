@@ -86,7 +86,7 @@ void CMemPort::update()
             if (versat_base == 0)
             {
                 //2nd copy at the end of global databus
-                global_databus[nSTAGE * N + sMEMA[mem_base]] = output_port[MEMP_LAT - 1];
+                global_databus[nSTAGE * (1 << (N_W - 1)) + sMEMA[mem_base]] = output_port[MEMP_LAT - 1];
             }
         }
         else
@@ -96,7 +96,7 @@ void CMemPort::update()
             if (versat_base == 0)
             {
                 //2nd copy at the end of global databus
-                global_databus[nSTAGE * N + sMEMB[mem_base]] = output_port[MEMP_LAT - 1];
+                global_databus[nSTAGE * (1 << (N_W - 1)) + sMEMB[mem_base]] = output_port[MEMP_LAT - 1];
             }
         }
     }

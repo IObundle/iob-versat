@@ -4,6 +4,21 @@
 //MACRO to calculate ceil of log2
 #define clog2(x) (x > 0 ? (int)ceil(log2(x)) : 0)
 
+//xversat
+#define nYOLO 0
+#define nMULADD 1
+#define nMUL 0
+#define DATAPATH_W 16
+#define nALULITE 1
+#define nBS 0
+#define nALU 0
+#define nVO 0
+#define nMEM 3
+#define nSTAGE 5
+#define CONF_MEM_ADDR_W 3
+#define nVI 0
+#define MEM_ADDR_W 5
+
 //xconfdefs
 #define CONF_MEM0A 0
 #define CONF_VI0 (CONF_MEM0A + 2*nMEM*MEMP_CONF_OFFSET)
@@ -168,20 +183,5 @@
 #define MUL_CONF_FNS 2
 #define MUL_CONF_OFFSET 3
 #define MUL_LAT 3
-
-//xversat
-#define nYOLO 0
-#define nMULADD 1
-#define nMUL 0
-#define DATAPATH_W 16
-#define nALULITE 1
-#define nBS 0
-#define nALU 0
-#define nVO 0
-#define nMEM 3
-#define nSTAGE 5
-#define CONF_MEM_ADDR_W 3
-#define nVI 0
-#define MEM_ADDR_W 5
 
 //End of Versat include file

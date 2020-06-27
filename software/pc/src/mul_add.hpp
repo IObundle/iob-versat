@@ -50,6 +50,6 @@ public:
     string info_iter();
 }; //end class CMULADD
 
-extern versat_t global_databus[(nSTAGE + 1) * N];
+extern versat_t global_databus[(nSTAGE + 1) * (1 << (N_W - 1))];
 extern int sMULADD[nMULADD];
 #endif

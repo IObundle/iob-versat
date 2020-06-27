@@ -32,4 +32,6 @@ public:
 
     string info();
 }; //end class CMUL
+extern int sMUL[nMUL];
+extern versat_t global_databus[(nSTAGE + 1) * (1 << (N_W - 1))];
 #endif

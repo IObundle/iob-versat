@@ -11,7 +11,7 @@ all:versat pc
 
 versat:
 	python ../../python/mkvhdr.py . .
-	python ../../python/mkhdr.py $(VERSAT_INC) . .
+	python ../../python/mkhdr.py . $(VERSAT_INC)  .
 
 
 pc: ../src/versat.hpp versat.h 

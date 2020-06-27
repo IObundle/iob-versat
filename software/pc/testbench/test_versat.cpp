@@ -56,7 +56,7 @@ void print_versat_iter()
     {
         ver += shadow_reg[i].info_iter();
         ver += "DATABUS  \n";
-        for (int j = 0; j < 2 * N; j++)
+        for (int j = 0; j < 2 * (1 << (N_W - 1)); j++)
         {
             ver += "databus[" + to_string(j) + "]=" + to_string(stage[i].databus[j]) + "\n";
         }

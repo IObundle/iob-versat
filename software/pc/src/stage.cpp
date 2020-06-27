@@ -11,7 +11,7 @@ CStage::CStage(int versat_base)
     this->versat_base = versat_base;
 
     //set databus pointer
-    this->databus = &(global_databus[N * (nSTAGE - versat_base)]);
+    this->databus = &(global_databus[(1 << (N_W - 1)) * (nSTAGE - versat_base)]);
     //special case for first stage
     if (versat_base == 0)
     {
@@ -412,41 +412,3 @@ string CStage::info_iter()
 #endif
     return ver;
 }
-
-int base;
-CStage stage[nSTAGE];
-CStage shadow_reg[nSTAGE];
-CMem versat_mem[nSTAGE][nMEM];
-int run_done = 0;
-
-/*databus vector
-stage 0 is repeated in the start and at the end
-stage order in databus
-[ 0 | nSTAGE-1 | nSTAGE-2 | ... | 2  | 1 | 0 ]
-^                                    ^
-|                                    |
-stage 0 databus                      stage 1 databus
-
-*/
-versat_t global_databus[(nSTAGE + 1) * N];
-#if nMEM > 0
-int sMEMA[nMEM], sMEMA_p[nMEM], sMEMB[nMEM], sMEMB_p[nMEM];
-#endif
-#if nALU > 0
-int sALU[nALU], sALU_p[nALU];
-#endif
-#if nALULITE > 0
-int sALULITE[nALULITE], sALULITE_p[nALULITE];
-#endif
-#if nMUL > 0
-int sMUL[nMUL], sMUL_p[nMUL];
-#endif
-#if nMULADD > 0
-int sMULADD[nMULADD], sMULADD_p[nMULADD];
-#endif
-#if nMULADDLITE > 0
-int sMULADDLITE[nMULADDLITE], sMULADDLITE_p[nMULADDLITE];
-#endif
-#if nBS > 0
-int sBS[nBS], sBS_p[nBS];
-#endif

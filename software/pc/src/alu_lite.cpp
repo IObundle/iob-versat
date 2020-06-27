@@ -40,7 +40,7 @@ void CALULite::update()
     if (versat_base == 0)
     {
         //2nd copy at the end of global databus
-        global_databus[nSTAGE * N + sALULITE[alulite_base]] = output_buff[ALULITE_LAT - 1];
+        global_databus[nSTAGE * (1 << (N_W - 1)) + sALULITE[alulite_base]] = output_buff[ALULITE_LAT - 1];
     }
 }
 
