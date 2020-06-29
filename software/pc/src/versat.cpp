@@ -87,7 +87,7 @@ void versat_init(int base_addr)
 }
 
 int versat_iter = 0;
-void run_sim()
+void *run_sim(void *ie)
 {
     int i = 0;
     //put simulation here
@@ -130,8 +130,10 @@ void run_sim()
         versat_iter++;
     }
     run_done = 1;
+    return NULL;
 }
 
+pthread_t t;
 void run()
 {
     //MEMSET(base, (RUN_DONE), 1);
@@ -147,8 +149,9 @@ void run()
         stage[i].update_shadow_reg();
     }
 
-    thread ti(run_sim);
-    ti.join();
+    //thread ti(run_sim);
+    pthread_create(&t, NULL, run_sim, NULL);
+    //ti.join();
 }
 
 int done()

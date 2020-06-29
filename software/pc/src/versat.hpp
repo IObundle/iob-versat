@@ -30,7 +30,7 @@ void versat_init(int base_addr);
 
 extern int run_done;
 
-void run_sim();
+void *run_sim();
 
 void run();
 
