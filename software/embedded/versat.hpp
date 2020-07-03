@@ -5,7 +5,7 @@
 #define MEMGET(base, location)        (*((volatile int*) (base + (sizeof(int)) * location)))
 
 //constants
-#define CONF_BASE (1<<(nMEM_W+MEM_ADDR_W+1))
+#define CONF_BASE (1<<(BASE_ADDR_W+1))
 #define CONF_MEM_SIZE ((int)pow(2,CONF_MEM_ADDR_W))
 #define MEM_SIZE ((int)pow(2,MEM_ADDR_W))
 #define RUN_DONE (1<<(nMEM_W+MEM_ADDR_W))
@@ -13,6 +13,7 @@
 //
 // VERSAT CLASSES
 //
+#if nMEM>0
 class CMemPort {
   public:
     int versat_base, mem_base, data_base;
@@ -83,6 +84,7 @@ class CMemPort {
       return MEMGET(versat_base, (this->data_base + addr));
     }
 };//end class CMEM
+#endif
 
 #if nVI>0
 class CVI {
@@ -403,8 +405,10 @@ class CStage {
   public:
     int versat_base;
     //Versat Function Units
+  #if nMEM>0
     CMemPort memA[nMEM];
     CMemPort memB[nMEM];
+  #endif
   #if nVI>0
     CVI vi[nVI];
   #endif
@@ -439,8 +443,10 @@ class CStage {
 
       //Init functional units
       int i;
+    #if nMEM>0
       for (i=0; i<nMEM; i++) memA[i] = CMemPort(versat_base, i, 0);
       for (i=0; i<nMEM; i++) memB[i] = CMemPort(versat_base, i, 1);a
+    #endif
     #if nVI>0
       for (i=0; i<nVI; i++) vi[i] = CVI(versat_base, i);
     #endif
@@ -487,12 +493,11 @@ class CStage {
 //
 static int base;
 CStage stage[nSTAGE];
-int sMEMA[nMEM], sMEMA_p[nMEM], sMEMB[nMEM], sMEMB_p[nMEM];
+#if nMEM>0
+  int sMEMA[nMEM], sMEMA_p[nMEM], sMEMB[nMEM], sMEMB_p[nMEM];
+#endif
 #if nVI>0
   int sVI[nVI], sVI_p[nVI];
-#endif
-#if nVO>0
-  int sVO[nVO], sVO_p[nVO];
 #endif
 #if nALU>0
   int sALU[nALU], sALU_p[nALU];
@@ -524,6 +529,7 @@ inline void versat_init(int base_addr) {
   int p_offset = (1<<(N_W-1));
   int s_cnt = 0;
 
+#if nMEM>0
   //Memories
   for(i=0; i<nMEM; i=i+1){                  
     sMEMA[i] = s_cnt + 2*i;                                            
@@ -531,6 +537,7 @@ inline void versat_init(int base_addr) {
     sMEMA_p[i] = sMEMA[i] + p_offset;
     sMEMB_p[i] = sMEMB[i] + p_offset;
   } s_cnt += 2*nMEM;                                               
+#endif
 
 #if nVI>0
   //Vread
@@ -538,14 +545,6 @@ inline void versat_init(int base_addr) {
     sVI[i] = s_cnt+i;
     sVI_p[i] = sVI[i] + p_offset;
   } s_cnt += nVI;
-#endif
-
-#if nVO>0
-  //Vwrite
-  for(i=0; i<nVO; i=i+1){
-    sVO[i] = s_cnt+i;
-    sVO_p[i] = sVO[i] + p_offset;
-  } s_cnt += nVO;
 #endif
 
 #if nALU>0                                                                      

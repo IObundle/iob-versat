@@ -23,7 +23,7 @@ module xstage # (
     // data/control interface
     input                           valid,
     input                           we,
-    input [`nMEM_W+`MEM_ADDR_W+1:0] addr,
+    input [`BASE_ADDR_W+1:0]        addr,
     input [DATA_W-1:0]              rdata,
     output [DATA_W-1:0]             wdata,
 `ifdef IO
@@ -41,8 +41,8 @@ module xstage # (
     );
 
    // simple address decode
-   wire                       		conf_valid = addr[`nMEM_W+`MEM_ADDR_W+1] & valid;
-   wire                             eng_valid = ~addr[`nMEM_W+`MEM_ADDR_W+1] & valid;
+   wire                       		conf_valid = addr[`BASE_ADDR_W+1] & valid;
+   wire                             eng_valid = ~addr[`BASE_ADDR_W+1] & valid;
 
    // configuration bus from conf module to versat
    wire [`CONF_BITS-1:0]            config_bus;

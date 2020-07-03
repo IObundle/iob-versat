@@ -6,7 +6,8 @@
 
 //CONTROL ADDRESS WIDTH
 //2 extra bits are to select xdata_eng/xconf and run/done
-`define CTR_ADDR_W (`nSTAGE_W+2+`nMEM_W+`MEM_ADDR_W)
+`define BASE_ADDR_W ((`nMEM_W+`MEM_ADDR_W) > (`CONF_REG_ADDR_W) ? (`nMEM_W+`MEM_ADDR_W) : (`CONF_REG_ADDR_W))
+`define CTR_ADDR_W (`nSTAGE_W+2+`BASE_ADDR_W)
 
 // Number of data bus entries
 `define N         (2*`nMEM + `nVI + `nALU + `nALULITE + `nMUL + `nMULADD + `nBS)
