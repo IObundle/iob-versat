@@ -1,20 +1,15 @@
-#include "versat.hpp"
+#include "alu_lite.hpp"
 #if nALULITE > 0
+
 CALULite::CALULite()
 {
 }
 
-CALULite::CALULite(int versat_base, int i)
+CALULite::CALULite(int versat_base, int i, versat_t *databus)
 {
     this->versat_base = versat_base;
     this->alulite_base = i;
-}
-
-void CALULite::update_shadow_reg_ALULite()
-{
-    shadow_reg[versat_base].alulite[alulite_base].opa = conf[versat_base].alulite[alulite_base].opa;
-    shadow_reg[versat_base].alulite[alulite_base].opb = conf[versat_base].alulite[alulite_base].opb;
-    shadow_reg[versat_base].alulite[alulite_base].fns = conf[versat_base].alulite[alulite_base].fns;
+    this->databus = databus;
 }
 
 void CALULite::start_run()
@@ -40,12 +35,12 @@ void CALULite::update()
     //insert new output
     output_buff[0] = out;
 
-    stage[versat_base].databus[sALULITE[alulite_base]] = output_buff[ALULITE_LAT - 1];
+    databus[sALULITE[alulite_base]] = output_buff[ALULITE_LAT - 1];
     //special case for stage 0
     if (versat_base == 0)
     {
         //2nd copy at the end of global databus
-        global_databus[nSTAGE * N + sALULITE[alulite_base]] = output_buff[ALULITE_LAT - 1];
+        global_databus[nSTAGE * (1 << (N_W - 1)) + sALULITE[alulite_base]] = output_buff[ALULITE_LAT - 1];
     }
 }
 
@@ -58,9 +53,9 @@ versat_t CALULite::output()
     bitset<DATAPATH_W> aux_cmp;
 
     //cast to int cin.to_ulong();
-    ina = stage[versat_base].databus[opa];
+    ina = databus[opa];
     loop = fns < 0 ? 1 : 0;
-    inb = stage[versat_base].databus[opb];
+    inb = databus[opb];
     ina_loop = loop ? out : ina;
 
     versat_t op_a_reg = ina;
@@ -104,28 +99,18 @@ versat_t CALULite::output()
     return out;
 }
 
-void CALULite::writeConf()
-{
-    conf[versat_base].alulite[alulite_base].opa = opa;
-    conf[versat_base].alulite[alulite_base].opb = opb;
-    conf[versat_base].alulite[alulite_base].fns = fns;
-}
-
 void CALULite::setOpA(int opa)
 {
-    conf[versat_base].alulite[alulite_base].opa = opa;
     this->opa = opa;
 }
 
 void CALULite::setOpB(int opb)
 {
-    conf[versat_base].alulite[alulite_base].opb = opb;
     this->opb = opb;
 }
 
 void CALULite::setFNS(int fns)
 {
-    conf[versat_base].alulite[alulite_base].fns = fns;
     this->fns = fns;
 }
 string CALULite::info()

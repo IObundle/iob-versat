@@ -1,20 +1,15 @@
-#include "versat.hpp"
+#include "alu.hpp"
 #if nALU > 0
+
 CALU::CALU()
 {
 }
 
-CALU::CALU(int versat_base, int i)
+CALU::CALU(int versat_base, int i, versat_t *databus)
 {
     this->versat_base = versat_base;
     this->alu_base = i;
-}
-
-void CALU::update_shadow_reg_ALU()
-{
-    shadow_reg[versat_base].alu[alu_base].opa = conf[versat_base].alu[alu_base].opa;
-    shadow_reg[versat_base].alu[alu_base].opb = conf[versat_base].alu[alu_base].opb;
-    shadow_reg[versat_base].alu[alu_base].fns = conf[versat_base].alu[alu_base].fns;
+    this->databus = databus;
 }
 
 void CALU::start_run()
@@ -27,12 +22,12 @@ void CALU::update()
     int i = 0;
 
     //update databus
-    stage[versat_base].databus[sALU[alu_base]] = output_buff[ALU_LAT - 1];
+    databus[sALU[alu_base]] = output_buff[ALU_LAT - 1];
     //special case for stage 0
     if (versat_base == 0)
     {
         //2nd copy at the end of global databus
-        global_databus[nSTAGE * N + sALU[alu_base]] = output_buff[ALU_LAT - 1];
+        global_databus[nSTAGE * (1 << (N_W - 1)) + sALU[alu_base]] = output_buff[ALU_LAT - 1];
     }
 
     //trickle down all outputs in buffer
@@ -51,8 +46,8 @@ void CALU::update()
 
 versat_t CALU::output()
 {
-    inb = stage[versat_base].databus[shadow_reg[versat_base].alu[alu_base].opa];
-    ina = stage[versat_base].databus[shadow_reg[versat_base].alu[alu_base].opb];
+    inb = databus[opa];
+    ina = databus[opb];
     bitset<DATAPATH_W> aux_sext;
     bitset<DATAPATH_W> aux_cmp;
     uint8_t aux_a = ina;
@@ -121,28 +116,18 @@ versat_t CALU::output()
     return out;
 }
 
-void CALU::writeConf()
-{
-    conf[versat_base].alu[alu_base].opa = opa;
-    conf[versat_base].alu[alu_base].opb = opb;
-    conf[versat_base].alu[alu_base].fns = fns;
-}
-
 void CALU::setOpA(int opa)
 {
-    conf[versat_base].alu[alu_base].opa = opa;
     this->opa = opa;
 }
 
 void CALU::setOpB(int opb)
 {
-    conf[versat_base].alu[alu_base].opb = opb;
     this->opb = opb;
 }
 
 void CALU::setFNS(int fns)
 {
-    conf[versat_base].alu[alu_base].fns = fns;
     this->fns = fns;
 }
 string CALU::info()
