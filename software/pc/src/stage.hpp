@@ -5,7 +5,6 @@
 #include "mem.hpp"
 #include "mul.hpp"
 #include "mul_add.hpp"
-#include "mul_add_lite.hpp"
 class CStage
 {
 private:
@@ -32,9 +31,6 @@ public:
 #endif
 #if nMULADD > 0
     CMulAdd muladd[nMULADD];
-#endif
-#if nYOLO > 0
-    CMulAddLite muladdlite[nMULADDLITE];
 #endif
 
     //Default constructor
@@ -100,9 +96,6 @@ extern int sMUL[nMUL], sMUL_p[nMUL];
 #endif
 #if nMULADD > 0
 extern int sMULADD[nMULADD], sMULADD_p[nMULADD];
-#endif
-#if nMULADDLITE > 0
-extern int sMULADDLITE[nMULADDLITE], sMULADDLITE_p[nMULADDLITE];
 #endif
 #if nBS > 0
 extern int sBS[nBS], sBS_p[nBS];

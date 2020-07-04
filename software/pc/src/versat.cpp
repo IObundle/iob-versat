@@ -66,16 +66,6 @@ void versat_init(int base_addr)
     s_cnt += nMULADD;
 #endif
 
-#if nMULADDLITE > 0
-    //MULADDLITES
-    for (i = 0; i < nMULADDLITE; i = i + 1)
-    {
-        sMULADDLITE[i] = s_cnt + i;
-        sMULADDLITE_p[i] = sMULADDLITE[i] + p_offset;
-    }
-    s_cnt += nMULADDLITE;
-#endif
-
 #if nBS > 0
     //BARREL SHIFTERS
     for (i = 0; i < nBS; i = i + 1)
@@ -184,9 +174,7 @@ int sMUL[nMUL], sMUL_p[nMUL];
 #if nMULADD > 0
 int sMULADD[nMULADD], sMULADD_p[nMULADD];
 #endif
-#if nMULADDLITE > 0
-int sMULADDLITE[nMULADDLITE], sMULADDLITE_p[nMULADDLITE];
-#endif
+
 #if nBS > 0
 int sBS[nBS], sBS_p[nBS];
 #endif

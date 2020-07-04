@@ -19,6 +19,6 @@ pc: ../src/versat.hpp versat.h
 
 clean:
 	@rm -rf *.elf *.h *.vh
-
+	rm versat_info.txt
 
 .PHONY: all clean

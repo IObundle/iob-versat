@@ -8,7 +8,7 @@ sim:
 fpga:
 	make -C $(FPGA_DIR)
 
-pc:
+pc-sim:
 	make -C $(PC_DIR)
 
 clean:

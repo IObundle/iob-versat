@@ -46,10 +46,6 @@ CStage::CStage(int versat_base)
     for (i = 0; i < nMULADD; i++)
         muladd[i] = CMulAdd(versat_base, i, databus);
 #endif
-#if nMULADDLITE > 0
-    for (i = 0; i < nMULADDLITE; i++)
-        muladdlite[i] = CMulAddLite(versat_base, i, databus);
-#endif
 }
 
 //clear Versat config
@@ -168,22 +164,6 @@ void CStage::update_shadow_reg()
         shadow_reg[versat_base].muladd[i].shift = stage[versat_base].muladd[i].shift;
     }
 #endif
-#if nMULADDLITE > 0
-    for (i = 0; i < nMULADDLITE; i++)
-    {
-        //muladdlite[i].update_shadow_reg_MulAddLite();
-        shadow_reg[versat_base].muladdlite[i].sela = stage[versat_base].muladdlite[i].sela;
-        shadow_reg[versat_base].muladdlite[i].selb = stage[versat_base].muladdlite[i].selb;
-        shadow_reg[versat_base].muladdlite[i].selc = stage[versat_base].muladdlite[i].selc;
-        shadow_reg[versat_base].muladdlite[i].iter = stage[versat_base].muladdlite[i].iter;
-        shadow_reg[versat_base].muladdlite[i].per = stage[versat_base].muladdlite[i].per;
-        shadow_reg[versat_base].muladdlite[i].delay = stage[versat_base].muladdlite[i].delay;
-        shadow_reg[versat_base].muladdlite[i].shift = stage[versat_base].muladdlite[i].shift;
-        shadow_reg[versat_base].muladdlite[i].accIN = stage[versat_base].muladdlite[i].accIN;
-        shadow_reg[versat_base].muladdlite[i].accOUT = stage[versat_base].muladdlite[i].accOUT;
-        shadow_reg[versat_base].muladdlite[i].batch = stage[versat_base].muladdlite[i].batch;
-    }
-#endif
 }
 
 //set run start on all FUs
@@ -213,10 +193,6 @@ void CStage::start_all_FUs()
 #if nMULADD > 0
     for (i = 0; i < nMULADD; i++)
         muladd[i].start_run();
-#endif
-#if nMULADDLITE > 0
-    for (i = 0; i < nMULADDLITE; i++)
-        muladdlite[i].start_run();
 #endif
 }
 
@@ -248,10 +224,6 @@ void CStage::update_all_FUs()
     for (i = 0; i < nMULADD; i++)
         muladd[i].update();
 #endif
-#if nMULADDLITE > 0
-    for (i = 0; i < nMULADDLITE; i++)
-        muladdlite[i].update();
-#endif
 }
 
 //calculate new output on all FUs
@@ -281,10 +253,6 @@ void CStage::output_all_FUs()
 #if nMULADD > 0
     for (i = 0; i < nMULADD; i++)
         muladd[i].output();
-#endif
-#if nMULADDLITE > 0
-    for (i = 0; i < nMULADDLITE; i++)
-        muladdlite[i].output();
 #endif
 }
 
@@ -354,12 +322,7 @@ string CStage::info()
         ver += muladd[i].info();
     }
 #endif
-#if nMULADDLITE > 0
-    for (i = 0; i < nYOLO; i++)
-    {
-        ver += muladdlite[i].info();
-    }
-#endif
+
     return ver;
 }
 
@@ -402,12 +365,6 @@ string CStage::info_iter()
     for (i = 0; i < nMULADD; i++)
     {
         ver += muladd[i].info_iter();
-    }
-#endif
-#if nMULADDLITE > 0
-    for (i = 0; i < nYOLO; i++)
-    {
-        ver += muladdlite[i].info();
     }
 #endif
     return ver;
