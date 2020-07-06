@@ -135,13 +135,10 @@ void run()
     for (i = 0; i < nSTAGE; i++)
     {
         stage[i].reset();
-        //shadow_reg[i] = stage[i];
-        stage[i].update_shadow_reg();
+        shadow_reg[i].copy(stage[i]);
     }
 
-    //thread ti(run_sim);
     pthread_create(&t, NULL, run_sim, NULL);
-    //ti.join();
 }
 
 int done()

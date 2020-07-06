@@ -81,12 +81,34 @@ void CBS::setFNS(int fns)
 {
     this->fns = fns;
 }
+void CBS::copy(CBS that)
+{
+    this->versat_base = that.versat_base;
+    this->bs_base = that.bs_base;
+    this->data = that.data;
+    this->shift = that.shift;
+    this->fns = that.fns;
+}
 string CBS::info()
 {
     string ver = "bs[" + to_string(bs_base) + "]\n";
     ver += "Data=       " + to_string(data) + "\n";
     ver += "Shift=      " + to_string(shift) + "\n";
     ver += "FNS =       " + to_string(fns) + "\n";
+    ver += "\n";
+    return ver;
+}
+string CBS::info_iter()
+{
+    string ver = "bs[" + to_string(bs_base) + "]\n";
+    ver += "in=" + to_string(in) + "\n";
+    ver += "data=" + to_string(data) + "\n";
+    ver += "out=" + to_string(out) + "\n";
+    ver += "OUTPUT_BUFFER (LATENCY SIM)\n";
+    for (int z = 0; z < BS_LAT; z++)
+    {
+        ver += "Output[" + to_string(z) + "]=" + to_string(output_buff[z]) + "\n";
+    }
     ver += "\n";
     return ver;
 }

@@ -23,12 +23,15 @@ public:
     //update output buffer, write results to databus
     void update();
     versat_t output();
+    void copy(CALU that);
 
     void setOpA(int opa);
     void setOpB(int opb);
     void setFNS(int fns);
 
     string info();
+    string info_iter();
+
 }; //end class CALU
 
 extern versat_t global_databus[(nSTAGE + 1) * (1 << (N_W - 1))];

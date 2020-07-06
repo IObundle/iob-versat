@@ -130,12 +130,36 @@ void CALU::setFNS(int fns)
 {
     this->fns = fns;
 }
+void CALU::copy(CALU that)
+{
+    this->versat_base = that.versat_base;
+    this->alu_base = that.alu_base;
+    this->opa = that.opa;
+    this->opb = that.opb;
+    this->fns = that.fns;
+}
 string CALU::info()
 {
     string ver = "alu[" + to_string(alu_base) + "]\n";
     ver += "SetOpA=       " + to_string(opa) + "\n";
     ver += "SelOpB=       " + to_string(opb) + "\n";
     ver += "FNS =       " + to_string(fns) + "\n";
+    ver += "\n";
+    return ver;
+}
+string CALU::info_iter()
+{
+    string ver = "alu[" + to_string(alu_base) + "]\n";
+    ver += "opa=" + to_string(ina) + "\n";
+    ver += "SetOpA=       " + to_string(opa) + "\n";
+    ver += "SetOpB=       " + to_string(opb) + "\n";
+    ver += "opb=" + to_string(inb) + "\n";
+    ver += "out=" + to_string(out) + "\n";
+    ver += "OUTPUT_BUFFER (LATENCY SIM)\n";
+    for (int z = 0; z < ALU_LAT; z++)
+    {
+        ver += "Output[" + to_string(z) + "]=" + to_string(output_buff[z]) + "\n";
+    }
     ver += "\n";
     return ver;
 }

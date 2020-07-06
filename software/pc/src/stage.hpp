@@ -48,8 +48,6 @@ public:
     void confMemRead(int addr);
 #endif
 
-    //update shadow register with current configuration
-    void update_shadow_reg();
     //set run start on all FUs
     void start_all_FUs();
 
@@ -58,7 +56,7 @@ public:
 
     //calculate new output on all FUs
     void output_all_FUs();
-
+    void copy(CStage that);
     string info();
     string info_iter();
 

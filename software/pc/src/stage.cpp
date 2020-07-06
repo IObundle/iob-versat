@@ -71,101 +71,6 @@ void CStage::confMemRead(int addr)
 }
 #endif
 
-//update shadow register with current configuration
-void CStage::update_shadow_reg()
-{
-    int i = 0;
-#if nMEM > 0
-    for (i = 0; i < nMEM; i++)
-    {
-        //memA[i].update_shadow_reg_MEM();
-        shadow_reg[versat_base].memA[i].iter = stage[versat_base].memA[i].iter;
-        shadow_reg[versat_base].memA[i].start = stage[versat_base].memA[i].start;
-        shadow_reg[versat_base].memA[i].per = stage[versat_base].memA[i].per;
-        shadow_reg[versat_base].memA[i].duty = stage[versat_base].memA[i].duty;
-        shadow_reg[versat_base].memA[i].sel = stage[versat_base].memA[i].sel;
-        shadow_reg[versat_base].memA[i].shift = stage[versat_base].memA[i].shift;
-        shadow_reg[versat_base].memA[i].incr = stage[versat_base].memA[i].incr;
-        shadow_reg[versat_base].memA[i].delay = stage[versat_base].memA[i].delay;
-        shadow_reg[versat_base].memA[i].ext = stage[versat_base].memA[i].ext;
-        shadow_reg[versat_base].memA[i].in_wr = stage[versat_base].memA[i].in_wr;
-        shadow_reg[versat_base].memA[i].rvrs = stage[versat_base].memA[i].rvrs;
-        shadow_reg[versat_base].memA[i].iter2 = stage[versat_base].memA[i].iter2;
-        shadow_reg[versat_base].memA[i].per2 = stage[versat_base].memA[i].per2;
-        shadow_reg[versat_base].memA[i].shift2 = stage[versat_base].memA[i].shift2;
-        shadow_reg[versat_base].memA[i].incr2 = stage[versat_base].memA[i].incr2;
-    }
-    for (i = 0; i < nMEM; i++)
-    {
-        //memB[i].update_shadow_reg_MEM();
-        shadow_reg[versat_base].memB[i].iter = stage[versat_base].memB[i].iter;
-        shadow_reg[versat_base].memB[i].start = stage[versat_base].memB[i].start;
-        shadow_reg[versat_base].memB[i].per = stage[versat_base].memB[i].per;
-        shadow_reg[versat_base].memB[i].duty = stage[versat_base].memB[i].duty;
-        shadow_reg[versat_base].memB[i].sel = stage[versat_base].memB[i].sel;
-        shadow_reg[versat_base].memB[i].shift = stage[versat_base].memB[i].shift;
-        shadow_reg[versat_base].memB[i].incr = stage[versat_base].memB[i].incr;
-        shadow_reg[versat_base].memB[i].delay = stage[versat_base].memB[i].delay;
-        shadow_reg[versat_base].memB[i].ext = stage[versat_base].memB[i].ext;
-        shadow_reg[versat_base].memB[i].in_wr = stage[versat_base].memB[i].in_wr;
-        shadow_reg[versat_base].memB[i].rvrs = stage[versat_base].memB[i].rvrs;
-        shadow_reg[versat_base].memB[i].iter2 = stage[versat_base].memB[i].iter2;
-        shadow_reg[versat_base].memB[i].per2 = stage[versat_base].memB[i].per2;
-        shadow_reg[versat_base].memB[i].shift2 = stage[versat_base].memB[i].shift2;
-        shadow_reg[versat_base].memB[i].incr2 = stage[versat_base].memB[i].incr2;
-    }
-#endif
-#if nALU > 0
-    for (i = 0; i < nALU; i++)
-    {
-        //alu[i].update_shadow_reg_ALU();
-        shadow_reg[versat_base].alu[i].opa = stage[versat_base].alu[i].opa;
-        shadow_reg[versat_base].alu[i].opb = stage[versat_base].alu[i].opb;
-        shadow_reg[versat_base].alu[i].fns = stage[versat_base].alu[i].fns;
-    }
-#endif
-#if nALULITE > 0
-    for (i = 0; i < nALULITE; i++)
-    {
-        //alulite[i].update_shadow_reg_ALULite();
-        shadow_reg[versat_base].alulite[i].opa = stage[versat_base].alulite[i].opa;
-        shadow_reg[versat_base].alulite[i].opb = stage[versat_base].alulite[i].opb;
-        shadow_reg[versat_base].alulite[i].fns = stage[versat_base].alulite[i].fns;
-    }
-#endif
-#if nBS > 0
-    for (i = 0; i < nBS; i++)
-    {
-        //bs[i].update_shadow_reg_BS();
-        shadow_reg[versat_base].bs[i].data = stage[versat_base].bs[i].data;
-        shadow_reg[versat_base].bs[i].fns = stage[versat_base].bs[i].fns;
-        shadow_reg[versat_base].bs[i].shift = stage[versat_base].bs[i].shift;
-    }
-#endif
-#if nMUL > 0
-    for (i = 0; i < nMUL; i++)
-    {
-        //mul[i].update_shadow_reg_Mul();
-        shadow_reg[versat_base].mul[i].sela = stage[versat_base].mul[i].sela;
-        shadow_reg[versat_base].mul[i].selb = stage[versat_base].mul[i].selb;
-        shadow_reg[versat_base].mul[i].fns = stage[versat_base].mul[i].fns;
-    }
-#endif
-#if nMULADD > 0
-    for (i = 0; i < nMULADD; i++)
-    {
-        //muladd[i].update_shadow_reg_MulAdd();
-        shadow_reg[versat_base].muladd[i].sela = stage[versat_base].muladd[i].sela;
-        shadow_reg[versat_base].muladd[i].selb = stage[versat_base].muladd[i].selb;
-        shadow_reg[versat_base].muladd[i].fns = stage[versat_base].muladd[i].fns;
-        shadow_reg[versat_base].muladd[i].iter = stage[versat_base].muladd[i].iter;
-        shadow_reg[versat_base].muladd[i].per = stage[versat_base].muladd[i].per;
-        shadow_reg[versat_base].muladd[i].delay = stage[versat_base].muladd[i].delay;
-        shadow_reg[versat_base].muladd[i].shift = stage[versat_base].muladd[i].shift;
-    }
-#endif
-}
-
 //set run start on all FUs
 void CStage::start_all_FUs()
 {
@@ -256,6 +161,58 @@ void CStage::output_all_FUs()
 #endif
 }
 
+void CStage::copy(CStage that)
+{
+    int i = 0;
+#if nMEM > 0
+    //Memories
+    for (i = 0; i < nMEM; i = i + 1)
+    {
+        this->memA[i].copy(that.memA[i]);
+        this->memB[i].copy(that.memB[i]);
+    }
+#endif
+#if nALU > 0
+    //ALUs
+    for (i = 0; i < nALU; i = i + 1)
+    {
+        this->alu[i].copy(that.alu[i]);
+    }
+#endif
+
+#if nALULITE > 0
+    //ALULITEs
+    for (i = 0; i < nALULITE; i = i + 1)
+    {
+        this->alulite[i].copy(that.alulite[i]);
+    }
+#endif
+
+#if nMUL > 0
+    //MULTIPLIERS
+    for (i = 0; i < nMUL; i = i + 1)
+    {
+        this->mul[i].copy(that.mul[i]);
+    }
+#endif
+
+#if nMULADD > 0
+    //MULADDS
+    for (i = 0; i < nMULADD; i = i + 1)
+    {
+        this->muladd[i].copy(that.muladd[i]);
+    }
+#endif
+
+#if nBS > 0
+    //BARREL SHIFTERS
+    for (i = 0; i < nBS; i = i + 1)
+    {
+        this->bs[i].copy(that.bs[i]);
+    }
+#endif
+}
+
 bool CStage::done()
 {
     bool auxA, auxB;
@@ -340,7 +297,7 @@ string CStage::info_iter()
 #if nALU > 0
     for (i = 0; i < nALU; i++)
     {
-        ver += alu[i].info();
+        ver += alu[i].info_iter();
     }
 #endif
 #if nALULITE > 0
@@ -352,13 +309,13 @@ string CStage::info_iter()
 #if nBS > 0
     for (i = 0; i < nBS; i++)
     {
-        ver += bs[i].info();
+        ver += bs[i].info_iter();
     }
 #endif
 #if nMUL > 0
     for (i = 0; i < nMUL; i++)
     {
-        ver += mul[i].info();
+        ver += mul[i].info_iter();
     }
 #endif
 #if nMULADD > 0

@@ -156,6 +156,19 @@ void CMulAdd::setShift(int shift)
 {
     this->shift = shift;
 }
+void CMulAdd::copy(CMulAdd that)
+{
+    this->versat_base = that.versat_base;
+    this->muladd_base = that.muladd_base;
+    this->sela = that.sela;
+    this->selb = that.selb;
+    this->fns = that.fns;
+    this->iter = that.iter;
+    this->per = that.per;
+    this->delay = that.delay;
+    this->shift = that.shift;
+}
+
 string CMulAdd::info()
 {
     string ver = "mul_add[" + to_string(muladd_base) + "]\n";

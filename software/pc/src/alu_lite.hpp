@@ -26,6 +26,7 @@ public:
     //update output buffer, write results to databus
     void update();
     versat_t output();
+    void copy(CALULite that);
 
     void setOpA(int opa);
     void setOpB(int opb);

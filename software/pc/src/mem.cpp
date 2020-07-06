@@ -357,6 +357,30 @@ int CMemPort::read(int addr)
 
     return 0;
 }
+
+void CMemPort::copy(CMemPort that)
+{
+    this->versat_base = that.versat_base;
+    this->mem_base = that.mem_base;
+    this->data_base = that.data_base;
+    this->iter = that.iter;
+    this->per = that.per;
+    this->duty = that.duty;
+    this->sel = that.sel;
+    this->start = that.start;
+    this->shift = that.shift;
+    this->incr = that.incr;
+    this->delay = that.delay;
+    this->in_wr = that.in_wr;
+    this->rvrs = that.rvrs;
+    this->ext = that.ext;
+    this->iter2 = that.iter2;
+    this->per2 = that.per2;
+    this->shift2 = that.shift2;
+    this->incr2 = that.incr2;
+    this->done = that.done;
+}
+
 string CMemPort::info()
 {
     string ver = "mem";

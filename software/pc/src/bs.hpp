@@ -25,12 +25,15 @@ public:
     void update();
 
     versat_t output();
+    void copy(CBS that);
 
     void setData(int data);
     void setShift(int shift);
     void setFNS(int fns);
 
     string info();
+    string info_iter();
+
 }; //end class CBS
 
 extern versat_t global_databus[(nSTAGE + 1) * (1 << (N_W - 1))];

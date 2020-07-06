@@ -62,6 +62,7 @@ public:
     void setPer2(int per2);
     void setIncr2(int incr);
     void setShift2(int shift2);
+    void copy(CMemPort that);
 
     void write(int addr, int val);
     int read(int addr);

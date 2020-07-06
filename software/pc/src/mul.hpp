@@ -25,12 +25,14 @@ public:
     void update();
 
     versat_t output();
-
+    void copy(CMul that);
     void setSelA(int sela);
     void setSelB(int selb);
     void setFNS(int fns);
 
     string info();
+    string info_iter();
+
 }; //end class CMUL
 extern int sMUL[nMUL];
 extern versat_t global_databus[(nSTAGE + 1) * (1 << (N_W - 1))];

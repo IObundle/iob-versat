@@ -37,7 +37,7 @@ public:
 
     void writeConf();
     uint32_t acumulator();
-
+    void copy(CMulAdd that);
     void setSelA(int sela);
     void setSelB(int selb);
     void setFNS(int fns);

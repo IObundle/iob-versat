@@ -113,6 +113,14 @@ void CALULite::setFNS(int fns)
 {
     this->fns = fns;
 }
+void CALULite::copy(CALULite that)
+{
+    this->versat_base = that.versat_base;
+    this->alulite_base = that.alulite_base;
+    this->opa = that.opa;
+    this->opb = that.opb;
+    this->fns = that.fns;
+}
 string CALULite::info()
 {
     string ver = "alu_lite[" + to_string(alulite_base) + "]\n";
