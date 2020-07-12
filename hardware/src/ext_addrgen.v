@@ -14,6 +14,10 @@
 
 module ext_addrgen #(
                      parameter DATA_W=32
+		     parameter IO_ADDR_W = `IO_ADDR_W,
+		     parameter MEM_ADDR_W = `MEM_ADDR_W,
+		     parameter IO_SIZE_W = `IO_SIZE_W,
+		     parameter PERIOD_W = `PERIOD_W
                      )
    (
 	input                            clk,
@@ -24,22 +28,22 @@ module ext_addrgen #(
     output                           done,
 
     // Configuration
-    input [`IO_ADDR_W-1:0]           ext_addr,
-    input [`MEM_ADDR_W-1:0]          int_addr,
-    input [`IO_SIZE_W-1:0]           size,
+    input [IO_ADDR_W-1:0]           ext_addr,
+    input [MEM_ADDR_W-1:0]          int_addr,
+    input [IO_SIZE_W-1:0]           size,
     input [1:0]                      direction,
-    input [`MEM_ADDR_W - 1:0]        iterations,
-	input [`PERIOD_W - 1:0]          period,
-	input [`PERIOD_W - 1:0]          duty,
-	input [`PERIOD_W - 1:0]          delay,
-	input [`MEM_ADDR_W - 1:0]        start,
-	input signed [`MEM_ADDR_W - 1:0] shift,
-	input signed [`MEM_ADDR_W - 1:0] incr,
+    input [MEM_ADDR_W - 1:0]        iterations,
+	input [PERIOD_W - 1:0]          period,
+	input [PERIOD_W - 1:0]          duty,
+	input [PERIOD_W - 1:0]          delay,
+	input [MEM_ADDR_W - 1:0]        start,
+	input signed [MEM_ADDR_W - 1:0] shift,
+	input signed [MEM_ADDR_W - 1:0] incr,
 
     // Databus interface
     input                            databus_ready,
     output                           databus_valid,
-    output [`IO_ADDR_W-1:0]          databus_addr,
+    output [IO_ADDR_W-1:0]          databus_addr,
     input [DATA_W-1:0]               databus_rdata,
     output [DATA_W-1:0]              databus_wdata,
     output reg [DATA_W/8-1:0]        databus_wstrb,
@@ -47,7 +51,7 @@ module ext_addrgen #(
 	// internal memory interface
 	output                           req,
 	output                           rnw,
-	output [`MEM_ADDR_W-1:0]         addr,
+	output [MEM_ADDR_W-1:0]         addr,
 	output [DATA_W-1:0]              data_out,
 	input [DATA_W-1:0]               data_in
 	);
@@ -56,25 +60,25 @@ module ext_addrgen #(
    
    reg                               init;
    
-   reg [`IO_SIZE_W:0]                counter_int;
-   reg [`IO_SIZE_W:0]                counter_int_nxt;
+   reg [IO_SIZE_W:0]                counter_int;
+   reg [IO_SIZE_W:0]                counter_int_nxt;
    
    reg [`STATES_W-1:0]               state;
    reg [`STATES_W-1:0]               state_nxt;
 
    reg                               databus_valid_int;
    reg                               databus_valid_reg;
-   wire [`IO_ADDR_W-1:0]             databus_addr_int;
-   reg [`IO_ADDR_W-1:0]              databus_addr_int_reg;
+   wire [IO_ADDR_W-1:0]             databus_addr_int;
+   reg [IO_ADDR_W-1:0]              databus_addr_int_reg;
 
    reg                               req_int;
    reg                               req_int_reg;
    reg                               rnw_int;
    reg                               rnw_int_reg;
-   reg [`MEM_ADDR_W-1:0]             addr_int;
-   reg [`MEM_ADDR_W-1:0]             addr_int_reg;
+   reg [MEM_ADDR_W-1:0]             addr_int;
+   reg [MEM_ADDR_W-1:0]             addr_int_reg;
 
-   wire [`MEM_ADDR_W-1:0]            addr_gen;
+   wire [MEM_ADDR_W-1:0]            addr_gen;
    wire                              ready = |iterations;
 
    assign databus_valid = (direction == 2'b01)? databus_valid_int : databus_valid_reg;
@@ -91,7 +95,10 @@ module ext_addrgen #(
    
    assign done = ~status;
 
-   xaddrgen addrgen (
+   xaddrgen # ( 
+		     .MEM_ADDR_W(MEM_ADDR_W),
+		     .PERIOD_W(PERIOD_W)
+   ) addrgen (
                      .clk(clk),
                      .rst(rst),
                      .init(run),
@@ -128,7 +135,7 @@ module ext_addrgen #(
    // Counter registers
    always @ (posedge clk)
      if (init) begin
-	    counter_int <= {(`IO_SIZE_W+1){1'b0}};
+	    counter_int <= {1'b0, {IO_SIZE_W{1'b0}}};
      end else begin
 	    counter_int <= counter_int_nxt;
      end

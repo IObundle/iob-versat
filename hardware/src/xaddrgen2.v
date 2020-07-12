@@ -1,32 +1,35 @@
 `timescale 1ns / 1ps
 `include "xversat.vh"
 
-module xaddrgen2 (
+module xaddrgen2 # ( 
+		 parameter				MEM_ADDR_W = `MEM_ADDR_W,
+		 parameter				PERIOD_W = `PERIOD_W
+		) (
 		 input                                  clk,
 		 input                                  rst,
 		 input                                  run,
 
 		 //configurations
-		 input [`MEM_ADDR_W - 1:0]              iterations,
-		 input [`PERIOD_W - 1:0]                period,
-		 input [`PERIOD_W - 1:0]                duty,
-		 input [`PERIOD_W - 1:0]                delay,
-		 input [`MEM_ADDR_W - 1:0]              start,
-		 input signed [`MEM_ADDR_W - 1:0]       shift,
-		 input signed [`MEM_ADDR_W - 1:0]       incr,
-		 input [`MEM_ADDR_W - 1:0]              iterations2,
-		 input [`PERIOD_W - 1:0]                period2,
-		 input signed [`MEM_ADDR_W - 1:0]       shift2,
-		 input signed [`MEM_ADDR_W - 1:0]       incr2,
+		 input [MEM_ADDR_W - 1:0]              iterations,
+		 input [PERIOD_W - 1:0]                period,
+		 input [PERIOD_W - 1:0]                duty,
+		 input [PERIOD_W - 1:0]                delay,
+		 input [MEM_ADDR_W - 1:0]              start,
+		 input signed [MEM_ADDR_W - 1:0]       shift,
+		 input signed [MEM_ADDR_W - 1:0]       incr,
+		 input [MEM_ADDR_W - 1:0]              iterations2,
+		 input [PERIOD_W - 1:0]                period2,
+		 input signed [MEM_ADDR_W - 1:0]       shift2,
+		 input signed [MEM_ADDR_W - 1:0]       incr2,
 
 		 //outputs
-		 output reg [`MEM_ADDR_W - 1:0]         addr,
+		 output reg [MEM_ADDR_W - 1:0]         addr,
 		 output reg                             mem_en,
 		 output reg                             done
 		 );
 
    //connection wires
-   wire [`MEM_ADDR_W - 1:0]                             addrB;
+   wire [MEM_ADDR_W - 1:0]                             addrB;
    wire                                                 mem_enB;
    wire                                                 doneA, doneB;
    wire                                                 mem_en_reg_w;
@@ -45,10 +48,13 @@ module xaddrgen2 (
    wire                                                 pause = mem_en_reg_w & ~doneA;
 
    //after first run, addrgenA start comes from addrgenB addr
-   wire	[`MEM_ADDR_W - 1:0]				startA = run ? start : addrB;
+   wire	[MEM_ADDR_W - 1:0]				startA = run ? start : addrB;
 
    //instantiate address generators
-   xaddrgen addrgenA (
+   xaddrgen # (
+	.MEM_ADDR_W(MEM_ADDR_W),
+	.PERIOD_W(PERIOD_W)
+   ) addrgenA (
         .clk(clk),
         .rst(rst),
         .init(runA),
@@ -66,7 +72,10 @@ module xaddrgen2 (
         .done(doneA)
         );
 
-   xaddrgen addrgenB (
+   xaddrgen # ( 
+	.MEM_ADDR_W(MEM_ADDR_W),
+	.PERIOD_W(PERIOD_W)
+   ) addrgenB (
         .clk(clk),
         .rst(rst),
         .init(run),
