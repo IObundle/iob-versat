@@ -1,6 +1,6 @@
 [submodule "submodules/interconnect"]
 	path = submodules/interconnect
 	url = git@github.com:IObundle/iob-interconnect.git
-[submodule "mem"]
+[submodule "submodules/mem"]
 	path = submodules/mem
 	url = git@github.com:IObundle/iob-mem.git

@@ -2,6 +2,7 @@
 
 // Top defines
 `include "xversat.vh"
+`define BASE_ADDR_W ((`nMEM_W+`MEM_ADDR_W) > (`CONF_REG_ADDR_W) ? (`nMEM_W+`MEM_ADDR_W) : (`CONF_REG_ADDR_W))
 `include "xconfdefs.vh"
 
 // FU defines              
