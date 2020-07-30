@@ -4,7 +4,7 @@ SUBMODULES_DIR:=$(ROOT_DIR)/submodules
 MEM_DIR:=$(SUBMODULES_DIR)/mem
 RTL_DIR:=$(ROOT_DIR)/hardware
 TB_DIR := $(RTL_DIR)/testbench
-INC_DIR := $(RTL_DIR)/include
+INC_DIR := $(RTL_DIR)/include/common
 
 
 

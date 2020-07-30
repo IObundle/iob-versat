@@ -1,5 +1,5 @@
 PYTHON_DIR = ../../submodules/iob-soc/software/python/
-CFLAGS=-Wall -Wno-unused-result -Wno-unknown-pragmas -Wfatal-errors -fPIC 
+CFLAGS=-Wall -Wno-unused-result -Wno-unknown-pragmas -Wfatal-errors -fPIC -std=gnu++11
 INCLUDE_PC = -I../src/ -I.
 VERSAT_INC=../../../hardware/include/
 
