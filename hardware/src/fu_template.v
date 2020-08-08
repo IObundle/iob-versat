@@ -1,6 +1,6 @@
 `timescale 1ns/1ps
 `include "versat.vh"
-`include "stage.vh"
+`include "stage_template.vh"
 `include "fu_template.vh"
 
 module fu_template 
@@ -13,7 +13,7 @@ module fu_template
     input                           clk,
     input                           rst,
 
-                 //cpu interface 
+    //cpu interface 
     input                           valid,
     input [2:0]                     address,
     input [31:0]                    wdata,
@@ -21,15 +21,15 @@ module fu_template
     output reg [31:0]               rdata,
     output reg                      ready,
  
- //mem interface
-    input [`REQ_W-1:0]              mem_in,
-    output [`REQ_W-1:0]             mem_out,
+    //mem interface
+    input [`REQ_W-1:0]              mem_req,
+    output [`RESP_W-1:0]            mem_resp,
  
- //flow interface
+    //flow interface
     input [N_FLOW_IN*`DATA_W-1:0]   flow_in,
     output [N_FLOW_OUT*`DATA_W-1:0] flow_out,
 
- //control
+    //control
     input                           run,
     output                          done
  
