@@ -28,6 +28,9 @@ void CMulAdd::start_run()
     duty_cnt = 0;
     cnt_addr = 0;
     done = 0;
+
+    for (int i = 0; i < MULADD_LAT; i++)
+        output_buff[i] = 0;
 }
 
 //update output buffer, write results to databus

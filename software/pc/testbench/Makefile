@@ -16,9 +16,11 @@ versat:
 
 pc: ../src/versat.hpp versat.h 
 	g++ -O3 -o firmware_PC.elf -pthread -lm $(CFLAGS) $(INCLUDE_PC) $(SRC_PC) ../src/*.cpp
-
+	-mkdir iter
 clean:
 	@rm -rf *.elf *.h *.vh
-	rm versat_info.txt
+	-rm -r iter
+	-rm versat_info.txt
+
 
 .PHONY: all clean

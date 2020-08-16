@@ -5,6 +5,8 @@
 #include "mem.hpp"
 #include "mul.hpp"
 #include "mul_add.hpp"
+#include "vread.hpp"
+#include "vwrite.hpp"
 class CStage
 {
 private:
@@ -16,6 +18,12 @@ public:
 #if nMEM > 0
     CMemPort memA[nMEM];
     CMemPort memB[nMEM];
+#endif
+#if nVI > 0
+    CRead vi[nVI];
+#endif
+#if nVO > 0
+    CWrite vo[nVO];
 #endif
 #if nALU > 0
     CALU alu[nALU];
@@ -70,6 +78,7 @@ extern CStage stage[nSTAGE];
 extern CStage shadow_reg[nSTAGE];
 extern CMem versat_mem[nSTAGE][nMEM];
 extern int versat_iter;
+extern int versat_debug;
 extern versat_t global_databus[(nSTAGE + 1) * (1 << (N_W - 1))];
 /*databus vector
 stage 0 is repeated in the start and at the end
@@ -82,6 +91,12 @@ stage 0 databus                      stage 1 databus
 */
 #if nMEM > 0
 extern int sMEMA[nMEM], sMEMA_p[nMEM], sMEMB[nMEM], sMEMB_p[nMEM];
+#endif
+#if nVI > 0
+extern int sVI[nVI], sVI_p[nVI];
+#endif
+#if nVO > 0
+extern int sVO[nVO], sVO_p[nVO];
 #endif
 #if nALU > 0
 extern int sALU[nALU], sALU_p[nALU];
