@@ -1,32 +1,23 @@
-#include "versat.hpp"
+#include "mul_add.hpp"
 #if nMULADD > 0
+class CStage;
+
 CMulAdd::CMulAdd()
 {
 }
 
-CMulAdd::CMulAdd(int versat_base, int i)
+CMulAdd::CMulAdd(int versat_base, int i, versat_t *databus)
 {
     this->versat_base = versat_base;
     this->muladd_base = i;
-}
-
-//set MulAdd configuration to shadow register
-void CMulAdd::update_shadow_reg_MulAdd()
-{
-    shadow_reg[versat_base].muladd[muladd_base].sela = conf[versat_base].muladd[muladd_base].sela;
-    shadow_reg[versat_base].muladd[muladd_base].selb = conf[versat_base].muladd[muladd_base].selb;
-    shadow_reg[versat_base].muladd[muladd_base].fns = conf[versat_base].muladd[muladd_base].fns;
-    shadow_reg[versat_base].muladd[muladd_base].iter = conf[versat_base].muladd[muladd_base].iter;
-    shadow_reg[versat_base].muladd[muladd_base].per = conf[versat_base].muladd[muladd_base].per;
-    shadow_reg[versat_base].muladd[muladd_base].delay = conf[versat_base].muladd[muladd_base].delay;
-    shadow_reg[versat_base].muladd[muladd_base].shift = conf[versat_base].muladd[muladd_base].shift;
+    this->databus = databus;
 }
 
 //start run
 void CMulAdd::start_run()
 {
     //set run_delay
-    run_delay = shadow_reg[versat_base].muladd[muladd_base].delay;
+    run_delay = delay;
 
     //set addrgen counter variables
     loop1 = 0;
@@ -63,12 +54,12 @@ void CMulAdd::update()
         //insert new output
         output_buff[0] = out;
         //update databus
-        stage[versat_base].databus[sMULADD[muladd_base]] = output_buff[MULADD_LAT - 1];
+        databus[sMULADD[muladd_base]] = output_buff[MULADD_LAT - 1];
         //special case for stage 0
         if (versat_base == 0)
         {
             //2nd copy at the end of global databus
-            global_databus[nSTAGE * N + sMULADD[muladd_base]] = output_buff[MULADD_LAT - 1];
+            global_databus[nSTAGE * (1 << (N_W - 1)) + sMULADD[muladd_base]] = output_buff[MULADD_LAT - 1];
         }
     }
 }
@@ -82,8 +73,8 @@ versat_t CMulAdd::output() //implemented as PIPELINED MULADD
     }
 
     //select inputs
-    opa = stage[versat_base].databus[sela];
-    opb = stage[versat_base].databus[selb];
+    opa = databus[sela];
+    opb = databus[selb];
 
     cnt_addr = acumulator();
 
@@ -101,28 +92,6 @@ versat_t CMulAdd::output() //implemented as PIPELINED MULADD
         acc = acc_w - result_mult;
     }
     out = (versat_t)(acc >> shift);
-    //if (opa != 0 && opb != 0)
-    //  printf("Core=%d,A=%hi,B=%hi,Mul_t=%d,Acc=%d,Out=%hi\n", versat_base, opa, opb, result_mult, acc, out);
-
-    //update addrgen counter - 1 iteration of nested for loop
-    /*
-    if (cnt_iter < iter)
-    {
-        if (cnt_per < per)
-        {
-            cnt_addr++;
-            cnt_per++;
-        }
-        else
-        {
-            cnt_per = 0;
-            cnt_addr = 0;
-            cnt_iter++;
-        }
-    }
-    if (cnt_iter == iter)
-        finished = 1;
-    */
 
     return out;
 }
@@ -159,51 +128,47 @@ uint32_t CMulAdd::acumulator()
     return aux;
 }
 
-void CMulAdd::writeConf()
-{
-    conf[versat_base].muladd[muladd_base].sela = sela;
-    conf[versat_base].muladd[muladd_base].selb = selb;
-    conf[versat_base].muladd[muladd_base].fns = fns;
-    conf[versat_base].muladd[muladd_base].iter = iter;
-    conf[versat_base].muladd[muladd_base].per = per;
-    conf[versat_base].muladd[muladd_base].delay = delay;
-    conf[versat_base].muladd[muladd_base].shift = shift;
-}
 void CMulAdd::setSelA(int sela)
 {
-    conf[versat_base].muladd[muladd_base].sela = sela;
     this->sela = sela;
 }
 void CMulAdd::setSelB(int selb)
 {
-    conf[versat_base].muladd[muladd_base].selb = selb;
     this->selb = selb;
 }
 void CMulAdd::setFNS(int fns)
 {
-    conf[versat_base].muladd[muladd_base].fns = fns;
     this->fns = fns;
 }
 void CMulAdd::setIter(int iter)
 {
-    conf[versat_base].muladd[muladd_base].iter = iter;
     this->iter = iter;
 }
 void CMulAdd::setPer(int per)
 {
-    conf[versat_base].muladd[muladd_base].per = per;
     this->per = per;
 }
 void CMulAdd::setDelay(int delay)
 {
-    conf[versat_base].muladd[muladd_base].delay = delay;
     this->delay = delay;
 }
 void CMulAdd::setShift(int shift)
 {
-    conf[versat_base].muladd[muladd_base].shift = shift;
     this->shift = shift;
 }
+void CMulAdd::copy(CMulAdd that)
+{
+    this->versat_base = that.versat_base;
+    this->muladd_base = that.muladd_base;
+    this->sela = that.sela;
+    this->selb = that.selb;
+    this->fns = that.fns;
+    this->iter = that.iter;
+    this->per = that.per;
+    this->delay = that.delay;
+    this->shift = that.shift;
+}
+
 string CMulAdd::info()
 {
     string ver = "mul_add[" + to_string(muladd_base) + "]\n";

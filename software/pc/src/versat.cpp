@@ -10,7 +10,6 @@ void versat_init(int base_addr)
     for (i = 0; i < nSTAGE; i++)
     {
         stage[i] = CStage(base_addr + i);
-        conf[i] = CStage(base_addr + i);
         shadow_reg[i] = CStage(base_addr + i);
     }
     //prepare sel variables
@@ -67,16 +66,6 @@ void versat_init(int base_addr)
     s_cnt += nMULADD;
 #endif
 
-#if nMULADDLITE > 0
-    //MULADDLITES
-    for (i = 0; i < nMULADDLITE; i = i + 1)
-    {
-        sMULADDLITE[i] = s_cnt + i;
-        sMULADDLITE_p[i] = sMULADDLITE[i] + p_offset;
-    }
-    s_cnt += nMULADDLITE;
-#endif
-
 #if nBS > 0
     //BARREL SHIFTERS
     for (i = 0; i < nBS; i = i + 1)
@@ -88,7 +77,7 @@ void versat_init(int base_addr)
 }
 
 int versat_iter = 0;
-void run_sim()
+void *run_sim(void *ie)
 {
     int i = 0;
     //put simulation here
@@ -116,7 +105,6 @@ void run_sim()
         {
             shadow_reg[i].update_all_FUs();
         }
-
         //TO DO: check for run finish
         //set run_done to 0
         for (i = 0; i < nSTAGE; i++)
@@ -132,8 +120,10 @@ void run_sim()
         versat_iter++;
     }
     run_done = 1;
+    return NULL;
 }
 
+pthread_t t;
 void run()
 {
     //MEMSET(base, (RUN_DONE), 1);
@@ -145,12 +135,10 @@ void run()
     for (i = 0; i < nSTAGE; i++)
     {
         stage[i].reset();
-        //shadow_reg[i] = stage[i];
-        stage[i].update_shadow_reg();
+        shadow_reg[i].copy(stage[i]);
     }
 
-    thread ti(run_sim);
-    ti.join();
+    pthread_create(&t, NULL, run_sim, NULL);
 }
 
 int done()
@@ -160,32 +148,14 @@ int done()
 
 void globalClearConf()
 {
-    memset(&conf, 0, sizeof(conf));
     for (int i = 0; i < nSTAGE; i++)
     {
-        conf[i] = CStage(i);
         shadow_reg[i] = CStage(i);
         stage[i] = CStage(i);
     }
 }
 
-int base;
-CStage stage[nSTAGE];
-CStage conf[nSTAGE];
-CStage shadow_reg[nSTAGE];
-CMem versat_mem[nSTAGE][nMEM];
-int run_done = 0;
-
-/*databus vector
-stage 0 is repeated in the start and at the end
-stage order in databus
-[ 0 | nSTAGE-1 | nSTAGE-2 | ... | 2  | 1 | 0 ]
-^                                    ^
-|                                    |
-stage 0 databus                      stage 1 databus
-
-*/
-versat_t global_databus[(nSTAGE + 1) * N];
+versat_t global_databus[(nSTAGE + 1) * (1 << (N_W - 1))];
 #if nMEM > 0
 int sMEMA[nMEM], sMEMA_p[nMEM], sMEMB[nMEM], sMEMB_p[nMEM];
 #endif
@@ -201,9 +171,13 @@ int sMUL[nMUL], sMUL_p[nMUL];
 #if nMULADD > 0
 int sMULADD[nMULADD], sMULADD_p[nMULADD];
 #endif
-#if nMULADDLITE > 0
-int sMULADDLITE[nMULADDLITE], sMULADDLITE_p[nMULADDLITE];
-#endif
+
 #if nBS > 0
 int sBS[nBS], sBS_p[nBS];
 #endif
+
+int base;
+CStage stage[nSTAGE];
+CStage shadow_reg[nSTAGE];
+CMem versat_mem[nSTAGE][nMEM];
+int run_done = 0;

@@ -1,5 +1,6 @@
 `timescale 1ns / 1ps
 
+`include "xdefs.vh"
 `include "xversat.vh"
 `include "xmemdefs.vh"
 `include "versat-io.vh"
@@ -175,15 +176,14 @@ module vwrite #(
         .clk(clk),
 
         // Reading port
-        .r_port_en(enA),
+        .r_en(enA),
         .r_addr(addrA),
         .data_out(outA),
 
         // Writting port
-        .w_port_en(enB),
+        .w_en(enB & wrB),
         .w_addr(addrB),
-        .data_in(data_to_wrB),
-        .w_en(wrB)
+        .data_in(data_to_wrB)
         );
 
 endmodule

@@ -35,7 +35,7 @@ module xconf_mem # (
    end
 
    //instantiate the config cache memory
-   iob_1p_mem #(
+   iob_sp_ram #(
 	.DATA_W(`CONF_BITS),
 	.ADDR_W(`CONF_MEM_ADDR_W))
    mem (

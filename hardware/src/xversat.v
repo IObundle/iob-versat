@@ -2,6 +2,7 @@
 
 // Top defines
 `include "xversat.vh"
+`define BASE_ADDR_W ((`nMEM_W+`MEM_ADDR_W) > (`CONF_REG_ADDR_W) ? (`nMEM_W+`MEM_ADDR_W) : (`CONF_REG_ADDR_W))
 `include "xconfdefs.vh"
 
 // FU defines              
@@ -48,7 +49,7 @@ module xversat # (
       end else begin 
          ready_r0 <= valid;
          ready_r1 <= ready_r0;
-         if ((addr[1+`nMEM_W+`MEM_ADDR_W -: 2] == 2'b0) && !we)
+         if (!addr[1+`BASE_ADDR_W] && !addr[`nMEM_W+`MEM_ADDR_W] && !we)
            ready <= ready_r1; //read mem
          else
            ready <= valid;
@@ -59,8 +60,8 @@ module xversat # (
    wire [`DATABUS_W-1:0] stage_databus [`nSTAGE:0];
 
    // global operations addr
-   wire run_done = ~addr[1+`nMEM_W+`MEM_ADDR_W] & addr[`nMEM_W+`MEM_ADDR_W];
-   wire global_conf_clear = addr[1+`nMEM_W+`MEM_ADDR_W] & (addr[`CONF_REG_ADDR_W:0] == `GLOBAL_CONF_CLEAR);
+   wire run_done = ~addr[1+`BASE_ADDR_W] & addr[`nMEM_W+`MEM_ADDR_W];
+   wire global_conf_clear = addr[1+`BASE_ADDR_W] & (addr[`CONF_REG_ADDR_W:0] == `GLOBAL_CONF_CLEAR);
 
    // select stage address
    wire [`CTR_ADDR_W-`nSTAGE_W-1:0] stage_addr = {addr[`CTR_ADDR_W-`nSTAGE_W-1:1], addr[0] & ~global_conf_clear};
