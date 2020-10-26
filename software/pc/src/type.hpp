@@ -2,6 +2,8 @@
 #include <iostream>
 #include <bitset>
 
+#define SIMD 0
+
 #if DATAPATH_W == 16
 typedef int16_t versat_t;
 typedef int32_t mul_t;

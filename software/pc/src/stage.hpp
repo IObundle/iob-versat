@@ -1,21 +1,31 @@
 #include "type.hpp"
+#if YOLO_VERSAT == 0
 #include "alu.hpp"
 #include "alu_lite.hpp"
 #include "bs.hpp"
 #include "mem.hpp"
 #include "mul.hpp"
 #include "mul_add.hpp"
+#include "vread.hpp"
+#include "vwrite.hpp"
 class CStage
 {
 private:
 public:
     int versat_base;
+
     versat_t *databus;
     //versat_t* databus[N*2];
     //Versat Function Units
 #if nMEM > 0
     CMemPort memA[nMEM];
     CMemPort memB[nMEM];
+#endif
+#if nVI > 0
+    CRead vi[nVI];
+#endif
+#if nVO > 0
+    CWrite vo[nVO];
 #endif
 #if nALU > 0
     CALU alu[nALU];
@@ -32,7 +42,6 @@ public:
 #if nMULADD > 0
     CMulAdd muladd[nMULADD];
 #endif
-
     //Default constructor
     CStage();
     //Default Constructor
@@ -68,8 +77,12 @@ public:
 extern int base;
 extern CStage stage[nSTAGE];
 extern CStage shadow_reg[nSTAGE];
+#if nMEM > 0
 extern CMem versat_mem[nSTAGE][nMEM];
+#endif
 extern int versat_iter;
+extern int versat_debug;
+
 extern versat_t global_databus[(nSTAGE + 1) * (1 << (N_W - 1))];
 /*databus vector
 stage 0 is repeated in the start and at the end
@@ -80,8 +93,15 @@ stage order in databus
 stage 0 databus                      stage 1 databus
 
 */
+
 #if nMEM > 0
 extern int sMEMA[nMEM], sMEMA_p[nMEM], sMEMB[nMEM], sMEMB_p[nMEM];
+#endif
+#if nVI > 0
+extern int sVI[nVI], sVI_p[nVI];
+#endif
+#if nVO > 0
+extern int sVO[nVO], sVO_p[nVO];
 #endif
 #if nALU > 0
 extern int sALU[nALU], sALU_p[nALU];
@@ -98,3 +118,45 @@ extern int sMULADD[nMULADD], sMULADD_p[nMULADD];
 #if nBS > 0
 extern int sBS[nBS], sBS_p[nBS];
 #endif
+
+#else
+#include "yolo_read.hpp"
+#include "yolo_write.hpp"
+class CVersat
+{
+public:
+versat_t databus_read[nYOLOvect+1]={0};
+    CYoloRead yread;
+    CYoloWrite ywrite;
+    //CDma dma;
+    int versat_base;
+    CVersat();
+    CVersat(int versat_base);
+
+    //clear Versat config
+    void clearConf();
+
+    //set run start on all FUs
+    void start_all_FUs();
+
+    //set update output buffers on all FUs
+    void update_all_FUs();
+
+    //calculate new output on all FUs
+    void output_all_FUs();
+    void copy(CVersat that);
+    void copy_write_config(CVersat that);
+    void copy_read_config(CVersat that);
+    string info();
+    string info_iter();
+
+    bool done();
+    void reset();
+};
+
+
+extern versat_t databus_read[nYOLOvect+1];
+#endif
+
+extern int versat_iter;
+extern int versat_debug;

@@ -2,7 +2,8 @@
 #include <stdio.h>
 #include <fstream>
 
-#if INFO == 1
+#if INFO == 1 && YOLO_VERSAT==0
+#if nMEM > 0
 void print_versat_mems()
 {
     FILE *f = fopen("versat_mem.hex", "w");
@@ -19,7 +20,9 @@ void print_versat_mems()
     }
     fclose(f);
 }
-
+#else
+void print_versat_mems() {}
+#endif
 void print_versat_info()
 {
     ofstream inf;

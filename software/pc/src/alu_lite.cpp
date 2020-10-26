@@ -15,6 +15,8 @@ CALULite::CALULite(int versat_base, int i, versat_t *databus)
 void CALULite::start_run()
 {
     //CALULite has no delay
+    for (int i = 0; i < ALULITE_LAT; i++)
+        output_buff[i] = 0;
 }
 
 void CALULite::update()

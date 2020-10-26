@@ -10,6 +10,7 @@
 //
 // VERSAT CLASSES
 //
+#if YOLO_VERSAT ==0
 class CMem;
 class CMemPort;
 class CALU;
@@ -17,6 +18,9 @@ class CALULite;
 class CMul;
 class CMulAdd;
 class CStage;
+#else
+class CVersat;
+#endif
 //
 //VERSAT global variables
 //

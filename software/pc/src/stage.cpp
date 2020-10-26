@@ -1,5 +1,5 @@
 #include "stage.hpp"
-
+#if YOLO_VERSAT == 0
 CStage::CStage()
 {
 }
@@ -25,6 +25,14 @@ CStage::CStage(int versat_base)
         memA[i] = CMemPort(versat_base, i, 0, databus);
     for (i = 0; i < nMEM; i++)
         memB[i] = CMemPort(versat_base, i, 1, databus);
+#endif
+#if nVI > 0
+    for (i = 0; i < nVI; i++)
+        vi[i] = CRead(versat_base, i, databus);
+#endif
+#if nVO > 0
+    for (i = 0; i < nVO; i++)
+        vo[i] = CWrite(versat_base, i, databus);
 #endif
 #if nALU > 0
     for (i = 0; i < nALU; i++)
@@ -59,15 +67,13 @@ void CStage::clearConf()
 //write current config in conf_mem
 void CStage::confMemWrite(int addr)
 {
-    if (addr < CONF_MEM_SIZE)
-        MEMSET(versat_base, (CONF_BASE + CONF_MEM + addr), 0);
+    // TO DO if you want confMEMs
 }
 
 //set addressed config in conf_mem as current config
 void CStage::confMemRead(int addr)
 {
-    if (addr < CONF_MEM_SIZE)
-        MEMGET(versat_base, (CONF_BASE + CONF_MEM + addr));
+    //TO DO if you want ConfMems
 }
 #endif
 
@@ -75,10 +81,20 @@ void CStage::confMemRead(int addr)
 void CStage::start_all_FUs()
 {
     int i = 0;
+#if nMEM > 0
     for (i = 0; i < nMEM; i++)
         memA[i].start_run();
     for (i = 0; i < nMEM; i++)
         memB[i].start_run();
+#endif
+#if nVI > 0
+    for (i = 0; i < nVI; i++)
+        vi[i].start_run();
+#endif
+#if nVO > 0
+    for (i = 0; i < nVO; i++)
+        vo[i].start_run();
+#endif
 #if nALU > 0
     for (i = 0; i < nALU; i++)
         alu[i].start_run();
@@ -105,10 +121,20 @@ void CStage::start_all_FUs()
 void CStage::update_all_FUs()
 {
     int i = 0;
+#if nMEM > 0
     for (i = 0; i < nMEM; i++)
         memA[i].update();
     for (i = 0; i < nMEM; i++)
         memB[i].update();
+#endif
+#if nVI > 0
+    for (i = 0; i < nVI; i++)
+        vi[i].update();
+#endif
+#if nVO > 0
+    for (i = 0; i < nVO; i++)
+        vo[i].update();
+#endif
 #if nALU > 0
     for (i = 0; i < nALU; i++)
         alu[i].update();
@@ -135,10 +161,20 @@ void CStage::update_all_FUs()
 void CStage::output_all_FUs()
 {
     int i = 0;
+#if nMEM > 0
     for (i = 0; i < nMEM; i++)
         memA[i].output();
     for (i = 0; i < nMEM; i++)
         memB[i].output();
+#endif
+#if nVI > 0
+    for (i = 0; i < nVI; i++)
+        vi[i].output();
+#endif
+#if nVO > 0
+    for (i = 0; i < nVO; i++)
+        vo[i].output();
+#endif
 #if nALU > 0
     for (i = 0; i < nALU; i++)
         alu[i].output();
@@ -171,6 +207,14 @@ void CStage::copy(CStage that)
         this->memA[i].copy(that.memA[i]);
         this->memB[i].copy(that.memB[i]);
     }
+#endif
+#if nVI > 0
+    for (i = 0; i < nVI; i++)
+        this->vi[i].copy(that.vi[i]);
+#endif
+#if nVO > 0
+    for (i = 0; i < nVO; i++)
+        this->vo[i].copy(that.vo[i]);
 #endif
 #if nALU > 0
     //ALUs
@@ -215,7 +259,9 @@ void CStage::copy(CStage that)
 
 bool CStage::done()
 {
-    bool auxA, auxB;
+    bool auxA = true;
+#if nMEM > 0
+    bool auxB;
     auxA = memA[0].done;
     auxB = memB[0].done;
     for (int i = 1; i < nMEM; i++)
@@ -223,7 +269,17 @@ bool CStage::done()
         auxA = auxA && memA[i].done;
         auxB = auxB && memB[i].done;
     }
-    return auxA && auxB;
+    auxA = auxA && auxB;
+#endif
+#if nVI > 0
+    for (int i = 0; i < nVI; i++)
+        auxA = auxA && vi[i].done;
+#endif
+#if nVO > 0
+    for (int i = 0; i < nVO; i++)
+        auxA = auxA && vo[i].done;
+#endif
+    return auxA;
 }
 
 void CStage::reset()
@@ -231,11 +287,6 @@ void CStage::reset()
     for (int i = 0; i < 2 * N; i++)
     {
         databus[i] = 0;
-    }
-    for (int i = 0; i < nMEM; i++)
-    {
-        memA[i].done = 0;
-        memB[i].done = 0;
     }
 }
 string CStage::info()
@@ -248,6 +299,14 @@ string CStage::info()
         ver += memA[i].info();
         ver += memB[i].info();
     }
+#endif
+#if nVI > 0
+    for (i = 0; i < nVI; i++)
+        ver += vi[i].info();
+#endif
+#if nVO > 0
+    for (i = 0; i < nVO; i++)
+        ver += vo[i].info();
 #endif
 #if nALU > 0
     for (i = 0; i < nALU; i++)
@@ -294,6 +353,14 @@ string CStage::info_iter()
         ver += memB[i].info_iter();
     }
 #endif
+#if nVI > 0
+    for (i = 0; i < nVI; i++)
+        ver += vi[i].info_iter();
+#endif
+#if nVO > 0
+    for (i = 0; i < nVO; i++)
+        ver += vo[i].info_iter();
+#endif
 #if nALU > 0
     for (i = 0; i < nALU; i++)
     {
@@ -324,5 +391,71 @@ string CStage::info_iter()
         ver += muladd[i].info_iter();
     }
 #endif
-    return ver;
+    return ver;o
 }
+#else
+CVersat::CVersat() {}
+CVersat::CVersat(int versat_base)
+{
+    this->versat_base = versat_base;
+    yread = CYoloRead(versat_base,databus_read);
+    ywrite = CYoloWrite(versat_base,databus_read);
+}
+void CVersat::clearConf()
+{
+    yread = CYoloRead(versat_base,databus_read);
+    ywrite = CYoloWrite(versat_base,databus_read);
+}
+string CVersat::info_iter()
+{
+    return NULL;
+}
+string CVersat::info()
+{
+    return NULL;
+}
+void CVersat::reset()
+{
+    //datapath reset
+    for(int i = 0; i < nYOLOvect+1; i++)
+        databus_read[i]=0;
+    ywrite.reset();
+}
+bool CVersat::done()
+{
+    bool aux1;
+    aux1 = yread.done();
+    aux1 = aux1 && ywrite.done();
+    return aux1;
+}
+void CVersat::copy(CVersat that)
+{
+    yread.copy(that.yread);
+    ywrite.copy(that.ywrite);
+}
+void CVersat::output_all_FUs()
+{
+    yread.output();
+    ywrite.output();
+}
+void CVersat::update_all_FUs()
+{
+    yread.update();
+    ywrite.update();
+}
+void CVersat::start_all_FUs()
+{
+    yread.start_run();
+    ywrite.start_run();
+}
+void CVersat::copy_write_config(CVersat that)
+{
+    ywrite.copy_write_config(that.ywrite);
+}
+void CVersat::copy_read_config(CVersat that)
+{
+    yread.copy_read_config(that.yread);
+    ywrite.copy_read_config(that.ywrite);    
+}
+
+#endif

@@ -1,7 +1,41 @@
 #include "versat.hpp"
 #include <pthread.h>
+versat_t *FPGA_mem;
+
+#if YOLO_VERSAT == 0
+int base;
+CStage stage[nSTAGE];
+#if nVI > 0 || nVO > 0
+#if nVI > 0 && nVO > 0
+#define VERSAT_CONFIG_BUFFER_SIZE 2
+CWrite write_buffer[nSTAGE][nVO][VERSAT_CONFIG_BUFFER_SIZE];
+CStage buffer[nSTAGE];
+#else
+#define VERSAT_CONFIG_BUFFER_SIZE 1
+#if nVI > 0
+CStage buffer[nSTAGE];
+#else
+CWrite write_buffer[nSTAGE][nVO][VERSAT_CONFIG_BUFFER_SIZE];
+#endif
+#endif
+#endif
+CStage shadow_reg[nSTAGE];
+#if nMEM > 0
+CMem versat_mem[nSTAGE][nMEM];
+#endif
+#else
+CVersat versat;
+CVersat shadow_reg;
+CVersat write_buffer[2];
+CVersat read_buffer;
+#endif
+int run_done = 0;
+
 void versat_init(int base_addr)
 {
+
+#if YOLO_VERSAT == 0
+
 
     //init versat stages
     int i;
@@ -11,10 +45,37 @@ void versat_init(int base_addr)
     {
         stage[i] = CStage(base_addr + i);
         shadow_reg[i] = CStage(base_addr + i);
+        buffer[i] = CStage(base_addr + i);
     }
     //prepare sel variables
     int p_offset = (1 << (N_W - 1));
     int s_cnt = 0;
+#if nVI > 0
+    //Vread
+    for (i = 0; i < nVI; i = i + 1)
+    {
+        sVI[i] = s_cnt + i;
+        sVI_p[i] = sVI[i] + p_offset;
+    }
+    s_cnt += nVI;
+    //create mem
+    FPGA_mem = new versat_t[1073741824 / (DATAPATH_W / 8)]; //1GB
+    for (i = 0; i < 1073741824 / (DATAPATH_W / 8); i++)
+    {
+        FPGA_mem[i] = 0;
+    }
+#endif
+#if nVO > 0
+    int j, k;
+    for (i = 0; i < nSTAGE; i++)
+    {
+        for (j = 0; j < nVO; j++)
+        {
+            for (k = 0; k < VERSAT_CONFIG_BUFFER_SIZE; k++)
+                write_buffer[i][j][k] = CWrite(i, j);
+        }
+    }
+#endif
 #if nMEM > 0
     //Memories
     for (i = 0; i < nMEM; i = i + 1)
@@ -74,11 +135,39 @@ void versat_init(int base_addr)
         sBS_p[i] = sBS[i] + p_offset;
     }
 #endif
+
+#else
+    FPGA_mem = new versat_t[1073741824 / (DATAPATH_W / 8)]; //1GB
+    for (int i = 0; i < 1073741824 / (DATAPATH_W / 8); i++)
+    {
+        FPGA_mem[i] = 0;
+    }
+    versat=CVersat(0);
+    shadow_reg=CVersat(0);
+
+    
+#endif
+/*
+#if nVO > 0
+    int j, k;
+    for (i = 0; i < nSTAGE; i++)
+    {
+        for (j = 0; j < nVO; j++)
+        {
+            for (k = 0; k < VERSAT_CONFIG_BUFFER_SIZE; k++)
+                write_buffer[i][j][k] = CWrite(i, j);
+        }
+    }
+#endif
+*/
 }
 
 int versat_iter = 0;
+int versat_run = 0;
+int versat_debug = 0;
 void *run_sim(void *ie)
 {
+#if YOLO_VERSAT ==0
     int i = 0;
     //put simulation here
     bool run_mem = 0;
@@ -107,6 +196,10 @@ void *run_sim(void *ie)
         }
         //TO DO: check for run finish
         //set run_done to 0
+        if (versat_debug == 1)
+        {
+            print_versat_iter();
+        }
         for (i = 0; i < nSTAGE; i++)
         {
             run_mem_stage[i] = shadow_reg[i].done();
@@ -121,23 +214,106 @@ void *run_sim(void *ie)
     }
     run_done = 1;
     return NULL;
+#else
+    bool run_mem = 0;
+    //set run start for all FUs
+    shadow_reg.start_all_FUs();
+    //main run loop
+    while (!run_mem)
+    {
+        //calculate new outputs
+        shadow_reg.output_all_FUs();
+
+        //update output buffers and datapath
+        shadow_reg.update_all_FUs();
+        run_mem = shadow_reg.done();
+        versat_iter++;
+    }
+    run_done = 1;
+    return NULL;
+#endif
+
 }
+#if nVO > 0 || YOLO_VERSAT == 1
+void write_buffer_transfer()
+{
+#if YOLO_VERSAT == 0
+    if (VERSAT_CONFIG_BUFFER_SIZE > 1)
+    {
+        for (int i = 0; i < nSTAGE; i++)
+            for (int j = 0; j < nVO; j++)
+            {
+                shadow_reg[i].vo[j].copy_ext(write_buffer[i][j][1]);
+                write_buffer[i][j][1].copy_ext(write_buffer[i][j][0]);
+                write_buffer[i][j][0].copy_ext(stage[i].vo[j]);
+            }
+    }
+    else
+    {
+        for (int i = 0; i < nSTAGE; i++)
+            for (int j = 0; j < nVO; j++)
+            {
+                shadow_reg[i].vo[j].copy_ext(write_buffer[i][j][0]);
+                write_buffer[i][j][0].copy_ext(stage[i].vo[j]);
+            }
+    }
+
+#else
+    shadow_reg.copy_write_config(write_buffer[1]);
+    write_buffer[1].copy_write_config(write_buffer[0]);
+    write_buffer[0].copy_write_config(versat);
+#endif
+}
+#endif
+#if nVI > 0 || YOLO_VERSAT == 1
+void FU_buffer_transfer()
+{
+    #if YOLO_VERSAT == 0
+    for (int i = 0; i < nSTAGE; i++)
+    {
+        stage[i].reset();
+        shadow_reg[i].copy(buffer[i]);
+        for (int j = 0; j < nVI; j++)
+        {
+            shadow_reg[i].vi[j].copy_ext(stage[i].vi[j]);
+        }
+        buffer[i].copy(stage[i]);
+    }
+    #else
+    versat.reset();
+    shadow_reg.copy(read_buffer);
+    shadow_reg.copy_read_config(versat);
+    #endif
+}
+#endif
 
 pthread_t t;
 void run()
 {
+#if YOLO_VERSAT == 0
     //MEMSET(base, (RUN_DONE), 1);
-    int i = 0;
     run_done = 0;
     versat_iter = 0;
 
-    //update shadow register with current configuration
+//update shadow register with current configuration
+#if nVO > 0
+    write_buffer_transfer();
+#endif
+#if nVI > 0
+    FU_buffer_transfer();
+#else
+    int i = 0;
+
     for (i = 0; i < nSTAGE; i++)
     {
         stage[i].reset();
         shadow_reg[i].copy(stage[i]);
     }
-
+#endif
+#else
+    write_buffer_transfer();
+    FU_buffer_transfer();
+#endif
     pthread_create(&t, NULL, run_sim, NULL);
 }
 
@@ -148,16 +324,22 @@ int done()
 
 void globalClearConf()
 {
+    #if YOLO_VERSAT == 0
     for (int i = 0; i < nSTAGE; i++)
     {
-        shadow_reg[i] = CStage(i);
         stage[i] = CStage(i);
     }
+    #else
+        versat=CVersat(0);
+    #endif
 }
-
+#if YOLO_VERSAT == 0
 versat_t global_databus[(nSTAGE + 1) * (1 << (N_W - 1))];
 #if nMEM > 0
 int sMEMA[nMEM], sMEMA_p[nMEM], sMEMB[nMEM], sMEMB_p[nMEM];
+#endif
+#if nVI > 0
+int sVI[nVI], sVI_p[nVI];
 #endif
 #if nALU > 0
 int sALU[nALU], sALU_p[nALU];
@@ -175,9 +357,4 @@ int sMULADD[nMULADD], sMULADD_p[nMULADD];
 #if nBS > 0
 int sBS[nBS], sBS_p[nBS];
 #endif
-
-int base;
-CStage stage[nSTAGE];
-CStage shadow_reg[nSTAGE];
-CMem versat_mem[nSTAGE][nMEM];
-int run_done = 0;
+#endif
