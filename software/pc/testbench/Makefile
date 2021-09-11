@@ -5,7 +5,7 @@ VERSAT_INC=../../../hardware/include/
 
 
 
-SRC_PC= ./testbench.c  ./test_versat.cpp
+SRC_PC= ./testbench.cpp  
 
 all:versat pc
 
@@ -15,7 +15,14 @@ versat:
 
 
 pc: ../src/versat.hpp versat.h 
-	g++ -O3 -o firmware_PC.elf -pthread -lm $(CFLAGS) $(INCLUDE_PC) $(SRC_PC) ../src/*.cpp
+	g++ -O3 -g -o firmware_PC.elf -pthread -lm $(CFLAGS) $(INCLUDE_PC) $(SRC_PC) ../src/*.cpp
+	-mkdir iter
+
+testMatrixMult: ../src/versat.hpp versat.h 
+	g++ -O3 -g -o firmware_PC.elf -pthread -lm $(CFLAGS) $(INCLUDE_PC) ./testMatrixMult.cpp ../src/*.cpp
+	-mkdir iter
+testConvolution: ../src/versat.hpp versat.h
+	g++ -O3 -g -o firmware_PC.elf -pthread -lm $(CFLAGS) $(INCLUDE_PC) ./testConvolution.cpp ../src/*.cpp
 	-mkdir iter
 clean:
 	@rm -rf *.elf *.h *.vh

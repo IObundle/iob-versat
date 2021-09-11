@@ -445,23 +445,22 @@ int main(int argc, char **argv)
     run();
     while (done() == 0)
         ;
+	int aux_versat_iter=versat_iter;
     //print_versat_info();
     globalClearConf();
 
     run();
     while (done() == 0)
         ;
-
     run();
     //print_versat_info();
 
     while (done() == 0)
         ;
-
     end = clock();
     //print_versat_info();
     printf("\n3D convolution done in %ld us\n", (end - start));
-    printf("Simulation took %d Versat Clock Cycles\n", versat_iter);
+    printf("Simulation took %d Versat Clock Cycles\n", aux_versat_iter);
 
     //display results
     printf("\nActual convolution result\n");

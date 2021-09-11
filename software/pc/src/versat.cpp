@@ -1,30 +1,32 @@
 #include "versat.hpp"
 #include <pthread.h>
-versat_t *FPGA_mem;
 
-int base;
-CStage stage[nSTAGE];
-#if nVI > 0 || nVO > 0
-#if nVI > 0 && nVO > 0
-#define VERSAT_CONFIG_BUFFER_SIZE 2
-CWrite write_buffer[nSTAGE][nVO][VERSAT_CONFIG_BUFFER_SIZE];
-CStage buffer[nSTAGE];
-#else
-#define VERSAT_CONFIG_BUFFER_SIZE 1
-#if nVI > 0
-CStage buffer[nSTAGE];
-#else
-CWrite write_buffer[nSTAGE][nVO][VERSAT_CONFIG_BUFFER_SIZE];
-#endif
-#endif
-#endif
-CStage shadow_reg[nSTAGE];
+
+versat_t global_databus[(nSTAGE + 1) * (1 << (N_W - 1))];
+versat_t* FPGA_mem;
 #if nMEM > 0
-CMem versat_mem[nSTAGE][nMEM];
+int sMEMA[nMEM], sMEMA_p[nMEM], sMEMB[nMEM], sMEMB_p[nMEM];
 #endif
-int run_done = 0;
+#if nVI > 0
+int sVI[nVI], sVI_p[nVI];
+#endif
+#if nALU > 0
+int sALU[nALU], sALU_p[nALU];
+#endif
+#if nALULITE > 0
+int sALULITE[nALULITE], sALULITE_p[nALULITE];
+#endif
+#if nMUL > 0
+int sMUL[nMUL], sMUL_p[nMUL];
+#endif
+#if nMULADD > 0
+int sMULADD[nMULADD], sMULADD_p[nMULADD];
+#endif
+#if nBS > 0
+int sBS[nBS], sBS_p[nBS];
+#endif
 
-void versat_init(int base_addr)
+void CVersat::versat_init(int base_addr)
 {
 
     //init versat stages
@@ -126,11 +128,7 @@ void versat_init(int base_addr)
     }
 #endif
 }
-
-int versat_iter = 0;
-int versat_run = 0;
-int versat_debug = 0;
-void *run_sim(void *ie)
+void* CVersat::run_sim(void* ie)
 {
     int i = 0;
     //put simulation here
@@ -162,7 +160,7 @@ void *run_sim(void *ie)
         //set run_done to 0
         if (versat_debug == 1)
         {
-            print_versat_iter();
+            print_versat_iter(*this);
         }
         for (i = 0; i < nSTAGE; i++)
         {
@@ -180,7 +178,7 @@ void *run_sim(void *ie)
     return NULL;
 }
 #if nVO > 0
-void write_buffer_transfer()
+void CVersat::write_buffer_transfer()
 {
     if (VERSAT_CONFIG_BUFFER_SIZE > 1)
     {
@@ -204,7 +202,7 @@ void write_buffer_transfer()
 }
 #endif
 #if nVI > 0
-void FU_buffer_transfer()
+void CVersat::FU_buffer_transfer()
 {
     for (int i = 0; i < nSTAGE; i++)
     {
@@ -220,7 +218,7 @@ void FU_buffer_transfer()
 #endif
 
 pthread_t t;
-void run()
+void CVersat::run()
 {
     //MEMSET(base, (RUN_DONE), 1);
     run_done = 0;
@@ -242,42 +240,29 @@ void run()
     }
 #endif
 
-    pthread_create(&t, NULL, run_sim, NULL);
+    pthread_create(&t, NULL, run_simulator,(void*)this);
+	 /*auto run_simulator= [](CVersat obj){
+		 obj.run_sim();
+	 };
+	 thread simulator(run_simulator,*this);*/
 }
 
-int done()
+void* run_simulator(void* in)
+{
+	CVersat* versat = (CVersat*)in;
+	versat->run_sim(NULL);
+	return NULL;
+}
+
+int CVersat::done()
 {
     return run_done;
 }
 
-void globalClearConf()
+void CVersat::globalClearConf()
 {
     for (int i = 0; i < nSTAGE; i++)
     {
         stage[i] = CStage(i);
     }
 }
-
-versat_t global_databus[(nSTAGE + 1) * (1 << (N_W - 1))];
-#if nMEM > 0
-int sMEMA[nMEM], sMEMA_p[nMEM], sMEMB[nMEM], sMEMB_p[nMEM];
-#endif
-#if nVI > 0
-int sVI[nVI], sVI_p[nVI];
-#endif
-#if nALU > 0
-int sALU[nALU], sALU_p[nALU];
-#endif
-#if nALULITE > 0
-int sALULITE[nALULITE], sALULITE_p[nALULITE];
-#endif
-#if nMUL > 0
-int sMUL[nMUL], sMUL_p[nMUL];
-#endif
-#if nMULADD > 0
-int sMULADD[nMULADD], sMULADD_p[nMULADD];
-#endif
-
-#if nBS > 0
-int sBS[nBS], sBS_p[nBS];
-#endif

@@ -76,7 +76,9 @@ public:
 extern int base;
 extern CStage stage[nSTAGE];
 extern CStage shadow_reg[nSTAGE];
+#if nMEM >0
 extern CMem versat_mem[nSTAGE][nMEM];
+#endif
 extern int versat_iter;
 extern int versat_debug;
 extern versat_t global_databus[(nSTAGE + 1) * (1 << (N_W - 1))];

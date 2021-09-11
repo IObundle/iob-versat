@@ -59,8 +59,41 @@ CStage::CStage(int versat_base)
 //clear Versat config
 void CStage::clearConf()
 {
-    int i = versat_base;
-    stage[i] = CStage(i);
+int i = 0;
+    #if nMEM > 0
+    for (i = 0; i < nMEM; i++)
+        memA[i] = CMemPort(versat_base, i, 0, databus);
+    for (i = 0; i < nMEM; i++)
+        memB[i] = CMemPort(versat_base, i, 1, databus);
+#endif
+#if nVI > 0
+    for (i = 0; i < nVI; i++)
+        vi[i] = CRead(versat_base, i, databus);
+#endif
+#if nVO > 0
+    for (i = 0; i < nVO; i++)
+        vo[i] = CWrite(versat_base, i, databus);
+#endif
+#if nALU > 0
+    for (i = 0; i < nALU; i++)
+        alu[i] = CALU(versat_base, i, databus);
+#endif
+#if nALULITE > 0
+    for (i = 0; i < nALULITE; i++)
+        alulite[i] = CALULite(versat_base, i, databus);
+#endif
+#if nBS > 0
+    for (i = 0; i < nBS; i++)
+        bs[i] = CBS(versat_base, i, databus);
+#endif
+#if nMUL > 0
+    for (i = 0; i < nMUL; i++)
+        mul[i] = CMul(versat_base, i, databus);
+#endif
+#if nMULADD > 0
+    for (i = 0; i < nMULADD; i++)
+        muladd[i] = CMulAdd(versat_base, i, databus);
+#endif
 }
 
 #ifdef CONF_MEM_USE
