@@ -51,8 +51,8 @@ void CVersat::versat_init(int base_addr)
     }
     s_cnt += nVI;
     //create mem
-    FPGA_mem = new versat_t[1073741824 / (DATAPATH_W / 8)]; //1GB
-    for (i = 0; i < 1073741824 / (DATAPATH_W / 8); i++)
+    FPGA_mem = new versat_t[1073741824 / (DATAPATH_W /8)]; //1GB
+    for (i = 0; i < 1073741824 / (DATAPATH_W /8); i++)
     {
         FPGA_mem[i] = 0;
     }
@@ -265,4 +265,13 @@ void CVersat::globalClearConf()
     {
         stage[i] = CStage(i);
     }
+}
+
+void CVersat::free_mem()
+{
+	for (int i = 0; i < nSTAGE; i++)
+    {
+        stage[i].free_mem();
+    }
+	delete FPGA_mem;
 }

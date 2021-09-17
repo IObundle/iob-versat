@@ -62,13 +62,13 @@ int main(void) {
     versat.run();
     while (versat.done() == 0)
         ;
-	int aux_versat_iter=versat.versat_iter;
     //print_versat_info();
     versat.globalClearConf();
 
     versat.run();
     while (versat.done() == 0)
         ;
+	int aux_versat_iter=versat.versat_iter;
     versat.run();
     //print_versat_info();
 

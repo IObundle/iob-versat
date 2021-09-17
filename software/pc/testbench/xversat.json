@@ -1,6 +1,6 @@
 {
   "nSTAGE": 1,
-  "DATAPATH_W": 16,
+  "DATAPATH_W": 32,
   "nVI": 3,
   "nVO": 1,
   "nMEM": 0,
@@ -10,7 +10,7 @@
   "nMULADD": 1,
   "nYOLO": 1,
   "nBS": 1,
-  "MEM_ADDR_W": 5,
+  "MEM_ADDR_W": 20,
   "PERIOD_W": 5,
   "YOLO_VERSAT": 0,
   "CONF_MEM_ADDR_W": 3,

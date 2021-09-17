@@ -9,6 +9,10 @@ CWrite::CWrite(int versat_base, int base, versat_t *databus)
     this->base = base;
     this->versat_base = versat_base;
     this->databus = databus;
+	mem = new versat_t[mem_size];
+	std::fill_n(mem,mem_size,0);
+
+
 }
 CWrite::CWrite(int versat_base, int base)
 {
@@ -349,6 +353,10 @@ void CWrite::write(int addr, versat_t data)
     {
         mem[addr + MEM_SIZE / 2] = data;
     }
+}
+void CWrite::free_mem()
+{
+	delete mem;
 }
 
 #endif

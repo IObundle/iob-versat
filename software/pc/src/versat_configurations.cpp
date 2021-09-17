@@ -74,6 +74,18 @@ int set_ExtMem_Read(CStage* obj,int index,Acumulator ext_loop)
 
 int set_IntMem_Read(CStage* obj,int index,Acumulator loop)
 {
+	switch(loop.nloops)
+	{
+		case 6:
+		case 5:loop.incr2+=loop.shift*loop.iter+(loop.incr*loop.per)*loop.iter; // 4 + 2*2 = 8
+			   loop.incr3+=loop.shift2*loop.iter2+(loop.incr2*loop.per2)*loop.iter2;
+			   cout << "\nreal values of incr2 are " << loop.incr2 << " and incr3 is " << loop.incr3 << "\n";
+				break;
+		case 4:
+		case 3:loop.incr2+=loop.shift*loop.iter+(loop.incr*loop.per)*loop.iter;
+				cout << "\nreal values of incr2 are " << loop.incr2; 
+		default : break;
+	}
 	obj->vi[index].setIntIter(loop.iter);
 	obj->vi[index].setIntPer(loop.per);
 	obj->vi[index].setIntIter2(loop.iter2);
@@ -89,14 +101,28 @@ int set_IntMem_Read(CStage* obj,int index,Acumulator loop)
 	obj->vi[index].setDuty(loop.duty);
 	obj->vi[index].setDelay(loop.delay);
 	obj->vi[index].setIntStart(loop.start);
-
-
 	return sVI[index];
 }
 
 
 int set_IntMem_Write(CStage* obj,int index,Acumulator loop,int sel)
 {
+	//Each pair of loops is an acumulator.
+	//The pairs work independently, so when going to use the 3rd loop, the iterator is reset to 0
+	//this is not intended on this specific API
+	//we want to iterate over data without being reset to loop.Start;
+	switch(loop.nloops)
+	{
+		case 6:
+		case 5:loop.incr2+=loop.shift*loop.iter+(loop.incr*loop.per)*loop.iter; // 4 + 2*2 = 8
+			   loop.incr3+=loop.shift2*loop.iter2+(loop.incr2*loop.per2)*loop.iter2;
+			   cout << "\nreal values of incr2 are " << loop.incr2 << " and incr3 is " << loop.incr3 << "\n";
+				break;
+		case 4:
+		case 3:loop.incr2+=loop.shift*loop.iter+(loop.incr*loop.per)*loop.iter;
+				cout << "\nreal values of incr2 are " << loop.incr2; 
+		default : break;
+	}
 	obj->vo[index].setIntIter(loop.iter);
 	obj->vo[index].setIntPer(loop.per);
 	obj->vo[index].setIntIter2(loop.iter2);
@@ -142,7 +168,7 @@ int set_ExtMem_Write(CStage* obj,int index,Acumulator ext_loop)
  * 		input	store	-	True = store Matrix Multiplication in Memory and then
  * returns: Position in the Databus to get Results of Matrix Multiplication
  ************************************************************************/
-int matrix_mult(CStage* versat,uint32_t matrix_a,uint32_t matrix_b,uint32_t result_matrix,int r_a,int c_a,int r_b,int c_b,bool store)
+int matrix_mult(CStage* versat,int matrix_a,int matrix_b,int result_matrix,int r_a,int c_a,int r_b,int c_b,bool store)
 {
 	Acumulator store_matrix_A= Acumulator();
 	Acumulator store_matrix_B= Acumulator();
@@ -178,8 +204,8 @@ int matrix_mult(CStage* versat,uint32_t matrix_a,uint32_t matrix_b,uint32_t resu
 					read_matrix_A.loop_settings(0);
 					set_IntMem_Read(versat,0,read_matrix_A);
 
-		read_matrix_B.add_loop(r_a,0);
-			read_matrix_B.add_loop(c_b,-2*c_b+1);
+		read_matrix_B.add_loop(r_a,-c_b);
+			read_matrix_B.add_loop(c_b,-r_b*c_b+1);
 				read_matrix_B.add_loop(r_b,c_b);
 					read_matrix_B.loop_settings(0);
 					set_IntMem_Read(versat,1,read_matrix_B);
@@ -203,7 +229,7 @@ int matrix_mult(CStage* versat,uint32_t matrix_a,uint32_t matrix_b,uint32_t resu
 	return sMULADD[0];
 }
 
-int dot_product(CStage* versat,uint32_t vector_a,uint32_t vector_b,uint32_t result,int length,bool store)
+int dot_product(CStage* versat,int vector_a,int vector_b,int result,int length,bool store)
 {
 	Acumulator store_matrix_A= Acumulator();
 	Acumulator store_matrix_B= Acumulator();
@@ -241,7 +267,7 @@ int dot_product(CStage* versat,uint32_t vector_a,uint32_t vector_b,uint32_t resu
 	workspace
 	output
 */
-int load_data(CStage* versat,uint32_t index,uint32_t addr,uint32_t size)
+int load_data(CStage* versat,int index,int addr,int size)
 {
 	Acumulator load= Acumulator();
 	load.add_loop(size);
@@ -249,7 +275,7 @@ int load_data(CStage* versat,uint32_t index,uint32_t addr,uint32_t size)
 	set_ExtMem_Read(versat,index,load);
 	return index;
 }
-int write_data(CStage* versat,uint32_t index,uint32_t DDR_addr,uint32_t size,uint32_t versat_addr)
+int write_data(CStage* versat,int index,int DDR_addr,int size,int versat_addr)
 {
 	Acumulator load= Acumulator();
 	load.add_loop(size);
@@ -283,13 +309,17 @@ void xyz_to_zxy(int pad,int new_addr,int input_addr,int channels,int height,int 
 					FPGA_mem[new_addr+i+k*(channels)+j*(channels)*(width+pad)]=FPGA_mem[input_addr+k+j*width+i*height*width];
 				}
 }
-int convolutional_layer_xyz(CStage* versat,uint32_t input_addr,uint32_t channels,uint32_t height, uint32_t width, uint32_t kernel_size, uint32_t stride, uint32_t pad,uint32_t weights_addr,uint32_t output_addr,uint32_t nkernels)
+int convolutional_layer_xyz(CStage* versat,int input_addr,int channels,int height, int width, int kernel_size, int stride, int pad,int weights_addr,int output_addr,int nkernels)
 {
 	Acumulator weights = Acumulator();
 	Acumulator input = 	Acumulator();
-	uint32_t new_addr=input_addr+channels*height*width+1;
+	int new_addr=input_addr+channels*height*width+1;
 	int out_w=(width + 2*pad - kernel_size) / stride + 1;
 	int out_h=(height + 2*pad - kernel_size) / stride + 1;
+	int in_w=width+pad;
+	int in_h=height+pad;
+	int rewind_kernel=-kernel_size*kernel_size;
+	int	line_plus_one = in_w-kernel_size;
 	bool padded=true;
 	if(padded==false)
 		{
@@ -297,24 +327,28 @@ int convolutional_layer_xyz(CStage* versat,uint32_t input_addr,uint32_t channels
 			input_addr=new_addr;
 		}
 
-	load_data(versat,0,input_addr,channels*(height+pad)*(width+pad));
+	load_data(versat,0,input_addr,channels*in_h*in_w);
 	load_data(versat,1,weights_addr,kernel_size*kernel_size*nkernels);
 	//calcuclar quantos outputs cabem na MEM_SIZE/2, Minimo Channels*k_size*k_size, fazer varias runs, para calcular as linhas todas
-	input.add_loop(out_h);
-		input.add_loop(out_w,-channels*(width+pad)*(height+pad)+stride);
-			input.add_loop(channels,-((width+pad)-kernel_size)*kernel_size+(width+pad)*(height+pad));
-				input.add_loop(kernel_size,(width+pad)-kernel_size);
-					input.add_loop(kernel_size);
-						input.loop_settings(0);
-						set_IntMem_Read(versat,0,input);
-
-	input.add_loop(out_h,0);
-		input.add_loop(out_w,0);
-			input.add_loop(channels,-kernel_size*kernel_size);
-				input.add_loop(kernel_size,0);
+	input.add_loop(out_h,kernel_size-stride);
+		input.add_loop(out_w,-channels*in_w*in_h+stride);
+			input.add_loop(channels, in_w*in_h-line_plus_one*kernel_size+rewind_kernel); // Posição final x8 depois dos 2 loops -8+16
+				cout << "Position after Input finished Accumulator is " << in_w*in_h-line_plus_one*kernel_size+rewind_kernel;
+				input.add_loop(kernel_size,line_plus_one);
 					input.add_loop(kernel_size,1);
 						input.loop_settings(0);
+						set_IntMem_Read(versat,0,input);
+						cout << "\nInput has nloops=" << (int)input.nloops << " \n";
+
+	weights.add_loop(out_h,0);
+		weights.add_loop(out_w,0);
+			weights.add_loop(channels,rewind_kernel);
+			cout << "Position after Weight finished Accumulator is " << rewind_kernel;
+				weights.add_loop(kernel_size,0);
+					weights.add_loop(kernel_size,1);
+						weights.loop_settings(0);
 					set_IntMem_Read(versat,1,weights);
+						cout << "\nWeights has nloops=" << (int)weights.nloops << " \n";
 
 
 	muladd_operation(versat,sVI[0],sVI[1],0,MULADD_MACC,out_h*out_w,kernel_size*kernel_size*channels,MEMP_LAT,0);

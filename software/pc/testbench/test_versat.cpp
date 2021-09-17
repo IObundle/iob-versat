@@ -49,7 +49,6 @@ void print_versat_iter(CVersat versat)
     string ola;
     static int i = 0;
 
-    printf("PRINTING ITER %d \n", versat.versat_iter);
     if (i == 0 && versat.versat_iter == 0)
     {
         ola = "./iter/versat_iter" + to_string(versat.versat_iter) + ".txt";

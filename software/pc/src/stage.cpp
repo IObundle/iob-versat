@@ -443,3 +443,11 @@ string CStage::info_iter()
 #endif
     return ver;
 }
+
+void CStage::free_mem()
+{
+	for(int i = 0; i < nVI; i++)
+		vi[i].free_mem();
+	for(int i = 0; i < nVO; i++)
+		vo[i].free_mem();
+}

@@ -110,12 +110,12 @@ private:
     bool next_half = false;
     versat_t output_port[MEMP_LAT], out = 0;
     versat_t *databus = NULL;
-#if YOLO_VERSAT == 0
-    versat_t mem[MEM_SIZE] = {0};
-#else
+//#if YOLO_VERSAT == 0
+    //versat_t mem[MEM_SIZE] = {0};
+//#else
     versat_t *mem;
-    int mem_size = 0;
-#endif
+    int mem_size = MEM_SIZE;
+//#endif
     //AGU VARIABLES
     int loop1 = 0,
         loop2 = 0, loop3 = 0, loop4 = 0, loop5 = 0, loop6 = 0;
@@ -171,7 +171,8 @@ public:
 
     //update output buffer, write results to databus
     void update();
-
+	void free_mem();
+	
     versat_t output();
     void getdatafromDDR();
     versat_t AGU();

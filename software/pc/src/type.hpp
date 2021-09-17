@@ -45,5 +45,5 @@ using namespace std;
 #define CONF_BASE (1 << (nMEM_W + MEM_ADDR_W + 1))
 #define CONF_MEM_SIZE ((int)pow(2, CONF_MEM_ADDR_W))
 //#define MEM_SIZE ((int)pow(2,MEM_ADDR_W))
-#define MEM_SIZE (1 << MEM_ADDR_W)
+#define MEM_SIZE (int)(1 << MEM_ADDR_W)
 #define RUN_DONE (1 << (nMEM_W + MEM_ADDR_W))

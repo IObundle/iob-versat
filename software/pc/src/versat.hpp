@@ -34,6 +34,7 @@ int done();
 void globalClearConf();
 void write_buffer_transfer();
 void FU_buffer_transfer();
+void free_mem();
 
 int base;
 int versat_iter = 0;
@@ -64,15 +65,15 @@ CMem versat_mem[nSTAGE][nMEM];
 
 class Acumulator {
 public:
-uint32_t iter,per,shift,incr,iter2,per2,shift2,incr2,iter3,per3,shift3,incr3;
+int iter,per,shift,incr,iter2,per2,shift2,incr2,iter3,per3,shift3,incr3;
 uint8_t nloops=0;
-uint32_t delay,duty,start;
-uint32_t extAddr,intAddr;
+int delay,duty,start;
+int extAddr,intAddr;
 Acumulator()
 {
 	iter=per=shift=incr=iter2=per2=shift2=incr2=iter3=per3=shift3=incr3=nloops=delay=duty=start=extAddr=intAddr=0;
 }
-void add_loop(uint32_t per,uint32_t incr = 1 )
+void add_loop(int per,int incr = 1 )
 {
 	switch(nloops)
 	{
@@ -98,7 +99,7 @@ void add_loop(uint32_t per,uint32_t incr = 1 )
 	}
 }
 
-void loop_settings(uint32_t start = 0, uint32_t duty = 0, uint32_t delay = 0,uint32_t extAddr = 0, uint32_t intAddr = 0)
+void loop_settings(int start = 0, int duty = 0, int delay = 0,int extAddr = 0, int intAddr = 0)
 {
 	this->duty=duty;
 	this->start=start;
@@ -108,9 +109,9 @@ void loop_settings(uint32_t start = 0, uint32_t duty = 0, uint32_t delay = 0,uin
 }
 };
 
-int convolutional_layer_xyz(CStage* versat,uint32_t input_addr,uint32_t channels,uint32_t height, uint32_t width, uint32_t kernel_size, uint32_t stride, uint32_t pad,uint32_t weights_addr,uint32_t output_addr,uint32_t nkernels);
-int matrix_mult(CStage* versat,uint32_t matrix_a,uint32_t matrix_b,uint32_t result_matrix,int r_a,int c_a,int r_b,int c_b,bool store);
-int dot_product(CStage* versat,uint32_t vector_a,uint32_t vector_b,uint32_t result,int length,bool store); 
+int convolutional_layer_xyz(CStage* versat,int input_addr,int channels,int height, int width, int kernel_size, int stride, int pad,int weights_addr,int output_addr,int nkernels);
+int matrix_mult(CStage* versat,int matrix_a,int matrix_b,int result_matrix,int r_a,int c_a,int r_b,int c_b,bool store);
+int dot_product(CStage* versat,int vector_a,int vector_b,int result,int length,bool store); 
 int set_IntMem_Write(CStage* obj,int index,Acumulator loop,int sel);
 int set_ExtMem_Write(CStage* obj,int index,Acumulator ext_loop);
 int set_IntMem_Read(CStage* obj,int index,Acumulator loop);

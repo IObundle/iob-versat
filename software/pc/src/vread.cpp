@@ -405,6 +405,8 @@ CRead::CRead(int versat_base, int base, versat_t *databus)
     this->base = base;
     this->versat_base = versat_base;
     this->databus = databus;
+	mem = new versat_t[mem_size];
+	std::fill_n(mem,mem_size,0);
 }
 #else
 CRead::CRead(int versat_base, int base, versat_t *mem, int mem_size, int n_loop,versat_t *databus)
@@ -705,7 +707,7 @@ versat_t CRead::addrgen2loop_ext()
             }
             else
             {
-                mem[iaddr + next_half] = dat;
+                mem[iaddr + MEM_SIZE/2] = dat;
             }
             addr += extIncr;
             iaddr += 1;
@@ -840,4 +842,8 @@ versat_t CRead::read(int addr)
     }
 }
 
+void CRead::free_mem()
+{
+	delete mem;
+}
 #endif

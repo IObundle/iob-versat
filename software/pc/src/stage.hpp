@@ -70,6 +70,7 @@ public:
 
     bool done();
     void reset();
+	void free_mem();
 
 }; //end class CStage
 

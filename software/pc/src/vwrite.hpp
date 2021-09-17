@@ -18,8 +18,9 @@ private:
     bool next_half = false;
     versat_t output_port[MEMP_LAT], out = 0;
     versat_t *databus = NULL;
-    versat_t mem[MEM_SIZE] = {0};
-
+    //versat_t mem[MEM_SIZE] = {0};
+	versat_t* mem = NULL;
+	int mem_size = MEM_SIZE;
     //AGU VARIABLES
     int loop1 = 0, loop2 = 0, loop3 = 0, loop4 = 0;
     int enable = 0;
@@ -66,6 +67,7 @@ public:
     //update output buffer, write results to databus
     void update();
     void getdatatoDDR();
+	void free_mem();
 
     versat_t output();
     versat_t AGU();
