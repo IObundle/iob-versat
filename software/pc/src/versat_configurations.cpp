@@ -79,11 +79,9 @@ int set_IntMem_Read(CStage* obj,int index,Acumulator loop)
 		case 6:
 		case 5:loop.incr2+=loop.shift*loop.iter+(loop.incr*loop.per)*loop.iter; // 4 + 2*2 = 8
 			   loop.incr3+=loop.shift2*loop.iter2+(loop.incr2*loop.per2)*loop.iter2;
-			   cout << "\nreal values of incr2 are " << loop.incr2 << " and incr3 is " << loop.incr3 << "\n";
 				break;
 		case 4:
 		case 3:loop.incr2+=loop.shift*loop.iter+(loop.incr*loop.per)*loop.iter;
-				cout << "\nreal values of incr2 are " << loop.incr2; 
 		default : break;
 	}
 	obj->vi[index].setIntIter(loop.iter);
@@ -116,11 +114,9 @@ int set_IntMem_Write(CStage* obj,int index,Acumulator loop,int sel)
 		case 6:
 		case 5:loop.incr2+=loop.shift*loop.iter+(loop.incr*loop.per)*loop.iter; // 4 + 2*2 = 8
 			   loop.incr3+=loop.shift2*loop.iter2+(loop.incr2*loop.per2)*loop.iter2;
-			   cout << "\nreal values of incr2 are " << loop.incr2 << " and incr3 is " << loop.incr3 << "\n";
 				break;
 		case 4:
 		case 3:loop.incr2+=loop.shift*loop.iter+(loop.incr*loop.per)*loop.iter;
-				cout << "\nreal values of incr2 are " << loop.incr2; 
 		default : break;
 	}
 	obj->vo[index].setIntIter(loop.iter);
@@ -314,8 +310,8 @@ int convolutional_layer_xyz(CStage* versat,int input_addr,int channels,int heigh
 	Acumulator weights = Acumulator();
 	Acumulator input = 	Acumulator();
 	int new_addr=input_addr+channels*height*width+1;
-	int out_w=(width + 2*pad - kernel_size) / stride + 1;
-	int out_h=(height + 2*pad - kernel_size) / stride + 1;
+	int out_w=((width + 2*pad - kernel_size) / stride) + 1;
+	int out_h=((height + 2*pad - kernel_size) / stride) + 1;
 	int in_w=width+pad;
 	int in_h=height+pad;
 	int rewind_kernel=-kernel_size*kernel_size;
@@ -330,30 +326,31 @@ int convolutional_layer_xyz(CStage* versat,int input_addr,int channels,int heigh
 	load_data(versat,0,input_addr,channels*in_h*in_w);
 	load_data(versat,1,weights_addr,kernel_size*kernel_size*nkernels);
 	//calcuclar quantos outputs cabem na MEM_SIZE/2, Minimo Channels*k_size*k_size, fazer varias runs, para calcular as linhas todas
-	input.add_loop(out_h,kernel_size-stride);
-		input.add_loop(out_w,-channels*in_w*in_h+stride);
-			input.add_loop(channels, in_w*in_h-line_plus_one*kernel_size+rewind_kernel); // Posição final x8 depois dos 2 loops -8+16
-				cout << "Position after Input finished Accumulator is " << in_w*in_h-line_plus_one*kernel_size+rewind_kernel;
-				input.add_loop(kernel_size,line_plus_one);
-					input.add_loop(kernel_size,1);
-						input.loop_settings(0);
-						set_IntMem_Read(versat,0,input);
-						cout << "\nInput has nloops=" << (int)input.nloops << " \n";
-
-	weights.add_loop(out_h,0);
-		weights.add_loop(out_w,0);
-			weights.add_loop(channels,rewind_kernel);
-			cout << "Position after Weight finished Accumulator is " << rewind_kernel;
-				weights.add_loop(kernel_size,0);
-					weights.add_loop(kernel_size,1);
-						weights.loop_settings(0);
-					set_IntMem_Read(versat,1,weights);
-						cout << "\nWeights has nloops=" << (int)weights.nloops << " \n";
+	
+	input.add_loop(nkernels,-in_w*(in_h-kernel_size+stride));	
+		input.add_loop(out_h,(in_w*stride)-stride*out_w);
+			input.add_loop(out_w,-channels*in_w*in_h+stride);
+				input.add_loop(channels, in_w*in_h-line_plus_one*kernel_size+rewind_kernel); // Posição final x8 depois dos 2 loops -8+16
+					input.add_loop(kernel_size,line_plus_one);
+						input.add_loop(kernel_size,1);
+							input.loop_settings(0);
+							set_IntMem_Read(versat,0,input);
 
 
-	muladd_operation(versat,sVI[0],sVI[1],0,MULADD_MACC,out_h*out_w,kernel_size*kernel_size*channels,MEMP_LAT,0);
+	weights.add_loop(nkernels,kernel_size*kernel_size);
+		weights.add_loop(out_h,0);
+			weights.add_loop(out_w,0);
+				weights.add_loop(channels,rewind_kernel);
+					weights.add_loop(kernel_size,0);
+						weights.add_loop(kernel_size,1);
+							weights.loop_settings(0);
+						set_IntMem_Read(versat,1,weights);
+
+
+	muladd_operation(versat,sVI[0],sVI[1],0,MULADD_MACC,out_h*out_w*nkernels,kernel_size*kernel_size*channels,MEMP_LAT,0);
 
 		Acumulator write_matrix = Acumulator();
+		write_matrix.add_loop(nkernels,0);
 		write_matrix.add_loop(out_h*out_w,1);
 		write_matrix.loop_settings(0,0,MEMP_LAT+MULADD_LAT,output_addr,0);
 		set_ExtMem_Write(versat,0,write_matrix);
