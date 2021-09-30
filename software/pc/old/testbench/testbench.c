@@ -89,7 +89,6 @@ int main(int argc, char **argv)
   start = clock();
   for (i = 0; i < nSTAGE; i++)
   {
-
     //configure mem0A to read 3x3 block from feature map
     stage[i].memA[0].setIter(3);
     stage[i].memA[0].setIncr(1);

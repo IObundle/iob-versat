@@ -47,7 +47,6 @@ void CMemPort::reset()
 
 void CMemPort::start_run()
 {
-
     done = 0;
     pos = start;
     pos2 = start;
