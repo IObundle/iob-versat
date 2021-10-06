@@ -1,0 +1,45 @@
+#
+# CORE DEFINITIONS FILE
+#
+
+CORE_NAME:=VERSAT
+TOP_MODULE = iob_versat
+
+DATA_W=32
+
+# VERSAT PATHS
+VERSAT_HW_DIR:=$(VERSAT_DIR)/hardware
+VERSAT_SW_DIR:=$(VERSAT_DIR)/software
+VERSAT_SUBMODULES_DIR:=$(VERSAT_DIR)/submodules
+
+# SUBMODULES
+VERSAT_SUBMODULES:=INTERCON MEM
+$(foreach p, $(VERSAT_SUBMODULES), $(eval $p_DIR ?=$(VERSAT_SUBMODULES_DIR)/$p))
+
+#
+# SIMULATION
+#
+SIM_DIR ?=$(VERSAT_HW_DIR)/simulation
+
+#
+# FPGA
+#
+FPGA_DIR ?=$(shell find $(VERSAT_DIR)/hardware -name $(FPGA_FAMILY))
+
+FPGA_FAMILY ?=CYCLONEV-GT
+#FPGA_FAMILY ?=XCKU
+
+FPGA_FAMILY_LIST = CYCLONEV-GT XCKU
+
+REMOTE_ROOT_DIR ?= sandbox/iob-soc/submodules/VERSAT
+
+#
+# VERSION
+#
+VERSION= 0.1
+VLINE:="V$(VERSION)"
+$(CORE_NAME)_version.txt:
+ifeq ($(VERSION),)
+	$(error "variable VERSION is not set")
+endif
+	echo $(VLINE) > version.txt

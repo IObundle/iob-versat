@@ -1,20 +1,10 @@
-SIM_DIR:=hardware/simulation/icarus
-FPGA_DIR:=hardware/fpga/intel/cyclone_v_gt
-SW_DIR:=software
-
-sim:
-	make -C $(SIM_DIR)
-
-fpga:
-	make -C $(FPGA_DIR)
+VERSAT_DIR:=.
+include core.mk
 
 pc-sim:
-	make -C $(SW_DIR)
+	make -C $(VERSAT_SW_DIR)
 
 clean:
-	-make -C $(SIM_DIR) clean
-	-make -C $(FPGA_DIR) clean
-	-make -C $(SW_DIR) clean
+	-make -C $(VERSAT_SW_DIR) clean
 
-
-.PHONY: sim fpga pc clean
+.PHONY: pc-sim clean
