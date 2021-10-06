@@ -1,7 +1,7 @@
 VERSAT_DIR:=.
 include core.mk
 
-pc-sim:
+pc-emul:
 	make -C $(VERSAT_SW_DIR)
 
 clean:
