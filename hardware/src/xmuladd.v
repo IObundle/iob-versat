@@ -13,15 +13,18 @@ module xmuladd # (
 	) (
                 input                         rst,
                 input                         clk,
-                input			      addrgen_rst,
-
-                //flow interface
-                input [2*`DATABUS_W-1:0]      flow_in,
-                output [DATA_W-1:0] 	      flow_out,
+                
+                //input			      addrgen_rst,
+                
+                input [DATA_W-1:0]           in1,
+                input [DATA_W-1:0]           in2,
+                output [DATA_W-1:0]          out,
 
                 // config interface
                 input [`MULADD_CONF_BITS-1:0] configdata
                 );
+
+   wire addrgen_rst = configdata[2];
 
    wire [`MULADD_FNS_W-1:0]                   opcode;
    wire signed [2*DATA_W-1:0]                 result_mult;
@@ -29,8 +32,6 @@ module xmuladd # (
    reg [2*DATA_W-1:0]                         result;
 
    //data
-   wire signed [DATA_W-1:0]                   op_a;
-   wire signed [DATA_W-1:0]                   op_b;
    wire [`MEM_ADDR_W-1:0]                     op_o;
 
    //config data
@@ -63,23 +64,6 @@ module xmuladd # (
    assign period = configdata[`MULADD_CONF_BITS-1-2*`N_W-`MULADD_FNS_W-`MEM_ADDR_W -: `PERIOD_W];
    assign delay = configdata[`MULADD_CONF_BITS-1-2*`N_W-`MULADD_FNS_W-`MEM_ADDR_W-`PERIOD_W -: `PERIOD_W];
    assign shift = configdata[`MULADD_CONF_BITS-1-2*`N_W-`MULADD_FNS_W-`MEM_ADDR_W-2*`PERIOD_W -: `SHIFT_W];
-
-   //input selection
-   xinmux # ( 
-	.DATA_W(DATA_W)
-   ) muxa (
-        .sel(sela),
-        .data_in(flow_in),
-        .data_out(op_a)
- 	);
-
-   xinmux # ( 
-	.DATA_W(DATA_W)
-   ) muxb (
-        .sel(selb),
-        .data_in(flow_in),
-        .data_out(op_b)
-	);
 
    //addr_gen to control macc
    wire ready = |iterations;
@@ -136,17 +120,17 @@ module xmuladd # (
      if(rst)
        result_mult_reg = {2*DATA_W{1'b0}};
      else
-       result_mult_reg = op_a * op_b;
+       result_mult_reg = in1 * in2;
    assign result_mult = result_mult_reg;
 `else                                          //3-stage pipeline
-   reg signed [DATA_W-1:0] op_a_reg, op_b_reg;
+   reg signed [DATA_W-1:0] in1_reg, in2_reg;
    reg signed [2*DATA_W-1:0] acc, dsp_out;
    wire signed [2*DATA_W-1:0] acc_w;
    //DSP48E template
    always @ (posedge clk) begin
-     op_a_reg <= op_a;
-     op_b_reg <= op_b;
-     result_mult_reg <= op_a_reg * op_b_reg;
+     in1_reg <= in1;
+     in2_reg <= in2;
+     result_mult_reg <= in1_reg * in2_reg;
      if(opcode == `MULADD_MACC)
        acc <= acc_w + result_mult_reg;
      else
@@ -180,6 +164,6 @@ module xmuladd # (
    end
 `endif
 
-   assign flow_out = result >> shift;
+   assign out = result >> shift;
 
 endmodule
