@@ -4,13 +4,15 @@
 
 module xmem #(
               parameter MEM_INIT_FILE="none",
-	      parameter DATA_W = 32
+	      parameter DATA_W = 32,
+         parameter ADDR_W = 16
               )
     (
     //control
     input                         clk,
     input                         rst,
-    input                         run,
+    
+    //input                         run,
     output                        doneA,
     output                        doneB,
 
@@ -21,17 +23,24 @@ module xmem #(
     input                         valid,
 
     //input / output data
-    input [2*`DATABUS_W-1:0]      flow_in,
-    output [2*DATA_W-1:0]         flow_out,
+    input [DATA_W-1:0]            in1,
+    input [DATA_W-1:0]            in2,
+    output [DATA_W-1:0]           out,
+
+    //output [2*DATA_W-1:0]         flow_out,
 
     //configurations
-    input [2*`MEMP_CONF_BITS-1:0] config_bits
+    input [2*`MEMP_CONF_BITS-1:0] configdata
     );
+
+   wire run = configdata[0];
 
    //output databus
    wire [DATA_W-1:0]              outA, outB;
    reg  [DATA_W-1:0]              outA_reg, outB_reg;
-   assign flow_out = {outA_reg, outB_reg};
+   
+   //assign flow_out =            {outA_reg, outB_reg};
+   assign out = outA_reg;
 
    //function to reverse bits
    function [`MEM_ADDR_W-1:0] reverseBits;
@@ -45,37 +54,37 @@ module xmem #(
    endfunction
 
    //unpack configuration bits 
-   wire [`MEM_ADDR_W-1:0] iterA    = config_bits[2*`MEMP_CONF_BITS-1 -: `MEM_ADDR_W];
-   wire [`PERIOD_W-1:0]   perA     = config_bits[2*`MEMP_CONF_BITS-`MEM_ADDR_W-1 -: `PERIOD_W];
-   wire [`PERIOD_W-1:0]   dutyA    = config_bits[2*`MEMP_CONF_BITS-`MEM_ADDR_W-`PERIOD_W-1 -: `PERIOD_W];
-   wire [`N_W-1:0]        selA     = config_bits[2*`MEMP_CONF_BITS-`MEM_ADDR_W-2*`PERIOD_W-1 -: `N_W];
-   wire [`MEM_ADDR_W-1:0] startA   = config_bits[2*`MEMP_CONF_BITS-`MEM_ADDR_W-2*`PERIOD_W-`N_W-1 -: `MEM_ADDR_W];
-   wire [`MEM_ADDR_W-1:0] shiftA   = config_bits[2*`MEMP_CONF_BITS-2*`MEM_ADDR_W-2*`PERIOD_W-`N_W-1 -: `MEM_ADDR_W];
-   wire [`MEM_ADDR_W-1:0] incrA    = config_bits[2*`MEMP_CONF_BITS-3*`MEM_ADDR_W-2*`PERIOD_W-`N_W-1 -: `MEM_ADDR_W];
-   wire [`PERIOD_W-1:0]   delayA   = config_bits[2*`MEMP_CONF_BITS-4*`MEM_ADDR_W-2*`PERIOD_W-`N_W-1 -: `PERIOD_W];
-   wire                   reverseA = config_bits[2*`MEMP_CONF_BITS-4*`MEM_ADDR_W-3*`PERIOD_W-`N_W-1 -: 1];
-   wire                   extA     = config_bits[2*`MEMP_CONF_BITS-4*`MEM_ADDR_W-3*`PERIOD_W-`N_W-1-1 -: 1];
-   wire                   inA_wr   = config_bits[2*`MEMP_CONF_BITS-4*`MEM_ADDR_W-3*`PERIOD_W-`N_W-2-1 -: 1];
-   wire [`MEM_ADDR_W-1:0] iter2A   = config_bits[2*`MEMP_CONF_BITS-4*`MEM_ADDR_W-3*`PERIOD_W-`N_W-3-1 -: `MEM_ADDR_W];
-   wire [`PERIOD_W-1:0]   per2A    = config_bits[2*`MEMP_CONF_BITS-5*`MEM_ADDR_W-3*`PERIOD_W-`N_W-3-1 -: `PERIOD_W];
-   wire [`MEM_ADDR_W-1:0] shift2A  = config_bits[2*`MEMP_CONF_BITS-5*`MEM_ADDR_W-4*`PERIOD_W-`N_W-3-1 -: `MEM_ADDR_W];
-   wire [`MEM_ADDR_W-1:0] incr2A   = config_bits[2*`MEMP_CONF_BITS-6*`MEM_ADDR_W-4*`PERIOD_W-`N_W-3-1 -: `MEM_ADDR_W];
+   wire [`MEM_ADDR_W-1:0] iterA    = configdata[2*`MEMP_CONF_BITS-1 -: `MEM_ADDR_W];
+   wire [`PERIOD_W-1:0]   perA     = configdata[2*`MEMP_CONF_BITS-`MEM_ADDR_W-1 -: `PERIOD_W];
+   wire [`PERIOD_W-1:0]   dutyA    = configdata[2*`MEMP_CONF_BITS-`MEM_ADDR_W-`PERIOD_W-1 -: `PERIOD_W];
+   wire [`N_W-1:0]        selA     = configdata[2*`MEMP_CONF_BITS-`MEM_ADDR_W-2*`PERIOD_W-1 -: `N_W];
+   wire [`MEM_ADDR_W-1:0] startA   = configdata[2*`MEMP_CONF_BITS-`MEM_ADDR_W-2*`PERIOD_W-`N_W-1 -: `MEM_ADDR_W];
+   wire [`MEM_ADDR_W-1:0] shiftA   = configdata[2*`MEMP_CONF_BITS-2*`MEM_ADDR_W-2*`PERIOD_W-`N_W-1 -: `MEM_ADDR_W];
+   wire [`MEM_ADDR_W-1:0] incrA    = configdata[2*`MEMP_CONF_BITS-3*`MEM_ADDR_W-2*`PERIOD_W-`N_W-1 -: `MEM_ADDR_W];
+   wire [`PERIOD_W-1:0]   delayA   = configdata[2*`MEMP_CONF_BITS-4*`MEM_ADDR_W-2*`PERIOD_W-`N_W-1 -: `PERIOD_W];
+   wire                   reverseA = configdata[2*`MEMP_CONF_BITS-4*`MEM_ADDR_W-3*`PERIOD_W-`N_W-1 -: 1];
+   wire                   extA     = configdata[2*`MEMP_CONF_BITS-4*`MEM_ADDR_W-3*`PERIOD_W-`N_W-1-1 -: 1];
+   wire                   in1_wr   = configdata[2*`MEMP_CONF_BITS-4*`MEM_ADDR_W-3*`PERIOD_W-`N_W-2-1 -: 1];
+   wire [`MEM_ADDR_W-1:0] iter2A   = configdata[2*`MEMP_CONF_BITS-4*`MEM_ADDR_W-3*`PERIOD_W-`N_W-3-1 -: `MEM_ADDR_W];
+   wire [`PERIOD_W-1:0]   per2A    = configdata[2*`MEMP_CONF_BITS-5*`MEM_ADDR_W-3*`PERIOD_W-`N_W-3-1 -: `PERIOD_W];
+   wire [`MEM_ADDR_W-1:0] shift2A  = configdata[2*`MEMP_CONF_BITS-5*`MEM_ADDR_W-4*`PERIOD_W-`N_W-3-1 -: `MEM_ADDR_W];
+   wire [`MEM_ADDR_W-1:0] incr2A   = configdata[2*`MEMP_CONF_BITS-6*`MEM_ADDR_W-4*`PERIOD_W-`N_W-3-1 -: `MEM_ADDR_W];
 
-   wire [`MEM_ADDR_W-1:0] iterB    = config_bits[`MEMP_CONF_BITS-1 -: `MEM_ADDR_W];
-   wire [`PERIOD_W-1:0]   perB     = config_bits[`MEMP_CONF_BITS-`MEM_ADDR_W-1 -: `PERIOD_W];
-   wire [`PERIOD_W-1:0]   dutyB    = config_bits[`MEMP_CONF_BITS-`MEM_ADDR_W-`PERIOD_W-1 -: `PERIOD_W];
-   wire [`N_W-1:0]        selB     = config_bits[`MEMP_CONF_BITS-`MEM_ADDR_W-2*`PERIOD_W-1 -: `N_W];
-   wire [`MEM_ADDR_W-1:0] startB   = config_bits[`MEMP_CONF_BITS-`MEM_ADDR_W-2*`PERIOD_W-`N_W-1 -: `MEM_ADDR_W];
-   wire [`MEM_ADDR_W-1:0] shiftB   = config_bits[`MEMP_CONF_BITS-2*`MEM_ADDR_W-2*`PERIOD_W-`N_W-1 -: `MEM_ADDR_W];
-   wire [`MEM_ADDR_W-1:0] incrB    = config_bits[`MEMP_CONF_BITS-3*`MEM_ADDR_W-2*`PERIOD_W-`N_W-1 -: `MEM_ADDR_W];
-   wire [`PERIOD_W-1:0]   delayB   = config_bits[`MEMP_CONF_BITS-4*`MEM_ADDR_W-2*`PERIOD_W-`N_W-1 -: `PERIOD_W];
-   wire                   reverseB = config_bits[`MEMP_CONF_BITS-4*`MEM_ADDR_W-3*`PERIOD_W-`N_W-1 -: 1];
-   wire                   extB     = config_bits[`MEMP_CONF_BITS-4*`MEM_ADDR_W-3*`PERIOD_W-`N_W-1-1 -: 1];
-   wire                   inB_wr   = config_bits[`MEMP_CONF_BITS-4*`MEM_ADDR_W-3*`PERIOD_W-`N_W-2-1 -: 1];
-   wire [`MEM_ADDR_W-1:0] iter2B   = config_bits[`MEMP_CONF_BITS-4*`MEM_ADDR_W-3*`PERIOD_W-`N_W-3-1 -: `MEM_ADDR_W];
-   wire [`PERIOD_W-1:0]   per2B    = config_bits[`MEMP_CONF_BITS-5*`MEM_ADDR_W-3*`PERIOD_W-`N_W-3-1 -: `PERIOD_W];
-   wire [`MEM_ADDR_W-1:0] shift2B  = config_bits[`MEMP_CONF_BITS-5*`MEM_ADDR_W-4*`PERIOD_W-`N_W-3-1 -: `MEM_ADDR_W];
-   wire [`MEM_ADDR_W-1:0] incr2B   = config_bits[`MEMP_CONF_BITS-6*`MEM_ADDR_W-4*`PERIOD_W-`N_W-3-1 -: `MEM_ADDR_W];
+   wire [`MEM_ADDR_W-1:0] iterB    = configdata[`MEMP_CONF_BITS-1 -: `MEM_ADDR_W];
+   wire [`PERIOD_W-1:0]   perB     = configdata[`MEMP_CONF_BITS-`MEM_ADDR_W-1 -: `PERIOD_W];
+   wire [`PERIOD_W-1:0]   dutyB    = configdata[`MEMP_CONF_BITS-`MEM_ADDR_W-`PERIOD_W-1 -: `PERIOD_W];
+   wire [`N_W-1:0]        selB     = configdata[`MEMP_CONF_BITS-`MEM_ADDR_W-2*`PERIOD_W-1 -: `N_W];
+   wire [`MEM_ADDR_W-1:0] startB   = configdata[`MEMP_CONF_BITS-`MEM_ADDR_W-2*`PERIOD_W-`N_W-1 -: `MEM_ADDR_W];
+   wire [`MEM_ADDR_W-1:0] shiftB   = configdata[`MEMP_CONF_BITS-2*`MEM_ADDR_W-2*`PERIOD_W-`N_W-1 -: `MEM_ADDR_W];
+   wire [`MEM_ADDR_W-1:0] incrB    = configdata[`MEMP_CONF_BITS-3*`MEM_ADDR_W-2*`PERIOD_W-`N_W-1 -: `MEM_ADDR_W];
+   wire [`PERIOD_W-1:0]   delayB   = configdata[`MEMP_CONF_BITS-4*`MEM_ADDR_W-2*`PERIOD_W-`N_W-1 -: `PERIOD_W];
+   wire                   reverseB = configdata[`MEMP_CONF_BITS-4*`MEM_ADDR_W-3*`PERIOD_W-`N_W-1 -: 1];
+   wire                   extB     = configdata[`MEMP_CONF_BITS-4*`MEM_ADDR_W-3*`PERIOD_W-`N_W-1-1 -: 1];
+   wire                   in2_wr   = configdata[`MEMP_CONF_BITS-4*`MEM_ADDR_W-3*`PERIOD_W-`N_W-2-1 -: 1];
+   wire [`MEM_ADDR_W-1:0] iter2B   = configdata[`MEMP_CONF_BITS-4*`MEM_ADDR_W-3*`PERIOD_W-`N_W-3-1 -: `MEM_ADDR_W];
+   wire [`PERIOD_W-1:0]   per2B    = configdata[`MEMP_CONF_BITS-5*`MEM_ADDR_W-3*`PERIOD_W-`N_W-3-1 -: `PERIOD_W];
+   wire [`MEM_ADDR_W-1:0] shift2B  = configdata[`MEMP_CONF_BITS-5*`MEM_ADDR_W-4*`PERIOD_W-`N_W-3-1 -: `MEM_ADDR_W];
+   wire [`MEM_ADDR_W-1:0] incr2B   = configdata[`MEMP_CONF_BITS-6*`MEM_ADDR_W-4*`PERIOD_W-`N_W-3-1 -: `MEM_ADDR_W];
 
    //mem enables output by addr gen
    wire enA_int;
@@ -83,35 +92,18 @@ module xmem #(
    wire enB;
 
    //write enables
-   wire wrA = valid? we : (enA_int & inA_wr & ~extA); //addrgen on & input on & input isn't address
-   wire wrB = (enB & inB_wr & ~extB);
+   wire wrA = valid? we : (enA_int & in1_wr & ~extA); //addrgen on & input on & input isn't address
+   wire wrB = (enB & in2_wr & ~extB);
 
    //port addresses and enables
    wire [`MEM_ADDR_W-1:0] addrA, addrA_int, addrA_int2;
    wire [`MEM_ADDR_W-1:0] addrB, addrB_int, addrB_int2;
 
    //data inputs
-   wire [DATA_W-1:0]     inA;
-   wire [DATA_W-1:0]     inB;
+   wire [DATA_W-1:0]     in1;
+   wire [DATA_W-1:0]     in2;
 
-   //input selection
-   xinmux # ( 
-	.DATA_W(DATA_W)
-   ) muxa (
-	.sel(selA),
-	.data_in(flow_in),
-	.data_out(inA)
-	);
-
-   xinmux # ( 
-	.DATA_W(DATA_W)
-   ) muxb (
-	.sel(selB),
-	.data_in(flow_in),
-	.data_out(inB)
-	);
-
-   wire [DATA_W-1:0]     data_to_wrA = valid? rdata : inA ;
+   wire [DATA_W-1:0]     data_to_wrA = valid? rdata : in1 ;
 
    //address generators
    xaddrgen2 addrgen2A (
@@ -155,8 +147,8 @@ module xmem #(
 		      );
 
    //define addresses based on ext and rvrs
-   assign addrA = valid? addr[`MEM_ADDR_W-1:0] : extA? inA[`MEM_ADDR_W-1:0] : addrA_int2[`MEM_ADDR_W-1:0];
-   assign addrB = extB? inB[`MEM_ADDR_W-1:0] : addrB_int2[`MEM_ADDR_W-1:0];
+   assign addrA = valid? addr[`MEM_ADDR_W-1:0] : extA? in1[`MEM_ADDR_W-1:0] : addrA_int2[`MEM_ADDR_W-1:0];
+   assign addrB = extB? in2[`MEM_ADDR_W-1:0] : addrB_int2[`MEM_ADDR_W-1:0];
    assign addrA_int2 = reverseA? reverseBits(addrA_int) : addrA_int;
    assign addrB_int2 = reverseB? reverseBits(addrB_int) : addrB_int;
 
@@ -166,7 +158,7 @@ module xmem #(
    reg en_a_reg, en_b_reg, we_a_reg, we_b_reg;
    always @ (posedge clk) begin
       data_a_reg <= data_to_wrA;
-      data_b_reg <= inB;
+      data_b_reg <= in2;
       addr_a_reg <= addrA;
       addr_b_reg <= addrB;
       en_a_reg <= enA;

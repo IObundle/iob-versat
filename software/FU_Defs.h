@@ -163,7 +163,7 @@ int32_t AddUpdateFunction(FUInstance* instance){
 	return a + b;
 }
 
-struct MemGen4{
+typedef struct MemGen4Tag{
     int iter, per, duty, sel, start, shift, incr, delay, in_wr;
     int rvrs, ext, iter2, per2, shift2, incr2;
     bool done;
@@ -175,7 +175,8 @@ struct MemGen4{
     int duty_cnt;
     int16_t* mem;
     bool debug;
-};
+    int32_t stored[3];
+} MemGen4;
 
 int32_t MemStartFunction(FUInstance* instance){
 	MemGen4* s = (MemGen4*) instance->extraData;
@@ -283,13 +284,16 @@ int32_t MemUpdateFunction(FUInstance* instance){
         }
     }
     
-    int32_t out;
+    int32_t out = s->stored[0];
     if(s->in_wr){
         if(s->enable){
             s->mem[aux] = instance->inputs[0]->output;
         }
     } else {
-        out = s->mem[aux];    
+        //s->stored[2] = s->stored[1];
+        //s->stored[1] = s->stored[0];
+        //s->stored[0] = s->mem[aux];
+        out = s->mem[aux];
     }
 
     if(s->debug){
@@ -299,7 +303,7 @@ int32_t MemUpdateFunction(FUInstance* instance){
     return out;
 }
 
-struct MulAddGen2{
+typedef struct MulAddGen2Tag{
     int32_t acc, acc_w;
     int done, duty;
     int duty_cnt, enable;
@@ -308,7 +312,7 @@ struct MulAddGen2{
     int run_delay;
     int sela, selb, fns, iter, per, delay, shift;
     bool debug;
-};
+} MulAddGen2;
 
 int32_t MulAddStartFunction(FUInstance* instance){
     MulAddGen2* s = (MulAddGen2*) instance->extraData;
