@@ -120,6 +120,9 @@ int bs_operation(CStage* obj, int op_a, int shift, int index, int operation);
 int muladd_operation(CStage* obj, int op_a, int op_b, int index, int operation,int iter,int per, int delay, int shift);
 int mul_operation(CStage* obj, int op_a, int op_b, int index, int operation);
 int alu_operation(CStage* obj,int op_a,int op_b,int index, int alu_index,int operation); // alu_index 0 for ALU, 1 for ALU_LITE
+
+//int input_optimized_convolution(int read_mem,int in_w,int in_h,int channels,int out_w,int out_h,int nkernels,int kernel_size);
+
 void* run_simulator(void* in);
 
 #endif

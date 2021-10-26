@@ -25,11 +25,11 @@ int main(void) {
 	srand((unsigned) time(&t));
 	cout << "Testing Convolution Layer xyz on Deep Versat\n";
 
-	int kernel_size=3;
+	int kernel_size=2;
 	int channels = 3;
 	int nkernels = 2;
-	int height = 417;
-	int width = 417;
+	int height = 4;
+	int width = 4;
 	//int height = 9;
 	//int width = 9;
 	int input_size = height*width*channels;
@@ -114,12 +114,16 @@ int main(void) {
 						}
 				}
 				FPGA_mem[addr_exp+i*(out_w)+j+z*out_w*out_h]=acc;
+				if(width<10)
 				printf("%d\t",FPGA_mem[addr_exp+i*(out_w)+j+z*out_w*out_h]);
 			}
+			if(width<10)
 			printf("\n");
 		}
+		if(width<10)
 		printf("\n\n");
 	}
+
 	convolutional_layer_xyz(&versat.stage[0],0,channels,height,width,kernel_size,stride,pad,addr_B*(DATAPATH_W / 8),addr_res*(DATAPATH_W / 8),nkernels);
 	//print_versat_config();
 
