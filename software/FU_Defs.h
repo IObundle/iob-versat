@@ -156,242 +156,323 @@
 #define MUL_CONF_OFFSET 3
 #define MUL_LAT 3
 
-int32_t AddUpdateFunction(FUInstance* instance){
-    int32_t a = instance->inputs[0]->output;
-	int32_t b = instance->inputs[1]->output;
+typedef struct Alulite_t{
+   int fns;
+   int self_loop;
+} AluliteConfig;
 
-	return a + b;
+int32_t* AluliteUpdateFunction(FUInstance* instance){
+   static int32_t out;
+
+   int32_t a = GetInputValue(instance,0);
+	int32_t b = GetInputValue(instance,1);
+
+   AluliteConfig* c = (AluliteConfig*) instance->config;
+
+   int32_t* storedDelay = (int32_t*) instance->extraData;
+
+   out = *storedDelay;
+
+   int res = 0;
+   switch (c->fns)
+   {
+   case ALULITE_OR:
+     res = a | b;
+     break;
+   case ALULITE_AND:
+     res = a & b;
+     break;
+   case ALULITE_CMP_SIG:
+     break;
+   case ALULITE_MUX:
+     res = a < 0 ? b : c->self_loop == 1 ? out : 0;
+     break;
+   case ALULITE_SUB:
+     res = a < 0 ? b : a - b;
+     break;
+   case ALULITE_ADD:
+     res =  a + b;
+     if (c->self_loop)
+         res =  a < 0 ? b : out;
+     break;
+   case ALULITE_MAX:
+     res =  (a > b ? a : b);
+     break;
+   case ALULITE_MIN:
+     res = (a < b ? a : b);
+     break;
+   default:
+     break;
+   }
+
+   *storedDelay = res;
+
+	return &out;
 }
 
-typedef struct MemGen4Tag{
-    int iter, per, duty, sel, start, shift, incr, delay, in_wr;
-    int rvrs, ext, iter2, per2, shift2, incr2;
-    bool done;
+typedef struct AddrGen_t{
+   int incr2,shift2,per2,iter2,in_wr,ext,rvrs,delay,incr,shift,start,duty,per,iter;
+} AddrGen;
+
+#undef B
+
+typedef struct MemConfig_t{
+   AddrGen B;
+   AddrGen A;
+} MemConfig;
+
+typedef struct MemExtra_t{
+    int done;
     int run_delay;
     int enable;
     int loop1, loop2, loop3, loop4;
-    uint32_t pos;
-    uint32_t pos2;
+    unsigned int pos;
+    unsigned int pos2;
     int duty_cnt;
-    int16_t* mem;
-    bool debug;
-    int32_t stored[3];
-} MemGen4;
+    int debug;
+    unsigned int stored[MEMP_LAT];
+} MemExtra;
 
-int32_t MemStartFunction(FUInstance* instance){
-	MemGen4* s = (MemGen4*) instance->extraData;
+int32_t* MemStartFunction(FUInstance* instance){
+   MemConfig* c = (MemConfig*) instance->config;
+   MemExtra*  e = (MemExtra*) instance->extraData;
 
-    s->done = 0;
-    s->pos = s->start;
-    s->pos2 = s->start;
-    if (s->duty == 0)
-        s->duty = s->per;
-    s->run_delay = s->delay;
+   e->done = 0;
+   e->pos = c->A.start;
+   e->pos2 = c->A.start;
+   if (c->A.duty == 0)
+      c->A.duty = c->A.per;
+   e->run_delay = c->A.delay;
 
-    return 0;
+   return 0;
 }
 
-int32_t MemUpdateFunction(FUInstance* instance){
-	MemGen4* s = (MemGen4*) instance->extraData;
+int32_t* MemUpdateFunction(FUInstance* instance){
+   static int32_t out[2];
 
-	if(s->run_delay){
-		s->run_delay--;
-		return instance->output;
+   MemConfig* c = (MemConfig*) instance->config;
+   MemExtra*  e = (MemExtra*) instance->extraData;
+   int* mem = (int*) instance->memMapped;
+
+   out[0] = 0;
+
+   for(int i = 0; i < MEMP_LAT - 1; i++){
+      e->stored[i] = e->stored[i+1]; 
+   }
+
+   out[0] = e->stored[0];
+
+	if(e->run_delay){
+		e->run_delay--;
+		return out;
 	}
 
-	if(s->done){
-		return instance->output;
+	if(e->done){
+		return out;
 	}
 
-	uint32_t aux;
-	if (s->iter2 == 0 && s->per2 == 0)
+	uint32_t aux = 0;
+	if (c->A.iter2 == 0 && c->A.per2 == 0)
     {
-        if (s->loop2 < s->iter)
+        if (e->loop2 < c->A.iter)
         {
-            if (s->loop1 < s->per)
+            if (e->loop1 < c->A.per)
             {
-                s->loop1++;
-                s->enable = 0;
-                if (s->duty_cnt < s->duty)
+                e->loop1++;
+                e->enable = 0;
+                if (e->duty_cnt < c->A.duty)
                 {
-                    s->enable = 1;
-                    aux = s->pos;
-                    s->duty_cnt++;
-                    s->pos += s->incr;
+                    e->enable = 1;
+                    aux = e->pos;
+                    e->duty_cnt++;
+                    e->pos += c->A.incr;
                 }
             }
-            if (s->loop1 == s->per)
+            if (e->loop1 == c->A.per)
             {
-                s->loop1 = 0;
-                s->duty_cnt = 0;
-                s->loop2++;
-                s->pos += s->shift;
+                e->loop1 = 0;
+                e->duty_cnt = 0;
+                e->loop2++;
+                e->pos += c->A.shift;
             }
         }
-        if (s->loop2 == s->iter)
+        if (e->loop2 == c->A.iter)
         {
-            s->loop2 = 0;
-            s->done = 1;
+            e->loop2 = 0;
+            e->done = 1;
         }
     }
     else
     {
-        if (s->loop4 < s->iter2)
+        if (e->loop4 < c->A.iter2)
         {
-            if (s->loop3 < s->per2)
+            if (e->loop3 < c->A.per2)
             {
-                if (s->loop2 < s->iter)
+                if (e->loop2 < c->A.iter)
                 {
-                    if (s->loop1 < s->per)
+                    if (e->loop1 < c->A.per)
                     {
-                        s->loop1++;
-                        s->enable = 0;
-                        if (s->duty_cnt < s->duty)
+                        e->loop1++;
+                        e->enable = 0;
+                        if (e->duty_cnt < c->A.duty)
                         {
-                            s->enable = 1;
-                            aux = s->pos;
-                            s->duty_cnt++;
-                            s->pos += s->incr;
+                            e->enable = 1;
+                            aux = e->pos;
+                            e->duty_cnt++;
+                            e->pos += c->A.incr;
                         }
                     }
-                    if (s->loop1 == s->per)
+                    if (e->loop1 == c->A.per)
                     {
-                        s->loop1 = 0;
-                        s->loop2++;
-                        s->duty_cnt = 0;
-                        s->pos += s->shift;
+                        e->loop1 = 0;
+                        e->loop2++;
+                        e->duty_cnt = 0;
+                        e->pos += c->A.shift;
                     }
                 }
-                if (s->loop2 == s->iter)
+                if (e->loop2 == c->A.iter)
                 {
-                    s->loop2 = 0;
-                    s->pos2 += s->incr2;
-                    s->pos = s->pos2;
-                    s->loop3++;
+                    e->loop2 = 0;
+                    e->pos2 += c->A.incr2;
+                    e->pos = e->pos2;
+                    e->loop3++;
                 }
             }
-            if (s->loop3 == s->per2)
+            if (e->loop3 == c->A.per2)
             {
-                s->pos2 += s->shift2;
-                s->pos = s->pos2;
-                s->loop3 = 0;
-                s->loop4++;
+                e->pos2 += c->A.shift2;
+                e->pos = e->pos2;
+                e->loop3 = 0;
+                e->loop4++;
             }
         }
-        if (s->loop4 == s->iter2)
+        if (e->loop4 == c->A.iter2)
         {
-            s->done = 1;
+            e->done = 1;
         }
     }
     
-    int32_t out = s->stored[0];
-    if(s->in_wr){
-        if(s->enable){
-            s->mem[aux] = instance->inputs[0]->output;
-        }
+    if(c->A.in_wr){
+         if(e->enable){
+            mem[aux] = GetInputValue(instance,0);
+         }
     } else {
-        //s->stored[2] = s->stored[1];
-        //s->stored[1] = s->stored[0];
-        //s->stored[0] = s->mem[aux];
-        out = s->mem[aux];
+         e->stored[MEMP_LAT-1] = mem[aux];
+         //out = mem[aux]; 
     }
 
-    if(s->debug){
-        printf("[mem] %d:%d\n",aux,out);
+    if(e->debug){
+        printf("[mem] %d:%d\n",aux,out[0]);
     }
 
     return out;
 }
 
-typedef struct MulAddGen2Tag{
-    int32_t acc, acc_w;
+typedef struct MuladdExtra_t{
+    int acc, acc_w;
     int done, duty;
     int duty_cnt, enable;
     int shift_addr, incr, aux, pos;
     int loop2, loop1, cnt_addr;
     int run_delay;
-    int sela, selb, fns, iter, per, delay, shift;
-    bool debug;
-} MulAddGen2;
+    int debug;
+    unsigned int stored[MULADD_LAT];
+} MuladdExtra;
 
-int32_t MulAddStartFunction(FUInstance* instance){
-    MulAddGen2* s = (MulAddGen2*) instance->extraData;
+typedef struct MuladdConfig_t{
+   int shift,delay,per,iter,fns;
+} MuladdConfig;
 
-    s->run_delay = s->delay;
+int32_t* MulAddStartFunction(FUInstance* instance){
+    MuladdConfig* c = (MuladdConfig*) instance->config;
+    MuladdExtra* e = (MuladdExtra*) instance->extraData;
+
+    e->run_delay = c->delay;
 
     //set addrgen counter variables
-    s->incr = 1;
-    s->loop1 = 0;
-    s->duty = s->per;
-    s->loop2 = 0;
-    s->pos = 0;
-    s->shift_addr = -s->per;
-    s->duty_cnt = 0;
-    s->cnt_addr = 0;
-    s->done = 0;
+    e->incr = 1;
+    e->loop1 = 0;
+    e->duty = c->per;
+    e->loop2 = 0;
+    e->pos = 0;
+    e->shift_addr = -c->per;
+    e->duty_cnt = 0;
+    e->cnt_addr = 0;
+    e->done = 0;
 
     return 0;
 }
 
-int32_t MulAddUpdateFunction(FUInstance* instance){
-    int32_t opa = instance->inputs[0]->output;
-    int32_t opb = instance->inputs[1]->output;
+int32_t* MulAddUpdateFunction(FUInstance* instance){
+    static int32_t out;
 
-    MulAddGen2* s = (MulAddGen2*) instance->extraData;
+    int32_t opa = GetInputValue(instance,0);
+    int32_t opb = GetInputValue(instance,1);
+
+    MuladdConfig* c = (MuladdConfig*) instance->config;
+    MuladdExtra* e = (MuladdExtra*) instance->extraData;
+
+    out = 0;
+
+    for(int i = 0; i < MULADD_LAT-1; i++){
+      e->stored[i] = e->stored[i+1]; 
+    }
+
+    out = e->stored[0];
 
     //check for delay
-    if (s->run_delay > 0)
+    if (e->run_delay > 0)
     {
-        s->run_delay--;
-        return instance->output;
+        e->run_delay--;
+        return &out;
     }
 
-    if (s->loop2 < s->iter)
+    if (e->loop2 < c->iter)
     {
-        if (s->loop1 < s->per)
+        if (e->loop1 < c->per)
         {
-            s->loop1++;
-            s->enable = 0;
-            if (s->duty_cnt < s->duty)
+            e->loop1++;
+            e->enable = 0;
+            if (e->duty_cnt < e->duty)
             {
-                s->enable = 1;
-                s->aux = s->pos;
-                s->duty_cnt++;
-                s->pos += s->incr;
+                e->enable = 1;
+                e->aux = e->pos;
+                e->duty_cnt++;
+                e->pos += e->incr;
             }
         }
-        if (s->loop1 == s->per)
+        if (e->loop1 == c->per)
         {
-            s->loop1 = 0;
-            s->duty_cnt = 0;
-            s->loop2++;
-            s->pos += s->shift_addr;
+            e->loop1 = 0;
+            e->duty_cnt = 0;
+            e->loop2++;
+            e->pos += e->shift_addr;
         }
     }
-    if (s->loop2 == s->iter)
+    if (e->loop2 == c->iter)
     {
-        s->loop2 = 0;
-        s->done = 1;
+        e->loop2 = 0;
+        e->done = 1;
     }
-    s->cnt_addr = s->aux;
+    e->cnt_addr = e->aux;
 
     //select acc_w value
-    s->acc_w = (s->cnt_addr == 0) ? 0 : s->acc;
+    e->acc_w = (e->cnt_addr == 0) ? 0 : e->acc;
 
     //perform MAC operation
     int32_t result_mult = opa * opb;
-    if (s->fns == MULADD_MACC)
+    if (c->fns == MULADD_MACC)
     {
-        s->acc = s->acc_w + result_mult;
+        e->acc = e->acc_w + result_mult;
     }
     else
     {
-        s->acc = s->acc_w - result_mult;
+        e->acc = e->acc_w - result_mult;
     }
-    int32_t out = (int32_t)(s->acc >> s->shift);
+    e->stored[MULADD_LAT-1] = (int32_t)(e->acc >> c->shift);
 
-    if(s->debug)
-        printf("[muladd] %d %d %d: %d\n",s->cnt_addr,opa,opb,out);
+    if(e->debug)
+        printf("[muladd] %d %d %d: %d\n",e->acc,opa,opb,e->stored[MULADD_LAT-1]);
 
-    return out;
+    return &out;
 }

@@ -2,7 +2,7 @@
 // input selection  bits = 2 * N_W
 // fns = 4
 `define ALULITE_FNS_W     4
-`define ALULITE_CONF_BITS (2*`N_W + `ALULITE_FNS_W)
+`define ALULITE_CONF_BITS (`ALULITE_FNS_W)
 
 // ALULITE functions
 // concat a 1 to the left to get the feedback versions of these functions

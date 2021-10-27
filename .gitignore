@@ -1,2 +1,4 @@
 software/*.out
 software/*.exe
+
+software/pc-emul/versat_instance_template.h

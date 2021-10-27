@@ -6,57 +6,75 @@
 
 typedef unsigned char byte;
 
-typedef struct FUInstanceTag FUInstance;
+typedef struct FUInstance_t FUInstance;
 
-typedef int32_t (*FUFunction)(FUInstance*);
+typedef int32_t* (*FUFunction)(FUInstance*);
 
 // Type system to prevent misuse
-typedef struct FU_TypeTag{
+typedef struct FU_Type_t{
 	int type;
 } FU_Type;
 
-typedef struct FUDeclarationTag{
+typedef struct FUDeclaration_t{
 	const char* name;
-	int extraBytes;
-   int configBits;
+	
+   int nInputs;
+   int nOutputs;
+
+   // Config and state interface
+   int nConfigs;
+   int const* configBits;
+   int nStates;
+   int const* stateBits;
+
    int memoryMapBytes;
+   int extraDataSize;
    bool doesIO;
 	FUFunction startFunction;
 	FUFunction updateFunction;
 } FUDeclaration;
 
-typedef struct FUInstanceTag{
+typedef struct{
+   FUInstance* instance;
+   int index;
+} FUInput;
+
+typedef struct FUInstance_t{
 	FU_Type declaration;
-	bool computed;
-	FUInstance* inputs[2]; // Only value that can be changed by user, the rest leave it as it is
-	int32_t output; // For now hardcode output to 32bits
-	int32_t storedOutput;
-	void* extraData;
-   int configDataIndex;
+	FUInput* inputs;
+	int32_t* outputs;
+	int32_t* storedOutputs;
+   void* extraData;
+
+   // Embedded memory 
+	volatile int* memMapped;
+   volatile int* config;
+   volatile int* state;
 } FUInstance;
 
-struct AcceleratorTag;
+typedef struct Accelerator_t Accelerator;
 
-typedef struct VersatTag{
+typedef struct Versat_t{
 	FUDeclaration* declarations;
 	int nDeclarations;
-	struct AcceleratorTag* accelerators;
+	Accelerator* accelerators;
 	int nAccelerators;
 } Versat;
 
-typedef struct AcceleratorTag{
+typedef struct Accelerator_t{
 	Versat* versat;
 	FUInstance* instances;
 	int nInstances;
-   int configDataSize;
 } Accelerator;
 
 // Versat functions
-void InitVersat(Versat* versat);
+void InitVersat(Versat* versat,int base);
 
-FU_Type RegisterFU(Versat* versat,const char* declarationName,int extraBytes,int configBits,int memoryMapBytes,bool doesIO,FUFunction startFunction,FUFunction updateFunction);
+FU_Type RegisterFU(Versat* versat,const char* declarationName,int nInputs,int nOutputs,int nConfigs,const int const* configBits,int nStates,const int const* stateBits,int memoryMapBytes,bool doesIO,int extraDataSize,FUFunction startFunction,FUFunction updateFunction);
 
 void OutputVersatSource(Versat* versat,const char* definitionFilepath,const char* sourceFilepath);
+
+void OutputMemoryMap(Versat* versat);
 
 // Accelerator functions
 Accelerator* CreateAccelerator(Versat* versat);
@@ -64,5 +82,25 @@ Accelerator* CreateAccelerator(Versat* versat);
 FUInstance* CreateFUInstance(Accelerator* accel,FU_Type type);
 
 void AcceleratorRun(Versat* versat,Accelerator* accel,FUInstance* endRoot,FUFunction terminateFunction);
+
+void IterativeAcceleratorRun(Versat* versat,Accelerator* accel,FUInstance* endRoot,FUFunction terminateFunction);
+
+// Helper functions
+FUDeclaration* GetDeclaration(Versat* versat,FUInstance* instance);
+
+int32_t GetInputValue(FUInstance* instance,int index);
+
+void ConnectUnits(Versat* versat,FUInstance* out,int outIndex,FUInstance* in,int inIndex);
+
+// FDInstance functions
+#if 0
+void SetMemoryMappedValue(FDInstance* instance,int byte_offset,int32_t value);
+
+int32_t GetMemoryMappedValue(FDInstance* instance,int byte_offset);
+
+void SetConfig(FDInstance* instance,int byte_offset,int32_t value);
+
+int32_t GetState(FDInstance* instance,int byte_offset);
+#endif
 
 #endif
