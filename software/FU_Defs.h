@@ -156,6 +156,12 @@
 #define MUL_CONF_OFFSET 3
 #define MUL_LAT 3
 
+static int aluliteBits[] = {4};
+static int memBits[] = {10,10,10,10,1,1,1,10,10,10,10,10,10,10,10,10,10,10,1,1,1,10,10,10,10,10,10,10};
+static int muladdBits[] = {5,10,10,10,1};
+static int regBits[] = {32,10};
+static int regStates[] = {32};
+
 typedef struct Alulite_t{
    int fns;
    int self_loop;
@@ -475,4 +481,53 @@ int32_t* MulAddUpdateFunction(FUInstance* instance){
         printf("[muladd] %d %d %d: %d\n",e->acc,opa,opb,e->stored[MULADD_LAT-1]);
 
     return &out;
+}
+
+typedef struct{
+   int initialValue,writeDelay;
+} RegConfig;
+
+int32_t* RegStartFunction(FUInstance* inst){
+   static int32_t startValue;
+
+   RegConfig* config = (RegConfig*) inst->config;
+   int32_t* view = (int32_t*) inst->extraData;
+
+   view[0] = config->writeDelay;
+   
+   startValue = inst->outputs[0]; // Kinda sketchy
+
+   if(!view[1]){
+      startValue = config->initialValue;
+      inst->state[0] = startValue;
+      view[1] = 1;
+   }
+
+   return &startValue;
+}
+
+int32_t* RegUpdateFunction(FUInstance* inst){
+   static int32_t out;
+
+   out = inst->outputs[0]; // By default, keep same output
+   int32_t* delayView = (int32_t*) inst->extraData;
+
+   if((*delayView) > 0){
+      if(*delayView == 1){
+         out = GetInputValue(inst,0);
+      }
+      *delayView -= 1;
+   }
+
+   inst->state[0] = out;
+
+   return &out;
+}
+
+int32_t* AddFunction(FUInstance* inst){
+   static int32_t out;
+
+   out = (GetInputValue(inst,0)) + (GetInputValue(inst,1));
+
+   return &out;
 }
