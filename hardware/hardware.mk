@@ -23,7 +23,7 @@ INCLUDE+=$(incdir) $(VERSAT_HW_DIR)/include
 #included files
 #VHDR+=$(wildcard $(VERSAT_HW_DIR)/include/*.vh)
 #sources
-VSRC+=$(VERSAT_HW_DIR)/src/*.v
+VSRC+=$(wildcard $(VERSAT_HW_DIR)/src/*.v)
 
 
 #cpu accessible registers

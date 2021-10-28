@@ -1,4 +1,5 @@
 `timescale 1ns/1ps
+`include "system.vh"
 `include "iob_lib.vh"
 `include "interconnect.vh"
 `include "iob_versat.vh"
@@ -21,11 +22,13 @@ module iob_versat
    input rst
 	);
 
-versat_instance xversat(
+versat_instance #(.ADDR_W(ADDR_W),.DATA_W(DATA_W)) xversat(
       .valid(valid),
       .we(|wstrb),
       .addr(address),
       .rdata(rdata),
+      .wdata(wdata),
+      .ready(ready),
 
       .clk(clk),
       .rst(rst)

@@ -12,7 +12,7 @@
 // in_wr = 1
 
 // Number of config bits
-`define MEMP_CONF_BITS (`N_W + 7*`MEM_ADDR_W + 4*`PERIOD_W + 1 + 1 + 1)
+`define MEMP_CONF_BITS (7*`MEM_ADDR_W + 4*`PERIOD_W + 1 + 1 + 1)
 
 //MEM configuration offsets
 `define MEMP_CONF_ITER 		0

@@ -1,4 +1,4 @@
-`timescale 1ns/1ps
+`timescale 1ns / 1ps
 `include "xversat.vh"
 `include "xmuladddefs.vh"
 
@@ -11,11 +11,10 @@
 module xmuladd # ( 
 		parameter		      DATA_W = 32
 	) (
-                input                         rst,
-                input                         clk,
-                
-                //input			      addrgen_rst,
-                
+                input                        rst,
+                input                        clk,
+                input                        run,                
+
                 input [DATA_W-1:0]           in1,
                 input [DATA_W-1:0]           in2,
                 output [DATA_W-1:0]          out,
@@ -23,8 +22,6 @@ module xmuladd # (
                 // config interface
                 input [`MULADD_CONF_BITS-1:0] configdata
                 );
-
-   wire addrgen_rst = configdata[2];
 
    wire [`MULADD_FNS_W-1:0]                   opcode;
    wire signed [2*DATA_W-1:0]                 result_mult;
@@ -35,8 +32,6 @@ module xmuladd # (
    wire [`MEM_ADDR_W-1:0]                     op_o;
 
    //config data
-   wire [`N_W-1: 0]                           sela;
-   wire [`N_W-1: 0]                           selb;
    wire [`MEM_ADDR_W-1:0]		      iterations;
    wire [`PERIOD_W-1:0]                       period;
    wire [`PERIOD_W-1:0]                       delay;
@@ -57,22 +52,20 @@ module xmuladd # (
 `endif
 
    //unpack config bits
-   assign sela   = configdata[`MULADD_CONF_BITS-1 -: `N_W];
-   assign selb   = configdata[`MULADD_CONF_BITS-1-`N_W -: `N_W];
-   assign opcode = configdata[`MULADD_CONF_BITS-1-2*`N_W -: `MULADD_FNS_W];
-   assign iterations = configdata[`MULADD_CONF_BITS-1-2*`N_W-`MULADD_FNS_W -: `MEM_ADDR_W];
-   assign period = configdata[`MULADD_CONF_BITS-1-2*`N_W-`MULADD_FNS_W-`MEM_ADDR_W -: `PERIOD_W];
-   assign delay = configdata[`MULADD_CONF_BITS-1-2*`N_W-`MULADD_FNS_W-`MEM_ADDR_W-`PERIOD_W -: `PERIOD_W];
-   assign shift = configdata[`MULADD_CONF_BITS-1-2*`N_W-`MULADD_FNS_W-`MEM_ADDR_W-2*`PERIOD_W -: `SHIFT_W];
+   assign opcode = configdata[`MULADD_CONF_BITS-1 -: `MULADD_FNS_W];
+   assign iterations = configdata[`MULADD_CONF_BITS-1-`MULADD_FNS_W -: `MEM_ADDR_W];
+   assign period = configdata[`MULADD_CONF_BITS-1-`MULADD_FNS_W-`MEM_ADDR_W -: `PERIOD_W];
+   assign delay = configdata[`MULADD_CONF_BITS-1-`MULADD_FNS_W-`MEM_ADDR_W-`PERIOD_W -: `PERIOD_W];
+   assign shift = configdata[`MULADD_CONF_BITS-1-`MULADD_FNS_W-`MEM_ADDR_W-2*`PERIOD_W -: `SHIFT_W];
 
    //addr_gen to control macc
    wire ready = |iterations;
    wire mem_en, done;
    xaddrgen addrgen (
 	.clk(clk),
-	.rst(addrgen_rst),
-	.init(rst),
-	.run(rst & ready),
+	.rst(rst),
+	.init(run),
+	.run(run),
 	.pause(1'b0),
 	.iterations(iterations),
 	.period(period),
