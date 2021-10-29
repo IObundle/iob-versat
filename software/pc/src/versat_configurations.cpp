@@ -615,7 +615,7 @@ int convolutional_layer_xyz(CStage* versat,int input_addr,int channels,int heigh
 					muladd_operation(versat,sVI[i+1],sVI[0],i,MULADD_MACC,(w1+aux_bool)*nkernels,kernel_size*kernel_size*channels,MEMP_LAT,0);
 
 					write_matrix[i] = Acumulator();
-					write_matrix[i].add_loop(nkernels,-w1+aux_bool+out_w*out_h);
+					write_matrix[i].add_loop(nkernels,-(w1+aux_bool)+out_w*out_h);
 					write_matrix[i].add_loop(w1+aux_bool,1);
 					write_matrix[i].loop_settings(0,0,MEMP_LAT+MULADD_LAT,output_addr_new,0);
 					set_ExtMem_Write(versat,0,write_matrix[i]);
@@ -637,18 +637,105 @@ int convolutional_layer_xyz(CStage* versat,int input_addr,int channels,int heigh
 	}
 	else if(y2>0)
 	{
+		load_data(versat,0,weights_addr,kernel_size*kernel_size*nkernels);
+		input_addr_new=input_addr;
+		output_addr_new=output_addr;
+		weights = Acumulator();
+			weights.add_loop(nkernels,kernel_size*kernel_size);
+				weights.add_loop(w1+1,0);
+					weights.add_loop(channels,rewind_kernel);
+						weights.add_loop(kernel_size,0);
+							weights.add_loop(kernel_size,1);
+								weights.loop_settings(0);
+							set_IntMem_Read(versat,0,weights);
 		for(int l=0; l<out_h; l++)
 		{
 			for(int j=0; j<out_w/y2; j++)
 			{
+				
 				for(int i=0; i<nOUTPUTS; i++)
 				{
 					//y
+					load_data(versat,i+1,input_addr_new,channels*(kernel_size+stride*(y-1)));
+					// h1 and h2 
+					input[i]= Acumulator();
+					//input[i].add_loop(nkernels,-in_w*(in_h-kernel_size+stride));	
+					//input[i].add_loop(out_h,(in_w*stride)-stride*out_w);
+					input[i].add_loop(nkernels,-in_w*(in_h-kernel_size+stride)); // check to see if OK
+						input[i].add_loop(y,-channels*in_w*in_h+stride);
+							input[i].add_loop(channels, in_w*in_h-line_plus_one*kernel_size+rewind_kernel); // Posição final x8 depois dos 2 loops -8+16
+								input[i].add_loop(kernel_size,line_plus_one);
+									input[i].add_loop(kernel_size,1);
+										input[i].loop_settings(0);
+										set_IntMem_Read(versat,0,input[i]);
+					aux--;
+
+					muladd_operation(versat,sVI[i+1],sVI[0],i,MULADD_MACC,y*nkernels,kernel_size*kernel_size*channels,MEMP_LAT,0);
+
+					write_matrix[i] = Acumulator();
+					write_matrix[i].add_loop(nkernels,-y+out_w*out_h);
+					write_matrix[i].add_loop(y,1);
+					write_matrix[i].loop_settings(0,0,MEMP_LAT+MULADD_LAT,output_addr_new,0);
+					set_ExtMem_Write(versat,0,write_matrix[i]);
+					// need to duplicate the code because in intMem it will write sequentially, in output ADDR it will write correctly
+						write_matrix[i] = Acumulator();
+						write_matrix[i].add_loop(nkernels,0);
+						write_matrix[i].add_loop(y,1);
+						write_matrix[i].loop_settings(0,0,MEMP_LAT+MULADD_LAT,output_addr_new,0);
+						write_matrix[i].add_loop(kernel_size*kernel_size*channels,0);
+						set_IntMem_Write(versat,0,write_matrix[i],sMULADD[0]);
+
+
+					input_addr_new+=channels*(kernel_size+stride*(y-1));
+					output_addr_new+=y;
 				}
+				//run
 			}
 			if(width_r != 0)
 			{
 				// width x1 and x2
+				//y
+				//r1 and r2
+				aux=width_r_x2;
+				if(aux>0)
+				aux_bool=1;
+				else
+				aux_bool=0;
+				for(int i=0; i<nOUTPUTS; i++)
+				{
+					load_data(versat,i+1,input_addr_new,channels*(kernel_size+stride*(width_r_x1+aux_bool-1)));
+					// h1 and h2 
+					input[i]= Acumulator();
+					//input[i].add_loop(nkernels,-in_w*(in_h-kernel_size+stride));	
+					//input[i].add_loop(out_h,(in_w*stride)-stride*out_w);
+					input[i].add_loop(nkernels,-in_w*(in_h-kernel_size+stride)); // check to see if OK
+						input[i].add_loop(width_r_x1+aux_bool,-channels*in_w*in_h+stride);
+							input[i].add_loop(channels, in_w*in_h-line_plus_one*kernel_size+rewind_kernel); // Posição final x8 depois dos 2 loops -8+16
+								input[i].add_loop(kernel_size,line_plus_one);
+									input[i].add_loop(kernel_size,1);
+										input[i].loop_settings(0);
+										set_IntMem_Read(versat,0,input[i]);
+					aux--;
+
+					muladd_operation(versat,sVI[i+1],sVI[0],i,MULADD_MACC,y*nkernels,kernel_size*kernel_size*channels,MEMP_LAT,0);
+
+					write_matrix[i] = Acumulator();
+					write_matrix[i].add_loop(nkernels,-(width_r_x1+aux_bool)+out_w*out_h);
+					write_matrix[i].add_loop(y,1);
+					write_matrix[i].loop_settings(0,0,MEMP_LAT+MULADD_LAT,output_addr_new,0);
+					set_ExtMem_Write(versat,0,write_matrix[i]);
+					// need to duplicate the code because in intMem it will write sequentially, in output ADDR it will write correctly
+						write_matrix[i] = Acumulator();
+						write_matrix[i].add_loop(nkernels,0);
+						write_matrix[i].add_loop(width_r_x1+aux_bool,1);
+						write_matrix[i].loop_settings(0,0,MEMP_LAT+MULADD_LAT,output_addr_new,0);
+						write_matrix[i].add_loop(kernel_size*kernel_size*channels,0);
+						set_IntMem_Write(versat,0,write_matrix[i],sMULADD[0]);
+
+
+					input_addr_new+=channels*(kernel_size+stride*(width_r_x1+aux_bool-1));
+					output_addr_new+=width_r_x1+aux_bool;
+				}
 			}	
 		}
 	
