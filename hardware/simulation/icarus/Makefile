@@ -9,7 +9,7 @@ INC_DIR := $(RTL_DIR)/include
 
 
 #verilog sources
-SRC := $(RTL_DIR)/src/*.v $(MEM_DIR)/tdp_ram/*.v $(MEM_DIR)/sp_ram/*.v $(MEM_DIR)/2p_mem/iob_2p_mem.v
+SRC := $(RTL_DIR)/src/*.v $(MEM_DIR)/tdp_ram/*.v $(MEM_DIR)/sp_ram/*.v $(MEM_DIR)/2p_ram/iob_2p_ram.v
 
 # select testbench file
 ifeq ($(CMDGOALS),)

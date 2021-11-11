@@ -30,6 +30,7 @@ typedef struct FUDeclaration_t{
    int memoryMapBytes;
    int extraDataSize;
    bool doesIO;
+   FUFunction initializeFunction;
 	FUFunction startFunction;
 	FUFunction updateFunction;
 } FUDeclaration;
@@ -59,6 +60,10 @@ typedef struct Versat_t{
 	int nDeclarations;
 	Accelerator* accelerators;
 	int nAccelerators;
+
+   // Options
+   int byteAddressable;
+   int useShadowRegisters;
 } Versat;
 
 typedef struct Accelerator_t{
@@ -70,7 +75,7 @@ typedef struct Accelerator_t{
 // Versat functions
 void InitVersat(Versat* versat,int base);
 
-FU_Type RegisterFU(Versat* versat,const char* declarationName,int nInputs,int nOutputs,int nConfigs,const int const* configBits,int nStates,const int const* stateBits,int memoryMapBytes,bool doesIO,int extraDataSize,FUFunction startFunction,FUFunction updateFunction);
+FU_Type RegisterFU(Versat* versat,const char* declarationName,int nInputs,int nOutputs,int nConfigs,const int* configBits,int nStates,const int* stateBits,int memoryMapBytes,bool doesIO,int extraDataSize,FUFunction initializeFunction,FUFunction startFunction,FUFunction updateFunction);
 
 void OutputVersatSource(Versat* versat,const char* definitionFilepath,const char* sourceFilepath);
 

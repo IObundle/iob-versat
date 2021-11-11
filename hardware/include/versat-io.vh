@@ -12,7 +12,7 @@
 // `MEMP_CONF_BITS = `N_W + 7*`MEM_ADDR_W + 4*`PERIOD_W + 1 + 1 + 1
 
 // Configuration versat-i
-`define VI_MEMP_CONF_BITS (`MEMP_CONF_BITS-`N_W-1) // No select and write enable
+`define VI_MEMP_CONF_BITS (`MEMP_CONF_BITS - 1) // No select and write enable
 
 `define VI_CONFIG_BITS (`IO_ADDR_W+`IO_SIZE_W+4*`MEM_ADDR_W+2*`PERIOD_W+`VI_MEMP_CONF_BITS)
 
