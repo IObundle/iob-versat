@@ -522,7 +522,7 @@ int32_t* AluliteUpdateFunction(FUInstance* instance){
    static int32_t out;
 
    int32_t a = GetInputValue(instance,0);
-	int32_t b = GetInputValue(instance,1);
+   int32_t b = GetInputValue(instance,1);
 
    AluliteConfig* c = (AluliteConfig*) instance->config;
 
@@ -564,7 +564,7 @@ int32_t* AluliteUpdateFunction(FUInstance* instance){
 
    *storedDelay = res;
 
-	return &out;
+   return &out;
 }
 
 typedef struct MemConfig_t{
@@ -613,17 +613,17 @@ int32_t* MemUpdateFunction(FUInstance* instance){
 
    out[0] = e->stored[0];
 
-	if(e->run_delay){
-		e->run_delay--;
-		return out;
-	}
+   if(e->run_delay){
+      e->run_delay--;
+      return out;
+   }
 
-	if(e->done){
-		return out;
-	}
+   if(e->done){
+      return out;
+   }
 
-	uint32_t aux = 0;
-	if (c->A.iter2 == 0 && c->A.per2 == 0)
+   uint32_t aux = 0;
+   if (c->A.iter2 == 0 && c->A.per2 == 0)
     {
         if (e->loop2 < c->A.iter)
         {
