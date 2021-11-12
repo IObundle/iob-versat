@@ -21,7 +21,7 @@ void InitVersat(Versat* versat,int base){
    MEMSET(versat_base,0x0,0);
 }
 
-FU_Type RegisterFU(Versat* versat,const char* declarationName,int nInputs,int nOutputs,int nConfigs,const int const* configBits,int nStates,const int const* stateBits,int memoryMapBytes,bool doesIO,int extraDataSize,FUFunction startFunction,FUFunction updateFunction){
+FU_Type RegisterFU(Versat* versat,const char* declarationName,int nInputs,int nOutputs,int nConfigs,const int const* configBits,int nStates,const int const* stateBits,int memoryMapBytes,bool doesIO,int extraDataSize,FUFunction initializeFunction,FUFunction startFunction,FUFunction updateFunction){
    FUDeclaration decl = {};
    FU_Type type = {};
 
@@ -33,6 +33,7 @@ FU_Type RegisterFU(Versat* versat,const char* declarationName,int nInputs,int nO
    decl.memoryMapBytes = memoryMapBytes;
    decl.doesIO = doesIO;
    decl.extraDataSize = extraDataSize;
+   decl.initializeFunction = initializeFunction;
    decl.startFunction = startFunction;
    decl.updateFunction = updateFunction;
 

@@ -142,9 +142,9 @@ module vwrite #(
                        .incr(incrB),
                        .delay(delayB),
                        .iterations2(iter2B),
-                         .period2(per2B),
-                         .shift2(shift2B),
-                         .incr2(incr2B),
+                       .period2(per2B),
+                       .shift2(shift2B),
+                       .incr2(incr2B),
                        .addr(addrB_int),
                        .mem_en(enB),
                        .done(doneB)
@@ -166,12 +166,12 @@ module vwrite #(
         // Reading port
         .r_en(enA),
         .r_addr(addrA),
-        .data_out(out0),
+        .r_data(out0),
 
         // Writing port
         .w_en(enB & wrB),
         .w_addr(addrB),
-        .data_in(data_to_wrB)
+        .w_data(data_to_wrB)
         );
 
 endmodule

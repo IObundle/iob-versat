@@ -170,12 +170,12 @@ module vread #(
         // Writting port
         .w_en(enA & wrA),
         .w_addr(addrA),
-        .data_in(data_to_wrA),
+        .w_data(data_to_wrA),
 
         // Reading port
         .r_en(enB),
         .r_addr(addrB),
-        .data_out(outB)
+        .r_data(outB)
         );
 
 endmodule

@@ -2,13 +2,12 @@
    // VERSAT
    //
 
+   `include "versat_defs.vh"
+
    iob_versat versat
       ( 
-      //CPU interface
-      .clk       (clk),
-      .rst       (reset),
-
       // AXI4 master interface
+      `ifdef IO
       //address write
       .m_axi_awid(m_axi_awid[1*1+:1]), 
       .m_axi_awaddr(m_axi_awaddr[1*`DDR_ADDR_W+:`DDR_ADDR_W]), 
@@ -51,11 +50,25 @@
       .m_axi_rlast(m_axi_rlast[1*1+:1]), 
       .m_axi_rvalid(m_axi_rvalid[1*1+:1]),  
       .m_axi_rready(m_axi_rready[1*1+:1]),
+      `endif
 
       .valid(slaves_req[`valid(`VERSAT)]),
       .address(slaves_req[`address(`VERSAT,`VERSAT_ADDR_W+2)-2]),
       .wdata(slaves_req[`wdata(`VERSAT)-(`DATA_W-`VERSAT_WDATA_W)]),
       .wstrb(slaves_req[`wstrb(`VERSAT)]),
       .rdata(slaves_resp[`rdata(`VERSAT)]),
-      .ready(slaves_resp[`ready(`VERSAT)])
+      .ready(slaves_resp[`ready(`VERSAT)]),
+
+      //CPU interface
+      .clk       (clk),
+      .rst       (reset)
       );
+
+   `ifndef IO 
+      assign m_axi_awvalid = 1'b0;
+      assign m_axi_wvalid = 1'b0;
+      assign m_axi_bready = 1'b0;
+      assign m_axi_arvalid = 1'b0;
+      assign m_axi_rready = 1'b0;
+   `endif
+
