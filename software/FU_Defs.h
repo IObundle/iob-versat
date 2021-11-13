@@ -1,3 +1,10 @@
+#define INSTANTIATE_CLASS
+#include "unitData.h"
+#undef INSTANTIATE_CLASS
+#define INSTANTIATE_ARRAY
+#include "unitData.h"
+#undef INSTANTIATE_ARRAY
+
 //versat-io
 #define IO_ADDR_W 32
 #define IO_SIZE_W 11
@@ -156,16 +163,359 @@
 #define MUL_CONF_OFFSET 3
 #define MUL_LAT 3
 
-static int aluliteBits[] = {4};
-static int memBits[] = {10,10,10,10,1,1,1,10,10,10,10,10,10,10,10,10,10,10,1,1,1,10,10,10,10,10,10,10};
-static int muladdBits[] = {5,10,10,10,1};
-static int regBits[] = {32,10};
-static int regStates[] = {32};
+#undef B
 
-typedef struct Alulite_t{
-   int fns;
-   int self_loop;
-} AluliteConfig;
+typedef struct {
+   int done,pos,pos2,run_delay,loop1,loop2,loop3,loop4,duty_cnt,enable,next_half;
+   int iaddr,eaddr,ext_loop1,ext_loop2;
+   int mem[2048];
+} VWriteExtra;
+
+typedef struct {
+   int done,pos,pos2,run_delay,loop1,loop2,loop3,loop4,duty_cnt,enable,next_half;
+   int iaddr,eaddr,ext_loop1,ext_loop2,memoryDelay;
+   unsigned int stored[MEMP_LAT];
+   int mem[2048];
+} VReadExtra;
+
+typedef struct MuladdExtra_t{
+    int acc, acc_w;
+    int done, duty;
+    int duty_cnt, enable;
+    int shift_addr, incr, aux, pos;
+    int loop2, loop1, cnt_addr;
+    int run_delay;
+    int debug;
+    unsigned int stored[MULADD_LAT];
+} MuladdExtra;
+
+typedef struct MemExtra_t{
+    int done;
+    int run_delay;
+    int enable;
+    int loop1, loop2, loop3, loop4;
+    unsigned int pos;
+    unsigned int pos2;
+    int duty_cnt;
+    int debug;
+    unsigned int stored[MEMP_LAT];
+} MemExtra;
+
+/*
+int32_t* VReadStartFunction(FUInstance* instance){
+   static int32_t result = 0;
+
+   VReadConfig* c = (VReadConfig*) instance->config;
+   VReadExtra*  e = (VReadExtra*) instance->extraData;
+
+   e->done = 0;
+   e->pos = c->int_addr;
+   e->pos2 = c->int_addr;
+   if (c->dutyA == 0)
+      c->dutyA = c->perA;
+   
+   //set run_delay
+   e->run_delay = 0;
+   e->loop1 = 0;
+   e->loop2 = 0;
+   e->loop3 = 0;
+   e->loop4 = 0;
+   e->duty_cnt = 0;
+   e->enable = 0;
+   e->iaddr = c->int_addr;
+   e->eaddr = 0;
+   e->memoryDelay = 3;
+
+   for (int i = 0; i < MEMP_LAT; i++)
+      e->stored[i] = 0;
+
+   return &result;
+}
+
+int32_t* VReadUpdateFunction(FUInstance* instance){
+   static int32_t out = 0;
+
+   VReadConfig* c = (VReadConfig*) instance->config;
+   VReadExtra*  e = (VReadExtra*) instance->extraData;
+   int* mem = e->mem;
+
+   out = 0;
+
+   for(int i = 0; i < MEMP_LAT - 1; i++){
+      e->stored[i] = e->stored[i+1]; 
+   }
+
+   out = e->stored[0];
+
+   // Memory read side
+   if(e->memoryDelay > 0)
+      e->memoryDelay -= 1;
+   else{
+      int* FPGA_mem = (int*) instance->state;
+
+      if(e->ext_loop1 < c->iterA)
+      {
+         if(e->ext_loop2 < c->perA)
+         {
+            int data = FPGA_mem[e->eaddr];
+            mem[e->iaddr++] = data;
+            e->eaddr += c->incrA;
+            e->ext_loop2++;
+         }
+         if(e->ext_loop2 == c->perA)
+         {
+            e->eaddr += c->shiftA;
+            e->ext_loop2 = 0;        
+            e->ext_loop1 += 1;
+         }
+      }
+   }
+
+   //check for delay
+   if (e->run_delay > 0)
+   {
+      e->run_delay--;
+      return &out;
+   }
+   
+   if(e->done){
+      return &out;
+   }
+
+   // Output side selection
+   uint32_t aux = 0;
+   if (c->B.iter2 == 0 && c->B.per2 == 0)
+   {
+      if (e->loop2 < c->B.iter)
+      {
+         if (e->loop1 < c->B.per)
+         {
+            e->loop1++;
+            e->enable = 0;
+            if (e->duty_cnt < c->B.duty)
+            {
+               e->enable = 1;
+               aux = e->pos;
+               e->duty_cnt++;
+               e->pos += c->B.incr;
+            }
+         }
+         if (e->loop1 == c->B.per)
+         {
+            e->loop1 = 0;
+            e->duty_cnt = 0;
+            e->loop2++;
+            e->pos += c->B.shift;
+         }
+      }
+      if (e->loop2 == c->B.iter)
+      {
+         e->loop2 = 0;
+         e->done = 1;
+      }
+   }
+   else
+   {
+      if (e->loop4 < c->B.iter2)
+      {
+         if (e->loop3 < c->B.per2)
+         {
+            if (e->loop2 < c->B.iter)
+            {
+               if (e->loop1 < c->B.per)
+               {
+                  e->loop1++;
+                  e->enable = 0;
+                  if (e->duty_cnt < c->B.duty)
+                  {
+                     e->enable = 1;
+                     aux = e->pos;
+                     e->duty_cnt++;
+                     e->pos += c->B.incr;
+                  }
+               }
+               if (e->loop1 == c->B.per)
+               {
+                  e->loop1 = 0;
+                  e->loop2++;
+                  e->duty_cnt = 0;
+                  e->pos += c->B.shift;
+               }
+            }
+            if (e->loop2 == c->B.iter)
+            {
+               e->loop2 = 0;
+               e->pos2 += c->B.incr2;
+               e->pos = e->pos2;
+               e->loop3++;
+            }
+         }
+         if (e->loop3 == c->B.per2)
+         {
+            e->pos2 += c->B.shift2;
+            e->pos = e->pos2;
+            e->loop3 = 0;
+            e->loop4++;
+         }
+      }
+      if (e->loop4 == c->B.iter2)
+      {
+         e->done = 1;
+      }
+   }
+
+   e->stored[MEMP_LAT-1] = mem[aux];
+
+   return &out;
+}
+
+int32_t* VWriteStartFunction(FUInstance* instance){
+   VWriteConfig* c = (VWriteConfig*) instance->config;
+   VWriteExtra*  e = (VWriteExtra*) instance->extraData;
+
+   e->done = 0;
+   e->pos = c->int_addr;
+   e->pos2 = c->int_addr;
+   if (c->dutyA == 0)
+      c->dutyA = c->perA;
+   
+   //set run_delay
+   e->run_delay = c->B.delay;
+   e->loop1 = 0;
+   e->loop2 = 0;
+   e->loop3 = 0;
+   e->loop4 = 0;
+   e->duty_cnt = 0;
+   e->enable = 0;
+   e->ext_loop1 = 0;
+   e->ext_loop2 = 0;
+   e->iaddr = c->int_addr;
+   e->eaddr = 0;
+
+   return NULL;
+}
+
+int32_t* VWriteUpdateFunction(FUInstance* instance){
+
+   VWriteConfig* c = (VWriteConfig*) instance->config;
+   VWriteExtra*  e = (VWriteExtra*) instance->extraData;
+   int* mem = e->mem;
+
+   // Read from memory
+   int* memory = (int*) instance->state;
+   if(e->ext_loop1 < c->iterA)
+   {
+      if(e->ext_loop2 < c->perA)
+      {
+         memory[e->eaddr++] = mem[e->iaddr];
+         e->iaddr += c->incrA;
+         e->ext_loop2++;
+      }
+      if(e->ext_loop2 == c->perA)
+      {
+         e->iaddr += c->shiftA;
+         e->ext_loop2 = 0;        
+         e->ext_loop1 += 1;
+      }
+   }
+
+   //check for delay
+   if (e->run_delay > 0)
+   {
+      e->run_delay--;
+      return NULL;
+   }
+   
+   if(e->done){
+      return NULL;
+   }
+
+   // Memory write side
+   uint32_t aux = 0;
+   if (c->B.iter2 == 0 && c->B.per2 == 0)
+   {
+      if (e->loop2 < c->B.iter)
+      {
+         if (e->loop1 < c->B.per)
+         {
+            e->loop1++;
+            e->enable = 0;
+            if (e->duty_cnt < c->B.duty)
+            {
+               e->enable = 1;
+               aux = e->pos;
+               e->duty_cnt++;
+               e->pos += c->B.incr;
+            }
+         }
+         if (e->loop1 == c->B.per)
+         {
+            e->loop1 = 0;
+            e->duty_cnt = 0;
+            e->loop2++;
+            e->pos += c->B.shift;
+         }
+      }
+      if (e->loop2 == c->B.iter)
+      {
+         e->loop2 = 0;
+         e->done = 1;
+      }
+   }
+   else
+   {
+      if (e->loop4 < c->B.iter2)
+      {
+         if (e->loop3 < c->B.per2)
+         {
+            if (e->loop2 < c->B.iter)
+            {
+               if (e->loop1 < c->B.per)
+               {
+                  e->loop1++;
+                  e->enable = 0;
+                  if (e->duty_cnt < c->B.duty)
+                  {
+                     e->enable = 1;
+                     aux = e->pos;
+                     e->duty_cnt++;
+                     e->pos += c->B.incr;
+                  }
+               }
+               if (e->loop1 == c->B.per)
+               {
+                  e->loop1 = 0;
+                  e->loop2++;
+                  e->duty_cnt = 0;
+                  e->pos += c->B.shift;
+               }
+            }
+            if (e->loop2 == c->B.iter)
+            {
+               e->loop2 = 0;
+               e->pos2 += c->B.incr2;
+               e->pos = e->pos2;
+               e->loop3++;
+            }
+         }
+         if (e->loop3 == c->B.per2)
+         {
+            e->pos2 += c->B.shift2;
+            e->pos = e->pos2;
+            e->loop3 = 0;
+            e->loop4++;
+         }
+      }
+      if (e->loop4 == c->B.iter2)
+      {
+         e->done = 1;
+      }
+   }
+
+   mem[aux] = GetInputValue(instance,0);
+
+   return NULL;
+}
 
 int32_t* AluliteUpdateFunction(FUInstance* instance){
    static int32_t out;
@@ -215,29 +565,6 @@ int32_t* AluliteUpdateFunction(FUInstance* instance){
 
 	return &out;
 }
-
-typedef struct AddrGen_t{
-   int incr2,shift2,per2,iter2,in_wr,ext,rvrs,delay,incr,shift,start,duty,per,iter;
-} AddrGen;
-
-#undef B
-
-typedef struct MemConfig_t{
-   AddrGen B;
-   AddrGen A;
-} MemConfig;
-
-typedef struct MemExtra_t{
-    int done;
-    int run_delay;
-    int enable;
-    int loop1, loop2, loop3, loop4;
-    unsigned int pos;
-    unsigned int pos2;
-    int duty_cnt;
-    int debug;
-    unsigned int stored[MEMP_LAT];
-} MemExtra;
 
 int32_t* MemStartFunction(FUInstance* instance){
    MemConfig* c = (MemConfig*) instance->config;
@@ -364,7 +691,6 @@ int32_t* MemUpdateFunction(FUInstance* instance){
          }
     } else {
          e->stored[MEMP_LAT-1] = mem[aux];
-         //out = mem[aux]; 
     }
 
     if(e->debug){
@@ -373,21 +699,6 @@ int32_t* MemUpdateFunction(FUInstance* instance){
 
     return out;
 }
-
-typedef struct MuladdExtra_t{
-    int acc, acc_w;
-    int done, duty;
-    int duty_cnt, enable;
-    int shift_addr, incr, aux, pos;
-    int loop2, loop1, cnt_addr;
-    int run_delay;
-    int debug;
-    unsigned int stored[MULADD_LAT];
-} MuladdExtra;
-
-typedef struct MuladdConfig_t{
-   int shift,delay,per,iter,fns;
-} MuladdConfig;
 
 int32_t* MulAddStartFunction(FUInstance* instance){
     MuladdConfig* c = (MuladdConfig*) instance->config;
@@ -483,10 +794,6 @@ int32_t* MulAddUpdateFunction(FUInstance* instance){
     return &out;
 }
 
-typedef struct{
-   int initialValue,writeDelay;
-} RegConfig;
-
 int32_t* RegStartFunction(FUInstance* inst){
    static int32_t startValue;
 
@@ -531,3 +838,4 @@ int32_t* AddFunction(FUInstance* inst){
 
    return &out;
 }
+*/

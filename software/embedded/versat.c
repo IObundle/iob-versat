@@ -17,19 +17,19 @@ void InitVersat(Versat* versat,int base){
    versat->declarations = decls;
    versat_base = base;
 
-   MEMSET(versat_base,0xffff,2);
-   MEMSET(versat_base,0xffff,0);
+   MEMSET(versat_base,0x0,2);
+   MEMSET(versat_base,0x0,0);
 }
 
-FU_Type RegisterFU(Versat* versat,const char* declarationName,int nInputs,int nOutputs,int nConfigs,const int const* configBits,int nStates,const int const* stateBits,int memoryMapBytes,bool doesIO,int extraDataSize,FUFunction startFunction,FUFunction updateFunction){
+FU_Type RegisterFU(Versat* versat,const char* declarationName,int nInputs,int nOutputs,int nConfigs,Wire* configWires,int nStates,Wire* stateWires,int memoryMapBytes,bool doesIO,int extraDataSize,FUFunction startFunction,FUFunction updateFunction){
    FUDeclaration decl = {};
    FU_Type type = {};
 
    decl.name = declarationName;
    decl.nStates = nStates;
-   decl.stateBits = stateBits;
+   decl.stateWires = stateWires;
    decl.nConfigs = nConfigs;
-   decl.configBits = configBits;
+   decl.configWires = configWires;
    decl.memoryMapBytes = memoryMapBytes;
    decl.doesIO = doesIO;
    decl.extraDataSize = extraDataSize;
@@ -62,25 +62,24 @@ Accelerator* CreateAccelerator(Versat* versat){
 
 FUInstance* CreateFUInstance(Accelerator* accel,FU_Type type){
    static int createdMem = 0;
-   static int createdConfig = 0;
-   static int createdState = 0;
+   static int createdConfig = 1; // Versat registers occupy position 0
+   static int createdState = 1; // Versat registers occupy position 0
 
    FUInstance instance = {};
    FUDeclaration decl = accel->versat->declarations[type.type];
 
    instance.declaration = type;
 
-   if(decl.stateBits){
+   if(decl.nStates){
       instance.state = (volatile int*) (versat_base + sizeof(int) * createdState);
       createdState += decl.nStates;
    }
-   if(decl.configBits){
+   if(decl.nConfigs){
       instance.config = (volatile int*) (versat_base + sizeof(int) * createdConfig);
       createdConfig += decl.nConfigs;
    }
    if(decl.memoryMapBytes){
-      instance.memMapped = (volatile int*) (versat_base + 0x10000 + 1024 * sizeof(int) * (createdMem++));
-      //printf("MemMapped: %x\n",instance.memMapped);
+      instance.memMapped = (volatile int*) (versat_base + 0x02000 + 1024 * sizeof(int) * (createdMem++));
    }
    accel->instances[accel->nInstances] = instance;
 
@@ -88,9 +87,14 @@ FUInstance* CreateFUInstance(Accelerator* accel,FU_Type type){
 }
 
 void AcceleratorRun(Versat* versat,Accelerator* accel,FUInstance* endRoot,FUFunction terminateFunction){
-   MEMSET(versat_base,0xffff,1);
+   MEMSET(versat_base,0x0,1);
 
-   while(!MEMGET(versat_base,0xffff));
+   while(1){
+      int val = MEMGET(versat_base,0x0);
+
+      if(val)
+         break;
+   }
 }
 
 void OutputVersatSource(Versat* versat,const char* declarationFilepath,const char* sourceFilepath){

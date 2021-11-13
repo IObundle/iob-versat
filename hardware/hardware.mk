@@ -16,18 +16,16 @@ INCLUDE+=$(incdir) $(LIB_DIR)/hardware/include
 VHDR+=$(wildcard $(LIB_DIR)/hardware/include/*.vh)
 endif
 
+#VERSAT HARDWARE
 #hardware include dirs
 INCLUDE+=$(incdir) $(VERSAT_HW_DIR)/include
 
-#UART HARDWARE
 #included files
-#VHDR+=$(wildcard $(VERSAT_HW_DIR)/include/*.vh)
+VHDR+=$(wildcard $(VERSAT_HW_DIR)/include/*.vh)
+
 #sources
 VSRC+=$(wildcard $(VERSAT_HW_DIR)/src/*.v)
-
-
-#cpu accessible registers
-#$(UART_HW_DIR)/include/UARTsw_reg_gen.v $(UART_HW_DIR)/include/UARTsw_reg.vh: $(UART_HW_DIR)/include/UARTsw_reg.v
-#	$(LIB_DIR)/software/mkregs.py $< HW
-#	mv UARTsw_reg_gen.v $(UART_HW_DIR)/include
-#	mv UARTsw_reg.vh $(UART_HW_DIR)/include
+VSRC+=$(MEM_DIR)/ram/2p_ram/iob_2p_ram.v # used by vread and vwrite
+VSRC+=$(DMA_DIR)/hardware/src/dma_axi.v
+VSRC+=$(DMA_DIR)/hardware/src/dma_axi_r.v
+VSRC+=$(DMA_DIR)/hardware/src/dma_axi_w.v

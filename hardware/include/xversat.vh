@@ -2,7 +2,7 @@
 `define nSTAGE 5
 
 // Datapath width
-`define DATAPATH_W 16
+`define DATAPATH_W 32
 
 // Number of functional units in each stage
 `define nMEM      	4

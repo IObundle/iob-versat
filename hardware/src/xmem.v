@@ -3,9 +3,9 @@
 `include "xmemdefs.vh"
 
 module xmem #(
-              parameter MEM_INIT_FILE="none",
-	      parameter DATA_W = 32,
-         parameter ADDR_W = 16
+         parameter MEM_INIT_FILE="none",
+         parameter DATA_W = 32,
+         parameter ADDR_W = 10
               )
     (
     //control
@@ -16,7 +16,7 @@ module xmem #(
     output                        done,
 
     //mem interface
-    input                         we,
+    input [DATA_W/8-1:0]          wstrb,
     input [ADDR_W-1:0]            addr,
     input [DATA_W-1:0]            wdata,
     input                         valid,
@@ -32,6 +32,8 @@ module xmem #(
     //configurations
     input [2*`MEMP_CONF_BITS-1:0] configdata
     );
+
+   wire we = |wstrb;
 
    wire doneA,doneB;
    assign done = doneA & doneB;
@@ -50,8 +52,8 @@ module xmem #(
       integer                     i;
 
       begin
-	 for (i=0; i < ADDR_W; i=i+1)
-	   reverseBits[i]=word[ADDR_W-1 - i];
+    for (i=0; i < ADDR_W; i=i+1)
+      reverseBits[i]=word[ADDR_W-1 - i];
       end
    endfunction
 
@@ -100,51 +102,48 @@ module xmem #(
    wire [ADDR_W-1:0] addrB, addrB_int, addrB_int2;
 
    //data inputs
-   wire [DATA_W-1:0]     in0;
-   wire [DATA_W-1:0]     in1;
-
    wire [DATA_W-1:0]     data_to_wrA = valid? wdata : in0 ;
 
    //address generators
    xaddrgen2 addrgen2A (
-		      .clk(clk),
-		      .rst(rst),
-		      .run(run),
-		      .iterations(iterA),
-		      .period(perA),
-		      .duty(dutyA),
-		      .start(startA),
-		      .shift(shiftA),
-		      .incr(incrA),
-		      .delay(delayA),
-		      .iterations2(iter2A),
-                      .period2(per2A),
-                      .shift2(shift2A),
-                      .incr2(incr2A),
-		      .addr(addrA_int),
-		      .mem_en(enA_int),
-		      .done(doneA)
-		      );
+            .clk(clk),
+            .rst(rst),
+            .run(run),
+            .iterations(iterA),
+            .period(perA),
+            .duty(dutyA),
+            .start(startA),
+            .shift(shiftA),
+            .incr(incrA),
+            .delay(delayA),
+            .iterations2(iter2A),
+            .period2(per2A),
+            .shift2(shift2A),
+            .incr2(incr2A),
+            .addr(addrA_int),
+            .mem_en(enA_int),
+            .done(doneA)
+            );
 
    xaddrgen2 addrgen2B (
-		      .clk(clk),
-		      .rst(rst),
-		      .run(run),
-		      .iterations(iterB),
-		      .period(perB),
-		      .duty(dutyB),
-		      .start(startB),
-		      .shift(shiftB),
-		      .incr(incrB),
-		      .delay(delayB),
-		      .iterations2(iter2B),
-                      .period2(per2B),
-                      .shift2(shift2B),
-                      .incr2(incr2B),
-		      .addr(addrB_int),
-		      .mem_en(enB),
-		      .done(doneB)
-		      );
+            .clk(clk),
+            .rst(rst),
+            .run(run),
+            .iterations(iterB),
+            .period(perB),
+            .duty(dutyB),
+            .start(startB),
+            .shift(shiftB),
+            .incr(incrB),
+            .delay(delayB),
+            .iterations2(iter2B),
+            .period2(per2B),
+            .shift2(shift2B),
+            .incr2(incr2B),
+            .addr(addrB_int),
+            .mem_en(enB),
+            .done(doneB)
+            );
 
    //define addresses based on ext and rvrs
    assign addrA = valid? addr[ADDR_W-1:0] : extA? in0[ADDR_W-1:0] : addrA_int2[ADDR_W-1:0];
@@ -197,9 +196,9 @@ module xmem #(
    end
 
    iob_tdp_ram #(
-                   .MEM_INIT_FILE(MEM_INIT_FILE),
-		   .DATA_W(DATA_W),
-		   .ADDR_W(ADDR_W))
+         .MEM_INIT_FILE(MEM_INIT_FILE),
+         .DATA_W(DATA_W),
+         .ADDR_W(ADDR_W))
    mem
      (
       .data_a(data_a_reg),

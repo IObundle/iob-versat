@@ -4,3 +4,6 @@
 [submodule "submodules/MEM"]
 	path = submodules/MEM
 	url = git@github.com:IObundle/iob-mem.git
+[submodule "submodules/DMA"]
+	path = submodules/DMA
+	url = git@github.com:IObundle/iob-dma.git

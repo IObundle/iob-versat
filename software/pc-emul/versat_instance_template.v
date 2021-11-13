@@ -1,4 +1,5 @@
 `timescale 1ns / 1ps
+`include "axi.vh"
 `include "xversat.vh"
 `include "xdefs.vh"
 
@@ -6,14 +7,15 @@
 
 module versat_instance #(
       parameter ADDR_W = `ADDR_W,
-      parameter DATA_W = `DATA_W
+      parameter DATA_W = `DATA_W,
+      parameter AXI_ADDR_W = `AXI_ADDR_W
    )
    (
    // Databus master interface
 `ifdef IO
    input [`nIO-1:0]                m_databus_ready,
    output [`nIO-1:0]               m_databus_valid,
-   output [`nIO*`IO_ADDR_W-1:0]    m_databus_addr,
+   output [`nIO*AXI_ADDR_W-1:0]   m_databus_addr,
    input [`nIO*`DATAPATH_W-1:0]    m_databus_rdata,
    output [`nIO*`DATAPATH_W-1:0]   m_databus_wdata,
    output [`nIO*`DATAPATH_W/8-1:0] m_databus_wstrb,
@@ -21,7 +23,7 @@ module versat_instance #(
    // data/control interface
    input                           valid,
    input [ADDR_W-1:0]              addr,
-   input                           we,
+   input [DATA_W/8-1:0]            wstrb,
    input [DATA_W-1:0]              wdata,
    output                          ready,
    output reg [DATA_W-1:0]         rdata,
@@ -36,6 +38,9 @@ wire done;
 reg run;
 wire [31:0] unitRdataFinal;
 reg [31:0] stateRead;
+
+wire we = (|wstrb);
+wire memoryMappedAddr = addr[`MAPPED_BIT];
 
 // Versat registers and memory access
 reg versat_ready;
@@ -56,13 +61,13 @@ always @(posedge clk,posedge rst) // Care, rst because writing to soft reset reg
 
       if(valid) begin 
          // Config/State register access
-         if(!addr[14]) begin
+         if(!memoryMappedAddr) begin
             versat_ready <= 1'b1;
             versat_rdata <= stateRead;
          end
 
          // Versat specific registers
-         if(addr[15:0] == 16'hffff) begin
+         if(addr == 0) begin
             versat_ready <= 1'b1;
             if(we)
                soft_reset <= wdata[1];
@@ -79,7 +84,7 @@ begin
    end else begin
       run <= 1'b0;
 
-      if(valid && we && addr[15:0] == 16'hffff)
+      if(valid && we && addr == 0)
          run <= wdata[0];
    end
 end
@@ -87,3 +92,27 @@ end
 assign rdata = (versat_ready ? versat_rdata : unitRdataFinal);
 
 assign ready = versat_ready | wor_ready;
+
+reg [`CONFIG_W - 1:0] configdata;
+wire [`STATE_W - 1:0] statedata;
+
+wire [`NUMBER_UNITS - 1:0] unitDone;
+reg [`MAPPED_UNITS - 1:0] memoryMappedEnable;
+wire[`MAPPED_UNITS - 1:0] unitReady;
+wire [31:0] unitRData[`MAPPED_UNITS - 1:0];
+
+assign wor_ready = (|unitReady);
+assign done = &unitDone;
+
+`ifdef SHADOW_REGISTERS
+reg [`CONFIG_W - 1:0] configdata_shadow;
+
+always @(posedge clk,posedge rst_int)
+begin
+   if(rst_int)
+      configdata <= {`CONFIG_W{1'b0}};
+   else if(valid && we && addr == 0 && wdata[0])
+      configdata <= configdata_shadow;
+end
+`endif
+
