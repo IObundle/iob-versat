@@ -15,6 +15,11 @@ typedef struct FU_Type_t{
 	int type;
 } FU_Type;
 
+typedef struct Wire_t{
+   const char* name;
+   int bitsize;
+} Wire;
+
 typedef struct FUDeclaration_t{
 	const char* name;
 	
@@ -23,9 +28,10 @@ typedef struct FUDeclaration_t{
 
    // Config and state interface
    int nConfigs;
-   int const* configBits;
+   const Wire* configWires;
+   
    int nStates;
-   int const* stateBits;
+   const Wire* stateWires;
 
    int memoryMapBytes;
    int extraDataSize;
@@ -75,7 +81,7 @@ typedef struct Accelerator_t{
 // Versat functions
 void InitVersat(Versat* versat,int base);
 
-FU_Type RegisterFU(Versat* versat,const char* declarationName,int nInputs,int nOutputs,int nConfigs,const int* configBits,int nStates,const int* stateBits,int memoryMapBytes,bool doesIO,int extraDataSize,FUFunction initializeFunction,FUFunction startFunction,FUFunction updateFunction);
+FU_Type RegisterFU(Versat* versat,const char* declarationName,int nInputs,int nOutputs,int nConfigs,const Wire* configWires,int nStates,const Wire* stateBits,int memoryMapBytes,bool doesIO,int extraDataSize,FUFunction initializeFunction,FUFunction startFunction,FUFunction updateFunction);
 
 void OutputVersatSource(Versat* versat,const char* definitionFilepath,const char* sourceFilepath);
 

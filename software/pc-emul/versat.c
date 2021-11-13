@@ -23,7 +23,7 @@ void InitVersat(Versat* versat,int base){
    versat_base = base;
 }
 
-FU_Type RegisterFU(Versat* versat,const char* declarationName,int nInputs,int nOutputs,int nConfigs,const int const* configBits,int nStates,const int const* stateBits,int memoryMapBytes,bool doesIO,int extraDataSize,FUFunction initializeFunction,FUFunction startFunction,FUFunction updateFunction){
+FU_Type RegisterFU(Versat* versat,const char* declarationName,int nInputs,int nOutputs,int nConfigs,const Wire* configWires,int nStates,const Wire* stateWires,int memoryMapBytes,bool doesIO,int extraDataSize,FUFunction initializeFunction,FUFunction startFunction,FUFunction updateFunction){
    FUDeclaration decl = {};
    FU_Type type = {};
 
@@ -31,9 +31,9 @@ FU_Type RegisterFU(Versat* versat,const char* declarationName,int nInputs,int nO
    decl.nOutputs = nOutputs;
    decl.name = declarationName;
    decl.nStates = nStates;
-   decl.stateBits = stateBits;
+   decl.stateWires = stateWires;
    decl.nConfigs = nConfigs;
-   decl.configBits = configBits;
+   decl.configWires = configWires;
    decl.memoryMapBytes = memoryMapBytes;
    decl.doesIO = doesIO;
    decl.extraDataSize = extraDataSize;
@@ -74,9 +74,9 @@ FUInstance* CreateFUInstance(Accelerator* accel,FU_Type type){
       instance.outputs = (int32_t*) malloc(decl.nOutputs * sizeof(int32_t));
       instance.storedOutputs = (int32_t*) malloc(decl.nOutputs * sizeof(int32_t));
    }
-   if(decl.stateBits)
+   if(decl.nStates)
       instance.state = (volatile int*) malloc(decl.nStates * sizeof(int));
-   if(decl.configBits)
+   if(decl.nConfigs)
       instance.config = (volatile int*) malloc(decl.nConfigs * sizeof(int));
    if(decl.memoryMapBytes)
       instance.memMapped = (volatile int*) malloc(decl.memoryMapBytes);
@@ -221,15 +221,15 @@ static VersatComputedValues ComputeVersatValues(Versat* versat){
 
       if(decl->nConfigs){
          for(int ii = 0; ii < decl->nConfigs; ii++){
-            res.configurationBits += decl->configBits[ii];
+            res.configurationBits += decl->configWires[ii].bitsize;
          }
       }
 
       res.nStates += decl->nStates;
       if(decl->nStates){
          for(int ii = 0; ii < decl->nConfigs; ii++){
-            res.stateBits += decl->stateBits[ii];
-         }      
+            res.stateBits += decl->stateWires[ii].bitsize;
+         }
       }
 
       if(decl->doesIO)
@@ -508,7 +508,7 @@ void OutputVersatSource(Versat* versat,const char* definitionFilepath,const char
       FUDeclaration* decl = &versat->declarations[type.type];
 
       for(int ii = 0; ii < decl->nConfigs; ii++){
-         int bitSize = decl->configBits[ii];;
+         int bitSize = decl->configWires[ii].bitsize;
 
          fprintf(s,"%s%sif(addr[%d:%d] == %d'd%d)\n",TAB,TAB,val.configAddressRange.high,val.configAddressRange.low,val.configAddressRange.high - val.configAddressRange.low + 1,index++);
          if(versat->useShadowRegisters)
@@ -535,7 +535,7 @@ void OutputVersatSource(Versat* versat,const char* definitionFilepath,const char
       FUDeclaration* decl = &versat->declarations[type.type];
 
       for(int ii = 0; ii < decl->nStates; ii++){
-         int bitSize = decl->stateBits[ii];
+         int bitSize = decl->stateWires[ii].bitsize;
 
          fprintf(s,"%s%sif(addr[%d:%d] == %d'd%d)\n",TAB,TAB,val.stateAddressRange.high,val.stateAddressRange.low,val.stateAddressRange.high - val.stateAddressRange.low + 1,index++);
          fprintf(s,"%s%s%sstateRead = statedata[%d+:%d];\n",TAB,TAB,TAB,bitCount,bitSize);
@@ -556,15 +556,17 @@ void OutputVersatSource(Versat* versat,const char* definitionFilepath,const char
       FU_Type type = instance->declaration;
       FUDeclaration* decl = &versat->declarations[type.type];
 
+      /*
       int configBits = 0;
       for(int ii = 0; ii < decl->nConfigs; ii++){
-         configBits += decl->configBits[ii];
+         configBits += decl->configWires[ii].bitsize;
       }
 
       int stateBits = 0;
       for(int ii = 0; ii < decl->nStates; ii++){
-         stateBits += decl->stateBits[ii];
+         stateBits += decl->stateWires[ii].bitsize;
       }
+      */
 
       fprintf(s,"%s%s unit%d(\n",TAB,decl->name,i);
       
@@ -581,14 +583,26 @@ void OutputVersatSource(Versat* versat,const char* definitionFilepath,const char
       }
 
       // Config data
-      if(decl->configBits){
-         fprintf(s,"%s.configdata(configdata[%d:%d]),\n",TAB,configDataIndex + configBits - 1,configDataIndex);
+      //if(decl->nConfigs){
+      //   fprintf(s,"%s.configdata(configdata[%d:%d]),\n",TAB,configDataIndex + configBits - 1,configDataIndex);
+      //}
+
+      for(int ii = 0; ii < decl->nConfigs; ii++){
+         Wire wire = decl->configWires[ii];
+         fprintf(s,"%s.%s(configdata[%d:%d]),\n",TAB,wire.name,configDataIndex + wire.bitsize - 1,configDataIndex);
+         configDataIndex += wire.bitsize;
       }
       
-      // State
-      if(decl->stateBits){
-         fprintf(s,"%s.statedata(statedata[%d:%d]),\n",TAB,stateDataIndex + stateBits - 1,stateDataIndex);
+      for(int ii = 0; ii < decl->nStates; ii++){
+         Wire wire = decl->stateWires[ii];
+         fprintf(s,"%s.%s(statedata[%d:%d]),\n",TAB,wire.name,stateDataIndex + wire.bitsize - 1,stateDataIndex);
+         stateDataIndex += wire.bitsize;
       }
+
+      // State
+      //if(decl->nStates){
+      //   fprintf(s,"%s.statedata(statedata[%d:%d]),\n",TAB,stateDataIndex + stateBits - 1,stateDataIndex);
+      //}
 
       if(decl->doesIO){
          fprintf(s,"%s.databus_ready(m_databus_ready[%d]),\n",TAB,ioIndex);
@@ -615,9 +629,6 @@ void OutputVersatSource(Versat* versat,const char* definitionFilepath,const char
       fprintf(s,"%s.clk(clk),\n",TAB);
       fprintf(s,"%s.rst(rst_int)\n",TAB);
       fprintf(s,"%s);\n\n",TAB);
-   
-      configDataIndex += configBits;
-      stateDataIndex += stateBits;
    }
 
    fprintf(s,"endmodule");

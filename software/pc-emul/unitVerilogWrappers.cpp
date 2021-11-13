@@ -1,7 +1,7 @@
 #include "unitVerilogWrappers.h"
 #include "stdio.h"
 
-#include "xadd.h"
+#include "../headers/xadd.h"
 
 // For now it is a name changed copy of GetInputValue, in order to compile
 static int32_t GetInput(FUInstance* instance,int index){

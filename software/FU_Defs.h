@@ -1,3 +1,10 @@
+#define INSTANTIATE_CLASS
+#include "unitData.h"
+#undef INSTANTIATE_CLASS
+#define INSTANTIATE_ARRAY
+#include "unitData.h"
+#undef INSTANTIATE_ARRAY
+
 //versat-io
 #define IO_ADDR_W 32
 #define IO_SIZE_W 11
@@ -158,32 +165,6 @@
 
 #undef B
 
-static int aluliteBits[] = {4};
-static int regStates[] = {32};
-static int regBits[] = {32,10};
-static int muladdBits[] = {5,10,10,10,1};
-static int memBits[] =    {10,10,10,10,1,1,1,10,10,10,10,10,10,10,10,10,10,10,1,1,1,10,10,10,10,10,10,10};
-static int vwriteBits[] = {10,10,10,10,1,1,10,10,10,10,10,10,10,10,10,10,10,10,11,10,32};
-static int vreadBits[] =  {10,10,10,10,1,1,10,10,10,10,10,10,10,10,10,10,10,10,11,10,32};
-
-typedef struct AddrGen_t{
-   int incr2,shift2,per2,iter2,in_wr,ext,rvrs,delay,incr,shift,start,duty,per,iter;
-} AddrGen;
-
-typedef struct AddrGenV_t{
-   int incr2,shift2,per2,iter2,ext,rvrs,delay,incr,shift,start,duty,per,iter;
-} AddrGenV;
-
-typedef struct{
-   AddrGenV B; // Versat side
-   int incrA,shiftA,dutyA,perA,iterA,size,int_addr,ext_addr; // Memory side
-} VReadConfig;
-
-typedef struct{
-   AddrGenV B; // Versat side
-   int incrA,shiftA,dutyA,perA,iterA,size,int_addr,ext_addr; // Memory side
-} VWriteConfig;
-
 typedef struct {
    int done,pos,pos2,run_delay,loop1,loop2,loop3,loop4,duty_cnt,enable,next_half;
    int iaddr,eaddr,ext_loop1,ext_loop2;
@@ -197,6 +178,30 @@ typedef struct {
    int mem[2048];
 } VReadExtra;
 
+typedef struct MuladdExtra_t{
+    int acc, acc_w;
+    int done, duty;
+    int duty_cnt, enable;
+    int shift_addr, incr, aux, pos;
+    int loop2, loop1, cnt_addr;
+    int run_delay;
+    int debug;
+    unsigned int stored[MULADD_LAT];
+} MuladdExtra;
+
+typedef struct MemExtra_t{
+    int done;
+    int run_delay;
+    int enable;
+    int loop1, loop2, loop3, loop4;
+    unsigned int pos;
+    unsigned int pos2;
+    int duty_cnt;
+    int debug;
+    unsigned int stored[MEMP_LAT];
+} MemExtra;
+
+/*
 int32_t* VReadStartFunction(FUInstance* instance){
    static int32_t result = 0;
 
@@ -512,17 +517,11 @@ int32_t* VWriteUpdateFunction(FUInstance* instance){
    return NULL;
 }
 
-
-typedef struct Alulite_t{
-   int fns;
-   int self_loop;
-} AluliteConfig;
-
 int32_t* AluliteUpdateFunction(FUInstance* instance){
    static int32_t out;
 
    int32_t a = GetInputValue(instance,0);
-   int32_t b = GetInputValue(instance,1);
+	int32_t b = GetInputValue(instance,1);
 
    AluliteConfig* c = (AluliteConfig*) instance->config;
 
@@ -564,25 +563,8 @@ int32_t* AluliteUpdateFunction(FUInstance* instance){
 
    *storedDelay = res;
 
-   return &out;
+	return &out;
 }
-
-typedef struct MemConfig_t{
-   AddrGen B;
-   AddrGen A;
-} MemConfig;
-
-typedef struct MemExtra_t{
-    int done;
-    int run_delay;
-    int enable;
-    int loop1, loop2, loop3, loop4;
-    unsigned int pos;
-    unsigned int pos2;
-    int duty_cnt;
-    int debug;
-    unsigned int stored[MEMP_LAT];
-} MemExtra;
 
 int32_t* MemStartFunction(FUInstance* instance){
    MemConfig* c = (MemConfig*) instance->config;
@@ -613,17 +595,17 @@ int32_t* MemUpdateFunction(FUInstance* instance){
 
    out[0] = e->stored[0];
 
-   if(e->run_delay){
-      e->run_delay--;
-      return out;
-   }
+	if(e->run_delay){
+		e->run_delay--;
+		return out;
+	}
 
-   if(e->done){
-      return out;
-   }
+	if(e->done){
+		return out;
+	}
 
-   uint32_t aux = 0;
-   if (c->A.iter2 == 0 && c->A.per2 == 0)
+	uint32_t aux = 0;
+	if (c->A.iter2 == 0 && c->A.per2 == 0)
     {
         if (e->loop2 < c->A.iter)
         {
@@ -717,21 +699,6 @@ int32_t* MemUpdateFunction(FUInstance* instance){
 
     return out;
 }
-
-typedef struct MuladdExtra_t{
-    int acc, acc_w;
-    int done, duty;
-    int duty_cnt, enable;
-    int shift_addr, incr, aux, pos;
-    int loop2, loop1, cnt_addr;
-    int run_delay;
-    int debug;
-    unsigned int stored[MULADD_LAT];
-} MuladdExtra;
-
-typedef struct MuladdConfig_t{
-   int shift,delay,per,iter,fns;
-} MuladdConfig;
 
 int32_t* MulAddStartFunction(FUInstance* instance){
     MuladdConfig* c = (MuladdConfig*) instance->config;
@@ -827,10 +794,6 @@ int32_t* MulAddUpdateFunction(FUInstance* instance){
     return &out;
 }
 
-typedef struct{
-   int initialValue,writeDelay;
-} RegConfig;
-
 int32_t* RegStartFunction(FUInstance* inst){
    static int32_t startValue;
 
@@ -875,3 +838,4 @@ int32_t* AddFunction(FUInstance* inst){
 
    return &out;
 }
+*/
