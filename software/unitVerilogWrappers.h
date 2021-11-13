@@ -15,3 +15,4 @@ EXPORT int32_t* AddStartFunction(FUInstance* inst);
 EXPORT int32_t* AddUpdateFunction(FUInstance* inst);
 
 #endif //INCLUDED_UNIT_VERILOG_WRAPPERS
+

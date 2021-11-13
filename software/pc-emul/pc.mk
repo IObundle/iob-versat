@@ -4,16 +4,17 @@ include $(VERSAT_DIR)/software/software.mk
 #pc sources
 SRC+=$(VERSAT_PC_EMUL)/versat.c
 
-HDR+=$(VERSAT_PC_EMUL)/versat_instance_template.h
+HDR+=versat_instance_template.h
 
-OBJ+=$(VERSAT_SW_DIR)/build/unitVerilogWrappers.o
+OBJ+=./build/unitVerilogWrappers.o
 
-$(VERSAT_SW_DIR)/build/unitVerilogWrappers.o: $(VERSAT_PC_EMUL)/unitVerilogWrappers.cpp
-	g++ -c -o $(VERSAT_SW_DIR)/build/unitVerilogWrappers.o $(VERSAT_PC_EMUL)/unitVerilogWrappers.cpp -I $(VERSAT_SW_DIR) -I $(VERILATOR_INCLUDE)
+./build/unitVerilogWrappers.o: ./build/xadd.o $(VERSAT_PC_EMUL)/unitVerilogWrappers.cpp
+	mkdir -p ./build
+	g++ -c -o ./build/unitVerilogWrappers.o $(VERSAT_PC_EMUL)/unitVerilogWrappers.cpp -I $(VERSAT_SW_DIR) -I $(VERILATOR_INCLUDE) -I./build/
 
-$(VERSAT_PC_EMUL)/versat_instance_template.h: $(VERSAT_PC_EMUL)/versat_instance_template.v
+versat_instance_template.h: $(VERSAT_PC_EMUL)/versat_instance_template.v
 	$(eval IN=$(VERSAT_PC_EMUL)/versat_instance_template.v)
-	$(eval OUT=$(VERSAT_PC_EMUL)/versat_instance_template.h)
+	$(eval OUT=versat_instance_template.h)
 	echo "#ifndef INCLUDED_VERSAT_INSTANCE_TEMPLATE_STR" > $(OUT)
 	echo "#define INCLUDED_VERSAT_INSTANCE_TEMPLATE_STR" >> $(OUT)
 	echo "static const char versat_instance_template_str[] = {" >> $(OUT)

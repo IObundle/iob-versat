@@ -1,7 +1,7 @@
 #include "unitVerilogWrappers.h"
 #include "stdio.h"
 
-#include "../headers/xadd.h"
+#include "xadd.h"
 
 // For now it is a name changed copy of GetInputValue, in order to compile
 static int32_t GetInput(FUInstance* instance,int index){
@@ -29,7 +29,7 @@ static int32_t GetInput(FUInstance* instance,int index){
 
 #define START_RUN(unit) \
    self->run = 1; \
-   self->eval(); \
+   UPDATE(unit); \
    self->run = 0;
 
 EXPORT int AddExtraSize(){
