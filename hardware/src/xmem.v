@@ -8,30 +8,61 @@ module xmem #(
          parameter ADDR_W = 10
               )
     (
-    //control
-    input                         clk,
-    input                         rst,
-    
-    input                         run,
-    output                        done,
+   //control
+   input                         clk,
+   input                         rst,
+   
+   input                         run,
+   output                        done,
+   
+   //mem interface
+   input [DATA_W/8-1:0]          wstrb,
+   input [ADDR_W-1:0]            addr,
+   input [DATA_W-1:0]            wdata,
+   input                         valid,
+   output reg                    ready,
+   output [DATA_W-1:0]           rdata,
 
-    //mem interface
-    input [DATA_W/8-1:0]          wstrb,
-    input [ADDR_W-1:0]            addr,
-    input [DATA_W-1:0]            wdata,
-    input                         valid,
-    output reg                    ready,
-    output [DATA_W-1:0]           rdata,
+   //input / output data
+   input [DATA_W-1:0]            in0,
+   input [DATA_W-1:0]            in1,
+   output [DATA_W-1:0]           out0,
+   output [DATA_W-1:0]           out1,
 
-    //input / output data
-    input [DATA_W-1:0]            in0,
-    input [DATA_W-1:0]            in1,
-    output [DATA_W-1:0]           out0,
-    output [DATA_W-1:0]           out1,
+   //configurations
+   //input [2*`MEMP_CONF_BITS-1:0] configdata
 
-    //configurations
-    input [2*`MEMP_CONF_BITS-1:0] configdata
-    );
+   // Configuration
+   input [ADDR_W-1:0]    iterA,
+   input [`PERIOD_W-1:0] perA,
+   input [`PERIOD_W-1:0] dutyA,    
+   input [ADDR_W-1:0]    startA,   
+   input [ADDR_W-1:0]    shiftA,   
+   input [ADDR_W-1:0]    incrA,    
+   input [`PERIOD_W-1:0] delayA,   
+   input                 reverseA, 
+   input                 extA,     
+   input                 in0_wr,   
+   input [ADDR_W-1:0]    iter2A,   
+   input [`PERIOD_W-1:0] per2A,    
+   input [ADDR_W-1:0]    shift2A,  
+   input [ADDR_W-1:0]    incr2A,
+
+   input [ADDR_W-1:0]    iterB,    
+   input [`PERIOD_W-1:0] perB,     
+   input [`PERIOD_W-1:0] dutyB,
+   input [ADDR_W-1:0]    startB,
+   input [ADDR_W-1:0]    shiftB,
+   input [ADDR_W-1:0]    incrB,
+   input [`PERIOD_W-1:0] delayB,
+   input                 reverseB, 
+   input                 extB,
+   input                 in1_wr,
+   input [ADDR_W-1:0]    iter2B,
+   input [`PERIOD_W-1:0] per2B,
+   input [ADDR_W-1:0]    shift2B,
+   input [ADDR_W-1:0]    incr2B
+   );
 
    wire we = |wstrb;
 
@@ -57,6 +88,7 @@ module xmem #(
       end
    endfunction
 
+/*
    //unpack configuration bits 
    wire [ADDR_W-1:0]    iterA    = configdata[2*`MEMP_CONF_BITS-1 -: ADDR_W];
    wire [`PERIOD_W-1:0] perA     = configdata[2*`MEMP_CONF_BITS-ADDR_W-1 -: `PERIOD_W];
@@ -87,6 +119,7 @@ module xmem #(
    wire [`PERIOD_W-1:0] per2B    = configdata[`MEMP_CONF_BITS-5*ADDR_W-3*`PERIOD_W-3-1 -: `PERIOD_W];
    wire [ADDR_W-1:0]    shift2B  = configdata[`MEMP_CONF_BITS-5*ADDR_W-4*`PERIOD_W-3-1 -: ADDR_W];
    wire [ADDR_W-1:0]    incr2B   = configdata[`MEMP_CONF_BITS-6*ADDR_W-4*`PERIOD_W-3-1 -: ADDR_W];
+*/
 
    //mem enables output by addr gen
    wire enA_int;

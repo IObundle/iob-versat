@@ -73,7 +73,7 @@ module ext_addrgen #(
    // link int mem and ext databus
    assign data_out = databus_rdata;
    assign databus_wdata = data_in;
-   assign databus_addr = ext_addr + (addr_gen<<1);
+   /* verilator lint_off WIDTH */ assign databus_addr = ext_addr + addr_gen; 
    assign addr = int_addr + counter_int;
 
    //assign req = (direction == 2'b01) ? req_int_reg : req_int;

@@ -174,6 +174,8 @@ versat_instance #(.ADDR_W(ADDR_W),.DATA_W(DATA_W)) xversat(
 
 endmodule
 
+`include "interconnect.vh"
+
 module xmerge
   #(
     parameter N_MASTERS = 2,

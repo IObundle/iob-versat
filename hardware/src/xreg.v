@@ -17,16 +17,16 @@ module xreg #(
     input [DATA_W-1:0]            in0,
     output reg [DATA_W-1:0]       out0,
 
-    //configurations
-    input [DELAY_W + DATA_W-1:0]  configdata,
+    input [DATA_W-1:0]            initialValue,
+    input [DELAY_W-1:0]           writeDelay,
 
-    output [DATA_W-1:0]           statedata
+    output [DATA_W-1:0]           currentValue
     );
 
 reg [DELAY_W-1:0] delay;
 reg alreadyInit;
 
-assign statedata = out0;
+assign currentValue = out0;
 assign done = (delay == 0);
 
 always @(posedge clk,posedge rst)
@@ -37,10 +37,10 @@ begin
       alreadyInit <= 0;
    end else if(run) begin
       if(!alreadyInit) begin
-         out0 <= configdata[DATA_W-1:0];
+         out0 <= initialValue;
          alreadyInit <= 1;
       end
-      delay <= configdata[DELAY_W+DATA_W-1:DATA_W];
+      delay <= writeDelay;
    end else begin
       if(|delay) begin
          delay <= delay - 1;
