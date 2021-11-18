@@ -1,12 +1,14 @@
+#include <new>
+
 #include "unitVerilogWrappers.h"
 #include "stdio.h"
 #include "math.h"
 
-#include "xadd.h"
-#include "xreg.h"
-#include "xmem.h"
-#include "vread.h"
-#include "vwrite.h"
+#include "Vxadd.h"
+#include "Vxreg.h"
+#include "Vxmem.h"
+#include "Vvread.h"
+#include "Vvwrite.h"
 
 #define INSTANTIATE_ARRAY
 #include "unitData.h"
@@ -14,28 +16,15 @@
 
 #define ARRAY_SIZE(array) sizeof(array) / sizeof(array[0])
 
-// For now it is a name changed copy of GetInputValue, in order to compile
-static int32_t GetInput(FUInstance* instance,int index){
-   FUInput input = instance->inputs[index];
-   FUInstance* inst = input.instance;
-
-   if(inst){
-      return inst->outputs[input.index];   
-   }
-   else{
-      return 0;
-   }   
-}
-
 #define INIT(unit) \
    self->run = 0; \
    self->clk = 0; \
    self->rst = 0;
 
 #define UPDATE(unit) \
-   self->clk = 1; \
-   self->eval(); \
    self->clk = 0; \
+   self->eval(); \
+   self->clk = 1; \
    self->eval();
 
 #define RESET(unit) \
@@ -47,6 +36,55 @@ static int32_t GetInput(FUInstance* instance,int index){
    self->run = 1; \
    UPDATE(unit); \
    self->run = 0;
+
+#define DEBUG_PRINT(unit) \
+   printf("%d %d %02x %08x %08x\n",unit->valid,unit->ready,unit->wstrb,unit->wdata,unit->rdata);
+
+template<typename T>
+static int32_t MemoryAccess(FUInstance* inst,int address,int value,int write){
+   T* self = (T*) inst->extraData;
+
+   if(write){
+      self->valid = 1;
+      self->wstrb = 0xf;
+      self->addr = address;
+      self->wdata = value;
+
+      self->eval();
+
+      while(!self->ready){
+         UPDATE(self);
+      }
+
+      self->valid = 0;
+      self->wstrb = 0x00;
+      self->addr = 0x00000000;
+      self->wdata = 0x00000000;
+
+      UPDATE(self);
+
+      return 0;
+   } else {
+      self->valid = 1;
+      self->wstrb = 0x0;
+      self->addr = address;
+
+      self->eval();
+
+      while(!self->ready){
+         UPDATE(self);
+      }
+
+      int32_t res = self->rdata;
+
+      self->valid = 0;
+      self->addr = 0;
+
+      UPDATE(self);
+
+      return res;
+   }
+}
 
 static int32_t* AddInitializeFunction(FUInstance* inst){
    Vxadd* self = new (inst->extraData) Vxadd();
@@ -74,8 +112,8 @@ static int32_t* AddUpdateFunction(FUInstance* inst){
 
    Vxadd* self = (Vxadd*) inst->extraData;
 
-   self->in0 = GetInput(inst,0);
-   self->in1 = GetInput(inst,1);
+   self->in0 = GetInputValue(inst,0);
+   self->in1 = GetInputValue(inst,1);
 
    UPDATE(self);
 
@@ -97,7 +135,8 @@ EXPORT FU_Type RegisterAdd(Versat* versat){
                                     sizeof(Vxadd), // Extra memory
                                     AddInitializeFunction,
                                     AddStartFunction,
-                                    AddUpdateFunction);
+                                    AddUpdateFunction,
+                                    NULL);
 
    return type;
 }
@@ -119,7 +158,6 @@ static int32_t* RegStartFunction(FUInstance* inst){
    RegConfig* config = (RegConfig*) inst->config;
 
    // Update config
-   self->initialValue = config->initialValue;
    self->writeDelay = config->writeDelay;
 
    START_RUN(self);
@@ -132,7 +170,7 @@ static int32_t* RegUpdateFunction(FUInstance* inst){
    Vxreg* self = (Vxreg*) inst->extraData;
    RegState* state = (RegState*) inst->state;
 
-   self->in0 = GetInput(inst,0);
+   self->in0 = GetInputValue(inst,0);
 
    UPDATE(self);
 
@@ -153,12 +191,13 @@ EXPORT FU_Type RegisterReg(Versat* versat){
                                     regConfigWires,
                                     ARRAY_SIZE(regStateWires), // State
                                     regStateWires,
-                                    0, // MemoryMapped
+                                    4, // MemoryMapped
                                     false, // IO
                                     sizeof(Vxreg), // Extra memory
                                     RegInitializeFunction,
                                     RegStartFunction,
-                                    RegUpdateFunction);
+                                    RegUpdateFunction,
+                                    MemoryAccess<Vxreg>);
 
    return type;
 }
@@ -219,7 +258,7 @@ static int32_t* MemUpdateFunction(FUInstance* inst){
    static int32_t out[2];
    Vxmem* self = (Vxmem*) inst->extraData;
 
-   self->in0 = GetInput(inst,0);
+   self->in0 = GetInputValue(inst,0);
 
    UPDATE(self);
 
@@ -231,6 +270,7 @@ static int32_t* MemUpdateFunction(FUInstance* inst){
 }
 
 EXPORT FU_Type RegisterMem(Versat* versat,int addr_w){
+   #if 0
    char* buffer = (char*) malloc(128 * sizeof(char)); // For now this memory is leaked.
    Wire* instanceWires = (Wire*) malloc(sizeof(Wire) * ARRAY_SIZE(memConfigWires)); // For now this memory is leaked.
 
@@ -246,20 +286,22 @@ EXPORT FU_Type RegisterMem(Versat* versat,int addr_w){
       if(wire->bitsize == MEM_SUBSTITUTE_ADDR_TYPE)
          wire->bitsize = addr_w;
    }
+   #endif
 
-   FU_Type type = RegisterFU(versat,buffer,
+   FU_Type type = RegisterFU(versat,"xmem #(.ADDR_W(10))",
                                     2, // n inputs
                                     2, // n outputs
                                     ARRAY_SIZE(memConfigWires), // Config
-                                    instanceWires, 
+                                    memConfigWires, 
                                     0, // State
                                     NULL,
-                                    (1 << addr_w) * 4, // MemoryMapped
+                                    (1 << 10) * 4, // MemoryMapped
                                     false, // IO
                                     sizeof(Vxmem), // Extra memory
                                     MemInitializeFunction,
                                     MemStartFunction,
-                                    MemUpdateFunction);
+                                    MemUpdateFunction,
+                                    MemoryAccess<Vxmem>);
 
    return type;
 }
@@ -310,6 +352,14 @@ static int32_t* VReadUpdateFunction(FUInstance* inst){
    static int32_t out;
    Vvread* self = (Vvread*) inst->extraData;
 
+   self->databus_ready = 0;
+
+   if(self->databus_valid){
+      int* ptr = (int*) (self->databus_addr);
+      self->databus_rdata = *ptr;
+      self->databus_ready = 1;
+   }
+
    UPDATE(self);
 
    // Update out
@@ -331,7 +381,8 @@ EXPORT FU_Type RegisterVRead(Versat* versat){
                                     sizeof(Vvread), // Extra memory
                                     VReadInitializeFunction,
                                     VReadStartFunction,
-                                    VReadUpdateFunction);
+                                    VReadUpdateFunction,
+                                    NULL);
 
    return type;
 }
@@ -382,7 +433,7 @@ static int32_t* VWriteUpdateFunction(FUInstance* inst){
    static int32_t out;
    Vvwrite* self = (Vvwrite*) inst->extraData;
 
-   self->in0 = GetInput(inst,0);
+   self->in0 = GetInputValue(inst,0);
 
    UPDATE(self);
 
@@ -405,7 +456,48 @@ EXPORT FU_Type RegisterVWrite(Versat* versat){
                                     sizeof(Vvwrite), // Extra memory
                                     VWriteInitializeFunction,
                                     VWriteStartFunction,
-                                    VWriteUpdateFunction);
+                                    VWriteUpdateFunction,
+                                    NULL);
+
+   return type;
+}
+
+static int32_t* DebugStartFunction(FUInstance* inst){
+   int* extra = (int*) inst->extraData;
+
+   *extra = 0;
+
+   return NULL;
+}
+
+static int32_t* DebugUpdateFunction(FUInstance* inst){
+   int* extra = (int*) inst->extraData;
+
+   int32_t val = GetInputValue(inst,0);
+
+   printf("[Debug %d]: 0x%x\n",*extra,val);
+
+   (*extra) += 1;
+
+   return NULL;
+}
+
+EXPORT FU_Type RegisterDebug(Versat* versat){
+   FU_Type type = RegisterFU(versat,"",
+                                    1, // n inputs
+                                    0, // n outputs
+                                    0, // Config
+                                    NULL,
+                                    0, // State
+                                    NULL,
+                                    0, // MemoryMapped
+                                    false, // IO
+                                    sizeof(int), // Extra memory
+                                    NULL,
+                                    DebugStartFunction,
+                                    DebugUpdateFunction,
+                                    NULL
+                                    );
 
    return type;
 }

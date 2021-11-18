@@ -3,8 +3,6 @@
 #include <string.h>
 #include "assert.h"
 
-#include <ncurses.h>
-
 #include "../versat.h"
 #include "versat_instance_template.h"
 
@@ -16,6 +14,13 @@ typedef struct Range_t{
    int high,low;
 } Range;
 
+FUDeclaration* GetDeclaration(Versat* versat,FUInstance* instance){
+   FU_Type type = instance->declaration;
+   FUDeclaration* decl = &versat->declarations[type.type];   
+
+   return decl;
+}
+
 // TODO: change memory from static to dynamically allocation. For now, allocate a static amount of memory
 void InitVersat(Versat* versat,int base){
    versat->accelerators = (Accelerator*) malloc(10 * sizeof(Accelerator));
@@ -23,7 +28,23 @@ void InitVersat(Versat* versat,int base){
    versat_base = base;
 }
 
-FU_Type RegisterFU(Versat* versat,const char* declarationName,int nInputs,int nOutputs,int nConfigs,const Wire* configWires,int nStates,const Wire* stateWires,int memoryMapBytes,bool doesIO,int extraDataSize,FUFunction initializeFunction,FUFunction startFunction,FUFunction updateFunction){
+static int32_t AccessMemory(Versat* versat,FUInstance* instance,int address, int value, int write){
+   FUDeclaration* decl = GetDeclaration(versat,instance);
+   int32_t res = decl->memAccessFunction(instance,address,value,write);
+
+   return res;
+}
+
+void VersatUnitWrite(Versat* versat,FUInstance* instance,int address, int value){
+   AccessMemory(versat,instance,address,value,1);
+}
+
+int32_t VersatUnitRead(Versat* versat,FUInstance* instance,int address){
+   int32_t res = AccessMemory(versat,instance,address,0,0);
+   return res;
+}
+
+FU_Type RegisterFU(Versat* versat,const char* declarationName,int nInputs,int nOutputs,int nConfigs,const Wire* configWires,int nStates,const Wire* stateWires,int memoryMapBytes,bool doesIO,int extraDataSize,FUFunction initializeFunction,FUFunction startFunction,FUFunction updateFunction,MemoryAccessFunction memAccessFunction){
    FUDeclaration decl = {};
    FU_Type type = {};
 
@@ -40,6 +61,7 @@ FU_Type RegisterFU(Versat* versat,const char* declarationName,int nInputs,int nO
    decl.initializeFunction = initializeFunction;
    decl.startFunction = startFunction;
    decl.updateFunction = updateFunction;
+   decl.memAccessFunction = memAccessFunction;
 
    type.type = versat->nDeclarations;
    versat->declarations[versat->nDeclarations++] = decl;
@@ -69,19 +91,17 @@ FUInstance* CreateFUInstance(Accelerator* accel,FU_Type type){
    instance.declaration = type;
    
    if(decl.nInputs)
-      instance.inputs = (FUInput*) malloc(decl.nInputs * sizeof(FUInput));
+      instance.inputs = (FUInput*) calloc(decl.nInputs,sizeof(FUInput));
    if(decl.nOutputs){
-      instance.outputs = (int32_t*) malloc(decl.nOutputs * sizeof(int32_t));
-      instance.storedOutputs = (int32_t*) malloc(decl.nOutputs * sizeof(int32_t));
+      instance.outputs = (int32_t*) calloc(decl.nOutputs,sizeof(int32_t));
+      instance.storedOutputs = (int32_t*) calloc(decl.nOutputs,sizeof(int32_t));
    }
    if(decl.nStates)
-      instance.state = (volatile int*) malloc(decl.nStates * sizeof(int));
+      instance.state = (volatile int*) calloc(decl.nStates,sizeof(int));
    if(decl.nConfigs)
-      instance.config = (volatile int*) malloc(decl.nConfigs * sizeof(int));
-   if(decl.memoryMapBytes)
-      instance.memMapped = (volatile int*) malloc(decl.memoryMapBytes);
+      instance.config = (volatile int*) calloc(decl.nConfigs,sizeof(int));
    if(decl.extraDataSize)
-      instance.extraData = calloc(decl.extraDataSize,sizeof(int));
+      instance.extraData = calloc(decl.extraDataSize,sizeof(char));
 
    accel->instances[accel->nInstances] = instance;
 
@@ -91,13 +111,6 @@ FUInstance* CreateFUInstance(Accelerator* accel,FU_Type type){
       decl.initializeFunction(ptr);
 
    return ptr;
-}
-
-FUDeclaration* GetDeclaration(Versat* versat,FUInstance* instance){
-   FU_Type type = instance->declaration;
-   FUDeclaration* decl = &versat->declarations[type.type];   
-
-   return decl;
 }
 
 static void AcceleratorRunStart(Versat* versat,Accelerator* accel){
@@ -134,8 +147,38 @@ static void AcceleratorRunIteration(Versat* versat,Accelerator* accel){
 void AcceleratorRun(Versat* versat,Accelerator* accel,FUInstance* endRoot,FUFunction terminateFunction){
    AcceleratorRunStart(versat,accel);
 
+   int cycle = 0;
    while(true){
+      #if 0
+      printf("\n\nCycle: %d\n",cycle++);
+
+      for(int i = 0; i < accel->nInstances; i++){
+         FUInstance* inst = &accel->instances[i];
+         FUDeclaration* decl = GetDeclaration(versat,inst);
+
+         printf("%s %d\n\ninputs:\n\n",decl->name,i);
+
+         for(int i = 0; i < decl->nInputs; i++){
+            printf("%x\n",GetInputValue(inst,i));
+         }
+      }
+      #endif
+
       AcceleratorRunIteration(versat,accel);
+
+      #if 0
+      for(int i = 0; i < accel->nInstances; i++){
+         FUInstance* inst = &accel->instances[i];
+         FUDeclaration* decl = GetDeclaration(versat,inst);
+
+         printf("\noutputs:\n\n");
+
+         for(int i = 0; i < decl->nOutputs; i++){
+            printf("%x\n",inst->outputs[i]);
+         }
+         printf("\n");
+      }
+      #endif
 
       // For now, the end is kinda hardcoded.
       if(terminateFunction(endRoot))
@@ -648,6 +691,9 @@ bool IsPrefix(char* prefix,char* str){
    return true;
 }
 
+#if 0
+#include <ncurses.h>
+
 #define EMPTY_STATE 0
 #define OUTPUT_STATE 1
 
@@ -792,3 +838,4 @@ void IterativeAcceleratorRun(Versat* versat,Accelerator* accel,FUInstance* endRo
 
    endwin();
 }
+#endif

@@ -10,7 +10,7 @@ OBJ+=./build/unitVerilogWrappers.o
 
 ./build/unitVerilogWrappers.o: ./build/xadd.o $(VERSAT_PC_EMUL)/unitVerilogWrappers.cpp
 	mkdir -p ./build
-	g++ -c -o ./build/unitVerilogWrappers.o $(VERSAT_PC_EMUL)/unitVerilogWrappers.cpp -I $(VERSAT_SW_DIR) -I $(VERILATOR_INCLUDE) -I./build/
+	g++ -c -o ./build/unitVerilogWrappers.o -g -mx32 $(VERSAT_PC_EMUL)/unitVerilogWrappers.cpp -I $(VERSAT_SW_DIR) -I $(VERILATOR_INCLUDE) -I ./build/
 
 versat_instance_template.h: $(VERSAT_PC_EMUL)/versat_instance_template.v
 	$(eval IN=$(VERSAT_PC_EMUL)/versat_instance_template.v)

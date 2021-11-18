@@ -15,6 +15,7 @@ typedef unsigned char byte;
 typedef struct FUInstance_t FUInstance;
 
 typedef int32_t* (*FUFunction)(FUInstance*);
+typedef int32_t (*MemoryAccessFunction)(FUInstance* instance, int address, int value,int write);
 
 // Type system to prevent misuse
 typedef struct FU_Type_t{
@@ -45,6 +46,7 @@ typedef struct FUDeclaration_t{
    FUFunction initializeFunction;
 	FUFunction startFunction;
 	FUFunction updateFunction;
+   MemoryAccessFunction memAccessFunction;
 } FUDeclaration;
 
 typedef struct{
@@ -60,7 +62,7 @@ typedef struct FUInstance_t{
    void* extraData;
 
    // Embedded memory 
-	volatile int* memMapped;
+   volatile int* memMapped;
    volatile int* config;
    volatile int* state;
 } FUInstance;
@@ -87,7 +89,14 @@ typedef struct Accelerator_t{
 // Versat functions
 EXPORT void InitVersat(Versat* versat,int base);
 
-EXPORT FU_Type RegisterFU(Versat* versat,const char* declarationName,int nInputs,int nOutputs,int nConfigs,const Wire* configWires,int nStates,const Wire* stateBits,int memoryMapBytes,bool doesIO,int extraDataSize,FUFunction initializeFunction,FUFunction startFunction,FUFunction updateFunction);
+EXPORT FU_Type RegisterFU(Versat* versat,const char* declarationName,
+                          int nInputs,int nOutputs,
+                          int nConfigs,const Wire* configWires,
+                          int nStates,const Wire* stateWires,
+                          int memoryMapBytes,bool doesIO,
+                          int extraDataSize,
+                          FUFunction initializeFunction,FUFunction startFunction,FUFunction updateFunction,
+                          MemoryAccessFunction memAccessFunction);
 
 EXPORT void OutputVersatSource(Versat* versat,const char* definitionFilepath,const char* sourceFilepath);
 
@@ -108,6 +117,9 @@ EXPORT FUDeclaration* GetDeclaration(Versat* versat,FUInstance* instance);
 EXPORT int32_t GetInputValue(FUInstance* instance,int index);
 
 EXPORT void ConnectUnits(Versat* versat,FUInstance* out,int outIndex,FUInstance* in,int inIndex);
+
+EXPORT void VersatUnitWrite(Versat* versat,FUInstance* instance,int address, int value);
+EXPORT int32_t VersatUnitRead(Versat* versat,FUInstance* instance,int address);
 
 // FDInstance functions
 #if 0

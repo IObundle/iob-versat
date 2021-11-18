@@ -23,15 +23,17 @@ INCLUDE_VERILATOR = -I$(VERSAT_HW_DIR)/src -I$(VERSAT_HW_DIR)/include -I$(MEM_DI
 
 ./build/verilated.o:
 	mkdir -p ./build;
-	g++  -I.  -MMD -I/usr/local/share/verilator/include -I/usr/local/share/verilator/include/vltstd -DVL_PRINTF=printf \
+	g++ -I. -MMD -I/usr/local/share/verilator/include -I/usr/local/share/verilator/include/vltstd -DVL_PRINTF=printf \
 	-DVM_COVERAGE=0 -DVM_SC=0 -DVM_TRACE=0 -Wno-sign-compare -Wno-uninitialized -Wno-unused-but-set-variable \
-	-Wno-unused-parameter -Wno-unused-variable -Wno-shadow -c -o ./build/verilated.o /usr/local/share/verilator/include/verilated.cpp
+	-Wno-unused-parameter -Wno-unused-variable -Wno-shadow -mx32 -g -c /usr/share/verilator/include/verilated.cpp /usr/share/verilator/include/verilated_vcd_c.cpp
+	mv *.o ./build/;
+	mv *.d ./build/;
 
 ./build/%.o: $(VERSAT_HW_DIR)/src/%.v
-	verilator $(INCLUDE_VERILATOR) -cc -Mdir ./obj $<;
+	verilator -CFLAGS "-g -mx32" $(INCLUDE_VERILATOR) -cc -Mdir ./obj $<;
 	cd ./obj && make -f V$*.mk;
-	mkdir -p ./build; mv ./obj/V$*__ALL.o ./build/$*.o;
-	mv ./obj/V$*.h ./build/$*.h
+	mkdir -p ./build; mv ./obj/*.o ./build;
+	mv ./obj/*.h ./build
 	rm -r -f ./obj
 
 PHONY: clean
