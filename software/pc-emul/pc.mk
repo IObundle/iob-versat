@@ -8,7 +8,7 @@ HDR+=versat_instance_template.h
 
 OBJ+=./build/unitVerilogWrappers.o
 
-./build/unitVerilogWrappers.o: ./build/xadd.o $(VERSAT_PC_EMUL)/unitVerilogWrappers.cpp
+./build/unitVerilogWrappers.o: $(VERSAT_PC_EMUL)/unitVerilogWrappers.cpp $(UNIT_OBJ)
 	mkdir -p ./build
 	g++ -c -o ./build/unitVerilogWrappers.o -g -mx32 $(VERSAT_PC_EMUL)/unitVerilogWrappers.cpp -I $(VERSAT_SW_DIR) -I $(VERILATOR_INCLUDE) -I ./build/
 

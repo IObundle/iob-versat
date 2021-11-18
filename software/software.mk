@@ -10,16 +10,11 @@ HDR+=$(VERSAT_SW_DIR)/*.h
 #SRC+=$(VERSAT_SW_DIR)/iob-uart.c
 
 #Units to verilate
-VERILATE_UNIT += xadd
-VERILATE_UNIT += xreg
-VERILATE_UNIT += xmem
-VERILATE_UNIT += vread
-VERILATE_UNIT += vwrite
+VERILATE_UNIT = xadd xreg xmem vread vwrite
 
-OBJ += $(foreach unit,$(VERILATE_UNIT),./build/$(unit).o)
-OBJ += ./build/verilated.o
+UNIT_OBJ+=$(foreach unit,$(VERILATE_UNIT),./build/V$(unit)__ALLcls.o)
 
-INCLUDE_VERILATOR = -I$(VERSAT_HW_DIR)/src -I$(VERSAT_HW_DIR)/include -I$(MEM_DIR)/ram/2p_ram -I$(CACHE_DIR)/submodules/MEM/tdp_ram
+OBJ+=./build/verilated.o
 
 ./build/verilated.o:
 	mkdir -p ./build;
@@ -29,8 +24,8 @@ INCLUDE_VERILATOR = -I$(VERSAT_HW_DIR)/src -I$(VERSAT_HW_DIR)/include -I$(MEM_DI
 	mv *.o ./build/;
 	mv *.d ./build/;
 
-./build/%.o: $(VERSAT_HW_DIR)/src/%.v
-	verilator -CFLAGS "-g -mx32" $(INCLUDE_VERILATOR) -cc -Mdir ./obj $<;
+./build/V%__ALLcls.o: $(VERSAT_HW_DIR)/src/%.v
+	verilator -CFLAGS "-g -mx32" -I$(VERSAT_HW_DIR)/src -I$(VERSAT_HW_DIR)/include -I$(MEM_DIR)/ram/2p_ram -I$(CACHE_DIR)/submodules/MEM/tdp_ram -cc -Mdir ./obj $<;
 	cd ./obj && make -f V$*.mk;
 	mkdir -p ./build; mv ./obj/*.o ./build;
 	mv ./obj/*.h ./build
