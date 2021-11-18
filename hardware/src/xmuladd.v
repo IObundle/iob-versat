@@ -20,22 +20,19 @@ module xmuladd # (
                 output [DATA_W-1:0]          out,
 
                 // config interface
-                input [`MULADD_CONF_BITS-1:0] configdata
+                input [`MULADD_FNS_W-1:0] opcode,
+                input [`MEM_ADDR_W-1:0] iterations,
+                input [`PERIOD_W-1:0] period,
+                input [`PERIOD_W-1:0] delay,
+                input [`SHIFT_W-1:0] shift
                 );
 
-   wire [`MULADD_FNS_W-1:0]                   opcode;
    wire signed [2*DATA_W-1:0]                 result_mult;
-   reg signed [2*DATA_W-1:0]		      result_mult_reg;
+   reg signed [2*DATA_W-1:0]		             result_mult_reg;
    reg [2*DATA_W-1:0]                         result;
 
    //data
    wire [`MEM_ADDR_W-1:0]                     op_o;
-
-   //config data
-   wire [`MEM_ADDR_W-1:0]		      iterations;
-   wire [`PERIOD_W-1:0]                       period;
-   wire [`PERIOD_W-1:0]                       delay;
-   wire [`SHIFT_W-1:0]			      shift;
 
    // register muladd control
    reg [`MEM_ADDR_W-1:0]                      op_o_reg;
@@ -50,13 +47,6 @@ module xmuladd # (
 `else
    reg                                        ld_acc1;
 `endif
-
-   //unpack config bits
-   assign opcode = configdata[`MULADD_CONF_BITS-1 -: `MULADD_FNS_W];
-   assign iterations = configdata[`MULADD_CONF_BITS-1-`MULADD_FNS_W -: `MEM_ADDR_W];
-   assign period = configdata[`MULADD_CONF_BITS-1-`MULADD_FNS_W-`MEM_ADDR_W -: `PERIOD_W];
-   assign delay = configdata[`MULADD_CONF_BITS-1-`MULADD_FNS_W-`MEM_ADDR_W-`PERIOD_W -: `PERIOD_W];
-   assign shift = configdata[`MULADD_CONF_BITS-1-`MULADD_FNS_W-`MEM_ADDR_W-2*`PERIOD_W -: `SHIFT_W];
 
    //addr_gen to control macc
    wire ready = |iterations;

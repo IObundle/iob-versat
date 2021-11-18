@@ -21,20 +21,23 @@ void InitVersat(Versat* versat,int base){
    MEMSET(versat_base,0x0,0);
 }
 
-FU_Type RegisterFU(Versat* versat,const char* declarationName,int nInputs,int nOutputs,int nConfigs,Wire* configWires,int nStates,Wire* stateWires,int memoryMapBytes,bool doesIO,int extraDataSize,FUFunction startFunction,FUFunction updateFunction){
+FU_Type RegisterFU(Versat* versat,const char* declarationName,
+                   int nInputs,int nOutputs,
+                   int nConfigs,const Wire* configWires,
+                   int nStates,const Wire* stateWires,
+                   int memoryMapBytes,bool doesIO,int extraDataSize,
+                   FUFunction initializeFunction,FUFunction startFunction,FUFunction updateFunction,
+                   MemoryAccessFunction memAccessFunction){
+
    FUDeclaration decl = {};
    FU_Type type = {};
 
    decl.name = declarationName;
-   decl.nStates = nStates;
-   decl.stateWires = stateWires;
    decl.nConfigs = nConfigs;
    decl.configWires = configWires;
+   decl.nStates = nStates;
+   decl.stateWires = stateWires;
    decl.memoryMapBytes = memoryMapBytes;
-   decl.doesIO = doesIO;
-   decl.extraDataSize = extraDataSize;
-   decl.startFunction = startFunction;
-   decl.updateFunction = updateFunction;
 
    type.type = versat->nDeclarations;
    versat->declarations[versat->nDeclarations++] = decl;
@@ -79,7 +82,7 @@ FUInstance* CreateFUInstance(Accelerator* accel,FU_Type type){
       createdConfig += decl.nConfigs;
    }
    if(decl.memoryMapBytes){
-      instance.memMapped = (volatile int*) (versat_base + 0x02000 + 1024 * sizeof(int) * (createdMem++));
+      instance.memMapped = (volatile int*) (versat_base + 0x10000 + 1024 * sizeof(int) * (createdMem++));
    }
    accel->instances[accel->nInstances] = instance;
 
@@ -115,4 +118,14 @@ int32_t GetInputValue(FUInstance* instance,int index){
 
 void ConnectUnits(Versat* versat,FUInstance* out,int outIndex,FUInstance* in,int inIndex){
 
+}
+
+void VersatUnitWrite(Versat* versat,FUInstance* instance,int address, int value){
+   instance->memMapped[address] = value;
+}
+
+int32_t VersatUnitRead(Versat* versat,FUInstance* instance,int address){
+   int32_t res = instance->memMapped[address];
+
+   return res;
 }

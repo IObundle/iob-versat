@@ -4,11 +4,18 @@
 #include "stdint.h"
 #include "stdbool.h"
 
+#ifdef __cplusplus
+#define EXPORT extern "C"
+#else
+#define EXPORT
+#endif
+
 typedef unsigned char byte;
 
 typedef struct FUInstance_t FUInstance;
 
 typedef int32_t* (*FUFunction)(FUInstance*);
+typedef int32_t (*MemoryAccessFunction)(FUInstance* instance, int address, int value,int write);
 
 // Type system to prevent misuse
 typedef struct FU_Type_t{
@@ -39,6 +46,7 @@ typedef struct FUDeclaration_t{
    FUFunction initializeFunction;
 	FUFunction startFunction;
 	FUFunction updateFunction;
+   MemoryAccessFunction memAccessFunction;
 } FUDeclaration;
 
 typedef struct{
@@ -54,7 +62,7 @@ typedef struct FUInstance_t{
    void* extraData;
 
    // Embedded memory 
-	volatile int* memMapped;
+   volatile int* memMapped;
    volatile int* config;
    volatile int* state;
 } FUInstance;
@@ -79,29 +87,39 @@ typedef struct Accelerator_t{
 } Accelerator;
 
 // Versat functions
-void InitVersat(Versat* versat,int base);
+EXPORT void InitVersat(Versat* versat,int base);
 
-FU_Type RegisterFU(Versat* versat,const char* declarationName,int nInputs,int nOutputs,int nConfigs,const Wire* configWires,int nStates,const Wire* stateBits,int memoryMapBytes,bool doesIO,int extraDataSize,FUFunction initializeFunction,FUFunction startFunction,FUFunction updateFunction);
+EXPORT FU_Type RegisterFU(Versat* versat,const char* declarationName,
+                          int nInputs,int nOutputs,
+                          int nConfigs,const Wire* configWires,
+                          int nStates,const Wire* stateWires,
+                          int memoryMapBytes,bool doesIO,
+                          int extraDataSize,
+                          FUFunction initializeFunction,FUFunction startFunction,FUFunction updateFunction,
+                          MemoryAccessFunction memAccessFunction);
 
-void OutputVersatSource(Versat* versat,const char* definitionFilepath,const char* sourceFilepath);
+EXPORT void OutputVersatSource(Versat* versat,const char* definitionFilepath,const char* sourceFilepath);
 
-void OutputMemoryMap(Versat* versat);
+EXPORT void OutputMemoryMap(Versat* versat);
 
 // Accelerator functions
-Accelerator* CreateAccelerator(Versat* versat);
+EXPORT Accelerator* CreateAccelerator(Versat* versat);
 
-FUInstance* CreateFUInstance(Accelerator* accel,FU_Type type);
+EXPORT FUInstance* CreateFUInstance(Accelerator* accel,FU_Type type);
 
-void AcceleratorRun(Versat* versat,Accelerator* accel,FUInstance* endRoot,FUFunction terminateFunction);
+EXPORT void AcceleratorRun(Versat* versat,Accelerator* accel,FUInstance* endRoot,FUFunction terminateFunction);
 
-void IterativeAcceleratorRun(Versat* versat,Accelerator* accel,FUInstance* endRoot,FUFunction terminateFunction);
+EXPORT void IterativeAcceleratorRun(Versat* versat,Accelerator* accel,FUInstance* endRoot,FUFunction terminateFunction);
 
 // Helper functions
-FUDeclaration* GetDeclaration(Versat* versat,FUInstance* instance);
+EXPORT FUDeclaration* GetDeclaration(Versat* versat,FUInstance* instance);
 
-int32_t GetInputValue(FUInstance* instance,int index);
+EXPORT int32_t GetInputValue(FUInstance* instance,int index);
 
-void ConnectUnits(Versat* versat,FUInstance* out,int outIndex,FUInstance* in,int inIndex);
+EXPORT void ConnectUnits(Versat* versat,FUInstance* out,int outIndex,FUInstance* in,int inIndex);
+
+EXPORT void VersatUnitWrite(Versat* versat,FUInstance* instance,int address, int value);
+EXPORT int32_t VersatUnitRead(Versat* versat,FUInstance* instance,int address);
 
 // FDInstance functions
 #if 0
