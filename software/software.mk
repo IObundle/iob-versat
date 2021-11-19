@@ -18,9 +18,9 @@ OBJ+=./build/verilated.o
 
 ./build/verilated.o:
 	mkdir -p ./build;
-	g++ -I. -MMD -I/usr/local/share/verilator/include -I/usr/local/share/verilator/include/vltstd -DVL_PRINTF=printf \
+	g++ -I. -MMD -I$(VERILATOR_INCLUDE) -I$(VERILATOR_INCLUDE)/vltstd -DVL_PRINTF=printf \
 	-DVM_COVERAGE=0 -DVM_SC=0 -DVM_TRACE=0 -Wno-sign-compare -Wno-uninitialized -Wno-unused-but-set-variable \
-	-Wno-unused-parameter -Wno-unused-variable -Wno-shadow -mx32 -g -c /usr/share/verilator/include/verilated.cpp /usr/share/verilator/include/verilated_vcd_c.cpp
+	-Wno-unused-parameter -Wno-unused-variable -Wno-shadow -mx32 -g -c $(VERILATOR_INCLUDE)/verilated.cpp $(VERILATOR_INCLUDE)/verilated_vcd_c.cpp
 	mv *.o ./build/;
 	mv *.d ./build/;
 
