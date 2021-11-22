@@ -442,6 +442,19 @@ void ConnectUnits(Versat* versat,FUInstance* out,int outIndex,FUInstance* in,int
    in->inputs[inIndex].index = outIndex;
 }
 
+bool IsAlpha(char ch){
+   if(ch >= 'a' && ch < 'z')
+      return true;
+
+   if(ch >= 'A' && ch <= 'Z')
+      return true;
+
+   if(ch >= '0' && ch <= '9')
+      return true;
+
+   return false;
+}
+
 #define TAB "   "
 
 void OutputVersatSource(Versat* versat,const char* definitionFilepath,const char* sourceFilepath){
@@ -599,19 +612,15 @@ void OutputVersatSource(Versat* versat,const char* definitionFilepath,const char
       FU_Type type = instance->declaration;
       FUDeclaration* decl = &versat->declarations[type.type];
 
-      /*
-      int configBits = 0;
-      for(int ii = 0; ii < decl->nConfigs; ii++){
-         configBits += decl->configWires[ii].bitsize;
+      // Small temporary fix to remove any unwanted character
+      char buffer[128];
+      int index;
+      for(index = 0; IsAlpha(decl->name[index]); index++){
+         buffer[index] = decl->name[index];
       }
+      buffer[index] = '\0';
 
-      int stateBits = 0;
-      for(int ii = 0; ii < decl->nStates; ii++){
-         stateBits += decl->stateWires[ii].bitsize;
-      }
-      */
-
-      fprintf(s,"%s%s unit%d(\n",TAB,decl->name,i);
+      fprintf(s,"%s%s %s_%d(\n",TAB,decl->name,buffer,i);
       
       for(int ii = 0; ii < decl->nOutputs; ii++){
          fprintf(s,"%s.out%d(output_%d_%d),\n",TAB,ii,i,ii);

@@ -306,8 +306,21 @@ EXPORT FU_Type RegisterMem(Versat* versat,int addr_w){
    return type;
 }
 
+// Since it is very likely that memory accesses will stall on a board, 
+// delay by a couple of seconds, in order to provide a closer to the expected experience
+#define INITIAL_MEMORY_LATENCY 5
+#define MEMORY_LATENCY 2
+
+struct VReadExtra{
+   Vvread vvread;
+   int memoryAccessCounter;
+};
+
 static int32_t* VReadInitializeFunction(FUInstance* inst){
-   Vvread* self = new (inst->extraData) Vvread();
+   VReadExtra* extra = new (inst->extraData) VReadExtra();
+   Vvread* self = &extra->vvread;
+
+   extra->memoryAccessCounter = INITIAL_MEMORY_LATENCY;
 
    INIT(self);
    
@@ -317,7 +330,8 @@ static int32_t* VReadInitializeFunction(FUInstance* inst){
 }
 
 static int32_t* VReadStartFunction(FUInstance* inst){
-   Vvread* self = (Vvread*) inst->extraData;
+   VReadExtra* extra = (VReadExtra*) inst->extraData;
+   Vvread* self = &extra->vvread;
    VReadConfig* config = (VReadConfig*) inst->config;
 
    // Update config
@@ -350,14 +364,20 @@ static int32_t* VReadStartFunction(FUInstance* inst){
 
 static int32_t* VReadUpdateFunction(FUInstance* inst){
    static int32_t out;
-   Vvread* self = (Vvread*) inst->extraData;
+   VReadExtra* extra = (VReadExtra*) inst->extraData;
+   Vvread* self = &extra->vvread;
 
    self->databus_ready = 0;
 
    if(self->databus_valid){
-      int* ptr = (int*) (self->databus_addr);
-      self->databus_rdata = *ptr;
-      self->databus_ready = 1;
+      if(extra->memoryAccessCounter > 0){
+         extra->memoryAccessCounter -= 1;
+      } else {
+         int* ptr = (int*) (self->databus_addr);
+         self->databus_rdata = *ptr;
+         self->databus_ready = 1;
+         extra->memoryAccessCounter = MEMORY_LATENCY;
+      }
    }
 
    UPDATE(self);
@@ -378,7 +398,7 @@ EXPORT FU_Type RegisterVRead(Versat* versat){
                                     NULL,
                                     0, // MemoryMapped
                                     true, // IO
-                                    sizeof(Vvread), // Extra memory
+                                    sizeof(VReadExtra), // Extra memory
                                     VReadInitializeFunction,
                                     VReadStartFunction,
                                     VReadUpdateFunction,

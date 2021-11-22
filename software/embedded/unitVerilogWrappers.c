@@ -119,8 +119,7 @@ EXPORT FU_Type RegisterDebug(Versat* versat){
                                     NULL,
                                     NULL,
                                     NULL,
-                                    NULL,
-                                    );
+                                    NULL);
 
    return type;
 }
