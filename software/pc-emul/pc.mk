@@ -7,10 +7,15 @@ SRC+=$(VERSAT_PC_EMUL)/versat.c
 HDR+=versat_instance_template.h
 
 OBJ+=./build/unitVerilogWrappers.o
+OBJ+=./build/unitVCD.o
 
 ./build/unitVerilogWrappers.o: $(VERSAT_PC_EMUL)/unitVerilogWrappers.cpp $(UNIT_OBJ)
 	mkdir -p ./build
 	g++ -std=c++11 -c -o ./build/unitVerilogWrappers.o -g -m32 $(VERSAT_PC_EMUL)/unitVerilogWrappers.cpp -I $(VERSAT_SW_DIR) -I $(VERILATOR_INCLUDE) -I ./build/
+
+./build/unitVCD.o: $(VERSAT_PC_EMUL)/unitVCD.cpp
+	mkdir -p ./build
+	g++ -std=c++11 -c -o ./build/unitVCD.o -g -m32 $(VERSAT_PC_EMUL)/unitVCD.cpp -I $(VERSAT_SW_DIR) -I $(VERILATOR_INCLUDE) -I ./build/
 
 versat_instance_template.h: $(VERSAT_PC_EMUL)/versat_instance_template.v
 	$(eval IN=$(VERSAT_PC_EMUL)/versat_instance_template.v)

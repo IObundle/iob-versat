@@ -1,8 +1,10 @@
 #include <new>
 
-#include "unitVerilogWrappers.h"
 #include "stdio.h"
 #include "math.h"
+
+#include "unitVCD.h"
+#include "unitVerilogWrappers.h"
 
 #include "Vxadd.h"
 #include "Vxreg.h"
@@ -36,6 +38,29 @@
    self->run = 1; \
    UPDATE(unit); \
    self->run = 0;
+
+#define VCD_UPDATE(unit) \
+   unit->clk = 0; \
+   unit->eval(); \
+   vcd->dump(); \
+   unit->clk = 1; \
+   unit->eval(); \
+   vcd->dump();
+
+#define VCD_RESET(unit) \
+   unit->rst = 1; \
+   VCD_UPDATE(unit); \
+   unit->rst = 0;
+
+#define VCD_START_RUN(unit) \
+   VCD_UPDATE(unit); \
+   unit->run = 1; \
+   VCD_UPDATE(unit); \
+   unit->run = 0;
+
+#define PREAMBLE(type) \
+   type* self = &data->unit; \
+   VCDData* vcd = &data->vcd;
 
 #define DEBUG_PRINT(unit) \
    printf("%d %d %02x %08x %08x\n",unit->valid,unit->ready,unit->wstrb,unit->wdata,unit->rdata);
@@ -312,27 +337,37 @@ EXPORT FU_Type RegisterMem(Versat* versat,int addr_w){
 #define MEMORY_LATENCY 2
 
 struct VReadExtra{
-   Vvread vvread;
+   Vvread unit;
+   VCDData vcd;
    int memoryAccessCounter;
 };
 
-static int32_t* VReadInitializeFunction(FUInstance* inst){
-   VReadExtra* extra = new (inst->extraData) VReadExtra();
-   Vvread* self = &extra->vvread;
+static int vreadCounter = 0;
 
-   extra->memoryAccessCounter = INITIAL_MEMORY_LATENCY;
+static int32_t* VReadInitializeFunction(FUInstance* inst){
+   char buffer[256];
+
+   VReadExtra* data = new (inst->extraData) VReadExtra();
+   PREAMBLE(Vvread);
+
+   self->trace(&vcd->vcd,99);
+
+   sprintf(buffer,"./trace_out/vread%d.vcd",vreadCounter++);
+   vcd->open(buffer);
+
+   data->memoryAccessCounter = INITIAL_MEMORY_LATENCY;
 
    INIT(self);
    
-   RESET(self);
+   VCD_RESET(self);
 
    return NULL;
 }
 
 static int32_t* VReadStartFunction(FUInstance* inst){
-   VReadExtra* extra = (VReadExtra*) inst->extraData;
-   Vvread* self = &extra->vvread;
+   VReadExtra* data = (VReadExtra*) inst->extraData;
    VReadConfig* config = (VReadConfig*) inst->config;
+   PREAMBLE(Vvread);
 
    // Update config
    self->ext_addr = config->ext_addr;
@@ -343,6 +378,7 @@ static int32_t* VReadStartFunction(FUInstance* inst){
    self->dutyA = config->dutyA;
    self->shiftA = config->shiftA;
    self->incrA = config->incrA;
+   self->pingPong = config->pingPong;
    self->iterB = config->iterB;
    self->perB = config->perB;
    self->dutyB = config->dutyB;
@@ -357,30 +393,30 @@ static int32_t* VReadStartFunction(FUInstance* inst){
    self->shift2B = config->shift2B;
    self->incr2B = config->incr2B;
 
-   START_RUN(self);
+   VCD_START_RUN(self);
 
    return NULL;
 }
 
 static int32_t* VReadUpdateFunction(FUInstance* inst){
    static int32_t out;
-   VReadExtra* extra = (VReadExtra*) inst->extraData;
-   Vvread* self = &extra->vvread;
+   VReadExtra* data = (VReadExtra*) inst->extraData;
+   PREAMBLE(Vvread);
 
    self->databus_ready = 0;
 
    if(self->databus_valid){
-      if(extra->memoryAccessCounter > 0){
-         extra->memoryAccessCounter -= 1;
+      if(data->memoryAccessCounter > 0){
+         data->memoryAccessCounter -= 1;
       } else {
          int* ptr = (int*) (self->databus_addr);
          self->databus_rdata = *ptr;
          self->databus_ready = 1;
-         extra->memoryAccessCounter = MEMORY_LATENCY;
+         data->memoryAccessCounter = MEMORY_LATENCY;
       }
    }
 
-   UPDATE(self);
+   VCD_UPDATE(self);
 
    // Update out
    out = self->out0;
@@ -430,6 +466,7 @@ static int32_t* VWriteStartFunction(FUInstance* inst){
    self->dutyA = config->dutyA;
    self->shiftA = config->shiftA;
    self->incrA = config->incrA;
+   self->pingPong = config->pingPong;
    self->iterB = config->iterB;
    self->perB = config->perB;
    self->dutyB = config->dutyB;

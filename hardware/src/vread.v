@@ -6,29 +6,28 @@
 `include "versat-io.vh"
 
 module vread #(
-               parameter DATA_W=32
+               parameter DATA_W = 32,
+               parameter ADDR_W = 10
                )
    (
-   input                       clk,
-   input                       rst,
+   input                   clk,
+   input                   rst,
 
-    input                       run,
-    output                      done,
+    input                  run,
+    output                 done,
 
     // Native interface
-    input                       databus_ready,
-    output                      databus_valid,
-    output [`IO_ADDR_W-1:0]     databus_addr,
-    input [DATA_W-1:0]          databus_rdata,
-    output [DATA_W-1:0]         databus_wdata,
-    output [DATA_W/8-1:0]       databus_wstrb,
+    input                  databus_ready,
+    output                 databus_valid,
+    output[`IO_ADDR_W-1:0] databus_addr,
+    input [DATA_W-1:0]     databus_rdata,
+    output [DATA_W-1:0]    databus_wdata,
+    output [DATA_W/8-1:0]  databus_wstrb,
 
     // input / output data
-    output [DATA_W-1:0]         out0,
+    output [DATA_W-1:0]    out0,
 
     // configurations
-    //input [`VI_CONFIG_BITS-1:0] configdata
-
    input [`IO_ADDR_W-1:0]  ext_addr,
    input [`MEM_ADDR_W-1:0] int_addr,
    input [`IO_SIZE_W-1:0]  size,
@@ -37,6 +36,7 @@ module vread #(
    input [`PERIOD_W-1:0]   dutyA,
    input [`MEM_ADDR_W-1:0] shiftA,
    input [`MEM_ADDR_W-1:0] incrA,
+   input                   pingPong,
 
    input [`MEM_ADDR_W-1:0] iterB,
    input [`PERIOD_W-1:0]   perB,
@@ -93,6 +93,22 @@ module vread #(
 
    wire [DATA_W-1:0]      data_to_wrA = inA;
 
+   reg                    pingPongState;
+   wire [ADDR_W-1:0]      int_addr_inst;
+   wire [ADDR_W-1:0]      startB_inst;
+
+   assign int_addr_inst = pingPong ? {pingPongState,int_addr[ADDR_W-2:0]} : int_addr;
+   assign startB_inst   = pingPong ? {pingPongState,startB[ADDR_W-2:0]} : startB;
+
+   // Ping pong 
+   always @(posedge clk,posedge rst)
+   begin
+      if(rst)
+         pingPongState <= 0;
+      else if(run)
+         pingPongState <= pingPong ? (!pingPongState) : 1'b0;
+   end
+
    // address generators
    ext_addrgen #(
                  .DATA_W(DATA_W)
@@ -107,7 +123,7 @@ module vread #(
 
             // Configuration
             .ext_addr(ext_addr),
-            .int_addr(int_addr),
+            .int_addr(int_addr_inst),
             .size(size),
             .direction(direction),
             .iterations(iterA),
@@ -141,7 +157,7 @@ module vread #(
                        .iterations(iterB),
                        .period(perB),
                        .duty(dutyB),
-                       .start(startB),
+                       .start(startB_inst),
                        .shift(shiftB),
                        .incr(incrB),
                        .delay(delayB),
@@ -158,11 +174,11 @@ module vread #(
    assign addrB = addrB_int2;
 
    assign addrA_int2 = addrA_int;
-   assign addrB_int2 = reverseB? reverseBits(addrB_int) : addrB_int;
+   assign addrB_int2 = reverseB ? reverseBits(addrB_int) : addrB_int;
    
    iob_2p_ram #(
                .DATA_W(DATA_W),
-               .ADDR_W(`MEM_ADDR_W)
+               .ADDR_W(ADDR_W)
                )
    mem (
         .clk(clk),
