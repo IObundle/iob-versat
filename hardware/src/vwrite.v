@@ -9,26 +9,25 @@ module vwrite #(
                 parameter DATA_W=32
                 )
    (
-   input                       clk,
-   input                       rst,
+   input                   clk,
+   input                   rst,
 
-    input                       run,
-    output                      done,
+    input                  run,
+    output                 done,
 
     // Databus interface
-    input                       databus_ready,
-    output                      databus_valid,
-    output [`IO_ADDR_W-1:0]     databus_addr,
-    input [DATA_W-1:0]          databus_rdata,
-    output [DATA_W-1:0]         databus_wdata,
-    output [DATA_W/8-1:0]       databus_wstrb,
+    input                  databus_ready,
+    output                 databus_valid,
+    output[`IO_ADDR_W-1:0] databus_addr,
+    input [DATA_W-1:0]     databus_rdata,
+    output [DATA_W-1:0]    databus_wdata,
+    output [DATA_W/8-1:0]  databus_wstrb,
 
     // input / output data
-    input [DATA_W-1:0]          in0,
-    output [DATA_W-1:0]         out0,
+    input [DATA_W-1:0]     in0,
+    output [DATA_W-1:0]    out0,
 
     // configurations
-    //input [`VO_CONFIG_BITS-1:0] configdata
    input [`IO_ADDR_W-1:0]  ext_addr,
    input [`MEM_ADDR_W-1:0] int_addr,
    input [`IO_SIZE_W-1:0]  size,
@@ -37,6 +36,7 @@ module vwrite #(
    input [`PERIOD_W-1:0]   dutyA,
    input [`MEM_ADDR_W-1:0] shiftA,
    input [`MEM_ADDR_W-1:0] incrA,
+   input                   pingPong,
 
    input [`MEM_ADDR_W-1:0] iterB,
    input [`PERIOD_W-1:0]   perB,
