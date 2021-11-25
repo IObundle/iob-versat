@@ -24,7 +24,6 @@ module xalulite # (
                  output reg [DATA_W-1:0] out,
 
                  // Config interface
-                 //input [`ALULITE_CONF_BITS - 1:0] configdata
                  input self_loop, 
                  input [`ALULITE_FNS_W-2 : 0] fns
                  );
@@ -37,15 +36,11 @@ module xalulite # (
 
    reg signed [DATA_W-1:0]                        result_int;
 
-   wire [DATA_W-1:0]                              in1;
-   wire [DATA_W-1:0]                              in2;
    reg                                            in1_msb;
    reg                                            in2_msb;
    wire [DATA_W-1:0]                              in1_int;
    reg [DATA_W-1:0]                               in1_reg;
    reg [DATA_W-1:0]                               in2_reg;
-   wire [`ALULITE_FNS_W-2:0]                      fns;
-   wire                                           self_loop;
 
    always @ (posedge clk, posedge rst)
      if (rst) begin

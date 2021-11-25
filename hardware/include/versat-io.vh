@@ -4,9 +4,6 @@
 // Transfer size width 2**11 = 2048 words (same as parameter ADDR_W)
 `define IO_SIZE_W 11
 
-// Number of versat-io units (versat-i + versat-o)
-`define nIO (`nVI+`nVO)
-
 // Configuration
 
 // `MEMP_CONF_BITS = `N_W + 7*`MEM_ADDR_W + 4*`PERIOD_W + 1 + 1 + 1
