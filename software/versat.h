@@ -27,18 +27,26 @@ typedef struct Wire_t{
    int bitsize;
 } Wire;
 
+#define VERSAT_TYPE_SINK             0x1 // Sink of data in the circuit.
+#define VERSAT_TYPE_SOURCE           0x2 // If the unit is a source of data
+#define VERSAT_TYPE_IMPLEMENTS_DELAY 0x4 // Wether unit implements delay or not
+#define VERSAT_TYPE_SOURCE_DELAY     0x8 // Wether the unit has delay to produce data, or to process data (1 - delay on source,0 - delay on compute/sink)
+
 typedef struct FUDeclaration_t{
 	const char* name;
-	
+
    int nInputs;
    int nOutputs;
 
    // Config and state interface
    int nConfigs;
    const Wire* configWires;
-   
+
    int nStates;
    const Wire* stateWires;
+
+   int latency; // Assume, for now, every port has the same latency
+   int type;
 
    int memoryMapBytes;
    int extraDataSize;
@@ -55,16 +63,26 @@ typedef struct{
 } FUInput;
 
 typedef struct FUInstance_t{
-	FU_Type declaration;
+	FUDeclaration* declaration;
 	FUInput* inputs;
 	int32_t* outputs;
 	int32_t* storedOutputs;
    void* extraData;
 
-   // Embedded memory 
+   // Embedded memory
    volatile int* memMapped;
    volatile int* config;
    volatile int* state;
+
+   // Auxiliary used by other algorithms
+   // For now, we do not need to know which output is connected
+   // (Ex: a unit with 4 outputs might only have 1 in numberOutputs,
+   //  we do not need to know which output is the one that is connected)
+   struct FUInstance_t** outputInstances;
+   int numberOutputs;
+
+   int* delays; // How many cycles unit must wait before seeing valid data
+   char tag; // Various uses
 } FUInstance;
 
 typedef struct Accelerator_t Accelerator;
@@ -84,19 +102,15 @@ typedef struct Accelerator_t{
 	Versat* versat;
 	FUInstance* instances;
 	int nInstances;
+
+   // Used by other algorithms
+   FUInstance** nodeOutputsAuxiliary;
 } Accelerator;
 
 // Versat functions
 EXPORT void InitVersat(Versat* versat,int base);
 
-EXPORT FU_Type RegisterFU(Versat* versat,const char* declarationName,
-                          int nInputs,int nOutputs,
-                          int nConfigs,const Wire* configWires,
-                          int nStates,const Wire* stateWires,
-                          int memoryMapBytes,bool doesIO,
-                          int extraDataSize,
-                          FUFunction initializeFunction,FUFunction startFunction,FUFunction updateFunction,
-                          MemoryAccessFunction memAccessFunction);
+EXPORT FU_Type RegisterFU(Versat* versat,FUDeclaration declaration);
 
 EXPORT void OutputVersatSource(Versat* versat,const char* definitionFilepath,const char* sourceFilepath);
 
@@ -107,19 +121,27 @@ EXPORT Accelerator* CreateAccelerator(Versat* versat);
 
 EXPORT FUInstance* CreateFUInstance(Accelerator* accel,FU_Type type);
 
-EXPORT void AcceleratorRun(Versat* versat,Accelerator* accel,FUInstance* endRoot,FUFunction terminateFunction);
+EXPORT void AcceleratorRun(Accelerator* accel,FUInstance* endRoot,FUFunction terminateFunction);
 
-EXPORT void IterativeAcceleratorRun(Versat* versat,Accelerator* accel,FUInstance* endRoot,FUFunction terminateFunction);
+EXPORT void IterativeAcceleratorRun(Accelerator* accel,FUInstance* endRoot,FUFunction terminateFunction);
 
 // Helper functions
-EXPORT FUDeclaration* GetDeclaration(Versat* versat,FUInstance* instance);
-
 EXPORT int32_t GetInputValue(FUInstance* instance,int index);
 
-EXPORT void ConnectUnits(Versat* versat,FUInstance* out,int outIndex,FUInstance* in,int inIndex);
+EXPORT void ConnectUnits(FUInstance* out,int outIndex,FUInstance* in,int inIndex);
 
-EXPORT void VersatUnitWrite(Versat* versat,FUInstance* instance,int address, int value);
-EXPORT int32_t VersatUnitRead(Versat* versat,FUInstance* instance,int address);
+EXPORT void VersatUnitWrite(FUInstance* instance,int address, int value);
+EXPORT int32_t VersatUnitRead(FUInstance* instance,int address);
+
+EXPORT void CalculateDelay(Accelerator* accel);
+EXPORT void CalculateNodesOutputs(Accelerator* accel);
+EXPORT void DAGOrdering(Accelerator* accel);
+
+/*
+EXPORT void CalculatePropagateDelay(Accelerator* accel);
+EXPORT int CalculateFullLatency(FUInstance* root);
+EXPORT void CalculateDelay(FUInstance* root);
+*/
 
 // FDInstance functions
 #if 0

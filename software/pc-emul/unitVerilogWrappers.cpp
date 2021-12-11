@@ -115,7 +115,7 @@ static int32_t* AddInitializeFunction(FUInstance* inst){
    Vxadd* self = new (inst->extraData) Vxadd();
 
    INIT(self);
-   
+
    self->in0 = 0;
    self->in1 = 0;
 
@@ -148,20 +148,18 @@ static int32_t* AddUpdateFunction(FUInstance* inst){
 }
 
 EXPORT FU_Type RegisterAdd(Versat* versat){
-   FU_Type type = RegisterFU(versat,"xadd",
-                                    2, // n inputs
-                                    1, // n outputs
-                                    0, // Config
-                                    NULL,
-                                    0, // State
-                                    NULL,
-                                    0, // MemoryMapped
-                                    false, // IO
-                                    sizeof(Vxadd), // Extra memory
-                                    AddInitializeFunction,
-                                    AddStartFunction,
-                                    AddUpdateFunction,
-                                    NULL);
+   FUDeclaration decl = {};
+
+   decl.name = "xadd";
+   decl.nInputs = 2;
+   decl.nOutputs = 1;
+   decl.extraDataSize = sizeof(Vxadd);
+   decl.initializeFunction = AddInitializeFunction;
+   decl.startFunction = AddStartFunction;
+   decl.updateFunction = AddUpdateFunction;
+   decl.latency = 1;
+
+   FU_Type type = RegisterFU(versat,decl);
 
    return type;
 }
@@ -183,7 +181,7 @@ static int32_t* RegStartFunction(FUInstance* inst){
    RegConfig* config = (RegConfig*) inst->config;
 
    // Update config
-   self->writeDelay = config->writeDelay;
+   self->writeDelay = inst->delays[0];
 
    START_RUN(self);
 
@@ -209,20 +207,25 @@ static int32_t* RegUpdateFunction(FUInstance* inst){
 }
 
 EXPORT FU_Type RegisterReg(Versat* versat){
-   FU_Type type = RegisterFU(versat,"xreg",
-                                    1, // n inputs
-                                    1, // n outputs
-                                    ARRAY_SIZE(regConfigWires), // Config
-                                    regConfigWires,
-                                    ARRAY_SIZE(regStateWires), // State
-                                    regStateWires,
-                                    4, // MemoryMapped
-                                    false, // IO
-                                    sizeof(Vxreg), // Extra memory
-                                    RegInitializeFunction,
-                                    RegStartFunction,
-                                    RegUpdateFunction,
-                                    MemoryAccess<Vxreg>);
+   FUDeclaration decl = {};
+
+   decl.name = "xreg";
+   decl.nInputs = 1;
+   decl.nOutputs = 1;
+   decl.nConfigs = ARRAY_SIZE(regConfigWires);
+   decl.configWires = regConfigWires;
+   decl.nStates = ARRAY_SIZE(regStateWires);
+   decl.stateWires = regStateWires;
+   decl.memoryMapBytes = 4;
+   decl.extraDataSize = sizeof(Vxreg);
+   decl.initializeFunction = RegInitializeFunction;
+   decl.startFunction = RegStartFunction;
+   decl.updateFunction = RegUpdateFunction;
+   decl.memAccessFunction = MemoryAccess<Vxreg>;
+   decl.type = (VERSAT_TYPE_SOURCE | VERSAT_TYPE_SINK | VERSAT_TYPE_IMPLEMENTS_DELAY);
+   decl.latency = 0; // Reg data is valid immediatly
+
+   FU_Type type = RegisterFU(versat,decl);
 
    return type;
 }
@@ -245,13 +248,16 @@ static int32_t* MemStartFunction(FUInstance* inst){
    MemConfig* config = (MemConfig*) inst->config;
 
    // Update config
+   self->delayA = inst->delays[0];
+   self->delayB = inst->delays[1];
+
    self->iterA = config->iterA;
    self->perA = config->perA;
    self->dutyA = config->dutyA;
    self->startA = config->startA;
    self->shiftA = config->shiftA;
    self->incrA = config->incrA;
-   self->delayA = config->delayA;
+   //self->delayA = config->delayA;
    self->reverseA = config->reverseA;
    self->extA = config->extA;
    self->in0_wr = config->in0_wr;
@@ -265,7 +271,7 @@ static int32_t* MemStartFunction(FUInstance* inst){
    self->startB = config->startB;
    self->shiftB = config->shiftB;
    self->incrB = config->incrB;
-   self->delayB = config->delayB;
+   //self->delayB = config->delayB;
    self->reverseB = config->reverseB;
    self->extB = config->extB;
    self->in1_wr = config->in1_wr;
@@ -313,25 +319,28 @@ EXPORT FU_Type RegisterMem(Versat* versat,int addr_w){
    }
    #endif
 
-   FU_Type type = RegisterFU(versat,"xmem #(.ADDR_W(10))",
-                                    2, // n inputs
-                                    2, // n outputs
-                                    ARRAY_SIZE(memConfigWires), // Config
-                                    memConfigWires, 
-                                    0, // State
-                                    NULL,
-                                    (1 << 10) * 4, // MemoryMapped
-                                    false, // IO
-                                    sizeof(Vxmem), // Extra memory
-                                    MemInitializeFunction,
-                                    MemStartFunction,
-                                    MemUpdateFunction,
-                                    MemoryAccess<Vxmem>);
+   FUDeclaration decl = {};
+
+   decl.name = "xmem #(.ADDR_W(10))";
+   decl.nInputs = 2;
+   decl.nOutputs = 2;
+   decl.nConfigs = ARRAY_SIZE(memConfigWires);
+   decl.configWires = memConfigWires;
+   decl.memoryMapBytes = (1 << 10) * 4;
+   decl.extraDataSize = sizeof(Vxmem);
+   decl.initializeFunction = MemInitializeFunction;
+   decl.startFunction = MemStartFunction;
+   decl.updateFunction = MemUpdateFunction;
+   decl.memAccessFunction = MemoryAccess<Vxmem>;
+   decl.type = (VERSAT_TYPE_SOURCE | VERSAT_TYPE_SINK | VERSAT_TYPE_IMPLEMENTS_DELAY | VERSAT_TYPE_SOURCE_DELAY);
+   decl.latency = 3;
+
+   FU_Type type = RegisterFU(versat,decl);
 
    return type;
 }
 
-// Since it is very likely that memory accesses will stall on a board, 
+// Since it is very likely that memory accesses will stall on a board,
 // delay by a couple of seconds, in order to provide a closer to the expected experience
 #define INITIAL_MEMORY_LATENCY 5
 #define MEMORY_LATENCY 2
@@ -358,7 +367,7 @@ static int32_t* VReadInitializeFunction(FUInstance* inst){
    data->memoryAccessCounter = INITIAL_MEMORY_LATENCY;
 
    INIT(self);
-   
+
    VCD_RESET(self);
 
    return NULL;
@@ -370,6 +379,8 @@ static int32_t* VReadStartFunction(FUInstance* inst){
    PREAMBLE(Vvread);
 
    // Update config
+   self->delayB = inst->delays[0];
+
    self->ext_addr = config->ext_addr;
    self->int_addr = config->int_addr;
    self->size = config->size;
@@ -385,7 +396,7 @@ static int32_t* VReadStartFunction(FUInstance* inst){
    self->startB = config->startB;
    self->shiftB = config->shiftB;
    self->incrB = config->incrB;
-   self->delayB = config->delayB;
+   //self->delayB = config->delayB;
    self->reverseB = config->reverseB;
    self->extB = config->extB;
    self->iter2B = config->iter2B;
@@ -425,20 +436,22 @@ static int32_t* VReadUpdateFunction(FUInstance* inst){
 }
 
 EXPORT FU_Type RegisterVRead(Versat* versat){
-   FU_Type type = RegisterFU(versat,"vread",
-                                    0, // n inputs
-                                    1, // n outputs
-                                    ARRAY_SIZE(vreadConfigWires), // Config
-                                    vreadConfigWires, 
-                                    0, // State
-                                    NULL,
-                                    0, // MemoryMapped
-                                    true, // IO
-                                    sizeof(VReadExtra), // Extra memory
-                                    VReadInitializeFunction,
-                                    VReadStartFunction,
-                                    VReadUpdateFunction,
-                                    NULL);
+   FUDeclaration decl = {};
+
+   decl.name = "vread";
+   decl.nInputs = 0;
+   decl.nOutputs = 1;
+   decl.nConfigs = ARRAY_SIZE(vreadConfigWires);
+   decl.configWires = vreadConfigWires;
+   decl.doesIO = true;
+   decl.extraDataSize = sizeof(VReadExtra);
+   decl.initializeFunction = VReadInitializeFunction;
+   decl.startFunction = VReadStartFunction;
+   decl.updateFunction = VReadUpdateFunction;
+   decl.type = (VERSAT_TYPE_SOURCE | VERSAT_TYPE_IMPLEMENTS_DELAY | VERSAT_TYPE_SOURCE_DELAY);
+   decl.latency = 1;
+
+   FU_Type type = RegisterFU(versat,decl);
 
    return type;
 }
@@ -447,7 +460,7 @@ static int32_t* VWriteInitializeFunction(FUInstance* inst){
    Vvwrite* self = new (inst->extraData) Vvwrite();
 
    INIT(self);
-   
+
    RESET(self);
 
    return NULL;
@@ -458,6 +471,8 @@ static int32_t* VWriteStartFunction(FUInstance* inst){
    VWriteConfig* config = (VWriteConfig*) inst->config;
 
    // Update config
+   self->delayB = inst->delays[0];
+
    self->ext_addr = config->ext_addr;
    self->int_addr = config->int_addr;
    self->size = config->size;
@@ -473,7 +488,7 @@ static int32_t* VWriteStartFunction(FUInstance* inst){
    self->startB = config->startB;
    self->shiftB = config->shiftB;
    self->incrB = config->incrB;
-   self->delayB = config->delayB;
+   //self->delayB = config->delayB;
    self->reverseB = config->reverseB;
    self->extB = config->extB;
    self->iter2B = config->iter2B;
@@ -501,20 +516,22 @@ static int32_t* VWriteUpdateFunction(FUInstance* inst){
 }
 
 EXPORT FU_Type RegisterVWrite(Versat* versat){
-   FU_Type type = RegisterFU(versat,"vwrite",
-                                    1, // n inputs
-                                    0, // n outputs
-                                    ARRAY_SIZE(vwriteConfigWires), // Config
-                                    vwriteConfigWires, 
-                                    0, // State
-                                    NULL,
-                                    0, // MemoryMapped
-                                    true, // IO
-                                    sizeof(Vvwrite), // Extra memory
-                                    VWriteInitializeFunction,
-                                    VWriteStartFunction,
-                                    VWriteUpdateFunction,
-                                    NULL);
+   FUDeclaration decl = {};
+
+   decl.name = "vwrite";
+   decl.nInputs = 1;
+   decl.nOutputs = 0;
+   decl.nConfigs = ARRAY_SIZE(vwriteConfigWires);
+   decl.configWires = vwriteConfigWires;
+   decl.doesIO = true;
+   decl.extraDataSize = sizeof(Vvwrite);
+   decl.initializeFunction = VWriteInitializeFunction;
+   decl.startFunction = VWriteStartFunction;
+   decl.updateFunction = VWriteUpdateFunction;
+   decl.type = (VERSAT_TYPE_SINK | VERSAT_TYPE_IMPLEMENTS_DELAY);
+   decl.latency = 0; // Does not matter, does not output anything
+
+   FU_Type type = RegisterFU(versat,decl);
 
    return type;
 }
@@ -540,21 +557,17 @@ static int32_t* DebugUpdateFunction(FUInstance* inst){
 }
 
 EXPORT FU_Type RegisterDebug(Versat* versat){
-   FU_Type type = RegisterFU(versat,"",
-                                    1, // n inputs
-                                    0, // n outputs
-                                    0, // Config
-                                    NULL,
-                                    0, // State
-                                    NULL,
-                                    0, // MemoryMapped
-                                    false, // IO
-                                    sizeof(int), // Extra memory
-                                    NULL,
-                                    DebugStartFunction,
-                                    DebugUpdateFunction,
-                                    NULL
-                                    );
+   FUDeclaration decl = {};
+
+   decl.name = "";
+   decl.nInputs = 1;
+   decl.nOutputs = 0;
+   decl.extraDataSize = sizeof(int);
+   decl.startFunction = DebugStartFunction;
+   decl.updateFunction = DebugUpdateFunction;
+   decl.type = VERSAT_TYPE_SINK;
+
+   FU_Type type = RegisterFU(versat,decl);
 
    return type;
 }

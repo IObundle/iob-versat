@@ -14,13 +14,6 @@ typedef struct Range_t{
    int high,low;
 } Range;
 
-FUDeclaration* GetDeclaration(Versat* versat,FUInstance* instance){
-   FU_Type type = instance->declaration;
-   FUDeclaration* decl = &versat->declarations[type.type];   
-
-   return decl;
-}
-
 // TODO: change memory from static to dynamically allocation. For now, allocate a static amount of memory
 void InitVersat(Versat* versat,int base){
    versat->accelerators = (Accelerator*) malloc(10 * sizeof(Accelerator));
@@ -28,40 +21,24 @@ void InitVersat(Versat* versat,int base){
    versat_base = base;
 }
 
-static int32_t AccessMemory(Versat* versat,FUInstance* instance,int address, int value, int write){
-   FUDeclaration* decl = GetDeclaration(versat,instance);
-   int32_t res = decl->memAccessFunction(instance,address,value,write);
+static int32_t AccessMemory(FUInstance* instance,int address, int value, int write){
+   FUDeclaration decl = *instance->declaration;
+   int32_t res = decl.memAccessFunction(instance,address,value,write);
 
    return res;
 }
 
-void VersatUnitWrite(Versat* versat,FUInstance* instance,int address, int value){
-   AccessMemory(versat,instance,address,value,1);
+void VersatUnitWrite(FUInstance* instance,int address, int value){
+   AccessMemory(instance,address,value,1);
 }
 
-int32_t VersatUnitRead(Versat* versat,FUInstance* instance,int address){
-   int32_t res = AccessMemory(versat,instance,address,0,0);
+int32_t VersatUnitRead(FUInstance* instance,int address){
+   int32_t res = AccessMemory(instance,address,0,0);
    return res;
 }
 
-FU_Type RegisterFU(Versat* versat,const char* declarationName,int nInputs,int nOutputs,int nConfigs,const Wire* configWires,int nStates,const Wire* stateWires,int memoryMapBytes,bool doesIO,int extraDataSize,FUFunction initializeFunction,FUFunction startFunction,FUFunction updateFunction,MemoryAccessFunction memAccessFunction){
-   FUDeclaration decl = {};
+FU_Type RegisterFU(Versat* versat,FUDeclaration decl){
    FU_Type type = {};
-
-   decl.nInputs = nInputs;
-   decl.nOutputs = nOutputs;
-   decl.name = declarationName;
-   decl.nStates = nStates;
-   decl.stateWires = stateWires;
-   decl.nConfigs = nConfigs;
-   decl.configWires = configWires;
-   decl.memoryMapBytes = memoryMapBytes;
-   decl.doesIO = doesIO;
-   decl.extraDataSize = extraDataSize;
-   decl.initializeFunction = initializeFunction;
-   decl.startFunction = startFunction;
-   decl.updateFunction = updateFunction;
-   decl.memAccessFunction = memAccessFunction;
 
    type.type = versat->nDeclarations;
    versat->declarations[versat->nDeclarations++] = decl;
@@ -86,15 +63,17 @@ Accelerator* CreateAccelerator(Versat* versat){
 
 FUInstance* CreateFUInstance(Accelerator* accel,FU_Type type){
    FUInstance instance = {};
-   FUDeclaration decl = accel->versat->declarations[type.type];
+   FUDeclaration* declPtr = &accel->versat->declarations[type.type];
+   FUDeclaration decl = *declPtr;
 
-   instance.declaration = type;
-   
+   instance.declaration = declPtr;
+
    if(decl.nInputs)
       instance.inputs = (FUInput*) calloc(decl.nInputs,sizeof(FUInput));
    if(decl.nOutputs){
       instance.outputs = (int32_t*) calloc(decl.nOutputs,sizeof(int32_t));
       instance.storedOutputs = (int32_t*) calloc(decl.nOutputs,sizeof(int32_t));
+      instance.delays = (int*) calloc(decl.nOutputs,sizeof(int));
    }
    if(decl.nStates)
       instance.state = (volatile int*) calloc(decl.nStates,sizeof(int));
@@ -113,72 +92,43 @@ FUInstance* CreateFUInstance(Accelerator* accel,FU_Type type){
    return ptr;
 }
 
-static void AcceleratorRunStart(Versat* versat,Accelerator* accel){
+static void AcceleratorRunStart(Accelerator* accel){
    for(int i = 0; i < accel->nInstances; i++){
       FUInstance* inst = &accel->instances[i];
-      FUDeclaration* decl = GetDeclaration(versat,inst);
-      FUFunction startFunction = decl->startFunction;
+      FUDeclaration decl = *inst->declaration;
+      FUFunction startFunction = decl.startFunction;
 
       if(startFunction){
          int32_t* startingOutputs = startFunction(inst);
-         
+
          if(startingOutputs)
-            memcpy(inst->outputs,startingOutputs,decl->nOutputs * sizeof(int32_t));
+            memcpy(inst->outputs,startingOutputs,decl.nOutputs * sizeof(int32_t));
       }
-   }   
+   }
 }
 
-static void AcceleratorRunIteration(Versat* versat,Accelerator* accel){
+static void AcceleratorRunIteration(Accelerator* accel){
    for(int i = 0; i < accel->nInstances; i++){
       FUInstance* instance = &accel->instances[i];
-      FUDeclaration* decl = GetDeclaration(versat,instance);
+      FUDeclaration decl = *instance->declaration;
 
-      int32_t* newOutputs = decl->updateFunction(instance);
+      int32_t* newOutputs = decl.updateFunction(instance);
 
-      memcpy(instance->storedOutputs,newOutputs,decl->nOutputs * sizeof(int32_t));
+      memcpy(instance->storedOutputs,newOutputs,decl.nOutputs * sizeof(int32_t));
    }
 
-   for(int i = 0; i < accel->nInstances; i++){        
-      FUDeclaration* decl = GetDeclaration(versat,&accel->instances[i]);
-      memcpy(accel->instances[i].outputs,accel->instances[i].storedOutputs,decl->nOutputs * sizeof(int32_t));
+   for(int i = 0; i < accel->nInstances; i++){
+      FUDeclaration decl = *accel->instances[i].declaration;
+      memcpy(accel->instances[i].outputs,accel->instances[i].storedOutputs,decl.nOutputs * sizeof(int32_t));
    }
 }
 
-void AcceleratorRun(Versat* versat,Accelerator* accel,FUInstance* endRoot,FUFunction terminateFunction){
-   AcceleratorRunStart(versat,accel);
+void AcceleratorRun(Accelerator* accel,FUInstance* endRoot,FUFunction terminateFunction){
+   AcceleratorRunStart(accel);
 
    int cycle = 0;
    while(true){
-      #if 0
-      printf("\n\nCycle: %d\n",cycle++);
-
-      for(int i = 0; i < accel->nInstances; i++){
-         FUInstance* inst = &accel->instances[i];
-         FUDeclaration* decl = GetDeclaration(versat,inst);
-
-         printf("%s %d\n\ninputs:\n\n",decl->name,i);
-
-         for(int i = 0; i < decl->nInputs; i++){
-            printf("%x\n",GetInputValue(inst,i));
-         }
-      }
-      #endif
-
-      AcceleratorRunIteration(versat,accel);
-
-      #if 0
-      for(int i = 0; i < accel->nInstances; i++){
-         FUInstance* inst = &accel->instances[i];
-         FUDeclaration* decl = GetDeclaration(versat,inst);
-
-         printf("\noutputs:\n\n");
-
-         for(int i = 0; i < decl->nOutputs; i++){
-            printf("%x\n",inst->outputs[i]);
-         }
-         printf("\n");
-      }
-      #endif
+      AcceleratorRunIteration(accel);
 
       // For now, the end is kinda hardcoded.
       if(terminateFunction(endRoot))
@@ -231,7 +181,7 @@ typedef struct VersatComputedValues_t{
 
    // Auxiliary for versat generation;
    int memoryConfigDecisionBit;
-   
+
    // Address
    Range memoryMappedUnitAddressRange;
    Range memoryAddressRange;
@@ -251,35 +201,35 @@ static VersatComputedValues ComputeVersatValues(Versat* versat){
 
    for(int i = 0; i < accel->nInstances; i++){
       FUInstance* instance = &accel->instances[i];
-      FUDeclaration* decl = GetDeclaration(versat,instance);
+      FUDeclaration decl = *instance->declaration;
 
-      if(decl->memoryMapBytes > res.maxMemoryMapBytes)
-         res.maxMemoryMapBytes = decl->memoryMapBytes;
+      if(decl.memoryMapBytes > res.maxMemoryMapBytes)
+         res.maxMemoryMapBytes = decl.memoryMapBytes;
 
-      res.memoryMapped += decl->memoryMapBytes;
-      if(decl->memoryMapBytes)
+      res.memoryMapped += decl.memoryMapBytes;
+      if(decl.memoryMapBytes)
          res.unitsMapped += 1;
 
-      res.nConfigs += decl->nConfigs;
+      res.nConfigs += decl.nConfigs;
 
-      if(decl->nConfigs){
-         for(int ii = 0; ii < decl->nConfigs; ii++){
-            res.configurationBits += decl->configWires[ii].bitsize;
+      if(decl.nConfigs){
+         for(int ii = 0; ii < decl.nConfigs; ii++){
+            res.configurationBits += decl.configWires[ii].bitsize;
          }
       }
 
-      res.nStates += decl->nStates;
-      if(decl->nStates){
-         for(int ii = 0; ii < decl->nConfigs; ii++){
-            res.stateBits += decl->stateWires[ii].bitsize;
+      res.nStates += decl.nStates;
+      if(decl.nStates){
+         for(int ii = 0; ii < decl.nConfigs; ii++){
+            res.stateBits += decl.stateWires[ii].bitsize;
          }
       }
 
-      if(decl->doesIO)
+      if(decl.doesIO)
          res.nUnitsIO += 1;
    }
-   
-   // Versat specific registers are treated as a special maping (all 0's) of 1 configuration and 1 state register 
+
+   // Versat specific registers are treated as a special maping (all 0's) of 1 configuration and 1 state register
    res.nConfigs += 1;
    res.nStates += 1;
 
@@ -295,7 +245,7 @@ static VersatComputedValues ComputeVersatValues(Versat* versat){
 
    res.lowerAddressSize = maxi(res.stateConfigurationAddressBits,res.memoryMappingAddressBits);
    res.addressSize = res.lowerAddressSize + 1; // One bit to select between memory or config/state
-   
+
    res.memoryConfigDecisionBit = res.addressSize - 1;
    res.memoryMappedUnitAddressRange.high = res.addressSize - 2;
    res.memoryMappedUnitAddressRange.low = res.memoryMappedUnitAddressRange.high - res.unitsMappedAddressBits + 1;
@@ -388,7 +338,7 @@ void OutputMemoryMap(Versat* versat){
    printf(ALIGN_FORMAT,"Config/State:");
    printf("0 ");
    for(int i = bitsNeeded - 1; i >= 0; i--){
-      if(i < val.configurationAddressBits && i < val.stateAddressBits)  
+      if(i < val.configurationAddressBits && i < val.stateAddressBits)
          printf("B ");
       else if(i < val.configurationAddressBits)
          printf("C ");
@@ -423,20 +373,20 @@ int32_t GetInputValue(FUInstance* instance,int index){
    FUInstance* inst = input.instance;
 
    if(inst){
-      return inst->outputs[input.index];   
+      return inst->outputs[input.index];
    }
    else{
       return 0;
-   }   
+   }
 }
 
 // Connects out -> in
-void ConnectUnits(Versat* versat,FUInstance* out,int outIndex,FUInstance* in,int inIndex){
-   FUDeclaration* inDecl = GetDeclaration(versat,in);
-   FUDeclaration* outDecl = GetDeclaration(versat,out);
+void ConnectUnits(FUInstance* out,int outIndex,FUInstance* in,int inIndex){
+   FUDeclaration inDecl = *in->declaration;
+   FUDeclaration outDecl = *out->declaration;
 
-   assert(inIndex < inDecl->nInputs);
-   assert(outIndex < outDecl->nOutputs);
+   assert(inIndex < inDecl.nInputs);
+   assert(outIndex < outDecl.nOutputs);
 
    in->inputs[inIndex].instance = out;
    in->inputs[inIndex].index = outIndex;
@@ -497,10 +447,9 @@ void OutputVersatSource(Versat* versat,const char* definitionFilepath,const char
    for(int i = 0; i < accel->nInstances; i++){
       FUInstance* instance = &accel->instances[i];
 
-      FU_Type type = instance->declaration;
-      FUDeclaration* decl = &versat->declarations[type.type];
+      FUDeclaration decl = *instance->declaration;;
 
-      for(int ii = 0; ii < decl->nOutputs; ii++){
+      for(int ii = 0; ii < decl.nOutputs; ii++){
          if(wroteFirst)
             fprintf(s,",");
 
@@ -520,10 +469,10 @@ void OutputVersatSource(Versat* versat,const char* definitionFilepath,const char
       fprintf(s,";\n\n");
    }
 
-   // Memory mapping   
+   // Memory mapping
    if(val.memoryMapped){
       fprintf(s,"assign unitRdataFinal = (unitRData[0]");
-      
+
       for(int i = 1; i < val.unitsMapped; i++){
          fprintf(s," | unitRData[%d]",i);
       }
@@ -554,17 +503,16 @@ void OutputVersatSource(Versat* versat,const char* definitionFilepath,const char
       fprintf(s,"%s%sconfigdata <= {`CONFIG_W{1'b0}};\n",TAB,TAB);
 
    fprintf(s,"%send else if(valid & we & !memoryMappedAddr) begin\n",TAB);
-   
+
    int index = 1; // 0 is reserved for versat registers
    int bitCount = 0;
    for(int i = 0; i < accel->nInstances; i++){
       FUInstance* instance = &accel->instances[i];
 
-      FU_Type type = instance->declaration;
-      FUDeclaration* decl = &versat->declarations[type.type];
+      FUDeclaration decl = *instance->declaration;
 
-      for(int ii = 0; ii < decl->nConfigs; ii++){
-         int bitSize = decl->configWires[ii].bitsize;
+      for(int ii = 0; ii < decl.nConfigs; ii++){
+         int bitSize = decl.configWires[ii].bitsize;
 
          fprintf(s,"%s%sif(addr[%d:%d] == %d'd%d)\n",TAB,TAB,val.configAddressRange.high,val.configAddressRange.low,val.configAddressRange.high - val.configAddressRange.low + 1,index++);
          if(versat->useShadowRegisters)
@@ -587,16 +535,15 @@ void OutputVersatSource(Versat* versat,const char* definitionFilepath,const char
    for(int i = 0; i < accel->nInstances; i++){
       FUInstance* instance = &accel->instances[i];
 
-      FU_Type type = instance->declaration;
-      FUDeclaration* decl = &versat->declarations[type.type];
+      FUDeclaration decl = *instance->declaration;
 
-      for(int ii = 0; ii < decl->nStates; ii++){
-         int bitSize = decl->stateWires[ii].bitsize;
+      for(int ii = 0; ii < decl.nStates; ii++){
+         int bitSize = decl.stateWires[ii].bitsize;
 
          fprintf(s,"%s%sif(addr[%d:%d] == %d'd%d)\n",TAB,TAB,val.stateAddressRange.high,val.stateAddressRange.low,val.stateAddressRange.high - val.stateAddressRange.low + 1,index++);
          fprintf(s,"%s%s%sstateRead = statedata[%d+:%d];\n",TAB,TAB,TAB,bitCount,bitSize);
          bitCount += bitSize;
-      }      
+      }
    }
    fprintf(s,"%send\n",TAB);
    fprintf(s,"end\n\n");
@@ -609,24 +556,23 @@ void OutputVersatSource(Versat* versat,const char* definitionFilepath,const char
    for(int i = 0; i < accel->nInstances; i++){
       FUInstance* instance = &accel->instances[i];
 
-      FU_Type type = instance->declaration;
-      FUDeclaration* decl = &versat->declarations[type.type];
+      FUDeclaration decl = *instance->declaration;
 
       // Small temporary fix to remove any unwanted character
       char buffer[128];
       int index;
-      for(index = 0; IsAlpha(decl->name[index]); index++){
-         buffer[index] = decl->name[index];
+      for(index = 0; IsAlpha(decl.name[index]); index++){
+         buffer[index] = decl.name[index];
       }
       buffer[index] = '\0';
 
-      fprintf(s,"%s%s %s_%d(\n",TAB,decl->name,buffer,i);
-      
-      for(int ii = 0; ii < decl->nOutputs; ii++){
-         fprintf(s,"%s.out%d(output_%d_%d),\n",TAB,ii,i,ii);
-      }   
+      fprintf(s,"%s%s %s_%d(\n",TAB,decl.name,buffer,i);
 
-      for(int ii = 0; ii < decl->nInputs; ii++){
+      for(int ii = 0; ii < decl.nOutputs; ii++){
+         fprintf(s,"%s.out%d(output_%d_%d),\n",TAB,ii,i,ii);
+      }
+
+      for(int ii = 0; ii < decl.nInputs; ii++){
          if(instance->inputs[ii].instance){
             fprintf(s,"%s.in%d(output_%d_%d),\n",TAB,ii,(int) (instance->inputs[ii].instance - accel->instances),instance->inputs[ii].index);
          } else {
@@ -634,29 +580,19 @@ void OutputVersatSource(Versat* versat,const char* definitionFilepath,const char
          }
       }
 
-      // Config data
-      //if(decl->nConfigs){
-      //   fprintf(s,"%s.configdata(configdata[%d:%d]),\n",TAB,configDataIndex + configBits - 1,configDataIndex);
-      //}
-
-      for(int ii = 0; ii < decl->nConfigs; ii++){
-         Wire wire = decl->configWires[ii];
+      for(int ii = 0; ii < decl.nConfigs; ii++){
+         Wire wire = decl.configWires[ii];
          fprintf(s,"%s.%s(configdata[%d:%d]),\n",TAB,wire.name,configDataIndex + wire.bitsize - 1,configDataIndex);
          configDataIndex += wire.bitsize;
       }
-      
-      for(int ii = 0; ii < decl->nStates; ii++){
-         Wire wire = decl->stateWires[ii];
+
+      for(int ii = 0; ii < decl.nStates; ii++){
+         Wire wire = decl.stateWires[ii];
          fprintf(s,"%s.%s(statedata[%d:%d]),\n",TAB,wire.name,stateDataIndex + wire.bitsize - 1,stateDataIndex);
          stateDataIndex += wire.bitsize;
       }
 
-      // State
-      //if(decl->nStates){
-      //   fprintf(s,"%s.statedata(statedata[%d:%d]),\n",TAB,stateDataIndex + stateBits - 1,stateDataIndex);
-      //}
-
-      if(decl->doesIO){
+      if(decl.doesIO){
          fprintf(s,"%s.databus_ready(m_databus_ready[%d]),\n",TAB,ioIndex);
          fprintf(s,"%s.databus_valid(m_databus_valid[%d]),\n",TAB,ioIndex);
          fprintf(s,"%s.databus_addr(m_databus_addr[%d+:32]),\n",TAB,ioIndex * 32);
@@ -667,10 +603,10 @@ void OutputVersatSource(Versat* versat,const char* definitionFilepath,const char
       }
 
       // Memory mapped
-      if(decl->memoryMapBytes){
+      if(decl.memoryMapBytes){
          fprintf(s,"%s.valid(memoryMappedEnable[%d]),\n",TAB,memoryMappedIndex);
          fprintf(s,"%s.wstrb(wstrb),\n",TAB);
-         fprintf(s,"%s.addr(addr[%d:0]),\n",TAB,log2i(decl->memoryMapBytes / 4) - 1);
+         fprintf(s,"%s.addr(addr[%d:0]),\n",TAB,log2i(decl.memoryMapBytes / 4) - 1);
          fprintf(s,"%s.rdata(unitRData[%d]),\n",TAB,memoryMappedIndex);
          fprintf(s,"%s.ready(unitReady[%d]),\n",TAB,memoryMappedIndex);
          fprintf(s,"%s.wdata(wdata),\n\n",TAB);
@@ -728,7 +664,7 @@ void IterativeAcceleratorRun(Versat* versat,Accelerator* accel,FUInstance* endRo
    noecho();
    intrflush(stdscr, FALSE);
    keypad(stdscr, TRUE);
-   
+
    halfdelay(2);
 
    state = 0;
@@ -825,7 +761,7 @@ void IterativeAcceleratorRun(Versat* versat,Accelerator* accel,FUInstance* endRo
                sprintf(buffer,"%x", ((int*) inst->extraData)[i]);
                mvaddstr(yCoord,0,buffer);
                yCoord += 1;
-            }            
+            }
          } break;
       }
 
@@ -848,3 +784,266 @@ void IterativeAcceleratorRun(Versat* versat,Accelerator* accel,FUInstance* endRo
    endwin();
 }
 #endif
+
+void CalculateNodesOutputs(Accelerator* accel){
+   int size = 0;
+   for(int i = 0; i < accel->nInstances; i++){
+      size += accel->instances[i].declaration->nOutputs;
+   }
+
+   if(accel->nodeOutputsAuxiliary){
+      free(accel->nodeOutputsAuxiliary);
+   }
+
+   accel->nodeOutputsAuxiliary = (FUInstance**) malloc(sizeof(FUInstance*) * 1024); // TODO: calculate based on need, no hardcoding
+
+   int sortedOutputsIndex = 0;
+   for(int i = 0; i < accel->nInstances; i++){
+      FUInstance* inst = &accel->instances[i];
+
+      inst->outputInstances = &accel->nodeOutputsAuxiliary[sortedOutputsIndex];
+
+      int numberOutputs = 0;
+      // Iterate over every other node
+      for(int ii = 0; ii < accel->nInstances; ii++){
+         FUInstance* other = &accel->instances[ii];
+
+         if(other == inst){
+            continue;
+         }
+
+         // Iterate over their inputs
+         for(int iii = 0; iii < other->declaration->nInputs; iii++){
+            if(other->inputs[iii].instance == inst){
+               numberOutputs += 1;
+               accel->nodeOutputsAuxiliary[sortedOutputsIndex++] = other;
+            }
+         }
+      }
+
+      inst->numberOutputs = numberOutputs;
+   }
+}
+
+#define CHECK_TYPE(inst,T) ((inst->declaration->type & T) == T)
+
+#define TAG_UNCONNECTED 0
+#define TAG_SOURCE      1
+#define TAG_SINK        2
+#define TAG_COMPUTE     3
+#define TAG_SOURCE_AND_SINK 4
+
+// Gives latency as seen by unit, taking into account existing delay
+static int CalculateUnitFullLatency(FUInstance* inst,int port,bool seenSourceAndSink){
+   if(inst->tag == TAG_SOURCE)
+      return inst->delays[port] + inst->declaration->latency;
+
+   if(inst->tag == TAG_SOURCE_AND_SINK){
+      if(seenSourceAndSink){
+         if(CHECK_TYPE(inst,VERSAT_TYPE_SOURCE_DELAY)){
+            return inst->delays[port] + inst->declaration->latency;
+         } else {
+            return inst->declaration->latency;
+         }
+      } else {
+         seenSourceAndSink = true;
+      }
+   }
+
+   int subLatency = 0;
+   for(int i = 0; i < inst->declaration->nInputs; i++){
+      if(inst->inputs[i].instance){
+         subLatency = maxi(subLatency,CalculateUnitFullLatency(inst->inputs[i].instance,inst->inputs[i].index,seenSourceAndSink));
+      }
+   }
+
+   return subLatency + inst->declaration->latency;
+}
+
+// Gives latency as seen by unit, taking into account existing delay
+static int CalculateUnitInputLatency(FUInstance* instance,bool seenSourceAndSink){
+   int latency = CalculateUnitFullLatency(instance,0,seenSourceAndSink) - instance->declaration->latency;
+
+   return latency;
+}
+
+static void SetPathLatency(FUInstance* inst,int amount,int port){
+   amount -= inst->declaration->latency;
+
+   if(inst->tag == TAG_SOURCE){
+      if(CHECK_TYPE(inst,VERSAT_TYPE_IMPLEMENTS_DELAY)){
+         inst->delays[port] = amount;
+      }
+   } else if(inst->tag == TAG_SOURCE_AND_SINK){
+      if(CHECK_TYPE(inst,VERSAT_TYPE_IMPLEMENTS_DELAY)
+      && CHECK_TYPE(inst,VERSAT_TYPE_SOURCE_DELAY)){
+         inst->delays[port] = amount;
+      }
+   }else if(inst->tag != TAG_SOURCE){
+      for(int i = 0; i < inst->declaration->nInputs; i++){
+         if(inst->inputs[i].instance){
+            SetPathLatency(inst->inputs[i].instance,amount,inst->inputs[i].index);
+         }
+      }
+   }
+}
+
+static int PropagateDelay(FUInstance* inst,int port,bool seenSourceAndSink){
+   int latencies[16];
+
+   if(inst->tag == TAG_SOURCE)
+      return inst->declaration->latency;
+
+   if(inst->tag == TAG_SOURCE_AND_SINK){
+      if(seenSourceAndSink){
+         return inst->declaration->latency;
+      } else {
+         seenSourceAndSink = true;
+      }
+   }
+
+   int minLatency = 0;
+   for(int i = 0; i < inst->declaration->nInputs; i++){
+      if(inst->inputs[i].instance){
+         int latency = PropagateDelay(inst->inputs[i].instance,inst->inputs[i].index,seenSourceAndSink);
+         latencies[i] = latency;
+         minLatency = maxi(minLatency,latency);
+      } else {
+         latencies[i] = -1;
+      }
+   }
+
+   for(int i = 0; i < inst->declaration->nInputs; i++){
+      if(latencies[i] != -1 && latencies[i] != minLatency){
+         SetPathLatency(inst->inputs[i].instance,minLatency,inst->inputs[i].index);
+
+         // TODO:
+         // Multiple paths convergence detection can be detected here
+         // if we check the latency of any other path change after calling SetPathLatency in any other path
+      }
+   }
+
+   return minLatency + inst->declaration->latency;
+}
+
+void CalculateDelay(Accelerator* accel){
+   // Reset delay to zero globally
+   for(int i = 0; i < accel->nInstances; i++){
+      FUInstance* inst = &accel->instances[i];
+
+      for(int ii = 0; ii < inst->declaration->nOutputs; ii++){
+         inst->delays[ii] = 0;
+      }
+   }
+
+   // Calculate output of nodes
+   CalculateNodesOutputs(accel);
+
+   // Tag units with the values we care for the delay computation
+   for(int i = 0; i < accel->nInstances; i++){
+      FUInstance* inst = &accel->instances[i];
+
+      inst->tag = TAG_UNCONNECTED;
+
+      bool hasInput = false;
+      for(int ii = 0; ii < inst->declaration->nInputs; ii++){
+         if(inst->inputs[ii].instance){
+            hasInput = true;
+            break;
+         }
+      }
+
+      bool hasOutput = (inst->numberOutputs > 0);
+
+      // If the unit is both capable of acting as a sink or as a source of data
+      if(CHECK_TYPE(inst,VERSAT_TYPE_SINK) && CHECK_TYPE(inst,VERSAT_TYPE_SOURCE)){
+         if(hasInput && hasOutput){
+            inst->tag = TAG_SOURCE_AND_SINK;
+         } else if(hasInput){
+            inst->tag = TAG_SINK;
+         } else if(hasOutput){
+            inst->tag = TAG_SOURCE;
+         }
+      }
+      else if(CHECK_TYPE(inst,VERSAT_TYPE_SINK) && hasInput){
+         inst->tag = TAG_SINK;
+      }
+      else if(CHECK_TYPE(inst,VERSAT_TYPE_SOURCE) && hasOutput){
+         inst->tag = TAG_SOURCE;
+      }
+      else if(hasOutput && hasInput){
+         inst->tag = TAG_COMPUTE;
+      }
+
+      if(inst->tag == TAG_UNCONNECTED)
+         assert(false); // For now, ignore units that have absolutely no connection or purpose, might affect the algorithm
+   }
+
+   // Compute delay to add to source units
+   for(int i = 0; i < accel->nInstances; i++){
+      FUInstance* inst = &accel->instances[i];
+
+      // Compute delay starting from sinks
+      if(inst->tag == TAG_SINK){
+         PropagateDelay(inst,0,true);
+      } else if(inst->tag == TAG_SOURCE_AND_SINK){ // Special compute if tag is both source and sink
+         PropagateDelay(inst,0,false);
+      }
+   }
+
+   // Compute delay to computation and sink units
+   for(int i = 0; i < accel->nInstances; i++){
+      FUInstance* inst = &accel->instances[i];
+
+      // If it does not implement delay, ignore
+      if(!CHECK_TYPE(inst,VERSAT_TYPE_IMPLEMENTS_DELAY))
+         continue;
+
+      if(inst->tag == TAG_SOURCE_AND_SINK && (!CHECK_TYPE(inst,VERSAT_TYPE_SOURCE_DELAY))){
+         int delay = CalculateUnitInputLatency(inst,false);
+         for(int ii = 0; ii < inst->declaration->nOutputs; ii++)
+            inst->delays[ii] = delay;
+      }
+
+      if((inst->tag == TAG_SINK) || (inst->tag == TAG_COMPUTE)){
+         int delay = CalculateUnitInputLatency(inst,true);
+         for(int ii = 0; ii < inst->declaration->nOutputs; ii++)
+            inst->delays[ii] = delay;
+      }
+   }
+}
+
+static FUInstance** orderingBuffer = NULL;
+static int index = 0;
+
+/*
+// Depth first based DAG Ordering
+// Units are ordered starting from the sinks to the sources of data
+void DAGOrdering(Accelerator* accel){
+   orderingBuffer = (FUInstance**) malloc(sizeof(FUInstance*) * accel->nInstances);
+   index = 0;
+
+   // Calculate outputs for each node
+   CalculateNodesOutputs(accel);
+
+   // Clear tags
+   for(int i = 0; i < accel->nInstances; i++){
+      accel->instances[i].tag = 0;
+   }
+
+   // For every Source
+   for(int i = 0; i < accel->nInstances; i++){
+      FUInstance* inst = &accel->instances[i];
+
+      if(SourceDelay(inst)){
+         inst->tag = IGNORE_SINK_TAG;
+         DAGVisit(&accel->instances[i]);
+      }
+   }
+
+   for(int i = 0; i < index; i++){
+      printf("%s\n",orderingBuffer[i]->declaration->name);
+   }
+   printf("%d\n",accel->nInstances);
+}
+*/
