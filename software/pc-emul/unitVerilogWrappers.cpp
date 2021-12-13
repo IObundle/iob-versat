@@ -178,7 +178,6 @@ static int32_t* RegInitializeFunction(FUInstance* inst){
 
 static int32_t* RegStartFunction(FUInstance* inst){
    Vxreg* self = (Vxreg*) inst->extraData;
-   RegConfig* config = (RegConfig*) inst->config;
 
    // Update config
    self->writeDelay = inst->delays[0];
@@ -212,8 +211,6 @@ EXPORT FU_Type RegisterReg(Versat* versat){
    decl.name = "xreg";
    decl.nInputs = 1;
    decl.nOutputs = 1;
-   decl.nConfigs = ARRAY_SIZE(regConfigWires);
-   decl.configWires = regConfigWires;
    decl.nStates = ARRAY_SIZE(regStateWires);
    decl.stateWires = regStateWires;
    decl.memoryMapBytes = 4;

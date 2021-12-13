@@ -81,7 +81,7 @@ typedef struct FUInstance_t{
    struct FUInstance_t** outputInstances;
    int numberOutputs;
 
-   int* delays; // How many cycles unit must wait before seeing valid data
+   int* delays; // How many cycles unit must wait before seeing valid data, one delay for each output
    char tag; // Various uses
 } FUInstance;
 
@@ -93,36 +93,43 @@ typedef struct Versat_t{
 	Accelerator* accelerators;
 	int nAccelerators;
 
+	int numberConfigurations;
+
    // Options
    int byteAddressable;
    int useShadowRegisters;
 } Versat;
+
+typedef struct Configuration_t{
+   int* savedData;
+   int size;
+} Configuration;
 
 typedef struct Accelerator_t{
 	Versat* versat;
 	FUInstance* instances;
 	int nInstances;
 
+   Configuration* savedConfigurations;
+
    // Used by other algorithms
    FUInstance** nodeOutputsAuxiliary;
 } Accelerator;
 
 // Versat functions
-EXPORT void InitVersat(Versat* versat,int base);
-
+EXPORT void InitVersat(Versat* versat,int base,int numberConfigurations);
 EXPORT FU_Type RegisterFU(Versat* versat,FUDeclaration declaration);
-
-EXPORT void OutputVersatSource(Versat* versat,const char* definitionFilepath,const char* sourceFilepath);
-
+EXPORT void OutputVersatSource(Versat* versat,const char* definitionFilepath,const char* sourceFilepath,const char* configurationFilepath);
 EXPORT void OutputMemoryMap(Versat* versat);
 
 // Accelerator functions
 EXPORT Accelerator* CreateAccelerator(Versat* versat);
-
 EXPORT FUInstance* CreateFUInstance(Accelerator* accel,FU_Type type);
 
-EXPORT void AcceleratorRun(Accelerator* accel,FUInstance* endRoot,FUFunction terminateFunction);
+EXPORT void SaveConfiguration(Accelerator* accel,int configuration);
+EXPORT void LoadConfiguration(Accelerator* accel,int configuration);
 
+EXPORT void AcceleratorRun(Accelerator* accel,FUInstance* endRoot,FUFunction terminateFunction);
 EXPORT void IterativeAcceleratorRun(Accelerator* accel,FUInstance* endRoot,FUFunction terminateFunction);
 
 // Helper functions
@@ -136,22 +143,5 @@ EXPORT int32_t VersatUnitRead(FUInstance* instance,int address);
 EXPORT void CalculateDelay(Accelerator* accel);
 EXPORT void CalculateNodesOutputs(Accelerator* accel);
 EXPORT void DAGOrdering(Accelerator* accel);
-
-/*
-EXPORT void CalculatePropagateDelay(Accelerator* accel);
-EXPORT int CalculateFullLatency(FUInstance* root);
-EXPORT void CalculateDelay(FUInstance* root);
-*/
-
-// FDInstance functions
-#if 0
-void SetMemoryMappedValue(FDInstance* instance,int byte_offset,int32_t value);
-
-int32_t GetMemoryMappedValue(FDInstance* instance,int byte_offset);
-
-void SetConfig(FDInstance* instance,int byte_offset,int32_t value);
-
-int32_t GetState(FDInstance* instance,int byte_offset);
-#endif
 
 #endif

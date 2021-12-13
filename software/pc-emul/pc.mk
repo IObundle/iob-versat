@@ -3,6 +3,7 @@ include $(VERSAT_DIR)/software/software.mk
 
 #pc sources
 SRC+=$(VERSAT_PC_EMUL)/versat.c
+SRC+=$(VERSAT_SW_DIR)/versatCommon.c
 
 HDR+=versat_instance_template.h
 
