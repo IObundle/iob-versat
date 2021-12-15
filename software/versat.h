@@ -10,6 +10,18 @@
 #define EXPORT
 #endif
 
+static int mini(int a1,int a2){
+   int res = (a1 < a2 ? a1 : a2);
+
+   return res;
+}
+
+static int maxi(int a1,int a2){
+   int res = (a1 > a2 ? a1 : a2);
+
+   return res;
+}
+
 typedef unsigned char byte;
 
 typedef struct FUInstance_t FUInstance;
@@ -85,7 +97,7 @@ typedef struct FUInstance_t{
    int numberOutputs;
 
    // Configuration + State variables that versat needs access to
-   int delays[2]; // How many cycles unit must wait before seeing valid data, one delay for each output
+   volatile int* delays; // How many cycles unit must wait before seeing valid data, one delay for each output
    int done; // Units that are sink or sources of data must implement done to ensure circuit does not end prematurely
 
    char tag; // Various uses
@@ -106,10 +118,22 @@ typedef struct Versat_t{
    int useShadowRegisters;
 } Versat;
 
+typedef struct ConfigurationData_t{
+   int size;
+   int* ptr;
+} ConfigurationData;
+
 typedef struct Configuration_t{
+   ConfigurationData* unitView;
    int* savedData;
    int size;
 } Configuration;
+
+typedef struct StoredConfigData_t{
+  int index;
+  int size;
+  const int* config;
+} StoredConfigData;
 
 typedef struct Accelerator_t{
 	Versat* versat;

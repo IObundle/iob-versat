@@ -85,6 +85,8 @@ FUInstance* CreateFUInstance(Accelerator* accel,FU_Type type){
    if(decl.extraDataSize)
       instance.extraData = calloc(decl.extraDataSize,sizeof(char));
 
+   instance.delays = (int*) calloc(2,sizeof(int));
+
    accel->instances[accel->nInstances] = instance;
 
    FUInstance* ptr = &accel->instances[accel->nInstances++];
@@ -134,6 +136,7 @@ void SaveConfiguration(Accelerator* accel,int configuration){
    assert(configuration < accel->versat->numberConfigurations);
 
    Configuration* config = &accel->savedConfigurations[configuration];
+   config->unitView = (ConfigurationData*) calloc(accel->nInstances,sizeof(ConfigurationData));
 
    if(config->savedData){
       free(config->savedData);
@@ -145,11 +148,8 @@ void SaveConfiguration(Accelerator* accel,int configuration){
    for(int i = 0; i < accel->nInstances; i++){
       FUInstance* inst = &accel->instances[i];
 
-      if(inst->declaration->type & VERSAT_TYPE_IMPLEMENTS_DELAY){
-         size += UnitDelays(inst);
-      }
-
-      #if 0 // For now, only save the delays, deal with configuration data later
+      size += UnitDelays(inst);
+      #if 0
       size += inst->declaration->nConfigs;
       #endif
    }
@@ -162,13 +162,14 @@ void SaveConfiguration(Accelerator* accel,int configuration){
    for(int i = 0; i < accel->nInstances; i++){
       FUInstance* inst = &accel->instances[i];
 
+      config->unitView[i].ptr = &config->savedData[index];
+
+      int indexBefore = index;
       if(inst->declaration->type & VERSAT_TYPE_IMPLEMENTS_DELAY){
-         if(UnitDelays(inst) == 1){
-            config->savedData[index++] = inst->delays[0];
-         } else {
-            for(int ii = 0; ii < inst->declaration->nOutputs; ii++){
-               config->savedData[index++] = inst->delays[ii];
-            }
+         int numberDelays = UnitDelays(inst);
+
+         for(int ii = 0; ii < numberDelays; ii++){
+            config->savedData[index++] = inst->delays[ii];
          }
       }
 
@@ -177,6 +178,8 @@ void SaveConfiguration(Accelerator* accel,int configuration){
          config->savedData[index++] = inst->config[ii];
       }
       #endif
+
+      config->unitView[i].size = (index - indexBefore);
    }
 }
 
@@ -192,20 +195,17 @@ void AcceleratorRun(Accelerator* accel){
          if(accel->instances[i].declaration->type & VERSAT_TYPE_IMPLEMENTS_DONE){
             if(!accel->instances[i].done){
                done = false;
+               break;
             }
          }
       }
+
+      cycle += 1;
 
       if(done){
          break;
       }
    }
-}
-
-static int maxi(int a1,int a2){
-   int res = (a1 > a2 ? a1 : a2);
-
-   return res;
 }
 
 // Log function customized to calculating bits needed for a number of possible addresses (ex: log2i(1024) = 10)
@@ -459,6 +459,63 @@ bool IsAlpha(char ch){
 
 #define TAB "   "
 
+// Some names might not work as identifiers (special the way we implement parameters)
+// This creates a id able name, care that memory is allocated statically
+static char* FixEntityName(const char* name){
+   static char buffer[128];
+
+   int index;
+   for(index = 0; IsAlpha(name[index]); index++){
+      buffer[index] = name[index];
+   }
+   buffer[index] = '\0';
+
+   return buffer;
+}
+
+static void OutputConfigurationFile(Versat* versat,FILE* f){
+   Accelerator* accel = &versat->accelerators[0]; // Only deal with 1 accel for now
+
+   int configIndex = 0;
+
+   fprintf(f,"#include \"versat.h\"\n\n");
+
+   fprintf(f,"StoredConfigData config_%d[] = {",configIndex);
+
+   bool didFirst = false;
+   int numberConfigurations = 0;
+   for(int i = 0; i < accel->nInstances; i++){
+      FUInstance* inst = &accel->instances[i];
+      FUDeclaration decl = *inst->declaration;
+      ConfigurationData data = accel->savedConfigurations[configIndex].unitView[i];
+
+      if(data.size == 0){
+         continue;
+      }
+
+      numberConfigurations += 1;
+      if(didFirst){
+         fprintf(f,",");
+      }
+      didFirst = true;
+
+      fprintf(f,"{%d,%d,(int[]){",i,data.size);
+
+      bool wroteFirst = false;
+      for(int ii = 0; ii < data.size; ii++){
+         if(wroteFirst){
+            fprintf(f,",");
+         }
+         fprintf(f,"%d",data.ptr[ii]);
+         wroteFirst = true;
+      }
+      fprintf(f,"}}");
+   }
+   fprintf(f,"};\n");
+
+   fprintf(f,"int configSize = %d;\n",numberConfigurations);
+}
+
 void OutputVersatSource(Versat* versat,const char* definitionFilepath,const char* sourceFilepath,const char* configurationFilepath){
    FILE* s = fopen(sourceFilepath,"w");
 
@@ -488,30 +545,7 @@ void OutputVersatSource(Versat* versat,const char* definitionFilepath,const char
    Accelerator* accel = &versat->accelerators[0];
 
    // Output configuration file
-   fprintf(c,"int configuration0[] = {");
-   bool first = true;
-   for(int i = 0; i < accel->savedConfigurations[0].size; i++){
-      if(first){
-         first = false;
-      } else {
-         fprintf(c,",");
-      }
-      fprintf(c,"%d",accel->savedConfigurations[0].savedData[i]);
-   }
-   fprintf(c,"};\n\n");
-
-   fprintf(c,"int number_versat_configurations = %d;\n",versat->numberConfigurations);
-   fprintf(c,"int* versat_configurations[] = {");
-   first = true;
-   for(int i = 0; i < versat->numberConfigurations; i++){
-      if(first){
-         first = false;
-      } else {
-         fprintf(c,",");
-      }
-      fprintf(c,"configuration%d",i);
-   }
-   fprintf(c,"};\n\n");
+   OutputConfigurationFile(versat,c);
 
    VersatComputedValues val = ComputeVersatValues(versat);
 
@@ -604,10 +638,7 @@ void OutputVersatSource(Versat* versat,const char* definitionFilepath,const char
             int bitSize = DELAY_BIT_SIZE;
 
             fprintf(s,"%s%sif(addr[%d:%d] == %d'd%d)\n",TAB,TAB,val.configAddressRange.high,val.configAddressRange.low,val.configAddressRange.high - val.configAddressRange.low + 1,index++);
-            if(versat->useShadowRegisters)
-               fprintf(s,"%s%s%sconfigdata_shadow[%d+:%d] <= wdata[%d:0];\n",TAB,TAB,TAB,bitCount,bitSize,bitSize-1);
-            else
-               fprintf(s,"%s%s%sconfigdata[%d+:%d] <= wdata[%d:0];\n",TAB,TAB,TAB,bitCount,bitSize,bitSize-1);
+            fprintf(s,"%s%s%sconfigdata[%d+:%d] <= wdata[%d:0]; // %s_%d delay%d\n",TAB,TAB,TAB,bitCount,bitSize,bitSize-1,decl.name,i,ii);
             bitCount += bitSize;
          }
       }
@@ -616,10 +647,7 @@ void OutputVersatSource(Versat* versat,const char* definitionFilepath,const char
          int bitSize = decl.configWires[ii].bitsize;
 
          fprintf(s,"%s%sif(addr[%d:%d] == %d'd%d)\n",TAB,TAB,val.configAddressRange.high,val.configAddressRange.low,val.configAddressRange.high - val.configAddressRange.low + 1,index++);
-         if(versat->useShadowRegisters)
-            fprintf(s,"%s%s%sconfigdata_shadow[%d+:%d] <= wdata[%d:0];\n",TAB,TAB,TAB,bitCount,bitSize,bitSize-1);
-         else
-            fprintf(s,"%s%s%sconfigdata[%d+:%d] <= wdata[%d:0];\n",TAB,TAB,TAB,bitCount,bitSize,bitSize-1);
+         fprintf(s,"%s%s%sconfigdata[%d+:%d] <= wdata[%d:0]; // %s_%d %s\n",TAB,TAB,TAB,bitCount,bitSize,bitSize-1,decl.name,i,decl.configWires[ii].name);
          bitCount += bitSize;
       }
    }
@@ -660,12 +688,7 @@ void OutputVersatSource(Versat* versat,const char* definitionFilepath,const char
       FUDeclaration decl = *instance->declaration;
 
       // Small temporary fix to remove any unwanted character
-      char buffer[128];
-      int index;
-      for(index = 0; IsAlpha(decl.name[index]); index++){
-         buffer[index] = decl.name[index];
-      }
-      buffer[index] = '\0';
+      char* buffer = FixEntityName(decl.name);
 
       fprintf(s,"%s%s %s_%d(\n",TAB,decl.name,buffer,i);
 
@@ -681,6 +704,8 @@ void OutputVersatSource(Versat* versat,const char* definitionFilepath,const char
          }
       }
 
+      // Delays act as config data but handled entirely by versat
+      // They are defined as the first bytes of the unit config
       int delays = UnitDelays(instance);
       if(delays){
          for(int ii = 0; ii < delays; ii++){
@@ -730,6 +755,7 @@ void OutputVersatSource(Versat* versat,const char* definitionFilepath,const char
 
    fprintf(s,"endmodule");
 
+   fclose(c);
    fclose(s);
    fclose(d);
 }
@@ -893,6 +919,275 @@ void IterativeAcceleratorRun(Accelerator* accel){
    endwin();
 }
 #endif
+
+void CalculateNodesOutputs(Accelerator* accel){
+   int size = 0;
+   for(int i = 0; i < accel->nInstances; i++){
+      size += accel->instances[i].declaration->nOutputs;
+   }
+
+   if(accel->nodeOutputsAuxiliary){
+      free(accel->nodeOutputsAuxiliary);
+   }
+
+   accel->nodeOutputsAuxiliary = (FUInstance**) malloc(sizeof(FUInstance*) * 1024); // TODO: calculate based on need, no hardcoding
+
+   int sortedOutputsIndex = 0;
+   for(int i = 0; i < accel->nInstances; i++){
+      FUInstance* inst = &accel->instances[i];
+
+      inst->outputInstances = &accel->nodeOutputsAuxiliary[sortedOutputsIndex];
+
+      int numberOutputs = 0;
+      // Iterate over every other node
+      for(int ii = 0; ii < accel->nInstances; ii++){
+         FUInstance* other = &accel->instances[ii];
+
+         if(other == inst){
+            continue;
+         }
+
+         // Iterate over their inputs
+         for(int iii = 0; iii < other->declaration->nInputs; iii++){
+            if(other->inputs[iii].instance == inst){
+               numberOutputs += 1;
+               accel->nodeOutputsAuxiliary[sortedOutputsIndex++] = other;
+            }
+         }
+      }
+
+      inst->numberOutputs = numberOutputs;
+   }
+}
+
+#define CHECK_TYPE(inst,T) ((inst->declaration->type & T) == T)
+
+#define TAG_UNCONNECTED 0
+#define TAG_SOURCE      1
+#define TAG_SINK        2
+#define TAG_COMPUTE     3
+#define TAG_SOURCE_AND_SINK 4
+
+// Gives latency as seen by unit, taking into account existing delay
+static int CalculateUnitFullLatency(FUInstance* inst,int port,bool seenSourceAndSink){
+   if(UnitDelays(inst) < 2){
+      port = 0;
+   }
+
+   if(inst->tag == TAG_SOURCE)
+      return inst->delays[port] + inst->declaration->latency;
+
+   if(inst->tag == TAG_SOURCE_AND_SINK){
+      if(seenSourceAndSink){
+         if(CHECK_TYPE(inst,VERSAT_TYPE_SOURCE_DELAY)){
+            return inst->delays[port] + inst->declaration->latency;
+         } else {
+            return inst->declaration->latency;
+         }
+      } else {
+         seenSourceAndSink = true;
+      }
+   }
+
+   int subLatency = 0;
+   for(int i = 0; i < inst->declaration->nInputs; i++){
+      if(inst->inputs[i].instance){
+         subLatency = maxi(subLatency,CalculateUnitFullLatency(inst->inputs[i].instance,inst->inputs[i].index,seenSourceAndSink));
+      }
+   }
+
+   return subLatency + inst->declaration->latency;
+}
+
+// Gives latency as seen by unit, taking into account existing delay
+static int CalculateUnitInputLatency(FUInstance* instance,bool seenSourceAndSink){
+   int latency = CalculateUnitFullLatency(instance,0,seenSourceAndSink) - instance->declaration->latency;
+
+   return latency;
+}
+
+static void SetPathLatency(FUInstance* inst,int amount,int port){
+   amount -= inst->declaration->latency;
+
+   if(UnitDelays(inst) < 2){
+      port = 0;
+   }
+
+   if(inst->tag == TAG_SOURCE){
+      if(CHECK_TYPE(inst,VERSAT_TYPE_IMPLEMENTS_DELAY)){
+         inst->delays[port] = amount;
+      }
+   } else if(inst->tag == TAG_SOURCE_AND_SINK){
+      if(CHECK_TYPE(inst,VERSAT_TYPE_IMPLEMENTS_DELAY)
+      && CHECK_TYPE(inst,VERSAT_TYPE_SOURCE_DELAY)){
+         inst->delays[port] = amount;
+      }
+   }else if(inst->tag != TAG_SOURCE){
+      for(int i = 0; i < inst->declaration->nInputs; i++){
+         if(inst->inputs[i].instance){
+            SetPathLatency(inst->inputs[i].instance,amount,inst->inputs[i].index);
+         }
+      }
+   }
+}
+
+static int PropagateDelay(FUInstance* inst,bool seenSourceAndSink){
+   int latencies[16];
+
+   if(inst->tag == TAG_SOURCE)
+      return inst->declaration->latency;
+
+   if(inst->tag == TAG_SOURCE_AND_SINK){
+      if(seenSourceAndSink){
+         return inst->declaration->latency;
+      } else {
+         seenSourceAndSink = true;
+      }
+   }
+
+   int minLatency = 0;
+   for(int i = 0; i < inst->declaration->nInputs; i++){
+      if(inst->inputs[i].instance){
+         int latency = PropagateDelay(inst->inputs[i].instance,seenSourceAndSink);
+         latencies[i] = latency;
+         minLatency = maxi(minLatency,latency);
+      } else {
+         latencies[i] = -1;
+      }
+   }
+
+   for(int i = 0; i < inst->declaration->nInputs; i++){
+      if(latencies[i] != -1 && latencies[i] != minLatency){
+         SetPathLatency(inst->inputs[i].instance,minLatency,inst->inputs[i].index);
+
+         // TODO:
+         // Multiple paths convergence detection can be detected here
+         // if we check the latency of any other path change after calling SetPathLatency in any other path
+      }
+   }
+
+   return minLatency + inst->declaration->latency;
+}
+
+EXPORT UnitInfo CalculateUnitInfo(FUInstance* inst){
+   UnitInfo info = {};
+
+   FUDeclaration decl = *inst->declaration;
+
+   info.numberDelays = UnitDelays(inst);
+   info.implementsDelay = (info.numberDelays > 0 ? true : false);
+   info.nConfigsWithDelay = decl.nConfigs + info.numberDelays;
+
+   if(decl.nConfigs){
+      for(int ii = 0; ii < decl.nConfigs; ii++){
+         info.configBitSize += decl.configWires[ii].bitsize;
+      }
+   }
+   info.configBitSize += DELAY_BIT_SIZE * info.numberDelays;
+
+   info.nStates = decl.nStates;
+   if(decl.nStates){
+      for(int ii = 0; ii < decl.nStates; ii++){
+         info.stateBitSize += decl.stateWires[ii].bitsize;
+      }
+   }
+
+   info.memoryMappedBytes = decl.memoryMapBytes;
+   info.implementsDone = decl.doesIO;
+   info.doesIO = decl.doesIO;
+
+   return info;
+}
+
+void CalculateDelay(Accelerator* accel){
+   // Reset delay to zero globally
+   for(int i = 0; i < accel->nInstances; i++){
+      FUInstance* inst = &accel->instances[i];
+
+      inst->delays[0] = 0;
+      inst->delays[1] = 0;
+   }
+
+   // Calculate output of nodes
+   CalculateNodesOutputs(accel);
+
+   // Tag units with the values we care for the delay computation
+   for(int i = 0; i < accel->nInstances; i++){
+      FUInstance* inst = &accel->instances[i];
+
+      inst->tag = TAG_UNCONNECTED;
+
+      bool hasInput = false;
+      for(int ii = 0; ii < inst->declaration->nInputs; ii++){
+         if(inst->inputs[ii].instance){
+            hasInput = true;
+            break;
+         }
+      }
+
+      bool hasOutput = (inst->numberOutputs > 0);
+
+      // If the unit is both capable of acting as a sink or as a source of data
+      if(CHECK_TYPE(inst,VERSAT_TYPE_SINK) && CHECK_TYPE(inst,VERSAT_TYPE_SOURCE)){
+         if(hasInput && hasOutput){
+            inst->tag = TAG_SOURCE_AND_SINK;
+         } else if(hasInput){
+            inst->tag = TAG_SINK;
+         } else if(hasOutput){
+            inst->tag = TAG_SOURCE;
+         }
+      }
+      else if(CHECK_TYPE(inst,VERSAT_TYPE_SINK) && hasInput){
+         inst->tag = TAG_SINK;
+      }
+      else if(CHECK_TYPE(inst,VERSAT_TYPE_SOURCE) && hasOutput){
+         inst->tag = TAG_SOURCE;
+      }
+      else if(hasOutput && hasInput){
+         inst->tag = TAG_COMPUTE;
+      }
+
+      assert(inst->tag != TAG_UNCONNECTED); // For now, ignore units that have absolutely no connection or purpose, might affect the algorithm
+   }
+
+   // Compute delay to add to source units
+   for(int i = 0; i < accel->nInstances; i++){
+      FUInstance* inst = &accel->instances[i];
+
+      // Compute delay starting from sinks
+      if(inst->tag == TAG_SINK){
+         PropagateDelay(inst,true);
+      } else if(inst->tag == TAG_SOURCE_AND_SINK){ // Special compute if tag is both source and sink
+         PropagateDelay(inst,false);
+      }
+   }
+
+   // Compute delay to computation and sink units
+   for(int i = 0; i < accel->nInstances; i++){
+      FUInstance* inst = &accel->instances[i];
+
+      // If it does not implement delay, ignore
+      if(!CHECK_TYPE(inst,VERSAT_TYPE_IMPLEMENTS_DELAY))
+         continue;
+
+      int numberDelays = UnitDelays(inst);
+
+      if(inst->tag == TAG_SOURCE_AND_SINK && (!CHECK_TYPE(inst,VERSAT_TYPE_SOURCE_DELAY))){
+         int delay = CalculateUnitInputLatency(inst,false);
+
+         for(int ii = 0; ii < numberDelays; ii++)
+            inst->delays[ii] = delay;
+      }
+
+      if((inst->tag == TAG_SINK) || (inst->tag == TAG_COMPUTE)){
+         int delay = CalculateUnitInputLatency(inst,true);
+
+         for(int ii = 0; ii < numberDelays; ii++)
+            inst->delays[ii] = delay;
+      }
+   }
+}
+
 
 static FUInstance** orderingBuffer = NULL;
 static int index = 0;

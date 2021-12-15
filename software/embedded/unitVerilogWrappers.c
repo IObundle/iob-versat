@@ -29,6 +29,7 @@ EXPORT FU_Type RegisterReg(Versat* versat){
    decl.name = "xreg";
    decl.nInputs = 1;
    decl.nOutputs = 1;
+   decl.nStates = ARRAY_SIZE(regStateWires);
    decl.memoryMapBytes = 4;
    decl.type = (VERSAT_TYPE_SOURCE | VERSAT_TYPE_SINK | VERSAT_TYPE_IMPLEMENTS_DELAY);
 
@@ -43,6 +44,7 @@ EXPORT FU_Type RegisterMem(Versat* versat,int addr_w){
    decl.name = "xmem #(.ADDR_W(10))";
    decl.nInputs = 2;
    decl.nOutputs = 2;
+   decl.nConfigs = ARRAY_SIZE(memConfigWires);
    decl.memoryMapBytes = (1 << 10) * 4;
    decl.type = (VERSAT_TYPE_SOURCE | VERSAT_TYPE_SINK | VERSAT_TYPE_IMPLEMENTS_DELAY | VERSAT_TYPE_SOURCE_DELAY);
    decl.latency = 3;
@@ -58,6 +60,7 @@ EXPORT FU_Type RegisterVRead(Versat* versat){
    decl.name = "vread";
    decl.nInputs = 0;
    decl.nOutputs = 1;
+   decl.nConfigs = ARRAY_SIZE(vreadConfigWires);
    decl.doesIO = true;
    decl.type = (VERSAT_TYPE_SOURCE | VERSAT_TYPE_IMPLEMENTS_DELAY | VERSAT_TYPE_SOURCE_DELAY);
    decl.latency = 1;
@@ -72,6 +75,7 @@ EXPORT FU_Type RegisterVWrite(Versat* versat){
 
    decl.name = "vwrite";
    decl.nInputs = 1;
+   decl.nConfigs = ARRAY_SIZE(vwriteConfigWires);
    decl.doesIO = true;
    decl.type = (VERSAT_TYPE_SINK | VERSAT_TYPE_IMPLEMENTS_DELAY);
 

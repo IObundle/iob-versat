@@ -65,6 +65,9 @@ FUInstance* CreateFUInstance(Accelerator* accel,FU_Type type){
 
    instance.declaration = decl;
 
+   instance.delays = (volatile int*) (versat_base + sizeof(int) * createdConfig);
+   createdConfig += UnitDelays(&instance);
+
    if(decl->nStates){
       instance.state = (volatile int*) (versat_base + sizeof(int) * createdState);
       createdState += decl->nStates;
@@ -125,3 +128,24 @@ void SaveConfiguration(Accelerator* accel,int configuration){
 void LoadConfiguration(Accelerator* accel,int configuration){
 
 }
+
+extern StoredConfigData config_0[];
+extern int configSize;
+
+// In versat space, simple extract delays from configuration data
+void CalculateDelay(Accelerator* accel){
+   for(int i = 0; i < configSize; i++){
+      StoredConfigData data = config_0[i];
+
+      FUInstance* inst = &accel->instances[data.index];
+
+      for(int ii = 0; ii < data.size; ii++){
+         inst->delays[ii] = data.config[ii];
+      }
+   }
+}
+
+
+
+
+
