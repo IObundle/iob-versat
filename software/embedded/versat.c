@@ -81,7 +81,7 @@ FUInstance* CreateFUInstance(Accelerator* accel,FU_Type type){
    return &accel->instances[accel->nInstances++];
 }
 
-void AcceleratorRun(Accelerator* accel,FUInstance* endRoot,FUFunction terminateFunction){
+void AcceleratorRun(Accelerator* accel){
    MEMSET(versat_base,0x0,1);
 
    while(1){

@@ -31,6 +31,9 @@ typedef struct Wire_t{
 #define VERSAT_TYPE_SOURCE           0x2 // If the unit is a source of data
 #define VERSAT_TYPE_IMPLEMENTS_DELAY 0x4 // Wether unit implements delay or not
 #define VERSAT_TYPE_SOURCE_DELAY     0x8 // Wether the unit has delay to produce data, or to process data (1 - delay on source,0 - delay on compute/sink)
+#define VERSAT_TYPE_IMPLEMENTS_DONE  0x10// Done is used to indicate to outside world that circuit is still processing. Only when every unit that implements done sets it to 1 should the circuit terminate
+
+#define DELAY_BIT_SIZE 8
 
 typedef struct FUDeclaration_t{
 	const char* name;
@@ -81,7 +84,10 @@ typedef struct FUInstance_t{
    struct FUInstance_t** outputInstances;
    int numberOutputs;
 
-   int* delays; // How many cycles unit must wait before seeing valid data, one delay for each output
+   // Configuration + State variables that versat needs access to
+   int delays[2]; // How many cycles unit must wait before seeing valid data, one delay for each output
+   int done; // Units that are sink or sources of data must implement done to ensure circuit does not end prematurely
+
    char tag; // Various uses
 } FUInstance;
 
@@ -116,6 +122,18 @@ typedef struct Accelerator_t{
    FUInstance** nodeOutputsAuxiliary;
 } Accelerator;
 
+typedef struct UnitInfo_t {
+   int nConfigsWithDelay;
+   int configBitSize;
+   int nStates;
+   int stateBitSize;
+   int memoryMappedBytes;
+   int implementsDelay;
+   int numberDelays;
+   int implementsDone;
+   int doesIO;
+} UnitInfo;
+
 // Versat functions
 EXPORT void InitVersat(Versat* versat,int base,int numberConfigurations);
 EXPORT FU_Type RegisterFU(Versat* versat,FUDeclaration declaration);
@@ -129,11 +147,14 @@ EXPORT FUInstance* CreateFUInstance(Accelerator* accel,FU_Type type);
 EXPORT void SaveConfiguration(Accelerator* accel,int configuration);
 EXPORT void LoadConfiguration(Accelerator* accel,int configuration);
 
-EXPORT void AcceleratorRun(Accelerator* accel,FUInstance* endRoot,FUFunction terminateFunction);
-EXPORT void IterativeAcceleratorRun(Accelerator* accel,FUInstance* endRoot,FUFunction terminateFunction);
+EXPORT void AcceleratorRun(Accelerator* accel);
+EXPORT void IterativeAcceleratorRun(Accelerator* accel);
 
 // Helper functions
 EXPORT int32_t GetInputValue(FUInstance* instance,int index);
+EXPORT int UnitDelays(FUInstance* inst);
+
+EXPORT UnitInfo CalculateUnitInfo(FUInstance* inst);
 
 EXPORT void ConnectUnits(FUInstance* out,int outIndex,FUInstance* in,int inIndex);
 

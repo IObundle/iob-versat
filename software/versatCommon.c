@@ -2,18 +2,28 @@
 
 #include "stdlib.h"
 
-static bool ComputeTypeDelay(FUInstance* inst){
-   if((inst->declaration->type & VERSAT_TYPE_IMPLEMENTS_DELAY) && !(inst->declaration->type & VERSAT_TYPE_SOURCE_DELAY)){
-      return true;
-   } else {
-      return false;
-   }
-}
-
 static int maxi(int a1,int a2){
    int res = (a1 > a2 ? a1 : a2);
 
    return res;
+}
+
+static int mini(int a1,int a2){
+   int res = (a1 < a2 ? a1 : a2);
+
+   return res;
+}
+
+int UnitDelays(FUInstance* inst){
+   if((inst->declaration->type & VERSAT_TYPE_IMPLEMENTS_DELAY)){
+      if(inst->declaration->type & VERSAT_TYPE_SOURCE_DELAY){
+         return mini(inst->declaration->nOutputs,2);
+      } else {
+         return 1;
+      }
+   } else {
+      return 0;
+   }
 }
 
 void CalculateNodesOutputs(Accelerator* accel){
@@ -66,7 +76,7 @@ void CalculateNodesOutputs(Accelerator* accel){
 
 // Gives latency as seen by unit, taking into account existing delay
 static int CalculateUnitFullLatency(FUInstance* inst,int port,bool seenSourceAndSink){
-   if(ComputeTypeDelay(inst)){
+   if(UnitDelays(inst) < 2){
       port = 0;
    }
 
@@ -105,7 +115,7 @@ static int CalculateUnitInputLatency(FUInstance* instance,bool seenSourceAndSink
 static void SetPathLatency(FUInstance* inst,int amount,int port){
    amount -= inst->declaration->latency;
 
-   if(ComputeTypeDelay(inst)){
+   if(UnitDelays(inst) < 2){
       port = 0;
    }
 
@@ -165,14 +175,43 @@ static int PropagateDelay(FUInstance* inst,bool seenSourceAndSink){
    return minLatency + inst->declaration->latency;
 }
 
+EXPORT UnitInfo CalculateUnitInfo(FUInstance* inst){
+   UnitInfo info = {};
+
+   FUDeclaration decl = *inst->declaration;
+
+   info.numberDelays = UnitDelays(inst);
+   info.implementsDelay = (info.numberDelays > 0 ? true : false);
+   info.nConfigsWithDelay = decl.nConfigs + info.numberDelays;
+
+   if(decl.nConfigs){
+      for(int ii = 0; ii < decl.nConfigs; ii++){
+         info.configBitSize += decl.configWires[ii].bitsize;
+      }
+   }
+   info.configBitSize += DELAY_BIT_SIZE * info.numberDelays;
+
+   info.nStates = decl.nStates;
+   if(decl.nStates){
+      for(int ii = 0; ii < decl.nStates; ii++){
+         info.stateBitSize += decl.stateWires[ii].bitsize;
+      }
+   }
+
+   info.memoryMappedBytes = decl.memoryMapBytes;
+   info.implementsDone = decl.doesIO;
+   info.doesIO = decl.doesIO;
+
+   return info;
+}
+
 void CalculateDelay(Accelerator* accel){
    // Reset delay to zero globally
    for(int i = 0; i < accel->nInstances; i++){
       FUInstance* inst = &accel->instances[i];
 
-      for(int ii = 0; ii < inst->declaration->nOutputs; ii++){
-         inst->delays[ii] = 0;
-      }
+      inst->delays[0] = 0;
+      inst->delays[1] = 0;
    }
 
    // Calculate output of nodes
@@ -241,7 +280,7 @@ void CalculateDelay(Accelerator* accel){
       if(inst->tag == TAG_SOURCE_AND_SINK && (!CHECK_TYPE(inst,VERSAT_TYPE_SOURCE_DELAY))){
          int delay = CalculateUnitInputLatency(inst,false);
 
-         if(ComputeTypeDelay(inst)){
+         if(UnitDelays(inst) == 1){
             inst->delays[0] = delay;
          } else {
             for(int ii = 0; ii < inst->declaration->nOutputs; ii++)
@@ -251,7 +290,7 @@ void CalculateDelay(Accelerator* accel){
 
       if((inst->tag == TAG_SINK) || (inst->tag == TAG_COMPUTE)){
          int delay = CalculateUnitInputLatency(inst,true);
-         if(ComputeTypeDelay(inst)){
+         if(UnitDelays(inst) == 1){
             inst->delays[0] = delay;
          } else {
             for(int ii = 0; ii < inst->declaration->nOutputs; ii++)

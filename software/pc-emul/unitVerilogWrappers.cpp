@@ -180,7 +180,7 @@ static int32_t* RegStartFunction(FUInstance* inst){
    Vxreg* self = (Vxreg*) inst->extraData;
 
    // Update config
-   self->writeDelay = inst->delays[0];
+   self->delay0 = inst->delays[0];
 
    START_RUN(self);
 
@@ -198,6 +198,8 @@ static int32_t* RegUpdateFunction(FUInstance* inst){
 
    // Update state
    state->currentValue = self->currentValue;
+
+   inst->done = self->done;
 
    // Update out
    out = self->out0;
@@ -219,7 +221,7 @@ EXPORT FU_Type RegisterReg(Versat* versat){
    decl.startFunction = RegStartFunction;
    decl.updateFunction = RegUpdateFunction;
    decl.memAccessFunction = MemoryAccess<Vxreg>;
-   decl.type = (VERSAT_TYPE_SOURCE | VERSAT_TYPE_SINK | VERSAT_TYPE_IMPLEMENTS_DELAY);
+   decl.type = (VERSAT_TYPE_SOURCE | VERSAT_TYPE_SINK | VERSAT_TYPE_IMPLEMENTS_DELAY | VERSAT_TYPE_IMPLEMENTS_DONE);
    decl.latency = 0; // Reg data is valid immediatly
 
    FU_Type type = RegisterFU(versat,decl);
@@ -245,8 +247,8 @@ static int32_t* MemStartFunction(FUInstance* inst){
    MemConfig* config = (MemConfig*) inst->config;
 
    // Update config
-   self->delayA = inst->delays[0];
-   self->delayB = inst->delays[1];
+   self->delay0 = inst->delays[0];
+   self->delay1 = inst->delays[1];
 
    self->iterA = config->iterA;
    self->perA = config->perA;
@@ -290,6 +292,8 @@ static int32_t* MemUpdateFunction(FUInstance* inst){
 
    UPDATE(self);
 
+   inst->done = self->done;
+
    // Update out
    out[0] = self->out0;
    out[1] = self->out1;
@@ -329,7 +333,7 @@ EXPORT FU_Type RegisterMem(Versat* versat,int addr_w){
    decl.startFunction = MemStartFunction;
    decl.updateFunction = MemUpdateFunction;
    decl.memAccessFunction = MemoryAccess<Vxmem>;
-   decl.type = (VERSAT_TYPE_SOURCE | VERSAT_TYPE_SINK | VERSAT_TYPE_IMPLEMENTS_DELAY | VERSAT_TYPE_SOURCE_DELAY);
+   decl.type = (VERSAT_TYPE_SOURCE | VERSAT_TYPE_SINK | VERSAT_TYPE_IMPLEMENTS_DELAY | VERSAT_TYPE_SOURCE_DELAY | VERSAT_TYPE_IMPLEMENTS_DONE);
    decl.latency = 3;
 
    FU_Type type = RegisterFU(versat,decl);
@@ -376,7 +380,7 @@ static int32_t* VReadStartFunction(FUInstance* inst){
    PREAMBLE(Vvread);
 
    // Update config
-   self->delayB = inst->delays[0];
+   self->delay0 = inst->delays[0];
 
    self->ext_addr = config->ext_addr;
    self->int_addr = config->int_addr;
@@ -429,6 +433,8 @@ static int32_t* VReadUpdateFunction(FUInstance* inst){
    // Update out
    out = self->out0;
 
+   inst->done = self->done;
+
    return &out;
 }
 
@@ -445,7 +451,7 @@ EXPORT FU_Type RegisterVRead(Versat* versat){
    decl.initializeFunction = VReadInitializeFunction;
    decl.startFunction = VReadStartFunction;
    decl.updateFunction = VReadUpdateFunction;
-   decl.type = (VERSAT_TYPE_SOURCE | VERSAT_TYPE_IMPLEMENTS_DELAY | VERSAT_TYPE_SOURCE_DELAY);
+   decl.type = (VERSAT_TYPE_SOURCE | VERSAT_TYPE_IMPLEMENTS_DELAY | VERSAT_TYPE_SOURCE_DELAY | VERSAT_TYPE_IMPLEMENTS_DONE);
    decl.latency = 1;
 
    FU_Type type = RegisterFU(versat,decl);
@@ -468,7 +474,7 @@ static int32_t* VWriteStartFunction(FUInstance* inst){
    VWriteConfig* config = (VWriteConfig*) inst->config;
 
    // Update config
-   self->delayB = inst->delays[0];
+   self->delay0 = inst->delays[0];
 
    self->ext_addr = config->ext_addr;
    self->int_addr = config->int_addr;
@@ -509,6 +515,8 @@ static int32_t* VWriteUpdateFunction(FUInstance* inst){
    // Update out
    out = self->out0;
 
+   inst->done = self->done;
+
    return &out;
 }
 
@@ -525,7 +533,7 @@ EXPORT FU_Type RegisterVWrite(Versat* versat){
    decl.initializeFunction = VWriteInitializeFunction;
    decl.startFunction = VWriteStartFunction;
    decl.updateFunction = VWriteUpdateFunction;
-   decl.type = (VERSAT_TYPE_SINK | VERSAT_TYPE_IMPLEMENTS_DELAY);
+   decl.type = (VERSAT_TYPE_SINK | VERSAT_TYPE_IMPLEMENTS_DELAY | VERSAT_TYPE_IMPLEMENTS_DONE);
    decl.latency = 0; // Does not matter, does not output anything
 
    FU_Type type = RegisterFU(versat,decl);

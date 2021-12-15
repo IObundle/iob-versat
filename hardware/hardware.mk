@@ -25,7 +25,7 @@ VHDR+=$(wildcard $(VERSAT_HW_DIR)/include/*.vh)
 
 #sources
 VSRC+=$(wildcard $(VERSAT_HW_DIR)/src/*.v)
-VSRC+=$(MEM_DIR)/hardware/ram/2p_ram/iob_2p_ram.v # used by vread and vwrite
+#VSRC+=$(MEM_DIR)/hardware/ram/2p_ram/iob_2p_ram.v # used by vread and vwrite
 VSRC+=$(DMA_DIR)/hardware/src/dma_axi.v
 VSRC+=$(DMA_DIR)/hardware/src/dma_axi_r.v
 VSRC+=$(DMA_DIR)/hardware/src/dma_axi_w.v

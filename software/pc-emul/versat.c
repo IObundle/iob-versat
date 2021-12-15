@@ -14,14 +14,6 @@ typedef struct Range_t{
    int high,low;
 } Range;
 
-static bool ComputeTypeDelay(FUInstance* inst){
-   if((inst->declaration->type & VERSAT_TYPE_IMPLEMENTS_DELAY) && !(inst->declaration->type & VERSAT_TYPE_SOURCE_DELAY)){
-      return true;
-   } else {
-      return false;
-   }
-}
-
 // TODO: change memory from static to dynamically allocation. For now, allocate a static amount of memory
 void InitVersat(Versat* versat,int base,int numberConfigurations){
    versat->accelerators = (Accelerator*) malloc(10 * sizeof(Accelerator));
@@ -85,12 +77,6 @@ FUInstance* CreateFUInstance(Accelerator* accel,FU_Type type){
    if(decl.nOutputs){
       instance.outputs = (int32_t*) calloc(decl.nOutputs,sizeof(int32_t));
       instance.storedOutputs = (int32_t*) calloc(decl.nOutputs,sizeof(int32_t));
-
-      if((decl.type & VERSAT_TYPE_IMPLEMENTS_DELAY) && (decl.type & VERSAT_TYPE_SOURCE_DELAY)){
-         instance.delays = (int*) calloc(decl.nOutputs,sizeof(int));
-      } else {
-         instance.delays = (int*) calloc(1,sizeof(int));
-      }
    }
    if(decl.nStates)
       instance.state = (volatile int*) calloc(decl.nStates,sizeof(int));
@@ -160,7 +146,7 @@ void SaveConfiguration(Accelerator* accel,int configuration){
       FUInstance* inst = &accel->instances[i];
 
       if(inst->declaration->type & VERSAT_TYPE_IMPLEMENTS_DELAY){
-         size += (ComputeTypeDelay(inst) ? 1 : inst->declaration->nOutputs);
+         size += UnitDelays(inst);
       }
 
       #if 0 // For now, only save the delays, deal with configuration data later
@@ -177,7 +163,7 @@ void SaveConfiguration(Accelerator* accel,int configuration){
       FUInstance* inst = &accel->instances[i];
 
       if(inst->declaration->type & VERSAT_TYPE_IMPLEMENTS_DELAY){
-         if(ComputeTypeDelay(inst)){
+         if(UnitDelays(inst) == 1){
             config->savedData[index++] = inst->delays[0];
          } else {
             for(int ii = 0; ii < inst->declaration->nOutputs; ii++){
@@ -194,16 +180,25 @@ void SaveConfiguration(Accelerator* accel,int configuration){
    }
 }
 
-void AcceleratorRun(Accelerator* accel,FUInstance* endRoot,FUFunction terminateFunction){
+void AcceleratorRun(Accelerator* accel){
    AcceleratorRunStart(accel);
 
    int cycle = 0;
    while(true){
       AcceleratorRunIteration(accel);
 
-      // For now, the end is kinda hardcoded.
-      if(terminateFunction(endRoot))
+      bool done = true;
+      for(int i = 0; i < accel->nInstances; i++){
+         if(accel->instances[i].declaration->type & VERSAT_TYPE_IMPLEMENTS_DONE){
+            if(!accel->instances[i].done){
+               done = false;
+            }
+         }
+      }
+
+      if(done){
          break;
+      }
    }
 }
 
@@ -271,33 +266,19 @@ static VersatComputedValues ComputeVersatValues(Versat* versat){
    Accelerator* accel = &versat->accelerators[0];
 
    for(int i = 0; i < accel->nInstances; i++){
-      FUInstance* instance = &accel->instances[i];
-      FUDeclaration decl = *instance->declaration;
+      UnitInfo info = CalculateUnitInfo(&accel->instances[i]);
 
-      if(decl.memoryMapBytes > res.maxMemoryMapBytes)
-         res.maxMemoryMapBytes = decl.memoryMapBytes;
+      res.maxMemoryMapBytes = maxi(res.maxMemoryMapBytes,info.memoryMappedBytes);
+      res.memoryMapped += info.memoryMappedBytes;
 
-      res.memoryMapped += decl.memoryMapBytes;
-      if(decl.memoryMapBytes)
+      if(info.memoryMappedBytes)
          res.unitsMapped += 1;
 
-      res.nConfigs += decl.nConfigs;
-
-      if(decl.nConfigs){
-         for(int ii = 0; ii < decl.nConfigs; ii++){
-            res.configurationBits += decl.configWires[ii].bitsize;
-         }
-      }
-
-      res.nStates += decl.nStates;
-      if(decl.nStates){
-         for(int ii = 0; ii < decl.nConfigs; ii++){
-            res.stateBits += decl.stateWires[ii].bitsize;
-         }
-      }
-
-      if(decl.doesIO)
-         res.nUnitsIO += 1;
+      res.nConfigs += info.nConfigsWithDelay;
+      res.configurationBits += info.configBitSize;
+      res.nStates += info.nStates;
+      res.stateBits += info.stateBitSize;
+      res.nUnitsIO += info.doesIO;
    }
 
    // Versat specific registers are treated as a special maping (all 0's) of 1 configuration and 1 state register
@@ -617,6 +598,20 @@ void OutputVersatSource(Versat* versat,const char* definitionFilepath,const char
 
       FUDeclaration decl = *instance->declaration;
 
+      int delays = UnitDelays(instance);
+      if(delays){
+         for(int ii = 0; ii < delays; ii++){
+            int bitSize = DELAY_BIT_SIZE;
+
+            fprintf(s,"%s%sif(addr[%d:%d] == %d'd%d)\n",TAB,TAB,val.configAddressRange.high,val.configAddressRange.low,val.configAddressRange.high - val.configAddressRange.low + 1,index++);
+            if(versat->useShadowRegisters)
+               fprintf(s,"%s%s%sconfigdata_shadow[%d+:%d] <= wdata[%d:0];\n",TAB,TAB,TAB,bitCount,bitSize,bitSize-1);
+            else
+               fprintf(s,"%s%s%sconfigdata[%d+:%d] <= wdata[%d:0];\n",TAB,TAB,TAB,bitCount,bitSize,bitSize-1);
+            bitCount += bitSize;
+         }
+      }
+
       for(int ii = 0; ii < decl.nConfigs; ii++){
          int bitSize = decl.configWires[ii].bitsize;
 
@@ -686,6 +681,14 @@ void OutputVersatSource(Versat* versat,const char* definitionFilepath,const char
          }
       }
 
+      int delays = UnitDelays(instance);
+      if(delays){
+         for(int ii = 0; ii < delays; ii++){
+            fprintf(s,"%s.delay%d(configdata[%d:%d]),\n",TAB,ii,configDataIndex + DELAY_BIT_SIZE - 1,configDataIndex);
+            configDataIndex += DELAY_BIT_SIZE;
+         }
+      }
+
       for(int ii = 0; ii < decl.nConfigs; ii++){
          Wire wire = decl.configWires[ii];
          fprintf(s,"%s.%s(configdata[%d:%d]),\n",TAB,wire.name,configDataIndex + wire.bitsize - 1,configDataIndex);
@@ -749,7 +752,7 @@ bool IsPrefix(char* prefix,char* str){
 #define OUTPUT_STATE 1
 
 #define RESET_BUFFER strcpy(lastAction,actionBuffer); actionBuffer[0] = '\0'; actionIndex = 0;
-void IterativeAcceleratorRun(Versat* versat,Accelerator* accel,FUInstance* endRoot,FUFunction terminateFunction){
+void IterativeAcceleratorRun(Accelerator* accel){
    char lastAction[MAX_CHARS];
    char actionBuffer[MAX_CHARS];
    int actionIndex = 0;
