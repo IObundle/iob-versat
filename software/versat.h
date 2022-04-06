@@ -1,8 +1,17 @@
-#ifndef INCLUDED_VERSAT
-#define INCLUDED_VERSAT
+#ifndef INCLUDED_VERSAT_H
+#define INCLUDED_VERSAT_H
 
+#include "stdio.h"
 #include "stdint.h"
 #include "stdbool.h"
+
+#include "utils.h"
+
+// Ugly but useful for now
+#define MAKE_VERSAT(NAME) \
+   char tempBuffer_##NAME[1024]; \
+   memset(tempBuffer_##NAME,0,1024); \
+   Versat* NAME = (Versat*) tempBuffer_##NAME
 
 #ifdef __cplusplus
 #define EXPORT extern "C"
@@ -10,76 +19,75 @@
 #define EXPORT
 #endif
 
-static int mini(int a1,int a2){
-   int res = (a1 < a2 ? a1 : a2);
-
-   return res;
-}
-
-static int maxi(int a1,int a2){
-   int res = (a1 > a2 ? a1 : a2);
-
-   return res;
-}
-
-typedef unsigned char byte;
-
-typedef struct FUInstance_t FUInstance;
-
+typedef struct Versat Versat;
+typedef struct FUInstance FUInstance;
 typedef int32_t* (*FUFunction)(FUInstance*);
 typedef int32_t (*MemoryAccessFunction)(FUInstance* instance, int address, int value,int write);
 
-// Type system to prevent misuse
-typedef struct FU_Type_t{
-	int type;
-} FU_Type;
+typedef struct PortInstance{
+   FUInstance* inst;
+   int port;
+} PortInstance;
 
-typedef struct Wire_t{
+enum DelayType {
+   DELAY_TYPE_SINK               = 0x1, // Sink of data in the circuit.
+   DELAY_TYPE_SOURCE             = 0x2, // If the unit is a source of data
+   DELAY_TYPE_IMPLEMENTS_DELAY   = 0x4, // Wether unit implements delay or not
+   DELAY_TYPE_SOURCE_DELAY       = 0x8, // Wether the unit has delay to produce data, or to process data (1 - delay on source,0 - delay on compute/sink)
+   DELAY_TYPE_IMPLEMENTS_DONE    = 0x10 // Done is used to indicate to outside world that circuit is still processing. Only when every unit that implements done sets it to 1 should the circuit terminate
+};
+
+typedef struct Wire{
    const char* name;
    int bitsize;
 } Wire;
 
-#define VERSAT_TYPE_SINK             0x1 // Sink of data in the circuit.
-#define VERSAT_TYPE_SOURCE           0x2 // If the unit is a source of data
-#define VERSAT_TYPE_IMPLEMENTS_DELAY 0x4 // Wether unit implements delay or not
-#define VERSAT_TYPE_SOURCE_DELAY     0x8 // Wether the unit has delay to produce data, or to process data (1 - delay on source,0 - delay on compute/sink)
-#define VERSAT_TYPE_IMPLEMENTS_DONE  0x10// Done is used to indicate to outside world that circuit is still processing. Only when every unit that implements done sets it to 1 should the circuit terminate
+typedef struct Accelerator Accelerator;
 
-#define DELAY_BIT_SIZE 8
-
-typedef struct FUDeclaration_t{
-	const char* name;
+typedef struct FUDeclaration{
+   HierarchyName name;
 
    int nInputs;
    int nOutputs;
 
-   // Config and state interface
-   int nConfigs;
-   const Wire* configWires;
+	union {
+      // Composite declaration
+      Accelerator* circuit;
 
-   int nStates;
-   const Wire* stateWires;
+      // Simple FU declaration
+      struct{
+         // Config and state interface
+         int nConfigs;
+         const Wire* configWires;
 
-   int latency; // Assume, for now, every port has the same latency
-   int type;
+         int nStates;
+         const Wire* stateWires;
 
-   int memoryMapBytes;
-   int extraDataSize;
-   bool doesIO;
-   FUFunction initializeFunction;
-	FUFunction startFunction;
-	FUFunction updateFunction;
-   MemoryAccessFunction memAccessFunction;
+         int latency; // Assume, for now, every port has the same latency
+
+         int memoryMapBytes;
+         int extraDataSize;
+         bool doesIO;
+         FUFunction initializeFunction;
+         FUFunction startFunction;
+         FUFunction updateFunction;
+         MemoryAccessFunction memAccessFunction;
+      };
+   };
+
+   enum {SINGLE,COMPOSITE,SPECIAL} type;
+   enum DelayType delayType;
 } FUDeclaration;
 
-typedef struct{
-   FUInstance* instance;
-   int index;
-} FUInput;
+typedef struct GraphComputedData GraphComputedData;
 
-typedef struct FUInstance_t{
+typedef struct FUInstance{
+   Accelerator* accel;
+	HierarchyName name;
 	FUDeclaration* declaration;
-	FUInput* inputs;
+	int id;
+   Accelerator* compositeAccel;
+
 	int32_t* outputs;
 	int32_t* storedOutputs;
    void* extraData;
@@ -89,64 +97,61 @@ typedef struct FUInstance_t{
    volatile int* config;
    volatile int* state;
 
-   // Auxiliary used by other algorithms
-   // For now, we do not need to know which output is connected
-   // (Ex: a unit with 4 outputs might only have 1 in numberOutputs,
-   //  we do not need to know which output is the one that is connected)
-   struct FUInstance_t** outputInstances;
-   int numberOutputs;
-
    // Configuration + State variables that versat needs access to
-   volatile int* delays; // How many cycles unit must wait before seeing valid data, one delay for each output
+   volatile int delay; // How many cycles unit must wait before seeing valid data, one delay for each output
    int done; // Units that are sink or sources of data must implement done to ensure circuit does not end prematurely
 
-   char tag; // Various uses
+   // Various uses
+   GraphComputedData* tempData;
+   char tag;
 } FUInstance;
 
-typedef struct Accelerator_t Accelerator;
+#if 0
+struct ConnectionInfo{
+   PortInstance inst;
+   int port;
+   int delay;
+};
 
-typedef struct Versat_t{
+struct GraphComputedData{
+   int numberInputs;
+   int numberOutputs;
+   ConnectionInfo* inputs; // Delay not used
+   ConnectionInfo* outputs;
+   enum {TAG_UNCONNECTED,TAG_COMPUTE,TAG_SOURCE,TAG_SINK,TAG_SOURCE_AND_SINK} nodeType;
+   int inputDelay;
+};
+
+struct Versat{
 	FUDeclaration* declarations;
 	int nDeclarations;
-	Accelerator* accelerators;
-	int nAccelerators;
+	Pool<Accelerator> accelerators;
 
 	int numberConfigurations;
 
    // Options
    int byteAddressable;
    int useShadowRegisters;
-} Versat;
+};
 
-typedef struct ConfigurationData_t{
-   int size;
-   int* ptr;
-} ConfigurationData;
+// MERGING
 
-typedef struct Configuration_t{
-   ConfigurationData* unitView;
-   int* savedData;
-   int size;
-} Configuration;
+struct Accelerator{
+   Versat* versat;
 
-typedef struct StoredConfigData_t{
-  int index;
-  int size;
-  const int* config;
-} StoredConfigData;
+   Pool<FUInstance> instances;
+	Pool<Edge> edges;
 
-typedef struct Accelerator_t{
-	Versat* versat;
-	FUInstance* instances;
-	int nInstances;
+   Pool<FUInstance*> inputInstancePointers;
+   FUInstance* outputInstance;
 
-   Configuration* savedConfigurations;
+	void* configuration;
+	int configurationSize;
 
-   // Used by other algorithms
-   FUInstance** nodeOutputsAuxiliary;
-} Accelerator;
+	bool init;
+};
 
-typedef struct UnitInfo_t {
+struct UnitInfo{
    int nConfigsWithDelay;
    int configBitSize;
    int nStates;
@@ -156,17 +161,62 @@ typedef struct UnitInfo_t {
    int numberDelays;
    int implementsDone;
    int doesIO;
-} UnitInfo;
+};
+
+#endif
+
+typedef struct Edge{ // A edge in a graph
+   PortInstance units[2];
+} Edge;
+
+typedef struct MappingNode{ // Mapping (edge to edge or node to node)
+   Edge edges[2];
+} MappingNode;
+
+typedef struct MappingEdge{ // Edge between mapping from edge to edge
+   MappingNode nodes[2];
+} MappingEdge;
+
+typedef struct ConsolidationGraph{
+   MappingNode* nodes;
+   int numberNodes;
+   MappingEdge* edges;
+   int numberEdges;
+
+   // Used in get clique;
+   int* validNodes;
+} ConsolidationGraph;
+
+typedef struct DAGOrder{
+   FUInstance** sinks;
+   int numberSinks;
+   FUInstance** sources;
+   int numberSources;
+   FUInstance** computeUnits;
+   int numberComputeUnits;
+   FUInstance** instancePtrs; // Source, then compute, then sink (source_and_sink treated as sink)
+} DAGOrder;
+
+EXPORT Accelerator* Flatten(Versat* versat,Accelerator* accel,int times);
+
+EXPORT void OutputGraphDotFile(Accelerator* accel,FILE* outputFile,int collapseSameEdges);
 
 // Versat functions
 EXPORT void InitVersat(Versat* versat,int base,int numberConfigurations);
-EXPORT FU_Type RegisterFU(Versat* versat,FUDeclaration declaration);
+EXPORT FUDeclaration* RegisterFU(Versat* versat,FUDeclaration declaration);
 EXPORT void OutputVersatSource(Versat* versat,const char* definitionFilepath,const char* sourceFilepath,const char* configurationFilepath);
 EXPORT void OutputMemoryMap(Versat* versat);
 
+EXPORT FUDeclaration* GetTypeByName(Versat* versat,const char* name);
+
 // Accelerator functions
 EXPORT Accelerator* CreateAccelerator(Versat* versat);
-EXPORT FUInstance* CreateFUInstance(Accelerator* accel,FU_Type type);
+EXPORT FUInstance* CreateFUInstance(Accelerator* accel,FUDeclaration* type);
+EXPORT FUInstance* CreateNamedFUInstance(Accelerator* accel,FUDeclaration* type,const char* entityName,HierarchyName* hierarchyParent);
+EXPORT void RemoveFUInstance(Accelerator* accel,FUInstance* inst);
+
+#define GetInstanceByName(ACCEL,...) GetInstanceByName_(ACCEL,NUMBER_ARGS(__VA_ARGS__),__VA_ARGS__)
+EXPORT FUInstance* GetInstanceByName_(Accelerator* accel,int argc, ...);
 
 EXPORT void SaveConfiguration(Accelerator* accel,int configuration);
 EXPORT void LoadConfiguration(Accelerator* accel,int configuration);
@@ -174,19 +224,24 @@ EXPORT void LoadConfiguration(Accelerator* accel,int configuration);
 EXPORT void AcceleratorRun(Accelerator* accel);
 EXPORT void IterativeAcceleratorRun(Accelerator* accel);
 
-// Helper functions
-EXPORT int32_t GetInputValue(FUInstance* instance,int index);
-EXPORT int UnitDelays(FUInstance* inst);
+EXPORT void AddInput(Accelerator* accel);
 
-EXPORT UnitInfo CalculateUnitInfo(FUInstance* inst);
+EXPORT // Helper functions
+EXPORT int32_t GetInputValue(FUInstance* instance,int port);
+EXPORT int UnitDelays(FUInstance* inst);
 
 EXPORT void ConnectUnits(FUInstance* out,int outIndex,FUInstance* in,int inIndex);
 
 EXPORT void VersatUnitWrite(FUInstance* instance,int address, int value);
 EXPORT int32_t VersatUnitRead(FUInstance* instance,int address);
 
-EXPORT void CalculateDelay(Accelerator* accel);
-EXPORT void CalculateNodesOutputs(Accelerator* accel);
-EXPORT void DAGOrdering(Accelerator* accel);
+EXPORT int CalculateLatency(FUInstance* inst,int sourceAndSinkAsSource);
+EXPORT void CalculateDelay(Versat* versat,Accelerator* accel);
+EXPORT void* CalculateGraphData(Accelerator* accel);
+EXPORT DAGOrder CalculateDAGOrdering(Accelerator* accel);
 
-#endif
+EXPORT ConsolidationGraph GenerateConsolidationGraph(Accelerator* accel1,Accelerator* accel2);
+EXPORT ConsolidationGraph MaxClique(ConsolidationGraph graph);
+EXPORT Accelerator* MergeGraphs(Versat* versat,Accelerator* accel1,Accelerator* accel2,ConsolidationGraph graph);
+
+#endif // INCLUDED_VERSAT_H
