@@ -11,115 +11,88 @@
 #define ARRAY_SIZE(array) sizeof(array) / sizeof(array[0])
 
 EXPORT FU_Type RegisterAdd(Versat* versat){
-   FU_Type type = RegisterFU(versat,"xadd",
-                                    2, // n inputs
-                                    1, // n outputs
-                                    0, // Config
-                                    NULL,
-                                    0, // State
-                                    NULL,
-                                    0, // MemoryMapped
-                                    false, // IO
-                                    0, // Extra memory
-                                    NULL,
-                                    NULL,
-                                    NULL,
-                                    NULL);
+   FUDeclaration decl = {};
+
+   decl.name = "xadd";
+   decl.nInputs = 2;
+   decl.nOutputs = 1;
+   decl.latency = 1;
+
+   FU_Type type = RegisterFU(versat,decl);
 
    return type;
 }
 
 EXPORT FU_Type RegisterReg(Versat* versat){
-   FU_Type type = RegisterFU(versat,"xreg",
-                                    1, // n inputs
-                                    1, // n outputs
-                                    ARRAY_SIZE(regConfigWires), // Config
-                                    regConfigWires,
-                                    ARRAY_SIZE(regStateWires), // State
-                                    regStateWires,
-                                    4, // MemoryMapped
-                                    false, // IO
-                                    0, // Extra memory
-                                    NULL,
-                                    NULL,
-                                    NULL,
-                                    NULL);
+   FUDeclaration decl = {};
+
+   decl.name = "xreg";
+   decl.nInputs = 1;
+   decl.nOutputs = 1;
+   decl.nStates = ARRAY_SIZE(regStateWires);
+   decl.memoryMapBytes = 4;
+   decl.type = (VERSAT_TYPE_SOURCE | VERSAT_TYPE_SINK | VERSAT_TYPE_IMPLEMENTS_DELAY);
+
+   FU_Type type = RegisterFU(versat,decl);
 
    return type;
 }
 
 EXPORT FU_Type RegisterMem(Versat* versat,int addr_w){
-   FU_Type type = RegisterFU(versat,"xmem",
-                                    2, // n inputs
-                                    2, // n outputs
-                                    ARRAY_SIZE(memConfigWires), // Config
-                                    memConfigWires, 
-                                    0, // State
-                                    NULL,
-                                    (1 << addr_w) * 4, // MemoryMapped
-                                    false, // IO
-                                    0, // Extra memory
-                                    NULL,
-                                    NULL,
-                                    NULL,
-                                    NULL);
+   FUDeclaration decl = {};
+
+   decl.name = "xmem #(.ADDR_W(10))";
+   decl.nInputs = 2;
+   decl.nOutputs = 2;
+   decl.nConfigs = ARRAY_SIZE(memConfigWires);
+   decl.memoryMapBytes = (1 << 10) * 4;
+   decl.type = (VERSAT_TYPE_SOURCE | VERSAT_TYPE_SINK | VERSAT_TYPE_IMPLEMENTS_DELAY | VERSAT_TYPE_SOURCE_DELAY);
+   decl.latency = 3;
+
+   FU_Type type = RegisterFU(versat,decl);
 
    return type;
 }
 
 EXPORT FU_Type RegisterVRead(Versat* versat){
-   FU_Type type = RegisterFU(versat,"vread",
-                                    0, // n inputs
-                                    1, // n outputs
-                                    ARRAY_SIZE(vreadConfigWires), // Config
-                                    vreadConfigWires, 
-                                    0, // State
-                                    NULL,
-                                    0, // MemoryMapped
-                                    true, // IO
-                                    0, // Extra memory
-                                    NULL,
-                                    NULL,
-                                    NULL,
-                                    NULL);
+   FUDeclaration decl = {};
+
+   decl.name = "vread";
+   decl.nInputs = 0;
+   decl.nOutputs = 1;
+   decl.nConfigs = ARRAY_SIZE(vreadConfigWires);
+   decl.doesIO = true;
+   decl.type = (VERSAT_TYPE_SOURCE | VERSAT_TYPE_IMPLEMENTS_DELAY | VERSAT_TYPE_SOURCE_DELAY);
+   decl.latency = 1;
+
+   FU_Type type = RegisterFU(versat,decl);
 
    return type;
 }
 
 EXPORT FU_Type RegisterVWrite(Versat* versat){
-   FU_Type type = RegisterFU(versat,"vwrite",
-                                    1, // n inputs
-                                    0, // n outputs
-                                    ARRAY_SIZE(vwriteConfigWires), // Config
-                                    vwriteConfigWires, 
-                                    0, // State
-                                    NULL,
-                                    0, // MemoryMapped
-                                    true, // IO
-                                    0, // Extra memory
-                                    NULL,
-                                    NULL,
-                                    NULL,
-                                    NULL);
+   FUDeclaration decl = {};
+
+   decl.name = "vwrite";
+   decl.nInputs = 1;
+   decl.nConfigs = ARRAY_SIZE(vwriteConfigWires);
+   decl.doesIO = true;
+   decl.type = (VERSAT_TYPE_SINK | VERSAT_TYPE_IMPLEMENTS_DELAY);
+
+   FU_Type type = RegisterFU(versat,decl);
 
    return type;
 }
 
 EXPORT FU_Type RegisterDebug(Versat* versat){
-   FU_Type type = RegisterFU(versat,"",
-                                    1, // n inputs
-                                    0, // n outputs
-                                    0, // Config
-                                    NULL,
-                                    0, // State
-                                    NULL,
-                                    0, // MemoryMapped
-                                    false, // IO
-                                    0, // Extra memory
-                                    NULL,
-                                    NULL,
-                                    NULL,
-                                    NULL);
+   FUDeclaration decl = {};
+
+   decl.name = "";
+   decl.nInputs = 1;
+   decl.extraDataSize = sizeof(int);
+   decl.type = VERSAT_TYPE_SINK;
+
+   FU_Type type = RegisterFU(versat,decl);
 
    return type;
 }

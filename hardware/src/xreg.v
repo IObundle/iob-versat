@@ -26,7 +26,7 @@ module xreg #(
     input [DATA_W-1:0]            in0,
     output reg [DATA_W-1:0]       out0,
 
-    input [DELAY_W-1:0]           writeDelay,
+    input [DELAY_W-1:0]           delay0,
 
     output [DATA_W-1:0]           currentValue
     );
@@ -45,7 +45,7 @@ begin
       ready <= 0;
    end else if(run) begin
       ready <= 0;
-      delay <= writeDelay;
+      delay <= delay0;
    end else if(valid & |wstrb) begin
       out0 <= wdata;
       ready <= 1'b1;

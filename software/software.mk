@@ -6,9 +6,6 @@ INCLUDE+=-I$(VERSAT_SW_DIR)
 #headers
 HDR+=$(VERSAT_SW_DIR)/*.h
 
-#sources
-#SRC+=$(VERSAT_SW_DIR)/iob-uart.c
-
 #Units to verilate
 VERILATE_UNIT = xadd xreg xmem vread vwrite
 

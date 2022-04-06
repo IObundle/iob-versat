@@ -6,8 +6,11 @@
 
 static int versat_base;
 
+extern int* number_versat_configurations;
+extern int  versat_configurations;
+
 // TODO: change memory from static to dynamically allocation. For now, allocate a static amount of memory
-void InitVersat(Versat* versat,int base){
+void InitVersat(Versat* versat,int base,int numberConfigurations){
    static Accelerator accel;
    static FUDeclaration decls[100];
 
@@ -21,23 +24,12 @@ void InitVersat(Versat* versat,int base){
    MEMSET(versat_base,0x0,0);
 }
 
-FU_Type RegisterFU(Versat* versat,const char* declarationName,
-                   int nInputs,int nOutputs,
-                   int nConfigs,const Wire* configWires,
-                   int nStates,const Wire* stateWires,
-                   int memoryMapBytes,bool doesIO,int extraDataSize,
-                   FUFunction initializeFunction,FUFunction startFunction,FUFunction updateFunction,
-                   MemoryAccessFunction memAccessFunction){
+// Start adding the concept of configuration to versat
+// The board does not compute anything, the firmware generates static structs and arrays that are coded in the firmware
+// The versat side simply uses those values
 
-   FUDeclaration decl = {};
+FU_Type RegisterFU(Versat* versat,FUDeclaration decl){
    FU_Type type = {};
-
-   decl.name = declarationName;
-   decl.nConfigs = nConfigs;
-   decl.configWires = configWires;
-   decl.nStates = nStates;
-   decl.stateWires = stateWires;
-   decl.memoryMapBytes = memoryMapBytes;
 
    type.type = versat->nDeclarations;
    versat->declarations[versat->nDeclarations++] = decl;
@@ -69,19 +61,22 @@ FUInstance* CreateFUInstance(Accelerator* accel,FU_Type type){
    static int createdState = 1; // Versat registers occupy position 0
 
    FUInstance instance = {};
-   FUDeclaration decl = accel->versat->declarations[type.type];
+   FUDeclaration* decl = &accel->versat->declarations[type.type];
 
-   instance.declaration = type;
+   instance.declaration = decl;
 
-   if(decl.nStates){
+   instance.delays = (volatile int*) (versat_base + sizeof(int) * createdConfig);
+   createdConfig += UnitDelays(&instance);
+
+   if(decl->nStates){
       instance.state = (volatile int*) (versat_base + sizeof(int) * createdState);
-      createdState += decl.nStates;
+      createdState += decl->nStates;
    }
-   if(decl.nConfigs){
+   if(decl->nConfigs){
       instance.config = (volatile int*) (versat_base + sizeof(int) * createdConfig);
-      createdConfig += decl.nConfigs;
+      createdConfig += decl->nConfigs;
    }
-   if(decl.memoryMapBytes){
+   if(decl->memoryMapBytes){
       instance.memMapped = (volatile int*) (versat_base + 0x10000 + 1024 * sizeof(int) * (createdMem++));
    }
    accel->instances[accel->nInstances] = instance;
@@ -89,7 +84,7 @@ FUInstance* CreateFUInstance(Accelerator* accel,FU_Type type){
    return &accel->instances[accel->nInstances++];
 }
 
-void AcceleratorRun(Versat* versat,Accelerator* accel,FUInstance* endRoot,FUFunction terminateFunction){
+void AcceleratorRun(Accelerator* accel){
    MEMSET(versat_base,0x0,1);
 
    while(1){
@@ -100,7 +95,7 @@ void AcceleratorRun(Versat* versat,Accelerator* accel,FUInstance* endRoot,FUFunc
    }
 }
 
-void OutputVersatSource(Versat* versat,const char* declarationFilepath,const char* sourceFilepath){
+void OutputVersatSource(Versat* versat,const char* declarationFilepath,const char* sourceFilepath,const char* configurationFilepath){
 
 }
 
@@ -108,24 +103,49 @@ void OutputMemoryMap(Versat* versat){
 
 }
 
-FUDeclaration* GetDeclaration(Versat* versat,FUInstance* instance){
-   return 0;
-}
-
 int32_t GetInputValue(FUInstance* instance,int index){
    return 0;
 }
 
-void ConnectUnits(Versat* versat,FUInstance* out,int outIndex,FUInstance* in,int inIndex){
+void ConnectUnits(FUInstance* out,int outIndex,FUInstance* in,int inIndex){
 
 }
 
-void VersatUnitWrite(Versat* versat,FUInstance* instance,int address, int value){
+void VersatUnitWrite(FUInstance* instance,int address, int value){
    instance->memMapped[address] = value;
 }
 
-int32_t VersatUnitRead(Versat* versat,FUInstance* instance,int address){
+int32_t VersatUnitRead(FUInstance* instance,int address){
    int32_t res = instance->memMapped[address];
 
    return res;
 }
+
+void SaveConfiguration(Accelerator* accel,int configuration){
+
+}
+
+void LoadConfiguration(Accelerator* accel,int configuration){
+
+}
+
+extern StoredConfigData config_0[];
+extern int configSize;
+
+// In versat space, simple extract delays from configuration data
+void CalculateDelay(Accelerator* accel){
+   for(int i = 0; i < configSize; i++){
+      StoredConfigData data = config_0[i];
+
+      FUInstance* inst = &accel->instances[data.index];
+
+      for(int ii = 0; ii < data.size; ii++){
+         inst->delays[ii] = data.config[ii];
+      }
+   }
+}
+
+
+
+
+

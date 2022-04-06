@@ -116,3 +116,58 @@ begin
 end
 `endif
 
+wire [31:0] ${ for i 0 nInstances for j 0 nOutputs[i] format_buffer "output_$(i)_$(j)" list_buffer ", " $};
+
+wire [31:0] ${ for i 0 unitsMapped format_buffer "rdata_$(i)" list_buffer ", " $};
+
+assign unitRdataFinal = (${ for i 0 unitsMapped format_buffer "unitRData[$(i)]" list_buffer " | " $});
+
+always @*
+begin
+   memoryMappedEnable = {${unitsMapped$}{1'b0}};
+   if(valid & memoryMappedAddr)
+   begin
+${ for i 0 unitsMapped format_buffer
+"      if(addr[$(memoryMappedUnitAddressRangeHigh):$(memoryMappedUnitAddressRangeLow)] == $(i))
+         memoryMappedEnable[$(i)] = 1'b1;
+"
+   print_buffer $} 
+   end
+end
+
+always @(posedge clk,posedge rst_int)
+   if(rst_int) begin
+      configdata <= {${configurationBits$}{1'b0}};
+   end else if(valid & we & !memoryMappedAddr) begin
+${ set counter 0
+   for i 0 configurationBitSize (
+      set i1 + i 1
+      set size configurationBitArray[i]
+      set size1 - size 1
+      format_buffer
+"      if(addr[$(configAddressRangeHigh):$(configAddressRangeLow)] == $(i1))
+         configdata[$(counter)+:$(size)] <= wdata[$(size1):0];
+"     
+      set counter + counter size
+   )
+   print_buffer $}
+   end
+
+always @*
+begin
+   stateRead = 32'h0;
+   if(valid & !memoryMappedAddr) begin
+${ set counter 0
+   for i 0 stateBitSize (
+      set i1 + i 1
+      set size stateBitArray[i]
+      format_buffer
+"      if(addr[$(stateAddressRangeHigh):$(stateAddressRangeLow)] == $(i1))
+         stateRead = statedata[$(counter)+:$(size)];
+"
+      set counter + counter size
+   )
+   print_buffer $}
+   end
+end
+
