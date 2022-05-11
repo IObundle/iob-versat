@@ -2,7 +2,7 @@
 `include "xversat.vh"
 
 module xdelay #(
-         parameter MAX_DELAY = 4,
+         parameter MAX_DELAY = 128,
          parameter DATA_W = 32
       )
     (
@@ -18,7 +18,7 @@ module xdelay #(
 
     output reg [DATA_W-1:0]       out0,
     
-    input [$clog2(MAX_DELAY)-1:0]   extra_delay
+    input [$clog2(MAX_DELAY)-1:0] extra_delay
     );
 
 assign done = 1'b1;
@@ -31,10 +31,11 @@ begin
    if(rst)
       out0 <= 0;
    else begin
-      out0 <= mem[0]
+      out0 <= mem[0];
 
-      for(i = 0; i < (MAX_DELAY - 1); i = i + 1)
+      for(i = 0; i < (MAX_DELAY - 1); i = i + 1) begin
          mem[i] <= mem[i + 1];
+      end
 
       if(extra_delay == 0)
          out0 <= in0;

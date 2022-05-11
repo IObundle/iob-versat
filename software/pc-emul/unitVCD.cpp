@@ -1,4 +1,4 @@
-#include "unitVCD.h"
+#include "unitVCD.hpp"
 
 static bool initTracing = false;
 static VerilatedVcdC* vcdFiles[128];
@@ -6,7 +6,7 @@ static int openedVcdFiles = 0;
 
 static void CloseOpenedVcdFiles(){
    //printf("Closing vcd files\n");
-   
+
    for(int i = 0; i < openedVcdFiles; i++){
       vcdFiles[i]->close();
    }
