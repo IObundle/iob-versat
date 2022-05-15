@@ -1,7 +1,7 @@
 `timescale 1ns / 1ps
 `include "xversat.vh"
 
-module xdelay #(
+module delay #(
          parameter MAX_DELAY = 128,
          parameter DATA_W = 32
       )
@@ -18,7 +18,7 @@ module xdelay #(
 
     output reg [DATA_W-1:0]       out0,
     
-    input [$clog2(MAX_DELAY)-1:0] extra_delay
+    input [$clog2(MAX_DELAY)-1:0] delay0
     );
 
 assign done = 1'b1;
@@ -37,10 +37,10 @@ begin
          mem[i] <= mem[i + 1];
       end
 
-      if(extra_delay == 0)
+      if(delay0 == 0)
          out0 <= in0;
       else
-         mem[extra_delay - 1] <= in0;
+         mem[delay0 - 1] <= in0;
    end
 end
 

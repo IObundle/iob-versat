@@ -47,8 +47,12 @@ struct SizedString{
    const char* str;
    size_t size;
 };
-
 SizedString MakeSizedString(const char* str, size_t size = 0);
+
+struct AllocInfo{
+   int size;
+   int allocated;
+};
 
 void FixedStringCpy(char* dest,SizedString src);
 
@@ -57,7 +61,6 @@ bool CompareString(SizedString str1,SizedString str2);
 bool CompareString(const char* str1,SizedString str2);
 bool CompareString(SizedString str1,const char* str2);
 bool CompareString(const char* str1,const char* str2);
-
 
 #define MAX_NAME_SIZE 64
 // Hierarchical naming scheme

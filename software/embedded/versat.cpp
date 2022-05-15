@@ -16,13 +16,6 @@ void InitVersat(Versat* versat,int base,int numberConfigurations){
 
    versat_base = base;
 
-   for(int i = 0; i < ARRAY_SIZE(instancesBuffer); i++){
-      instancesBuffer[i].memMapped += base / sizeof(int);
-      instancesBuffer[i].config += base / sizeof(int);
-      instancesBuffer[i].state += base / sizeof(int);
-      instancesBuffer[i].delay += base / sizeof(int);
-   }
-
    MEMSET(versat_base,0x0,2);
    MEMSET(versat_base,0x0,0);
 }
@@ -118,7 +111,7 @@ FUInstance* GetInstanceByName_(Accelerator* accel,int argc, ...){
    }
 
    if(res == nullptr){
-      printf("Didn't find: %s",buffer);
+      printf("Didn't find: %s\n",buffer);
    }
 
    va_end(args);
@@ -128,13 +121,13 @@ FUInstance* GetInstanceByName_(Accelerator* accel,int argc, ...){
 
 // In versat space, simple extract delays from configuration data
 void CalculateDelay(Versat* versat,Accelerator* accel){
-   #if 0
-   for(int i = 0; i < ARRAY_SIZE(); i++){
+   for(int i = 0; i < ARRAY_SIZE(instancesBuffer); i++){
       FUInstance* inst = &instancesBuffer[i];
 
-      inst->delay = 1;
+      printf("%d %x\n",i,(int)inst->delay);
+
+      inst->delay[0] = inst->baseDelay;
    }
-   #endif
 }
 
 // From this point on, empty functions so the code still compiles
@@ -175,13 +168,6 @@ FUDeclaration* RegisterDebug(Versat* versat){
 FUDeclaration* RegisterConst(Versat* versat){
    return nullptr;
 }
-FUDeclaration* RegisterUnitF(Versat* versat){
-   return nullptr;
-}
-
-FUDeclaration* RegisterUnitM(Versat* versat){
-   return nullptr;
-}
 
 void ConnectUnits(FUInstance* out,int outIndex,FUInstance* in,int inIndex){
 }
@@ -213,6 +199,13 @@ void DeallocatePages(void* ptr,int pages){
 
 SizedString MakeSizedString(const char* str, size_t size){
    SizedString s = {};
+
+   if(size == 0){
+      size = strlen(str);
+   }
+
+   s.str = str;
+   s.size = size;
    return s;
 }
 
@@ -243,7 +236,9 @@ void FlushStdout(){
 }
 
 FUInstance* CreateNamedFUInstance(Accelerator* accel,FUDeclaration* type,SizedString entityName,HierarchyName* hierarchyParent){
-   return nullptr;
+   FUInstance* res = GetInstanceByName_(accel,1,entityName.str);
+
+   return res;
 }
 
 void RegisterTypes(){

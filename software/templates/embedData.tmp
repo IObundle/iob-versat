@@ -1,24 +1,26 @@
 // Maybe better methods to embed data exist, but for now I just want a quick way of embedding data 
 
 static FUInstance instancesBuffer[] = {
-   #{set memMapped 0}
-   #{set config 0}
-   #{set state 0}
-   #{set delay 0}
-   #{join ","}
-   #{for inst instances}
+   #{join "," for inst instances}
    {
-   .name = {"@{inst.name | GetHierarchyName}",nullptr},
-   .memMapped = (volatile int*) @{memoryMappedBase * 4 + memMapped | Hex},
-   .config = (volatile int*) @{(config + 1) * 4 | Hex},
-   .state = (volatile int*) @{(state + 1) * 4 | Hex},
-   .delay = (volatile int*) @{(nConfigs + delay + 1) * 4 | Hex},
-   .baseDelay = @{inst.baseDelay}
+      .name = {"@{inst.name | GetHierarchyName}",nullptr},
+      #{if inst.memMapped + 0} 
+         .memMapped = (int*) @{inst.memMapped - memMapped + versatBase | Hex}, 
+      #{else} 
+         .memMapped = (int*) 0x0, 
+      #{end}
+      
+      #{if inst.config + 0} 
+         .config = (int*) @{inst.config - config + 4 + versatBase | Hex}, 
+      #{else} 
+         .config = (int*) 0x0, 
+      #{end}
+      
+      #{if inst.state + 0} 
+         .state = (int*) @{inst.state - state + 4 + versatBase | Hex} 
+      #{else} 
+         .state = (int*) 0x0
+      #{end}
    }
-   #{set memMapped memMapped + inst.declaration->memoryMapBytes}
-   #{set config config + inst.declaration->nConfigs}
-   #{set state state + inst.declaration->nStates}
-   #{set delay delay + inst.declaration->nDelays}
-   #{end}
    #{end}
 };

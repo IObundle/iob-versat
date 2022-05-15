@@ -58,6 +58,7 @@ void RegisterTypes();
 
 TypeInfo* GetTypeInfo(Type type);
 
+
 Type GetType(const char* typeName);
 Value AccessObject(Value object,SizedString memberName);
 Value AccessObjectPointer(Value object,SizedString memberName);

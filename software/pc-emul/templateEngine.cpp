@@ -255,7 +255,9 @@ static bool IsCommandBlockType(Command com){
       return false;
    } else if(CompareString(com.name,"inc")){
       return false;
-   } else{
+   } else if(CompareString(com.name,"else")){
+      return false;
+   } else {
       return true;
    }
 }
@@ -268,7 +270,7 @@ static Command ParseCommand(Tokenizer* tok){
    StoreToken(name,com.name);
 
    if(CompareToken(name,"join")){
-      com.nExpressions = 1;
+      com.nExpressions = 4;
    } else if(CompareToken(name,"for")){
       com.nExpressions = 2;
    } else if(CompareToken(name,"if")){
@@ -279,6 +281,8 @@ static Command ParseCommand(Tokenizer* tok){
       com.nExpressions = 2;
    } else if(CompareToken(name,"inc")){
       com.nExpressions = 1;
+   } else if(CompareToken(name,"else")){
+      com.nExpressions = 0;
    } else {
       Assert(false);
    }
@@ -323,6 +327,8 @@ static Block* Parse(Tokenizer* tok){
          block->textBlock = tok->Finish();
       }
       tok->AdvancePeek(block->textBlock);
+
+      //printf("_%.*s_",block->textBlock.size,block->textBlock.str);
    }
 
    return block;
@@ -380,7 +386,7 @@ static Value EvalExpression(Expression* expr){
                char* hier = GetHierarchyNameRepr(*name);
                int size = strlen(hier);
 
-               char* buffer = (char*) calloc(size,sizeof(char)); // TODO: will leak
+               char* buffer = (char*) calloc(size + 1,sizeof(char)); // TODO: will leak
                strcpy(buffer,hier);
 
                val.type = ValueType::STRING;
@@ -401,6 +407,18 @@ static Value EvalExpression(Expression* expr){
          Value op2 = EvalExpression(expr->expressions[1]);
 
          if(expr->op != '='){
+            if(op1.customType.pointers){
+               op1.type = ValueType::NUMBER;
+
+               int view = *((int*) op1.custom);
+               op1.number = view;
+            }
+            if(op2.customType.pointers){
+               op2.type = ValueType::NUMBER;
+               int view = *((int*) op2.custom);
+               op2.number = view;
+            }
+
             Assert(op1.type == ValueType::NUMBER && op2.type == ValueType::NUMBER);
          }
 
@@ -501,7 +519,11 @@ void PrintValue(FILE* file,Value val){
    if(val.type >= (int) ValueType::CUSTOM){
       TypeInfo* info = GetTypeInfo(val.customType);
 
-      DebugSignal();
+      if(val.customType.pointers){
+         fprintf(file,"%d",(int) val.custom); // Print all pointers as a number
+      } else {
+         DebugSignal();
+      }
 
       return;
    }
@@ -559,13 +581,73 @@ void Eval(Block* block){
 
          Assert(separator.type == ValueType::STRING);
 
-         envTable[MakeSizedString("join")] = MakeValue(true);
-         envTable[MakeSizedString("join-separator")] = separator;
-         envTable[MakeSizedString("join-seen-first")] = MakeValue(false);
+         bool seenFirst = false;
 
-         for(int i = 0; i < block->numberInnerBlocks; i++){
-            Eval(block->innerBlocks[i]);
+         // TODO: ALMOST EXACT COPY OF FOR, HACK FOR NOW, CHANGE LATER
+         Assert(com.expressions[2]->type == Expression::IDENTIFIER);
+         SizedString id = com.expressions[2]->id;
+
+         Value iterating = EvalExpression(com.expressions[3]);
+
+         if(iterating.type == ValueType::NUMBER){
+            for(Value i = MakeValue(0); i.number < iterating.number; i.number++){
+               envTable[id] = i;
+
+               if(seenFirst) {
+                  fprintf(output,"%.*s",separator.str.size,separator.str.str);
+               } else {
+                  seenFirst = true;
+               }
+
+               for(int ii = 0; ii < block->numberInnerBlocks; ii++){
+                  Eval(block->innerBlocks[ii]);
+               }
+               i = envTable[id];
+            }
+         } else if(iterating.type == ValueType::POOL){ // TODO: currently hardcoded to Pool<FUInstance> since it's only use case
+            for(FUInstance* inst : *iterating.pool){
+               Value val = {};
+
+               val.type = ValueType::CUSTOM;
+               val.customType = GetType("FUInstance");
+               val.custom = inst;
+
+               envTable[id] = val;
+
+               if(seenFirst) {
+                  fprintf(output,"%.*s",separator.str.size,separator.str.str);
+               } else {
+                  seenFirst = true;
+               }
+
+               for(int ii = 0; ii < block->numberInnerBlocks; ii++){
+                  Eval(block->innerBlocks[ii]);
+               }
+            }
+         } else if(iterating.type == ValueType::VECTOR){
+            for(FUInstance* inst : *iterating.vec){
+               Value val = {};
+
+               val.type = ValueType::CUSTOM;
+               val.customType = GetType("FUInstance");
+               val.custom = inst;
+
+               envTable[id] = val;
+
+               if(seenFirst) {
+                  fprintf(output,"%.*s",separator.str.size,separator.str.str);
+               } else {
+                  seenFirst = true;
+               }
+
+               for(int ii = 0; ii < block->numberInnerBlocks; ii++){
+                  Eval(block->innerBlocks[ii]);
+               }
+            }
+         } else {
+            Assert(false);
          }
+         // END OF COPY OF FOR
 
          envTable[MakeSizedString("join")] = MakeValue(false);
       } else if(CompareString(com.name,"for")){
@@ -618,7 +700,20 @@ void Eval(Block* block){
 
          if(val.boolean){
             for(int ii = 0; ii < block->numberInnerBlocks; ii++){
+               if(block->innerBlocks[ii]->type == Block::COMMAND && strcmp(block->innerBlocks[ii]->command.name,"else") == 0){
+                  break;
+               }
                Eval(block->innerBlocks[ii]);
+            }
+         } else {
+            int index;
+            for(index = 0; index < block->numberInnerBlocks; index++){
+               if(block->innerBlocks[index]->type == Block::COMMAND && strcmp(block->innerBlocks[index]->command.name,"else") == 0){
+                  for(int ii = index + 1; ii < block->numberInnerBlocks; ii++){
+                     Eval(block->innerBlocks[ii]);
+                  }
+                  break;
+               }
             }
          }
       } else if(CompareString(com.name,"set")){
@@ -640,21 +735,6 @@ void Eval(Block* block){
       }
    } else {
       // Print text
-
-      // Check if join region
-      Value val = envTable[MakeSizedString("join")];
-      if(val.boolean){
-         Value seenFirst = envTable[MakeSizedString("join-seen-first")];
-
-         if(!seenFirst.boolean){
-            envTable[MakeSizedString("join-seen-first")] = MakeValue(true);
-         } else {
-            Value separator = envTable[MakeSizedString("join-separator")];
-            fprintf(output,"%.*s",separator.str.size,separator.str.str);
-         }
-      }
-
-      // Normal printing
       Tokenizer tok(block->textBlock.str,block->textBlock.size,"[]()*.-/}",{"@{","->","=="});
 
       while(1){

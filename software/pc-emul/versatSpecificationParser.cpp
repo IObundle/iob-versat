@@ -300,6 +300,7 @@ FUDeclaration* ParseModule(Versat* versat,Tokenizer* tok){
       decl.nStates += d->nStates;
       decl.memoryMapBytes += AlignNextPower2(d->memoryMapBytes); // Order of entities affect size, need to look into it
       decl.nDelays += d->nDelays;
+      decl.extraDataSize += d->extraDataSize;
    }
 
    decl.configWires = (Wire*) calloc(decl.nConfigs,sizeof(Wire));

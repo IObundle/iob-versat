@@ -74,16 +74,21 @@ reg [@{unitsMapped - 1}:0] memoryMappedEnable;
 wire[@{unitsMapped - 1}:0] unitReady;
 wire [31:0] unitRData[@{unitsMapped - 1}:0];
 
-wire [31:0] #{join ", "}#{for i unitsMapped} rdata_@{i} #{end}#{end};
+wire [31:0] #{join ", " for i unitsMapped} rdata_@{i} #{end};
 
-assign unitRdataFinal = (#{join "|"}#{for i unitsMapped} unitRData[@{i}] #{end}#{end});
+assign unitRdataFinal = (#{join "|" for i unitsMapped} unitRData[@{i}] #{end});
 #{end}
 
 wire [@{numberUnits - 1}:0] unitDone;
 
 assign done = &unitDone;
 
-wire [31:0] #{join ", "}#{for inst instances}#{for j inst.tempData->numberOutputs} output_@{inst.id}_@{j}#{end}#{end}#{end};
+wire [31:0] #{join ", " for inst instances}
+   #{if inst.tempData->outputPortsUsed} 
+      #{join ", " for j inst.tempData->outputPortsUsed} output_@{inst.id}_@{j} #{end}
+   #{else}
+      unused_@{inst.id} #{end}
+#{end};
 
 // Memory mapped
 #{if unitsMapped}
@@ -123,11 +128,11 @@ end
       #{end}
       #{end}
 
-      #{for i inst.tempData->numberOutputs}
+      #{for i inst.tempData->outputPortsUsed}
          .out@{i}(output_@{inst.id}_@{i}),
       #{end} 
 
-      #{for i inst.tempData->numberInputs}
+      #{for i inst.tempData->inputPortsUsed}
          .in@{i}(output_@{inst.tempData->inputs[i].inst.inst->id}_@{inst.tempData->inputs[i].inst.port}),
       #{end}
 
@@ -151,7 +156,7 @@ end
       #{if decl->memoryMapBytes}
       .valid(memoryMappedEnable[@{memoryMappedIndex}]),
       .wstrb(wstrb),
-      .addr(addr[@{memoryMappedUnitAddressRangeHigh - 1}:0]),
+      .addr(addr[@{memoryMappedUnitAddressRange - 1}:0]),
       .rdata(unitRData[@{memoryMappedIndex}]),
       .ready(unitReady[@{memoryMappedIndex}]),
       .wdata(wdata),

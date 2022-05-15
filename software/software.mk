@@ -7,7 +7,7 @@ INCLUDE+=-I$(VERSAT_SW_DIR)
 VERSAT_HDR += $(wildcard $(VERSAT_SW_DIR)/*.hpp)
 
 #Units to verilate
-VERILATE_UNIT = xadd xreg xmem vread vwrite
+VERILATE_UNIT = xadd xreg xmem vread vwrite pipeline_register
 
 UNIT_HDR+=$(foreach unit,$(VERILATE_UNIT),./build/V$(unit).h)
 

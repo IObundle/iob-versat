@@ -25,7 +25,8 @@ enum DelayType {
    DELAY_TYPE_BASE               = 0x0,
    DELAY_TYPE_SINK_DELAY         = 0x1,
    DELAY_TYPE_SOURCE_DELAY       = 0x2,
-   DELAY_TYPE_IMPLEMENTS_DONE    = 0x4
+   DELAY_TYPE_COMPUTE_DELAY      = 0x4,
+   DELAY_TYPE_IMPLEMENTS_DONE    = 0x8
 };
 
 #define CHECK_DELAY(inst,T) ((inst->declaration->delayType & T) == T)
@@ -62,7 +63,7 @@ struct FUDeclaration{
    FUFunction updateFunction;
    MemoryAccessFunction memAccessFunction;
 
-   enum {SINGLE,COMPOSITE,SPECIAL} type;
+   enum {SINGLE = 0x0,COMPOSITE = 0x1,SPECIAL = 0x2} type;
 
    enum DelayType delayType;
 };
@@ -73,10 +74,10 @@ struct FUInstance{
 	HierarchyName name;
 
    // Embedded memory
-   volatile int* memMapped;
-   volatile int* config;
-   volatile int* state;
-   volatile int* delay;
+   int* memMapped;
+   int* config;
+   int* state;
+   int* delay;
 
    int baseDelay;
 
@@ -107,6 +108,8 @@ struct ConnectionInfo{
 struct GraphComputedData{
    int numberInputs;
    int numberOutputs;
+   int inputPortsUsed;
+   int outputPortsUsed;
    ConnectionInfo* inputs; // Delay not used
    ConnectionInfo* outputs;
    enum {TAG_UNCONNECTED,TAG_COMPUTE,TAG_SOURCE,TAG_SINK,TAG_SOURCE_AND_SINK} nodeType;
@@ -117,6 +120,7 @@ struct Versat{
 	Pool<FUDeclaration> declarations;
 	Pool<Accelerator> accelerators;
 
+	int base;
 	int numberConfigurations;
 
 	// Declaration for units that versat might instantiate itself
@@ -148,6 +152,15 @@ struct Accelerator{
 
    Pool<FUInstance*> inputInstancePointers;
    FUInstance* outputInstance;
+
+   int32_t* config;
+   int32_t* state;
+   int32_t* memMapped;
+
+   // TODO: Maybe add config, state and memMapped to these structs
+   AllocInfo configAlloc;
+   AllocInfo stateAlloc;
+   AllocInfo memMappedAlloc;
 
 	void* configuration;
 	int configurationSize;

@@ -15,6 +15,7 @@ FUDeclaration* RegisterConst(Versat* versat);
 FUDeclaration* RegisterMem(Versat* versat,int addr_w);
 FUDeclaration* RegisterVRead(Versat* versat);
 FUDeclaration* RegisterVWrite(Versat* versat);
+FUDeclaration* RegisterPipelineRegister(Versat* versat);
 
 FUDeclaration* RegisterDebug(Versat* versat);
 

@@ -57,12 +57,12 @@ begin
          running <= 1;
       end 
 
-      if(running) begin
+      if(running & !done) begin
          if(|delay) begin
             delay <= delay - 1;
          end
 
-         if(!done && delay == 0) begin
+         if(delay == 0) begin
             out0 <= in0;
             done <= 1;
          end

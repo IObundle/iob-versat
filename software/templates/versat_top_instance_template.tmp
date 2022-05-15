@@ -104,12 +104,17 @@ assign wor_ready = (|unitReady);
 assign done = &unitDone;
 
 #{if versatValues.numberConnections}
-wire [31:0] #{join ", "}#{for inst instances}#{for j inst.tempData->numberOutputs} output_@{inst.id}_@{j}#{end}#{end}#{end};
+wire [31:0] #{join ", " for inst instances}
+   #{if inst.tempData->outputPortsUsed} 
+      #{join ", " for j inst.tempData->outputPortsUsed} output_@{inst.id}_@{j} #{end}
+   #{else}
+      unused_@{inst.id} #{end}
+#{end};
 #{end}
 
 #{if unitsMapped}
 wire [31:0] unitRData[@{unitsMapped - 1}:0];
-assign unitRdataFinal = (#{join "|"}#{for i unitsMapped} unitRData[@{i}] #{end}#{end});
+assign unitRdataFinal = (#{join "|" for i unitsMapped} unitRData[@{i}] #{end});
 #{end}
 
 // Memory mapped
@@ -140,7 +145,7 @@ begin
       #{for i decl->nConfigs}
       #{set wire decl->configWires[i]}
       if(addr[@{configAddressRangeHigh}:@{configAddressRangeLow}] == @{addr + 1})
-         configdata[@{counter}+:@{wire.bitsize}] <= wdata[@{wire.bitsize - 1}:0];     
+         configdata[@{counter}+:@{wire.bitsize}] <= wdata[@{wire.bitsize - 1}:0]; // @{wire.name}
       #{inc addr}
       #{set counter counter + wire.bitsize}
       #{end}
@@ -183,17 +188,21 @@ end
 #{for inst instances}
 #{set decl inst.declaration}
    @{decl->name.str} @{decl->name.str}_@{counter} (
-      #{for i inst.tempData->numberOutputs}
+      #{for i inst.tempData->outputPortsUsed}
          .out@{i}(output_@{inst.id}_@{i}),
       #{end} 
 
-      #{for i inst.tempData->numberInputs}
+      #{for i inst.tempData->inputPortsUsed}
          .in@{i}(output_@{inst.tempData->inputs[i].inst.inst->id}_@{inst.tempData->inputs[i].inst.port}),
       #{end}
 
       #{for i decl->nConfigs}
       #{set wire decl->configWires[i]}
+      #{if decl->type}
          .@{wire.name}_@{i}(configdata[@{configDataIndex}+:@{wire.bitsize}]),
+      #{else}
+         .@{wire.name}(configdata[@{configDataIndex}+:@{wire.bitsize}]),
+      #{end}
       #{set configDataIndex configDataIndex + wire.bitsize}
       #{end}
 
@@ -204,7 +213,11 @@ end
 
       #{for i decl->nStates}
       #{set wire decl->stateWires[i]}
+      #{if decl->type}
          .@{wire.name}_@{i}(statedata[@{stateDataIndex}+:@{wire.bitsize}]),
+      #{else}
+         .@{wire.name}(statedata[@{stateDataIndex}+:@{wire.bitsize}]),
+      #{end}
       #{set stateDataIndex stateDataIndex + wire.bitsize}
       #{end}      
 

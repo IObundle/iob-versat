@@ -14,6 +14,7 @@
 #include "Vxmem.h"
 #include "Vvread.h"
 #include "Vvwrite.h"
+#include "Vpipeline_register.h"
 
 #define INSTANTIATE_ARRAY
 #include "unitData.hpp"
@@ -22,25 +23,25 @@
 #define ARRAY_SIZE(array) sizeof(array) / sizeof(array[0])
 
 #define INIT(unit) \
-   self->run = 0; \
-   self->clk = 0; \
-   self->rst = 0;
+   unit->run = 0; \
+   unit->clk = 0; \
+   unit->rst = 0;
 
 #define UPDATE(unit) \
-   self->clk = 0; \
-   self->eval(); \
-   self->clk = 1; \
-   self->eval();
+   unit->clk = 0; \
+   unit->eval(); \
+   unit->clk = 1; \
+   unit->eval();
 
 #define RESET(unit) \
-   self->rst = 1; \
+   unit->rst = 1; \
    UPDATE(unit); \
-   self->rst = 0;
+   unit->rst = 0;
 
 #define START_RUN(unit) \
-   self->run = 1; \
+   unit->run = 1; \
    UPDATE(unit); \
-   self->run = 0;
+   unit->run = 0;
 
 #define VCD_UPDATE(unit) \
    unit->clk = 0; \
@@ -67,6 +68,11 @@
 
 #define DEBUG_PRINT(unit) \
    printf("%d %d %02x %08x %08x\n",unit->valid,unit->ready,unit->wstrb,unit->wdata,unit->rdata);
+
+static int32_t* DefaultInitFunction(FUInstance* inst){
+   inst->done = true;
+   return nullptr;
+}
 
 template<typename T>
 static int32_t MemoryAccess(FUInstance* inst,int address,int value,int write){
@@ -124,6 +130,8 @@ static int32_t* AddInitializeFunction(FUInstance* inst){
 
    RESET(self);
 
+   inst->done = true;
+
    return NULL;
 }
 
@@ -165,14 +173,27 @@ FUDeclaration* RegisterAdd(Versat* versat){
    return RegisterFU(versat,decl);
 }
 
+struct RegData{
+   Vxreg unit;
+   VCDData vcd;
+};
+
 static int32_t* RegInitializeFunction(FUInstance* inst){
-   Vxreg* self = new (inst->extraData) Vxreg();
+   static int regCounter;
+   char buffer[256];
+   RegData* data = new (inst->extraData) RegData();
+   PREAMBLE(Vxreg);
+
+   self->trace(&data->vcd.vcd,99);
+
+   sprintf(buffer,"./trace_out/reg%d.vcd",regCounter++);
+   data->vcd.open(buffer);
 
    INIT(self);
 
    self->in0 = 0;
 
-   RESET(self);
+   VCD_RESET(self);
 
    return NULL;
 }
@@ -180,12 +201,13 @@ static int32_t* RegInitializeFunction(FUInstance* inst){
 static int32_t* RegStartFunction(FUInstance* inst){
    static int32_t out;
 
-   Vxreg* self = (Vxreg*) inst->extraData;
+   RegData* data = (RegData*) inst->extraData;
+   PREAMBLE(Vxreg);
 
    // Update config
    self->delay0 = inst->delay[0];
 
-   START_RUN(self);
+   VCD_START_RUN(self);
 
    out = self->out0;
 
@@ -194,15 +216,18 @@ static int32_t* RegStartFunction(FUInstance* inst){
 
 static int32_t* RegUpdateFunction(FUInstance* inst){
    static int32_t out;
-   Vxreg* self = (Vxreg*) inst->extraData;
+   RegData* data = (RegData*) inst->extraData;
    RegState* state = (RegState*) inst->state;
+
+   PREAMBLE(Vxreg);
 
    self->in0 = GetInputValue(inst,0);
 
-   UPDATE(self);
+   VCD_UPDATE(self);
 
    // Update state
    state->currentValue = self->currentValue;
+   inst->done = self->done;
 
    // Update out
    out = self->out0;
@@ -216,17 +241,17 @@ FUDeclaration* RegisterReg(Versat* versat){
    strcpy(decl.name.str,"xreg");
    decl.nInputs = 1;
    decl.nOutputs = 1;
-   decl.latency = 1;
    decl.nStates = ARRAY_SIZE(regStateWires);
    decl.stateWires = regStateWires;
    decl.memoryMapBytes = 4;
-   decl.extraDataSize = sizeof(Vxreg);
+   decl.extraDataSize = sizeof(RegData);
    decl.initializeFunction = RegInitializeFunction;
    decl.startFunction = RegStartFunction;
    decl.updateFunction = RegUpdateFunction;
    decl.memAccessFunction = MemoryAccess<Vxreg>;
    decl.delayType = DelayType::DELAY_TYPE_SINK_DELAY;
    decl.nDelays = 1;
+   decl.latency = 0; // Takes zero cycles to output data (already starts with data at the beginning of the run)
 
    return RegisterFU(versat,decl);
 }
@@ -236,6 +261,8 @@ static int32_t* ConstStartFunction(FUInstance* inst){
 
    // Update config
    out = *inst->config;
+
+   inst->done = true;
 
    return &out;
 }
@@ -604,3 +631,77 @@ FUDeclaration* RegisterDebug(Versat* versat){
 
    return RegisterFU(versat,decl);
 }
+
+struct PipeRegData{
+   Vpipeline_register unit;
+   VCDData vcd;
+};
+
+static int32_t* PipelineRegisterInitializeFunction(FUInstance* inst){
+   static int pipeRegCounter = 0;
+   char buffer[256];
+   PipeRegData* data = new (inst->extraData) PipeRegData();
+   PREAMBLE(Vpipeline_register);
+
+   self->trace(&data->vcd.vcd,99);
+
+   sprintf(buffer,"./trace_out/pipeReg%d.vcd",pipeRegCounter++);
+   data->vcd.open(buffer);
+
+   INIT(self);
+
+   self->in0 = 0;
+
+   VCD_RESET(self);
+
+   return NULL;
+}
+
+static int32_t* PipelineRegisterStartFunction(FUInstance* inst){
+   static int32_t out;
+   PipeRegData* data = (PipeRegData*) inst->extraData;
+   PREAMBLE(Vpipeline_register);
+
+   VCD_START_RUN(self);
+
+   out = self->out0;
+   inst->done = true;
+
+   return &out;
+}
+
+static int32_t* PipelineRegisterUpdateFunction(FUInstance* inst){
+   static int32_t out;
+   PipeRegData* data = (PipeRegData*) inst->extraData;
+   PREAMBLE(Vpipeline_register);
+
+   self->in0 = GetInputValue(inst,0);
+
+   VCD_UPDATE(self);
+
+   // Update out
+   out = self->out0;
+
+   inst->done = true;
+
+   return &out;
+}
+
+FUDeclaration* RegisterPipelineRegister(Versat* versat){
+   FUDeclaration decl = {};
+
+   strcpy(decl.name.str,"pipeline_register");
+   decl.nInputs = 1;
+   decl.nOutputs = 1;
+   decl.latency = 1;
+   decl.extraDataSize = sizeof(PipeRegData);
+   decl.initializeFunction = PipelineRegisterInitializeFunction;
+   decl.startFunction = PipelineRegisterStartFunction;
+   decl.updateFunction = PipelineRegisterUpdateFunction;
+   decl.type = FUDeclaration::SINGLE;
+
+   return RegisterFU(versat,decl);
+}
+
+
+
