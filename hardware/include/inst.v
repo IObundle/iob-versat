@@ -4,6 +4,7 @@
 
    `include "versat_defs.vh"
 
+
    iob_versat versat
       ( 
       // AXI4 master interface
@@ -65,10 +66,10 @@
       );
 
    `ifndef IO 
-      assign m_axi_awvalid = 1'b0;
-      assign m_axi_wvalid = 1'b0;
-      assign m_axi_bready = 1'b0;
-      assign m_axi_arvalid = 1'b0;
-      assign m_axi_rready = 1'b0;
+      assign m_axi_awvalid[1*1+:1] = 1'b0;
+      assign m_axi_wvalid[1*1+:1] = 1'b0;
+      assign m_axi_bready[1*1+:1] = 1'b0;
+      assign m_axi_arvalid[1*1+:1] = 1'b0;
+      assign m_axi_rready[1*1+:1] = 1'b0;
    `endif
 

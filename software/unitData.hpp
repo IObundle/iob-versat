@@ -112,8 +112,9 @@ ENTRY(shift2B,10)
 LAST_ENTRY(incr2B,10)
 END(VWriteConfig)
 
-
-
+START(ConstConfig_t,constConfigWires)
+LAST_ENTRY(constant,32)
+END(ConstConfig)
 
 
 

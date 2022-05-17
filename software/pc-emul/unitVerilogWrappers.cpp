@@ -6,41 +6,42 @@
 #include "math.h"
 #include "string.h"
 
-#include "unitVCD.h"
-#include "unitVerilogWrappers.h"
+#include "unitVCD.hpp"
+#include "unitVerilogWrappers.hpp"
 
 #include "Vxadd.h"
 #include "Vxreg.h"
 #include "Vxmem.h"
 #include "Vvread.h"
 #include "Vvwrite.h"
+#include "Vpipeline_register.h"
 
 #define INSTANTIATE_ARRAY
-#include "unitData.h"
+#include "unitData.hpp"
 #undef INSTANTIATE_ARRAY
 
 #define ARRAY_SIZE(array) sizeof(array) / sizeof(array[0])
 
 #define INIT(unit) \
-   self->run = 0; \
-   self->clk = 0; \
-   self->rst = 0;
+   unit->run = 0; \
+   unit->clk = 0; \
+   unit->rst = 0;
 
 #define UPDATE(unit) \
-   self->clk = 0; \
-   self->eval(); \
-   self->clk = 1; \
-   self->eval();
+   unit->clk = 0; \
+   unit->eval(); \
+   unit->clk = 1; \
+   unit->eval();
 
 #define RESET(unit) \
-   self->rst = 1; \
+   unit->rst = 1; \
    UPDATE(unit); \
-   self->rst = 0;
+   unit->rst = 0;
 
 #define START_RUN(unit) \
-   self->run = 1; \
+   unit->run = 1; \
    UPDATE(unit); \
-   self->run = 0;
+   unit->run = 0;
 
 #define VCD_UPDATE(unit) \
    unit->clk = 0; \
@@ -67,6 +68,11 @@
 
 #define DEBUG_PRINT(unit) \
    printf("%d %d %02x %08x %08x\n",unit->valid,unit->ready,unit->wstrb,unit->wdata,unit->rdata);
+
+static int32_t* DefaultInitFunction(FUInstance* inst){
+   inst->done = true;
+   return nullptr;
+}
 
 template<typename T>
 static int32_t MemoryAccess(FUInstance* inst,int address,int value,int write){
@@ -124,6 +130,8 @@ static int32_t* AddInitializeFunction(FUInstance* inst){
 
    RESET(self);
 
+   inst->done = true;
+
    return NULL;
 }
 
@@ -150,7 +158,7 @@ static int32_t* AddUpdateFunction(FUInstance* inst){
    return &out;
 }
 
-EXPORT FUDeclaration* RegisterAdd(Versat* versat){
+FUDeclaration* RegisterAdd(Versat* versat){
    FUDeclaration decl = {};
 
    strcpy(decl.name.str,"xadd");
@@ -165,41 +173,60 @@ EXPORT FUDeclaration* RegisterAdd(Versat* versat){
    return RegisterFU(versat,decl);
 }
 
+struct RegData{
+   Vxreg unit;
+   VCDData vcd;
+};
+
 static int32_t* RegInitializeFunction(FUInstance* inst){
-   Vxreg* self = new (inst->extraData) Vxreg();
+   static int regCounter;
+   char buffer[256];
+   RegData* data = new (inst->extraData) RegData();
+   PREAMBLE(Vxreg);
+
+   self->trace(&data->vcd.vcd,99);
+
+   sprintf(buffer,"./trace_out/reg%d.vcd",regCounter++);
+   data->vcd.open(buffer);
 
    INIT(self);
 
    self->in0 = 0;
 
-   RESET(self);
+   VCD_RESET(self);
 
    return NULL;
 }
 
 static int32_t* RegStartFunction(FUInstance* inst){
-   Vxreg* self = (Vxreg*) inst->extraData;
+   static int32_t out;
+
+   RegData* data = (RegData*) inst->extraData;
+   PREAMBLE(Vxreg);
 
    // Update config
-   self->delay0 = inst->delay;
+   self->delay0 = inst->delay[0];
 
-   START_RUN(self);
+   VCD_START_RUN(self);
 
-   return NULL;
+   out = self->out0;
+
+   return &out;
 }
 
 static int32_t* RegUpdateFunction(FUInstance* inst){
    static int32_t out;
-   Vxreg* self = (Vxreg*) inst->extraData;
+   RegData* data = (RegData*) inst->extraData;
    RegState* state = (RegState*) inst->state;
+
+   PREAMBLE(Vxreg);
 
    self->in0 = GetInputValue(inst,0);
 
-   UPDATE(self);
+   VCD_UPDATE(self);
 
    // Update state
    state->currentValue = self->currentValue;
-
    inst->done = self->done;
 
    // Update out
@@ -208,7 +235,7 @@ static int32_t* RegUpdateFunction(FUInstance* inst){
    return &out;
 }
 
-EXPORT FUDeclaration* RegisterReg(Versat* versat){
+FUDeclaration* RegisterReg(Versat* versat){
    FUDeclaration decl = {};
 
    strcpy(decl.name.str,"xreg");
@@ -217,13 +244,46 @@ EXPORT FUDeclaration* RegisterReg(Versat* versat){
    decl.nStates = ARRAY_SIZE(regStateWires);
    decl.stateWires = regStateWires;
    decl.memoryMapBytes = 4;
-   decl.extraDataSize = sizeof(Vxreg);
+   decl.extraDataSize = sizeof(RegData);
    decl.initializeFunction = RegInitializeFunction;
    decl.startFunction = RegStartFunction;
    decl.updateFunction = RegUpdateFunction;
    decl.memAccessFunction = MemoryAccess<Vxreg>;
-   decl.delayType = (enum DelayType)(DELAY_TYPE_SOURCE | DELAY_TYPE_SINK | DELAY_TYPE_IMPLEMENTS_DELAY | DELAY_TYPE_IMPLEMENTS_DONE);
-   decl.latency = 0; // Reg data is valid immediatly
+   decl.delayType = DelayType::DELAY_TYPE_SINK_DELAY;
+   decl.nDelays = 1;
+   decl.latency = 0; // Takes zero cycles to output data (already starts with data at the beginning of the run)
+
+   return RegisterFU(versat,decl);
+}
+
+static int32_t* ConstStartFunction(FUInstance* inst){
+   static int32_t out;
+
+   // Update config
+   out = *inst->config;
+
+   inst->done = true;
+
+   return &out;
+}
+
+static int32_t* ConstUpdateFunction(FUInstance* inst){
+   static int32_t out;
+
+   out = *inst->config;
+
+   return &out;
+}
+
+FUDeclaration* RegisterConst(Versat* versat){
+   FUDeclaration decl = {};
+
+   strcpy(decl.name.str,"xconst");
+   decl.nOutputs = 1;
+   decl.nConfigs = ARRAY_SIZE(constConfigWires);
+   decl.configWires = constConfigWires;
+   decl.startFunction = ConstStartFunction;
+   decl.updateFunction = ConstUpdateFunction;
 
    return RegisterFU(versat,decl);
 }
@@ -246,8 +306,8 @@ static int32_t* MemStartFunction(FUInstance* inst){
    MemConfig* config = (MemConfig*) inst->config;
 
    // Update config
-   self->delay0 = inst->delay;
-   self->delay1 = inst->delay;
+   self->delay0 = inst->delay[0];
+   self->delay1 = inst->delay[0];
 
    self->iterA = config->iterA;
    self->perA = config->perA;
@@ -300,7 +360,7 @@ static int32_t* MemUpdateFunction(FUInstance* inst){
    return out;
 }
 
-EXPORT FUDeclaration* RegisterMem(Versat* versat,int addr_w){
+FUDeclaration* RegisterMem(Versat* versat,int addr_w){
    #if 0
    char* buffer = (char*) malloc(128 * sizeof(char)); // For now this memory is leaked.
    Wire* instanceWires = (Wire*) malloc(sizeof(Wire) * ARRAY_SIZE(memConfigWires)); // For now this memory is leaked.
@@ -332,8 +392,9 @@ EXPORT FUDeclaration* RegisterMem(Versat* versat,int addr_w){
    decl.startFunction = MemStartFunction;
    decl.updateFunction = MemUpdateFunction;
    decl.memAccessFunction = MemoryAccess<Vxmem>;
-   decl.delayType = (enum DelayType)(DELAY_TYPE_SOURCE | DELAY_TYPE_SINK | DELAY_TYPE_IMPLEMENTS_DELAY | DELAY_TYPE_SOURCE_DELAY | DELAY_TYPE_IMPLEMENTS_DONE);
+   decl.delayType = (enum DelayType)(DELAY_TYPE_SOURCE_DELAY | DELAY_TYPE_IMPLEMENTS_DONE);
    decl.latency = 3;
+   decl.nDelays = 1;
 
    return RegisterFU(versat,decl);
 }
@@ -377,7 +438,7 @@ static int32_t* VReadStartFunction(FUInstance* inst){
    PREAMBLE(Vvread);
 
    // Update config
-   self->delay0 = inst->delay;
+   self->delay0 = inst->delay[0];
 
    self->ext_addr = config->ext_addr;
    self->int_addr = config->int_addr;
@@ -435,7 +496,7 @@ static int32_t* VReadUpdateFunction(FUInstance* inst){
    return &out;
 }
 
-EXPORT FUDeclaration* RegisterVRead(Versat* versat){
+FUDeclaration* RegisterVRead(Versat* versat){
    FUDeclaration decl = {};
 
    strcpy(decl.name.str,"vread");
@@ -448,8 +509,9 @@ EXPORT FUDeclaration* RegisterVRead(Versat* versat){
    decl.initializeFunction = VReadInitializeFunction;
    decl.startFunction = VReadStartFunction;
    decl.updateFunction = VReadUpdateFunction;
-   decl.delayType = (enum DelayType)(DELAY_TYPE_SOURCE | DELAY_TYPE_IMPLEMENTS_DELAY | DELAY_TYPE_SOURCE_DELAY | DELAY_TYPE_IMPLEMENTS_DONE);
+   decl.delayType = (enum DelayType)(DELAY_TYPE_SOURCE_DELAY | DELAY_TYPE_IMPLEMENTS_DONE);
    decl.latency = 1;
+   decl.nDelays = 1;
 
    return RegisterFU(versat,decl);
 }
@@ -469,7 +531,7 @@ static int32_t* VWriteStartFunction(FUInstance* inst){
    VWriteConfig* config = (VWriteConfig*) inst->config;
 
    // Update config
-   self->delay0 = inst->delay;
+   self->delay0 = inst->delay[0];
 
    self->ext_addr = config->ext_addr;
    self->int_addr = config->int_addr;
@@ -515,7 +577,7 @@ static int32_t* VWriteUpdateFunction(FUInstance* inst){
    return &out;
 }
 
-EXPORT FUDeclaration* RegisterVWrite(Versat* versat){
+FUDeclaration* RegisterVWrite(Versat* versat){
    FUDeclaration decl = {};
 
    strcpy(decl.name.str,"vwrite");
@@ -528,53 +590,12 @@ EXPORT FUDeclaration* RegisterVWrite(Versat* versat){
    decl.initializeFunction = VWriteInitializeFunction;
    decl.startFunction = VWriteStartFunction;
    decl.updateFunction = VWriteUpdateFunction;
-   decl.delayType = (enum DelayType)(DELAY_TYPE_SINK | DELAY_TYPE_IMPLEMENTS_DELAY | DELAY_TYPE_IMPLEMENTS_DONE);
+   decl.delayType = (enum DelayType)(DELAY_TYPE_SINK_DELAY | DELAY_TYPE_IMPLEMENTS_DONE);
    decl.latency = 0; // Does not matter, does not output anything
+   decl.nDelays = 1;
 
    return RegisterFU(versat,decl);
 }
-
-static int32_t* DelayUpdateFunction(FUInstance* inst){
-   static int32_t out;
-
-   out = GetInputValue(inst,0);
-
-   return &out;
-}
-
-EXPORT FUDeclaration* RegisterDelay(Versat* versat){
-   FUDeclaration decl = {};
-
-   strcpy(decl.name.str,"delay");
-   decl.nInputs = 1;
-   decl.nOutputs = 1;
-   decl.latency = 1;
-   decl.updateFunction = DelayUpdateFunction;
-   decl.type = FUDeclaration::SINGLE;
-
-   return RegisterFU(versat,decl);
-}
-
-EXPORT FUDeclaration* RegisterCircuitInput(Versat* versat){
-   FUDeclaration decl = {};
-
-   strcpy(decl.name.str,"circuitInput");
-   decl.nOutputs = 99;
-   decl.type = FUDeclaration::SPECIAL;
-
-   return RegisterFU(versat,decl);
-}
-
-EXPORT FUDeclaration* RegisterCircuitOutput(Versat* versat){
-   FUDeclaration decl = {};
-
-   strcpy(decl.name.str,"circuitOutput");
-   decl.nInputs = 99;
-   decl.type = FUDeclaration::SPECIAL;
-
-   return RegisterFU(versat,decl);
-}
-
 
 static int32_t* DebugStartFunction(FUInstance* inst){
    int* extra = (int*) inst->extraData;
@@ -596,15 +617,91 @@ static int32_t* DebugUpdateFunction(FUInstance* inst){
    return NULL;
 }
 
-EXPORT FUDeclaration* RegisterDebug(Versat* versat){
+FUDeclaration* RegisterDebug(Versat* versat){
    FUDeclaration decl = {};
 
-   decl.nInputs = 1;
+   strcpy(decl.name.str,"debug");
+   decl.nInputs = 99;
    decl.nOutputs = 0;
    decl.extraDataSize = sizeof(int);
    decl.startFunction = DebugStartFunction;
    decl.updateFunction = DebugUpdateFunction;
-   decl.delayType = DELAY_TYPE_SINK;
+   decl.delayType = DELAY_TYPE_SINK_DELAY;
+   decl.nDelays = 1;
 
    return RegisterFU(versat,decl);
 }
+
+struct PipeRegData{
+   Vpipeline_register unit;
+   VCDData vcd;
+};
+
+static int32_t* PipelineRegisterInitializeFunction(FUInstance* inst){
+   static int pipeRegCounter = 0;
+   char buffer[256];
+   PipeRegData* data = new (inst->extraData) PipeRegData();
+   PREAMBLE(Vpipeline_register);
+
+   self->trace(&data->vcd.vcd,99);
+
+   sprintf(buffer,"./trace_out/pipeReg%d.vcd",pipeRegCounter++);
+   data->vcd.open(buffer);
+
+   INIT(self);
+
+   self->in0 = 0;
+
+   VCD_RESET(self);
+
+   return NULL;
+}
+
+static int32_t* PipelineRegisterStartFunction(FUInstance* inst){
+   static int32_t out;
+   PipeRegData* data = (PipeRegData*) inst->extraData;
+   PREAMBLE(Vpipeline_register);
+
+   VCD_START_RUN(self);
+
+   out = self->out0;
+   inst->done = true;
+
+   return &out;
+}
+
+static int32_t* PipelineRegisterUpdateFunction(FUInstance* inst){
+   static int32_t out;
+   PipeRegData* data = (PipeRegData*) inst->extraData;
+   PREAMBLE(Vpipeline_register);
+
+   self->in0 = GetInputValue(inst,0);
+
+   VCD_UPDATE(self);
+
+   // Update out
+   out = self->out0;
+
+   inst->done = true;
+
+   return &out;
+}
+
+FUDeclaration* RegisterPipelineRegister(Versat* versat){
+   FUDeclaration decl = {};
+
+   strcpy(decl.name.str,"pipeline_register");
+   decl.nInputs = 1;
+   decl.nOutputs = 1;
+   decl.latency = 1;
+   decl.extraDataSize = sizeof(PipeRegData);
+   decl.initializeFunction = PipelineRegisterInitializeFunction;
+   decl.startFunction = PipelineRegisterStartFunction;
+   decl.updateFunction = PipelineRegisterUpdateFunction;
+   decl.type = FUDeclaration::SINGLE;
+
+   return RegisterFU(versat,decl);
+}
+
+
+
