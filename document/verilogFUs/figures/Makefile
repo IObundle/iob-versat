@@ -14,7 +14,7 @@ pngs: $(PNGS)
 
 
 %.png: %.svg
-	@inkscape $< --export-png=$@ --export-dpi=250
+	@inkscape $< --export-png=$@ --export-dpi=250 --export-background=\#ffffff
 
 clean:
 	@rm -rf *.svg
