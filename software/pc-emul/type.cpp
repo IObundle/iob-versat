@@ -264,6 +264,11 @@ Value AccessObjectPointer(Value object,SizedString memberName){
    if(type.baseTypeId < basicTypes){
       if(type.pointers == 0){
          Value val = CollapseCustomIntoValue(newObject,type);
+
+         if(val.type == ValueType::CHAR && member.isArray){
+            val.type = ValueType::STRING;
+            val.str = MakeSizedString((char*) newObject);
+         }
          return val;
       }
    }

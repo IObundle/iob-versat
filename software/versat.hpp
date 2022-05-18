@@ -16,11 +16,6 @@ struct FUInstance;
 typedef int32_t* (*FUFunction)(FUInstance*);
 typedef int32_t (*MemoryAccessFunction)(FUInstance* instance, int address, int value,int write);
 
-struct PortInstance{
-   FUInstance* inst;
-   int port;
-};
-
 enum DelayType {
    DELAY_TYPE_BASE               = 0x0,
    DELAY_TYPE_SINK_DELAY         = 0x1,
@@ -42,9 +37,12 @@ struct FUDeclaration{
    int nInputs;
    int nOutputs;
 
+   int* inputShifts;
+   int* outputDelays;
+
    Accelerator* circuit; // Composite declaration
 
-   int latency; // Assume, for now, every port has the same latency
+   int latency_; // Assume, for now, every port has the same latency
 
    // Config and state interface
    int nConfigs;
@@ -55,7 +53,7 @@ struct FUDeclaration{
 
    int nDelays; // Code only handles 1 for now, hardware needs this value for correct generation
 
-   int memoryMapBytes;
+   int memoryMapDWords;
    int extraDataSize;
    bool doesIO;
    FUFunction initializeFunction;
@@ -68,7 +66,33 @@ struct FUDeclaration{
    enum DelayType delayType;
 };
 
-struct GraphComputedData;
+struct PortInstance{
+   FUInstance* inst;
+   int port;
+};
+
+struct ConnectionInfo{
+   PortInstance inst;
+   int port;
+   int delay;
+};
+
+struct GraphComputedData{
+   int numberInputs;
+   int numberOutputs;
+   int inputPortsUsed;
+   int outputPortsUsed;
+   ConnectionInfo* inputs; // Delay not used
+   ConnectionInfo* outputs;
+   enum {TAG_UNCONNECTED,TAG_COMPUTE,TAG_SOURCE,TAG_SINK,TAG_SOURCE_AND_SINK} nodeType;
+   int inputDelay;
+};
+
+struct VersatComputedData{
+   char memoryMask[32];
+   int memoryMaskSize;
+   int addressTopBit;
+};
 
 struct FUInstance{
 	HierarchyName name;
@@ -96,24 +120,8 @@ struct FUInstance{
 
    // Various uses
    GraphComputedData* tempData;
+   VersatComputedData* versatData;
    char tag;
-};
-
-struct ConnectionInfo{
-   PortInstance inst;
-   int port;
-   int delay;
-};
-
-struct GraphComputedData{
-   int numberInputs;
-   int numberOutputs;
-   int inputPortsUsed;
-   int outputPortsUsed;
-   ConnectionInfo* inputs; // Delay not used
-   ConnectionInfo* outputs;
-   enum {TAG_UNCONNECTED,TAG_COMPUTE,TAG_SOURCE,TAG_SINK,TAG_SOURCE_AND_SINK} nodeType;
-   int inputDelay;
 };
 
 struct Versat{
@@ -123,7 +131,7 @@ struct Versat{
 	int base;
 	int numberConfigurations;
 
-	// Declaration for units that versat might instantiate itself
+	// Declaration for units that versat needs to instantiate itself
 	FUDeclaration* delay;
    FUDeclaration* input;
    FUDeclaration* output;
@@ -142,6 +150,7 @@ struct DAGOrder{
 
 struct Edge{ // A edge in a graph
    PortInstance units[2];
+   int timeShift;
 };
 
 struct Accelerator{
@@ -156,22 +165,27 @@ struct Accelerator{
    int32_t* config;
    int32_t* state;
    int32_t* memMapped;
+   int32_t* delay;
 
    // TODO: Maybe add config, state and memMapped to these structs
    AllocInfo configAlloc;
    AllocInfo stateAlloc;
    AllocInfo memMappedAlloc;
+   AllocInfo delayAlloc;
 
 	void* configuration;
 	int configurationSize;
 
 	bool locked; // Used for debug purposes
 	void* graphDataMem;
+	void* versatDataMem;
    DAGOrder order;
    int cyclesPerRun;
 
 	int entityId;
 	bool init;
+
+	enum {ACCELERATOR,SUBACCELERATOR,CIRCUIT} type;
 };
 
 struct UnitInfo{
@@ -179,7 +193,7 @@ struct UnitInfo{
    int configBitSize;
    int nStates;
    int stateBitSize;
-   int memoryMappedBytes;
+   int memoryMapDWords;
    int implementsDelay;
    int numberDelays;
    int implementsDone;
@@ -226,11 +240,9 @@ struct VersatComputedValues{
    int configurationBits;
    int stateBits;
    int lowerAddressSize;
-   int addressSize;
    int configurationAddressBits;
    int stateAddressBits;
-   int unitsMappedAddressBits;
-   int maxMemoryMapBytes;
+   int maxMemoryMapDWords;
    int memoryAddressBits;
    int stateConfigurationAddressBits;
    int memoryMappingAddressBits;
@@ -239,7 +251,6 @@ struct VersatComputedValues{
    int memoryConfigDecisionBit;
 
    // Address
-   Range memoryMappedUnitAddressRange;
    Range memoryAddressRange;
    Range configAddressRange;
    Range stateAddressRange;
@@ -263,7 +274,7 @@ void InitVersat(Versat* versat,int base,int numberConfigurations);
 FUDeclaration* RegisterFU(Versat* versat,FUDeclaration declaration);
 void OutputVersatSource(Versat* versat,Accelerator* accel,const char* sourceFilepath,const char* constantsFilepath,const char* dataFilepath);
 void OutputCircuitSource(Versat* versat,FUDeclaration accelDecl,Accelerator* accel,FILE* file);
-void OutputMemoryMap(Versat* versat);
+void OutputMemoryMap(Versat* versat,Accelerator* accel);
 
 FUDeclaration* GetTypeByName(Versat* versat,SizedString str);
 
@@ -271,8 +282,6 @@ FUDeclaration* GetTypeByName(Versat* versat,SizedString str);
 Accelerator* CreateAccelerator(Versat* versat);
 FUInstance* CreateFUInstance(Accelerator* accel,FUDeclaration* type);
 FUInstance* CreateNamedFUInstance(Accelerator* accel,FUDeclaration* type,SizedString entityName,HierarchyName* hierarchyParent);
-FUInstance* CreateShallowFUInstance(Accelerator* accel,FUDeclaration* type);
-FUInstance* CreateShallowNamedFUInstance(Accelerator* accel,FUDeclaration* type,SizedString entityName,HierarchyName* hierarchyParent);
 void RemoveFUInstance(Accelerator* accel,FUInstance* inst);
 
 void LockAccelerator(Accelerator* accel);
@@ -292,7 +301,7 @@ void AddInput(Accelerator* accel);
 // Helper functions
 int32_t GetInputValue(FUInstance* instance,int port);
 
-void ConnectUnits(FUInstance* out,int outIndex,FUInstance* in,int inIndex);
+Edge* ConnectUnits(FUInstance* out,int outIndex,FUInstance* in,int inIndex);
 
 void VersatUnitWrite(FUInstance* instance,int address, int value);
 int32_t VersatUnitRead(FUInstance* instance,int address);
@@ -300,6 +309,7 @@ int32_t VersatUnitRead(FUInstance* instance,int address);
 int CalculateLatency(FUInstance* inst,int sourceAndSinkAsSource);
 void CalculateDelay(Versat* versat,Accelerator* accel);
 void CalculateGraphData(Accelerator* accel);
+void CalculateVersatData(Accelerator* accel,VersatComputedValues vals);
 
 ConsolidationGraph GenerateConsolidationGraph(Accelerator* accel1,Accelerator* accel2);
 ConsolidationGraph MaxClique(ConsolidationGraph graph);

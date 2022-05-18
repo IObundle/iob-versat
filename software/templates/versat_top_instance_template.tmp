@@ -124,9 +124,13 @@ begin
 #{if unitsMapped}
    if(valid & memoryMappedAddr)
    begin
-   #{for i unitsMapped}
-      if(addr[@{memoryMappedUnitAddressRangeHigh}:@{memoryMappedUnitAddressRangeLow}] == @{i})
-         memoryMappedEnable[@{i}] = 1'b1;
+   #{set counter 0}
+   #{for inst instances}
+   #{if inst.declaration->memoryMapDWords}
+      if(addr[@{memoryAddressBits - 1}:@{memoryAddressBits - inst.versatData->memoryMaskSize}] == @{inst.versatData->memoryMaskSize}'b@{inst.versatData->memoryMask})
+         memoryMappedEnable[@{counter}] = 1'b1;
+   #{inc counter}
+   #{end}
    #{end}
    end
 #{end}
@@ -221,10 +225,10 @@ end
       #{set stateDataIndex stateDataIndex + wire.bitsize}
       #{end}      
 
-      #{if decl->memoryMapBytes}
+      #{if decl->memoryMapDWords}
       .valid(memoryMappedEnable[@{memoryMappedIndex}]),
       .wstrb(wstrb),
-      .addr(addr[@{memoryMappedUnitAddressRangeHigh - 1}:0]),
+      .addr(addr[@{inst.versatData->addressTopBit}:0]),
       .rdata(unitRData[@{memoryMappedIndex}]),
       .ready(unitReady[@{memoryMappedIndex}]),
       .wdata(wdata),

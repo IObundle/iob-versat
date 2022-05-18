@@ -121,13 +121,28 @@ FUInstance* GetInstanceByName_(Accelerator* accel,int argc, ...){
 
 // In versat space, simple extract delays from configuration data
 void CalculateDelay(Versat* versat,Accelerator* accel){
-   for(int i = 0; i < ARRAY_SIZE(instancesBuffer); i++){
-      FUInstance* inst = &instancesBuffer[i];
-
-      printf("%d %x\n",i,(int)inst->delay);
-
-      inst->delay[0] = inst->baseDelay;
+   for(int i = 0; i < ARRAY_SIZE(delayBuffer); i++){
+      delayBase[i] = delayBuffer[i];
    }
+}
+
+
+SizedString MakeSizedString(const char* str, size_t size){
+   SizedString s = {};
+
+   if(size == 0){
+      size = strlen(str);
+   }
+
+   s.str = str;
+   s.size = size;
+   return s;
+}
+
+FUInstance* CreateNamedFUInstance(Accelerator* accel,FUDeclaration* type,SizedString entityName,HierarchyName* hierarchyParent){
+   FUInstance* res = GetInstanceByName_(accel,1,entityName.str);
+
+   return res;
 }
 
 // From this point on, empty functions so the code still compiles
@@ -135,7 +150,7 @@ void OutputVersatSource(Versat* versat,Accelerator* accel,const char* declaratio
 
 }
 
-void OutputMemoryMap(Versat* versat){
+void OutputMemoryMap(Versat* versat,Accelerator* accel){
 
 }
 
@@ -197,17 +212,6 @@ void* AllocatePages(int pages){
 void DeallocatePages(void* ptr,int pages){
 }
 
-SizedString MakeSizedString(const char* str, size_t size){
-   SizedString s = {};
-
-   if(size == 0){
-      size = strlen(str);
-   }
-
-   s.str = str;
-   s.size = size;
-   return s;
-}
 
 void FixedStringCpy(char* dest,SizedString src){
 }
@@ -235,44 +239,7 @@ int AlignNextPower2(int val){
 void FlushStdout(){
 }
 
-FUInstance* CreateNamedFUInstance(Accelerator* accel,FUDeclaration* type,SizedString entityName,HierarchyName* hierarchyParent){
-   FUInstance* res = GetInstanceByName_(accel,1,entityName.str);
-
-   return res;
-}
-
 void RegisterTypes(){
 }
 
-/*
-
-Embedded
-
-Disabled (empty):
-
-   Anything related to type info can be disabled (but it can be enabled, no problem, nothing really depends on it though)
-   Register functions can be disabled , I think
-   GetTypeByName - we do not need to get types, I think
-   ConnectUnits - do not need
-
-Enabled:
-
-   InitVersat - memory address needed only.
-   CreateAccelerator - must return some data that separates all the following instance functions from different accelerators (an array of instance info)
-   CreateInstance - only needs to returns instance. Either gets info by name or by order of creation (but in that case order of creation must be kept constant)
-   GetInstanceByName - absolutely needed
-   VersatUnitWrite - memory write
-   VersatUnitRead - memory read
-   CalculateDelay - In embedded only need to set delay (write to registers). Delay data should be pre computed (handle only 1 configuration for now)
-   AcceleratorRun - write to register, start accelerator
-
-
-
-
-
-
-
-
-
-*/
 

@@ -18,7 +18,7 @@ struct Member{
 };
 
 struct Type{
-   int baseTypeId; // TODO: Should be a pointer
+   int baseTypeId; // TODO: Should be a TypeInfo pointer, easier to debug and majority of the code simply calls the GetTypeInfo function first thing first
    int pointers;
 };
 
@@ -58,6 +58,7 @@ void RegisterTypes();
 
 TypeInfo* GetTypeInfo(Type type);
 
+void OutputObject(void* object,const char* typeName); // TODO: implement
 
 Type GetType(const char* typeName);
 Value AccessObject(Value object,SizedString memberName);

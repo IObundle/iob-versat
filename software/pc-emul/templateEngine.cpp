@@ -179,12 +179,16 @@ static Expression* ParseTerm(Tokenizer* tok){
    while(1){
       Token peek = tok->PeekToken();
 
-      if(CompareString(peek,"*") || CompareString(peek,"/") || CompareString(peek,"&")){
+      if(CompareString(peek,"*") || CompareString(peek,"/") || CompareString(peek,"&") || CompareString(peek,"**")){
          tok->AdvancePeek(peek);
          Expression* expr = &expressionBuffer[expressionSize++];
 
          expr->type = Expression::OPERATION;
-         expr->op = peek.str[0];
+         if(CompareString(peek,"**")){
+            expr->op = 'p';
+         } else {
+            expr->op = peek.str[0];
+         }
          expr->size = 2;
          expr->expressions[0] = current;
          expr->expressions[1] = ParseTerm(tok);
@@ -327,8 +331,6 @@ static Block* Parse(Tokenizer* tok){
          block->textBlock = tok->Finish();
       }
       tok->AdvancePeek(block->textBlock);
-
-      //printf("_%.*s_",block->textBlock.size,block->textBlock.str);
    }
 
    return block;
@@ -444,6 +446,13 @@ static Value EvalExpression(Expression* expr){
             case '&':{
                val.number = val1 & val2;
             }break;
+            case 'p':{
+               val.number = val1;
+
+               for(int i = 0; i < val2; i++){
+                  val.number *= val1;
+               }
+            } break;
             default:{
                DebugSignal();
             }break;
@@ -488,33 +497,6 @@ static Value EvalExpression(Expression* expr){
    return MakeValue();
 }
 
-static int FormatSpecialChars(const char* ptr,int size){
-   const char* special[] = {"@{"};
-
-   for(int i = 0; i < ARRAY_SIZE(special); i++){
-      SizedString specialStr = MakeSizedString(special[i]);
-
-      if(specialStr.size >= size){
-         continue;
-      }
-
-      SizedString ptrStr = {ptr,specialStr.size};
-
-      if(CompareString(ptrStr,specialStr)){
-         return specialStr.size;
-      }
-   }
-
-   char single[] = "}";
-   for(int i = 0; i < ARRAY_SIZE(single); i++){
-      if(single[i] == ptr[0]){
-         return 1;
-      }
-   }
-
-   return 0;
-}
-
 void PrintValue(FILE* file,Value val){
    if(val.type >= (int) ValueType::CUSTOM){
       TypeInfo* info = GetTypeInfo(val.customType);
@@ -540,6 +522,9 @@ void PrintValue(FILE* file,Value val){
    }break;
    case ValueType::STRING_LITERAL:{
       fprintf(file,"\"%.*s\"",val.str.size,val.str.str);
+   }break;
+   case ValueType::CHAR:{
+      fprintf(file,"%c",val.ch);
    }break;
    default:{
       DebugSignal();
@@ -644,6 +629,21 @@ void Eval(Block* block){
                   Eval(block->innerBlocks[ii]);
                }
             }
+         } else if(iterating.type == ValueType::ARRAY){
+            for(int i = 0; i < iterating.size; i++){
+               Value val = MakeValue(iterating.array[i]);
+               envTable[id] = val;
+
+               if(seenFirst) {
+                  fprintf(output,"%.*s",separator.str.size,separator.str.str);
+               } else {
+                  seenFirst = true;
+               }
+
+               for(int ii = 0; ii < block->numberInnerBlocks; ii++){
+                  Eval(block->innerBlocks[ii]);
+               }
+            }
          } else {
             Assert(false);
          }
@@ -686,6 +686,15 @@ void Eval(Block* block){
                val.customType = GetType("FUInstance");
                val.custom = inst;
 
+               envTable[id] = val;
+
+               for(int ii = 0; ii < block->numberInnerBlocks; ii++){
+                  Eval(block->innerBlocks[ii]);
+               }
+            }
+         } else if(iterating.type == ValueType::ARRAY){
+            for(int i = 0; i < iterating.size; i++){
+               Value val = MakeValue(iterating.array[i]);
                envTable[id] = val;
 
                for(int ii = 0; ii < block->numberInnerBlocks; ii++){
@@ -735,7 +744,7 @@ void Eval(Block* block){
       }
    } else {
       // Print text
-      Tokenizer tok(block->textBlock.str,block->textBlock.size,"[]()*.-/}",{"@{","->","=="});
+      Tokenizer tok(block->textBlock.str,block->textBlock.size,"[]()*.-/}",{"@{","->","==","**"});
 
       while(1){
          Token text = tok.PeekFindUntil("@{");
@@ -777,7 +786,7 @@ void ProcessTemplate(FILE* outputFile,const char* templateFilepath){
    fclose(file);
 
    buffer[fileSize] = '\0';
-   Tokenizer tokenizer(buffer,fileSize,"()[]{}+-:;.,*~\"",{"#{","->","=="});
+   Tokenizer tokenizer(buffer,fileSize,"()[]{}+-:;.,*~\"",{"#{","->","==","**"});
    Tokenizer* tok = &tokenizer;
 
    #if 0

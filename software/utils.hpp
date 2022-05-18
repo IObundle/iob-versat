@@ -23,6 +23,7 @@ int RoundUpDiv(int dividend,int divisor);
 int AlignNextPower2(int val);
 
 void FlushStdout();
+void* ZeroOutRealloc(void* ptr,int newSize,int oldSize); // Realloc but zeroes out extra memory allocated
 
 #define DebugSignal() printf("%s:%d\n",__FILE__,__LINE__);
 
@@ -48,6 +49,7 @@ struct SizedString{
    size_t size;
 };
 SizedString MakeSizedString(const char* str, size_t size = 0);
+#define MAKE_SIZED_STRING(STR) (MakeSizedString(STR,strlen(STR))) // Should compute length at compile time
 
 struct AllocInfo{
    int size;

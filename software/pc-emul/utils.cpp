@@ -86,6 +86,19 @@ SizedString MakeSizedString(const char* str,size_t size){
    return res;
 }
 
+void* ZeroOutRealloc(void* ptr,int newSize,int oldSize){
+   int extraMem = newSize - oldSize;
+
+   void* res = realloc(ptr,newSize);
+
+   if(extraMem > 0){
+      char* view = (char*) res;
+      memset(&view[oldSize],0,extraMem);
+   }
+
+   return res;
+}
+
 void FixedStringCpy(char* dest,SizedString src){
    int i = 0;
    for(i = 0; i < src.size; i++){

@@ -45,7 +45,7 @@ module @{accel.name.str} #(
    output [`nIO*`DATAPATH_W/8-1:0] m_databus_wstrb,
    #{end}
 
-   #{if accel.memoryMapBytes}
+   #{if accel.memoryMapDWords}
    // data/control interface
    input                           valid,
    input [ADDR_W-1:0]              addr,
@@ -153,7 +153,7 @@ end
       #{inc statesSeen}
       #{end}      
 
-      #{if decl->memoryMapBytes}
+      #{if decl->memoryMapDWords}
       .valid(memoryMappedEnable[@{memoryMappedIndex}]),
       .wstrb(wstrb),
       .addr(addr[@{memoryMappedUnitAddressRange - 1}:0]),

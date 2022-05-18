@@ -16,7 +16,7 @@ module xreg #(
 
     // native interface 
     input [DATA_W/8-1:0]          wstrb,
-    input [ADDR_W-1:0]            addr,
+    input                         addr, // shouldn't even have it at all, but needed so that it follows the interface expected by verilator
     input [DATA_W-1:0]            wdata,
     input                         valid,
     output reg                    ready,

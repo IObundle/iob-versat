@@ -30,6 +30,7 @@ int GetIndex(char* name){
 
 typedef struct Var_t{
    HierarchyName name;
+   int timeShift;
    int portStart;
    int portEnd;
 } Var;
@@ -38,6 +39,17 @@ Var ParseVar(Tokenizer* tok){
    Token name = tok->NextToken();
 
    Token peek = tok->PeekToken();
+
+   int timeShift = 0;
+   if(CompareToken(peek,"[")){
+      tok->AdvancePeek(peek);
+
+      Token timeShiftToken = tok->NextToken();
+      timeShift = ParseInt(timeShiftToken);
+
+      tok->AssertNextToken("]");
+      peek = tok->PeekToken();
+   }
 
    int portStart = 0;
    int portEnd = 0;
@@ -60,6 +72,7 @@ Var ParseVar(Tokenizer* tok){
    Var var = {};
 
    StoreToken(name,var.name.str);
+   var.timeShift = timeShift;
    var.portStart = portStart;
    var.portEnd = portEnd;
 
@@ -82,7 +95,7 @@ PortInstance ParseTerm(Versat* versat,Accelerator* circuit,Tokenizer* tok,Hierar
    Assert(var.portStart == var.portEnd);
 
    if(negate){
-      FUInstance* negation = CreateShallowNamedFUInstance(circuit,GetTypeByName(versat,MakeSizedString("NOT")),MakeSizedString("not"),circuitName);
+      FUInstance* negation = CreateNamedFUInstance(circuit,GetTypeByName(versat,MakeSizedString("NOT")),MakeSizedString("not"),circuitName);
 
       ConnectUnits(inst,var.portStart,negation,0);
 
@@ -131,7 +144,7 @@ FUInstance* ParseExpression(Versat* versat,Accelerator* circuit,Tokenizer* tok,H
    }
 
    SizedString typeStr = MakeSizedString(typeName);
-   FUInstance* res = CreateShallowNamedFUInstance(circuit,GetTypeByName(versat,typeStr),typeStr,circuitName);
+   FUInstance* res = CreateNamedFUInstance(circuit,GetTypeByName(versat,typeStr),typeStr,circuitName);
 
    ConnectUnits(term1.inst,term1.port,res,0);
    ConnectUnits(term2.inst,term2.port,res,1);
@@ -174,6 +187,7 @@ FUDeclaration* ParseModule(Versat* versat,Tokenizer* tok){
    FUDeclaration* circuitOutput = GetTypeByName(versat,MakeSizedString("circuitOutput"));
 
    Accelerator* circuit = CreateAccelerator(versat);
+   circuit->type = Accelerator::CIRCUIT;
 
    FUDeclaration decl = {};
    decl.type = FUDeclaration::COMPOSITE;
@@ -192,7 +206,7 @@ FUDeclaration* ParseModule(Versat* versat,Tokenizer* tok){
          break;
       }
 
-      FUInstance* inst = CreateShallowNamedFUInstance(circuit,circuitInput,token,&decl.name);
+      FUInstance* inst = CreateNamedFUInstance(circuit,circuitInput,token,&decl.name);
       FUInstance** ptr = circuit->inputInstancePointers.Alloc();
 
       *ptr = inst;
@@ -220,7 +234,7 @@ FUDeclaration* ParseModule(Versat* versat,Tokenizer* tok){
          Token name = tok->NextToken();
 
          FUDeclaration* FUType = GetTypeByName(versat,type);
-         FUInstance* inst = CreateShallowNamedFUInstance(circuit,FUType,name,&decl.name);
+         FUInstance* inst = CreateNamedFUInstance(circuit,FUType,name,&decl.name);
 
          tok->AssertNextToken(";");
       } else {
@@ -252,7 +266,7 @@ FUDeclaration* ParseModule(Versat* versat,Tokenizer* tok){
                decl.nOutputs = maxi(decl.nOutputs - 1,inVar.portEnd) + 1;
 
                if(!circuit->outputInstance){
-                  circuit->outputInstance = CreateShallowNamedFUInstance(circuit,circuitOutput,MakeSizedString("out"),&decl.name);
+                  circuit->outputInstance = CreateNamedFUInstance(circuit,circuitOutput,MakeSizedString("out"),&decl.name);
                }
 
                inst2 = circuit->outputInstance;
@@ -262,11 +276,13 @@ FUDeclaration* ParseModule(Versat* versat,Tokenizer* tok){
 
             if(outRange == 1){
                for(int i = 0; i < inRange; i++){
-                  ConnectUnits(inst1,outVar.portStart,inst2,inVar.portStart + i);
+                  Edge* edge = ConnectUnits(inst1,outVar.portStart,inst2,inVar.portStart + i);
+                  edge->timeShift = outVar.timeShift;
                }
             } else {
                for(int i = 0; i < inRange; i++){
-                  ConnectUnits(inst1,outVar.portStart + i,inst2,inVar.portStart + i);
+                  Edge* edge = ConnectUnits(inst1,outVar.portStart + i,inst2,inVar.portStart + i);
+                  edge->timeShift = outVar.timeShift;
                }
             }
             #endif
@@ -283,9 +299,11 @@ FUDeclaration* ParseModule(Versat* versat,Tokenizer* tok){
 
    CalculateDelay(versat,circuit);
 
+   /*
    if(circuit->outputInstance){
       decl.latency = circuit->cyclesPerRun;
    }
+   */
 
    {
    FILE* dotFile = fopen("circuit.dot","w");
@@ -298,7 +316,7 @@ FUDeclaration* ParseModule(Versat* versat,Tokenizer* tok){
 
       decl.nConfigs += d->nConfigs;
       decl.nStates += d->nStates;
-      decl.memoryMapBytes += AlignNextPower2(d->memoryMapBytes); // Order of entities affect size, need to look into it
+      decl.memoryMapDWords += AlignNextPower2(d->memoryMapDWords); // Order of entities affect size, need to look into it
       decl.nDelays += d->nDelays;
       decl.extraDataSize += d->extraDataSize;
    }
