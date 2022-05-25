@@ -236,15 +236,38 @@ int CompareStringNoEnd(const char* strNoEnd,const char* strWithEnd){
    return 1;
 }
 
-int ParseInt(SizedString str){
-   int res = 0;
-   for(int i = 0; i < str.size; i++){
-      Assert(str.str[i] >= '0' && str.str[i] <= '9');
-
-      res *= 10;
-      res += str.str[i] - '0';
+// The following two functions together will error if not decimal or hexadecimal
+static int CharToInt(char ch){
+   if(ch >= '0' && ch <= '9'){
+      return ch - '0';
+   } else if(ch >= 'A' && ch <= 'F'){
+      return 10 + (ch - 'A');
+   } else if(ch >= 'a' && ch <= 'f'){
+      return 10 + (ch - 'a');
+   } else {
+      Assert(false); // Do not care for other bases, for now
    }
+}
 
-   return res;
+int ParseInt(SizedString str){
+   if(str.size >= 2 && str.str[0] == '0' && (str.str[1] == 'x' || str.str[1] == 'X')){ // Hexadecimal
+      int res = 0;
+
+      for(int i = 2; i < str.size; i++){
+         res *= 16;
+         res += CharToInt(str.str[i]);
+      }
+
+      return res;
+   } else {
+      int res = 0;
+      for(int i = 0; i < str.size; i++){
+         Assert(str.str[i] >= '0' && str.str[i] <= '9');
+
+         res *= 10;
+         res += CharToInt(str.str[i]);
+      }
+      return res;
+   }
 }
 

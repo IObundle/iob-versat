@@ -278,14 +278,32 @@ FUDeclaration* ParseModule(Versat* versat,Tokenizer* tok){
          Token type = tok->NextToken();
          Token name = tok->NextToken();
 
-         FUDeclaration* FUtype = GetTypeByName(versat,type);
-         FUInstance* inst = CreateNamedFUInstance(circuit,FUtype,name,&decl.name);
+         FUDeclaration* FUType = GetTypeByName(versat,type);
+         FUInstance* inst = CreateNamedFUInstance(circuit,FUType,name,&decl.name);
 
          Token peek = tok->PeekToken();
 
          if(CompareString(peek,"(")){
+            tok->AdvancePeek(peek);
 
             Token list = tok->PeekFindUntil(")");
+            int arguments = 1 + CountSubstring(list,MAKE_SIZED_STRING(","));
+            Assert(arguments <= FUType->nConfigs);
+
+            Tokenizer insideList(list.str,list.size,",",{});
+
+            inst->config = (int32_t*) calloc(FUType->nConfigs,sizeof(int));
+            for(int i = 0; i < arguments; i++){
+               Token arg = insideList.NextToken();
+
+               inst->config[i] = ParseInt(arg);
+
+               if(i != arguments - 1){
+                  insideList.AssertNextToken(",");
+               }
+            }
+            Assert(insideList.Done());
+
             tok->AdvancePeek(list);
 
             tok->AssertNextToken(")");
@@ -296,9 +314,27 @@ FUDeclaration* ParseModule(Versat* versat,Tokenizer* tok){
             tok->AdvancePeek(peek);
 
             Token list = tok->PeekFindUntil("}");
+            int arguments = 1 + CountSubstring(list,MAKE_SIZED_STRING(","));
+            Assert(arguments <= FUType->memoryMapDWords);
+
+            Tokenizer insideList(list.str,list.size,",",{});
+
+            inst->memMapped = (int32_t*) calloc(FUType->memoryMapDWords,sizeof(int));
+            for(int i = 0; i < arguments; i++){
+               Token arg = insideList.NextToken();
+
+               inst->memMapped[i] = ParseInt(arg);
+
+               if(i != arguments - 1){
+                  insideList.AssertNextToken(",");
+               }
+            }
+            Assert(insideList.Done());
+
             tok->AdvancePeek(list);
 
             tok->AssertNextToken("}");
+            peek = tok->PeekToken();
          }
 
          tok->AssertNextToken(";");

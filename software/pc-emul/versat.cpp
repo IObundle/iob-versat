@@ -420,7 +420,22 @@ static int32_t AccessMemory(FUInstance* instance,int address, int value, int wri
 }
 
 void VersatUnitWrite(FUInstance* instance,int address, int value){
-   AccessMemory(instance,address,value,1);
+   if(instance->declaration->type == FUDeclaration::COMPOSITE){
+      int offset = 0;
+
+      for(FUInstance* inst : instance->compositeAccel->instances){
+         int mappedWords = inst->declaration->memoryMapDWords;
+         if(mappedWords){
+            if(address >= offset && address <= offset + mappedWords){
+               VersatUnitWrite(inst,address - offset,value);
+            } else {
+               offset += mappedWords;
+            }
+         }
+      }
+   } else {
+      AccessMemory(instance,address,value,1);
+   }
 }
 
 int32_t VersatUnitRead(FUInstance* instance,int address){
@@ -726,6 +741,15 @@ static Accelerator* InstantiateSubAccelerator(Versat* versat,Accelerator* accel,
 
       if(newInst->declaration->initializeFunction){
          newInst->declaration->initializeFunction(newInst);
+      }
+
+      if(inst->config){
+         memcpy(newInst->config,inst->config,inst->declaration->nConfigs * sizeof(int32_t));
+      }
+      if(inst->memMapped){
+         for(int i = 0; i < inst->declaration->memoryMapDWords; i++){
+            VersatUnitWrite(newInst,i,inst->memMapped[i]);
+         }
       }
 
       map.insert({inst,newInst});
