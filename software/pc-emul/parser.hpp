@@ -47,6 +47,8 @@ public:
 
 Token ExtendToken(Token t1,Token t2);
 
+int CountSubstring(SizedString str,SizedString substr);
+
 void StoreToken(Token token,char* buffer);
 #define CompareToken CompareString
 

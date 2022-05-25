@@ -9,6 +9,35 @@
 
 #define ARRAY_SIZE(array) sizeof(array) / sizeof(array[0])
 
+/*
+TODO: Remove repeated code
+*/
+
+template<typename T>
+struct SimpleHash{
+   std::size_t operator()(T const& val) const noexcept{
+      char* view = (char*) &val;
+
+      size_t res = 0;
+      std::hash<char> hasher;
+      for(int i = 0; i < sizeof(T); i++){
+         res += hasher(view[i]);
+      }
+      return res;
+   }
+};
+
+template<typename T>
+struct SimpleEqual{
+   bool operator()(const T &left, const T &right) const {
+      bool res = (memcmp(&left,&right,sizeof(T)) == 0);
+
+      return res;
+   }
+};
+int CalculateLatency_(PortInstance portInst, std::unordered_map<PortInstance,int,SimpleHash<PortInstance>,SimpleEqual<PortInstance>>* memoization);
+
+
 typedef struct Name_t{
    char name[256];
    FUDeclaration* type;
@@ -30,7 +59,8 @@ int GetIndex(char* name){
 
 typedef struct Var_t{
    HierarchyName name;
-   int timeShift;
+   int delayStart;
+   int delayEnd;
    int portStart;
    int portEnd;
 } Var;
@@ -40,12 +70,23 @@ Var ParseVar(Tokenizer* tok){
 
    Token peek = tok->PeekToken();
 
-   int timeShift = 0;
+   int delayStart = 0;
+   int delayEnd = 0;
    if(CompareToken(peek,"[")){
       tok->AdvancePeek(peek);
 
-      Token timeShiftToken = tok->NextToken();
-      timeShift = ParseInt(timeShiftToken);
+      Token delayToken = tok->NextToken();
+      delayStart = ParseInt(delayToken);
+
+      peek = tok->PeekToken();
+      if(CompareToken(peek,"..")){
+         tok->AdvancePeek(peek);
+         Token delayEndToken = tok->NextToken();
+
+         delayEnd = ParseInt(delayEndToken);
+      } else {
+         delayEnd = delayStart;
+      }
 
       tok->AssertNextToken("]");
       peek = tok->PeekToken();
@@ -59,7 +100,7 @@ Var ParseVar(Tokenizer* tok){
       portStart = ParseInt(portToken);
 
       peek = tok->PeekToken();
-      if(CompareToken(peek,".")){
+      if(CompareToken(peek,"..")){
          tok->AdvancePeek(peek);
          portToken = tok->NextToken();
 
@@ -69,10 +110,14 @@ Var ParseVar(Tokenizer* tok){
       }
    }
 
+   Assert(delayEnd >= delayStart);
+   Assert(portEnd >= portStart);
+
    Var var = {};
 
    StoreToken(name,var.name.str);
-   var.timeShift = timeShift;
+   var.delayStart = delayStart;
+   var.delayEnd = delayEnd;
    var.portStart = portStart;
    var.portEnd = portEnd;
 
@@ -233,8 +278,28 @@ FUDeclaration* ParseModule(Versat* versat,Tokenizer* tok){
          Token type = tok->NextToken();
          Token name = tok->NextToken();
 
-         FUDeclaration* FUType = GetTypeByName(versat,type);
-         FUInstance* inst = CreateNamedFUInstance(circuit,FUType,name,&decl.name);
+         FUDeclaration* FUtype = GetTypeByName(versat,type);
+         FUInstance* inst = CreateNamedFUInstance(circuit,FUtype,name,&decl.name);
+
+         Token peek = tok->PeekToken();
+
+         if(CompareString(peek,"(")){
+
+            Token list = tok->PeekFindUntil(")");
+            tok->AdvancePeek(list);
+
+            tok->AssertNextToken(")");
+            peek = tok->PeekToken();
+         }
+
+         if(CompareString(peek,"{")){
+            tok->AdvancePeek(peek);
+
+            Token list = tok->PeekFindUntil("}");
+            tok->AdvancePeek(list);
+
+            tok->AssertNextToken("}");
+         }
 
          tok->AssertNextToken(";");
       } else {
@@ -255,7 +320,12 @@ FUDeclaration* ParseModule(Versat* versat,Tokenizer* tok){
             Var inVar = ParseVar(tok);
 
             int outRange = outVar.portEnd - outVar.portStart + 1;
+            int delayRange = outVar.delayEnd - outVar.delayStart + 1;
             int inRange = inVar.portEnd - inVar.portStart + 1;
+
+            if(delayRange != 1 && inRange != delayRange){
+               Assert(false);
+            }
 
             Assert(outRange == inRange || outRange == 1);
 
@@ -274,22 +344,23 @@ FUDeclaration* ParseModule(Versat* versat,Tokenizer* tok){
                inst2 = GetInstance(circuit,{inVar.name.str});
             }
 
+            int delayDelta = (delayRange == 1 ? 0 : 1);
             if(outRange == 1){
                for(int i = 0; i < inRange; i++){
                   Edge* edge = ConnectUnits(inst1,outVar.portStart,inst2,inVar.portStart + i);
-                  edge->timeShift = outVar.timeShift;
+                  edge->delay = -(outVar.delayStart + delayDelta * i);
                }
             } else {
                for(int i = 0; i < inRange; i++){
                   Edge* edge = ConnectUnits(inst1,outVar.portStart + i,inst2,inVar.portStart + i);
-                  edge->timeShift = outVar.timeShift;
+                  edge->delay = -(outVar.delayStart + delayDelta * i);
                }
             }
             #endif
 
             tok->AssertNextToken(";");
          } else {
-            printf("%s\n",peek.str);
+            printf("%.*s\n",peek.size,peek.str);
             fflush(stdout);
             Assert(0);
          }
@@ -299,17 +370,24 @@ FUDeclaration* ParseModule(Versat* versat,Tokenizer* tok){
 
    CalculateDelay(versat,circuit);
 
-   /*
-   if(circuit->outputInstance){
-      decl.latency = circuit->cyclesPerRun;
-   }
-   */
+   decl.inputDelays = (int*) calloc(decl.nInputs,sizeof(int));
 
-   {
-   FILE* dotFile = fopen("circuit.dot","w");
-   OutputGraphDotFile(circuit,dotFile,1);
-   fclose(dotFile);
+   int i = 0;
+   int minimum = (1 << 30);
+   for(FUInstance** input : circuit->inputInstancePointers){
+      decl.inputDelays[i++] = (*input)->baseDelay;
+      minimum = mini(minimum,(*input)->baseDelay);
    }
+
+   decl.latencies = (int*) calloc(decl.nOutputs,sizeof(int));
+
+   if(circuit->outputInstance){
+      for(int i = 0; i < decl.nOutputs; i++){
+         decl.latencies[i] = circuit->outputInstance->tempData->inputDelay;
+      }
+   }
+
+   OutputGraphDotFile(circuit,1,"circuit.dot");
 
    for(FUInstance* inst : circuit->instances){
       FUDeclaration* d = inst->declaration;
@@ -428,7 +506,7 @@ void ParseVersatSpecification(Versat* versat,FILE* file){
    char* buffer = (char*) calloc(256*1024*1024,sizeof(char)); // Calloc to fix valgrind error
    int fileSize = fread(buffer,sizeof(char),256*1024*1024,file);
 
-   Tokenizer tokenizer = Tokenizer(buffer,fileSize, "[](){}+:;,*~.",{"->",">>>","<<<",">>","<<"});
+   Tokenizer tokenizer = Tokenizer(buffer,fileSize, "[](){}+:;,*~.",{"->",">>>","<<<",">>","<<",".."});
    Tokenizer* tok = &tokenizer;
 
    while(!tok->Done()){

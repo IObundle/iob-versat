@@ -102,6 +102,7 @@ Type GetType(const char* structName){
    }
 
    Assert(false);
+   return (Type){};
 }
 
 static Value CollapseCustomIntoValue(void* ptr,Type type){

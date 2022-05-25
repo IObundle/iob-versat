@@ -29,6 +29,32 @@ static int versat_base;
 
 #define MAX_DELAY 128
 
+template<typename T>
+struct SimpleHash{
+   std::size_t operator()(T const& val) const noexcept{
+      char* view = (char*) &val;
+
+      size_t res = 0;
+      std::hash<char> hasher;
+      for(int i = 0; i < sizeof(T); i++){
+         res += hasher(view[i]);
+      }
+      return res;
+   }
+};
+
+template<typename T>
+struct SimpleEqual{
+   bool operator()(const T &left, const T &right) const {
+      bool res = (memcmp(&left,&right,sizeof(T)) == 0);
+
+      return res;
+   }
+};
+
+static int zeros[100] = {};
+static int ones[] = {1,1};
+
 static int32_t* DefaultInitFunction(FUInstance* inst){
    inst->done = true;
    return nullptr;
@@ -62,7 +88,8 @@ static FUDeclaration* RegisterDelay(Versat* versat){
    strcpy(decl.name.str,"delay");
    decl.nInputs = 1;
    decl.nOutputs = 1;
-   decl.latency = 1;
+   decl.inputDelays = zeros;
+   decl.latencies = ones;
    decl.nDelays = 1;
    decl.delayType = DelayType::DELAY_TYPE_COMPUTE_DELAY;
    decl.extraDataSize = sizeof(int32_t) * MAX_DELAY;
@@ -79,7 +106,10 @@ static FUDeclaration* RegisterCircuitInput(Versat* versat){
    strcpy(decl.name.str,"circuitInput");
    decl.nOutputs = 99;
    decl.nInputs = 1;  // Used for templating circuit
+   decl.latencies = zeros;
+   decl.inputDelays = zeros;
    decl.initializeFunction = DefaultInitFunction;
+   decl.delayType = DelayType::DELAY_TYPE_SOURCE_DELAY;
    decl.type = FUDeclaration::SPECIAL;
 
    return RegisterFU(versat,decl);
@@ -91,7 +121,10 @@ static FUDeclaration* RegisterCircuitOutput(Versat* versat){
    strcpy(decl.name.str,"circuitOutput");
    decl.nInputs = 99;
    decl.nOutputs = 99; // Used for templating circuit
+   decl.latencies = zeros;
+   decl.inputDelays = zeros;
    decl.initializeFunction = DefaultInitFunction;
+   decl.delayType = DelayType::DELAY_TYPE_SINK_DELAY;
    decl.type = FUDeclaration::SPECIAL;
 
    return RegisterFU(versat,decl);
@@ -337,6 +370,8 @@ void RegisterOperators(Versat* versat){
    FUDeclaration decl = {};
    decl.nOutputs = 1;
    decl.nInputs = 1;
+   decl.inputDelays = zeros;
+   decl.latencies = zeros;
    for(int i = 0; i < ARRAY_SIZE(unary); i++){
       FixedStringCpy(decl.name.str,MakeSizedString(unary[i]));
       decl.updateFunction = unaryF[i];
@@ -356,6 +391,8 @@ void InitVersat(Versat* versat,int base,int numberConfigurations){
    versat->base = base;
 
    FUDeclaration nullDeclaration = {};
+   nullDeclaration.latencies = zeros;
+   nullDeclaration.inputDelays = zeros;
    RegisterFU(versat,nullDeclaration);
 
    versat->delay = RegisterDelay(versat);
@@ -483,8 +520,11 @@ FUDeclaration* RegisterFU(Versat* versat,FUDeclaration decl){
    FUDeclaration* type = versat->declarations.Alloc();
    *type = decl;
 
-   Assert(decl.inputShifts);
-   Assert(decl.outputDelays);
+   if(decl.nInputs){
+      Assert(decl.inputDelays);
+   }
+
+   Assert(decl.latencies);
 
    return type;
 }
@@ -521,7 +561,9 @@ static char* FormatNameToOutput(FUInstance* inst){
    return buffer;
 }
 
-void OutputGraphDotFile(Accelerator* accel,FILE* outputFile,int collapseSameEdges){
+static void OutputGraphDotFile_(Accelerator* accel,bool collapseSameEdges,FILE* outputFile){
+   LockAccelerator(accel);
+
    fprintf(outputFile,"digraph accel {\n\tnode [fontcolor=white,style=filled,color=\"160,60,176\"];\n");
    for(FUInstance* inst : accel->instances){
       char* name = FormatNameToOutput(inst);
@@ -543,10 +585,41 @@ void OutputGraphDotFile(Accelerator* accel,FILE* outputFile,int collapseSameEdge
       }
 
       fprintf(outputFile,"\t%s -> ",FormatNameToOutput(edge->units[0].inst));
-      fprintf(outputFile,"%s;\n",FormatNameToOutput(edge->units[1].inst));
+      fprintf(outputFile,"%s",FormatNameToOutput(edge->units[1].inst));
+
+      #if 1
+      FUInstance* outputInst = edge->units[0].inst;
+      int delay = 0;
+      for(int i = 0; i < outputInst->tempData->numberOutputs; i++){
+         if(edge->units[1].inst == outputInst->tempData->outputs[i].inst.inst && edge->units[1].port == outputInst->tempData->outputs[i].inst.port){
+            delay = outputInst->tempData->outputs[i].delay;
+            break;
+         }
+      }
+
+      fprintf(outputFile,"[label=\"%d\"]",delay);
+      //fprintf(outputFile,"[label=\"[%d:%d;%d:%d]\"]",outputInst->declaration->latencies[0],delay,edge->units[1].inst->declaration->inputDelays[edge->units[1].port],edge->delay);
+      #endif
+
+      fprintf(outputFile,";\n");
    }
 
    fprintf(outputFile,"}\n");
+}
+
+void OutputGraphDotFile(Accelerator* accel,bool collapseSameEdges,const char* filenameFormat,...){
+   char buffer[1024];
+
+   va_list args;
+   va_start(args,filenameFormat);
+
+   vsprintf(buffer,filenameFormat,args);
+
+   FILE* file = fopen(buffer,"w");
+   OutputGraphDotFile_(accel,collapseSameEdges,file);
+   fclose(file);
+
+   va_end(args);
 }
 
 SubgraphData SubGraphAroundInstance(Versat* versat,Accelerator* accel,FUInstance* instance,int layers){
@@ -600,7 +673,6 @@ SubgraphData SubGraphAroundInstance(Versat* versat,Accelerator* accel,FUInstance
 
    return data;
 }
-
 
 Accelerator* CreateAccelerator(Versat* versat){
    Accelerator* accel = versat->accelerators.Alloc();
@@ -974,6 +1046,9 @@ Accelerator* Flatten(Versat* versat,Accelerator* accel,int times){
 }
 
 // Debug output file
+
+#define DUMP_VCD 0
+
 static FILE* accelOutputFile = nullptr;
 static std::array<char,4> currentMapping = {'a','a','a','a'};
 static void ResetMapping(){
@@ -1021,6 +1096,10 @@ static void PrintVCDDefinitions_(Accelerator* accel){
 }
 
 static void PrintVCDDefinitions(Accelerator* accel){
+   #if DUMP_VCD == 0
+      return;
+   #endif
+
    ResetMapping();
 
    fprintf(accelOutputFile,"$timescale   1ns $end\n");
@@ -1068,6 +1147,10 @@ static void PrintVCD_(Accelerator* accel){
 }
 
 static void PrintVCD(Accelerator* accel,int time,int clock){ // Need to put some clock signal
+   #if DUMP_VCD == 0
+      return;
+   #endif
+
    ResetMapping();
 
    fprintf(accelOutputFile,"#%d\n",time * 10);
@@ -1141,6 +1224,7 @@ static void AcceleratorRunIteration(Accelerator* accel){
             for(int iii = 0; iii < input->tempData->numberOutputs; iii++){
                int32_t val = GetInputValue(inst,ii);
                input->outputs[iii] = val;
+               input->storedOutputs[iii] = val;
             }
          }
 
@@ -1155,12 +1239,13 @@ static void AcceleratorRunIteration(Accelerator* accel){
             for(int ii = 0; ii < output->tempData->numberInputs; ii++){
                int32_t val = GetInputValue(output,ii);
                inst->outputs[ii] = val;
+               inst->storedOutputs[ii] = val;
             }
          }
       } else {
          int32_t* newOutputs = decl.updateFunction(inst);
 
-         if(inst->declaration->latency == 0 && inst->tempData->nodeType != GraphComputedData::TAG_SOURCE){
+         if(inst->declaration->latencies[0] == 0 && inst->tempData->nodeType != GraphComputedData::TAG_SOURCE){
             memcpy(inst->outputs,newOutputs,decl.nOutputs * sizeof(int32_t));
             memcpy(inst->storedOutputs,newOutputs,decl.nOutputs * sizeof(int32_t));
          } else {
@@ -1185,7 +1270,6 @@ void AcceleratorDoCycle(Accelerator* accel){
    });
 }
 
-// Need to generate VCD file or else I'll never debug this correctly
 void AcceleratorRun(Accelerator* accel){
    static int numberRuns = 0;
    static int time = 0;
@@ -1194,12 +1278,14 @@ void AcceleratorRun(Accelerator* accel){
    VisitAcceleratorInstances(accel,[](FUInstance*){
    });
 
+   #if DUMP_VCD == 1
    {
       char buffer[128];
       sprintf(buffer,"debug/accelRun%d.vcd",numberRuns++);
       accelOutputFile = fopen(buffer,"w");
       Assert(accelOutputFile);
    }
+   #endif
 
    PrintVCDDefinitions(accel);
 
@@ -1211,20 +1297,24 @@ void AcceleratorRun(Accelerator* accel){
    PrintVCD(accel,time++,1);
    PrintVCD(accel,time++,0);
 
-   for(int cycle = 0; 1; cycle++){
+   for(int cycle = 0; cycle < 100; cycle++){
       AcceleratorDoCycle(accel);
       AcceleratorRunIteration(accel);
       PrintVCD(accel,time++,1);
       PrintVCD(accel,time++,0);
 
+      #if 0
       if(AcceleratorDone(accel)){
          break;
       }
+      #endif
    }
 
    PrintVCD(accel,time++,1);
    PrintVCD(accel,time++,0);
+   #if DUMP_VCD == 1
    fclose(accelOutputFile);
+   #endif
 }
 
 // Log function customized to calculating bits needed for a number of possible addresses (ex: log2i(1024) = 10)
@@ -1614,7 +1704,7 @@ void CalculateGraphData(Accelerator* accel){
          if(edge->units[1].inst == inst){
             inputBuffer->inst = edge->units[0];
             inputBuffer->port = edge->units[1].port;
-            inputBuffer->delay = edge->timeShift;
+            inputBuffer->delay = edge->delay;
             inputBuffer += 1;
 
             inst->tempData->inputPortsUsed = maxi(inst->tempData->inputPortsUsed,edge->units[1].port + 1);
@@ -1677,16 +1767,19 @@ void CalculateVersatData(Accelerator* accel,VersatComputedValues vals){
    }
 }
 
-static int CalculateLatency_(FUInstance* inst,int sourceAndSinkAsSource, std::unordered_map<FUInstance*,int>* memoization){
-   if(inst->tempData->nodeType == GraphComputedData::TAG_SOURCE_AND_SINK && sourceAndSinkAsSource){
-      return inst->declaration->latency;
+int CalculateLatency_(PortInstance portInst, std::unordered_map<PortInstance,int,SimpleHash<PortInstance>,SimpleEqual<PortInstance>>* memoization){
+   FUInstance* inst = portInst.inst;
+   int port = portInst.port;
+
+   if(inst->tempData->nodeType == GraphComputedData::TAG_SOURCE_AND_SINK){
+      return inst->declaration->latencies[port];
    } else if(inst->tempData->nodeType == GraphComputedData::TAG_SOURCE){
-      return inst->declaration->latency;
+      return inst->declaration->latencies[port];
    } else if(inst->tempData->nodeType == GraphComputedData::TAG_UNCONNECTED){
-      return inst->declaration->latency;
+      Assert(false);
    }
 
-   auto iter = memoization->find(inst);
+   auto iter = memoization->find(portInst);
 
    if(iter != memoization->end()){
       return iter->second;
@@ -1694,20 +1787,46 @@ static int CalculateLatency_(FUInstance* inst,int sourceAndSinkAsSource, std::un
 
    int latency = 0;
    for(int i = 0; i < inst->tempData->numberInputs; i++){
-      latency = maxi(latency,CalculateLatency_(inst->tempData->inputs[i].inst.inst,true,memoization));
+      ConnectionInfo* info = &inst->tempData->inputs[i];
+
+      int lat = CalculateLatency_(info->inst,memoization);
+
+      lat += abs(inst->tempData->inputs[i].delay);
+      lat += abs(inst->declaration->inputDelays[i]);
+
+      Assert(inst->declaration->inputDelays[i] < 1000);
+
+      latency = maxi(latency,lat);
    }
 
-   int finalLatency = latency + inst->declaration->latency;
+   int finalLatency = latency + inst->declaration->latencies[port];
 
-   memoization->insert({inst,finalLatency});
+   memoization->insert({portInst,finalLatency});
 
    return finalLatency;
 }
 
-int CalculateLatency(FUInstance* inst,int sourceAndSinkAsSource){
-   std::unordered_map<FUInstance*,int> map;
+int CalculateLatency(FUInstance* inst){
+   std::unordered_map<PortInstance,int,SimpleHash<PortInstance>,SimpleEqual<PortInstance>> map;
 
-   return CalculateLatency_(inst,sourceAndSinkAsSource,&map);
+   if(inst->tempData->nodeType == GraphComputedData::TAG_SOURCE_AND_SINK){
+      return 0;
+   }
+   if(inst->tempData->nodeType == GraphComputedData::TAG_SOURCE){
+      return 0;
+   }
+   if(inst->tempData->nodeType == GraphComputedData::TAG_UNCONNECTED){
+      return 0;
+   }
+
+   int maxLatency = 0;
+   for(int i = 0; i < inst->tempData->numberInputs; i++){
+      ConnectionInfo* info = &inst->tempData->inputs[i];
+      int latency = CalculateLatency_(info->inst,&map);
+      maxLatency = maxi(maxLatency,latency);
+   }
+
+   return maxLatency;
 }
 
 // Fixes edges such that unit before connected to after, is reconnected to new unit
@@ -1727,72 +1846,53 @@ void InsertUnit(Accelerator* accel, FUInstance* before, int beforePort, FUInstan
 }
 
 void SendLatencyUpwards(FUInstance* inst){
-   int val = inst->tempData->inputDelay;
-   for(int ii = 0; ii < inst->tempData->numberInputs; ii++){
-      ConnectionInfo* info = &inst->tempData->inputs[ii];
+   int b = inst->tempData->inputDelay;
 
-      FUInstance* other = inst->tempData->inputs[ii].inst.inst;
-      for(int iii = 0; iii < other->tempData->numberOutputs; iii++){
-         ConnectionInfo* otherInfo = &other->tempData->outputs[iii];
+   for(int i = 0; i < inst->tempData->numberInputs; i++){
+      ConnectionInfo* info = &inst->tempData->inputs[i];
+
+      int a = inst->declaration->inputDelays[info->port];
+      int e = inst->tempData->inputs[info->port].delay;
+
+      FUInstance* other = inst->tempData->inputs[i].inst.inst;
+      for(int ii = 0; ii < other->tempData->numberOutputs; ii++){
+         ConnectionInfo* otherInfo = &other->tempData->outputs[ii];
+
+         int c = other->declaration->latencies[info->inst.port];
 
          if(info->inst.inst == other && info->inst.port == otherInfo->port &&
             otherInfo->inst.inst == inst && otherInfo->inst.port == info->port){
-            otherInfo->delay = inst->tempData->inputDelay - info->delay;
+            otherInfo->delay = b + a + e - c;
          }
       }
    }
 }
 
-static void SetDelayRecursive(FUInstance* inst,int delay){
-   inst->delay[0] = inst->baseDelay + delay;
-
-   if(inst->declaration->type == FUDeclaration::COMPOSITE && inst->compositeAccel != nullptr){
-      for(FUInstance* child : inst->compositeAccel->instances){
-         SetDelayRecursive(child,delay);
-      }
-   }
-}
-
-void PrintDelayInfo(Accelerator* accel){
-   for(FUInstance* inst : accel->instances){
-      printf("%s %d\n",inst->name.str,inst->tempData->inputDelay);
-      #if 1
-      for(int i = 0; i < inst->tempData->numberOutputs; i++){
-         printf(">%d\n",inst->tempData->outputs[i].delay);
-      }
-      #endif
-   }
-   printf("\n\n");
-
-}
-
 void CalculateDelay(Versat* versat,Accelerator* accel){
+   #define OUTPUT_DOT 0
+   static int graphs = 0;
    LockAccelerator(accel);
 
    DAGOrder order = accel->order;
 
-   // Calculate latency for sinks
-   int maxLatency = 0;
+   // Clear everything, just in case
+   for(FUInstance* inst : accel->instances){
+      inst->tempData->inputDelay = 0;
+
+      for(int i = 0; i < inst->tempData->numberOutputs; i++){
+         inst->tempData->outputs[i].delay = 0;
+      }
+   }
+
    for(int i = 0; i < order.numberSinks; i++){
       FUInstance* inst = order.sinks[i];
 
-      int latency = 0;
-      if(inst->tempData->nodeType == GraphComputedData::TAG_SOURCE_AND_SINK){
-         latency = CalculateLatency(inst,false);
-      } else {
-         latency = CalculateLatency(inst,true);
-      }
-
-      maxLatency = maxi(maxLatency,latency);
-
-      inst->tempData->inputDelay = (latency - inst->declaration->latency);
-
-      Assert(inst->tempData->inputDelay >= 0);
-
       SendLatencyUpwards(inst);
+      #if OUTPUT_DOT == 1
+      OutputGraphDotFile(accel,false,"debug/out1_%d.dot",graphs++);
+      #endif
    }
 
-   // Calculate latency up the DAG along compute units
    for(int i = accel->instances.Size() - order.numberSinks - 1; i >= 0; i--){
       FUInstance* inst = order.instancePtrs[i];
 
@@ -1801,7 +1901,6 @@ void CalculateDelay(Versat* versat,Accelerator* accel){
       }
 
       int minimum = (1 << 30);
-
       for(int ii = 0; ii < inst->tempData->numberOutputs; ii++){
          minimum = mini(minimum,inst->tempData->outputs[ii].delay);
       }
@@ -1810,54 +1909,33 @@ void CalculateDelay(Versat* versat,Accelerator* accel){
          inst->tempData->outputs[ii].delay -= minimum;
       }
 
-      inst->tempData->inputDelay = minimum - inst->declaration->latency;
-
-      #if 1
-      if(inst->tempData->inputDelay < 0){
-         for(int ii = 0; ii < inst->tempData->numberOutputs; ii++){
-            Assert(inst->tempData->outputs[ii].delay >= 0);
-            inst->tempData->outputs[ii].delay = abs(inst->tempData->inputDelay) - inst->tempData->outputs[ii].delay;
-         }
-         inst->tempData->inputDelay = 0;
-      } else {
-         SendLatencyUpwards(inst);
-      }
-      #endif
+      inst->tempData->inputDelay = minimum;
+      inst->baseDelay = abs(inst->tempData->inputDelay);
 
       SendLatencyUpwards(inst);
-
-      //PrintDelayInfo(accel);
+      #if OUTPUT_DOT == 1
+      OutputGraphDotFile(accel,false,"debug/out2_%d.dot",graphs++);
+      #endif
    }
 
-   // If source units cannot meet delay requirements (cannot have source delay), send input delay back to outputs
-   for(int i = 0; i < order.numberSources; i++){
-      FUInstance* inst = order.sources[i];
+   int minimum = 0;
+   for(FUInstance* inst : accel->instances){
+      minimum = mini(minimum,inst->tempData->inputDelay);
+   }
 
-      if(!CHECK_DELAY(inst,DelayType::DELAY_TYPE_SOURCE_DELAY)){
+   minimum = abs(minimum);
+   for(FUInstance* inst : accel->instances){
+      inst->tempData->inputDelay += minimum;
+   }
+
+   for(FUInstance* inst : accel->instances){
+      if(inst->tempData->nodeType == GraphComputedData::TAG_SOURCE_AND_SINK){
          for(int ii = 0; ii < inst->tempData->numberOutputs; ii++){
-            inst->tempData->outputs[ii].delay += inst->tempData->inputDelay;
+            inst->tempData->outputs[ii].delay = 0;
          }
-         inst->tempData->inputDelay = 0;
-      } else {
-         inst->baseDelay = inst->tempData->inputDelay;
-
-         inst->tempData->inputDelay = 0;
       }
+      inst->baseDelay = inst->tempData->inputDelay;
    }
-
-   #if 1
-   PrintDelayInfo(accel);
-   #endif
-
-   #if 1
-   for(int i = 0; i < order.numberSources; i++){
-      FUInstance* inst = order.sources[i];
-
-      if(CHECK_DELAY(inst,DelayType::DELAY_TYPE_SOURCE_DELAY)){
-         inst->delay[0] = inst->tempData->inputDelay;
-      }
-   }
-   #endif
 
    #if 1
    accel->locked = false;
@@ -1865,11 +1943,6 @@ void CalculateDelay(Versat* versat,Accelerator* accel){
    int delaysInserted = 0;
    for(int i = accel->instances.Size() - 1; i >= 0; i--){
       FUInstance* inst = order.instancePtrs[i];
-
-      //For now, I think it only makes sense for computing and source units to add any sort of delay
-      if(inst->tempData->nodeType != GraphComputedData::TAG_COMPUTE && inst->declaration->type == FUDeclaration::SPECIAL && inst->tempData->nodeType != GraphComputedData::TAG_SOURCE){
-         continue;
-      }
 
       for(int ii = 0; ii < inst->tempData->numberOutputs; ii++){
          ConnectionInfo* info = &inst->tempData->outputs[ii];
@@ -1882,20 +1955,39 @@ void CalculateDelay(Versat* versat,Accelerator* accel){
 
             InsertUnit(accel,inst,info->port,info->inst.inst,info->inst.port,newInst);
 
-            newInst->baseDelay = info->delay - versat->delay->latency;
+            newInst->baseDelay = info->delay - versat->delay->latencies[0];
             Assert(newInst->baseDelay >= 0);
          }
       }
    }
-   #endif
+   LockAccelerator(accel);
 
    for(FUInstance* inst : accel->instances){
-      if(inst->declaration != versat->delay){
-         SetDelayRecursive(inst,inst->tempData->inputDelay);
+      inst->tempData->inputDelay = inst->baseDelay;
+
+      if(inst->declaration->type != FUDeclaration::COMPOSITE){
+         inst->delay[0] = inst->baseDelay;
       }
    }
+   #endif
 
-   accel->cyclesPerRun = maxLatency;
+   #if OUTPUT_DOT == 1
+   OutputGraphDotFile(accel,false,"debug/out3_%d.dot",graphs++);
+   #endif
+}
+
+void SetDelayRecursive(FUInstance* inst,int delay){
+   if(inst->declaration->type != FUDeclaration::SPECIAL){
+      inst->delay[0] = inst->baseDelay + delay;
+   } else {
+      inst->delay[0] = inst->baseDelay; // Special units use fixed delay regardless of outside delay
+   }
+
+   if(inst->declaration->type == FUDeclaration::COMPOSITE){
+      for(FUInstance* child : inst->compositeAccel->instances){
+         SetDelayRecursive(child,inst->delay[0]);
+      }
+   }
 }
 
 static int NodeMappingConflict(Edge edge1,Edge edge2){

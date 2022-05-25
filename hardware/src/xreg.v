@@ -32,7 +32,6 @@ module xreg #(
     );
 
 reg [DELAY_W-1:0] delay;
-reg running;
 
 assign rdata = (ready ? out0 : 0);
 assign currentValue = out0;
@@ -43,9 +42,9 @@ begin
       out0 <= 0;
       delay <= 0;
       ready <= 0;
-      done <= 0;
-      running <= 0;
+      done <= 1;
    end else begin
+      // Native interface
       ready <= valid;
 
       if(valid & |wstrb) begin
@@ -53,18 +52,16 @@ begin
       end
 
       if(run) begin
+         done <= 0;
          delay <= delay0;
-         running <= 1;
       end 
 
-      if(running & !done) begin
-         if(|delay) begin
-            delay <= delay - 1;
-         end
-
+      if(!done) begin
          if(delay == 0) begin
             out0 <= in0;
             done <= 1;
+         end else begin
+            delay <= delay - 1;
          end
       end
    end

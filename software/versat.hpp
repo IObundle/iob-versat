@@ -37,12 +37,10 @@ struct FUDeclaration{
    int nInputs;
    int nOutputs;
 
-   int* inputShifts;
-   int* outputDelays;
+   int* inputDelays;
+   int* latencies;
 
    Accelerator* circuit; // Composite declaration
-
-   int latency_; // Assume, for now, every port has the same latency
 
    // Config and state interface
    int nConfigs;
@@ -150,7 +148,7 @@ struct DAGOrder{
 
 struct Edge{ // A edge in a graph
    PortInstance units[2];
-   int timeShift;
+   int delay;
 };
 
 struct Accelerator{
@@ -267,7 +265,7 @@ struct SubgraphData{
 
 Accelerator* Flatten(Versat* versat,Accelerator* accel,int times);
 
-void OutputGraphDotFile(Accelerator* accel,FILE* outputFile,int collapseSameEdges);
+void OutputGraphDotFile(Accelerator* accel,bool collapseSameEdges,const char* filenameFormat,...) __attribute__ ((format (printf, 3, 4)));
 
 // Versat functions
 void InitVersat(Versat* versat,int base,int numberConfigurations);
@@ -306,8 +304,9 @@ Edge* ConnectUnits(FUInstance* out,int outIndex,FUInstance* in,int inIndex);
 void VersatUnitWrite(FUInstance* instance,int address, int value);
 int32_t VersatUnitRead(FUInstance* instance,int address);
 
-int CalculateLatency(FUInstance* inst,int sourceAndSinkAsSource);
+int CalculateLatency(FUInstance* inst);
 void CalculateDelay(Versat* versat,Accelerator* accel);
+void SetDelayRecursive(FUInstance* inst,int delay);
 void CalculateGraphData(Accelerator* accel);
 void CalculateVersatData(Accelerator* accel,VersatComputedValues vals);
 

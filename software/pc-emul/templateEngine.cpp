@@ -42,7 +42,7 @@ struct Block{
    };
    Block* innerBlocks[MAX_ARGUMENTS];
    int numberInnerBlocks;
-   enum {TEXT,COMMAND,COUNT} type;
+   enum {TEXT,COMMAND} type;
 };
 
 // Static variables
@@ -72,7 +72,7 @@ static void ResetVariables(){
 
 static Expression* ParseExpression(Tokenizer* tok);
 
-// Crude LR parser for identifiers
+// Crude parser for identifiers
 static Expression* ParseIdentifier(Expression* current,Tokenizer* tok){
    Token firstId = tok->NextToken();
 
@@ -267,7 +267,6 @@ static bool IsCommandBlockType(Command com){
 }
 
 static Command ParseCommand(Tokenizer* tok){
-   // TODO: parse command
    Command com = {};
 
    Token name = tok->NextToken();

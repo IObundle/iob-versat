@@ -20,6 +20,7 @@
 #include "unitData.hpp"
 #undef INSTANTIATE_ARRAY
 
+//#define TRACE
 #define ARRAY_SIZE(array) sizeof(array) / sizeof(array[0])
 
 #define INIT(unit) \
@@ -43,6 +44,7 @@
    UPDATE(unit); \
    unit->run = 0;
 
+#ifdef TRACE
 #define VCD_UPDATE(unit) \
    unit->clk = 0; \
    unit->eval(); \
@@ -61,6 +63,11 @@
    unit->run = 1; \
    VCD_UPDATE(unit); \
    unit->run = 0;
+#else
+#define VCD_UPDATE(unit) UPDATE(unit)
+#define VCD_RESET(unit) RESET(unit)
+#define VCD_START_RUN(unit) START_RUN(unit)
+#endif
 
 #define PREAMBLE(type) \
    type* self = &data->unit; \
@@ -69,9 +76,9 @@
 #define DEBUG_PRINT(unit) \
    printf("%d %d %02x %08x %08x\n",unit->valid,unit->ready,unit->wstrb,unit->wdata,unit->rdata);
 
-static int32_t zeros[] = {0,0};
-static int32_t ones[] = {1,1};
-static int32_t threes[] = {3,3};
+static int zeros[100] = {};
+static int ones[] = {1,1};
+static int threes[] = {3,3};
 
 static int32_t* DefaultInitFunction(FUInstance* inst){
    inst->done = true;
@@ -168,13 +175,12 @@ FUDeclaration* RegisterAdd(Versat* versat){
    strcpy(decl.name.str,"xadd");
    decl.nInputs = 2;
    decl.nOutputs = 1;
-   decl.inputShifts = zeros;
-   decl.outputDelays = ones;
+   decl.inputDelays = zeros;
+   decl.latencies = ones;
    decl.extraDataSize = sizeof(Vxadd);
    decl.initializeFunction = AddInitializeFunction;
    decl.startFunction = AddStartFunction;
    decl.updateFunction = AddUpdateFunction;
-   //decl.latency = 1;
 
    return RegisterFU(versat,decl);
 }
@@ -190,10 +196,11 @@ static int32_t* RegInitializeFunction(FUInstance* inst){
    RegData* data = new (inst->extraData) RegData();
    PREAMBLE(Vxreg);
 
+   #ifdef TRACE
    self->trace(&data->vcd.vcd,99);
-
    sprintf(buffer,"./trace_out/reg%d.vcd",regCounter++);
    data->vcd.open(buffer);
+   #endif
 
    INIT(self);
 
@@ -247,8 +254,8 @@ FUDeclaration* RegisterReg(Versat* versat){
    strcpy(decl.name.str,"xreg");
    decl.nInputs = 1;
    decl.nOutputs = 1;
-   decl.inputShifts = zeros;
-   decl.outputDelays = zeros;
+   decl.inputDelays = zeros;
+   decl.latencies = zeros;
    decl.nStates = ARRAY_SIZE(regStateWires);
    decl.stateWires = regStateWires;
    decl.memoryMapDWords = 1;
@@ -258,8 +265,7 @@ FUDeclaration* RegisterReg(Versat* versat){
    decl.updateFunction = RegUpdateFunction;
    decl.memAccessFunction = MemoryAccess<Vxreg>;
    decl.delayType = DelayType::DELAY_TYPE_SINK_DELAY;
-   decl.nDelays = 1;
-   //decl.latency = 0; // Takes zero cycles to output data (already starts with data at the beginning of the run)
+   decl.nDelays = decl.nInputs;
 
    return RegisterFU(versat,decl);
 }
@@ -288,8 +294,8 @@ FUDeclaration* RegisterConst(Versat* versat){
 
    strcpy(decl.name.str,"xconst");
    decl.nOutputs = 1;
-   decl.inputShifts = zeros;
-   decl.outputDelays = zeros;
+   decl.inputDelays = zeros;
+   decl.latencies = zeros;
    decl.nConfigs = ARRAY_SIZE(constConfigWires);
    decl.configWires = constConfigWires;
    decl.startFunction = ConstStartFunction;
@@ -394,8 +400,8 @@ FUDeclaration* RegisterMem(Versat* versat,int addr_w){
    strcpy(decl.name.str,"xmem");
    decl.nInputs = 2;
    decl.nOutputs = 2;
-   decl.inputShifts = threes;
-   decl.outputDelays = threes;
+   decl.inputDelays = zeros;
+   decl.latencies = threes;
    decl.nConfigs = ARRAY_SIZE(memConfigWires);
    decl.configWires = memConfigWires;
    decl.memoryMapDWords = (1 << 10);
@@ -405,8 +411,7 @@ FUDeclaration* RegisterMem(Versat* versat,int addr_w){
    decl.updateFunction = MemUpdateFunction;
    decl.memAccessFunction = MemoryAccess<Vxmem>;
    decl.delayType = (enum DelayType)(DELAY_TYPE_SOURCE_DELAY | DELAY_TYPE_IMPLEMENTS_DONE);
-   //decl.latency = 3;
-   decl.nDelays = 1;
+   decl.nDelays = decl.nInputs;
 
    return RegisterFU(versat,decl);
 }
@@ -430,10 +435,11 @@ static int32_t* VReadInitializeFunction(FUInstance* inst){
    VReadExtra* data = new (inst->extraData) VReadExtra();
    PREAMBLE(Vvread);
 
+   #ifdef TRACE
    self->trace(&vcd->vcd,99);
-
    sprintf(buffer,"./trace_out/vread%d.vcd",vreadCounter++);
    vcd->open(buffer);
+   #endif
 
    data->memoryAccessCounter = INITIAL_MEMORY_LATENCY;
 
@@ -514,8 +520,8 @@ FUDeclaration* RegisterVRead(Versat* versat){
    strcpy(decl.name.str,"vread");
    decl.nInputs = 0;
    decl.nOutputs = 1;
-   decl.inputShifts = zeros;
-   decl.outputDelays = ones;
+   decl.inputDelays = zeros;
+   decl.latencies = ones;
    decl.nConfigs = ARRAY_SIZE(vreadConfigWires);
    decl.configWires = vreadConfigWires;
    decl.doesIO = true;
@@ -524,7 +530,6 @@ FUDeclaration* RegisterVRead(Versat* versat){
    decl.startFunction = VReadStartFunction;
    decl.updateFunction = VReadUpdateFunction;
    decl.delayType = (enum DelayType)(DELAY_TYPE_SOURCE_DELAY | DELAY_TYPE_IMPLEMENTS_DONE);
-   //decl.latency = 1;
    decl.nDelays = 1;
 
    return RegisterFU(versat,decl);
@@ -597,8 +602,8 @@ FUDeclaration* RegisterVWrite(Versat* versat){
    strcpy(decl.name.str,"vwrite");
    decl.nInputs = 1;
    decl.nOutputs = 0;
-   decl.inputShifts = zeros;
-   decl.outputDelays = zeros;
+   decl.inputDelays = zeros;
+   decl.latencies = zeros;
    decl.nConfigs = ARRAY_SIZE(vwriteConfigWires);
    decl.configWires = vwriteConfigWires;
    decl.doesIO = true;
@@ -607,8 +612,7 @@ FUDeclaration* RegisterVWrite(Versat* versat){
    decl.startFunction = VWriteStartFunction;
    decl.updateFunction = VWriteUpdateFunction;
    decl.delayType = (enum DelayType)(DELAY_TYPE_SINK_DELAY | DELAY_TYPE_IMPLEMENTS_DONE);
-   //decl.latency = 0; // Does not matter, does not output anything
-   decl.nDelays = 1;
+   decl.nDelays = decl.nInputs;
 
    return RegisterFU(versat,decl);
 }
@@ -639,13 +643,13 @@ FUDeclaration* RegisterDebug(Versat* versat){
    strcpy(decl.name.str,"debug");
    decl.nInputs = 99;
    decl.nOutputs = 0;
-   decl.inputShifts = zeros;
-   decl.outputDelays = zeros;
+   decl.inputDelays = zeros;
+   decl.latencies = zeros;
    decl.extraDataSize = sizeof(int);
    decl.startFunction = DebugStartFunction;
    decl.updateFunction = DebugUpdateFunction;
    decl.delayType = DELAY_TYPE_SINK_DELAY;
-   decl.nDelays = 1;
+   decl.nDelays = decl.nInputs;
 
    return RegisterFU(versat,decl);
 }
@@ -661,10 +665,12 @@ static int32_t* PipelineRegisterInitializeFunction(FUInstance* inst){
    PipeRegData* data = new (inst->extraData) PipeRegData();
    PREAMBLE(Vpipeline_register);
 
+   #ifdef TRACE
    self->trace(&data->vcd.vcd,99);
 
    sprintf(buffer,"./trace_out/pipeReg%d.vcd",pipeRegCounter++);
    data->vcd.open(buffer);
+   #endif
 
    INIT(self);
 
@@ -711,9 +717,8 @@ FUDeclaration* RegisterPipelineRegister(Versat* versat){
    strcpy(decl.name.str,"pipeline_register");
    decl.nInputs = 1;
    decl.nOutputs = 1;
-   decl.inputShifts = zeros;
-   decl.outputDelays = ones;
-   //decl.latency = 1;
+   decl.inputDelays = zeros;
+   decl.latencies = ones;
    decl.extraDataSize = sizeof(PipeRegData);
    decl.initializeFunction = PipelineRegisterInitializeFunction;
    decl.startFunction = PipelineRegisterStartFunction;

@@ -1,5 +1,7 @@
 #include "unitVCD.hpp"
 
+#include "utils.hpp"
+
 static bool initTracing = false;
 static VerilatedVcdC* vcdFiles[128];
 static int openedVcdFiles = 0;
@@ -33,6 +35,8 @@ void VCDData::dump()
 
 void VCDData::open(const char* filepath){
    vcd.open(filepath);
+
+   Assert(openedVcdFiles < 128);
 
    vcdFiles[openedVcdFiles++] = &vcd;
 }

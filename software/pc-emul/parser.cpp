@@ -196,6 +196,31 @@ Token ExtendToken(Token t1,Token t2){
    return t1;
 }
 
+int CountSubstring(SizedString str,SizedString substr){
+   if(substr.size == 0){
+      return 0;
+   }
+
+   int count = 0;
+   for(int i = 0; i < (str.size - substr.size + 1); i++){
+      const char* view = &str.str[i];
+
+      bool possible = true;
+      for(int ii = 0; ii < substr.size; ii++){
+         if(view[ii] != substr.str[ii]){
+            possible = false;
+            break;
+         }
+      }
+
+      if(possible){
+         count += 1;
+      }
+   }
+
+   return count;
+}
+
 void StoreToken(Token token,char* buffer){
    memcpy(buffer,token.str,token.size);
    buffer[token.size] = '\0';
