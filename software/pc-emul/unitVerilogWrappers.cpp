@@ -728,5 +728,51 @@ FUDeclaration* RegisterPipelineRegister(Versat* versat){
    return RegisterFU(versat,decl);
 }
 
+int32_t* MergeStartFunction(FUInstance* inst){
+   static int32_t out;
+
+   int32_t* extraData = (int32_t*) inst->extraData;
+
+   extraData[0] = inst->delay[0];
+   extraData[1] = 0;
+
+   out = GetInputValue(inst,0);
+
+   return &out;
+}
+
+int32_t* MergeUpdateFunction(FUInstance* inst){
+   static int32_t out;
+
+   int32_t* extraData = (int32_t*) inst->extraData; // 0 - delay, 1 - counter
+
+   out = GetInputValue(inst,extraData[1]);
+
+   if(extraData[0] == 0){
+      extraData[1] += 1;
+   } else {
+      extraData[0] -= 1;
+   }
+
+   return &out;
+}
+
+FUDeclaration* RegisterMerge(Versat* versat){
+   static int inputDelays[] = {0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15};
+   FUDeclaration decl = {};
+
+   strcpy(decl.name.str,"Merge");
+   decl.nInputs = 16;
+   decl.nOutputs = 1;
+   decl.inputDelays = inputDelays;
+   decl.latencies = ones;
+   decl.extraDataSize = sizeof(int) * 2;
+   decl.startFunction = MergeStartFunction;
+   decl.updateFunction = MergeUpdateFunction;
+   decl.type = FUDeclaration::SINGLE;
+   decl.nDelays = 1;
+
+   return RegisterFU(versat,decl);
+}
 
 

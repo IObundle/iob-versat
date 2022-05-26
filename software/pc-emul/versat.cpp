@@ -408,6 +408,7 @@ void InitVersat(Versat* versat,int base,int numberConfigurations){
    RegisterMem(versat,10);
    RegisterDebug(versat);
    RegisterConst(versat);
+   RegisterMerge(versat);
 
    RegisterOperators(versat);
 }
@@ -1071,7 +1072,7 @@ Accelerator* Flatten(Versat* versat,Accelerator* accel,int times){
 
 // Debug output file
 
-#define DUMP_VCD 0
+#define DUMP_VCD 1
 
 static FILE* accelOutputFile = nullptr;
 static std::array<char,4> currentMapping = {'a','a','a','a'};
@@ -1893,7 +1894,7 @@ void SendLatencyUpwards(FUInstance* inst){
 }
 
 void CalculateDelay(Versat* versat,Accelerator* accel){
-   #define OUTPUT_DOT 0
+   #define OUTPUT_DOT 1
    static int graphs = 0;
    LockAccelerator(accel);
 
@@ -2001,15 +2002,17 @@ void CalculateDelay(Versat* versat,Accelerator* accel){
 }
 
 void SetDelayRecursive(FUInstance* inst,int delay){
-   if(inst->declaration->type != FUDeclaration::SPECIAL){
+   if(inst->declaration->type != FUDeclaration::SPECIAL && inst->declaration != inst->accel->versat->delay){
       inst->delay[0] = inst->baseDelay + delay;
    } else {
       inst->delay[0] = inst->baseDelay; // Special units use fixed delay regardless of outside delay
    }
 
+   int fullDelay = inst->delay[0];
+
    if(inst->declaration->type == FUDeclaration::COMPOSITE){
       for(FUInstance* child : inst->compositeAccel->instances){
-         SetDelayRecursive(child,inst->delay[0]);
+         SetDelayRecursive(child,fullDelay);
       }
    }
 }

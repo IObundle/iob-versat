@@ -249,25 +249,35 @@ static int CharToInt(char ch){
    }
 }
 
-int ParseInt(SizedString str){
-   if(str.size >= 2 && str.str[0] == '0' && (str.str[1] == 'x' || str.str[1] == 'X')){ // Hexadecimal
+int ParseInt(SizedString ss){
+   const char* str = ss.str;
+   int size = ss.size;
+
+   int sign = 1;
+   if(size >= 1 && str[0] == '-'){
+      sign = -1;
+      size -= 1;
+      str += 1;
+   }
+
+   if(size >= 2 && str[0] == '0' && (str[1] == 'x' || str[1] == 'X')){ // Hexadecimal
       int res = 0;
 
-      for(int i = 2; i < str.size; i++){
+      for(int i = 2; i < size; i++){
          res *= 16;
-         res += CharToInt(str.str[i]);
+         res += CharToInt(str[i]);
       }
 
-      return res;
+      return (res * sign);
    } else {
       int res = 0;
-      for(int i = 0; i < str.size; i++){
-         Assert(str.str[i] >= '0' && str.str[i] <= '9');
+      for(int i = 0; i < size; i++){
+         Assert(str[i] >= '0' && str[i] <= '9');
 
          res *= 10;
-         res += CharToInt(str.str[i]);
+         res += CharToInt(str[i]);
       }
-      return res;
+      return (res * sign);
    }
 }
 
