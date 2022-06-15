@@ -45,7 +45,7 @@ OBJ+=./build/verilated_vcd_c.o
 	mv *.d ./build/;
 
 ./build/V%.h: $(VERSAT_HW_DIR)/src/%.v $(VERSAT_HDR) $(HDR) ./build/typeInfo.inc
-	verilator --trace -CFLAGS "-g -m32 -std=c++11" -I$(VERSAT_HW_DIR)/src -I$(VERSAT_HW_DIR)/include -I$(MEM_DIR)/ram/2p_ram -I$(CACHE_DIR)/submodules/MEM/tdp_ram -cc -Mdir ./obj $<;
+	verilator --trace -CFLAGS "-g -m32 -std=c++11" -I$(VERSAT_HW_DIR)/src -I$(VERSAT_HW_DIR)/include -I$(VERSAT_DIR)/submodules/MEM/ram/2p_ram -I$(CACHE_DIR)/submodules/MEM/tdp_ram -cc -Mdir ./obj $<;
 	cd ./obj && make -f V$*.mk;
 	mkdir -p ./build; mv ./obj/*.o ./build;
 	mv ./obj/*.h ./build
