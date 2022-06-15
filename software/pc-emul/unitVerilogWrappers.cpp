@@ -377,24 +377,6 @@ static int32_t* MemUpdateFunction(FUInstance* inst){
 }
 
 FUDeclaration* RegisterMem(Versat* versat,int addr_w){
-   #if 0
-   char* buffer = (char*) malloc(128 * sizeof(char)); // For now this memory is leaked.
-   Wire* instanceWires = (Wire*) malloc(sizeof(Wire) * ARRAY_SIZE(memConfigWires)); // For now this memory is leaked.
-
-   assert(addr_w < 20);
-
-   sprintf(buffer,"xmem #(.ADDR_W(%d))",addr_w);
-
-   memcpy(instanceWires,memConfigWires,sizeof(Wire) * ARRAY_SIZE(memConfigWires));
-
-   for(int i = 0; i < ARRAY_SIZE(memConfigWires); i++){
-      Wire* wire = &instanceWires[i];
-
-      if(wire->bitsize == MEM_SUBSTITUTE_ADDR_TYPE)
-         wire->bitsize = addr_w;
-   }
-   #endif
-
    FUDeclaration decl = {};
 
    strcpy(decl.name.str,"xmem");
@@ -524,7 +506,7 @@ FUDeclaration* RegisterVRead(Versat* versat){
    decl.latencies = ones;
    decl.nConfigs = ARRAY_SIZE(vreadConfigWires);
    decl.configWires = vreadConfigWires;
-   decl.doesIO = true;
+   decl.nIOs = 1;
    decl.extraDataSize = sizeof(VReadExtra);
    decl.initializeFunction = VReadInitializeFunction;
    decl.startFunction = VReadStartFunction;
@@ -606,7 +588,7 @@ FUDeclaration* RegisterVWrite(Versat* versat){
    decl.latencies = zeros;
    decl.nConfigs = ARRAY_SIZE(vwriteConfigWires);
    decl.configWires = vwriteConfigWires;
-   decl.doesIO = true;
+   decl.nIOs = 1;
    decl.extraDataSize = sizeof(Vvwrite);
    decl.initializeFunction = VWriteInitializeFunction;
    decl.startFunction = VWriteStartFunction;

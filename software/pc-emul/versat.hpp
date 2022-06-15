@@ -5,8 +5,10 @@
 #include <stdint.h>
 #include <unordered_map>
 #include <initializer_list>
+#include <vector>
 
 #include "utils.hpp"
+#include "memory.hpp"
 
 // Forward declarations
 struct Versat;
@@ -50,10 +52,10 @@ struct FUDeclaration{
    Wire* stateWires;
 
    int nDelays; // Code only handles 1 for now, hardware needs this value for correct generation
+   int nIOs;
 
    int memoryMapDWords;
    int extraDataSize;
-   bool doesIO;
    FUFunction initializeFunction;
    FUFunction startFunction;
    FUFunction updateFunction;
@@ -80,7 +82,7 @@ struct GraphComputedData{
    int numberOutputs;
    int inputPortsUsed;
    int outputPortsUsed;
-   ConnectionInfo* inputs; // Delay not used
+   ConnectionInfo* inputs;
    ConnectionInfo* outputs;
    enum {TAG_UNCONNECTED,TAG_COMPUTE,TAG_SOURCE,TAG_SINK,TAG_SOURCE_AND_SINK} nodeType;
    int inputDelay;
@@ -122,9 +124,16 @@ struct FUInstance{
    char tag;
 };
 
+struct DebugState{
+   bool outputAccelerator;
+};
+
 struct Versat{
 	Pool<FUDeclaration> declarations;
 	Pool<Accelerator> accelerators;
+
+	Arena permanent;
+	Arena temp;
 
 	int base;
 	int numberConfigurations;
@@ -134,6 +143,11 @@ struct Versat{
    FUDeclaration* input;
    FUDeclaration* output;
    FUDeclaration* pipelineRegister;
+
+   DebugState debug;
+
+   // Command line options
+   std::vector<const char*> includeDirs;
 };
 
 struct DAGOrder{
@@ -165,7 +179,7 @@ struct Accelerator{
    int32_t* memMapped;
    int32_t* delay;
 
-   // TODO: Maybe add config, state and memMapped to these structs
+   // TODO: Maybe add the config, state and memMapped pointers directly to these structs, instead of separated
    AllocInfo configAlloc;
    AllocInfo stateAlloc;
    AllocInfo memMappedAlloc;
@@ -174,7 +188,7 @@ struct Accelerator{
 	void* configuration;
 	int configurationSize;
 
-	bool locked; // Used for debug purposes
+	enum Locked {FREE,GRAPH,ORDERED} locked;
 	void* graphDataMem;
 	void* versatDataMem;
    DAGOrder order;
@@ -192,10 +206,22 @@ struct UnitInfo{
    int nStates;
    int stateBitSize;
    int memoryMapDWords;
+   int memoryAddressBits;
+   int memoryMappingAddressBits;
+   int configurationAddressBits;
+   int stateConfigurationAddressBits;
+   int memoryConfigDecisionBit;
+   Range memoryAddressRange;
+   Range configAddressRange;
+   Range stateAddressRange;
+   Range configBitsRange;
+   Range stateBitsRange;
+   int lowerAddressSize;
+   int stateAddressBits;
    int implementsDelay;
    int numberDelays;
    int implementsDone;
-   int doesIO;
+   int nIOs;
 };
 
 struct MappingNode{ // Mapping (edge to edge or node to node)
@@ -220,11 +246,6 @@ struct ConsolidationGraph{
 struct Mapping{
    FUInstance* source;
    FUInstance* sink;
-};
-
-struct Range{
-   int high;
-   int low;
 };
 
 struct VersatComputedValues{
@@ -269,20 +290,24 @@ void OutputGraphDotFile(Accelerator* accel,bool collapseSameEdges,const char* fi
 
 // Versat functions
 void InitVersat(Versat* versat,int base,int numberConfigurations);
+void ParseCommandLineOptions(Versat* versat,int argc,const char** argv);
+void ParseVersatSpecification(Versat* versat,const char* filepath);
+
 FUDeclaration* RegisterFU(Versat* versat,FUDeclaration declaration);
 void OutputVersatSource(Versat* versat,Accelerator* accel,const char* sourceFilepath,const char* constantsFilepath,const char* dataFilepath);
 void OutputCircuitSource(Versat* versat,FUDeclaration accelDecl,Accelerator* accel,FILE* file);
 void OutputMemoryMap(Versat* versat,Accelerator* accel);
+void OutputUnitInfo(FUInstance* instance);
 
 FUDeclaration* GetTypeByName(Versat* versat,SizedString str);
 
 // Accelerator functions
 Accelerator* CreateAccelerator(Versat* versat);
 FUInstance* CreateFUInstance(Accelerator* accel,FUDeclaration* type);
-FUInstance* CreateNamedFUInstance(Accelerator* accel,FUDeclaration* type,SizedString entityName,HierarchyName* hierarchyParent);
+FUInstance* CreateNamedFUInstance(Accelerator* accel,FUDeclaration* type,SizedString entityName);
 void RemoveFUInstance(Accelerator* accel,FUInstance* inst);
 
-void LockAccelerator(Accelerator* accel);
+void LockAccelerator(Accelerator* accel,Accelerator::Locked);
 
 // Can use printf style arguments, but only chars and integers.
 // Put arguments right after format string
@@ -317,5 +342,7 @@ Accelerator* MergeGraphs(Versat* versat,Accelerator* accel1,Accelerator* accel2,
 SubgraphData SubGraphAroundInstance(Versat* versat,Accelerator* accel,FUInstance* instance,int layers);
 
 FUInstance* GetInstance(Accelerator* circuit,std::initializer_list<char*> names);
+
+void Hook(Versat* versat);
 
 #endif // INCLUDED_VERSAT_HPP

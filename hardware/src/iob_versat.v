@@ -23,7 +23,7 @@ module iob_versat
  		`include "cpu_axi4lite_s_if.v"
 	`endif
 
-   `ifdef IO
+   `ifdef nIO
       `include "cpu_axi4_m_if.v"
    `endif
 
@@ -31,7 +31,7 @@ module iob_versat
    input rst
 	);
 
-`ifdef IO
+`ifdef nIO
    wire [`nIO-1:0]               m_databus_ready;
    wire [`nIO-1:0]               m_databus_valid;
    wire [`nIO*`IO_ADDR_W-1:0]    m_databus_addr;
@@ -159,7 +159,7 @@ versat_instance #(.ADDR_W(ADDR_W),.DATA_W(DATA_W)) xversat(
       .wdata(wdata),
       .ready(ready),
 
-`ifdef IO
+`ifdef nIO
       .m_databus_ready(m_databus_ready),
       .m_databus_valid(m_databus_valid),
       .m_databus_addr(m_databus_addr),
@@ -173,8 +173,6 @@ versat_instance #(.ADDR_W(ADDR_W),.DATA_W(DATA_W)) xversat(
    ); 
 
 endmodule
-
-`include "interconnect.vh"
 
 module xmerge
   #(

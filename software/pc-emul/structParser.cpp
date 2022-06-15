@@ -2,9 +2,8 @@
 
 #include "parser.hpp"
 #include "utils.hpp"
-//#include "type.hpp"
 
-struct Member{
+struct SimpleMemberInfo{
    char baseTypeName[512];
    char arrayDefinition[512];
    bool hasArray;
@@ -12,15 +11,15 @@ struct Member{
    char name[512];
 };
 
-struct TypeInfo{
-   Member* members;
+struct SimpleTypeInfo{
+   SimpleMemberInfo* members;
    int nMembers;
    char name[512];
 };
 
-static TypeInfo typeInfoBuffer[1024*1024];
+static SimpleTypeInfo typeInfoBuffer[1024*1024];
 static int typeInfoIndex;
-static Member memberBuffer[1024*1024];
+static SimpleMemberInfo memberBuffer[1024*1024];
 static int memberIndex;
 
 static void SkipQualifiers(Tokenizer* tok){
@@ -40,25 +39,25 @@ static void SkipQualifiers(Tokenizer* tok){
    }
 }
 
-static TypeInfo* NameToType(char* name){
+static SimpleTypeInfo* NameToType(char* name){
    for(int i = 0; i < typeInfoIndex; i++){
       if(CompareString(typeInfoBuffer[i].name,name)){
          return &typeInfoBuffer[i];
       }
    }
 
-   TypeInfo type = {};
+   SimpleTypeInfo type = {};
 
    strcpy(type.name,name);
 
-   TypeInfo* res = &typeInfoBuffer[typeInfoIndex];
+   SimpleTypeInfo* res = &typeInfoBuffer[typeInfoIndex];
    typeInfoBuffer[typeInfoIndex++] = type;
 
    return res;
 }
 
-static TypeInfo* AddType(TypeInfo info){
-   TypeInfo* type = NameToType(info.name);
+static SimpleTypeInfo* AddType(SimpleTypeInfo info){
+   SimpleTypeInfo* type = NameToType(info.name);
 
    *type = info;
 
@@ -79,8 +78,8 @@ static int ParseEvalExpression(Tokenizer* tok){
    return val;
 }
 
-static Member ParseMember(Tokenizer* tok){
-   Member member = {};
+static SimpleMemberInfo ParseMember(Tokenizer* tok){
+   SimpleMemberInfo member = {};
    SkipQualifiers(tok);
 
    Token token = tok->PeekToken();
@@ -90,12 +89,15 @@ static Member ParseMember(Tokenizer* tok){
       tok->AdvancePeek(token);
 
       Token peek = tok->PeekToken();
-      if(CompareToken(peek,"{")){
-         tok->AdvancePeek(tok->PeekFindUntil("}"));
-         tok->AssertNextToken("}");
-      } else {
+      if(!CompareToken(peek,"{")){
          Token enumName = tok->NextToken();
          StoreToken(enumName,member.baseTypeName);
+      }
+
+      peek = tok->PeekToken();
+      if(CompareToken(peek,"{")){
+         tok->NextFindUntil("}");
+         tok->AssertNextToken("}");
       }
       strcpy(member.baseTypeName,"int"); // TODO: Set enums to int, easier but hackish
    } else {
@@ -103,7 +105,7 @@ static Member ParseMember(Tokenizer* tok){
 
       Token peek = tok->PeekToken();
       if(CompareToken(peek,"<")){ // Template
-         tok->AdvancePeek(tok->PeekFindUntil(">"));
+         tok->NextFindUntil(">");
          Token end = tok->AssertNextToken(">");
 
          token = ExtendToken(token,end);
@@ -127,8 +129,7 @@ static Member ParseMember(Tokenizer* tok){
    if(CompareToken(peek,"[")){
       tok->AdvancePeek(peek);
 
-      Token peek = tok->PeekFindUntil("]");
-      tok->AdvancePeek(peek);
+      Token peek = tok->NextFindUntil("]");
 
       StoreToken(peek,member.arrayDefinition);
       member.hasArray = true;
@@ -141,9 +142,9 @@ static Member ParseMember(Tokenizer* tok){
    return member;
 }
 
-static TypeInfo* ParseStruct(Tokenizer* tok,int insideStruct){
+static SimpleTypeInfo* ParseStruct(Tokenizer* tok,int insideStruct){
    static int unnamedStructIndex = 0;
-   TypeInfo structInfo = {};
+   SimpleTypeInfo structInfo = {};
 
    Token token = tok->NextToken();
    Assert(CompareToken(token,"struct"));
@@ -178,7 +179,7 @@ static TypeInfo* ParseStruct(Tokenizer* tok,int insideStruct){
          break;
       }
 
-      Member info = ParseMember(tok);
+      SimpleMemberInfo info = ParseMember(tok);
 
       if(tok->Done()){
          break;
@@ -206,7 +207,7 @@ void ParseHeaderFile(Tokenizer* tok){
 
    #if 0
    for(int i = 0; i < typeInfoIndex; i++){
-      TypeInfo* info = &typeInfoBuffer[i];
+      SimpleTypeInfo* info = &typeInfoBuffer[i];
 
       printf("\n%s\n",info->name);
 
@@ -233,13 +234,13 @@ void OutputRegisterTypesFunction(FILE* output){
    fprintf(output,"static void RegisterComplexTypes(){\n");
 
    for(int i = 0; i < typeInfoIndex; i++){
-      TypeInfo* info = &typeInfoBuffer[i];
+      SimpleTypeInfo* info = &typeInfoBuffer[i];
 
       fprintf(output,"  RegisterStruct(A(%s),{\n",info->name);
 
       bool first = true;
       for(int ii = 0; ii < info->nMembers; ii++){
-         Member* m = &info->members[ii];
+         SimpleMemberInfo* m = &info->members[ii];
 
          const char* arrayElements = "0";
          const char* hasArray = "false";
@@ -272,7 +273,7 @@ void OutputRegisterTypesFunction(FILE* output){
    fprintf(output,"}\n");
 }
 
-#if 1
+#ifdef STANDALONE
 int main(int argc,const char* argv[]){
    if(argc < 3){
       printf("Error, need at least 3 arguments: <program> <outputFile> <inputFile1> ...");
@@ -284,10 +285,15 @@ int main(int argc,const char* argv[]){
 
    for(int i = 0; i < argc - 2; i++){
       FILE* input = fopen(argv[2+i],"r");
+
+      if(!input){
+         printf("Failed to open file: %s\n",argv[2+i]);
+         return 0;
+      }
+
       int fileSize = fread(buffer,sizeof(char),256*1024*1024,input);
 
-      Tokenizer tok(buffer,fileSize,"[]{};*<>",{});
-
+      Tokenizer tok(MakeSizedString(buffer,fileSize),"[]{};*<>",{});
       ParseHeaderFile(&tok);
    }
 

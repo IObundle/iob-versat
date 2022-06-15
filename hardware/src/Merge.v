@@ -31,7 +31,7 @@ module Merge #(
     input [DATA_W-1:0]            in14,
     input [DATA_W-1:0]            in15,
 
-    output [DATA_W-1:0]           out0,
+    output reg [DATA_W-1:0]       out0,
 
     input [9:0]                   delay0
     );
@@ -59,7 +59,7 @@ assign select[15] = in15;
 
 reg [3:0] counter;
 
-always @(posedge clk,posedge pos)
+always @(posedge clk,posedge rst)
 begin
      if(rst) begin
           delay <= 0;

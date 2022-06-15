@@ -44,7 +44,7 @@ module vwrite #(
    input [`MEM_ADDR_W-1:0] startB,
    input [`MEM_ADDR_W-1:0] shiftB,
    input [`MEM_ADDR_W-1:0] incrB,
-   input [`PERIOD_W-1:0]   delay0, // delayB
+   input [32-1:0]          delay0, // delayB
    input                   reverseB,
    input                   extB,
    input [`MEM_ADDR_W-1:0] iter2B,
@@ -139,7 +139,7 @@ module vwrite #(
                        .start(startB),
                        .shift(shiftB),
                        .incr(incrB),
-                       .delay(delay0),
+                       .delay(delay0[9:0]),
                        .iterations2(iter2B),
                          .period2(per2B),
                          .shift2(shift2B),

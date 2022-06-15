@@ -1,0 +1,4 @@
+#ifndef INCLUDED_PATH
+#define INCLUDED_PATH
+
+#endif // INCLUDED_PATH

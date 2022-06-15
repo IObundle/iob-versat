@@ -1,4 +1,5 @@
 `timescale 1ns / 1ps
+`include "system.vh"
 `include "axi.vh"
 `include "xversat.vh"
 `include "xdefs.vh"
@@ -14,35 +15,35 @@ module @{accel.name.str} #(
    output done,
 
    #{for i accel.nInputs}
-   input [DATA_W-1:0]              in@{i},
+   (* latency=2 *) input [DATA_W-1:0]              in@{i},
    #{end}
 
    #{for i accel.nOutputs}
-   output [DATA_W-1:0]             out@{i},
+   (* latency=2 *) output [DATA_W-1:0]             out@{i},
    #{end}
 
    #{for i accel.nConfigs}
    #{set wire accel.configWires[i]}
-   input [@{wire.bitsize-1}:0]     @{wire.name}_@{i},
+   input [@{wire.bitsize-1}:0]     @{wire.name},
    #{end}
 
    #{for i accel.nStates}
    #{set wire accel.stateWires[i]}
-   output [@{wire.bitsize-1}:0]    @{wire.name}_@{i},
+   output [@{wire.bitsize-1}:0]    @{wire.name},
    #{end}
 
    #{for i accel.nDelays}
    input [31:0]                    delay@{i},
    #{end}
 
-   #{if accel.doesIO}
+   #{if accel.nIOs}
    // Databus master interface
-   input [`nIO-1:0]                m_databus_ready,
-   output [`nIO-1:0]               m_databus_valid,
-   output [`nIO*AXI_ADDR_W-1:0]    m_databus_addr,
-   input [`nIO*`DATAPATH_W-1:0]    m_databus_rdata,
-   output [`nIO*`DATAPATH_W-1:0]   m_databus_wdata,
-   output [`nIO*`DATAPATH_W/8-1:0] m_databus_wstrb,
+   input [@{accel.nIOs - 1}:0]                databus_ready,
+   output [@{accel.nIOs - 1}:0]               databus_valid,
+   output [@{accel.nIOs} * AXI_ADDR_W-1:0]    databus_addr,
+   input [@{accel.nIOs} * `DATAPATH_W-1:0]    databus_rdata,
+   output [@{accel.nIOs} * `DATAPATH_W-1:0]   databus_wdata,
+   output [@{accel.nIOs} * `DATAPATH_W/8-1:0] databus_wstrb,
    #{end}
 
    #{if accel.memoryMapDWords}
@@ -84,8 +85,8 @@ wire [@{numberUnits - 1}:0] unitDone;
 assign done = &unitDone;
 
 wire [31:0] #{join ", " for inst instances}
-   #{if inst.tempData->outputPortsUsed} 
-      #{join ", " for j inst.tempData->outputPortsUsed} output_@{inst.id}_@{j} #{end}
+   #{if inst.tempData.outputPortsUsed} 
+      #{join ", " for j inst.tempData.outputPortsUsed} output_@{inst.id}_@{j} #{end}
    #{else}
       unused_@{inst.id} #{end}
 #{end};
@@ -110,66 +111,61 @@ end
 #{set stateDataIndex 0}
 #{set ioIndex 0}
 #{set memoryMappedIndex 0}
-#{set configsSeen 0}
-#{set statesSeen 0}
 #{set inputSeen 0}
 #{set delaySeen 0}
 #{for inst instances}
 #{set decl inst.declaration}
-   @{decl->name.str} @{decl->name.str}_@{counter} (
-      #{if decl->name.str == "circuitInput"}
-         .in0(in@{inputSeen}),
-      #{set inputSeen inputSeen + 1}
-      #{end}
-
-      #{if decl->name.str == "circuitOutput"}
-      #{for i accel.nOutputs}
-         .out@{i}(out@{i}),
-      #{end}
-      #{end}
-
-      #{for i inst.tempData->outputPortsUsed}
+   #{if decl.name.str == "circuitInput"}
+   #{else}
+   #{if decl.name.str == "circuitOutput"}
+   #{else}
+   @{decl.name.str} @{decl.name.str}_@{counter} (
+      #{for i inst.tempData.outputPortsUsed}
          .out@{i}(output_@{inst.id}_@{i}),
-      #{end} 
-
-      #{for i inst.tempData->inputPortsUsed}
-         .in@{i}(output_@{inst.tempData->inputs[i].inst.inst->id}_@{inst.tempData->inputs[i].inst.port}),
       #{end}
 
-      #{for i decl->nConfigs}
-      #{set wire decl->configWires[i]}
-         .@{wire.name}_@{i}(@{accel.configWires[configsSeen].name}_@{configsSeen}),
+      #{for i inst.tempData.inputPortsUsed}
+      #{if inst.tempData.inputs[i].inst.inst.declaration.type == 2}
+         .in@{i}(in@{inst.tempData.inputs[i].inst.port}),
+      #{else}
+         .in@{i}(output_@{inst.tempData.inputs[i].inst.inst.id}_@{inst.tempData.inputs[i].inst.port}),
+      #{end}
+      #{end}
+
+      #{for i decl.nConfigs}
+      #{set wire decl.configWires[i]}
+         .@{wire.name}(@{accel.configWires[configsSeen].name}),
       #{inc configsSeen}
       #{end}
 
-      #{for i decl->nDelays}
+      #{for i decl.nDelays}
          .delay@{i}(delay@{delaySeen}),
       #{inc delaySeen}
       #{end}
 
-      #{for i decl->nStates}
-      #{set wire decl->stateWires[i]}
-         .@{wire.name}(@{accel.stateWires[statesSeen].name}_@{statesSeen}),
-      #{inc statesSeen}
+      #{for i decl.nStates}
+      #{set wire decl.stateWires[i]}
+         .@{wire.name}(@{accel.stateWires[statesSeen].name}),
+      #{inc stateSeen}
       #{end}      
 
-      #{if decl->memoryMapDWords}
+      #{if decl.memoryMapDWords}
       .valid(memoryMappedEnable[@{memoryMappedIndex}]),
       .wstrb(wstrb),
-      .addr(addr[@{memoryMappedUnitAddressRange - 1}:0]),
+      .addr(addr[@{inst.versatData.addressTopBit}:0]),
       .rdata(unitRData[@{memoryMappedIndex}]),
       .ready(unitReady[@{memoryMappedIndex}]),
       .wdata(wdata),
       #{inc memoryMappedIndex}
       #{end}
 
-      #{if decl->doesIO}
-      .databus_ready(m_databus_ready[@{ioIndex}]),
-      .databus_valid(m_databus_valid[@{ioIndex}]),
-      .databus_addr(m_databus_addr[@{ioIndex}]),
-      .databus_rdata(m_databus_rdata[@{ioIndex}]),
-      .databus_wdata(m_databus_wdata[@{ioIndex}]),
-      .databus_wstrb(m_databus_wstrb[@{ioIndex}]),
+      #{for i decl.nIOs}
+      .databus_ready(databus_ready[@{ioIndex}]),
+      .databus_valid(databus_valid[@{ioIndex}]),
+      .databus_addr(databus_addr[@{ioIndex * 32}+:32]),
+      .databus_rdata(databus_rdata[@{ioIndex * 32}+:32]),
+      .databus_wdata(databus_wdata[@{ioIndex * 32}+:32]),
+      .databus_wstrb(databus_wstrb[@{ioIndex * 4}+:4]),
       #{inc ioIndex}
       #{end} 
       
@@ -178,8 +174,19 @@ end
       .clk(clk),
       .rst(rst)
    );
-
+      #{end}
+   #{end}
 #{set counter counter + 1}
+#{end}
+
+#{for inst instances}
+#{set decl inst.declaration}
+#{if decl.name.str == "circuitOutput"}
+   #{for i inst.tempData.numberInputs}
+   #{set in inst.tempData.inputs[i]}
+   assign out@{i} = output_@{in.inst.inst.id}_@{in.inst.port};
+   #{end}
+#{end}
 #{end}
 
 endmodule

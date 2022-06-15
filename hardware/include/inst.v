@@ -8,7 +8,7 @@
    iob_versat versat
       ( 
       // AXI4 master interface
-      `ifdef IO
+      `ifdef nIO
       //address write
       .m_axi_awid(m_axi_awid[1*1+:1]), 
       .m_axi_awaddr(m_axi_awaddr[1*`DDR_ADDR_W+:`DDR_ADDR_W]), 
@@ -65,7 +65,7 @@
       .rst       (reset)
       );
 
-   `ifndef IO 
+   `ifndef nIO 
       assign m_axi_awvalid[1*1+:1] = 1'b0;
       assign m_axi_wvalid[1*1+:1] = 1'b0;
       assign m_axi_bready[1*1+:1] = 1'b0;

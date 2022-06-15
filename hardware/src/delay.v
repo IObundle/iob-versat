@@ -18,7 +18,7 @@ module delay #(
 
     output reg [DATA_W-1:0]       out0,
     
-    input [$clog2(MAX_DELAY)-1:0] delay0
+    input [32-1:0] delay0
     );
 
 assign done = 1'b1;

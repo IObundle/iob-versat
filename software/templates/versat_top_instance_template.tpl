@@ -1,7 +1,8 @@
 `timescale 1ns / 1ps
 `include "axi.vh"
-`include "xversat.vh"
-`include "xdefs.vh"
+//`include "xversat.vh"
+//`include "xdefs.vh"
+`include "versat_defs.vh"
 
 module versat_instance #(
       parameter ADDR_W = `ADDR_W,
@@ -10,7 +11,7 @@ module versat_instance #(
    )
    (
    // Databus master interface
-`ifdef IO
+`ifdef nIO
    input [`nIO-1:0]                m_databus_ready,
    output [`nIO-1:0]               m_databus_valid,
    output [`nIO*AXI_ADDR_W-1:0]    m_databus_addr,
@@ -105,8 +106,8 @@ assign done = &unitDone;
 
 #{if versatValues.numberConnections}
 wire [31:0] #{join ", " for inst instances}
-   #{if inst.tempData->outputPortsUsed} 
-      #{join ", " for j inst.tempData->outputPortsUsed} output_@{inst.id}_@{j} #{end}
+   #{if inst.tempData.outputPortsUsed} 
+      #{join ", " for j inst.tempData.outputPortsUsed} output_@{inst.id}_@{j} #{end}
    #{else}
       unused_@{inst.id} #{end}
 #{end};
@@ -126,8 +127,8 @@ begin
    begin
    #{set counter 0}
    #{for inst instances}
-   #{if inst.declaration->memoryMapDWords}
-      if(addr[@{memoryAddressBits - 1}:@{memoryAddressBits - inst.versatData->memoryMaskSize}] == @{inst.versatData->memoryMaskSize}'b@{inst.versatData->memoryMask})
+   #{if inst.declaration.memoryMapDWords}
+      if(addr[@{memoryAddressBits - 1}:@{memoryAddressBits - inst.versatData.memoryMaskSize}] == @{inst.versatData.memoryMaskSize}'b@{inst.versatData.memoryMask})
          memoryMappedEnable[@{counter}] = 1'b1;
    #{inc counter}
    #{end}
@@ -146,14 +147,14 @@ begin
       #{set addr 0}
       #{for inst instances}
       #{set decl inst.declaration}
-      #{for i decl->nConfigs}
-      #{set wire decl->configWires[i]}
+      #{for i decl.nConfigs}
+      #{set wire decl.configWires[i]}
       if(addr[@{configAddressRangeHigh}:@{configAddressRangeLow}] == @{addr + 1})
          configdata[@{counter}+:@{wire.bitsize}] <= wdata[@{wire.bitsize - 1}:0]; // @{wire.name}
       #{inc addr}
       #{set counter counter + wire.bitsize}
       #{end}
-      #{for i decl->nDelays}
+      #{for i decl.nDelays}
       if(addr[@{configAddressRangeHigh}:@{configAddressRangeLow}] == @{addr + 1})
          configdata[@{counter}+:32] <= wdata[31:0]; // Delay
       #{inc addr}
@@ -172,8 +173,8 @@ begin
       #{set addr 0}
       #{for inst instances}
       #{set decl inst.declaration}
-      #{for i decl->nStates}
-      #{set wire decl->stateWires[i]}
+      #{for i decl.nStates}
+      #{set wire decl.stateWires[i]}
       if(addr[@{stateAddressRangeHigh}:@{stateAddressRangeLow}] == @{addr + 1})
          stateRead = statedata[@{counter}+:@{wire.bitsize}];
       #{inc addr}
@@ -191,57 +192,57 @@ end
 #{set delaySeen 0}
 #{for inst instances}
 #{set decl inst.declaration}
-   @{decl->name.str} @{decl->name.str}_@{counter} (
-      #{for i inst.tempData->outputPortsUsed}
+   @{decl.name.str} @{decl.name.str}_@{counter} (
+      #{for i inst.tempData.outputPortsUsed}
          .out@{i}(output_@{inst.id}_@{i}),
       #{end} 
 
-      #{for i inst.tempData->inputPortsUsed}
-         .in@{i}(output_@{inst.tempData->inputs[i].inst.inst->id}_@{inst.tempData->inputs[i].inst.port}),
+      #{for i inst.tempData.inputPortsUsed}
+         .in@{i}(output_@{inst.tempData.inputs[i].inst.inst.id}_@{inst.tempData.inputs[i].inst.port}),
       #{end}
 
-      #{for i decl->nConfigs}
-      #{set wire decl->configWires[i]}
-      #{if decl->type}
-         .@{wire.name}_@{i}(configdata[@{configDataIndex}+:@{wire.bitsize}]),
+      #{for i decl.nConfigs}
+      #{set wire decl.configWires[i]}
+      #{if decl.type}
+         .@{wire.name}(configdata[@{configDataIndex}+:@{wire.bitsize}]),
       #{else}
          .@{wire.name}(configdata[@{configDataIndex}+:@{wire.bitsize}]),
       #{end}
       #{set configDataIndex configDataIndex + wire.bitsize}
       #{end}
 
-      #{for i decl->nDelays}
+      #{for i decl.nDelays}
          .delay@{i}(configdata[@{configDataIndex}+:32]),
       #{set configDataIndex configDataIndex + 32}
       #{end}
 
-      #{for i decl->nStates}
-      #{set wire decl->stateWires[i]}
-      #{if decl->type}
-         .@{wire.name}_@{i}(statedata[@{stateDataIndex}+:@{wire.bitsize}]),
+      #{for i decl.nStates}
+      #{set wire decl.stateWires[i]}
+      #{if decl.type}
+         .@{wire.name}(statedata[@{stateDataIndex}+:@{wire.bitsize}]),
       #{else}
          .@{wire.name}(statedata[@{stateDataIndex}+:@{wire.bitsize}]),
       #{end}
       #{set stateDataIndex stateDataIndex + wire.bitsize}
       #{end}      
 
-      #{if decl->memoryMapDWords}
+      #{if decl.memoryMapDWords}
       .valid(memoryMappedEnable[@{memoryMappedIndex}]),
       .wstrb(wstrb),
-      .addr(addr[@{inst.versatData->addressTopBit}:0]),
+      .addr(addr[@{inst.versatData.addressTopBit}:0]),
       .rdata(unitRData[@{memoryMappedIndex}]),
       .ready(unitReady[@{memoryMappedIndex}]),
       .wdata(wdata),
       #{inc memoryMappedIndex}
       #{end}
 
-      #{if decl->doesIO}
+      #{for i decl.nIOs}
       .databus_ready(m_databus_ready[@{ioIndex}]),
       .databus_valid(m_databus_valid[@{ioIndex}]),
-      .databus_addr(m_databus_addr[@{ioIndex}]),
-      .databus_rdata(m_databus_rdata[@{ioIndex}]),
-      .databus_wdata(m_databus_wdata[@{ioIndex}]),
-      .databus_wstrb(m_databus_wstrb[@{ioIndex}]),
+      .databus_addr(m_databus_addr[@{ioIndex * 32}+:32]),
+      .databus_rdata(m_databus_rdata[@{ioIndex * 32}+:32]),
+      .databus_wdata(m_databus_wdata[@{ioIndex * 32}+:32]),
+      .databus_wstrb(m_databus_wstrb[@{ioIndex * 4}+:4]),
       #{inc ioIndex}
       #{end} 
       

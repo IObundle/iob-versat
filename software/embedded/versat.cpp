@@ -105,8 +105,10 @@ FUInstance* GetInstanceByName_(Accelerator* accel,int argc, ...){
    FUInstance* res = nullptr;
 
    for(int i = 0; i < ARRAY_SIZE(instancesBuffer); i++){
-      if(strcmp(instancesBuffer[i].name.str,buffer) == 0){
+      printf("%d %d %s\n",i,ARRAY_SIZE(instancesBuffer),buffer);
+      if(strcmp(instancesBuffer[i].name,buffer) == 0){
          res = &instancesBuffer[i];
+         break;
       }
    }
 
@@ -126,7 +128,6 @@ void CalculateDelay(Versat* versat,Accelerator* accel){
    }
 }
 
-
 SizedString MakeSizedString(const char* str, size_t size){
    SizedString s = {};
 
@@ -139,107 +140,11 @@ SizedString MakeSizedString(const char* str, size_t size){
    return s;
 }
 
-FUInstance* CreateNamedFUInstance(Accelerator* accel,FUDeclaration* type,SizedString entityName,HierarchyName* hierarchyParent){
+FUInstance* CreateNamedFUInstance(Accelerator* accel,FUDeclaration* type,SizedString entityName){
    FUInstance* res = GetInstanceByName_(accel,1,entityName.str);
 
    return res;
 }
 
-// From this point on, empty functions so the code still compiles
-void OutputVersatSource(Versat* versat,Accelerator* accel,const char* declarationFilepath,const char* sourceFilepath,const char* configurationFilepath){
-
-}
-
-void OutputMemoryMap(Versat* versat,Accelerator* accel){
-
-}
-
-void SaveConfiguration(Accelerator* accel,int configuration){
-
-}
-
-void LoadConfiguration(Accelerator* accel,int configuration){
-
-}
-
-FUDeclaration* RegisterAdd(Versat* versat){
-   return nullptr;
-}
-FUDeclaration* RegisterReg(Versat* versat){
-   return nullptr;
-}
-FUDeclaration* RegisterVRead(Versat* versat){
-   return nullptr;
-}
-FUDeclaration* RegisterVWrite(Versat* versat){
-   return nullptr;
-}
-FUDeclaration* RegisterMem(Versat* versat,int n){
-   return nullptr;
-}
-FUDeclaration* RegisterDebug(Versat* versat){
-   return nullptr;
-}
-FUDeclaration* RegisterConst(Versat* versat){
-   return nullptr;
-}
-
-void ConnectUnits(FUInstance* out,int outIndex,FUInstance* in,int inIndex){
-}
-
-Accelerator* Flatten(Versat* versat,Accelerator* accel,int times){
-   return nullptr;
-}
-
-void OutputVersatSource(Versat* versat,Accelerator* accel,const char* sourceFilepath){
-}
-
-void RemoveFUInstance(Accelerator* accel,FUInstance* inst){
-}
-
-FUDeclaration* GetTypeByName(Versat* versat,SizedString str){
-   return nullptr;
-}
-
-int GetPageSize(){
-   return 4096;
-}
-
-void* AllocatePages(int pages){
-   return nullptr;
-}
-
-void DeallocatePages(void* ptr,int pages){
-}
-
-
-void FixedStringCpy(char* dest,SizedString src){
-}
-
-int32_t GetInputValue(FUInstance* instance,int port){
-   return 0;
-}
-
-int mini(int a1,int a2){
-   return 0;
-}
-
-int maxi(int a1,int a2){
-   return 0;
-}
-
-int RoundUpDiv(int dividend,int divisor){
-   return 1;
-}
-
-int AlignNextPower2(int val){
-   return 1;
-}
-
-void FlushStdout(){
-}
-
 void RegisterTypes(){
 }
-
-

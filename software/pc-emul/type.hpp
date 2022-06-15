@@ -3,8 +3,10 @@
 
 #include <vector>
 
-#include "versat.hpp"
+#include "memory.hpp"
 #include "utils.hpp"
+
+struct FUInstance;
 
 struct Member{
    const char* baseType;
@@ -13,13 +15,8 @@ struct Member{
    size_t baseTypeSize;
    int offset;
    int numberPtrs;
-   bool isArray;
    int arrayExpressionEval;
-};
-
-struct Type{
-   int baseTypeId; // TODO: Should be a TypeInfo pointer, easier to debug and majority of the code simply calls the GetTypeInfo function first thing first
-   int pointers;
+   bool isArray;
 };
 
 // Care, order is important
@@ -33,6 +30,11 @@ struct TypeInfo {
    const char* name;
 };
 
+struct Type{
+   TypeInfo* baseType;
+   int pointers;
+};
+
 struct Value{
    union{
       bool boolean;
@@ -42,7 +44,8 @@ struct Value{
       Pool<FUInstance>* pool;
       std::vector<FUInstance*>* vec;
       struct {
-         int* array;
+         Type customType_;
+         void* array;
          int size;
       };
       struct {
@@ -51,19 +54,35 @@ struct Value{
       };
    };
 
+   char smallBuffer[32];
+   ValueType type;
+};
+
+struct Iterator{
+   union{
+      int currentNumber;
+      PoolIterator<FUInstance> poolIterator;
+   };
+
+   Value iterating;
    ValueType type;
 };
 
 void RegisterTypes();
 
-TypeInfo* GetTypeInfo(Type type);
+void Print(Value val);
+void OutputObject(void* object,Type objectType); // TODO: implement
 
-void OutputObject(void* object,const char* typeName); // TODO: implement
+Value ConvertValue(Value in,ValueType want);
 
 Type GetType(const char* typeName);
 Value AccessObject(Value object,SizedString memberName);
-Value AccessObjectPointer(Value object,SizedString memberName);
 Value AccessObjectIndex(Value object,int index);
+
+Iterator Iterate(Value iterating);
+bool HasNext(Iterator iter);
+void Advance(Iterator* iter);
+Value GetValue(Iterator iter);
 
 bool EqualValues(Value v1,Value v2);
 

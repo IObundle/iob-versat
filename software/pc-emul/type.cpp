@@ -43,8 +43,8 @@ static void RegisterStruct(const char* name, size_t size,std::initializer_list<M
    int i = 0;
    size_t computedSize = 0;
    for(Member m : data){
-      computedSize += m.size;
       computedSize = ALIGN_4(computedSize);
+      computedSize += m.size;
 
       info->members.push_back(m);
 
@@ -54,13 +54,12 @@ static void RegisterStruct(const char* name, size_t size,std::initializer_list<M
          typeInfo->size = m.baseTypeSize;
       }
    }
-
-   Assert(computedSize == size);
 }
 
 #define A(STRUCT) #STRUCT,sizeof(STRUCT)
-#define B(STRUCT,FULLTYPE,TYPE,NAME,PTR,HAS_ARRAY,ARRAY_ELEMENTS)  ((Member){#TYPE,#NAME,sizeof(FULLTYPE),sizeof(TYPE),offsetof(STRUCT,NAME),PTR,HAS_ARRAY,ARRAY_ELEMENTS})
+#define B(STRUCT,FULLTYPE,TYPE,NAME,PTR,HAS_ARRAY,ARRAY_ELEMENTS)  ((Member){#TYPE,#NAME,sizeof(FULLTYPE),sizeof(TYPE),offsetof(STRUCT,NAME),PTR,ARRAY_ELEMENTS,HAS_ARRAY})
 
+#include "verilogParser.hpp"
 #include "typeInfo.inc"
 
 void RegisterTypes(){
@@ -76,7 +75,7 @@ void RegisterTypes(){
    RegisterSimpleType("bool",sizeof(char),ValueType::BOOLEAN);
    RegisterSimpleType("char",sizeof(char),ValueType::CHAR);
    RegisterSimpleType("Pool<FUInstance>",sizeof(Pool<FUInstance>*),ValueType::POOL);
-   RegisterSimpleType("void",sizeof(void),ValueType::NIL);
+   RegisterSimpleType("void",4,ValueType::NIL);
 
    RegisterComplexTypes();
 
@@ -94,7 +93,7 @@ Type GetType(const char* structName){
       if(CompareString(info->name,structName)){
          Type type = {};
 
-         type.baseTypeId = info->id;
+         type.baseType = info;
          type.pointers = 0; // TODO: Parse struct name for pointers?
 
          return type;
@@ -108,7 +107,7 @@ Type GetType(const char* structName){
 static Value CollapseCustomIntoValue(void* ptr,Type type){
    Value val = {};
    // Should match the RegisterSimpleType order, maybe change if needed
-   switch(type.baseTypeId){
+   switch(type.baseType->id){
    case 0:{
       val.type = ValueType::NUMBER;
       val.number = *((int*) ptr);
@@ -129,12 +128,23 @@ static Value CollapseCustomIntoValue(void* ptr,Type type){
       val.type = ValueType::NIL;
    }break;
    default:{
-      val.type = ValueType::NIL; // Hackish but stays for now
+      val.type = ValueType::CUSTOM;
+      val.custom = ptr;
+      val.customType = type;
       //TODO: make this the one for all function to deal with object and type to value transformation, instead of only collapsing certain values
    }break;
    }
 
    return val;
+}
+
+static void* DeferencePointer(void* object,TypeInfo* info,int index){
+   char** viewPtr = (char**) object;
+   char* view = *viewPtr;
+
+   char* objectPtr = view + info->size * index;
+
+   return objectPtr;
 }
 
 Value AccessObjectIndex(Value object,int index){
@@ -143,12 +153,16 @@ Value AccessObjectIndex(Value object,int index){
    Assert(object.type == ValueType::POOL || object.type == ValueType::ARRAY || object.type == ValueType::CUSTOM);
 
    if(object.type == ValueType::ARRAY){
-      int* array = object.array;
+      Byte* array = (Byte*) object.array;
 
       Assert(index < object.size);
+      void* objectPtr = (void*) (array + index * object.customType.baseType->size);
 
-      value.type = ValueType::NUMBER;
-      value.number = array[index];
+      value.type = ValueType::CUSTOM;
+      value.custom = objectPtr;
+      value.customType = object.customType;
+
+      value = CollapseCustomIntoValue(objectPtr,value.customType);
    } else if(object.type == ValueType::POOL){
       Pool<FUInstance>* pool = object.pool;
 
@@ -162,12 +176,7 @@ Value AccessObjectIndex(Value object,int index){
    } else { // Ptr
       Assert(object.customType.pointers);
 
-      TypeInfo* typeInfo = GetTypeInfo(object.customType);
-
-      char** viewPtr = (char**) object.custom; // PortInstance**
-      char* view = *viewPtr;
-
-      char* objectPtr = view + typeInfo->size * index;
+      void* objectPtr = DeferencePointer(object.custom,object.customType.baseType,index);
 
       value.type = ValueType::CUSTOM;
       value.custom = objectPtr;
@@ -184,14 +193,8 @@ Value AccessObjectIndex(Value object,int index){
    return value;
 }
 
-TypeInfo* GetTypeInfo(Type type){
-   TypeInfo* info = typeInfos.Get(type.baseTypeId);
-
-   return info;
-}
-
 Value AccessObject(Value object,SizedString memberName){
-   TypeInfo* info = GetTypeInfo(object.customType);
+   TypeInfo* info = object.customType.baseType;
 
    int offset = -1;
    Member member = {};
@@ -205,12 +208,18 @@ Value AccessObject(Value object,SizedString memberName){
 
    Assert(offset >= 0);
    Assert(info->members.size()); // Type is incomplete
-   char* view = (char*) object.custom;
+
+   char* deference = (char*) object.custom;
+   for(int i = 0; i < object.customType.pointers; i++){
+      deference = *((char**) deference);
+   }
+
+   char* view = deference;
    void* newObject = &view[offset];
 
    Type type = GetType(member.baseType);
 
-   if(type.baseTypeId < basicTypes){
+   if(type.baseType->id < basicTypes){
       if(member.numberPtrs == 0){
          Value val = CollapseCustomIntoValue(newObject,type);
 
@@ -219,7 +228,7 @@ Value AccessObject(Value object,SizedString memberName){
             val.str = MakeSizedString((char*) newObject);
          }
          return val;
-      } else if(member.numberPtrs == 1 && type.baseTypeId == 2){
+      } else if(member.numberPtrs == 1 && type.baseType->id == 2){
          Value val = {};
 
          char* str = *(char**) newObject;
@@ -239,48 +248,131 @@ Value AccessObject(Value object,SizedString memberName){
    return newValue;
 }
 
-Value AccessObjectPointer(Value object,SizedString memberName){
-   Assert(object.customType.pointers);
+void Print(Value val){
+   switch(val.type){
+      case ValueType::NUMBER:{
+         printf("%d",val.number);
+      }break;
+      case ValueType::CUSTOM:{
+         printf("\n");
+         OutputObject(val.custom,val.customType);
+      }break;
+      default:{
+         Assert(false);
+      }break;
+   }
+}
 
-   TypeInfo* info = GetTypeInfo(object.customType);
+void OutputObject(void* object,Type objectType){
+   TypeInfo* info = objectType.baseType;
 
-   int offset = -1;
-   Member member = {};
+   Byte* ptr = (Byte*) object;
    for(Member m : info->members){
-      if(CompareString(m.name,memberName)){
-         offset = m.offset;
-         member = m;
-         break;
-      }
+      Value val = {};
+
+      val = CollapseCustomIntoValue(ptr + m.offset,GetType(m.baseType));
+      val.customType.pointers = m.numberPtrs;
+
+      printf("%s ",m.name);
+
+      Print(val);
+
+      printf("\n");
+   }
+}
+
+Iterator Iterate(Value iterating){
+   Iterator iter = {};
+   iter.iterating = iterating;
+
+   switch(iterating.type){
+      case ValueType::NUMBER:{
+         iter.currentNumber = 0;
+      }break;
+      case ValueType::POOL:{
+         iter.poolIterator = iterating.pool->begin();
+      }break;
+      case ValueType::ARRAY:{
+         iter.currentNumber = 0;
+      }break;
+      case ValueType::VECTOR:{
+         iter.currentNumber = 0;
+      }break;
+      default:{
+         Assert(false);
+      }break;
    }
 
-   void* deference = (void*) *((char**) object.custom);
+   return iter;
+}
 
-   Assert(offset >= 0);
-   char* view = (char*) deference;
-   void* newObject = &view[offset];
-
-   Type type = GetType(member.baseType);
-
-   if(type.baseTypeId < basicTypes){
-      if(type.pointers == 0){
-         Value val = CollapseCustomIntoValue(newObject,type);
-
-         if(val.type == ValueType::CHAR && member.isArray){
-            val.type = ValueType::STRING;
-            val.str = MakeSizedString((char*) newObject);
-         }
-         return val;
-      }
+bool HasNext(Iterator iter){
+   bool res;
+   switch(iter.iterating.type){
+      case ValueType::NUMBER:{
+         res = (iter.currentNumber < iter.iterating.number);
+      }break;
+      case ValueType::POOL:{
+         res = (iter.poolIterator != iter.iterating.pool->end());
+      }break;
+      case ValueType::ARRAY:{
+         res = (iter.currentNumber < iter.iterating.size);
+      }break;
+      case ValueType::VECTOR:{
+         res = (iter.currentNumber < iter.iterating.vec->size());
+      }break;
+      default:{
+         Assert(false);
+      }break;
    }
 
-   Value newValue = {};
-   newValue.customType = type;
-   newValue.customType.pointers = member.numberPtrs + (member.isArray ? 1 : 0); // TODO: See array
-   newValue.custom = newObject;
-   newValue.type = ValueType::CUSTOM;
+   return res;
+}
 
-   return newValue;
+void Advance(Iterator* iter){
+   switch(iter->iterating.type){
+      case ValueType::NUMBER:{
+         iter->currentNumber += 1;
+      }break;
+      case ValueType::POOL:{
+         ++iter->poolIterator;
+      }break;
+      case ValueType::ARRAY:{
+         iter->currentNumber += 1;
+      }break;
+      case ValueType::VECTOR:{
+         iter->currentNumber += 1;
+      }break;
+      default: {
+         Assert(false);
+      }break;
+   }
+}
+
+Value GetValue(Iterator iter){
+   Value val = {};
+   switch(iter.iterating.type){
+      case ValueType::NUMBER:{
+         val = MakeValue(iter.currentNumber);
+      }break;
+      case ValueType::POOL:{
+         val.customType = GetType("FUInstance");
+         val.custom = *iter.poolIterator;
+      }break;
+      case ValueType::ARRAY:{
+         val = AccessObjectIndex(iter.iterating,iter.currentNumber);
+      }break;
+      case ValueType::VECTOR:{
+         val.customType = GetType("FUInstance");
+         val.customType.pointers = 1;
+         val.custom = &(*iter.iterating.vec)[iter.currentNumber];
+      }break;
+      default:{
+         Assert(false);
+      }break;
+   }
+
+   return val;
 }
 
 bool EqualValues(Value v1,Value v2){
@@ -291,8 +383,38 @@ bool EqualValues(Value v1,Value v2){
    case ValueType::STRING:{
       res = (CompareString(v1.str,v2.str));
    }break;
+   case ValueType::NUMBER:{
+      res = (v1.number == v2.number);
+   }break;
    default:{
       DebugSignal();
+   }break;
+   }
+
+   return res;
+}
+
+Value ConvertValue(Value in,ValueType want){
+   if(in.type == want){
+      return in;
+   }
+
+   Value res = {};
+   res.type = want;
+
+   switch(want){
+   case ValueType::BOOLEAN:{
+      switch(in.type){
+         case ValueType::NUMBER:{
+            res.boolean = (in.number != 0);
+         }break;
+      default:{
+         Assert(false);
+      }break;
+      }
+   }break;
+   default:{
+      Assert(false);
    }break;
    }
 

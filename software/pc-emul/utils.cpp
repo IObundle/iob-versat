@@ -1,39 +1,10 @@
 #include "utils.hpp"
 
 #include <unistd.h>
-#include <sys/mman.h>
+#include <limits.h>
 
-#include "signal.h"
 #include "stdio.h"
 #include "string.h"
-#include "stdlib.h"
-#include "assert.h"
-
-int GetPageSize(){
-   static int pageSize = 0;
-
-   if(pageSize == 0){
-      pageSize = getpagesize();
-   }
-
-   return pageSize;
-}
-
-static int pagesAllocated = 0;
-static int pagesDeallocated = 0;
-
-void* AllocatePages(int pages){
-   pagesAllocated += pages;
-   void* res = mmap(0, pages * GetPageSize(), PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-   Assert(res != MAP_FAILED);
-
-   return res;
-}
-
-void DeallocatePages(void* ptr,int pages){
-   pagesDeallocated += pages;
-   munmap(ptr,pages * GetPageSize());
-}
 
 // Misc
 
@@ -86,19 +57,6 @@ SizedString MakeSizedString(const char* str,size_t size){
    return res;
 }
 
-void* ZeroOutRealloc(void* ptr,int newSize,int oldSize){
-   int extraMem = newSize - oldSize;
-
-   void* res = realloc(ptr,newSize);
-
-   if(extraMem > 0){
-      char* view = (char*) res;
-      memset(&view[oldSize],0,extraMem);
-   }
-
-   return res;
-}
-
 void FixedStringCpy(char* dest,SizedString src){
    int i = 0;
    for(i = 0; i < src.size; i++){
@@ -139,6 +97,24 @@ bool CompareString(const char* str1,const char* str2){
 
 void FlushStdout(){
    fflush(stdout);
+}
+
+long int GetFileSize(FILE* file){
+   long int mark = ftell(file);
+
+   fseek(file,0,SEEK_END);
+   long int size = ftell(file);
+
+   fseek(file,mark,SEEK_SET);
+
+   return size;
+}
+
+char* GetCurrentDirectory(){
+   static char buffer[PATH_MAX];
+   buffer[0] = '\0';
+   getcwd(buffer,PATH_MAX);
+   return buffer;
 }
 
 static char* GetHierarchyNameRepr_(HierarchyName name, char* buffer,int first){

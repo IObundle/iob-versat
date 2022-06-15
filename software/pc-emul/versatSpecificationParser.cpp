@@ -9,34 +9,7 @@
 
 #define ARRAY_SIZE(array) sizeof(array) / sizeof(array[0])
 
-/*
-TODO: Remove repeated code
-*/
-
-template<typename T>
-struct SimpleHash{
-   std::size_t operator()(T const& val) const noexcept{
-      char* view = (char*) &val;
-
-      size_t res = 0;
-      std::hash<char> hasher;
-      for(int i = 0; i < sizeof(T); i++){
-         res += hasher(view[i]);
-      }
-      return res;
-   }
-};
-
-template<typename T>
-struct SimpleEqual{
-   bool operator()(const T &left, const T &right) const {
-      bool res = (memcmp(&left,&right,sizeof(T)) == 0);
-
-      return res;
-   }
-};
 int CalculateLatency_(PortInstance portInst, std::unordered_map<PortInstance,int,SimpleHash<PortInstance>,SimpleEqual<PortInstance>>* memoization);
-
 
 typedef struct Name_t{
    char name[256];
@@ -140,7 +113,8 @@ PortInstance ParseTerm(Versat* versat,Accelerator* circuit,Tokenizer* tok,Hierar
    Assert(var.portStart == var.portEnd);
 
    if(negate){
-      FUInstance* negation = CreateNamedFUInstance(circuit,GetTypeByName(versat,MakeSizedString("NOT")),MakeSizedString("not"),circuitName);
+      FUInstance* negation = CreateNamedFUInstance(circuit,GetTypeByName(versat,MakeSizedString("NOT")),MakeSizedString("not"));
+      negation->name.parent = circuitName;
 
       ConnectUnits(inst,var.portStart,negation,0);
 
@@ -189,7 +163,8 @@ FUInstance* ParseExpression(Versat* versat,Accelerator* circuit,Tokenizer* tok,H
    }
 
    SizedString typeStr = MakeSizedString(typeName);
-   FUInstance* res = CreateNamedFUInstance(circuit,GetTypeByName(versat,typeStr),typeStr,circuitName);
+   FUInstance* res = CreateNamedFUInstance(circuit,GetTypeByName(versat,typeStr),typeStr);
+   res->name.parent = circuitName;
 
    ConnectUnits(term1.inst,term1.port,res,0);
    ConnectUnits(term2.inst,term2.port,res,1);
@@ -207,19 +182,6 @@ void TagInputs(Accelerator* accel,FUInstance* inst){
    for(int i = 0; i < inst->tempData->numberInputs; i++){
       TagInputs(accel,inst->tempData->inputs[i].inst.inst);
    }
-}
-
-// Checks if there is a connection between source and sink, that doesn't pass through a source and sink unit
-bool ExistsConnection(Accelerator* accel, FUInstance* source, FUInstance* sink){
-   LockAccelerator(accel);
-
-   for(FUInstance* inst : accel->instances){
-      inst->tag = 0;
-   }
-
-   TagInputs(accel,sink);
-
-   return (bool) source->tag;
 }
 
 FUDeclaration* ParseModule(Versat* versat,Tokenizer* tok){
@@ -251,7 +213,9 @@ FUDeclaration* ParseModule(Versat* versat,Tokenizer* tok){
          break;
       }
 
-      FUInstance* inst = CreateNamedFUInstance(circuit,circuitInput,token,&decl.name);
+      FUInstance* inst = CreateNamedFUInstance(circuit,circuitInput,token);
+      inst->name.parent = &decl.name;
+
       FUInstance** ptr = circuit->inputInstancePointers.Alloc();
 
       *ptr = inst;
@@ -279,18 +243,19 @@ FUDeclaration* ParseModule(Versat* versat,Tokenizer* tok){
          Token name = tok->NextToken();
 
          FUDeclaration* FUType = GetTypeByName(versat,type);
-         FUInstance* inst = CreateNamedFUInstance(circuit,FUType,name,&decl.name);
+         FUInstance* inst = CreateNamedFUInstance(circuit,FUType,name);
+         inst->name.parent = &decl.name;
 
          Token peek = tok->PeekToken();
 
          if(CompareString(peek,"(")){
             tok->AdvancePeek(peek);
 
-            Token list = tok->PeekFindUntil(")");
+            Token list = tok->NextFindUntil(")");
             int arguments = 1 + CountSubstring(list,MAKE_SIZED_STRING(","));
             Assert(arguments <= FUType->nConfigs);
 
-            Tokenizer insideList(list.str,list.size,",",{});
+            Tokenizer insideList(list,",",{});
 
             inst->config = (int32_t*) calloc(FUType->nConfigs,sizeof(int));
             for(int i = 0; i < arguments; i++){
@@ -304,8 +269,6 @@ FUDeclaration* ParseModule(Versat* versat,Tokenizer* tok){
             }
             Assert(insideList.Done());
 
-            tok->AdvancePeek(list);
-
             tok->AssertNextToken(")");
             peek = tok->PeekToken();
          }
@@ -313,11 +276,11 @@ FUDeclaration* ParseModule(Versat* versat,Tokenizer* tok){
          if(CompareString(peek,"{")){
             tok->AdvancePeek(peek);
 
-            Token list = tok->PeekFindUntil("}");
+            Token list = tok->NextFindUntil("}");
             int arguments = 1 + CountSubstring(list,MAKE_SIZED_STRING(","));
             Assert(arguments <= FUType->memoryMapDWords);
 
-            Tokenizer insideList(list.str,list.size,",",{});
+            Tokenizer insideList(list,",",{});
 
             inst->memMapped = (int32_t*) calloc(FUType->memoryMapDWords,sizeof(int));
             for(int i = 0; i < arguments; i++){
@@ -330,8 +293,6 @@ FUDeclaration* ParseModule(Versat* versat,Tokenizer* tok){
                }
             }
             Assert(insideList.Done());
-
-            tok->AdvancePeek(list);
 
             tok->AssertNextToken("}");
             peek = tok->PeekToken();
@@ -372,7 +333,8 @@ FUDeclaration* ParseModule(Versat* versat,Tokenizer* tok){
                decl.nOutputs = maxi(decl.nOutputs - 1,inVar.portEnd) + 1;
 
                if(!circuit->outputInstance){
-                  circuit->outputInstance = CreateNamedFUInstance(circuit,circuitOutput,MakeSizedString("out"),&decl.name);
+                  circuit->outputInstance = CreateNamedFUInstance(circuit,circuitOutput,MakeSizedString("out"));
+                  circuit->outputInstance->name.parent = &decl.name;
                }
 
                inst2 = circuit->outputInstance;
@@ -433,10 +395,11 @@ FUDeclaration* ParseModule(Versat* versat,Tokenizer* tok){
       decl.memoryMapDWords += AlignNextPower2(d->memoryMapDWords); // Order of entities affect size, need to look into it
       decl.nDelays += d->nDelays;
       decl.extraDataSize += d->extraDataSize;
+      decl.nIOs += d->nIOs;
    }
 
-   decl.configWires = (Wire*) calloc(decl.nConfigs,sizeof(Wire));
-   decl.stateWires  = (Wire*) calloc(decl.nStates,sizeof(Wire));
+   decl.configWires = PushArray(&versat->permanent,decl.nConfigs,Wire);
+   decl.stateWires = PushArray(&versat->permanent,decl.nStates,Wire);
 
    int configIndex = 0;
    int stateIndex = 0;
@@ -444,10 +407,26 @@ FUDeclaration* ParseModule(Versat* versat,Tokenizer* tok){
       FUDeclaration* d = inst->declaration;
 
       for(int i = 0; i < d->nConfigs; i++){
-         decl.configWires[configIndex++] = d->configWires[i];
+         int newSize = strlen(d->configWires[i].name) + 8;
+
+         Byte* newName = PushBytes(&versat->permanent,newSize);
+         int size = sprintf(newName,"%s_%.2d",d->configWires[i].name,configIndex);
+
+         Assert(size < newSize);
+
+         decl.configWires[configIndex].name = (const char*) newName;
+         decl.configWires[configIndex++].bitsize = d->configWires[i].bitsize;
       }
       for(int i = 0; i < d->nStates; i++){
-         decl.stateWires[stateIndex++] = d->stateWires[i];
+         int newSize = strlen(d->stateWires[i].name) + 8;
+
+         Byte* newName = PushBytes(&versat->permanent,newSize);
+         int size = sprintf(newName,"%s_%.2d",d->stateWires[i].name,stateIndex);
+
+         Assert(size < newSize);
+
+         decl.stateWires[stateIndex].name = (const char*) newName;
+         decl.stateWires[stateIndex++].bitsize = d->stateWires[i].bitsize;
       }
    }
 
@@ -487,7 +466,7 @@ FUDeclaration* ParseModule(Versat* versat,Tokenizer* tok){
    }
    #endif
 
-   LockAccelerator(circuit);
+   LockAccelerator(circuit,Accelerator::Locked::GRAPH);
    for(FUInstance* inst : circuit->instances){
       if(inst->declaration->type == FUDeclaration::SPECIAL){
          continue;
@@ -538,18 +517,23 @@ FUDeclaration* ParseModule(Versat* versat,Tokenizer* tok){
    return res;
 }
 
-void ParseVersatSpecification(Versat* versat,FILE* file){
-   char* buffer = (char*) calloc(256*1024*1024,sizeof(char)); // Calloc to fix valgrind error
-   int fileSize = fread(buffer,sizeof(char),256*1024*1024,file);
+void ParseVersatSpecification(Versat* versat,const char* filepath){
+   Byte* mark = MarkArena(&versat->temp);
+   SizedString content = PushFile(&versat->temp,filepath);
 
-   Tokenizer tokenizer = Tokenizer(buffer,fileSize, "[](){}+:;,*~.",{"->",">>>","<<<",">>","<<",".."});
+   if(content.size < 0){
+      printf("Failed to open file, filepath: %s\n",filepath);
+      Assert(false);
+   }
+
+   Tokenizer tokenizer = Tokenizer(content, "[](){}+:;,*~.",{"->",">>>","<<<",">>","<<",".."});
    Tokenizer* tok = &tokenizer;
 
    while(!tok->Done()){
       ParseModule(versat,tok);
    }
 
-   free(buffer);
+   PopMark(&versat->temp,mark);
 }
 
 
