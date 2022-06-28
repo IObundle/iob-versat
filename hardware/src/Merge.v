@@ -33,10 +33,10 @@ module Merge #(
 
     output reg [DATA_W-1:0]       out0,
 
-    input [9:0]                   delay0
+    input [DELAY_W-1:0]                   delay0
     );
 
-reg [9:0] delay;
+reg [DELAY_W-1:0] delay;
 
 wire [DATA_W-1:0] select[15:0];
 

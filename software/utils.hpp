@@ -21,7 +21,7 @@
    int _ = (int) (EXPR);   \
    if(!_){ \
       FlushStdout(); \
-      assert(_ && EXPR); \
+      assert(_ && (EXPR)); \
    } \
    }
 #else
@@ -33,16 +33,13 @@ struct SizedString{
    int size;
 };
 
+#define UNPACK_SS(STR) STR.size,STR.str
+
 #define MAX_NAME_SIZE 64
 // Hierarchical naming scheme
 struct HierarchyName{
    char str[MAX_NAME_SIZE];
    HierarchyName* parent;
-};
-
-struct AllocInfo{
-   int size;
-   int allocated;
 };
 
 struct Range{
@@ -75,4 +72,18 @@ bool CompareString(const char* str1,const char* str2);
 
 char* GetHierarchyNameRepr(HierarchyName name); // Uses statically allocaded memory, take care
 
+SizedString PathGoUp(char* pathBuffer);
+
 #endif // INCLUDED_UTILS_HPP
+
+
+
+
+
+
+
+
+
+
+
+

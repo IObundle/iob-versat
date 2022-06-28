@@ -1,3 +1,4 @@
+#{include "versat_common.tpl"}
 `timescale 1ns / 1ps
 `include "axi.vh"
 //`include "xversat.vh"
@@ -7,11 +8,11 @@
 module versat_instance #(
       parameter ADDR_W = `ADDR_W,
       parameter DATA_W = `DATA_W,
-      parameter AXI_ADDR_W = `AXI_ADDR_W
+      parameter AXI_ADDR_W = 32
    )
    (
    // Databus master interface
-`ifdef nIO
+`ifdef VERSAT_IO
    input [`nIO-1:0]                m_databus_ready,
    output [`nIO-1:0]               m_databus_valid,
    output [`nIO*AXI_ADDR_W-1:0]    m_databus_addr,
@@ -127,9 +128,13 @@ begin
    begin
    #{set counter 0}
    #{for inst instances}
-   #{if inst.declaration.memoryMapDWords}
-      if(addr[@{memoryAddressBits - 1}:@{memoryAddressBits - inst.versatData.memoryMaskSize}] == @{inst.versatData.memoryMaskSize}'b@{inst.versatData.memoryMask})
-         memoryMappedEnable[@{counter}] = 1'b1;
+   #{if inst.declaration.isMemoryMapped}
+      #{if inst.versatData.memoryMaskSize}
+         if(addr[@{memoryAddressBits - 1}:@{memoryAddressBits - inst.versatData.memoryMaskSize}] == @{inst.versatData.memoryMaskSize}'b@{inst.versatData.memoryMask})
+            memoryMappedEnable[@{counter}] = 1'b1;
+      #{else}
+         memoryMappedEnable[0] = 1'b1;
+      #{end}
    #{inc counter}
    #{end}
    #{end}
@@ -226,10 +231,14 @@ end
       #{set stateDataIndex stateDataIndex + wire.bitsize}
       #{end}      
 
-      #{if decl.memoryMapDWords}
+      #{if decl.isMemoryMapped}
       .valid(memoryMappedEnable[@{memoryMappedIndex}]),
       .wstrb(wstrb),
-      .addr(addr[@{inst.versatData.addressTopBit}:0]),
+      #{if decl.memoryMapBits}
+      .addr(addr[@{decl.memoryMapBits - 1}:0]),
+      #{else}
+      .addr(1'b0), // Shouldnt need but otherwise verilator would complain
+      #{end}
       .rdata(unitRData[@{memoryMappedIndex}]),
       .ready(unitReady[@{memoryMappedIndex}]),
       .wdata(wdata),
@@ -251,7 +260,6 @@ end
       .clk(clk),
       .rst(rst_int)
    );
-
 #{set counter counter + 1}
 #{end}
 

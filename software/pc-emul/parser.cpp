@@ -59,15 +59,16 @@ Tokenizer::Tokenizer(SizedString content,const char* singleChars,std::vector<std
 ,specialChars(specialCharsList)
 {
    keepWhitespaces = false;
+   keepComments = false;
 }
 
-int Tokenizer::SpecialChars(const char* ptr, int size){
+int Tokenizer::SpecialChars(const char* ptr, unsigned int size){
    for(std::string special : specialChars){
       if(special.size() >= size){
          continue;
       }
 
-      SizedString specialStr = {special.c_str(),special.size()};
+      SizedString specialStr = {special.c_str(),(int) special.size()};
       SizedString ptrStr = {ptr,specialStr.size};
 
       if(CompareString(ptrStr,specialStr)){
@@ -75,7 +76,7 @@ int Tokenizer::SpecialChars(const char* ptr, int size){
       }
    }
 
-   for(int i = 0; i < singleChars.size(); i++){
+   for(size_t i = 0; i < singleChars.size(); i++){
       if(singleChars[i] == ptr[0]){
          return 1;
       }
@@ -143,19 +144,21 @@ Token Tokenizer::PeekFindUntil(const char* str){
          }
       }
 
-      if(&ptr[i+1] + ss.size < end && ptr[i] == '/' && ptr[i+1] == '/'){
-         while(ptr[i] != '\n'){
-            i += 1;
+      if(!keepComments){
+         if(&ptr[i+1] + ss.size < end && ptr[i] == '/' && ptr[i+1] == '/'){
+            while(ptr[i] != '\n'){
+               i += 1;
+            }
+            continue;
          }
-         continue;
-      }
 
-      if(&ptr[i+1] + ss.size < end && ptr[i] == '/' && ptr[i+1] == '*'){
-         while(&ptr[i] + ss.size < end && (ptr[i-1] != '*' || ptr[i] != '/')){
+         if(&ptr[i+1] + ss.size < end && ptr[i] == '/' && ptr[i+1] == '*'){
+            while(&ptr[i] + ss.size < end && (ptr[i-1] != '*' || ptr[i] != '/')){
+               i += 1;
+            }
             i += 1;
+            continue;
          }
-         i += 1;
-         continue;
       }
 
       i += 1;

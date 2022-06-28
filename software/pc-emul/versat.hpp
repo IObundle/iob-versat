@@ -2,7 +2,6 @@
 #define INCLUDED_VERSAT_HPP
 
 #include <stdio.h>
-#include <stdint.h>
 #include <unordered_map>
 #include <initializer_list>
 #include <vector>
@@ -15,8 +14,8 @@ struct Versat;
 struct Accelerator;
 struct FUInstance;
 
-typedef int32_t* (*FUFunction)(FUInstance*);
-typedef int32_t (*MemoryAccessFunction)(FUInstance* instance, int address, int value,int write);
+typedef int* (*FUFunction)(FUInstance*);
+typedef int (*MemoryAccessFunction)(FUInstance* instance, int address, int value,int write);
 
 enum DelayType {
    DELAY_TYPE_BASE               = 0x0,
@@ -51,19 +50,21 @@ struct FUDeclaration{
    int nStates;
    Wire* stateWires;
 
-   int nDelays; // Code only handles 1 for now, hardware needs this value for correct generation
+   int nDelays; // Code only handles 1 single instace, for now, hardware needs this value for correct generation
    int nIOs;
-
-   int memoryMapDWords;
+   int memoryMapBits;
+   bool isMemoryMapped;
    int extraDataSize;
    FUFunction initializeFunction;
    FUFunction startFunction;
    FUFunction updateFunction;
    MemoryAccessFunction memAccessFunction;
+   const char* operation;
+   bool isOperation;
 
    enum {SINGLE = 0x0,COMPOSITE = 0x1,SPECIAL = 0x2} type;
 
-   enum DelayType delayType;
+   DelayType delayType;
 };
 
 struct PortInstance{
@@ -89,9 +90,9 @@ struct GraphComputedData{
 };
 
 struct VersatComputedData{
-   char memoryMask[32];
    int memoryMaskSize;
-   int addressTopBit;
+   char memoryMask[33];
+   int memoryAddressOffset;
 };
 
 struct FUInstance{
@@ -111,12 +112,13 @@ struct FUInstance{
 	int id;
    Accelerator* compositeAccel;
 
-	int32_t* outputs;
-	int32_t* storedOutputs;
+	int* outputs;
+	int* storedOutputs;
    void* extraData;
 
    // Configuration + State variables that versat needs access to
    int done; // Units that are sink or sources of data must implement done to ensure circuit does not end prematurely
+   bool isStatic;
 
    // Various uses
    GraphComputedData* tempData;
@@ -150,6 +152,11 @@ struct Versat{
    std::vector<const char*> includeDirs;
 };
 
+struct Edge{ // A edge in a graph
+   PortInstance units[2];
+   int delay;
+};
+
 struct DAGOrder{
    FUInstance** sinks;
    int numberSinks;
@@ -157,12 +164,7 @@ struct DAGOrder{
    int numberSources;
    FUInstance** computeUnits;
    int numberComputeUnits;
-   FUInstance** instancePtrs; // Source, then compute, then sink (source_and_sink treated as sink)
-};
-
-struct Edge{ // A edge in a graph
-   PortInstance units[2];
-   int delay;
+   Allocation<FUInstance*> instances;
 };
 
 struct Accelerator{
@@ -174,25 +176,18 @@ struct Accelerator{
    Pool<FUInstance*> inputInstancePointers;
    FUInstance* outputInstance;
 
-   int32_t* config;
-   int32_t* state;
-   int32_t* memMapped;
-   int32_t* delay;
-
-   // TODO: Maybe add the config, state and memMapped pointers directly to these structs, instead of separated
-   AllocInfo configAlloc;
-   AllocInfo stateAlloc;
-   AllocInfo memMappedAlloc;
-   AllocInfo delayAlloc;
+   Allocation<int> configAlloc;
+   Allocation<int> stateAlloc;
+   Allocation<int> delayAlloc;
 
 	void* configuration;
 	int configurationSize;
 
-	enum Locked {FREE,GRAPH,ORDERED} locked;
-	void* graphDataMem;
-	void* versatDataMem;
+	enum Locked {FREE,GRAPH,ORDERED,FIXED} locked;
    DAGOrder order;
-   int cyclesPerRun;
+   Allocation<Byte> graphData;
+	Allocation<VersatComputedData> versatData;
+	int cyclesPerRun;
 
 	int entityId;
 	bool init;
@@ -218,8 +213,6 @@ struct UnitInfo{
    Range stateBitsRange;
    int lowerAddressSize;
    int stateAddressBits;
-   int implementsDelay;
-   int numberDelays;
    int implementsDone;
    int nIOs;
 };
@@ -284,6 +277,11 @@ struct SubgraphData{
    FUInstance* instanceMapped;
 };
 
+struct HashKey{
+   SizedString key;
+   int data;
+};
+
 Accelerator* Flatten(Versat* versat,Accelerator* accel,int times);
 
 void OutputGraphDotFile(Accelerator* accel,bool collapseSameEdges,const char* filenameFormat,...) __attribute__ ((format (printf, 3, 4)));
@@ -322,18 +320,18 @@ void AcceleratorRun(Accelerator* accel);
 void AddInput(Accelerator* accel);
 
 // Helper functions
-int32_t GetInputValue(FUInstance* instance,int port);
+int GetInputValue(FUInstance* instance,int port);
 
 Edge* ConnectUnits(FUInstance* out,int outIndex,FUInstance* in,int inIndex);
 
 void VersatUnitWrite(FUInstance* instance,int address, int value);
-int32_t VersatUnitRead(FUInstance* instance,int address);
+int VersatUnitRead(FUInstance* instance,int address);
 
 int CalculateLatency(FUInstance* inst);
 void CalculateDelay(Versat* versat,Accelerator* accel);
 void SetDelayRecursive(FUInstance* inst,int delay);
 void CalculateGraphData(Accelerator* accel);
-void CalculateVersatData(Accelerator* accel,VersatComputedValues vals);
+void CalculateVersatData(Accelerator* accel);
 
 ConsolidationGraph GenerateConsolidationGraph(Accelerator* accel1,Accelerator* accel2);
 ConsolidationGraph MaxClique(ConsolidationGraph graph);
@@ -343,6 +341,6 @@ SubgraphData SubGraphAroundInstance(Versat* versat,Accelerator* accel,FUInstance
 
 FUInstance* GetInstance(Accelerator* circuit,std::initializer_list<char*> names);
 
-void Hook(Versat* versat);
+void Hook(Versat* versat,Accelerator* accel,FUInstance* inst);
 
 #endif // INCLUDED_VERSAT_HPP

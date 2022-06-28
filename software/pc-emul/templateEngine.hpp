@@ -4,6 +4,31 @@
 #include "versat.hpp"
 #include "parser.hpp"
 
+struct Expression;
+
+struct Command{
+   char name[32];
+
+   Expression** expressions;
+   int nExpressions;
+};
+
+struct Block{
+   union{
+      Token textBlock;
+      Command command;
+   };
+   Block* next;
+   Block* nextInner;
+   enum {TEXT,COMMAND} type;
+};
+
+struct TemplateFunction{
+   Expression** arguments;
+   int numberArguments;
+   Block* block;
+};
+
 void ProcessTemplate(FILE* outputFile,const char* templateFilepath,Arena* tempArena);
 
 // TODO: Probably should all have the same name and overload

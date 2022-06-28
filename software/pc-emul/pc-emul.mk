@@ -16,7 +16,7 @@ UNIT_VERILOG += $(foreach unit,$(VERILATE_UNIT),$(VERSAT_DIR)/hardware/src/$(uni
 
 UNIT_HDR+=$(foreach unit,$(VERILATE_UNIT),./build/V$(unit).h)
 
-TYPE_INFO_HDR = $(VERSAT_PC_EMUL)/versat.hpp $(VERSAT_SW_DIR)/utils.hpp $(VERSAT_PC_EMUL)/verilogParser.hpp
+TYPE_INFO_HDR = $(VERSAT_PC_EMUL)/versat.hpp $(VERSAT_SW_DIR)/utils.hpp $(VERSAT_PC_EMUL)/verilogParser.hpp $(VERSAT_PC_EMUL)/templateEngine.hpp
 
 TOOL_COMMON_SRC += $(VERSAT_DIR)/software/pc-emul/parser.cpp
 TOOL_COMMON_SRC += $(VERSAT_DIR)/software/pc-emul/utils.cpp
@@ -44,21 +44,21 @@ OBJ+=./build/verilated_vcd_c.o
 	mv *.o ./build/;
 	mv *.d ./build/;
 
-./build/V%.h: $(VERSAT_HW_DIR)/src/%.v $(VERSAT_HDR) $(HDR) ./build/typeInfo.inc
-	verilator --trace -CFLAGS "-g -m32 -std=c++11" -I$(VERSAT_HW_DIR)/src -I$(VERSAT_HW_DIR)/include -I$(VERSAT_DIR)/submodules/MEM/ram/2p_ram -I$(CACHE_DIR)/submodules/MEM/tdp_ram -cc -Mdir ./obj $<;
+./build/V%.h: $(VERSAT_HW_DIR)/src/%.v
+	verilator --trace -CFLAGS "-g -m32 -std=c++11" -I$(VERSAT_HW_DIR)/src -I$(VERSAT_HW_DIR)/include -I$(VERSAT_DIR)/submodules/MEM/ram/2p_ram -I$(VERSAT_DIR)/submodules/MEM/ram/tdp_ram -cc -Mdir ./obj $<;
 	cd ./obj && make -f V$*.mk;
 	mkdir -p ./build; mv ./obj/*.o ./build;
 	mv ./obj/*.h ./build
 	rm -r -f ./obj
 
-./build/typeInfo.inc: ./build/structParser.out $(VERSAT_SW_DIR)/pc-emul/structParser.cpp
+./build/typeInfo.inc: ./build/structParser.out $(TYPE_INFO_HDR)
 	mkdir -p ./build
 	./build/structParser.out ./build/typeInfo.inc $(TYPE_INFO_HDR)
 
 ./build/verilogWrapper.inc: ./build/verilogParser.out  $(VERSAT_SW_DIR)/pc-emul/verilogParser.cpp
 	./build/verilogParser.out ./build/verilogWrapper.inc -I $(VERSAT_DIR)/submodules/INTERCON/hardware/include/ -I $(VERSAT_DIR)/hardware/include/ -I $(VERSAT_DIR)/hardware/src/ $(UNIT_VERILOG)
 
-./build/%.o: $(VERSAT_PC_EMUL)/%.cpp $(HDR) $(UNIT_HDR) $(VERSAT_HDR) ./build/typeInfo.inc
+./build/%.o: $(VERSAT_PC_EMUL)/%.cpp $(HDR) $(UNIT_HDR) $(VERSAT_HDR) $(CPP_FILES) ./build/typeInfo.inc
 	mkdir -p ./build
 	$(info $@)
 	g++ -std=c++11 -DPC -c -o $@ -g -m32 $< -I $(VERSAT_SW_DIR) -I $(VERSAT_PC_EMUL) -I $(VERILATOR_INCLUDE) -I ./build/
@@ -70,3 +70,5 @@ OBJ+=./build/verilated_vcd_c.o
 ./build/verilogParser.out: $(VERSAT_SW_DIR)/pc-emul/verilogParser.cpp $(TOOL_SRC) ./build/typeInfo.inc
 	mkdir -p ./build
 	g++ -std=c++11 -DSTANDALONE -o $@ -g -m32 $< -I ./build/ -I $(VERSAT_DIR)/software/ -I  $(VERSAT_DIR)/software/pc-emul  -I $(VERSAT_DIR)/software/pc-emul/ $(TOOL_SRC)
+
+.PRECIOUS: $(UNIT_HDR)

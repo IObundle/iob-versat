@@ -378,8 +378,6 @@ static Expression* ParseExpression(Tokenizer* tok){
 }
 
 static Range ParseRange(Tokenizer* tok,ValueMap& map){
-   enum {SIMPLE,ADD,SUB} type;
-
    Token peek = tok->PeekToken();
 
    if(!CompareString(peek,"[")){
@@ -393,44 +391,10 @@ static Range ParseRange(Tokenizer* tok,ValueMap& map){
    Range res = {};
    res.high = Eval(ParseExpression(tok),map).number;
 
-   Token sep = tok->NextToken();
-   if(CompareString(sep,":")){
-      type = SIMPLE;
-   }
-   #if 0
-   else if(CompareString(sep,"+:")){
-      type = ADD;
-   } else if(CompareString(sep,"-:")){
-      type = SUB;
-   }
-   #endif
-   else {
-      Assert(false);
-   }
+   tok->AssertNextToken(":");
 
    res.low = Eval(ParseExpression(tok),map).number;
    tok->AssertNextToken("]");
-
-   switch(type){
-   case SIMPLE:{
-   }break;
-   /*
-   case ADD:{
-      int base = res.left;
-      int toAdd = res.right;
-
-      res.right = base;
-      res.left = base + toAdd;
-   }break;
-   case SUB:{
-      int base = res.left;
-      int toSub = res.right;
-
-      res.left = base;
-      res.right = base - toSub;
-   }break;
-   */
-   }
 
    return res;
 }
@@ -545,8 +509,6 @@ std::vector<Module> ParseVerilogFile(SizedString fileContent, std::vector<const 
    Tokenizer tokenizer = Tokenizer(fileContent,":,()[]{}\"+-/*=",{"#(","+:","-:","(*","*)","module","endmodule"});
    Tokenizer* tok = &tokenizer;
 
-   FILE* output = fopen("Veriloged.txt","w");
-
    std::vector<Module> modules;
    Byte* mark = MarkArena(tempArena);
    while(!tok->Done()){
@@ -647,16 +609,13 @@ int main(int argc,const char* argv[]){
    Arena tempArenaInst = {};
    tempArena = &tempArenaInst;
 
-   tempArena->totalAllocated = Megabyte(64);
-   tempArena->mem = (Byte*) calloc(tempArena->totalAllocated,sizeof(Byte));
+   InitArena(tempArena,Megabyte(64));
 
    Arena preprocess = {};
-   preprocess.totalAllocated = Megabyte(64);
-   preprocess.mem = (Byte*) calloc(preprocess.totalAllocated,sizeof(Byte));
+   InitArena(&preprocess,Megabyte(64));
 
    Arena permanent = {};
-   permanent.totalAllocated = Megabyte(64);
-   permanent.mem = (Byte*) calloc(permanent.totalAllocated,sizeof(Byte));
+   InitArena(&permanent,Megabyte(64));
 
    std::vector<ModuleInfo> allModules;
    for(const char* str : filePaths){

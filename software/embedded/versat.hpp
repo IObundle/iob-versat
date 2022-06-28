@@ -38,6 +38,7 @@ void CalculateDelay(Versat* versat,Accelerator* accel);
 SizedString MakeSizedString(const char* str, size_t size);
 FUInstance* CreateNamedFUInstance(Accelerator* accel,FUDeclaration* type,SizedString entityName);
 
+void Hook(Versat* versat,Accelerator* accel,FUInstance* inst);
 // Functions that perform no useful work are simple pre processed out
 #define OutputVersatSource(...) ((void)0)
 #define ConnectUnits(...) ((void)0)
@@ -47,8 +48,8 @@ FUInstance* CreateNamedFUInstance(Accelerator* accel,FUDeclaration* type,SizedSt
 #define Flatten(...) ((Accelerator*)0)
 #define GetTypeByName(...) ((FUDeclaration*)0)
 #define ParseCommandLineOptions(...) ((void)0)
-#define Hook(...) ((void)0)
 #define OutputMemoryMap(...) ((void)0)
 #define OutputUnitInfo(...) ((void)0)
+#define RegisterTypes(...) ((void)0)
 
 #endif // INCLUDED_VERSAT

@@ -144,3 +144,35 @@ char* GetHierarchyNameRepr(HierarchyName name){
 
    return ptr;
 }
+
+SizedString PathGoUp(char* pathBuffer){
+   SizedString content = MakeSizedString(pathBuffer);
+
+   int i = content.size - 1;
+   for(; i >= 0; i--){
+      if(content.str[i] == '/'){
+         break;
+      }
+   }
+
+   if(content.str[i] != '/'){
+      return content;
+   }
+
+   pathBuffer[i] = '\0';
+   content.size = i;
+
+   return content;
+}
+
+
+
+
+
+
+
+
+
+
+
+

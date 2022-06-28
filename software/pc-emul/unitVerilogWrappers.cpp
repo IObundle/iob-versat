@@ -80,13 +80,8 @@ static int zeros[100] = {};
 static int ones[] = {1,1};
 static int threes[] = {3,3};
 
-static int32_t* DefaultInitFunction(FUInstance* inst){
-   inst->done = true;
-   return nullptr;
-}
-
 template<typename T>
-static int32_t MemoryAccess(FUInstance* inst,int address,int value,int write){
+static int MemoryAccess(FUInstance* inst,int address,int value,int write){
    T* self = (T*) inst->extraData;
 
    if(write){
@@ -120,7 +115,7 @@ static int32_t MemoryAccess(FUInstance* inst,int address,int value,int write){
          UPDATE(self);
       }
 
-      int32_t res = self->rdata;
+      int res = self->rdata;
 
       self->valid = 0;
       self->addr = 0;
@@ -131,7 +126,7 @@ static int32_t MemoryAccess(FUInstance* inst,int address,int value,int write){
    }
 }
 
-static int32_t* AddInitializeFunction(FUInstance* inst){
+static int* AddInitializeFunction(FUInstance* inst){
    Vxadd* self = new (inst->extraData) Vxadd();
 
    INIT(self);
@@ -146,7 +141,7 @@ static int32_t* AddInitializeFunction(FUInstance* inst){
    return NULL;
 }
 
-static int32_t* AddStartFunction(FUInstance* inst){
+static int* AddStartFunction(FUInstance* inst){
    Vxadd* self = (Vxadd*) inst->extraData;
 
    START_RUN(self);
@@ -154,8 +149,8 @@ static int32_t* AddStartFunction(FUInstance* inst){
    return NULL;
 }
 
-static int32_t* AddUpdateFunction(FUInstance* inst){
-   static int32_t out;
+static int* AddUpdateFunction(FUInstance* inst){
+   static int out;
 
    Vxadd* self = (Vxadd*) inst->extraData;
 
@@ -190,7 +185,7 @@ struct RegData{
    VCDData vcd;
 };
 
-static int32_t* RegInitializeFunction(FUInstance* inst){
+static int* RegInitializeFunction(FUInstance* inst){
    static int regCounter;
    char buffer[256];
    RegData* data = new (inst->extraData) RegData();
@@ -211,8 +206,8 @@ static int32_t* RegInitializeFunction(FUInstance* inst){
    return NULL;
 }
 
-static int32_t* RegStartFunction(FUInstance* inst){
-   static int32_t out;
+static int* RegStartFunction(FUInstance* inst){
+   static int out;
 
    RegData* data = (RegData*) inst->extraData;
    PREAMBLE(Vxreg);
@@ -227,8 +222,8 @@ static int32_t* RegStartFunction(FUInstance* inst){
    return &out;
 }
 
-static int32_t* RegUpdateFunction(FUInstance* inst){
-   static int32_t out;
+static int* RegUpdateFunction(FUInstance* inst){
+   static int out;
    RegData* data = (RegData*) inst->extraData;
    RegState* state = (RegState*) inst->state;
 
@@ -258,7 +253,8 @@ FUDeclaration* RegisterReg(Versat* versat){
    decl.latencies = zeros;
    decl.nStates = ARRAY_SIZE(regStateWires);
    decl.stateWires = regStateWires;
-   decl.memoryMapDWords = 1;
+   decl.memoryMapBits = 0;
+   decl.isMemoryMapped = true;
    decl.extraDataSize = sizeof(RegData);
    decl.initializeFunction = RegInitializeFunction;
    decl.startFunction = RegStartFunction;
@@ -270,8 +266,8 @@ FUDeclaration* RegisterReg(Versat* versat){
    return RegisterFU(versat,decl);
 }
 
-static int32_t* ConstStartFunction(FUInstance* inst){
-   static int32_t out;
+static int* ConstStartFunction(FUInstance* inst){
+   static int out;
 
    // Update config
    out = *inst->config;
@@ -281,8 +277,8 @@ static int32_t* ConstStartFunction(FUInstance* inst){
    return &out;
 }
 
-static int32_t* ConstUpdateFunction(FUInstance* inst){
-   static int32_t out;
+static int* ConstUpdateFunction(FUInstance* inst){
+   static int out;
 
    out = *inst->config;
 
@@ -304,7 +300,7 @@ FUDeclaration* RegisterConst(Versat* versat){
    return RegisterFU(versat,decl);
 }
 
-static int32_t* MemInitializeFunction(FUInstance* inst){
+static int* MemInitializeFunction(FUInstance* inst){
    Vxmem* self = new (inst->extraData) Vxmem();
 
    INIT(self);
@@ -317,7 +313,7 @@ static int32_t* MemInitializeFunction(FUInstance* inst){
    return NULL;
 }
 
-static int32_t* MemStartFunction(FUInstance* inst){
+static int* MemStartFunction(FUInstance* inst){
    Vxmem* self = (Vxmem*) inst->extraData;
    MemConfig* config = (MemConfig*) inst->config;
 
@@ -359,8 +355,8 @@ static int32_t* MemStartFunction(FUInstance* inst){
    return NULL;
 }
 
-static int32_t* MemUpdateFunction(FUInstance* inst){
-   static int32_t out[2];
+static int* MemUpdateFunction(FUInstance* inst){
+   static int out[2];
    Vxmem* self = (Vxmem*) inst->extraData;
 
    self->in0 = GetInputValue(inst,0);
@@ -386,7 +382,8 @@ FUDeclaration* RegisterMem(Versat* versat,int addr_w){
    decl.latencies = threes;
    decl.nConfigs = ARRAY_SIZE(memConfigWires);
    decl.configWires = memConfigWires;
-   decl.memoryMapDWords = (1 << 10);
+   decl.memoryMapBits = 10;
+   decl.isMemoryMapped = true;
    decl.extraDataSize = sizeof(Vxmem);
    decl.initializeFunction = MemInitializeFunction;
    decl.startFunction = MemStartFunction;
@@ -411,7 +408,7 @@ struct VReadExtra{
 
 static int vreadCounter = 0;
 
-static int32_t* VReadInitializeFunction(FUInstance* inst){
+static int* VReadInitializeFunction(FUInstance* inst){
    char buffer[256];
 
    VReadExtra* data = new (inst->extraData) VReadExtra();
@@ -432,7 +429,7 @@ static int32_t* VReadInitializeFunction(FUInstance* inst){
    return NULL;
 }
 
-static int32_t* VReadStartFunction(FUInstance* inst){
+static int* VReadStartFunction(FUInstance* inst){
    VReadExtra* data = (VReadExtra*) inst->extraData;
    VReadConfig* config = (VReadConfig*) inst->config;
    PREAMBLE(Vvread);
@@ -468,8 +465,8 @@ static int32_t* VReadStartFunction(FUInstance* inst){
    return NULL;
 }
 
-static int32_t* VReadUpdateFunction(FUInstance* inst){
-   static int32_t out;
+static int* VReadUpdateFunction(FUInstance* inst){
+   static int out;
    VReadExtra* data = (VReadExtra*) inst->extraData;
    PREAMBLE(Vvread);
 
@@ -517,7 +514,7 @@ FUDeclaration* RegisterVRead(Versat* versat){
    return RegisterFU(versat,decl);
 }
 
-static int32_t* VWriteInitializeFunction(FUInstance* inst){
+static int* VWriteInitializeFunction(FUInstance* inst){
    Vvwrite* self = new (inst->extraData) Vvwrite();
 
    INIT(self);
@@ -527,7 +524,7 @@ static int32_t* VWriteInitializeFunction(FUInstance* inst){
    return NULL;
 }
 
-static int32_t* VWriteStartFunction(FUInstance* inst){
+static int* VWriteStartFunction(FUInstance* inst){
    Vvwrite* self = (Vvwrite*) inst->extraData;
    VWriteConfig* config = (VWriteConfig*) inst->config;
 
@@ -562,8 +559,8 @@ static int32_t* VWriteStartFunction(FUInstance* inst){
    return NULL;
 }
 
-static int32_t* VWriteUpdateFunction(FUInstance* inst){
-   static int32_t out;
+static int* VWriteUpdateFunction(FUInstance* inst){
+   static int out;
    Vvwrite* self = (Vvwrite*) inst->extraData;
 
    self->in0 = GetInputValue(inst,0);
@@ -599,7 +596,7 @@ FUDeclaration* RegisterVWrite(Versat* versat){
    return RegisterFU(versat,decl);
 }
 
-static int32_t* DebugStartFunction(FUInstance* inst){
+static int* DebugStartFunction(FUInstance* inst){
    int* extra = (int*) inst->extraData;
 
    *extra = 0;
@@ -607,10 +604,10 @@ static int32_t* DebugStartFunction(FUInstance* inst){
    return NULL;
 }
 
-static int32_t* DebugUpdateFunction(FUInstance* inst){
+static int* DebugUpdateFunction(FUInstance* inst){
    int* extra = (int*) inst->extraData;
 
-   int32_t val = GetInputValue(inst,0);
+   int val = GetInputValue(inst,0);
 
    printf("[Debug %d]: 0x%x\n",*extra,val);
 
@@ -641,7 +638,7 @@ struct PipeRegData{
    VCDData vcd;
 };
 
-static int32_t* PipelineRegisterInitializeFunction(FUInstance* inst){
+static int* PipelineRegisterInitializeFunction(FUInstance* inst){
    static int pipeRegCounter = 0;
    char buffer[256];
    PipeRegData* data = new (inst->extraData) PipeRegData();
@@ -663,8 +660,8 @@ static int32_t* PipelineRegisterInitializeFunction(FUInstance* inst){
    return NULL;
 }
 
-static int32_t* PipelineRegisterStartFunction(FUInstance* inst){
-   static int32_t out;
+static int* PipelineRegisterStartFunction(FUInstance* inst){
+   static int out;
    PipeRegData* data = (PipeRegData*) inst->extraData;
    PREAMBLE(Vpipeline_register);
 
@@ -676,8 +673,8 @@ static int32_t* PipelineRegisterStartFunction(FUInstance* inst){
    return &out;
 }
 
-static int32_t* PipelineRegisterUpdateFunction(FUInstance* inst){
-   static int32_t out;
+static int* PipelineRegisterUpdateFunction(FUInstance* inst){
+   static int out;
    PipeRegData* data = (PipeRegData*) inst->extraData;
    PREAMBLE(Vpipeline_register);
 
@@ -710,10 +707,10 @@ FUDeclaration* RegisterPipelineRegister(Versat* versat){
    return RegisterFU(versat,decl);
 }
 
-int32_t* MergeStartFunction(FUInstance* inst){
-   static int32_t out;
+int* MergeStartFunction(FUInstance* inst){
+   static int out;
 
-   int32_t* extraData = (int32_t*) inst->extraData;
+   int* extraData = (int*) inst->extraData;
 
    extraData[0] = inst->delay[0];
    extraData[1] = 0;
@@ -723,10 +720,10 @@ int32_t* MergeStartFunction(FUInstance* inst){
    return &out;
 }
 
-int32_t* MergeUpdateFunction(FUInstance* inst){
-   static int32_t out;
+int* MergeUpdateFunction(FUInstance* inst){
+   static int out;
 
-   int32_t* extraData = (int32_t*) inst->extraData; // 0 - delay, 1 - counter
+   int* extraData = (int*) inst->extraData; // 0 - delay, 1 - counter
 
    out = GetInputValue(inst,extraData[1]);
 

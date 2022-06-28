@@ -6,17 +6,32 @@ static unsigned int delayBuffer[] = {
    #{end}
 };
 
-static volatile int* delayBase = (volatile int*) @{versatBase + nConfigs * 4 + 4 |> Hex};
+struct HashKey{
+   const char* key;
+   int32_t index;
+};
+
+static HashKey instanceHashmap[] = {
+   #{join "," for d instanceHashmap}
+      #{if d.data == 0-1}
+      {(const char*)0,-1}
+      #{else}
+      {"@{d.key}",@{d.data}}
+      #{end}
+   #{end}
+};
+
+static volatile int* delayBase = (volatile int*) @{versatBase + (nConfigs - nDelays) * 4 |> Hex};
 static volatile int* configBase = (volatile int*) @{versatBase + 4 |> Hex};
 static volatile int* stateBase = (volatile int*) @{versatBase + 4 |> Hex};
-static volatile int* memMappedBase = (volatile int*) @{versatBase + 2 ** memoryConfigDecisionBit |> Hex};
+static volatile int* memMappedBase = (volatile int*) @{versatBase + memoryMappedBase * 4 |> Hex};
 
 static FUInstance instancesBuffer[] = {
-   #{join "," for inst instances}
+   #{debug 1} #{join "," for inst instances}
    {
       .name = @{inst.name |> GetHierarchyName |> String},
-      #{if inst.memMapped + 0} 
-         .memMapped = (int*) @{inst.memMapped - memMapped + (2 ** memoryConfigDecisionBit) + versatBase |> Hex}, 
+      #{if inst.declaration.isMemoryMapped} 
+         .memMapped = (int*) @{versatBase + memoryMappedBase * 4 + inst.versatData.memoryAddressOffset * 4 |> Hex}, 
       #{else} 
          .memMapped = (int*) 0x0, 
       #{end}
@@ -33,5 +48,6 @@ static FUInstance instancesBuffer[] = {
          .state = (int*) 0x0
       #{end}
    }
+   #{end}
    #{end}
 };

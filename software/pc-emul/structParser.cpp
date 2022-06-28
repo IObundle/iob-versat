@@ -3,24 +3,32 @@
 #include "parser.hpp"
 #include "utils.hpp"
 
-struct SimpleMemberInfo{
-   char baseTypeName[512];
-   char arrayDefinition[512];
-   bool hasArray;
-   int pointers;
-   char name[512];
-};
+struct SimpleMemberInfo;
 
 struct SimpleTypeInfo{
+   SizedString name;
    SimpleMemberInfo* members;
-   int nMembers;
-   char name[512];
+   SimpleTypeInfo* templateType;
+   int pointers;
+   bool isStruct; // or union
+   bool isTemplated;
+
+   SimpleTypeInfo* next;
 };
 
-static SimpleTypeInfo typeInfoBuffer[1024*1024];
-static int typeInfoIndex;
-static SimpleMemberInfo memberBuffer[1024*1024];
-static int memberIndex;
+struct SimpleMemberInfo{
+   SizedString name;
+   SimpleTypeInfo* type;
+   SizedString arrayExpression;
+   bool hasArray;
+
+   SimpleMemberInfo* next;
+};
+
+static Arena tempArenaInst;
+static Arena* tempArena = &tempArenaInst;
+static SimpleTypeInfo* types;
+static SimpleTypeInfo* structures;
 
 static void SkipQualifiers(Tokenizer* tok){
    while(1){
@@ -39,157 +47,184 @@ static void SkipQualifiers(Tokenizer* tok){
    }
 }
 
-static SimpleTypeInfo* NameToType(char* name){
-   for(int i = 0; i < typeInfoIndex; i++){
-      if(CompareString(typeInfoBuffer[i].name,name)){
-         return &typeInfoBuffer[i];
+static SimpleTypeInfo* NameToType(SizedString name){
+   for(SimpleTypeInfo* ptr = types; ptr != nullptr; ptr = ptr->next){
+      if(CompareString(ptr->name,name)){
+         return ptr;
       }
    }
 
-   SimpleTypeInfo type = {};
+   SimpleTypeInfo* type = PushStruct(tempArena,SimpleTypeInfo);
+   type->name = PushString(tempArena,name);
 
-   strcpy(type.name,name);
-
-   SimpleTypeInfo* res = &typeInfoBuffer[typeInfoIndex];
-   typeInfoBuffer[typeInfoIndex++] = type;
-
-   return res;
-}
-
-static SimpleTypeInfo* AddType(SimpleTypeInfo info){
-   SimpleTypeInfo* type = NameToType(info.name);
-
-   *type = info;
+   type->next = types;
+   types = type;
 
    return type;
 }
 
-static int ParseEvalExpression(Tokenizer* tok){
-   Token token = tok->NextToken(); // Only simple numbers for now
+// No struct or union parsing
+static SimpleTypeInfo* ParseSimpleType(Tokenizer* tok){
+   SimpleTypeInfo* res = PushStruct(tempArena,SimpleTypeInfo);
 
-   int val = 0;
-   for(int i = 0; i < token.size; i++){
-      val *= 10;
-
-      Assert(token.str[i] >= '0' && token.str[i] <= '9');
-      val += token.str[i] - '0';
-   }
-
-   return val;
-}
-
-static SimpleMemberInfo ParseMember(Tokenizer* tok){
-   SimpleMemberInfo member = {};
    SkipQualifiers(tok);
 
+   Token type = tok->NextToken();
+
+   Token peek = tok->PeekToken();
+   if(CompareToken(peek,"<")){ // Template
+      tok->AdvancePeek(peek);
+
+      SimpleTypeInfo* templateType = ParseSimpleType(tok);
+
+      templateType->next = res->templateType;
+      res->templateType = templateType;
+      res->isTemplated = true;
+
+      Token last = tok->AssertNextToken(">");
+
+      type = ExtendToken(type,last);
+   }
+
+   res->name = type;
+
+   peek = tok->PeekToken();
+   while(CompareToken(peek,"*")){
+      tok->AdvancePeek(peek);
+      res->pointers += 1;
+      peek = tok->PeekToken();
+   }
+
+   return res;
+}
+
+static SimpleTypeInfo* ParseStruct(Tokenizer* tok,SizedString outsideStructName,bool insideStruct);
+
+static SimpleMemberInfo* ParseMember(Tokenizer* tok,SizedString outsideStructName){
+   SimpleMemberInfo* member = PushStruct(tempArena,SimpleMemberInfo);
    Token token = tok->PeekToken();
 
-   char typeStr[512];
-   if(CompareToken(token,"enum")){
+   if(CompareString(token,"struct") || CompareString(token,"union")){
+      member->type = ParseStruct(tok,outsideStructName,true);
+
+      Token next = tok->NextToken();
+      if(CompareString(next,";")){ // Unnamed struct
+         member->name.size = 0;
+      } else {
+         member->name = next;
+
+         // No array, for now
+         tok->AssertNextToken(";");
+      }
+   } else if(CompareString(token,"enum")){
       tok->AdvancePeek(token);
 
       Token peek = tok->PeekToken();
+      Token enumName = {};
       if(!CompareToken(peek,"{")){
-         Token enumName = tok->NextToken();
-         StoreToken(enumName,member.baseTypeName);
+         enumName = tok->NextToken();
+
+         if(outsideStructName.size > 0){
+            Byte* ptr = PushBytes(tempArena,1024);
+
+            sprintf(ptr,"%.*s::%.*s",UNPACK_SS(outsideStructName),UNPACK_SS(enumName));
+
+            enumName = MakeSizedString(ptr);
+         }
+      } else {
+         enumName = MAKE_SIZED_STRING("int");
       }
+
+      SimpleTypeInfo* type = PushStruct(tempArena,SimpleTypeInfo);
+
+      type->name = enumName;
+      member->type = type;
 
       peek = tok->PeekToken();
       if(CompareToken(peek,"{")){
          tok->NextFindUntil("}");
          tok->AssertNextToken("}");
       }
-      strcpy(member.baseTypeName,"int"); // TODO: Set enums to int, easier but hackish
+
+      member->name = tok->NextToken();
+      tok->AssertNextToken(";");
    } else {
-      token = tok->NextToken();
+      SimpleTypeInfo* simple = ParseSimpleType(tok);
+
+      simple->next = member->type;
+      member->type = simple;
+
+      Token name = tok->NextToken();
+      member->name = name;
 
       Token peek = tok->PeekToken();
-      if(CompareToken(peek,"<")){ // Template
-         tok->NextFindUntil(">");
-         Token end = tok->AssertNextToken(">");
+      if(CompareToken(peek,"[")){
+         tok->AdvancePeek(peek);
 
-         token = ExtendToken(token,end);
+         Token peek = tok->NextFindUntil("]");
+
+         member->arrayExpression = peek;
+         member->hasArray = true;
+
+         tok->AssertNextToken("]");
       }
 
-      StoreToken(token,member.baseTypeName);
+      tok->AssertNextToken(";");
    }
-
-   token = tok->PeekToken();
-   while(CompareToken(token,"*")){
-      tok->AdvancePeek(token);
-      member.pointers += 1;
-      token = tok->PeekToken();
-   }
-
-   Token name = tok->NextToken();
-   StoreToken(name,member.name);
-
-   // Skip array declaration, for now?
-   Token peek = tok->PeekToken();
-   if(CompareToken(peek,"[")){
-      tok->AdvancePeek(peek);
-
-      Token peek = tok->NextFindUntil("]");
-
-      StoreToken(peek,member.arrayDefinition);
-      member.hasArray = true;
-
-      tok->AssertNextToken("]");
-   }
-
-   tok->AssertNextToken(";");
 
    return member;
 }
 
-static SimpleTypeInfo* ParseStruct(Tokenizer* tok,int insideStruct){
-   static int unnamedStructIndex = 0;
-   SimpleTypeInfo structInfo = {};
+static SimpleTypeInfo* ParseStruct(Tokenizer* tok,SizedString outsideStructName, bool insideStruct){
+   SimpleTypeInfo* structInfo = PushStruct(tempArena,SimpleTypeInfo);
 
    Token token = tok->NextToken();
-   Assert(CompareToken(token,"struct"));
+   Assert(CompareToken(token,"struct") || CompareToken(token,"union"));
+
+   structInfo->isStruct = true;
 
    token = tok->PeekToken();
-
    if(CompareToken(token,"{")){ // Unnamed
-      sprintf(structInfo.name,"unnamed_type_%d",unnamedStructIndex++);
+      structInfo->name.size = 0;
    } else { // Named struct
-      token = tok->NextToken();
+      Token name = tok->NextToken();
 
-      StoreToken(token,structInfo.name);
+      if(insideStruct){
+         Byte* ptr = PushBytes(tempArena,1024);
+
+         sprintf(ptr,"%.*s::%.*s",UNPACK_SS(outsideStructName),UNPACK_SS(name));
+
+         structInfo->name = MakeSizedString(ptr);
+      } else {
+         structInfo->name = name;
+      }
    }
 
    token = tok->PeekToken();
-
-   if(CompareToken(token,";") || !CompareToken(token,"{")){
-      return AddType(structInfo);
-   } else {
-      token = tok->NextToken();
+   if(CompareToken(token,";")){
+      return structInfo;
    }
+   tok->AssertNextToken("{");
 
-   Assert(CompareToken(token,"{"));
-
-   //structInfo.type = instanceType;
-   structInfo.members = &memberBuffer[memberIndex];
    while(1){
       token = tok->PeekToken();
 
       if(CompareToken(token,"}")){
-         tok->NextToken();
+         tok->AdvancePeek(token);
          break;
       }
 
-      SimpleMemberInfo info = ParseMember(tok);
+      SimpleMemberInfo* info = ParseMember(tok,structInfo->name);
 
       if(tok->Done()){
          break;
       }
 
-      memberBuffer[memberIndex++] = info;
-      structInfo.nMembers += 1;
+      info->next = structInfo->members;
+      structInfo->members = info;
    }
 
-   return AddType(structInfo);
+   return structInfo;
 }
 
 void ParseHeaderFile(Tokenizer* tok){
@@ -202,51 +237,101 @@ void ParseHeaderFile(Tokenizer* tok){
       }
       tok->AdvancePeek(skip);
 
-      ParseStruct(tok,false);
+      SimpleTypeInfo* info = ParseStruct(tok,MakeSizedString(""),false);
+
+      info->next = structures;
+      structures = info;
    }
+}
 
-   #if 0
-   for(int i = 0; i < typeInfoIndex; i++){
-      SimpleTypeInfo* info = &typeInfoBuffer[i];
+char* GenerateTypeExpression(SimpleMemberInfo* m){
+   static char buffer[1024];
 
-      printf("\n%s\n",info->name);
-
-      for(int ii = 0; ii < info->nMembers; ii++){
-         Member* member = &info->members[ii];
-
-         printf("  %s",member->baseTypeName);
-         for(int i = 0; i < member->pointers; i++){
-            printf("*");
-         }
-
-         printf("  %s",member->name);
-
-         if(member->hasArray){
-            printf("[%s]",member->arrayDefinition);
-         }
-         printf(";\n");
+   char* ptr = buffer;
+   if(m->type->name.size == 0){
+      buffer[0] = '\0';
+   } else {
+      ptr += sprintf(ptr,"%.*s",UNPACK_SS(m->type->name));
+      for(int x = 0; x < m->type->pointers; x++){
+         ptr += sprintf(ptr,"*");
+      }
+      if(m->hasArray){
+         ptr += sprintf(ptr,"[%.*s]",UNPACK_SS(m->arrayExpression));
       }
    }
-   #endif
+
+   return buffer;
+}
+
+/*
+TODO: just refactor the majority of this code, if you can't read it in plain english, it's probably too complicated.
+      Remove the unnecessary calculations, use the sizeof and offsetof for the arrays. Just assume that we only have one dimensional arrays or one pointer of indirection and no more
+*/
+
+struct IterateSubmembers{
+   SimpleMemberInfo* currentMember[16];
+   int stackIndex;
+};
+
+SimpleMemberInfo* Next(IterateSubmembers* iter){
+   while(iter->stackIndex >= 0){
+      SimpleMemberInfo*& ptr = iter->currentMember[iter->stackIndex];
+      ptr = ptr->next;
+
+      if(!ptr){
+         iter->stackIndex -= 1;
+         continue;
+      }
+
+      if(ptr->type->name.size == 0){
+         iter->stackIndex += 1;
+         iter->currentMember[iter->stackIndex] = ptr->type->members;
+      }
+
+      break;
+   }
+
+   if(iter->stackIndex < 0){
+      return nullptr;
+   }
+
+   return iter->currentMember[iter->stackIndex];
+}
+
+char* GetFullInstanceName(IterateSubmembers* iter){
+   static char buffer[1024];
+
+   char* ptr = buffer;
+   bool first = true;
+   for(int i = 0; i <= iter->stackIndex; i++){
+      if(iter->currentMember[i]->name.size){
+         if(!first){
+            ptr += sprintf(ptr,".");
+         }
+         ptr += sprintf(ptr,"%.*s",UNPACK_SS(iter->currentMember[i]->name));
+         first = false;
+      }
+   }
+
+   return buffer;
 }
 
 void OutputRegisterTypesFunction(FILE* output){
    fprintf(output,"static void RegisterComplexTypes(){\n");
 
-   for(int i = 0; i < typeInfoIndex; i++){
-      SimpleTypeInfo* info = &typeInfoBuffer[i];
-
-      fprintf(output,"  RegisterStruct(A(%s),{\n",info->name);
+   for(SimpleTypeInfo* info = structures; info != nullptr; info = info->next){
+      fprintf(output,"  RegisterStruct(A(%.*s),{\n",UNPACK_SS(info->name));
 
       bool first = true;
-      for(int ii = 0; ii < info->nMembers; ii++){
-         SimpleMemberInfo* m = &info->members[ii];
+      IterateSubmembers iter = {};
+      iter.currentMember[0] = info->members;
 
-         const char* arrayElements = "0";
-         const char* hasArray = "false";
+      for(SimpleMemberInfo* m = info->members; m != nullptr; m = Next(&iter)){
+         SizedString arrayElements = MAKE_SIZED_STRING("0");
+         SizedString hasArray = MAKE_SIZED_STRING("false");
          if(m->hasArray){
-            arrayElements = m->arrayDefinition;
-            hasArray = "true";
+            arrayElements = m->arrayExpression;
+            hasArray = MAKE_SIZED_STRING("true");
          }
 
          const char* preamble = "               ";
@@ -256,24 +341,43 @@ void OutputRegisterTypesFunction(FILE* output){
             first = false;
          }
 
-         char buffer[1024];
-         char* ptr = buffer;
-         ptr += sprintf(ptr,"%s",m->baseTypeName);
-         for(int x = 0; x < m->pointers; x++){
-            ptr += sprintf(ptr,"*");
-         }
-         if(m->hasArray){
-            ptr += sprintf(ptr,"[%s]",m->arrayDefinition);
+         fprintf(output,"%s((Member){",preamble);
+
+         fprintf(output,"\"%.*s\"",UNPACK_SS(m->type->name));
+         fprintf(output,",\"%s\"",GetFullInstanceName(&iter));
+         fprintf(output,",sizeof(%s)",GenerateTypeExpression(m));
+
+         if(CompareString(m->type->name,"void")){
+            fprintf(output,",4");
+         } else {
+            fprintf(output,",sizeof(%.*s)",UNPACK_SS(m->type->name));
          }
 
-         fprintf(output,"%sB(%s,%s,%s,%s,%d,%s,%s)\n",preamble,info->name,buffer,m->baseTypeName,m->name,m->pointers,hasArray,arrayElements);
+         fprintf(output,",offsetof(%.*s,%s)",UNPACK_SS(info->name),GetFullInstanceName(&iter));
+         fprintf(output,",%d",m->type->pointers); // Ptr
+         fprintf(output,",%.*s",UNPACK_SS(arrayElements)); // array elements
+         fprintf(output,",%.*s",UNPACK_SS(hasArray)); // has array
+
+         fprintf(output,"})\n");
+
       }
       fprintf(output,"             });\n");
    }
    fprintf(output,"}\n");
 }
 
+//#define STANDALONE
+
 #ifdef STANDALONE
+struct Teste{
+   struct T1{
+      int info[3];
+   } lol;
+   struct{
+      int what[4];
+   };
+};
+
 int main(int argc,const char* argv[]){
    if(argc < 3){
       printf("Error, need at least 3 arguments: <program> <outputFile> <inputFile1> ...");
@@ -281,19 +385,19 @@ int main(int argc,const char* argv[]){
       return 0;
    }
 
-   char* buffer = (char*) malloc(256*1024*1024*sizeof(char));
+   printf("%d\n",offsetof(Teste,lol.info));
+
+   InitArena(tempArena,Megabyte(64));
 
    for(int i = 0; i < argc - 2; i++){
-      FILE* input = fopen(argv[2+i],"r");
+      SizedString content = PushFile(tempArena,argv[2+i]);
 
-      if(!input){
+      if(content.size < 0){
          printf("Failed to open file: %s\n",argv[2+i]);
          return 0;
       }
 
-      int fileSize = fread(buffer,sizeof(char),256*1024*1024,input);
-
-      Tokenizer tok(MakeSizedString(buffer,fileSize),"[]{};*<>",{});
+      Tokenizer tok(content,"[]{};*<>",{});
       ParseHeaderFile(&tok);
    }
 

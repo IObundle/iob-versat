@@ -196,22 +196,23 @@ module xmem #(
    end
 
    iob_tdp_ram #(
-         .MEM_INIT_FILE(MEM_INIT_FILE),
+         .FILE(MEM_INIT_FILE),
          .DATA_W(DATA_W),
          .ADDR_W(ADDR_W))
    mem
      (
-      .data_a(data_a_reg),
-      .data_b(data_b_reg),
-      .addr_a(addr_a_reg),
-      .addr_b(addr_b_reg),
-      .en_a(en_a_reg),
-      .en_b(en_b_reg),
-      .we_a(we_a_reg),
-      .we_b(we_b_reg),
-      .q_a(outA),
-      .q_b(outB),
-      .clk(clk)
+      .dinA(data_a_reg),
+      .dinB(data_b_reg),
+      .addrA(addr_a_reg),
+      .addrB(addr_b_reg),
+      .enA(en_a_reg),
+      .enB(en_b_reg),
+      .weA(we_a_reg),
+      .weB(we_b_reg),
+      .doutA(outA),
+      .doutB(outB),
+      .clkA(clk),
+      .clkB(clk)
       );
 
    //register mem outputs

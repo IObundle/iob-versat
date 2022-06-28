@@ -205,12 +205,13 @@ FUDeclaration* ParseModule(Versat* versat,Tokenizer* tok){
    for(int i = 0; 1; i++){
       Token token = tok->NextToken();
 
-      if(CompareToken(token,",")){
-         continue;
-      }
-
       if(CompareToken(token,")")){
          break;
+      }
+
+      Token peek = tok->PeekToken();
+      if(!CompareToken(peek,")")){
+         tok->AssertNextToken(",");
       }
 
       FUInstance* inst = CreateNamedFUInstance(circuit,circuitInput,token);
@@ -218,6 +219,7 @@ FUDeclaration* ParseModule(Versat* versat,Tokenizer* tok){
 
       FUInstance** ptr = circuit->inputInstancePointers.Alloc();
 
+      inst->id = i; // TODO: Hackish
       *ptr = inst;
       decl.nInputs += 1;
    }
@@ -239,11 +241,20 @@ FUDeclaration* ParseModule(Versat* versat,Tokenizer* tok){
       }
 
       if(state == 0){
+         Token possibleStatic = tok->PeekToken();
+
+         bool isStatic = false;
+         if(CompareString(possibleStatic,"static")){
+            tok->AdvancePeek(possibleStatic);
+            isStatic = true;
+         }
+
          Token type = tok->NextToken();
          Token name = tok->NextToken();
 
          FUDeclaration* FUType = GetTypeByName(versat,type);
          FUInstance* inst = CreateNamedFUInstance(circuit,FUType,name);
+         inst->isStatic = isStatic;
          inst->name.parent = &decl.name;
 
          Token peek = tok->PeekToken();
@@ -257,7 +268,7 @@ FUDeclaration* ParseModule(Versat* versat,Tokenizer* tok){
 
             Tokenizer insideList(list,",",{});
 
-            inst->config = (int32_t*) calloc(FUType->nConfigs,sizeof(int));
+            inst->config = (int*) calloc(FUType->nConfigs,sizeof(int));
             for(int i = 0; i < arguments; i++){
                Token arg = insideList.NextToken();
 
@@ -278,11 +289,11 @@ FUDeclaration* ParseModule(Versat* versat,Tokenizer* tok){
 
             Token list = tok->NextFindUntil("}");
             int arguments = 1 + CountSubstring(list,MAKE_SIZED_STRING(","));
-            Assert(arguments <= FUType->memoryMapDWords);
+            Assert(arguments <= (1 << FUType->memoryMapBits));
 
             Tokenizer insideList(list,",",{});
 
-            inst->memMapped = (int32_t*) calloc(FUType->memoryMapDWords,sizeof(int));
+            inst->memMapped = (int*) calloc(1 << FUType->memoryMapBits,sizeof(int));
             for(int i = 0; i < arguments; i++){
                Token arg = insideList.NextToken();
 
@@ -387,15 +398,56 @@ FUDeclaration* ParseModule(Versat* versat,Tokenizer* tok){
 
    OutputGraphDotFile(circuit,1,"circuit.dot");
 
+   int memoryMapBits[32];
+   memset(memoryMapBits,0,sizeof(int) * 32);
    for(FUInstance* inst : circuit->instances){
       FUDeclaration* d = inst->declaration;
 
+      if(d->isMemoryMapped){
+         memoryMapBits[d->memoryMapBits] += 1;
+      }
+
       decl.nConfigs += d->nConfigs;
       decl.nStates += d->nStates;
-      decl.memoryMapDWords += AlignNextPower2(d->memoryMapDWords); // Order of entities affect size, need to look into it
       decl.nDelays += d->nDelays;
       decl.extraDataSize += d->extraDataSize;
       decl.nIOs += d->nIOs;
+   }
+
+   // Huffman encoding calculation for max bits
+   int last = -1;
+   while(1){
+      for(int i = 0; i < 32; i++){
+         if(memoryMapBits[i]){
+            memoryMapBits[i+1] += (memoryMapBits[i] / 2);
+            memoryMapBits[i] = memoryMapBits[i] % 2;
+            last = i;
+         }
+      }
+
+      int first = -1;
+      int second = -1;
+      for(int i = 0; i < 32; i++){
+         if(first == -1 && memoryMapBits[i] == 1){
+            first = i;
+         } else if(second == -1 && memoryMapBits[i] == 1){
+            second = i;
+            break;
+         }
+      }
+
+      if(second == -1){
+         break;
+      }
+
+      memoryMapBits[first] = 0;
+      memoryMapBits[second] = 0;
+      memoryMapBits[maxi(first,second) + 1] += 1;
+   }
+
+   if(last != -1){
+      decl.isMemoryMapped = true;
+      decl.memoryMapBits = last;
    }
 
    decl.configWires = PushArray(&versat->permanent,decl.nConfigs,Wire);

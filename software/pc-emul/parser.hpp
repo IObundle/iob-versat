@@ -35,7 +35,7 @@ public:
 
 private:
 
-   int SpecialChars(const char* ptr, int size);
+   int SpecialChars(const char* ptr,size_t size);
    void ConsumeWhitespace();
 
 public:
@@ -90,7 +90,7 @@ struct SimpleHash{
 
       size_t res = 0;
       std::hash<char> hasher;
-      for(int i = 0; i < sizeof(T); i++){
+      for(size_t i = 0; i < sizeof(T); i++){
          res += hasher(view[i]);
       }
       return res;

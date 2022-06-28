@@ -19,43 +19,65 @@ struct Member{
    bool isArray;
 };
 
-// Care, order is important
-enum ValueType{NUMBER = 0,BOOLEAN = 1,CHAR,POOL,STRING,STRING_LITERAL,ARRAY,NIL,VECTOR,CUSTOM};
+struct Type;
 
-struct TypeInfo {
-   std::vector<Member> members;
-   int size;
-   enum {SIMPLES,STRUCT,UNION,UNKNOWN,COUNT} type;
-   int id;
-   const char* name;
+struct TypeInfo{
+   Type* baseType;
+   bool isPointer;
+   bool isArray;
 };
 
 struct Type{
-   TypeInfo* baseType;
-   int pointers;
+   SizedString name;
+   union{
+      TypeInfo info;
+
+      struct{
+         Member* members;
+         int nMembers;
+         int size; // Size of struct or base type
+      };
+   };
+
+   enum {BASE,STRUCT,INDIRECT,UNKNOWN,COUNT} type;
 };
+
+namespace ValueType{
+   extern Type* NUMBER;
+   extern Type* BOOLEAN;
+   extern Type* CHAR;
+   extern Type* POOL;
+   extern Type* STRING;
+   extern Type* NIL;
+   extern Type* SIZED_STRING;
+   extern Type* TEMPLATE_FUNCTION;
+};
+
+struct TemplateFunction;
 
 struct Value{
    union{
       bool boolean;
       char ch;
       int number;
-      SizedString str;
-      Pool<FUInstance>* pool;
-      std::vector<FUInstance*>* vec;
+      struct{
+         SizedString str;
+         bool literal;
+      };
+      Pool<FUInstance>* pool; // TODO: Do not need to store Pool, only need to store a generic iterator to the start (and keep track of template type)
       struct {
-         Type customType_;
          void* array;
          int size;
       };
+      TemplateFunction* templateFunction;
       struct {
-         Type customType;
          void* custom;
       };
    };
 
    char smallBuffer[32];
-   ValueType type;
+   Type* type;
+   bool isTemp;
 };
 
 struct Iterator{
@@ -65,17 +87,19 @@ struct Iterator{
    };
 
    Value iterating;
-   ValueType type;
 };
 
 void RegisterTypes();
 
 void Print(Value val);
-void OutputObject(void* object,Type objectType); // TODO: implement
+void OutputObject(void* object,Type* objectType); // TODO: implement
 
-Value ConvertValue(Value in,ValueType want);
+Value CollapseArrayIntoPtr(Value in);
+Value ConvertValue(Value in,Type* want);
 
-Type GetType(const char* typeName);
+Type* GetType(Type* baseType,bool isPointer = false,bool isArray = false);
+Type* GetType(const char* typeName,bool isPointer = false,bool isArray = false);
+
 Value AccessObject(Value object,SizedString memberName);
 Value AccessObjectIndex(Value object,int index);
 
@@ -93,6 +117,9 @@ Value MakeValue(const char* str);
 Value MakeValue(SizedString str);
 Value MakeValue(bool boolean);
 
-#define MAX_CUSTOM_TYPES 256
+template<typename T>
+Value MakeValue(T val);
+
+
 
 #endif // INCLUDED_TYPE

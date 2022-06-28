@@ -12,7 +12,11 @@ extern int* number_versat_configurations;
 extern int  versat_configurations;
 
 void InitVersat(Versat* versat,int base,int numberConfigurations){
+   #if 0
    printf("Embedded Versat\n");
+   #else
+   printf("E\n");
+   #endif
 
    versat_base = base;
 
@@ -44,7 +48,18 @@ FUInstance* CreateFUInstance(Accelerator* accel,FUDeclaration* decl){
 }
 
 void AcceleratorRun(Accelerator* accel){
+   #if 0
+   printf("Before run\n");
+   #else
+   printf("B\n");
+   #endif
    MEMSET(versat_base,0x0,1);
+
+   #if 0
+   printf("After run\n");
+   #else
+   printf("A\n");
+   #endif
 
    while(1){
       int val = MEMGET(versat_base,0x0);
@@ -52,6 +67,11 @@ void AcceleratorRun(Accelerator* accel){
       if(val)
          break;
    }
+   #if 0
+   printf("Run completed\n");
+   #else
+   printf("R\n");
+   #endif
 }
 
 void VersatUnitWrite(FUInstance* instance,int address, int value){
@@ -89,7 +109,7 @@ FUInstance* GetInstanceByName_(Accelerator* accel,int argc, ...){
       }
 
       if(arguments){
-         ptr += vsnprintf(ptr,ptr - buffer,str,args);
+         ptr += vsnprintf(ptr,1024 - (ptr - buffer),str,args);
          i += arguments;
          for(int ii = 0; ii < arguments; ii++){
             va_arg(args, int); // Need to consume something
@@ -101,15 +121,27 @@ FUInstance* GetInstanceByName_(Accelerator* accel,int argc, ...){
    }
 
    *ptr = '\0';
-   //printf("%s\n",buffer);
    FUInstance* res = nullptr;
 
-   for(int i = 0; i < ARRAY_SIZE(instancesBuffer); i++){
-      printf("%d %d %s\n",i,ARRAY_SIZE(instancesBuffer),buffer);
-      if(strcmp(instancesBuffer[i].name,buffer) == 0){
-         res = &instancesBuffer[i];
+   unsigned int hash = 0;
+   for(int i = 0; buffer[i] != '\0'; i++){
+      hash *= 17;
+      hash += buffer[i];
+   }
+
+   int hashTableSize = ARRAY_SIZE(instanceHashmap);
+   for(int counter = 0; counter < hashTableSize; counter++){
+      HashKey data = instanceHashmap[(hash + counter) % hashTableSize];
+
+      if(strcmp(data.key,buffer) == 0){
+         res = &instancesBuffer[data.index];
          break;
+      } else if(data.index == -1){
+         printf("ERROR ON HASH: %d\n",(hash + counter) % hashTableSize);
+         printf("STR: %s\n",buffer);
       }
+
+      //printf("%d %d %s\n",i,ARRAY_SIZE(instancesBuffer),buffer);
    }
 
    if(res == nullptr){
@@ -146,5 +178,6 @@ FUInstance* CreateNamedFUInstance(Accelerator* accel,FUDeclaration* type,SizedSt
    return res;
 }
 
-void RegisterTypes(){
+void Hook(Versat* versat,Accelerator* accel,FUInstance* inst){
+
 }

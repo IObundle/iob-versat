@@ -2,6 +2,8 @@
 #define INCLUDED_MEMORY
 
 #include <cstddef>
+#include <cstdint>
+#include <cstdlib>
 
 #include "utils.hpp"
 
@@ -14,14 +16,30 @@ int GetPageSize();
 void* AllocatePages(int pages);
 void DeallocatePages(void* ptr,int pages);
 
-void* ZeroOutRealloc(void* ptr,int newSize,int oldSize); // Realloc but zeroes out extra memory allocated
+template<typename T>
+struct Allocation{
+   T* ptr;
+   int size;
+   int allocated;
+};
+
+template<typename T>
+bool ZeroOutAlloc(Allocation<T>* alloc,int newSize); // Possible reallocs (returns true if so) but clears all memory allocated to zero
+
+template<typename T>
+bool ZeroOutRealloc(Allocation<T>* alloc,int newSize); // Returns true if it actually performed reallocation
+
+template<typename T>
+void Free(Allocation<T>* alloc);
 
 struct Arena{
    Byte* mem;
    size_t used;
    size_t totalAllocated;
+   bool align;
 };
 
+void InitArena(Arena* arena,size_t size);
 Byte* MarkArena(Arena* arena);
 void PopMark(Arena* arena,Byte* mark);
 Byte* PushBytes(Arena* arena, int size);
@@ -89,9 +107,8 @@ private:
 
 public:
 
-   #if 0
+   Pool();
    ~Pool();
-   #endif
 
    T* Alloc();
    void Remove(T* elem);
@@ -108,6 +125,53 @@ public:
 };
 
 // Impl
+template<typename T>
+bool ZeroOutAlloc(Allocation<T>* alloc,int newSize){
+   T* stored = alloc->ptr;
+
+   if(newSize > alloc->allocated){
+      alloc->ptr = (T*) calloc(newSize,sizeof(T));
+
+      memcpy(alloc->ptr,stored,alloc->size * sizeof(T));
+
+      alloc->allocated = newSize;
+      alloc->size = newSize;
+   }
+
+   memset(alloc->ptr,0,alloc->allocated * sizeof(T));
+   bool res = (stored != alloc->ptr);
+   return res;
+}
+
+template<typename T>
+bool ZeroOutRealloc(Allocation<T>* alloc,int newSize){
+   T* stored = alloc->ptr;
+
+   if(newSize > alloc->allocated){
+      alloc->ptr = (T*) calloc(newSize,sizeof(T));
+
+      memcpy(alloc->ptr,stored,alloc->size * sizeof(T));
+
+      alloc->allocated = newSize;
+      alloc->size = newSize;
+   }
+
+   // Clear out free (allocated now or before) space
+   if(alloc->allocated - alloc->size > 0){
+      char* view = (char*) alloc->ptr;
+      memset(&view[alloc->size],0,(alloc->allocated - alloc->size) * sizeof(T));
+   }
+
+   bool res = (stored != alloc->ptr);
+   return res;
+}
+
+template<typename T>
+void Free(Allocation<T>* info){
+   free(info->ptr);
+   info->ptr = 0;
+}
+
 template<typename T>
 PoolIterator<T>::PoolIterator(Pool<T>* pool)
 :pool(pool)
@@ -188,23 +252,29 @@ T* PoolIterator<T>::operator*(){
    return val;
 }
 
-#if 0
+template<typename T>
+Pool<T>::Pool()
+:mem(nullptr)
+,allocated(0)
+,endSize(0)
+{
+}
+
 template<typename T>
 Pool<T>::~Pool(){
    PoolInfo info = GetPoolInfo();
 
-   byte* ptr = mem;
+   Byte* ptr = mem;
    while(ptr){
       PageInfo page = GetPageInfo(info,ptr);
 
-      byte* nextPage = page.header->nextPage;
+      Byte* nextPage = page.header->nextPage;
 
       DeallocatePages(ptr,1);
 
       ptr = nextPage;
    }
 }
-#endif
 
 template<typename T>
 PoolInfo Pool<T>::GetPoolInfo(){

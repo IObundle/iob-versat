@@ -42,17 +42,11 @@ void DeallocatePages(void* ptr,int pages){
    munmap(ptr,pages * GetPageSize());
 }
 
-void* ZeroOutRealloc(void* ptr,int newSize,int oldSize){
-   int extraMem = newSize - oldSize;
-
-   void* res = realloc(ptr,newSize);
-
-   if(extraMem > 0){
-      char* view = (char*) res;
-      memset(&view[oldSize],0,extraMem);
-   }
-
-   return res;
+void InitArena(Arena* arena,size_t size){
+   arena->used = 0;
+   arena->totalAllocated = size;
+   arena->mem = (Byte*) calloc(size,sizeof(Byte));
+   arena->align = false;
 }
 
 Byte* MarkArena(Arena* arena){
@@ -68,6 +62,10 @@ Byte* PushBytes(Arena* arena, int size){
 
    memset(ptr,0,size);
    arena->used += size;
+
+   if(arena->align){
+      arena->used = ALIGN_4(arena->used);
+   }
 
    Assert(arena->used < arena->totalAllocated);
 
