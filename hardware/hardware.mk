@@ -19,7 +19,7 @@ INCLUDE+=$(incdir) $(VERSAT_DIR)/submodules/LIB/hardware/include
 #included files
 VHDR+=$(wildcard $(VERSAT_HW_DIR)/include/*.vh)
 
-VHDR+=cpu_axi4_m_if.vh
+VHDR+=cpu_axi4_m_if.v
 
 #sources
 VSRC+=$(wildcard $(VERSAT_HW_DIR)/src/*.v)
@@ -29,5 +29,6 @@ VSRC+=$(VERSAT_DIR)/submodules/DMA/hardware/src/dma_axi.v
 VSRC+=$(VERSAT_DIR)/submodules/DMA/hardware/src/dma_axi_r.v
 VSRC+=$(VERSAT_DIR)/submodules/DMA/hardware/src/dma_axi_w.v
 
-cpu_axi4_m_if.vh: 
+cpu_axi4_m_if.v: 
 	$(VERSAT_DIR)/submodules/LIB/software/python/axi_gen.py axi_m_port cpu_ m_
+	cp cpu_axi_m_port.vh cpu_axi4_m_if.v
