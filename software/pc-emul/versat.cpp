@@ -2666,7 +2666,7 @@ static void T(Accelerator* accel){
 }
 
 void Hook(Versat* versat,Accelerator* accel,FUInstance* inst){
-   versat->debug.outputAccelerator = true;
+   //versat->debug.outputAccelerator = true;
 
    #if 0
    accel = CreateAccelerator(versat);
