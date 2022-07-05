@@ -5,6 +5,7 @@
 #include <unordered_map>
 #include <initializer_list>
 #include <vector>
+#include <set>
 
 #include "utils.hpp"
 #include "memory.hpp"
@@ -13,6 +14,7 @@
 struct Versat;
 struct Accelerator;
 struct FUInstance;
+struct FUDeclaration;
 
 typedef int* (*FUFunction)(FUInstance*);
 typedef int (*MemoryAccessFunction)(FUInstance* instance, int address, int value,int write);
@@ -32,6 +34,18 @@ struct Wire{
    int bitsize;
 };
 
+// Maybe add wire name here?
+// Need wire name
+struct StaticInfo{
+   FUDeclaration* module;
+   SizedString name;
+   Wire* wires;
+   int nConfigs;
+   int* ptr;
+};
+
+bool operator<(const StaticInfo& lhs,const StaticInfo& rhs);
+
 struct FUDeclaration{
    HierarchyName name;
 
@@ -50,6 +64,8 @@ struct FUDeclaration{
    int nStates;
    Wire* stateWires;
 
+   int nStaticConfigs;
+
    int nDelays; // Code only handles 1 single instace, for now, hardware needs this value for correct generation
    int nIOs;
    int memoryMapBits;
@@ -61,6 +77,8 @@ struct FUDeclaration{
    MemoryAccessFunction memAccessFunction;
    const char* operation;
    bool isOperation;
+
+   std::vector<StaticInfo> staticUnits;
 
    enum {SINGLE = 0x0,COMPOSITE = 0x1,SPECIAL = 0x2} type;
 
@@ -119,6 +137,8 @@ struct FUInstance{
    // Configuration + State variables that versat needs access to
    int done; // Units that are sink or sources of data must implement done to ensure circuit does not end prematurely
    bool isStatic;
+
+   bool namedAccess;
 
    // Various uses
    GraphComputedData* tempData;
@@ -179,6 +199,9 @@ struct Accelerator{
    Allocation<int> configAlloc;
    Allocation<int> stateAlloc;
    Allocation<int> delayAlloc;
+   Allocation<int> staticAlloc;
+
+   std::vector<StaticInfo> staticInfo;
 
 	void* configuration;
 	int configurationSize;
@@ -193,28 +216,6 @@ struct Accelerator{
 	bool init;
 
 	enum {ACCELERATOR,SUBACCELERATOR,CIRCUIT} type;
-};
-
-struct UnitInfo{
-   int nConfigsWithDelay;
-   int configBitSize;
-   int nStates;
-   int stateBitSize;
-   int memoryMapDWords;
-   int memoryAddressBits;
-   int memoryMappingAddressBits;
-   int configurationAddressBits;
-   int stateConfigurationAddressBits;
-   int memoryConfigDecisionBit;
-   Range memoryAddressRange;
-   Range configAddressRange;
-   Range stateAddressRange;
-   Range configBitsRange;
-   Range stateBitsRange;
-   int lowerAddressSize;
-   int stateAddressBits;
-   int implementsDone;
-   int nIOs;
 };
 
 struct MappingNode{ // Mapping (edge to edge or node to node)
@@ -242,34 +243,37 @@ struct Mapping{
 };
 
 struct VersatComputedValues{
-   int memoryMapped;
-   int numberConnections;
-   int unitsMapped;
    int nConfigs;
-   int nStates;
+   int configBits;
+
+   int nStatics;
+   int staticBits;
+
    int nDelays;
-   int nUnitsIO;
+   int delayBits;
+
+   // The sum of config + static + delays (all types of configuration)
+   int nConfigurations;
    int configurationBits;
-   int stateBits;
-   int lowerAddressSize;
    int configurationAddressBits;
+
+   int nStates;
+   int stateBits;
    int stateAddressBits;
+
+   int unitsMapped;
+   int memoryMapped;
    int maxMemoryMapDWords;
-   int memoryAddressBits;
+
+   int nUnitsIO;
+
+   int numberConnections;
+
    int stateConfigurationAddressBits;
+   int memoryAddressBits;
    int memoryMappingAddressBits;
-
-   // Auxiliary for versat generation;
    int memoryConfigDecisionBit;
-
-   // Address
-   Range memoryAddressRange;
-   Range configAddressRange;
-   Range stateAddressRange;
-
-   // Bits
-   Range configBitsRange;
-   Range stateBitsRange;
+   int lowerAddressSize;
 };
 
 struct SubgraphData{
@@ -329,7 +333,7 @@ int VersatUnitRead(FUInstance* instance,int address);
 
 int CalculateLatency(FUInstance* inst);
 void CalculateDelay(Versat* versat,Accelerator* accel);
-void SetDelayRecursive(FUInstance* inst,int delay);
+void SetDelayRecursive(Accelerator* accel);
 void CalculateGraphData(Accelerator* accel);
 void CalculateVersatData(Accelerator* accel);
 

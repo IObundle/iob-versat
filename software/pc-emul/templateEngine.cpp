@@ -145,7 +145,7 @@ static Expression* ParseExpression(Tokenizer* tok){
       return expr;
    }
 
-   Expression* res = ParseOperationType(tok,{{"|>"},{"and","or","xor"},{"=="},{"+","-"},{"*","/","&","**"}},ParseFactor,tempArena);
+   Expression* res = ParseOperationType(tok,{{"|>"},{"and","or","xor"},{">","<",">=","<=","=="},{"+","-"},{"*","/","&","**"}},ParseFactor,tempArena);
 
    return res;
 }
@@ -375,6 +375,20 @@ static Value EvalExpression(Expression* expr){
             case '&':{
                val.number = val1 & val2;
             }break;
+            case '>':{
+               if(expr->op[1] == '='){
+                  val.boolean = (val1 >= val2);
+               } else {
+                  val.boolean = (val1 > val2);
+               }
+            }break;
+            case '<':{
+               if(expr->op[1] == '='){
+                  val.boolean = (val1 <= val2);
+               } else {
+                  val.boolean = (val1 < val2);
+               }
+            }break;
             case 'p':{
                val.number = val1;
 
@@ -602,7 +616,7 @@ static void Eval(Block* block){
       }
    } else {
       // Print text
-      Tokenizer tok(block->textBlock,"![]()*.-/}",{"@{","==","**","|>"});
+      Tokenizer tok(block->textBlock,"!()[]{}+-:;.,*~><\"",{"@{","==","**","|>",">=","<="});
 
       tok.keepComments = true;
 
@@ -632,7 +646,7 @@ static void Eval(Block* block){
 }
 
 void ParseAndEvaluate(SizedString content){
-   Tokenizer tokenizer(content,"!()[]{}+-:;.,*~\"",{"#{","==","**"});
+   Tokenizer tokenizer(content,"!()[]{}+-:;.,*~><\"",{"#{","==","**",">=","<="});
    Tokenizer* tok = &tokenizer;
 
    tok->keepComments = true;

@@ -6,19 +6,25 @@
 #define MEMSET(base, location, value) (*((volatile int*) (base + (sizeof(int)) * location)) = value)
 #define MEMGET(base, location)        (*((volatile int*) (base + (sizeof(int)) * location)))
 
+#if 0
+#define DEBUG
+#endif
+
 static int versat_base;
 
 extern int* number_versat_configurations;
 extern int  versat_configurations;
 
 void InitVersat(Versat* versat,int base,int numberConfigurations){
-   #if 0
-   printf("Embedded Versat\n");
-   #else
+   #ifdef DEBUG
    printf("E\n");
    #endif
 
    versat_base = base;
+
+   #ifdef DEBUG
+   printf("BASE:%x\n",base);
+   #endif
 
    MEMSET(versat_base,0x0,2);
    MEMSET(versat_base,0x0,0);
@@ -48,18 +54,8 @@ FUInstance* CreateFUInstance(Accelerator* accel,FUDeclaration* decl){
 }
 
 void AcceleratorRun(Accelerator* accel){
-   #if 0
-   printf("Before run\n");
-   #else
    printf("B\n");
-   #endif
    MEMSET(versat_base,0x0,1);
-
-   #if 0
-   printf("After run\n");
-   #else
-   printf("A\n");
-   #endif
 
    while(1){
       int val = MEMGET(versat_base,0x0);
@@ -67,19 +63,23 @@ void AcceleratorRun(Accelerator* accel){
       if(val)
          break;
    }
-   #if 0
-   printf("Run completed\n");
-   #else
-   printf("R\n");
-   #endif
+   printf("A\n");
 }
 
 void VersatUnitWrite(FUInstance* instance,int address, int value){
    instance->memMapped[address] = value;
+
+   #ifdef DEBUG
+   printf("W:%x-%x\n",address,value);
+   #endif
 }
 
 int32_t VersatUnitRead(FUInstance* instance,int address){
    int32_t res = instance->memMapped[address];
+
+   #ifdef DEBUG
+   printf("R:%x-%x\n",address,res);
+   #endif
 
    return res;
 }
@@ -150,13 +150,21 @@ FUInstance* GetInstanceByName_(Accelerator* accel,int argc, ...){
 
    va_end(args);
 
+   #ifdef DEBUG
+   printf("C:%x\n",res->config);
+   printf("S:%x\n",res->state);
+   printf("M:%x\n",res->memMapped);
+   #endif
+
    return res;
 }
 
-// In versat space, simple extract delays from configuration data
 void CalculateDelay(Versat* versat,Accelerator* accel){
    for(int i = 0; i < ARRAY_SIZE(delayBuffer); i++){
       delayBase[i] = delayBuffer[i];
+   }
+   for(int i = 0; i < ARRAY_SIZE(staticBuffer); i++){ // Hackish, for now
+      staticBase[i] = staticBuffer[i];
    }
 }
 

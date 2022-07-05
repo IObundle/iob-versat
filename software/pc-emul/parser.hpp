@@ -83,49 +83,4 @@ bool IsNum(char ch);
 typedef Expression* (*ParsingFunction)(Tokenizer* tok);
 Expression* ParseOperationType(Tokenizer* tok,std::vector<std::vector<const char*>> operators,ParsingFunction finalFunction,Arena* tempArena);
 
-template<typename T>
-struct SimpleHash{
-   std::size_t operator()(T const& val) const noexcept{
-      char* view = (char*) &val;
-
-      size_t res = 0;
-      std::hash<char> hasher;
-      for(size_t i = 0; i < sizeof(T); i++){
-         res += hasher(view[i]);
-      }
-      return res;
-   }
-};
-
-template<typename T>
-struct SimpleEqual{
-   bool operator()(const T &left, const T &right) const {
-      bool res = (memcmp(&left,&right,sizeof(T)) == 0);
-
-      return res;
-   }
-};
-
-template<>
-struct SimpleHash<SizedString>{
-   std::size_t operator()(SizedString const& val) const noexcept{
-      size_t res = 0;
-      std::hash<char> hasher;
-      for(int i = 0; i < val.size; i++){
-         res += hasher(val.str[i]);
-      }
-      return res;
-   }
-};
-
-template<>
-struct SimpleEqual<SizedString>{
-   bool operator()(const SizedString &left, const SizedString &right) const {
-      bool res = CompareString(left,right);
-
-      return res;
-   }
-};
-
-
 #endif // INCLUDED_PARSER

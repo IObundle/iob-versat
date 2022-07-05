@@ -95,7 +95,7 @@ assign rdata = (versat_ready ? versat_rdata : unitRdataFinal);
 
 assign ready = versat_ready | wor_ready;
 
-reg [@{versatValues.configurationBits + versatValues.nDelays * 32 - 1}:0] configdata;
+reg [@{versatValues.configurationBits - 1}:0] configdata;
 wire [@{versatValues.stateBits - 1}:0] statedata;
 
 wire [@{numberUnits - 1}:0] unitDone;
@@ -149,18 +149,32 @@ begin
       configdata <= {@{configurationBits}{1'b0}};
    end else if(valid & we & !memoryMappedAddr) begin
       #{set counter 0}
-      #{set addr 0}
+      #{set addr 1}
       #{for inst instances}
       #{set decl inst.declaration}
       #{for i decl.nConfigs}
       #{set wire decl.configWires[i]}
-      if(addr[@{configAddressRangeHigh}:@{configAddressRangeLow}] == @{addr + 1})
-         configdata[@{counter}+:@{wire.bitsize}] <= wdata[@{wire.bitsize - 1}:0]; // @{wire.name}
+      if(addr[@{versatValues.configurationAddressBits - 1}:0] == @{addr}) // @{versatBase + addr * 4 |> Hex}
+         configdata[@{counter}+:@{wire.bitsize}] <= wdata[@{wire.bitsize - 1}:0]; // @{wire.name} - @{decl.name.str}
       #{inc addr}
       #{set counter counter + wire.bitsize}
       #{end}
+      #{end}
+
+      #{for unit accel.staticInfo}
+      #{for i unit.nConfigs}
+      #{set wire unit.wires[i]}
+      if(addr[@{versatValues.configurationAddressBits - 1}:0] == @{addr}) // @{versatBase + addr * 4 |> Hex}
+         configdata[@{counter}+:32] <= wdata[31:0]; //  @{unit.module.name.str}_@{unit.name}_@{wire.name}
+      #{inc addr}
+      #{set counter counter + 32}
+      #{end}
+      #{end}
+
+      #{for inst instances}
+      #{set decl inst.declaration}
       #{for i decl.nDelays}
-      if(addr[@{configAddressRangeHigh}:@{configAddressRangeLow}] == @{addr + 1})
+      if(addr[@{versatValues.configurationAddressBits - 1}:0] == @{addr}) // @{versatBase + addr * 4 |> Hex}
          configdata[@{counter}+:32] <= wdata[31:0]; // Delay
       #{inc addr}
       #{set counter counter + 32}
@@ -180,7 +194,7 @@ begin
       #{set decl inst.declaration}
       #{for i decl.nStates}
       #{set wire decl.stateWires[i]}
-      if(addr[@{stateAddressRangeHigh}:@{stateAddressRangeLow}] == @{addr + 1})
+      if(addr[@{versatValues.stateAddressBits - 1}:0] == @{addr + 1}) // @{versatBase + addr * 4 |> Hex}
          stateRead = statedata[@{counter}+:@{wire.bitsize}];
       #{inc addr}
       #{set counter counter + wire.bitsize}
@@ -214,6 +228,14 @@ end
          .@{wire.name}(configdata[@{configDataIndex}+:@{wire.bitsize}]),
       #{end}
       #{set configDataIndex configDataIndex + wire.bitsize}
+      #{end}
+
+      #{for unit decl.staticUnits}
+      #{for i unit.nConfigs}
+      #{set wire unit.wires[i]}
+         .@{unit.module.name.str}_@{unit.name}_@{wire.name}(configdata[@{configDataIndex}+:32]),
+      #{set configDataIndex configDataIndex + 32}
+      #{end}
       #{end}
 
       #{for i decl.nDelays}

@@ -52,6 +52,12 @@ typedef std::function<void(FUInstance*)> AcceleratorInstancesVisitor;
 static void VisitAcceleratorInstances(Accelerator* accel,AcceleratorInstancesVisitor func);
 static void AcceleratorRunStart(Accelerator* accel);
 
+bool operator<(const StaticInfo& left,const StaticInfo& right){
+   bool res = std::tie(left.module,left.name,left.wires,left.ptr) < std::tie(right.module,right.name,right.wires,right.ptr);
+
+   return res;
+}
+
 static int zeros[100] = {};
 static int ones[] = {1,1};
 
@@ -63,26 +69,30 @@ static int* DefaultInitFunction(FUInstance* inst){
 static int* DelayUpdateFunction(FUInstance* inst){
    static int out;
 
-   Assert(inst->delay[0] < MAX_DELAY);
+   Assert(inst->config[0] < MAX_DELAY);
 
    int* fifo = (int*) inst->extraData;
 
-   if(inst->delay[0] == 0){
+   if(inst->config[0] == 0){
       out = GetInputValue(inst,0);
    } else {
       out = fifo[0];
 
-      for(int i = 0; i < inst->delay[0]; i++){
+      for(int i = 0; i < inst->config[0]; i++){
          fifo[i] = fifo[i+1];
       }
 
-      fifo[inst->delay[0] - 1] = GetInputValue(inst,0);
+      fifo[inst->config[0] - 1] = GetInputValue(inst,0);
    }
 
    return &out;
 }
 
 static FUDeclaration* RegisterDelay(Versat* versat){
+   static Wire wire = {};
+   wire.bitsize = 32;
+   wire.name = "amount";
+
    FUDeclaration decl = {};
 
    strcpy(decl.name.str,"delay");
@@ -90,7 +100,8 @@ static FUDeclaration* RegisterDelay(Versat* versat){
    decl.nOutputs = 1;
    decl.inputDelays = zeros;
    decl.latencies = ones;
-   decl.nDelays = 1;
+   decl.nConfigs = 1; // Treat the delay value as a configuration, instead of a special delay
+   decl.configWires = &wire;
    decl.delayType = DelayType::DELAY_TYPE_COMPUTE_DELAY;
    decl.extraDataSize = sizeof(int) * MAX_DELAY;
    decl.initializeFunction = DefaultInitFunction;
@@ -254,55 +265,6 @@ void LockAccelerator(Accelerator* accel,Accelerator::Locked level){
       CalculateVersatData(accel);
       accel->locked = Accelerator::Locked::FIXED;
    }
-}
-
-static UnitInfo CalculateUnitInfo(FUInstance* inst){
-   UnitInfo info = {};
-
-   FUDeclaration decl = *inst->declaration;
-
-   info.nConfigsWithDelay = decl.nConfigs + decl.nDelays;
-
-   if(decl.nConfigs){
-      for(int ii = 0; ii < decl.nConfigs; ii++){
-         info.configBitSize += decl.configWires[ii].bitsize;
-      }
-   }
-   info.configBitSize += DELAY_BIT_SIZE * decl.nDelays;
-
-   info.nStates = decl.nStates;
-   if(decl.nStates){
-      for(int ii = 0; ii < decl.nStates; ii++){
-         info.stateBitSize += decl.stateWires[ii].bitsize;
-      }
-   }
-
-   info.memoryMapDWords = (1 << decl.memoryMapBits);
-   info.memoryAddressBits = log2i(info.memoryMapDWords);
-   info.implementsDone = decl.nIOs;
-   info.nIOs = decl.nIOs;
-
-   info.memoryMappingAddressBits = info.memoryAddressBits;
-   info.configurationAddressBits = log2i(decl.nConfigs);
-   info.stateAddressBits = log2i(decl.nStates);
-   info.stateConfigurationAddressBits = maxi(info.configurationAddressBits,info.stateAddressBits);
-
-   info.lowerAddressSize = maxi(info.stateConfigurationAddressBits,info.memoryMappingAddressBits);
-
-   info.memoryConfigDecisionBit = info.lowerAddressSize;
-   info.memoryAddressRange.high = info.memoryConfigDecisionBit - 1;
-   info.memoryAddressRange.low = 0;
-   info.configAddressRange.high = info.configurationAddressBits - 1;
-   info.configAddressRange.low = 0;
-   info.stateAddressRange.high = info.stateAddressBits - 1;
-   info.stateAddressRange.low = 0;
-
-   info.configBitsRange.high = info.configBitSize - 1;
-   info.configBitsRange.low = 0;
-   info.stateBitsRange.high = info.stateBitSize - 1;
-   info.stateBitsRange.low = 0;
-
-   return info;
 }
 
 typedef std::unordered_map<FUInstance*,FUInstance*> InstanceMap;
@@ -595,6 +557,8 @@ FUInstance* GetInstanceByName_(Accelerator* circuit,int argc, ...){
 
    va_end(args);
 
+   res->namedAccess = true;
+
    return res;
 }
 
@@ -633,7 +597,11 @@ static char* FormatNameToOutput(FUInstance* inst){
    #endif
 
    #if PRINT_DELAY == 1
-   ptr += sprintf(ptr,"_%d",inst->baseDelay);
+   if(CompareString(inst->declaration->name.str,MAKE_SIZED_STRING("delay")) && inst->config){
+      ptr += sprintf(ptr,"_%d",inst->config[0]);
+   } else {
+      ptr += sprintf(ptr,"_%d",inst->baseDelay);
+   }
    #endif
 
    #undef PRINT_ID
@@ -760,12 +728,14 @@ Accelerator* CreateAccelerator(Versat* versat){
    Accelerator* accel = versat->accelerators.Alloc();
    accel->versat = versat;
 
+   ZeroOutAlloc(&accel->staticAlloc,1024); // Do not want to deal with reallocations for static data, for now
+
    return accel;
 }
 
-static Accelerator* InstantiateSubAccelerator(Versat* versat,Accelerator* accel,HierarchyName* parent,int* config,int* state,int* memMapped,int* delay);
+static Accelerator* InstantiateSubAccelerator(Versat* versat,Accelerator* topLevel,FUDeclaration* subaccelType,Accelerator* accel,HierarchyName* parent,int* config,int* state,int* memMapped,int* delay);
 
-static FUInstance* CreateSubFUInstance(Accelerator* accel,FUDeclaration* declaration,int* config,int* state,int* memMapped,int* delay){
+static FUInstance* CreateSubFUInstance(Accelerator* accel,Accelerator* topLevel,FUDeclaration* declaration,int* config,int* state,int* memMapped,int* delay){
    FUInstance* ptr = accel->instances.Alloc();
 
    ptr->id = accel->entityId++;
@@ -774,10 +744,18 @@ static FUInstance* CreateSubFUInstance(Accelerator* accel,FUDeclaration* declara
 
    sprintf(ptr->name.str,"%.15s",FixEntityName(declaration->name.str));
 
-   ptr->config = config;
-   ptr->state = state;
-   ptr->memMapped = memMapped;
-   ptr->delay = delay;
+   if(declaration->nConfigs){
+      ptr->config = config;
+   }
+   if(declaration->nStates){
+      ptr->state = state;
+   }
+   if(declaration->isMemoryMapped){
+      ptr->memMapped = memMapped;
+   }
+   if(declaration->nDelays){
+      ptr->delay = delay;
+   }
 
    if(declaration->nOutputs){
       ptr->outputs = (int*) calloc(declaration->nOutputs,sizeof(int));
@@ -789,42 +767,75 @@ static FUInstance* CreateSubFUInstance(Accelerator* accel,FUDeclaration* declara
    }
 
    if(declaration->type == FUDeclaration::COMPOSITE){
-      ptr->compositeAccel = InstantiateSubAccelerator(accel->versat,declaration->circuit,&ptr->name,config,state,memMapped,delay);
+      ptr->compositeAccel = InstantiateSubAccelerator(accel->versat,topLevel,declaration,declaration->circuit,&ptr->name,config,state,memMapped,delay);
    }
 
    return ptr;
 }
 
-static Accelerator* InstantiateSubAccelerator(Versat* versat,Accelerator* accel,HierarchyName* parent,int* config,int* state,int* memMapped,int* delay){
+static Accelerator* InstantiateSubAccelerator(Versat* versat,Accelerator* topLevel,FUDeclaration* subaccelType,Accelerator* accel,HierarchyName* parent,int* config,int* state,int* memMapped,int* delay){
    InstanceMap map = {};
    Accelerator* newAccel = CreateAccelerator(versat);
 
    // Flat copy of instances
    for(FUInstance* inst : accel->instances){
-      FUInstance* newInst = CreateSubFUInstance(newAccel,inst->declaration,config,state,memMapped,delay);
 
-      state += inst->declaration->nStates;
+      // Check if static
+      // Check if static unit already exists
+      // If exists, simply pass the static unit config pointer as the config pointer (so that the lower units can be set to the correct position)
 
-      #if 0
+      int* configPtr = config;
+
+      #if 1
+      StaticInfo* saved = nullptr;
       if(inst->isStatic){
-         for(FUInstance* others : newAccel->instances){
-            if(others->declaration == inst->declaration && others->isStatic){
-               newInst->config = others->config;
-
+         int* foundConfig = nullptr;
+         for(StaticInfo& info : topLevel->staticInfo){
+            if(info.module == subaccelType && CompareString(info.name,inst->name.str)){
+               foundConfig = info.ptr;
+               saved = &info;
             }
+         }
+
+         if(foundConfig){
+            configPtr = foundConfig;
+         } else { // Have to allocate and reallocate static configuration
+            configPtr = &topLevel->staticAlloc.ptr[topLevel->staticAlloc.size];
+
+            topLevel->staticAlloc.size += inst->declaration->nConfigs;
+            Assert(topLevel->staticAlloc.size < topLevel->staticAlloc.reserved);
+
+            StaticInfo info = {};
+            info.module = subaccelType;
+            info.name = MakeSizedString(inst->name.str);
+            info.ptr = configPtr;
+
+            topLevel->staticInfo.push_back(info);
+
+            saved = &topLevel->staticInfo.back();
          }
       }
       #endif
 
-      config += inst->declaration->nConfigs;
+      FUInstance* newInst = CreateSubFUInstance(newAccel,topLevel,inst->declaration,configPtr,state,memMapped,delay);
+      newInst->name.parent = parent;
+      FixedStringCpy(newInst->name.str,MakeSizedString(inst->name.str));
+
+      state += inst->declaration->nStates;
+
+      if(inst->isStatic){
+         saved->wires = newInst->declaration->configWires;
+         saved->nConfigs = newInst->declaration->nConfigs;
+      } else {
+         config += inst->declaration->nConfigs;
+      }
+
       delay += inst->declaration->nDelays;
 
       if(inst->declaration->isMemoryMapped){
          memMapped = (int*) (((char*) memMapped) + (1 << inst->declaration->memoryMapBits) * 4);
       }
 
-      newInst->name.parent = parent;
-      FixedStringCpy(newInst->name.str,MakeSizedString(inst->name.str));
       newInst->baseDelay = inst->baseDelay;
 
       if(newInst->declaration->initializeFunction){
@@ -834,6 +845,7 @@ static Accelerator* InstantiateSubAccelerator(Versat* versat,Accelerator* accel,
       if(inst->config){
          memcpy(newInst->config,inst->config,inst->declaration->nConfigs * sizeof(int));
       }
+
       if(inst->declaration->isMemoryMapped && inst->memMapped){
          for(int i = 0; i < (1 << inst->declaration->memoryMapBits); i++){
             VersatUnitWrite(newInst,i,inst->memMapped[i]);
@@ -898,6 +910,7 @@ static void CheckReallocation(Allocation<int>* accelInfo,FUInstance* inst,Accele
    if(size){
       if(ZeroOutRealloc(accelInfo,accelInfo->size + size)){
          ReallocInstances(accel,accelInfo->ptr,arrayPtr,sizePtr);
+         accelInfo->size = accelInfo->size + size;
       }
    }
 }
@@ -940,7 +953,11 @@ FUInstance* CreateFUInstance(Accelerator* accel,FUDeclaration* type){
    }
 
    if(decl.type == FUDeclaration::COMPOSITE){
-      ptr->compositeAccel = InstantiateSubAccelerator(accel->versat,decl.circuit,&ptr->name,ptr->config,ptr->state,ptr->memMapped,ptr->delay);
+      ptr->compositeAccel = InstantiateSubAccelerator(accel->versat,accel,type,decl.circuit,&ptr->name,ptr->config,ptr->state,ptr->memMapped,ptr->delay);
+   }
+
+   if(!ptr->config && accel->staticAlloc.ptr){
+      ptr->config = accel->staticAlloc.ptr;
    }
 
    if(decl.initializeFunction)
@@ -953,6 +970,8 @@ FUInstance* CreateNamedFUInstance(Accelerator* accel,FUDeclaration* type,SizedSt
    FUInstance* inst = CreateFUInstance(accel,type);
 
    FixedStringCpy(inst->name.str,entityName);
+
+   inst->namedAccess = true;
 
    return inst;
 }
@@ -1446,50 +1465,54 @@ static VersatComputedValues ComputeVersatValues(Versat* versat,Accelerator* acce
    VersatComputedValues res = {};
 
    for(FUInstance* inst : accel->instances){
-      UnitInfo info = CalculateUnitInfo(inst);
+      FUDeclaration* decl = inst->declaration;
 
       res.numberConnections += inst->tempData->numberOutputs;
 
-      res.maxMemoryMapDWords = maxi(res.maxMemoryMapDWords,info.memoryMapDWords);
-      res.memoryMapped += info.memoryMapDWords;
+      res.maxMemoryMapDWords = maxi(res.maxMemoryMapDWords,1 << decl->memoryMapBits);
+      res.memoryMapped += (1 << decl->memoryMapBits);
 
-      if(inst->declaration->isMemoryMapped)
+      if(decl->isMemoryMapped)
          res.unitsMapped += 1;
 
-      res.nConfigs += info.nConfigsWithDelay;
-      res.configurationBits += info.configBitSize;
-      res.configurationBits += inst->declaration->nDelays * 32;
-      res.nStates += info.nStates;
-      res.stateBits += info.stateBitSize;
-      res.nUnitsIO += info.nIOs;
-      res.nDelays += inst->declaration->nDelays;
+      res.nConfigs += decl->nConfigs;
+      for(int i = 0; i < decl->nConfigs; i++){
+         res.configBits += decl->configWires[i].bitsize;
+      }
+
+      res.nStates += decl->nStates;
+      for(int i = 0; i < decl->nStates; i++){
+         res.stateBits += decl->stateWires[i].bitsize;
+      }
+
+      res.nDelays += decl->nDelays;
+      res.delayBits += decl->nDelays * 32;
+
+      res.nUnitsIO += decl->nIOs;
+   }
+
+   for(auto& unit : accel->staticInfo){
+      res.nStatics += unit.nConfigs;
+      res.staticBits += unit.nConfigs * 32;
    }
 
    // Versat specific registers are treated as a special maping (all 0's) of 1 configuration and 1 state register
    res.nConfigs += 1;
    res.nStates += 1;
 
+   res.nConfigurations = res.nConfigs + res.nStatics + res.nDelays;
+   res.configurationBits = res.configBits + res.staticBits + res.delayBits;
+
    res.memoryAddressBits = log2i(res.memoryMapped);
 
    res.memoryMappingAddressBits = res.memoryAddressBits;
-   res.configurationAddressBits = log2i(res.nConfigs);
+   res.configurationAddressBits = log2i(res.nConfigurations);
    res.stateAddressBits = log2i(res.nStates);
    res.stateConfigurationAddressBits = maxi(res.configurationAddressBits,res.stateAddressBits);
 
    res.lowerAddressSize = maxi(res.stateConfigurationAddressBits,res.memoryMappingAddressBits);
 
    res.memoryConfigDecisionBit = res.lowerAddressSize;
-   res.memoryAddressRange.high = res.memoryConfigDecisionBit - 1;
-   res.memoryAddressRange.low = 0;
-   res.configAddressRange.high = res.configurationAddressBits - 1;
-   res.configAddressRange.low = 0;
-   res.stateAddressRange.high = res.stateAddressBits - 1;
-   res.stateAddressRange.low = 0;
-
-   res.configBitsRange.high = res.configurationBits - 1;
-   res.configBitsRange.low = 0;
-   res.stateBitsRange.high = res.stateBits - 1;
-   res.stateBitsRange.low = 0;
 
    return res;
 }
@@ -1504,7 +1527,16 @@ void OutputMemoryMap(Versat* versat,Accelerator* accel){
    printf("Units mapped: %d\n",val.unitsMapped);
    printf("Memory mapping address bits: %d\n",val.memoryMappingAddressBits);
    printf("\n");
-   printf("Configuration registers: %d (including versat reg and delays)\n",val.nConfigs);
+   printf("Config registers: %d\n",val.nConfigs);
+   printf("Config bits used: %d\n",val.configBits);
+   printf("\n");
+   printf("Static registers: %d\n",val.nStatics);
+   printf("Static bits used: %d\n",val.staticBits);
+   printf("\n");
+   printf("Delay registers: %d\n",val.nDelays);
+   printf("Delay bits used: %d\n",val.delayBits);
+   printf("\n");
+   printf("Configuration registers: %d (including versat reg, static and delays)\n",val.nConfigurations);
    printf("Configuration address bits: %d\n",val.configurationAddressBits);
    printf("Configuration bits used: %d\n",val.configurationBits);
    printf("\n");
@@ -1582,17 +1614,14 @@ void OutputMemoryMap(Versat* versat,Accelerator* accel){
    printf("B - Used by both Config and State\n");
    printf("\n");
    printf("Memory/Config bit: %d\n",val.memoryConfigDecisionBit);
-   printf("Memory range: [%d:%d]\n",val.memoryAddressRange.high,val.memoryAddressRange.low);
-   printf("Config range: [%d:%d]\n",val.configAddressRange.high,val.configAddressRange.low);
-   printf("State range: [%d:%d]\n",val.stateAddressRange.high,val.stateAddressRange.low);
+   printf("Memory range: [%d:0]\n",val.memoryAddressBits - 1);
+   printf("Config range: [%d:0]\n",val.configurationAddressBits - 1);
+   printf("State range: [%d:0]\n",val.stateAddressBits - 1);
 }
 
 void OutputUnitInfo(FUInstance* instance){
    LockAccelerator(instance->accel,Accelerator::Locked::FIXED);
 
-   //UnitInfo info = CalculateUnitInfo(instance);
-
-   //OutputObject(&info,GetType("UnitInfo"));
 }
 
 int GetInputValue(FUInstance* instance,int index){
@@ -1656,10 +1685,6 @@ void OutputCircuitSource(Versat* versat,FUDeclaration decl,Accelerator* accel,FI
    TemplateSetNumber("configurationBits",val.configurationBits);
 
    TemplateSetNumber("memoryConfigDecisionBit",val.memoryConfigDecisionBit);
-   TemplateSetNumber("configAddressRangeHigh",val.configAddressRange.high);
-   TemplateSetNumber("configAddressRangeLow",val.configAddressRange.low);
-   TemplateSetNumber("stateAddressRangeHigh",val.stateAddressRange.high);
-   TemplateSetNumber("stateAddressRangeLow",val.stateAddressRange.low);
    TemplateSetCustom("versat",versat,"Versat");
 
    ProcessTemplate(file,"../../submodules/VERSAT/software/templates/versat_accelerator_template.tpl",&versat->temp);
@@ -1668,23 +1693,6 @@ void OutputCircuitSource(Versat* versat,FUDeclaration decl,Accelerator* accel,FI
 
 void OutputVersatSource(Versat* versat,Accelerator* accel,const char* sourceFilepath,const char* constantsFilepath,const char* dataFilepath){
    LockAccelerator(accel,Accelerator::Locked::FIXED);
-
-   #if 0
-   printf("\n\n\n\n");
-   for(FUDeclaration* decl : versat->declarations){
-      printf("%s %d\n",decl->name.str,decl->latency);
-   }
-   printf("\n\n\n\n");
-
-   #if 1
-   VisitAcceleratorInstances(accel,[](FUInstance* inst){
-      if(inst->baseDelay){
-         printf("%s %d %d\n",inst->name.str,inst->baseDelay,inst->delay[0]);
-      }
-   });
-   #endif
-
-   #endif
 
    #if 1
    // No need for templating, small file
@@ -1696,6 +1704,15 @@ void OutputVersatSource(Versat* versat,Accelerator* accel,const char* sourceFile
    }
 
    VersatComputedValues val = ComputeVersatValues(versat,accel);
+
+   #if 1
+   std::vector<FUInstance*> accum;
+   VisitAcceleratorInstances(accel,[&](FUInstance* inst){
+      if(inst->namedAccess){
+         accum.push_back(inst);
+      }
+   });
+   #endif
 
    fprintf(c,"`define NUMBER_UNITS %d\n",accel->instances.Size());
    fprintf(c,"`define CONFIG_W %d\n",val.configurationBits);
@@ -1728,35 +1745,22 @@ void OutputVersatSource(Versat* versat,Accelerator* accel,const char* sourceFile
    TemplateSetNumber("numberUnits",accel->instances.Size());
    TemplateSetCustom("versatValues",&val,"VersatComputedValues");
    TemplateSetCustom("versat",versat,"Versat");
+   TemplateSetCustom("accel",accel,"Accelerator");
+   TemplateSetNumber("nStatics",val.nStatics);
+   TemplateSetNumber("nDelays",val.nDelays);
 
    // Output configuration file
    TemplateSetInstancePool("instances",&accel->instances);
 
+   TemplateSetNumber("versatBase",versat->base);
    TemplateSetNumber("memoryAddressBits",val.memoryAddressBits);
    TemplateSetNumber("unitsMapped",val.unitsMapped);
    TemplateSetNumber("memoryConfigDecisionBit",val.memoryConfigDecisionBit);
    TemplateSetNumber("configurationBits",val.configurationBits);
-   TemplateSetNumber("configAddressRangeHigh",val.configAddressRange.high);
-   TemplateSetNumber("configAddressRangeLow",val.configAddressRange.low);
-   TemplateSetNumber("stateAddressRangeHigh",val.stateAddressRange.high);
-   TemplateSetNumber("stateAddressRangeLow",val.stateAddressRange.low);
 
    ProcessTemplate(s,"../../submodules/VERSAT/software/templates/versat_top_instance_template.tpl",&versat->temp);
 
-   // TODO: Do not forget to remove this #if
-   // Since we do not need access to the lower FUs for the examples, for now, store less data by only storing top level information
-   #if 1
-   std::vector<FUInstance*> accum;
-   VisitAcceleratorInstances(accel,[&](FUInstance* inst){
-      FUDeclaration decl = *inst->declaration;
-
-      if(decl.nConfigs || decl.nStates || decl.isMemoryMapped){
-         accum.push_back(inst);
-      }
-   });
-   #endif
-
-   unsigned int hashTableSize = 2500;
+   unsigned int hashTableSize = 50;
    Assert(accum.size() < (hashTableSize / 2));
    HashKey hashMap[hashTableSize];
    for(size_t i = 0; i < hashTableSize; i++){
@@ -1801,7 +1805,11 @@ void OutputVersatSource(Versat* versat,Accelerator* accel,const char* sourceFile
    TemplateSetNumber("config",(int)accel->configAlloc.ptr);
    TemplateSetNumber("state",(int)accel->stateAlloc.ptr);
    TemplateSetNumber("memMapped",(int)0);
+   TemplateSetNumber("static",(int)accel->staticAlloc.ptr);
+   TemplateSetNumber("staticEnd",(int)&accel->staticAlloc.ptr[accel->staticAlloc.reserved]);
+
    TemplateSetArray("delay","int",accel->delayAlloc.ptr,accel->delayAlloc.size);
+   TemplateSetArray("staticBuffer","int",accel->staticAlloc.ptr,accel->staticAlloc.size);
 
    TemplateSetNumber("memoryAddressBits",val.memoryAddressBits);
    TemplateSetNumber("memoryConfigDecisionBit",val.memoryConfigDecisionBit);
@@ -1809,6 +1817,7 @@ void OutputVersatSource(Versat* versat,Accelerator* accel,const char* sourceFile
    TemplateSetNumber("memoryMappedBase",1 << val.memoryConfigDecisionBit);
    TemplateSetNumber("nConfigs",val.nConfigs);
    TemplateSetNumber("nDelays",val.nDelays);
+   TemplateSetNumber("nStatics",val.nStatics);
    TemplateSetInstanceVector("instances",&accum);
    TemplateSetNumber("numberUnits",accum.size());
    ProcessTemplate(d,"../../submodules/VERSAT/software/templates/embedData.tpl",&versat->temp);
@@ -1995,7 +2004,8 @@ void CalculateVersatData(Accelerator* accel){
    }
 }
 
-int CalculateLatency_(PortInstance portInst, std::unordered_map<PortInstance,int,SimpleHash<PortInstance>,SimpleEqual<PortInstance>>* memoization){
+#if 0
+int CalculateLatency_(PortInstance portInst, std::unordered_map<PortInstance,int>* memoization){
    FUInstance* inst = portInst.inst;
    int port = portInst.port;
 
@@ -2056,6 +2066,7 @@ int CalculateLatency(FUInstance* inst){
 
    return maxLatency;
 }
+#endif
 
 // Fixes edges such that unit before connected to after, is reconnected to new unit
 void InsertUnit(Accelerator* accel, FUInstance* before, int beforePort, FUInstance* after, int afterPort, FUInstance* newUnit){
@@ -2185,6 +2196,10 @@ void CalculateDelay(Versat* versat,Accelerator* accel){
 
             newInst->baseDelay = info->delay - versat->delay->latencies[0];
             newInst->isStatic = true; // By default all delays are static
+
+            if(newInst->config){
+               newInst->config[0] = newInst->baseDelay;
+            }
             Assert(newInst->baseDelay >= 0);
          }
       }
@@ -2195,7 +2210,9 @@ void CalculateDelay(Versat* versat,Accelerator* accel){
       inst->tempData->inputDelay = inst->baseDelay;
 
       // TODO: Check if this is needed
-      #if 1
+
+
+      #if 0
       if(inst->declaration->type != FUDeclaration::COMPOSITE && inst->delay){
          inst->delay[0] = inst->baseDelay;
       }
@@ -2208,23 +2225,28 @@ void CalculateDelay(Versat* versat,Accelerator* accel){
    #endif
 }
 
-void SetDelayRecursive(FUInstance* inst,int delay){
-   if(!inst->declaration->nDelays){
+void SetDelayRecursive_(FUInstance* inst,int delay){
+   if(inst->declaration == inst->accel->versat->delay){
+      inst->config[0] = inst->baseDelay;
       return;
    }
 
-   if(inst->declaration->type != FUDeclaration::SPECIAL && inst->declaration != inst->accel->versat->delay){
-      inst->delay[0] = inst->baseDelay + delay;
-   } else {
-      inst->delay[0] = inst->baseDelay; // Special units use fixed delay regardless of outside delay
-   }
+   int totalDelay = inst->baseDelay + delay;
 
-   int fullDelay = inst->delay[0];
+   if(inst->declaration->nDelays){
+      inst->delay[0] = totalDelay;
+   }
 
    if(inst->declaration->type == FUDeclaration::COMPOSITE){
       for(FUInstance* child : inst->compositeAccel->instances){
-         SetDelayRecursive(child,fullDelay);
+         SetDelayRecursive_(child,totalDelay);
       }
+   }
+}
+
+void SetDelayRecursive(Accelerator* accel){
+   for(FUInstance* inst : accel->instances){
+      SetDelayRecursive_(inst,0);
    }
 }
 
@@ -2644,10 +2666,56 @@ static void T(Accelerator* accel){
 }
 
 void Hook(Versat* versat,Accelerator* accel,FUInstance* inst){
-   //T(accel);
-   //printf("\n");
+   versat->debug.outputAccelerator = true;
 
-   //versat->debug.outputAccelerator = true;
+   #if 0
+   accel = CreateAccelerator(versat);
+   FUDeclaration* type = GetTypeByName(versat,MAKE_SIZED_STRING("D"));
+   FUInstance* top = CreateNamedFUInstance(accel,type,MAKE_SIZED_STRING("d"));
+
+   // Every static unit is completely identified by module where is declared and the name
+   FUInstance* b1_c1 = GetInstanceByName(accel,"d","b1","c1");
+   FUInstance* b1_a_c1 = GetInstanceByName(accel,"d","b1","a","c1");
+   FUInstance* b1_a_c2 = GetInstanceByName(accel,"d","b1","a","c2"); // Static
+   FUInstance* b1_a_c3 = GetInstanceByName(accel,"d","b1","a","c3");
+   FUInstance* b1_c3 = GetInstanceByName(accel,"d","b1","c3");
+
+   FUInstance* b2_c1 = GetInstanceByName(accel,"d","b2","c1");       // Static
+   FUInstance* b2_a_c1 = GetInstanceByName(accel,"d","b2","a","c1"); // Static
+   FUInstance* b2_a_c2 = GetInstanceByName(accel,"d","b2","a","c2"); // Static * 2
+   FUInstance* b2_a_c3 = GetInstanceByName(accel,"d","b2","a","c3"); // Static
+   FUInstance* b2_c3 = GetInstanceByName(accel,"d","b2","c3");       // Static
+
+   FUInstance* c1_c1 = GetInstanceByName(accel,"d","c1","c1");       // Static
+   FUInstance* c1_a_c1 = GetInstanceByName(accel,"d","c1","a","c1");
+   FUInstance* c1_a_c2 = GetInstanceByName(accel,"d","c1","a","c2"); // Static
+   FUInstance* c1_a_c3 = GetInstanceByName(accel,"d","c1","a","c3");
+   FUInstance* c1_c3 = GetInstanceByName(accel,"d","c1","c3");       // Static
+
+   FUInstance* c2_c1 = GetInstanceByName(accel,"d","c2","c1");       // Static * 2
+   FUInstance* c2_a_c1 = GetInstanceByName(accel,"d","c2","a","c1"); // Static
+   FUInstance* c2_a_c2 = GetInstanceByName(accel,"d","c2","a","c2"); // Static * 2
+   FUInstance* c2_a_c3 = GetInstanceByName(accel,"d","c2","a","c3"); // Static
+   FUInstance* c2_c3 = GetInstanceByName(accel,"d","c2","c3");       // Static * 2
+
+   // Configuration - only 6 non static configurations
+   // b1.c1 | b1.a.c1 | b1.a.c3 | b1.c3 | c1.a.c1 | c1.a.c3
+
+   // Static - units point to a simple stack that also gets bigger, like config, but if the same unit type is allocated, the configuration of the unit is simply redirected to the existing configuration
+   // A::c2 | D::b2 | C::c1 | C::c3 | D::c2 (
+
+   printf("%d\n",accel->configAlloc.size);
+
+   VisitAcceleratorInstances(accel,[](FUInstance* inst){
+      printf("%-10s-%p\n",GetHierarchyNameRepr(inst->name),inst->config);
+   });
+
+   Assert(b1_a_c2->config == b2_a_c2->config);
+   Assert(b1_a_c2->config == c1_a_c2->config);
+   Assert(b1_a_c2->config == c2_a_c2->config);
+   Assert(accel->configAlloc.size == 6);
+
+   #endif
 }
 
 
