@@ -103,7 +103,7 @@ reg [@{unitsMapped - 1}:0] memoryMappedEnable;
 wire[@{unitsMapped - 1}:0] unitReady;
 
 assign wor_ready = (|unitReady);
-assign done = &unitDone;
+assign done = (&unitDone && !run);
 
 #{if versatValues.numberConnections}
 wire [31:0] #{join ", " for inst instances}
