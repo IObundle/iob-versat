@@ -7,14 +7,14 @@ USE_NETLIST ?=0
 #lib
 ifneq (LIB,$(filter LIB, $(SUBMODULES)))
 SUBMODULES+=LIB
-INCLUDE+=$(incdir) $(LIB_DIR)/hardware/include
+INCLUDE+=$(incdir)$(LIB_DIR)/hardware/include
 VHDR+=$(wildcard $(LIB_DIR)/hardware/include/*.vh)
 endif
 
 #VERSAT HARDWARE
 #hardware include dirs
-INCLUDE+=$(incdir) $(VERSAT_HW_DIR)/include
-INCLUDE+=$(incdir) $(VERSAT_DIR)/submodules/LIB/hardware/include
+INCLUDE+=$(incdir)$(VERSAT_HW_DIR)/include
+INCLUDE+=$(incdir)$(VERSAT_DIR)/submodules/LIB/hardware/include
 
 #included files
 VHDR+=$(wildcard $(VERSAT_HW_DIR)/include/*.vh)
