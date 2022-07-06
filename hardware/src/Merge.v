@@ -11,7 +11,7 @@ module Merge #(
     input                         rst,
     
     input                         run,
-    output reg                    done,
+    output                        done,
 
     //input / output data
     input [DATA_W-1:0]            in0,
@@ -33,7 +33,7 @@ module Merge #(
 
     output reg [DATA_W-1:0]       out0,
 
-    input [DELAY_W-1:0]                   delay0
+    input [DELAY_W-1:0]           delay0
     );
 
 reg [DELAY_W-1:0] delay;
@@ -59,6 +59,8 @@ assign select[15] = in15;
 
 reg [3:0] counter;
 
+assign done = 1'b1;
+
 always @(posedge clk,posedge rst)
 begin
      if(rst) begin
@@ -66,7 +68,7 @@ begin
           counter <= 0;
      end else if(run) begin
           delay <= delay0;
-          counter <= 1;
+          counter <= 0;
      end else begin
           if(|delay) begin
                delay <= delay - 1;

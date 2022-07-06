@@ -3,6 +3,7 @@
 
 #include <vector>
 
+#include "versat.hpp"
 #include "memory.hpp"
 #include "utils.hpp"
 
@@ -51,6 +52,7 @@ namespace ValueType{
    extern Type* NIL;
    extern Type* SIZED_STRING;
    extern Type* TEMPLATE_FUNCTION;
+   extern Type* SET;
 };
 
 struct TemplateFunction;
@@ -70,6 +72,7 @@ struct Value{
          int size;
       };
       TemplateFunction* templateFunction;
+      StaticInfo staticInfo;
       struct {
          void* custom;
       };
@@ -84,6 +87,7 @@ struct Iterator{
    union{
       int currentNumber;
       PoolIterator<FUInstance> poolIterator;
+      std::set<StaticInfo>::iterator setIterator;
    };
 
    Value iterating;

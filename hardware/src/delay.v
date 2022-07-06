@@ -2,7 +2,7 @@
 `include "xversat.vh"
 
 module delay #(
-         parameter MAX_DELAY = 128,
+         parameter MAX_DELAY = 32,
          parameter DATA_W = 32
       )
     (
@@ -18,29 +18,30 @@ module delay #(
 
     output reg [DATA_W-1:0]       out0,
     
-    input [32-1:0] delay0
+    input [31:0]                  amount
     );
 
 assign done = 1'b1;
 
 reg [DATA_W-1:0] mem[MAX_DELAY - 1:0];
-integer i;
+reg [$clog2(MAX_DELAY)-1:0] index;
 
 always @(posedge clk,posedge rst)
 begin
-   if(rst)
+   if(rst) begin
       out0 <= 0;
-   else begin
-      out0 <= mem[0];
-
-      for(i = 0; i < (MAX_DELAY - 1); i = i + 1) begin
-         mem[i] <= mem[i + 1];
-      end
-
-      if(delay0 == 0)
+      index <= 0;
+   end else begin
+      if(amount == 0) begin
          out0 <= in0;
-      else
-         mem[delay0 - 1] <= in0;
+      end else begin
+         out0 <= mem[index];
+         mem[index] <= in0;
+
+         index <= index + 1;
+         if(index + 1 >= amount)
+            index <= 0;
+      end
    end
 end
 

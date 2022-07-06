@@ -15,6 +15,7 @@ namespace ValueType{
    Type* NIL;
    Type* SIZED_STRING;
    Type* TEMPLATE_FUNCTION;
+   Type* SET;
 };
 
 struct CompareTypeInfo {
@@ -103,6 +104,7 @@ void RegisterTypes(){
 
    ValueType::SIZED_STRING = GetType("SizedString",false,false);
    ValueType::TEMPLATE_FUNCTION = GetType("TemplateFunction",true,false);
+   ValueType::SET = GetType("std::set<StaticInfo>",false,false);
 }
 
 Type* GetType(Type* baseType,bool isPointer,bool isArray){
@@ -230,7 +232,12 @@ Value AccessObjectIndex(Value object,int index){
 Value AccessObject(Value object,SizedString memberName){
    Type* type = object.type;
 
-   char* deference = (char*) object.custom;
+   char* deference = nullptr;
+   if(object.isTemp){
+      deference = (char*) &object;
+   } else {
+      deference = (char*) object.custom;
+   }
 
    while(type->type == Type::INDIRECT){
       deference = *((char**) deference);
@@ -323,6 +330,12 @@ Iterator Iterate(Value iterating){
       iter.poolIterator = iterating.pool->begin();
    } else if(iterating.type->info.isArray || iterating.type->info.isPointer){
       iter.currentNumber = 0;
+   } else if(iterating.type == ValueType::SET){
+      std::set<StaticInfo>* set = (std::set<StaticInfo>*) iterating.custom;
+
+      iter.setIterator = set->begin();
+   } else if(iterating.type == GetType("std::vector<StaticInfo>",false,false)){
+      iter.currentNumber = 0;
    } else {
       Assert(false);
    }
@@ -339,6 +352,14 @@ bool HasNext(Iterator iter){
       res = (iter.poolIterator != iter.iterating.pool->end());
    } else if(iter.iterating.type->info.isArray || iter.iterating.type->info.isPointer){
       res = (iter.currentNumber < iter.iterating.size);
+   } else if(iter.iterating.type == ValueType::SET){
+      auto set = (std::set<StaticInfo>*) iter.iterating.custom;
+
+      res = (iter.setIterator != set->end());
+   } else if(iter.iterating.type == GetType("std::vector<StaticInfo>",false,false)){
+      auto vec = (std::vector<StaticInfo>*) iter.iterating.custom;
+
+      res = (iter.currentNumber < vec->size());
    } else {
       Assert(false);
    }
@@ -352,6 +373,10 @@ void Advance(Iterator* iter){
    } else if(iter->iterating.type == ValueType::POOL){
       ++iter->poolIterator;
    } else if(iter->iterating.type->info.isArray || iter->iterating.type->info.isPointer){
+      iter->currentNumber += 1;
+   } else if(iter->iterating.type == ValueType::SET){
+      ++iter->setIterator;
+   } else if(iter->iterating.type == GetType("std::vector<StaticInfo>",false,false)){
       iter->currentNumber += 1;
    } else {
       Assert(false);
@@ -368,6 +393,16 @@ Value GetValue(Iterator iter){
       val.custom = *iter.poolIterator;
    } else if(iter.iterating.type->info.isArray || iter.iterating.type->info.isPointer){
       val = AccessObjectIndex(iter.iterating,iter.currentNumber);
+   } else if(iter.iterating.type == ValueType::SET){
+      val.type = GetType("StaticInfo",false,false);
+      val.staticInfo = *iter.setIterator;
+      val.isTemp = true;
+   } else if(iter.iterating.type == GetType("std::vector<StaticInfo>",false,false)){
+      auto& vec = *(std::vector<StaticInfo>*) iter.iterating.custom;
+
+      val.type = GetType("StaticInfo",false,false);
+      val.staticInfo = vec[iter.currentNumber];
+      val.isTemp = true;
    } else {
       Assert(false);
    }
@@ -379,7 +414,7 @@ bool EqualValues(Value v1,Value v2){
    Value c1 = CollapseArrayIntoPtr(v1);
    Value c2 = CollapseArrayIntoPtr(v2);
 
-   Assert(c1.type == c2.type);
+   c2 = ConvertValue(c2,c1.type);
 
    bool res = false;
 
@@ -387,6 +422,8 @@ bool EqualValues(Value v1,Value v2){
       res = (c1.number == c2.number);
    } else if(c1.type == ValueType::STRING){
       res = (CompareString(c1.str,c2.str));
+   } else if(c1.type == ValueType::SIZED_STRING){
+      res = CompareString(c1.str,c2.str);
    } else {
       Assert(false);
    }
@@ -420,6 +457,10 @@ Value ConvertValue(Value in,Type* want){
    if(want == ValueType::BOOLEAN){
       if(in.type == ValueType::NUMBER){
          res.boolean = (in.number != 0);
+      } else if(in.type->type == Type::INDIRECT){
+         int* pointerValue = (int*) DeferencePointer(in.custom,in.type->info.baseType,0);
+
+         res.boolean = (pointerValue != nullptr);
       } else {
          Assert(false);
       }
@@ -428,6 +469,14 @@ Value ConvertValue(Value in,Type* want){
          int* pointerValue = (int*) DeferencePointer(in.custom,in.type->info.baseType,0);
 
          res.number = (int) pointerValue;
+      } else {
+         Assert(false);
+      }
+   } else if(want == ValueType::SIZED_STRING){
+      if(in.type == GetType("HierarchyName",false,false)){
+         HierarchyName* name = (HierarchyName*) in.custom;
+
+         res = MakeValue(MakeSizedString(name->str));
       } else {
          Assert(false);
       }

@@ -33,6 +33,8 @@ struct SizedString{
    int size;
 };
 
+bool operator<(const SizedString& lhs,const SizedString& rhs);
+
 #define UNPACK_SS(STR) STR.size,STR.str
 
 #define MAX_NAME_SIZE 64

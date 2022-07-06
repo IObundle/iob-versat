@@ -2,13 +2,13 @@
 #define INCLUDED_VERILOG_PARSER
 
 #include <vector>
-#include <unordered_map>
+#include <map>
 
 #include "utils.hpp"
 #include "parser.hpp"
 
-typedef std::unordered_map<SizedString,Value,SimpleHash<SizedString>,SimpleEqual<SizedString>> ValueMap;
-typedef std::unordered_map<SizedString,SizedString,SimpleHash<SizedString>,SimpleEqual<SizedString>> MacroMap;
+typedef std::map<SizedString,Value> ValueMap;
+typedef std::map<SizedString,SizedString> MacroMap;
 
 struct Arena;
 

@@ -9,8 +9,6 @@
 
 #define ARRAY_SIZE(array) sizeof(array) / sizeof(array[0])
 
-int CalculateLatency_(PortInstance portInst, std::unordered_map<PortInstance,int,SimpleHash<PortInstance>,SimpleEqual<PortInstance>>* memoization);
-
 typedef struct Name_t{
    char name[256];
    FUDeclaration* type;
@@ -184,6 +182,18 @@ void TagInputs(Accelerator* accel,FUInstance* inst){
    }
 }
 
+StaticInfo* SetLikeInsert(std::vector<StaticInfo>& vec,StaticInfo& info){
+   for(StaticInfo& iter : vec){
+      if(info.module == iter.module && CompareString(info.name,iter.name)){
+         return &iter;
+      }
+   }
+
+   vec.push_back(info);
+
+   return &vec.back();
+}
+
 FUDeclaration* ParseModule(Versat* versat,Tokenizer* tok){
    tok->AssertNextToken("module");
 
@@ -312,7 +322,7 @@ FUDeclaration* ParseModule(Versat* versat,Tokenizer* tok){
          tok->AssertNextToken(";");
       } else {
          Var outVar = ParseVar(tok);
-#if 1
+
          Token peek = tok->NextToken();
          if(CompareToken(peek,"=")){
             FUInstance* inst = ParseExpression(versat,circuit,tok,&decl.name);
@@ -373,7 +383,6 @@ FUDeclaration* ParseModule(Versat* versat,Tokenizer* tok){
             fflush(stdout);
             Assert(0);
          }
-#endif
       }
    }
 
@@ -407,7 +416,12 @@ FUDeclaration* ParseModule(Versat* versat,Tokenizer* tok){
          memoryMapBits[d->memoryMapBits] += 1;
       }
 
-      decl.nConfigs += d->nConfigs;
+      if(inst->isStatic){
+         decl.nStaticConfigs += d->nConfigs;
+      } else {
+         decl.nConfigs += d->nConfigs;
+      }
+
       decl.nStates += d->nStates;
       decl.nDelays += d->nDelays;
       decl.extraDataSize += d->extraDataSize;
@@ -556,12 +570,29 @@ FUDeclaration* ParseModule(Versat* versat,Tokenizer* tok){
 
    FUDeclaration* res = RegisterFU(versat,decl);
 
+   // TODO: Hackish
+   for(FUInstance* inst : circuit->instances){
+      if(inst->isStatic){
+         StaticInfo unit = {};
+         unit.module = res;
+         unit.name = MakeSizedString(inst->name.str);
+         unit.nConfigs = inst->declaration->nConfigs;
+         unit.wires = inst->declaration->configWires;
+
+         SetLikeInsert(res->staticUnits,unit);
+      } else if(inst->declaration->type == FUDeclaration::COMPOSITE){
+         for(StaticInfo& unit : inst->declaration->staticUnits){
+            SetLikeInsert(res->staticUnits,unit);
+         }
+      }
+   }
+
    #if 1
    {
    char buffer[256];
    sprintf(buffer,"src/%s.v",decl.name.str);
    FILE* sourceCode = fopen(buffer,"w");
-   OutputCircuitSource(versat,decl,circuit,sourceCode);
+   OutputCircuitSource(versat,*res,circuit,sourceCode);
    fclose(sourceCode);
    }
    #endif

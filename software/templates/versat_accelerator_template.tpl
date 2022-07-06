@@ -29,13 +29,20 @@ module @{accel.name.str} #(
    input [@{wire.bitsize-1}:0]     @{wire.name},
    #{end}
 
+   #{for unit accel.staticUnits}
+   #{for i unit.nConfigs}
+   #{set wire unit.wires[i]}
+   input [31:0]                    @{unit.module.name.str}_@{unit.name}_@{wire.name},
+   #{end}
+   #{end}
+
    #{for i accel.nStates}
    #{set wire accel.stateWires[i]}
    output [@{wire.bitsize-1}:0]    @{wire.name},
    #{end}
 
    #{for i accel.nDelays}
-   input [31:0]                    delay@{i},
+   input  [31:0]                   delay@{i},
    #{end}
 
    #{if accel.nIOs}
@@ -87,9 +94,12 @@ wire [31:0] #{join ", " for i unitsMapped} rdata_@{i} #{end};
 assign unitRdataFinal = (#{join "|" for i unitsMapped} unitRData[@{i}] #{end});
 #{end}
 
+#{if nonSpecialUnits > 0}
 wire [@{nonSpecialUnits - 1}:0] unitDone;
-
 assign done = &unitDone;
+#{else}
+assign done = 1'b1;
+#{end}
 
 wire [31:0] #{join ", " for inst instances}
    #{if inst.tempData.outputPortsUsed} 
@@ -171,16 +181,33 @@ end
 
          #{for i inst.tempData.inputPortsUsed}
          #{if inst.tempData.inputs[i].inst.inst.declaration.type == 2}
-            .in@{i}(in@{inst.tempData.inputs[i].inst.inst.id}),
+            .in@{inst.tempData.inputs[i].port}(in@{inst.tempData.inputs[i].inst.inst.id}), // @{inst.tempData.inputs[i].inst.inst.name.str}
          #{else}
-            .in@{i}(#{call outputName inst.tempData.inputs[i].inst}),
+            .in@{inst.tempData.inputs[i].port}(#{call outputName inst.tempData.inputs[i].inst}),
          #{end}
          #{end}
 
+         #{if inst.isStatic}
+         #{for unit accel.staticUnits}
+         #{if unit.name == inst.name}
+         #{for i unit.nConfigs}
+         #{set wire unit.wires[i]}
+            .@{wire.name}(@{unit.module.name.str}_@{unit.name}_@{wire.name}),
+         #{end}
+         #{end}
+         #{end}
+         #{else}
          #{for i decl.nConfigs}
          #{set wire decl.configWires[i]}
             .@{wire.name}(@{accel.configWires[configsSeen].name}),
          #{inc configsSeen}
+         #{end}
+         #{for unit decl.staticUnits}
+         #{for i unit.nConfigs}
+         #{set wire unit.wires[i]}
+            .@{unit.module.name.str}_@{unit.name}_@{wire.name}(@{unit.module.name.str}_@{unit.name}_@{wire.name}),
+         #{end}
+         #{end}
          #{end}
 
          #{for i decl.nDelays}

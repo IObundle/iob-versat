@@ -20,7 +20,7 @@ template<typename T>
 struct Allocation{
    T* ptr;
    int size;
-   int allocated;
+   int reserved;
 };
 
 template<typename T>
@@ -129,16 +129,15 @@ template<typename T>
 bool ZeroOutAlloc(Allocation<T>* alloc,int newSize){
    T* stored = alloc->ptr;
 
-   if(newSize > alloc->allocated){
+   if(newSize > alloc->reserved){
       alloc->ptr = (T*) calloc(newSize,sizeof(T));
 
       memcpy(alloc->ptr,stored,alloc->size * sizeof(T));
 
-      alloc->allocated = newSize;
-      alloc->size = newSize;
+      alloc->reserved = newSize;
    }
 
-   memset(alloc->ptr,0,alloc->allocated * sizeof(T));
+   memset(alloc->ptr,0,alloc->reserved * sizeof(T));
    bool res = (stored != alloc->ptr);
    return res;
 }
@@ -147,19 +146,18 @@ template<typename T>
 bool ZeroOutRealloc(Allocation<T>* alloc,int newSize){
    T* stored = alloc->ptr;
 
-   if(newSize > alloc->allocated){
+   if(newSize > alloc->reserved){
       alloc->ptr = (T*) calloc(newSize,sizeof(T));
 
       memcpy(alloc->ptr,stored,alloc->size * sizeof(T));
 
-      alloc->allocated = newSize;
-      alloc->size = newSize;
+      alloc->reserved = newSize;
    }
 
    // Clear out free (allocated now or before) space
-   if(alloc->allocated - alloc->size > 0){
+   if(alloc->reserved - alloc->size > 0){
       char* view = (char*) alloc->ptr;
-      memset(&view[alloc->size],0,(alloc->allocated - alloc->size) * sizeof(T));
+      memset(&view[alloc->size],0,(alloc->reserved - alloc->size) * sizeof(T));
    }
 
    bool res = (stored != alloc->ptr);

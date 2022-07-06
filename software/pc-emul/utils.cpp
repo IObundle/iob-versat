@@ -6,6 +6,23 @@
 #include "stdio.h"
 #include "string.h"
 
+bool operator<(const SizedString& lhs,const SizedString& rhs){
+   for(int i = 0; i < mini(lhs.size,rhs.size); i++){
+      if(lhs.str[i] < rhs.str[i]){
+         return true;
+      }
+      if(lhs.str[i] > rhs.str[i]){
+         return false;
+      }
+   }
+
+   if(lhs.size < rhs.size){
+      return true;
+   }
+
+   return false;
+}
+
 // Misc
 
 int mini(int a1,int a2){
