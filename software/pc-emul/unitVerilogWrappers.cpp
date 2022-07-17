@@ -12,6 +12,7 @@
 #include "Vxadd.h"
 #include "Vxreg.h"
 #include "Vxmem.h"
+#include "Vxmuladd.h"
 #include "Vvread.h"
 #include "Vvwrite.h"
 #include "Vpipeline_register.h"
@@ -186,12 +187,11 @@ struct RegData{
 };
 
 static int* RegInitializeFunction(FUInstance* inst){
-   static int regCounter;
-   char buffer[256];
    RegData* data = new (inst->extraData) RegData();
    PREAMBLE(Vxreg);
 
    #ifdef TRACE
+   char buffer[256];
    self->trace(&data->vcd.vcd,99);
    sprintf(buffer,"./trace_out/reg%d.vcd",regCounter++);
    data->vcd.open(buffer);
@@ -406,15 +406,12 @@ struct VReadExtra{
    int memoryAccessCounter;
 };
 
-static int vreadCounter = 0;
-
 static int* VReadInitializeFunction(FUInstance* inst){
-   char buffer[256];
-
    VReadExtra* data = new (inst->extraData) VReadExtra();
    PREAMBLE(Vvread);
 
    #ifdef TRACE
+   char buffer[256];
    self->trace(&vcd->vcd,99);
    sprintf(buffer,"./trace_out/vread%d.vcd",vreadCounter++);
    vcd->open(buffer);
@@ -599,7 +596,7 @@ FUDeclaration* RegisterVWrite(Versat* versat){
 static int* DebugStartFunction(FUInstance* inst){
    int* extra = (int*) inst->extraData;
 
-   *extra = 0;
+   *extra = inst->delay[0];
 
    return NULL;
 }
@@ -609,9 +606,11 @@ static int* DebugUpdateFunction(FUInstance* inst){
 
    int val = GetInputValue(inst,0);
 
-   printf("[Debug %d]: 0x%x\n",*extra,val);
-
-   (*extra) += 1;
+   if(*extra){
+      *extra -= 1;
+   } else {
+      printf("[%s]: %d\n",inst->name.str,val);
+   }
 
    return NULL;
 }
@@ -628,7 +627,7 @@ FUDeclaration* RegisterDebug(Versat* versat){
    decl.startFunction = DebugStartFunction;
    decl.updateFunction = DebugUpdateFunction;
    decl.delayType = DELAY_TYPE_SINK_DELAY;
-   decl.nDelays = decl.nInputs;
+   decl.nDelays = 1;
 
    return RegisterFU(versat,decl);
 }
@@ -639,12 +638,11 @@ struct PipeRegData{
 };
 
 static int* PipelineRegisterInitializeFunction(FUInstance* inst){
-   static int pipeRegCounter = 0;
-   char buffer[256];
    PipeRegData* data = new (inst->extraData) PipeRegData();
    PREAMBLE(Vpipeline_register);
 
    #ifdef TRACE
+   char buffer[256];
    self->trace(&data->vcd.vcd,99);
 
    sprintf(buffer,"./trace_out/pipeReg%d.vcd",pipeRegCounter++);
@@ -754,4 +752,69 @@ FUDeclaration* RegisterMerge(Versat* versat){
    return RegisterFU(versat,decl);
 }
 
+// MULADD
+
+static int* MuladdInitializeFunction(FUInstance* inst){
+   Vxmuladd* self = new (inst->extraData) Vxmuladd();
+
+   INIT(self);
+
+   RESET(self);
+
+   return NULL;
+}
+
+static int* MuladdStartFunction(FUInstance* inst){
+   Vxmuladd* self = (Vxmuladd*) inst->extraData;
+   MuladdConfig* config = (MuladdConfig*) inst->config;
+
+   // Update config
+   self->delay0 = inst->delay[0];
+
+   self->iterations = config->iterations;
+   self->period = config->period;
+   self->shift = config->shift;
+
+   START_RUN(self);
+
+   return NULL;
+}
+
+static int* MuladdUpdateFunction(FUInstance* inst){
+   static int out;
+   Vxmuladd* self = (Vxmuladd*) inst->extraData;
+
+   self->in0 = GetInputValue(inst,0);
+   self->in1 = GetInputValue(inst,1);
+
+   UPDATE(self);
+
+   // Update out
+   out = self->out0;
+
+   inst->done = self->done;
+
+   return &out;
+}
+
+FUDeclaration* RegisterMuladd(Versat* versat){
+   static int latencies[] = {3};
+   FUDeclaration decl = {};
+
+   strcpy(decl.name.str,"xmuladd");
+   decl.nInputs = 2;
+   decl.nOutputs = 1;
+   decl.inputDelays = zeros;
+   decl.latencies = latencies;
+   decl.nConfigs = ARRAY_SIZE(muladdConfigWires);
+   decl.configWires = muladdConfigWires;
+   decl.extraDataSize = sizeof(Vxmuladd);
+   decl.initializeFunction = MuladdInitializeFunction;
+   decl.startFunction = MuladdStartFunction;
+   decl.updateFunction = MuladdUpdateFunction;
+   decl.delayType = (enum DelayType)(DELAY_TYPE_COMPUTE_DELAY | DELAY_TYPE_IMPLEMENTS_DONE);
+   decl.nDelays = 1;
+
+   return RegisterFU(versat,decl);
+}
 

@@ -165,9 +165,9 @@ begin
       #{for i unit.nConfigs}
       #{set wire unit.wires[i]}
       if(addr[@{versatValues.configurationAddressBits - 1}:0] == @{addr}) // @{versatBase + addr * 4 |> Hex}
-         configdata[@{counter}+:32] <= wdata[31:0]; //  @{unit.module.name.str}_@{unit.name}_@{wire.name}
+         configdata[@{counter}+:@{wire.bitsize}] <= wdata[@{wire.bitsize - 1}:0]; //  @{unit.module.name.str}_@{unit.name}_@{wire.name}
       #{inc addr}
-      #{set counter counter + 32}
+      #{set counter counter + wire.bitsize}
       #{end}
       #{end}
 
@@ -233,8 +233,8 @@ end
       #{for unit decl.staticUnits}
       #{for i unit.nConfigs}
       #{set wire unit.wires[i]}
-         .@{unit.module.name.str}_@{unit.name}_@{wire.name}(configdata[@{configDataIndex}+:32]),
-      #{set configDataIndex configDataIndex + 32}
+         .@{unit.module.name.str}_@{unit.name}_@{wire.name}(configdata[@{configDataIndex}+:@{wire.bitsize}]),
+      #{set configDataIndex configDataIndex + wire.bitsize}
       #{end}
       #{end}
 
@@ -267,14 +267,14 @@ end
       #{inc memoryMappedIndex}
       #{end}
 
-      #{for i decl.nIOs}
-      .databus_ready(m_databus_ready[@{ioIndex}]),
-      .databus_valid(m_databus_valid[@{ioIndex}]),
-      .databus_addr(m_databus_addr[@{ioIndex * 32}+:32]),
-      .databus_rdata(m_databus_rdata[@{ioIndex * 32}+:32]),
-      .databus_wdata(m_databus_wdata[@{ioIndex * 32}+:32]),
-      .databus_wstrb(m_databus_wstrb[@{ioIndex * 4}+:4]),
-      #{inc ioIndex}
+      #{if decl.nIOs}
+      .databus_ready(m_databus_ready[@{ioIndex} +: @{decl.nIOs}]),
+      .databus_valid(m_databus_valid[@{ioIndex} +: @{decl.nIOs}]),
+      .databus_addr(m_databus_addr[@{ioIndex * 32} +: @{32 * decl.nIOs}]),
+      .databus_rdata(m_databus_rdata[@{ioIndex * 32} +: @{32 * decl.nIOs}]),
+      .databus_wdata(m_databus_wdata[@{ioIndex * 32} +: @{32 * decl.nIOs}]),
+      .databus_wstrb(m_databus_wstrb[@{ioIndex * 4} +: @{4 * decl.nIOs}]),
+      #{set ioIndex ioIndex + decl.nIOs}
       #{end} 
       
       .run(run),

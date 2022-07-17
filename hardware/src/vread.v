@@ -73,13 +73,6 @@ module vread #(
    wire [`MEM_ADDR_W-1:0] startA    = `MEM_ADDR_W'd0;
    wire [`PERIOD_W-1:0]   delayA    = `PERIOD_W'd0;
 
-   // mem enables output by addr gen
-   wire enA = req;
-   wire enB;
-
-   // write enables
-   wire wrA = req & ~rnw;
-
    // port addresses and enables
    wire [`MEM_ADDR_W-1:0] addrA, addrA_int, addrA_int2;
    wire [`MEM_ADDR_W-1:0] addrB, addrB_int, addrB_int2;
@@ -91,11 +84,18 @@ module vread #(
    wire                   rnw;
    wire [DATA_W-1:0]      data_in = 0;
 
-   wire [DATA_W-1:0]      data_to_wrA = inA;
-
    reg                    pingPongState;
    wire [ADDR_W-1:0]      int_addr_inst;
    wire [ADDR_W-1:0]      startB_inst;
+
+   // mem enables output by addr gen
+   wire enA = req;
+   wire enB;
+
+   // write enables
+   wire wrA = req & ~rnw;
+
+   wire [DATA_W-1:0]      data_to_wrA = inA;
 
    assign int_addr_inst = pingPong ? {pingPongState,int_addr[ADDR_W-2:0]} : int_addr;
    assign startB_inst   = pingPong ? {pingPongState,startB[ADDR_W-2:0]} : startB;

@@ -229,7 +229,7 @@ FUDeclaration* ParseModule(Versat* versat,Tokenizer* tok){
 
       FUInstance** ptr = circuit->inputInstancePointers.Alloc();
 
-      inst->id = i; // TODO: Hackish
+      //inst->id = i; // TODO: Hackish
       *ptr = inst;
       decl.nInputs += 1;
    }
@@ -416,6 +416,7 @@ FUDeclaration* ParseModule(Versat* versat,Tokenizer* tok){
          memoryMapBits[d->memoryMapBits] += 1;
       }
 
+      // TODO: BUG IN HERE - config wires is too short
       if(inst->isStatic){
          decl.nStaticConfigs += d->nConfigs;
       } else {
@@ -464,8 +465,15 @@ FUDeclaration* ParseModule(Versat* versat,Tokenizer* tok){
       decl.memoryMapBits = last;
    }
 
+   // TODO: HACK
+   decl.configWires = PushArray(&versat->permanent,100,Wire);
+   decl.stateWires = PushArray(&versat->permanent,100,Wire);
+
+   #if 0
    decl.configWires = PushArray(&versat->permanent,decl.nConfigs,Wire);
    decl.stateWires = PushArray(&versat->permanent,decl.nStates,Wire);
+   #endif
+
 
    int configIndex = 0;
    int stateIndex = 0;
@@ -473,8 +481,9 @@ FUDeclaration* ParseModule(Versat* versat,Tokenizer* tok){
       FUDeclaration* d = inst->declaration;
 
       for(int i = 0; i < d->nConfigs; i++){
-         int newSize = strlen(d->configWires[i].name) + 8;
+         int newSize = strlen(d->configWires[i].name) + 16;
 
+         //Byte* newName = (Byte*) calloc(newSize,sizeof(char));
          Byte* newName = PushBytes(&versat->permanent,newSize);
          int size = sprintf(newName,"%s_%.2d",d->configWires[i].name,configIndex);
 
@@ -484,8 +493,9 @@ FUDeclaration* ParseModule(Versat* versat,Tokenizer* tok){
          decl.configWires[configIndex++].bitsize = d->configWires[i].bitsize;
       }
       for(int i = 0; i < d->nStates; i++){
-         int newSize = strlen(d->stateWires[i].name) + 8;
+         int newSize = strlen(d->stateWires[i].name) + 16;
 
+         //Byte* newName = (Byte*) calloc(newSize,sizeof(char));
          Byte* newName = PushBytes(&versat->permanent,newSize);
          int size = sprintf(newName,"%s_%.2d",d->stateWires[i].name,stateIndex);
 

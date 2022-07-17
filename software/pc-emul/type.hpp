@@ -85,7 +85,7 @@ struct Value{
 
 struct Iterator{
    union{
-      int currentNumber;
+      unsigned int currentNumber;
       PoolIterator<FUInstance> poolIterator;
       std::set<StaticInfo>::iterator setIterator;
    };
@@ -116,6 +116,7 @@ bool EqualValues(Value v1,Value v2);
 
 // Simple make value functions
 Value MakeValue();
+Value MakeValue(unsigned int integer);
 Value MakeValue(int integer);
 Value MakeValue(const char* str);
 Value MakeValue(SizedString str);

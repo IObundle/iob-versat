@@ -12,6 +12,8 @@
 
 void ParseAndEvaluate(SizedString content);
 
+static bool debugging = false;
+
 struct CompareFunction : public std::binary_function<SizedString, SizedString, bool> {
 public:
    bool operator() (SizedString str1, SizedString str2) const{
@@ -153,7 +155,7 @@ static Expression* ParseExpression(Tokenizer* tok){
 static bool IsCommandBlockType(Command com){
    static const char* notBlocks[] = {"set","end","inc","else","include","call"};
 
-   for(int i = 0; i < ARRAY_SIZE(notBlocks); i++){
+   for(unsigned int i = 0; i < ARRAY_SIZE(notBlocks); i++){
       if(CompareString(com.name,notBlocks[i])){
          return false;
       }
@@ -182,7 +184,7 @@ static Command ParseCommand(Tokenizer* tok){
 
    bool found = false;
 
-   for(int i = 0; i < ARRAY_SIZE(commands); i++){
+   for(unsigned int i = 0; i < ARRAY_SIZE(commands); i++){
       auto command = commands[i];
 
       if(CompareString(name,command.name)){
@@ -200,7 +202,7 @@ static Command ParseCommand(Tokenizer* tok){
 
       com.nExpressions = 0;
       while(!arguments.Done()){
-         Token next = arguments.NextToken();
+         arguments.NextToken();
          com.nExpressions += 1;
       }
    }
@@ -419,7 +421,20 @@ static Value EvalExpression(Expression* expr){
 
          Assert(index.type == ValueType::NUMBER);
 
+         if(debugging){
+            Wire* wires = (Wire*) object.custom;
+
+            printf("%p %d\n",wires,index.number);
+            FlushStdout();
+         }
+
          Value res = AccessObjectIndex(object,index.number);
+
+         if(debugging){
+            Wire* wire = (Wire*) res.custom;
+
+            printf("%s %d\n",wire->name,wire->bitsize);
+         }
 
          return res;
       } break;
@@ -545,11 +560,14 @@ static void Eval(Block* block){
 
          if(val.boolean){
             DebugSignal();
+            debugging = true;
          }
 
          for(Block* ptr = block->nextInner; ptr != nullptr; ptr = ptr->next){
             Eval(ptr);
          }
+
+         debugging = false;
       } else if(CompareString(com.name,"include")){
          char buffer[4096];
 

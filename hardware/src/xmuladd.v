@@ -13,140 +13,85 @@ module xmuladd # (
 	) (
                 input                        rst,
                 input                        clk,
-                input                        run,                
+                input                        run,
+                output reg                   done,
 
+                input [DATA_W-1:0]           in0,
                 input [DATA_W-1:0]           in1,
-                input [DATA_W-1:0]           in2,
-                output [DATA_W-1:0]          out,
+                output [DATA_W-1:0]          out0,
 
                 // config interface
-                input [`MULADD_FNS_W-1:0] opcode,
-                input [`MEM_ADDR_W-1:0] iterations,
-                input [`PERIOD_W-1:0] period,
-                input [`PERIOD_W-1:0] delay,
-                input [`SHIFT_W-1:0] shift
+                input opcode,
+                input [`MEM_ADDR_W-1:0]       iterations,
+                input [`PERIOD_W-1:0]         period,
+                input [$clog2(`DATAPATH_W):0] shift,
+
+                input [31:0]                 delay0
                 );
 
-   wire signed [2*DATA_W-1:0]                 result_mult;
-   reg signed [2*DATA_W-1:0]		             result_mult_reg;
-   reg [2*DATA_W-1:0]                         result;
+reg [31:0] delay;
+reg [9:0] currentIteration;
+reg [9:0] currentPeriod;
 
-   //data
-   wire [`MEM_ADDR_W-1:0]                     op_o;
+always @(posedge clk,posedge rst)
+begin
+   if(rst) begin
+      done <= 1'b0;
+      delay <= 0;
+      currentIteration <= 0;
+      currentPeriod <= 0;
+   end else if(run) begin
+      delay <= delay0 + 2;
+      done <= 1'b0;
+   end else if(|delay) begin
+      delay <= delay - 1;
+      if(iterations == 0) begin
+         done <= 1'b1;
+      end
+      currentIteration <= 0;
+      currentPeriod <= 0;
+   end else if(delay == 0 && !done) begin
+      currentPeriod <= currentPeriod + 1;
 
-   // register muladd control
-   reg [`MEM_ADDR_W-1:0]                      op_o_reg;
+      if(currentPeriod + 1 >= period) begin
+         currentPeriod <= 0;
 
-   // accumulator load signal
-   wire                                       ld_acc;
-   //combinatorial
-   wire                                       ld_acc0;
-   //pipelined
-`ifdef MULADD_COMB
-   reg [2*DATA_W-1:0]                         acc;
-`else
-   reg                                        ld_acc1;
-`endif
-
-   //addr_gen to control macc
-   wire ready = |iterations;
-   wire mem_en, done;
-   xaddrgen addrgen (
-	.clk(clk),
-	.rst(rst),
-	.init(run),
-	.run(run),
-	.pause(1'b0),
-	.iterations(iterations),
-	.period(period),
-	.duty(period),
-	.start(`MEM_ADDR_W'b0),
-	.shift(-period),
-	.incr(`MEM_ADDR_W'b1),
-	.delay(delay),
-	.addr(op_o),
-	.mem_en(mem_en),
-	.done(done)
-	);
-
-   //update registers
-   always @ (posedge clk, posedge rst) begin
-     if (rst) begin
-       op_o_reg <= {`MEM_ADDR_W{1'd0}};
-`ifdef MULADD_COMB                             //pipelined
-       acc <= {2*DATA_W{1'b0}};
-`else
-       ld_acc1 <= 1'b0;
-`endif
-     end else begin
-       op_o_reg <= op_o;
-`ifdef MULADD_COMB                             //pipelined
-       acc <= result;
-`else
-       ld_acc1 <= ld_acc0;
-`endif
-     end
+         currentIteration <= currentIteration +  1;
+         if(currentIteration + 1 >= iterations) begin
+            done <= 1'b1;
+         end
+      end
    end
+end
 
-   assign ld_acc0 = (op_o_reg=={`MEM_ADDR_W{1'd0}});
+// select multiplier statically
+reg signed [DATA_W-1:0] in0_reg, in1_reg;
+reg signed [2*DATA_W-1:0] acc, dsp_out0, result_mult_reg;
+//DSP48E template
+always @ (posedge clk,posedge rst) begin
+   if(rst) begin
+      in0_reg <= 0;
+      in1_reg <= 0;
+      acc <= 0;
+      dsp_out0 <= 0;
+   end else begin
+      in0_reg <= in0;
+      in1_reg <= in1;
+      result_mult_reg <= in0_reg * in1_reg;
 
-   // compute accumulator load signal
-`ifdef MULADD_COMB                             //combinatorial
-   assign ld_acc = ld_acc0;
-`else                                          //pipelined
-   assign ld_acc = ld_acc1;
-`endif
-
-   // select multiplier statically
-`ifdef MULADD_COMB                             //combinatorial
-   always @ (posedge clk, posedge rst)
-     if(rst)
-       result_mult_reg = {2*DATA_W{1'b0}};
-     else
-       result_mult_reg = in1 * in2;
-   assign result_mult = result_mult_reg;
-`else                                          //3-stage pipeline
-   reg signed [DATA_W-1:0] in1_reg, in2_reg;
-   reg signed [2*DATA_W-1:0] acc, dsp_out;
-   wire signed [2*DATA_W-1:0] acc_w;
-   //DSP48E template
-   always @ (posedge clk) begin
-     in1_reg <= in1;
-     in2_reg <= in2;
-     result_mult_reg <= in1_reg * in2_reg;
-     if(opcode == `MULADD_MACC)
-       acc <= acc_w + result_mult_reg;
-     else
-       acc <= acc_w - result_mult_reg;
-     dsp_out <= acc;
+      if(currentPeriod == 0) begin
+         acc <= result_mult_reg;
+      end else begin
+         if(opcode == `MULADD_MACC)
+            acc <= acc + result_mult_reg;
+         else
+            acc <= acc - result_mult_reg;
+      end
+     
+      dsp_out0 <= acc;
    end
-   assign result = dsp_out;
-   assign acc_w = ld_acc ? {DATA_W*2{1'b0}} : acc;
-`endif
+end
 
-   // process mult result according to opcode
-`ifdef MULADD_COMB
-   always @ * begin
-
-      case (opcode)
-	`MULADD_MACC: begin
-           if(ld_acc)
-             result = result_mult;
-           else
-	     result = acc + result_mult;
- 	end
-	`MULADD_MSUB: begin
-           if(ld_acc)
-             result = result_mult;
-           else
-	     result = acc - result_mult;
-        end
-	default: //MACC
-          result = acc + result_mult;
-      endcase // case (opcode)
-   end
-`endif
-
-   assign out = result >> shift;
+assign out0 = dsp_out0[31:0];
 
 endmodule

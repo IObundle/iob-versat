@@ -97,12 +97,13 @@ class Pool{
    Byte* mem;
    int allocated;
    int endSize; // Used for end iterator creation
+   PoolInfo info;
 
    friend class PoolIterator<T>;
 
 private:
 
-   PoolInfo GetPoolInfo();
+   PoolInfo CalculatePoolInfo();
    PageInfo GetPageInfo(PoolInfo poolInfo,Byte* page);
 
 public:
@@ -181,7 +182,7 @@ PoolIterator<T>::PoolIterator(Pool<T>* pool)
    page = pool->mem;
 
    if(page && pool->allocated){
-      PoolInfo info = pool->GetPoolInfo();
+      PoolInfo info = pool->info;
       PageInfo pageInfo = pool->GetPageInfo(info,page);
 
       if(!(pageInfo.bitmap[index] & (1 << bit))){
@@ -204,7 +205,7 @@ bool PoolIterator<T>::operator!=(const PoolIterator<T>& iter){
 
 template<typename T>
 PoolIterator<T>& PoolIterator<T>::operator++(){
-   PoolInfo info = pool->GetPoolInfo();
+   PoolInfo info = pool->info;
    PageInfo pageInfo = pool->GetPageInfo(info,page);
 
    while(fullIndex < pool->endSize){
@@ -242,7 +243,7 @@ T* PoolIterator<T>::operator*(){
    T* view = (T*) page;
    T* val = &view[index * 8 + (7 - bit)];
 
-   PoolInfo info = pool->GetPoolInfo();
+   PoolInfo info = pool->info;
    PageInfo pageInfo = pool->GetPageInfo(info,page);
 
    Assert(pageInfo.bitmap[index] & (1 << bit));
@@ -256,12 +257,11 @@ Pool<T>::Pool()
 ,allocated(0)
 ,endSize(0)
 {
+   info = CalculatePoolInfo();
 }
 
 template<typename T>
 Pool<T>::~Pool(){
-   PoolInfo info = GetPoolInfo();
-
    Byte* ptr = mem;
    while(ptr){
       PageInfo page = GetPageInfo(info,ptr);
@@ -275,7 +275,7 @@ Pool<T>::~Pool(){
 }
 
 template<typename T>
-PoolInfo Pool<T>::GetPoolInfo(){
+PoolInfo Pool<T>::CalculatePoolInfo(){
    PoolInfo info = {};
 
    info.unitsPerFullPage = (GetPageSize() - sizeof(PoolHeader)) / sizeof(T);
@@ -303,8 +303,6 @@ T* Pool<T>::Alloc(){
    if(!mem){
       mem = (Byte*) AllocatePages(1);
    }
-
-   PoolInfo info = GetPoolInfo();
 
    int fullIndex = 0;
    Byte* ptr = mem;
@@ -363,8 +361,6 @@ T* Pool<T>::Get(int index){
       return nullptr;
    }
 
-   PoolInfo info = GetPoolInfo();
-
    Byte* ptr = mem;
    PageInfo page = GetPageInfo(info,ptr);
    while(index >= page.header->allocatedUnits){
@@ -391,7 +387,6 @@ T* Pool<T>::Get(int index){
 
 template<typename T>
 void Pool<T>::Remove(T* elem){
-   PoolInfo info = GetPoolInfo();
    Byte* page = (Byte*) ((unsigned int)elem & ~(GetPageSize() - 1));
    PageInfo pageInfo = GetPageInfo(info,page);
 
@@ -407,8 +402,6 @@ void Pool<T>::Remove(T* elem){
 
 template<typename T>
 void Pool<T>::Clear(){
-   PoolInfo info = GetPoolInfo();
-
    Byte* page = mem;
    while(page){
       PageInfo pageInfo = GetPageInfo(info,page);

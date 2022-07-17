@@ -30,29 +30,7 @@ void InitVersat(Versat* versat,int base,int numberConfigurations){
    MEMSET(versat_base,0x0,0);
 }
 
-FUDeclaration* RegisterFU(Versat* versat,FUDeclaration decl){
-   static FUDeclaration decls[100];
-   static int index;
-
-   FUDeclaration* res = &decls[index];
-   decls[index++] = decl;
-
-   return res;
-}
-
 // Accelerator functions
-Accelerator* CreateAccelerator(Versat* versat){
-   return nullptr;
-}
-
-FUInstance* CreateFUInstance(Accelerator* accel,FUDeclaration* decl){
-   static int instancesCreated = 0;
-
-   FUInstance* inst = &instancesBuffer[instancesCreated++];
-
-   return inst;
-}
-
 void AcceleratorRun(Accelerator* accel){
    printf("B\n");
    MEMSET(versat_base,0x0,1);

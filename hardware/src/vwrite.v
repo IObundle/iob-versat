@@ -70,13 +70,6 @@ module vwrite #(
    wire [1:0]             direction = 2'b10;
    wire [`PERIOD_W-1:0]   delayA    = `PERIOD_W'd0;
 
-   // mem enables output by addr gen
-   wire enA = req;
-   wire enB;
-
-   // write enables
-   wire wrB = (enB & ~extB); //addrgen on & input on & input isn't address
-
    // port addresses and enables
    wire [`MEM_ADDR_W-1:0] addrA, addrA_int, addrA_int2;
    wire [`MEM_ADDR_W-1:0] addrB, addrB_int, addrB_int2;
@@ -85,6 +78,13 @@ module vwrite #(
    wire                   req;
    wire                   rnw;
    wire [DATA_W-1:0]      data_out;
+
+   // mem enables output by addr gen
+   wire enA = req;
+   wire enB;
+
+   // write enables
+   wire wrB = (enB & ~extB); //addrgen on & input on & input isn't address
 
    wire [DATA_W-1:0]      data_to_wrB = in0;
 

@@ -64,6 +64,19 @@ module xmem #(
    input [ADDR_W-1:0]    incr2B
    );
 
+    reg [31:0] testDelay;
+
+   always @(posedge clk,posedge rst)
+   begin
+      if(rst) begin
+         testDelay <= 0;
+      end else if (run) begin
+         testDelay <= delay0;
+      end else if(|testDelay) begin
+         testDelay <= testDelay - 1;
+      end
+   end
+
    wire we = |wstrb;
 
    wire doneA,doneB;

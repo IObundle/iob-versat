@@ -114,8 +114,6 @@ Type* GetType(Type* baseType,bool isPointer,bool isArray){
 
    Assert(!(isPointer && isArray)); // Only 1 can be active at once
 
-   Type* foundBaseType = nullptr;
-
    TypeInfo info = {};
    info.baseType = baseType;
    info.isArray = isArray;
@@ -215,6 +213,8 @@ Value AccessObjectIndex(Value object,int index){
       value.type = object.type->info.baseType;
       value.custom = objectPtr;
    } else if(object.type->info.isPointer) { // Ptr
+      Assert(!object.isTemp);
+
       void* objectPtr = DeferencePointer(object.custom,object.type->info.baseType,index);
 
       value.type = object.type->info.baseType;
@@ -490,6 +490,14 @@ Value ConvertValue(Value in,Type* want){
 Value MakeValue(){
    Value val = {};
    val.type = ValueType::NIL;
+   val.isTemp = true;
+   return val;
+}
+
+Value MakeValue(unsigned int integer){
+   Value val = {};
+   val.number = (int) integer;
+   val.type = ValueType::NUMBER;
    val.isTemp = true;
    return val;
 }

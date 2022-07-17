@@ -27,7 +27,7 @@ struct SimpleMemberInfo{
 
 static Arena tempArenaInst;
 static Arena* tempArena = &tempArenaInst;
-static SimpleTypeInfo* types;
+//static SimpleTypeInfo* types;
 static SimpleTypeInfo* structures;
 
 static void SkipQualifiers(Tokenizer* tok){
@@ -47,6 +47,7 @@ static void SkipQualifiers(Tokenizer* tok){
    }
 }
 
+#if 0
 static SimpleTypeInfo* NameToType(SizedString name){
    for(SimpleTypeInfo* ptr = types; ptr != nullptr; ptr = ptr->next){
       if(CompareString(ptr->name,name)){
@@ -62,6 +63,7 @@ static SimpleTypeInfo* NameToType(SizedString name){
 
    return type;
 }
+#endif
 
 // No struct or union parsing
 static SimpleTypeInfo* ParseSimpleType(Tokenizer* tok){

@@ -32,7 +32,7 @@ module @{accel.name.str} #(
    #{for unit accel.staticUnits}
    #{for i unit.nConfigs}
    #{set wire unit.wires[i]}
-   input [31:0]                    @{unit.module.name.str}_@{unit.name}_@{wire.name},
+   input [@{wire.bitsize-1}:0]                    @{unit.module.name.str}_@{unit.name}_@{wire.name},
    #{end}
    #{end}
 
@@ -47,12 +47,12 @@ module @{accel.name.str} #(
 
    #{if accel.nIOs}
    // Databus master interface
-   input [@{accel.nIOs - 1}:0]                databus_ready,
-   output [@{accel.nIOs - 1}:0]               databus_valid,
-   output [@{accel.nIOs} * AXI_ADDR_W-1:0]    databus_addr,
-   input [@{accel.nIOs} * `DATAPATH_W-1:0]    databus_rdata,
-   output [@{accel.nIOs} * `DATAPATH_W-1:0]   databus_wdata,
-   output [@{accel.nIOs} * `DATAPATH_W/8-1:0] databus_wstrb,
+   input [@{accel.nIOs - 1}:0]                    databus_ready,
+   output [@{accel.nIOs - 1}:0]                   databus_valid,
+   output [@{accel.nIOs - 1} * AXI_ADDR_W-1:0]    databus_addr,
+   input [@{accel.nIOs - 1} * `DATAPATH_W-1:0]    databus_rdata,
+   output [@{accel.nIOs - 1} * `DATAPATH_W-1:0]   databus_wdata,
+   output [@{accel.nIOs - 1} * `DATAPATH_W/8-1:0] databus_wstrb,
    #{end}
 
    #{if accel.isMemoryMapped}
@@ -235,14 +235,14 @@ end
          #{inc memoryMappedIndex}
          #{end}
 
-         #{for i decl.nIOs}
-         .databus_ready(databus_ready[@{ioIndex}]),
-         .databus_valid(databus_valid[@{ioIndex}]),
-         .databus_addr(databus_addr[@{ioIndex * 32}+:32]),
-         .databus_rdata(databus_rdata[@{ioIndex * 32}+:32]),
-         .databus_wdata(databus_wdata[@{ioIndex * 32}+:32]),
-         .databus_wstrb(databus_wstrb[@{ioIndex * 4}+:4]),
-         #{inc ioIndex}
+         #{if decl.nIOs}
+         .databus_ready(databus_ready[@{ioIndex} +: @{decl.nIOs}]),
+         .databus_valid(databus_valid[@{ioIndex} +: @{decl.nIOs}]),
+         .databus_addr(databus_addr[@{ioIndex * 32} +: @{32 * decl.nIOs}]),
+         .databus_rdata(databus_rdata[@{ioIndex * 32} +: @{32 * decl.nIOs}]),
+         .databus_wdata(databus_wdata[@{ioIndex * 32} +: @{32 * decl.nIOs}]),
+         .databus_wstrb(databus_wstrb[@{ioIndex * 4} +: @{4 * decl.nIOs}]),
+         #{set ioIndex ioIndex + decl.nIOs}
          #{end} 
          
          .run(run),

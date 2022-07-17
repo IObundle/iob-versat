@@ -421,6 +421,7 @@ void InitVersat(Versat* versat,int base,int numberConfigurations){
    RegisterDebug(versat);
    RegisterConst(versat);
    RegisterMerge(versat);
+   RegisterMuladd(versat);
 
    RegisterOperators(versat);
 }
@@ -1436,7 +1437,7 @@ void AcceleratorRun(Accelerator* accel){
       PrintVCD(accel,time++,0);
    }
 
-   for(int cycle = 0; cycle < 100; cycle++){
+   for(int cycle = 0; cycle < 999; cycle++){
       AcceleratorDoCycle(accel);
       AcceleratorRunIteration(accel);
 
@@ -1621,19 +1622,28 @@ void OutputMemoryMap(Versat* versat,Accelerator* accel){
 
 void OutputUnitInfo(FUInstance* instance){
    LockAccelerator(instance->accel,Accelerator::Locked::FIXED);
-
 }
 
 int GetInputValue(FUInstance* instance,int index){
-   Accelerator* accel = instance->accel;
+   Assert(instance->tempData);
 
+   for(int i = 0; i < instance->tempData->numberInputs; i++){
+      ConnectionInfo connection = instance->tempData->inputs[i];
+
+      if(connection.port == index){
+         return connection.inst.inst->outputs[connection.inst.port];
+      }
+   }
+
+   return 0;
+
+   #if 0
    for(Edge* edge : accel->edges){
       if(edge->units[1].inst == instance && edge->units[1].port == index){
          return edge->units[0].inst->outputs[edge->units[0].port];
       }
    }
-
-   return 0;
+   #endif
 }
 
 // Connects out -> in

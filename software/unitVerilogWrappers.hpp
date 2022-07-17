@@ -17,6 +17,7 @@ FUDeclaration* RegisterVRead(Versat* versat);
 FUDeclaration* RegisterVWrite(Versat* versat);
 FUDeclaration* RegisterPipelineRegister(Versat* versat);
 FUDeclaration* RegisterMerge(Versat* versat);
+FUDeclaration* RegisterMuladd(Versat* versat);
 
 FUDeclaration* RegisterDebug(Versat* versat);
 

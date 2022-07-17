@@ -21,11 +21,8 @@ struct Accelerator{
 };
 
 void InitVersat(Versat* versat,int base,int numberConfigurations);
-FUDeclaration* RegisterFU(Versat* versat,FUDeclaration decl);
 
 // Accelerator functions
-Accelerator* CreateAccelerator(Versat* versat);
-FUInstance* CreateFUInstance(Accelerator* accel,FUDeclaration* decl);
 void AcceleratorRun(Accelerator* accel);
 void VersatUnitWrite(FUInstance* instance,int address, int value);
 int32_t VersatUnitRead(FUInstance* instance,int address);
@@ -33,13 +30,15 @@ int32_t VersatUnitRead(FUInstance* instance,int address);
 #define GetInstanceByName(ACCEL,...) GetInstanceByName_(ACCEL,NUMBER_ARGS(__VA_ARGS__),__VA_ARGS__)
 FUInstance* GetInstanceByName_(Accelerator* accel,int argc, ...);
 
-// In versat space, simple extract delays from configuration data
-void CalculateDelay(Versat* versat,Accelerator* accel);
+void CalculateDelay(Versat* versat,Accelerator* accel); // In versat space, simple extract delays from configuration data
 SizedString MakeSizedString(const char* str, size_t size);
 FUInstance* CreateNamedFUInstance(Accelerator* accel,FUDeclaration* type,SizedString entityName);
 
 void Hook(Versat* versat,Accelerator* accel,FUInstance* inst);
 // Functions that perform no useful work are simple pre processed out
+#define CreateAccelerator(...) ((Accelerator*)0)
+#define RegisterFU(...) ((FUDeclaration*)0)
+#define CreateFUInstance(...) ((void)0)
 #define OutputVersatSource(...) ((void)0)
 #define ConnectUnits(...) ((void)0)
 #define OutputGraphDotFile(...) ((void)0)
