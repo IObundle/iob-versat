@@ -91,18 +91,63 @@ begin
    end
 end
 
-assign rdata = (versat_ready ? versat_rdata : unitRdataFinal);
+reg [31:0] read_test_counter;
+reg enableReadCounter;
+always @(posedge clk,posedge rst)
+begin
+   if(rst) begin
+      read_test_counter <= 0;
+      enableReadCounter <= 0;
+   end else if(valid) begin
+      read_test_counter <= 0;
+      enableReadCounter <= 1;
+   end else if(enableReadCounter) begin
+      read_test_counter <= read_test_counter + 1;
+   end   
+end
 
+
+reg [31:0] test_counter;
+reg enableCounter;
+always @(posedge clk,posedge rst)
+begin
+   if(rst) begin
+      test_counter <= 0;
+      enableCounter <= 0;
+   end else if(run) begin
+      test_counter <= 0;
+      enableCounter <= 1;
+   end else if(done) begin
+      enableCounter <= 0;
+   end else if(enableCounter) begin
+      test_counter <= test_counter + 1;
+   end
+end
+
+#{if unitsMapped}
+assign rdata = (versat_ready ? versat_rdata : unitRdataFinal);
+#{else}
+assign rdata = versat_rdata;
+#{end}
+
+
+#{if unitsMapped}
 assign ready = versat_ready | wor_ready;
+#{else}
+assign ready = versat_ready;
+#{end}
 
 reg [@{versatValues.configurationBits - 1}:0] configdata;
 wire [@{versatValues.stateBits - 1}:0] statedata;
 
 wire [@{numberUnits - 1}:0] unitDone;
+
+#{if unitsMapped}
 reg [@{unitsMapped - 1}:0] memoryMappedEnable;
 wire[@{unitsMapped - 1}:0] unitReady;
-
 assign wor_ready = (|unitReady);
+#{end}
+
 assign done = (&unitDone && !run);
 
 #{if versatValues.numberConnections}
@@ -120,6 +165,7 @@ assign unitRdataFinal = (#{join "|" for i unitsMapped} unitRData[@{i}] #{end});
 #{end}
 
 // Memory mapped
+#{if unitsMapped}
 always @*
 begin
    memoryMappedEnable = {@{unitsMapped}{1'b0}};
@@ -141,6 +187,7 @@ begin
    end
 #{end}
 end
+#{end}
 
 // Config writing
 always @(posedge clk,posedge rst_int)

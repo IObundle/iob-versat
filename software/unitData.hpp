@@ -61,7 +61,7 @@ START(MuladdConfig_t,muladdConfigWires)
 ENTRY(opcode,1)
 ENTRY(iterations,10)
 ENTRY(period,10)
-LAST_ENTRY(shift,5)
+LAST_ENTRY(shift,6)
 END(MuladdConfig)
 
 START(VReadConfig_t,vreadConfigWires)
@@ -115,4 +115,8 @@ END(VWriteConfig)
 START(ConstConfig_t,constConfigWires)
 LAST_ENTRY(constant,32)
 END(ConstConfig)
+
+START(Mux2Config_t, mux2ConfigWires)
+LAST_ENTRY(sel,1)
+END(Mux2Config)
 

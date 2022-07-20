@@ -416,13 +416,11 @@ FUDeclaration* ParseModule(Versat* versat,Tokenizer* tok){
          memoryMapBits[d->memoryMapBits] += 1;
       }
 
-      // TODO: BUG IN HERE - config wires is too short
       if(inst->isStatic){
          decl.nStaticConfigs += d->nConfigs;
-      } else {
-         decl.nConfigs += d->nConfigs;
       }
 
+      decl.nConfigs += d->nConfigs;
       decl.nStates += d->nStates;
       decl.nDelays += d->nDelays;
       decl.extraDataSize += d->extraDataSize;
@@ -465,15 +463,8 @@ FUDeclaration* ParseModule(Versat* versat,Tokenizer* tok){
       decl.memoryMapBits = last;
    }
 
-   // TODO: HACK
-   decl.configWires = PushArray(&versat->permanent,100,Wire);
-   decl.stateWires = PushArray(&versat->permanent,100,Wire);
-
-   #if 0
    decl.configWires = PushArray(&versat->permanent,decl.nConfigs,Wire);
    decl.stateWires = PushArray(&versat->permanent,decl.nStates,Wire);
-   #endif
-
 
    int configIndex = 0;
    int stateIndex = 0;
@@ -492,6 +483,7 @@ FUDeclaration* ParseModule(Versat* versat,Tokenizer* tok){
          decl.configWires[configIndex].name = (const char*) newName;
          decl.configWires[configIndex++].bitsize = d->configWires[i].bitsize;
       }
+
       for(int i = 0; i < d->nStates; i++){
          int newSize = strlen(d->stateWires[i].name) + 16;
 

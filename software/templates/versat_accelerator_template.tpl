@@ -49,10 +49,10 @@ module @{accel.name.str} #(
    // Databus master interface
    input [@{accel.nIOs - 1}:0]                    databus_ready,
    output [@{accel.nIOs - 1}:0]                   databus_valid,
-   output [@{accel.nIOs - 1} * AXI_ADDR_W-1:0]    databus_addr,
-   input [@{accel.nIOs - 1} * `DATAPATH_W-1:0]    databus_rdata,
-   output [@{accel.nIOs - 1} * `DATAPATH_W-1:0]   databus_wdata,
-   output [@{accel.nIOs - 1} * `DATAPATH_W/8-1:0] databus_wstrb,
+   output [@{accel.nIOs} * AXI_ADDR_W-1:0]    databus_addr,
+   input [@{accel.nIOs} * `DATAPATH_W-1:0]    databus_rdata,
+   output [@{accel.nIOs} * `DATAPATH_W-1:0]   databus_wdata,
+   output [@{accel.nIOs} * `DATAPATH_W/8-1:0] databus_wstrb,
    #{end}
 
    #{if accel.isMemoryMapped}

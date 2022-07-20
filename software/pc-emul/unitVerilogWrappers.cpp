@@ -16,6 +16,7 @@
 #include "Vvread.h"
 #include "Vvwrite.h"
 #include "Vpipeline_register.h"
+#include "Vxmux2.h"
 
 #define INSTANTIATE_ARRAY
 #include "unitData.hpp"
@@ -561,6 +562,13 @@ static int* VWriteUpdateFunction(FUInstance* inst){
    Vvwrite* self = (Vvwrite*) inst->extraData;
 
    self->in0 = GetInputValue(inst,0);
+   self->databus_ready = 0;
+
+   if(self->databus_valid){
+      int* ptr = (int*) self->databus_addr;
+      *ptr = self->databus_wdata;
+      self->databus_ready = 1;
+   }
 
    UPDATE(self);
 
@@ -817,4 +825,74 @@ FUDeclaration* RegisterMuladd(Versat* versat){
 
    return RegisterFU(versat,decl);
 }
+
+// XMUX
+
+static int* XMux2InitializeFunction(FUInstance* inst){
+   Vxmux2* self = new (inst->extraData) Vxmux2();
+
+   INIT(self);
+
+   RESET(self);
+
+   return NULL;
+}
+
+static int* XMux2StartFunction(FUInstance* inst){
+   Vxmux2* self = (Vxmux2*) inst->extraData;
+
+   self->sel = inst->config[0];
+
+   START_RUN(self);
+
+   return NULL;
+}
+
+static int* XMux2UpdateFunction(FUInstance* inst){
+   static int out;
+   Vxmux2* self = (Vxmux2*) inst->extraData;
+
+   self->in0 = GetInputValue(inst,0);
+   self->in1 = GetInputValue(inst,1);
+
+   UPDATE(self);
+
+   // Update out
+   out = self->out0;
+
+   inst->done = self->done;
+
+   return &out;
+}
+
+FUDeclaration* RegisterMux2(Versat* versat){
+   static int latencies[] = {1};
+   FUDeclaration decl = {};
+
+   strcpy(decl.name.str,"xmux2");
+   decl.nInputs = 2;
+   decl.nOutputs = 1;
+   decl.inputDelays = zeros;
+   decl.latencies = latencies;
+   decl.nConfigs = ARRAY_SIZE(mux2ConfigWires);
+   decl.configWires = mux2ConfigWires;
+   decl.extraDataSize = sizeof(Vxmux2);
+   decl.initializeFunction = XMux2InitializeFunction;
+   decl.startFunction = XMux2StartFunction;
+   decl.updateFunction = XMux2UpdateFunction;
+   decl.delayType = (enum DelayType)(DELAY_TYPE_COMPUTE_DELAY | DELAY_TYPE_IMPLEMENTS_DONE);
+
+   return RegisterFU(versat,decl);
+}
+
+
+
+
+
+
+
+
+
+
+
 

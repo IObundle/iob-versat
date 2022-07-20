@@ -33,6 +33,7 @@ static volatile int* configBase = (volatile int*) @{versatBase + 4 |> Hex};
 static volatile int* stateBase = (volatile int*) @{versatBase + 4 |> Hex};
 static volatile int* memMappedBase = (volatile int*) @{versatBase + memoryMappedBase * 4 |> Hex};
 
+#{set delaySeen 0}
 FUInstance instancesBuffer[] = {
    #{join "," for inst instances}
    {
@@ -54,9 +55,16 @@ FUInstance instancesBuffer[] = {
       #{end}
       
       #{if inst.state} 
-         .state = (int*) @{inst.state - state + 4 + versatBase |> Hex} 
+         .state = (int*) @{inst.state - state + 4 + versatBase |> Hex},
       #{else} 
-         .state = (int*) 0x0
+         .state = (int*) 0x0,
+      #{end}
+
+      #{if inst.declaration.nDelays}
+         .delay = (int*) &delayBase[@{delaySeen}]
+      #{set delaySeen delaySeen + inst.declaration.nDelays}
+      #{else}
+         .delay = (int*) 0x0
       #{end}
    }
    #{end}

@@ -422,6 +422,7 @@ void InitVersat(Versat* versat,int base,int numberConfigurations){
    RegisterConst(versat);
    RegisterMerge(versat);
    RegisterMuladd(versat);
+   RegisterMux2(versat);
 
    RegisterOperators(versat);
 }

@@ -6,6 +6,7 @@ struct SimpleFUInstance{
    int* memMapped;
    int* config;
    int* state;
+   int* delay;
 };
 
 #endif // INCLUDED_VERSAT_COMMON

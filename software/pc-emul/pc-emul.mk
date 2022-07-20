@@ -14,7 +14,7 @@ CPP_FILES = $(wildcard $(VERSAT_PC_EMUL)/*.cpp)
 CPP_OBJ = $(patsubst $(VERSAT_PC_EMUL)/%.cpp,$(BUILD_DIR)/%.o,$(CPP_FILES))
 
 #Units to verilate
-VERILATE_UNIT := xadd xreg xmem xmuladd vread vwrite pipeline_register
+VERILATE_UNIT := xadd xreg xmem xmuladd vread vwrite pipeline_register xmux2
 UNIT_VERILOG := $(foreach unit,$(VERILATE_UNIT),$(VERSAT_DIR)/hardware/src/$(unit).v)
 
 UNIT_HDR+=$(foreach unit,$(VERILATE_UNIT),$(BUILD_DIR)/V$(unit).h)
@@ -58,7 +58,7 @@ $(BUILD_DIR)/typeInfo.inc: $(BUILD_DIR)/structParser.out $(TYPE_INFO_HDR)
 $(BUILD_DIR)/verilogWrapper.inc: $(BUILD_DIR)/verilogParser.out  $(VERSAT_SW_DIR)/pc-emul/verilogParser.cpp
 	#$(BUILD_DIR)/verilogParser.out $(BUILD_DIR)/verilogWrapper.inc -I $(VERSAT_DIR)/submodules/INTERCON/hardware/include/ -I $(VERSAT_DIR)/hardware/include/ -I $(VERSAT_DIR)/hardware/src/ $(UNIT_VERILOG)
 
-$(BUILD_DIR)/%.o: $(VERSAT_PC_EMUL)/%.cpp $(HDR) $(UNIT_HDR) $(VERSAT_HDR) $(CPP_FILES) $(BUILD_DIR)/typeInfo.inc $(BUILD_DIR)/verilogWrapper.inc
+$(BUILD_DIR)/%.o: $(VERSAT_PC_EMUL)/%.cpp $(HDR) $(UNIT_HDR) $(VERSAT_HDR) $(CPP_FILES) $(BUILD_DIR)/typeInfo.inc #$(BUILD_DIR)/verilogWrapper.inc
 	mkdir -p $(BUILD_DIR)
 	$(info $@)
 	g++ -std=c++11 -DPC -c -o $@ $(GLOBAL_CFLAGS) $< -I $(VERSAT_SW_DIR) -I $(VERSAT_PC_EMUL) -I $(VERILATOR_INCLUDE) -I $(BUILD_DIR)/
