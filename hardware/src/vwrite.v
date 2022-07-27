@@ -44,7 +44,7 @@ module vwrite #(
    input [`MEM_ADDR_W-1:0] startB,
    input [`MEM_ADDR_W-1:0] shiftB,
    input [`MEM_ADDR_W-1:0] incrB,
-   input [`PERIOD_W-1:0]   delay0, // delayB
+   input [32-1:0]          delay0, // delayB
    input                   reverseB,
    input                   extB,
    input [`MEM_ADDR_W-1:0] iter2B,
@@ -70,13 +70,6 @@ module vwrite #(
    wire [1:0]             direction = 2'b10;
    wire [`PERIOD_W-1:0]   delayA    = `PERIOD_W'd0;
 
-   // mem enables output by addr gen
-   wire enA = req;
-   wire enB;
-
-   // write enables
-   wire wrB = (enB & ~extB); //addrgen on & input on & input isn't address
-
    // port addresses and enables
    wire [`MEM_ADDR_W-1:0] addrA, addrA_int, addrA_int2;
    wire [`MEM_ADDR_W-1:0] addrB, addrB_int, addrB_int2;
@@ -85,6 +78,13 @@ module vwrite #(
    wire                   req;
    wire                   rnw;
    wire [DATA_W-1:0]      data_out;
+
+   // mem enables output by addr gen
+   wire enA = req;
+   wire enB;
+
+   // write enables
+   wire wrB = (enB & ~extB); //addrgen on & input on & input isn't address
 
    wire [DATA_W-1:0]      data_to_wrB = in0;
 
@@ -139,7 +139,7 @@ module vwrite #(
                        .start(startB),
                        .shift(shiftB),
                        .incr(incrB),
-                       .delay(delay0),
+                       .delay(delay0[9:0]),
                        .iterations2(iter2B),
                          .period2(per2B),
                          .shift2(shift2B),

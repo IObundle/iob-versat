@@ -39,7 +39,7 @@ module xmem #(
    input [ADDR_W-1:0]    startA,   
    input [ADDR_W-1:0]    shiftA,   
    input [ADDR_W-1:0]    incrA,    
-   input [`PERIOD_W-1:0] delay0,   
+   input [32-1:0]        delay0,   
    input                 reverseA, 
    input                 extA,     
    input                 in0_wr,   
@@ -54,7 +54,7 @@ module xmem #(
    input [ADDR_W-1:0]    startB,
    input [ADDR_W-1:0]    shiftB,
    input [ADDR_W-1:0]    incrB,
-   input [`PERIOD_W-1:0] delay1,
+   input [32-1:0]        delay1,
    input                 reverseB, 
    input                 extB,
    input                 in1_wr,
@@ -63,6 +63,19 @@ module xmem #(
    input [ADDR_W-1:0]    shift2B,
    input [ADDR_W-1:0]    incr2B
    );
+
+    reg [31:0] testDelay;
+
+   always @(posedge clk,posedge rst)
+   begin
+      if(rst) begin
+         testDelay <= 0;
+      end else if (run) begin
+         testDelay <= delay0;
+      end else if(|testDelay) begin
+         testDelay <= testDelay - 1;
+      end
+   end
 
    wire we = |wstrb;
 
@@ -115,7 +128,7 @@ module xmem #(
             .start(startA),
             .shift(shiftA),
             .incr(incrA),
-            .delay(delay0),
+            .delay(delay0[9:0]),
             .iterations2(iter2A),
             .period2(per2A),
             .shift2(shift2A),
@@ -135,7 +148,7 @@ module xmem #(
             .start(startB),
             .shift(shiftB),
             .incr(incrB),
-            .delay(delay1),
+            .delay(delay1[9:0]),
             .iterations2(iter2B),
             .period2(per2B),
             .shift2(shift2B),
@@ -196,22 +209,23 @@ module xmem #(
    end
 
    iob_tdp_ram #(
-         .MEM_INIT_FILE(MEM_INIT_FILE),
+         .FILE(MEM_INIT_FILE),
          .DATA_W(DATA_W),
          .ADDR_W(ADDR_W))
    mem
      (
-      .data_a(data_a_reg),
-      .data_b(data_b_reg),
-      .addr_a(addr_a_reg),
-      .addr_b(addr_b_reg),
-      .en_a(en_a_reg),
-      .en_b(en_b_reg),
-      .we_a(we_a_reg),
-      .we_b(we_b_reg),
-      .q_a(outA),
-      .q_b(outB),
-      .clk(clk)
+      .dinA(data_a_reg),
+      .dinB(data_b_reg),
+      .addrA(addr_a_reg),
+      .addrB(addr_b_reg),
+      .enA(en_a_reg),
+      .enB(en_b_reg),
+      .weA(we_a_reg),
+      .weB(we_b_reg),
+      .doutA(outA),
+      .doutB(outB),
+      .clkA(clk),
+      .clkB(clk)
       );
 
    //register mem outputs

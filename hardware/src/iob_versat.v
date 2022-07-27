@@ -2,36 +2,31 @@
 `include "axi.vh"
 `include "system.vh"
 `include "iob_lib.vh"
-`include "interconnect.vh"
+`include "iob_intercon.vh"
 `include "iob_versat.vh"
 
 `include "versat_defs.vh"
 
 module iob_versat
   # (//the below parameters are used in cpu if includes below
-    	parameter AXI_ADDR_W = `AXI_ADDR_W,
+    	parameter AXI_ADDR_W = 32,
       parameter AXI_DATA_W = 32,
       parameter ADDR_W = `VERSAT_ADDR_W, //NODOC Address width
     	parameter DATA_W = `VERSAT_RDATA_W, //NODOC CPU data width
     	parameter WDATA_W = `VERSAT_WDATA_W //NODOC CPU data width
     )
   	(
-   	//CPU interface
-	`ifndef USE_AXI4LITE
- 		`include "cpu_nat_s_if.v"
-	`else
- 		`include "cpu_axi4lite_s_if.v"
-	`endif
+ 		`include "iob_s_if.vh"
 
-   `ifdef IO
-      `include "cpu_axi4_m_if.v"
+   `ifdef VERSAT_IO
+      `include "cpu_axi_m_port.vh"
    `endif
 
    input clk,
    input rst
 	);
 
-`ifdef IO
+`ifdef VERSAT_IO
    wire [`nIO-1:0]               m_databus_ready;
    wire [`nIO-1:0]               m_databus_valid;
    wire [`nIO*`IO_ADDR_W-1:0]    m_databus_addr;
@@ -149,8 +144,6 @@ module iob_versat
       );
 `endif
 
-
-
 versat_instance #(.ADDR_W(ADDR_W),.DATA_W(DATA_W)) xversat(
       .valid(valid),
       .wstrb(wstrb),
@@ -159,7 +152,7 @@ versat_instance #(.ADDR_W(ADDR_W),.DATA_W(DATA_W)) xversat(
       .wdata(wdata),
       .ready(ready),
 
-`ifdef IO
+`ifdef VERSAT_IO
       .m_databus_ready(m_databus_ready),
       .m_databus_valid(m_databus_valid),
       .m_databus_addr(m_databus_addr),
@@ -173,8 +166,6 @@ versat_instance #(.ADDR_W(ADDR_W),.DATA_W(DATA_W)) xversat(
    ); 
 
 endmodule
-
-`include "interconnect.vh"
 
 module xmerge
   #(

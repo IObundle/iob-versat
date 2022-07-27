@@ -2,7 +2,6 @@
 `include "xversat.vh"
 
 module xadd #(
-         parameter DELAY_W = 10,
          parameter DATA_W = 32
               )
     (

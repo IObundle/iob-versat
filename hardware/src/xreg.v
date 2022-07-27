@@ -2,7 +2,7 @@
 `include "xversat.vh"
 
 module xreg #(
-         parameter DELAY_W = 10,
+         parameter DELAY_W = 32,
          parameter ADDR_W = 1,
          parameter DATA_W = 32
               )
@@ -12,11 +12,11 @@ module xreg #(
     input                         rst,
     
     input                         run,
-    output                        done,
+    output reg                    done,
 
     // native interface 
     input [DATA_W/8-1:0]          wstrb,
-    input [ADDR_W-1:0]            addr,
+    input                         addr, // shouldn't even have it at all, but needed so that it follows the interface expected by verilator
     input [DATA_W-1:0]            wdata,
     input                         valid,
     output reg                    ready,
@@ -35,7 +35,6 @@ reg [DELAY_W-1:0] delay;
 
 assign rdata = (ready ? out0 : 0);
 assign currentValue = out0;
-assign done = (delay == 0);
 
 always @(posedge clk,posedge rst)
 begin
@@ -43,21 +42,27 @@ begin
       out0 <= 0;
       delay <= 0;
       ready <= 0;
-   end else if(run) begin
-      ready <= 0;
-      delay <= delay0;
-   end else if(valid & |wstrb) begin
-      out0 <= wdata;
-      ready <= 1'b1;
+      done <= 1;
    end else begin
-      ready <= 0;
+      // Native interface
+      ready <= valid;
 
-      if(|delay) begin
-         delay <= delay - 1;
+      if(valid & |wstrb) begin
+         out0 <= wdata;
       end
 
-      if(delay == 1) begin
-         out0 <= in0;
+      if(run) begin
+         done <= 0;
+         delay <= delay0;
+      end 
+
+      if(!done) begin
+         if(delay == 0) begin
+            out0 <= in0;
+            done <= 1;
+         end else begin
+            delay <= delay - 1;
+         end
       end
    end
 end
