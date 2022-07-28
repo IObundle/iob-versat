@@ -226,7 +226,7 @@ SizedString PreprocessVerilogFile(Arena* output, SizedString fileContent,std::ve
    PreprocessVerilogFile_(output,fileContent,includeFilepaths);
    PopMark(tempArena,tempMark);
 
-   PushString(output,MAKE_SIZED_STRING("\0"));
+   PushString(output,MakeSizedString("\0"));
    res.size = MarkArena(output) - mark;
 
    #if 0
@@ -612,7 +612,7 @@ int main(int argc,const char* argv[]){
          int nInputs = 0;
          int nOutputs = 0;
          int nDelays = 0;
-         int memoryMappedWords = 0;
+         int memoryMappedBits = 0;
          bool doesIO = false;
          bool memoryMap = false;
          bool hasDone = false;
@@ -653,9 +653,9 @@ int main(int argc,const char* argv[]){
                      || CheckFormat("wstrb",decl.name)){
                memoryMap = true;
 
-               int range = (decl.range.high - decl.range.low);
-
-               memoryMappedWords = range;
+               if(CheckFormat("addr",decl.name)){
+                  memoryMappedBits = (decl.range.high - decl.range.low + 1);
+               }
             } else if(CheckFormat("clk",decl.name)){
                // Nothing
             } else if(CheckFormat("rst",decl.name)){
@@ -691,6 +691,7 @@ int main(int argc,const char* argv[]){
          info.hasDone = hasDone;
          info.nDelays = nDelays;
          info.isSource = module.isSource;
+         info.memoryMappedBits = memoryMappedBits;
 
          allModules.push_back(info);
       }

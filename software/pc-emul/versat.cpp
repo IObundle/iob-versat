@@ -67,55 +67,10 @@ static int* DefaultInitFunction(FUInstance* inst){
    return nullptr;
 }
 
-static int* DelayUpdateFunction(FUInstance* inst){
-   static int out;
-
-   Assert(inst->config[0] < MAX_DELAY);
-
-   int* fifo = (int*) inst->extraData;
-
-   if(inst->config[0] == 0){
-      out = GetInputValue(inst,0);
-   } else {
-      out = fifo[0];
-
-      for(int i = 0; i < inst->config[0]; i++){
-         fifo[i] = fifo[i+1];
-      }
-
-      fifo[inst->config[0] - 1] = GetInputValue(inst,0);
-   }
-
-   return &out;
-}
-
-static FUDeclaration* RegisterDelay(Versat* versat){
-   static Wire wire = {};
-   wire.bitsize = 32;
-   wire.name = MAKE_SIZED_STRING("amount");
-
-   FUDeclaration decl = {};
-
-   strcpy(decl.name.str,"delay");
-   decl.nInputs = 1;
-   decl.nOutputs = 1;
-   decl.inputDelays = zeros;
-   decl.latencies = ones;
-   decl.nConfigs = 1; // Treat the delay value as a configuration, instead of a special delay
-   decl.configWires = &wire;
-   decl.delayType = DelayType::DELAY_TYPE_COMPUTE_DELAY;
-   decl.extraDataSize = sizeof(int) * MAX_DELAY;
-   decl.initializeFunction = DefaultInitFunction;
-   decl.updateFunction = DelayUpdateFunction;
-   decl.type = FUDeclaration::SINGLE;
-
-   return RegisterFU(versat,decl);
-}
-
 static FUDeclaration* RegisterCircuitInput(Versat* versat){
    FUDeclaration decl = {};
 
-   strcpy(decl.name.str,"circuitInput");
+   strcpy(decl.name.str,"CircuitInput");
    decl.nOutputs = 99;
    decl.nInputs = 1;  // Used for templating circuit
    decl.latencies = zeros;
@@ -130,7 +85,7 @@ static FUDeclaration* RegisterCircuitInput(Versat* versat){
 static FUDeclaration* RegisterCircuitOutput(Versat* versat){
    FUDeclaration decl = {};
 
-   strcpy(decl.name.str,"circuitOutput");
+   strcpy(decl.name.str,"CircuitOutput");
    decl.nInputs = 99;
    decl.nOutputs = 99; // Used for templating circuit
    decl.latencies = zeros;
@@ -410,10 +365,12 @@ void InitVersat(Versat* versat,int base,int numberConfigurations){
 
    RegisterAllVerilogUnits(versat);
 
-   versat->delay = RegisterDelay(versat);
+   versat->delay = GetTypeByName(versat,MakeSizedString("Delay"));
+   versat->pipelineRegister = GetTypeByName(versat,MakeSizedString("PipelineRegister"));
+
+   //versat->delay = RegisterDelay(versat);
    versat->input = RegisterCircuitInput(versat);
    versat->output = RegisterCircuitOutput(versat);
-   versat->pipelineRegister = GetTypeByName(versat,MAKE_SIZED_STRING("PipelineRegister"));
 
 
    //versat->pipelineRegister = RegisterPipelineRegister(versat);
@@ -607,7 +564,7 @@ static char* FormatNameToOutput(FUInstance* inst){
    #endif
 
    #if PRINT_DELAY == 1
-   if(CompareString(inst->declaration->name.str,MAKE_SIZED_STRING("delay")) && inst->config){
+   if(CompareString(inst->declaration->name.str,MakeSizedString("Delay")) && inst->config){
       ptr += sprintf(ptr,"_%d",inst->config[0]);
    } else {
       ptr += sprintf(ptr,"_%d",inst->baseDelay);
@@ -1239,8 +1196,35 @@ static void PrintVCDDefinitions_(Accelerator* accel){
          IncrementMapping();
       }
 
-      fprintf(accelOutputFile,"$var wire  1 %c%c%c%c done $end\n",currentMapping[0],currentMapping[1],currentMapping[2],currentMapping[3]);
-      IncrementMapping();
+      for(int i = 0; i < inst->declaration->nConfigs; i++){
+         Wire* wire = &inst->declaration->configWires[i];
+         fprintf(accelOutputFile,"$var wire  %d %c%c%c%c %.*s $end\n",wire->bitsize,currentMapping[0],currentMapping[1],currentMapping[2],currentMapping[3],UNPACK_SS(wire->name));
+         IncrementMapping();
+      }
+
+      for(int i = 0; i < inst->declaration->nStates; i++){
+         Wire* wire = &inst->declaration->stateWires[i];
+         fprintf(accelOutputFile,"$var wire  %d %c%c%c%c %.*s $end\n",wire->bitsize,currentMapping[0],currentMapping[1],currentMapping[2],currentMapping[3],UNPACK_SS(wire->name));
+         IncrementMapping();
+      }
+
+      for(StaticInfo info : accel->staticInfo){
+         for(int i = 0; i < info.nConfigs; i++){
+            Wire* wire = &info.wires[i];
+            fprintf(accelOutputFile,"$var wire  %d %c%c%c%c %.*s_%.*s $end\n",wire->bitsize,currentMapping[0],currentMapping[1],currentMapping[2],currentMapping[3],UNPACK_SS(info.name),UNPACK_SS(wire->name));
+            IncrementMapping();
+         }
+      }
+
+      for(int i = 0; i < accel->delayAlloc.size; i++){
+         fprintf(accelOutputFile,"$var wire 32 %c%c%c%c delay%d $end\n",currentMapping[0],currentMapping[1],currentMapping[2],currentMapping[3],i);
+         IncrementMapping();
+      }
+
+      if(inst->declaration->implementsDone){
+         fprintf(accelOutputFile,"$var wire  1 %c%c%c%c done $end\n",currentMapping[0],currentMapping[1],currentMapping[2],currentMapping[3]);
+         IncrementMapping();
+      }
 
       if(inst->declaration->type == FUDeclaration::COMPOSITE){
          PrintVCDDefinitions_(inst->compositeAccel);
@@ -1280,7 +1264,7 @@ static char* Bin(unsigned int val){
    return buffer;
 }
 
-static void PrintVCD_(Accelerator* accel){
+static void PrintVCD_(Accelerator* accel,int time){
    for(FUInstance* inst : accel->instances){
       for(int i = 0; i < inst->tempData->inputPortsUsed; i++){
          fprintf(accelOutputFile,"b%s %c%c%c%c\n",Bin(GetInputValue(inst,i)),currentMapping[0],currentMapping[1],currentMapping[2],currentMapping[3]);
@@ -1292,11 +1276,39 @@ static void PrintVCD_(Accelerator* accel){
          IncrementMapping();
       }
 
-      fprintf(accelOutputFile,"%d%c%c%c%c\n",inst->done ? 1 : 0,currentMapping[0],currentMapping[1],currentMapping[2],currentMapping[3]);
-      IncrementMapping();
+      for(int i = 0; i < inst->declaration->nConfigs; i++){
+         if(time == 0){
+            fprintf(accelOutputFile,"b%s %c%c%c%c\n",Bin(inst->config[i]),currentMapping[0],currentMapping[1],currentMapping[2],currentMapping[3]);
+         }
+         IncrementMapping();
+      }
+
+      for(int i = 0; i < inst->declaration->nStates; i++){
+         fprintf(accelOutputFile,"b%s %c%c%c%c\n",Bin(inst->state[i]),currentMapping[0],currentMapping[1],currentMapping[2],currentMapping[3]);
+         IncrementMapping();
+      }
+
+      for(StaticInfo info : accel->staticInfo){
+         for(int i = 0; i < info.nConfigs; i++){
+            if(time == 0){
+               fprintf(accelOutputFile,"b%s %c%c%c%c\n",Bin(info.ptr[i]),currentMapping[0],currentMapping[1],currentMapping[2],currentMapping[3]);
+            }
+            IncrementMapping();
+         }
+      }
+
+      for(int i = 0; i < accel->delayAlloc.size; i++){
+         fprintf(accelOutputFile,"b%s %c%c%c%c\n",Bin(accel->delayAlloc.ptr[i]),currentMapping[0],currentMapping[1],currentMapping[2],currentMapping[3],i);
+         IncrementMapping();
+      }
+
+      if(inst->declaration->implementsDone){
+         fprintf(accelOutputFile,"%d%c%c%c%c\n",inst->done ? 1 : 0,currentMapping[0],currentMapping[1],currentMapping[2],currentMapping[3]);
+         IncrementMapping();
+      }
 
       if(inst->declaration->type == FUDeclaration::COMPOSITE){
-         PrintVCD_(inst->compositeAccel);
+         PrintVCD_(inst->compositeAccel,time);
       }
    }
 }
@@ -1310,7 +1322,7 @@ static void PrintVCD(Accelerator* accel,int time,int clock){ // Need to put some
 
    fprintf(accelOutputFile,"#%d\n",time * 10);
    fprintf(accelOutputFile,"%da\n",clock ? 1 : 0);
-   PrintVCD_(accel);
+   PrintVCD_(accel,time);
 }
 
 static void VisitAcceleratorInstances_(FUInstance* inst,AcceleratorInstancesVisitor func){
@@ -1350,7 +1362,7 @@ static void AcceleratorRunStart(Accelerator* accel){
 
 static bool AcceleratorDone(Accelerator* accel){
    for(FUInstance* inst : accel->instances){
-      if(!inst->done){
+      if(inst->declaration->implementsDone && !inst->done){
          return false;
       }
    }
@@ -1379,7 +1391,9 @@ static void AcceleratorRunIteration(Accelerator* accel){
          AcceleratorRunIteration(inst->compositeAccel);
 
          // Calculate unit done
-         inst->done = AcceleratorDone(inst->compositeAccel);
+         if(inst->declaration->implementsDone){
+            inst->done = AcceleratorDone(inst->compositeAccel);
+         }
 
          // Set output instance value to accelerator output
          FUInstance* output = inst->compositeAccel->outputInstance;
@@ -1419,7 +1433,7 @@ void AcceleratorDoCycle(Accelerator* accel){
 
 void AcceleratorRun(Accelerator* accel){
    static int numberRuns = 0;
-   static int time = 0;
+   int time = 0;
 
    // Only used to lock all acelerators
    VisitAcceleratorInstances(accel,[](FUInstance* inst){
@@ -1498,7 +1512,10 @@ static VersatComputedValues ComputeVersatValues(Versat* versat,Accelerator* acce
 
    for(auto& unit : accel->staticInfo){
       res.nStatics += unit.nConfigs;
-      res.staticBits += unit.nConfigs * 32;
+
+      for(int i = 0; i < unit.nConfigs; i++){
+         res.staticBits += unit.wires[i].bitsize;
+      }
    }
 
    // Versat specific registers are treated as a special maping (all 0's) of 1 configuration and 1 state register
@@ -2217,7 +2234,7 @@ void CalculateDelay(Versat* versat,Accelerator* accel){
             InsertUnit(accel,inst,info->port,info->inst.inst,info->inst.port,newInst);
 
             newInst->baseDelay = info->delay - versat->delay->latencies[0];
-            //newInst->isStatic = true; // By default all delays are static
+            newInst->isStatic = true; // By default all delays are static
 
             if(newInst->config){
                newInst->config[0] = newInst->baseDelay;
@@ -2690,8 +2707,8 @@ void Hook(Versat* versat,Accelerator* accel,FUInstance* inst){
 
    #if 0
    accel = CreateAccelerator(versat);
-   FUDeclaration* type = GetTypeByName(versat,MAKE_SIZED_STRING("D"));
-   FUInstance* top = CreateNamedFUInstance(accel,type,MAKE_SIZED_STRING("d"));
+   FUDeclaration* type = GetTypeByName(versat,MakeSizedString("D"));
+   FUInstance* top = CreateNamedFUInstance(accel,type,MakeSizedString("d"));
 
    // Every static unit is completely identified by module where is declared and the name
    FUInstance* b1_c1 = GetInstanceByName(accel,"d","b1","c1");

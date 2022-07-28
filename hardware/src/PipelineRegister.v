@@ -6,7 +6,6 @@ module PipelineRegister #(
       )
       (
          input run,
-         output done,
 
          input [DATA_W-1:0] in0,
 
@@ -15,8 +14,6 @@ module PipelineRegister #(
          input clk,
          input rst
       ); 
-      
-assign done = 1'b1;
 
 always @(posedge clk,posedge rst)
 begin

@@ -1,12 +1,20 @@
 #{define outputName portInstance}
-#{set inst portInstance.inst}
-#{set decl inst.declaration}
-   #{if decl.type == 2}
-      in@{inst.id} #{else}
-      #{if decl.isOperation}
-         comb_@{inst.name.str} #{else}
-         output_@{inst.id}_@{portInstance.port} #{end}
+#{set inst2 portInstance.inst}
+#{set decl2 inst2.declaration}
+   #{if decl2.type == 2}
+      in@{inst2.id} #{else}
+      #{if decl2.isOperation}
+         comb_@{inst2.name.str} #{else}
+         output_@{inst2.id}_@{portInstance.port} #{end}
    #{end}
 #{end}
 
+#{define CountDones instances}
+#{set nDones 0}
+#{for inst instances}
+#{if inst.declaration.implementsDone}
+#{inc nDones}
+#{end}
+#{end}
+#{end}
 

@@ -134,7 +134,7 @@ static SimpleMemberInfo* ParseMember(Tokenizer* tok,SizedString outsideStructNam
             enumName = MakeSizedString(ptr);
          }
       } else {
-         enumName = MAKE_SIZED_STRING("int");
+         enumName = MakeSizedString("int");
       }
 
       SimpleTypeInfo* type = PushStruct(tempArena,SimpleTypeInfo);
@@ -329,11 +329,11 @@ void OutputRegisterTypesFunction(FILE* output){
       iter.currentMember[0] = info->members;
 
       for(SimpleMemberInfo* m = info->members; m != nullptr; m = Next(&iter)){
-         SizedString arrayElements = MAKE_SIZED_STRING("0");
-         SizedString hasArray = MAKE_SIZED_STRING("false");
+         SizedString arrayElements = MakeSizedString("0");
+         SizedString hasArray = MakeSizedString("false");
          if(m->hasArray){
             arrayElements = m->arrayExpression;
-            hasArray = MAKE_SIZED_STRING("true");
+            hasArray = MakeSizedString("true");
          }
 
          const char* preamble = "               ";

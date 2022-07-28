@@ -10,7 +10,6 @@ module Mux2 #(
     input                         rst,
     
     input                         run,
-    output                        done,
 
     //input / output data
     input [DATA_W-1:0]            in0,
@@ -20,8 +19,6 @@ module Mux2 #(
     
     input                         sel
     );
-
-assign done = 1'b1;
 
 always @(posedge clk,posedge rst)
 begin

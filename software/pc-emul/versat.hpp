@@ -23,8 +23,7 @@ enum DelayType {
    DELAY_TYPE_BASE               = 0x0,
    DELAY_TYPE_SINK_DELAY         = 0x1,
    DELAY_TYPE_SOURCE_DELAY       = 0x2,
-   DELAY_TYPE_COMPUTE_DELAY      = 0x4,
-   DELAY_TYPE_IMPLEMENTS_DONE    = 0x8
+   DELAY_TYPE_COMPUTE_DELAY      = 0x4
 };
 
 inline DelayType operator|(DelayType a, DelayType b)
@@ -46,7 +45,7 @@ struct StaticInfo{
    SizedString name;
    Wire* wires;
    int nConfigs;
-   int* ptr;
+   int* ptr; // Pointer to config of existing unit
 };
 
 bool operator<(const StaticInfo& lhs,const StaticInfo& rhs);
@@ -82,6 +81,7 @@ struct FUDeclaration{
    MemoryAccessFunction memAccessFunction;
    const char* operation;
    bool isOperation;
+   bool implementsDone;
 
    std::vector<StaticInfo> staticUnits;
 

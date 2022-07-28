@@ -200,8 +200,8 @@ FUDeclaration* ParseModule(Versat* versat,Tokenizer* tok){
    Token name = tok->NextToken();
    tok->AssertNextToken("(");
 
-   FUDeclaration* circuitInput = GetTypeByName(versat,MakeSizedString("circuitInput"));
-   FUDeclaration* circuitOutput = GetTypeByName(versat,MakeSizedString("circuitOutput"));
+   FUDeclaration* circuitInput = GetTypeByName(versat,MakeSizedString("CircuitInput"));
+   FUDeclaration* circuitOutput = GetTypeByName(versat,MakeSizedString("CircuitOutput"));
 
    Accelerator* circuit = CreateAccelerator(versat);
    circuit->type = Accelerator::CIRCUIT;
@@ -273,7 +273,7 @@ FUDeclaration* ParseModule(Versat* versat,Tokenizer* tok){
             tok->AdvancePeek(peek);
 
             Token list = tok->NextFindUntil(")");
-            int arguments = 1 + CountSubstring(list,MAKE_SIZED_STRING(","));
+            int arguments = 1 + CountSubstring(list,MakeSizedString(","));
             Assert(arguments <= FUType->nConfigs);
 
             Tokenizer insideList(list,",",{});
@@ -298,7 +298,7 @@ FUDeclaration* ParseModule(Versat* versat,Tokenizer* tok){
             tok->AdvancePeek(peek);
 
             Token list = tok->NextFindUntil("}");
-            int arguments = 1 + CountSubstring(list,MAKE_SIZED_STRING(","));
+            int arguments = 1 + CountSubstring(list,MakeSizedString(","));
             Assert(arguments <= (1 << FUType->memoryMapBits));
 
             Tokenizer insideList(list,",",{});
@@ -418,9 +418,10 @@ FUDeclaration* ParseModule(Versat* versat,Tokenizer* tok){
 
       if(inst->isStatic){
          decl.nStaticConfigs += d->nConfigs;
+      } else {
+         decl.nConfigs += d->nConfigs;
       }
 
-      decl.nConfigs += d->nConfigs;
       decl.nStates += d->nStates;
       decl.nDelays += d->nDelays;
       decl.extraDataSize += d->extraDataSize;
@@ -471,16 +472,18 @@ FUDeclaration* ParseModule(Versat* versat,Tokenizer* tok){
    for(FUInstance* inst : circuit->instances){
       FUDeclaration* d = inst->declaration;
 
-      for(int i = 0; i < d->nConfigs; i++){
-         int newSize = d->configWires[i].name.size + 16;
+      if(!inst->isStatic){
+         for(int i = 0; i < d->nConfigs; i++){
+            int newSize = d->configWires[i].name.size + 16;
 
-         Byte* newName = PushBytes(&versat->permanent,newSize);
-         int size = sprintf(newName,"%.*s_%.2d",d->configWires[i].name.size,d->configWires[i].name.str,configIndex);
+            Byte* newName = PushBytes(&versat->permanent,newSize);
+            int size = sprintf(newName,"%.*s_%.2d",d->configWires[i].name.size,d->configWires[i].name.str,configIndex);
 
-         Assert(size < newSize);
+            Assert(size < newSize);
 
-         decl.configWires[configIndex].name = MakeSizedString(newName,size);
-         decl.configWires[configIndex++].bitsize = d->configWires[i].bitsize;
+            decl.configWires[configIndex].name = MakeSizedString(newName,size);
+            decl.configWires[configIndex++].bitsize = d->configWires[i].bitsize;
+         }
       }
 
       for(int i = 0; i < d->nStates; i++){
@@ -496,22 +499,6 @@ FUDeclaration* ParseModule(Versat* versat,Tokenizer* tok){
       }
    }
 
-   #if 0
-   if(CompareToken(name,"SHA")){
-      for(FUInstance* inst : circuit->instances){
-         printf("%s:%d\n",inst->name.str,inst->delay);
-      }
-      FlushStdout();
-   }
-   #endif
-
-   #if 0
-   bool computeUnitType = (bool) circuit->inputInstancePointers.Size();
-   for(FUInstance** instPtr : circuit->inputInstancePointers){
-      computeUnitType &= ExistsConnection(circuit,*instPtr,circuit->outputInstance);
-   }
-   #endif
-
    // TODO: Change unit delay type inference. Only care about delay type to upper levels.
    // Type source only if a source unit is connected to out. Type sink only if there is a input to sink connection
    #if 1
@@ -520,25 +507,13 @@ FUDeclaration* ParseModule(Versat* versat,Tokenizer* tok){
    #endif
    bool implementsDone = false;
 
-   #if 0
-   if(!computeUnitType){
-      if(decl.nInputs && decl.nOutputs){
-         decl.delayType = (DelayType) (DelayType::DELAY_TYPE_SINK_DELAY | DelayType::DELAY_TYPE_SOURCE_DELAY);
-      } else if(decl.nInputs) {
-         decl.delayType = DelayType::DELAY_TYPE_SINK_DELAY;
-      } else if(decl.nOutputs){
-         decl.delayType = DelayType::DELAY_TYPE_SOURCE_DELAY;
-      }
-   }
-   #endif
-
    LockAccelerator(circuit,Accelerator::Locked::GRAPH);
    for(FUInstance* inst : circuit->instances){
       if(inst->declaration->type == FUDeclaration::SPECIAL){
          continue;
       }
 
-      if(CHECK_DELAY(inst,DelayType::DELAY_TYPE_IMPLEMENTS_DONE)){
+      if(inst->declaration->implementsDone){
          implementsDone = true;
       }
       #if 1
@@ -564,14 +539,12 @@ FUDeclaration* ParseModule(Versat* versat,Tokenizer* tok){
    }
    #endif
 
-   if(implementsDone){
-      decl.delayType = (DelayType) ((int)decl.delayType | (int)DelayType::DELAY_TYPE_IMPLEMENTS_DONE);
-   }
+   decl.implementsDone = implementsDone;
 
    FUDeclaration* res = RegisterFU(versat,decl);
 
    // TODO: Hackish
-   #if 0
+   #if 1
    for(FUInstance* inst : circuit->instances){
       if(inst->isStatic){
          StaticInfo unit = {};
@@ -579,8 +552,6 @@ FUDeclaration* ParseModule(Versat* versat,Tokenizer* tok){
          unit.name = MakeSizedString(inst->name.str);
          unit.nConfigs = inst->declaration->nConfigs;
          unit.wires = inst->declaration->configWires;
-
-         unit.nConfigs = 1;
 
          Assert(unit.wires);
 

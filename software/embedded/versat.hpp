@@ -31,7 +31,6 @@ int32_t VersatUnitRead(FUInstance* instance,int address);
 FUInstance* GetInstanceByName_(Accelerator* accel,int argc, ...);
 
 void CalculateDelay(Versat* versat,Accelerator* accel); // In versat space, simple extract delays from configuration data
-SizedString MakeSizedString(const char* str, size_t size);
 FUInstance* CreateNamedFUInstance(Accelerator* accel,FUDeclaration* type,SizedString entityName);
 
 void Hook(Versat* versat,Accelerator* accel,FUInstance* inst);

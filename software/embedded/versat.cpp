@@ -32,7 +32,10 @@ void InitVersat(Versat* versat,int base,int numberConfigurations){
 
 // Accelerator functions
 void AcceleratorRun(Accelerator* accel){
+   #ifdef DEBUG
    printf("B\n");
+   #endif
+
    MEMSET(versat_base,0x0,1);
 
    while(1){
@@ -41,7 +44,9 @@ void AcceleratorRun(Accelerator* accel){
       if(val)
          break;
    }
+   #ifdef DEBUG
    printf("A\n");
+   #endif
 }
 
 void VersatUnitWrite(FUInstance* instance,int address, int value){
@@ -144,18 +149,6 @@ void CalculateDelay(Versat* versat,Accelerator* accel){
    for(int i = 0; i < ARRAY_SIZE(staticBuffer); i++){ // Hackish, for now
       staticBase[i] = staticBuffer[i];
    }
-}
-
-SizedString MakeSizedString(const char* str, size_t size){
-   SizedString s = {};
-
-   if(size == 0){
-      size = strlen(str);
-   }
-
-   s.str = str;
-   s.size = size;
-   return s;
 }
 
 FUInstance* CreateNamedFUInstance(Accelerator* accel,FUDeclaration* type,SizedString entityName){

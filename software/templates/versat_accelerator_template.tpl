@@ -6,6 +6,8 @@
 
 #{include "versat_common.tpl"}
 
+#{call CountDones instances}
+
 module @{accel.name.str} #(
       parameter ADDR_W = `ADDR_W,
       parameter DATA_W = `DATA_W,
@@ -14,7 +16,10 @@ module @{accel.name.str} #(
    (
 
    input run,
+   
+   #{if nDones}
    output done,
+   #{end}
 
    #{for i accel.nInputs}
    input [DATA_W-1:0]              in@{i},
@@ -94,11 +99,9 @@ wire [31:0] #{join ", " for i unitsMapped} rdata_@{i} #{end};
 assign unitRdataFinal = (#{join "|" for i unitsMapped} unitRData[@{i}] #{end});
 #{end}
 
-#{if nonSpecialUnits > 0}
-wire [@{nonSpecialUnits - 1}:0] unitDone;
+#{if nDones > 0}
+wire [@{nDones - 1}:0] unitDone;
 assign done = &unitDone;
-#{else}
-assign done = 1'b1;
 #{end}
 
 wire [31:0] #{join ", " for inst instances}
@@ -167,11 +170,12 @@ end
 #{set configsSeen 0}
 #{set delaySeen 0}
 #{set statesSeen 0}
+#{set doneCounter 0}
 #{for inst instances}
 #{set decl inst.declaration}
-   #{if decl.name.str == "circuitInput"}
+   #{if decl.name.str == "CircuitInput"}
    #{else}
-   #{if decl.name.str == "circuitOutput"}
+   #{if decl.name.str == "CircuitOutput"}
    #{else}
       #{if !decl.isOperation}
       @{decl.name.str} @{decl.name.str}_@{counter} (
@@ -188,24 +192,22 @@ end
          #{end}
 
          #{if inst.isStatic}
-         #{for unit accel.staticUnits}
-         #{if unit.name == inst.name}
-         #{for i unit.nConfigs}
-         #{set wire unit.wires[i]}
-            .@{wire.name}(@{unit.module.name.str}_@{unit.name}_@{wire.name}),
+         #{for i inst.declaration.nConfigs}
+         #{set wire inst.declaration.configWires[i]}
+            .@{wire.name}(@{accel.name.str}_@{inst.name.str}_@{wire.name}), // Static
          #{end}
-         #{end}
-         #{end}
+
          #{else}
+         
          #{for i decl.nConfigs}
          #{set wire decl.configWires[i]}
-            .@{wire.name}(@{accel.configWires[configsSeen].name}),
+            .@{wire.name}(@{accel.configWires[configsSeen].name}), // Config
          #{inc configsSeen}
          #{end}
          #{for unit decl.staticUnits}
          #{for i unit.nConfigs}
          #{set wire unit.wires[i]}
-            .@{unit.module.name.str}_@{unit.name}_@{wire.name}(@{unit.module.name.str}_@{unit.name}_@{wire.name}),
+            .@{unit.module.name.str}_@{unit.name}_@{wire.name}(@{unit.module.name.str}_@{unit.name}_@{wire.name}), // Static
          #{end}
          #{end}
          #{end}
@@ -246,11 +248,16 @@ end
          #{end} 
          
          .run(run),
-         .done(unitDone[@{counter}]),
+
+         #{if decl.implementsDone}
+         .done(unitDone[@{doneCounter}]),
+         #{inc doneCounter}
+         #{end}
+
          .clk(clk),
          .rst(rst)
       );
-         #{set counter counter + 1}
+         #{inc counter}
       #{end}
       #{end}
    #{end}
@@ -258,7 +265,7 @@ end
 
 #{for inst instances}
 #{set decl inst.declaration}
-#{if decl.name.str == "circuitOutput"}
+#{if decl.name.str == "CircuitOutput"}
    #{for i inst.tempData.numberInputs}
    #{set in inst.tempData.inputs[i].inst}
    assign out@{i} = #{call outputName in};

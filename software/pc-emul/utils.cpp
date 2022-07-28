@@ -60,20 +60,6 @@ int AlignNextPower2(int val){
    return res;
 }
 
-SizedString MakeSizedString(const char* str,size_t size){
-   SizedString res = {};
-
-   res.str = str;
-
-   if(size != 0){
-      res.size = size;
-   }else{
-      res.size = strlen(str);
-   }
-
-   return res;
-}
-
 void FixedStringCpy(char* dest,SizedString src){
    int i = 0;
    for(i = 0; i < src.size; i++){

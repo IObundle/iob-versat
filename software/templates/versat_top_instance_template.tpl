@@ -1,8 +1,9 @@
 #{include "versat_common.tpl"}
+
+#{call CountDones instances}
+
 `timescale 1ns / 1ps
 `include "axi.vh"
-//`include "xversat.vh"
-//`include "xdefs.vh"
 `include "versat_defs.vh"
 
 module versat_instance #(
@@ -140,7 +141,7 @@ assign ready = versat_ready;
 reg [@{versatValues.configurationBits - 1}:0] configdata;
 wire [@{versatValues.stateBits - 1}:0] statedata;
 
-wire [@{numberUnits - 1}:0] unitDone;
+wire [@{nDones - 1}:0] unitDone;
 
 #{if unitsMapped}
 reg [@{unitsMapped - 1}:0] memoryMappedEnable;
@@ -195,6 +196,7 @@ begin
    if(rst_int) begin
       configdata <= {@{configurationBits}{1'b0}};
    end else if(valid & we & !memoryMappedAddr) begin
+      // Config
       #{set counter 0}
       #{set addr 1}
       #{for inst instances}
@@ -208,6 +210,7 @@ begin
       #{end}
       #{end}
 
+      // Static
       #{for unit accel.staticInfo}
       #{for i unit.nConfigs}
       #{set wire unit.wires[i]}
@@ -218,6 +221,7 @@ begin
       #{end}
       #{end}
 
+      // Delays
       #{for inst instances}
       #{set decl inst.declaration}
       #{for i decl.nDelays}

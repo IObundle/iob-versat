@@ -61,8 +61,11 @@ void FlushStdout();
 long int GetFileSize(FILE* file);
 char* GetCurrentDirectory();
 
-SizedString MakeSizedString(const char* str, size_t size = 0);
-#define MAKE_SIZED_STRING(STR) (MakeSizedString(STR,strlen(STR))) // Should compute length at compile time
+#define MakeSizedString1(STR) ((SizedString){STR,(int) strlen(STR)}) // Should compute length at compile time (alternatively, should just use sizeof)
+#define MakeSizedString2(STR,LEN) ((SizedString){STR,(int) LEN})
+
+#define GET_MACRO(_1,_2,NAME,...) NAME
+#define MakeSizedString(...) GET_MACRO(__VA_ARGS__, MakeSizedString2, MakeSizedString1)(__VA_ARGS__)
 
 void FixedStringCpy(char* dest,SizedString src);
 

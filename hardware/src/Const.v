@@ -10,7 +10,6 @@ module Const #(
     input               rst,
     
     input               run,
-    output              done,
 
     //input / output data
     output [DATA_W-1:0] out0,
@@ -19,6 +18,5 @@ module Const #(
     );
 
 assign out0 = constant;
-assign done = 1'b1;
 
 endmodule

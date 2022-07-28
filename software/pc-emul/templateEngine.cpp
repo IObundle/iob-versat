@@ -613,7 +613,7 @@ static void Eval(Block* block){
             Assert(false);
          }
 
-         auto savedTable = envTable;
+         //auto savedTable = envTable;
 
          TemplateFunction* func = iter->second.templateFunction;
 
@@ -633,7 +633,7 @@ static void Eval(Block* block){
          }
          #endif
 
-         envTable = savedTable;
+         //envTable = savedTable;
       } else {
          Assert(false);
       }

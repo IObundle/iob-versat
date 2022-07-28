@@ -11,7 +11,6 @@ module Merge #(
     input                         rst,
     
     input                         run,
-    output                        done,
 
     //input / output data
     input [DATA_W-1:0]            in0,
@@ -58,8 +57,6 @@ assign select[14] = in14;
 assign select[15] = in15;
 
 reg [3:0] counter;
-
-assign done = 1'b1;
 
 always @(posedge clk,posedge rst)
 begin

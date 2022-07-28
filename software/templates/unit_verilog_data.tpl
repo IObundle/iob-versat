@@ -255,19 +255,19 @@ static FUDeclaration* @{module.name}_Register(Versat* versat){
    decl.updateFunction = @{module.name}_UpdateFunction;
 
    #{if module.nConfigs}
-   static Wire @{module.name}ConfigWires[] = {#{join "," for i module.nConfigs} {MAKE_SIZED_STRING("@{module.configs[i].name}"),@{module.configs[i].bitsize}} #{end}};
+   static Wire @{module.name}ConfigWires[] = {#{join "," for i module.nConfigs} {MakeSizedString("@{module.configs[i].name}"),@{module.configs[i].bitsize}} #{end}};
    decl.nConfigs = @{module.nConfigs};
    decl.configWires = @{module.name}ConfigWires;
    #{end}
 
    #{if module.nStates}
-   static Wire @{module.name}StateWires[] = {#{join "," for i module.nStates} {MAKE_SIZED_STRING("@{module.states[i].name}"),@{module.states[i].bitsize}} #{end}};
+   static Wire @{module.name}StateWires[] = {#{join "," for i module.nStates} {MakeSizedString("@{module.states[i].name}"),@{module.states[i].bitsize}} #{end}};
    decl.nStates = @{module.nStates};
    decl.stateWires = @{module.name}StateWires;
    #{end}
 
    #{if module.hasDone}
-   decl.delayType = decl.delayType | DelayType::DELAY_TYPE_IMPLEMENTS_DONE;
+   decl.implementsDone = true;
    #{end}
 
    #{if module.isSource}
@@ -280,7 +280,7 @@ static FUDeclaration* @{module.name}_Register(Versat* versat){
 
    #{if module.memoryMapped}
    decl.isMemoryMapped = true;
-   decl.memoryMapBits = 0;
+   decl.memoryMapBits = @{module.memoryMappedBits};
    decl.memAccessFunction = MemoryAccess<V@{module.name}>;
    #{end}
 

@@ -39,6 +39,7 @@ struct ModuleInfo{
    int nDelays;
    bool doesIO;
    bool memoryMapped;
+   int memoryMappedBits;
    bool hasDone;
    bool isSource;
 };

@@ -6,7 +6,6 @@ module CircuitInput #(
       )
       (
          input run,
-         output done,
 
          input [DATA_W-1:0] in0,
 
@@ -47,6 +46,5 @@ assign out12 = in0;
 assign out13 = in0;
 assign out14 = in0;
 assign out15 = in0;
-assign done = 1'b1;
 
 endmodule
