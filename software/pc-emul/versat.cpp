@@ -16,8 +16,6 @@
 
 #include "templateEngine.hpp"
 
-#include "unitVerilogWrappers.hpp"
-
 #define IMPLEMENT_VERILOG_UNITS
 #include "verilogWrapper.inc"
 
