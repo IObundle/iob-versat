@@ -1,6 +1,8 @@
 #ifndef INCLUDED_UNIT_VERILOG_WRAPPERS
 #define INCLUDED_UNIT_VERILOG_WRAPPERS
 
+#if 0
+
 #include "versat.hpp"
 
 #define INSTANTIATE_CLASS
@@ -21,6 +23,7 @@ FUDeclaration* RegisterMuladd(Versat* versat);
 FUDeclaration* RegisterMux2(Versat* versat);
 
 FUDeclaration* RegisterDebug(Versat* versat);
+#endif
 
 #endif //INCLUDED_UNIT_VERILOG_WRAPPERS
 

@@ -5,7 +5,7 @@
 `include "xmemdefs.vh"
 `include "versat-io.vh"
 
-module vwrite #(
+module VWrite #(
                 parameter DATA_W=32
                 )
    (

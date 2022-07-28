@@ -1,7 +1,7 @@
 `timescale 1ns / 1ps
 `include "xversat.vh"
 
-module xconst #(
+module Const #(
          parameter DATA_W = 32
               )
     (

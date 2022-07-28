@@ -472,28 +472,26 @@ FUDeclaration* ParseModule(Versat* versat,Tokenizer* tok){
       FUDeclaration* d = inst->declaration;
 
       for(int i = 0; i < d->nConfigs; i++){
-         int newSize = strlen(d->configWires[i].name) + 16;
+         int newSize = d->configWires[i].name.size + 16;
 
-         //Byte* newName = (Byte*) calloc(newSize,sizeof(char));
          Byte* newName = PushBytes(&versat->permanent,newSize);
-         int size = sprintf(newName,"%s_%.2d",d->configWires[i].name,configIndex);
+         int size = sprintf(newName,"%.*s_%.2d",d->configWires[i].name.size,d->configWires[i].name.str,configIndex);
 
          Assert(size < newSize);
 
-         decl.configWires[configIndex].name = (const char*) newName;
+         decl.configWires[configIndex].name = MakeSizedString(newName,size);
          decl.configWires[configIndex++].bitsize = d->configWires[i].bitsize;
       }
 
       for(int i = 0; i < d->nStates; i++){
-         int newSize = strlen(d->stateWires[i].name) + 16;
+         int newSize = d->stateWires[i].name.size + 16;
 
-         //Byte* newName = (Byte*) calloc(newSize,sizeof(char));
          Byte* newName = PushBytes(&versat->permanent,newSize);
-         int size = sprintf(newName,"%s_%.2d",d->stateWires[i].name,stateIndex);
+         int size = sprintf(newName,"%.*s_%.2d",d->stateWires[i].name.size,d->stateWires[i].name.str,stateIndex);
 
          Assert(size < newSize);
 
-         decl.stateWires[stateIndex].name = (const char*) newName;
+         decl.stateWires[stateIndex].name = MakeSizedString(newName,size);
          decl.stateWires[stateIndex++].bitsize = d->stateWires[i].bitsize;
       }
    }
@@ -573,6 +571,7 @@ FUDeclaration* ParseModule(Versat* versat,Tokenizer* tok){
    FUDeclaration* res = RegisterFU(versat,decl);
 
    // TODO: Hackish
+   #if 0
    for(FUInstance* inst : circuit->instances){
       if(inst->isStatic){
          StaticInfo unit = {};
@@ -581,6 +580,10 @@ FUDeclaration* ParseModule(Versat* versat,Tokenizer* tok){
          unit.nConfigs = inst->declaration->nConfigs;
          unit.wires = inst->declaration->configWires;
 
+         unit.nConfigs = 1;
+
+         Assert(unit.wires);
+
          SetLikeInsert(res->staticUnits,unit);
       } else if(inst->declaration->type == FUDeclaration::COMPOSITE){
          for(StaticInfo& unit : inst->declaration->staticUnits){
@@ -588,6 +591,7 @@ FUDeclaration* ParseModule(Versat* versat,Tokenizer* tok){
          }
       }
    }
+   #endif
 
    #if 1
    {

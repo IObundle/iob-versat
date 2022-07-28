@@ -283,12 +283,15 @@ static void Print(Block* block, int level = 0){
 }
 
 static Value HexValue(Value in){
+   static char buffer[128];
+
    int number = ConvertValue(in,ValueType::NUMBER).number;
+
+   int size = sprintf(buffer,"0x%x",number);
 
    Value res = {};
    res.type = ValueType::STRING;
-   res.str.str = res.smallBuffer;
-   res.str.size = sprintf(res.smallBuffer,"0x%x",number);
+   res.str = PushString(tempArena,SizedString{buffer,size});
 
    return res;
 }
@@ -433,7 +436,7 @@ static Value EvalExpression(Expression* expr){
          if(debugging){
             Wire* wire = (Wire*) res.custom;
 
-            printf("%s %d\n",wire->name,wire->bitsize);
+            printf("%.*s %d\n",wire->name.size,wire->name.str,wire->bitsize);
          }
 
          return res;
@@ -470,6 +473,8 @@ static void PrintValue(FILE* file,Value in){
       fprintf(file,"%c",val.ch);
    } else if(val.type == ValueType::SIZED_STRING){
       fprintf(file,"%.*s",val.str.size,val.str.str);
+   } else if(val.type == ValueType::BOOLEAN){
+      fprintf(file,"%s",val.boolean ? "true" : "false");
    } else {
       Assert(false);
    }

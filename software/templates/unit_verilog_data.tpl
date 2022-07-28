@@ -1,16 +1,37 @@
+#{for module modules}
+#{if module.nConfigs}
+
+struct @{module.name}Config{
+#{for i module.nConfigs}
+#{set wire module.configs[i]}
+int @{wire.name};
+#{end}
+};
+
+#{end}
+
+#{if module.nStates}
+
+struct @{module.name}State{
+#{for i module.nStates}
+#{set wire module.states[i]}
+int @{wire.name};
+#{end}
+};
+
+#{end}
+#{end}
+
+#ifdef IMPLEMENT_VERILOG_UNITS
 #include <new>
 
 #include "versat.hpp"
+#include "utils.hpp"
 
-#include "stdio.h"
-#include "math.h"
-#include "string.h"
+#{for module modules}
+#include "V@{module.name}.h"
+#{end}
 
-#include "unitVCD.hpp"
-
-#define INSTANTIATE_ARRAY
-#include "unitData.hpp"
-#undef INSTANTIATE_ARRAY
 
 //#define TRACE
 #define ARRAY_SIZE(array) sizeof(array) / sizeof(array[0])
@@ -39,9 +60,6 @@
 #define PREAMBLE(type) \
    type* self = &data->unit; \
    VCDData* vcd = &data->vcd;
-
-#define DEBUG_PRINT(unit) \
-   printf("%d %d %02x %08x %08x\n",unit->valid,unit->ready,unit->wstrb,unit->wdata,unit->rdata);
 
 template<typename T>
 static int32_t MemoryAccess(FUInstance* inst,int address,int value,int write){
@@ -89,9 +107,12 @@ static int32_t MemoryAccess(FUInstance* inst,int address,int value,int write){
    }
 }
 
+#define INITIAL_MEMORY_LATENCY 5
+#define MEMORY_LATENCY 2
+
 #{for module modules}
-static init32_t* @{module.name}_InitializeFunction(FUInstance* inst){
-   V@{module.name} self = new (inst->extraData) V@{module.name}();
+static int32_t* @{module.name}_InitializeFunction(FUInstance* inst){
+   V@{module.name}* self = new (inst->extraData) V@{module.name}();
 
    INIT(self);
 
@@ -101,19 +122,41 @@ static init32_t* @{module.name}_InitializeFunction(FUInstance* inst){
 
    RESET(self);
 
-   inst->done = self->done;
-
    return NULL;
 }
 
-static init32_t* @{module.name}_StartFunction(FUInstance* inst){
+static int32_t* @{module.name}_StartFunction(FUInstance* inst){
 #{if module.nOutputs}
    static int32_t out[@{module.nOutputs}];
 #{end}
 
    V@{module.name}* self = (V@{module.name}*) inst->extraData;
 
+#{if module.nDelays}
+#{for i module.nDelays}
+   self->delay@{i} = inst->delay[@{i}];
+#{end}
+#{end}
+
+#{if module.nConfigs}
+@{module.name}Config* config = (@{module.name}Config*) inst->config;
+#{for i module.nConfigs}
+   self->@{module.configs[i].name} = config->@{module.configs[i].name};
+#{end}
+#{end}
+
+
+#{if module.doesIO}
+   int* memoryLatency = (int*) &self[1];
+
+   *memoryLatency = INITIAL_MEMORY_LATENCY;
+#{end}
+
    START_RUN(self);
+
+#{if module.hasDone}
+   inst->done = self->done;
+#{end}
 
 #{if module.nOutputs}
    #{for i module.nOutputs}
@@ -126,7 +169,7 @@ static init32_t* @{module.name}_StartFunction(FUInstance* inst){
 #{end}
 }
 
-static init32_t* @{module.name}_UpdateFunction(FUInstance* inst){
+static int32_t* @{module.name}_UpdateFunction(FUInstance* inst){
 #{if module.nOutputs}
    static int32_t out[@{module.nOutputs}];
 #{end}
@@ -137,7 +180,41 @@ static init32_t* @{module.name}_UpdateFunction(FUInstance* inst){
    self->in@{i} = GetInputValue(inst,@{i}); 
 #{end}
 
+#{if module.doesIO}
+   int* memoryLatency = (int*) &self[1];
+
+   self->databus_ready = 0;
+
+   if(self->databus_valid && self->databus_wstrb == 0){
+      if(*memoryLatency > 0){
+         *memoryLatency -= 1;
+      } else {
+         int* ptr = (int*) (self->databus_addr);
+         self->databus_rdata = *ptr;
+         self->databus_ready = 1;
+         *memoryLatency = MEMORY_LATENCY;
+      }
+   }
+
+   if(self->databus_valid && self->databus_wstrb != 0){
+      int* ptr = (int*) self->databus_addr;
+      *ptr = self->databus_wdata;
+      self->databus_ready = 1;
+   }
+#{end}
+
    UPDATE(self);
+
+#{if module.nStates}
+@{module.name}State* state = (@{module.name}State*) inst->state;
+#{for i module.nStates}
+   state->@{module.states[i].name} = self->@{module.states[i].name};
+#{end}
+#{end}
+
+#{if module.hasDone}
+   inst->done = self->done;
+#{end}
 
 #{if module.nOutputs}
    #{for i module.nOutputs}
@@ -150,26 +227,74 @@ static init32_t* @{module.name}_UpdateFunction(FUInstance* inst){
 #{end}
 }
 
-static int32_t* @{module.name}_Register(Versat* versat){
+static FUDeclaration* @{module.name}_Register(Versat* versat){
    FUDeclaration decl = {};
 
-   strcpy(decl.name.str,"@{module.name}");
+   #{if module.nInputs}
    decl.nInputs = @{module.nInputs};
+   static int inputDelays[] =  {#{join "," for i module.nInputs}@{module.inputDelays[i]}#{end}};
+   decl.inputDelays = inputDelays;
+   #{end}
+
+   #{if module.nOutputs}
    decl.nOutputs = @{module.nOutputs};
-   decl.inputDelays = {#{join "," for i module.nInputs}@{module.inputDelays[i]}#{end}};
-   decl.latencies = {#{join "," for i module.nOutputs}@{module.latencies[i]}#{end}};
+   static int latencies[] = {#{join "," for i module.nOutputs}@{module.latencies[i]}#{end}};
+   decl.latencies = latencies;
+   #{end}
+
+   strcpy(decl.name.str,"@{module.name}");
+
+   #{if module.doesIO}
+   decl.extraDataSize = sizeof(V@{module.name}) + 4;
+   #{else}
    decl.extraDataSize = sizeof(V@{module.name});
+   #{end}
+
    decl.initializeFunction = @{module.name}_InitializeFunction;
    decl.startFunction = @{module.name}_StartFunction;
    decl.updateFunction = @{module.name}_UpdateFunction;
 
+   #{if module.nConfigs}
+   static Wire @{module.name}ConfigWires[] = {#{join "," for i module.nConfigs} {MAKE_SIZED_STRING("@{module.configs[i].name}"),@{module.configs[i].bitsize}} #{end}};
+   decl.nConfigs = @{module.nConfigs};
+   decl.configWires = @{module.name}ConfigWires;
+   #{end}
+
+   #{if module.nStates}
+   static Wire @{module.name}StateWires[] = {#{join "," for i module.nStates} {MAKE_SIZED_STRING("@{module.states[i].name}"),@{module.states[i].bitsize}} #{end}};
+   decl.nStates = @{module.nStates};
+   decl.stateWires = @{module.name}StateWires;
+   #{end}
+
+   #{if module.hasDone}
+   decl.delayType = decl.delayType | DelayType::DELAY_TYPE_IMPLEMENTS_DONE;
+   #{end}
+
+   #{if module.isSource}
+   decl.delayType = decl.delayType | DelayType::DELAY_TYPE_SINK_DELAY;
+   #{end}
+
    #{if module.doesIO}
+   decl.nIOs = 1;
+   #{end}
+
+   #{if module.memoryMapped}
+   decl.isMemoryMapped = true;
+   decl.memoryMapBits = 0;
    decl.memAccessFunction = MemoryAccess<V@{module.name}>;
    #{end}
 
+   decl.nDelays = @{module.nDelays};
 
    return RegisterFU(versat,decl);
 }
 
-
 #{end}
+
+static void RegisterAllVerilogUnits(Versat* versat){
+   #{for module modules}
+   @{module.name}_Register(versat);
+   #{end}
+}
+
+#endif

@@ -1,7 +1,7 @@
 `timescale 1ns / 1ps
 `include "xversat.vh"
 
-module xreg #(
+(* source *) module Reg #(
          parameter DELAY_W = 32,
          parameter ADDR_W = 1,
          parameter DATA_W = 32

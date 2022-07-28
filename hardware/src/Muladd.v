@@ -8,7 +8,7 @@
 
  */
 
-module xmuladd # ( 
+module Muladd #( 
 		parameter		      DATA_W = 32
 	) (
                 input                        rst,
@@ -18,13 +18,13 @@ module xmuladd # (
 
                 input [DATA_W-1:0]           in0,
                 input [DATA_W-1:0]           in1,
-                output [DATA_W-1:0]          out0,
+                (* latency=3 *) output [DATA_W-1:0]          out0,
 
                 // config interface
                 input opcode,
                 input [`MEM_ADDR_W-1:0]       iterations,
                 input [`PERIOD_W-1:0]         period,
-                input [$clog2(`DATAPATH_W):0] shift,
+                input [5:0]                   shift,
 
                 input [31:0]                 delay0
                 );

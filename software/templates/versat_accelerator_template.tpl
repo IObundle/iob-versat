@@ -32,7 +32,7 @@ module @{accel.name.str} #(
    #{for unit accel.staticUnits}
    #{for i unit.nConfigs}
    #{set wire unit.wires[i]}
-   input [@{wire.bitsize-1}:0]                    @{unit.module.name.str}_@{unit.name}_@{wire.name},
+   input [@{wire.bitsize-1}:0]     @{unit.module.name.str}_@{unit.name}_@{wire.name},
    #{end}
    #{end}
 

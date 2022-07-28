@@ -5,7 +5,7 @@
 `include "versat-io.vh"
 `include "xdefs.vh"
 
-module vread #(
+module VRead #(
                parameter DATA_W = 32,
                parameter ADDR_W = 10
                )
@@ -25,7 +25,7 @@ module vread #(
     output [DATA_W/8-1:0]  databus_wstrb,
 
     // input / output data
-    output [DATA_W-1:0]    out0,
+    (* latency=1 *) output [DATA_W-1:0]    out0,
 
     // configurations
    input [`IO_ADDR_W-1:0]  ext_addr,

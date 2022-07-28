@@ -1,7 +1,7 @@
 `timescale 1ns / 1ps
 `include "xversat.vh"
 
-module delay #(
+module Delay #(
          parameter MAX_DELAY = 32,
          parameter DATA_W = 32
       )

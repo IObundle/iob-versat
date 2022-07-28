@@ -27,10 +27,15 @@ enum DelayType {
    DELAY_TYPE_IMPLEMENTS_DONE    = 0x8
 };
 
+inline DelayType operator|(DelayType a, DelayType b)
+{
+    return static_cast<DelayType>(static_cast<int>(a) | static_cast<int>(b));
+}
+
 #define CHECK_DELAY(inst,T) ((inst->declaration->delayType & T) == T)
 
 struct Wire{
-   const char* name;
+   SizedString name;
    int bitsize;
 };
 

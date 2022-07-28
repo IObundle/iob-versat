@@ -23,6 +23,7 @@ struct Module{
    SizedString name;
    ValueMap parameters;
    std::vector<PortDeclaration> ports;
+   bool isSource;
 };
 
 struct ModuleInfo{
@@ -31,8 +32,15 @@ struct ModuleInfo{
    int nOutputs;
    int* inputDelays;
    int* latencies;
+   int nConfigs;
+   Wire* configs;
+   int nStates;
+   Wire* states;
+   int nDelays;
    bool doesIO;
    bool memoryMapped;
+   bool hasDone;
+   bool isSource;
 };
 
 SizedString PreprocessVerilogFile(Arena* output, SizedString fileContent,std::vector<const char*>* includeFilepaths,Arena* tempArena);

@@ -1,3 +1,5 @@
+#if 0
+
 #include <new>
 
 #include "versat.hpp"
@@ -418,8 +420,6 @@ static int* VReadInitializeFunction(FUInstance* inst){
    vcd->open(buffer);
    #endif
 
-   data->memoryAccessCounter = INITIAL_MEMORY_LATENCY;
-
    INIT(self);
 
    VCD_RESET(self);
@@ -434,6 +434,8 @@ static int* VReadStartFunction(FUInstance* inst){
 
    // Update config
    self->delay0 = inst->delay[0];
+
+   data->memoryAccessCounter = INITIAL_MEMORY_LATENCY;
 
    self->ext_addr = config->ext_addr;
    self->int_addr = config->int_addr;
@@ -721,6 +723,8 @@ int* MergeStartFunction(FUInstance* inst){
    extraData[0] = inst->delay[0];
    extraData[1] = 0;
 
+   inst->done = 0;
+
    out = GetInputValue(inst,0);
 
    return &out;
@@ -732,6 +736,10 @@ int* MergeUpdateFunction(FUInstance* inst){
    int* extraData = (int*) inst->extraData; // 0 - delay, 1 - counter
 
    out = GetInputValue(inst,extraData[1]);
+
+   if(extraData[1] >= 16){
+      inst->done = 1;
+   }
 
    if(extraData[0] == 0){
       extraData[1] += 1;
@@ -885,6 +893,7 @@ FUDeclaration* RegisterMux2(Versat* versat){
    return RegisterFU(versat,decl);
 }
 
+#endif
 
 
 

@@ -74,6 +74,7 @@ template<typename T> class Pool;
 template<typename T>
 class PoolIterator{
    Pool<T>* pool;
+   PageInfo pageInfo;
    int fullIndex;
    int bit;
    int index;
@@ -182,8 +183,7 @@ PoolIterator<T>::PoolIterator(Pool<T>* pool)
    page = pool->mem;
 
    if(page && pool->allocated){
-      PoolInfo info = pool->info;
-      PageInfo pageInfo = pool->GetPageInfo(info,page);
+      pageInfo = pool->GetPageInfo(pool->info,page);
 
       if(!(pageInfo.bitmap[index] & (1 << bit))){
          ++(*this);
@@ -206,7 +206,6 @@ bool PoolIterator<T>::operator!=(const PoolIterator<T>& iter){
 template<typename T>
 PoolIterator<T>& PoolIterator<T>::operator++(){
    PoolInfo info = pool->info;
-   PageInfo pageInfo = pool->GetPageInfo(info,page);
 
    while(fullIndex < pool->endSize){
       fullIndex += 1;
@@ -236,15 +235,10 @@ PoolIterator<T>& PoolIterator<T>::operator++(){
 
 template<typename T>
 T* PoolIterator<T>::operator*(){
-   if(page == nullptr){
-      return nullptr;
-   }
+   Assert(page != nullptr);
 
    T* view = (T*) page;
    T* val = &view[index * 8 + (7 - bit)];
-
-   PoolInfo info = pool->info;
-   PageInfo pageInfo = pool->GetPageInfo(info,page);
 
    Assert(pageInfo.bitmap[index] & (1 << bit));
 

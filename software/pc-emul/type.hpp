@@ -78,7 +78,6 @@ struct Value{
       };
    };
 
-   char smallBuffer[32];
    Type* type;
    bool isTemp;
 };

@@ -2,7 +2,7 @@
 `include "xversat.vh"
 `include "xmemdefs.vh"
 
-module xmem #(
+(* source *) module Mem #(
          parameter MEM_INIT_FILE="none",
          parameter DATA_W = 32,
          parameter ADDR_W = 10
@@ -26,8 +26,8 @@ module xmem #(
    //input / output data
    input [DATA_W-1:0]            in0,
    input [DATA_W-1:0]            in1,
-   output [DATA_W-1:0]           out0,
-   output [DATA_W-1:0]           out1,
+   (* latency=3 *) output [DATA_W-1:0]           out0,
+   (* latency=3 *) output [DATA_W-1:0]           out1,
 
    //configurations
    //input [2*`MEMP_CONF_BITS-1:0] configdata

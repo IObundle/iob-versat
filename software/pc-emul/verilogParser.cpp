@@ -511,69 +511,37 @@ std::vector<Module> ParseVerilogFile(SizedString fileContent, std::vector<const 
 
    std::vector<Module> modules;
    Byte* mark = MarkArena(tempArena);
+
+   bool isSource = false;
    while(!tok->Done()){
       Token peek = tok->PeekToken();
+
+      if(CompareToken(peek,"(*")){
+         tok->AdvancePeek(peek);
+
+         Token attribute = tok->NextToken();
+         if(CompareToken(attribute,"source")){
+            isSource = true;
+         } else {
+            Assert(false); // Unknown attribute, error for now
+         }
+
+         tok->AssertNextToken("*)");
+
+         continue;
+      }
 
       if(CompareToken(peek,"module")){
          Module module = ParseModule(tok);
 
-         #if 0
-         printf("%.*s\n",module.name.size,module.name.str);
-
-         for(auto ptr : module.parameters){
-            printf("%.*s %d\n",ptr.first.size,ptr.first.str,ptr.second);
-         }
-
-         for(PortDeclaration& ptr : module.ports){
-            for(auto ptr2 : ptr.attributes){
-               printf("(* %.*s = %d *)",ptr2.first.size,ptr2.first.str,ptr2.second);
-            }
-
-            printf("%d [%d:%d] %.*s\n",(int) ptr.type,ptr.range.high,ptr.range.low,ptr.name.size,ptr.name.str);
-         }
-         #endif
-
-         #if 0
-         int maxInputs = -1;
-         int maxOutputs = -1;
-         bool hasIO = false;
-
-         for(PortDeclaration& ptr : module.ports){
-            Tokenizer inside(ptr.name,"",{"in","out","databus"});
-
-            Token tok = inside.NextToken();
-
-            if(CompareString(tok,"in")){
-               Token number = inside.NextToken();
-               int val = ParseInt(number);
-               maxInputs = maxi(maxInputs,val);
-               continue;
-            }
-
-            if(CompareString(tok,"out")){
-               Token number = inside.NextToken();
-               int val = ParseInt(number);
-               maxOutputs = maxi(maxOutputs,val);
-               continue;
-            }
-
-            if(CompareString(tok,"databus")){
-               hasIO = true;
-               continue;
-            }
-         }
-
-         TemplateSetNumber("maxInputs",maxInputs);
-         TemplateSetNumber("maxOutputs",maxOutputs);
-         TemplateSetBool("hasIO",hasIO);
-         TemplateSetCustom("module",&module,"Module");
-         ProcessTemplate(output,"../../submodules/VERSAT/software/templates/unit_verilog_data.tpl",arena);
-         #endif
-
+         module.isSource = isSource;
          modules.push_back(module);
-      } else {
-         tok->AdvancePeek(peek);
+
+         isSource = false;
+         continue;
       }
+
+      tok->AdvancePeek(peek);
    }
    PopMark(tempArena,mark);
 
@@ -636,13 +604,18 @@ int main(int argc,const char* argv[]){
          ModuleInfo info = {};
 
          int* inputDelays = PushArray(&permanent,100,int);
-         int* outputLatencies = PushArray(&permanent,100,int);;
+         int* outputLatencies = PushArray(&permanent,100,int);
+         Wire* configs = PushArray(&permanent,100,Wire);
+         Wire* states = PushArray(&permanent,100,Wire);
+         int nConfigs = 0;
+         int nStates = 0;
          int nInputs = 0;
          int nOutputs = 0;
          int nDelays = 0;
          int memoryMappedWords = 0;
          bool doesIO = false;
          bool memoryMap = false;
+         bool hasDone = false;
          for(PortDeclaration decl : module.ports){
             Tokenizer port(decl.name,"",{"in","out","delay","done","rst","clk","run","databus"});
 
@@ -665,14 +638,42 @@ int main(int argc,const char* argv[]){
                int delay = ParseInt(port.NextToken());
 
                nDelays = maxi(nDelays,delay + 1);
-            } else if(CheckFormat("databus_valid",decl.name)){
+            } else if(  CheckFormat("databus_ready",decl.name)
+                     || CheckFormat("databus_valid",decl.name)
+                     || CheckFormat("databus_addr",decl.name)
+                     || CheckFormat("databus_rdata",decl.name)
+                     || CheckFormat("databus_wdata",decl.name)
+                     || CheckFormat("databus_wstrb",decl.name)){
                doesIO = true;
-            } else if(CheckFormat("addr",decl.name)){
+            } else if(  CheckFormat("ready",decl.name)
+                     || CheckFormat("valid",decl.name)
+                     || CheckFormat("addr",decl.name)
+                     || CheckFormat("rdata",decl.name)
+                     || CheckFormat("wdata",decl.name)
+                     || CheckFormat("wstrb",decl.name)){
                memoryMap = true;
 
                int range = (decl.range.high - decl.range.low);
 
                memoryMappedWords = range;
+            } else if(CheckFormat("clk",decl.name)){
+               // Nothing
+            } else if(CheckFormat("rst",decl.name)){
+               // Nothing
+            } else if(CheckFormat("run",decl.name)){
+               // Nothing
+            } else if(CheckFormat("done",decl.name)){
+               hasDone = true;
+            } else if(decl.type == PortDeclaration::INPUT){ // Config
+               configs[nConfigs].bitsize = decl.range.high - decl.range.low + 1;
+               configs[nConfigs].name = decl.name;
+               nConfigs += 1;
+            } else if(decl.type == PortDeclaration::OUTPUT){ // State
+               states[nStates].bitsize = decl.range.high - decl.range.low + 1;
+               states[nStates].name = decl.name;
+               nStates += 1;
+            } else {
+               Assert(false);
             }
          }
 
@@ -683,6 +684,13 @@ int main(int argc,const char* argv[]){
          info.nOutputs = nOutputs;
          info.inputDelays = inputDelays;
          info.latencies = outputLatencies;
+         info.configs = configs;
+         info.nConfigs = nConfigs;
+         info.states = states;
+         info.nStates = nStates;
+         info.hasDone = hasDone;
+         info.nDelays = nDelays;
+         info.isSource = module.isSource;
 
          allModules.push_back(info);
       }

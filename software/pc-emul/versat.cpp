@@ -18,6 +18,9 @@
 
 #include "unitVerilogWrappers.hpp"
 
+#define IMPLEMENT_VERILOG_UNITS
+#include "verilogWrapper.inc"
+
 #define DELAY_BIT_SIZE 8
 
 static int versat_base;
@@ -91,7 +94,7 @@ static int* DelayUpdateFunction(FUInstance* inst){
 static FUDeclaration* RegisterDelay(Versat* versat){
    static Wire wire = {};
    wire.bitsize = 32;
-   wire.name = "amount";
+   wire.name = MAKE_SIZED_STRING("amount");
 
    FUDeclaration decl = {};
 
@@ -407,22 +410,30 @@ void InitVersat(Versat* versat,int base,int numberConfigurations){
    nullDeclaration.inputDelays = zeros;
    RegisterFU(versat,nullDeclaration);
 
+   RegisterAllVerilogUnits(versat);
+
    versat->delay = RegisterDelay(versat);
    versat->input = RegisterCircuitInput(versat);
    versat->output = RegisterCircuitOutput(versat);
-   versat->pipelineRegister = RegisterPipelineRegister(versat);
+   versat->pipelineRegister = GetTypeByName(versat,MAKE_SIZED_STRING("PipelineRegister"));
+
+
+   //versat->pipelineRegister = RegisterPipelineRegister(versat);
 
    // Versat specific units
-   RegisterAdd(versat);
-   RegisterReg(versat);
-   RegisterVRead(versat);
-   RegisterVWrite(versat);
-   RegisterMem(versat,10);
-   RegisterDebug(versat);
-   RegisterConst(versat);
-   RegisterMerge(versat);
-   RegisterMuladd(versat);
-   RegisterMux2(versat);
+   //RegisterAdd(versat);
+
+   //RegisterReg(versat);
+   //RegisterMem(versat,10);
+   //RegisterVRead(versat);
+   //RegisterVWrite(versat);
+
+   //RegisterDebug(versat);
+
+   //RegisterConst(versat);
+   //RegisterMerge(versat);
+   //RegisterMuladd(versat);
+   //RegisterMux2(versat);
 
    RegisterOperators(versat);
 }
@@ -440,8 +451,7 @@ void ParseCommandLineOptions(Versat* versat,int argc,const char** argv){
 }
 
 static int AccessMemory(FUInstance* instance,int address, int value, int write){
-   FUDeclaration decl = *instance->declaration;
-   int res = decl.memAccessFunction(instance,address,value,write);
+   int res = instance->declaration->memAccessFunction(instance,address,value,write);
 
    return res;
 }
@@ -932,8 +942,6 @@ FUInstance* CreateFUInstance(Accelerator* accel,FUDeclaration* type){
       return ptr;
    }
 
-   FUDeclaration decl = *type;
-
    CheckReallocation(&accel->configAlloc   ,ptr,accel,&FUInstance::config   ,&FUDeclaration::nConfigs, false);
    CheckReallocation(&accel->stateAlloc    ,ptr,accel,&FUInstance::state    ,&FUDeclaration::nStates, false);
    CheckReallocation(&accel->delayAlloc    ,ptr,accel,&FUInstance::delay    ,&FUDeclaration::nDelays, false);
@@ -945,25 +953,25 @@ FUInstance* CreateFUInstance(Accelerator* accel,FUDeclaration* type){
    }
    #endif
 
-   if(decl.nOutputs){
-      ptr->outputs = (int*) calloc(decl.nOutputs,sizeof(int));
-      ptr->storedOutputs = (int*) calloc(decl.nOutputs,sizeof(int));
+   if(type->nOutputs){
+      ptr->outputs = (int*) calloc(type->nOutputs,sizeof(int));
+      ptr->storedOutputs = (int*) calloc(type->nOutputs,sizeof(int));
    }
 
-   if(decl.extraDataSize){
-      ptr->extraData = calloc(decl.extraDataSize,sizeof(char));
+   if(type->extraDataSize){
+      ptr->extraData = calloc(type->extraDataSize,sizeof(char));
    }
 
-   if(decl.type == FUDeclaration::COMPOSITE){
-      ptr->compositeAccel = InstantiateSubAccelerator(accel->versat,accel,type,decl.circuit,&ptr->name,ptr->config,ptr->state,ptr->memMapped,ptr->delay);
+   if(type->type == FUDeclaration::COMPOSITE){
+      ptr->compositeAccel = InstantiateSubAccelerator(accel->versat,accel,type,type->circuit,&ptr->name,ptr->config,ptr->state,ptr->memMapped,ptr->delay);
    }
 
    if(!ptr->config && accel->staticAlloc.ptr){
       ptr->config = accel->staticAlloc.ptr;
    }
 
-   if(decl.initializeFunction)
-      decl.initializeFunction(ptr);
+   if(type->initializeFunction)
+      type->initializeFunction(ptr);
 
    return ptr;
 }
@@ -1324,15 +1332,14 @@ static void VisitAcceleratorInstances(Accelerator* accel,AcceleratorInstancesVis
 }
 
 static void AcceleratorRunStartVisitor(FUInstance* inst){
-   FUDeclaration decl = *inst->declaration;
-   FUFunction startFunction = decl.startFunction;
+   FUFunction startFunction = inst->declaration->startFunction;
 
    if(startFunction){
       int* startingOutputs = startFunction(inst);
 
       if(startingOutputs){
-         memcpy(inst->outputs,startingOutputs,decl.nOutputs * sizeof(int));
-         memcpy(inst->storedOutputs,startingOutputs,decl.nOutputs * sizeof(int));
+         memcpy(inst->outputs,startingOutputs,inst->declaration->nOutputs * sizeof(int));
+         memcpy(inst->storedOutputs,startingOutputs,inst->declaration->nOutputs * sizeof(int));
       }
    }
 }
@@ -1357,10 +1364,9 @@ static void AcceleratorRunIteration(Accelerator* accel){
    for(int i = 0; i < accel->instances.Size(); i++){
       FUInstance* inst = accel->order.instances.ptr[i];
 
-      FUDeclaration decl = *inst->declaration;
-      if(decl.type == FUDeclaration::SPECIAL){
+      if(inst->declaration->type == FUDeclaration::SPECIAL){
          continue;
-      } else if(decl.type == FUDeclaration::COMPOSITE){
+      } else if(inst->declaration->type == FUDeclaration::COMPOSITE){
          // Set accelerator input to instance input
          for(int ii = 0; ii < inst->tempData->numberInputs; ii++){
             FUInstance* input = *inst->compositeAccel->inputInstancePointers.Get(ii);
@@ -1387,13 +1393,13 @@ static void AcceleratorRunIteration(Accelerator* accel){
             }
          }
       } else {
-         int* newOutputs = decl.updateFunction(inst);
+         int* newOutputs = inst->declaration->updateFunction(inst);
 
          if(inst->declaration->latencies[0] == 0 && inst->tempData->nodeType != GraphComputedData::TAG_SOURCE){
-            memcpy(inst->outputs,newOutputs,decl.nOutputs * sizeof(int));
-            memcpy(inst->storedOutputs,newOutputs,decl.nOutputs * sizeof(int));
+            memcpy(inst->outputs,newOutputs,inst->declaration->nOutputs * sizeof(int));
+            memcpy(inst->storedOutputs,newOutputs,inst->declaration->nOutputs * sizeof(int));
          } else {
-            memcpy(inst->storedOutputs,newOutputs,decl.nOutputs * sizeof(int));
+            memcpy(inst->storedOutputs,newOutputs,inst->declaration->nOutputs * sizeof(int));
          }
       }
    }
@@ -1409,8 +1415,7 @@ void SaveConfiguration(Accelerator* accel,int configuration){
 
 void AcceleratorDoCycle(Accelerator* accel){
    VisitAcceleratorInstances(accel,[](FUInstance* inst){
-      FUDeclaration decl = *inst->declaration;
-      memcpy(inst->outputs,inst->storedOutputs,decl.nOutputs * sizeof(int));
+      memcpy(inst->outputs,inst->storedOutputs,inst->declaration->nOutputs * sizeof(int));
    });
 }
 
@@ -1438,7 +1443,7 @@ void AcceleratorRun(Accelerator* accel){
       PrintVCD(accel,time++,0);
    }
 
-   for(int cycle = 0; cycle < 999; cycle++){
+   for(int cycle = 0; 1; cycle++){
       AcceleratorDoCycle(accel);
       AcceleratorRunIteration(accel);
 
@@ -1447,7 +1452,7 @@ void AcceleratorRun(Accelerator* accel){
          PrintVCD(accel,time++,0);
       }
 
-      #if 0
+      #if 1
       if(AcceleratorDone(accel)){
          break;
       }
@@ -1649,12 +1654,12 @@ int GetInputValue(FUInstance* instance,int index){
 
 // Connects out -> in
 Edge* ConnectUnits(FUInstance* out,int outIndex,FUInstance* in,int inIndex){
-   FUDeclaration inDecl = *in->declaration;
-   FUDeclaration outDecl = *out->declaration;
+   FUDeclaration* inDecl = in->declaration;
+   FUDeclaration* outDecl = out->declaration;
 
    Assert(out->accel == in->accel);
-   Assert(inIndex < inDecl.nInputs);
-   Assert(outIndex < outDecl.nOutputs);
+   Assert(inIndex < inDecl->nInputs);
+   Assert(outIndex < outDecl->nOutputs);
 
    Accelerator* accel = out->accel;
 
@@ -1891,11 +1896,19 @@ void CalculateGraphData(Accelerator* accel){
 
       // If the unit is both capable of acting as a sink or as a source of data
       if(hasInput && hasOutput){
+         #if 0
+         if(inst->declaration->nDelays){
+            inst->tempData->nodeType = GraphComputedData::TAG_SOURCE_AND_SINK;
+         } else {
+            inst->tempData->nodeType = GraphComputedData::TAG_COMPUTE;
+         }
+         #else
          if(CHECK_DELAY(inst,DELAY_TYPE_SINK_DELAY) || CHECK_DELAY(inst,DELAY_TYPE_SOURCE_DELAY)){
             inst->tempData->nodeType = GraphComputedData::TAG_SOURCE_AND_SINK;
          }  else {
             inst->tempData->nodeType = GraphComputedData::TAG_COMPUTE;
          }
+         #endif
       } else if(hasInput){
          inst->tempData->nodeType = GraphComputedData::TAG_SINK;
       } else if(hasOutput){
@@ -2206,7 +2219,7 @@ void CalculateDelay(Versat* versat,Accelerator* accel){
             InsertUnit(accel,inst,info->port,info->inst.inst,info->inst.port,newInst);
 
             newInst->baseDelay = info->delay - versat->delay->latencies[0];
-            newInst->isStatic = true; // By default all delays are static
+            //newInst->isStatic = true; // By default all delays are static
 
             if(newInst->config){
                newInst->config[0] = newInst->baseDelay;
@@ -2219,8 +2232,6 @@ void CalculateDelay(Versat* versat,Accelerator* accel){
 
    for(FUInstance* inst : accel->instances){
       inst->tempData->inputDelay = inst->baseDelay;
-
-      // TODO: Check if this is needed
 
 
       #if 0
