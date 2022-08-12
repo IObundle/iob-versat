@@ -36,6 +36,21 @@ typedef std::function<void(FUInstance*)> AcceleratorInstancesVisitor;
 static void VisitAcceleratorInstances(Accelerator* accel,AcceleratorInstancesVisitor func);
 static void AcceleratorRunStart(Accelerator* accel);
 
+bool operator==(const PortInstance& lhs,const PortInstance& rhs){
+   bool res = (lhs.inst == rhs.inst && lhs.port == rhs.port);
+
+   return res;
+}
+
+template<> class std::hash<PortInstance>{
+   public:
+   std::size_t operator()(PortInstance const& s) const noexcept{
+      int res = SimpleHash(MakeSizedString((const char*) &s,sizeof(PortInstance)));
+
+      return (std::size_t) res;
+   }
+};
+
 bool operator<(const StaticInfo& left,const StaticInfo& right){
    bool res = std::tie(left.module,left.name,left.wires,left.ptr) < std::tie(right.module,right.name,right.wires,right.ptr);
 
@@ -377,6 +392,10 @@ void ParseCommandLineOptions(Versat* versat,int argc,const char** argv){
    }
 }
 
+void EnableDebug(Versat* versat){
+   versat->debug.outputAccelerator = true;
+}
+
 static int AccessMemory(FUInstance* instance,int address, int value, int write){
    int res = instance->declaration->memAccessFunction(instance,address,value,write);
 
@@ -684,10 +703,10 @@ static FUInstance* CreateSubFUInstance(Accelerator* accel,Accelerator* topLevel,
 static Accelerator* InstantiateSubAccelerator(Versat* versat,Accelerator* topLevel,FUDeclaration* subaccelType,Accelerator* accel,HierarchyName* parent,int* config,int* state,int* memMapped,int* delay){
    InstanceMap map = {};
    Accelerator* newAccel = CreateAccelerator(versat);
+   newAccel->subtype = subaccelType;
 
    // Flat copy of instances
    for(FUInstance* inst : accel->instances){
-
       // Check if static
       // Check if static unit already exists
       // If exists, simply pass the static unit config pointer as the config pointer (so that the lower units can be set to the correct position)
@@ -925,6 +944,7 @@ FUDeclaration* RegisterSubUnit(Versat* versat,SizedString name,Accelerator* circ
       }
    }
 
+   circuit->subtype = &decl;
    CalculateDelay(versat,circuit);
 
    decl.inputDelays = (int*) calloc(decl.nInputs,sizeof(int));
@@ -1081,6 +1101,7 @@ FUDeclaration* RegisterSubUnit(Versat* versat,SizedString name,Accelerator* circ
    decl.implementsDone = implementsDone;
 
    FUDeclaration* res = RegisterFU(versat,decl);
+   res->circuit->subtype = res;
 
    // TODO: Hackish
    #if 1
@@ -1593,6 +1614,11 @@ void AcceleratorDoCycle(Accelerator* accel){
 void AcceleratorRun(Accelerator* accel){
    static int numberRuns = 0;
    int time = 0;
+
+   // TODO:
+   FUDeclaration base = {};
+   base.name = MakeSizedString("Top");
+   accel->subtype = &base;
 
    CalculateDelay(accel->versat,accel);
    SetDelayRecursive(accel);
@@ -2247,6 +2273,62 @@ void SendLatencyUpwards(FUInstance* inst){
    }
 }
 
+#if 1
+int CalculateLatency_(PortInstance portInst, std::unordered_map<PortInstance,int>* memoization,bool seenSourceAndSink){
+   FUInstance* inst = portInst.inst;
+   int port = portInst.port;
+
+   if(inst->tempData->nodeType == GraphComputedData::TAG_SOURCE_AND_SINK && seenSourceAndSink){
+      return inst->declaration->latencies[port];
+   } else if(inst->tempData->nodeType == GraphComputedData::TAG_SOURCE){
+      return inst->declaration->latencies[port];
+   } else if(inst->tempData->nodeType == GraphComputedData::TAG_UNCONNECTED){
+      Assert(false);
+   }
+
+   auto iter = memoization->find(portInst);
+
+   if(iter != memoization->end()){
+      return iter->second;
+   }
+
+   int latency = 0;
+   for(int i = 0; i < inst->tempData->numberInputs; i++){
+      ConnectionInfo* info = &inst->tempData->inputs[i];
+
+      int lat = CalculateLatency_(info->inst,memoization,true);
+
+      //lat += abs(inst->tempData->inputs[i].delay);
+      //lat += abs(inst->declaration->inputDelays[i]);
+
+      Assert(inst->declaration->inputDelays[i] < 1000);
+
+      latency = maxi(latency,lat);
+   }
+
+   int finalLatency = latency + inst->declaration->latencies[port];
+
+   memoization->insert({portInst,finalLatency});
+
+   return finalLatency;
+}
+
+int CalculateLatency(FUInstance* inst){
+   std::unordered_map<PortInstance,int> map;
+
+   Assert(inst->tempData->nodeType == GraphComputedData::TAG_SOURCE_AND_SINK || inst->tempData->nodeType == GraphComputedData::TAG_SINK);
+
+   int maxLatency = 0;
+   for(int i = 0; i < inst->tempData->numberInputs; i++){
+      ConnectionInfo* info = &inst->tempData->inputs[i];
+      int latency = CalculateLatency_(info->inst,&map,false);
+      maxLatency = maxi(maxLatency,latency);
+   }
+
+   return maxLatency;
+}
+#endif
+
 void CalculateDelay(Versat* versat,Accelerator* accel){
    #define OUTPUT_DOT 1
    static int graphs = 0;
@@ -2263,12 +2345,29 @@ void CalculateDelay(Versat* versat,Accelerator* accel){
       }
    }
 
+   char buffer[1024];
+   int size = sprintf(buffer,"debug/%.*s/",UNPACK_SS(accel->subtype->name));
+   MakeDirectory(buffer);
+
+   #if 0
+   printf("%.*s:\n",UNPACK_SS(accel->subtype->name));
+   int maxLatency = 0;
+   for(int i = 0; i < order.numberSinks; i++){
+      int lat = CalculateLatency(order.sinks[i]);
+
+      printf("  %d\n",lat);
+      maxLatency = maxi(maxLatency,lat);
+   }
+   #endif
+
    for(int i = 0; i < order.numberSinks; i++){
       FUInstance* inst = order.sinks[i];
 
+      //inst->tempData->inputDelay = maxLatency;
+
       SendLatencyUpwards(inst);
       #if OUTPUT_DOT == 1
-      OutputGraphDotFile(accel,false,"debug/out1_%d.dot",graphs++);
+      OutputGraphDotFile(accel,false,"debug/%.*s/out1_%d.dot",UNPACK_SS(accel->subtype->name),graphs++);
       #endif
    }
 
@@ -2293,7 +2392,7 @@ void CalculateDelay(Versat* versat,Accelerator* accel){
 
       SendLatencyUpwards(inst);
       #if OUTPUT_DOT == 1
-      OutputGraphDotFile(accel,false,"debug/out2_%d.dot",graphs++);
+      OutputGraphDotFile(accel,false,"debug/%.*s/out2_%d.dot",UNPACK_SS(accel->subtype->name),graphs++);
       #endif
    }
 
@@ -2317,7 +2416,6 @@ void CalculateDelay(Versat* versat,Accelerator* accel){
    }
 
    #if 1
-   //accel->locked = Accelerator::Locked::FREE; // Hackish way of adding new instances but keeping previous ordering data
    LockAccelerator(accel,Accelerator::Locked::FREE,false);
    // Insert delay units if needed
    int delaysInserted = 0;
@@ -2350,7 +2448,6 @@ void CalculateDelay(Versat* versat,Accelerator* accel){
    for(FUInstance* inst : accel->instances){
       inst->tempData->inputDelay = inst->baseDelay;
 
-
       #if 0
       if(inst->declaration->type != FUDeclaration::COMPOSITE && inst->delay){
          inst->delay[0] = inst->baseDelay;
@@ -2360,7 +2457,7 @@ void CalculateDelay(Versat* versat,Accelerator* accel){
    #endif
 
    #if OUTPUT_DOT == 1
-   OutputGraphDotFile(accel,false,"debug/out3_%d.dot",graphs++);
+   OutputGraphDotFile(accel,false,"debug/%.*s/out3_%d.dot",UNPACK_SS(accel->subtype->name),graphs++);
    #endif
 }
 

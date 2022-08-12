@@ -260,6 +260,7 @@ end
 #{set ioIndex 0}
 #{set memoryMappedIndex 0}
 #{set delaySeen 0}
+#{set doneCounter 0}
 #{for inst instances}
 #{set decl inst.declaration}
    @{decl.name} @{decl.name}_@{counter} (
@@ -329,7 +330,10 @@ end
       #{end} 
       
       .run(run),
-      .done(unitDone[@{counter}]),
+      #{if decl.implementsDone}
+      .done(unitDone[@{doneCounter}]),
+      #{inc doneCounter}
+      #{end}
       .clk(clk),
       .rst(rst_int)
    );

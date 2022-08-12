@@ -93,6 +93,7 @@ void FlushStdout();
 
 long int GetFileSize(FILE* file);
 char* GetCurrentDirectory();
+void MakeDirectory(const char* path);
 
 void FixedStringCpy(char* dest,SizedString src);
 

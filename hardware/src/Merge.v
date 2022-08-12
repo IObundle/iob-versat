@@ -30,7 +30,7 @@ module Merge #(
     (* latency = 14 *) input [DATA_W-1:0]            in14,
     (* latency = 15 *) input [DATA_W-1:0]            in15,
 
-    output reg [DATA_W-1:0]       out0,
+    (* latency = 1 *) output reg [DATA_W-1:0]       out0,
 
     input [DELAY_W-1:0]           delay0
     );

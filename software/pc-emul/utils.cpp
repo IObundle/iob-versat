@@ -2,6 +2,8 @@
 
 #include <unistd.h>
 #include <limits.h>
+#include <sys/types.h>
+#include <sys/stat.h>
 
 #include "stdio.h"
 #include "string.h"
@@ -184,6 +186,10 @@ char* GetCurrentDirectory(){
    buffer[0] = '\0';
    getcwd(buffer,PATH_MAX);
    return buffer;
+}
+
+void MakeDirectory(const char* path){
+   mkdir(path, S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
 }
 
 bool IsAlpha(char ch){

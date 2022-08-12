@@ -187,6 +187,7 @@ struct DAGOrder{
 
 struct Accelerator{
    Versat* versat;
+   FUDeclaration* subtype; // If subaccelerator
 
    Pool<FUInstance> instances;
 	Pool<Edge> edges;
@@ -292,6 +293,8 @@ Versat* InitVersat(int base,int numberConfigurations);
 void Free(Versat* versat);
 void ParseCommandLineOptions(Versat* versat,int argc,const char** argv);
 void ParseVersatSpecification(Versat* versat,const char* filepath);
+
+void EnableDebug(Versat* versat);
 
 Accelerator* Flatten(Versat* versat,Accelerator* accel,int times);
 

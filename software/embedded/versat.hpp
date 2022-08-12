@@ -35,6 +35,7 @@ FUInstance* CreateFUInstance(Accelerator* accel,FUDeclaration* type,SizedString 
 
 void Hook(Versat* versat,Accelerator* accel,FUInstance* inst);
 // Functions that perform no useful work are simple pre processed out
+#define EnableDebug(...) ((void)0)
 #define CreateAccelerator(...) ((Accelerator*)0)
 #define RegisterFU(...) ((FUDeclaration*)0)
 #define OutputVersatSource(...) ((void)0)

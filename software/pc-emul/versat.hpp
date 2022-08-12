@@ -28,6 +28,7 @@ void OutputGraphDotFile(Accelerator* accel,bool collapseSameEdges,const char* fi
 Versat* InitVersat(int base,int numberConfigurations);
 void ParseCommandLineOptions(Versat* versat,int argc,const char** argv);
 void ParseVersatSpecification(Versat* versat,const char* filepath);
+void EnableDebug(Versat* versat);
 
 FUDeclaration* RegisterFU(Versat* versat,FUDeclaration declaration);
 void OutputVersatSource(Versat* versat,Accelerator* accel,const char* sourceFilepath,const char* constantsFilepath,const char* dataFilepath);
@@ -62,12 +63,6 @@ void ConnectUnitsWithDelay(FUInstance* out,int outIndex,FUInstance* in,int inInd
 
 void VersatUnitWrite(FUInstance* instance,int address, int value);
 int VersatUnitRead(FUInstance* instance,int address);
-
-int CalculateLatency(FUInstance* inst);
-void CalculateDelay(Versat* versat,Accelerator* accel);
-void SetDelayRecursive(Accelerator* accel);
-void CalculateGraphData(Accelerator* accel);
-void CalculateVersatData(Accelerator* accel);
 
 Accelerator* MergeGraphs(Versat* versat,Accelerator* accel1,Accelerator* accel2);
 
