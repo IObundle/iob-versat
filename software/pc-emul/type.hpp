@@ -3,56 +3,70 @@
 
 #include <vector>
 
-#include "versat.hpp"
+#include "versatPrivate.hpp"
 #include "memory.hpp"
 #include "utils.hpp"
 
-struct FUInstance;
-
-struct Member{
-   const char* baseType;
-   const char* name;
-   size_t size;
-   size_t baseTypeSize;
-   int offset;
-   int numberPtrs;
-   int arrayExpressionEval;
-   bool isArray;
-};
-
+struct Member;
 struct Type;
 
-struct TypeInfo{
-   Type* baseType;
-   bool isPointer;
-   bool isArray;
+struct EnumMember{
+   SizedString name;
+   SizedString value;
+
+   EnumMember* next;
+};
+
+struct TemplateArg{
+   Type* type;
+
+   TemplateArg* next;
 };
 
 struct Type{
    SizedString name;
    union{
-      TypeInfo info;
+      Type* pointerType;
+      Type* arrayType; // Array size can by calculated from size (size / size of arrayed type)
+      Type* typedefType;
+      EnumMember* enumMembers;
 
-      struct{
+      struct{ // TEMPLATED_STRUCT
          Member* members;
-         int nMembers;
-         int size; // Size of struct or base type
+         TemplateArg* templateArgs;
+      };
+
+      struct{ // TEMPLATED_INSTANCE
+         Type* templateBase;
+         TemplateArg* templateArgs_;
       };
    };
 
-   enum {BASE,STRUCT,INDIRECT,UNKNOWN,COUNT} type;
+   int size; // Size of type (total size in case of arrays)
+   enum Subtype {UNKNOWN = 0,BASE,STRUCT,POINTER,ARRAY,TEMPLATED_STRUCT,TEMPLATED_INSTANCE,TEMPLATE_PARAMETER,ENUM,TYPEDEF} type;
+};
+
+struct Member{
+   Type* type;
+   SizedString name;
+   int offset;
+
+   Member* next;
+
+#ifdef STRUCT_PARSER
+   Type* structType;
+   SizedString arrayExpression;
+#endif
 };
 
 namespace ValueType{
    extern Type* NUMBER;
    extern Type* BOOLEAN;
    extern Type* CHAR;
-   extern Type* POOL;
    extern Type* STRING;
    extern Type* NIL;
    extern Type* SIZED_STRING;
    extern Type* TEMPLATE_FUNCTION;
-   extern Type* SET;
 };
 
 struct TemplateFunction;
@@ -65,11 +79,6 @@ struct Value{
       struct{
          SizedString str;
          bool literal;
-      };
-      Pool<FUInstance>* pool; // TODO: Do not need to store Pool, only need to store a generic iterator to the start (and keep track of template type)
-      struct {
-         void* array;
-         int size;
       };
       TemplateFunction* templateFunction;
       StaticInfo staticInfo;
@@ -84,24 +93,28 @@ struct Value{
 
 struct Iterator{
    union{
-      unsigned int currentNumber;
-      PoolIterator<FUInstance> poolIterator;
-      std::set<StaticInfo>::iterator setIterator;
+      int currentNumber;
+      GenericPoolIterator poolIterator;
    };
 
    Value iterating;
 };
 
 void RegisterTypes();
+void FreeTypes();
 
 void Print(Value val);
 void OutputObject(void* object,Type* objectType); // TODO: implement
 
+Value CollapsePtrIntoStruct(Value in);
 Value CollapseArrayIntoPtr(Value in);
 Value ConvertValue(Value in,Type* want);
 
-Type* GetType(Type* baseType,bool isPointer = false,bool isArray = false);
-Type* GetType(const char* typeName,bool isPointer = false,bool isArray = false);
+int ArrayLength(Type* type);
+
+Type* GetType(SizedString typeName); // Parsable C like name (ex: "int*" for pointer to int) [Type name optionally followed by template argument then pointers then array]
+Type* GetPointerType(Type* baseType);
+Type* GetArrayType(Type* baseType, int arrayLength);
 
 Value AccessObject(Value object,SizedString memberName);
 Value AccessObjectIndex(Value object,int index);
@@ -111,7 +124,8 @@ bool HasNext(Iterator iter);
 void Advance(Iterator* iter);
 Value GetValue(Iterator iter);
 
-bool EqualValues(Value v1,Value v2);
+bool Equal(Value v1,Value v2);
+bool Equal(Type* t1,Type* t2);
 
 // Simple make value functions
 Value MakeValue();

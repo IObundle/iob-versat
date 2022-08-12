@@ -8,7 +8,7 @@
 
 #{call CountDones instances}
 
-module @{accel.name.str} #(
+module @{accel.name} #(
       parameter ADDR_W = `ADDR_W,
       parameter DATA_W = `DATA_W,
       parameter AXI_ADDR_W = 32
@@ -37,7 +37,7 @@ module @{accel.name.str} #(
    #{for unit accel.staticUnits}
    #{for i unit.nConfigs}
    #{set wire unit.wires[i]}
-   input [@{wire.bitsize-1}:0]     @{unit.module.name.str}_@{unit.name}_@{wire.name},
+   input [@{wire.bitsize-1}:0]     @{unit.module.name}_@{unit.name}_@{wire.name},
    #{end}
    #{end}
 
@@ -84,8 +84,8 @@ wire wor_ready;
 wire [31:0] unitRdataFinal;
 reg [31:0] stateRead;
 
-// Memory access
 #{if unitsMapped}
+// Memory access
 wire we = (|wstrb);
 assign rdata = unitRdataFinal;
 assign ready = wor_ready;
@@ -111,8 +111,8 @@ wire [31:0] #{join ", " for inst instances}
       unused_@{inst.id} #{end}
 #{end};
 
-// Memory mapped
 #{if unitsMapped}
+// Memory mapped
 always @*
 begin
    memoryMappedEnable = {@{unitsMapped}{1'b0}};
@@ -142,15 +142,15 @@ begin
 #{for inst instances}
 #{set decl inst.declaration}
    #{if decl.isOperation}
-      #{set input1 inst.tempData[0].inputs[0].inst}
+   #{set input1 inst.tempData[0].inputs[0].inst}
       #{if decl.nInputs == 1}
          comb_@{inst.name.str} = @{decl.operation} #{call outputName input1};
       #{else}
          #{set input2 inst.tempData[0].inputs[1].inst}
-         #{if decl.name.str == "RHR"}
+         #{if decl.name == "RHR"}
             comb_@{inst.name.str} = (#{call outputName input1} >> #{call outputName input2}) | (#{call outputName input1} << (32 - #{call outputName input2}));
          #{else} 
-            #{if decl.name.str == "RHL"}
+            #{if decl.name == "RHL"}
                comb_@{inst.name.str} = (#{call outputName input1} << #{call outputName input2}) | (#{call outputName input1} >> (32 - #{call outputName input2}));
             #{else}
                comb_@{inst.name.str} = #{call outputName input1} @{decl.operation} #{call outputName input2};
@@ -173,12 +173,12 @@ end
 #{set doneCounter 0}
 #{for inst instances}
 #{set decl inst.declaration}
-   #{if decl.name.str == "CircuitInput"}
+   #{if decl.name == "CircuitInput"}
    #{else}
-   #{if decl.name.str == "CircuitOutput"}
+   #{if decl.name == "CircuitOutput"}
    #{else}
       #{if !decl.isOperation}
-      @{decl.name.str} @{decl.name.str}_@{counter} (
+      @{decl.name} @{decl.name}_@{counter} (
          #{for i inst.tempData.outputPortsUsed}
             .out@{i}(output_@{inst.id}_@{i}),
          #{end}
@@ -194,20 +194,19 @@ end
          #{if inst.isStatic}
          #{for i inst.declaration.nConfigs}
          #{set wire inst.declaration.configWires[i]}
-            .@{wire.name}(@{accel.name.str}_@{inst.name.str}_@{wire.name}), // Static
+         .@{wire.name}(@{accel.name}_@{inst.name.str}_@{wire.name}), // Static
          #{end}
 
          #{else}
-         
          #{for i decl.nConfigs}
          #{set wire decl.configWires[i]}
-            .@{wire.name}(@{accel.configWires[configsSeen].name}), // Config
+         .@{wire.name}(@{accel.configWires[configsSeen].name}), // Config
          #{inc configsSeen}
          #{end}
-         #{for unit decl.staticUnits}
+         #{for unit decl.staticUnits}         
          #{for i unit.nConfigs}
          #{set wire unit.wires[i]}
-            .@{unit.module.name.str}_@{unit.name}_@{wire.name}(@{unit.module.name.str}_@{unit.name}_@{wire.name}), // Static
+         .@{unit.module.name}_@{unit.name}_@{wire.name}(@{unit.module.name}_@{unit.name}_@{wire.name}), // Static
          #{end}
          #{end}
          #{end}
@@ -265,7 +264,7 @@ end
 
 #{for inst instances}
 #{set decl inst.declaration}
-#{if decl.name.str == "CircuitOutput"}
+#{if decl.name == "CircuitOutput"}
    #{for i inst.tempData.numberInputs}
    #{set in inst.tempData.inputs[i].inst}
    assign out@{i} = #{call outputName in};

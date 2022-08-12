@@ -21,7 +21,7 @@ UNIT_VERILOG := $(foreach unit,$(VERILATE_UNIT),$(VERSAT_DIR)/hardware/src/$(uni
 
 UNIT_HDR+=$(foreach unit,$(VERILATE_UNIT),$(BUILD_DIR)/V$(unit).h)
 
-TYPE_INFO_HDR = $(VERSAT_PC_EMUL)/versat.hpp $(VERSAT_SW_DIR)/utils.hpp $(VERSAT_PC_EMUL)/verilogParser.hpp $(VERSAT_PC_EMUL)/templateEngine.hpp
+TYPE_INFO_HDR = $(VERSAT_PC_EMUL)/versatPrivate.hpp $(VERSAT_SW_DIR)/utils.hpp $(VERSAT_PC_EMUL)/verilogParser.hpp $(VERSAT_PC_EMUL)/templateEngine.hpp $(VERSAT_PC_EMUL)/memory.hpp
 
 TOOL_COMMON_SRC += $(VERSAT_DIR)/software/pc-emul/parser.cpp
 TOOL_COMMON_SRC += $(VERSAT_DIR)/software/pc-emul/utils.cpp
@@ -60,9 +60,8 @@ $(BUILD_DIR)/typeInfo.inc: $(BUILD_DIR)/structParser.out $(TYPE_INFO_HDR)
 $(BUILD_DIR)/verilogWrapper.inc: $(BUILD_DIR)/verilogParser.out  $(VERSAT_SW_DIR)/pc-emul/verilogParser.cpp $(VERSAT_TEMPLATE_DIR)/unit_verilog_data.tpl
 	$(BUILD_DIR)/verilogParser.out $(BUILD_DIR)/verilogWrapper.inc -I $(VERSAT_DIR)/submodules/INTERCON/hardware/include/ -I $(VERSAT_DIR)/hardware/include/ -I $(VERSAT_DIR)/hardware/src/ $(UNIT_VERILOG)
 
-$(BUILD_DIR)/%.o: $(VERSAT_PC_EMUL)/%.cpp $(HDR) $(UNIT_HDR) $(VERSAT_HDR) $(CPP_FILES) $(BUILD_DIR)/typeInfo.inc $(BUILD_DIR)/verilogWrapper.inc
+$(BUILD_DIR)/%.o: $(VERSAT_PC_EMUL)/%.cpp $(HDR) $(UNIT_HDR) $(VERSAT_HDR) $(BUILD_DIR)/typeInfo.inc $(BUILD_DIR)/verilogWrapper.inc
 	mkdir -p $(BUILD_DIR)
-	$(info $@)
 	g++ -std=c++11 -DPC -c -o $@ $(GLOBAL_CFLAGS) $< -I $(VERSAT_SW_DIR) -I $(VERSAT_PC_EMUL) -I $(VERILATOR_INCLUDE) -I $(BUILD_DIR)/
 
 $(BUILD_DIR)/structParser.out: $(VERSAT_SW_DIR)/pc-emul/structParser.cpp $(TOOL_COMMON_SRC)

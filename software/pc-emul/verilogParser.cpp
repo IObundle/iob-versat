@@ -48,7 +48,7 @@ static void DoIfStatement(Arena* output,Tokenizer* tok,std::vector<const char*>*
    } else if(CompareString(first,"`ifndef")){
       compareVal = false;
    } else {
-      Assert(false);
+      UNHANDLED_ERROR;
    }
 
    bool exists = (macros.find(macroName) != macros.end());
@@ -123,7 +123,7 @@ void PreprocessVerilogFile_(Arena* output, SizedString fileContent,std::vector<c
                printf("  %s\n",str);
             }
 
-            DebugSignal();
+            DEBUG_BREAK;
             exit(0);
          }
 
@@ -199,11 +199,11 @@ void PreprocessVerilogFile_(Arena* output, SizedString fileContent,std::vector<c
       } else if(CompareToken(peek,"`ifdef") || CompareToken(peek,"`ifndef")){
          DoIfStatement(output,tok,includeFilepaths);
       } else if(CompareToken(peek,"`else")){
-         Assert(false);
+         NOT_POSSIBLE;
       } else if(CompareToken(peek,"`endif")){
-         Assert(false);
+         NOT_POSSIBLE;
       } else if(CompareToken(peek,"`elsif")){
-         Assert(false);
+         NOT_POSSIBLE;
       } else {
          tok->AdvancePeek(peek);
 
@@ -311,7 +311,7 @@ static Value Eval(Expression* expr,ValueMap& map){
          return res;
       }break;
       default:{
-         Assert(false);
+         NOT_IMPLEMENTED;
       }break;
       }
    }break;
@@ -323,11 +323,11 @@ static Value Eval(Expression* expr,ValueMap& map){
       return expr->val;
    }break;
    default:{
-      Assert(false);
+      NOT_POSSIBLE;
    }break;
    }
 
-   Assert(false);
+   NOT_POSSIBLE;
    return MakeValue();
 }
 
@@ -457,7 +457,7 @@ static Module ParseModule(Tokenizer* tok){
       } else if(CompareString(portType,"inout")){
          port.type = PortDeclaration::INOUT;
       } else {
-         Assert(false);
+         UNHANDLED_ERROR;
       }
 
       peek = tok->PeekToken();
@@ -523,7 +523,7 @@ std::vector<Module> ParseVerilogFile(SizedString fileContent, std::vector<const 
          if(CompareToken(attribute,"source")){
             isSource = true;
          } else {
-            Assert(false); // Unknown attribute, error for now
+            NOT_IMPLEMENTED; // Unknown attribute, error for now
          }
 
          tok->AssertNextToken("*)");
@@ -673,7 +673,7 @@ int main(int argc,const char* argv[]){
                states[nStates].name = decl.name;
                nStates += 1;
             } else {
-               Assert(false);
+               NOT_IMPLEMENTED;
             }
          }
 

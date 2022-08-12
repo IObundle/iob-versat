@@ -15,7 +15,9 @@ static int versat_base;
 extern int* number_versat_configurations;
 extern int  versat_configurations;
 
-void InitVersat(Versat* versat,int base,int numberConfigurations){
+Versat* InitVersat(int base,int numberConfigurations){
+   static Versat versat = {};
+
    #ifdef DEBUG
    printf("E\n");
    #endif
@@ -28,6 +30,8 @@ void InitVersat(Versat* versat,int base,int numberConfigurations){
 
    MEMSET(versat_base,0x0,2);
    MEMSET(versat_base,0x0,0);
+
+   return &versat;
 }
 
 // Accelerator functions
@@ -35,6 +39,14 @@ void AcceleratorRun(Accelerator* accel){
    #ifdef DEBUG
    printf("B\n");
    #endif
+
+   // Set delay and static values
+   for(int i = 0; i < ARRAY_SIZE(delayBuffer); i++){
+      delayBase[i] = delayBuffer[i];
+   }
+   for(int i = 0; i < ARRAY_SIZE(staticBuffer); i++){ // Hackish, for now
+      staticBase[i] = staticBuffer[i];
+   }
 
    MEMSET(versat_base,0x0,1);
 
@@ -142,16 +154,7 @@ FUInstance* GetInstanceByName_(Accelerator* accel,int argc, ...){
    return res;
 }
 
-void CalculateDelay(Versat* versat,Accelerator* accel){
-   for(int i = 0; i < ARRAY_SIZE(delayBuffer); i++){
-      delayBase[i] = delayBuffer[i];
-   }
-   for(int i = 0; i < ARRAY_SIZE(staticBuffer); i++){ // Hackish, for now
-      staticBase[i] = staticBuffer[i];
-   }
-}
-
-FUInstance* CreateNamedFUInstance(Accelerator* accel,FUDeclaration* type,SizedString entityName){
+FUInstance* CreateFUInstance(Accelerator* accel,FUDeclaration* type,SizedString entityName){
    FUInstance* res = GetInstanceByName_(accel,1,entityName.str);
 
    return res;

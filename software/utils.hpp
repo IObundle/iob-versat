@@ -4,6 +4,9 @@
 #include <iosfwd>
 #include <string.h>
 #include <new>
+#include <functional>
+
+#include "signal.h"
 
 #include "assert.h"
 
@@ -13,7 +16,7 @@
 #define NUMBER_ARGS_(T1,T2,T3,T4,T5,T6,T7,T8,T9,TA,TB,TC,TD,TE,TF,TG,TH,Arg, ...) Arg
 #define NUMBER_ARGS(...) NUMBER_ARGS_(-1,##__VA_ARGS__,16,15,14,13,12,11,10,9,8,7,6,5,4,3,2,1,0)
 
-#define DebugSignal() printf("%s:%d\n",__FILE__,__LINE__);
+#define PrintFileAndLine() printf("%s:%d\n",__FILE__,__LINE__)
 
 #if 1
 #define Assert(EXPR) \
@@ -28,14 +31,41 @@
 #define Assert(EXPR) do {} while(0)
 #endif
 
+#define DEBUG_BREAK do{ FlushStdout(); raise(SIGTRAP); } while(0)
+
+#define NOT_IMPLEMENTED do{ FlushStdout(); Assert(false); } while(0) // Doesn't mean that something is necessarily future planned
+#define NOT_POSSIBLE DEBUG_BREAK
+#define UNHANDLED_ERROR do{ FlushStdout(); Assert(false); } while(0) // Know it's an error, but only exit, for now
+#define USER_ERROR do{ FlushStdout(); exit(0); } while(0) // User error and program does not try to repair or keep going (report error before and exit)
+
 struct SizedString{
    const char* str;
    int size;
 };
 
+char* SizedStringToCStr(SizedString s); // Uses static buffer, care
+
 bool operator<(const SizedString& lhs,const SizedString& rhs);
+bool operator==(const SizedString& lhs,const SizedString& rhs);
+
+int SimpleHash(SizedString hashing);
+
+template<> class std::hash<SizedString>{
+   public:
+   std::size_t operator()(SizedString const& s) const noexcept{
+      int res = SimpleHash(s);
+
+      return (std::size_t) res;
+   }
+};
 
 #define UNPACK_SS(STR) STR.size,STR.str
+
+#define MakeSizedString1(STR) ((SizedString){STR,(int) strlen(STR)})
+#define MakeSizedString2(STR,LEN) ((SizedString){STR,(int) (LEN)})
+
+#define GET_MACRO(_1,_2,NAME,...) NAME
+#define MakeSizedString(...) GET_MACRO(__VA_ARGS__, MakeSizedString2, MakeSizedString1)(__VA_ARGS__)
 
 #define MAX_NAME_SIZE 64
 // Hierarchical naming scheme
@@ -53,19 +83,16 @@ struct Range{
 int mini(int a1,int a2);
 int maxi(int a1,int a2);
 int RoundUpDiv(int dividend,int divisor);
+int log2i(int value); // Log function customized to calculating bits needed for a number of possible addresses (ex: log2i(1024) = 10)
 
 int AlignNextPower2(int val);
+
+int NumberDigitsRepresentation(int number); // Number of digits if printed (negative includes - sign )
 
 void FlushStdout();
 
 long int GetFileSize(FILE* file);
 char* GetCurrentDirectory();
-
-#define MakeSizedString1(STR) ((SizedString){STR,(int) strlen(STR)}) // Should compute length at compile time (alternatively, should just use sizeof)
-#define MakeSizedString2(STR,LEN) ((SizedString){STR,(int) LEN})
-
-#define GET_MACRO(_1,_2,NAME,...) NAME
-#define MakeSizedString(...) GET_MACRO(__VA_ARGS__, MakeSizedString2, MakeSizedString1)(__VA_ARGS__)
 
 void FixedStringCpy(char* dest,SizedString src);
 
@@ -74,6 +101,8 @@ bool CompareString(SizedString str1,SizedString str2);
 bool CompareString(const char* str1,SizedString str2);
 bool CompareString(SizedString str1,const char* str2);
 bool CompareString(const char* str1,const char* str2);
+
+bool IsAlpha(char ch);
 
 char* GetHierarchyNameRepr(HierarchyName name); // Uses statically allocaded memory, take care
 

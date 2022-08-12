@@ -204,7 +204,7 @@ begin
       #{for i decl.nConfigs}
       #{set wire decl.configWires[i]}
       if(addr[@{versatValues.configurationAddressBits - 1}:0] == @{addr}) // @{versatBase + addr * 4 |> Hex}
-         configdata[@{counter}+:@{wire.bitsize}] <= wdata[@{wire.bitsize - 1}:0]; // @{wire.name} - @{decl.name.str}
+         configdata[@{counter}+:@{wire.bitsize}] <= wdata[@{wire.bitsize - 1}:0]; // @{wire.name} - @{decl.name}
       #{inc addr}
       #{set counter counter + wire.bitsize}
       #{end}
@@ -215,7 +215,7 @@ begin
       #{for i unit.nConfigs}
       #{set wire unit.wires[i]}
       if(addr[@{versatValues.configurationAddressBits - 1}:0] == @{addr}) // @{versatBase + addr * 4 |> Hex}
-         configdata[@{counter}+:@{wire.bitsize}] <= wdata[@{wire.bitsize - 1}:0]; //  @{unit.module.name.str}_@{unit.name}_@{wire.name}
+         configdata[@{counter}+:@{wire.bitsize}] <= wdata[@{wire.bitsize - 1}:0]; //  @{unit.module.name}_@{unit.name}_@{wire.name}
       #{inc addr}
       #{set counter counter + wire.bitsize}
       #{end}
@@ -262,7 +262,7 @@ end
 #{set delaySeen 0}
 #{for inst instances}
 #{set decl inst.declaration}
-   @{decl.name.str} @{decl.name.str}_@{counter} (
+   @{decl.name} @{decl.name}_@{counter} (
       #{for i inst.tempData.outputPortsUsed}
          .out@{i}(output_@{inst.id}_@{i}),
       #{end} 
@@ -284,7 +284,7 @@ end
       #{for unit decl.staticUnits}
       #{for i unit.nConfigs}
       #{set wire unit.wires[i]}
-         .@{unit.module.name.str}_@{unit.name}_@{wire.name}(configdata[@{configDataIndex}+:@{wire.bitsize}]),
+         .@{unit.module.name}_@{unit.name}_@{wire.name}(configdata[@{configDataIndex}+:@{wire.bitsize}]),
       #{set configDataIndex configDataIndex + wire.bitsize}
       #{end}
       #{end}

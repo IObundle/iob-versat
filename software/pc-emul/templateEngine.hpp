@@ -1,7 +1,7 @@
 #ifndef TEMPLATE_ENGINE_INCLUDED
 #define TEMPLATE_ENGINE_INCLUDED
 
-#include "versat.hpp"
+#include "versatPrivate.hpp"
 #include "parser.hpp"
 
 struct Expression;
@@ -14,6 +14,8 @@ struct Command{
 };
 
 struct Block{
+   Token fullText;
+
    union{
       Token textBlock;
       Command command;
@@ -37,7 +39,5 @@ void TemplateSetNumber(const char* id,int number);
 void TemplateSetString(const char* id,const char* str);
 void TemplateSetArray(const char* id,const char* baseType,void* array,int size);
 void TemplateSetBool(const char* id,bool boolean);
-void TemplateSetInstancePool(const char* id,Pool<FUInstance>* pool); // Not very good, but no other choice
-void TemplateSetInstanceVector(const char* id,std::vector<FUInstance*>* vec);
 
 #endif // TEMPLATE_ENGINE_INCLUDED

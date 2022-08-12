@@ -2,13 +2,13 @@
 #define INCLUDED_VERILOG_PARSER
 
 #include <vector>
-#include <map>
+#include <unordered_map>
 
 #include "utils.hpp"
 #include "parser.hpp"
 
-typedef std::map<SizedString,Value> ValueMap;
-typedef std::map<SizedString,SizedString> MacroMap;
+typedef std::unordered_map<SizedString,Value> ValueMap;
+typedef std::unordered_map<SizedString,SizedString> MacroMap;
 
 struct Arena;
 
@@ -20,9 +20,9 @@ struct PortDeclaration{
 };
 
 struct Module{
-   SizedString name;
    ValueMap parameters;
    std::vector<PortDeclaration> ports;
+   SizedString name;
    bool isSource;
 };
 

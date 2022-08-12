@@ -6,6 +6,31 @@
 #include "stdio.h"
 #include "string.h"
 
+int SimpleHash(SizedString hashing)
+{
+   int res = 0;
+
+   int prime = 5;
+   for(int i = 0; i < hashing.size; i++){
+      res += (int) hashing.str[i] * prime;
+      res <<= 4;
+      prime += 6; // Some not prime, but will find most of them
+   }
+
+   return res;
+}
+
+char* SizedStringToCStr(SizedString s){
+   static char buffer[1024];
+
+   Assert(s.size < 1023);
+
+   memcpy(buffer,s.str,s.size);
+   buffer[s.size] = '\0';
+
+   return buffer;
+}
+
 bool operator<(const SizedString& lhs,const SizedString& rhs){
    for(int i = 0; i < mini(lhs.size,rhs.size); i++){
       if(lhs.str[i] < rhs.str[i]){
@@ -21,6 +46,12 @@ bool operator<(const SizedString& lhs,const SizedString& rhs){
    }
 
    return false;
+}
+
+bool operator==(const SizedString& lhs,const SizedString& rhs){
+   bool res = CompareString(lhs,rhs);
+
+   return res;
 }
 
 // Misc
@@ -47,6 +78,24 @@ int RoundUpDiv(int dividend,int divisor){
    }
 }
 
+int log2i(int value){
+   int res = 0;
+
+   if(value <= 0)
+      return 0;
+
+   value -= 1; // If value matches a power of 2, we still want to return the previous value
+
+   while(value > 1){
+      value /= 2;
+      res++;
+   }
+
+   res += 1;
+
+   return res;
+}
+
 int AlignNextPower2(int val){
    if(val <= 0){
       return 0;
@@ -58,6 +107,23 @@ int AlignNextPower2(int val){
    }
 
    return res;
+}
+
+int NumberDigitsRepresentation(int number){
+   int nDigits = 0;
+
+   int num = number;
+   if(num < 0){
+      nDigits += 1;
+      num *= -1;
+   }
+
+   while(num > 0){
+      num /= 10;
+      nDigits += 1;
+   }
+
+   return nDigits;
 }
 
 void FixedStringCpy(char* dest,SizedString src){
@@ -118,6 +184,19 @@ char* GetCurrentDirectory(){
    buffer[0] = '\0';
    getcwd(buffer,PATH_MAX);
    return buffer;
+}
+
+bool IsAlpha(char ch){
+   if(ch >= 'a' && ch < 'z')
+      return true;
+
+   if(ch >= 'A' && ch <= 'Z')
+      return true;
+
+   if(ch >= '0' && ch <= '9')
+      return true;
+
+   return false;
 }
 
 static char* GetHierarchyNameRepr_(HierarchyName name, char* buffer,int first){

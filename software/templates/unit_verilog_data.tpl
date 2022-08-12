@@ -25,7 +25,7 @@ int @{wire.name};
 #ifdef IMPLEMENT_VERILOG_UNITS
 #include <new>
 
-#include "versat.hpp"
+#include "versatPrivate.hpp"
 #include "utils.hpp"
 
 #{for module modules}
@@ -242,7 +242,7 @@ static FUDeclaration* @{module.name}_Register(Versat* versat){
    decl.latencies = latencies;
    #{end}
 
-   strcpy(decl.name.str,"@{module.name}");
+   decl.name = MakeSizedString("@{module.name}");
 
    #{if module.doesIO}
    decl.extraDataSize = sizeof(V@{module.name}) + 4;

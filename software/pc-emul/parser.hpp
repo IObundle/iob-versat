@@ -14,6 +14,7 @@ struct Expression{
    Expression** expressions;
    int size;
    Value val;
+   SizedString text;
 
    enum {UNDEFINED,OPERATION,IDENTIFIER,LITERAL,ARRAY_ACCESS,MEMBER_ACCESS} type;
 };
@@ -22,6 +23,7 @@ typedef int (*CharFunction) (const char* ptr,int size);
 typedef SizedString Token;
 
 class Tokenizer{
+   const char* start;
    const char* ptr;
    const char* end;
    int lines;
@@ -63,12 +65,14 @@ public:
 
    void AdvancePeek(Token tok);
 
+   void SetSingleChars(const char* singleChars);
    bool Done();
    int Lines(){return lines;};
 
 };
 
 bool CheckFormat(const char* format,Token tok);
+bool Contains(SizedString str,const char* toCheck);
 
 Token ExtendToken(Token t1,Token t2);
 

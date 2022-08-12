@@ -40,11 +40,13 @@ struct Arena{
 };
 
 void InitArena(Arena* arena,size_t size);
+void Free(Arena* arena);
 Byte* MarkArena(Arena* arena);
 void PopMark(Arena* arena,Byte* mark);
 Byte* PushBytes(Arena* arena, int size);
 SizedString PushFile(Arena* arena,const char* filepath);
 SizedString PushString(Arena* arena,SizedString ss);
+SizedString PushString(Arena* arena,const char* format,...) __attribute__ ((format (printf, 2, 3)));
 #define PushStruct(ARENA,STRUCT) (STRUCT*) PushBytes(ARENA,sizeof(STRUCT))
 #define PushArray(ARENA,SIZE,STRUCT) (STRUCT*) PushBytes(ARENA,sizeof(STRUCT) * SIZE)
 
@@ -67,6 +69,25 @@ struct PoolInfo{
 struct PageInfo{
    PoolHeader* header;
    Byte* bitmap;
+};
+
+class GenericPoolIterator{
+   PoolInfo poolInfo;
+   PageInfo pageInfo;
+   int fullIndex;
+   int bit;
+   int index;
+   int numberElements;
+   int elemSize;
+   Byte* page;
+
+public:
+
+   GenericPoolIterator(Byte* page,int numberElements,int elemSize);
+
+   bool HasNext();
+   GenericPoolIterator& operator++();
+   Byte* operator*();
 };
 
 template<typename T> class Pool;
@@ -92,6 +113,9 @@ public:
    T* operator*();
 };
 
+PoolInfo CalculatePoolInfo(int elemSize);
+PageInfo GetPageInfo(PoolInfo poolInfo,Byte* page);
+
 // Pool
 template<typename T>
 class Pool{
@@ -102,11 +126,6 @@ class Pool{
 
    friend class PoolIterator<T>;
 
-private:
-
-   PoolInfo CalculatePoolInfo();
-   PageInfo GetPageInfo(PoolInfo poolInfo,Byte* page);
-
 public:
 
    Pool();
@@ -116,8 +135,9 @@ public:
    void Remove(T* elem);
 
    T* Get(int index);
+   Byte* GetMemoryPtr();
 
-   void Clear();
+   void Clear(bool clearMemory = false);
 
    int Size(){return allocated;};
 
@@ -129,31 +149,32 @@ public:
 // Impl
 template<typename T>
 bool ZeroOutAlloc(Allocation<T>* alloc,int newSize){
-   T* stored = alloc->ptr;
-
+   bool didRealloc = false;
    if(newSize > alloc->reserved){
-      alloc->ptr = (T*) calloc(newSize,sizeof(T));
+      T* tmp = (T*) realloc(alloc->ptr,newSize * sizeof(T));
 
-      memcpy(alloc->ptr,stored,alloc->size * sizeof(T));
+      Assert(tmp);
 
+      alloc->ptr = tmp;
       alloc->reserved = newSize;
+      didRealloc = true;
    }
 
    memset(alloc->ptr,0,alloc->reserved * sizeof(T));
-   bool res = (stored != alloc->ptr);
-   return res;
+   return didRealloc;
 }
 
 template<typename T>
 bool ZeroOutRealloc(Allocation<T>* alloc,int newSize){
-   T* stored = alloc->ptr;
-
+   bool didRealloc = false;
    if(newSize > alloc->reserved){
-      alloc->ptr = (T*) calloc(newSize,sizeof(T));
+      T* tmp = (T*) realloc(alloc->ptr,newSize * sizeof(T));
 
-      memcpy(alloc->ptr,stored,alloc->size * sizeof(T));
+      Assert(tmp);
 
+      alloc->ptr = tmp;
       alloc->reserved = newSize;
+      didRealloc = true;
    }
 
    // Clear out free (allocated now or before) space
@@ -162,14 +183,15 @@ bool ZeroOutRealloc(Allocation<T>* alloc,int newSize){
       memset(&view[alloc->size],0,(alloc->reserved - alloc->size) * sizeof(T));
    }
 
-   bool res = (stored != alloc->ptr);
-   return res;
+   return didRealloc;
 }
 
 template<typename T>
-void Free(Allocation<T>* info){
-   free(info->ptr);
-   info->ptr = 0;
+void Free(Allocation<T>* alloc){
+   free(alloc->ptr);
+   alloc->ptr = nullptr;
+   alloc->reserved = 0;
+   alloc->size = 0;
 }
 
 template<typename T>
@@ -183,7 +205,7 @@ PoolIterator<T>::PoolIterator(Pool<T>* pool)
    page = pool->mem;
 
    if(page && pool->allocated){
-      pageInfo = pool->GetPageInfo(pool->info,page);
+      pageInfo = GetPageInfo(pool->info,page);
 
       if(!(pageInfo.bitmap[index] & (1 << bit))){
          ++(*this);
@@ -193,9 +215,8 @@ PoolIterator<T>::PoolIterator(Pool<T>* pool)
 
 template<typename T>
 bool PoolIterator<T>::operator!=(const PoolIterator<T>& iter){
-   if(this->pool != iter.pool){
-      return true; // Should probably be a error
-   }
+   Assert(this->pool == iter.pool)
+
    if(this->fullIndex < pool->endSize){ // Kinda of a hack, for now
       return true;
    }
@@ -222,7 +243,7 @@ PoolIterator<T>& PoolIterator<T>::operator++(){
          if(page == nullptr){
             break;
          }
-         pageInfo = pool->GetPageInfo(info,page);
+         pageInfo = GetPageInfo(info,page);
       }
 
       if(pageInfo.bitmap[index] & (1 << bit)){
@@ -251,7 +272,7 @@ Pool<T>::Pool()
 ,allocated(0)
 ,endSize(0)
 {
-   info = CalculatePoolInfo();
+   info = CalculatePoolInfo(sizeof(T));
 }
 
 template<typename T>
@@ -266,28 +287,6 @@ Pool<T>::~Pool(){
 
       ptr = nextPage;
    }
-}
-
-template<typename T>
-PoolInfo Pool<T>::CalculatePoolInfo(){
-   PoolInfo info = {};
-
-   info.unitsPerFullPage = (GetPageSize() - sizeof(PoolHeader)) / sizeof(T);
-   info.bitmapSize = RoundUpDiv(info.unitsPerFullPage,8);
-   info.unitsPerPage = (GetPageSize() - sizeof(PoolHeader) - info.bitmapSize) / sizeof(T);
-   info.pageGranuality = 1;
-
-   return info;
-}
-
-template<typename T>
-PageInfo Pool<T>::GetPageInfo(PoolInfo poolInfo,Byte* page){
-   PageInfo info = {};
-
-   info.header = (PoolHeader*) (page + poolInfo.pageGranuality * GetPageSize() - sizeof(PoolHeader));
-   info.bitmap = (Byte*) info.header - poolInfo.bitmapSize;
-
-   return info;
 }
 
 template<typename T>
@@ -395,15 +394,32 @@ void Pool<T>::Remove(T* elem){
 }
 
 template<typename T>
-void Pool<T>::Clear(){
-   Byte* page = mem;
-   while(page){
-      PageInfo pageInfo = GetPageInfo(info,page);
+Byte* Pool<T>::GetMemoryPtr(){
+   return mem;
+}
 
-      memset(pageInfo.bitmap,0,info.bitmapSize);
-      pageInfo.header->allocatedUnits = 0;
+template<typename T>
+void Pool<T>::Clear(bool freeMemory){
+   if(freeMemory){
+      Byte* page = mem;
+      while(page){
+         PageInfo pageInfo = GetPageInfo(info,page);
+         Byte* next = pageInfo.header->nextPage;
 
-      page = pageInfo.header->nextPage;
+         DeallocatePages(page,1);
+         page = next;
+      }
+      mem = nullptr;
+   } else {
+      Byte* page = mem;
+      while(page){
+         PageInfo pageInfo = GetPageInfo(info,page);
+
+         memset(pageInfo.bitmap,0,info.bitmapSize);
+         pageInfo.header->allocatedUnits = 0;
+
+         page = pageInfo.header->nextPage;
+      }
    }
 
    endSize = 0;
