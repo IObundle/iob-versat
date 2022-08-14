@@ -12,6 +12,7 @@ void Log(LogModule module,LogLevel level,const char* format, ...){
 
    if(enabledModule && enabledLevel){
       vprintf(format,args);
+      printf("\n");
    }
 
    va_end(args);

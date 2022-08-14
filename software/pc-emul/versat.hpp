@@ -10,6 +10,7 @@ struct FUDeclaration;
 struct GraphComputedData;
 struct VersatComputedData;
 
+#if 0
 struct FUInstance{
 	HierarchyName name;
 
@@ -18,6 +19,35 @@ struct FUInstance{
    int* config;
    int* state;
    int* delay;
+};
+#endif
+
+struct FUInstance{
+	HierarchyName name;
+
+   // Embedded memory
+   int* memMapped;
+   int* config;
+   int* state;
+   int* delay;
+
+   // Pc only
+   int baseDelay;
+
+   Accelerator* accel;
+	FUDeclaration* declaration;
+	int id;
+   Accelerator* compositeAccel;
+
+	int* outputs;
+	int* storedOutputs;
+   char* extraData;
+
+   // Configuration + State variables that versat needs access to
+   int done; // Units that are sink or sources of data must implement done to ensure circuit does not end prematurely
+   bool isStatic;
+
+   bool namedAccess;
 };
 
 Accelerator* Flatten(Versat* versat,Accelerator* accel,int times);

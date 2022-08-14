@@ -227,6 +227,14 @@ static int32_t* @{module.name}_UpdateFunction(FUInstance* inst){
 #{end}
 }
 
+static int32_t* @{module.name}_DestroyFunction(FUInstance* inst){
+   V@{module.name}* self = (V@{module.name}*) inst->extraData;
+
+   self->~V@{module.name}();
+
+   return nullptr;
+}
+
 static FUDeclaration* @{module.name}_Register(Versat* versat){
    FUDeclaration decl = {};
 
@@ -253,6 +261,7 @@ static FUDeclaration* @{module.name}_Register(Versat* versat){
    decl.initializeFunction = @{module.name}_InitializeFunction;
    decl.startFunction = @{module.name}_StartFunction;
    decl.updateFunction = @{module.name}_UpdateFunction;
+   decl.destroyFunction = @{module.name}_DestroyFunction;
 
    #{if module.nConfigs}
    static Wire @{module.name}ConfigWires[] = {#{join "," for i module.nConfigs} {MakeSizedString("@{module.configs[i].name}"),@{module.configs[i].bitsize}} #{end}};

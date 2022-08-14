@@ -15,6 +15,7 @@ inline size_t Megabyte(int val){return Kilobyte(val) * 1024;};
 int GetPageSize();
 void* AllocatePages(int pages);
 void DeallocatePages(void* ptr,int pages);
+void CheckMemoryStats();
 
 template<typename T>
 struct Allocation{
@@ -143,12 +144,13 @@ public:
 
    PoolIterator<T> begin();
    PoolIterator<T> end();
-
 };
 
 // Impl
 template<typename T>
 bool ZeroOutAlloc(Allocation<T>* alloc,int newSize){
+   Assert(newSize > 0);
+
    bool didRealloc = false;
    if(newSize > alloc->reserved){
       T* tmp = (T*) realloc(alloc->ptr,newSize * sizeof(T));
@@ -166,6 +168,8 @@ bool ZeroOutAlloc(Allocation<T>* alloc,int newSize){
 
 template<typename T>
 bool ZeroOutRealloc(Allocation<T>* alloc,int newSize){
+   Assert(newSize > 0);
+
    bool didRealloc = false;
    if(newSize > alloc->reserved){
       T* tmp = (T*) realloc(alloc->ptr,newSize * sizeof(T));

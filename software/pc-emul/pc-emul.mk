@@ -26,6 +26,7 @@ TYPE_INFO_HDR = $(VERSAT_PC_EMUL)/versatPrivate.hpp $(VERSAT_SW_DIR)/utils.hpp $
 TOOL_COMMON_SRC += $(VERSAT_DIR)/software/pc-emul/parser.cpp
 TOOL_COMMON_SRC += $(VERSAT_DIR)/software/pc-emul/utils.cpp
 TOOL_COMMON_SRC += $(VERSAT_DIR)/software/pc-emul/memory.cpp
+TOOL_COMMON_SRC += $(VERSAT_DIR)/software/pc-emul/logger.cpp
 TOOL_SRC += $(TOOL_COMMON_SRC)
 TOOL_SRC += $(VERSAT_DIR)/software/pc-emul/templateEngine.cpp
 TOOL_SRC += $(VERSAT_DIR)/software/pc-emul/type.cpp

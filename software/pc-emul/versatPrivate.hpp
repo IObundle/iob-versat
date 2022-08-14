@@ -4,6 +4,7 @@
 #include <vector>
 
 #include "memory.hpp"
+#include "logger.hpp"
 // Forward declarations
 struct Versat;
 struct Accelerator;
@@ -46,40 +47,39 @@ struct FUDeclaration{
    SizedString name;
 
    int nInputs;
-   int nOutputs;
-
    int* inputDelays;
+   int nOutputs;
    int* latencies;
 
-   Accelerator* circuit; // Composite declaration
-
-   // Config and state interface
+   // Interfaces
    int nConfigs;
    Wire* configWires;
-
    int nStates;
    Wire* stateWires;
-
-   int nStaticConfigs;
-
    int nDelays; // Code only handles 1 single instace, for now, hardware needs this value for correct generation
    int nIOs;
    int memoryMapBits;
-   bool isMemoryMapped;
+   int nStaticConfigs;
    int extraDataSize;
+
+   Accelerator* circuit; // Composite declaration
+
    FUFunction initializeFunction;
    FUFunction startFunction;
    FUFunction updateFunction;
+   FUFunction destroyFunction;
    MemoryAccessFunction memAccessFunction;
-   const char* operation;
-   bool isOperation;
-   bool implementsDone;
 
+   int nTotalOutputs;
+   const char* operation;
    Pool<StaticInfo> staticUnits;
 
    enum {SINGLE = 0x0,COMPOSITE = 0x1,SPECIAL = 0x2} type;
-
    DelayType delayType;
+
+   bool isOperation;
+   bool implementsDone;
+   bool isMemoryMapped;
 };
 
 struct PortInstance{
@@ -130,7 +130,7 @@ struct FUInstance{
 
 	int* outputs;
 	int* storedOutputs;
-   void* extraData;
+   Byte* extraData;
 
    // Configuration + State variables that versat needs access to
    int done; // Units that are sink or sources of data must implement done to ensure circuit does not end prematurely
@@ -199,11 +199,11 @@ struct Accelerator{
    Allocation<int> stateAlloc;
    Allocation<int> delayAlloc;
    Allocation<int> staticAlloc;
-
    Allocation<int> outputAlloc;
    Allocation<int> storedOutputAlloc;
+   Allocation<Byte> extraDataAlloc;
 
-   std::vector<StaticInfo> staticInfo;
+   Pool<StaticInfo> staticInfo;
 
 	void* configuration;
 	int configurationSize;

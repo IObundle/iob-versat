@@ -9,6 +9,8 @@
 #include <cstdarg>
 #include <cstdlib>
 
+#include "logger.hpp"
+
 int GetPageSize(){
    static int pageSize = 0;
 
@@ -41,6 +43,12 @@ void* AllocatePages(int pages){
 void DeallocatePages(void* ptr,int pages){
    pagesDeallocated += pages;
    munmap(ptr,pages * GetPageSize());
+}
+
+void CheckMemoryStats(){
+   if(pagesAllocated != pagesDeallocated){
+      Log(LogModule::MEMORY,LogLevel::WARN,"Number of pages allocated/freed: %d/%d",pagesAllocated,pagesDeallocated);
+   }
 }
 
 void InitArena(Arena* arena,size_t size){
