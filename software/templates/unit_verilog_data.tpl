@@ -1,3 +1,6 @@
+#ifndef INCLUDED_VERILOG_DATA
+#define INCLUDED_VERILOG_DATA
+
 #{for module modules}
 #{if module.nConfigs}
 
@@ -307,3 +310,5 @@ static void RegisterAllVerilogUnits(Versat* versat){
 }
 
 #endif
+
+#endif // INCLUDED_VERILOG_DATA

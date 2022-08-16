@@ -219,7 +219,7 @@ PoolIterator<T>::PoolIterator(Pool<T>* pool)
 
 template<typename T>
 bool PoolIterator<T>::operator!=(const PoolIterator<T>& iter){
-   Assert(this->pool == iter.pool)
+   Assert(this->pool == iter.pool);
 
    if(this->fullIndex < pool->endSize){ // Kinda of a hack, for now
       return true;

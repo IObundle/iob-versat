@@ -911,23 +911,23 @@ FUInstance* CreateFUInstance(Accelerator* accel,FUDeclaration* type,SizedString 
    CheckReallocation(&accel->storedOutputAlloc,ptr,accel,&FUInstance::storedOutputs   ,&FUDeclaration::nTotalOutputs);
    CheckReallocation(&accel->extraDataAlloc,ptr,accel,&FUInstance::extraData,&FUDeclaration::extraDataSize);
 
-   #if 1
-   int* oldPtr = accel->staticAlloc.ptr;
-   if(ZeroOutRealloc(&accel->staticAlloc,accel->staticAlloc.size + type->nStaticConfigs)){
-      int* ptr = accel->staticAlloc.ptr;
-      int offset = oldPtr - ptr;
+   if(type->nStaticConfigs){
+      int* oldPtr = accel->staticAlloc.ptr;
+      if(ZeroOutRealloc(&accel->staticAlloc,accel->staticAlloc.size + type->nStaticConfigs)){
+         int* ptr = accel->staticAlloc.ptr;
+         int offset = oldPtr - ptr;
 
-      VisitAcceleratorInstances(accel,[offset](FUInstance* inst){
-         if(inst->isStatic){
-            inst->config += offset;
+         VisitAcceleratorInstances(accel,[offset](FUInstance* inst){
+            if(inst->isStatic){
+               inst->config += offset;
+            }
+         });
+
+         for(StaticInfo* info : accel->staticInfo){
+            info->ptr += offset;
          }
-      });
-
-      for(StaticInfo* info : accel->staticInfo){
-         info->ptr += offset;
       }
    }
-   #endif
 
    if(type->type == FUDeclaration::COMPOSITE){
       FUInstanceInterfaces inter = {};

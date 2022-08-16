@@ -18,15 +18,15 @@
 
 #define PrintFileAndLine() printf("%s:%d\n",__FILE__,__LINE__)
 
-#if 1
+#ifdef PC
 #define Assert(EXPR) \
-   { \
+   do { \
    int _ = (int) (EXPR);   \
    if(!_){ \
       FlushStdout(); \
       assert(_ && (EXPR)); \
    } \
-   }
+   } while(0)
 #else
 #define Assert(EXPR) do {} while(0)
 #endif
@@ -84,10 +84,13 @@ int mini(int a1,int a2);
 int maxi(int a1,int a2);
 int RoundUpDiv(int dividend,int divisor);
 int log2i(int value); // Log function customized to calculating bits needed for a number of possible addresses (ex: log2i(1024) = 10)
-
 int AlignNextPower2(int val);
 
 int NumberDigitsRepresentation(int number); // Number of digits if printed (negative includes - sign )
+
+// Weak random generator but produces same results in pc-emul and in simulation
+void SeedRandomNumber(uint seed);
+uint GetRandomNumber();
 
 void FlushStdout();
 
