@@ -538,7 +538,7 @@ std::vector<Module> ParseVerilogFile(SizedString fileContent, std::vector<const 
          modules.push_back(module);
 
          isSource = false;
-         continue;
+         break; // For now, only parse the first module found
       }
 
       tok->AdvancePeek(peek);

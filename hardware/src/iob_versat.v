@@ -81,6 +81,131 @@ module iob_versat
     .s_resp(s_resp)
     );
 
+   SimpleIOBToAxi iobToAxi(
+    //
+    // Native Slave I/F
+    //
+    .s_valid(s_valid),
+    .s_addr(s_addr),
+    .s_wdata(s_wdata),
+    .s_wstrb(s_wstrb),
+    .s_rdata(s_rdata),
+    .s_ready(s_ready),
+  
+    // Address write
+    .m_axi_awid(m_axi_awid), 
+    .m_axi_awaddr(m_axi_awaddr), 
+    .m_axi_awlen(m_axi_awlen), 
+    .m_axi_awsize(m_axi_awsize), 
+    .m_axi_awburst(m_axi_awburst), 
+    .m_axi_awlock(m_axi_awlock), 
+    .m_axi_awcache(m_axi_awcache), 
+    .m_axi_awprot(m_axi_awprot),
+    .m_axi_awqos(m_axi_awqos), 
+    .m_axi_awvalid(m_axi_awvalid), 
+    .m_axi_awready(m_axi_awready),
+    //write
+    .m_axi_wdata(m_axi_wdata), 
+    .m_axi_wstrb(m_axi_wstrb), 
+    .m_axi_wlast(m_axi_wlast), 
+    .m_axi_wvalid(m_axi_wvalid), 
+    .m_axi_wready(m_axi_wready), 
+    //write response
+    .m_axi_bid(m_axi_bid), 
+    .m_axi_bresp(m_axi_bresp), 
+    .m_axi_bvalid(m_axi_bvalid), 
+    .m_axi_bready(m_axi_bready),
+    //address read
+    .m_axi_arid(m_axi_arid), 
+    .m_axi_araddr(m_axi_araddr), 
+    .m_axi_arlen(m_axi_arlen), 
+    .m_axi_arsize(m_axi_arsize), 
+    .m_axi_arburst(m_axi_arburst), 
+    .m_axi_arlock(m_axi_arlock), 
+    .m_axi_arcache(m_axi_arcache), 
+    .m_axi_arprot(m_axi_arprot), 
+    .m_axi_arqos(m_axi_arqos), 
+    .m_axi_arvalid(m_axi_arvalid), 
+    .m_axi_arready(m_axi_arready), 
+    //read 
+    .m_axi_rid(m_axi_rid), 
+    .m_axi_rdata(m_axi_rdata), 
+    .m_axi_rresp(m_axi_rresp), 
+    .m_axi_rlast(m_axi_rlast), 
+    .m_axi_rvalid(m_axi_rvalid),  
+    .m_axi_rready(m_axi_rready),
+
+    .clk(clk),
+    .rst(rst)
+  );
+
+/*
+   iob2axi #(.ADDR_W(ADDR_W),.DATA_W(DATA_W)) iob_to_axi(
+    .run(1'b0),
+    .direction(|s_wstrb), // 0 for reading, 1 for writing
+    .addr(0),
+    .ready(),
+    .error(),
+
+    //
+    // Native Slave I/F
+    //
+    .s_valid(s_valid),
+    .s_addr(s_addr),
+    .s_wdata(s_wdata),
+    .s_wstrb(s_wstrb),
+    .s_rdata(s_rdata),
+    .s_ready(s_ready),
+  
+    // Address write
+    .m_axi_awid(m_axi_awid), 
+    .m_axi_awaddr(m_axi_awaddr), 
+    .m_axi_awlen(m_axi_awlen), 
+    .m_axi_awsize(m_axi_awsize), 
+    .m_axi_awburst(m_axi_awburst), 
+    .m_axi_awlock(m_axi_awlock), 
+    .m_axi_awcache(m_axi_awcache), 
+    .m_axi_awprot(m_axi_awprot),
+    .m_axi_awqos(m_axi_awqos), 
+    .m_axi_awvalid(m_axi_awvalid), 
+    .m_axi_awready(m_axi_awready),
+    //write
+    .m_axi_wdata(m_axi_wdata), 
+    .m_axi_wstrb(m_axi_wstrb), 
+    .m_axi_wlast(m_axi_wlast), 
+    .m_axi_wvalid(m_axi_wvalid), 
+    .m_axi_wready(m_axi_wready), 
+    //write response
+    .m_axi_bid(m_axi_bid), 
+    .m_axi_bresp(m_axi_bresp), 
+    .m_axi_bvalid(m_axi_bvalid), 
+    .m_axi_bready(m_axi_bready),
+    //address read
+    .m_axi_arid(m_axi_arid), 
+    .m_axi_araddr(m_axi_araddr), 
+    .m_axi_arlen(m_axi_arlen), 
+    .m_axi_arsize(m_axi_arsize), 
+    .m_axi_arburst(m_axi_arburst), 
+    .m_axi_arlock(m_axi_arlock), 
+    .m_axi_arcache(m_axi_arcache), 
+    .m_axi_arprot(m_axi_arprot), 
+    .m_axi_arqos(m_axi_arqos), 
+    .m_axi_arvalid(m_axi_arvalid), 
+    .m_axi_arready(m_axi_arready), 
+    //read 
+    .m_axi_rid(m_axi_rid), 
+    .m_axi_rdata(m_axi_rdata), 
+    .m_axi_rresp(m_axi_rresp), 
+    .m_axi_rlast(m_axi_rlast), 
+    .m_axi_rvalid(m_axi_rvalid),  
+    .m_axi_rready(m_axi_rready),
+
+    .clk(clk),
+    .rst(rst)
+  );
+*/
+
+/*
    dma_axi #(.DMA_DATA_W(DATA_W),.AXI_DATA_W(AXI_DATA_W),.AXI_ADDR_W(AXI_ADDR_W)) dma(
       .clk(clk),
       .rst(rst),
@@ -94,7 +219,7 @@ module iob_versat
       .ready(s_ready),
 
       // DMA signals
-      .dma_len(8'hf),
+      .dma_len(8'h10),
       .dma_ready(dma_ready),
       .error(dma_error),
       
@@ -142,6 +267,8 @@ module iob_versat
       .m_axi_rvalid(m_axi_rvalid),  
       .m_axi_rready(m_axi_rready)
       );
+*/
+
 `endif
 
 versat_instance #(.ADDR_W(ADDR_W),.DATA_W(DATA_W)) xversat(

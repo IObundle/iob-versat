@@ -520,7 +520,9 @@ FUDeclaration* RegisterFU(Versat* versat,FUDeclaration decl){
       Assert(decl.inputDelays);
    }
 
-   Assert(decl.latencies);
+   if(decl.nOutputs){
+      Assert(decl.latencies);
+   }
 
    if(type->type != FUDeclaration::COMPOSITE){
       type->nTotalOutputs = type->nOutputs;
@@ -1666,7 +1668,7 @@ static void AcceleratorRunIteration(Accelerator* accel){
       } else {
          int* newOutputs = inst->declaration->updateFunction(inst);
 
-         if(inst->declaration->latencies[0] == 0 && inst->tempData->nodeType != GraphComputedData::TAG_SOURCE){
+         if(inst->declaration->nOutputs && inst->declaration->latencies[0] == 0 && inst->tempData->nodeType != GraphComputedData::TAG_SOURCE){
             memcpy(inst->outputs,newOutputs,inst->declaration->nOutputs * sizeof(int));
             memcpy(inst->storedOutputs,newOutputs,inst->declaration->nOutputs * sizeof(int));
          } else {

@@ -135,7 +135,7 @@ end
 #{end}
 
 #{set counter 0}
-reg [31:0] #{join "," for inst instances} #{if inst.declaration.latencies[0]} unused@{counter} #{inc counter} #{else} comb_@{inst.name.str} #{end}#{end}; 
+reg [31:0] #{join "," for inst instances} #{if inst.declaration.isOperation} comb_@{inst.name.str} #{else} unused@{counter} #{inc counter} #{end}#{end}; 
 
 always @*
 begin

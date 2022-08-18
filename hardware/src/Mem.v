@@ -80,7 +80,26 @@
    wire we = |wstrb;
 
    wire doneA,doneB;
-   assign done = doneA & doneB;
+
+   // Delay done by 2 cycles so that pc-emul matches simulation
+   reg doneA_1,doneB_1;
+   reg doneA_2,doneB_2;
+   always @(posedge clk,posedge rst)
+   begin
+      if(rst) begin
+         doneA_1 <= 0;
+         doneA_2 <= 0;
+         doneB_1 <= 0;
+         doneB_2 <= 0;
+      end else begin
+         doneA_1 <= doneA;
+         doneA_2 <= doneA_1;
+         doneB_1 <= doneB;
+         doneB_2 <= doneB_1;
+      end
+   end
+
+   assign done = doneA_2 & doneB_2;
 
    //output databus
    wire [DATA_W-1:0]              outA, outB;
