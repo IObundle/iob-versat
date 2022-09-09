@@ -17,9 +17,11 @@ module versat_instance #(
    input [`nIO-1:0]                m_databus_ready,
    output [`nIO-1:0]               m_databus_valid,
    output [`nIO*AXI_ADDR_W-1:0]    m_databus_addr,
-   input [`nIO*`DATAPATH_W-1:0]    m_databus_rdata,
+   input [`DATAPATH_W-1:0]         m_databus_rdata,
    output [`nIO*`DATAPATH_W-1:0]   m_databus_wdata,
    output [`nIO*`DATAPATH_W/8-1:0] m_databus_wstrb,
+   output [`nIO*8-1:0]             m_databus_len,
+   input [`nIO-1:0]                m_databus_last,
 `endif
    // data/control interface
    input                           valid,
@@ -323,9 +325,11 @@ end
       .databus_ready(m_databus_ready[@{ioIndex} +: @{decl.nIOs}]),
       .databus_valid(m_databus_valid[@{ioIndex} +: @{decl.nIOs}]),
       .databus_addr(m_databus_addr[@{ioIndex * 32} +: @{32 * decl.nIOs}]),
-      .databus_rdata(m_databus_rdata[@{ioIndex * 32} +: @{32 * decl.nIOs}]),
+      .databus_rdata(m_databus_rdata),
       .databus_wdata(m_databus_wdata[@{ioIndex * 32} +: @{32 * decl.nIOs}]),
       .databus_wstrb(m_databus_wstrb[@{ioIndex * 4} +: @{4 * decl.nIOs}]),
+      .databus_len(m_databus_len[@{ioIndex * 8} +: @{8 * decl.nIOs}]),
+      .databus_last(m_databus_last[@{ioIndex} +: @{decl.nIOs}]),
       #{set ioIndex ioIndex + decl.nIOs}
       #{end} 
       

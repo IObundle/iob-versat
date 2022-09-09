@@ -309,6 +309,25 @@ static Value HexValue(Value in){
    return res;
 }
 
+static int CountNonOperationChilds(Accelerator* accel){
+   if(accel == nullptr){
+      return 0;
+   }
+
+   int count = 0;
+   for(FUInstance* inst : accel->instances){
+      if(inst->declaration->type == FUDeclaration::COMPOSITE){
+         count += CountNonOperationChilds(inst->compositeAccel);
+      }
+
+      if(!inst->declaration->isOperation && inst->declaration->type != FUDeclaration::SPECIAL){
+         count += 1;
+      }
+   }
+
+   return count;
+}
+
 static Value EvalExpression(Expression* expr){
    switch(expr->type){
       case Expression::OPERATION:{
@@ -331,6 +350,10 @@ static Value EvalExpression(Expression* expr){
             } else if(CompareString(expr->expressions[1]->id,"String")){
                Assert(val.type == ValueType::STRING);
                val.literal = true;
+            } else if(CompareString(expr->expressions[1]->id,"CountNonOperationChilds")){
+               Accelerator* accel = *((Accelerator**) val.custom);
+
+               val = MakeValue(CountNonOperationChilds(accel));
             } else {
                NOT_IMPLEMENTED;
             }

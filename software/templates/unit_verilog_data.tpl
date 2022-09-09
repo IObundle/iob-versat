@@ -110,6 +110,11 @@ static int32_t MemoryAccess(FUInstance* inst,int address,int value,int write){
    }
 }
 
+struct DatabusAccess{
+   int counter;
+   int latencyCounter;
+};
+
 #define INITIAL_MEMORY_LATENCY 5
 #define MEMORY_LATENCY 2
 
@@ -150,9 +155,10 @@ static int32_t* @{module.name}_StartFunction(FUInstance* inst){
 
 
 #{if module.doesIO}
-   int* memoryLatency = (int*) &self[1];
+   DatabusAccess* memoryLatency = (DatabusAccess*) &self[1];
 
-   *memoryLatency = INITIAL_MEMORY_LATENCY;
+   memoryLatency->counter = 0;
+   memoryLatency->latencyCounter = INITIAL_MEMORY_LATENCY;
 #{end}
 
    START_RUN(self);
@@ -184,29 +190,40 @@ static int32_t* @{module.name}_UpdateFunction(FUInstance* inst){
 #{end}
 
 #{if module.doesIO}
-   int* memoryLatency = (int*) &self[1];
+   DatabusAccess* access = (DatabusAccess*) &self[1];
 
-   self->databus_ready = 0;
-
-   if(self->databus_valid && self->databus_wstrb == 0){
-      if(*memoryLatency > 0){
-         *memoryLatency -= 1;
+   if(self->databus_valid){
+      if(access->latencyCounter > 0){
+         access->latencyCounter -= 1;
       } else {
-         int* ptr = (int*) (self->databus_addr);
-         self->databus_rdata = *ptr;
-         self->databus_ready = 1;
-         *memoryLatency = MEMORY_LATENCY;
-      }
-   }
+         if(self->databus_wstrb == 0){
+            int* ptr = (int*) (self->databus_addr);
+            self->databus_rdata = ptr[access->counter];
+            self->databus_ready = 1;
+         } else { // self->databus_wstrb != 0
+            int* ptr = (int*) self->databus_addr;
+            ptr[access->counter] = self->databus_wdata;
+            self->databus_ready = 1;
+         }
+         
+         if(access->counter == self->databus_len){
+            access->counter = 0;
+            self->databus_last = 1;
+         } else {
+            access->counter += 1;            
+         }
 
-   if(self->databus_valid && self->databus_wstrb != 0){
-      int* ptr = (int*) self->databus_addr;
-      *ptr = self->databus_wdata;
-      self->databus_ready = 1;
+         access->latencyCounter = MEMORY_LATENCY;
+      }
    }
 #{end}
 
    UPDATE(self);
+
+#{if module.doesIO}
+   self->databus_ready = 0;
+   self->databus_last = 0;
+#{end}
 
 #{if module.nStates}
 @{module.name}State* state = (@{module.name}State*) inst->state;
@@ -256,7 +273,7 @@ static FUDeclaration* @{module.name}_Register(Versat* versat){
    decl.name = MakeSizedString("@{module.name}");
 
    #{if module.doesIO}
-   decl.extraDataSize = sizeof(V@{module.name}) + 4;
+   decl.extraDataSize = sizeof(V@{module.name}) + sizeof(DatabusAccess);
    #{else}
    decl.extraDataSize = sizeof(V@{module.name});
    #{end}

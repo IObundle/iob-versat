@@ -58,7 +58,7 @@ void OutputGraphDotFile(Accelerator* accel,bool collapseSameEdges,const char* fi
 Versat* InitVersat(int base,int numberConfigurations);
 void ParseCommandLineOptions(Versat* versat,int argc,const char** argv);
 void ParseVersatSpecification(Versat* versat,const char* filepath);
-void EnableDebug(Versat* versat);
+bool SetDebug(Versat* versat,bool flag);
 
 FUDeclaration* RegisterFU(Versat* versat,FUDeclaration declaration);
 void OutputVersatSource(Versat* versat,Accelerator* accel,const char* sourceFilepath,const char* constantsFilepath,const char* dataFilepath);
@@ -79,6 +79,7 @@ FUDeclaration* RegisterSubUnit(Versat* versat,SizedString name,Accelerator* acce
 // Put arguments right after format string
 #define GetInstanceByName(ACCEL,...) GetInstanceByName_(ACCEL,NUMBER_ARGS(__VA_ARGS__),__VA_ARGS__)
 FUInstance* GetInstanceByName_(Accelerator* accel,int argc, ...);
+FUInstance* GetInstanceByName_(FUInstance* inst,int argc, ...);
 
 void SaveConfiguration(Accelerator* accel,int configuration);
 void LoadConfiguration(Accelerator* accel,int configuration);
@@ -94,7 +95,7 @@ void ConnectUnitsWithDelay(FUInstance* out,int outIndex,FUInstance* in,int inInd
 void VersatUnitWrite(FUInstance* instance,int address, int value);
 int VersatUnitRead(FUInstance* instance,int address);
 
-Accelerator* MergeGraphs(Versat* versat,Accelerator* accel1,Accelerator* accel2);
+FUDeclaration* MergeAccelerators(Versat* versat,FUDeclaration* accel1,FUDeclaration* accel2);
 
 void Hook(Versat* versat,Accelerator* accel,FUInstance* inst);
 

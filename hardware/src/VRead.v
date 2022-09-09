@@ -6,23 +6,25 @@
 `include "xdefs.vh"
 
 module VRead #(
-               parameter DATA_W = 32,
-               parameter ADDR_W = 10
-               )
+   parameter DATA_W = 32,
+   parameter ADDR_W = 10
+   )
    (
-   input                   clk,
-   input                   rst,
+   input                  clk,
+   input                  rst,
 
-    input                  run,
-    output                 done,
+   input                  run,
+   output                 done,
 
-    // Native interface
-    input                  databus_ready,
-    output                 databus_valid,
-    output[`IO_ADDR_W-1:0] databus_addr,
-    input [DATA_W-1:0]     databus_rdata,
-    output [DATA_W-1:0]    databus_wdata,
-    output [DATA_W/8-1:0]  databus_wstrb,
+   // Native interface
+   input                  databus_ready,
+   output                 databus_valid,
+   output reg [`IO_ADDR_W-1:0] databus_addr,
+   input [DATA_W-1:0]     databus_rdata,
+   output [DATA_W-1:0]    databus_wdata,
+   output [DATA_W/8-1:0]  databus_wstrb,
+   output [7:0]           databus_len,
+   input                  databus_last,
 
     // input / output data
     (* latency=1 *) output [DATA_W-1:0]    out0,
@@ -36,6 +38,7 @@ module VRead #(
    input [`PERIOD_W-1:0]   dutyA,
    input [`MEM_ADDR_W-1:0] shiftA,
    input [`MEM_ADDR_W-1:0] incrA,
+   input [7:0]             length,
    input                   pingPong,
 
    input [`MEM_ADDR_W-1:0] iterB,
@@ -53,11 +56,33 @@ module VRead #(
    input [`MEM_ADDR_W-1:0] incr2B
    );
 
+   assign databus_len = length;
+
    // output databus
    wire [DATA_W-1:0]            outB;
-   wire doneA,doneB;
+   
+   wire gen_done;
+   reg doneA;
+   reg doneB;
+   wire doneB_int;
    assign out0 = outB;
    assign done = doneA & doneB;
+
+   always @(posedge clk,posedge rst)
+   begin
+      if(rst) begin
+         doneA <= 1'b0;
+         doneB <= 1'b0;
+      end else if(run) begin
+         doneA <= 1'b0;
+         doneB <= 1'b0;
+      end else begin 
+         if(databus_valid && databus_ready && databus_last)
+            doneA <= 1'b1;
+         if(doneB_int)
+            doneB <= 1'b1;
+      end
+   end
 
    function [`MEM_ADDR_W-1:0] reverseBits;
       input [`MEM_ADDR_W-1:0]   word;
@@ -110,17 +135,24 @@ module VRead #(
    end
 
    wire next;
-   wire [`MEM_ADDR_W-1:0] addressA;
 
    assign databus_wstrb = 4'b0000;
 
-   wire genDone;
+   wire gen_valid,gen_ready;
+   wire [`MEM_ADDR_W-1:0] gen_addr;
+
+   always @(posedge clk,posedge rst)
+   begin
+      if(rst)
+         databus_addr <= 0;
+      else if(run)
+         databus_addr <= ext_addr;
+   end
 
    MyAddressGen addrgenA(
       .clk(clk),
       .rst(rst),
       .run(run),
-      .next(next),
 
       //configurations 
       .iterations(iterA),
@@ -132,9 +164,10 @@ module VRead #(
       .incr(incrA),
 
       //outputs 
-      .valid(),
-      .addr(addressA),
-      .done(genDone)
+      .valid(gen_valid),
+      .ready(gen_ready),
+      .addr(gen_addr),
+      .done(gen_done)
       );
 
     xaddrgen2 addrgen2B (
@@ -154,7 +187,7 @@ module VRead #(
                        .incr2(incr2B),
                        .addr(addrB_int),
                        .mem_en(enB),
-                       .done(doneB)
+                       .done(doneB_int)
                        );
 
    assign addrA = addrA_int2;
@@ -166,30 +199,26 @@ module VRead #(
    wire write_en;
    wire [`MEM_ADDR_W-1:0] write_addr;
    wire [DATA_W-1:0] write_data;
+   
+   MemoryWriter #(.ADDR_W(`MEM_ADDR_W)) 
+   writer(
+      .gen_valid(gen_valid),
+      .gen_ready(gen_ready),
+      .gen_addr(gen_addr),
 
+      // Slave connected to data source
+      .data_valid(databus_ready),
+      .data_ready(databus_valid),
+      .data_in(databus_rdata),
 
-   IObToMem #(.DATA_W(DATA_W)) IobToMem(
-      .ext_addr(ext_addr),
-
-      .write_done(genDone),
-      .write_addr(addressA),
-      .next(next),
-
-      .mem_en(write_en),
+      // Connect to memory
+      .mem_enable(write_en),
       .mem_addr(write_addr),
       .mem_data(write_data),
 
-      .ready(databus_ready),
-      .valid(databus_valid),
-      .rdata(databus_rdata),
-      .addr(databus_addr),
-
-      .run(run),
-      .done(doneA),
-
       .clk(clk),
       .rst(rst)
-   );
+      );
 
    iob_2p_ram #(
                .DATA_W(DATA_W),
@@ -208,103 +237,5 @@ module VRead #(
         .r_addr(addrB),
         .r_data(outB)
         );
-
-endmodule
-
-module IObToMem #(
-      parameter DATA_W = 32
-   )(
-      input [`IO_ADDR_W-1:0] ext_addr,
-
-      input write_done,
-      input [`MEM_ADDR_W-1:0] write_addr,
-      output reg next,
-
-      output reg mem_en,
-      output reg [`MEM_ADDR_W-1:0]  mem_addr,
-      output [DATA_W-1:0] mem_data,
-
-      input                       ready,
-      output reg [`IO_ADDR_W-1:0] addr,
-      output reg                  valid,
-      input reg [DATA_W-1:0]      rdata,
-
-      input run,
-      output reg done,
-
-      input clk,
-      input rst
-   );
-
-reg [3:0] state;
-reg [31:0] counter;
-
-always @(posedge clk,posedge rst)
-begin
-   if(rst) begin
-      state <= 0;
-      counter <= 0;
-      done <= 0;
-   end else if(run) begin
-      state <= 4'h1;
-      counter <= 0;
-      done <= 0;
-   end else begin
-      case(state)
-      4'h0: begin
-         state <= 4'h0;
-      end
-      4'h1: begin
-         state <= 4'h2;
-         addr <= ext_addr + counter;
-         counter <= counter + 4;
-      end
-      4'h2: begin
-         if(ready) begin
-            mem_addr <= write_addr;
-            mem_data <= rdata;
-            state <= 4'h3;
-         end
-      end
-      4'h3: begin
-         if(write_done) begin
-            state <= 4'h0;
-            done <= 1'b1;
-         end else begin
-            state <= 4'h1;
-         end
-      end
-      default: begin
-         state <= 4'h0;
-      end
-      endcase
-   end
-end
-
-always @*
-begin
-   valid = 1'b0;
-   next = 1'b0;
-   mem_en = 1'b0;
-
-   case(state)
-   4'h1: begin
-   end
-   4'h2: begin
-      valid = 1'b1;
-      if(ready) begin
-         valid = 1'b0;
-      end
-   end
-   4'h3: begin
-      mem_en = 1'b1;
-      if(!write_done) begin
-         next = 1'b1;
-      end
-   end
-   default: begin
-   end
-   endcase
-end
 
 endmodule

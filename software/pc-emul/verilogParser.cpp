@@ -643,7 +643,9 @@ int main(int argc,const char* argv[]){
                      || CheckFormat("databus_addr",decl.name)
                      || CheckFormat("databus_rdata",decl.name)
                      || CheckFormat("databus_wdata",decl.name)
-                     || CheckFormat("databus_wstrb",decl.name)){
+                     || CheckFormat("databus_wstrb",decl.name)
+                     || CheckFormat("databus_len",decl.name)
+                     || CheckFormat("databus_last",decl.name)){
                doesIO = true;
             } else if(  CheckFormat("ready",decl.name)
                      || CheckFormat("valid",decl.name)

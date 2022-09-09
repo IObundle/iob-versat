@@ -415,8 +415,12 @@ void ParseCommandLineOptions(Versat* versat,int argc,const char** argv){
    }
 }
 
-void EnableDebug(Versat* versat){
-   versat->debug.outputAccelerator = true;
+bool SetDebug(Versat* versat,bool flag){
+   bool last = versat->debug.outputAccelerator;
+
+   versat->debug.outputAccelerator = flag;
+
+   return last;
 }
 
 static int AccessMemory(FUInstance* instance,int address, int value, int write){
@@ -464,11 +468,8 @@ FUDeclaration* GetTypeByName(Versat* versat,SizedString name){
    return nullptr;
 }
 
-FUInstance* GetInstanceByName_(Accelerator* circuit,int argc, ...){
+static FUInstance* vGetInstanceByName_(Accelerator* circuit,int argc,va_list args){
    char buffer[256];
-
-   va_list args;
-   va_start(args,argc);
 
    Accelerator* ptr = circuit;
    FUInstance* res = nullptr;
@@ -505,9 +506,31 @@ FUInstance* GetInstanceByName_(Accelerator* circuit,int argc, ...){
       }
    }
 
+   res->namedAccess = true;
+
+   return res;
+}
+
+FUInstance* GetInstanceByName_(Accelerator* circuit,int argc, ...){
+   va_list args;
+   va_start(args,argc);
+
+   FUInstance* res = vGetInstanceByName_(circuit,argc,args);
+
    va_end(args);
 
-   res->namedAccess = true;
+   return res;
+}
+
+FUInstance* GetInstanceByName_(FUInstance* inst,int argc, ...){
+   Assert(inst->compositeAccel);
+
+   va_list args;
+   va_start(args,argc);
+
+   FUInstance* res = vGetInstanceByName_(inst->compositeAccel,argc,args);
+
+   va_end(args);
 
    return res;
 }
@@ -1440,6 +1463,16 @@ static void IncrementMapping(){
 }
 
 static void PrintVCDDefinitions_(Accelerator* accel){
+   #if 1
+   for(StaticInfo* info : accel->staticInfo){
+      for(int i = 0; i < info->nConfigs; i++){
+         Wire* wire = &info->wires[i];
+         fprintf(accelOutputFile,"$var wire  %d %c%c%c%c %.*s_%.*s $end\n",wire->bitsize,currentMapping[0],currentMapping[1],currentMapping[2],currentMapping[3],UNPACK_SS(info->name),UNPACK_SS(wire->name));
+         IncrementMapping();
+      }
+   }
+   #endif
+
    for(FUInstance* inst : accel->instances){
       fprintf(accelOutputFile,"$scope module %s_%d $end\n",inst->name.str,inst->id);
 
@@ -1467,6 +1500,12 @@ static void PrintVCDDefinitions_(Accelerator* accel){
          IncrementMapping();
       }
 
+      for(int i = 0; i < inst->declaration->nDelays; i++){
+         fprintf(accelOutputFile,"$var wire 32 %c%c%c%c delay%d $end\n",currentMapping[0],currentMapping[1],currentMapping[2],currentMapping[3],i);
+         IncrementMapping();
+      }
+
+      #if 0
       for(StaticInfo* info : accel->staticInfo){
          for(int i = 0; i < info->nConfigs; i++){
             Wire* wire = &info->wires[i];
@@ -1474,11 +1513,7 @@ static void PrintVCDDefinitions_(Accelerator* accel){
             IncrementMapping();
          }
       }
-
-      for(int i = 0; i < accel->delayAlloc.size; i++){
-         fprintf(accelOutputFile,"$var wire 32 %c%c%c%c delay%d $end\n",currentMapping[0],currentMapping[1],currentMapping[2],currentMapping[3],i);
-         IncrementMapping();
-      }
+      #endif
 
       if(inst->declaration->implementsDone){
          fprintf(accelOutputFile,"$var wire  1 %c%c%c%c done $end\n",currentMapping[0],currentMapping[1],currentMapping[2],currentMapping[3]);
@@ -1524,6 +1559,17 @@ static char* Bin(unsigned int val){
 }
 
 static void PrintVCD_(Accelerator* accel,int time){
+   #if 1
+   for(StaticInfo* info : accel->staticInfo){
+      for(int i = 0; i < info->nConfigs; i++){
+         if(time == 0){
+            fprintf(accelOutputFile,"b%s %c%c%c%c\n",Bin(info->ptr[i]),currentMapping[0],currentMapping[1],currentMapping[2],currentMapping[3]);
+         }
+         IncrementMapping();
+      }
+   }
+   #endif
+
    for(FUInstance* inst : accel->instances){
       for(int i = 0; i < inst->tempData->inputPortsUsed; i++){
          fprintf(accelOutputFile,"b%s %c%c%c%c\n",Bin(GetInputValue(inst,i)),currentMapping[0],currentMapping[1],currentMapping[2],currentMapping[3]);
@@ -1549,6 +1595,12 @@ static void PrintVCD_(Accelerator* accel,int time){
          IncrementMapping();
       }
 
+      for(int i = 0; i < inst->declaration->nDelays; i++){
+         fprintf(accelOutputFile,"b%s %c%c%c%c\n",Bin(inst->delay[i]),currentMapping[0],currentMapping[1],currentMapping[2],currentMapping[3]);
+         IncrementMapping();
+      }
+
+      #if 0
       for(StaticInfo* info : accel->staticInfo){
          for(int i = 0; i < info->nConfigs; i++){
             if(time == 0){
@@ -1557,11 +1609,7 @@ static void PrintVCD_(Accelerator* accel,int time){
             IncrementMapping();
          }
       }
-
-      for(int i = 0; i < accel->delayAlloc.size; i++){
-         fprintf(accelOutputFile,"b%s %c%c%c%c\n",Bin(accel->delayAlloc.ptr[i]),currentMapping[0],currentMapping[1],currentMapping[2],currentMapping[3]);
-         IncrementMapping();
-      }
+      #endif
 
       if(inst->declaration->implementsDone){
          fprintf(accelOutputFile,"%d%c%c%c%c\n",inst->done ? 1 : 0,currentMapping[0],currentMapping[1],currentMapping[2],currentMapping[3]);
@@ -1738,7 +1786,7 @@ void AcceleratorRun(Accelerator* accel){
       PrintVCD(accel,time++,0);
    }
 
-   for(int cycle = 0; 1; cycle++){
+   for(int cycle = 0; 1; cycle++){ // Max amount of iterations
       AcceleratorDoCycle(accel);
       AcceleratorRunIteration(accel);
 
@@ -2025,7 +2073,7 @@ void OutputVersatSource(Versat* versat,Accelerator* accel,const char* sourceFile
    #if 1
    std::vector<FUInstance*> accum;
    VisitAcceleratorInstances(accel,[&](FUInstance* inst){
-      if(inst->namedAccess){
+      if(!inst->declaration->isOperation && inst->declaration->type != FUDeclaration::SPECIAL){
          accum.push_back(inst);
       }
    });
@@ -2077,7 +2125,10 @@ void OutputVersatSource(Versat* versat,Accelerator* accel,const char* sourceFile
 
    ProcessTemplate(s,"../../submodules/VERSAT/software/templates/versat_top_instance_template.tpl",&versat->temp);
 
-   unsigned int hashTableSize = 50;
+
+
+   /*
+   unsigned int hashTableSize = 2048;
    Assert(accum.size() < (hashTableSize / 2));
    HashKey hashMap[hashTableSize];
    for(size_t i = 0; i < hashTableSize; i++){
@@ -2113,8 +2164,10 @@ void OutputVersatSource(Versat* versat,Accelerator* accel,const char* sourceFile
       }
    }
 
+
    TemplateSetNumber("hashTableSize",hashTableSize);
    TemplateSetArray("instanceHashmap","HashKey",hashMap,hashTableSize);
+   */
 
    TemplateSetNumber("configurationSize",accel->configAlloc.size);
    TemplateSetArray("configurationData","int",accel->configAlloc.ptr,accel->configAlloc.size);
@@ -2139,7 +2192,7 @@ void OutputVersatSource(Versat* versat,Accelerator* accel,const char* sourceFile
    TemplateSetNumber("numberUnits",accum.size());
    ProcessTemplate(d,"../../submodules/VERSAT/software/templates/embedData.tpl",&versat->temp);
 
-   PopMark(&versat->temp,mark);
+   //PopMark(&versat->temp,mark);
 
    fclose(s);
    fclose(d);
@@ -2586,7 +2639,6 @@ void SetDelayRecursive(Accelerator* accel){
    }
 }
 
-#if 0
 static int NodeMappingConflict(Edge edge1,Edge edge2){
    FUInstance* list[4] = {edge1.units[0].inst,edge1.units[1].inst,edge2.units[0].inst,edge2.units[1].inst};
    FUInstance* instances[4] = {0,0,0,0};
@@ -2618,104 +2670,6 @@ static int MappingConflict(MappingNode map1,MappingNode map2){
               NodeMappingConflict(map2.edges[0],map2.edges[1]));
 
    return res;
-}
-
-ConsolidationGraph GenerateConsolidationGraph(Accelerator* accel1,Accelerator* accel2){
-   ConsolidationGraph graph = {};
-
-   graph.nodes = (MappingNode*) malloc(sizeof(MappingNode) * 1024);
-   graph.edges = (MappingEdge*) malloc(sizeof(MappingEdge) * 1024);
-
-   //LockAccelerator(accel1);
-   //LockAccelerator(accel2);
-
-   // Check node mapping
-   #if 0
-   for(int i = 0; i < accel1->nInstances; i++){
-      for(int ii = 0; ii < accel2->nInstances; ii++){
-         FUInstance* inst1 = &accel1->instances[i];
-         FUInstance* inst2 = &accel2->instances[ii];
-
-         if(inst1->declaration == inst2->declaration){
-            MappingNode node = {};
-
-            node.edges[0].inst[0] = inst1;
-            node.edges[0].inst[1] = inst1;
-            node.edges[1].inst[0] = inst2;
-            node.edges[1].inst[1] = inst2;
-
-            graph.nodes[graph.numberNodes++] = node;
-         }
-      }
-   }
-   #endif
-
-   #if 0
-   // Check possible edges
-   for(int i = 0; i < accel1->nInstances; i++){
-      for(int ii = 0; ii < accel2->nInstances; ii++){
-         FUInstance* inst1 = &accel1->instances[i];
-         FUInstance* inst2 = &accel2->instances[ii];
-
-         for(int iii = 0; iii < inst1->tempData->numberOutputs; iii++){
-            for(int iv = 0; iv < inst2->tempData->numberOutputs; iv++){
-               FUInstance* other1 = inst1->tempData->outputs[iii].inst;
-               FUInstance* other2 = inst2->tempData->outputs[iv].inst;
-
-               // WRONG, INSTANCES CAN HAVE MULTIPLE PORTS CONNECTED
-               // THIS WAY ONLY HAD 1 POSSIBLE
-
-               PortEdge port1 = GetPort(inst1,other1);
-               PortEdge port2 = GetPort(inst2,other2);
-
-               if(inst1->declaration == inst2->declaration &&
-                  other1->declaration == other2->declaration &&
-                  port1.inPort == port2.inPort &&
-                  port1.outPort == port2.outPort){
-
-                  MappingNode node = {};
-
-                  node.edges[0].inst[0] = inst1;
-                  node.edges[0].inst[1] = other1;
-                  node.edges[0].inPort = port1.inPort;
-                  node.edges[0].outPort = port1.outPort;
-                  node.edges[1].inst[0] = inst2;
-                  node.edges[1].inst[1] = other2;
-                  node.edges[1].inPort = port1.inPort;
-                  node.edges[1].outPort = port1.outPort;
-
-                  graph.nodes[graph.numberNodes++] = node;
-               }
-            }
-         }
-      }
-   }
-
-   // Check edge conflicts
-   for(int i = 0; i < graph.numberNodes; i++){
-      for(int ii = 0; ii < graph.numberNodes; ii++){
-         if(i == ii){
-            continue;
-         }
-
-         MappingNode node1 = graph.nodes[i];
-         MappingNode node2 = graph.nodes[ii];
-
-         if(MappingConflict(node1,node2)){
-            continue;
-         }
-
-         MappingEdge edge = {};
-
-         edge.nodes[0] = node1;
-         edge.nodes[1] = node2;
-
-         graph.edges[graph.numberEdges++] = edge;
-      }
-   }
-   #endif
-
-   return graph;
 }
 
 int EdgeEqual(Edge edge1,Edge edge2){
@@ -2922,6 +2876,7 @@ FUInstance* NodeMapped(FUInstance* inst, ConsolidationGraph graph){
    return nullptr;
 }
 
+#if 0
 Accelerator* MergeGraphs(Versat* versat,Accelerator* accel1,Accelerator* accel2,ConsolidationGraph graph){
    Mapping* graphToFinal = (Mapping*) calloc(sizeof(Mapping),1024);
 
@@ -2985,6 +2940,192 @@ Accelerator* MergeGraphs(Versat* versat,Accelerator* accel1,Accelerator* accel2,
    return newGraph;
 }
 #endif
+
+
+ConsolidationGraph GenerateConsolidationGraph(Accelerator* accel1,Accelerator* accel2){
+   ConsolidationGraph graph = {};
+
+   graph.nodes = (MappingNode*) malloc(sizeof(MappingNode) * 1024 * 10);
+   graph.edges = (MappingEdge*) malloc(sizeof(MappingEdge) * 1024 * 10);
+
+   // Check node mapping
+   #if 1
+   for(FUInstance* instA : accel1->instances){
+      for(FUInstance* instB : accel2->instances){
+         if(instA->declaration == instB->declaration){
+            MappingNode node = {};
+
+            node.edges[0].units[0].inst = instA;
+            node.edges[0].units[1].inst = instA;
+            node.edges[1].units[0].inst = instB;
+            node.edges[1].units[1].inst = instB;
+
+            graph.nodes[graph.numberNodes++] = node;
+         }
+      }
+   }
+   #endif
+
+   #if 0
+   // Check possible edges
+   for(int i = 0; i < accel1->nInstances; i++){
+      for(int ii = 0; ii < accel2->nInstances; ii++){
+         FUInstance* inst1 = &accel1->instances[i];
+         FUInstance* inst2 = &accel2->instances[ii];
+
+         for(int iii = 0; iii < inst1->tempData->numberOutputs; iii++){
+            for(int iv = 0; iv < inst2->tempData->numberOutputs; iv++){
+               FUInstance* other1 = inst1->tempData->outputs[iii].inst;
+               FUInstance* other2 = inst2->tempData->outputs[iv].inst;
+
+               // WRONG, INSTANCES CAN HAVE MULTIPLE PORTS CONNECTED
+               // THIS WAY ONLY HAD 1 POSSIBLE
+
+               PortEdge port1 = GetPort(inst1,other1);
+               PortEdge port2 = GetPort(inst2,other2);
+
+               if(inst1->declaration == inst2->declaration &&
+                  other1->declaration == other2->declaration &&
+                  port1.inPort == port2.inPort &&
+                  port1.outPort == port2.outPort){
+
+                  MappingNode node = {};
+
+                  node.edges[0].inst[0] = inst1;
+                  node.edges[0].inst[1] = other1;
+                  node.edges[0].inPort = port1.inPort;
+                  node.edges[0].outPort = port1.outPort;
+                  node.edges[1].inst[0] = inst2;
+                  node.edges[1].inst[1] = other2;
+                  node.edges[1].inPort = port1.inPort;
+                  node.edges[1].outPort = port1.outPort;
+
+                  graph.nodes[graph.numberNodes++] = node;
+               }
+            }
+         }
+      }
+   }
+
+   // Check edge conflicts
+   for(int i = 0; i < graph.numberNodes; i++){
+      for(int ii = 0; ii < graph.numberNodes; ii++){
+         if(i == ii){
+            continue;
+         }
+
+         MappingNode node1 = graph.nodes[i];
+         MappingNode node2 = graph.nodes[ii];
+
+         if(MappingConflict(node1,node2)){
+            continue;
+         }
+
+         MappingEdge edge = {};
+
+         edge.nodes[0] = node1;
+         edge.nodes[1] = node2;
+
+         graph.edges[graph.numberEdges++] = edge;
+      }
+   }
+   #endif
+
+
+
+   return graph;
+}
+
+void PrintMappingNode(MappingNode* node){
+   printf("\n");
+   printf("0:%s - ",node->edges[0].units[0].inst->name.str);
+   printf("0:%s\n",node->edges[0].units[1].inst->name.str);
+   printf("1:%s - ",node->edges[1].units[0].inst->name.str);
+   printf("1:%s\n",node->edges[1].units[1].inst->name.str);
+   printf("\n");
+}
+
+FUDeclaration* MergeAccelerators(Versat* versat,FUDeclaration* accel1,FUDeclaration* accel2){
+   Assert(accel1->type == FUDeclaration::COMPOSITE && accel2->type == FUDeclaration::COMPOSITE);
+
+   ConsolidationGraph graph = GenerateConsolidationGraph(accel1->circuit,accel2->circuit);
+
+   for(int i = 0; i < graph.numberNodes; i++){
+      MappingNode* node = &graph.nodes[i];
+
+      PrintMappingNode(node);
+   }
+
+   ConsolidationGraph clique = MaxClique(graph);
+
+   for(int i = 0; i < graph.numberNodes; i++){
+      MappingNode* node = &clique.nodes[i];
+
+      PrintMappingNode(node);
+   }
+
+   Mapping* graphToFinal = (Mapping*) calloc(sizeof(Mapping),1024);
+
+   InstanceMap map = {};
+
+   Accelerator* newGraph = CreateAccelerator(versat);
+
+   // Create base instances (accel 1)
+   for(FUInstance* inst : accel1->circuit->instances){
+      FUInstance* newNode = CreateFUInstance(newGraph,inst->declaration,MakeSizedString(inst->name.str));
+
+      map.insert({inst,newNode});
+   }
+
+   #if 1
+   for(FUInstance* inst : accel2->circuit->instances){
+      FUInstance* mappedNode = NodeMapped(inst,clique); // Returns node in graph 1
+
+      if(mappedNode){
+         mappedNode = map.find(mappedNode)->second;
+      } else {
+         mappedNode = CreateFUInstance(newGraph,inst->declaration,MakeSizedString(inst->name.str));
+      }
+
+      AddMapping(graphToFinal,inst,mappedNode);
+   }
+   #endif
+
+   #if 1
+   // Add edges from accel1
+   for(FUInstance* inst : accel1->circuit->instances){
+      for(int ii = 0; ii < inst->tempData->numberOutputs; ii++){
+         FUInstance* other = inst->tempData->outputs[ii].inst.inst;
+
+         FUInstance* mappedInst = map.find(inst)->second;
+         FUInstance* mappedOther = map.find(other)->second;
+
+         ConnectUnits(mappedInst,0,mappedOther,0);
+      }
+   }
+   #endif
+
+   #if 0
+   for(FUInstance* inst : accel2->instances){
+      for(int ii = 0; ii < inst->tempData->numberOutputs; ii++){
+         FUInstance* other = inst->tempData->outputs[ii].inst.inst;
+
+         FUInstance* mappedInst =  map.find(inst)->second;
+         FUInstance* mappedOther = map.find(other)->second;
+
+         //PortEdge portEdge = GetPort(inst,other);
+
+         //ConnectUnits(mappedInst,portEdge.outPort,mappedOther,portEdge.inPort);
+      }
+   }
+   #endif
+
+   OutputGraphDotFile(newGraph,false,"Merged.dot");
+
+   //return newGraph;
+
+   return nullptr;
+}
 
 #undef NUMBER_OUTPUTS
 #undef OUTPUT

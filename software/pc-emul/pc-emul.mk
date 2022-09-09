@@ -19,7 +19,7 @@ CPP_FILES += $(VERSAT_DIR)/software/utilsCommon.cpp
 CPP_OBJ += $(BUILD_DIR)/utilsCommon.o
 
 #Units to verilate
-VERILATE_UNIT := Reg Mem Muladd VRead VWrite PipelineRegister Mux2 Merge Const Delay SwapEndian
+VERILATE_UNIT := Reg Mem Muladd VRead VWrite PipelineRegister Mux2 Merge Const Delay SwapEndian LookupTable
 UNIT_VERILOG := $(foreach unit,$(VERILATE_UNIT),$(VERSAT_DIR)/hardware/src/$(unit).v)
 
 UNIT_HDR+=$(foreach unit,$(VERILATE_UNIT),$(BUILD_DIR)/V$(unit).h)
@@ -55,7 +55,7 @@ $(BUILD_DIR)/verilated_vcd_c.o:
 	mv *.d $(BUILD_DIR)/;
 
 $(BUILD_DIR)/V%.h: $(VERSAT_HW_DIR)/src/%.v
-	verilator --trace -CFLAGS "$(VERILATE_FLAGS)" -I$(VERSAT_HW_DIR)/src -I$(VERSAT_HW_DIR)/include -I$(VERSAT_DIR)/submodules/MEM/ram/2p_ram -I$(VERSAT_DIR)/submodules/MEM/ram/tdp_ram -cc -Mdir $(BUILD_DIR) $<;
+	verilator --trace -CFLAGS "$(VERILATE_FLAGS)" -I$(VERSAT_HW_DIR)/src -I$(VERSAT_HW_DIR)/include -I$(VERSAT_DIR)/submodules/MEM/ram/dp_ram -I$(VERSAT_DIR)/submodules/MEM/ram/2p_ram -I$(VERSAT_DIR)/submodules/MEM/ram/tdp_ram -cc -Mdir $(BUILD_DIR) $<;
 	cd $(BUILD_DIR) && make -f V$*.mk;
 
 $(BUILD_DIR)/typeInfo.inc: $(BUILD_DIR)/structParser.out $(TYPE_INFO_HDR)

@@ -27,8 +27,8 @@ class Tokenizer{
    const char* ptr;
    const char* end;
    int lines;
-   std::string singleChars;
-   std::vector<std::string> specialChars;
+   std::string singleChars; // TODO: Why use string instead of sized string?
+   std::vector<std::string> specialChars; // TODO: Why use string instead of sized string?
 
 public:
 

@@ -52,12 +52,14 @@ module @{accel.name} #(
 
    #{if accel.nIOs}
    // Databus master interface
-   input [@{accel.nIOs - 1}:0]                    databus_ready,
-   output [@{accel.nIOs - 1}:0]                   databus_valid,
+   input [@{accel.nIOs - 1}:0]                databus_ready,
+   output [@{accel.nIOs - 1}:0]               databus_valid,
    output [@{accel.nIOs} * AXI_ADDR_W-1:0]    databus_addr,
-   input [@{accel.nIOs} * `DATAPATH_W-1:0]    databus_rdata,
+   input [`DATAPATH_W-1:0]                    databus_rdata,
    output [@{accel.nIOs} * `DATAPATH_W-1:0]   databus_wdata,
    output [@{accel.nIOs} * `DATAPATH_W/8-1:0] databus_wstrb,
+   output [@{accel.nIOs} * 8-1:0]             databus_len,
+   input  [@{accel.nIOs - 1}:0]               databus_last,
    #{end}
 
    #{if accel.isMemoryMapped}
@@ -240,9 +242,11 @@ end
          .databus_ready(databus_ready[@{ioIndex} +: @{decl.nIOs}]),
          .databus_valid(databus_valid[@{ioIndex} +: @{decl.nIOs}]),
          .databus_addr(databus_addr[@{ioIndex * 32} +: @{32 * decl.nIOs}]),
-         .databus_rdata(databus_rdata[@{ioIndex * 32} +: @{32 * decl.nIOs}]),
+         .databus_rdata(databus_rdata),
          .databus_wdata(databus_wdata[@{ioIndex * 32} +: @{32 * decl.nIOs}]),
          .databus_wstrb(databus_wstrb[@{ioIndex * 4} +: @{4 * decl.nIOs}]),
+         .databus_len(databus_len[@{ioIndex * 8} +: @{8 * decl.nIOs}]),
+         .databus_last(databus_last[@{ioIndex} +: @{decl.nIOs}]),
          #{set ioIndex ioIndex + decl.nIOs}
          #{end} 
          

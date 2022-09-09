@@ -6,27 +6,29 @@
 `include "versat-io.vh"
 
 module VWrite #(
-                parameter DATA_W=32
-                )
+   parameter DATA_W=32
+   )
    (
-   input                   clk,
-   input                   rst,
+   input                  clk,
+   input                  rst,
 
-    input                  run,
-    output                 done,
+   input                  run,
+   output                 done,
 
-    // Databus interface
-    input                  databus_ready,
-    output                 databus_valid,
-    output[`IO_ADDR_W-1:0] databus_addr,
-    input [DATA_W-1:0]     databus_rdata,
-    output [DATA_W-1:0]    databus_wdata,
-    output [DATA_W/8-1:0]  databus_wstrb,
+   // Databus interface
+   input                  databus_ready,
+   output                 databus_valid,
+   output[`IO_ADDR_W-1:0] databus_addr,
+   input [DATA_W-1:0]     databus_rdata,
+   output [DATA_W-1:0]    databus_wdata,
+   output [DATA_W/8-1:0]  databus_wstrb,
+   output [7:0]           databus_len,
+   input                  databus_last,
 
-    // input / output data
-    input [DATA_W-1:0]     in0,
+   // input / output data
+   input [DATA_W-1:0]     in0,
 
-    // configurations
+   // configurations
    input [`IO_ADDR_W-1:0]  ext_addr,
    input [`MEM_ADDR_W-1:0] int_addr,
    input [`IO_SIZE_W-1:0]  size,
@@ -35,6 +37,7 @@ module VWrite #(
    input [`PERIOD_W-1:0]   dutyA,
    input [`MEM_ADDR_W-1:0] shiftA,
    input [`MEM_ADDR_W-1:0] incrA,
+   input [7:0]             length,
    input                   pingPong,
 
    input [`MEM_ADDR_W-1:0] iterB,
@@ -52,18 +55,31 @@ module VWrite #(
    input [`MEM_ADDR_W-1:0] incr2B
    );
 
-   reg last_valid;
+   assign databus_addr = ext_addr;
+   assign databus_len = length;
+   assign databus_wstrb = 4'b1111;
+
+   wire gen_done;
+   reg doneA;
+   reg doneB;
+   wire doneB_int;
+   assign done = doneA & doneB;
 
    always @(posedge clk,posedge rst)
    begin
-      if(rst)
-         last_valid <= 0;
-      else
-         last_valid <= databus_valid;
+      if(rst) begin
+         doneA <= 1'b0;
+         doneB <= 1'b0;
+      end else if(run) begin
+         doneA <= 1'b0;
+         doneB <= 1'b0;
+      end else  begin
+         if(databus_valid && databus_ready && databus_last)
+            doneA <= 1'b1;
+         if(doneB_int)
+            doneB <= 1'b1;
+      end
    end
-
-   wire doneA,doneB;
-   assign done = doneA & doneB;
 
    function [`MEM_ADDR_W-1:0] reverseBits;
       input [`MEM_ADDR_W-1:0]   word;
@@ -97,19 +113,13 @@ module VWrite #(
 
    wire [DATA_W-1:0]      data_to_wrB = in0;
 
-   wire next;
-   wire addrValid;
-   wire [`MEM_ADDR_W-1:0] addressA;
-
-   assign databus_wstrb = 4'b1111;
-
-   wire genDone;
+   wire gen_valid,gen_ready;
+   wire [`MEM_ADDR_W-1:0] gen_addr;
 
    MyAddressGen addrgenA(
       .clk(clk),
       .rst(rst),
       .run(run),
-      .next(next),
 
       //configurations 
       .iterations(iterA),
@@ -121,9 +131,10 @@ module VWrite #(
       .incr(incrA),
 
       //outputs 
-      .valid(addrValid),
-      .addr(addressA),
-      .done(genDone)
+      .valid(gen_valid),
+      .ready(gen_ready),
+      .addr(gen_addr),
+      .done(gen_done)
       );
 
     xaddrgen2 addrgen2B (
@@ -143,7 +154,7 @@ module VWrite #(
                        .incr2(incr2B),
                        .addr(addrB_int),
                        .mem_en(enB),
-                       .done(doneB)
+                       .done(doneB_int)
                        );
 
    assign addrA = addrA_int2;
@@ -156,25 +167,23 @@ module VWrite #(
    wire [`MEM_ADDR_W-1:0] read_addr;
    wire [DATA_W-1:0] read_data;
 
-   MemToIOB #(.DATA_W(DATA_W)) memToIob(
-      .ext_addr(ext_addr),
+   MemoryReader #(.ADDR_W(`MEM_ADDR_W))
+   reader(
+      // Slave
+      .s_valid(gen_valid),
+      .s_ready(gen_ready),
+      .s_addr(gen_addr),
 
-      .read_done(genDone),
-      .read_en(addrValid),
-      .read_addr(addressA),
-      .next(next),
+      // Master
+      .m_valid(databus_valid),
+      .m_ready(databus_ready),
+      .m_addr(),
+      .m_data(databus_wdata),
 
-      .mem_en(read_en),
+      // Connect to memory
+      .mem_enable(read_en),
       .mem_addr(read_addr),
       .mem_data(read_data),
-
-      .ready(databus_ready),
-      .valid(databus_valid),
-      .wdata(databus_wdata),
-      .addr(databus_addr),
-
-      .run(run),
-      .done(doneA),
 
       .clk(clk),
       .rst(rst)
@@ -200,117 +209,3 @@ module VWrite #(
 
 endmodule
 
-module MemToIOB #(
-      parameter DATA_W = 32
-   )(
-      input [`IO_ADDR_W-1:0] ext_addr,
-
-      input read_done,
-      input read_en,
-      input [`MEM_ADDR_W-1:0] read_addr,
-      output reg next,
-
-      output reg mem_en,
-      output reg [`MEM_ADDR_W-1:0]  mem_addr,
-      input [DATA_W-1:0] mem_data,
-
-      input                       ready,
-      output reg [`IO_ADDR_W-1:0] addr,
-      output reg                  valid,
-      output reg [DATA_W-1:0]     wdata,
-
-      input run,
-      output reg done,
-
-      input clk,
-      input rst
-   );
-
-reg [3:0] state;
-reg [31:0] counter;
-
-always @(posedge clk,posedge rst)
-begin
-   if(rst) begin
-      state <= 0;
-      counter <= 0;
-      done <= 0;
-   end else if(run) begin
-      state <= 4'h1;
-      counter <= 0;
-      done <= 0;
-   end else begin
-      case(state)
-      4'h0: begin
-         state <= 4'h0;
-      end
-      4'h1: begin
-         if(read_en) begin
-            state <= 4'h2;
-            mem_addr <= read_addr;
-         end
-      end
-      4'h2: begin
-         state <= 4'h3;
-      end
-      4'h3: begin
-         state <= 4'h4;
-      end
-      4'h4: begin
-         state <= 4'h5;
-         wdata <= mem_data;
-         addr <= ext_addr + counter;
-         counter <= counter + 32'h4;
-      end
-      4'h5: begin
-         state <= 4'h6;
-      end
-      4'h6: begin
-         if(ready) begin
-            if(read_done) begin
-               state <= 4'h0;
-               done <= 1'b1;
-            end else begin
-               state <= 4'h1;
-            end
-         end
-      end
-      default: begin
-         state <= 4'h0;
-      end
-      endcase
-   end
-end
-
-always @*
-begin
-   valid = 1'b0;
-   next = 1'b0;
-   mem_en = 1'b0;
-
-   case(state)
-   4'h2: begin
-      mem_en = 1'b1;
-   end
-   4'h3: begin
-      mem_en = 1'b1;
-   end
-   4'h5: begin
-      valid = 1'b1;
-   end
-   4'h6: begin
-      valid = 1'b1;
-      if(ready) begin
-         if(!read_done) begin
-            next = 1'b1;
-         end
-         next = 1'b1;
-         valid = 1'b0;
-      end
-   end
-   default: begin
-   end
-   endcase
-end
-
-endmodule

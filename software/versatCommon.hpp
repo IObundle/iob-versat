@@ -7,6 +7,8 @@ struct SimpleFUInstance{
    int* config;
    int* state;
    int* delay;
+
+   int numberChilds;
 };
 
 #endif // INCLUDED_VERSAT_COMMON
