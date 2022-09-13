@@ -6,7 +6,7 @@
 #define MEMSET(base, location, value) (*((volatile int*) (base + (sizeof(int)) * location)) = value)
 #define MEMGET(base, location)        (*((volatile int*) (base + (sizeof(int)) * location)))
 
-#if 0
+#if 1
 #define DEBUG
 #endif
 

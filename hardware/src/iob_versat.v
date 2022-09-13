@@ -11,6 +11,7 @@ module iob_versat
   # (//the below parameters are used in cpu if includes below
     	parameter AXI_ADDR_W = 32,
       parameter AXI_DATA_W = 32,
+      parameter AXI_ID_W = 4,
       parameter ADDR_W = `VERSAT_ADDR_W, //NODOC Address width
     	parameter DATA_W = `VERSAT_RDATA_W, //NODOC CPU data width
     	parameter WDATA_W = `VERSAT_WDATA_W //NODOC CPU data width
@@ -19,7 +20,7 @@ module iob_versat
  		`include "iob_s_if.vh"
 
    `ifdef VERSAT_IO
-      `include "m_axi_m_port.vh"
+      `include "m_versat_axi_m_port.vh"
    `endif
 
    input clk,
@@ -127,7 +128,8 @@ AxiDelay #(.MAX_DELAY(0)) delayW(
 
 SimpleAXItoAXI #(
     .ADDR_W(AXI_ADDR_W),
-    .DATA_W(DATA_W)
+    .DATA_W(DATA_W),
+    .AXI_ID_W(AXI_ID_W)
   ) simpleToAxi(
 
   .m_wvalid(d_w_valid),
@@ -145,8 +147,8 @@ SimpleAXItoAXI #(
   .m_rlen(r_len),
   .m_rlast(r_last),
 
-  `include "m_m_axi_read_portmap.vh"
-  `include "m_m_axi_write_portmap.vh"
+  `include "m_versat_axi_read_portmap.vh"
+  `include "m_versat_axi_write_portmap.vh"
 
   .clk(clk),
   .rst(rst)
@@ -313,6 +315,7 @@ endmodule
 module SimpleAXItoAXI #(
     parameter AXI_ADDR_W = 32,
     parameter AXI_DATA_W = 32,
+    parameter AXI_ID_W = 4,
     parameter ADDR_W = 0,
     parameter DATA_W = 32
   )
@@ -332,7 +335,7 @@ module SimpleAXItoAXI #(
     input  [7:0] m_rlen,
     output m_rlast,
 
-    `include "m_axi_m_port.vh"
+    `include "m_versat_axi_m_port.vh"
 
     input clk,
     input rst

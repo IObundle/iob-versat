@@ -89,12 +89,13 @@ reg [31:0] stateRead;
 #{if unitsMapped}
 // Memory access
 wire we = (|wstrb);
+wire[@{unitsMapped - 1}:0] unitReady;
+reg [@{unitsMapped - 1}:0] memoryMappedEnable;
+wire [31:0] unitRData[@{unitsMapped - 1}:0];
+
 assign rdata = unitRdataFinal;
 assign ready = wor_ready;
 assign wor_ready = (|unitReady);
-reg [@{unitsMapped - 1}:0] memoryMappedEnable;
-wire[@{unitsMapped - 1}:0] unitReady;
-wire [31:0] unitRData[@{unitsMapped - 1}:0];
 
 wire [31:0] #{join ", " for i unitsMapped} rdata_@{i} #{end};
 

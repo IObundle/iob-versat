@@ -4,6 +4,10 @@
 
    `include "versat_defs.vh"
 
+   `ifdef VERSAT_IO
+      initial $display("Versat IO in use\n");
+   `endif
+
    iob_versat versat
       ( 
       // AXI4 master interface
@@ -65,6 +69,8 @@
       );
 
    `ifndef VERSAT_IO
+      initial $display("No Versat IO\n");
+      
       assign m_axi_awid[1*1+:1] = 1'b0;
       assign m_axi_awaddr[1*`DDR_ADDR_W+:`DDR_ADDR_W] = 0;
       assign m_axi_awlen[1*8+:8] = 0;

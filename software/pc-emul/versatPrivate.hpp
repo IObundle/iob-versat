@@ -146,6 +146,7 @@ struct FUInstance{
 
 struct DebugState{
    bool outputAccelerator;
+   bool outputGraphs;
 };
 
 struct Versat{

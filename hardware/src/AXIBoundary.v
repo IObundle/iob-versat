@@ -6,7 +6,7 @@ module AXIBoundaryWrite #(
   )
   (
     input s_valid,
-    output reg s_ready,
+    output s_ready,
     input [ADDR_W-1:0] s_addr,
     input [DATA_W-1:0] s_wdata,
     input [(DATA_W / 8)-1:0] s_wstrb,
@@ -23,6 +23,14 @@ module AXIBoundaryWrite #(
     input rst
   );
 
+assign m_valid = s_valid;
+assign s_ready = m_ready;
+assign m_addr = s_addr;
+assign m_wdata = s_wdata;
+assign m_wstrb = s_wstrb;
+assign m_len = s_len;
+
+/*
 wire [ADDR_W-1:0] addr_boundary = {s_addr[ADDR_W-1:12],12'h0};
 wire [ADDR_W-1:0] start_addr = {s_addr[ADDR_W-1:2],2'b00};
 wire [ADDR_W-1:0] end_addr = (start_addr + (s_len + 1) * 4);
@@ -63,5 +71,6 @@ begin
       m_len = s_len;
     end
 end
+*/
 
 endmodule

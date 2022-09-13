@@ -2480,7 +2480,6 @@ int CalculateLatency(FUInstance* inst){
 #endif
 
 void CalculateDelay(Versat* versat,Accelerator* accel){
-   #define OUTPUT_DOT 1
    static int graphs = 0;
    LockAccelerator(accel,Accelerator::Locked::ORDERED);
 
@@ -2495,9 +2494,11 @@ void CalculateDelay(Versat* versat,Accelerator* accel){
       }
    }
 
-   char buffer[1024];
-   sprintf(buffer,"debug/%.*s/",UNPACK_SS(accel->subtype->name));
-   MakeDirectory(buffer);
+   if(versat->debug.outputGraphs){
+      char buffer[1024];
+      sprintf(buffer,"debug/%.*s/",UNPACK_SS(accel->subtype->name));
+      MakeDirectory(buffer);
+   }
 
    #if 0
    printf("%.*s:\n",UNPACK_SS(accel->subtype->name));
@@ -2516,9 +2517,10 @@ void CalculateDelay(Versat* versat,Accelerator* accel){
       //inst->tempData->inputDelay = maxLatency;
 
       SendLatencyUpwards(inst);
-      #if OUTPUT_DOT == 1
-      OutputGraphDotFile(accel,false,"debug/%.*s/out1_%d.dot",UNPACK_SS(accel->subtype->name),graphs++);
-      #endif
+
+      if(versat->debug.outputGraphs){
+         OutputGraphDotFile(accel,false,"debug/%.*s/out1_%d.dot",UNPACK_SS(accel->subtype->name),graphs++);
+      }
    }
 
    for(int i = accel->instances.Size() - order.numberSinks - 1; i >= 0; i--){
@@ -2541,9 +2543,10 @@ void CalculateDelay(Versat* versat,Accelerator* accel){
       inst->baseDelay = abs(inst->tempData->inputDelay);
 
       SendLatencyUpwards(inst);
-      #if OUTPUT_DOT == 1
-      OutputGraphDotFile(accel,false,"debug/%.*s/out2_%d.dot",UNPACK_SS(accel->subtype->name),graphs++);
-      #endif
+
+      if(versat->debug.outputGraphs){
+         OutputGraphDotFile(accel,false,"debug/%.*s/out2_%d.dot",UNPACK_SS(accel->subtype->name),graphs++);
+      }
    }
 
    int minimum = 0;
@@ -2609,9 +2612,9 @@ void CalculateDelay(Versat* versat,Accelerator* accel){
    }
    #endif
 
-   #if OUTPUT_DOT == 1
-   OutputGraphDotFile(accel,false,"debug/%.*s/out3_%d.dot",UNPACK_SS(accel->subtype->name),graphs++);
-   #endif
+   if(versat->debug.outputGraphs){
+      OutputGraphDotFile(accel,false,"debug/%.*s/out3_%d.dot",UNPACK_SS(accel->subtype->name),graphs++);
+   }
 }
 
 void SetDelayRecursive_(FUInstance* inst,int delay){
