@@ -146,7 +146,7 @@ FUInstance* GetInstanceByName_(FUInstance* inst,int argc, ...){
    va_start(args,argc);
 
    int index = inst - instancesBuffer;
-   FUInstance* res = vGetInstanceByName_(index,argc,args);
+   FUInstance* res = vGetInstanceByName_(index + 1,argc,args);
 
    va_end(args);
 
