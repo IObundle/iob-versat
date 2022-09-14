@@ -179,7 +179,7 @@ begin
    #{for inst instances}
    #{if inst.declaration.isMemoryMapped}
       #{if inst.versatData.memoryMaskSize}
-         if(addr[@{memoryAddressBits - 1}:@{memoryAddressBits - inst.versatData.memoryMaskSize}] == @{inst.versatData.memoryMaskSize}'b@{inst.versatData.memoryMask})
+         if(addr[@{memoryAddressBits - 1}:@{memoryAddressBits - inst.versatData.memoryMaskSize}] == @{inst.versatData.memoryMaskSize}'b@{inst.versatData.memoryMask}) // @{versatBase + memoryMappedBase * 4 + inst.versatData.memoryAddressOffset * 4 |> Hex} - @{versatBase + memoryMappedBase + inst.versatData.memoryAddressOffset |> Hex}
             memoryMappedEnable[@{counter}] = 1'b1;
       #{else}
          memoryMappedEnable[0] = 1'b1;
@@ -312,8 +312,6 @@ end
       .wstrb(wstrb),
       #{if decl.memoryMapBits}
       .addr(addr[@{decl.memoryMapBits - 1}:0]),
-      #{else}
-      .addr(1'b0), // Shouldnt need but otherwise verilator would complain
       #{end}
       .rdata(unitRData[@{memoryMappedIndex}]),
       .ready(unitReady[@{memoryMappedIndex}]),

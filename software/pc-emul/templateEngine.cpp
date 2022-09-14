@@ -155,7 +155,7 @@ static Expression* ParseExpression(Tokenizer* tok){
       return expr;
    }
 
-   Expression* res = ParseOperationType(tok,{{"|>"},{"and","or","xor"},{">","<",">=","<=","=="},{"+","-"},{"*","/","&","**"}},ParseFactor,tempArena);
+   Expression* res = ParseOperationType(tok,{{"|>"},{"and","or","xor"},{">","<",">=","<=","==","!="},{"+","-"},{"*","/","&","**"}},ParseFactor,tempArena);
 
    res->text = tok->Point(start);
    return res;
@@ -373,12 +373,10 @@ static Value EvalExpression(Expression* expr){
          Value op2 = EvalExpression(expr->expressions[1]);
 
          if(CompareString(expr->op,"==")){
-            if(Equal(op1,op2)){
-               return MakeValue(true);
-            } else {
-               return MakeValue(false);
-            }
-         } else if(CompareString(expr->op,"and")){
+            return MakeValue(Equal(op1,op2));
+         } else if(CompareString(expr->op,"!=")){
+            return MakeValue(!Equal(op1,op2));
+         }else if(CompareString(expr->op,"and")){
             bool bool1 = ConvertValue(op1,ValueType::BOOLEAN).boolean;
             bool bool2 = ConvertValue(op2,ValueType::BOOLEAN).boolean;
 
@@ -665,7 +663,7 @@ static void Eval(Block* block){
       }
    } else {
       // Print text
-      Tokenizer tok(block->textBlock,"!()[]{}+-:;.,*~><\"",{"@{","==","**","|>",">=","<="});
+      Tokenizer tok(block->textBlock,"!()[]{}+-:;.,*~><\"",{"@{","==","**","|>",">=","<=","!="});
 
       tok.keepComments = true;
 
@@ -695,7 +693,7 @@ static void Eval(Block* block){
 }
 
 void ParseAndEvaluate(SizedString content){
-   Tokenizer tokenizer(content,"!()[]{}+-:;.,*~><\"",{"#{","==","**",">=","<="});
+   Tokenizer tokenizer(content,"!()[]{}+-:;.,*~><\"",{"#{","==","!=","**",">=","<=","!="});
    Tokenizer* tok = &tokenizer;
 
    tok->keepComments = true;

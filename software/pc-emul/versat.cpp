@@ -1819,11 +1819,11 @@ static VersatComputedValues ComputeVersatValues(Versat* versat,Accelerator* acce
 
       res.numberConnections += inst->tempData->numberOutputs;
 
-      res.maxMemoryMapDWords = maxi(res.maxMemoryMapDWords,1 << decl->memoryMapBits);
-      res.memoryMapped += (1 << decl->memoryMapBits);
-
-      if(decl->isMemoryMapped)
+      if(decl->isMemoryMapped){
+         res.maxMemoryMapDWords = maxi(res.maxMemoryMapDWords,1 << decl->memoryMapBits);
+         res.memoryMappedBytes += (1 << (decl->memoryMapBits + 2));
          res.unitsMapped += 1;
+      }
 
       res.nConfigs += decl->nConfigs;
       for(int i = 0; i < decl->nConfigs; i++){
@@ -1856,7 +1856,7 @@ static VersatComputedValues ComputeVersatValues(Versat* versat,Accelerator* acce
    res.nConfigurations = res.nConfigs + res.nStatics + res.nDelays;
    res.configurationBits = res.configBits + res.staticBits + res.delayBits;
 
-   res.memoryAddressBits = log2i(res.memoryMapped);
+   res.memoryAddressBits = log2i(res.memoryMappedBytes / 4);
 
    res.memoryMappingAddressBits = res.memoryAddressBits;
    res.configurationAddressBits = log2i(res.nConfigurations);
@@ -1874,7 +1874,7 @@ void OutputMemoryMap(Versat* versat,Accelerator* accel){
    VersatComputedValues val = ComputeVersatValues(versat,accel);
 
    printf("\n");
-   printf("Total bytes mapped: %d\n",val.memoryMapped * 4);
+   printf("Total bytes mapped: %d\n",val.memoryMappedBytes);
    printf("Maximum bytes mapped by a unit: %d\n",val.maxMemoryMapDWords * 4);
    printf("Memory address bits: %d\n",val.memoryAddressBits);
    printf("Units mapped: %d\n",val.unitsMapped);
@@ -2122,6 +2122,7 @@ void OutputVersatSource(Versat* versat,Accelerator* accel,const char* sourceFile
    TemplateSetNumber("unitsMapped",val.unitsMapped);
    TemplateSetNumber("memoryConfigDecisionBit",val.memoryConfigDecisionBit);
    TemplateSetNumber("configurationBits",val.configurationBits);
+   TemplateSetNumber("memoryMappedBase",1 << val.memoryConfigDecisionBit);
 
    ProcessTemplate(s,"../../submodules/VERSAT/software/templates/versat_top_instance_template.tpl",&versat->temp);
 

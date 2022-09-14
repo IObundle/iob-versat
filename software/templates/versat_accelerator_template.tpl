@@ -67,8 +67,6 @@ module @{accel.name} #(
    input                           valid,
    #{if accel.memoryMapBits}
    input [@{accel.memoryMapBits - 1}:0] addr,
-   #{else}
-   input                                addr, // Shouldnt need but otherwise verilator would complain
    #{end}
 
    input [DATA_W/8-1:0]            wstrb,
@@ -230,8 +228,6 @@ end
          .wstrb(wstrb),
          #{if decl.memoryMapBits}
          .addr(addr[@{decl.memoryMapBits - 1}:0]),
-         #{else}
-         .addr(1'b0), // Shouldnt need but otherwise verilator would complain
          #{end}
          .rdata(unitRData[@{memoryMappedIndex}]),
          .ready(unitReady[@{memoryMappedIndex}]),
@@ -272,7 +268,7 @@ end
 #{if decl.name == "CircuitOutput"}
    #{for i inst.tempData.numberInputs}
    #{set in inst.tempData.inputs[i].inst}
-   assign out@{i} = #{call outputName in};
+   assign out@{inst.tempData.inputs[i].port} = #{call outputName in};
    #{end}
 #{end}
 #{end}

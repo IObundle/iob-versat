@@ -260,7 +260,7 @@ struct VersatComputedValues{
    int nDelays;
    int delayBits;
 
-   // The sum of config + static + delays (all types of configuration)
+   // Configurations = config + static + delays
    int nConfigurations;
    int configurationBits;
    int configurationAddressBits;
@@ -270,7 +270,7 @@ struct VersatComputedValues{
    int stateAddressBits;
 
    int unitsMapped;
-   int memoryMapped;
+   int memoryMappedBytes;
    int maxMemoryMapDWords;
 
    int nUnitsIO;

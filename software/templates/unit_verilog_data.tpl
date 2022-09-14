@@ -65,12 +65,55 @@ int @{wire.name};
    VCDData* vcd = &data->vcd;
 
 template<typename T>
+static int32_t MemoryAccessNoAddress(FUInstance* inst,int address,int value,int write){
+   T* self = (T*) inst->extraData;
+
+   if(write){
+      self->valid = 1;
+      self->wstrb = 0xf;
+      self->wdata = value;
+
+      self->eval();
+
+      while(!self->ready){
+         UPDATE(self);
+      }
+
+      self->valid = 0;
+      self->wstrb = 0x00;
+      self->wdata = 0x00000000;
+
+      UPDATE(self);
+
+      return 0;
+   } else {
+      self->valid = 1;
+      self->wstrb = 0x0;
+
+      self->eval();
+
+      while(!self->ready){
+         UPDATE(self);
+      }
+
+      int32_t res = self->rdata;
+
+      self->valid = 0;
+
+      UPDATE(self);
+
+      return res;
+   }
+}
+
+template<typename T>
 static int32_t MemoryAccess(FUInstance* inst,int address,int value,int write){
    T* self = (T*) inst->extraData;
 
    if(write){
       self->valid = 1;
       self->wstrb = 0xf;
+
       self->addr = address;
       self->wdata = value;
 
@@ -310,7 +353,11 @@ static FUDeclaration* @{module.name}_Register(Versat* versat){
    #{if module.memoryMapped}
    decl.isMemoryMapped = true;
    decl.memoryMapBits = @{module.memoryMappedBits};
+   #{if module.memoryMappedBits == 0}
+   decl.memAccessFunction = MemoryAccessNoAddress<V@{module.name}>;
+   #{else}
    decl.memAccessFunction = MemoryAccess<V@{module.name}>;
+   #{end}
    #{end}
 
    decl.nDelays = @{module.nDelays};

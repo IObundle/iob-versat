@@ -104,7 +104,7 @@ xmerge #(.N_SLAVES(`nIO),.ADDR_W(`IO_ADDR_W),.DATA_W(`DATAPATH_W)) merge(
 
 wire d_r_ready,d_r_valid,d_w_ready,d_w_valid;
 
-AxiDelay #(.MAX_DELAY(0)) delayR(
+AxiDelay #(.MAX_DELAY(5)) delayR(
     .s_valid(r_valid),
     .s_ready(r_ready),
 
@@ -115,7 +115,7 @@ AxiDelay #(.MAX_DELAY(0)) delayR(
     .rst(rst)
   );
 
-AxiDelay #(.MAX_DELAY(0)) delayW(
+AxiDelay #(.MAX_DELAY(5)) delayW(
     .s_valid(w_valid),
     .s_ready(w_ready),
 
