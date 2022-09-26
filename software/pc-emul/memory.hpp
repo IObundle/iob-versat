@@ -107,8 +107,11 @@ class PoolIterator{
 
 public:
 
-   PoolIterator(Pool<T>* pool);
+   PoolIterator();
 
+   void SetPool(Pool<T>* pool);
+
+   bool HasNext(){return this->fullIndex < pool->endSize;};
    bool operator!=(const PoolIterator& iter);
    PoolIterator& operator++();
    T* operator*();
@@ -199,13 +202,19 @@ void Free(Allocation<T>* alloc){
 }
 
 template<typename T>
-PoolIterator<T>::PoolIterator(Pool<T>* pool)
-:pool(pool)
+PoolIterator<T>::PoolIterator()
+:pool(nullptr)
 ,fullIndex(0)
 ,bit(7)
 ,index(0)
 ,lastVal(nullptr)
 {
+}
+
+template<typename T>
+void PoolIterator<T>::SetPool(Pool<T>* pool){
+   this->pool = pool;
+
    page = pool->mem;
 
    if(page && pool->allocated){
@@ -436,14 +445,18 @@ PoolIterator<T> Pool<T>::begin(){
       return end();
    }
 
-   PoolIterator<T> iter(this);
+   PoolIterator<T> iter = {};
+
+   iter.SetPool(this);
 
    return iter;
 }
 
 template<typename T>
 PoolIterator<T> Pool<T>::end(){
-   PoolIterator<T> iter(this);
+   PoolIterator<T> iter = {};
+
+   iter.SetPool(this);
 
    iter.fullIndex = endSize;
 

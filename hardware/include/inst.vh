@@ -65,7 +65,7 @@
 
       //CPU interface
       .clk       (clk),
-      .rst       (reset)
+      .rst       (cpu_reset)
       );
 
    `ifndef VERSAT_IO

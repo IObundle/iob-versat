@@ -110,6 +110,12 @@ struct VersatComputedData{
    char memoryMask[33];
 };
 
+struct Parameter{
+   SizedString name;
+   SizedString value;
+   Parameter* next;
+};
+
 // Care with order of initial members, must follow the same as versat.hpp
 struct FUInstance{
 	HierarchyName name;
@@ -120,7 +126,7 @@ struct FUInstance{
    int* state;
    int* delay;
 
-   // Pc only
+   // PC only
    int baseDelay;
 
    Accelerator* accel;
@@ -131,6 +137,9 @@ struct FUInstance{
 	int* outputs;
 	int* storedOutputs;
    Byte* extraData;
+
+   SizedString parameters;
+   //Parameter* parameterList;
 
    // Configuration + State variables that versat needs access to
    int done; // Units that are sink or sources of data must implement done to ensure circuit does not end prematurely
@@ -293,6 +302,17 @@ struct HashKey{
    SizedString key;
    int data;
 };
+
+struct AcceleratorIterator{
+   FUDeclaration* type;
+
+   PoolIterator<FUInstance> stack[16];
+   int index;
+};
+
+AcceleratorIterator IterateByType(Accelerator* accel,FUDeclaration* type);
+FUInstance* Next(AcceleratorIterator& iter);
+bool HasNext(AcceleratorIterator& iter);
 
 // Versat functions
 Versat* InitVersat(int base,int numberConfigurations);

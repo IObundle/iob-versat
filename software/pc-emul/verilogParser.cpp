@@ -603,10 +603,15 @@ int main(int argc,const char* argv[]){
       for(Module& module : modules){
          ModuleInfo info = {};
 
-         int* inputDelays = PushArray(&permanent,100,int);
-         int* outputLatencies = PushArray(&permanent,100,int);
-         Wire* configs = PushArray(&permanent,100,Wire);
-         Wire* states = PushArray(&permanent,100,Wire);
+         info.inputDelays = PushArray(&permanent,100,int);
+         info.outputLatencies = PushArray(&permanent,100,int);
+         info.configs = PushArray(&permanent,100,Wire);
+         info.states = PushArray(&permanent,100,Wire);
+
+         info.name = module.name;
+         info.isSource = module.isSource;
+
+         #if 0
          int nConfigs = 0;
          int nStates = 0;
          int nInputs = 0;
@@ -616,6 +621,11 @@ int main(int argc,const char* argv[]){
          bool doesIO = false;
          bool memoryMap = false;
          bool hasDone = false;
+         bool hasClk = false;
+         bool hasReset = false;
+         bool hasRun = false;
+         bool hasRunning = false;
+         #endif
          for(PortDeclaration decl : module.ports){
             Tokenizer port(decl.name,"",{"in","out","delay","done","rst","clk","run","databus"});
 
@@ -624,20 +634,20 @@ int main(int argc,const char* argv[]){
                int input = ParseInt(port.NextToken());
                int delay = decl.attributes[MakeSizedString("latency")].number;
 
-               nInputs = maxi(nInputs,input + 1);
-               inputDelays[input] = delay;
+               info.nInputs = maxi(info.nInputs,input + 1);
+               info.inputDelays[input] = delay;
             } else if(CheckFormat("out%d",decl.name)){
                port.AssertNextToken("out");
                int output = ParseInt(port.NextToken());
                int latency = decl.attributes[MakeSizedString("latency")].number;
 
-               nOutputs = maxi(nOutputs,output + 1);
-               outputLatencies[output] = latency;
+               info.nOutputs = maxi(info.nOutputs,output + 1);
+               info.outputLatencies[output] = latency;
             } else if(CheckFormat("delay%d",decl.name)){
                port.AssertNextToken("delay");
                int delay = ParseInt(port.NextToken());
 
-               nDelays = maxi(nDelays,delay + 1);
+               info.nDelays = maxi(info.nDelays,delay + 1);
             } else if(  CheckFormat("databus_ready",decl.name)
                      || CheckFormat("databus_valid",decl.name)
                      || CheckFormat("databus_addr",decl.name)
@@ -646,40 +656,40 @@ int main(int argc,const char* argv[]){
                      || CheckFormat("databus_wstrb",decl.name)
                      || CheckFormat("databus_len",decl.name)
                      || CheckFormat("databus_last",decl.name)){
-               doesIO = true;
+               info.doesIO = true;
             } else if(  CheckFormat("ready",decl.name)
                      || CheckFormat("valid",decl.name)
                      || CheckFormat("addr",decl.name)
                      || CheckFormat("rdata",decl.name)
                      || CheckFormat("wdata",decl.name)
                      || CheckFormat("wstrb",decl.name)){
-               memoryMap = true;
+               info.memoryMapped = true;
 
                if(CheckFormat("addr",decl.name)){
-                  memoryMappedBits = (decl.range.high - decl.range.low + 1);
+                  info.memoryMappedBits = (decl.range.high - decl.range.low + 1);
                }
             } else if(CheckFormat("clk",decl.name)){
-               // Nothing
+               info.hasClk = true;
             } else if(CheckFormat("rst",decl.name)){
-               // Nothing
+               info.hasReset = true;
             } else if(CheckFormat("run",decl.name)){
-               // Nothing
+               info.hasRun = true;
+            } else if(CheckFormat("running",decl.name)){
+               info.hasRunning = true;
             } else if(CheckFormat("done",decl.name)){
-               hasDone = true;
+               info.hasDone = true;
             } else if(decl.type == PortDeclaration::INPUT){ // Config
-               configs[nConfigs].bitsize = decl.range.high - decl.range.low + 1;
-               configs[nConfigs].name = decl.name;
-               nConfigs += 1;
+               info.configs[info.nConfigs].bitsize = decl.range.high - decl.range.low + 1;
+               info.configs[info.nConfigs++].name = decl.name;
             } else if(decl.type == PortDeclaration::OUTPUT){ // State
-               states[nStates].bitsize = decl.range.high - decl.range.low + 1;
-               states[nStates].name = decl.name;
-               nStates += 1;
+               info.states[info.nStates].bitsize = decl.range.high - decl.range.low + 1;
+               info.states[info.nStates++].name = decl.name;
             } else {
                NOT_IMPLEMENTED;
             }
          }
 
-         info.name = module.name;
+         #if 0
          info.doesIO = doesIO;
          info.memoryMapped = memoryMap;
          info.nInputs = nInputs;
@@ -692,8 +702,8 @@ int main(int argc,const char* argv[]){
          info.nStates = nStates;
          info.hasDone = hasDone;
          info.nDelays = nDelays;
-         info.isSource = module.isSource;
          info.memoryMappedBits = memoryMappedBits;
+         #endif
 
          allModules.push_back(info);
       }

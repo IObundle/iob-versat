@@ -309,7 +309,7 @@ static FUDeclaration* @{module.name}_Register(Versat* versat){
 
    #{if module.nOutputs}
    decl.nOutputs = @{module.nOutputs};
-   static int latencies[] = {#{join "," for i module.nOutputs}@{module.latencies[i]}#{end}};
+   static int latencies[] = {#{join "," for i module.nOutputs}@{module.outputLatencies[i]}#{end}};
    decl.latencies = latencies;
    #{end}
 

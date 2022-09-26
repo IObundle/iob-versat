@@ -22,6 +22,12 @@ struct FUInstance{
 };
 #endif
 
+struct Parameter{
+   SizedString name;
+   SizedString value;
+   Parameter* next;
+};
+
 struct FUInstance{
 	HierarchyName name;
 
@@ -31,7 +37,7 @@ struct FUInstance{
    int* state;
    int* delay;
 
-   // Pc only
+   // PC only
    int baseDelay;
 
    Accelerator* accel;
@@ -43,12 +49,27 @@ struct FUInstance{
 	int* storedOutputs;
    char* extraData;
 
+   Parameter* parameterList;
+
    // Configuration + State variables that versat needs access to
    int done; // Units that are sink or sources of data must implement done to ensure circuit does not end prematurely
    bool isStatic;
 
    bool namedAccess;
 };
+
+#if 0
+struct AcceleratorIterator{
+   FUDeclaration* type;
+
+   PoolIterator<FUInstance> stack[16];
+   int index;
+};
+
+AcceleratorIterator IterateByType(Accelerator* accel,FUDeclaration* type);
+FUInstance* Next(AcceleratorIterator& iter);
+bool HasNext(AcceleratorIterator& iter);
+#endif
 
 Accelerator* Flatten(Versat* versat,Accelerator* accel,int times);
 

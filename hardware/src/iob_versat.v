@@ -27,34 +27,11 @@ module iob_versat
    input rst
 	);
 
-versat_instance #(.ADDR_W(ADDR_W),.DATA_W(DATA_W)) xversat(
-      .valid(valid),
-      .wstrb(wstrb),
-      .addr(address),
-      .rdata(rdata),
-      .wdata(wdata),
-      .ready(ready),
-
-`ifdef VERSAT_IO
-      .m_databus_ready(m_databus_ready),
-      .m_databus_valid(m_databus_valid),
-      .m_databus_addr(m_databus_addr),
-      .m_databus_rdata(m_databus_rdata),
-      .m_databus_wdata(m_databus_wdata),
-      .m_databus_wstrb(m_databus_wstrb),
-      .m_databus_len(m_databus_len),
-      .m_databus_last(m_databus_last),
-`endif
-
-      .clk(clk),
-      .rst(rst)
-); 
-
 `ifdef VERSAT_IO
 wire [`nIO-1:0]               m_databus_ready;
 wire [`nIO-1:0]               m_databus_valid;
 wire [`nIO*`IO_ADDR_W-1:0]    m_databus_addr;
-wire [`nIO*`DATAPATH_W-1:0]   m_databus_rdata;
+wire [`DATAPATH_W-1:0]        m_databus_rdata;
 wire [`nIO*`DATAPATH_W-1:0]   m_databus_wdata;
 wire [`nIO*`DATAPATH_W/8-1:0] m_databus_wstrb;
 wire [`nIO*8-1:0]             m_databus_len;
@@ -102,6 +79,7 @@ xmerge #(.N_SLAVES(`nIO),.ADDR_W(`IO_ADDR_W),.DATA_W(`DATAPATH_W)) merge(
   .rst(rst)
 );
 
+/*
 wire d_r_ready,d_r_valid,d_w_ready,d_w_valid;
 
 AxiDelay #(.MAX_DELAY(5)) delayR(
@@ -125,6 +103,7 @@ AxiDelay #(.MAX_DELAY(5)) delayW(
     .clk(clk),
     .rst(rst)
   );
+*/
 
 SimpleAXItoAXI #(
     .ADDR_W(AXI_ADDR_W),
@@ -132,16 +111,16 @@ SimpleAXItoAXI #(
     .AXI_ID_W(AXI_ID_W)
   ) simpleToAxi(
 
-  .m_wvalid(d_w_valid),
-  .m_wready(d_w_ready),
+  .m_wvalid(w_valid),
+  .m_wready(w_ready),
   .m_waddr(w_addr),
   .m_wdata(w_data),
   .m_wstrb(w_strb),
   .m_wlen(w_len),
   .m_wlast(w_last),
   
-  .m_rvalid(d_r_valid),
-  .m_rready(d_r_ready),
+  .m_rvalid(r_valid),
+  .m_rready(r_ready),
   .m_raddr(r_addr),
   .m_rdata(r_data),
   .m_rlen(r_len),
@@ -156,6 +135,29 @@ SimpleAXItoAXI #(
 
 `endif
 
+versat_instance #(.ADDR_W(ADDR_W),.DATA_W(DATA_W)) xversat(
+      .valid(valid),
+      .wstrb(wstrb),
+      .addr(address),
+      .rdata(rdata),
+      .wdata(wdata),
+      .ready(ready),
+
+`ifdef VERSAT_IO
+      .m_databus_ready(m_databus_ready),
+      .m_databus_valid(m_databus_valid),
+      .m_databus_addr(m_databus_addr),
+      .m_databus_rdata(m_databus_rdata),
+      .m_databus_wdata(m_databus_wdata),
+      .m_databus_wstrb(m_databus_wstrb),
+      .m_databus_len(m_databus_len),
+      .m_databus_last(m_databus_last),
+`endif
+
+      .clk(clk),
+      .rst(rst)
+); 
+
 endmodule
 
 module xmerge #(
@@ -166,8 +168,8 @@ module xmerge #(
   (
     // Slaves
     input [N_SLAVES-1:0] s_valid,
-    output reg [N_SLAVES-1:0] s_ready,
-    output reg [N_SLAVES-1:0] s_last, 
+    output [N_SLAVES-1:0] s_ready,
+    output [N_SLAVES-1:0] s_last, 
     input [ADDR_W * N_SLAVES-1:0] s_addr,
     input [DATA_W * N_SLAVES-1:0] s_wdata,
     output [(DATA_W / 8) * N_SLAVES-1:0] s_wstrb,
@@ -276,34 +278,30 @@ begin
   end
 end
 
+assign s_ready = ((w_running && m_wready ? 1 : 0) << w_slave) | ((r_running && m_rready ? 1 : 0) << r_slave);
+assign s_last = ((w_running && m_wlast ? 1 : 0 ) << w_slave) | ((r_running && m_rlast ? 1 : 0 ) << r_slave);
+
 always @*
 begin
-  s_ready = 0;
-  s_last = 0;
-
   m_rvalid = 0; 
   m_raddr = 0;
   m_rlen = 0;
  
   m_wvalid = 0; 
   m_waddr = 0;
-  m_wlen = 0;
   m_wdata = 0;
   m_wstrb = 0;
+  m_wlen = 0;
   
   if(w_running) begin
-    s_ready[w_slave] = m_wready;
-    s_last[w_slave] = m_wlast;
     m_wvalid = s_valid[w_slave];
     m_waddr = st_addr[w_slave];
     m_wdata = st_wdata[w_slave];
     m_wstrb = st_wstrb[w_slave];
     m_wlen = st_len[w_slave];
-  end
+  end 
 
   if(r_running) begin
-    s_ready[r_slave] = m_rready;
-    s_last[r_slave] = m_rlast;
     m_rvalid = s_valid[r_slave];
     m_raddr = st_addr[r_slave];
     m_rlen = st_len[r_slave];
@@ -378,6 +376,80 @@ assign m_axi_wlast = wlast;
 assign m_wlast = wlast;
 assign m_rlast = m_axi_rlast;
 
+reg [7:0] counter;
+reg [2:0] state;
+always @(posedge clk,posedge rst)
+begin
+  if(rst) begin
+    state <= 0;
+    awvalid <= 0;
+    arvalid <= 0;
+    counter <= 0;
+  end else begin
+    case(state)
+    3'h0: begin
+      if(m_wvalid) begin
+        awvalid <= 1'b1;
+        state <= 3'h1;
+      end else if(m_rvalid) begin
+        arvalid <= 1'b1;
+        state <= 3'h3;
+      end
+    end
+    3'h1: begin // Write address set
+      if(m_axi_awready) begin
+        awvalid <= 1'b0;
+        state <= 3'h2;
+      end
+    end
+    3'h2: begin
+      if(m_axi_wvalid && m_axi_wready) begin
+        counter <= counter + 1;
+        if(wlast) begin
+          state <= 3'h0;
+          counter <= 0;
+        end
+      end
+    end
+    3'h3: begin // Write address set
+      if(m_axi_arready) begin
+        arvalid <= 1'b0;
+        state <= 3'h4;
+      end
+    end
+    3'h4: begin
+      if(m_axi_rvalid && m_axi_rready && m_axi_rlast) begin
+        state <= 3'h0;
+      end
+    end
+    endcase
+  end
+end
+
+always @*
+begin
+  wvalid = 1'b0;
+  m_wready = 1'b0;
+  wlast = 1'b0;
+  rready = 1'b0;
+  m_rready = 1'b0;
+
+  if(state == 3'h2) begin
+    wvalid = m_wvalid;
+    m_wready = m_axi_wready;
+    
+    if(counter == m_wlen)
+      wlast = 1'b1;
+  end
+
+  if(state == 3'h4) begin
+    rready = m_rvalid;
+    m_rready = m_axi_rvalid;
+  end
+end
+
+
+/*
 reg [7:0] counter;
 reg [2:0] wstate;
 always @(posedge clk,posedge rst)
@@ -467,9 +539,9 @@ begin
     m_rready = m_axi_rvalid;
   end
 end
+*/
 
 endmodule 
-
 
 module skid_control(
     input in_valid,
@@ -642,29 +714,4 @@ end
 assign in_ready = out_ready;
 
 endmodule
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 

@@ -179,7 +179,7 @@ end
    #{if decl.name == "CircuitOutput"}
    #{else}
       #{if !decl.isOperation}
-      @{decl.name} @{decl.name}_@{counter} (
+      @{decl.name} @{inst.parameters} @{inst.name.str}_@{counter} (
          #{for i inst.tempData.outputPortsUsed}
             .out@{i}(output_@{inst.id}_@{i}),
          #{end}
@@ -195,19 +195,19 @@ end
          #{if inst.isStatic}
          #{for i inst.declaration.nConfigs}
          #{set wire inst.declaration.configWires[i]}
-         .@{wire.name}(@{accel.name}_@{inst.name.str}_@{wire.name}), // Static
+         .@{wire.name}(@{accel.name}_@{inst.name.str}_@{wire.name}),
          #{end}
 
          #{else}
          #{for i decl.nConfigs}
          #{set wire decl.configWires[i]}
-         .@{wire.name}(@{accel.configWires[configsSeen].name}), // Config
+         .@{wire.name}(@{accel.configWires[configsSeen].name}),
          #{inc configsSeen}
          #{end}
          #{for unit decl.staticUnits}         
          #{for i unit.nConfigs}
          #{set wire unit.wires[i]}
-         .@{unit.module.name}_@{unit.name}_@{wire.name}(@{unit.module.name}_@{unit.name}_@{wire.name}), // Static
+         .@{unit.module.name}_@{unit.name}_@{wire.name}(@{unit.module.name}_@{unit.name}_@{wire.name}),
          #{end}
          #{end}
          #{end}

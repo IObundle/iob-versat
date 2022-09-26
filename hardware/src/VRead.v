@@ -56,8 +56,10 @@ module VRead #(
    input [`MEM_ADDR_W-1:0] incr2B
    );
 
+   assign databus_wdata = 0;
+   assign databus_wstrb = 4'b0000;
    assign databus_len = length;
-
+   
    // output databus
    wire [DATA_W-1:0]            outB;
    
@@ -135,9 +137,6 @@ module VRead #(
    end
 
    wire next;
-
-   assign databus_wstrb = 4'b0000;
-
    wire gen_valid,gen_ready;
    wire [`MEM_ADDR_W-1:0] gen_addr;
 

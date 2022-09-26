@@ -1,6 +1,8 @@
 #versat common parameters
 include $(VERSAT_DIR)/software/software.mk
 
+include $(VERSAT_DIR)/sharedHardware.mk
+
 VERSAT_TEMPLATE_DIR := $(VERSAT_DIR)/software/templates
 
 BUILD_DIR=./build
@@ -55,7 +57,7 @@ $(BUILD_DIR)/verilated_vcd_c.o:
 	mv *.d $(BUILD_DIR)/;
 
 $(BUILD_DIR)/V%.h: $(VERSAT_HW_DIR)/src/%.v
-	verilator --trace -CFLAGS "$(VERILATE_FLAGS)" -I$(VERSAT_HW_DIR)/src -I$(VERSAT_HW_DIR)/include -I$(VERSAT_DIR)/submodules/MEM/ram/dp_ram -I$(VERSAT_DIR)/submodules/MEM/ram/2p_ram -I$(VERSAT_DIR)/submodules/MEM/ram/tdp_ram -cc -Mdir $(BUILD_DIR) $<;
+	verilator --trace -CFLAGS "$(VERILATE_FLAGS)" -I$(VERSAT_HW_DIR)/src -I$(VERSAT_HW_DIR)/include $(V_INCLUDE) -cc -Mdir $(BUILD_DIR) $<;
 	cd $(BUILD_DIR) && make -f V$*.mk;
 
 $(BUILD_DIR)/typeInfo.inc: $(BUILD_DIR)/structParser.out $(TYPE_INFO_HDR)

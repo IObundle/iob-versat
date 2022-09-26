@@ -56,8 +56,8 @@ module VWrite #(
    );
 
    assign databus_addr = ext_addr;
-   assign databus_len = length;
    assign databus_wstrb = 4'b1111;
+   assign databus_len = length;
 
    wire gen_done;
    reg doneA;

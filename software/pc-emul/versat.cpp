@@ -2573,6 +2573,7 @@ void CalculateDelay(Versat* versat,Accelerator* accel){
    accel->locked = Accelerator::Locked::FREE;
    // Insert delay units if needed
    int delaysInserted = 0;
+   static int maxDelay = 0;
    for(int i = accel->instances.Size() - 1; i >= 0; i--){
       FUInstance* inst = order.instances.ptr[i];
 
@@ -2588,6 +2589,8 @@ void CalculateDelay(Versat* versat,Accelerator* accel){
             InsertUnit(accel,inst,info->port,info->inst.inst,info->inst.port,newInst);
 
             newInst->baseDelay = info->delay - versat->delay->latencies[0];
+
+            maxDelay = maxi(maxDelay,newInst->baseDelay);
             newInst->isStatic = true; // By default all delays are static
 
             if(newInst->config){
@@ -2597,6 +2600,7 @@ void CalculateDelay(Versat* versat,Accelerator* accel){
          }
       }
    }
+   //printf("%d\n",maxDelay);
    accel->locked = Accelerator::Locked::ORDERED;
 
    LockAccelerator(accel,Accelerator::Locked::FREE,true);
@@ -3131,6 +3135,60 @@ FUDeclaration* MergeAccelerators(Versat* versat,FUDeclaration* accel1,FUDeclarat
    return nullptr;
 }
 
+AcceleratorIterator IterateByType(Accelerator* accel,FUDeclaration* type){
+   AcceleratorIterator iter = {};
+
+   iter.type = type;
+   iter.index = 0;
+   iter.stack[0] = accel->instances.begin();
+
+   return iter;
+}
+
+FUInstance* Advance(AcceleratorIterator& iter){
+   if(!iter.stack[iter.index].HasNext()){
+      return nullptr;
+   }
+
+   FUInstance* inst = *iter.stack[iter.index];
+
+   if(inst->declaration->type == FUDeclaration::COMPOSITE){
+      iter.stack[++iter.index] = inst->compositeAccel->instances.begin();
+   } else {
+
+      while(1){
+         ++iter.stack[iter.index];
+
+         if(!iter.stack[iter.index].HasNext()){
+            if(iter.index > 0){
+               iter.index -= 1;
+               continue;
+            }
+         }
+
+         break;
+      }
+   }
+
+   return inst;
+}
+
+FUInstance* Next(AcceleratorIterator& iter){
+   for(FUInstance* inst = Advance(iter); inst != nullptr; inst = Advance(iter)){
+      if(inst->declaration == iter.type){
+         return inst;
+      }
+   }
+}
+
+bool HasNext(AcceleratorIterator& iter){
+   if(iter.index == 0 && !iter.stack[0].HasNext()){
+      return true;
+   }
+
+   return false;
+}
+
 #undef NUMBER_OUTPUTS
 #undef OUTPUT
 
@@ -3147,13 +3205,6 @@ static void T(Accelerator* accel){
 }
 
 void Hook(Versat* versat,Accelerator* accel,FUInstance* inst){
-   Free(versat);
-
-   #if 0
-   VisitAcceleratorInstances(accel,[](FUInstance* inst){
-      printf("%s\n",GetHierarchyNameRepr(inst->name));
-   });
-   #endif
 }
 
 

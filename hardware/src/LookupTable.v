@@ -1,7 +1,7 @@
 `timescale 1ns / 1ps
 
 module LookupTable #(
-       parameter MEM_INIT_FILE="none",
+       parameter INIT_MEM_FILE="none",
        parameter DATA_W = 32,
        parameter ADDR_W = 8
    )
@@ -13,12 +13,12 @@ module LookupTable #(
       input                         valid,
       output reg                    ready,
       output [DATA_W-1:0]           rdata,
-          
+
       input [DATA_W-1:0] in0,
       input [DATA_W-1:0] in1,
 
-      (* latency = 1 *) output [DATA_W-1:0] out0,
-      (* latency = 1 *) output [DATA_W-1:0] out1,
+      (* latency = 2 *) output reg [DATA_W-1:0] out0,
+      (* latency = 2 *) output reg [DATA_W-1:0] out1,
 
       input clk,
       input rst,
@@ -49,8 +49,21 @@ module LookupTable #(
       end
    end
 
+   wire [DATA_W-1:0] outA,outB;
+
+   always @(posedge clk,posedge rst)
+   begin
+      if(rst) begin
+         out0 <= 0;
+         out1 <= 0;
+      end else begin
+         out0 <= outA;
+         out1 <= outB;
+      end
+   end
+
    iob_dp_ram #(
-         .FILE(MEM_INIT_FILE),
+         .FILE(INIT_MEM_FILE),
          .DATA_W(DATA_W),
          .ADDR_W(ADDR_W))
    mem
@@ -63,8 +76,8 @@ module LookupTable #(
       .enB(1'b1),
       .weA(write),
       .weB(1'b0),
-      .doutA(out0),
-      .doutB(out1),
+      .doutA(outA),
+      .doutB(outB),
       .clk(clk)
       );
 

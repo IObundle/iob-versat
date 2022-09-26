@@ -140,8 +140,8 @@ assign ready = versat_ready | wor_ready;
 assign ready = versat_ready;
 #{end}
 
-reg [@{versatValues.configurationBits - 1}:0] configdata;
-wire [@{versatValues.stateBits - 1}:0] statedata;
+#{if versatValues.configurationBits} reg [@{versatValues.configurationBits-1}:0] configdata; #{end}
+#{if versatValues.stateBits} wire [@{versatValues.stateBits - 1}:0] statedata; #{end}
 
 wire [@{nDones - 1}:0] unitDone;
 
@@ -265,7 +265,7 @@ end
 #{set doneCounter 0}
 #{for inst instances}
 #{set decl inst.declaration}
-   @{decl.name} @{decl.name}_@{counter} (
+   @{decl.name} @{inst.parameters} @{inst.name.str}_@{counter} (
       #{for i inst.tempData.outputPortsUsed}
          .out@{i}(output_@{inst.id}_@{i}),
       #{end} 

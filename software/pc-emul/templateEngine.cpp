@@ -189,7 +189,8 @@ static Command ParseCommand(Tokenizer* tok){
                                                             {"debug",1},
                                                             {"include",1},
                                                             {"define",-1},
-                                                            {"call",-1}};
+                                                            {"call",-1},
+                                                            {"while",1}};
 
    bool found = false;
 
@@ -449,7 +450,10 @@ static Value EvalExpression(Expression* expr){
       case Expression::IDENTIFIER:{
          auto iter = envTable.find(expr->id);
 
-         Assert(iter != envTable.end());
+         if(iter == envTable.end()){
+            printf("Didn't find identifier: %.*s\n",UNPACK_SS(expr->id));
+            exit(0);
+         }
 
          return iter->second;
       } break;
@@ -497,6 +501,12 @@ static void PrintValue(FILE* file,Value in){
       fprintf(file,"%.*s",val.str.size,val.str.str);
    } else if(val.type == ValueType::BOOLEAN){
       fprintf(file,"%s",val.boolean ? "true" : "false");
+   } else if(val.type->type == Type::POINTER){
+      Assert(!val.isTemp);
+
+      void* res = *(void**) val.custom;
+
+      fprintf(file,"%p",res);
    } else {
       NOT_IMPLEMENTED;
    }
@@ -658,6 +668,12 @@ static void Eval(Block* block){
          #endif
 
          //envTable = savedTable;
+      } else if(CompareString(com.name,"while")){
+         while(ConvertValue(EvalExpression(com.expressions[0]),ValueType::BOOLEAN).boolean){
+            for(Block* ptr = block->nextInner; ptr != nullptr; ptr = ptr->next){
+               Eval(ptr); // Push on stack
+            }
+         }
       } else {
          NOT_IMPLEMENTED;
       }

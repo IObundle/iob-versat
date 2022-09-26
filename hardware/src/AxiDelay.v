@@ -1,7 +1,7 @@
 `timescale 1ns / 1ps
 
 module AxiDelay #(
-      MAX_DELAY = 3
+      parameter MAX_DELAY = 3
    )
    (
       input s_valid,

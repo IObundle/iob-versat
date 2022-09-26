@@ -31,7 +31,7 @@ struct ModuleInfo{
    int nInputs;
    int nOutputs;
    int* inputDelays;
-   int* latencies;
+   int* outputLatencies;
    int nConfigs;
    Wire* configs;
    int nStates;
@@ -41,6 +41,10 @@ struct ModuleInfo{
    bool memoryMapped;
    int memoryMappedBits;
    bool hasDone;
+   bool hasClk;
+   bool hasReset;
+   bool hasRun;
+   bool hasRunning;
    bool isSource;
 };
 

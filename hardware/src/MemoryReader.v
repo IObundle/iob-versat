@@ -28,14 +28,13 @@ module MemoryReader #(
 wire s_transfer = (s_valid && s_ready);
 wire m_transfer = (m_valid && m_ready);
 
-reg stored;
-reg [DATA_W-1:0] stored_data;
-reg [ADDR_W-1:0] stored_addr,last_addr;
+reg [ADDR_W-1:0] last_addr;
 
 always @(posedge clk,posedge rst)
 begin
    if(rst) begin
-
+      m_valid <= 1'b0;
+      last_addr <= 0;
    end else begin
       if(m_transfer) begin
          m_valid <= 1'b0;

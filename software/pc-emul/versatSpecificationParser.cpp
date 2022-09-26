@@ -233,11 +233,35 @@ FUDeclaration* ParseModule(Versat* versat,Tokenizer* tok){
          }
 
          Token type = tok->NextToken();
+
+         Token possibleParameters = tok->PeekToken();
+         Token fullParameters = MakeSizedString("");
+         if(CompareString(possibleParameters,"#")){
+            int index = 0;
+
+            void* mark = tok->Mark();
+            while(1){
+               token = tok->NextToken();
+
+               if(CompareString(token,"(")){
+                  index += 1;
+               }
+               if(CompareString(token,")")){
+                  index -= 1;
+                  if(index == 0){
+                     break;
+                  }
+               }
+            }
+            fullParameters = tok->Point(mark);
+         }
+
          Token name = tok->NextToken();
 
          FUDeclaration* FUType = GetTypeByName(versat,type);
          FUInstance* inst = CreateFUInstance(circuit,FUType,name);
          inst->isStatic = isStatic;
+         inst->parameters = PushString(&versat->permanent,fullParameters);
 
          Token peek = tok->PeekToken();
 
@@ -365,7 +389,7 @@ void ParseVersatSpecification(Versat* versat,const char* filepath){
       DEBUG_BREAK;
    }
 
-   Tokenizer tokenizer = Tokenizer(content, "[](){}+:;,*~.",{"->",">>>","<<<",">>","<<",".."});
+   Tokenizer tokenizer = Tokenizer(content, "#[](){}+:;,*~.",{"->",">>>","<<<",">>","<<",".."});
    Tokenizer* tok = &tokenizer;
 
    while(!tok->Done()){

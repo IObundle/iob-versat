@@ -687,6 +687,8 @@ Value ConvertValue(Value in,Type* want){
          int* pointerValue = (int*) DeferencePointer(in.custom,in.type->pointerType,0);
 
          res.boolean = (pointerValue != nullptr);
+      } else if(in.type->type == Type::STRUCT){
+         res.boolean = (in.custom != nullptr);
       } else {
          NOT_IMPLEMENTED;
       }
