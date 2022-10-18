@@ -172,7 +172,7 @@ module xmerge #(
     output [N_SLAVES-1:0] s_last, 
     input [ADDR_W * N_SLAVES-1:0] s_addr,
     input [DATA_W * N_SLAVES-1:0] s_wdata,
-    output [(DATA_W / 8) * N_SLAVES-1:0] s_wstrb,
+    input [(DATA_W / 8) * N_SLAVES-1:0] s_wstrb,
     output [DATA_W-1:0] s_rdata,
     input [8 * N_SLAVES - 1:0] s_len,
 

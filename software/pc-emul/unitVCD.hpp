@@ -3,7 +3,8 @@
 
 #include <verilated_vcd_c.h>
 
-struct VCDData{
+class VCDData{
+public:
    VerilatedVcdC vcd;
    int timesDumped;
 

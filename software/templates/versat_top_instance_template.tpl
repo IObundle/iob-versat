@@ -271,7 +271,7 @@ end
       #{end} 
 
       #{for i inst.tempData.inputPortsUsed}
-         .in@{i}(output_@{inst.tempData.inputs[i].inst.inst.id}_@{inst.tempData.inputs[i].inst.port}),
+         .in@{i}(output_@{inst.tempData.inputs[i].instConnectedTo.inst.id}_@{inst.tempData.inputs[i].instConnectedTo.port}),
       #{end}
 
       #{for i decl.nConfigs}

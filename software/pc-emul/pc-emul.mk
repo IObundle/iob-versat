@@ -21,12 +21,19 @@ CPP_FILES += $(VERSAT_DIR)/software/utilsCommon.cpp
 CPP_OBJ += $(BUILD_DIR)/utilsCommon.o
 
 #Units to verilate
-VERILATE_UNIT := Reg Mem Muladd VRead VWrite PipelineRegister Mux2 Merge Const Delay SwapEndian LookupTable
+VERILATE_UNIT := Reg Mem Muladd VRead VWrite PipelineRegister Mux2 Merge Const Delay SwapEndian LookupTable Mul
 UNIT_VERILOG := $(foreach unit,$(VERILATE_UNIT),$(VERSAT_DIR)/hardware/src/$(unit).v)
 
 UNIT_HDR+=$(foreach unit,$(VERILATE_UNIT),$(BUILD_DIR)/V$(unit).h)
 
-TYPE_INFO_HDR = $(VERSAT_PC_EMUL)/versatPrivate.hpp $(VERSAT_SW_DIR)/utils.hpp $(VERSAT_PC_EMUL)/verilogParser.hpp $(VERSAT_PC_EMUL)/templateEngine.hpp $(VERSAT_PC_EMUL)/memory.hpp
+TYPE_INFO_HDR += $(VERSAT_PC_EMUL)/versat.hpp
+TYPE_INFO_HDR += $(VERSAT_PC_EMUL)/versatPrivate.hpp
+TYPE_INFO_HDR += $(VERSAT_SW_DIR)/utils.hpp
+TYPE_INFO_HDR += $(VERSAT_PC_EMUL)/verilogParser.hpp
+TYPE_INFO_HDR += $(VERSAT_PC_EMUL)/templateEngine.hpp
+TYPE_INFO_HDR += $(VERSAT_PC_EMUL)/memory.hpp
+TYPE_INFO_HDR += $(VERSAT_PC_EMUL)/merge.hpp
+TYPE_INFO_HDR += $(VERSAT_PC_EMUL)/codeGeneration.hpp
 
 TOOL_COMMON_SRC += $(VERSAT_DIR)/software/pc-emul/parser.cpp
 TOOL_COMMON_SRC += $(VERSAT_DIR)/software/pc-emul/utils.cpp

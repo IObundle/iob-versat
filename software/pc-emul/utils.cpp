@@ -78,6 +78,13 @@ SizedString PathGoUp(char* pathBuffer){
    return content;
 }
 
+static char GetHexadecimalChar(int value){
+   if(value < 10){
+      return '0' + value;
+   } else{
+      return 'a' + (value - 10);
+   }
+}
 
 
 

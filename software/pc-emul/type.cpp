@@ -247,6 +247,8 @@ static Type* GetArrayType(SizedString name,int arrayLength){
 
 #include "templateEngine.hpp"
 #include "verilogParser.hpp"
+#include "codeGeneration.hpp"
+#include "merge.hpp"
 #include "typeInfo.inc"
 
 void RegisterTypes(){
@@ -357,11 +359,11 @@ Value AccessObjectIndex(Value object,int index){
 
    #if 0
    if(object.type == ValueType::POOL){
-      Pool<FUInstance>* pool = object.pool;
+      Pool<ComplexFUInstance>* pool = object.pool;
 
       Assert(index < pool->Size());
 
-      FUInstance* inst = pool->Get(index);
+      ComplexFUInstance* inst = pool->Get(index);
 
       value.type = GetType(MakeSizedString("FUInstance")); // TODO: place to replace when adding template support
       value.custom = (void*) inst;
@@ -396,45 +398,44 @@ Value AccessObjectIndex(Value object,int index){
    return value;
 }
 
-Value AccessObject(Value object,SizedString memberName){
-   Assert(!object.isTemp); // Must be a struct and structs are never temp
+Value AccessStruct(Value structure,Member* member){
+   Assert(structure.type->type == Type::STRUCT);
+   Assert(!structure.isTemp);
 
+   char* view = (char*) structure.custom;
+   void* newObject = &view[member->offset];
+
+   Value newValue = {};
+   newValue.custom = newObject;
+   newValue.type = member->type;
+   newValue.isTemp = false;
+
+   newValue = CollapseValue(newValue);
+
+   return newValue;
+}
+
+Value AccessObject(Value object,SizedString memberName){
    Value structure = CollapsePtrIntoStruct(object);
    Type* type = structure.type;
-   char* deference = (char*) structure.custom;
 
-   Assert(type->type == Type::STRUCT);
    Assert(type->members); // Type is incomplete
 
    int offset = -1;
-   Member member = {};
-   for(Member* m = type->members; type->members != nullptr; m = m->next){
+   Member* member = nullptr;
+   for(Member* m = type->members; m != nullptr; m = m->next){
       if(CompareString(m->name,memberName)){
          offset = m->offset;
-         member = *m;
+         member = m;
          break;
       }
    }
 
    Assert(offset >= 0);
 
-   #if 0
-   for(int i = 0; i < object.customType.pointers; i++){
-      deference = *((char**) deference);
-   }
-   #endif
+   Value res = AccessStruct(structure,member);
 
-   char* view = deference;
-   void* newObject = &view[offset];
-
-   Value newValue = {};
-   newValue.custom = newObject;
-   newValue.type = member.type;;
-   newValue.isTemp = false;
-
-   newValue = CollapseValue(newValue);
-
-   return newValue;
+   return res;
 }
 
 void Print(Value val){
@@ -498,7 +499,7 @@ Iterator Iterate(Value iterating){
 
          new (&iter.poolIterator) GenericPoolIterator(page,pool->Size(),type->templateArgs->type->size);
       } else if(type->templateBase == GetType(MakeSizedString("std::vector"))){ // TODO: A lot of assumptions are being made for std::vector so this works. Probably not safe (change later)
-         Assert(sizeof(std::vector<Byte>) == sizeof(std::vector<FUInstance>)); // Assuming std::vector<T> is same for any T (otherwise, cast does not work)
+         Assert(sizeof(std::vector<Byte>) == sizeof(std::vector<ComplexFUInstance>)); // Assuming std::vector<T> is same for any T (otherwise, cast does not work)
 
          iter.currentNumber = 0;
       } else {
@@ -598,6 +599,12 @@ Value GetValue(Iterator iter){
    }
 
    return val;
+}
+
+SizedString GetValueRepresentation(Value val){
+   SizedString res = {};
+
+   return res;
 }
 
 bool Equal(Value v1,Value v2){
@@ -767,4 +774,13 @@ Value MakeValue(bool boolean){
    return val;
 }
 
+Value MakeValue(void* entity,const char* typeName){
+   Value val = {};
+
+   val.type = GetType(MakeSizedString(typeName));
+   val.custom = entity;
+   val.isTemp = false;
+
+   return val;
+}
 

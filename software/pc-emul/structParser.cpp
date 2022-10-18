@@ -208,6 +208,7 @@ static Type* ParseEnum(Tokenizer* tok,SizedString outsideStructName){
 
 static Member* ParseMember(Tokenizer* tok,SizedString outsideStructName){
    Member* member = members.Alloc();
+   member->index = -1;
    Token token = tok->PeekToken();
 
    if(CompareString(token,"struct") || CompareString(token,"union")){
@@ -269,6 +270,8 @@ static Type* ParseStruct(Tokenizer* tok,SizedString outsideStructName){
 
    SizedString name = {};
 
+   Type* baseType = nullptr;
+
    token = tok->PeekToken();
    if(CompareToken(token,"{")){ // Unnamed
       static int nUnnamed = 1;
@@ -284,11 +287,20 @@ static Type* ParseStruct(Tokenizer* tok,SizedString outsideStructName){
       if(outsideStructName.size > 0){
          name = PushString(tempArena,"%.*s::%.*s",UNPACK_SS(outsideStructName),UNPACK_SS(name));
       }
+
+      token = tok->PeekToken();
+      if(CompareToken(token,":")){ // inheritance
+         tok->AssertNextToken(":");
+         tok->AssertNextToken("public"); // Forced to be a public inheritance
+
+         baseType = ParseSimpleType(tok);
+      }
    }
 
    Type* structInfo = FindOrCreateType(name);
 
    structInfo->type = Type::STRUCT;
+   structInfo->baseType = baseType;
 
    token = tok->PeekToken();
    if(CompareToken(token,";")){
@@ -715,6 +727,7 @@ void OutputRegisterTypesFunction(FILE* output){
    fprintf(output,"\n");
 
    fprintf(output,"    static Member members[] = {\n");
+   int index = 0;
    bool first = true;
    for(Type* info : types){
       if(info->type != Type::STRUCT || info->name.size == 0 || IsUnnamedStruct(info)){
@@ -730,6 +743,10 @@ void OutputRegisterTypesFunction(FILE* output){
             preamble = "        ,";
          } else {
             first = false;
+         }
+
+         if(m->index == -1){
+            m->index = index++;
          }
 
          fprintf(output,"%s(Member){",preamble);
@@ -749,7 +766,7 @@ void OutputRegisterTypesFunction(FILE* output){
    }
    fprintf(output,"    };\n\n");
 
-   int index = 0;
+   //int index = 0;
    for(Type* info : types){
       if(info->type != Type::STRUCT || info->name.size == 0 || IsUnnamedStruct(info)){
          continue;
@@ -757,16 +774,31 @@ void OutputRegisterTypesFunction(FILE* output){
 
       fprintf(output,"    RegisterStructMembers(MakeSizedString(\"%.*s\"),{",UNPACK_SS(info->name));
 
+      bool first = true;
+
+      if(info->baseType){
+         IterateSubmembers iter = {};
+         iter.currentMember[0] = info->baseType->members;
+
+         for(Member* m = info->baseType->members; m != nullptr; m = Next(&iter)){
+            if(first){
+               fprintf(output,"&members[%d]",m->index);
+               first = false;
+            } else {
+               fprintf(output,",&members[%d]",m->index);
+            }
+         }
+      }
+
       IterateSubmembers iter = {};
       iter.currentMember[0] = info->members;
 
-      bool first = true;
       for(Member* m = info->members; m != nullptr; m = Next(&iter)){
          if(first){
-            fprintf(output,"&members[%d]",index++);
+            fprintf(output,"&members[%d]",m->index);
             first = false;
          } else {
-            fprintf(output,",&members[%d]",index++);
+            fprintf(output,",&members[%d]",m->index);
          }
       }
       fprintf(output,"});\n");

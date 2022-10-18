@@ -7,8 +7,6 @@
 #include "versatCommon.hpp"
 #include "utils.hpp"
 
-typedef SimpleFUInstance FUInstance;
-
 struct Versat{
 };
 
@@ -37,6 +35,8 @@ FUInstance* CreateFUInstance(Accelerator* accel,FUDeclaration* type,SizedString 
 void Hook(Versat* versat,Accelerator* accel,FUInstance* inst);
 // Functions that perform no useful work are simple pre processed out
 #define SetDebug(...) (0)
+#define ClearConfigurations(...) ((void)0)
+#define ActivateMergedAccelerator(...) ((void)0)
 #define CreateAccelerator(...) ((Accelerator*)0)
 #define RegisterFU(...) ((FUDeclaration*)0)
 #define OutputVersatSource(...) ((void)0)
@@ -52,5 +52,6 @@ void Hook(Versat* versat,Accelerator* accel,FUInstance* inst);
 #define RegisterTypes(...) ((void)0)
 #define ParseVersatSpecification(...) ((void)0)
 #define MergeAccelerators(...) ((FUDeclaration*)0)
+#define Free(...) ((void)0)
 
 #endif // INCLUDED_VERSAT

@@ -65,7 +65,7 @@ int @{wire.name};
    VCDData* vcd = &data->vcd;
 
 template<typename T>
-static int32_t MemoryAccessNoAddress(FUInstance* inst,int address,int value,int write){
+static int32_t MemoryAccessNoAddress(ComplexFUInstance* inst,int address,int value,int write){
    T* self = (T*) inst->extraData;
 
    if(write){
@@ -107,7 +107,7 @@ static int32_t MemoryAccessNoAddress(FUInstance* inst,int address,int value,int 
 }
 
 template<typename T>
-static int32_t MemoryAccess(FUInstance* inst,int address,int value,int write){
+static int32_t MemoryAccess(ComplexFUInstance* inst,int address,int value,int write){
    T* self = (T*) inst->extraData;
 
    if(write){
@@ -162,7 +162,7 @@ struct DatabusAccess{
 #define MEMORY_LATENCY 2
 
 #{for module modules}
-static int32_t* @{module.name}_InitializeFunction(FUInstance* inst){
+static int32_t* @{module.name}_InitializeFunction(ComplexFUInstance* inst){
    V@{module.name}* self = new (inst->extraData) V@{module.name}();
 
    INIT(self);
@@ -176,7 +176,7 @@ static int32_t* @{module.name}_InitializeFunction(FUInstance* inst){
    return NULL;
 }
 
-static int32_t* @{module.name}_StartFunction(FUInstance* inst){
+static int32_t* @{module.name}_StartFunction(ComplexFUInstance* inst){
 #{if module.nOutputs}
    static int32_t out[@{module.nOutputs}];
 #{end}
@@ -221,7 +221,7 @@ static int32_t* @{module.name}_StartFunction(FUInstance* inst){
 #{end}
 }
 
-static int32_t* @{module.name}_UpdateFunction(FUInstance* inst){
+static int32_t* @{module.name}_UpdateFunction(ComplexFUInstance* inst){
 #{if module.nOutputs}
    static int32_t out[@{module.nOutputs}];
 #{end}
@@ -290,7 +290,7 @@ static int32_t* @{module.name}_UpdateFunction(FUInstance* inst){
 #{end}
 }
 
-static int32_t* @{module.name}_DestroyFunction(FUInstance* inst){
+static int32_t* @{module.name}_DestroyFunction(ComplexFUInstance* inst){
    V@{module.name}* self = (V@{module.name}*) inst->extraData;
 
    self->~V@{module.name}();

@@ -1,7 +1,7 @@
 #ifndef INCLUDED_VERSAT_COMMON
 #define INCLUDED_VERSAT_COMMON
 
-struct SimpleFUInstance{
+struct FUInstance{
    const char* name;
    int* memMapped;
    int* config;

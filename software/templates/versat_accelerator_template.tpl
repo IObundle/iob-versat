@@ -143,11 +143,11 @@ begin
 #{for inst instances}
 #{set decl inst.declaration}
    #{if decl.isOperation}
-   #{set input1 inst.tempData[0].inputs[0].inst}
+   #{set input1 inst.tempData[0].inputs[0].instConnectedTo}
       #{if decl.nInputs == 1}
          comb_@{inst.name.str} = @{decl.operation} #{call outputName input1};
       #{else}
-         #{set input2 inst.tempData[0].inputs[1].inst}
+         #{set input2 inst.tempData[0].inputs[1].instConnectedTo}
          #{if decl.name == "RHR"}
             comb_@{inst.name.str} = (#{call outputName input1} >> #{call outputName input2}) | (#{call outputName input1} << (32 - #{call outputName input2}));
          #{else} 
@@ -185,10 +185,10 @@ end
          #{end}
 
          #{for i inst.tempData.inputPortsUsed}
-         #{if inst.tempData.inputs[i].inst.inst.declaration.type == 2}
-            .in@{inst.tempData.inputs[i].port}(in@{inst.tempData.inputs[i].inst.inst.id}), // @{inst.tempData.inputs[i].inst.inst.name.str}
+         #{if inst.tempData.inputs[i].instConnectedTo.inst.declaration.type == 2}
+            .in@{inst.tempData.inputs[i].port}(in@{inst.tempData.inputs[i].instConnectedTo.inst.id}), // @{inst.tempData.inputs[i].instConnectedTo.inst.name.str}
          #{else}
-            .in@{inst.tempData.inputs[i].port}(#{call outputName inst.tempData.inputs[i].inst}),
+            .in@{inst.tempData.inputs[i].port}(#{call outputName inst.tempData.inputs[i].instConnectedTo}),
          #{end}
          #{end}
 
@@ -267,7 +267,7 @@ end
 #{set decl inst.declaration}
 #{if decl.name == "CircuitOutput"}
    #{for i inst.tempData.numberInputs}
-   #{set in inst.tempData.inputs[i].inst}
+   #{set in inst.tempData.inputs[i].instConnectedTo}
    assign out@{inst.tempData.inputs[i].port} = #{call outputName in};
    #{end}
 #{end}

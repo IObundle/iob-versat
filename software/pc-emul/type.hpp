@@ -25,6 +25,7 @@ struct TemplateArg{
 
 struct Type{
    SizedString name;
+   Type* baseType; // For struct inheritance
    union{
       Type* pointerType;
       Type* arrayType; // Array size can by calculated from size (size / size of arrayed type)
@@ -53,10 +54,10 @@ struct Member{
 
    Member* next;
 
-#ifdef STRUCT_PARSER
+// STRUCT_PARSER
    Type* structType;
    SizedString arrayExpression;
-#endif
+   int index;
 };
 
 namespace ValueType{
@@ -88,7 +89,7 @@ struct Value{
    };
 
    Type* type;
-   bool isTemp;
+   bool isTemp; // Temp is stored inside the Value, instead of storing a pointer to it in the custom variable
 };
 
 struct Iterator{
@@ -103,8 +104,7 @@ struct Iterator{
 void RegisterTypes();
 void FreeTypes();
 
-void Print(Value val);
-void OutputObject(void* object,Type* objectType); // TODO: implement
+SizedString GetValueRepresentation(Value val,Arena* arena);
 
 Value CollapsePtrIntoStruct(Value in);
 Value CollapseArrayIntoPtr(Value in);
@@ -116,6 +116,7 @@ Type* GetType(SizedString typeName); // Parsable C like name (ex: "int*" for poi
 Type* GetPointerType(Type* baseType);
 Type* GetArrayType(Type* baseType, int arrayLength);
 
+Value AccessStruct(Value object,Member* member);
 Value AccessObject(Value object,SizedString memberName);
 Value AccessObjectIndex(Value object,int index);
 
@@ -131,13 +132,9 @@ bool Equal(Type* t1,Type* t2);
 Value MakeValue();
 Value MakeValue(unsigned int integer);
 Value MakeValue(int integer);
-Value MakeValue(const char* str);
 Value MakeValue(SizedString str);
 Value MakeValue(bool boolean);
 
-template<typename T>
-Value MakeValue(T val);
-
-
+Value MakeValue(void* val,const char* typeName);
 
 #endif // INCLUDED_TYPE

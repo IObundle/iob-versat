@@ -12,14 +12,15 @@ enum LogModule{
 };
 
 enum LogLevel{
-   INFO    = 0,
-   DEBUG   = 1,
-   WARN    = 2,
-   ERROR   = 3,
-   FATAL   = 4
+   DEBUG   = 0, // Info that user doesn't care about
+   INFO    = 1, // General info that every user might want to know
+   WARN    = 2, // Not a problem, but can lead to poor results (performance, unexpected results, etc..)
+   ERROR   = 3, // Problem but can continue
+   FATAL   = 4  // Problem that cannot continue
 };
 
-void Log(LogModule module,LogLevel level,const char* format, ...) __attribute__ ((format (printf, 3, 4)));
+#define Log(MODULE,LEVEL,...) Log_(MODULE,LEVEL,__LINE__,__FILE__,__PRETTY_FUNCTION__,__VA_ARGS__)
+void Log_(LogModule module,LogLevel level,int line,const char* filename,const char* funcName,const char* format, ...) __attribute__ ((format (printf, 6, 7)));
 
 #define LogOnce(...) \
    do { \

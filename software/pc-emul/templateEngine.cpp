@@ -9,6 +9,7 @@
 
 #include "utils.hpp"
 #include "type.hpp"
+#include "debug.hpp"
 
 void ParseAndEvaluate(SizedString content);
 
@@ -84,10 +85,10 @@ static Expression* ParseIdentifier(Expression* current,Tokenizer* tok){
    return current;
 }
 
-static Expression* ParseAtom(Tokenizer* tok){
+static Expression* ParseAtom(Tokenizer* tok,Arena* arena){
    void* start = tok->Mark();
 
-   Expression* expr = PushStruct(tempArena,Expression);
+   Expression* expr = PushStruct(arena,Expression);
    expr->type = Expression::LITERAL;
 
    Token token = tok->PeekToken();
@@ -127,7 +128,7 @@ static Expression* ParseFactor(Tokenizer* tok){
       expr = ParseExpression(tok);
       tok->AssertNextToken(")");
    } else {
-      expr = ParseAtom(tok);
+      expr = ParseAtom(tok,tempArena);
    }
 
    expr->text = tok->Point(start);
@@ -316,7 +317,7 @@ static int CountNonOperationChilds(Accelerator* accel){
    }
 
    int count = 0;
-   for(FUInstance* inst : accel->instances){
+   for(ComplexFUInstance* inst : accel->instances){
       if(inst->declaration->type == FUDeclaration::COMPOSITE){
          count += CountNonOperationChilds(inst->compositeAccel);
       }
@@ -746,11 +747,7 @@ void ProcessTemplate(FILE* outputFile,const char* templateFilepath,Arena* arena)
 }
 
 void TemplateSetCustom(const char* id,void* entity,const char* typeName){
-   Value val = {};
-
-   val.type = GetType(MakeSizedString(typeName));
-   val.custom = entity;
-   val.isTemp = false;
+   Value val = MakeValue(entity,typeName);
 
    envTable[MakeSizedString(id)] = val;
 }

@@ -10,24 +10,6 @@ struct FUDeclaration;
 struct GraphComputedData;
 struct VersatComputedData;
 
-#if 0
-struct FUInstance{
-	HierarchyName name;
-
-   // Embedded memory
-   int* memMapped;
-   int* config;
-   int* state;
-   int* delay;
-};
-#endif
-
-struct Parameter{
-   SizedString name;
-   SizedString value;
-   Parameter* next;
-};
-
 struct FUInstance{
 	HierarchyName name;
 
@@ -49,7 +31,7 @@ struct FUInstance{
 	int* storedOutputs;
    char* extraData;
 
-   Parameter* parameterList;
+   SizedString parameters;
 
    // Configuration + State variables that versat needs access to
    int done; // Units that are sink or sources of data must implement done to ensure circuit does not end prematurely
@@ -58,18 +40,11 @@ struct FUInstance{
    bool namedAccess;
 };
 
-#if 0
-struct AcceleratorIterator{
-   FUDeclaration* type;
-
-   PoolIterator<FUInstance> stack[16];
-   int index;
+enum VersatDebugFlags{
+   OUTPUT_GRAPH_DOT,
+   OUTPUT_ACCELERATORS_CODE,
+   OUTPUT_VERSAT_CODE
 };
-
-AcceleratorIterator IterateByType(Accelerator* accel,FUDeclaration* type);
-FUInstance* Next(AcceleratorIterator& iter);
-bool HasNext(AcceleratorIterator& iter);
-#endif
 
 Accelerator* Flatten(Versat* versat,Accelerator* accel,int times);
 
@@ -77,13 +52,15 @@ void OutputGraphDotFile(Accelerator* accel,bool collapseSameEdges,const char* fi
 
 // Versat functions
 Versat* InitVersat(int base,int numberConfigurations);
+void Free(Versat* versat);
 void ParseCommandLineOptions(Versat* versat,int argc,const char** argv);
 void ParseVersatSpecification(Versat* versat,const char* filepath);
-bool SetDebug(Versat* versat,bool flag);
+
+bool SetDebug(Versat* versat,VersatDebugFlags flags, bool flag);
 
 FUDeclaration* RegisterFU(Versat* versat,FUDeclaration declaration);
 void OutputVersatSource(Versat* versat,Accelerator* accel,const char* sourceFilepath,const char* constantsFilepath,const char* dataFilepath);
-void OutputCircuitSource(Versat* versat,FUDeclaration accelDecl,Accelerator* accel,FILE* file);
+void OutputCircuitSource(Versat* versat,FUDeclaration* decl,Accelerator* accel,FILE* file);
 void OutputMemoryMap(Versat* versat,Accelerator* accel);
 void OutputUnitInfo(FUInstance* instance);
 
@@ -91,7 +68,7 @@ FUDeclaration* GetTypeByName(Versat* versat,SizedString str);
 
 // Accelerator functions
 Accelerator* CreateAccelerator(Versat* versat);
-FUInstance* CreateFUInstance(Accelerator* accel,FUDeclaration* type,SizedString entityName);
+FUInstance* CreateFUInstance(Accelerator* accel,FUDeclaration* type,SizedString entityName,bool flat = false,bool isStatic = false);
 void RemoveFUInstance(Accelerator* accel,FUInstance* inst);
 
 FUDeclaration* RegisterSubUnit(Versat* versat,SizedString name,Accelerator* accel);
@@ -102,10 +79,20 @@ FUDeclaration* RegisterSubUnit(Versat* versat,SizedString name,Accelerator* acce
 FUInstance* GetInstanceByName_(Accelerator* accel,int argc, ...);
 FUInstance* GetInstanceByName_(FUInstance* inst,int argc, ...);
 
+void ClearConfigurations(Accelerator* accel);
 void SaveConfiguration(Accelerator* accel,int configuration);
 void LoadConfiguration(Accelerator* accel,int configuration);
 
 void AcceleratorRun(Accelerator* accel);
+void ActivateMergedAccelerator(Versat* versat,Accelerator* accel,FUDeclaration* type);
+
+//void PopulateAccelerator(Accelerator* accel);
+void CheckMemory(Accelerator* topLevel,Accelerator* accel);
+//void InitializeFUInstances(Accelerator* accel,bool force = false);
+void DisplayAcceleratorMemory(Accelerator* topLevel);
+//void FixAcceleratorDelay(Accelerator* accel);
+
+void SetDefaultConfiguration(FUInstance* inst,int* config,int size);
 
 // Helper functions
 int GetInputValue(FUInstance* instance,int port);
@@ -116,7 +103,7 @@ void ConnectUnitsWithDelay(FUInstance* out,int outIndex,FUInstance* in,int inInd
 void VersatUnitWrite(FUInstance* instance,int address, int value);
 int VersatUnitRead(FUInstance* instance,int address);
 
-FUDeclaration* MergeAccelerators(Versat* versat,FUDeclaration* accel1,FUDeclaration* accel2);
+FUDeclaration* MergeAccelerators(Versat* versat,FUDeclaration* accel1,FUDeclaration* accel2,SizedString name);
 
 void Hook(Versat* versat,Accelerator* accel,FUInstance* inst);
 

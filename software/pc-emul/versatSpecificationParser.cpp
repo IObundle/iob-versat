@@ -115,17 +115,17 @@ PortInstance ParseTerm(Versat* versat,Accelerator* circuit,Tokenizer* tok){
 
       ConnectUnits(inst,var.portStart,negation,0);
 
-      res.inst = negation;
+      res.inst = (ComplexFUInstance*) negation;
       res.port = 0;
    } else {
-      res.inst = inst;
+      res.inst = (ComplexFUInstance*) inst;
       res.port = var.portStart;
    }
 
    return res;
 }
 
-FUInstance* ParseExpression(Versat* versat,Accelerator* circuit,Tokenizer* tok){
+FUInstance* ParseExpression(Versat* versat,Accelerator* circuit,Tokenizer* tok,SizedString name){
    PortInstance term1 = ParseTerm(versat,circuit,tok);
    Token op = tok->PeekToken();
 
@@ -160,24 +160,12 @@ FUInstance* ParseExpression(Versat* versat,Accelerator* circuit,Tokenizer* tok){
    }
 
    SizedString typeStr = MakeSizedString(typeName);
-   FUInstance* res = CreateFUInstance(circuit,GetTypeByName(versat,typeStr),typeStr);
+   FUInstance* res = CreateFUInstance(circuit,GetTypeByName(versat,typeStr),name);
 
    ConnectUnits(term1.inst,term1.port,res,0);
    ConnectUnits(term2.inst,term2.port,res,1);
 
    return res;
-}
-
-void TagInputs(Accelerator* accel,FUInstance* inst){
-   if(inst->tag || inst->tempData->nodeType == GraphComputedData::TAG_SOURCE_AND_SINK){
-      return;
-   }
-
-   inst->tag = 1;
-
-   for(int i = 0; i < inst->tempData->numberInputs; i++){
-      TagInputs(accel,inst->tempData->inputs[i].inst.inst);
-   }
 }
 
 FUDeclaration* ParseModule(Versat* versat,Tokenizer* tok){
@@ -202,9 +190,9 @@ FUDeclaration* ParseModule(Versat* versat,Tokenizer* tok){
       }
 
       FUInstance* inst = CreateFUInstance(circuit,versat->input,token);
-      FUInstance** ptr = circuit->inputInstancePointers.Alloc();
+      ComplexFUInstance** ptr = circuit->inputInstancePointers.Alloc();
 
-      *ptr = inst;
+      *ptr = (ComplexFUInstance*) inst;
    }
 
    tok->AssertNextToken("{");
@@ -275,6 +263,9 @@ FUDeclaration* ParseModule(Versat* versat,Tokenizer* tok){
             Tokenizer insideList(list,",",{});
 
             inst->config = PushArray(&versat->permanent,FUType->nConfigs,int);
+            SetDefaultConfiguration(inst,inst->config,FUType->nConfigs);
+
+            //inst->savedConfiguration = true;
             for(int i = 0; i < arguments; i++){
                Token arg = insideList.NextToken();
 
@@ -300,6 +291,7 @@ FUDeclaration* ParseModule(Versat* versat,Tokenizer* tok){
             Tokenizer insideList(list,",",{});
 
             inst->memMapped = PushArray(&versat->permanent,1 << FUType->memoryMapBits,int);
+            //inst->savedMemory = true;
             for(int i = 0; i < arguments; i++){
                Token arg = insideList.NextToken();
 
@@ -321,9 +313,7 @@ FUDeclaration* ParseModule(Versat* versat,Tokenizer* tok){
 
          Token peek = tok->NextToken();
          if(CompareToken(peek,"=")){
-            FUInstance* inst = ParseExpression(versat,circuit,tok);
-
-            StoreToken(outVar.name,inst->name.str);
+            FUInstance* inst = ParseExpression(versat,circuit,tok,outVar.name);
 
             if(CompareString(outVar.name,"out")){
                USER_ERROR;
@@ -348,7 +338,7 @@ FUDeclaration* ParseModule(Versat* versat,Tokenizer* tok){
             #if 1
             if(CompareString(inVar.name,"out")){
                if(!circuit->outputInstance){
-                  circuit->outputInstance = CreateFUInstance(circuit,versat->output,MakeSizedString("out"));
+                  circuit->outputInstance = (ComplexFUInstance*) CreateFUInstance(circuit,versat->output,MakeSizedString("out"));
                }
 
                inst2 = circuit->outputInstance;

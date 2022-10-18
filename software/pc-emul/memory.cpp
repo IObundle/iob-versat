@@ -47,7 +47,7 @@ void DeallocatePages(void* ptr,int pages){
 
 void CheckMemoryStats(){
    if(pagesAllocated != pagesDeallocated){
-      Log(LogModule::MEMORY,LogLevel::WARN,"Number of pages allocated/freed: %d/%d",pagesAllocated,pagesDeallocated);
+      Log(LogModule::MEMORY,LogLevel::WARN,"Number of pages freed/allocated: %d/%d",pagesDeallocated,pagesAllocated);
    }
 }
 
