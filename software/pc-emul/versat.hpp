@@ -43,7 +43,8 @@ struct FUInstance{
 enum VersatDebugFlags{
    OUTPUT_GRAPH_DOT,
    OUTPUT_ACCELERATORS_CODE,
-   OUTPUT_VERSAT_CODE
+   OUTPUT_VERSAT_CODE,
+   OUTPUT_VCD
 };
 
 Accelerator* Flatten(Versat* versat,Accelerator* accel,int times);

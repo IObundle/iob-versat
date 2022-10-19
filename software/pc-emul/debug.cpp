@@ -1,7 +1,5 @@
 #include "debug.hpp"
 
-#include <ncurses.h>
-
 #include "type.hpp"
 
 void DisplayInstanceMemory(ComplexFUInstance* inst){
@@ -17,6 +15,9 @@ void DisplayInstanceMemory(ComplexFUInstance* inst){
 void DisplayAcceleratorMemory(Accelerator* topLevel){
    printf("Config:\n");
    OutputMemoryHex(topLevel->configAlloc.ptr,topLevel->configAlloc.size * sizeof(int));
+
+   printf("Static:\n");
+   OutputMemoryHex(topLevel->staticAlloc.ptr,topLevel->staticAlloc.size * sizeof(int));
 
    printf("Delay:\n");
    OutputMemoryHex(topLevel->delayAlloc.ptr,topLevel->delayAlloc.size * sizeof(int));
@@ -47,6 +48,9 @@ void OutputMemoryHex(void* memory,int size){
 
    printf("\n");
 }
+
+#if 0
+#include <ncurses.h>
 
 struct PanelState{
    Value valueLooking;
@@ -183,3 +187,5 @@ void DebugTerminal(Value initialValue){
 
 	endwin();
 }
+
+#endif

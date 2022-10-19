@@ -299,6 +299,10 @@ bool SetDebug(Versat* versat,VersatDebugFlags flags,bool flag){
       last = versat->debug.outputVersat;
       versat->debug.outputVersat = flag;
    }break;
+   case VersatDebugFlags::OUTPUT_VCD:{
+      last = versat->debug.outputVCD;
+      versat->debug.outputVCD = flag;
+   }break;
    default:{
       NOT_POSSIBLE;
    }break;
@@ -601,35 +605,6 @@ Accelerator* CreateAccelerator(Versat* versat){
    return accel;
 }
 
-template<typename T>
-class PushPtr{
-   T* ptr;
-   int maximumTimes;
-   int timesPushed;
-
-public:
-   void Init(T* ptr,int maximum){
-      this->ptr = ptr;
-      this->maximumTimes = maximum;
-      this->timesPushed = 0;
-   }
-
-   void Init(Allocation<T> alloc){
-      this->ptr = alloc.ptr;
-      this->maximumTimes = alloc.size;
-      this->timesPushed = 0;
-   }
-
-   T* Push(int times){
-      T* res = &ptr[timesPushed];
-      timesPushed += times;
-
-      Assert(timesPushed <= maximumTimes);
-
-      return res;
-   }
-};
-
 struct FUInstanceInterfaces{
    PushPtr<int> config;
    PushPtr<int> state;
@@ -640,13 +615,7 @@ struct FUInstanceInterfaces{
    PushPtr<Byte> extraData;
 };
 
-struct StaticAllocation{
-   FUDeclaration* module;
-   SizedString name;
-   PushPtr<int> pushPtr;
-};
-
-void PopulateAcceleratorRecursive(FUDeclaration* accelType,ComplexFUInstance* inst,FUInstanceInterfaces& in,std::vector<StaticAllocation>& staticsAllocated){
+void PopulateAcceleratorRecursive(FUDeclaration* accelType,ComplexFUInstance* inst,FUInstanceInterfaces& in,Pool<StaticInfo>& staticsAllocated){
    FUDeclaration* type = inst->declaration;
    PushPtr<int> saved = in.config;
 
@@ -658,20 +627,21 @@ void PopulateAcceleratorRecursive(FUDeclaration* accelType,ComplexFUInstance* in
 
    bool foundStatic = false;
    if(inst->isStatic){
-      for(StaticAllocation& info : staticsAllocated){
-         if(info.module == accelType && CompareString(info.name,inst->name.str)){
-            in.config = info.pushPtr;
+      for(StaticInfo* info : staticsAllocated){
+         if(info->module == accelType && CompareString(info->name,inst->name.str)){
+            in.config.Init(info->ptr,info->nConfigs);
             foundStatic = true;
             break;
          }
       }
 
       if(!foundStatic){
-         StaticAllocation allocation = {};
-         allocation.module = accelType;
-         allocation.name = MakeSizedString(inst->name.str);
-         allocation.pushPtr = in.statics;
-         staticsAllocated.push_back(allocation);
+         StaticInfo* allocation = staticsAllocated.Alloc();
+         allocation->module = accelType;
+         allocation->name = MakeSizedString(inst->name.str);
+         allocation->nConfigs = inst->declaration->nConfigs;
+         allocation->ptr = in.statics.Push(0);
+         allocation->wires = inst->declaration->configWires;
 
          in.config = in.statics;
       }
@@ -710,6 +680,10 @@ void PopulateAcceleratorRecursive(FUDeclaration* accelType,ComplexFUInstance* in
       for(ComplexFUInstance* inst : inst->compositeAccel->instances){
          PopulateAcceleratorRecursive(newAccelType,inst,in,staticsAllocated);
       }
+   }
+
+   if(inst->declarationInstance && ((ComplexFUInstance*) inst->declarationInstance)->savedConfiguration){
+      memcpy(inst->config,inst->declarationInstance->config,inst->declaration->nConfigs * sizeof(int));
    }
 
    if(inst->isStatic){
@@ -789,16 +763,6 @@ void PopulateAccelerator(Accelerator* accel){
    ZeroOutRealloc(&accel->staticAlloc,val.statics);
    #endif
 
-   #if 0
-   ZeroOutAlloc(&accel->configAlloc,val.configs);
-   ZeroOutAlloc(&accel->stateAlloc,val.states);
-   ZeroOutAlloc(&accel->delayAlloc,val.delays);
-   ZeroOutAlloc(&accel->outputAlloc,val.totalOutputs);
-   ZeroOutAlloc(&accel->storedOutputAlloc,val.totalOutputs);
-   ZeroOutAlloc(&accel->extraDataAlloc,val.extraData);
-   ZeroOutAlloc(&accel->staticAlloc,val.statics);
-   #endif
-
    FUInstanceInterfaces inter = {};
 
    #if 1
@@ -811,13 +775,11 @@ void PopulateAccelerator(Accelerator* accel){
    inter.statics.Init(accel->staticAlloc);
    #endif
 
-   std::vector<StaticAllocation> staticsAllocated;
-
    //printf("\n\n==\n\n");
 
    // Assuming no static units on top, for now
    for(ComplexFUInstance* inst : accel->instances){
-      PopulateAcceleratorRecursive(nullptr,inst,inter,staticsAllocated);
+      PopulateAcceleratorRecursive(nullptr,inst,inter,accel->staticInfo);
    }
 }
 
@@ -862,6 +824,8 @@ static Accelerator* CopyAccelerator(Versat* versat,Accelerator* accel,InstanceMa
    // Copy of instances
    for(ComplexFUInstance* inst : accel->instances){
       ComplexFUInstance* newInst = CopyInstance(newAccel,inst,MakeSizedString(inst->name.str),flat);
+
+      newInst->declarationInstance = inst;
 
       map->insert({inst,newInst});
    }
@@ -1794,7 +1758,7 @@ void AcceleratorRun(Accelerator* accel){
       }
    }
 
-   if(accel->versat->debug.outputAccelerator){
+   if(accel->versat->debug.outputVCD){
       char buffer[128];
       sprintf(buffer,"debug/accelRun%d.vcd",numberRuns++);
       accelOutputFile = fopen(buffer,"w");
@@ -1806,7 +1770,7 @@ void AcceleratorRun(Accelerator* accel){
    AcceleratorRunStart(accel);
    AcceleratorRunIteration(accel);
 
-   if(accel->versat->debug.outputAccelerator){
+   if(accel->versat->debug.outputVCD){
       PrintVCD(accel,time++,0);
    }
 
@@ -1814,7 +1778,7 @@ void AcceleratorRun(Accelerator* accel){
       AcceleratorDoCycle(accel);
       AcceleratorRunIteration(accel);
 
-      if(accel->versat->debug.outputAccelerator){
+      if(accel->versat->debug.outputVCD){
          PrintVCD(accel,time++,1);
          PrintVCD(accel,time++,0);
       }
@@ -1826,7 +1790,7 @@ void AcceleratorRun(Accelerator* accel){
       #endif
    }
 
-   if(accel->versat->debug.outputAccelerator){
+   if(accel->versat->debug.outputVCD){
       PrintVCD(accel,time++,1);
       PrintVCD(accel,time++,0);
       fclose(accelOutputFile);

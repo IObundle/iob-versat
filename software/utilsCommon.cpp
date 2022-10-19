@@ -152,6 +152,32 @@ bool CompareString(const char* str1,const char* str2){
    return res;
 }
 
+char GetHexadecimalChar(int value){
+   if(value < 10){
+      return '0' + value;
+   } else{
+      return 'a' + (value - 10);
+   }
+}
+
+unsigned char* GetHexadecimal(const unsigned char* text, int str_size){
+   static unsigned char buffer[2048+1];
+   int i;
+
+   for(i = 0; i< str_size; i++){
+      Assert(i * 2 < 2048);
+
+      int ch = (int) ((unsigned char) text[i]);
+
+      buffer[i*2] = GetHexadecimalChar(ch / 16);
+      buffer[i*2+1] = GetHexadecimalChar(ch % 16);
+   }
+
+   buffer[(i)*2] = '\0';
+
+   return buffer;
+}
+
 bool IsAlpha(char ch){
    if(ch >= 'a' && ch < 'z')
       return true;

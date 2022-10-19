@@ -68,6 +68,7 @@ template<> class std::hash<SizedString>{
 #define MakeSizedString(...) GET_MACRO(__VA_ARGS__, MakeSizedString2, MakeSizedString1)(__VA_ARGS__)
 
 #define MAX_NAME_SIZE 64
+
 // Hierarchical naming scheme
 struct HierarchyName{
    char str[MAX_NAME_SIZE];
@@ -105,6 +106,9 @@ bool CompareString(SizedString str1,SizedString str2);
 bool CompareString(const char* str1,SizedString str2);
 bool CompareString(SizedString str1,const char* str2);
 bool CompareString(const char* str1,const char* str2);
+
+char GetHexadecimalChar(int value);
+unsigned char* GetHexadecimal(const unsigned char* text, int str_size); // Helper function to display result
 
 bool IsAlpha(char ch);
 

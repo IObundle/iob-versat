@@ -143,9 +143,10 @@ struct Parameter{
    Parameter* next;
 };
 
-// Care with order of initial members, must follow the same as versat.hpp
 struct ComplexFUInstance : public FUInstance{
    // Various uses
+   FUInstance* declarationInstance;
+
    GraphComputedData* tempData;
    VersatComputedData* versatData;
    char tag;
@@ -158,6 +159,7 @@ struct DebugState{
    bool outputGraphs;
    bool outputAccelerator;
    bool outputVersat;
+   bool outputVCD;
 };
 
 struct Versat{

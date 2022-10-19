@@ -37,6 +37,35 @@ void Alloc(Allocation<T>* alloc,int newSize);
 template<typename T>
 void Free(Allocation<T>* alloc);
 
+template<typename T>
+class PushPtr{
+public:
+   T* ptr;
+   int maximumTimes;
+   int timesPushed;
+
+   void Init(T* ptr,int maximum){
+      this->ptr = ptr;
+      this->maximumTimes = maximum;
+      this->timesPushed = 0;
+   }
+
+   void Init(Allocation<T> alloc){
+      this->ptr = alloc.ptr;
+      this->maximumTimes = alloc.size;
+      this->timesPushed = 0;
+   }
+
+   T* Push(int times){
+      T* res = &ptr[timesPushed];
+      timesPushed += times;
+
+      Assert(timesPushed <= maximumTimes);
+
+      return res;
+   }
+};
+
 struct Arena{
    Byte* mem;
    size_t used;
