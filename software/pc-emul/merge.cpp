@@ -194,18 +194,20 @@ ConsolidationGraph MaxClique(ConsolidationGraph graph){
    for(int i = graph.numberNodes - 1; i >= 0; i--){
       for(int j = 0; j < graph.numberNodes; j++){
          graph.validNodes[j] = (i <= j ? 1 : 0);
-         printf("%d ",graph.validNodes[j]);
+         //printf("%d ",graph.validNodes[j]);
       }
-      printf("\n");
+      //printf("\n");
 
       OnlyNeighbors(&graph,i);
       graph.validNodes[i] = 1;
 
+      #if 0
       for(int j = 0; j < graph.numberNodes; j++){
          printf("%d ",graph.validNodes[j]);
       }
       printf("\n");
       printf("\n");
+      #endif
 
       Clique(graph,1);
 
