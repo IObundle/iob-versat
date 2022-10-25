@@ -138,9 +138,11 @@ int NumberNodes(ConsolidationGraph graph){
    return num;
 }
 
+#define TABLE_SIZE (1024*8)
+
 static int max = 0;
 static int found = 0;
-static int table[1024];
+static int table[TABLE_SIZE];
 static ConsolidationGraph clique;
 
 void Clique(ConsolidationGraph graphArg,int size){
@@ -185,7 +187,7 @@ ConsolidationGraph MaxClique(ConsolidationGraph graph){
 
    max = 0;
    found = 0;
-   for(int i = 0; i < 1024; i++){
+   for(int i = 0; i < TABLE_SIZE; i++){
       table[i] = 0;
    }
 
@@ -194,14 +196,14 @@ ConsolidationGraph MaxClique(ConsolidationGraph graph){
    for(int i = graph.numberNodes - 1; i >= 0; i--){
       for(int j = 0; j < graph.numberNodes; j++){
          graph.validNodes[j] = (i <= j ? 1 : 0);
-         //printf("%d ",graph.validNodes[j]);
+         printf("%d ",graph.validNodes[j]);
       }
-      //printf("\n");
+      printf("\n");
 
       OnlyNeighbors(&graph,i);
       graph.validNodes[i] = 1;
 
-      #if 0
+      #if 1
       for(int j = 0; j < graph.numberNodes; j++){
          printf("%d ",graph.validNodes[j]);
       }
@@ -215,26 +217,6 @@ ConsolidationGraph MaxClique(ConsolidationGraph graph){
    }
 
    return graph;
-}
-
-void AddMapping(Mapping* mappings, FUInstance* source,FUInstance* sink){
-   for(int i = 0; i < 1024; i++){
-      if(mappings[i].source == nullptr){
-         mappings[i].source = source;
-         mappings[i].sink = sink;
-         return;
-      }
-   }
-}
-
-Mapping* GetMapping(Mapping* mappings, FUInstance* source){
-   for(int i = 0; i < 1024; i++){
-      if(mappings[i].source == source){
-         return &mappings[i];
-      }
-   }
-
-   return nullptr;
 }
 
 FUInstance* NodeMapped(FUInstance* inst, ConsolidationGraph graph){
@@ -271,71 +253,6 @@ FUInstance* NodeMapped(FUInstance* inst, ConsolidationGraph graph){
    return nullptr;
 }
 
-#if 0
-Accelerator* MergeGraphs(Versat* versat,Accelerator* accel1,Accelerator* accel2,ConsolidationGraph graph){
-   Mapping* graphToFinal = (Mapping*) calloc(sizeof(Mapping),1024);
-
-   InstanceMap map = {};
-
-   Accelerator* newGraph = CreateAccelerator(versat);
-
-   //LockAccelerator(accel1);
-   //LockAccelerator(accel2);
-
-   // Create base instances (accel 1)
-   for(ComplexFUInstance* inst : accel1->instances){
-      ComplexFUInstance* newNode = CreateFUInstance(newGraph,inst->declaration);
-
-      map.insert({inst,newNode});
-   }
-
-   #if 1
-   for(ComplexFUInstance* inst : accel2->instances){
-      ComplexFUInstance* mappedNode = NodeMapped(inst,graph); // Returns node in graph 1
-
-      if(mappedNode){
-         mappedNode = map.find(mappedNode)->second;
-      } else {
-         mappedNode = CreateFUInstance(newGraph,inst->declaration);
-      }
-
-      AddMapping(graphToFinal,inst,mappedNode);
-   }
-   #endif
-
-   // Add edges from accel1
-   for(ComplexFUInstance* inst : accel1->instances){
-      for(int ii = 0; ii < inst->tempData->numberOutputs; ii++){
-         ComplexFUInstance* other = inst->tempData->outputs[ii].inst.inst;
-
-         ComplexFUInstance* mappedInst = map.find(inst)->second;
-         ComplexFUInstance* mappedOther = map.find(other)->second;
-
-         //PortEdge portEdge = GetPort(inst,other);
-
-         //ConnectUnits(mappedInst,portEdge.outPort,mappedOther,portEdge.inPort);
-      }
-   }
-
-   #if 1
-   for(ComplexFUInstance* inst : accel2->instances){
-      for(int ii = 0; ii < inst->tempData->numberOutputs; ii++){
-         ComplexFUInstance* other = inst->tempData->outputs[ii].inst.inst;
-
-         ComplexFUInstance* mappedInst =  map.find(inst)->second;
-         ComplexFUInstance* mappedOther = map.find(other)->second;
-
-         //PortEdge portEdge = GetPort(inst,other);
-
-         //ConnectUnits(mappedInst,portEdge.outPort,mappedOther,portEdge.inPort);
-      }
-   }
-   #endif
-
-   return newGraph;
-}
-#endif
-
 ConsolidationGraph GenerateConsolidationGraph(Arena* arena,Accelerator* accel1,Accelerator* accel2){
    ConsolidationGraph graph = {};
 
@@ -351,6 +268,7 @@ ConsolidationGraph GenerateConsolidationGraph(Arena* arena,Accelerator* accel1,A
             node->type = MappingNode::NODE;
             node->nodes.instances[0] = instA;
             node->nodes.instances[1] = instB;
+
             graph.numberNodes += 1;
          }
       }
@@ -380,14 +298,15 @@ ConsolidationGraph GenerateConsolidationGraph(Arena* arena,Accelerator* accel1,A
          }
       }
    }
+   #endif
 
+   #if 1
    graph.edges = (MappingEdge*) MarkArena(arena);
+   int times = 0;
    // Check edge conflicts
    for(int i = 0; i < graph.numberNodes; i++){
-      for(int ii = 0; ii < graph.numberNodes; ii++){
-         if(i >= ii){
-            continue;
-         }
+      for(int ii = 0; ii < i; ii++){
+         times += 1;
 
          MappingNode node1 = graph.nodes[i];
          MappingNode node2 = graph.nodes[ii];
@@ -396,10 +315,12 @@ ConsolidationGraph GenerateConsolidationGraph(Arena* arena,Accelerator* accel1,A
             continue;
          }
 
+         #if 1
          MappingEdge* edge = PushStruct(arena,MappingEdge);
 
          edge->nodes[0] = node1;
          edge->nodes[1] = node2;
+         #endif
 
          graph.numberEdges += 1;
       }
@@ -462,43 +383,38 @@ static void OutputConsolidationGraph(ConsolidationGraph graph,Arena* memory){
 
    fprintf(outputFile,"}\n");
    fclose(outputFile);
+}
 
-   #if 0
-   std::set<std::pair<ComplexFUInstance*,ComplexFUInstance*>> sameEdgeCounter;
+static InstanceMap ConsolidationGraphMerging(Versat* versat,Accelerator* accel1,Accelerator* accel2,Arena* arena){
+   ConsolidationGraph graph = GenerateConsolidationGraph(arena,accel1,accel2);
 
-   for(Edge* edge : accel->edges){
-      if(collapseSameEdges){
-         std::pair<ComplexFUInstance*,ComplexFUInstance*> key{edge->units[0].inst,edge->units[1].inst};
+   OutputConsolidationGraph(graph,arena);
 
-         if(sameEdgeCounter.count(key) == 1){
-            continue;
-         }
+   ConsolidationGraph clique = MaxClique(graph);
 
-         sameEdgeCounter.insert(key);
+   InstanceMap res;
+
+   for(int i = 0; i < graph.numberNodes; i++){
+      MappingNode node = graph.nodes[i];
+
+      if(!graph.validNodes[i]){
+         continue;
       }
 
-      fprintf(outputFile,"\t%s -> ",FormatNameToOutput(edge->units[0].inst));
-      fprintf(outputFile,"%s",FormatNameToOutput(edge->units[1].inst));
+      if(node.type == MappingNode::NODE){
+         MergeEdge& nodes = node.nodes;
 
-      #if 1
-      ComplexFUInstance* outputInst = edge->units[0].inst;
-      int delay = 0;
-      for(int i = 0; i < outputInst->tempData->numberOutputs; i++){
-         if(edge->units[1].inst == outputInst->tempData->outputs[i].inst.inst && edge->units[1].port == outputInst->tempData->outputs[i].inst.port){
-            delay = outputInst->tempData->outputs[i].delay;
-            break;
-         }
+         res.insert({nodes.instances[1],nodes.instances[0]});
+      } else { // Edge mapping
+         PortEdge& edge0 = node.edges[0]; // Edge in graph 1
+         PortEdge& edge1 = node.edges[1]; // Edge in graph 2
+
+         res.insert({edge1.units[0].inst,edge0.units[0].inst});
+         res.insert({edge1.units[1].inst,edge0.units[1].inst});
       }
-
-      fprintf(outputFile,"[label=\"%d\"]",delay);
-      //fprintf(outputFile,"[label=\"[%d:%d;%d:%d]\"]",outputInst->declaration->latencies[0],delay,edge->units[1].inst->declaration->inputDelays[edge->units[1].port],edge->delay);
-      #endif
-
-      fprintf(outputFile,";\n");
    }
 
-   fprintf(outputFile,"}\n");
-   #endif
+   return res;
 }
 
 FUDeclaration* MergeAccelerators(Versat* versat,FUDeclaration* accel1,FUDeclaration* accel2,SizedString name){
@@ -507,13 +423,12 @@ FUDeclaration* MergeAccelerators(Versat* versat,FUDeclaration* accel1,FUDeclarat
    Arena* arena = &versat->temp;
    Byte* mark = MarkArena(&versat->temp);
 
-   ConsolidationGraph graph = GenerateConsolidationGraph(arena,accel1->baseCircuit,accel2->baseCircuit);
+   Accelerator* flatten1 = Flatten(versat,accel1->baseCircuit,2);
+   Accelerator* flatten2 = Flatten(versat,accel2->baseCircuit,2);
 
-   OutputConsolidationGraph(graph,arena);
+   InstanceMap graphMapping = ConsolidationGraphMerging(versat,flatten1,flatten2,arena);
 
-   ConsolidationGraph clique = MaxClique(graph);
-
-   Mapping* graphToFinal = PushArray(arena,1024,Mapping);
+   PopMark(arena,mark);
 
    InstanceMap map = {};
 
@@ -521,7 +436,7 @@ FUDeclaration* MergeAccelerators(Versat* versat,FUDeclaration* accel1,FUDeclarat
    newGraph->type = Accelerator::CIRCUIT;
 
    // Create base instances from accel 1
-   for(FUInstance* inst : accel1->baseCircuit->instances){
+   for(FUInstance* inst : flatten1->instances){
       FUInstance* newNode = CreateFUInstance(newGraph,inst->declaration,MakeSizedString(inst->name.str));
 
       map.insert({inst,newNode});
@@ -529,24 +444,23 @@ FUDeclaration* MergeAccelerators(Versat* versat,FUDeclaration* accel1,FUDeclarat
 
    #if 1
    // Create base instances from accel 2, unless they are mapped to nodes from accel 1
-   for(FUInstance* inst : accel2->baseCircuit->instances){
-      FUInstance* mappedNode = NodeMapped(inst,clique); // Returns node in graph 1
+   for(FUInstance* inst : flatten2->instances){
+      auto mapping = graphMapping.find(inst); // Returns mapping from flatten2 to flatten1
 
-      if(mappedNode){
-         mappedNode = map.find(mappedNode)->second;
+      if(mapping != graphMapping.end()){
+         FUInstance* mappedNode = map.find(mapping->second)->second;
+
          map.insert({inst,mappedNode});
          newGraph->nameToInstance.insert({inst->name.str,Test{mappedNode}});
       } else {
-         mappedNode = CreateFUInstance(newGraph,inst->declaration,MakeSizedString(inst->name.str));
+         FUInstance* mappedNode = CreateFUInstance(newGraph,inst->declaration,MakeSizedString(inst->name.str));
          map.insert({inst,mappedNode});
       }
-
-      AddMapping(graphToFinal,inst,mappedNode);
    }
    #endif
 
    #if 1
-   for(Edge* edge : accel1->baseCircuit->edges){
+   for(Edge* edge : flatten1->edges){
       FUInstance* mappedInst = map.find(edge->units[0].inst)->second;
       FUInstance* mappedOther = map.find(edge->units[1].inst)->second;
 
@@ -556,7 +470,7 @@ FUDeclaration* MergeAccelerators(Versat* versat,FUDeclaration* accel1,FUDeclarat
 
    #if 1
    // Add edges from accel 2
-   for(Edge* edge : accel2->baseCircuit->edges){
+   for(Edge* edge : flatten2->edges){
       FUInstance* mappedInst = map.find(edge->units[0].inst)->second;
       FUInstance* mappedOther = map.find(edge->units[1].inst)->second;
 
@@ -568,9 +482,6 @@ FUDeclaration* MergeAccelerators(Versat* versat,FUDeclaration* accel1,FUDeclarat
 
    OutputGraphDotFile(newGraph,false,"Merged.dot");
 
-   //TODO: Since we are creating a new graph, we are instantiating memory and therefore RegisterSubUnit thinks we are setting default values for the units
-   //      Need to rework this entire system.
-   //Assert(false);
    FUDeclaration* decl = RegisterSubUnit(versat,name,newGraph);
 
    //decl->type = FUDeclaration::MERGED;

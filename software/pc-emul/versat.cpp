@@ -192,8 +192,8 @@ Versat* InitVersat(int base,int numberConfigurations){
    versat->base = base;
    versat_base = base;
 
-   InitArena(&versat->temp,Megabyte(16));
-   InitArena(&versat->permanent,Megabyte(64));
+   InitArena(&versat->temp,Megabyte(256));
+   InitArena(&versat->permanent,Megabyte(256));
 
    FUDeclaration nullDeclaration = {};
    nullDeclaration.latencies = zeros;
@@ -263,6 +263,7 @@ void Free(Versat* versat){
    FreeTypes();
 
    CheckMemoryStats();
+
 }
 
 void SetDefaultConfiguration(FUInstance* instance,int* config,int size){
@@ -270,6 +271,13 @@ void SetDefaultConfiguration(FUInstance* instance,int* config,int size){
 
    inst->config = config;
    inst->savedConfiguration = true;
+}
+
+void ShareInstanceConfig(FUInstance* instance, int shareBlockIndex){
+   ComplexFUInstance* inst = (ComplexFUInstance*) instance;
+
+   inst->sharedIndex = shareBlockIndex;
+   inst->sharedEnable = true;
 }
 
 void ParseCommandLineOptions(Versat* versat,int argc,const char** argv){
@@ -615,6 +623,47 @@ struct FUInstanceInterfaces{
    PushPtr<Byte> extraData;
 };
 
+// Forward declare
+void PopulateAcceleratorRecursive(FUDeclaration* accelType,ComplexFUInstance* inst,FUInstanceInterfaces& in,Pool<StaticInfo>& staticsAllocated);
+
+struct SharingInfo{
+   int* ptr;
+   bool init;
+};
+
+void DoPopulate(Accelerator* accel,FUDeclaration* accelType,FUInstanceInterfaces& in,Pool<StaticInfo>& staticsAllocated){
+   std::vector<SharingInfo> sharingInfo;
+   for(ComplexFUInstance* inst : accel->instances){
+      SharingInfo* info = nullptr;
+      PushPtr<int> savedConfig = in.config;
+
+      if(inst->sharedEnable){
+         int index = inst->sharedIndex;
+
+         if(index >= sharingInfo.size()){
+            sharingInfo.resize(index + 1);
+         }
+
+         info = &sharingInfo[index];
+
+         if(info->init){ // Already exists, replace config with ptr
+            in.config.Init(info->ptr,inst->declaration->nConfigs);
+         } else {
+            info->ptr = in.config.Push(0);
+         }
+      }
+
+      PopulateAcceleratorRecursive(accelType,inst,in,staticsAllocated);
+
+      if(inst->sharedEnable){
+         if(info->init){
+            in.config = savedConfig;
+         }
+         info->init = true;
+      }
+   }
+}
+
 void PopulateAcceleratorRecursive(FUDeclaration* accelType,ComplexFUInstance* inst,FUInstanceInterfaces& in,Pool<StaticInfo>& staticsAllocated){
    FUDeclaration* type = inst->declaration;
    PushPtr<int> saved = in.config;
@@ -677,9 +726,7 @@ void PopulateAcceleratorRecursive(FUDeclaration* accelType,ComplexFUInstance* in
    if(inst->compositeAccel){
       FUDeclaration* newAccelType = inst->declaration;
 
-      for(ComplexFUInstance* inst : inst->compositeAccel->instances){
-         PopulateAcceleratorRecursive(newAccelType,inst,in,staticsAllocated);
-      }
+      DoPopulate(inst->compositeAccel,newAccelType,in,staticsAllocated);
    }
 
    if(inst->declarationInstance && ((ComplexFUInstance*) inst->declarationInstance)->savedConfiguration){
@@ -690,7 +737,6 @@ void PopulateAcceleratorRecursive(FUDeclaration* accelType,ComplexFUInstance* in
       if(!foundStatic){
          in.statics = in.config;
       }
-
       in.config = saved;
    }
 
@@ -711,39 +757,146 @@ void InitializeFUInstances(Accelerator* accel,bool force){
 }
 
 struct AcceleratorValues{
+   int inputs;
+   int outputs;
+
    int configs;
    int states;
    int delays;
-   int outputs;
+   int ios;
    int extraData;
    int totalOutputs;
    int statics;
+
+   int memoryMappedBits;
+   bool isMemoryMapped;
 };
 
-AcceleratorValues ComputeAcceleratorValues(Accelerator* accel){
+struct StaticId{
+   FUDeclaration* parent;
+   SizedString name;
+};
+
+AcceleratorValues ComputeAcceleratorValues(Versat* versat,Accelerator* accel){
    AcceleratorValues val = {};
 
+   std::vector<StaticId> staticSeen;
+   std::vector<bool> seenShared;
+
+   int memoryMapBits[32];
+   memset(memoryMapBits,0,sizeof(int) * 32);
+
+   // Handle non-static information
    for(ComplexFUInstance* inst : accel->instances){
       FUDeclaration* type = inst->declaration;
 
-      if(inst->isStatic){
-         val.statics += type->nConfigs;
-      } else {
+      // Check if shared
+      if(inst->sharedEnable){
+         if(inst->sharedIndex >= seenShared.size()){
+            seenShared.resize(inst->sharedIndex + 1);
+         }
+
+         if(!seenShared[inst->sharedIndex]){
+            val.configs += inst->declaration->nConfigs;
+         }
+
+         seenShared[inst->sharedIndex] = true;
+      } else if(!inst->isStatic){ // Shared cannot be static
          val.configs += type->nConfigs;
+      }
+
+      if(type->isMemoryMapped){
+         memoryMapBits[type->memoryMapBits] += 1;
+      }
+
+      if(type == versat->input){
+         val.inputs += 1;
       }
 
       val.states += type->nStates;
       val.delays += type->nDelays;
-      val.outputs += type->nOutputs;
+      val.ios += type->nIOs;
       val.extraData += type->extraDataSize;
       val.totalOutputs += type->nTotalOutputs;
-      val.statics += type->nStaticConfigs;
+   }
+
+   if(accel->outputInstance){
+      for(Edge* edge : accel->edges){
+         if(edge->units[0].inst == accel->outputInstance){
+            val.outputs = maxi(val.outputs - 1,edge->units[0].port) + 1;
+         }
+         if(edge->units[1].inst == accel->outputInstance){
+            val.outputs = maxi(val.outputs - 1,edge->units[1].port) + 1;
+         }
+      }
+   }
+   val.totalOutputs += val.outputs;
+
+   // Handle static information
+   AcceleratorIterator iter = {};
+   for(FUInstance* inst = iter.Start(accel); inst; inst = iter.Next()){
+      if(!inst->isStatic){
+         continue;
+      }
+
+      StaticId id = {};
+
+      id.name = MakeSizedString(inst->name.str);
+      id.parent = iter.CurrentAcceleratorInstance()->declaration;
+
+      StaticId* found = nullptr;
+      for(StaticId& search : staticSeen){
+         if(CompareString(id.name,search.name) && id.parent == search.parent){
+            found = &search;
+         }
+      }
+
+      if(!found){
+         staticSeen.push_back(id);
+         val.statics += inst->declaration->nConfigs;
+      }
+   }
+
+   // Huffman encoding for memory mapping bits
+   int last = -1;
+   while(1){
+      for(int i = 0; i < 32; i++){
+         if(memoryMapBits[i]){
+            memoryMapBits[i+1] += (memoryMapBits[i] / 2);
+            memoryMapBits[i] = memoryMapBits[i] % 2;
+            last = i;
+         }
+      }
+
+      int first = -1;
+      int second = -1;
+      for(int i = 0; i < 32; i++){
+         if(first == -1 && memoryMapBits[i] == 1){
+            first = i;
+         } else if(second == -1 && memoryMapBits[i] == 1){
+            second = i;
+            break;
+         }
+      }
+
+      if(second == -1){
+         break;
+      }
+
+      memoryMapBits[first] = 0;
+      memoryMapBits[second] = 0;
+      memoryMapBits[maxi(first,second) + 1] += 1;
+   }
+
+   if(last != -1){
+      val.isMemoryMapped = true;
+      val.memoryMappedBits = last;
    }
 
    return val;
 }
 
-void PopulateAccelerator(Accelerator* accel){
+void PopulateAccelerator(Versat* versat,Accelerator* accel){
    #if 1
    if(accel->type == Accelerator::CIRCUIT){
       return;
@@ -751,7 +904,7 @@ void PopulateAccelerator(Accelerator* accel){
    #endif
 
    // Accel should be top level
-   AcceleratorValues val = ComputeAcceleratorValues(accel);
+   AcceleratorValues val = ComputeAcceleratorValues(versat,accel);
 
    #if 1
    ZeroOutRealloc(&accel->configAlloc,val.configs);
@@ -777,10 +930,19 @@ void PopulateAccelerator(Accelerator* accel){
 
    //printf("\n\n==\n\n");
 
+   accel->staticInfo.Clear();
    // Assuming no static units on top, for now
-   for(ComplexFUInstance* inst : accel->instances){
-      PopulateAcceleratorRecursive(nullptr,inst,inter,accel->staticInfo);
-   }
+   DoPopulate(accel,nullptr,inter,accel->staticInfo);
+
+#if 1
+   Assert(inter.config.Empty());
+   Assert(inter.state.Empty());
+   Assert(inter.delay.Empty());
+   Assert(inter.outputs.Empty());
+   Assert(inter.storedOutputs.Empty());
+   Assert(inter.extraData.Empty());
+   Assert(inter.statics.Empty());
+#endif
 }
 
 void CheckMemory(Accelerator* topLevel,Accelerator* accel){
@@ -808,6 +970,8 @@ static ComplexFUInstance* CopyInstance(Accelerator* newAccel,ComplexFUInstance* 
 
    newInst->baseDelay = oldInstance->baseDelay;
    newInst->isStatic = oldInstance->isStatic;
+   newInst->sharedEnable = oldInstance->sharedEnable;
+   newInst->sharedIndex = oldInstance->sharedIndex;
 
    return newInst;
 }
@@ -881,7 +1045,7 @@ FUInstance* CreateFUInstance(Accelerator* accel,FUDeclaration* type,SizedString 
 
    #if 1
    if(!flat){
-      PopulateAccelerator(accel);
+      PopulateAccelerator(accel->versat,accel);
    }
    #endif
 
@@ -930,6 +1094,14 @@ FUDeclaration* RegisterSubUnit(Versat* versat,SizedString name,Accelerator* circ
    // HACK, for now
    circuit->subtype = &decl;
 
+   for(ComplexFUInstance* inst : circuit->instances){
+      FUDeclaration* d = inst->declaration;
+
+      if(d == versat->output){
+         circuit->outputInstance = inst;
+      }
+   }
+
    decl.baseCircuit = CopyAccelerator(versat,circuit,nullptr,true);
 
    FixMultipleInputs(versat,circuit);
@@ -940,8 +1112,21 @@ FUDeclaration* RegisterSubUnit(Versat* versat,SizedString name,Accelerator* circ
 
    decl.fixedDelayCircuit = circuit;
 
-   circuit->outputInstance = nullptr;
+   AcceleratorValues val = ComputeAcceleratorValues(versat,decl.fixedDelayCircuit);
 
+   decl.nInputs = val.inputs;
+   decl.nOutputs = val.outputs;
+   decl.nConfigs = val.configs;
+   decl.nStates = val.states;
+   decl.nDelays = val.delays;
+   decl.nIOs = val.ios;
+   decl.extraDataSize = val.extraData;
+   decl.nTotalOutputs = val.totalOutputs;
+   decl.nStaticConfigs = val.statics;
+   decl.isMemoryMapped = val.isMemoryMapped;
+   decl.memoryMapBits = val.memoryMappedBits;
+
+   #if 0
    int memoryMapBits[32];
    memset(memoryMapBits,0,sizeof(int) * 32);
    for(ComplexFUInstance* inst : circuit->instances){
@@ -969,6 +1154,7 @@ FUDeclaration* RegisterSubUnit(Versat* versat,SizedString name,Accelerator* circ
       decl.extraDataSize += d->extraDataSize;
       decl.nTotalOutputs += d->nTotalOutputs;
    }
+
    if(circuit->outputInstance){
       for(Edge* edge : circuit->edges){
          if(edge->units[0].inst == circuit->outputInstance){
@@ -981,6 +1167,7 @@ FUDeclaration* RegisterSubUnit(Versat* versat,SizedString name,Accelerator* circ
    }
 
    decl.nTotalOutputs += decl.nOutputs;
+   #endif
 
    decl.inputDelays = PushArray(&versat->permanent,decl.nInputs,int);
 
@@ -999,6 +1186,7 @@ FUDeclaration* RegisterSubUnit(Versat* versat,SizedString name,Accelerator* circ
       }
    }
 
+   #if 0
    // Huffman encoding calculation for max bits
    int last = -1;
    while(1){
@@ -1034,6 +1222,7 @@ FUDeclaration* RegisterSubUnit(Versat* versat,SizedString name,Accelerator* circ
       decl.isMemoryMapped = true;
       decl.memoryMapBits = last;
    }
+   #endif
 
    decl.configWires = PushArray(&versat->permanent,decl.nConfigs,Wire);
    decl.stateWires = PushArray(&versat->permanent,decl.nStates,Wire);
@@ -1218,7 +1407,7 @@ void CompressAcceleratorMemory(Accelerator* accel){
 Accelerator* Flatten(Versat* versat,Accelerator* accel,int times){
    #if 1
    InstanceMap map;
-   Accelerator* newAccel = CopyAccelerator(versat,accel,&map,false);
+   Accelerator* newAccel = CopyAccelerator(versat,accel,&map,true);
    map.clear();
 
    PortInstance outputs[60];
@@ -1421,7 +1610,7 @@ Accelerator* Flatten(Versat* versat,Accelerator* accel,int times){
    OutputGraphDotFile(accel,true,"./debug/original.dot");
    OutputGraphDotFile(newAccel,true,"./debug/flatten.dot");
 
-   PopulateAccelerator(newAccel);
+   PopulateAccelerator(versat,newAccel);
    InitializeFUInstances(newAccel,true);
 
    Assert(newAccel->instances.Size() == newAccel->nameToInstance.size());

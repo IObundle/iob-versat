@@ -34,7 +34,6 @@ struct ConsolidationGraph{
    int* validNodes;
 };
 
-// Private but needed to be on header for type introspection
 struct Mapping{
    FUInstance* source;
    FUInstance* sink;

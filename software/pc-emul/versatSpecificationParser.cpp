@@ -168,6 +168,96 @@ FUInstance* ParseExpression(Versat* versat,Accelerator* circuit,Tokenizer* tok,S
    return res;
 }
 
+FUInstance* ParseInstanceDeclaration(Versat* versat,Tokenizer* tok,Accelerator* circuit){
+   Token type = tok->NextToken();
+
+   Token possibleParameters = tok->PeekToken();
+   Token fullParameters = MakeSizedString("");
+   if(CompareString(possibleParameters,"#")){
+      int index = 0;
+
+      void* mark = tok->Mark();
+      while(1){
+         Token token = tok->NextToken();
+
+         if(CompareString(token,"(")){
+            index += 1;
+         }
+         if(CompareString(token,")")){
+            index -= 1;
+            if(index == 0){
+               break;
+            }
+         }
+      }
+      fullParameters = tok->Point(mark);
+   }
+
+   Token name = tok->NextToken();
+
+   FUDeclaration* FUType = GetTypeByName(versat,type);
+   FUInstance* inst = CreateFUInstance(circuit,FUType,name);
+   inst->parameters = PushString(&versat->permanent,fullParameters);
+
+   Token peek = tok->PeekToken();
+
+   if(CompareString(peek,"(")){
+      tok->AdvancePeek(peek);
+
+      Token list = tok->NextFindUntil(")");
+      int arguments = 1 + CountSubstring(list,MakeSizedString(","));
+      Assert(arguments <= FUType->nConfigs);
+
+      Tokenizer insideList(list,",",{});
+
+      inst->config = PushArray(&versat->permanent,FUType->nConfigs,int);
+      SetDefaultConfiguration(inst,inst->config,FUType->nConfigs);
+
+      //inst->savedConfiguration = true;
+      for(int i = 0; i < arguments; i++){
+         Token arg = insideList.NextToken();
+
+         inst->config[i] = ParseInt(arg);
+
+         if(i != arguments - 1){
+            insideList.AssertNextToken(",");
+         }
+      }
+      Assert(insideList.Done());
+
+      tok->AssertNextToken(")");
+      peek = tok->PeekToken();
+   }
+
+   if(CompareString(peek,"{")){
+      tok->AdvancePeek(peek);
+
+      Token list = tok->NextFindUntil("}");
+      int arguments = 1 + CountSubstring(list,MakeSizedString(","));
+      Assert(arguments <= (1 << FUType->memoryMapBits));
+
+      Tokenizer insideList(list,",",{});
+
+      inst->memMapped = PushArray(&versat->permanent,1 << FUType->memoryMapBits,int);
+      //inst->savedMemory = true;
+      for(int i = 0; i < arguments; i++){
+         Token arg = insideList.NextToken();
+
+         inst->memMapped[i] = ParseInt(arg);
+
+         if(i != arguments - 1){
+            insideList.AssertNextToken(",");
+         }
+      }
+      Assert(insideList.Done());
+
+      tok->AssertNextToken("}");
+      peek = tok->PeekToken();
+   }
+
+   return inst;
+}
+
 FUDeclaration* ParseModule(Versat* versat,Tokenizer* tok){
    tok->AssertNextToken("module");
 
@@ -197,6 +287,7 @@ FUDeclaration* ParseModule(Versat* versat,Tokenizer* tok){
 
    tok->AssertNextToken("{");
 
+   int shareIndex = 0;
    int state = 0;
    while(!tok->Done()){
       Token token = tok->PeekToken();
@@ -212,102 +303,50 @@ FUDeclaration* ParseModule(Versat* versat,Tokenizer* tok){
       }
 
       if(state == 0){
-         Token possibleStatic = tok->PeekToken();
+         Token possibleQualifier = tok->PeekToken();
 
          bool isStatic = false;
-         if(CompareString(possibleStatic,"static")){
-            tok->AdvancePeek(possibleStatic);
+         if(CompareString(possibleQualifier,"static")){
+            tok->AdvancePeek(possibleQualifier);
             isStatic = true;
          }
+         if(CompareString(possibleQualifier,"share")){
+            tok->AdvancePeek(possibleQualifier);
 
-         Token type = tok->NextToken();
+            Token shareType = tok->NextToken();
 
-         Token possibleParameters = tok->PeekToken();
-         Token fullParameters = MakeSizedString("");
-         if(CompareString(possibleParameters,"#")){
-            int index = 0;
+            //ShareBlock* block = PushStruct(&versat->permanent,ShareBlock);
 
-            void* mark = tok->Mark();
-            while(1){
-               token = tok->NextToken();
+            if(CompareString(shareType,"config")){
+               Token typeName = tok->NextToken();
 
-               if(CompareString(token,"(")){
-                  index += 1;
-               }
-               if(CompareString(token,")")){
-                  index -= 1;
-                  if(index == 0){
+               tok->AssertNextToken("{");
+
+               FUDeclaration* type = GetTypeByName(versat,typeName);
+               while(1){
+                  Token possibleName = tok->NextToken();
+
+                  if(CompareString(possibleName,"}")){
                      break;
                   }
+
+                  FUInstance* inst = CreateFUInstance(circuit,type,possibleName);
+
+                  ShareInstanceConfig(inst,shareIndex);
+
+                  tok->AssertNextToken(";");
                }
+            } else {
+               UNHANDLED_ERROR;
             }
-            fullParameters = tok->Point(mark);
+
+            shareIndex += 1;
+         } else {
+            FUInstance* inst = ParseInstanceDeclaration(versat,tok,circuit);
+            inst->isStatic = isStatic;
+
+            tok->AssertNextToken(";");
          }
-
-         Token name = tok->NextToken();
-
-         FUDeclaration* FUType = GetTypeByName(versat,type);
-         FUInstance* inst = CreateFUInstance(circuit,FUType,name);
-         inst->isStatic = isStatic;
-         inst->parameters = PushString(&versat->permanent,fullParameters);
-
-         Token peek = tok->PeekToken();
-
-         if(CompareString(peek,"(")){
-            tok->AdvancePeek(peek);
-
-            Token list = tok->NextFindUntil(")");
-            int arguments = 1 + CountSubstring(list,MakeSizedString(","));
-            Assert(arguments <= FUType->nConfigs);
-
-            Tokenizer insideList(list,",",{});
-
-            inst->config = PushArray(&versat->permanent,FUType->nConfigs,int);
-            SetDefaultConfiguration(inst,inst->config,FUType->nConfigs);
-
-            //inst->savedConfiguration = true;
-            for(int i = 0; i < arguments; i++){
-               Token arg = insideList.NextToken();
-
-               inst->config[i] = ParseInt(arg);
-
-               if(i != arguments - 1){
-                  insideList.AssertNextToken(",");
-               }
-            }
-            Assert(insideList.Done());
-
-            tok->AssertNextToken(")");
-            peek = tok->PeekToken();
-         }
-
-         if(CompareString(peek,"{")){
-            tok->AdvancePeek(peek);
-
-            Token list = tok->NextFindUntil("}");
-            int arguments = 1 + CountSubstring(list,MakeSizedString(","));
-            Assert(arguments <= (1 << FUType->memoryMapBits));
-
-            Tokenizer insideList(list,",",{});
-
-            inst->memMapped = PushArray(&versat->permanent,1 << FUType->memoryMapBits,int);
-            //inst->savedMemory = true;
-            for(int i = 0; i < arguments; i++){
-               Token arg = insideList.NextToken();
-
-               inst->memMapped[i] = ParseInt(arg);
-
-               if(i != arguments - 1){
-                  insideList.AssertNextToken(",");
-               }
-            }
-            Assert(insideList.Done());
-
-            tok->AssertNextToken("}");
-            peek = tok->PeekToken();
-         }
-
-         tok->AssertNextToken(";");
       } else {
          Var outVar = ParseVar(tok);
 

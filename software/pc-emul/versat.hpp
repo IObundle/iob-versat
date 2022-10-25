@@ -94,6 +94,7 @@ void DisplayAcceleratorMemory(Accelerator* topLevel);
 //void FixAcceleratorDelay(Accelerator* accel);
 
 void SetDefaultConfiguration(FUInstance* inst,int* config,int size);
+void ShareInstanceConfig(FUInstance* inst, int shareBlockIndex);
 
 // Helper functions
 int GetInputValue(FUInstance* instance,int port);

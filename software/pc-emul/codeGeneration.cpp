@@ -107,6 +107,8 @@ void OutputVersatSource(Versat* versat,Accelerator* accel,const char* sourceFile
 
    LockAccelerator(accel,Accelerator::Locked::FIXED);
 
+   SetDelayRecursive(accel);
+
    #if 1
    // No need for templating, small file
    FILE* c = fopen(constantsFilepath,"w");

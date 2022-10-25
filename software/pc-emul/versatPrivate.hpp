@@ -92,8 +92,6 @@ struct FUDeclaration{
    int nStaticConfigs;
    int extraDataSize;
 
-   //Accelerator* circuit; // Composite declaration
-
    // Stores different accelerators depending on properties we want
    Accelerator* baseCircuit;
    Accelerator* fixedMultiEdgeCircuit;
@@ -152,6 +150,8 @@ struct ComplexFUInstance : public FUInstance{
    char tag;
    bool savedConfiguration; // For subunits registered, indicate when we save configuration before hand
    bool savedMemory; // Same for memory
+   Byte sharedIndex;
+   bool sharedEnable;
    bool initialized;
 };
 
