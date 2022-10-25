@@ -1073,7 +1073,8 @@ static bool CheckName(SizedString name){
                  ||  (ch >= 'A' && ch <= 'Z')
                  ||  (ch >= '0' && ch <= '9' && i != 0)
                  ||  (ch == '_')
-                 ||  (ch == '.'); // For now allow it, despite the fact that it should only be used internally by Versat
+                 ||  (ch == '.')  // For now allow it, despite the fact that it should only be used internally by Versat
+                 ||  (ch == '/'); // For now allow it, despite the fact that it should only be used internally by Versat
 
       if(!allowed){
          return false;
