@@ -173,7 +173,7 @@ struct Versat{
 	int numberConfigurations;
 
 	// Declaration for units that versat needs to instantiate itself
-	FUDeclaration* delay;
+	FUDeclaration* buffer;
    FUDeclaration* input;
    FUDeclaration* multiplexer;
    FUDeclaration* output;
@@ -208,7 +208,7 @@ struct Accelerator{
    Pool<ComplexFUInstance> instances;
 	Pool<Edge> edges;
 
-   std::unordered_map<std::string,Test> nameToInstance;
+   //std::unordered_map<std::string,Test> nameToInstance;
 
    Pool<ComplexFUInstance*> inputInstancePointers;
    ComplexFUInstance* outputInstance;

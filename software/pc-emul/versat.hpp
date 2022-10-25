@@ -11,7 +11,8 @@ struct GraphComputedData;
 struct VersatComputedData;
 
 struct FUInstance{
-	HierarchyName name;
+	//HierarchyName name;
+   SizedString name;
 
    // Embedded memory
    int* memMapped;
@@ -89,9 +90,7 @@ void ActivateMergedAccelerator(Versat* versat,Accelerator* accel,FUDeclaration* 
 
 //void PopulateAccelerator(Accelerator* accel);
 void CheckMemory(Accelerator* topLevel,Accelerator* accel);
-//void InitializeFUInstances(Accelerator* accel,bool force = false);
 void DisplayAcceleratorMemory(Accelerator* topLevel);
-//void FixAcceleratorDelay(Accelerator* accel);
 
 void SetDefaultConfiguration(FUInstance* inst,int* config,int size);
 void ShareInstanceConfig(FUInstance* inst, int shareBlockIndex);

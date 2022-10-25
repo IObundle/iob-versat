@@ -177,8 +177,6 @@ void OutputVersatSource(Versat* versat,Accelerator* accel,const char* sourceFile
 
    ProcessTemplate(s,"../../submodules/VERSAT/software/templates/versat_top_instance_template.tpl",&versat->temp);
 
-
-
    /*
    unsigned int hashTableSize = 2048;
    Assert(accum.size() < (hashTableSize / 2));

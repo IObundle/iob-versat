@@ -101,7 +101,7 @@ void PreprocessVerilogFile_(Arena* output, SizedString fileContent,std::vector<c
          tok->AssertNextToken("\"");
 
          // Open include file
-         std::string filename(fileName.str,fileName.size);
+         std::string filename(UNPACK_SS_REVERSE(fileName));
          FILE* file = nullptr;
          std::string filepath;
          for(const char* str : *includeFilepaths){
@@ -115,7 +115,7 @@ void PreprocessVerilogFile_(Arena* output, SizedString fileContent,std::vector<c
          }
 
          if(!file){
-            printf("Couldn't find file: %.*s\n",fileName.size,fileName.str);
+            printf("Couldn't find file: %.*s\n",UNPACK_SS(fileName));
             printf("Looked on the following folders:\n");
 
             printf("  %s\n",GetCurrentDirectory());

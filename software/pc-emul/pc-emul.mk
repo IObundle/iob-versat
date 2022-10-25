@@ -21,7 +21,7 @@ CPP_FILES += $(VERSAT_DIR)/software/utilsCommon.cpp
 CPP_OBJ += $(BUILD_DIR)/utilsCommon.o
 
 #Units to verilate
-VERILATE_UNIT := Reg Mem Muladd VRead VWrite PipelineRegister Mux2 Merge Const Delay SwapEndian LookupTable Mul
+VERILATE_UNIT := Reg Mem Muladd VRead VWrite PipelineRegister Mux2 Merge Const Buffer SwapEndian LookupTable Mul
 UNIT_VERILOG := $(foreach unit,$(VERILATE_UNIT),$(VERSAT_DIR)/hardware/src/$(unit).v)
 
 UNIT_HDR+=$(foreach unit,$(VERILATE_UNIT),$(BUILD_DIR)/V$(unit).h)

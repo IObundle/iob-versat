@@ -9,6 +9,7 @@
 #include "type.hpp"
 #include "codeGeneration.hpp"
 #include "debug.hpp"
+#include "parser.hpp"
 
 #include <printf.h>
 #include <unordered_map>
@@ -202,7 +203,7 @@ Versat* InitVersat(int base,int numberConfigurations){
 
    RegisterAllVerilogUnits(versat);
 
-   versat->delay = GetTypeByName(versat,MakeSizedString("Delay"));
+   versat->buffer = GetTypeByName(versat,MakeSizedString("Buffer"));
    versat->pipelineRegister = GetTypeByName(versat,MakeSizedString("PipelineRegister"));
    versat->multiplexer = GetTypeByName(versat,MakeSizedString("Mux2"));
    versat->input = RegisterCircuitInput(versat);
@@ -243,7 +244,6 @@ void Free(Versat* versat){
       Free(&accel->storedOutputAlloc);
       Free(&accel->extraDataAlloc);
 
-      accel->nameToInstance.~unordered_map();
       accel->instances.Clear(true);
       accel->edges.Clear(true);
       accel->inputInstancePointers.Clear(true);
@@ -367,99 +367,73 @@ FUDeclaration* GetTypeByName(Versat* versat,SizedString name){
    return nullptr;
 }
 
-static FUInstance* vGetInstanceByName_(Accelerator* circuit,int argc,va_list args){
-   char buffer[1024];
+struct HierarchicalName{
+   SizedString name;
+   HierarchicalName* next;
+};
 
-   Accelerator* ptr = circuit;
+static FUInstance* GetInstanceByHierarchicalName(Accelerator* accel,HierarchicalName* hier){
+   Assert(hier != nullptr);
+
    FUInstance* res = nullptr;
+   for(FUInstance* inst : accel->instances){
+      Tokenizer tok(inst->name,"./",{});
 
-   va_list fullName;
-   va_copy(fullName,args);
+      Token name = tok.NextToken();
 
-   // Check to see if full name is present
-   char* bufferPtr = buffer;
-   bool first = true;
-   for (int i = 0; i < argc; i++){
-      char* str = va_arg(fullName, char*);
-      int arguments = parse_printf_format(str,0,nullptr);
-
-      if(first){
-         first = false;
-      } else {
-         bufferPtr += sprintf(bufferPtr,"_");
-      }
-
-      if(arguments){
-         bufferPtr += vsprintf(bufferPtr,str,fullName);
-         i += arguments;
-         for(int ii = 0; ii < arguments; ii++){
-            va_arg(fullName, int); // Need to consume something
+      if(CompareString(name,hier->name)){
+         if(hier->next){
+            res = GetInstanceByHierarchicalName(inst->compositeAccel,hier->next);
+         } else {
+            res = inst;
          }
-      } else {
-         bufferPtr += sprintf(bufferPtr,"%s",str);
+         break;
       }
    }
-   va_end(fullName);
-   //printf("%s\n",buffer);
 
-   std::string toFind = std::string(buffer);
-   for(auto pair : circuit->nameToInstance){
-      if(pair.first == toFind){
-         FUInstance* res = pair.second.inst;
-         res->namedAccess = true;
-         return res;
-      }
-   }
+   return res;
+}
+
+static FUInstance* vGetInstanceByName_(Accelerator* circuit,int argc,va_list args){
+   Arena* arena = &circuit->versat->temp;
+
+   HierarchicalName fullName = {};
+   HierarchicalName* namePtr = &fullName;
+   HierarchicalName* lastPtr = nullptr;
 
    for (int i = 0; i < argc; i++){
       char* str = va_arg(args, char*);
-      int found = 0;
-
       int arguments = parse_printf_format(str,0,nullptr);
 
+      if(namePtr == nullptr){
+         HierarchicalName* newBlock = PushStruct(arena,HierarchicalName);
+
+         lastPtr->next = newBlock;
+         namePtr = newBlock;
+      }
+
+      SizedString name = {};
       if(arguments){
-         vsprintf(buffer,str,args);
+         name = vPushString(arena,str,args);
          i += arguments;
          for(int ii = 0; ii < arguments; ii++){
             va_arg(args, int); // Need to consume something
          }
       } else {
-         strcpy(buffer,str);
+         name = PushString(arena,"%s",str);
       }
 
-      #if 0
-      for(FUInstance* inst : ptr->instances){
-         if(strcmp(inst->name.str,buffer) == 0){
-            res = inst;
-            found = 1;
-
-            break;
-         }
-      }
-      #else
-      std::string toFind = std::string(buffer);
-      for(auto pair : ptr->nameToInstance){
-         if(pair.first == toFind){
-            res = pair.second.inst;
-            found = 1;
-
-            break;
-         }
-      }
-      #endif
-
-      if(!found){
-         Log(LogModule::VERSAT,LogLevel::FATAL,"Didn't find the following instance: %s",buffer);
-      }
-
-      Assert(found);
-
-      if(res->declaration->type == FUDeclaration::COMPOSITE){
-         ptr = res->compositeAccel;
-      }
+      namePtr->name = name;
+      lastPtr = namePtr;
+      namePtr = namePtr->next;
    }
 
-   res->namedAccess = true;
+   FUInstance* res = GetInstanceByHierarchicalName(circuit,&fullName);
+
+   if(!res){
+      GetInstanceByHierarchicalName(circuit,&fullName);
+      Assert(false);
+   }
 
    return res;
 }
@@ -520,18 +494,18 @@ static char* FormatNameToOutput(FUInstance* inst){
    #if HIERARCHICAL_NAME == 1
       char* name = GetHierarchyNameRepr(inst->name);
    #else
-      char* name = inst->name.str;
+      SizedString name = inst->name;
    #endif
 
    char* ptr = buffer;
-   ptr += sprintf(ptr,"%s",name);
+   ptr += sprintf(ptr,"%.*s",UNPACK_SS(name));
 
    #if PRINT_ID == 1
    ptr += sprintf(ptr,"_%d",inst->id);
    #endif
 
    #if PRINT_DELAY == 1
-   if(CompareString(inst->declaration->name,"Delay") && inst->config){
+   if(CompareString(inst->declaration->name,"Buffer") && inst->config){
       ptr += sprintf(ptr,"_%d",inst->config[0]);
    } else {
       ptr += sprintf(ptr,"_%d",inst->baseDelay);
@@ -677,7 +651,7 @@ void PopulateAcceleratorRecursive(FUDeclaration* accelType,ComplexFUInstance* in
    bool foundStatic = false;
    if(inst->isStatic){
       for(StaticInfo* info : staticsAllocated){
-         if(info->module == accelType && CompareString(info->name,inst->name.str)){
+         if(info->module == accelType && CompareString(info->name,inst->name)){
             in.config.Init(info->ptr,info->nConfigs);
             foundStatic = true;
             break;
@@ -687,7 +661,7 @@ void PopulateAcceleratorRecursive(FUDeclaration* accelType,ComplexFUInstance* in
       if(!foundStatic){
          StaticInfo* allocation = staticsAllocated.Alloc();
          allocation->module = accelType;
-         allocation->name = MakeSizedString(inst->name.str);
+         allocation->name = inst->name;
          allocation->nConfigs = inst->declaration->nConfigs;
          allocation->ptr = in.statics.Push(0);
          allocation->wires = inst->declaration->configWires;
@@ -841,7 +815,7 @@ AcceleratorValues ComputeAcceleratorValues(Versat* versat,Accelerator* accel){
 
       StaticId id = {};
 
-      id.name = MakeSizedString(inst->name.str);
+      id.name = inst->name;
       id.parent = iter.CurrentAcceleratorInstance()->declaration;
 
       StaticId* found = nullptr;
@@ -950,7 +924,7 @@ void CheckMemory(Accelerator* topLevel,Accelerator* accel){
    //for(FUInstance* inst = iter.Start(accel); inst; inst = iter.Next()){
 
    for(ComplexFUInstance* inst : accel->instances){
-      printf("%s:\n",inst->name.str);
+      printf("%.*s:\n",UNPACK_SS(inst->name));
       if(inst->isStatic){
          printf("C:%d\n",inst->config ? inst->config - topLevel->staticAlloc.ptr : -1);
       } else {
@@ -987,7 +961,7 @@ static Accelerator* CopyAccelerator(Versat* versat,Accelerator* accel,InstanceMa
 
    // Copy of instances
    for(ComplexFUInstance* inst : accel->instances){
-      ComplexFUInstance* newInst = CopyInstance(newAccel,inst,MakeSizedString(inst->name.str),flat);
+      ComplexFUInstance* newInst = CopyInstance(newAccel,inst,inst->name,flat);
 
       newInst->declarationInstance = inst;
 
@@ -995,9 +969,11 @@ static Accelerator* CopyAccelerator(Versat* versat,Accelerator* accel,InstanceMa
    }
 
    // Copy of name to instances
+   #if 0
    for(auto& pair : accel->nameToInstance){
       newAccel->nameToInstance.insert({pair.first,Test{map->at((ComplexFUInstance*) pair.second.inst)}});
    }
+   #endif
 
    // Flat copy of edges
    for(Edge* edge : accel->edges){
@@ -1032,11 +1008,9 @@ FUInstance* CreateFUInstance(Accelerator* accel,FUDeclaration* type,SizedString 
    ptr->accel = accel;
    ptr->declaration = type;
 
-   FixedStringCpy(ptr->name.str,name);
+   ptr->name = name;
    ptr->namedAccess = true;
    ptr->isStatic = isStatic;
-
-   accel->nameToInstance.insert({ptr->name.str,Test{ptr}});
 
    if(type->type == FUDeclaration::COMPOSITE){
       //ptr->compositeAccel = InstantiateAccelerator(accel->versat,&type->baseCircuit);
@@ -1298,7 +1272,7 @@ FUDeclaration* RegisterSubUnit(Versat* versat,SizedString name,Accelerator* circ
       if(inst->isStatic){
          StaticInfo unit = {};
          unit.module = res;
-         unit.name = MakeSizedString(inst->name.str);
+         unit.name = inst->name;
          unit.nConfigs = inst->declaration->nConfigs;
          unit.wires = inst->declaration->configWires;
 
@@ -1359,11 +1333,6 @@ bool IsGraphValid(Accelerator* accel){
    return 1;
 }
 
-struct NamedInstance{
-   SizedString fullName;
-   ComplexFUInstance* ptr;
-};
-
 void CompressAcceleratorMemory(Accelerator* accel){
    InstanceMap oldPosToNew;
 
@@ -1399,10 +1368,17 @@ void CompressAcceleratorMemory(Accelerator* accel){
       }
    }
 
+   #if 0
    for(auto& pair : accel->nameToInstance){
       pair.second.inst = oldPosToNew.at((ComplexFUInstance*) pair.second.inst);
    }
+   #endif
 }
+
+struct NamedInstance{
+   SizedString fullName;
+   ComplexFUInstance* ptr;
+};
 
 Accelerator* Flatten(Versat* versat,Accelerator* accel,int times){
    #if 1
@@ -1434,7 +1410,8 @@ Accelerator* Flatten(Versat* versat,Accelerator* accel,int times){
       }
       #endif
 
-      #if 1
+      Assert(false);
+      #if 0
       for(ComplexFUInstance* inst : newAccel->instances){
          if(inst->declaration->type == FUDeclaration::COMPOSITE){
             NamedInstance* ptr = compositeInstances.Alloc();
@@ -1467,7 +1444,7 @@ Accelerator* Flatten(Versat* versat,Accelerator* accel,int times){
                continue;
             }
 
-            SizedString newName = PushString(&versat->temp,"%s_%s",instPtr->fullName.str,circuitInst->name.str);
+            SizedString newName = PushString(&versat->temp,"%.*s_%.*s",UNPACK_SS(instPtr->fullName),UNPACK_SS(circuitInst->name));
             ComplexFUInstance* newInst = CopyInstance(newAccel,circuitInst,newName,true);
 
             map.insert({circuitInst,newInst});
@@ -1586,7 +1563,6 @@ Accelerator* Flatten(Versat* versat,Accelerator* accel,int times){
       for(ComplexFUInstance** instPtr : toRemove){
          ComplexFUInstance* inst = *instPtr;
 
-         newAccel->nameToInstance.erase(std::string(inst->name.str));
          RemoveFUInstance(newAccel,inst);
       }
 
@@ -1613,7 +1589,7 @@ Accelerator* Flatten(Versat* versat,Accelerator* accel,int times){
    PopulateAccelerator(versat,newAccel);
    InitializeFUInstances(newAccel,true);
 
-   Assert(newAccel->instances.Size() == newAccel->nameToInstance.size());
+   //Assert(newAccel->instances.Size() == newAccel->nameToInstance.size());
 
    return newAccel;
    #endif
@@ -1656,17 +1632,17 @@ static void PrintVCDDefinitions_(Accelerator* accel){
    #endif
 
    for(ComplexFUInstance* inst : accel->instances){
-      fprintf(accelOutputFile,"$scope module %s_%d $end\n",inst->name.str,inst->id);
+      fprintf(accelOutputFile,"$scope module %.*s_%d $end\n",UNPACK_SS(inst->name),inst->id);
 
       for(int i = 0; i < inst->tempData->inputPortsUsed; i++){
-         fprintf(accelOutputFile,"$var wire  32 %c%c%c%c %s_in%d $end\n",currentMapping[0],currentMapping[1],currentMapping[2],currentMapping[3],GetHierarchyNameRepr(inst->name),i);
+         fprintf(accelOutputFile,"$var wire  32 %c%c%c%c %.*s_in%d $end\n",currentMapping[0],currentMapping[1],currentMapping[2],currentMapping[3],UNPACK_SS(inst->name),i);
          IncrementMapping();
       }
 
       for(int i = 0; i < inst->tempData->outputPortsUsed; i++){
-         fprintf(accelOutputFile,"$var wire  32 %c%c%c%c %s_out%d $end\n",currentMapping[0],currentMapping[1],currentMapping[2],currentMapping[3],GetHierarchyNameRepr(inst->name),i);
+         fprintf(accelOutputFile,"$var wire  32 %c%c%c%c %.*s_out%d $end\n",currentMapping[0],currentMapping[1],currentMapping[2],currentMapping[3],UNPACK_SS(inst->name),i);
          IncrementMapping();
-         fprintf(accelOutputFile,"$var wire  32 %c%c%c%c %s_stored_out%d $end\n",currentMapping[0],currentMapping[1],currentMapping[2],currentMapping[3],GetHierarchyNameRepr(inst->name),i);
+         fprintf(accelOutputFile,"$var wire  32 %c%c%c%c %.*s_stored_out%d $end\n",currentMapping[0],currentMapping[1],currentMapping[2],currentMapping[3],UNPACK_SS(inst->name),i);
          IncrementMapping();
       }
 
@@ -2201,7 +2177,7 @@ int CalculateLatency(ComplexFUInstance* inst){
 #endif
 
 void SetDelayRecursive_(ComplexFUInstance* inst,int delay){
-   if(inst->declaration == inst->accel->versat->delay){
+   if(inst->declaration == inst->accel->versat->buffer){
       inst->config[0] = inst->baseDelay;
       return;
    }
@@ -2233,7 +2209,7 @@ void SetDelayRecursive(Accelerator* accel){
 
 static void T(Accelerator* accel){
    for(ComplexFUInstance* inst : accel->instances){
-      printf("%s %p\n",inst->name.str,inst->memMapped);
+      printf("%.*s %p\n",UNPACK_SS(inst->name),inst->memMapped);
 
       if(inst->declaration->type == FUDeclaration::COMPOSITE){
          T(inst->compositeAccel);

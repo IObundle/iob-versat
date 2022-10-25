@@ -1,6 +1,6 @@
 `timescale 1ns / 1ps
 
-module Delay #(
+module Buffer #(
          parameter ADDR_W = 6,
          parameter DATA_W = 32
       )

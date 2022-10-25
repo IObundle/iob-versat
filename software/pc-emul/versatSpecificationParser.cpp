@@ -154,7 +154,7 @@ FUInstance* ParseExpression(Versat* versat,Accelerator* circuit,Tokenizer* tok,S
    } else if(CompareToken(op,"+")){
       typeName = "ADD";
    } else {
-      printf("%s\n",op.str);
+      printf("%.*s\n",UNPACK_SS(op));
       fflush(stdout);
       Assert(0);
    }
@@ -193,7 +193,7 @@ FUInstance* ParseInstanceDeclaration(Versat* versat,Tokenizer* tok,Accelerator* 
       fullParameters = tok->Point(mark);
    }
 
-   Token name = tok->NextToken();
+   SizedString name = PushString(&versat->permanent,tok->NextToken());
 
    FUDeclaration* FUType = GetTypeByName(versat,type);
    FUInstance* inst = CreateFUInstance(circuit,FUType,name);
@@ -279,7 +279,8 @@ FUDeclaration* ParseModule(Versat* versat,Tokenizer* tok){
          tok->AssertNextToken(",");
       }
 
-      FUInstance* inst = CreateFUInstance(circuit,versat->input,token);
+      SizedString name = PushString(&versat->permanent,token);
+      FUInstance* inst = CreateFUInstance(circuit,versat->input,name);
       ComplexFUInstance** ptr = circuit->inputInstancePointers.Alloc();
 
       *ptr = (ComplexFUInstance*) inst;
@@ -330,7 +331,8 @@ FUDeclaration* ParseModule(Versat* versat,Tokenizer* tok){
                      break;
                   }
 
-                  FUInstance* inst = CreateFUInstance(circuit,type,possibleName);
+                  SizedString name = PushString(&versat->permanent,possibleName);
+                  FUInstance* inst = CreateFUInstance(circuit,type,name);
 
                   ShareInstanceConfig(inst,shareIndex);
 
@@ -352,7 +354,8 @@ FUDeclaration* ParseModule(Versat* versat,Tokenizer* tok){
 
          Token peek = tok->NextToken();
          if(CompareToken(peek,"=")){
-            FUInstance* inst = ParseExpression(versat,circuit,tok,outVar.name);
+            SizedString name = PushString(&versat->permanent,outVar.name);
+            FUInstance* inst = ParseExpression(versat,circuit,tok,name);
 
             if(CompareString(outVar.name,"out")){
                USER_ERROR;
@@ -399,7 +402,7 @@ FUDeclaration* ParseModule(Versat* versat,Tokenizer* tok){
 
             tok->AssertNextToken(";");
          } else {
-            printf("%.*s\n",peek.size,peek.str);
+            printf("%.*s\n",UNPACK_SS(peek));
             fflush(stdout);
             Assert(0);
          }

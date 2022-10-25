@@ -60,6 +60,7 @@ template<> class std::hash<SizedString>{
 };
 
 #define UNPACK_SS(STR) STR.size,STR.str
+#define UNPACK_SS_REVERSE(STR) STR.str,STR.size
 
 #define MakeSizedString1(STR) ((SizedString){STR,(int) strlen(STR)})
 #define MakeSizedString2(STR,LEN) ((SizedString){STR,(int) (LEN)})
@@ -72,7 +73,7 @@ template<> class std::hash<SizedString>{
 // Hierarchical naming scheme
 struct HierarchyName{
    char str[MAX_NAME_SIZE];
-   HierarchyName* parent;
+   //HierarchyName* parent;
 };
 
 struct Range{
@@ -111,8 +112,6 @@ char GetHexadecimalChar(int value);
 unsigned char* GetHexadecimal(const unsigned char* text, int str_size); // Helper function to display result
 
 bool IsAlpha(char ch);
-
-char* GetHierarchyNameRepr(HierarchyName name); // Uses statically allocaded memory, take care
 
 SizedString PathGoUp(char* pathBuffer);
 

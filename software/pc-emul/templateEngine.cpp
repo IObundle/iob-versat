@@ -338,17 +338,6 @@ static Value EvalExpression(Expression* expr){
 
             if(CompareString(expr->expressions[1]->id,"Hex")){
                val = HexValue(val);
-            } else if(CompareString(expr->expressions[1]->id,"GetHierarchyName")){
-               Assert(val.type == GetType(MakeSizedString("HierarchyName")));
-
-               HierarchyName* name = (HierarchyName*) val.custom;
-               char* hier = GetHierarchyNameRepr(*name);
-
-               SizedString buffer = PushString(tempArena,MakeSizedString(hier));
-
-               val.type = ValueType::STRING;
-               val.str = buffer;
-               val.isTemp = true;
             } else if(CompareString(expr->expressions[1]->id,"String")){
                Assert(val.type == ValueType::STRING);
                val.literal = true;

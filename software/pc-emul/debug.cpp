@@ -3,7 +3,7 @@
 #include "type.hpp"
 
 void DisplayInstanceMemory(ComplexFUInstance* inst){
-   printf("%s\n",inst->name.str);
+   printf("%.*s\n",UNPACK_SS(inst->name));
    printf("  C: %p\n",inst->config);
    printf("  S: %p\n",inst->state);
    printf("  D: %p\n",inst->delay);
@@ -12,15 +12,21 @@ void DisplayInstanceMemory(ComplexFUInstance* inst){
    printf("  E: %p\n",inst->extraData);
 }
 
+static void DisplayIntList(int* ptr, int size){
+   for(int i = 0; i < size; i++){
+      printf("%d\n",ptr[i]);
+   }
+}
+
 void DisplayAcceleratorMemory(Accelerator* topLevel){
    printf("Config:\n");
-   OutputMemoryHex(topLevel->configAlloc.ptr,topLevel->configAlloc.size * sizeof(int));
+   DisplayIntList(topLevel->configAlloc.ptr,topLevel->configAlloc.size);
 
    printf("Static:\n");
-   OutputMemoryHex(topLevel->staticAlloc.ptr,topLevel->staticAlloc.size * sizeof(int));
+   DisplayIntList(topLevel->staticAlloc.ptr,topLevel->staticAlloc.size);
 
    printf("Delay:\n");
-   OutputMemoryHex(topLevel->delayAlloc.ptr,topLevel->delayAlloc.size * sizeof(int));
+   DisplayIntList(topLevel->delayAlloc.ptr,topLevel->delayAlloc.size);
 }
 
 static char GetHex(int value){
@@ -147,7 +153,7 @@ void DebugTerminal(Value initialValue){
             wattron( w, A_STANDOUT );
          }
 
-         mvaddnstr(yPos, 0, member->name.str,member->name.size);
+         mvaddnstr(yPos, 0, UNPACK_SS_REVERSE(member->name));
 
          if(menuIndex == state->cursorPosition){
             wattroff( w, A_STANDOUT );
@@ -159,10 +165,10 @@ void DebugTerminal(Value initialValue){
          switch(member->type->type){
          case Type::STRUCT:{
             addstr("STRUCT:");
-            addnstr(member->type->name.str, member->type->name.size);
+            addnstr(UNPACK_SS_REVERSE(member->name));
          }break;
          case Type::POINTER:{
-            addnstr(member->type->name.str,member->type->name.size);
+            addnstr(UNPACK_SS_REVERSE(member->name));
             addstr(":");
             Value ptr = AccessStruct(val,member);
 
@@ -171,7 +177,7 @@ void DebugTerminal(Value initialValue){
          case Type::BASE:{
             Value number = AccessStruct(val,member);
 
-            addnstr(member->type->name.str,member->type->name.size);
+            addnstr(UNPACK_SS_REVERSE(member->name));
             addstr(":");
 
             printw("%x",number.number);

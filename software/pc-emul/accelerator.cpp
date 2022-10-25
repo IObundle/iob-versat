@@ -170,7 +170,7 @@ SubgraphData SubGraphAroundInstance(Versat* versat,Accelerator* accel,ComplexFUI
 
    InstanceMap map;
    for(ComplexFUInstance* nonMapped : subgraphUnits){
-      ComplexFUInstance* mapped = (ComplexFUInstance*) CreateFUInstance(newAccel,nonMapped->declaration,MakeSizedString(nonMapped->name.str));
+      ComplexFUInstance* mapped = (ComplexFUInstance*) CreateFUInstance(newAccel,nonMapped->declaration,nonMapped->name);
       map.insert({nonMapped,mapped});
    }
 
@@ -616,7 +616,7 @@ void CalculateDelay(Versat* versat,Accelerator* accel){
    #if 1
    accel->locked = Accelerator::Locked::FREE;
    // Insert delay units if needed
-   int delaysInserted = 0;
+   int buffersInserted = 0;
    static int maxDelay = 0;
    for(int i = accel->instances.Size() - 1; i >= 0; i--){
       ComplexFUInstance* inst = order.instances.ptr[i];
@@ -625,22 +625,22 @@ void CalculateDelay(Versat* versat,Accelerator* accel){
          ConnectionInfo* info = &inst->tempData->outputs[ii];
          ComplexFUInstance* other = info->instConnectedTo.inst;
 
-         if(other->declaration == versat->delay){
+         if(other->declaration == versat->buffer){
             other->baseDelay = info->delay;
             //Assert(other->baseDelay >= 0);
          } else if(info->delay != 0){
 
-            Assert(inst->declaration != versat->delay);
+            Assert(inst->declaration != versat->buffer);
             //Assert(info->instConnectedTo.inst->declaration != versat->delay);
 
             char buffer[128];
-            int size = sprintf(buffer,"delay%d",delaysInserted++);
+            int size = sprintf(buffer,"buffer%d",buffersInserted++);
 
-            ComplexFUInstance* delay = (ComplexFUInstance*) CreateFUInstance(accel,versat->delay,MakeSizedString(buffer,size),false,true);
+            ComplexFUInstance* delay = (ComplexFUInstance*) CreateFUInstance(accel,versat->buffer,MakeSizedString(buffer,size),false,true);
 
             InsertUnit(accel,PortInstance{inst,info->port},PortInstance{info->instConnectedTo.inst,info->instConnectedTo.port},PortInstance{delay,0});
 
-            delay->baseDelay = info->delay - versat->delay->latencies[0];
+            delay->baseDelay = info->delay - versat->buffer->latencies[0];
 
             Assert(delay->baseDelay >= 0);
 
@@ -664,7 +664,7 @@ void CalculateDelay(Versat* versat,Accelerator* accel){
 
       Assert(inst->baseDelay >= 0);
 
-      if(inst->declaration == versat->delay && inst->config){
+      if(inst->declaration == versat->buffer && inst->config){
          inst->config[0] = inst->baseDelay;
       }
    }

@@ -87,6 +87,7 @@ Byte* PushBytes(Arena* arena, int size);
 SizedString PushFile(Arena* arena,const char* filepath);
 SizedString PushString(Arena* arena,SizedString ss);
 SizedString PushString(Arena* arena,const char* format,...) __attribute__ ((format (printf, 2, 3)));
+SizedString vPushString(Arena* arena,const char* format,va_list args);
 #define PushStruct(ARENA,STRUCT) (STRUCT*) PushBytes(ARENA,sizeof(STRUCT))
 #define PushArray(ARENA,SIZE,STRUCT) (STRUCT*) PushBytes(ARENA,sizeof(STRUCT) * SIZE)
 

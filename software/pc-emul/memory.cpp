@@ -122,10 +122,7 @@ SizedString PushString(Arena* arena,SizedString ss){
    return res;
 }
 
-SizedString PushString(Arena* arena,const char* format,...){
-   va_list args;
-   va_start(args,format);
-
+SizedString vPushString(Arena* arena,const char* format,va_list args){
    char* buffer = &arena->mem[arena->used];
    int size = vsprintf(buffer,format,args);
 
@@ -136,6 +133,16 @@ SizedString PushString(Arena* arena,const char* format,...){
    }
 
    SizedString res = MakeSizedString(buffer,size);
+
+   return res;
+}
+
+
+SizedString PushString(Arena* arena,const char* format,...){
+   va_list args;
+   va_start(args,format);
+
+   SizedString res = vPushString(arena,format,args);
 
    va_end(args);
 

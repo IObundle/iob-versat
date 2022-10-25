@@ -339,22 +339,22 @@ SizedString MappingNodeIdentifier(MappingNode* node,Arena* memory){
       FUInstance* n0 = node->nodes.instances[0];
       FUInstance* n1 = node->nodes.instances[1];
 
-      name = PushString(memory,"A%s_B%s",n0->name.str,n1->name.str);
+      name = PushString(memory,"A%.*s_B%.*s",UNPACK_SS(n0->name),UNPACK_SS(n1->name));
    } else if(node->type == MappingNode::EDGE){
       PortEdge e0 = node->edges[0];
       PortEdge e1 = node->edges[1];
 
-      char* e00 = e0.units[0].inst->name.str;
-      char* e01 = e0.units[1].inst->name.str;
-      char* e10 = e1.units[0].inst->name.str;
-      char* e11 = e1.units[1].inst->name.str;
+      SizedString e00 = e0.units[0].inst->name;
+      SizedString e01 = e0.units[1].inst->name;
+      SizedString e10 = e1.units[0].inst->name;
+      SizedString e11 = e1.units[1].inst->name;
 
       int p00 = e0.units[0].port;
       int p01 = e0.units[1].port;
       int p10 = e1.units[0].port;
       int p11 = e1.units[1].port;
 
-      name = PushString(memory,"A%s_%d_%s_%d_B%s_%d_%s_%d",e00,p00,e01,p01,e10,p10,e11,p11);
+      name = PushString(memory,"A%.*s_%d_%.*s_%d_B%.*s_%d_%.*s_%d",UNPACK_SS(e00),p00,UNPACK_SS(e01),p01,UNPACK_SS(e10),p10,UNPACK_SS(e11),p11);
    } else {
       NOT_IMPLEMENTED;
    }
@@ -437,7 +437,7 @@ FUDeclaration* MergeAccelerators(Versat* versat,FUDeclaration* accel1,FUDeclarat
 
    // Create base instances from accel 1
    for(FUInstance* inst : flatten1->instances){
-      FUInstance* newNode = CreateFUInstance(newGraph,inst->declaration,MakeSizedString(inst->name.str));
+      FUInstance* newNode = CreateFUInstance(newGraph,inst->declaration,inst->name);
 
       map.insert({inst,newNode});
    }
@@ -451,9 +451,8 @@ FUDeclaration* MergeAccelerators(Versat* versat,FUDeclaration* accel1,FUDeclarat
          FUInstance* mappedNode = map.find(mapping->second)->second;
 
          map.insert({inst,mappedNode});
-         newGraph->nameToInstance.insert({inst->name.str,Test{mappedNode}});
       } else {
-         FUInstance* mappedNode = CreateFUInstance(newGraph,inst->declaration,MakeSizedString(inst->name.str));
+         FUInstance* mappedNode = CreateFUInstance(newGraph,inst->declaration,inst->name);
          map.insert({inst,mappedNode});
       }
    }
