@@ -409,7 +409,7 @@ FUDeclaration* ParseModule(Versat* versat,Tokenizer* tok){
       }
    }
 
-   return RegisterSubUnit(versat,name,circuit);
+   return RegisterSubUnit(versat,PushString(&versat->permanent,name),circuit);
 }
 
 void ParseVersatSpecification(Versat* versat,const char* filepath){

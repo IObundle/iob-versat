@@ -375,19 +375,63 @@ struct HierarchicalName{
 static FUInstance* GetInstanceByHierarchicalName(Accelerator* accel,HierarchicalName* hier){
    Assert(hier != nullptr);
 
+   HierarchicalName* savedHier = hier;
    FUInstance* res = nullptr;
    for(FUInstance* inst : accel->instances){
       Tokenizer tok(inst->name,"./",{});
 
-      Token name = tok.NextToken();
+      while(true){
+         // Unpack individual name
+         hier = savedHier;
+         while(true){
+            Token name = tok.NextToken();
 
-      if(CompareString(name,hier->name)){
-         if(hier->next){
-            res = GetInstanceByHierarchicalName(inst->compositeAccel,hier->next);
-         } else {
-            res = inst;
+            // Unpack hierarchical name
+            Tokenizer hierTok(hier->name,":",{});
+            Token hierName = hierTok.NextToken();
+
+            if(!CompareString(name,hierName)){
+               break;
+            }
+
+            Token possibleTypeQualifier = hierTok.PeekToken();
+
+            if(CompareString(possibleTypeQualifier,":")){
+               hierTok.AdvancePeek(possibleTypeQualifier);
+
+               Token type = hierTok.NextToken();
+
+               if(!CompareString(type,inst->declaration->name)){
+                  break;
+               }
+            }
+
+            Token possibleDot = tok.PeekToken();
+
+            // If hierarchical name, need to advance through hierarchy
+            if(CompareString(possibleDot,".") && hier->next){
+               tok.AdvancePeek(possibleDot);
+               Assert(hier); // Cannot be nullptr
+
+               hier = hier->next;
+               continue;
+            } else if(inst->compositeAccel && hier->next){
+               FUInstance* res = GetInstanceByHierarchicalName(inst->compositeAccel,hier->next);
+               if(res){
+                  return res;
+               }
+            } else if(!hier->next){ // Correct name and type (if specified) and no further hierarchical name to follow
+               return inst;
+            }
          }
-         break;
+
+         // Check if multiple names
+         Token possibleDuplicateName = tok.PeekFindIncluding("/");
+         if(possibleDuplicateName.size > 0){
+            tok.AdvancePeek(possibleDuplicateName);
+         } else {
+            break;
+         }
       }
    }
 
@@ -423,9 +467,31 @@ static FUInstance* vGetInstanceByName_(Accelerator* circuit,int argc,va_list arg
          name = PushString(arena,"%s",str);
       }
 
-      namePtr->name = name;
-      lastPtr = namePtr;
-      namePtr = namePtr->next;
+      Tokenizer tok(name,".",{});
+      Token hasDot = tok.PeekFindIncluding(".");
+
+      while(!tok.Done()){
+         if(namePtr == nullptr){
+            HierarchicalName* newBlock = PushStruct(arena,HierarchicalName);
+
+            lastPtr->next = newBlock;
+            namePtr = newBlock;
+         }
+
+         Token name = tok.NextToken();
+
+         namePtr->name = name;
+         lastPtr = namePtr;
+         namePtr = namePtr->next;
+
+         Token peek = tok.PeekToken();
+         if(CompareString(peek,".")){
+            tok.AdvancePeek(peek);
+            continue;
+         }
+
+         break;
+      }
    }
 
    FUInstance* res = GetInstanceByHierarchicalName(circuit,&fullName);
@@ -999,8 +1065,28 @@ static Accelerator* CopyAccelerator(Versat* versat,Accelerator* accel,InstanceMa
 }
 #endif
 
+static bool CheckName(SizedString name){
+   for(int i = 0; i < name.size; i++){
+      char ch = name.str[i];
+
+      bool allowed = (ch >= 'a' && ch <= 'z')
+                 ||  (ch >= 'A' && ch <= 'Z')
+                 ||  (ch >= '0' && ch <= '9' && i != 0)
+                 ||  (ch == '_')
+                 ||  (ch == '.'); // For now allow it, despite the fact that it should only be used internally by Versat
+
+      if(!allowed){
+         return false;
+      }
+   }
+
+   return true;
+}
+
 FUInstance* CreateFUInstance(Accelerator* accel,FUDeclaration* type,SizedString name,bool flat,bool isStatic){
    LockAccelerator(accel,Accelerator::Locked::FREE);
+
+   Assert(CheckName(name));
 
    ComplexFUInstance* ptr = accel->instances.Alloc();
 
@@ -1063,7 +1149,7 @@ FUDeclaration* RegisterSubUnit(Versat* versat,SizedString name,Accelerator* circ
 
    decl.type = FUDeclaration::COMPOSITE;
    //decl.circuit = circuit;
-   decl.name = PushString(&versat->permanent,name);
+   decl.name = name;
 
    // HACK, for now
    circuit->subtype = &decl;
@@ -1375,11 +1461,6 @@ void CompressAcceleratorMemory(Accelerator* accel){
    #endif
 }
 
-struct NamedInstance{
-   SizedString fullName;
-   ComplexFUInstance* ptr;
-};
-
 Accelerator* Flatten(Versat* versat,Accelerator* accel,int times){
    #if 1
    InstanceMap map;
@@ -1391,9 +1472,7 @@ Accelerator* Flatten(Versat* versat,Accelerator* accel,int times){
       outputs[i] = (PortInstance){};
    }
 
-   // TODO: figure out a way to have true hierarchircal naming schemes even when flattening
-   // Use it to debug further. No point wasting time right now
-   Pool<NamedInstance> compositeInstances = {};
+   Pool<ComplexFUInstance*> compositeInstances = {};
    Pool<ComplexFUInstance*> toRemove = {};
    for(int i = 0; i < times; i++){
       #if 0
@@ -1410,27 +1489,20 @@ Accelerator* Flatten(Versat* versat,Accelerator* accel,int times){
       }
       #endif
 
-      Assert(false);
-      #if 0
+      //Assert(false);
+      #if 1
       for(ComplexFUInstance* inst : newAccel->instances){
          if(inst->declaration->type == FUDeclaration::COMPOSITE){
-            NamedInstance* ptr = compositeInstances.Alloc();
+            ComplexFUInstance** ptr = compositeInstances.Alloc();
 
-            for(auto& pair : newAccel->nameToInstance){
-               if(pair.second.inst == inst){
-                  ptr->fullName = MakeSizedString(pair.first.c_str(),pair.first.size());
-                  break;
-               }
-            }
-
-            ptr->ptr = inst;
+            *ptr = inst;
          }
       }
       #endif
 
       int count = 0;
-      for(NamedInstance* instPtr : compositeInstances){
-         ComplexFUInstance* inst = instPtr->ptr;
+      for(ComplexFUInstance** instPtr : compositeInstances){
+         ComplexFUInstance* inst = *instPtr;
 
          Assert(inst->declaration->type == FUDeclaration::COMPOSITE);
 
@@ -1444,7 +1516,7 @@ Accelerator* Flatten(Versat* versat,Accelerator* accel,int times){
                continue;
             }
 
-            SizedString newName = PushString(&versat->temp,"%.*s_%.*s",UNPACK_SS(instPtr->fullName),UNPACK_SS(circuitInst->name));
+            SizedString newName = PushString(&versat->temp,"%.*s.%.*s",UNPACK_SS(inst->name),UNPACK_SS(circuitInst->name));
             ComplexFUInstance* newInst = CopyInstance(newAccel,circuitInst,newName,true);
 
             map.insert({circuitInst,newInst});

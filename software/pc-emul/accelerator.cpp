@@ -633,10 +633,9 @@ void CalculateDelay(Versat* versat,Accelerator* accel){
             Assert(inst->declaration != versat->buffer);
             //Assert(info->instConnectedTo.inst->declaration != versat->delay);
 
-            char buffer[128];
-            int size = sprintf(buffer,"buffer%d",buffersInserted++);
+            SizedString bufferName = PushString(&versat->permanent,"buffer%d",buffersInserted++);
 
-            ComplexFUInstance* delay = (ComplexFUInstance*) CreateFUInstance(accel,versat->buffer,MakeSizedString(buffer,size),false,true);
+            ComplexFUInstance* delay = (ComplexFUInstance*) CreateFUInstance(accel,versat->buffer,bufferName,false,true);
 
             InsertUnit(accel,PortInstance{inst,info->port},PortInstance{info->instConnectedTo.inst,info->instConnectedTo.port},PortInstance{delay,0});
 

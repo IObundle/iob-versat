@@ -450,6 +450,13 @@ FUDeclaration* MergeAccelerators(Versat* versat,FUDeclaration* accel1,FUDeclarat
       if(mapping != graphMapping.end()){
          FUInstance* mappedNode = map.find(mapping->second)->second;
 
+         // If names are equal, nothing to do
+         if(!CompareString(inst->name,mappedNode->name)){
+            SizedString newName = PushString(&versat->permanent,"%.*s/%.*s",UNPACK_SS(mappedNode->name),UNPACK_SS(inst->name));
+
+            mappedNode->name = newName;
+         }
+
          map.insert({inst,mappedNode});
       } else {
          FUInstance* mappedNode = CreateFUInstance(newGraph,inst->declaration,inst->name);
