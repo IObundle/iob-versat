@@ -143,6 +143,24 @@ static void CalculateDAGOrdering(Accelerator* accel){
    }
 
    Assert(accel->order.numberSources + accel->order.numberComputeUnits + accel->order.numberSinks == accel->instances.Size());
+
+   // Calculate order
+   for(int i = 0; i < accel->order.numberSources; i++){
+      ComplexFUInstance* inst = accel->order.sources[i];
+
+      inst->tempData->order = 0;
+   }
+
+   for(int i = accel->order.numberSources; i < accel->order.instances.size; i++){
+      ComplexFUInstance* inst = accel->order.instances.ptr[i];
+
+      int max = 0;
+      for(int ii = 0; ii < inst->tempData->numberInputs; ii++){
+         max = maxi(max,inst->tempData->inputs[ii].instConnectedTo.inst->tempData->order);
+      }
+
+      inst->tempData->order = (max + 1);
+   }
 }
 
 SubgraphData SubGraphAroundInstance(Versat* versat,Accelerator* accel,ComplexFUInstance* instance,int layers){
@@ -494,17 +512,6 @@ void SendLatencyUpwards(Versat* versat,ComplexFUInstance* inst){
          }
       }
    }
-
-   #if 0
-   for(int i = 0; i < inst->tempData->numberInputs; i++){
-      ComplexFUInstance* other = inst->tempData->inputs[i].instConnectedTo.inst;
-      for(int ii = 0; ii < other->tempData->numberOutputs; ii++){
-         ConnectionInfo* otherInfo = &other->tempData->outputs[ii];
-
-         otherInfo->delay += abs(minimum);
-      }
-   }
-   #endif
 }
 
 // Fixes edges such that unit before connected to after, is reconnected to new unit
@@ -543,17 +550,6 @@ void CalculateDelay(Versat* versat,Accelerator* accel){
       sprintf(buffer,"debug/%.*s/",UNPACK_SS(accel->subtype->name));
       MakeDirectory(buffer);
    }
-
-   #if 0
-   printf("%.*s:\n",UNPACK_SS(accel->subtype->name));
-   int maxLatency = 0;
-   for(int i = 0; i < order.numberSinks; i++){
-      int lat = CalculateLatency(order.sinks[i]);
-
-      printf("  %d\n",lat);
-      maxLatency = maxi(maxLatency,lat);
-   }
-   #endif
 
    for(int i = 0; i < order.numberSinks; i++){
       ComplexFUInstance* inst = order.sinks[i];
@@ -605,7 +601,9 @@ void CalculateDelay(Versat* versat,Accelerator* accel){
    }
 
    for(ComplexFUInstance* inst : accel->instances){
-      if(inst->tempData->nodeType == GraphComputedData::TAG_SOURCE_AND_SINK){
+      if(inst->tempData->nodeType == GraphComputedData::TAG_UNCONNECTED){
+         inst->tempData->inputDelay = 0;
+      } else if(inst->tempData->nodeType == GraphComputedData::TAG_SOURCE_AND_SINK){
          for(int ii = 0; ii < inst->tempData->numberOutputs; ii++){
             inst->tempData->outputs[ii].delay = 0;
          }
@@ -662,6 +660,7 @@ void CalculateDelay(Versat* versat,Accelerator* accel){
       inst->tempData->inputDelay = inst->baseDelay;
 
       Assert(inst->baseDelay >= 0);
+      Assert(inst->baseDelay < 9999); // Unless dealing with really long accelerators, should catch some calculating bugs
 
       if(inst->declaration == versat->buffer && inst->config){
          inst->config[0] = inst->baseDelay;

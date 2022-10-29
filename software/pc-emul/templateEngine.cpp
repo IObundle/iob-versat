@@ -330,6 +330,33 @@ static int CountNonOperationChilds(Accelerator* accel){
    return count;
 }
 
+static Value EscapeSizedString(Value val){
+   Assert(val.type == ValueType::SIZED_STRING);
+   Assert(val.isTemp);
+
+   SizedString str = val.str;
+
+   SizedString escaped = PushString(tempArena,str);
+   char* view = (char*) escaped.str;
+
+   for(int i = 0; i < escaped.size; i++){
+      char ch = view[i];
+
+      if(   (ch >= 'a' && ch <= 'z')
+         || (ch >= 'A' && ch <= 'Z')
+         || (ch >= '0' && ch <= '9')){
+         continue;
+      } else {
+         view[i] = '_'; // Replace any foreign symbol with a underscore
+      }
+   }
+
+   Value res = val;
+   res.str = escaped;
+
+   return res;
+}
+
 static Value EvalExpression(Expression* expr){
    switch(expr->type){
       case Expression::OPERATION:{
@@ -345,6 +372,8 @@ static Value EvalExpression(Expression* expr){
                Accelerator* accel = *((Accelerator**) val.custom);
 
                val = MakeValue(CountNonOperationChilds(accel));
+            } else if(CompareString(expr->expressions[1]->id,"Identify")){
+               val = EscapeSizedString(val);
             } else {
                NOT_IMPLEMENTED;
             }
@@ -460,7 +489,7 @@ static Value EvalExpression(Expression* expr){
       case Expression::MEMBER_ACCESS:{
          Value object = EvalExpression(expr->expressions[0]);
 
-         Value res = AccessObject(object,expr->id);
+         Value res = AccessStruct(object,expr->id);
 
          return res;
       }break;

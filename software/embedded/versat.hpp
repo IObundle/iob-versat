@@ -39,6 +39,7 @@ void Hook(Versat* versat,Accelerator* accel,FUInstance* inst);
 #define ActivateMergedAccelerator(...) ((void)0)
 #define CreateAccelerator(...) ((Accelerator*)0)
 #define RegisterFU(...) ((FUDeclaration*)0)
+#define DisplayAcceleratorMemory(...) ((void)0)
 #define OutputVersatSource(...) ((void)0)
 #define ConnectUnits(...) ((void)0)
 #define OutputGraphDotFile(...) ((void)0)

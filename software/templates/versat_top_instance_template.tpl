@@ -265,7 +265,7 @@ end
 #{set doneCounter 0}
 #{for inst instances}
 #{set decl inst.declaration}
-   @{decl.name} @{inst.parameters} @{inst.name.str}_@{counter} (
+   @{decl.name} @{inst.parameters} @{inst.name |> Identify}_@{counter} (
       #{for i inst.tempData.outputPortsUsed}
          .out@{i}(output_@{inst.id}_@{i}),
       #{end} 

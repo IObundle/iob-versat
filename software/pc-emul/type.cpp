@@ -16,6 +16,8 @@ namespace ValueType{
    Type* SIZED_STRING;
    Type* TEMPLATE_FUNCTION;
    Type* SET;
+   Type* POOL;
+   Type* STD_VECTOR;
 };
 
 static Arena permanentArena;
@@ -270,6 +272,8 @@ void RegisterTypes(){
    ValueType::STRING = GetPointerType(ValueType::CHAR);
    ValueType::SIZED_STRING = GetType(MakeSizedString("SizedString"));
    ValueType::TEMPLATE_FUNCTION = GetPointerType(GetType(MakeSizedString("TemplateFunction")));
+   ValueType::POOL = GetType(MakeSizedString("Pool"));
+   ValueType::STD_VECTOR = GetType(MakeSizedString("std::vector"));
 
    #if 0
    for(Type* type : types){
@@ -300,14 +304,63 @@ int ArrayLength(Type* type){
    return res;
 }
 
+SizedString GetValueRepresentation(Value in,Arena* arena){
+   Value val = CollapseArrayIntoPtr(in);
+   SizedString res = {};
+
+   if(val.type == ValueType::NUMBER){
+      res = PushString(arena,"%d",val.number);
+   } else if(val.type == ValueType::STRING){
+      if(val.literal){
+         res = PushString(arena,"\"%.*s\"",UNPACK_SS(val.str));
+      } else {
+         res = PushString(arena,"%.*s",UNPACK_SS(val.str));
+      }
+   } else if(val.type == ValueType::CHAR){
+      res = PushString(arena,"%c",val.ch);
+   } else if(val.type == ValueType::SIZED_STRING){
+      res = PushString(arena,"%.*s",UNPACK_SS(val.str));
+   } else if(val.type == ValueType::BOOLEAN){
+      res = PushString(arena,"%s",val.boolean ? "true" : "false");
+   } else if(val.type->type == Type::POINTER){
+      Assert(!val.isTemp);
+
+      void* ptr = *(void**) val.custom;
+
+      if(ptr == nullptr){
+         res = PushString(arena,"0x0");
+      } else {
+         res = PushString(arena,"%p",ptr);
+      }
+   } else {
+      // Return empty
+   }
+
+   return res;
+}
 
 Value CollapsePtrIntoStruct(Value object){
    Type* type = object.type;
 
+   if(type->type != Type::POINTER){
+      return object;
+   }
+
+   Assert(!object.isTemp);
+
    char* deference = (char*) object.custom;
+
    while(type->type == Type::POINTER){
-      deference = *((char**) deference);
-      type = type->pointerType;
+      if(deference != nullptr){
+         deference = *((char**) deference);
+         type = type->pointerType;
+      } else {
+         return MakeValue();
+      }
+   }
+
+   if(deference == nullptr){
+      return MakeValue();
    }
 
    Value newVal = {};
@@ -325,7 +378,9 @@ static Value CollapseValue(Value val){
    if(val.type == ValueType::NUMBER){
       val.number = *((int*) val.custom);
    } else if(val.type == ValueType::BOOLEAN){
-      val.boolean = *((bool*) val.custom);
+      bool boolean = *((bool*) val.custom);
+      val.number = 0;
+      val.boolean = boolean;
    } else if(val.type == ValueType::CHAR){
       val.ch = *((char*) val.custom);
    } else if(val.type == ValueType::NIL){
@@ -415,7 +470,21 @@ Value AccessStruct(Value structure,Member* member){
    return newValue;
 }
 
-Value AccessObject(Value object,SizedString memberName){
+Value AccessStruct(Value val,int index){
+   Assert(val.type->type == Type::STRUCT);
+
+   Member* member = val.type->members;
+
+   for(int i = 0; i < index && member != nullptr; i++){
+      member = member->next;
+   }
+
+   Value res = AccessStruct(val,member);
+
+   return res;
+}
+
+Value AccessStruct(Value object,SizedString memberName){
    Value structure = CollapsePtrIntoStruct(object);
    Type* type = structure.type;
 
@@ -490,7 +559,7 @@ Iterator Iterate(Value iterating){
    } else if(type->type == Type::TEMPLATED_INSTANCE){
       Assert(iterating.isTemp == false);
 
-      if(type->templateBase == GetType(MakeSizedString("Pool"))){
+      if(type->templateBase == ValueType::POOL){
          Assert(type->templateArgs);
 
          Pool<Byte>* pool = (Pool<Byte>*) iterating.custom; // Any type of pool is good enough
@@ -498,7 +567,7 @@ Iterator Iterate(Value iterating){
          Byte* page = pool->GetMemoryPtr();
 
          new (&iter.poolIterator) GenericPoolIterator(page,pool->Size(),type->templateArgs->type->size);
-      } else if(type->templateBase == GetType(MakeSizedString("std::vector"))){ // TODO: A lot of assumptions are being made for std::vector so this works. Probably not safe (change later)
+      } else if(type->templateBase == ValueType::STD_VECTOR){ // TODO: A lot of assumptions are being made for std::vector so this works. Probably not safe (change later)
          Assert(sizeof(std::vector<Byte>) == sizeof(std::vector<ComplexFUInstance>)); // Assuming std::vector<T> is same for any T (otherwise, cast does not work)
 
          iter.currentNumber = 0;
@@ -526,11 +595,11 @@ bool HasNext(Iterator iter){
       bool res = (iter.currentNumber < len);
       return res;
    } else if(type->type == Type::TEMPLATED_INSTANCE){
-      if(type->templateBase == GetType(MakeSizedString("Pool"))){
+      if(type->templateBase == ValueType::POOL){
          bool res = iter.poolIterator.HasNext();
 
          return res;
-      } else if(type->templateBase == GetType(MakeSizedString("std::vector"))){
+      } else if(type->templateBase == ValueType::STD_VECTOR){
          std::vector<Byte>* b = (std::vector<Byte>*) iter.iterating.custom;
 
          int byteSize = b->size();
@@ -556,9 +625,9 @@ void Advance(Iterator* iter){
    } else if(type->type == Type::ARRAY){
       iter->currentNumber += 1;
    } else if(type->type == Type::TEMPLATED_INSTANCE){
-      if(type->templateBase == GetType(MakeSizedString("Pool"))){
+      if(type->templateBase == ValueType::POOL){
          ++iter->poolIterator;
-      } else if(type->templateBase == GetType(MakeSizedString("std::vector"))){
+      } else if(type->templateBase == ValueType::STD_VECTOR){
          iter->currentNumber += 1;
       } else {
          NOT_IMPLEMENTED;
@@ -578,10 +647,10 @@ Value GetValue(Iterator iter){
    } else if(type->type == Type::ARRAY){
       val = AccessObjectIndex(iter.iterating,iter.currentNumber);
    } else if(type->type == Type::TEMPLATED_INSTANCE){
-      if(type->templateBase == GetType(MakeSizedString("Pool"))){
+      if(type->templateBase == ValueType::POOL){
          val.custom = *iter.poolIterator;
          val.type = type->templateArgs->type;
-      } else if(type->templateBase == GetType(MakeSizedString("std::vector"))){
+      } else if(type->templateBase == ValueType::STD_VECTOR){
          std::vector<Byte>* b = (std::vector<Byte>*) iter.iterating.custom;
 
          int size = type->templateArgs->type->size;

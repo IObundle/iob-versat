@@ -214,7 +214,6 @@ void OutputVersatSource(Versat* versat,Accelerator* accel,const char* sourceFile
       }
    }
 
-
    TemplateSetNumber("hashTableSize",hashTableSize);
    TemplateSetArray("instanceHashmap","HashKey",hashMap,hashTableSize);
    */

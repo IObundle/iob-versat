@@ -4,7 +4,7 @@
    #{if decl2.type == 2}
       in@{inst2.id} #{else}
       #{if decl2.isOperation}
-         comb_@{inst2.name.str} #{else}
+         comb_@{inst2.name |> Identify} #{else}
          output_@{inst2.id}_@{portInstance.port} #{end}
    #{end}
 #{end}

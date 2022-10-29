@@ -127,6 +127,7 @@ struct GraphComputedData{
    ConnectionInfo* outputs;
    enum {TAG_UNCONNECTED,TAG_COMPUTE,TAG_SOURCE,TAG_SINK,TAG_SOURCE_AND_SINK} nodeType;
    int inputDelay;
+   int order;
 };
 
 struct VersatComputedData{
@@ -207,8 +208,6 @@ struct Accelerator{
 
    Pool<ComplexFUInstance> instances;
 	Pool<Edge> edges;
-
-   //std::unordered_map<std::string,Test> nameToInstance;
 
    Pool<ComplexFUInstance*> inputInstancePointers;
    ComplexFUInstance* outputInstance;

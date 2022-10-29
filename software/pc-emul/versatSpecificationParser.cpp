@@ -316,8 +316,6 @@ FUDeclaration* ParseModule(Versat* versat,Tokenizer* tok){
 
             Token shareType = tok->NextToken();
 
-            //ShareBlock* block = PushStruct(&versat->permanent,ShareBlock);
-
             if(CompareString(shareType,"config")){
                Token typeName = tok->NextToken();
 

@@ -25,7 +25,7 @@ wire write_en = (occupancy <= amount);
 
 reg [DATA_W-1:0] inData;
 wire [DATA_W-1:0] fifo_data;
-iob_sync_fifo #(.DATA_W(DATA_W),.ADDR_W(ADDR_W))
+iob_sync_fifo #(.DATA_WIDTH(DATA_W),.ADDRESS_WIDTH(ADDR_W))
    fifo 
    (
       .rst(rst),
@@ -35,13 +35,13 @@ iob_sync_fifo #(.DATA_W(DATA_W),.ADDR_W(ADDR_W))
 
       //read port
       .r_data(fifo_data), 
-      .r_empty(),
-      .r_en(read_en),
+      .empty(),
+      .read_en(read_en),
 
       //write port
       .w_data(in0),
-      .w_full(),
-      .w_en(write_en)
+      .full(),
+      .write_en(write_en)
    );
 
 always @(posedge clk,posedge rst)

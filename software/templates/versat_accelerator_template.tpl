@@ -136,7 +136,7 @@ end
 #{end}
 
 #{set counter 0}
-reg [31:0] #{join "," for inst instances} #{if inst.declaration.isOperation} comb_@{inst.name.str} #{else} unused@{counter} #{inc counter} #{end}#{end}; 
+reg [31:0] #{join "," for inst instances} #{if inst.declaration.isOperation} comb_@{inst.name |> Identify} #{else} unused@{counter} #{inc counter} #{end}#{end}; 
 
 always @*
 begin
@@ -145,16 +145,16 @@ begin
    #{if decl.isOperation}
    #{set input1 inst.tempData[0].inputs[0].instConnectedTo}
       #{if decl.nInputs == 1}
-         comb_@{inst.name.str} = @{decl.operation} #{call outputName input1};
+         comb_@{inst.name |> Identify} = @{decl.operation} #{call outputName input1};
       #{else}
          #{set input2 inst.tempData[0].inputs[1].instConnectedTo}
          #{if decl.name == "RHR"}
-            comb_@{inst.name.str} = (#{call outputName input1} >> #{call outputName input2}) | (#{call outputName input1} << (32 - #{call outputName input2}));
+            comb_@{inst.name |> Identify} = (#{call outputName input1} >> #{call outputName input2}) | (#{call outputName input1} << (32 - #{call outputName input2}));
          #{else} 
             #{if decl.name == "RHL"}
-               comb_@{inst.name.str} = (#{call outputName input1} << #{call outputName input2}) | (#{call outputName input1} >> (32 - #{call outputName input2}));
+               comb_@{inst.name |> Identify} = (#{call outputName input1} << #{call outputName input2}) | (#{call outputName input1} >> (32 - #{call outputName input2}));
             #{else}
-               comb_@{inst.name.str} = #{call outputName input1} @{decl.operation} #{call outputName input2};
+               comb_@{inst.name |> Identify} = #{call outputName input1} @{decl.operation} #{call outputName input2};
             #{end}
          #{end}
       #{end}
@@ -179,14 +179,14 @@ end
    #{if decl.name == "CircuitOutput"}
    #{else}
       #{if !decl.isOperation}
-      @{decl.name} @{inst.parameters} @{inst.name.str}_@{counter} (
+      @{decl.name} @{inst.parameters} @{inst.name |> Identify}_@{counter} (
          #{for i inst.tempData.outputPortsUsed}
             .out@{i}(output_@{inst.id}_@{i}),
          #{end}
 
          #{for i inst.tempData.inputPortsUsed}
          #{if inst.tempData.inputs[i].instConnectedTo.inst.declaration.type == 2}
-            .in@{inst.tempData.inputs[i].port}(in@{inst.tempData.inputs[i].instConnectedTo.inst.id}), // @{inst.tempData.inputs[i].instConnectedTo.inst.name.str}
+            .in@{inst.tempData.inputs[i].port}(in@{inst.tempData.inputs[i].instConnectedTo.inst.id}), // @{inst.tempData.inputs[i].instConnectedTo.inst.name |> Identify}
          #{else}
             .in@{inst.tempData.inputs[i].port}(#{call outputName inst.tempData.inputs[i].instConnectedTo}),
          #{end}
@@ -195,7 +195,7 @@ end
          #{if inst.isStatic}
          #{for i inst.declaration.nConfigs}
          #{set wire inst.declaration.configWires[i]}
-         .@{wire.name}(@{accel.name}_@{inst.name.str}_@{wire.name}),
+         .@{wire.name}(@{accel.name}_@{inst.name |> Identify}_@{wire.name}),
          #{end}
 
          #{else}

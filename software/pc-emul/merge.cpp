@@ -385,7 +385,7 @@ static void OutputConsolidationGraph(ConsolidationGraph graph,Arena* memory){
    fclose(outputFile);
 }
 
-static InstanceMap ConsolidationGraphMerging(Versat* versat,Accelerator* accel1,Accelerator* accel2,Arena* arena){
+static InstanceMap ConsolidationGraphMapping(Versat* versat,Accelerator* accel1,Accelerator* accel2,Arena* arena){
    ConsolidationGraph graph = GenerateConsolidationGraph(arena,accel1,accel2);
 
    OutputConsolidationGraph(graph,arena);
@@ -417,16 +417,155 @@ static InstanceMap ConsolidationGraphMerging(Versat* versat,Accelerator* accel1,
    return res;
 }
 
+static InstanceMap FirstFitGraphMapping(Versat* versat,Accelerator* accel1,Accelerator* accel2,Arena* arena){
+   InstanceMap res;
+
+   for(ComplexFUInstance* inst : accel1->instances){
+      inst->tag = 0;
+   }
+   for(ComplexFUInstance* inst : accel2->instances){
+      inst->tag = 0;
+   }
+
+   for(ComplexFUInstance* inst1 : accel1->instances){
+      if(inst1->tag){
+         continue;
+      }
+
+      for(ComplexFUInstance* inst2 : accel2->instances){
+         if(inst2->tag){
+            continue;
+         }
+
+         if(inst1->declaration == inst2->declaration){
+            res.insert({inst2,inst1});
+            inst1->tag = 1;
+            inst2->tag = 1;
+            break;
+         }
+      }
+   }
+
+   return res;
+}
+
+#include <algorithm>
+
+struct {
+   bool operator()(ComplexFUInstance* f1, ComplexFUInstance* f2) const {
+      bool res = false;
+      if(f1->tempData->order == f2->tempData->order){
+         res = (f1->declaration < f2->declaration);
+      } else {
+         res = (f1->tempData->order < f2->tempData->order);
+      }
+      return res;
+   }
+} compare;
+
+void OrderedMatch(std::vector<ComplexFUInstance*>& order1,std::vector<ComplexFUInstance*>& order2,InstanceMap& map,int orderOffset){
+   auto iter1 = order1.begin();
+   auto iter2 = order2.begin();
+
+   // Match same order
+   for(; iter1 != order1.end() && iter2 != order2.end();){
+      ComplexFUInstance* inst1 = *iter1;
+      ComplexFUInstance* inst2 = *iter2;
+
+      int val1 = inst1->tempData->order;
+      int val2 = inst1->tempData->order;
+
+      if(abs(val1 - val2) <= orderOffset && inst1->declaration == inst2->declaration){
+         Assert(!inst1->tag);
+         Assert(!inst2->tag);
+
+         inst1->tag = 1;
+         inst2->tag = 1;
+
+         map.insert({inst2,inst1});
+
+         ++iter1;
+         ++iter2;
+         continue;
+      }
+
+      if(compare(inst1,inst2)){
+         ++iter1;
+      } else if(!compare(inst1,inst2)){
+         ++iter2;
+      } else {
+         ++iter1;
+         ++iter2;
+      }
+   }
+}
+
+static InstanceMap OrderedFitGraphMapping(Versat* versat,Accelerator* accel1,Accelerator* accel2){
+   LockAccelerator(accel1,Accelerator::Locked::ORDERED);
+   LockAccelerator(accel2,Accelerator::Locked::ORDERED);
+
+   InstanceMap map;
+
+   for(ComplexFUInstance* inst : accel1->instances){
+      inst->tag = 0;
+   }
+
+   for(ComplexFUInstance* inst : accel2->instances){
+      inst->tag = 0;
+   }
+
+   int minIterations = mini(accel1->instances.Size(),accel2->instances.Size());
+
+   auto BinaryNext = [](int i){
+      if(i == 0){
+         return 1;
+      } else {
+         return (i * 2);
+      }
+   };
+
+   std::vector<ComplexFUInstance*> order1;
+   std::vector<ComplexFUInstance*> order2;
+   for(int i = 0; i < minIterations * 2; i = BinaryNext(i)){
+      order1.clear();
+      order2.clear();
+      for(ComplexFUInstance* inst : accel1->instances){
+         if(!inst->tag){
+            order1.push_back(inst);
+         }
+      }
+      for(ComplexFUInstance* inst : accel2->instances){
+         if(!inst->tag){
+            order2.push_back(inst);
+         }
+      }
+
+      std::sort(order1.begin(),order1.end(),compare);
+      std::sort(order2.begin(),order2.end(),compare);
+
+      OrderedMatch(order1,order2,map,i);
+   }
+
+   return map;
+}
+
 FUDeclaration* MergeAccelerators(Versat* versat,FUDeclaration* accel1,FUDeclaration* accel2,SizedString name){
    Assert(accel1->type == FUDeclaration::COMPOSITE && accel2->type == FUDeclaration::COMPOSITE);
 
    Arena* arena = &versat->temp;
    Byte* mark = MarkArena(&versat->temp);
 
-   Accelerator* flatten1 = Flatten(versat,accel1->baseCircuit,2);
-   Accelerator* flatten2 = Flatten(versat,accel2->baseCircuit,2);
+   Accelerator* flatten1 = Flatten(versat,accel1->baseCircuit,99);
+   Accelerator* flatten2 = Flatten(versat,accel2->baseCircuit,99);
 
-   InstanceMap graphMapping = ConsolidationGraphMerging(versat,flatten1,flatten2,arena);
+   InstanceMap graphMapping;
+   if(true){
+      graphMapping = OrderedFitGraphMapping(versat,flatten1,flatten2);
+   } else if(flatten1->instances.Size() >= 500 || flatten2->instances.Size() >= 500){
+      graphMapping = FirstFitGraphMapping(versat,flatten1,flatten2,arena);
+   } else {
+      graphMapping = ConsolidationGraphMapping(versat,flatten1,flatten2,arena);
+   }
 
    PopMark(arena,mark);
 

@@ -24,7 +24,7 @@ static volatile int* memMappedBase = (volatile int*) @{versatBase + memoryMapped
 FUInstance instancesBuffer[] = {
    #{join "," for inst instances}
    {
-      .name = "@{inst.name.str}",
+      .name = "@{inst.name |> Identify}",
       #{if inst.declaration.isMemoryMapped} 
          .memMapped = (int*) @{versatBase + memoryMappedBase * 4 + inst.versatData.memoryAddressOffset * 4 |> Hex}, 
       #{else} 

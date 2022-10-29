@@ -57,6 +57,7 @@ void OutputMemoryHex(void* memory,int size){
 
 #if 0
 #include <ncurses.h>
+#include <signal.h>
 
 struct PanelState{
    Value valueLooking;
@@ -88,7 +89,143 @@ static int clamp(int min,int val,int max){
    return val;
 }
 
+// Only allow one input
+enum Input{
+   INPUT_NONE,
+   INPUT_BACKSPACE,
+   INPUT_ENTER,
+   INPUT_DOWN,
+   INPUT_UP
+};
+
+void StructPanel(WINDOW* w,PanelState* state,Input input,Arena* arena){
+   Value val = state->valueLooking;
+   Type* type = val.type;
+
+   int width,height;
+   getmaxyx(w, height, width);
+
+   const int panelWidth = 32;
+
+   int numberMembers = ListCount(type->members);
+
+   if(input == INPUT_DOWN){
+      state->cursorPosition += 1;
+   } else if(input == INPUT_UP){
+      state->cursorPosition -= 1;
+   }
+
+   state->cursorPosition = clamp(0,state->cursorPosition,numberMembers - 1);
+
+   int menuIndex = 0;
+   int startPos = 2;
+
+   int listHeight = height - 2;
+   int maxListOffset = numberMembers - listHeight;
+
+   int listOffset = maxi(0,mini(maxListOffset, state->cursorPosition - (listHeight / 2)));
+
+   mvaddnstr(0, 0, "Top:", 4);
+   for(Member* member = val.type->members; member != nullptr; member = member->next){
+      int yPos = startPos + menuIndex;
+
+      if(menuIndex == state->cursorPosition){
+         wattron( w, A_STANDOUT );
+      }
+
+      mvaddnstr(yPos, 0, member->name.str,member->name.size);
+
+      Value memberVal = AccessStruct(val,member);
+      SizedString repr = GetValueRepresentation(memberVal,arena);
+
+      move(yPos, panelWidth);
+      addnstr(repr.str,repr.size);
+
+      move(yPos, panelWidth + panelWidth / 2);
+      addnstr(member->type->name.str,member->type->name.size);
+
+      if(menuIndex == state->cursorPosition){
+         wattroff( w, A_STANDOUT );
+      }
+
+      menuIndex += 1;
+   }
+}
+
+void TerminalIteration(WINDOW* w,Input input){
+   static char buffer[4096];
+
+   Arena arenaInst = {};
+   arenaInst.mem = buffer;
+   arenaInst.totalAllocated = 4096;
+
+   Arena* arena = &arenaInst;
+
+   // Before panel decision
+   if(input == INPUT_BACKSPACE){
+      currentPanel -= 1;
+   } else if(input == INPUT_ENTER){
+      PanelState* currentState = &panels[currentPanel];
+
+      Value val = currentState->valueLooking;
+      Type* type = val.type;
+
+      // Switch on type
+      if(type->type == Type::STRUCT){
+         Value selectedValue = AccessStruct(val,currentState->cursorPosition);
+
+         selectedValue = CollapsePtrIntoStruct(selectedValue);
+
+         #if 1
+         if(selectedValue.type->type == Type::STRUCT || (selectedValue.type->type == Type::TEMPLATED_INSTANCE && selectedValue.type->templateBase == ValueType::POOL)){
+            currentPanel += 1;
+
+            PanelState* newState = &panels[currentPanel];
+            newState->cursorPosition = 0;
+            newState->valueLooking = selectedValue;
+         }
+         #endif
+      } else if(type->type == Type::TEMPLATED_INSTANCE && type->templateBase == GetType(MakeSizedString("Pool"))){
+         // Do nothing, for now
+
+         //Iterator iter = Iterate(val);
+      }
+   }
+
+   currentPanel = std::max(0,currentPanel);
+
+   // At this point, panel is locked in,
+   PanelState* state = &panels[currentPanel];
+
+   if(state->valueLooking.type->type == Type::STRUCT){
+      StructPanel(w,state,input,arena);
+      return;
+   } else {
+
+   }
+}
+
+#include <sys/types.h>
+#include <sys/ioctl.h>
+#include <termios.h>
+
+static int terminalWidth,terminalHeight;
+static bool resized;
+
+static void sig_handler(int sig){
+   if (sig == SIGWINCH) {
+      winsize winsz;
+
+      ioctl(0, TIOCGWINSZ, &winsz);
+
+      terminalWidth = winsz.ws_row;
+      terminalHeight = winsz.ws_col;
+      resized = true;
+  }
+}
+
 void DebugTerminal(Value initialValue){
+   panels[0].cursorPosition = 0;
    panels[0].valueLooking = initialValue;
 
 	WINDOW *w  = initscr();
@@ -100,95 +237,47 @@ void DebugTerminal(Value initialValue){
 
    curs_set(0);
 
-   int panelWidth = 32;
+   static bool init = false;
+   if(!init){
+      getmaxyx(w, terminalHeight, terminalWidth);
+      resized = false;
+      signal(SIGWINCH, sig_handler);
+   }
 
-   mvaddnstr(0, 0, "Top:", 4);
+   TerminalIteration(w,INPUT_NONE);
+
    int c;
    while((c = getch()) != 'q'){
-      // Before panel decision
+      Input input = {};
+
       switch(c){
       case KEY_BACKSPACE:{
-         currentPanel -= 1;
+         input = INPUT_BACKSPACE;
       }break;
+      case 10:
       case KEY_ENTER:{
-         // currentPanel += 1;
-         // TODO: Have to fetch the selected value, if structure or equivalent
+         input = INPUT_ENTER;
       }break;
-      }
-      currentPanel = std::max(0,currentPanel);
-
-      // At this point, panel is locked in,
-      PanelState* state = &panels[currentPanel];
-
-      Value val = state->valueLooking;
-      Type* type = val.type;
-
-      if(type->type != Type::STRUCT){
-         mvaddstr(2,0,"NOT A STRUCT");
-         continue;
-      }
-
-      int numberMembers = 0;
-
-      #if 1
-      if(type->type == Type::STRUCT){
-         numberMembers = ListCount(type->members);
-      }
-      #endif
-
-      switch(c){
       case KEY_DOWN:{
-         state->cursorPosition += 1;
-      } break;
-      case KEY_UP:{
-         state->cursorPosition -= 1;
+         input = INPUT_DOWN;
       }break;
-		}
-      state->cursorPosition = clamp(0,state->cursorPosition,numberMembers - 1);
-
-		int menuIndex = 0;
-      for(Member* member = val.type->members; member != nullptr; member = member->next){
-         int yPos = 2 + menuIndex;
-         if(menuIndex == state->cursorPosition){
-            wattron( w, A_STANDOUT );
-         }
-
-         mvaddnstr(yPos, 0, UNPACK_SS_REVERSE(member->name));
-
-         if(menuIndex == state->cursorPosition){
-            wattroff( w, A_STANDOUT );
-         }
-
-         #if 1
-         move(yPos, panelWidth);
-         //printw("%d ",member->offset);
-         switch(member->type->type){
-         case Type::STRUCT:{
-            addstr("STRUCT:");
-            addnstr(UNPACK_SS_REVERSE(member->name));
-         }break;
-         case Type::POINTER:{
-            addnstr(UNPACK_SS_REVERSE(member->name));
-            addstr(":");
-            Value ptr = AccessStruct(val,member);
-
-            printw("%x",ptr.isTemp);
-         }break;
-         case Type::BASE:{
-            Value number = AccessStruct(val,member);
-
-            addnstr(UNPACK_SS_REVERSE(member->name));
-            addstr(":");
-
-            printw("%x",number.number);
-         }break;
-         }
-         #endif
-
-         menuIndex += 1;
+      case KEY_UP:{
+         input = INPUT_UP;
+      }break;
       }
 
-      refresh();
+      bool iterate = false;
+      if(resized){
+         resizeterm(terminalWidth,terminalHeight);
+         resized = false;
+         iterate = true;
+      }
+
+      if(input != INPUT_NONE || iterate){
+         clear();
+         TerminalIteration(w,input);
+         refresh();
+      }
 	}
 
 	endwin();

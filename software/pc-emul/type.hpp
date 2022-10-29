@@ -68,6 +68,8 @@ namespace ValueType{
    extern Type* NIL;
    extern Type* SIZED_STRING;
    extern Type* TEMPLATE_FUNCTION;
+   extern Type* POOL;
+   extern Type* STD_VECTOR;
 };
 
 struct TemplateFunction;
@@ -117,7 +119,8 @@ Type* GetPointerType(Type* baseType);
 Type* GetArrayType(Type* baseType, int arrayLength);
 
 Value AccessStruct(Value object,Member* member);
-Value AccessObject(Value object,SizedString memberName);
+Value AccessStruct(Value val,int index);
+Value AccessStruct(Value object,SizedString memberName);
 Value AccessObjectIndex(Value object,int index);
 
 Iterator Iterate(Value iterating);
