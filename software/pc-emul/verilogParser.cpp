@@ -427,6 +427,11 @@ static Module ParseModule(Tokenizer* tok){
          while(1){
             Token attributeName = tok->NextToken();
 
+            if(!CompareString(attributeName,"versat_latency")){
+               printf("ERROR: Do not know attribute named: %.*s\n",UNPACK_SS(attributeName));
+               exit(-1);
+            }
+
             peek = tok->PeekToken();
             if(CompareString(peek,"=")){
                tok->AdvancePeek(peek);
@@ -632,14 +637,14 @@ int main(int argc,const char* argv[]){
             if(CheckFormat("in%d",decl.name)){
                port.AssertNextToken("in");
                int input = ParseInt(port.NextToken());
-               int delay = decl.attributes[MakeSizedString("latency")].number;
+               int delay = decl.attributes[MakeSizedString("versat_latency")].number;
 
                info.nInputs = maxi(info.nInputs,input + 1);
                info.inputDelays[input] = delay;
             } else if(CheckFormat("out%d",decl.name)){
                port.AssertNextToken("out");
                int output = ParseInt(port.NextToken());
-               int latency = decl.attributes[MakeSizedString("latency")].number;
+               int latency = decl.attributes[MakeSizedString("versat_latency")].number;
 
                info.nOutputs = maxi(info.nOutputs,output + 1);
                info.outputLatencies[output] = latency;

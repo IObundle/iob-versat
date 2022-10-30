@@ -482,7 +482,7 @@ void FixMultipleInputs(Versat* versat,Accelerator* accel){
       char buffer[1024];
       sprintf(buffer,"debug/%.*s/",UNPACK_SS(accel->subtype->name));
       MakeDirectory(buffer);
-      OutputGraphDotFile(accel,false,"debug/%.*s/mux.dot",UNPACK_SS(accel->subtype->name));
+      OutputGraphDotFile(versat,accel,false,"debug/%.*s/mux.dot",UNPACK_SS(accel->subtype->name));
    }
 }
 
@@ -560,7 +560,7 @@ void CalculateDelay(Versat* versat,Accelerator* accel){
       SendLatencyUpwards(versat,inst);
 
       if(versat->debug.outputGraphs){
-         OutputGraphDotFile(accel,false,"debug/%.*s/out1_%d.dot",UNPACK_SS(accel->subtype->name),graphs++);
+         OutputGraphDotFile(versat,accel,false,"debug/%.*s/out1_%d.dot",UNPACK_SS(accel->subtype->name),graphs++);
       }
    }
 
@@ -586,7 +586,7 @@ void CalculateDelay(Versat* versat,Accelerator* accel){
       SendLatencyUpwards(versat,inst);
 
       if(versat->debug.outputGraphs){
-         OutputGraphDotFile(accel,false,"debug/%.*s/out2_%d.dot",UNPACK_SS(accel->subtype->name),graphs++);
+         OutputGraphDotFile(versat,accel,false,"debug/%.*s/out2_%d.dot",UNPACK_SS(accel->subtype->name),graphs++);
       }
    }
 
@@ -625,28 +625,40 @@ void CalculateDelay(Versat* versat,Accelerator* accel){
 
          if(other->declaration == versat->buffer){
             other->baseDelay = info->delay;
-            //Assert(other->baseDelay >= 0);
-         } else if(info->delay != 0){
+         } else if(other->declaration == versat->fixedBuffer){
+            NOT_IMPLEMENTED;
+         } else if(info->delay > 0){
 
-            Assert(inst->declaration != versat->buffer);
-            //Assert(info->instConnectedTo.inst->declaration != versat->delay);
+            Assert(!(inst->declaration == versat->buffer || inst->declaration == versat->fixedBuffer));
 
-            SizedString bufferName = PushString(&versat->permanent,"buffer%d",buffersInserted++);
+            if(versat->debug.useFixedBuffers){
+               SizedString bufferName = PushString(&versat->permanent,"fixedBuffer%d",buffersInserted++);
 
-            ComplexFUInstance* delay = (ComplexFUInstance*) CreateFUInstance(accel,versat->buffer,bufferName,false,true);
+               ComplexFUInstance* delay = (ComplexFUInstance*) CreateFUInstance(accel,versat->fixedBuffer,bufferName,false,false);
+               delay->parameters = PushString(&versat->permanent,"#(.AMOUNT(%d))",info->delay - versat->fixedBuffer->latencies[0]);
 
-            InsertUnit(accel,PortInstance{inst,info->port},PortInstance{info->instConnectedTo.inst,info->instConnectedTo.port},PortInstance{delay,0});
+               InsertUnit(accel,PortInstance{inst,info->port},PortInstance{info->instConnectedTo.inst,info->instConnectedTo.port},PortInstance{delay,0});
 
-            delay->baseDelay = info->delay - versat->buffer->latencies[0];
+               delay->baseDelay = info->delay - versat->fixedBuffer->latencies[0];
 
-            Assert(delay->baseDelay >= 0);
+               maxDelay = maxi(maxDelay,delay->baseDelay);
+            } else {
+               SizedString bufferName = PushString(&versat->permanent,"buffer%d",buffersInserted++);
 
-            maxDelay = maxi(maxDelay,delay->baseDelay);
+               ComplexFUInstance* delay = (ComplexFUInstance*) CreateFUInstance(accel,versat->buffer,bufferName,false,true);
+               InsertUnit(accel,PortInstance{inst,info->port},PortInstance{info->instConnectedTo.inst,info->instConnectedTo.port},PortInstance{delay,0});
 
-            if(delay->config){
-               delay->config[0] = delay->baseDelay;
+               delay->baseDelay = info->delay - versat->buffer->latencies[0];
+               Assert(delay->baseDelay >= 0);
+
+               maxDelay = maxi(maxDelay,delay->baseDelay);
+
+               if(delay->config){
+                  delay->config[0] = delay->baseDelay;
+               }
             }
-            Assert(delay->baseDelay >= 0);
+         } else {
+            Assert(info->delay >= 0);
          }
       }
    }
@@ -669,7 +681,7 @@ void CalculateDelay(Versat* versat,Accelerator* accel){
    #endif
 
    if(versat->debug.outputGraphs){
-      OutputGraphDotFile(accel,false,"debug/%.*s/out3_%d.dot",UNPACK_SS(accel->subtype->name),graphs++);
+      OutputGraphDotFile(versat,accel,false,"debug/%.*s/out3_%d.dot",UNPACK_SS(accel->subtype->name),graphs++);
    }
 }
 

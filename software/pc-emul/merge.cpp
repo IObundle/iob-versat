@@ -625,7 +625,7 @@ FUDeclaration* MergeAccelerators(Versat* versat,FUDeclaration* accel1,FUDeclarat
 
    Assert(IsGraphValid(newGraph));
 
-   OutputGraphDotFile(newGraph,false,"Merged.dot");
+   OutputGraphDotFile(versat,newGraph,false,"Merged.dot");
 
    FUDeclaration* decl = RegisterSubUnit(versat,name,newGraph);
 

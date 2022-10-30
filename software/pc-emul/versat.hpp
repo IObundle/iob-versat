@@ -45,12 +45,13 @@ enum VersatDebugFlags{
    OUTPUT_GRAPH_DOT,
    OUTPUT_ACCELERATORS_CODE,
    OUTPUT_VERSAT_CODE,
-   OUTPUT_VCD
+   OUTPUT_VCD,
+   USE_FIXED_BUFFERS
 };
 
 Accelerator* Flatten(Versat* versat,Accelerator* accel,int times);
 
-void OutputGraphDotFile(Accelerator* accel,bool collapseSameEdges,const char* filenameFormat,...) __attribute__ ((format (printf, 3, 4)));
+void OutputGraphDotFile(Versat* versat,Accelerator* accel,bool collapseSameEdges,const char* filenameFormat,...) __attribute__ ((format (printf, 4, 5)));
 
 // Versat functions
 Versat* InitVersat(int base,int numberConfigurations);

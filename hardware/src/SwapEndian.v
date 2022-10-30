@@ -11,10 +11,10 @@ module SwapEndian #(
     
     input               run,
 
-    (* latency = 0 *) input [DATA_W-1:0]  in0,
+    (* versat_latency = 0 *) input [DATA_W-1:0]  in0,
 
     //input / output data
-    (* latency = 0 *) output reg [DATA_W-1:0] out0,
+    (* versat_latency = 0 *) output reg [DATA_W-1:0] out0,
 
     input               enabled
     );

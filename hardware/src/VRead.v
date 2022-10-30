@@ -27,7 +27,7 @@ module VRead #(
    input                  databus_last,
 
     // input / output data
-    (* latency=1 *) output [DATA_W-1:0]    out0,
+    (* versat_latency = 1 *) output [DATA_W-1:0]    out0,
 
     // configurations
    input [`IO_ADDR_W-1:0]  ext_addr,

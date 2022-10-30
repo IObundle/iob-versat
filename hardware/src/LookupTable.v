@@ -17,8 +17,8 @@ module LookupTable #(
       input [DATA_W-1:0] in0,
       input [DATA_W-1:0] in1,
 
-      (* latency = 2 *) output reg [DATA_W-1:0] out0,
-      (* latency = 2 *) output reg [DATA_W-1:0] out1,
+      (* versat_latency = 2 *) output reg [DATA_W-1:0] out0,
+      (* versat_latency = 2 *) output reg [DATA_W-1:0] out1,
 
       input clk,
       input rst,

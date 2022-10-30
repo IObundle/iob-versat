@@ -15,7 +15,7 @@ module FixedBuffer #(
     //input / output data
     input [DATA_W-1:0]            in0,
 
-    (* latency=1 *) output reg [DATA_W-1:0] out0,
+    (* versat_latency = 1 *) output reg [DATA_W-1:0] out0
    );
 
 generate
@@ -37,7 +37,7 @@ generate
       always @(posedge clk)
       begin
          out0 <= bufferData[0];
-         for(i = 0; i < AMOUNT - 2; i = i + 1) begin
+         for(i = 0; i < AMOUNT - 1; i = i + 1) begin
             bufferData[i] <= bufferData[i+1];
          end
          bufferData[AMOUNT-1] <= in0;

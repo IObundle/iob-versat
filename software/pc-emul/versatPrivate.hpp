@@ -161,6 +161,7 @@ struct DebugState{
    bool outputAccelerator;
    bool outputVersat;
    bool outputVCD;
+   bool useFixedBuffers;
 };
 
 struct Versat{
@@ -175,6 +176,7 @@ struct Versat{
 
 	// Declaration for units that versat needs to instantiate itself
 	FUDeclaration* buffer;
+   FUDeclaration* fixedBuffer;
    FUDeclaration* input;
    FUDeclaration* multiplexer;
    FUDeclaration* output;

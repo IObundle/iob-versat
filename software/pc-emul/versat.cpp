@@ -204,6 +204,7 @@ Versat* InitVersat(int base,int numberConfigurations){
    RegisterAllVerilogUnits(versat);
 
    versat->buffer = GetTypeByName(versat,MakeSizedString("Buffer"));
+   versat->fixedBuffer = GetTypeByName(versat,MakeSizedString("FixedBuffer"));
    versat->pipelineRegister = GetTypeByName(versat,MakeSizedString("PipelineRegister"));
    versat->multiplexer = GetTypeByName(versat,MakeSizedString("Mux2"));
    versat->input = RegisterCircuitInput(versat);
@@ -310,6 +311,10 @@ bool SetDebug(Versat* versat,VersatDebugFlags flags,bool flag){
    case VersatDebugFlags::OUTPUT_VCD:{
       last = versat->debug.outputVCD;
       versat->debug.outputVCD = flag;
+   }break;
+   case VersatDebugFlags::USE_FIXED_BUFFERS:{
+      last = versat->debug.useFixedBuffers;
+      versat->debug.useFixedBuffers = flag;
    }break;
    default:{
       NOT_POSSIBLE;
@@ -550,47 +555,57 @@ FUDeclaration* RegisterFU(Versat* versat,FUDeclaration decl){
 }
 
 // Uses static allocated memory. Intended for use by OutputGraphDotFile
-static char* FormatNameToOutput(FUInstance* inst){
+static char* FormatNameToOutput(Versat* versat,FUInstance* inst){
    #define PRINT_ID 0
-   #define HIERARCHICAL_NAME 0
    #define PRINT_DELAY 1
 
    static char buffer[1024];
 
-   #if HIERARCHICAL_NAME == 1
-      char* name = GetHierarchyNameRepr(inst->name);
-   #else
-      SizedString name = inst->name;
-   #endif
-
    char* ptr = buffer;
-   ptr += sprintf(ptr,"%.*s",UNPACK_SS(name));
+   ptr += sprintf(ptr,"%.*s",UNPACK_SS(inst->name));
 
    #if PRINT_ID == 1
    ptr += sprintf(ptr,"_%d",inst->id);
    #endif
 
    #if PRINT_DELAY == 1
-   if(CompareString(inst->declaration->name,"Buffer") && inst->config){
+   if(inst->declaration == versat->buffer && inst->config){
       ptr += sprintf(ptr,"_%d",inst->config[0]);
+   } else if(inst->declaration == versat->fixedBuffer && inst->parameters.size > 0){
+      Tokenizer tok(inst->parameters,".()",{"#("});
+
+      while(!tok.Done()){
+         Token amountParam = tok.NextToken();
+
+         if(CompareString(amountParam,"AMOUNT")){
+            tok.AssertNextToken("(");
+
+            Token number = tok.NextToken();
+
+            tok.AssertNextToken(")");
+
+            ptr += sprintf(ptr,"_%.*s",UNPACK_SS(number));
+            break;
+         }
+      }
+
    } else {
       ptr += sprintf(ptr,"_%d",inst->baseDelay);
    }
    #endif
 
    #undef PRINT_ID
-   #undef HIERARCHICAL_NAME
    #undef PRINT_DELAY
 
    return buffer;
 }
 
-static void OutputGraphDotFile_(Accelerator* accel,bool collapseSameEdges,FILE* outputFile){
+static void OutputGraphDotFile_(Versat* versat,Accelerator* accel,bool collapseSameEdges,FILE* outputFile){
    LockAccelerator(accel,Accelerator::Locked::GRAPH);
 
    fprintf(outputFile,"digraph accel {\n\tnode [fontcolor=white,style=filled,color=\"160,60,176\"];\n");
    for(ComplexFUInstance* inst : accel->instances){
-      char* name = FormatNameToOutput(inst);
+      char* name = FormatNameToOutput(versat,inst);
 
       fprintf(outputFile,"\t\"%s\";\n",name);
    }
@@ -608,8 +623,8 @@ static void OutputGraphDotFile_(Accelerator* accel,bool collapseSameEdges,FILE* 
          sameEdgeCounter.insert(key);
       }
 
-      fprintf(outputFile,"\t\"%s\" -> ",FormatNameToOutput(edge->units[0].inst));
-      fprintf(outputFile,"\"%s\"",FormatNameToOutput(edge->units[1].inst));
+      fprintf(outputFile,"\t\"%s\" -> ",FormatNameToOutput(versat,edge->units[0].inst));
+      fprintf(outputFile,"\"%s\"",FormatNameToOutput(versat,edge->units[1].inst));
 
       #if 1
       ComplexFUInstance* outputInst = edge->units[0].inst;
@@ -631,7 +646,7 @@ static void OutputGraphDotFile_(Accelerator* accel,bool collapseSameEdges,FILE* 
    fprintf(outputFile,"}\n");
 }
 
-void OutputGraphDotFile(Accelerator* accel,bool collapseSameEdges,const char* filenameFormat,...){
+void OutputGraphDotFile(Versat* versat,Accelerator* accel,bool collapseSameEdges,const char* filenameFormat,...){
    char buffer[1024];
 
    va_list args;
@@ -640,7 +655,7 @@ void OutputGraphDotFile(Accelerator* accel,bool collapseSameEdges,const char* fi
    vsprintf(buffer,filenameFormat,args);
 
    FILE* file = fopen(buffer,"w");
-   OutputGraphDotFile_(accel,collapseSameEdges,file);
+   OutputGraphDotFile_(versat,accel,collapseSameEdges,file);
    fclose(file);
 
    va_end(args);
@@ -1627,7 +1642,7 @@ Accelerator* Flatten(Versat* versat,Accelerator* accel,int times){
          RemoveFUInstance(newAccel,inst);
       }
 
-      OutputGraphDotFile(newAccel,true,"./debug/flatten.dot");
+      OutputGraphDotFile(versat,newAccel,true,"./debug/flatten.dot");
 
       IsGraphValid(newAccel);
 
@@ -1646,8 +1661,8 @@ Accelerator* Flatten(Versat* versat,Accelerator* accel,int times){
 
    //DebugTerminal(MakeValue(newAccel,"Accelerator"));
 
-   OutputGraphDotFile(accel,true,"./debug/original.dot");
-   OutputGraphDotFile(newAccel,true,"./debug/flatten.dot");
+   OutputGraphDotFile(versat,accel,true,"./debug/original.dot");
+   OutputGraphDotFile(versat,newAccel,true,"./debug/flatten.dot");
 
    PopulateAccelerator(versat,newAccel);
    InitializeFUInstances(newAccel,true);
