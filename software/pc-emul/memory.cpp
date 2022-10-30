@@ -58,6 +58,16 @@ void InitArena(Arena* arena,size_t size){
    arena->align = false;
 }
 
+Arena SubArena(Arena* arena,size_t size){
+   Byte* mem = PushBytes(arena,size);
+
+   Arena res = {};
+   res.mem = mem;
+   res.totalAllocated = size;
+
+   return res;
+}
+
 void Free(Arena* arena){
    free(arena->mem);
    arena->totalAllocated = 0;
@@ -126,7 +136,7 @@ SizedString vPushString(Arena* arena,const char* format,va_list args){
    char* buffer = &arena->mem[arena->used];
    int size = vsprintf(buffer,format,args);
 
-   arena->used += (size_t) (size + 1);
+   arena->used += (size_t) (size);
 
    if(arena->align){
       arena->used = ALIGN_4(arena->used);

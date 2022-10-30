@@ -71,6 +71,7 @@ public:
 
 };
 
+bool CheckStringOnlyWhitespace(Token tok);
 bool CheckFormat(const char* format,Token tok);
 bool Contains(SizedString str,const char* toCheck);
 

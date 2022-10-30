@@ -35,6 +35,7 @@ public:
 static std::map<SizedString,Value,CompareFunction> envTable;
 static FILE* output;
 static Arena* tempArena;
+static Arena* outputArena;
 static const char* filepath;
 
 static Expression* ParseExpression(Tokenizer* tok);
@@ -501,10 +502,13 @@ static Value EvalExpression(Expression* expr){
    return MakeValue();
 }
 
-static void PrintValue(FILE* file,Value in){
+#if 1
+static SizedString PrintValue(FILE* file,Value in){
    Value val = CollapseArrayIntoPtr(in);
 
    if(val.type == ValueType::NUMBER){
+
+
       fprintf(file,"%d",val.number);
    } else if(val.type == ValueType::STRING){
       if(val.literal){
@@ -530,8 +534,12 @@ static void PrintValue(FILE* file,Value in){
       NOT_IMPLEMENTED;
    }
 }
+#endif
 
-static void Eval(Block* block){
+static SizedString Eval(Block* block){
+   SizedString res = {};
+   res.str = MarkArena(outputArena);
+
    if(block->type == Block::COMMAND){
       Command com = block->command;
 
@@ -544,26 +552,31 @@ static void Eval(Block* block){
          SizedString id = com.expressions[2]->id;
 
          Value iterating = EvalExpression(com.expressions[3]);
-         bool seenFirst = false;
          int counter = 0;
          for(Iterator iter = Iterate(iterating); HasNext(iter); Advance(&iter)){
             Value val = GetValue(iter);
             envTable[id] = val;
 
-            if(seenFirst) {
-               fprintf(output,"%.*s",separator.str.size,separator.str.str);
-            } else {
-               seenFirst = true;
+            bool outputSeparator = false;
+            for(Block* ptr = block->nextInner; ptr != nullptr; ptr = ptr->next){
+               SizedString val = Eval(ptr);
+
+               if(!CheckStringOnlyWhitespace(val)){
+                  res.size += val.size; // Push on stack
+                  outputSeparator = true;
+               } else {
+                  printf("here\n");
+               }
             }
 
-            for(Block* ptr = block->nextInner; ptr != nullptr; ptr = ptr->next){
-               Eval(ptr); // Push on stack
+            if(outputSeparator){
+               res.size += PushString(outputArena,"%.*s",separator.str.size,separator.str.str).size;
             }
 
             counter += 1;
          }
-
-         envTable[MakeSizedString("join")] = MakeValue(false);
+         outputArena->used -= separator.str.size;
+         res.size -= separator.str.size;
       } else if(CompareString(com.name,"for")){
          Assert(com.expressions[0]->type == Expression::IDENTIFIER);
          SizedString id = com.expressions[0]->id;
@@ -574,7 +587,7 @@ static void Eval(Block* block){
             envTable[id] = val;
 
             for(Block* ptr = block->nextInner; ptr != nullptr; ptr = ptr->next){
-               Eval(ptr); // Push on stack
+               res.size += Eval(ptr).size; // Push on stack
             }
          }
       } else if (CompareString(com.name,"if")){
@@ -585,13 +598,13 @@ static void Eval(Block* block){
                if(ptr->type == Block::COMMAND && strcmp(ptr->command.name,"else") == 0){
                   break;
                }
-               Eval(ptr);
+               res.size += Eval(ptr).size; // Push on stack
             }
          } else {
             for(Block* ptr = block->nextInner; ptr != nullptr; ptr = ptr->next){
                if(ptr->type == Block::COMMAND && strcmp(ptr->command.name,"else") == 0){
                   for(ptr = ptr->next; ptr != nullptr; ptr = ptr->next){
-                     Eval(ptr);
+                     res.size += Eval(ptr).size; // Push on stack
                   }
                   break;
                }
@@ -622,7 +635,7 @@ static void Eval(Block* block){
          }
 
          for(Block* ptr = block->nextInner; ptr != nullptr; ptr = ptr->next){
-            Eval(ptr);
+            res.size += Eval(ptr).size; // Push on stack
          }
 
          debugging = false;
@@ -682,7 +695,7 @@ static void Eval(Block* block){
 
          #if 1
          for(Block* ptr = func->block; ptr != nullptr; ptr = ptr->next){
-            Eval(ptr);
+            res.size += Eval(ptr).size; // Push on stack
          }
          #endif
 
@@ -690,7 +703,7 @@ static void Eval(Block* block){
       } else if(CompareString(com.name,"while")){
          while(ConvertValue(EvalExpression(com.expressions[0]),ValueType::BOOLEAN).boolean){
             for(Block* ptr = block->nextInner; ptr != nullptr; ptr = ptr->next){
-               Eval(ptr); // Push on stack
+               res.size += Eval(ptr).size; // Push on stack
             }
          }
       } else {
@@ -701,7 +714,6 @@ static void Eval(Block* block){
       Tokenizer tok(block->textBlock,"!()[]{}+-:;.,*~><\"",{"@{","==","**","|>",">=","<=","!="});
 
       tok.keepComments = true;
-
       while(1){
          Token text = tok.PeekFindUntil("@{");
 
@@ -710,7 +722,9 @@ static void Eval(Block* block){
          }
          tok.AdvancePeek(text);
 
-         fprintf(output,"%.*s",text.size,text.str);
+         //fprintf(output,"%.*s",text.size,text.str);
+
+         res.size += PushString(outputArena,text).size;
 
          if(tok.Done()){
             break;
@@ -722,9 +736,13 @@ static void Eval(Block* block){
 
          Value val = EvalExpression(expr);
 
-         PrintValue(output,val);
+         res.size += GetValueRepresentation(val,outputArena).size;
+
+         //PrintValue(output,val);
       }
    }
+
+   return res;
 }
 
 void ParseAndEvaluate(SizedString content){
@@ -736,7 +754,8 @@ void ParseAndEvaluate(SizedString content){
    while(!tok->Done()){
       Block* block = Parse(tok);
 
-      Eval(block);
+      SizedString text = Eval(block);
+      fprintf(output,"%.*s",text.size,text.str);
       fflush(output);
    }
 }
@@ -744,6 +763,11 @@ void ParseAndEvaluate(SizedString content){
 void ProcessTemplate(FILE* outputFile,const char* templateFilepath,Arena* arena){
    tempArena = arena;
    filepath = templateFilepath;
+
+   Byte* mark = MarkArena(arena);
+
+   Arena outputArenaInst = SubArena(arena,Megabyte(1));
+   outputArena = &outputArenaInst;
 
    #if 0
       output = stdout;
@@ -757,7 +781,6 @@ void ProcessTemplate(FILE* outputFile,const char* templateFilepath,Arena* arena)
 
    SizedString content = PushFile(tempArena,templateFilepath);
 
-   Byte* mark = MarkArena(tempArena);
    ParseAndEvaluate(content);
    PopMark(tempArena,mark);
 

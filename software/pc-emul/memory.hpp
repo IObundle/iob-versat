@@ -80,6 +80,7 @@ struct Arena{
 };
 
 void InitArena(Arena* arena,size_t size);
+Arena SubArena(Arena* arena,size_t size);
 void Free(Arena* arena);
 Byte* MarkArena(Arena* arena);
 void PopMark(Arena* arena,Byte* mark);

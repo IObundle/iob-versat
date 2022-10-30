@@ -327,6 +327,16 @@ bool Tokenizer::Done(){
    return res;
 }
 
+bool CheckStringOnlyWhitespace(Token tok){
+   for(int i = 0; i < tok.size; i++){
+      char ch = tok.str[i];
+      if(!IsWhitespace(ch)){
+         return false;
+      }
+   }
+   return true;
+}
+
 bool CheckFormat(const char* format,Token tok){
    int tokenIndex = 0;
    for(int formatIndex = 0; 1;){
