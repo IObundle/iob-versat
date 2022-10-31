@@ -13,6 +13,7 @@
 
 #include <printf.h>
 #include <unordered_map>
+#include <set>
 
 #include <utility>
 
@@ -1194,6 +1195,23 @@ FUDeclaration* RegisterSubUnit(Versat* versat,SizedString name,Accelerator* circ
    }
 
    decl.baseCircuit = CopyAccelerator(versat,circuit,nullptr,true);
+
+   #if 0
+   bool allOperations = true;
+   for(ComplexFUInstance* inst : circuit->instances){
+      if(inst->declaration->type == FUDeclaration::SPECIAL){
+         continue;
+      }
+      if(!inst->declaration->isOperation){
+         allOperations = false;
+         break;
+      }
+   }
+
+   if(allOperations){
+      circuit = Flatten(versat,circuit,99);
+   }
+   #endif
 
    FixMultipleInputs(versat,circuit);
 

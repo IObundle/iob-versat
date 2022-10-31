@@ -7,6 +7,7 @@
 #{include "versat_common.tpl"}
 
 #{call CountDones instances}
+#{call CountOperations instances}
 
 module @{accel.name} #(
       parameter ADDR_W = `ADDR_W,
@@ -108,8 +109,7 @@ assign done = &unitDone;
 wire [31:0] #{join ", " for inst instances}
    #{if inst.tempData.outputPortsUsed} 
       #{join ", " for j inst.tempData.outputPortsUsed} output_@{inst.id}_@{j} #{end}
-   #{else}
-      unused_@{inst.id} #{end}
+   #{end}
 #{end};
 
 #{if unitsMapped}
@@ -135,8 +135,8 @@ begin
 end
 #{end}
 
-#{set counter 0}
-reg [31:0] #{join "," for inst instances} #{if inst.declaration.isOperation} comb_@{inst.name |> Identify} #{else} unused@{counter} #{inc counter} #{end}#{end}; 
+#{if nOperations}
+reg [31:0] #{join "," for inst instances} #{if inst.declaration.isOperation} comb_@{inst.name |> Identify} #{end}#{end}; 
 
 always @*
 begin
@@ -161,6 +161,7 @@ begin
    #{end}
 #{end}
 end
+#{end}
 
 #{set counter 0}
 #{set configDataIndex 0}

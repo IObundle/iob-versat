@@ -1,6 +1,6 @@
 #{include "versat_common.tpl"}
 
-#{call CountDones instances}
+#{set nDones #{call CountDones instances}}
 
 `timescale 1ns / 1ps
 `include "axi.vh"

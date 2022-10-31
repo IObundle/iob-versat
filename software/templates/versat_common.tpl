@@ -10,11 +10,22 @@
 #{end}
 
 #{define CountDones instances}
-#{set nDones 0}
-#{for inst instances}
-#{if inst.declaration.implementsDone}
-#{inc nDones}
+   #{set nDones 0}
+   #{for inst instances}
+   #{if inst.declaration.implementsDone}
+   #{inc nDones}
+   #{end}
+   #{end}
+   #{return nDones}
 #{end}
-#{end}
+
+#{define CountOperations instances}
+   #{set nOperations 0}
+   #{for inst instances}
+      #{if inst.declaration.isOperation}
+      #{inc nOperations}
+   #{end}
+   #{end}
+   #{return nOperations}
 #{end}
 

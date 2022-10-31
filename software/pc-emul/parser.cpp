@@ -157,7 +157,7 @@ Token Tokenizer::AssertNextToken(const char* format){
       }
       printf("^\n");
 
-      USER_ERROR;
+      DEBUG_BREAK;
    }
 
    return token;
@@ -289,7 +289,7 @@ void* Tokenizer::Mark(){
 }
 
 Token Tokenizer::Point(void* mark){
-   Assert(ptr > mark);
+   Assert(ptr >= mark);
 
    Token token = {};
    token.str = ((char*)mark);
@@ -323,6 +323,60 @@ bool Tokenizer::Done(){
    bool res = ptr >= end;
 
    Rollback(mark);
+
+   return res;
+}
+
+bool Tokenizer::IsSpecialOrSingle(SizedString toTest){
+   if(toTest.size > 1){
+      for(std::string& str : specialChars){
+         if(CompareString(str.c_str(),toTest)){
+            return true;
+         }
+      }
+   } else {
+      for(char ch : singleChars){
+         if(ch == toTest.str[0]){
+            return true;
+         }
+      }
+   }
+
+   return false;
+}
+
+SizedString Tokenizer::PeekUntilDelimiterExpression(SizedString open,SizedString close, int numberOpenSeen){
+   Assert(IsSpecialOrSingle(open));
+   Assert(IsSpecialOrSingle(close));
+
+   void* pos = Mark();
+
+   SizedString res = {};
+   res.str = (const char*) pos;
+
+   int seen = numberOpenSeen;
+   while(!Done()){
+      Token tok = PeekToken();
+
+      if(CompareString(tok,open)){
+         seen += 1;
+      } else if(CompareString(tok,close)){
+         if(seen == 0){
+            break;
+         }
+
+         seen -= 1;
+
+         if(seen == 0){
+            res = Point(pos);
+            break;
+         }
+      }
+
+      AdvancePeek(tok);
+   }
+
+   Rollback(pos); // Act as peek
 
    return res;
 }
@@ -509,26 +563,32 @@ bool IsNum(char ch){
    return res;
 }
 
-Expression* ParseOperationType(Tokenizer* tok,std::vector<std::vector<const char*>> operators,ParsingFunction finalFunction,Arena* tempArena){
+struct OperationList{
+   const char** op;
+   int nOperations;
+   OperationList* next;
+};
+
+Expression* ParseOperationType_(Tokenizer* tok,OperationList* operators,ParsingFunction finalFunction,Arena* tempArena){
    void* start = tok->Mark();
 
-   if(operators.size() == 0){
+   if(operators == nullptr){
       Expression* expr = finalFunction(tok);
 
       expr->text = tok->Point(start);
       return expr;
    }
 
-   std::vector<const char*> currentList = operators[0];
-   auto remaining = std::vector<std::vector<const char*>>(operators.begin()+1,operators.end());
-
-   Expression* current = ParseOperationType(tok,remaining,finalFunction,tempArena);
+   OperationList* nextOperators = operators->next;
+   Expression* current = ParseOperationType_(tok,nextOperators,finalFunction,tempArena);
 
    while(1){
       Token peek = tok->PeekToken();
 
       bool foundOne = false;
-      for(const char* elem : currentList){
+      for(int i = 0; i < operators->nOperations; i++){
+         const char* elem = operators->op[i];
+
          if(CompareString(peek,elem)){
             tok->AdvancePeek(peek);
             Expression* expr = PushStruct(tempArena,Expression);
@@ -538,7 +598,7 @@ Expression* ParseOperationType(Tokenizer* tok,std::vector<std::vector<const char
             expr->op = elem;
             expr->size = 2;
             expr->expressions[0] = current;
-            expr->expressions[1] = ParseOperationType(tok,remaining,finalFunction,tempArena);
+            expr->expressions[1] = ParseOperationType_(tok,nextOperators,finalFunction,tempArena);
 
             current = expr;
             foundOne = true;
@@ -552,5 +612,29 @@ Expression* ParseOperationType(Tokenizer* tok,std::vector<std::vector<const char
 
    current->text = tok->Point(start);
    return current;
+}
+
+Expression* ParseOperationType(Tokenizer* tok,std::initializer_list<std::initializer_list<const char*>> operators,ParsingFunction finalFunction,Arena* tempArena){
+   OperationList head = {};
+   OperationList* ptr = nullptr;
+
+   for(std::initializer_list<const char*> outerList : operators){
+      if(ptr){
+         ptr->next = PushStruct(tempArena,OperationList);
+         ptr = ptr->next;
+      } else {
+         ptr = &head;
+      }
+
+      ptr->op = PushArray(tempArena,outerList.size(),const char*);
+
+      for(const char* str : outerList){
+         ptr->op[ptr->nOperations++] = str;
+      }
+   }
+
+   Expression* expr = ParseOperationType_(tok,&head,finalFunction,tempArena);
+
+   return expr;
 }
 
