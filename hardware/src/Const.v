@@ -1,7 +1,7 @@
 `timescale 1ns / 1ps
 `include "xversat.vh"
 
-module xconst #(
+module Const #(
          parameter DATA_W = 32
               )
     (
@@ -10,7 +10,6 @@ module xconst #(
     input               rst,
     
     input               run,
-    output              done,
 
     //input / output data
     output [DATA_W-1:0] out0,
@@ -19,6 +18,5 @@ module xconst #(
     );
 
 assign out0 = constant;
-assign done = 1'b1;
 
 endmodule

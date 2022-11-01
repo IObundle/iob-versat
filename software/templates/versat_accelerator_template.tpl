@@ -6,7 +6,10 @@
 
 #{include "versat_common.tpl"}
 
-module @{accel.name.str} #(
+#{call CountDones instances}
+#{call CountOperations instances}
+
+module @{accel.name} #(
       parameter ADDR_W = `ADDR_W,
       parameter DATA_W = `DATA_W,
       parameter AXI_ADDR_W = 32
@@ -14,7 +17,10 @@ module @{accel.name.str} #(
    (
 
    input run,
+   
+   #{if nDones}
    output done,
+   #{end}
 
    #{for i accel.nInputs}
    input [DATA_W-1:0]              in@{i},
@@ -32,7 +38,7 @@ module @{accel.name.str} #(
    #{for unit accel.staticUnits}
    #{for i unit.nConfigs}
    #{set wire unit.wires[i]}
-   input [@{wire.bitsize-1}:0]                    @{unit.module.name.str}_@{unit.name}_@{wire.name},
+   input [@{wire.bitsize-1}:0]     @{unit.module.name}_@{unit.name}_@{wire.name},
    #{end}
    #{end}
 
@@ -47,12 +53,14 @@ module @{accel.name.str} #(
 
    #{if accel.nIOs}
    // Databus master interface
-   input [@{accel.nIOs - 1}:0]                    databus_ready,
-   output [@{accel.nIOs - 1}:0]                   databus_valid,
+   input [@{accel.nIOs - 1}:0]                databus_ready,
+   output [@{accel.nIOs - 1}:0]               databus_valid,
    output [@{accel.nIOs} * AXI_ADDR_W-1:0]    databus_addr,
-   input [@{accel.nIOs} * `DATAPATH_W-1:0]    databus_rdata,
+   input [`DATAPATH_W-1:0]                    databus_rdata,
    output [@{accel.nIOs} * `DATAPATH_W-1:0]   databus_wdata,
    output [@{accel.nIOs} * `DATAPATH_W/8-1:0] databus_wstrb,
+   output [@{accel.nIOs} * 8-1:0]             databus_len,
+   input  [@{accel.nIOs - 1}:0]               databus_last,
    #{end}
 
    #{if accel.isMemoryMapped}
@@ -60,8 +68,6 @@ module @{accel.name.str} #(
    input                           valid,
    #{if accel.memoryMapBits}
    input [@{accel.memoryMapBits - 1}:0] addr,
-   #{else}
-   input                                addr, // Shouldnt need but otherwise verilator would complain
    #{end}
 
    input [DATA_W/8-1:0]            wstrb,
@@ -79,37 +85,35 @@ wire wor_ready;
 wire [31:0] unitRdataFinal;
 reg [31:0] stateRead;
 
-// Memory access
 #{if unitsMapped}
+// Memory access
 wire we = (|wstrb);
+wire[@{unitsMapped - 1}:0] unitReady;
+reg [@{unitsMapped - 1}:0] memoryMappedEnable;
+wire [31:0] unitRData[@{unitsMapped - 1}:0];
+
 assign rdata = unitRdataFinal;
 assign ready = wor_ready;
 assign wor_ready = (|unitReady);
-reg [@{unitsMapped - 1}:0] memoryMappedEnable;
-wire[@{unitsMapped - 1}:0] unitReady;
-wire [31:0] unitRData[@{unitsMapped - 1}:0];
 
 wire [31:0] #{join ", " for i unitsMapped} rdata_@{i} #{end};
 
 assign unitRdataFinal = (#{join "|" for i unitsMapped} unitRData[@{i}] #{end});
 #{end}
 
-#{if nonSpecialUnits > 0}
-wire [@{nonSpecialUnits - 1}:0] unitDone;
+#{if nDones > 0}
+wire [@{nDones - 1}:0] unitDone;
 assign done = &unitDone;
-#{else}
-assign done = 1'b1;
 #{end}
 
 wire [31:0] #{join ", " for inst instances}
    #{if inst.tempData.outputPortsUsed} 
       #{join ", " for j inst.tempData.outputPortsUsed} output_@{inst.id}_@{j} #{end}
-   #{else}
-      unused_@{inst.id} #{end}
+   #{end}
 #{end};
 
-// Memory mapped
 #{if unitsMapped}
+// Memory mapped
 always @*
 begin
    memoryMappedEnable = {@{unitsMapped}{1'b0}};
@@ -131,32 +135,33 @@ begin
 end
 #{end}
 
-#{set counter 0}
-reg [31:0] #{join "," for inst instances} #{if inst.declaration.latencies[0]} unused@{counter} #{inc counter} #{else} comb_@{inst.name.str} #{end}#{end}; 
+#{if nOperations}
+reg [31:0] #{join "," for inst instances} #{if inst.declaration.isOperation} comb_@{inst.name |> Identify} #{end}#{end}; 
 
 always @*
 begin
 #{for inst instances}
 #{set decl inst.declaration}
    #{if decl.isOperation}
-      #{set input1 inst.tempData[0].inputs[0].inst}
+   #{set input1 inst.tempData[0].inputs[0].instConnectedTo}
       #{if decl.nInputs == 1}
-         comb_@{inst.name.str} = @{decl.operation} #{call outputName input1};
+         comb_@{inst.name |> Identify} = @{decl.operation} #{call outputName input1};
       #{else}
-         #{set input2 inst.tempData[0].inputs[1].inst}
-         #{if decl.name.str == "RHR"}
-            comb_@{inst.name.str} = (#{call outputName input1} >> #{call outputName input2}) | (#{call outputName input1} << (32 - #{call outputName input2}));
+         #{set input2 inst.tempData[0].inputs[1].instConnectedTo}
+         #{if decl.name == "RHR"}
+            comb_@{inst.name |> Identify} = (#{call outputName input1} >> #{call outputName input2}) | (#{call outputName input1} << (32 - #{call outputName input2}));
          #{else} 
-            #{if decl.name.str == "RHL"}
-               comb_@{inst.name.str} = (#{call outputName input1} << #{call outputName input2}) | (#{call outputName input1} >> (32 - #{call outputName input2}));
+            #{if decl.name == "RHL"}
+               comb_@{inst.name |> Identify} = (#{call outputName input1} << #{call outputName input2}) | (#{call outputName input1} >> (32 - #{call outputName input2}));
             #{else}
-               comb_@{inst.name.str} = #{call outputName input1} @{decl.operation} #{call outputName input2};
+               comb_@{inst.name |> Identify} = #{call outputName input1} @{decl.operation} #{call outputName input2};
             #{end}
          #{end}
       #{end}
    #{end}
 #{end}
 end
+#{end}
 
 #{set counter 0}
 #{set configDataIndex 0}
@@ -167,45 +172,43 @@ end
 #{set configsSeen 0}
 #{set delaySeen 0}
 #{set statesSeen 0}
+#{set doneCounter 0}
 #{for inst instances}
 #{set decl inst.declaration}
-   #{if decl.name.str == "circuitInput"}
+   #{if decl.name == "CircuitInput"}
    #{else}
-   #{if decl.name.str == "circuitOutput"}
+   #{if decl.name == "CircuitOutput"}
    #{else}
       #{if !decl.isOperation}
-      @{decl.name.str} @{decl.name.str}_@{counter} (
+      @{decl.name} @{inst.parameters} @{inst.name |> Identify}_@{counter} (
          #{for i inst.tempData.outputPortsUsed}
             .out@{i}(output_@{inst.id}_@{i}),
          #{end}
 
          #{for i inst.tempData.inputPortsUsed}
-         #{if inst.tempData.inputs[i].inst.inst.declaration.type == 2}
-            .in@{inst.tempData.inputs[i].port}(in@{inst.tempData.inputs[i].inst.inst.id}), // @{inst.tempData.inputs[i].inst.inst.name.str}
+         #{if inst.tempData.inputs[i].instConnectedTo.inst.declaration.type == 2}
+            .in@{inst.tempData.inputs[i].port}(in@{inst.tempData.inputs[i].instConnectedTo.inst.id}), // @{inst.tempData.inputs[i].instConnectedTo.inst.name |> Identify}
          #{else}
-            .in@{inst.tempData.inputs[i].port}(#{call outputName inst.tempData.inputs[i].inst}),
+            .in@{inst.tempData.inputs[i].port}(#{call outputName inst.tempData.inputs[i].instConnectedTo}),
          #{end}
          #{end}
 
          #{if inst.isStatic}
-         #{for unit accel.staticUnits}
-         #{if unit.name == inst.name}
-         #{for i unit.nConfigs}
-         #{set wire unit.wires[i]}
-            .@{wire.name}(@{unit.module.name.str}_@{unit.name}_@{wire.name}),
+         #{for i inst.declaration.nConfigs}
+         #{set wire inst.declaration.configWires[i]}
+         .@{wire.name}(@{accel.name}_@{inst.name |> Identify}_@{wire.name}),
          #{end}
-         #{end}
-         #{end}
+
          #{else}
          #{for i decl.nConfigs}
          #{set wire decl.configWires[i]}
-            .@{wire.name}(@{accel.configWires[configsSeen].name}),
+         .@{wire.name}(@{accel.configWires[configsSeen].name}),
          #{inc configsSeen}
          #{end}
-         #{for unit decl.staticUnits}
+         #{for unit decl.staticUnits}         
          #{for i unit.nConfigs}
          #{set wire unit.wires[i]}
-            .@{unit.module.name.str}_@{unit.name}_@{wire.name}(@{unit.module.name.str}_@{unit.name}_@{wire.name}),
+         .@{unit.module.name}_@{unit.name}_@{wire.name}(@{unit.module.name}_@{unit.name}_@{wire.name}),
          #{end}
          #{end}
          #{end}
@@ -226,8 +229,6 @@ end
          .wstrb(wstrb),
          #{if decl.memoryMapBits}
          .addr(addr[@{decl.memoryMapBits - 1}:0]),
-         #{else}
-         .addr(1'b0), // Shouldnt need but otherwise verilator would complain
          #{end}
          .rdata(unitRData[@{memoryMappedIndex}]),
          .ready(unitReady[@{memoryMappedIndex}]),
@@ -239,18 +240,25 @@ end
          .databus_ready(databus_ready[@{ioIndex} +: @{decl.nIOs}]),
          .databus_valid(databus_valid[@{ioIndex} +: @{decl.nIOs}]),
          .databus_addr(databus_addr[@{ioIndex * 32} +: @{32 * decl.nIOs}]),
-         .databus_rdata(databus_rdata[@{ioIndex * 32} +: @{32 * decl.nIOs}]),
+         .databus_rdata(databus_rdata),
          .databus_wdata(databus_wdata[@{ioIndex * 32} +: @{32 * decl.nIOs}]),
          .databus_wstrb(databus_wstrb[@{ioIndex * 4} +: @{4 * decl.nIOs}]),
+         .databus_len(databus_len[@{ioIndex * 8} +: @{8 * decl.nIOs}]),
+         .databus_last(databus_last[@{ioIndex} +: @{decl.nIOs}]),
          #{set ioIndex ioIndex + decl.nIOs}
          #{end} 
          
          .run(run),
-         .done(unitDone[@{counter}]),
+
+         #{if decl.implementsDone}
+         .done(unitDone[@{doneCounter}]),
+         #{inc doneCounter}
+         #{end}
+
          .clk(clk),
          .rst(rst)
       );
-         #{set counter counter + 1}
+         #{inc counter}
       #{end}
       #{end}
    #{end}
@@ -258,10 +266,10 @@ end
 
 #{for inst instances}
 #{set decl inst.declaration}
-#{if decl.name.str == "circuitOutput"}
+#{if decl.name == "CircuitOutput"}
    #{for i inst.tempData.numberInputs}
-   #{set in inst.tempData.inputs[i].inst}
-   assign out@{i} = #{call outputName in};
+   #{set in inst.tempData.inputs[i].instConnectedTo}
+   assign out@{inst.tempData.inputs[i].port} = #{call outputName in};
    #{end}
 #{end}
 #{end}

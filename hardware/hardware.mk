@@ -1,6 +1,10 @@
 include $(VERSAT_DIR)/core.mk
 
+include $(VERSAT_DIR)/sharedHardware.mk
+
 USE_NETLIST ?=0
+
+include $(AXI_DIR)/config.mk
 
 #SUBMODULE HARDWARE
 
@@ -17,18 +21,30 @@ INCLUDE+=$(incdir)$(VERSAT_HW_DIR)/include
 INCLUDE+=$(incdir)$(VERSAT_DIR)/submodules/LIB/hardware/include
 
 #included files
+INCLUDE+=$(incdir). $(incdir)$(AXI_DIR)/hardware/include
+
 VHDR+=$(wildcard $(VERSAT_HW_DIR)/include/*.vh)
 
-VHDR+=cpu_axi4_m_if.v
+VHDR+=m_versat_axi_m_port.vh
+VHDR+=m_versat_axi_m_write_port.vh
+VHDR+=m_versat_axi_m_read_port.vh
+VHDR+=m_m_versat_axi_write_portmap.vh
+VHDR+=m_m_versat_axi_read_portmap.vh
 
 #sources
 VSRC+=$(wildcard $(VERSAT_HW_DIR)/src/*.v)
-VSRC+=$(VERSAT_DIR)/submodules/MEM/ram/tdp_ram/iob_tdp_ram.v # used by xmem
-VSRC+=$(VERSAT_DIR)/submodules/MEM/ram/2p_ram/iob_2p_ram.v # used by vread and vwrite
-VSRC+=$(VERSAT_DIR)/submodules/DMA/hardware/src/dma_axi.v
-VSRC+=$(VERSAT_DIR)/submodules/DMA/hardware/src/dma_axi_r.v
-VSRC+=$(VERSAT_DIR)/submodules/DMA/hardware/src/dma_axi_w.v
 
-cpu_axi4_m_if.v: 
-	$(VERSAT_DIR)/submodules/LIB/software/python/axi_gen.py axi_m_port cpu_ m_
-	cp cpu_axi_m_port.vh cpu_axi4_m_if.v
+m_versat_axi_m_port.vh:
+	$(LIB_DIR)/software/python/axi_gen.py axi_m_port 'm_versat_' 'm_'
+
+m_versat_axi_m_write_port.vh:
+	$(LIB_DIR)/software/python/axi_gen.py axi_m_write_port 'm_versat_' 'm_'
+
+m_versat_axi_m_read_port.vh:
+	$(LIB_DIR)/software/python/axi_gen.py axi_m_read_port 'm_versat_' 'm_'
+
+m_m_versat_axi_write_portmap.vh:
+	$(LIB_DIR)/software/python/axi_gen.py axi_write_portmap 'm_versat_' 'm_' 'm_'
+
+m_m_versat_axi_read_portmap.vh:
+	$(LIB_DIR)/software/python/axi_gen.py axi_read_portmap 'm_versat_' 'm_' 'm_'

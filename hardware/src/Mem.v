@@ -2,7 +2,7 @@
 `include "xversat.vh"
 `include "xmemdefs.vh"
 
-module xmem #(
+(* source *) module Mem #(
          parameter MEM_INIT_FILE="none",
          parameter DATA_W = 32,
          parameter ADDR_W = 10
@@ -26,8 +26,8 @@ module xmem #(
    //input / output data
    input [DATA_W-1:0]            in0,
    input [DATA_W-1:0]            in1,
-   output [DATA_W-1:0]           out0,
-   output [DATA_W-1:0]           out1,
+   (* versat_latency = 3 *) output [DATA_W-1:0]           out0,
+   (* versat_latency = 3 *) output [DATA_W-1:0]           out1,
 
    //configurations
    //input [2*`MEMP_CONF_BITS-1:0] configdata
@@ -80,7 +80,26 @@ module xmem #(
    wire we = |wstrb;
 
    wire doneA,doneB;
-   assign done = doneA & doneB;
+
+   // Delay done by 2 cycles so that pc-emul matches simulation
+   reg doneA_1,doneB_1;
+   reg doneA_2,doneB_2;
+   always @(posedge clk,posedge rst)
+   begin
+      if(rst) begin
+         doneA_1 <= 0;
+         doneA_2 <= 0;
+         doneB_1 <= 0;
+         doneB_2 <= 0;
+      end else begin
+         doneA_1 <= doneA;
+         doneA_2 <= doneA_1;
+         doneB_1 <= doneB;
+         doneB_2 <= doneB_1;
+      end
+   end
+
+   assign done = doneA_2 & doneB_2;
 
    //output databus
    wire [DATA_W-1:0]              outA, outB;

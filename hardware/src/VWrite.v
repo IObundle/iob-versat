@@ -5,29 +5,30 @@
 `include "xmemdefs.vh"
 `include "versat-io.vh"
 
-module vwrite #(
-                parameter DATA_W=32
-                )
+module VWrite #(
+   parameter DATA_W=32
+   )
    (
-   input                   clk,
-   input                   rst,
+   input                  clk,
+   input                  rst,
 
-    input                  run,
-    output                 done,
+   input                  run,
+   output                 done,
 
-    // Databus interface
-    input                  databus_ready,
-    output                 databus_valid,
-    output[`IO_ADDR_W-1:0] databus_addr,
-    input [DATA_W-1:0]     databus_rdata,
-    output [DATA_W-1:0]    databus_wdata,
-    output [DATA_W/8-1:0]  databus_wstrb,
+   // Databus interface
+   input                  databus_ready,
+   output                 databus_valid,
+   output[`IO_ADDR_W-1:0] databus_addr,
+   input [DATA_W-1:0]     databus_rdata,
+   output [DATA_W-1:0]    databus_wdata,
+   output [DATA_W/8-1:0]  databus_wstrb,
+   output [7:0]           databus_len,
+   input                  databus_last,
 
-    // input / output data
-    input [DATA_W-1:0]     in0,
-    output [DATA_W-1:0]    out0,
+   // input / output data
+   input [DATA_W-1:0]     in0,
 
-    // configurations
+   // configurations
    input [`IO_ADDR_W-1:0]  ext_addr,
    input [`MEM_ADDR_W-1:0] int_addr,
    input [`IO_SIZE_W-1:0]  size,
@@ -36,6 +37,7 @@ module vwrite #(
    input [`PERIOD_W-1:0]   dutyA,
    input [`MEM_ADDR_W-1:0] shiftA,
    input [`MEM_ADDR_W-1:0] incrA,
+   input [7:0]             length,
    input                   pingPong,
 
    input [`MEM_ADDR_W-1:0] iterB,
@@ -44,7 +46,7 @@ module vwrite #(
    input [`MEM_ADDR_W-1:0] startB,
    input [`MEM_ADDR_W-1:0] shiftB,
    input [`MEM_ADDR_W-1:0] incrB,
-   input [32-1:0]          delay0, // delayB
+   input [31:0]            delay0, // delayB
    input                   reverseB,
    input                   extB,
    input [`MEM_ADDR_W-1:0] iter2B,
@@ -53,8 +55,31 @@ module vwrite #(
    input [`MEM_ADDR_W-1:0] incr2B
    );
 
-   wire doneA,doneB;
+   assign databus_addr = ext_addr;
+   assign databus_wstrb = 4'b1111;
+   assign databus_len = length;
+
+   wire gen_done;
+   reg doneA;
+   reg doneB;
+   wire doneB_int;
    assign done = doneA & doneB;
+
+   always @(posedge clk,posedge rst)
+   begin
+      if(rst) begin
+         doneA <= 1'b0;
+         doneB <= 1'b0;
+      end else if(run) begin
+         doneA <= 1'b0;
+         doneB <= 1'b0;
+      end else  begin
+         if(databus_valid && databus_ready && databus_last)
+            doneA <= 1'b1;
+         if(doneB_int)
+            doneB <= 1'b1;
+      end
+   end
 
    function [`MEM_ADDR_W-1:0] reverseBits;
       input [`MEM_ADDR_W-1:0]   word;
@@ -88,46 +113,29 @@ module vwrite #(
 
    wire [DATA_W-1:0]      data_to_wrB = in0;
 
-   //address generators
-   ext_addrgen #(
-                 .DATA_W(DATA_W)
-                 )
-   addrgenA (
-            .clk(clk),
-            .rst(rst),
+   wire gen_valid,gen_ready;
+   wire [`MEM_ADDR_W-1:0] gen_addr;
 
-            // Control
-            .run(run),
-            .done(doneA),
+   MyAddressGen addrgenA(
+      .clk(clk),
+      .rst(rst),
+      .run(run),
 
-            // Configuration
-            .ext_addr(ext_addr),
-            .int_addr(int_addr),
-            .size(size),
-            .direction(direction),
-            .iterations(iterA),
-            .period(perA),
-            .duty(dutyA),
-            .start(startA),
-            .shift(shiftA),
-            .incr(incrA),
-            .delay(delayA),
+      //configurations 
+      .iterations(iterA),
+      .period(perA),
+      .duty(dutyA),
+      .delay(delayA),
+      .start(startA),
+      .shift(shiftA),
+      .incr(incrA),
 
-            // Databus interface
-            .databus_ready(databus_ready),
-            .databus_valid(databus_valid),
-            .databus_addr(databus_addr),
-            .databus_rdata(databus_rdata),
-            .databus_wdata(databus_wdata),
-            .databus_wstrb(databus_wstrb),
-
-            // internal memory interface
-            .req(req),
-            .rnw(rnw),
-            .addr(addrA_int),
-            .data_out(data_out),
-            .data_in(out0)
-           );
+      //outputs 
+      .valid(gen_valid),
+      .ready(gen_ready),
+      .addr(gen_addr),
+      .done(gen_done)
+      );
 
     xaddrgen2 addrgen2B (
                        .clk(clk),
@@ -141,12 +149,12 @@ module vwrite #(
                        .incr(incrB),
                        .delay(delay0[9:0]),
                        .iterations2(iter2B),
-                         .period2(per2B),
-                         .shift2(shift2B),
-                         .incr2(incr2B),
+                       .period2(per2B),
+                       .shift2(shift2B),
+                       .incr2(incr2B),
                        .addr(addrB_int),
                        .mem_en(enB),
-                       .done(doneB)
+                       .done(doneB_int)
                        );
 
    assign addrA = addrA_int2;
@@ -155,6 +163,32 @@ module vwrite #(
    assign addrA_int2 = addrA_int;
    assign addrB_int2 = reverseB? reverseBits(addrB_int) : addrB_int;
    
+   wire read_en;
+   wire [`MEM_ADDR_W-1:0] read_addr;
+   wire [DATA_W-1:0] read_data;
+
+   MemoryReader #(.ADDR_W(`MEM_ADDR_W))
+   reader(
+      // Slave
+      .s_valid(gen_valid),
+      .s_ready(gen_ready),
+      .s_addr(gen_addr),
+
+      // Master
+      .m_valid(databus_valid),
+      .m_ready(databus_ready),
+      .m_addr(),
+      .m_data(databus_wdata),
+
+      // Connect to memory
+      .mem_enable(read_en),
+      .mem_addr(read_addr),
+      .mem_data(read_data),
+
+      .clk(clk),
+      .rst(rst)
+   );
+
    iob_2p_ram #(
                 .DATA_W(DATA_W),
                 .ADDR_W(`MEM_ADDR_W)
@@ -163,9 +197,9 @@ module vwrite #(
         .clk(clk),
 
         // Reading port
-        .r_en(enA),
-        .r_addr(addrA),
-        .r_data(out0),
+        .r_en(read_en),
+        .r_addr(read_addr),
+        .r_data(read_data),
 
         // Writing port
         .w_en(enB & wrB),
@@ -174,3 +208,4 @@ module vwrite #(
         );
 
 endmodule
+

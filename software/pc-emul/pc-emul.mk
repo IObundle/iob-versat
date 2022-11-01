@@ -1,6 +1,10 @@
 #versat common parameters
 include $(VERSAT_DIR)/software/software.mk
 
+include $(VERSAT_DIR)/sharedHardware.mk
+
+VERSAT_TEMPLATE_DIR := $(VERSAT_DIR)/software/templates
+
 BUILD_DIR=./build
 #pc sources
 HDR+=$(wildcard $(VERSAT_PC_EMUL)/*.hpp)
@@ -13,17 +17,29 @@ DEFINE+= -DPC
 CPP_FILES = $(wildcard $(VERSAT_PC_EMUL)/*.cpp)
 CPP_OBJ = $(patsubst $(VERSAT_PC_EMUL)/%.cpp,$(BUILD_DIR)/%.o,$(CPP_FILES))
 
+CPP_FILES += $(VERSAT_DIR)/software/utilsCommon.cpp
+CPP_OBJ += $(BUILD_DIR)/utilsCommon.o
+
 #Units to verilate
-VERILATE_UNIT := xadd xreg xmem xmuladd vread vwrite pipeline_register xmux2
+VERILATE_UNIT := Reg Mem Muladd VRead VWrite PipelineRegister Mux2 Merge Const Buffer FixedBuffer SwapEndian LookupTable Mul
 UNIT_VERILOG := $(foreach unit,$(VERILATE_UNIT),$(VERSAT_DIR)/hardware/src/$(unit).v)
 
 UNIT_HDR+=$(foreach unit,$(VERILATE_UNIT),$(BUILD_DIR)/V$(unit).h)
 
-TYPE_INFO_HDR = $(VERSAT_PC_EMUL)/versat.hpp $(VERSAT_SW_DIR)/utils.hpp $(VERSAT_PC_EMUL)/verilogParser.hpp $(VERSAT_PC_EMUL)/templateEngine.hpp
+TYPE_INFO_HDR += $(VERSAT_PC_EMUL)/versat.hpp
+TYPE_INFO_HDR += $(VERSAT_PC_EMUL)/versatPrivate.hpp
+TYPE_INFO_HDR += $(VERSAT_SW_DIR)/utils.hpp
+TYPE_INFO_HDR += $(VERSAT_PC_EMUL)/verilogParser.hpp
+TYPE_INFO_HDR += $(VERSAT_PC_EMUL)/templateEngine.hpp
+TYPE_INFO_HDR += $(VERSAT_PC_EMUL)/memory.hpp
+TYPE_INFO_HDR += $(VERSAT_PC_EMUL)/merge.hpp
+TYPE_INFO_HDR += $(VERSAT_PC_EMUL)/codeGeneration.hpp
 
 TOOL_COMMON_SRC += $(VERSAT_DIR)/software/pc-emul/parser.cpp
 TOOL_COMMON_SRC += $(VERSAT_DIR)/software/pc-emul/utils.cpp
+TOOL_COMMON_SRC += $(VERSAT_DIR)/software/utilsCommon.cpp
 TOOL_COMMON_SRC += $(VERSAT_DIR)/software/pc-emul/memory.cpp
+TOOL_COMMON_SRC += $(VERSAT_DIR)/software/pc-emul/logger.cpp
 TOOL_SRC += $(TOOL_COMMON_SRC)
 TOOL_SRC += $(VERSAT_DIR)/software/pc-emul/templateEngine.cpp
 TOOL_SRC += $(VERSAT_DIR)/software/pc-emul/type.cpp
@@ -48,19 +64,22 @@ $(BUILD_DIR)/verilated_vcd_c.o:
 	mv *.d $(BUILD_DIR)/;
 
 $(BUILD_DIR)/V%.h: $(VERSAT_HW_DIR)/src/%.v
-	verilator --trace -CFLAGS "$(VERILATE_FLAGS)" -I$(VERSAT_HW_DIR)/src -I$(VERSAT_HW_DIR)/include -I$(VERSAT_DIR)/submodules/MEM/ram/2p_ram -I$(VERSAT_DIR)/submodules/MEM/ram/tdp_ram -cc -Mdir $(BUILD_DIR) $<;
+	verilator --trace -CFLAGS "$(VERILATE_FLAGS)" -I$(VERSAT_HW_DIR)/src -I$(VERSAT_HW_DIR)/include $(V_INCLUDE) -cc -Mdir $(BUILD_DIR) $<;
 	cd $(BUILD_DIR) && make -f V$*.mk;
 
 $(BUILD_DIR)/typeInfo.inc: $(BUILD_DIR)/structParser.out $(TYPE_INFO_HDR)
 	mkdir -p $(BUILD_DIR)
 	$(BUILD_DIR)/structParser.out $(BUILD_DIR)/typeInfo.inc $(TYPE_INFO_HDR)
 
-$(BUILD_DIR)/verilogWrapper.inc: $(BUILD_DIR)/verilogParser.out  $(VERSAT_SW_DIR)/pc-emul/verilogParser.cpp
-	#$(BUILD_DIR)/verilogParser.out $(BUILD_DIR)/verilogWrapper.inc -I $(VERSAT_DIR)/submodules/INTERCON/hardware/include/ -I $(VERSAT_DIR)/hardware/include/ -I $(VERSAT_DIR)/hardware/src/ $(UNIT_VERILOG)
+$(BUILD_DIR)/verilogWrapper.inc: $(BUILD_DIR)/verilogParser.out  $(VERSAT_SW_DIR)/pc-emul/verilogParser.cpp $(VERSAT_TEMPLATE_DIR)/unit_verilog_data.tpl
+	$(BUILD_DIR)/verilogParser.out $(BUILD_DIR)/verilogWrapper.inc -I $(VERSAT_DIR)/submodules/INTERCON/hardware/include/ -I $(VERSAT_DIR)/hardware/include/ -I $(VERSAT_DIR)/hardware/src/ $(UNIT_VERILOG)
 
-$(BUILD_DIR)/%.o: $(VERSAT_PC_EMUL)/%.cpp $(HDR) $(UNIT_HDR) $(VERSAT_HDR) $(CPP_FILES) $(BUILD_DIR)/typeInfo.inc #$(BUILD_DIR)/verilogWrapper.inc
+$(BUILD_DIR)/%.o: $(VERSAT_DIR)/software/%.cpp $(HDR) $(UNIT_HDR) $(VERSAT_HDR) $(BUILD_DIR)/typeInfo.inc $(BUILD_DIR)/verilogWrapper.inc
 	mkdir -p $(BUILD_DIR)
-	$(info $@)
+	g++ -std=c++11 -DPC -c -o $@ $(GLOBAL_CFLAGS) $< -I $(VERSAT_SW_DIR) -I $(VERSAT_PC_EMUL) -I $(VERILATOR_INCLUDE) -I $(BUILD_DIR)/
+
+$(BUILD_DIR)/%.o: $(VERSAT_PC_EMUL)/%.cpp $(HDR) $(UNIT_HDR) $(VERSAT_HDR) $(BUILD_DIR)/typeInfo.inc $(BUILD_DIR)/verilogWrapper.inc
+	mkdir -p $(BUILD_DIR)
 	g++ -std=c++11 -DPC -c -o $@ $(GLOBAL_CFLAGS) $< -I $(VERSAT_SW_DIR) -I $(VERSAT_PC_EMUL) -I $(VERILATOR_INCLUDE) -I $(BUILD_DIR)/
 
 $(BUILD_DIR)/structParser.out: $(VERSAT_SW_DIR)/pc-emul/structParser.cpp $(TOOL_COMMON_SRC)

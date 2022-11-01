@@ -6,15 +6,18 @@
 #include <cstdlib>
 
 #include "utils.hpp"
+#include "logger.hpp"
 
 typedef char Byte;
 
 inline size_t Kilobyte(int val){return val * 1024;};
 inline size_t Megabyte(int val){return Kilobyte(val) * 1024;};
+inline size_t Gigabyte(int val){return Megabyte(val) * 1024;};
 
 int GetPageSize();
 void* AllocatePages(int pages);
 void DeallocatePages(void* ptr,int pages);
+void CheckMemoryStats();
 
 template<typename T>
 struct Allocation{
@@ -30,7 +33,44 @@ template<typename T>
 bool ZeroOutRealloc(Allocation<T>* alloc,int newSize); // Returns true if it actually performed reallocation
 
 template<typename T>
+void Alloc(Allocation<T>* alloc,int newSize);
+
+template<typename T>
 void Free(Allocation<T>* alloc);
+
+template<typename T>
+class PushPtr{
+public:
+   T* ptr;
+   int maximumTimes;
+   int timesPushed;
+
+   void Init(T* ptr,int maximum){
+      this->ptr = ptr;
+      this->maximumTimes = maximum;
+      this->timesPushed = 0;
+   }
+
+   void Init(Allocation<T> alloc){
+      this->ptr = alloc.ptr;
+      this->maximumTimes = alloc.size;
+      this->timesPushed = 0;
+   }
+
+   T* Push(int times){
+      T* res = &ptr[timesPushed];
+      timesPushed += times;
+
+      Assert(timesPushed <= maximumTimes);
+
+      return res;
+   }
+
+   bool Empty(){
+      bool res = (maximumTimes == timesPushed);
+      return res;
+   }
+};
 
 struct Arena{
    Byte* mem;
@@ -40,11 +80,15 @@ struct Arena{
 };
 
 void InitArena(Arena* arena,size_t size);
+Arena SubArena(Arena* arena,size_t size);
+void Free(Arena* arena);
 Byte* MarkArena(Arena* arena);
 void PopMark(Arena* arena,Byte* mark);
 Byte* PushBytes(Arena* arena, int size);
 SizedString PushFile(Arena* arena,const char* filepath);
 SizedString PushString(Arena* arena,SizedString ss);
+SizedString PushString(Arena* arena,const char* format,...) __attribute__ ((format (printf, 2, 3)));
+SizedString vPushString(Arena* arena,const char* format,va_list args);
 #define PushStruct(ARENA,STRUCT) (STRUCT*) PushBytes(ARENA,sizeof(STRUCT))
 #define PushArray(ARENA,SIZE,STRUCT) (STRUCT*) PushBytes(ARENA,sizeof(STRUCT) * SIZE)
 
@@ -69,11 +113,31 @@ struct PageInfo{
    Byte* bitmap;
 };
 
+class GenericPoolIterator{
+   PoolInfo poolInfo;
+   PageInfo pageInfo;
+   int fullIndex;
+   int bit;
+   int index;
+   int numberElements;
+   int elemSize;
+   Byte* page;
+
+public:
+
+   GenericPoolIterator(Byte* page,int numberElements,int elemSize);
+
+   bool HasNext();
+   GenericPoolIterator& operator++();
+   Byte* operator*();
+};
+
 template<typename T> class Pool;
 
 template<typename T>
 class PoolIterator{
    Pool<T>* pool;
+   PageInfo pageInfo;
    int fullIndex;
    int bit;
    int index;
@@ -84,12 +148,21 @@ class PoolIterator{
 
 public:
 
-   PoolIterator(Pool<T>* pool);
+   PoolIterator();
 
+   void SetPool(Pool<T>* pool);
+
+   void Advance();
+   bool IsValid();
+
+   bool HasNext(){return this->fullIndex < pool->endSize;};
    bool operator!=(const PoolIterator& iter);
    PoolIterator& operator++();
    T* operator*();
 };
+
+PoolInfo CalculatePoolInfo(int elemSize);
+PageInfo GetPageInfo(PoolInfo poolInfo,Byte* page);
 
 // Pool
 template<typename T>
@@ -101,58 +174,67 @@ class Pool{
 
    friend class PoolIterator<T>;
 
-private:
-
-   PoolInfo CalculatePoolInfo();
-   PageInfo GetPageInfo(PoolInfo poolInfo,Byte* page);
-
 public:
 
+#if 0
    Pool();
    ~Pool();
+#endif
 
    T* Alloc();
    void Remove(T* elem);
 
    T* Get(int index);
+   Byte* GetMemoryPtr();
 
-   void Clear();
+   void Clear(bool clearMemory = false);
 
    int Size(){return allocated;};
 
    PoolIterator<T> begin();
    PoolIterator<T> end();
 
+   PoolIterator<T> beginNonValid();
 };
 
 // Impl
 template<typename T>
 bool ZeroOutAlloc(Allocation<T>* alloc,int newSize){
-   T* stored = alloc->ptr;
-
-   if(newSize > alloc->reserved){
-      alloc->ptr = (T*) calloc(newSize,sizeof(T));
-
-      memcpy(alloc->ptr,stored,alloc->size * sizeof(T));
-
-      alloc->reserved = newSize;
+   if(newSize <= 0){
+      return false;
    }
 
+   bool didRealloc = false;
+   if(newSize > alloc->reserved){
+      T* tmp = (T*) realloc(alloc->ptr,newSize * sizeof(T));
+
+      Assert(tmp);
+
+      alloc->ptr = tmp;
+      alloc->reserved = newSize;
+      didRealloc = true;
+   }
+
+   alloc->size = newSize;
    memset(alloc->ptr,0,alloc->reserved * sizeof(T));
-   bool res = (stored != alloc->ptr);
-   return res;
+   return didRealloc;
 }
 
 template<typename T>
 bool ZeroOutRealloc(Allocation<T>* alloc,int newSize){
-   T* stored = alloc->ptr;
+   if(newSize <= 0){
+      return false;
+   }
 
+   bool didRealloc = false;
    if(newSize > alloc->reserved){
-      alloc->ptr = (T*) calloc(newSize,sizeof(T));
+      T* tmp = (T*) realloc(alloc->ptr,newSize * sizeof(T));
 
-      memcpy(alloc->ptr,stored,alloc->size * sizeof(T));
+      Assert(tmp);
 
+      alloc->ptr = tmp;
       alloc->reserved = newSize;
+      didRealloc = true;
    }
 
    // Clear out free (allocated now or before) space
@@ -161,41 +243,58 @@ bool ZeroOutRealloc(Allocation<T>* alloc,int newSize){
       memset(&view[alloc->size],0,(alloc->reserved - alloc->size) * sizeof(T));
    }
 
-   bool res = (stored != alloc->ptr);
-   return res;
+   alloc->size = newSize;
+   return didRealloc;
 }
 
 template<typename T>
-void Free(Allocation<T>* info){
-   free(info->ptr);
-   info->ptr = 0;
+void Alloc(Allocation<T>* alloc,int newSize){
+   if(alloc->ptr != nullptr){
+      LogOnce(LogModule::MEMORY,LogLevel::WARN,"Allocating memory without previously freeing");
+   }
+
+   alloc->ptr = (T*) malloc(sizeof(T) * newSize);
+   alloc->reserved = newSize;
+   alloc->size = newSize;
 }
 
 template<typename T>
-PoolIterator<T>::PoolIterator(Pool<T>* pool)
-:pool(pool)
+void Free(Allocation<T>* alloc){
+   free(alloc->ptr);
+   alloc->ptr = nullptr;
+   alloc->reserved = 0;
+   alloc->size = 0;
+}
+
+template<typename T>
+PoolIterator<T>::PoolIterator()
+:pool(nullptr)
 ,fullIndex(0)
 ,bit(7)
 ,index(0)
 ,lastVal(nullptr)
 {
+}
+
+template<typename T>
+void PoolIterator<T>::SetPool(Pool<T>* pool){
+   this->pool = pool;
+
    page = pool->mem;
 
    if(page && pool->allocated){
-      PoolInfo info = pool->info;
-      PageInfo pageInfo = pool->GetPageInfo(info,page);
+      pageInfo = GetPageInfo(pool->info,page);
 
-      if(!(pageInfo.bitmap[index] & (1 << bit))){
-         ++(*this);
-      }
+//      if(!IsValid()){
+//         ++(*this);
+//      }
    }
 }
 
 template<typename T>
 bool PoolIterator<T>::operator!=(const PoolIterator<T>& iter){
-   if(this->pool != iter.pool){
-      return true; // Should probably be a error
-   }
+   Assert(this->pool == iter.pool);
+
    if(this->fullIndex < pool->endSize){ // Kinda of a hack, for now
       return true;
    }
@@ -204,29 +303,39 @@ bool PoolIterator<T>::operator!=(const PoolIterator<T>& iter){
 }
 
 template<typename T>
+void PoolIterator<T>::Advance(){
+   PoolInfo& info = pool->info;
+
+   fullIndex += 1;
+   bit -= 1;
+   if(bit < 0){
+      index += 1;
+      bit = 7;
+   }
+
+   if(index * 8 + (7 - bit) >= info.unitsPerPage){
+      index = 0;
+      bit = 7;
+      page = pageInfo.header->nextPage;
+      if(page != nullptr){
+         pageInfo = GetPageInfo(info,page);
+      }
+   }
+}
+
+template<typename T>
+bool PoolIterator<T>::IsValid(){
+   bool res = pageInfo.bitmap[index] & (1 << bit);
+
+   return res;
+}
+
+template<typename T>
 PoolIterator<T>& PoolIterator<T>::operator++(){
-   PoolInfo info = pool->info;
-   PageInfo pageInfo = pool->GetPageInfo(info,page);
-
    while(fullIndex < pool->endSize){
-      fullIndex += 1;
-      bit -= 1;
-      if(bit < 0){
-         index += 1;
-         bit = 7;
-      }
+      Advance();
 
-      if(index * 8 + (7 - bit) >= info.unitsPerPage){
-         index = 0;
-         bit = 7;
-         page = pageInfo.header->nextPage;
-         if(page == nullptr){
-            break;
-         }
-         pageInfo = pool->GetPageInfo(info,page);
-      }
-
-      if(pageInfo.bitmap[index] & (1 << bit)){
+      if(IsValid()){
          break;
       }
    }
@@ -236,28 +345,24 @@ PoolIterator<T>& PoolIterator<T>::operator++(){
 
 template<typename T>
 T* PoolIterator<T>::operator*(){
-   if(page == nullptr){
-      return nullptr;
-   }
+   Assert(page != nullptr);
 
    T* view = (T*) page;
    T* val = &view[index * 8 + (7 - bit)];
 
-   PoolInfo info = pool->info;
-   PageInfo pageInfo = pool->GetPageInfo(info,page);
-
-   Assert(pageInfo.bitmap[index] & (1 << bit));
+   //Assert(pageInfo.bitmap[index] & (1 << bit));
 
    return val;
 }
 
+#if 0
 template<typename T>
 Pool<T>::Pool()
 :mem(nullptr)
 ,allocated(0)
 ,endSize(0)
 {
-   info = CalculatePoolInfo();
+
 }
 
 template<typename T>
@@ -273,28 +378,7 @@ Pool<T>::~Pool(){
       ptr = nextPage;
    }
 }
-
-template<typename T>
-PoolInfo Pool<T>::CalculatePoolInfo(){
-   PoolInfo info = {};
-
-   info.unitsPerFullPage = (GetPageSize() - sizeof(PoolHeader)) / sizeof(T);
-   info.bitmapSize = RoundUpDiv(info.unitsPerFullPage,8);
-   info.unitsPerPage = (GetPageSize() - sizeof(PoolHeader) - info.bitmapSize) / sizeof(T);
-   info.pageGranuality = 1;
-
-   return info;
-}
-
-template<typename T>
-PageInfo Pool<T>::GetPageInfo(PoolInfo poolInfo,Byte* page){
-   PageInfo info = {};
-
-   info.header = (PoolHeader*) (page + poolInfo.pageGranuality * GetPageSize() - sizeof(PoolHeader));
-   info.bitmap = (Byte*) info.header - poolInfo.bitmapSize;
-
-   return info;
-}
+#endif
 
 template<typename T>
 T* Pool<T>::Alloc(){
@@ -302,6 +386,7 @@ T* Pool<T>::Alloc(){
 
    if(!mem){
       mem = (Byte*) AllocatePages(1);
+      info = CalculatePoolInfo(sizeof(T));
    }
 
    int fullIndex = 0;
@@ -401,15 +486,32 @@ void Pool<T>::Remove(T* elem){
 }
 
 template<typename T>
-void Pool<T>::Clear(){
-   Byte* page = mem;
-   while(page){
-      PageInfo pageInfo = GetPageInfo(info,page);
+Byte* Pool<T>::GetMemoryPtr(){
+   return mem;
+}
 
-      memset(pageInfo.bitmap,0,info.bitmapSize);
-      pageInfo.header->allocatedUnits = 0;
+template<typename T>
+void Pool<T>::Clear(bool freeMemory){
+   if(freeMemory){
+      Byte* page = mem;
+      while(page){
+         PageInfo pageInfo = GetPageInfo(info,page);
+         Byte* next = pageInfo.header->nextPage;
 
-      page = pageInfo.header->nextPage;
+         DeallocatePages(page,1);
+         page = next;
+      }
+      mem = nullptr;
+   } else {
+      Byte* page = mem;
+      while(page){
+         PageInfo pageInfo = GetPageInfo(info,page);
+
+         memset(pageInfo.bitmap,0,info.bitmapSize);
+         pageInfo.header->allocatedUnits = 0;
+
+         page = pageInfo.header->nextPage;
+      }
    }
 
    endSize = 0;
@@ -422,16 +524,37 @@ PoolIterator<T> Pool<T>::begin(){
       return end();
    }
 
-   PoolIterator<T> iter(this);
+   PoolIterator<T> iter = {};
+
+   iter.SetPool(this);
+
+   if(!iter.IsValid()){
+      ++iter;
+   }
 
    return iter;
 }
 
 template<typename T>
 PoolIterator<T> Pool<T>::end(){
-   PoolIterator<T> iter(this);
+   PoolIterator<T> iter = {};
+
+   iter.SetPool(this);
 
    iter.fullIndex = endSize;
+
+   return iter;
+}
+
+template<typename T>
+PoolIterator<T> Pool<T>::beginNonValid(){
+   if(!mem || allocated == 0){
+      return end();
+   }
+
+   PoolIterator<T> iter = {};
+
+   iter.SetPool(this);
 
    return iter;
 }

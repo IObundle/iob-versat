@@ -48,7 +48,7 @@ static void DoIfStatement(Arena* output,Tokenizer* tok,std::vector<const char*>*
    } else if(CompareString(first,"`ifndef")){
       compareVal = false;
    } else {
-      Assert(false);
+      UNHANDLED_ERROR;
    }
 
    bool exists = (macros.find(macroName) != macros.end());
@@ -101,7 +101,7 @@ void PreprocessVerilogFile_(Arena* output, SizedString fileContent,std::vector<c
          tok->AssertNextToken("\"");
 
          // Open include file
-         std::string filename(fileName.str,fileName.size);
+         std::string filename(UNPACK_SS_REVERSE(fileName));
          FILE* file = nullptr;
          std::string filepath;
          for(const char* str : *includeFilepaths){
@@ -115,7 +115,7 @@ void PreprocessVerilogFile_(Arena* output, SizedString fileContent,std::vector<c
          }
 
          if(!file){
-            printf("Couldn't find file: %.*s\n",fileName.size,fileName.str);
+            printf("Couldn't find file: %.*s\n",UNPACK_SS(fileName));
             printf("Looked on the following folders:\n");
 
             printf("  %s\n",GetCurrentDirectory());
@@ -123,7 +123,7 @@ void PreprocessVerilogFile_(Arena* output, SizedString fileContent,std::vector<c
                printf("  %s\n",str);
             }
 
-            DebugSignal();
+            DEBUG_BREAK;
             exit(0);
          }
 
@@ -199,11 +199,11 @@ void PreprocessVerilogFile_(Arena* output, SizedString fileContent,std::vector<c
       } else if(CompareToken(peek,"`ifdef") || CompareToken(peek,"`ifndef")){
          DoIfStatement(output,tok,includeFilepaths);
       } else if(CompareToken(peek,"`else")){
-         Assert(false);
+         NOT_POSSIBLE;
       } else if(CompareToken(peek,"`endif")){
-         Assert(false);
+         NOT_POSSIBLE;
       } else if(CompareToken(peek,"`elsif")){
-         Assert(false);
+         NOT_POSSIBLE;
       } else {
          tok->AdvancePeek(peek);
 
@@ -226,7 +226,7 @@ SizedString PreprocessVerilogFile(Arena* output, SizedString fileContent,std::ve
    PreprocessVerilogFile_(output,fileContent,includeFilepaths);
    PopMark(tempArena,tempMark);
 
-   PushString(output,MAKE_SIZED_STRING("\0"));
+   PushString(output,MakeSizedString("\0"));
    res.size = MarkArena(output) - mark;
 
    #if 0
@@ -311,7 +311,7 @@ static Value Eval(Expression* expr,ValueMap& map){
          return res;
       }break;
       default:{
-         Assert(false);
+         NOT_IMPLEMENTED;
       }break;
       }
    }break;
@@ -323,11 +323,11 @@ static Value Eval(Expression* expr,ValueMap& map){
       return expr->val;
    }break;
    default:{
-      Assert(false);
+      NOT_POSSIBLE;
    }break;
    }
 
-   Assert(false);
+   NOT_POSSIBLE;
    return MakeValue();
 }
 
@@ -427,6 +427,11 @@ static Module ParseModule(Tokenizer* tok){
          while(1){
             Token attributeName = tok->NextToken();
 
+            if(!CompareString(attributeName,"versat_latency")){
+               printf("ERROR: Do not know attribute named: %.*s\n",UNPACK_SS(attributeName));
+               exit(-1);
+            }
+
             peek = tok->PeekToken();
             if(CompareString(peek,"=")){
                tok->AdvancePeek(peek);
@@ -457,7 +462,7 @@ static Module ParseModule(Tokenizer* tok){
       } else if(CompareString(portType,"inout")){
          port.type = PortDeclaration::INOUT;
       } else {
-         Assert(false);
+         UNHANDLED_ERROR;
       }
 
       peek = tok->PeekToken();
@@ -511,69 +516,37 @@ std::vector<Module> ParseVerilogFile(SizedString fileContent, std::vector<const 
 
    std::vector<Module> modules;
    Byte* mark = MarkArena(tempArena);
+
+   bool isSource = false;
    while(!tok->Done()){
       Token peek = tok->PeekToken();
+
+      if(CompareToken(peek,"(*")){
+         tok->AdvancePeek(peek);
+
+         Token attribute = tok->NextToken();
+         if(CompareToken(attribute,"source")){
+            isSource = true;
+         } else {
+            NOT_IMPLEMENTED; // Unknown attribute, error for now
+         }
+
+         tok->AssertNextToken("*)");
+
+         continue;
+      }
 
       if(CompareToken(peek,"module")){
          Module module = ParseModule(tok);
 
-         #if 0
-         printf("%.*s\n",module.name.size,module.name.str);
-
-         for(auto ptr : module.parameters){
-            printf("%.*s %d\n",ptr.first.size,ptr.first.str,ptr.second);
-         }
-
-         for(PortDeclaration& ptr : module.ports){
-            for(auto ptr2 : ptr.attributes){
-               printf("(* %.*s = %d *)",ptr2.first.size,ptr2.first.str,ptr2.second);
-            }
-
-            printf("%d [%d:%d] %.*s\n",(int) ptr.type,ptr.range.high,ptr.range.low,ptr.name.size,ptr.name.str);
-         }
-         #endif
-
-         #if 0
-         int maxInputs = -1;
-         int maxOutputs = -1;
-         bool hasIO = false;
-
-         for(PortDeclaration& ptr : module.ports){
-            Tokenizer inside(ptr.name,"",{"in","out","databus"});
-
-            Token tok = inside.NextToken();
-
-            if(CompareString(tok,"in")){
-               Token number = inside.NextToken();
-               int val = ParseInt(number);
-               maxInputs = maxi(maxInputs,val);
-               continue;
-            }
-
-            if(CompareString(tok,"out")){
-               Token number = inside.NextToken();
-               int val = ParseInt(number);
-               maxOutputs = maxi(maxOutputs,val);
-               continue;
-            }
-
-            if(CompareString(tok,"databus")){
-               hasIO = true;
-               continue;
-            }
-         }
-
-         TemplateSetNumber("maxInputs",maxInputs);
-         TemplateSetNumber("maxOutputs",maxOutputs);
-         TemplateSetBool("hasIO",hasIO);
-         TemplateSetCustom("module",&module,"Module");
-         ProcessTemplate(output,"../../submodules/VERSAT/software/templates/unit_verilog_data.tpl",arena);
-         #endif
-
+         module.isSource = isSource;
          modules.push_back(module);
-      } else {
-         tok->AdvancePeek(peek);
+
+         isSource = false;
+         break; // For now, only parse the first module found
       }
+
+      tok->AdvancePeek(peek);
    }
    PopMark(tempArena,mark);
 
@@ -635,54 +608,107 @@ int main(int argc,const char* argv[]){
       for(Module& module : modules){
          ModuleInfo info = {};
 
-         int* inputDelays = PushArray(&permanent,100,int);
-         int* outputLatencies = PushArray(&permanent,100,int);;
+         info.inputDelays = PushArray(&permanent,100,int);
+         info.outputLatencies = PushArray(&permanent,100,int);
+         info.configs = PushArray(&permanent,100,Wire);
+         info.states = PushArray(&permanent,100,Wire);
+
+         info.name = module.name;
+         info.isSource = module.isSource;
+
+         #if 0
+         int nConfigs = 0;
+         int nStates = 0;
          int nInputs = 0;
          int nOutputs = 0;
          int nDelays = 0;
-         int memoryMappedWords = 0;
+         int memoryMappedBits = 0;
          bool doesIO = false;
          bool memoryMap = false;
+         bool hasDone = false;
+         bool hasClk = false;
+         bool hasReset = false;
+         bool hasRun = false;
+         bool hasRunning = false;
+         #endif
          for(PortDeclaration decl : module.ports){
             Tokenizer port(decl.name,"",{"in","out","delay","done","rst","clk","run","databus"});
 
             if(CheckFormat("in%d",decl.name)){
                port.AssertNextToken("in");
                int input = ParseInt(port.NextToken());
-               int delay = decl.attributes[MakeSizedString("latency")].number;
+               int delay = decl.attributes[MakeSizedString("versat_latency")].number;
 
-               nInputs = maxi(nInputs,input + 1);
-               inputDelays[input] = delay;
+               info.nInputs = maxi(info.nInputs,input + 1);
+               info.inputDelays[input] = delay;
             } else if(CheckFormat("out%d",decl.name)){
                port.AssertNextToken("out");
                int output = ParseInt(port.NextToken());
-               int latency = decl.attributes[MakeSizedString("latency")].number;
+               int latency = decl.attributes[MakeSizedString("versat_latency")].number;
 
-               nOutputs = maxi(nOutputs,output + 1);
-               outputLatencies[output] = latency;
+               info.nOutputs = maxi(info.nOutputs,output + 1);
+               info.outputLatencies[output] = latency;
             } else if(CheckFormat("delay%d",decl.name)){
                port.AssertNextToken("delay");
                int delay = ParseInt(port.NextToken());
 
-               nDelays = maxi(nDelays,delay + 1);
-            } else if(CheckFormat("databus_valid",decl.name)){
-               doesIO = true;
-            } else if(CheckFormat("addr",decl.name)){
-               memoryMap = true;
+               info.nDelays = maxi(info.nDelays,delay + 1);
+            } else if(  CheckFormat("databus_ready",decl.name)
+                     || CheckFormat("databus_valid",decl.name)
+                     || CheckFormat("databus_addr",decl.name)
+                     || CheckFormat("databus_rdata",decl.name)
+                     || CheckFormat("databus_wdata",decl.name)
+                     || CheckFormat("databus_wstrb",decl.name)
+                     || CheckFormat("databus_len",decl.name)
+                     || CheckFormat("databus_last",decl.name)){
+               info.doesIO = true;
+            } else if(  CheckFormat("ready",decl.name)
+                     || CheckFormat("valid",decl.name)
+                     || CheckFormat("addr",decl.name)
+                     || CheckFormat("rdata",decl.name)
+                     || CheckFormat("wdata",decl.name)
+                     || CheckFormat("wstrb",decl.name)){
+               info.memoryMapped = true;
 
-               int range = (decl.range.high - decl.range.low);
-
-               memoryMappedWords = range;
+               if(CheckFormat("addr",decl.name)){
+                  info.memoryMappedBits = (decl.range.high - decl.range.low + 1);
+               }
+            } else if(CheckFormat("clk",decl.name)){
+               info.hasClk = true;
+            } else if(CheckFormat("rst",decl.name)){
+               info.hasReset = true;
+            } else if(CheckFormat("run",decl.name)){
+               info.hasRun = true;
+            } else if(CheckFormat("running",decl.name)){
+               info.hasRunning = true;
+            } else if(CheckFormat("done",decl.name)){
+               info.hasDone = true;
+            } else if(decl.type == PortDeclaration::INPUT){ // Config
+               info.configs[info.nConfigs].bitsize = decl.range.high - decl.range.low + 1;
+               info.configs[info.nConfigs++].name = decl.name;
+            } else if(decl.type == PortDeclaration::OUTPUT){ // State
+               info.states[info.nStates].bitsize = decl.range.high - decl.range.low + 1;
+               info.states[info.nStates++].name = decl.name;
+            } else {
+               NOT_IMPLEMENTED;
             }
          }
 
-         info.name = module.name;
+         #if 0
          info.doesIO = doesIO;
          info.memoryMapped = memoryMap;
          info.nInputs = nInputs;
          info.nOutputs = nOutputs;
          info.inputDelays = inputDelays;
          info.latencies = outputLatencies;
+         info.configs = configs;
+         info.nConfigs = nConfigs;
+         info.states = states;
+         info.nStates = nStates;
+         info.hasDone = hasDone;
+         info.nDelays = nDelays;
+         info.memoryMappedBits = memoryMappedBits;
+         #endif
 
          allModules.push_back(info);
       }

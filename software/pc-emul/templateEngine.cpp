@@ -9,6 +9,7 @@
 
 #include "utils.hpp"
 #include "type.hpp"
+#include "debug.hpp"
 
 void ParseAndEvaluate(SizedString content);
 
@@ -34,12 +35,86 @@ public:
 static std::map<SizedString,Value,CompareFunction> envTable;
 static FILE* output;
 static Arena* tempArena;
+static Arena* outputArena;
 static const char* filepath;
 
 static Expression* ParseExpression(Tokenizer* tok);
 
+static bool IsCommandBlockType(Command com){
+   static const char* notBlocks[] = {"set","end","inc","else","include","call","return"};
+
+   for(unsigned int i = 0; i < ARRAY_SIZE(notBlocks); i++){
+      if(CompareString(com.name,notBlocks[i])){
+         return false;
+      }
+   }
+
+   return true;
+}
+
+static Command ParseCommand(Tokenizer* tok){
+   Command com = {};
+
+   Token name = tok->NextToken();
+   StoreToken(name,com.name);
+
+   struct {const char* name;int nExpressions;} commands[] = {{"join",4},
+                                                            {"for",2},
+                                                            {"if",1},
+                                                            {"end",0},
+                                                            {"set",2},
+                                                            {"inc",1},
+                                                            {"else",0},
+                                                            {"debug",1},
+                                                            {"include",1},
+                                                            {"define",-1},
+                                                            {"call",-1},
+                                                            {"while",1},
+                                                            {"return",1}};
+
+   bool found = false;
+
+   for(unsigned int i = 0; i < ARRAY_SIZE(commands); i++){
+      auto command = commands[i];
+
+      if(CompareString(name,command.name)){
+         com.nExpressions = command.nExpressions;
+         found = true;
+         break;
+      }
+   }
+   Assert(found);
+
+   if(com.nExpressions == -1){
+      Token peek = tok->PeekUntilDelimiterExpression(MakeSizedString("{"),MakeSizedString("}"),1);
+
+      Tokenizer arguments(peek,"}",{"@{"});
+
+      com.nExpressions = 0;
+      while(!arguments.Done()){
+         Token token = arguments.NextToken();
+
+         if(CompareString(token,"@{")){
+            Token insidePeek = arguments.PeekUntilDelimiterExpression(MakeSizedString("@{"),MakeSizedString("}"),1);
+            arguments.AdvancePeek(token);
+            arguments.AssertNextToken("}");
+         }
+
+         com.nExpressions += 1;
+      }
+   }
+
+   com.expressions = PushArray(tempArena,com.nExpressions,Expression*);
+   for(int i = 0; i < com.nExpressions; i++){
+      com.expressions[i] = ParseExpression(tok);
+   }
+
+   return com;
+}
+
 // Crude parser for identifiers
 static Expression* ParseIdentifier(Expression* current,Tokenizer* tok){
+   void* start = tok->Mark();
    Token firstId = tok->NextToken();
 
    current->type = Expression::IDENTIFIER;
@@ -79,15 +154,17 @@ static Expression* ParseIdentifier(Expression* current,Tokenizer* tok){
       }
    }
 
+   current->text = tok->Point(start);
    return current;
 }
 
-static Expression* ParseAtom(Tokenizer* tok){
-   Expression* expr = PushStruct(tempArena,Expression);
+static Expression* ParseAtom(Tokenizer* tok,Arena* arena){
+   void* start = tok->Mark();
+
+   Expression* expr = PushStruct(arena,Expression);
+   expr->type = Expression::LITERAL;
 
    Token token = tok->PeekToken();
-
-   expr->type = Expression::LITERAL;
    if(token.str[0] >= '0' && token.str[0] <= '9'){
       tok->AdvancePeek(token);
       int num = 0;
@@ -97,40 +174,57 @@ static Expression* ParseAtom(Tokenizer* tok){
          num += token.str[i] - '0';
       }
 
-      expr->val.type = ValueType::NUMBER;
-      expr->val.number = num;
+      expr->val = MakeValue(num);
    } else if(token.str[0] == '\"'){
       tok->AdvancePeek(token);
       Token str = tok->NextFindUntil("\"");
       tok->AssertNextToken("\"");
 
-      expr->val.str = str;
-      expr->val.type = ValueType::STRING;
+      expr->val = MakeValue(str);
+   } else if(CompareString(token,"@{")){
+      tok->AdvancePeek(token);
+      expr = ParseExpression(tok);
+      tok->AssertNextToken("}");
+   } else if(CompareString(token,"#{")){
+      tok->AdvancePeek(token);
+      Command command = ParseCommand(tok);
+      Assert(!IsCommandBlockType(command));
+      tok->AssertNextToken("}");
+
+      expr->type = Expression::COMMAND;
+      expr->command = PushStruct(arena,Command);
+      *expr->command = command;
    } else {
       expr->type = Expression::IDENTIFIER;
       expr = ParseIdentifier(expr,tok);
    }
 
+   expr->text = tok->Point(start);
    return expr;
 }
 
 static Expression* ParseFactor(Tokenizer* tok){
+   void* start = tok->Mark();
+
    Token peek = tok->PeekToken();
 
+   Expression* expr = nullptr;
    if(CompareString(peek,"(")){
       tok->AdvancePeek(peek);
-      Expression* expr = ParseExpression(tok);
+      expr = ParseExpression(tok);
       tok->AssertNextToken(")");
-      return expr;
    } else {
-      Expression* expr = ParseAtom(tok);
-      return expr;
+      expr = ParseAtom(tok,tempArena);
    }
+
+   expr->text = tok->Point(start);
+   return expr;
 }
 
 static Expression* ParseExpression(Tokenizer* tok){
-   Token peek = tok->PeekToken();
+   void* start = tok->Mark();
 
+   Token peek = tok->PeekToken();
    if(CompareString(peek,"!")){
       tok->AdvancePeek(peek);
 
@@ -144,79 +238,20 @@ static Expression* ParseExpression(Tokenizer* tok){
       expr->size = 1;
       expr->expressions[0] = child;
 
+      expr->text = tok->Point(start);
       return expr;
    }
 
-   Expression* res = ParseOperationType(tok,{{"|>"},{"and","or","xor"},{">","<",">=","<=","=="},{"+","-"},{"*","/","&","**"}},ParseFactor,tempArena);
+   Expression* res = ParseOperationType(tok,{{"|>"},{"and","or","xor"},{">","<",">=","<=","==","!="},{"+","-"},{"*","/","&","**"}},ParseFactor,tempArena);
 
+   res->text = tok->Point(start);
    return res;
-}
-
-static bool IsCommandBlockType(Command com){
-   static const char* notBlocks[] = {"set","end","inc","else","include","call"};
-
-   for(unsigned int i = 0; i < ARRAY_SIZE(notBlocks); i++){
-      if(CompareString(com.name,notBlocks[i])){
-         return false;
-      }
-   }
-
-   return true;
-}
-
-static Command ParseCommand(Tokenizer* tok){
-   Command com = {};
-
-   Token name = tok->NextToken();
-   StoreToken(name,com.name);
-
-   struct {const char* name;int nExpressions;} commands[] = {{"join",4},
-                                                            {"for",2},
-                                                            {"if",1},
-                                                            {"end",0},
-                                                            {"set",2},
-                                                            {"inc",1},
-                                                            {"else",0},
-                                                            {"debug",1},
-                                                            {"include",1},
-                                                            {"define",-1},
-                                                            {"call",-1}};
-
-   bool found = false;
-
-   for(unsigned int i = 0; i < ARRAY_SIZE(commands); i++){
-      auto command = commands[i];
-
-      if(CompareString(name,command.name)){
-         com.nExpressions = command.nExpressions;
-         found = true;
-         break;
-      }
-   }
-   Assert(found);
-
-   if(com.nExpressions == -1){
-      Token peek = tok->PeekFindUntil("}");
-
-      Tokenizer arguments(peek,"",{});
-
-      com.nExpressions = 0;
-      while(!arguments.Done()){
-         arguments.NextToken();
-         com.nExpressions += 1;
-      }
-   }
-
-   com.expressions = PushArray(tempArena,com.nExpressions,Expression*);
-   for(int i = 0; i < com.nExpressions; i++){
-      com.expressions[i] = ParseExpression(tok);
-   }
-
-   return com;
 }
 
 static Block* Parse(Tokenizer* tok){
    Block* block = PushStruct(tempArena,Block);
+
+   void* start = tok->Mark();
 
    Token token = tok->PeekToken();
    if(CompareString(token,"#{")){
@@ -258,6 +293,8 @@ static Block* Parse(Tokenizer* tok){
       tok->AdvancePeek(block->textBlock);
    }
 
+   block->fullText = tok->Point(start);
+
    return block;
 }
 
@@ -283,15 +320,72 @@ static void Print(Block* block, int level = 0){
 }
 
 static Value HexValue(Value in){
+   static char buffer[128];
+
    int number = ConvertValue(in,ValueType::NUMBER).number;
+
+   int size = sprintf(buffer,"0x%x",number);
 
    Value res = {};
    res.type = ValueType::STRING;
-   res.str.str = res.smallBuffer;
-   res.str.size = sprintf(res.smallBuffer,"0x%x",number);
+   res.str = PushString(tempArena,SizedString{buffer,size});
 
    return res;
 }
+
+static int CountNonOperationChilds(Accelerator* accel){
+   if(accel == nullptr){
+      return 0;
+   }
+
+   int count = 0;
+   for(ComplexFUInstance* inst : accel->instances){
+      if(inst->declaration->type == FUDeclaration::COMPOSITE){
+         count += CountNonOperationChilds(inst->compositeAccel);
+      }
+
+      if(!inst->declaration->isOperation && inst->declaration->type != FUDeclaration::SPECIAL){
+         count += 1;
+      }
+   }
+
+   return count;
+}
+
+static Value EscapeSizedString(Value val){
+   Assert(val.type == ValueType::SIZED_STRING);
+   Assert(val.isTemp);
+
+   SizedString str = val.str;
+
+   SizedString escaped = PushString(tempArena,str);
+   char* view = (char*) escaped.str;
+
+   for(int i = 0; i < escaped.size; i++){
+      char ch = view[i];
+
+      if(   (ch >= 'a' && ch <= 'z')
+         || (ch >= 'A' && ch <= 'Z')
+         || (ch >= '0' && ch <= '9')){
+         continue;
+      } else {
+         view[i] = '_'; // Replace any foreign symbol with a underscore
+      }
+   }
+
+   Value res = val;
+   res.str = escaped;
+
+   return res;
+}
+
+struct ValueAndText{
+   Value val;
+   SizedString text;
+};
+
+static SizedString Eval(Block* block);
+static ValueAndText EvalNonBlockCommand(Command com);
 
 static Value EvalExpression(Expression* expr){
    switch(expr->type){
@@ -301,21 +395,17 @@ static Value EvalExpression(Expression* expr){
 
             if(CompareString(expr->expressions[1]->id,"Hex")){
                val = HexValue(val);
-            } else if(CompareString(expr->expressions[1]->id,"GetHierarchyName")){
-               Assert(val.type == GetType("HierarchyName"));
-
-               HierarchyName* name = (HierarchyName*) val.custom;
-               char* hier = GetHierarchyNameRepr(*name);
-
-               SizedString buffer = PushString(tempArena,MakeSizedString(hier));
-
-               val.type = ValueType::STRING;
-               val.str = buffer;
             } else if(CompareString(expr->expressions[1]->id,"String")){
                Assert(val.type == ValueType::STRING);
                val.literal = true;
+            } else if(CompareString(expr->expressions[1]->id,"CountNonOperationChilds")){
+               Accelerator* accel = *((Accelerator**) val.custom);
+
+               val = MakeValue(CountNonOperationChilds(accel));
+            } else if(CompareString(expr->expressions[1]->id,"Identify")){
+               val = EscapeSizedString(val);
             } else {
-               Assert(false);
+               NOT_IMPLEMENTED;
             }
 
             return val;
@@ -333,12 +423,10 @@ static Value EvalExpression(Expression* expr){
          Value op2 = EvalExpression(expr->expressions[1]);
 
          if(CompareString(expr->op,"==")){
-            if(EqualValues(op1,op2)){
-               return MakeValue(true);
-            } else {
-               return MakeValue(false);
-            }
-         } else if(CompareString(expr->op,"and")){
+            return MakeValue(Equal(op1,op2));
+         } else if(CompareString(expr->op,"!=")){
+            return MakeValue(!Equal(op1,op2));
+         }else if(CompareString(expr->op,"and")){
             bool bool1 = ConvertValue(op1,ValueType::BOOLEAN).boolean;
             bool bool2 = ConvertValue(op2,ValueType::BOOLEAN).boolean;
 
@@ -399,19 +487,31 @@ static Value EvalExpression(Expression* expr){
                }
             } break;
             default:{
-               DebugSignal();
+               NOT_IMPLEMENTED;
             }break;
          }
 
          return val;
-      }break;
+      } break;
       case Expression::LITERAL:{
          return expr->val;
+      } break;
+      case Expression::COMMAND:{
+         Command command = *expr->command;
+
+         Assert(!IsCommandBlockType(command));
+
+         Value result = EvalNonBlockCommand(command).val;
+
+         return result;
       } break;
       case Expression::IDENTIFIER:{
          auto iter = envTable.find(expr->id);
 
-         Assert(iter != envTable.end());
+         if(iter == envTable.end()){
+            printf("Didn't find identifier: %.*s\n",UNPACK_SS(expr->id));
+            exit(0);
+         }
 
          return iter->second;
       } break;
@@ -421,42 +521,32 @@ static Value EvalExpression(Expression* expr){
 
          Assert(index.type == ValueType::NUMBER);
 
-         if(debugging){
-            Wire* wires = (Wire*) object.custom;
-
-            printf("%p %d\n",wires,index.number);
-            FlushStdout();
-         }
-
          Value res = AccessObjectIndex(object,index.number);
-
-         if(debugging){
-            Wire* wire = (Wire*) res.custom;
-
-            printf("%s %d\n",wire->name,wire->bitsize);
-         }
 
          return res;
       } break;
       case Expression::MEMBER_ACCESS:{
          Value object = EvalExpression(expr->expressions[0]);
 
-         Value res = AccessObject(object,expr->id);
+         Value res = AccessStruct(object,expr->id);
 
          return res;
       }break;
       default:{
-         Assert(false);
+         NOT_IMPLEMENTED;
       } break;
    }
 
    return MakeValue();
 }
 
-static void PrintValue(FILE* file,Value in){
+#if 0
+static SizedString PrintValue(FILE* file,Value in){
    Value val = CollapseArrayIntoPtr(in);
 
    if(val.type == ValueType::NUMBER){
+
+
       fprintf(file,"%d",val.number);
    } else if(val.type == ValueType::STRING){
       if(val.literal){
@@ -470,174 +560,226 @@ static void PrintValue(FILE* file,Value in){
       fprintf(file,"%c",val.ch);
    } else if(val.type == ValueType::SIZED_STRING){
       fprintf(file,"%.*s",val.str.size,val.str.str);
+   } else if(val.type == ValueType::BOOLEAN){
+      fprintf(file,"%s",val.boolean ? "true" : "false");
+   } else if(val.type->type == Type::POINTER){
+      Assert(!val.isTemp);
+
+      void* res = *(void**) val.custom;
+
+      fprintf(file,"%p",res);
    } else {
-      Assert(false);
+      NOT_IMPLEMENTED;
    }
 }
+#endif
 
-static void Eval(Block* block){
-   if(block->type == Block::COMMAND){
-      Command com = block->command;
+static SizedString EvalBlockCommand(Block* block){
+   Command com = block->command;
+   SizedString res = {};
+   res.str = MarkArena(outputArena);
 
-      if(CompareString(com.name,"join")){
-         Value separator = EvalExpression(com.expressions[0]);
+   if(CompareString(com.name,"join")){
+      Value separator = EvalExpression(com.expressions[0]);
 
-         Assert(separator.type == ValueType::STRING);
+      Assert(separator.type == ValueType::STRING);
 
-         Assert(com.expressions[2]->type == Expression::IDENTIFIER);
-         SizedString id = com.expressions[2]->id;
+      Assert(com.expressions[2]->type == Expression::IDENTIFIER);
+      SizedString id = com.expressions[2]->id;
 
-         Value iterating = EvalExpression(com.expressions[3]);
-         bool seenFirst = false;
-         int counter = 0;
-         for(Iterator iter = Iterate(iterating); HasNext(iter); Advance(&iter)){
-            Value val = GetValue(iter);
-            envTable[id] = val;
+      Value iterating = EvalExpression(com.expressions[3]);
+      int counter = 0;
+      for(Iterator iter = Iterate(iterating); HasNext(iter); Advance(&iter)){
+         Value val = GetValue(iter);
+         envTable[id] = val;
 
-            if(seenFirst) {
-               fprintf(output,"%.*s",separator.str.size,separator.str.str);
-            } else {
-               seenFirst = true;
-            }
+         bool outputSeparator = false;
+         for(Block* ptr = block->nextInner; ptr != nullptr; ptr = ptr->next){
+            SizedString val = Eval(ptr);
 
-            for(Block* ptr = block->nextInner; ptr != nullptr; ptr = ptr->next){
-               Eval(ptr); // Push on stack
-            }
-
-            counter += 1;
-         }
-
-         envTable[MakeSizedString("join")] = MakeValue(false);
-      } else if(CompareString(com.name,"for")){
-         Assert(com.expressions[0]->type == Expression::IDENTIFIER);
-         SizedString id = com.expressions[0]->id;
-
-         Value iterating = EvalExpression(com.expressions[1]);
-         for(Iterator iter = Iterate(iterating); HasNext(iter); Advance(&iter)){
-            Value val = GetValue(iter);
-            envTable[id] = val;
-
-            for(Block* ptr = block->nextInner; ptr != nullptr; ptr = ptr->next){
-               Eval(ptr); // Push on stack
+            if(!CheckStringOnlyWhitespace(val)){
+               res.size += val.size; // Push on stack
+               outputSeparator = true;
             }
          }
-      } else if (CompareString(com.name,"if")){
-         Value val = ConvertValue(EvalExpression(com.expressions[0]),ValueType::BOOLEAN);
 
-         if(val.boolean){
-            for(Block* ptr = block->nextInner; ptr != nullptr; ptr = ptr->next){
-               if(ptr->type == Block::COMMAND && strcmp(ptr->command.name,"else") == 0){
-                  break;
-               }
-               Eval(ptr);
-            }
-         } else {
-            for(Block* ptr = block->nextInner; ptr != nullptr; ptr = ptr->next){
-               if(ptr->type == Block::COMMAND && strcmp(ptr->command.name,"else") == 0){
-                  for(ptr = ptr->next; ptr != nullptr; ptr = ptr->next){
-                     Eval(ptr);
-                  }
-                  break;
-               }
-            }
+         if(outputSeparator){
+            res.size += PushString(outputArena,"%.*s",separator.str.size,separator.str.str).size;
          }
-      } else if(CompareString(com.name,"set")){
-         Value val = EvalExpression(com.expressions[1]);
 
-         Assert(com.expressions[0]->type == Expression::IDENTIFIER);
+         counter += 1;
+      }
+      outputArena->used -= separator.str.size;
+      res.size -= separator.str.size;
+   } else if(CompareString(com.name,"for")){
+      Assert(com.expressions[0]->type == Expression::IDENTIFIER);
+      SizedString id = com.expressions[0]->id;
 
-         envTable[com.expressions[0]->id] = val;
-      } else if(CompareString(com.name,"inc")){
-         Value val = EvalExpression(com.expressions[0]);
-
-         Assert(val.type == ValueType::NUMBER);
-
-         val.number += 1;
-
-         envTable[com.expressions[0]->id] = val;
-      } else if(CompareString(com.name,"debug")){
-         Value val = EvalExpression(com.expressions[0]);
-
-         if(val.boolean){
-            DebugSignal();
-            debugging = true;
-         }
+      Value iterating = EvalExpression(com.expressions[1]);
+      for(Iterator iter = Iterate(iterating); HasNext(iter); Advance(&iter)){
+         Value val = GetValue(iter);
+         envTable[id] = val;
 
          for(Block* ptr = block->nextInner; ptr != nullptr; ptr = ptr->next){
-            Eval(ptr);
+            res.size += Eval(ptr).size; // Push on stack
          }
+      }
+   } else if (CompareString(com.name,"if")){
+      Value val = ConvertValue(EvalExpression(com.expressions[0]),ValueType::BOOLEAN);
 
-         debugging = false;
-      } else if(CompareString(com.name,"include")){
-         char buffer[4096];
+      if(val.boolean){
+         for(Block* ptr = block->nextInner; ptr != nullptr; ptr = ptr->next){
+            if(ptr->type == Block::COMMAND && strcmp(ptr->command.name,"else") == 0){
+               break;
+            }
+            res.size += Eval(ptr).size; // Push on stack
+         }
+      } else {
+         for(Block* ptr = block->nextInner; ptr != nullptr; ptr = ptr->next){
+            if(ptr->type == Block::COMMAND && strcmp(ptr->command.name,"else") == 0){
+               for(ptr = ptr->next; ptr != nullptr; ptr = ptr->next){
+                  res.size += Eval(ptr).size; // Push on stack
+               }
+               break;
+            }
+         }
+      }
+   } else if(CompareString(com.name,"debug")){
+      Value val = EvalExpression(com.expressions[0]);
 
-         Value filenameString = EvalExpression(com.expressions[0]);
-         Assert(filenameString.type == ValueType::STRING);
+      if(val.boolean){
+         DEBUG_BREAK;
+         debugging = true;
+      }
 
-         strcpy(buffer,filepath);
-         SizedString path = PathGoUp(buffer);
+      for(Block* ptr = block->nextInner; ptr != nullptr; ptr = ptr->next){
+         res.size += Eval(ptr).size; // Push on stack
+      }
 
-         SizedString filename = filenameString.str;
-         sprintf(&buffer[path.size],"/%.*s",filename.size,filename.str);
+      debugging = false;
+   } else if(CompareString(com.name,"while")){
+      while(ConvertValue(EvalExpression(com.expressions[0]),ValueType::BOOLEAN).boolean){
+         for(Block* ptr = block->nextInner; ptr != nullptr; ptr = ptr->next){
+            res.size += Eval(ptr).size; // Push on stack
+         }
+      }
+   } else if(CompareString(com.name,"define")) {
+      SizedString id = com.expressions[0]->id;
 
-         SizedString content = PushFile(tempArena,buffer);
-         Assert(content.size >= 0);
+      TemplateFunction* func = PushStruct(tempArena,TemplateFunction);
 
-         ParseAndEvaluate(content);
-      } else if(CompareString(com.name,"define")) {
-         SizedString id = com.expressions[0]->id;
+      func->arguments = &com.expressions[1];
+      func->numberArguments = com.nExpressions - 1;
+      func->block = block->nextInner;
 
-         TemplateFunction* func = PushStruct(tempArena,TemplateFunction);
+      Value val = {};
+      val.templateFunction = func;
+      val.type = ValueType::TEMPLATE_FUNCTION;
+      val.isTemp = true;
 
-         func->arguments = &com.expressions[1];
-         func->numberArguments = com.nExpressions - 1;
-         func->block = block->nextInner;
+      envTable[id] = val;
+   }
 
-         Value val = {};
-         val.templateFunction = func;
-         val.type = ValueType::TEMPLATE_FUNCTION;
-         val.isTemp = true;
+   return res;
+}
+
+static ValueAndText EvalNonBlockCommand(Command com){
+   Value val = MakeValue();
+   SizedString text = {};
+   text.str = MarkArena(outputArena);
+
+   if(CompareString(com.name,"set")){
+      val = EvalExpression(com.expressions[1]);
+
+      Assert(com.expressions[0]->type == Expression::IDENTIFIER);
+
+      val = CollapsePtrIntoStruct(val);
+
+      envTable[com.expressions[0]->id] = val;
+   } else if(CompareString(com.name,"inc")){
+      val = EvalExpression(com.expressions[0]);
+
+      Assert(val.type == ValueType::NUMBER);
+
+      val.number += 1;
+
+      envTable[com.expressions[0]->id] = val;
+   } else if(CompareString(com.name,"include")){
+      char buffer[4096];
+
+      Value filenameString = EvalExpression(com.expressions[0]);
+      Assert(filenameString.type == ValueType::STRING);
+
+      strcpy(buffer,filepath);
+      SizedString path = PathGoUp(buffer);
+
+      SizedString filename = filenameString.str;
+      sprintf(&buffer[path.size],"/%.*s",UNPACK_SS(filename));
+
+      SizedString content = PushFile(tempArena,buffer);
+      Assert(content.size >= 0);
+
+      ParseAndEvaluate(content);
+   } else if(CompareString(com.name,"call")){
+      SizedString id = com.expressions[0]->id;
+
+      auto iter = envTable.find(id);
+      if(iter == envTable.end()){
+         printf("Failed to find %.*s\n",UNPACK_SS(id));
+         DEBUG_BREAK;
+      }
+
+      //auto savedTable = envTable;
+
+      TemplateFunction* func = iter->second.templateFunction;
+
+      Assert(func->numberArguments == com.nExpressions - 1);
+
+      for(int i = 0; i < func->numberArguments; i++){
+         SizedString id = func->arguments[i]->id;
+
+         Value val = EvalExpression(com.expressions[1+i]);
 
          envTable[id] = val;
-      } else if(CompareString(com.name,"call")){
-         SizedString id = com.expressions[0]->id;
+      }
 
-         auto iter = envTable.find(id);
-         if(iter == envTable.end()){
-            printf("Failed to find %.*s\n",UNPACK_SS(id));
-            Assert(false);
-         }
+      for(Block* ptr = func->block; ptr != nullptr; ptr = ptr->next){
+         text.size += Eval(ptr).size;
+      }
 
-         auto savedTable = envTable;
+      val = envTable[MakeSizedString("return")];
 
-         TemplateFunction* func = iter->second.templateFunction;
+      //envTable = savedTable;
+   } else if(CompareString(com.name,"return")){
+      val = EvalExpression(com.expressions[0]);
 
-         Assert(func->numberArguments == com.nExpressions - 1);
+      envTable[MakeSizedString("return")] = val;
+   } else {
+      NOT_IMPLEMENTED;
+   }
 
-         for(int i = 0; i < func->numberArguments; i++){
-            SizedString id = func->arguments[i]->id;
+   ValueAndText res = {};
+   res.val = val;
+   res.text = text;
 
-            Value val = EvalExpression(com.expressions[1+i]);
+   return res;
+}
 
-            envTable[id] = val;
-         }
+static SizedString Eval(Block* block){
+   SizedString res = {};
+   res.str = MarkArena(outputArena);
 
-         #if 1
-         for(Block* ptr = func->block; ptr != nullptr; ptr = ptr->next){
-            Eval(ptr);
-         }
-         #endif
-
-         envTable = savedTable;
+   if(block->type == Block::COMMAND){
+      if(IsCommandBlockType(block->command)){
+         res = EvalBlockCommand(block);
       } else {
-         Assert(false);
+         res = EvalNonBlockCommand(block->command).text;
       }
    } else {
       // Print text
-      Tokenizer tok(block->textBlock,"!()[]{}+-:;.,*~><\"",{"@{","==","**","|>",">=","<="});
+      Tokenizer tok(block->textBlock,"!()[]{}+-:;.,*~><\"",{"@{","==","**","|>",">=","<=","!="});
 
       tok.keepComments = true;
-
       while(1){
          Token text = tok.PeekFindUntil("@{");
 
@@ -646,7 +788,9 @@ static void Eval(Block* block){
          }
          tok.AdvancePeek(text);
 
-         fprintf(output,"%.*s",text.size,text.str);
+         //fprintf(output,"%.*s",text.size,text.str);
+
+         res.size += PushString(outputArena,text).size;
 
          if(tok.Done()){
             break;
@@ -658,13 +802,17 @@ static void Eval(Block* block){
 
          Value val = EvalExpression(expr);
 
-         PrintValue(output,val);
+         res.size += GetValueRepresentation(val,outputArena).size;
+
+         //PrintValue(output,val);
       }
    }
+
+   return res;
 }
 
 void ParseAndEvaluate(SizedString content){
-   Tokenizer tokenizer(content,"!()[]{}+-:;.,*~><\"",{"#{","==","**",">=","<="});
+   Tokenizer tokenizer(content,"!()[]{}+-:;.,*~><\"",{"#{","@{","==","!=","**","|>",">=","<=","!="});
    Tokenizer* tok = &tokenizer;
 
    tok->keepComments = true;
@@ -672,7 +820,8 @@ void ParseAndEvaluate(SizedString content){
    while(!tok->Done()){
       Block* block = Parse(tok);
 
-      Eval(block);
+      SizedString text = Eval(block);
+      fprintf(output,"%.*s",text.size,text.str);
       fflush(output);
    }
 }
@@ -680,6 +829,11 @@ void ParseAndEvaluate(SizedString content){
 void ProcessTemplate(FILE* outputFile,const char* templateFilepath,Arena* arena){
    tempArena = arena;
    filepath = templateFilepath;
+
+   Byte* mark = MarkArena(arena);
+
+   Arena outputArenaInst = SubArena(arena,Megabyte(16));
+   outputArena = &outputArenaInst;
 
    #if 0
       output = stdout;
@@ -693,7 +847,6 @@ void ProcessTemplate(FILE* outputFile,const char* templateFilepath,Arena* arena)
 
    SizedString content = PushFile(tempArena,templateFilepath);
 
-   Byte* mark = MarkArena(tempArena);
    ParseAndEvaluate(content);
    PopMark(tempArena,mark);
 
@@ -701,11 +854,7 @@ void ProcessTemplate(FILE* outputFile,const char* templateFilepath,Arena* arena)
 }
 
 void TemplateSetCustom(const char* id,void* entity,const char* typeName){
-   Value val = {};
-
-   val.type = GetType(typeName);
-   val.custom = entity;
-   val.isTemp = false;
+   Value val = MakeValue(entity,typeName);
 
    envTable[MakeSizedString(id)] = val;
 }
@@ -725,33 +874,8 @@ void TemplateSetBool(const char* id,bool boolean){
 void TemplateSetArray(const char* id,const char* baseType,void* array,int size){
    Value val = {};
 
-   val.type = GetType(baseType,false,true);
-   val.array = array;
-   val.size = size;
-   val.isTemp = true;
-
-   envTable[MakeSizedString(id)] = val;
-}
-
-void TemplateSetInstancePool(const char* id,Pool<FUInstance>* pool){
-   Value val = {};
-
-   val.type = ValueType::POOL;
-   val.pool = pool;
-   val.isTemp = true;
-
-   envTable[MakeSizedString(id)] = val;
-}
-
-void TemplateSetInstanceVector(const char* id,std::vector<FUInstance*>* vec){
-   Value val = {};
-
-   Type* FUInstancePointer = GetType("FUInstance",true,false);
-
-   val.type = GetType(FUInstancePointer,false,true);
-   val.array = vec->data();
-   val.size = vec->size();
-   val.isTemp = true;
+   val.type = GetArrayType(GetType(MakeSizedString(baseType)),size);
+   val.custom = array;
 
    envTable[MakeSizedString(id)] = val;
 }

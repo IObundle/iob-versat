@@ -8,25 +8,30 @@
 #include "utils.hpp"
 #include "type.hpp"
 
+struct Command;
+
 struct Expression{
    const char* op;
    SizedString id;
    Expression** expressions;
+   Command* command;
    int size;
    Value val;
+   SizedString text;
 
-   enum {UNDEFINED,OPERATION,IDENTIFIER,LITERAL,ARRAY_ACCESS,MEMBER_ACCESS} type;
+   enum {UNDEFINED,OPERATION,IDENTIFIER,COMMAND,LITERAL,ARRAY_ACCESS,MEMBER_ACCESS} type;
 };
 
 typedef int (*CharFunction) (const char* ptr,int size);
 typedef SizedString Token;
 
 class Tokenizer{
+   const char* start;
    const char* ptr;
    const char* end;
    int lines;
-   std::string singleChars;
-   std::vector<std::string> specialChars;
+   std::string singleChars; // TODO: Why use string instead of sized string?
+   std::vector<std::string> specialChars; // TODO: Why use string instead of sized string?
 
 public:
 
@@ -53,6 +58,9 @@ public:
 
    Token FindFirst(std::initializer_list<const char*> strings);
 
+   // For expressions where there is a open and a closing delimiter (think '{...{...}...}') and need to check where an associated close delimiter is
+   SizedString PeekUntilDelimiterExpression(SizedString open,SizedString close, int numberOpenSeen); //
+
    Token PeekWhitespace();
 
    Token Finish();
@@ -63,12 +71,16 @@ public:
 
    void AdvancePeek(Token tok);
 
+   void SetSingleChars(const char* singleChars);
    bool Done();
    int Lines(){return lines;};
 
+   bool IsSpecialOrSingle(SizedString toTest);
 };
 
+bool CheckStringOnlyWhitespace(Token tok);
 bool CheckFormat(const char* format,Token tok);
+bool Contains(SizedString str,const char* toCheck);
 
 Token ExtendToken(Token t1,Token t2);
 
@@ -81,6 +93,6 @@ int ParseInt(SizedString str);
 bool IsNum(char ch);
 
 typedef Expression* (*ParsingFunction)(Tokenizer* tok);
-Expression* ParseOperationType(Tokenizer* tok,std::vector<std::vector<const char*>> operators,ParsingFunction finalFunction,Arena* tempArena);
+Expression* ParseOperationType(Tokenizer* tok,std::initializer_list<std::initializer_list<const char*>> operators,ParsingFunction finalFunction,Arena* tempArena);
 
 #endif // INCLUDED_PARSER

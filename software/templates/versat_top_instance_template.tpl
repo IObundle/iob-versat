@@ -1,8 +1,9 @@
 #{include "versat_common.tpl"}
+
+#{set nDones #{call CountDones instances}}
+
 `timescale 1ns / 1ps
 `include "axi.vh"
-//`include "xversat.vh"
-//`include "xdefs.vh"
 `include "versat_defs.vh"
 
 module versat_instance #(
@@ -16,9 +17,11 @@ module versat_instance #(
    input [`nIO-1:0]                m_databus_ready,
    output [`nIO-1:0]               m_databus_valid,
    output [`nIO*AXI_ADDR_W-1:0]    m_databus_addr,
-   input [`nIO*`DATAPATH_W-1:0]    m_databus_rdata,
+   input [`DATAPATH_W-1:0]         m_databus_rdata,
    output [`nIO*`DATAPATH_W-1:0]   m_databus_wdata,
    output [`nIO*`DATAPATH_W/8-1:0] m_databus_wstrb,
+   output [`nIO*8-1:0]             m_databus_len,
+   input [`nIO-1:0]                m_databus_last,
 `endif
    // data/control interface
    input                           valid,
@@ -137,10 +140,10 @@ assign ready = versat_ready | wor_ready;
 assign ready = versat_ready;
 #{end}
 
-reg [@{versatValues.configurationBits - 1}:0] configdata;
-wire [@{versatValues.stateBits - 1}:0] statedata;
+#{if versatValues.configurationBits} reg [@{versatValues.configurationBits-1}:0] configdata; #{end}
+#{if versatValues.stateBits} wire [@{versatValues.stateBits - 1}:0] statedata; #{end}
 
-wire [@{numberUnits - 1}:0] unitDone;
+wire [@{nDones - 1}:0] unitDone;
 
 #{if unitsMapped}
 reg [@{unitsMapped - 1}:0] memoryMappedEnable;
@@ -176,7 +179,7 @@ begin
    #{for inst instances}
    #{if inst.declaration.isMemoryMapped}
       #{if inst.versatData.memoryMaskSize}
-         if(addr[@{memoryAddressBits - 1}:@{memoryAddressBits - inst.versatData.memoryMaskSize}] == @{inst.versatData.memoryMaskSize}'b@{inst.versatData.memoryMask})
+         if(addr[@{memoryAddressBits - 1}:@{memoryAddressBits - inst.versatData.memoryMaskSize}] == @{inst.versatData.memoryMaskSize}'b@{inst.versatData.memoryMask}) // @{versatBase + memoryMappedBase * 4 + inst.versatData.memoryAddressOffset * 4 |> Hex} - @{versatBase + memoryMappedBase + inst.versatData.memoryAddressOffset |> Hex}
             memoryMappedEnable[@{counter}] = 1'b1;
       #{else}
          memoryMappedEnable[0] = 1'b1;
@@ -195,6 +198,7 @@ begin
    if(rst_int) begin
       configdata <= {@{configurationBits}{1'b0}};
    end else if(valid & we & !memoryMappedAddr) begin
+      // Config
       #{set counter 0}
       #{set addr 1}
       #{for inst instances}
@@ -202,22 +206,24 @@ begin
       #{for i decl.nConfigs}
       #{set wire decl.configWires[i]}
       if(addr[@{versatValues.configurationAddressBits - 1}:0] == @{addr}) // @{versatBase + addr * 4 |> Hex}
-         configdata[@{counter}+:@{wire.bitsize}] <= wdata[@{wire.bitsize - 1}:0]; // @{wire.name} - @{decl.name.str}
+         configdata[@{counter}+:@{wire.bitsize}] <= wdata[@{wire.bitsize - 1}:0]; // @{wire.name} - @{decl.name}
       #{inc addr}
       #{set counter counter + wire.bitsize}
       #{end}
       #{end}
 
+      // Static
       #{for unit accel.staticInfo}
       #{for i unit.nConfigs}
       #{set wire unit.wires[i]}
       if(addr[@{versatValues.configurationAddressBits - 1}:0] == @{addr}) // @{versatBase + addr * 4 |> Hex}
-         configdata[@{counter}+:@{wire.bitsize}] <= wdata[@{wire.bitsize - 1}:0]; //  @{unit.module.name.str}_@{unit.name}_@{wire.name}
+         configdata[@{counter}+:@{wire.bitsize}] <= wdata[@{wire.bitsize - 1}:0]; //  @{unit.module.name}_@{unit.name}_@{wire.name}
       #{inc addr}
       #{set counter counter + wire.bitsize}
       #{end}
       #{end}
 
+      // Delays
       #{for inst instances}
       #{set decl inst.declaration}
       #{for i decl.nDelays}
@@ -256,15 +262,16 @@ end
 #{set ioIndex 0}
 #{set memoryMappedIndex 0}
 #{set delaySeen 0}
+#{set doneCounter 0}
 #{for inst instances}
 #{set decl inst.declaration}
-   @{decl.name.str} @{decl.name.str}_@{counter} (
+   @{decl.name} @{inst.parameters} @{inst.name |> Identify}_@{counter} (
       #{for i inst.tempData.outputPortsUsed}
          .out@{i}(output_@{inst.id}_@{i}),
       #{end} 
 
       #{for i inst.tempData.inputPortsUsed}
-         .in@{i}(output_@{inst.tempData.inputs[i].inst.inst.id}_@{inst.tempData.inputs[i].inst.port}),
+         .in@{i}(output_@{inst.tempData.inputs[i].instConnectedTo.inst.id}_@{inst.tempData.inputs[i].instConnectedTo.port}),
       #{end}
 
       #{for i decl.nConfigs}
@@ -280,7 +287,7 @@ end
       #{for unit decl.staticUnits}
       #{for i unit.nConfigs}
       #{set wire unit.wires[i]}
-         .@{unit.module.name.str}_@{unit.name}_@{wire.name}(configdata[@{configDataIndex}+:@{wire.bitsize}]),
+         .@{unit.module.name}_@{unit.name}_@{wire.name}(configdata[@{configDataIndex}+:@{wire.bitsize}]),
       #{set configDataIndex configDataIndex + wire.bitsize}
       #{end}
       #{end}
@@ -305,8 +312,6 @@ end
       .wstrb(wstrb),
       #{if decl.memoryMapBits}
       .addr(addr[@{decl.memoryMapBits - 1}:0]),
-      #{else}
-      .addr(1'b0), // Shouldnt need but otherwise verilator would complain
       #{end}
       .rdata(unitRData[@{memoryMappedIndex}]),
       .ready(unitReady[@{memoryMappedIndex}]),
@@ -318,14 +323,19 @@ end
       .databus_ready(m_databus_ready[@{ioIndex} +: @{decl.nIOs}]),
       .databus_valid(m_databus_valid[@{ioIndex} +: @{decl.nIOs}]),
       .databus_addr(m_databus_addr[@{ioIndex * 32} +: @{32 * decl.nIOs}]),
-      .databus_rdata(m_databus_rdata[@{ioIndex * 32} +: @{32 * decl.nIOs}]),
+      .databus_rdata(m_databus_rdata),
       .databus_wdata(m_databus_wdata[@{ioIndex * 32} +: @{32 * decl.nIOs}]),
       .databus_wstrb(m_databus_wstrb[@{ioIndex * 4} +: @{4 * decl.nIOs}]),
+      .databus_len(m_databus_len[@{ioIndex * 8} +: @{8 * decl.nIOs}]),
+      .databus_last(m_databus_last[@{ioIndex} +: @{decl.nIOs}]),
       #{set ioIndex ioIndex + decl.nIOs}
       #{end} 
       
       .run(run),
-      .done(unitDone[@{counter}]),
+      #{if decl.implementsDone}
+      .done(unitDone[@{doneCounter}]),
+      #{inc doneCounter}
+      #{end}
       .clk(clk),
       .rst(rst_int)
    );

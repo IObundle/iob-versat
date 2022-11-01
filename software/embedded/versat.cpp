@@ -15,7 +15,9 @@ static int versat_base;
 extern int* number_versat_configurations;
 extern int  versat_configurations;
 
-void InitVersat(Versat* versat,int base,int numberConfigurations){
+Versat* InitVersat(int base,int numberConfigurations){
+   static Versat versat = {};
+
    #ifdef DEBUG
    printf("E\n");
    #endif
@@ -28,11 +30,24 @@ void InitVersat(Versat* versat,int base,int numberConfigurations){
 
    MEMSET(versat_base,0x0,2);
    MEMSET(versat_base,0x0,0);
+
+   return &versat;
 }
 
 // Accelerator functions
 void AcceleratorRun(Accelerator* accel){
+   #ifdef DEBUG
    printf("B\n");
+   #endif
+
+   // Set delay and static values
+   for(int i = 0; i < ARRAY_SIZE(delayBuffer); i++){
+      delayBase[i] = delayBuffer[i];
+   }
+   for(int i = 0; i < ARRAY_SIZE(staticBuffer); i++){ // Hackish, for now
+      staticBase[i] = staticBuffer[i];
+   }
+
    MEMSET(versat_base,0x0,1);
 
    while(1){
@@ -41,7 +56,9 @@ void AcceleratorRun(Accelerator* accel){
       if(val)
          break;
    }
+   #ifdef DEBUG
    printf("A\n");
+   #endif
 }
 
 void VersatUnitWrite(FUInstance* instance,int address, int value){
@@ -62,21 +79,10 @@ int32_t VersatUnitRead(FUInstance* instance,int address){
    return res;
 }
 
-FUInstance* GetInstanceByName_(Accelerator* accel,int argc, ...){
-   static char buffer[1024];
-
-   va_list args;
-   va_start(args,argc);
-
-   bool first = true;
-   char* ptr = buffer;
+static FUInstance* vGetInstanceByName_(int startIndex,int argc, va_list args){
+   int index = startIndex;
    for (int i = 0; i < argc; i++){
       char* str = va_arg(args, char*);
-
-      if(!first){
-         *(ptr++) = '_';
-      }
-      first = false;
 
       int length = strlen(str);
       int arguments = 0;
@@ -86,47 +92,34 @@ FUInstance* GetInstanceByName_(Accelerator* accel,int argc, ...){
          }
       }
 
+      char buffer[1024];
       if(arguments){
-         ptr += vsnprintf(ptr,1024 - (ptr - buffer),str,args);
+         vsnprintf(buffer,1024,str,args);
          i += arguments;
          for(int ii = 0; ii < arguments; ii++){
             va_arg(args, int); // Need to consume something
          }
       } else {
-         strcpy(ptr,str);
-         ptr += length;
-      }
-   }
-
-   *ptr = '\0';
-   FUInstance* res = nullptr;
-
-   unsigned int hash = 0;
-   for(int i = 0; buffer[i] != '\0'; i++){
-      hash *= 17;
-      hash += buffer[i];
-   }
-
-   int hashTableSize = ARRAY_SIZE(instanceHashmap);
-   for(int counter = 0; counter < hashTableSize; counter++){
-      HashKey data = instanceHashmap[(hash + counter) % hashTableSize];
-
-      if(strcmp(data.key,buffer) == 0){
-         res = &instancesBuffer[data.index];
-         break;
-      } else if(data.index == -1){
-         printf("ERROR ON HASH: %d\n",(hash + counter) % hashTableSize);
-         printf("STR: %s\n",buffer);
+         strcpy(buffer,str);
       }
 
-      //printf("%d %d %s\n",i,ARRAY_SIZE(instancesBuffer),buffer);
+      //printf("B:%s\n",buffer);
+
+      for(; index < ARRAY_SIZE(instancesBuffer);){
+         //printf("%d %s ",index,instancesBuffer[index].name);
+         if(strcmp(buffer,instancesBuffer[index].name) == 0){
+            index += 1;
+            break;
+         } else {
+            index += instancesBuffer[index].numberChilds + 1;
+         }
+         //printf("%d\n",index);
+      }
+
+      //printf("I:%d\n",index);
    }
 
-   if(res == nullptr){
-      printf("Didn't find: %s\n",buffer);
-   }
-
-   va_end(args);
+   FUInstance* res = &instancesBuffer[index - 1];
 
    #ifdef DEBUG
    printf("C:%x\n",res->config);
@@ -137,28 +130,30 @@ FUInstance* GetInstanceByName_(Accelerator* accel,int argc, ...){
    return res;
 }
 
-void CalculateDelay(Versat* versat,Accelerator* accel){
-   for(int i = 0; i < ARRAY_SIZE(delayBuffer); i++){
-      delayBase[i] = delayBuffer[i];
-   }
-   for(int i = 0; i < ARRAY_SIZE(staticBuffer); i++){ // Hackish, for now
-      staticBase[i] = staticBuffer[i];
-   }
+FUInstance* GetInstanceByName_(Accelerator* accel,int argc, ...){
+   va_list args;
+   va_start(args,argc);
+
+   FUInstance* res = vGetInstanceByName_(0,argc,args);
+
+   va_end(args);
+
+   return res;
 }
 
-SizedString MakeSizedString(const char* str, size_t size){
-   SizedString s = {};
+FUInstance* GetInstanceByName_(FUInstance* inst,int argc, ...){
+   va_list args;
+   va_start(args,argc);
 
-   if(size == 0){
-      size = strlen(str);
-   }
+   int index = inst - instancesBuffer;
+   FUInstance* res = vGetInstanceByName_(index + 1,argc,args);
 
-   s.str = str;
-   s.size = size;
-   return s;
+   va_end(args);
+
+   return res;
 }
 
-FUInstance* CreateNamedFUInstance(Accelerator* accel,FUDeclaration* type,SizedString entityName){
+FUInstance* CreateFUInstance(Accelerator* accel,FUDeclaration* type,SizedString entityName){
    FUInstance* res = GetInstanceByName_(accel,1,entityName.str);
 
    return res;

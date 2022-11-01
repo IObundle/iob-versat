@@ -1,76 +1,247 @@
 #include "type.hpp"
 
+#include <new>
 #include <map>
 #include <tuple>
 
 #include "parser.hpp"
-#include "versat.hpp"
+#include "versatPrivate.hpp"
 
 namespace ValueType{
    Type* NUMBER;
    Type* BOOLEAN;
    Type* CHAR;
-   Type* POOL;
    Type* STRING;
    Type* NIL;
    Type* SIZED_STRING;
    Type* TEMPLATE_FUNCTION;
    Type* SET;
-};
-
-struct CompareTypeInfo {
-   bool operator()(const TypeInfo& left,const TypeInfo& right) const {
-      bool res = std::tie(left.baseType,left.isPointer,left.isArray) < std::tie(right.baseType,right.isPointer,right.isArray);
-
-      return res;
-   }
+   Type* POOL;
+   Type* STD_VECTOR;
 };
 
 static Arena permanentArena;
 static Pool<Type> types;
-static std::map<TypeInfo,Type*,CompareTypeInfo> infoToType;
 
-static Type* RegisterSimpleType(const char* name,int size){
+static Type* RegisterSimpleType(SizedString name,int size){
    Type* type = types.Alloc();
 
    type->type = Type::BASE;
    type->size = size;
-   type->name = MakeSizedString(name);
-
-   TypeInfo info = {};
-   info.baseType = type;
-   infoToType[info] = type;
+   type->name = name;
 
    return type;
 }
 
-static Type* RegisterStruct(const char* name, size_t size,std::initializer_list<Member> data){
-   Type* type = GetType(name);
+static Type* RegisterOpaqueType(SizedString name,Type::Subtype subtype,int size){
+   Type* type = types.Alloc();
 
-   if(type->type != Type::UNKNOWN && type->nMembers > 0){
-      return type;
+   type->name = name;
+   type->type = subtype;
+   type->size = size;
+
+   return type;
+}
+
+static Type* RegisterOpaqueTemplateStruct(SizedString name){
+   Type* type = types.Alloc();
+
+   type->name = name;
+   type->type = Type::TEMPLATED_STRUCT;
+
+   return type;
+}
+
+static Type* RegisterEnum(SizedString name){
+   Type* type = types.Alloc();
+
+   type->name = name;
+   type->type = Type::ENUM;
+   type->size = sizeof(int);
+
+   return type;
+}
+
+static Type* RegisterTypedef(SizedString name,SizedString typedefName){
+   Type* type = GetType(name);
+   Type* typedefType = GetType(typedefName);
+
+   Assert(type->type == Type::TYPEDEF);
+
+   type->name = name;
+   type->typedefType = typedefType;
+   type->size = typedefType->size;
+
+   return type;
+}
+
+static Type* RegisterTemplateInstance(SizedString fullName,SizedString baseName,std::initializer_list<SizedString> data){
+   Type* type = GetType(fullName);
+   Assert(type->type == Type::TEMPLATED_INSTANCE);
+
+   type->templateBase = GetType(baseName);
+
+   for(SizedString name : data){
+      TemplateArg* arg = PushStruct(&permanentArena,TemplateArg);
+
+      arg->type = GetType(name);
+      arg->next = type->templateArgs;
+
+      type->templateArgs = arg;
    }
 
-   type->type = Type::STRUCT;
-   type->size = size;
-   type->members = (Member*) PushArray(&permanentArena,data.size(),Member);
+   return type;
+}
 
-   for(Member m : data){
-      type->members[type->nMembers++] = m;
+static Type* RegisterStructMembers(SizedString name,std::initializer_list<Member*> data){
+   Type* type = GetType(name);
 
-      Type* typeInfo = GetType(m.baseType);
-      if(typeInfo->type == Type::UNKNOWN){
-         typeInfo->type = Type::STRUCT;
-         typeInfo->size = m.baseTypeSize;
-         typeInfo->nMembers = 0;
+   Assert(type->type == Type::STRUCT || type->type == Type::TEMPLATED_INSTANCE);
+
+   Member* ptr = nullptr;
+   for(Member* m : data){
+      m->next = ptr;
+      ptr = m;
+   }
+
+   type->members = ptr;
+
+   return type;
+}
+
+Type* GetType(SizedString name){
+   for(Type* type : types){
+      if(CompareString(type->name,name)){
+         return type;
       }
    }
 
-   TypeInfo info = {};
-   info.baseType = type;
-   infoToType[info] = type;
+   Tokenizer tok(name,"*[]<>",{});
 
-   return type;
+   Token templatedName = tok.PeekFindIncluding(">");
+
+   Type* res = nullptr;
+   if(CompareString(name,templatedName)){ // Name equal to templated name means that no pointers or arrays, only templated arguments are not found
+      Token baseName = tok.NextToken();
+      tok.AssertNextToken("<");
+
+      Type* base = GetType(baseName);
+
+      Token argName = tok.PeekFindUntil(">");
+      tok.AdvancePeek(argName);
+      tok.AssertNextToken(">");
+
+      Assert(!Contains(argName,",")); // Only handle 1 argument, for now
+
+      Type* arg = GetType(argName);
+
+      Type* newType = types.Alloc();
+
+      newType->type = Type::TEMPLATED_INSTANCE;
+      newType->name = PushString(&permanentArena,name);
+      newType->templateBase = base;
+      newType->templateArgs = PushStruct(&permanentArena,TemplateArg);
+
+      newType->templateArgs->type = arg;
+
+      res = newType;
+   } else if(templatedName.size > 0){
+      res = GetType(templatedName);
+   } else {
+      Token typeName = tok.NextToken();
+      res = GetType(typeName);
+   }
+
+   while(!tok.Done()){
+      Token next = tok.NextToken();
+
+      if(CompareString(next,"*")){
+         bool found = false;
+         for(Type* type : types){
+            if(type->type == Type::POINTER && type->pointerType == res){
+               found = true;
+               res = type;
+               break;
+            }
+         }
+
+         if(!found){
+            res = GetPointerType(res);
+         }
+
+         continue;
+      }
+
+      if(CompareString(next,"[")){
+         Token arrayExpression = tok.PeekFindUntil("]");
+         tok.AdvancePeek(arrayExpression);
+         tok.AssertNextToken("]");
+
+         if(!CheckFormat("%d",arrayExpression)){
+            DEBUG_BREAK;
+         }
+
+         int arraySize = ParseInt(arrayExpression);
+         bool found = false;
+         for(Type* type : types){
+            if(type->type == Type::ARRAY && type->arrayType == res && type->size == (arraySize * res->size)){
+               res = type;
+               found = true;
+               break;
+            }
+         }
+
+         if(!found){
+            res = GetArrayType(res,arraySize);
+         }
+
+         continue;
+      }
+
+      NOT_POSSIBLE;
+   }
+   Assert(res);
+
+   return res;
+}
+
+Type* GetPointerType(Type* baseType){
+   for(Type* type : types){
+      if(type->type == Type::POINTER && type->pointerType == baseType){
+         return type;
+      }
+   }
+
+   Type* ret = types.Alloc();
+   ret->name = PushString(&permanentArena,"%.*s*",UNPACK_SS(baseType->name));;
+   ret->type = Type::POINTER;
+   ret->pointerType = baseType;
+   ret->size = sizeof(void*);
+
+   return ret;
+}
+
+Type* GetArrayType(Type* baseType, int arrayLength){
+   for(Type* type : types){
+      if(type->type == Type::ARRAY && type->arrayType == baseType && ArrayLength(type) == arrayLength){
+         return type;
+      }
+   }
+
+   Type* ret = types.Alloc();
+   ret->name = PushString(&permanentArena,"%.*s[%d]",UNPACK_SS(baseType->name),arrayLength);
+   ret->type = Type::ARRAY;
+   ret->pointerType = baseType;
+   ret->size = arrayLength * baseType->size;
+
+   return ret;
+}
+
+static Type* GetArrayType(SizedString name,int arrayLength){
+   Type* type = GetType(name);
+   Type* res = GetArrayType(type,arrayLength);
+
+   return res;
 }
 
 #define A(STRUCT) #STRUCT,sizeof(STRUCT)
@@ -78,6 +249,8 @@ static Type* RegisterStruct(const char* name, size_t size,std::initializer_list<
 
 #include "templateEngine.hpp"
 #include "verilogParser.hpp"
+#include "codeGeneration.hpp"
+#include "merge.hpp"
 #include "typeInfo.inc"
 
 void RegisterTypes(){
@@ -90,68 +263,111 @@ void RegisterTypes(){
    InitArena(&permanentArena,Megabyte(16));
    permanentArena.align = true;
 
-   // Care, order is important
-   ValueType::NUMBER = RegisterSimpleType("int",sizeof(int));
-   ValueType::BOOLEAN =  RegisterSimpleType("bool",sizeof(char));
-   ValueType::CHAR =  RegisterSimpleType("char",sizeof(char));
-   ValueType::POOL = RegisterSimpleType("Pool<FUInstance>",sizeof(Pool<FUInstance>*));
-   ValueType::NIL = RegisterSimpleType("void",4);
+   RegisterParsedTypes();
 
-   // Register a string
-   ValueType::STRING = GetType("char",true,false);
+   ValueType::NUMBER = GetType(MakeSizedString("int"));
+   ValueType::BOOLEAN =  GetType(MakeSizedString("bool"));
+   ValueType::CHAR =  GetType(MakeSizedString("char"));
+   ValueType::NIL = GetType(MakeSizedString("void"));
+   ValueType::STRING = GetPointerType(ValueType::CHAR);
+   ValueType::SIZED_STRING = GetType(MakeSizedString("SizedString"));
+   ValueType::TEMPLATE_FUNCTION = GetPointerType(GetType(MakeSizedString("TemplateFunction")));
+   ValueType::POOL = GetType(MakeSizedString("Pool"));
+   ValueType::STD_VECTOR = GetType(MakeSizedString("std::vector"));
 
-   RegisterComplexTypes();
-
-   ValueType::SIZED_STRING = GetType("SizedString",false,false);
-   ValueType::TEMPLATE_FUNCTION = GetType("TemplateFunction",true,false);
-   ValueType::SET = GetType("std::set<StaticInfo>",false,false);
-}
-
-Type* GetType(Type* baseType,bool isPointer,bool isArray){
-   if(isPointer == false && isArray == false){
-      return baseType;
-   }
-
-   Assert(!(isPointer && isArray)); // Only 1 can be active at once
-
-   TypeInfo info = {};
-   info.baseType = baseType;
-   info.isArray = isArray;
-   info.isPointer = isPointer;
-
-   auto findDirect = infoToType.find(info);
-
-   if(findDirect != infoToType.end()){
-      return findDirect->second;
-   }
-
-   Type* type = types.Alloc();
-
-   type->type = Type::INDIRECT;
-   type->info = info;
-   type->size = sizeof(void*);
-
-   infoToType[type->info] = type;
-
-   return type;
-}
-
-Type* GetType(const char* structName,bool isPointer,bool isArray){
-   Assert(!(isPointer && isArray)); // Only 1 can be active at once
-
+   #if 0
    for(Type* type : types){
-      if(CompareString(structName,type->name)){
-         Type* res = GetType(type,isPointer,isArray);
-         return res;
+      printf("%.*s: Size:%d Type:%d\n",UNPACK_SS(type->name),type->size,(int) type->type);
+
+      if(type->type == Type::STRUCT ){
+         for(Member* m = type->members; m != nullptr; m = m->next){
+            printf("  [%.*s: Size:%d Type:%d] %.*s Offset: %d\n",UNPACK_SS(m->type->name),m->type->size,(int) m->type->type,UNPACK_SS(m->name),m->offset);
+         }
+      }
+   }
+   #endif
+}
+
+void FreeTypes(){
+   Free(&permanentArena);
+   types.Clear(true);
+}
+
+int ArrayLength(Type* type){
+   Assert(type->type == Type::ARRAY);
+
+   int arraySize = type->size;
+   int baseTypeSize = type->arrayType->size;
+
+   int res = (arraySize / baseTypeSize);
+
+   return res;
+}
+
+SizedString GetValueRepresentation(Value in,Arena* arena){
+   Value val = CollapseArrayIntoPtr(in);
+   SizedString res = {};
+
+   if(val.type == ValueType::NUMBER){
+      res = PushString(arena,"%d",val.number);
+   } else if(val.type == ValueType::STRING){
+      if(val.literal){
+         res = PushString(arena,"\"%.*s\"",UNPACK_SS(val.str));
+      } else {
+         res = PushString(arena,"%.*s",UNPACK_SS(val.str));
+      }
+   } else if(val.type == ValueType::CHAR){
+      res = PushString(arena,"%c",val.ch);
+   } else if(val.type == ValueType::SIZED_STRING){
+      res = PushString(arena,"%.*s",UNPACK_SS(val.str));
+   } else if(val.type == ValueType::BOOLEAN){
+      res = PushString(arena,"%s",val.boolean ? "true" : "false");
+   } else if(val.type->type == Type::POINTER){
+      Assert(!val.isTemp);
+
+      void* ptr = *(void**) val.custom;
+
+      if(ptr == nullptr){
+         res = PushString(arena,"0x0");
+      } else {
+         res = PushString(arena,"%p",ptr);
+      }
+   } else {
+      // Return empty
+   }
+
+   return res;
+}
+
+Value CollapsePtrIntoStruct(Value object){
+   Type* type = object.type;
+
+   if(type->type != Type::POINTER){
+      return object;
+   }
+
+   Assert(!object.isTemp);
+
+   char* deference = (char*) object.custom;
+
+   while(type->type == Type::POINTER){
+      if(deference != nullptr){
+         deference = *((char**) deference);
+         type = type->pointerType;
+      } else {
+         return MakeValue();
       }
    }
 
-   Type* type = types.Alloc();
+   if(deference == nullptr){
+      return MakeValue();
+   }
 
-   type->type = Type::UNKNOWN;
-   type->name = PushString(&permanentArena,MakeSizedString(structName));
+   Value newVal = {};
+   newVal.type = type;
+   newVal.custom = deference;
 
-   return type;
+   return newVal;
 }
 
 static Value CollapseValue(Value val){
@@ -162,11 +378,11 @@ static Value CollapseValue(Value val){
    if(val.type == ValueType::NUMBER){
       val.number = *((int*) val.custom);
    } else if(val.type == ValueType::BOOLEAN){
-      val.boolean = *((bool*) val.custom);
+      bool boolean = *((bool*) val.custom);
+      val.number = 0;
+      val.boolean = boolean;
    } else if(val.type == ValueType::CHAR){
       val.ch = *((char*) val.custom);
-   } else if(val.type == ValueType::POOL){
-      val.pool = (Pool<FUInstance>*) val.custom;
    } else if(val.type == ValueType::NIL){
       val.number = 0;
    } else if(val.type == ValueType::STRING){
@@ -175,6 +391,8 @@ static Value CollapseValue(Value val){
       val.str = *((SizedString*) val.custom);
    } else if(val.type == ValueType::TEMPLATE_FUNCTION){
       val.templateFunction = *((TemplateFunction**) val.custom);
+   } else if(val.type->type == Type::ENUM){
+      val.number = *(int*) val.custom;
    } else {
       val.isTemp = false; // No collapse, same type
    }
@@ -194,33 +412,39 @@ static void* DeferencePointer(void* object,Type* info,int index){
 Value AccessObjectIndex(Value object,int index){
    Value value = {};
 
+   #if 0
    if(object.type == ValueType::POOL){
-      Pool<FUInstance>* pool = object.pool;
+      Pool<ComplexFUInstance>* pool = object.pool;
 
       Assert(index < pool->Size());
 
-      FUInstance* inst = pool->Get(index);
+      ComplexFUInstance* inst = pool->Get(index);
 
-      value.type = GetType("FUInstance"); // TODO: place to replace when adding template support
+      value.type = GetType(MakeSizedString("FUInstance")); // TODO: place to replace when adding template support
       value.custom = (void*) inst;
-   } else if(object.type->info.isArray){
-      Byte* array = (Byte*) object.array;
+   } else
+   #endif
+   if(object.type->type == Type::ARRAY){
+      Type* arrayType = object.type;
+      Byte* array = (Byte*) object.custom;
 
-      Assert(index < object.size);
+      int arrayIndexSize = (arrayType->size / arrayType->arrayType->size);
 
-      void* objectPtr = (void*) (array + index * object.type->info.baseType->size);
+      Assert(index < arrayIndexSize);
 
-      value.type = object.type->info.baseType;
+      void* objectPtr = (void*) (array + index * object.type->arrayType->size);
+
+      value.type = object.type->arrayType;
       value.custom = objectPtr;
-   } else if(object.type->info.isPointer) { // Ptr
+   } else if(object.type->type == Type::POINTER) { // Ptr
       Assert(!object.isTemp);
 
-      void* objectPtr = DeferencePointer(object.custom,object.type->info.baseType,index);
+      void* objectPtr = DeferencePointer(object.custom,object.type->pointerType,index);
 
-      value.type = object.type->info.baseType;
+      value.type = object.type->pointerType;
       value.custom = objectPtr;
    } else {
-      Assert(false);
+      NOT_IMPLEMENTED;
    }
 
    value.isTemp = false;
@@ -229,51 +453,16 @@ Value AccessObjectIndex(Value object,int index){
    return value;
 }
 
-Value AccessObject(Value object,SizedString memberName){
-   Type* type = object.type;
+Value AccessStruct(Value structure,Member* member){
+   Assert(structure.type->type == Type::STRUCT);
+   Assert(!structure.isTemp);
 
-   char* deference = nullptr;
-   if(object.isTemp){
-      deference = (char*) &object;
-   } else {
-      deference = (char*) object.custom;
-   }
-
-   while(type->type == Type::INDIRECT){
-      deference = *((char**) deference);
-      type = type->info.baseType;
-   }
-
-   Assert(type->type == Type::STRUCT);
-   Assert(type->nMembers); // Type is incomplete
-
-   int offset = -1;
-   Member member = {};
-   for(int i = 0; i < type->nMembers; i++){
-      Member* m = &type->members[i];
-      if(CompareString(m->name,memberName)){
-         offset = m->offset;
-         member = *m;
-         break;
-      }
-   }
-
-   Assert(offset >= 0);
-
-   #if 0
-   for(int i = 0; i < object.customType.pointers; i++){
-      deference = *((char**) deference);
-   }
-   #endif
-
-   char* view = deference;
-   void* newObject = &view[offset];
-
-   Type* newType = GetType(member.baseType,member.numberPtrs,member.isArray); // Might fail for multiple pointers / arrays
+   char* view = (char*) structure.custom;
+   void* newObject = &view[member->offset];
 
    Value newValue = {};
    newValue.custom = newObject;
-   newValue.type = newType;
+   newValue.type = member->type;
    newValue.isTemp = false;
 
    newValue = CollapseValue(newValue);
@@ -281,8 +470,45 @@ Value AccessObject(Value object,SizedString memberName){
    return newValue;
 }
 
+Value AccessStruct(Value val,int index){
+   Assert(val.type->type == Type::STRUCT);
+
+   Member* member = val.type->members;
+
+   for(int i = 0; i < index && member != nullptr; i++){
+      member = member->next;
+   }
+
+   Value res = AccessStruct(val,member);
+
+   return res;
+}
+
+Value AccessStruct(Value object,SizedString memberName){
+   Value structure = CollapsePtrIntoStruct(object);
+   Type* type = structure.type;
+
+   Assert(type->members); // Type is incomplete
+
+   int offset = -1;
+   Member* member = nullptr;
+   for(Member* m = type->members; m != nullptr; m = m->next){
+      if(CompareString(m->name,memberName)){
+         offset = m->offset;
+         member = m;
+         break;
+      }
+   }
+
+   Assert(offset >= 0);
+
+   Value res = AccessStruct(structure,member);
+
+   return res;
+}
+
 void Print(Value val){
-   Assert(false);
+   NOT_IMPLEMENTED;
 
    #if 0
    switch(val.type){
@@ -294,7 +520,7 @@ void Print(Value val){
          OutputObject(val.custom,val.customType);
       }break;
       default:{
-         Assert(false);
+         NOT_IMPLEMENTED;
       }break;
    }
    #endif
@@ -321,98 +547,152 @@ void OutputObject(void* object,Type objectType){
 }
 
 Iterator Iterate(Value iterating){
+   Type* type = iterating.type;
+
    Iterator iter = {};
    iter.iterating = iterating;
 
-   if(iterating.type == ValueType::NUMBER){
+   if(type == ValueType::NUMBER){
       iter.currentNumber = 0;
-   } else if(iterating.type == ValueType::POOL){
-      iter.poolIterator = iterating.pool->begin();
-   } else if(iterating.type->info.isArray || iterating.type->info.isPointer){
+   } else if(type->type == Type::ARRAY){
       iter.currentNumber = 0;
-   } else if(iterating.type == ValueType::SET){
-      std::set<StaticInfo>* set = (std::set<StaticInfo>*) iterating.custom;
+   } else if(type->type == Type::TEMPLATED_INSTANCE){
+      Assert(iterating.isTemp == false);
 
-      iter.setIterator = set->begin();
-   } else if(iterating.type == GetType("std::vector<StaticInfo>",false,false)){
-      iter.currentNumber = 0;
+      if(type->templateBase == ValueType::POOL){
+         Assert(type->templateArgs);
+
+         Pool<Byte>* pool = (Pool<Byte>*) iterating.custom; // Any type of pool is good enough
+
+         Byte* page = pool->GetMemoryPtr();
+
+         new (&iter.poolIterator) GenericPoolIterator(page,pool->Size(),type->templateArgs->type->size);
+      } else if(type->templateBase == ValueType::STD_VECTOR){ // TODO: A lot of assumptions are being made for std::vector so this works. Probably not safe (change later)
+         Assert(sizeof(std::vector<Byte>) == sizeof(std::vector<ComplexFUInstance>)); // Assuming std::vector<T> is same for any T (otherwise, cast does not work)
+
+         iter.currentNumber = 0;
+      } else {
+         NOT_IMPLEMENTED;
+      }
    } else {
-      Assert(false);
+      NOT_IMPLEMENTED;
    }
 
    return iter;
 }
 
 bool HasNext(Iterator iter){
-   bool res;
+   Type* type = iter.iterating.type;
 
-   if(iter.iterating.type == ValueType::NUMBER){
-      res = (iter.currentNumber < iter.iterating.number);
-   } else if(iter.iterating.type == ValueType::POOL){
-      res = (iter.poolIterator != iter.iterating.pool->end());
-   } else if(iter.iterating.type->info.isArray || iter.iterating.type->info.isPointer){
-      res = (iter.currentNumber < iter.iterating.size);
-   } else if(iter.iterating.type == ValueType::SET){
-      auto set = (std::set<StaticInfo>*) iter.iterating.custom;
+   if(type == ValueType::NUMBER){
+      int len = iter.iterating.number;
 
-      res = (iter.setIterator != set->end());
-   } else if(iter.iterating.type == GetType("std::vector<StaticInfo>",false,false)){
-      auto vec = (std::vector<StaticInfo>*) iter.iterating.custom;
+      bool res = (iter.currentNumber < len);
+      return res;
+   } else if(type->type == Type::ARRAY){
+      int len = ArrayLength(type);
 
-      res = (iter.currentNumber < vec->size());
+      bool res = (iter.currentNumber < len);
+      return res;
+   } else if(type->type == Type::TEMPLATED_INSTANCE){
+      if(type->templateBase == ValueType::POOL){
+         bool res = iter.poolIterator.HasNext();
+
+         return res;
+      } else if(type->templateBase == ValueType::STD_VECTOR){
+         std::vector<Byte>* b = (std::vector<Byte>*) iter.iterating.custom;
+
+         int byteSize = b->size();
+         int len = byteSize / type->templateArgs->type->size;
+
+         bool res = (iter.currentNumber < len);
+         return res;
+      } else {
+         NOT_IMPLEMENTED;
+      }
    } else {
-      Assert(false);
+      NOT_IMPLEMENTED;
    }
 
-   return res;
+   return false;
 }
 
 void Advance(Iterator* iter){
-   if(iter->iterating.type == ValueType::NUMBER){
+   Type* type = iter->iterating.type;
+
+   if(type == ValueType::NUMBER){
       iter->currentNumber += 1;
-   } else if(iter->iterating.type == ValueType::POOL){
-      ++iter->poolIterator;
-   } else if(iter->iterating.type->info.isArray || iter->iterating.type->info.isPointer){
+   } else if(type->type == Type::ARRAY){
       iter->currentNumber += 1;
-   } else if(iter->iterating.type == ValueType::SET){
-      ++iter->setIterator;
-   } else if(iter->iterating.type == GetType("std::vector<StaticInfo>",false,false)){
-      iter->currentNumber += 1;
+   } else if(type->type == Type::TEMPLATED_INSTANCE){
+      if(type->templateBase == ValueType::POOL){
+         ++iter->poolIterator;
+      } else if(type->templateBase == ValueType::STD_VECTOR){
+         iter->currentNumber += 1;
+      } else {
+         NOT_IMPLEMENTED;
+      }
    } else {
-      Assert(false);
+      NOT_IMPLEMENTED;
    }
 }
 
 Value GetValue(Iterator iter){
    Value val = {};
 
-   if(iter.iterating.type == ValueType::NUMBER){
-      val = MakeValue(iter.currentNumber);
-   } else if(iter.iterating.type == ValueType::POOL){
-      val.type = GetType("FUInstance");
-      val.custom = *iter.poolIterator;
-   } else if(iter.iterating.type->info.isArray || iter.iterating.type->info.isPointer){
-      val = AccessObjectIndex(iter.iterating,iter.currentNumber);
-   } else if(iter.iterating.type == ValueType::SET){
-      val.type = GetType("StaticInfo",false,false);
-      val.staticInfo = *iter.setIterator;
-      val.isTemp = true;
-   } else if(iter.iterating.type == GetType("std::vector<StaticInfo>",false,false)){
-      auto& vec = *(std::vector<StaticInfo>*) iter.iterating.custom;
+   Type* type = iter.iterating.type;
 
-      val.type = GetType("StaticInfo",false,false);
-      val.staticInfo = vec[iter.currentNumber];
-      val.isTemp = true;
+   if(type == ValueType::NUMBER){
+      val = MakeValue(iter.currentNumber);
+   } else if(type->type == Type::ARRAY){
+      val = AccessObjectIndex(iter.iterating,iter.currentNumber);
+   } else if(type->type == Type::TEMPLATED_INSTANCE){
+      if(type->templateBase == ValueType::POOL){
+         val.custom = *iter.poolIterator;
+         val.type = type->templateArgs->type;
+      } else if(type->templateBase == ValueType::STD_VECTOR){
+         std::vector<Byte>* b = (std::vector<Byte>*) iter.iterating.custom;
+
+         int size = type->templateArgs->type->size;
+         int index = iter.currentNumber;
+
+         Byte* view = b->data();
+
+         val.custom = &view[index * size];
+         val.type = type->templateArgs->type;
+      } else {
+         NOT_IMPLEMENTED;
+      }
    } else {
-      Assert(false);
+      NOT_IMPLEMENTED;
    }
 
    return val;
 }
 
-bool EqualValues(Value v1,Value v2){
+SizedString GetValueRepresentation(Value val){
+   SizedString res = {};
+
+   return res;
+}
+
+bool Equal(Value v1,Value v2){
    Value c1 = CollapseArrayIntoPtr(v1);
    Value c2 = CollapseArrayIntoPtr(v2);
+
+   if(c1.type == ValueType::STRING && c2.type == ValueType::SIZED_STRING){
+      SizedString str = c1.str;
+      SizedString ss = c2.str;
+      Assert(c1.isTemp == true && c2.isTemp == true);
+
+      return CompareString(ss,str);
+   } else if(c1.type == ValueType::SIZED_STRING && c2.type == ValueType::STRING){
+      SizedString str = c2.str;
+      SizedString ss = c1.str;
+      Assert(c2.isTemp == true && c1.isTemp == true);
+
+      return CompareString(ss,str);
+   }
 
    c2 = ConvertValue(c2,c1.type);
 
@@ -424,20 +704,42 @@ bool EqualValues(Value v1,Value v2){
       res = (CompareString(c1.str,c2.str));
    } else if(c1.type == ValueType::SIZED_STRING){
       res = CompareString(c1.str,c2.str);
+   } else if(c1.type->type == Type::ENUM){
+      if(c1.type != c2.type){
+         res = false;
+      } else {
+         res = (c1.number == c2.number);
+      }
    } else {
-      Assert(false);
+      NOT_IMPLEMENTED;
    }
 
    return res;
 }
 
+bool Equal(Type* t1,Type* t2){
+   if(t1->type != t2->type){
+      return false;
+   }
+
+   if(t1->size != t2->size){
+      return false;
+   }
+
+   if(t1->pointerType != t2->pointerType){
+      return false;
+   }
+
+   return CompareString(t1->name,t2->name);
+}
+
 Value CollapseArrayIntoPtr(Value in){
-   if(!in.type->info.isArray){
+   if(in.type->type != Type::ARRAY){
       return in;
    }
 
    Value newValue = {};
-   newValue.type = GetType(in.type->info.baseType,true,false);
+   newValue.type = GetPointerType(in.type->arrayType);
    newValue.custom = &in.custom;
    newValue.isTemp = false;
 
@@ -455,33 +757,42 @@ Value ConvertValue(Value in,Type* want){
    res.type = want;
 
    if(want == ValueType::BOOLEAN){
-      if(in.type == ValueType::NUMBER){
+      if(in.type == ValueType::NUMBER || in.type->type == Type::ENUM){
          res.boolean = (in.number != 0);
-      } else if(in.type->type == Type::INDIRECT){
-         int* pointerValue = (int*) DeferencePointer(in.custom,in.type->info.baseType,0);
+      } else if(in.type->type == Type::POINTER){
+         int* pointerValue = (int*) DeferencePointer(in.custom,in.type->pointerType,0);
 
          res.boolean = (pointerValue != nullptr);
+      } else if(in.type->type == Type::STRUCT){
+         res.boolean = (in.custom != nullptr);
       } else {
-         Assert(false);
+         NOT_IMPLEMENTED;
       }
    } else if(want == ValueType::NUMBER){
-      if(in.type->type == Type::INDIRECT){
-         int* pointerValue = (int*) DeferencePointer(in.custom,in.type->info.baseType,0);
+      if(in.type->type == Type::POINTER){
+         int* pointerValue = (int*) DeferencePointer(in.custom,in.type->pointerType,0);
 
          res.number = (int) pointerValue;
       } else {
-         Assert(false);
+         NOT_IMPLEMENTED;
       }
    } else if(want == ValueType::SIZED_STRING){
-      if(in.type == GetType("HierarchyName",false,false)){
+      if(in.type == GetType(MakeSizedString("HierarchyName"))){
          HierarchyName* name = (HierarchyName*) in.custom;
 
          res = MakeValue(MakeSizedString(name->str));
       } else {
-         Assert(false);
+         NOT_IMPLEMENTED;
+      }
+   } else if(want->type == Type::ENUM){
+      if(in.type == ValueType::NUMBER){
+         res = in;
+         res.type = want;
+      } else {
+         NOT_IMPLEMENTED;
       }
    } else {
-      Assert(false);
+      NOT_IMPLEMENTED;
    }
 
    return res;
@@ -532,4 +843,13 @@ Value MakeValue(bool boolean){
    return val;
 }
 
+Value MakeValue(void* entity,const char* typeName){
+   Value val = {};
+
+   val.type = GetType(MakeSizedString(typeName));
+   val.custom = entity;
+   val.isTemp = false;
+
+   return val;
+}
 

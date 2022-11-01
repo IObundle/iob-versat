@@ -52,7 +52,8 @@ void Tokenizer::ConsumeWhitespace(){
 }
 
 Tokenizer::Tokenizer(SizedString content,const char* singleChars,std::vector<std::string> specialCharsList)
-:ptr(content.str)
+:start(content.str)
+,ptr(content.str)
 ,end(content.str + content.size)
 ,lines(1)
 ,singleChars(singleChars)
@@ -88,6 +89,10 @@ int Tokenizer::SpecialChars(const char* ptr, unsigned int size){
 Token Tokenizer::PeekToken(){
    Token token = {};
 
+   if(ptr >= end){
+      return token;
+   }
+
    ConsumeWhitespace();
 
    // After this, only need to set size
@@ -118,10 +123,42 @@ Token Tokenizer::NextToken(){
    return res;
 };
 
-Token Tokenizer::AssertNextToken(const char* str){
+Token Tokenizer::AssertNextToken(const char* format){
    Token token = NextToken();
 
-   Assert(CompareToken(token,str));
+   if(!CompareToken(token,format)){
+      // Get start of the line
+      const char* lineStart = token.str;
+      while(lineStart > start){
+         lineStart -= 1;
+         if(lineStart[0] == '\n'){
+            lineStart += 1;
+            break;
+         }
+      }
+
+      // Get end of the line
+      const char* lineEnd = token.str;
+      while(lineEnd < end){
+         lineEnd += 1;
+         if(lineEnd[0] == '\n'){
+            break;
+         }
+      }
+
+      SizedString fullLine = MakeSizedString(lineStart,lineEnd - lineStart);
+
+      printf("Parser Error. Expected to find: '%s'\n",format);
+      printf("%d\t | %.*s\n",lines,UNPACK_SS(fullLine));
+      printf("\t | ");
+
+      for(int i = 0; i < token.str - lineStart; i++){
+         printf(" ");
+      }
+      printf("^\n");
+
+      DEBUG_BREAK;
+   }
 
    return token;
 }
@@ -132,7 +169,7 @@ Token Tokenizer::PeekFindUntil(const char* str){
    SizedString ss = MakeSizedString(str);
 
    int i = 0;
-   while(&ptr[i] + ss.size < end){
+   while(&ptr[i] + ss.size <= end){
       if(ptr[i] == str[0]){
          SizedString cmp = MakeSizedString(&ptr[i],ss.size);
 
@@ -183,20 +220,35 @@ Token Tokenizer::PeekFindIncluding(const char* str){
 
 Token Tokenizer::FindFirst(std::initializer_list<const char*> strings){
    Token best = {};
+   best.size = -1;
+
    const char* res = nullptr;
+   bool first = true;
    for(const char* str : strings){
       Token token = PeekFindUntil(str);
 
-      if(best.size <= 0){
-         best = token;
-         res = str;
-      } else if(token.size > 0 && token.size < best.size){
+      if(first){
+         if(token.size != -1){
+            first = false;
+            best = token;
+            res = str;
+         }
+      }
+
+      if(token.size > 0 && token.size < best.size){
          best = token;
          res = str;
       }
    }
 
-   return MakeSizedString(res);
+   if(res){
+      return MakeSizedString(res);
+   } else {
+      Token noFound = {};
+      noFound.size = -1;
+
+      return noFound;
+   }
 }
 
 Token Tokenizer::NextFindUntil(const char* str){
@@ -237,7 +289,7 @@ void* Tokenizer::Mark(){
 }
 
 Token Tokenizer::Point(void* mark){
-   Assert(ptr > mark);
+   Assert(ptr >= mark);
 
    Token token = {};
    token.str = ((char*)mark);
@@ -248,6 +300,10 @@ Token Tokenizer::Point(void* mark){
 
 void Tokenizer::Rollback(void* mark){
    ptr = (const char*) mark;
+}
+
+void Tokenizer::SetSingleChars(const char* singleChars){
+   this->singleChars = std::string(singleChars);
 }
 
 void Tokenizer::AdvancePeek(Token tok){
@@ -269,6 +325,70 @@ bool Tokenizer::Done(){
    Rollback(mark);
 
    return res;
+}
+
+bool Tokenizer::IsSpecialOrSingle(SizedString toTest){
+   if(toTest.size > 1){
+      for(std::string& str : specialChars){
+         if(CompareString(str.c_str(),toTest)){
+            return true;
+         }
+      }
+   } else {
+      for(char ch : singleChars){
+         if(ch == toTest.str[0]){
+            return true;
+         }
+      }
+   }
+
+   return false;
+}
+
+SizedString Tokenizer::PeekUntilDelimiterExpression(SizedString open,SizedString close, int numberOpenSeen){
+   Assert(IsSpecialOrSingle(open));
+   Assert(IsSpecialOrSingle(close));
+
+   void* pos = Mark();
+
+   SizedString res = {};
+   res.str = (const char*) pos;
+
+   int seen = numberOpenSeen;
+   while(!Done()){
+      Token tok = PeekToken();
+
+      if(CompareString(tok,open)){
+         seen += 1;
+      } else if(CompareString(tok,close)){
+         if(seen == 0){
+            break;
+         }
+
+         seen -= 1;
+
+         if(seen == 0){
+            res = Point(pos);
+            break;
+         }
+      }
+
+      AdvancePeek(tok);
+   }
+
+   Rollback(pos); // Act as peek
+
+   return res;
+}
+
+bool CheckStringOnlyWhitespace(Token tok){
+   for(int i = 0; i < tok.size; i++){
+      char ch = tok.str[i];
+      if(!IsWhitespace(ch)){
+         return false;
+      }
+   }
+   return true;
 }
 
 bool CheckFormat(const char* format,Token tok){
@@ -304,8 +424,11 @@ bool CheckFormat(const char* format,Token tok){
                }
             }
          }break;
+         case '\0':{
+            NOT_POSSIBLE;
+         }break;
          default:{
-            Assert(false);
+            NOT_IMPLEMENTED;
          }break;
          }
       } else if(formatChar != tok.str[tokenIndex]){
@@ -317,6 +440,18 @@ bool CheckFormat(const char* format,Token tok){
    }
 
    return true;
+}
+
+bool Contains(SizedString str,const char* toCheck){
+   Tokenizer tok(str,"",{});
+
+   Token token = tok.PeekFindUntil(toCheck);
+
+   if(token.size > 0){
+      return true;
+   }
+
+   return false;
 }
 
 Token ExtendToken(Token t1,Token t2){
@@ -385,7 +520,7 @@ static int CharToInt(char ch){
    } else if(ch >= 'a' && ch <= 'f'){
       return 10 + (ch - 'a');
    } else {
-      Assert(false); // Do not care for other bases, for now
+      NOT_IMPLEMENTED;
    }
    return 0;
 }
@@ -428,21 +563,32 @@ bool IsNum(char ch){
    return res;
 }
 
-Expression* ParseOperationType(Tokenizer* tok,std::vector<std::vector<const char*>> operators,ParsingFunction finalFunction,Arena* tempArena){
-   if(operators.size() == 0){
-      return finalFunction(tok);
+struct OperationList{
+   const char** op;
+   int nOperations;
+   OperationList* next;
+};
+
+Expression* ParseOperationType_(Tokenizer* tok,OperationList* operators,ParsingFunction finalFunction,Arena* tempArena){
+   void* start = tok->Mark();
+
+   if(operators == nullptr){
+      Expression* expr = finalFunction(tok);
+
+      expr->text = tok->Point(start);
+      return expr;
    }
 
-   std::vector<const char*> currentList = operators[0];
-   auto remaining = std::vector<std::vector<const char*>>(operators.begin()+1,operators.end());
-
-   Expression* current = ParseOperationType(tok,remaining,finalFunction,tempArena);
+   OperationList* nextOperators = operators->next;
+   Expression* current = ParseOperationType_(tok,nextOperators,finalFunction,tempArena);
 
    while(1){
       Token peek = tok->PeekToken();
 
       bool foundOne = false;
-      for(const char* elem : currentList){
+      for(int i = 0; i < operators->nOperations; i++){
+         const char* elem = operators->op[i];
+
          if(CompareString(peek,elem)){
             tok->AdvancePeek(peek);
             Expression* expr = PushStruct(tempArena,Expression);
@@ -452,7 +598,7 @@ Expression* ParseOperationType(Tokenizer* tok,std::vector<std::vector<const char
             expr->op = elem;
             expr->size = 2;
             expr->expressions[0] = current;
-            expr->expressions[1] = ParseOperationType(tok,remaining,finalFunction,tempArena);
+            expr->expressions[1] = ParseOperationType_(tok,nextOperators,finalFunction,tempArena);
 
             current = expr;
             foundOne = true;
@@ -464,6 +610,31 @@ Expression* ParseOperationType(Tokenizer* tok,std::vector<std::vector<const char
       }
    }
 
+   current->text = tok->Point(start);
    return current;
+}
+
+Expression* ParseOperationType(Tokenizer* tok,std::initializer_list<std::initializer_list<const char*>> operators,ParsingFunction finalFunction,Arena* tempArena){
+   OperationList head = {};
+   OperationList* ptr = nullptr;
+
+   for(std::initializer_list<const char*> outerList : operators){
+      if(ptr){
+         ptr->next = PushStruct(tempArena,OperationList);
+         ptr = ptr->next;
+      } else {
+         ptr = &head;
+      }
+
+      ptr->op = PushArray(tempArena,outerList.size(),const char*);
+
+      for(const char* str : outerList){
+         ptr->op[ptr->nOperations++] = str;
+      }
+   }
+
+   Expression* expr = ParseOperationType_(tok,&head,finalFunction,tempArena);
+
+   return expr;
 }
 

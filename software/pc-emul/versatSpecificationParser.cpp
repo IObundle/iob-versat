@@ -4,7 +4,7 @@
 #include "assert.h"
 #include "stdint.h"
 
-#include "versat.hpp"
+#include "versatPrivate.hpp"
 #include "parser.hpp"
 
 #define ARRAY_SIZE(array) sizeof(array) / sizeof(array[0])
@@ -29,7 +29,7 @@ int GetIndex(char* name){
 }
 
 typedef struct Var_t{
-   HierarchyName name;
+   SizedString name;
    int delayStart;
    int delayEnd;
    int portStart;
@@ -86,7 +86,7 @@ Var ParseVar(Tokenizer* tok){
 
    Var var = {};
 
-   StoreToken(name,var.name.str);
+   var.name = name;
    var.delayStart = delayStart;
    var.delayEnd = delayEnd;
    var.portStart = portStart;
@@ -95,7 +95,7 @@ Var ParseVar(Tokenizer* tok){
    return var;
 }
 
-PortInstance ParseTerm(Versat* versat,Accelerator* circuit,Tokenizer* tok,HierarchyName* circuitName){
+PortInstance ParseTerm(Versat* versat,Accelerator* circuit,Tokenizer* tok){
    Token peek = tok->PeekToken();
    int negate = 0;
    if(CompareToken(peek,"~")){
@@ -105,29 +105,28 @@ PortInstance ParseTerm(Versat* versat,Accelerator* circuit,Tokenizer* tok,Hierar
 
    Var var = ParseVar(tok);
 
-   FUInstance* inst = GetInstance(circuit,{var.name.str});
+   FUInstance* inst = GetInstanceByName(circuit,"%.*s",UNPACK_SS(var.name));
    PortInstance res = {};
 
    Assert(var.portStart == var.portEnd);
 
    if(negate){
-      FUInstance* negation = CreateNamedFUInstance(circuit,GetTypeByName(versat,MakeSizedString("NOT")),MakeSizedString("not"));
-      negation->name.parent = circuitName;
+      FUInstance* negation = CreateFUInstance(circuit,GetTypeByName(versat,MakeSizedString("NOT")),MakeSizedString("not"));
 
       ConnectUnits(inst,var.portStart,negation,0);
 
-      res.inst = negation;
+      res.inst = (ComplexFUInstance*) negation;
       res.port = 0;
    } else {
-      res.inst = inst;
+      res.inst = (ComplexFUInstance*) inst;
       res.port = var.portStart;
    }
 
    return res;
 }
 
-FUInstance* ParseExpression(Versat* versat,Accelerator* circuit,Tokenizer* tok,HierarchyName* circuitName){
-   PortInstance term1 = ParseTerm(versat,circuit,tok,circuitName);
+FUInstance* ParseExpression(Versat* versat,Accelerator* circuit,Tokenizer* tok,SizedString name){
+   PortInstance term1 = ParseTerm(versat,circuit,tok);
    Token op = tok->PeekToken();
 
    if(CompareToken(op,";")){
@@ -135,7 +134,7 @@ FUInstance* ParseExpression(Versat* versat,Accelerator* circuit,Tokenizer* tok,H
    }
 
    tok->AdvancePeek(op);
-   PortInstance term2 = ParseTerm(versat,circuit,tok,circuitName);
+   PortInstance term2 = ParseTerm(versat,circuit,tok);
 
    const char* typeName;
    if(CompareToken(op,"&")){
@@ -155,14 +154,13 @@ FUInstance* ParseExpression(Versat* versat,Accelerator* circuit,Tokenizer* tok,H
    } else if(CompareToken(op,"+")){
       typeName = "ADD";
    } else {
-      printf("%s\n",op.str);
+      printf("%.*s\n",UNPACK_SS(op));
       fflush(stdout);
       Assert(0);
    }
 
    SizedString typeStr = MakeSizedString(typeName);
-   FUInstance* res = CreateNamedFUInstance(circuit,GetTypeByName(versat,typeStr),typeStr);
-   res->name.parent = circuitName;
+   FUInstance* res = CreateFUInstance(circuit,GetTypeByName(versat,typeStr),name);
 
    ConnectUnits(term1.inst,term1.port,res,0);
    ConnectUnits(term2.inst,term2.port,res,1);
@@ -170,28 +168,94 @@ FUInstance* ParseExpression(Versat* versat,Accelerator* circuit,Tokenizer* tok,H
    return res;
 }
 
-void TagInputs(Accelerator* accel,FUInstance* inst){
-   if(inst->tag || inst->tempData->nodeType == GraphComputedData::TAG_SOURCE_AND_SINK){
-      return;
-   }
+FUInstance* ParseInstanceDeclaration(Versat* versat,Tokenizer* tok,Accelerator* circuit){
+   Token type = tok->NextToken();
 
-   inst->tag = 1;
+   Token possibleParameters = tok->PeekToken();
+   Token fullParameters = MakeSizedString("");
+   if(CompareString(possibleParameters,"#")){
+      int index = 0;
 
-   for(int i = 0; i < inst->tempData->numberInputs; i++){
-      TagInputs(accel,inst->tempData->inputs[i].inst.inst);
-   }
-}
+      void* mark = tok->Mark();
+      while(1){
+         Token token = tok->NextToken();
 
-StaticInfo* SetLikeInsert(std::vector<StaticInfo>& vec,StaticInfo& info){
-   for(StaticInfo& iter : vec){
-      if(info.module == iter.module && CompareString(info.name,iter.name)){
-         return &iter;
+         if(CompareString(token,"(")){
+            index += 1;
+         }
+         if(CompareString(token,")")){
+            index -= 1;
+            if(index == 0){
+               break;
+            }
+         }
       }
+      fullParameters = tok->Point(mark);
    }
 
-   vec.push_back(info);
+   SizedString name = PushString(&versat->permanent,tok->NextToken());
 
-   return &vec.back();
+   FUDeclaration* FUType = GetTypeByName(versat,type);
+   FUInstance* inst = CreateFUInstance(circuit,FUType,name);
+   inst->parameters = PushString(&versat->permanent,fullParameters);
+
+   Token peek = tok->PeekToken();
+
+   if(CompareString(peek,"(")){
+      tok->AdvancePeek(peek);
+
+      Token list = tok->NextFindUntil(")");
+      int arguments = 1 + CountSubstring(list,MakeSizedString(","));
+      Assert(arguments <= FUType->nConfigs);
+
+      Tokenizer insideList(list,",",{});
+
+      inst->config = PushArray(&versat->permanent,FUType->nConfigs,int);
+      SetDefaultConfiguration(inst,inst->config,FUType->nConfigs);
+
+      //inst->savedConfiguration = true;
+      for(int i = 0; i < arguments; i++){
+         Token arg = insideList.NextToken();
+
+         inst->config[i] = ParseInt(arg);
+
+         if(i != arguments - 1){
+            insideList.AssertNextToken(",");
+         }
+      }
+      Assert(insideList.Done());
+
+      tok->AssertNextToken(")");
+      peek = tok->PeekToken();
+   }
+
+   if(CompareString(peek,"{")){
+      tok->AdvancePeek(peek);
+
+      Token list = tok->NextFindUntil("}");
+      int arguments = 1 + CountSubstring(list,MakeSizedString(","));
+      Assert(arguments <= (1 << FUType->memoryMapBits));
+
+      Tokenizer insideList(list,",",{});
+
+      inst->memMapped = PushArray(&versat->permanent,1 << FUType->memoryMapBits,int);
+      //inst->savedMemory = true;
+      for(int i = 0; i < arguments; i++){
+         Token arg = insideList.NextToken();
+
+         inst->memMapped[i] = ParseInt(arg);
+
+         if(i != arguments - 1){
+            insideList.AssertNextToken(",");
+         }
+      }
+      Assert(insideList.Done());
+
+      tok->AssertNextToken("}");
+      peek = tok->PeekToken();
+   }
+
+   return inst;
 }
 
 FUDeclaration* ParseModule(Versat* versat,Tokenizer* tok){
@@ -200,17 +264,8 @@ FUDeclaration* ParseModule(Versat* versat,Tokenizer* tok){
    Token name = tok->NextToken();
    tok->AssertNextToken("(");
 
-   FUDeclaration* circuitInput = GetTypeByName(versat,MakeSizedString("circuitInput"));
-   FUDeclaration* circuitOutput = GetTypeByName(versat,MakeSizedString("circuitOutput"));
-
    Accelerator* circuit = CreateAccelerator(versat);
    circuit->type = Accelerator::CIRCUIT;
-
-   FUDeclaration decl = {};
-   decl.type = FUDeclaration::COMPOSITE;
-   decl.circuit = circuit;
-   StoreToken(name,decl.name.str);
-   Assert(name.size < MAX_NAME_SIZE);
 
    for(int i = 0; 1; i++){
       Token token = tok->NextToken();
@@ -224,18 +279,16 @@ FUDeclaration* ParseModule(Versat* versat,Tokenizer* tok){
          tok->AssertNextToken(",");
       }
 
-      FUInstance* inst = CreateNamedFUInstance(circuit,circuitInput,token);
-      inst->name.parent = &decl.name;
+      SizedString name = PushString(&versat->permanent,token);
+      FUInstance* inst = CreateFUInstance(circuit,versat->input,name);
+      ComplexFUInstance** ptr = circuit->inputInstancePointers.Alloc();
 
-      FUInstance** ptr = circuit->inputInstancePointers.Alloc();
-
-      //inst->id = i; // TODO: Hackish
-      *ptr = inst;
-      decl.nInputs += 1;
+      *ptr = (ComplexFUInstance*) inst;
    }
 
    tok->AssertNextToken("{");
 
+   int shareIndex = 0;
    int state = 0;
    while(!tok->Done()){
       Token token = tok->PeekToken();
@@ -251,86 +304,59 @@ FUDeclaration* ParseModule(Versat* versat,Tokenizer* tok){
       }
 
       if(state == 0){
-         Token possibleStatic = tok->PeekToken();
+         Token possibleQualifier = tok->PeekToken();
 
          bool isStatic = false;
-         if(CompareString(possibleStatic,"static")){
-            tok->AdvancePeek(possibleStatic);
+         if(CompareString(possibleQualifier,"static")){
+            tok->AdvancePeek(possibleQualifier);
             isStatic = true;
          }
+         if(CompareString(possibleQualifier,"share")){
+            tok->AdvancePeek(possibleQualifier);
 
-         Token type = tok->NextToken();
-         Token name = tok->NextToken();
+            Token shareType = tok->NextToken();
 
-         FUDeclaration* FUType = GetTypeByName(versat,type);
-         FUInstance* inst = CreateNamedFUInstance(circuit,FUType,name);
-         inst->isStatic = isStatic;
-         inst->name.parent = &decl.name;
+            if(CompareString(shareType,"config")){
+               Token typeName = tok->NextToken();
 
-         Token peek = tok->PeekToken();
+               tok->AssertNextToken("{");
 
-         if(CompareString(peek,"(")){
-            tok->AdvancePeek(peek);
+               FUDeclaration* type = GetTypeByName(versat,typeName);
+               while(1){
+                  Token possibleName = tok->NextToken();
 
-            Token list = tok->NextFindUntil(")");
-            int arguments = 1 + CountSubstring(list,MAKE_SIZED_STRING(","));
-            Assert(arguments <= FUType->nConfigs);
+                  if(CompareString(possibleName,"}")){
+                     break;
+                  }
 
-            Tokenizer insideList(list,",",{});
+                  SizedString name = PushString(&versat->permanent,possibleName);
+                  FUInstance* inst = CreateFUInstance(circuit,type,name);
 
-            inst->config = (int*) calloc(FUType->nConfigs,sizeof(int));
-            for(int i = 0; i < arguments; i++){
-               Token arg = insideList.NextToken();
+                  ShareInstanceConfig(inst,shareIndex);
 
-               inst->config[i] = ParseInt(arg);
-
-               if(i != arguments - 1){
-                  insideList.AssertNextToken(",");
+                  tok->AssertNextToken(";");
                }
+            } else {
+               UNHANDLED_ERROR;
             }
-            Assert(insideList.Done());
 
-            tok->AssertNextToken(")");
-            peek = tok->PeekToken();
+            shareIndex += 1;
+         } else {
+            FUInstance* inst = ParseInstanceDeclaration(versat,tok,circuit);
+            inst->isStatic = isStatic;
+
+            tok->AssertNextToken(";");
          }
-
-         if(CompareString(peek,"{")){
-            tok->AdvancePeek(peek);
-
-            Token list = tok->NextFindUntil("}");
-            int arguments = 1 + CountSubstring(list,MAKE_SIZED_STRING(","));
-            Assert(arguments <= (1 << FUType->memoryMapBits));
-
-            Tokenizer insideList(list,",",{});
-
-            inst->memMapped = (int*) calloc(1 << FUType->memoryMapBits,sizeof(int));
-            for(int i = 0; i < arguments; i++){
-               Token arg = insideList.NextToken();
-
-               inst->memMapped[i] = ParseInt(arg);
-
-               if(i != arguments - 1){
-                  insideList.AssertNextToken(",");
-               }
-            }
-            Assert(insideList.Done());
-
-            tok->AssertNextToken("}");
-            peek = tok->PeekToken();
-         }
-
-         tok->AssertNextToken(";");
       } else {
          Var outVar = ParseVar(tok);
 
          Token peek = tok->NextToken();
          if(CompareToken(peek,"=")){
-            FUInstance* inst = ParseExpression(versat,circuit,tok,&decl.name);
+            SizedString name = PushString(&versat->permanent,outVar.name);
+            FUInstance* inst = ParseExpression(versat,circuit,tok,name);
 
-            strcpy(inst->name.str,outVar.name.str);
-
-            if(strcmp(outVar.name.str,"out") == 0){
-               Assert(0);
+            if(CompareString(outVar.name,"out")){
+               USER_ERROR;
             }
 
             tok->AssertNextToken(";");
@@ -342,264 +368,46 @@ FUDeclaration* ParseModule(Versat* versat,Tokenizer* tok){
             int inRange = inVar.portEnd - inVar.portStart + 1;
 
             if(delayRange != 1 && inRange != delayRange){
-               Assert(false);
+               UNHANDLED_ERROR;
             }
 
             Assert(outRange == inRange || outRange == 1);
 
-            FUInstance* inst1 = GetInstance(circuit,{outVar.name.str});
+            FUInstance* inst1 = GetInstanceByName(circuit,"%.*s",UNPACK_SS(outVar.name));
             FUInstance* inst2 = nullptr;
             #if 1
-            if(CompareString(inVar.name.str,"out")){
-               decl.nOutputs = maxi(decl.nOutputs - 1,inVar.portEnd) + 1;
-
+            if(CompareString(inVar.name,"out")){
                if(!circuit->outputInstance){
-                  circuit->outputInstance = CreateNamedFUInstance(circuit,circuitOutput,MakeSizedString("out"));
-                  circuit->outputInstance->name.parent = &decl.name;
+                  circuit->outputInstance = (ComplexFUInstance*) CreateFUInstance(circuit,versat->output,MakeSizedString("out"));
                }
 
                inst2 = circuit->outputInstance;
             } else {
-               inst2 = GetInstance(circuit,{inVar.name.str});
+               inst2 = GetInstanceByName(circuit,"%.*s",UNPACK_SS(inVar.name));
             }
 
             int delayDelta = (delayRange == 1 ? 0 : 1);
             if(outRange == 1){
                for(int i = 0; i < inRange; i++){
-                  Edge* edge = ConnectUnits(inst1,outVar.portStart,inst2,inVar.portStart + i);
-                  edge->delay = -(outVar.delayStart + delayDelta * i);
+                  ConnectUnitsWithDelay(inst1,outVar.portStart,inst2,inVar.portStart + i,-(outVar.delayStart + delayDelta * i));
                }
             } else {
                for(int i = 0; i < inRange; i++){
-                  Edge* edge = ConnectUnits(inst1,outVar.portStart + i,inst2,inVar.portStart + i);
-                  edge->delay = -(outVar.delayStart + delayDelta * i);
+                  ConnectUnitsWithDelay(inst1,outVar.portStart + i,inst2,inVar.portStart + i,-(outVar.delayStart + delayDelta * i));
                }
             }
             #endif
 
             tok->AssertNextToken(";");
          } else {
-            printf("%.*s\n",peek.size,peek.str);
+            printf("%.*s\n",UNPACK_SS(peek));
             fflush(stdout);
             Assert(0);
          }
       }
    }
 
-   CalculateDelay(versat,circuit);
-
-   decl.inputDelays = (int*) calloc(decl.nInputs,sizeof(int));
-
-   int i = 0;
-   int minimum = (1 << 30);
-   for(FUInstance** input : circuit->inputInstancePointers){
-      decl.inputDelays[i++] = (*input)->baseDelay;
-      minimum = mini(minimum,(*input)->baseDelay);
-   }
-
-   decl.latencies = (int*) calloc(decl.nOutputs,sizeof(int));
-
-   if(circuit->outputInstance){
-      for(int i = 0; i < decl.nOutputs; i++){
-         decl.latencies[i] = circuit->outputInstance->tempData->inputDelay;
-      }
-   }
-
-   OutputGraphDotFile(circuit,1,"circuit.dot");
-
-   int memoryMapBits[32];
-   memset(memoryMapBits,0,sizeof(int) * 32);
-   for(FUInstance* inst : circuit->instances){
-      FUDeclaration* d = inst->declaration;
-
-      if(d->isMemoryMapped){
-         memoryMapBits[d->memoryMapBits] += 1;
-      }
-
-      if(inst->isStatic){
-         decl.nStaticConfigs += d->nConfigs;
-      }
-
-      decl.nConfigs += d->nConfigs;
-      decl.nStates += d->nStates;
-      decl.nDelays += d->nDelays;
-      decl.extraDataSize += d->extraDataSize;
-      decl.nIOs += d->nIOs;
-   }
-
-   // Huffman encoding calculation for max bits
-   int last = -1;
-   while(1){
-      for(int i = 0; i < 32; i++){
-         if(memoryMapBits[i]){
-            memoryMapBits[i+1] += (memoryMapBits[i] / 2);
-            memoryMapBits[i] = memoryMapBits[i] % 2;
-            last = i;
-         }
-      }
-
-      int first = -1;
-      int second = -1;
-      for(int i = 0; i < 32; i++){
-         if(first == -1 && memoryMapBits[i] == 1){
-            first = i;
-         } else if(second == -1 && memoryMapBits[i] == 1){
-            second = i;
-            break;
-         }
-      }
-
-      if(second == -1){
-         break;
-      }
-
-      memoryMapBits[first] = 0;
-      memoryMapBits[second] = 0;
-      memoryMapBits[maxi(first,second) + 1] += 1;
-   }
-
-   if(last != -1){
-      decl.isMemoryMapped = true;
-      decl.memoryMapBits = last;
-   }
-
-   decl.configWires = PushArray(&versat->permanent,decl.nConfigs,Wire);
-   decl.stateWires = PushArray(&versat->permanent,decl.nStates,Wire);
-
-   int configIndex = 0;
-   int stateIndex = 0;
-   for(FUInstance* inst : circuit->instances){
-      FUDeclaration* d = inst->declaration;
-
-      for(int i = 0; i < d->nConfigs; i++){
-         int newSize = strlen(d->configWires[i].name) + 16;
-
-         //Byte* newName = (Byte*) calloc(newSize,sizeof(char));
-         Byte* newName = PushBytes(&versat->permanent,newSize);
-         int size = sprintf(newName,"%s_%.2d",d->configWires[i].name,configIndex);
-
-         Assert(size < newSize);
-
-         decl.configWires[configIndex].name = (const char*) newName;
-         decl.configWires[configIndex++].bitsize = d->configWires[i].bitsize;
-      }
-
-      for(int i = 0; i < d->nStates; i++){
-         int newSize = strlen(d->stateWires[i].name) + 16;
-
-         //Byte* newName = (Byte*) calloc(newSize,sizeof(char));
-         Byte* newName = PushBytes(&versat->permanent,newSize);
-         int size = sprintf(newName,"%s_%.2d",d->stateWires[i].name,stateIndex);
-
-         Assert(size < newSize);
-
-         decl.stateWires[stateIndex].name = (const char*) newName;
-         decl.stateWires[stateIndex++].bitsize = d->stateWires[i].bitsize;
-      }
-   }
-
-   #if 0
-   if(CompareToken(name,"SHA")){
-      for(FUInstance* inst : circuit->instances){
-         printf("%s:%d\n",inst->name.str,inst->delay);
-      }
-      FlushStdout();
-   }
-   #endif
-
-   #if 0
-   bool computeUnitType = (bool) circuit->inputInstancePointers.Size();
-   for(FUInstance** instPtr : circuit->inputInstancePointers){
-      computeUnitType &= ExistsConnection(circuit,*instPtr,circuit->outputInstance);
-   }
-   #endif
-
-   // TODO: Change unit delay type inference. Only care about delay type to upper levels.
-   // Type source only if a source unit is connected to out. Type sink only if there is a input to sink connection
-   #if 1
-   bool hasSourceDelay = false;
-   bool hasSinkDelay = false;
-   #endif
-   bool implementsDone = false;
-
-   #if 0
-   if(!computeUnitType){
-      if(decl.nInputs && decl.nOutputs){
-         decl.delayType = (DelayType) (DelayType::DELAY_TYPE_SINK_DELAY | DelayType::DELAY_TYPE_SOURCE_DELAY);
-      } else if(decl.nInputs) {
-         decl.delayType = DelayType::DELAY_TYPE_SINK_DELAY;
-      } else if(decl.nOutputs){
-         decl.delayType = DelayType::DELAY_TYPE_SOURCE_DELAY;
-      }
-   }
-   #endif
-
-   LockAccelerator(circuit,Accelerator::Locked::GRAPH);
-   for(FUInstance* inst : circuit->instances){
-      if(inst->declaration->type == FUDeclaration::SPECIAL){
-         continue;
-      }
-
-      if(CHECK_DELAY(inst,DelayType::DELAY_TYPE_IMPLEMENTS_DONE)){
-         implementsDone = true;
-      }
-      #if 1
-      if(inst->tempData->nodeType == GraphComputedData::TAG_SINK){
-         hasSinkDelay = CHECK_DELAY(inst,DELAY_TYPE_SINK_DELAY);
-      }
-      if(inst->tempData->nodeType == GraphComputedData::TAG_SOURCE){
-         hasSourceDelay = CHECK_DELAY(inst,DELAY_TYPE_SOURCE_DELAY);
-      }
-      if(inst->tempData->nodeType == GraphComputedData::TAG_SOURCE_AND_SINK){
-         hasSinkDelay = CHECK_DELAY(inst,DELAY_TYPE_SINK_DELAY);
-         hasSourceDelay = CHECK_DELAY(inst,DELAY_TYPE_SOURCE_DELAY);
-      }
-      #endif
-   }
-
-   #if 1
-   if(hasSourceDelay){
-      decl.delayType = (DelayType) ((int)decl.delayType | (int) DelayType::DELAY_TYPE_SOURCE_DELAY);
-   }
-   if (hasSinkDelay){
-      decl.delayType = (DelayType) ((int)decl.delayType | (int) DelayType::DELAY_TYPE_SINK_DELAY);
-   }
-   #endif
-
-   if(implementsDone){
-      decl.delayType = (DelayType) ((int)decl.delayType | (int)DelayType::DELAY_TYPE_IMPLEMENTS_DONE);
-   }
-
-   FUDeclaration* res = RegisterFU(versat,decl);
-
-   // TODO: Hackish
-   for(FUInstance* inst : circuit->instances){
-      if(inst->isStatic){
-         StaticInfo unit = {};
-         unit.module = res;
-         unit.name = MakeSizedString(inst->name.str);
-         unit.nConfigs = inst->declaration->nConfigs;
-         unit.wires = inst->declaration->configWires;
-
-         SetLikeInsert(res->staticUnits,unit);
-      } else if(inst->declaration->type == FUDeclaration::COMPOSITE){
-         for(StaticInfo& unit : inst->declaration->staticUnits){
-            SetLikeInsert(res->staticUnits,unit);
-         }
-      }
-   }
-
-   #if 1
-   {
-   char buffer[256];
-   sprintf(buffer,"src/%s.v",decl.name.str);
-   FILE* sourceCode = fopen(buffer,"w");
-   OutputCircuitSource(versat,*res,circuit,sourceCode);
-   fclose(sourceCode);
-   }
-   #endif
-
-   return res;
+   return RegisterSubUnit(versat,PushString(&versat->permanent,name),circuit);
 }
 
 void ParseVersatSpecification(Versat* versat,const char* filepath){
@@ -608,10 +416,10 @@ void ParseVersatSpecification(Versat* versat,const char* filepath){
 
    if(content.size < 0){
       printf("Failed to open file, filepath: %s\n",filepath);
-      Assert(false);
+      DEBUG_BREAK;
    }
 
-   Tokenizer tokenizer = Tokenizer(content, "[](){}+:;,*~.",{"->",">>>","<<<",">>","<<",".."});
+   Tokenizer tokenizer = Tokenizer(content, "#[](){}+:;,*~.",{"->",">>>","<<<",">>","<<",".."});
    Tokenizer* tok = &tokenizer;
 
    while(!tok->Done()){

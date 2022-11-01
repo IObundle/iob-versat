@@ -2,13 +2,13 @@
 #define INCLUDED_VERILOG_PARSER
 
 #include <vector>
-#include <map>
+#include <unordered_map>
 
 #include "utils.hpp"
 #include "parser.hpp"
 
-typedef std::map<SizedString,Value> ValueMap;
-typedef std::map<SizedString,SizedString> MacroMap;
+typedef std::unordered_map<SizedString,Value> ValueMap;
+typedef std::unordered_map<SizedString,SizedString> MacroMap;
 
 struct Arena;
 
@@ -20,9 +20,10 @@ struct PortDeclaration{
 };
 
 struct Module{
-   SizedString name;
    ValueMap parameters;
    std::vector<PortDeclaration> ports;
+   SizedString name;
+   bool isSource;
 };
 
 struct ModuleInfo{
@@ -30,9 +31,21 @@ struct ModuleInfo{
    int nInputs;
    int nOutputs;
    int* inputDelays;
-   int* latencies;
+   int* outputLatencies;
+   int nConfigs;
+   Wire* configs;
+   int nStates;
+   Wire* states;
+   int nDelays;
    bool doesIO;
    bool memoryMapped;
+   int memoryMappedBits;
+   bool hasDone;
+   bool hasClk;
+   bool hasReset;
+   bool hasRun;
+   bool hasRunning;
+   bool isSource;
 };
 
 SizedString PreprocessVerilogFile(Arena* output, SizedString fileContent,std::vector<const char*>* includeFilepaths,Arena* tempArena);

@@ -5,27 +5,29 @@
 `include "versat-io.vh"
 `include "xdefs.vh"
 
-module vread #(
-               parameter DATA_W = 32,
-               parameter ADDR_W = 10
-               )
+module VRead #(
+   parameter DATA_W = 32,
+   parameter ADDR_W = 10
+   )
    (
-   input                   clk,
-   input                   rst,
+   input                  clk,
+   input                  rst,
 
-    input                  run,
-    output                 done,
+   input                  run,
+   output                 done,
 
-    // Native interface
-    input                  databus_ready,
-    output                 databus_valid,
-    output[`IO_ADDR_W-1:0] databus_addr,
-    input [DATA_W-1:0]     databus_rdata,
-    output [DATA_W-1:0]    databus_wdata,
-    output [DATA_W/8-1:0]  databus_wstrb,
+   // Native interface
+   input                  databus_ready,
+   output                 databus_valid,
+   output reg [`IO_ADDR_W-1:0] databus_addr,
+   input [DATA_W-1:0]     databus_rdata,
+   output [DATA_W-1:0]    databus_wdata,
+   output [DATA_W/8-1:0]  databus_wstrb,
+   output [7:0]           databus_len,
+   input                  databus_last,
 
     // input / output data
-    output [DATA_W-1:0]    out0,
+    (* versat_latency = 1 *) output [DATA_W-1:0]    out0,
 
     // configurations
    input [`IO_ADDR_W-1:0]  ext_addr,
@@ -36,6 +38,7 @@ module vread #(
    input [`PERIOD_W-1:0]   dutyA,
    input [`MEM_ADDR_W-1:0] shiftA,
    input [`MEM_ADDR_W-1:0] incrA,
+   input [7:0]             length,
    input                   pingPong,
 
    input [`MEM_ADDR_W-1:0] iterB,
@@ -53,11 +56,35 @@ module vread #(
    input [`MEM_ADDR_W-1:0] incr2B
    );
 
+   assign databus_wdata = 0;
+   assign databus_wstrb = 4'b0000;
+   assign databus_len = length;
+   
    // output databus
    wire [DATA_W-1:0]            outB;
-   wire doneA,doneB;
+   
+   wire gen_done;
+   reg doneA;
+   reg doneB;
+   wire doneB_int;
    assign out0 = outB;
    assign done = doneA & doneB;
+
+   always @(posedge clk,posedge rst)
+   begin
+      if(rst) begin
+         doneA <= 1'b0;
+         doneB <= 1'b0;
+      end else if(run) begin
+         doneA <= 1'b0;
+         doneB <= 1'b0;
+      end else begin 
+         if(databus_valid && databus_ready && databus_last)
+            doneA <= 1'b1;
+         if(doneB_int)
+            doneB <= 1'b1;
+      end
+   end
 
    function [`MEM_ADDR_W-1:0] reverseBits;
       input [`MEM_ADDR_W-1:0]   word;
@@ -109,46 +136,38 @@ module vread #(
          pingPongState <= pingPong ? (!pingPongState) : 1'b0;
    end
 
-   // address generators
-   ext_addrgen #(
-                 .DATA_W(DATA_W)
-                 )
-   addrgenA (
-            .clk(clk),
-            .rst(rst),
+   wire next;
+   wire gen_valid,gen_ready;
+   wire [`MEM_ADDR_W-1:0] gen_addr;
 
-            // Control
-            .run(run),
-            .done(doneA),
+   always @(posedge clk,posedge rst)
+   begin
+      if(rst)
+         databus_addr <= 0;
+      else if(run)
+         databus_addr <= ext_addr;
+   end
 
-            // Configuration
-            .ext_addr(ext_addr),
-            .int_addr(int_addr_inst),
-            .size(size),
-            .direction(direction),
-            .iterations(iterA),
-            .period(perA),
-            .duty(dutyA),
-            .start(startA),
-            .shift(shiftA),
-            .incr(incrA),
-            .delay(delayA),
+   MyAddressGen addrgenA(
+      .clk(clk),
+      .rst(rst),
+      .run(run),
 
-            // Databus interface
-            .databus_ready(databus_ready),
-            .databus_valid(databus_valid),
-            .databus_addr(databus_addr),
-            .databus_rdata(databus_rdata),
-            .databus_wdata(databus_wdata),
-            .databus_wstrb(databus_wstrb),
+      //configurations 
+      .iterations(iterA),
+      .period(perA),
+      .duty(dutyA),
+      .delay(delayA),
+      .start(startA),
+      .shift(shiftA),
+      .incr(incrA),
 
-            // internal memory interface
-            .req(req),
-            .rnw(rnw),
-            .addr(addrA_int),
-            .data_out(inA),
-            .data_in(data_in)
-           );
+      //outputs 
+      .valid(gen_valid),
+      .ready(gen_ready),
+      .addr(gen_addr),
+      .done(gen_done)
+      );
 
     xaddrgen2 addrgen2B (
                        .clk(clk),
@@ -167,7 +186,7 @@ module vread #(
                        .incr2(incr2B),
                        .addr(addrB_int),
                        .mem_en(enB),
-                       .done(doneB)
+                       .done(doneB_int)
                        );
 
    assign addrA = addrA_int2;
@@ -176,6 +195,30 @@ module vread #(
    assign addrA_int2 = addrA_int;
    assign addrB_int2 = reverseB ? reverseBits(addrB_int) : addrB_int;
    
+   wire write_en;
+   wire [`MEM_ADDR_W-1:0] write_addr;
+   wire [DATA_W-1:0] write_data;
+   
+   MemoryWriter #(.ADDR_W(`MEM_ADDR_W)) 
+   writer(
+      .gen_valid(gen_valid),
+      .gen_ready(gen_ready),
+      .gen_addr(gen_addr),
+
+      // Slave connected to data source
+      .data_valid(databus_ready),
+      .data_ready(databus_valid),
+      .data_in(databus_rdata),
+
+      // Connect to memory
+      .mem_enable(write_en),
+      .mem_addr(write_addr),
+      .mem_data(write_data),
+
+      .clk(clk),
+      .rst(rst)
+      );
+
    iob_2p_ram #(
                .DATA_W(DATA_W),
                .ADDR_W(ADDR_W)
@@ -184,9 +227,9 @@ module vread #(
         .clk(clk),
 
         // Writting port
-        .w_en(enA & wrA),
-        .w_addr(addrA),
-        .w_data(data_to_wrA),
+        .w_en(write_en),
+        .w_addr(write_addr),
+        .w_data(write_data),
 
         // Reading port
         .r_en(enB),

@@ -12,20 +12,7 @@ unsigned int staticBuffer[] = {
    #{end} 
 };
 
-struct HashKey{
-   const char* key;
-   int32_t index;
-};
 
-HashKey instanceHashmap[] = {
-   #{join "," for d instanceHashmap}
-      #{if d.data == 0-1}
-      {(const char*)0,-1}
-      #{else}
-      {"@{d.key}",@{d.data}}
-      #{end}
-   #{end}
-};
 
 static volatile int* staticBase = (volatile int*) @{versatBase + nConfigs * 4 |> Hex};
 static volatile int* delayBase = (volatile int*) @{versatBase + (nConfigs + nStatics) * 4 |> Hex};
@@ -37,7 +24,7 @@ static volatile int* memMappedBase = (volatile int*) @{versatBase + memoryMapped
 FUInstance instancesBuffer[] = {
    #{join "," for inst instances}
    {
-      .name = @{inst.name |> GetHierarchyName |> String},
+      .name = "@{inst.name |> Identify}",
       #{if inst.declaration.isMemoryMapped} 
          .memMapped = (int*) @{versatBase + memoryMappedBase * 4 + inst.versatData.memoryAddressOffset * 4 |> Hex}, 
       #{else} 
@@ -61,11 +48,13 @@ FUInstance instancesBuffer[] = {
       #{end}
 
       #{if inst.declaration.nDelays}
-         .delay = (int*) &delayBase[@{delaySeen}]
+         .delay = (int*) &delayBase[@{delaySeen}],
       #{set delaySeen delaySeen + inst.declaration.nDelays}
       #{else}
-         .delay = (int*) 0x0
+         .delay = (int*) 0x0,
       #{end}
+
+      .numberChilds = @{inst.compositeAccel |> CountNonOperationChilds}
    }
    #{end}
 };
