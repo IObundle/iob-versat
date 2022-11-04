@@ -2,10 +2,27 @@
 #{set inst2 portInstance.inst}
 #{set decl2 inst2.declaration}
    #{if decl2.type == 2}
-      in@{inst2.id} #{else}
+      in@{inst2.id} 
+   #{else}
       #{if decl2.isOperation}
-         comb_@{inst2.name |> Identify} #{else}
-         output_@{inst2.id}_@{portInstance.port} #{end}
+         comb_@{inst2.name |> Identify} 
+      #{else}
+         output_@{inst2.id}_@{portInstance.port} 
+      #{end}
+   #{end}
+#{end}
+
+#{define retOutputName portInstance}
+#{set inst2 portInstance.inst}
+#{set decl2 inst2.declaration}
+   #{if decl2.type == 2}
+      #{return "in" # inst2.id} 
+   #{else}
+      #{if decl2.isOperation}
+         #{return "comb_" # inst2.name |> Identify} 
+      #{else}
+         #{return "output_" # inst2.id # "_" # portInstance.port} 
+      #{end}
    #{end}
 #{end}
 

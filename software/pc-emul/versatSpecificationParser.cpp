@@ -353,7 +353,7 @@ FUDeclaration* ParseModule(Versat* versat,Tokenizer* tok){
          Token peek = tok->NextToken();
          if(CompareToken(peek,"=")){
             SizedString name = PushString(&versat->permanent,outVar.name);
-            FUInstance* inst = ParseExpression(versat,circuit,tok,name);
+            ParseExpression(versat,circuit,tok,name);
 
             if(CompareString(outVar.name,"out")){
                USER_ERROR;

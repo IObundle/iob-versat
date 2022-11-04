@@ -141,22 +141,14 @@ reg [31:0] #{join "," for inst instances} #{if inst.declaration.isOperation} com
 always @*
 begin
 #{for inst instances}
-#{set decl inst.declaration}
+   #{set decl inst.declaration}
    #{if decl.isOperation}
-   #{set input1 inst.tempData[0].inputs[0].instConnectedTo}
+      #{set input1 inst.tempData[0].inputs[0].instConnectedTo}
       #{if decl.nInputs == 1}
-         comb_@{inst.name |> Identify} = @{decl.operation} #{call outputName input1};
+         #{format decl.operation "comb" @{inst.name |> Identify} #{call retOutputName input1}};
       #{else}
          #{set input2 inst.tempData[0].inputs[1].instConnectedTo}
-         #{if decl.name == "RHR"}
-            comb_@{inst.name |> Identify} = (#{call outputName input1} >> #{call outputName input2}) | (#{call outputName input1} << (32 - #{call outputName input2}));
-         #{else} 
-            #{if decl.name == "RHL"}
-               comb_@{inst.name |> Identify} = (#{call outputName input1} << #{call outputName input2}) | (#{call outputName input1} >> (32 - #{call outputName input2}));
-            #{else}
-               comb_@{inst.name |> Identify} = #{call outputName input1} @{decl.operation} #{call outputName input2};
-            #{end}
-         #{end}
+         #{format decl.operation "comb" @{inst.name |> Identify} #{call retOutputName input1} #{call retOutputName input2}};
       #{end}
    #{end}
 #{end}

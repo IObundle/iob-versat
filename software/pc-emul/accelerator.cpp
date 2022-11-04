@@ -435,7 +435,6 @@ void CalculateVersatData(Accelerator* accel){
 
 void FixMultipleInputs(Versat* versat,Accelerator* accel){
    static int multiplexersInstantiated = 0;
-   static int graphFixed = 0;
    LockAccelerator(accel,Accelerator::Locked::GRAPH);
 
    int portUsedCount[99];

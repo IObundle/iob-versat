@@ -152,7 +152,14 @@ void RegisterOperators(Versat* versat){
    FUFunction unaryF[] = {UnaryNot};
    const char* binary[] = {"XOR","ADD","AND","OR","RHR","SHR","RHL","SHL"};
    FUFunction binaryF[] = {BinaryXOR,BinaryADD,BinaryAND,BinaryOR,BinaryRHR,BinarySHR,BinaryRHL,BinarySHL};
-   const char* binaryOperation[] = {"^","+","&","|","<<",">>","<<",">>"};
+   const char* binaryOperation[] = {"{0}_{1} = {2} ^ {3}",
+                                    "{0}_{1} = {2} + {3}",
+                                    "{0}_{1} = {2} & {3}",
+                                    "{0}_{1} = {2} | {3}",
+                                    "{0}_{1} = ({2} >> {3}) | ({2} << (32 - {3}))",
+                                    "{0}_{1} = {2} >> {3}",
+                                    "{0}_{1} = ({2} << {3}) | ({2} >> (32 - {3}))",
+                                    "{0}_{1} = {2} << {3}"};
 
    FUDeclaration decl = {};
    decl.nOutputs = 1;
@@ -160,12 +167,11 @@ void RegisterOperators(Versat* versat){
    decl.inputDelays = zeros;
    decl.latencies = zeros;
    decl.isOperation = true;
-   for(unsigned int i = 0; i < ARRAY_SIZE(unary); i++){
-      decl.name = MakeSizedString(unary[i]);
-      decl.updateFunction = unaryF[i];
-      decl.operation = "~";
-      RegisterFU(versat,decl);
-   }
+
+   decl.name = MakeSizedString(unary[0]);
+   decl.updateFunction = unaryF[0];
+   decl.operation = "{0}_{1} = ~{2}";
+   RegisterFU(versat,decl);
 
    decl.nInputs = 2;
    for(unsigned int i = 0; i < ARRAY_SIZE(binary); i++){
@@ -220,18 +226,18 @@ Versat* InitVersat(int base,int numberConfigurations){
 
 void Free(Versat* versat){
    for(Accelerator* accel : versat->accelerators){
+      #if 0
       if(accel->type == Accelerator::CIRCUIT){
          continue;
       }
+      #endif
 
       #if 1
-      //if(accel->type != Accelerator::CIRCUIT){
-         for(ComplexFUInstance* inst : accel->instances){
-            if(inst->initialized && inst->declaration->destroyFunction){
-               inst->declaration->destroyFunction(inst);
-            }
+      for(ComplexFUInstance* inst : accel->instances){
+         if(inst->initialized && inst->declaration->destroyFunction){
+            inst->declaration->destroyFunction(inst);
          }
-      //}
+      }
       #endif
    }
 
@@ -474,8 +480,6 @@ static FUInstance* vGetInstanceByName_(Accelerator* circuit,int argc,va_list arg
       }
 
       Tokenizer tok(name,".",{});
-      Token hasDot = tok.PeekFindIncluding(".");
-
       while(!tok.Done()){
          if(namePtr == nullptr){
             HierarchicalName* newBlock = PushStruct(arena,HierarchicalName);
@@ -696,7 +700,7 @@ void DoPopulate(Accelerator* accel,FUDeclaration* accelType,FUInstanceInterfaces
       if(inst->sharedEnable){
          int index = inst->sharedIndex;
 
-         if(index >= sharingInfo.size()){
+         if(index >= (int) sharingInfo.size()){
             sharingInfo.resize(index + 1);
          }
 
@@ -806,7 +810,7 @@ void InitializeFUInstances(Accelerator* accel,bool force){
    AcceleratorIterator iter = {};
    for(ComplexFUInstance* inst = iter.Start(accel); inst; inst = iter.Next()){
       FUDeclaration* type = inst->declaration;
-      if((force && type->initializeFunction) || (!inst->initialized && type->initializeFunction)){
+      if(type->initializeFunction && (force || !inst->initialized)){
          type->initializeFunction(inst);
          inst->initialized = true;
       }
@@ -865,7 +869,7 @@ AcceleratorValues ComputeAcceleratorValues(Versat* versat,Accelerator* accel){
 
       // Check if shared
       if(inst->sharedEnable){
-         if(inst->sharedIndex >= seenShared.size()){
+         if(inst->sharedIndex >= (int) seenShared.size()){
             seenShared.resize(inst->sharedIndex + 1);
          }
 
@@ -1685,10 +1689,10 @@ Accelerator* Flatten(Versat* versat,Accelerator* accel,int times){
    PopulateAccelerator(versat,newAccel);
    InitializeFUInstances(newAccel,true);
 
+   #if 0
    AcceleratorValues val1 = ComputeAcceleratorValues(versat,accel);
    AcceleratorValues val2 = ComputeAcceleratorValues(versat,newAccel);
 
-   #if 0
    Assert((val1.configs + val1.statics) == val2.configs);
    Assert(val1.states == val2.states);
    Assert(val1.delays == val2.delays);

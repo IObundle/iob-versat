@@ -151,7 +151,7 @@ struct ComplexFUInstance : public FUInstance{
    char tag;
    bool savedConfiguration; // For subunits registered, indicate when we save configuration before hand
    bool savedMemory; // Same for memory
-   Byte sharedIndex;
+   int sharedIndex;
    bool sharedEnable;
    bool initialized;
 };
@@ -178,8 +178,8 @@ struct Versat{
 	FUDeclaration* buffer;
    FUDeclaration* fixedBuffer;
    FUDeclaration* input;
-   FUDeclaration* multiplexer;
    FUDeclaration* output;
+   FUDeclaration* multiplexer;
    FUDeclaration* pipelineRegister;
 
    DebugState debug;

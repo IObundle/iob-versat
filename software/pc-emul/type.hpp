@@ -110,7 +110,9 @@ SizedString GetValueRepresentation(Value val,Arena* arena);
 
 Value CollapsePtrIntoStruct(Value in);
 Value CollapseArrayIntoPtr(Value in);
-Value ConvertValue(Value in,Type* want);
+Value CollapseValue(Value val);
+
+Value ConvertValue(Value in,Type* want,Arena* arena);
 
 int ArrayLength(Type* type);
 

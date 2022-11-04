@@ -183,8 +183,6 @@ void Clique(ConsolidationGraph graphArg,int size){
 }
 
 ConsolidationGraph MaxClique(ConsolidationGraph graph){
-   ConsolidationGraph res = {};
-
    max = 0;
    found = 0;
    for(int i = 0; i < TABLE_SIZE; i++){
@@ -394,10 +392,10 @@ static InstanceMap ConsolidationGraphMapping(Versat* versat,Accelerator* accel1,
 
    InstanceMap res;
 
-   for(int i = 0; i < graph.numberNodes; i++){
-      MappingNode node = graph.nodes[i];
+   for(int i = 0; i < clique.numberNodes; i++){
+      MappingNode node = clique.nodes[i];
 
-      if(!graph.validNodes[i]){
+      if(!clique.validNodes[i]){
          continue;
       }
 
@@ -572,7 +570,7 @@ FUDeclaration* MergeAccelerators(Versat* versat,FUDeclaration* accel1,FUDeclarat
    InstanceMap map = {};
 
    Accelerator* newGraph = CreateAccelerator(versat);
-   newGraph->type = Accelerator::CIRCUIT;
+   //newGraph->type = Accelerator::CIRCUIT;
 
    // Create base instances from accel 1
    for(FUInstance* inst : flatten1->instances){
