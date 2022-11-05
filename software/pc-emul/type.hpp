@@ -108,6 +108,8 @@ void FreeTypes();
 
 SizedString GetValueRepresentation(Value val,Arena* arena);
 
+Value RemoveOnePointerIndirection(Value in);
+
 Value CollapsePtrIntoStruct(Value in);
 Value CollapseArrayIntoPtr(Value in);
 Value CollapseValue(Value val);

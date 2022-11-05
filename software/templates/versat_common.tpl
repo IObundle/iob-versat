@@ -5,7 +5,11 @@
       in@{inst2.id} 
    #{else}
       #{if decl2.isOperation}
-         comb_@{inst2.name |> Identify} 
+         #{if decl2.latencies[0] == 0}
+            comb_@{inst2.name |> Identify}
+         #{else}
+            seq_@{inst2.name |> Identify}
+         #{end}
       #{else}
          output_@{inst2.id}_@{portInstance.port} 
       #{end}
@@ -38,10 +42,17 @@
 
 #{define CountOperations instances}
    #{set nOperations 0}
+   #{set nCombOperations 0}
+   #{set nSeqOperations 0}
    #{for inst instances}
       #{if inst.declaration.isOperation}
-      #{inc nOperations}
-   #{end}
+         #{inc nOperations}
+         #{if inst.declaration.latencies[0] == 0}
+            #{inc nCombOperations}
+         #{else}
+            #{inc nSeqOperations}
+         #{end}
+      #{end}
    #{end}
    #{return nOperations}
 #{end}

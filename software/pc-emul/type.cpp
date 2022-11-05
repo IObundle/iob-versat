@@ -631,8 +631,68 @@ Value GetValue(Iterator iter){
    return val;
 }
 
-SizedString GetValueRepresentation(Value val){
-   SizedString res = {};
+static bool IsPointerLike(Type* type){
+   bool res = type->type == Type::POINTER || type->type == Type::ARRAY;
+   return res;
+}
+
+Value RemoveOnePointerIndirection(Value in){
+   Assert(IsPointerLike(in.type));
+
+   Value res = in;
+
+   if(in.type->type == Type::ARRAY){
+      res = CollapseArrayIntoPtr(in);
+   }
+
+   // Remove one level of indirection
+   Assert(in.type->type == Type::POINTER);
+   Type* type = res.type;
+
+   char* deference = (char*) res.custom;
+
+   if(deference != nullptr){
+      res.custom = *((char**) deference);
+      res.type = type->pointerType;
+   } else {
+      res = MakeValue();
+   }
+
+   return res;
+}
+
+static bool IsTypeBaseTypeOfPointer(Type* baseToCheck,Type* pointerLikeType){
+   Type* checker = pointerLikeType;
+   while(IsPointerLike(checker)){
+      if(baseToCheck == checker){
+         return true;
+      } else if(checker->type == Type::ARRAY){
+         checker = GetPointerType(checker->arrayType);
+      } else if(checker->type == Type::POINTER){
+         checker = checker->pointerType;
+      } else {
+         break;
+      }
+   }
+
+   bool res = (baseToCheck == checker);
+   return res;
+}
+
+static Value CollapsePtrUntilType(Value in, Type* typeWanted){
+   Value res = in;
+
+   while(res.type != typeWanted){
+      if(res.type->type == Type::ARRAY){
+         res = CollapseArrayIntoPtr(res);
+      } else if(in.type->type == Type::POINTER){
+         res = RemoveOnePointerIndirection(res);
+      } else {
+         NOT_POSSIBLE;
+      }
+   }
+
+   Assert(res.type == typeWanted);
 
    return res;
 }
@@ -655,7 +715,15 @@ bool Equal(Value v1,Value v2){
       return CompareString(ss,str);
    }
 
-   c2 = ConvertValue(c2,c1.type,nullptr);
+   if(IsTypeBaseTypeOfPointer(c2.type,c1.type)){
+      c1 = CollapsePtrUntilType(c1,c2.type);
+   } else if(IsTypeBaseTypeOfPointer(c1.type,c2.type)){
+      c2 = CollapsePtrUntilType(c2,c1.type);
+   }
+
+   if(c2.type != c1.type){
+      c2 = ConvertValue(c2,c1.type,nullptr);
+   }
 
    bool res = false;
 
@@ -671,6 +739,13 @@ bool Equal(Value v1,Value v2){
       } else {
          res = (c1.number == c2.number);
       }
+   } else if(c1.type->type == Type::POINTER){
+      Assert(!c1.isTemp && !c2.isTemp); // TODO: The concept of temp variables should be better handled. For now, just check that we are dealing with the must common case and proceed
+
+      c1 = RemoveOnePointerIndirection(c1);
+      c2 = RemoveOnePointerIndirection(c2);
+
+      res = (c1.custom == c2.custom);
    } else {
       NOT_IMPLEMENTED;
    }

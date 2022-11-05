@@ -222,6 +222,20 @@ static Expression* ParseFactor(Tokenizer* tok){
       tok->AdvancePeek(peek);
       expr = ParseExpression(tok);
       tok->AssertNextToken(")");
+   } else if(CompareString(peek,"!")){
+      tok->AdvancePeek(peek);
+
+      Expression* child = ParseExpression(tok);
+
+      expr = PushStruct(tempArena,Expression);
+      expr->expressions = PushStruct(tempArena,Expression*);
+
+      expr->type = Expression::OPERATION;
+      expr->op = "!";
+      expr->size = 1;
+      expr->expressions[0] = child;
+
+      expr->text = tok->Point(start);
    } else {
       expr = ParseAtom(tok,tempArena);
    }
@@ -233,6 +247,7 @@ static Expression* ParseFactor(Tokenizer* tok){
 static Expression* ParseExpression(Tokenizer* tok){
    void* start = tok->Mark();
 
+   #if 0
    Token peek = tok->PeekToken();
    if(CompareString(peek,"!")){
       tok->AdvancePeek(peek);
@@ -240,7 +255,7 @@ static Expression* ParseExpression(Tokenizer* tok){
       Expression* child = ParseExpression(tok);
 
       Expression* expr = PushStruct(tempArena,Expression);
-      expr->expressions = PushArray(tempArena,1,Expression*);
+      expr->expressions = PushStruct(tempArena,Expression*);
 
       expr->type = Expression::OPERATION;
       expr->op = "!";
@@ -250,6 +265,7 @@ static Expression* ParseExpression(Tokenizer* tok){
       expr->text = tok->Point(start);
       return expr;
    }
+   #endif
 
    Expression* res = ParseOperationType(tok,{{"#"},{"|>"},{"and","or","xor"},{">","<",">=","<=","==","!="},{"+","-"},{"*","/","&","**"}},ParseFactor,tempArena);
 
@@ -548,40 +564,6 @@ static Value EvalExpression(Expression* expr){
    return MakeValue();
 }
 
-#if 0
-static SizedString PrintValue(FILE* file,Value in){
-   Value val = CollapseArrayIntoPtr(in);
-
-   if(val.type == ValueType::NUMBER){
-
-
-      fprintf(file,"%d",val.number);
-   } else if(val.type == ValueType::STRING){
-      if(val.literal){
-         fprintf(file,"\"");
-      }
-      fprintf(file,"%.*s",val.str.size,val.str.str);
-      if(val.literal){
-         fprintf(file,"\"");
-      }
-   } else if(val.type == ValueType::CHAR){
-      fprintf(file,"%c",val.ch);
-   } else if(val.type == ValueType::SIZED_STRING){
-      fprintf(file,"%.*s",val.str.size,val.str.str);
-   } else if(val.type == ValueType::BOOLEAN){
-      fprintf(file,"%s",val.boolean ? "true" : "false");
-   } else if(val.type->type == Type::POINTER){
-      Assert(!val.isTemp);
-
-      void* res = *(void**) val.custom;
-
-      fprintf(file,"%p",res);
-   } else {
-      NOT_IMPLEMENTED;
-   }
-}
-#endif
-
 static SizedString EvalBlockCommand(Block* block){
    Command* com = block->command;
    SizedString res = {};
@@ -700,8 +682,6 @@ static ValueAndText EvalNonBlockCommand(Command* com){
       val = EvalExpression(com->expressions[1]);
 
       Assert(com->expressions[0]->type == Expression::IDENTIFIER);
-
-      val = CollapsePtrIntoStruct(val);
 
       envTable[com->expressions[0]->id] = val;
    } else if(CompareString(com->name,"inc")){

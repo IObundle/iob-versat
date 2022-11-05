@@ -82,69 +82,95 @@ static FUDeclaration* RegisterCircuitOutput(Versat* versat){
    return RegisterFU(versat,decl);
 }
 
+static int* UpdatePipelineRegister(ComplexFUInstance* inst){
+   static int out;
+
+   out = GetInputValue(inst,0);
+   inst->done = true;
+
+   return &out;
+}
+
+static FUDeclaration* RegisterPipelineRegister(Versat* versat){
+   FUDeclaration decl = {};
+   static int ones[] = {1};
+
+   decl.name = MakeSizedString("PipelineRegister");
+   decl.nInputs = 1;
+   decl.nOutputs = 1;
+   decl.latencies = ones;
+   decl.inputDelays = zeros;
+   decl.initializeFunction = DefaultInitFunction;
+   decl.updateFunction = UpdatePipelineRegister;
+   decl.isOperation = true;
+   decl.operation = "{0}_{1} <= {2}";
+
+   return RegisterFU(versat,decl);
+}
+
 int* UnaryNot(ComplexFUInstance* inst){
-    static uint out;
-    out = ~GetInputValue(inst,0);
-    inst->done = true;
-    return (int*) &out;
+   static uint out;
+   out = ~GetInputValue(inst,0);
+   inst->done = true;
+   return (int*) &out;
 }
 
 int* BinaryXOR(ComplexFUInstance* inst){
-    static uint out;
-    out = GetInputValue(inst,0) ^ GetInputValue(inst,1);
-    inst->done = true;
-    return (int*) &out;
+   static uint out;
+   out = GetInputValue(inst,0) ^ GetInputValue(inst,1);
+   inst->done = true;
+   return (int*) &out;
 }
 
 int* BinaryADD(ComplexFUInstance* inst){
-    static uint out;
-    out = GetInputValue(inst,0) + GetInputValue(inst,1);
-    inst->done = true;
-    return (int*) &out;
+   static uint out;
+   out = GetInputValue(inst,0) + GetInputValue(inst,1);
+   inst->done = true;
+   return (int*) &out;
 }
 int* BinaryAND(ComplexFUInstance* inst){
-    static uint out;
-    out = GetInputValue(inst,0) & GetInputValue(inst,1);
-    inst->done = true;
-    return (int*) &out;
+   static uint out;
+   out = GetInputValue(inst,0) & GetInputValue(inst,1);
+   inst->done = true;
+   return (int*) &out;
 }
 int* BinaryOR(ComplexFUInstance* inst){
-    static uint out;
-    out = GetInputValue(inst,0) | GetInputValue(inst,1);
-    inst->done = true;
-    return (int*) &out;
+   static uint out;
+   out = GetInputValue(inst,0) | GetInputValue(inst,1);
+   inst->done = true;
+   return (int*) &out;
 }
 int* BinaryRHR(ComplexFUInstance* inst){
-    static uint out;
-    uint value = GetInputValue(inst,0);
-    uint shift = GetInputValue(inst,1);
-    out = (value >> shift) | (value << (32 - shift));
-    inst->done = true;
-    return (int*) &out;
+   static uint out;
+   uint value = GetInputValue(inst,0);
+   uint shift = GetInputValue(inst,1);
+   out = (value >> shift) | (value << (32 - shift));
+   inst->done = true;
+   return (int*) &out;
 }
 int* BinaryRHL(ComplexFUInstance* inst){
-    static uint out;
-    uint value = GetInputValue(inst,0);
-    uint shift = GetInputValue(inst,1);
-    out = (value << shift) | (value >> (32 - shift));
-    inst->done = true;
-    return (int*) &out;
+   static uint out;
+   uint value = GetInputValue(inst,0);
+   uint shift = GetInputValue(inst,1);
+   out = (value << shift) | (value >> (32 - shift));
+   inst->done = true;
+   return (int*) &out;
 }
 int* BinarySHR(ComplexFUInstance* inst){
-    static uint out;
-    uint value = GetInputValue(inst,0);
-    uint shift = GetInputValue(inst,1);
-    out = (value >> shift);
-    inst->done = true;
-    return (int*) &out;
+   static uint out;
+   uint value = GetInputValue(inst,0);
+   uint shift = GetInputValue(inst,1);
+   out = (value >> shift);
+   inst->done = true;
+   return (int*) &out;
 }
 int* BinarySHL(ComplexFUInstance* inst){
-    static uint out;
-    uint value = GetInputValue(inst,0);
-    uint shift = GetInputValue(inst,1);
-    out = (value << shift);
-    inst->done = true;
-    return (int*) &out;
+   static uint out;
+   uint value = GetInputValue(inst,0);
+   uint shift = GetInputValue(inst,1);
+   out = (value << shift);
+   inst->done = true;
+   return (int*) &out;
 }
 
 void RegisterOperators(Versat* versat){
@@ -180,6 +206,7 @@ void RegisterOperators(Versat* versat){
       decl.operation = binaryOperation[i];
       RegisterFU(versat,decl);
    }
+
 }
 
 Versat* InitVersat(int base,int numberConfigurations){
@@ -212,7 +239,7 @@ Versat* InitVersat(int base,int numberConfigurations){
 
    versat->buffer = GetTypeByName(versat,MakeSizedString("Buffer"));
    versat->fixedBuffer = GetTypeByName(versat,MakeSizedString("FixedBuffer"));
-   versat->pipelineRegister = GetTypeByName(versat,MakeSizedString("PipelineRegister"));
+   versat->pipelineRegister = RegisterPipelineRegister(versat); //GetTypeByName(versat,MakeSizedString("PipelineRegister"));
    versat->multiplexer = GetTypeByName(versat,MakeSizedString("Mux2"));
    versat->input = RegisterCircuitInput(versat);
    versat->output = RegisterCircuitOutput(versat);
@@ -1017,7 +1044,7 @@ void PopulateAccelerator(Versat* versat,Accelerator* accel){
    // Assuming no static units on top, for now
    DoPopulate(accel,accel->subtype,inter,accel->staticInfo);
 
-#if 1
+#if 0
    Assert(inter.config.Empty());
    Assert(inter.state.Empty());
    Assert(inter.delay.Empty());
@@ -1200,7 +1227,7 @@ FUDeclaration* RegisterSubUnit(Versat* versat,SizedString name,Accelerator* circ
 
    decl.baseCircuit = CopyAccelerator(versat,circuit,nullptr,true);
 
-   #if 0
+   #if 1
    bool allOperations = true;
    for(ComplexFUInstance* inst : circuit->instances){
       if(inst->declaration->type == FUDeclaration::SPECIAL){

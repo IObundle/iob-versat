@@ -261,7 +261,6 @@ end
 #{set stateDataIndex 0}
 #{set ioIndex 0}
 #{set memoryMappedIndex 0}
-#{set delaySeen 0}
 #{set doneCounter 0}
 #{for inst instances}
 #{set decl inst.declaration}
