@@ -7,14 +7,15 @@
    `ifdef VERSAT_IO
       initial $display("Versat IO in use\n");
    `endif
+   wire [32-1:0] versat_awaddr;
+   wire [32-1:0] versat_araddr;
 
-   iob_versat versat
-      ( 
+   iob_versat versat ( 
       // AXI4 master interface
       `ifdef VERSAT_IO
       //address write
       .m_axi_awid(), 
-      .m_axi_awaddr(m_axi_awaddr[1*`DDR_ADDR_W+:`DDR_ADDR_W]), 
+      .m_axi_awaddr(versat_awaddr), 
       .m_axi_awlen(m_axi_awlen[1*8+:8]), 
       .m_axi_awsize(m_axi_awsize[1*3+:3]), 
       .m_axi_awburst(m_axi_awburst[1*2+:2]), 
@@ -37,7 +38,7 @@
       .m_axi_bready(m_axi_bready[1*1+:1]), 
       //address read
       .m_axi_arid(), 
-      .m_axi_araddr(m_axi_araddr[1*`DDR_ADDR_W+:`DDR_ADDR_W]), 
+      .m_axi_araddr(versat_araddr), 
       .m_axi_arlen(m_axi_arlen[1*8+:8]), 
       .m_axi_arsize(m_axi_arsize[1*3+:3]), 
       .m_axi_arburst(m_axi_arburst[1*2+:2]), 
@@ -101,5 +102,8 @@
       assign m_axi_arvalid[1*1+:1] = 0; //
 
       assign m_axi_rready[1*1+:1] = 1'b1; // To prevent lookup, "ready" for everything
+   `else
+      assign m_axi_awaddr[1*`DDR_ADDR_W+:`DDR_ADDR_W] = versat_awaddr[`DDR_ADDR_W-1:0];
+      assign m_axi_araddr[1*`DDR_ADDR_W+:`DDR_ADDR_W] = versat_araddr[`DDR_ADDR_W-1:0];
    `endif
 
