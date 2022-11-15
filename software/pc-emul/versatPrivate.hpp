@@ -261,6 +261,19 @@ public:
    ComplexFUInstance* CurrentAcceleratorInstance(); // Returns the top accelerator for the last FUInstance returned by Start or Next
 };
 
+struct IterativeUnitDeclaration{
+   SizedString name;
+   SizedString unitName;
+   FUDeclaration* baseDeclaration;
+   Accelerator* initial;
+   Accelerator* forLoop;
+
+   int nInputs;
+   int nOutputs;
+   int stateSize;
+   int latency;
+};
+
 int CalculateLatency(ComplexFUInstance* inst);
 void CalculateDelay(Versat* versat,Accelerator* accel);
 void SetDelayRecursive(Accelerator* accel);

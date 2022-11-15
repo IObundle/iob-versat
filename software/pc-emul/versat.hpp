@@ -7,8 +7,7 @@
 struct Versat;
 struct Accelerator;
 struct FUDeclaration;
-struct GraphComputedData;
-struct VersatComputedData;
+struct IterativeUnitDeclaration; // TODO: Cannot leak this struct to public
 
 struct FUInstance{
 	//HierarchyName name;
@@ -74,6 +73,7 @@ Accelerator* CreateAccelerator(Versat* versat);
 FUInstance* CreateFUInstance(Accelerator* accel,FUDeclaration* type,SizedString entityName,bool flat = false,bool isStatic = false);
 void RemoveFUInstance(Accelerator* accel,FUInstance* inst);
 
+FUDeclaration* RegisterIterativeUnit(Versat* versat,IterativeUnitDeclaration* decl); // TODO: Cannot let the IterativeUnitDeclaration leak to the public interface
 FUDeclaration* RegisterSubUnit(Versat* versat,SizedString name,Accelerator* accel);
 
 // Can use printf style arguments, but only chars and integers.

@@ -258,6 +258,27 @@ Token Tokenizer::NextFindUntil(const char* str){
    return token;
 }
 
+bool Tokenizer::IfPeekToken(const char* str){
+   Token peek = PeekToken();
+
+   if(CompareString(peek,str)){
+      return true;
+   }
+
+   return false;
+}
+
+bool Tokenizer::IfNextToken(const char* str){
+   Token peek = PeekToken();
+
+   if(CompareString(peek,str)){
+      AdvancePeek(peek);
+      return true;
+   }
+
+   return false;
+}
+
 Token Tokenizer::PeekWhitespace(){
    Token token = {};
 

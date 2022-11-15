@@ -9,10 +9,21 @@
 
 #define ARRAY_SIZE(array) sizeof(array) / sizeof(array[0])
 
-typedef struct Name_t{
+struct Name{
    char name[256];
    FUDeclaration* type;
-} Name;
+};
+
+struct ConnectionExtra{
+   int portStart;
+   int portEnd;
+   int delayStart;
+   int delayEnd;
+};
+
+struct Var : public ConnectionExtra {
+   SizedString name;
+};
 
 static Name identifiers[256];
 static int identifiersIndex;
@@ -27,14 +38,6 @@ int GetIndex(char* name){
    Assert(0);
    return 0;
 }
-
-typedef struct Var_t{
-   SizedString name;
-   int delayStart;
-   int delayEnd;
-   int portStart;
-   int portEnd;
-} Var;
 
 Var ParseVar(Tokenizer* tok){
    Token name = tok->NextToken();
@@ -258,6 +261,29 @@ FUInstance* ParseInstanceDeclaration(Versat* versat,Tokenizer* tok,Accelerator* 
    return inst;
 }
 
+void ConnectUnit(FUInstance* inst1,FUInstance* inst2,ConnectionExtra outVar,ConnectionExtra inVar){
+   int outRange = outVar.portEnd - outVar.portStart + 1;
+   int delayRange = outVar.delayEnd - outVar.delayStart + 1;
+   int inRange = inVar.portEnd - inVar.portStart + 1;
+
+   if(delayRange != 1 && inRange != delayRange){
+      UNHANDLED_ERROR;
+   }
+
+   Assert(outRange == inRange || outRange == 1);
+
+   int delayDelta = (delayRange == 1 ? 0 : 1);
+   if(outRange == 1){
+      for(int i = 0; i < inRange; i++){
+         ConnectUnitsWithDelay(inst1,outVar.portStart,inst2,inVar.portStart + i,-(outVar.delayStart + delayDelta * i));
+      }
+   } else {
+      for(int i = 0; i < inRange; i++){
+         ConnectUnitsWithDelay(inst1,outVar.portStart + i,inst2,inVar.portStart + i,-(outVar.delayStart + delayDelta * i));
+      }
+   }
+}
+
 FUDeclaration* ParseModule(Versat* versat,Tokenizer* tok){
    tok->AssertNextToken("module");
 
@@ -350,8 +376,8 @@ FUDeclaration* ParseModule(Versat* versat,Tokenizer* tok){
       } else {
          Var outVar = ParseVar(tok);
 
-         Token peek = tok->NextToken();
-         if(CompareToken(peek,"=")){
+         Token op = tok->NextToken();
+         if(CompareToken(op,"=")){
             SizedString name = PushString(&versat->permanent,outVar.name);
             ParseExpression(versat,circuit,tok,name);
 
@@ -360,22 +386,11 @@ FUDeclaration* ParseModule(Versat* versat,Tokenizer* tok){
             }
 
             tok->AssertNextToken(";");
-         } else if(CompareToken(peek,"->")){
+         } else if(CompareToken(op,"->")){
             Var inVar = ParseVar(tok);
-
-            int outRange = outVar.portEnd - outVar.portStart + 1;
-            int delayRange = outVar.delayEnd - outVar.delayStart + 1;
-            int inRange = inVar.portEnd - inVar.portStart + 1;
-
-            if(delayRange != 1 && inRange != delayRange){
-               UNHANDLED_ERROR;
-            }
-
-            Assert(outRange == inRange || outRange == 1);
 
             FUInstance* inst1 = GetInstanceByName(circuit,"%.*s",UNPACK_SS(outVar.name));
             FUInstance* inst2 = nullptr;
-            #if 1
             if(CompareString(inVar.name,"out")){
                if(!circuit->outputInstance){
                   circuit->outputInstance = (ComplexFUInstance*) CreateFUInstance(circuit,versat->output,MakeSizedString("out"));
@@ -386,21 +401,11 @@ FUDeclaration* ParseModule(Versat* versat,Tokenizer* tok){
                inst2 = GetInstanceByName(circuit,"%.*s",UNPACK_SS(inVar.name));
             }
 
-            int delayDelta = (delayRange == 1 ? 0 : 1);
-            if(outRange == 1){
-               for(int i = 0; i < inRange; i++){
-                  ConnectUnitsWithDelay(inst1,outVar.portStart,inst2,inVar.portStart + i,-(outVar.delayStart + delayDelta * i));
-               }
-            } else {
-               for(int i = 0; i < inRange; i++){
-                  ConnectUnitsWithDelay(inst1,outVar.portStart + i,inst2,inVar.portStart + i,-(outVar.delayStart + delayDelta * i));
-               }
-            }
-            #endif
+            ConnectUnit(inst1,inst2,outVar,inVar);
 
             tok->AssertNextToken(";");
          } else {
-            printf("%.*s\n",UNPACK_SS(peek));
+            printf("%.*s\n",UNPACK_SS(op));
             fflush(stdout);
             Assert(0);
          }
@@ -408,6 +413,158 @@ FUDeclaration* ParseModule(Versat* versat,Tokenizer* tok){
    }
 
    return RegisterSubUnit(versat,PushString(&versat->permanent,name),circuit);
+}
+
+FUDeclaration* ParseIterative(Versat* versat,Tokenizer* tok){
+   IterativeUnitDeclaration decl = {};
+
+   tok->AssertNextToken("iterative");
+
+   decl.name = tok->NextToken();
+
+   Accelerator* firstPhase = CreateAccelerator(versat);
+   Accelerator* secondPhase = CreateAccelerator(versat);
+
+   FUInstance* firstPhaseOut = CreateFUInstance(firstPhase,versat->output,MakeSizedString("state"),false,false);
+   firstPhase->outputInstance = (ComplexFUInstance*) firstPhaseOut;
+
+   FUInstance* secondOut = CreateFUInstance(secondPhase,versat->output,MakeSizedString("out"),false,false);
+   secondPhase->outputInstance = (ComplexFUInstance*) secondOut;
+   FUInstance* secondState = CreateFUInstance(secondPhase,versat->output,MakeSizedString("state"),false,false);
+
+   tok->AssertNextToken("(");
+   // Arguments
+   Token peek = tok->PeekToken();
+   while(1){
+      Token argument = tok->PeekToken();
+
+      if(CompareString(argument,")")){
+         break;
+      }
+      tok->AdvancePeek(argument);
+
+      Token peek = tok->PeekToken();
+      if(CompareString(peek,",")){
+         tok->AdvancePeek(peek);
+      }
+
+      #if 1
+      SizedString name = PushString(&versat->permanent,argument);
+
+      decl.nInputs += 1;
+      {
+      ComplexFUInstance* inst = (ComplexFUInstance*) CreateFUInstance(firstPhase,versat->input,name);
+      ComplexFUInstance** ptr = firstPhase->inputInstancePointers.Alloc();
+      *ptr = inst;
+      }
+
+      {
+      ComplexFUInstance* inst = (ComplexFUInstance*) CreateFUInstance(secondPhase,versat->input,name);
+      ComplexFUInstance** ptr = secondPhase->inputInstancePointers.Alloc();
+      *ptr = inst;
+      }
+      #endif
+   }
+   tok->AssertNextToken(")");
+   tok->AssertNextToken("{");
+
+   // Instance instantiation;
+   if(!tok->IfPeekToken("#")){
+      Token instanceTypeName = tok->NextToken();
+      Token instanceName = tok->NextToken();
+      tok->AssertNextToken(";");
+
+      FUDeclaration* type = GetTypeByName(versat,instanceTypeName);
+      SizedString name = PushString(&versat->permanent,instanceName);
+
+      Assert(type->latencies[0] == 0); // Assume combinatorial unit, for now
+      decl.baseDeclaration = type;
+      decl.unitName = name;
+
+      CreateFUInstance(firstPhase,type,name,true,false);
+      CreateFUInstance(secondPhase,type,name,true,false);
+   }
+
+   tok->AssertNextToken("#");
+
+   SizedString latencyStr = tok->NextToken();
+   decl.latency = ParseInt(latencyStr);
+
+   // Initial
+   while(1){
+      if(tok->IfPeekToken("#")){
+         break;
+      }
+
+      Var start = ParseVar(tok);
+
+      tok->AssertNextToken("->");
+
+      Var end = ParseVar(tok);
+      tok->AssertNextToken(";");
+
+      FUInstance* inst1 = GetInstanceByName(firstPhase,"%.*s",UNPACK_SS(start.name));
+      FUInstance* inst2 = nullptr;
+
+      if(CompareString(end.name,"state")){
+         inst2 = firstPhaseOut;
+         decl.stateSize = maxi(decl.stateSize,end.portEnd);
+      } else {
+         UNHANDLED_ERROR;
+      }
+
+      ConnectUnit(inst1,inst2,start,end);
+   }
+   tok->AssertNextToken("#");
+
+   // For in
+   while(1){
+      if(tok->IfPeekToken("}")){
+         break;
+      }
+
+      Var start = ParseVar(tok);
+
+      //Assert(CompareString(start.name,"state"));
+
+      tok->AssertNextToken("->");
+
+      Var end = ParseVar(tok);
+      tok->AssertNextToken(";");
+
+      FUInstance* inst1 = nullptr;
+      FUInstance* inst2 = nullptr;
+
+      if(CompareString(start.name,"state")){
+         inst1 = secondState;
+         decl.stateSize = maxi(decl.stateSize,end.portEnd);
+      } else {
+         inst1 = GetInstanceByName(secondPhase,"%.*s",UNPACK_SS(start.name));
+      }
+
+      if(CompareString(end.name,"out")){
+         inst2 = secondOut;
+         decl.nOutputs = maxi(decl.nOutputs,end.portEnd);
+      } else if(CompareString(end.name,"state")){
+         inst2 = secondState;
+         decl.stateSize = maxi(decl.stateSize,end.portEnd);
+      } else {
+         inst2 = GetInstanceByName(secondPhase,"%.*s",UNPACK_SS(end.name));
+      }
+
+      ConnectUnit(inst1,inst2,start,end);
+   }
+   tok->AssertNextToken("}");
+   decl.nOutputs += 1;
+   decl.stateSize += 1;
+
+   OutputGraphDotFile(versat,firstPhase,false,"./debug/firstPhase.dot");
+   OutputGraphDotFile(versat,secondPhase,false,"./debug/secondPhase.dot");
+
+   decl.initial = firstPhase;
+   decl.forLoop = secondPhase;
+
+   return RegisterIterativeUnit(versat,&decl);
 }
 
 void ParseVersatSpecification(Versat* versat,const char* filepath){
@@ -423,7 +580,13 @@ void ParseVersatSpecification(Versat* versat,const char* filepath){
    Tokenizer* tok = &tokenizer;
 
    while(!tok->Done()){
-      ParseModule(versat,tok);
+      Token peek = tok->PeekToken();
+
+      if(CompareString(peek,"module")){
+         ParseModule(versat,tok);
+      } else if(CompareString(peek,"iterative")){
+         ParseIterative(versat,tok);
+      }
    }
 
    PopMark(&versat->temp,mark);

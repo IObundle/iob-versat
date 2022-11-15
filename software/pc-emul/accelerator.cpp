@@ -625,7 +625,7 @@ void CalculateDelay(Versat* versat,Accelerator* accel){
          if(other->declaration == versat->buffer){
             other->baseDelay = info->delay;
          } else if(other->declaration == versat->fixedBuffer){
-            NOT_IMPLEMENTED;
+            //NOT_IMPLEMENTED;
          } else if(info->delay > 0){
 
             Assert(!(inst->declaration == versat->buffer || inst->declaration == versat->fixedBuffer));

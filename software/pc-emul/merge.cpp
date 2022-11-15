@@ -257,7 +257,7 @@ ConsolidationGraph GenerateConsolidationGraph(Arena* arena,Accelerator* accel1,A
    graph.nodes = (MappingNode*) MarkArena(arena);
 
    // Check node mapping
-   #if 1
+   #if 0
    for(ComplexFUInstance* instA : accel1->instances){
       for(ComplexFUInstance* instB : accel2->instances){
          if(instA->declaration == instB->declaration){
@@ -557,6 +557,7 @@ FUDeclaration* MergeAccelerators(Versat* versat,FUDeclaration* accel1,FUDeclarat
    Accelerator* flatten2 = Flatten(versat,accel2->baseCircuit,99);
 
    InstanceMap graphMapping;
+
    if(true){
       graphMapping = OrderedFitGraphMapping(versat,flatten1,flatten2);
    } else if(flatten1->instances.Size() >= 500 || flatten2->instances.Size() >= 500){

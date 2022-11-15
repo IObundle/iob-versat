@@ -500,7 +500,9 @@ Value AccessStruct(Value object,SizedString memberName){
       }
    }
 
-   Assert(offset >= 0);
+   if(offset == -1){
+      Log(LogModule::PARSER,LogLevel::FATAL,"Failure to find member named: %.*s on structure: %.*s",UNPACK_SS(memberName),UNPACK_SS(structure.type->name));
+   }
 
    Value res = AccessStruct(structure,member);
 
@@ -744,6 +746,11 @@ bool Equal(Value v1,Value v2){
 
       c1 = RemoveOnePointerIndirection(c1);
       c2 = RemoveOnePointerIndirection(c2);
+
+      res = (c1.custom == c2.custom);
+   } else if(c1.type->type == Type::STRUCT){
+      Assert(!c1.isTemp);
+      Assert(!c2.isTemp);
 
       res = (c1.custom == c2.custom);
    } else {

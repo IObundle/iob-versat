@@ -56,6 +56,9 @@ public:
    Token PeekFindIncluding(const char* str);
    Token NextFindUntil(const char* str);
 
+   bool IfPeekToken(const char* str);
+   bool IfNextToken(const char* str);
+
    Token FindFirst(std::initializer_list<const char*> strings);
 
    // For expressions where there is a open and a closing delimiter (think '{...{...}...}') and need to check where an associated close delimiter is

@@ -1,34 +1,36 @@
-#{define outputName portInstance}
-#{set inst2 portInstance.inst}
-#{set decl2 inst2.declaration}
-   #{if decl2.type == 2}
-      in@{inst2.id} 
-   #{else}
-      #{if decl2.isOperation}
-         #{if decl2.latencies[0] == 0}
-            comb_@{inst2.name |> Identify}
-         #{else}
-            seq_@{inst2.name |> Identify}
-         #{end}
-      #{else}
-         output_@{inst2.id}_@{portInstance.port} 
-      #{end}
-   #{end}
+#{define iterativeOutputName portInstance port}
+#{if portInstance.inst == secondState}
+   #{return "state" # port}
+#{else}
+#{if portInstance.inst.declaration.type == 2}
+   #{return "in" # port}
+#{else}
+   #{return "unitOut[" # port # "]"}
+#{end}
+#{end}
 #{end}
 
 #{define retOutputName portInstance}
 #{set inst2 portInstance.inst}
 #{set decl2 inst2.declaration}
    #{if decl2.type == 2}
-      #{return "in" # inst2.id} 
+      #{return "in" # inst2.id}
    #{else}
       #{if decl2.isOperation}
-         #{return "comb_" # inst2.name |> Identify} 
+         #{if decl2.latencies[0] == 0}
+            #{return "comb_" # inst2.name |> Identify}
+         #{else}
+            #{return "seq_" # inst2.name |> Identify}
+         #{end} 
       #{else}
          #{return "output_" # inst2.id # "_" # portInstance.port} 
       #{end}
    #{end}
 #{end}
+
+#{define outputName portInstance}
+#{set val #{call retOutputName portInstance}}
+@{val}#{end}
 
 #{define CountDones instances}
    #{set nDones 0}
