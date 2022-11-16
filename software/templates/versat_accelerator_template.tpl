@@ -7,6 +7,7 @@
 #{include "versat_common.tpl"}
 
 #{call CountDones instances}
+#{call CountOperations instances}
 
 module @{accel.name} #(
       parameter ADDR_W = `ADDR_W,
@@ -108,8 +109,7 @@ assign done = &unitDone;
 wire [31:0] #{join ", " for inst instances}
    #{if inst.tempData.outputPortsUsed} 
       #{join ", " for j inst.tempData.outputPortsUsed} output_@{inst.id}_@{j} #{end}
-   #{else}
-      unused_@{inst.id} #{end}
+   #{end}
 #{end};
 
 #{if unitsMapped}
@@ -135,58 +135,59 @@ begin
 end
 #{end}
 
-#{set counter 0}
-reg [31:0] #{join "," for inst instances} #{if inst.declaration.isOperation} comb_@{inst.name.str} #{else} unused@{counter} #{inc counter} #{end}#{end}; 
+#{if nCombOperations}
+reg [31:0] #{join "," for inst instances} #{if inst.declaration.isOperation and inst.declaration.latencies[0] == 0} comb_@{inst.name |> Identify} #{end}#{end}; 
 
 always @*
 begin
 #{for inst instances}
-#{set decl inst.declaration}
-   #{if decl.isOperation}
-   #{set input1 inst.tempData[0].inputs[0].instConnectedTo}
+   #{set decl inst.declaration}
+   #{if decl.isOperation and decl.latencies[0] == 0}
+      #{set input1 inst.tempData[0].inputs[0].instConnectedTo}
       #{if decl.nInputs == 1}
-         comb_@{inst.name.str} = @{decl.operation} #{call outputName input1};
+         #{format decl.operation "comb" @{inst.name |> Identify} #{call retOutputName input1}};
       #{else}
          #{set input2 inst.tempData[0].inputs[1].instConnectedTo}
-         #{if decl.name == "RHR"}
-            comb_@{inst.name.str} = (#{call outputName input1} >> #{call outputName input2}) | (#{call outputName input1} << (32 - #{call outputName input2}));
-         #{else} 
-            #{if decl.name == "RHL"}
-               comb_@{inst.name.str} = (#{call outputName input1} << #{call outputName input2}) | (#{call outputName input1} >> (32 - #{call outputName input2}));
-            #{else}
-               comb_@{inst.name.str} = #{call outputName input1} @{decl.operation} #{call outputName input2};
-            #{end}
-         #{end}
+         #{format decl.operation "comb" @{inst.name |> Identify} #{call retOutputName input1} #{call retOutputName input2}};
       #{end}
    #{end}
 #{end}
 end
+#{end}
+
+#{if nSeqOperations}
+reg [31:0] #{join "," for inst instances} #{if inst.declaration.isOperation and inst.declaration.latencies[0] != 0} seq_@{inst.name |> Identify} #{end}#{end}; 
+
+always @(posedge clk)
+begin
+#{for inst instances}
+   #{set decl inst.declaration}
+   #{if decl.isOperation and decl.latencies[0] != 0 }
+      #{set input1 inst.tempData[0].inputs[0].instConnectedTo}
+      #{format decl.operation "seq" @{inst.name |> Identify} #{call retOutputName input1}};
+   #{end}
+#{end}   
+end
+#{end}
 
 #{set counter 0}
-#{set configDataIndex 0}
-#{set stateDataIndex 0}
 #{set ioIndex 0}
-#{set memoryMappedIndex 0}
-#{set inputSeen 0}
 #{set configsSeen 0}
+#{set memoryMappedIndex 0}
 #{set delaySeen 0}
 #{set statesSeen 0}
 #{set doneCounter 0}
 #{for inst instances}
 #{set decl inst.declaration}
-   #{if decl.name == "CircuitInput"}
-   #{else}
-   #{if decl.name == "CircuitOutput"}
-   #{else}
-      #{if !decl.isOperation}
-      @{decl.name} @{inst.parameters} @{inst.name.str}_@{counter} (
+   #{if (decl != versat.input and decl != versat.output and !decl.isOperation)}
+      @{decl.name} @{inst.parameters} @{inst.name |> Identify}_@{counter} (
          #{for i inst.tempData.outputPortsUsed}
             .out@{i}(output_@{inst.id}_@{i}),
          #{end}
 
          #{for i inst.tempData.inputPortsUsed}
          #{if inst.tempData.inputs[i].instConnectedTo.inst.declaration.type == 2}
-            .in@{inst.tempData.inputs[i].port}(in@{inst.tempData.inputs[i].instConnectedTo.inst.id}), // @{inst.tempData.inputs[i].instConnectedTo.inst.name.str}
+            .in@{inst.tempData.inputs[i].port}(in@{inst.tempData.inputs[i].instConnectedTo.inst.id}), // @{inst.tempData.inputs[i].instConnectedTo.inst.name |> Identify}
          #{else}
             .in@{inst.tempData.inputs[i].port}(#{call outputName inst.tempData.inputs[i].instConnectedTo}),
          #{end}
@@ -195,7 +196,7 @@ end
          #{if inst.isStatic}
          #{for i inst.declaration.nConfigs}
          #{set wire inst.declaration.configWires[i]}
-         .@{wire.name}(@{accel.name}_@{inst.name.str}_@{wire.name}),
+         .@{wire.name}(@{accel.name}_@{inst.name |> Identify}_@{wire.name}),
          #{end}
 
          #{else}
@@ -258,14 +259,12 @@ end
          .rst(rst)
       );
          #{inc counter}
-      #{end}
-      #{end}
    #{end}
 #{end}
 
 #{for inst instances}
 #{set decl inst.declaration}
-#{if decl.name == "CircuitOutput"}
+#{if decl == versat.output}
    #{for i inst.tempData.numberInputs}
    #{set in inst.tempData.inputs[i].instConnectedTo}
    assign out@{inst.tempData.inputs[i].port} = #{call outputName in};

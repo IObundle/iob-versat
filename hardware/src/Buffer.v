@@ -1,6 +1,6 @@
 `timescale 1ns / 1ps
 
-module Delay #(
+module Buffer #(
          parameter ADDR_W = 6,
          parameter DATA_W = 32
       )
@@ -14,7 +14,7 @@ module Delay #(
     //input / output data
     input [DATA_W-1:0]            in0,
 
-    (* latency=1 *) output reg [DATA_W-1:0] out0,
+    (* versat_latency = 1 *) output reg [DATA_W-1:0] out0,
     
     input [ADDR_W-1:0]     amount
     );

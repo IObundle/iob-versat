@@ -9,19 +9,15 @@ module PipelineRegister #(
 
          input [DATA_W-1:0] in0,
 
-         (* latency = 1 *) output reg [DATA_W-1:0] out0,
+         (* versat_latency = 1 *) output reg [DATA_W-1:0] out0,
       
          input clk,
          input rst
       ); 
 
-always @(posedge clk,posedge rst)
+always @(posedge clk)
 begin
-   if(rst) begin
-      out0 <= 0;
-   end else begin
-      out0 <= in0;
-   end
+   out0 <= in0;
 end
 
 endmodule

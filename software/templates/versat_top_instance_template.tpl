@@ -1,6 +1,6 @@
 #{include "versat_common.tpl"}
 
-#{call CountDones instances}
+#{set nDones #{call CountDones instances}}
 
 `timescale 1ns / 1ps
 `include "axi.vh"
@@ -261,11 +261,10 @@ end
 #{set stateDataIndex 0}
 #{set ioIndex 0}
 #{set memoryMappedIndex 0}
-#{set delaySeen 0}
 #{set doneCounter 0}
 #{for inst instances}
 #{set decl inst.declaration}
-   @{decl.name} @{inst.parameters} @{inst.name.str}_@{counter} (
+   @{decl.name} @{inst.parameters} @{inst.name |> Identify}_@{counter} (
       #{for i inst.tempData.outputPortsUsed}
          .out@{i}(output_@{inst.id}_@{i}),
       #{end} 

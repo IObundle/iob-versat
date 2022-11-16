@@ -1,20 +1,61 @@
-#{define outputName portInstance}
+#{define iterativeOutputName portInstance port}
+#{if portInstance.inst == secondState}
+   #{return "state" # port}
+#{else}
+#{if portInstance.inst.declaration.type == 2}
+   #{return "in" # port}
+#{else}
+   #{return "unitOut[" # port # "]"}
+#{end}
+#{end}
+#{end}
+
+#{define retOutputName portInstance}
 #{set inst2 portInstance.inst}
 #{set decl2 inst2.declaration}
    #{if decl2.type == 2}
-      in@{inst2.id} #{else}
+      #{return "in" # inst2.id}
+   #{else}
       #{if decl2.isOperation}
-         comb_@{inst2.name.str} #{else}
-         output_@{inst2.id}_@{portInstance.port} #{end}
+         #{if decl2.latencies[0] == 0}
+            #{return "comb_" # inst2.name |> Identify}
+         #{else}
+            #{return "seq_" # inst2.name |> Identify}
+         #{end} 
+      #{else}
+         #{return "output_" # inst2.id # "_" # portInstance.port} 
+      #{end}
    #{end}
 #{end}
 
+#{define outputName portInstance}
+#{set val #{call retOutputName portInstance}}
+@{val}#{end}
+
 #{define CountDones instances}
-#{set nDones 0}
-#{for inst instances}
-#{if inst.declaration.implementsDone}
-#{inc nDones}
+   #{set nDones 0}
+   #{for inst instances}
+   #{if inst.declaration.implementsDone}
+   #{inc nDones}
+   #{end}
+   #{end}
+   #{return nDones}
 #{end}
-#{end}
+
+#{define CountOperations instances}
+   #{set nOperations 0}
+   #{set nCombOperations 0}
+   #{set nSeqOperations 0}
+   #{for inst instances}
+      #{if inst.declaration.isOperation}
+         #{inc nOperations}
+         #{if inst.declaration.latencies[0] == 0}
+            #{inc nCombOperations}
+         #{else}
+            #{inc nSeqOperations}
+         #{end}
+      #{end}
+   #{end}
+   #{return nOperations}
 #{end}
 

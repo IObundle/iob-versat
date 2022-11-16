@@ -101,7 +101,7 @@ void PreprocessVerilogFile_(Arena* output, SizedString fileContent,std::vector<c
          tok->AssertNextToken("\"");
 
          // Open include file
-         std::string filename(fileName.str,fileName.size);
+         std::string filename(UNPACK_SS_REVERSE(fileName));
          FILE* file = nullptr;
          std::string filepath;
          for(const char* str : *includeFilepaths){
@@ -115,7 +115,7 @@ void PreprocessVerilogFile_(Arena* output, SizedString fileContent,std::vector<c
          }
 
          if(!file){
-            printf("Couldn't find file: %.*s\n",fileName.size,fileName.str);
+            printf("Couldn't find file: %.*s\n",UNPACK_SS(fileName));
             printf("Looked on the following folders:\n");
 
             printf("  %s\n",GetCurrentDirectory());
@@ -427,6 +427,11 @@ static Module ParseModule(Tokenizer* tok){
          while(1){
             Token attributeName = tok->NextToken();
 
+            if(!CompareString(attributeName,"versat_latency")){
+               printf("ERROR: Do not know attribute named: %.*s\n",UNPACK_SS(attributeName));
+               exit(-1);
+            }
+
             peek = tok->PeekToken();
             if(CompareString(peek,"=")){
                tok->AdvancePeek(peek);
@@ -632,14 +637,14 @@ int main(int argc,const char* argv[]){
             if(CheckFormat("in%d",decl.name)){
                port.AssertNextToken("in");
                int input = ParseInt(port.NextToken());
-               int delay = decl.attributes[MakeSizedString("latency")].number;
+               int delay = decl.attributes[MakeSizedString("versat_latency")].number;
 
                info.nInputs = maxi(info.nInputs,input + 1);
                info.inputDelays[input] = delay;
             } else if(CheckFormat("out%d",decl.name)){
                port.AssertNextToken("out");
                int output = ParseInt(port.NextToken());
-               int latency = decl.attributes[MakeSizedString("latency")].number;
+               int latency = decl.attributes[MakeSizedString("versat_latency")].number;
 
                info.nOutputs = maxi(info.nOutputs,output + 1);
                info.outputLatencies[output] = latency;

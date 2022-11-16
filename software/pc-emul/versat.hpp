@@ -7,11 +7,11 @@
 struct Versat;
 struct Accelerator;
 struct FUDeclaration;
-struct GraphComputedData;
-struct VersatComputedData;
+struct IterativeUnitDeclaration; // TODO: Cannot leak this struct to public
 
 struct FUInstance{
-	HierarchyName name;
+	//HierarchyName name;
+   SizedString name;
 
    // Embedded memory
    int* memMapped;
@@ -44,12 +44,13 @@ enum VersatDebugFlags{
    OUTPUT_GRAPH_DOT,
    OUTPUT_ACCELERATORS_CODE,
    OUTPUT_VERSAT_CODE,
-   OUTPUT_VCD
+   OUTPUT_VCD,
+   USE_FIXED_BUFFERS
 };
 
 Accelerator* Flatten(Versat* versat,Accelerator* accel,int times);
 
-void OutputGraphDotFile(Accelerator* accel,bool collapseSameEdges,const char* filenameFormat,...) __attribute__ ((format (printf, 3, 4)));
+void OutputGraphDotFile(Versat* versat,Accelerator* accel,bool collapseSameEdges,const char* filenameFormat,...) __attribute__ ((format (printf, 4, 5)));
 
 // Versat functions
 Versat* InitVersat(int base,int numberConfigurations);
@@ -72,6 +73,7 @@ Accelerator* CreateAccelerator(Versat* versat);
 FUInstance* CreateFUInstance(Accelerator* accel,FUDeclaration* type,SizedString entityName,bool flat = false,bool isStatic = false);
 void RemoveFUInstance(Accelerator* accel,FUInstance* inst);
 
+FUDeclaration* RegisterIterativeUnit(Versat* versat,IterativeUnitDeclaration* decl); // TODO: Cannot let the IterativeUnitDeclaration leak to the public interface
 FUDeclaration* RegisterSubUnit(Versat* versat,SizedString name,Accelerator* accel);
 
 // Can use printf style arguments, but only chars and integers.
@@ -89,9 +91,7 @@ void ActivateMergedAccelerator(Versat* versat,Accelerator* accel,FUDeclaration* 
 
 //void PopulateAccelerator(Accelerator* accel);
 void CheckMemory(Accelerator* topLevel,Accelerator* accel);
-//void InitializeFUInstances(Accelerator* accel,bool force = false);
 void DisplayAcceleratorMemory(Accelerator* topLevel);
-//void FixAcceleratorDelay(Accelerator* accel);
 
 void SetDefaultConfiguration(FUInstance* inst,int* config,int size);
 void ShareInstanceConfig(FUInstance* inst, int shareBlockIndex);

@@ -7,7 +7,7 @@
 struct Expression;
 
 struct Command{
-   char name[32];
+   SizedString name;
 
    Expression** expressions;
    int nExpressions;
@@ -18,7 +18,7 @@ struct Block{
 
    union{
       Token textBlock;
-      Command command;
+      Command* command;
    };
    Block* next;
    Block* nextInner;

@@ -143,6 +143,24 @@ static void CalculateDAGOrdering(Accelerator* accel){
    }
 
    Assert(accel->order.numberSources + accel->order.numberComputeUnits + accel->order.numberSinks == accel->instances.Size());
+
+   // Calculate order
+   for(int i = 0; i < accel->order.numberSources; i++){
+      ComplexFUInstance* inst = accel->order.sources[i];
+
+      inst->tempData->order = 0;
+   }
+
+   for(int i = accel->order.numberSources; i < accel->order.instances.size; i++){
+      ComplexFUInstance* inst = accel->order.instances.ptr[i];
+
+      int max = 0;
+      for(int ii = 0; ii < inst->tempData->numberInputs; ii++){
+         max = maxi(max,inst->tempData->inputs[ii].instConnectedTo.inst->tempData->order);
+      }
+
+      inst->tempData->order = (max + 1);
+   }
 }
 
 SubgraphData SubGraphAroundInstance(Versat* versat,Accelerator* accel,ComplexFUInstance* instance,int layers){
@@ -170,7 +188,7 @@ SubgraphData SubGraphAroundInstance(Versat* versat,Accelerator* accel,ComplexFUI
 
    InstanceMap map;
    for(ComplexFUInstance* nonMapped : subgraphUnits){
-      ComplexFUInstance* mapped = (ComplexFUInstance*) CreateFUInstance(newAccel,nonMapped->declaration,MakeSizedString(nonMapped->name.str));
+      ComplexFUInstance* mapped = (ComplexFUInstance*) CreateFUInstance(newAccel,nonMapped->declaration,nonMapped->name);
       map.insert({nonMapped,mapped});
    }
 
@@ -417,7 +435,6 @@ void CalculateVersatData(Accelerator* accel){
 
 void FixMultipleInputs(Versat* versat,Accelerator* accel){
    static int multiplexersInstantiated = 0;
-   static int graphFixed = 0;
    LockAccelerator(accel,Accelerator::Locked::GRAPH);
 
    int portUsedCount[99];
@@ -464,7 +481,7 @@ void FixMultipleInputs(Versat* versat,Accelerator* accel){
       char buffer[1024];
       sprintf(buffer,"debug/%.*s/",UNPACK_SS(accel->subtype->name));
       MakeDirectory(buffer);
-      OutputGraphDotFile(accel,false,"debug/%.*s/mux.dot",UNPACK_SS(accel->subtype->name));
+      OutputGraphDotFile(versat,accel,false,"debug/%.*s/mux.dot",UNPACK_SS(accel->subtype->name));
    }
 }
 
@@ -494,17 +511,6 @@ void SendLatencyUpwards(Versat* versat,ComplexFUInstance* inst){
          }
       }
    }
-
-   #if 0
-   for(int i = 0; i < inst->tempData->numberInputs; i++){
-      ComplexFUInstance* other = inst->tempData->inputs[i].instConnectedTo.inst;
-      for(int ii = 0; ii < other->tempData->numberOutputs; ii++){
-         ConnectionInfo* otherInfo = &other->tempData->outputs[ii];
-
-         otherInfo->delay += abs(minimum);
-      }
-   }
-   #endif
 }
 
 // Fixes edges such that unit before connected to after, is reconnected to new unit
@@ -544,17 +550,6 @@ void CalculateDelay(Versat* versat,Accelerator* accel){
       MakeDirectory(buffer);
    }
 
-   #if 0
-   printf("%.*s:\n",UNPACK_SS(accel->subtype->name));
-   int maxLatency = 0;
-   for(int i = 0; i < order.numberSinks; i++){
-      int lat = CalculateLatency(order.sinks[i]);
-
-      printf("  %d\n",lat);
-      maxLatency = maxi(maxLatency,lat);
-   }
-   #endif
-
    for(int i = 0; i < order.numberSinks; i++){
       ComplexFUInstance* inst = order.sinks[i];
 
@@ -564,7 +559,7 @@ void CalculateDelay(Versat* versat,Accelerator* accel){
       SendLatencyUpwards(versat,inst);
 
       if(versat->debug.outputGraphs){
-         OutputGraphDotFile(accel,false,"debug/%.*s/out1_%d.dot",UNPACK_SS(accel->subtype->name),graphs++);
+         OutputGraphDotFile(versat,accel,false,"debug/%.*s/out1_%d.dot",UNPACK_SS(accel->subtype->name),graphs++);
       }
    }
 
@@ -590,7 +585,7 @@ void CalculateDelay(Versat* versat,Accelerator* accel){
       SendLatencyUpwards(versat,inst);
 
       if(versat->debug.outputGraphs){
-         OutputGraphDotFile(accel,false,"debug/%.*s/out2_%d.dot",UNPACK_SS(accel->subtype->name),graphs++);
+         OutputGraphDotFile(versat,accel,false,"debug/%.*s/out2_%d.dot",UNPACK_SS(accel->subtype->name),graphs++);
       }
    }
 
@@ -605,7 +600,9 @@ void CalculateDelay(Versat* versat,Accelerator* accel){
    }
 
    for(ComplexFUInstance* inst : accel->instances){
-      if(inst->tempData->nodeType == GraphComputedData::TAG_SOURCE_AND_SINK){
+      if(inst->tempData->nodeType == GraphComputedData::TAG_UNCONNECTED){
+         inst->tempData->inputDelay = 0;
+      } else if(inst->tempData->nodeType == GraphComputedData::TAG_SOURCE_AND_SINK){
          for(int ii = 0; ii < inst->tempData->numberOutputs; ii++){
             inst->tempData->outputs[ii].delay = 0;
          }
@@ -616,7 +613,7 @@ void CalculateDelay(Versat* versat,Accelerator* accel){
    #if 1
    accel->locked = Accelerator::Locked::FREE;
    // Insert delay units if needed
-   int delaysInserted = 0;
+   int buffersInserted = 0;
    static int maxDelay = 0;
    for(int i = accel->instances.Size() - 1; i >= 0; i--){
       ComplexFUInstance* inst = order.instances.ptr[i];
@@ -625,31 +622,42 @@ void CalculateDelay(Versat* versat,Accelerator* accel){
          ConnectionInfo* info = &inst->tempData->outputs[ii];
          ComplexFUInstance* other = info->instConnectedTo.inst;
 
-         if(other->declaration == versat->delay){
+         if(other->declaration == versat->buffer){
             other->baseDelay = info->delay;
-            //Assert(other->baseDelay >= 0);
-         } else if(info->delay != 0){
+         } else if(other->declaration == versat->fixedBuffer){
+            //NOT_IMPLEMENTED;
+         } else if(info->delay > 0){
 
-            Assert(inst->declaration != versat->delay);
-            //Assert(info->instConnectedTo.inst->declaration != versat->delay);
+            Assert(!(inst->declaration == versat->buffer || inst->declaration == versat->fixedBuffer));
 
-            char buffer[128];
-            int size = sprintf(buffer,"delay%d",delaysInserted++);
+            if(versat->debug.useFixedBuffers){
+               SizedString bufferName = PushString(&versat->permanent,"fixedBuffer%d",buffersInserted++);
 
-            ComplexFUInstance* delay = (ComplexFUInstance*) CreateFUInstance(accel,versat->delay,MakeSizedString(buffer,size),false,true);
+               ComplexFUInstance* delay = (ComplexFUInstance*) CreateFUInstance(accel,versat->fixedBuffer,bufferName,false,false);
+               delay->parameters = PushString(&versat->permanent,"#(.AMOUNT(%d))",info->delay - versat->fixedBuffer->latencies[0]);
 
-            InsertUnit(accel,PortInstance{inst,info->port},PortInstance{info->instConnectedTo.inst,info->instConnectedTo.port},PortInstance{delay,0});
+               InsertUnit(accel,PortInstance{inst,info->port},PortInstance{info->instConnectedTo.inst,info->instConnectedTo.port},PortInstance{delay,0});
 
-            delay->baseDelay = info->delay - versat->delay->latencies[0];
+               delay->baseDelay = info->delay - versat->fixedBuffer->latencies[0];
 
-            Assert(delay->baseDelay >= 0);
+               maxDelay = maxi(maxDelay,delay->baseDelay);
+            } else {
+               SizedString bufferName = PushString(&versat->permanent,"buffer%d",buffersInserted++);
 
-            maxDelay = maxi(maxDelay,delay->baseDelay);
+               ComplexFUInstance* delay = (ComplexFUInstance*) CreateFUInstance(accel,versat->buffer,bufferName,false,true);
+               InsertUnit(accel,PortInstance{inst,info->port},PortInstance{info->instConnectedTo.inst,info->instConnectedTo.port},PortInstance{delay,0});
 
-            if(delay->config){
-               delay->config[0] = delay->baseDelay;
+               delay->baseDelay = info->delay - versat->buffer->latencies[0];
+               Assert(delay->baseDelay >= 0);
+
+               maxDelay = maxi(maxDelay,delay->baseDelay);
+
+               if(delay->config){
+                  delay->config[0] = delay->baseDelay;
+               }
             }
-            Assert(delay->baseDelay >= 0);
+         } else {
+            Assert(info->delay >= 0);
          }
       }
    }
@@ -663,15 +671,16 @@ void CalculateDelay(Versat* versat,Accelerator* accel){
       inst->tempData->inputDelay = inst->baseDelay;
 
       Assert(inst->baseDelay >= 0);
+      Assert(inst->baseDelay < 9999); // Unless dealing with really long accelerators, should catch some calculating bugs
 
-      if(inst->declaration == versat->delay && inst->config){
+      if(inst->declaration == versat->buffer && inst->config){
          inst->config[0] = inst->baseDelay;
       }
    }
    #endif
 
    if(versat->debug.outputGraphs){
-      OutputGraphDotFile(accel,false,"debug/%.*s/out3_%d.dot",UNPACK_SS(accel->subtype->name),graphs++);
+      OutputGraphDotFile(versat,accel,false,"debug/%.*s/out3_%d.dot",UNPACK_SS(accel->subtype->name),graphs++);
    }
 }
 

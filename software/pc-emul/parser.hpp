@@ -8,15 +8,18 @@
 #include "utils.hpp"
 #include "type.hpp"
 
+struct Command;
+
 struct Expression{
    const char* op;
    SizedString id;
    Expression** expressions;
+   Command* command;
    int size;
    Value val;
    SizedString text;
 
-   enum {UNDEFINED,OPERATION,IDENTIFIER,LITERAL,ARRAY_ACCESS,MEMBER_ACCESS} type;
+   enum {UNDEFINED,OPERATION,IDENTIFIER,COMMAND,LITERAL,ARRAY_ACCESS,MEMBER_ACCESS} type;
 };
 
 typedef int (*CharFunction) (const char* ptr,int size);
@@ -53,7 +56,13 @@ public:
    Token PeekFindIncluding(const char* str);
    Token NextFindUntil(const char* str);
 
+   bool IfPeekToken(const char* str);
+   bool IfNextToken(const char* str);
+
    Token FindFirst(std::initializer_list<const char*> strings);
+
+   // For expressions where there is a open and a closing delimiter (think '{...{...}...}') and need to check where an associated close delimiter is
+   SizedString PeekUntilDelimiterExpression(std::initializer_list<const char*> open,std::initializer_list<const char*> close, int numberOpenSeen); //
 
    Token PeekWhitespace();
 
@@ -69,8 +78,10 @@ public:
    bool Done();
    int Lines(){return lines;};
 
+   bool IsSpecialOrSingle(SizedString toTest);
 };
 
+bool CheckStringOnlyWhitespace(Token tok);
 bool CheckFormat(const char* format,Token tok);
 bool Contains(SizedString str,const char* toCheck);
 
@@ -85,6 +96,6 @@ int ParseInt(SizedString str);
 bool IsNum(char ch);
 
 typedef Expression* (*ParsingFunction)(Tokenizer* tok);
-Expression* ParseOperationType(Tokenizer* tok,std::vector<std::vector<const char*>> operators,ParsingFunction finalFunction,Arena* tempArena);
+Expression* ParseOperationType(Tokenizer* tok,std::initializer_list<std::initializer_list<const char*>> operators,ParsingFunction finalFunction,Arena* tempArena);
 
 #endif // INCLUDED_PARSER

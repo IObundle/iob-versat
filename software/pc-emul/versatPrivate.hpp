@@ -127,6 +127,7 @@ struct GraphComputedData{
    ConnectionInfo* outputs;
    enum {TAG_UNCONNECTED,TAG_COMPUTE,TAG_SOURCE,TAG_SINK,TAG_SOURCE_AND_SINK} nodeType;
    int inputDelay;
+   int order;
 };
 
 struct VersatComputedData{
@@ -150,7 +151,7 @@ struct ComplexFUInstance : public FUInstance{
    char tag;
    bool savedConfiguration; // For subunits registered, indicate when we save configuration before hand
    bool savedMemory; // Same for memory
-   Byte sharedIndex;
+   int sharedIndex;
    bool sharedEnable;
    bool initialized;
 };
@@ -160,6 +161,7 @@ struct DebugState{
    bool outputAccelerator;
    bool outputVersat;
    bool outputVCD;
+   bool useFixedBuffers;
 };
 
 struct Versat{
@@ -173,10 +175,11 @@ struct Versat{
 	int numberConfigurations;
 
 	// Declaration for units that versat needs to instantiate itself
-	FUDeclaration* delay;
+	FUDeclaration* buffer;
+   FUDeclaration* fixedBuffer;
    FUDeclaration* input;
-   FUDeclaration* multiplexer;
    FUDeclaration* output;
+   FUDeclaration* multiplexer;
    FUDeclaration* pipelineRegister;
 
    DebugState debug;
@@ -207,8 +210,6 @@ struct Accelerator{
 
    Pool<ComplexFUInstance> instances;
 	Pool<Edge> edges;
-
-   std::unordered_map<std::string,Test> nameToInstance;
 
    Pool<ComplexFUInstance*> inputInstancePointers;
    ComplexFUInstance* outputInstance;
@@ -258,6 +259,19 @@ public:
    ComplexFUInstance* Next(); // Returns nullptr in the end
 
    ComplexFUInstance* CurrentAcceleratorInstance(); // Returns the top accelerator for the last FUInstance returned by Start or Next
+};
+
+struct IterativeUnitDeclaration{
+   SizedString name;
+   SizedString unitName;
+   FUDeclaration* baseDeclaration;
+   Accelerator* initial;
+   Accelerator* forLoop;
+
+   int nInputs;
+   int nOutputs;
+   int stateSize;
+   int latency;
 };
 
 int CalculateLatency(ComplexFUInstance* inst);

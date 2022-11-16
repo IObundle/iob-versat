@@ -190,31 +190,3 @@ bool IsAlpha(char ch){
 
    return false;
 }
-
-static char* GetHierarchyNameRepr_(HierarchyName name, char* buffer,int first){
-   if(name.parent){
-      buffer = GetHierarchyNameRepr_(*name.parent,buffer,0);
-   }
-
-   for(int i = 0; i < MAX_NAME_SIZE - 1 && name.str[i] != '\0'; i++){
-      *(buffer++) = name.str[i];
-   }
-   if(!first){
-      *(buffer++) = '_';
-   }
-   *buffer = '\0';
-
-   return buffer;
-}
-
-char* GetHierarchyNameRepr(HierarchyName name){
-   static int slot = 0;
-   static char buffer[MAX_NAME_SIZE * 16 * 8];
-
-   char* ptr = &buffer[MAX_NAME_SIZE * 16 * slot];
-   GetHierarchyNameRepr_(name,ptr,1);
-
-   slot = (slot + 1) % 8;
-
-   return ptr;
-}

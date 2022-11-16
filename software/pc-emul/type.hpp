@@ -68,6 +68,8 @@ namespace ValueType{
    extern Type* NIL;
    extern Type* SIZED_STRING;
    extern Type* TEMPLATE_FUNCTION;
+   extern Type* POOL;
+   extern Type* STD_VECTOR;
 };
 
 struct TemplateFunction;
@@ -106,9 +108,13 @@ void FreeTypes();
 
 SizedString GetValueRepresentation(Value val,Arena* arena);
 
+Value RemoveOnePointerIndirection(Value in);
+
 Value CollapsePtrIntoStruct(Value in);
 Value CollapseArrayIntoPtr(Value in);
-Value ConvertValue(Value in,Type* want);
+Value CollapseValue(Value val);
+
+Value ConvertValue(Value in,Type* want,Arena* arena);
 
 int ArrayLength(Type* type);
 
@@ -117,7 +123,8 @@ Type* GetPointerType(Type* baseType);
 Type* GetArrayType(Type* baseType, int arrayLength);
 
 Value AccessStruct(Value object,Member* member);
-Value AccessObject(Value object,SizedString memberName);
+Value AccessStruct(Value val,int index);
+Value AccessStruct(Value object,SizedString memberName);
 Value AccessObjectIndex(Value object,int index);
 
 Iterator Iterate(Value iterating);
