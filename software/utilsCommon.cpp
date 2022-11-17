@@ -97,8 +97,8 @@ int NumberDigitsRepresentation(int number){
    return nDigits;
 }
 
-static uint seed = 1;
-void SeedRandomNumber(uint val){
+static unsigned int seed = 1;
+void SeedRandomNumber(unsigned int val){
    if(val == 0){
       seed = 1;
    } else {
@@ -106,7 +106,7 @@ void SeedRandomNumber(uint val){
    }
 }
 
-uint GetRandomNumber(){
+unsigned int GetRandomNumber(){
    // Xorshift
    seed ^= seed << 13;
 	seed ^= seed >> 17;

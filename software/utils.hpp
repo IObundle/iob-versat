@@ -91,8 +91,8 @@ int AlignNextPower2(int val);
 int NumberDigitsRepresentation(int number); // Number of digits if printed (negative includes - sign )
 
 // Weak random generator but produces same results in pc-emul and in simulation
-void SeedRandomNumber(uint seed);
-uint GetRandomNumber();
+void SeedRandomNumber(unsigned int seed);
+unsigned int GetRandomNumber();
 
 void FlushStdout();
 

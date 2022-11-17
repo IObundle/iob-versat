@@ -1,6 +1,7 @@
 #ifndef INCLUDED_MEMORY
 #define INCLUDED_MEMORY
 
+#include <cstdarg>
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>

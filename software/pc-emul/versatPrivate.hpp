@@ -7,6 +7,7 @@
 #include "memory.hpp"
 #include "logger.hpp"
 
+#include <stdio.h>
 #include "versat.hpp"
 
 struct ComplexFUInstance;
