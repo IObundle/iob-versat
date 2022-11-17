@@ -370,7 +370,7 @@ Value CollapsePtrIntoStruct(Value object){
    return newVal;
 }
 
-static Value CollapseValue(Value val){
+Value CollapseValue(Value val){
    Assert(!val.isTemp); // Only use this function for values you know are references when calling
 
    val.isTemp = true; // Assume that collapse happens
@@ -500,50 +500,13 @@ Value AccessStruct(Value object,SizedString memberName){
       }
    }
 
-   Assert(offset >= 0);
+   if(offset == -1){
+      Log(LogModule::PARSER,LogLevel::FATAL,"Failure to find member named: %.*s on structure: %.*s",UNPACK_SS(memberName),UNPACK_SS(structure.type->name));
+   }
 
    Value res = AccessStruct(structure,member);
 
    return res;
-}
-
-void Print(Value val){
-   NOT_IMPLEMENTED;
-
-   #if 0
-   switch(val.type){
-      case ValueType::NUMBER:{
-         printf("%d",val.number);
-      }break;
-      case ValueType::CUSTOM:{
-         printf("\n");
-         OutputObject(val.custom,val.customType);
-      }break;
-      default:{
-         NOT_IMPLEMENTED;
-      }break;
-   }
-   #endif
-}
-
-void OutputObject(void* object,Type objectType){
-   #if 0
-   Type* info = objectType.baseType;
-
-   Byte* ptr = (Byte*) object;
-   for(Member m : info->members){
-      Value val = {};
-
-      val = CollapseCustomIntoValue(ptr + m.offset,GetType(m.baseType));
-      val.customType.pointers = m.numberPtrs;
-
-      printf("%s ",m.name);
-
-      Print(val);
-
-      printf("\n");
-   }
-   #endif
 }
 
 Iterator Iterate(Value iterating){
@@ -670,8 +633,68 @@ Value GetValue(Iterator iter){
    return val;
 }
 
-SizedString GetValueRepresentation(Value val){
-   SizedString res = {};
+static bool IsPointerLike(Type* type){
+   bool res = type->type == Type::POINTER || type->type == Type::ARRAY;
+   return res;
+}
+
+Value RemoveOnePointerIndirection(Value in){
+   Assert(IsPointerLike(in.type));
+
+   Value res = in;
+
+   if(in.type->type == Type::ARRAY){
+      res = CollapseArrayIntoPtr(in);
+   }
+
+   // Remove one level of indirection
+   Assert(in.type->type == Type::POINTER);
+   Type* type = res.type;
+
+   char* deference = (char*) res.custom;
+
+   if(deference != nullptr){
+      res.custom = *((char**) deference);
+      res.type = type->pointerType;
+   } else {
+      res = MakeValue();
+   }
+
+   return res;
+}
+
+static bool IsTypeBaseTypeOfPointer(Type* baseToCheck,Type* pointerLikeType){
+   Type* checker = pointerLikeType;
+   while(IsPointerLike(checker)){
+      if(baseToCheck == checker){
+         return true;
+      } else if(checker->type == Type::ARRAY){
+         checker = GetPointerType(checker->arrayType);
+      } else if(checker->type == Type::POINTER){
+         checker = checker->pointerType;
+      } else {
+         break;
+      }
+   }
+
+   bool res = (baseToCheck == checker);
+   return res;
+}
+
+static Value CollapsePtrUntilType(Value in, Type* typeWanted){
+   Value res = in;
+
+   while(res.type != typeWanted){
+      if(res.type->type == Type::ARRAY){
+         res = CollapseArrayIntoPtr(res);
+      } else if(in.type->type == Type::POINTER){
+         res = RemoveOnePointerIndirection(res);
+      } else {
+         NOT_POSSIBLE;
+      }
+   }
+
+   Assert(res.type == typeWanted);
 
    return res;
 }
@@ -694,7 +717,15 @@ bool Equal(Value v1,Value v2){
       return CompareString(ss,str);
    }
 
-   c2 = ConvertValue(c2,c1.type);
+   if(IsTypeBaseTypeOfPointer(c2.type,c1.type)){
+      c1 = CollapsePtrUntilType(c1,c2.type);
+   } else if(IsTypeBaseTypeOfPointer(c1.type,c2.type)){
+      c2 = CollapsePtrUntilType(c2,c1.type);
+   }
+
+   if(c2.type != c1.type){
+      c2 = ConvertValue(c2,c1.type,nullptr);
+   }
 
    bool res = false;
 
@@ -710,6 +741,18 @@ bool Equal(Value v1,Value v2){
       } else {
          res = (c1.number == c2.number);
       }
+   } else if(c1.type->type == Type::POINTER){
+      Assert(!c1.isTemp && !c2.isTemp); // TODO: The concept of temp variables should be better handled. For now, just check that we are dealing with the must common case and proceed
+
+      c1 = RemoveOnePointerIndirection(c1);
+      c2 = RemoveOnePointerIndirection(c2);
+
+      res = (c1.custom == c2.custom);
+   } else if(c1.type->type == Type::STRUCT){
+      Assert(!c1.isTemp);
+      Assert(!c2.isTemp);
+
+      res = (c1.custom == c2.custom);
    } else {
       NOT_IMPLEMENTED;
    }
@@ -748,7 +791,7 @@ Value CollapseArrayIntoPtr(Value in){
    return newValue;
 }
 
-Value ConvertValue(Value in,Type* want){
+Value ConvertValue(Value in,Type* want,Arena* arena){
    if(in.type == want){
       return in;
    }
@@ -781,6 +824,11 @@ Value ConvertValue(Value in,Type* want){
          HierarchyName* name = (HierarchyName*) in.custom;
 
          res = MakeValue(MakeSizedString(name->str));
+      } else if(in.type == ValueType::STRING){
+         res = in;
+         res.type = want;
+      } else if(arena){
+         res.str = GetValueRepresentation(in,arena);
       } else {
          NOT_IMPLEMENTED;
       }

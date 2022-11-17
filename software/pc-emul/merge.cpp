@@ -183,8 +183,6 @@ void Clique(ConsolidationGraph graphArg,int size){
 }
 
 ConsolidationGraph MaxClique(ConsolidationGraph graph){
-   ConsolidationGraph res = {};
-
    max = 0;
    found = 0;
    for(int i = 0; i < TABLE_SIZE; i++){
@@ -259,7 +257,7 @@ ConsolidationGraph GenerateConsolidationGraph(Arena* arena,Accelerator* accel1,A
    graph.nodes = (MappingNode*) MarkArena(arena);
 
    // Check node mapping
-   #if 1
+   #if 0
    for(ComplexFUInstance* instA : accel1->instances){
       for(ComplexFUInstance* instB : accel2->instances){
          if(instA->declaration == instB->declaration){
@@ -394,10 +392,10 @@ static InstanceMap ConsolidationGraphMapping(Versat* versat,Accelerator* accel1,
 
    InstanceMap res;
 
-   for(int i = 0; i < graph.numberNodes; i++){
-      MappingNode node = graph.nodes[i];
+   for(int i = 0; i < clique.numberNodes; i++){
+      MappingNode node = clique.nodes[i];
 
-      if(!graph.validNodes[i]){
+      if(!clique.validNodes[i]){
          continue;
       }
 
@@ -559,6 +557,7 @@ FUDeclaration* MergeAccelerators(Versat* versat,FUDeclaration* accel1,FUDeclarat
    Accelerator* flatten2 = Flatten(versat,accel2->baseCircuit,99);
 
    InstanceMap graphMapping;
+
    if(true){
       graphMapping = OrderedFitGraphMapping(versat,flatten1,flatten2);
    } else if(flatten1->instances.Size() >= 500 || flatten2->instances.Size() >= 500){
@@ -572,7 +571,7 @@ FUDeclaration* MergeAccelerators(Versat* versat,FUDeclaration* accel1,FUDeclarat
    InstanceMap map = {};
 
    Accelerator* newGraph = CreateAccelerator(versat);
-   newGraph->type = Accelerator::CIRCUIT;
+   //newGraph->type = Accelerator::CIRCUIT;
 
    // Create base instances from accel 1
    for(FUInstance* inst : flatten1->instances){

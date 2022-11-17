@@ -649,6 +649,7 @@ void OutputRegisterTypesFunction(FILE* output){
    }
    #endif
 
+   fprintf(output,"#pragma GCC diagnostic ignored \"-Winvalid-offsetof\"\n");
    fprintf(output,"static void RegisterParsedTypes(){\n");
 
    for(Type* info : types){

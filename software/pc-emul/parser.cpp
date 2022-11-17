@@ -258,6 +258,27 @@ Token Tokenizer::NextFindUntil(const char* str){
    return token;
 }
 
+bool Tokenizer::IfPeekToken(const char* str){
+   Token peek = PeekToken();
+
+   if(CompareString(peek,str)){
+      return true;
+   }
+
+   return false;
+}
+
+bool Tokenizer::IfNextToken(const char* str){
+   Token peek = PeekToken();
+
+   if(CompareString(peek,str)){
+      AdvancePeek(peek);
+      return true;
+   }
+
+   return false;
+}
+
 Token Tokenizer::PeekWhitespace(){
    Token token = {};
 
@@ -345,9 +366,13 @@ bool Tokenizer::IsSpecialOrSingle(SizedString toTest){
    return false;
 }
 
-SizedString Tokenizer::PeekUntilDelimiterExpression(SizedString open,SizedString close, int numberOpenSeen){
-   Assert(IsSpecialOrSingle(open));
-   Assert(IsSpecialOrSingle(close));
+SizedString Tokenizer::PeekUntilDelimiterExpression(std::initializer_list<const char*> open,std::initializer_list<const char*> close, int numberOpenSeen){
+   for(const char* str : open){
+      Assert(IsSpecialOrSingle(MakeSizedString(str)));
+   }
+   for(const char* str : close){
+      Assert(IsSpecialOrSingle(MakeSizedString(str)));
+   }
 
    void* pos = Mark();
 
@@ -358,17 +383,25 @@ SizedString Tokenizer::PeekUntilDelimiterExpression(SizedString open,SizedString
    while(!Done()){
       Token tok = PeekToken();
 
-      if(CompareString(tok,open)){
-         seen += 1;
-      } else if(CompareString(tok,close)){
-         if(seen == 0){
+      for(const char* str : open){
+         if(CompareString(tok,str)){
+            seen += 1;
             break;
          }
+      }
 
-         seen -= 1;
+      for(const char* str : close){
+         if(CompareString(tok,str)){
+            if(seen == 0){
+               goto end;
+            }
 
-         if(seen == 0){
-            res = Point(pos);
+            seen -= 1;
+
+            if(seen == 0){
+               res = Point(pos);
+               goto end;
+            }
             break;
          }
       }
@@ -376,6 +409,7 @@ SizedString Tokenizer::PeekUntilDelimiterExpression(SizedString open,SizedString
       AdvancePeek(tok);
    }
 
+end:
    Rollback(pos); // Act as peek
 
    return res;

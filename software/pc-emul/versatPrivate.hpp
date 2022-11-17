@@ -7,6 +7,7 @@
 #include "memory.hpp"
 #include "logger.hpp"
 
+#include <stdio.h>
 #include "versat.hpp"
 
 struct ComplexFUInstance;
@@ -151,7 +152,7 @@ struct ComplexFUInstance : public FUInstance{
    char tag;
    bool savedConfiguration; // For subunits registered, indicate when we save configuration before hand
    bool savedMemory; // Same for memory
-   Byte sharedIndex;
+   int sharedIndex;
    bool sharedEnable;
    bool initialized;
 };
@@ -178,8 +179,8 @@ struct Versat{
 	FUDeclaration* buffer;
    FUDeclaration* fixedBuffer;
    FUDeclaration* input;
-   FUDeclaration* multiplexer;
    FUDeclaration* output;
+   FUDeclaration* multiplexer;
    FUDeclaration* pipelineRegister;
 
    DebugState debug;
@@ -259,6 +260,19 @@ public:
    ComplexFUInstance* Next(); // Returns nullptr in the end
 
    ComplexFUInstance* CurrentAcceleratorInstance(); // Returns the top accelerator for the last FUInstance returned by Start or Next
+};
+
+struct IterativeUnitDeclaration{
+   SizedString name;
+   SizedString unitName;
+   FUDeclaration* baseDeclaration;
+   Accelerator* initial;
+   Accelerator* forLoop;
+
+   int nInputs;
+   int nOutputs;
+   int stateSize;
+   int latency;
 };
 
 int CalculateLatency(ComplexFUInstance* inst);
