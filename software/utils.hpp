@@ -115,6 +115,13 @@ bool IsAlpha(char ch);
 
 SizedString PathGoUp(char* pathBuffer);
 
+template<typename T>
+void Memset(T* buffer,T elem,int bufferSize){
+   for(int i = 0; i < bufferSize; i++){
+      buffer[i] = elem;
+   }
+}
+
 #endif // INCLUDED_UTILS_HPP
 
 

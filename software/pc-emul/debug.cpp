@@ -2,6 +2,27 @@
 
 #include "type.hpp"
 
+void CheckMemory(Accelerator* topLevel,Accelerator* accel){
+   //AcceleratorIterator iter = {};
+   //for(FUInstance* inst = iter.Start(accel); inst; inst = iter.Next()){
+
+   for(ComplexFUInstance* inst : accel->instances){
+      printf("[%.*s] %.*s:\n",UNPACK_SS(inst->declaration->name),UNPACK_SS(inst->name));
+      if(inst->isStatic){
+         printf("C:%d\n",inst->config ? inst->config - topLevel->staticAlloc.ptr : -1);
+      } else {
+         printf("C:%d\n",inst->config ? inst->config - topLevel->configAlloc.ptr : -1);
+      }
+
+      printf("S:%d\n",inst->state ? inst->state - topLevel->stateAlloc.ptr : -1);
+      printf("D:%d\n",inst->delay ? inst->delay - topLevel->delayAlloc.ptr : -1);
+      printf("O:%d\n",inst->outputs ? inst->outputs - topLevel->outputAlloc.ptr : -1);
+      printf("o:%d\n",inst->storedOutputs ? inst->storedOutputs - topLevel->storedOutputAlloc.ptr : -1);
+      printf("E:%d\n",inst->extraData ? inst->extraData - topLevel->extraDataAlloc.ptr : -1);
+      printf("\n");
+   }
+}
+
 void DisplayInstanceMemory(ComplexFUInstance* inst){
    printf("%.*s\n",UNPACK_SS(inst->name));
    printf("  C: %p\n",inst->config);
@@ -53,6 +74,43 @@ void OutputMemoryHex(void* memory,int size){
    }
 
    printf("\n");
+}
+
+static void OutputSimpleIntegers(int* mem,int size){
+   for(int i = 0; i < size; i++){
+      printf("%d ",mem[i]);
+   }
+}
+
+void DisplayUnitConfiguration(Accelerator* topLevel){
+   AcceleratorIterator iter = {};
+   for(ComplexFUInstance* inst = iter.Start(topLevel); inst; inst = iter.Next()){
+      UnitValues val = CalculateIndividualUnitValues(inst);
+
+      FUDeclaration* type = inst->declaration;
+
+      if(val.configs | val.states | val.delays){
+         printf("[%.*s] %.*s:",UNPACK_SS(type->name),UNPACK_SS(inst->name));
+         if(val.configs){
+            if(IsConfigStatic(topLevel,inst)){
+               printf("\nStatic [%d]: ",inst->config - topLevel->staticAlloc.ptr);
+            } else {
+               printf("\nConfig [%d]: ",inst->config - topLevel->configAlloc.ptr);
+            }
+
+            OutputSimpleIntegers(inst->config,val.configs);
+         }
+         if(val.states){
+            printf("\nState [%d]: ",inst->state - topLevel->stateAlloc.ptr);
+            OutputSimpleIntegers(inst->state,val.states);
+         }
+         if(val.delays){
+            printf("\nDelay [%d]: ",inst->delay - topLevel->delayAlloc.ptr);
+            OutputSimpleIntegers(inst->delay,val.delays);
+         }
+         printf("\n\n");
+      }
+   }
 }
 
 #if 0

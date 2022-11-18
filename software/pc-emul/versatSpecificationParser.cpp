@@ -420,17 +420,20 @@ FUDeclaration* ParseIterative(Versat* versat,Tokenizer* tok){
 
    tok->AssertNextToken("iterative");
 
-   decl.name = tok->NextToken();
+   SizedString name = tok->NextToken();
+
+   decl.name = PushString(&versat->permanent,name);
 
    Accelerator* firstPhase = CreateAccelerator(versat);
    Accelerator* secondPhase = CreateAccelerator(versat);
 
-   FUInstance* firstPhaseOut = CreateFUInstance(firstPhase,versat->output,MakeSizedString("state"),false,false);
-   firstPhase->outputInstance = (ComplexFUInstance*) firstPhaseOut;
+   FUInstance* firstOut = CreateFUInstance(firstPhase,versat->output,MakeSizedString("out"),true,false);
+   firstPhase->outputInstance = (ComplexFUInstance*) firstOut;
+   FUInstance* firstData = CreateFUInstance(firstPhase,versat->data,MakeSizedString("data"),true,false);
 
-   FUInstance* secondOut = CreateFUInstance(secondPhase,versat->output,MakeSizedString("out"),false,false);
+   FUInstance* secondOut = CreateFUInstance(secondPhase,versat->output,MakeSizedString("out"),true,false);
    secondPhase->outputInstance = (ComplexFUInstance*) secondOut;
-   FUInstance* secondState = CreateFUInstance(secondPhase,versat->output,MakeSizedString("state"),false,false);
+   FUInstance* secondData = CreateFUInstance(secondPhase,versat->data,MakeSizedString("data"),true,false);
 
    tok->AssertNextToken("(");
    // Arguments
@@ -451,15 +454,14 @@ FUDeclaration* ParseIterative(Versat* versat,Tokenizer* tok){
       #if 1
       SizedString name = PushString(&versat->permanent,argument);
 
-      decl.nInputs += 1;
       {
-      ComplexFUInstance* inst = (ComplexFUInstance*) CreateFUInstance(firstPhase,versat->input,name);
+      ComplexFUInstance* inst = (ComplexFUInstance*) CreateFUInstance(firstPhase,versat->input,name,true);
       ComplexFUInstance** ptr = firstPhase->inputInstancePointers.Alloc();
       *ptr = inst;
       }
 
       {
-      ComplexFUInstance* inst = (ComplexFUInstance*) CreateFUInstance(secondPhase,versat->input,name);
+      ComplexFUInstance* inst = (ComplexFUInstance*) CreateFUInstance(secondPhase,versat->input,name,true);
       ComplexFUInstance** ptr = secondPhase->inputInstancePointers.Alloc();
       *ptr = inst;
       }
@@ -477,14 +479,12 @@ FUDeclaration* ParseIterative(Versat* versat,Tokenizer* tok){
       FUDeclaration* type = GetTypeByName(versat,instanceTypeName);
       SizedString name = PushString(&versat->permanent,instanceName);
 
-      Assert(type->latencies[0] == 0); // Assume combinatorial unit, for now
       decl.baseDeclaration = type;
       decl.unitName = name;
 
       CreateFUInstance(firstPhase,type,name,true,false);
       CreateFUInstance(secondPhase,type,name,true,false);
    }
-
    tok->AssertNextToken("#");
 
    SizedString latencyStr = tok->NextToken();
@@ -506,11 +506,11 @@ FUDeclaration* ParseIterative(Versat* versat,Tokenizer* tok){
       FUInstance* inst1 = GetInstanceByName(firstPhase,"%.*s",UNPACK_SS(start.name));
       FUInstance* inst2 = nullptr;
 
-      if(CompareString(end.name,"state")){
-         inst2 = firstPhaseOut;
-         decl.stateSize = maxi(decl.stateSize,end.portEnd);
+      if(CompareString(end.name,"data")){
+         inst2 = firstData;
+         decl.dataSize = maxi(decl.dataSize,end.portEnd);
       } else {
-         UNHANDLED_ERROR;
+         inst2 = GetInstanceByName(firstPhase,"%.*s",UNPACK_SS(end.name));
       }
 
       ConnectUnit(inst1,inst2,start,end);
@@ -525,8 +525,6 @@ FUDeclaration* ParseIterative(Versat* versat,Tokenizer* tok){
 
       Var start = ParseVar(tok);
 
-      //Assert(CompareString(start.name,"state"));
-
       tok->AssertNextToken("->");
 
       Var end = ParseVar(tok);
@@ -535,19 +533,18 @@ FUDeclaration* ParseIterative(Versat* versat,Tokenizer* tok){
       FUInstance* inst1 = nullptr;
       FUInstance* inst2 = nullptr;
 
-      if(CompareString(start.name,"state")){
-         inst1 = secondState;
-         decl.stateSize = maxi(decl.stateSize,end.portEnd);
+      if(CompareString(start.name,"data")){
+         inst1 = secondData;
+         decl.dataSize = maxi(decl.dataSize,end.portEnd);
       } else {
          inst1 = GetInstanceByName(secondPhase,"%.*s",UNPACK_SS(start.name));
       }
 
       if(CompareString(end.name,"out")){
          inst2 = secondOut;
-         decl.nOutputs = maxi(decl.nOutputs,end.portEnd);
-      } else if(CompareString(end.name,"state")){
-         inst2 = secondState;
-         decl.stateSize = maxi(decl.stateSize,end.portEnd);
+      } else if(CompareString(end.name,"data")){
+         inst2 = secondData;
+         decl.dataSize = maxi(decl.dataSize,end.portEnd);
       } else {
          inst2 = GetInstanceByName(secondPhase,"%.*s",UNPACK_SS(end.name));
       }
@@ -555,8 +552,7 @@ FUDeclaration* ParseIterative(Versat* versat,Tokenizer* tok){
       ConnectUnit(inst1,inst2,start,end);
    }
    tok->AssertNextToken("}");
-   decl.nOutputs += 1;
-   decl.stateSize += 1;
+   decl.dataSize += 1;
 
    OutputGraphDotFile(versat,firstPhase,false,"./debug/firstPhase.dot");
    OutputGraphDotFile(versat,secondPhase,false,"./debug/secondPhase.dot");

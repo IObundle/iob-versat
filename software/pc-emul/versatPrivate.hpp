@@ -101,17 +101,23 @@ struct FUDeclaration{
    // Merged accelerator
    FUDeclaration* mergedType[2]; // TODO: probably change it from static to a dynamic allocating with more space, in order to accommodate multiple mergings (merge A with B and then the result with C)
 
+   // Iterative
+   SizedString unitName;
+   FUDeclaration* baseDeclaration;
+   Accelerator* initial;
+   Accelerator* forLoop;
+   int dataSize;
+
    FUFunction initializeFunction;
    FUFunction startFunction;
    FUFunction updateFunction;
    FUFunction destroyFunction;
    MemoryAccessFunction memAccessFunction;
 
-   int nTotalOutputs;
    const char* operation;
    Pool<StaticInfo> staticUnits;
 
-   enum {SINGLE = 0x0,COMPOSITE = 0x1,SPECIAL = 0x2,MERGED = 0x3} type;
+   enum {SINGLE = 0x0,COMPOSITE = 0x1,SPECIAL = 0x2,MERGED = 0x3,ITERATIVE = 0x4} type;
    DelayType delayType;
 
    bool isOperation;
@@ -146,6 +152,8 @@ struct Parameter{
 struct ComplexFUInstance : public FUInstance{
    // Various uses
    FUInstance* declarationInstance;
+
+   Accelerator* iterative;
 
    GraphComputedData* tempData;
    VersatComputedData* versatData;
@@ -182,6 +190,7 @@ struct Versat{
    FUDeclaration* output;
    FUDeclaration* multiplexer;
    FUDeclaration* pipelineRegister;
+   FUDeclaration* data;
 
    DebugState debug;
 
@@ -269,17 +278,40 @@ struct IterativeUnitDeclaration{
    Accelerator* initial;
    Accelerator* forLoop;
 
-   int nInputs;
-   int nOutputs;
-   int stateSize;
+   int dataSize;
    int latency;
 };
+
+struct UnitValues{
+   int inputs;
+   int outputs;
+
+   int configs;
+   int states;
+   int delays;
+   int ios;
+   int totalOutputs;
+   int extraData;
+   int statics;
+
+   int memoryMappedBits;
+   bool isMemoryMapped;
+};
+
+UnitValues CalculateIndividualUnitValues(ComplexFUInstance* inst); // Values for individual unit, not taking into account sub units
+UnitValues CalculateAcceleratorUnitValues(Versat* versat,ComplexFUInstance* inst); // Values taking into account sub units
+UnitValues CalculateAcceleratorValues(Versat* versat,Accelerator* accel); //
 
 int CalculateLatency(ComplexFUInstance* inst);
 void CalculateDelay(Versat* versat,Accelerator* accel);
 void SetDelayRecursive(Accelerator* accel);
 void CalculateGraphData(Accelerator* accel);
 void CalculateVersatData(Accelerator* accel);
+
+bool IsConfigStatic(Accelerator* topLevel,ComplexFUInstance* inst);
+
+int CalculateTotalOutputs(Accelerator* accel);
+int CalculateTotalOutputs(FUInstance* inst);
 
 void ConnectUnits(PortInstance out,PortInstance in);
 

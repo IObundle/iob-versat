@@ -188,9 +188,9 @@ public:
    T* Get(int index);
    Byte* GetMemoryPtr();
 
-   void Clear(bool clearMemory = false);
-
    int Size(){return allocated;};
+   void Clear(bool clearMemory = false);
+   Pool<T> Copy();
 
    PoolIterator<T> begin();
    PoolIterator<T> end();
@@ -489,6 +489,18 @@ void Pool<T>::Remove(T* elem){
 template<typename T>
 Byte* Pool<T>::GetMemoryPtr(){
    return mem;
+}
+
+template<typename T>
+Pool<T> Pool<T>::Copy(){
+   Pool<T> other = {};
+
+   for(T* ptr : *this){
+      T* inst = other.Alloc();
+      *inst = *ptr;
+   }
+
+   return other;
 }
 
 template<typename T>
