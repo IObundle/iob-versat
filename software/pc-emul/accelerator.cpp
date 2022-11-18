@@ -24,7 +24,7 @@ ComplexFUInstance* AcceleratorIterator::Next(){
 
    ComplexFUInstance* inst = *stack[index];
 
-   if(inst->declaration->type == FUDeclaration::COMPOSITE && inst->compositeAccel){
+   if(inst->compositeAccel){
       stack[++index] = inst->compositeAccel->instances.begin();
    } else {
       while(1){
@@ -431,6 +431,25 @@ void CalculateVersatData(Accelerator* accel){
    }
 
    blocks.Clear(true);
+}
+
+int CalculateTotalOutputs(Accelerator* accel){
+   int total = 0;
+   AcceleratorIterator iter = {};
+   for(FUInstance* inst = iter.Start(accel); inst; inst = iter.Next()){
+      total += inst->declaration->nOutputs;
+   }
+   return total;
+}
+
+int CalculateTotalOutputs(FUInstance* inst){
+   int total = 0;
+   if(inst->compositeAccel){
+      total += CalculateTotalOutputs(inst->compositeAccel);
+   }
+   total += inst->declaration->nOutputs;
+
+   return total;
 }
 
 void FixMultipleInputs(Versat* versat,Accelerator* accel){

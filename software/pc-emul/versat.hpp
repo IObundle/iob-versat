@@ -89,15 +89,20 @@ void LoadConfiguration(Accelerator* accel,int configuration);
 void AcceleratorRun(Accelerator* accel);
 void ActivateMergedAccelerator(Versat* versat,Accelerator* accel,FUDeclaration* type);
 
-//void PopulateAccelerator(Accelerator* accel);
+// Debugging
 void CheckMemory(Accelerator* topLevel,Accelerator* accel);
 void DisplayAcceleratorMemory(Accelerator* topLevel);
+void DisplayUnitConfiguration(Accelerator* topLevel);
 
 void SetDefaultConfiguration(FUInstance* inst,int* config,int size);
 void ShareInstanceConfig(FUInstance* inst, int shareBlockIndex);
 
 // Helper functions
 int GetInputValue(FUInstance* instance,int port);
+
+// For sub accelerators with input and output units
+void SetInputValue(Accelerator* accel,int portNumber,int number);
+int GetOutputValue(Accelerator* accel,int portNumber);
 
 void ConnectUnits(FUInstance* out,int outIndex,FUInstance* in,int inIndex);
 void ConnectUnitsWithDelay(FUInstance* out,int outIndex,FUInstance* in,int inIndex,int delay);

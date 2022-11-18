@@ -1,6 +1,6 @@
-#{define iterativeOutputName portInstance port}
-#{if portInstance.inst == secondState}
-   #{return "state" # port}
+#{define retIterativeOutputName portInstance port}
+#{if portInstance.inst.declaration == versat.state}
+   #{return "state[" # port # "]"}
 #{else}
 #{if portInstance.inst.declaration.type == 2}
    #{return "in" # port}
@@ -9,6 +9,10 @@
 #{end}
 #{end}
 #{end}
+
+#{define iterativeOutputName portInstance port}
+#{set val #{call retIterativeOutputName portInstance port}}
+@{val}#{end}
 
 #{define retOutputName portInstance}
 #{set inst2 portInstance.inst}
