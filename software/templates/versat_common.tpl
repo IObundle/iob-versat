@@ -1,6 +1,6 @@
 #{define retIterativeOutputName portInstance port}
-#{if portInstance.inst.declaration == versat.state}
-   #{return "state[" # port # "]"}
+#{if portInstance.inst.declaration == versat.data}
+   #{return "data[" # port # "]"}
 #{else}
 #{if portInstance.inst.declaration.type == 2}
    #{return "in" # port}

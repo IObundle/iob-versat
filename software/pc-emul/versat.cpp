@@ -93,10 +93,10 @@ static int* DefaultUpdateFunction(ComplexFUInstance* inst){
    return out;
 }
 
-static FUDeclaration* RegisterState(Versat* versat){
+static FUDeclaration* RegisterData(Versat* versat){
    FUDeclaration decl = {};
 
-   decl.name = MakeSizedString("state");
+   decl.name = MakeSizedString("Data");
    decl.nInputs = 50;
    decl.nOutputs = 50;
    decl.latencies = ones;
@@ -269,7 +269,7 @@ Versat* InitVersat(int base,int numberConfigurations){
    versat->multiplexer = GetTypeByName(versat,MakeSizedString("Mux2"));
    versat->input = RegisterCircuitInput(versat);
    versat->output = RegisterCircuitOutput(versat);
-   versat->state = RegisterState(versat);
+   versat->data = RegisterData(versat);
 
    RegisterOperators(versat);
 
@@ -1436,7 +1436,7 @@ static int* IterativeUpdateFunction(ComplexFUInstance* inst){
 
    int* delay = (int*) inst->extraData;
 
-   ComplexFUInstance* stateInst = (ComplexFUInstance*) GetInstanceByName(inst->compositeAccel,"state");
+   ComplexFUInstance* dataInst = (ComplexFUInstance*) GetInstanceByName(inst->compositeAccel,"data");
 
    LockAccelerator(inst->compositeAccel,Accelerator::Locked::ORDERED);
    Assert(inst->iterative);
@@ -1456,11 +1456,11 @@ static int* IterativeUpdateFunction(ComplexFUInstance* inst){
          out[i] = val;
       }
 
-      ComplexFUInstance* secondState = (ComplexFUInstance*) GetInstanceByName(inst->iterative,"state");
+      ComplexFUInstance* secondData = (ComplexFUInstance*) GetInstanceByName(inst->iterative,"data");
 
-      for(int i = 0; i < secondState->declaration->nOutputs; i++){
-         stateInst->outputs[i] = secondState->outputs[i];
-         stateInst->storedOutputs[i] = secondState->outputs[i];
+      for(int i = 0; i < secondData->declaration->nOutputs; i++){
+         dataInst->outputs[i] = secondData->outputs[i];
+         dataInst->storedOutputs[i] = secondData->outputs[i];
       }
 
       *delay = -1;
@@ -1479,11 +1479,11 @@ FUDeclaration* RegisterIterativeUnit(Versat* versat,IterativeUnitDeclaration* de
    LockAccelerator(decl->initial,Accelerator::Locked::GRAPH);
    LockAccelerator(decl->forLoop,Accelerator::Locked::GRAPH);
 
-   FUInstance* state = nullptr;
+   FUInstance* data = nullptr;
    FUInstance* comb = nullptr;
    for(FUInstance* inst : decl->forLoop->instances){
-      if(inst->declaration == versat->state){
-         state = inst;
+      if(inst->declaration == versat->data){
+         data = inst;
       }
       if(inst->declaration == decl->baseDeclaration){
          comb = inst;
@@ -1510,7 +1510,7 @@ FUDeclaration* RegisterIterativeUnit(Versat* versat,IterativeUnitDeclaration* de
    declaration.unitName = decl->unitName;
    declaration.initial = decl->initial;
    declaration.forLoop = decl->forLoop;
-   declaration.stateSize = decl->stateSize;
+   declaration.dataSize = decl->dataSize;
 
    declaration.initializeFunction = IterativeInitializeFunction;
    declaration.startFunction = IterativeStartFunction;
@@ -1533,24 +1533,24 @@ FUDeclaration* RegisterIterativeUnit(Versat* versat,IterativeUnitDeclaration* de
    TemplateSetCustom("comb",comb,"ComplexFUInstance");
 
    FUInstance* firstPartComb = nullptr;
-   FUInstance* firstState = nullptr;
+   FUInstance* firstData = nullptr;
    FUInstance* secondPartComb = nullptr;
-   FUInstance* secondState = nullptr;
+   FUInstance* secondData = nullptr;
 
    for(FUInstance* inst : decl->initial->instances){
       if(inst->declaration == decl->baseDeclaration){
          firstPartComb = inst;
       }
-      if(inst->declaration == versat->state){
-         firstState = inst;
+      if(inst->declaration == versat->data){
+         firstData = inst;
       }
    }
    for(FUInstance* inst : decl->forLoop->instances){
       if(inst->declaration == decl->baseDeclaration){
          secondPartComb = inst;
       }
-      if(inst->declaration == versat->state){
-         secondState = inst;
+      if(inst->declaration == versat->data){
+         secondData = inst;
       }
    }
 
@@ -1559,8 +1559,8 @@ FUDeclaration* RegisterIterativeUnit(Versat* versat,IterativeUnitDeclaration* de
    TemplateSetCustom("secondComb",secondPartComb,"ComplexFUInstance");
    TemplateSetCustom("firstOut",decl->initial->outputInstance,"ComplexFUInstance");
    TemplateSetCustom("secondOut",decl->forLoop->outputInstance,"ComplexFUInstance");
-   TemplateSetCustom("firstState",firstState,"ComplexFUInstance");
-   TemplateSetCustom("secondState",secondState,"ComplexFUInstance");
+   TemplateSetCustom("firstData",firstData,"ComplexFUInstance");
+   TemplateSetCustom("secondData",secondData,"ComplexFUInstance");
 
    ProcessTemplate(sourceCode,"../../submodules/VERSAT/software/templates/versat_iterative_template.tpl",&versat->temp);
 

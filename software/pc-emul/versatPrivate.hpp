@@ -105,7 +105,7 @@ struct FUDeclaration{
    FUDeclaration* baseDeclaration;
    Accelerator* initial;
    Accelerator* forLoop;
-   int stateSize;
+   int dataSize;
 
    FUFunction initializeFunction;
    FUFunction startFunction;
@@ -189,7 +189,7 @@ struct Versat{
    FUDeclaration* output;
    FUDeclaration* multiplexer;
    FUDeclaration* pipelineRegister;
-   FUDeclaration* state;
+   FUDeclaration* data;
 
    DebugState debug;
 
@@ -277,7 +277,7 @@ struct IterativeUnitDeclaration{
    Accelerator* initial;
    Accelerator* forLoop;
 
-   int stateSize;
+   int dataSize;
    int latency;
 };
 
