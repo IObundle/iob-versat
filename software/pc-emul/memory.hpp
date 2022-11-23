@@ -76,7 +76,6 @@ struct Arena{
    Byte* mem;
    size_t used;
    size_t totalAllocated;
-   bool align;
 };
 
 void InitArena(Arena* arena,size_t size);
@@ -85,10 +84,12 @@ void Free(Arena* arena);
 Byte* MarkArena(Arena* arena);
 void PopMark(Arena* arena,Byte* mark);
 Byte* PushBytes(Arena* arena, int size);
+SizedString PointArena(Arena* arena,Byte* mark);
 SizedString PushFile(Arena* arena,const char* filepath);
 SizedString PushString(Arena* arena,SizedString ss);
 SizedString PushString(Arena* arena,const char* format,...) __attribute__ ((format (printf, 2, 3)));
 SizedString vPushString(Arena* arena,const char* format,va_list args);
+void PushNullByte(Arena* arena);
 #define PushStruct(ARENA,STRUCT) (STRUCT*) PushBytes(ARENA,sizeof(STRUCT))
 #define PushArray(ARENA,SIZE,STRUCT) (STRUCT*) PushBytes(ARENA,sizeof(STRUCT) * SIZE)
 
@@ -182,9 +183,10 @@ public:
 #endif
 
    T* Alloc();
+   T* Alloc(int index); // Returns nullptr if element already allocated at given position
    void Remove(T* elem);
 
-   T* Get(int index);
+   T* Get(int index); // Returns nullptr if element not allocated (call Alloc(int index) to allocate)
    Byte* GetMemoryPtr();
 
    int Size(){return allocated;};
@@ -438,6 +440,40 @@ T* Pool<T>::Alloc(){
 
    Assert(0);
    return nullptr;
+}
+
+template<typename T>
+T* Pool<T>::Alloc(int index){
+   if(!mem){
+      mem = (Byte*) AllocatePages(1);
+      info = CalculatePoolInfo(sizeof(T));
+   }
+
+   Byte* ptr = mem;
+   PageInfo page = GetPageInfo(info,ptr);
+   while(index >= info.unitsPerPage){
+      if(!page.header->nextPage){
+         page.header->nextPage = (Byte*) AllocatePages(1);
+      }
+
+      ptr = page.header->nextPage;
+      page = GetPageInfo(info,ptr);
+      index -= info.unitsPerPage;
+   }
+
+   int bitmapIndex = index / 8;
+   int bitIndex = (7 - index % 8);
+
+   if(page.bitmap[bitmapIndex] & (1 << bitIndex)){
+      return nullptr;
+   }
+
+   T* view = (T*) ptr;
+   page.bitmap[bitmapIndex] |= (1 << bitIndex);
+   allocated += 1;
+   endSize = maxi(index + 1,endSize);
+
+   return &view[bitmapIndex * 8 + (7 - bitIndex)];
 }
 
 template<typename T>

@@ -215,7 +215,7 @@ struct Test{
 
 struct Accelerator{
    Versat* versat;
-   FUDeclaration* subtype; // If subaccelerator
+   FUDeclaration* subtype; // Set if subaccelerator (accelerator associated to a FUDeclaration). A "free" accelerator has this set to nullptr
 
    Pool<ComplexFUInstance> instances;
 	Pool<Edge> edges;
@@ -245,7 +245,7 @@ struct Accelerator{
 	int entityId;
 	bool init;
 
-	enum {ACCELERATOR,SUBACCELERATOR,CIRCUIT} type;
+	//enum {ACCELERATOR,SUBACCELERATOR,CIRCUIT} type;
 };
 
 struct SubgraphData{

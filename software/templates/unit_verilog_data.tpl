@@ -239,15 +239,20 @@ static int32_t* @{module.name}_UpdateFunction(ComplexFUInstance* inst){
       if(access->latencyCounter > 0){
          access->latencyCounter -= 1;
       } else {
+         int* ptr = (int*) (self->databus_addr);
+         
          if(self->databus_wstrb == 0){
-            int* ptr = (int*) (self->databus_addr);
-            self->databus_rdata = ptr[access->counter];
-            self->databus_ready = 1;
+            if(ptr == nullptr){
+               self->databus_rdata = 0xfeeffeef; // Feed bad data if not set (in pc-emul is needed otherwise segfault)
+            } else {
+               self->databus_rdata = ptr[access->counter];
+            }            
          } else { // self->databus_wstrb != 0
-            int* ptr = (int*) self->databus_addr;
-            ptr[access->counter] = self->databus_wdata;
-            self->databus_ready = 1;
+            if(ptr != nullptr){
+               ptr[access->counter] = self->databus_wdata;
+            }
          }
+         self->databus_ready = 1;
          
          if(access->counter == self->databus_len){
             access->counter = 0;

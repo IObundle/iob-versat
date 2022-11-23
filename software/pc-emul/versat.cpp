@@ -563,7 +563,19 @@ static FUInstance* vGetInstanceByName_(Accelerator* circuit,int argc,va_list arg
    if(!res){
       GetInstanceByHierarchicalName(circuit,&fullName);
 
-      printf("Didn't find the following instance: %.*s\n",UNPACK_SS(fullName.name));
+      printf("Didn't find the following instance: ");
+
+      bool first = true;
+      for(HierarchicalName* ptr = &fullName; ptr != nullptr; ptr = ptr->next){
+         if(first){
+            first = false;
+         } else {
+            printf(".");
+         }
+         printf("%.*s",UNPACK_SS(ptr->name));
+      }
+
+      printf("\n");
       Assert(false);
    }
 
@@ -693,7 +705,7 @@ static void OutputGraphDotFile_(Versat* versat,Accelerator* accel,bool collapseS
          }
       }
 
-      fprintf(outputFile,"[label=\"%d\"]",delay);
+      fprintf(outputFile,"[label=\"%d->%d:%d\"]",edge->units[0].port,edge->units[1].port,delay);
       //fprintf(outputFile,"[label=\"[%d:%d;%d:%d]\"]",outputInst->declaration->latencies[0],delay,edge->units[1].inst->declaration->inputDelays[edge->units[1].port],edge->delay);
       #endif
 
@@ -806,7 +818,7 @@ void PopulateAcceleratorRecursive(FUDeclaration* accelType,ComplexFUInstance* in
 
    bool foundStatic = false;
    if(inst->isStatic){
-      Assert(accelType);
+      //Assert(accelType);
 
       for(StaticInfo* info : staticsAllocated){
          if(info->module == accelType && CompareString(info->name,inst->name)){
@@ -887,10 +899,6 @@ void InitializeFUInstances(Accelerator* accel,bool force){
    }
    #endif
 }
-
-struct AcceleratorValues{
-
-};
 
 struct StaticId{
    FUDeclaration* parent;
@@ -1031,7 +1039,7 @@ UnitValues CalculateAcceleratorValues(Versat* versat,Accelerator* accel){
 }
 
 void PopulateAccelerator(Versat* versat,Accelerator* accel){
-   #if 1
+   #if 0
    if(accel->type == Accelerator::CIRCUIT){
       return;
    }
@@ -1063,6 +1071,8 @@ void PopulateAccelerator(Versat* versat,Accelerator* accel){
    #endif
 
    accel->staticInfo.Clear();
+
+   FUInstanceInterfaces savedInter = inter;
    // Assuming no static units on top, for now
    DoPopulate(accel,accel->subtype,inter,accel->staticInfo);
 
@@ -1236,8 +1246,16 @@ FUDeclaration* RegisterSubUnit(Versat* versat,SizedString name,Accelerator* circ
    // HACK, for now
    circuit->subtype = &decl;
 
+   // Keep track of input and output nodes
    for(ComplexFUInstance* inst : circuit->instances){
       FUDeclaration* d = inst->declaration;
+
+      if(d == versat->input){
+         int index = inst->id;
+
+         ComplexFUInstance** ptr = circuit->inputInstancePointers.Alloc(index);
+         *ptr = (ComplexFUInstance*) inst;
+      }
 
       if(d == versat->output){
          circuit->outputInstance = inst;
@@ -1265,6 +1283,8 @@ FUDeclaration* RegisterSubUnit(Versat* versat,SizedString name,Accelerator* circ
    #endif
 
    FixMultipleInputs(versat,circuit);
+
+   OutputGraphDotFile(versat,circuit,true,"debug/FixMultipleInputs.dot");
 
    decl.fixedMultiEdgeCircuit = CopyAccelerator(versat,circuit,nullptr,true);
 
@@ -1698,7 +1718,7 @@ Accelerator* Flatten(Versat* versat,Accelerator* accel,int times){
                continue;
             }
 
-            SizedString newName = PushString(&versat->temp,"%.*s.%.*s",UNPACK_SS(inst->name),UNPACK_SS(circuitInst->name));
+            SizedString newName = PushString(&versat->permanent,"%.*s.%.*s",UNPACK_SS(inst->name),UNPACK_SS(circuitInst->name));
             ComplexFUInstance* newInst = CopyInstance(newAccel,circuitInst,newName,true);
 
             if(newInst->isStatic){
@@ -1896,23 +1916,19 @@ Accelerator* Flatten(Versat* versat,Accelerator* accel,int times){
    OutputGraphDotFile(versat,accel,true,"./debug/original.dot");
    OutputGraphDotFile(versat,newAccel,true,"./debug/flatten.dot");
 
-   #if 0
-   FUDeclaration decl = {};
-   decl.type = FUDeclaration::COMPOSITE;
-   decl.name = MakeSizedString("TOP");
-   // HACK, for now
-   newAccel->subtype = &decl;
-
+   #if 1
    PopulateAccelerator(versat,newAccel);
    InitializeFUInstances(newAccel,true);
    CalculateDelay(versat,newAccel);
 
-   AcceleratorValues val1 = ComputeAcceleratorValues(versat,accel);
-   AcceleratorValues val2 = ComputeAcceleratorValues(versat,newAccel);
+   UnitValues val1 = CalculateAcceleratorValues(versat,accel);
+   UnitValues val2 = CalculateAcceleratorValues(versat,newAccel);
 
-   Assert((val1.configs + val1.statics) == (val2.configs + val2.statics));
-   Assert(val1.states == val2.states);
-   Assert(val1.delays == val2.delays);
+   if(times == 99){
+      Assert((val1.configs + val1.statics) == val2.configs); // New accel shouldn't have statics, unless they are from delay units added (which should also be shared configs)
+      Assert(val1.states == val2.states);
+      Assert(val1.delays == val2.delays);
+   }
    #endif
 
    newAccel->staticInfo.Clear();
@@ -2415,6 +2431,30 @@ int GetInputValue(FUInstance* inst,int index){
    return 0;
 }
 
+int GetNumberOfInputs(FUInstance* inst){
+   return inst->declaration->nInputs;
+}
+
+int GetNumberOfOutputs(FUInstance* inst){
+   return inst->declaration->nOutputs;
+}
+
+int GetNumberOfInputs(Accelerator* accel){
+   return accel->inputInstancePointers.Size();
+}
+
+int GetNumberOfOutputs(Accelerator* accel){
+   LockAccelerator(accel,Accelerator::Locked::GRAPH);
+
+   ComplexFUInstance* inst = accel->outputInstance;
+
+   if(inst){
+      return inst->tempData->numberInputs;
+   } else {
+      return 0;
+   }
+}
+
 void SetInputValue(Accelerator* accel,int portNumber,int number){
    Assert(accel->outputAlloc.ptr);
 
@@ -2434,6 +2474,12 @@ int GetOutputValue(Accelerator* accel,int portNumber){
    int value = GetInputValue(inst,portNumber);
 
    return value;
+}
+
+int GetInputPortNumber(Versat* versat,FUInstance* inputInstance){
+   Assert(inputInstance->declaration == versat->input);
+
+   return inputInstance->id;
 }
 
 // Connects out -> in
@@ -2464,6 +2510,19 @@ void ConnectUnitsWithDelay(FUInstance* out,int outIndex,FUInstance* in,int inInd
    edge->units[1].inst = (ComplexFUInstance*) in;
    edge->units[1].port = inIndex;
    edge->delay = delay;
+}
+
+void ConnectUnitsIfNotConnected(FUInstance* out,int outIndex,FUInstance* in,int inIndex){
+   Accelerator* accel = out->accel;
+
+   for(Edge* edge : accel->edges){
+      if(edge->units[0].inst == out && edge->units[0].port == outIndex
+      && edge->units[1].inst == in  && edge->units[1].port == inIndex)
+
+      return;
+   }
+
+   ConnectUnits(out,outIndex,in,inIndex);
 }
 
 #define MAX_CHARS 64

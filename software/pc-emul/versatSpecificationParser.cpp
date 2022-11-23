@@ -114,7 +114,7 @@ PortInstance ParseTerm(Versat* versat,Accelerator* circuit,Tokenizer* tok){
    Assert(var.portStart == var.portEnd);
 
    if(negate){
-      FUInstance* negation = CreateFUInstance(circuit,GetTypeByName(versat,MakeSizedString("NOT")),MakeSizedString("not"));
+      FUInstance* negation = CreateFUInstance(circuit,GetTypeByName(versat,MakeSizedString("NOT")),MakeSizedString("not"),true);
 
       ConnectUnits(inst,var.portStart,negation,0);
 
@@ -163,7 +163,7 @@ FUInstance* ParseExpression(Versat* versat,Accelerator* circuit,Tokenizer* tok,S
    }
 
    SizedString typeStr = MakeSizedString(typeName);
-   FUInstance* res = CreateFUInstance(circuit,GetTypeByName(versat,typeStr),name);
+   FUInstance* res = CreateFUInstance(circuit,GetTypeByName(versat,typeStr),name,true);
 
    ConnectUnits(term1.inst,term1.port,res,0);
    ConnectUnits(term2.inst,term2.port,res,1);
@@ -171,7 +171,7 @@ FUInstance* ParseExpression(Versat* versat,Accelerator* circuit,Tokenizer* tok,S
    return res;
 }
 
-FUInstance* ParseInstanceDeclaration(Versat* versat,Tokenizer* tok,Accelerator* circuit){
+FUInstance* ParseInstanceDeclaration(Versat* versat,Tokenizer* tok,Accelerator* circuit,bool isStatic){
    Token type = tok->NextToken();
 
    Token possibleParameters = tok->PeekToken();
@@ -199,7 +199,7 @@ FUInstance* ParseInstanceDeclaration(Versat* versat,Tokenizer* tok,Accelerator* 
    SizedString name = PushString(&versat->permanent,tok->NextToken());
 
    FUDeclaration* FUType = GetTypeByName(versat,type);
-   FUInstance* inst = CreateFUInstance(circuit,FUType,name);
+   FUInstance* inst = CreateFUInstance(circuit,FUType,name,true,isStatic);
    inst->parameters = PushString(&versat->permanent,fullParameters);
 
    Token peek = tok->PeekToken();
@@ -291,7 +291,7 @@ FUDeclaration* ParseModule(Versat* versat,Tokenizer* tok){
    tok->AssertNextToken("(");
 
    Accelerator* circuit = CreateAccelerator(versat);
-   circuit->type = Accelerator::CIRCUIT;
+   //circuit->type = Accelerator::CIRCUIT;
 
    for(int i = 0; 1; i++){
       Token token = tok->NextToken();
@@ -306,10 +306,7 @@ FUDeclaration* ParseModule(Versat* versat,Tokenizer* tok){
       }
 
       SizedString name = PushString(&versat->permanent,token);
-      FUInstance* inst = CreateFUInstance(circuit,versat->input,name);
-      ComplexFUInstance** ptr = circuit->inputInstancePointers.Alloc();
-
-      *ptr = (ComplexFUInstance*) inst;
+      FUInstance* inst = CreateFUInstance(circuit,versat->input,name,true);
    }
 
    tok->AssertNextToken("{");
@@ -356,7 +353,7 @@ FUDeclaration* ParseModule(Versat* versat,Tokenizer* tok){
                   }
 
                   SizedString name = PushString(&versat->permanent,possibleName);
-                  FUInstance* inst = CreateFUInstance(circuit,type,name);
+                  FUInstance* inst = CreateFUInstance(circuit,type,name,true);
 
                   ShareInstanceConfig(inst,shareIndex);
 
@@ -368,8 +365,7 @@ FUDeclaration* ParseModule(Versat* versat,Tokenizer* tok){
 
             shareIndex += 1;
          } else {
-            FUInstance* inst = ParseInstanceDeclaration(versat,tok,circuit);
-            inst->isStatic = isStatic;
+            FUInstance* inst = ParseInstanceDeclaration(versat,tok,circuit,isStatic);
 
             tok->AssertNextToken(";");
          }
@@ -393,7 +389,7 @@ FUDeclaration* ParseModule(Versat* versat,Tokenizer* tok){
             FUInstance* inst2 = nullptr;
             if(CompareString(inVar.name,"out")){
                if(!circuit->outputInstance){
-                  circuit->outputInstance = (ComplexFUInstance*) CreateFUInstance(circuit,versat->output,MakeSizedString("out"));
+                  circuit->outputInstance = (ComplexFUInstance*) CreateFUInstance(circuit,versat->output,MakeSizedString("out"),true);
                }
 
                inst2 = circuit->outputInstance;

@@ -55,7 +55,6 @@ void InitArena(Arena* arena,size_t size){
    arena->used = 0;
    arena->totalAllocated = size;
    arena->mem = (Byte*) calloc(size,sizeof(Byte));
-   arena->align = false;
 }
 
 Arena SubArena(Arena* arena,size_t size){
@@ -88,13 +87,16 @@ Byte* PushBytes(Arena* arena, int size){
    memset(ptr,0,size);
    arena->used += size;
 
-   if(arena->align){
-      arena->used = ALIGN_4(arena->used);
-   }
-
    Assert(arena->used < arena->totalAllocated);
 
    return ptr;
+}
+
+SizedString PointArena(Arena* arena,Byte* mark){
+   SizedString res = {};
+   res.str = mark;
+   res.size = &arena->mem[arena->used] - mark;
+   return res;
 }
 
 SizedString PushFile(Arena* arena,const char* filepath){
@@ -138,15 +140,10 @@ SizedString vPushString(Arena* arena,const char* format,va_list args){
 
    arena->used += (size_t) (size);
 
-   if(arena->align){
-      arena->used = ALIGN_4(arena->used);
-   }
-
    SizedString res = MakeSizedString(buffer,size);
 
    return res;
 }
-
 
 SizedString PushString(Arena* arena,const char* format,...){
    va_list args;
@@ -157,6 +154,11 @@ SizedString PushString(Arena* arena,const char* format,...){
    va_end(args);
 
    return res;
+}
+
+void PushNullByte(Arena* arena){
+   Byte* res = PushBytes(arena,1);
+   *res = '\0';
 }
 
 PoolInfo CalculatePoolInfo(int elemSize){

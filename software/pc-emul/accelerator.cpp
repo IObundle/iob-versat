@@ -165,7 +165,7 @@ static void CalculateDAGOrdering(Accelerator* accel){
 
 SubgraphData SubGraphAroundInstance(Versat* versat,Accelerator* accel,ComplexFUInstance* instance,int layers){
    Accelerator* newAccel = CreateAccelerator(versat);
-   newAccel->type = Accelerator::CIRCUIT;
+   //newAccel->type = Accelerator::CIRCUIT;
 
    std::set<ComplexFUInstance*> subgraphUnits;
    std::set<ComplexFUInstance*> tempSubgraphUnits;
@@ -458,11 +458,11 @@ void FixMultipleInputs(Versat* versat,Accelerator* accel){
 
    int portUsedCount[99];
    for(ComplexFUInstance* inst : accel->instances){
-      if(inst->declaration == versat->multiplexer){ // Not good, but works for now (otherwise newly added muxes would break this part)
+      if(inst->declaration == versat->multiplexer){ // Not good, but works for now (otherwise newly added muxes would break the algorithm)
          continue;
       }
 
-      memset(portUsedCount,0,sizeof(int) * 99);
+      Memset(portUsedCount,0,99);
 
       for(int i = 0; i < inst->tempData->numberInputs; i++){
          ConnectionInfo* info = &inst->tempData->inputs[i];

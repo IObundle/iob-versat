@@ -21,7 +21,7 @@ struct MappingNode{ // Mapping (edge to edge or node to node)
 };
 
 struct MappingEdge{ // Edge between mapping from edge to edge
-   MappingNode nodes[2];
+   MappingNode* nodes[2];
 };
 
 struct ConsolidationGraph{

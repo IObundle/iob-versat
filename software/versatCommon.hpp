@@ -3,10 +3,10 @@
 
 struct FUInstance{
    const char* name;
-   int* memMapped;
-   int* config;
-   int* state;
-   int* delay;
+   volatile int* memMapped;
+   volatile int* config;
+   volatile int* state;
+   volatile int* delay;
 
    int numberChilds;
 };

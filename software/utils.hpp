@@ -122,6 +122,14 @@ void Memset(T* buffer,T elem,int bufferSize){
    }
 }
 
+template<typename T>
+void Memcpy(T* dest,T* scr,int numberElements){
+   for(int i = 0; i < numberElements; i++){
+      dest[i] = scr[i];
+   }
+}
+
+
 #endif // INCLUDED_UTILS_HPP
 
 

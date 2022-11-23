@@ -12,8 +12,6 @@ unsigned int staticBuffer[] = {
    #{end} 
 };
 
-
-
 static volatile int* staticBase = (volatile int*) @{versatBase + nConfigs * 4 |> Hex};
 static volatile int* delayBase = (volatile int*) @{versatBase + (nConfigs + nStatics) * 4 |> Hex};
 static volatile int* configBase = (volatile int*) @{versatBase + 4 |> Hex};

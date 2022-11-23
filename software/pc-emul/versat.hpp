@@ -100,17 +100,25 @@ void ShareInstanceConfig(FUInstance* inst, int shareBlockIndex);
 // Helper functions
 int GetInputValue(FUInstance* instance,int port);
 
+int GetNumberOfInputs(FUInstance* inst);
+int GetNumberOfOutputs(FUInstance* inst);
+
 // For sub accelerators with input and output units
+int GetNumberOfInputs(Accelerator* accel);
+int GetNumberOfOutputs(Accelerator* accel);
 void SetInputValue(Accelerator* accel,int portNumber,int number);
 int GetOutputValue(Accelerator* accel,int portNumber);
 
+int GetInputPortNumber(Versat* versat,FUInstance* inputInstance);
+
 void ConnectUnits(FUInstance* out,int outIndex,FUInstance* in,int inIndex);
 void ConnectUnitsWithDelay(FUInstance* out,int outIndex,FUInstance* in,int inIndex,int delay);
+void ConnectUnitsIfNotConnected(FUInstance* out,int outIndex,FUInstance* in,int inIndex);
 
 void VersatUnitWrite(FUInstance* instance,int address, int value);
 int VersatUnitRead(FUInstance* instance,int address);
 
-FUDeclaration* MergeAccelerators(Versat* versat,FUDeclaration* accel1,FUDeclaration* accel2,SizedString name);
+FUDeclaration* MergeAccelerators(Versat* versat,FUDeclaration* accel1,FUDeclaration* accel2,SizedString name,int flatteningOrder = 99);
 
 void Hook(Versat* versat,Accelerator* accel,FUInstance* inst);
 

@@ -261,7 +261,6 @@ void RegisterTypes(){
    registered = true;
 
    InitArena(&permanentArena,Megabyte(16));
-   permanentArena.align = true;
 
    RegisterParsedTypes();
 
