@@ -73,7 +73,7 @@ module @{accel.name} #(
    input [DATA_W/8-1:0]            wstrb,
    input [DATA_W-1:0]              wdata,
    output                          ready,
-   output reg [DATA_W-1:0]         rdata,
+   output [DATA_W-1:0]             rdata,
    #{end}
 
    input                           clk,
