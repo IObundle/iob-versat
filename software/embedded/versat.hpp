@@ -18,6 +18,12 @@ struct Accelerator{
    bool locked;
 };
 
+enum MergingStrategy{
+   SIMPLE_COMBINATION,
+   CONSOLIDATION_GRAPH,
+   PIECEWISE_CONSOLIDATION_GRAPH
+}; // TODO: Remove need for this? Only here because firmware instantiates variables of this type
+
 Versat* InitVersat(int base,int numberConfigurations);
 
 // Accelerator functions

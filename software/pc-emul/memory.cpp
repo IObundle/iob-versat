@@ -51,6 +51,15 @@ void CheckMemoryStats(){
    }
 }
 
+ArenaMarker::ArenaMarker(Arena* arena){
+   this->arena = arena;
+   this->mark = MarkArena(arena);
+}
+
+ArenaMarker::~ArenaMarker(){
+   PopMark(this->arena,this->mark);
+}
+
 void InitArena(Arena* arena,size_t size){
    arena->used = 0;
    arena->totalAllocated = size;
@@ -84,10 +93,10 @@ void PopMark(Arena* arena,Byte* mark){
 Byte* PushBytes(Arena* arena, int size){
    Byte* ptr = &arena->mem[arena->used];
 
+   Assert(arena->used + size < arena->totalAllocated);
+
    memset(ptr,0,size);
    arena->used += size;
-
-   Assert(arena->used < arena->totalAllocated);
 
    return ptr;
 }
@@ -140,6 +149,8 @@ SizedString vPushString(Arena* arena,const char* format,va_list args){
 
    arena->used += (size_t) (size);
 
+   Assert(arena->used < arena->totalAllocated);
+
    SizedString res = MakeSizedString(buffer,size);
 
    return res;
@@ -159,6 +170,84 @@ SizedString PushString(Arena* arena,const char* format,...){
 void PushNullByte(Arena* arena){
    Byte* res = PushBytes(arena,1);
    *res = '\0';
+}
+
+void BitArray::Init(Byte* memory,int bitSize){
+   this->memory = memory;
+   this->bitSize = bitSize;
+}
+
+void BitArray::Init(Arena* arena,int bitSize){
+   this->bitSize = bitSize;
+   this->memory = MarkArena(arena);
+   PushBytes(arena,BitToByteSize(bitSize));
+}
+
+void BitArray::Fill(bool value){
+   int fillValue = (value ? 0xff : 0x00);
+
+   int byteSize = BitToByteSize(this->bitSize);
+   for(int i = 0; i < byteSize; i++){
+      this->memory[i] = fillValue;
+   }
+}
+
+void BitArray::Copy(BitArray array){
+   Assert(this->bitSize >= array.bitSize);
+
+   int byteSize = BitToByteSize(this->bitSize);
+   Memcpy(this->memory,array.memory,byteSize);
+}
+
+int BitArray::Get(int index){
+   Assert(index < this->bitSize);
+
+   int byteIndex = index / 8;
+   int bitIndex = 7 - (index % 8);
+
+   Byte byte = memory[byteIndex];
+   int result = (byte & (1 << bitIndex) ? 1 : 0);
+
+   return result;
+}
+
+void BitArray::Set(int index,bool value){
+   Assert(index < this->bitSize);
+
+   int byteIndex = index / 8;
+   int bitIndex = 7 - (index % 8);
+
+   if(value){
+      memory[byteIndex] |= (1 << bitIndex);
+   } else {
+      memory[byteIndex] &= ~(1 << bitIndex);
+   }
+}
+
+SizedString BitArray::PrintRepresentation(Arena* output){
+   Byte* mark = MarkArena(output);
+   for(int i = this->bitSize - 1; i >= 0; --i){
+      int val = Get(i);
+
+      if(val){
+         PushString(output,MakeSizedString("1"));
+      } else {
+         PushString(output,MakeSizedString("0"));
+      }
+   }
+   SizedString res = PointArena(output,mark);
+   return res;
+}
+
+BitArray& BitArray::operator&=(const BitArray& other){
+   Assert(this->bitSize == other.bitSize);
+
+   int byteSize = BitToByteSize(this->bitSize);
+   for(int i = 0; i < byteSize; i++){
+      this->memory[i] &= other.memory[i];
+   }
+
+   return *this;
 }
 
 PoolInfo CalculatePoolInfo(int elemSize){

@@ -17,7 +17,8 @@ module Mul #(
 
                 input [DATA_W-1:0]           in0,
                 input [DATA_W-1:0]           in1,
-                (* versat_latency = 3 *) output [DATA_W-1:0]          out0,
+                (* versat_latency = 3 *) output [DATA_W-1:0] out0,
+                (* versat_latency = 3 *) output [DATA_W-1:0] out1,                
 
                 // config interface
                 input [31:0]                 delay0

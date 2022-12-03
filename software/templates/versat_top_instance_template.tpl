@@ -155,8 +155,8 @@ assign done = (&unitDone && !run);
 
 #{if versatValues.numberConnections}
 wire [31:0] #{join ", " for inst instances}
-   #{if inst.tempData.outputPortsUsed} 
-      #{join ", " for j inst.tempData.outputPortsUsed} output_@{inst.id}_@{j} #{end}
+   #{if inst.graphData.outputPortsUsed} 
+      #{join ", " for j inst.graphData.outputPortsUsed} output_@{inst.id}_@{j} #{end}
    #{else}
       unused_@{inst.id} #{end}
 #{end};
@@ -265,12 +265,12 @@ end
 #{for inst instances}
 #{set decl inst.declaration}
    @{decl.name} @{inst.parameters} @{inst.name |> Identify}_@{counter} (
-      #{for i inst.tempData.outputPortsUsed}
+      #{for i inst.graphData.outputPortsUsed}
          .out@{i}(output_@{inst.id}_@{i}),
       #{end} 
 
-      #{for i inst.tempData.inputPortsUsed}
-         .in@{i}(output_@{inst.tempData.inputs[i].instConnectedTo.inst.id}_@{inst.tempData.inputs[i].instConnectedTo.port}),
+      #{for i inst.graphData.inputPortsUsed}
+         .in@{i}(output_@{inst.graphData.inputs[i].instConnectedTo.inst.id}_@{inst.graphData.inputs[i].instConnectedTo.port}),
       #{end}
 
       #{for i decl.nConfigs}

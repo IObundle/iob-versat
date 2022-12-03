@@ -4,17 +4,19 @@
 #include "templateEngine.hpp"
 
 VersatComputedValues ComputeVersatValues(Versat* versat,Accelerator* accel){
-   LockAccelerator(accel,Accelerator::Locked::GRAPH);
+   ArenaMarker marker(&versat->temp);
+   AcceleratorView view = CreateAcceleratorView(accel,&versat->temp);
+   DAGOrder order = view.CalculateDAGOrdering(&versat->temp);
 
    VersatComputedValues res = {};
 
    for(ComplexFUInstance* inst : accel->instances){
       FUDeclaration* decl = inst->declaration;
 
-      res.numberConnections += inst->tempData->numberOutputs;
+      res.numberConnections += inst->graphData->numberOutputs;
 
       if(decl->isMemoryMapped){
-         res.maxMemoryMapDWords = maxi(res.maxMemoryMapDWords,1 << decl->memoryMapBits);
+         res.maxMemoryMapDWords = std::max(res.maxMemoryMapDWords,1 << decl->memoryMapBits);
          res.memoryMappedBytes += (1 << (decl->memoryMapBits + 2));
          res.unitsMapped += 1;
       }
@@ -55,14 +57,16 @@ VersatComputedValues ComputeVersatValues(Versat* versat,Accelerator* accel){
    res.memoryMappingAddressBits = res.memoryAddressBits;
    res.configurationAddressBits = log2i(res.nConfigurations);
    res.stateAddressBits = log2i(res.nStates);
-   res.stateConfigurationAddressBits = maxi(res.configurationAddressBits,res.stateAddressBits);
+   res.stateConfigurationAddressBits = std::max(res.configurationAddressBits,res.stateAddressBits);
 
-   res.lowerAddressSize = maxi(res.stateConfigurationAddressBits,res.memoryMappingAddressBits);
+   res.lowerAddressSize = std::max(res.stateConfigurationAddressBits,res.memoryMappingAddressBits);
 
    res.memoryConfigDecisionBit = res.lowerAddressSize;
 
    return res;
 }
+
+#include "debug.hpp"
 
 void OutputCircuitSource(Versat* versat,FUDeclaration* decl,Accelerator* accel,FILE* file){
    if(!versat->debug.outputAccelerator){
@@ -70,7 +74,8 @@ void OutputCircuitSource(Versat* versat,FUDeclaration* decl,Accelerator* accel,F
    }
 
    #if 1
-   LockAccelerator(accel,Accelerator::Locked::FIXED);
+   Arena* arena = &versat->temp;
+   ArenaMarker marker(arena);
 
    TemplateSetCustom("accel",decl,"FUDeclaration");
 
@@ -96,6 +101,13 @@ void OutputCircuitSource(Versat* versat,FUDeclaration* decl,Accelerator* accel,F
    TemplateSetNumber("memoryConfigDecisionBit",val.memoryConfigDecisionBit);
    TemplateSetCustom("versat",versat,"Versat");
 
+   //ClearFUInstanceTempData(accel);
+   //DebugTerminal(MakeValue(accel,"Accelerator"));
+   //SetDebuggingValue(MakeValue(accel,"Accelerator"));
+
+   AcceleratorView view = CreateAcceleratorView(accel,arena);
+   view.CalculateVersatData(arena);
+
    ProcessTemplate(file,"../../submodules/VERSAT/software/templates/versat_accelerator_template.tpl",&versat->temp);
    #endif
 }
@@ -105,7 +117,10 @@ void OutputVersatSource(Versat* versat,Accelerator* accel,const char* sourceFile
       return;
    }
 
-   LockAccelerator(accel,Accelerator::Locked::FIXED);
+   Arena* arena = &versat->temp;
+   ArenaMarker marker(arena);
+   AcceleratorView view = CreateAcceleratorView(accel,arena);
+   view.CalculateVersatData(arena);
 
    SetDelayRecursive(accel);
 
@@ -174,6 +189,9 @@ void OutputVersatSource(Versat* versat,Accelerator* accel,const char* sourceFile
    TemplateSetNumber("memoryConfigDecisionBit",val.memoryConfigDecisionBit);
    TemplateSetNumber("configurationBits",val.configurationBits);
    TemplateSetNumber("memoryMappedBase",1 << val.memoryConfigDecisionBit);
+
+   view = CreateAcceleratorView(accel,arena);
+   view.CalculateVersatData(arena);
 
    ProcessTemplate(s,"../../submodules/VERSAT/software/templates/versat_top_instance_template.tpl",&versat->temp);
 

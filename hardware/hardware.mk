@@ -19,6 +19,9 @@ endif
 #hardware include dirs
 INCLUDE+=$(incdir)$(VERSAT_HW_DIR)/include
 INCLUDE+=$(incdir)$(VERSAT_DIR)/submodules/LIB/hardware/include
+INCLUDE+=$(incdir)$(VERSAT_DIR)/submodules/FPU/hardware/include
+
+INCLUDE+=$(V_INCLUDE)
 
 #included files
 INCLUDE+=$(incdir). $(incdir)$(AXI_DIR)/hardware/include

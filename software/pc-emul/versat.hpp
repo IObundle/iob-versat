@@ -118,7 +118,13 @@ void ConnectUnitsIfNotConnected(FUInstance* out,int outIndex,FUInstance* in,int 
 void VersatUnitWrite(FUInstance* instance,int address, int value);
 int VersatUnitRead(FUInstance* instance,int address);
 
-FUDeclaration* MergeAccelerators(Versat* versat,FUDeclaration* accel1,FUDeclaration* accel2,SizedString name,int flatteningOrder = 99);
+enum MergingStrategy{
+   SIMPLE_COMBINATION,
+   CONSOLIDATION_GRAPH,
+   PIECEWISE_CONSOLIDATION_GRAPH
+};
+
+FUDeclaration* MergeAccelerators(Versat* versat,FUDeclaration* accel1,FUDeclaration* accel2,SizedString name,int flatteningOrder = 99,MergingStrategy strategy = MergingStrategy::CONSOLIDATION_GRAPH);
 
 void Hook(Versat* versat,Accelerator* accel,FUInstance* inst);
 

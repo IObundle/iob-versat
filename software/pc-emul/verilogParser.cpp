@@ -558,6 +558,10 @@ std::vector<Module> ParseVerilogFile(SizedString fileContent, std::vector<const 
 #endif
 
 #ifdef STANDALONE
+// Empty impl otherwise debug won't work on template engine
+void StartDebugTerminal(){
+}
+
 int main(int argc,const char* argv[]){
    if(argc < 3){
       printf("Error, need at least 3 arguments: <program> <outputFile> <inputFile1> ...");
@@ -639,20 +643,20 @@ int main(int argc,const char* argv[]){
                int input = ParseInt(port.NextToken());
                int delay = decl.attributes[MakeSizedString("versat_latency")].number;
 
-               info.nInputs = maxi(info.nInputs,input + 1);
+               info.nInputs = std::max(info.nInputs,input + 1);
                info.inputDelays[input] = delay;
             } else if(CheckFormat("out%d",decl.name)){
                port.AssertNextToken("out");
                int output = ParseInt(port.NextToken());
                int latency = decl.attributes[MakeSizedString("versat_latency")].number;
 
-               info.nOutputs = maxi(info.nOutputs,output + 1);
+               info.nOutputs = std::max(info.nOutputs,output + 1);
                info.outputLatencies[output] = latency;
             } else if(CheckFormat("delay%d",decl.name)){
                port.AssertNextToken("delay");
                int delay = ParseInt(port.NextToken());
 
-               info.nDelays = maxi(info.nDelays,delay + 1);
+               info.nDelays = std::max(info.nDelays,delay + 1);
             } else if(  CheckFormat("databus_ready",decl.name)
                      || CheckFormat("databus_valid",decl.name)
                      || CheckFormat("databus_addr",decl.name)

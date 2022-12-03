@@ -9,7 +9,7 @@
 #include "string.h"
 
 bool operator<(const SizedString& lhs,const SizedString& rhs){
-   for(int i = 0; i < mini(lhs.size,rhs.size); i++){
+   for(int i = 0; i < std::min(lhs.size,rhs.size); i++){
       if(lhs.str[i] < rhs.str[i]){
          return true;
       }

@@ -26,19 +26,6 @@ char* SizedStringToCStr(SizedString s){
 }
 
 // Misc
-
-int mini(int a1,int a2){
-   int res = (a1 < a2 ? a1 : a2);
-
-   return res;
-}
-
-int maxi(int a1,int a2){
-   int res = (a1 > a2 ? a1 : a2);
-
-   return res;
-}
-
 int RoundUpDiv(int dividend,int divisor){
    int div = dividend / divisor;
 
@@ -76,6 +63,55 @@ int AlignNextPower2(int val){
    while(res < val){
       res *= 2;
    }
+
+   return res;
+}
+
+int RandomNumberBetween(int minimum,int maximum,int randomValue){
+   int delta = maximum - minimum;
+
+   if(delta <= 0){
+      return minimum;
+   }
+
+   int res = minimum + (randomValue % (delta + 1));
+   return res;
+}
+
+float Abs(float val){
+   float res = val;
+
+   if(val < 0.0f){
+      res = -val;
+   }
+
+   return res;
+}
+
+bool FloatEqual(float f0,float f1,float epsilon){
+   bool res = (Abs(f0 - f1) < epsilon);
+
+   return res;
+}
+
+int PackInt(float val){
+   union {
+      float f;
+      int i;
+   } conv;
+
+   conv.f = val;
+
+   return conv.i;
+}
+
+int SwapEndianess(int val){
+   unsigned char* view = (unsigned char*) &val;
+
+   int res = (view[0] << 24) |
+             (view[1] << 16) |
+             (view[2] << 8)  |
+             (view[3]);
 
    return res;
 }

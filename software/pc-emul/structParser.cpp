@@ -338,9 +338,12 @@ Type* ParseTemplatedStructDefinition(Tokenizer* tok){
    Token peek = tok->PeekToken();
 
    TemplateArg* arguments = nullptr;
-   if(CompareString(peek,">")){ // Template specialization
-      tok->AdvancePeek(peek);
-   } else {
+
+   while(!tok->Done()){
+      if(tok->IfPeekToken(">")){
+         break;
+      }
+
       tok->AssertNextToken("typename");
 
       Token parameter = tok->NextToken();
@@ -356,8 +359,12 @@ Type* ParseTemplatedStructDefinition(Tokenizer* tok){
 
       arguments = newArgument;
 
-      tok->AssertNextToken(">"); // Only handle 1 parameter, for now
+      if(!tok->IfNextToken(",")){
+         break;
+      }
    }
+
+   tok->AssertNextToken(">");
 
    peek = tok->PeekToken();
    if(!CompareString(peek,"struct")){

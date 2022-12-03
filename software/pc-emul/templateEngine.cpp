@@ -19,7 +19,7 @@ struct ValueAndText{
 struct CompareFunction : public std::binary_function<SizedString, SizedString, bool> {
 public:
    bool operator() (SizedString str1, SizedString str2) const{
-      for(int i = 0; i < mini(str1.size,str2.size); i++){
+      for(int i = 0; i < std::min(str1.size,str2.size); i++){
          if(str1.str[i] < str2.str[i]){
             return true;
          }
@@ -853,12 +853,13 @@ void ParseAndEvaluate(SizedString content){
 }
 
 void ProcessTemplate(FILE* outputFile,const char* templateFilepath,Arena* arena){
+   ArenaMarker marker(arena);
    tempArena = arena;
+
    filepath = templateFilepath;
 
-   Byte* mark = MarkArena(arena);
-
    Arena outputArenaInst = SubArena(arena,Megabyte(64));
+   StartDebugTerminal();
    outputArena = &outputArenaInst;
 
    #if 0
@@ -874,7 +875,6 @@ void ProcessTemplate(FILE* outputFile,const char* templateFilepath,Arena* arena)
    SizedString content = PushFile(tempArena,templateFilepath);
 
    ParseAndEvaluate(content);
-   PopMark(tempArena,mark);
 
    envTable.clear();
 }

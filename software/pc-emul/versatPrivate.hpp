@@ -26,6 +26,16 @@ inline DelayType operator|(DelayType a, DelayType b)
     return static_cast<DelayType>(static_cast<int>(a) | static_cast<int>(b));
 }
 
+template<typename Node,typename Edge>
+struct Graph{
+   Node* nodes;
+   int numberNodes;
+   Edge* edges;
+   int numberEdges;
+
+   BitArray validNodes;
+};
+
 #define CHECK_DELAY(inst,T) ((inst->declaration->delayType & T) == T)
 
 struct Wire{
@@ -65,11 +75,6 @@ struct ConnectionInfo{
 struct Edge{ // A edge in a graph
    PortInstance units[2];
    int delay;
-};
-
-struct Graph{
-   Pool<ComplexFUInstance> instances;
-   Pool<Edge> edges;
 };
 
 // A declaration is constant after being registered
@@ -154,7 +159,7 @@ struct ComplexFUInstance : public FUInstance{
 
    Accelerator* iterative;
 
-   GraphComputedData* tempData;
+   GraphComputedData* graphData;
    VersatComputedData* versatData;
    char tag;
    bool savedConfiguration; // For subunits registered, indicate when we save configuration before hand
@@ -188,6 +193,7 @@ struct Versat{
    FUDeclaration* input;
    FUDeclaration* output;
    FUDeclaration* multiplexer;
+   FUDeclaration* combMultiplexer;
    FUDeclaration* pipelineRegister;
    FUDeclaration* data;
 
@@ -204,7 +210,7 @@ struct DAGOrder{
    int numberSources;
    ComplexFUInstance** computeUnits;
    int numberComputeUnits;
-   Allocation<ComplexFUInstance*> instances;
+   ComplexFUInstance** instances;
 };
 
 struct Test{
@@ -213,7 +219,7 @@ struct Test{
    bool usingStoredValues;
 };
 
-struct Accelerator{
+struct Accelerator{ // Graph + data storage
    Versat* versat;
    FUDeclaration* subtype; // Set if subaccelerator (accelerator associated to a FUDeclaration). A "free" accelerator has this set to nullptr
 
@@ -236,16 +242,26 @@ struct Accelerator{
 	void* configuration;
 	int configurationSize;
 
-	enum Locked {FREE,GRAPH,ORDERED,FIXED} locked;
-   DAGOrder order;
-   Allocation<Byte> graphData;
-	Allocation<VersatComputedData> versatData;
 	int cyclesPerRun;
 
 	int entityId;
 	bool init;
 
 	//enum {ACCELERATOR,SUBACCELERATOR,CIRCUIT} type;
+};
+
+// Graph associated to an accelerator
+class AcceleratorView : public Graph<ComplexFUInstance*,Edge>{
+public:
+   DAGOrder order;
+   bool dagOrder;
+   bool graphData;
+   bool versatData;
+   Accelerator* accel;
+
+   void CalculateGraphData(Arena* arena);
+   DAGOrder CalculateDAGOrdering(Arena* arena);
+   void CalculateVersatData(Arena* arena);
 };
 
 struct SubgraphData{
@@ -304,8 +320,14 @@ UnitValues CalculateAcceleratorValues(Versat* versat,Accelerator* accel); //
 int CalculateLatency(ComplexFUInstance* inst);
 void CalculateDelay(Versat* versat,Accelerator* accel);
 void SetDelayRecursive(Accelerator* accel);
-void CalculateGraphData(Accelerator* accel);
-void CalculateVersatData(Accelerator* accel);
+
+SizedString CalculateGraphData(AcceleratorView view,Arena* arena);
+DAGOrder CalculateDAGOrdering(AcceleratorView view,Arena* arena);
+VersatComputedData* CalculateVersatData(AcceleratorView view,Arena* arena);
+
+void ClearFUInstanceTempData(Accelerator* accel);
+
+AcceleratorView CreateAcceleratorView(Accelerator* accel,Arena* arena);
 
 bool IsConfigStatic(Accelerator* topLevel,ComplexFUInstance* inst);
 
@@ -316,9 +338,9 @@ void ConnectUnits(PortInstance out,PortInstance in);
 
 bool IsGraphValid(Accelerator* accel);
 
-void FixMultipleInputs(Versat* versat,Accelerator* accel);
+bool IsUnitCombinatorial(FUInstance* inst);
 
-void LockAccelerator(Accelerator* accel,Accelerator::Locked, bool freeMemory = false);
+void FixMultipleInputs(Versat* versat,Accelerator* accel);
 
 SubgraphData SubGraphAroundInstance(Versat* versat,Accelerator* accel,ComplexFUInstance* instance,int layers);
 

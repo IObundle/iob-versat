@@ -156,6 +156,8 @@ FUInstance* ParseExpression(Versat* versat,Accelerator* circuit,Tokenizer* tok,S
       typeName = "SHL";
    } else if(CompareToken(op,"+")){
       typeName = "ADD";
+   } else if(CompareToken(op,"-")){
+      typeName = "SUB";
    } else {
       printf("%.*s\n",UNPACK_SS(op));
       fflush(stdout);
@@ -504,7 +506,7 @@ FUDeclaration* ParseIterative(Versat* versat,Tokenizer* tok){
 
       if(CompareString(end.name,"data")){
          inst2 = firstData;
-         decl.dataSize = maxi(decl.dataSize,end.portEnd);
+         decl.dataSize = std::max(decl.dataSize,end.portEnd);
       } else {
          inst2 = GetInstanceByName(firstPhase,"%.*s",UNPACK_SS(end.name));
       }
@@ -531,7 +533,7 @@ FUDeclaration* ParseIterative(Versat* versat,Tokenizer* tok){
 
       if(CompareString(start.name,"data")){
          inst1 = secondData;
-         decl.dataSize = maxi(decl.dataSize,end.portEnd);
+         decl.dataSize = std::max(decl.dataSize,end.portEnd);
       } else {
          inst1 = GetInstanceByName(secondPhase,"%.*s",UNPACK_SS(start.name));
       }
@@ -540,7 +542,7 @@ FUDeclaration* ParseIterative(Versat* versat,Tokenizer* tok){
          inst2 = secondOut;
       } else if(CompareString(end.name,"data")){
          inst2 = secondData;
-         decl.dataSize = maxi(decl.dataSize,end.portEnd);
+         decl.dataSize = std::max(decl.dataSize,end.portEnd);
       } else {
          inst2 = GetInstanceByName(secondPhase,"%.*s",UNPACK_SS(end.name));
       }

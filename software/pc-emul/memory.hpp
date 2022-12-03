@@ -14,6 +14,8 @@ inline size_t Kilobyte(int val){return val * 1024;};
 inline size_t Megabyte(int val){return Kilobyte(val) * 1024;};
 inline size_t Gigabyte(int val){return Megabyte(val) * 1024;};
 
+inline size_t BitToByteSize(int bitSize){return ((bitSize + 7) / 8);};
+
 int GetPageSize();
 void* AllocatePages(int pages);
 void DeallocatePages(void* ptr,int pages);
@@ -66,6 +68,7 @@ public:
       return res;
    }
 
+
    bool Empty(){
       bool res = (maximumTimes == timesPushed);
       return res;
@@ -76,6 +79,14 @@ struct Arena{
    Byte* mem;
    size_t used;
    size_t totalAllocated;
+};
+
+class ArenaMarker{
+   Arena* arena;
+   Byte* mark;
+public:
+   ArenaMarker(Arena* arena);
+   ~ArenaMarker();
 };
 
 void InitArena(Arena* arena,size_t size);
@@ -92,6 +103,26 @@ SizedString vPushString(Arena* arena,const char* format,va_list args);
 void PushNullByte(Arena* arena);
 #define PushStruct(ARENA,STRUCT) (STRUCT*) PushBytes(ARENA,sizeof(STRUCT))
 #define PushArray(ARENA,SIZE,STRUCT) (STRUCT*) PushBytes(ARENA,sizeof(STRUCT) * SIZE)
+
+class BitArray{
+public:
+   Byte* memory;
+   int bitSize;
+
+public:
+   void Init(Byte* memory,int bitSize);
+   void Init(Arena* arena,int bitSize);
+
+   void Fill(bool value);
+   void Copy(BitArray array);
+
+   int Get(int index);
+   void Set(int index,bool value);
+
+   SizedString PrintRepresentation(Arena* output);
+
+   BitArray& operator&=(const BitArray& other);
+};
 
 /*
    Pool
@@ -471,7 +502,7 @@ T* Pool<T>::Alloc(int index){
    T* view = (T*) ptr;
    page.bitmap[bitmapIndex] |= (1 << bitIndex);
    allocated += 1;
-   endSize = maxi(index + 1,endSize);
+   endSize = std::max(index + 1,endSize);
 
    return &view[bitmapIndex * 8 + (7 - bitIndex)];
 }

@@ -73,7 +73,7 @@ module @{accel.name} #(
    input [DATA_W/8-1:0]            wstrb,
    input [DATA_W-1:0]              wdata,
    output                          ready,
-   output reg [DATA_W-1:0]         rdata,
+   output [DATA_W-1:0]             rdata,
    #{end}
 
    input                           clk,
@@ -107,8 +107,8 @@ assign done = &unitDone;
 #{end}
 
 wire [31:0] #{join ", " for inst instances}
-   #{if inst.tempData.outputPortsUsed} 
-      #{join ", " for j inst.tempData.outputPortsUsed} output_@{inst.id}_@{j} #{end}
+   #{if inst.graphData.outputPortsUsed} 
+      #{join ", " for j inst.graphData.outputPortsUsed} output_@{inst.id}_@{j} #{end}
    #{end}
 #{end};
 
@@ -143,11 +143,11 @@ begin
 #{for inst instances}
    #{set decl inst.declaration}
    #{if decl.isOperation and decl.latencies[0] == 0}
-      #{set input1 inst.tempData[0].inputs[0].instConnectedTo}
+      #{set input1 inst.graphData[0].inputs[0].instConnectedTo}
       #{if decl.nInputs == 1}
          #{format decl.operation "comb" @{inst.name |> Identify} #{call retOutputName input1}};
       #{else}
-         #{set input2 inst.tempData[0].inputs[1].instConnectedTo}
+         #{set input2 inst.graphData[0].inputs[1].instConnectedTo}
          #{format decl.operation "comb" @{inst.name |> Identify} #{call retOutputName input1} #{call retOutputName input2}};
       #{end}
    #{end}
@@ -163,7 +163,7 @@ begin
 #{for inst instances}
    #{set decl inst.declaration}
    #{if decl.isOperation and decl.latencies[0] != 0 }
-      #{set input1 inst.tempData[0].inputs[0].instConnectedTo}
+      #{set input1 inst.graphData[0].inputs[0].instConnectedTo}
       #{format decl.operation "seq" @{inst.name |> Identify} #{call retOutputName input1}};
    #{end}
 #{end}   
@@ -181,15 +181,15 @@ end
 #{set decl inst.declaration}
    #{if (decl != versat.input and decl != versat.output and !decl.isOperation)}
       @{decl.name} @{inst.parameters} @{inst.name |> Identify}_@{counter} (
-         #{for i inst.tempData.outputPortsUsed}
+         #{for i inst.graphData.outputPortsUsed}
             .out@{i}(output_@{inst.id}_@{i}),
          #{end}
 
-         #{for i inst.tempData.inputPortsUsed}
-         #{if inst.tempData.inputs[i].instConnectedTo.inst.declaration.type == 2}
-            .in@{inst.tempData.inputs[i].port}(in@{inst.tempData.inputs[i].instConnectedTo.inst.id}), // @{inst.tempData.inputs[i].instConnectedTo.inst.name |> Identify}
+         #{for i inst.graphData.inputPortsUsed}
+         #{if inst.graphData.inputs[i].instConnectedTo.inst.declaration.type == 2}
+            .in@{inst.graphData.inputs[i].port}(in@{inst.graphData.inputs[i].instConnectedTo.inst.id}), // @{inst.graphData.inputs[i].instConnectedTo.inst.name |> Identify}
          #{else}
-            .in@{inst.tempData.inputs[i].port}(#{call outputName inst.tempData.inputs[i].instConnectedTo}),
+            .in@{inst.graphData.inputs[i].port}(#{call outputName inst.graphData.inputs[i].instConnectedTo}),
          #{end}
          #{end}
 
@@ -265,9 +265,9 @@ end
 #{for inst instances}
 #{set decl inst.declaration}
 #{if decl == versat.output}
-   #{for i inst.tempData.numberInputs}
-   #{set in inst.tempData.inputs[i].instConnectedTo}
-   assign out@{inst.tempData.inputs[i].port} = #{call outputName in};
+   #{for i inst.graphData.numberInputs}
+   #{set in inst.graphData.inputs[i].instConnectedTo}
+   assign out@{inst.graphData.inputs[i].port} = #{call outputName in};
    #{end}
 #{end}
 #{end}

@@ -4,7 +4,7 @@
 #include "versatPrivate.hpp"
 
 struct MergeEdge{
-   FUInstance* instances[2];
+   ComplexFUInstance* instances[2];
 };
 
 struct PortEdge{
@@ -24,24 +24,27 @@ struct MappingEdge{ // Edge between mapping from edge to edge
    MappingNode* nodes[2];
 };
 
-struct ConsolidationGraph{
-   MappingNode* nodes;
-   int numberNodes;
-   MappingEdge* edges;
-   int numberEdges;
-
-   // Used in get clique;
-   int* validNodes;
-};
+typedef Graph<MappingNode,MappingEdge> ConsolidationGraph;
 
 struct Mapping{
    FUInstance* source;
    FUInstance* sink;
 };
 
-SizedString MappingNodeIdentifier(MappingNode* node,Arena* memory);
+struct ConsolidationGraphOptions{
+   int order;
+   int difference;
+   bool mapNodes;
+   enum {NOTHING,SAME_ORDER,EXACT_ORDER} type;
+};
 
-ConsolidationGraph GenerateConsolidationGraph(Accelerator* accel1,Accelerator* accel2);
-ConsolidationGraph MaxClique(ConsolidationGraph graph);
+bool MappingConflict(MappingNode map1,MappingNode map2);
+ConsolidationGraph MaxClique(ConsolidationGraph graph,Arena* arena);
+
+ConsolidationGraph GenerateConsolidationGraph(Versat* versat,Arena* arena,Accelerator* accel1,Accelerator* accel2,ConsolidationGraphOptions options,MergingStrategy strategy);
+
+Accelerator* MergeAccelerator(Versat* versat,Accelerator* accel1,Accelerator* accel2,MergingStrategy strategy);
+
+SizedString MappingNodeIdentifier(MappingNode* node,Arena* memory);
 
 #endif // INCLUDED_MERGE_GRAPH

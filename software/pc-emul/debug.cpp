@@ -1,6 +1,39 @@
 #include "debug.hpp"
 
+#include <cstdlib>
+
 #include "type.hpp"
+
+static void AssertValidRandomGraphOptions(RandomGraphOptions* options){
+   Assert(options->maxNodes >= options->minNodes);
+   Assert(options->maxDepth >= options->minDepth);
+
+   float totalProbability = 0.0f;
+   for(int i = 0; i < options->numberTypes; i++){
+      RandomGraphTypeOption* type = &options->types[i];
+
+      totalProbability += type->probability;
+   }
+
+   Assert(std::abs(totalProbability - 1.0f) < 0.01f);
+}
+
+struct TypeData{
+   int numberNodes;
+};
+
+Accelerator* GenerateRandomGraph(Versat* versat,RandomGraphOptions* options,unsigned int seed){
+   AssertValidRandomGraphOptions(options);
+
+   srand(seed);
+
+   int nodes = RandomNumberBetween(options->minNodes,options->maxNodes,rand());
+   int depth = RandomNumberBetween(options->minDepth,options->maxDepth,rand());
+
+   NOT_IMPLEMENTED;
+
+   return nullptr;
+}
 
 void CheckMemory(Accelerator* topLevel,Accelerator* accel){
    //AcceleratorIterator iter = {};
@@ -113,13 +146,15 @@ void DisplayUnitConfiguration(Accelerator* topLevel){
    }
 }
 
-#if 0
+#if 1
 #include <ncurses.h>
 #include <signal.h>
 
 struct PanelState{
+   SizedString name;
    Value valueLooking;
    int cursorPosition;
+   Byte* arenaMark;
 };
 
 static PanelState panels[99] = {};
@@ -136,7 +171,27 @@ int ListCount(T* listHead){
    return count;
 }
 
-static int clamp(int min,int val,int max){
+template<typename T>
+T* GetListByIndex(T* listHead,int index){
+   T* ptr = listHead;
+
+   while(index > 0){
+      ptr = ptr->next;
+      index -= 1;
+   }
+
+   return ptr;
+}
+
+static int RolloverRange(int min,int val,int max){
+   if(val < min){
+      val = max;
+   } else if(val > max){
+      val = min;
+   }
+}
+
+static int Clamp(int min,int val,int max){
    if(val < min){
       return min;
    }
@@ -165,25 +220,9 @@ void StructPanel(WINDOW* w,PanelState* state,Input input,Arena* arena){
 
    const int panelWidth = 32;
 
-   int numberMembers = ListCount(type->members);
-
-   if(input == INPUT_DOWN){
-      state->cursorPosition += 1;
-   } else if(input == INPUT_UP){
-      state->cursorPosition -= 1;
-   }
-
-   state->cursorPosition = clamp(0,state->cursorPosition,numberMembers - 1);
-
    int menuIndex = 0;
    int startPos = 2;
 
-   int listHeight = height - 2;
-   int maxListOffset = numberMembers - listHeight;
-
-   int listOffset = maxi(0,mini(maxListOffset, state->cursorPosition - (listHeight / 2)));
-
-   mvaddnstr(0, 0, "Top:", 4);
    for(Member* member = val.type->members; member != nullptr; member = member->next){
       int yPos = startPos + menuIndex;
 
@@ -193,11 +232,16 @@ void StructPanel(WINDOW* w,PanelState* state,Input input,Arena* arena){
 
       mvaddnstr(yPos, 0, member->name.str,member->name.size);
 
-      Value memberVal = AccessStruct(val,member);
-      SizedString repr = GetValueRepresentation(memberVal,arena);
+      // Ugly hack, somethings are char* despite not pointing to strings but to areas of memory
+      // Type system cannot distinguish them, and therefore we kinda hack it away
+      if(member->type != GetType(MakeSizedString("char*"))){
+         //printf("%.*s\n",UNPACK_SS(member->name));
+         Value memberVal = AccessStruct(val,member);
+         SizedString repr = GetValueRepresentation(memberVal,arena);
 
-      move(yPos, panelWidth);
-      addnstr(repr.str,repr.size);
+         move(yPos, panelWidth);
+         addnstr(repr.str,repr.size);
+      }
 
       move(yPos, panelWidth + panelWidth / 2);
       addnstr(member->type->name.str,member->type->name.size);
@@ -210,43 +254,51 @@ void StructPanel(WINDOW* w,PanelState* state,Input input,Arena* arena){
    }
 }
 
-void TerminalIteration(WINDOW* w,Input input){
-   static char buffer[4096];
-
-   Arena arenaInst = {};
-   arenaInst.mem = buffer;
-   arenaInst.totalAllocated = 4096;
-
-   Arena* arena = &arenaInst;
-
+void TerminalIteration(WINDOW* w,Input input,Arena* arena){
    // Before panel decision
    if(input == INPUT_BACKSPACE){
       currentPanel -= 1;
+
+      PanelState* currentState = &panels[currentPanel];
+      //PopMark(arena,currentState->arenaMark);
    } else if(input == INPUT_ENTER){
       PanelState* currentState = &panels[currentPanel];
 
       Value val = currentState->valueLooking;
       Type* type = val.type;
 
+      // Assume new state will be created and fill with default parameters
+      PanelState* newState = &panels[currentPanel + 1];
+      newState->cursorPosition = 0;
+      newState->arenaMark = MarkArena(arena);
+
       // Switch on type
       if(type->type == Type::STRUCT){
+         Member* member = GetListByIndex(type->members,currentState->cursorPosition);
+
          Value selectedValue = AccessStruct(val,currentState->cursorPosition);
 
          selectedValue = CollapsePtrIntoStruct(selectedValue);
 
-         #if 1
          if(selectedValue.type->type == Type::STRUCT || (selectedValue.type->type == Type::TEMPLATED_INSTANCE && selectedValue.type->templateBase == ValueType::POOL)){
             currentPanel += 1;
 
-            PanelState* newState = &panels[currentPanel];
-            newState->cursorPosition = 0;
+            newState->name = member->name;
             newState->valueLooking = selectedValue;
          }
-         #endif
-      } else if(type->type == Type::TEMPLATED_INSTANCE && type->templateBase == GetType(MakeSizedString("Pool"))){
-         // Do nothing, for now
+      } else if(type->type == Type::TEMPLATED_INSTANCE && type->templateBase == ValueType::POOL){
+         Iterator iter = Iterate(val);
+         for(int i = 0; HasNext(iter); i += 1,Advance(&iter)){
+            if(i == currentState->cursorPosition){
+               Value val = GetValue(iter);
 
-         //Iterator iter = Iterate(val);
+               currentPanel += 1;
+
+               newState->name = PushString(arena,"%d\n",i);;
+               newState->valueLooking = val;
+               break;
+            }
+         }
       }
    }
 
@@ -255,11 +307,60 @@ void TerminalIteration(WINDOW* w,Input input){
    // At this point, panel is locked in,
    PanelState* state = &panels[currentPanel];
 
-   if(state->valueLooking.type->type == Type::STRUCT){
+   Value val = state->valueLooking;
+   Type* type = val.type;
+
+   mvaddnstr(0, 0,  val.type->name.str, val.type->name.size);
+
+   if(state->name.size){
+      addnstr(":",1);
+      addnstr(state->name.str,state->name.size);
+   }
+
+   int numberElements = 0;
+   if(type->type == Type::STRUCT){
+      numberElements = ListCount(type->members);
+   } else if(type->type == Type::TEMPLATED_INSTANCE && type->templateBase == ValueType::POOL){
+      Iterator iter = Iterate(val);
+      for(; HasNext(iter); Advance(&iter)){
+         numberElements += 1;
+      }
+   }
+
+   if(input == INPUT_DOWN){
+      state->cursorPosition += 1;
+   } else if(input == INPUT_UP){
+      state->cursorPosition -= 1;
+   }
+
+   state->cursorPosition = RolloverRange(0,state->cursorPosition,numberElements - 1);
+
+   if(type->type == Type::STRUCT){
       StructPanel(w,state,input,arena);
       return;
-   } else {
+   } else if(type->type == Type::TEMPLATED_INSTANCE && type->templateBase == ValueType::POOL){
+      Iterator iter = Iterate(val);
+      for(int index = 0; HasNext(iter); index += 1,Advance(&iter)){
+         Value val = GetValue(iter);
+         Type* type = val.type;
 
+         if(index == state->cursorPosition){
+            wattron( w, A_STANDOUT );
+         }
+
+         move(index + 2,0);
+         {
+            ArenaMarker marker(arena);
+            SizedString integer = PushString(arena,"%d\n",index);
+            addnstr(integer.str,integer.size);
+         }
+
+         if(index == state->cursorPosition){
+            wattroff( w, A_STANDOUT );
+         }
+      }
+   } else {
+      mvaddnstr(1,0,"NO TYPE",7);
    }
 }
 
@@ -267,10 +368,37 @@ void TerminalIteration(WINDOW* w,Input input){
 #include <sys/ioctl.h>
 #include <termios.h>
 
+static Value storedDebugValue;
+static bool validStoredDebugValue = false;
+
+void StartDebugTerminal(){
+   if(validStoredDebugValue){
+      DebugTerminal(storedDebugValue);
+   }
+}
+
+static void debug_sig_handler(int sig){
+   if (sig == SIGUSR1){
+      StartDebugTerminal();
+   }
+}
+
+void SetDebuggingValue(Value val){
+   static bool init = false;
+
+   if(!init){
+      signal(SIGUSR1, debug_sig_handler);
+      init = true;
+   }
+
+   storedDebugValue = val;
+   validStoredDebugValue = true;
+}
+
 static int terminalWidth,terminalHeight;
 static bool resized;
 
-static void sig_handler(int sig){
+static void terminal_sig_handler(int sig){
    if (sig == SIGWINCH) {
       winsize winsz;
 
@@ -283,6 +411,10 @@ static void sig_handler(int sig){
 }
 
 void DebugTerminal(Value initialValue){
+   Arena arena = {};
+   InitArena(&arena,Megabyte(1));
+
+   panels[0].name = MakeSizedString("TOP");
    panels[0].cursorPosition = 0;
    panels[0].valueLooking = initialValue;
 
@@ -299,10 +431,10 @@ void DebugTerminal(Value initialValue){
    if(!init){
       getmaxyx(w, terminalHeight, terminalWidth);
       resized = false;
-      signal(SIGWINCH, sig_handler);
+      signal(SIGWINCH, terminal_sig_handler);
    }
 
-   TerminalIteration(w,INPUT_NONE);
+   TerminalIteration(w,INPUT_NONE,&arena);
 
    int c;
    while((c = getch()) != 'q'){
@@ -333,12 +465,14 @@ void DebugTerminal(Value initialValue){
 
       if(input != INPUT_NONE || iterate){
          clear();
-         TerminalIteration(w,input);
+         TerminalIteration(w,input,&arena);
          refresh();
       }
 	}
 
 	endwin();
+
+	Free(&arena);
 }
 
 #endif

@@ -7,7 +7,6 @@
 #include <functional>
 
 #include "signal.h"
-
 #include "assert.h"
 
 #define ALIGN_4(val) ((val + 3) & ~0x3)
@@ -82,11 +81,16 @@ struct Range{
 };
 
 // Misc
-int mini(int a1,int a2);
-int maxi(int a1,int a2);
 int RoundUpDiv(int dividend,int divisor);
 int log2i(int value); // Log function customized to calculating bits needed for a number of possible addresses (ex: log2i(1024) = 10)
 int AlignNextPower2(int val);
+int RandomNumberBetween(int minimum,int maximum,int randomValue);
+
+float Abs(float val);
+bool FloatEqual(float f0,float f1,float epsilon = 0.001f);
+
+int PackInt(float val);
+int SwapEndianess(int val);
 
 int NumberDigitsRepresentation(int number); // Number of digits if printed (negative includes - sign )
 
@@ -128,7 +132,6 @@ void Memcpy(T* dest,T* scr,int numberElements){
       dest[i] = scr[i];
    }
 }
-
 
 #endif // INCLUDED_UTILS_HPP
 
