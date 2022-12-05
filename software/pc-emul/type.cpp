@@ -249,8 +249,6 @@ static Type* GetArrayType(SizedString name,int arrayLength){
 
 #include "templateEngine.hpp"
 #include "verilogParser.hpp"
-#include "codeGeneration.hpp"
-#include "merge.hpp"
 #include "typeInfo.inc"
 
 void RegisterTypes(){
@@ -819,11 +817,7 @@ Value ConvertValue(Value in,Type* want,Arena* arena){
          NOT_IMPLEMENTED;
       }
    } else if(want == ValueType::SIZED_STRING){
-      if(in.type == GetType(MakeSizedString("HierarchyName"))){
-         HierarchyName* name = (HierarchyName*) in.custom;
-
-         res = MakeValue(MakeSizedString(name->str));
-      } else if(in.type == ValueType::STRING){
+      if(in.type == ValueType::STRING){
          res = in;
          res.type = want;
       } else if(arena){

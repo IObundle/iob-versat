@@ -1,0 +1,78 @@
+Misc:
+
+   Stop using asserts for likely user errors. Parser is full of asserts that are actually faulty user data. Need to grapple with things now before they become more complex, even if in the future there is likelihood that things will change.
+>  Reorganize the codebase. Declare every Versat function in a single header [versatPrivate.hpp] (minimize static functions and make them close to their use case) for easy access and organize the code by putting the functions strictly in the same order as they are declared.
+      Can divide the code in various source files, but no need to have a header file for every single header.
+      Remove every other header, unless specific ones, but still use multiple source files. Try to separate logically. Put a comment that indicates the file where the function is defined.
+      Try to organize sections by meaning as much as possible. Versat on top, then accelerator. Utils and misc on bottom, the usual. 
+   Rework makefile. Remove clutter, simplify, make it parallel (especially Verilator and building all object files). Initially attemps to parallelize seem to not work (no difference in time between -j1 and -j8)
+   Hard to reason with fixed buffer because we immediatly transform delay into a string. Having to parse the delay is not a solution. Figure out what to do and remove all the portions of code that parse the delay out from the unit
+
+Delay and Time:
+
+   Introduce the concept of input delay and output delay.
+      Represented in verilog by the wires delayInX, where X is the input port number, and delayOutX.
+      delayIn is used for units that consume input and need to know when the input is valid. 
+      delayOut is used for units that produce output and need to know when to start producing. If a unit has an output and no delayOut, then assume unit starts producing immediatly.
+      The concepts of compute only, source, sink and source_sink can be derived from knowing which type each unit provides.
+
+|  Add a "constant" edge, which is time agnostic (no buffer is ever added to a constant edge)
+      Useful for units that produce a constant value.
+      Maybe the concept should be applied to the unit itself, and not to the edge. But if so, it would be hard to propagate that info accross hierarquies. 
+         For now, let the circuit designer handle this by setting himself the constant edges and stuff.
+
+   Change the Calculate Delay function to work from the inputs towards the outputs.
+      Add a simple mem unit that is connected to the vread of SHA to see the problem. (The mem unit is left with a delay of 67, when it should be close to 3 due to vread latency)
+
+   Check how merging affects delay and buffer calculations.
+      First thing I think is that for variable buffers, use an AcceleratorView and allow the function to only had delays units if the merging mapping needs it.
+         The problem is that adding a buffer unit might affect the latency for previous circuits. Probably would get stuck looping around until no new unit was needed.
+         Probably would need to do a full accelerator calculate delay and fix buffers, then use AcceleratorView for each graph to extract the correct values for each accelerator.
+      For fixed buffers, I don't think using AcceleratorView does anything. Have to perform CalculateDelay and FixBuffers globally.
+
+Accelerator View:
+
+   Need to grasp this part. Very important for the future of the project but hard to reason as no easy solution appers to be exist.
+>  For now, try to propagate AcceleratorViews as further as possible. If a function currently needs to create a AcceleratorView, changing it so that it takes it as a parameter and checks inside if it's correct.
+      Only user level functions should have a need to create AcceleratorViews. Everything else takes.
+
++ Graph data:
+
+   Add a array that maps directly to inputs if they exist, nullptr if they do not and only a single value if multiple inputs exist. Also had a flag saying that multiple inputs exit. Useful for templating.
+
++ Configuration management:
+
+   Add an interface to provide the user with the ability to save and load configurations.
+      Need to add two types. Software sided saving and loading of configuration (Data is not stored on versat).
+      Hardware sided saving and loading of configuration (Data is stored on versat).
+      Provide ways to change from one side to the other.
+      Provide ways to save data in PC-Emul and load it in embedded.
+      Need to cleary separate where data is stored.
+
+- Template:
+
+   Do a template pass to remove duplicate code, lock down on the approach used to identify units and wires. Different templates should almost resemble each other. All the logic should be shared between units and should relie on common ground.
+   Allow the use of enums inside templates. (See parsing enum info on Type)
+   Add local variables. Need to introduce the concept of "stack frames".
+   Take a look at the way whitespace is handled. Nothing too important, but I think some places could generate files with errors because they don't handle whitespace correctly
+
+- Type:
+
+   Do a pass over the use of the temp identifier. It's kind of an hack 
+   Parse and generate enum information.
+
+- Pool
+   
+   Fix the use of unnecessary information, that makes it impossible to copy. Every piece of information required to iterate is stored inside the linked list.
+
+Current know bugs/problems:
+
+   OutputGraphDot is currently disabled for the most part, by means of commenting out calling code. This is due to changes accross the codebase and should be easy to fix.
+   Using Const units to test simple instances is breaking AES, while using Regs doesn't. Fix OutputGraphDot, call it with delays and identify the problem.
+
+Legend:
+
+   > Currently working on, important
+   + Should be next, but taking a backseat to other, more important issues
+   |  Subject to change, not final
+   -  Not important, low priority or can be bypassed by hardcoding stuff until absolutely needed

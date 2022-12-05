@@ -20,11 +20,10 @@ enum DelayType {
    DELAY_TYPE_SOURCE_DELAY       = 0x2,
    DELAY_TYPE_COMPUTE_DELAY      = 0x4
 };
+#define CHECK_DELAY(inst,T) ((inst->declaration->delayType & T) == T)
 
 inline DelayType operator|(DelayType a, DelayType b)
-{
-    return static_cast<DelayType>(static_cast<int>(a) | static_cast<int>(b));
-}
+{return static_cast<DelayType>(static_cast<int>(a) | static_cast<int>(b));}
 
 template<typename Node,typename Edge>
 struct Graph{
@@ -35,8 +34,6 @@ struct Graph{
 
    BitArray validNodes;
 };
-
-#define CHECK_DELAY(inst,T) ((inst->declaration->delayType & T) == T)
 
 struct Wire{
    SizedString name;
@@ -49,16 +46,6 @@ struct StaticInfo{
    Wire* wires;
    int nConfigs;
    int* ptr; // Pointer to config of existing unit
-};
-
-bool operator<(const StaticInfo& lhs,const StaticInfo& rhs);
-
-struct SimpleNode{
-   SizedString name;
-   FUDeclaration* declaration;
-
-   bool isStatic;
-   //void* data;
 };
 
 struct PortInstance{
@@ -246,8 +233,6 @@ struct Accelerator{ // Graph + data storage
 
 	int entityId;
 	bool init;
-
-	//enum {ACCELERATOR,SUBACCELERATOR,CIRCUIT} type;
 };
 
 // Graph associated to an accelerator
@@ -260,6 +245,7 @@ public:
    Accelerator* accel;
 
    void CalculateGraphData(Arena* arena);
+   void CalculateDelay(Arena* arena);
    DAGOrder CalculateDAGOrdering(Arena* arena);
    void CalculateVersatData(Arena* arena);
 };
@@ -313,37 +299,168 @@ struct UnitValues{
    bool isMemoryMapped;
 };
 
+struct VersatComputedValues{
+   int nConfigs;
+   int configBits;
+
+   int nStatics;
+   int staticBits;
+
+   int nDelays;
+   int delayBits;
+
+   // Configurations = config + static + delays
+   int nConfigurations;
+   int configurationBits;
+   int configurationAddressBits;
+
+   int nStates;
+   int stateBits;
+   int stateAddressBits;
+
+   int unitsMapped;
+   int memoryMappedBytes;
+   int maxMemoryMapDWords;
+
+   int nUnitsIO;
+
+   int numberConnections;
+
+   int stateConfigurationAddressBits;
+   int memoryAddressBits;
+   int memoryMappingAddressBits;
+   int memoryConfigDecisionBit;
+   int lowerAddressSize;
+};
+
+struct FUInstanceInterfaces{
+   PushPtr<int> config;
+   PushPtr<int> state;
+   PushPtr<int> delay;
+   PushPtr<int> outputs;
+   PushPtr<int> storedOutputs;
+   PushPtr<int> statics;
+   PushPtr<Byte> extraData;
+};
+
+struct StaticId{
+   FUDeclaration* parent;
+   SizedString name;
+};
+
+struct SharingInfo{
+   int* ptr;
+   bool init;
+};
+
+struct MergeEdge{
+   ComplexFUInstance* instances[2];
+};
+
+struct PortEdge{
+   PortInstance units[2];
+};
+
+struct MappingNode{ // Mapping (edge to edge or node to node)
+   union{
+      MergeEdge nodes;
+      PortEdge edges[2];
+   };
+
+   enum {NODE,EDGE} type;
+};
+
+struct MappingEdge{ // Edge between mapping from edge to edge
+   MappingNode* nodes[2];
+};
+
+struct Mapping{
+   FUInstance* source;
+   FUInstance* sink;
+};
+
+struct ConsolidationGraphOptions{
+   int order;
+   int difference;
+   bool mapNodes;
+   enum {NOTHING,SAME_ORDER,EXACT_ORDER} type;
+};
+
+typedef std::unordered_map<ComplexFUInstance*,ComplexFUInstance*> InstanceMap;
+typedef Graph<MappingNode,MappingEdge> ConsolidationGraph;
+
+// General info
 UnitValues CalculateIndividualUnitValues(ComplexFUInstance* inst); // Values for individual unit, not taking into account sub units
 UnitValues CalculateAcceleratorUnitValues(Versat* versat,ComplexFUInstance* inst); // Values taking into account sub units
-UnitValues CalculateAcceleratorValues(Versat* versat,Accelerator* accel); //
+UnitValues CalculateAcceleratorValues(Versat* versat,Accelerator* accel);
+VersatComputedValues ComputeVersatValues(Versat* versat,Accelerator* accel);
+int CalculateTotalOutputs(Accelerator* accel);
+int CalculateTotalOutputs(FUInstance* inst);
+bool IsConfigStatic(Accelerator* topLevel,ComplexFUInstance* inst);
+bool IsUnitCombinatorial(FUInstance* inst);
 
+// Accelerator
+void PopulateAccelerator(Versat* versat,Accelerator* accel);
+Accelerator* CopyAccelerator(Versat* versat,Accelerator* accel,InstanceMap* map,bool flat);
+ComplexFUInstance* CopyInstance(Accelerator* newAccel,ComplexFUInstance* oldInstance,SizedString newName,bool flat);
+void InitializeFUInstances(Accelerator* accel,bool force);
+void CompressAcceleratorMemory(Accelerator* accel);
+
+// Delay
 int CalculateLatency(ComplexFUInstance* inst);
 void CalculateDelay(Versat* versat,Accelerator* accel);
 void SetDelayRecursive(Accelerator* accel);
 
+// Graph fixes
+void FixMultipleInputs(Versat* versat,Accelerator* accel);
+void FixDelays(Versat* versat,Accelerator* accel,AcceleratorView view);
+
+// Accelerator calculations
+AcceleratorView CreateAcceleratorView(Accelerator* accel,Arena* arena);
 SizedString CalculateGraphData(AcceleratorView view,Arena* arena);
 DAGOrder CalculateDAGOrdering(AcceleratorView view,Arena* arena);
 VersatComputedData* CalculateVersatData(AcceleratorView view,Arena* arena);
-
 void ClearFUInstanceTempData(Accelerator* accel);
 
-AcceleratorView CreateAcceleratorView(Accelerator* accel,Arena* arena);
+// Accelerator merging
+bool MappingConflict(MappingNode map1,MappingNode map2);
+ConsolidationGraph MaxClique(ConsolidationGraph graph,Arena* arena);
+ConsolidationGraph GenerateConsolidationGraph(Versat* versat,Arena* arena,Accelerator* accel1,Accelerator* accel2,ConsolidationGraphOptions options,MergingStrategy strategy);
+Accelerator* MergeAccelerator(Versat* versat,Accelerator* accel1,Accelerator* accel2,MergingStrategy strategy);
 
-bool IsConfigStatic(Accelerator* topLevel,ComplexFUInstance* inst);
-
-int CalculateTotalOutputs(Accelerator* accel);
-int CalculateTotalOutputs(FUInstance* inst);
-
-void ConnectUnits(PortInstance out,PortInstance in);
-
-bool IsGraphValid(Accelerator* accel);
-
-bool IsUnitCombinatorial(FUInstance* inst);
-
-void FixMultipleInputs(Versat* versat,Accelerator* accel);
-
+// Debug
+bool IsGraphValid(AcceleratorView view);
 SubgraphData SubGraphAroundInstance(Versat* versat,Accelerator* accel,ComplexFUInstance* instance,int layers);
+void OutputGraphDotFile(Versat* versat,AcceleratorView view,bool collapseSameEdges,const char* filenameFormat,...) __attribute__ ((format (printf, 4, 5)));
+
+// Misc
+bool CheckValidName(SizedString name); // Check if name can be used as identifier in verilog
+SizedString MappingNodeIdentifier(MappingNode* node,Arena* memory);
+void ConnectUnits(PortInstance out,PortInstance in);
+void OutputCircuitSource(Versat* versat,FUDeclaration* decl,Accelerator* accel,FILE* file);
 
 inline bool operator==(const PortInstance& p1,const PortInstance& p2){return p1.inst == p2.inst && p1.port == p2.port;};
+inline bool operator==(const StaticId& id1,const StaticId& id2){
+   bool res = CompareString(id1.name,id2.name) && id1.parent == id2.parent;
+   return res;
+}
 
+template<> class std::hash<PortInstance>{
+   public:
+   std::size_t operator()(PortInstance const& s) const noexcept{
+      int res = SimpleHash(MakeSizedString((const char*) &s,sizeof(PortInstance)));
+
+      return (std::size_t) res;
+   }
+};
+
+template<> class std::hash<StaticId>{
+   public:
+   std::size_t operator()(StaticId const& s) const noexcept{
+      int res = SimpleHash(s.name);
+      res += (int) s.parent;
+
+      return (std::size_t) res;
+   }
+};
 #endif // INCLUDED_VERSAT_PRIVATE_HPP

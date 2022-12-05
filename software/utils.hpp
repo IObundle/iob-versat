@@ -67,14 +67,6 @@ template<> class std::hash<SizedString>{
 #define GET_MACRO(_1,_2,NAME,...) NAME
 #define MakeSizedString(...) GET_MACRO(__VA_ARGS__, MakeSizedString2, MakeSizedString1)(__VA_ARGS__)
 
-#define MAX_NAME_SIZE 64
-
-// Hierarchical naming scheme
-struct HierarchyName{
-   char str[MAX_NAME_SIZE];
-   //HierarchyName* parent;
-};
-
 struct Range{
    int high;
    int low;
@@ -86,6 +78,9 @@ int log2i(int value); // Log function customized to calculating bits needed for 
 int AlignNextPower2(int val);
 int RandomNumberBetween(int minimum,int maximum,int randomValue);
 
+int RolloverRange(int min,int val,int max);
+int Clamp(int min,int val,int max);
+
 float Abs(float val);
 bool FloatEqual(float f0,float f1,float epsilon = 0.001f);
 
@@ -93,6 +88,7 @@ int PackInt(float val);
 int SwapEndianess(int val);
 
 int NumberDigitsRepresentation(int number); // Number of digits if printed (negative includes - sign )
+char GetHex(int value);
 
 // Weak random generator but produces same results in pc-emul and in simulation
 void SeedRandomNumber(uint seed);

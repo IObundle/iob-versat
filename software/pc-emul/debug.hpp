@@ -3,31 +3,18 @@
 
 #include "type.hpp"
 
-struct RandomGraphTypeOption{
-   FUDeclaration* decl;
-   float probability;
-};
-
-struct RandomGraphOptions{
-   int numberInputs;
-   int numberOutputs;
-
-   int maxNodes;
-   int minNodes;
-
-   int maxDepth;
-   int minDepth;
-
-   RandomGraphTypeOption* types;
-   int numberTypes;
-};
-
-Accelerator* GenerateRandomGraph(Versat* versat,RandomGraphOptions* options,unsigned int seed);
-
+void CheckMemory(Accelerator* topLevel,Accelerator* accel);
 void DisplayInstanceMemory(ComplexFUInstance* inst);
 void DisplayAcceleratorMemory(Accelerator* topLevel);
+void DisplayUnitConfiguration(Accelerator* topLevel);
+
+bool IsGraphValid(AcceleratorView view);
+void OutputGraphDotFile(Versat* versat,AcceleratorView view,bool collapseSameEdges,const char* filenameFormat,...);
 
 void OutputMemoryHex(void* memory,int size);
+
+void PrintVCDDefinitions(FILE* accelOutputFile,Accelerator* accel);
+void PrintVCD(FILE* accelOutputFile,Accelerator* accel,int time,int clock);
 
 void SetDebuggingValue(Value val);
 void StartDebugTerminal();

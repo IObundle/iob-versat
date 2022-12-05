@@ -1,12 +1,11 @@
-#include "codeGeneration.hpp"
-
 #include "versatPrivate.hpp"
+
 #include "templateEngine.hpp"
 
 VersatComputedValues ComputeVersatValues(Versat* versat,Accelerator* accel){
    ArenaMarker marker(&versat->temp);
    AcceleratorView view = CreateAcceleratorView(accel,&versat->temp);
-   DAGOrder order = view.CalculateDAGOrdering(&versat->temp);
+   view.CalculateDAGOrdering(&versat->temp);
 
    VersatComputedValues res = {};
 

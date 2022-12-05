@@ -1,5 +1,3 @@
-#include "merge.hpp"
-
 #include "versatPrivate.hpp"
 
 #include <cstdarg>
@@ -795,7 +793,7 @@ void InsertMapping(GraphMapping& map,ComplexFUInstance* inst1,ComplexFUInstance*
    DoInsertMapping(map.reverseInstanceMap,inst0,inst1);
 }
 
-static GraphMapping ConsolidationGraphMapping(Versat* versat,Arena* arena,Accelerator* accel1,Accelerator* accel2){
+GraphMapping ConsolidationGraphMapping(Versat* versat,Accelerator* accel1,Accelerator* accel2,Arena* arena){
    ArenaMarker marker(arena);
 
    GraphMapping res;
@@ -899,8 +897,8 @@ static GraphMapping ConsolidationGraphMapping(Versat* versat,Arena* arena,Accele
    return res;
 }
 
-static InstanceMap FirstFitGraphMapping(Versat* versat,Accelerator* accel1,Accelerator* accel2,Arena* arena){
-   InstanceMap res;
+static GraphMapping FirstFitGraphMapping(Versat* versat,Accelerator* accel1,Accelerator* accel2,Arena* arena){
+   GraphMapping res;
 
    for(ComplexFUInstance* inst : accel1->instances){
       inst->tag = 0;
@@ -920,7 +918,7 @@ static InstanceMap FirstFitGraphMapping(Versat* versat,Accelerator* accel1,Accel
          }
 
          if(inst1->declaration == inst2->declaration){
-            res.insert({inst2,inst1});
+            res.instanceMap.insert({inst2,inst1});
             inst1->tag = 1;
             inst2->tag = 1;
             break;
@@ -928,6 +926,7 @@ static InstanceMap FirstFitGraphMapping(Versat* versat,Accelerator* accel1,Accel
       }
    }
 
+   NOT_IMPLEMENTED; // Not fully implemented. Missing edge mappings
    return res;
 }
 
@@ -982,15 +981,15 @@ void OrderedMatch(std::vector<ComplexFUInstance*>& order1,std::vector<ComplexFUI
    }
 }
 
-static InstanceMap OrderedFitGraphMapping(Versat* versat,Accelerator* accel0,Accelerator* accel1){
-   ArenaMarker marker(&versat->temp);
+static GraphMapping OrderedFitGraphMapping(Versat* versat,Accelerator* accel0,Accelerator* accel1,Arena* arena){
+   ArenaMarker marker(arena);
 
-   AcceleratorView view0 = CreateAcceleratorView(accel0,&versat->temp);
-   view0.CalculateDAGOrdering(&versat->temp);
-   AcceleratorView view1 = CreateAcceleratorView(accel1,&versat->temp);
-   view1.CalculateDAGOrdering(&versat->temp);
+   AcceleratorView view0 = CreateAcceleratorView(accel0,arena);
+   view0.CalculateDAGOrdering(arena);
+   AcceleratorView view1 = CreateAcceleratorView(accel1,arena);
+   view1.CalculateDAGOrdering(arena);
 
-   InstanceMap map;
+   GraphMapping res = {};
 
    for(ComplexFUInstance* inst : accel0->instances){
       inst->tag = 0;
@@ -1029,19 +1028,20 @@ static InstanceMap OrderedFitGraphMapping(Versat* versat,Accelerator* accel0,Acc
       std::sort(order1.begin(),order1.end(),compare);
       std::sort(order2.begin(),order2.end(),compare);
 
-      OrderedMatch(order1,order2,map,i);
+      OrderedMatch(order1,order2,res.instanceMap,i);
    }
 
-   return map;
+   NOT_IMPLEMENTED; // Missing edge mapping
+   return res;
 }
 
-GraphMapping TestingGraphMapping(Versat* versat,Arena* arena,Accelerator* accel0,Accelerator* accel1){
-   ArenaMarker marker(&versat->temp);
+GraphMapping TestingGraphMapping(Versat* versat,Accelerator* accel0,Accelerator* accel1,Arena* arena){
+   ArenaMarker marker(arena);
 
-   AcceleratorView view0 = CreateAcceleratorView(accel0,&versat->temp);
-   DAGOrder order0 = view0.CalculateDAGOrdering(&versat->temp);
-   AcceleratorView view1 = CreateAcceleratorView(accel1,&versat->temp);
-   DAGOrder order1 = view1.CalculateDAGOrdering(&versat->temp);
+   AcceleratorView view0 = CreateAcceleratorView(accel0,arena);
+   view0.CalculateDAGOrdering(arena);
+   AcceleratorView view1 = CreateAcceleratorView(accel1,arena);
+   view1.CalculateDAGOrdering(arena);
 
    int maxOrder1 = 0;
    for(ComplexFUInstance* inst : accel0->instances){
@@ -1189,8 +1189,9 @@ void PrintSavedByMerge(Versat* versat,Accelerator* finalAccel,Accelerator* accel
    printf("\n");
 
    Accelerator* simpleCombine = MergeAccelerator(versat,accel1,accel2,MergingStrategy::SIMPLE_COMBINATION);
-   FixMultipleInputs(versat,simpleCombine);
-   CalculateDelay(versat,simpleCombine);
+   NOT_IMPLEMENTED; //
+   //FixMultipleInputs(versat,simpleCombine);
+   //CalculateDelay(versat,simpleCombine);
 
    printf("Simple Combine: %d %d\n",simpleCombine->instances.Size(),simpleCombine->edges.Size());
 
@@ -1250,10 +1251,22 @@ Accelerator* MergeAccelerator(Versat* versat,Accelerator* accel1,Accelerator* ac
 
    GraphMapping graphMapping;
 
-   if(strategy == MergingStrategy::CONSOLIDATION_GRAPH){
-      graphMapping = ConsolidationGraphMapping(versat,arena,accel1,accel2);
-   } else if(strategy == MergingStrategy::PIECEWISE_CONSOLIDATION_GRAPH){
-      graphMapping = TestingGraphMapping(versat,arena,accel1,accel2);
+   switch(strategy){
+   case MergingStrategy::SIMPLE_COMBINATION:{
+      // Do nothing, no mapping leads to simple combination
+   }break;
+   case MergingStrategy::CONSOLIDATION_GRAPH:{
+      graphMapping = ConsolidationGraphMapping(versat,accel1,accel2,arena);
+   }break;
+   case MergingStrategy::PIECEWISE_CONSOLIDATION_GRAPH:{
+      graphMapping = TestingGraphMapping(versat,accel1,accel2,arena);
+   }break;
+   case MergingStrategy::FIRST_FIT:{
+      graphMapping = FirstFitGraphMapping(versat,accel1,accel2,arena);
+   }break;
+   case MergingStrategy::ORDERED_FIT:{
+      graphMapping = OrderedFitGraphMapping(versat,accel1,accel2,arena);
+   }break;
    }
 
    InstanceMap map = {};
@@ -1332,9 +1345,13 @@ Accelerator* MergeAccelerator(Versat* versat,Accelerator* accel1,Accelerator* ac
    }
    #endif
 
-   Assert(IsGraphValid(newGraph));
+   {
+      ArenaMarker marker(arena);
+      AcceleratorView view = CreateAcceleratorView(newGraph,arena);
+      IsGraphValid(view);
+   }
 
-   OutputGraphDotFile(versat,newGraph,false,"debug/Merged.dot");
+   //OutputGraphDotFile(versat,newGraph,false,"debug/Merged.dot");
 
    //printf("Nodes mapping size: %d\n",graphMapping.instanceMap.size());
 
@@ -1345,8 +1362,10 @@ FUDeclaration* MergeAccelerators(Versat* versat,FUDeclaration* accel1,FUDeclarat
    Accelerator* flatten1 = Flatten(versat,accel1->baseCircuit,flatteningOrder);
    Accelerator* flatten2 = Flatten(versat,accel2->baseCircuit,flatteningOrder);
 
+   #if 0
    OutputGraphDotFile(versat,flatten1,true,"debug/flatten1.dot");
    OutputGraphDotFile(versat,flatten2,true,"debug/flatten2.dot");
+   #endif
 
    Accelerator* newGraph = MergeAccelerator(versat,flatten1,flatten2,strategy);
 
@@ -1355,7 +1374,7 @@ FUDeclaration* MergeAccelerators(Versat* versat,FUDeclaration* accel1,FUDeclarat
 
    FUDeclaration* decl = RegisterSubUnit(versat,name,newGraph);
 
-   OutputGraphDotFile(versat,decl->fixedDelayCircuit,false,"debug/FixedDelay.dot");
+   //OutputGraphDotFile(versat,decl->fixedDelayCircuit,false,"debug/FixedDelay.dot");
 
    #if 0
    //CalculateDelay(versat,flatten1);

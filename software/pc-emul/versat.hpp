@@ -10,7 +10,6 @@ struct FUDeclaration;
 struct IterativeUnitDeclaration; // TODO: Cannot leak this struct to public
 
 struct FUInstance{
-	//HierarchyName name;
    SizedString name;
 
    // Embedded memory
@@ -48,84 +47,80 @@ enum VersatDebugFlags{
    USE_FIXED_BUFFERS
 };
 
-Accelerator* Flatten(Versat* versat,Accelerator* accel,int times);
-
-void OutputGraphDotFile(Versat* versat,Accelerator* accel,bool collapseSameEdges,const char* filenameFormat,...) __attribute__ ((format (printf, 4, 5)));
+enum MergingStrategy{
+   SIMPLE_COMBINATION,
+   CONSOLIDATION_GRAPH,
+   PIECEWISE_CONSOLIDATION_GRAPH,
+   FIRST_FIT,
+   ORDERED_FIT
+};
 
 // Versat functions
 Versat* InitVersat(int base,int numberConfigurations);
-void Free(Versat* versat);
+void Free(Versat* versat); // Usually not needed, as memory is freed on program termination and Versat is supposed to be "active" from start to finish, but usuful for debugging memory problems
 void ParseCommandLineOptions(Versat* versat,int argc,const char** argv);
-void ParseVersatSpecification(Versat* versat,const char* filepath);
-
 bool SetDebug(Versat* versat,VersatDebugFlags flags, bool flag);
-
-FUDeclaration* RegisterFU(Versat* versat,FUDeclaration declaration);
-void OutputVersatSource(Versat* versat,Accelerator* accel,const char* sourceFilepath,const char* constantsFilepath,const char* dataFilepath);
-void OutputCircuitSource(Versat* versat,FUDeclaration* decl,Accelerator* accel,FILE* file);
-void OutputMemoryMap(Versat* versat,Accelerator* accel);
-void OutputUnitInfo(FUInstance* instance);
-
-FUDeclaration* GetTypeByName(Versat* versat,SizedString str);
+void ParseVersatSpecification(Versat* versat,const char* filepath);
 
 // Accelerator functions
 Accelerator* CreateAccelerator(Versat* versat);
 FUInstance* CreateFUInstance(Accelerator* accel,FUDeclaration* type,SizedString entityName,bool flat = false,bool isStatic = false);
+void AcceleratorRun(Accelerator* accel);
 void RemoveFUInstance(Accelerator* accel,FUInstance* inst);
+void OutputVersatSource(Versat* versat,Accelerator* accel,const char* sourceFilepath,const char* constantsFilepath,const char* dataFilepath);
+Accelerator* Flatten(Versat* versat,Accelerator* accel,int times);
 
-FUDeclaration* RegisterIterativeUnit(Versat* versat,IterativeUnitDeclaration* decl); // TODO: Cannot let the IterativeUnitDeclaration leak to the public interface
-FUDeclaration* RegisterSubUnit(Versat* versat,SizedString name,Accelerator* accel);
-
-// Can use printf style arguments, but only chars and integers.
-// Put arguments right after format string
+// Access units and sub units inside an accelerator. Can use printf style arguments, but only chars and integers are currently supported. Format is <format1>,<args1 if any>,<format2>,...
 #define GetInstanceByName(ACCEL,...) GetInstanceByName_(ACCEL,NUMBER_ARGS(__VA_ARGS__),__VA_ARGS__)
 FUInstance* GetInstanceByName_(Accelerator* accel,int argc, ...);
 FUInstance* GetInstanceByName_(FUInstance* inst,int argc, ...);
 
-void ClearConfigurations(Accelerator* accel);
-void SaveConfiguration(Accelerator* accel,int configuration);
-void LoadConfiguration(Accelerator* accel,int configuration);
-
-void AcceleratorRun(Accelerator* accel);
-void ActivateMergedAccelerator(Versat* versat,Accelerator* accel,FUDeclaration* type);
-
-// Debugging
-void CheckMemory(Accelerator* topLevel,Accelerator* accel);
-void DisplayAcceleratorMemory(Accelerator* topLevel);
-void DisplayUnitConfiguration(Accelerator* topLevel);
-
-void SetDefaultConfiguration(FUInstance* inst,int* config,int size);
-void ShareInstanceConfig(FUInstance* inst, int shareBlockIndex);
-
-// Helper functions
-int GetInputValue(FUInstance* instance,int port);
-
-int GetNumberOfInputs(FUInstance* inst);
-int GetNumberOfOutputs(FUInstance* inst);
-
-// For sub accelerators with input and output units
-int GetNumberOfInputs(Accelerator* accel);
-int GetNumberOfOutputs(Accelerator* accel);
-void SetInputValue(Accelerator* accel,int portNumber,int number);
-int GetOutputValue(Accelerator* accel,int portNumber);
-
-int GetInputPortNumber(Versat* versat,FUInstance* inputInstance);
-
+// Unit connection
 void ConnectUnits(FUInstance* out,int outIndex,FUInstance* in,int inIndex);
 void ConnectUnitsWithDelay(FUInstance* out,int outIndex,FUInstance* in,int inIndex,int delay);
 void ConnectUnitsIfNotConnected(FUInstance* out,int outIndex,FUInstance* in,int inIndex);
 
+// Read/Write to unit
 void VersatUnitWrite(FUInstance* instance,int address, int value);
 int VersatUnitRead(FUInstance* instance,int address);
 
-enum MergingStrategy{
-   SIMPLE_COMBINATION,
-   CONSOLIDATION_GRAPH,
-   PIECEWISE_CONSOLIDATION_GRAPH
-};
+// Unit default configuration and configuration sharing
+void SetDefaultConfiguration(FUInstance* inst,int* config,int size);
+void ShareInstanceConfig(FUInstance* inst, int shareBlockIndex);
 
+// Declaration functions
+FUDeclaration* RegisterFU(Versat* versat,FUDeclaration declaration);
+FUDeclaration* GetTypeByName(Versat* versat,SizedString str);
+FUDeclaration* RegisterIterativeUnit(Versat* versat,IterativeUnitDeclaration* decl); // TODO: Cannot let the IterativeUnitDeclaration leak to the public interface.
+FUDeclaration* RegisterSubUnit(Versat* versat,SizedString name,Accelerator* accel);
 FUDeclaration* MergeAccelerators(Versat* versat,FUDeclaration* accel1,FUDeclaration* accel2,SizedString name,int flatteningOrder = 99,MergingStrategy strategy = MergingStrategy::CONSOLIDATION_GRAPH);
 
+// Configuration loading and storing
+void ClearConfigurations(Accelerator* accel);
+void SaveConfiguration(Accelerator* accel,int configuration);
+void LoadConfiguration(Accelerator* accel,int configuration);
+void ActivateMergedAccelerator(Versat* versat,Accelerator* accel,FUDeclaration* type); // Set the accelerator configuration to execute the merged graph represented by type
+
+// Debug + output general accelerator info
+void OutputMemoryMap(Versat* versat,Accelerator* accel);
+void OutputUnitInfo(FUInstance* instance);
+void CheckMemory(Accelerator* topLevel,Accelerator* accel);
+void DisplayAcceleratorMemory(Accelerator* topLevel);
+void DisplayUnitConfiguration(Accelerator* topLevel);
+
+// Helper functions, useful to implement custom units
+int GetInputValue(FUInstance* instance,int port);
+int GetNumberOfInputs(FUInstance* inst);
+int GetNumberOfOutputs(FUInstance* inst);
+
+// Helper functions to create sub accelerators
+int GetNumberOfInputs(Accelerator* accel);
+int GetNumberOfOutputs(Accelerator* accel);
+void SetInputValue(Accelerator* accel,int portNumber,int number);
+int GetOutputValue(Accelerator* accel,int portNumber);
+int GetInputPortNumber(Versat* versat,FUInstance* inputInstance);
+
+// General hook function for debugging purposes
 void Hook(Versat* versat,Accelerator* accel,FUInstance* inst);
 
 #endif // INCLUDED_VERSAT_HPP

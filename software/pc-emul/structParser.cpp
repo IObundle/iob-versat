@@ -879,7 +879,7 @@ int main(int argc,const char* argv[]){
 Currently the parser is incapable of handling multiple arrays and it cannot handle pointers to arrays using the default C expression with no reliance on typedefs (can only handle arrays of pointers).
    Do not care enough to fix this, for now
 
-Currently the parse can only parse one template parameter, nothing more.
+Currently multiple template parameters might cause issues, not properly implemented.
 
 */
 

@@ -84,7 +84,6 @@ struct Value{
          bool literal;
       };
       TemplateFunction* templateFunction;
-      StaticInfo staticInfo;
       struct {
          void* custom;
       };

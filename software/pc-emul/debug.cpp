@@ -1,44 +1,13 @@
 #include "debug.hpp"
 
+#include <stdarg.h>
 #include <cstdlib>
+#include <set>
 
 #include "type.hpp"
-
-static void AssertValidRandomGraphOptions(RandomGraphOptions* options){
-   Assert(options->maxNodes >= options->minNodes);
-   Assert(options->maxDepth >= options->minDepth);
-
-   float totalProbability = 0.0f;
-   for(int i = 0; i < options->numberTypes; i++){
-      RandomGraphTypeOption* type = &options->types[i];
-
-      totalProbability += type->probability;
-   }
-
-   Assert(std::abs(totalProbability - 1.0f) < 0.01f);
-}
-
-struct TypeData{
-   int numberNodes;
-};
-
-Accelerator* GenerateRandomGraph(Versat* versat,RandomGraphOptions* options,unsigned int seed){
-   AssertValidRandomGraphOptions(options);
-
-   srand(seed);
-
-   int nodes = RandomNumberBetween(options->minNodes,options->maxNodes,rand());
-   int depth = RandomNumberBetween(options->minDepth,options->maxDepth,rand());
-
-   NOT_IMPLEMENTED;
-
-   return nullptr;
-}
+#include "textualRepresentation.hpp"
 
 void CheckMemory(Accelerator* topLevel,Accelerator* accel){
-   //AcceleratorIterator iter = {};
-   //for(FUInstance* inst = iter.Start(accel); inst; inst = iter.Next()){
-
    for(ComplexFUInstance* inst : accel->instances){
       printf("[%.*s] %.*s:\n",UNPACK_SS(inst->declaration->name),UNPACK_SS(inst->name));
       if(inst->isStatic){
@@ -66,53 +35,21 @@ void DisplayInstanceMemory(ComplexFUInstance* inst){
    printf("  E: %p\n",inst->extraData);
 }
 
-static void DisplayIntList(int* ptr, int size){
+static void OutputSimpleIntegers(int* mem,int size){
    for(int i = 0; i < size; i++){
-      printf("%d\n",ptr[i]);
+      printf("%d ",mem[i]);
    }
 }
 
 void DisplayAcceleratorMemory(Accelerator* topLevel){
    printf("Config:\n");
-   DisplayIntList(topLevel->configAlloc.ptr,topLevel->configAlloc.size);
+   OutputSimpleIntegers(topLevel->configAlloc.ptr,topLevel->configAlloc.size);
 
    printf("Static:\n");
-   DisplayIntList(topLevel->staticAlloc.ptr,topLevel->staticAlloc.size);
+   OutputSimpleIntegers(topLevel->staticAlloc.ptr,topLevel->staticAlloc.size);
 
    printf("Delay:\n");
-   DisplayIntList(topLevel->delayAlloc.ptr,topLevel->delayAlloc.size);
-}
-
-static char GetHex(int value){
-   if(value < 10){
-      return '0' + value;
-   } else{
-      return 'a' + (value - 10);
-   }
-}
-
-void OutputMemoryHex(void* memory,int size){
-   unsigned char* view = (unsigned char*) memory;
-
-   for(int i = 0; i < size; i++){
-      if(i % 16 == 0 && i != 0){
-         printf("\n");
-      }
-
-      int low = view[i] % 16;
-      int high = view[i] / 16;
-
-      printf("%c%c ",GetHex(high),GetHex(low));
-
-   }
-
-   printf("\n");
-}
-
-static void OutputSimpleIntegers(int* mem,int size){
-   for(int i = 0; i < size; i++){
-      printf("%d ",mem[i]);
-   }
+   OutputSimpleIntegers(topLevel->delayAlloc.ptr,topLevel->delayAlloc.size);
 }
 
 void DisplayUnitConfiguration(Accelerator* topLevel){
@@ -144,6 +81,293 @@ void DisplayUnitConfiguration(Accelerator* topLevel){
          printf("\n\n");
       }
    }
+}
+
+bool IsGraphValid(AcceleratorView view){
+   Assert(view.graphData);
+
+   InstanceMap map;
+
+   for(int i = 0; i < view.numberNodes; i++){
+      ComplexFUInstance* inst = view.nodes[i];
+
+      inst->tag = 0;
+      map.insert({inst,inst});
+   }
+
+   for(int i = 0; i < view.numberEdges; i++){
+      Edge* edge = &view.edges[i];
+
+      for(int i = 0; i < 2; i++){
+         auto res = map.find(edge->units[i].inst);
+
+         Assert(res != map.end());
+
+         res->first->tag = 1;
+      }
+
+      Assert(edge->units[0].port < edge->units[0].inst->declaration->nOutputs && edge->units[0].port >= 0);
+      Assert(edge->units[1].port < edge->units[1].inst->declaration->nInputs && edge->units[1].port >= 0);
+   }
+
+   if(view.numberEdges){
+      for(int i = 0; i < view.numberNodes; i++){
+         ComplexFUInstance* inst = view.nodes[i];
+
+         Assert(inst->tag == 1 || inst->graphData->nodeType == GraphComputedData::TAG_UNCONNECTED);
+      }
+   }
+
+   return true;
+}
+
+static void OutputGraphDotFile_(Versat* versat,AcceleratorView view,bool collapseSameEdges,FILE* outputFile){
+   Arena* arena = &versat->temp;
+
+   fprintf(outputFile,"digraph accel {\n\tnode [fontcolor=white,style=filled,color=\"160,60,176\"];\n");
+   for(int i = 0; i < view.numberNodes; i++){
+      ComplexFUInstance* inst = view.nodes[i];
+      SizedString name = Repr(versat,inst,arena,true);
+
+      fprintf(outputFile,"\t\"%.*s\";\n",UNPACK_SS(name));
+   }
+
+   std::set<std::pair<ComplexFUInstance*,ComplexFUInstance*>> sameEdgeCounter;
+
+   for(int i = 0; i < view.numberEdges; i++){
+      Edge* edge = &view.edges[i];
+      if(collapseSameEdges){
+         std::pair<ComplexFUInstance*,ComplexFUInstance*> key{edge->units[0].inst,edge->units[1].inst};
+
+         if(sameEdgeCounter.count(key) == 1){
+            continue;
+         }
+
+         sameEdgeCounter.insert(key);
+      }
+
+      SizedString first = Repr(versat,edge->units[0].inst,arena,true);
+      SizedString second = Repr(versat,edge->units[1].inst,arena,true);
+
+      fprintf(outputFile,"\t\"%.*s\" -> ",UNPACK_SS(first));
+      fprintf(outputFile,"\"%.*s\"",UNPACK_SS(second));
+
+      #if 0
+      ComplexFUInstance* outputInst = edge->units[0].inst;
+      int delay = 0;
+      for(int i = 0; i < outputInst->graphData->numberOutputs; i++){
+         if(edge->units[1].inst == outputInst->graphData->outputs[i].instConnectedTo.inst && edge->units[1].port == outputInst->graphData->outputs[i].instConnectedTo.port){
+            delay = outputInst->graphData->outputs[i].delay;
+            break;
+         }
+      }
+
+      fprintf(outputFile,"[label=\"%d->%d:%d\"]",edge->units[0].port,edge->units[1].port,delay);
+      #endif
+
+      fprintf(outputFile,";\n");
+   }
+
+   fprintf(outputFile,"}\n");
+}
+
+void OutputGraphDotFile(Versat* versat,AcceleratorView view,bool collapseSameEdges,const char* filenameFormat,...){
+   char buffer[1024];
+
+   va_list args;
+   va_start(args,filenameFormat);
+
+   vsprintf(buffer,filenameFormat,args);
+
+   FILE* file = fopen(buffer,"w");
+   OutputGraphDotFile_(versat,view,collapseSameEdges,file);
+   fclose(file);
+
+   va_end(args);
+}
+
+void OutputMemoryHex(void* memory,int size){
+   unsigned char* view = (unsigned char*) memory;
+
+   for(int i = 0; i < size; i++){
+      if(i % 16 == 0 && i != 0){
+         printf("\n");
+      }
+
+      int low = view[i] % 16;
+      int high = view[i] / 16;
+
+      printf("%c%c ",GetHex(high),GetHex(low));
+
+   }
+
+   printf("\n");
+}
+
+static std::array<char,4> currentMapping = {'a','a','a','a'};
+static int mappingIncrements = 0;
+static void ResetMapping(){
+   currentMapping[0] = 'a';
+   currentMapping[1] = 'a';
+   currentMapping[2] = 'a';
+   currentMapping[3] = 'a';
+   mappingIncrements = 0;
+}
+
+static void IncrementMapping(){
+   for(int i = 3; i >= 0; i--){
+      mappingIncrements += 1;
+      currentMapping[i] += 1;
+      if(currentMapping[i] == 'z' + 1){
+         currentMapping[i] = 'a';
+      } else {
+         return;
+      }
+   }
+   Assert(false && "Increase mapping space");
+}
+
+static void PrintVCDDefinitions_(FILE* accelOutputFile,Accelerator* accel){
+   Arena* arena = &accel->versat->temp;
+   AcceleratorView view = CreateAcceleratorView(accel,arena);
+   view.CalculateGraphData(arena);
+
+   for(StaticInfo* info : accel->staticInfo){
+      for(int i = 0; i < info->nConfigs; i++){
+         Wire* wire = &info->wires[i];
+         fprintf(accelOutputFile,"$var wire  %d %c%c%c%c %.*s_%.*s $end\n",wire->bitsize,currentMapping[0],currentMapping[1],currentMapping[2],currentMapping[3],UNPACK_SS(info->name),UNPACK_SS(wire->name));
+         IncrementMapping();
+      }
+   }
+
+   for(ComplexFUInstance* inst : accel->instances){
+      fprintf(accelOutputFile,"$scope module %.*s_%d $end\n",UNPACK_SS(inst->name),inst->id);
+
+      for(int i = 0; i < inst->graphData->inputPortsUsed; i++){
+         fprintf(accelOutputFile,"$var wire  32 %c%c%c%c %.*s_in%d $end\n",currentMapping[0],currentMapping[1],currentMapping[2],currentMapping[3],UNPACK_SS(inst->name),i);
+         IncrementMapping();
+      }
+
+      for(int i = 0; i < inst->graphData->outputPortsUsed; i++){
+         fprintf(accelOutputFile,"$var wire  32 %c%c%c%c %.*s_out%d $end\n",currentMapping[0],currentMapping[1],currentMapping[2],currentMapping[3],UNPACK_SS(inst->name),i);
+         IncrementMapping();
+         fprintf(accelOutputFile,"$var wire  32 %c%c%c%c %.*s_stored_out%d $end\n",currentMapping[0],currentMapping[1],currentMapping[2],currentMapping[3],UNPACK_SS(inst->name),i);
+         IncrementMapping();
+      }
+
+      for(int i = 0; i < inst->declaration->nConfigs; i++){
+         Wire* wire = &inst->declaration->configWires[i];
+         fprintf(accelOutputFile,"$var wire  %d %c%c%c%c %.*s $end\n",wire->bitsize,currentMapping[0],currentMapping[1],currentMapping[2],currentMapping[3],UNPACK_SS(wire->name));
+         IncrementMapping();
+      }
+
+      for(int i = 0; i < inst->declaration->nStates; i++){
+         Wire* wire = &inst->declaration->stateWires[i];
+         fprintf(accelOutputFile,"$var wire  %d %c%c%c%c %.*s $end\n",wire->bitsize,currentMapping[0],currentMapping[1],currentMapping[2],currentMapping[3],UNPACK_SS(wire->name));
+         IncrementMapping();
+      }
+
+      for(int i = 0; i < inst->declaration->nDelays; i++){
+         fprintf(accelOutputFile,"$var wire 32 %c%c%c%c delay%d $end\n",currentMapping[0],currentMapping[1],currentMapping[2],currentMapping[3],i);
+         IncrementMapping();
+      }
+
+      if(inst->declaration->implementsDone){
+         fprintf(accelOutputFile,"$var wire  1 %c%c%c%c done $end\n",currentMapping[0],currentMapping[1],currentMapping[2],currentMapping[3]);
+         IncrementMapping();
+      }
+
+      if(inst->compositeAccel){
+         PrintVCDDefinitions_(accelOutputFile,inst->compositeAccel);
+      }
+
+      fprintf(accelOutputFile,"$upscope $end\n");
+   }
+}
+
+void PrintVCDDefinitions(FILE* accelOutputFile,Accelerator* accel){
+   ResetMapping();
+
+   fprintf(accelOutputFile,"$timescale   1ns $end\n");
+   fprintf(accelOutputFile,"$scope module TOP $end\n");
+   fprintf(accelOutputFile,"$var wire  1 a clk $end\n");
+   PrintVCDDefinitions_(accelOutputFile,accel);
+   fprintf(accelOutputFile,"$upscope $end\n");
+   fprintf(accelOutputFile,"$enddefinitions $end\n");
+}
+
+static char* Bin(unsigned int val){
+   static char buffer[33];
+   buffer[32] = '\0';
+
+   for(int i = 0; i < 32; i++){
+      if(val - (1 << (31 - i)) < val){
+         val = val - (1 << (31 - i));
+         buffer[i] = '1';
+      } else {
+         buffer[i] = '0';
+      }
+   }
+   return buffer;
+}
+
+static void PrintVCD_(FILE* accelOutputFile,Accelerator* accel,int time){
+   for(StaticInfo* info : accel->staticInfo){
+      for(int i = 0; i < info->nConfigs; i++){
+         if(time == 0){
+            fprintf(accelOutputFile,"b%s %c%c%c%c\n",Bin(info->ptr[i]),currentMapping[0],currentMapping[1],currentMapping[2],currentMapping[3]);
+         }
+         IncrementMapping();
+      }
+   }
+
+   for(ComplexFUInstance* inst : accel->instances){
+      for(int i = 0; i < inst->graphData->inputPortsUsed; i++){
+         fprintf(accelOutputFile,"b%s %c%c%c%c\n",Bin(GetInputValue(inst,i)),currentMapping[0],currentMapping[1],currentMapping[2],currentMapping[3]);
+         IncrementMapping();
+      }
+
+      for(int i = 0; i < inst->graphData->outputPortsUsed; i++){
+         fprintf(accelOutputFile,"b%s %c%c%c%c\n",Bin(inst->outputs[i]),currentMapping[0],currentMapping[1],currentMapping[2],currentMapping[3]);
+         IncrementMapping();
+         fprintf(accelOutputFile,"b%s %c%c%c%c\n",Bin(inst->storedOutputs[i]),currentMapping[0],currentMapping[1],currentMapping[2],currentMapping[3]);
+         IncrementMapping();
+      }
+
+      for(int i = 0; i < inst->declaration->nConfigs; i++){
+         if(time == 0){
+            fprintf(accelOutputFile,"b%s %c%c%c%c\n",Bin(inst->config[i]),currentMapping[0],currentMapping[1],currentMapping[2],currentMapping[3]);
+         }
+         IncrementMapping();
+      }
+
+      for(int i = 0; i < inst->declaration->nStates; i++){
+         fprintf(accelOutputFile,"b%s %c%c%c%c\n",Bin(inst->state[i]),currentMapping[0],currentMapping[1],currentMapping[2],currentMapping[3]);
+         IncrementMapping();
+      }
+
+      for(int i = 0; i < inst->declaration->nDelays; i++){
+         fprintf(accelOutputFile,"b%s %c%c%c%c\n",Bin(inst->delay[i]),currentMapping[0],currentMapping[1],currentMapping[2],currentMapping[3]);
+         IncrementMapping();
+      }
+
+      if(inst->declaration->implementsDone){
+         fprintf(accelOutputFile,"%d%c%c%c%c\n",inst->done ? 1 : 0,currentMapping[0],currentMapping[1],currentMapping[2],currentMapping[3]);
+         IncrementMapping();
+      }
+
+      if(inst->compositeAccel){
+         PrintVCD_(accelOutputFile,inst->compositeAccel,time);
+      }
+   }
+}
+
+void PrintVCD(FILE* accelOutputFile,Accelerator* accel,int time,int clock){ // Need to put some clock signal
+   ResetMapping();
+
+   fprintf(accelOutputFile,"#%d\n",time * 10);
+   fprintf(accelOutputFile,"%da\n",clock ? 1 : 0);
+   PrintVCD_(accelOutputFile,accel,time);
 }
 
 #if 1
@@ -183,25 +407,6 @@ T* GetListByIndex(T* listHead,int index){
    return ptr;
 }
 
-static int RolloverRange(int min,int val,int max){
-   if(val < min){
-      val = max;
-   } else if(val > max){
-      val = min;
-   }
-}
-
-static int Clamp(int min,int val,int max){
-   if(val < min){
-      return min;
-   }
-   if(val >= max){
-      return max;
-   }
-
-   return val;
-}
-
 // Only allow one input
 enum Input{
    INPUT_NONE,
@@ -215,15 +420,12 @@ void StructPanel(WINDOW* w,PanelState* state,Input input,Arena* arena){
    Value val = state->valueLooking;
    Type* type = val.type;
 
-   int width,height;
-   getmaxyx(w, height, width);
-
    const int panelWidth = 32;
 
    int menuIndex = 0;
    int startPos = 2;
 
-   for(Member* member = val.type->members; member != nullptr; member = member->next){
+   for(Member* member = type->members; member != nullptr; member = member->next){
       int yPos = startPos + menuIndex;
 
       if(menuIndex == state->cursorPosition){
@@ -260,7 +462,7 @@ void TerminalIteration(WINDOW* w,Input input,Arena* arena){
       currentPanel -= 1;
 
       PanelState* currentState = &panels[currentPanel];
-      //PopMark(arena,currentState->arenaMark);
+      PopMark(arena,currentState->arenaMark);
    } else if(input == INPUT_ENTER){
       PanelState* currentState = &panels[currentPanel];
 
@@ -341,8 +543,7 @@ void TerminalIteration(WINDOW* w,Input input,Arena* arena){
    } else if(type->type == Type::TEMPLATED_INSTANCE && type->templateBase == ValueType::POOL){
       Iterator iter = Iterate(val);
       for(int index = 0; HasNext(iter); index += 1,Advance(&iter)){
-         Value val = GetValue(iter);
-         Type* type = val.type;
+         //Value val = GetValue(iter);
 
          if(index == state->cursorPosition){
             wattron( w, A_STANDOUT );

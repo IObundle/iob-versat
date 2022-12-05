@@ -31,7 +31,6 @@ TYPE_INFO_HDR += $(VERSAT_SW_DIR)/utils.hpp
 TYPE_INFO_HDR += $(VERSAT_PC_EMUL)/verilogParser.hpp
 TYPE_INFO_HDR += $(VERSAT_PC_EMUL)/templateEngine.hpp
 TYPE_INFO_HDR += $(VERSAT_PC_EMUL)/memory.hpp
-TYPE_INFO_HDR += $(VERSAT_PC_EMUL)/codeGeneration.hpp
 
 TOOL_COMMON_SRC += $(VERSAT_DIR)/software/pc-emul/parser.cpp
 TOOL_COMMON_SRC += $(VERSAT_DIR)/software/pc-emul/utils.cpp
@@ -63,7 +62,7 @@ $(BUILD_DIR)/verilated_vcd_c.o:
 
 $(BUILD_DIR)/V%.h: $(VERSAT_HW_DIR)/src/%.v
 	verilator --trace -CFLAGS "$(VERILATE_FLAGS)" -I$(VERSAT_HW_DIR)/src -I$(VERSAT_HW_DIR)/include $(V_INCLUDE) -cc -Mdir $(BUILD_DIR) $<;
-	cd $(BUILD_DIR) && make -f V$*.mk;
+	$(MAKE) -C $(BUILD_DIR) -f V$*.mk;
 
 $(BUILD_DIR)/typeInfo.inc: $(BUILD_DIR)/structParser.out $(TYPE_INFO_HDR)
 	mkdir -p $(BUILD_DIR)
@@ -89,3 +88,5 @@ $(BUILD_DIR)/verilogParser.out: $(VERSAT_SW_DIR)/pc-emul/verilogParser.cpp $(TOO
 	g++ -std=c++11 -DSTANDALONE -o $@ -g -m32 $< -I $(BUILD_DIR)/ -I $(VERSAT_DIR)/software/ -I  $(VERSAT_DIR)/software/pc-emul  -I $(VERSAT_DIR)/software/pc-emul/ $(TOOL_SRC)
 
 .PRECIOUS: $(UNIT_HDR)
+
+.NOTPARALLEL: $(BUILD_DIR)/V%.h

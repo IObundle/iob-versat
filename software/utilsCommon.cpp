@@ -78,6 +78,27 @@ int RandomNumberBetween(int minimum,int maximum,int randomValue){
    return res;
 }
 
+int RolloverRange(int min,int val,int max){
+   if(val < min){
+      val = max;
+   } else if(val > max){
+      val = min;
+   }
+
+   return val;
+}
+
+int Clamp(int min,int val,int max){
+   if(val < min){
+      return min;
+   }
+   if(val >= max){
+      return max;
+   }
+
+   return val;
+}
+
 float Abs(float val){
    float res = val;
 
@@ -131,6 +152,14 @@ int NumberDigitsRepresentation(int number){
    }
 
    return nDigits;
+}
+
+char GetHex(int value){
+   if(value < 10){
+      return '0' + value;
+   } else{
+      return 'a' + (value - 10);
+   }
 }
 
 static uint seed = 1;

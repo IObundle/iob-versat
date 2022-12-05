@@ -308,7 +308,7 @@ FUDeclaration* ParseModule(Versat* versat,Tokenizer* tok){
       }
 
       SizedString name = PushString(&versat->permanent,token);
-      FUInstance* inst = CreateFUInstance(circuit,versat->input,name,true);
+      CreateFUInstance(circuit,versat->input,name,true);
    }
 
    tok->AssertNextToken("{");
@@ -367,7 +367,7 @@ FUDeclaration* ParseModule(Versat* versat,Tokenizer* tok){
 
             shareIndex += 1;
          } else {
-            FUInstance* inst = ParseInstanceDeclaration(versat,tok,circuit,isStatic);
+            ParseInstanceDeclaration(versat,tok,circuit,isStatic);
 
             tok->AssertNextToken(";");
          }
@@ -435,7 +435,6 @@ FUDeclaration* ParseIterative(Versat* versat,Tokenizer* tok){
 
    tok->AssertNextToken("(");
    // Arguments
-   Token peek = tok->PeekToken();
    while(1){
       Token argument = tok->PeekToken();
 
@@ -552,8 +551,16 @@ FUDeclaration* ParseIterative(Versat* versat,Tokenizer* tok){
    tok->AssertNextToken("}");
    decl.dataSize += 1;
 
-   OutputGraphDotFile(versat,firstPhase,false,"./debug/firstPhase.dot");
-   OutputGraphDotFile(versat,secondPhase,false,"./debug/secondPhase.dot");
+   {
+   Arena* arena = &versat->temp;
+   ArenaMarker marker(arena);
+   AcceleratorView first = CreateAcceleratorView(firstPhase,arena);
+   AcceleratorView second = CreateAcceleratorView(secondPhase,arena);
+   first.CalculateGraphData(arena);
+   second.CalculateGraphData(arena);
+   OutputGraphDotFile(versat,first,false,"./debug/firstPhase.dot");
+   OutputGraphDotFile(versat,second,false,"./debug/secondPhase.dot");
+   }
 
    decl.initial = firstPhase;
    decl.forLoop = secondPhase;
