@@ -23,9 +23,9 @@ module xaddrgen2 # (
        input signed [MEM_ADDR_W - 1:0]       incr2,
 
        //outputs
-       output reg [MEM_ADDR_W - 1:0]         addr,
-       output reg                             mem_en,
-       output reg                             done
+       output [MEM_ADDR_W - 1:0]             addr,
+       output                                mem_en,
+       output                                done
        );
 
    //connection wires
