@@ -277,11 +277,11 @@ void ConnectUnit(FUInstance* inst1,FUInstance* inst2,ConnectionExtra outVar,Conn
    int delayDelta = (delayRange == 1 ? 0 : 1);
    if(outRange == 1){
       for(int i = 0; i < inRange; i++){
-         ConnectUnitsWithDelay(inst1,outVar.portStart,inst2,inVar.portStart + i,-(outVar.delayStart + delayDelta * i));
+         ConnectUnits(inst1,outVar.portStart,inst2,inVar.portStart + i,-(outVar.delayStart + delayDelta * i));
       }
    } else {
       for(int i = 0; i < inRange; i++){
-         ConnectUnitsWithDelay(inst1,outVar.portStart + i,inst2,inVar.portStart + i,-(outVar.delayStart + delayDelta * i));
+         ConnectUnits(inst1,outVar.portStart + i,inst2,inVar.portStart + i,-(outVar.delayStart + delayDelta * i));
       }
    }
 }

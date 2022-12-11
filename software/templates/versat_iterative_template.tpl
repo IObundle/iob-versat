@@ -4,7 +4,9 @@
 
 module @{base.name} #(
       parameter DELAY_W = 32,
-      parameter DATA_W = 32
+      parameter DATA_W = 32,
+      parameter ADDR_W = `ADDR_W,
+      parameter AXI_ADDR_W = 32
    )(
 
       #{for i base.nInputs}

@@ -96,7 +96,7 @@ bool IsGraphValid(AcceleratorView view){
    }
 
    for(int i = 0; i < view.numberEdges; i++){
-      Edge* edge = &view.edges[i];
+      Edge* edge = view.edges[i].edge;
 
       for(int i = 0; i < 2; i++){
          auto res = map.find(edge->units[i].inst);
@@ -135,7 +135,7 @@ static void OutputGraphDotFile_(Versat* versat,AcceleratorView view,bool collaps
    std::set<std::pair<ComplexFUInstance*,ComplexFUInstance*>> sameEdgeCounter;
 
    for(int i = 0; i < view.numberEdges; i++){
-      Edge* edge = &view.edges[i];
+      Edge* edge = view.edges[i].edge;
       if(collapseSameEdges){
          std::pair<ComplexFUInstance*,ComplexFUInstance*> key{edge->units[0].inst,edge->units[1].inst};
 
@@ -370,7 +370,7 @@ void PrintVCD(FILE* accelOutputFile,Accelerator* accel,int time,int clock){ // N
    PrintVCD_(accelOutputFile,accel,time);
 }
 
-#if 1
+#if 0
 #include <ncurses.h>
 #include <signal.h>
 

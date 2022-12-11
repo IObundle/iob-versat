@@ -99,31 +99,85 @@ int Clamp(int min,int val,int max){
    return val;
 }
 
+float Sqrt(float n){
+   float high = 1.8446734e+19;
+   float low = 0.0f;
+
+   float middle;
+   for(int i = 0; i < 256; i++){
+      middle = (high / 2.0f) + (low / 2.0f); // Divide individually otherwise risk of overflowing the addition
+
+      float squared = middle * middle;
+
+      if(FloatEqual(squared,n)){
+         break;
+      } else if(squared > n){
+         high = middle;
+      } else {
+         low = middle;
+      }
+   }
+
+   return middle;
+}
+
 float Abs(float val){
    float res = val;
-
    if(val < 0.0f){
       res = -val;
    }
+   return res;
+}
 
+int Abs(int val){
+   int res = val;
+   if(val < 0){
+      res = -val;
+   }
+   return res;
+}
+
+int Abs(uint val){
+   int conv = (int) val;
+   int res = Abs(conv);
    return res;
 }
 
 bool FloatEqual(float f0,float f1,float epsilon){
-   bool res = (Abs(f0 - f1) < epsilon);
+   if(f0 == f1){
+      return true;
+   }
 
-   return res;
+   float norm = Abs(f0) + Abs(f1);
+   float diff = Abs(f0 - f1);
+
+   bool equal = diff < norm * epsilon;
+
+   return equal;
 }
 
 int PackInt(float val){
-   union {
-      float f;
-      int i;
-   } conv;
-
+   Conversion conv = {};
    conv.f = val;
 
    return conv.i;
+}
+
+float PackFloat(int val){
+   Conversion conv = {};
+   conv.i = val;
+
+   return conv.f;
+}
+
+float PackFloat(Byte sign,Byte exponent,int mantissa){
+   Conversion conv = {};
+
+   conv.ui = COND_BIT_MASK(31,sign) |
+             (exponent << 23) |
+             MASK_VALUE(mantissa,23);
+
+   return conv.f;
 }
 
 int SwapEndianess(int val){

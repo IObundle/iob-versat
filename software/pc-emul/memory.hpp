@@ -8,8 +8,6 @@
 #include "utils.hpp"
 #include "logger.hpp"
 
-typedef char Byte;
-
 inline size_t Kilobyte(int val){return val * 1024;};
 inline size_t Megabyte(int val){return Kilobyte(val) * 1024;};
 inline size_t Gigabyte(int val){return Megabyte(val) * 1024;};

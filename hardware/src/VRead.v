@@ -47,7 +47,7 @@ module VRead #(
    input [`MEM_ADDR_W-1:0] startB,
    input [`MEM_ADDR_W-1:0] shiftB,
    input [`MEM_ADDR_W-1:0] incrB,
-   input [32-1:0]          delay0,// delayB
+   input [31:0]            delay0,// delayB
    input                   reverseB,
    input                   extB,
    input [`MEM_ADDR_W-1:0] iter2B,
@@ -98,7 +98,7 @@ module VRead #(
 
    wire [1:0]             direction = 2'b01;
    wire [`MEM_ADDR_W-1:0] startA    = `MEM_ADDR_W'd0;
-   wire [`PERIOD_W-1:0]   delayA    = `PERIOD_W'd0;
+   wire [31:0]   delayA    = 0;
 
    // port addresses and enables
    wire [`MEM_ADDR_W-1:0] addrA, addrA_int, addrA_int2;

@@ -39,6 +39,11 @@ struct FUInstance{
    bool namedAccess;
 };
 
+struct SpecificMerge{
+   SizedString instA;
+   SizedString instB;
+};
+
 enum VersatDebugFlags{
    OUTPUT_GRAPH_DOT,
    OUTPUT_ACCELERATORS_CODE,
@@ -73,12 +78,12 @@ Accelerator* Flatten(Versat* versat,Accelerator* accel,int times);
 // Access units and sub units inside an accelerator. Can use printf style arguments, but only chars and integers are currently supported. Format is <format1>,<args1 if any>,<format2>,...
 #define GetInstanceByName(ACCEL,...) GetInstanceByName_(ACCEL,NUMBER_ARGS(__VA_ARGS__),__VA_ARGS__)
 FUInstance* GetInstanceByName_(Accelerator* accel,int argc, ...);
+FUInstance* GetInstanceByName_(FUDeclaration* decl,int argc, ...);
 FUInstance* GetInstanceByName_(FUInstance* inst,int argc, ...);
 
 // Unit connection
-void ConnectUnits(FUInstance* out,int outIndex,FUInstance* in,int inIndex);
-void ConnectUnitsWithDelay(FUInstance* out,int outIndex,FUInstance* in,int inIndex,int delay);
-void ConnectUnitsIfNotConnected(FUInstance* out,int outIndex,FUInstance* in,int inIndex);
+void ConnectUnits(FUInstance* out,int outIndex,FUInstance* in,int inIndex,int delay = 0);
+void ConnectUnitsIfNotConnected(FUInstance* out,int outIndex,FUInstance* in,int inIndex,int delay = 0);
 
 // Read/Write to unit
 void VersatUnitWrite(FUInstance* instance,int address, int value);
@@ -93,7 +98,8 @@ FUDeclaration* RegisterFU(Versat* versat,FUDeclaration declaration);
 FUDeclaration* GetTypeByName(Versat* versat,SizedString str);
 FUDeclaration* RegisterIterativeUnit(Versat* versat,IterativeUnitDeclaration* decl); // TODO: Cannot let the IterativeUnitDeclaration leak to the public interface.
 FUDeclaration* RegisterSubUnit(Versat* versat,SizedString name,Accelerator* accel);
-FUDeclaration* MergeAccelerators(Versat* versat,FUDeclaration* accel1,FUDeclaration* accel2,SizedString name,int flatteningOrder = 99,MergingStrategy strategy = MergingStrategy::CONSOLIDATION_GRAPH);
+FUDeclaration* MergeAccelerators(Versat* versat,FUDeclaration* accel1,FUDeclaration* accel2,SizedString name,int flatteningOrder = 99,
+                                 MergingStrategy strategy = MergingStrategy::CONSOLIDATION_GRAPH,SpecificMerge* specifics = nullptr,int nSpecifics = 0);
 
 // Configuration loading and storing
 void ClearConfigurations(Accelerator* accel);

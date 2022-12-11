@@ -1,12 +1,13 @@
 Misc:
 
    Stop using asserts for likely user errors. Parser is full of asserts that are actually faulty user data. Need to grapple with things now before they become more complex, even if in the future there is likelihood that things will change.
->  Reorganize the codebase. Declare every Versat function in a single header [versatPrivate.hpp] (minimize static functions and make them close to their use case) for easy access and organize the code by putting the functions strictly in the same order as they are declared.
-      Can divide the code in various source files, but no need to have a header file for every single header.
-      Remove every other header, unless specific ones, but still use multiple source files. Try to separate logically. Put a comment that indicates the file where the function is defined.
-      Try to organize sections by meaning as much as possible. Versat on top, then accelerator. Utils and misc on bottom, the usual. 
-   Rework makefile. Remove clutter, simplify, make it parallel (especially Verilator and building all object files). Initially attemps to parallelize seem to not work (no difference in time between -j1 and -j8)
    Hard to reason with fixed buffer because we immediatly transform delay into a string. Having to parse the delay is not a solution. Figure out what to do and remove all the portions of code that parse the delay out from the unit
+
+Testbench:
+
+   Rework testbench
+      Add subtests
+      Use a more data oriented approach. Kinda problematic when running in embedded, so make small changes and test in embedded to make sure not doing anything to much complicated.
 
 Delay and Time:
 
@@ -30,17 +31,26 @@ Delay and Time:
          Probably would need to do a full accelerator calculate delay and fix buffers, then use AcceleratorView for each graph to extract the correct values for each accelerator.
       For fixed buffers, I don't think using AcceleratorView does anything. Have to perform CalculateDelay and FixBuffers globally.
 
+   Should the concept of data validity be extended to remove the fact that data is assumed valid forever after the unit starts producing valid data?
+      Some units only produce valid data after X cycles. Think things like iterative units and complex FPU units that aren't pipelined.
+      The concept is useful, especially if we can use it to make storing data to memory. It should also allow units that are not easily pipelinable to produce more than data per iteration. 
+      The problem is how to fix the timing for complex graphs. (Imagine a unit whose inputs produce valid every 2 cycles and another every 3 cycles).
+
+   Further abstract the concept of iterative units. 
+      Some units, like FPU div and such, work like iterative units. 
+      It should be possible to define normal units as iterative, instead of only defined as graphs and through the use of ParseVersatSpecifications.
+
 Accelerator View:
 
    Need to grasp this part. Very important for the future of the project but hard to reason as no easy solution appers to be exist.
 >  For now, try to propagate AcceleratorViews as further as possible. If a function currently needs to create a AcceleratorView, changing it so that it takes it as a parameter and checks inside if it's correct.
       Only user level functions should have a need to create AcceleratorViews. Everything else takes.
 
-+ Graph data:
++  Graph data:
 
    Add a array that maps directly to inputs if they exist, nullptr if they do not and only a single value if multiple inputs exist. Also had a flag saying that multiple inputs exit. Useful for templating.
 
-+ Configuration management:
++  Configuration management:
 
    Add an interface to provide the user with the ability to save and load configurations.
       Need to add two types. Software sided saving and loading of configuration (Data is not stored on versat).
@@ -49,19 +59,23 @@ Accelerator View:
       Provide ways to save data in PC-Emul and load it in embedded.
       Need to cleary separate where data is stored.
 
-- Template:
+-  Optimization:
+
+   Make an unordered_map class that takes an arena and the amount of memory needed right of the bat.
+
+-  Template:
 
    Do a template pass to remove duplicate code, lock down on the approach used to identify units and wires. Different templates should almost resemble each other. All the logic should be shared between units and should relie on common ground.
    Allow the use of enums inside templates. (See parsing enum info on Type)
    Add local variables. Need to introduce the concept of "stack frames".
    Take a look at the way whitespace is handled. Nothing too important, but I think some places could generate files with errors because they don't handle whitespace correctly
 
-- Type:
+-  Type:
 
    Do a pass over the use of the temp identifier. It's kind of an hack 
    Parse and generate enum information.
 
-- Pool
+-  Pool
    
    Fix the use of unnecessary information, that makes it impossible to copy. Every piece of information required to iterate is stored inside the linked list.
 

@@ -859,7 +859,6 @@ void ProcessTemplate(FILE* outputFile,const char* templateFilepath,Arena* arena)
    filepath = templateFilepath;
 
    Arena outputArenaInst = SubArena(arena,Megabyte(64));
-   StartDebugTerminal();
    outputArena = &outputArenaInst;
 
    #if 0

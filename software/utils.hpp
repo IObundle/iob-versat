@@ -9,6 +9,10 @@
 #include "signal.h"
 #include "assert.h"
 
+#define CI(x) (x - '0')
+#define TWO_DIGIT(x,y) (CI(x) * 10 + CI(y))
+#define COMPILE_TIME (TWO_DIGIT(__TIME__[0],__TIME__[1]) * 3600 + TWO_DIGIT(__TIME__[3],__TIME__[4]) * 60 + TWO_DIGIT(__TIME__[6],__TIME__[7]))
+
 #define ALIGN_4(val) ((val + 3) & ~0x3)
 #define ARRAY_SIZE(array) sizeof(array) / sizeof(array[0])
 
@@ -36,6 +40,8 @@
 #define NOT_POSSIBLE DEBUG_BREAK
 #define UNHANDLED_ERROR do{ FlushStdout(); Assert(false); } while(0) // Know it's an error, but only exit, for now
 #define USER_ERROR do{ FlushStdout(); exit(0); } while(0) // User error and program does not try to repair or keep going (report error before and exit)
+
+typedef char Byte;
 
 struct SizedString{
    const char* str;
@@ -72,19 +78,36 @@ struct Range{
    int low;
 };
 
+union Conversion {
+   float f;
+   int i;
+   uint ui;
+};
+
+#define BIT_MASK(BIT) (1 << BIT)
+#define COND_BIT_MASK(BIT,COND) (COND ? BIT_MASK(BIT) : 0)
+#define FULL_MASK(BITS) (BIT_MASK(BITS) - 1)
+#define MASK_VALUE(VAL,BITS) (VAL & FULL_MASK(BITS))
+
 // Misc
 int RoundUpDiv(int dividend,int divisor);
 int log2i(int value); // Log function customized to calculating bits needed for a number of possible addresses (ex: log2i(1024) = 10)
 int AlignNextPower2(int val);
 int RandomNumberBetween(int minimum,int maximum,int randomValue);
 
+// Math related functions
 int RolloverRange(int min,int val,int max);
 int Clamp(int min,int val,int max);
 
+float Sqrt(float n);
 float Abs(float val);
-bool FloatEqual(float f0,float f1,float epsilon = 0.001f);
+int Abs(int val);
+int Abs(uint val); // Convert to signed and perform abs, otherwise no reason to call a Abs function for an unsigned number
+bool FloatEqual(float f0,float f1,float epsilon = 0.00001f);
 
 int PackInt(float val);
+float PackFloat(int val);
+float PackFloat(Byte sign,Byte exponent,int mantissa);
 int SwapEndianess(int val);
 
 int NumberDigitsRepresentation(int number); // Number of digits if printed (negative includes - sign )

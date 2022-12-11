@@ -174,7 +174,7 @@ static void RegisterOperators(Versat* versat){
       const char* operation;
    };
 
-   Operation unary[] = {{"NOT",UnaryNot,"{0}_{1} = ~{2}"}};
+   Operation unary[] =  {{"NOT",UnaryNot,"{0}_{1} = ~{2}"}};
    Operation binary[] = {{"XOR",BinaryXOR,"{0}_{1} = {2} ^ {3}"},
                          {"ADD",BinaryADD,"{0}_{1} = {2} + {3}"},
                          {"SUB",BinarySUB,"{0}_{1} = {2} - {3}"},
@@ -417,11 +417,6 @@ FUDeclaration* GetTypeByName(Versat* versat,SizedString name){
    return nullptr;
 }
 
-struct HierarchicalName{
-   SizedString name;
-   HierarchicalName* next;
-};
-
 static FUInstance* GetInstanceByHierarchicalName(Accelerator* accel,HierarchicalName* hier){
    Assert(hier != nullptr);
 
@@ -577,6 +572,17 @@ FUInstance* GetInstanceByName_(Accelerator* circuit,int argc, ...){
    return res;
 }
 
+FUInstance* GetInstanceByName_(FUDeclaration* decl,int argc, ...){
+   va_list args;
+   va_start(args,argc);
+
+   FUInstance* res = vGetInstanceByName_(decl->baseCircuit,argc,args);
+
+   va_end(args);
+
+   return res;
+}
+
 FUInstance* GetInstanceByName_(FUInstance* instance,int argc, ...){
    FUInstance* inst = (FUInstance*) instance;
 
@@ -592,16 +598,31 @@ FUInstance* GetInstanceByName_(FUInstance* instance,int argc, ...){
    return res;
 }
 
+Edge* FindEdge(FUInstance* out,int outIndex,FUInstance* in,int inIndex,int delay){
+   FUDeclaration* inDecl = in->declaration;
+   FUDeclaration* outDecl = out->declaration;
+
+   Assert(out->accel == in->accel);
+   Assert(inIndex < inDecl->nInputs);
+   Assert(outIndex < outDecl->nOutputs);
+
+   Accelerator* accel = out->accel;
+
+   for(Edge* edge : accel->edges){
+      if(edge->units[0].inst == (ComplexFUInstance*) out &&
+         edge->units[0].port == outIndex &&
+         edge->units[1].inst == (ComplexFUInstance*) in &&
+         edge->units[1].port == inIndex &&
+         edge->delay == delay) {
+         return edge;
+      }
+   }
+
+   return nullptr;
+}
+
 // Connects out -> in
-void ConnectUnits(PortInstance out,PortInstance in){
-   ConnectUnits(out.inst,out.port,in.inst,in.port);
-}
-
-void ConnectUnits(FUInstance* out,int outIndex,FUInstance* in,int inIndex){
-   ConnectUnitsWithDelay(out,outIndex,in,inIndex,0);
-}
-
-void ConnectUnitsWithDelay(FUInstance* out,int outIndex,FUInstance* in,int inIndex,int delay){
+Edge* ConnectUnitsGetEdge(FUInstance* out,int outIndex,FUInstance* in,int inIndex,int delay){
    FUDeclaration* inDecl = in->declaration;
    FUDeclaration* outDecl = out->declaration;
 
@@ -618,19 +639,35 @@ void ConnectUnitsWithDelay(FUInstance* out,int outIndex,FUInstance* in,int inInd
    edge->units[1].inst = (ComplexFUInstance*) in;
    edge->units[1].port = inIndex;
    edge->delay = delay;
+
+   return edge;
 }
 
-void ConnectUnitsIfNotConnected(FUInstance* out,int outIndex,FUInstance* in,int inIndex){
+void ConnectUnits(FUInstance* out,int outIndex,FUInstance* in,int inIndex,int delay){
+   ConnectUnitsGetEdge(out,outIndex,in,inIndex,delay);
+}
+
+void ConnectUnitsIfNotConnected(FUInstance* out,int outIndex,FUInstance* in,int inIndex,int delay){
+   ConnectUnitsIfNotConnectedGetEdge(out,outIndex,in,inIndex,delay);
+}
+
+Edge* ConnectUnitsIfNotConnectedGetEdge(FUInstance* out,int outIndex,FUInstance* in,int inIndex,int delay){
    Accelerator* accel = out->accel;
 
    for(Edge* edge : accel->edges){
-      if(edge->units[0].inst == out && edge->units[0].port == outIndex
-      && edge->units[1].inst == in  && edge->units[1].port == inIndex)
+      if(edge->units[0].inst == out && edge->units[0].port == outIndex &&
+         edge->units[1].inst == in  && edge->units[1].port == inIndex){
+         Assert(delay == edge->delay); // TODO: What to do if this isn't true? Add another edge with a different delay?
 
-      return;
+         return edge;
+      }
    }
 
-   ConnectUnits(out,outIndex,in,inIndex);
+   return ConnectUnitsGetEdge(out,outIndex,in,inIndex,delay);
+}
+
+Edge* ConnectUnits(PortInstance out,PortInstance in,int delay){
+   return ConnectUnitsGetEdge(out.inst,out.port,in.inst,in.port,delay);
 }
 
 FUDeclaration* RegisterFU(Versat* versat,FUDeclaration decl){

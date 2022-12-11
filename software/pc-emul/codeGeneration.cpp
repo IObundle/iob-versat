@@ -44,6 +44,9 @@ VersatComputedValues ComputeVersatValues(Versat* versat,Accelerator* accel){
       }
    }
 
+   res.staticBitsStart = res.configBits;
+   res.delayBitsStart = res.staticBitsStart + res.staticBits;
+
    // Versat specific registers are treated as a special maping (all 0's) of 1 configuration and 1 state register
    res.nConfigs += 1;
    res.nStates += 1;
@@ -178,6 +181,7 @@ void OutputVersatSource(Versat* versat,Accelerator* accel,const char* sourceFile
    TemplateSetCustom("accel",accel,"Accelerator");
    TemplateSetNumber("nStatics",val.nStatics);
    TemplateSetNumber("nDelays",val.nDelays);
+   TemplateSetNumber("delayStart",val.delayBitsStart);
 
    // Output configuration file
    TemplateSetCustom("instances",&accel->instances,"Pool<ComplexFUInstance>");

@@ -683,7 +683,7 @@ void AcceleratorView::CalculateGraphData(Arena* arena){
       inst->graphData->outputs = outputBuffer;
 
       for(int i = 0; i < numberEdges; i++){
-         Edge* edge = &edges[i];
+         Edge* edge = edges[i].edge;
 
          if(edge->units[0].inst == inst){
             outputBuffer->instConnectedTo = edge->units[1];
@@ -972,62 +972,6 @@ DAGOrder AcceleratorView::CalculateDAGOrdering(Arena* arena){
    return order;
 }
 
-SubgraphData SubGraphAroundInstance(Versat* versat,Accelerator* accel,ComplexFUInstance* instance,int layers){
-   NOT_IMPLEMENTED; // Use AcceleratorView to implement
-   return SubgraphData{};
-   #if 0
-   Accelerator* newAccel = CreateAccelerator(versat);
-   //newAccel->type = Accelerator::CIRCUIT;
-
-   std::set<ComplexFUInstance*> subgraphUnits;
-   std::set<ComplexFUInstance*> tempSubgraphUnits;
-   subgraphUnits.insert(instance);
-   for(int i = 0; i < layers; i++){
-      for(ComplexFUInstance* inst : subgraphUnits){
-         for(Edge* edge : accel->edges){
-            for(int i = 0; i < 2; i++){
-               if(edge->units[i].inst == inst){
-                  tempSubgraphUnits.insert(edge->units[1 - i].inst);
-                  break;
-               }
-            }
-         }
-      }
-
-      subgraphUnits.insert(tempSubgraphUnits.begin(),tempSubgraphUnits.end());
-      tempSubgraphUnits.clear();
-   }
-
-   InstanceMap map;
-   for(ComplexFUInstance* nonMapped : subgraphUnits){
-      ComplexFUInstance* mapped = (ComplexFUInstance*) CreateFUInstance(newAccel,nonMapped->declaration,nonMapped->name);
-      map.insert({nonMapped,mapped});
-   }
-
-   for(Edge* edge : accel->edges){
-      auto iter0 = map.find(edge->units[0].inst);
-      auto iter1 = map.find(edge->units[1].inst);
-
-      if(iter0 == map.end() || iter1 == map.end()){
-         continue;
-      }
-
-      Edge* newEdge = newAccel->edges.Alloc();
-
-      *newEdge = *edge;
-      newEdge->units[0].inst = iter0->second;
-      newEdge->units[1].inst = iter1->second;
-   }
-
-   SubgraphData data = {};
-
-   data.accel = newAccel;
-   data.instanceMapped = map.at(instance);
-
-   return data;
-   #endif
-}
-
 struct HuffmanBlock{
    int bits;
    ComplexFUInstance* instance; // TODO: Maybe add the instance index (on the list) so we can push to the left instances that appear first and make it easier to see the mapping taking place
@@ -1164,7 +1108,7 @@ AcceleratorView CreateAcceleratorView(Accelerator* accel,Arena* arena){
    AcceleratorView view = {};
 
    view.nodes = PushArray(arena,accel->instances.Size(),ComplexFUInstance*);
-   view.edges = PushArray(arena,accel->edges.Size(),Edge);
+   view.edges = PushArray(arena,accel->edges.Size(),EdgeView);
    view.validNodes.Init(arena,accel->instances.Size());
 
    std::unordered_map<ComplexFUInstance*,int> map;
@@ -1175,17 +1119,111 @@ AcceleratorView CreateAcceleratorView(Accelerator* accel,Arena* arena){
       view.numberNodes += 1;
    }
    for(Edge* edge : accel->edges){
-      Edge newEdge = {};
+      EdgeView newEdge = {};
 
       ComplexFUInstance* inst0 = edge->units[0].inst;
       ComplexFUInstance* inst1 = edge->units[1].inst;
 
-      newEdge = *edge;
-      newEdge.units[0].inst = view.nodes[map.find(inst0)->second];
-      newEdge.units[1].inst = view.nodes[map.find(inst1)->second];
+      newEdge.edge = edge;
+      newEdge.nodes[0] = &view.nodes[map.find(inst0)->second];
+      newEdge.nodes[1] = &view.nodes[map.find(inst1)->second];
 
       view.edges[view.numberEdges++] = newEdge;
    }
+
+   return view;
+}
+
+AcceleratorView CreateAcceleratorView(Accelerator* accel,std::vector<Edge*>& edgeMappings,Arena* arena){
+   AcceleratorView view = {};
+
+   view.edges = (EdgeView*) MarkArena(arena);
+   // Allocate edges first
+   for(Edge* edge : edgeMappings){
+      EdgeView* newEdge = PushStruct(arena,EdgeView);
+
+      newEdge->edge = edge;
+      view.numberEdges += 1;
+   }
+
+   std::unordered_map<ComplexFUInstance*,int> map;
+   view.nodes = (ComplexFUInstance**) MarkArena(arena);
+   for(int i = 0; i < view.numberEdges; i++){
+      EdgeView* edgeView = &view.edges[i];
+
+      Edge* edge = edgeView->edge;
+
+      for(int ii = 0; ii < 2; ii++){
+         ComplexFUInstance* node = edge->units[ii].inst;
+
+         auto iter = map.find(node);
+         ComplexFUInstance** mapping = nullptr;
+         if(iter == map.end()){
+            ComplexFUInstance** newNode = PushStruct(arena,ComplexFUInstance*);
+            map.insert({node,view.numberNodes});
+            view.numberNodes += 1;
+            *newNode = node;
+
+            mapping = newNode;
+         } else {
+            mapping = &view.nodes[iter->second];
+         }
+
+         edgeView->nodes[ii] = mapping;
+      }
+   }
+
+   view.validNodes.Init(arena,view.numberNodes);
+   view.validNodes.Fill(1);
+
+   return view;
+}
+
+AcceleratorView SubGraphAroundInstance(Versat* versat,Accelerator* accel,ComplexFUInstance* instance,int layers,Arena* arena){
+   AcceleratorView view = {};
+
+   view.edges = (EdgeView*) MarkArena(arena);
+   // Allocate edges first
+   for(Edge* edge : accel->edges){
+      if(!(edge->units[0].inst == instance || edge->units[1].inst == instance)){
+         continue;
+      }
+
+      EdgeView* newEdge = PushStruct(arena,EdgeView);
+
+      newEdge->edge = edge;
+      view.numberEdges += 1;
+   }
+
+   std::unordered_map<ComplexFUInstance*,int> map;
+   view.nodes = (ComplexFUInstance**) MarkArena(arena);
+   for(int i = 0; i < view.numberEdges; i++){
+      EdgeView* edgeView = &view.edges[i];
+
+      Edge* edge = edgeView->edge;
+
+      for(int ii = 0; ii < 2; ii++){
+         ComplexFUInstance* node = edge->units[ii].inst;
+
+         auto iter = map.find(node);
+         ComplexFUInstance** mapping = nullptr;
+         if(iter == map.end()){
+            ComplexFUInstance** newNode = PushStruct(arena,ComplexFUInstance*);
+            map.insert({node,view.numberNodes});
+            view.numberNodes += 1;
+            *newNode = node;
+
+            mapping = newNode;
+         } else {
+            mapping = &view.nodes[iter->second];
+         }
+
+         edgeView->nodes[ii] = mapping;
+      }
+   }
+
+   view.validNodes.Init(arena,view.numberNodes);
+   view.validNodes.Fill(1);
 
    return view;
 }
@@ -1321,7 +1359,7 @@ void FixMultipleInputs(Versat* versat,Accelerator* accel){
             // Connect edges to multiplexer
             int portsConnected = 0;
             for(int i = 0; i < view.numberEdges; i++){
-               Edge* edge = &view.edges[i];
+               Edge* edge = view.edges[i].edge;
                if(edge->units[1] == PortInstance{inst,port}){
                   edge->units[1].inst = multiplexer;
                   edge->units[1].port = portsConnected;

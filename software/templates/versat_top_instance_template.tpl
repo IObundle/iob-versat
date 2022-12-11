@@ -259,6 +259,7 @@ end
 #{set counter 0}
 #{set configDataIndex 0}
 #{set stateDataIndex 0}
+#{set delaySeen 0}
 #{set ioIndex 0}
 #{set memoryMappedIndex 0}
 #{set doneCounter 0}
@@ -292,8 +293,8 @@ end
       #{end}
 
       #{for i decl.nDelays}
-         .delay@{i}(configdata[@{configDataIndex}+:32]),
-      #{set configDataIndex configDataIndex + 32}
+         .delay@{i}(configdata[@{delayStart + (delaySeen * 32)}+:32]),
+      #{set delaySeen delaySeen + 1}
       #{end}
 
       #{for i decl.nStates}
