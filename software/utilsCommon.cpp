@@ -1,5 +1,7 @@
 #include "utils.hpp"
 
+#include <limits>
+
 int SimpleHash(SizedString hashing)
 {
    int res = 0;
@@ -149,6 +151,7 @@ bool FloatEqual(float f0,float f1,float epsilon){
    }
 
    float norm = Abs(f0) + Abs(f1);
+   norm = std::min(norm,std::numeric_limits<float>::max());
    float diff = Abs(f0 - f1);
 
    bool equal = diff < norm * epsilon;
