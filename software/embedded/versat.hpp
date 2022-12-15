@@ -61,5 +61,6 @@ void Hook(Versat* versat,Accelerator* accel,FUInstance* inst);
 #define MergeAccelerators(...) ((FUDeclaration*)0)
 #define Free(...) ((void)0)
 #define DisplayUnitConfiguration(...) ((void)0)
+#define CheckInputAndOutputNumber(...) ((void)0)
 
 #endif // INCLUDED_VERSAT

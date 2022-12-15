@@ -114,6 +114,9 @@ void CheckMemory(Accelerator* topLevel,Accelerator* accel);
 void DisplayAcceleratorMemory(Accelerator* topLevel);
 void DisplayUnitConfiguration(Accelerator* topLevel);
 
+// Debug units, only for pc-emul
+bool CheckInputAndOutputNumber(FUDeclaration* type,int inputs,int outputs);
+
 // Helper functions, useful to implement custom units
 int GetInputValue(FUInstance* instance,int port);
 int GetNumberOfInputs(FUInstance* inst);

@@ -91,6 +91,16 @@ void DisplayUnitConfiguration(AcceleratorView topLevel){
    }
 }
 
+bool CheckInputAndOutputNumber(FUDeclaration* type,int inputs,int outputs){
+   if(inputs > type->nInputs){
+      return false;
+   } else if(outputs > type->nOutputs){
+      return false;
+   }
+
+   return true;
+}
+
 bool IsGraphValid(AcceleratorView view){
    Assert(view.graphData);
 
@@ -380,7 +390,7 @@ void PrintVCD(FILE* accelOutputFile,Accelerator* accel,int time,int clock){ // N
    PrintVCD_(accelOutputFile,accel,time);
 }
 
-#if 1
+#if 0
 #include <ncurses.h>
 #include <signal.h>
 
