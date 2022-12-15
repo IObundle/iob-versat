@@ -100,7 +100,10 @@ SizedString PushString(Arena* arena,const char* format,...) __attribute__ ((form
 SizedString vPushString(Arena* arena,const char* format,va_list args);
 void PushNullByte(Arena* arena);
 #define PushStruct(ARENA,STRUCT) (STRUCT*) PushBytes(ARENA,sizeof(STRUCT))
-#define PushArray(ARENA,SIZE,STRUCT) (STRUCT*) PushBytes(ARENA,sizeof(STRUCT) * SIZE)
+#define PushArray(ARENA,SIZE,TYPE) PushArray_<TYPE>(ARENA,SIZE)
+
+template<typename T>
+Array<T> PushArray_(Arena* arena,int size){Array<T> res = {}; res.size = size; res.data = (T*) PushBytes(arena,sizeof(T) * size); return res;};
 
 class BitArray{
 public:

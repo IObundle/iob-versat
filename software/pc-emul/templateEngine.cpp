@@ -20,10 +20,10 @@ struct CompareFunction : public std::binary_function<SizedString, SizedString, b
 public:
    bool operator() (SizedString str1, SizedString str2) const{
       for(int i = 0; i < std::min(str1.size,str2.size); i++){
-         if(str1.str[i] < str2.str[i]){
+         if(str1[i] < str2[i]){
             return true;
          }
-         if(str1.str[i] > str2.str[i]){
+         if(str1[i] > str2[i]){
             return false;
          }
       }
@@ -79,24 +79,24 @@ static Command* ParseCommand(Tokenizer* tok){
                                                             {"format",-1}};
 
    bool found = false;
-
+   int commandSize = -1;
    for(unsigned int i = 0; i < ARRAY_SIZE(commands); i++){
       auto command = commands[i];
 
       if(CompareString(com->name,command.name)){
-         com->nExpressions = command.nExpressions;
+         commandSize = command.nExpressions;
          found = true;
          break;
       }
    }
    Assert(found);
 
-   if(com->nExpressions == -1){
+   if(commandSize == -1){
       Token peek = tok->PeekUntilDelimiterExpression({"{","@{","#{"},{"}"},1);
 
       Tokenizer arguments(peek,"}",{"@{","#{"});
 
-      com->nExpressions = 0;
+      commandSize = 0;
       while(!arguments.Done()){
          Token token = arguments.NextToken();
 
@@ -110,12 +110,12 @@ static Command* ParseCommand(Tokenizer* tok){
             arguments.AssertNextToken("}");
          }
 
-         com->nExpressions += 1;
+         commandSize += 1;
       }
    }
 
-   com->expressions = PushArray(tempArena,com->nExpressions,Expression*);
-   for(int i = 0; i < com->nExpressions; i++){
+   com->expressions = PushArray(tempArena,commandSize,Expression*);
+   for(int i = 0; i < com->expressions.size; i++){
       com->expressions[i] = ParseExpression(tok);
    }
 
@@ -139,7 +139,6 @@ static Expression* ParseIdentifier(Expression* current,Tokenizer* tok){
          expr->expressions = PushArray(tempArena,2,Expression*);
 
          expr->type = Expression::ARRAY_ACCESS;
-         expr->size = 2;
          expr->expressions[0] = current;
          expr->expressions[1] = ParseExpression(tok);
 
@@ -155,7 +154,6 @@ static Expression* ParseIdentifier(Expression* current,Tokenizer* tok){
 
          expr->type = Expression::MEMBER_ACCESS;
          expr->id = memberName;
-         expr->size = 1;
          expr->expressions[0] = current;
 
          current = expr;
@@ -175,17 +173,17 @@ static Expression* ParseAtom(Tokenizer* tok,Arena* arena){
    expr->type = Expression::LITERAL;
 
    Token token = tok->PeekToken();
-   if(token.str[0] >= '0' && token.str[0] <= '9'){
+   if(token[0] >= '0' && token[0] <= '9'){
       tok->AdvancePeek(token);
       int num = 0;
 
       for(int i = 0; i < token.size; i++){
          num *= 10;
-         num += token.str[i] - '0';
+         num += token[i] - '0';
       }
 
       expr->val = MakeValue(num);
-   } else if(token.str[0] == '\"'){
+   } else if(token[0] == '\"'){
       tok->AdvancePeek(token);
       Token str = tok->NextFindUntil("\"");
       tok->AssertNextToken("\"");
@@ -228,11 +226,10 @@ static Expression* ParseFactor(Tokenizer* tok){
       Expression* child = ParseExpression(tok);
 
       expr = PushStruct(tempArena,Expression);
-      expr->expressions = PushStruct(tempArena,Expression*);
+      expr->expressions = PushArray(tempArena,1,Expression*);
 
       expr->type = Expression::OPERATION;
       expr->op = "!";
-      expr->size = 1;
       expr->expressions[0] = child;
 
       expr->text = tok->Point(start);
@@ -384,7 +381,7 @@ static Value EscapeSizedString(Value val){
    SizedString str = val.str;
 
    SizedString escaped = PushString(tempArena,str);
-   char* view = (char*) escaped.str;
+   char* view = (char*) escaped.data;
 
    for(int i = 0; i < escaped.size; i++){
       char ch = view[i];
@@ -567,7 +564,7 @@ static Value EvalExpression(Expression* expr){
 static SizedString EvalBlockCommand(Block* block){
    Command* com = block->command;
    SizedString res = {};
-   res.str = MarkArena(outputArena);
+   res.data = MarkArena(outputArena);
 
    if(CompareString(com->name,"join")){
       Value separator = EvalExpression(com->expressions[0]);
@@ -594,7 +591,7 @@ static SizedString EvalBlockCommand(Block* block){
          }
 
          if(outputSeparator){
-            res.size += PushString(outputArena,"%.*s",separator.str.size,separator.str.str).size;
+            res.size += PushString(outputArena,"%.*s",separator.str.size,separator.str.data).size;
          }
 
          counter += 1;
@@ -659,7 +656,7 @@ static SizedString EvalBlockCommand(Block* block){
       TemplateFunction* func = PushStruct(tempArena,TemplateFunction);
 
       func->arguments = &com->expressions[1];
-      func->numberArguments = com->nExpressions - 1;
+      func->numberArguments = com->expressions.size - 1;
       func->block = block->nextInner;
 
       Value val = {};
@@ -676,7 +673,7 @@ static SizedString EvalBlockCommand(Block* block){
 static ValueAndText EvalNonBlockCommand(Command* com){
    Value val = MakeValue();
    SizedString text = {};
-   text.str = MarkArena(outputArena);
+   text.data = MarkArena(outputArena);
 
    if(CompareString(com->name,"set")){
       val = EvalExpression(com->expressions[1]);
@@ -721,7 +718,7 @@ static ValueAndText EvalNonBlockCommand(Command* com){
 
       TemplateFunction* func = iter->second.templateFunction;
 
-      Assert(func->numberArguments == com->nExpressions - 1);
+      Assert(func->numberArguments == com->expressions.size - 1);
 
       for(int i = 0; i < func->numberArguments; i++){
          SizedString id = func->arguments[i]->id;
@@ -751,7 +748,7 @@ static ValueAndText EvalNonBlockCommand(Command* com){
 
       Tokenizer tok(format,"{}",{});
       Byte* mark = MarkArena(outputArena);
-      text.str = mark;
+      text.data = mark;
 
       while(!tok.Done()){
          Token simpleText = tok.PeekFindUntil("{");
@@ -774,7 +771,7 @@ static ValueAndText EvalNonBlockCommand(Command* com){
 
          int index = ParseInt(indexText);
 
-         Assert(index < com->nExpressions + 1);
+         Assert(index < com->expressions.size + 1);
 
          Value val = ConvertValue(EvalExpression(com->expressions[index + 1]),ValueType::SIZED_STRING,tempArena);
 
@@ -793,7 +790,7 @@ static ValueAndText EvalNonBlockCommand(Command* com){
 
 static SizedString Eval(Block* block){
    SizedString res = {};
-   res.str = MarkArena(outputArena);
+   res.data = MarkArena(outputArena);
 
    if(block->type == Block::COMMAND){
       if(IsCommandBlockType(block->command)){
@@ -847,7 +844,7 @@ void ParseAndEvaluate(SizedString content){
       Block* block = Parse(tok);
 
       SizedString text = Eval(block);
-      fprintf(output,"%.*s",text.size,text.str);
+      fprintf(output,"%.*s",text.size,text.data);
       fflush(output);
    }
 }

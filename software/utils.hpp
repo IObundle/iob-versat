@@ -21,6 +21,7 @@
 
 #define PrintFileAndLine() printf("%s:%d\n",__FILE__,__LINE__)
 
+void FlushStdout();
 #ifdef PC
 #define Assert(EXPR) \
    do { \
@@ -43,10 +44,28 @@
 
 typedef char Byte;
 
-struct SizedString{
-   const char* str;
-   int size;
+template<typename T>
+class ArrayIterator{
+public:
+   T* ptr;
+
+   inline bool operator!=(const ArrayIterator<T>& iter){return ptr != iter.ptr;};
+   inline ArrayIterator<T>& operator++(){++ptr; return *this;};
+   inline T& operator*(){return *ptr;};
 };
+
+template<typename T>
+class Array{
+public:
+   T* data;
+   int size;
+
+   inline T& operator[](int index) const {Assert(index < size); return data[index];} // Assert + function call could trash performance really bad. Eventually profile and replace with direct access if the case
+   ArrayIterator<T> begin(){return ArrayIterator<T>{data};};
+   ArrayIterator<T> end(){return ArrayIterator<T>{data + size};};
+};
+
+typedef Array<const char> SizedString;
 
 char* SizedStringToCStr(SizedString s); // Uses static buffer, care
 
@@ -64,8 +83,8 @@ template<> class std::hash<SizedString>{
    }
 };
 
-#define UNPACK_SS(STR) STR.size,STR.str
-#define UNPACK_SS_REVERSE(STR) STR.str,STR.size
+#define UNPACK_SS(STR) STR.size,STR.data
+#define UNPACK_SS_REVERSE(STR) STR.data,STR.size
 
 #define MakeSizedString1(STR) ((SizedString){STR,(int) strlen(STR)})
 #define MakeSizedString2(STR,LEN) ((SizedString){STR,(int) (LEN)})
@@ -116,8 +135,6 @@ char GetHex(int value);
 // Weak random generator but produces same results in pc-emul and in simulation
 void SeedRandomNumber(uint seed);
 uint GetRandomNumber();
-
-void FlushStdout();
 
 long int GetFileSize(FILE* file);
 char* GetCurrentDirectory();

@@ -3,6 +3,9 @@
 
 #include "versatPrivate.hpp"
 
-SizedString Repr(Versat* versat,FUInstance* inst,Arena* arena,bool printDelay = false);
+SizedString Repr(FUInstance* inst,Arena* arena,bool printDelay = false);
+SizedString Repr(FUDeclaration* decl,Arena* arena);
+SizedString Repr(PortInstance port,Arena* memory);
+SizedString Repr(MappingNode* node,Arena* memory);
 
 #endif // INCLUDED_TEXTUAL_REPRESENTATION

@@ -22,6 +22,9 @@ Delay and Time:
       Maybe the concept should be applied to the unit itself, and not to the edge. But if so, it would be hard to propagate that info accross hierarquies. 
          For now, let the circuit designer handle this by setting himself the constant edges and stuff.
 
++  Remove base delay from FUInstance. Unneeded for multiple instances, should be replace by storing data on the FUDeclaration.
+      A "hack" that shouldn't have been made, doesn't even work for merged accelerators, as we can have multiple base delays.
+
    Change the Calculate Delay function to work from the inputs towards the outputs.
       Add a simple mem unit that is connected to the vread of SHA to see the problem. (The mem unit is left with a delay of 67, when it should be close to 3 due to vread latency)
 
@@ -46,6 +49,10 @@ Accelerator View:
 >  For now, try to propagate AcceleratorViews as further as possible. If a function currently needs to create a AcceleratorView, changing it so that it takes it as a parameter and checks inside if it's correct.
       Only user level functions should have a need to create AcceleratorViews. Everything else takes.
 
+Merge:
+
+   Represent input and output mapping as specifics.
+
 +  Graph data:
 
    Add a array that maps directly to inputs if they exist, nullptr if they do not and only a single value if multiple inputs exist. Also had a flag saying that multiple inputs exit. Useful for templating.
@@ -62,6 +69,9 @@ Accelerator View:
 -  Optimization:
 
    Make an unordered_map class that takes an arena and the amount of memory needed right of the bat.
+
+   Profile the effects of the assertions in the code. Make sure debug mode isn't running too slow when compared to release
+      Especial attention to the Array class operator[]. 
 
 -  Template:
 

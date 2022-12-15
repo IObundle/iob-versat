@@ -399,7 +399,7 @@ void ParseHeaderFile(Tokenizer* tok){
          // Skip typedef of functions by checking if a '(' or a ')' appears in the line
          bool cont = false;
          for(int i = 0; i < line.size; i++){
-            if(line.str[i] == '(' || line.str[i] == ')'){
+            if(line[i] == '(' || line[i] == ')'){
                cont = true;
             }
          }

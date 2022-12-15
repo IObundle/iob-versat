@@ -10,10 +10,10 @@
 
 bool operator<(const SizedString& lhs,const SizedString& rhs){
    for(int i = 0; i < std::min(lhs.size,rhs.size); i++){
-      if(lhs.str[i] < rhs.str[i]){
+      if(lhs[i] < rhs[i]){
          return true;
       }
-      if(lhs.str[i] > rhs.str[i]){
+      if(lhs[i] > rhs[i]){
          return false;
       }
    }
@@ -63,12 +63,12 @@ SizedString PathGoUp(char* pathBuffer){
 
    int i = content.size - 1;
    for(; i >= 0; i--){
-      if(content.str[i] == '/'){
+      if(content[i] == '/'){
          break;
       }
    }
 
-   if(content.str[i] != '/'){
+   if(content[i] != '/'){
       return content;
    }
 

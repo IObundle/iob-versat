@@ -103,7 +103,7 @@ Byte* PushBytes(Arena* arena, int size){
 
 SizedString PointArena(Arena* arena,Byte* mark){
    SizedString res = {};
-   res.str = mark;
+   res.data = mark;
    res.size = &arena->mem[arena->used] - mark;
    return res;
 }
@@ -126,7 +126,7 @@ SizedString PushFile(Arena* arena,const char* filepath){
    fclose(file);
 
    res.size = size;
-   res.str = (const char*) mem;
+   res.data = (const char*) mem;
 
    return res;
 }
@@ -134,10 +134,10 @@ SizedString PushFile(Arena* arena,const char* filepath){
 SizedString PushString(Arena* arena,SizedString ss){
    Byte* mem = PushBytes(arena,ss.size);
 
-   memcpy(mem,ss.str,ss.size);
+   memcpy(mem,ss.data,ss.size);
 
    SizedString res = {};
-   res.str = (const char*) mem;
+   res.data = (const char*) mem;
    res.size = ss.size;
 
    return res;

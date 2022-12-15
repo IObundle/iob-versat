@@ -25,12 +25,11 @@ enum DelayType {
 inline DelayType operator|(DelayType a, DelayType b)
 {return static_cast<DelayType>(static_cast<int>(a) | static_cast<int>(b));}
 
-template<typename Node,typename Edge>
-struct Graph{
-   Node* nodes;
-   int numberNodes;
-   Edge* edges;
-   int numberEdges;
+template<typename Node,typename Edge> //
+class Graph{
+public:
+   Array<Node> nodes;
+   Array<Edge> edges;
 
    BitArray validNodes;
 };
@@ -123,6 +122,7 @@ struct GraphComputedData{
    int outputPortsUsed;
    ConnectionInfo* inputs;
    ConnectionInfo* outputs;
+   Array<PortInstance> inputToPortInstance;
    enum {TAG_UNCONNECTED,TAG_COMPUTE,TAG_SOURCE,TAG_SINK,TAG_SOURCE_AND_SINK} nodeType;
    int inputDelay;
    int order;
@@ -190,16 +190,6 @@ struct Versat{
    std::vector<const char*> includeDirs;
 };
 
-struct DAGOrder{
-   ComplexFUInstance** sinks;
-   int numberSinks;
-   ComplexFUInstance** sources;
-   int numberSources;
-   ComplexFUInstance** computeUnits;
-   int numberComputeUnits;
-   ComplexFUInstance** instances;
-};
-
 struct Test{
    FUInstance* inst;
    ComplexFUInstance storedValues;
@@ -238,6 +228,16 @@ struct Accelerator{ // Graph + data storage
 struct EdgeView{
    Edge* edge; // Points to edge inside accelerator
    ComplexFUInstance** nodes[2]; // Points to node inside AcceleratorView
+};
+
+struct DAGOrder{
+   ComplexFUInstance** sinks;
+   int numberSinks;
+   ComplexFUInstance** sources;
+   int numberSources;
+   ComplexFUInstance** computeUnits;
+   int numberComputeUnits;
+   ComplexFUInstance** instances;
 };
 
 // Graph associated to an accelerator
@@ -480,4 +480,5 @@ template<> class std::hash<StaticId>{
       return (std::size_t) res;
    }
 };
+
 #endif // INCLUDED_VERSAT_PRIVATE_HPP

@@ -13,9 +13,8 @@ struct Command;
 struct Expression{
    const char* op;
    SizedString id;
-   Expression** expressions;
+   Array<Expression*> expressions;
    Command* command;
-   int size;
    Value val;
    SizedString text;
 

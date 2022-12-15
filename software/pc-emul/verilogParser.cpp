@@ -219,7 +219,7 @@ SizedString PreprocessVerilogFile(Arena* output, SizedString fileContent,std::ve
    tempArena = arena;
 
    SizedString res = {};
-   res.str = (const char*) &output->mem[output->used];
+   res.data = (const char*) &output->mem[output->used];
    Byte* mark = MarkArena(output);
 
    Byte* tempMark = MarkArena(tempArena);
@@ -243,7 +243,7 @@ static Expression* ParseAtom(Tokenizer* tok){
 
    Token peek = tok->PeekToken();
 
-   if(IsNum(peek.str[0])){
+   if(IsNum(peek[0])){
       int res = ParseInt(peek);
       tok->AdvancePeek(peek);
 
@@ -251,7 +251,7 @@ static Expression* ParseAtom(Tokenizer* tok){
       expr->type = Expression::LITERAL;
 
       return expr;
-   } else if(peek.str[0] == '"'){
+   } else if(peek[0] == '"'){
       tok->AdvancePeek(peek);
       Token str = tok->PeekFindUntil("\"");
       tok->AdvancePeek(str);
@@ -612,10 +612,10 @@ int main(int argc,const char* argv[]){
       for(Module& module : modules){
          ModuleInfo info = {};
 
-         info.inputDelays = PushArray(&permanent,100,int);
-         info.outputLatencies = PushArray(&permanent,100,int);
-         info.configs = PushArray(&permanent,100,Wire);
-         info.states = PushArray(&permanent,100,Wire);
+         info.inputDelays = PushArray(&permanent,100,int).data;
+         info.outputLatencies = PushArray(&permanent,100,int).data;
+         info.configs = PushArray(&permanent,100,Wire).data;
+         info.states = PushArray(&permanent,100,Wire).data;
 
          info.name = module.name;
          info.isSource = module.isSource;

@@ -9,8 +9,7 @@ struct Expression;
 struct Command{
    SizedString name;
 
-   Expression** expressions;
-   int nExpressions;
+   Array<Expression*> expressions;
 };
 
 struct Block{

@@ -928,7 +928,7 @@ FUDeclaration* RegisterSubUnit(Versat* versat,SizedString name,Accelerator* circ
    decl.memoryMapBits = val.memoryMappedBits;
    decl.memAccessFunction = CompositeMemoryAccess;
 
-   decl.inputDelays = PushArray(&versat->permanent,decl.nInputs,int);
+   decl.inputDelays = PushArray(&versat->permanent,decl.nInputs,int).data;
 
    int i = 0;
    int minimum = (1 << 30);
@@ -937,7 +937,7 @@ FUDeclaration* RegisterSubUnit(Versat* versat,SizedString name,Accelerator* circ
       minimum = std::min(minimum,(*input)->baseDelay);
    }
 
-   decl.latencies = PushArray(&versat->permanent,decl.nOutputs,int);
+   decl.latencies = PushArray(&versat->permanent,decl.nOutputs,int).data;
 
    if(circuit->outputInstance){
       for(int i = 0; i < decl.nOutputs; i++){
@@ -945,8 +945,8 @@ FUDeclaration* RegisterSubUnit(Versat* versat,SizedString name,Accelerator* circ
       }
    }
 
-   decl.configWires = PushArray(&versat->permanent,decl.nConfigs,Wire);
-   decl.stateWires = PushArray(&versat->permanent,decl.nStates,Wire);
+   decl.configWires = PushArray(&versat->permanent,decl.nConfigs,Wire).data;
+   decl.stateWires = PushArray(&versat->permanent,decl.nStates,Wire).data;
 
    int configIndex = 0;
    int stateIndex = 0;
@@ -1155,8 +1155,8 @@ FUDeclaration* RegisterIterativeUnit(Versat* versat,IterativeUnitDeclaration* de
    declaration.destroyFunction = IterativeDestroyFunction;
    declaration.memAccessFunction = CompositeMemoryAccess;
 
-   declaration.inputDelays = PushArray(&versat->permanent,declaration.nInputs,int);
-   declaration.latencies = PushArray(&versat->permanent,declaration.nOutputs,int);
+   declaration.inputDelays = PushArray(&versat->permanent,declaration.nInputs,int).data;
+   declaration.latencies = PushArray(&versat->permanent,declaration.nOutputs,int).data;
    Memset(declaration.inputDelays,0,declaration.nInputs);
    Memset(declaration.latencies,decl->latency,declaration.nOutputs);
 
@@ -1563,7 +1563,7 @@ void SetDelayRecursive(Accelerator* accel){
 
 bool CheckValidName(SizedString name){
    for(int i = 0; i < name.size; i++){
-      char ch = name.str[i];
+      char ch = name[i];
 
       bool allowed = (ch >= 'a' && ch <= 'z')
                  ||  (ch >= 'A' && ch <= 'Z')

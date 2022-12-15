@@ -8,7 +8,7 @@ int SimpleHash(SizedString hashing)
 
    int prime = 5;
    for(int i = 0; i < hashing.size; i++){
-      res += (int) hashing.str[i] * prime;
+      res += (int) hashing[i] * prime;
       res <<= 4;
       prime += 6; // Some not prime, but will find most of them
    }
@@ -21,7 +21,7 @@ char* SizedStringToCStr(SizedString s){
 
    Assert(s.size < 1023);
 
-   memcpy(buffer,s.str,s.size);
+   memcpy(buffer,s.data,s.size);
    buffer[s.size] = '\0';
 
    return buffer;
@@ -239,7 +239,7 @@ uint GetRandomNumber(){
 void FixedStringCpy(char* dest,SizedString src){
    int i = 0;
    for(i = 0; i < src.size; i++){
-      dest[i] = src.str[i];
+      dest[i] = src[i];
    }
    dest[i] = '\0';
 }
@@ -250,7 +250,7 @@ bool CompareString(SizedString str1,SizedString str2){
    }
 
    for(int i = 0; i < str1.size; i++){
-      if(str1.str[i] != str2.str[i]){
+      if(str1[i] != str2[i]){
          return false;
       }
    }

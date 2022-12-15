@@ -1,4 +1,6 @@
 #include "versatPrivate.hpp"
+#include "debug.hpp"
+#include "textualRepresentation.hpp"
 
 #include <cstdarg>
 #include <unordered_map>
@@ -165,7 +167,7 @@ ConsolidationGraph Copy(ConsolidationGraph graph,Arena* arena){
    ConsolidationGraph res = {};
 
    res = graph;
-   res.validNodes.Init(arena,graph.numberNodes);
+   res.validNodes.Init(arena,graph.nodes.size);
    res.validNodes.Copy(graph.validNodes);
 
    return res;
@@ -173,7 +175,7 @@ ConsolidationGraph Copy(ConsolidationGraph graph,Arena* arena){
 
 int NumberNodes(ConsolidationGraph graph){
    int num = 0;
-   for(int i = 0; i < graph.numberNodes; i++){
+   for(int i = 0; i < graph.nodes.size; i++){
       if(graph.validNodes.Get(i)){
          num += 1;
       }
@@ -183,13 +185,13 @@ int NumberNodes(ConsolidationGraph graph){
 }
 
 int NodeIndex(ConsolidationGraph graph,MappingNode* node){
-   int index = node - graph.nodes;
+   int index = node - graph.nodes.data;
    return index;
 }
 
 int ValidNodes(ConsolidationGraph graph){
    int count = 0;
-   for(int i = 0; i < graph.numberNodes; i++){
+   for(int i = 0; i < graph.nodes.size; i++){
       if(graph.validNodes.Get(i)){
          count += 1;
       }
@@ -214,7 +216,7 @@ IsCliqueResult IsClique(ConsolidationGraph graph,BitArray* neighbors,Arena* aren
       return res;
    }
 
-   for(int i = 0; i < graph.numberNodes; i++){
+   for(int i = 0; i < graph.nodes.size; i++){
       MappingNode* node = &graph.nodes[i];
 
       if(!graph.validNodes.Get(i)){
@@ -222,7 +224,7 @@ IsCliqueResult IsClique(ConsolidationGraph graph,BitArray* neighbors,Arena* aren
       }
 
       int count = 0;
-      for(int ii = 0; ii < graph.numberEdges; ii++){
+      for(int ii = 0; ii < graph.edges.size; ii++){
          MappingEdge* edge = &graph.edges[ii];
 
          // Only count edge if both nodes are valid
@@ -297,7 +299,7 @@ void Clique(CliqueState* state,ConsolidationGraph graphArg,IndexRecord* record,i
       }
 
       int i;
-      for(i = 0; i < graph.numberNodes; i++){
+      for(i = 0; i < graph.nodes.size; i++){
          if(graph.validNodes.Get(i)){
             break;
          }
@@ -331,13 +333,13 @@ void Clique(CliqueState* state,ConsolidationGraph graphArg,IndexRecord* record,i
 }
 
 BitArray* CalculateNeighborsTable(ConsolidationGraph graph,Arena* arena){
-   BitArray* neighbors = PushArray(arena,graph.numberNodes,BitArray);
-   for(int i = 0; i < graph.numberNodes; i++){
-      neighbors[i].Init(arena,graph.numberNodes);
+   BitArray* neighbors = PushArray(arena,graph.nodes.size,BitArray).data;
+   for(int i = 0; i < graph.nodes.size; i++){
+      neighbors[i].Init(arena,graph.nodes.size);
       neighbors[i].Fill(0);
    }
 
-   for(int i = 0; i < graph.numberEdges; i++){
+   for(int i = 0; i < graph.edges.size; i++){
       MappingEdge edge = graph.edges[i];
 
       int index0 = NodeIndex(graph,edge.nodes[0]);
@@ -352,7 +354,7 @@ BitArray* CalculateNeighborsTable(ConsolidationGraph graph,Arena* arena){
 
 ConsolidationGraph MaxClique(ConsolidationGraph graph,Arena* arena){
    CliqueState state = {};
-   state.table = PushArray(arena,graph.numberNodes,int);
+   state.table = PushArray(arena,graph.nodes.size,int).data;
    state.clique = Copy(graph,arena); // Preserve nodes and edges, but allocates different valid nodes
    state.start = std::chrono::steady_clock::now();
 
@@ -361,11 +363,11 @@ ConsolidationGraph MaxClique(ConsolidationGraph graph,Arena* arena){
    // Pre calculate nodes neighbors
    BitArray* neighbors = CalculateNeighborsTable(graph,arena);
 
-   for(int i = graph.numberNodes - 1; i >= 0; i--){
+   for(int i = graph.nodes.size - 1; i >= 0; i--){
       Byte* mark = MarkArena(arena);
 
       state.found = false;
-      for(int j = i; j < graph.numberNodes; j++){
+      for(int j = i; j < graph.nodes.size; j++){
          graph.validNodes.Set(j,1);
       }
 
@@ -444,7 +446,7 @@ inline bool EdgeOrder(Edge* edge,ConsolidationGraphOptions options){
 ConsolidationGraph GenerateConsolidationGraph(Versat* versat,Arena* arena,Accelerator* accel1,Accelerator* accel2,ConsolidationGraphOptions options){
    ConsolidationGraph graph = {};
 
-   graph.nodes = (MappingNode*) MarkArena(arena);
+   graph.nodes.data = (MappingNode*) MarkArena(arena);
 
    // Insert specific mappings first (the first mapping nodes are the specifics)
    #if 1
@@ -457,7 +459,7 @@ ConsolidationGraph GenerateConsolidationGraph(Versat* versat,Arena* arena,Accele
       node->nodes.instances[0] = specific.instA;
       node->nodes.instances[1] = specific.instB;
 
-      graph.numberNodes += 1;
+      graph.nodes.size += 1;
    }
    #endif
 
@@ -506,7 +508,7 @@ ConsolidationGraph GenerateConsolidationGraph(Versat* versat,Arena* arena,Accele
          MappingNode* space = PushStruct(arena,MappingNode);
 
          *space = node;
-         graph.numberNodes += 1;
+         graph.nodes.size += 1;
       }
    }
    #endif
@@ -579,12 +581,13 @@ ConsolidationGraph GenerateConsolidationGraph(Versat* versat,Arena* arena,Accele
             MappingNode* space = PushStruct(arena,MappingNode);
 
             *space = node;
-            graph.numberNodes += 1;
+            graph.nodes.size += 1;
          }
       }
    }
    #endif
 
+   #if 0
    // Map outputs
    if(accel1->outputInstance && accel2->outputInstance){
       MappingNode* node = PushStruct(arena,MappingNode);
@@ -593,7 +596,7 @@ ConsolidationGraph GenerateConsolidationGraph(Versat* versat,Arena* arena,Accele
       node->nodes.instances[0] = accel1->outputInstance;
       node->nodes.instances[1] = accel2->outputInstance;
 
-      graph.numberNodes += 1;
+      graph.nodes.size += 1;
    }
 
    // Map inputs
@@ -617,15 +620,16 @@ ConsolidationGraph GenerateConsolidationGraph(Versat* versat,Arena* arena,Accele
          node->nodes.instances[0] = instA;
          node->nodes.instances[1] = instB;
 
-         graph.numberNodes += 1;
+         graph.nodes.size += 1;
       }
    }
+   #endif
 
-   graph.edges = (MappingEdge*) MarkArena(arena);
+   graph.edges.data = (MappingEdge*) MarkArena(arena);
    int times = 0;
    bool runOutOfSpace = false;
    // Check edge conflicts
-   for(int i = 0; i < graph.numberNodes; i++){
+   for(int i = 0; i < graph.nodes.size; i++){
       for(int ii = 0; ii < i; ii++){
          times += 1;
 
@@ -647,22 +651,22 @@ ConsolidationGraph GenerateConsolidationGraph(Versat* versat,Arena* arena,Accele
          }
          #endif
 
-         graph.numberEdges += 1;
+         graph.edges.size += 1;
       }
    }
 
    if(runOutOfSpace){
-      printf("No more space Nodes: %d Edges: %d\n",graph.numberNodes,graph.numberEdges);
+      printf("No more space Nodes: %d Edges: %d\n",graph.nodes.size,graph.edges.size);
       return graph;
    }
 
    // Reorder vertices
    #if 01
-   int nodes = graph.numberNodes;
-   int* degree = PushArray(arena,nodes,int);
+   int nodes = graph.nodes.size;
+   int* degree = PushArray(arena,nodes,int).data;
    Memset(degree,0,nodes);
 
-   for(int i = 0; i < graph.numberEdges; i++){
+   for(int i = 0; i < graph.edges.size; i++){
       MappingEdge* edge = &graph.edges[i];
 
       int node0 = NodeIndex(graph,edge->nodes[0]);
@@ -672,7 +676,7 @@ ConsolidationGraph GenerateConsolidationGraph(Versat* versat,Arena* arena,Accele
       degree[node1] += 1;
    }
 
-   int* indexToMinimumNode = PushArray(arena,nodes,int);
+   int* indexToMinimumNode = PushArray(arena,nodes,int).data;
    for(int i = 0; i < nodes; i++){
       int minimum = 999999;
       int minimumIndex = -1;
@@ -689,7 +693,7 @@ ConsolidationGraph GenerateConsolidationGraph(Versat* versat,Arena* arena,Accele
       indexToMinimumNode[minimumIndex] = i;
 
       // Remove degree for every neighbor
-      for(int ii = 0; ii < graph.numberEdges; ii++){
+      for(int ii = 0; ii < graph.edges.size; ii++){
          MappingEdge* edge = &graph.edges[ii];
 
          int node0 = NodeIndex(graph,edge->nodes[0]);
@@ -716,7 +720,7 @@ ConsolidationGraph GenerateConsolidationGraph(Versat* versat,Arena* arena,Accele
    }
    #endif
 
-   MappingNode* newMapping = PushArray(arena,nodes,MappingNode);
+   MappingNode* newMapping = PushArray(arena,nodes,MappingNode).data;
 
    for(int i = 0; i < nodes; i++){
       int mapped = indexToMinimumNode[i];
@@ -725,7 +729,7 @@ ConsolidationGraph GenerateConsolidationGraph(Versat* versat,Arena* arena,Accele
    }
 
    // Update edges
-   for(int i = 0; i < graph.numberEdges; i++){
+   for(int i = 0; i < graph.edges.size; i++){
       MappingEdge* edge = &graph.edges[i];
 
       int node0 = NodeIndex(graph,edge->nodes[0]);
@@ -738,7 +742,7 @@ ConsolidationGraph GenerateConsolidationGraph(Versat* versat,Arena* arena,Accele
       edge->nodes[1] = &newMapping[m1];
    }
 
-   graph.nodes = newMapping;
+   graph.nodes.data = newMapping;
 
    // Check if reordering is correct
    #if 0
@@ -762,46 +766,12 @@ ConsolidationGraph GenerateConsolidationGraph(Versat* versat,Arena* arena,Accele
 
    #endif
 
-   graph.validNodes.Init(arena,graph.numberNodes);
+   graph.validNodes.Init(arena,graph.nodes.size);
    graph.validNodes.Fill(1);
 
    return graph;
 }
 
-SizedString PortInstanceIdentifier(PortInstance port,Arena* memory){
-   FUInstance* inst = port.inst;
-   FUDeclaration* decl = inst->declaration;
-
-   SizedString res = PushString(memory,"%.*s_%d:%.*s",UNPACK_SS(inst->name),port.port,UNPACK_SS(decl->name));
-   return res;
-}
-
-SizedString MappingNodeIdentifier(MappingNode* node,Arena* memory){
-   SizedString name = {};
-   if(node->type == MappingNode::NODE){
-      FUInstance* n0 = node->nodes.instances[0];
-      FUInstance* n1 = node->nodes.instances[1];
-
-      name = PushString(memory,"%.*s -- %.*s",UNPACK_SS(n0->name),UNPACK_SS(n1->name));
-   } else if(node->type == MappingNode::EDGE){
-      PortEdge e0 = node->edges[0];
-      PortEdge e1 = node->edges[1];
-
-      Byte* mark = MarkArena(memory);
-      PortInstanceIdentifier(e0.units[0],memory);
-      PushString(memory," -- ");
-      PortInstanceIdentifier(e0.units[1],memory);
-      PushString(memory,"/");
-      PortInstanceIdentifier(e1.units[0],memory);
-      PushString(memory," -- ");
-      PortInstanceIdentifier(e1.units[1],memory);
-      name = PointArena(memory,mark);
-   } else {
-      NOT_IMPLEMENTED;
-   }
-
-   return name;
-}
 
 static void OutputConsolidationGraph(ConsolidationGraph graph,Arena* memory,bool onlyOutputValid,const char* format,...){
    va_list args;
@@ -812,10 +782,10 @@ static void OutputConsolidationGraph(ConsolidationGraph graph,Arena* memory,bool
 
    va_end(args);
 
-   FILE* outputFile = fopen(fileName.str,"w");
+   FILE* outputFile = fopen(fileName.data,"w");
 
    fprintf(outputFile,"graph GraphName {\n\tnode [fontcolor=white,style=filled,color=\"160,60,176\"];\n");
-   for(int i = 0; i < graph.numberNodes; i++){
+   for(int i = 0; i < graph.nodes.size; i++){
       MappingNode* node = &graph.nodes[i];
 
       if(onlyOutputValid && !graph.validNodes.Get(i)){
@@ -823,10 +793,10 @@ static void OutputConsolidationGraph(ConsolidationGraph graph,Arena* memory,bool
       }
 
       ArenaMarker marker(memory);
-      fprintf(outputFile,"\t\"%.*s\";\n",UNPACK_SS(MappingNodeIdentifier(node,memory)));
+      fprintf(outputFile,"\t\"%.*s\";\n",UNPACK_SS(Repr(node,memory)));
    }
 
-   for(int i = 0; i < graph.numberEdges; i++){
+   for(int i = 0; i < graph.edges.size; i++){
       MappingEdge* edge = &graph.edges[i];
 
       if(onlyOutputValid){
@@ -839,8 +809,8 @@ static void OutputConsolidationGraph(ConsolidationGraph graph,Arena* memory,bool
       }
 
       ArenaMarker marker(memory);
-      SizedString node1 = MappingNodeIdentifier(edge->nodes[0],memory);
-      SizedString node2 = MappingNodeIdentifier(edge->nodes[1],memory);
+      SizedString node1 = Repr(edge->nodes[0],memory);
+      SizedString node2 = Repr(edge->nodes[1],memory);
 
       fprintf(outputFile,"\t\"%.*s\" -- \"%.*s\";\n",UNPACK_SS(node1),UNPACK_SS(node2));
    }
@@ -910,7 +880,7 @@ GraphMapping ConsolidationGraphMapping(Versat* versat,Accelerator* accel1,Accele
    clique = nodeClique;
    #endif
 
-   for(int i = 0; i < clique.numberNodes; i++){
+   for(int i = 0; i < clique.nodes.size; i++){
       MappingNode node = clique.nodes[i];
 
       if(!clique.validNodes.Get(i)){
@@ -1153,7 +1123,7 @@ GraphMapping TestingGraphMapping(Versat* versat,Accelerator* accel0,Accelerator*
 
       //printf("%d %d\n",i,NumberNodes(clique));
 
-      for(int ii = 0; ii < clique.numberNodes; ii++){
+      for(int ii = 0; ii < clique.nodes.size; ii++){
          MappingNode node = clique.nodes[ii];
 
          if(!clique.validNodes.Get(ii)){
@@ -1327,7 +1297,7 @@ Accelerator* MergeAccelerator(Versat* versat,Accelerator* accel1,Accelerator* ac
    }break;
    case MergingStrategy::CONSOLIDATION_GRAPH:{
       ConsolidationGraphOptions options = {};
-      options.mapNodes = true;
+      options.mapNodes = false;
       options.specifics = specificNodes;
       options.nSpecifics = nSpecifics;
 
@@ -1370,7 +1340,7 @@ Accelerator* MergeAccelerator(Versat* versat,Accelerator* accel1,Accelerator* ac
 
          #if 0
          for(int i = 0; i < mappedNode->name.size; i++){
-            if(mappedNode->name.str[i] == '/'){
+            if(mappedNode->name[i] == '/'){
                Assert(false);
             }
          }
@@ -1443,6 +1413,7 @@ Accelerator* MergeAccelerator(Versat* versat,Accelerator* accel1,Accelerator* ac
       view.CalculateGraphData(arena);
       IsGraphValid(view);
       OutputGraphDotFile(versat,view,false,"debug/Merged1View.dot");
+      view.CalculateDelay(arena);
    }
 
    {
@@ -1467,7 +1438,7 @@ FUDeclaration* MergeAccelerators(Versat* versat,FUDeclaration* accel1,FUDeclarat
    Arena* arena = &versat->temp;
    ArenaMarker marker(arena);
 
-   SpecificMergeNodes* specificNodes = PushArray(arena,nSpecifics,SpecificMergeNodes);
+   SpecificMergeNodes* specificNodes = PushArray(arena,nSpecifics,SpecificMergeNodes).data;
 
    for(int i = 0; i < nSpecifics; i++){
       specificNodes[i].instA = (ComplexFUInstance*) GetInstanceByName(flatten1,specifics[i].instA);
@@ -1502,8 +1473,12 @@ FUDeclaration* MergeAccelerators(Versat* versat,FUDeclaration* accel1,FUDeclarat
 
    FUDeclaration* decl = RegisterSubUnit(versat,name,newGraph);
 
-   //OutputGraphDotFile(versat,decl->fixedDelayCircuit,false,"debug/FixedDelay.dot");
-
+   {
+      ArenaMarker marker(arena);
+      AcceleratorView view = CreateAcceleratorView(decl->fixedDelayCircuit,arena);
+      view.CalculateGraphData(arena);
+      OutputGraphDotFile(versat,view,false,"debug/FixedDelay.dot");
+   }
    #if 0
    //CalculateDelay(versat,flatten1);
    //CalculateDelay(versat,flatten2);

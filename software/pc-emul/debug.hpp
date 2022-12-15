@@ -7,6 +7,7 @@ void CheckMemory(Accelerator* topLevel,Accelerator* accel);
 void DisplayInstanceMemory(ComplexFUInstance* inst);
 void DisplayAcceleratorMemory(Accelerator* topLevel);
 void DisplayUnitConfiguration(Accelerator* topLevel);
+void DisplayUnitConfiguration(AcceleratorView topLevel);
 
 bool IsGraphValid(AcceleratorView view);
 void OutputGraphDotFile(Versat* versat,AcceleratorView view,bool collapseSameEdges,const char* filenameFormat,...);

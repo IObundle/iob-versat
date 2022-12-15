@@ -45,16 +45,24 @@ void DisplayAcceleratorMemory(Accelerator* topLevel){
    printf("Config:\n");
    OutputSimpleIntegers(topLevel->configAlloc.ptr,topLevel->configAlloc.size);
 
-   printf("Static:\n");
+   printf("\nStatic:\n");
    OutputSimpleIntegers(topLevel->staticAlloc.ptr,topLevel->staticAlloc.size);
 
-   printf("Delay:\n");
+   printf("\nDelay:\n");
    OutputSimpleIntegers(topLevel->delayAlloc.ptr,topLevel->delayAlloc.size);
+   printf("\n");
 }
 
 void DisplayUnitConfiguration(Accelerator* topLevel){
-   AcceleratorIterator iter = {};
-   for(ComplexFUInstance* inst = iter.Start(topLevel); inst; inst = iter.Next()){
+   Arena* arena = &topLevel->versat->temp;
+   ArenaMarker marker(arena);
+   AcceleratorView view = CreateAcceleratorView(topLevel,arena);
+   DisplayUnitConfiguration(view);
+}
+
+void DisplayUnitConfiguration(AcceleratorView topLevel){
+   for(int i = 0; i < topLevel.nodes.size; i++){
+      ComplexFUInstance* inst = topLevel.nodes[i];
       UnitValues val = CalculateIndividualUnitValues(inst);
 
       FUDeclaration* type = inst->declaration;
@@ -62,20 +70,20 @@ void DisplayUnitConfiguration(Accelerator* topLevel){
       if(val.configs | val.states | val.delays){
          printf("[%.*s] %.*s:",UNPACK_SS(type->name),UNPACK_SS(inst->name));
          if(val.configs){
-            if(IsConfigStatic(topLevel,inst)){
-               printf("\nStatic [%d]: ",inst->config - topLevel->staticAlloc.ptr);
+            if(IsConfigStatic(topLevel.accel,inst)){
+               printf("\nStatic [%d]: ",inst->config - topLevel.accel->staticAlloc.ptr);
             } else {
-               printf("\nConfig [%d]: ",inst->config - topLevel->configAlloc.ptr);
+               printf("\nConfig [%d]: ",inst->config - topLevel.accel->configAlloc.ptr);
             }
 
             OutputSimpleIntegers(inst->config,val.configs);
          }
          if(val.states){
-            printf("\nState [%d]: ",inst->state - topLevel->stateAlloc.ptr);
+            printf("\nState [%d]: ",inst->state - topLevel.accel->stateAlloc.ptr);
             OutputSimpleIntegers(inst->state,val.states);
          }
          if(val.delays){
-            printf("\nDelay [%d]: ",inst->delay - topLevel->delayAlloc.ptr);
+            printf("\nDelay [%d]: ",inst->delay - topLevel.accel->delayAlloc.ptr);
             OutputSimpleIntegers(inst->delay,val.delays);
          }
          printf("\n\n");
@@ -88,14 +96,14 @@ bool IsGraphValid(AcceleratorView view){
 
    InstanceMap map;
 
-   for(int i = 0; i < view.numberNodes; i++){
+   for(int i = 0; i < view.nodes.size; i++){
       ComplexFUInstance* inst = view.nodes[i];
 
       inst->tag = 0;
       map.insert({inst,inst});
    }
 
-   for(int i = 0; i < view.numberEdges; i++){
+   for(int i = 0; i < view.edges.size; i++){
       Edge* edge = view.edges[i].edge;
 
       for(int i = 0; i < 2; i++){
@@ -110,8 +118,8 @@ bool IsGraphValid(AcceleratorView view){
       Assert(edge->units[1].port < edge->units[1].inst->declaration->nInputs && edge->units[1].port >= 0);
    }
 
-   if(view.numberEdges){
-      for(int i = 0; i < view.numberNodes; i++){
+   if(view.edges.size){
+      for(int i = 0; i < view.nodes.size; i++){
          ComplexFUInstance* inst = view.nodes[i];
 
          Assert(inst->tag == 1 || inst->graphData->nodeType == GraphComputedData::TAG_UNCONNECTED);
@@ -125,16 +133,18 @@ static void OutputGraphDotFile_(Versat* versat,AcceleratorView view,bool collaps
    Arena* arena = &versat->temp;
 
    fprintf(outputFile,"digraph accel {\n\tnode [fontcolor=white,style=filled,color=\"160,60,176\"];\n");
-   for(int i = 0; i < view.numberNodes; i++){
+   for(int i = 0; i < view.nodes.size; i++){
       ComplexFUInstance* inst = view.nodes[i];
-      SizedString name = Repr(versat,inst,arena,true);
+      SizedString name = Repr(inst,arena,false);
+      SizedString type = Repr(inst->declaration,arena);
 
       fprintf(outputFile,"\t\"%.*s\";\n",UNPACK_SS(name));
+      //fprintf(outputFile,"\t\"%.*s\" [label=\"%.*s\"];\n",UNPACK_SS(name),UNPACK_SS(type));
    }
 
    std::set<std::pair<ComplexFUInstance*,ComplexFUInstance*>> sameEdgeCounter;
 
-   for(int i = 0; i < view.numberEdges; i++){
+   for(int i = 0; i < view.edges.size; i++){
       Edge* edge = view.edges[i].edge;
       if(collapseSameEdges){
          std::pair<ComplexFUInstance*,ComplexFUInstance*> key{edge->units[0].inst,edge->units[1].inst};
@@ -146,8 +156,8 @@ static void OutputGraphDotFile_(Versat* versat,AcceleratorView view,bool collaps
          sameEdgeCounter.insert(key);
       }
 
-      SizedString first = Repr(versat,edge->units[0].inst,arena,true);
-      SizedString second = Repr(versat,edge->units[1].inst,arena,true);
+      SizedString first = Repr(edge->units[0].inst,arena,false);
+      SizedString second = Repr(edge->units[1].inst,arena,false);
 
       fprintf(outputFile,"\t\"%.*s\" -> ",UNPACK_SS(first));
       fprintf(outputFile,"\"%.*s\"",UNPACK_SS(second));
@@ -370,7 +380,7 @@ void PrintVCD(FILE* accelOutputFile,Accelerator* accel,int time,int clock){ // N
    PrintVCD_(accelOutputFile,accel,time);
 }
 
-#if 0
+#if 1
 #include <ncurses.h>
 #include <signal.h>
 
@@ -432,7 +442,7 @@ void StructPanel(WINDOW* w,PanelState* state,Input input,Arena* arena){
          wattron( w, A_STANDOUT );
       }
 
-      mvaddnstr(yPos, 0, member->name.str,member->name.size);
+      mvaddnstr(yPos, 0, member->name.data,member->name.size);
 
       // Ugly hack, somethings are char* despite not pointing to strings but to areas of memory
       // Type system cannot distinguish them, and therefore we kinda hack it away
@@ -442,11 +452,11 @@ void StructPanel(WINDOW* w,PanelState* state,Input input,Arena* arena){
          SizedString repr = GetValueRepresentation(memberVal,arena);
 
          move(yPos, panelWidth);
-         addnstr(repr.str,repr.size);
+         addnstr(repr.data,repr.size);
       }
 
       move(yPos, panelWidth + panelWidth / 2);
-      addnstr(member->type->name.str,member->type->name.size);
+      addnstr(member->type->name.data,member->type->name.size);
 
       if(menuIndex == state->cursorPosition){
          wattroff( w, A_STANDOUT );
@@ -456,13 +466,15 @@ void StructPanel(WINDOW* w,PanelState* state,Input input,Arena* arena){
    }
 }
 
-void TerminalIteration(WINDOW* w,Input input,Arena* arena){
+void TerminalIteration(WINDOW* w,Input input,Arena* arena,Arena* temp){
    // Before panel decision
    if(input == INPUT_BACKSPACE){
-      currentPanel -= 1;
+      if(currentPanel > 0){
+         PanelState* currentState = &panels[currentPanel];
+         PopMark(arena,currentState->arenaMark);
 
-      PanelState* currentState = &panels[currentPanel];
-      PopMark(arena,currentState->arenaMark);
+         currentPanel -= 1;
+      }
    } else if(input == INPUT_ENTER){
       PanelState* currentState = &panels[currentPanel];
 
@@ -512,11 +524,13 @@ void TerminalIteration(WINDOW* w,Input input,Arena* arena){
    Value val = state->valueLooking;
    Type* type = val.type;
 
-   mvaddnstr(0, 0,  val.type->name.str, val.type->name.size);
+   SizedString panelNumber = PushString(temp,"%d",currentPanel);
+   mvaddnstr(0,0, panelNumber.data,panelNumber.size);
+   mvaddnstr(0,3, val.type->name.data, val.type->name.size);
 
    if(state->name.size){
       addnstr(":",1);
-      addnstr(state->name.str,state->name.size);
+      addnstr(state->name.data,state->name.size);
    }
 
    int numberElements = 0;
@@ -550,11 +564,8 @@ void TerminalIteration(WINDOW* w,Input input,Arena* arena){
          }
 
          move(index + 2,0);
-         {
-            ArenaMarker marker(arena);
-            SizedString integer = PushString(arena,"%d\n",index);
-            addnstr(integer.str,integer.size);
-         }
+         SizedString integer = PushString(temp,"%d\n",index);
+         addnstr(integer.data,integer.size);
 
          if(index == state->cursorPosition){
             wattroff( w, A_STANDOUT );
@@ -613,7 +624,9 @@ static void terminal_sig_handler(int sig){
 
 void DebugTerminal(Value initialValue){
    Arena arena = {};
+   Arena temp = {};
    InitArena(&arena,Megabyte(1));
+   InitArena(&temp,Megabyte(1));
 
    panels[0].name = MakeSizedString("TOP");
    panels[0].cursorPosition = 0;
@@ -635,7 +648,7 @@ void DebugTerminal(Value initialValue){
       signal(SIGWINCH, terminal_sig_handler);
    }
 
-   TerminalIteration(w,INPUT_NONE,&arena);
+   TerminalIteration(w,INPUT_NONE,&arena,&temp);
 
    int c;
    while((c = getch()) != 'q'){
@@ -666,7 +679,8 @@ void DebugTerminal(Value initialValue){
 
       if(input != INPUT_NONE || iterate){
          clear();
-         TerminalIteration(w,input,&arena);
+         ArenaMarker mark(&temp);
+         TerminalIteration(w,input,&arena,&temp);
          refresh();
       }
 	}

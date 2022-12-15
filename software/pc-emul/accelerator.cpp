@@ -656,35 +656,31 @@ void AcceleratorView::CalculateGraphData(Arena* arena){
    }
 
    graphData = true;
-   int memoryNeeded = sizeof(GraphComputedData) * numberNodes + 2 * numberEdges * sizeof(ConnectionInfo);
+   int memoryNeeded = sizeof(GraphComputedData) * nodes.size + 2 * edges.size * sizeof(ConnectionInfo);
    Byte* memory = PushBytes(arena,memoryNeeded);
 
    PushPtr<Byte> data;
    data.Init(memory,memoryNeeded);
 
-   GraphComputedData* computedData = (GraphComputedData*) data.Push(numberNodes * sizeof(GraphComputedData));
-   ConnectionInfo* inputBuffer = (ConnectionInfo*) data.Push(numberEdges * sizeof(ConnectionInfo));
-   ConnectionInfo* outputBuffer = (ConnectionInfo*) data.Push(numberEdges * sizeof(ConnectionInfo));
+   GraphComputedData* computedData = (GraphComputedData*) data.Push(nodes.size * sizeof(GraphComputedData));
+   ConnectionInfo* inputBuffer = (ConnectionInfo*) data.Push(edges.size * sizeof(ConnectionInfo));
+   ConnectionInfo* outputBuffer = (ConnectionInfo*) data.Push(edges.size * sizeof(ConnectionInfo));
 
    Assert(data.Empty());
 
    // Associate computed data to each instance
-   for(int i = 0; i < numberNodes; i++){
+   for(int i = 0; i < nodes.size; i++){
       ComplexFUInstance* inst = nodes[i];
-
       inst->graphData = &computedData[i];
    }
 
    // Set inputs and outputs
-   for(int i = 0; i < numberNodes; i++){
-      ComplexFUInstance* inst = nodes[i];
-
+   for(ComplexFUInstance* inst : nodes){
       inst->graphData->inputs = inputBuffer;
       inst->graphData->outputs = outputBuffer;
 
-      for(int i = 0; i < numberEdges; i++){
-         Edge* edge = edges[i].edge;
-
+      for(EdgeView& edgeView : edges){
+         Edge* edge = edgeView.edge;
          if(edge->units[0].inst == inst){
             outputBuffer->instConnectedTo = edge->units[1];
             outputBuffer->port = edge->units[0].port;
@@ -707,9 +703,7 @@ void AcceleratorView::CalculateGraphData(Arena* arena){
       }
    }
 
-   for(int i = 0; i < numberNodes; i++){
-      ComplexFUInstance* inst = nodes[i];
-
+   for(ComplexFUInstance* inst : nodes){
       inst->graphData->nodeType = GraphComputedData::TAG_UNCONNECTED;
 
       bool hasInput = (inst->graphData->numberInputs > 0);
@@ -764,8 +758,7 @@ void AcceleratorView::CalculateDelay(Arena* arena){
    CalculateDAGOrdering(arena);
 
    // Clear everything, just in case
-   for(int i = 0; i < numberNodes; i++){
-      ComplexFUInstance* inst = nodes[i];
+   for(ComplexFUInstance* inst : nodes){
       inst->graphData->inputDelay = 0;
 
       for(int i = 0; i < inst->graphData->numberOutputs; i++){
@@ -796,7 +789,7 @@ void AcceleratorView::CalculateDelay(Arena* arena){
       #endif
    }
 
-   for(int i = numberNodes - order.numberSinks - 1; i >= 0; i--){
+   for(int i = nodes.size - order.numberSinks - 1; i >= 0; i--){
       ComplexFUInstance* inst = order.instances[i];
 
       if(inst->graphData->nodeType == GraphComputedData::TAG_UNCONNECTED){
@@ -825,20 +818,17 @@ void AcceleratorView::CalculateDelay(Arena* arena){
    }
 
    int minimum = 0;
-   for(int i = 0; i < numberNodes; i++){
-      ComplexFUInstance* inst = nodes[i];
+   for(ComplexFUInstance* inst : nodes){
       minimum = std::min(minimum,inst->graphData->inputDelay);
    }
 
    minimum = abs(minimum);
-   for(int i = 0; i < numberNodes; i++){
-      ComplexFUInstance* inst = nodes[i];
+   for(ComplexFUInstance* inst : nodes){
       inst->graphData->inputDelay = minimum - abs(inst->graphData->inputDelay);
    }
 
-    for(int i = 0; i < numberNodes; i++){
-      ComplexFUInstance* inst = nodes[i];
-     if(inst->graphData->nodeType == GraphComputedData::TAG_UNCONNECTED){
+   for(ComplexFUInstance* inst : nodes){
+      if(inst->graphData->nodeType == GraphComputedData::TAG_UNCONNECTED){
          inst->graphData->inputDelay = 0;
       } else if(inst->graphData->nodeType == GraphComputedData::TAG_SOURCE_AND_SINK){
          for(int ii = 0; ii < inst->graphData->numberOutputs; ii++){
@@ -894,18 +884,16 @@ DAGOrder AcceleratorView::CalculateDAGOrdering(Arena* arena){
    order.numberComputeUnits = 0;
    order.numberSinks = 0;
    order.numberSources = 0;
-   order.instances= PushArray(arena,numberNodes,ComplexFUInstance*);
+   order.instances = PushArray(arena,nodes.size,ComplexFUInstance*).data;
 
-   for(int i = 0; i < numberNodes; i++){
-      ComplexFUInstance* inst = nodes[i];
+   for(ComplexFUInstance* inst : nodes){
       inst->tag = 0;
    }
 
    ComplexFUInstance** sourceUnits = order.instances;
    order.sources = sourceUnits;
    // Add source units, guaranteed to come first
-   for(int i = 0; i < numberNodes; i++){
-      ComplexFUInstance* inst = nodes[i];
+   for(ComplexFUInstance* inst : nodes){
       if(inst->graphData->nodeType == GraphComputedData::TAG_SOURCE || (inst->graphData->nodeType == GraphComputedData::TAG_SOURCE_AND_SINK && CHECK_DELAY(inst,DelayType::DELAY_TYPE_SOURCE_DELAY))){
          *(sourceUnits++) = inst;
          order.numberSources += 1;
@@ -917,8 +905,7 @@ DAGOrder AcceleratorView::CalculateDAGOrdering(Arena* arena){
    ComplexFUInstance** computeUnits = sourceUnits;
    order.computeUnits = computeUnits;
 
-   for(int i = 0; i < numberNodes; i++){
-      ComplexFUInstance* inst = nodes[i];
+   for(ComplexFUInstance* inst : nodes){
       if(inst->graphData->nodeType == GraphComputedData::TAG_UNCONNECTED){
          *(computeUnits++) = inst;
          order.numberComputeUnits += 1;
@@ -932,8 +919,7 @@ DAGOrder AcceleratorView::CalculateDAGOrdering(Arena* arena){
    ComplexFUInstance** sinkUnits = computeUnits;
    order.sinks = sinkUnits;
 
-   for(int i = 0; i < numberNodes; i++){
-      ComplexFUInstance* inst = nodes[i];
+   for(ComplexFUInstance* inst : nodes){
       if(inst->graphData->nodeType == GraphComputedData::TAG_SINK || (inst->graphData->nodeType == GraphComputedData::TAG_SOURCE_AND_SINK && CHECK_DELAY(inst,DelayType::DELAY_TYPE_SINK_DELAY))){
          *(sinkUnits++) = inst;
          order.numberSinks += 1;
@@ -943,12 +929,11 @@ DAGOrder AcceleratorView::CalculateDAGOrdering(Arena* arena){
    }
 
 
-   for(int i = 0; i < numberNodes; i++){
-      ComplexFUInstance* inst = nodes[i];
+   for(ComplexFUInstance* inst : nodes){
       Assert(inst->tag == TAG_PERMANENT_MARK);
    }
 
-   Assert(order.numberSources + order.numberComputeUnits + order.numberSinks == numberNodes);
+   Assert(order.numberSources + order.numberComputeUnits + order.numberSinks == nodes.size);
 
    // Calculate order
    for(int i = 0; i < order.numberSources; i++){
@@ -957,7 +942,7 @@ DAGOrder AcceleratorView::CalculateDAGOrdering(Arena* arena){
       inst->graphData->order = 0;
    }
 
-   for(int i = order.numberSources; i < numberNodes; i++){
+   for(int i = order.numberSources; i < nodes.size; i++){
       ComplexFUInstance* inst = order.instances[i];
 
       int max = 0;
@@ -1001,13 +986,11 @@ void AcceleratorView::CalculateVersatData(Arena* arena){
    }
 
    versatData = true;
-   VersatComputedData* mem = PushArray(arena,numberNodes,VersatComputedData);
+   VersatComputedData* mem = PushArray(arena,nodes.size,VersatComputedData).data;
 
    CalculateGraphData(arena);
 
-   for(int i = 0; i < numberNodes; i++){
-      ComplexFUInstance* inst = nodes[i];
-
+   for(ComplexFUInstance* inst : nodes){
       if(inst->declaration->type == FUDeclaration::COMPOSITE && inst->compositeAccel){
          AcceleratorView view = CreateAcceleratorView(inst->compositeAccel,arena);
          view.CalculateVersatData(arena);
@@ -1021,8 +1004,7 @@ void AcceleratorView::CalculateVersatData(Arena* arena){
    Pool<HuffmanBlock> blocks = {};
    std::priority_queue<HuffmanBlock*,std::vector<HuffmanBlock*>,decltype(Compare)> huffQueue(Compare);
 
-   for(int i = 0; i < numberNodes; i++){
-      ComplexFUInstance* inst = nodes[i];
+   for(ComplexFUInstance* inst : nodes){
       inst->versatData = mem++;
 
       if(inst->declaration->isMemoryMapped){
@@ -1062,14 +1044,13 @@ void AcceleratorView::CalculateVersatData(Arena* arena){
    SaveMemoryMappingInfo(bitMapping,0,root);
 
    int maxMask = 0;
-   for(int i = 0; i < numberNodes; i++){
-      ComplexFUInstance* inst = nodes[i];
+   for(ComplexFUInstance* inst : nodes){
       if(inst->declaration->isMemoryMapped){
          maxMask = std::max(maxMask,inst->versatData->memoryMaskSize + inst->declaration->memoryMapBits);
       }
    }
 
-   for(int i = 0; i < numberNodes; i++){
+   for(int i = 0; i < nodes.size; i++){
       ComplexFUInstance* inst = nodes[i];
       if(inst->declaration->isMemoryMapped){
          int memoryAddressOffset = 0;
@@ -1112,12 +1093,14 @@ AcceleratorView CreateAcceleratorView(Accelerator* accel,Arena* arena){
    view.validNodes.Init(arena,accel->instances.Size());
 
    std::unordered_map<ComplexFUInstance*,int> map;
+   int nodes = 0;
    for(ComplexFUInstance* inst : accel->instances){
-      map.insert({inst,view.numberNodes});
-      view.nodes[view.numberNodes] = inst;
+      map.insert({inst,nodes});
+      view.nodes[nodes] = inst;
 
-      view.numberNodes += 1;
+      nodes += 1;
    }
+   int edges = 0;
    for(Edge* edge : accel->edges){
       EdgeView newEdge = {};
 
@@ -1128,7 +1111,7 @@ AcceleratorView CreateAcceleratorView(Accelerator* accel,Arena* arena){
       newEdge.nodes[0] = &view.nodes[map.find(inst0)->second];
       newEdge.nodes[1] = &view.nodes[map.find(inst1)->second];
 
-      view.edges[view.numberEdges++] = newEdge;
+      view.edges[edges++] = newEdge;
    }
 
    return view;
@@ -1137,21 +1120,19 @@ AcceleratorView CreateAcceleratorView(Accelerator* accel,Arena* arena){
 AcceleratorView CreateAcceleratorView(Accelerator* accel,std::vector<Edge*>& edgeMappings,Arena* arena){
    AcceleratorView view = {};
 
-   view.edges = (EdgeView*) MarkArena(arena);
+   view.edges.data = (EdgeView*) MarkArena(arena);
    // Allocate edges first
    for(Edge* edge : edgeMappings){
       EdgeView* newEdge = PushStruct(arena,EdgeView);
 
       newEdge->edge = edge;
-      view.numberEdges += 1;
+      view.edges.size += 1;
    }
 
    std::unordered_map<ComplexFUInstance*,int> map;
-   view.nodes = (ComplexFUInstance**) MarkArena(arena);
-   for(int i = 0; i < view.numberEdges; i++){
-      EdgeView* edgeView = &view.edges[i];
-
-      Edge* edge = edgeView->edge;
+   view.nodes.data = (ComplexFUInstance**) MarkArena(arena);
+   for(EdgeView& edgeView : view.edges){
+      Edge* edge = edgeView.edge;
 
       for(int ii = 0; ii < 2; ii++){
          ComplexFUInstance* node = edge->units[ii].inst;
@@ -1160,8 +1141,8 @@ AcceleratorView CreateAcceleratorView(Accelerator* accel,std::vector<Edge*>& edg
          ComplexFUInstance** mapping = nullptr;
          if(iter == map.end()){
             ComplexFUInstance** newNode = PushStruct(arena,ComplexFUInstance*);
-            map.insert({node,view.numberNodes});
-            view.numberNodes += 1;
+            map.insert({node,view.nodes.size});
+            view.nodes.size += 1;
             *newNode = node;
 
             mapping = newNode;
@@ -1169,11 +1150,11 @@ AcceleratorView CreateAcceleratorView(Accelerator* accel,std::vector<Edge*>& edg
             mapping = &view.nodes[iter->second];
          }
 
-         edgeView->nodes[ii] = mapping;
+         edgeView.nodes[ii] = mapping;
       }
    }
 
-   view.validNodes.Init(arena,view.numberNodes);
+   view.validNodes.Init(arena,view.nodes.size);
    view.validNodes.Fill(1);
 
    return view;
@@ -1182,7 +1163,7 @@ AcceleratorView CreateAcceleratorView(Accelerator* accel,std::vector<Edge*>& edg
 AcceleratorView SubGraphAroundInstance(Versat* versat,Accelerator* accel,ComplexFUInstance* instance,int layers,Arena* arena){
    AcceleratorView view = {};
 
-   view.edges = (EdgeView*) MarkArena(arena);
+   view.edges.data = (EdgeView*) MarkArena(arena);
    // Allocate edges first
    for(Edge* edge : accel->edges){
       if(!(edge->units[0].inst == instance || edge->units[1].inst == instance)){
@@ -1192,15 +1173,13 @@ AcceleratorView SubGraphAroundInstance(Versat* versat,Accelerator* accel,Complex
       EdgeView* newEdge = PushStruct(arena,EdgeView);
 
       newEdge->edge = edge;
-      view.numberEdges += 1;
+      view.edges.size += 1;
    }
 
    std::unordered_map<ComplexFUInstance*,int> map;
-   view.nodes = (ComplexFUInstance**) MarkArena(arena);
-   for(int i = 0; i < view.numberEdges; i++){
-      EdgeView* edgeView = &view.edges[i];
-
-      Edge* edge = edgeView->edge;
+   view.nodes.data = (ComplexFUInstance**) MarkArena(arena);
+   for(EdgeView& edgeView : view.edges){
+      Edge* edge = edgeView.edge;
 
       for(int ii = 0; ii < 2; ii++){
          ComplexFUInstance* node = edge->units[ii].inst;
@@ -1209,8 +1188,8 @@ AcceleratorView SubGraphAroundInstance(Versat* versat,Accelerator* accel,Complex
          ComplexFUInstance** mapping = nullptr;
          if(iter == map.end()){
             ComplexFUInstance** newNode = PushStruct(arena,ComplexFUInstance*);
-            map.insert({node,view.numberNodes});
-            view.numberNodes += 1;
+            map.insert({node,view.nodes.size});
+            view.nodes.size += 1;
             *newNode = node;
 
             mapping = newNode;
@@ -1218,11 +1197,11 @@ AcceleratorView SubGraphAroundInstance(Versat* versat,Accelerator* accel,Complex
             mapping = &view.nodes[iter->second];
          }
 
-         edgeView->nodes[ii] = mapping;
+         edgeView.nodes[ii] = mapping;
       }
    }
 
-   view.validNodes.Init(arena,view.numberNodes);
+   view.validNodes.Init(arena,view.nodes.size);
    view.validNodes.Fill(1);
 
    return view;
@@ -1320,8 +1299,7 @@ void FixMultipleInputs(Versat* versat,Accelerator* accel){
 
    bool isComb = true;
    int portUsedCount[99];
-   for(int i = 0; i < view.numberNodes; i++){
-      ComplexFUInstance* inst = view.nodes[i];
+   for(ComplexFUInstance* inst : view.nodes){
       if(inst->declaration == versat->multiplexer || inst->declaration == versat->combMultiplexer){ // Not good, but works for now (otherwise newly added muxes would break the algorithm)
          continue;
       }
@@ -1358,8 +1336,8 @@ void FixMultipleInputs(Versat* versat,Accelerator* accel){
 
             // Connect edges to multiplexer
             int portsConnected = 0;
-            for(int i = 0; i < view.numberEdges; i++){
-               Edge* edge = view.edges[i].edge;
+            for(EdgeView& edgeView : view.edges){
+               Edge* edge = edgeView.edge;
                if(edge->units[1] == PortInstance{inst,port}){
                   edge->units[1].inst = multiplexer;
                   edge->units[1].port = portsConnected;
