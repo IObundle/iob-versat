@@ -2,43 +2,47 @@
 
 #include "parser.hpp"
 
-SizedString Repr(FUInstance* inst,Arena* arena,bool printDelay){
+SizedString UniqueRepr(FUInstance* inst,Arena* arena){
+   FUDeclaration* decl = inst->declaration;
+   SizedString str = PushString(arena,"%.*s_%.*s_%d",UNPACK_SS(decl->name),UNPACK_SS(inst->name),inst->id);
+   return str;
+}
+
+SizedString Repr(FUInstance* inst,GraphDotFormat format,Arena* arena){
    Byte* mark = MarkArena(arena);
 
-   PushString(arena,"%.*s_%d",UNPACK_SS(inst->name),inst->id);
+   bool expl  = format & GRAPH_DOT_FORMAT_EXPLICIT;
+   bool name  = format & GRAPH_DOT_FORMAT_NAME;
+   bool type  = format & GRAPH_DOT_FORMAT_TYPE;
+   bool id    = format & GRAPH_DOT_FORMAT_ID;
+   bool delay = format & GRAPH_DOT_FORMAT_DELAY;
 
-   if(printDelay){
-      #if 0
-      if(inst->declaration == versat->buffer && inst->config){
-         PushString(arena,"_%d",inst->config[0]);
-      } else if(inst->declaration == versat->fixedBuffer && inst->parameters.size > 0){
-         Tokenizer tok(inst->parameters,".()",{"#("});
-
-         while(!tok.Done()){
-            Token amountParam = tok.NextToken();
-
-            if(CompareString(amountParam,"AMOUNT")){
-               tok.AssertNextToken("(");
-
-               Token number = tok.NextToken();
-
-               tok.AssertNextToken(")");
-
-               PushString(arena,"_%.*s",UNPACK_SS(number));
-               break;
-            }
-         }
-
-      } else {
-      #endif
-         PushString(arena,"_%d",inst->baseDelay);
-      #if 0
-      }
-      #endif
+   if(expl && name){
+      PushString(arena,"Name:");
+   }
+   if(name){
+      PushString(arena,"%.*s\\n",UNPACK_SS(inst->name));
+   }
+   if(expl && type){
+      PushString(arena,"Type:");
+   }
+   if(type){
+      PushString(arena,"%.*s\\n",UNPACK_SS(inst->declaration->name));
+   }
+   if(expl && id){
+      PushString(arena,"Id:");
+   }
+   if(id){
+      PushString(arena,"%d\\n",inst->id);
+   }
+   if(expl && delay){
+      PushString(arena,"Delay:");
+   }
+   if(delay){
+      PushString(arena,"%d\\n",inst->baseDelay);
    }
 
    SizedString res = PointArena(arena,mark);
-
    return res;
 }
 
@@ -48,44 +52,71 @@ SizedString Repr(FUDeclaration* decl,Arena* arena){
    PushString(arena,"%.*s",UNPACK_SS(decl->name));
 
    SizedString res = PointArena(arena,mark);
-
    return res;
 }
 
-SizedString Repr(PortInstance port,Arena* memory){
-   FUInstance* inst = port.inst;
-   FUDeclaration* decl = inst->declaration;
+SizedString Repr(PortInstance in,PortInstance out,GraphDotFormat format,Arena* arena){
+   Byte* mark = MarkArena(arena);
 
-   Byte* mark = MarkArena(memory);
+   bool expl = format & GRAPH_DOT_FORMAT_EXPLICIT;
+   bool lat  = format & GRAPH_DOT_FORMAT_LATENCY;
 
-   Repr(inst,memory);
-   //PushString(memory,"_%d:",port.port);
-   //Repr(decl,memory);
+   Repr(in,format,arena);
 
-   SizedString res = PointArena(memory,mark);
+   if(expl && lat){
+      PushString(arena,"\\nLat:");
+   }
+   if(lat){
+      PushString(arena,"%d",in.inst->declaration->outputLatencies[in.port]);
+   }
+
+   PushString(arena,"\\n->\\n");
+   Repr(out,format,arena);
+   if(expl && lat){
+      PushString(arena,"\\nLat:");
+   }
+   if(lat){
+      PushString(arena,"%d",out.inst->declaration->inputDelays[out.port]);
+   }
+
+   SizedString res = PointArena(arena,mark);
    return res;
 }
 
-SizedString Repr(MappingNode* node,Arena* memory){
+SizedString Repr(PortInstance port,GraphDotFormat format,Arena* arena){
+   Byte* mark = MarkArena(arena);
+
+   bool expl = format & GRAPH_DOT_FORMAT_EXPLICIT;
+
+   if(expl){
+      PushString(arena,"Port:");
+   }
+   PushString(arena,"%d",port.port);
+
+   SizedString res = PointArena(arena,mark);
+   return res;
+}
+
+SizedString Repr(MappingNode node,Arena* arena){
    SizedString name = {};
-   if(node->type == MappingNode::NODE){
-      FUInstance* n0 = node->nodes.instances[0];
-      FUInstance* n1 = node->nodes.instances[1];
+   if(node.type == MappingNode::NODE){
+      FUInstance* n0 = node.nodes.instances[0];
+      FUInstance* n1 = node.nodes.instances[1];
 
-      name = PushString(memory,"%.*s -- %.*s",UNPACK_SS(n0->name),UNPACK_SS(n1->name));
-   } else if(node->type == MappingNode::EDGE){
-      PortEdge e0 = node->edges[0];
-      PortEdge e1 = node->edges[1];
+      name = PushString(arena,"%.*s -- %.*s",UNPACK_SS(n0->name),UNPACK_SS(n1->name));
+   } else if(node.type == MappingNode::EDGE){
+      PortEdge e0 = node.edges[0];
+      PortEdge e1 = node.edges[1];
 
-      Byte* mark = MarkArena(memory);
-      Repr(e0.units[0],memory);
-      PushString(memory," -- ");
-      Repr(e0.units[1],memory);
-      PushString(memory,"/");
-      Repr(e1.units[0],memory);
-      PushString(memory," -- ");
-      Repr(e1.units[1],memory);
-      name = PointArena(memory,mark);
+      Byte* mark = MarkArena(arena);
+      Repr(e0.units[0],GRAPH_DOT_FORMAT_NAME,arena);
+      PushString(arena," -- ");
+      Repr(e0.units[1],GRAPH_DOT_FORMAT_NAME,arena);
+      PushString(arena,"/");
+      Repr(e1.units[0],GRAPH_DOT_FORMAT_NAME,arena);
+      PushString(arena," -- ");
+      Repr(e1.units[1],GRAPH_DOT_FORMAT_NAME,arena);
+      name = PointArena(arena,mark);
    } else {
       NOT_IMPLEMENTED;
    }

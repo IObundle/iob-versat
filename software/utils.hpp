@@ -5,6 +5,7 @@
 #include <string.h>
 #include <new>
 #include <functional>
+#include <stdint.h>
 
 #include "signal.h"
 #include "assert.h"
@@ -22,7 +23,7 @@
 #define PrintFileAndLine() printf("%s:%d\n",__FILE__,__LINE__)
 
 void FlushStdout();
-#ifdef PC
+#if defined(PC) && defined(VERSAT_DEBUG)
 #define Assert(EXPR) \
    do { \
    int _ = (int) (EXPR);   \
@@ -43,6 +44,7 @@ void FlushStdout();
 #define USER_ERROR do{ FlushStdout(); exit(0); } while(0) // User error and program does not try to repair or keep going (report error before and exit)
 
 typedef char Byte;
+typedef uint32_t uint;
 
 template<typename T>
 class ArrayIterator{
@@ -97,13 +99,15 @@ struct Range{
    int low;
 };
 
-union Conversion {
+union Conversion{
    float f;
    int i;
    uint ui;
 };
 
 #define BIT_MASK(BIT) (1 << BIT)
+#define GET_BIT(VAL,INDEX) (VAL & (BIT_MASK(INDEX)))
+#define SET_BIT(VAL,INDEX) (VAL | (BIT_MASK(INDEX)))
 #define COND_BIT_MASK(BIT,COND) (COND ? BIT_MASK(BIT) : 0)
 #define FULL_MASK(BITS) (BIT_MASK(BITS) - 1)
 #define MASK_VALUE(VAL,BITS) (VAL & FULL_MASK(BITS))
@@ -112,6 +116,7 @@ union Conversion {
 int RoundUpDiv(int dividend,int divisor);
 int log2i(int value); // Log function customized to calculating bits needed for a number of possible addresses (ex: log2i(1024) = 10)
 int AlignNextPower2(int val);
+bool IsPowerOf2(int val);
 int RandomNumberBetween(int minimum,int maximum,int randomValue);
 
 // Math related functions
@@ -163,11 +168,27 @@ void Memset(T* buffer,T elem,int bufferSize){
 }
 
 template<typename T>
+void Memset(Array<T> buffer,T elem){
+   for(int i = 0; i < buffer.size; i++){
+      buffer[i] = elem;
+   }
+}
+
+template<typename T>
 void Memcpy(T* dest,T* scr,int numberElements){
    for(int i = 0; i < numberElements; i++){
       dest[i] = scr[i];
    }
 }
+
+// Mainly change return meaning (true means equal)
+template<typename T>
+bool Memcmp(T* a,T* b,int numberElements){
+   bool res = (memcmp(a,b,numberElements * sizeof(T)) == 0);
+
+   return res;
+}
+
 
 #endif // INCLUDED_UTILS_HPP
 

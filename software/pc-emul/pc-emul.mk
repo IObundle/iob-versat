@@ -12,7 +12,13 @@ HDR+=$(wildcard $(VERSAT_PC_EMUL)/*.hpp)
 VERILATE_FLAGS :=-g -m32
 
 INCLUDE += -I$(VERSAT_PC_EMUL)
-DEFINE += -DPC
+VERSAT_DEFINE += -DPC
+
+# Add ncurses for debug terminal support
+ifeq ($(SUPPORT_NCURSES),1)
+  VERSAT_DEFINE +=-DNCURSES
+  LIBS +=-lncurses
+endif
 
 CPP_FILES := $(wildcard $(VERSAT_PC_EMUL)/*.cpp)
 CPP_OBJ := $(patsubst $(VERSAT_PC_EMUL)/%.cpp,$(BUILD_DIR)/%.o,$(CPP_FILES))
@@ -69,10 +75,10 @@ $(BUILD_DIR)/verilogWrapper.inc: $(BUILD_DIR)/verilogParser.out  $(VERSAT_SW_DIR
 	$(BUILD_DIR)/verilogParser.out $(BUILD_DIR)/verilogWrapper.inc -I $(VERSAT_DIR)/submodules/INTERCON/hardware/include/ -I $(VERSAT_DIR)/hardware/include/ -I $(VERSAT_DIR)/hardware/src/ $(UNIT_VERILOG)
 
 $(BUILD_DIR)/%.o: $(VERSAT_DIR)/software/%.cpp $(HDR) $(UNIT_HDR) $(VERSAT_HDR) $(BUILD_DIR)/typeInfo.inc $(BUILD_DIR)/verilogWrapper.inc
-	g++ -std=c++11 -DPC -c -o $@ $(GLOBAL_CFLAGS) $< -I $(VERSAT_SW_DIR) -I $(VERSAT_PC_EMUL) -I $(VERILATOR_INCLUDE) -I $(BUILD_DIR)/
+	-g++ -std=c++11 $(VERSAT_DEFINE) -c -o $@ $(GLOBAL_CFLAGS) $< -I $(VERSAT_SW_DIR) -I $(VERSAT_PC_EMUL) -I $(VERILATOR_INCLUDE) -I $(BUILD_DIR)/
 
 $(BUILD_DIR)/%.o: $(VERSAT_PC_EMUL)/%.cpp $(HDR) $(UNIT_HDR) $(VERSAT_HDR) $(BUILD_DIR)/typeInfo.inc $(BUILD_DIR)/verilogWrapper.inc
-	g++ -std=c++11 -DPC -c -o $@ $(GLOBAL_CFLAGS) $< -I $(VERSAT_SW_DIR) -I $(VERSAT_PC_EMUL) -I $(VERILATOR_INCLUDE) -I $(BUILD_DIR)/
+	-g++ -std=c++11 $(VERSAT_DEFINE) -c -o $@ $(GLOBAL_CFLAGS) $< -I $(VERSAT_SW_DIR) -I $(VERSAT_PC_EMUL) -I $(VERILATOR_INCLUDE) -I $(BUILD_DIR)/
 
 $(BUILD_DIR)/structParser.out: $(VERSAT_SW_DIR)/pc-emul/structParser.cpp $(TOOL_COMMON_SRC)
 	g++ -std=c++11 -DSTANDALONE -o $@ -g -m32 $< -I $(VERSAT_DIR)/software/ -I  $(VERSAT_DIR)/software/pc-emul  -I $(VERSAT_DIR)/software/pc-emul/ $(TOOL_COMMON_SRC)

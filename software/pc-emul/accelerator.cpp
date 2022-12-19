@@ -1,4 +1,5 @@
 #include "versatPrivate.hpp"
+#include "debug.hpp"
 
 #include <unordered_map>
 #include <set>
@@ -31,7 +32,7 @@ void PopulateAcceleratorRecursive(FUDeclaration* accelType,ComplexFUInstance* in
 
       for(StaticInfo* info : staticsAllocated){
          if(info->module == accelType && CompareString(info->name,inst->name)){
-            in.config.Init(info->ptr,info->nConfigs);
+            in.config.Init(info->ptr,info->configs.size);
             foundStatic = true;
             break;
          }
@@ -41,9 +42,8 @@ void PopulateAcceleratorRecursive(FUDeclaration* accelType,ComplexFUInstance* in
          StaticInfo* allocation = staticsAllocated.Alloc();
          allocation->module = accelType;
          allocation->name = inst->name;
-         allocation->nConfigs = inst->declaration->nConfigs;
+         allocation->configs = inst->declaration->configs;
          allocation->ptr = in.statics.Push(0);
-         allocation->wires = inst->declaration->configWires;
 
          in.config = in.statics;
       }
@@ -83,7 +83,7 @@ void PopulateAcceleratorRecursive(FUDeclaration* accelType,ComplexFUInstance* in
    }
 
    if(inst->declarationInstance && ((ComplexFUInstance*) inst->declarationInstance)->savedConfiguration){
-      memcpy(inst->config,inst->declarationInstance->config,inst->declaration->nConfigs * sizeof(int));
+      memcpy(inst->config,inst->declarationInstance->config,inst->declaration->configs.size * sizeof(int));
    }
 
    if(inst->isStatic){
@@ -110,7 +110,7 @@ void DoPopulate(Accelerator* accel,FUDeclaration* accelType,FUInstanceInterfaces
          info = &sharingInfo[index];
 
          if(info->init){ // Already exists, replace config with ptr
-            in.config.Init(info->ptr,inst->declaration->nConfigs);
+            in.config.Init(info->ptr,inst->declaration->configs.size);
          } else {
             info->ptr = in.config.Push(0);
          }
@@ -656,8 +656,11 @@ void AcceleratorView::CalculateGraphData(Arena* arena){
    }
 
    graphData = true;
-   int memoryNeeded = sizeof(GraphComputedData) * nodes.size + 2 * edges.size * sizeof(ConnectionInfo);
+   int memoryNeeded = sizeof(GraphComputedData) * nodes.size + 2 * edges.size * sizeof(ConnectionInfo) + edges.size * sizeof(int);
    Byte* memory = PushBytes(arena,memoryNeeded);
+
+   ArenaMarker marker(arena);
+   Hashmap<Edge*,int*> map(arena,edges.size);
 
    PushPtr<Byte> data;
    data.Init(memory,memoryNeeded);
@@ -665,6 +668,12 @@ void AcceleratorView::CalculateGraphData(Arena* arena){
    GraphComputedData* computedData = (GraphComputedData*) data.Push(nodes.size * sizeof(GraphComputedData));
    ConnectionInfo* inputBuffer = (ConnectionInfo*) data.Push(edges.size * sizeof(ConnectionInfo));
    ConnectionInfo* outputBuffer = (ConnectionInfo*) data.Push(edges.size * sizeof(ConnectionInfo));
+
+   for(EdgeView& edgeView : edges){
+      Edge* edge = edgeView.edge;
+
+      map.Insert(edge,(int*) data.Push(sizeof(int)));
+   }
 
    Assert(data.Empty());
 
@@ -676,84 +685,99 @@ void AcceleratorView::CalculateGraphData(Arena* arena){
 
    // Set inputs and outputs
    for(ComplexFUInstance* inst : nodes){
-      inst->graphData->inputs = inputBuffer;
-      inst->graphData->outputs = outputBuffer;
+      GraphComputedData* graphData = inst->graphData;
+
+      graphData->allInputs.data = inputBuffer;
+      graphData->allOutputs.data = outputBuffer;
+
+      // TODO: for circuit inputs, max inputs don't need to be equal to the declared value. They can depend on the graph
+      int maxInputs = inst->declaration->inputDelays.size;
+      graphData->outputs = inst->declaration->outputLatencies.size;
 
       for(EdgeView& edgeView : edges){
          Edge* edge = edgeView.edge;
+
          if(edge->units[0].inst == inst){
             outputBuffer->instConnectedTo = edge->units[1];
             outputBuffer->port = edge->units[0].port;
+            outputBuffer->edgeDelay = edge->delay;
+            outputBuffer->delay = map.GetOrFail(edge);
+
             outputBuffer += 1;
 
-            inst->graphData->outputPortsUsed = std::max(inst->graphData->outputPortsUsed,edge->units[0].port + 1);
-            inst->graphData->numberOutputs += 1;
+            graphData->allOutputs.size += 1;
          }
          if(edge->units[1].inst == inst){
             inputBuffer->instConnectedTo = edge->units[0];
             inputBuffer->port = edge->units[1].port;
-            inputBuffer->delay = edge->delay;
+            inputBuffer->edgeDelay = edge->delay;
+            inputBuffer->delay = map.GetOrFail(edge);
             inputBuffer += 1;
 
-            Assert(abs(inputBuffer->delay) < 100);
-
-            inst->graphData->inputPortsUsed = std::max(inst->graphData->inputPortsUsed,edge->units[1].port + 1);
-            inst->graphData->numberInputs += 1;
+            graphData->allInputs.size += 1;
          }
       }
-   }
 
-   for(ComplexFUInstance* inst : nodes){
-      inst->graphData->nodeType = GraphComputedData::TAG_UNCONNECTED;
+      graphData->singleInputs = PushArray(arena,maxInputs,PortInstance);
+      for(ConnectionInfo& info : graphData->allInputs){
+         int index = info.port;
 
-      bool hasInput = (inst->graphData->numberInputs > 0);
-      bool hasOutput = (inst->graphData->numberOutputs > 0);
+         if(graphData->singleInputs[index].inst){
+            graphData->multipleSamePortInputs = true;
+         } else {
+            graphData->singleInputs[index] = info.instConnectedTo;
+         }
+      }
+
+      graphData->nodeType = GraphComputedData::TAG_UNCONNECTED;
+
+      bool hasInput = (graphData->allInputs.size > 0);
+      bool hasOutput = (graphData->allOutputs.size > 0);
 
       // If the unit is both capable of acting as a sink or as a source of data
       if(hasInput && hasOutput){
          if(CHECK_DELAY(inst,DELAY_TYPE_SINK_DELAY) || CHECK_DELAY(inst,DELAY_TYPE_SOURCE_DELAY)){
-            inst->graphData->nodeType = GraphComputedData::TAG_SOURCE_AND_SINK;
+            graphData->nodeType = GraphComputedData::TAG_SOURCE_AND_SINK;
          }  else {
-            inst->graphData->nodeType = GraphComputedData::TAG_COMPUTE;
+            graphData->nodeType = GraphComputedData::TAG_COMPUTE;
          }
       } else if(hasInput){
-         inst->graphData->nodeType = GraphComputedData::TAG_SINK;
+         graphData->nodeType = GraphComputedData::TAG_SINK;
       } else if(hasOutput){
-         inst->graphData->nodeType = GraphComputedData::TAG_SOURCE;
+         graphData->nodeType = GraphComputedData::TAG_SOURCE;
       } else {
          // Unconnected
       }
    }
 }
 
+#if 1
 static void SendLatencyUpwards(ComplexFUInstance* inst){
    int b = inst->graphData->inputDelay;
 
-   int minimum = 0;
-   for(int i = 0; i < inst->graphData->numberInputs; i++){
-      ConnectionInfo* info = &inst->graphData->inputs[i];
+   for(ConnectionInfo& info : inst->graphData->allOutputs){
+      ComplexFUInstance* other = info.instConnectedTo.inst;
 
-      int a = inst->declaration->inputDelays[info->port];
-      int e = info->delay;
+      // Do not set delay for source and sink units. Source units cannot be found in this, otherwise they wouldn't be source
+      Assert(other->graphData->nodeType != GraphComputedData::TAG_SOURCE);
 
-      ComplexFUInstance* other = inst->graphData->inputs[i].instConnectedTo.inst;
-      for(int ii = 0; ii < other->graphData->numberOutputs; ii++){
-         ConnectionInfo* otherInfo = &other->graphData->outputs[ii];
+      int a = inst->declaration->outputLatencies[info.port];
+      int e = info.edgeDelay;
 
-         int c = other->declaration->latencies[info->instConnectedTo.port];
+      for(ConnectionInfo& otherInfo : other->graphData->allInputs){
+         int c = other->declaration->inputDelays[info.instConnectedTo.port];
 
-         if(info->instConnectedTo.inst == other && info->instConnectedTo.port == otherInfo->port &&
-            otherInfo->instConnectedTo.inst == inst && otherInfo->instConnectedTo.port == info->port){
-            otherInfo->delay = b + a + e - c;
+         if(info.instConnectedTo.port == otherInfo.port &&
+            otherInfo.instConnectedTo.inst == inst && otherInfo.instConnectedTo.port == info.port){
 
-            minimum = std::min(minimum,otherInfo->delay);
-
-            //Assert(abs(otherInfo->delay) < 100);
+            *otherInfo.delay = b + a + e - c;
          }
       }
    }
 }
+#endif
 
+#if 1
 void AcceleratorView::CalculateDelay(Arena* arena){
    CalculateDAGOrdering(arena);
 
@@ -761,83 +785,132 @@ void AcceleratorView::CalculateDelay(Arena* arena){
    for(ComplexFUInstance* inst : nodes){
       inst->graphData->inputDelay = 0;
 
-      for(int i = 0; i < inst->graphData->numberOutputs; i++){
-         inst->graphData->outputs[i].delay = 0;
+      for(ConnectionInfo& info : inst->graphData->allOutputs){
+         *info.delay = 0;
+      }
+      for(ConnectionInfo& info : inst->graphData->allInputs){
+         *info.delay = 0;
       }
    }
 
-   #if 0
    if(versat->debug.outputGraphs){
       char buffer[1024];
       sprintf(buffer,"debug/%.*s/",UNPACK_SS(accel->subtype->name));
       MakeDirectory(buffer);
    }
-   #endif
 
-   for(int i = 0; i < order.numberSinks; i++){
-      ComplexFUInstance* inst = order.sinks[i];
+   int graphs = 0;
+   for(int i = 0; i < order.numberSources; i++){
+      ComplexFUInstance* inst = order.sources[i];
 
-      inst->graphData->inputDelay = -10000; // As long as it is a constant greater than max latency, should work fine
-      inst->baseDelay = abs(inst->graphData->inputDelay);
+      inst->graphData->inputDelay = 0;
+      inst->baseDelay = 0;
 
       SendLatencyUpwards(inst);
 
-      #if 0
+      #if 1
       if(versat->debug.outputGraphs){
-         OutputGraphDotFile(versat,view,false,"debug/%.*s/out1_%d.dot",UNPACK_SS(view.accel->subtype->name),graphs++);
+         OutputGraphDotFile(versat,*this,true,"debug/%.*s/out1_%d.dot",UNPACK_SS(accel->subtype->name),graphs++);
       }
       #endif
    }
 
-   for(int i = nodes.size - order.numberSinks - 1; i >= 0; i--){
+   for(int i = order.numberSources; i < nodes.size; i++){
       ComplexFUInstance* inst = order.instances[i];
 
       if(inst->graphData->nodeType == GraphComputedData::TAG_UNCONNECTED){
          continue;
       }
 
-      int minimum = (1 << 30);
-      for(int ii = 0; ii < inst->graphData->numberOutputs; ii++){
-         minimum = std::min(minimum,inst->graphData->outputs[ii].delay);
+      int maximum = -(1 << 30);
+      for(ConnectionInfo& info : inst->graphData->allInputs){
+         maximum = std::max(maximum,*info.delay);
       }
 
-      for(int ii = 0; ii < inst->graphData->numberOutputs; ii++){
-         inst->graphData->outputs[ii].delay -= minimum;
+      #if 1
+      for(ConnectionInfo& info : inst->graphData->allInputs){
+         *info.delay = maximum - *info.delay;
+      }
+      #endif
+
+      inst->graphData->inputDelay = maximum;
+      inst->baseDelay = maximum;
+
+      if(inst->graphData->nodeType != GraphComputedData::TAG_SOURCE_AND_SINK){
+         SendLatencyUpwards(inst);
       }
 
-      inst->graphData->inputDelay = minimum;
-      inst->baseDelay = abs(inst->graphData->inputDelay);
-
-      SendLatencyUpwards(inst);
-
-      #if 0
+      #if 1
       if(versat->debug.outputGraphs){
-         OutputGraphDotFile(versat,view,false,"debug/%.*s/out2_%d.dot",UNPACK_SS(view.accel->subtype->name),graphs++);
+         OutputGraphDotFile(versat,*this,true,"debug/%.*s/out2_%d.dot",UNPACK_SS(accel->subtype->name),graphs++);
       }
       #endif
    }
+
+   #if 1
+   for(int i = 0; i < order.numberSinks; i++){
+      ComplexFUInstance* inst = order.sinks[i];
+
+      if(inst->graphData->nodeType != GraphComputedData::TAG_SOURCE_AND_SINK){
+         continue;
+      }
+
+      // Source and sink units never have output delay. They can't
+      for(ConnectionInfo& info : inst->graphData->allOutputs){
+         *info.delay = 0;
+      }
+   }
+   #endif
 
    int minimum = 0;
    for(ComplexFUInstance* inst : nodes){
       minimum = std::min(minimum,inst->graphData->inputDelay);
    }
-
-   minimum = abs(minimum);
    for(ComplexFUInstance* inst : nodes){
-      inst->graphData->inputDelay = minimum - abs(inst->graphData->inputDelay);
+      inst->graphData->inputDelay = inst->graphData->inputDelay - minimum;
+   }
+
+   if(versat->debug.outputGraphs){
+      OutputGraphDotFile(versat,*this,true,"debug/%.*s/out3.dot",UNPACK_SS(accel->subtype->name));
+   }
+
+   #if 1
+   for(int i = 0; i < order.numberSources; i++){
+      ComplexFUInstance* inst = order.sources[i];
+
+      int minimum = 1 << 30;
+      for(ConnectionInfo& info : inst->graphData->allOutputs){
+         minimum = std::min(minimum,*info.delay);
+      }
+
+      // Does not take into account unit latency
+      inst->graphData->inputDelay = minimum;
+      inst->baseDelay = minimum;
+
+      for(ConnectionInfo& info : inst->graphData->allOutputs){
+         *info.delay -= minimum;
+      }
+   }
+   #endif
+
+   if(versat->debug.outputGraphs){
+      OutputGraphDotFile(versat,*this,true,"debug/%.*s/out4.dot",UNPACK_SS(accel->subtype->name));
    }
 
    for(ComplexFUInstance* inst : nodes){
       if(inst->graphData->nodeType == GraphComputedData::TAG_UNCONNECTED){
          inst->graphData->inputDelay = 0;
       } else if(inst->graphData->nodeType == GraphComputedData::TAG_SOURCE_AND_SINK){
-         for(int ii = 0; ii < inst->graphData->numberOutputs; ii++){
-            inst->graphData->outputs[ii].delay = 0;
+         #if 0
+         for(ConnectionInfo& info : inst->graphData->allInputs){
+            *info.delay = 0;
          }
+         #endif
       }
       inst->baseDelay = inst->graphData->inputDelay;
    }
 }
+#endif
 
 static int Visit(ComplexFUInstance*** ordering,ComplexFUInstance* inst){
    if(inst->tag == TAG_PERMANENT_MARK){
@@ -856,8 +929,8 @@ static int Visit(ComplexFUInstance*** ordering,ComplexFUInstance* inst){
 
    int count = 0;
    if(inst->graphData->nodeType == GraphComputedData::TAG_COMPUTE){
-      for(int i = 0; i < inst->graphData->numberInputs; i++){
-         count += Visit(ordering,inst->graphData->inputs[i].instConnectedTo.inst);
+      for(ConnectionInfo& info : inst->graphData->allInputs){
+         count += Visit(ordering,info.instConnectedTo.inst);
       }
    }
 
@@ -946,8 +1019,8 @@ DAGOrder AcceleratorView::CalculateDAGOrdering(Arena* arena){
       ComplexFUInstance* inst = order.instances[i];
 
       int max = 0;
-      for(int ii = 0; ii < inst->graphData->numberInputs; ii++){
-         max = std::max(max,inst->graphData->inputs[ii].instConnectedTo.inst->graphData->order);
+      for(ConnectionInfo& info : inst->graphData->allInputs){
+         max = std::max(max,info.instConnectedTo.inst->graphData->order);
       }
 
       inst->graphData->order = (max + 1);
@@ -1088,6 +1161,8 @@ void ClearFUInstanceTempData(Accelerator* accel){
 AcceleratorView CreateAcceleratorView(Accelerator* accel,Arena* arena){
    AcceleratorView view = {};
 
+   view.versat = accel->versat;
+   view.accel = accel;
    view.nodes = PushArray(arena,accel->instances.Size(),ComplexFUInstance*);
    view.edges = PushArray(arena,accel->edges.Size(),EdgeView);
    view.validNodes.Init(arena,accel->instances.Size());
@@ -1120,6 +1195,8 @@ AcceleratorView CreateAcceleratorView(Accelerator* accel,Arena* arena){
 AcceleratorView CreateAcceleratorView(Accelerator* accel,std::vector<Edge*>& edgeMappings,Arena* arena){
    AcceleratorView view = {};
 
+   view.versat = accel->versat;
+   view.accel = accel;
    view.edges.data = (EdgeView*) MarkArena(arena);
    // Allocate edges first
    for(Edge* edge : edgeMappings){
@@ -1211,7 +1288,7 @@ int CalculateTotalOutputs(Accelerator* accel){
    int total = 0;
    AcceleratorIterator iter = {};
    for(FUInstance* inst = iter.Start(accel); inst; inst = iter.Next()){
-      total += inst->declaration->nOutputs;
+      total += inst->declaration->outputLatencies.size;
    }
    return total;
 }
@@ -1221,7 +1298,7 @@ int CalculateTotalOutputs(FUInstance* inst){
    if(inst->compositeAccel){
       total += CalculateTotalOutputs(inst->compositeAccel);
    }
-   total += inst->declaration->nOutputs;
+   total += inst->declaration->outputLatencies.size;
 
    return total;
 }
@@ -1229,13 +1306,14 @@ int CalculateTotalOutputs(FUInstance* inst){
 bool IsUnitCombinatorial(FUInstance* instance){
    FUDeclaration* type = instance->declaration;
 
-   if(type->nOutputs && type->latencies[0] == 0){
+   if(type->outputLatencies.size && type->outputLatencies[0] == 0){
       return true;
    } else {
       return false;
    }
 }
 
+#if 0
 static int CalculateLatency_(PortInstance portInst, std::unordered_map<PortInstance,int>* memoization,bool seenSourceAndSink){
    ComplexFUInstance* inst = portInst.inst;
    int port = portInst.port;
@@ -1285,7 +1363,7 @@ int CalculateLatency(ComplexFUInstance* inst){
 
    return maxLatency;
 }
-
+#endif
 
 void FixMultipleInputs(Versat* versat,Accelerator* accel){
    Arena* arena = &versat->temp;
@@ -1310,13 +1388,11 @@ void FixMultipleInputs(Versat* versat,Accelerator* accel){
          isComb = false;
       }
 
-      for(int i = 0; i < inst->graphData->numberInputs; i++){
-         ConnectionInfo* info = &inst->graphData->inputs[i];
+      for(ConnectionInfo& info : inst->graphData->allInputs){
+         Assert(info.port < 99 && info.port >= 0);
+         portUsedCount[info.port] += 1;
 
-         Assert(info->port < 99 && info->port >= 0);
-         portUsedCount[info->port] += 1;
-
-         if(!IsUnitCombinatorial(info->instConnectedTo.inst)){
+         if(!IsUnitCombinatorial(info.instConnectedTo.inst)){
             isComb = false;
          }
       }
@@ -1375,6 +1451,8 @@ void InsertUnit(Accelerator* accel, PortInstance before, PortInstance after, Por
          return;
       }
    }
+
+   Assert(false);
 }
 
 void FixDelays(Versat* versat,Accelerator* accel,AcceleratorView view){
@@ -1391,66 +1469,72 @@ void FixDelays(Versat* versat,Accelerator* accel,AcceleratorView view){
          continue;
       }
 
-      for(int ii = 0; ii < inst->graphData->numberOutputs; ii++){
-         ConnectionInfo* info = &inst->graphData->outputs[ii];
-         ComplexFUInstance* other = info->instConnectedTo.inst;
+      for(ConnectionInfo& info : inst->graphData->allInputs){
+         ComplexFUInstance* other = info.instConnectedTo.inst;
+         PortInstance start = info.instConnectedTo;
+         PortInstance end = PortInstance{inst,info.port};
+
+         int delay = *info.delay;
 
          if(other->declaration == versat->buffer){
-            other->baseDelay = info->delay;
+            other->baseDelay = delay;
          } else if(other->declaration == versat->fixedBuffer){
             //NOT_IMPLEMENTED;
-         } else if(info->delay > 0){
+         } else if(delay > 0){
 
             //Assert(!(inst->declaration == versat->buffer || inst->declaration == versat->fixedBuffer));
 
             if(versat->debug.useFixedBuffers){
                SizedString bufferName = PushString(&versat->permanent,"fixedBuffer%d",buffersInserted++);
 
-               ComplexFUInstance* delay = (ComplexFUInstance*) CreateFUInstance(accel,versat->fixedBuffer,bufferName,false,false);
-               delay->parameters = PushString(&versat->permanent,"#(.AMOUNT(%d))",info->delay - versat->fixedBuffer->latencies[0]);
+               ComplexFUInstance* unit = (ComplexFUInstance*) CreateFUInstance(accel,versat->fixedBuffer,bufferName,false,false);
+               unit->parameters = PushString(&versat->permanent,"#(.AMOUNT(%d))",delay - versat->fixedBuffer->outputLatencies[0]);
 
-               InsertUnit(accel,PortInstance{inst,info->port},PortInstance{info->instConnectedTo.inst,info->instConnectedTo.port},PortInstance{delay,0});
+               InsertUnit(accel,start,end,PortInstance{unit,0});
 
-               delay->baseDelay = info->delay - versat->fixedBuffer->latencies[0];
+               unit->baseDelay = delay - versat->fixedBuffer->outputLatencies[0];
 
-               maxDelay = std::max(maxDelay,delay->baseDelay);
+               maxDelay = std::max(maxDelay,unit->baseDelay);
             } else {
                SizedString bufferName = PushString(&versat->permanent,"buffer%d",buffersInserted++);
 
-               ComplexFUInstance* delay = (ComplexFUInstance*) CreateFUInstance(accel,versat->buffer,bufferName,false,true);
-               InsertUnit(accel,PortInstance{inst,info->port},PortInstance{info->instConnectedTo.inst,info->instConnectedTo.port},PortInstance{delay,0});
+               ComplexFUInstance* unit = (ComplexFUInstance*) CreateFUInstance(accel,versat->buffer,bufferName,false,true);
+               InsertUnit(accel,start,end,PortInstance{unit,0});
 
-               delay->baseDelay = info->delay - versat->buffer->latencies[0];
-               Assert(delay->baseDelay >= 0);
+               unit->baseDelay = delay - versat->buffer->outputLatencies[0];
+               Assert(unit->baseDelay >= 0);
 
-               maxDelay = std::max(maxDelay,delay->baseDelay);
+               maxDelay = std::max(maxDelay,unit->baseDelay);
 
-               if(delay->config){
-                  delay->config[0] = delay->baseDelay;
+               if(unit->config){
+                  unit->config[0] = unit->baseDelay;
                }
             }
          } else {
-            Assert(info->delay >= 0);
+            Assert(delay >= 0);
          }
       }
    }
 
-   view = CreateAcceleratorView(accel,&versat->temp);
-   view.CalculateDAGOrdering(&versat->temp);
-
    for(ComplexFUInstance* inst : accel->instances){
-      inst->graphData->inputDelay = inst->baseDelay;
+      if(inst->graphData){
+         inst->graphData->inputDelay = inst->baseDelay;
 
-      Assert(inst->baseDelay >= 0);
-      Assert(inst->baseDelay < 9999); // Unless dealing with really long accelerators, should catch some calculating bugs
+         // TODO: Reinsert this asserts
+         Assert(inst->baseDelay >= 0);
+         Assert(inst->baseDelay < 9999); // Unless dealing with really long accelerators, should catch some calculating bugs
 
-      if(inst->declaration == versat->buffer && inst->config){
-         inst->config[0] = inst->baseDelay;
+         if(inst->declaration == versat->buffer && inst->config){
+            inst->config[0] = inst->baseDelay;
+         }
       }
    }
 
    if(versat->debug.outputGraphs){
-      //OutputGraphDotFile(versat,accel,false,"debug/%.*s/out3_%d.dot",UNPACK_SS(accel->subtype->name),graphs++);
+      AcceleratorView newView = CreateAcceleratorView(accel,&versat->temp);
+      newView.CalculateDAGOrdering(&versat->temp);
+      newView.CalculateGraphData(&versat->temp);
+      OutputGraphDotFile(versat,newView,true,"debug/%.*s/fixDelay.dot",UNPACK_SS(accel->subtype->name));
    }
 }
 
@@ -1459,12 +1543,10 @@ void ActivateMergedAcceleratorRecursive(Versat* versat,ComplexFUInstance* inst, 
       AcceleratorIterator iter = {};
 
       for(ComplexFUInstance* subInst = iter.Start(inst->compositeAccel); subInst; subInst = iter.Next()){
-         if(versat->multiplexer == subInst->declaration){
-            subInst->config[0] = index;
-         }
+         ActivateMergedAcceleratorRecursive(versat,subInst,index);
       }
    } else {
-      if(versat->multiplexer == inst->declaration){
+      if(versat->multiplexer == inst->declaration || versat->combMultiplexer == inst->declaration){
          inst->config[0] = index;
       }
    }

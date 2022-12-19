@@ -16,6 +16,7 @@
 
 #{define retOutputName portInstance}
 #{set inst2 portInstance.inst}
+#{if inst2}
 #{set decl2 inst2.declaration}
    #{if decl2.type == 2}
       #{return "in" # inst2.id}
@@ -30,6 +31,9 @@
          #{return "output_" # inst2.id # "_" # portInstance.port} 
       #{end}
    #{end}
+#{else}
+#{return ""}
+#{end}
 #{end}
 
 #{define outputName portInstance}

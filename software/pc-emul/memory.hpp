@@ -4,6 +4,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
+#include <stdarg.h>
 
 #include "utils.hpp"
 #include "logger.hpp"
@@ -123,6 +124,34 @@ public:
    SizedString PrintRepresentation(Arena* output);
 
    BitArray& operator&=(const BitArray& other);
+};
+
+// An hashmap implementations that uses arenas. Does not allocate any memory after construction. Need to pass current amount of maxAmountOfElements
+template<typename Key,typename Data>
+class Hashmap{
+   class Pair{
+   public:
+      Key key;
+      Data data;
+   };
+
+   Pair* memory;
+   BitArray valid;
+   int size;
+
+public:
+
+   Hashmap(){}
+   Hashmap(Arena* arena,int maxAmountOfElements);
+   void Init(Arena* arena,int maxAmountOfElements);
+
+   Data* Insert(Key key,Data data);
+   Data* InsertIfNotExist(Key key,Data data);
+
+   Data* Get(Key key);
+   Data GetOrFail(Key key);
+
+   bool Exists(Key key);
 };
 
 /*
@@ -298,6 +327,88 @@ void Free(Allocation<T>* alloc){
    alloc->ptr = nullptr;
    alloc->reserved = 0;
    alloc->size = 0;
+}
+
+template<typename Key,typename Data>
+Hashmap<Key,Data>::Hashmap(Arena* arena,int maxAmountOfElements){
+   Init(arena,maxAmountOfElements);
+}
+
+template<typename Key,typename Data>
+void Hashmap<Key,Data>::Init(Arena* arena,int maxAmountOfElements){
+   if(maxAmountOfElements > 0){
+      size = AlignNextPower2(maxAmountOfElements) * 2;
+      Assert(IsPowerOf2(size) && size > 1);
+
+      memory = (Hashmap<Key,Data>::Pair*) PushBytes(arena,sizeof(Hashmap<Key,Data>::Pair) * size);
+      valid.Init(arena,size);
+      valid.Fill(0);
+   }
+}
+
+template<typename Key,typename Data>
+Data* Hashmap<Key,Data>::Insert(Key key,Data data){
+   int mask = size - 1;
+   int index = SimpleHash(MakeSizedString((const char*) &key,sizeof(Key))) & mask; // Size is power of 2
+
+   // open addressing, find first empty position
+   for(; 1; index = (index + 1) & mask){
+      if(!valid.Get(index)){
+         break;
+      }
+
+      Assert(!Memcmp(&key,&memory[index].key,1));
+   }
+
+   valid.Set(index,1);
+   memory[index].key = key;
+   memory[index].data = data;
+
+   return &memory[index].data;
+}
+
+template<typename Key,typename Data>
+Data* Hashmap<Key,Data>::InsertIfNotExist(Key key,Data data){
+   Data* ptr = Get(key);
+
+   if(ptr == nullptr){
+      return Insert(key,data);
+   }
+
+   return nullptr;
+}
+
+template<typename Key,typename Data>
+bool Hashmap<Key,Data>::Exists(Key key){
+   Data* ptr = Get(key);
+
+   if(ptr == nullptr){
+      return false;
+   }
+   return true;
+}
+
+template<typename Key,typename Data>
+Data* Hashmap<Key,Data>::Get(Key key){
+   int mask = size - 1;
+   int index = SimpleHash(MakeSizedString((const char*) &key,sizeof(Key))) & mask; // Size is power of 2
+
+   for(; 1; index = (index + 1) & mask){
+      if(!valid.Get(index)){ // Since using open addressing, the first sign of a non valid position means key doesn't exist.
+         return nullptr;
+      }
+
+      if(Memcmp(&key,&memory[index].key,1)){
+         return &memory[index].data;
+      }
+   }
+}
+
+template<typename Key,typename Data>
+Data Hashmap<Key,Data>::GetOrFail(Key key){
+   Data* ptr = Get(key);
+   Assert(ptr);
+   return *ptr;
 }
 
 template<typename T>
@@ -540,7 +651,7 @@ T* Pool<T>::Get(int index){
 
 template<typename T>
 void Pool<T>::Remove(T* elem){
-   Byte* page = (Byte*) ((unsigned int)elem & ~(GetPageSize() - 1));
+   Byte* page = (Byte*) ((uint)elem & ~(GetPageSize() - 1));
    PageInfo pageInfo = GetPageInfo(info,page);
 
    int pageIndex = ((Byte*) elem - page) / sizeof(T);

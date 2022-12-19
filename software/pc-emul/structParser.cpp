@@ -843,6 +843,11 @@ void RegisterSimpleTypes(){
 //#define STANDALONE
 
 #ifdef STANDALONE
+// Empty impl otherwise debug won't work on template engine
+void StartDebugTerminal(){
+}
+void DebugTerminal(Value val){
+}
 
 int main(int argc,const char* argv[]){
    if(argc < 3){

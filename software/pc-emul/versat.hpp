@@ -46,10 +46,22 @@ struct SpecificMerge{
 
 enum VersatDebugFlags{
    OUTPUT_GRAPH_DOT,
+   GRAPH_DOT_FORMAT,
    OUTPUT_ACCELERATORS_CODE,
    OUTPUT_VERSAT_CODE,
    OUTPUT_VCD,
    USE_FIXED_BUFFERS
+};
+
+typedef uint GraphDotFormat;
+enum GraphDotFormat_{
+   GRAPH_DOT_FORMAT_NAME = 0x1,
+   GRAPH_DOT_FORMAT_TYPE = 0x2,
+   GRAPH_DOT_FORMAT_ID = 0x4,
+   GRAPH_DOT_FORMAT_DELAY = 0x8,
+   GRAPH_DOT_FORMAT_EXPLICIT = 0x10, // indicates which field is which when outputting name
+   GRAPH_DOT_FORMAT_PORT = 0x20, // Outputs port information for edges and port instance
+   GRAPH_DOT_FORMAT_LATENCY = 0x40 // Outputs latency information for edges and port instances which know their latency information
 };
 
 enum MergingStrategy{
@@ -64,7 +76,7 @@ enum MergingStrategy{
 Versat* InitVersat(int base,int numberConfigurations);
 void Free(Versat* versat); // Usually not needed, as memory is freed on program termination and Versat is supposed to be "active" from start to finish, but usuful for debugging memory problems
 void ParseCommandLineOptions(Versat* versat,int argc,const char** argv);
-bool SetDebug(Versat* versat,VersatDebugFlags flags, bool flag);
+uint SetDebug(Versat* versat,VersatDebugFlags flags,uint flag);
 void ParseVersatSpecification(Versat* versat,const char* filepath);
 
 // Accelerator functions
@@ -113,8 +125,9 @@ void OutputUnitInfo(FUInstance* instance);
 void CheckMemory(Accelerator* topLevel,Accelerator* accel);
 void DisplayAcceleratorMemory(Accelerator* topLevel);
 void DisplayUnitConfiguration(Accelerator* topLevel);
+void EnterDebugTerminal(Versat* versat);
 
-// Debug units, only for pc-emul
+// Debug units, only works for pc-emul (no declaration info in embedded)
 bool CheckInputAndOutputNumber(FUDeclaration* type,int inputs,int outputs);
 
 // Helper functions, useful to implement custom units

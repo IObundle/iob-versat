@@ -78,8 +78,8 @@ reg [31:0] data[@{base.dataSize-1}:0];
 wire [31:0] unitOut[@{base.nOutputs-1}:0];
 
 #{for i base.nInputs}
-   #{set portInstance1 firstComb.graphData.inputs[i].instConnectedTo}
-   #{set portInstance2 secondComb.graphData.inputs[i].instConnectedTo}
+   #{set portInstance1 firstComb.graphData.singleInputs[i]}
+   #{set portInstance2 secondComb.graphData.singleInputs[i]}
    wire [31:0] inputWire_@{i} = (looping ? #{call iterativeOutputName portInstance2 i} : #{call iterativeOutputName portInstance1 i}); // @{portInstance2.inst.name} : @{portInstance1.inst.name}
 #{end}
 
@@ -94,10 +94,10 @@ begin
    end else if(running) begin
       if(!looping) begin // Delay phase (First graph, also responsible for providing the latency values?) 
          if(delay == 0) begin
-            #{for i secondData.graphData.inputPortsUsed}
-               #{set portInstance secondData.graphData.inputs[i].instConnectedTo}
-               #{set port secondData.graphData.inputs[i].port}
-               data[@{i}] <= #{call iterativeOutputName portInstance port};
+            #{for input secondData.graphData.singleInputs}
+            #{if input.inst}
+               data[@{index}] <= #{call iterativeOutputName input index};
+            #{end}
             #{end}
             looping <= 1;
          end else begin
@@ -105,10 +105,10 @@ begin
          end
       end else begin // Looping state
          // Update phase (Second graph)
-         #{for i secondData.graphData.inputPortsUsed}
-         #{set portInstance secondData.graphData.inputs[i].instConnectedTo}
-         #{set port secondData.graphData.inputs[i].port}
-            data[@{i}] <= #{call iterativeOutputName portInstance port};
+         #{for input secondData.graphData.singleInputs}
+         #{if input.inst}
+            data[@{index}] <= #{call iterativeOutputName input index};
+         #{end}
          #{end}
       end
    end
@@ -116,8 +116,8 @@ end
 
 // Second graph
 #{for i base.nOutputs}
-#{set portInstance1 firstOut.graphData.inputs[i].instConnectedTo}
-#{set portInstance2 secondOut.graphData.inputs[i].instConnectedTo}
+#{set portInstance1 firstOut.graphData.allInputs[i].instConnectedTo}
+#{set portInstance2 secondOut.graphData.allInputs[i].instConnectedTo}
    assign out@{i} = (looping ? #{call iterativeOutputName portInstance2 i} : #{call iterativeOutputName portInstance1 i});
 #{end}
 
@@ -129,8 +129,8 @@ assign done = (unitDone & looping);
 #{set decl firstComb.declaration}
 
 @{decl.name} @{firstComb.name}(
-   #{for i comb.graphData.inputPortsUsed}
-      .in@{i}(inputWire_@{i}),
+   #{for input comb.graphData.singleInputs}
+      .in@{index}(inputWire_@{index}),
    #{end}
    #{for i decl.nOutputs}
       .out@{i}(unitOut[@{i}]),

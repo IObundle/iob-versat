@@ -69,6 +69,11 @@ int AlignNextPower2(int val){
    return res;
 }
 
+bool IsPowerOf2(int val){
+   bool res = (val != 0) && ((val & (val - 1)) == 0);
+   return res;
+}
+
 int RandomNumberBetween(int minimum,int maximum,int randomValue){
    int delta = maximum - minimum;
 
@@ -139,7 +144,7 @@ int Abs(int val){
    return res;
 }
 
-int Abs(uint val){
+int Abs(unsigned int val){
    int conv = (int) val;
    int res = Abs(conv);
    return res;
@@ -219,8 +224,8 @@ char GetHex(int value){
    }
 }
 
-static uint seed = 1;
-void SeedRandomNumber(uint val){
+static unsigned int seed = 1;
+void SeedRandomNumber(unsigned int val){
    if(val == 0){
       seed = 1;
    } else {
@@ -228,7 +233,7 @@ void SeedRandomNumber(uint val){
    }
 }
 
-uint GetRandomNumber(){
+unsigned int GetRandomNumber(){
    // Xorshift
    seed ^= seed << 13;
 	seed ^= seed >> 17;

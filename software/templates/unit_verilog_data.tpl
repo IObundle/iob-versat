@@ -307,15 +307,13 @@ static FUDeclaration* @{module.name}_Register(Versat* versat){
    FUDeclaration decl = {};
 
    #{if module.nInputs}
-   decl.nInputs = @{module.nInputs};
    static int inputDelays[] =  {#{join "," for i module.nInputs}@{module.inputDelays[i]}#{end}};
-   decl.inputDelays = inputDelays;
+   decl.inputDelays = Array<int>{inputDelays,@{module.nInputs}};
    #{end}
 
    #{if module.nOutputs}
-   decl.nOutputs = @{module.nOutputs};
-   static int latencies[] = {#{join "," for i module.nOutputs}@{module.outputLatencies[i]}#{end}};
-   decl.latencies = latencies;
+   static int outputLatencies[] = {#{join "," for i module.nOutputs}@{module.outputLatencies[i]}#{end}};
+   decl.outputLatencies = Array<int>{outputLatencies,@{module.nOutputs}};
    #{end}
 
    decl.name = MakeSizedString("@{module.name}");
@@ -333,14 +331,12 @@ static FUDeclaration* @{module.name}_Register(Versat* versat){
 
    #{if module.nConfigs}
    static Wire @{module.name}ConfigWires[] = {#{join "," for i module.nConfigs} {MakeSizedString("@{module.configs[i].name}"),@{module.configs[i].bitsize}} #{end}};
-   decl.nConfigs = @{module.nConfigs};
-   decl.configWires = @{module.name}ConfigWires;
+   decl.configs = Array<Wire>{@{module.name}ConfigWires,@{module.nConfigs}};
    #{end}
 
    #{if module.nStates}
    static Wire @{module.name}StateWires[] = {#{join "," for i module.nStates} {MakeSizedString("@{module.states[i].name}"),@{module.states[i].bitsize}} #{end}};
-   decl.nStates = @{module.nStates};
-   decl.stateWires = @{module.name}StateWires;
+   decl.states = Array<Wire>{@{module.name}StateWires,@{module.nStates}};
    #{end}
 
    #{if module.hasDone}

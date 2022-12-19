@@ -2,6 +2,7 @@
 #include "debug.hpp"
 #include "textualRepresentation.hpp"
 
+#include <cstdio>
 #include <cstdarg>
 #include <unordered_map>
 
@@ -793,7 +794,7 @@ static void OutputConsolidationGraph(ConsolidationGraph graph,Arena* memory,bool
       }
 
       ArenaMarker marker(memory);
-      fprintf(outputFile,"\t\"%.*s\";\n",UNPACK_SS(Repr(node,memory)));
+      fprintf(outputFile,"\t\"%.*s\";\n",UNPACK_SS(Repr(*node,memory)));
    }
 
    for(int i = 0; i < graph.edges.size; i++){
@@ -809,8 +810,8 @@ static void OutputConsolidationGraph(ConsolidationGraph graph,Arena* memory,bool
       }
 
       ArenaMarker marker(memory);
-      SizedString node1 = Repr(edge->nodes[0],memory);
-      SizedString node2 = Repr(edge->nodes[1],memory);
+      SizedString node1 = Repr(*edge->nodes[0],memory);
+      SizedString node2 = Repr(*edge->nodes[1],memory);
 
       fprintf(outputFile,"\t\"%.*s\" -- \"%.*s\";\n",UNPACK_SS(node1),UNPACK_SS(node2));
    }
@@ -1385,9 +1386,12 @@ Accelerator* MergeAccelerator(Versat* versat,Accelerator* accel1,Accelerator* ac
          FUInstance* mappedOther = map.find(edge->units[1].inst)->second;
 
          Edge* oldEdge = FindEdge(mappedInst,edge->units[0].port,mappedOther,edge->units[1].port,edge->delay);
-         accel2EdgeMap.push_back(oldEdge);
 
-         continue;
+         if(oldEdge){ // Edge between port instances might exist but different delay means we need to create another one
+            accel2EdgeMap.push_back(oldEdge);
+
+            continue;
+         }
       }
       #endif
 
@@ -1404,7 +1408,7 @@ Accelerator* MergeAccelerator(Versat* versat,Accelerator* accel1,Accelerator* ac
       AcceleratorView view = CreateAcceleratorView(newGraph,arena);
       view.CalculateGraphData(arena);
       IsGraphValid(view);
-      OutputGraphDotFile(versat,view,false,"debug/Merged.dot");
+      OutputGraphDotFile(versat,view,true,"debug/Merged.dot");
    }
 
    {
@@ -1412,7 +1416,7 @@ Accelerator* MergeAccelerator(Versat* versat,Accelerator* accel1,Accelerator* ac
       AcceleratorView view = CreateAcceleratorView(newGraph,accel1EdgeMap,arena);
       view.CalculateGraphData(arena);
       IsGraphValid(view);
-      OutputGraphDotFile(versat,view,false,"debug/Merged1View.dot");
+      OutputGraphDotFile(versat,view,true,"debug/Merged1View.dot");
       view.CalculateDelay(arena);
    }
 
@@ -1421,7 +1425,7 @@ Accelerator* MergeAccelerator(Versat* versat,Accelerator* accel1,Accelerator* ac
       AcceleratorView view = CreateAcceleratorView(newGraph,accel2EdgeMap,arena);
       view.CalculateGraphData(arena);
       IsGraphValid(view);
-      OutputGraphDotFile(versat,view,false,"debug/Merged2View.dot");
+      OutputGraphDotFile(versat,view,true,"debug/Merged2View.dot");
    }
 
    //printf("Nodes mapping size: %d\n",graphMapping.instanceMap.size());
@@ -1477,7 +1481,7 @@ FUDeclaration* MergeAccelerators(Versat* versat,FUDeclaration* accel1,FUDeclarat
       ArenaMarker marker(arena);
       AcceleratorView view = CreateAcceleratorView(decl->fixedDelayCircuit,arena);
       view.CalculateGraphData(arena);
-      OutputGraphDotFile(versat,view,false,"debug/FixedDelay.dot");
+      OutputGraphDotFile(versat,view,true,"debug/FixedDelay.dot");
    }
    #if 0
    //CalculateDelay(versat,flatten1);

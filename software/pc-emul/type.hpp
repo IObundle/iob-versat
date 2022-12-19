@@ -69,6 +69,7 @@ namespace ValueType{
    extern Type* SIZED_STRING;
    extern Type* TEMPLATE_FUNCTION;
    extern Type* POOL;
+   extern Type* ARRAY;
    extern Type* STD_VECTOR;
 };
 
@@ -115,8 +116,6 @@ Value CollapseValue(Value val);
 
 Value ConvertValue(Value in,Type* want,Arena* arena);
 
-int ArrayLength(Type* type);
-
 Type* GetType(SizedString typeName); // Parsable C like name (ex: "int*" for pointer to int) [Type name optionally followed by template argument then pointers then array]
 Type* GetPointerType(Type* baseType);
 Type* GetArrayType(Type* baseType, int arrayLength);
@@ -125,6 +124,10 @@ Value AccessStruct(Value object,Member* member);
 Value AccessStruct(Value val,int index);
 Value AccessStruct(Value object,SizedString memberName);
 Value AccessObjectIndex(Value object,int index);
+
+int ArrayLength(Type* type);
+int IndexableSize(Value object); // If type is indexable, return the maximum size
+bool IsIndexable(Type* type);
 
 Iterator Iterate(Value iterating);
 bool HasNext(Iterator iter);

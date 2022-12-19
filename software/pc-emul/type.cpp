@@ -17,6 +17,7 @@ namespace ValueType{
    Type* TEMPLATE_FUNCTION;
    Type* SET;
    Type* POOL;
+   Type* ARRAY;
    Type* STD_VECTOR;
 };
 
@@ -270,6 +271,7 @@ void RegisterTypes(){
    ValueType::SIZED_STRING = GetType(MakeSizedString("SizedString"));
    ValueType::TEMPLATE_FUNCTION = GetPointerType(GetType(MakeSizedString("TemplateFunction")));
    ValueType::POOL = GetType(MakeSizedString("Pool"));
+   ValueType::ARRAY = GetType(MakeSizedString("Array"));
    ValueType::STD_VECTOR = GetType(MakeSizedString("std::vector"));
 
    #if 0
@@ -288,17 +290,6 @@ void RegisterTypes(){
 void FreeTypes(){
    Free(&permanentArena);
    types.Clear(true);
-}
-
-int ArrayLength(Type* type){
-   Assert(type->type == Type::ARRAY);
-
-   int arraySize = type->size;
-   int baseTypeSize = type->arrayType->size;
-
-   int res = (arraySize / baseTypeSize);
-
-   return res;
 }
 
 SizedString GetValueRepresentation(Value in,Arena* arena){
@@ -383,7 +374,13 @@ Value CollapseValue(Value val){
    } else if(val.type == ValueType::NIL){
       val.number = 0;
    } else if(val.type == ValueType::STRING){
-      val.str = MakeSizedString(*(char**) val.custom);
+      char* str = *(char**) val.custom;
+
+      if(str == nullptr){
+         val.str = MakeSizedString("");
+      } else {
+         val.str = MakeSizedString(str);
+      }
    } else if(val.type == ValueType::SIZED_STRING){
       val.str = *((SizedString*) val.custom);
    } else if(val.type == ValueType::TEMPLATE_FUNCTION){
@@ -440,6 +437,18 @@ Value AccessObjectIndex(Value object,int index){
 
       value.type = object.type->pointerType;
       value.custom = objectPtr;
+   } else if(object.type->type == Type::TEMPLATED_INSTANCE){
+      if(object.type->templateBase == ValueType::ARRAY){
+         Array<Byte>* byteArray = (Array<Byte>*) object.custom;
+
+         int size = object.type->templateArgs->type->size;
+         Byte* view = (Byte*) byteArray->data;
+
+         value.custom = &view[index * size];
+         value.type = object.type->templateArgs->type;
+      } else {
+         NOT_IMPLEMENTED;
+      }
    } else {
       NOT_IMPLEMENTED;
    }
@@ -506,6 +515,63 @@ Value AccessStruct(Value object,SizedString memberName){
    return res;
 }
 
+int ArrayLength(Type* type){
+   Assert(type->type == Type::ARRAY);
+
+   int arraySize = type->size;
+   int baseTypeSize = type->arrayType->size;
+
+   int res = (arraySize / baseTypeSize);
+
+   return res;
+}
+
+int IndexableSize(Value object){
+   Type* type = object.type;
+
+   Assert(IsIndexable(type));
+
+   int size = 0;
+
+   if(type->type == Type::ARRAY){
+      size = ArrayLength(type);
+   } else if(type->type == Type::TEMPLATED_INSTANCE){
+      if(type->templateBase == ValueType::POOL){
+         for(Iterator iter = Iterate(object); HasNext(iter); Advance(&iter)){
+            size += 1;
+         }
+      } else if(type->templateBase == ValueType::STD_VECTOR){ // TODO: A lot of assumptions are being made for std::vector so this works. Probably not safe (change later)
+         std::vector<Byte>* b = (std::vector<Byte>*) object.custom;
+
+         int byteSize = b->size();
+         size = byteSize / type->templateArgs->type->size;
+      } else if(type->templateBase == ValueType::ARRAY){
+         Array<Byte>* view = (Array<Byte>*) object.custom;
+         size = view->size;
+      }
+   }
+
+   return size;
+}
+
+bool IsIndexable(Type* type){
+   bool res = false;
+
+   if(type->type == Type::ARRAY){
+      res = true;
+   } else if(type->type == Type::TEMPLATED_INSTANCE){
+      if(type->templateBase == ValueType::POOL){
+         res = true;
+      } else if(type->templateBase == ValueType::STD_VECTOR){ // TODO: A lot of assumptions are being made for std::vector so this works. Probably not safe (change later)
+         res = true;
+      } else if(type->templateBase == ValueType::ARRAY){
+         res = true;
+      }
+   }
+
+   return res;
+}
+
 Iterator Iterate(Value iterating){
    Type* type = iterating.type;
 
@@ -530,6 +596,8 @@ Iterator Iterate(Value iterating){
       } else if(type->templateBase == ValueType::STD_VECTOR){ // TODO: A lot of assumptions are being made for std::vector so this works. Probably not safe (change later)
          Assert(sizeof(std::vector<Byte>) == sizeof(std::vector<ComplexFUInstance>)); // Assuming std::vector<T> is same for any T (otherwise, cast does not work)
 
+         iter.currentNumber = 0;
+      } else if(type->templateBase == ValueType::ARRAY){
          iter.currentNumber = 0;
       } else {
          NOT_IMPLEMENTED;
@@ -560,10 +628,12 @@ bool HasNext(Iterator iter){
 
          return res;
       } else if(type->templateBase == ValueType::STD_VECTOR){
-         std::vector<Byte>* b = (std::vector<Byte>*) iter.iterating.custom;
+         int len = IndexableSize(iter.iterating);
 
-         int byteSize = b->size();
-         int len = byteSize / type->templateArgs->type->size;
+         bool res = (iter.currentNumber < len);
+         return res;
+      } else if(type->templateBase == ValueType::ARRAY){
+         int len = IndexableSize(iter.iterating);
 
          bool res = (iter.currentNumber < len);
          return res;
@@ -588,6 +658,8 @@ void Advance(Iterator* iter){
       if(type->templateBase == ValueType::POOL){
          ++iter->poolIterator;
       } else if(type->templateBase == ValueType::STD_VECTOR){
+         iter->currentNumber += 1;
+      } else if(type->templateBase == ValueType::ARRAY){
          iter->currentNumber += 1;
       } else {
          NOT_IMPLEMENTED;
@@ -620,6 +692,8 @@ Value GetValue(Iterator iter){
 
          val.custom = &view[index * size];
          val.type = type->templateArgs->type;
+      } else if(type->templateBase == ValueType::ARRAY){
+         val = AccessObjectIndex(iter.iterating,iter.currentNumber);
       } else {
          NOT_IMPLEMENTED;
       }
@@ -846,7 +920,7 @@ Value MakeValue(){
    return val;
 }
 
-Value MakeValue(unsigned int integer){
+Value MakeValue(uint integer){
    Value val = {};
    val.number = (int) integer;
    val.type = ValueType::NUMBER;

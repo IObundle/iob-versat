@@ -211,12 +211,12 @@ FUInstance* ParseInstanceDeclaration(Versat* versat,Tokenizer* tok,Accelerator* 
 
       Token list = tok->NextFindUntil(")");
       int arguments = 1 + CountSubstring(list,MakeSizedString(","));
-      Assert(arguments <= FUType->nConfigs);
+      Assert(arguments <= FUType->configs.size);
 
       Tokenizer insideList(list,",",{});
 
-      inst->config = PushArray(&versat->permanent,FUType->nConfigs,int).data;
-      SetDefaultConfiguration(inst,inst->config,FUType->nConfigs);
+      inst->config = PushArray(&versat->permanent,FUType->configs.size,int).data;
+      SetDefaultConfiguration(inst,inst->config,FUType->configs.size);
 
       //inst->savedConfiguration = true;
       for(int i = 0; i < arguments; i++){
@@ -277,11 +277,11 @@ void ConnectUnit(FUInstance* inst1,FUInstance* inst2,ConnectionExtra outVar,Conn
    int delayDelta = (delayRange == 1 ? 0 : 1);
    if(outRange == 1){
       for(int i = 0; i < inRange; i++){
-         ConnectUnits(inst1,outVar.portStart,inst2,inVar.portStart + i,-(outVar.delayStart + delayDelta * i));
+         ConnectUnits(inst1,outVar.portStart,inst2,inVar.portStart + i,outVar.delayStart + delayDelta * i);
       }
    } else {
       for(int i = 0; i < inRange; i++){
-         ConnectUnits(inst1,outVar.portStart + i,inst2,inVar.portStart + i,-(outVar.delayStart + delayDelta * i));
+         ConnectUnits(inst1,outVar.portStart + i,inst2,inVar.portStart + i,outVar.delayStart + delayDelta * i);
       }
    }
 }

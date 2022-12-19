@@ -1,14 +1,16 @@
 #ifndef INCLUDED_LOGGER
 #define INCLUDED_LOGGER
 
-#define ENABLE_LOG_MODULE 0b1111
+//                          DPAVM
+#define ENABLE_LOG_MODULE 0b11111
 #define MINIMUM_LOG_LEVEL 0
 
 enum LogModule{
    MEMORY      = 0x1,
-   VERSAT      = 0x2,
+   TOP_SYS     = 0x2,
    ACCELERATOR = 0x4,
-   PARSER      = 0x8
+   PARSER      = 0x8,
+   DEBUG_SYS   = 0x10,
 };
 
 enum LogLevel{

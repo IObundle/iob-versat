@@ -1,6 +1,7 @@
 Misc:
 
    Stop using asserts for likely user errors. Parser is full of asserts that are actually faulty user data. Need to grapple with things now before they become more complex, even if in the future there is likelihood that things will change.
+   Maybe do some fuzz testing? 
    Hard to reason with fixed buffer because we immediatly transform delay into a string. Having to parse the delay is not a solution. Figure out what to do and remove all the portions of code that parse the delay out from the unit
 
 Testbench:
@@ -9,24 +10,61 @@ Testbench:
       Add subtests
       Use a more data oriented approach. Kinda problematic when running in embedded, so make small changes and test in embedded to make sure not doing anything to much complicated.
 
+Major change:
+
+>  Increase the amount of data stored in FUDeclarations that I know is gonna be needed anyway.
+      Order information should be stored inside the FUDeclarations. AcceleratorRun should only need to call calculate order for top level graph if needed.
+
+   Need to figure out once and for all how to tie Accelerators to their FUDeclarations.
+      DO NOT DO ANYTHING UNTIL: Implemented proper configuration management. 
+                                Finalized current changes and merge fully working.
+                                Maybe add some code to profile both time and memory usage. Current implementation is not the best but currently blind and no way of measuring improvements.
+      Acknowledge that free Accelerators exist. I can do wathever I want with FUDeclaration accelerators. Ideally I don't want to create dozens of subaccelerators everytime I instantiate a unit. The information already exists in the FUDeclarations
+      Do I need to instantiate sub accelerators at all?
+         Instead of returning a pointer, return a structure with the correct values, calculated at the time.
+            Problem is that in the event a new unit is added, the configuration memories can be reallocated.
+         A structure (Hashmap?) inside the Accelerator allocates space for the FUInstance and returns a pointer for such a structure.
+            We go from the accelerator having a pool of every single instance to the accelerator having a pool for only the subset actually needed by the user.
+            The values for that structure can be computed individually when needed. Instead of computing everything at once everytime we instantiate a unit (in the Populate function)
+      The most important part is to make sure that the GetInstance function returns the same exact values that it currently does.
+      FUDeclaration graphs stop being "Accelerators". Accelerators are coded as user level wrappers that stores info so that user gets pointers that correctly keep track of configuration location for all the units.
+      Or we completely change how the user has access to the configuration memory.
+         We could make it explicit, but I like the ideia of simply storing FUInstances* and access directly when needed.
+         Furthermore, storing unit information shouldn't pose a big problem. A few hundred units at most. The cost is only needed if the user code uses a very long code of (allocate -> configure unit -> repeat).
+         Otherwise the cost is meanigless if not less than current implementation (because in the new one, configuration location data already exists inside the FUDeclaration units).
+      How to connect units to their graph counterparts?
+         Units that are "instantiated" can contain a pointer to the FUDeclaration node that it "represents".
+         Can always move from graphs by calling GetInstance(name). As long as it's properly implemented, we should have no problem moving from one "graph" to the other.
+      How to handle code generation?
+         As long as I have access to GraphData related functions, it should be fine.
+         Do I even need to access the Accelerator instances? Don't I only need data that I can already get inside the FUDeclarations?
+            Specially for the subaccelerators. They only need data that can easily be computed and stored in FUDeclarations.
+            For the top level accelerator, need to populate to get config pointers, at least for the top level units.
+               Maybe change the way config and state information is propagated? Instead of dividing at the top level, just bundle in groups for each subaccelerator and the subaccelerator itself divides the data among units.
+               Ex: instead of passing .val1(configdata[5:0]) and .val2(configdata[9:6], just pass .config(configdata[9:0]) and let the subunit handle separating into val1 and val2.
+            The problem would be that the units would also need to be the ones that handle the writing and reading of config and state. Which becomes more complicated when going to add configuration save and loading.
+
+
 Delay and Time:
 
    Introduce the concept of input delay and output delay.
       Represented in verilog by the wires delayInX, where X is the input port number, and delayOutX.
       delayIn is used for units that consume input and need to know when the input is valid. 
-      delayOut is used for units that produce output and need to know when to start producing. If a unit has an output and no delayOut, then assume unit starts producing immediatly.
+      delayOut is used for units that produce output and need to know when to start producing.
       The concepts of compute only, source, sink and source_sink can be derived from knowing which type each unit provides.
 
 |  Add a "constant" edge, which is time agnostic (no buffer is ever added to a constant edge)
       Useful for units that produce a constant value.
       Maybe the concept should be applied to the unit itself, and not to the edge. But if so, it would be hard to propagate that info accross hierarquies. 
          For now, let the circuit designer handle this by setting himself the constant edges and stuff.
+      Or maybe the concept should be applied to the port? The common use case would be a input unit, think const, that is connected to two other units with different delay requirements.
+         The most important part is to make sure that we do not add buffer units for values that are constant from the moment unit starts producing valid data.
+         Do not know how useful would a "constant" edge be in a world where we can already decide if the units port is constant or not. 
+         Maybe when making accelerators where the final decision of when data is valid rests on the designer, and therefore no point in adding buffers.
+            But in that case, maybe there is a better way of handling this cases? 
 
-+  Remove base delay from FUInstance. Unneeded for multiple instances, should be replace by storing data on the FUDeclaration.
-      A "hack" that shouldn't have been made, doesn't even work for merged accelerators, as we can have multiple base delays.
-
-   Change the Calculate Delay function to work from the inputs towards the outputs.
-      Add a simple mem unit that is connected to the vread of SHA to see the problem. (The mem unit is left with a delay of 67, when it should be close to 3 due to vread latency)
++  Remove base delay from FUInstance. Unneeded for multiple instances, should be replace by storing data on the FUDeclaration and/or temporarily on GraphData?
+      A "hack" that shouldn't have been made, doesn't even work for merged accelerators, as we can have multiple base delays. Also delays should be port based, not instance based.
 
    Check how merging affects delay and buffer calculations.
       First thing I think is that for variable buffers, use an AcceleratorView and allow the function to only had delays units if the merging mapping needs it.
@@ -45,19 +83,21 @@ Delay and Time:
 
 Accelerator View:
 
-   Need to grasp this part. Very important for the future of the project but hard to reason as no easy solution appers to be exist.
+   Need to grasp this part. Very important for the future of the project but hard to reason as no easy solution appears to be exist.
 >  For now, try to propagate AcceleratorViews as further as possible. If a function currently needs to create a AcceleratorView, changing it so that it takes it as a parameter and checks inside if it's correct.
       Only user level functions should have a need to create AcceleratorViews. Everything else takes.
+
+ Iterative units:
+   
+   Simplify the process of creating and make it more code based instead of versat specifications based.
+      Develop a simple code path to create iterative units, also push the generation code to the codeGeneration file.
+      Versat specifications should depend on 
 
 Merge:
 
    Represent input and output mapping as specifics.
 
-+  Graph data:
-
-   Add a array that maps directly to inputs if they exist, nullptr if they do not and only a single value if multiple inputs exist. Also had a flag saying that multiple inputs exit. Useful for templating.
-
-+  Configuration management:
+Configuration management:
 
    Add an interface to provide the user with the ability to save and load configurations.
       Need to add two types. Software sided saving and loading of configuration (Data is not stored on versat).
@@ -66,28 +106,46 @@ Merge:
       Provide ways to save data in PC-Emul and load it in embedded.
       Need to cleary separate where data is stored.
 
--  Optimization:
+Parser:
 
-   Make an unordered_map class that takes an arena and the amount of memory needed right of the bat.
++  Create a fuzzing test system to really hammer away parsing bugs.
+      For starters, the test system takes a ordered collection of tokens already separated by the tester that is guaranteed to produce valid input.
+      The fuzzer then uses that collection to produce a multitude of inputs that can potently fail 
+      Random ways of producing failing inputs:
+         Change order of tokens
+         Insert whitespaces between random tokens
+         Completely change the token with random garbage
+         Completely replace token with whitespace (effectevely remove it)
+         More specific: Insert at the start of the token a common character known to produce errors (ex: a digit, which usually cannot be found at a start of a identifier, etc.)
+      Two things to test for: If the parser gracefully fails and if it produces a good error message, instead of simply asserting away.
+
+|  Generate optimized tokens. Instead of returning a SizedString, return a Token, which not only includes the string, but a type value that is set for the most common types of tokens (+,*,- and things like that).
+      Define a set of constants of the type TOKEN_X. Code that needs to compare to these special tokens can do so in a switch case.
+
+|  Change parsing of expressions to be much more efficient, check some of the algorithms seen in the net. Make it explicit the precedence and associativity of operators
+
+Optimization:
+
+-  Make an unordered_map class that takes an arena and the amount of memory needed right of the bat.
 
    Profile the effects of the assertions in the code. Make sure debug mode isn't running too slow when compared to release
       Especial attention to the Array class operator[]. 
 
--  Template:
+Template:
 
    Do a template pass to remove duplicate code, lock down on the approach used to identify units and wires. Different templates should almost resemble each other. All the logic should be shared between units and should relie on common ground.
    Allow the use of enums inside templates. (See parsing enum info on Type)
    Add local variables. Need to introduce the concept of "stack frames".
    Take a look at the way whitespace is handled. Nothing too important, but I think some places could generate files with errors because they don't handle whitespace correctly
 
--  Type:
+Type:
 
    Do a pass over the use of the temp identifier. It's kind of an hack 
    Parse and generate enum information.
 
--  Pool
+Pool
    
-   Fix the use of unnecessary information, that makes it impossible to copy. Every piece of information required to iterate is stored inside the linked list.
+-  Fix the use of unnecessary information, that makes it impossible to copy. Every piece of information required to iterate is stored inside the linked list.
 
 Current know bugs/problems:
 

@@ -42,8 +42,9 @@ struct Wire{
 struct StaticInfo{
    FUDeclaration* module;
    SizedString name;
-   Wire* wires;
-   int nConfigs;
+   Array<Wire> configs;
+   //Wire* wires;
+   //int nConfigs;
    int* ptr; // Pointer to config of existing unit
 };
 
@@ -55,7 +56,8 @@ struct PortInstance{
 struct ConnectionInfo{
    PortInstance instConnectedTo;
    int port;
-   int delay;
+   int edgeDelay; // Stores the edge delay information
+   int* delay; // Used to calculate delay. Does not store edge delay information
 };
 
 struct Edge{ // A edge in a graph
@@ -67,6 +69,13 @@ struct Edge{ // A edge in a graph
 struct FUDeclaration{
    SizedString name;
 
+   Array<int> inputDelays;
+   Array<int> outputLatencies;
+
+   Array<Wire> configs;
+   Array<Wire> states;
+
+   /*
    int nInputs;
    int* inputDelays;
    int nOutputs;
@@ -77,6 +86,7 @@ struct FUDeclaration{
    Wire* configWires;
    int nStates;
    Wire* stateWires;
+   */
    int nDelays; // Code only handles 1 single instace, for now, hardware needs this value for correct generation
    int nIOs;
    int memoryMapBits;
@@ -116,16 +126,14 @@ struct FUDeclaration{
 };
 
 struct GraphComputedData{
-   int numberInputs;
-   int numberOutputs;
-   int inputPortsUsed;
-   int outputPortsUsed;
-   ConnectionInfo* inputs;
-   ConnectionInfo* outputs;
-   Array<PortInstance> inputToPortInstance;
+   Array<ConnectionInfo> allInputs; // All connections, even repeated ones
+   Array<ConnectionInfo> allOutputs;
+   Array<PortInstance> singleInputs; // Assume no repetition. If repetion exists, multipleSamePortInputs is true. If not connected, port instance inst is nullptr
+   int outputs;
    enum {TAG_UNCONNECTED,TAG_COMPUTE,TAG_SOURCE,TAG_SINK,TAG_SOURCE_AND_SINK} nodeType;
    int inputDelay;
    int order;
+   bool multipleSamePortInputs;
 };
 
 struct VersatComputedData{
@@ -157,6 +165,7 @@ struct ComplexFUInstance : public FUInstance{
 };
 
 struct DebugState{
+   uint dotFormat;
    bool outputGraphs;
    bool outputAccelerator;
    bool outputVersat;
@@ -243,11 +252,12 @@ struct DAGOrder{
 // Graph associated to an accelerator
 class AcceleratorView : public Graph<ComplexFUInstance*,EdgeView>{
 public:
+   Versat* versat;
+   Accelerator* accel;
    DAGOrder order;
    bool dagOrder;
    bool graphData;
    bool versatData;
-   Accelerator* accel;
 
    void CalculateGraphData(Arena* arena);
    void CalculateDelay(Arena* arena);
@@ -294,6 +304,7 @@ struct UnitValues{
    int totalOutputs;
    int extraData;
    int statics;
+   int sharedUnits;
 
    int memoryMappedBits;
    bool isMemoryMapped;

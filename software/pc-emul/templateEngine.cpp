@@ -47,7 +47,7 @@ static Arena* outputArena;
 static const char* filepath;
 
 static bool IsCommandBlockType(Command* com){
-   static const char* notBlocks[] = {"set","end","inc","else","include","call","return","format"};
+   static const char* notBlocks[] = {"set","end","inc","else","include","call","return","format","debugTerminal","debugBreak"};
 
    for(unsigned int i = 0; i < ARRAY_SIZE(notBlocks); i++){
       if(CompareString(com->name,notBlocks[i])){
@@ -76,7 +76,10 @@ static Command* ParseCommand(Tokenizer* tok){
                                                             {"call",-1},
                                                             {"while",1},
                                                             {"return",1},
-                                                            {"format",-1}};
+                                                            {"format",-1},
+                                                            {"debugTerminal",1},
+                                                            {"debugMessage",0},
+                                                            {"debugBreak",0}};
 
    bool found = false;
    int commandSize = -1;
@@ -434,6 +437,22 @@ static Value EvalExpression(Expression* expr){
 
          // Two or more op operations
          Value op1 = EvalExpression(expr->expressions[0]);
+
+         // Short circuit
+         if(CompareString(expr->op,"and")){
+            bool bool1 = ConvertValue(op1,ValueType::BOOLEAN,nullptr).boolean;
+
+            if(!bool1){
+               return MakeValue(false);
+            }
+         } else if(CompareString(expr->op,"or")){
+            bool bool1 = ConvertValue(op1,ValueType::BOOLEAN,nullptr).boolean;
+
+            if(bool1){
+               return MakeValue(true);
+            }
+         }
+
          Value op2 = EvalExpression(expr->expressions[1]);
 
          if(CompareString(expr->op,"==")){
@@ -441,15 +460,15 @@ static Value EvalExpression(Expression* expr){
          } else if(CompareString(expr->op,"!=")){
             return MakeValue(!Equal(op1,op2));
          }else if(CompareString(expr->op,"and")){
-            bool bool1 = ConvertValue(op1,ValueType::BOOLEAN,nullptr).boolean;
+            // At this point bool1 is true
             bool bool2 = ConvertValue(op2,ValueType::BOOLEAN,nullptr).boolean;
 
-            return MakeValue(bool1 && bool2);
+            return MakeValue(bool2);
          } else if(CompareString(expr->op,"or")){
-            bool bool1 = ConvertValue(op1,ValueType::BOOLEAN,nullptr).boolean;
+            // At this point bool1 is false
             bool bool2 = ConvertValue(op2,ValueType::BOOLEAN,nullptr).boolean;
 
-            return MakeValue(bool1 || bool2);
+            return MakeValue(bool2);
          } else if(CompareString(expr->op,"xor")){
             bool bool1 = ConvertValue(op1,ValueType::BOOLEAN,nullptr).boolean;
             bool bool2 = ConvertValue(op2,ValueType::BOOLEAN,nullptr).boolean;
@@ -603,9 +622,11 @@ static SizedString EvalBlockCommand(Block* block){
       SizedString id = com->expressions[0]->id;
 
       Value iterating = EvalExpression(com->expressions[1]);
-      for(Iterator iter = Iterate(iterating); HasNext(iter); Advance(&iter)){
+      int index = 0;
+      for(Iterator iter = Iterate(iterating); HasNext(iter); index += 1,Advance(&iter)){
          Value val = GetValue(iter);
          envTable[id] = val;
+         envTable[MakeSizedString("index")] = MakeValue(index);
 
          for(Block* ptr = block->nextInner; ptr != nullptr; ptr = ptr->next){
             res.size += Eval(ptr).size; // Push on stack
@@ -665,6 +686,15 @@ static SizedString EvalBlockCommand(Block* block){
       val.isTemp = true;
 
       envTable[id] = val;
+   } else if(CompareString(com->name,"debugMessage")){
+      ArenaMarker marker(outputArena);
+
+      for(Block* ptr = block->nextInner; ptr != nullptr; ptr = ptr->next){
+         SizedString res = Eval(ptr); // Push on stack
+         printf("%.*s\n",UNPACK_SS(res));
+      }
+   } else {
+      NOT_IMPLEMENTED;
    }
 
    return res;
@@ -777,6 +807,11 @@ static ValueAndText EvalNonBlockCommand(Command* com){
 
          text.size += PushString(outputArena,val.str).size;
       }
+   } else if(CompareString(com->name,"debugTerminal")){
+      Value val = EvalExpression(com->expressions[0]);
+      DebugTerminal(val);
+   } else if(CompareString(com->name,"debugBreak")){
+      DEBUG_BREAK;
    } else {
       NOT_IMPLEMENTED;
    }

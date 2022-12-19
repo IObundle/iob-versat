@@ -1,6 +1,7 @@
 #include "debug.hpp"
 
-#include <stdarg.h>
+#include <cstdio>
+#include <cstdarg>
 #include <cstdlib>
 #include <set>
 
@@ -60,6 +61,10 @@ void DisplayUnitConfiguration(Accelerator* topLevel){
    DisplayUnitConfiguration(view);
 }
 
+void EnterDebugTerminal(Versat* versat){
+   DebugTerminal(MakeValue(versat,"Versat"));
+}
+
 void DisplayUnitConfiguration(AcceleratorView topLevel){
    for(int i = 0; i < topLevel.nodes.size; i++){
       ComplexFUInstance* inst = topLevel.nodes[i];
@@ -92,9 +97,9 @@ void DisplayUnitConfiguration(AcceleratorView topLevel){
 }
 
 bool CheckInputAndOutputNumber(FUDeclaration* type,int inputs,int outputs){
-   if(inputs > type->nInputs){
+   if(inputs > type->inputDelays.size){
       return false;
-   } else if(outputs > type->nOutputs){
+   } else if(outputs > type->outputLatencies.size){
       return false;
    }
 
@@ -124,8 +129,8 @@ bool IsGraphValid(AcceleratorView view){
          res->first->tag = 1;
       }
 
-      Assert(edge->units[0].port < edge->units[0].inst->declaration->nOutputs && edge->units[0].port >= 0);
-      Assert(edge->units[1].port < edge->units[1].inst->declaration->nInputs && edge->units[1].port >= 0);
+      Assert(edge->units[0].port < edge->units[0].inst->declaration->outputLatencies.size && edge->units[0].port >= 0);
+      Assert(edge->units[1].port < edge->units[1].inst->declaration->inputDelays.size && edge->units[1].port >= 0);
    }
 
    if(view.edges.size){
@@ -145,11 +150,10 @@ static void OutputGraphDotFile_(Versat* versat,AcceleratorView view,bool collaps
    fprintf(outputFile,"digraph accel {\n\tnode [fontcolor=white,style=filled,color=\"160,60,176\"];\n");
    for(int i = 0; i < view.nodes.size; i++){
       ComplexFUInstance* inst = view.nodes[i];
-      SizedString name = Repr(inst,arena,false);
-      SizedString type = Repr(inst->declaration,arena);
+      SizedString id = UniqueRepr(inst,arena);
+      SizedString name = Repr(inst,versat->debug.dotFormat,arena);
 
-      fprintf(outputFile,"\t\"%.*s\";\n",UNPACK_SS(name));
-      //fprintf(outputFile,"\t\"%.*s\" [label=\"%.*s\"];\n",UNPACK_SS(name),UNPACK_SS(type));
+      fprintf(outputFile,"\t\"%.*s\" [label=\"%.*s\"];\n",UNPACK_SS(id),UNPACK_SS(name));
    }
 
    std::set<std::pair<ComplexFUInstance*,ComplexFUInstance*>> sameEdgeCounter;
@@ -166,26 +170,42 @@ static void OutputGraphDotFile_(Versat* versat,AcceleratorView view,bool collaps
          sameEdgeCounter.insert(key);
       }
 
-      SizedString first = Repr(edge->units[0].inst,arena,false);
-      SizedString second = Repr(edge->units[1].inst,arena,false);
-
-      fprintf(outputFile,"\t\"%.*s\" -> ",UNPACK_SS(first));
-      fprintf(outputFile,"\"%.*s\"",UNPACK_SS(second));
+      SizedString first = UniqueRepr(edge->units[0].inst,arena);
+      SizedString second = UniqueRepr(edge->units[1].inst,arena);
+      SizedString label = {};
+      int calculatedDelay = 0;
 
       #if 0
-      ComplexFUInstance* outputInst = edge->units[0].inst;
-      int delay = 0;
-      for(int i = 0; i < outputInst->graphData->numberOutputs; i++){
-         if(edge->units[1].inst == outputInst->graphData->outputs[i].instConnectedTo.inst && edge->units[1].port == outputInst->graphData->outputs[i].instConnectedTo.port){
-            delay = outputInst->graphData->outputs[i].delay;
+      // Get info from input instance side
+      PortInstance start = edge->units[0];
+      for(ConnectionInfo& info : start.inst->graphData->allOutputs){
+         if(info.port == start.port && info.instConnectedTo == edge->units[1]){
+            PortInstance end = info.instConnectedTo;
+
+            label = Repr(start,end,versat->debug.dotFormat,arena);
+            calculatedDelay = info.delay;
             break;
          }
       }
-
-      fprintf(outputFile,"[label=\"%d->%d:%d\"]",edge->units[0].port,edge->units[1].port,delay);
       #endif
 
-      fprintf(outputFile,";\n");
+      #if 01
+      // Get info from output instance side
+      PortInstance end = edge->units[1];
+      for(ConnectionInfo& info : end.inst->graphData->allInputs){
+         if(info.port == end.port && info.instConnectedTo == edge->units[0]){
+            PortInstance start = info.instConnectedTo;
+
+            label = Repr(start,end,versat->debug.dotFormat,arena);
+            calculatedDelay = *info.delay;
+            break;
+         }
+      }
+      #endif
+
+      fprintf(outputFile,"\t\"%.*s\" -> ",UNPACK_SS(first));
+      fprintf(outputFile,"\"%.*s\"",UNPACK_SS(second));
+      fprintf(outputFile,"[label=\"%.*s\\n[%d:%d]\"];\n",UNPACK_SS(label),edge->delay,calculatedDelay);
    }
 
    fprintf(outputFile,"}\n");
@@ -224,18 +244,18 @@ void OutputMemoryHex(void* memory,int size){
    printf("\n");
 }
 
-static std::array<char,4> currentMapping = {'a','a','a','a'};
+static const int VCD_MAPPING_SIZE = 5;
+static std::array<char,VCD_MAPPING_SIZE> currentMapping = {'a','a','a','a','a'};
 static int mappingIncrements = 0;
 static void ResetMapping(){
-   currentMapping[0] = 'a';
-   currentMapping[1] = 'a';
-   currentMapping[2] = 'a';
-   currentMapping[3] = 'a';
+   for(int i = 0; i < VCD_MAPPING_SIZE; i++){
+      currentMapping[i] = 'a';
+   }
    mappingIncrements = 0;
 }
 
 static void IncrementMapping(){
-   for(int i = 3; i >= 0; i--){
+   for(int i = VCD_MAPPING_SIZE-1; i >= 0; i--){
       mappingIncrements += 1;
       currentMapping[i] += 1;
       if(currentMapping[i] == 'z' + 1){
@@ -253,9 +273,8 @@ static void PrintVCDDefinitions_(FILE* accelOutputFile,Accelerator* accel){
    view.CalculateGraphData(arena);
 
    for(StaticInfo* info : accel->staticInfo){
-      for(int i = 0; i < info->nConfigs; i++){
-         Wire* wire = &info->wires[i];
-         fprintf(accelOutputFile,"$var wire  %d %c%c%c%c %.*s_%.*s $end\n",wire->bitsize,currentMapping[0],currentMapping[1],currentMapping[2],currentMapping[3],UNPACK_SS(info->name),UNPACK_SS(wire->name));
+      for(Wire& wire : info->configs){
+         fprintf(accelOutputFile,"$var wire  %d %c%c%c%c %.*s_%.*s $end\n",wire.bitsize,currentMapping[0],currentMapping[1],currentMapping[2],currentMapping[3],UNPACK_SS(info->name),UNPACK_SS(wire.name));
          IncrementMapping();
       }
    }
@@ -263,27 +282,25 @@ static void PrintVCDDefinitions_(FILE* accelOutputFile,Accelerator* accel){
    for(ComplexFUInstance* inst : accel->instances){
       fprintf(accelOutputFile,"$scope module %.*s_%d $end\n",UNPACK_SS(inst->name),inst->id);
 
-      for(int i = 0; i < inst->graphData->inputPortsUsed; i++){
+      for(int i = 0; i < inst->graphData->singleInputs.size; i++){
          fprintf(accelOutputFile,"$var wire  32 %c%c%c%c %.*s_in%d $end\n",currentMapping[0],currentMapping[1],currentMapping[2],currentMapping[3],UNPACK_SS(inst->name),i);
          IncrementMapping();
       }
 
-      for(int i = 0; i < inst->graphData->outputPortsUsed; i++){
+      for(int i = 0; i < inst->graphData->outputs; i++){
          fprintf(accelOutputFile,"$var wire  32 %c%c%c%c %.*s_out%d $end\n",currentMapping[0],currentMapping[1],currentMapping[2],currentMapping[3],UNPACK_SS(inst->name),i);
          IncrementMapping();
          fprintf(accelOutputFile,"$var wire  32 %c%c%c%c %.*s_stored_out%d $end\n",currentMapping[0],currentMapping[1],currentMapping[2],currentMapping[3],UNPACK_SS(inst->name),i);
          IncrementMapping();
       }
 
-      for(int i = 0; i < inst->declaration->nConfigs; i++){
-         Wire* wire = &inst->declaration->configWires[i];
-         fprintf(accelOutputFile,"$var wire  %d %c%c%c%c %.*s $end\n",wire->bitsize,currentMapping[0],currentMapping[1],currentMapping[2],currentMapping[3],UNPACK_SS(wire->name));
+      for(Wire& wire : inst->declaration->configs){
+         fprintf(accelOutputFile,"$var wire  %d %c%c%c%c %.*s $end\n",wire.bitsize,currentMapping[0],currentMapping[1],currentMapping[2],currentMapping[3],UNPACK_SS(wire.name));
          IncrementMapping();
       }
 
-      for(int i = 0; i < inst->declaration->nStates; i++){
-         Wire* wire = &inst->declaration->stateWires[i];
-         fprintf(accelOutputFile,"$var wire  %d %c%c%c%c %.*s $end\n",wire->bitsize,currentMapping[0],currentMapping[1],currentMapping[2],currentMapping[3],UNPACK_SS(wire->name));
+      for(Wire& wire : inst->declaration->states){
+         fprintf(accelOutputFile,"$var wire  %d %c%c%c%c %.*s $end\n",wire.bitsize,currentMapping[0],currentMapping[1],currentMapping[2],currentMapping[3],UNPACK_SS(wire.name));
          IncrementMapping();
       }
 
@@ -333,7 +350,7 @@ static char* Bin(unsigned int val){
 
 static void PrintVCD_(FILE* accelOutputFile,Accelerator* accel,int time){
    for(StaticInfo* info : accel->staticInfo){
-      for(int i = 0; i < info->nConfigs; i++){
+      for(int i = 0; i < info->configs.size; i++){
          if(time == 0){
             fprintf(accelOutputFile,"b%s %c%c%c%c\n",Bin(info->ptr[i]),currentMapping[0],currentMapping[1],currentMapping[2],currentMapping[3]);
          }
@@ -342,26 +359,26 @@ static void PrintVCD_(FILE* accelOutputFile,Accelerator* accel,int time){
    }
 
    for(ComplexFUInstance* inst : accel->instances){
-      for(int i = 0; i < inst->graphData->inputPortsUsed; i++){
+      for(int i = 0; i < inst->graphData->singleInputs.size; i++){
          fprintf(accelOutputFile,"b%s %c%c%c%c\n",Bin(GetInputValue(inst,i)),currentMapping[0],currentMapping[1],currentMapping[2],currentMapping[3]);
          IncrementMapping();
       }
 
-      for(int i = 0; i < inst->graphData->outputPortsUsed; i++){
+      for(int i = 0; i < inst->graphData->outputs; i++){
          fprintf(accelOutputFile,"b%s %c%c%c%c\n",Bin(inst->outputs[i]),currentMapping[0],currentMapping[1],currentMapping[2],currentMapping[3]);
          IncrementMapping();
          fprintf(accelOutputFile,"b%s %c%c%c%c\n",Bin(inst->storedOutputs[i]),currentMapping[0],currentMapping[1],currentMapping[2],currentMapping[3]);
          IncrementMapping();
       }
 
-      for(int i = 0; i < inst->declaration->nConfigs; i++){
+      for(int i = 0; i < inst->declaration->configs.size; i++){
          if(time == 0){
             fprintf(accelOutputFile,"b%s %c%c%c%c\n",Bin(inst->config[i]),currentMapping[0],currentMapping[1],currentMapping[2],currentMapping[3]);
          }
          IncrementMapping();
       }
 
-      for(int i = 0; i < inst->declaration->nStates; i++){
+      for(int i = 0; i < inst->declaration->states.size; i++){
          fprintf(accelOutputFile,"b%s %c%c%c%c\n",Bin(inst->state[i]),currentMapping[0],currentMapping[1],currentMapping[2],currentMapping[3]);
          IncrementMapping();
       }
@@ -391,6 +408,10 @@ void PrintVCD(FILE* accelOutputFile,Accelerator* accel,int time,int clock){ // N
 }
 
 #if 0
+#define NCURSES
+#endif
+
+#ifdef NCURSES
 #include <ncurses.h>
 #include <signal.h>
 
@@ -436,9 +457,24 @@ enum Input{
    INPUT_UP
 };
 
-void StructPanel(WINDOW* w,PanelState* state,Input input,Arena* arena){
-   Value val = state->valueLooking;
+static bool WatchableObject(Value object){
+   Value val = CollapsePtrIntoStruct(object);
+
    Type* type = val.type;
+
+   if(IsIndexable(type)){
+      return true;
+   } else if(type->type == Type::STRUCT){
+      return true;
+   }
+
+   return false;
+}
+
+void StructPanel(WINDOW* w,Value val,int cursorPosition,int xStart,bool displayOnly,Arena* arena){
+   Type* type = val.type;
+
+   Assert(type->type == Type::STRUCT);
 
    const int panelWidth = 32;
 
@@ -448,27 +484,22 @@ void StructPanel(WINDOW* w,PanelState* state,Input input,Arena* arena){
    for(Member* member = type->members; member != nullptr; member = member->next){
       int yPos = startPos + menuIndex;
 
-      if(menuIndex == state->cursorPosition){
+      if(!displayOnly && menuIndex == cursorPosition){
          wattron( w, A_STANDOUT );
       }
 
-      mvaddnstr(yPos, 0, member->name.data,member->name.size);
+      mvaddnstr(yPos, xStart, member->name.data,member->name.size);
 
-      // Ugly hack, somethings are char* despite not pointing to strings but to areas of memory
-      // Type system cannot distinguish them, and therefore we kinda hack it away
-      if(member->type != GetType(MakeSizedString("char*"))){
-         //printf("%.*s\n",UNPACK_SS(member->name));
-         Value memberVal = AccessStruct(val,member);
-         SizedString repr = GetValueRepresentation(memberVal,arena);
+      Value memberVal = AccessStruct(val,member);
+      SizedString repr = GetValueRepresentation(memberVal,arena);
 
-         move(yPos, panelWidth);
-         addnstr(repr.data,repr.size);
-      }
+      move(yPos, xStart + panelWidth);
+      addnstr(repr.data,repr.size);
 
-      move(yPos, panelWidth + panelWidth / 2);
+      move(yPos, xStart + panelWidth + panelWidth / 2);
       addnstr(member->type->name.data,member->type->name.size);
 
-      if(menuIndex == state->cursorPosition){
+      if(!displayOnly && menuIndex == cursorPosition){
          wattroff( w, A_STANDOUT );
       }
 
@@ -477,6 +508,8 @@ void StructPanel(WINDOW* w,PanelState* state,Input input,Arena* arena){
 }
 
 void TerminalIteration(WINDOW* w,Input input,Arena* arena,Arena* temp){
+   ArenaMarker mark(temp);
+   clear();
    // Before panel decision
    if(input == INPUT_BACKSPACE){
       if(currentPanel > 0){
@@ -496,7 +529,6 @@ void TerminalIteration(WINDOW* w,Input input,Arena* arena,Arena* temp){
       newState->cursorPosition = 0;
       newState->arenaMark = MarkArena(arena);
 
-      // Switch on type
       if(type->type == Type::STRUCT){
          Member* member = GetListByIndex(type->members,currentState->cursorPosition);
 
@@ -504,13 +536,13 @@ void TerminalIteration(WINDOW* w,Input input,Arena* arena,Arena* temp){
 
          selectedValue = CollapsePtrIntoStruct(selectedValue);
 
-         if(selectedValue.type->type == Type::STRUCT || (selectedValue.type->type == Type::TEMPLATED_INSTANCE && selectedValue.type->templateBase == ValueType::POOL)){
+         if(selectedValue.type->type == Type::STRUCT || IsIndexable(selectedValue.type)){
             currentPanel += 1;
 
             newState->name = member->name;
             newState->valueLooking = selectedValue;
          }
-      } else if(type->type == Type::TEMPLATED_INSTANCE && type->templateBase == ValueType::POOL){
+      } else if(IsIndexable(type)){
          Iterator iter = Iterate(val);
          for(int i = 0; HasNext(iter); i += 1,Advance(&iter)){
             if(i == currentState->cursorPosition){
@@ -528,7 +560,7 @@ void TerminalIteration(WINDOW* w,Input input,Arena* arena,Arena* temp){
 
    currentPanel = std::max(0,currentPanel);
 
-   // At this point, panel is locked in,
+   // At this point, panel is locked in
    PanelState* state = &panels[currentPanel];
 
    Value val = state->valueLooking;
@@ -546,11 +578,8 @@ void TerminalIteration(WINDOW* w,Input input,Arena* arena,Arena* temp){
    int numberElements = 0;
    if(type->type == Type::STRUCT){
       numberElements = ListCount(type->members);
-   } else if(type->type == Type::TEMPLATED_INSTANCE && type->templateBase == ValueType::POOL){
-      Iterator iter = Iterate(val);
-      for(; HasNext(iter); Advance(&iter)){
-         numberElements += 1;
-      }
+   } else if(IsIndexable(type)){
+      numberElements = IndexableSize(val);
    }
 
    if(input == INPUT_DOWN){
@@ -562,15 +591,16 @@ void TerminalIteration(WINDOW* w,Input input,Arena* arena,Arena* temp){
    state->cursorPosition = RolloverRange(0,state->cursorPosition,numberElements - 1);
 
    if(type->type == Type::STRUCT){
-      StructPanel(w,state,input,arena);
-      return;
-   } else if(type->type == Type::TEMPLATED_INSTANCE && type->templateBase == ValueType::POOL){
+      StructPanel(w,state->valueLooking,state->cursorPosition,0,false,arena);
+   } else if(IsIndexable(type)){
       Iterator iter = Iterate(val);
-      for(int index = 0; HasNext(iter); index += 1,Advance(&iter)){
-         //Value val = GetValue(iter);
 
+      Value currentSelected = {};
+
+      for(int index = 0; HasNext(iter); index += 1,Advance(&iter)){
          if(index == state->cursorPosition){
             wattron( w, A_STANDOUT );
+            currentSelected = GetValue(iter);
          }
 
          move(index + 2,0);
@@ -581,9 +611,21 @@ void TerminalIteration(WINDOW* w,Input input,Arena* arena,Arena* temp){
             wattroff( w, A_STANDOUT );
          }
       }
+
+      if(numberElements){
+         if(currentSelected.type->type == Type::STRUCT){
+            StructPanel(w,currentSelected,0,8,true,arena);
+         } else {
+            SizedString repr = GetValueRepresentation(currentSelected,temp);
+            mvaddnstr(2,8,repr.data,repr.size);
+         }
+      }
    } else {
-      mvaddnstr(1,0,"NO TYPE",7);
+      SizedString typeName = PushString(temp,"%.*s",UNPACK_SS(type->name));
+      mvaddnstr(1,0,typeName.data,typeName.size);
    }
+
+   refresh();
 }
 
 #include <sys/types.h>
@@ -600,8 +642,13 @@ void StartDebugTerminal(){
 }
 
 static void debug_sig_handler(int sig){
-   if (sig == SIGUSR1){
+   if(sig == SIGUSR1){
       StartDebugTerminal();
+   }
+   if(sig == SIGSEGV){
+      StartDebugTerminal();
+      signal(SIGSEGV, SIG_DFL);
+      raise(SIGSEGV);
    }
 }
 
@@ -610,6 +657,7 @@ void SetDebuggingValue(Value val){
 
    if(!init){
       signal(SIGUSR1, debug_sig_handler);
+      signal(SIGSEGV, debug_sig_handler);
       init = true;
    }
 
@@ -633,14 +681,17 @@ static void terminal_sig_handler(int sig){
 }
 
 void DebugTerminal(Value initialValue){
+   Assert(WatchableObject(initialValue));
+
    Arena arena = {};
    Arena temp = {};
    InitArena(&arena,Megabyte(1));
    InitArena(&temp,Megabyte(1));
 
+   currentPanel = 0;
    panels[0].name = MakeSizedString("TOP");
    panels[0].cursorPosition = 0;
-   panels[0].valueLooking = initialValue;
+   panels[0].valueLooking = CollapsePtrIntoStruct(initialValue);
 
 	WINDOW *w  = initscr();
 
@@ -688,10 +739,7 @@ void DebugTerminal(Value initialValue){
       }
 
       if(input != INPUT_NONE || iterate){
-         clear();
-         ArenaMarker mark(&temp);
          TerminalIteration(w,input,&arena,&temp);
-         refresh();
       }
 	}
 
@@ -699,5 +747,9 @@ void DebugTerminal(Value initialValue){
 
 	Free(&arena);
 }
-
+#else
+void DebugTerminal(Value initialValue){
+   LogOnce(LogModule::DEBUG_SYS,LogLevel::DEBUG,"No ncurses support, no debug terminal");
+   return;
+}
 #endif

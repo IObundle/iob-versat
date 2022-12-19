@@ -12,7 +12,7 @@ VersatComputedValues ComputeVersatValues(Versat* versat,Accelerator* accel){
    for(ComplexFUInstance* inst : accel->instances){
       FUDeclaration* decl = inst->declaration;
 
-      res.numberConnections += inst->graphData->numberOutputs;
+      res.numberConnections += inst->graphData->allOutputs.size;
 
       if(decl->isMemoryMapped){
          res.maxMemoryMapDWords = std::max(res.maxMemoryMapDWords,1 << decl->memoryMapBits);
@@ -20,14 +20,14 @@ VersatComputedValues ComputeVersatValues(Versat* versat,Accelerator* accel){
          res.unitsMapped += 1;
       }
 
-      res.nConfigs += decl->nConfigs;
-      for(int i = 0; i < decl->nConfigs; i++){
-         res.configBits += decl->configWires[i].bitsize;
+      res.nConfigs += decl->configs.size;
+      for(Wire& wire : decl->configs){
+         res.configBits += wire.bitsize;
       }
 
-      res.nStates += decl->nStates;
-      for(int i = 0; i < decl->nStates; i++){
-         res.stateBits += decl->stateWires[i].bitsize;
+      res.nStates += decl->states.size;
+      for(Wire& wire : decl->states){
+         res.stateBits += wire.bitsize;
       }
 
       res.nDelays += decl->nDelays;
@@ -37,10 +37,10 @@ VersatComputedValues ComputeVersatValues(Versat* versat,Accelerator* accel){
    }
 
    for(StaticInfo* unit : accel->staticInfo){
-      res.nStatics += unit->nConfigs;
+      res.nStatics += unit->configs.size;
 
-      for(int i = 0; i < unit->nConfigs; i++){
-         res.staticBits += unit->wires[i].bitsize;
+      for(Wire& wire : unit->configs){
+         res.staticBits += wire.bitsize;
       }
    }
 
@@ -197,47 +197,6 @@ void OutputVersatSource(Versat* versat,Accelerator* accel,const char* sourceFile
    view.CalculateVersatData(arena);
 
    ProcessTemplate(s,"../../submodules/VERSAT/software/templates/versat_top_instance_template.tpl",&versat->temp);
-
-   /*
-   unsigned int hashTableSize = 2048;
-   Assert(accum.size() < (hashTableSize / 2));
-   HashKey hashMap[hashTableSize];
-   for(size_t i = 0; i < hashTableSize; i++){
-      hashMap[i].data = -1;
-      hashMap[i].key = (SizedString){nullptr,0};
-   }
-
-   Byte* mark = MarkArena(&versat->temp);
-   for(size_t i = 0; i < accum.size(); i++){
-      char* name = GetHierarchyNameRepr(accum[i]->name);
-
-      SizedString ss = PushString(&versat->temp,MakeSizedString(name));
-
-      unsigned int hash = 0;
-      for(int ii = 0; ii < ss.size; ii++){
-         hash *= 17;
-         hash += ss.str[ii];
-      }
-
-      if(hashMap[hash % hashTableSize].data == -1){
-         hashMap[hash % hashTableSize].data = i;
-         hashMap[hash % hashTableSize].key = ss;
-      } else {
-         unsigned int counter;
-         for(counter = 0; counter < hashTableSize; counter++){
-            if(hashMap[(hash + counter) % hashTableSize].data == -1){
-               hashMap[(hash + counter) % hashTableSize].data = i;
-               hashMap[(hash + counter) % hashTableSize].key = ss;
-               break;
-            }
-         }
-         Assert(counter != hashTableSize);
-      }
-   }
-
-   TemplateSetNumber("hashTableSize",hashTableSize);
-   TemplateSetArray("instanceHashmap","HashKey",hashMap,hashTableSize);
-   */
 
    TemplateSetNumber("configurationSize",accel->configAlloc.size);
    TemplateSetArray("configurationData","int",accel->configAlloc.ptr,accel->configAlloc.size);
