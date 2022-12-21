@@ -9,6 +9,7 @@
 
 namespace ValueType{
    Type* NUMBER;
+   Type* SIZE_T;
    Type* BOOLEAN;
    Type* CHAR;
    Type* STRING;
@@ -264,6 +265,7 @@ void RegisterTypes(){
    RegisterParsedTypes();
 
    ValueType::NUMBER = GetType(MakeSizedString("int"));
+   ValueType::SIZE_T = GetType(MakeSizedString("size_t"));
    ValueType::BOOLEAN =  GetType(MakeSizedString("bool"));
    ValueType::CHAR =  GetType(MakeSizedString("char"));
    ValueType::NIL = GetType(MakeSizedString("void"));
@@ -310,6 +312,8 @@ SizedString GetValueRepresentation(Value in,Arena* arena){
       res = PushString(arena,"%.*s",UNPACK_SS(val.str));
    } else if(val.type == ValueType::BOOLEAN){
       res = PushString(arena,"%s",val.boolean ? "true" : "false");
+   } else if(val.type == ValueType::SIZE_T){
+      res = PushString(arena,"%d",*(int*)val.custom);
    } else if(val.type->type == Type::POINTER){
       Assert(!val.isTemp);
 

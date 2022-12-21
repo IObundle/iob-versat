@@ -75,18 +75,6 @@ struct FUDeclaration{
    Array<Wire> configs;
    Array<Wire> states;
 
-   /*
-   int nInputs;
-   int* inputDelays;
-   int nOutputs;
-   int* latencies;
-
-   // Interfaces
-   int nConfigs;
-   Wire* configWires;
-   int nStates;
-   Wire* stateWires;
-   */
    int nDelays; // Code only handles 1 single instace, for now, hardware needs this value for correct generation
    int nIOs;
    int memoryMapBits;
@@ -256,10 +244,12 @@ public:
    Accelerator* accel;
    DAGOrder order;
    bool dagOrder;
-   bool graphData;
-   bool versatData;
+   Array<Byte> graphData;
+   Array<VersatComputedData> versatData;
 
    void CalculateGraphData(Arena* arena);
+   void SetGraphData();
+
    void CalculateDelay(Arena* arena);
    DAGOrder CalculateDAGOrdering(Arena* arena);
    void CalculateVersatData(Arena* arena);

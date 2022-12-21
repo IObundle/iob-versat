@@ -207,7 +207,6 @@ FUInstance* CreateFUInstance(Accelerator* accel,FUDeclaration* type,SizedString 
    return ptr;
 }
 
-
 Accelerator* CopyAccelerator(Versat* versat,Accelerator* accel,InstanceMap* map,bool flat){
    Accelerator* newAccel = CreateAccelerator(versat);
    InstanceMap nullCaseMap;
@@ -575,6 +574,7 @@ Accelerator* Flatten(Versat* versat,Accelerator* accel,int times){
    {
       ArenaMarker marker(arena);
       AcceleratorView view = CreateAcceleratorView(newAccel,arena);
+      view.CalculateGraphData(arena);
       OutputGraphDotFile(versat,view,true,"./debug/flatten.dot");
    }
 
@@ -650,20 +650,31 @@ ComplexFUInstance* AcceleratorIterator::CurrentAcceleratorInstance(){
    return inst;
 }
 
+void AcceleratorView::SetGraphData(){
+   Assert(graphData.size);
+
+   GraphComputedData* computedData = (GraphComputedData*) graphData.data;
+
+   // Associate computed data to each instance
+   for(int i = 0; i < nodes.size; i++){
+      ComplexFUInstance* inst = nodes[i];
+      inst->graphData = &computedData[i];
+   }
+}
+
 void AcceleratorView::CalculateGraphData(Arena* arena){
-   if(graphData){
+   if(graphData.size){
       return;
    }
 
-   graphData = true;
    int memoryNeeded = sizeof(GraphComputedData) * nodes.size + 2 * edges.size * sizeof(ConnectionInfo) + edges.size * sizeof(int);
-   Byte* memory = PushBytes(arena,memoryNeeded);
+   graphData = PushArray(arena,memoryNeeded,Byte);
 
    ArenaMarker marker(arena);
    Hashmap<Edge*,int*> map(arena,edges.size);
 
    PushPtr<Byte> data;
-   data.Init(memory,memoryNeeded);
+   data.Init(graphData);
 
    GraphComputedData* computedData = (GraphComputedData*) data.Push(nodes.size * sizeof(GraphComputedData));
    ConnectionInfo* inputBuffer = (ConnectionInfo*) data.Push(edges.size * sizeof(ConnectionInfo));
@@ -677,11 +688,7 @@ void AcceleratorView::CalculateGraphData(Arena* arena){
 
    Assert(data.Empty());
 
-   // Associate computed data to each instance
-   for(int i = 0; i < nodes.size; i++){
-      ComplexFUInstance* inst = nodes[i];
-      inst->graphData = &computedData[i];
-   }
+   SetGraphData();
 
    // Set inputs and outputs
    for(ComplexFUInstance* inst : nodes){
@@ -1054,11 +1061,10 @@ static void SaveMemoryMappingInfo(char* buffer,int size,HuffmanBlock* block){
 }
 
 void AcceleratorView::CalculateVersatData(Arena* arena){
-   if(versatData){
+   if(versatData.size){
       return;
    }
 
-   versatData = true;
    VersatComputedData* mem = PushArray(arena,nodes.size,VersatComputedData).data;
 
    CalculateGraphData(arena);
@@ -1371,7 +1377,7 @@ void FixMultipleInputs(Versat* versat,Accelerator* accel){
    AcceleratorView view = CreateAcceleratorView(accel,arena);
    view.CalculateGraphData(arena);
 
-   Assert(view.graphData);
+   Assert(view.graphData.size);
 
    static int multiplexersInstantiated = 0;
 
@@ -1456,7 +1462,7 @@ void InsertUnit(Accelerator* accel, PortInstance before, PortInstance after, Por
 }
 
 void FixDelays(Versat* versat,Accelerator* accel,AcceleratorView view){
-   Assert(view.graphData && view.dagOrder);
+   Assert(view.graphData.size && view.dagOrder);
 
    DAGOrder order = view.order;
 

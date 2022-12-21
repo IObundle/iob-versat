@@ -14,6 +14,8 @@ Major change:
 
 >  Increase the amount of data stored in FUDeclarations that I know is gonna be needed anyway.
       Order information should be stored inside the FUDeclarations. AcceleratorRun should only need to call calculate order for top level graph if needed.
+      The problem is not order information. Is graph data.
+      How would I store graph data in a FUDeclaration that would be useful for already created accelerators?
 
    Need to figure out once and for all how to tie Accelerators to their FUDeclarations.
       DO NOT DO ANYTHING UNTIL: Implemented proper configuration management. 
@@ -44,6 +46,15 @@ Major change:
                Ex: instead of passing .val1(configdata[5:0]) and .val2(configdata[9:6], just pass .config(configdata[9:0]) and let the subunit handle separating into val1 and val2.
             The problem would be that the units would also need to be the ones that handle the writing and reading of config and state. Which becomes more complicated when going to add configuration save and loading.
 
+Embedded data:
+
+   The named access to FUInstances is actually the best way to go. 
+      All we need is to separate the generation of the versat_data.inc file from the remaining of the code.
+      This allows the user to separate the generation of versat from the test code.
+      But on the other hand, we must force the user to always run the simulation code before compiling.
+      Maybe add a debug flag to output all the data available anyway.
+
+   Also consider adding a debug flag to output declaration data so that we do not need to tiptoe around it during the creation of tests.
 
 Delay and Time:
 

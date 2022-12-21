@@ -40,6 +40,9 @@ template<typename T>
 void Free(Allocation<T>* alloc);
 
 template<typename T>
+int MemoryUsage(Allocation<T> alloc);
+
+template<typename T>
 class PushPtr{
 public:
    T* ptr;
@@ -49,6 +52,12 @@ public:
    void Init(T* ptr,int maximum){
       this->ptr = ptr;
       this->maximumTimes = maximum;
+      this->timesPushed = 0;
+   }
+
+   void Init(Array<T> arr){
+      this->ptr = arr.data;
+      this->maximumTimes = arr.size;
       this->timesPushed = 0;
    }
 
@@ -258,6 +267,8 @@ public:
    PoolIterator<T> end();
 
    PoolIterator<T> beginNonValid();
+
+   int MemoryUsage();
 };
 
 // Impl
@@ -327,6 +338,12 @@ void Free(Allocation<T>* alloc){
    alloc->ptr = nullptr;
    alloc->reserved = 0;
    alloc->size = 0;
+}
+
+template<typename T>
+int MemoryUsage(Allocation<T> alloc){
+   int memoryUsed = alloc.reserved * sizeof(T);
+   return memoryUsed;
 }
 
 template<typename Key,typename Data>
@@ -750,5 +767,20 @@ PoolIterator<T> Pool<T>::beginNonValid(){
    return iter;
 }
 
+template<typename T>
+int Pool<T>::MemoryUsage(){
+   Byte* page = mem;
+   int numberPages = 0;
+   while(page){
+      numberPages += 1;
+      PageInfo pageInfo = GetPageInfo(info,page);
+      Byte* next = pageInfo.header->nextPage;
+
+      page = next;
+   }
+
+   int memoryUsed = numberPages * GetPageSize();
+   return memoryUsed;
+}
 
 #endif // INCLUDED_MEMORY

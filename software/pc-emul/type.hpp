@@ -62,6 +62,7 @@ struct Member{
 
 namespace ValueType{
    extern Type* NUMBER;
+   extern Type* SIZE_T;
    extern Type* BOOLEAN;
    extern Type* CHAR;
    extern Type* STRING;

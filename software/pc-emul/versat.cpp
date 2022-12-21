@@ -1572,6 +1572,26 @@ bool CheckValidName(SizedString name){
    return true;
 }
 
+int CalculateMemoryUsage(Versat* versat){
+   int totalSize = 0;
+   for(Accelerator* accel : versat->accelerators){
+      int accelSize = accel->instances.MemoryUsage() + accel->edges.MemoryUsage();
+      accelSize += MemoryUsage(accel->configAlloc);
+      accelSize += MemoryUsage(accel->stateAlloc);
+      accelSize += MemoryUsage(accel->delayAlloc);
+      accelSize += MemoryUsage(accel->staticAlloc);
+      accelSize += MemoryUsage(accel->outputAlloc);
+      accelSize += MemoryUsage(accel->storedOutputAlloc);
+      accelSize += MemoryUsage(accel->extraDataAlloc);
+
+      totalSize += accelSize;
+   }
+
+   totalSize += versat->permanent.used; // Not total allocated, because it would distort the actual data we care about
+
+   return totalSize;
+}
+
 void Hook(Versat* versat,Accelerator* accel,FUInstance* inst){
 
 }

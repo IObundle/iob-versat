@@ -107,7 +107,7 @@ bool CheckInputAndOutputNumber(FUDeclaration* type,int inputs,int outputs){
 }
 
 bool IsGraphValid(AcceleratorView view){
-   Assert(view.graphData);
+   Assert(view.graphData.size);
 
    InstanceMap map;
 
