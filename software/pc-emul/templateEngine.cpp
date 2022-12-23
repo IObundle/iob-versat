@@ -117,7 +117,7 @@ static Command* ParseCommand(Tokenizer* tok){
       }
    }
 
-   com->expressions = PushArray(tempArena,commandSize,Expression*);
+   com->expressions = PushArray<Expression*>(tempArena,commandSize);
    for(int i = 0; i < com->expressions.size; i++){
       com->expressions[i] = ParseExpression(tok);
    }
@@ -139,7 +139,7 @@ static Expression* ParseIdentifier(Expression* current,Tokenizer* tok){
       if(CompareString(token,"[")){
          tok->AdvancePeek(token);
          Expression* expr = PushStruct(tempArena,Expression);
-         expr->expressions = PushArray(tempArena,2,Expression*);
+         expr->expressions = PushArray<Expression*>(tempArena,2);
 
          expr->type = Expression::ARRAY_ACCESS;
          expr->expressions[0] = current;
@@ -153,7 +153,7 @@ static Expression* ParseIdentifier(Expression* current,Tokenizer* tok){
          Token memberName = tok->NextToken();
 
          Expression* expr = PushStruct(tempArena,Expression);
-         expr->expressions = PushArray(tempArena,1,Expression*);
+         expr->expressions = PushArray<Expression*>(tempArena,1);
 
          expr->type = Expression::MEMBER_ACCESS;
          expr->id = memberName;
@@ -229,7 +229,7 @@ static Expression* ParseFactor(Tokenizer* tok){
       Expression* child = ParseExpression(tok);
 
       expr = PushStruct(tempArena,Expression);
-      expr->expressions = PushArray(tempArena,1,Expression*);
+      expr->expressions = PushArray<Expression*>(tempArena,1);
 
       expr->type = Expression::OPERATION;
       expr->op = "!";

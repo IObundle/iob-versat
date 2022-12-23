@@ -69,22 +69,6 @@ public:
 
 typedef Array<const char> SizedString;
 
-char* SizedStringToCStr(SizedString s); // Uses static buffer, care
-
-bool operator<(const SizedString& lhs,const SizedString& rhs);
-bool operator==(const SizedString& lhs,const SizedString& rhs);
-
-int SimpleHash(SizedString hashing);
-
-template<> class std::hash<SizedString>{
-   public:
-   std::size_t operator()(SizedString const& s) const noexcept{
-      int res = SimpleHash(s);
-
-      return (std::size_t) res;
-   }
-};
-
 #define UNPACK_SS(STR) STR.size,STR.data
 #define UNPACK_SS_REVERSE(STR) STR.data,STR.size
 

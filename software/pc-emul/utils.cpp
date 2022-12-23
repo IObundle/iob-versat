@@ -8,29 +8,6 @@
 #include "stdio.h"
 #include "string.h"
 
-bool operator<(const SizedString& lhs,const SizedString& rhs){
-   for(int i = 0; i < std::min(lhs.size,rhs.size); i++){
-      if(lhs[i] < rhs[i]){
-         return true;
-      }
-      if(lhs[i] > rhs[i]){
-         return false;
-      }
-   }
-
-   if(lhs.size < rhs.size){
-      return true;
-   }
-
-   return false;
-}
-
-bool operator==(const SizedString& lhs,const SizedString& rhs){
-   bool res = CompareString(lhs,rhs);
-
-   return res;
-}
-
 // Misc
 void FlushStdout(){
    fflush(stdout);

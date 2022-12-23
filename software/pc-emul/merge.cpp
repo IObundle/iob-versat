@@ -7,46 +7,6 @@
 #include <unordered_map>
 
 #include <chrono>
-
-template<> class std::hash<PortEdge>{
-   public:
-   std::size_t operator()(PortEdge const& s) const noexcept{
-      int res = SimpleHash(MakeSizedString((const char*) &s,sizeof(PortEdge)));
-
-      return (std::size_t) res;
-   }
-};
-
-template<> class std::hash<Edge>{
-   public:
-   std::size_t operator()(Edge const& s) const noexcept{
-      int res = SimpleHash(MakeSizedString((const char*) &s,sizeof(Edge)));
-
-      return (std::size_t) res;
-   }
-};
-
-inline bool operator==(const PortEdge& e1,const PortEdge& e2){
-   bool res = (e1.units[0] == e2.units[0] && e1.units[1] == e2.units[1]);
-   return res;
-}
-inline bool operator!=(const PortEdge& e1,const PortEdge& e2){
-   bool res = !(e1 == e2);
-   return res;
-}
-
-inline bool operator==(PortInstance& p1,PortInstance& p2){
-   bool sameInstance = (p1.inst == p2.inst);
-   //bool samePort = (p1.port == p2.port);
-
-   bool res = sameInstance;
-   return res;
-}
-inline bool operator!=(PortInstance& p1,PortInstance& p2){
-   bool res = !(p1 == p2);
-   return res;
-}
-
 typedef std::unordered_map<ComplexFUInstance*,ComplexFUInstance*> InstanceMap;
 typedef std::unordered_map<PortEdge,PortEdge> PortEdgeMap;
 typedef std::unordered_map<Edge*,Edge*> EdgeMap;
@@ -334,7 +294,7 @@ void Clique(CliqueState* state,ConsolidationGraph graphArg,IndexRecord* record,i
 }
 
 BitArray* CalculateNeighborsTable(ConsolidationGraph graph,Arena* arena){
-   BitArray* neighbors = PushArray(arena,graph.nodes.size,BitArray).data;
+   BitArray* neighbors = PushArray<BitArray>(arena,graph.nodes.size).data;
    for(int i = 0; i < graph.nodes.size; i++){
       neighbors[i].Init(arena,graph.nodes.size);
       neighbors[i].Fill(0);
@@ -355,7 +315,7 @@ BitArray* CalculateNeighborsTable(ConsolidationGraph graph,Arena* arena){
 
 ConsolidationGraph MaxClique(ConsolidationGraph graph,Arena* arena){
    CliqueState state = {};
-   state.table = PushArray(arena,graph.nodes.size,int).data;
+   state.table = PushArray<int>(arena,graph.nodes.size).data;
    state.clique = Copy(graph,arena); // Preserve nodes and edges, but allocates different valid nodes
    state.start = std::chrono::steady_clock::now();
 
@@ -664,7 +624,7 @@ ConsolidationGraph GenerateConsolidationGraph(Versat* versat,Arena* arena,Accele
    // Reorder vertices
    #if 01
    int nodes = graph.nodes.size;
-   int* degree = PushArray(arena,nodes,int).data;
+   int* degree = PushArray<int>(arena,nodes).data;
    Memset(degree,0,nodes);
 
    for(int i = 0; i < graph.edges.size; i++){
@@ -677,7 +637,7 @@ ConsolidationGraph GenerateConsolidationGraph(Versat* versat,Arena* arena,Accele
       degree[node1] += 1;
    }
 
-   int* indexToMinimumNode = PushArray(arena,nodes,int).data;
+   int* indexToMinimumNode = PushArray<int>(arena,nodes).data;
    for(int i = 0; i < nodes; i++){
       int minimum = 999999;
       int minimumIndex = -1;
@@ -721,7 +681,7 @@ ConsolidationGraph GenerateConsolidationGraph(Versat* versat,Arena* arena,Accele
    }
    #endif
 
-   MappingNode* newMapping = PushArray(arena,nodes,MappingNode).data;
+   MappingNode* newMapping = PushArray<MappingNode>(arena,nodes).data;
 
    for(int i = 0; i < nodes; i++){
       int mapped = indexToMinimumNode[i];
@@ -1442,7 +1402,7 @@ FUDeclaration* MergeAccelerators(Versat* versat,FUDeclaration* accel1,FUDeclarat
    Arena* arena = &versat->temp;
    ArenaMarker marker(arena);
 
-   SpecificMergeNodes* specificNodes = PushArray(arena,nSpecifics,SpecificMergeNodes).data;
+   SpecificMergeNodes* specificNodes = PushArray<SpecificMergeNodes>(arena,nSpecifics).data;
 
    for(int i = 0; i < nSpecifics; i++){
       specificNodes[i].instA = (ComplexFUInstance*) GetInstanceByName(flatten1,specifics[i].instA);

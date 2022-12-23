@@ -274,7 +274,7 @@ static void PrintVCDDefinitions_(FILE* accelOutputFile,Accelerator* accel){
 
    for(StaticInfo* info : accel->staticInfo){
       for(Wire& wire : info->configs){
-         fprintf(accelOutputFile,"$var wire  %d %c%c%c%c %.*s_%.*s $end\n",wire.bitsize,currentMapping[0],currentMapping[1],currentMapping[2],currentMapping[3],UNPACK_SS(info->name),UNPACK_SS(wire.name));
+         fprintf(accelOutputFile,"$var wire  %d %c%c%c%c %.*s_%.*s $end\n",wire.bitsize,currentMapping[0],currentMapping[1],currentMapping[2],currentMapping[3],UNPACK_SS(info->id.name),UNPACK_SS(wire.name));
          IncrementMapping();
       }
    }

@@ -614,10 +614,10 @@ int main(int argc,const char* argv[]){
       for(Module& module : modules){
          ModuleInfo info = {};
 
-         info.inputDelays = PushArray(&permanent,100,int).data;
-         info.outputLatencies = PushArray(&permanent,100,int).data;
-         info.configs = PushArray(&permanent,100,Wire).data;
-         info.states = PushArray(&permanent,100,Wire).data;
+         info.inputDelays = PushArray<int>(&permanent,100).data;
+         info.outputLatencies = PushArray<int>(&permanent,100).data;
+         info.configs = PushArray<Wire>(&permanent,100).data;
+         info.states = PushArray<Wire>(&permanent,100).data;
 
          info.name = module.name;
          info.isSource = module.isSource;

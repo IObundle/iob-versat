@@ -31,7 +31,7 @@ void PopulateAcceleratorRecursive(FUDeclaration* accelType,ComplexFUInstance* in
       //Assert(accelType);
 
       for(StaticInfo* info : staticsAllocated){
-         if(info->module == accelType && CompareString(info->name,inst->name)){
+         if(info->id.parent == accelType && CompareString(info->id.name,inst->name)){
             in.config.Init(info->ptr,info->configs.size);
             foundStatic = true;
             break;
@@ -40,8 +40,8 @@ void PopulateAcceleratorRecursive(FUDeclaration* accelType,ComplexFUInstance* in
 
       if(!foundStatic){
          StaticInfo* allocation = staticsAllocated.Alloc();
-         allocation->module = accelType;
-         allocation->name = inst->name;
+         allocation->id.parent = accelType;
+         allocation->id.name = inst->name;
          allocation->configs = inst->declaration->configs;
          allocation->ptr = in.statics.Push(0);
 
@@ -65,7 +65,7 @@ void PopulateAcceleratorRecursive(FUDeclaration* accelType,ComplexFUInstance* in
       inst->outputs = in.outputs.Push(val.outputs);
       inst->storedOutputs = in.storedOutputs.Push(val.outputs);
    }
-   if(val.extraData){
+   if(inst->compositeAccel || val.extraData){
       inst->extraData = in.extraData.Push(val.extraData);
    }
 
@@ -272,7 +272,6 @@ void InitializeFUInstances(Accelerator* accel,bool force){
 }
 
 void RemoveFUInstance(Accelerator* accel,ComplexFUInstance* inst){
-   //TODO: Remove instance doesn't update the config / state / memMapped / delay pointers
    for(Edge* edge : accel->edges){
       if(edge->units[0].inst == inst){
          accel->edges.Remove(edge);
@@ -668,7 +667,7 @@ void AcceleratorView::CalculateGraphData(Arena* arena){
    }
 
    int memoryNeeded = sizeof(GraphComputedData) * nodes.size + 2 * edges.size * sizeof(ConnectionInfo) + edges.size * sizeof(int);
-   graphData = PushArray(arena,memoryNeeded,Byte);
+   graphData = PushArray<Byte>(arena,memoryNeeded);
 
    ArenaMarker marker(arena);
    Hashmap<Edge*,int*> map(arena,edges.size);
@@ -676,7 +675,7 @@ void AcceleratorView::CalculateGraphData(Arena* arena){
    PushPtr<Byte> data;
    data.Init(graphData);
 
-   GraphComputedData* computedData = (GraphComputedData*) data.Push(nodes.size * sizeof(GraphComputedData));
+   /* GraphComputedData* computedData = (GraphComputedData*) */ data.Push(nodes.size * sizeof(GraphComputedData));
    ConnectionInfo* inputBuffer = (ConnectionInfo*) data.Push(edges.size * sizeof(ConnectionInfo));
    ConnectionInfo* outputBuffer = (ConnectionInfo*) data.Push(edges.size * sizeof(ConnectionInfo));
 
@@ -725,7 +724,7 @@ void AcceleratorView::CalculateGraphData(Arena* arena){
          }
       }
 
-      graphData->singleInputs = PushArray(arena,maxInputs,PortInstance);
+      graphData->singleInputs = PushArray<PortInstance>(arena,maxInputs);
       for(ConnectionInfo& info : graphData->allInputs){
          int index = info.port;
 
@@ -964,7 +963,7 @@ DAGOrder AcceleratorView::CalculateDAGOrdering(Arena* arena){
    order.numberComputeUnits = 0;
    order.numberSinks = 0;
    order.numberSources = 0;
-   order.instances = PushArray(arena,nodes.size,ComplexFUInstance*).data;
+   order.instances = PushArray<ComplexFUInstance*>(arena,nodes.size).data;
 
    for(ComplexFUInstance* inst : nodes){
       inst->tag = 0;
@@ -1065,7 +1064,7 @@ void AcceleratorView::CalculateVersatData(Arena* arena){
       return;
    }
 
-   VersatComputedData* mem = PushArray(arena,nodes.size,VersatComputedData).data;
+   VersatComputedData* mem = PushArray<VersatComputedData>(arena,nodes.size).data;
 
    CalculateGraphData(arena);
 
@@ -1169,8 +1168,8 @@ AcceleratorView CreateAcceleratorView(Accelerator* accel,Arena* arena){
 
    view.versat = accel->versat;
    view.accel = accel;
-   view.nodes = PushArray(arena,accel->instances.Size(),ComplexFUInstance*);
-   view.edges = PushArray(arena,accel->edges.Size(),EdgeView);
+   view.nodes = PushArray<ComplexFUInstance*>(arena,accel->instances.Size());
+   view.edges = PushArray<EdgeView>(arena,accel->edges.Size());
    view.validNodes.Init(arena,accel->instances.Size());
 
    std::unordered_map<ComplexFUInstance*,int> map;
@@ -1526,7 +1525,6 @@ void FixDelays(Versat* versat,Accelerator* accel,AcceleratorView view){
       if(inst->graphData){
          inst->graphData->inputDelay = inst->baseDelay;
 
-         // TODO: Reinsert this asserts
          Assert(inst->baseDelay >= 0);
          Assert(inst->baseDelay < 9999); // Unless dealing with really long accelerators, should catch some calculating bugs
 

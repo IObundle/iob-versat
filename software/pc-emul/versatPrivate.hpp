@@ -39,13 +39,21 @@ struct Wire{
    int bitsize;
 };
 
-struct StaticInfo{
-   FUDeclaration* module;
+struct StaticId{
+   FUDeclaration* parent;
    SizedString name;
+};
+
+struct StaticData{
    Array<Wire> configs;
-   //Wire* wires;
-   //int nConfigs;
-   int* ptr; // Pointer to config of existing unit
+   int offset;
+};
+
+struct StaticInfo{
+   StaticId id;
+   Array<Wire> configs;
+   int* ptr; // Pointer to config of existing unit.
+   int offset;
 };
 
 struct PortInstance{
@@ -65,6 +73,16 @@ struct Edge{ // A edge in a graph
    int delay;
 };
 
+struct DAGOrder{
+   ComplexFUInstance** sinks;
+   int numberSinks;
+   ComplexFUInstance** sources;
+   int numberSources;
+   ComplexFUInstance** computeUnits;
+   int numberComputeUnits;
+   ComplexFUInstance** instances;
+};
+
 // A declaration is constant after being registered
 struct FUDeclaration{
    SizedString name;
@@ -74,6 +92,14 @@ struct FUDeclaration{
 
    Array<Wire> configs;
    Array<Wire> states;
+
+   Array<int> configOffsets;
+   Array<int> statesOffsets;
+   Array<int> delayOffsets;
+   Array<int> outputOffsets;
+   Array<int> extraDataOffsets;
+
+   int totalOutputs; // Temp
 
    int nDelays; // Code only handles 1 single instace, for now, hardware needs this value for correct generation
    int nIOs;
@@ -85,6 +111,8 @@ struct FUDeclaration{
    Accelerator* baseCircuit;
    Accelerator* fixedMultiEdgeCircuit;
    Accelerator* fixedDelayCircuit;
+
+   DAGOrder temporaryOrder;
 
    // Merged accelerator
    FUDeclaration* mergedType[2]; // TODO: probably change it from static to a dynamic allocating with more space, in order to accommodate multiple mergings (merge A with B and then the result with C)
@@ -103,7 +131,7 @@ struct FUDeclaration{
    MemoryAccessFunction memAccessFunction;
 
    const char* operation;
-   Pool<StaticInfo> staticUnits;
+   Hashmap<StaticId,StaticData> staticUnits;
 
    enum {SINGLE = 0x0,COMPOSITE = 0x1,SPECIAL = 0x2,MERGED = 0x3,ITERATIVE = 0x4} type;
    DelayType delayType;
@@ -227,16 +255,6 @@ struct EdgeView{
    ComplexFUInstance** nodes[2]; // Points to node inside AcceleratorView
 };
 
-struct DAGOrder{
-   ComplexFUInstance** sinks;
-   int numberSinks;
-   ComplexFUInstance** sources;
-   int numberSources;
-   ComplexFUInstance** computeUnits;
-   int numberComputeUnits;
-   ComplexFUInstance** instances;
-};
-
 // Graph associated to an accelerator
 class AcceleratorView : public Graph<ComplexFUInstance*,EdgeView>{
 public:
@@ -351,11 +369,6 @@ struct FUInstanceInterfaces{
    PushPtr<Byte> extraData;
 };
 
-struct StaticId{
-   FUDeclaration* parent;
-   SizedString name;
-};
-
 struct SharingInfo{
    int* ptr;
    bool init;
@@ -405,7 +418,7 @@ typedef std::unordered_map<ComplexFUInstance*,ComplexFUInstance*> InstanceMap;
 typedef Graph<MappingNode,MappingEdge> ConsolidationGraph;
 
 // General info
-UnitValues CalculateIndividualUnitValues(ComplexFUInstance* inst); // Values for individual unit, not taking into account sub units
+UnitValues CalculateIndividualUnitValues(ComplexFUInstance* inst); // Values for individual unit, not taking into account sub units. For a composite, this pretty much returns empty except for total outputs, as the unit itself must allocate output memory
 UnitValues CalculateAcceleratorUnitValues(Versat* versat,ComplexFUInstance* inst); // Values taking into account sub units
 UnitValues CalculateAcceleratorValues(Versat* versat,Accelerator* accel);
 VersatComputedValues ComputeVersatValues(Versat* versat,Accelerator* accel);
@@ -457,29 +470,6 @@ bool CheckValidName(SizedString name); // Check if name can be used as identifie
 SizedString MappingNodeIdentifier(MappingNode* node,Arena* memory);
 void OutputCircuitSource(Versat* versat,FUDeclaration* decl,Accelerator* accel,FILE* file);
 
-inline bool operator==(const PortInstance& p1,const PortInstance& p2){return p1.inst == p2.inst && p1.port == p2.port;};
-inline bool operator==(const StaticId& id1,const StaticId& id2){
-   bool res = CompareString(id1.name,id2.name) && id1.parent == id2.parent;
-   return res;
-}
-
-template<> class std::hash<PortInstance>{
-   public:
-   std::size_t operator()(PortInstance const& s) const noexcept{
-      int res = SimpleHash(MakeSizedString((const char*) &s,sizeof(PortInstance)));
-
-      return (std::size_t) res;
-   }
-};
-
-template<> class std::hash<StaticId>{
-   public:
-   std::size_t operator()(StaticId const& s) const noexcept{
-      int res = SimpleHash(s.name);
-      res += (int) s.parent;
-
-      return (std::size_t) res;
-   }
-};
+#include "typeSpecifics.inl"
 
 #endif // INCLUDED_VERSAT_PRIVATE_HPP

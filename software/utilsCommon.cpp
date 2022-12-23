@@ -2,31 +2,6 @@
 
 #include <limits>
 
-int SimpleHash(SizedString hashing)
-{
-   int res = 0;
-
-   int prime = 5;
-   for(int i = 0; i < hashing.size; i++){
-      res += (int) hashing[i] * prime;
-      res <<= 4;
-      prime += 6; // Some not prime, but will find most of them
-   }
-
-   return res;
-}
-
-char* SizedStringToCStr(SizedString s){
-   static char buffer[1024];
-
-   Assert(s.size < 1023);
-
-   memcpy(buffer,s.data,s.size);
-   buffer[s.size] = '\0';
-
-   return buffer;
-}
-
 // Misc
 int RoundUpDiv(int dividend,int divisor){
    int div = dividend / divisor;

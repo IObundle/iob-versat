@@ -410,18 +410,6 @@ static void* DeferencePointer(void* object,Type* info,int index){
 Value AccessObjectIndex(Value object,int index){
    Value value = {};
 
-   #if 0
-   if(object.type == ValueType::POOL){
-      Pool<ComplexFUInstance>* pool = object.pool;
-
-      Assert(index < pool->Size());
-
-      ComplexFUInstance* inst = pool->Get(index);
-
-      value.type = GetType(MakeSizedString("FUInstance")); // TODO: place to replace when adding template support
-      value.custom = (void*) inst;
-   } else
-   #endif
    if(object.type->type == Type::ARRAY){
       Type* arrayType = object.type;
       Byte* array = (Byte*) object.custom;
@@ -596,7 +584,7 @@ Iterator Iterate(Value iterating){
 
          Byte* page = pool->GetMemoryPtr();
 
-         new (&iter.poolIterator) GenericPoolIterator(page,pool->Size(),type->templateArgs->type->size);
+         iter.poolIterator.Init(page,pool->Size(),type->templateArgs->type->size);
       } else if(type->templateBase == ValueType::STD_VECTOR){ // TODO: A lot of assumptions are being made for std::vector so this works. Probably not safe (change later)
          Assert(sizeof(std::vector<Byte>) == sizeof(std::vector<ComplexFUInstance>)); // Assuming std::vector<T> is same for any T (otherwise, cast does not work)
 

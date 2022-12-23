@@ -92,6 +92,12 @@ Delay and Time:
       Some units, like FPU div and such, work like iterative units. 
       It should be possible to define normal units as iterative, instead of only defined as graphs and through the use of ParseVersatSpecifications.
 
+Performance:
+
+   Need to check if the Hashmap class is producing good hashes. 
+      The c++ way of hashing was causing troubles as hashing pointers was completely useless
+      As long as pointers are hashing correctly, don't think to much about it.
+
 Accelerator View:
 
    Need to grasp this part. Very important for the future of the project but hard to reason as no easy solution appears to be exist.

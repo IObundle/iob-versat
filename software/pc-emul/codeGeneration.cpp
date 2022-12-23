@@ -103,10 +103,6 @@ void OutputCircuitSource(Versat* versat,FUDeclaration* decl,Accelerator* accel,F
    TemplateSetNumber("memoryConfigDecisionBit",val.memoryConfigDecisionBit);
    TemplateSetCustom("versat",versat,"Versat");
 
-   //ClearFUInstanceTempData(accel);
-   //DebugTerminal(MakeValue(accel,"Accelerator"));
-   //SetDebuggingValue(MakeValue(accel,"Accelerator"));
-
    AcceleratorView view = CreateAcceleratorView(accel,arena);
    view.CalculateVersatData(arena);
 

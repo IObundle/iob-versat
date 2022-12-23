@@ -172,6 +172,28 @@ void PushNullByte(Arena* arena){
    *res = '\0';
 }
 
+bool BitIterator::operator!=(BitIterator& iter){
+   bool res = (index != iter.index);
+   return res;
+}
+
+void BitIterator::operator++(){
+   while(1){
+      this->index += 1;
+
+      if(this->index >= array->bitSize){
+         break;
+      }
+      if(array->Get(this->index)){
+         break;
+      }
+   }
+}
+
+int BitIterator::operator*(){
+   return this->index;
+}
+
 void BitArray::Init(Byte* memory,int bitSize){
    this->memory = memory;
    this->bitSize = bitSize;
@@ -239,15 +261,63 @@ SizedString BitArray::PrintRepresentation(Arena* output){
    return res;
 }
 
-BitArray& BitArray::operator&=(const BitArray& other){
+void BitArray::operator&=(BitArray& other){
    Assert(this->bitSize == other.bitSize);
 
    int byteSize = BitToByteSize(this->bitSize);
    for(int i = 0; i < byteSize; i++){
       this->memory[i] &= other.memory[i];
    }
+}
 
-   return *this;
+BitIterator BitArray::begin(){
+   BitIterator iter = {};
+   iter.array = this;
+
+   if(!Get(0)){
+      ++iter;
+   }
+
+   return iter;
+}
+
+BitIterator BitArray::end(){
+   BitIterator iter = {};
+   iter.array = this;
+   iter.index = bitSize;
+   return iter;
+}
+
+void GenericHashmapIterator::Init(Byte* memory,BitIterator begin,BitIterator end,int keySize,int dataSize){
+   this->memory = memory;
+   this->iter = begin;
+   this->end = end;
+   this->keySize = keySize;
+   this->dataSize = dataSize;
+}
+
+bool GenericHashmapIterator::HasNext(){
+   bool res = (iter != end);
+   return res;
+}
+
+void GenericHashmapIterator::operator++(){
+   ++iter;
+}
+
+Pair<Byte*,Byte*> GenericHashmapIterator::operator*(){
+   int index = *iter;
+
+   int pairSize = keySize + dataSize;
+   Byte* firstStart = &memory[pairSize * index];
+   Byte* secondStart = &firstStart[keySize];
+
+   Pair<Byte*,Byte*> pair = {};
+
+   pair.first = firstStart;
+   pair.second = secondStart;
+
+   return pair;
 }
 
 PoolInfo CalculatePoolInfo(int elemSize){
@@ -270,14 +340,14 @@ PageInfo GetPageInfo(PoolInfo poolInfo,Byte* page){
    return info;
 }
 
-GenericPoolIterator::GenericPoolIterator(Byte* page,int numberElements,int elemSize)
-:fullIndex(0)
-,bit(7)
-,index(0)
-,numberElements(numberElements)
-,elemSize(elemSize)
-,page(page)
-{
+void GenericPoolIterator::Init(Byte* page,int numberElements,int elemSize){
+   fullIndex = 0;
+   bit = 7;
+   index = 0;
+   this->numberElements = numberElements;
+   this->elemSize = elemSize;
+   this->page = page;
+
    poolInfo = CalculatePoolInfo(elemSize);
    pageInfo = GetPageInfo(poolInfo,page);
 
@@ -298,7 +368,7 @@ bool GenericPoolIterator::HasNext(){
    return false;
 }
 
-GenericPoolIterator& GenericPoolIterator::operator++(){
+void GenericPoolIterator::operator++(){
    while(fullIndex < numberElements){
       fullIndex += 1;
       bit -= 1;
@@ -321,8 +391,6 @@ GenericPoolIterator& GenericPoolIterator::operator++(){
          break;
       }
    }
-
-   return *this;
 }
 
 Byte* GenericPoolIterator::operator*(){

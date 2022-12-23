@@ -281,10 +281,6 @@ void Free(Versat* versat){
       accel->staticInfo.Clear(true);
    }
 
-   for(FUDeclaration* decl : versat->declarations){
-      decl->staticUnits.Clear(true);
-   }
-
    versat->accelerators.Clear(true);
    versat->declarations.Clear(true);
 
@@ -695,6 +691,23 @@ UnitValues CalculateIndividualUnitValues(ComplexFUInstance* inst){
    return res;
 }
 
+UnitValues CalculateAcceleratorUnitValues(Versat* versat,ComplexFUInstance* inst){
+   UnitValues res = {};
+
+   FUDeclaration* type = inst->declaration;
+
+   if(type->type == FUDeclaration::COMPOSITE){
+      Assert(inst->compositeAccel);
+
+      res = CalculateAcceleratorValues(versat,inst->compositeAccel);
+      res.totalOutputs += type->outputLatencies.size;
+   } else {
+      res = CalculateIndividualUnitValues(inst);
+   }
+
+   return res;
+}
+
 UnitValues CalculateAcceleratorValues(Versat* versat,Accelerator* accel){
    UnitValues val = {};
 
@@ -826,24 +839,12 @@ bool IsConfigStatic(Accelerator* topLevel,ComplexFUInstance* inst){
    }
 }
 
-static StaticInfo* SetLikeInsert(Pool<StaticInfo>& vec,StaticInfo& info){
-   for(StaticInfo* iter : vec){
-      if(info.module == iter->module && CompareString(info.name,iter->name)){
-         return iter;
-      }
-   }
-
-   StaticInfo* res = vec.Alloc();
-   *res = info;
-
-   return res;
-}
-
 FUDeclaration* RegisterSubUnit(Versat* versat,SizedString name,Accelerator* circuit){
    FUDeclaration decl = {};
 
-   Arena* arena = &versat->temp;
-   ArenaMarker marker(arena);
+   Arena* permanent = &versat->permanent;
+   Arena* temp = &versat->temp;
+   ArenaMarker marker(temp);
 
    decl.type = FUDeclaration::COMPOSITE;
    //decl.circuit = circuit;
@@ -893,13 +894,18 @@ FUDeclaration* RegisterSubUnit(Versat* versat,SizedString name,Accelerator* circ
    decl.fixedMultiEdgeCircuit = CopyAccelerator(versat,circuit,nullptr,true);
 
    {
-   ArenaMarker marker(arena);
-   AcceleratorView view = CreateAcceleratorView(circuit,arena);
-   view.CalculateDelay(arena);
+   ArenaMarker marker(temp);
+   AcceleratorView view = CreateAcceleratorView(circuit,temp);
+   view.CalculateDelay(temp);
    FixDelays(versat,circuit,view);
    }
 
    decl.fixedDelayCircuit = circuit;
+
+   AcceleratorView view = CreateAcceleratorView(circuit,permanent);
+   view.CalculateDAGOrdering(permanent);
+   view.CalculateDelay(permanent);
+   decl.temporaryOrder = view.order;
 
    UnitValues val = CalculateAcceleratorValues(versat,decl.fixedDelayCircuit);
 
@@ -911,7 +917,7 @@ FUDeclaration* RegisterSubUnit(Versat* versat,SizedString name,Accelerator* circ
    decl.memoryMapBits = val.memoryMappedBits;
    decl.memAccessFunction = CompositeMemoryAccess;
 
-   decl.inputDelays = PushArray(&versat->permanent,val.inputs,int);
+   decl.inputDelays = PushArray<int>(permanent,val.inputs);
 
    int i = 0;
    int minimum = (1 << 30);
@@ -920,7 +926,7 @@ FUDeclaration* RegisterSubUnit(Versat* versat,SizedString name,Accelerator* circ
       minimum = std::min(minimum,(*input)->baseDelay);
    }
 
-   decl.outputLatencies = PushArray(&versat->permanent,val.outputs,int);
+   decl.outputLatencies = PushArray<int>(permanent,val.outputs);
 
    if(circuit->outputInstance){
       for(int i = 0; i < decl.outputLatencies.size; i++){
@@ -928,10 +934,10 @@ FUDeclaration* RegisterSubUnit(Versat* versat,SizedString name,Accelerator* circ
       }
    }
 
-   decl.configs = PushArray(&versat->permanent,val.configs,Wire);
-   decl.states = PushArray(&versat->permanent,val.states,Wire);
+   decl.configs = PushArray<Wire>(permanent,val.configs);
+   decl.states = PushArray<Wire>(permanent,val.states);
 
-   Hashmap<int,int> staticsSeen(arena,val.sharedUnits);
+   Hashmap<int,int> staticsSeen(temp,val.sharedUnits);
    int configIndex = 0;
    int stateIndex = 0;
    for(ComplexFUInstance* inst : circuit->instances){
@@ -941,34 +947,79 @@ FUDeclaration* RegisterSubUnit(Versat* versat,SizedString name,Accelerator* circ
          if(inst->sharedEnable){
             if(staticsSeen.InsertIfNotExist(inst->sharedIndex,0)){
                for(Wire& wire : d->configs){
-                  decl.configs[configIndex].name = PushString(&versat->permanent,"%.*s_%.2d",UNPACK_SS(wire.name),configIndex);
+                  decl.configs[configIndex].name = PushString(permanent,"%.*s_%.2d",UNPACK_SS(wire.name),configIndex);
                   decl.configs[configIndex++].bitsize = wire.bitsize;
                }
             }
          } else {
             for(Wire& wire : d->configs){
-               decl.configs[configIndex].name = PushString(&versat->permanent,"%.*s_%.2d",UNPACK_SS(wire.name),configIndex);
+               decl.configs[configIndex].name = PushString(permanent,"%.*s_%.2d",UNPACK_SS(wire.name),configIndex);
                decl.configs[configIndex++].bitsize = wire.bitsize;
             }
          }
       }
 
       for(Wire& wire : d->states){
-         decl.states[stateIndex].name = PushString(&versat->permanent,"%.*s_%.2d",UNPACK_SS(wire.name),stateIndex);
+         decl.states[stateIndex].name = PushString(permanent,"%.*s_%.2d",UNPACK_SS(wire.name),stateIndex);
          decl.states[stateIndex++].bitsize = wire.bitsize;
       }
    }
 
+   decl.configOffsets = PushArray<int>(permanent,circuit->instances.Size());
+   decl.statesOffsets = PushArray<int>(permanent,circuit->instances.Size());
+   decl.delayOffsets = PushArray<int>(permanent,circuit->instances.Size());
+   decl.outputOffsets = PushArray<int>(permanent,circuit->instances.Size());
+   decl.extraDataOffsets = PushArray<int>(permanent,circuit->instances.Size());
+   Hashmap<int,int> sharedToOffset(temp,val.configs);
+
+   configIndex = 0;
+   stateIndex = 0;
+   int delayIndex = 0;
+   int outputIndex = 0;
+   int extraDataIndex = 0;
+   int unitIndex = 0;
+   for(ComplexFUInstance* inst : circuit->instances){
+      UnitValues val = CalculateAcceleratorUnitValues(versat,inst);
+
+      int savedIndex = -1;
+
+      if(inst->sharedEnable){
+         int* possibleOffset = sharedToOffset.Get(inst->sharedIndex);
+
+         if(possibleOffset){
+            savedIndex = configIndex;
+            configIndex = *possibleOffset;
+         } else {
+            sharedToOffset.Insert(inst->sharedIndex,configIndex);
+         }
+      }
+
+      FUDeclaration* d = inst->declaration;
+
+      decl.configOffsets[unitIndex] = configIndex;
+      configIndex += d->configs.size;
+      decl.statesOffsets[unitIndex] = stateIndex;
+      stateIndex += d->states.size;
+      decl.delayOffsets[unitIndex] = delayIndex;
+      delayIndex += d->nDelays;
+      decl.outputOffsets[unitIndex] = outputIndex;
+      outputIndex += val.totalOutputs;
+      decl.extraDataOffsets[unitIndex] = extraDataIndex;
+      extraDataIndex += d->extraDataSize;
+
+      if(savedIndex != -1){
+         configIndex = savedIndex;
+      }
+
+      unitIndex += 1;
+   }
+   decl.totalOutputs = outputIndex;
+
    // TODO: Change unit delay type inference. Only care about delay type to upper levels.
    // Type source only if a source unit is connected to out. Type sink only if there is a input to sink connection
-   #if 1
    bool hasSourceDelay = false;
    bool hasSinkDelay = false;
-   #endif
    bool implementsDone = false;
-
-   AcceleratorView view = CreateAcceleratorView(circuit,&versat->temp);
-   view.CalculateGraphData(&versat->temp);
 
    for(ComplexFUInstance* inst : circuit->instances){
       if(inst->declaration->type == FUDeclaration::SPECIAL){
@@ -1010,29 +1061,37 @@ FUDeclaration* RegisterSubUnit(Versat* versat,SizedString name,Accelerator* circ
 
    // TODO: Hackish, change Pool so that copying it around does nothing and then put this before the register unit
    #if 1
+   //Hashmap<StaticId,int> staticMap(temp,1000);
+   res->staticUnits.Init(permanent,1000); // TODO: Set correct number of elements
+   int staticOffset = 0;
+   // Start by collecting all the existing static allocated units in subinstances
    for(ComplexFUInstance* inst : circuit->instances){
-      if(inst->isStatic){
-         StaticInfo unit = {};
-         unit.module = res;
-         unit.name = inst->name;
-         unit.configs = inst->declaration->configs;
+      if(inst->declaration->type == FUDeclaration::COMPOSITE ||
+         inst->declaration->type == FUDeclaration::ITERATIVE){
 
-         Assert(unit.configs.data);
-
-         SetLikeInsert(res->staticUnits,unit);
-      } else if(inst->declaration->type == FUDeclaration::COMPOSITE || inst->declaration->type == FUDeclaration::ITERATIVE){
-         for(StaticInfo* unit : inst->declaration->staticUnits){
-            SetLikeInsert(res->staticUnits,*unit);
+         for(auto pair : inst->declaration->staticUnits){
+            res->staticUnits.InsertIfNotExist(pair.first,pair.second);
+            staticOffset = std::max(staticOffset,pair.second.offset + pair.second.configs.size);
          }
       }
    }
 
-   for(StaticInfo* info : res->staticUnits){
-      res->nStaticConfigs += info->configs.size;
+   // Add this units static instances
+   for(ComplexFUInstance* inst : circuit->instances){
+      if(inst->isStatic){
+         StaticId id = {};
+         id.name = inst->name;
+         id.parent = res;
+
+         StaticData data = {};
+         data.configs = inst->declaration->configs;
+         data.offset = staticOffset;
+
+         res->staticUnits.InsertIfNotExist(id,data);
+         staticOffset += inst->declaration->configs.size;
+      }
    }
    #endif
-
-   ClearFUInstanceTempData(circuit);
 
    #if 1
    {
@@ -1063,6 +1122,8 @@ static void AcceleratorRunComposite(ComplexFUInstance*); // Fwd decl
 static void AcceleratorRunIteration(Accelerator* accel);
 static int* IterativeUpdateFunction(ComplexFUInstance* inst){
    static int out[99];
+   return out;
+   #if 0
 
    FUDeclaration* type = inst->declaration;
    int* delay = (int*) inst->extraData;
@@ -1099,6 +1160,7 @@ static int* IterativeUpdateFunction(ComplexFUInstance* inst){
    }
 
    return out;
+   #endif
 }
 
 static int* IterativeDestroyFunction(ComplexFUInstance* inst){
@@ -1125,7 +1187,7 @@ FUDeclaration* RegisterIterativeUnit(Versat* versat,IterativeUnitDeclaration* de
    // Default combinatorial values
    declaration = *combType; // By default, copy everything from combinatorial declaration
    declaration.type = FUDeclaration::ITERATIVE;
-   declaration.staticUnits = combType->staticUnits.Copy();
+   declaration.staticUnits = combType->staticUnits;
    declaration.nDelays = 1; // At least one delay
 
    // Accelerator computed values
@@ -1145,8 +1207,8 @@ FUDeclaration* RegisterIterativeUnit(Versat* versat,IterativeUnitDeclaration* de
    declaration.destroyFunction = IterativeDestroyFunction;
    declaration.memAccessFunction = CompositeMemoryAccess;
 
-   declaration.inputDelays = PushArray(&versat->permanent,val.inputs,int);
-   declaration.outputLatencies = PushArray(&versat->permanent,val.outputs,int);
+   declaration.inputDelays = PushArray<int>(&versat->permanent,val.inputs);
+   declaration.outputLatencies = PushArray<int>(&versat->permanent,val.outputs);
    Memset(declaration.inputDelays,0);
    Memset(declaration.outputLatencies,decl->latency);
 
@@ -1245,10 +1307,13 @@ static bool AcceleratorDone(Accelerator* accel){
    return done;
 }
 
-static void AcceleratorRunIteration(Accelerator* accel); // Fwd decl
+static void AcceleratorRunIteration(Accelerator* accel,FUInstanceInterfaces inter); // Fwd decl
+static void AcceleratorRunIteration3(ComplexFUInstance* inst,Hashmap<StaticId,StaticData>& staticMap); // Fwd decl
 
-static void AcceleratorRunComposite(ComplexFUInstance* compositeInst){
+static void AcceleratorRunComposite(ComplexFUInstance* compositeInst,Hashmap<StaticId,StaticData>& staticMap){
    // Set accelerator input to instance input
+   Accelerator* accel = compositeInst->declaration->fixedDelayCircuit;
+
    for(int ii = 0; ii < compositeInst->graphData->allInputs.size; ii++){
       ComplexFUInstance* input = *compositeInst->compositeAccel->inputInstancePointers.Get(ii);
 
@@ -1259,7 +1324,8 @@ static void AcceleratorRunComposite(ComplexFUInstance* compositeInst){
       }
    }
 
-   AcceleratorRunIteration(compositeInst->compositeAccel);
+   //AcceleratorRunIteration(compositeInst->compositeAccel);
+   AcceleratorRunIteration3(compositeInst,staticMap);
 
    // Note: Instead of propagating done upwards, for now, calculate everything inside the AcceleratorDone function (easier to debug and detect which unit isn't producing done when it's supposed to)
    #if 0
@@ -1279,7 +1345,138 @@ static void AcceleratorRunComposite(ComplexFUInstance* compositeInst){
    }
 }
 
-static void AcceleratorRunIteration(Accelerator* accel){
+static void AcceleratorRunComposite2(ComplexFUInstance* compositeInst,Hashmap<StaticId,StaticData>& staticMap){
+   // Set accelerator input to instance input
+   Accelerator* accel = compositeInst->declaration->fixedDelayCircuit;
+
+   for(int i = 0; i < compositeInst->graphData->singleInputs.size; i++){
+      ComplexFUInstance** possibleInput = accel->inputInstancePointers.Get(i);
+
+      if(possibleInput){
+         ComplexFUInstance* input = *possibleInput;
+         int val = GetInputValue(compositeInst,i);
+         for(int ii = 0; ii < input->graphData->outputs; ii++){
+            input->outputs[ii] = val;
+            input->storedOutputs[ii] = val;
+         }
+      }
+   }
+
+   //AcceleratorRunIteration(compositeInst->compositeAccel);
+   AcceleratorRunIteration3(compositeInst,staticMap);
+
+   // Note: Instead of propagating done upwards, for now, calculate everything inside the AcceleratorDone function (easier to debug and detect which unit isn't producing done when it's supposed to)
+   #if 0
+   if(compositeInst->declaration->implementsDone){
+      compositeInst->done = AcceleratorDone(compositeInst->compositeAccel);
+   }
+   #endif
+
+   // Set output instance value to accelerator output
+   ComplexFUInstance* output = accel->outputInstance;
+   if(output){
+      for(int ii = 0; ii < output->graphData->allInputs.size; ii++){
+         int val = GetInputValue(output,ii);
+         compositeInst->outputs[ii] = val;
+         compositeInst->storedOutputs[ii] = val;
+      }
+   }
+
+}
+
+void PopulateAccelerator2(Accelerator* accel,FUDeclaration* topDeclaration,FUInstanceInterfaces& inter,Hashmap<StaticId,StaticData>& staticMap){
+   int configIndex = 0;
+   int stateIndex = 0;
+   int delayIndex = 0;
+   int outputIndex = 0;
+   int extraDataIndex = 0;
+   for(ComplexFUInstance* inst : accel->instances){
+      FUDeclaration* decl = inst->declaration;
+      UnitValues val = CalculateAcceleratorUnitValues(accel->versat,inst);
+
+      if(inst->isStatic){
+         StaticId id = {};
+         id.parent = topDeclaration;
+         id.name = inst->name;
+
+         StaticData* staticInfo = staticMap.Get(id);
+         Assert(staticInfo);
+         inst->config = &inter.statics.ptr[staticInfo->offset];
+      } else if(decl->configs.size){
+         inst->config = &inter.config.ptr[configIndex];
+         configIndex += decl->configs.size;
+      }
+      if(decl->states.size){
+         inst->state = &inter.state.ptr[stateIndex];
+         stateIndex += decl->states.size;
+      }
+      if(decl->nDelays){
+         inst->delay = &inter.delay.ptr[delayIndex];
+         delayIndex += decl->nDelays;
+      }
+      #if 1
+      if(decl->outputLatencies.size){
+         inst->outputs = &inter.outputs.ptr[outputIndex];
+         inst->storedOutputs = &inter.storedOutputs.ptr[outputIndex];
+         outputIndex += val.totalOutputs;
+      }
+      #endif
+      if(decl->extraDataSize){
+         inst->extraData = &inter.extraData.ptr[extraDataIndex];
+         extraDataIndex += decl->extraDataSize;
+      }
+   }
+}
+
+
+// For subunits
+static void AcceleratorRunIteration3(ComplexFUInstance* instance,Hashmap<StaticId,StaticData>& staticMap){
+   FUDeclaration* decl = instance->declaration;
+   Accelerator* accel = decl->fixedDelayCircuit;
+   DAGOrder& order = decl->temporaryOrder;
+
+   FUInstanceInterfaces inter = {};
+
+   UnitValues val = CalculateAcceleratorUnitValues(accel->versat,instance);
+
+   inter.config.Init(instance->config,decl->configs.size);
+   inter.state.Init(instance->state,decl->states.size);
+   inter.delay.Init(instance->delay,decl->nDelays);
+   inter.outputs.Init(instance->outputs,val.totalOutputs);
+   inter.storedOutputs.Init(instance->storedOutputs,val.totalOutputs);
+   inter.extraData.Init(instance->extraData,decl->extraDataSize);
+
+   PopulateAccelerator2(accel,decl,inter,staticMap);
+
+   //Assert(inter.config.Empty()); // Bad way of checking, due to static units
+   Assert(inter.state.Empty());
+   Assert(inter.delay.Empty());
+   Assert(inter.outputs.Empty());
+   Assert(inter.storedOutputs.Empty());
+   //Assert(inter.extraData.Empty()); // For now, ignore outputs
+
+   for(int i = 0; i < accel->instances.Size(); i++){
+      ComplexFUInstance* inst = order.instances[i];
+
+      if(inst->declaration->type == FUDeclaration::SPECIAL){
+         continue;
+      } else if(inst->declaration->type == FUDeclaration::COMPOSITE){
+         AcceleratorRunComposite2(inst,staticMap);
+      } else {
+         int* newOutputs = inst->declaration->updateFunction(inst);
+
+         if(inst->declaration->outputLatencies.size && inst->declaration->outputLatencies[0] == 0 && inst->graphData->nodeType != GraphComputedData::TAG_SOURCE){
+            memcpy(inst->outputs,newOutputs,inst->declaration->outputLatencies.size * sizeof(int));
+            memcpy(inst->storedOutputs,newOutputs,inst->declaration->outputLatencies.size * sizeof(int));
+         } else {
+            memcpy(inst->storedOutputs,newOutputs,inst->declaration->outputLatencies.size * sizeof(int));
+         }
+      }
+   }
+}
+
+#if 0
+static void AcceleratorRunIteration(Accelerator* accel){ // old
    AcceleratorView view = CreateAcceleratorView(accel,&accel->versat->temp);
    DAGOrder order = view.CalculateDAGOrdering(&accel->versat->temp);
 
@@ -1289,7 +1486,30 @@ static void AcceleratorRunIteration(Accelerator* accel){
       if(inst->declaration->type == FUDeclaration::SPECIAL){
          continue;
       } else if(inst->declaration->type == FUDeclaration::COMPOSITE){
-         AcceleratorRunComposite(inst);
+         AcceleratorRunComposite(inst,staticMap);
+      } else {
+         int* newOutputs = inst->declaration->updateFunction(inst);
+
+         if(inst->declaration->outputLatencies.size && inst->declaration->outputLatencies[0] == 0 && inst->graphData->nodeType != GraphComputedData::TAG_SOURCE){
+            memcpy(inst->outputs,newOutputs,inst->declaration->outputLatencies.size * sizeof(int));
+            memcpy(inst->storedOutputs,newOutputs,inst->declaration->outputLatencies.size * sizeof(int));
+         } else {
+            memcpy(inst->storedOutputs,newOutputs,inst->declaration->outputLatencies.size * sizeof(int));
+         }
+      }
+   }
+}
+#endif
+
+// For the top level accelerator
+static void AcceleratorRunTopLevel(AcceleratorView view,Hashmap<StaticId,StaticData>& staticMap){
+   for(int i = 0; i < view.nodes.size; i++){
+      ComplexFUInstance* inst = view.order.instances[i];
+
+      if(inst->declaration->type == FUDeclaration::SPECIAL){
+         continue;
+      } else if(inst->declaration->type == FUDeclaration::COMPOSITE){
+         AcceleratorRunComposite2(inst,staticMap);
       } else {
          int* newOutputs = inst->declaration->updateFunction(inst);
 
@@ -1310,6 +1530,18 @@ void AcceleratorRun(Accelerator* accel){
    Arena* arena = &accel->versat->temp;
    ArenaMarker marker(arena);
 
+   // TODO: Eventually retire this portion. Make the Accelerator structure a map, maybe a std::unordered_map
+   Hashmap<StaticId,StaticData> staticUnits;
+   staticUnits.Init(arena,accel->staticInfo.Size());
+   for(StaticInfo* info : accel->staticInfo){
+      StaticData data = {};
+      data.configs = info->configs;
+      data.offset = info->offset;
+
+      staticUnits.Insert(info->id,data);
+   }
+
+   //DebugTerminal(MakeValue(accel,"Accelerator"));
    #if 1
    FUDeclaration base = {};
    base.name = MakeSizedString("Top");
@@ -1317,10 +1549,11 @@ void AcceleratorRun(Accelerator* accel){
 
    AcceleratorView view = CreateAcceleratorView(accel,arena);
    view.CalculateDelay(arena);
+   view.CalculateDAGOrdering(arena);
    SetDelayRecursive(accel);
    #endif
 
-   // Lock all acelerators
+   #if 1
    AcceleratorIterator iter = {};
    for(ComplexFUInstance* inst = iter.Start(accel); inst; inst = iter.Next()){
       if(inst->declaration->type == FUDeclaration::COMPOSITE && inst->compositeAccel){
@@ -1328,6 +1561,7 @@ void AcceleratorRun(Accelerator* accel){
          view.CalculateDAGOrdering(arena);
       }
    }
+   #endif
 
    FILE* accelOutputFile = nullptr;
    if(accel->versat->debug.outputVCD){
@@ -1339,8 +1573,31 @@ void AcceleratorRun(Accelerator* accel){
       PrintVCDDefinitions(accelOutputFile,accel);
    }
 
+   #if 1
+   FUInstanceInterfaces inter = {};
+   inter.config.Init(accel->configAlloc);
+   inter.state.Init(accel->stateAlloc);
+   inter.delay.Init(accel->delayAlloc);
+   inter.outputs.Init(accel->outputAlloc);
+   inter.storedOutputs.Init(accel->storedOutputAlloc);
+   inter.extraData.Init(accel->extraDataAlloc);
+   inter.statics.Init(accel->staticAlloc);
+
+   #if 1
+   PopulateAccelerator2(view.accel,nullptr,inter,staticUnits);
+   #endif
+
+   Assert(inter.config.Empty()); // Bad way of checking, due to static units
+   Assert(inter.state.Empty());
+   Assert(inter.delay.Empty());
+   Assert(inter.outputs.Empty());
+   Assert(inter.storedOutputs.Empty());
+   Assert(inter.extraData.Empty()); // For now, ignore outputs
+
+   #endif
+
    AcceleratorRunStart(accel);
-   AcceleratorRunIteration(accel);
+   AcceleratorRunTopLevel(view,staticUnits);
 
    if(accel->versat->debug.outputVCD){
       PrintVCD(accelOutputFile,accel,time++,0);
@@ -1351,7 +1608,7 @@ void AcceleratorRun(Accelerator* accel){
       Assert(accel->outputAlloc.size == accel->storedOutputAlloc.size);
       memcpy(accel->outputAlloc.ptr,accel->storedOutputAlloc.ptr,accel->outputAlloc.size * sizeof(int));
 
-      AcceleratorRunIteration(accel);
+      AcceleratorRunTopLevel(view,staticUnits);
 
       if(accel->versat->debug.outputVCD){
          PrintVCD(accelOutputFile,accel,time++,1);
@@ -1477,13 +1734,9 @@ int GetInputValue(FUInstance* inst,int index){
 
    Assert(instance->graphData);
 
-   for(ConnectionInfo& connection : instance->graphData->allInputs){
-      if(connection.port == index){
-         return connection.instConnectedTo.inst->outputs[connection.instConnectedTo.port];
-      }
-   }
+   PortInstance& other = instance->graphData->singleInputs[index];
 
-   return 0;
+   return other.inst->outputs[other.port];
 }
 
 int GetNumberOfInputs(FUInstance* inst){
