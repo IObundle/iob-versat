@@ -122,7 +122,6 @@ void ActivateMergedAccelerator(Versat* versat,Accelerator* accel,FUDeclaration* 
 // Debug + output general accelerator info
 void OutputMemoryMap(Versat* versat,Accelerator* accel);
 void OutputUnitInfo(FUInstance* instance);
-void CheckMemory(Accelerator* topLevel,Accelerator* accel);
 void DisplayAcceleratorMemory(Accelerator* topLevel);
 void DisplayUnitConfiguration(Accelerator* topLevel);
 void EnterDebugTerminal(Versat* versat);

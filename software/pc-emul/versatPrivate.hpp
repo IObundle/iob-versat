@@ -91,6 +91,8 @@ struct FUDeclaration{
    Array<Wire> configs;
    Array<Wire> states;
 
+   // Care, these only make sense for composite units. Don't forget that Single units do not use these.
+   // Do not use their size to make decisions unless you know you are dealing with composite units
    Array<int> configOffsets;
    Array<int> stateOffsets;
    Array<int> delayOffsets;
@@ -226,11 +228,6 @@ struct Accelerator{ // Graph + data storage
    Pool<ComplexFUInstance> instances;
 	Pool<Edge> edges;
 
-   Pool<ComplexFUInstance> instancesView;
-
-   Pool<ComplexFUInstance*> inputInstancePointers;
-   ComplexFUInstance* outputInstance;
-
    Allocation<int> configAlloc;
    Allocation<int> stateAlloc;
    Allocation<int> delayAlloc;
@@ -300,6 +297,7 @@ public:
    ComplexFUInstance* CurrentAcceleratorInstance(); // Returns the accelerator instance for the Current() instance or nullptr if currently at top level
 
    AcceleratorIterator LevelBelowIterator(Arena* temp); // Current() must be a composite instance, Returns an iterator that will iterate starting from the level below, but will end without going to upper levels.
+   AcceleratorIterator LevelBelowIterator(); // Not taking an arena means that the returned iterator uses current iterator memory. Returned iterator must be iterated fully before the current iterator can be used, otherwise memory conflicts will arise as both iterators are sharing the same stack
 };
 
 struct IterativeUnitDeclaration{
@@ -479,11 +477,14 @@ Accelerator* MergeAccelerator(Versat* versat,Accelerator* accel1,Accelerator* ac
 // Debug
 bool IsGraphValid(AcceleratorView view);
 void OutputGraphDotFile(Versat* versat,AcceleratorView view,bool collapseSameEdges,const char* filenameFormat,...) __attribute__ ((format (printf, 4, 5)));
+void CheckMemory(AcceleratorIterator iter);
 
 // Misc
 bool CheckValidName(SizedString name); // Check if name can be used as identifier in verilog
 SizedString MappingNodeIdentifier(MappingNode* node,Arena* memory);
 void OutputCircuitSource(Versat* versat,FUDeclaration* decl,Accelerator* accel,FILE* file);
+ComplexFUInstance* GetInputInstance(Accelerator* accel,int inputIndex);
+ComplexFUInstance* GetOutputInstance(Accelerator* accel);
 
 #include "typeSpecifics.inl"
 

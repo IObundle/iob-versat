@@ -315,6 +315,7 @@ FUDeclaration* ParseModule(Versat* versat,Tokenizer* tok){
 
    int shareIndex = 0;
    int state = 0;
+   ComplexFUInstance* outputInstance = nullptr;
    while(!tok->Done()){
       Token token = tok->PeekToken();
 
@@ -390,11 +391,11 @@ FUDeclaration* ParseModule(Versat* versat,Tokenizer* tok){
             FUInstance* inst1 = GetInstanceByName(circuit,"%.*s",UNPACK_SS(outVar.name));
             FUInstance* inst2 = nullptr;
             if(CompareString(inVar.name,"out")){
-               if(!circuit->outputInstance){
-                  circuit->outputInstance = (ComplexFUInstance*) CreateFUInstance(circuit,versat->output,MakeSizedString("out"),true);
+               if(!outputInstance){
+                  outputInstance = (ComplexFUInstance*) CreateFUInstance(circuit,versat->output,MakeSizedString("out"),true);
                }
 
-               inst2 = circuit->outputInstance;
+               inst2 = outputInstance;
             } else {
                inst2 = GetInstanceByName(circuit,"%.*s",UNPACK_SS(inVar.name));
             }
@@ -426,11 +427,9 @@ FUDeclaration* ParseIterative(Versat* versat,Tokenizer* tok){
    Accelerator* secondPhase = CreateAccelerator(versat);
 
    FUInstance* firstOut = CreateFUInstance(firstPhase,versat->output,MakeSizedString("out"),true,false);
-   firstPhase->outputInstance = (ComplexFUInstance*) firstOut;
    FUInstance* firstData = CreateFUInstance(firstPhase,versat->data,MakeSizedString("data"),true,false);
 
    FUInstance* secondOut = CreateFUInstance(secondPhase,versat->output,MakeSizedString("out"),true,false);
-   secondPhase->outputInstance = (ComplexFUInstance*) secondOut;
    FUInstance* secondData = CreateFUInstance(secondPhase,versat->data,MakeSizedString("data"),true,false);
 
    tok->AssertNextToken("(");
@@ -453,14 +452,10 @@ FUDeclaration* ParseIterative(Versat* versat,Tokenizer* tok){
 
       {
       ComplexFUInstance* inst = (ComplexFUInstance*) CreateFUInstance(firstPhase,versat->input,name,true);
-      ComplexFUInstance** ptr = firstPhase->inputInstancePointers.Alloc();
-      *ptr = inst;
       }
 
       {
       ComplexFUInstance* inst = (ComplexFUInstance*) CreateFUInstance(secondPhase,versat->input,name,true);
-      ComplexFUInstance** ptr = secondPhase->inputInstancePointers.Alloc();
-      *ptr = inst;
       }
       #endif
    }

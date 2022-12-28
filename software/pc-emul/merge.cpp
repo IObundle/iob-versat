@@ -477,6 +477,9 @@ ConsolidationGraph GenerateConsolidationGraph(Versat* versat,Arena* arena,Accele
    // Check node mapping
    #if 1
    if(options.mapNodes){
+      ComplexFUInstance* accel1Output = GetOutputInstance(accel1);
+      ComplexFUInstance* accel2Output = GetOutputInstance(accel2);
+
       for(ComplexFUInstance* instA : accel1->instances){
          PortInstance portA = {};
          portA.inst = instA;
@@ -487,7 +490,7 @@ ConsolidationGraph GenerateConsolidationGraph(Versat* versat,Arena* arena,Accele
             continue;
          }
 
-         if(instA == accel1->outputInstance || instA->declaration == versat->input){
+         if(instA == accel1Output || instA->declaration == versat->input){
             continue;
          }
 
@@ -503,7 +506,7 @@ ConsolidationGraph GenerateConsolidationGraph(Versat* versat,Arena* arena,Accele
             if(options.type == ConsolidationGraphOptions::EXACT_ORDER && deltaB >= 0 && deltaB <= options.difference){
                continue;
             }
-            if(instB == accel2->outputInstance || instB->declaration == versat->input){
+            if(instB == accel2Output || instB->declaration == versat->input){
                continue;
             }
 

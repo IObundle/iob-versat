@@ -12,39 +12,7 @@ Testbench:
 
 Major change:
 
->  Increase the amount of data stored in FUDeclarations that I know is gonna be needed anyway.
-      Order information should be stored inside the FUDeclarations. AcceleratorRun should only need to call calculate order for top level graph if needed.
-      The problem is not order information. Is graph data.
-      How would I store graph data in a FUDeclaration that would be useful for already created accelerators?
-
-   Need to figure out once and for all how to tie Accelerators to their FUDeclarations.
-      DO NOT DO ANYTHING UNTIL: Implemented proper configuration management. 
-                                Finalized current changes and merge fully working.
-                                Maybe add some code to profile both time and memory usage. Current implementation is not the best but currently blind and no way of measuring improvements.
-      Acknowledge that free Accelerators exist. I can do wathever I want with FUDeclaration accelerators. Ideally I don't want to create dozens of subaccelerators everytime I instantiate a unit. The information already exists in the FUDeclarations
-      Do I need to instantiate sub accelerators at all?
-         Instead of returning a pointer, return a structure with the correct values, calculated at the time.
-            Problem is that in the event a new unit is added, the configuration memories can be reallocated.
-         A structure (Hashmap?) inside the Accelerator allocates space for the FUInstance and returns a pointer for such a structure.
-            We go from the accelerator having a pool of every single instance to the accelerator having a pool for only the subset actually needed by the user.
-            The values for that structure can be computed individually when needed. Instead of computing everything at once everytime we instantiate a unit (in the Populate function)
-      The most important part is to make sure that the GetInstance function returns the same exact values that it currently does.
-      FUDeclaration graphs stop being "Accelerators". Accelerators are coded as user level wrappers that stores info so that user gets pointers that correctly keep track of configuration location for all the units.
-      Or we completely change how the user has access to the configuration memory.
-         We could make it explicit, but I like the ideia of simply storing FUInstances* and access directly when needed.
-         Furthermore, storing unit information shouldn't pose a big problem. A few hundred units at most. The cost is only needed if the user code uses a very long code of (allocate -> configure unit -> repeat).
-         Otherwise the cost is meanigless if not less than current implementation (because in the new one, configuration location data already exists inside the FUDeclaration units).
-      How to connect units to their graph counterparts?
-         Units that are "instantiated" can contain a pointer to the FUDeclaration node that it "represents".
-         Can always move from graphs by calling GetInstance(name). As long as it's properly implemented, we should have no problem moving from one "graph" to the other.
-      How to handle code generation?
-         As long as I have access to GraphData related functions, it should be fine.
-         Do I even need to access the Accelerator instances? Don't I only need data that I can already get inside the FUDeclarations?
-            Specially for the subaccelerators. They only need data that can easily be computed and stored in FUDeclarations.
-            For the top level accelerator, need to populate to get config pointers, at least for the top level units.
-               Maybe change the way config and state information is propagated? Instead of dividing at the top level, just bundle in groups for each subaccelerator and the subaccelerator itself divides the data among units.
-               Ex: instead of passing .val1(configdata[5:0]) and .val2(configdata[9:6], just pass .config(configdata[9:0]) and let the subunit handle separating into val1 and val2.
-            The problem would be that the units would also need to be the ones that handle the writing and reading of config and state. Which becomes more complicated when going to add configuration save and loading.
+   Initial configuration can be saved inside FUDeclarations
 
 Embedded data:
 
@@ -122,6 +90,12 @@ Configuration management:
       Provide ways to change from one side to the other.
       Provide ways to save data in PC-Emul and load it in embedded.
       Need to cleary separate where data is stored.
+
+FUInstance reordering:
+
+   We can eliminate the need to store order information if we make sure that FUDeclaration accelerators are stored in DAG order.
+   In order to maintain the order expected by the configuration arrays, we can change the offsets to match the changed order of instances.
+   This is for now a potently change to make. There is no immediate need and it could potently turn out to be premature.
 
 Parser:
 

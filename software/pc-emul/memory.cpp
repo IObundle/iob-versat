@@ -81,7 +81,7 @@ void PopToSubArena(Arena* arena,Arena subArena){
 
    int old = arena->used;
    arena->used = subArenaMemPos - arena->mem;
-   Assert(old > arena->used);
+   Assert(old >= arena->used);
 }
 
 void Free(Arena* arena){

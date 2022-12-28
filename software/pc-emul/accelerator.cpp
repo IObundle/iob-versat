@@ -290,17 +290,6 @@ Accelerator* CopyAccelerator(Versat* versat,Accelerator* accel,InstanceMap* map,
       newEdge->units[1].inst = map->at(edge->units[1].inst);
    }
 
-   // Copy of input instance pointers
-   for(ComplexFUInstance** instPtr : accel->inputInstancePointers){
-      ComplexFUInstance** newInstPtr = newAccel->inputInstancePointers.Alloc();
-
-      *newInstPtr = map->at(*instPtr);
-   }
-
-   if(accel->outputInstance){
-      newAccel->outputInstance = map->at(accel->outputInstance);
-   }
-
    return newAccel;
 }
 
@@ -419,6 +408,7 @@ Accelerator* Flatten(Versat* versat,Accelerator* accel,int times){
 
          count += 1;
          Accelerator* circuit = inst->declaration->fixedDelayCircuit;
+         ComplexFUInstance* outputInstance = GetOutputInstance(circuit);
 
          int savedSharedIndex = freeSharedIndex;
          if(inst->sharedEnable){
@@ -503,7 +493,7 @@ Accelerator* Flatten(Versat* versat,Accelerator* accel,int times){
          for(Edge* edge : newAccel->edges){
             if(edge->units[0].inst == inst){
                for(Edge* circuitEdge: circuit->edges){
-                  if(circuitEdge->units[1].inst == circuit->outputInstance && circuitEdge->units[1].port == edge->units[0].port){
+                  if(circuitEdge->units[1].inst == outputInstance && circuitEdge->units[1].port == edge->units[0].port){
                      auto iter = map.find(circuitEdge->units[0].inst);
 
                      if(iter == map.end()){
@@ -526,7 +516,7 @@ Accelerator* Flatten(Versat* versat,Accelerator* accel,int times){
          // Add accel edges to input instances
          for(Edge* edge : newAccel->edges){
             if(edge->units[1].inst == inst){
-               ComplexFUInstance* circuitInst = *circuit->inputInstancePointers.Get(edge->units[1].port);
+               ComplexFUInstance* circuitInst = GetInputInstance(circuit,edge->units[1].port);
 
                for(Edge* circuitEdge : circuit->edges){
                   if(circuitEdge->units[0].inst == circuitInst){
@@ -571,7 +561,7 @@ Accelerator* Flatten(Versat* versat,Accelerator* accel,int times){
          for(Edge* edge1 : newAccel->edges){
             if(edge1->units[1].inst == inst){
                PortInstance input = edge1->units[0];
-               ComplexFUInstance* circuitInput = *circuit->inputInstancePointers.Get(edge1->units[1].port);
+               ComplexFUInstance* circuitInput = GetInputInstance(circuit,edge1->units[1].port);
 
                for(Edge* edge2 : newAccel->edges){
                   if(edge2->units[0].inst == inst){
@@ -580,7 +570,7 @@ Accelerator* Flatten(Versat* versat,Accelerator* accel,int times){
 
                      for(Edge* circuitEdge : circuit->edges){
                         if(circuitEdge->units[0].inst == circuitInput
-                        && circuitEdge->units[1].inst == circuit->outputInstance
+                        && circuitEdge->units[1].inst == outputInstance
                         && circuitEdge->units[1].port == outputPort){
 
                            Edge* newEdge = newAccel->edges.Alloc();
@@ -766,6 +756,13 @@ ComplexFUInstance* AcceleratorIterator::Descend(){
       inter.extraData.Init(inst->extraData,decl->extraDataSize);
       inter.statics.Init(topLevel->staticAlloc);
 
+      UnitValues individual = CalculateIndividualUnitValues(inst);
+      inter.outputs.Push(individual.outputs);
+      inter.storedOutputs.Push(individual.outputs);
+
+      inter.outputs.maximumTimes += individual.outputs;
+      inter.storedOutputs.maximumTimes += individual.outputs;
+
       PopulateAccelerator2(accel,decl,inter,*staticUnits);
 
       //Assert(inter.config.Empty()); // Bad way of checking, due to static units
@@ -841,6 +838,23 @@ AcceleratorIterator AcceleratorIterator::LevelBelowIterator(Arena* arena){
    AcceleratorIterator iter = {};
 
    iter.Start(topLevel,inst,arena,populate);
+
+   return iter;
+}
+
+AcceleratorIterator AcceleratorIterator::LevelBelowIterator(){
+   Descend();
+
+   AcceleratorIterator iter = {};
+   iter.stack.data = &this->stack.data[level];
+   iter.stack.size = this->stack.size - level;
+   iter.staticUnits = this->staticUnits;
+   iter.topLevel = this->topLevel;
+   iter.level = 0;
+   iter.calledStart = true;
+   iter.populate = this->populate;
+
+   this->level -= 1;
 
    return iter;
 }
@@ -1767,5 +1781,24 @@ void ActivateMergedAccelerator(Versat* versat,Accelerator* accel,FUDeclaration* 
       }
    }
    #endif
+}
+
+ComplexFUInstance* GetInputInstance(Accelerator* accel,int inputIndex){
+   for(ComplexFUInstance* inst : accel->instances){
+      if(inst->declaration == accel->versat->input && inst->id == inputIndex){
+         return inst;
+      }
+   }
+   return nullptr;
+}
+
+ComplexFUInstance* GetOutputInstance(Accelerator* accel){
+   for(ComplexFUInstance* inst : accel->instances){
+      if(inst->declaration == accel->versat->output){
+         return inst;
+      }
+   }
+
+   return nullptr;
 }
 

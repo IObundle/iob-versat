@@ -27,7 +27,7 @@ static FUDeclaration* RegisterCircuitInput(Versat* versat){
    FUDeclaration decl = {};
 
    decl.name = MakeSizedString("CircuitInput");
-   decl.inputDelays = Array<int>{zeros,1};  // Used for templating circuit
+   decl.inputDelays = Array<int>{zeros,0};
    decl.outputLatencies = Array<int>{zeros,50};
    decl.initializeFunction = DefaultInitFunction;
    decl.delayType = DelayType::DELAY_TYPE_SOURCE_DELAY;
@@ -40,7 +40,7 @@ static FUDeclaration* RegisterCircuitOutput(Versat* versat){
 
    decl.name = MakeSizedString("CircuitOutput");
    decl.inputDelays = Array<int>{zeros,50};
-   decl.outputLatencies = Array<int>{zeros,50}; // Used for templating circuit
+   decl.outputLatencies = Array<int>{zeros,0};
    decl.initializeFunction = DefaultInitFunction;
    decl.delayType = DelayType::DELAY_TYPE_SINK_DELAY;
    decl.type = FUDeclaration::SPECIAL;
@@ -277,7 +277,6 @@ void Free(Versat* versat){
 
       accel->instances.Clear(true);
       accel->edges.Clear(true);
-      accel->inputInstancePointers.Clear(true);
       accel->staticInfo.Clear(true);
    }
 
@@ -826,12 +825,13 @@ UnitValues CalculateAcceleratorValues(Versat* versat,Accelerator* accel){
       val.extraData += type->extraDataSize;
    }
 
-   if(accel->outputInstance){
+   ComplexFUInstance* outputInstance = GetOutputInstance(accel);
+   if(outputInstance){
       for(Edge* edge : accel->edges){
-         if(edge->units[0].inst == accel->outputInstance){
+         if(edge->units[0].inst == outputInstance){
             val.outputs = std::max(val.outputs - 1,edge->units[0].port) + 1;
          }
-         if(edge->units[1].inst == accel->outputInstance){
+         if(edge->units[1].inst == outputInstance){
             val.outputs = std::max(val.outputs - 1,edge->units[1].port) + 1;
          }
       }
@@ -911,6 +911,10 @@ UnitValues CalculateAcceleratorValues(Versat* versat,Accelerator* accel){
 bool IsConfigStatic(Accelerator* topLevel,ComplexFUInstance* inst){
    int* config = inst->config;
 
+   if(config == nullptr){
+      return false;
+   }
+
    int delta = config - topLevel->configAlloc.ptr;
 
    if(delta >= 0 && delta < topLevel->configAlloc.size){
@@ -933,22 +937,6 @@ FUDeclaration* RegisterSubUnit(Versat* versat,SizedString name,Accelerator* circ
 
    // HACK, for now
    circuit->subtype = &decl;
-
-   // Keep track of input and output nodes
-   for(ComplexFUInstance* inst : circuit->instances){
-      FUDeclaration* d = inst->declaration;
-
-      if(d == versat->input){
-         int index = inst->id;
-
-         ComplexFUInstance** ptr = circuit->inputInstancePointers.Alloc(index);
-         *ptr = (ComplexFUInstance*) inst;
-      }
-
-      if(d == versat->output){
-         circuit->outputInstance = inst;
-      }
-   }
 
    decl.baseCircuit = CopyAccelerator(versat,circuit,nullptr,true);
 
@@ -983,11 +971,60 @@ FUDeclaration* RegisterSubUnit(Versat* versat,SizedString name,Accelerator* circ
 
    decl.fixedDelayCircuit = circuit;
 
-   AcceleratorView view = CreateAcceleratorView(circuit,permanent);
+   AcceleratorView view = CreateAcceleratorView(circuit,temp);
+   view.CalculateGraphData(temp);
+   view.CalculateDAGOrdering(temp);
+   view.CalculateDelay(temp);
+
+   #if 01
+   // Reorganize nodes based on DAG order
+   DAGOrder order = view.order;
+   Hashmap<ComplexFUInstance*,int> instanceToNewIndex = {};
+   instanceToNewIndex.Init(temp,circuit->instances.Size());
+   for(int i = 0; i < view.nodes.size; i++){
+      ComplexFUInstance* inst = order.instances[i];
+
+      instanceToNewIndex.Insert(inst,i);
+   }
+
+   Hashmap<int,int> oldIndexToNewIndex = {};
+   oldIndexToNewIndex.Init(temp,circuit->instances.Size());
+   {
+   int i = 0;
+   for(ComplexFUInstance* inst : circuit->instances){
+      int newIndex = instanceToNewIndex.GetOrFail(inst);
+
+      oldIndexToNewIndex.Insert(i,newIndex);
+      i++;
+   }
+   }
+
+   Hashmap<ComplexFUInstance*,ComplexFUInstance*> oldInstanceToNewInstance = {};
+   oldInstanceToNewInstance.Init(temp,circuit->instances.Size());
+   Pool<ComplexFUInstance> newInstances = {};
+   for(int i = 0; i < view.nodes.size; i++){
+      ComplexFUInstance* old = order.instances[i];
+
+      ComplexFUInstance* newInst = newInstances.Alloc();
+
+      oldInstanceToNewInstance.Insert(old,newInst);
+      *newInst = *old;
+   }
+   circuit->instances.Clear();
+   circuit->instances = newInstances;
+   for(Edge* edge : circuit->edges){
+      edge->units[0].inst = oldInstanceToNewInstance.GetOrFail(edge->units[0].inst);
+      edge->units[1].inst = oldInstanceToNewInstance.GetOrFail(edge->units[1].inst);
+   }
+   #endif
+
+   view = CreateAcceleratorView(circuit,permanent);
    view.CalculateGraphData(permanent);
    view.CalculateDAGOrdering(permanent);
    view.CalculateDelay(permanent);
    decl.temporaryOrder = view.order;
+
+   OutputGraphDotFile(versat,view,true,"debug/test.dot");
 
    UnitValues val = CalculateAcceleratorValues(versat,decl.fixedDelayCircuit);
 
@@ -1001,18 +1038,22 @@ FUDeclaration* RegisterSubUnit(Versat* versat,SizedString name,Accelerator* circ
 
    decl.inputDelays = PushArray<int>(permanent,val.inputs);
 
-   int i = 0;
-   int minimum = (1 << 30);
-   for(ComplexFUInstance** input : circuit->inputInstancePointers){
-      decl.inputDelays[i++] = (*input)->baseDelay;
-      minimum = std::min(minimum,(*input)->baseDelay);
+   for(int i = 0; i < val.inputs; i++){
+      ComplexFUInstance* input = GetInputInstance(circuit,i);
+
+      if(!input){
+         continue;
+      }
+
+      decl.inputDelays[i++] = input->baseDelay;
    }
 
    decl.outputLatencies = PushArray<int>(permanent,val.outputs);
 
-   if(circuit->outputInstance){
+   ComplexFUInstance* outputInstance = GetOutputInstance(circuit);
+   if(outputInstance){
       for(int i = 0; i < decl.outputLatencies.size; i++){
-         decl.outputLatencies[i] = circuit->outputInstance->baseDelay;
+         decl.outputLatencies[i] = outputInstance->baseDelay;
       }
    }
 
@@ -1332,6 +1373,7 @@ FUDeclaration* RegisterIterativeUnit(Versat* versat,IterativeUnitDeclaration* de
       }
    }
 
+   #if 0
    TemplateSetCustom("versat",versat,"Versat");
    TemplateSetCustom("firstComb",firstPartComb,"ComplexFUInstance");
    TemplateSetCustom("secondComb",secondPartComb,"ComplexFUInstance");
@@ -1339,6 +1381,7 @@ FUDeclaration* RegisterIterativeUnit(Versat* versat,IterativeUnitDeclaration* de
    TemplateSetCustom("secondOut",decl->forLoop->outputInstance,"ComplexFUInstance");
    TemplateSetCustom("firstData",firstData,"ComplexFUInstance");
    TemplateSetCustom("secondData",secondData,"ComplexFUInstance");
+   #endif
 
    ProcessTemplate(sourceCode,"../../submodules/VERSAT/software/templates/versat_iterative_template.tpl",&versat->temp);
 
@@ -1401,15 +1444,16 @@ static void AcceleratorRunComposite2(ComplexFUInstance* compositeInst,Hashmap<St
    Accelerator* accel = compositeInst->declaration->fixedDelayCircuit;
 
    for(int i = 0; i < compositeInst->graphData->singleInputs.size; i++){
-      ComplexFUInstance** possibleInput = accel->inputInstancePointers.Get(i);
+      if(compositeInst->graphData->singleInputs[i].inst == nullptr){
+         continue;
+      }
 
-      if(possibleInput){
-         ComplexFUInstance* input = *possibleInput;
-         int val = GetInputValue(compositeInst,i);
-         for(int ii = 0; ii < input->graphData->outputs; ii++){
-            input->outputs[ii] = val;
-            input->storedOutputs[ii] = val;
-         }
+      ComplexFUInstance* input = GetInputInstance(accel,i);
+      Assert(input);
+      int val = GetInputValue(compositeInst,i);
+      for(int ii = 0; ii < input->graphData->outputs; ii++){
+         input->outputs[ii] = val;
+         input->storedOutputs[ii] = val;
       }
    }
 
@@ -1424,9 +1468,13 @@ static void AcceleratorRunComposite2(ComplexFUInstance* compositeInst,Hashmap<St
    #endif
 
    // Set output instance value to accelerator output
-   ComplexFUInstance* output = accel->outputInstance;
+   ComplexFUInstance* output = GetOutputInstance(accel);
    if(output){
-      for(int ii = 0; ii < output->graphData->allInputs.size; ii++){
+      for(int ii = 0; ii < output->graphData->singleInputs.size; ii++){
+         if(output->graphData->singleInputs[ii].inst == nullptr){
+            continue;
+         }
+
          int val = GetInputValue(output,ii);
          compositeInst->outputs[ii] = val;
          compositeInst->storedOutputs[ii] = val;
@@ -1473,6 +1521,13 @@ void PopulateAccelerator2(Accelerator* accel,FUDeclaration* topDeclaration,FUIns
    for(ComplexFUInstance* inst : accel->instances){
       FUDeclaration* decl = inst->declaration;
       UnitValues val = CalculateAcceleratorUnitValues(accel->versat,inst);
+
+      inst->config = nullptr;
+      inst->state = nullptr;
+      inst->delay = nullptr;
+      inst->outputs = nullptr;
+      inst->storedOutputs = nullptr;
+      inst->extraData = nullptr;
 
       if(inst->isStatic){
          StaticId id = {};
@@ -1529,14 +1584,21 @@ static void AcceleratorRunIteration3(ComplexFUInstance* instance,Hashmap<StaticI
    inter.storedOutputs.Init(instance->storedOutputs,val.totalOutputs);
    inter.extraData.Init(instance->extraData,decl->extraDataSize);
 
+   UnitValues individual = CalculateIndividualUnitValues(instance);
+   inter.outputs.Push(individual.outputs);
+   inter.storedOutputs.Push(individual.outputs);
+
+   inter.outputs.maximumTimes += individual.outputs;
+   inter.storedOutputs.maximumTimes += individual.outputs;
+
    PopulateAccelerator2(accel,decl,inter,staticMap);
 
-   //Assert(inter.config.Empty()); // Bad way of checking, due to static units
+   Assert(inter.config.Empty()); // Bad way of checking, due to static units
    Assert(inter.state.Empty());
    Assert(inter.delay.Empty());
    Assert(inter.outputs.Empty());
    Assert(inter.storedOutputs.Empty());
-   //Assert(inter.extraData.Empty()); // For now, ignore outputs
+   Assert(inter.extraData.Empty()); // For now, ignore outputs
 
    for(int i = 0; i < accel->instances.Size(); i++){
       ComplexFUInstance* inst = order.instances[i];
@@ -1630,12 +1692,19 @@ void AcceleratorRun(Accelerator* accel){
    PopulateAccelerator2(view.accel,nullptr,inter,staticUnits);
    #endif
 
-   //Assert(inter.config.Empty()); // Bad way of checking, due to static units
+   Assert(inter.config.Empty());
    Assert(inter.state.Empty());
    Assert(inter.delay.Empty());
    Assert(inter.outputs.Empty());
    Assert(inter.storedOutputs.Empty());
-   Assert(inter.extraData.Empty()); // For now, ignore outputs
+   Assert(inter.extraData.Empty());
+   #endif
+
+   #if 01
+   AcceleratorIterator iter = {};
+   iter.Start(accel,arena,false);
+
+   CheckMemory(iter);
    #endif
 
    AcceleratorRunStart(accel,staticUnits);
@@ -1778,6 +1847,12 @@ int GetInputValue(FUInstance* inst,int index){
 
    PortInstance& other = instance->graphData->singleInputs[index];
 
+   #if 0
+   if(!other.inst){
+      return 0;
+   }
+   #endif
+
    return other.inst->outputs[other.port];
 }
 
@@ -1790,7 +1865,14 @@ int GetNumberOfOutputs(FUInstance* inst){
 }
 
 int GetNumberOfInputs(Accelerator* accel){
-   return accel->inputInstancePointers.Size();
+   int count = 0;
+   for(ComplexFUInstance* inst : accel->instances){
+      if(inst->declaration == accel->versat->input){
+         count += 1;
+      }
+   }
+
+   return count;
 }
 
 int GetNumberOfOutputs(Accelerator* accel){
@@ -1801,18 +1883,15 @@ int GetNumberOfOutputs(Accelerator* accel){
 void SetInputValue(Accelerator* accel,int portNumber,int number){
    Assert(accel->outputAlloc.ptr);
 
-   ComplexFUInstance** instPtr = accel->inputInstancePointers.Get(portNumber);
-
-   Assert(instPtr);
-
-   ComplexFUInstance* inst = *instPtr;
+   ComplexFUInstance* inst = GetInputInstance(accel,portNumber);
+   Assert(inst);
 
    inst->outputs[0] = number;
    inst->storedOutputs[0] = number;
 }
 
 int GetOutputValue(Accelerator* accel,int portNumber){
-   FUInstance* inst = accel->outputInstance;
+   ComplexFUInstance* inst = GetOutputInstance(accel);
 
    int value = GetInputValue(inst,portNumber);
 
