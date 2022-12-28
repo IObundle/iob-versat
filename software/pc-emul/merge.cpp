@@ -414,7 +414,7 @@ ConsolidationGraph GenerateConsolidationGraph(Versat* versat,Arena* arena,Accele
    for(int i = 0; i < options.nSpecifics; i++){
       SpecificMergeNodes specific = options.specifics[i];
 
-      MappingNode* node = PushStruct(arena,MappingNode);
+      MappingNode* node = PushStruct<MappingNode>(arena);
 
       node->type = MappingNode::NODE;
       node->nodes.instances[0] = specific.instA;
@@ -466,7 +466,7 @@ ConsolidationGraph GenerateConsolidationGraph(Versat* versat,Arena* arena,Accele
          }
          #endif
 
-         MappingNode* space = PushStruct(arena,MappingNode);
+         MappingNode* space = PushStruct<MappingNode>(arena);
 
          *space = node;
          graph.nodes.size += 1;
@@ -539,7 +539,7 @@ ConsolidationGraph GenerateConsolidationGraph(Versat* versat,Arena* arena,Accele
             }
             #endif
 
-            MappingNode* space = PushStruct(arena,MappingNode);
+            MappingNode* space = PushStruct<MappingNode>(arena);
 
             *space = node;
             graph.nodes.size += 1;
@@ -603,7 +603,7 @@ ConsolidationGraph GenerateConsolidationGraph(Versat* versat,Arena* arena,Accele
 
          #if 1
          if(arena->used + sizeof(MappingEdge) < arena->totalAllocated){
-            MappingEdge* edge = PushStruct(arena,MappingEdge);
+            MappingEdge* edge = PushStruct<MappingEdge>(arena);
 
             edge->nodes[0] = node1;
             edge->nodes[1] = node2;

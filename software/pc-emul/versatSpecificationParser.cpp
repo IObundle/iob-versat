@@ -597,35 +597,3 @@ void ParseVersatSpecification(Versat* versat,const char* filepath){
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

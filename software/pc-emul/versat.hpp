@@ -24,7 +24,7 @@ struct FUInstance{
    Accelerator* accel;
 	FUDeclaration* declaration;
 	int id;
-   Accelerator* compositeAccel;
+   //Accelerator* compositeAccel;
 
 	int* outputs;
 	int* storedOutputs;
@@ -129,6 +129,7 @@ void EnterDebugTerminal(Versat* versat);
 
 // Debug units, only works for pc-emul (no declaration info in embedded)
 bool CheckInputAndOutputNumber(FUDeclaration* type,int inputs,int outputs);
+void PrintAcceleratorInstances(Accelerator* accel);
 
 // Helper functions, useful to implement custom units
 int GetInputValue(FUInstance* instance,int port);

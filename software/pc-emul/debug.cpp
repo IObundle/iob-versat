@@ -106,6 +106,18 @@ bool CheckInputAndOutputNumber(FUDeclaration* type,int inputs,int outputs){
    return true;
 }
 
+void PrintAcceleratorInstances(Accelerator* accel){
+   STACK_ARENA(temp,Kilobyte(16));
+
+   AcceleratorIterator iter = {};
+   for(ComplexFUInstance* inst = iter.Start(accel,&temp,false); inst; inst = iter.Next()){
+      for(int ii = 0; ii < iter.level; ii++){
+         printf("  ");
+      }
+      printf("%.*s\n",UNPACK_SS(inst->name));
+   }
+}
+
 bool IsGraphValid(AcceleratorView view){
    Assert(view.graphData.size);
 
@@ -272,12 +284,14 @@ static void PrintVCDDefinitions_(FILE* accelOutputFile,Accelerator* accel){
    AcceleratorView view = CreateAcceleratorView(accel,arena);
    view.CalculateGraphData(arena);
 
+   #if 0
    for(StaticInfo* info : accel->staticInfo){
       for(Wire& wire : info->configs){
          fprintf(accelOutputFile,"$var wire  %d %c%c%c%c %.*s_%.*s $end\n",wire.bitsize,currentMapping[0],currentMapping[1],currentMapping[2],currentMapping[3],UNPACK_SS(info->id.name),UNPACK_SS(wire.name));
          IncrementMapping();
       }
    }
+   #endif
 
    for(ComplexFUInstance* inst : accel->instances){
       fprintf(accelOutputFile,"$scope module %.*s_%d $end\n",UNPACK_SS(inst->name),inst->id);
@@ -314,8 +328,8 @@ static void PrintVCDDefinitions_(FILE* accelOutputFile,Accelerator* accel){
          IncrementMapping();
       }
 
-      if(inst->compositeAccel){
-         PrintVCDDefinitions_(accelOutputFile,inst->compositeAccel);
+      if(inst->declaration->fixedDelayCircuit){
+         PrintVCDDefinitions_(accelOutputFile,inst->declaration->fixedDelayCircuit);
       }
 
       fprintf(accelOutputFile,"$upscope $end\n");
@@ -349,6 +363,7 @@ static char* Bin(unsigned int val){
 }
 
 static void PrintVCD_(FILE* accelOutputFile,Accelerator* accel,int time){
+   #if 0
    for(StaticInfo* info : accel->staticInfo){
       for(int i = 0; i < info->configs.size; i++){
          if(time == 0){
@@ -357,6 +372,7 @@ static void PrintVCD_(FILE* accelOutputFile,Accelerator* accel,int time){
          IncrementMapping();
       }
    }
+   #endif
 
    for(ComplexFUInstance* inst : accel->instances){
       for(int i = 0; i < inst->graphData->singleInputs.size; i++){
@@ -393,8 +409,8 @@ static void PrintVCD_(FILE* accelOutputFile,Accelerator* accel,int time){
          IncrementMapping();
       }
 
-      if(inst->compositeAccel){
-         PrintVCD_(accelOutputFile,inst->compositeAccel,time);
+      if(inst->declaration->fixedDelayCircuit){
+         PrintVCD_(accelOutputFile,inst->declaration->fixedDelayCircuit,time);
       }
    }
 }

@@ -96,10 +96,12 @@ Pair<Key,Data>& HashmapIterator<Key,Data>::operator*(){
    return pair;
 }
 
+#if 0
 template<typename Key,typename Data>
 Hashmap<Key,Data>::Hashmap(Arena* arena,int maxAmountOfElements){
    Init(arena,maxAmountOfElements);
 }
+#endif
 
 template<typename Key,typename Data>
 void Hashmap<Key,Data>::Init(Arena* arena,int maxAmountOfElements){
@@ -112,11 +114,13 @@ void Hashmap<Key,Data>::Init(Arena* arena,int maxAmountOfElements){
       Memset(memory,Pair<Key,Data>{});
       valid.Init(arena,size);
       valid.Fill(0);
+      initialized = true;
    }
 }
 
 template<typename Key,typename Data>
 Data* Hashmap<Key,Data>::Insert(Key key,Data data){
+   Assert(initialized);
    int mask = memory.size - 1;
    int index = Hash<Key>(key) & mask; // Size is power of 2
 
@@ -137,6 +141,7 @@ Data* Hashmap<Key,Data>::Insert(Key key,Data data){
 
 template<typename Key,typename Data>
 Data* Hashmap<Key,Data>::InsertIfNotExist(Key key,Data data){
+   Assert(initialized);
    Data* ptr = Get(key);
 
    if(ptr == nullptr){
@@ -148,6 +153,10 @@ Data* Hashmap<Key,Data>::InsertIfNotExist(Key key,Data data){
 
 template<typename Key,typename Data>
 bool Hashmap<Key,Data>::Exists(Key key){
+   if(!initialized){
+      return false;
+   }
+
    Data* ptr = Get(key);
 
    if(ptr == nullptr){
@@ -158,6 +167,10 @@ bool Hashmap<Key,Data>::Exists(Key key){
 
 template<typename Key,typename Data>
 Data* Hashmap<Key,Data>::Get(Key key){
+   if(!initialized){
+      return nullptr;
+   }
+
    int mask = memory.size - 1;
    int index = Hash<Key>(key) & mask; // Size is power of 2
 
@@ -174,6 +187,7 @@ Data* Hashmap<Key,Data>::Get(Key key){
 
 template<typename Key,typename Data>
 Data Hashmap<Key,Data>::GetOrFail(Key key){
+   Assert(initialized);
    Data* ptr = Get(key);
    Assert(ptr);
    return *ptr;

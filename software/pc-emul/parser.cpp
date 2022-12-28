@@ -625,7 +625,7 @@ Expression* ParseOperationType_(Tokenizer* tok,OperationList* operators,ParsingF
 
          if(CompareString(peek,elem)){
             tok->AdvancePeek(peek);
-            Expression* expr = PushStruct(tempArena,Expression);
+            Expression* expr = PushStruct<Expression>(tempArena);
             expr->expressions = PushArray<Expression*>(tempArena,2);
 
             expr->type = Expression::OPERATION;
@@ -653,7 +653,7 @@ Expression* ParseOperationType(Tokenizer* tok,std::initializer_list<std::initial
 
    for(std::initializer_list<const char*> outerList : operators){
       if(ptr){
-         ptr->next = PushStruct(tempArena,OperationList);
+         ptr->next = PushStruct<OperationList>(tempArena);
          ptr = ptr->next;
       } else {
          ptr = &head;

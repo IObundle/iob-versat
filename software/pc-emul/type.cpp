@@ -84,7 +84,7 @@ static Type* RegisterTemplateInstance(SizedString fullName,SizedString baseName,
    type->templateBase = GetType(baseName);
 
    for(SizedString name : data){
-      TemplateArg* arg = PushStruct(&permanentArena,TemplateArg);
+      TemplateArg* arg = PushStruct<TemplateArg>(&permanentArena);
 
       arg->type = GetType(name);
       arg->next = type->templateArgs;
@@ -142,7 +142,7 @@ Type* GetType(SizedString name){
       newType->type = Type::TEMPLATED_INSTANCE;
       newType->name = PushString(&permanentArena,name);
       newType->templateBase = base;
-      newType->templateArgs = PushStruct(&permanentArena,TemplateArg);
+      newType->templateArgs = PushStruct<TemplateArg>(&permanentArena);
 
       newType->templateArgs->type = arg;
 

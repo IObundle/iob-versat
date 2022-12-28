@@ -1,7 +1,7 @@
 Misc:
 
    Stop using asserts for likely user errors. Parser is full of asserts that are actually faulty user data. Need to grapple with things now before they become more complex, even if in the future there is likelihood that things will change.
-   Maybe do some fuzz testing? 
+   Maybe do some fuzz testing? Especially for parsers
    Hard to reason with fixed buffer because we immediatly transform delay into a string. Having to parse the delay is not a solution. Figure out what to do and remove all the portions of code that parse the delay out from the unit
 
 Testbench:
@@ -141,12 +141,15 @@ Parser:
 
 |  Change parsing of expressions to be much more efficient, check some of the algorithms seen in the net. Make it explicit the precedence and associativity of operators
 
-Optimization:
-
--  Make an unordered_map class that takes an arena and the amount of memory needed right of the bat.
+Optimizations:
 
    Profile the effects of the assertions in the code. Make sure debug mode isn't running too slow when compared to release
       Especial attention to the Array class operator[]. 
+
+   The RegisterSubUnit function is allocating space for every single units offset.
+      This isn't needed, we could have if statements in the populate function that check wether the unit has actually need or not to have the field populated.
+      In fact, currently units are having their configuration pointers point to somebody else configuration space. Ideally we should set the pointers to nullptr, as it should be a segfault accessing other units configurations.
+      Also, investigate wether we need the offset arrays for outputs and extraData, instead of just using push pointers.
 
 Template:
 

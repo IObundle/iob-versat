@@ -76,6 +76,14 @@ Arena SubArena(Arena* arena,size_t size){
    return res;
 }
 
+void PopToSubArena(Arena* arena,Arena subArena){
+   Byte* subArenaMemPos = &subArena.mem[subArena.used];
+
+   int old = arena->used;
+   arena->used = subArenaMemPos - arena->mem;
+   Assert(old > arena->used);
+}
+
 void Free(Arena* arena){
    free(arena->mem);
    arena->totalAllocated = 0;

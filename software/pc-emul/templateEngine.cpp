@@ -59,7 +59,7 @@ static bool IsCommandBlockType(Command* com){
 }
 
 static Command* ParseCommand(Tokenizer* tok){
-   Command* com = PushStruct(tempArena,Command);
+   Command* com = PushStruct<Command>(tempArena);
 
    com->name = tok->NextToken();
 
@@ -138,7 +138,7 @@ static Expression* ParseIdentifier(Expression* current,Tokenizer* tok){
 
       if(CompareString(token,"[")){
          tok->AdvancePeek(token);
-         Expression* expr = PushStruct(tempArena,Expression);
+         Expression* expr = PushStruct<Expression>(tempArena);
          expr->expressions = PushArray<Expression*>(tempArena,2);
 
          expr->type = Expression::ARRAY_ACCESS;
@@ -152,7 +152,7 @@ static Expression* ParseIdentifier(Expression* current,Tokenizer* tok){
          tok->AdvancePeek(token);
          Token memberName = tok->NextToken();
 
-         Expression* expr = PushStruct(tempArena,Expression);
+         Expression* expr = PushStruct<Expression>(tempArena);
          expr->expressions = PushArray<Expression*>(tempArena,1);
 
          expr->type = Expression::MEMBER_ACCESS;
@@ -172,7 +172,7 @@ static Expression* ParseIdentifier(Expression* current,Tokenizer* tok){
 static Expression* ParseAtom(Tokenizer* tok,Arena* arena){
    void* start = tok->Mark();
 
-   Expression* expr = PushStruct(arena,Expression);
+   Expression* expr = PushStruct<Expression>(arena);
    expr->type = Expression::LITERAL;
 
    Token token = tok->PeekToken();
@@ -228,7 +228,7 @@ static Expression* ParseFactor(Tokenizer* tok){
 
       Expression* child = ParseExpression(tok);
 
-      expr = PushStruct(tempArena,Expression);
+      expr = PushStruct<Expression>(tempArena);
       expr->expressions = PushArray<Expression*>(tempArena,1);
 
       expr->type = Expression::OPERATION;
@@ -274,7 +274,7 @@ static Expression* ParseExpression(Tokenizer* tok){
 }
 
 static Block* Parse(Tokenizer* tok){
-   Block* block = PushStruct(tempArena,Block);
+   Block* block = PushStruct<Block>(tempArena);
 
    void* start = tok->Mark();
 
@@ -366,7 +366,7 @@ static int CountNonOperationChilds(Accelerator* accel){
    int count = 0;
    for(ComplexFUInstance* inst : accel->instances){
       if(inst->declaration->type == FUDeclaration::COMPOSITE){
-         count += CountNonOperationChilds(inst->compositeAccel);
+         count += CountNonOperationChilds(inst->declaration->fixedDelayCircuit);
       }
 
       if(!inst->declaration->isOperation && inst->declaration->type != FUDeclaration::SPECIAL){
@@ -674,7 +674,7 @@ static SizedString EvalBlockCommand(Block* block){
    } else if(CompareString(com->name,"define")) {
       SizedString id = com->expressions[0]->id;
 
-      TemplateFunction* func = PushStruct(tempArena,TemplateFunction);
+      TemplateFunction* func = PushStruct<TemplateFunction>(tempArena);
 
       func->arguments = &com->expressions[1];
       func->numberArguments = com->expressions.size - 1;

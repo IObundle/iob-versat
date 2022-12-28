@@ -239,7 +239,7 @@ SizedString PreprocessVerilogFile(Arena* output, SizedString fileContent,std::ve
 }
 
 static Expression* ParseAtom(Tokenizer* tok){
-   Expression* expr = PushStruct(tempArena,Expression);
+   Expression* expr = PushStruct<Expression>(tempArena);
 
    Token peek = tok->PeekToken();
 

@@ -37,9 +37,9 @@ VersatComputedValues ComputeVersatValues(Versat* versat,Accelerator* accel){
    }
 
    for(StaticInfo* unit : accel->staticInfo){
-      res.nStatics += unit->configs.size;
+      res.nStatics += unit->data.configs.size;
 
-      for(Wire& wire : unit->configs){
+      for(Wire& wire : unit->data.configs){
          res.staticBits += wire.bitsize;
       }
    }
@@ -136,7 +136,7 @@ void OutputVersatSource(Versat* versat,Accelerator* accel,const char* sourceFile
    #if 1
    std::vector<ComplexFUInstance*> accum;
    AcceleratorIterator iter = {};
-   for(ComplexFUInstance* inst = iter.Start(accel); inst; inst = iter.Next()){
+   for(ComplexFUInstance* inst = iter.Start(accel,&versat->temp); inst; inst = iter.Next()){
       if(!inst->declaration->isOperation && inst->declaration->type != FUDeclaration::SPECIAL){
          accum.push_back(inst);
       }

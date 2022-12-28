@@ -99,8 +99,9 @@ public:
    ~ArenaMarker();
 };
 
-void InitArena(Arena* arena,size_t size);
+void InitArena(Arena* arena,size_t size); // Calls calloc
 Arena SubArena(Arena* arena,size_t size);
+void PopToSubArena(Arena* top,Arena subArena);
 void Free(Arena* arena);
 Byte* MarkArena(Arena* arena);
 void PopMark(Arena* arena,Byte* mark);
@@ -111,10 +112,19 @@ SizedString PushString(Arena* arena,SizedString ss);
 SizedString PushString(Arena* arena,const char* format,...) __attribute__ ((format (printf, 2, 3)));
 SizedString vPushString(Arena* arena,const char* format,va_list args);
 void PushNullByte(Arena* arena);
-#define PushStruct(ARENA,STRUCT) (STRUCT*) PushBytes(ARENA,sizeof(STRUCT))
+
+// Do not abuse stack arenas.
+#define STACK_ARENA(NAME,SIZE) \
+   Arena NAME = {}; \
+   char buffer_##NAME[SIZE]; \
+   NAME.mem = buffer_##NAME; \
+   NAME.totalAllocated = SIZE;
 
 template<typename T>
 Array<T> PushArray(Arena* arena,int size){Array<T> res = {}; res.size = size; res.data = (T*) PushBytes(arena,sizeof(T) * size); return res;};
+
+template<typename T>
+T* PushStruct(Arena* arena){T* res = (T*) PushBytes(arena,sizeof(T)); return res;};
 
 class BitArray;
 
@@ -204,11 +214,10 @@ public:
    Array<Pair<Key,Data>> memory; // Power of 2 size
    BitArray valid;
    int inserted;
+   bool initialized;
 
 public:
 
-   Hashmap(){}
-   Hashmap(Arena* arena,int maxAmountOfElements);
    void Init(Arena* arena,int maxAmountOfElements);
 
    Data* Insert(Key key,Data data);

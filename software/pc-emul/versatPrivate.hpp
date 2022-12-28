@@ -51,9 +51,7 @@ struct StaticData{
 
 struct StaticInfo{
    StaticId id;
-   Array<Wire> configs;
-   int* ptr; // Pointer to config of existing unit.
-   int offset;
+   StaticData data;
 };
 
 struct PortInstance{
@@ -94,14 +92,14 @@ struct FUDeclaration{
    Array<Wire> states;
 
    Array<int> configOffsets;
-   Array<int> statesOffsets;
+   Array<int> stateOffsets;
    Array<int> delayOffsets;
    Array<int> outputOffsets;
    Array<int> extraDataOffsets;
 
    int totalOutputs; // Temp
 
-   int nDelays; // Code only handles 1 single instace, for now, hardware needs this value for correct generation
+   int nDelays; // Code only handles 1 single instance, for now, hardware needs this value for correct generation
    int nIOs;
    int memoryMapBits;
    int nStaticConfigs;
@@ -145,7 +143,7 @@ struct GraphComputedData{
    Array<ConnectionInfo> allInputs; // All connections, even repeated ones
    Array<ConnectionInfo> allOutputs;
    Array<PortInstance> singleInputs; // Assume no repetition. If repetion exists, multipleSamePortInputs is true. If not connected, port instance inst is nullptr
-   int outputs;
+   int outputs; // No single outputs because not much reasons to.
    enum {TAG_UNCONNECTED,TAG_COMPUTE,TAG_SOURCE,TAG_SINK,TAG_SOURCE_AND_SINK} nodeType;
    int inputDelay;
    int order;
@@ -228,6 +226,8 @@ struct Accelerator{ // Graph + data storage
    Pool<ComplexFUInstance> instances;
 	Pool<Edge> edges;
 
+   Pool<ComplexFUInstance> instancesView;
+
    Pool<ComplexFUInstance*> inputInstancePointers;
    ComplexFUInstance* outputInstance;
 
@@ -280,14 +280,26 @@ struct HashKey{
 
 class AcceleratorIterator{
 public:
-   PoolIterator<ComplexFUInstance> stack[16];
-   int index;
+   Array<PoolIterator<ComplexFUInstance>> stack;
+   Hashmap<StaticId,StaticData>* staticUnits;
+   Accelerator* topLevel;
+   int level;
    bool calledStart;
+   bool populate;
 
-   ComplexFUInstance* Start(Accelerator* accel); // Must call first
-   ComplexFUInstance* Next(); // Returns nullptr in the end
+   // Must call first
+   ComplexFUInstance* Start(Accelerator* topLevel,ComplexFUInstance* compositeInst,Arena* temp,bool populate = false);
+   ComplexFUInstance* Start(Accelerator* topLevel,Arena* temp,bool populate = false);
 
-   ComplexFUInstance* CurrentAcceleratorInstance(); // Returns the top accelerator for the last FUInstance returned by Start or Next
+   ComplexFUInstance* Descend(); // Current() must be a composite instance, otherwise this will fail
+
+   ComplexFUInstance* Next(); // Iterates over subunits
+   ComplexFUInstance* Skip(); // Only stays on the same level
+
+   ComplexFUInstance* Current(); // Returns nullptr to indicate end of iteration
+   ComplexFUInstance* CurrentAcceleratorInstance(); // Returns the accelerator instance for the Current() instance or nullptr if currently at top level
+
+   AcceleratorIterator LevelBelowIterator(Arena* temp); // Current() must be a composite instance, Returns an iterator that will iterate starting from the level below, but will end without going to upper levels.
 };
 
 struct IterativeUnitDeclaration{
@@ -417,6 +429,10 @@ struct ConsolidationGraphOptions{
 typedef std::unordered_map<ComplexFUInstance*,ComplexFUInstance*> InstanceMap;
 typedef Graph<MappingNode,MappingEdge> ConsolidationGraph;
 
+// Temp
+void PopulateAccelerator(Accelerator* accel,FUDeclaration* topDeclaration,FUInstanceInterfaces& inter,Hashmap<StaticId,StaticData>& staticMap);
+void PopulateAccelerator2(Accelerator* accel,FUDeclaration* topDeclaration,FUInstanceInterfaces& inter,Hashmap<StaticId,StaticData>& staticMap);
+
 // General info
 UnitValues CalculateIndividualUnitValues(ComplexFUInstance* inst); // Values for individual unit, not taking into account sub units. For a composite, this pretty much returns empty except for total outputs, as the unit itself must allocate output memory
 UnitValues CalculateAcceleratorUnitValues(Versat* versat,ComplexFUInstance* inst); // Values taking into account sub units
@@ -428,7 +444,6 @@ bool IsConfigStatic(Accelerator* topLevel,ComplexFUInstance* inst);
 bool IsUnitCombinatorial(FUInstance* inst);
 
 // Accelerator
-void PopulateAccelerator(Versat* versat,Accelerator* accel);
 Accelerator* CopyAccelerator(Versat* versat,Accelerator* accel,InstanceMap* map,bool flat);
 ComplexFUInstance* CopyInstance(Accelerator* newAccel,ComplexFUInstance* oldInstance,SizedString newName,bool flat);
 void InitializeFUInstances(Accelerator* accel,bool force);

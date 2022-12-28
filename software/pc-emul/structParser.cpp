@@ -85,7 +85,7 @@ static Type* ParseSimpleType(Tokenizer* tok){
       tok->AdvancePeek(peek);
 
       while(1){
-         TemplateArg* arg = PushStruct(tempArena,TemplateArg);
+         TemplateArg* arg = PushStruct<TemplateArg>(tempArena);
 
          arg->type = ParseSimpleType(tok);
          arg->next = templateArgs;
@@ -194,7 +194,7 @@ static Type* ParseEnum(Tokenizer* tok,SizedString outsideStructName){
             }
          }
 
-         EnumMember* newMember = PushStruct(tempArena,EnumMember);
+         EnumMember* newMember = PushStruct<EnumMember>(tempArena);
          newMember->name = enumMemberName;
          newMember->value = value;
          newMember->next = type->enumMembers;
@@ -353,7 +353,7 @@ Type* ParseTemplatedStructDefinition(Tokenizer* tok){
 
       type->type = Type::TEMPLATE_PARAMETER;
 
-      TemplateArg* newArgument = PushStruct(tempArena,TemplateArg);
+      TemplateArg* newArgument = PushStruct<TemplateArg>(tempArena);
       newArgument->type = type;
       newArgument->next = arguments;
 
