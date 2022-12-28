@@ -976,7 +976,7 @@ FUDeclaration* RegisterSubUnit(Versat* versat,SizedString name,Accelerator* circ
    view.CalculateDAGOrdering(temp);
    view.CalculateDelay(temp);
 
-   #if 01
+   #if 1
    // Reorganize nodes based on DAG order
    DAGOrder order = view.order;
    Hashmap<ComplexFUInstance*,int> instanceToNewIndex = {};
@@ -1642,6 +1642,67 @@ static void AcceleratorRunTopLevel(AcceleratorView view,Hashmap<StaticId,StaticD
    }
 }
 
+static void AcceleratorRunIter(AcceleratorIterator iter,Hashmap<StaticId,StaticData>& staticMap);
+static void AcceleratorRunComposite4(AcceleratorIterator iter,Hashmap<StaticId,StaticData>& staticMap){
+   // Set accelerator input to instance input
+   ComplexFUInstance* compositeInst = iter.Current();
+   Assert(compositeInst->declaration->type == FUDeclaration::COMPOSITE);
+   Accelerator* accel = compositeInst->declaration->fixedDelayCircuit;
+
+   // Order is very important. Need to populate before setting input values
+   AcceleratorIterator it = iter.LevelBelowIterator();
+
+   // Cannot access input here because not populated
+   for(int i = 0; i < compositeInst->graphData->singleInputs.size; i++){
+      if(compositeInst->graphData->singleInputs[i].inst == nullptr){
+         continue;
+      }
+
+      ComplexFUInstance* input = GetInputInstance(accel,i);
+      Assert(input);
+      int val = GetInputValue(compositeInst,i);
+      for(int ii = 0; ii < input->graphData->outputs; ii++){
+         input->outputs[ii] = val;
+         input->storedOutputs[ii] = val;
+      }
+   }
+
+   AcceleratorRunIter(it,staticMap);
+
+   // Set output instance value to accelerator output
+   ComplexFUInstance* output = GetOutputInstance(accel);
+   if(output){
+      for(int ii = 0; ii < output->graphData->singleInputs.size; ii++){
+         if(output->graphData->singleInputs[ii].inst == nullptr){
+            continue;
+         }
+
+         int val = GetInputValue(output,ii);
+         compositeInst->outputs[ii] = val;
+         compositeInst->storedOutputs[ii] = val;
+      }
+   }
+}
+
+static void AcceleratorRunIter(AcceleratorIterator iter,Hashmap<StaticId,StaticData>& staticMap){
+   for(ComplexFUInstance* inst = iter.Current(); inst; inst = iter.Skip()){
+      if(inst->declaration->type == FUDeclaration::SPECIAL){
+         continue;
+      } else if(inst->declaration->type == FUDeclaration::COMPOSITE){
+         AcceleratorRunComposite4(iter,staticMap);
+      } else {
+         int* newOutputs = inst->declaration->updateFunction(inst);
+
+         if(inst->declaration->outputLatencies.size && inst->declaration->outputLatencies[0] == 0 && inst->graphData->nodeType != GraphComputedData::TAG_SOURCE){
+            memcpy(inst->outputs,newOutputs,inst->declaration->outputLatencies.size * sizeof(int));
+            memcpy(inst->storedOutputs,newOutputs,inst->declaration->outputLatencies.size * sizeof(int));
+         } else {
+            memcpy(inst->storedOutputs,newOutputs,inst->declaration->outputLatencies.size * sizeof(int));
+         }
+      }
+   }
+}
+
 void AcceleratorRun(Accelerator* accel){
    static int numberRuns = 0;
    int time = 0;
@@ -1656,7 +1717,6 @@ void AcceleratorRun(Accelerator* accel){
       staticUnits.Insert(info->id,info->data);
    }
 
-   //DebugTerminal(MakeValue(accel,"Accelerator"));
    #if 1
    FUDeclaration base = {};
    base.name = MakeSizedString("Top");
@@ -1679,36 +1739,16 @@ void AcceleratorRun(Accelerator* accel){
    }
 
    #if 1
-   FUInstanceInterfaces inter = {};
-   inter.config.Init(accel->configAlloc);
-   inter.state.Init(accel->stateAlloc);
-   inter.delay.Init(accel->delayAlloc);
-   inter.outputs.Init(accel->outputAlloc);
-   inter.storedOutputs.Init(accel->storedOutputAlloc);
-   inter.extraData.Init(accel->extraDataAlloc);
-   inter.statics.Init(accel->staticAlloc);
-
-   #if 1
-   PopulateAccelerator2(view.accel,nullptr,inter,staticUnits);
-   #endif
-
-   Assert(inter.config.Empty());
-   Assert(inter.state.Empty());
-   Assert(inter.delay.Empty());
-   Assert(inter.outputs.Empty());
-   Assert(inter.storedOutputs.Empty());
-   Assert(inter.extraData.Empty());
-   #endif
-
-   #if 01
    AcceleratorIterator iter = {};
-   iter.Start(accel,arena,false);
+   iter.Start(accel,arena,true);
 
-   CheckMemory(iter);
+   //CheckMemory(iter);
    #endif
 
    AcceleratorRunStart(accel,staticUnits);
-   AcceleratorRunTopLevel(view,staticUnits);
+   iter.Start(accel,arena,true);
+   AcceleratorRunIter(iter,staticUnits);
+   //AcceleratorRunTopLevel(view,staticUnits);
 
    if(accel->versat->debug.outputVCD){
       PrintVCD(accelOutputFile,accel,time++,0);
@@ -1719,7 +1759,9 @@ void AcceleratorRun(Accelerator* accel){
       Assert(accel->outputAlloc.size == accel->storedOutputAlloc.size);
       memcpy(accel->outputAlloc.ptr,accel->storedOutputAlloc.ptr,accel->outputAlloc.size * sizeof(int));
 
-      AcceleratorRunTopLevel(view,staticUnits);
+      iter.Start(accel,arena,true);
+      AcceleratorRunIter(iter,staticUnits);
+      //AcceleratorRunTopLevel(view,staticUnits);
 
       if(accel->versat->debug.outputVCD){
          PrintVCD(accelOutputFile,accel,time++,1);
