@@ -14,170 +14,33 @@ Accelerator* CreateAccelerator(Versat* versat){
    Accelerator* accel = versat->accelerators.Alloc();
    accel->versat = versat;
 
+   Reserve(&accel->configAlloc,Kilobyte(1));
+   Reserve(&accel->stateAlloc,Kilobyte(1));
+   Reserve(&accel->delayAlloc,Kilobyte(1));
+   Reserve(&accel->staticAlloc,Kilobyte(1));
+   Reserve(&accel->outputAlloc,Megabyte(1));
+   Reserve(&accel->storedOutputAlloc,Megabyte(1));
+   Reserve(&accel->extraDataAlloc,Megabyte(1));
+
    return accel;
 }
 
-// Forward declare
-#if 0
-void DoPopulate(Accelerator* accel,FUDeclaration* accelType,FUInstanceInterfaces& in,Pool<StaticInfo>& staticsAllocated);
+void RepopulateAccelerator(Accelerator* topLevel){
+   STACK_ARENA(temp,Kilobyte(16));
 
-void PopulateAcceleratorRecursive(FUDeclaration* accelType,ComplexFUInstance* inst,FUInstanceInterfaces& in,Pool<StaticInfo>& staticsAllocated){
-   FUDeclaration* type = inst->declaration;
-   PushPtr<int> saved = in.config;
+   AcceleratorIterator iter = {};
+   iter.Start(topLevel,&temp,true); // This will populate top level units
 
-   UnitValues val = CalculateIndividualUnitValues(inst);
+   for(ComplexFUInstance* inst : topLevel->subInstances){
+      ComplexFUInstance* other = (ComplexFUInstance*) GetInstanceByName(topLevel,inst->name);
 
-   bool foundStatic = false;
-   if(inst->isStatic){
-      //Assert(accelType);
-
-      for(StaticInfo* info : staticsAllocated){
-         if(info->id.parent == accelType && CompareString(info->id.name,inst->name)){
-            in.config.Init(info->ptr,info->configs.size);
-            foundStatic = true;
-            break;
-         }
-      }
-
-      if(!foundStatic){
-         StaticInfo* allocation = staticsAllocated.Alloc();
-         allocation->id.parent = accelType;
-         allocation->id.name = inst->name;
-         allocation->configs = inst->declaration->configs;
-         allocation->ptr = in.statics.Push(0);
-
-         in.config = in.statics;
-      }
-   }
-
-   // Accelerator instance doesn't allocate memory, it shares memory with sub units
-   if(inst->compositeAccel || val.configs){
-      inst->config = in.config.Push(val.configs);
-   }
-   if(inst->compositeAccel || val.states){
-      inst->state = in.state.Push(val.states);
-   }
-   if(inst->compositeAccel || val.delays){
-      inst->delay = in.delay.Push(val.delays);
-   }
-
-   // Except for outputs, each unit has it's own output memory
-   if(val.outputs){
-      inst->outputs = in.outputs.Push(val.outputs);
-      inst->storedOutputs = in.storedOutputs.Push(val.outputs);
-   }
-   if(inst->compositeAccel || val.extraData){
-      inst->extraData = in.extraData.Push(val.extraData);
-   }
-
-   #if 1
-   if(!inst->initialized && type->initializeFunction){
-      type->initializeFunction(inst);
-      inst->initialized = true;
-   }
-   #endif
-
-   if(inst->compositeAccel){
-      FUDeclaration* newAccelType = inst->declaration;
-
-      DoPopulate(inst->compositeAccel,newAccelType,in,staticsAllocated);
-   }
-
-   if(inst->declarationInstance && ((ComplexFUInstance*) inst->declarationInstance)->savedConfiguration){
-      memcpy(inst->config,inst->declarationInstance->config,inst->declaration->configs.size * sizeof(int));
-   }
-
-   if(inst->isStatic){
-      if(!foundStatic){
-         in.statics = in.config;
-      }
-      in.config = saved;
+      *inst = *other;
    }
 }
-
-void DoPopulate(Accelerator* accel,FUDeclaration* accelType,FUInstanceInterfaces& in,Pool<StaticInfo>& staticsAllocated){
-   std::vector<SharingInfo> sharingInfo;
-   for(ComplexFUInstance* inst : accel->instances){
-      SharingInfo* info = nullptr;
-      PushPtr<int> savedConfig = in.config;
-
-      if(inst->sharedEnable){
-         int index = inst->sharedIndex;
-
-         if(index >= (int) sharingInfo.size()){
-            sharingInfo.resize(index + 1);
-         }
-
-         info = &sharingInfo[index];
-
-         if(info->init){ // Already exists, replace config with ptr
-            in.config.Init(info->ptr,inst->declaration->configs.size);
-         } else {
-            info->ptr = in.config.Push(0);
-         }
-      }
-
-      PopulateAcceleratorRecursive(accelType,inst,in,staticsAllocated);
-
-      if(inst->sharedEnable){
-         if(info->init){
-            in.config = savedConfig;
-         }
-         info->init = true;
-      }
-   }
-}
-
-void PopulateAccelerator(Versat* versat,Accelerator* accel){
-   #if 0
-   if(accel->type == Accelerator::CIRCUIT){
-      return;
-   }
-   #endif
-
-   // Accel should be top level
-   UnitValues val = CalculateAcceleratorValues(versat,accel);
-
-   #if 1
-   ZeroOutRealloc(&accel->configAlloc,val.configs);
-   ZeroOutRealloc(&accel->stateAlloc,val.states);
-   ZeroOutRealloc(&accel->delayAlloc,val.delays);
-   ZeroOutRealloc(&accel->outputAlloc,val.totalOutputs);
-   ZeroOutRealloc(&accel->storedOutputAlloc,val.totalOutputs);
-   ZeroOutRealloc(&accel->extraDataAlloc,val.extraData);
-   ZeroOutRealloc(&accel->staticAlloc,val.statics);
-   #endif
-
-   FUInstanceInterfaces inter = {};
-
-   #if 1
-   inter.config.Init(accel->configAlloc);
-   inter.state.Init(accel->stateAlloc);
-   inter.delay.Init(accel->delayAlloc);
-   inter.outputs.Init(accel->outputAlloc);
-   inter.storedOutputs.Init(accel->storedOutputAlloc);
-   inter.extraData.Init(accel->extraDataAlloc);
-   inter.statics.Init(accel->staticAlloc);
-   #endif
-
-   accel->staticInfo.Clear();
-
-   // Assuming no static units on top, for now
-   DoPopulate(accel,accel->subtype,inter,accel->staticInfo);
-
-#if 1
-   Assert(inter.config.Empty());
-   Assert(inter.state.Empty());
-   Assert(inter.delay.Empty());
-   Assert(inter.outputs.Empty());
-   Assert(inter.storedOutputs.Empty());
-   Assert(inter.extraData.Empty());
-   Assert(inter.statics.Empty());
-#endif
-}
-#endif
 
 FUInstance* CreateFUInstance(Accelerator* accel,FUDeclaration* type,SizedString name,bool flat,bool isStatic){
+   ArenaMarker marker(&accel->versat->temp);
+
    Assert(CheckValidName(name));
 
    ComplexFUInstance* ptr = accel->instances.Alloc();
@@ -211,18 +74,18 @@ FUInstance* CreateFUInstance(Accelerator* accel,FUDeclaration* type,SizedString 
    int outputOffset = accel->outputAlloc.size;
    int extraDataOffset = accel->extraDataAlloc.size;
 
-   ZeroOutRealloc(&accel->configAlloc,val.configs);
-   ZeroOutRealloc(&accel->stateAlloc,val.states);
-   ZeroOutRealloc(&accel->delayAlloc,val.delays);
-   ZeroOutRealloc(&accel->outputAlloc,val.totalOutputs);
-   ZeroOutRealloc(&accel->storedOutputAlloc,val.totalOutputs);
-   ZeroOutRealloc(&accel->extraDataAlloc,val.extraData);
-   ZeroOutRealloc(&accel->staticAlloc,val.statics);
+   Assert(!ZeroOutRealloc(&accel->configAlloc,val.configs));
+   Assert(!ZeroOutRealloc(&accel->stateAlloc,val.states));
+   Assert(!ZeroOutRealloc(&accel->delayAlloc,val.delays));
+   Assert(!ZeroOutRealloc(&accel->outputAlloc,val.totalOutputs));
+   Assert(!ZeroOutRealloc(&accel->storedOutputAlloc,val.totalOutputs));
+   Assert(!ZeroOutRealloc(&accel->extraDataAlloc,val.extraData));
+   Assert(!ZeroOutRealloc(&accel->staticAlloc,val.statics));
 
    if(isStatic){
-      ptr->config = &accel->configAlloc.ptr[configOffset];
-   } else {
       ptr->config = &accel->staticAlloc.ptr[configOffset];
+   } else {
+      ptr->config = &accel->configAlloc.ptr[configOffset];
    }
 
    ptr->state = &accel->stateAlloc.ptr[stateOffset];
@@ -233,13 +96,6 @@ FUInstance* CreateFUInstance(Accelerator* accel,FUDeclaration* type,SizedString 
 
    // Initialize sub units
    if(type->type == FUDeclaration::COMPOSITE){ // TODO: Iterative units
-      AcceleratorIterator iter = {};
-      for(ComplexFUInstance* inst = iter.Start(accel,ptr,&accel->versat->temp,true); inst; inst = iter.Next()){
-         if(inst->declaration->initializeFunction){
-            inst->declaration->initializeFunction(inst);
-         }
-      }
-
       // Fix static info
       for(Pair<StaticId,StaticData> pair : type->staticUnits){
          bool found = false;
@@ -257,6 +113,18 @@ FUInstance* CreateFUInstance(Accelerator* accel,FUDeclaration* type,SizedString 
 
          info->id = pair.first;
          info->data = pair.second;
+      }
+
+      AcceleratorIterator iter = {};
+      for(ComplexFUInstance* inst = iter.Start(accel,&accel->versat->temp,true); inst; inst = iter.Skip()){
+         if(inst == ptr){
+            for(ComplexFUInstance* subInst = iter.Descend(); subInst; subInst = iter.Next()){
+               if(subInst->declaration->initializeFunction){
+                  subInst->declaration->initializeFunction(subInst);
+               }
+            }
+            break;
+         }
       }
    } else if(type->initializeFunction){
       type->initializeFunction(ptr);
@@ -659,34 +527,32 @@ ComplexFUInstance* AcceleratorIterator::Start(Accelerator* topLevel,ComplexFUIns
    Accelerator* accel = compositeInst->declaration->fixedDelayCircuit;
 
    if(populate){
-      // TODO: When creating LevelBelowIterator, the creating iterator hashmap could be used instead of recreating the same thing here
       staticUnits = PushStruct<Hashmap<StaticId,StaticData>>(arena);
       staticUnits->Init(arena,topLevel->staticInfo.Size());
       for(StaticInfo* info : topLevel->staticInfo){
          staticUnits->Insert(info->id,info->data);
       }
 
-      UnitValues val = CalculateAcceleratorValues(accel->versat,accel);
-
-      staticUnits = &compositeInst->declaration->staticUnits;
+      staticUnits = &decl->staticUnits;
 
       FUInstanceInterfaces inter = {};
       inter.config.Init(compositeInst->config,decl->configs.size);
       inter.state.Init(compositeInst->state,decl->states.size);
       inter.delay.Init(compositeInst->delay,decl->nDelays);
-      inter.outputs.Init(compositeInst->outputs,val.totalOutputs);
-      inter.storedOutputs.Init(compositeInst->storedOutputs,val.totalOutputs);
+      inter.outputs.Init(compositeInst->outputs,decl->totalOutputs);
+      inter.storedOutputs.Init(compositeInst->storedOutputs,decl->totalOutputs);
       inter.extraData.Init(compositeInst->extraData,decl->extraDataSize);
       inter.statics.Init(topLevel->staticAlloc);
 
-      PopulateAccelerator(accel,compositeInst->declaration,inter,*staticUnits);
+      PopulateAccelerator(accel,decl,inter,*staticUnits);
 
       #if 0
+      Assert(inter.config.Empty());
       Assert(inter.state.Empty());
       Assert(inter.delay.Empty());
       Assert(inter.outputs.Empty());
       Assert(inter.storedOutputs.Empty());
-      Assert(inter.extraData.Empty()); // For now, ignore outputs
+      Assert(inter.extraData.Empty());
       #endif
    }
 
@@ -721,13 +587,13 @@ ComplexFUInstance* AcceleratorIterator::Start(Accelerator* topLevel,Arena* arena
 
       PopulateAccelerator2(topLevel,nullptr,inter,*staticUnits);
 
-      #if 0
-      //Assert(inter.config.Empty()); // Bad way of checking, due to static units
+      #if 1
+      Assert(inter.config.Empty());
       Assert(inter.state.Empty());
       Assert(inter.delay.Empty());
       Assert(inter.outputs.Empty());
       Assert(inter.storedOutputs.Empty());
-      Assert(inter.extraData.Empty()); // For now, ignore outputs
+      Assert(inter.extraData.Empty());
       #endif
    }
 
@@ -746,13 +612,11 @@ ComplexFUInstance* AcceleratorIterator::Descend(){
       Accelerator* accel = decl->fixedDelayCircuit;
       FUInstanceInterfaces inter = {};
 
-      UnitValues val = CalculateAcceleratorValues(accel->versat,accel);
-
       inter.config.Init(inst->config,decl->configs.size);
       inter.state.Init(inst->state,decl->states.size);
       inter.delay.Init(inst->delay,decl->nDelays);
-      inter.outputs.Init(inst->outputs,val.totalOutputs);
-      inter.storedOutputs.Init(inst->storedOutputs,val.totalOutputs);
+      inter.outputs.Init(inst->outputs,decl->totalOutputs);
+      inter.storedOutputs.Init(inst->storedOutputs,decl->totalOutputs);
       inter.extraData.Init(inst->extraData,decl->extraDataSize);
       inter.statics.Init(topLevel->staticAlloc);
 
@@ -760,17 +624,14 @@ ComplexFUInstance* AcceleratorIterator::Descend(){
       inter.outputs.Push(individual.outputs);
       inter.storedOutputs.Push(individual.outputs);
 
-      inter.outputs.maximumTimes += individual.outputs;
-      inter.storedOutputs.maximumTimes += individual.outputs;
-
       PopulateAccelerator2(accel,decl,inter,*staticUnits);
 
-      //Assert(inter.config.Empty()); // Bad way of checking, due to static units
+      Assert(inter.config.Empty());
       Assert(inter.state.Empty());
       Assert(inter.delay.Empty());
       Assert(inter.outputs.Empty());
       Assert(inter.storedOutputs.Empty());
-      //Assert(inter.extraData.Empty()); // For now, ignore outputs
+      Assert(inter.extraData.Empty());
    }
 
    stack[++level] = inst->declaration->fixedDelayCircuit->instances.begin();
@@ -1498,10 +1359,10 @@ AcceleratorView SubGraphAroundInstance(Versat* versat,Accelerator* accel,Complex
 
 int CalculateTotalOutputs(Accelerator* accel){
    int total = 0;
-   AcceleratorIterator iter = {};
-   for(FUInstance* inst = iter.Start(accel,&accel->versat->temp); inst; inst = iter.Next()){
-      total += inst->declaration->outputLatencies.size;
+   for(ComplexFUInstance* inst : accel->instances){
+      total += inst->declaration->totalOutputs;
    }
+
    return total;
 }
 

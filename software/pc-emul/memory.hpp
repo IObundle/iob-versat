@@ -36,6 +36,9 @@ template<typename T>
 bool ZeroOutRealloc(Allocation<T>* alloc,int newSize); // Returns true if it actually performed reallocation
 
 template<typename T>
+void Reserve(Allocation<T>* alloc,int reservedSize);
+
+template<typename T>
 void Alloc(Allocation<T>* alloc,int newSize);
 
 template<typename T>
@@ -77,7 +80,6 @@ public:
 
       return res;
    }
-
 
    bool Empty(){
       bool res = (maximumTimes == timesPushed);

@@ -52,6 +52,12 @@ bool ZeroOutRealloc(Allocation<T>* alloc,int newSize){
 }
 
 template<typename T>
+void Reserve(Allocation<T>* alloc,int reservedSize){
+   alloc->ptr = (T*) malloc(sizeof(T) * reservedSize);
+   alloc->reserved = reservedSize;
+}
+
+template<typename T>
 void Alloc(Allocation<T>* alloc,int newSize){
    if(alloc->ptr != nullptr){
       LogOnce(LogModule::MEMORY,LogLevel::WARN,"Allocating memory without previously freeing");

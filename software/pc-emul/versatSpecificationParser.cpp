@@ -295,6 +295,7 @@ FUDeclaration* ParseModule(Versat* versat,Tokenizer* tok){
    Accelerator* circuit = CreateAccelerator(versat);
    //circuit->type = Accelerator::CIRCUIT;
 
+   int insertedInputs = 0;
    for(int i = 0; 1; i++){
       Token token = tok->NextToken();
 
@@ -308,7 +309,7 @@ FUDeclaration* ParseModule(Versat* versat,Tokenizer* tok){
       }
 
       SizedString name = PushString(&versat->permanent,token);
-      CreateFUInstance(circuit,versat->input,name,true);
+      CreateOrGetInput(circuit,name,insertedInputs++);
    }
 
    tok->AssertNextToken("{");
@@ -434,6 +435,7 @@ FUDeclaration* ParseIterative(Versat* versat,Tokenizer* tok){
 
    tok->AssertNextToken("(");
    // Arguments
+   int insertedInputs = 0;
    while(1){
       Token argument = tok->PeekToken();
 
@@ -447,17 +449,10 @@ FUDeclaration* ParseIterative(Versat* versat,Tokenizer* tok){
          tok->AdvancePeek(peek);
       }
 
-      #if 1
       SizedString name = PushString(&versat->permanent,argument);
 
-      {
-      ComplexFUInstance* inst = (ComplexFUInstance*) CreateFUInstance(firstPhase,versat->input,name,true);
-      }
-
-      {
-      ComplexFUInstance* inst = (ComplexFUInstance*) CreateFUInstance(secondPhase,versat->input,name,true);
-      }
-      #endif
+      CreateOrGetInput(firstPhase,name,insertedInputs);
+      CreateOrGetInput(secondPhase,name,insertedInputs++);
    }
    tok->AssertNextToken(")");
    tok->AssertNextToken("{");
@@ -564,7 +559,8 @@ FUDeclaration* ParseIterative(Versat* versat,Tokenizer* tok){
 }
 
 void ParseVersatSpecification(Versat* versat,const char* filepath){
-   Byte* mark = MarkArena(&versat->temp);
+   ArenaMarker marker(&versat->temp);
+
    SizedString content = PushFile(&versat->temp,filepath);
 
    if(content.size < 0){
@@ -584,8 +580,6 @@ void ParseVersatSpecification(Versat* versat,const char* filepath){
          ParseIterative(versat,tok);
       }
    }
-
-   PopMark(&versat->temp,mark);
 }
 
 

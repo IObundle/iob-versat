@@ -24,7 +24,6 @@ struct FUInstance{
    Accelerator* accel;
 	FUDeclaration* declaration;
 	int id;
-   //Accelerator* compositeAccel;
 
 	int* outputs;
 	int* storedOutputs;
@@ -134,6 +133,7 @@ void PrintAcceleratorInstances(Accelerator* accel);
 int GetInputValue(FUInstance* instance,int port);
 int GetNumberOfInputs(FUInstance* inst);
 int GetNumberOfOutputs(FUInstance* inst);
+FUInstance* CreateOrGetInput(Accelerator* accel,SizedString name,int portNumber);
 
 // Helper functions to create sub accelerators
 int GetNumberOfInputs(Accelerator* accel);

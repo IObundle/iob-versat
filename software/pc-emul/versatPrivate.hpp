@@ -228,13 +228,16 @@ struct Accelerator{ // Graph + data storage
    Pool<ComplexFUInstance> instances;
 	Pool<Edge> edges;
 
+   Pool<ComplexFUInstance> subInstances;
+
    Allocation<int> configAlloc;
    Allocation<int> stateAlloc;
    Allocation<int> delayAlloc;
    Allocation<int> staticAlloc;
+   Allocation<Byte> extraDataAlloc;
+
    Allocation<int> outputAlloc;
    Allocation<int> storedOutputAlloc;
-   Allocation<Byte> extraDataAlloc;
 
    Pool<StaticInfo> staticInfo;
 

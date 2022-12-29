@@ -293,10 +293,6 @@ static void IncrementMapping(){
 }
 
 static void PrintVCDDefinitions_(FILE* accelOutputFile,Accelerator* accel){
-   Arena* arena = &accel->versat->temp;
-   AcceleratorView view = CreateAcceleratorView(accel,arena);
-   view.CalculateGraphData(arena);
-
    #if 0
    for(StaticInfo* info : accel->staticInfo){
       for(Wire& wire : info->configs){
