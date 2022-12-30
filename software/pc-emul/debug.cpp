@@ -274,7 +274,7 @@ static void PrintVCDDefinitions_(FILE* accelOutputFile,Accelerator* accel){
 
    for(StaticInfo* info : accel->staticInfo){
       for(Wire& wire : info->configs){
-         fprintf(accelOutputFile,"$var wire  %d %c%c%c%c %.*s_%.*s $end\n",wire.bitsize,currentMapping[0],currentMapping[1],currentMapping[2],currentMapping[3],UNPACK_SS(info->name),UNPACK_SS(wire.name));
+         fprintf(accelOutputFile,"$var wire  %d %s %.*s_%.*s $end\n",wire.bitsize,currentMapping.data(),UNPACK_SS(info->name),UNPACK_SS(wire.name));
          IncrementMapping();
       }
    }
@@ -283,34 +283,34 @@ static void PrintVCDDefinitions_(FILE* accelOutputFile,Accelerator* accel){
       fprintf(accelOutputFile,"$scope module %.*s_%d $end\n",UNPACK_SS(inst->name),inst->id);
 
       for(int i = 0; i < inst->graphData->singleInputs.size; i++){
-         fprintf(accelOutputFile,"$var wire  32 %c%c%c%c %.*s_in%d $end\n",currentMapping[0],currentMapping[1],currentMapping[2],currentMapping[3],UNPACK_SS(inst->name),i);
+         fprintf(accelOutputFile,"$var wire  32 %s %.*s_in%d $end\n",currentMapping.data(),UNPACK_SS(inst->name),i);
          IncrementMapping();
       }
 
       for(int i = 0; i < inst->graphData->outputs; i++){
-         fprintf(accelOutputFile,"$var wire  32 %c%c%c%c %.*s_out%d $end\n",currentMapping[0],currentMapping[1],currentMapping[2],currentMapping[3],UNPACK_SS(inst->name),i);
+         fprintf(accelOutputFile,"$var wire  32 %s %.*s_out%d $end\n",currentMapping.data(),UNPACK_SS(inst->name),i);
          IncrementMapping();
-         fprintf(accelOutputFile,"$var wire  32 %c%c%c%c %.*s_stored_out%d $end\n",currentMapping[0],currentMapping[1],currentMapping[2],currentMapping[3],UNPACK_SS(inst->name),i);
+         fprintf(accelOutputFile,"$var wire  32 %s %.*s_stored_out%d $end\n",currentMapping.data(),UNPACK_SS(inst->name),i);
          IncrementMapping();
       }
 
       for(Wire& wire : inst->declaration->configs){
-         fprintf(accelOutputFile,"$var wire  %d %c%c%c%c %.*s $end\n",wire.bitsize,currentMapping[0],currentMapping[1],currentMapping[2],currentMapping[3],UNPACK_SS(wire.name));
+         fprintf(accelOutputFile,"$var wire  %d %s %.*s $end\n",wire.bitsize,currentMapping.data(),UNPACK_SS(wire.name));
          IncrementMapping();
       }
 
       for(Wire& wire : inst->declaration->states){
-         fprintf(accelOutputFile,"$var wire  %d %c%c%c%c %.*s $end\n",wire.bitsize,currentMapping[0],currentMapping[1],currentMapping[2],currentMapping[3],UNPACK_SS(wire.name));
+         fprintf(accelOutputFile,"$var wire  %d %s %.*s $end\n",wire.bitsize,currentMapping.data(),UNPACK_SS(wire.name));
          IncrementMapping();
       }
 
       for(int i = 0; i < inst->declaration->nDelays; i++){
-         fprintf(accelOutputFile,"$var wire 32 %c%c%c%c delay%d $end\n",currentMapping[0],currentMapping[1],currentMapping[2],currentMapping[3],i);
+         fprintf(accelOutputFile,"$var wire 32 %s delay%d $end\n",currentMapping.data(),i);
          IncrementMapping();
       }
 
       if(inst->declaration->implementsDone){
-         fprintf(accelOutputFile,"$var wire  1 %c%c%c%c done $end\n",currentMapping[0],currentMapping[1],currentMapping[2],currentMapping[3]);
+         fprintf(accelOutputFile,"$var wire  1 %s done $end\n",currentMapping.data());
          IncrementMapping();
       }
 
@@ -352,7 +352,7 @@ static void PrintVCD_(FILE* accelOutputFile,Accelerator* accel,int time){
    for(StaticInfo* info : accel->staticInfo){
       for(int i = 0; i < info->configs.size; i++){
          if(time == 0){
-            fprintf(accelOutputFile,"b%s %c%c%c%c\n",Bin(info->ptr[i]),currentMapping[0],currentMapping[1],currentMapping[2],currentMapping[3]);
+            fprintf(accelOutputFile,"b%s %s\n",Bin(info->ptr[i]),currentMapping.data());
          }
          IncrementMapping();
       }
@@ -360,36 +360,36 @@ static void PrintVCD_(FILE* accelOutputFile,Accelerator* accel,int time){
 
    for(ComplexFUInstance* inst : accel->instances){
       for(int i = 0; i < inst->graphData->singleInputs.size; i++){
-         fprintf(accelOutputFile,"b%s %c%c%c%c\n",Bin(GetInputValue(inst,i)),currentMapping[0],currentMapping[1],currentMapping[2],currentMapping[3]);
+         fprintf(accelOutputFile,"b%s %s\n",Bin(GetInputValue(inst,i)),currentMapping.data());
          IncrementMapping();
       }
 
       for(int i = 0; i < inst->graphData->outputs; i++){
-         fprintf(accelOutputFile,"b%s %c%c%c%c\n",Bin(inst->outputs[i]),currentMapping[0],currentMapping[1],currentMapping[2],currentMapping[3]);
+         fprintf(accelOutputFile,"b%s %s\n",Bin(inst->outputs[i]),currentMapping.data());
          IncrementMapping();
-         fprintf(accelOutputFile,"b%s %c%c%c%c\n",Bin(inst->storedOutputs[i]),currentMapping[0],currentMapping[1],currentMapping[2],currentMapping[3]);
+         fprintf(accelOutputFile,"b%s %s\n",Bin(inst->storedOutputs[i]),currentMapping.data());
          IncrementMapping();
       }
 
       for(int i = 0; i < inst->declaration->configs.size; i++){
          if(time == 0){
-            fprintf(accelOutputFile,"b%s %c%c%c%c\n",Bin(inst->config[i]),currentMapping[0],currentMapping[1],currentMapping[2],currentMapping[3]);
+            fprintf(accelOutputFile,"b%s %s\n",Bin(inst->config[i]),currentMapping.data());
          }
          IncrementMapping();
       }
 
       for(int i = 0; i < inst->declaration->states.size; i++){
-         fprintf(accelOutputFile,"b%s %c%c%c%c\n",Bin(inst->state[i]),currentMapping[0],currentMapping[1],currentMapping[2],currentMapping[3]);
+         fprintf(accelOutputFile,"b%s %s\n",Bin(inst->state[i]),currentMapping.data());
          IncrementMapping();
       }
 
       for(int i = 0; i < inst->declaration->nDelays; i++){
-         fprintf(accelOutputFile,"b%s %c%c%c%c\n",Bin(inst->delay[i]),currentMapping[0],currentMapping[1],currentMapping[2],currentMapping[3]);
+         fprintf(accelOutputFile,"b%s %s\n",Bin(inst->delay[i]),currentMapping.data());
          IncrementMapping();
       }
 
       if(inst->declaration->implementsDone){
-         fprintf(accelOutputFile,"%d%c%c%c%c\n",inst->done ? 1 : 0,currentMapping[0],currentMapping[1],currentMapping[2],currentMapping[3]);
+         fprintf(accelOutputFile,"%d%s\n",inst->done ? 1 : 0,currentMapping.data());
          IncrementMapping();
       }
 
