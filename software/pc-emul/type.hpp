@@ -67,6 +67,7 @@ namespace ValueType{
    extern Type* CHAR;
    extern Type* STRING;
    extern Type* NIL;
+   extern Type* HASHMAP;
    extern Type* SIZED_STRING;
    extern Type* TEMPLATE_FUNCTION;
    extern Type* POOL;
@@ -99,6 +100,7 @@ struct Iterator{
    union{
       int currentNumber;
       GenericPoolIterator poolIterator;
+      GenericHashmapIterator hashmapIterator;
    };
 
    Value iterating;

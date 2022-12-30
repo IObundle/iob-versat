@@ -57,8 +57,7 @@ public:
 };
 
 template<typename T>
-class Array{
-public:
+struct Array{
    T* data;
    int size;
 

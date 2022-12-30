@@ -858,9 +858,9 @@ UnitValues CalculateAcceleratorValues(Versat* versat,Accelerator* accel){
          for(Pair<StaticId,StaticData> pair : inst->declaration->staticUnits){
             int* possibleFind = staticSeen.Get(pair.first);
 
-            if(possibleFind){
+            if(!possibleFind){
                staticSeen.Insert(pair.first,1);
-               val.statics += inst->declaration->configs.size;
+               val.statics += pair.second.configs.size;
             }
          }
       }

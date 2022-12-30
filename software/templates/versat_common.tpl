@@ -22,7 +22,7 @@
       #{return "in" # inst2.id}
    #{else}
       #{if decl2.isOperation}
-         #{if decl2.latencies[0] == 0}
+         #{if decl2.outputLatencies[0] == 0}
             #{return "comb_" # inst2.name |> Identify}
          #{else}
             #{return "seq_" # inst2.name |> Identify}
@@ -57,7 +57,7 @@
    #{for inst instances}
       #{if inst.declaration.isOperation}
          #{inc nOperations}
-         #{if inst.declaration.latencies[0] == 0}
+         #{if inst.declaration.outputLatencies[0] == 0}
             #{inc nCombOperations}
          #{else}
             #{inc nSeqOperations}

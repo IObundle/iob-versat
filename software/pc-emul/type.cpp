@@ -14,6 +14,7 @@ namespace ValueType{
    Type* CHAR;
    Type* STRING;
    Type* NIL;
+   Type* HASHMAP;
    Type* SIZED_STRING;
    Type* TEMPLATE_FUNCTION;
    Type* SET;
@@ -269,6 +270,7 @@ void RegisterTypes(){
    ValueType::BOOLEAN =  GetType(MakeSizedString("bool"));
    ValueType::CHAR =  GetType(MakeSizedString("char"));
    ValueType::NIL = GetType(MakeSizedString("void"));
+   ValueType::HASHMAP = GetType(MakeSizedString("Hashmap"));
    ValueType::STRING = GetPointerType(ValueType::CHAR);
    ValueType::SIZED_STRING = GetType(MakeSizedString("SizedString"));
    ValueType::TEMPLATE_FUNCTION = GetPointerType(GetType(MakeSizedString("TemplateFunction")));
@@ -591,6 +593,16 @@ Iterator Iterate(Value iterating){
          iter.currentNumber = 0;
       } else if(type->templateBase == ValueType::ARRAY){
          iter.currentNumber = 0;
+      } else if(type->templateBase == ValueType::HASHMAP){
+         Assert(type->templateArgs && type->templateArgs->next); // Two template args
+
+         Hashmap<Byte,Byte>* hashmap = (Hashmap<Byte,Byte>*) iterating.custom; // Any type of hashmap is good enough
+
+         Byte* memory = (Byte*) hashmap->memory.data;
+         int keySize = type->templateArgs->type->size;
+         int dataSize = type->templateArgs->next->type->size;
+
+         iter.hashmapIterator.Init(memory,hashmap->valid.begin(),hashmap->valid.end(),keySize,dataSize);
       } else {
          NOT_IMPLEMENTED;
       }
@@ -629,6 +641,9 @@ bool HasNext(Iterator iter){
 
          bool res = (iter.currentNumber < len);
          return res;
+      } else if(type->templateBase == ValueType::HASHMAP){
+         bool res = iter.hashmapIterator.HasNext();
+         return res;
       } else {
          NOT_IMPLEMENTED;
       }
@@ -653,6 +668,8 @@ void Advance(Iterator* iter){
          iter->currentNumber += 1;
       } else if(type->templateBase == ValueType::ARRAY){
          iter->currentNumber += 1;
+      } else if(type->templateBase == ValueType::HASHMAP){
+         ++iter->hashmapIterator;
       } else {
          NOT_IMPLEMENTED;
       }
@@ -686,6 +703,13 @@ Value GetValue(Iterator iter){
          val.type = type->templateArgs->type;
       } else if(type->templateBase == ValueType::ARRAY){
          val = AccessObjectIndex(iter.iterating,iter.currentNumber);
+      } else if(type->templateBase == ValueType::HASHMAP){
+         Pair<Byte*,Byte*> pair = *iter.hashmapIterator;
+
+         Type* dataType = type->templateArgs->next->type;
+
+         val.custom = pair.second;
+         val.type = dataType;
       } else {
          NOT_IMPLEMENTED;
       }

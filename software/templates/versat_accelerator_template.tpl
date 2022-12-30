@@ -22,28 +22,25 @@ module @{accel.name} #(
    output done,
    #{end}
 
-   #{for i accel.nInputs}
-   input [DATA_W-1:0]              in@{i},
+   #{for i accel.inputDelays}
+   input [DATA_W-1:0]              in@{index},
    #{end}
 
-   #{for i accel.nOutputs}
-   output [DATA_W-1:0]             out@{i},
+   #{for i accel.outputLatencies}
+   output [DATA_W-1:0]             out@{index},
    #{end}
 
-   #{for i accel.nConfigs}
-   #{set wire accel.configWires[i]}
+   #{for wire accel.configs}
    input [@{wire.bitsize-1}:0]     @{wire.name},
    #{end}
 
    #{for unit accel.staticUnits}
-   #{for i unit.nConfigs}
-   #{set wire unit.wires[i]}
+   #{for wire unit.configs}
    input [@{wire.bitsize-1}:0]     @{unit.module.name}_@{unit.name}_@{wire.name},
    #{end}
    #{end}
 
-   #{for i accel.nStates}
-   #{set wire accel.stateWires[i]}
+   #{for wire accel.states}
    output [@{wire.bitsize-1}:0]    @{wire.name},
    #{end}
 
@@ -136,15 +133,15 @@ end
 #{end}
 
 #{if nCombOperations}
-reg [31:0] #{join "," for inst instances} #{if inst.declaration.isOperation and inst.declaration.latencies[0] == 0} comb_@{inst.name |> Identify} #{end}#{end}; 
+reg [31:0] #{join "," for inst instances} #{if inst.declaration.isOperation and inst.declaration.outputLatencies[0] == 0} comb_@{inst.name |> Identify} #{end}#{end}; 
 
 always @*
 begin
 #{for inst instances}
    #{set decl inst.declaration}
-   #{if decl.isOperation and decl.latencies[0] == 0}
+   #{if decl.isOperation and decl.outputLatencies[0] == 0}
       #{set input1 inst.graphData[0].singleInputs[0]}
-      #{if decl.nInputs == 1}
+      #{if decl.inputDelays.size == 1}
          #{format decl.operation "comb" @{inst.name |> Identify} #{call retOutputName input1}};
       #{else}
          #{set input2 inst.graphData[0].singleInputs[1]}
@@ -156,13 +153,13 @@ end
 #{end}
 
 #{if nSeqOperations}
-reg [31:0] #{join "," for inst instances} #{if inst.declaration.isOperation and inst.declaration.latencies[0] != 0} seq_@{inst.name |> Identify} #{end}#{end}; 
+reg [31:0] #{join "," for inst instances} #{if inst.declaration.isOperation and inst.declaration.outputLatencies[0] != 0} seq_@{inst.name |> Identify} #{end}#{end}; 
 
 always @(posedge clk)
 begin
 #{for inst instances}
    #{set decl inst.declaration}
-   #{if decl.isOperation and decl.latencies[0] != 0 }
+   #{if decl.isOperation and decl.outputLatencies[0] != 0 }
       #{set input1 inst.graphData[0].singleInputs[0]}
       #{format decl.operation "seq" @{inst.name |> Identify} #{call retOutputName input1}};
    #{end}
