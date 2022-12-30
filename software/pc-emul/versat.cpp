@@ -1438,6 +1438,7 @@ static bool AcceleratorDone(Accelerator* accel){
    return done;
 }
 
+// Populates sub accelerator
 void PopulateAccelerator(Accelerator* accel,FUDeclaration* topDeclaration,FUInstanceInterfaces& inter,Hashmap<StaticId,StaticData>& staticMap){
    int configIndex = 0;
    int stateIndex = 0;
@@ -1468,6 +1469,7 @@ void PopulateAccelerator(Accelerator* accel,FUDeclaration* topDeclaration,FUInst
    }
 }
 
+// The true "Accelerator" populator
 void PopulateAccelerator2(Accelerator* accel,FUDeclaration* topDeclaration,FUInstanceInterfaces& inter,Hashmap<StaticId,StaticData>& staticMap){
    STACK_ARENA(temp,Kilobyte(16));
 

@@ -623,6 +623,8 @@ ComplexFUInstance* AcceleratorIterator::Descend(){
       UnitValues individual = CalculateIndividualUnitValues(inst);
       inter.outputs.Push(individual.outputs);
       inter.storedOutputs.Push(individual.outputs);
+      inter.outputs.ptr += individual.outputs;
+      inter.storedOutputs.ptr += individual.outputs;
 
       PopulateAccelerator(accel,decl,inter,*staticUnits);
 
