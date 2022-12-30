@@ -983,16 +983,14 @@ FUDeclaration* RegisterSubUnit(Versat* versat,SizedString name,Accelerator* circ
       instanceToNewIndex.Insert(inst,i);
    }
 
-   Hashmap<int,int> oldIndexToNewIndex = {};
-   oldIndexToNewIndex.Init(temp,circuit->instances.Size());
-   {
+   Hashmap<int,int> newIndexToOld = {};
+   newIndexToOld.Init(temp,circuit->instances.Size());
    int i = 0;
    for(ComplexFUInstance* inst : circuit->instances){
       int newIndex = instanceToNewIndex.GetOrFail(inst);
 
-      oldIndexToNewIndex.Insert(i,newIndex);
+      newIndexToOld.Insert(newIndex,i);
       i++;
-   }
    }
 
    Hashmap<ComplexFUInstance*,ComplexFUInstance*> oldInstanceToNewInstance = {};
@@ -1006,6 +1004,7 @@ FUDeclaration* RegisterSubUnit(Versat* versat,SizedString name,Accelerator* circ
       oldInstanceToNewInstance.Insert(old,newInst);
       *newInst = *old;
    }
+
    circuit->instances.Clear();
    circuit->instances = newInstances;
    for(Edge* edge : circuit->edges){
@@ -1100,7 +1099,11 @@ FUDeclaration* RegisterSubUnit(Versat* versat,SizedString name,Accelerator* circ
    int outputIndex = 0;
    int extraDataIndex = 0;
    int unitIndex = 0;
-   for(ComplexFUInstance* inst : circuit->instances){
+   //for(ComplexFUInstance* inst : circuit->instances){
+   for(int i = 0 ; i < circuit->instances.Size(); i++){
+      int oldPos = newIndexToOld.GetOrFail(i);
+      ComplexFUInstance* inst = view.nodes[oldPos];
+
       UnitValues val = CalculateAcceleratorUnitValues(versat,inst);
 
       int savedIndex = -1;
@@ -1118,16 +1121,18 @@ FUDeclaration* RegisterSubUnit(Versat* versat,SizedString name,Accelerator* circ
 
       FUDeclaration* d = inst->declaration;
 
-      decl.configOffsets[unitIndex] = configIndex;
+      decl.configOffsets[oldPos] = configIndex;
       configIndex += d->configs.size;
-      decl.stateOffsets[unitIndex] = stateIndex;
+      decl.stateOffsets[oldPos] = stateIndex;
       stateIndex += d->states.size;
-      decl.delayOffsets[unitIndex] = delayIndex;
+      decl.delayOffsets[oldPos] = delayIndex;
       delayIndex += d->nDelays;
+      decl.extraDataOffsets[oldPos] = extraDataIndex;
+      extraDataIndex += d->extraDataSize;
+
+      // Outputs follow the DAG order
       decl.outputOffsets[unitIndex] = outputIndex;
       outputIndex += val.totalOutputs;
-      decl.extraDataOffsets[unitIndex] = extraDataIndex;
-      extraDataIndex += d->extraDataSize;
 
       if(savedIndex != -1){
          configIndex = savedIndex;

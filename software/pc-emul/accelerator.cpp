@@ -624,14 +624,17 @@ ComplexFUInstance* AcceleratorIterator::Descend(){
       inter.outputs.Push(individual.outputs);
       inter.storedOutputs.Push(individual.outputs);
 
-      PopulateAccelerator2(accel,decl,inter,*staticUnits);
+      PopulateAccelerator(accel,decl,inter,*staticUnits);
 
+      // Don't make sense when using PopulateAccelerator(1). The function does not push
+      #if 0
       Assert(inter.config.Empty());
       Assert(inter.state.Empty());
       Assert(inter.delay.Empty());
       Assert(inter.outputs.Empty());
       Assert(inter.storedOutputs.Empty());
       Assert(inter.extraData.Empty());
+      #endif
    }
 
    stack[++level] = inst->declaration->fixedDelayCircuit->instances.begin();

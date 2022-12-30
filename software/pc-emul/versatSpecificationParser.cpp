@@ -578,6 +578,8 @@ void ParseVersatSpecification(Versat* versat,const char* filepath){
          ParseModule(versat,tok);
       } else if(CompareString(peek,"iterative")){
          ParseIterative(versat,tok);
+      } else {
+         tok->AdvancePeek(peek);
       }
    }
 }
