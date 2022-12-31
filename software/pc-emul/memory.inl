@@ -131,11 +131,14 @@ Data* Hashmap<Key,Data>::Insert(Key key,Data data){
    int index = Hash<Key>(key) & mask; // Size is power of 2
 
    // open addressing, find first empty position
-   for(; 1; index = (index + 1) & mask){
+   bool found = false;
+   for(int i = 0; i < memory.size; i += 1,index = (index + 1) & mask){
       if(!valid.Get(index)){
+         found = true;
          break;
       }
    }
+   Assert(found); // Hashmap is full
 
    valid.Set(index,1);
    memory[index].key = key;

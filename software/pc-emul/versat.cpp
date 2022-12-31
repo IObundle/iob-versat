@@ -791,7 +791,7 @@ UnitValues CalculateAcceleratorValues(Versat* versat,Accelerator* accel){
    std::vector<bool> seenShared;
 
    Hashmap<StaticId,int> staticSeen = {};
-   staticSeen.Init(&accel->versat->temp,50);
+   staticSeen.Init(&accel->versat->temp,1000);
 
    int memoryMapBits[32];
    memset(memoryMapBits,0,sizeof(int) * 32);
@@ -972,6 +972,10 @@ FUDeclaration* RegisterSubUnit(Versat* versat,SizedString name,Accelerator* circ
    view.CalculateDAGOrdering(temp);
    view.CalculateDelay(temp);
 
+   if(CompareString(name,"Convolution")){
+      printf("here\n");
+   }
+
    #if 1
    // Reorganize nodes based on DAG order
    DAGOrder order = view.order;
@@ -983,13 +987,13 @@ FUDeclaration* RegisterSubUnit(Versat* versat,SizedString name,Accelerator* circ
       instanceToNewIndex.Insert(inst,i);
    }
 
-   Hashmap<int,int> newIndexToOld = {};
-   newIndexToOld.Init(temp,circuit->instances.Size());
+   Hashmap<int,int> oldIndexToNew = {};
+   oldIndexToNew.Init(temp,circuit->instances.Size());
    int i = 0;
    for(ComplexFUInstance* inst : circuit->instances){
       int newIndex = instanceToNewIndex.GetOrFail(inst);
 
-      newIndexToOld.Insert(newIndex,i);
+      oldIndexToNew.Insert(i,newIndex);
       i++;
    }
 
@@ -1099,10 +1103,13 @@ FUDeclaration* RegisterSubUnit(Versat* versat,SizedString name,Accelerator* circ
    int outputIndex = 0;
    int extraDataIndex = 0;
    int unitIndex = 0;
+
    //for(ComplexFUInstance* inst : circuit->instances){
    for(int i = 0 ; i < circuit->instances.Size(); i++){
-      int oldPos = newIndexToOld.GetOrFail(i);
-      ComplexFUInstance* inst = view.nodes[oldPos];
+      int newPos = oldIndexToNew.GetOrFail(i);
+      ComplexFUInstance* inst = view.nodes[newPos]; // Bias -> res
+
+      // We should iterate from the order set in specifications
 
       UnitValues val = CalculateAcceleratorUnitValues(versat,inst);
 
@@ -1121,13 +1128,13 @@ FUDeclaration* RegisterSubUnit(Versat* versat,SizedString name,Accelerator* circ
 
       FUDeclaration* d = inst->declaration;
 
-      decl.configOffsets[oldPos] = configIndex;
+      decl.configOffsets[newPos] = configIndex;
       configIndex += d->configs.size;
-      decl.stateOffsets[oldPos] = stateIndex;
+      decl.stateOffsets[newPos] = stateIndex;
       stateIndex += d->states.size;
-      decl.delayOffsets[oldPos] = delayIndex;
+      decl.delayOffsets[newPos] = delayIndex;
       delayIndex += d->nDelays;
-      decl.extraDataOffsets[oldPos] = extraDataIndex;
+      decl.extraDataOffsets[newPos] = extraDataIndex;
       extraDataIndex += d->extraDataSize;
 
       // Outputs follow the DAG order
@@ -1842,7 +1849,9 @@ int GetInputPortNumber(Versat* versat,FUInstance* inputInstance){
    return inputInstance->id;
 }
 
-void SetDelayRecursive_(ComplexFUInstance* inst,int delay){
+void SetDelayRecursive_(AcceleratorIterator iter,int delay){
+   ComplexFUInstance* inst = iter.Current();
+
    if(inst->declaration == inst->accel->versat->buffer){
       inst->config[0] = inst->baseDelay;
       return;
@@ -1851,8 +1860,10 @@ void SetDelayRecursive_(ComplexFUInstance* inst,int delay){
    int totalDelay = inst->baseDelay + delay;
 
    if(inst->declaration->type == FUDeclaration::COMPOSITE){
-      for(ComplexFUInstance* child : inst->declaration->fixedDelayCircuit->instances){
-         SetDelayRecursive_(child,totalDelay);
+      AcceleratorIterator it = iter.LevelBelowIterator();
+
+      for(ComplexFUInstance* child = it.Current(); child; child = it.Skip()){
+         SetDelayRecursive_(it,totalDelay);
       }
    } else if(inst->declaration->nDelays){
       inst->delay[0] = totalDelay;
@@ -1860,8 +1871,10 @@ void SetDelayRecursive_(ComplexFUInstance* inst,int delay){
 }
 
 void SetDelayRecursive(Accelerator* accel){
-   for(ComplexFUInstance* inst : accel->instances){
-      SetDelayRecursive_(inst,0);
+   STACK_ARENA(temp,Kilobyte(16));
+   AcceleratorIterator iter = {};
+   for(ComplexFUInstance* inst = iter.Start(accel,&temp,true); inst; inst = iter.Skip()){
+      SetDelayRecursive_(iter,0);
    }
 }
 
