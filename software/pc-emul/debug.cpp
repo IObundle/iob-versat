@@ -226,21 +226,7 @@ static void OutputGraphDotFile_(Versat* versat,AcceleratorView view,bool collaps
       SizedString label = {};
       int calculatedDelay = 0;
 
-      #if 0
-      // Get info from input instance side
-      PortInstance start = edge->units[0];
-      for(ConnectionInfo& info : start.inst->graphData->allOutputs){
-         if(info.port == start.port && info.instConnectedTo == edge->units[1]){
-            PortInstance end = info.instConnectedTo;
-
-            label = Repr(start,end,versat->debug.dotFormat,arena);
-            calculatedDelay = info.delay;
-            break;
-         }
-      }
-      #endif
-
-      #if 01
+      #if 1
       // Get info from output instance side
       PortInstance end = edge->units[1];
       for(ConnectionInfo& info : end.inst->graphData->allInputs){

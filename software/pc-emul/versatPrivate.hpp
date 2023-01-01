@@ -268,7 +268,7 @@ public:
    void CalculateGraphData(Arena* arena);
    void SetGraphData();
 
-   void CalculateDelay(Arena* arena);
+   void CalculateDelay(Arena* arena,bool outputDebugGraph = false);
    DAGOrder CalculateDAGOrdering(Arena* arena);
    void CalculateVersatData(Arena* arena);
 };

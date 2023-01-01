@@ -2,17 +2,25 @@ Misc:
 
    Stop using asserts for likely user errors. Parser is full of asserts that are actually faulty user data. Need to grapple with things now before they become more complex, even if in the future there is likelihood that things will change.
    Maybe do some fuzz testing? Especially for parsers
-   Hard to reason with fixed buffer because we immediatly transform delay into a string. Having to parse the delay is not a solution. Figure out what to do and remove all the portions of code that parse the delay out from the unit
+   Hard to reason with fixed buffer because we immediatly transform delay into a parameter string. Having to parse the delay is not a solution. Figure out what to do and remove all the portions of code that parse the delay out from the unit
 
 Testbench:
 
    Rework testbench
       Add subtests
-      Use a more data oriented approach. Kinda problematic when running in embedded, so make small changes and test in embedded to make sure not doing anything to much complicated.
+      Use a more data oriented approach. Kinda problematic when running in embedded, so make small changes and test in embedded to make sure not doing anything too much complicated.
 
 Major change:
 
    Initial configuration can be saved inside FUDeclarations
+
+Graph optimizations:
+
+   Adding the concept of weight to units would allow a number of optimizations to be performed, automatically by Versat.
+      The calculate delay and fix graphs could potently replicate units if adding the delays would lead to a bigger overall weight.
+      The weight could be simply set by the user for the simple units, while composite units would only need to add up all their instances weights.
+      To calculate the weight, we could just compile the unit standalone and take the value of the amount of LUTs used.
+      We could also add multiple weights, one for LUTs, another for memories, and so one.
 
 Embedded data:
 
@@ -51,26 +59,27 @@ Delay and Time:
          Probably would need to do a full accelerator calculate delay and fix buffers, then use AcceleratorView for each graph to extract the correct values for each accelerator.
       For fixed buffers, I don't think using AcceleratorView does anything. Have to perform CalculateDelay and FixBuffers globally.
 
+   Improve the fixing of graphs.
+      When fixing the graphs, we currently only take the result from calculate delay and insert buffers into any edge with any positive delay.
+      We can improve this by sending delay to later or units before hand. If a unit has 1 input and 8 outputs, and there is a need to delay to follow up units, then we end up adding 8 delay units when we only need to insert 1 at the input.
+      I don't think this is a problem of the calculate delay algorithm, because if we had a unit with 8 inputs and 1 outputs, we could potentially hit the other edge case.
+      I think we need to pick the result of the calculate delay as the base case, then model the problem as a minimization problem, knowing that we can shuffle delays around, until we reach a minimum of delay units needed to add. 
+
    Should the concept of data validity be extended to remove the fact that data is assumed valid forever after the unit starts producing valid data?
       Some units only produce valid data after X cycles. Think things like iterative units and complex FPU units that aren't pipelined.
-      The concept is useful, especially if we can use it to make storing data to memory. It should also allow units that are not easily pipelinable to produce more than data per iteration. 
+      The concept is useful, especially if we can use it to make storing data to memory. It should also allow units that are not easily pipelinable to produce more than one valid data per iteration. 
       The problem is how to fix the timing for complex graphs. (Imagine a unit whose inputs produce valid every 2 cycles and another every 3 cycles).
 
    Further abstract the concept of iterative units. 
-      Some units, like FPU div and such, work like iterative units. 
+      Some units, like FPU div and such, work like iterative units.
+      Ultimately, we use the concept of "iterative units" as a hack for the fact that Versat cannot represent units that only output valid data after every X cycles.
       It should be possible to define normal units as iterative, instead of only defined as graphs and through the use of ParseVersatSpecifications.
 
 Performance:
 
    Need to check if the Hashmap class is producing good hashes. 
-      The c++ way of hashing was causing troubles as hashing pointers was completely useless
+      The default c++ way of hashing was causing troubles as hashing pointers was completely useless
       As long as pointers are hashing correctly, don't think to much about it.
-
-Accelerator View:
-
-   Need to grasp this part. Very important for the future of the project but hard to reason as no easy solution appears to be exist.
->  For now, try to propagate AcceleratorViews as further as possible. If a function currently needs to create a AcceleratorView, changing it so that it takes it as a parameter and checks inside if it's correct.
-      Only user level functions should have a need to create AcceleratorViews. Everything else takes.
 
  Iterative units:
    
@@ -85,17 +94,11 @@ Merge:
 Configuration management:
 
    Add an interface to provide the user with the ability to save and load configurations.
-      Need to add two types. Software sided saving and loading of configuration (Data is not stored on versat).
-      Hardware sided saving and loading of configuration (Data is stored on versat).
+      Need to add two types. Software sided saving and loading of configuration (Data is not stored on accelerator).
+      Hardware sided saving and loading of configuration (Data is stored on accelerator).
       Provide ways to change from one side to the other.
       Provide ways to save data in PC-Emul and load it in embedded.
-      Need to cleary separate where data is stored.
-
-FUInstance reordering:
-
-   We can eliminate the need to store order information if we make sure that FUDeclaration accelerators are stored in DAG order.
-   In order to maintain the order expected by the configuration arrays, we can change the offsets to match the changed order of instances.
-   This is for now a potently change to make. There is no immediate need and it could potently turn out to be premature.
+      Need to clearly separate where data is stored.
 
 Parser:
 
@@ -109,16 +112,16 @@ Parser:
          Completely replace token with whitespace (effectevely remove it)
          More specific: Insert at the start of the token a common character known to produce errors (ex: a digit, which usually cannot be found at a start of a identifier, etc.)
       Two things to test for: If the parser gracefully fails and if it produces a good error message, instead of simply asserting away.
+      Override linux signal handlers to make sure we have actually output the test that cause the bug in the first place.
+      We can add the fuzzer to the list of automatic tests that we continuosly run all the time. Use the compile time seed to make sure we can rerun the test later.
 
-|  Generate optimized tokens. Instead of returning a SizedString, return a Token, which not only includes the string, but a type value that is set for the most common types of tokens (+,*,- and things like that).
-      Define a set of constants of the type TOKEN_X. Code that needs to compare to these special tokens can do so in a switch case.
 
-|  Change parsing of expressions to be much more efficient, check some of the algorithms seen in the net. Make it explicit the precedence and associativity of operators
+|  Change parsing of expressions to be much more correct, check some of the algorithms seen in the net. Make it explicit the precedence and associativity of operators
 
 Optimizations:
 
    Profile the effects of the assertions in the code. Make sure debug mode isn't running too slow when compared to release
-      Especial attention to the Array class operator[]. 
+      Especial attention to the Array class operator[]. Taking a performance hit every time we access an array might cause problems later one. We can always replace the code when we actually reach that point, though.
 
    The RegisterSubUnit function is allocating space for every single units offset.
       This isn't needed, we could have if statements in the populate function that check wether the unit has actually need or not to have the field populated.
@@ -139,12 +142,9 @@ Type:
 
 Pool
    
--  Fix the use of unnecessary information, that makes it impossible to copy. Every piece of information required to iterate is stored inside the linked list.
+-  Fix the use of unnecessary information stored on the class, that makes it impossible to copy. Every piece of information required to iterate should be stored inside the linked list.
 
 Current know bugs/problems:
-
-   OutputGraphDot is currently disabled for the most part, by means of commenting out calling code. This is due to changes accross the codebase and should be easy to fix.
-   Using Const units to test simple instances is breaking AES, while using Regs doesn't. Fix OutputGraphDot, call it with delays and identify the problem.
 
 Legend:
 

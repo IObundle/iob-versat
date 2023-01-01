@@ -947,7 +947,7 @@ FUDeclaration* RegisterSubUnit(Versat* versat,SizedString name,Accelerator* circ
    {
    ArenaMarker marker(temp);
    AcceleratorView view = CreateAcceleratorView(circuit,temp);
-   view.CalculateDelay(temp);
+   view.CalculateDelay(temp,true);
    FixDelays(versat,circuit,view);
    }
 

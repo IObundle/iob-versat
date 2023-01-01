@@ -861,7 +861,7 @@ static void SendLatencyUpwards(ComplexFUInstance* inst){
 #endif
 
 #if 1
-void AcceleratorView::CalculateDelay(Arena* arena){
+void AcceleratorView::CalculateDelay(Arena* arena,bool outputDebugGraph){
    CalculateDAGOrdering(arena);
 
    // Clear everything, just in case
@@ -876,7 +876,7 @@ void AcceleratorView::CalculateDelay(Arena* arena){
       }
    }
 
-   if(versat->debug.outputGraphs){
+   if(outputDebugGraph && versat->debug.outputGraphs){
       char buffer[1024];
       sprintf(buffer,"debug/%.*s/",UNPACK_SS(accel->subtype->name));
       MakeDirectory(buffer);
@@ -892,7 +892,7 @@ void AcceleratorView::CalculateDelay(Arena* arena){
       SendLatencyUpwards(inst);
 
       #if 1
-      if(versat->debug.outputGraphs){
+      if(outputDebugGraph && versat->debug.outputGraphs){
          OutputGraphDotFile(versat,*this,true,"debug/%.*s/out1_%d.dot",UNPACK_SS(accel->subtype->name),graphs++);
       }
       #endif
@@ -924,7 +924,7 @@ void AcceleratorView::CalculateDelay(Arena* arena){
       }
 
       #if 1
-      if(versat->debug.outputGraphs){
+      if(outputDebugGraph && versat->debug.outputGraphs){
          OutputGraphDotFile(versat,*this,true,"debug/%.*s/out2_%d.dot",UNPACK_SS(accel->subtype->name),graphs++);
       }
       #endif
@@ -953,7 +953,7 @@ void AcceleratorView::CalculateDelay(Arena* arena){
       inst->graphData->inputDelay = inst->graphData->inputDelay - minimum;
    }
 
-   if(versat->debug.outputGraphs){
+   if(outputDebugGraph && versat->debug.outputGraphs){
       OutputGraphDotFile(versat,*this,true,"debug/%.*s/out3.dot",UNPACK_SS(accel->subtype->name));
    }
 
@@ -976,7 +976,7 @@ void AcceleratorView::CalculateDelay(Arena* arena){
    }
    #endif
 
-   if(versat->debug.outputGraphs){
+   if(outputDebugGraph && versat->debug.outputGraphs){
       OutputGraphDotFile(versat,*this,true,"debug/%.*s/out4.dot",UNPACK_SS(accel->subtype->name));
    }
 
