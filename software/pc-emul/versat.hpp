@@ -124,6 +124,7 @@ void OutputUnitInfo(FUInstance* instance);
 void DisplayAcceleratorMemory(Accelerator* topLevel);
 void DisplayUnitConfiguration(Accelerator* topLevel);
 void EnterDebugTerminal(Versat* versat);
+void CheckMemory(Accelerator* topLevel);
 
 // Debug units, only works for pc-emul (no declaration info in embedded)
 bool CheckInputAndOutputNumber(FUDeclaration* type,int inputs,int outputs);

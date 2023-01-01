@@ -154,7 +154,7 @@ void Memset(T* buffer,T elem,int bufferSize){
 template<typename T>
 void Memset(Array<T> buffer,T elem){
    for(int i = 0; i < buffer.size; i++){
-      buffer[i] = elem;
+      buffer.data[i] = elem;
    }
 }
 

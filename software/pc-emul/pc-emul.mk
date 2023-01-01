@@ -50,6 +50,8 @@ TOOL_SRC += $(VERSAT_DIR)/software/pc-emul/type.cpp
 CPP_OBJ+=$(BUILD_DIR)/verilated.o
 CPP_OBJ+=$(BUILD_DIR)/verilated_vcd_c.o
 
+VERSAT_HDR+=$(wildcard $(VERSAT_PC_EMUL)/*.inl)
+
 $(BUILD_DIR)/verilated.o:
 	g++ $(VERILATE_FLAGS) -I. -MMD -I$(VERILATOR_INCLUDE) -I$(VERILATOR_INCLUDE)/vltstd -DVL_PRINTF=printf \
 	-DVM_COVERAGE=0 -DVM_SC=0 -DVM_TRACE=0 -Wno-sign-compare -Wno-uninitialized -Wno-unused-but-set-variable \

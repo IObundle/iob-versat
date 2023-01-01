@@ -61,73 +61,75 @@ FUInstance* CreateFUInstance(Accelerator* accel,FUDeclaration* type,SizedString 
       info->data.offset = offset;
    }
 
-   UnitValues val = CalculateAcceleratorValues(accel->versat,accel);
+   if(true){
+   //if(!flat){
+      // The position of top level newly created units is always at the end of the current allocated configurations
+      int configOffset = accel->configAlloc.size;
+      if(isStatic){
+         configOffset = accel->staticAlloc.size;
+      }
 
-   // The position of top level newly created units is always at the end of the current allocated configurations
-   int configOffset = accel->configAlloc.size;
-   if(isStatic){
-      configOffset = accel->staticAlloc.size;
-   }
+      int stateOffset = accel->stateAlloc.size;
+      int delayOffset = accel->delayAlloc.size;
+      int outputOffset = accel->outputAlloc.size;
+      int extraDataOffset = accel->extraDataAlloc.size;
 
-   int stateOffset = accel->stateAlloc.size;
-   int delayOffset = accel->delayAlloc.size;
-   int outputOffset = accel->outputAlloc.size;
-   int extraDataOffset = accel->extraDataAlloc.size;
+      UnitValues val = CalculateAcceleratorValues(accel->versat,accel);
+      Assert(!ZeroOutRealloc(&accel->configAlloc,val.configs));
+      Assert(!ZeroOutRealloc(&accel->stateAlloc,val.states));
+      Assert(!ZeroOutRealloc(&accel->delayAlloc,val.delays));
+      Assert(!ZeroOutRealloc(&accel->outputAlloc,val.totalOutputs));
+      Assert(!ZeroOutRealloc(&accel->storedOutputAlloc,val.totalOutputs));
+      Assert(!ZeroOutRealloc(&accel->extraDataAlloc,val.extraData));
+      Assert(!ZeroOutRealloc(&accel->staticAlloc,val.statics));
 
-   Assert(!ZeroOutRealloc(&accel->configAlloc,val.configs));
-   Assert(!ZeroOutRealloc(&accel->stateAlloc,val.states));
-   Assert(!ZeroOutRealloc(&accel->delayAlloc,val.delays));
-   Assert(!ZeroOutRealloc(&accel->outputAlloc,val.totalOutputs));
-   Assert(!ZeroOutRealloc(&accel->storedOutputAlloc,val.totalOutputs));
-   Assert(!ZeroOutRealloc(&accel->extraDataAlloc,val.extraData));
-   Assert(!ZeroOutRealloc(&accel->staticAlloc,val.statics));
+      if(isStatic){
+         ptr->config = &accel->staticAlloc.ptr[configOffset];
+      } else {
+         ptr->config = &accel->configAlloc.ptr[configOffset];
+      }
 
-   if(isStatic){
-      ptr->config = &accel->staticAlloc.ptr[configOffset];
-   } else {
-      ptr->config = &accel->configAlloc.ptr[configOffset];
-   }
+      ptr->state = &accel->stateAlloc.ptr[stateOffset];
+      ptr->delay = &accel->delayAlloc.ptr[delayOffset];
+      ptr->outputs = &accel->outputAlloc.ptr[outputOffset];
+      ptr->storedOutputs = &accel->storedOutputAlloc.ptr[outputOffset];
+      ptr->extraData = &accel->extraDataAlloc.ptr[extraDataOffset];
 
-   ptr->state = &accel->stateAlloc.ptr[stateOffset];
-   ptr->delay = &accel->delayAlloc.ptr[delayOffset];
-   ptr->outputs = &accel->outputAlloc.ptr[outputOffset];
-   ptr->storedOutputs = &accel->storedOutputAlloc.ptr[outputOffset];
-   ptr->extraData = &accel->extraDataAlloc.ptr[extraDataOffset];
+      // Initialize sub units
+      if(type->type == FUDeclaration::COMPOSITE){ // TODO: Iterative units
+         // Fix static info
+         for(Pair<StaticId,StaticData> pair : type->staticUnits){
+            bool found = false;
+            for(StaticInfo* info : accel->staticInfo){
+               if(pair.first == info->id){
+                  found = true;
+                  break;
+               }
+            }
+            if(found){
+               continue;
+            }
 
-   // Initialize sub units
-   if(type->type == FUDeclaration::COMPOSITE){ // TODO: Iterative units
-      // Fix static info
-      for(Pair<StaticId,StaticData> pair : type->staticUnits){
-         bool found = false;
-         for(StaticInfo* info : accel->staticInfo){
-            if(pair.first == info->id){
-               found = true;
+            StaticInfo* info = accel->staticInfo.Alloc();
+
+            info->id = pair.first;
+            info->data = pair.second;
+         }
+
+         AcceleratorIterator iter = {};
+         for(ComplexFUInstance* inst = iter.Start(accel,&accel->versat->temp,true); inst; inst = iter.Skip()){
+            if(inst == ptr){
+               for(ComplexFUInstance* subInst = iter.Descend(); subInst; subInst = iter.Next()){
+                  if(subInst->declaration->initializeFunction){
+                     subInst->declaration->initializeFunction(subInst);
+                  }
+               }
                break;
             }
          }
-         if(found){
-            continue;
-         }
-
-         StaticInfo* info = accel->staticInfo.Alloc();
-
-         info->id = pair.first;
-         info->data = pair.second;
+      } else if(type->initializeFunction){
+         type->initializeFunction(ptr);
       }
-
-      AcceleratorIterator iter = {};
-      for(ComplexFUInstance* inst = iter.Start(accel,&accel->versat->temp,true); inst; inst = iter.Skip()){
-         if(inst == ptr){
-            for(ComplexFUInstance* subInst = iter.Descend(); subInst; subInst = iter.Next()){
-               if(subInst->declaration->initializeFunction){
-                  subInst->declaration->initializeFunction(subInst);
-               }
-            }
-            break;
-         }
-      }
-   } else if(type->initializeFunction){
-      type->initializeFunction(ptr);
    }
 
    return ptr;
@@ -619,12 +621,6 @@ ComplexFUInstance* AcceleratorIterator::Descend(){
       inter.storedOutputs.Init(inst->storedOutputs,decl->totalOutputs);
       inter.extraData.Init(inst->extraData,decl->extraDataSize);
       inter.statics.Init(topLevel->staticAlloc);
-
-      UnitValues individual = CalculateIndividualUnitValues(inst);
-      inter.outputs.Push(individual.outputs);
-      inter.storedOutputs.Push(individual.outputs);
-      inter.outputs.ptr += individual.outputs;
-      inter.storedOutputs.ptr += individual.outputs;
 
       PopulateAccelerator(accel,decl,inter,*staticUnits);
 

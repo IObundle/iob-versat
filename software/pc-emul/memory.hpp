@@ -133,7 +133,8 @@ class BitArray;
 class BitIterator{
 public:
    BitArray* array;
-   int index;
+   int currentByte;
+   int currentBit;
 
 public:
    bool operator!=(BitIterator& iter);

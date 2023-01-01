@@ -181,25 +181,50 @@ void PushNullByte(Arena* arena){
 }
 
 bool BitIterator::operator!=(BitIterator& iter){
-   bool res = (index != iter.index);
+   bool res = !(currentByte == iter.currentByte && currentBit == iter.currentBit);
    return res;
 }
 
 void BitIterator::operator++(){
-   while(1){
-      this->index += 1;
+   int byteSize = array->bitSize / 8;
 
-      if(this->index >= array->bitSize){
-         break;
+   // Increment once
+   currentBit += 1;
+   if(currentBit >= 8){
+      currentBit = 0;
+      currentByte += 1;
+   }
+
+   // Stop at first valid found after
+   while(currentByte < byteSize){
+      unsigned char ch = array->memory[currentByte];
+
+      if(!ch){
+         currentByte += 1;
+         currentBit = 0;
+         continue;
       }
-      if(array->Get(this->index)){
-         break;
+
+      // Fallthrough switch
+      switch(currentBit){
+      case 0: if(ch & 0x80) return; else ++currentBit;
+      case 1: if(ch & 0x40) return; else ++currentBit;
+      case 2: if(ch & 0x20) return; else ++currentBit;
+      case 3: if(ch & 0x10) return; else ++currentBit;
+      case 4: if(ch & 0x08) return; else ++currentBit;
+      case 5: if(ch & 0x04) return; else ++currentBit;
+      case 6: if(ch & 0x02) return; else ++currentBit;
+      case 7: if(ch & 0x01) return; else {
+         currentBit = 0;
+         currentByte += 1;
+         }
       }
    }
 }
 
 int BitIterator::operator*(){
-   return this->index;
+   int index = currentByte * 8 + currentBit;
+   return index;
 }
 
 void BitArray::Init(Byte* memory,int bitSize){
@@ -292,7 +317,8 @@ BitIterator BitArray::begin(){
 BitIterator BitArray::end(){
    BitIterator iter = {};
    iter.array = this;
-   iter.index = bitSize;
+   iter.currentByte = bitSize / 8;
+   iter.currentBit = bitSize % 8;
    return iter;
 }
 

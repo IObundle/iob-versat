@@ -3,7 +3,7 @@
 
 #include "type.hpp"
 
-void CheckMemory(Accelerator* topLevel,Accelerator* accel);
+void CheckMemory(AcceleratorIterator iter);
 void DisplayInstanceMemory(ComplexFUInstance* inst);
 void DisplayAcceleratorMemory(Accelerator* topLevel);
 void DisplayUnitConfiguration(Accelerator* topLevel);

@@ -8,34 +8,60 @@
 #include "type.hpp"
 #include "textualRepresentation.hpp"
 
+void CheckMemory(Accelerator* topLevel){
+   STACK_ARENA(temp,Kilobyte(16));
+
+   AcceleratorIterator iter = {};
+   iter.Start(topLevel,&temp,true);
+
+   CheckMemory(iter);
+}
+
+static void CheckMemoryPrint(const char* level,const char* name,int pos,int delta,ComplexFUInstance* inst = nullptr){ // inst is for total outputs, if the unit is composite
+   bool isComposite = (inst && inst->declaration->type == FUDeclaration::COMPOSITE);
+
+   if(delta == 1 || (isComposite && delta == 0)){
+      printf("%s%s:%d [%d",level,name,pos,delta);
+   } else if(delta > 0 || isComposite){
+      printf("%s%s:%d-%d [%d",level,name,pos,pos + delta - 1,delta);
+   } else {
+      return;
+   }
+
+   if(isComposite){
+      printf("+%d]\n",inst->declaration->totalOutputs);
+   } else {
+      printf("]\n");
+   }
+}
+
 void CheckMemory(AcceleratorIterator iter){
-   char levelBuffer[] = "                        ";
+   char levelBuffer[] = "| | | | | | | | | | | | ";
 
    Accelerator* topLevel = iter.topLevel;
    for(ComplexFUInstance* inst = iter.Current(); inst; inst = iter.Next()){
       FUDeclaration* decl = inst->declaration;
-      levelBuffer[iter.level] = '\0';
+      levelBuffer[iter.level * 2] = '\0';
+
+      printf("%s\n",levelBuffer);
 
       printf("%s[%.*s] %.*s:\n",levelBuffer,UNPACK_SS(inst->declaration->name),UNPACK_SS(inst->name));
-      if(inst->config){
-         if(IsConfigStatic(topLevel,inst)){
-            printf("%sCs:%d",levelBuffer,inst->config - topLevel->staticAlloc.ptr);
-         } else {
-            printf("%sCn:%d",levelBuffer,inst->config - topLevel->configAlloc.ptr);
-         }
-         printf(" [%d]\n",decl->configs.size);
+
+      if(IsConfigStatic(topLevel,inst)){
+         CheckMemoryPrint(levelBuffer,"c",inst->config - topLevel->staticAlloc.ptr,decl->configs.size);
+      } else {
+         CheckMemoryPrint(levelBuffer,"C",inst->config - topLevel->configAlloc.ptr,decl->configs.size);
       }
 
       UnitValues val = CalculateIndividualUnitValues(inst);
 
-      if(inst->state) printf("%sS:%d [%d]\n",levelBuffer,inst->state - topLevel->stateAlloc.ptr,decl->states.size);
-      if(inst->delay) printf("%sD:%d [%d]\n",levelBuffer,inst->delay - topLevel->delayAlloc.ptr,decl->nDelays);
-      if(inst->outputs) printf("%sO:%d [%d]\n",levelBuffer,inst->outputs - topLevel->outputAlloc.ptr,val.outputs);
-      if(inst->storedOutputs) printf("%so:%d [%d]\n",levelBuffer,inst->storedOutputs - topLevel->storedOutputAlloc.ptr,val.outputs);
-      if(inst->extraData) printf("%sE:%d [%d]\n",levelBuffer,inst->extraData - topLevel->extraDataAlloc.ptr,decl->extraDataSize);
-      printf("\n");
+      CheckMemoryPrint(levelBuffer,"S",inst->state - topLevel->stateAlloc.ptr,decl->states.size);
+      CheckMemoryPrint(levelBuffer,"D",inst->delay - topLevel->delayAlloc.ptr,decl->nDelays);
+      CheckMemoryPrint(levelBuffer,"E",inst->extraData - topLevel->extraDataAlloc.ptr,decl->extraDataSize);
+      CheckMemoryPrint(levelBuffer,"O",inst->outputs - topLevel->outputAlloc.ptr,val.outputs,inst);
+      CheckMemoryPrint(levelBuffer,"o",inst->storedOutputs - topLevel->storedOutputAlloc.ptr,val.outputs,inst);
 
-      levelBuffer[iter.level] = ' ';
+      levelBuffer[iter.level * 2] = '|';
    }
 }
 
@@ -360,18 +386,16 @@ void PrintVCDDefinitions(FILE* accelOutputFile,Accelerator* accel){
    fprintf(accelOutputFile,"$enddefinitions $end\n");
 }
 
-static char* Bin(unsigned int val){
+static char* Bin(unsigned int value){
    static char buffer[33];
    buffer[32] = '\0';
 
-   for(int i = 0; i < 32; i++){
-      if(val - (1 << (31 - i)) < val){
-         val = val - (1 << (31 - i));
-         buffer[i] = '1';
-      } else {
-         buffer[i] = '0';
-      }
+   unsigned int val = value;
+   for(int i = 31; i >= 0; i--){
+      buffer[i] = '0' + (val & 0x1);
+      val >>= 1;
    }
+
    return buffer;
 }
 

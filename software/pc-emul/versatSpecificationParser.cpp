@@ -541,6 +541,7 @@ FUDeclaration* ParseIterative(Versat* versat,Tokenizer* tok){
    tok->AssertNextToken("}");
    decl.dataSize += 1;
 
+   #if 0
    {
    Arena* arena = &versat->temp;
    ArenaMarker marker(arena);
@@ -551,6 +552,7 @@ FUDeclaration* ParseIterative(Versat* versat,Tokenizer* tok){
    OutputGraphDotFile(versat,first,false,"./debug/firstPhase.dot");
    OutputGraphDotFile(versat,second,false,"./debug/secondPhase.dot");
    }
+   #endif
 
    decl.initial = firstPhase;
    decl.forLoop = secondPhase;

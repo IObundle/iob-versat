@@ -28,7 +28,7 @@ static FUDeclaration* RegisterCircuitInput(Versat* versat){
 
    decl.name = MakeSizedString("CircuitInput");
    decl.inputDelays = Array<int>{zeros,0};
-   decl.outputLatencies = Array<int>{zeros,50};
+   decl.outputLatencies = Array<int>{zeros,1};
    decl.initializeFunction = DefaultInitFunction;
    decl.delayType = DelayType::DELAY_TYPE_SOURCE_DELAY;
    decl.type = FUDeclaration::SPECIAL;
@@ -540,7 +540,7 @@ static FUInstance* GetInstanceByHierarchicalName2(AcceleratorIterator iter,Hiera
    return res;
 }
 
-static FUInstance* vGetInstanceByName_(Accelerator* circuit,Arena* arena,int argc,va_list args){
+static FUInstance* vGetInstanceByName_(AcceleratorIterator iter,Arena* arena,int argc,va_list args){
    HierarchicalName fullName = {};
    HierarchicalName* namePtr = &fullName;
    HierarchicalName* lastPtr = nullptr;
@@ -592,32 +592,9 @@ static FUInstance* vGetInstanceByName_(Accelerator* circuit,Arena* arena,int arg
       }
    }
 
-   AcceleratorIterator iter = {};
-   iter.Start(circuit,arena,true);
    FUInstance* res = GetInstanceByHierarchicalName2(iter,&fullName,arena);
 
-   #if 0
-   FUInstance* res = GetInstanceByHierarchicalName(circuit,&fullName);
-
-   if(!res){
-      GetInstanceByHierarchicalName(circuit,&fullName);
-
-      printf("Didn't find the following instance: ");
-
-      bool first = true;
-      for(HierarchicalName* ptr = &fullName; ptr != nullptr; ptr = ptr->next){
-         if(first){
-            first = false;
-         } else {
-            printf(".");
-         }
-         printf("%.*s",UNPACK_SS(ptr->name));
-      }
-
-      printf("\n");
-      Assert(false);
-   }
-   #endif
+   Assert(res);
 
    return res;
 }
@@ -627,7 +604,10 @@ FUInstance* GetInstanceByName_(Accelerator* circuit,int argc, ...){
    va_start(args,argc);
 
    STACK_ARENA(temp,Kilobyte(16));
-   FUInstance* res = vGetInstanceByName_(circuit,&temp,argc,args);
+   AcceleratorIterator iter = {};
+   iter.Start(circuit,&temp,true);
+
+   FUInstance* res = vGetInstanceByName_(iter,&temp,argc,args);
 
    va_end(args);
 
@@ -639,7 +619,10 @@ FUInstance* GetInstanceByName_(FUDeclaration* decl,int argc, ...){
    va_start(args,argc);
 
    STACK_ARENA(temp,Kilobyte(16));
-   FUInstance* res = vGetInstanceByName_(decl->baseCircuit,&temp,argc,args);
+   AcceleratorIterator iter = {};
+   iter.Start(decl->fixedDelayCircuit,&temp,false);
+
+   FUInstance* res = vGetInstanceByName_(iter,&temp,argc,args);
 
    va_end(args);
 
@@ -650,11 +633,14 @@ FUInstance* GetInstanceByName_(FUInstance* instance,int argc, ...){
    va_list args;
    va_start(args,argc);
 
-   FUInstance* inst = (FUInstance*) instance;
+   ComplexFUInstance* inst = (ComplexFUInstance*) instance;
    Assert(inst->declaration->fixedDelayCircuit);
 
    STACK_ARENA(temp,Kilobyte(16));
-   FUInstance* res = vGetInstanceByName_(inst->declaration->fixedDelayCircuit,&temp,argc,args);
+   AcceleratorIterator iter = {};
+   iter.Start(inst->declaration->fixedDelayCircuit,inst,&temp,true);
+
+   FUInstance* res = vGetInstanceByName_(iter,&temp,argc,args);
 
    va_end(args);
 
@@ -972,9 +958,11 @@ FUDeclaration* RegisterSubUnit(Versat* versat,SizedString name,Accelerator* circ
    view.CalculateDAGOrdering(temp);
    view.CalculateDelay(temp);
 
+   #if 0 // Don't forget to remove
    if(CompareString(name,"Convolution")){
       printf("here\n");
    }
+   #endif
 
    #if 1
    // Reorganize nodes based on DAG order
@@ -1023,8 +1011,6 @@ FUDeclaration* RegisterSubUnit(Versat* versat,SizedString name,Accelerator* circ
    view.CalculateDelay(permanent);
    decl.temporaryOrder = view.order;
 
-   OutputGraphDotFile(versat,view,true,"debug/test.dot");
-
    UnitValues val = CalculateAcceleratorValues(versat,decl.fixedDelayCircuit);
 
    decl.nDelays = val.delays;
@@ -1064,7 +1050,9 @@ FUDeclaration* RegisterSubUnit(Versat* versat,SizedString name,Accelerator* circ
 
    int configIndex = 0;
    int stateIndex = 0;
-   for(ComplexFUInstance* inst : circuit->instances){
+   for(int i = 0 ; i < circuit->instances.Size(); i++){
+      int newPos = oldIndexToNew.GetOrFail(i);
+      ComplexFUInstance* inst = view.nodes[newPos];
       FUDeclaration* d = inst->declaration;
 
       if(!inst->isStatic){
@@ -1100,19 +1088,16 @@ FUDeclaration* RegisterSubUnit(Versat* versat,SizedString name,Accelerator* circ
    configIndex = 0;
    stateIndex = 0;
    int delayIndex = 0;
-   int outputIndex = 0;
    int extraDataIndex = 0;
    int unitIndex = 0;
 
-   //for(ComplexFUInstance* inst : circuit->instances){
+   int outputIndex = val.outputs; // The first portion of the output is reserved for the output of the composite unit
+
    for(int i = 0 ; i < circuit->instances.Size(); i++){
       int newPos = oldIndexToNew.GetOrFail(i);
-      ComplexFUInstance* inst = view.nodes[newPos]; // Bias -> res
+      ComplexFUInstance* inst = view.nodes[newPos];
 
       // We should iterate from the order set in specifications
-
-      UnitValues val = CalculateAcceleratorUnitValues(versat,inst);
-
       int savedIndex = -1;
 
       if(inst->sharedEnable){
@@ -1138,8 +1123,10 @@ FUDeclaration* RegisterSubUnit(Versat* versat,SizedString name,Accelerator* circ
       extraDataIndex += d->extraDataSize;
 
       // Outputs follow the DAG order
+      ComplexFUInstance* dagInst = view.nodes[i];
+
       decl.outputOffsets[unitIndex] = outputIndex;
-      outputIndex += val.totalOutputs;
+      outputIndex += dagInst->declaration->totalOutputs;
 
       if(savedIndex != -1){
          configIndex = savedIndex;
@@ -1147,8 +1134,7 @@ FUDeclaration* RegisterSubUnit(Versat* versat,SizedString name,Accelerator* circ
 
       unitIndex += 1;
    }
-   decl.totalOutputs = outputIndex;
-   decl.totalOutputs += decl.outputLatencies.size;
+   decl.totalOutputs = outputIndex; // Includes the output portion of the composite instance
 
    // TODO: Change unit delay type inference. Only care about delay type to upper levels.
    // Type source only if a source unit is connected to out. Type sink only if there is a input to sink connection
@@ -1228,7 +1214,7 @@ FUDeclaration* RegisterSubUnit(Versat* versat,SizedString name,Accelerator* circ
    }
    #endif
 
-   #if 1
+   #if 0
    {
    char buffer[256];
    sprintf(buffer,"src/%.*s.v",UNPACK_SS(decl.name));

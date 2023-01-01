@@ -42,7 +42,7 @@ bool ZeroOutRealloc(Allocation<T>* alloc,int newSize){
    }
 
    // Clear out free (allocated now or before) space
-   if(alloc->reserved - alloc->size > 0){
+   if(didRealloc){
       char* view = (char*) alloc->ptr;
       memset(&view[alloc->size],0,(alloc->reserved - alloc->size) * sizeof(T));
    }
