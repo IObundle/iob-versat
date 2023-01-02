@@ -164,15 +164,15 @@ bool IsGraphValid(AcceleratorView view){
 
    InstanceMap map;
 
-   for(int i = 0; i < view.nodes.size; i++){
-      ComplexFUInstance* inst = view.nodes[i];
+   for(ComplexFUInstance** instPtr : view.nodes){
+      ComplexFUInstance* inst = *instPtr;
 
       inst->tag = 0;
       map.insert({inst,inst});
    }
 
-   for(int i = 0; i < view.edges.size; i++){
-      Edge* edge = view.edges[i].edge;
+   for(EdgeView* edgeView : view.edges){
+      Edge* edge = edgeView->edge;
 
       for(int i = 0; i < 2; i++){
          auto res = map.find(edge->units[i].inst);
@@ -186,9 +186,9 @@ bool IsGraphValid(AcceleratorView view){
       Assert(edge->units[1].port < edge->units[1].inst->declaration->inputDelays.size && edge->units[1].port >= 0);
    }
 
-   if(view.edges.size){
-      for(int i = 0; i < view.nodes.size; i++){
-         ComplexFUInstance* inst = view.nodes[i];
+   if(view.edges.Size()){
+      for(ComplexFUInstance** instPtr : view.nodes){
+         ComplexFUInstance* inst = *instPtr;
 
          Assert(inst->tag == 1 || inst->graphData->nodeType == GraphComputedData::TAG_UNCONNECTED);
       }
@@ -201,8 +201,8 @@ static void OutputGraphDotFile_(Versat* versat,AcceleratorView view,bool collaps
    Arena* arena = &versat->temp;
 
    fprintf(outputFile,"digraph accel {\n\tnode [fontcolor=white,style=filled,color=\"160,60,176\"];\n");
-   for(int i = 0; i < view.nodes.size; i++){
-      ComplexFUInstance* inst = view.nodes[i];
+   for(ComplexFUInstance** instPtr : view.nodes){
+      ComplexFUInstance* inst = *instPtr;
       SizedString id = UniqueRepr(inst,arena);
       SizedString name = Repr(inst,versat->debug.dotFormat,arena);
 
@@ -211,8 +211,8 @@ static void OutputGraphDotFile_(Versat* versat,AcceleratorView view,bool collaps
 
    std::set<std::pair<ComplexFUInstance*,ComplexFUInstance*>> sameEdgeCounter;
 
-   for(int i = 0; i < view.edges.size; i++){
-      Edge* edge = view.edges[i].edge;
+   for(EdgeView* edgeView : view.edges){
+      Edge* edge = edgeView->edge;
       if(collapseSameEdges){
          std::pair<ComplexFUInstance*,ComplexFUInstance*> key{edge->units[0].inst,edge->units[1].inst};
 
@@ -320,10 +320,6 @@ static void PrintVCDDefinitions_(FILE* accelOutputFile,Accelerator* accel){
       fprintf(accelOutputFile,"$scope module %.*s_%d $end\n",UNPACK_SS(inst->name),inst->id);
 
       for(int i = 0; i < inst->graphData->singleInputs.size; i++){
-         if(inst->graphData->singleInputs[i].inst == nullptr){
-            continue;
-         }
-
          fprintf(accelOutputFile,"$var wire  32 %s %.*s_in%d $end\n",currentMapping.data(),UNPACK_SS(inst->name),i);
          IncrementMapping();
       }
@@ -363,7 +359,7 @@ static void PrintVCDDefinitions_(FILE* accelOutputFile,Accelerator* accel){
    }
 }
 
-void PrintVCDDefinitions(FILE* accelOutputFile,Accelerator* accel){
+Array<int> PrintVCDDefinitions(FILE* accelOutputFile,Accelerator* accel,Arena* tempSave){
    ResetMapping();
 
    fprintf(accelOutputFile,"$timescale   1ns $end\n");
@@ -372,6 +368,9 @@ void PrintVCDDefinitions(FILE* accelOutputFile,Accelerator* accel){
    PrintVCDDefinitions_(accelOutputFile,accel);
    fprintf(accelOutputFile,"$upscope $end\n");
    fprintf(accelOutputFile,"$enddefinitions $end\n");
+
+   Array<int> array = PushArray<int>(tempSave,mappingIncrements);
+   return array;
 }
 
 static char* Bin(unsigned int value){
@@ -387,7 +386,7 @@ static char* Bin(unsigned int value){
    return buffer;
 }
 
-static void PrintVCD_(FILE* accelOutputFile,AcceleratorIterator iter,int time){
+static void PrintVCD_(FILE* accelOutputFile,AcceleratorIterator iter,int time,Array<int> sameValueCheckSpace){
    #if 0
    for(StaticInfo* info : accel->staticInfo){
       for(int i = 0; i < info->configs.size; i++){
@@ -402,17 +401,31 @@ static void PrintVCD_(FILE* accelOutputFile,AcceleratorIterator iter,int time){
    for(ComplexFUInstance* inst = iter.Current(); inst; inst = iter.Skip()){
       for(int i = 0; i < inst->graphData->singleInputs.size; i++){
          if(inst->graphData->singleInputs[i].inst == nullptr){
-            continue;
+            if(time == 0){
+               fprintf(accelOutputFile,"bx %s\n",currentMapping.data());
+            }
+         } else {
+            int value = GetInputValue(inst,i);
+
+            if(time == 0 || (value != sameValueCheckSpace[mappingIncrements])){
+               fprintf(accelOutputFile,"b%s %s\n",Bin(value),currentMapping.data());
+               sameValueCheckSpace[mappingIncrements] = value;
+            }
          }
 
-         fprintf(accelOutputFile,"b%s %s\n",Bin(GetInputValue(inst,i)),currentMapping.data());
          IncrementMapping();
       }
 
       for(int i = 0; i < inst->graphData->outputs; i++){
-         fprintf(accelOutputFile,"b%s %s\n",Bin(inst->outputs[i]),currentMapping.data());
+         if(time == 0 || (inst->outputs[i] != sameValueCheckSpace[mappingIncrements])){
+            fprintf(accelOutputFile,"b%s %s\n",Bin(inst->outputs[i]),currentMapping.data());
+            sameValueCheckSpace[mappingIncrements] = inst->outputs[i];
+         }
          IncrementMapping();
-         fprintf(accelOutputFile,"b%s %s\n",Bin(inst->storedOutputs[i]),currentMapping.data());
+         if(time == 0 || (inst->storedOutputs[i] != sameValueCheckSpace[mappingIncrements])){
+            fprintf(accelOutputFile,"b%s %s\n",Bin(inst->storedOutputs[i]),currentMapping.data());
+            sameValueCheckSpace[mappingIncrements] = inst->storedOutputs[i];
+         }
          IncrementMapping();
       }
 
@@ -424,29 +437,39 @@ static void PrintVCD_(FILE* accelOutputFile,AcceleratorIterator iter,int time){
       }
 
       for(int i = 0; i < inst->declaration->states.size; i++){
-         fprintf(accelOutputFile,"b%s %s\n",Bin(inst->state[i]),currentMapping.data());
+         if(time == 0 || (inst->state[i] != sameValueCheckSpace[mappingIncrements])){
+            fprintf(accelOutputFile,"b%s %s\n",Bin(inst->state[i]),currentMapping.data());
+            sameValueCheckSpace[mappingIncrements] = inst->state[i];
+         }
          IncrementMapping();
       }
 
       for(int i = 0; i < inst->declaration->nDelays; i++){
-         fprintf(accelOutputFile,"b%s %s\n",Bin(inst->delay[i]),currentMapping.data());
+         if(time == 0 || (inst->delay[i] != sameValueCheckSpace[mappingIncrements])){
+            fprintf(accelOutputFile,"b%s %s\n",Bin(inst->delay[i]),currentMapping.data());
+            sameValueCheckSpace[mappingIncrements] = inst->delay[i];
+         }
+
          IncrementMapping();
       }
 
       if(inst->declaration->implementsDone){
-         fprintf(accelOutputFile,"%d%s\n",inst->done ? 1 : 0,currentMapping.data());
+         if(time == 0 || (inst->done != sameValueCheckSpace[mappingIncrements])){
+            fprintf(accelOutputFile,"%d%s\n",inst->done ? 1 : 0,currentMapping.data());
+            sameValueCheckSpace[mappingIncrements] = inst->done;
+         }
          IncrementMapping();
       }
 
       if(inst->declaration->fixedDelayCircuit){
          AcceleratorIterator it = iter.LevelBelowIterator();
 
-         PrintVCD_(accelOutputFile,it,time);
+         PrintVCD_(accelOutputFile,it,time,sameValueCheckSpace);
       }
    }
 }
 
-void PrintVCD(FILE* accelOutputFile,Accelerator* accel,int time,int clock){ // Need to put some clock signal
+void PrintVCD(FILE* accelOutputFile,Accelerator* accel,int time,int clock,Array<int> sameValueCheckSpace){ // Need to put some clock signal
    STACK_ARENA(temp,Kilobyte(16));
    ResetMapping();
 
@@ -455,7 +478,7 @@ void PrintVCD(FILE* accelOutputFile,Accelerator* accel,int time,int clock){ // N
 
    AcceleratorIterator iter = {};
    iter.Start(accel,&temp,true);
-   PrintVCD_(accelOutputFile,iter,time);
+   PrintVCD_(accelOutputFile,iter,time,sameValueCheckSpace);
 }
 
 #if 0

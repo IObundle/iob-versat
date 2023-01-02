@@ -304,8 +304,6 @@ T* PoolIterator<T>::operator*(){
    T* view = (T*) page;
    T* val = &view[index * 8 + (7 - bit)];
 
-   //Assert(pageInfo.bitmap[index] & (1 << bit));
-
    return val;
 }
 
@@ -456,6 +454,15 @@ T* Pool<T>::Get(int index){
    T* view = (T*) ptr;
 
    return &view[bitmapIndex * 8 + (7 - bitIndex)];
+}
+
+template<typename T>
+T& Pool<T>::GetOrFail(int index){
+   T* res = Get(index);
+
+   Assert(res);
+
+   return *res;
 }
 
 template<typename T>

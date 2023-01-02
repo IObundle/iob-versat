@@ -25,7 +25,7 @@ enum DelayType {
 inline DelayType operator|(DelayType a, DelayType b)
 {return static_cast<DelayType>(static_cast<int>(a) | static_cast<int>(b));}
 
-template<typename Node,typename Edge> //
+template<typename Node,typename Edge>
 class Graph{
 public:
    Array<Node> nodes;
@@ -258,15 +258,23 @@ struct EdgeView{
    ComplexFUInstance** nodes[2]; // Points to node inside AcceleratorView
 };
 
-// Graph associated to an accelerator
-class AcceleratorView : public Graph<ComplexFUInstance*,EdgeView>{
+// A view into an accelerator.
+class AcceleratorView{
 public:
+   // We use dynamic memory for nodes and edges, as we need to add/remove nodes to the graph and to update the associated accelerator view as well
+   Pool<ComplexFUInstance*> nodes;
+   Pool<EdgeView> edges;
+
    Versat* versat;
    Accelerator* accel;
-   DAGOrder order;
-   bool dagOrder;
+
+   // All the other memory is meant to be stored in an arena. A temp arena for temporary use or permanent if to store in a FUDeclaration
    Array<Byte> graphData;
    Array<VersatComputedData> versatData;
+   DAGOrder order;
+   bool dagOrder;
+
+public:
 
    void CalculateGraphData(Arena* arena);
    void SetGraphData();
@@ -297,7 +305,7 @@ public:
    ComplexFUInstance* Descend(); // Current() must be a composite instance, otherwise this will fail
 
    ComplexFUInstance* Next(); // Iterates over subunits
-   ComplexFUInstance* Skip(); // Only stays on the same level
+   ComplexFUInstance* Skip(); // Next unit on the same level
 
    ComplexFUInstance* Current(); // Returns nullptr to indicate end of iteration
    ComplexFUInstance* CurrentAcceleratorInstance(); // Returns the accelerator instance for the Current() instance or nullptr if currently at top level

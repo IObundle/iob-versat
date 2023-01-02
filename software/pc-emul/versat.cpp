@@ -635,7 +635,7 @@ FUInstance* GetInstanceByName_(FUInstance* instance,int argc, ...){
    ComplexFUInstance* inst = (ComplexFUInstance*) instance;
    Assert(inst->declaration->fixedDelayCircuit);
 
-   STACK_ARENA(temp,Kilobyte(16));
+   STACK_ARENA(temp,Kilobyte(64));
    AcceleratorIterator iter = {};
    iter.Start(inst->declaration->fixedDelayCircuit,inst,&temp,true);
 
@@ -968,7 +968,7 @@ FUDeclaration* RegisterSubUnit(Versat* versat,SizedString name,Accelerator* circ
    DAGOrder order = view.order;
    Hashmap<ComplexFUInstance*,int> instanceToNewIndex = {};
    instanceToNewIndex.Init(temp,circuit->instances.Size());
-   for(int i = 0; i < view.nodes.size; i++){
+   for(int i = 0; i < view.nodes.Size(); i++){
       ComplexFUInstance* inst = order.instances[i];
 
       instanceToNewIndex.Insert(inst,i);
@@ -987,7 +987,7 @@ FUDeclaration* RegisterSubUnit(Versat* versat,SizedString name,Accelerator* circ
    Hashmap<ComplexFUInstance*,ComplexFUInstance*> oldInstanceToNewInstance = {};
    oldInstanceToNewInstance.Init(temp,circuit->instances.Size());
    Pool<ComplexFUInstance> newInstances = {};
-   for(int i = 0; i < view.nodes.size; i++){
+   for(int i = 0; i < view.nodes.Size(); i++){
       ComplexFUInstance* old = order.instances[i];
 
       ComplexFUInstance* newInst = newInstances.Alloc();
@@ -1056,7 +1056,7 @@ FUDeclaration* RegisterSubUnit(Versat* versat,SizedString name,Accelerator* circ
    int stateIndex = 0;
    for(int i = 0 ; i < circuit->instances.Size(); i++){
       int newPos = oldIndexToNew.GetOrFail(i);
-      ComplexFUInstance* inst = view.nodes[newPos];
+      ComplexFUInstance* inst = view.nodes.GetOrFail(newPos);
       FUDeclaration* d = inst->declaration;
 
       if(!inst->isStatic){
@@ -1106,7 +1106,7 @@ FUDeclaration* RegisterSubUnit(Versat* versat,SizedString name,Accelerator* circ
    int staticIndex = 0;
    for(int i = 0 ; i < circuit->instances.Size(); i++){
       int newPos = oldIndexToNew.GetOrFail(i);
-      ComplexFUInstance* inst = view.nodes[newPos];
+      ComplexFUInstance* inst = view.nodes.GetOrFail(newPos);
 
       // We should iterate from the order set in specifications
       int savedIndex = -1;
@@ -1145,7 +1145,7 @@ FUDeclaration* RegisterSubUnit(Versat* versat,SizedString name,Accelerator* circ
       extraDataIndex += d->extraDataSize;
 
       // Outputs follow the DAG order
-      ComplexFUInstance* dagInst = view.nodes[i];
+      ComplexFUInstance* dagInst = view.nodes.GetOrFail(i);
 
       decl.outputOffsets[unitIndex] = outputIndex;
       outputIndex += dagInst->declaration->totalOutputs;
@@ -1630,13 +1630,14 @@ void AcceleratorRun(Accelerator* accel){
    #endif
 
    FILE* accelOutputFile = nullptr;
+   Array<int> vcdSameCheckSpace = {};
    if(accel->versat->debug.outputVCD){
       char buffer[128];
       sprintf(buffer,"debug/accelRun%d.vcd",numberRuns++);
       accelOutputFile = fopen(buffer,"w");
       Assert(accelOutputFile);
 
-      PrintVCDDefinitions(accelOutputFile,accel);
+      vcdSameCheckSpace = PrintVCDDefinitions(accelOutputFile,accel,arena);
    }
 
    AcceleratorRunStart(accel,staticUnits);
@@ -1646,7 +1647,7 @@ void AcceleratorRun(Accelerator* accel){
    AcceleratorRunIter(iter,staticUnits);
 
    if(accel->versat->debug.outputVCD){
-      PrintVCD(accelOutputFile,accel,time++,0);
+      PrintVCD(accelOutputFile,accel,time++,0,vcdSameCheckSpace);
    }
 
    for(int cycle = 0; cycle < 100; cycle++){ // Max amount of iterations
@@ -1657,8 +1658,8 @@ void AcceleratorRun(Accelerator* accel){
       AcceleratorRunIter(iter,staticUnits);
 
       if(accel->versat->debug.outputVCD){
-         PrintVCD(accelOutputFile,accel,time++,1);
-         PrintVCD(accelOutputFile,accel,time++,0);
+         PrintVCD(accelOutputFile,accel,time++,1,vcdSameCheckSpace);
+         PrintVCD(accelOutputFile,accel,time++,0,vcdSameCheckSpace);
       }
 
       if(AcceleratorDone(accel)){
@@ -1667,8 +1668,8 @@ void AcceleratorRun(Accelerator* accel){
    }
 
    if(accel->versat->debug.outputVCD){
-      PrintVCD(accelOutputFile,accel,time++,1);
-      PrintVCD(accelOutputFile,accel,time++,0);
+      PrintVCD(accelOutputFile,accel,time++,1,vcdSameCheckSpace);
+      PrintVCD(accelOutputFile,accel,time++,0,vcdSameCheckSpace);
       fclose(accelOutputFile);
    }
 }

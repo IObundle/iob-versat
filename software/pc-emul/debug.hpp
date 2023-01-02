@@ -14,8 +14,8 @@ void OutputGraphDotFile(Versat* versat,AcceleratorView view,bool collapseSameEdg
 
 void OutputMemoryHex(void* memory,int size);
 
-void PrintVCDDefinitions(FILE* accelOutputFile,Accelerator* accel);
-void PrintVCD(FILE* accelOutputFile,Accelerator* accel,int time,int clock);
+Array<int> PrintVCDDefinitions(FILE* accelOutputFile,Accelerator* accel,Arena* sameCheckSpace);
+void PrintVCD(FILE* accelOutputFile,Accelerator* accel,int time,int clock,Array<int> sameCheckSpace);
 
 void SetDebuggingValue(Value val);
 void StartDebugTerminal();

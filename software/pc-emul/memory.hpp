@@ -329,6 +329,7 @@ public:
    void Remove(T* elem);
 
    T* Get(int index); // Returns nullptr if element not allocated (call Alloc(int index) to allocate)
+   T& GetOrFail(int index);
    Byte* GetMemoryPtr();
 
    int Size(){return allocated;};
