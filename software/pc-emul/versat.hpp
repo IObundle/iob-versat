@@ -101,7 +101,7 @@ void VersatUnitWrite(FUInstance* instance,int address, int value);
 int VersatUnitRead(FUInstance* instance,int address);
 
 // Unit default configuration and configuration sharing
-void SetDefaultConfiguration(FUInstance* inst,int* config,int size);
+void SetDefaultConfiguration(FUInstance* inst);
 void ShareInstanceConfig(FUInstance* inst, int shareBlockIndex);
 
 // Declaration functions

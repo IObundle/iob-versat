@@ -338,10 +338,9 @@ uint SetDebug(Versat* versat,VersatDebugFlags flags,uint flag){
    return last;
 }
 
-void SetDefaultConfiguration(FUInstance* instance,int* config,int size){
+void SetDefaultConfiguration(FUInstance* instance){
    ComplexFUInstance* inst = (ComplexFUInstance*) instance;
 
-   inst->config = config;
    inst->savedConfiguration = true;
 }
 
@@ -910,6 +909,12 @@ bool IsConfigStatic(Accelerator* topLevel,ComplexFUInstance* inst){
 FUDeclaration* RegisterSubUnit(Versat* versat,SizedString name,Accelerator* circuit){
    FUDeclaration decl = {};
 
+   #if 1 // Don't forget to remove
+   if(CompareString(name,"SHA")){
+      printf("here\n");
+   }
+   #endif
+
    Arena* permanent = &versat->permanent;
    Arena* temp = &versat->temp;
    ArenaMarker marker(temp);
@@ -957,12 +962,6 @@ FUDeclaration* RegisterSubUnit(Versat* versat,SizedString name,Accelerator* circ
    view.CalculateGraphData(temp);
    view.CalculateDAGOrdering(temp);
    view.CalculateDelay(temp);
-
-   #if 0 // Don't forget to remove
-   if(CompareString(name,"Convolution")){
-      printf("here\n");
-   }
-   #endif
 
    #if 1
    // Reorganize nodes based on DAG order
@@ -1012,6 +1011,11 @@ FUDeclaration* RegisterSubUnit(Versat* versat,SizedString name,Accelerator* circ
    decl.temporaryOrder = view.order;
 
    UnitValues val = CalculateAcceleratorValues(versat,decl.fixedDelayCircuit);
+
+   bool anySavedConfiguration = false;
+   for(ComplexFUInstance* inst : circuit->instances){
+      anySavedConfiguration |= inst->savedConfiguration;
+   }
 
    decl.nDelays = val.delays;
    decl.nIOs = val.ios;
@@ -1082,6 +1086,12 @@ FUDeclaration* RegisterSubUnit(Versat* versat,SizedString name,Accelerator* circ
    decl.delayOffsets = PushArray<int>(permanent,circuit->instances.Size());
    decl.outputOffsets = PushArray<int>(permanent,circuit->instances.Size());
    decl.extraDataOffsets = PushArray<int>(permanent,circuit->instances.Size());
+
+   if(anySavedConfiguration){
+      decl.defaultConfig = PushArray<int>(permanent,val.configs);
+      decl.defaultStatic = PushArray<int>(permanent,val.statics);
+   }
+
    Hashmap<int,int> sharedToOffset = {};
    sharedToOffset.Init(temp,val.configs);
 
@@ -1093,6 +1103,7 @@ FUDeclaration* RegisterSubUnit(Versat* versat,SizedString name,Accelerator* circ
 
    int outputIndex = val.outputs; // The first portion of the output is reserved for the output of the composite unit
 
+   int staticIndex = 0;
    for(int i = 0 ; i < circuit->instances.Size(); i++){
       int newPos = oldIndexToNew.GetOrFail(i);
       ComplexFUInstance* inst = view.nodes[newPos];
@@ -1108,6 +1119,17 @@ FUDeclaration* RegisterSubUnit(Versat* versat,SizedString name,Accelerator* circ
             configIndex = *possibleOffset;
          } else {
             sharedToOffset.Insert(inst->sharedIndex,configIndex);
+         }
+      }
+
+      // After sharing because we technically can implement sharing with default configurations
+      if(anySavedConfiguration){
+         if(inst->isStatic){
+            Memcpy(&decl.defaultStatic.data[staticIndex],inst->config,inst->declaration->configs.size);
+            staticIndex += inst->declaration->configs.size;
+         } else {
+            int index = inst->config - circuit->configAlloc.ptr;
+            Memcpy(&decl.defaultConfig.data[index],inst->config,inst->declaration->configs.size);
          }
       }
 
@@ -1191,8 +1213,12 @@ FUDeclaration* RegisterSubUnit(Versat* versat,SizedString name,Accelerator* circ
          inst->declaration->type == FUDeclaration::ITERATIVE){
 
          for(auto pair : inst->declaration->staticUnits){
-            res->staticUnits.InsertIfNotExist(pair.first,pair.second);
-            staticOffset = std::max(staticOffset,pair.second.offset + pair.second.configs.size);
+            StaticData newData = pair.second;
+            newData.offset = staticOffset;
+
+            if(res->staticUnits.InsertIfNotExist(pair.first,newData)){
+               staticOffset += newData.configs.size;
+            }
          }
       }
    }
@@ -1208,8 +1234,9 @@ FUDeclaration* RegisterSubUnit(Versat* versat,SizedString name,Accelerator* circ
          data.configs = inst->declaration->configs;
          data.offset = staticOffset;
 
-         res->staticUnits.InsertIfNotExist(id,data);
-         staticOffset += inst->declaration->configs.size;
+         if(res->staticUnits.InsertIfNotExist(id,data)){
+            staticOffset += inst->declaration->configs.size;
+         }
       }
    }
    #endif
@@ -1398,8 +1425,6 @@ void LoadConfiguration(Accelerator* accel,int configuration){
 void SaveConfiguration(Accelerator* accel,int configuration){
    //Assert(configuration < accel->versat->numberConfigurations);
 }
-
-void PopulateAccelerator2(Accelerator* accel,FUDeclaration* topDeclaration,FUInstanceInterfaces& inter,Hashmap<StaticId,StaticData>& staticMap);
 
 static void AcceleratorRunStart(Accelerator* accel,Hashmap<StaticId,StaticData>& staticMap){
    AcceleratorIterator iter = {};
@@ -1614,30 +1639,22 @@ void AcceleratorRun(Accelerator* accel){
       PrintVCDDefinitions(accelOutputFile,accel);
    }
 
-   #if 1
+   AcceleratorRunStart(accel,staticUnits);
+
    AcceleratorIterator iter = {};
    iter.Start(accel,arena,true);
-
-   //CheckMemory(iter);
-   #endif
-
-   AcceleratorRunStart(accel,staticUnits);
-   iter.Start(accel,arena,true);
    AcceleratorRunIter(iter,staticUnits);
-   //AcceleratorRunTopLevel(view,staticUnits);
 
    if(accel->versat->debug.outputVCD){
       PrintVCD(accelOutputFile,accel,time++,0);
    }
 
-   int cycle;
-   for(cycle = 0; 1; cycle++){ // Max amount of iterations
+   for(int cycle = 0; cycle < 100; cycle++){ // Max amount of iterations
       Assert(accel->outputAlloc.size == accel->storedOutputAlloc.size);
       memcpy(accel->outputAlloc.ptr,accel->storedOutputAlloc.ptr,accel->outputAlloc.size * sizeof(int));
 
       iter.Start(accel,arena,true);
       AcceleratorRunIter(iter,staticUnits);
-      //AcceleratorRunTopLevel(view,staticUnits);
 
       if(accel->versat->debug.outputVCD){
          PrintVCD(accelOutputFile,accel,time++,1);

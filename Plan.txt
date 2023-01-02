@@ -3,6 +3,7 @@ Misc:
    Stop using asserts for likely user errors. Parser is full of asserts that are actually faulty user data. Need to grapple with things now before they become more complex, even if in the future there is likelihood that things will change.
    Maybe do some fuzz testing? Especially for parsers
    Hard to reason with fixed buffer because we immediatly transform delay into a parameter string. Having to parse the delay is not a solution. Figure out what to do and remove all the portions of code that parse the delay out from the unit
+   Should probably generate a FUInstance unit test, that runs an unit individually and make sure that the unit correctly implements the interface expected by Versat. The user simply calls a function with the unit it wants to test and it outputs a verilog testbench that exercises the unit. Most common sources of errors are gonna be delay = 0, not outputting done when done (the testbench should enter an infinite loop, do not know any other way to test this), following the specifications of the "iob" interface and the semi axi interface, among other things.
 
 Testbench:
 
@@ -127,6 +128,10 @@ Optimizations:
       This isn't needed, we could have if statements in the populate function that check wether the unit has actually need or not to have the field populated.
       In fact, currently units are having their configuration pointers point to somebody else configuration space. Ideally we should set the pointers to nullptr, as it should be a segfault accessing other units configurations.
       Also, investigate wether we need the offset arrays for outputs and extraData, instead of just using push pointers.
+
+   The VCD file generation outputs data every cycle for every unit even if no change occured at all.
+      The fix is farely easy, just pass an arena and store the previous outputted value, otherwise do not output anything at all.
+      Probably takes longer, but uses less space and gtkwaves should load almost instantaneously 
 
 Template:
 

@@ -38,6 +38,37 @@ void RepopulateAccelerator(Accelerator* topLevel){
    }
 }
 
+void InitializeSubaccelerator(AcceleratorIterator iter){
+   int staticIndex = 0;
+   ComplexFUInstance* parent = iter.CurrentAcceleratorInstance();
+   FUDeclaration* decl = parent->declaration;
+
+   for(ComplexFUInstance* inst = iter.Current(); inst; inst = iter.Skip()){
+      #if 01
+      if(inst->savedConfiguration){
+         if(inst->isStatic){
+            Assert(inst->declaration->configs.size <= decl->defaultStatic.size - staticIndex);
+            Memcpy(inst->config,&decl->defaultStatic.data[staticIndex],inst->declaration->configs.size);
+            staticIndex += inst->declaration->configs.size;
+         } else {
+            int configIndex = inst->config - parent->config;
+            Assert(inst->declaration->configs.size <= decl->defaultConfig.size - configIndex);
+            Memcpy(inst->config,&decl->defaultConfig.data[configIndex],inst->declaration->configs.size);
+         }
+      }
+      #endif
+
+      if(inst->declaration->initializeFunction){
+         inst->declaration->initializeFunction(inst);
+      }
+
+      if(inst->declaration->type == FUDeclaration::COMPOSITE){
+         AcceleratorIterator it = iter.LevelBelowIterator();
+         InitializeSubaccelerator(it);
+      }
+   }
+}
+
 FUInstance* CreateFUInstance(Accelerator* accel,FUDeclaration* type,SizedString name,bool flat,bool isStatic){
    ArenaMarker marker(&accel->versat->temp);
 
@@ -52,6 +83,13 @@ FUInstance* CreateFUInstance(Accelerator* accel,FUDeclaration* type,SizedString 
    ptr->namedAccess = true;
    ptr->isStatic = isStatic;
 
+   for(auto pair : type->staticUnits){
+      StaticInfo* info = accel->staticInfo.Alloc();
+
+      info->id = pair.first;
+      info->data = pair.second;
+   }
+
    if(isStatic){
       int offset = accel->staticInfo.Size();
       StaticInfo* info = accel->staticInfo.Alloc();
@@ -60,6 +98,11 @@ FUInstance* CreateFUInstance(Accelerator* accel,FUDeclaration* type,SizedString 
       info->id.parent = nullptr;
       info->data.offset = offset;
    }
+
+   #if 0
+   if(CompareString(name,"Test"))
+      DebugTerminal(MakeValue(accel,"Accelerator"));
+   #endif
 
    if(true){
    //if(!flat){
@@ -118,13 +161,10 @@ FUInstance* CreateFUInstance(Accelerator* accel,FUDeclaration* type,SizedString 
 
          AcceleratorIterator iter = {};
          for(ComplexFUInstance* inst = iter.Start(accel,&accel->versat->temp,true); inst; inst = iter.Skip()){
+            // Have to iterate the top units until reaching the one we just created
             if(inst == ptr){
-               for(ComplexFUInstance* subInst = iter.Descend(); subInst; subInst = iter.Next()){
-                  if(subInst->declaration->initializeFunction){
-                     subInst->declaration->initializeFunction(subInst);
-                  }
-               }
-               break;
+               AcceleratorIterator it = iter.LevelBelowIterator();
+               InitializeSubaccelerator(it);
             }
          }
       } else if(type->initializeFunction){
@@ -147,6 +187,9 @@ Accelerator* CopyAccelerator(Versat* versat,Accelerator* accel,InstanceMap* map,
    for(ComplexFUInstance* inst : accel->instances){
       ComplexFUInstance* newInst = CopyInstance(newAccel,inst,inst->name,flat);
       newInst->declarationInstance = inst;
+
+      Memcpy(newInst->config,inst->config,inst->declaration->configs.size);
+      newInst->savedConfiguration = inst->savedConfiguration;
 
       map->insert({inst,newInst});
    }
@@ -651,9 +694,11 @@ ComplexFUInstance* AcceleratorIterator::Current(){
 }
 
 ComplexFUInstance* AcceleratorIterator::CurrentAcceleratorInstance(){
+   #if 0 // Only because of LevelBelowIterator. Ideally should have a flag to signal this situation and let the function access stack[-1] for iterators that we know they have a bigger stack
    if(level == 0){
       return nullptr;
    }
+   #endif
 
    ComplexFUInstance* inst = *stack[level - 1];
    return inst;

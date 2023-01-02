@@ -94,19 +94,17 @@ void DisplayAcceleratorMemory(Accelerator* topLevel){
 }
 
 void DisplayUnitConfiguration(Accelerator* topLevel){
-   Arena* arena = &topLevel->versat->temp;
-   ArenaMarker marker(arena);
-   AcceleratorView view = CreateAcceleratorView(topLevel,arena);
-   DisplayUnitConfiguration(view);
+   STACK_ARENA(temp,Kilobyte(16));
+   AcceleratorIterator iter = {};
+   iter.Start(topLevel,&temp,true);
+   DisplayUnitConfiguration(iter);
 }
 
-void EnterDebugTerminal(Versat* versat){
-   DebugTerminal(MakeValue(versat,"Versat"));
-}
+void DisplayUnitConfiguration(AcceleratorIterator iter){
+   Accelerator* accel = iter.topLevel;
+   Assert(accel);
 
-void DisplayUnitConfiguration(AcceleratorView topLevel){
-   for(int i = 0; i < topLevel.nodes.size; i++){
-      ComplexFUInstance* inst = topLevel.nodes[i];
+   for(ComplexFUInstance* inst = iter.Current(); inst; inst = iter.Next()){
       UnitValues val = CalculateIndividualUnitValues(inst);
 
       FUDeclaration* type = inst->declaration;
@@ -114,25 +112,29 @@ void DisplayUnitConfiguration(AcceleratorView topLevel){
       if(val.configs | val.states | val.delays){
          printf("[%.*s] %.*s:",UNPACK_SS(type->name),UNPACK_SS(inst->name));
          if(val.configs){
-            if(IsConfigStatic(topLevel.accel,inst)){
-               printf("\nStatic [%d]: ",inst->config - topLevel.accel->staticAlloc.ptr);
+            if(IsConfigStatic(accel,inst)){
+               printf("\nStatic [%d]: ",inst->config - accel->staticAlloc.ptr);
             } else {
-               printf("\nConfig [%d]: ",inst->config - topLevel.accel->configAlloc.ptr);
+               printf("\nConfig [%d]: ",inst->config - accel->configAlloc.ptr);
             }
 
             OutputSimpleIntegers(inst->config,val.configs);
          }
          if(val.states){
-            printf("\nState [%d]: ",inst->state - topLevel.accel->stateAlloc.ptr);
+            printf("\nState [%d]: ",inst->state - accel->stateAlloc.ptr);
             OutputSimpleIntegers(inst->state,val.states);
          }
          if(val.delays){
-            printf("\nDelay [%d]: ",inst->delay - topLevel.accel->delayAlloc.ptr);
+            printf("\nDelay [%d]: ",inst->delay - accel->delayAlloc.ptr);
             OutputSimpleIntegers(inst->delay,val.delays);
          }
          printf("\n\n");
       }
    }
+}
+
+void EnterDebugTerminal(Versat* versat){
+   DebugTerminal(MakeValue(versat,"Versat"));
 }
 
 bool CheckInputAndOutputNumber(FUDeclaration* type,int inputs,int outputs){

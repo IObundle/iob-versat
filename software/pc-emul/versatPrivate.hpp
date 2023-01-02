@@ -99,6 +99,9 @@ struct FUDeclaration{
    Array<int> outputOffsets;
    Array<int> extraDataOffsets;
 
+   Array<int> defaultConfig;
+   Array<int> defaultStatic;
+
    int totalOutputs; // Temp
 
    int nDelays; // Code only handles 1 single instance, for now, hardware needs this value for correct generation
@@ -469,7 +472,6 @@ void FixDelays(Versat* versat,Accelerator* accel,AcceleratorView view);
 AcceleratorView CreateAcceleratorView(Accelerator* accel,Arena* arena);
 AcceleratorView CreateAcceleratorView(Accelerator* accel,std::vector<Edge*>& edgeMappings,Arena* arena);
 AcceleratorView SubGraphAroundInstance(Versat* versat,Accelerator* accel,ComplexFUInstance* instance,int layers,Arena* arena);
-void ClearFUInstanceTempData(Accelerator* accel);
 
 // Accelerator merging
 bool MappingConflict(MappingNode map1,MappingNode map2);

@@ -307,6 +307,10 @@ BitIterator BitArray::begin(){
    BitIterator iter = {};
    iter.array = this;
 
+   if(bitSize == 0){
+      return iter;
+   }
+
    if(!Get(0)){
       ++iter;
    }

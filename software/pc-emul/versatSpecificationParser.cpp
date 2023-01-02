@@ -215,9 +215,6 @@ FUInstance* ParseInstanceDeclaration(Versat* versat,Tokenizer* tok,Accelerator* 
 
       Tokenizer insideList(list,",",{});
 
-      inst->config = PushArray<int>(&versat->permanent,FUType->configs.size).data;
-      SetDefaultConfiguration(inst,inst->config,FUType->configs.size);
-
       //inst->savedConfiguration = true;
       for(int i = 0; i < arguments; i++){
          Token arg = insideList.NextToken();
@@ -228,6 +225,7 @@ FUInstance* ParseInstanceDeclaration(Versat* versat,Tokenizer* tok,Accelerator* 
             insideList.AssertNextToken(",");
          }
       }
+      SetDefaultConfiguration(inst);
       Assert(insideList.Done());
 
       tok->AssertNextToken(")");
@@ -291,6 +289,12 @@ FUDeclaration* ParseModule(Versat* versat,Tokenizer* tok){
 
    Token name = tok->NextToken();
    tok->AssertNextToken("(");
+
+   #if 1 // Don't forget to remove
+   if(CompareString(name,"Constants")){
+      printf("here\n");
+   }
+   #endif
 
    Accelerator* circuit = CreateAccelerator(versat);
    //circuit->type = Accelerator::CIRCUIT;
