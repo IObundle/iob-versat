@@ -90,7 +90,9 @@ Accelerator* Flatten(Versat* versat,Accelerator* accel,int times);
 #define GetInstanceByName(ACCEL,...) GetInstanceByName_(ACCEL,NUMBER_ARGS(__VA_ARGS__),__VA_ARGS__)
 FUInstance* GetInstanceByName_(Accelerator* accel,int argc, ...);
 FUInstance* GetInstanceByName_(FUDeclaration* decl,int argc, ...);
-FUInstance* GetInstanceByName_(FUInstance* inst,int argc, ...);
+
+#define GetSubInstanceByName(TOP_LEVEL,INST,...) GetSubInstanceByName_(TOP_LEVEL,INST,NUMBER_ARGS(__VA_ARGS__),__VA_ARGS__)
+FUInstance* GetSubInstanceByName_(Accelerator* topLevel,FUInstance* inst,int argc, ...);
 
 // Unit connection
 void ConnectUnits(FUInstance* out,int outIndex,FUInstance* in,int inIndex,int delay = 0);

@@ -53,7 +53,7 @@ bool ZeroOutRealloc(Allocation<T>* alloc,int newSize){
 
 template<typename T>
 void Reserve(Allocation<T>* alloc,int reservedSize){
-   alloc->ptr = (T*) malloc(sizeof(T) * reservedSize);
+   alloc->ptr = (T*) calloc(reservedSize,sizeof(T));
    alloc->reserved = reservedSize;
 }
 
@@ -66,6 +66,12 @@ void Alloc(Allocation<T>* alloc,int newSize){
    alloc->ptr = (T*) malloc(sizeof(T) * newSize);
    alloc->reserved = newSize;
    alloc->size = newSize;
+}
+
+template<typename T>
+bool Inside(Allocation<T>* alloc,T* ptr){
+   bool res = (ptr >= alloc->ptr && ptr < (alloc->ptr + alloc->size));
+   return res;
 }
 
 template<typename T>
@@ -223,39 +229,23 @@ HashmapIterator<Key,Data> Hashmap<Key,Data>::end(){
 }
 
 template<typename T>
-PoolIterator<T>::PoolIterator()
-:pool(nullptr)
-,fullIndex(0)
-,bit(7)
-,index(0)
-,lastVal(nullptr)
-{
-}
+void PoolIterator<T>::Init(Pool<T>* pool,Byte* page){
+   *this = {};
 
-template<typename T>
-void PoolIterator<T>::SetPool(Pool<T>* pool){
    this->pool = pool;
+   this->page = page;
+   this->bit = 7;
 
-   page = pool->mem;
-
-   if(page && pool->allocated){
+   if(page){
       pageInfo = GetPageInfo(pool->info,page);
-
-//      if(!IsValid()){
-//         ++(*this);
-//      }
    }
 }
 
 template<typename T>
 bool PoolIterator<T>::operator!=(PoolIterator<T>& iter){
-   Assert(this->pool == iter.pool);
+   bool res = this->page != iter.page; // We only care about for ranges, so no need to be specific
 
-   if(this->fullIndex < pool->endSize){ // Kinda of a hack, for now
-      return true;
-   }
-
-   return false;
+   return res;
 }
 
 template<typename T>
@@ -288,7 +278,7 @@ bool PoolIterator<T>::IsValid(){
 
 template<typename T>
 void PoolIterator<T>::operator++(){
-   while(fullIndex < pool->endSize){
+   while(page){
       Advance();
 
       if(IsValid()){
@@ -373,13 +363,8 @@ T* Pool<T>::Alloc(){
             page.bitmap[index] |= (1 << i);
 
             page.header->allocatedUnits += 1;
-            allocated += 1;
 
             fullIndex += index * 8 + (7 - i);
-
-            if(fullIndex + 1 > endSize){
-               endSize = fullIndex + 1;
-            }
 
             T* inst = new (&view[index * 8 + (7 - i)]) T(); // Needed for anything stl based
 
@@ -420,8 +405,6 @@ T* Pool<T>::Alloc(int index){
 
    T* view = (T*) ptr;
    page.bitmap[bitmapIndex] |= (1 << bitIndex);
-   allocated += 1;
-   endSize = std::max(index + 1,endSize);
 
    return &view[bitmapIndex * 8 + (7 - bitIndex)];
 }
@@ -476,8 +459,6 @@ void Pool<T>::Remove(T* elem){
 
    pageInfo.bitmap[bitmapIndex] &= ~(1 << bit);
    pageInfo.header->allocatedUnits -= 1;
-
-   allocated -= 1;
 }
 
 template<typename T>
@@ -495,6 +476,20 @@ Pool<T> Pool<T>::Copy(){
    }
 
    return other;
+}
+
+template<typename T>
+int Pool<T>::Size(){
+   int count = 0;
+
+   Byte* page = mem;
+   while(page){
+      PageInfo pageInfo = GetPageInfo(info,page);
+      count += pageInfo.header->allocatedUnits;
+      page = pageInfo.header->nextPage;
+   }
+
+   return count;
 }
 
 template<typename T>
@@ -520,24 +515,12 @@ void Pool<T>::Clear(bool freeMemory){
          page = pageInfo.header->nextPage;
       }
    }
-
-   endSize = 0;
-   allocated = 0;
 }
 
 template<typename T>
 PoolIterator<T> Pool<T>::begin(){
-   if(!mem || allocated == 0){
-      return end();
-   }
-
    PoolIterator<T> iter = {};
-
-   iter.SetPool(this);
-
-   if(!iter.IsValid()){
-      ++iter;
-   }
+   iter.Init(this,mem);
 
    return iter;
 }
@@ -545,23 +528,15 @@ PoolIterator<T> Pool<T>::begin(){
 template<typename T>
 PoolIterator<T> Pool<T>::end(){
    PoolIterator<T> iter = {};
-
-   iter.SetPool(this);
-
-   iter.fullIndex = endSize;
+   iter.Init(this,nullptr);
 
    return iter;
 }
 
 template<typename T>
 PoolIterator<T> Pool<T>::beginNonValid(){
-   if(!mem || allocated == 0){
-      return end();
-   }
-
    PoolIterator<T> iter = {};
-
-   iter.SetPool(this);
+   iter.Init(this,mem);
 
    return iter;
 }

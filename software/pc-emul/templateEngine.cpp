@@ -921,7 +921,7 @@ void TemplateSetNumber(const char* id,int number){
 }
 
 void TemplateSetString(const char* id,const char* str){
-   envTable[MakeSizedString(id)] = MakeValue(str);
+   envTable[MakeSizedString(id)] = MakeValue(MakeSizedString(str));
 }
 
 void TemplateSetBool(const char* id,bool boolean){

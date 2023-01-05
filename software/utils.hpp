@@ -43,6 +43,27 @@ void FlushStdout();
 #define UNHANDLED_ERROR do{ FlushStdout(); Assert(false); } while(0) // Know it's an error, but only exit, for now
 #define USER_ERROR do{ FlushStdout(); exit(0); } while(0) // User error and program does not try to repair or keep going (report error before and exit)
 
+#ifdef VERSAT
+extern "C"{
+#include "iob-timer.h"
+}
+#define TIME_FUNCTION timer_get_count
+#else
+#define TIME_FUNCTION clock
+#endif
+
+// Automatically times a block in number of counts
+class TimeIt{
+public:
+	unsigned long long start;
+   const char* id;
+
+   TimeIt(const char* id){this->id = id; start = TIME_FUNCTION();};
+   ~TimeIt(){unsigned long long end = TIME_FUNCTION();printf("%s: %llu\n",id,end - start);}
+};
+#define TIME_IT(ID) TimeIt timer_##__LINE__(ID)
+
+
 typedef char Byte;
 typedef uint32_t uint;
 
@@ -173,6 +194,17 @@ bool Memcmp(T* a,T* b,int numberElements){
    return res;
 }
 
+inline unsigned char SelectByte(int val,int index){
+   union{
+      int val;
+      unsigned char asChar;
+   } conv;
+
+   int i = (index & 3) * 8;
+   conv.val = ((val >> i) & 0x000000ff);
+
+   return conv.asChar;
+}
 
 #endif // INCLUDED_UTILS_HPP
 

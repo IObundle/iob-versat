@@ -100,8 +100,14 @@ inline bool operator==(const SizedString& lhs,const SizedString& rhs){
 }
 
 inline bool operator==(const PortInstance& p1,const PortInstance& p2){
-   return (p1.inst == p2.inst && p1.port == p2.port);
-};
+   bool res = (p1.inst == p2.inst && p1.port == p2.port);
+   return res;
+}
+
+inline bool operator!=(const PortInstance& p1,const PortInstance& p2){
+   bool res = !(p1 == p2);
+   return res;
+}
 
 inline bool operator==(const StaticId& id1,const StaticId& id2){
    bool res = CompareString(id1.name,id2.name) && id1.parent == id2.parent;
@@ -114,18 +120,6 @@ inline bool operator==(const PortEdge& e1,const PortEdge& e2){
 }
 inline bool operator!=(const PortEdge& e1,const PortEdge& e2){
    bool res = !(e1 == e2);
-   return res;
-}
-
-inline bool operator==(PortInstance& p1,PortInstance& p2){
-   bool sameInstance = (p1.inst == p2.inst);
-   //bool samePort = (p1.port == p2.port);
-
-   bool res = sameInstance;
-   return res;
-}
-inline bool operator!=(PortInstance& p1,PortInstance& p2){
-   bool res = !(p1 == p2);
    return res;
 }
 

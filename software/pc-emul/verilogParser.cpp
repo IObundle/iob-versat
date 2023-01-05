@@ -565,8 +565,8 @@ void DebugTerminal(Value val){
 }
 
 int main(int argc,const char* argv[]){
-   if(argc < 3){
-      printf("Error, need at least 3 arguments: <program> <outputFile> <inputFile1> ...");
+   if(argc < 4){
+      printf("Error, need at least 4 arguments: <program> <namespace> <outputFile> <inputFile1> ...");
 
       return 0;
    }
@@ -576,7 +576,7 @@ int main(int argc,const char* argv[]){
    std::vector<const char*> includePaths;
    std::vector<const char*> filePaths;
    // Parse include paths
-   for(int i = 2; i < argc; i++){
+   for(int i = 3; i < argc; i++){
       if(CompareString("-I",argv[i])){
          includePaths.push_back(argv[i+1]);
          i += 1;
@@ -722,7 +722,9 @@ int main(int argc,const char* argv[]){
 
    TemplateSetArray("modules","ModuleInfo",allModules.data(),allModules.size());
 
-   FILE* output = fopen(argv[1],"w");
+   FILE* output = fopen(argv[2],"w");
+   TemplateSetString("namespace",argv[1]);
+   fflush(stdout);
    ProcessTemplate(output,"../../submodules/VERSAT/software/templates/unit_verilog_data.tpl",tempArena);
 
    return 0;

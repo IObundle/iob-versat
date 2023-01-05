@@ -9,7 +9,7 @@
 #include "textualRepresentation.hpp"
 
 void CheckMemory(Accelerator* topLevel){
-   STACK_ARENA(temp,Kilobyte(16));
+   STACK_ARENA(temp,Kilobyte(64));
 
    AcceleratorIterator iter = {};
    iter.Start(topLevel,&temp,true);
@@ -94,7 +94,7 @@ void DisplayAcceleratorMemory(Accelerator* topLevel){
 }
 
 void DisplayUnitConfiguration(Accelerator* topLevel){
-   STACK_ARENA(temp,Kilobyte(16));
+   STACK_ARENA(temp,Kilobyte(64));
    AcceleratorIterator iter = {};
    iter.Start(topLevel,&temp,true);
    DisplayUnitConfiguration(iter);
@@ -148,7 +148,7 @@ bool CheckInputAndOutputNumber(FUDeclaration* type,int inputs,int outputs){
 }
 
 void PrintAcceleratorInstances(Accelerator* accel){
-   STACK_ARENA(temp,Kilobyte(16));
+   STACK_ARENA(temp,Kilobyte(64));
 
    AcceleratorIterator iter = {};
    for(ComplexFUInstance* inst = iter.Start(accel,&temp,false); inst; inst = iter.Next()){
@@ -197,7 +197,7 @@ bool IsGraphValid(AcceleratorView view){
    return true;
 }
 
-static void OutputGraphDotFile_(Versat* versat,AcceleratorView view,bool collapseSameEdges,FILE* outputFile){
+static void OutputGraphDotFile_(Versat* versat,AcceleratorView& view,bool collapseSameEdges,ComplexFUInstance* highlighInstance,FILE* outputFile){
    Arena* arena = &versat->temp;
 
    fprintf(outputFile,"digraph accel {\n\tnode [fontcolor=white,style=filled,color=\"160,60,176\"];\n");
@@ -206,11 +206,16 @@ static void OutputGraphDotFile_(Versat* versat,AcceleratorView view,bool collaps
       SizedString id = UniqueRepr(inst,arena);
       SizedString name = Repr(inst,versat->debug.dotFormat,arena);
 
-      fprintf(outputFile,"\t\"%.*s\" [label=\"%.*s\"];\n",UNPACK_SS(id),UNPACK_SS(name));
+      if(inst == highlighInstance){
+         fprintf(outputFile,"\t\"%.*s\" [color=blue,label=\"%.*s\"];\n",UNPACK_SS(id),UNPACK_SS(name));
+      } else {
+         fprintf(outputFile,"\t\"%.*s\" [label=\"%.*s\"];\n",UNPACK_SS(id),UNPACK_SS(name));
+      }
    }
 
    std::set<std::pair<ComplexFUInstance*,ComplexFUInstance*>> sameEdgeCounter;
 
+   // TODO: Consider adding a true same edge counter, that collects edges with equal delay and then represents them on the graph as a pair, using [portStart-portEnd]
    for(EdgeView* edgeView : view.edges){
       Edge* edge = edgeView->edge;
       if(collapseSameEdges){
@@ -225,32 +230,27 @@ static void OutputGraphDotFile_(Versat* versat,AcceleratorView view,bool collaps
 
       SizedString first = UniqueRepr(edge->units[0].inst,arena);
       SizedString second = UniqueRepr(edge->units[1].inst,arena);
-      SizedString label = {};
-      int calculatedDelay = 0;
-
-      #if 1
-      // Get info from output instance side
+      PortInstance start = edge->units[0];
       PortInstance end = edge->units[1];
-      for(ConnectionInfo& info : end.inst->graphData->allInputs){
-         if(info.port == end.port && info.instConnectedTo == edge->units[0]){
-            PortInstance start = info.instConnectedTo;
+      SizedString label = Repr(start,end,versat->debug.dotFormat,arena);
+      int calculatedDelay = edgeView->delay;
 
-            label = Repr(start,end,versat->debug.dotFormat,arena);
-            calculatedDelay = *info.delay;
-            break;
-         }
-      }
-      #endif
+      bool highlight = (start.inst == highlighInstance || end.inst == highlighInstance);
 
       fprintf(outputFile,"\t\"%.*s\" -> ",UNPACK_SS(first));
       fprintf(outputFile,"\"%.*s\"",UNPACK_SS(second));
-      fprintf(outputFile,"[label=\"%.*s\\n[%d:%d]\"];\n",UNPACK_SS(label),edge->delay,calculatedDelay);
+
+      if(highlight){
+         fprintf(outputFile,"[color=blue,label=\"%.*s\\n[%d:%d]\"];\n",UNPACK_SS(label),edge->delay,calculatedDelay);
+      } else {
+         fprintf(outputFile,"[label=\"%.*s\\n[%d:%d]\"];\n",UNPACK_SS(label),edge->delay,calculatedDelay);
+      }
    }
 
    fprintf(outputFile,"}\n");
 }
 
-void OutputGraphDotFile(Versat* versat,AcceleratorView view,bool collapseSameEdges,const char* filenameFormat,...){
+void OutputGraphDotFile(Versat* versat,AcceleratorView& view,bool collapseSameEdges,const char* filenameFormat,...){
    char buffer[1024];
 
    va_list args;
@@ -259,10 +259,40 @@ void OutputGraphDotFile(Versat* versat,AcceleratorView view,bool collapseSameEdg
    vsprintf(buffer,filenameFormat,args);
 
    FILE* file = fopen(buffer,"w");
-   OutputGraphDotFile_(versat,view,collapseSameEdges,file);
+   OutputGraphDotFile_(versat,view,collapseSameEdges,nullptr,file);
    fclose(file);
 
    va_end(args);
+}
+
+void OutputGraphDotFile(Versat* versat,AcceleratorView& view,bool collapseSameEdges,ComplexFUInstance* highlighInstance,const char* filenameFormat,...){
+   char buffer[1024];
+
+   va_list args;
+   va_start(args,filenameFormat);
+
+   vsprintf(buffer,filenameFormat,args);
+
+   FILE* file = fopen(buffer,"w");
+   OutputGraphDotFile_(versat,view,collapseSameEdges,highlighInstance,file);
+   fclose(file);
+
+   va_end(args);
+}
+
+SizedString PushMemoryHex(Arena* arena,void* memory,int size){
+   Byte* mark = MarkArena(arena);
+
+   unsigned char* view = (unsigned char*) memory;
+
+   for(int i = 0; i < size; i++){
+      int low = view[i] % 16;
+      int high = view[i] / 16;
+
+      PushString(arena,"%c%c ",GetHex(high),GetHex(low));
+   }
+
+   return PointArena(arena,mark);
 }
 
 void OutputMemoryHex(void* memory,int size){
@@ -365,6 +395,7 @@ Array<int> PrintVCDDefinitions(FILE* accelOutputFile,Accelerator* accel,Arena* t
    fprintf(accelOutputFile,"$timescale   1ns $end\n");
    fprintf(accelOutputFile,"$scope module TOP $end\n");
    fprintf(accelOutputFile,"$var wire  1 a clk $end\n");
+   fprintf(accelOutputFile,"$var wire  32 b counter $end\n");
    PrintVCDDefinitions_(accelOutputFile,accel);
    fprintf(accelOutputFile,"$upscope $end\n");
    fprintf(accelOutputFile,"$enddefinitions $end\n");
@@ -470,11 +501,12 @@ static void PrintVCD_(FILE* accelOutputFile,AcceleratorIterator iter,int time,Ar
 }
 
 void PrintVCD(FILE* accelOutputFile,Accelerator* accel,int time,int clock,Array<int> sameValueCheckSpace){ // Need to put some clock signal
-   STACK_ARENA(temp,Kilobyte(16));
+   STACK_ARENA(temp,Kilobyte(64));
    ResetMapping();
 
    fprintf(accelOutputFile,"#%d\n",time * 10);
    fprintf(accelOutputFile,"%da\n",clock ? 1 : 0);
+   fprintf(accelOutputFile,"b%s b\n",Bin((time + 1) / 2));
 
    AcceleratorIterator iter = {};
    iter.Start(accel,&temp,true);

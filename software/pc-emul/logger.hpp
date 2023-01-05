@@ -10,7 +10,7 @@ enum LogModule{
    TOP_SYS     = 0x2,
    ACCELERATOR = 0x4,
    PARSER      = 0x8,
-   DEBUG_SYS   = 0x10,
+   DEBUG_SYS   = 0x10
 };
 
 enum LogLevel{

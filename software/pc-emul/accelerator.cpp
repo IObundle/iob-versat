@@ -26,7 +26,7 @@ Accelerator* CreateAccelerator(Versat* versat){
 }
 
 void RepopulateAccelerator(Accelerator* topLevel){
-   STACK_ARENA(temp,Kilobyte(16));
+   STACK_ARENA(temp,Kilobyte(64));
 
    AcceleratorIterator iter = {};
    iter.Start(topLevel,&temp,true); // This will populate top level units
@@ -589,7 +589,7 @@ ComplexFUInstance* AcceleratorIterator::Start(Accelerator* topLevel,ComplexFUIns
       inter.extraData.Init(compositeInst->extraData,decl->extraDataSize);
       inter.statics.Init(topLevel->staticAlloc);
 
-      PopulateAccelerator(accel,decl,inter,*staticUnits);
+      PopulateAccelerator(topLevel,accel,decl,inter,*staticUnits);
 
       #if 0
       Assert(inter.config.Empty());
@@ -665,7 +665,7 @@ ComplexFUInstance* AcceleratorIterator::Descend(){
       inter.extraData.Init(inst->extraData,decl->extraDataSize);
       inter.statics.Init(topLevel->staticAlloc);
 
-      PopulateAccelerator(accel,decl,inter,*staticUnits);
+      PopulateAccelerator(topLevel,accel,decl,inter,*staticUnits);
 
       // Don't make sense when using PopulateAccelerator(1). The function does not push
       #if 0
@@ -787,14 +787,8 @@ void AcceleratorView::CalculateGraphData(Arena* arena){
    int nNodes = nodes.Size();
    int nEdges = edges.Size();
 
-   int memoryNeeded = sizeof(GraphComputedData) * nNodes + 2 * nEdges * sizeof(ConnectionInfo) + nEdges * sizeof(int);
+   int memoryNeeded = sizeof(GraphComputedData) * nNodes + 2 * nEdges * sizeof(ConnectionInfo);
    graphData = PushArray<Byte>(arena,memoryNeeded);
-
-   Arena sub = SubArena(arena,Megabyte(1));
-
-   ArenaMarker marker(arena);
-   Hashmap<Edge*,int*> map = {};
-   map.Init(arena,nEdges);
 
    PushPtr<Byte> data;
    data.Init(graphData);
@@ -802,13 +796,6 @@ void AcceleratorView::CalculateGraphData(Arena* arena){
    /* GraphComputedData* computedData = (GraphComputedData*) */ data.Push(nNodes * sizeof(GraphComputedData));
    ConnectionInfo* inputBuffer = (ConnectionInfo*) data.Push(nEdges * sizeof(ConnectionInfo));
    ConnectionInfo* outputBuffer = (ConnectionInfo*) data.Push(nEdges * sizeof(ConnectionInfo));
-
-   for(EdgeView* edgeView : edges){
-      Edge* edge = edgeView->edge;
-
-      map.Insert(edge,(int*) data.Push(sizeof(int)));
-   }
-
    Assert(data.Empty());
 
    SetGraphData();
@@ -832,7 +819,7 @@ void AcceleratorView::CalculateGraphData(Arena* arena){
             outputBuffer->instConnectedTo = edge->units[1];
             outputBuffer->port = edge->units[0].port;
             outputBuffer->edgeDelay = edge->delay;
-            outputBuffer->delay = map.GetOrFail(edge);
+            outputBuffer->delay = &edgeView->delay;
 
             outputBuffer += 1;
 
@@ -842,14 +829,14 @@ void AcceleratorView::CalculateGraphData(Arena* arena){
             inputBuffer->instConnectedTo = edge->units[0];
             inputBuffer->port = edge->units[1].port;
             inputBuffer->edgeDelay = edge->delay;
-            inputBuffer->delay = map.GetOrFail(edge);
+            inputBuffer->delay = &edgeView->delay;
             inputBuffer += 1;
 
             graphData->allInputs.size += 1;
          }
       }
 
-      graphData->singleInputs = PushArray<PortInstance>(&sub,maxInputs);
+      graphData->singleInputs = PushArray<PortInstance>(arena,maxInputs);
       for(ConnectionInfo& info : graphData->allInputs){
          int index = info.port;
 
@@ -880,8 +867,6 @@ void AcceleratorView::CalculateGraphData(Arena* arena){
          // Unconnected
       }
    }
-
-   PopToSubArena(arena,sub);
 }
 
 #if 1
@@ -945,7 +930,7 @@ void AcceleratorView::CalculateDelay(Arena* arena,bool outputDebugGraph){
 
       #if 1
       if(outputDebugGraph && versat->debug.outputGraphs){
-         OutputGraphDotFile(versat,*this,true,"debug/%.*s/out1_%d.dot",UNPACK_SS(accel->subtype->name),graphs++);
+         OutputGraphDotFile(versat,*this,true,inst,"debug/%.*s/out1_%d.dot",UNPACK_SS(accel->subtype->name),graphs++);
       }
       #endif
    }
@@ -977,7 +962,7 @@ void AcceleratorView::CalculateDelay(Arena* arena,bool outputDebugGraph){
 
       #if 1
       if(outputDebugGraph && versat->debug.outputGraphs){
-         OutputGraphDotFile(versat,*this,true,"debug/%.*s/out2_%d.dot",UNPACK_SS(accel->subtype->name),graphs++);
+         OutputGraphDotFile(versat,*this,true,inst,"debug/%.*s/out2_%d.dot",UNPACK_SS(accel->subtype->name),graphs++);
       }
       #endif
    }
@@ -1500,7 +1485,7 @@ void FixMultipleInputs(Versat* versat,Accelerator* accel){
    int portUsedCount[99];
    for(ComplexFUInstance** instPtr : view.nodes){
       ComplexFUInstance* inst = *instPtr;
-      if(inst->declaration == versat->multiplexer || inst->declaration == versat->combMultiplexer){ // Not good, but works for now (otherwise newly added muxes would break the algorithm)
+      if(inst->declaration == BasicDeclaration::multiplexer || inst->declaration == BasicDeclaration::combMultiplexer){ // Not good, but works for now (otherwise newly added muxes would break the algorithm)
          continue;
       }
 
@@ -1521,11 +1506,11 @@ void FixMultipleInputs(Versat* versat,Accelerator* accel){
 
       for(int port = 0; port < 99; port++){
          if(portUsedCount[port] > 1){ // Edge has more that one connection
-            FUDeclaration* muxType = versat->multiplexer;
+            FUDeclaration* muxType = BasicDeclaration::multiplexer;
             const char* format = "mux%d";
 
             if(isComb){
-               muxType = versat->combMultiplexer;
+               muxType = BasicDeclaration::combMultiplexer;
                format = "comb_mux%d";
             }
 
@@ -1562,7 +1547,7 @@ void FixMultipleInputs(Versat* versat,Accelerator* accel){
    #endif
 }
 
-// Fixes edges such that unit before connected to after, is reconnected to new unit
+// Fixes edges such that unit before connected to after, are reconnected to new unit
 void InsertUnit(Accelerator* accel, PortInstance before, PortInstance after, PortInstance newUnit){
    for(Edge* edge : accel->edges){
       if(edge->units[0] == before && edge->units[1] == after){
@@ -1577,17 +1562,39 @@ void InsertUnit(Accelerator* accel, PortInstance before, PortInstance after, Por
    Assert(false);
 }
 
-void FixDelays(Versat* versat,Accelerator* accel,AcceleratorView view){
+void InsertUnit(AcceleratorView& view, PortInstance before, PortInstance after, PortInstance newUnit,ComplexFUInstance** newNode){
+   for(EdgeView* edgeView : view.edges){
+      Edge* edge = edgeView->edge;
+      if(edge->units[0] == before && edge->units[1] == after){
+         Edge* newEdge = ConnectUnits(newUnit,after);
+
+         EdgeView* newEdgeView = view.edges.Alloc();
+
+         newEdgeView->edge = newEdge;
+         newEdgeView->nodes[0] = newNode;
+         newEdgeView->nodes[1] = edgeView->nodes[1];
+
+         edge->units[1] = newUnit;
+         edgeView->nodes[1] = newNode;
+
+         return;
+      }
+   }
+
+   Assert(false);
+}
+
+void FixDelays(Versat* versat,Accelerator* accel,AcceleratorView& view){
    Assert(view.graphData.size && view.dagOrder);
 
    DAGOrder order = view.order;
 
    int buffersInserted = 0;
-   static int maxDelay = 0;
+   int fixed = 0;
    for(int i = accel->instances.Size() - 1; i >= 0; i--){
       ComplexFUInstance* inst = order.instances[i];
 
-      if(inst->declaration == versat->buffer || inst->declaration == versat->fixedBuffer){
+      if(inst->declaration == BasicDeclaration::buffer || inst->declaration == BasicDeclaration::fixedBuffer){
          continue;
       }
 
@@ -1598,41 +1605,50 @@ void FixDelays(Versat* versat,Accelerator* accel,AcceleratorView view){
 
          int delay = *info.delay;
 
-         if(other->declaration == versat->buffer){
+         if(other->declaration == BasicDeclaration::buffer){
             other->baseDelay = delay;
-         } else if(other->declaration == versat->fixedBuffer){
+         } else if(other->declaration == BasicDeclaration::fixedBuffer){
             //NOT_IMPLEMENTED;
          } else if(delay > 0){
-
-            //Assert(!(inst->declaration == versat->buffer || inst->declaration == versat->fixedBuffer));
-
             if(versat->debug.useFixedBuffers){
                SizedString bufferName = PushString(&versat->permanent,"fixedBuffer%d",buffersInserted++);
 
-               ComplexFUInstance* unit = (ComplexFUInstance*) CreateFUInstance(accel,versat->fixedBuffer,bufferName,false,false);
-               unit->parameters = PushString(&versat->permanent,"#(.AMOUNT(%d))",delay - versat->fixedBuffer->outputLatencies[0]);
+               ComplexFUInstance* unit = (ComplexFUInstance*) CreateFUInstance(accel,BasicDeclaration::fixedBuffer,bufferName,false,false);
+               unit->parameters = PushString(&versat->permanent,"#(.AMOUNT(%d))",delay - BasicDeclaration::fixedBuffer->outputLatencies[0]);
 
-               InsertUnit(accel,start,end,PortInstance{unit,0});
+               ComplexFUInstance** viewNode = view.nodes.Alloc();
+               *viewNode = unit;
 
-               unit->baseDelay = delay - versat->fixedBuffer->outputLatencies[0];
+               InsertUnit(view,start,end,PortInstance{unit,0},viewNode);
 
-               maxDelay = std::max(maxDelay,unit->baseDelay);
+               unit->bufferAmount = delay - BasicDeclaration::fixedBuffer->outputLatencies[0];
+
+               if(versat->debug.outputGraphs){
+                  OutputGraphDotFile(versat,view,false,unit,"debug/%.*s/fix_%d.dot",UNPACK_SS(accel->subtype->name),++fixed);
+               }
             } else {
                SizedString bufferName = PushString(&versat->permanent,"buffer%d",buffersInserted++);
 
-               ComplexFUInstance* unit = (ComplexFUInstance*) CreateFUInstance(accel,versat->buffer,bufferName,false,true);
-               InsertUnit(accel,start,end,PortInstance{unit,0});
+               ComplexFUInstance* unit = (ComplexFUInstance*) CreateFUInstance(accel,BasicDeclaration::buffer,bufferName,false,true);
+               ComplexFUInstance** viewNode = view.nodes.Alloc();
+               *viewNode = unit;
 
-               unit->baseDelay = delay - versat->buffer->outputLatencies[0];
-               Assert(unit->baseDelay >= 0);
+               InsertUnit(view,start,end,PortInstance{unit,0},viewNode);
 
-               maxDelay = std::max(maxDelay,unit->baseDelay);
+               unit->bufferAmount = delay - BasicDeclaration::buffer->outputLatencies[0];
+               Assert(unit->bufferAmount >= 0);
 
                if(unit->config){
-                  unit->config[0] = unit->baseDelay;
+                  unit->config[0] = unit->bufferAmount;
+               }
+               if(versat->debug.outputGraphs){
+                  OutputGraphDotFile(versat,view,false,unit,"debug/%.*s/fix_%d.dot",UNPACK_SS(accel->subtype->name),++fixed);
                }
             }
          } else {
+            if(versat->debug.outputGraphs){
+               OutputGraphDotFile(versat,view,false,"debug/%.*s/fix_%d_nothing.dot",UNPACK_SS(accel->subtype->name),fixed);
+            }
             Assert(delay >= 0);
          }
       }
@@ -1645,7 +1661,7 @@ void FixDelays(Versat* versat,Accelerator* accel,AcceleratorView view){
          Assert(inst->baseDelay >= 0);
          Assert(inst->baseDelay < 9999); // Unless dealing with really long accelerators, should catch some calculating bugs
 
-         if(inst->declaration == versat->buffer && inst->config){
+         if(inst->declaration == BasicDeclaration::buffer && inst->config){
             inst->config[0] = inst->baseDelay;
          }
       }
@@ -1670,7 +1686,7 @@ void ActivateMergedAcceleratorRecursive(Versat* versat,ComplexFUInstance* inst, 
          ActivateMergedAcceleratorRecursive(versat,subInst,index);
       }
    } else {
-      if(versat->multiplexer == inst->declaration || versat->combMultiplexer == inst->declaration){
+      if(BasicDeclaration::multiplexer == inst->declaration || BasicDeclaration::combMultiplexer == inst->declaration){
          inst->config[0] = index;
       }
    }
@@ -1695,7 +1711,7 @@ void ActivateMergedAccelerator(Versat* versat,Accelerator* accel,FUDeclaration* 
 
 ComplexFUInstance* GetInputInstance(Accelerator* accel,int inputIndex){
    for(ComplexFUInstance* inst : accel->instances){
-      if(inst->declaration == accel->versat->input && inst->id == inputIndex){
+      if(inst->declaration == BasicDeclaration::input && inst->id == inputIndex){
          return inst;
       }
    }
@@ -1704,7 +1720,7 @@ ComplexFUInstance* GetInputInstance(Accelerator* accel,int inputIndex){
 
 ComplexFUInstance* GetOutputInstance(Accelerator* accel){
    for(ComplexFUInstance* inst : accel->instances){
-      if(inst->declaration == accel->versat->output){
+      if(inst->declaration == BasicDeclaration::output){
          return inst;
       }
    }

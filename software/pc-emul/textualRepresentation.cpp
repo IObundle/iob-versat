@@ -11,11 +11,15 @@ SizedString UniqueRepr(FUInstance* inst,Arena* arena){
 SizedString Repr(FUInstance* inst,GraphDotFormat format,Arena* arena){
    Byte* mark = MarkArena(arena);
 
+   ComplexFUInstance* instance = (ComplexFUInstance*) inst;
+
    bool expl  = format & GRAPH_DOT_FORMAT_EXPLICIT;
    bool name  = format & GRAPH_DOT_FORMAT_NAME;
    bool type  = format & GRAPH_DOT_FORMAT_TYPE;
    bool id    = format & GRAPH_DOT_FORMAT_ID;
    bool delay = format & GRAPH_DOT_FORMAT_DELAY;
+
+   bool buffer = (inst->declaration == BasicDeclaration::buffer || inst->declaration == BasicDeclaration::fixedBuffer);
 
    if(expl && name){
       PushString(arena,"Name:");
@@ -36,10 +40,18 @@ SizedString Repr(FUInstance* inst,GraphDotFormat format,Arena* arena){
       PushString(arena,"%d\\n",inst->id);
    }
    if(expl && delay){
-      PushString(arena,"Delay:");
+      if(buffer){
+         PushString(arena,"Buffer:");
+      } else {
+         PushString(arena,"Delay:");
+      }
    }
    if(delay){
-      PushString(arena,"%d\\n",inst->baseDelay);
+      if(buffer){
+         PushString(arena,"%d\\n",instance->bufferAmount);
+      } else {
+         PushString(arena,"%d\\n",inst->baseDelay);
+      }
    }
 
    SizedString res = PointArena(arena,mark);

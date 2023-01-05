@@ -1,5 +1,5 @@
-#ifndef INCLUDED_VERILOG_DATA
-#define INCLUDED_VERILOG_DATA
+#ifndef INCLUDED_VERILOG_DATA_@{namespace}
+#define INCLUDED_VERILOG_DATA_@{namespace}
 
 #{for module modules}
 #{if module.nConfigs}
@@ -35,8 +35,6 @@ int @{wire.name};
 #include "V@{module.name}.h"
 #{end}
 
-
-//#define TRACE
 #define ARRAY_SIZE(array) sizeof(array) / sizeof(array[0])
 
 #define INIT(unit) \
@@ -64,6 +62,8 @@ int @{wire.name};
    type* self = &data->unit; \
    VCDData* vcd = &data->vcd;
 
+#ifndef INCLUDED_WRAPPER_FUNCTIONS
+#define INCLUDED_WRAPPER_FUNCTIONS
 template<typename T>
 static int32_t MemoryAccessNoAddress(ComplexFUInstance* inst,int address,int value,int write){
    T* self = (T*) inst->extraData;
@@ -158,8 +158,10 @@ struct DatabusAccess{
    int latencyCounter;
 };
 
-#define INITIAL_MEMORY_LATENCY 5
-#define MEMORY_LATENCY 2
+static const int INITIAL_MEMORY_LATENCY = 5;
+static const int MEMORY_LATENCY = 2;
+
+#endif // INCLUDED_WRAPPER_FUNCTIONS
 
 #{for module modules}
 static int32_t* @{module.name}_InitializeFunction(ComplexFUInstance* inst){
@@ -368,7 +370,7 @@ static FUDeclaration* @{module.name}_Register(Versat* versat){
 
 #{end}
 
-static void RegisterAllVerilogUnits(Versat* versat){
+static void RegisterAllVerilogUnits@{namespace}(Versat* versat){
    #{for module modules}
    @{module.name}_Register(versat);
    #{end}
@@ -376,4 +378,10 @@ static void RegisterAllVerilogUnits(Versat* versat){
 
 #endif
 
-#endif // INCLUDED_VERILOG_DATA
+#undef INIT
+#undef UPDATE
+#undef RESET
+#undef START_RUN
+#undef PREAMBLE
+
+#endif // INCLUDED_VERILOG_DATA_@{namespace}

@@ -290,14 +290,7 @@ FUDeclaration* ParseModule(Versat* versat,Tokenizer* tok){
    Token name = tok->NextToken();
    tok->AssertNextToken("(");
 
-   #if 1 // Don't forget to remove
-   if(CompareString(name,"Constants")){
-      printf("here\n");
-   }
-   #endif
-
    Accelerator* circuit = CreateAccelerator(versat);
-   //circuit->type = Accelerator::CIRCUIT;
 
    int insertedInputs = 0;
    for(int i = 0; 1; i++){
@@ -397,7 +390,7 @@ FUDeclaration* ParseModule(Versat* versat,Tokenizer* tok){
             FUInstance* inst2 = nullptr;
             if(CompareString(inVar.name,"out")){
                if(!outputInstance){
-                  outputInstance = (ComplexFUInstance*) CreateFUInstance(circuit,versat->output,MakeSizedString("out"),true);
+                  outputInstance = (ComplexFUInstance*) CreateFUInstance(circuit,BasicDeclaration::output,MakeSizedString("out"),true);
                }
 
                inst2 = outputInstance;
@@ -431,11 +424,11 @@ FUDeclaration* ParseIterative(Versat* versat,Tokenizer* tok){
    Accelerator* firstPhase = CreateAccelerator(versat);
    Accelerator* secondPhase = CreateAccelerator(versat);
 
-   FUInstance* firstOut = CreateFUInstance(firstPhase,versat->output,MakeSizedString("out"),true,false);
-   FUInstance* firstData = CreateFUInstance(firstPhase,versat->data,MakeSizedString("data"),true,false);
+   FUInstance* firstOut = CreateFUInstance(firstPhase,BasicDeclaration::output,MakeSizedString("out"),true,false);
+   FUInstance* firstData = CreateFUInstance(firstPhase,BasicDeclaration::data,MakeSizedString("data"),true,false);
 
-   FUInstance* secondOut = CreateFUInstance(secondPhase,versat->output,MakeSizedString("out"),true,false);
-   FUInstance* secondData = CreateFUInstance(secondPhase,versat->data,MakeSizedString("data"),true,false);
+   FUInstance* secondOut = CreateFUInstance(secondPhase,BasicDeclaration::output,MakeSizedString("out"),true,false);
+   FUInstance* secondData = CreateFUInstance(secondPhase,BasicDeclaration::data,MakeSizedString("data"),true,false);
 
    tok->AssertNextToken("(");
    // Arguments

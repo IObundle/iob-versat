@@ -10,8 +10,9 @@ void DisplayUnitConfiguration(Accelerator* topLevel);
 void DisplayUnitConfiguration(AcceleratorIterator iter);
 
 bool IsGraphValid(AcceleratorView view);
-void OutputGraphDotFile(Versat* versat,AcceleratorView view,bool collapseSameEdges,const char* filenameFormat,...);
+void OutputGraphDotFile(Versat* versat,AcceleratorView& view,bool collapseSameEdges,const char* filenameFormat,...);
 
+SizedString PushMemoryHex(Arena* arena,void* memory,int size);
 void OutputMemoryHex(void* memory,int size);
 
 Array<int> PrintVCDDefinitions(FILE* accelOutputFile,Accelerator* accel,Arena* sameCheckSpace);

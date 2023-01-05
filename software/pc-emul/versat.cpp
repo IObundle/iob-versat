@@ -15,6 +15,7 @@
 #include "templateEngine.hpp"
 
 #define IMPLEMENT_VERILOG_UNITS
+#include "basicWrapper.inc"
 #include "verilogWrapper.inc"
 
 static int zeros[50] = {};
@@ -198,6 +199,18 @@ static void RegisterOperators(Versat* versat){
    }
 }
 
+static Pool<FUDeclaration> basicDeclarations;
+namespace BasicDeclaration{
+	FUDeclaration* buffer;
+   FUDeclaration* fixedBuffer;
+   FUDeclaration* input;
+   FUDeclaration* output;
+   FUDeclaration* multiplexer;
+   FUDeclaration* combMultiplexer;
+   FUDeclaration* pipelineRegister;
+   FUDeclaration* data;
+}
+
 Versat* InitVersat(int base,int numberConfigurations){
    static Versat versatInst = {};
    static bool doneOnce = false;
@@ -227,20 +240,33 @@ Versat* InitVersat(int base,int numberConfigurations){
    FUDeclaration nullDeclaration = {};
    nullDeclaration.inputDelays = Array<int>{zeros,1};
    nullDeclaration.outputLatencies = Array<int>{zeros,1};
+
+   // Kinda of a hack, for now. We register on versat and then move the basic declarations out
    RegisterFU(versat,nullDeclaration);
-
-   RegisterAllVerilogUnits(versat);
-
-   versat->buffer = GetTypeByName(versat,MakeSizedString("Buffer"));
-   versat->fixedBuffer = GetTypeByName(versat,MakeSizedString("FixedBuffer"));
-   versat->pipelineRegister = RegisterPipelineRegister(versat);
-   versat->multiplexer = GetTypeByName(versat,MakeSizedString("Mux2"));
-   versat->combMultiplexer = GetTypeByName(versat,MakeSizedString("CombMux2"));
-   versat->input = RegisterCircuitInput(versat);
-   versat->output = RegisterCircuitOutput(versat);
-   versat->data = RegisterData(versat);
-
+   RegisterAllVerilogUnitsBasic(versat);
    RegisterOperators(versat);
+   RegisterPipelineRegister(versat);
+   RegisterCircuitInput(versat);
+   RegisterCircuitOutput(versat);
+   RegisterData(versat);
+
+   for(FUDeclaration* decl : versat->declarations){
+      FUDeclaration* newSpace = basicDeclarations.Alloc();
+      *newSpace = *decl;
+   }
+   versat->declarations.Clear(false);
+
+   // This ones are specific for the instance
+   RegisterAllVerilogUnitsVerilog(versat);
+
+   BasicDeclaration::buffer = GetTypeByName(versat,MakeSizedString("Buffer"));
+   BasicDeclaration::fixedBuffer = GetTypeByName(versat,MakeSizedString("FixedBuffer"));
+   BasicDeclaration::pipelineRegister = GetTypeByName(versat,MakeSizedString("PipelineRegister"));
+   BasicDeclaration::multiplexer = GetTypeByName(versat,MakeSizedString("Mux2"));
+   BasicDeclaration::combMultiplexer = GetTypeByName(versat,MakeSizedString("CombMux2"));
+   BasicDeclaration::input = GetTypeByName(versat,MakeSizedString("CircuitInput"));
+   BasicDeclaration::output = GetTypeByName(versat,MakeSizedString("CircuitOutput"));
+   BasicDeclaration::data = GetTypeByName(versat,MakeSizedString("Data"));
 
    Log(LogModule::TOP_SYS,LogLevel::INFO,"Init versat");
 
@@ -398,6 +424,12 @@ int VersatUnitRead(FUInstance* instance,int address){
 
 FUDeclaration* GetTypeByName(Versat* versat,SizedString name){
    for(FUDeclaration* decl : versat->declarations){
+      if(CompareString(decl->name,name)){
+         return decl;
+      }
+   }
+
+   for(FUDeclaration* decl : basicDeclarations){
       if(CompareString(decl->name,name)){
          return decl;
       }
@@ -602,7 +634,7 @@ FUInstance* GetInstanceByName_(Accelerator* circuit,int argc, ...){
    va_list args;
    va_start(args,argc);
 
-   STACK_ARENA(temp,Kilobyte(16));
+   STACK_ARENA(temp,Kilobyte(64));
    AcceleratorIterator iter = {};
    iter.Start(circuit,&temp,true);
 
@@ -617,7 +649,7 @@ FUInstance* GetInstanceByName_(FUDeclaration* decl,int argc, ...){
    va_list args;
    va_start(args,argc);
 
-   STACK_ARENA(temp,Kilobyte(16));
+   STACK_ARENA(temp,Kilobyte(64));
    AcceleratorIterator iter = {};
    iter.Start(decl->fixedDelayCircuit,&temp,false);
 
@@ -628,7 +660,7 @@ FUInstance* GetInstanceByName_(FUDeclaration* decl,int argc, ...){
    return res;
 }
 
-FUInstance* GetInstanceByName_(FUInstance* instance,int argc, ...){
+FUInstance* GetSubInstanceByName_(Accelerator* topLevel,FUInstance* instance,int argc, ...){
    va_list args;
    va_start(args,argc);
 
@@ -637,7 +669,7 @@ FUInstance* GetInstanceByName_(FUInstance* instance,int argc, ...){
 
    STACK_ARENA(temp,Kilobyte(64));
    AcceleratorIterator iter = {};
-   iter.Start(inst->declaration->fixedDelayCircuit,inst,&temp,true);
+   iter.Start(topLevel,inst,&temp,true);
 
    FUInstance* res = vGetInstanceByName_(iter,&temp,argc,args);
 
@@ -805,7 +837,7 @@ UnitValues CalculateAcceleratorValues(Versat* versat,Accelerator* accel){
          memoryMapBits[type->memoryMapBits] += 1;
       }
 
-      if(type == versat->input){
+      if(type == BasicDeclaration::input){
          val.inputs += 1;
       }
 
@@ -899,7 +931,7 @@ bool IsConfigStatic(Accelerator* topLevel,ComplexFUInstance* inst){
 
    int delta = config - topLevel->configAlloc.ptr;
 
-   if(delta >= 0 && delta < topLevel->configAlloc.size){
+   if(Inside(&topLevel->configAlloc,config)){
       return false;
    } else {
       return true;
@@ -908,12 +940,6 @@ bool IsConfigStatic(Accelerator* topLevel,ComplexFUInstance* inst){
 
 FUDeclaration* RegisterSubUnit(Versat* versat,SizedString name,Accelerator* circuit){
    FUDeclaration decl = {};
-
-   #if 1 // Don't forget to remove
-   if(CompareString(name,"SHA")){
-      printf("here\n");
-   }
-   #endif
 
    Arena* permanent = &versat->permanent;
    Arena* temp = &versat->temp;
@@ -1034,7 +1060,7 @@ FUDeclaration* RegisterSubUnit(Versat* versat,SizedString name,Accelerator* circ
          continue;
       }
 
-      decl.inputDelays[i++] = input->baseDelay;
+      decl.inputDelays[i] = input->baseDelay;
    }
 
    decl.outputLatencies = PushArray<int>(permanent,val.outputs);
@@ -1382,7 +1408,7 @@ FUDeclaration* RegisterIterativeUnit(Versat* versat,IterativeUnitDeclaration* de
       if(inst->declaration == decl->baseDeclaration){
          firstPartComb = inst;
       }
-      if(inst->declaration == versat->data){
+      if(inst->declaration == BasicDeclaration::data){
          firstData = inst;
       }
    }
@@ -1390,7 +1416,7 @@ FUDeclaration* RegisterIterativeUnit(Versat* versat,IterativeUnitDeclaration* de
       if(inst->declaration == decl->baseDeclaration){
          secondPartComb = inst;
       }
-      if(inst->declaration == versat->data){
+      if(inst->declaration == BasicDeclaration::data){
          secondData = inst;
       }
    }
@@ -1456,17 +1482,34 @@ static bool AcceleratorDone(Accelerator* accel){
    return done;
 }
 
-// Populates sub accelerator
-void PopulateAccelerator(Accelerator* accel,FUDeclaration* topDeclaration,FUInstanceInterfaces& inter,Hashmap<StaticId,StaticData>& staticMap){
-   int configIndex = 0;
-   int stateIndex = 0;
-   int delayIndex = 0;
-   int outputIndex = 0;
-   int extraDataIndex = 0;
+bool CheckCorrectConfiguration(Accelerator* topLevel,ComplexFUInstance* inst){
+   bool correct = true;
 
-   for(ComplexFUInstance* inst : accel->instances){
+   if(IsConfigStatic(topLevel,inst)){
+      Assert(inst->config == nullptr || Inside(&topLevel->staticAlloc,inst->config));
+   } else {
+      Assert(inst->config == nullptr || Inside(&topLevel->configAlloc,inst->config));
+   }
+
+   Assert(inst->state == nullptr || Inside(&topLevel->stateAlloc,inst->state));
+   Assert(inst->delay == nullptr || Inside(&topLevel->delayAlloc,inst->delay));
+   Assert(inst->extraData == nullptr || Inside(&topLevel->extraDataAlloc,inst->extraData));
+   Assert(inst->outputs == nullptr || Inside(&topLevel->outputAlloc,inst->outputs));
+   Assert(inst->storedOutputs == nullptr || Inside(&topLevel->storedOutputAlloc,inst->storedOutputs));
+}
+
+// Populates sub accelerator
+void PopulateAccelerator(Accelerator* topLevel,Accelerator* accel,FUDeclaration* topDeclaration,FUInstanceInterfaces& inter,Hashmap<StaticId,StaticData>& staticMap){
+   for(int index = 0; ComplexFUInstance* inst : accel->instances){
       FUDeclaration* decl = inst->declaration;
       UnitValues val = CalculateAcceleratorUnitValues(accel->versat,inst);
+
+      inst->config = nullptr;
+      inst->state = nullptr;
+      inst->delay = nullptr;
+      inst->outputs = nullptr;
+      inst->storedOutputs = nullptr;
+      inst->extraData = nullptr;
 
       if(inst->isStatic){
          StaticId id = {};
@@ -1476,20 +1519,31 @@ void PopulateAccelerator(Accelerator* accel,FUDeclaration* topDeclaration,FUInst
          StaticData* staticInfo = staticMap.Get(id);
          Assert(staticInfo);
          inst->config = &inter.statics.ptr[staticInfo->offset];
-      } else{
-         inst->config = &inter.config.ptr[topDeclaration->configOffsets[configIndex++]];
+      } else if(decl->configs.size){
+         inst->config = &inter.config.ptr[topDeclaration->configOffsets[index]];
       }
-      inst->state = &inter.state.ptr[topDeclaration->stateOffsets[stateIndex++]];
-      inst->delay = &inter.delay.ptr[topDeclaration->delayOffsets[delayIndex++]];
-      inst->outputs = &inter.outputs.ptr[topDeclaration->outputOffsets[outputIndex]];
-      inst->storedOutputs = &inter.storedOutputs.ptr[topDeclaration->outputOffsets[outputIndex++]];
-      inst->extraData = &inter.extraData.ptr[topDeclaration->extraDataOffsets[extraDataIndex++]];
+      if(decl->states.size){
+         inst->state = &inter.state.ptr[topDeclaration->stateOffsets[index]];
+      }
+      if(decl->nDelays){
+         inst->delay = &inter.delay.ptr[topDeclaration->delayOffsets[index]];
+      }
+      if(decl->totalOutputs){
+         inst->outputs = &inter.outputs.ptr[topDeclaration->outputOffsets[index]];
+         inst->storedOutputs = &inter.storedOutputs.ptr[topDeclaration->outputOffsets[index]];
+      }
+      if(decl->extraDataSize){
+         inst->extraData = &inter.extraData.ptr[topDeclaration->extraDataOffsets[index]];
+      }
+
+      CheckCorrectConfiguration(topLevel,inst);
+      index += 1;
    }
 }
 
 // The true "Accelerator" populator
 void PopulateAccelerator2(Accelerator* accel,FUDeclaration* topDeclaration,FUInstanceInterfaces& inter,Hashmap<StaticId,StaticData>& staticMap){
-   STACK_ARENA(temp,Kilobyte(16));
+   STACK_ARENA(temp,Kilobyte(64));
 
    Hashmap<int,int*> sharedToConfigPtr = {};
    sharedToConfigPtr.Init(&temp,accel->instances.Size());
@@ -1540,6 +1594,8 @@ void PopulateAccelerator2(Accelerator* accel,FUDeclaration* topDeclaration,FUIns
       if(decl->extraDataSize){
          inst->extraData = inter.extraData.Push(decl->extraDataSize);
       }
+
+      CheckCorrectConfiguration(accel,inst);
    }
 }
 
@@ -1650,7 +1706,7 @@ void AcceleratorRun(Accelerator* accel){
       PrintVCD(accelOutputFile,accel,time++,0,vcdSameCheckSpace);
    }
 
-   for(int cycle = 0; cycle < 100; cycle++){ // Max amount of iterations
+   for(int cycle = 0; cycle < 10000; cycle++){ // Max amount of iterations
       Assert(accel->outputAlloc.size == accel->storedOutputAlloc.size);
       memcpy(accel->outputAlloc.ptr,accel->storedOutputAlloc.ptr,accel->outputAlloc.size * sizeof(int));
 
@@ -1802,12 +1858,12 @@ int GetNumberOfOutputs(FUInstance* inst){
 
 FUInstance* CreateOrGetInput(Accelerator* accel,SizedString name,int portNumber){
    for(ComplexFUInstance* inst : accel->instances){
-      if(inst->declaration == accel->versat->input && inst->id == portNumber){
+      if(inst->declaration == BasicDeclaration::input && inst->id == portNumber){
          return inst;
       }
    }
 
-   FUInstance* inst = CreateFUInstance(accel,accel->versat->input,name,false,false);
+   FUInstance* inst = CreateFUInstance(accel,BasicDeclaration::input,name,false,false);
    inst->id = portNumber;
 
    return inst;
@@ -1816,7 +1872,7 @@ FUInstance* CreateOrGetInput(Accelerator* accel,SizedString name,int portNumber)
 int GetNumberOfInputs(Accelerator* accel){
    int count = 0;
    for(ComplexFUInstance* inst : accel->instances){
-      if(inst->declaration == accel->versat->input){
+      if(inst->declaration == BasicDeclaration::input){
          count += 1;
       }
    }
@@ -1848,7 +1904,7 @@ int GetOutputValue(Accelerator* accel,int portNumber){
 }
 
 int GetInputPortNumber(Versat* versat,FUInstance* inputInstance){
-   Assert(inputInstance->declaration == versat->input);
+   Assert(inputInstance->declaration == BasicDeclaration::input);
 
    return inputInstance->id;
 }
@@ -1856,8 +1912,8 @@ int GetInputPortNumber(Versat* versat,FUInstance* inputInstance){
 void SetDelayRecursive_(AcceleratorIterator iter,int delay){
    ComplexFUInstance* inst = iter.Current();
 
-   if(inst->declaration == inst->accel->versat->buffer){
-      inst->config[0] = inst->baseDelay;
+   if(inst->declaration == BasicDeclaration::buffer){
+      inst->config[0] = inst->bufferAmount;
       return;
    }
 
@@ -1875,7 +1931,7 @@ void SetDelayRecursive_(AcceleratorIterator iter,int delay){
 }
 
 void SetDelayRecursive(Accelerator* accel){
-   STACK_ARENA(temp,Kilobyte(16));
+   STACK_ARENA(temp,Kilobyte(64));
    AcceleratorIterator iter = {};
    for(ComplexFUInstance* inst = iter.Start(accel,&temp,true); inst; inst = iter.Skip()){
       SetDelayRecursive_(iter,0);

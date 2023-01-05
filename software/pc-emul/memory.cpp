@@ -378,11 +378,10 @@ PageInfo GetPageInfo(PoolInfo poolInfo,Byte* page){
    return info;
 }
 
-void GenericPoolIterator::Init(Byte* page,int numberElements,int elemSize){
+void GenericPoolIterator::Init(Byte* page,int elemSize){
    fullIndex = 0;
    bit = 7;
    index = 0;
-   this->numberElements = numberElements;
    this->elemSize = elemSize;
    this->page = page;
 
@@ -395,11 +394,7 @@ void GenericPoolIterator::Init(Byte* page,int numberElements,int elemSize){
 }
 
 bool GenericPoolIterator::HasNext(){
-   if(!page){
-      return false;
-   }
-
-   if(this->fullIndex < this->numberElements){ // Kinda of a hack, for now
+   if(page){
       return true;
    }
 
@@ -407,7 +402,7 @@ bool GenericPoolIterator::HasNext(){
 }
 
 void GenericPoolIterator::operator++(){
-   while(fullIndex < numberElements){
+   while(1){
       fullIndex += 1;
       bit -= 1;
       if(bit < 0){

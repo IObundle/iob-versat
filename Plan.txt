@@ -13,7 +13,9 @@ Testbench:
 
 Major change:
 
-   Initial configuration can be saved inside FUDeclarations
+   A lot of the calculations being done in the FUDeclaration is already being done in the CreateFUInstance function of the Accelerator.
+   This is actually expected. The registerSub function expects to receive an actual working Accelerator, and from them to generate a generic template instance.
+   We make a couple of changes, like removing multiple inputs and adding delays, but somethings I think could be carried over, like static info and such
 
 Graph optimizations:
 
@@ -145,9 +147,9 @@ Type:
    Do a pass over the use of the temp identifier. It's kind of an hack 
    Parse and generate enum information.
 
-Pool
-   
--  Fix the use of unnecessary information stored on the class, that makes it impossible to copy. Every piece of information required to iterate should be stored inside the linked list.
+Hashmap:
+
+   Fix like the Pool fix (make it so the struct is like a viewer to the true data structure) and change to using buckets
 
 Current know bugs/problems:
 

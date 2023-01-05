@@ -369,7 +369,7 @@ bool EqualPortMapping(Versat* versat,PortInstance p1,PortInstance p2){
    FUDeclaration* d1 = p1.inst->declaration;
    FUDeclaration* d2 = p2.inst->declaration;
 
-   if(d1 == versat->input && d2 == versat->input){ // Check the special case for inputs
+   if(d1 == BasicDeclaration::input && d2 == BasicDeclaration::input){ // Check the special case for inputs
       if(GetInputPortNumber(versat,p1.inst) == GetInputPortNumber(versat,p2.inst)){
          return true;
       } else {
@@ -490,7 +490,7 @@ ConsolidationGraph GenerateConsolidationGraph(Versat* versat,Arena* arena,Accele
             continue;
          }
 
-         if(instA == accel1Output || instA->declaration == versat->input){
+         if(instA == accel1Output || instA->declaration == BasicDeclaration::input){
             continue;
          }
 
@@ -506,7 +506,7 @@ ConsolidationGraph GenerateConsolidationGraph(Versat* versat,Arena* arena,Accele
             if(options.type == ConsolidationGraphOptions::EXACT_ORDER && deltaB >= 0 && deltaB <= options.difference){
                continue;
             }
-            if(instB == accel2Output || instB->declaration == versat->input){
+            if(instB == accel2Output || instB->declaration == BasicDeclaration::input){
                continue;
             }
 
@@ -565,12 +565,12 @@ ConsolidationGraph GenerateConsolidationGraph(Versat* versat,Arena* arena,Accele
 
    // Map inputs
    for(ComplexFUInstance* instA : accel1->instances){
-      if(instA->declaration != versat->input){
+      if(instA->declaration != BasicDeclaration::input){
          continue;
       }
 
       for(ComplexFUInstance* instB : accel2->instances){
-         if(instB->declaration != versat->input){
+         if(instB->declaration != BasicDeclaration::input){
             continue;
          }
 
@@ -1129,11 +1129,11 @@ OverheadCount CountOverheadUnits(Versat* versat,Accelerator* accel){
    for(FUInstance* inst : accel->instances){
       FUDeclaration* decl = inst->declaration;
 
-      if(decl == versat->multiplexer || decl == versat->combMultiplexer){
+      if(decl == BasicDeclaration::multiplexer || decl == BasicDeclaration::combMultiplexer){
          res.muxes += 1;
       }
 
-      if(decl == versat->buffer || decl == versat->fixedBuffer){
+      if(decl == BasicDeclaration::buffer || decl == BasicDeclaration::fixedBuffer){
          res.buffers += 1;
       }
    }
@@ -1164,12 +1164,12 @@ static int Weight(Versat* versat,Accelerator* accel,bool countBuffer = false){
          continue;
       }
 
-      if(decl == versat->multiplexer || decl == versat->combMultiplexer){
+      if(decl == BasicDeclaration::multiplexer || decl == BasicDeclaration::combMultiplexer){
          weight += 1;
          continue;
       }
 
-      if(decl == versat->buffer || decl == versat->fixedBuffer){
+      if(decl == BasicDeclaration::buffer || decl == BasicDeclaration::fixedBuffer){
          if(countBuffer){
             weight += 1;
          }

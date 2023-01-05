@@ -42,6 +42,9 @@ template<typename T>
 void Alloc(Allocation<T>* alloc,int newSize);
 
 template<typename T>
+bool Inside(Allocation<T>* alloc,T* ptr);
+
+template<typename T>
 void Free(Allocation<T>* alloc);
 
 template<typename T>
@@ -262,13 +265,12 @@ class GenericPoolIterator{
    int fullIndex;
    int bit;
    int index;
-   int numberElements;
    int elemSize;
    Byte* page;
 
 public:
 
-   void Init(Byte* page,int numberElements,int elemSize);
+   void Init(Byte* page,int elemSize);
 
    bool HasNext();
    void operator++();
@@ -291,14 +293,12 @@ class PoolIterator{
 
 public:
 
-   PoolIterator();
+   void Init(Pool<T>* pool,Byte* page);
 
-   void SetPool(Pool<T>* pool);
-
-   void Advance();
+   void Advance(); // Does not care if valid or not, always advance one position
    bool IsValid();
 
-   bool HasNext(){return this->fullIndex < pool->endSize;};
+   bool HasNext(){return (page != nullptr);};
    bool operator!=(PoolIterator& iter);
    void operator++();
    T* operator*();
@@ -311,18 +311,11 @@ PageInfo GetPageInfo(PoolInfo poolInfo,Byte* page);
 template<typename T>
 class Pool{
    Byte* mem;
-   int allocated;
-   int endSize; // Used for end iterator creation
    PoolInfo info;
 
    friend class PoolIterator<T>;
 
 public:
-
-#if 0
-   Pool();
-   ~Pool();
-#endif
 
    T* Alloc();
    T* Alloc(int index); // Returns nullptr if element already allocated at given position
@@ -332,7 +325,7 @@ public:
    T& GetOrFail(int index);
    Byte* GetMemoryPtr();
 
-   int Size(){return allocated;};
+   int Size();
    void Clear(bool clearMemory = false);
    Pool<T> Copy();
 

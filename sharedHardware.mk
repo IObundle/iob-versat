@@ -1,7 +1,7 @@
-VERILATE_UNIT := Reg Mem Muladd VRead VWrite Mux2 CombMux2 Merge Const 
-VERILATE_UNIT += Buffer FixedBuffer SwapEndian LookupTable Mul Generator IntSqrt
-VERILATE_UNIT += FloatAdd FloatSub FloatMul FloatDiv FloatSqrt Q16Sqrt
-VERILATE_UNIT += FloatMax FloatMin Float2Int Float2UInt Int2Float
+VERILATE_UNIT_BASIC += Buffer FixedBuffer SwapEndian LookupTable Mul Generator IntSqrt
+VERILATE_UNIT_BASIC += Reg Mem Muladd VRead VWrite Mux2 CombMux2 Merge Const 
+VERILATE_UNIT_BASIC += FloatAdd FloatSub FloatMul FloatDiv FloatSqrt Q16Sqrt
+VERILATE_UNIT_BASIC += FloatMax FloatMin Float2Int Float2UInt Int2Float
 
 V_INCLUDE+=-I$(VERSAT_DIR)/submodules/MEM/hardware/ram/tdp_ram
 V_INCLUDE+=-I$(VERSAT_DIR)/submodules/MEM/hardware/ram/2p_ram

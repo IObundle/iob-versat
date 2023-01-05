@@ -72,6 +72,12 @@ static Type* ParseSimpleType(Tokenizer* tok){
    SkipQualifiers(tok);
 
    Token name = tok->NextToken();
+
+   if(CompareString(name,"unsigned")){
+      Token next = tok->NextToken();
+      name = ExtendToken(name,next);
+   }
+
    Token peek = tok->PeekToken();
    Type* templateBase = nullptr;
    TemplateArg* templateArgs = nullptr;

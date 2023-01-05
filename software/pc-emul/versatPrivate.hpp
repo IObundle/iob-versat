@@ -25,6 +25,7 @@ enum DelayType {
 inline DelayType operator|(DelayType a, DelayType b)
 {return static_cast<DelayType>(static_cast<int>(a) | static_cast<int>(b));}
 
+// So far, this type of graph is only useful for consolidation graphs.
 template<typename Node,typename Edge>
 class Graph{
 public:
@@ -173,6 +174,7 @@ struct ComplexFUInstance : public FUInstance{
 
    Accelerator* iterative;
 
+   int bufferAmount;
    GraphComputedData* graphData;
    VersatComputedData* versatData;
    char tag;
@@ -201,16 +203,6 @@ struct Versat{
 
 	int base;
 	int numberConfigurations;
-
-	// Declaration for units that versat needs to instantiate itself
-	FUDeclaration* buffer;
-   FUDeclaration* fixedBuffer;
-   FUDeclaration* input;
-   FUDeclaration* output;
-   FUDeclaration* multiplexer;
-   FUDeclaration* combMultiplexer;
-   FUDeclaration* pipelineRegister;
-   FUDeclaration* data;
 
    DebugState debug;
 
@@ -256,10 +248,11 @@ struct Accelerator{ // Graph + data storage
 struct EdgeView{
    Edge* edge; // Points to edge inside accelerator
    ComplexFUInstance** nodes[2]; // Points to node inside AcceleratorView
+   int delay;
 };
 
 // A view into an accelerator.
-class AcceleratorView{
+class AcceleratorView{ // More like a "graph view"
 public:
    // We use dynamic memory for nodes and edges, as we need to add/remove nodes to the graph and to update the associated accelerator view as well
    Pool<ComplexFUInstance*> nodes;
@@ -438,11 +431,22 @@ struct ConsolidationGraphOptions{
    enum {NOTHING,SAME_ORDER,EXACT_ORDER} type;
 };
 
+namespace BasicDeclaration{
+	extern FUDeclaration* buffer;
+   extern FUDeclaration* fixedBuffer;
+   extern FUDeclaration* input;
+   extern FUDeclaration* output;
+   extern FUDeclaration* multiplexer;
+   extern FUDeclaration* combMultiplexer;
+   extern FUDeclaration* pipelineRegister;
+   extern FUDeclaration* data;
+}
+
 typedef std::unordered_map<ComplexFUInstance*,ComplexFUInstance*> InstanceMap;
 typedef Graph<MappingNode,MappingEdge> ConsolidationGraph;
 
 // Temp
-void PopulateAccelerator(Accelerator* accel,FUDeclaration* topDeclaration,FUInstanceInterfaces& inter,Hashmap<StaticId,StaticData>& staticMap);
+void PopulateAccelerator(Accelerator* topLevel,Accelerator* accel,FUDeclaration* topDeclaration,FUInstanceInterfaces& inter,Hashmap<StaticId,StaticData>& staticMap);
 void PopulateAccelerator2(Accelerator* accel,FUDeclaration* topDeclaration,FUInstanceInterfaces& inter,Hashmap<StaticId,StaticData>& staticMap);
 
 // General info
@@ -474,7 +478,7 @@ void SetDelayRecursive(Accelerator* accel);
 
 // Graph fixes
 void FixMultipleInputs(Versat* versat,Accelerator* accel);
-void FixDelays(Versat* versat,Accelerator* accel,AcceleratorView view);
+void FixDelays(Versat* versat,Accelerator* accel,AcceleratorView& view);
 
 // AcceleratorView related functions
 AcceleratorView CreateAcceleratorView(Accelerator* accel,Arena* arena);
@@ -489,7 +493,7 @@ Accelerator* MergeAccelerator(Versat* versat,Accelerator* accel1,Accelerator* ac
 
 // Debug
 bool IsGraphValid(AcceleratorView view);
-void OutputGraphDotFile(Versat* versat,AcceleratorView view,bool collapseSameEdges,const char* filenameFormat,...) __attribute__ ((format (printf, 4, 5)));
+void OutputGraphDotFile(Versat* versat,AcceleratorView& view,bool collapseSameEdges,ComplexFUInstance* highlighInstance,const char* filenameFormat,...) __attribute__ ((format (printf, 5, 6)));
 void CheckMemory(AcceleratorIterator iter);
 
 // Misc
