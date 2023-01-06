@@ -92,6 +92,7 @@ void StoreToken(Token token,char* buffer);
 #define CompareToken CompareString
 
 int ParseInt(SizedString str);
+double ParseDouble(SizedString str);
 bool IsNum(char ch);
 
 typedef Expression* (*ParsingFunction)(Tokenizer* tok);

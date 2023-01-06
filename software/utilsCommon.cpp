@@ -111,6 +111,15 @@ float Abs(float val){
    return res;
 }
 
+double Abs(double val){
+   double res = val;
+   if(val < 0.0){
+      res = -val;
+   }
+   return res;
+}
+
+
 int Abs(int val){
    int res = val;
    if(val < 0){
@@ -126,6 +135,20 @@ int Abs(unsigned int val){
 }
 
 bool FloatEqual(float f0,float f1,float epsilon){
+   if(f0 == f1){
+      return true;
+   }
+
+   float norm = Abs(f0) + Abs(f1);
+   norm = std::min(norm,std::numeric_limits<float>::max());
+   float diff = Abs(f0 - f1);
+
+   bool equal = diff < norm * epsilon;
+
+   return equal;
+}
+
+bool FloatEqual(double f0,double f1,double epsilon){
    if(f0 == f1){
       return true;
    }

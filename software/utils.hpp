@@ -130,9 +130,11 @@ int Clamp(int min,int val,int max);
 
 float Sqrt(float n);
 float Abs(float val);
+double Abs(double val);
 int Abs(int val);
 int Abs(uint val); // Convert to signed and perform abs, otherwise no reason to call a Abs function for an unsigned number
 bool FloatEqual(float f0,float f1,float epsilon = 0.00001f);
+bool FloatEqual(double f0,double f1,double epsilon = 0.00001);
 
 int PackInt(float val);
 float PackFloat(int val);

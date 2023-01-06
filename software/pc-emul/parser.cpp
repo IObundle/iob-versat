@@ -591,6 +591,18 @@ int ParseInt(SizedString ss){
    }
 }
 
+double ParseDouble(SizedString str){
+   static char buffer[1024];
+
+   Memcpy(buffer,(char*) str.data,str.size);
+   buffer[str.size] = '\0';
+
+   double d;
+   sscanf(buffer,"%lf",&d);
+
+   return d;
+}
+
 bool IsNum(char ch){
    bool res = (ch >= '0' && ch <= '9');
 
