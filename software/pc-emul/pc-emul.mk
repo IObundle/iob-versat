@@ -23,7 +23,7 @@ endif
 CPP_FILES := $(wildcard $(VERSAT_PC_EMUL)/*.cpp)
 CPP_OBJ := $(patsubst $(VERSAT_PC_EMUL)/%.cpp,$(BUILD_DIR)/%.o,$(CPP_FILES))
 
-CPP_FILES += $(VERSAT_DIR)/software/utilsCommon.cpp
+CPP_FILES += $(wildcard $(VERSAT_DIR)/software/*.cpp)
 CPP_OBJ += $(BUILD_DIR)/utilsCommon.o
 
 #Units to verilate
@@ -37,13 +37,13 @@ TYPE_INFO_HDR += $(VERSAT_PC_EMUL)/versatPrivate.hpp
 TYPE_INFO_HDR += $(VERSAT_SW_DIR)/utils.hpp
 TYPE_INFO_HDR += $(VERSAT_PC_EMUL)/verilogParser.hpp
 TYPE_INFO_HDR += $(VERSAT_PC_EMUL)/templateEngine.hpp
-TYPE_INFO_HDR += $(VERSAT_PC_EMUL)/memory.hpp
+TYPE_INFO_HDR += $(VERSAT_PC_EMUL)/../memory.hpp
 
 TOOL_COMMON_SRC += $(VERSAT_DIR)/software/pc-emul/parser.cpp
 TOOL_COMMON_SRC += $(VERSAT_DIR)/software/pc-emul/utils.cpp
-TOOL_COMMON_SRC += $(VERSAT_DIR)/software/utilsCommon.cpp
 TOOL_COMMON_SRC += $(VERSAT_DIR)/software/pc-emul/memory.cpp
 TOOL_COMMON_SRC += $(VERSAT_DIR)/software/pc-emul/logger.cpp
+TOOL_COMMON_SRC += $(VERSAT_DIR)/software/utilsCommon.cpp
 TOOL_SRC += $(TOOL_COMMON_SRC)
 TOOL_SRC += $(VERSAT_DIR)/software/pc-emul/templateEngine.cpp
 TOOL_SRC += $(VERSAT_DIR)/software/pc-emul/type.cpp
@@ -87,10 +87,10 @@ $(BUILD_DIR)/%.o: $(VERSAT_PC_EMUL)/%.cpp $(HDR) $(UNIT_HDR) $(VERSAT_HDR) $(BUI
 	-g++ -std=c++11 $(VERSAT_DEFINE) -c -o $@ $(GLOBAL_CFLAGS) $< -I $(VERSAT_SW_DIR) -I $(VERSAT_PC_EMUL) -I $(VERILATOR_INCLUDE) -I $(BUILD_DIR)/
 
 $(BUILD_DIR)/structParser.out: $(VERSAT_SW_DIR)/pc-emul/structParser.cpp $(TOOL_COMMON_SRC)
-	g++ -std=c++11 -DSTANDALONE -o $@ -g -m32 $< -I $(VERSAT_DIR)/software/ -I  $(VERSAT_DIR)/software/pc-emul  -I $(VERSAT_DIR)/software/pc-emul/ $(TOOL_COMMON_SRC)
+	g++ -std=c++11 -DPC -DVERSAT_DEBUG -DSTANDALONE -o $@ -g -m32 $< -I $(VERSAT_DIR)/software/ -I  $(VERSAT_DIR)/software/pc-emul  -I $(VERSAT_DIR)/software/pc-emul/ $(TOOL_COMMON_SRC)
 
 $(BUILD_DIR)/verilogParser.out: $(VERSAT_SW_DIR)/pc-emul/verilogParser.cpp $(TOOL_SRC) $(BUILD_DIR)/typeInfo.inc
-	g++ -std=c++11 -DSTANDALONE -o $@ -g -m32 $< -I $(BUILD_DIR)/ -I $(VERSAT_DIR)/software/ -I  $(VERSAT_DIR)/software/pc-emul  -I $(VERSAT_DIR)/software/pc-emul/ $(TOOL_SRC)
+	g++ -std=c++11 -DPC -DVERSAT_DEBUG -DSTANDALONE -o $@ -g -m32 $< -I $(BUILD_DIR)/ -I $(VERSAT_DIR)/software/ -I  $(VERSAT_DIR)/software/pc-emul  -I $(VERSAT_DIR)/software/pc-emul/ $(TOOL_SRC)
 
 verilator_test: $(CPP_OBJ)
 

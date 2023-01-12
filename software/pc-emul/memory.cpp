@@ -343,19 +343,14 @@ void GenericHashmapIterator::operator++(){
    ++iter;
 }
 
-Pair<Byte*,Byte*> GenericHashmapIterator::operator*(){
+Byte* GenericHashmapIterator::operator*(){
    int index = *iter;
 
    int pairSize = keySize + dataSize;
    Byte* firstStart = &memory[pairSize * index];
    Byte* secondStart = &firstStart[keySize];
 
-   Pair<Byte*,Byte*> pair = {};
-
-   pair.first = firstStart;
-   pair.second = secondStart;
-
-   return pair;
+   return firstStart;
 }
 
 PoolInfo CalculatePoolInfo(int elemSize){

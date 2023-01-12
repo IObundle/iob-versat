@@ -323,10 +323,6 @@ void ParseCommandLineOptions(Versat* versat,int argc,const char** argv){
       printf("Arg %d: %s\n",i,argv[i]);
    }
    #endif
-
-   for(int i = 1; i < argc; i++){
-      versat->includeDirs.push_back(argv[i]);
-   }
 }
 
 uint SetDebug(Versat* versat,VersatDebugFlags flags,uint flag){
@@ -625,7 +621,7 @@ static FUInstance* vGetInstanceByName_(AcceleratorIterator iter,Arena* arena,int
 
    FUInstance* res = GetInstanceByHierarchicalName2(iter,&fullName,arena);
 
-   Assert(res);
+   Assert(res); // We are asserting, but we should return nullptr and let outside code handle error
 
    return res;
 }
@@ -1034,6 +1030,7 @@ FUDeclaration* RegisterSubUnit(Versat* versat,SizedString name,Accelerator* circ
    view.CalculateGraphData(permanent);
    view.CalculateDAGOrdering(permanent);
    view.CalculateDelay(permanent);
+   view.CalculateVersatData(permanent);
    decl.temporaryOrder = view.order;
 
    UnitValues val = CalculateAcceleratorValues(versat,decl.fixedDelayCircuit);
@@ -1267,7 +1264,7 @@ FUDeclaration* RegisterSubUnit(Versat* versat,SizedString name,Accelerator* circ
    }
    #endif
 
-   #if 0
+   #if 1
    {
    char buffer[256];
    sprintf(buffer,"src/%.*s.v",UNPACK_SS(decl.name));
@@ -1431,7 +1428,7 @@ FUDeclaration* RegisterIterativeUnit(Versat* versat,IterativeUnitDeclaration* de
    TemplateSetCustom("secondData",secondData,"ComplexFUInstance");
    #endif
 
-   ProcessTemplate(sourceCode,"../../submodules/VERSAT/software/templates/versat_iterative_template.tpl",&versat->temp);
+   //ProcessTemplate(sourceCode,"../../submodules/VERSAT/software/templates/versat_iterative_template.tpl",&versat->temp);
 
    fclose(sourceCode);
 
@@ -1731,6 +1728,7 @@ void AcceleratorRun(Accelerator* accel){
 }
 
 void OutputMemoryMap(Versat* versat,Accelerator* accel){
+   UNHANDLED_ERROR; // Might need to create a view so that ComputeVersatValues works
    VersatComputedValues val = ComputeVersatValues(versat,accel);
 
    printf("\n");

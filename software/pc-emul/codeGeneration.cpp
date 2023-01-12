@@ -3,9 +3,11 @@
 #include "templateEngine.hpp"
 
 VersatComputedValues ComputeVersatValues(Versat* versat,Accelerator* accel){
+   #if 0
    ArenaMarker marker(&versat->temp);
    AcceleratorView view = CreateAcceleratorView(accel,&versat->temp);
    view.CalculateDAGOrdering(&versat->temp);
+   #endif
 
    VersatComputedValues res = {};
 
@@ -75,7 +77,6 @@ void OutputCircuitSource(Versat* versat,FUDeclaration* decl,Accelerator* accel,F
       return;
    }
 
-   #if 1
    Arena* arena = &versat->temp;
    ArenaMarker marker(arena);
 
@@ -103,11 +104,10 @@ void OutputCircuitSource(Versat* versat,FUDeclaration* decl,Accelerator* accel,F
    TemplateSetNumber("memoryConfigDecisionBit",val.memoryConfigDecisionBit);
    TemplateSetCustom("versat",versat,"Versat");
 
-   AcceleratorView view = CreateAcceleratorView(accel,arena);
-   view.CalculateVersatData(arena);
+   TemplateSetCustom("inputDecl",BasicDeclaration::input,"FUDeclaration");
+   TemplateSetCustom("outputDecl",BasicDeclaration::output,"FUDeclaration");
 
    ProcessTemplate(file,"../../submodules/VERSAT/software/templates/versat_accelerator_template.tpl",&versat->temp);
-   #endif
 }
 
 void OutputVersatSource(Versat* versat,Accelerator* accel,const char* sourceFilepath,const char* constantsFilepath,const char* dataFilepath){

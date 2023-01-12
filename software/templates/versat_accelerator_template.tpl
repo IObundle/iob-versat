@@ -35,8 +35,9 @@ module @{accel.name} #(
    #{end}
 
    #{for unit accel.staticUnits}
-   #{for wire unit.configs}
-   input [@{wire.bitsize-1}:0]     @{unit.module.name}_@{unit.name}_@{wire.name},
+   #{set id unit.first}
+   #{for wire unit.second.configs}
+   input [@{wire.bitsize-1}:0]     @{id.parent.name}_@{id.name}_@{wire.name},
    #{end}
    #{end}
 
@@ -176,7 +177,7 @@ end
 #{set doneCounter 0}
 #{for inst instances}
 #{set decl inst.declaration}
-   #{if (decl != versat.input and decl != versat.output and !decl.isOperation)}
+   #{if (decl != inputDecl and decl != outputDecl and !decl.isOperation)}
       @{decl.name} @{inst.parameters} @{inst.name |> Identify}_@{counter} (
          #{for i inst.graphData.outputs}
             .out@{i}(output_@{inst.id}_@{i}),
@@ -191,21 +192,19 @@ end
          #{end}
 
          #{if inst.isStatic}
-         #{for i inst.declaration.nConfigs}
-         #{set wire inst.declaration.configWires[i]}
+         #{for wire inst.declaration.configs}
          .@{wire.name}(@{accel.name}_@{inst.name |> Identify}_@{wire.name}),
          #{end}
 
          #{else}
-         #{for i decl.nConfigs}
-         #{set wire decl.configWires[i]}
-         .@{wire.name}(@{accel.configWires[configsSeen].name}),
+         #{for wire decl.configs}
+         .@{wire.name}(@{accel.configs[configsSeen].name}),
          #{inc configsSeen}
          #{end}
          #{for unit decl.staticUnits}         
-         #{for i unit.nConfigs}
-         #{set wire unit.wires[i]}
-         .@{unit.module.name}_@{unit.name}_@{wire.name}(@{unit.module.name}_@{unit.name}_@{wire.name}),
+         #{set id unit.first}
+         #{for wire unit.second.configs}
+         .@{id.parent.name}_@{id.name}_@{wire.name}(@{id.parent.name}_@{id.name}_@{wire.name}),
          #{end}
          #{end}
          #{end}
@@ -215,11 +214,10 @@ end
          #{inc delaySeen}
          #{end}
 
-         #{for i decl.nStates}
-         #{set wire decl.stateWires[i]}
-            .@{wire.name}(@{accel.stateWires[statesSeen].name}),
+         #{for wire decl.states}
+            .@{wire.name}(@{accel.states[statesSeen].name}),
          #{inc statesSeen}
-         #{end}      
+         #{end}
 
          #{if decl.isMemoryMapped}
          .valid(memoryMappedEnable[@{memoryMappedIndex}]),
@@ -261,7 +259,7 @@ end
 
 #{for inst instances}
 #{set decl inst.declaration}
-#{if decl == versat.output}
+#{if decl == outputDecl}
    #{for input inst.graphData.singleInputs}
    #{if input.inst}
    assign out@{index} = #{call outputName input};

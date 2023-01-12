@@ -279,6 +279,24 @@ bool Tokenizer::IfNextToken(const char* str){
    return false;
 }
 
+bool Tokenizer::IsSingleChar(char ch){
+   for(char v : singleChars){
+      if(v == ch){
+         return true;
+      }
+   }
+   return false;
+}
+
+bool Tokenizer::IsSingleChar(char* chars){
+   for(int i = 0; chars[i]; i++){
+      if(!IsSingleChar(chars[i])){
+         return false;
+      }
+   }
+   return true;
+}
+
 Token Tokenizer::PeekWhitespace(){
    Token token = {};
 
@@ -477,15 +495,31 @@ bool CheckFormat(const char* format,Token tok){
 }
 
 bool Contains(SizedString str,const char* toCheck){
-   Tokenizer tok(str,"",{});
+   Tokenizer tok(str,"",{toCheck});
 
-   Token token = tok.PeekFindUntil(toCheck);
+   while(!tok.Done()){
+      Token token = tok.NextToken();
 
-   if(token.size > 0){
-      return true;
+      if(CompareString(token,toCheck)){
+         return true;
+      }
    }
 
    return false;
+}
+
+SizedString TrimWhitespaces(SizedString in){
+   const char* start = in.data;
+   const char* end = &in.data[in.size-1];
+
+   while(IsWhitespace(*start) && start < end) ++start;
+   while(IsWhitespace(*end) && end > start) --end;
+
+   SizedString res = {};
+   res.data = start;
+   res.size = end - start + 1;
+
+   return res;
 }
 
 Token ExtendToken(Token t1,Token t2){
@@ -599,6 +633,18 @@ double ParseDouble(SizedString str){
 
    double d;
    sscanf(buffer,"%lf",&d);
+
+   return d;
+}
+
+float ParseFloat(SizedString str){
+   static char buffer[1024];
+
+   Memcpy(buffer,(char*) str.data,str.size);
+   buffer[str.size] = '\0';
+
+   float d;
+   sscanf(buffer,"%f",&d);
 
    return d;
 }

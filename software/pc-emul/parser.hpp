@@ -58,6 +58,9 @@ public:
    bool IfPeekToken(const char* str);
    bool IfNextToken(const char* str);
 
+   bool IsSingleChar(char ch);
+   bool IsSingleChar(char* chars);
+
    Token FindFirst(std::initializer_list<const char*> strings);
 
    // For expressions where there is a open and a closing delimiter (think '{...{...}...}') and need to check where an associated close delimiter is
@@ -84,6 +87,8 @@ bool CheckStringOnlyWhitespace(Token tok);
 bool CheckFormat(const char* format,Token tok);
 bool Contains(SizedString str,const char* toCheck);
 
+SizedString TrimWhitespaces(SizedString in);
+
 Token ExtendToken(Token t1,Token t2);
 
 int CountSubstring(SizedString str,SizedString substr);
@@ -93,6 +98,7 @@ void StoreToken(Token token,char* buffer);
 
 int ParseInt(SizedString str);
 double ParseDouble(SizedString str);
+float ParseFloat(SizedString str);
 bool IsNum(char ch);
 
 typedef Expression* (*ParsingFunction)(Tokenizer* tok);

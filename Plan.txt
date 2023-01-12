@@ -5,6 +5,11 @@ Misc:
    Hard to reason with fixed buffer because we immediatly transform delay into a parameter string. Having to parse the delay is not a solution. Figure out what to do and remove all the portions of code that parse the delay out from the unit
    Should probably generate a FUInstance unit test, that runs an unit individually and make sure that the unit correctly implements the interface expected by Versat. The user simply calls a function with the unit it wants to test and it outputs a verilog testbench that exercises the unit. Most common sources of errors are gonna be delay = 0, not outputting done when done (the testbench should enter an infinite loop, do not know any other way to test this), following the specifications of the "iob" interface and the semi axi interface, among other things.
 
+   Change the SizedString to simple String or Str. Change the UNPACK_SS to STR* or something more simple, if allowed.
+   Change the CompareString functions to a operator ==
+   Tired of having to write a lot for nothing. Also maybe remove the MakeSizedString functions. Probably no gain, especially if the alternative can be inlined in some way or form. Worse case generation call the function Str and call the struct String (or function is String and struct is Str or function is String and struct is string, maybe better this way, more explicit where it needs to). Have people call Str("") everywhere, if no good alternative exists.
+   (Which doesn't appear to exist, because adding a constructor makes a mess with unions and I don't think an alternative exists)
+
 Testbench:
 
    Rework testbench

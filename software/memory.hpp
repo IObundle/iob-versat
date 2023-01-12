@@ -168,19 +168,6 @@ public:
    BitIterator end();
 };
 
-template<typename First,typename Second>
-class Pair{
-public:
-   union{
-      First key;
-      First first;
-   };
-   union{
-      Second data;
-      Second second;
-   };
-};
-
 template<typename Key,typename Data>
 class Hashmap;
 
@@ -198,7 +185,7 @@ public:
 
    bool HasNext();
    void operator++();
-   Pair<Byte*,Byte*> operator*();
+   Byte* operator*();
 };
 
 template<typename Key,typename Data>
@@ -215,8 +202,7 @@ public:
 
 // An hashmap implementation that uses arenas. Does not allocate any memory after construction. Need to pass current amount of maxAmountOfElements
 template<typename Key,typename Data>
-class Hashmap{
-public:
+struct Hashmap{
    Array<Pair<Key,Data>> memory; // Power of 2 size
    BitArray valid;
    int inserted;
@@ -309,13 +295,9 @@ PageInfo GetPageInfo(PoolInfo poolInfo,Byte* page);
 
 // Pool
 template<typename T>
-class Pool{
+struct Pool{
    Byte* mem;
    PoolInfo info;
-
-   friend class PoolIterator<T>;
-
-public:
 
    T* Alloc();
    T* Alloc(int index); // Returns nullptr if element already allocated at given position

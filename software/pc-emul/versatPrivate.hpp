@@ -205,9 +205,6 @@ struct Versat{
 	int numberConfigurations;
 
    DebugState debug;
-
-   // Command line options
-   std::vector<const char*> includeDirs;
 };
 
 struct Test{

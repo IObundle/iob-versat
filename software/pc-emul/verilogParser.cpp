@@ -588,13 +588,13 @@ int main(int argc,const char* argv[]){
    Arena tempArenaInst = {};
    tempArena = &tempArenaInst;
 
-   InitArena(tempArena,Megabyte(64));
+   InitArena(tempArena,Megabyte(256));
 
    Arena preprocess = {};
-   InitArena(&preprocess,Megabyte(64));
+   InitArena(&preprocess,Megabyte(256));
 
    Arena permanent = {};
-   InitArena(&permanent,Megabyte(64));
+   InitArena(&permanent,Megabyte(256));
 
    std::vector<ModuleInfo> allModules;
    for(const char* str : filePaths){

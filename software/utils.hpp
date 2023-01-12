@@ -44,6 +44,7 @@ void FlushStdout();
 #define USER_ERROR do{ FlushStdout(); exit(0); } while(0) // User error and program does not try to repair or keep going (report error before and exit)
 
 #ifdef VERSAT
+#include <cstdio>
 extern "C"{
 #include "iob-timer.h"
 }
@@ -63,9 +64,10 @@ public:
 };
 #define TIME_IT(ID) TimeIt timer_##__LINE__(ID)
 
-
 typedef char Byte;
+#ifdef PC
 typedef uint32_t uint;
+#endif
 
 template<typename T>
 class ArrayIterator{
@@ -78,8 +80,7 @@ public:
 };
 
 template<typename T>
-class Array{
-public:
+struct Array{
    T* data;
    int size;
 
@@ -90,8 +91,8 @@ public:
 
 typedef Array<const char> SizedString;
 
-#define UNPACK_SS(STR) STR.size,STR.data
-#define UNPACK_SS_REVERSE(STR) STR.data,STR.size
+#define UNPACK_SS(STR) (STR).size,(STR).data
+#define UNPACK_SS_REVERSE(STR) (STR).data,(STR).size
 
 #define MakeSizedString1(STR) ((SizedString){STR,(int) strlen(STR)})
 #define MakeSizedString2(STR,LEN) ((SizedString){STR,(int) (LEN)})
@@ -108,6 +109,18 @@ union Conversion{
    float f;
    int i;
    uint ui;
+};
+
+template<typename First,typename Second>
+struct Pair{
+   union{
+      First key;
+      First first;
+   };
+   union{
+      Second data;
+      Second second;
+   };
 };
 
 #define BIT_MASK(BIT) (1 << BIT)

@@ -141,7 +141,7 @@ FUInstance* GetInstanceByName_(Accelerator* accel,int argc, ...){
    return res;
 }
 
-FUInstance* GetInstanceByName_(FUInstance* inst,int argc, ...){
+FUInstance* GetSubInstanceByName_(Accelerator* topLevel,FUInstance* inst,int argc, ...){
    va_list args;
    va_start(args,argc);
 
@@ -154,7 +154,7 @@ FUInstance* GetInstanceByName_(FUInstance* inst,int argc, ...){
 }
 
 FUInstance* CreateFUInstance(Accelerator* accel,FUDeclaration* type,SizedString entityName){
-   FUInstance* res = GetInstanceByName_(accel,1,entityName.str);
+   FUInstance* res = GetInstanceByName_(accel,1,entityName.data);
 
    return res;
 }

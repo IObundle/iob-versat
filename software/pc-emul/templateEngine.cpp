@@ -601,10 +601,10 @@ static SizedString EvalBlockCommand(Block* block){
 
          bool outputSeparator = false;
          for(Block* ptr = block->nextInner; ptr != nullptr; ptr = ptr->next){
-            SizedString val = Eval(ptr);
+            SizedString text = Eval(ptr);
 
-            if(!CheckStringOnlyWhitespace(val)){
-               res.size += val.size; // Push on stack
+            if(!CheckStringOnlyWhitespace(text)){
+               res.size += text.size; // Push on stack
                outputSeparator = true;
             }
          }

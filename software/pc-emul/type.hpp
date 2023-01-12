@@ -18,9 +18,14 @@ struct EnumMember{
 };
 
 struct TemplateArg{
-   Type* type;
-
+   SizedString name;
    TemplateArg* next;
+};
+
+struct TemplatedMember{
+   SizedString typeName;
+   SizedString name;
+   int memberOffset;
 };
 
 struct Type{
@@ -32,19 +37,20 @@ struct Type{
       Type* typedefType;
       EnumMember* enumMembers;
 
-      struct{ // TEMPLATED_STRUCT
-         Member* members;
-         TemplateArg* templateArgs;
+      struct{ // TEMPLATED_STRUCT_DEF
+         Array<TemplatedMember> templateMembers;
+         Array<SizedString> templateArgs;
       };
 
       struct{ // TEMPLATED_INSTANCE
-         Type* templateBase;
-         TemplateArg* templateArgs_;
+         Array<Member> members;
+         Type* templateBase; // Points to the template base type that lead to this instance
+         Array<Type*> templateArgTypes;
       };
    };
 
    int size; // Size of type (total size in case of arrays)
-   enum Subtype {UNKNOWN = 0,BASE,STRUCT,POINTER,ARRAY,TEMPLATED_STRUCT,TEMPLATED_INSTANCE,TEMPLATE_PARAMETER,ENUM,TYPEDEF} type;
+   enum Subtype {UNKNOWN = 0,BASE,STRUCT,POINTER,ARRAY,TEMPLATED_STRUCT_DEF,TEMPLATED_INSTANCE,ENUM,TYPEDEF} type;
 };
 
 struct Member{
@@ -120,6 +126,7 @@ Value CollapseValue(Value val);
 Value ConvertValue(Value in,Type* want,Arena* arena);
 
 Type* GetType(SizedString typeName); // Parsable C like name (ex: "int*" for pointer to int) [Type name optionally followed by template argument then pointers then array]
+Type* GetTypeOrFail(SizedString typeName);
 Type* GetPointerType(Type* baseType);
 Type* GetArrayType(Type* baseType, int arrayLength);
 

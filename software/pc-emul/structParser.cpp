@@ -5,14 +5,79 @@
 #include "parser.hpp"
 #include "utils.hpp"
 
-#define UNNAMED_TEMPLATE "unnamed_%d"
+#include <set>
+
 #define UNNAMED_ENUM_TEMPLATE "unnamed_enum_%d"
 
 static Arena tempArenaInst;
 static Arena* tempArena = &tempArenaInst;
 
-static Pool<Type> types = {};
-static Pool<Member> members = {};
+static Arena permArenaInst;
+static Arena* perm = &permArenaInst;
+
+struct MemberDef;
+
+// Only support one inheritance for now
+#if 0
+struct InheritanceDef{
+   SizedString name;
+   enum {PUBLIC,PRIVATE} type;
+   InheritanceDef* next;
+};
+#endif
+
+struct TemplateParamDef{
+   SizedString name;
+   TemplateParamDef* next;
+};
+
+struct StructDef{
+   SizedString fullExpression;
+   SizedString name;
+   SizedString inherit;
+   TemplateParamDef* params;
+   MemberDef* members;
+   bool isUnion;
+};
+
+struct TemplatedDef{
+   SizedString baseType;
+   TemplateParamDef* next;
+};
+
+struct EnumDef{
+   SizedString name;
+   SizedString values;
+};
+
+struct TypedefDef{
+   SizedString oldType;
+   SizedString newType;
+};
+
+struct TypeDef{
+   union{
+      SizedString simpleType;
+      TypedefDef typedefType;
+      EnumDef enumType;
+      TemplatedDef templatedType;
+      StructDef structType;
+   };
+   enum {SIMPLE,TYPEDEF,ENUM,TEMPLATED,STRUCT} type;
+};
+
+struct MemberDef{
+   SizedString fullExpression; // In theory, should be a combination of all the below
+   TypeDef type;
+   SizedString pointersAndReferences;
+   SizedString name;
+   SizedString arrays;
+
+   MemberDef* next;
+};
+
+static Pool<MemberDef> defs = {};
+static Pool<TypeDef> typeDefs = {};
 
 static void SkipQualifiers(Tokenizer* tok){
    while(1){
@@ -26,27 +91,25 @@ static void SkipQualifiers(Tokenizer* tok){
          tok->AdvancePeek(peek);
          continue;
       }
+      if(CompareToken(peek,"static")){
+         tok->AdvancePeek(peek);
+         continue;
+      }
+      if(CompareToken(peek,"inline")){
+         tok->AdvancePeek(peek);
+         continue;
+      }
+      if(CompareToken(peek,"public:")){
+         tok->AdvancePeek(peek);
+         continue;
+      }
+      if(CompareToken(peek,"private:")){
+         tok->AdvancePeek(peek);
+         continue;
+      }
 
       break;
    }
-}
-
-static Type* ParseSimpleType(Tokenizer* tok);
-
-// Checks if type already exists
-static Type* FindOrCreateType(SizedString name){
-   for(Type* ptr : types){
-      if(CompareString(ptr->name,name)){
-         return ptr;
-      }
-   }
-
-   Type* type = types.Alloc();
-
-   type->name = name;
-   type->type = Type::UNKNOWN;
-
-   return type;
 }
 
 template<typename T>
@@ -68,9 +131,10 @@ T* ReverseList(T* head){
    return ptr;
 }
 
-static Type* ParseSimpleType(Tokenizer* tok){
+static SizedString ParseSimpleType(Tokenizer* tok){
    SkipQualifiers(tok);
 
+   void* mark = tok->Mark();
    Token name = tok->NextToken();
 
    if(CompareString(name,"unsigned")){
@@ -79,23 +143,13 @@ static Type* ParseSimpleType(Tokenizer* tok){
    }
 
    Token peek = tok->PeekToken();
-   Type* templateBase = nullptr;
-   TemplateArg* templateArgs = nullptr;
    if(CompareToken(peek,"<")){ // Template
-      templateBase = FindOrCreateType(name);
-
-      templateBase->type = Type::TEMPLATED_STRUCT;
-
       Token nameRemaining = tok->PeekFindIncluding(">");
       name = ExtendToken(name,nameRemaining);
       tok->AdvancePeek(peek);
 
       while(1){
-         TemplateArg* arg = PushStruct<TemplateArg>(tempArena);
-
-         arg->type = ParseSimpleType(tok);
-         arg->next = templateArgs;
-         templateArgs = arg;
+         ParseSimpleType(tok);
 
          Token peek = tok->PeekToken();
 
@@ -108,74 +162,45 @@ static Type* ParseSimpleType(Tokenizer* tok){
       }
    }
 
-   Type* type = FindOrCreateType(name);
-
-   if(templateBase){
-      type->type = Type::TEMPLATED_INSTANCE;
-      type->templateBase = templateBase;
-      type->templateArgs = templateArgs;
-   }
-
    peek = tok->PeekToken();
-   while(CompareToken(peek,"*")){
+   while(CompareToken(peek,"*") || CompareToken(peek,"&")){
       tok->AdvancePeek(peek);
-
-      Byte* nameBuffer = PushBytes(tempArena,type->name.size + 2); // extra * and null terminator
-      sprintf(nameBuffer,"%.*s*",UNPACK_SS(type->name));
-
-      Type* pointer = FindOrCreateType(MakeSizedString(nameBuffer,type->name.size + 1));
-
-      pointer->type = Type::POINTER;
-      pointer->pointerType = type;
-
-      type = pointer;
 
       peek = tok->PeekToken();
    }
 
-   return type;
+   SizedString res = tok->Point(mark);
+   res = TrimWhitespaces(res);
+
+   return res;
 }
 
-static Type* ParseStruct(Tokenizer* tok,SizedString outsideStructName);
+static StructDef ParseStruct(Tokenizer* tok);
 
 // Add enum members and default init values so that we can generate code that iterates over enums or prints strings automatically
 
-static Type* ParseEnum(Tokenizer* tok,SizedString outsideStructName){
+static EnumDef ParseEnum(Tokenizer* tok){
    tok->AssertNextToken("enum");
 
    Token peek = tok->PeekToken();
    Token enumName = {};
-   if(CompareToken(peek,"{")){ // Unnamed enum
-      static int nUnnamedEnum = 1;
-
-      if(outsideStructName.size > 0){
-         enumName = PushString(tempArena,"%.*s::" UNNAMED_ENUM_TEMPLATE,UNPACK_SS(outsideStructName),nUnnamedEnum++);
-      } else {
-         enumName = PushString(tempArena,UNNAMED_ENUM_TEMPLATE,nUnnamedEnum++);
-      }
-   } else {
+   if(!CompareToken(peek,"{")){ // Unnamed enum
       enumName = tok->NextToken();
-
-      if(outsideStructName.size > 0){
-         enumName = PushString(tempArena,"%.*s::%.*s",UNPACK_SS(outsideStructName),UNPACK_SS(enumName));
-      }
    }
 
-   Type* type = FindOrCreateType(enumName);
-
-   type->type = Type::ENUM;
-   type->name = enumName;
    peek = tok->PeekToken();
+   void* valuesMark = tok->Mark();
+   SizedString values = {};
    if(CompareToken(peek,"{")){
       tok->AdvancePeek(peek);
-
-      Assert(type->enumMembers == nullptr);
 
       while(1){
          Token peek = tok->PeekToken();
 
          if(CompareString(peek,"}")){
             tok->AdvancePeek(peek);
+
+            values = tok->Point(valuesMark);
             break;
          }
          if(CompareString(peek,",")){
@@ -191,131 +216,138 @@ static Type* ParseEnum(Tokenizer* tok,SizedString outsideStructName){
 
             value = tok->NextToken();
          }
-
-         if(value.size == 0){
-            if(type->enumMembers == nullptr){
-               value = PushString(tempArena,"0");
-            } else {
-               value = PushString(tempArena,"((int) %.*s) + 1",UNPACK_SS(type->enumMembers->name));
-            }
-         }
-
-         EnumMember* newMember = PushStruct<EnumMember>(tempArena);
-         newMember->name = enumMemberName;
-         newMember->value = value;
-         newMember->next = type->enumMembers;
-
-         type->enumMembers = newMember;
       }
    }
 
-   return type;
+   EnumDef def = {};
+   def.name = enumName;
+   def.values = values;
+
+   return def;
 }
 
-static Member* ParseMember(Tokenizer* tok,SizedString outsideStructName){
-   Member* member = members.Alloc();
-   member->index = -1;
+static MemberDef* ParseMember(Tokenizer* tok){
    Token token = tok->PeekToken();
 
+   MemberDef def = {};
+   void* mark = tok->Mark();
+
    if(CompareString(token,"struct") || CompareString(token,"union")){
-      member->type = ParseStruct(tok,outsideStructName);
+      StructDef structDef = ParseStruct(tok);
+
+      def.type.structType = structDef;
+      def.type.type = TypeDef::STRUCT;
 
       Token next = tok->NextToken();
       if(CompareString(next,";")){ // Unnamed struct
-         member->name.size = 0;
       } else {
-         member->name = next;
-
          // No array for named structure declarations, for now
          tok->AssertNextToken(";");
       }
    } else if(CompareString(token,"enum")){
-      Type* enumType = ParseEnum(tok,outsideStructName);
+      void* typeMark = tok->Mark();
+      EnumDef enumDef = ParseEnum(tok);
 
-      member->type = enumType;
-      member->name = tok->NextToken();
+      def.type.enumType = enumDef;
+      def.type.type = TypeDef::ENUM;
+
+      def.name = tok->NextToken();
       tok->AssertNextToken(";");
    } else {
-      Type* type = ParseSimpleType(tok);
+      def.type.simpleType = ParseSimpleType(tok);
+      def.type.type = TypeDef::SIMPLE;
 
       Token name = tok->NextToken();
-      member->name = name;
+      def.name = name;
 
       Token peek = tok->PeekToken();
+      void* arraysMark = tok->Mark();
       if(CompareToken(peek,"[")){
          tok->AdvancePeek(peek);
-
          Token arrayExpression = tok->NextFindUntil("]");
-
-         member->arrayExpression = arrayExpression;
-
-         Byte* nameBuffer = PushBytes(tempArena,type->name.size + arrayExpression.size + 3); // extra [] and null terminator
-         sprintf(nameBuffer,"%.*s[%.*s]",UNPACK_SS(type->name),UNPACK_SS(arrayExpression));
-
-         Type* arrayType = FindOrCreateType(MakeSizedString(nameBuffer,type->name.size + arrayExpression.size + 2));
-
-         arrayType->type = Type::ARRAY;
-         arrayType->arrayType = type;
-
-         type = arrayType;
-
          tok->AssertNextToken("]");
+
+         def.arrays = tok->Point(arraysMark);
+      } else if(CompareToken(peek,"(")){
+         Token advanceList = tok->PeekUntilDelimiterExpression({"("},{")"},0);
+         tok->AdvancePeek(advanceList);
+         tok->AssertNextToken(")");
+         if(!tok->IfNextToken(";")){
+            Token advanceFunctionBody = tok->PeekUntilDelimiterExpression({"{"},{"}"},0);
+            tok->AdvancePeek(advanceFunctionBody);
+            tok->AssertNextToken("}");
+            tok->IfNextToken(";");
+         }
+
+         // We are inside a function declaration
+         return nullptr;
       }
 
-      member->type = type;
+      Token finalToken = tok->NextToken();
 
-      tok->AssertNextToken(";");
+      if(CompareString(finalToken,"(")){
+         Token advanceList = tok->PeekUntilDelimiterExpression({"("},{")"},1);
+         tok->AdvancePeek(advanceList);
+         tok->AssertNextToken(")");
+         if(!tok->IfNextToken(";")){
+            Token advanceFunctionBody = tok->PeekUntilDelimiterExpression({"{"},{"}"},0);
+            tok->AdvancePeek(advanceFunctionBody);
+            tok->AssertNextToken("}");
+            tok->IfNextToken(";");
+         }
+
+         // We are inside a function declaration
+         return nullptr;
+      } else {
+         Assert(CompareString(finalToken,";"));
+      }
    }
 
-   return member;
+   MemberDef* mem = defs.Alloc();
+   *mem = def;
+
+   return mem;
 }
 
-static Type* ParseStruct(Tokenizer* tok,SizedString outsideStructName){
+static StructDef ParseStruct(Tokenizer* tok){
+   void* mark = tok->Mark();
+
    Token token = tok->NextToken();
    Assert(CompareToken(token,"struct") || CompareToken(token,"union"));
-
    SizedString name = {};
 
-   Type* baseType = nullptr;
+   StructDef def = {};
+   if(CompareToken(token,"union")){
+      def.isUnion = true;
+   }
 
    token = tok->PeekToken();
    if(CompareToken(token,"{")){ // Unnamed
-      static int nUnnamed = 1;
-
-      if(outsideStructName.size > 0){
-         name = PushString(tempArena,"%.*s::" UNNAMED_TEMPLATE,UNPACK_SS(outsideStructName),nUnnamed);
-      } else {
-         name = PushString(tempArena,UNNAMED_TEMPLATE,nUnnamed++);
-      }
    } else { // Named struct
       name = tok->NextToken();
-
-      if(outsideStructName.size > 0){
-         name = PushString(tempArena,"%.*s::%.*s",UNPACK_SS(outsideStructName),UNPACK_SS(name));
-      }
 
       token = tok->PeekToken();
       if(CompareToken(token,":")){ // inheritance
          tok->AssertNextToken(":");
+
          tok->AssertNextToken("public"); // Forced to be a public inheritance
 
-         baseType = ParseSimpleType(tok);
+         def.inherit = ParseSimpleType(tok);
       }
    }
 
-   Type* structInfo = FindOrCreateType(name);
-
-   structInfo->type = Type::STRUCT;
-   structInfo->baseType = baseType;
+   def.name = name;
 
    token = tok->PeekToken();
    if(CompareToken(token,";")){
-      return structInfo;
+      def.fullExpression = tok->Point(mark);
+
+      return def;
    }
 
    tok->AssertNextToken("{");
 
-   while(1){
+   while(!tok->Done()){
       token = tok->PeekToken();
 
       if(CompareToken(token,"}")){
@@ -323,28 +355,33 @@ static Type* ParseStruct(Tokenizer* tok,SizedString outsideStructName){
          break;
       }
 
-      Member* info = ParseMember(tok,structInfo->name);
+      MemberDef* member = ParseMember(tok);
+
+      if(member == nullptr){
+         continue;
+      }
 
       if(tok->Done()){
          break;
       }
 
-      info->structType = structInfo;
-      info->next = structInfo->members;
-      structInfo->members = info;
+      member->next = def.members;
+      def.members = member;
    }
 
-   return structInfo;
+   def.fullExpression = tok->Point(mark);
+   def.members = ReverseList(def.members);
+
+   return def;
 }
 
-Type* ParseTemplatedStructDefinition(Tokenizer* tok){
+StructDef ParseTemplatedStructDefinition(Tokenizer* tok){
    tok->AssertNextToken("template");
    tok->AssertNextToken("<");
 
    Token peek = tok->PeekToken();
 
-   TemplateArg* arguments = nullptr;
-
+   TemplateParamDef* ptr = nullptr;
    while(!tok->Done()){
       if(tok->IfPeekToken(">")){
          break;
@@ -354,16 +391,10 @@ Type* ParseTemplatedStructDefinition(Tokenizer* tok){
 
       Token parameter = tok->NextToken();
 
-      Type* type = FindOrCreateType(parameter);
-      Assert(type->type == Type::UNKNOWN || type->type == Type::TEMPLATE_PARAMETER);
-
-      type->type = Type::TEMPLATE_PARAMETER;
-
-      TemplateArg* newArgument = PushStruct<TemplateArg>(tempArena);
-      newArgument->type = type;
-      newArgument->next = arguments;
-
-      arguments = newArgument;
+      TemplateParamDef* newParam = PushStruct<TemplateParamDef>(tempArena);
+      newParam->name = parameter;
+      newParam->next = ptr;
+      ptr = newParam;
 
       if(!tok->IfNextToken(",")){
          break;
@@ -374,17 +405,15 @@ Type* ParseTemplatedStructDefinition(Tokenizer* tok){
 
    peek = tok->PeekToken();
    if(!CompareString(peek,"struct")){
-      return nullptr; // Only parse structs, for now
+      StructDef def = {};
+      return def; // Only parse structs
    }
 
-   Type* type = ParseStruct(tok,MakeSizedString(""));
+   StructDef def = ParseStruct(tok);
 
-   if(arguments){
-      type->type = Type::TEMPLATED_STRUCT;
-      type->templateArgs = ReverseList(arguments);
-   }
+   def.params = ReverseList(ptr);
 
-   return type;
+   return def;
 }
 
 void ParseHeaderFile(Tokenizer* tok){
@@ -392,11 +421,27 @@ void ParseHeaderFile(Tokenizer* tok){
       Token type = tok->PeekToken();
 
       if(CompareString(type,"enum")){
-         ParseEnum(tok,MakeSizedString(""));
+         EnumDef def = ParseEnum(tok);
+
+         TypeDef* newType = typeDefs.Alloc();
+         newType->type = TypeDef::ENUM;
+         newType->enumType = def;
+
       } else if(CompareString(type,"struct")){
-         ParseStruct(tok,MakeSizedString(""));
+         StructDef def = ParseStruct(tok);
+         if(def.members){
+            TypeDef* typeDef = typeDefs.Alloc();
+            typeDef->type = TypeDef::STRUCT;
+            typeDef->structType = def;
+         }
       } else if(CompareString(type,"template")){
-         ParseTemplatedStructDefinition(tok);
+         StructDef def = ParseTemplatedStructDefinition(tok);
+
+         if(def.members){
+            TypeDef* typeDef = typeDefs.Alloc();
+            typeDef->type = TypeDef::STRUCT;
+            typeDef->structType = def;
+         }
       } else if(CompareString(type,"typedef")){
          tok->AdvancePeek(type);
 
@@ -413,22 +458,32 @@ void ParseHeaderFile(Tokenizer* tok){
             continue;
          }
 
+         void* oldMark = tok->Mark();
+
          Token peek = tok->PeekToken();
          Type* type = nullptr;
          if(CompareString(peek,"struct")){
-            type = ParseStruct(tok,MakeSizedString(""));
+            StructDef def = ParseStruct(tok);
+
+            if(def.members){
+               TypeDef* typeDef = typeDefs.Alloc();
+               typeDef->type = TypeDef::STRUCT;
+               typeDef->structType = def;
+            }
          } else {
-            type = ParseSimpleType(tok);
+            ParseSimpleType(tok);
          }
+
+         SizedString old = tok->Point(oldMark);
+         old = TrimWhitespaces(old);
 
          Token name = tok->NextToken();
          tok->AssertNextToken(";");
 
-         Type* typedefType = FindOrCreateType(name);
-
-         typedefType->type = Type::TYPEDEF;
-         typedefType->typedefType = type;
-         typedefType->size = type->size;
+         TypeDef* def = typeDefs.Alloc();
+         def->type = TypeDef::TYPEDEF;
+         def->typedefType.oldType = old;
+         def->typedefType.newType = name;
 
          continue;
       } else {
@@ -437,413 +492,351 @@ void ParseHeaderFile(Tokenizer* tok){
    }
 }
 
-struct IterateSubmembers{
-   Member* currentMember[16];
-   int stackIndex;
-};
-
-Member* Next(IterateSubmembers* iter){
-   while(iter->stackIndex >= 0){
-      Member*& ptr = iter->currentMember[iter->stackIndex];
-      ptr = ptr->next;
-
-      if(!ptr){
-         iter->stackIndex -= 1;
-         continue;
+int CountMembers(MemberDef* m){
+   int count = 0;
+   for(; m; m = m->next){
+      if(m->type.type == TypeDef::STRUCT){
+         count += CountMembers(m->type.structType.members);
+      } else {
+         count += 1;
       }
-
-      if(ptr->name.size == 0){
-         iter->stackIndex += 1;
-         iter->currentMember[iter->stackIndex] = ptr->type->members;
-         Assert(ptr->type->type == Type::STRUCT);
-      }
-
-      break;
    }
 
-   if(iter->stackIndex < 0){
-      return nullptr;
-   }
-
-   return iter->currentMember[iter->stackIndex];
+   return count;
 }
 
-char* GetFullInstanceName(IterateSubmembers* iter){
-   static char buffer[1024];
+SizedString GetTypeName(TypeDef* type){
+   SizedString name = {};
+   switch(type->type){
+   case TypeDef::ENUM:{
+      name = type->enumType.name;
+   }break;
+   case TypeDef::SIMPLE:{
+      name = type->simpleType;
+   }break;
+   case TypeDef::STRUCT:{
+      name = type->structType.name;
+   }break;
+   case TypeDef::TEMPLATED:{
+      name = type->templatedType.baseType;
+   }break;
+   case TypeDef::TYPEDEF:{
+      name = type->typedefType.oldType;
+   }break;
+   }
 
-   char* ptr = buffer;
-   bool first = true;
-   for(int i = 0; i <= iter->stackIndex; i++){
-      if(iter->currentMember[i]->name.size){
-         if(!first){
-            ptr += sprintf(ptr,".");
-         }
+   return name;
+}
 
-         if(i == iter->stackIndex){
-            ptr += sprintf(ptr,"%.*s",UNPACK_SS(iter->currentMember[i]->name));
+TypeDef* GetDef(SizedString name){
+   for(TypeDef* def : typeDefs){
+      SizedString typeName = GetTypeName(def);
+
+      if(CompareString(typeName,name)){
+         return def;
+      }
+   }
+
+   return nullptr;
+}
+
+void OutputMembers(FILE* output,SizedString structName,MemberDef* m,bool first){
+   for(; m != nullptr; m = m->next){
+      if(m->type.type == TypeDef::STRUCT){
+         StructDef def = m->type.structType;
+         if(def.name.size > 0){
+            SizedString name = PushString(tempArena,"%.*s::%.*s",UNPACK_SS(structName),UNPACK_SS(def.name));
+
+            OutputMembers(output,name,m->type.structType.members,first);
          } else {
-            ptr += sprintf(ptr,"%.*s",UNPACK_SS(iter->currentMember[i]->structType->name));
+            OutputMembers(output,structName,m->type.structType.members,first); // anonymous struct
+         }
+      } else {
+         const char* preamble = "        ";
+         if(!first){
+            preamble = "        ,";
          }
 
-         first = false;
+         SizedString typeName = GetTypeName(&m->type);
+
+         if(typeName.size == 0){
+            if(m->type.type == TypeDef::ENUM){
+               typeName = MakeSizedString("int");
+            }
+         }
+
+         fprintf(output,"%s(Member){",preamble);
+         fprintf(output,"GetType(MakeSizedString(\"%.*s\"))",UNPACK_SS(typeName));
+         fprintf(output,",MakeSizedString(\"%.*s\")",UNPACK_SS(m->name));
+         fprintf(output,",offsetof(%.*s,%.*s)}\n",UNPACK_SS(structName),UNPACK_SS(m->name));
       }
+      first = false;
+   }
+}
+
+int OutputTemplateMembers(FILE* output,MemberDef* m,int index,bool insideUnion, bool first){
+   for(; m != nullptr; m = m->next){
+      if(m->type.type == TypeDef::STRUCT){
+         StructDef def = m->type.structType;
+         int count = OutputTemplateMembers(output,m->type.structType.members,index,def.isUnion,first); // anonymous struct
+
+         if(def.isUnion){
+            index += 1;
+         } else {
+            index += count;
+         }
+      } else {
+         const char* preamble = "        ";
+         if(!first){
+            preamble = "        ,";
+         }
+         fprintf(output,"%s(TemplatedMember){",preamble);
+         fprintf(output,"MakeSizedString(\"%.*s\")",UNPACK_SS(m->type.simpleType));
+         fprintf(output,",MakeSizedString(\"%.*s\")",UNPACK_SS(m->name));
+         fprintf(output,",%d}\n",index);
+
+         if(!insideUnion){
+            index += 1;
+         }
+      }
+      first = false;
+   }
+   return index;
+}
+
+SizedString GetBaseType(SizedString name){
+   Tokenizer tok(name,"<>*&",{});
+
+   // TODO: This should call parsing simple type. Deal with unsigned and things like that
+   SkipQualifiers(&tok);
+
+   Token base = tok.NextToken();
+
+   SkipQualifiers(&tok);
+
+   Token peek = tok.PeekToken();
+   if(CompareString(peek,"<")){
+      Token templateInst = tok.PeekUntilDelimiterExpression({"<"},{">"},0);
+      base = ExtendToken(base,templateInst);
+      tok.AdvancePeek(templateInst);
+      base = ExtendToken(base,tok.AssertNextToken(">"));
    }
 
-   return buffer;
-}
+   base = TrimWhitespaces(base);
 
-/*
-
-Left to do:
-
-   Add, either to the struct parser or to the type, info for the std classes used ex: std::vector and stuff like that
-   Finish the process of registering templated structures
-   Finish rewriting the type.cpp and test it
-
-*/
-
-Type* GetBaseType(Type* type){
-   switch (type->type){
-      case Type::BASE: return type;
-      case Type::STRUCT: return type;
-      case Type::POINTER: return GetBaseType(type->pointerType);
-      case Type::ARRAY: return GetBaseType(type->arrayType);
-      case Type::TEMPLATED_STRUCT: return type;
-      case Type::TEMPLATED_INSTANCE: return type;
-      case Type::TEMPLATE_PARAMETER: return type;
-      case Type::TYPEDEF: return GetBaseType(type->typedefType);
-      case Type::ENUM: return type;
-      case Type::UNKNOWN: return type;
-      default:
-         NOT_IMPLEMENTED;
-   };
-
-   NOT_POSSIBLE;
-   return nullptr;
-}
-
-const char* TypeEnumName(Type* type){
-   switch (type->type){
-      case Type::BASE: return "BASE";
-      case Type::STRUCT: return "STRUCT";
-      case Type::POINTER: return "POINTER";
-      case Type::ARRAY: return "ARRAY";
-      case Type::TEMPLATED_STRUCT: return "TEMPLATED_STRUCT";
-      case Type::TEMPLATED_INSTANCE: return "TEMPLATED_INSTANCE";
-      case Type::TEMPLATE_PARAMETER: return "TEMPLATE_PARAMETER";
-      case Type::TYPEDEF: return "TYPEDEF";
-      case Type::ENUM: return "ENUM";
-      case Type::UNKNOWN: return "UNKNOWN";
-      default:
-         NOT_IMPLEMENTED;
-   };
-
-   NOT_POSSIBLE;
-   return nullptr;
-}
-
-bool IsUnnamedStruct(Type* type){
-   Tokenizer tok(type->name,"",{"::"});
-
-   while(!tok.Done()){
-      Token token = tok.NextToken();
-
-      if(CheckFormat(UNNAMED_TEMPLATE,token)){
-         return true;
-      }
-   }
-
-   return false;
-}
-
-bool IsUnnamedEnum(Type* type){
-   Tokenizer tok(type->name,"",{"::"});
-
-   while(!tok.Done()){
-      Token token = tok.NextToken();
-
-      if(CheckFormat(UNNAMED_ENUM_TEMPLATE,token)){
-         return true;
-      }
-   }
-
-   return false;
+   return base;
 }
 
 void OutputRegisterTypesFunction(FILE* output){
-   #if 0
-   for(Type* type : types){
-      if(type->type == Type::TEMPLATED_INSTANCE){
-         Tokenizer tok(type->name,"<>",{});
+   std::set<SizedString> seen;
 
-         Token baseName = tok.NextToken();
-
-         Type* base = FindOrCreateType(baseName);
-         Assert(base->type == Type::TEMPLATED_STRUCT);
-
-         tok.AssertNextToken("<");
-
-         while(1){
-            Token argName = tok.NextToken();
-         }
-      }
-   }
-   #endif
-
-   #if 0
-   for(Type* type : types){
-      #if 1
-      printf("%.*s %s\n",UNPACK_SS(type->name),TypeEnumName(type));
-      #endif
-
-      switch(type->type){
-         case Type::BASE:;
-         case Type::POINTER:;
-         case Type::ARRAY:;
-         case Type::UNKNOWN:;
-         case Type::TEMPLATE_PARAMETER:;
-            break;
-
-         #if 0
-         case Type::TYPEDEF:{
-            char* fullName = TypeFullName(type->typedefType);
-            printf("  %s\n",fullName);
-         } break;
-         #endif
-
-         #if 0
-         case Type::STRUCT:{
-            for(Member* m = type->members; m != nullptr; m = m->next){
-               char* fullName = TypeFullName(m->type);
-               printf("  %s %.*s\n",fullName,UNPACK_SS(m->name));
-            }
-         } break;
-         #endif
-
-         #if 0
-         case Type::ENUM:{
-            for(EnumMember* m = type->enumMembers; m != nullptr; m = m->next){
-               printf("  %.*s = %.*s\n",UNPACK_SS(m->name),UNPACK_SS(m->value));
-            }
-         } break;
-         #endif
-
-         #if 0
-         case Type::TEMPLATED_STRUCT:{
-            for(Member* m = type->members; m != nullptr; m = m->next){
-               char* fullName = TypeFullName(m->type);
-               printf("  %s %.*s\n",fullName,UNPACK_SS(m->name));
-            }
-            printf("  Args: ");
-            for(TemplateArg* arg = type->templateArgs; arg != nullptr; arg = arg->next){
-               printf(" %.*s ",UNPACK_SS(arg->name));
-            }
-            printf("\n");
-         } break;
-         #endif
-
-         #if 1
-         case Type::TEMPLATED_INSTANCE:{
-            printf("  Base: %.*s\n",UNPACK_SS(type->templateBase->name));
-
-            for(TemplateArg* a = type->templateArgs; a != nullptr; a = a->next){
-               printf("    %.*s\n",UNPACK_SS(a->type->name));
-            }
-
-            #if 0
-            for(Member* m = type->members; m != nullptr; m = m->next){
-               printf("  %.*s %.*s\n",UNPACK_SS(m->type->name),UNPACK_SS(m->name));
-            }
-            #endif
-         } break;
-         #endif
-
-      };
-   }
-   #endif
+   seen.insert(MakeSizedString("void"));
+   seen.insert(MakeSizedString("const"));
+   seen.insert(MakeSizedString("T"));
+   seen.insert(MakeSizedString("Array<Pair<Key,Data>>"));
 
    fprintf(output,"#pragma GCC diagnostic ignored \"-Winvalid-offsetof\"\n");
    fprintf(output,"static void RegisterParsedTypes(){\n");
 
-   for(Type* info : types){
-      if(info->type != Type::BASE){
-         continue;
+   for(TypeDef* def : typeDefs){
+      if(def->type == TypeDef::TYPEDEF){
+         fprintf(output,"   RegisterOpaqueType(MakeSizedString(\"%.*s\"),Type::TYPEDEF,sizeof(%.*s));\n",UNPACK_SS(def->typedefType.newType),UNPACK_SS(def->typedefType.newType));
+         seen.insert(def->typedefType.newType);
       }
-
-      if(CompareString(info->name,"void")){
-         fprintf(output,"    RegisterSimpleType(MakeSizedString(\"%.*s\"),sizeof(char));\n",UNPACK_SS(info->name));
-      } else {
-         fprintf(output,"    RegisterSimpleType(MakeSizedString(\"%.*s\"),sizeof(%.*s));\n",UNPACK_SS(info->name),UNPACK_SS(info->name));
+   }
+   fprintf(output,"\n");
+   for(TypeDef* def : typeDefs){
+      if(def->type == TypeDef::STRUCT && !def->structType.params){
+         fprintf(output,"   RegisterOpaqueType(MakeSizedString(\"%.*s\"),Type::STRUCT,sizeof(%.*s));\n",UNPACK_SS(def->structType.name),UNPACK_SS(def->structType.name));
+         seen.insert(def->structType.name);
       }
    }
    fprintf(output,"\n");
 
-   for(Type* info : types){
-      if(!(info->type == Type::STRUCT || info->type == Type::TYPEDEF || info->type == Type::TEMPLATED_INSTANCE || info->type == Type::UNKNOWN)){
-         continue;
-      }
+   for(TypeDef* def : typeDefs){
+      if(def->type == TypeDef::STRUCT){
+         for(MemberDef* m = def->structType.members; m; m = m->next){
+            SizedString name = GetTypeName(&m->type);
 
-      if(info->type == Type::STRUCT && IsUnnamedStruct(info)){
-         continue;
-      }
+            if(name.size == 0){
+               continue;
+            }
 
-      fprintf(output,"    RegisterOpaqueType(MakeSizedString(\"%.*s\"),Type::%s,sizeof(%.*s));\n",UNPACK_SS(info->name),TypeEnumName(info),UNPACK_SS(info->name));
-   }
-   fprintf(output,"\n");
+            name = GetBaseType(name);
 
-   for(Type* info : types){
-      if(info->type != Type::TEMPLATED_STRUCT){
-         continue;
-      }
+            auto iter = seen.find(name);
 
-      fprintf(output,"    RegisterOpaqueTemplateStruct(MakeSizedString(\"%.*s\"));\n",UNPACK_SS(info->name));
-   }
-   fprintf(output,"\n");
+            if(iter == seen.end()){
+               if(Contains(name,"<")){
+                  fprintf(output,"   RegisterOpaqueType(MakeSizedString(\"%.*s\"),Type::TEMPLATED_INSTANCE,sizeof(%.*s));\n",UNPACK_SS(name),UNPACK_SS(name));
+               } else {
+                  fprintf(output,"   RegisterOpaqueType(MakeSizedString(\"%.*s\"),Type::UNKNOWN,sizeof(%.*s));\n",UNPACK_SS(name),UNPACK_SS(name));
+               }
 
-   for(Type* info : types){
-      if(info->type != Type::ENUM){
-         continue;
-      }
-
-      fprintf(output,"    RegisterEnum(MakeSizedString(\"%.*s\"));\n",UNPACK_SS(info->name));
-   }
-   fprintf(output,"\n");
-
-   for(Type* info : types){
-      if(info->type != Type::TEMPLATED_INSTANCE){
-         continue;
-      }
-
-      fprintf(output,"    RegisterTemplateInstance(MakeSizedString(\"%.*s\"),MakeSizedString(\"%.*s\"),{",UNPACK_SS(info->name),UNPACK_SS(info->templateBase->name));
-
-      bool first = true;
-      for(TemplateArg* a = info->templateArgs; a != nullptr; a = a->next){
-         if(first){
-            first = false;
-         } else {
-            fprintf(output,",");
-         }
-
-         fprintf(output,"MakeSizedString(\"%.*s\")",UNPACK_SS(a->type->name));
-      }
-      fprintf(output,"});\n");
-   }
-   fprintf(output,"\n");
-
-   for(Type* info : types){
-      if(info->type != Type::TYPEDEF){
-         continue;
-      }
-
-      fprintf(output,"    RegisterTypedef(MakeSizedString(\"%.*s\"),",UNPACK_SS(info->name));
-      fprintf(output,"MakeSizedString(\"%.*s\"));\n",UNPACK_SS(info->typedefType->name));
-   }
-   fprintf(output,"\n");
-
-   fprintf(output,"    static Member members[] = {\n");
-   int index = 0;
-   bool first = true;
-   for(Type* info : types){
-      if(info->type != Type::STRUCT || info->name.size == 0 || IsUnnamedStruct(info)){
-         continue;
-      }
-
-      IterateSubmembers iter = {};
-      iter.currentMember[0] = info->members;
-
-      for(Member* m = info->members; m != nullptr; m = Next(&iter)){
-         const char* preamble = "        ";
-         if(!first){
-            preamble = "        ,";
-         } else {
-            first = false;
-         }
-
-         if(m->index == -1){
-            m->index = index++;
-         }
-
-         fprintf(output,"%s(Member){",preamble);
-
-         if(m->type->type == Type::ARRAY){
-            fprintf(output,"GetArrayType(MakeSizedString(\"%.*s\"),%.*s)",UNPACK_SS(m->type->arrayType->name),UNPACK_SS(m->arrayExpression));
-         } else {
-            fprintf(output,"GetType(MakeSizedString(\"%.*s\"))",UNPACK_SS(m->type->name));
-         }
-
-         fprintf(output,",MakeSizedString(\"%.*s\")",UNPACK_SS(m->name));
-         fprintf(output,",offsetof(%.*s,%.*s)",UNPACK_SS(info->name),UNPACK_SS(m->name));
-         fprintf(output,",nullptr");
-
-         fprintf(output,"}\n");
-      }
-   }
-   fprintf(output,"    };\n\n");
-
-   //int index = 0;
-   for(Type* info : types){
-      if(info->type != Type::STRUCT || info->name.size == 0 || IsUnnamedStruct(info)){
-         continue;
-      }
-
-      fprintf(output,"    RegisterStructMembers(MakeSizedString(\"%.*s\"),{",UNPACK_SS(info->name));
-
-      bool first = true;
-
-      if(info->baseType){
-         IterateSubmembers iter = {};
-         iter.currentMember[0] = info->baseType->members;
-
-         for(Member* m = info->baseType->members; m != nullptr; m = Next(&iter)){
-            if(first){
-               fprintf(output,"&members[%d]",m->index);
-               first = false;
-            } else {
-               fprintf(output,",&members[%d]",m->index);
+               seen.insert(name);
             }
          }
       }
+      if(def->type == TypeDef::TYPEDEF){
+         SizedString name = def->typedefType.oldType;
+         name = GetBaseType(name);
+         auto iter = seen.find(name);
 
-      IterateSubmembers iter = {};
-      iter.currentMember[0] = info->members;
-
-      for(Member* m = info->members; m != nullptr; m = Next(&iter)){
-         if(first){
-            fprintf(output,"&members[%d]",m->index);
-            first = false;
-         } else {
-            fprintf(output,",&members[%d]",m->index);
+         if(iter == seen.end()){
+            if(Contains(name,"<")){
+               fprintf(output,"   RegisterOpaqueType(MakeSizedString(\"%.*s\"),Type::TEMPLATED_INSTANCE,sizeof(%.*s));\n",UNPACK_SS(name),UNPACK_SS(name));
+            } else {
+               fprintf(output,"   RegisterOpaqueType(MakeSizedString(\"%.*s\"),Type::UNKNOWN,sizeof(%.*s));\n",UNPACK_SS(name),UNPACK_SS(name));
+            }
+            seen.insert(name);
          }
       }
-      fprintf(output,"});\n");
+   }
+   fprintf(output,"\n");
+
+   for(TypeDef* def : typeDefs){
+      if(def->type == TypeDef::ENUM){
+         fprintf(output,"   RegisterEnum(MakeSizedString(\"%.*s\"));\n",UNPACK_SS(def->enumType.name));
+         seen.insert(def->enumType.name);
+      }
+   }
+   fprintf(output,"\n");
+
+   fprintf(output,"   static SizedString templateArgs[] = {\n");
+   bool first = true;
+   for(TypeDef* def : typeDefs){
+      if(!(def->type == TypeDef::STRUCT && def->structType.params)){
+         continue;
+      }
+
+      for(TemplateParamDef* a = def->structType.params; a != nullptr; a = a->next){
+         if(first){
+            fprintf(output,"        ");
+            first = false;
+         } else {
+            fprintf(output,"        ,");
+         }
+         fprintf(output,"MakeSizedString(\"%.*s\")\n",UNPACK_SS(a->name));
+      }
+   }
+   fprintf(output,"   };\n\n");
+
+   int index = 0;
+   for(TypeDef* def : typeDefs){
+      if(!(def->type == TypeDef::STRUCT && def->structType.params)){
+         continue;
+      }
+
+      int count = 0;
+      for(TemplateParamDef* a = def->structType.params; a != nullptr; a = a->next){
+         count += 1;
+         seen.insert(a->name);
+      }
+
+      fprintf(output,"   RegisterTemplate(MakeSizedString(\"%.*s\"),(Array<SizedString>){&templateArgs[%d],%d});\n",UNPACK_SS(def->structType.name),index,count);
+      index += count;
+   }
+   fprintf(output,"\n");
+
+   for(TypeDef* def : typeDefs){
+      if(def->type != TypeDef::TYPEDEF){
+         continue;
+      }
+
+      fprintf(output,"   RegisterTypedef(MakeSizedString(\"%.*s\"),",UNPACK_SS(def->typedefType.oldType));
+      fprintf(output,"MakeSizedString(\"%.*s\"));\n",UNPACK_SS(def->typedefType.newType));
+   }
+   fprintf(output,"\n");
+
+   fprintf(output,"   static TemplatedMember templateMembers[] = {\n");
+   first = true;
+   for(TypeDef* def : typeDefs){
+      if(!(def->type == TypeDef::STRUCT && def->structType.params)){
+         continue;
+      }
+
+      OutputTemplateMembers(output,def->structType.members,0,def->structType.isUnion,first);
+      first = false;
+   }
+   fprintf(output,"   };\n\n");
+
+   index = 0;
+   for(TypeDef* def : typeDefs){
+      if(!(def->type == TypeDef::STRUCT && def->structType.params)){
+         continue;
+      }
+
+      int size = CountMembers(def->structType.members);
+      fprintf(output,"   RegisterTemplateMembers(MakeSizedString(\"%.*s\"),(Array<TemplatedMember>){&templateMembers[%d],%d});\n",UNPACK_SS(def->structType.name),index,size);
+      index += size;
+   }
+   fprintf(output,"\n");
+
+   fprintf(output,"   static Member members[] = {\n");
+   index = 0;
+   first = true;
+   for(TypeDef* def : typeDefs){
+      if(!(def->type == TypeDef::STRUCT && !def->structType.params)){
+         continue;
+      }
+
+      if(def->structType.inherit.size){
+         TypeDef* inheritDef = GetDef(def->structType.inherit);
+
+         OutputMembers(output,inheritDef->structType.name,inheritDef->structType.members,first);
+      }
+
+      OutputMembers(output,def->structType.name,def->structType.members,first);
+      first = false;
+   }
+   fprintf(output,"   };\n\n");
+
+   index = 0;
+   for(TypeDef* def : typeDefs){
+      if(!(def->type == TypeDef::STRUCT && !def->structType.params)){
+         continue;
+      }
+
+      int size = CountMembers(def->structType.members);
+
+      if(def->structType.inherit.size){
+         TypeDef* inheritDef = GetDef(def->structType.inherit);
+
+         size += CountMembers(inheritDef->structType.members);
+      }
+
+
+      fprintf(output,"   RegisterStructMembers(MakeSizedString(\"%.*s\"),(Array<Member>){&members[%d],%d});\n",UNPACK_SS(def->structType.name),index,size);
+      index += size;
+   }
+   fprintf(output,"\n");
+
+   #if 1
+   for(SizedString type : seen){
+      if(CompareString(type,"Array<Pair<Key,Data>>")){
+         continue;
+      }
+
+      if(Contains(type,"<")){
+         fprintf(output,"   InstantiateTemplate(MakeSizedString(\"%.*s\"));\n",UNPACK_SS(type));
+      }
+   }
+   #endif
+
+   fprintf(output,"\n}\n");
+}
+
+SizedString OutputMember(MemberDef* def){
+   Byte* mark = MarkArena(tempArena);
+
+   PushString(tempArena,"%.*s | ",UNPACK_SS(def->type.simpleType));
+   PushString(tempArena,"%.*s",UNPACK_SS(def->name));
+   if(def->arrays.size){
+      PushString(tempArena,"%.*s",UNPACK_SS(def->arrays));
    }
 
-   fprintf(output,"}\n");
-}
-
-static Type* RegisterSimpleType(SizedString name,int size){
-   Type* type = types.Alloc();
-
-   type->type = Type::BASE;
-   type->size = size;
-   type->name = name;
-
-   return type;
-}
-
-void RegisterSimpleTypes(){
-   #define R(TYPE) RegisterSimpleType(MakeSizedString(#TYPE),sizeof(TYPE))
-
-   R(int);
-   R(unsigned int);
-   R(char);
-   R(bool);
-   R(unsigned char);
-   R(float);
-   R(double);
-   R(size_t);
-
-   RegisterSimpleType(MakeSizedString("void"),1);
+   SizedString res = PointArena(tempArena,mark);
+   return res;
 }
 
 //#define STANDALONE
@@ -863,8 +856,7 @@ int main(int argc,const char* argv[]){
    }
 
    InitArena(tempArena,Megabyte(256));
-
-   RegisterSimpleTypes();
+   InitArena(perm,Megabyte(256));
 
    for(int i = 0; i < argc - 2; i++){
       SizedString content = PushFile(tempArena,argv[2+i]);
@@ -874,26 +866,21 @@ int main(int argc,const char* argv[]){
          return 0;
       }
 
-      Tokenizer tok(content,"[]{};*<>,=",{});
+      Tokenizer tok(content,"[]{}();*<>,=",{});
       ParseHeaderFile(&tok);
    }
 
+   const char* test = "template<typename T> struct std::vector{T* mem; int size; int allocated;};";
+   Tokenizer tok(MakeSizedString(test),"[]{}();*<>,=",{});
+   ParseHeaderFile(&tok);
+
    FILE* output = fopen(argv[1],"w");
+
    OutputRegisterTypesFunction(output);
 
    return 0;
 }
 #endif
-
-/*
-
-Currently the parser is incapable of handling multiple arrays and it cannot handle pointers to arrays using the default C expression with no reliance on typedefs (can only handle arrays of pointers).
-   Do not care enough to fix this, for now
-
-Currently multiple template parameters might cause issues, not properly implemented.
-
-*/
-
 
 
 

@@ -52,7 +52,7 @@ FUInstance instancesBuffer[] = {
          .delay = (int*) 0x0,
       #{end}
 
-      .numberChilds = @{inst.compositeAccel |> CountNonOperationChilds}
+      .numberChilds = @{inst.declaration.fixedDelayCircuit |> CountNonOperationChilds}
    }
    #{end}
 };

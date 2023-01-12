@@ -203,8 +203,7 @@ begin
       #{set addr 1}
       #{for inst instances}
       #{set decl inst.declaration}
-      #{for i decl.nConfigs}
-      #{set wire decl.configWires[i]}
+      #{for wire decl.configs}
       if(addr[@{versatValues.configurationAddressBits - 1}:0] == @{addr}) // @{versatBase + addr * 4 |> Hex}
          configdata[@{counter}+:@{wire.bitsize}] <= wdata[@{wire.bitsize - 1}:0]; // @{wire.name} - @{decl.name}
       #{inc addr}
@@ -214,10 +213,9 @@ begin
 
       // Static
       #{for unit accel.staticInfo}
-      #{for i unit.nConfigs}
-      #{set wire unit.wires[i]}
+      #{for wire unit.data.configs}
       if(addr[@{versatValues.configurationAddressBits - 1}:0] == @{addr}) // @{versatBase + addr * 4 |> Hex}
-         configdata[@{counter}+:@{wire.bitsize}] <= wdata[@{wire.bitsize - 1}:0]; //  @{unit.module.name}_@{unit.name}_@{wire.name}
+         configdata[@{counter}+:@{wire.bitsize}] <= wdata[@{wire.bitsize - 1}:0]; //  @{unit.id.parent.name}_@{unit.id.name}_@{wire.name}
       #{inc addr}
       #{set counter counter + wire.bitsize}
       #{end}
@@ -245,8 +243,7 @@ begin
       #{set addr 0}
       #{for inst instances}
       #{set decl inst.declaration}
-      #{for i decl.nStates}
-      #{set wire decl.stateWires[i]}
+      #{for wire decl.states}
       if(addr[@{versatValues.stateAddressBits - 1}:0] == @{addr + 1}) // @{versatBase + addr * 4 |> Hex}
          stateRead = statedata[@{counter}+:@{wire.bitsize}];
       #{inc addr}
@@ -274,8 +271,7 @@ end
          .in@{index}(output_@{input.inst.id}_@{input.port}),
       #{end}
 
-      #{for i decl.nConfigs}
-      #{set wire decl.configWires[i]}
+      #{for wire decl.configs}
       #{if decl.type}
          .@{wire.name}(configdata[@{configDataIndex}+:@{wire.bitsize}]),
       #{else}
@@ -285,9 +281,9 @@ end
       #{end}
 
       #{for unit decl.staticUnits}
-      #{for i unit.nConfigs}
-      #{set wire unit.wires[i]}
-         .@{unit.module.name}_@{unit.name}_@{wire.name}(configdata[@{configDataIndex}+:@{wire.bitsize}]),
+      #{set id unit.first}
+      #{for wire unit.second.configs}
+         .@{id.parent.name}_@{id.name}_@{wire.name}(configdata[@{configDataIndex}+:@{wire.bitsize}]),
       #{set configDataIndex configDataIndex + wire.bitsize}
       #{end}
       #{end}
@@ -297,8 +293,7 @@ end
       #{set delaySeen delaySeen + 1}
       #{end}
 
-      #{for i decl.nStates}
-      #{set wire decl.stateWires[i]}
+      #{for wire decl.states}
       #{if decl.type}
          .@{wire.name}(statedata[@{stateDataIndex}+:@{wire.bitsize}]),
       #{else}

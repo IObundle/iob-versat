@@ -17,6 +17,22 @@ public:
    }
 };
 
+template<> class std::hash<SizedString>{
+public:
+   std::size_t operator()(SizedString const& s) const noexcept{
+   std::size_t res = 0;
+
+   std::size_t prime = 5;
+   for(int i = 0; i < s.size; i++){
+      res += (std::size_t) s[i] * prime;
+      res <<= 4;
+      prime += 6; // Some not prime, but will find most of them
+   }
+
+   return res;
+   }
+};
+
 template<> class std::hash<PortInstance>{
    public:
    std::size_t operator()(PortInstance const& s) const noexcept{

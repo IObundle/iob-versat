@@ -22,19 +22,17 @@ module @{base.name} #(
       #{end}
 
       #{for unit base.staticUnits}
-      #{for i unit.nConfigs}
-      #{set wire unit.wires[i]}
-      input [@{wire.bitsize-1}:0]     @{unit.module.name}_@{unit.name}_@{wire.name},
+      #{set id unit.first}
+      #{for wire unit.second.configs}
+      input [@{wire.bitsize-1}:0]     @{id.parent.name}_@{unit.id.name}_@{wire.name},
       #{end}
       #{end}
 
-      #{for i base.nConfigs}
-      #{set wire base.configWires[i]}
+      #{for wire base.configs}
       input [@{wire.bitsize-1}:0]     @{wire.name},
       #{end}
 
-      #{for i base.nStates}
-      #{set wire base.stateWires[i]}
+      #{for wire base.states}
       output [@{wire.bitsize-1}:0]    @{wire.name},
       #{end}
 
@@ -136,21 +134,19 @@ assign done = (unitDone & looping);
       .out@{i}(unitOut[@{i}]),
    #{end}
 
-   #{for i decl.nConfigs}
-   #{set wire decl.configWires[i]}
-   .@{wire.name}(@{decl.configWires[i].name}),
+   #{for wire decl.configs}
+   .@{wire.name}(@{wire.name}),
    #{end}
 
    #{for unit decl.staticUnits}         
-   #{for i unit.nConfigs}
-   #{set wire unit.wires[i]}
-   .@{unit.module.name}_@{unit.name}_@{wire.name}(@{unit.module.name}_@{unit.name}_@{wire.name}),
+   #{set id unit.first}
+   #{for wire unit.second.configs}
+   .@{id.parent.name}_@{id.name}_@{wire.name}(@{id.parent.name}_@{id.name}_@{wire.name}),
    #{end}
    #{end}
 
-   #{for i decl.nStates}
-   #{set wire decl.stateWires[i]}
-      .@{wire.name}(@{decl.stateWires[i].name}),
+   #{for wire decl.states}
+      .@{wire.name}(@{wire.name}),
    #{end}
 
    #{if decl.isMemoryMapped}

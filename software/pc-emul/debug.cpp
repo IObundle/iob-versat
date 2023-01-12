@@ -587,23 +587,23 @@ void StructPanel(WINDOW* w,Value val,int cursorPosition,int xStart,bool displayO
    int menuIndex = 0;
    int startPos = 2;
 
-   for(Member* member = type->members; member != nullptr; member = member->next){
+   for(Member& member : type->members){
       int yPos = startPos + menuIndex;
 
       if(!displayOnly && menuIndex == cursorPosition){
          wattron( w, A_STANDOUT );
       }
 
-      mvaddnstr(yPos, xStart, member->name.data,member->name.size);
+      mvaddnstr(yPos, xStart, member.name.data,member.name.size);
 
-      Value memberVal = AccessStruct(val,member);
+      Value memberVal = AccessStruct(val,&member);
       SizedString repr = GetValueRepresentation(memberVal,arena);
 
       move(yPos, xStart + panelWidth);
       addnstr(repr.data,repr.size);
 
       move(yPos, xStart + panelWidth + panelWidth / 2);
-      addnstr(member->type->name.data,member->type->name.size);
+      addnstr(member.type->name.data,member.type->name.size);
 
       if(!displayOnly && menuIndex == cursorPosition){
          wattroff( w, A_STANDOUT );
@@ -636,7 +636,7 @@ void TerminalIteration(WINDOW* w,Input input,Arena* arena,Arena* temp){
       newState->arenaMark = MarkArena(arena);
 
       if(type->type == Type::STRUCT){
-         Member* member = GetListByIndex(type->members,currentState->cursorPosition);
+         Member* member = &type->members[currentState->cursorPosition];
 
          Value selectedValue = AccessStruct(val,currentState->cursorPosition);
 
@@ -683,7 +683,7 @@ void TerminalIteration(WINDOW* w,Input input,Arena* arena,Arena* temp){
 
    int numberElements = 0;
    if(type->type == Type::STRUCT){
-      numberElements = ListCount(type->members);
+      numberElements = type->members.size;
    } else if(IsIndexable(type)){
       numberElements = IndexableSize(val);
    }
@@ -756,6 +756,11 @@ static void debug_sig_handler(int sig){
       signal(SIGSEGV, SIG_DFL);
       raise(SIGSEGV);
    }
+   if(sig == SIGABRT){
+      StartDebugTerminal();
+      signal(SIGABRT, SIG_DFL);
+      raise(SIGABRT);
+   }
 }
 
 void SetDebuggingValue(Value val){
@@ -764,6 +769,7 @@ void SetDebuggingValue(Value val){
    if(!init){
       signal(SIGUSR1, debug_sig_handler);
       signal(SIGSEGV, debug_sig_handler);
+      signal(SIGABRT, debug_sig_handler);
       init = true;
    }
 
