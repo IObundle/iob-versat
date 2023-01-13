@@ -5,8 +5,36 @@
 #include <cstdlib>
 #include <set>
 
+#include "parser.hpp"
 #include "type.hpp"
 #include "textualRepresentation.hpp"
+
+SizedString FuzzText(SizedString formattedExample,char sep,Arena* arena,int seed){
+   char sepBuffer[2] = {sep,'\0'};
+   Tokenizer tok(formattedExample,sepBuffer,{});
+
+   tok.AssertNextToken(sepBuffer);
+
+   Byte* mark = MarkArena(arena);
+
+   while(!tok.Done()){
+      Token next = tok.NextToken();
+      tok.AssertNextToken(sepBuffer);
+
+      *PushStruct<Token>(arena) = next;
+   }
+   Assert(tok.Done());
+
+   Array<Token> tokens = PointArray<Token>(arena,mark);
+
+   mark = MarkArena(arena);
+   for(Token& token : tokens){
+      PushString(arena,"%.*s ",UNPACK_SS(token));
+   }
+   SizedString res = PointArena(arena,mark);
+
+   return res;
+}
 
 void CheckMemory(Accelerator* topLevel){
    STACK_ARENA(temp,Kilobyte(64));

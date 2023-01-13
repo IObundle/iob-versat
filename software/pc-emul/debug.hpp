@@ -3,6 +3,8 @@
 
 #include "type.hpp"
 
+SizedString FuzzText(SizedString formattedExample,char sep,Arena* arena,int seed = COMPILE_TIME);
+
 void CheckMemory(AcceleratorIterator iter);
 void DisplayInstanceMemory(ComplexFUInstance* inst);
 void DisplayAcceleratorMemory(Accelerator* topLevel);

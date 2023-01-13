@@ -185,9 +185,9 @@ end
 
          #{for input inst.graphData.singleInputs}
          #{if input.inst and input.inst.declaration.type == 2}
-            .in@{input.port}(in@{input.inst.id}), // @{input.inst.name |> Identify}
+            .in@{index}(in@{input.inst.id}), // @{input.inst.name |> Identify}
          #{else}
-            .in@{input.port}(#{call outputName input}),
+            .in@{index}(#{call outputName input}),
          #{end}
          #{end}
 

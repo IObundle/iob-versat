@@ -1975,15 +1975,25 @@ int CalculateMemoryUsage(Versat* versat){
    return totalSize;
 }
 
-void Hook(Versat* versat,Accelerator* accel,FUInstance* inst){
+#include "thread.hpp"
 
+void PrintNumber(int id,void* arg){
+   printf("%d\n",id);
 }
 
+void Hook(Versat* versat,Accelerator* accel,FUInstance* inst){
+   InitThreadPool(8);
 
+   for(int i = 0; i < 16; i++){
+      Task task;
+      task.function = PrintNumber;
+      task.args = nullptr;
 
+      AddTask(task);
+   }
 
-
-
+   TerminatePool();
+}
 
 
 

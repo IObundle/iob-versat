@@ -146,11 +146,11 @@ FUInstance* ParseExpression(Versat* versat,Accelerator* circuit,Tokenizer* tok,S
       typeName = "OR";
    } else if(CompareToken(op,"^")){
       typeName = "XOR";
-   } else if(CompareToken(op,">>>")){
+   } else if(CompareToken(op,">><")){
       typeName = "RHR";
    } else if(CompareToken(op,">>")){
       typeName = "SHR";
-   } else if(CompareToken(op,"<<<")){
+   } else if(CompareToken(op,"<<>")){
       typeName = "RHL";
    } else if(CompareToken(op,"<<")){
       typeName = "SHL";
@@ -557,17 +557,8 @@ FUDeclaration* ParseIterative(Versat* versat,Tokenizer* tok){
    return RegisterIterativeUnit(versat,&decl);
 }
 
-void ParseVersatSpecification(Versat* versat,const char* filepath){
-   ArenaMarker marker(&versat->temp);
-
-   SizedString content = PushFile(&versat->temp,filepath);
-
-   if(content.size < 0){
-      printf("Failed to open file, filepath: %s\n",filepath);
-      DEBUG_BREAK;
-   }
-
-   Tokenizer tokenizer = Tokenizer(content, "#[](){}+:;,*~.",{"->",">>>","<<<",">>","<<",".."});
+void ParseVersatSpecification(Versat* versat,SizedString content){
+   Tokenizer tokenizer = Tokenizer(content, "#[](){}+:;,*~.",{"->",">><","<<>",">>","<<",".."});
    Tokenizer* tok = &tokenizer;
 
    while(!tok->Done()){
@@ -581,6 +572,19 @@ void ParseVersatSpecification(Versat* versat,const char* filepath){
          tok->AdvancePeek(peek);
       }
    }
+}
+
+void ParseVersatSpecification(Versat* versat,const char* filepath){
+   ArenaMarker marker(&versat->temp);
+
+   SizedString content = PushFile(&versat->temp,filepath);
+
+   if(content.size < 0){
+      printf("Failed to open file, filepath: %s\n",filepath);
+      DEBUG_BREAK;
+   }
+
+   ParseVersatSpecification(versat,content);
 }
 
 

@@ -76,6 +76,7 @@ Versat* InitVersat(int base,int numberConfigurations);
 void Free(Versat* versat); // Usually not needed, as memory is freed on program termination and Versat is supposed to be "active" from start to finish, but usuful for debugging memory problems
 void ParseCommandLineOptions(Versat* versat,int argc,const char** argv);
 uint SetDebug(Versat* versat,VersatDebugFlags flags,uint flag);
+void ParseVersatSpecification(Versat* versat,SizedString content);
 void ParseVersatSpecification(Versat* versat,const char* filepath);
 
 // Accelerator functions

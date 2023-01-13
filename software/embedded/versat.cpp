@@ -162,3 +162,49 @@ FUInstance* CreateFUInstance(Accelerator* accel,FUDeclaration* type,SizedString 
 void Hook(Versat* versat,Accelerator* accel,FUInstance* inst){
 
 }
+
+#include "versatExtra.hpp"
+
+bool InitSimpleAccelerator(SimpleAccelerator* simple,Versat* versat,const char* declarationName){
+   bool res = simple->init;
+   simple->inst = &instancesBuffer[0];
+   for(int i = 0; i < simpleInputs; i++){
+      simple->inputs[i] = &instancesBuffer[inputStart + i];
+   }
+   for(int i = 0; i < simpleOutputs; i++){
+      simple->outputs[i] = &instancesBuffer[outputStart + i];
+   }
+   simple->numberInputs = simpleInputs;
+   simple->numberOutputs = simpleOutputs;
+   simple->init = true;
+
+   return res;
+}
+
+int* vRunSimpleAccelerator(SimpleAccelerator* simple,va_list args){
+   static int out[99];
+
+   for(unsigned int i = 0; i < simple->numberInputs; i++){
+      int val = va_arg(args,int);
+      simple->inputs[i]->config[0] = val;
+   }
+
+   AcceleratorRun(simple->accel);
+
+   for(unsigned int i = 0; i < simple->numberOutputs; i++){
+      out[i] = simple->outputs[i]->state[0];
+   }
+
+   return out;
+}
+
+int* RunSimpleAccelerator(SimpleAccelerator* simple, ...){
+   va_list args;
+   va_start(args,simple);
+
+   int* out = vRunSimpleAccelerator(simple,args);
+
+   va_end(args);
+
+   return out;
+}

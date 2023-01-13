@@ -16,6 +16,8 @@ Testbench:
       Add subtests
       Use a more data oriented approach. Kinda problematic when running in embedded, so make small changes and test in embedded to make sure not doing anything too much complicated.
 
+   Use more randomized testcases, specially for floating point numbers and things that are "hard" in hardware but easy to check in software
+
 Major change:
 
    A lot of the calculations being done in the FUDeclaration is already being done in the CreateFUInstance function of the Accelerator.

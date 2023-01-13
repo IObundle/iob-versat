@@ -461,6 +461,7 @@ Accelerator* CopyAccelerator(Versat* versat,Accelerator* accel,InstanceMap* map,
 ComplexFUInstance* CopyInstance(Accelerator* newAccel,ComplexFUInstance* oldInstance,SizedString newName,bool flat);
 void InitializeFUInstances(Accelerator* accel,bool force);
 void CompressAcceleratorMemory(Accelerator* accel);
+int CountNonOperationChilds(Accelerator* accel);
 
 // Unit connection (returns Edge)
 Edge* FindEdge(FUInstance* out,int outIndex,FUInstance* in,int inIndex,int delay = 0);

@@ -19,4 +19,6 @@ struct SimpleAccelerator{
 bool InitSimpleAccelerator(SimpleAccelerator* simple,Versat* versat,const char* declarationName);
 int* RunSimpleAccelerator(SimpleAccelerator* simple, ...); // Return is statically allocated. Do not reuse between calls to function
 
+void OutputVersatSource(Versat* versat,SimpleAccelerator* accel,const char* sourceFilepath,const char* constantsFilepath,const char* dataFilepath);
+
 #endif // INCLUDED_VERSAT_EXTRA

@@ -56,3 +56,12 @@ FUInstance instancesBuffer[] = {
    }
    #{end}
 };
+
+#{if IsSimple}
+
+static int simpleInputs = @{simpleInputs};
+static int simpleOutputs = @{simpleOutputs};
+static int inputStart = @{inputStart};
+static int outputStart = @{outputStart};
+
+#{end}

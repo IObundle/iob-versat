@@ -22,6 +22,8 @@ struct Versat{
 struct FUDeclaration{
 };
 
+struct SimpleAccelerator;
+
 struct Accelerator{
    Versat* versat;
    bool locked;
@@ -84,7 +86,8 @@ inline void ActivateMergedAccelerator(Versat* versat,Accelerator* accel,FUDeclar
 #define CreateAccelerator(...) ((Accelerator*)0)
 #define RegisterFU(...) ((FUDeclaration*)0)
 #define DisplayAcceleratorMemory(...) ((void)0)
-#define OutputVersatSource(...) ((void)0)
+inline void OutputVersatSource(Versat* versat,Accelerator* accel,const char* sourceFilepath,const char* constantsFilepath,const char* dataFilepath){}
+inline void OutputVersatSource(Versat* versat,SimpleAccelerator* accel,const char* sourceFilepath,const char* constantsFilepath,const char* dataFilepath){}
 #define ConnectUnits(...) ((void)0)
 #define OutputGraphDotFile(...) ((void)0)
 #define RemoveFUInstance(...) ((void)0)

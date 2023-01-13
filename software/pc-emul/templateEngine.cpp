@@ -10,6 +10,7 @@
 #include "utils.hpp"
 #include "type.hpp"
 #include "debug.hpp"
+#include "versatPrivate.hpp"
 
 struct ValueAndText{
    Value val;
@@ -358,25 +359,6 @@ static Value HexValue(Value in){
    return res;
 }
 
-static int CountNonOperationChilds(Accelerator* accel){
-   if(accel == nullptr){
-      return 0;
-   }
-
-   int count = 0;
-   for(ComplexFUInstance* inst : accel->instances){
-      if(inst->declaration->type == FUDeclaration::COMPOSITE){
-         count += CountNonOperationChilds(inst->declaration->fixedDelayCircuit);
-      }
-
-      if(!inst->declaration->isOperation && inst->declaration->type != FUDeclaration::SPECIAL){
-         count += 1;
-      }
-   }
-
-   return count;
-}
-
 static Value EscapeSizedString(Value val){
    Assert(val.type == ValueType::SIZED_STRING || val.type == ValueType::STRING);
    Assert(val.isTemp);
@@ -402,6 +384,25 @@ static Value EscapeSizedString(Value val){
    res.str = escaped;
 
    return res;
+}
+
+inline int CountNonOperationChilds(Accelerator* accel){
+   if(accel == nullptr){
+      return 0;
+   }
+
+   int count = 0;
+   for(ComplexFUInstance* inst : accel->instances){
+      if(inst->declaration->type == FUDeclaration::COMPOSITE){
+         count += CountNonOperationChilds(inst->declaration->fixedDelayCircuit);
+      }
+
+      if(!inst->declaration->isOperation && inst->declaration->type != FUDeclaration::SPECIAL){
+         count += 1;
+      }
+   }
+
+   return count;
 }
 
 static Value EvalExpression(Expression* expr){

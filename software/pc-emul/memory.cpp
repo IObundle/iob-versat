@@ -51,15 +51,6 @@ void CheckMemoryStats(){
    }
 }
 
-ArenaMarker::ArenaMarker(Arena* arena){
-   this->arena = arena;
-   this->mark = MarkArena(arena);
-}
-
-ArenaMarker::~ArenaMarker(){
-   PopMark(this->arena,this->mark);
-}
-
 void InitArena(Arena* arena,size_t size){
    arena->used = 0;
    arena->totalAllocated = size;

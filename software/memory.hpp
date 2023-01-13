@@ -96,14 +96,6 @@ struct Arena{
    size_t totalAllocated;
 };
 
-class ArenaMarker{
-   Arena* arena;
-   Byte* mark;
-public:
-   ArenaMarker(Arena* arena);
-   ~ArenaMarker();
-};
-
 void InitArena(Arena* arena,size_t size); // Calls calloc
 Arena SubArena(Arena* arena,size_t size);
 void PopToSubArena(Arena* top,Arena subArena);
@@ -118,6 +110,14 @@ SizedString PushString(Arena* arena,const char* format,...) __attribute__ ((form
 SizedString vPushString(Arena* arena,const char* format,va_list args);
 void PushNullByte(Arena* arena);
 
+class ArenaMarker{
+   Arena* arena;
+   Byte* mark;
+public:
+   ArenaMarker(Arena* arena){this->arena = arena; this->mark = MarkArena(arena);};
+   ~ArenaMarker(){PopMark(this->arena,this->mark);};
+};
+
 // Do not abuse stack arenas.
 #define STACK_ARENA(NAME,SIZE) \
    Arena NAME = {}; \
@@ -127,6 +127,9 @@ void PushNullByte(Arena* arena);
 
 template<typename T>
 Array<T> PushArray(Arena* arena,int size){Array<T> res = {}; res.size = size; res.data = (T*) PushBytes(arena,sizeof(T) * size); return res;};
+
+template<typename T>
+Array<T> PointArray(Arena* arena,Byte* mark){SizedString data = PointArena(arena,mark); Array<T> res = {}; res.data = (T*) data.data; res.size = data.size / sizeof(T); return res;}
 
 template<typename T>
 T* PushStruct(Arena* arena){T* res = (T*) PushBytes(arena,sizeof(T)); return res;};

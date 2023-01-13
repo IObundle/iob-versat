@@ -281,6 +281,25 @@ void CompressAcceleratorMemory(Accelerator* accel){
    }
 }
 
+int CountNonOperationChilds(Accelerator* accel){
+   if(accel == nullptr){
+      return 0;
+   }
+
+   int count = 0;
+   for(ComplexFUInstance* inst : accel->instances){
+      if(inst->declaration->type == FUDeclaration::COMPOSITE){
+         count += CountNonOperationChilds(inst->declaration->fixedDelayCircuit);
+      }
+
+      if(!inst->declaration->isOperation && inst->declaration->type != FUDeclaration::SPECIAL){
+         count += 1;
+      }
+   }
+
+   return count;
+}
+
 Accelerator* Flatten(Versat* versat,Accelerator* accel,int times){
    Arena* arena = &versat->temp;
 
