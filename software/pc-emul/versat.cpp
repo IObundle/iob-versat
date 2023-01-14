@@ -24,6 +24,16 @@ static int* DefaultInitFunction(ComplexFUInstance* inst){
    inst->done = true;
    return nullptr;
 }
+static int* DefaultUpdateFunction(ComplexFUInstance* inst){
+   static int out[50];
+
+   for(int i = 0; i < 50; i++){
+      out[i] = GetInputValue(inst,i);
+   }
+
+   return out;
+}
+
 static FUDeclaration* RegisterCircuitInput(Versat* versat){
    FUDeclaration decl = {};
 
@@ -48,15 +58,7 @@ static FUDeclaration* RegisterCircuitOutput(Versat* versat){
 
    return RegisterFU(versat,decl);
 }
-static int* DefaultUpdateFunction(ComplexFUInstance* inst){
-   static int out[50];
 
-   for(int i = 0; i < 50; i++){
-      out[i] = GetInputValue(inst,i);
-   }
-
-   return out;
-}
 static FUDeclaration* RegisterData(Versat* versat){
    FUDeclaration decl = {};
 
@@ -91,6 +93,30 @@ static FUDeclaration* RegisterPipelineRegister(Versat* versat){
 
    return RegisterFU(versat,decl);
 }
+
+static int* LiteralInitFunction(ComplexFUInstance* inst){
+   static int out;
+   out = inst->literal;
+   inst->done = true;
+   return &out;
+}
+static int* LiteraltUpdateFunction(ComplexFUInstance* inst){
+   static int out;
+   out = inst->literal;
+   return &out;
+}
+
+static FUDeclaration* RegisterLiteral(Versat* versat){
+   FUDeclaration decl = {};
+
+   decl.name = MakeSizedString("Literal");
+   decl.outputLatencies = Array<int>{zeros,1};
+   decl.initializeFunction = LiteralInitFunction;
+   decl.updateFunction = LiteraltUpdateFunction;
+
+   return RegisterFU(versat,decl);
+}
+
 static int* UnaryNot(ComplexFUInstance* inst){
    static unsigned int out;
    out = ~GetInputValue(inst,0);
@@ -249,6 +275,7 @@ Versat* InitVersat(int base,int numberConfigurations){
    RegisterCircuitInput(versat);
    RegisterCircuitOutput(versat);
    RegisterData(versat);
+   RegisterLiteral(versat);
 
    for(FUDeclaration* decl : versat->declarations){
       FUDeclaration* newSpace = basicDeclarations.Alloc();

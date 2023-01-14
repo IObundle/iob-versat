@@ -665,7 +665,7 @@ Expression* ParseOperationType_(Tokenizer* tok,OperationList* operators,ParsingF
    void* start = tok->Mark();
 
    if(operators == nullptr){
-      Expression* expr = finalFunction(tok);
+      Expression* expr = finalFunction(tok,tempArena);
 
       expr->text = tok->Point(start);
       return expr;

@@ -190,6 +190,7 @@ Accelerator* CopyAccelerator(Versat* versat,Accelerator* accel,InstanceMap* map,
 
       Memcpy(newInst->config,inst->config,inst->declaration->configs.size);
       newInst->savedConfiguration = inst->savedConfiguration;
+      newInst->literal = inst->literal;
 
       map->insert({inst,newInst});
    }

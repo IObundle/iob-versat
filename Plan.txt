@@ -10,6 +10,17 @@ Misc:
    Tired of having to write a lot for nothing. Also maybe remove the MakeSizedString functions. Probably no gain, especially if the alternative can be inlined in some way or form. Worse case generation call the function Str and call the struct String (or function is String and struct is Str or function is String and struct is string, maybe better this way, more explicit where it needs to). Have people call Str("") everywhere, if no good alternative exists.
    (Which doesn't appear to exist, because adding a constructor makes a mess with unions and I don't think an alternative exists)
 
+Literal:
+
+   In verilog, it should compile into a literal as well.
+   Do not know where to store it in pc-emul. Do not like the idea of having a FUInstance specific value that gets carried around but for only a small amount of units.
+   Should probably be something akin to a parameter.
+
+Specification Parser:
+
+   The parser is not taking into account the delay inside expressions.
+   Add arrays, instead of having to type every unit repeatedly.
+
 Testbench:
 
    Rework testbench
@@ -31,6 +42,20 @@ Graph optimizations:
       The weight could be simply set by the user for the simple units, while composite units would only need to add up all their instances weights.
       To calculate the weight, we could just compile the unit standalone and take the value of the amount of LUTs used.
       We could also add multiple weights, one for LUTs, another for memories, and so one.
+      Remove unused nodes (and alert the user)
+
+   Change linear operations from lists into trees (think adders, logic operations and the likes).
+      Ideally start by joining everything into a single unit, with multiple edges to the same port.
+      Then check if it's possible to change connection based on associativity.
+      Then break up into the tree shape
+
+   Change connections for associative operations
+   Partition buffers into multiple parts if they are connected to the same output (If one input requires a buffer of 2 and the other 3, we can use a 2 buffer plus a 1 buffer connected to the 2 buffer, instead of a 3 buffer [basically moving the fanout down the path]).
+
+   Move delays and buffers upwards or downwards the paths. Instead of unit with 1 input and 8 outputs having 8 buffers, we could just have 1 buffer. 
+      Probably needs to be modelled as a optimization problem, since we can also encounter a problem with 8 inputs and 1 output and we have to move the buffer downwards.
+
+
 
 Embedded data:
 
@@ -68,12 +93,6 @@ Delay and Time:
          The problem is that adding a buffer unit might affect the latency for previous circuits. Probably would get stuck looping around until no new unit was needed.
          Probably would need to do a full accelerator calculate delay and fix buffers, then use AcceleratorView for each graph to extract the correct values for each accelerator.
       For fixed buffers, I don't think using AcceleratorView does anything. Have to perform CalculateDelay and FixBuffers globally.
-
-   Improve the fixing of graphs.
-      When fixing the graphs, we currently only take the result from calculate delay and insert buffers into any edge with any positive delay.
-      We can improve this by sending delay to later or units before hand. If a unit has 1 input and 8 outputs, and there is a need to delay to follow up units, then we end up adding 8 delay units when we only need to insert 1 at the input.
-      I don't think this is a problem of the calculate delay algorithm, because if we had a unit with 8 inputs and 1 outputs, we could potentially hit the other edge case.
-      I think we need to pick the result of the calculate delay as the base case, then model the problem as a minimization problem, knowing that we can shuffle delays around, until we reach a minimum of delay units needed to add. 
 
    Should the concept of data validity be extended to remove the fact that data is assumed valid forever after the unit starts producing valid data?
       Some units only produce valid data after X cycles. Think things like iterative units and complex FPU units that aren't pipelined.
@@ -125,7 +144,6 @@ Parser:
       Override linux signal handlers to make sure we have actually output the test that cause the bug in the first place.
       We can add the fuzzer to the list of automatic tests that we continuosly run all the time. Use the compile time seed to make sure we can rerun the test later.
 
-
 |  Change parsing of expressions to be much more correct, check some of the algorithms seen in the net. Make it explicit the precedence and associativity of operators
 
 Optimizations:
@@ -138,16 +156,14 @@ Optimizations:
       In fact, currently units are having their configuration pointers point to somebody else configuration space. Ideally we should set the pointers to nullptr, as it should be a segfault accessing other units configurations.
       Also, investigate wether we need the offset arrays for outputs and extraData, instead of just using push pointers.
 
-   The VCD file generation outputs data every cycle for every unit even if no change occured at all.
-      The fix is farely easy, just pass an arena and store the previous outputted value, otherwise do not output anything at all.
-      Probably takes longer, but uses less space and gtkwaves should load almost instantaneously 
-
 Template:
 
    Do a template pass to remove duplicate code, lock down on the approach used to identify units and wires. Different templates should almost resemble each other. All the logic should be shared between units and should relie on common ground.
    Allow the use of enums inside templates. (See parsing enum info on Type)
    Add local variables. Need to introduce the concept of "stack frames".
    Take a look at the way whitespace is handled. Nothing too important, but I think some places could generate files with errors because they don't handle whitespace correctly
+
+   The Command structure is not needed, I thing. Does the same thing as an expression.
 
 Type:
 

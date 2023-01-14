@@ -32,12 +32,12 @@ UNIT_VERILOG_BASIC := $(foreach unit,$(VERILATE_UNIT_BASIC),$(VERSAT_DIR)/hardwa
 UNIT_HDR+=$(foreach unit,$(VERILATE_UNIT_BASIC),$(BUILD_DIR)/V$(unit).h)
 UNIT_HDR+=$(foreach unit,$(VERILATE_UNIT),$(BUILD_DIR)/V$(unit).h)
 
+TYPE_INFO_HDR += $(VERSAT_SW_DIR)/utils.hpp
+TYPE_INFO_HDR += $(VERSAT_SW_DIR)/memory.hpp
 TYPE_INFO_HDR += $(VERSAT_PC_EMUL)/versat.hpp
 TYPE_INFO_HDR += $(VERSAT_PC_EMUL)/versatPrivate.hpp
-TYPE_INFO_HDR += $(VERSAT_SW_DIR)/utils.hpp
 TYPE_INFO_HDR += $(VERSAT_PC_EMUL)/verilogParser.hpp
 TYPE_INFO_HDR += $(VERSAT_PC_EMUL)/templateEngine.hpp
-TYPE_INFO_HDR += $(VERSAT_PC_EMUL)/../memory.hpp
 
 TOOL_COMMON_SRC += $(VERSAT_DIR)/software/pc-emul/parser.cpp
 TOOL_COMMON_SRC += $(VERSAT_DIR)/software/pc-emul/utils.cpp
@@ -51,6 +51,7 @@ TOOL_SRC += $(VERSAT_DIR)/software/pc-emul/type.cpp
 CPP_OBJ+=$(BUILD_DIR)/verilated.o
 CPP_OBJ+=$(BUILD_DIR)/verilated_vcd_c.o
 
+VERSAT_HDR+=$(wildcard $(VERSAT_SW_DIR)/*.inl)
 VERSAT_HDR+=$(wildcard $(VERSAT_PC_EMUL)/*.inl)
 
 $(BUILD_DIR)/verilated.o:

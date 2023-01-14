@@ -214,7 +214,7 @@ static Expression* ParseAtom(Tokenizer* tok,Arena* arena){
    return expr;
 }
 
-static Expression* ParseFactor(Tokenizer* tok){
+static Expression* ParseFactor(Tokenizer* tok,Arena* arena){
    void* start = tok->Mark();
 
    Token peek = tok->PeekToken();
@@ -229,8 +229,8 @@ static Expression* ParseFactor(Tokenizer* tok){
 
       Expression* child = ParseExpression(tok);
 
-      expr = PushStruct<Expression>(tempArena);
-      expr->expressions = PushArray<Expression*>(tempArena,1);
+      expr = PushStruct<Expression>(arena);
+      expr->expressions = PushArray<Expression*>(arena,1);
 
       expr->type = Expression::OPERATION;
       expr->op = "!";
@@ -238,7 +238,7 @@ static Expression* ParseFactor(Tokenizer* tok){
 
       expr->text = tok->Point(start);
    } else {
-      expr = ParseAtom(tok,tempArena);
+      expr = ParseAtom(tok,arena);
    }
 
    expr->text = tok->Point(start);

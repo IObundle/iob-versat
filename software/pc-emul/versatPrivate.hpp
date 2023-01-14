@@ -174,7 +174,10 @@ struct ComplexFUInstance : public FUInstance{
 
    Accelerator* iterative;
 
+   union{
+   int literal;
    int bufferAmount;
+   };
    GraphComputedData* graphData;
    VersatComputedData* versatData;
    char tag;
@@ -428,6 +431,7 @@ struct ConsolidationGraphOptions{
    enum {NOTHING,SAME_ORDER,EXACT_ORDER} type;
 };
 
+// Simple operations should also be stored here. They are versat agnostic as well
 namespace BasicDeclaration{
 	extern FUDeclaration* buffer;
    extern FUDeclaration* fixedBuffer;

@@ -101,7 +101,7 @@ double ParseDouble(SizedString str);
 float ParseFloat(SizedString str);
 bool IsNum(char ch);
 
-typedef Expression* (*ParsingFunction)(Tokenizer* tok);
+typedef Expression* (*ParsingFunction)(Tokenizer* tok,Arena* arena);
 Expression* ParseOperationType(Tokenizer* tok,std::initializer_list<std::initializer_list<const char*>> operators,ParsingFunction finalFunction,Arena* tempArena);
 
 #endif // INCLUDED_PARSER

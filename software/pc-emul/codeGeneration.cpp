@@ -215,6 +215,7 @@ void OutputVersatSource(Versat* versat,Accelerator* accel,const char* sourceFile
    TemplateSetNumber("nStatics",val.nStatics);
    TemplateSetCustom("instances",&accum,"std::vector<ComplexFUInstance*>");
    TemplateSetNumber("numberUnits",accum.size());
+   TemplateSetBool("IsSimple",false);
    ProcessTemplate(d,"../../submodules/VERSAT/software/templates/embedData.tpl",&versat->temp);
 
    //PopMark(&versat->temp,mark);

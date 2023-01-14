@@ -273,7 +273,7 @@ static Expression* ParseAtom(Tokenizer* tok){
 
 static Expression* ParseExpression(Tokenizer* tok);
 
-static Expression* ParseFactor(Tokenizer* tok){
+static Expression* ParseFactor(Tokenizer* tok,Arena* arena){
    Token peek = tok->PeekToken();
 
    if(CompareString(peek,"(")){

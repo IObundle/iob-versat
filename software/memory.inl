@@ -136,10 +136,15 @@ Data* Hashmap<Key,Data>::Insert(Key key,Data data){
    int mask = memory.size - 1;
    int index = Hash<Key>(key) & mask; // Size is power of 2
 
-   // open addressing, find first empty position
+   // open addressing, find first empty position or valid position with same key
    bool found = false;
    for(int i = 0; i < memory.size; i += 1,index = (index + 1) & mask){
-      if(!valid.Get(index)){
+      if(valid.Get(index)){
+         if(key == memory[index].key){ // Found space with same key
+            found = true;
+            break;
+         }
+      } else { // Found free space
          found = true;
          break;
       }
