@@ -10,6 +10,7 @@
 #include <cstdlib>
 
 #include "logger.hpp"
+#include "intrinsics.hpp"
 
 int GetPageSize(){
    static int pageSize = 0;
@@ -55,6 +56,15 @@ void InitArena(Arena* arena,size_t size){
    arena->used = 0;
    arena->totalAllocated = size;
    arena->mem = (Byte*) calloc(size,sizeof(Byte));
+   Assert(arena->mem);
+   Assert(IS_ALIGNED_8(arena->mem));
+}
+
+void InitLargeArena(Arena* arena){
+   arena->used = 0;
+   arena->totalAllocated = Gigabyte(4);
+   arena->mem = (Byte*) AllocatePages(arena->totalAllocated / GetPageSize());
+   Assert(arena->mem);
 }
 
 Arena SubArena(Arena* arena,size_t size){
@@ -70,7 +80,7 @@ Arena SubArena(Arena* arena,size_t size){
 void PopToSubArena(Arena* arena,Arena subArena){
    Byte* subArenaMemPos = &subArena.mem[subArena.used];
 
-   int old = arena->used;
+   size_t old = arena->used;
    arena->used = subArenaMemPos - arena->mem;
    Assert(old >= arena->used);
 }
@@ -94,7 +104,7 @@ Byte* PushBytes(Arena* arena, int size){
 
    Assert(arena->used + size < arena->totalAllocated);
 
-   memset(ptr,0,size);
+   //memset(ptr,0,size);
    arena->used += size;
 
    return ptr;
@@ -102,7 +112,7 @@ Byte* PushBytes(Arena* arena, int size){
 
 SizedString PointArena(Arena* arena,Byte* mark){
    SizedString res = {};
-   res.data = mark;
+   res.data = (char*) mark;
    res.size = &arena->mem[arena->used] - mark;
    return res;
 }
@@ -143,7 +153,7 @@ SizedString PushString(Arena* arena,SizedString ss){
 }
 
 SizedString vPushString(Arena* arena,const char* format,va_list args){
-   char* buffer = &arena->mem[arena->used];
+   char* buffer = (char*) &arena->mem[arena->used];
    int size = vsprintf(buffer,format,args);
 
    arena->used += (size_t) (size);
@@ -187,6 +197,8 @@ void BitIterator::operator++(){
    }
 
    // Stop at first valid found after
+   // TODO: Maybe use the FirstBitSetIndex function, instead of this
+   //       Need to change that function to maybe return bitSize if not
    while(currentByte < byteSize){
       unsigned char ch = array->memory[currentByte];
 
@@ -198,14 +210,14 @@ void BitIterator::operator++(){
 
       // Fallthrough switch
       switch(currentBit){
-      case 0: if(ch & 0x80) return; else ++currentBit;
-      case 1: if(ch & 0x40) return; else ++currentBit;
-      case 2: if(ch & 0x20) return; else ++currentBit;
-      case 3: if(ch & 0x10) return; else ++currentBit;
-      case 4: if(ch & 0x08) return; else ++currentBit;
-      case 5: if(ch & 0x04) return; else ++currentBit;
-      case 6: if(ch & 0x02) return; else ++currentBit;
-      case 7: if(ch & 0x01) return; else {
+      case 0: if(ch & 0x01) return; else ++currentBit;
+      case 1: if(ch & 0x02) return; else ++currentBit;
+      case 2: if(ch & 0x04) return; else ++currentBit;
+      case 3: if(ch & 0x08) return; else ++currentBit;
+      case 4: if(ch & 0x10) return; else ++currentBit;
+      case 5: if(ch & 0x20) return; else ++currentBit;
+      case 6: if(ch & 0x40) return; else ++currentBit;
+      case 7: if(ch & 0x80) return; else {
          currentBit = 0;
          currentByte += 1;
          }
@@ -221,18 +233,19 @@ int BitIterator::operator*(){
 void BitArray::Init(Byte* memory,int bitSize){
    this->memory = memory;
    this->bitSize = bitSize;
+   Assert(IS_ALIGNED_4(BitSizeToByteSize(bitSize)));
 }
 
 void BitArray::Init(Arena* arena,int bitSize){
    this->bitSize = bitSize;
    this->memory = MarkArena(arena);
-   PushBytes(arena,BitToByteSize(bitSize));
+   PushBytes(arena,ALIGN_4(BitSizeToByteSize(bitSize))); // Makes it easier to use popcount
 }
 
 void BitArray::Fill(bool value){
    int fillValue = (value ? 0xff : 0x00);
 
-   int byteSize = BitToByteSize(this->bitSize);
+   int byteSize = BitSizeToByteSize(this->bitSize);
    for(int i = 0; i < byteSize; i++){
       this->memory[i] = fillValue;
    }
@@ -241,7 +254,7 @@ void BitArray::Fill(bool value){
 void BitArray::Copy(BitArray array){
    Assert(this->bitSize >= array.bitSize);
 
-   int byteSize = BitToByteSize(this->bitSize);
+   int byteSize = BitSizeToByteSize(this->bitSize);
    Memcpy(this->memory,array.memory,byteSize);
 }
 
@@ -249,8 +262,7 @@ int BitArray::Get(int index){
    Assert(index < this->bitSize);
 
    int byteIndex = index / 8;
-   int bitIndex = 7 - (index % 8);
-
+   int bitIndex = index % 8;
    Byte byte = memory[byteIndex];
    int result = (byte & (1 << bitIndex) ? 1 : 0);
 
@@ -261,13 +273,122 @@ void BitArray::Set(int index,bool value){
    Assert(index < this->bitSize);
 
    int byteIndex = index / 8;
-   int bitIndex = 7 - (index % 8);
+   int bitIndex = index % 8;
 
    if(value){
       memory[byteIndex] |= (1 << bitIndex);
    } else {
       memory[byteIndex] &= ~(1 << bitIndex);
    }
+}
+
+int BitArray::GetNumberBitsSet(){
+   int count = 0;
+
+   #if 1
+   int32* ptr = (int32*) this->memory;
+   int i = 0;
+   for(;i < this->bitSize; i += 32){
+      count += PopCount(*ptr);
+      ptr += 1;
+   }
+   #else
+   // Deal with data not aligned to 4
+   int32* ptr = (int32*) this->memory;
+   int i = 0;
+   for(;(i + 32) < this->bitSize; i += 32){
+      count += PopCount(*ptr);
+      ptr += 1;
+   }
+
+   if(i < this->bitSize){
+      int bytes = BitSizeToByteSize(this->bitSize - i);
+
+      int32 test = {};
+      int8* testView = &test;
+      int8* ptrView = (int8*) ptr;
+
+      switch(bytes){
+      case 1: testView[0] = ptrView[0];
+      case 2: testView[1] = ptrView[1];
+      case 3: testView[2] = ptrView[2];
+      case 4: testView[3] = ptrView[3]; // Shouldn't happen, as it means we are aligned
+      }
+
+      count += PopCount(test);
+   }
+   #endif
+
+   return count;
+}
+
+int BitArray::FirstBitSetIndex(){
+   #ifdef VERSAT_DEBUG
+   int correct = 0;
+   for(int i = 0; i < this->bitSize; i++){
+      if(Get(i)){
+         correct = i;
+         break;
+      }
+   }
+   #endif
+
+   uint32* ptr = (uint32*) this->memory;
+   int i = 0;
+   for(;i < this->bitSize; i += 32){
+      if(*ptr != 0){
+         int index = i + TrailingZerosCount(*ptr);
+         Assert(index == correct);
+         return index;
+      }
+      ptr += 1;
+   }
+   Assert(false); // Not correct but good for the current needs
+   return -1;
+}
+
+int BitArray::FirstBitSetIndex(int start){
+   #ifdef VERSAT_DEBUG
+   int correct = 0;
+   for(int i = start; i < this->bitSize; i++){
+      if(Get(i)){
+         correct = i;
+         break;
+      }
+   }
+   #endif
+
+   Assert(start < this->bitSize);
+   int i = ALIGN_32(start - 31);
+   uint32 startDWord = BitSizeToDWordSize(i);
+   uint32* ptr = (uint32*) this->memory;
+   ptr = &ptr[startDWord];
+
+   uint32 val = *ptr;
+
+   while(val != 0){
+      int bitIndex = TrailingZerosCount(val);
+      int index = i + bitIndex;
+      if(index >= start){
+         Assert(index == correct);
+         return index;
+      } else {
+         val = CLEAR_BIT(val,bitIndex);
+      }
+   }
+
+   i += 32;
+   ptr += 1;
+   for(;i < this->bitSize; i += 32){
+      if(*ptr != 0){
+         int index = i + TrailingZerosCount(*ptr);
+         Assert(index == correct);
+         return index;
+      }
+      ptr += 1;
+   }
+   Assert(false); // Not correct but good for the current needs
+   return -1;
 }
 
 SizedString BitArray::PrintRepresentation(Arena* output){
@@ -288,7 +409,7 @@ SizedString BitArray::PrintRepresentation(Arena* output){
 void BitArray::operator&=(BitArray& other){
    Assert(this->bitSize == other.bitSize);
 
-   int byteSize = BitToByteSize(this->bitSize);
+   int byteSize = BitSizeToByteSize(this->bitSize);
    for(int i = 0; i < byteSize; i++){
       this->memory[i] &= other.memory[i];
    }

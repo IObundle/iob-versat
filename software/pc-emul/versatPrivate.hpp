@@ -27,10 +27,10 @@ inline DelayType operator|(DelayType a, DelayType b)
 
 // So far, this type of graph is only useful for consolidation graphs.
 template<typename Node,typename Edge>
-class Graph{
+class AdjacencyValidGraph{
 public:
    Array<Node> nodes;
-   Array<Edge> edges;
+   Array<BitArray> edges;
 
    BitArray validNodes;
 };
@@ -234,6 +234,8 @@ struct Accelerator{ // Graph + data storage
    Allocation<int> outputAlloc;
    Allocation<int> storedOutputAlloc;
 
+   Arena memory;
+
    Pool<StaticInfo> staticInfo;
 
 	void* configuration;
@@ -280,31 +282,6 @@ public:
 struct HashKey{
    SizedString key;
    int data;
-};
-
-class AcceleratorIterator{
-public:
-   Array<PoolIterator<ComplexFUInstance>> stack;
-   Hashmap<StaticId,StaticData>* staticUnits;
-   Accelerator* topLevel;
-   int level;
-   bool calledStart;
-   bool populate;
-
-   // Must call first
-   ComplexFUInstance* Start(Accelerator* topLevel,ComplexFUInstance* compositeInst,Arena* temp,bool populate = false);
-   ComplexFUInstance* Start(Accelerator* topLevel,Arena* temp,bool populate = false);
-
-   ComplexFUInstance* Descend(); // Current() must be a composite instance, otherwise this will fail
-
-   ComplexFUInstance* Next(); // Iterates over subunits
-   ComplexFUInstance* Skip(); // Next unit on the same level
-
-   ComplexFUInstance* Current(); // Returns nullptr to indicate end of iteration
-   ComplexFUInstance* CurrentAcceleratorInstance(); // Returns the accelerator instance for the Current() instance or nullptr if currently at top level
-
-   AcceleratorIterator LevelBelowIterator(Arena* temp); // Current() must be a composite instance, Returns an iterator that will iterate starting from the level below, but will end without going to upper levels.
-   AcceleratorIterator LevelBelowIterator(); // Not taking an arena means that the returned iterator uses current iterator memory. Returned iterator must be iterated fully before the current iterator can be used, otherwise memory conflicts will arise as both iterators are sharing the same stack
 };
 
 struct IterativeUnitDeclaration{
@@ -376,16 +353,6 @@ struct HierarchicalName{
    HierarchicalName* next;
 };
 
-struct FUInstanceInterfaces{
-   PushPtr<int> config;
-   PushPtr<int> state;
-   PushPtr<int> delay;
-   PushPtr<int> outputs;
-   PushPtr<int> storedOutputs;
-   PushPtr<int> statics;
-   PushPtr<Byte> extraData;
-};
-
 struct SharingInfo{
    int* ptr;
    bool init;
@@ -431,6 +398,47 @@ struct ConsolidationGraphOptions{
    enum {NOTHING,SAME_ORDER,EXACT_ORDER} type;
 };
 
+class FUInstanceInterfaces{
+public:
+   PushPtr<int> config;
+   PushPtr<int> state;
+   PushPtr<int> delay;
+   PushPtr<int> outputs;
+   PushPtr<int> storedOutputs;
+   PushPtr<int> statics;
+   PushPtr<Byte> extraData;
+
+   void Init(Accelerator* accel);
+   void Init(Accelerator* topLevel,ComplexFUInstance* inst);
+
+   void AssertEmpty(bool checkStatic = true);
+};
+
+class AcceleratorIterator{
+public:
+   Array<PoolIterator<ComplexFUInstance>> stack;
+   Hashmap<StaticId,StaticData>* staticUnits;
+   Accelerator* topLevel;
+   int level;
+   bool calledStart;
+   bool populate;
+
+   // Must call first
+   ComplexFUInstance* Start(Accelerator* topLevel,ComplexFUInstance* compositeInst,Arena* temp,bool populate = false);
+   ComplexFUInstance* Start(Accelerator* topLevel,Arena* temp,bool populate = false);
+
+   ComplexFUInstance* Descend(); // Current() must be a composite instance, otherwise this will fail
+
+   ComplexFUInstance* Next(); // Iterates over subunits
+   ComplexFUInstance* Skip(); // Next unit on the same level
+
+   ComplexFUInstance* Current(); // Returns nullptr to indicate end of iteration
+   ComplexFUInstance* CurrentAcceleratorInstance(); // Returns the accelerator instance for the Current() instance or nullptr if currently at top level
+
+   AcceleratorIterator LevelBelowIterator(Arena* temp); // Current() must be a composite instance, Returns an iterator that will iterate starting from the level below, but will end without going to upper levels.
+   AcceleratorIterator LevelBelowIterator(); // Not taking an arena means that the returned iterator uses current iterator memory. Returned iterator must be iterated fully before the current iterator can be used, otherwise memory conflicts will arise as both iterators are sharing the same stack
+};
+
 // Simple operations should also be stored here. They are versat agnostic as well
 namespace BasicDeclaration{
 	extern FUDeclaration* buffer;
@@ -444,7 +452,7 @@ namespace BasicDeclaration{
 }
 
 typedef std::unordered_map<ComplexFUInstance*,ComplexFUInstance*> InstanceMap;
-typedef Graph<MappingNode,MappingEdge> ConsolidationGraph;
+typedef AdjacencyValidGraph<MappingNode,MappingEdge> ConsolidationGraph;
 
 // Temp
 void PopulateAccelerator(Accelerator* topLevel,Accelerator* accel,FUDeclaration* topDeclaration,FUInstanceInterfaces& inter,Hashmap<StaticId,StaticData>& staticMap);
@@ -491,7 +499,7 @@ AcceleratorView SubGraphAroundInstance(Versat* versat,Accelerator* accel,Complex
 bool MappingConflict(MappingNode map1,MappingNode map2);
 ConsolidationGraph MaxClique(ConsolidationGraph graph,Arena* arena);
 ConsolidationGraph GenerateConsolidationGraph(Versat* versat,Arena* arena,Accelerator* accel1,Accelerator* accel2,ConsolidationGraphOptions options,MergingStrategy strategy);
-Accelerator* MergeAccelerator(Versat* versat,Accelerator* accel1,Accelerator* accel2,SpecificMergeNodes* specificNodes,int nSpecifics,MergingStrategy strategy);
+Accelerator* MergeAccelerator(Versat* versat,Accelerator* accel1,Accelerator* accel2,SpecificMergeNodes* specificNodes,int nSpecifics,MergingStrategy strategy,SizedString name);
 
 // Debug
 bool IsGraphValid(AcceleratorView view);

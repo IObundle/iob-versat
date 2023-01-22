@@ -1,5 +1,11 @@
 Misc:
 
+   I'm tired of having to handle printf style functions.
+      Just code an alternative, have it support the kind of expressions that you frequently use, everything else can be equal to printf style
+
+   Check if the change to Arena functions to be templates wouldn't be better implemented as they used to be.
+      For the cases where we push types with ',', we should just use a typedef. That way we know for sure that we are reusing the same function. No need to instantiate all that template bullshit as well.
+
    Stop using asserts for likely user errors. Parser is full of asserts that are actually faulty user data. Need to grapple with things now before they become more complex, even if in the future there is likelihood that things will change.
    Maybe do some fuzz testing? Especially for parsers
    Hard to reason with fixed buffer because we immediatly transform delay into a parameter string. Having to parse the delay is not a solution. Figure out what to do and remove all the portions of code that parse the delay out from the unit
@@ -31,9 +37,21 @@ Testbench:
 
 Major change:
 
+   Need to start standarizing a lot of things. Types sizes and stuff like that.
+
+   To implement different bit widths, have Versat generate the sources it wants to instantiate and run Verilator over it.
+      Compile and build everything into a shared library, which is then opened by Versat.
+      Also, if we require units to use the ADDR_W parameter, we can switch to compiling for 64 bits again.
+
+   As an optimization, it should be possible to generate the entire circuit and use it, instead of relying on simulating individual units.
+      Should check it out as a possibility. The biggest issue is the potential problem for Verilator to spend much more time during compilation for barely any gain, but at that point need to check if so.
+      Even if slower, should be good to support it, as we then have the ability both ways. Fully verilated and partially verilated
+
    A lot of the calculations being done in the FUDeclaration is already being done in the CreateFUInstance function of the Accelerator.
    This is actually expected. The registerSub function expects to receive an actual working Accelerator, and from them to generate a generic template instance.
    We make a couple of changes, like removing multiple inputs and adding delays, but somethings I think could be carried over, like static info and such
+   See if it's possible to keep the composite instance "existing" even after the flattening. The only major problem I see is the way memory mapped accesses work.
+      The may objective is to make it so that the code works by getting subinstances from other instances, and that we keep the same code working even after doing flattening of the hierarchy.
 
 Graph optimizations:
 
@@ -55,7 +73,11 @@ Graph optimizations:
    Move delays and buffers upwards or downwards the paths. Instead of unit with 1 input and 8 outputs having 8 buffers, we could just have 1 buffer. 
       Probably needs to be modelled as a optimization problem, since we can also encounter a problem with 8 inputs and 1 output and we have to move the buffer downwards.
 
-
+Accelerator 
+   
+   It would be helpful and easier if top level static units didn't allocate config space as static space, it would be useful if it allocated everything continuously.
+   The main issue is that if we do that, then dealing with a top level acceleration and an equal subaccelerator would lead to different results.
+   A function F that expects to receive any accelerator of a certain type, would produce different results for F(topLevel) and F(compositeInstance of RegisterSub(topLevel)).
 
 Embedded data:
 
@@ -116,10 +138,6 @@ Performance:
       Develop a simple code path to create iterative units, also push the generation code to the codeGeneration file.
       Versat specifications should depend on 
 
-Merge:
-
-   Represent input and output mapping as specifics.
-
 Configuration management:
 
    Add an interface to provide the user with the ability to save and load configurations.
@@ -168,6 +186,7 @@ Template:
 Type:
 
    Do a pass over the use of the temp identifier. It's kind of an hack 
+   Keep and seperate unsigned entities from signed types. 
    Parse and generate enum information.
 
 Hashmap:

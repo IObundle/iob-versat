@@ -94,7 +94,7 @@ static FUDeclaration* RegisterPipelineRegister(Versat* versat){
    return RegisterFU(versat,decl);
 }
 
-static int* LiteralInitFunction(ComplexFUInstance* inst){
+static int* LiteralStartFunction(ComplexFUInstance* inst){
    static int out;
    out = inst->literal;
    inst->done = true;
@@ -111,7 +111,7 @@ static FUDeclaration* RegisterLiteral(Versat* versat){
 
    decl.name = MakeSizedString("Literal");
    decl.outputLatencies = Array<int>{zeros,1};
-   decl.initializeFunction = LiteralInitFunction;
+   decl.startFunction = LiteralStartFunction;
    decl.updateFunction = LiteraltUpdateFunction;
 
    return RegisterFU(versat,decl);
@@ -657,22 +657,24 @@ FUInstance* GetInstanceByName_(Accelerator* circuit,int argc, ...){
    va_list args;
    va_start(args,argc);
 
-   STACK_ARENA(temp,Kilobyte(64));
+   Arena* temp = &circuit->memory;
+   ArenaMarker marker(temp);
    AcceleratorIterator iter = {};
-   iter.Start(circuit,&temp,true);
+   iter.Start(circuit,temp,true);
 
-   FUInstance* res = vGetInstanceByName_(iter,&temp,argc,args);
+   FUInstance* res = vGetInstanceByName_(iter,temp,argc,args);
 
    va_end(args);
 
    return res;
 }
 
-FUInstance* GetInstanceByName_(FUDeclaration* decl,int argc, ...){
+FUInstance* GetInstanceByName_(Versat* versat,FUDeclaration* decl,int argc, ...){
+   STACK_ARENA(temp,Kilobyte(64)); // Arena stack since low memory usage as we do not map FUInstances for FUDeclaration
    va_list args;
    va_start(args,argc);
 
-   STACK_ARENA(temp,Kilobyte(64));
+   ArenaMarker marker(&temp);
    AcceleratorIterator iter = {};
    iter.Start(decl->fixedDelayCircuit,&temp,false);
 
@@ -690,11 +692,12 @@ FUInstance* GetSubInstanceByName_(Accelerator* topLevel,FUInstance* instance,int
    ComplexFUInstance* inst = (ComplexFUInstance*) instance;
    Assert(inst->declaration->fixedDelayCircuit);
 
-   STACK_ARENA(temp,Kilobyte(64));
+   Arena* temp = &topLevel->memory;
+   ArenaMarker marker(temp);
    AcceleratorIterator iter = {};
-   iter.Start(topLevel,inst,&temp,true);
+   iter.Start(topLevel,inst,temp,true);
 
-   FUInstance* res = vGetInstanceByName_(iter,&temp,argc,args);
+   FUInstance* res = vGetInstanceByName_(iter,temp,argc,args);
 
    va_end(args);
 
@@ -951,8 +954,6 @@ bool IsConfigStatic(Accelerator* topLevel,ComplexFUInstance* inst){
    if(config == nullptr){
       return false;
    }
-
-   int delta = config - topLevel->configAlloc.ptr;
 
    if(Inside(&topLevel->configAlloc,config)){
       return false;
@@ -1295,7 +1296,7 @@ FUDeclaration* RegisterSubUnit(Versat* versat,SizedString name,Accelerator* circ
    {
    char buffer[256];
    sprintf(buffer,"src/%.*s.v",UNPACK_SS(decl.name));
-   FILE* sourceCode = fopen(buffer,"w");
+   FILE* sourceCode = OpenFileAndCreateDirectories(buffer,"w");
    OutputCircuitSource(versat,res,circuit,sourceCode);
    fclose(sourceCode);
    }
@@ -1316,8 +1317,6 @@ static int* IterativeStartFunction(ComplexFUInstance* inst){
    return nullptr;
 }
 
-static void AcceleratorRunComposite(ComplexFUInstance*); // Fwd decl
-static void AcceleratorRunIteration(Accelerator* accel);
 static int* IterativeUpdateFunction(ComplexFUInstance* inst){
    static int out[99];
    return out;
@@ -1418,11 +1417,12 @@ FUDeclaration* RegisterIterativeUnit(Versat* versat,IterativeUnitDeclaration* de
 
    char buffer[256];
    sprintf(buffer,"src/%.*s.v",UNPACK_SS(decl->name));
-   FILE* sourceCode = fopen(buffer,"w");
+   FILE* sourceCode = OpenFileAndCreateDirectories(buffer,"w");
 
    TemplateSetCustom("base",registeredType,"FUDeclaration");
    TemplateSetCustom("comb",comb,"ComplexFUInstance");
 
+   #if 0
    FUInstance* firstPartComb = nullptr;
    FUInstance* firstData = nullptr;
    FUInstance* secondPartComb = nullptr;
@@ -1445,7 +1445,6 @@ FUDeclaration* RegisterIterativeUnit(Versat* versat,IterativeUnitDeclaration* de
       }
    }
 
-   #if 0
    TemplateSetCustom("versat",versat,"Versat");
    TemplateSetCustom("firstComb",firstPartComb,"ComplexFUInstance");
    TemplateSetCustom("secondComb",secondPartComb,"ComplexFUInstance");
@@ -1507,8 +1506,6 @@ static bool AcceleratorDone(Accelerator* accel){
 }
 
 bool CheckCorrectConfiguration(Accelerator* topLevel,ComplexFUInstance* inst){
-   bool correct = true;
-
    if(IsConfigStatic(topLevel,inst)){
       Assert(inst->config == nullptr || Inside(&topLevel->staticAlloc,inst->config));
    } else {
@@ -1520,13 +1517,15 @@ bool CheckCorrectConfiguration(Accelerator* topLevel,ComplexFUInstance* inst){
    Assert(inst->extraData == nullptr || Inside(&topLevel->extraDataAlloc,inst->extraData));
    Assert(inst->outputs == nullptr || Inside(&topLevel->outputAlloc,inst->outputs));
    Assert(inst->storedOutputs == nullptr || Inside(&topLevel->storedOutputAlloc,inst->storedOutputs));
+
+   return true;
 }
 
 // Populates sub accelerator
 void PopulateAccelerator(Accelerator* topLevel,Accelerator* accel,FUDeclaration* topDeclaration,FUInstanceInterfaces& inter,Hashmap<StaticId,StaticData>& staticMap){
-   for(int index = 0; ComplexFUInstance* inst : accel->instances){
+   int index = 0;
+   for(ComplexFUInstance* inst : accel->instances){
       FUDeclaration* decl = inst->declaration;
-      UnitValues val = CalculateAcceleratorUnitValues(accel->versat,inst);
 
       inst->config = nullptr;
       inst->state = nullptr;
@@ -1565,12 +1564,46 @@ void PopulateAccelerator(Accelerator* topLevel,Accelerator* accel,FUDeclaration*
    }
 }
 
+void FUInstanceInterfaces::Init(Accelerator* accel){
+   config.Init(accel->configAlloc);
+   state.Init(accel->stateAlloc);
+   delay.Init(accel->delayAlloc);
+   outputs.Init(accel->outputAlloc);
+   storedOutputs.Init(accel->storedOutputAlloc);
+   extraData.Init(accel->extraDataAlloc);
+   statics.Init(accel->staticAlloc);
+}
+
+void FUInstanceInterfaces::Init(Accelerator* topLevel,ComplexFUInstance* inst){
+   FUDeclaration* decl = inst->declaration;
+   config.Init(inst->config,decl->configs.size);
+   state.Init(inst->state,decl->states.size);
+   delay.Init(inst->delay,decl->nDelays);
+   outputs.Init(inst->outputs,decl->totalOutputs);
+   storedOutputs.Init(inst->storedOutputs,decl->totalOutputs);
+   extraData.Init(inst->extraData,decl->extraDataSize);
+   statics.Init(topLevel->staticAlloc);
+}
+
+void FUInstanceInterfaces::AssertEmpty(bool checkStatic){
+   Assert(config.Empty());
+   Assert(state.Empty());
+   Assert(delay.Empty());
+   Assert(outputs.Empty());
+   Assert(storedOutputs.Empty());
+   Assert(extraData.Empty());
+   if(checkStatic){
+      Assert(statics.Empty());
+   }
+}
+
 // The true "Accelerator" populator
 void PopulateAccelerator2(Accelerator* accel,FUDeclaration* topDeclaration,FUInstanceInterfaces& inter,Hashmap<StaticId,StaticData>& staticMap){
-   STACK_ARENA(temp,Kilobyte(64));
+   Arena* temp = &accel->memory;
+   ArenaMarker marker(temp);
 
    Hashmap<int,int*> sharedToConfigPtr = {};
-   sharedToConfigPtr.Init(&temp,accel->instances.Size());
+   sharedToConfigPtr.Init(temp,accel->instances.Size());
 
    for(ComplexFUInstance* inst : accel->instances){
       FUDeclaration* decl = inst->declaration;
@@ -1714,7 +1747,7 @@ void AcceleratorRun(Accelerator* accel){
    if(accel->versat->debug.outputVCD){
       char buffer[128];
       sprintf(buffer,"debug/accelRun%d.vcd",numberRuns++);
-      accelOutputFile = fopen(buffer,"w");
+      accelOutputFile = OpenFileAndCreateDirectories(buffer,"w");
       Assert(accelOutputFile);
 
       vcdSameCheckSpace = PrintVCDDefinitions(accelOutputFile,accel,arena);
@@ -1956,9 +1989,10 @@ void SetDelayRecursive_(AcceleratorIterator iter,int delay){
 }
 
 void SetDelayRecursive(Accelerator* accel){
-   STACK_ARENA(temp,Kilobyte(64));
+   Arena* temp = &accel->memory;
+   ArenaMarker marker(temp);
    AcceleratorIterator iter = {};
-   for(ComplexFUInstance* inst = iter.Start(accel,&temp,true); inst; inst = iter.Skip()){
+   for(ComplexFUInstance* inst = iter.Start(accel,temp,true); inst; inst = iter.Skip()){
       SetDelayRecursive_(iter,0);
    }
 }

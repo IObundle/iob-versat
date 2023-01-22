@@ -22,14 +22,17 @@ Accelerator* CreateAccelerator(Versat* versat){
    Reserve(&accel->storedOutputAlloc,Megabyte(1));
    Reserve(&accel->extraDataAlloc,Megabyte(1));
 
+   InitArena(&accel->memory,Megabyte(1));
+
    return accel;
 }
 
 void RepopulateAccelerator(Accelerator* topLevel){
-   STACK_ARENA(temp,Kilobyte(64));
+   Arena* temp = &topLevel->memory;
+   ArenaMarker marker(temp);
 
    AcceleratorIterator iter = {};
-   iter.Start(topLevel,&temp,true); // This will populate top level units
+   iter.Start(topLevel,temp,true); // This will populate top level units
 
    for(ComplexFUInstance* inst : topLevel->subInstances){
       ComplexFUInstance* other = (ComplexFUInstance*) GetInstanceByName(topLevel,inst->name);
@@ -104,7 +107,7 @@ FUInstance* CreateFUInstance(Accelerator* accel,FUDeclaration* type,SizedString 
       DebugTerminal(MakeValue(accel,"Accelerator"));
    #endif
 
-   if(true){
+   if(!flat){ // TODO: before this was true
    //if(!flat){
       // The position of top level newly created units is always at the end of the current allocated configurations
       int configOffset = accel->configAlloc.size;
@@ -126,17 +129,19 @@ FUInstance* CreateFUInstance(Accelerator* accel,FUDeclaration* type,SizedString 
       Assert(!ZeroOutRealloc(&accel->extraDataAlloc,val.extraData));
       Assert(!ZeroOutRealloc(&accel->staticAlloc,val.statics));
 
-      if(isStatic){
-         ptr->config = &accel->staticAlloc.ptr[configOffset];
-      } else {
-         ptr->config = &accel->configAlloc.ptr[configOffset];
+      if(type->configs.size){
+         if(isStatic){
+            ptr->config = &accel->staticAlloc.ptr[configOffset];
+         } else {
+            ptr->config = &accel->configAlloc.ptr[configOffset];
+         }
       }
 
-      ptr->state = &accel->stateAlloc.ptr[stateOffset];
-      ptr->delay = &accel->delayAlloc.ptr[delayOffset];
-      ptr->outputs = &accel->outputAlloc.ptr[outputOffset];
-      ptr->storedOutputs = &accel->storedOutputAlloc.ptr[outputOffset];
-      ptr->extraData = &accel->extraDataAlloc.ptr[extraDataOffset];
+      if(type->states.size) ptr->state = &accel->stateAlloc.ptr[stateOffset];
+      if(type->nDelays) ptr->delay = &accel->delayAlloc.ptr[delayOffset];
+      if(type->outputLatencies.size || type->totalOutputs) ptr->outputs = &accel->outputAlloc.ptr[outputOffset];
+      if(type->outputLatencies.size || type->totalOutputs) ptr->storedOutputs = &accel->storedOutputAlloc.ptr[outputOffset];
+      if(type->extraDataSize) ptr->extraData = &accel->extraDataAlloc.ptr[extraDataOffset];
 
       // Initialize sub units
       if(type->type == FUDeclaration::COMPOSITE){ // TODO: Iterative units
@@ -188,7 +193,9 @@ Accelerator* CopyAccelerator(Versat* versat,Accelerator* accel,InstanceMap* map,
       ComplexFUInstance* newInst = CopyInstance(newAccel,inst,inst->name,flat);
       newInst->declarationInstance = inst;
 
-      Memcpy(newInst->config,inst->config,inst->declaration->configs.size);
+      if(!flat){
+         Memcpy(newInst->config,inst->config,inst->declaration->configs.size);
+      }
       newInst->savedConfiguration = inst->savedConfiguration;
       newInst->literal = inst->literal;
 
@@ -234,6 +241,8 @@ void InitializeFUInstances(Accelerator* accel,bool force){
 }
 #endif
 
+// This function works, but not for the flatten algorithm, as we hope  that the configs match but they don't match for the outputs after removing a composite instance
+// We could, on the other hand, push the outputs of a composite instance to after the outputs of the subinstances, at which point it should work
 void RemoveFUInstance(Accelerator* accel,ComplexFUInstance* inst){
    for(Edge* edge : accel->edges){
       if(edge->units[0].inst == inst){
@@ -243,7 +252,128 @@ void RemoveFUInstance(Accelerator* accel,ComplexFUInstance* inst){
       }
    }
 
+   // Change allocations for all the other units
+   int nConfigs = inst->declaration->configs.size;
+   int nStates = inst->declaration->states.size;
+   int nDelays = inst->declaration->nDelays;
+   int nOutputs = inst->declaration->totalOutputs;
+   int nExtraData = inst->declaration->extraDataSize;
+
+   int* oldConfig = inst->config;
+   int* oldState = inst->state;
+   int* oldDelay = inst->delay;
+   int* oldOutputs = inst->outputs;
+   int* oldStoredOutputs = inst->storedOutputs;
+   unsigned char* oldExtraData = inst->extraData;
+
+   if(inst->config) RemoveChunkAndCompress(&accel->configAlloc,inst->config,nConfigs);
+   if(inst->state) RemoveChunkAndCompress(&accel->stateAlloc,inst->state,nStates);
+   if(inst->delay) RemoveChunkAndCompress(&accel->delayAlloc,inst->delay,nDelays);
+   if(inst->outputs) RemoveChunkAndCompress(&accel->outputAlloc,inst->outputs,nOutputs);
+   if(inst->storedOutputs) RemoveChunkAndCompress(&accel->storedOutputAlloc,inst->storedOutputs,nOutputs);
+   if(inst->extraData) RemoveChunkAndCompress(&accel->extraDataAlloc,inst->extraData,nExtraData);
+
+   // Remove instance
    accel->instances.Remove(inst);
+
+   // Fix config pointers
+   for(ComplexFUInstance* in : accel->instances){
+      if(!IsConfigStatic(accel,in) && in->config > oldConfig){
+         in->config -= nConfigs;
+      }
+      if(in->state > oldState){
+         in->state -= nStates;
+      }
+      if(in->delay > oldDelay){
+         in->delay -= nDelays;
+      }
+      #if 1
+      if(in->outputs > oldOutputs){
+         in->outputs -= nOutputs;
+      }
+      if(in->storedOutputs > oldStoredOutputs){
+         in->outputs -= nOutputs;
+      }
+      #endif
+      if(in->extraData > oldExtraData){
+         in->extraData -= nExtraData;
+      }
+   }
+}
+
+void FlattenRemoveFUInstance(Accelerator* accel,ComplexFUInstance* inst){
+   for(Edge* edge : accel->edges){
+      if(edge->units[0].inst == inst){
+         accel->edges.Remove(edge);
+      } else if(edge->units[1].inst == inst){
+         accel->edges.Remove(edge);
+      }
+   }
+
+   #if 0
+   // Change allocations for all the other units
+   int nConfigs = inst->declaration->configs.size;
+   int nStates = inst->declaration->states.size;
+   int nDelays = inst->declaration->nDelays;
+   int nOutputs = inst->declaration->outputLatencies.size;
+   int nTotalOutputs = inst->declaration->totalOutputs;
+   int nExtraData = inst->declaration->extraDataSize;
+
+   int* oldConfig = inst->config;
+   int* oldState = inst->state;
+   int* oldDelay = inst->delay;
+   int* oldOutputs = inst->outputs;
+   int* oldStoredOutputs = inst->storedOutputs;
+   char* oldExtraData = inst->extraData;
+
+   if(inst->config) RemoveChunkAndCompress(&accel->configAlloc,inst->config,nConfigs);
+   if(inst->state) RemoveChunkAndCompress(&accel->stateAlloc,inst->state,nStates);
+   if(inst->delay) RemoveChunkAndCompress(&accel->delayAlloc,inst->delay,nDelays);
+   if(inst->outputs) RemoveChunkAndCompress(&accel->outputAlloc,inst->outputs,nOutputs);
+   if(inst->storedOutputs) RemoveChunkAndCompress(&accel->storedOutputAlloc,inst->storedOutputs,nOutputs);
+   if(inst->extraData) RemoveChunkAndCompress(&accel->extraDataAlloc,inst->extraData,nExtraData);
+
+   if(inst->declaration->type == FUDeclaration::COMPOSITE){
+      accel->outputAlloc.size -= (nTotalOutputs - nOutputs); // Total outputs already includes nOutputs, and RemoveChunkAndCompress already removes nOutputs
+      accel->storedOutputAlloc.size -= (nTotalOutputs - nOutputs);
+      nOutputs = nTotalOutputs;
+   }
+   #endif
+
+   // Remove instance
+   accel->instances.Remove(inst);
+
+   #if 0
+   // Fix config pointers
+   for(ComplexFUInstance* in : accel->instances){
+      if(!IsConfigStatic(accel,in) && in->config > oldConfig){
+         in->config -= nConfigs;
+         Assert(Inside(&accel->configAlloc,in->config));
+      }
+      if(in->state > oldState){
+         in->state -= nStates;
+         Assert(Inside(&accel->stateAlloc,in->state));
+      }
+      if(in->delay > oldDelay){
+         in->delay -= nDelays;
+         Assert(Inside(&accel->delayAlloc,in->delay));
+      }
+      #if 1
+      if(in->outputs > oldOutputs){
+         in->outputs -= nOutputs;
+         Assert(Inside(&accel->outputAlloc,in->outputs));
+      }
+      if(in->storedOutputs > oldStoredOutputs){
+         in->storedOutputs -= nOutputs;
+         Assert(Inside(&accel->storedOutputAlloc,in->storedOutputs));
+      }
+      #endif
+      if(in->extraData > oldExtraData){
+         in->extraData -= nExtraData;
+         Assert(Inside(&accel->extraDataAlloc,in->extraData));
+      }
+   }
+   #endif
 }
 
 void CompressAcceleratorMemory(Accelerator* accel){
@@ -303,6 +433,7 @@ int CountNonOperationChilds(Accelerator* accel){
 
 Accelerator* Flatten(Versat* versat,Accelerator* accel,int times){
    Arena* arena = &versat->temp;
+   ArenaMarker marker(arena);
 
    InstanceMap map;
    Accelerator* newAccel = CopyAccelerator(versat,accel,&map,true);
@@ -526,9 +657,10 @@ Accelerator* Flatten(Versat* versat,Accelerator* accel,int times){
       for(ComplexFUInstance** instPtr : toRemove){
          ComplexFUInstance* inst = *instPtr;
 
-         RemoveFUInstance(newAccel,inst);
+         FlattenRemoveFUInstance(newAccel,inst);
       }
 
+      #if 0
       {
          ArenaMarker marker(arena);
          AcceleratorView view = CreateAcceleratorView(newAccel,arena);
@@ -536,6 +668,7 @@ Accelerator* Flatten(Versat* versat,Accelerator* accel,int times){
          IsGraphValid(view);
          OutputGraphDotFile(versat,view,true,"./debug/flatten.dot");
       }
+      #endif
 
       CompressAcceleratorMemory(newAccel);
 
@@ -544,6 +677,7 @@ Accelerator* Flatten(Versat* versat,Accelerator* accel,int times){
          AcceleratorView view = CreateAcceleratorView(newAccel,arena);
          view.CalculateGraphData(arena);
          IsGraphValid(view);
+         OutputGraphDotFile(versat,view,true,"./debug/flatten.dot");
       }
 
       toRemove.Clear();
@@ -560,13 +694,10 @@ Accelerator* Flatten(Versat* versat,Accelerator* accel,int times){
       OutputGraphDotFile(versat,view,true,"./debug/flatten.dot");
    }
 
-   #if 0
-   PopulateAccelerator(versat,newAccel);
-   InitializeFUInstances(newAccel,true);
-
-   AcceleratorView view = CreateAcceleratorView(newAccel,arena);
-   view.CalculateDelay(arena);
-   FixDelays(versat,newAccel,view);
+   #if 1
+   //AcceleratorView view = CreateAcceleratorView(newAccel,arena);
+   //view.CalculateDelay(arena);
+   //FixDelays(versat,newAccel,view);
 
    UnitValues val1 = CalculateAcceleratorValues(versat,accel);
    UnitValues val2 = CalculateAcceleratorValues(versat,newAccel);
@@ -579,6 +710,196 @@ Accelerator* Flatten(Versat* versat,Accelerator* accel,int times){
    #endif
 
    newAccel->staticInfo.Clear();
+
+   return newAccel;
+}
+
+// Returns the instances connected to the output instance.
+// The index in the array is the associated port
+Array<PortInstance> RecursiveFlattenCreate(Versat* versat,Accelerator* newAccel,Accelerator* accel,Array<PortInstance> inputs,Arena* arena){
+   int count = 0;
+   for(ComplexFUInstance* inst : accel->instances){
+      count += inst->declaration->outputLatencies.size * 50;
+   }
+
+   Array<PortInstance> outputs = PushArray<PortInstance>(arena,BasicDeclaration::output->inputDelays.size);
+   // Arena marker here, I think
+
+   // The key is in topLevel space
+   // The data is in newAccel space
+   Hashmap<PortInstance,PortInstance> mapOutputsToNewInstances = {};
+   mapOutputsToNewInstances.Init(arena,count);
+   Hashmap<ComplexFUInstance*,ComplexFUInstance*> oldToNew = {};
+   oldToNew.Init(arena,accel->instances.Size());
+
+   // In theory, should not work for accelerators with loops
+   for(ComplexFUInstance* inst : accel->instances){
+      if(inst->declaration == BasicDeclaration::input){
+         int port = inst->id;
+         PortInstance mapped = inputs[port];
+
+         mapOutputsToNewInstances.Insert((PortInstance){inst,port},mapped);
+      } else if(inst->declaration->type == FUDeclaration::COMPOSITE){
+         Array<PortInstance> inputs = PushArray<PortInstance>(arena,inst->graphData->singleInputs.size);
+         int i = 0;
+         for(PortInstance portInst : inst->graphData->singleInputs){ // Map top level space to new accel space
+            if(portInst.inst){
+               PortInstance* possible = mapOutputsToNewInstances.Get(portInst);
+
+               if(possible){
+                  inputs[i] = *possible;
+               }
+            }
+            i += 1;
+         }
+
+         Array<PortInstance> outputs = RecursiveFlattenCreate(versat,newAccel,inst->declaration->fixedDelayCircuit,inputs,arena);
+         i = 0;
+         for(PortInstance portInst : outputs){
+            PortInstance topLevelSpace = (PortInstance){inst,i};
+
+            mapOutputsToNewInstances.Insert(topLevelSpace,portInst);
+            i += 1;
+         }
+      } else if(inst->declaration->type == FUDeclaration::SINGLE){
+         ComplexFUInstance* newUnit = (ComplexFUInstance*) CreateFUInstance(newAccel,inst->declaration,inst->name,false,inst->isStatic);
+         oldToNew.Insert(inst,newUnit);
+
+         int i = 0;
+         for(PortInstance portInst : inst->graphData->singleInputs){
+            if(portInst.inst){
+               PortInstance correct = {};
+               if(portInst.inst->declaration == BasicDeclaration::input){
+                  int port = portInst.inst->id;
+                  correct = inputs[port];
+               } else {
+                  PortInstance* possible = mapOutputsToNewInstances.Get(portInst);
+                  if(possible){
+                     correct = *possible;
+                  } else {
+                     correct.inst = oldToNew.GetOrFail(portInst.inst);
+                     correct.port = portInst.port;
+                  }
+               }
+
+               if(correct.inst){
+                  ConnectUnits(correct,(PortInstance){newUnit,i},0);
+               }
+            }
+            i += 1;
+         }
+      }
+   }
+
+   ComplexFUInstance* output = GetOutputInstance(accel);
+
+   int i = 0;
+   for(PortInstance portInst : output->graphData->singleInputs){
+      if(portInst.inst){
+         PortInstance correct = {};
+         if(portInst.inst->declaration == BasicDeclaration::input){
+            int port = portInst.inst->id;
+            correct = inputs[port];
+         } else {
+            PortInstance* possible = mapOutputsToNewInstances.Get(portInst);
+            if(possible){
+               correct = *possible;
+            } else {
+               correct.inst = oldToNew.GetOrFail(portInst.inst);
+               correct.port = portInst.port;
+            }
+         }
+
+         outputs[i] = correct;
+      }
+      i += 1;
+   }
+
+   return outputs;
+}
+
+Accelerator* RecursiveFlatten(Versat* versat,Accelerator* topLevel){
+   Arena* arena = &versat->temp;
+   ArenaMarker marker(arena);
+
+   Accelerator* newAccel = CreateAccelerator(versat);
+
+   AcceleratorView view = CreateAcceleratorView(topLevel,arena);
+   view.CalculateDAGOrdering(arena);
+
+   int count = 0;
+   for(ComplexFUInstance* inst : topLevel->instances){
+      count += inst->declaration->outputLatencies.size * 50;
+   }
+
+   // The key is in topLevel space
+   // The data is in newAccel space
+   Hashmap<PortInstance,PortInstance> mapOutputsToNewInstances = {};
+   mapOutputsToNewInstances.Init(arena,count);
+   Hashmap<ComplexFUInstance*,ComplexFUInstance*> oldToNew = {};
+   oldToNew.Init(arena,topLevel->instances.Size());
+
+   // In theory, should not work for accelerators with loops
+   for(int index = 0; index < view.nodes.Size(); index++){
+      ComplexFUInstance* inst = view.order.instances[index];
+
+      if(inst->declaration->type == FUDeclaration::COMPOSITE){
+         Array<PortInstance> inputs = PushArray<PortInstance>(arena,inst->graphData->singleInputs.size);
+         int i = 0;
+         for(PortInstance portInst : inst->graphData->singleInputs){ // Map top level space to new topLevel space
+            if(portInst.inst){
+               PortInstance* possible = mapOutputsToNewInstances.Get(portInst);
+
+               if(possible){
+                  inputs[i] = *possible;
+               } else {
+                  inputs[i].inst = oldToNew.GetOrFail(portInst.inst);
+                  inputs[i].port = portInst.port;
+               }
+            }
+            i += 1;
+         }
+
+         Array<PortInstance> outputs = RecursiveFlattenCreate(versat,newAccel,inst->declaration->fixedDelayCircuit,inputs,arena);
+         for(PortInstance portInst : outputs){
+            PortInstance topLevelSpace = (PortInstance){inst,i};
+
+            mapOutputsToNewInstances.Insert(topLevelSpace,portInst);
+            i += 1;
+         }
+      } else {
+         ComplexFUInstance* newUnit = (ComplexFUInstance*) CreateFUInstance(newAccel,inst->declaration,inst->name,false,inst->isStatic);
+         oldToNew.Insert(inst,newUnit);
+
+         int i = 0;
+         for(PortInstance portInst : inst->graphData->singleInputs){
+            if(portInst.inst){
+               PortInstance correct = {};
+               PortInstance* possible = mapOutputsToNewInstances.Get(portInst);
+               if(possible){
+                  correct = *possible;
+               } else {
+                  correct.inst = oldToNew.GetOrFail(portInst.inst);
+                  correct.port = portInst.port;
+               }
+
+               ConnectUnits(correct,(PortInstance){newUnit,i},0);
+            }
+            i += 1;
+         }
+      }
+   }
+
+   view = CreateAcceleratorView(newAccel,arena);
+   view.CalculateDAGOrdering(arena);
+   OutputGraphDotFile(versat,view,true,nullptr,"debug/flatten.dot");
+
+   #if 0
+   Assert(topLevel->configAlloc.size == newAccel->configAlloc.size);
+   Assert(topLevel->stateAlloc.size == newAccel->stateAlloc.size);
+   Assert(topLevel->delayAlloc.size == newAccel->delayAlloc.size);
+   Assert(topLevel->extraDataAlloc.size == newAccel->extraDataAlloc.size);
+   #endif
 
    return newAccel;
 }
@@ -601,23 +922,12 @@ ComplexFUInstance* AcceleratorIterator::Start(Accelerator* topLevel,ComplexFUIns
       staticUnits = &decl->staticUnits;
 
       FUInstanceInterfaces inter = {};
-      inter.config.Init(compositeInst->config,decl->configs.size);
-      inter.state.Init(compositeInst->state,decl->states.size);
-      inter.delay.Init(compositeInst->delay,decl->nDelays);
-      inter.outputs.Init(compositeInst->outputs,decl->totalOutputs);
-      inter.storedOutputs.Init(compositeInst->storedOutputs,decl->totalOutputs);
-      inter.extraData.Init(compositeInst->extraData,decl->extraDataSize);
-      inter.statics.Init(topLevel->staticAlloc);
+      inter.Init(topLevel,compositeInst);
 
       PopulateAccelerator(topLevel,accel,decl,inter,*staticUnits);
 
       #if 0
-      Assert(inter.config.Empty());
-      Assert(inter.state.Empty());
-      Assert(inter.delay.Empty());
-      Assert(inter.outputs.Empty());
-      Assert(inter.storedOutputs.Empty());
-      Assert(inter.extraData.Empty());
+      inter.AssertEmpty();
       #endif
    }
 
@@ -642,24 +952,9 @@ ComplexFUInstance* AcceleratorIterator::Start(Accelerator* topLevel,Arena* arena
       }
 
       FUInstanceInterfaces inter = {};
-      inter.config.Init(topLevel->configAlloc);
-      inter.state.Init(topLevel->stateAlloc);
-      inter.delay.Init(topLevel->delayAlloc);
-      inter.outputs.Init(topLevel->outputAlloc);
-      inter.storedOutputs.Init(topLevel->storedOutputAlloc);
-      inter.extraData.Init(topLevel->extraDataAlloc);
-      inter.statics.Init(topLevel->staticAlloc);
-
+      inter.Init(topLevel);
       PopulateAccelerator2(topLevel,nullptr,inter,*staticUnits);
-
-      #if 1
-      Assert(inter.config.Empty());
-      Assert(inter.state.Empty());
-      Assert(inter.delay.Empty());
-      Assert(inter.outputs.Empty());
-      Assert(inter.storedOutputs.Empty());
-      Assert(inter.extraData.Empty());
-      #endif
+      inter.AssertEmpty(false);
    }
 
    stack = PushArray<PoolIterator<ComplexFUInstance>>(arena,99);
@@ -675,26 +970,12 @@ ComplexFUInstance* AcceleratorIterator::Descend(){
    if(populate){
       FUDeclaration* decl = inst->declaration;
       Accelerator* accel = decl->fixedDelayCircuit;
+
       FUInstanceInterfaces inter = {};
-
-      inter.config.Init(inst->config,decl->configs.size);
-      inter.state.Init(inst->state,decl->states.size);
-      inter.delay.Init(inst->delay,decl->nDelays);
-      inter.outputs.Init(inst->outputs,decl->totalOutputs);
-      inter.storedOutputs.Init(inst->storedOutputs,decl->totalOutputs);
-      inter.extraData.Init(inst->extraData,decl->extraDataSize);
-      inter.statics.Init(topLevel->staticAlloc);
-
+      inter.Init(topLevel,inst);
       PopulateAccelerator(topLevel,accel,decl,inter,*staticUnits);
-
-      // Don't make sense when using PopulateAccelerator(1). The function does not push
       #if 0
-      Assert(inter.config.Empty());
-      Assert(inter.state.Empty());
-      Assert(inter.delay.Empty());
-      Assert(inter.outputs.Empty());
-      Assert(inter.storedOutputs.Empty());
-      Assert(inter.extraData.Empty());
+      inter.AssertEmpty();
       #endif
    }
 
@@ -809,6 +1090,7 @@ void AcceleratorView::CalculateGraphData(Arena* arena){
 
    int memoryNeeded = sizeof(GraphComputedData) * nNodes + 2 * nEdges * sizeof(ConnectionInfo);
    graphData = PushArray<Byte>(arena,memoryNeeded);
+   Memset<Byte>(graphData,0);
 
    PushPtr<Byte> data;
    data.Init(graphData);
@@ -857,6 +1139,7 @@ void AcceleratorView::CalculateGraphData(Arena* arena){
       }
 
       graphData->singleInputs = PushArray<PortInstance>(arena,maxInputs);
+      Memset(graphData->singleInputs,(PortInstance){});
       for(ConnectionInfo& info : graphData->allInputs){
          int index = info.port;
 
@@ -931,12 +1214,6 @@ void AcceleratorView::CalculateDelay(Arena* arena,bool outputDebugGraph){
       for(ConnectionInfo& info : inst->graphData->allInputs){
          *info.delay = 0;
       }
-   }
-
-   if(outputDebugGraph && versat->debug.outputGraphs){
-      char buffer[1024];
-      sprintf(buffer,"debug/%.*s/",UNPACK_SS(accel->subtype->name));
-      MakeDirectory(buffer);
    }
 
    int graphs = 0;
@@ -1559,9 +1836,6 @@ void FixMultipleInputs(Versat* versat,Accelerator* accel){
 
    #if 0
    if(versat->debug.outputGraphs){
-      char buffer[1024];
-      sprintf(buffer,"debug/%.*s/",UNPACK_SS(accel->subtype->name));
-      MakeDirectory(buffer);
       OutputGraphDotFile(versat,view,false,"debug/%.*s/mux.dot",UNPACK_SS(accel->subtype->name));
    }
    #endif

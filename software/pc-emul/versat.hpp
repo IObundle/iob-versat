@@ -27,7 +27,7 @@ struct FUInstance{
 
 	int* outputs;
 	int* storedOutputs;
-   char* extraData;
+   unsigned char* extraData;
 
    SizedString parameters;
 
@@ -70,6 +70,9 @@ enum MergingStrategy{
    FIRST_FIT,
    ORDERED_FIT
 };
+
+// Temp
+Accelerator* RecursiveFlatten(Versat* versat,Accelerator* topLevel);
 
 // Versat functions
 Versat* InitVersat(int base,int numberConfigurations);

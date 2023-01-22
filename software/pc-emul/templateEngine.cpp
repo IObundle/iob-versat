@@ -584,7 +584,7 @@ static Value EvalExpression(Expression* expr){
 static SizedString EvalBlockCommand(Block* block){
    Command* com = block->command;
    SizedString res = {};
-   res.data = MarkArena(outputArena);
+   res.data = (char*) MarkArena(outputArena);
 
    if(CompareString(com->name,"join")){
       Value separator = EvalExpression(com->expressions[0]);
@@ -704,7 +704,7 @@ static SizedString EvalBlockCommand(Block* block){
 static ValueAndText EvalNonBlockCommand(Command* com){
    Value val = MakeValue();
    SizedString text = {};
-   text.data = MarkArena(outputArena);
+   text.data = (char*) MarkArena(outputArena);
 
    if(CompareString(com->name,"set")){
       val = EvalExpression(com->expressions[1]);
@@ -779,7 +779,7 @@ static ValueAndText EvalNonBlockCommand(Command* com){
 
       Tokenizer tok(format,"{}",{});
       Byte* mark = MarkArena(outputArena);
-      text.data = mark;
+      text.data = (char*) mark;
 
       while(!tok.Done()){
          Token simpleText = tok.PeekFindUntil("{");
@@ -826,7 +826,7 @@ static ValueAndText EvalNonBlockCommand(Command* com){
 
 static SizedString Eval(Block* block){
    SizedString res = {};
-   res.data = MarkArena(outputArena);
+   res.data = (char*) MarkArena(outputArena);
 
    if(block->type == Block::COMMAND){
       if(IsCommandBlockType(block->command)){
@@ -919,6 +919,13 @@ void TemplateSetCustom(const char* id,void* entity,const char* typeName){
 
 void TemplateSetNumber(const char* id,int number){
    envTable[MakeSizedString(id)] = MakeValue(number);
+}
+
+void TemplateSet(const char* id,void* ptr){
+   Value val = {};
+   val.custom = ptr;
+   val.type = ValueType::NUMBER;
+   envTable[MakeSizedString(id)] = val;
 }
 
 void TemplateSetString(const char* id,const char* str){

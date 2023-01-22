@@ -14,8 +14,20 @@
 #define TWO_DIGIT(x,y) (CI(x) * 10 + CI(y))
 #define COMPILE_TIME (TWO_DIGIT(__TIME__[0],__TIME__[1]) * 3600 + TWO_DIGIT(__TIME__[3],__TIME__[4]) * 60 + TWO_DIGIT(__TIME__[6],__TIME__[7]))
 
-#define ALIGN_4(val) ((val + 3) & ~0x3)
+#define ALIGN_2(val) (((val) + 1) & ~1)
+#define ALIGN_4(val) (((val) + 3) & ~3)
+#define ALIGN_8(val) (((val) + 7) & ~7)
+#define ALIGN_16(val) (((val) + 15) & ~15)
+#define ALIGN_32(val) (((val) + 31) & ~31)
+#define ALIGN_64(val) (((val) + 63) & ~63) // Usually a cache line
 #define ARRAY_SIZE(array) sizeof(array) / sizeof(array[0])
+
+#define IS_ALIGNED_2(val) ((((uptr) val) & 1) == 0x0)
+#define IS_ALIGNED_4(val) ((((uptr) val) & 3) == 0x0)
+#define IS_ALIGNED_8(val) ((((uptr) val) & 7) == 0x0)
+#define IS_ALIGNED_16(val) ((((uptr) val) & 15) == 0x0)
+#define IS_ALIGNED_32(val) ((((uptr) val) & 31) == 0x0)
+#define IS_ALIGNED_64(val) ((((uptr) val) & 63) == 0x0)
 
 #define NUMBER_ARGS_(T1,T2,T3,T4,T5,T6,T7,T8,T9,TA,TB,TC,TD,TE,TF,TG,TH,Arg, ...) Arg
 #define NUMBER_ARGS(...) NUMBER_ARGS_(-1,##__VA_ARGS__,16,15,14,13,12,11,10,9,8,7,6,5,4,3,2,1,0)
@@ -26,8 +38,8 @@ void FlushStdout();
 #if defined(PC) && defined(VERSAT_DEBUG)
 #define Assert(EXPR) \
    do { \
-   int _ = (int) (EXPR);   \
-   if(!_){ \
+   bool _ = !(EXPR);   \
+   if(_){ \
       FlushStdout(); \
       assert(_ && (EXPR)); \
    } \
@@ -53,6 +65,21 @@ extern "C"{
 #define TIME_FUNCTION clock
 #endif
 
+#ifdef PC
+typedef intptr_t iptr;
+typedef uintptr_t uptr;
+typedef uint32_t uint;
+typedef int64_t int64;
+typedef uint64_t uint64;
+typedef int32_t int32;
+typedef uint32_t uint32;
+typedef int16_t int16;
+typedef uint16_t uint16;
+typedef int8_t int8;
+typedef uint8_t uint8;
+typedef uint8_t Byte;
+#endif
+
 // Automatically times a block in number of counts
 class TimeIt{
 public:
@@ -63,11 +90,6 @@ public:
    ~TimeIt(){unsigned long long end = TIME_FUNCTION();printf("%s: %llu\n",id,end - start);}
 };
 #define TIME_IT(ID) TimeIt timer_##__LINE__(ID)
-
-typedef char Byte;
-#ifdef PC
-typedef uint32_t uint;
-#endif
 
 template<typename T>
 class ArrayIterator{
@@ -96,6 +118,9 @@ typedef Array<const char> SizedString;
 
 #define MakeSizedString1(STR) ((SizedString){STR,(int) strlen(STR)})
 #define MakeSizedString2(STR,LEN) ((SizedString){STR,(int) (LEN)})
+
+inline SizedString String(const char* str){return (SizedString){str,(int) strlen(str)};}
+inline SizedString String(const unsigned char* str){return (SizedString){(const char*)str,(int) strlen((const char*) str)};}
 
 #define GET_MACRO(_1,_2,NAME,...) NAME
 #define MakeSizedString(...) GET_MACRO(__VA_ARGS__, MakeSizedString2, MakeSizedString1)(__VA_ARGS__)
@@ -126,6 +151,7 @@ struct Pair{
 #define BIT_MASK(BIT) (1 << BIT)
 #define GET_BIT(VAL,INDEX) (VAL & (BIT_MASK(INDEX)))
 #define SET_BIT(VAL,INDEX) (VAL | (BIT_MASK(INDEX)))
+#define CLEAR_BIT(VAL,INDEX) (VAL & ~(BIT_MASK(INDEX)))
 #define COND_BIT_MASK(BIT,COND) (COND ? BIT_MASK(BIT) : 0)
 #define FULL_MASK(BITS) (BIT_MASK(BITS) - 1)
 #define MASK_VALUE(VAL,BITS) (VAL & FULL_MASK(BITS))
@@ -156,6 +182,9 @@ int SwapEndianess(int val);
 
 int NumberDigitsRepresentation(int number); // Number of digits if printed (negative includes - sign )
 char GetHex(int value);
+Byte HexCharToNumber(char ch);
+
+void HexStringToHex(unsigned char* buffer,SizedString str);
 
 // Weak random generator but produces same results in pc-emul and in simulation
 void SeedRandomNumber(uint seed);
@@ -164,6 +193,7 @@ uint GetRandomNumber();
 long int GetFileSize(FILE* file);
 char* GetCurrentDirectory();
 void MakeDirectory(const char* path);
+FILE* OpenFileAndCreateDirectories(const char* path,const char* format);
 
 void FixedStringCpy(char* dest,SizedString src);
 
@@ -181,32 +211,28 @@ bool IsAlpha(char ch);
 SizedString PathGoUp(char* pathBuffer);
 
 template<typename T>
-void Memset(T* buffer,T elem,int bufferSize){
+inline void Memset(T* buffer,T elem,int bufferSize){
    for(int i = 0; i < bufferSize; i++){
       buffer[i] = elem;
    }
 }
 
 template<typename T>
-void Memset(Array<T> buffer,T elem){
+inline void Memset(Array<T> buffer,T elem){
    for(int i = 0; i < buffer.size; i++){
       buffer.data[i] = elem;
    }
 }
 
 template<typename T>
-void Memcpy(T* dest,T* scr,int numberElements){
-   for(int i = 0; i < numberElements; i++){
-      dest[i] = scr[i];
-   }
+inline void Memcpy(T* dest,T* src,int numberElements){
+   memcpy(dest,src,numberElements * sizeof(T));
 }
 
 // Mainly change return meaning (true means equal)
 template<typename T>
-bool Memcmp(T* a,T* b,int numberElements){
-   bool res = (memcmp(a,b,numberElements * sizeof(T)) == 0);
-
-   return res;
+inline bool Memcmp(T* a,T* b,int numberElements){
+   return (memcmp(a,b,numberElements * sizeof(T)) == 0);
 }
 
 inline unsigned char SelectByte(int val,int index){

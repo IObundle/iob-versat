@@ -11,8 +11,13 @@ struct Task{
 void InitThreadPool(int threads);
 void TerminatePool(bool force = false);
 
-bool IsTaskWaiting();
+void WaitCompletion();
 
+int NumberThreads();
+
+bool FullTasks();
 void AddTask(Task task);
+
+#define MemoryBarrier() __asm__ __volatile__("":::"memory"); __sync_synchronize() // Gcc specific
 
 #endif // INCLUDED_THREADS

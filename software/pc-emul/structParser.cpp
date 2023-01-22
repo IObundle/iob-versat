@@ -12,9 +12,6 @@
 static Arena tempArenaInst;
 static Arena* tempArena = &tempArenaInst;
 
-static Arena permArenaInst;
-static Arena* perm = &permArenaInst;
-
 struct MemberDef;
 
 // Only support one inheritance for now
@@ -207,7 +204,7 @@ static EnumDef ParseEnum(Tokenizer* tok){
             tok->AdvancePeek(peek);
          }
 
-         Token enumMemberName = tok->NextToken();
+         /*Token enumMemberName = */ tok->NextToken();
 
          Token value = {};
          peek = tok->PeekToken();
@@ -230,7 +227,6 @@ static MemberDef* ParseMember(Tokenizer* tok){
    Token token = tok->PeekToken();
 
    MemberDef def = {};
-   void* mark = tok->Mark();
 
    if(CompareString(token,"struct") || CompareString(token,"union")){
       StructDef structDef = ParseStruct(tok);
@@ -245,7 +241,6 @@ static MemberDef* ParseMember(Tokenizer* tok){
          tok->AssertNextToken(";");
       }
    } else if(CompareString(token,"enum")){
-      void* typeMark = tok->Mark();
       EnumDef enumDef = ParseEnum(tok);
 
       def.type.enumType = enumDef;
@@ -264,7 +259,7 @@ static MemberDef* ParseMember(Tokenizer* tok){
       void* arraysMark = tok->Mark();
       if(CompareToken(peek,"[")){
          tok->AdvancePeek(peek);
-         Token arrayExpression = tok->NextFindUntil("]");
+         /*Token arrayExpression =*/ tok->NextFindUntil("]");
          tok->AssertNextToken("]");
 
          def.arrays = tok->Point(arraysMark);
@@ -461,7 +456,6 @@ void ParseHeaderFile(Tokenizer* tok){
          void* oldMark = tok->Mark();
 
          Token peek = tok->PeekToken();
-         Type* type = nullptr;
          if(CompareString(peek,"struct")){
             StructDef def = ParseStruct(tok);
 
@@ -634,6 +628,7 @@ void OutputRegisterTypesFunction(FILE* output){
    seen.insert(MakeSizedString("const"));
    seen.insert(MakeSizedString("T"));
    seen.insert(MakeSizedString("Array<Pair<Key,Data>>"));
+   seen.insert(MakeSizedString("Pair<Key,Data>"));
 
    fprintf(output,"#pragma GCC diagnostic ignored \"-Winvalid-offsetof\"\n");
    fprintf(output,"static void RegisterParsedTypes(){\n");
@@ -816,6 +811,9 @@ void OutputRegisterTypesFunction(FILE* output){
       if(CompareString(type,"Array<Pair<Key,Data>>")){
          continue;
       }
+      if(CompareString(type,"Pair<Key,Data>")){
+         continue;
+      }
 
       if(Contains(type,"<")){
          fprintf(output,"   InstantiateTemplate(MakeSizedString(\"%.*s\"));\n",UNPACK_SS(type));
@@ -856,7 +854,6 @@ int main(int argc,const char* argv[]){
    }
 
    InitArena(tempArena,Megabyte(256));
-   InitArena(perm,Megabyte(256));
 
    for(int i = 0; i < argc - 2; i++){
       SizedString content = PushFile(tempArena,argv[2+i]);
@@ -874,7 +871,7 @@ int main(int argc,const char* argv[]){
    Tokenizer tok(MakeSizedString(test),"[]{}();*<>,=",{});
    ParseHeaderFile(&tok);
 
-   FILE* output = fopen(argv[1],"w");
+   FILE* output = OpenFileAndCreateDirectories(argv[1],"w");
 
    OutputRegisterTypesFunction(output);
 

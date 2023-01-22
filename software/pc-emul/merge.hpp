@@ -1,0 +1,67 @@
+#ifndef INCLUDED_MERGE
+#define INCLUDED_MERGE
+
+#include "versatPrivate.hpp"
+#include "thread.hpp"
+
+struct IndexRecord{
+   int index;
+   IndexRecord* next;
+};
+
+// Represents the full algorithm
+struct RefParallelState{
+   ConsolidationGraph result;
+   ConsolidationGraph graphCopy;
+   Byte* arenaMark; // Stores everything expect result, allocated before hand
+   Arena* arena;
+   TaskFunction taskFunction;
+   clock_t start;
+   int nThreads;
+   int upperBound;
+   int i;
+
+   Array<Arena> threadArenas;
+   Array<int> table; // Shared by threads
+   int max;
+   bool timeout;
+};
+
+struct ParallelCliqueState{
+   volatile int* max;
+   volatile int thisMax;
+   Array<int> table;
+   Array<bool> tableLooked;
+   ConsolidationGraph* cliqueOut;
+   clock_t start;
+   int counter;
+   int index;
+   bool timeout;
+   bool found;
+};
+
+// Allocated for each task
+struct RefParallelTask{
+   RefParallelState* state;
+   int index;
+};
+
+struct IsCliqueResult{
+   bool result;
+   int failedIndex;
+};
+
+bool NodeMappingConflict(PortEdge edge1,PortEdge edge2);
+bool MappingConflict(MappingNode map1,MappingNode map2);
+ConsolidationGraph Copy(ConsolidationGraph graph,Arena* arena);
+int NodeIndex(ConsolidationGraph graph,MappingNode* node);
+
+int ValidNodes(ConsolidationGraph graph);
+
+BitArray* CalculateNeighborsTable(ConsolidationGraph graph,Arena* arena);
+
+IsCliqueResult IsClique(ConsolidationGraph graph);
+
+ConsolidationGraph ParallelMaxClique(ConsolidationGraph graph,int upperBound,Arena* arena);
+
+#endif // INCLUDED_MERGE

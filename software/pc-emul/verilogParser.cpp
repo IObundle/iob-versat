@@ -127,7 +127,7 @@ void PreprocessVerilogFile_(Arena* output, SizedString fileContent,std::vector<c
             exit(0);
          }
 
-         int fileSize = GetFileSize(file);
+         size_t fileSize = GetFileSize(file);
 
          Byte* mem = PushBytes(tempArena,fileSize + 1);
          fread(mem,sizeof(char),fileSize,file);
@@ -722,7 +722,7 @@ int main(int argc,const char* argv[]){
 
    TemplateSetArray("modules","ModuleInfo",allModules.data(),allModules.size());
 
-   FILE* output = fopen(argv[2],"w");
+   FILE* output = OpenFileAndCreateDirectories(argv[2],"w");
    TemplateSetString("namespace",argv[1]);
    fflush(stdout);
    ProcessTemplate(output,"../../submodules/VERSAT/software/templates/unit_verilog_data.tpl",tempArena);

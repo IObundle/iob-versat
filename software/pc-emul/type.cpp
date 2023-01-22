@@ -388,7 +388,7 @@ Type* GetPointerType(Type* baseType){
    }
 
    Type* ret = types.Alloc();
-   ret->name = PushString(&permanentArena,"%.*s*",UNPACK_SS(baseType->name));;
+   ret->name = PushString(&permanentArena,"%.*s*",UNPACK_SS(baseType->name));
    ret->type = Type::POINTER;
    ret->pointerType = baseType;
    ret->size = sizeof(void*);
@@ -410,13 +410,6 @@ Type* GetArrayType(Type* baseType, int arrayLength){
    ret->size = arrayLength * baseType->size;
 
    return ret;
-}
-
-static Type* GetArrayType(SizedString name,int arrayLength){
-   Type* type = GetType(name);
-   Type* res = GetArrayType(type,arrayLength);
-
-   return res;
 }
 
 #define A(STRUCT) #STRUCT,sizeof(STRUCT)
@@ -466,7 +459,7 @@ SizedString GetValueRepresentation(Value in,Arena* arena){
    SizedString res = {};
 
    if(val.type == ValueType::NUMBER){
-      res = PushString(arena,"%d",val.number);
+      res = PushString(arena,"%ld",val.number);
    } else if(val.type == ValueType::STRING){
       if(val.literal){
          res = PushString(arena,"\"%.*s\"",UNPACK_SS(val.str));
@@ -1070,9 +1063,9 @@ Value ConvertValue(Value in,Type* want,Arena* arena){
       }
    } else if(want == ValueType::NUMBER){
       if(in.type->type == Type::POINTER){
-         int* pointerValue = (int*) DeferencePointer(in.custom,in.type->pointerType,0);
+         void* pointerValue = (void*) DeferencePointer(in.custom,in.type->pointerType,0);
 
-         res.number = (int) pointerValue;
+         res.number = (int64) pointerValue;
       } else {
          NOT_IMPLEMENTED;
       }
@@ -1106,9 +1099,17 @@ Value MakeValue(){
    return val;
 }
 
-Value MakeValue(uint integer){
+Value MakeValue(int64 integer){
    Value val = {};
-   val.number = (int) integer;
+   val.number = integer;
+   val.type = ValueType::NUMBER;
+   val.isTemp = true;
+   return val;
+}
+
+Value MakeValue(unsigned int integer){
+   Value val = {};
+   val.number = (uint64) integer; // Should probably maintain the unsigned information. TODO
    val.type = ValueType::NUMBER;
    val.isTemp = true;
    return val;
@@ -1116,11 +1117,13 @@ Value MakeValue(uint integer){
 
 Value MakeValue(int integer){
    Value val = {};
-   val.number = integer;
+   val.number = (int64) integer;
    val.type = ValueType::NUMBER;
    val.isTemp = true;
    return val;
 }
+
+Value MakeValue(unsigned int integer);
 
 Value MakeValue(const char* str){
    Value res = MakeValue(MakeSizedString(str));

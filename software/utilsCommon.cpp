@@ -222,6 +222,35 @@ char GetHex(int value){
    }
 }
 
+Byte HexCharToNumber(char ch){
+   if(ch >= '0' && ch <= '9'){
+      return ch - '0';
+   }
+   if(ch >= 'A' && ch <= 'F'){
+      return (ch - 'A') + 10;
+   }
+   if(ch >= 'a' && ch <= 'f'){
+      return (ch - 'a') + 10;
+   }
+
+   Assert(false);
+   return '\0';
+}
+
+void HexStringToHex(unsigned char* buffer,SizedString str){
+   Assert(str.size % 2 == 0);
+
+   for(int i = 0; i < str.size; i += 2){
+      char high = str.data[i];
+      char low  = str.data[i+1];
+
+      Byte highV = HexCharToNumber(high);
+      Byte lowV = HexCharToNumber(low);
+
+      buffer[i / 2] = highV * 16 + lowV;
+   }
+}
+
 static unsigned int seed = 1;
 void SeedRandomNumber(unsigned int val){
    if(val == 0){

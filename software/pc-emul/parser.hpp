@@ -59,7 +59,7 @@ public:
    bool IfNextToken(const char* str);
 
    bool IsSingleChar(char ch);
-   bool IsSingleChar(char* chars);
+   bool IsSingleChar(const char* chars);
 
    Token FindFirst(std::initializer_list<const char*> strings);
 

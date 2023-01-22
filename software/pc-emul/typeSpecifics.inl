@@ -46,8 +46,8 @@ template<> class std::hash<PortInstance>{
 template<> class std::hash<StaticId>{
    public:
    std::size_t operator()(StaticId const& s) const noexcept{
-      int res = std::hash<SizedString>()(s.name);
-      res += (int) s.parent;
+      std::size_t res = std::hash<SizedString>()(s.name);
+      res += (std::size_t) s.parent;
 
       return (std::size_t) res;
    }
@@ -125,17 +125,24 @@ inline bool operator!=(const PortInstance& p1,const PortInstance& p2){
    return res;
 }
 
-inline bool operator==(const StaticId& id1,const StaticId& id2){
-   bool res = CompareString(id1.name,id2.name) && id1.parent == id2.parent;
-   return res;
-}
-
 inline bool operator==(const PortEdge& e1,const PortEdge& e2){
    bool res = (e1.units[0] == e2.units[0] && e1.units[1] == e2.units[1]);
    return res;
 }
+
 inline bool operator!=(const PortEdge& e1,const PortEdge& e2){
    bool res = !(e1 == e2);
+   return res;
+}
+
+inline bool operator==(const MappingNode& node1,const MappingNode& node2){
+   bool res = (node1.edges[0] == node2.edges[0] &&
+               node1.edges[1] == node2.edges[1]);
+   return res;
+}
+
+inline bool operator==(const StaticId& id1,const StaticId& id2){
+   bool res = CompareString(id1.name,id2.name) && id1.parent == id2.parent;
    return res;
 }
 

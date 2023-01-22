@@ -9,7 +9,7 @@ BUILD_DIR :=./build
 #pc sources
 HDR+=$(wildcard $(VERSAT_PC_EMUL)/*.hpp)
 
-VERILATE_FLAGS :=-g -m32
+VERILATE_FLAGS :=-g
 
 INCLUDE += -I$(VERSAT_PC_EMUL)
 VERSAT_DEFINE += -DPC
@@ -57,14 +57,14 @@ VERSAT_HDR+=$(wildcard $(VERSAT_PC_EMUL)/*.inl)
 $(BUILD_DIR)/verilated.o:
 	g++ $(VERILATE_FLAGS) -I. -MMD -I$(VERILATOR_INCLUDE) -I$(VERILATOR_INCLUDE)/vltstd -DVL_PRINTF=printf \
 	-DVM_COVERAGE=0 -DVM_SC=0 -DVM_TRACE=0 -Wno-sign-compare -Wno-uninitialized -Wno-unused-but-set-variable \
-	-Wno-unused-parameter -Wno-unused-variable -Wno-shadow -m32 -g -c $(VERILATOR_INCLUDE)/verilated.cpp
+	-Wno-unused-parameter -Wno-unused-variable -Wno-shadow -g -c $(VERILATOR_INCLUDE)/verilated.cpp
 	mv *.o $(BUILD_DIR)/;
 	mv *.d $(BUILD_DIR)/;
 
 $(BUILD_DIR)/verilated_vcd_c.o:
 	g++ $(VERILATE_FLAGS) -I. -MMD -I$(VERILATOR_INCLUDE) -I$(VERILATOR_INCLUDE)/vltstd -DVL_PRINTF=printf \
 	-DVM_COVERAGE=0 -DVM_SC=0 -DVM_TRACE=0 -Wno-sign-compare -Wno-uninitialized -Wno-unused-but-set-variable \
-	-Wno-unused-parameter -Wno-unused-variable -Wno-shadow -m32 -g -c $(VERILATOR_INCLUDE)/verilated_vcd_c.cpp
+	-Wno-unused-parameter -Wno-unused-variable -Wno-shadow -g -c $(VERILATOR_INCLUDE)/verilated_vcd_c.cpp
 	mv *.o $(BUILD_DIR)/;
 	mv *.d $(BUILD_DIR)/;
 
@@ -88,10 +88,10 @@ $(BUILD_DIR)/%.o: $(VERSAT_PC_EMUL)/%.cpp $(HDR) $(UNIT_HDR) $(VERSAT_HDR) $(BUI
 	-g++ -std=c++11 $(VERSAT_DEFINE) -c -o $@ $(GLOBAL_CFLAGS) $< -I $(VERSAT_SW_DIR) -I $(VERSAT_PC_EMUL) -I $(VERILATOR_INCLUDE) -I $(BUILD_DIR)/
 
 $(BUILD_DIR)/structParser.out: $(VERSAT_SW_DIR)/pc-emul/structParser.cpp $(TOOL_COMMON_SRC)
-	g++ -std=c++11 -DPC -DVERSAT_DEBUG -DSTANDALONE -o $@ -g -m32 $< -I $(VERSAT_DIR)/software/ -I  $(VERSAT_DIR)/software/pc-emul  -I $(VERSAT_DIR)/software/pc-emul/ $(TOOL_COMMON_SRC)
+	g++ -std=c++11 -DPC -DVERSAT_DEBUG -DSTANDALONE -o $@ -g $< -I $(VERSAT_DIR)/software/ -I  $(VERSAT_DIR)/software/pc-emul  -I $(VERSAT_DIR)/software/pc-emul/ $(TOOL_COMMON_SRC)
 
 $(BUILD_DIR)/verilogParser.out: $(VERSAT_SW_DIR)/pc-emul/verilogParser.cpp $(TOOL_SRC) $(BUILD_DIR)/typeInfo.inc
-	g++ -std=c++11 -DPC -DVERSAT_DEBUG -DSTANDALONE -o $@ -g -m32 $< -I $(BUILD_DIR)/ -I $(VERSAT_DIR)/software/ -I  $(VERSAT_DIR)/software/pc-emul  -I $(VERSAT_DIR)/software/pc-emul/ $(TOOL_SRC)
+	g++ -std=c++11 -DPC -DVERSAT_DEBUG -DSTANDALONE -o $@ -g $< -I $(BUILD_DIR)/ -I $(VERSAT_DIR)/software/ -I  $(VERSAT_DIR)/software/pc-emul  -I $(VERSAT_DIR)/software/pc-emul/ $(TOOL_SRC)
 
 verilator_test: $(CPP_OBJ)
 

@@ -271,7 +271,7 @@ PortExpression InstantiateExpression(Versat* versat,Expression* root,Accelerator
 
       if(root->expressions.size == 1){
          Assert(root->op[0] == '~');
-         FUInstance* inst = CreateFUInstance(circuit,GetTypeByName(versat,MakeSizedString("NOT")),{},true);
+         FUInstance* inst = CreateFUInstance(circuit,GetTypeByName(versat,MakeSizedString("NOT")),MakeSizedString("NOT"),true);
 
          ConnectUnits(expr0.inst,expr0.extra.portStart,inst,0,expr0.extra.delayStart);
 
@@ -291,7 +291,7 @@ PortExpression InstantiateExpression(Versat* versat,Expression* root,Accelerator
       Assert(expr1.extra.delayStart == expr1.extra.delayEnd);
 
       SizedString op = MakeSizedString(root->op);
-      char* typeName;
+      const char* typeName;
       if(CompareToken(op,"&")){
          typeName = "AND";
       } else if(CompareToken(op,"|")){
@@ -316,7 +316,8 @@ PortExpression InstantiateExpression(Versat* versat,Expression* root,Accelerator
       }
 
       SizedString typeStr = MakeSizedString(typeName);
-      FUInstance* inst = CreateFUInstance(circuit,GetTypeByName(versat,typeStr),{},true);
+      FUDeclaration* type = GetTypeByName(versat,typeStr);
+      FUInstance* inst = CreateFUInstance(circuit,type,type->name,true);
 
       ConnectUnits(expr0.inst,expr0.extra.portStart,inst,0,expr0.extra.delayStart);
       ConnectUnits(expr1.inst,expr1.extra.portStart,inst,1,expr0.extra.delayStart);
@@ -325,6 +326,9 @@ PortExpression InstantiateExpression(Versat* versat,Expression* root,Accelerator
       res.extra.portEnd  = res.extra.portStart  = 0;
       res.extra.delayEnd = res.extra.delayStart = 0;
    } break;
+   default: {
+      Assert(false);
+   } break;
    }
 
    Assert(res.inst);
@@ -332,8 +336,6 @@ PortExpression InstantiateExpression(Versat* versat,Expression* root,Accelerator
 }
 
 FUInstance* ParseExpression(Versat* versat,Accelerator* circuit,Tokenizer* tok,InstanceTable& table){
-   static int timesCalled = 0;
-
    Arena* arena = &versat->temp;
    Expression* expr = ParseExpression(tok,arena);
    PortExpression inst = InstantiateExpression(versat,expr,circuit,table);
@@ -388,13 +390,13 @@ FUInstance* ParseInstanceDeclaration(Versat* versat,Tokenizer* tok,Accelerator* 
       for(int i = 0; i < arguments; i++){
          Token arg = insideList.NextToken();
 
-         inst->config[i] = ParseInt(arg);
+         /*inst->config[i] =*/ ParseInt(arg);
 
          if(i != arguments - 1){
             insideList.AssertNextToken(",");
          }
       }
-      SetDefaultConfiguration(inst);
+      //SetDefaultConfiguration(inst);
       Assert(insideList.Done());
 
       tok->AssertNextToken(")");
@@ -410,12 +412,12 @@ FUInstance* ParseInstanceDeclaration(Versat* versat,Tokenizer* tok,Accelerator* 
 
       Tokenizer insideList(list,",",{});
 
-      inst->memMapped = PushArray<int>(&versat->permanent,1 << FUType->memoryMapBits).data;
+      //inst->memMapped = PushArray<int>(&versat->permanent,1 << FUType->memoryMapBits).data;
       //inst->savedMemory = true;
       for(int i = 0; i < arguments; i++){
          Token arg = insideList.NextToken();
 
-         inst->memMapped[i] = ParseInt(arg);
+         /*inst->memMapped[i] = */ ParseInt(arg);
 
          if(i != arguments - 1){
             insideList.AssertNextToken(",");
@@ -535,6 +537,7 @@ FUDeclaration* ParseModule(Versat* versat,Tokenizer* tok){
 
             SizedString name = PushString(&versat->permanent,outVar.name);
             FUInstance* inst = ParseExpression(versat,circuit,tok,table);
+            inst->name = PushString(&versat->permanent,name);
             table.Insert(name,inst);
 
             tok->AssertNextToken(";");
@@ -572,6 +575,20 @@ FUDeclaration* ParseModule(Versat* versat,Tokenizer* tok){
             ConnectUnit((PortExpression){inst1,outVar.extra},(PortExpression){inst2,inVar.extra});
 
             tok->AssertNextToken(";");
+         // The problem is when using port based expressions. We cannot have variables represent ports, only instances. And it kinda of messes up the way a programmer thinks. If I use a port based expression on the right, the variable only takes the instance
+         } else if(CompareToken(op,"->=")){
+            Var inVar = ParseVar(tok);
+
+            if(CompareString(inVar.name,"out")){
+               USER_ERROR;
+            }
+
+            FUInstance* inst1 = table.GetOrFail(outVar.name);
+            FUInstance* inst2 = table.GetOrFail(inVar.name);
+
+            ConnectUnit((PortExpression){inst1,outVar.extra},(PortExpression){inst2,inVar.extra});
+            table.Insert(outVar.name,inst2);
+            tok->AssertNextToken(";");
          } else {
             printf("%.*s\n",UNPACK_SS(op));
             fflush(stdout);
@@ -599,7 +616,7 @@ FUDeclaration* ParseIterative(Versat* versat,Tokenizer* tok){
    Accelerator* firstPhase = CreateAccelerator(versat);
    Accelerator* secondPhase = CreateAccelerator(versat);
 
-   FUInstance* firstOut = CreateFUInstance(firstPhase,BasicDeclaration::output,MakeSizedString("out"),true,false);
+   /*FUInstance* firstOut = */ CreateFUInstance(firstPhase,BasicDeclaration::output,MakeSizedString("out"),true,false);
    FUInstance* firstData = CreateFUInstance(firstPhase,BasicDeclaration::data,MakeSizedString("data"),true,false);
 
    FUInstance* secondOut = CreateFUInstance(secondPhase,BasicDeclaration::output,MakeSizedString("out"),true,false);
@@ -720,7 +737,7 @@ FUDeclaration* ParseIterative(Versat* versat,Tokenizer* tok){
 }
 
 void ParseVersatSpecification(Versat* versat,SizedString content){
-   Tokenizer tokenizer = Tokenizer(content, "=#[](){}+:;,*~.",{"->",">><","<<>",">>","<<","..","^="});
+   Tokenizer tokenizer = Tokenizer(content, "=#[](){}+:;,*~.",{"->=","->",">><","<<>",">>","<<","..","^="});
    Tokenizer* tok = &tokenizer;
 
    while(!tok->Done()){

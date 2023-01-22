@@ -4,6 +4,7 @@
 #include <limits.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <dirent.h>
 
 #include "stdio.h"
 #include "string.h"
@@ -33,6 +34,29 @@ char* GetCurrentDirectory(){
 
 void MakeDirectory(const char* path){
    mkdir(path, S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
+}
+
+FILE* OpenFileAndCreateDirectories(const char* path,const char* format){
+   char buffer[PATH_MAX];
+   memset(buffer,0,PATH_MAX);
+
+   for(int i = 0; path[i]; i++){
+      buffer[i] = path[i];
+
+      if(path[i] == '/'){
+         DIR* dir = opendir(buffer);
+         if(!dir && errno == ENOENT){
+            MakeDirectory(buffer);
+         }
+         if(dir){
+            closedir(dir);
+         }
+      }
+   }
+
+   FILE* file = fopen(buffer,format);
+   Assert(file);
+   return file;
 }
 
 SizedString PathGoUp(char* pathBuffer){

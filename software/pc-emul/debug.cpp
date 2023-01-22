@@ -37,10 +37,11 @@ SizedString FuzzText(SizedString formattedExample,char sep,Arena* arena,int seed
 }
 
 void CheckMemory(Accelerator* topLevel){
-   STACK_ARENA(temp,Kilobyte(64));
+   Arena* temp = &topLevel->memory;
+   ArenaMarker marker(temp);
 
    AcceleratorIterator iter = {};
-   iter.Start(topLevel,&temp,true);
+   iter.Start(topLevel,temp,true);
 
    CheckMemory(iter);
 }
@@ -122,9 +123,11 @@ void DisplayAcceleratorMemory(Accelerator* topLevel){
 }
 
 void DisplayUnitConfiguration(Accelerator* topLevel){
-   STACK_ARENA(temp,Kilobyte(64));
+   Arena* temp = &topLevel->memory;
+   ArenaMarker marker(temp);
+
    AcceleratorIterator iter = {};
-   iter.Start(topLevel,&temp,true);
+   iter.Start(topLevel,temp,true);
    DisplayUnitConfiguration(iter);
 }
 
@@ -141,19 +144,19 @@ void DisplayUnitConfiguration(AcceleratorIterator iter){
          printf("[%.*s] %.*s:",UNPACK_SS(type->name),UNPACK_SS(inst->name));
          if(val.configs){
             if(IsConfigStatic(accel,inst)){
-               printf("\nStatic [%d]: ",inst->config - accel->staticAlloc.ptr);
+               printf("\nStatic [%ld]: ",inst->config - accel->staticAlloc.ptr);
             } else {
-               printf("\nConfig [%d]: ",inst->config - accel->configAlloc.ptr);
+               printf("\nConfig [%ld]: ",inst->config - accel->configAlloc.ptr);
             }
 
             OutputSimpleIntegers(inst->config,val.configs);
          }
          if(val.states){
-            printf("\nState [%d]: ",inst->state - accel->stateAlloc.ptr);
+            printf("\nState [%ld]: ",inst->state - accel->stateAlloc.ptr);
             OutputSimpleIntegers(inst->state,val.states);
          }
          if(val.delays){
-            printf("\nDelay [%d]: ",inst->delay - accel->delayAlloc.ptr);
+            printf("\nDelay [%ld]: ",inst->delay - accel->delayAlloc.ptr);
             OutputSimpleIntegers(inst->delay,val.delays);
          }
          printf("\n\n");
@@ -176,10 +179,11 @@ bool CheckInputAndOutputNumber(FUDeclaration* type,int inputs,int outputs){
 }
 
 void PrintAcceleratorInstances(Accelerator* accel){
-   STACK_ARENA(temp,Kilobyte(64));
+   Arena* temp = &accel->memory;
+   ArenaMarker marker(temp);
 
    AcceleratorIterator iter = {};
-   for(ComplexFUInstance* inst = iter.Start(accel,&temp,false); inst; inst = iter.Next()){
+   for(ComplexFUInstance* inst = iter.Start(accel,temp,false); inst; inst = iter.Next()){
       for(int ii = 0; ii < iter.level; ii++){
          printf("  ");
       }
@@ -286,7 +290,7 @@ void OutputGraphDotFile(Versat* versat,AcceleratorView& view,bool collapseSameEd
 
    vsprintf(buffer,filenameFormat,args);
 
-   FILE* file = fopen(buffer,"w");
+   FILE* file = OpenFileAndCreateDirectories(buffer,"w");
    OutputGraphDotFile_(versat,view,collapseSameEdges,nullptr,file);
    fclose(file);
 
@@ -301,7 +305,7 @@ void OutputGraphDotFile(Versat* versat,AcceleratorView& view,bool collapseSameEd
 
    vsprintf(buffer,filenameFormat,args);
 
-   FILE* file = fopen(buffer,"w");
+   FILE* file = OpenFileAndCreateDirectories(buffer,"w");
    OutputGraphDotFile_(versat,view,collapseSameEdges,highlighInstance,file);
    fclose(file);
 
@@ -529,7 +533,8 @@ static void PrintVCD_(FILE* accelOutputFile,AcceleratorIterator iter,int time,Ar
 }
 
 void PrintVCD(FILE* accelOutputFile,Accelerator* accel,int time,int clock,Array<int> sameValueCheckSpace){ // Need to put some clock signal
-   STACK_ARENA(temp,Kilobyte(64));
+   Arena* temp = &accel->memory;
+   ArenaMarker marker(temp);
    ResetMapping();
 
    fprintf(accelOutputFile,"#%d\n",time * 10);
@@ -537,7 +542,7 @@ void PrintVCD(FILE* accelOutputFile,Accelerator* accel,int time,int clock,Array<
    fprintf(accelOutputFile,"b%s b\n",Bin((time + 1) / 2));
 
    AcceleratorIterator iter = {};
-   iter.Start(accel,&temp,true);
+   iter.Start(accel,temp,true);
    PrintVCD_(accelOutputFile,iter,time,sameValueCheckSpace);
 }
 
@@ -684,7 +689,7 @@ void TerminalIteration(WINDOW* w,Input input,Arena* arena,Arena* temp){
 
                currentPanel += 1;
 
-               newState->name = PushString(arena,"%d\n",i);;
+               newState->name = PushString(arena,"%d\n",i);
                newState->valueLooking = val;
                break;
             }

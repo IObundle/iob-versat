@@ -63,7 +63,7 @@ Tokenizer::Tokenizer(SizedString content,const char* singleChars,std::vector<std
    keepComments = false;
 }
 
-int Tokenizer::SpecialChars(const char* ptr, unsigned int size){
+int Tokenizer::SpecialChars(const char* ptr, size_t size){
    for(std::string special : specialChars){
       if(special.size() >= size){
          continue;
@@ -288,7 +288,7 @@ bool Tokenizer::IsSingleChar(char ch){
    return false;
 }
 
-bool Tokenizer::IsSingleChar(char* chars){
+bool Tokenizer::IsSingleChar(const char* chars){
    for(int i = 0; chars[i]; i++){
       if(!IsSingleChar(chars[i])){
          return false;
@@ -713,6 +713,7 @@ Expression* ParseOperationType(Tokenizer* tok,std::initializer_list<std::initial
       if(ptr){
          ptr->next = PushStruct<OperationList>(tempArena);
          ptr = ptr->next;
+         *ptr = {};
       } else {
          ptr = &head;
       }

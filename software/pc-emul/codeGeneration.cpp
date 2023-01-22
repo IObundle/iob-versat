@@ -124,7 +124,7 @@ void OutputVersatSource(Versat* versat,Accelerator* accel,const char* sourceFile
 
    #if 1
    // No need for templating, small file
-   FILE* c = fopen(constantsFilepath,"w");
+   FILE* c = OpenFileAndCreateDirectories(constantsFilepath,"w");
 
    if(!c){
       printf("Error creating file, check if filepath is correct: %s\n",constantsFilepath);
@@ -156,14 +156,14 @@ void OutputVersatSource(Versat* versat,Accelerator* accel,const char* sourceFile
 
    fclose(c);
 
-   FILE* s = fopen(sourceFilepath,"w");
+   FILE* s = OpenFileAndCreateDirectories(sourceFilepath,"w");
 
    if(!s){
       printf("Error creating file, check if filepath is correct: %s\n",sourceFilepath);
       return;
    }
 
-   FILE* d = fopen(dataFilepath,"w");
+   FILE* d = OpenFileAndCreateDirectories(dataFilepath,"w");
 
    if(!d){
       fclose(s);
@@ -197,11 +197,11 @@ void OutputVersatSource(Versat* versat,Accelerator* accel,const char* sourceFile
    TemplateSetNumber("configurationSize",accel->configAlloc.size);
    TemplateSetArray("configurationData","int",accel->configAlloc.ptr,accel->configAlloc.size);
 
-   TemplateSetNumber("config",(int)accel->configAlloc.ptr);
-   TemplateSetNumber("state",(int)accel->stateAlloc.ptr);
-   TemplateSetNumber("memMapped",(int)0);
-   TemplateSetNumber("static",(int)accel->staticAlloc.ptr);
-   TemplateSetNumber("staticEnd",(int)&accel->staticAlloc.ptr[accel->staticAlloc.reserved]);
+   TemplateSet("config",accel->configAlloc.ptr);
+   TemplateSet("state",accel->stateAlloc.ptr);
+   TemplateSet("memMapped",nullptr);
+   TemplateSet("static",accel->staticAlloc.ptr);
+   TemplateSet("staticEnd",&accel->staticAlloc.ptr[accel->staticAlloc.reserved]);
 
    TemplateSetArray("delay","int",accel->delayAlloc.ptr,accel->delayAlloc.size);
    TemplateSetArray("staticBuffer","int",accel->staticAlloc.ptr,accel->staticAlloc.size);

@@ -69,6 +69,17 @@ void Alloc(Allocation<T>* alloc,int newSize){
 }
 
 template<typename T>
+void RemoveChunkAndCompress(Allocation<T>* alloc,T* ptr,int size){
+   Assert(Inside(alloc,ptr));
+
+   T* copyStart = ptr + size;
+   int copySize = alloc->size - (copyStart - alloc->ptr);
+
+   Memcpy(ptr,copyStart,copySize);
+   alloc->size -= size;
+}
+
+template<typename T>
 bool Inside(Allocation<T>* alloc,T* ptr){
    bool res = (ptr >= alloc->ptr && ptr < (alloc->ptr + alloc->size));
    return res;
@@ -108,12 +119,19 @@ Pair<Key,Data>& HashmapIterator<Key,Data>::operator*(){
    return pair;
 }
 
-#if 0
 template<typename Key,typename Data>
-Hashmap<Key,Data>::Hashmap(Arena* arena,int maxAmountOfElements){
-   Init(arena,maxAmountOfElements);
-}
-#endif
+struct Node{
+   Pair<Key,Data> data;
+   Node* next;
+};
+
+template<typename Key,typename Data>
+struct HashmapHeader{
+   int nodesAllocated;
+   int nodesUsed;
+   Array<Node<Key,Data>*> buckets;
+   Array<Node<Key,Data>> data;
+};
 
 template<typename Key,typename Data>
 void Hashmap<Key,Data>::Init(Arena* arena,int maxAmountOfElements){
@@ -128,6 +146,17 @@ void Hashmap<Key,Data>::Init(Arena* arena,int maxAmountOfElements){
       valid.Fill(0);
       initialized = true;
    }
+
+   int size = AlignNextPower2(maxAmountOfElements) * 2;
+
+   this->mem = (Byte*) PushStruct<HashmapHeader<Key,Data>>(arena);
+   HashmapHeader<Key,Data>* header = (HashmapHeader<Key,Data>*) this->mem;
+
+   header->nodesAllocated = size;
+   header->nodesUsed = 0;
+   header->buckets = PushArray<Node<Key,Data>*>(arena,size);
+   Memset<Node<Key,Data>*>(header->buckets,nullptr);
+   header->data = PushArray<Node<Key,Data>>(arena,size);
 }
 
 template<typename Key,typename Data>
@@ -136,27 +165,41 @@ Data* Hashmap<Key,Data>::Insert(Key key,Data data){
    int mask = memory.size - 1;
    int index = Hash<Key>(key) & mask; // Size is power of 2
 
-   // open addressing, find first empty position or valid position with same key
-   bool found = false;
-   for(int i = 0; i < memory.size; i += 1,index = (index + 1) & mask){
-      if(valid.Get(index)){
-         if(key == memory[index].key){ // Found space with same key
-            found = true;
-            break;
+   HashmapHeader<Key,Data>* header = (HashmapHeader<Key,Data>*) this->mem;
+   Node<Key,Data>* ptr = header->buckets[index];
+
+   // Do not even need to look
+   if(ptr == nullptr){
+      Assert(header->nodesUsed < header->nodesAllocated);
+      Node<Key,Data>* node = &header->data[header->nodesUsed++];
+
+      node->data.key = key;
+      node->data.data = data;
+      node->next = nullptr;
+
+      header->buckets[index] = node;
+
+      return &node->data.data;
+   } else {
+      for(; ptr; ptr = ptr->next){
+         if(ptr->data.key == key){ // Same key
+            ptr->data.data = data; // No duplicated keys, overwrite data
+            return &ptr->data.data;
          }
-      } else { // Found free space
-         found = true;
-         break;
       }
+
+      Assert(header->nodesUsed < header->nodesAllocated);
+      Node<Key,Data>* newNode = &header->data[header->nodesUsed++];
+      newNode->data.key = key;
+      newNode->data.data = data;
+      newNode->next = header->buckets[index];
+
+      header->buckets[index] = newNode;
+
+      return &newNode->data.data;
    }
-   Assert(found); // Hashmap is full
 
-   valid.Set(index,1);
-   memory[index].key = key;
-   memory[index].data = data;
-   inserted += 1;
-
-   return &memory[index].data;
+   return nullptr;
 }
 
 template<typename Key,typename Data>
@@ -194,15 +237,15 @@ Data* Hashmap<Key,Data>::Get(Key key){
    int mask = memory.size - 1;
    int index = Hash<Key>(key) & mask; // Size is power of 2
 
-   for(; 1; index = (index + 1) & mask){
-      if(!valid.Get(index)){ // Since using open addressing, the first sign of a non valid position means key doesn't exist.
-         return nullptr;
-      }
-
-      if(key == memory[index].key){
-         return &memory[index].data;
+   HashmapHeader<Key,Data>* header = (HashmapHeader<Key,Data>*) this->mem;
+   Node<Key,Data>* ptr = header->buckets[index];
+   for(; ptr; ptr = ptr->next){
+      if(ptr->data.key == key){ // Same key
+         return &ptr->data.data;
       }
    }
+
+   return nullptr;
 }
 
 template<typename Key,typename Data>
@@ -243,6 +286,10 @@ void PoolIterator<T>::Init(Pool<T>* pool,Byte* page){
 
    if(page){
       pageInfo = GetPageInfo(pool->info,page);
+
+      if(!IsValid()){
+         ++(*this);
+      }
    }
 }
 
@@ -455,7 +502,7 @@ T& Pool<T>::GetOrFail(int index){
 
 template<typename T>
 void Pool<T>::Remove(T* elem){
-   Byte* page = (Byte*) ((uint)elem & ~(GetPageSize() - 1));
+   Byte* page = (Byte*) ((uintptr_t)elem & ~(GetPageSize() - 1));
    PageInfo pageInfo = GetPageInfo(info,page);
 
    int pageIndex = ((Byte*) elem - page) / sizeof(T);

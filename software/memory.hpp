@@ -15,7 +15,8 @@ inline size_t Kilobyte(int val){return val * 1024;};
 inline size_t Megabyte(int val){return Kilobyte(val) * 1024;};
 inline size_t Gigabyte(int val){return Megabyte(val) * 1024;};
 
-inline size_t BitToByteSize(int bitSize){return ((bitSize + 7) / 8);};
+inline size_t BitSizeToByteSize(int bitSize){return ((bitSize + 7) / 8);};
+inline size_t BitSizeToDWordSize(int bitSize){return ((bitSize + 31) / 32);};
 
 int GetPageSize();
 void* AllocatePages(int pages);
@@ -29,26 +30,14 @@ struct Allocation{
    int reserved;
 };
 
-template<typename T>
-bool ZeroOutAlloc(Allocation<T>* alloc,int newSize); // Possible reallocs (returns true if so) but clears all memory allocated to zero
-
-template<typename T>
-bool ZeroOutRealloc(Allocation<T>* alloc,int newSize); // Returns true if it actually performed reallocation
-
-template<typename T>
-void Reserve(Allocation<T>* alloc,int reservedSize);
-
-template<typename T>
-void Alloc(Allocation<T>* alloc,int newSize);
-
-template<typename T>
-bool Inside(Allocation<T>* alloc,T* ptr);
-
-template<typename T>
-void Free(Allocation<T>* alloc);
-
-template<typename T>
-int MemoryUsage(Allocation<T> alloc);
+template<typename T> bool ZeroOutAlloc(Allocation<T>* alloc,int newSize); // Possible reallocs (returns true if so) but clears all memory allocated to zero
+template<typename T> bool ZeroOutRealloc(Allocation<T>* alloc,int newSize); // Returns true if it actually performed reallocation
+template<typename T> void Reserve(Allocation<T>* alloc,int reservedSize);
+template<typename T> void RemoveChunkAndCompress(Allocation<T>* alloc,T* ptr,int size);
+template<typename T> void Alloc(Allocation<T>* alloc,int newSize);
+template<typename T> bool Inside(Allocation<T>* alloc,T* ptr);
+template<typename T> void Free(Allocation<T>* alloc);
+template<typename T> int MemoryUsage(Allocation<T> alloc);
 
 template<typename T>
 class PushPtr{
@@ -97,6 +86,7 @@ struct Arena{
 };
 
 void InitArena(Arena* arena,size_t size); // Calls calloc
+void InitLargeArena(Arena* arena,size_t size); //
 Arena SubArena(Arena* arena,size_t size);
 void PopToSubArena(Arena* top,Arena subArena);
 void Free(Arena* arena);
@@ -122,7 +112,7 @@ public:
 #define STACK_ARENA(NAME,SIZE) \
    Arena NAME = {}; \
    char buffer_##NAME[SIZE]; \
-   NAME.mem = buffer_##NAME; \
+   NAME.mem = (Byte*) buffer_##NAME; \
    NAME.totalAllocated = SIZE;
 
 template<typename T>
@@ -162,6 +152,11 @@ public:
 
    int Get(int index);
    void Set(int index,bool value);
+
+   int GetNumberBitsSet();
+
+   int FirstBitSetIndex();
+   int FirstBitSetIndex(int start);
 
    SizedString PrintRepresentation(Arena* output);
 
@@ -203,7 +198,7 @@ public:
    Pair<Key,Data>& operator*();
 };
 
-// An hashmap implementation that uses arenas. Does not allocate any memory after construction. Need to pass current amount of maxAmountOfElements
+// An hashmap implementation for arenas. Does not allocate any memory after construction. Need to pass correct amount of maxAmountOfElements
 template<typename Key,typename Data>
 struct Hashmap{
    Array<Pair<Key,Data>> memory; // Power of 2 size
@@ -211,6 +206,7 @@ struct Hashmap{
    int inserted;
    bool initialized;
 
+   Byte* mem;
 public:
 
    void Init(Arena* arena,int maxAmountOfElements);

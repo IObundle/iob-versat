@@ -16,7 +16,7 @@ inline void UnlockMutex(){pthread_mutex_unlock(&poolMutex);}
 inline void IncSem(){sem_post(&poolSemaphore);}
 inline void DecSem(){sem_wait(&poolSemaphore);}
 
-static const int MAX_TASKS = 128;
+static const int MAX_TASKS = 1024;
 
 // Pool mutex locked
 static Task tasks[MAX_TASKS];
@@ -24,8 +24,20 @@ static int taskWrite;
 static int taskRead;
 static bool stop;
 
+static int jobsAdded;
+static int jobsFinished;
+
 void* ThreadFunction(void* arg){
-   int id = (int) arg; // For now, embed id as the argument
+   union {
+      void* ptr;
+      struct{
+         int i0;
+         int i1;
+      };
+   } conv;
+
+   conv.ptr = arg;
+   int id = conv.i0; // For now, embed id as the argument
 
    while(1){
       DecSem();
@@ -35,13 +47,15 @@ void* ThreadFunction(void* arg){
       }
 
       LockMutex();
-
       Task task = tasks[taskRead];
       taskRead = (taskRead + 1) % MAX_TASKS;
-
       UnlockMutex();
 
       task.function(id,task.args);
+
+      LockMutex(); // Should be a different mutex
+      jobsFinished += 1;
+      UnlockMutex();
    }
 
    return nullptr;
@@ -63,11 +77,18 @@ void InitThreadPool(int nThreads){
    res |= pthread_mutex_init(&poolMutex,NULL);
    res |= sem_init(&poolSemaphore,0,0);
 
-   for(int i = 0; i < nThreads; i++){
+   for(iptr i = 0; i < nThreads; i++){
       res |= pthread_create(&threads[i],NULL,ThreadFunction,(void*) i);
    }
 
    Assert(res == 0);
+}
+
+bool FullTasks(){
+   LockMutex();
+   bool full = (taskWrite + 1 == taskRead);
+   UnlockMutex();
+   return full;
 }
 
 void AddTask(Task task){
@@ -81,6 +102,28 @@ void AddTask(Task task){
    UnlockMutex();
 
    IncSem();
+
+   jobsAdded += 1;
+}
+
+int NumberThreads(){
+   return numberThreads;
+}
+
+void WaitCompletion(){
+   while(1){
+      LockMutex();
+      bool end = (jobsAdded == jobsFinished);
+      UnlockMutex();
+
+      if(end){
+         break;
+      } else {
+         //sleep(1);
+      }
+   }
+
+   return;
 }
 
 void TerminatePool(bool force){
