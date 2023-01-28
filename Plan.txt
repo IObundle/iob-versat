@@ -126,12 +126,6 @@ Delay and Time:
       Ultimately, we use the concept of "iterative units" as a hack for the fact that Versat cannot represent units that only output valid data after every X cycles.
       It should be possible to define normal units as iterative, instead of only defined as graphs and through the use of ParseVersatSpecifications.
 
-Performance:
-
-   Need to check if the Hashmap class is producing good hashes. 
-      The default c++ way of hashing was causing troubles as hashing pointers was completely useless
-      As long as pointers are hashing correctly, don't think to much about it.
-
  Iterative units:
    
    Simplify the process of creating and make it more code based instead of versat specifications based.
@@ -174,14 +168,19 @@ Optimizations:
       In fact, currently units are having their configuration pointers point to somebody else configuration space. Ideally we should set the pointers to nullptr, as it should be a segfault accessing other units configurations.
       Also, investigate wether we need the offset arrays for outputs and extraData, instead of just using push pointers.
 
-Template:
+Template Engine:
 
-   Do a template pass to remove duplicate code, lock down on the approach used to identify units and wires. Different templates should almost resemble each other. All the logic should be shared between units and should relie on common ground.
+   The engine isn't fully parsing the templates.
+      The Eval call is parsing some things. Everything should be parsed on the Parse function and the Eval function should never have to parse a single line.
+
+Templates:
+
+   Do a template pass to remove duplicate code, lock down on the approach used to identify units and wires. Different templates should almost resemble each other. All the logic should be shared between units and should rely on common ground.
    Allow the use of enums inside templates. (See parsing enum info on Type)
    Add local variables. Need to introduce the concept of "stack frames".
    Take a look at the way whitespace is handled. Nothing too important, but I think some places could generate files with errors because they don't handle whitespace correctly
 
-   The Command structure is not needed, I thing. Does the same thing as an expression.
+   The Command structure is not needed, I think. Does the same thing as an expression.
 
 Type:
 

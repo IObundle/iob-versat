@@ -2,39 +2,10 @@
 
 #include <cstdio>
 #include <cstdarg>
-#include <cstdlib>
 #include <set>
 
-#include "parser.hpp"
 #include "type.hpp"
 #include "textualRepresentation.hpp"
-
-SizedString FuzzText(SizedString formattedExample,char sep,Arena* arena,int seed){
-   char sepBuffer[2] = {sep,'\0'};
-   Tokenizer tok(formattedExample,sepBuffer,{});
-
-   tok.AssertNextToken(sepBuffer);
-
-   Byte* mark = MarkArena(arena);
-
-   while(!tok.Done()){
-      Token next = tok.NextToken();
-      tok.AssertNextToken(sepBuffer);
-
-      *PushStruct<Token>(arena) = next;
-   }
-   Assert(tok.Done());
-
-   Array<Token> tokens = PointArray<Token>(arena,mark);
-
-   mark = MarkArena(arena);
-   for(Token& token : tokens){
-      PushString(arena,"%.*s ",UNPACK_SS(token));
-   }
-   SizedString res = PointArena(arena,mark);
-
-   return res;
-}
 
 void CheckMemory(Accelerator* topLevel){
    Arena* temp = &topLevel->memory;
@@ -229,14 +200,27 @@ bool IsGraphValid(AcceleratorView view){
    return true;
 }
 
+void OutputGraphDotFile_(SimpleGraph graph,bool collapseSameEdges,FILE* file){
+   fprintf(file,"digraph accel {\n\tnode [fontcolor=white,style=filled,color=\"160,60,176\"];\n");
+
+   for(int i = 0; i < graph.nodes.size; i++){
+      fprintf(file,"%d [label=\"%.*s\"]\n",i,UNPACK_SS(graph.nodes[i].decl->name));
+   }
+   for(int i = 0; i < graph.edges.size; i++){
+      SimpleEdge e = graph.edges[i];
+      fprintf(file,"%d:%d -> %d:%d\n",e.out,e.outPort,e.in,e.inPort);
+   }
+   fprintf(file,"}\n");
+}
+
 static void OutputGraphDotFile_(Versat* versat,AcceleratorView& view,bool collapseSameEdges,ComplexFUInstance* highlighInstance,FILE* outputFile){
    Arena* arena = &versat->temp;
 
    fprintf(outputFile,"digraph accel {\n\tnode [fontcolor=white,style=filled,color=\"160,60,176\"];\n");
    for(ComplexFUInstance** instPtr : view.nodes){
       ComplexFUInstance* inst = *instPtr;
-      SizedString id = UniqueRepr(inst,arena);
-      SizedString name = Repr(inst,versat->debug.dotFormat,arena);
+      String id = UniqueRepr(inst,arena);
+      String name = Repr(inst,versat->debug.dotFormat,arena);
 
       if(inst == highlighInstance){
          fprintf(outputFile,"\t\"%.*s\" [color=blue,label=\"%.*s\"];\n",UNPACK_SS(id),UNPACK_SS(name));
@@ -260,11 +244,11 @@ static void OutputGraphDotFile_(Versat* versat,AcceleratorView& view,bool collap
          sameEdgeCounter.insert(key);
       }
 
-      SizedString first = UniqueRepr(edge->units[0].inst,arena);
-      SizedString second = UniqueRepr(edge->units[1].inst,arena);
+      String first = UniqueRepr(edge->units[0].inst,arena);
+      String second = UniqueRepr(edge->units[1].inst,arena);
       PortInstance start = edge->units[0];
       PortInstance end = edge->units[1];
-      SizedString label = Repr(start,end,versat->debug.dotFormat,arena);
+      String label = Repr(start,end,versat->debug.dotFormat,arena);
       int calculatedDelay = edgeView->delay;
 
       bool highlight = (start.inst == highlighInstance || end.inst == highlighInstance);
@@ -297,6 +281,21 @@ void OutputGraphDotFile(Versat* versat,AcceleratorView& view,bool collapseSameEd
    va_end(args);
 }
 
+void OutputGraphDotFile(SimpleGraph graph,bool collapseSameEdges,const char* filenameFormat,...){
+   char buffer[1024];
+
+   va_list args;
+   va_start(args,filenameFormat);
+
+   vsprintf(buffer,filenameFormat,args);
+
+   FILE* file = OpenFileAndCreateDirectories(buffer,"w");
+   OutputGraphDotFile_(graph,collapseSameEdges,file);
+   fclose(file);
+
+   va_end(args);
+}
+
 void OutputGraphDotFile(Versat* versat,AcceleratorView& view,bool collapseSameEdges,ComplexFUInstance* highlighInstance,const char* filenameFormat,...){
    char buffer[1024];
 
@@ -312,7 +311,7 @@ void OutputGraphDotFile(Versat* versat,AcceleratorView& view,bool collapseSameEd
    va_end(args);
 }
 
-SizedString PushMemoryHex(Arena* arena,void* memory,int size){
+String PushMemoryHex(Arena* arena,void* memory,int size){
    Byte* mark = MarkArena(arena);
 
    unsigned char* view = (unsigned char*) memory;
@@ -546,6 +545,12 @@ void PrintVCD(FILE* accelOutputFile,Accelerator* accel,int time,int clock,Array<
    PrintVCD_(accelOutputFile,iter,time,sameValueCheckSpace);
 }
 
+void SetDebugSignalHandler(SignalHandler func){
+   signal(SIGUSR1, func);
+   signal(SIGSEGV, func);
+   signal(SIGABRT, func);
+}
+
 #if 0
 #define NCURSES
 #endif
@@ -555,7 +560,7 @@ void PrintVCD(FILE* accelOutputFile,Accelerator* accel,int time,int clock,Array<
 #include <signal.h>
 
 struct PanelState{
-   SizedString name;
+   String name;
    Value valueLooking;
    int cursorPosition;
    Byte* arenaMark;
@@ -630,7 +635,7 @@ void StructPanel(WINDOW* w,Value val,int cursorPosition,int xStart,bool displayO
       mvaddnstr(yPos, xStart, member.name.data,member.name.size);
 
       Value memberVal = AccessStruct(val,&member);
-      SizedString repr = GetValueRepresentation(memberVal,arena);
+      String repr = GetValueRepresentation(memberVal,arena);
 
       move(yPos, xStart + panelWidth);
       addnstr(repr.data,repr.size);
@@ -705,7 +710,7 @@ void TerminalIteration(WINDOW* w,Input input,Arena* arena,Arena* temp){
    Value val = state->valueLooking;
    Type* type = val.type;
 
-   SizedString panelNumber = PushString(temp,"%d",currentPanel);
+   String panelNumber = PushString(temp,"%d",currentPanel);
    mvaddnstr(0,0, panelNumber.data,panelNumber.size);
    mvaddnstr(0,3, val.type->name.data, val.type->name.size);
 
@@ -743,7 +748,7 @@ void TerminalIteration(WINDOW* w,Input input,Arena* arena,Arena* temp){
          }
 
          move(index + 2,0);
-         SizedString integer = PushString(temp,"%d\n",index);
+         String integer = PushString(temp,"%d\n",index);
          addnstr(integer.data,integer.size);
 
          if(index == state->cursorPosition){
@@ -755,12 +760,12 @@ void TerminalIteration(WINDOW* w,Input input,Arena* arena,Arena* temp){
          if(currentSelected.type->type == Type::STRUCT){
             StructPanel(w,currentSelected,0,8,true,arena);
          } else {
-            SizedString repr = GetValueRepresentation(currentSelected,temp);
+            String repr = GetValueRepresentation(currentSelected,temp);
             mvaddnstr(2,8,repr.data,repr.size);
          }
       }
    } else {
-      SizedString typeName = PushString(temp,"%.*s",UNPACK_SS(type->name));
+      String typeName = PushString(temp,"%.*s",UNPACK_SS(type->name));
       mvaddnstr(1,0,typeName.data,typeName.size);
    }
 
@@ -834,7 +839,7 @@ void DebugTerminal(Value initialValue){
    InitArena(&temp,Megabyte(1));
 
    currentPanel = 0;
-   panels[0].name = MakeSizedString("TOP");
+   panels[0].name = STRING("TOP");
    panels[0].cursorPosition = 0;
    panels[0].valueLooking = CollapsePtrIntoStruct(initialValue);
 

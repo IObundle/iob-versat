@@ -72,10 +72,19 @@ void InitializeSubaccelerator(AcceleratorIterator iter){
    }
 }
 
-FUInstance* CreateFUInstance(Accelerator* accel,FUDeclaration* type,SizedString name,bool flat,bool isStatic){
+FUInstance* CreateFUInstance(Accelerator* accel,FUDeclaration* type,String name,bool flat,bool isStatic){
    ArenaMarker marker(&accel->versat->temp);
 
    Assert(CheckValidName(name));
+
+   for(ComplexFUInstance* inst : accel->instances){
+      if(inst->name == name){
+         //String tempName = PushString(&accel->versat->permanent,"%.*s_%d",UNPACK_SS(name),accel->created++);
+         //name = tempName;
+         Assert(false);
+         break;
+      }
+   }
 
    ComplexFUInstance* ptr = accel->instances.Alloc();
 
@@ -214,7 +223,7 @@ Accelerator* CopyAccelerator(Versat* versat,Accelerator* accel,InstanceMap* map,
    return newAccel;
 }
 
-ComplexFUInstance* CopyInstance(Accelerator* newAccel,ComplexFUInstance* oldInstance,SizedString newName,bool flat){
+ComplexFUInstance* CopyInstance(Accelerator* newAccel,ComplexFUInstance* oldInstance,String newName,bool flat){
    ComplexFUInstance* newInst = (ComplexFUInstance*) CreateFUInstance(newAccel,oldInstance->declaration,newName,flat);
 
    newInst->parameters = oldInstance->parameters;
@@ -493,7 +502,7 @@ Accelerator* Flatten(Versat* versat,Accelerator* accel,int times){
                continue;
             }
 
-            SizedString newName = PushString(&versat->permanent,"%.*s.%.*s",UNPACK_SS(inst->name),UNPACK_SS(circuitInst->name));
+            String newName = PushString(&versat->permanent,"%.*s.%.*s",UNPACK_SS(inst->name),UNPACK_SS(circuitInst->name));
             ComplexFUInstance* newInst = CopyInstance(newAccel,circuitInst,newName,true);
 
             if(newInst->isStatic){
@@ -694,7 +703,7 @@ Accelerator* Flatten(Versat* versat,Accelerator* accel,int times){
       OutputGraphDotFile(versat,view,true,"./debug/flatten.dot");
    }
 
-   #if 1
+   #if 0
    //AcceleratorView view = CreateAcceleratorView(newAccel,arena);
    //view.CalculateDelay(arena);
    //FixDelays(versat,newAccel,view);
@@ -1597,8 +1606,6 @@ AcceleratorView CreateAcceleratorView(Accelerator* accel,Arena* arena){
       ComplexFUInstance* inst1 = edge->units[1].inst;
 
       newEdge.edge = edge;
-      newEdge.nodes[0] = map.find(inst0)->second;
-      newEdge.nodes[1] = map.find(inst1)->second;
 
       *view.edges.Alloc() = newEdge;
    }
@@ -1638,8 +1645,6 @@ AcceleratorView CreateAcceleratorView(Accelerator* accel,std::vector<Edge*>& edg
          } else {
             mapping = view.nodes.Get(iter->second);
          }
-
-         edgeView->nodes[ii] = mapping;
       }
    }
 
@@ -1679,8 +1684,6 @@ AcceleratorView SubGraphAroundInstance(Versat* versat,Accelerator* accel,Complex
          } else {
             mapping = view.nodes.Get(iter->second);
          }
-
-         edgeView->nodes[ii] = mapping;
       }
    }
 
@@ -1811,7 +1814,7 @@ void FixMultipleInputs(Versat* versat,Accelerator* accel){
                format = "comb_mux%d";
             }
 
-            SizedString name = PushString(&versat->permanent,format,multiplexersInstantiated++);
+            String name = PushString(&versat->permanent,format,multiplexersInstantiated++);
             ComplexFUInstance* multiplexer = (ComplexFUInstance*) CreateFUInstance(accel,muxType,name);
 
             // Connect edges to multiplexer
@@ -1865,11 +1868,8 @@ void InsertUnit(AcceleratorView& view, PortInstance before, PortInstance after, 
          EdgeView* newEdgeView = view.edges.Alloc();
 
          newEdgeView->edge = newEdge;
-         newEdgeView->nodes[0] = newNode;
-         newEdgeView->nodes[1] = edgeView->nodes[1];
 
          edge->units[1] = newUnit;
-         edgeView->nodes[1] = newNode;
 
          return;
       }
@@ -1905,7 +1905,7 @@ void FixDelays(Versat* versat,Accelerator* accel,AcceleratorView& view){
             //NOT_IMPLEMENTED;
          } else if(delay > 0){
             if(versat->debug.useFixedBuffers){
-               SizedString bufferName = PushString(&versat->permanent,"fixedBuffer%d",buffersInserted++);
+               String bufferName = PushString(&versat->permanent,"fixedBuffer%d",buffersInserted++);
 
                ComplexFUInstance* unit = (ComplexFUInstance*) CreateFUInstance(accel,BasicDeclaration::fixedBuffer,bufferName,false,false);
                unit->parameters = PushString(&versat->permanent,"#(.AMOUNT(%d))",delay - BasicDeclaration::fixedBuffer->outputLatencies[0]);
@@ -1921,7 +1921,7 @@ void FixDelays(Versat* versat,Accelerator* accel,AcceleratorView& view){
                   OutputGraphDotFile(versat,view,false,unit,"debug/%.*s/fix_%d.dot",UNPACK_SS(accel->subtype->name),++fixed);
                }
             } else {
-               SizedString bufferName = PushString(&versat->permanent,"buffer%d",buffersInserted++);
+               String bufferName = PushString(&versat->permanent,"buffer%d",buffersInserted++);
 
                ComplexFUInstance* unit = (ComplexFUInstance*) CreateFUInstance(accel,BasicDeclaration::buffer,bufferName,false,true);
                ComplexFUInstance** viewNode = view.nodes.Alloc();

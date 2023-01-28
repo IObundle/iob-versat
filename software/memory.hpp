@@ -21,6 +21,7 @@ inline size_t BitSizeToDWordSize(int bitSize){return ((bitSize + 31) / 32);};
 int GetPageSize();
 void* AllocatePages(int pages);
 void DeallocatePages(void* ptr,int pages);
+long PagesAvailable();
 void CheckMemoryStats();
 
 template<typename T>
@@ -93,11 +94,11 @@ void Free(Arena* arena);
 Byte* MarkArena(Arena* arena);
 void PopMark(Arena* arena,Byte* mark);
 Byte* PushBytes(Arena* arena, int size);
-SizedString PointArena(Arena* arena,Byte* mark);
-SizedString PushFile(Arena* arena,const char* filepath);
-SizedString PushString(Arena* arena,SizedString ss);
-SizedString PushString(Arena* arena,const char* format,...) __attribute__ ((format (printf, 2, 3)));
-SizedString vPushString(Arena* arena,const char* format,va_list args);
+String PointArena(Arena* arena,Byte* mark);
+String PushFile(Arena* arena,const char* filepath);
+String PushString(Arena* arena,String ss);
+String PushString(Arena* arena,const char* format,...) __attribute__ ((format (printf, 2, 3)));
+String vPushString(Arena* arena,const char* format,va_list args);
 void PushNullByte(Arena* arena);
 
 class ArenaMarker{
@@ -119,7 +120,7 @@ template<typename T>
 Array<T> PushArray(Arena* arena,int size){Array<T> res = {}; res.size = size; res.data = (T*) PushBytes(arena,sizeof(T) * size); return res;};
 
 template<typename T>
-Array<T> PointArray(Arena* arena,Byte* mark){SizedString data = PointArena(arena,mark); Array<T> res = {}; res.data = (T*) data.data; res.size = data.size / sizeof(T); return res;}
+Array<T> PointArray(Arena* arena,Byte* mark){String data = PointArena(arena,mark); Array<T> res = {}; res.data = (T*) data.data; res.size = data.size / sizeof(T); return res;}
 
 template<typename T>
 T* PushStruct(Arena* arena){T* res = (T*) PushBytes(arena,sizeof(T)); return res;};
@@ -142,6 +143,7 @@ class BitArray{
 public:
    Byte* memory;
    int bitSize;
+   int byteSize;
 
 public:
    void Init(Byte* memory,int bitSize);
@@ -158,7 +160,7 @@ public:
    int FirstBitSetIndex();
    int FirstBitSetIndex(int start);
 
-   SizedString PrintRepresentation(Arena* output);
+   String PrintRepresentation(Arena* output);
 
    void operator&=(BitArray& other);
 
@@ -167,30 +169,10 @@ public:
 };
 
 template<typename Key,typename Data>
-class Hashmap;
-
-class GenericHashmapIterator{
-public:
-   Byte* memory;
-   BitIterator iter;
-   BitIterator end;
-   int keySize;
-   int dataSize;
-
-public:
-
-   void Init(Byte* memory,BitIterator begin,BitIterator end,int keySize,int dataSize);
-
-   bool HasNext();
-   void operator++();
-   Byte* operator*();
-};
-
-template<typename Key,typename Data>
 class HashmapIterator{
 public:
-   Hashmap<Key,Data>* map;
-   BitIterator bitIter;
+   Pair<Key,Data>* pairs;
+   int index;
 
 public:
    bool operator!=(HashmapIterator& iter);
@@ -198,15 +180,25 @@ public:
    Pair<Key,Data>& operator*();
 };
 
+template<typename Key,typename Data>
+struct HashmapHeader{
+   int nodesAllocated;
+   int nodesUsed;
+   Pair<Key,Data>** buckets;
+   Pair<Key,Data>*  data;
+   Pair<Key,Data>** next; // Next is separated from data, to allow easy iteration of the data
+
+   // Remaining data is:
+   // Pair<Key,Data>* bucketsData[nodesAllocated];
+   // Pair<Key,Data>* nextArray[nodesAllocated];
+   // Pair<Key,Data> dataData[nodesAllocated];
+};
+
 // An hashmap implementation for arenas. Does not allocate any memory after construction. Need to pass correct amount of maxAmountOfElements
 template<typename Key,typename Data>
 struct Hashmap{
-   Array<Pair<Key,Data>> memory; // Power of 2 size
-   BitArray valid;
-   int inserted;
-   bool initialized;
+   HashmapHeader<Key,Data>* header;
 
-   Byte* mem;
 public:
 
    void Init(Arena* arena,int maxAmountOfElements);

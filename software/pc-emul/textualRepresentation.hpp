@@ -3,11 +3,13 @@
 
 #include "versatPrivate.hpp"
 
-SizedString UniqueRepr(FUInstance* inst,Arena* arena); // Returns a representation that uniquely identifies the instance. Not necessarily useful for outputing
-SizedString Repr(FUInstance* inst,GraphDotFormat format,Arena* arena);
-SizedString Repr(PortInstance in,PortInstance out,GraphDotFormat format,Arena* arena);
-SizedString Repr(FUDeclaration* decl,Arena* arena);
-SizedString Repr(PortInstance port,GraphDotFormat format,Arena* memory);
-SizedString Repr(MappingNode node,Arena* memory);
+String UniqueRepr(FUInstance* inst,Arena* arena); // Returns a representation that uniquely identifies the instance. Not necessarily useful for outputing
+String Repr(FUInstance* inst,GraphDotFormat format,Arena* arena);
+String Repr(PortInstance in,PortInstance out,GraphDotFormat format,Arena* arena);
+String Repr(FUDeclaration* decl,Arena* arena);
+String Repr(PortInstance port,GraphDotFormat format,Arena* memory);
+String Repr(MergeEdge node,GraphDotFormat format,Arena* memory);
+String Repr(PortEdge node,GraphDotFormat format,Arena* memory);
+String Repr(MappingNode node,Arena* memory);
 
 #endif // INCLUDED_TEXTUAL_REPRESENTATION

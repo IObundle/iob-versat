@@ -237,7 +237,7 @@ Byte HexCharToNumber(char ch){
    return '\0';
 }
 
-void HexStringToHex(unsigned char* buffer,SizedString str){
+void HexStringToHex(unsigned char* buffer,String str){
    Assert(str.size % 2 == 0);
 
    for(int i = 0; i < str.size; i += 2){
@@ -268,7 +268,7 @@ unsigned int GetRandomNumber(){
    return seed;
 }
 
-void FixedStringCpy(char* dest,SizedString src){
+void FixedStringCpy(char* dest,String src){
    int i = 0;
    for(i = 0; i < src.size; i++){
       dest[i] = src[i];
@@ -276,7 +276,7 @@ void FixedStringCpy(char* dest,SizedString src){
    dest[i] = '\0';
 }
 
-bool CompareString(SizedString str1,SizedString str2){
+bool CompareString(String str1,String str2){
    if(str1.size != str2.size){
       return false;
    }
@@ -294,13 +294,13 @@ bool CompareString(SizedString str1,SizedString str2){
    return true;
 }
 
-bool CompareString(const char* str1,SizedString str2){
+bool CompareString(const char* str1,String str2){
    // Slower but do not care for now
-   bool res = CompareString(MakeSizedString(str1),str2);
+   bool res = CompareString(STRING(str1),str2);
    return res;
 }
 
-bool CompareString(SizedString str1,const char* str2){
+bool CompareString(String str1,const char* str2){
    bool res = CompareString(str2,str1);
    return res;
 }

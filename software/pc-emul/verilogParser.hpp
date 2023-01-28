@@ -7,27 +7,27 @@
 #include "utils.hpp"
 #include "parser.hpp"
 
-typedef std::unordered_map<SizedString,Value> ValueMap;
-typedef std::unordered_map<SizedString,SizedString> MacroMap;
+typedef std::unordered_map<String,Value> ValueMap;
+typedef std::unordered_map<String,String> MacroMap;
 
 struct Arena;
 
 struct PortDeclaration{
    ValueMap attributes;
    Range range;
-   SizedString name;
+   String name;
    enum {INPUT,OUTPUT,INOUT} type;
 };
 
 struct Module{
    ValueMap parameters;
    std::vector<PortDeclaration> ports;
-   SizedString name;
+   String name;
    bool isSource;
 };
 
 struct ModuleInfo{
-   SizedString name;
+   String name;
    int nInputs;
    int nOutputs;
    int* inputDelays;
@@ -48,7 +48,7 @@ struct ModuleInfo{
    bool isSource;
 };
 
-SizedString PreprocessVerilogFile(Arena* output, SizedString fileContent,std::vector<const char*>* includeFilepaths,Arena* tempArena);
-std::vector<Module> ParseVerilogFile(SizedString fileContent, std::vector<const char*>* includeFilepaths, Arena* tempArena);
+String PreprocessVerilogFile(Arena* output, String fileContent,std::vector<const char*>* includeFilepaths,Arena* tempArena);
+std::vector<Module> ParseVerilogFile(String fileContent, std::vector<const char*>* includeFilepaths, Arena* tempArena);
 
 #endif // INCLUDED_VERILOG_PARSER

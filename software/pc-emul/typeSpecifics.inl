@@ -17,9 +17,9 @@ public:
    }
 };
 
-template<> class std::hash<SizedString>{
+template<> class std::hash<String>{
 public:
-   std::size_t operator()(SizedString const& s) const noexcept{
+   std::size_t operator()(String const& s) const noexcept{
    std::size_t res = 0;
 
    std::size_t prime = 5;
@@ -46,7 +46,7 @@ template<> class std::hash<PortInstance>{
 template<> class std::hash<StaticId>{
    public:
    std::size_t operator()(StaticId const& s) const noexcept{
-      std::size_t res = std::hash<SizedString>()(s.name);
+      std::size_t res = std::hash<String>()(s.name);
       res += (std::size_t) s.parent;
 
       return (std::size_t) res;
@@ -92,7 +92,7 @@ inline int Hash(T const& t){
    return res;
 }
 
-inline bool operator<(const SizedString& lhs,const SizedString& rhs){
+inline bool operator<(const String& lhs,const String& rhs){
    for(int i = 0; i < std::min(lhs.size,rhs.size); i++){
       if(lhs[i] < rhs[i]){
          return true;
@@ -109,8 +109,14 @@ inline bool operator<(const SizedString& lhs,const SizedString& rhs){
    return false;
 }
 
-inline bool operator==(const SizedString& lhs,const SizedString& rhs){
+inline bool operator==(const String& lhs,const String& rhs){
    bool res = CompareString(lhs,rhs);
+
+   return res;
+}
+
+inline bool operator!=(const String& lhs,const String& rhs){
+   bool res = !CompareString(lhs,rhs);
 
    return res;
 }

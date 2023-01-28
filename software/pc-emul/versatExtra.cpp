@@ -13,21 +13,21 @@ bool InitSimpleAccelerator(SimpleAccelerator* simple,Versat* versat,const char* 
       return false;
    }
 
-   FUDeclaration* type = GetTypeByName(versat,MakeSizedString(declarationName));
+   FUDeclaration* type = GetTypeByName(versat,STRING(declarationName));
 
    simple->accel = CreateAccelerator(versat);
-   simple->inst = CreateFUInstance(simple->accel,type,MakeSizedString("Test"));
+   simple->inst = CreateFUInstance(simple->accel,type,STRING("Test"));
 
    simple->numberInputs = type->inputDelays.size;
    simple->numberOutputs = type->outputLatencies.size;
 
-   FUDeclaration* constType = GetTypeByName(versat,MakeSizedString("Const"));
-   FUDeclaration* regType = GetTypeByName(versat,MakeSizedString("Reg"));
+   FUDeclaration* constType = GetTypeByName(versat,STRING("Const"));
+   FUDeclaration* regType = GetTypeByName(versat,STRING("Reg"));
 
    for(unsigned int i = 0; i < simple->numberInputs; i++){
       Assert(i < ARRAY_SIZE(constIn));
 
-      SizedString name = MakeSizedString(constIn[i]);
+      String name = STRING(constIn[i]);
       simple->inputs[i] = CreateFUInstance(simple->accel,constType,name);
       ConnectUnits(simple->inputs[i],0,simple->inst,i);
    }
@@ -35,7 +35,7 @@ bool InitSimpleAccelerator(SimpleAccelerator* simple,Versat* versat,const char* 
    for(unsigned int i = 0; i < simple->numberOutputs; i++){
       Assert(i < ARRAY_SIZE(regOut));
 
-      SizedString name = MakeSizedString(regOut[i]);
+      String name = STRING(regOut[i]);
       simple->outputs[i] = CreateFUInstance(simple->accel,regType,name);
 
       ConnectUnits(simple->inst,i,simple->outputs[i],0);

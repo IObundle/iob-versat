@@ -11,25 +11,25 @@ struct Member;
 struct Type;
 
 struct EnumMember{
-   SizedString name;
-   SizedString value;
+   String name;
+   String value;
 
    EnumMember* next;
 };
 
 struct TemplateArg{
-   SizedString name;
+   String name;
    TemplateArg* next;
 };
 
 struct TemplatedMember{
-   SizedString typeName;
-   SizedString name;
+   String typeName;
+   String name;
    int memberOffset;
 };
 
 struct Type{
-   SizedString name;
+   String name;
    Type* baseType; // For struct inheritance
    union{
       Type* pointerType;
@@ -39,7 +39,7 @@ struct Type{
 
       struct{ // TEMPLATED_STRUCT_DEF
          Array<TemplatedMember> templateMembers;
-         Array<SizedString> templateArgs;
+         Array<String> templateArgs;
       };
 
       struct{ // TEMPLATED_INSTANCE
@@ -55,14 +55,14 @@ struct Type{
 
 struct Member{
    Type* type;
-   SizedString name;
+   String name;
    int offset;
 
    Member* next;
 
 // STRUCT_PARSER
    Type* structType;
-   SizedString arrayExpression;
+   String arrayExpression;
    int index;
 };
 
@@ -89,7 +89,7 @@ struct Value{
       char ch;
       int64 number;
       struct{
-         SizedString str;
+         String str;
          bool literal;
       };
       TemplateFunction* templateFunction;
@@ -106,8 +106,8 @@ struct Iterator{
    union{
       int currentNumber;
       GenericPoolIterator poolIterator;
-      GenericHashmapIterator hashmapIterator;
    };
+   Type* hashmapType;
 
    Value iterating;
 };
@@ -115,7 +115,7 @@ struct Iterator{
 void RegisterTypes();
 void FreeTypes();
 
-SizedString GetValueRepresentation(Value val,Arena* arena);
+String GetValueRepresentation(Value val,Arena* arena);
 
 Value RemoveOnePointerIndirection(Value in);
 
@@ -125,14 +125,14 @@ Value CollapseValue(Value val);
 
 Value ConvertValue(Value in,Type* want,Arena* arena);
 
-Type* GetType(SizedString typeName); // Parsable C like name (ex: "int*" for pointer to int) [Type name optionally followed by template argument then pointers then array]
-Type* GetTypeOrFail(SizedString typeName);
+Type* GetType(String typeName); // Parsable C like name (ex: "int*" for pointer to int) [Type name optionally followed by template argument then pointers then array]
+Type* GetTypeOrFail(String typeName);
 Type* GetPointerType(Type* baseType);
 Type* GetArrayType(Type* baseType, int arrayLength);
 
 Value AccessStruct(Value object,Member* member);
 Value AccessStruct(Value val,int index);
-Value AccessStruct(Value object,SizedString memberName);
+Value AccessStruct(Value object,String memberName);
 Value AccessObjectIndex(Value object,int index);
 
 int ArrayLength(Type* type);
@@ -152,7 +152,7 @@ Value MakeValue();
 Value MakeValue(int64 integer);
 Value MakeValue(unsigned int integer);
 Value MakeValue(int integer);
-Value MakeValue(SizedString str);
+Value MakeValue(String str);
 Value MakeValue(bool boolean);
 
 Value MakeValue(void* val,const char* typeName);

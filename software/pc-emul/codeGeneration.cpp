@@ -107,7 +107,12 @@ void OutputCircuitSource(Versat* versat,FUDeclaration* decl,Accelerator* accel,F
    TemplateSetCustom("inputDecl",BasicDeclaration::input,"FUDeclaration");
    TemplateSetCustom("outputDecl",BasicDeclaration::output,"FUDeclaration");
 
-   ProcessTemplate(file,"../../submodules/VERSAT/software/templates/versat_accelerator_template.tpl",&versat->temp);
+   if(!BasicTemplates::acceleratorTemplate){
+      BasicTemplates::acceleratorTemplate = CompileTemplate("../../submodules/VERSAT/software/templates/versat_accelerator_template.tpl",&versat->permanent);
+   }
+   ProcessTemplate(file,BasicTemplates::acceleratorTemplate,&versat->temp);
+
+   //ProcessTemplate(file,"../../submodules/VERSAT/software/templates/versat_accelerator_template.tpl",&versat->temp);
 }
 
 void OutputVersatSource(Versat* versat,Accelerator* accel,const char* sourceFilepath,const char* constantsFilepath,const char* dataFilepath){

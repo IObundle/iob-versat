@@ -6,8 +6,8 @@
 #include <sys/stat.h>
 #include <dirent.h>
 
-#include "stdio.h"
-#include "string.h"
+#include <cstdio>
+#include <cstring>
 
 // Misc
 void FlushStdout(){
@@ -59,8 +59,8 @@ FILE* OpenFileAndCreateDirectories(const char* path,const char* format){
    return file;
 }
 
-SizedString PathGoUp(char* pathBuffer){
-   SizedString content = MakeSizedString(pathBuffer);
+String PathGoUp(char* pathBuffer){
+   String content = STRING(pathBuffer);
 
    int i = content.size - 1;
    for(; i >= 0; i--){

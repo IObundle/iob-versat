@@ -10,7 +10,7 @@ struct FUDeclaration;
 struct IterativeUnitDeclaration; // TODO: Cannot leak this struct to public
 
 struct FUInstance{
-   SizedString name;
+   String name;
 
    // Embedded memory
    int* memMapped;
@@ -29,7 +29,7 @@ struct FUInstance{
 	int* storedOutputs;
    unsigned char* extraData;
 
-   SizedString parameters;
+   String parameters;
 
    // Configuration + State variables that versat needs access to
    int done; // Units that are sink or sources of data must implement done to ensure circuit does not end prematurely
@@ -39,8 +39,8 @@ struct FUInstance{
 };
 
 struct SpecificMerge{
-   SizedString instA;
-   SizedString instB;
+   String instA;
+   String instB;
 };
 
 enum VersatDebugFlags{
@@ -79,16 +79,16 @@ Versat* InitVersat(int base,int numberConfigurations);
 void Free(Versat* versat); // Usually not needed, as memory is freed on program termination and Versat is supposed to be "active" from start to finish, but usuful for debugging memory problems
 void ParseCommandLineOptions(Versat* versat,int argc,const char** argv);
 uint SetDebug(Versat* versat,VersatDebugFlags flags,uint flag);
-void ParseVersatSpecification(Versat* versat,SizedString content);
+void ParseVersatSpecification(Versat* versat,String content);
 void ParseVersatSpecification(Versat* versat,const char* filepath);
 
 // Accelerator functions
 Accelerator* CreateAccelerator(Versat* versat);
-FUInstance* CreateFUInstance(Accelerator* accel,FUDeclaration* type,SizedString entityName,bool flat = false,bool isStatic = false);
+FUInstance* CreateFUInstance(Accelerator* accel,FUDeclaration* type,String entityName,bool flat = false,bool isStatic = false);
 void AcceleratorRun(Accelerator* accel);
 void RemoveFUInstance(Accelerator* accel,FUInstance* inst);
 void OutputVersatSource(Versat* versat,Accelerator* accel,const char* sourceFilepath,const char* constantsFilepath,const char* dataFilepath);
-Accelerator* Flatten(Versat* versat,Accelerator* accel,int times);
+Accelerator* Flatten(Versat* versat,Accelerator* accel,int times); // This should work on the passed accelerator. We should not create a new accelerator
 
 // Access units and sub units inside an accelerator. Can use printf style arguments, but only chars and integers are currently supported. Format is <format1>,<args1 if any>,<format2>,...
 #define GetInstanceByName(ACCEL,...) GetInstanceByName_(ACCEL,NUMBER_ARGS(__VA_ARGS__),__VA_ARGS__)
@@ -112,10 +112,10 @@ void ShareInstanceConfig(FUInstance* inst, int shareBlockIndex);
 
 // Declaration functions
 FUDeclaration* RegisterFU(Versat* versat,FUDeclaration declaration);
-FUDeclaration* GetTypeByName(Versat* versat,SizedString str);
+FUDeclaration* GetTypeByName(Versat* versat,String str);
 FUDeclaration* RegisterIterativeUnit(Versat* versat,IterativeUnitDeclaration* decl); // TODO: Cannot let the IterativeUnitDeclaration leak to the public interface.
-FUDeclaration* RegisterSubUnit(Versat* versat,SizedString name,Accelerator* accel);
-FUDeclaration* MergeAccelerators(Versat* versat,FUDeclaration* accel1,FUDeclaration* accel2,SizedString name,int flatteningOrder = 99,
+FUDeclaration* RegisterSubUnit(Versat* versat,String name,Accelerator* accel);
+FUDeclaration* MergeAccelerators(Versat* versat,FUDeclaration* accel1,FUDeclaration* accel2,String name,int flatteningOrder = 99,
                                  MergingStrategy strategy = MergingStrategy::CONSOLIDATION_GRAPH,SpecificMerge* specifics = nullptr,int nSpecifics = 0);
 
 // Configuration loading and storing
@@ -140,7 +140,7 @@ void PrintAcceleratorInstances(Accelerator* accel);
 int GetInputValue(FUInstance* instance,int port);
 int GetNumberOfInputs(FUInstance* inst);
 int GetNumberOfOutputs(FUInstance* inst);
-FUInstance* CreateOrGetInput(Accelerator* accel,SizedString name,int portNumber);
+FUInstance* CreateOrGetInput(Accelerator* accel,String name,int portNumber);
 
 // Helper functions to create sub accelerators
 int GetNumberOfInputs(Accelerator* accel);
@@ -152,5 +152,7 @@ int GetInputPortNumber(Versat* versat,FUInstance* inputInstance);
 // General hook function for debugging purposes
 int CalculateMemoryUsage(Versat* versat); // Not accurate, but returns the biggest amount of memory usage.
 void Hook(Versat* versat,Accelerator* accel,FUInstance* inst);
+
+void TestVersatSide(Versat* versat); // Calls tests from versat side
 
 #endif // INCLUDED_VERSAT_HPP

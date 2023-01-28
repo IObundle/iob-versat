@@ -111,19 +111,15 @@ struct Array{
    ArrayIterator<T> end(){return ArrayIterator<T>{data + size};};
 };
 
-typedef Array<const char> SizedString;
+typedef Array<const char> String;
 
 #define UNPACK_SS(STR) (STR).size,(STR).data
 #define UNPACK_SS_REVERSE(STR) (STR).data,(STR).size
 
-#define MakeSizedString1(STR) ((SizedString){STR,(int) strlen(STR)})
-#define MakeSizedString2(STR,LEN) ((SizedString){STR,(int) (LEN)})
-
-inline SizedString String(const char* str){return (SizedString){str,(int) strlen(str)};}
-inline SizedString String(const unsigned char* str){return (SizedString){(const char*)str,(int) strlen((const char*) str)};}
-
-#define GET_MACRO(_1,_2,NAME,...) NAME
-#define MakeSizedString(...) GET_MACRO(__VA_ARGS__, MakeSizedString2, MakeSizedString1)(__VA_ARGS__)
+inline String STRING(const char* str){return (String){str,(int) strlen(str)};}
+inline String STRING(const char* str,int size){return (String){str,size};}
+inline String STRING(const unsigned char* str){return (String){(const char*)str,(int) strlen((const char*) str)};}
+inline String STRING(const unsigned char* str,int size){return (String){(const char*)str,size};}
 
 struct Range{
    int high;
@@ -184,7 +180,7 @@ int NumberDigitsRepresentation(int number); // Number of digits if printed (nega
 char GetHex(int value);
 Byte HexCharToNumber(char ch);
 
-void HexStringToHex(unsigned char* buffer,SizedString str);
+void HexStringToHex(unsigned char* buffer,String str);
 
 // Weak random generator but produces same results in pc-emul and in simulation
 void SeedRandomNumber(uint seed);
@@ -195,12 +191,12 @@ char* GetCurrentDirectory();
 void MakeDirectory(const char* path);
 FILE* OpenFileAndCreateDirectories(const char* path,const char* format);
 
-void FixedStringCpy(char* dest,SizedString src);
+void FixedStringCpy(char* dest,String src);
 
 // Compare strings regardless of implementation
-bool CompareString(SizedString str1,SizedString str2);
-bool CompareString(const char* str1,SizedString str2);
-bool CompareString(SizedString str1,const char* str2);
+bool CompareString(String str1,String str2);
+bool CompareString(const char* str1,String str2);
+bool CompareString(String str1,const char* str2);
 bool CompareString(const char* str1,const char* str2);
 
 char GetHexadecimalChar(int value);
@@ -208,7 +204,7 @@ unsigned char* GetHexadecimal(const unsigned char* text, int str_size); // Helpe
 
 bool IsAlpha(char ch);
 
-SizedString PathGoUp(char* pathBuffer);
+String PathGoUp(char* pathBuffer);
 
 template<typename T>
 inline void Memset(T* buffer,T elem,int bufferSize){

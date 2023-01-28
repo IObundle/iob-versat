@@ -2,13 +2,13 @@
 
 #include "parser.hpp"
 
-SizedString UniqueRepr(FUInstance* inst,Arena* arena){
+String UniqueRepr(FUInstance* inst,Arena* arena){
    FUDeclaration* decl = inst->declaration;
-   SizedString str = PushString(arena,"%.*s_%.*s_%d",UNPACK_SS(decl->name),UNPACK_SS(inst->name),inst->id);
+   String str = PushString(arena,"%.*s_%.*s_%d",UNPACK_SS(decl->name),UNPACK_SS(inst->name),inst->id);
    return str;
 }
 
-SizedString Repr(FUInstance* inst,GraphDotFormat format,Arena* arena){
+String Repr(FUInstance* inst,GraphDotFormat format,Arena* arena){
    Byte* mark = MarkArena(arena);
 
    ComplexFUInstance* instance = (ComplexFUInstance*) inst;
@@ -54,20 +54,20 @@ SizedString Repr(FUInstance* inst,GraphDotFormat format,Arena* arena){
       }
    }
 
-   SizedString res = PointArena(arena,mark);
+   String res = PointArena(arena,mark);
    return res;
 }
 
-SizedString Repr(FUDeclaration* decl,Arena* arena){
+String Repr(FUDeclaration* decl,Arena* arena){
    Byte* mark = MarkArena(arena);
 
    PushString(arena,"%.*s",UNPACK_SS(decl->name));
 
-   SizedString res = PointArena(arena,mark);
+   String res = PointArena(arena,mark);
    return res;
 }
 
-SizedString Repr(PortInstance in,PortInstance out,GraphDotFormat format,Arena* arena){
+String Repr(PortInstance in,PortInstance out,GraphDotFormat format,Arena* arena){
    Byte* mark = MarkArena(arena);
 
    bool expl = format & GRAPH_DOT_FORMAT_EXPLICIT;
@@ -91,14 +91,14 @@ SizedString Repr(PortInstance in,PortInstance out,GraphDotFormat format,Arena* a
       PushString(arena,"%d",out.inst->declaration->inputDelays[out.port]);
    }
 
-   SizedString res = PointArena(arena,mark);
+   String res = PointArena(arena,mark);
    return res;
 }
 
-SizedString Repr(PortInstance port,GraphDotFormat format,Arena* arena){
+String Repr(PortInstance port,GraphDotFormat format,Arena* arena){
    Byte* mark = MarkArena(arena);
 
-   Repr(port.inst,GRAPH_DOT_FORMAT_NAME | GRAPH_DOT_FORMAT_ID,arena);
+   Repr(port.inst,GRAPH_DOT_FORMAT_NAME,arena);
    PushString(arena,"_");
 
    bool expl = format & GRAPH_DOT_FORMAT_EXPLICIT;
@@ -108,33 +108,51 @@ SizedString Repr(PortInstance port,GraphDotFormat format,Arena* arena){
    }
    PushString(arena,"%d",port.port);
 
-   SizedString res = PointArena(arena,mark);
+   String res = PointArena(arena,mark);
    return res;
 }
 
-SizedString Repr(MappingNode node,Arena* arena){
-   SizedString name = {};
-   GraphDotFormat format = GRAPH_DOT_FORMAT_NAME | GRAPH_DOT_FORMAT_ID;
+String Repr(PortEdge edge,GraphDotFormat format,Arena* arena){
+   Byte* mark = MarkArena(arena);
+
+   format |= GRAPH_DOT_FORMAT_NAME;
+
+   Repr(edge.units[0],format,arena);
+   PushString(arena," -- ");
+   Repr(edge.units[1],format,arena);
+
+   String res = PointArena(arena,mark);
+   return res;
+}
+
+String Repr(MergeEdge node,GraphDotFormat format,Arena* arena){
+   Byte* mark = MarkArena(arena);
+
+   format |= GRAPH_DOT_FORMAT_NAME;
+
+   Repr(node.instances[0],format,arena);
+   PushString(arena," -- ");
+   Repr(node.instances[1],format,arena);
+
+   String name = PointArena(arena,mark);
+
+   return name;
+}
+
+String Repr(MappingNode node,Arena* arena){
+   String name = {};
+   GraphDotFormat format = GRAPH_DOT_FORMAT_NAME;
+
    if(node.type == MappingNode::NODE){
-      Byte* mark = MarkArena(arena);
-
-      Repr(node.nodes.instances[0],format,arena);
-      PushString(arena," -- ");
-      Repr(node.nodes.instances[1],format,arena);
-
-      name = PointArena(arena,mark);
+      name = Repr(node.nodes,format,arena);
    } else if(node.type == MappingNode::EDGE){
       PortEdge e0 = node.edges[0];
       PortEdge e1 = node.edges[1];
 
       Byte* mark = MarkArena(arena);
-      Repr(e0.units[0],format,arena);
-      PushString(arena," -- ");
-      Repr(e0.units[1],format,arena);
+      Repr(e0,format,arena);
       PushString(arena,"/");
-      Repr(e1.units[0],format,arena);
-      PushString(arena," -- ");
-      Repr(e1.units[1],format,arena);
+      Repr(e1,format,arena);
       name = PointArena(arena,mark);
    } else {
       NOT_IMPLEMENTED;
@@ -142,7 +160,6 @@ SizedString Repr(MappingNode node,Arena* arena){
 
    return name;
 }
-
 
 
 

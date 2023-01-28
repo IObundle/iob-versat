@@ -7,7 +7,7 @@
 struct Expression;
 
 struct Command{
-   SizedString name;
+   String name;
 
    Array<Expression*> expressions;
 };
@@ -30,7 +30,17 @@ struct TemplateFunction{
    Block* block;
 };
 
-void ProcessTemplate(FILE* outputFile,const char* templateFilepath,Arena* tempArena);
+struct CompiledTemplate{
+   int totalMemoryUsed;
+   const char* filepath;
+   String content;
+   Block* blocks;
+   // Followed by file name, then content and then the block/expression structure
+};
+
+void ProcessTemplate(FILE* outputFile,const char* templateFilepath,Arena* arena);
+void ProcessTemplate(FILE* outputFile,CompiledTemplate* compiledTemplate,Arena* arena);
+CompiledTemplate* CompileTemplate(const char* templateFilepath,Arena* arena);
 
 void TemplateSetCustom(const char* id,void* entity,const char* typeName);
 void TemplateSetNumber(const char* id,int number);

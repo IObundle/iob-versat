@@ -51,7 +51,7 @@ static void SkipQualifiers(Tokenizer* tok){
    }
 }
 
-static SizedString ParseSimpleType(Tokenizer* tok){
+static String ParseSimpleType(Tokenizer* tok){
    Assert(tok->IsSingleChar("<>,"));
 
    SkipQualifiers(tok);
@@ -84,13 +84,13 @@ static SizedString ParseSimpleType(Tokenizer* tok){
       }
    }
 
-   SizedString res = tok->Point(mark);
+   String res = tok->Point(mark);
    res = TrimWhitespaces(res);
 
    return res;
 }
 
-static Type* RegisterSimpleType(SizedString name,int size){
+static Type* RegisterSimpleType(String name,int size){
    Type* type = types.Alloc();
 
    type->type = Type::BASE;
@@ -100,7 +100,7 @@ static Type* RegisterSimpleType(SizedString name,int size){
    return type;
 }
 
-static Type* RegisterOpaqueType(SizedString name,Type::Subtype subtype,int size){
+static Type* RegisterOpaqueType(String name,Type::Subtype subtype,int size){
    for(Type* type : types){
       if(CompareString(type->name,name)){
          Assert(type->size == size);
@@ -117,7 +117,7 @@ static Type* RegisterOpaqueType(SizedString name,Type::Subtype subtype,int size)
    return type;
 }
 
-static Type* RegisterEnum(SizedString name){
+static Type* RegisterEnum(String name){
    Type* type = types.Alloc();
 
    type->name = name;
@@ -127,7 +127,7 @@ static Type* RegisterEnum(SizedString name){
    return type;
 }
 
-static Type* RegisterTypedef(SizedString oldName,SizedString newName){
+static Type* RegisterTypedef(String oldName,String newName){
    Type* type = GetType(newName);
    Type* typedefType = GetType(oldName);
 
@@ -140,7 +140,7 @@ static Type* RegisterTypedef(SizedString oldName,SizedString newName){
    return type;
 }
 
-static Type* RegisterTemplate(SizedString baseName,Array<SizedString> templateArgNames){
+static Type* RegisterTemplate(String baseName,Array<String> templateArgNames){
    Type* type = types.Alloc();
 
    type->name = baseName;
@@ -150,7 +150,7 @@ static Type* RegisterTemplate(SizedString baseName,Array<SizedString> templateAr
    return type;
 }
 
-static Type* RegisterStructMembers(SizedString name,Array<Member> members){
+static Type* RegisterStructMembers(String name,Array<Member> members){
    Type* type = GetType(name);
 
    Assert(type->type == Type::STRUCT);
@@ -160,7 +160,7 @@ static Type* RegisterStructMembers(SizedString name,Array<Member> members){
    return type;
 }
 
-static Type* RegisterTemplateMembers(SizedString name,Array<TemplatedMember> members){
+static Type* RegisterTemplateMembers(String name,Array<TemplatedMember> members){
    Type* type = GetType(name);
 
    Assert(type->type == Type::TEMPLATED_STRUCT_DEF);
@@ -170,7 +170,7 @@ static Type* RegisterTemplateMembers(SizedString name,Array<TemplatedMember> mem
    return type;
 }
 
-Type* GetSpecificType(SizedString name){
+Type* GetSpecificType(String name){
   for(Type* type : types){
       if(CompareString(type->name,name)){
          return type;
@@ -180,7 +180,7 @@ Type* GetSpecificType(SizedString name){
    return nullptr;
 }
 
-Type* InstantiateTemplate(SizedString name){
+Type* InstantiateTemplate(String name){
    STACK_ARENA(temp,Kilobyte(4));
    Tokenizer tok(name,"<>,",{});
 
@@ -190,7 +190,7 @@ Type* InstantiateTemplate(SizedString name){
       return alreadyExists;
    }
 
-   Hashmap<SizedString,SizedString> templateToType;
+   Hashmap<String,String> templateToType;
    templateToType.Init(&temp,16);
 
    Token baseName = tok.NextToken();
@@ -214,8 +214,8 @@ Type* InstantiateTemplate(SizedString name){
             break;
          }
 
-         SizedString simpleType = ParseSimpleType(&tok);
-         SizedString templateArg = templateBase->templateArgs[index];
+         String simpleType = ParseSimpleType(&tok);
+         String templateArg = templateBase->templateArgs[index];
 
          templateArgTypes[index] = GetTypeOrFail(simpleType);
 
@@ -229,6 +229,7 @@ Type* InstantiateTemplate(SizedString name){
    int nMembers = templateBase->templateMembers.size;
    Array<Member> members = PushArray<Member>(&permanentArena,nMembers);
    Array<int> sizes = PushArray<int>(&temp,nMembers);
+   Memset(sizes,0);
    for(int i = 0; i < nMembers; i++){
       TemplatedMember templateMember = templateBase->templateMembers[i];
       Tokenizer tok(templateMember.typeName,"*&[],<>",{});
@@ -238,7 +239,7 @@ Type* InstantiateTemplate(SizedString name){
       while(!tok.Done()){
          Token token = tok.NextToken();
 
-         SizedString* found = templateToType.Get(token);
+         String* found = templateToType.Get(token);
          if(found){
             PushString(&temp,"%.*s",UNPACK_SS(*found));
          } else {
@@ -246,7 +247,7 @@ Type* InstantiateTemplate(SizedString name){
          }
       }
 
-      SizedString trueType = PointArena(&temp,mark);
+      String trueType = PointArena(&temp,mark);
       Type* type = GetTypeOrFail(trueType);
 
       members[i].type = type;
@@ -289,7 +290,7 @@ Type* InstantiateTemplate(SizedString name){
    return newType;
 }
 
-Type* GetType(SizedString name){
+Type* GetType(String name){
    Type* typeExists = GetSpecificType(name);
    if(typeExists){
       return typeExists;
@@ -369,7 +370,7 @@ Type* GetType(SizedString name){
    return res;
 }
 
-Type* GetTypeOrFail(SizedString name){
+Type* GetTypeOrFail(String name){
    Type* type = GetType(name);
 
    if(!type){
@@ -428,25 +429,25 @@ void RegisterTypes(){
 
    InitArena(&permanentArena,Megabyte(16));
 
-   ValueType::NUMBER = RegisterSimpleType(MakeSizedString("int"),sizeof(int));
-   ValueType::SIZE_T = RegisterSimpleType(MakeSizedString("size_t"),sizeof(size_t));
-   ValueType::BOOLEAN = RegisterSimpleType(MakeSizedString("bool"),sizeof(bool));
-   ValueType::CHAR = RegisterSimpleType(MakeSizedString("char"),sizeof(char));
-   ValueType::NIL = RegisterSimpleType(MakeSizedString("void"),sizeof(char));
-   RegisterSimpleType(MakeSizedString("unsigned int"),sizeof(unsigned int));
-   RegisterSimpleType(MakeSizedString("unsigned char"),sizeof(unsigned char));
-   RegisterSimpleType(MakeSizedString("float"),sizeof(float));
-   RegisterSimpleType(MakeSizedString("double"),sizeof(double));
+   ValueType::NUMBER = RegisterSimpleType(STRING("int"),sizeof(int));
+   ValueType::SIZE_T = RegisterSimpleType(STRING("size_t"),sizeof(size_t));
+   ValueType::BOOLEAN = RegisterSimpleType(STRING("bool"),sizeof(bool));
+   ValueType::CHAR = RegisterSimpleType(STRING("char"),sizeof(char));
+   ValueType::NIL = RegisterSimpleType(STRING("void"),sizeof(char));
+   RegisterSimpleType(STRING("unsigned int"),sizeof(unsigned int));
+   RegisterSimpleType(STRING("unsigned char"),sizeof(unsigned char));
+   RegisterSimpleType(STRING("float"),sizeof(float));
+   RegisterSimpleType(STRING("double"),sizeof(double));
 
    RegisterParsedTypes();
 
-   ValueType::HASHMAP = GetTypeOrFail(MakeSizedString("Hashmap"));
+   ValueType::HASHMAP = GetTypeOrFail(STRING("Hashmap"));
    ValueType::STRING = GetPointerType(ValueType::CHAR);
-   ValueType::SIZED_STRING = GetTypeOrFail(MakeSizedString("SizedString"));
-   ValueType::TEMPLATE_FUNCTION = GetPointerType(GetTypeOrFail(MakeSizedString("TemplateFunction")));
-   ValueType::POOL = GetTypeOrFail(MakeSizedString("Pool"));
-   ValueType::ARRAY = GetTypeOrFail(MakeSizedString("Array"));
-   ValueType::STD_VECTOR = GetTypeOrFail(MakeSizedString("std::vector"));
+   ValueType::SIZED_STRING = GetTypeOrFail(STRING("String"));
+   ValueType::TEMPLATE_FUNCTION = GetPointerType(GetTypeOrFail(STRING("TemplateFunction")));
+   ValueType::POOL = GetTypeOrFail(STRING("Pool"));
+   ValueType::ARRAY = GetTypeOrFail(STRING("Array"));
+   ValueType::STD_VECTOR = GetTypeOrFail(STRING("std::vector"));
 }
 
 void FreeTypes(){
@@ -454,9 +455,9 @@ void FreeTypes(){
    types.Clear(true);
 }
 
-SizedString GetValueRepresentation(Value in,Arena* arena){
+String GetValueRepresentation(Value in,Arena* arena){
    Value val = CollapseArrayIntoPtr(in);
-   SizedString res = {};
+   String res = {};
 
    if(val.type == ValueType::NUMBER){
       res = PushString(arena,"%ld",val.number);
@@ -541,12 +542,12 @@ Value CollapseValue(Value val){
       char* str = *(char**) val.custom;
 
       if(str == nullptr){
-         val.str = MakeSizedString("");
+         val.str = STRING("");
       } else {
-         val.str = MakeSizedString(str);
+         val.str = STRING(str);
       }
    } else if(val.type == ValueType::SIZED_STRING){
-      val.str = *((SizedString*) val.custom);
+      val.str = *((String*) val.custom);
    } else if(val.type == ValueType::TEMPLATE_FUNCTION){
       val.templateFunction = *((TemplateFunction**) val.custom);
    } else if(val.type->type == Type::ENUM){
@@ -637,7 +638,7 @@ Value AccessStruct(Value val,int index){
    return res;
 }
 
-Value AccessStruct(Value object,SizedString memberName){
+Value AccessStruct(Value object,String memberName){
    Value structure = CollapsePtrIntoStruct(object);
    Type* type = structure.type;
 
@@ -693,6 +694,13 @@ int IndexableSize(Value object){
       } else if(type->templateBase == ValueType::ARRAY){
          Array<Byte>* view = (Array<Byte>*) object.custom;
          size = view->size;
+      } else if(type->templateBase == ValueType::HASHMAP){
+         Hashmap<Byte,Byte>* view = (Hashmap<Byte,Byte>*) object.custom;
+         if(!view->header){
+            size = 0;
+         } else {
+            size = view->header->nodesUsed;
+         }
       } else {
          NOT_IMPLEMENTED;
       }
@@ -712,6 +720,8 @@ bool IsIndexable(Type* type){
       } else if(type->templateBase == ValueType::STD_VECTOR){ // TODO: A lot of assumptions are being made for std::vector so this works. Probably not safe (change later)
          res = true;
       } else if(type->templateBase == ValueType::ARRAY){
+         res = true;
+      } else if(type->templateBase == ValueType::HASHMAP){
          res = true;
       }
    }
@@ -743,13 +753,20 @@ Iterator Iterate(Value iterating){
       } else if(type->templateBase == ValueType::ARRAY){
          iter.currentNumber = 0;
       } else if(type->templateBase == ValueType::HASHMAP){
-         Hashmap<Byte,Byte>* hashmap = (Hashmap<Byte,Byte>*) iterating.custom; // Any type of hashmap is good enough
+         iter.currentNumber = 0;
 
-         Byte* memory = (Byte*) hashmap->memory.data;
-         int keySize = type->templateArgTypes[0]->size;
-         int dataSize = type->templateArgTypes[1]->size;
+         Type* keyType = type->templateArgTypes[0];
+         Type* dataType = type->templateArgTypes[1];
 
-         iter.hashmapIterator.Init(memory,hashmap->valid.begin(),hashmap->valid.end(),keySize,dataSize);
+         STACK_ARENA(temp,256);
+         String pairName = PushString(&temp,"Pair<%.*s,%.*s>",UNPACK_SS(keyType->name),UNPACK_SS(dataType->name));
+
+         Type* exists = GetSpecificType(pairName);
+         if(!exists){
+            String permanentName = PushString(&permanentArena,pairName);
+            exists = GetType(permanentName);
+         }
+         iter.hashmapType = exists;
       } else {
          NOT_IMPLEMENTED;
       }
@@ -789,7 +806,9 @@ bool HasNext(Iterator iter){
          bool res = (iter.currentNumber < len);
          return res;
       } else if(type->templateBase == ValueType::HASHMAP){
-         bool res = iter.hashmapIterator.HasNext();
+         int len = IndexableSize(iter.iterating);
+
+         bool res = (iter.currentNumber < len);
          return res;
       } else {
          NOT_IMPLEMENTED;
@@ -816,7 +835,7 @@ void Advance(Iterator* iter){
       } else if(type->templateBase == ValueType::ARRAY){
          iter->currentNumber += 1;
       } else if(type->templateBase == ValueType::HASHMAP){
-         ++iter->hashmapIterator;
+         iter->currentNumber += 1;
       } else {
          NOT_IMPLEMENTED;
       }
@@ -851,28 +870,12 @@ Value GetValue(Iterator iter){
       } else if(type->templateBase == ValueType::ARRAY){
          val = AccessObjectIndex(iter.iterating,iter.currentNumber);
       } else if(type->templateBase == ValueType::HASHMAP){
-         Byte* pair = *iter.hashmapIterator;
+         Hashmap<Byte,Byte>* view = (Hashmap<Byte,Byte>*) iter.iterating.custom;
 
-         Type* keyType = type->templateArgTypes[0];
-         Type* dataType = type->templateArgTypes[1];
+         Byte* data = (Byte*) view->header->data;
 
-         STACK_ARENA(temp,256);
-
-         Byte* mark = MarkArena(&temp);
-         PushString(&temp,"Pair<");
-         PushString(&temp,"%.*s,",UNPACK_SS(keyType->name));
-         PushString(&temp,"%.*s>",UNPACK_SS(dataType->name));
-         SizedString pairName = PointArena(&temp,mark);
-
-         val.custom = pair;
-
-         Type* exists = GetSpecificType(pairName);
-         if(exists){
-            val.type = exists;
-         } else {
-            SizedString permanentName = PushString(&permanentArena,pairName);
-            val.type = GetType(permanentName);
-         }
+         val.custom = &data[iter.currentNumber * iter.hashmapType->size];
+         val.type = iter.hashmapType;
       } else {
          NOT_IMPLEMENTED;
       }
@@ -954,14 +957,14 @@ bool Equal(Value v1,Value v2){
    Value c2 = CollapseArrayIntoPtr(v2);
 
    if(c1.type == ValueType::STRING && c2.type == ValueType::SIZED_STRING){
-      SizedString str = c1.str;
-      SizedString ss = c2.str;
+      String str = c1.str;
+      String ss = c2.str;
       Assert(c1.isTemp == true && c2.isTemp == true);
 
       return CompareString(ss,str);
    } else if(c1.type == ValueType::SIZED_STRING && c2.type == ValueType::STRING){
-      SizedString str = c2.str;
-      SizedString ss = c1.str;
+      String str = c2.str;
+      String ss = c1.str;
       Assert(c2.isTemp == true && c1.isTemp == true);
 
       return CompareString(ss,str);
@@ -1126,12 +1129,12 @@ Value MakeValue(int integer){
 Value MakeValue(unsigned int integer);
 
 Value MakeValue(const char* str){
-   Value res = MakeValue(MakeSizedString(str));
+   Value res = MakeValue(STRING(str));
    res.isTemp = true;
    return res;
 }
 
-Value MakeValue(SizedString str){
+Value MakeValue(String str){
    Value val = {};
    val.str = str;
    val.type = ValueType::STRING;
@@ -1150,7 +1153,7 @@ Value MakeValue(bool boolean){
 Value MakeValue(void* entity,const char* typeName){
    Value val = {};
 
-   val.type = GetType(MakeSizedString(typeName));
+   val.type = GetType(STRING(typeName));
    val.custom = entity;
    val.isTemp = false;
 

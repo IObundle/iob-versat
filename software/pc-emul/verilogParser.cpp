@@ -10,8 +10,8 @@
 static MacroMap macros;
 static Arena* tempArena;
 
-void PerformDefineSubstitution(Arena* output,SizedString name){
-   SizedString subs = macros[name];
+void PerformDefineSubstitution(Arena* output,String name){
+   String subs = macros[name];
 
    Tokenizer inside(subs,"`",{});
 
@@ -36,7 +36,7 @@ void PerformDefineSubstitution(Arena* output,SizedString name){
    PushString(output,finish);
 }
 
-void PreprocessVerilogFile_(Arena* output, SizedString fileContent,std::vector<const char*>* includeFilepaths);
+void PreprocessVerilogFile_(Arena* output, String fileContent,std::vector<const char*>* includeFilepaths);
 
 static void DoIfStatement(Arena* output,Tokenizer* tok,std::vector<const char*>* includeFilepaths){
    Token first = tok->NextToken();
@@ -87,7 +87,7 @@ static void DoIfStatement(Arena* output,Tokenizer* tok,std::vector<const char*>*
    }
 }
 
-void PreprocessVerilogFile_(Arena* output, SizedString fileContent,std::vector<const char*>* includeFilepaths){
+void PreprocessVerilogFile_(Arena* output, String fileContent,std::vector<const char*>* includeFilepaths){
    Tokenizer tokenizer = Tokenizer(fileContent, "()`\\\",+-/*",{"`include","`define","`timescale","`ifdef","`else","`elsif","`endif","`ifndef"});
    Tokenizer* tok = &tokenizer;
 
@@ -133,7 +133,7 @@ void PreprocessVerilogFile_(Arena* output, SizedString fileContent,std::vector<c
          fread(mem,sizeof(char),fileSize,file);
          mem[fileSize] = '\0';
 
-         PreprocessVerilogFile_(output,MakeSizedString((const char*) mem,fileSize),includeFilepaths);
+         PreprocessVerilogFile_(output,STRING((const char*) mem,fileSize),includeFilepaths);
 
          fclose(file);
       } else if(CompareToken(peek,"`define")){ // Same for defines
@@ -214,11 +214,11 @@ void PreprocessVerilogFile_(Arena* output, SizedString fileContent,std::vector<c
    }
 }
 
-SizedString PreprocessVerilogFile(Arena* output, SizedString fileContent,std::vector<const char*>* includeFilepaths,Arena* arena){
+String PreprocessVerilogFile(Arena* output, String fileContent,std::vector<const char*>* includeFilepaths,Arena* arena){
    macros.clear();
    tempArena = arena;
 
-   SizedString res = {};
+   String res = {};
    res.data = (const char*) &output->mem[output->used];
    Byte* mark = MarkArena(output);
 
@@ -226,7 +226,7 @@ SizedString PreprocessVerilogFile(Arena* output, SizedString fileContent,std::ve
    PreprocessVerilogFile_(output,fileContent,includeFilepaths);
    PopMark(tempArena,tempMark);
 
-   PushString(output,MakeSizedString("\0"));
+   PushString(output,STRING("\0"));
    res.size = MarkArena(output) - mark;
 
    #if 0
@@ -508,7 +508,7 @@ static Module ParseModule(Tokenizer* tok){
    return module;
 }
 
-std::vector<Module> ParseVerilogFile(SizedString fileContent, std::vector<const char*>* includeFilepaths, Arena* arena){
+std::vector<Module> ParseVerilogFile(String fileContent, std::vector<const char*>* includeFilepaths, Arena* arena){
    tempArena = arena;
 
    Tokenizer tokenizer = Tokenizer(fileContent,":,()[]{}\"+-/*=",{"#(","+:","-:","(*","*)","module","endmodule"});
@@ -601,14 +601,14 @@ int main(int argc,const char* argv[]){
       Byte* mark = MarkArena(tempArena);
       printf("%s\n",str);
 
-      SizedString content = PushFile(tempArena,str);
+      String content = PushFile(tempArena,str);
 
       if(content.size <= 0){
          printf("Failed to open file: %s\n",str);
          return 0;
       }
 
-      SizedString processed = PreprocessVerilogFile(&preprocess,content,&includePaths,tempArena);
+      String processed = PreprocessVerilogFile(&preprocess,content,&includePaths,tempArena);
       std::vector<Module> modules = ParseVerilogFile(processed,&includePaths,tempArena);
 
       for(Module& module : modules){
@@ -643,14 +643,14 @@ int main(int argc,const char* argv[]){
             if(CheckFormat("in%d",decl.name)){
                port.AssertNextToken("in");
                int input = ParseInt(port.NextToken());
-               int delay = decl.attributes[MakeSizedString("versat_latency")].number;
+               int delay = decl.attributes[STRING("versat_latency")].number;
 
                info.nInputs = std::max(info.nInputs,input + 1);
                info.inputDelays[input] = delay;
             } else if(CheckFormat("out%d",decl.name)){
                port.AssertNextToken("out");
                int output = ParseInt(port.NextToken());
-               int latency = decl.attributes[MakeSizedString("versat_latency")].number;
+               int latency = decl.attributes[STRING("versat_latency")].number;
 
                info.nOutputs = std::max(info.nOutputs,output + 1);
                info.outputLatencies[output] = latency;

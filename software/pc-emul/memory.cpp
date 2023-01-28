@@ -3,6 +3,7 @@
 #include <unistd.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
+#include <sys/sysinfo.h>
 #include <fcntl.h>
 
 #include <cstdio>
@@ -44,6 +45,11 @@ void* AllocatePages(int pages){
 void DeallocatePages(void* ptr,int pages){
    pagesDeallocated += pages;
    munmap(ptr,pages * GetPageSize());
+}
+
+long PagesAvailable(){
+   long res = get_avphys_pages(); // No idea how good this is, appears to "kinda" work after large allocations (and writing to the pages).
+   return res;
 }
 
 void CheckMemoryStats(){
@@ -110,15 +116,15 @@ Byte* PushBytes(Arena* arena, int size){
    return ptr;
 }
 
-SizedString PointArena(Arena* arena,Byte* mark){
-   SizedString res = {};
+String PointArena(Arena* arena,Byte* mark){
+   String res = {};
    res.data = (char*) mark;
    res.size = &arena->mem[arena->used] - mark;
    return res;
 }
 
-SizedString PushFile(Arena* arena,const char* filepath){
-   SizedString res = {};
+String PushFile(Arena* arena,const char* filepath){
+   String res = {};
    FILE* file = fopen(filepath,"r");
 
    if(!file){
@@ -140,19 +146,19 @@ SizedString PushFile(Arena* arena,const char* filepath){
    return res;
 }
 
-SizedString PushString(Arena* arena,SizedString ss){
+String PushString(Arena* arena,String ss){
    Byte* mem = PushBytes(arena,ss.size);
 
    memcpy(mem,ss.data,ss.size);
 
-   SizedString res = {};
+   String res = {};
    res.data = (const char*) mem;
    res.size = ss.size;
 
    return res;
 }
 
-SizedString vPushString(Arena* arena,const char* format,va_list args){
+String vPushString(Arena* arena,const char* format,va_list args){
    char* buffer = (char*) &arena->mem[arena->used];
    int size = vsprintf(buffer,format,args);
 
@@ -160,16 +166,16 @@ SizedString vPushString(Arena* arena,const char* format,va_list args){
 
    Assert(arena->used < arena->totalAllocated);
 
-   SizedString res = MakeSizedString(buffer,size);
+   String res = STRING(buffer,size);
 
    return res;
 }
 
-SizedString PushString(Arena* arena,const char* format,...){
+String PushString(Arena* arena,const char* format,...){
    va_list args;
    va_start(args,format);
 
-   SizedString res = vPushString(arena,format,args);
+   String res = vPushString(arena,format,args);
 
    va_end(args);
 
@@ -233,20 +239,21 @@ int BitIterator::operator*(){
 void BitArray::Init(Byte* memory,int bitSize){
    this->memory = memory;
    this->bitSize = bitSize;
-   Assert(IS_ALIGNED_4(BitSizeToByteSize(bitSize)));
+   this->byteSize = BitSizeToByteSize(bitSize);
+   Assert(IS_ALIGNED_4(this->byteSize));
 }
 
 void BitArray::Init(Arena* arena,int bitSize){
-   this->bitSize = bitSize;
    this->memory = MarkArena(arena);
-   PushBytes(arena,ALIGN_4(BitSizeToByteSize(bitSize))); // Makes it easier to use popcount
+   this->bitSize = bitSize;
+   this->byteSize = ALIGN_4(BitSizeToByteSize(bitSize));
+   PushBytes(arena,this->byteSize); // Makes it easier to use popcount
 }
 
 void BitArray::Fill(bool value){
    int fillValue = (value ? 0xff : 0x00);
 
-   int byteSize = BitSizeToByteSize(this->bitSize);
-   for(int i = 0; i < byteSize; i++){
+   for(int i = 0; i < this->byteSize; i++){
       this->memory[i] = fillValue;
    }
 }
@@ -254,7 +261,6 @@ void BitArray::Fill(bool value){
 void BitArray::Copy(BitArray array){
    Assert(this->bitSize >= array.bitSize);
 
-   int byteSize = BitSizeToByteSize(this->bitSize);
    Memcpy(this->memory,array.memory,byteSize);
 }
 
@@ -369,12 +375,16 @@ int BitArray::FirstBitSetIndex(int start){
    while(val != 0){
       int bitIndex = TrailingZerosCount(val);
       int index = i + bitIndex;
+      if(index >= this->bitSize){
+         Assert(false); // Not correct but good for the current needs
+         return -1;
+      }
       if(index >= start){
          Assert(index == correct);
          return index;
-      } else {
-         val = CLEAR_BIT(val,bitIndex);
       }
+
+      val = CLEAR_BIT(val,bitIndex);
    }
 
    i += 32;
@@ -391,25 +401,24 @@ int BitArray::FirstBitSetIndex(int start){
    return -1;
 }
 
-SizedString BitArray::PrintRepresentation(Arena* output){
+String BitArray::PrintRepresentation(Arena* output){
    Byte* mark = MarkArena(output);
    for(int i = this->bitSize - 1; i >= 0; --i){
       int val = Get(i);
 
       if(val){
-         PushString(output,MakeSizedString("1"));
+         PushString(output,STRING("1"));
       } else {
-         PushString(output,MakeSizedString("0"));
+         PushString(output,STRING("0"));
       }
    }
-   SizedString res = PointArena(output,mark);
+   String res = PointArena(output,mark);
    return res;
 }
 
 void BitArray::operator&=(BitArray& other){
    Assert(this->bitSize == other.bitSize);
 
-   int byteSize = BitSizeToByteSize(this->bitSize);
    for(int i = 0; i < byteSize; i++){
       this->memory[i] &= other.memory[i];
    }
@@ -436,33 +445,6 @@ BitIterator BitArray::end(){
    iter.currentByte = bitSize / 8;
    iter.currentBit = bitSize % 8;
    return iter;
-}
-
-void GenericHashmapIterator::Init(Byte* memory,BitIterator begin,BitIterator end,int keySize,int dataSize){
-   this->memory = memory;
-   this->iter = begin;
-   this->end = end;
-   this->keySize = keySize;
-   this->dataSize = dataSize;
-}
-
-bool GenericHashmapIterator::HasNext(){
-   bool res = (iter != end);
-   return res;
-}
-
-void GenericHashmapIterator::operator++(){
-   ++iter;
-}
-
-Byte* GenericHashmapIterator::operator*(){
-   int index = *iter;
-
-   int pairSize = keySize + dataSize;
-   Byte* firstStart = &memory[pairSize * index];
-   Byte* secondStart = &firstStart[keySize];
-
-   return firstStart;
 }
 
 PoolInfo CalculatePoolInfo(int elemSize){

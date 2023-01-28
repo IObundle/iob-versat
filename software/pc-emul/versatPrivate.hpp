@@ -25,24 +25,14 @@ enum DelayType {
 inline DelayType operator|(DelayType a, DelayType b)
 {return static_cast<DelayType>(static_cast<int>(a) | static_cast<int>(b));}
 
-// So far, this type of graph is only useful for consolidation graphs.
-template<typename Node,typename Edge>
-class AdjacencyValidGraph{
-public:
-   Array<Node> nodes;
-   Array<BitArray> edges;
-
-   BitArray validNodes;
-};
-
 struct Wire{
-   SizedString name;
+   String name;
    int bitsize;
 };
 
 struct StaticId{
    FUDeclaration* parent;
-   SizedString name;
+   String name;
 };
 
 struct StaticData{
@@ -82,9 +72,25 @@ struct DAGOrder{
    ComplexFUInstance** instances;
 };
 
+struct SimpleNode{
+   FUDeclaration* decl;
+};
+
+struct SimpleEdge{
+   int out;
+   int outPort;
+   int in;
+   int inPort;
+};
+
+struct SimpleGraph{
+   Array<SimpleNode> nodes;
+   Array<SimpleEdge> edges;
+};
+
 // A declaration is constant after being registered
 struct FUDeclaration{
-   SizedString name;
+   String name;
 
    Array<int> inputDelays;
    Array<int> outputLatencies;
@@ -115,6 +121,7 @@ struct FUDeclaration{
    Accelerator* baseCircuit;
    Accelerator* fixedMultiEdgeCircuit;
    Accelerator* fixedDelayCircuit;
+   SimpleGraph fixedDelayCircuitSimple;
 
    DAGOrder temporaryOrder;
 
@@ -122,7 +129,7 @@ struct FUDeclaration{
    FUDeclaration* mergedType[2]; // TODO: probably change it from static to a dynamic allocating with more space, in order to accommodate multiple mergings (merge A with B and then the result with C)
 
    // Iterative
-   SizedString unitName;
+   String unitName;
    FUDeclaration* baseDeclaration;
    Accelerator* initial;
    Accelerator* forLoop;
@@ -163,8 +170,8 @@ struct VersatComputedData{
 };
 
 struct Parameter{
-   SizedString name;
-   SizedString value;
+   String name;
+   String value;
    Parameter* next;
 };
 
@@ -243,13 +250,13 @@ struct Accelerator{ // Graph + data storage
 
 	int cyclesPerRun;
 
+	int created;
 	int entityId;
 	bool init;
 };
 
 struct EdgeView{
    Edge* edge; // Points to edge inside accelerator
-   ComplexFUInstance** nodes[2]; // Points to node inside AcceleratorView
    int delay;
 };
 
@@ -280,13 +287,13 @@ public:
 };
 
 struct HashKey{
-   SizedString key;
+   String key;
    int data;
 };
 
 struct IterativeUnitDeclaration{
-   SizedString name;
-   SizedString unitName;
+   String name;
+   String unitName;
    FUDeclaration* baseDeclaration;
    Accelerator* initial;
    Accelerator* forLoop;
@@ -349,7 +356,7 @@ struct VersatComputedValues{
 };
 
 struct HierarchicalName{
-   SizedString name;
+   String name;
    HierarchicalName* next;
 };
 
@@ -439,6 +446,13 @@ public:
    AcceleratorIterator LevelBelowIterator(); // Not taking an arena means that the returned iterator uses current iterator memory. Returned iterator must be iterated fully before the current iterator can be used, otherwise memory conflicts will arise as both iterators are sharing the same stack
 };
 
+struct ConsolidationGraph{
+   Array<MappingNode> nodes;
+   Array<BitArray> edges;
+
+   BitArray validNodes;
+};
+
 // Simple operations should also be stored here. They are versat agnostic as well
 namespace BasicDeclaration{
 	extern FUDeclaration* buffer;
@@ -451,8 +465,14 @@ namespace BasicDeclaration{
    extern FUDeclaration* data;
 }
 
+struct CompiledTemplate;
+namespace BasicTemplates{
+   extern CompiledTemplate* acceleratorTemplate;
+}
+
 typedef std::unordered_map<ComplexFUInstance*,ComplexFUInstance*> InstanceMap;
-typedef AdjacencyValidGraph<MappingNode,MappingEdge> ConsolidationGraph;
+
+SimpleGraph ConvertGraph(Accelerator* accel,Arena* arena);
 
 // Temp
 void PopulateAccelerator(Accelerator* topLevel,Accelerator* accel,FUDeclaration* topDeclaration,FUInstanceInterfaces& inter,Hashmap<StaticId,StaticData>& staticMap);
@@ -470,7 +490,7 @@ bool IsUnitCombinatorial(FUInstance* inst);
 
 // Accelerator
 Accelerator* CopyAccelerator(Versat* versat,Accelerator* accel,InstanceMap* map,bool flat);
-ComplexFUInstance* CopyInstance(Accelerator* newAccel,ComplexFUInstance* oldInstance,SizedString newName,bool flat);
+ComplexFUInstance* CopyInstance(Accelerator* newAccel,ComplexFUInstance* oldInstance,String newName,bool flat);
 void InitializeFUInstances(Accelerator* accel,bool force);
 void CompressAcceleratorMemory(Accelerator* accel);
 int CountNonOperationChilds(Accelerator* accel);
@@ -499,7 +519,7 @@ AcceleratorView SubGraphAroundInstance(Versat* versat,Accelerator* accel,Complex
 bool MappingConflict(MappingNode map1,MappingNode map2);
 ConsolidationGraph MaxClique(ConsolidationGraph graph,Arena* arena);
 ConsolidationGraph GenerateConsolidationGraph(Versat* versat,Arena* arena,Accelerator* accel1,Accelerator* accel2,ConsolidationGraphOptions options,MergingStrategy strategy);
-Accelerator* MergeAccelerator(Versat* versat,Accelerator* accel1,Accelerator* accel2,SpecificMergeNodes* specificNodes,int nSpecifics,MergingStrategy strategy,SizedString name);
+//GraphMapping MergeAccelerator(Versat* versat,Accelerator* accel1,Accelerator* accel2,SpecificMergeNodes* specificNodes,int nSpecifics,MergingStrategy strategy,String name);
 
 // Debug
 bool IsGraphValid(AcceleratorView view);
@@ -507,8 +527,10 @@ void OutputGraphDotFile(Versat* versat,AcceleratorView& view,bool collapseSameEd
 void CheckMemory(AcceleratorIterator iter);
 
 // Misc
-bool CheckValidName(SizedString name); // Check if name can be used as identifier in verilog
-SizedString MappingNodeIdentifier(MappingNode* node,Arena* memory);
+bool CheckValidName(String name); // Check if name can be used as identifier in verilog
+String MappingNodeIdentifier(MappingNode* node,Arena* memory);
+int CountNonSpecialChilds(Accelerator* accel);
+int CountNonSpecialEdges(Accelerator* accel);
 void OutputCircuitSource(Versat* versat,FUDeclaration* decl,Accelerator* accel,FILE* file);
 ComplexFUInstance* GetInputInstance(Accelerator* accel,int inputIndex);
 ComplexFUInstance* GetOutputInstance(Accelerator* accel);

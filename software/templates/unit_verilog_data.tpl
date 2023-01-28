@@ -318,7 +318,7 @@ static FUDeclaration* @{module.name}_Register(Versat* versat){
    decl.outputLatencies = Array<int>{outputLatencies,@{module.nOutputs}};
    #{end}
 
-   decl.name = MakeSizedString("@{module.name}");
+   decl.name = STRING("@{module.name}");
 
    #{if module.doesIO}
    decl.extraDataSize = sizeof(V@{module.name}) + sizeof(DatabusAccess);
@@ -332,12 +332,12 @@ static FUDeclaration* @{module.name}_Register(Versat* versat){
    decl.destroyFunction = @{module.name}_DestroyFunction;
 
    #{if module.nConfigs}
-   static Wire @{module.name}ConfigWires[] = {#{join "," for i module.nConfigs} {MakeSizedString("@{module.configs[i].name}"),@{module.configs[i].bitsize}} #{end}};
+   static Wire @{module.name}ConfigWires[] = {#{join "," for i module.nConfigs} {STRING("@{module.configs[i].name}"),@{module.configs[i].bitsize}} #{end}};
    decl.configs = Array<Wire>{@{module.name}ConfigWires,@{module.nConfigs}};
    #{end}
 
    #{if module.nStates}
-   static Wire @{module.name}StateWires[] = {#{join "," for i module.nStates} {MakeSizedString("@{module.states[i].name}"),@{module.states[i].bitsize}} #{end}};
+   static Wire @{module.name}StateWires[] = {#{join "," for i module.nStates} {STRING("@{module.states[i].name}"),@{module.states[i].bitsize}} #{end}};
    decl.states = Array<Wire>{@{module.name}StateWires,@{module.nStates}};
    #{end}
 

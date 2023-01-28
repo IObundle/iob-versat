@@ -17,44 +17,44 @@ struct MemberDef;
 // Only support one inheritance for now
 #if 0
 struct InheritanceDef{
-   SizedString name;
+   String name;
    enum {PUBLIC,PRIVATE} type;
    InheritanceDef* next;
 };
 #endif
 
 struct TemplateParamDef{
-   SizedString name;
+   String name;
    TemplateParamDef* next;
 };
 
 struct StructDef{
-   SizedString fullExpression;
-   SizedString name;
-   SizedString inherit;
+   String fullExpression;
+   String name;
+   String inherit;
    TemplateParamDef* params;
    MemberDef* members;
    bool isUnion;
 };
 
 struct TemplatedDef{
-   SizedString baseType;
+   String baseType;
    TemplateParamDef* next;
 };
 
 struct EnumDef{
-   SizedString name;
-   SizedString values;
+   String name;
+   String values;
 };
 
 struct TypedefDef{
-   SizedString oldType;
-   SizedString newType;
+   String oldType;
+   String newType;
 };
 
 struct TypeDef{
    union{
-      SizedString simpleType;
+      String simpleType;
       TypedefDef typedefType;
       EnumDef enumType;
       TemplatedDef templatedType;
@@ -64,11 +64,11 @@ struct TypeDef{
 };
 
 struct MemberDef{
-   SizedString fullExpression; // In theory, should be a combination of all the below
+   String fullExpression; // In theory, should be a combination of all the below
    TypeDef type;
-   SizedString pointersAndReferences;
-   SizedString name;
-   SizedString arrays;
+   String pointersAndReferences;
+   String name;
+   String arrays;
 
    MemberDef* next;
 };
@@ -128,7 +128,7 @@ T* ReverseList(T* head){
    return ptr;
 }
 
-static SizedString ParseSimpleType(Tokenizer* tok){
+static String ParseSimpleType(Tokenizer* tok){
    SkipQualifiers(tok);
 
    void* mark = tok->Mark();
@@ -166,7 +166,7 @@ static SizedString ParseSimpleType(Tokenizer* tok){
       peek = tok->PeekToken();
    }
 
-   SizedString res = tok->Point(mark);
+   String res = tok->Point(mark);
    res = TrimWhitespaces(res);
 
    return res;
@@ -187,7 +187,7 @@ static EnumDef ParseEnum(Tokenizer* tok){
 
    peek = tok->PeekToken();
    void* valuesMark = tok->Mark();
-   SizedString values = {};
+   String values = {};
    if(CompareToken(peek,"{")){
       tok->AdvancePeek(peek);
 
@@ -309,7 +309,7 @@ static StructDef ParseStruct(Tokenizer* tok){
 
    Token token = tok->NextToken();
    Assert(CompareToken(token,"struct") || CompareToken(token,"union"));
-   SizedString name = {};
+   String name = {};
 
    StructDef def = {};
    if(CompareToken(token,"union")){
@@ -468,7 +468,7 @@ void ParseHeaderFile(Tokenizer* tok){
             ParseSimpleType(tok);
          }
 
-         SizedString old = tok->Point(oldMark);
+         String old = tok->Point(oldMark);
          old = TrimWhitespaces(old);
 
          Token name = tok->NextToken();
@@ -499,8 +499,8 @@ int CountMembers(MemberDef* m){
    return count;
 }
 
-SizedString GetTypeName(TypeDef* type){
-   SizedString name = {};
+String GetTypeName(TypeDef* type){
+   String name = {};
    switch(type->type){
    case TypeDef::ENUM:{
       name = type->enumType.name;
@@ -522,9 +522,9 @@ SizedString GetTypeName(TypeDef* type){
    return name;
 }
 
-TypeDef* GetDef(SizedString name){
+TypeDef* GetDef(String name){
    for(TypeDef* def : typeDefs){
-      SizedString typeName = GetTypeName(def);
+      String typeName = GetTypeName(def);
 
       if(CompareString(typeName,name)){
          return def;
@@ -534,12 +534,12 @@ TypeDef* GetDef(SizedString name){
    return nullptr;
 }
 
-void OutputMembers(FILE* output,SizedString structName,MemberDef* m,bool first){
+void OutputMembers(FILE* output,String structName,MemberDef* m,bool first){
    for(; m != nullptr; m = m->next){
       if(m->type.type == TypeDef::STRUCT){
          StructDef def = m->type.structType;
          if(def.name.size > 0){
-            SizedString name = PushString(tempArena,"%.*s::%.*s",UNPACK_SS(structName),UNPACK_SS(def.name));
+            String name = PushString(tempArena,"%.*s::%.*s",UNPACK_SS(structName),UNPACK_SS(def.name));
 
             OutputMembers(output,name,m->type.structType.members,first);
          } else {
@@ -551,17 +551,17 @@ void OutputMembers(FILE* output,SizedString structName,MemberDef* m,bool first){
             preamble = "        ,";
          }
 
-         SizedString typeName = GetTypeName(&m->type);
+         String typeName = GetTypeName(&m->type);
 
          if(typeName.size == 0){
             if(m->type.type == TypeDef::ENUM){
-               typeName = MakeSizedString("int");
+               typeName = STRING("int");
             }
          }
 
          fprintf(output,"%s(Member){",preamble);
-         fprintf(output,"GetType(MakeSizedString(\"%.*s\"))",UNPACK_SS(typeName));
-         fprintf(output,",MakeSizedString(\"%.*s\")",UNPACK_SS(m->name));
+         fprintf(output,"GetType(STRING(\"%.*s\"))",UNPACK_SS(typeName));
+         fprintf(output,",STRING(\"%.*s\")",UNPACK_SS(m->name));
          fprintf(output,",offsetof(%.*s,%.*s)}\n",UNPACK_SS(structName),UNPACK_SS(m->name));
       }
       first = false;
@@ -585,8 +585,8 @@ int OutputTemplateMembers(FILE* output,MemberDef* m,int index,bool insideUnion, 
             preamble = "        ,";
          }
          fprintf(output,"%s(TemplatedMember){",preamble);
-         fprintf(output,"MakeSizedString(\"%.*s\")",UNPACK_SS(m->type.simpleType));
-         fprintf(output,",MakeSizedString(\"%.*s\")",UNPACK_SS(m->name));
+         fprintf(output,"STRING(\"%.*s\")",UNPACK_SS(m->type.simpleType));
+         fprintf(output,",STRING(\"%.*s\")",UNPACK_SS(m->name));
          fprintf(output,",%d}\n",index);
 
          if(!insideUnion){
@@ -598,7 +598,7 @@ int OutputTemplateMembers(FILE* output,MemberDef* m,int index,bool insideUnion, 
    return index;
 }
 
-SizedString GetBaseType(SizedString name){
+String GetBaseType(String name){
    Tokenizer tok(name,"<>*&",{});
 
    // TODO: This should call parsing simple type. Deal with unsigned and things like that
@@ -622,27 +622,32 @@ SizedString GetBaseType(SizedString name){
 }
 
 void OutputRegisterTypesFunction(FILE* output){
-   std::set<SizedString> seen;
+   std::set<String> seen;
 
-   seen.insert(MakeSizedString("void"));
-   seen.insert(MakeSizedString("const"));
-   seen.insert(MakeSizedString("T"));
-   seen.insert(MakeSizedString("Array<Pair<Key,Data>>"));
-   seen.insert(MakeSizedString("Pair<Key,Data>"));
+   // HACK, with more time, resolve these. Basically just need to make sure that we correctly identify which are template params or not
+   seen.insert(STRING("void"));
+   seen.insert(STRING("const"));
+   seen.insert(STRING("T"));
+   seen.insert(STRING("Array<Pair<Key,Data>>"));
+   seen.insert(STRING("Pair<Key,Data>"));
+   seen.insert(STRING("HashmapNode"));
+   seen.insert(STRING("Array<HashmapNode<Key,Data>*>"));
+   seen.insert(STRING("Array<HashmapNode<Key,Data>>"));
+   seen.insert(STRING("HashmapHeader<Key,Data>"));
 
    fprintf(output,"#pragma GCC diagnostic ignored \"-Winvalid-offsetof\"\n");
    fprintf(output,"static void RegisterParsedTypes(){\n");
 
    for(TypeDef* def : typeDefs){
       if(def->type == TypeDef::TYPEDEF){
-         fprintf(output,"   RegisterOpaqueType(MakeSizedString(\"%.*s\"),Type::TYPEDEF,sizeof(%.*s));\n",UNPACK_SS(def->typedefType.newType),UNPACK_SS(def->typedefType.newType));
+         fprintf(output,"   RegisterOpaqueType(STRING(\"%.*s\"),Type::TYPEDEF,sizeof(%.*s));\n",UNPACK_SS(def->typedefType.newType),UNPACK_SS(def->typedefType.newType));
          seen.insert(def->typedefType.newType);
       }
    }
    fprintf(output,"\n");
    for(TypeDef* def : typeDefs){
       if(def->type == TypeDef::STRUCT && !def->structType.params){
-         fprintf(output,"   RegisterOpaqueType(MakeSizedString(\"%.*s\"),Type::STRUCT,sizeof(%.*s));\n",UNPACK_SS(def->structType.name),UNPACK_SS(def->structType.name));
+         fprintf(output,"   RegisterOpaqueType(STRING(\"%.*s\"),Type::STRUCT,sizeof(%.*s));\n",UNPACK_SS(def->structType.name),UNPACK_SS(def->structType.name));
          seen.insert(def->structType.name);
       }
    }
@@ -651,7 +656,7 @@ void OutputRegisterTypesFunction(FILE* output){
    for(TypeDef* def : typeDefs){
       if(def->type == TypeDef::STRUCT){
          for(MemberDef* m = def->structType.members; m; m = m->next){
-            SizedString name = GetTypeName(&m->type);
+            String name = GetTypeName(&m->type);
 
             if(name.size == 0){
                continue;
@@ -663,9 +668,9 @@ void OutputRegisterTypesFunction(FILE* output){
 
             if(iter == seen.end()){
                if(Contains(name,"<")){
-                  fprintf(output,"   RegisterOpaqueType(MakeSizedString(\"%.*s\"),Type::TEMPLATED_INSTANCE,sizeof(%.*s));\n",UNPACK_SS(name),UNPACK_SS(name));
+                  fprintf(output,"   RegisterOpaqueType(STRING(\"%.*s\"),Type::TEMPLATED_INSTANCE,sizeof(%.*s));\n",UNPACK_SS(name),UNPACK_SS(name));
                } else {
-                  fprintf(output,"   RegisterOpaqueType(MakeSizedString(\"%.*s\"),Type::UNKNOWN,sizeof(%.*s));\n",UNPACK_SS(name),UNPACK_SS(name));
+                  fprintf(output,"   RegisterOpaqueType(STRING(\"%.*s\"),Type::UNKNOWN,sizeof(%.*s));\n",UNPACK_SS(name),UNPACK_SS(name));
                }
 
                seen.insert(name);
@@ -673,15 +678,15 @@ void OutputRegisterTypesFunction(FILE* output){
          }
       }
       if(def->type == TypeDef::TYPEDEF){
-         SizedString name = def->typedefType.oldType;
+         String name = def->typedefType.oldType;
          name = GetBaseType(name);
          auto iter = seen.find(name);
 
          if(iter == seen.end()){
             if(Contains(name,"<")){
-               fprintf(output,"   RegisterOpaqueType(MakeSizedString(\"%.*s\"),Type::TEMPLATED_INSTANCE,sizeof(%.*s));\n",UNPACK_SS(name),UNPACK_SS(name));
+               fprintf(output,"   RegisterOpaqueType(STRING(\"%.*s\"),Type::TEMPLATED_INSTANCE,sizeof(%.*s));\n",UNPACK_SS(name),UNPACK_SS(name));
             } else {
-               fprintf(output,"   RegisterOpaqueType(MakeSizedString(\"%.*s\"),Type::UNKNOWN,sizeof(%.*s));\n",UNPACK_SS(name),UNPACK_SS(name));
+               fprintf(output,"   RegisterOpaqueType(STRING(\"%.*s\"),Type::UNKNOWN,sizeof(%.*s));\n",UNPACK_SS(name),UNPACK_SS(name));
             }
             seen.insert(name);
          }
@@ -691,13 +696,13 @@ void OutputRegisterTypesFunction(FILE* output){
 
    for(TypeDef* def : typeDefs){
       if(def->type == TypeDef::ENUM){
-         fprintf(output,"   RegisterEnum(MakeSizedString(\"%.*s\"));\n",UNPACK_SS(def->enumType.name));
+         fprintf(output,"   RegisterEnum(STRING(\"%.*s\"));\n",UNPACK_SS(def->enumType.name));
          seen.insert(def->enumType.name);
       }
    }
    fprintf(output,"\n");
 
-   fprintf(output,"   static SizedString templateArgs[] = {\n");
+   fprintf(output,"   static String templateArgs[] = {\n");
    bool first = true;
    for(TypeDef* def : typeDefs){
       if(!(def->type == TypeDef::STRUCT && def->structType.params)){
@@ -711,7 +716,7 @@ void OutputRegisterTypesFunction(FILE* output){
          } else {
             fprintf(output,"        ,");
          }
-         fprintf(output,"MakeSizedString(\"%.*s\")\n",UNPACK_SS(a->name));
+         fprintf(output,"STRING(\"%.*s\")\n",UNPACK_SS(a->name));
       }
    }
    fprintf(output,"   };\n\n");
@@ -728,7 +733,7 @@ void OutputRegisterTypesFunction(FILE* output){
          seen.insert(a->name);
       }
 
-      fprintf(output,"   RegisterTemplate(MakeSizedString(\"%.*s\"),(Array<SizedString>){&templateArgs[%d],%d});\n",UNPACK_SS(def->structType.name),index,count);
+      fprintf(output,"   RegisterTemplate(STRING(\"%.*s\"),(Array<String>){&templateArgs[%d],%d});\n",UNPACK_SS(def->structType.name),index,count);
       index += count;
    }
    fprintf(output,"\n");
@@ -738,8 +743,8 @@ void OutputRegisterTypesFunction(FILE* output){
          continue;
       }
 
-      fprintf(output,"   RegisterTypedef(MakeSizedString(\"%.*s\"),",UNPACK_SS(def->typedefType.oldType));
-      fprintf(output,"MakeSizedString(\"%.*s\"));\n",UNPACK_SS(def->typedefType.newType));
+      fprintf(output,"   RegisterTypedef(STRING(\"%.*s\"),",UNPACK_SS(def->typedefType.oldType));
+      fprintf(output,"STRING(\"%.*s\"));\n",UNPACK_SS(def->typedefType.newType));
    }
    fprintf(output,"\n");
 
@@ -762,7 +767,7 @@ void OutputRegisterTypesFunction(FILE* output){
       }
 
       int size = CountMembers(def->structType.members);
-      fprintf(output,"   RegisterTemplateMembers(MakeSizedString(\"%.*s\"),(Array<TemplatedMember>){&templateMembers[%d],%d});\n",UNPACK_SS(def->structType.name),index,size);
+      fprintf(output,"   RegisterTemplateMembers(STRING(\"%.*s\"),(Array<TemplatedMember>){&templateMembers[%d],%d});\n",UNPACK_SS(def->structType.name),index,size);
       index += size;
    }
    fprintf(output,"\n");
@@ -801,22 +806,32 @@ void OutputRegisterTypesFunction(FILE* output){
       }
 
 
-      fprintf(output,"   RegisterStructMembers(MakeSizedString(\"%.*s\"),(Array<Member>){&members[%d],%d});\n",UNPACK_SS(def->structType.name),index,size);
+      fprintf(output,"   RegisterStructMembers(STRING(\"%.*s\"),(Array<Member>){&members[%d],%d});\n",UNPACK_SS(def->structType.name),index,size);
       index += size;
    }
    fprintf(output,"\n");
 
    #if 1
-   for(SizedString type : seen){
+   for(String type : seen){
+      // HACK, with more time, resolve these. Basically just need to make sure that we correctly identify which are template params or not
       if(CompareString(type,"Array<Pair<Key,Data>>")){
          continue;
       }
       if(CompareString(type,"Pair<Key,Data>")){
          continue;
       }
+      if(CompareString(type,"Array<HashmapNode<Key,Data>>")){
+         continue;
+      }
+      if(CompareString(type,"Array<HashmapNode<Key,Data>*>")){
+         continue;
+      }
+      if(CompareString(type,"HashmapHeader<Key,Data>")){
+         continue;
+      }
 
       if(Contains(type,"<")){
-         fprintf(output,"   InstantiateTemplate(MakeSizedString(\"%.*s\"));\n",UNPACK_SS(type));
+         fprintf(output,"   InstantiateTemplate(STRING(\"%.*s\"));\n",UNPACK_SS(type));
       }
    }
    #endif
@@ -824,7 +839,7 @@ void OutputRegisterTypesFunction(FILE* output){
    fprintf(output,"\n}\n");
 }
 
-SizedString OutputMember(MemberDef* def){
+String OutputMember(MemberDef* def){
    Byte* mark = MarkArena(tempArena);
 
    PushString(tempArena,"%.*s | ",UNPACK_SS(def->type.simpleType));
@@ -833,7 +848,7 @@ SizedString OutputMember(MemberDef* def){
       PushString(tempArena,"%.*s",UNPACK_SS(def->arrays));
    }
 
-   SizedString res = PointArena(tempArena,mark);
+   String res = PointArena(tempArena,mark);
    return res;
 }
 
@@ -856,7 +871,7 @@ int main(int argc,const char* argv[]){
    InitArena(tempArena,Megabyte(256));
 
    for(int i = 0; i < argc - 2; i++){
-      SizedString content = PushFile(tempArena,argv[2+i]);
+      String content = PushFile(tempArena,argv[2+i]);
 
       if(content.size < 0){
          printf("Failed to open file: %s\n",argv[2+i]);
@@ -868,7 +883,7 @@ int main(int argc,const char* argv[]){
    }
 
    const char* test = "template<typename T> struct std::vector{T* mem; int size; int allocated;};";
-   Tokenizer tok(MakeSizedString(test),"[]{}();*<>,=",{});
+   Tokenizer tok(STRING(test),"[]{}();*<>,=",{});
    ParseHeaderFile(&tok);
 
    FILE* output = OpenFileAndCreateDirectories(argv[1],"w");
