@@ -112,8 +112,7 @@ module VRead #(
    wire [DATA_W-1:0]      data_in = 0;
 
    reg                    pingPongState;
-   wire [ADDR_W-1:0]      int_addr_inst;
-   wire [ADDR_W-1:0]      startB_inst;
+   wire [`MEM_ADDR_W-1:0] startB_inst;
 
    // mem enables output by addr gen
    wire enA = req;
@@ -124,8 +123,7 @@ module VRead #(
 
    wire [DATA_W-1:0]      data_to_wrA = inA;
 
-   assign int_addr_inst = pingPong ? {pingPongState,int_addr[ADDR_W-2:0]} : int_addr;
-   assign startB_inst   = pingPong ? {pingPongState,startB[ADDR_W-2:0]} : startB;
+   assign startB_inst   = pingPong ? {pingPongState,startB[`MEM_ADDR_W-2:0]} : startB;
 
    // Ping pong 
    always @(posedge clk,posedge rst)
@@ -221,7 +219,7 @@ module VRead #(
 
    iob_2p_ram #(
                .DATA_W(DATA_W),
-               .ADDR_W(ADDR_W)
+               .ADDR_W(`MEM_ADDR_W)
                )
    mem (
         .clk(clk),
