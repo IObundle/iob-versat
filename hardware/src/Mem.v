@@ -5,7 +5,7 @@
 (* source *) module Mem #(
          parameter MEM_INIT_FILE="none",
          parameter DATA_W = 32,
-         parameter ADDR_W = 10
+         parameter ADDR_W = 5
               )
     (
    //control
