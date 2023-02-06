@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python3
 #Description: converts xversat.json definitions to xversat.vh
 #Arguments: xversat.json directory and xversat.vh directory
 
