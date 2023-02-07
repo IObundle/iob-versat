@@ -1,9 +1,5 @@
 #include "type.hpp"
 
-#include <new>
-#include <map>
-#include <tuple>
-
 #include "parser.hpp"
 #include "versatPrivate.hpp"
 

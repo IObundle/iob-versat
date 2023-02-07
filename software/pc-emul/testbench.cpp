@@ -13,7 +13,7 @@ void HandleError(int sig){
    fflush(stdout);
 }
 
-void TestVersatSide(Versat* versat){
+void FuzzVersatSpecification(Versat* versat){
    Arena* arena = &versat->temp;
    ArenaMarker marker(arena);
 
@@ -30,6 +30,32 @@ void TestVersatSide(Versat* versat){
 
    SetDebugSignalHandler(HandleError);
    ParseVersatSpecification(versat,fuzzed);
+}
 
-   exit(0);
+#include <unistd.h>
+#include <sys/wait.h>
+#include <errno.h>
+
+void VersatSideVerilatorCall(){
+   pid_t pid = fork();
+
+   if(pid < 0){
+      printf("Error calling fork\n");
+   } else if(pid == 0){
+      int res = execlp("verilator",(char*) NULL);
+      printf("Error calling execlp: %s\n",strerror(errno));
+   } else {
+      int status;
+      pid_t res = wait(&status);
+   }
+}
+
+void TestVersatSide(Versat* versat){
+   #if 0
+   FuzzVersatSpecification(versat);
+   #endif // 0
+
+   #if 0
+   VersatSideVerilatorCall();
+   #endif // 0
 }

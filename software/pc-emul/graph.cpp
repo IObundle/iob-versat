@@ -6,89 +6,17 @@
 static Arena nodeArenaInst;
 static Arena* nodeArena = &nodeArenaInst;
 
-static EdgeNode* freeEdgeNodes = nullptr;
-static Node* freeNodes = nullptr;
-
-static Node* AllocateNode(){
-   Node* res = nullptr;
-   if(freeNodes){
-      res = freeNodes;
-      freeNodes = res->next;
-   } else {
-      res = PushStruct<Node>(nodeArena);
-   }
-   return res;
-}
-
-static EdgeNode* AllocateEdgeNode(){
-   EdgeNode* res = nullptr;
-   if(freeEdgeNodes){
-      res = freeEdgeNodes;
-      freeEdgeNodes = res->next;
-   } else {
-      res = PushStruct<EdgeNode>(nodeArena);
-   }
-   return res;
-}
-
-Graph* PushGraph(Arena* arena){
-   static bool init = false;
-   if(!init){
-      InitArena(nodeArena,Gigabyte(1));
-      init = true;
-   }
-
-   Graph* graph = PushStruct<Graph>(arena);
-   *graph = {};
-
-   return graph;
-}
-
-Node* AddNode(Graph* graph,ComplexFUInstance* inst,Node* previous){
-   Node* node = AllocateNode();
-   node->inst = inst;
-   node->name = inst->name;
-
-   if(previous){
-      node->next = previous->next;
-      previous->next = node;
-   } else {
-      node->next = graph->nodes;
-      graph->nodes = node;
-   }
-
-   return node;
-}
-
-EdgeNode* AddEdge(Graph* graph,Node* out,int outPort,Node* in,int inPort,EdgeNode* previous){
-   EdgeNode* node = AllocateEdgeNode();
-   node->out.node = out;
-   node->out.port = outPort;
-   node->in.node = in;
-   node->in.port = inPort;
-
-   if(previous){
-      node->next = previous->next;
-      previous->next = node;
-   } else {
-      node->next = graph->edges;
-      graph->edges = node;
-   }
-
-   return node;
-}
-
 bool ContainsNode(EdgeNode* edge,Node* node){
-   bool res = (edge->in.node == node || edge->out.node == node);
+   bool res = (edge->in.inst == node || edge->out.inst == node);
    return res;
 }
 
 void RemoveNodeAndEdges(Graph* graph,Node* node){
-   if(graph->nodes == node){ // Special case
-      graph->nodes = node->next;
+   if(graph->instances == node){ // Special case
+      graph->instances = node->next;
    } else {
       Node* previous = nullptr;
-      for(Node* ptr = graph->nodes; ptr; ptr = ptr->next){
+      FOREACH_LIST(ptr,graph->instances){
          if(ptr == node){
             previous->next = ptr->next;
             break;
@@ -96,25 +24,16 @@ void RemoveNodeAndEdges(Graph* graph,Node* node){
          previous = ptr;
       }
    }
-   // Add to free list
-   node->next = freeNodes;
-   freeNodes = node;
 
    while(ContainsNode(graph->edges,node)){ // Special case
       EdgeNode* old = graph->edges;
       graph->edges = graph->edges->next;
-
-      old->next = freeEdgeNodes;
-      freeEdgeNodes = old;
    }
 
    EdgeNode* previous = nullptr;
    for(EdgeNode* ptr = graph->edges; ptr;){
       if(ContainsNode(ptr,node)){
          previous->next = ptr->next;
-
-         ptr->next = freeEdgeNodes;
-         freeEdgeNodes = ptr;
 
          ptr = previous->next;
       } else {
@@ -124,100 +43,68 @@ void RemoveNodeAndEdges(Graph* graph,Node* node){
    }
 }
 
-void ConvertGraph(Graph* graph,Accelerator* accel,Arena* arena){
-   Hashmap<ComplexFUInstance*,Node*> map = {};
-   map.Init(arena,accel->instances.Size());
-
-   Assert(graph->nodes == nullptr); // Only allow conversion in an empty graph
-
-   {
-   Node* ptr = nullptr;
-   for(ComplexFUInstance* inst : accel->instances){
-      ptr = AddNode(graph,inst,ptr);
-      map.Insert(inst,ptr);
-   }
-   }
-
-   {
-   EdgeNode* ptr = nullptr;
-   for(ComplexFUInstance* inst : accel->instances){
-      Node* out = map.GetOrFail(inst);
-
-      for(Edge* edge : accel->edges){
-         if(edge->units[0].inst != inst){
-            continue;
-         }
-
-         int outPort = edge->units[0].port;
-         Node* in = map.GetOrFail(edge->units[1].inst);
-         int inPort = edge->units[1].port;
-
-         ptr = AddEdge(graph,out,outPort,in,inPort,ptr);
-      }
-   }
-   }
-}
-
 void SortEdgesByVertices(Graph* graph){
    EdgeNode* start = nullptr;
    EdgeNode* ptr = nullptr;
-   FOREACH_LIST(nodePtr,graph->nodes){
-      EdgeNode* previous = nullptr;
-      for(EdgeNode* edge = graph->edges; edge;){
-         EdgeNode* next = edge->next;
+   FOREACH_LIST(outPtr,graph->instances){
+      FOREACH_LIST(inPtr,graph->instances){
+         EdgeNode* previous = nullptr;
+         for(EdgeNode* edge = graph->edges; edge;){
+            EdgeNode* next = edge->next;
 
-         if(edge->out.node == nodePtr){
-            // Remove edge from edge list
-            if(previous){
-               previous->next = next;
-            } else if(graph->edges){
-               graph->edges = next;
-            }
+            if(edge->out.inst == outPtr && edge->in.inst == inPtr){
+               // Remove edge from edge list
+               if(previous){
+                  previous->next = next;
+               } else if(graph->edges){
+                  graph->edges = next;
+               }
 
-            // Add it to new list
-            if(ptr){
-               ptr->next = edge;
+               // Add it to new list
+               if(ptr){
+                  ptr->next = edge;
+               } else {
+                  start = edge;
+               }
+
+               edge->next = nullptr;
+               ptr = edge;
             } else {
-               start = edge;
+               previous = edge;
             }
 
-            edge->next = nullptr;
-            ptr = edge;
-         } else {
-            previous = edge;
+            edge = next;
          }
-
-         edge = next;
       }
    }
 
    graph->edges = start;
 }
 
+void ReorganizeAccelerator(Graph* graph,Arena* temp);
+
 FlattenResult FlattenNode(Graph* graph,Node* node,Arena* arena){
-   FUDeclaration* decl = node->inst->declaration;
+   FUDeclaration* decl = node->declaration;
 
    if(decl->type != FUDeclaration::COMPOSITE){
       return (FlattenResult){};
    }
 
    Accelerator* circuit = decl->baseCircuit;
+   ReorganizeAccelerator(circuit,arena);
 
    ComplexFUInstance* inputPortToNode[99] = {};
    ComplexFUInstance* outputInstance = nullptr;
 
    Hashmap<ComplexFUInstance*,Node*> map = {};
-   map.Init(arena,circuit->instances.Size());
+   map.Init(arena,circuit->numberInstances);
 
    int inserted = 0;
 
    Node* ptr = node;
-   bool first = true;
-   for(ComplexFUInstance* inst : circuit->instances){
-      Node* instNode = nullptr;
-
+   FOREACH_LIST(inst,circuit->instances){
       if(inst->declaration == BasicDeclaration::input){
-         int port = inst->id;
+         int port = inst->portIndex;
          continue;
       }
       if(inst->declaration == BasicDeclaration::output){
@@ -225,36 +112,29 @@ FlattenResult FlattenNode(Graph* graph,Node* node,Arena* arena){
          continue;
       }
 
-      instNode = AllocateNode();
+      String newName = PushString(&graph->versat->permanent,"%.*s.%.*s",UNPACK_SS(node->name),UNPACK_SS(inst->name));
+      ComplexFUInstance* res = CopyInstance(graph,inst,newName,true,ptr);
 
-      String newName = PushString(arena,"%.*s.%.*s",UNPACK_SS(node->name),UNPACK_SS(inst->name));
-
-      instNode->inst = inst;
-      instNode->next = ptr->next;
-      instNode->name = newName;
-
-      map.Insert(inst,instNode);
-
-      ptr->next = instNode;
-      ptr = instNode;
+      map.Insert(inst,res);
 
       inserted += 1;
+      ptr = res;
    }
    Node* flatUnitStart = node->next;
    Node* flatUnitEnd = ptr->next;
 
-   // Input edges
    EdgeNode* listPos = nullptr; // Tries to keep edges of similar sorted nodes close together
    FOREACH_LIST(ptr,graph->edges){
-      if(ptr->in.node == node){
+      if(ptr->in.inst == node){
          listPos = ptr;
          break;
       }
    }
 
+   // Input edges
    EdgeNode* flatEdgeStart = nullptr;
    int flattenedEdges = 0;
-   for(Edge* edge : circuit->edges){
+   FOREACH_LIST(edge,circuit->edges){
       if(edge->units[0].inst->declaration != BasicDeclaration::input ||
          edge->units[1].inst->declaration == BasicDeclaration::output){ // We don't deal with input to output edges here
          continue;
@@ -262,13 +142,13 @@ FlattenResult FlattenNode(Graph* graph,Node* node,Arena* arena){
 
       Assert(edge->units[0].port == 0); // Must be connected to port 0
 
-      int outsidePort = edge->units[0].inst->id; // The input port is stored in the id of the input unit
+      int outsidePort = edge->units[0].inst->portIndex; // The input port is stored in the id of the input unit
       ComplexFUInstance* instInside = edge->units[1].inst;
       Node* nodeInside = map.GetOrFail(instInside);
       int portInside = edge->units[1].port;
 
       for(EdgeNode* edgeNode = graph->edges; edgeNode; edgeNode = edgeNode->next){
-         if(!(edgeNode->in.node == node && edgeNode->in.port == outsidePort)){
+         if(!(edgeNode->in.inst == node && edgeNode->in.port == outsidePort)){
             continue;
          }
 
@@ -279,25 +159,25 @@ FlattenResult FlattenNode(Graph* graph,Node* node,Arena* arena){
          }
          #endif
 
-         listPos = AddEdge(graph,edgeNode->out.node,edgeNode->out.port,nodeInside,portInside,listPos);
+         listPos = ConnectUnits(edgeNode->out.inst,edgeNode->out.port,nodeInside,portInside,0,listPos); // AddEdge(graph,edgeNode->out.inst,edgeNode->out.port,nodeInside,portInside,listPos);
          flattenedEdges += 1;
       }
    }
 
    #if 1
    // Input to output directly
-   for(Edge* edge : circuit->edges){
+   FOREACH_LIST(edge,circuit->edges){
       if(!(edge->units[0].inst->declaration == BasicDeclaration::input &&
            edge->units[1].inst->declaration == BasicDeclaration::output)){
          continue;
       }
 
-      int outsideInputPort = edge->units[0].inst->id; // b
+      int outsideInputPort = edge->units[0].inst->portIndex; // b
       int outsideOutputPort = edge->units[1].port; // c
 
       // Search out node
       for(EdgeNode* n1 = graph->edges; n1; n1 = n1->next){
-         if(!(n1->in.node == node && n1->in.port == outsideInputPort)){
+         if(!(n1->in.inst == node && n1->in.port == outsideInputPort)){
             continue;
          }
 
@@ -305,13 +185,13 @@ FlattenResult FlattenNode(Graph* graph,Node* node,Arena* arena){
 
          // Search in node
          for(EdgeNode* n2 = graph->edges; n2; n2 = n2->next){
-            if(!(n2->out.node == node && n2->out.port == outsideOutputPort)){
+            if(!(n2->out.inst == node && n2->out.port == outsideOutputPort)){
                continue;
             }
 
             PortNode in = n2->in;
 
-            listPos = AddEdge(graph,out.node,out.port,in.node,in.port,listPos);
+            listPos = ConnectUnits(out.inst,out.port,in.inst,in.port,0,listPos);  // AddEdge(graph,out.node,out.port,in.node,in.port,listPos);
             flattenedEdges += 1;
          }
       }
@@ -319,7 +199,7 @@ FlattenResult FlattenNode(Graph* graph,Node* node,Arena* arena){
    #endif
 
    FOREACH_LIST(ptr,graph->edges){
-      if(ptr->out.node == node){
+      if(ptr->out.inst == node){
          listPos = ptr;
          break;
       }
@@ -328,7 +208,7 @@ FlattenResult FlattenNode(Graph* graph,Node* node,Arena* arena){
    #if 1
    int circuitEdgesStart = flattenedEdges;
    // Circuit edges
-   for(Edge* edge : circuit->edges){
+   FOREACH_LIST(edge,circuit->edges){
       if(edge->units[0].inst->declaration == BasicDeclaration::input ||
          edge->units[1].inst->declaration == BasicDeclaration::output){
          continue;
@@ -342,14 +222,14 @@ FlattenResult FlattenNode(Graph* graph,Node* node,Arena* arena){
       Node* out = map.GetOrFail(outInside);
       Node* in = map.GetOrFail(inInside);
 
-      listPos = AddEdge(graph,out,outPort,in,inPort,listPos);
+      listPos = ConnectUnits(out,outPort,in,inPort,0,listPos); // AddEdge(graph,out,outPort,in,inPort,listPos);
       flattenedEdges += 1;
    }
    int circuitEdgesEnd = flattenedEdges;
    #endif
 
    // Output edges
-   for(Edge* edge : circuit->edges){
+   FOREACH_LIST(edge,circuit->edges){
       if(edge->units[1].inst->declaration != BasicDeclaration::output ||
          edge->units[0].inst->declaration == BasicDeclaration::input){ // We don't deal with input to output edges here
          continue;
@@ -361,11 +241,11 @@ FlattenResult FlattenNode(Graph* graph,Node* node,Arena* arena){
       int outsidePort = edge->units[1].port;
 
       for(EdgeNode* edgeNode = graph->edges; edgeNode; edgeNode = edgeNode->next){
-         if(!(edgeNode->out.node == node && edgeNode->out.port == outsidePort)){
+         if(!(edgeNode->out.inst == node && edgeNode->out.port == outsidePort)){
             continue;
          }
 
-         listPos = AddEdge(graph,nodeInside,portInside,edgeNode->in.node,edgeNode->in.port,listPos);
+         listPos = ConnectUnits(nodeInside,portInside,edgeNode->in.inst,edgeNode->in.port,0,listPos); // AddEdge(graph,nodeInside,portInside,edgeNode->in.node,edgeNode->in.port,listPos);
          flattenedEdges += 1;
       }
    }
@@ -387,22 +267,22 @@ FlattenResult FlattenNode(Graph* graph,Node* node,Arena* arena){
    return res;
 }
 
-String OutputDotGraph(Graph* graph,Arena* output){
+String OutputDotGraph(Subgraph graph,Arena* output){
    Byte* mark = MarkArena(output);
 
    PushString(output,"digraph accel {\n\tnode [fontcolor=white,style=filled,color=\"160,60,176\"];\n");
-   for(Node* ptr = graph->nodes; ptr; ptr = ptr->next){
+   FOREACH_SUBLIST(ptr,graph.nodes){
       ArenaMarker marker(nodeArena); // Use node arena as temporary storage for repr
 
       String res = ptr->name;
       //String res = Repr(ptr->inst,GRAPH_DOT_FORMAT_NAME,nodeArena);
       PushString(output,"    \"%.*s\";\n",UNPACK_SS(res));
    }
-   for(EdgeNode* ptr = graph->edges; ptr; ptr = ptr->next){
+   FOREACH_SUBLIST(ptr,graph.edges){
       ArenaMarker marker(nodeArena); // Use node arena as temporary storage for repr
 
-      String out = ptr->out.node->name;
-      String in = ptr->in.node->name;
+      String out = ptr->out.inst->name;
+      String in = ptr->in.inst->name;
 
       #if 0
       String out = Repr(ptr->out.node->inst,GRAPH_DOT_FORMAT_NAME,nodeArena);
@@ -414,6 +294,394 @@ String OutputDotGraph(Graph* graph,Arena* output){
    PushString(output,"}\n");
 
    String res = PointArena(output,mark);
+   return res;
+}
+
+String OutputDotGraph(Graph* graph,Arena* output){
+   Byte* mark = MarkArena(output);
+
+   PushString(output,"digraph accel {\n\tnode [fontcolor=white,style=filled,color=\"160,60,176\"];\n");
+   FOREACH_LIST(ptr,graph->instances){
+      ArenaMarker marker(nodeArena); // Use node arena as temporary storage for repr
+
+      String res = ptr->name;
+      //String res = Repr(ptr->inst,GRAPH_DOT_FORMAT_NAME,nodeArena);
+      PushString(output,"    \"%.*s\";\n",UNPACK_SS(res));
+   }
+   FOREACH_LIST(ptr,graph->edges){
+      ArenaMarker marker(nodeArena); // Use node arena as temporary storage for repr
+
+      String out = ptr->out.inst->name;
+      String in = ptr->in.inst->name;
+
+      #if 0
+      String out = Repr(ptr->out.node->inst,GRAPH_DOT_FORMAT_NAME,nodeArena);
+      String in = Repr(ptr->in.node->inst,GRAPH_DOT_FORMAT_NAME,nodeArena);
+      #endif
+
+      PushString(output,"    \"%.*s\" -> \"%.*s\";\n",UNPACK_SS(out),UNPACK_SS(in));
+   }
+   PushString(output,"}\n");
+
+   String res = PointArena(output,mark);
+   return res;
+}
+
+#include "merge.hpp"
+
+Node* GetOutputInstance(Subgraph sub){
+   FOREACH_SUBLIST(inst,sub.nodes){
+      if(inst->declaration == BasicDeclaration::output){
+         return inst;
+      }
+   }
+   return nullptr;
+}
+
+ConsolidationResult GenerateConsolidationGraph(Versat* versat,Arena* arena,Subgraph accel1,Subgraph accel2,ConsolidationGraphOptions options){
+   ConsolidationGraph graph = {};
+
+   // Should be temp memory instead of using memory intended for the graph, but since the graph is expected to use a lot of memory and we are technically saving memory using this mapping, no major problem
+   Hashmap<ComplexFUInstance*,MergeEdge> specificsMapping;
+   specificsMapping.Init(arena,1000);
+   Pool<MappingNode> specificsAdded = {};
+
+   for(int i = 0; i < options.nSpecifics; i++){
+      SpecificMergeNodes specific = options.specifics[i];
+
+      MergeEdge node = {};
+      node.instances[0] = specific.instA;
+      node.instances[1] = specific.instB;
+
+      specificsMapping.Insert(specific.instA,node);
+      specificsMapping.Insert(specific.instB,node);
+
+      MappingNode* n = specificsAdded.Alloc();
+      n->nodes = node;
+      n->type = MappingNode::NODE;
+   }
+
+   #if 1
+   // Map outputs
+   Node* accel1Output = GetOutputInstance(accel1);
+   Node* accel2Output = GetOutputInstance(accel2);
+   if(accel1Output && accel2Output){
+      MergeEdge node = {};
+      node.instances[0] = accel1Output;
+      node.instances[1] = accel2Output;
+
+      specificsMapping.Insert(accel1Output,node);
+      specificsMapping.Insert(accel2Output,node);
+
+      MappingNode* n = specificsAdded.Alloc();
+      n->nodes = node;
+      n->type = MappingNode::NODE;
+   }
+
+   // Map inputs
+   FOREACH_SUBLIST(instA,accel1.nodes){
+      if(instA->declaration != BasicDeclaration::input){
+         continue;
+      }
+
+      FOREACH_SUBLIST(instB,accel2.nodes){
+         if(instB->declaration != BasicDeclaration::input){
+            continue;
+         }
+
+         if(instA->id != instB->id){
+            continue;
+         }
+
+         MergeEdge node = {};
+         node.instances[0] = instA;
+         node.instances[1] = instB;
+
+         specificsMapping.Insert(instA,node);
+         specificsMapping.Insert(instB,node);
+
+         MappingNode* n = specificsAdded.Alloc();
+         n->nodes = node;
+         n->type = MappingNode::NODE;
+      }
+   }
+   #endif
+
+   // Insert specific mappings first (the first mapping nodes are the specifics)
+   #if 0
+   for(int i = 0; i < options.nSpecifics; i++){
+      SpecificMergeNodes specific = options.specifics[i];
+
+      MappingNode* node = PushStruct<MappingNode>(arena);
+
+      node->type = MappingNode::NODE;
+      node->nodes.instances[0] = specific.instA;
+      node->nodes.instances[1] = specific.instB;
+
+      graph.nodes.size += 1;
+   }
+   #endif
+
+   graph.nodes.data = (MappingNode*) MarkArena(arena);
+
+   #if 1
+   // Check possible edge mapping
+   FOREACH_SUBLIST(edge1,accel1.edges){
+      FOREACH_SUBLIST(edge2,accel2.edges){
+         // TODO: some nodes do not care about which port is connected (think the inputs for common operations, like multiplication, adders and the likes)
+         // Can augment the algorithm further to find more mappings
+         if(!(EqualPortMapping(versat,edge1->units[0],edge2->units[0]) &&
+            EqualPortMapping(versat,edge1->units[1],edge2->units[1]))){
+            continue;
+         }
+
+         // No mapping input or output units
+         #if 1
+         if(edge1->units[0].inst->declaration->type == FUDeclaration::SPECIAL ||
+            edge1->units[1].inst->declaration->type == FUDeclaration::SPECIAL ||
+            edge2->units[0].inst->declaration->type == FUDeclaration::SPECIAL ||
+            edge2->units[1].inst->declaration->type == FUDeclaration::SPECIAL){
+            continue;
+         }
+         #endif
+
+         MappingNode node = {};
+         node.type = MappingNode::EDGE;
+
+         node.edges[0].units[0] = edge1->units[0];
+         node.edges[0].units[1] = edge1->units[1];
+         node.edges[1].units[0] = edge2->units[0];
+         node.edges[1].units[1] = edge2->units[1];
+
+         // Checks to see if we are in conflict with any specific node.
+         MergeEdge* possibleSpecificConflict = specificsMapping.Get(node.edges[0].units[0].inst);
+         if(!possibleSpecificConflict) possibleSpecificConflict = specificsMapping.Get(node.edges[0].units[1].inst);
+         if(!possibleSpecificConflict) possibleSpecificConflict = specificsMapping.Get(node.edges[1].units[0].inst);
+         if(!possibleSpecificConflict) possibleSpecificConflict = specificsMapping.Get(node.edges[1].units[1].inst);
+
+         if(possibleSpecificConflict){
+            MappingNode specificNode = {};
+            specificNode.type = MappingNode::NODE;
+            specificNode.nodes = *possibleSpecificConflict;
+
+            if(MappingConflict(node,specificNode)){
+               continue;
+            }
+         }
+
+         #if 0
+         // Check to see that the edge maps with all the specific nodes. Specific nodes must be part of the final clique, and therefore we can not insert any edge that could potently make it not happen
+         bool conflict = false;
+         for(int i = 0; i < options.nSpecifics; i++){
+            MappingNode specificNode = graph.nodes[i];
+
+            if(MappingConflict(node,specificNode)){
+               conflict = true;
+               break;
+            }
+         }
+         if(conflict){
+            continue;
+         }
+         #endif
+
+         MappingNode* space = PushStruct<MappingNode>(arena);
+
+         *space = node;
+         graph.nodes.size += 1;
+      }
+   }
+   #endif
+
+   // Check node mapping
+   #if 0
+   if(options.mapNodes){
+      ComplexFUInstance* accel1Output = GetOutputInstance(accel1);
+      ComplexFUInstance* accel2Output = GetOutputInstance(accel2);
+
+      for(ComplexFUInstance* instA : accel1->instances){
+         PortInstance portA = {};
+         portA.inst = instA;
+
+         int deltaA = instA->graphData->order - options.order;
+
+         if(options.type == ConsolidationGraphOptions::EXACT_ORDER && deltaA >= 0 && deltaA <= options.difference){
+            continue;
+         }
+
+         if(instA == accel1Output || instA->declaration == BasicDeclaration::input){
+            continue;
+         }
+
+         for(ComplexFUInstance* instB : accel2->instances){
+            PortInstance portB = {};
+            portB.inst = instB;
+
+            int deltaB = instB->graphData->order - options.order;
+
+            if(options.type == ConsolidationGraphOptions::SAME_ORDER && instA->graphData->order != instB->graphData->order){
+               continue;
+            }
+            if(options.type == ConsolidationGraphOptions::EXACT_ORDER && deltaB >= 0 && deltaB <= options.difference){
+               continue;
+            }
+            if(instB == accel2Output || instB->declaration == BasicDeclaration::input){
+               continue;
+            }
+
+            if(!EqualPortMapping(versat,portA,portB)){
+               continue;
+            }
+
+            MappingNode node = {};
+            node.type = MappingNode::NODE;
+            node.nodes.instances[0] = instA;
+            node.nodes.instances[1] = instB;
+
+            MergeEdge* possibleSpecificConflict = specificsMapping.Get(node.nodes.instances[0]);
+            if(!possibleSpecificConflict) possibleSpecificConflict = specificsMapping.Get(node.nodes.instances[1]);
+
+            if(possibleSpecificConflict){
+               MappingNode specificNode = {};
+               specificNode.type = MappingNode::NODE;
+               specificNode.nodes = *possibleSpecificConflict;
+
+               if(MappingConflict(node,specificNode)){
+                  continue;
+               }
+            }
+
+            #if 0
+            // Same check for nodes in regards to specifics
+            bool conflict = false;
+            for(int i = 0; i < options.nSpecifics; i++){
+               MappingNode specificNode = graph.nodes[i];
+
+               // No point adding same exact node
+               if(specificNode.nodes.instances[0] == instA &&
+                  specificNode.nodes.instances[1] == instB){
+                  conflict = true;
+                  break;
+               }
+
+               if(MappingConflict(node,specificNode)){
+                  conflict = true;
+                  break;
+               }
+            }
+            if(conflict){
+               continue;
+            }
+            #endif
+
+            MappingNode* space = PushStruct<MappingNode>(arena);
+
+            *space = node;
+            graph.nodes.size += 1;
+         }
+      }
+   }
+   #endif
+
+   #if 0
+   printf("Size (MB):%d ",((graph.nodes.size / 8) * graph.nodes.size) / Megabyte(1));
+   exit(0);
+   #endif
+
+   // Order nodes based on how equal in depth they are
+   #if 0
+   //{  ArenaMarker marker(arena);
+      AcceleratorView view1 = CreateAcceleratorView(accel1,arena);
+      AcceleratorView view2 = CreateAcceleratorView(accel2,arena);
+      view1.CalculateDAGOrdering(arena);
+      view2.CalculateDAGOrdering(arena);
+
+      Array<int> count = PushArray<int>(arena,graph.nodes.size);
+      Memset(count,0);
+      int max = 0;
+      for(int i = 0; i < graph.nodes.size; i++){
+         int depth = NodeDepth(graph.nodes[i]);
+         max = std::max(max,depth);
+
+         if(depth >= graph.nodes.size){
+            depth = graph.nodes.size - 1;
+         }
+
+         count[depth] += 1;
+      }
+      Array<int> offsets = PushArray<int>(arena,max + 1);
+      Memset(offsets,0);
+      for(int i = 1; i < offsets.size; i++){
+         offsets[i] = offsets[i-1] + count[i-1];
+      }
+      Array<MappingNode> sorted = PushArray<MappingNode>(arena,graph.nodes.size);
+      for(int i = 0; i < graph.nodes.size; i++){
+         int depth = NodeDepth(graph.nodes[i]);
+
+         int offset = offsets[depth];
+         offsets[depth] += 1;
+
+         sorted[offset] = graph.nodes[i];
+      }
+
+      for(int i = 0; i < sorted.size; i++){
+         graph.nodes[i] = sorted[sorted.size - i - 1];
+      }
+      #if 1
+      for(int i = 0; i < graph.nodes.size; i++){
+         int depth = NodeDepth(graph.nodes[i]);
+         //printf("%d\n",depth);
+      }
+      #endif
+   //}
+   #endif
+
+   int upperBound = std::min(Size(accel1.nodes),Size(accel2.nodes));
+   Array<BitArray> neighbors = PushArray<BitArray>(arena,graph.nodes.size);
+   int times = 0;
+   for(int i = 0; i < graph.nodes.size; i++){
+      neighbors[i].Init(arena,graph.nodes.size);
+      neighbors[i].Fill(0);
+   }
+   for(int i = 0; i < graph.nodes.size; i++){
+      MappingNode node1 = graph.nodes[i];
+
+      for(int ii = 0; ii < i; ii++){
+         times += 1;
+
+         MappingNode node2 = graph.nodes[ii];
+
+         if(MappingConflict(node1,node2)){
+            continue;
+         }
+
+         neighbors.data[i].Set(ii,1);
+         neighbors.data[ii].Set(i,1);
+      }
+   }
+   graph.edges = neighbors;
+
+   // Reorder based on degree of nodes
+   #if 0
+   {  ArenaMarker marker(arena);
+      Array<int> degree = PushArray<int>(arena,graph.nodes.size);
+      Memset(degree,0);
+      for(int i = 0; i < graph.nodes.size; i++){
+         degree[i] = graph.edges[i].GetNumberBitsSet();
+      }
+
+
+
+   #endif
+
+   graph.validNodes.Init(arena,graph.nodes.size);
+   graph.validNodes.Fill(1);
+
+   ConsolidationResult res = {};
+   res.graph = graph;
+   res.upperBound = upperBound;
+   res.specificsAdded = specificsAdded;
+
    return res;
 }
 

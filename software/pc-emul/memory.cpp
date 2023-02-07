@@ -187,13 +187,14 @@ void PushNullByte(Arena* arena){
    *res = '\0';
 }
 
-bool BitIterator::operator!=(BitIterator& iter){
-   bool res = !(currentByte == iter.currentByte && currentBit == iter.currentBit);
-   return res;
+bool BitIterator::operator!=(BitIterator& iter){ // Returns false if passed over iter
+   bool passedOver = currentByte > iter.currentByte || (currentByte == iter.currentByte && currentBit >= iter.currentBit);
+
+   return !passedOver;
 }
 
 void BitIterator::operator++(){
-   int byteSize = array->bitSize / 8;
+   int byteSize = (array->bitSize + 7) / 8;
 
    // Increment once
    currentBit += 1;
@@ -216,19 +217,24 @@ void BitIterator::operator++(){
 
       // Fallthrough switch
       switch(currentBit){
-      case 0: if(ch & 0x01) return; else ++currentBit;
-      case 1: if(ch & 0x02) return; else ++currentBit;
-      case 2: if(ch & 0x04) return; else ++currentBit;
-      case 3: if(ch & 0x08) return; else ++currentBit;
-      case 4: if(ch & 0x10) return; else ++currentBit;
-      case 5: if(ch & 0x20) return; else ++currentBit;
-      case 6: if(ch & 0x40) return; else ++currentBit;
-      case 7: if(ch & 0x80) return; else {
+      case 0: if(ch & 0x01) goto end; else ++currentBit;
+      case 1: if(ch & 0x02) goto end; else ++currentBit;
+      case 2: if(ch & 0x04) goto end; else ++currentBit;
+      case 3: if(ch & 0x08) goto end; else ++currentBit;
+      case 4: if(ch & 0x10) goto end; else ++currentBit;
+      case 5: if(ch & 0x20) goto end; else ++currentBit;
+      case 6: if(ch & 0x40) goto end; else ++currentBit;
+      case 7: if(ch & 0x80) goto end; else {
          currentBit = 0;
          currentByte += 1;
          }
       }
    }
+
+end:
+
+   //Assert(array->Get(*(*this)));
+   return;
 }
 
 int BitIterator::operator*(){
@@ -403,7 +409,7 @@ int BitArray::FirstBitSetIndex(int start){
 
 String BitArray::PrintRepresentation(Arena* output){
    Byte* mark = MarkArena(output);
-   for(int i = this->bitSize - 1; i >= 0; --i){
+   for(int i =  0; i < this->bitSize; i++){
       int val = Get(i);
 
       if(val){
@@ -442,7 +448,7 @@ BitIterator BitArray::begin(){
 BitIterator BitArray::end(){
    BitIterator iter = {};
    iter.array = this;
-   iter.currentByte = bitSize / 8;
+   iter.currentByte = bitSize/ 8;
    iter.currentBit = bitSize % 8;
    return iter;
 }

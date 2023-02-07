@@ -5,7 +5,6 @@
 
 #include <map>
 #include <cstring>
-#include <functional>
 
 #include "utils.hpp"
 #include "type.hpp"
@@ -387,13 +386,13 @@ static Value EscapeString(Value val){
    return res;
 }
 
-inline int CountNonOperationChilds(Accelerator* accel){
+int CountNonOperationChilds(Accelerator* accel){
    if(accel == nullptr){
       return 0;
    }
 
    int count = 0;
-   for(ComplexFUInstance* inst : accel->instances){
+   FOREACH_LIST(inst,accel->instances){
       if(inst->declaration->type == FUDeclaration::COMPOSITE){
          count += CountNonOperationChilds(inst->declaration->fixedDelayCircuit);
       }

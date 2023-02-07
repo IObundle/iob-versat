@@ -49,11 +49,17 @@ void FlushStdout();
 #endif
 
 #define DEBUG_BREAK do{ FlushStdout(); raise(SIGTRAP); } while(0)
+#define DEBUG_BREAK_IF(COND) if(COND){FlushStdout(); raise(SIGTRAP);}
 
 #define NOT_IMPLEMENTED do{ FlushStdout(); Assert(false); } while(0) // Doesn't mean that something is necessarily future planned
 #define NOT_POSSIBLE DEBUG_BREAK
 #define UNHANDLED_ERROR do{ FlushStdout(); Assert(false); } while(0) // Know it's an error, but only exit, for now
 #define USER_ERROR do{ FlushStdout(); exit(0); } while(0) // User error and program does not try to repair or keep going (report error before and exit)
+#define UNREACHABLE do{Assert(false); __builtin_unreachable();} while(0)
+
+#define FOREACH_LIST(ITER,START) for(auto* ITER = START; ITER; ITER = ITER->next)
+#define FOREACH_LIST_BOUNDED(ITER,START,END) for(auto* ITER = START; ITER != END; ITER = ITER->next)
+#define FOREACH_SUBLIST(ITER,SUB) for(auto* ITER = SUB.start; ITER != SUB.end; ITER = ITER->next)
 
 #ifdef VERSAT
 #include <cstdio>
@@ -152,6 +158,10 @@ struct Pair{
 #define FULL_MASK(BITS) (BIT_MASK(BITS) - 1)
 #define MASK_VALUE(VAL,BITS) (VAL & FULL_MASK(BITS))
 
+// Returns a statically allocated string, instead of implementing varg for everything
+// Returned string uses statically allocated memory. Intended to be used to create quick strings for other functions, instead of having to implement them as variadic
+char* StaticFormat(const char* format,...);
+
 // Misc
 int RoundUpDiv(int dividend,int divisor);
 int log2i(int value); // Log function customized to calculating bits needed for a number of possible addresses (ex: log2i(1024) = 10)
@@ -242,6 +252,57 @@ inline unsigned char SelectByte(int val,int index){
 
    return conv.asChar;
 }
+
+
+template<typename T>
+T* ListGet(T* start,int index){
+   T* ptr = start;
+   for(int i = 0; i < index; i++){
+      if(ptr){
+         ptr = ptr->next;
+      }
+   }
+   return ptr;
+}
+
+template<typename T>
+int ListIndex(T* start,T* toFind){
+   int i = 0;
+   FOREACH_LIST(ptr,start){
+      if(ptr == toFind){
+         break;
+      }
+      i += 1;
+   }
+   return i;
+}
+
+template<typename T>
+T* ListRemove(T* start,T* toRemove){ // Returns start of new list. ToRemove is still valid afterwards
+   if(start == toRemove){
+      return start->next;
+   } else {
+      T* previous = nullptr;
+      FOREACH_LIST(ptr,start){
+         if(ptr == toRemove){
+            previous->next = ptr->next;
+         }
+         previous = ptr;
+      }
+
+      return start;
+   }
+}
+
+template<typename T>
+int Size(T* start){
+   int size = 0;
+   FOREACH_LIST(ptr,start){
+      size += 1;
+   }
+   return size;
+}
+
 
 #endif // INCLUDED_UTILS_HPP
 

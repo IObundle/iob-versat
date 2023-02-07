@@ -200,6 +200,10 @@ int SwapEndianess(int val){
 int NumberDigitsRepresentation(int number){
    int nDigits = 0;
 
+   if(number == 0){
+      return 1;
+   }
+
    int num = number;
    if(num < 0){
       nDigits += 1;
@@ -251,21 +255,21 @@ void HexStringToHex(unsigned char* buffer,String str){
    }
 }
 
-static unsigned int seed = 1;
+static unsigned int randomSeed = 1;
 void SeedRandomNumber(unsigned int val){
    if(val == 0){
-      seed = 1;
+      randomSeed = 1;
    } else {
-      seed = val;
+      randomSeed = val;
    }
 }
 
 unsigned int GetRandomNumber(){
    // Xorshift
-   seed ^= seed << 13;
-	seed ^= seed >> 17;
-	seed ^= seed << 5;
-   return seed;
+   randomSeed ^= randomSeed << 13;
+	randomSeed ^= randomSeed >> 17;
+	randomSeed ^= randomSeed << 5;
+   return randomSeed;
 }
 
 void FixedStringCpy(char* dest,String src){

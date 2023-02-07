@@ -98,3 +98,5 @@ verilator_test: $(CPP_OBJ)
 .PRECIOUS: $(UNIT_HDR)
 
 .NOTPARALLEL: $(BUILD_DIR)/V%.h
+
+.SUFFIXES:

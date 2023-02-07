@@ -8,7 +8,7 @@
 #include "textualRepresentation.hpp"
 
 void CheckMemory(Accelerator* topLevel){
-   Arena* temp = &topLevel->memory;
+   Arena* temp = &topLevel->temp;
    ArenaMarker marker(temp);
 
    AcceleratorIterator iter = {};
@@ -94,7 +94,7 @@ void DisplayAcceleratorMemory(Accelerator* topLevel){
 }
 
 void DisplayUnitConfiguration(Accelerator* topLevel){
-   Arena* temp = &topLevel->memory;
+   Arena* temp = &topLevel->temp;
    ArenaMarker marker(temp);
 
    AcceleratorIterator iter = {};
@@ -150,7 +150,7 @@ bool CheckInputAndOutputNumber(FUDeclaration* type,int inputs,int outputs){
 }
 
 void PrintAcceleratorInstances(Accelerator* accel){
-   Arena* temp = &accel->memory;
+   Arena* temp = &accel->temp;
    ArenaMarker marker(temp);
 
    AcceleratorIterator iter = {};
@@ -377,7 +377,7 @@ static void PrintVCDDefinitions_(FILE* accelOutputFile,Accelerator* accel){
    }
    #endif
 
-   for(ComplexFUInstance* inst : accel->instances){
+   FOREACH_LIST(inst,accel->instances){
       fprintf(accelOutputFile,"$scope module %.*s_%d $end\n",UNPACK_SS(inst->name),inst->id);
 
       for(int i = 0; i < inst->graphData->singleInputs.size; i++){
@@ -532,7 +532,7 @@ static void PrintVCD_(FILE* accelOutputFile,AcceleratorIterator iter,int time,Ar
 }
 
 void PrintVCD(FILE* accelOutputFile,Accelerator* accel,int time,int clock,Array<int> sameValueCheckSpace){ // Need to put some clock signal
-   Arena* temp = &accel->memory;
+   Arena* temp = &accel->temp;
    ArenaMarker marker(temp);
    ResetMapping();
 

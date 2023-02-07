@@ -11,7 +11,7 @@ VersatComputedValues ComputeVersatValues(Versat* versat,Accelerator* accel){
 
    VersatComputedValues res = {};
 
-   for(ComplexFUInstance* inst : accel->instances){
+   FOREACH_LIST(inst,accel->instances){
       FUDeclaration* decl = inst->declaration;
 
       res.numberConnections += inst->graphData->allOutputs.size;
@@ -86,11 +86,11 @@ void OutputCircuitSource(Versat* versat,FUDeclaration* decl,Accelerator* accel,F
 
    // Output configuration file
    TemplateSetCustom("versatValues",&val,"VersatComputedValues");
-   TemplateSetCustom("instances",&accel->instances,"Pool<ComplexFUInstance>");
-   TemplateSetNumber("numberUnits",accel->instances.Size());
+   //TemplateSetCustom("instances",&accel->instances,"Pool<ComplexFUInstance>");
+   TemplateSetNumber("numberUnits",accel->numberInstances);
 
    int nonSpecialUnits = 0;
-   for(ComplexFUInstance* inst : accel->instances){
+   FOREACH_LIST(inst,accel->instances){
       if(inst->declaration->type != FUDeclaration::SPECIAL && !inst->declaration->isOperation){
          nonSpecialUnits += 1;
       }
@@ -148,7 +148,7 @@ void OutputVersatSource(Versat* versat,Accelerator* accel,const char* sourceFile
    };
    #endif
 
-   fprintf(c,"`define NUMBER_UNITS %d\n",accel->instances.Size());
+   fprintf(c,"`define NUMBER_UNITS %d\n",accel->numberInstances);
    fprintf(c,"`define CONFIG_W %d\n",val.configurationBits);
    fprintf(c,"`define STATE_W %d\n",val.stateBits);
    fprintf(c,"`define MAPPED_UNITS %d\n",val.unitsMapped);
@@ -176,7 +176,7 @@ void OutputVersatSource(Versat* versat,Accelerator* accel,const char* sourceFile
       return;
    }
 
-   TemplateSetNumber("numberUnits",accel->instances.Size());
+   TemplateSetNumber("numberUnits",accel->numberInstances);
    TemplateSetCustom("versatValues",&val,"VersatComputedValues");
    TemplateSetCustom("versat",versat,"Versat");
    TemplateSetCustom("accel",accel,"Accelerator");

@@ -135,10 +135,7 @@ PortInstance ParseTerm(Versat* versat,Accelerator* circuit,Tokenizer* tok,Instan
 }
 #endif
 
-//FUInstance* ParseExpression(Versat* versat,Accelerator* circuit,Tokenizer* tok,InstanceTable& table)
-
-
-Expression* ParseAtom(Tokenizer* tok,Arena* arena){
+Expression* ParseAtomS(Tokenizer* tok,Arena* arena){
    Token peek = tok->PeekToken();
 
    bool negate = false;
@@ -187,7 +184,7 @@ Expression* ParseTerm(Tokenizer* tok,Arena* arena){
       expr = ParseExpression(tok,arena);
       tok->AssertNextToken(")");
    } else {
-      expr = ParseAtom(tok,arena);
+      expr = ParseAtomS(tok,arena);
    }
 
    return expr;
@@ -457,6 +454,8 @@ FUDeclaration* ParseModule(Versat* versat,Tokenizer* tok){
    tok->AssertNextToken("module");
 
    Token moduleName = tok->NextToken();
+   //DEBUG_BREAK_IF(CompareString(moduleName,"StaticConst"));
+
    tok->AssertNextToken("(");
 
    Accelerator* circuit = CreateAccelerator(versat);

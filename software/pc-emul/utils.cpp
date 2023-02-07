@@ -8,6 +8,23 @@
 
 #include <cstdio>
 #include <cstring>
+#include <cstdarg>
+
+char* StaticFormat(const char* format,...){
+   static const int BUFFER_SIZE = 1024*4;
+   static char buffer[BUFFER_SIZE];
+
+   va_list args;
+   va_start(args,format);
+
+   int written = vsprintf(buffer,format,args);
+
+   va_end(args);
+
+   Assert(written < BUFFER_SIZE);
+
+   return buffer;
+}
 
 // Misc
 void FlushStdout(){

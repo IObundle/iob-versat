@@ -79,7 +79,7 @@ void OutputVersatSource(Versat* versat,SimpleAccelerator* simpleAccel,const char
    };
    #endif
 
-   fprintf(c,"`define NUMBER_UNITS %d\n",accel->instances.Size());
+   fprintf(c,"`define NUMBER_UNITS %d\n",accel->numberInstances);
    fprintf(c,"`define CONFIG_W %d\n",val.configurationBits);
    fprintf(c,"`define STATE_W %d\n",val.stateBits);
    fprintf(c,"`define MAPPED_UNITS %d\n",val.unitsMapped);
@@ -107,7 +107,7 @@ void OutputVersatSource(Versat* versat,SimpleAccelerator* simpleAccel,const char
       return;
    }
 
-   TemplateSetNumber("numberUnits",accel->instances.Size());
+   TemplateSetNumber("numberUnits",accel->numberInstances);
    TemplateSetCustom("versatValues",&val,"VersatComputedValues");
    TemplateSetCustom("versat",versat,"Versat");
    TemplateSetCustom("accel",accel,"Accelerator");

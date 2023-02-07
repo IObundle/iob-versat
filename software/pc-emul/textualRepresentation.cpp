@@ -161,6 +161,25 @@ String Repr(MappingNode node,Arena* arena){
    return name;
 }
 
+String PushIntTableRepresentation(Arena* arena,Array<int> values){
+   int maxDigitSize = 0;
+   for(int val : values){
+      maxDigitSize = std::max(maxDigitSize,NumberDigitsRepresentation(val));
+   }
+
+   int valPerLine = 80 / (maxDigitSize + 1); // +1 for spaces
+   Byte* mark = MarkArena(arena);
+   for(int i = 0; i < values.size; i++){
+      if((i % valPerLine == 0) && i != 0){
+         PushString(arena,"\n");
+      }
+
+      PushString(arena,"%.*d ",maxDigitSize,values[i]);
+   }
+
+   String res = PointArena(arena,mark);
+   return res;
+}
 
 
 

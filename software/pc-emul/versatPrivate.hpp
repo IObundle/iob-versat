@@ -57,9 +57,22 @@ struct ConnectionInfo{
    int* delay; // Used to calculate delay. Does not store edge delay information
 };
 
-struct Edge{ // A edge in a graph
+struct PortEdge{
    PortInstance units[2];
+};
+
+struct Edge{ // A edge in a graph
+   union{
+      struct{
+         PortInstance out;
+         PortInstance in;
+      };
+      PortEdge edge;
+      PortInstance units[2];
+   };
+
    int delay;
+   Edge* next;
 };
 
 struct DAGOrder{
@@ -181,9 +194,12 @@ struct ComplexFUInstance : public FUInstance{
 
    Accelerator* iterative;
 
+   ComplexFUInstance* next;
+
    union{
    int literal;
    int bufferAmount;
+   int portIndex;
    };
    GraphComputedData* graphData;
    VersatComputedData* versatData;
@@ -227,8 +243,11 @@ struct Accelerator{ // Graph + data storage
    Versat* versat;
    FUDeclaration* subtype; // Set if subaccelerator (accelerator associated to a FUDeclaration). A "free" accelerator has this set to nullptr
 
-   Pool<ComplexFUInstance> instances;
-	Pool<Edge> edges;
+   ComplexFUInstance* instances;
+   ComplexFUInstance* lastAdded;
+   int numberInstances;
+   Edge* edges;
+   int numberEdges;
 
    Pool<ComplexFUInstance> subInstances;
 
@@ -241,7 +260,9 @@ struct Accelerator{ // Graph + data storage
    Allocation<int> outputAlloc;
    Allocation<int> storedOutputAlloc;
 
-   Arena memory;
+   Arena instancesMemory;
+   Arena edgesMemory;
+   Arena temp;
 
    Pool<StaticInfo> staticInfo;
 
@@ -374,10 +395,6 @@ struct MergeEdge{
    ComplexFUInstance* instances[2];
 };
 
-struct PortEdge{
-   PortInstance units[2];
-};
-
 struct MappingNode{ // Mapping (edge to edge or node to node)
    union{
       MergeEdge nodes;
@@ -423,7 +440,7 @@ public:
 
 class AcceleratorIterator{
 public:
-   Array<PoolIterator<ComplexFUInstance>> stack;
+   Array<ComplexFUInstance*> stack;
    Hashmap<StaticId,StaticData>* staticUnits;
    Accelerator* topLevel;
    int level;
@@ -453,6 +470,32 @@ struct ConsolidationGraph{
    BitArray validNodes;
 };
 
+struct ConsolidationResult{
+   ConsolidationGraph graph;
+   Pool<MappingNode> specificsAdded;
+   int upperBound;
+};
+
+struct CliqueState{
+   int max;
+   int upperBound;
+   int startI;
+   Array<int> table;
+   ConsolidationGraph clique;
+   clock_t start;
+   bool found;
+};
+
+typedef std::unordered_map<ComplexFUInstance*,ComplexFUInstance*> InstanceMap;
+typedef std::unordered_map<PortEdge,PortEdge> PortEdgeMap;
+typedef std::unordered_map<Edge*,Edge*> EdgeMap;
+
+struct MergeGraphResult{
+   std::vector<Edge*> accel1EdgeMap;
+   std::vector<Edge*> accel2EdgeMap;
+   Accelerator* newGraph;
+};
+
 // Simple operations should also be stored here. They are versat agnostic as well
 namespace BasicDeclaration{
 	extern FUDeclaration* buffer;
@@ -472,11 +515,15 @@ namespace BasicTemplates{
 
 typedef std::unordered_map<ComplexFUInstance*,ComplexFUInstance*> InstanceMap;
 
-SimpleGraph ConvertGraph(Accelerator* accel,Arena* arena);
+struct GraphMapping;
 
 // Temp
+bool EqualPortMapping(Versat* versat,PortInstance p1,PortInstance p2);
 void PopulateAccelerator(Accelerator* topLevel,Accelerator* accel,FUDeclaration* topDeclaration,FUInstanceInterfaces& inter,Hashmap<StaticId,StaticData>& staticMap);
 void PopulateAccelerator2(Accelerator* accel,FUDeclaration* topDeclaration,FUInstanceInterfaces& inter,Hashmap<StaticId,StaticData>& staticMap);
+ConsolidationResult GenerateConsolidationGraph(Versat* versat,Arena* arena,Accelerator* accel1,Accelerator* accel2,ConsolidationGraphOptions options);
+MergeGraphResult MergeGraph(Versat* versat,Accelerator* flatten1,Accelerator* flatten2,GraphMapping& graphMapping,String name);
+void AddCliqueToMapping(GraphMapping& res,ConsolidationGraph clique);
 
 // General info
 UnitValues CalculateIndividualUnitValues(ComplexFUInstance* inst); // Values for individual unit, not taking into account sub units. For a composite, this pretty much returns empty except for total outputs, as the unit itself must allocate output memory
@@ -490,16 +537,18 @@ bool IsUnitCombinatorial(FUInstance* inst);
 
 // Accelerator
 Accelerator* CopyAccelerator(Versat* versat,Accelerator* accel,InstanceMap* map,bool flat);
+ComplexFUInstance* CopyInstance(Accelerator* newAccel,ComplexFUInstance* oldInstance,String newName,bool flat,ComplexFUInstance* previous);
 ComplexFUInstance* CopyInstance(Accelerator* newAccel,ComplexFUInstance* oldInstance,String newName,bool flat);
 void InitializeFUInstances(Accelerator* accel,bool force);
-void CompressAcceleratorMemory(Accelerator* accel);
 int CountNonOperationChilds(Accelerator* accel);
 
 // Unit connection (returns Edge)
 Edge* FindEdge(FUInstance* out,int outIndex,FUInstance* in,int inIndex,int delay = 0);
 Edge* ConnectUnitsGetEdge(FUInstance* out,int outIndex,FUInstance* in,int inIndex,int delay = 0);
+Edge* ConnectUnitsGetEdge(FUInstance* out,int outIndex,FUInstance* in,int inIndex,int delay,Edge* previous);
 Edge* ConnectUnitsIfNotConnectedGetEdge(FUInstance* out,int outIndex,FUInstance* in,int inIndex,int delay = 0);
 Edge* ConnectUnits(PortInstance out,PortInstance in,int delay = 0);
+Edge* ConnectUnits(FUInstance* out,int outIndex,FUInstance* in,int inIndex,int delay,Edge* previousEdge);
 
 // Delay
 int CalculateLatency(ComplexFUInstance* inst);
@@ -517,14 +566,17 @@ AcceleratorView SubGraphAroundInstance(Versat* versat,Accelerator* accel,Complex
 
 // Accelerator merging
 bool MappingConflict(MappingNode map1,MappingNode map2);
-ConsolidationGraph MaxClique(ConsolidationGraph graph,Arena* arena);
+CliqueState MaxClique(ConsolidationGraph graph,int upperBound,Arena* arena);
 ConsolidationGraph GenerateConsolidationGraph(Versat* versat,Arena* arena,Accelerator* accel1,Accelerator* accel2,ConsolidationGraphOptions options,MergingStrategy strategy);
 //GraphMapping MergeAccelerator(Versat* versat,Accelerator* accel1,Accelerator* accel2,SpecificMergeNodes* specificNodes,int nSpecifics,MergingStrategy strategy,String name);
 
 // Debug
 bool IsGraphValid(AcceleratorView view);
+void OutputGraphDotFile(Versat* versat,AcceleratorView& view,bool collapseSameEdges,const char* filenameFormat,...) __attribute__ ((format (printf, 4, 5)));
 void OutputGraphDotFile(Versat* versat,AcceleratorView& view,bool collapseSameEdges,ComplexFUInstance* highlighInstance,const char* filenameFormat,...) __attribute__ ((format (printf, 5, 6)));
 void CheckMemory(AcceleratorIterator iter);
+
+void OutputConsolidationGraph(ConsolidationGraph graph,Arena* memory,bool onlyOutputValid,const char* format,...);
 
 // Misc
 bool CheckValidName(String name); // Check if name can be used as identifier in verilog
@@ -535,6 +587,16 @@ void OutputCircuitSource(Versat* versat,FUDeclaration* decl,Accelerator* accel,F
 ComplexFUInstance* GetInputInstance(Accelerator* accel,int inputIndex);
 ComplexFUInstance* GetOutputInstance(Accelerator* accel);
 
+FUDeclaration* HierarchicalMergeAccelerators(Versat* versat,Accelerator* accel1,Accelerator* accel2,String name);
+
 #include "typeSpecifics.inl"
+
+
+struct GraphMapping{
+   InstanceMap instanceMap;
+   InstanceMap reverseInstanceMap;
+   PortEdgeMap edgeMap;
+};
+
 
 #endif // INCLUDED_VERSAT_PRIVATE_HPP

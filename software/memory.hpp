@@ -102,11 +102,12 @@ String vPushString(Arena* arena,const char* format,va_list args);
 void PushNullByte(Arena* arena);
 
 class ArenaMarker{
+public:
    Arena* arena;
    Byte* mark;
-public:
    ArenaMarker(Arena* arena){this->arena = arena; this->mark = MarkArena(arena);};
    ~ArenaMarker(){PopMark(this->arena,this->mark);};
+   void Pop(){PopMark(this->arena,this->mark);};
 };
 
 // Do not abuse stack arenas.

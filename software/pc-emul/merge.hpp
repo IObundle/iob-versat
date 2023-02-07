@@ -4,6 +4,8 @@
 #include "versatPrivate.hpp"
 #include "thread.hpp"
 
+#define MAX_CLIQUE_TIME 10.0f
+
 struct IndexRecord{
    int index;
    IndexRecord* next;
@@ -50,6 +52,8 @@ struct IsCliqueResult{
    bool result;
    int failedIndex;
 };
+
+void Clique(CliqueState* state,ConsolidationGraph graphArg,int index,IndexRecord* record,int size,Arena* arena);
 
 bool NodeMappingConflict(PortEdge edge1,PortEdge edge2);
 bool MappingConflict(MappingNode map1,MappingNode map2);

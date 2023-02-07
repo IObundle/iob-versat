@@ -14,7 +14,7 @@ FUZZING_FUNCTION(NoRightSpace){
 
 FUZZING_FUNCTION(DeleteOneChar){
    token.size -= 1;
-   PushString(arena,"%.*s",UNPACK_SS(token));
+   PushString(arena,"%.*s ",UNPACK_SS(token));
 }
 
 static FuzzingFunction functionTable[] = {

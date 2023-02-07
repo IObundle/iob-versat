@@ -5,6 +5,7 @@
 
 struct Arena;
 
+#if 0
 struct Node{
    Node* next;
    String name;
@@ -18,8 +19,14 @@ struct PortNode{
 
 struct EdgeNode{
    EdgeNode* next;
-   PortNode out;
-   PortNode in;
+
+   union {
+      struct {
+      PortNode out;
+      PortNode in;
+      };
+      PortNode units[2];
+   };
 };
 
 struct Graph{
@@ -27,6 +34,12 @@ struct Graph{
    EdgeNode* edges;
    Accelerator* accel;
 };
+#endif
+
+typedef ComplexFUInstance Node;
+typedef PortInstance PortNode;
+typedef Edge EdgeNode;
+typedef Accelerator Graph;
 
 struct FlattenResult{
    Node* flatUnitStart;
@@ -46,9 +59,40 @@ struct FlatteningTemp{
    int flattenedUnits;
    int subunitsCount;
    int edgeCount;
+   int edgeStart;
+   int level;
+   int flag;
 };
 
-#define FOREACH_LIST(ITER,START) for(auto* ITER = START; ITER; ITER = ITER->next)
+template<typename T>
+struct Sublist{
+   T* start;
+   T* end;
+};
+
+template<typename T>
+int Size(Sublist<T> sub){
+   int count = 0;
+   FOREACH_LIST_BOUNDED(ptr,sub.start,sub.end){
+      count += 1;
+   }
+   return count;
+}
+
+template<typename T>
+Sublist<T> SimpleSublist(T* start,int size){
+   Sublist<T> res = {};
+   res.start = start;
+   res.end = ListGet(start,size);
+   return res;
+}
+
+struct Subgraph{
+   Sublist<Node> nodes;
+   Sublist<EdgeNode> edges;
+};
+
+Node* GetOutputInstance(Subgraph sub);
 
 Graph* PushGraph(Arena* arena);
 
@@ -58,10 +102,11 @@ EdgeNode* AddEdge(Graph* graph,Node* out,int outPort,Node* in,int inPort,EdgeNod
 
 void RemoveNodeAndEdges(Graph* graph,Node* node);
 
-void ConvertGraph(Graph* graph,Accelerator* accel,Arena* arena);
-
 FlattenResult FlattenNode(Graph* graph,Node* node,Arena* arena);
 
 String OutputDotGraph(Graph* graph,Arena* arena);
+String OutputDotGraph(Subgraph graph,Arena* output);
+
+ConsolidationResult GenerateConsolidationGraph(Versat* versat,Arena* arena,Subgraph accel1,Subgraph accel2,ConsolidationGraphOptions options);
 
 #endif // INCLUDED_GRAPH
