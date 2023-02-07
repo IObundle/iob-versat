@@ -1516,6 +1516,7 @@ FUDeclaration* HierarchicalMergeAccelerators(Versat* versat,Accelerator* accel1,
 /*
    Mess around with node ordering until you find something.
    Alternativly try to dig deep into the reason the max clique function is taking so long.'Put a bunch of printfs inside the function, check which nodes are causing the problems
+*/
 
    #if 0
    SwapCliqueNodes(state,91,95);
