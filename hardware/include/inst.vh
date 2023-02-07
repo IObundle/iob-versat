@@ -10,11 +10,13 @@
    wire [32-1:0] versat_awaddr;
    wire [32-1:0] versat_araddr;
 
-   iob_versat versat ( 
+   iob_versat #(
+       .AXI_ID_W(AXI_ID_W)
+   ) versat ( 
       // AXI4 master interface
       `ifdef VERSAT_IO
       //address write
-      .m_axi_awid(), 
+      .m_axi_awid(m_axi_awlen[1*1+:1]), 
       .m_axi_awaddr(versat_awaddr), 
       .m_axi_awlen(m_axi_awlen[1*8+:8]), 
       .m_axi_awsize(m_axi_awsize[1*3+:3]), 
@@ -32,12 +34,12 @@
       .m_axi_wvalid(m_axi_wvalid[1*1+:1]), 
       .m_axi_wready(m_axi_wready[1*1+:1]), 
       //write response
-      .m_axi_bid(), 
+      .m_axi_bid(m_axi_bid[1*1+:1]), 
       .m_axi_bresp(m_axi_bresp[1*2+:2]), 
       .m_axi_bvalid(m_axi_bvalid[1*1+:1]), 
       .m_axi_bready(m_axi_bready[1*1+:1]), 
       //address read
-      .m_axi_arid(), 
+      .m_axi_arid(m_axi_arid[1*1+:1]), 
       .m_axi_araddr(versat_araddr), 
       .m_axi_arlen(m_axi_arlen[1*8+:8]), 
       .m_axi_arsize(m_axi_arsize[1*3+:3]), 
@@ -49,7 +51,7 @@
       .m_axi_arvalid(m_axi_arvalid[1*1+:1]), 
       .m_axi_arready(m_axi_arready[1*1+:1]), 
       //read 
-      .m_axi_rid(), 
+      .m_axi_rid(m_axi_rid[1*1:+1]), 
       .m_axi_rdata(m_axi_rdata[1*32+:32]), 
       .m_axi_rresp(m_axi_rresp[1*2+:2]), 
       .m_axi_rlast(m_axi_rlast[1*1+:1]), 

@@ -5,7 +5,7 @@
 (* source *) module Mem #(
          parameter MEM_INIT_FILE="none",
          parameter DATA_W = 32,
-         parameter ADDR_W = 10
+         parameter ADDR_W = 5
               )
     (
    //control
@@ -137,7 +137,7 @@
    wire [DATA_W-1:0]     data_to_wrA = valid? wdata : in0 ;
 
    //address generators
-   xaddrgen2 addrgen2A (
+   xaddrgen2 #(.MEM_ADDR_W(ADDR_W)) addrgen2A (
             .clk(clk),
             .rst(rst),
             .run(run),
@@ -157,7 +157,7 @@
             .done(doneA)
             );
 
-   xaddrgen2 addrgen2B (
+   xaddrgen2 #(.MEM_ADDR_W(ADDR_W)) addrgen2B (
             .clk(clk),
             .rst(rst),
             .run(run),
