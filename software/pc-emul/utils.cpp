@@ -5,10 +5,27 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <dirent.h>
+#include <sys/ptrace.h>
 
 #include <cstdio>
 #include <cstring>
 #include <cstdarg>
+
+bool CurrentlyDebugging(){
+   static bool init = false;
+   static bool value;
+
+   if(!init){
+      init = true;
+      if(ptrace(PTRACE_TRACEME,0,1,0) < 0){
+         value = true;
+      } else {
+         ptrace(PTRACE_DETACH,0,1,0);
+      }
+   }
+
+   return value;
+}
 
 char* StaticFormat(const char* format,...){
    static const int BUFFER_SIZE = 1024*4;

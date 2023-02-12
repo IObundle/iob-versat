@@ -113,7 +113,7 @@ FlattenResult FlattenNode(Graph* graph,Node* node,Arena* arena){
       }
 
       String newName = PushString(&graph->versat->permanent,"%.*s.%.*s",UNPACK_SS(node->name),UNPACK_SS(inst->name));
-      ComplexFUInstance* res = CopyInstance(graph,inst,newName,true,ptr);
+      ComplexFUInstance* res = CopyInstance(graph,inst,newName,ptr);
 
       map.Insert(inst,res);
 

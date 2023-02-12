@@ -8,10 +8,9 @@
 #include "debug.hpp"
 #include "intrinsics.hpp"
 
-
 void Clique(CliqueState* state,ConsolidationGraph graphArg,int index,IndexRecord* record,int size,Arena* arena){
    static int iterations = 0;
-   printf("%d\n",iterations++);
+   //printf("%d\n",iterations++);
 
    //ConsolidationGraph graph = Copy(graphArg,arena);
    ConsolidationGraph graph = graphArg;
@@ -44,6 +43,12 @@ void Clique(CliqueState* state,ConsolidationGraph graphArg,int index,IndexRecord
       if(size + num <= state->max){
          return;
       }
+
+      #if 0
+      if(size + num <= state->table[index]){ // The problem is that state->max will already be equal to this by the time we arrive here.
+         return;
+      }
+      #endif
 
       int i = graph.validNodes.FirstBitSetIndex(lastI);
 
@@ -107,6 +112,7 @@ void RunMaxClique(CliqueState* state,Arena* arena){
       IndexRecord record = {};
       record.index = i;
 
+      printf("%d\n",i);
       Clique(state,graph,i,&record,1,arena);
       state->table[i] = state->max;
 
@@ -1195,7 +1201,225 @@ void SwapCliqueUntil(CliqueState* state,int start,int endIncluded){
    }
 }
 
-FUDeclaration* HierarchicalMergeAccelerators(Versat* versat,Accelerator* accel1,Accelerator* accel2,String name){
+ConsolidationResult GenerateConsolidationGraphGivenInitialClique(Versat* versat,Arena* arena,Subgraph accel1,Subgraph accel2,ConsolidationGraph givenClique){
+   ConsolidationGraph graph = {};
+
+   // Should be temp memory instead of using memory intended for the graph, but since the graph is expected to use a lot of memory and we are technically saving memory using this mapping, no major problem
+   Hashmap<ComplexFUInstance*,MappingNode> specificsMapping;
+   specificsMapping.Init(arena,1000);
+   Pool<MappingNode> specificsAdded = {};
+   Hashmap<ComplexFUInstance*,int> nodeExists;
+   nodeExists.Init(arena,Size(accel1.nodes) + Size(accel2.nodes));
+
+   FOREACH_SUBLIST(ptr,accel1.nodes){
+      nodeExists.InsertIfNotExist(ptr,0);
+   }
+   FOREACH_SUBLIST(ptr,accel2.nodes){
+      nodeExists.InsertIfNotExist(ptr,0);
+   }
+
+   // Inserts specifics from the given clique
+   for(int i : givenClique.validNodes){
+      MappingNode node = givenClique.nodes[i];
+
+      specificsMapping.Insert(node.nodes.instances[0],node);
+      specificsMapping.Insert(node.nodes.instances[1],node);
+
+      MappingNode* n = specificsAdded.Alloc();
+      *n = node;
+
+      ARENA_MARKER(arena);
+      String repr = Repr(node,arena);
+
+      printf("%.*s\n",UNPACK_SS(repr));
+   }
+
+   #if 1
+   // Map outputs
+   Node* accel1Output = GetOutputInstance(accel1);
+   Node* accel2Output = GetOutputInstance(accel2);
+   if(accel1Output && accel2Output){
+      MappingNode node = {};
+      node.nodes.instances[0] = accel1Output;
+      node.nodes.instances[1] = accel2Output;
+
+      specificsMapping.Insert(accel1Output,node);
+      specificsMapping.Insert(accel2Output,node);
+
+      MappingNode* n = specificsAdded.Alloc();
+      *n = node;
+
+      ARENA_MARKER(arena);
+      String repr = Repr(node,arena);
+
+      printf("%.*s\n",UNPACK_SS(repr));
+   }
+
+   // Map inputs
+   FOREACH_SUBLIST(instA,accel1.nodes){
+      if(instA->declaration != BasicDeclaration::input){
+         continue;
+      }
+
+      FOREACH_SUBLIST(instB,accel2.nodes){
+         if(instB->declaration != BasicDeclaration::input){
+            continue;
+         }
+
+         if(instA->id != instB->id){
+            continue;
+         }
+
+         MappingNode node = {};
+         node.nodes.instances[0] = instA;
+         node.nodes.instances[1] = instB;
+
+         specificsMapping.Insert(instA,node);
+         specificsMapping.Insert(instB,node);
+
+         MappingNode* n = specificsAdded.Alloc();
+         *n = node;
+
+         ARENA_MARKER(arena);
+         String repr = Repr(node,arena);
+
+         printf("%.*s\n",UNPACK_SS(repr));
+      }
+   }
+   #endif
+
+   graph.nodes.data = (MappingNode*) MarkArena(arena);
+
+   #if 1
+   // Check possible edge mapping
+   FOREACH_SUBLIST(edge1,accel1.edges){
+      #if 01
+      if(!(nodeExists.Get(edge1->units[0].inst) && nodeExists.Get(edge1->units[1].inst))){
+         continue;
+      }
+      #endif
+
+      FOREACH_SUBLIST(edge2,accel2.edges){
+         #if 01
+         if(!(nodeExists.Get(edge2->units[0].inst) && nodeExists.Get(edge2->units[1].inst))){
+            continue;
+         }
+         #endif
+
+         // TODO: some nodes do not care about which port is connected (think the inputs for common operations, like multiplication, adders and the likes)
+         // Can augment the algorithm further to find more mappings
+         if(!(EqualPortMapping(versat,edge1->units[0],edge2->units[0]) &&
+            EqualPortMapping(versat,edge1->units[1],edge2->units[1]))){
+            continue;
+         }
+
+         // No mapping input or output units
+         #if 1
+         if(edge1->units[0].inst->declaration->type == FUDeclaration::SPECIAL ||
+            edge1->units[1].inst->declaration->type == FUDeclaration::SPECIAL ||
+            edge2->units[0].inst->declaration->type == FUDeclaration::SPECIAL ||
+            edge2->units[1].inst->declaration->type == FUDeclaration::SPECIAL){
+            continue;
+         }
+         #endif
+
+         MappingNode node = {};
+         node.type = MappingNode::EDGE;
+
+         node.edges[0].units[0] = edge1->units[0];
+         node.edges[0].units[1] = edge1->units[1];
+         node.edges[1].units[0] = edge2->units[0];
+         node.edges[1].units[1] = edge2->units[1];
+
+         // Checks to see if we are in conflict with any specific node.
+         MappingNode* possibleSpecificConflict = specificsMapping.Get(node.edges[0].units[0].inst);
+         if(!possibleSpecificConflict) possibleSpecificConflict = specificsMapping.Get(node.edges[0].units[1].inst);
+         if(!possibleSpecificConflict) possibleSpecificConflict = specificsMapping.Get(node.edges[1].units[0].inst);
+         if(!possibleSpecificConflict) possibleSpecificConflict = specificsMapping.Get(node.edges[1].units[1].inst);
+
+         if(possibleSpecificConflict && MappingConflict(node,*possibleSpecificConflict)){
+            ARENA_MARKER(arena);
+
+            String mapping = Repr(node,arena);
+            printf("%.*s --- ",UNPACK_SS(mapping));
+
+            String problem = Repr(*possibleSpecificConflict,arena);
+            printf("%.*s\n",UNPACK_SS(problem));
+
+            continue;
+         }
+
+         #if 0
+         // Check to see that the edge maps with all the specific nodes. Specific nodes must be part of the final clique, and therefore we can not insert any edge that could potently make it not happen
+         bool conflict = false;
+         for(int i = 0; i < options.nSpecifics; i++){
+            MappingNode specificNode = graph.nodes[i];
+
+            if(MappingConflict(node,specificNode)){
+               conflict = true;
+               break;
+            }
+         }
+         if(conflict){
+            continue;
+         }
+         #endif
+
+         MappingNode* space = PushStruct<MappingNode>(arena);
+
+         *space = node;
+         graph.nodes.size += 1;
+      }
+   }
+   #endif
+
+   int upperBound = std::min(Size(accel1.nodes),Size(accel2.nodes));
+   Array<BitArray> neighbors = PushArray<BitArray>(arena,graph.nodes.size);
+   int times = 0;
+   for(int i = 0; i < graph.nodes.size; i++){
+      neighbors[i].Init(arena,graph.nodes.size);
+      neighbors[i].Fill(0);
+   }
+   for(int i = 0; i < graph.nodes.size; i++){
+      MappingNode node1 = graph.nodes[i];
+
+      for(int ii = 0; ii < i; ii++){
+         times += 1;
+
+         MappingNode node2 = graph.nodes[ii];
+
+         if(MappingConflict(node1,node2)){
+            continue;
+         }
+
+         neighbors.data[i].Set(ii,1);
+         neighbors.data[ii].Set(i,1);
+      }
+   }
+   graph.edges = neighbors;
+
+   // Reorder based on degree of nodes
+   #if 0
+   {  ArenaMarker marker(arena);
+      Array<int> degree = PushArray<int>(arena,graph.nodes.size);
+      Memset(degree,0);
+      for(int i = 0; i < graph.nodes.size; i++){
+         degree[i] = graph.edges[i].GetNumberBitsSet();
+      }
+   #endif
+
+   graph.validNodes.Init(arena,graph.nodes.size);
+   graph.validNodes.Fill(1);
+
+   ConsolidationResult res = {};
+   res.graph = graph;
+   res.upperBound = upperBound;
+   res.specificsAdded = specificsAdded;
+
+   return res;
+}
+
+MergeGraphResult HierarchicalMergeAccelerators(Versat* versat,Accelerator* accel1,Accelerator* accel2,String name){
    Arena* arena = &versat->temp;
    ArenaMarker marker(arena);
 
@@ -1212,10 +1436,14 @@ FUDeclaration* HierarchicalMergeAccelerators(Versat* versat,Accelerator* accel1,
    decl2.Init(arena,999);
 
    for(FlatteningTemp& t : res1){
-      decl1.InsertIfNotExist(t.decl,&t);
+      if(t.level == 0){
+         decl1.InsertIfNotExist(t.decl,&t);
+      }
    }
    for(FlatteningTemp& t : res2){
-      decl2.InsertIfNotExist(t.decl,&t);
+      if(t.level == 0){
+         decl2.InsertIfNotExist(t.decl,&t);
+      }
    }
 
    OutputDotGraph(graph1,"debug/graph_0.dot",arena);
@@ -1231,7 +1459,6 @@ FUDeclaration* HierarchicalMergeAccelerators(Versat* versat,Accelerator* accel1,
          }
          FUDeclaration* t1 = pair1.second->decl;
          FUDeclaration* t2 = pair2.second->decl;
-
 
          Subgraph sub1 = {};
          sub1.nodes = SimpleSublist(ListGet(graph1->instances,pair1.second->index),pair1.second->subunitsCount);
@@ -1280,6 +1507,10 @@ FUDeclaration* HierarchicalMergeAccelerators(Versat* versat,Accelerator* accel1,
 
    Byte* mark = MarkArena(arena);
    for(FlatteningTemp& t1 : res1){
+      if(t1.level != 0){
+         continue;
+      }
+
       int maxWeight = 0;
       for(FlatteningTemp& t2 : res2){
          if(t1.flag || t2.flag){
@@ -1295,6 +1526,10 @@ FUDeclaration* HierarchicalMergeAccelerators(Versat* versat,Accelerator* accel1,
       }
 
       for(FlatteningTemp& t2 : res2){
+         if(t2.level != 0){
+            continue;
+         }
+
          if(t1.flag || t2.flag){
             continue;
          }
@@ -1380,6 +1615,38 @@ FUDeclaration* HierarchicalMergeAccelerators(Versat* versat,Accelerator* accel1,
          approximateClique.validNodes.Set(bit,1);
       }
    }
+   Assert(IsClique(approximateClique).result);
+
+   // Full clique
+   #if 0
+   {
+   printf("Full clique:\n");
+   CliqueState* state = InitMaxClique(graph,999,arena);
+
+   RunMaxClique(state,arena);
+   ConsolidationGraph clique = state->clique;
+   printf("Size: %d\n",graph.nodes.size);
+   printf("Size of clique: %d\n",clique.validNodes.GetNumberBitsSet());
+   }
+   #endif
+
+   #if 01
+   {
+   printf("Given approximate clique:\n");
+   ConsolidationResult resultingGraph = GenerateConsolidationGraphGivenInitialClique(versat,arena,sub1,sub2,approximateClique);
+   ConsolidationGraph graph = resultingGraph.graph;
+   OutputConsolidationGraph(graph,arena,true,"debug/specificCG.dot");
+
+   CliqueState* state = InitMaxClique(graph,999,arena);
+   RunMaxClique(state,arena);
+   ConsolidationGraph clique = state->clique;
+   Assert(IsClique(clique).result);
+
+   printf("Size: %d\n",graph.nodes.size);
+   printf("Size Initial clique: %d\n",approximateClique.validNodes.GetNumberBitsSet());
+   printf("Size of clique: %d\n",clique.validNodes.GetNumberBitsSet());
+   }
+   #endif
 
    #if 0
    printf("\n\n");
@@ -1412,7 +1679,7 @@ FUDeclaration* HierarchicalMergeAccelerators(Versat* versat,Accelerator* accel1,
    }
    #endif
 
-   #if 01
+   #if 0
    printf("Approximate clique:\n");
    for(int i : approximateClique.validNodes){
       IndexMapping map = GetMappingNodeIndexes(approximateClique.nodes[i],graph1->edges,graph2->edges);
@@ -1438,14 +1705,7 @@ FUDeclaration* HierarchicalMergeAccelerators(Versat* versat,Accelerator* accel1,
    }
    #endif
 
-/*
-
-   IMPORTANT: Standardize the code. Put it into the format that you are already thinking in.
-              The rest is simple. You already know what you need to do, just tackle the things as they come.
-
-*/
-
-   #if 1
+   #if 0
    {
    ArenaMarker marker(arena);
    printf("Max Clique:\n");
@@ -1484,6 +1744,26 @@ FUDeclaration* HierarchicalMergeAccelerators(Versat* versat,Accelerator* accel1,
 
    Array<int> coreNumbers = CalculateCoreNumbers(graph,arena);
 
+/*
+
+   Implement the AES wrapper. Use the current workspace, do not try to change it to the other branch until you have it working here.
+
+   Try this:
+
+      Use Consolidation Graph method to find best mappings for subunits.
+      Then use information taken to try to find a better mapping, but do not use the Consolidation graph approach.
+         Parallelize this portion and use it.
+      We can technically store multiple cliques, so it might be possible to search over multiple starting points
+
+      Alternatively, we might be able to build a Consolidation Graph with the mappings found already taken. (We only insert nodes which would maintain the clique)
+      The building procedure could be parallelized (even though might not be necessary if amount of potential nodes is low)
+      And furthermore we could keep track of multiple starting points to search multiple cliques extensions.
+         Or at least use them to guide the search, and implement a parallelized search over these more likely paths.
+
+
+*/
+
+   #if 0
    SwapCliqueUntil(state,91,95);
    SwapCliqueUntil(state,89,94);
    SwapCliqueUntil(state,88,93);
@@ -1512,11 +1792,7 @@ FUDeclaration* HierarchicalMergeAccelerators(Versat* versat,Accelerator* accel1,
    SwapCliqueUntil(state,14,70);
    SwapCliqueUntil(state,13,69);
    SwapCliqueUntil(state,12,68);
-
-/*
-   Mess around with node ordering until you find something.
-   Alternativly try to dig deep into the reason the max clique function is taking so long.'Put a bunch of printfs inside the function, check which nodes are causing the problems
-*/
+   #endif
 
    #if 0
    SwapCliqueNodes(state,91,95);
@@ -1630,8 +1906,6 @@ FUDeclaration* HierarchicalMergeAccelerators(Versat* versat,Accelerator* accel1,
    //AddCliqueToMapping(mapping,approximateClique);
    AddSpecificsToMapping(mapping,result.specificsAdded);
 
-   MergeGraph(versat,graph1,graph2,mapping,STRING("Test"));
-
-   return nullptr;
+   return MergeGraph(versat,graph1,graph2,mapping,STRING("Test"));
 }
 

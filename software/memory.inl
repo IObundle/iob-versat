@@ -99,6 +99,11 @@ int MemoryUsage(Allocation<T> alloc){
    return memoryUsed;
 }
 
+template<typename T> bool Inside(PushPtr<T>* push,T* ptr){
+   bool res = (ptr >= push->ptr && ptr < (push->ptr + push->maximumTimes));
+   return res;
+}
+
 template<typename Key,typename Data>
 bool HashmapIterator<Key,Data>::operator!=(HashmapIterator& iter){
    bool res = (iter.index != this->index);
@@ -235,6 +240,23 @@ Data Hashmap<Key,Data>::GetOrFail(Key key){
    Data* ptr = Get(key);
    Assert(ptr);
    return *ptr;
+}
+
+template<typename Key,typename Data>
+GetOrAllocateResult<Data> Hashmap<Key,Data>::GetOrAllocate(Key key){
+   //TODO: implement this more efficiently, instead of using separated calls
+   Data* ptr = Get(key);
+
+   GetOrAllocateResult<Data> res = {};
+
+   if(ptr){
+      res.result = true;
+   } else {
+      ptr = Insert(key,(Data){});
+   }
+
+   res.data = ptr;
+   return res;
 }
 
 template<typename Key,typename Data>

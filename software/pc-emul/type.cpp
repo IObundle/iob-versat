@@ -725,6 +725,57 @@ bool IsIndexable(Type* type){
    return res;
 }
 
+bool IsBasicType(Type* type){
+   bool res = (type == ValueType::NUMBER ||
+               type == ValueType::SIZE_T ||
+               type == ValueType::BOOLEAN ||
+               type == ValueType::CHAR ||
+               type == ValueType::STRING ||
+               type == ValueType::SIZED_STRING);
+
+   return res;
+}
+
+bool IsIndexableOfBasicType(Type* type){
+   Assert(IsIndexable(type));
+
+   bool res = false;
+   if(type->type == Type::ARRAY){
+      res = IsBasicType(type->arrayType);
+   } else if(type->type == Type::TEMPLATED_INSTANCE){
+      if(type->templateBase == ValueType::POOL){
+         res = IsBasicType(type->templateArgTypes[0]);
+      } else if(type->templateBase == ValueType::STD_VECTOR){ // TODO: A lot of assumptions are being made for std::vector so this works. Probably not safe (change later)
+         res = IsBasicType(type->templateArgTypes[0]);
+      } else if(type->templateBase == ValueType::ARRAY){
+         res = IsBasicType(type->templateArgTypes[0]);
+      } else if(type->templateBase == ValueType::HASHMAP){
+         res = false; //res = IsBasicType(type->templateArgTypes[1]);
+      }
+   }
+
+   return res;
+}
+
+bool IsEmbeddedListKind(Type* type){
+   Assert(type->type == Type::STRUCT);
+
+   bool res = false;
+   for(Member& member : type->members){
+      if(CompareString(member.name,"next")){
+         Type* memberType = member.type;
+
+         if(memberType->type == Type::POINTER && memberType->pointerType == type){
+            res = true;
+         }
+
+         break;
+      }
+   }
+
+   return res;
+}
+
 Iterator Iterate(Value iterating){
    Type* type = iterating.type;
 

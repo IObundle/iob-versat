@@ -71,6 +71,16 @@ enum MergingStrategy{
    ORDERED_FIT
 };
 
+enum MemType{
+   CONFIG,
+   STATE,
+   DELAY,
+   STATIC,
+   EXTRA,
+   OUTPUT,
+   STORED_OUTPUT
+};
+
 // Temp
 Accelerator* RecursiveFlatten(Versat* versat,Accelerator* topLevel);
 
@@ -84,7 +94,7 @@ void ParseVersatSpecification(Versat* versat,const char* filepath);
 
 // Accelerator functions
 Accelerator* CreateAccelerator(Versat* versat);
-FUInstance* CreateFUInstance(Accelerator* accel,FUDeclaration* type,String entityName,bool flat = false,bool isStatic = false);
+FUInstance* CreateFUInstance(Accelerator* accel,FUDeclaration* type,String entityName);
 void AcceleratorRun(Accelerator* accel);
 void RemoveFUInstance(Accelerator* accel,FUInstance* inst);
 void OutputVersatSource(Versat* versat,Accelerator* accel,const char* sourceFilepath,const char* constantsFilepath,const char* dataFilepath);
@@ -109,6 +119,7 @@ int VersatUnitRead(FUInstance* instance,int address);
 // Unit default configuration and configuration sharing
 void SetDefaultConfiguration(FUInstance* inst);
 void ShareInstanceConfig(FUInstance* inst, int shareBlockIndex);
+void SetStatic(Accelerator* accel,FUInstance* inst);
 
 // Declaration functions
 FUDeclaration* RegisterFU(Versat* versat,FUDeclaration declaration);
@@ -131,6 +142,7 @@ void DisplayAcceleratorMemory(Accelerator* topLevel);
 void DisplayUnitConfiguration(Accelerator* topLevel);
 void EnterDebugTerminal(Versat* versat);
 void CheckMemory(Accelerator* topLevel);
+void CheckMemory(Accelerator* topLevel,MemType type);
 
 // Debug units, only works for pc-emul (no declaration info in embedded)
 bool CheckInputAndOutputNumber(FUDeclaration* type,int inputs,int outputs);

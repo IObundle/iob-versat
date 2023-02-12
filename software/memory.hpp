@@ -70,7 +70,14 @@ public:
       timesPushed += times;
 
       Assert(timesPushed <= maximumTimes);
+      return res;
+   }
 
+   T* Set(int pos,int times){
+      T* res = &ptr[pos];
+
+      timesPushed = std::max(timesPushed,pos + times);
+      Assert(timesPushed <= maximumTimes);
       return res;
    }
 
@@ -79,6 +86,8 @@ public:
       return res;
    }
 };
+
+template<typename T> bool Inside(PushPtr<T>* push,T* ptr);
 
 struct Arena{
    Byte* mem;
@@ -109,6 +118,28 @@ public:
    ~ArenaMarker(){PopMark(this->arena,this->mark);};
    void Pop(){PopMark(this->arena,this->mark);};
 };
+
+#define ARENA_MARKER(ARENA) ArenaMarker marker(ARENA);
+#define START_ARENA_REGION(ARENA) \
+   { ArenaMarker marker(ARENA);
+
+#define END_ARENA_REGION(ARENA) }
+
+template<typename F>
+class Defer{
+public:
+   F f;
+   Defer(F f) : f(f){};
+   ~Defer(){f();}
+};
+
+struct _DeferDummy{};
+template<typename F>
+Defer<F> operator+(_DeferDummy,F&& f){
+   return Defer<F>(f);
+}
+
+#define defer auto deferVar = _DeferDummy() + [&]()
 
 // Do not abuse stack arenas.
 #define STACK_ARENA(NAME,SIZE) \
@@ -195,6 +226,12 @@ struct HashmapHeader{
    // Pair<Key,Data> dataData[nodesAllocated];
 };
 
+template<typename Data>
+struct GetOrAllocateResult{
+   Data* data;
+   bool result;
+};
+
 // An hashmap implementation for arenas. Does not allocate any memory after construction. Need to pass correct amount of maxAmountOfElements
 template<typename Key,typename Data>
 struct Hashmap{
@@ -209,6 +246,8 @@ public:
 
    Data* Get(Key key);
    Data GetOrFail(Key key);
+
+   GetOrAllocateResult<Data> GetOrAllocate(Key key); // More efficient way for the Get, does not exist, Insert pattern
 
    bool Exists(Key key);
 

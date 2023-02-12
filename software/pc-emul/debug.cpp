@@ -4,6 +4,8 @@
 #include <cstdarg>
 #include <set>
 
+#include <algorithm>
+
 #include "type.hpp"
 #include "textualRepresentation.hpp"
 
@@ -15,6 +17,16 @@ void CheckMemory(Accelerator* topLevel){
    iter.Start(topLevel,temp,true);
 
    CheckMemory(iter);
+}
+
+void CheckMemory(Accelerator* topLevel,MemType type){
+   Arena* temp = &topLevel->temp;
+   ArenaMarker marker(temp);
+
+   AcceleratorIterator iter = {};
+   iter.Start(topLevel,temp,true);
+
+   CheckMemory(iter,type,temp);
 }
 
 static void CheckMemoryPrint(const char* level,const char* name,int pos,int delta,ComplexFUInstance* inst = nullptr){ // inst is for total outputs, if the unit is composite
@@ -33,6 +45,172 @@ static void CheckMemoryPrint(const char* level,const char* name,int pos,int delt
    } else {
       printf("]\n");
    }
+}
+
+static void PrintRange(int pos,int delta,bool isComposite,FUDeclaration* decl){
+   if(delta == 1){
+      printf("%d [%d]",pos,delta);
+   } else if(delta > 0 || isComposite){
+      printf("%d-%d [%d]",pos,pos + delta - 1,delta);
+   }
+}
+
+static void PrintLevel(int level){
+   for(int i = 0; i < level; i++){
+      printf("  ");
+   }
+}
+
+struct MemoryRange{
+   int start;
+   int delta;
+   FUDeclaration* decl;
+   String name;
+   int level;
+   bool isComposite;
+};
+
+void CheckMemory(AcceleratorIterator iter,MemType type,Arena* arena){
+   ARENA_MARKER(arena);
+
+   Byte* mark = MarkArena(arena);
+
+   Accelerator* topLevel = iter.topLevel;
+   for(ComplexFUInstance* inst = iter.Current(); inst; inst = iter.Next()){
+      FUDeclaration* decl = inst->declaration;
+
+      bool isComposite = (decl->type == FUDeclaration::COMPOSITE);
+
+      MemoryRange* t = nullptr;
+
+      switch(type){
+      case MemType::CONFIG:{
+         if(decl->nDelays){
+            t->start = inst->delay - topLevel->delayAlloc.ptr;
+            t->delta = decl->nDelays;
+         }
+      }break;
+      case MemType::DELAY:{
+         if(decl->nDelays){
+            t->start = inst->delay - topLevel->delayAlloc.ptr;
+            t->delta = decl->nDelays;
+         }
+      }break;
+      case MemType::EXTRA:{
+         if(decl->extraDataSize){
+            t = PushStruct<MemoryRange>(arena);
+            t->start = inst->extraData - topLevel->extraDataAlloc.ptr;
+            t->delta = decl->extraDataSize;
+         }
+      }break;
+      case MemType::OUTPUT:{
+      }break;
+      case MemType::STATE:{
+      }break;
+      case MemType::STATIC:{
+      }break;
+      case MemType::STORED_OUTPUT:{
+      }break;
+      }
+
+      if(t){
+         t->decl = decl;
+         t->level = iter.level;
+         t->name = inst->name;
+         t->isComposite = isComposite;
+      }
+   }
+
+   Array<MemoryRange> array = PointArray<MemoryRange>(arena,mark);
+
+   qsort(array.data,array.size,sizeof(MemoryRange),[](const void* v1,const void* v2){
+            MemoryRange* m1 = (MemoryRange*) v1;
+            MemoryRange* m2 = (MemoryRange*) v2;
+            return m1->start - m2->start;
+         });
+
+   mark = MarkArena(arena);
+
+   for(MemoryRange& r : array){
+      Range* range = PushStruct<Range>(arena);
+
+      range->start = r.start;
+
+      if(!r.isComposite){
+         PrintLevel(r.level);
+         printf("[%.*s] %.*s : %d-%d [%d]\n",UNPACK_SS(r.decl->name),UNPACK_SS(r.name),r.start,r.start + r.delta,r.delta);
+         range->end = r.start + r.delta;
+      } else {
+         range->end = r.start;
+      }
+   }
+
+   Array<Range> ranges = PointArray<Range>(arena,mark);
+
+   SortRanges(ranges);
+
+   Assert(CheckNoGaps(ranges).result);
+   Assert(CheckNoOverlap(ranges).result);
+}
+
+void SortRanges(Array<Range> ranges){
+   qsort(ranges.data,ranges.size,sizeof(Range),[](const void* v1,const void* v2){
+            Range* r1 = (Range*) v1;
+            Range* r2 = (Range*) v2;
+            return r1->start - r2->start;
+         });
+}
+
+static bool IsSorted(Array<Range> ranges){
+   for(int i = 0; i < ranges.size - 1; i++){
+      if(ranges[i + 1].start < ranges[i].start){
+         DEBUG_BREAK_IF_DEBUGGING();
+         return false;
+      }
+   }
+   return true;
+}
+
+CheckRangeResult CheckNoOverlap(Array<Range> ranges){
+   CheckRangeResult res = {};
+
+   Assert(IsSorted(ranges));
+
+   for(int i = 0; i < ranges.size - 1; i++){
+      Range cur = ranges[i];
+      Range next = ranges[i+1];
+
+      if(cur.end > next.start){
+         res.result = false;
+         res.problemIndex = i;
+
+         return res;
+      }
+   }
+
+   res.result = true;
+   return res;
+}
+
+CheckRangeResult CheckNoGaps(Array<Range> ranges){
+   CheckRangeResult res = {};
+
+   Assert(IsSorted(ranges));
+
+   for(int i = 0; i < ranges.size - 1; i++){
+      Range cur = ranges[i];
+      Range next = ranges[i+1];
+
+      if(cur.end != next.start){
+         res.result = false;
+         res.problemIndex = i;
+
+         return res;
+      }
+   }
+
+   res.result = true;
+   return res;
 }
 
 void CheckMemory(AcceleratorIterator iter){
@@ -566,8 +744,12 @@ struct PanelState{
    Byte* arenaMark;
 };
 
-static PanelState panels[99] = {};
-static int currentPanel = 0;
+#define MAX_FRAMES 99
+#define MAX_PANELS 10
+
+static PanelState globalPanels[MAX_PANELS][MAX_FRAMES] = {};
+static int globalCurrentPanels[MAX_PANELS] = {};
+static int globalCurrentPanel;
 
 template<typename T>
 int ListCount(T* listHead){
@@ -597,8 +779,10 @@ enum Input{
    INPUT_NONE,
    INPUT_BACKSPACE,
    INPUT_ENTER,
+   INPUT_UP,
    INPUT_DOWN,
-   INPUT_UP
+   INPUT_LEFT,
+   INPUT_RIGHT
 };
 
 static bool WatchableObject(Value object){
@@ -624,6 +808,10 @@ void StructPanel(WINDOW* w,Value val,int cursorPosition,int xStart,bool displayO
 
    int menuIndex = 0;
    int startPos = 2;
+
+   if(IsEmbeddedListKind(type)){
+      mvaddnstr(1,0,"List kind",9);
+   }
 
    for(Member& member : type->members){
       int yPos = startPos + menuIndex;
@@ -651,25 +839,27 @@ void StructPanel(WINDOW* w,Value val,int cursorPosition,int xStart,bool displayO
    }
 }
 
-void TerminalIteration(WINDOW* w,Input input,Arena* arena,Arena* temp){
+void TerminalIteration(int panelIndex,WINDOW* w,Input input,Arena* arena,Arena* temp){
+   PanelState* panel = globalPanels[panelIndex];
+   int& currentPanel = globalCurrentPanels[panelIndex];
+
    ArenaMarker mark(temp);
    clear();
    // Before panel decision
-   if(input == INPUT_BACKSPACE){
+   {
+   PanelState* currentState = &panel[currentPanel];
+   Value val = currentState->valueLooking;
+   Type* type = val.type;
+
+   if(input == INPUT_BACKSPACE || input == INPUT_LEFT){
       if(currentPanel > 0){
-         PanelState* currentState = &panels[currentPanel];
          PopMark(arena,currentState->arenaMark);
 
          currentPanel -= 1;
       }
    } else if(input == INPUT_ENTER){
-      PanelState* currentState = &panels[currentPanel];
-
-      Value val = currentState->valueLooking;
-      Type* type = val.type;
-
       // Assume new state will be created and fill with default parameters
-      PanelState* newState = &panels[currentPanel + 1];
+      PanelState* newState = &panel[currentPanel + 1];
       newState->cursorPosition = 0;
       newState->arenaMark = MarkArena(arena);
 
@@ -687,25 +877,45 @@ void TerminalIteration(WINDOW* w,Input input,Arena* arena,Arena* temp){
             newState->valueLooking = selectedValue;
          }
       } else if(IsIndexable(type)){
-         Iterator iter = Iterate(val);
-         for(int i = 0; HasNext(iter); i += 1,Advance(&iter)){
-            if(i == currentState->cursorPosition){
-               Value val = GetValue(iter);
+         if(!IsIndexableOfBasicType(type)){
+            Iterator iter = Iterate(val);
+            for(int i = 0; HasNext(iter); i += 1,Advance(&iter)){
+               if(i == currentState->cursorPosition){
+                  Value val = GetValue(iter);
 
-               currentPanel += 1;
+                  currentPanel += 1;
 
-               newState->name = PushString(arena,"%d\n",i);
-               newState->valueLooking = val;
-               break;
+                  newState->name = PushString(arena,"%d\n",i);
+                  newState->valueLooking = val;
+                  break;
+               }
             }
          }
       }
+   } else if(input == INPUT_RIGHT){
+      if(type->type == Type::STRUCT && IsEmbeddedListKind(type)){
+         PanelState* newState = &panel[currentPanel + 1];
+         newState->cursorPosition = 0;
+         newState->arenaMark = MarkArena(arena);
+
+         Value selectedValue = AccessStruct(val,STRING("next"));
+
+         selectedValue = CollapsePtrIntoStruct(selectedValue);
+
+         if(selectedValue.type->type == Type::STRUCT || IsIndexable(selectedValue.type)){
+            currentPanel += 1;
+
+            newState->name = STRING("next");
+            newState->valueLooking = selectedValue;
+         }
+      }
+   }
    }
 
    currentPanel = std::max(0,currentPanel);
 
    // At this point, panel is locked in
-   PanelState* state = &panels[currentPanel];
+   PanelState* state = &panel[currentPanel];
 
    Value val = state->valueLooking;
    Type* type = val.type;
@@ -737,31 +947,65 @@ void TerminalIteration(WINDOW* w,Input input,Arena* arena,Arena* temp){
    if(type->type == Type::STRUCT){
       StructPanel(w,state->valueLooking,state->cursorPosition,0,false,arena);
    } else if(IsIndexable(type)){
-      Iterator iter = Iterate(val);
+      if(IsIndexableOfBasicType(type)){
+         Iterator iter = Iterate(val);
 
-      Value currentSelected = {};
-
-      for(int index = 0; HasNext(iter); index += 1,Advance(&iter)){
-         if(index == state->cursorPosition){
-            wattron( w, A_STANDOUT );
-            currentSelected = GetValue(iter);
+         int maxSize = 0;
+         for(; HasNext(iter); Advance(&iter)){
+            String repr = GetValueRepresentation(GetValue(iter),temp);
+            maxSize = std::max(maxSize,repr.size);
          }
 
-         move(index + 2,0);
-         String integer = PushString(temp,"%d\n",index);
-         addnstr(integer.data,integer.size);
+         int maxElementsPerLine = 10; // For now, hardcode it
+         int spacing = 2;
 
-         if(index == state->cursorPosition){
-            wattroff( w, A_STANDOUT );
+         for(int i = 0; i < 10; i++){
+            String integer = PushString(temp,"%d\n",i);
+
+            mvaddnstr(1,(maxSize - 1) + 2+i*(maxSize+spacing),integer.data,integer.size);
          }
-      }
 
-      if(numberElements){
-         if(currentSelected.type->type == Type::STRUCT){
-            StructPanel(w,currentSelected,0,8,true,arena);
-         } else {
-            String repr = GetValueRepresentation(currentSelected,temp);
-            mvaddnstr(2,8,repr.data,repr.size);
+         iter = Iterate(val);
+         int y = 2;
+         int x = 2;
+         for(int index = 0; HasNext(iter); index += 1,Advance(&iter)){
+            if(index % 10 == 0 && index != 0){
+               y += 1;
+               x = 2;
+            }
+
+            String repr = GetValueRepresentation(GetValue(iter),temp);
+            int alignLeft = x + (maxSize - repr.size);
+            mvaddnstr(y,alignLeft,repr.data,repr.size);
+            x += maxSize + spacing;
+         }
+      } else {
+         Iterator iter = Iterate(val);
+
+         Value currentSelected = {};
+
+         for(int index = 0; HasNext(iter); index += 1,Advance(&iter)){
+            if(index == state->cursorPosition){
+               wattron( w, A_STANDOUT );
+               currentSelected = GetValue(iter);
+            }
+
+            move(index + 2,0);
+            String integer = PushString(temp,"%d\n",index);
+            addnstr(integer.data,integer.size);
+
+            if(index == state->cursorPosition){
+               wattroff( w, A_STANDOUT );
+            }
+         }
+
+         if(numberElements){
+            if(currentSelected.type->type == Type::STRUCT){
+               StructPanel(w,currentSelected,0,8,true,arena);
+            } else {
+               String repr = GetValueRepresentation(currentSelected,temp);
+               mvaddnstr(2,8,repr.data,repr.size);
+            }
          }
       }
    } else {
@@ -838,10 +1082,13 @@ void DebugTerminal(Value initialValue){
    InitArena(&arena,Megabyte(1));
    InitArena(&temp,Megabyte(1));
 
-   currentPanel = 0;
-   panels[0].name = STRING("TOP");
-   panels[0].cursorPosition = 0;
-   panels[0].valueLooking = CollapsePtrIntoStruct(initialValue);
+   for(int i = 0; i < MAX_PANELS; i++){
+      globalCurrentPanels[i] = 0;
+   }
+
+   globalPanels[0][0].name = STRING("TOP");
+   globalPanels[0][0].cursorPosition = 0;
+   globalPanels[0][0].valueLooking = CollapsePtrIntoStruct(initialValue);
 
 	WINDOW *w  = initscr();
 
@@ -859,7 +1106,7 @@ void DebugTerminal(Value initialValue){
       signal(SIGWINCH, terminal_sig_handler);
    }
 
-   TerminalIteration(w,INPUT_NONE,&arena,&temp);
+   TerminalIteration(0,w,INPUT_NONE,&arena,&temp);
 
    int c;
    while((c = getch()) != 'q'){
@@ -872,6 +1119,12 @@ void DebugTerminal(Value initialValue){
       case 10:
       case KEY_ENTER:{
          input = INPUT_ENTER;
+      }break;
+      case KEY_LEFT:{
+         input = INPUT_LEFT;
+      }break;
+      case KEY_RIGHT:{
+         input = INPUT_RIGHT;
       }break;
       case KEY_DOWN:{
          input = INPUT_DOWN;
@@ -889,7 +1142,7 @@ void DebugTerminal(Value initialValue){
       }
 
       if(input != INPUT_NONE || iterate){
-         TerminalIteration(w,input,&arena,&temp);
+         TerminalIteration(0,w,input,&arena,&temp);
       }
 	}
 

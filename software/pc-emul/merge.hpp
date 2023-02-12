@@ -4,7 +4,7 @@
 #include "versatPrivate.hpp"
 #include "thread.hpp"
 
-#define MAX_CLIQUE_TIME 10.0f
+#define MAX_CLIQUE_TIME 10000.0f
 
 struct IndexRecord{
    int index;

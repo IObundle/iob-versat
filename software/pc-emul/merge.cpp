@@ -1153,7 +1153,7 @@ MergeGraphResult MergeGraph(Versat* versat,Accelerator* flatten1,Accelerator* fl
             mappedNode->name = newName;
          }
       } else {
-         mappedNode = (ComplexFUInstance*) CreateFUInstance(newGraph,inst->declaration,inst->name,true);
+         mappedNode = (ComplexFUInstance*) CreateFUInstance(newGraph,inst->declaration,inst->name);
       }
       map.insert({inst,mappedNode});
    }
@@ -1240,10 +1240,10 @@ MergeGraphResult MergeGraph(Versat* versat,Accelerator* flatten1,Accelerator* fl
 
 FUDeclaration* MergeAccelerators(Versat* versat,FUDeclaration* accel1,FUDeclaration* accel2,String name,
                                  int flatteningOrder,MergingStrategy strategy,SpecificMerge* specifics,int nSpecifics){
+   Arena* arena = &versat->temp;
+   ArenaMarker marker(arena);
 
-   HierarchicalMergeAccelerators(versat,accel1->baseCircuit,accel2->baseCircuit,name);
-   return nullptr;
-
+   #if 0
    #if 0
    Accelerator* flatten1 = Flatten(versat,accel1->baseCircuit,1);
    Accelerator* flatten2 = Flatten(versat,accel2->baseCircuit,1);
@@ -1251,9 +1251,6 @@ FUDeclaration* MergeAccelerators(Versat* versat,FUDeclaration* accel1,FUDeclarat
    Accelerator* flatten1 = Flatten(versat,accel1->baseCircuit,flatteningOrder);
    Accelerator* flatten2 = Flatten(versat,accel2->baseCircuit,flatteningOrder);
    #endif
-
-   Arena* arena = &versat->temp;
-   ArenaMarker marker(arena);
 
    SpecificMergeNodes* specificNodes = PushArray<SpecificMergeNodes>(arena,nSpecifics).data;
 
@@ -1279,6 +1276,9 @@ FUDeclaration* MergeAccelerators(Versat* versat,FUDeclaration* accel1,FUDeclarat
    GraphMapping graphMapping = MergeAccelerator(versat,flatten1,flatten2,specificNodes,nSpecifics,strategy,name,auxiliaryMapping);
 
    MergeGraphResult result = MergeGraph(versat,flatten1,flatten2,graphMapping,name);
+   #endif
+
+   MergeGraphResult result = HierarchicalMergeAccelerators(versat,accel1->baseCircuit,accel2->baseCircuit,name);
 
    FUDeclaration* decl = RegisterSubUnit(versat,name,result.newGraph);
 

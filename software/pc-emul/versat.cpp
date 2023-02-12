@@ -12,6 +12,7 @@
 #include "type.hpp"
 #include "debug.hpp"
 #include "parser.hpp"
+#include "configurations.hpp"
 
 #include "templateEngine.hpp"
 
@@ -265,7 +266,9 @@ Versat* InitVersat(int base,int numberConfigurations){
    versat->numberConfigurations = numberConfigurations;
    versat->base = base;
 
-   InitArena(&versat->temp,Gigabyte(8));
+   //InitArena(&versat->temp,Gigabyte(8));
+   InitArena(&versat->temp,Gigabyte(1));
+
    InitArena(&versat->permanent,Megabyte(256));
 
    FUDeclaration nullDeclaration = {};
@@ -403,6 +406,22 @@ void ShareInstanceConfig(FUInstance* instance, int shareBlockIndex){
 
    inst->sharedIndex = shareBlockIndex;
    inst->sharedEnable = true;
+}
+
+void SetStatic(Accelerator* accel,FUInstance* instance){
+   ComplexFUInstance* inst = (ComplexFUInstance*) instance;
+
+   #if 0
+   int offset = accel->staticInfo.Size();
+   StaticInfo* info = accel->staticInfo.Alloc();
+
+   info->id.name = inst->name;
+   info->id.parent = nullptr;
+   info->data.offset = offset;
+   #endif
+
+   inst->isStatic = true;
+
 }
 
 static int CompositeMemoryAccess(ComplexFUInstance* instance,int address,int value,int write){
@@ -610,6 +629,7 @@ static FUInstance* vGetInstanceByName_(AcceleratorIterator iter,Arena* arena,int
 
       if(namePtr == nullptr){
          HierarchicalName* newBlock = PushStruct<HierarchicalName>(arena);
+         *newBlock = {};
 
          lastPtr->next = newBlock;
          namePtr = newBlock;
@@ -630,6 +650,7 @@ static FUInstance* vGetInstanceByName_(AcceleratorIterator iter,Arena* arena,int
       while(!tok.Done()){
          if(namePtr == nullptr){
             HierarchicalName* newBlock = PushStruct<HierarchicalName>(arena);
+            *newBlock = {};
 
             lastPtr->next = newBlock;
             namePtr = newBlock;
@@ -650,6 +671,13 @@ static FUInstance* vGetInstanceByName_(AcceleratorIterator iter,Arena* arena,int
          break;
       }
    }
+
+   #if 0
+   FOREACH_LIST(ptr,&fullName){
+      printf("%.*s ",UNPACK_SS(ptr->name));
+   }
+   printf("\n");
+   #endif
 
    FUInstance* res = GetInstanceByHierarchicalName2(iter,&fullName,arena);
 
@@ -1001,29 +1029,11 @@ FUDeclaration* RegisterSubUnit(Versat* versat,String name,Accelerator* circuit){
    // HACK, for now
    circuit->subtype = &decl;
 
-   decl.baseCircuit = CopyAccelerator(versat,circuit,nullptr,true);
-
-   #if 0
-   bool allOperations = true;
-   for(ComplexFUInstance* inst : circuit->instances){
-      if(inst->declaration->type == FUDeclaration::SPECIAL){
-         continue;
-      }
-      if(!inst->declaration->isOperation){
-         allOperations = false;
-         break;
-      }
-   }
-
-   if(allOperations){
-      circuit = Flatten(versat,circuit,99);
-      circuit->subtype = &decl;
-   }
-   #endif
+   decl.baseCircuit = CopyAccelerator(versat,circuit,nullptr);
 
    FixMultipleInputs(versat,circuit);
 
-   decl.fixedMultiEdgeCircuit = CopyAccelerator(versat,circuit,nullptr,true);
+   decl.fixedMultiEdgeCircuit = CopyAccelerator(versat,circuit,nullptr);
 
    {
    ArenaMarker marker(temp);
@@ -1032,12 +1042,14 @@ FUDeclaration* RegisterSubUnit(Versat* versat,String name,Accelerator* circuit){
    FixDelays(versat,circuit,view);
    }
 
-   decl.fixedDelayCircuit = circuit;
-
    AcceleratorView view = CreateAcceleratorView(circuit,temp);
    view.CalculateGraphData(temp);
    view.CalculateDAGOrdering(temp);
    view.CalculateDelay(temp);
+
+   CalculatedOffsets preSortedConfigs = CalculateConfigOffsetsIgnoringStatics(circuit,temp);
+   CalculatedOffsets preSortedStates = CalculateConfigurationOffset(circuit,MemType::STATE,temp);
+   CalculatedOffsets preSortedDelays = CalculateConfigurationOffset(circuit,MemType::DELAY,temp);
 
    #if 1
    // Reorganize nodes based on DAG order
@@ -1050,6 +1062,8 @@ FUDeclaration* RegisterSubUnit(Versat* versat,String name,Accelerator* circuit){
    order.instances[size-1]->next = nullptr;
    #endif
 
+   decl.fixedDelayCircuit = circuit;
+
    view = CreateAcceleratorView(circuit,permanent);
    view.CalculateGraphData(permanent);
    view.CalculateDAGOrdering(permanent);
@@ -1057,7 +1071,7 @@ FUDeclaration* RegisterSubUnit(Versat* versat,String name,Accelerator* circuit){
    view.CalculateVersatData(permanent);
    decl.temporaryOrder = view.order;
 
-   UnitValues val = CalculateAcceleratorValues(versat,decl.fixedDelayCircuit);
+   UnitValues val = CalculateAcceleratorValues(versat,circuit);
 
    bool anySavedConfiguration = false;
    FOREACH_LIST(inst,circuit->instances){
@@ -1128,11 +1142,8 @@ FUDeclaration* RegisterSubUnit(Versat* versat,String name,Accelerator* circuit){
       }
    }
 
-   decl.configOffsets = PushArray<int>(permanent,circuit->numberInstances);
-   decl.stateOffsets = PushArray<int>(permanent,circuit->numberInstances);
-   decl.delayOffsets = PushArray<int>(permanent,circuit->numberInstances);
-   decl.outputOffsets = PushArray<int>(permanent,circuit->numberInstances);
-   decl.extraDataOffsets = PushArray<int>(permanent,circuit->numberInstances);
+   //decl.outputOffsets = PushArray<int>(permanent,circuit->numberInstances);
+   //decl.extraDataOffsets = PushArray<int>(permanent,circuit->numberInstances);
 
    if(anySavedConfiguration){
       decl.defaultConfig = PushArray<int>(permanent,val.configs);
@@ -1142,68 +1153,45 @@ FUDeclaration* RegisterSubUnit(Versat* versat,String name,Accelerator* circuit){
    Hashmap<int,int> sharedToOffset = {};
    sharedToOffset.Init(temp,val.configs);
 
-   configIndex = 0;
-   stateIndex = 0;
-   int delayIndex = 0;
-   int extraDataIndex = 0;
+   #if 1
+   decl.configOffsets.offsets = PushArray<int>(permanent,circuit->numberInstances);
+   decl.stateOffsets.offsets = PushArray<int>(permanent,circuit->numberInstances);
+   decl.delayOffsets.offsets = PushArray<int>(permanent,circuit->numberInstances);
 
-   int outputIndex = val.outputs; // The first portion of the output is reserved for the output of the composite unit
+   decl.configOffsets.size = preSortedConfigs.size;
+   decl.stateOffsets.size = preSortedStates.size;
+   decl.delayOffsets.size = preSortedDelays.size;
 
-   int staticIndex = 0;
-   int unitIndex = 0;
    ComplexFUInstance* dagInst = circuit->instances;
    for(int i = 0 ; i < circuit->numberInstances; i++){
       ComplexFUInstance* inst = ((ComplexFUInstance*) circuit->instancesMemory.mem) + i; // Base order
       int newPos = dagInst - ((ComplexFUInstance*) circuit->instancesMemory.mem);
 
-      // We should iterate from the order set in specifications
-      int savedIndex = -1;
+      decl.configOffsets.offsets[i] = preSortedConfigs.offsets[newPos];
+      decl.stateOffsets.offsets[i] = preSortedStates.offsets[newPos];
+      decl.delayOffsets.offsets[i] = preSortedDelays.offsets[newPos];
 
-      if(inst->sharedEnable){
-         int* possibleOffset = sharedToOffset.Get(inst->sharedIndex);
-
-         if(possibleOffset){
-            savedIndex = configIndex;
-            configIndex = *possibleOffset;
-         } else {
-            sharedToOffset.Insert(inst->sharedIndex,configIndex);
-         }
-      }
-
-      // After sharing because we technically can implement sharing with default configurations
-      if(anySavedConfiguration){
-         if(inst->isStatic){
-            Memcpy(&decl.defaultStatic.data[staticIndex],inst->config,inst->declaration->configs.size);
-            staticIndex += inst->declaration->configs.size;
-         } else {
-            int index = inst->config - circuit->configAlloc.ptr;
-            Memcpy(&decl.defaultConfig.data[index],inst->config,inst->declaration->configs.size);
-         }
-      }
-
-      FUDeclaration* d = inst->declaration;
-
-      decl.configOffsets[newPos] = configIndex;
-      configIndex += d->configs.size;
-      decl.stateOffsets[newPos] = stateIndex;
-      stateIndex += d->states.size;
-      decl.delayOffsets[newPos] = delayIndex;
-      delayIndex += d->nDelays;
-      decl.extraDataOffsets[newPos] = extraDataIndex;
-      extraDataIndex += d->extraDataSize;
-
-      // Outputs follow the DAG order
-      decl.outputOffsets[unitIndex] = outputIndex;
-      outputIndex += dagInst->declaration->totalOutputs;
-
-      if(savedIndex != -1){
-         configIndex = savedIndex;
-      }
-
-      unitIndex += 1;
       dagInst = dagInst->next;
    }
-   decl.totalOutputs = outputIndex; // Includes the output portion of the composite instance
+   #else
+   //DEBUG_BREAK_IF(CompareString(name,"SimpleShareConfig"));
+
+   decl.configOffsets = CalculateConfigurationOffset(circuit,MemType::CONFIG,permanent);
+   decl.stateOffsets = CalculateConfigurationOffset(circuit,MemType::STATE,permanent);
+   decl.delayOffsets = CalculateConfigurationOffset(circuit,MemType::DELAY,permanent);
+   #endif
+   Assert(decl.configOffsets.size == val.configs);
+   Assert(decl.stateOffsets.size == val.states);
+   Assert(decl.delayOffsets.size == val.delays);
+
+   decl.outputOffsets = CalculateOutputsOffset(circuit,val.outputs,permanent);
+   Assert(decl.outputOffsets.size == val.totalOutputs + val.outputs);
+   decl.totalOutputs = val.totalOutputs + val.outputs; // Includes the output portion of the composite instance
+
+   decl.extraDataOffsets = CalculateConfigurationOffset(circuit,MemType::EXTRA,permanent);
+   Assert(decl.extraDataOffsets.size == val.extraData);
+
+   //Assert(extraDataIndex <= decl.extraDataSize);
 
    // TODO: Change unit delay type inference. Only care about delay type to upper levels.
    // Type source only if a source unit is connected to out. Type sink only if there is a input to sink connection
@@ -1517,6 +1505,20 @@ bool CheckCorrectConfiguration(Accelerator* topLevel,ComplexFUInstance* inst){
    return true;
 }
 
+bool CheckCorrectConfiguration(Accelerator* topLevel,FUInstanceInterfaces& inter,ComplexFUInstance* inst){
+   if(IsConfigStatic(topLevel,inst)){
+      Assert(inst->config == nullptr || Inside(&inter.statics,inst->config));
+   } else {
+      Assert(inst->config == nullptr || Inside(&inter.config,inst->config));
+   }
+
+   Assert(inst->state == nullptr || Inside(&inter.state,inst->state));
+   Assert(inst->delay == nullptr || Inside(&inter.delay,inst->delay));
+   Assert(inst->extraData == nullptr || Inside(&inter.extraData,inst->extraData));
+   Assert(inst->outputs == nullptr || Inside(&inter.outputs,inst->outputs));
+   Assert(inst->storedOutputs == nullptr || Inside(&inter.storedOutputs,inst->storedOutputs));
+}
+
 // Populates sub accelerator
 void PopulateAccelerator(Accelerator* topLevel,Accelerator* accel,FUDeclaration* topDeclaration,FUInstanceInterfaces& inter,Hashmap<StaticId,StaticData>& staticMap){
    int index = 0;
@@ -1530,31 +1532,32 @@ void PopulateAccelerator(Accelerator* topLevel,Accelerator* accel,FUDeclaration*
       inst->storedOutputs = nullptr;
       inst->extraData = nullptr;
 
-      if(inst->isStatic){
+      if(inst->isStatic && decl->configs.size){
          StaticId id = {};
          id.parent = topDeclaration;
          id.name = inst->name;
 
          StaticData* staticInfo = staticMap.Get(id);
          Assert(staticInfo);
-         inst->config = &inter.statics.ptr[staticInfo->offset];
+         inst->config = inter.statics.Set(staticInfo->offset,decl->configs.size);
       } else if(decl->configs.size){
-         inst->config = &inter.config.ptr[topDeclaration->configOffsets[index]];
+         inst->config = inter.config.Set(topDeclaration->configOffsets.offsets[index],decl->configs.size);
       }
       if(decl->states.size){
-         inst->state = &inter.state.ptr[topDeclaration->stateOffsets[index]];
+         inst->state = inter.state.Set(topDeclaration->stateOffsets.offsets[index],decl->states.size);
       }
       if(decl->nDelays){
-         inst->delay = &inter.delay.ptr[topDeclaration->delayOffsets[index]];
+         inst->delay = inter.delay.Set(topDeclaration->delayOffsets.offsets[index],decl->nDelays);
       }
       if(decl->totalOutputs){
-         inst->outputs = &inter.outputs.ptr[topDeclaration->outputOffsets[index]];
-         inst->storedOutputs = &inter.storedOutputs.ptr[topDeclaration->outputOffsets[index]];
+         inst->outputs = inter.outputs.Set(topDeclaration->outputOffsets.offsets[index],decl->totalOutputs);
+         inst->storedOutputs = inter.storedOutputs.Set(topDeclaration->outputOffsets.offsets[index],decl->totalOutputs);
       }
       if(decl->extraDataSize){
-         inst->extraData = &inter.extraData.ptr[topDeclaration->extraDataOffsets[index]];
+         inst->extraData = inter.extraData.Set(topDeclaration->extraDataOffsets.offsets[index],decl->extraDataSize);
       }
 
+      CheckCorrectConfiguration(topLevel,inter,inst);
       CheckCorrectConfiguration(topLevel,inst);
       index += 1;
    }
@@ -1572,12 +1575,13 @@ void FUInstanceInterfaces::Init(Accelerator* accel){
 
 void FUInstanceInterfaces::Init(Accelerator* topLevel,ComplexFUInstance* inst){
    FUDeclaration* decl = inst->declaration;
-   config.Init(inst->config,decl->configs.size);
-   state.Init(inst->state,decl->states.size);
-   delay.Init(inst->delay,decl->nDelays);
+
+   config.Init(inst->config,decl->configOffsets.size);
+   state.Init(inst->state,decl->stateOffsets.size);
+   delay.Init(inst->delay,decl->delayOffsets.size);
    outputs.Init(inst->outputs,decl->totalOutputs);
    storedOutputs.Init(inst->storedOutputs,decl->totalOutputs);
-   extraData.Init(inst->extraData,decl->extraDataSize);
+   extraData.Init(inst->extraData,decl->extraDataOffsets.size);
    statics.Init(topLevel->staticAlloc);
 }
 
@@ -1891,6 +1895,10 @@ int GetInputValue(FUInstance* inst,int index){
 
    Assert(instance->graphData);
 
+   if(!instance->graphData->singleInputs.size){
+      return 0;
+   }
+
    PortInstance& other = instance->graphData->singleInputs[index];
 
    #if 1
@@ -1917,7 +1925,7 @@ FUInstance* CreateOrGetInput(Accelerator* accel,String name,int portNumber){
       }
    }
 
-   ComplexFUInstance* inst = (ComplexFUInstance*) CreateFUInstance(accel,BasicDeclaration::input,name,false,false);
+   ComplexFUInstance* inst = (ComplexFUInstance*) CreateFUInstance(accel,BasicDeclaration::input,name);
    inst->portIndex = portNumber;
 
    return inst;

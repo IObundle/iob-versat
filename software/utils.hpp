@@ -51,6 +51,10 @@ void FlushStdout();
 #define DEBUG_BREAK do{ FlushStdout(); raise(SIGTRAP); } while(0)
 #define DEBUG_BREAK_IF(COND) if(COND){FlushStdout(); raise(SIGTRAP);}
 
+#define DEBUG_BREAK_IF_DEBUGGING() DEBUG_BREAK_IF(CurrentlyDebugging())
+
+bool CurrentlyDebugging();
+
 #define NOT_IMPLEMENTED do{ FlushStdout(); Assert(false); } while(0) // Doesn't mean that something is necessarily future planned
 #define NOT_POSSIBLE DEBUG_BREAK
 #define UNHANDLED_ERROR do{ FlushStdout(); Assert(false); } while(0) // Know it's an error, but only exit, for now
@@ -128,9 +132,27 @@ inline String STRING(const unsigned char* str){return (String){(const char*)str,
 inline String STRING(const unsigned char* str,int size){return (String){(const char*)str,size};}
 
 struct Range{
-   int high;
-   int low;
+   union{
+      int high;
+      int start;
+   };
+
+   union{
+      int low;
+      int end;
+   };
 };
+
+struct CheckRangeResult{
+   bool result;
+   int problemIndex;
+};
+
+void SortRanges(Array<Range> ranges);
+
+// These functions require sorted ranges
+CheckRangeResult CheckNoOverlap(Array<Range> ranges);
+CheckRangeResult CheckNoGaps(Array<Range> ranges);
 
 union Conversion{
    float f;

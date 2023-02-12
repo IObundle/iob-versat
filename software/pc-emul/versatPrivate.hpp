@@ -101,6 +101,11 @@ struct SimpleGraph{
    Array<SimpleEdge> edges;
 };
 
+struct CalculatedOffsets{
+   Array<int> offsets;
+   int size;
+};
+
 // A declaration is constant after being registered
 struct FUDeclaration{
    String name;
@@ -113,11 +118,11 @@ struct FUDeclaration{
 
    // Care, these only make sense for composite units. Don't forget that Single units do not use these.
    // Do not use their size to make decisions unless you know you are dealing with composite units
-   Array<int> configOffsets;
-   Array<int> stateOffsets;
-   Array<int> delayOffsets;
-   Array<int> outputOffsets;
-   Array<int> extraDataOffsets;
+   CalculatedOffsets configOffsets;
+   CalculatedOffsets stateOffsets;
+   CalculatedOffsets delayOffsets;
+   CalculatedOffsets outputOffsets;
+   CalculatedOffsets extraDataOffsets;
 
    Array<int> defaultConfig;
    Array<int> defaultStatic;
@@ -464,10 +469,10 @@ public:
 };
 
 struct ConsolidationGraph{
-   Array<MappingNode> nodes;
-   Array<BitArray> edges;
+   Array<MappingNode> nodes; // 2
+   Array<BitArray> edges;    // 2
 
-   BitArray validNodes;
+   BitArray validNodes;      // 3 -> 8 quadwords
 };
 
 struct ConsolidationResult{
@@ -536,9 +541,9 @@ bool IsConfigStatic(Accelerator* topLevel,ComplexFUInstance* inst);
 bool IsUnitCombinatorial(FUInstance* inst);
 
 // Accelerator
-Accelerator* CopyAccelerator(Versat* versat,Accelerator* accel,InstanceMap* map,bool flat);
-ComplexFUInstance* CopyInstance(Accelerator* newAccel,ComplexFUInstance* oldInstance,String newName,bool flat,ComplexFUInstance* previous);
-ComplexFUInstance* CopyInstance(Accelerator* newAccel,ComplexFUInstance* oldInstance,String newName,bool flat);
+Accelerator* CopyAccelerator(Versat* versat,Accelerator* accel,InstanceMap* map);
+ComplexFUInstance* CopyInstance(Accelerator* newAccel,ComplexFUInstance* oldInstance,String newName,ComplexFUInstance* previous);
+ComplexFUInstance* CopyInstance(Accelerator* newAccel,ComplexFUInstance* oldInstance,String newName);
 void InitializeFUInstances(Accelerator* accel,bool force);
 int CountNonOperationChilds(Accelerator* accel);
 
@@ -575,6 +580,8 @@ bool IsGraphValid(AcceleratorView view);
 void OutputGraphDotFile(Versat* versat,AcceleratorView& view,bool collapseSameEdges,const char* filenameFormat,...) __attribute__ ((format (printf, 4, 5)));
 void OutputGraphDotFile(Versat* versat,AcceleratorView& view,bool collapseSameEdges,ComplexFUInstance* highlighInstance,const char* filenameFormat,...) __attribute__ ((format (printf, 5, 6)));
 void CheckMemory(AcceleratorIterator iter);
+void CheckMemory(AcceleratorIterator iter,MemType type);
+void CheckMemory(AcceleratorIterator iter,MemType type,Arena* arena);
 
 void OutputConsolidationGraph(ConsolidationGraph graph,Arena* memory,bool onlyOutputValid,const char* format,...);
 
@@ -587,10 +594,9 @@ void OutputCircuitSource(Versat* versat,FUDeclaration* decl,Accelerator* accel,F
 ComplexFUInstance* GetInputInstance(Accelerator* accel,int inputIndex);
 ComplexFUInstance* GetOutputInstance(Accelerator* accel);
 
-FUDeclaration* HierarchicalMergeAccelerators(Versat* versat,Accelerator* accel1,Accelerator* accel2,String name);
+MergeGraphResult HierarchicalMergeAccelerators(Versat* versat,Accelerator* accel1,Accelerator* accel2,String name);
 
 #include "typeSpecifics.inl"
-
 
 struct GraphMapping{
    InstanceMap instanceMap;

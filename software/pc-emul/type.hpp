@@ -77,7 +77,7 @@ namespace ValueType{
    extern Type* SIZED_STRING;
    extern Type* TEMPLATE_FUNCTION;
    extern Type* POOL;
-   extern Type* ARRAY;
+   extern Type* ARRAY; // Array templated structure, not to confuse with a normal C style array
    extern Type* STD_VECTOR;
 };
 
@@ -138,6 +138,9 @@ Value AccessObjectIndex(Value object,int index);
 int ArrayLength(Type* type);
 int IndexableSize(Value object); // If type is indexable, return the maximum size
 bool IsIndexable(Type* type);
+bool IsBasicType(Type* type);
+bool IsIndexableOfBasicType(Type* type);
+bool IsEmbeddedListKind(Type* type); // Any structure with an embedded next pointer to itself is considered an embedded list
 
 Iterator Iterate(Value iterating);
 bool HasNext(Iterator iter);

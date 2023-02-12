@@ -10,6 +10,7 @@ String FuzzText(String formattedExample,Arena* arena,int seed = COMPILE_TIME); /
 void OutputGraphDotFile(SimpleGraph graph,bool collapseSameEdges,const char* filenameFormat,...);
 
 void CheckMemory(AcceleratorIterator iter);
+void CheckMemory(AcceleratorIterator iter,MemType type,Arena* arena);
 void DisplayInstanceMemory(ComplexFUInstance* inst);
 void DisplayAcceleratorMemory(Accelerator* topLevel);
 void DisplayUnitConfiguration(Accelerator* topLevel);

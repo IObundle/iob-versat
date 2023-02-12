@@ -342,6 +342,14 @@ static StructDef ParseStruct(Tokenizer* tok){
 
    tok->AssertNextToken("{");
 
+   Token peek = tok->PeekToken();
+   if(CompareString(peek,"}")){
+      tok->AdvancePeek(peek);
+      def.fullExpression = tok->Point(mark);
+
+      return def;
+   }
+
    while(!tok->Done()){
       token = tok->PeekToken();
 
@@ -634,6 +642,7 @@ void OutputRegisterTypesFunction(FILE* output){
    seen.insert(STRING("Array<HashmapNode<Key,Data>*>"));
    seen.insert(STRING("Array<HashmapNode<Key,Data>>"));
    seen.insert(STRING("HashmapHeader<Key,Data>"));
+   seen.insert(STRING("Data"));
 
    fprintf(output,"#pragma GCC diagnostic ignored \"-Winvalid-offsetof\"\n");
    fprintf(output,"static void RegisterParsedTypes(){\n");
