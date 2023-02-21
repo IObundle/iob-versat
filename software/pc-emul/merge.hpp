@@ -4,7 +4,7 @@
 #include "versatPrivate.hpp"
 #include "thread.hpp"
 
-#define MAX_CLIQUE_TIME 10000.0f
+#define MAX_CLIQUE_TIME 10.0f
 
 struct IndexRecord{
    int index;
@@ -38,6 +38,7 @@ struct ParallelCliqueState{
    clock_t start;
    int counter;
    int index;
+   int upperbound;
    bool timeout;
    bool found;
 };
@@ -53,12 +54,15 @@ struct IsCliqueResult{
    int failedIndex;
 };
 
+void InsertMapping(GraphMapping& map,PortEdge& edge0,PortEdge& edge1);
 void Clique(CliqueState* state,ConsolidationGraph graphArg,int index,IndexRecord* record,int size,Arena* arena);
 
 bool NodeMappingConflict(PortEdge edge1,PortEdge edge2);
 bool MappingConflict(MappingNode map1,MappingNode map2);
 ConsolidationGraph Copy(ConsolidationGraph graph,Arena* arena);
 int NodeIndex(ConsolidationGraph graph,MappingNode* node);
+
+MergeGraphResult HierarchicalHeuristic(Versat* versat,FUDeclaration* decl1,FUDeclaration* decl2,String name);
 
 int ValidNodes(ConsolidationGraph graph);
 

@@ -13,11 +13,6 @@ bool NodeMappingConflict(PortEdge edge1,PortEdge edge2){
    PortInstance p10 = edge2.units[0];
    PortInstance p11 = edge2.units[1];
 
-   // If different declarations, return early
-   if(p00.inst->declaration != p10.inst->declaration){
-      return false;
-   }
-
    #if 0 // There is some bug here
    if(!(edge1.units[0].port == edge2.units[0].port && edge1.units[1].port == edge2.units[1].port)){
       return false;
@@ -165,12 +160,12 @@ IsCliqueResult IsClique(ConsolidationGraph graph){
 }
 
 // Checks if nodes are "equal" in terms of mapping
-bool EqualPortMapping(Versat* versat,PortInstance p1,PortInstance p2){
+bool EqualPortMapping(PortInstance p1,PortInstance p2){
    FUDeclaration* d1 = p1.inst->declaration;
    FUDeclaration* d2 = p2.inst->declaration;
 
    if(d1 == BasicDeclaration::input && d2 == BasicDeclaration::input){ // Check the special case for inputs
-      if(GetInputPortNumber(versat,p1.inst) == GetInputPortNumber(versat,p2.inst)){
+      if(GetInputPortNumber(p1.inst) == GetInputPortNumber(p2.inst)){
          return true;
       } else {
          return false;
@@ -327,8 +322,8 @@ ConsolidationResult GenerateConsolidationGraph(Versat* versat,Arena* arena,Accel
             continue;
          }
 
-         if(!(EqualPortMapping(versat,edge1->units[0],edge2->units[0]) &&
-            EqualPortMapping(versat,edge1->units[1],edge2->units[1]))){
+         if(!(EqualPortMapping(edge1->units[0],edge2->units[0]) &&
+            EqualPortMapping(edge1->units[1],edge2->units[1]))){
             continue;
          }
 
@@ -636,6 +631,13 @@ void DoInsertMapping(InstanceMap& map,ComplexFUInstance* inst1,ComplexFUInstance
 void InsertMapping(GraphMapping& map,ComplexFUInstance* inst1,ComplexFUInstance* inst0){
    DoInsertMapping(map.instanceMap,inst1,inst0);
    DoInsertMapping(map.reverseInstanceMap,inst0,inst1);
+}
+
+void InsertMapping(GraphMapping& map,PortEdge& edge0,PortEdge& edge1){
+   map.edgeMap.insert({edge1,edge0});
+
+   InsertMapping(map,edge1.units[0].inst,edge0.units[0].inst);
+   InsertMapping(map,edge1.units[1].inst,edge0.units[1].inst);
 }
 
 void AddCliqueToMapping(GraphMapping& res,ConsolidationGraph clique){
@@ -1238,6 +1240,8 @@ MergeGraphResult MergeGraph(Versat* versat,Accelerator* flatten1,Accelerator* fl
    return res;
 }
 
+#include "scratchSpace.hpp"
+
 FUDeclaration* MergeAccelerators(Versat* versat,FUDeclaration* accel1,FUDeclaration* accel2,String name,
                                  int flatteningOrder,MergingStrategy strategy,SpecificMerge* specifics,int nSpecifics){
    Arena* arena = &versat->temp;
@@ -1278,7 +1282,16 @@ FUDeclaration* MergeAccelerators(Versat* versat,FUDeclaration* accel1,FUDeclarat
    MergeGraphResult result = MergeGraph(versat,flatten1,flatten2,graphMapping,name);
    #endif
 
-   MergeGraphResult result = HierarchicalMergeAccelerators(versat,accel1->baseCircuit,accel2->baseCircuit,name);
+   #if 01
+   MergeGraphResult result = HierarchicalHeuristic(versat,accel1,accel2,name);
+   #elif 0
+   MergeGraphResult result = HierarchicalMergeAcceleratorsFullClique(versat,accel1->baseCircuit,accel2->baseCircuit,name);
+   //MergeGraphResult result = HierarchicalMergeAccelerators(versat,accel1->baseCircuit,accel2->baseCircuit,name);
+   #else
+   MergeGraphResult result = ParallelHierarchicalHeuristic(versat,accel1,accel2,name);
+   #endif
+
+   return nullptr;
 
    FUDeclaration* decl = RegisterSubUnit(versat,name,result.newGraph);
 

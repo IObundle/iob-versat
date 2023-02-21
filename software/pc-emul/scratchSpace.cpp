@@ -1,16 +1,508 @@
-#include "versatPrivate.hpp"
+#include "scratchSpace.hpp"
 
 #include <unistd.h>
 
-#include "merge.hpp"
-#include "graph.hpp"
-#include "textualRepresentation.hpp"
-#include "debug.hpp"
-#include "intrinsics.hpp"
+#if 0
+#define G(r,i,a,b,c,d)                      \
+  do {                                      \
+    a = a + b + m[blake2s_sigma[r][2*i+0]]; \
+    d = rotr32(d ^ a, 16);                  \
+    c = c + d;                              \
+    b = rotr32(b ^ c, 12);                  \
+    a = a + b + m[blake2s_sigma[r][2*i+1]]; \
+    d = rotr32(d ^ a, 8);                   \
+    c = c + d;                              \
+    b = rotr32(b ^ c, 7);                   \
+  } while(0)
+
+#define ROUND(r)                    \
+  do {                              \
+    G(r,0,v[ 0],v[ 4],v[ 8],v[12]); \
+    G(r,1,v[ 1],v[ 5],v[ 9],v[13]); \
+    G(r,2,v[ 2],v[ 6],v[10],v[14]); \
+    G(r,3,v[ 3],v[ 7],v[11],v[15]); \
+    G(r,4,v[ 0],v[ 5],v[10],v[15]); \
+    G(r,5,v[ 1],v[ 6],v[11],v[12]); \
+    G(r,6,v[ 2],v[ 7],v[ 8],v[13]); \
+    G(r,7,v[ 3],v[ 4],v[ 9],v[14]); \
+  } while(0)
+
+static void blake2s_compress( blake2s_state *S, const uint8_t in[BLAKE2S_BLOCKBYTES] )
+{
+  uint32_t m[16];
+  uint32_t v[16];
+  size_t i;
+
+  for( i = 0; i < 16; ++i ) {
+    m[i] = load32( in + i * sizeof( m[i] ) );
+  }
+
+  for( i = 0; i < 8; ++i ) {
+    v[i] = S->h[i];
+  }
+
+  v[ 8] = blake2s_IV[0];
+  v[ 9] = blake2s_IV[1];
+  v[10] = blake2s_IV[2];
+  v[11] = blake2s_IV[3];
+  v[12] = S->t[0] ^ blake2s_IV[4];
+  v[13] = S->t[1] ^ blake2s_IV[5];
+  v[14] = S->f[0] ^ blake2s_IV[6];
+  v[15] = S->f[1] ^ blake2s_IV[7];
+
+  ROUND( 0 );
+  ROUND( 1 );
+  ROUND( 2 );
+  ROUND( 3 );
+  ROUND( 4 );
+  ROUND( 5 );
+  ROUND( 6 );
+  ROUND( 7 );
+  ROUND( 8 );
+  ROUND( 9 );
+
+  for( i = 0; i < 8; ++i ) {
+    S->h[i] = S->h[i] ^ v[i] ^ v[i + 8];
+  }
+}
+#endif
+
+#if 0
+// Old version
+MergeGraphResult HierarchicalMergeAccelerators(Versat* versat,Accelerator* accel1,Accelerator* accel2,String name){
+   Arena* arena = &versat->temp;
+   ArenaMarker marker(arena);
+
+   Graph* graph1 = accel1;
+   Array<FlatteningTemp> res1 = HierarchicalFlattening(graph1,arena);
+
+   printf("Graph1: \n");
+   PrintGraphInfo(graph1);
+
+   Graph* graph2 = accel2;
+   Array<FlatteningTemp> res2 = HierarchicalFlattening(graph2,arena);
+
+   printf("Graph2: \n");
+   PrintGraphInfo(graph2);
+
+   Hashmap<FUDeclaration*,FlatteningTemp*> decl1 = {};
+   decl1.Init(arena,999);
+
+   Hashmap<FUDeclaration*,FlatteningTemp*> decl2 = {};
+   decl2.Init(arena,999);
+
+   FOREACH_LIST(ptr,&res1[0]){
+      printf("[%.*s] %.*s %d\n",UNPACK_SS(ptr->decl->name),UNPACK_SS(ptr->name),ptr->level);
+      decl1.InsertIfNotExist(ptr->decl,ptr);
+   }
+
+   FOREACH_LIST(ptr,&res2[0]){
+      printf("[%.*s] %.*s %d\n",UNPACK_SS(ptr->decl->name),UNPACK_SS(ptr->name),ptr->level);
+      decl2.InsertIfNotExist(ptr->decl,ptr);
+   }
+
+   OutputDotGraph(graph1,"debug/graph_0.dot",arena);
+   OutputDotGraph(graph2,"debug/graph_1.dot",arena);
+
+   // Get subgraph mappings (one for each declaration pair)
+   Array<SubgraphMapping> mappings = PushArray<SubgraphMapping>(arena,99);
+   int index = 0;
+   for(auto pair1 : decl1){
+      for(auto pair2 : decl2){
+         if(pair1.first == pair2.first){
+            continue;
+         }
+         FUDeclaration* t1 = pair1.second->decl;
+         FUDeclaration* t2 = pair2.second->decl;
+
+         printf("%.*s %.*s\n",UNPACK_SS(t1->name),UNPACK_SS(t2->name));
+
+         FlushStdout();
+   //exit(0);
+
+         Subgraph sub1 = {};
+         sub1.nodes = SimpleSublist(ListGet(graph1->instances,pair1.second->index),pair1.second->subunitsCount);
+         sub1.edges = SimpleSublist(ListGet(graph1->edges,pair1.second->edgeStart),pair1.second->edgeCount);
+
+         Subgraph sub2 = {};
+         sub2.nodes = SimpleSublist(ListGet(graph2->instances,pair2.second->index),pair2.second->subunitsCount);
+         sub2.edges = SimpleSublist(ListGet(graph2->edges,pair2.second->edgeStart),pair2.second->edgeCount);
+
+         OutputDotGraph(sub1,StaticFormat("debug/sub_%.*s_sub.dot",UNPACK_SS(t1->name)),arena);
+         OutputDotGraph(sub2,StaticFormat("debug/sub_%.*s_sub.dot",UNPACK_SS(t2->name)),arena);
+
+         CalculateCliqueAndGetMappingsResult res = CalculateCliqueAndGetMappings(sub1,sub2,arena); // Should be, in theory,a pretty good aproximation
+         Array<IndexMapping> indexMappings = res.mappings;
+
+         #if 0
+         for(IndexMapping m : indexMappings){
+            printf("Map edge %d to %d\n",m.index0,m.index1);
+         }
+         printf("\n");
+         #endif
+
+         mappings[index].decl1 = t1;
+         mappings[index].decl2 = t2;
+         mappings[index].edgeMappings = indexMappings;
+         mappings[index].table = res.cliqueTable;
+         mappings[index].tableMappings = res.cliqueTableMappings;
+         index += 1;
+      }
+   }
+   mappings.size = index;
+
+   Subgraph sub1 = DefaultSubgraph(graph1);
+   Subgraph sub2 = DefaultSubgraph(graph2);
+
+   ConsolidationResult result = GenerateConsolidationGraphForSubgraphs(sub1,sub2,{},arena);
+   ConsolidationGraph graph = result.graph;
+
+   Array<FlattenMapping> specificMappings = GetSpecificMappings(&res1[0],&res2[0],mappings,arena);
+
+   #if 1
+   for(FlattenMapping& m : specificMappings){
+      printf("%.*s:%d %.*s:%d - %d\n",UNPACK_SS(m.t1->decl->name),m.t1->index,UNPACK_SS(m.t2->decl->name),m.t2->index,m.weight);
+   }
+   #endif
+
+   for(int i = 0; i < specificMappings.size; i++){
+      for(int j = i + 1; j < specificMappings.size; j++){
+         if(specificMappings[j].t1->index > specificMappings[i].t1->index){
+            FlattenMapping temp = specificMappings[j];
+            specificMappings[j] = specificMappings[i];
+            specificMappings[i] = temp;
+         }
+      }
+   }
+
+   #if 0
+   printf("Possible mappings:\n");
+   for(int i = 0; i < graph.nodes.size; i++){
+      IndexMapping map = GetMappingNodeIndexes(graph.nodes[i],graph1->edges,graph2->edges);
+
+      printf("%02d : %02d    ",map.index0,map.index1);
+
+      EdgeNode* e1 = ListGet(graph1->edges,map.index0);
+      EdgeNode* e2 = ListGet(graph2->edges,map.index1);
+
+      ArenaMarker marker(arena);
+      String str1 = Repr(e1->edge,GRAPH_DOT_FORMAT_NAME,arena);
+      String str2 = Repr(e2->edge,GRAPH_DOT_FORMAT_NAME,arena);
+      printf("%.*s // %.*s\n",UNPACK_SS(str1),UNPACK_SS(str2));
+   }
+   #endif
+
+   ConsolidationGraph approximateClique = Copy(graph,arena);
+   approximateClique.validNodes.Fill(0);
+
+   for(FlattenMapping& m : specificMappings){
+      ArenaMarker marker(arena);
+      Array<IndexMapping> graphMappings = TransformGenericIntoSpecific(m.mapping->edgeMappings,m.t1,m.t2,arena);
+
+      Array<IndexMapping> graphTableMappings = TransformGenericIntoSpecific(m.mapping->tableMappings,m.t1,m.t2,arena);
+
+      #if 0
+      for(IndexMapping& map : graphTableMappings){
+         printf("%02d %02d\n",map.index0,map.index1);
+      }
+      #endif
+
+      for(IndexMapping& specific : graphMappings){
+         int bit = GetMappingBit(graph,graph1,graph2,specific);
+
+         approximateClique.validNodes.Set(bit,1);
+      }
+   }
+   Assert(IsClique(approximateClique).result);
+
+   GraphMapping mapping = {};
+
+   // Full clique
+   #if 01
+   {
+   printf("Full clique:\n");
+   CliqueState* state = InitMaxClique(graph,999,arena);
+
+   RunMaxClique(state,arena);
+   ConsolidationGraph clique = state->clique;
+   printf("Size: %d\n",graph.nodes.size);
+   printf("Size of clique: %d\n",clique.validNodes.GetNumberBitsSet());
+
+   AddCliqueToMapping(mapping,clique);
+
+   }
+   #endif
+
+   Array<int> coreNumbers = CalculateCoreNumbers(graph,arena);
+
+   #if 0
+   printf("\n");
+   for(int i = 0; i < graph.edges.size; i++){
+      BitArray& arr = graph.edges[i];
+
+      region(arena){
+         String repr = arr.PrintRepresentation(arena);
+         printf("%.*s %d\n",UNPACK_SS(repr),arr.GetNumberBitsSet());
+      };
+   }
+   printf("\n");
+   #endif
+
+   #if 0
+   {
+   printf("Given approximate clique:\n");
+   ConsolidationResult resultingGraph = GenerateConsolidationGraphGivenInitialClique(sub1,sub2,approximateClique,arena);
+   ConsolidationGraph graph = resultingGraph.graph;
+   OutputConsolidationGraph(graph,arena,true,"debug/specificCG.dot");
+
+   CliqueState* state = InitMaxClique(graph,999,arena);
+   RunMaxClique(state,arena);
+   ConsolidationGraph extraClique = state->clique;
+   Assert(IsClique(extraClique).result);
+
+   printf("Size: %d\n",graph.nodes.size);
+   printf("Size Initial clique: %d\n",approximateClique.validNodes.GetNumberBitsSet());
+   printf("Size of extra clique: %d\n",extraClique.validNodes.GetNumberBitsSet());
+
+   AddCliqueToMapping(mapping,approximateClique);
+   AddCliqueToMapping(mapping,extraClique);
+   }
+   #endif
+
+   #if 0
+   printf("\n\n");
+   for(int i = 0; i < graph.validNodes.bitSize; i++){
+      IndexMapping map = GetMappingNodeIndexes(graph.nodes[i],graph1->edges,graph2->edges);
+
+      printf("%d : %d\n",map.index0,map.index1);
+   }
+   #endif
+
+   #if 0
+   //CalculateCliqueAndGetMappings(versat,sub1,sub2,arena);
+
+   //Array<ConsolidationGraph> cliques = AllMaxClique(result.graph,999,arena);
+   CliqueState state = MaxClique(result.graph,999,arena);
+   ConsolidationGraph clique = state.clique;
+
+   for(int i = 0; i < clique.nodes.size; i++){
+      IndexMapping map = GetMappingNodeIndexes(clique.nodes[i],graph1->edges,graph2->edges);
+
+      printf("%02d : %02d    ",map.index0,map.index1);
+
+      EdgeNode* e1 = ListGet(graph1->edges,map.index0);
+      EdgeNode* e2 = ListGet(graph2->edges,map.index1);
+
+      ArenaMarker marker(arena);
+      String str1 = Repr(e1->edge,GRAPH_DOT_FORMAT_NAME,arena);
+      String str2 = Repr(e2->edge,GRAPH_DOT_FORMAT_NAME,arena);
+      printf("%.*s // %.*s\n",UNPACK_SS(str1),UNPACK_SS(str2));
+   }
+   #endif
+
+   #if 0
+   printf("Approximate clique:\n");
+   for(int i : approximateClique.validNodes){
+      IndexMapping map = GetMappingNodeIndexes(approximateClique.nodes[i],graph1->edges,graph2->edges);
+
+      printf("%d : %d\n",map.index0,map.index1);
+   }
+   #endif
+
+   #if 0
+   printf("True Cliques:\n");
+   // The best 99 cliques
+   Array<ConsolidationGraph> cliques = AllMaxClique(result.graph,999,arena);
+
+   //CliqueState state = MaxClique(result.graph,999,arena);
+   //ConsolidationGraph clique = state.clique;
+   for(ConsolidationGraph& clique : cliques){
+      for(int i : clique.validNodes){
+         IndexMapping map = GetMappingNodeIndexes(clique.nodes[i],graph1->edges,graph2->edges);
+
+         printf("%d : %d\n",map.index0,map.index1);
+      }
+      printf("\n");
+   }
+   #endif
+
+   #if 0
+   {
+   ArenaMarker marker(arena);
+   printf("Max Clique:\n");
+   CliqueState* state = InitMaxClique(result.graph,999,arena);
+   Memset(state->table,0);
+
+   #if 0
+   for(int i = 0; i < state->table.size; i++){
+      MappingNode node = state->clique.nodes[i];
+
+      IndexMapping map = GetMappingNodeIndexes(node,graph1->edges,graph2->edges);
+
+      printf("%d %d\n",map.index0,map.index1);
+   }
+   #endif
+
+   #if 0
+   printf("Before:\n");
+   int extra = 0;
+   for(FlattenMapping& m : specificMappings){
+      ArenaMarker marker(arena);
+      Array<IndexMapping> graphTableMappings = TransformGenericIntoSpecific(m.mapping->tableMappings,m.t1,m.t2,arena);
+
+      int maxAdded = 0;
+      int index = 0;
+      for(IndexMapping& map : graphTableMappings){
+         printf("%02d %02d\n",map.index0,map.index1);
+
+         int i = GetMappingBit(graph,graph1,graph2,map);
+         state->table[i] = m.mapping->table[index++] + extra;
+         maxAdded = std::max(state->table[i],maxAdded);
+      }
+      extra += maxAdded;
+   }
+   #endif
+
+   Array<int> coreNumbers = CalculateCoreNumbers(graph,arena);
+
+   for(int i = graph.nodes.size - 1; i >= 0; i--){
+      if(state->table[i] == 0){
+         state->startI = i + 1;
+         break;
+      }
+   }
+   if(state->startI >= graph.nodes.size){
+      state->startI = graph.nodes.size - 1;
+   }
+
+   state->max = 0;
+   for(int i = state->startI; i < graph.nodes.size; i++){
+      state->max = std::max(state->table[i],state->max);
+   }
+   printf("Max: %d\n",state->max);
+
+   #if 0
+   int size = state->clique.nodes.size;
+
+   int lastPos = size - 1;
+   for(int i = lastPos; i >= 0; i--){
+      if(state->table[i] != 0){
+         if(i != lastPos){
+            Assert(state->table[lastPos] == 0);
+
+            //PrintGraphEdges(&state->clique,arena);
+
+            printf("SwapCliqueNodes(%d,%d);\n",i,lastPos);
+            SwapCliqueNodes(state,i,lastPos);
+
+            //String res = PushIntTableRepresentation(arena,state->table);
+            //printf("%.*s\n",UNPACK_SS(res));
+
+            //PrintGraphEdges(&state->clique,arena);
+
+            //exit(0);
+         }
+         lastPos -= 1;
+      }
+   }
+   state->max = state->table[lastPos + 1];
+   state->startI = lastPos;
+   #endif
+
+   String res = PushIntTableRepresentation(arena,state->table);
+   printf("%.*s\n",UNPACK_SS(res));
+
+   sleep(1);
+
+   //exit(0);
+
+   //clock_t start = clock();
+   MemoryBarrier();
+   uint64 start = RDTSC();
+   RunMaxClique(state,arena);
+   uint64 end = RDTSC();
+   //clock_t end = clock();
+
+   printf("%ld\n",end - start);
+
+   ConsolidationGraph clique = state->clique;
+   for(int i : clique.validNodes){
+      ArenaMarker marker(arena);
+      IndexMapping map = GetMappingNodeIndexes(clique.nodes[i],graph1->edges,graph2->edges);
+
+      String r = Repr(clique.nodes[i],arena);
+
+      printf("%d : %d - %.*s %.*s\n",map.index0,map.index1,UNPACK_SS(r));
+   }
+   printf("\n");
+
+   res = PushIntTableRepresentation(arena,state->table);
+   printf("%.*s\n",UNPACK_SS(res));
+   }
+   #endif
+
+   AddSpecificsToMapping(mapping,result.specificsAdded);
+   //AddCliqueToMapping(mapping,approximateClique);
+
+   printf("%d\n",mapping.edgeMap.size());
+
+   return MergeGraph(versat,graph1,graph2,mapping,STRING("Test"));
+}
+
+#endif
+
+bool Contains(IndexRecord* record,int toCheck){
+   FOREACH_LIST(ptr,record){
+      if(ptr->index == toCheck){
+         return true;
+      }
+   }
+   return false;
+}
+
+void OutputDotGraph(Graph* graph,const char* filepath,Arena* temp){
+   ArenaMarker marker(temp);
+   String str = OutputDotGraph(graph,temp);
+   FILE* file = OpenFileAndCreateDirectories(filepath,"w");
+   fprintf(file,"%.*s",UNPACK_SS(str));
+   fclose(file);
+}
+
+void OutputDotGraph(Subgraph graph,const char* filepath,Arena* temp){
+   ArenaMarker marker(temp);
+   String str = OutputDotGraph(graph,temp);
+   FILE* file = OpenFileAndCreateDirectories(filepath,"w");
+   fprintf(file,"%.*s",UNPACK_SS(str));
+   fclose(file);
+}
+
+void ReorganizeAccelerator(Accelerator* accel,Arena* temp){
+   AcceleratorView view = CreateAcceleratorView(accel,temp);
+   view.CalculateGraphData(temp);
+   view.CalculateDAGOrdering(temp);
+
+   // Reorganize nodes based on DAG order
+   DAGOrder order = view.order;
+   int size = view.nodes.Size();
+   accel->instances = order.instances[0];
+   for(int i = 0; i < size - 1; i++){
+      order.instances[i]->next = order.instances[i+1];
+   }
+   order.instances[size-1]->next = nullptr;
+}
+
+Array<MappingNode> ReorderMappingNodes(Array<MappingNode> nodes, Array<int> order,Arena* temp){
+   Array<MappingNode> ordered = PushArray<MappingNode>(temp,order.size);
+
+   for(int i = 0; i < ordered.size; i++){
+      ordered[i] = nodes[order[i]];
+   }
+
+   return ordered;
+}
 
 void Clique(CliqueState* state,ConsolidationGraph graphArg,int index,IndexRecord* record,int size,Arena* arena){
-   static int iterations = 0;
-   //printf("%d\n",iterations++);
+   state->iterations += 1;
 
    //ConsolidationGraph graph = Copy(graphArg,arena);
    ConsolidationGraph graph = graphArg;
@@ -31,8 +523,8 @@ void Clique(CliqueState* state,ConsolidationGraph graphArg,int index,IndexRecord
       return;
    }
 
-   auto end = clock();
-   float elapsed = (end - state->start) / CLOCKS_PER_SEC;
+   auto end = GetTime();
+   float elapsed = end - state->start;
    if(elapsed > MAX_CLIQUE_TIME){
       state->found = true;
       return;
@@ -95,7 +587,7 @@ void RunMaxClique(CliqueState* state,Arena* arena){
    ConsolidationGraph graph = Copy(state->clique,arena);
    graph.validNodes.Fill(0);
 
-   state->start = clock();
+   state->start = GetTime();
 
    int startI = state->startI ? state->startI : graph.nodes.size - 1;
 
@@ -112,7 +604,7 @@ void RunMaxClique(CliqueState* state,Arena* arena){
       IndexRecord record = {};
       record.index = i;
 
-      printf("%d\n",i);
+      //printf("%d / %d\r",i,graph.nodes.size);
       Clique(state,graph,i,&record,1,arena);
       state->table[i] = state->max;
 
@@ -123,13 +615,14 @@ void RunMaxClique(CliqueState* state,Arena* arena){
          break;
       }
 
-      auto end = clock();
-      float elapsed = (end - state->start) / CLOCKS_PER_SEC;
+      auto end = GetTime();
+      float elapsed = end - state->start;
       if(elapsed > MAX_CLIQUE_TIME){
          printf("Timeout, index: %d (from %d)\n",i,graph.nodes.size);
          break;
       }
    }
+   printf("\nFinished in: %d\n",state->iterations);
 
    Assert(IsClique(state->clique).result);
 }
@@ -179,15 +672,6 @@ CliqueState MaxClique(ConsolidationGraph graph,int upperBound,Arena* arena){
    Assert(IsClique(state.clique).result);
 
    return state;
-}
-
-bool Contains(IndexRecord* record,int toCheck){
-   FOREACH_LIST(ptr,record){
-      if(ptr->index == toCheck){
-         return true;
-      }
-   }
-   return false;
 }
 
 void AllMaxCliques(CliqueState* state,Array<ConsolidationGraph>& allCliques,int& maxCliquesFound,ConsolidationGraph graphArg,int index,IndexRecord* record,int size,Arena* arena){
@@ -321,19 +805,60 @@ Array<ConsolidationGraph> AllMaxClique(ConsolidationGraph graph,int upperBound,A
    return result;
 }
 
+void FixFlatteningTempHierarchyRecursive(Array<FlatteningTemp> array,int level){
+   for(int i = 0; i < array.size;){
+      FlatteningTemp* cur = &array[i];
+      if(i + 1 >= array.size){
+         break;
+      }
+
+      int nextIndex = i + 1;
+      for(; nextIndex < array.size; nextIndex++){
+         if(array[nextIndex].level == level){
+            break;
+         }
+      }
+
+      if(nextIndex < array.size){
+         cur->next = &array[nextIndex];
+      } else {
+         cur->next = nullptr;
+      }
+
+      if(nextIndex - i > 1){ // has childs
+         cur->child = &array[i + 1];
+
+         Array<FlatteningTemp> subArray = {};
+         subArray.data = cur->child;
+         subArray.size = nextIndex - i - 1;
+         FixFlatteningTempHierarchyRecursive(subArray,level + 1);
+      } else {
+         cur->child = nullptr;
+      }
+
+      i = nextIndex;
+   }
+}
+
+void FixFlatteningTempHierarchy(Array<FlatteningTemp> array){
+   FixFlatteningTempHierarchyRecursive(array,0);
+}
+
 Array<FlatteningTemp> HierarchicalFlattening(Graph* graph,Arena* arena){
    Array<FlatteningTemp> result = PushArray<FlatteningTemp>(arena,999);
+   Memset(result,{});
 
    //ArenaMarker marker(arena);
    String str = OutputDotGraph(graph,arena);
 
-   #if 1
+   #if 0
    FILE* file = OpenFileAndCreateDirectories("debug/test.dot","w");
    fprintf(file,"%.*s",UNPACK_SS(str));
    fclose(file);
    #endif
 
    // Flattening
+   timeRegion("Flattening part"){
    int index = 0;
    while(1){
       Node* ptr = graph->instances;
@@ -356,6 +881,7 @@ Array<FlatteningTemp> HierarchicalFlattening(Graph* graph,Arena* arena){
          Assert(result[index].decl);
 
          FlattenResult res = FlattenNode(graph,ptr,arena);
+         //ptr = res.flatUnitStart;
          ptr = res.flatUnitEnd;
 
          result[index].flattenedUnits = res.flattenedUnits;
@@ -363,7 +889,7 @@ Array<FlatteningTemp> HierarchicalFlattening(Graph* graph,Arena* arena){
          count += nonSpecialSubunits;
          noFlatten = false;
 
-         #if 1
+         #if 0
          String str = OutputDotGraph(graph,arena);
          String dir = PushString(arena,"debug/test_%d.dot",index);
          PushNullByte(arena);
@@ -379,10 +905,44 @@ Array<FlatteningTemp> HierarchicalFlattening(Graph* graph,Arena* arena){
          break;
       }
    }
-
    result.size = index;
+   };
+
+   timeRegion("Assert no loop"){
+      AssertNoLoop(graph->edges,arena);
+   };
+
+   timeRegion("Sort by edges"){
+      SortEdgesByVertices(graph);
+   };
+
+   #if 0
+   static int nOutputted = 0;
+   region(arena){
+      String str = OutputDotGraph(graph,arena);
+      String dir = PushString(arena,"debug/test_%d.dot",nOutputted++);
+      PushNullByte(arena);
+      FILE* file = OpenFileAndCreateDirectories(dir.data,"w");
+      fprintf(file,"%.*s",UNPACK_SS(str));
+      fclose(file);
+   };
+   exit(0);
+   #endif
+
+   // Reorders based on name so that childs are below parent values
+   for(int iters = 1; iters < result.size; iters++){
+      for(int i = 0; i < result.size - iters; i++){
+         FlatteningTemp& t1 = result[i];
+         FlatteningTemp& t2 = result[i + 1];
+
+         if(CompareStringOrdered(t1.name,t2.name) < 0){
+            SWAP(result[i],result[i + 1]);
+         }
+      }
+   }
+
    // Calculate number of edges and edge offset
-   for(int i = 0; i < index; i++){
+   for(int i = 0; i < result.size; i++){
       String vertName = result[i].name;
 
       int level = 0;
@@ -417,20 +977,31 @@ Array<FlatteningTemp> HierarchicalFlattening(Graph* graph,Arena* arena){
       result[i].edgeStart = offsetStart - 1;
    }
 
-   #if 1
-   for(int i = 0; i < index; i++){
+   // Fix child and next pointers
+   FixFlatteningTempHierarchy(result);
+
+   #if 0
+   FOREACH_LIST(ptr,&result[0]){
+      printf("%.*s %d\n",UNPACK_SS(ptr->name),ptr->level);
+   }
+   #endif
+
+   #if 0
+   for(FlatteningTemp& t : result){
+      printf("%.*s %d\n",UNPACK_SS(t.name),t.level);
+   }
+   #endif
+
+   #if 0
+   for(int i = 0; i < result.size; i++){
       auto d = result[i];
       printf("%.*s Decl:%.*s N:%d +: %d Edge:%d +: %d\n",UNPACK_SS(d.name),UNPACK_SS(d.decl->name),d.index,d.subunitsCount,d.edgeStart,d.edgeCount);
    }
+   exit(0);
    #endif
 
    return result;
 }
-
-struct IndexMapping{
-   int index0;
-   int index1;
-};
 
 IndexMapping GetMappingNodeIndexes(MappingNode node,Edge* sub1,Edge* sub2){
    IndexMapping res = {};
@@ -462,386 +1033,179 @@ IndexMapping GetMappingNodeIndexes(MappingNode node,Edge* sub1,Edge* sub2){
    return res;
 }
 
-struct SubgraphMapping{
-   FUDeclaration* decl1;
-   FUDeclaration* decl2;
-   Array<IndexMapping> edgeMappings;
-   Array<int> table;
-   Array<IndexMapping> tableMappings;
-};
+ConsolidationGraph ParallelBuildConsolidationGraphFromNodes(Array<MappingNode> nodes,Arena* arena){
+   struct ThisTask{
+      int i;
+      Array<BitArray> neighbors;
+      Array<MappingNode> nodes;
+   };
 
-static ConsolidationResult GenerateConsolidationGraphForSubgraphs(Versat* versat,Arena* arena,Subgraph accel1,Subgraph accel2){
-   ConsolidationGraph graph = {};
+   auto taskFunction = [](int id,void* arg){
+      ThisTask* task = (ThisTask*) arg;
 
-   // Should be temp memory instead of using memory intended for the graph, but since the graph is expected to use a lot of memory and we are technically saving memory using this mapping, no major problem
-   Hashmap<ComplexFUInstance*,MergeEdge> specificsMapping;
-   specificsMapping.Init(arena,1000);
-   Pool<MappingNode> specificsAdded = {};
-   Hashmap<ComplexFUInstance*,int> nodeExists;
-   nodeExists.Init(arena,Size(accel1.nodes) + Size(accel2.nodes));
+      int i = task->i;
+      Array<BitArray> neighbors = task->neighbors;
+      Array<MappingNode> nodes = task->nodes;
 
-   FOREACH_SUBLIST(ptr,accel1.nodes){
-      nodeExists.InsertIfNotExist(ptr,0);
-   }
-   FOREACH_SUBLIST(ptr,accel2.nodes){
-      nodeExists.InsertIfNotExist(ptr,0);
-   }
-
-   #if 1
-   // Map outputs
-   Node* accel1Output = GetOutputInstance(accel1);
-   Node* accel2Output = GetOutputInstance(accel2);
-   if(accel1Output && accel2Output){
-      MergeEdge node = {};
-      node.instances[0] = accel1Output;
-      node.instances[1] = accel2Output;
-
-      specificsMapping.Insert(accel1Output,node);
-      specificsMapping.Insert(accel2Output,node);
-
-      MappingNode* n = specificsAdded.Alloc();
-      n->nodes = node;
-      n->type = MappingNode::NODE;
-   }
-
-   // Map inputs
-   FOREACH_SUBLIST(instA,accel1.nodes){
-      if(instA->declaration != BasicDeclaration::input){
-         continue;
-      }
-
-      FOREACH_SUBLIST(instB,accel2.nodes){
-         if(instB->declaration != BasicDeclaration::input){
-            continue;
-         }
-
-         if(instA->id != instB->id){
-            continue;
-         }
-
-         MergeEdge node = {};
-         node.instances[0] = instA;
-         node.instances[1] = instB;
-
-         specificsMapping.Insert(instA,node);
-         specificsMapping.Insert(instB,node);
-
-         MappingNode* n = specificsAdded.Alloc();
-         n->nodes = node;
-         n->type = MappingNode::NODE;
-      }
-   }
-   #endif
-
-   // Insert specific mappings first (the first mapping nodes are the specifics)
-   #if 0
-   for(int i = 0; i < options.nSpecifics; i++){
-      SpecificMergeNodes specific = options.specifics[i];
-
-      MappingNode* node = PushStruct<MappingNode>(arena);
-
-      node->type = MappingNode::NODE;
-      node->nodes.instances[0] = specific.instA;
-      node->nodes.instances[1] = specific.instB;
-
-      graph.nodes.size += 1;
-   }
-   #endif
-
-   graph.nodes.data = (MappingNode*) MarkArena(arena);
-
-   #if 1
-   // Check possible edge mapping
-   FOREACH_SUBLIST(edge1,accel1.edges){
-      #if 01
-      if(!(nodeExists.Get(edge1->units[0].inst) && nodeExists.Get(edge1->units[1].inst))){
-         continue;
-      }
-      #endif
-
-      FOREACH_SUBLIST(edge2,accel2.edges){
-         #if 01
-         if(!(nodeExists.Get(edge2->units[0].inst) && nodeExists.Get(edge2->units[1].inst))){
-            continue;
-         }
-         #endif
-
-         // TODO: some nodes do not care about which port is connected (think the inputs for common operations, like multiplication, adders and the likes)
-         // Can augment the algorithm further to find more mappings
-         if(!(EqualPortMapping(versat,edge1->units[0],edge2->units[0]) &&
-            EqualPortMapping(versat,edge1->units[1],edge2->units[1]))){
-            continue;
-         }
-
-         // No mapping input or output units
-         #if 1
-         if(edge1->units[0].inst->declaration->type == FUDeclaration::SPECIAL ||
-            edge1->units[1].inst->declaration->type == FUDeclaration::SPECIAL ||
-            edge2->units[0].inst->declaration->type == FUDeclaration::SPECIAL ||
-            edge2->units[1].inst->declaration->type == FUDeclaration::SPECIAL){
-            continue;
-         }
-         #endif
-
-         MappingNode node = {};
-         node.type = MappingNode::EDGE;
-
-         node.edges[0].units[0] = edge1->units[0];
-         node.edges[0].units[1] = edge1->units[1];
-         node.edges[1].units[0] = edge2->units[0];
-         node.edges[1].units[1] = edge2->units[1];
-
-         // Checks to see if we are in conflict with any specific node.
-         MergeEdge* possibleSpecificConflict = specificsMapping.Get(node.edges[0].units[0].inst);
-         if(!possibleSpecificConflict) possibleSpecificConflict = specificsMapping.Get(node.edges[0].units[1].inst);
-         if(!possibleSpecificConflict) possibleSpecificConflict = specificsMapping.Get(node.edges[1].units[0].inst);
-         if(!possibleSpecificConflict) possibleSpecificConflict = specificsMapping.Get(node.edges[1].units[1].inst);
-
-         if(possibleSpecificConflict){
-            MappingNode specificNode = {};
-            specificNode.type = MappingNode::NODE;
-            specificNode.nodes = *possibleSpecificConflict;
-
-            if(MappingConflict(node,specificNode)){
-               continue;
-            }
-         }
-
-         #if 0
-         // Check to see that the edge maps with all the specific nodes. Specific nodes must be part of the final clique, and therefore we can not insert any edge that could potently make it not happen
-         bool conflict = false;
-         for(int i = 0; i < options.nSpecifics; i++){
-            MappingNode specificNode = graph.nodes[i];
-
-            if(MappingConflict(node,specificNode)){
-               conflict = true;
-               break;
-            }
-         }
-         if(conflict){
-            continue;
-         }
-         #endif
-
-         MappingNode* space = PushStruct<MappingNode>(arena);
-
-         *space = node;
-         graph.nodes.size += 1;
-      }
-   }
-   #endif
-
-   // Check node mapping
-   #if 0
-   if(options.mapNodes){
-      ComplexFUInstance* accel1Output = GetOutputInstance(accel1);
-      ComplexFUInstance* accel2Output = GetOutputInstance(accel2);
-
-      for(ComplexFUInstance* instA : accel1->instances){
-         PortInstance portA = {};
-         portA.inst = instA;
-
-         int deltaA = instA->graphData->order - options.order;
-
-         if(options.type == ConsolidationGraphOptions::EXACT_ORDER && deltaA >= 0 && deltaA <= options.difference){
-            continue;
-         }
-
-         if(instA == accel1Output || instA->declaration == BasicDeclaration::input){
-            continue;
-         }
-
-         for(ComplexFUInstance* instB : accel2->instances){
-            PortInstance portB = {};
-            portB.inst = instB;
-
-            int deltaB = instB->graphData->order - options.order;
-
-            if(options.type == ConsolidationGraphOptions::SAME_ORDER && instA->graphData->order != instB->graphData->order){
-               continue;
-            }
-            if(options.type == ConsolidationGraphOptions::EXACT_ORDER && deltaB >= 0 && deltaB <= options.difference){
-               continue;
-            }
-            if(instB == accel2Output || instB->declaration == BasicDeclaration::input){
-               continue;
-            }
-
-            if(!EqualPortMapping(versat,portA,portB)){
-               continue;
-            }
-
-            MappingNode node = {};
-            node.type = MappingNode::NODE;
-            node.nodes.instances[0] = instA;
-            node.nodes.instances[1] = instB;
-
-            MergeEdge* possibleSpecificConflict = specificsMapping.Get(node.nodes.instances[0]);
-            if(!possibleSpecificConflict) possibleSpecificConflict = specificsMapping.Get(node.nodes.instances[1]);
-
-            if(possibleSpecificConflict){
-               MappingNode specificNode = {};
-               specificNode.type = MappingNode::NODE;
-               specificNode.nodes = *possibleSpecificConflict;
-
-               if(MappingConflict(node,specificNode)){
-                  continue;
-               }
-            }
-
-            #if 0
-            // Same check for nodes in regards to specifics
-            bool conflict = false;
-            for(int i = 0; i < options.nSpecifics; i++){
-               MappingNode specificNode = graph.nodes[i];
-
-               // No point adding same exact node
-               if(specificNode.nodes.instances[0] == instA &&
-                  specificNode.nodes.instances[1] == instB){
-                  conflict = true;
-                  break;
-               }
-
-               if(MappingConflict(node,specificNode)){
-                  conflict = true;
-                  break;
-               }
-            }
-            if(conflict){
-               continue;
-            }
-            #endif
-
-            MappingNode* space = PushStruct<MappingNode>(arena);
-
-            *space = node;
-            graph.nodes.size += 1;
-         }
-      }
-   }
-   #endif
-
-   #if 0
-   printf("Size (MB):%d ",((graph.nodes.size / 8) * graph.nodes.size) / Megabyte(1));
-   exit(0);
-   #endif
-
-   // Order nodes based on how equal in depth they are
-   #if 0
-   //{  ArenaMarker marker(arena);
-      AcceleratorView view1 = CreateAcceleratorView(accel1,arena);
-      AcceleratorView view2 = CreateAcceleratorView(accel2,arena);
-      view1.CalculateDAGOrdering(arena);
-      view2.CalculateDAGOrdering(arena);
-
-      Array<int> count = PushArray<int>(arena,graph.nodes.size);
-      Memset(count,0);
-      int max = 0;
-      for(int i = 0; i < graph.nodes.size; i++){
-         int depth = NodeDepth(graph.nodes[i]);
-         max = std::max(max,depth);
-
-         if(depth >= graph.nodes.size){
-            depth = graph.nodes.size - 1;
-         }
-
-         count[depth] += 1;
-      }
-      Array<int> offsets = PushArray<int>(arena,max + 1);
-      Memset(offsets,0);
-      for(int i = 1; i < offsets.size; i++){
-         offsets[i] = offsets[i-1] + count[i-1];
-      }
-      Array<MappingNode> sorted = PushArray<MappingNode>(arena,graph.nodes.size);
-      for(int i = 0; i < graph.nodes.size; i++){
-         int depth = NodeDepth(graph.nodes[i]);
-
-         int offset = offsets[depth];
-         offsets[depth] += 1;
-
-         sorted[offset] = graph.nodes[i];
-      }
-
-      for(int i = 0; i < sorted.size; i++){
-         graph.nodes[i] = sorted[sorted.size - i - 1];
-      }
-      #if 1
-      for(int i = 0; i < graph.nodes.size; i++){
-         int depth = NodeDepth(graph.nodes[i]);
-         //printf("%d\n",depth);
-      }
-      #endif
-   //}
-   #endif
-
-   int upperBound = std::min(Size(accel1.nodes),Size(accel2.nodes));
-   Array<BitArray> neighbors = PushArray<BitArray>(arena,graph.nodes.size);
-   int times = 0;
-   for(int i = 0; i < graph.nodes.size; i++){
-      neighbors[i].Init(arena,graph.nodes.size);
-      neighbors[i].Fill(0);
-   }
-   for(int i = 0; i < graph.nodes.size; i++){
-      MappingNode node1 = graph.nodes[i];
+      MappingNode node1 = nodes[i];
 
       for(int ii = 0; ii < i; ii++){
-         times += 1;
-
-         MappingNode node2 = graph.nodes[ii];
+         MappingNode node2 = nodes[ii];
 
          if(MappingConflict(node1,node2)){
             continue;
          }
 
          neighbors.data[i].Set(ii,1);
-         neighbors.data[ii].Set(i,1);
+         //neighbors.data[ii].Set(i,1);
+      }
+   };
+
+   Array<BitArray> neighbors = PushArray<BitArray>(arena,nodes.size);
+
+   for(int i = 0; i < nodes.size; i++){
+      neighbors[i].Init(arena,nodes.size);
+      neighbors[i].Fill(0);
+   }
+
+   timeRegion("Parallel edge construction"){
+   region(arena){
+      Array<ThisTask> data = PushArray<ThisTask>(arena,NumberThreads() * 8);
+
+      Task task = {};
+      task.function = taskFunction;
+      for(int i = 0; i < nodes.size; i++){
+         ThisTask& current = data[i % data.size];
+
+         current.i = i;
+         current.neighbors = neighbors;
+         current.nodes = nodes;
+
+         task.args = &current;
+
+         while(FullTasks());
+         AddTask(task);
+      }
+      WaitCompletion();
+   };
+   };
+
+   for(int i = 0; i < nodes.size; i++){
+      BitArray array = neighbors.data[i];
+
+      for(int ii = 0; ii < i; ii++){
+         int bit = neighbors.data[i].Get(ii);
+
+         if(bit){
+            neighbors.data[ii].Set(i,1);
+         }
       }
    }
+
+   ConsolidationGraph graph = {};
+
+   graph.nodes = nodes;
    graph.edges = neighbors;
-
-   // Reorder based on degree of nodes
-   #if 0
-   {  ArenaMarker marker(arena);
-      Array<int> degree = PushArray<int>(arena,graph.nodes.size);
-      Memset(degree,0);
-      for(int i = 0; i < graph.nodes.size; i++){
-         degree[i] = graph.edges[i].GetNumberBitsSet();
-      }
-
-
-
-   #endif
-
-   graph.validNodes.Init(arena,graph.nodes.size);
+   graph.validNodes.Init(arena,nodes.size);
    graph.validNodes.Fill(1);
 
-   ConsolidationResult res = {};
-   res.graph = graph;
-   res.upperBound = upperBound;
-   res.specificsAdded = specificsAdded;
+   return graph;
+}
+
+int CalculateAmountOfMappings(Array<MappingNode> nodes,Arena* arena){
+   int count = 0;
+   for(int i = 0; i < nodes.size; i++){
+      MappingNode node1 = nodes[i];
+
+      for(int ii = 0; ii < i; ii++){
+         MappingNode node2 = nodes[ii];
+
+         if(MappingConflict(node1,node2)){
+            continue;
+         }
+
+         count += 1;
+      }
+   }
+   return count;
+}
+
+ConsolidationGraph BuildConsolidationGraphFromNodes(Array<MappingNode> nodes,Arena* arena){
+   //return ParallelBuildConsolidationGraphFromNodes(nodes,arena);
+
+   Array<BitArray> neighbors = PushArray<BitArray>(arena,nodes.size);
+
+   for(int i = 0; i < nodes.size; i++){
+      neighbors[i].Init(arena,nodes.size);
+      neighbors[i].Fill(0);
+   }
+   for(int i = 0; i < nodes.size; i++){
+      MappingNode node1 = nodes[i];
+
+      for(int ii = 0; ii < i; ii++){
+         MappingNode node2 = nodes[ii];
+
+         if(MappingConflict(node1,node2)){
+            continue;
+         }
+
+         neighbors.data[i].Set(ii,1);
+      }
+   }
+
+   for(int i = 0; i < nodes.size; i++){
+      BitArray array = neighbors.data[i];
+
+      for(int ii = 0; ii < i; ii++){
+         int bit = neighbors.data[i].Get(ii);
+
+         if(bit){
+            neighbors.data[ii].Set(i,1);
+         }
+      }
+   }
+
+   ConsolidationGraph graph = {};
+
+   graph.nodes = nodes;
+   graph.edges = neighbors;
+   graph.validNodes.Init(arena,nodes.size);
+   graph.validNodes.Fill(1);
+
+   return graph;
+}
+
+Array<IndexMapping> GetIndexMappingFromClique(ConsolidationGraph clique,Subgraph sub1,Subgraph sub2,Arena* out){
+   Array<IndexMapping> res = PushArray<IndexMapping>(out,clique.validNodes.GetNumberBitsSet());
+
+   int index = 0;
+   for(int i : clique.validNodes){
+      MappingNode node = clique.nodes[i];
+
+      Assert(clique.validNodes.Get(i));
+
+      res[index] = GetMappingNodeIndexes(node,sub1.edges.start,sub2.edges.start);
+      index += 1;
+   }
 
    return res;
 }
 
-struct CalculateCliqueAndGetMappingsResult{
-   Array<IndexMapping> mappings;
-   Array<int> cliqueTable;
-   Array<IndexMapping> cliqueTableMappings;
-};
-
-CalculateCliqueAndGetMappingsResult CalculateCliqueAndGetMappings(Versat* versat,Subgraph sub1,Subgraph sub2,Arena* arena){
+CalculateCliqueAndGetMappingsResult CalculateCliqueAndGetMappings(Subgraph sub1,Subgraph sub2,Arena* arena){
    Array<IndexMapping> mapping = PushArray<IndexMapping>(arena,999);
    Array<int> cliqueTable = PushArray<int>(arena,999);
    Array<IndexMapping> cliqueTableMappings = PushArray<IndexMapping>(arena,999);
 
-   ConsolidationResult result = GenerateConsolidationGraphForSubgraphs(versat,arena,sub1,sub2);
+   ConsolidationResult result = GenerateConsolidationGraphForSubgraphs(sub1,sub2,{},arena);
 
+   #if 0
    for(int i = 0; i < result.graph.nodes.size; i++){
       MappingNode node = result.graph.nodes[i];
 
       String rep = Repr(node,arena);
       printf("%.*s\n",UNPACK_SS(rep));
    }
+   #endif
 
    CliqueState* state = InitMaxClique(result.graph,999,arena);
    RunMaxClique(state,arena);
@@ -849,7 +1213,9 @@ CalculateCliqueAndGetMappingsResult CalculateCliqueAndGetMappings(Versat* versat
    Memcpy(cliqueTable.data,state->table.data,state->table.size);
 
    for(int i = 0; i < state->table.size; i++){
+      #if 0
       printf("%d ",state->table[i]);
+      #endif
 
       cliqueTableMappings[i] = GetMappingNodeIndexes(clique.nodes[i],sub1.edges.start,sub2.edges.start);
    }
@@ -875,39 +1241,6 @@ CalculateCliqueAndGetMappingsResult CalculateCliqueAndGetMappings(Versat* versat
 
    return res;
 }
-
-void OutputDotGraph(Graph* graph,const char* filepath,Arena* temp){
-   ArenaMarker marker(temp);
-   String str = OutputDotGraph(graph,temp);
-   FILE* file = OpenFileAndCreateDirectories(filepath,"w");
-   fprintf(file,"%.*s",UNPACK_SS(str));
-   fclose(file);
-}
-
-void OutputDotGraph(Subgraph graph,const char* filepath,Arena* temp){
-   ArenaMarker marker(temp);
-   String str = OutputDotGraph(graph,temp);
-   FILE* file = OpenFileAndCreateDirectories(filepath,"w");
-   fprintf(file,"%.*s",UNPACK_SS(str));
-   fclose(file);
-}
-
-void ReorganizeAccelerator(Accelerator* accel,Arena* temp){
-   AcceleratorView view = CreateAcceleratorView(accel,temp);
-   view.CalculateGraphData(temp);
-   view.CalculateDAGOrdering(temp);
-
-   // Reorganize nodes based on DAG order
-   DAGOrder order = view.order;
-   int size = view.nodes.Size();
-   accel->instances = order.instances[0];
-   for(int i = 0; i < size - 1; i++){
-      order.instances[i]->next = order.instances[i+1];
-   }
-   order.instances[size-1]->next = nullptr;
-}
-
-void SortEdgesByVertices(Graph* graph);
 
 Subgraph DefaultSubgraph(Graph* graph){
    Subgraph sub = {};
@@ -999,11 +1332,6 @@ Subgraph RemoveInputsAndOutputs(Subgraph sub){
    return res;
 }
 
-bool operator==(const IndexMapping& m0,const IndexMapping& m1){
-   bool res = (m0.index0 == m1.index0 && m0.index1 == m1.index1);
-   return res;
-}
-
 int GetMappingBit(ConsolidationGraph& cg,Graph* graph1,Graph* graph2,IndexMapping map){
    for(int i = 0; i < cg.nodes.size; i++){
       IndexMapping inside = GetMappingNodeIndexes(cg.nodes[i],graph1->edges,graph2->edges);
@@ -1029,19 +1357,6 @@ Array<IndexMapping> TransformGenericIntoSpecific(Array<IndexMapping> generic,Fla
    return res;
 }
 
-struct FlattenMapping{
-   FlatteningTemp* t1;
-   FlatteningTemp* t2;
-   SubgraphMapping* mapping;
-   int weight;
-};
-
-#define SWAP(A,B) do { \
-   auto TEMP = A; \
-   A = B; \
-   B = TEMP; \
-   } while(0)
-
 void Swap(BitArray* arr1,BitArray* arr2){
    Assert(arr1->byteSize == arr2->byteSize);
 
@@ -1059,70 +1374,482 @@ void PrintGraphEdges(ConsolidationGraph* graph,Arena* arena){
    }
 }
 
-#if 0
-Array<int> CalculateCoreNumbers(ConsolidationGraph graph,Arena* arena){
-   ArenaMarker marker(arena);
+Array<int> CalculateDegrees(ConsolidationGraph graph,Arena* arena){
    int size = graph.nodes.size;
    Array<BitArray> edges = graph.edges;
 
    Array<int> degrees = PushArray<int>(arena,size);
-
    for(int i = 0; i < size; i++){
       degrees[i] = edges[i].GetNumberBitsSet();
    }
+   return degrees;
+}
 
-   Array<int> bins = PushArray<int>(arena,size);
-   for(int val : degrees){
-      bins[val] += 1;
-   }
+MinResult FindSmallest(Array<int> array){
+   Assert(array.size);
 
-   Array<int> sortedDegrees = PushArray<int>(arena,size);
-   int index = 0;
-   for(int i = 0; i < bins.size; i++){
-      int numberOfRun = bins[i];
-
-      for(int ii = 0; ii < numberOfRun; ii++){
-         sortedDegrees[index++] = i;
+   int smallest = array[0];
+   int smallestIndex = 0;
+   for(int i = 1; i < array.size; i++){
+      if(array[i] < smallest){
+         smallest = array[i];
+         smallestIndex = i;
       }
    }
 
-   Array<int> offsets = PushArray<int>(arena,size + 1);
-   offsets[0] = 0;
-   for(int i = 1; i < size + 1; i++){
-      offsets[i] = offsets[i - 1] + bins[i - 1];
-   }
-
-   Array<int> newIndex = PushArray<int>(arena,size);
-   for(int i = 0; i < size; i++){
-      int degree = degrees[i];
-      int newPos = offsets[degree];
-      offsets[degree] += 1;
-
-      newIndex[i] = newPos;
-   }
-   Array<int> newToOld = PushArray<int>(arena,size);
-   for(int i = 0; i < size; i++){
-      int oldPos = i;
-      int newPos = newIndex[i];
-
-      newToOld[newPos] = oldPos;
-   }
-
-   String newToOldS = PushIntTableRepresentation(arena,newToOld);
-   printf("%.*s\n",UNPACK_SS(newToOldS));
-
-   String newPos = PushIntTableRepresentation(arena,newIndex);
-   printf("%.*s\n",UNPACK_SS(newPos));
-
-   String nonOrdered = PushIntTableRepresentation(arena,degrees);
-   printf("%.*s\n",UNPACK_SS(nonOrdered));
-
-   #if 01
-   String res = PushIntTableRepresentation(arena,sortedDegrees);
-   printf("%.*s\n",UNPACK_SS(res));
-   #endif
+   MinResult res = {};
+   res.value = smallest;
+   res.index = smallestIndex;
+   return res;
 }
-#endif
+
+Array<int> CountValues(Array<int> array,int maximumValue,Arena* out){
+   Array<int> res = PushArray<int>(out,maximumValue);
+   Memset(res,0);
+
+   for(int i = 0; i < array.size; i++){
+      Assert(array[i] < maximumValue);
+      res[array[i]] += 1;
+   }
+
+   return res;
+}
+
+void AssertIndexedArray(Array<int> array,Arena* arena){
+   int size = array.size;
+   region(arena){
+      Array<int> seen = CountValues(array,size,arena);
+
+      bool assertion = true;
+      for(int i = 0; i < size; i++){
+         if(seen[i] != 1){
+            printf("Found a non one: %d on index: %d\n",seen[i],i);
+            assertion = false;
+         }
+      }
+      Assert(assertion);
+   };
+}
+
+Array<int> DegreeReordering(ConsolidationGraph graph,Arena* arena){
+   int size = graph.nodes.size;
+   Array<int> sortedIndexes = PushArray<int>(arena,size);
+
+   region(arena){
+      Array<int> degrees = CalculateDegrees(graph,arena);
+
+      for(int i = 0; i < size; i++){
+         MinResult smallest = FindSmallest(degrees);
+         int index = smallest.index;
+
+         sortedIndexes[i] = index;
+         degrees[index] = size + 1;
+
+         BitArray neighbors = graph.edges[index];
+         for(int neigh : neighbors){
+            degrees[neigh] -= 1;
+         }
+      }
+   };
+
+   AssertIndexedArray(sortedIndexes,arena);
+   return sortedIndexes;
+}
+
+Array<int> RadixReordering(ConsolidationGraph graph,Arena* arena){
+   int size = graph.nodes.size;
+   Array<int> sortedIndexes = PushArray<int>(arena,size);
+
+   region(arena){
+      auto indexed = IndexArray(graph.edges,arena);
+
+      auto zero = PushArray<IndexedStruct<BitArray>>(arena,size);
+      auto one = PushArray<IndexedStruct<BitArray>>(arena,size);
+
+      for(int i = 0; i < size; i++){
+         int zeroIndex = 0;
+         int oneIndex = 0;
+
+         for(int ii = 0; ii < size; ii++){
+            int val = indexed[ii].data.Get(i);
+
+            if(val){
+               one[oneIndex++] = indexed[ii];
+            } else {
+               zero[zeroIndex++] = indexed[ii];
+            }
+         }
+
+         int index = 0;
+         for(int ii = 0; ii < oneIndex; ii++){
+            indexed[index++] = one[ii];
+         }
+         for(int ii = 0; ii < zeroIndex; ii++){
+            indexed[index++] = zero[ii];
+         }
+         Assert(index == size);
+      }
+
+      for(int i = 0; i < size; i++){
+         sortedIndexes[i] = indexed[i].index;
+      }
+   };
+
+   AssertIndexedArray(sortedIndexes,arena);
+   return sortedIndexes;
+}
+
+void PrintIntTable(Array<int> array,Arena* arena,int digitSize = 0){
+   region(arena){
+      String repr = PushIntTableRepresentation(arena,array,digitSize);
+      printf("%.*s",UNPACK_SS(repr));
+   };
+}
+
+ColoredOrderingResult ColoredOrdering(ConsolidationGraph graph,Arena* arena){
+   int size = graph.nodes.size;
+   Array<int> sortedIndexes = PushArray<int>(arena,size);
+   int biggestColorFound = 0;
+
+   region(arena){
+      Array<int> colors = PushArray<int>(arena,size);
+      Memset(colors,-1);
+
+      Array<int> neighColor = PushArray<int>(arena,size);
+      PushPtr<int> colorsSeenPush;
+      colorsSeenPush.Init(neighColor);
+
+      colors[0] = 0;
+      for(int index = 1; index < size; index++){
+         BLOCK_REGION(arena);
+
+         BitArray neighbors = graph.edges[index];
+
+         colorsSeenPush.Reset();
+
+         for(int neigh : neighbors){
+            int value = colors[neigh];
+            if(value == -1){
+               continue;
+            }
+
+            int* space = colorsSeenPush.Push(1);
+            *space = value;
+         }
+
+         Array<int> colorsSeen = colorsSeenPush.AsArray();
+
+         if(colorsSeen.size == 0){
+            colors[index] = 0;
+            continue;
+         }
+
+         Array<int> count = CountValues(colorsSeen,index,arena);
+
+         MinResult thisColor = FindSmallest(count);
+
+         if(thisColor.value != 0){
+            colors[index] = thisColor.index + 1;
+         } else {
+            colors[index] = thisColor.index;
+         }
+         biggestColorFound = std::max(biggestColorFound,colors[index]);
+      }
+
+      #if 0
+      PrintIntTable(colors,arena,3);
+      printf("\n");
+      #endif
+
+      PushPtr<int> sortedPush = {};
+      sortedPush.Init(sortedIndexes);
+      for(int colorValue = 0; colorValue < biggestColorFound + 1; colorValue++){
+         for(int i = 0; i < size; i++){
+            if(colors[i] == colorValue){
+               int* pos = sortedPush.Push(1);
+               *pos = i;
+            }
+         }
+      }
+      #if 0
+      PrintIntTable(sortedIndexes,arena,3);
+      printf("\n");
+      #endif
+   };
+
+   AssertIndexedArray(sortedIndexes,arena);
+
+   ColoredOrderingResult res = {};
+   res.order = sortedIndexes;
+   res.upperBound = biggestColorFound + 1;
+
+   return res;
+}
+
+GenerateMappingNodesResult GenerateMappingNodes(Subgraph accel1,Subgraph accel2,Arena* out,Arena* temp,Array<MappingNode> implicitNodes){
+   BLOCK_REGION(temp);
+
+   Hashmap<ComplexFUInstance*,MergeEdge> specificsMapping;
+   specificsMapping.Init(temp,1000);
+   Pool<MappingNode> specificsAdded = {};
+   Hashmap<ComplexFUInstance*,int> nodeExists;
+   nodeExists.Init(temp,Size(accel1.nodes) + Size(accel2.nodes));
+
+   FOREACH_SUBLIST(ptr,accel1.nodes){
+      nodeExists.InsertIfNotExist(ptr,0);
+   }
+   FOREACH_SUBLIST(ptr,accel2.nodes){
+      nodeExists.InsertIfNotExist(ptr,0);
+   }
+
+   // Map outputs
+   Node* accel1Output = GetOutputInstance(accel1);
+   Node* accel2Output = GetOutputInstance(accel2);
+   if(accel1Output && accel2Output){
+      MergeEdge node = {};
+      node.instances[0] = accel1Output;
+      node.instances[1] = accel2Output;
+
+      specificsMapping.Insert(accel1Output,node);
+      specificsMapping.Insert(accel2Output,node);
+
+      MappingNode* n = specificsAdded.Alloc();
+      n->nodes = node;
+      n->type = MappingNode::NODE;
+   }
+
+   // Map inputs
+   FOREACH_SUBLIST(instA,accel1.nodes){
+      if(instA->declaration != BasicDeclaration::input){
+         continue;
+      }
+
+      FOREACH_SUBLIST(instB,accel2.nodes){
+         if(instB->declaration != BasicDeclaration::input){
+            continue;
+         }
+
+         if(instA->id != instB->id){
+            continue;
+         }
+
+         MergeEdge node = {};
+         node.instances[0] = instA;
+         node.instances[1] = instB;
+
+         specificsMapping.Insert(instA,node);
+         specificsMapping.Insert(instB,node);
+
+         MappingNode* n = specificsAdded.Alloc();
+         n->nodes = node;
+         n->type = MappingNode::NODE;
+      }
+   }
+
+   Byte* nodeStart = MarkArena(out);
+
+   // Check possible edge mapping
+   FOREACH_SUBLIST(edge1,accel1.edges){
+      if(!(nodeExists.Get(edge1->units[0].inst) && nodeExists.Get(edge1->units[1].inst))){
+         continue;
+      }
+
+      FOREACH_SUBLIST(edge2,accel2.edges){
+         if(!(nodeExists.Get(edge2->units[0].inst) && nodeExists.Get(edge2->units[1].inst))){
+            continue;
+         }
+
+         // TODO: some nodes do not care about which port is connected (think the inputs for common operations, like multiplication, adders and the likes)
+         // Can augment the algorithm further to find more mappings
+         if(!(EqualPortMapping(edge1->units[0],edge2->units[0]) &&
+            EqualPortMapping(edge1->units[1],edge2->units[1]))){
+            continue;
+         }
+
+         if(edge1->units[0].inst->declaration->type == FUDeclaration::SPECIAL ||
+            edge1->units[1].inst->declaration->type == FUDeclaration::SPECIAL ||
+            edge2->units[0].inst->declaration->type == FUDeclaration::SPECIAL ||
+            edge2->units[1].inst->declaration->type == FUDeclaration::SPECIAL){
+            continue;
+         }
+
+         MappingNode node = {};
+         node.type = MappingNode::EDGE;
+
+         node.edges[0].units[0] = edge1->units[0];
+         node.edges[0].units[1] = edge1->units[1];
+         node.edges[1].units[0] = edge2->units[0];
+         node.edges[1].units[1] = edge2->units[1];
+
+         // Checks to see if we are in conflict with any specific node.
+         MergeEdge* possibleSpecificConflict = specificsMapping.Get(node.edges[0].units[0].inst);
+         if(!possibleSpecificConflict) possibleSpecificConflict = specificsMapping.Get(node.edges[0].units[1].inst);
+         if(!possibleSpecificConflict) possibleSpecificConflict = specificsMapping.Get(node.edges[1].units[0].inst);
+         if(!possibleSpecificConflict) possibleSpecificConflict = specificsMapping.Get(node.edges[1].units[1].inst);
+
+         if(possibleSpecificConflict){
+            MappingNode specificNode = {};
+            specificNode.type = MappingNode::NODE;
+            specificNode.nodes = *possibleSpecificConflict;
+
+            if(MappingConflict(node,specificNode)){
+               continue;
+            }
+         }
+
+         bool continueLoop = false;
+         for(MappingNode specificNode : implicitNodes){
+            if(specificNode == node){
+               continueLoop = true;
+               break;
+            }
+
+            if(MappingConflict(node,specificNode)){
+               continueLoop = true;
+               break;
+            }
+         }
+
+         if(continueLoop){
+            continue;
+         }
+
+         MappingNode* space = PushStruct<MappingNode>(out);
+         *space = node;
+      }
+   }
+
+   Array<MappingNode> nodes = PointArray<MappingNode>(out,nodeStart);
+
+   GenerateMappingNodesResult res = {};
+   res.nodes = nodes;
+   res.specificsAdded = specificsAdded;
+
+   return res;
+}
+
+int EdgeSize(ConsolidationGraph graph){
+   int count = 0;
+   for(BitArray& arr : graph.edges){
+      count += arr.GetNumberBitsSet();
+   }
+   return count;
+}
+
+ConsolidationResult GenerateConsolidationGraphForSubgraphs(Subgraph accel1,Subgraph accel2,Array<MappingNode> implicitNodes,Arena* arena){
+   // Should be temp memory instead of using memory intended for the graph, but since the graph is expected to use a lot of memory and we are technically saving memory using this mapping, no major problem
+   Byte* mark = MarkArena(arena);
+   Arena nodeSpace = SubArena(arena,Size(accel1.edges) * Size(accel2.edges) * sizeof(MappingNode));
+
+   //TimeIt t1("Node construction");
+   GenerateMappingNodesResult nodesResult = GenerateMappingNodes(accel1,accel2,&nodeSpace,arena,implicitNodes);
+   //t1.End();
+
+   Array<MappingNode> nodes = nodesResult.nodes;
+   //printf("Node Size: %d\n",nodes.size);
+
+   #if 0
+   int amountOfMappings = CalculateAmountOfMappings(nodes,arena);
+   printf("Amount of edges: %d\n",amountOfMappings);
+   #endif
+
+   if(nodes.size > 1000000){
+      //printf("Too many nodes, zero graph\n");
+
+      PopMark(arena,mark);
+      ConsolidationResult res = {};
+
+      return res;
+   }
+
+   PopToSubArena(arena,nodeSpace);
+
+   if(nodes.size == 0){
+      ConsolidationResult res = {};
+      res.graph = (ConsolidationGraph){};
+      res.upperBound = 0;
+      res.specificsAdded = nodesResult.specificsAdded;
+      return res;
+   }
+
+   int upperBound = 999999;
+   ConsolidationGraph graph = {};
+
+   #if 0
+   timeRegion("Edge construction"){
+   graph = BuildConsolidationGraphFromNodes(nodes,arena);
+   };
+   timeRegion("Node Coloring"){
+   region(arena){
+      ColoredOrderingResult orderingResult = ColoredOrdering(graph,arena);
+      Array<int> newOrder = orderingResult.order;
+      upperBound = orderingResult.upperBound;
+   };
+   };
+   #endif
+
+   #if 1
+   //timeRegion("Node reordering"){
+   region(arena){
+      graph = BuildConsolidationGraphFromNodes(nodes,arena);
+      //printf("Edge size: %d\n",EdgeSize(graph));
+      //exit(0);
+
+      #if 0
+      Array<int> newOrder = DegreeReordering(graph,arena);
+      upperBound = std::min(Size(accel1.nodes),Size(accel2.nodes));
+      #endif
+      #if 0
+      Array<int> newOrder = RadixReordering(graph,arena);
+      upperBound = std::min(Size(accel1.nodes),Size(accel2.nodes));
+      #endif
+      #if 01
+      ColoredOrderingResult orderingResult = ColoredOrdering(graph,arena);
+      Array<int> newOrder = orderingResult.order;
+      upperBound = orderingResult.upperBound;
+      //PrintIntTable(newOrder,arena);
+      #endif
+
+      Array<MappingNode> orderedNodes = ReorderMappingNodes(nodes,newOrder,arena);
+
+      for(int i = 0; i < orderedNodes.size; i++){
+         nodes[i] = orderedNodes[i];
+      }
+   };
+   //};
+   #endif
+
+   #if 1
+   //TimeIt t2("Edge construction");
+   graph = BuildConsolidationGraphFromNodes(nodes,arena);
+   //t2.End();
+   #endif
+
+   //printf("Edge size: %d\n",EdgeSize(graph));
+   //exit(0);
+
+   ConsolidationResult res = {};
+   res.graph = graph;
+   res.upperBound = upperBound;
+   res.specificsAdded = nodesResult.specificsAdded;
+
+   //printf("Upperbound:%d\n",upperBound);
+
+   return res;
+}
+
+ConsolidationResult GenerateConsolidationGraphGivenInitialClique(Subgraph accel1,Subgraph accel2,ConsolidationGraph givenClique,Arena* arena){
+   Byte* nodesMark = MarkArena(arena);
+
+   for(int i : givenClique.validNodes){
+      MappingNode* node = PushStruct<MappingNode>(arena);
+      *node = givenClique.nodes[i];
+   }
+   Array<MappingNode> implicitNodes = PointArray<MappingNode>(arena,nodesMark);
+
+   ConsolidationResult res = GenerateConsolidationGraphForSubgraphs(accel1,accel2,implicitNodes,arena);
+   return res;
+}
 
 Array<int> CalculateCoreNumbers(ConsolidationGraph graph,Arena* arena){
    int size = graph.nodes.size;
@@ -1132,10 +1859,14 @@ Array<int> CalculateCoreNumbers(ConsolidationGraph graph,Arena* arena){
 
    ArenaMarker marker(arena);
 
-   Array<int> degrees = PushArray<int>(arena,size);
-   for(int i = 0; i < size; i++){
-      degrees[i] = edges[i].GetNumberBitsSet();
-   }
+   Array<int> degrees = CalculateDegrees(graph,arena);
+
+   #if 0
+   region(arena){
+      String repr = PushIntTableRepresentation(arena,degrees);
+      printf("Degrees:\n %.*s\n",UNPACK_SS(repr));
+   };
+   #endif
 
    Array<bool> seen = PushArray<bool>(arena,size);
    Memset(seen,false);
@@ -1154,6 +1885,7 @@ Array<int> CalculateCoreNumbers(ConsolidationGraph graph,Arena* arena){
       int index = smallestIndex;
 
       Assert(index != -1);
+      Assert(!seen[index]);
       seen[index] = true;
 
       core[index] = smallestDegree;
@@ -1165,8 +1897,10 @@ Array<int> CalculateCoreNumbers(ConsolidationGraph graph,Arena* arena){
       }
    }
 
+   #if 0
    String res = PushIntTableRepresentation(arena,core);
-   printf("%.*s\n",UNPACK_SS(res));
+   printf("Core:\n %.*s\n",UNPACK_SS(res));
+   #endif
 
    return core;
 }
@@ -1201,265 +1935,362 @@ void SwapCliqueUntil(CliqueState* state,int start,int endIncluded){
    }
 }
 
-ConsolidationResult GenerateConsolidationGraphGivenInitialClique(Versat* versat,Arena* arena,Subgraph accel1,Subgraph accel2,ConsolidationGraph givenClique){
-   ConsolidationGraph graph = {};
-
-   // Should be temp memory instead of using memory intended for the graph, but since the graph is expected to use a lot of memory and we are technically saving memory using this mapping, no major problem
-   Hashmap<ComplexFUInstance*,MappingNode> specificsMapping;
-   specificsMapping.Init(arena,1000);
-   Pool<MappingNode> specificsAdded = {};
-   Hashmap<ComplexFUInstance*,int> nodeExists;
-   nodeExists.Init(arena,Size(accel1.nodes) + Size(accel2.nodes));
-
-   FOREACH_SUBLIST(ptr,accel1.nodes){
-      nodeExists.InsertIfNotExist(ptr,0);
+Array<FlattenMapping> GetSpecificMappings(FlatteningTemp* head1,FlatteningTemp* head2,Array<SubgraphMapping> mappings,Arena* arena){
+   FOREACH_LIST(t1,head1){
+      //printf("%.*s %d\n",UNPACK_SS(t1->name),t1->level);
+      t1->flag = 0;
    }
-   FOREACH_SUBLIST(ptr,accel2.nodes){
-      nodeExists.InsertIfNotExist(ptr,0);
+   FOREACH_LIST(t2,head2){
+      //printf("%.*s %d\n",UNPACK_SS(t2->name),t2->level);
+      t2->flag = 0;
    }
 
-   // Inserts specifics from the given clique
-   for(int i : givenClique.validNodes){
-      MappingNode node = givenClique.nodes[i];
+   Byte* mark = MarkArena(arena);
 
-      specificsMapping.Insert(node.nodes.instances[0],node);
-      specificsMapping.Insert(node.nodes.instances[1],node);
+   bool mappedOne = true;
+   while(mappedOne){
+      mappedOne = false;
 
-      MappingNode* n = specificsAdded.Alloc();
-      *n = node;
+      int maxWeight = 0;
+      FOREACH_LIST(t1,head1){
+         FOREACH_LIST(t2,head2){
+            if(t1->flag || t2->flag){
+               continue;
+            }
 
-      ARENA_MARKER(arena);
-      String repr = Repr(node,arena);
+            for(SubgraphMapping& sub : mappings){
+               //printf("Sub: %.*s - %.*s %d\n",UNPACK_SS(sub.decl1->name),UNPACK_SS(sub.decl2->name),sub.edgeMappings.size);
+               if(sub.decl1 == t1->decl && sub.decl2 == t2->decl){
+                  int weight = sub.edgeMappings.size;
 
-      printf("%.*s\n",UNPACK_SS(repr));
-   }
-
-   #if 1
-   // Map outputs
-   Node* accel1Output = GetOutputInstance(accel1);
-   Node* accel2Output = GetOutputInstance(accel2);
-   if(accel1Output && accel2Output){
-      MappingNode node = {};
-      node.nodes.instances[0] = accel1Output;
-      node.nodes.instances[1] = accel2Output;
-
-      specificsMapping.Insert(accel1Output,node);
-      specificsMapping.Insert(accel2Output,node);
-
-      MappingNode* n = specificsAdded.Alloc();
-      *n = node;
-
-      ARENA_MARKER(arena);
-      String repr = Repr(node,arena);
-
-      printf("%.*s\n",UNPACK_SS(repr));
-   }
-
-   // Map inputs
-   FOREACH_SUBLIST(instA,accel1.nodes){
-      if(instA->declaration != BasicDeclaration::input){
-         continue;
-      }
-
-      FOREACH_SUBLIST(instB,accel2.nodes){
-         if(instB->declaration != BasicDeclaration::input){
-            continue;
-         }
-
-         if(instA->id != instB->id){
-            continue;
-         }
-
-         MappingNode node = {};
-         node.nodes.instances[0] = instA;
-         node.nodes.instances[1] = instB;
-
-         specificsMapping.Insert(instA,node);
-         specificsMapping.Insert(instB,node);
-
-         MappingNode* n = specificsAdded.Alloc();
-         *n = node;
-
-         ARENA_MARKER(arena);
-         String repr = Repr(node,arena);
-
-         printf("%.*s\n",UNPACK_SS(repr));
-      }
-   }
-   #endif
-
-   graph.nodes.data = (MappingNode*) MarkArena(arena);
-
-   #if 1
-   // Check possible edge mapping
-   FOREACH_SUBLIST(edge1,accel1.edges){
-      #if 01
-      if(!(nodeExists.Get(edge1->units[0].inst) && nodeExists.Get(edge1->units[1].inst))){
-         continue;
-      }
-      #endif
-
-      FOREACH_SUBLIST(edge2,accel2.edges){
-         #if 01
-         if(!(nodeExists.Get(edge2->units[0].inst) && nodeExists.Get(edge2->units[1].inst))){
-            continue;
-         }
-         #endif
-
-         // TODO: some nodes do not care about which port is connected (think the inputs for common operations, like multiplication, adders and the likes)
-         // Can augment the algorithm further to find more mappings
-         if(!(EqualPortMapping(versat,edge1->units[0],edge2->units[0]) &&
-            EqualPortMapping(versat,edge1->units[1],edge2->units[1]))){
-            continue;
-         }
-
-         // No mapping input or output units
-         #if 1
-         if(edge1->units[0].inst->declaration->type == FUDeclaration::SPECIAL ||
-            edge1->units[1].inst->declaration->type == FUDeclaration::SPECIAL ||
-            edge2->units[0].inst->declaration->type == FUDeclaration::SPECIAL ||
-            edge2->units[1].inst->declaration->type == FUDeclaration::SPECIAL){
-            continue;
-         }
-         #endif
-
-         MappingNode node = {};
-         node.type = MappingNode::EDGE;
-
-         node.edges[0].units[0] = edge1->units[0];
-         node.edges[0].units[1] = edge1->units[1];
-         node.edges[1].units[0] = edge2->units[0];
-         node.edges[1].units[1] = edge2->units[1];
-
-         // Checks to see if we are in conflict with any specific node.
-         MappingNode* possibleSpecificConflict = specificsMapping.Get(node.edges[0].units[0].inst);
-         if(!possibleSpecificConflict) possibleSpecificConflict = specificsMapping.Get(node.edges[0].units[1].inst);
-         if(!possibleSpecificConflict) possibleSpecificConflict = specificsMapping.Get(node.edges[1].units[0].inst);
-         if(!possibleSpecificConflict) possibleSpecificConflict = specificsMapping.Get(node.edges[1].units[1].inst);
-
-         if(possibleSpecificConflict && MappingConflict(node,*possibleSpecificConflict)){
-            ARENA_MARKER(arena);
-
-            String mapping = Repr(node,arena);
-            printf("%.*s --- ",UNPACK_SS(mapping));
-
-            String problem = Repr(*possibleSpecificConflict,arena);
-            printf("%.*s\n",UNPACK_SS(problem));
-
-            continue;
-         }
-
-         #if 0
-         // Check to see that the edge maps with all the specific nodes. Specific nodes must be part of the final clique, and therefore we can not insert any edge that could potently make it not happen
-         bool conflict = false;
-         for(int i = 0; i < options.nSpecifics; i++){
-            MappingNode specificNode = graph.nodes[i];
-
-            if(MappingConflict(node,specificNode)){
-               conflict = true;
-               break;
+                  //printf("%.*s - %.*s = %d\n",UNPACK_SS(sub.decl1->name),UNPACK_SS(sub.decl2->name),weight);
+                  maxWeight = std::max(maxWeight,weight);
+               }
             }
          }
-         if(conflict){
-            continue;
+      }
+      if(maxWeight == 0){
+         break;
+      }
+
+      FOREACH_LIST(t1,head1){
+         FOREACH_LIST(t2,head2){
+            if(t1->flag || t2->flag){
+               continue;
+            }
+            for(SubgraphMapping& sub : mappings){
+               if(sub.decl1 == t1->decl && sub.decl2 == t2->decl){
+                  int weight = sub.edgeMappings.size;
+
+                  #if 0
+                  if(weight != maxWeight){
+                     continue;
+                  }
+                  #else
+                  if(weight != maxWeight || maxWeight == 0){
+                     continue;
+                  }
+                  #endif
+
+                  FlattenMapping* map = PushStruct<FlattenMapping>(arena);
+                  map->t1 = t1;
+                  map->t2 = t2;
+                  map->mapping = &sub;
+                  map->weight = weight;
+                  t1->flag = 1;
+                  t2->flag = 1;
+
+                  mappedOne = true;
+                  goto endLoop;
+               }
+            }
          }
-         #endif
-
-         MappingNode* space = PushStruct<MappingNode>(arena);
-
-         *space = node;
-         graph.nodes.size += 1;
       }
+endLoop:;
    }
-   #endif
 
-   int upperBound = std::min(Size(accel1.nodes),Size(accel2.nodes));
-   Array<BitArray> neighbors = PushArray<BitArray>(arena,graph.nodes.size);
-   int times = 0;
-   for(int i = 0; i < graph.nodes.size; i++){
-      neighbors[i].Init(arena,graph.nodes.size);
-      neighbors[i].Fill(0);
-   }
-   for(int i = 0; i < graph.nodes.size; i++){
-      MappingNode node1 = graph.nodes[i];
-
-      for(int ii = 0; ii < i; ii++){
-         times += 1;
-
-         MappingNode node2 = graph.nodes[ii];
-
-         if(MappingConflict(node1,node2)){
-            continue;
-         }
-
-         neighbors.data[i].Set(ii,1);
-         neighbors.data[ii].Set(i,1);
-      }
-   }
-   graph.edges = neighbors;
-
-   // Reorder based on degree of nodes
-   #if 0
-   {  ArenaMarker marker(arena);
-      Array<int> degree = PushArray<int>(arena,graph.nodes.size);
-      Memset(degree,0);
-      for(int i = 0; i < graph.nodes.size; i++){
-         degree[i] = graph.edges[i].GetNumberBitsSet();
-      }
-   #endif
-
-   graph.validNodes.Init(arena,graph.nodes.size);
-   graph.validNodes.Fill(1);
-
-   ConsolidationResult res = {};
-   res.graph = graph;
-   res.upperBound = upperBound;
-   res.specificsAdded = specificsAdded;
+   Array<FlattenMapping> res = PointArray<FlattenMapping>(arena,mark);
 
    return res;
 }
 
-MergeGraphResult HierarchicalMergeAccelerators(Versat* versat,Accelerator* accel1,Accelerator* accel2,String name){
-   Arena* arena = &versat->temp;
-   ArenaMarker marker(arena);
-
-   Graph* graph1 = accel1;
-   Array<FlatteningTemp> res1 = HierarchicalFlattening(graph1,arena);
-
-   Graph* graph2 = accel2;
-   Array<FlatteningTemp> res2 = HierarchicalFlattening(graph2,arena);
-
+#if 0
+Array<IndexMapping> ParallelHierarchicalHeuristic(Graph* graph1,Graph* graph2,FlatteningTemp* t1,FlatteningTemp* t2,PushPtr<SubgraphMapping>& allMappings,Arena* arena){
    Hashmap<FUDeclaration*,FlatteningTemp*> decl1 = {};
    decl1.Init(arena,999);
 
    Hashmap<FUDeclaration*,FlatteningTemp*> decl2 = {};
    decl2.Init(arena,999);
 
-   for(FlatteningTemp& t : res1){
-      if(t.level == 0){
-         decl1.InsertIfNotExist(t.decl,&t);
-      }
-   }
-   for(FlatteningTemp& t : res2){
-      if(t.level == 0){
-         decl2.InsertIfNotExist(t.decl,&t);
-      }
+   FOREACH_LIST(ptr,t1->child){
+      decl1.InsertIfNotExist(ptr->decl,ptr);
    }
 
-   OutputDotGraph(graph1,"debug/graph_0.dot",arena);
-   OutputDotGraph(graph2,"debug/graph_1.dot",arena);
+   FOREACH_LIST(ptr,t2->child){
+      decl2.InsertIfNotExist(ptr->decl,ptr);
+   }
 
-   // Get subgraph mappings (one for each declaration pair)
-   Array<SubgraphMapping> mappings = PushArray<SubgraphMapping>(arena,99);
-   int index = 0;
+   int numberMappings = 0;
+   // Get any mapping missing from allMappings
    for(auto pair1 : decl1){
       for(auto pair2 : decl2){
          if(pair1.first == pair2.first){
             continue;
          }
-         FUDeclaration* t1 = pair1.second->decl;
-         FUDeclaration* t2 = pair2.second->decl;
 
+         bool doContinue = false;
+         for(SubgraphMapping& map : allMappings.AsArray()){
+            if(map.decl1 == pair1.first && map.decl2 == pair2.first){
+               doContinue = true;
+               break;
+            }
+         }
+         if(doContinue){
+            continue;
+         }
+
+         numberMappings += 1;
+      }
+   }
+   printf("Mappings: %d\n",numberMappings);
+
+   exit(0);
+
+   // Get any mapping missing from allMappings
+   for(auto pair1 : decl1){
+      for(auto pair2 : decl2){
+         if(pair1.first == pair2.first){
+            continue;
+         }
+
+         bool doContinue = false;
+         for(SubgraphMapping& map : allMappings.AsArray()){
+            if(map.decl1 == pair1.first && map.decl2 == pair2.first){
+               doContinue = true;
+               break;
+            }
+         }
+         if(doContinue){
+            continue;
+         }
+
+         FUDeclaration* t1 = pair1.first;
+         FUDeclaration* t2 = pair2.first;
+
+         Array<IndexMapping> indexMappings = ParallelHierarchicalHeuristic(graph1,graph2,pair1.second,pair2.second,allMappings,arena);
+
+         SubgraphMapping* mapping = allMappings.Push(1);
+
+         mapping->decl1 = t1;
+         mapping->decl2 = t2;
+         mapping->edgeMappings = indexMappings;
+      }
+   }
+
+   Array<FlattenMapping> specificMappings = GetSpecificMappings(t1->child,t2->child,allMappings.AsArray(),arena);
+
+   for(int i = 0; i < specificMappings.size; i++){
+      for(int j = i + 1; j < specificMappings.size; j++){
+         if(specificMappings[j].t1->index > specificMappings[i].t1->index){
+            SWAP(specificMappings[i],specificMappings[j]);
+         }
+      }
+   }
+
+   TIME_IT("Finding heuristic");
+
+   #if 01
+   printf("=== Finding heuristic for %.*s [%.*s] %.*s [%.*s] ===\n",UNPACK_SS(t1->name),UNPACK_SS(t1->decl->name),UNPACK_SS(t2->name),UNPACK_SS(t2->decl->name));
+
+   for(FlattenMapping& mapping : specificMappings){
+      printf("Mapping %.*s to %.*s\n",UNPACK_SS(mapping.t1->name),UNPACK_SS(mapping.t2->name));
+   }
+   #endif
+
+   int specificSize = 0;
+   for(FlattenMapping& m : specificMappings){
+      specificSize += m.mapping->edgeMappings.size;
+   }
+
+   printf("Specific size: %d\n",specificSize);
+
+   Array<MappingNode> implicitNodes = PushArray<MappingNode>(arena,specificSize);
+   PushPtr<MappingNode> nodesPush = {};
+   nodesPush.Init(implicitNodes);
+
+   for(FlattenMapping& m : specificMappings){
+      Subgraph sub1 = {};
+      sub1.nodes = SimpleSublist(ListGet(graph1->instances,m.t1->index),m.t1->subunitsCount);
+      sub1.edges = SimpleSublist(ListGet(graph1->edges,m.t1->edgeStart),m.t1->edgeCount);
+
+      Subgraph sub2 = {};
+      sub2.nodes = SimpleSublist(ListGet(graph2->instances,m.t2->index),m.t2->subunitsCount);
+      sub2.edges = SimpleSublist(ListGet(graph2->edges,m.t2->edgeStart),m.t2->edgeCount);
+
+      ArenaMarker marker(arena);
+      Array<IndexMapping> graphMappings = m.mapping->edgeMappings;
+
+      for(IndexMapping map : graphMappings){
+         MappingNode* node = nodesPush.Push(1);
+
+         node->type = MappingNode::EDGE;
+         node->edges[0] = ListGet(sub1.edges.start,map.index0)->edge;
+         node->edges[1] = ListGet(sub2.edges.start,map.index1)->edge;
+         //printf("G: %d %d\n",map.index0,map.index1);
+      }
+   }
+
+   Subgraph sub1 = {};
+   sub1.nodes = SimpleSublist(ListGet(graph1->instances,t1->index),t1->subunitsCount);
+   sub1.edges = SimpleSublist(ListGet(graph1->edges,t1->edgeStart),t1->edgeCount);
+
+   Subgraph sub2 = {};
+   sub2.nodes = SimpleSublist(ListGet(graph2->instances,t2->index),t2->subunitsCount);
+   sub2.edges = SimpleSublist(ListGet(graph2->edges,t2->edgeStart),t2->edgeCount);
+
+   ConsolidationResult result = GenerateConsolidationGraphForSubgraphs(sub1,sub2,implicitNodes,arena);
+   ConsolidationGraph graph = result.graph;
+
+   #if 01
+   CliqueState* state = InitMaxClique(graph,result.upperBound,arena);
+   RunMaxClique(state,arena);
+   ConsolidationGraph extraClique = state->clique;
+   #else
+   TimeIt pc("Parallel clique");
+   ConsolidationGraph extraClique = ParallelMaxClique(graph,result.upperBound,arena);
+   pc.End();
+   #endif
+
+   Assert(IsClique(extraClique).result);
+
+   #if 0
+   OutputDotGraph(sub1,StaticFormat("debug/sub_%.*s_sub.dot",UNPACK_SS(t1->name)),arena);
+   OutputDotGraph(sub2,StaticFormat("debug/sub_%.*s_sub.dot",UNPACK_SS(t2->name)),arena);
+
+   printf("Mapping nodes:\n");
+   for(MappingNode& node : implicitNodes){
+      region(arena){
+         String repr = Repr(node,arena);
+         printf("%.*s\n",UNPACK_SS(repr));
+      };
+   }
+   printf("\n\n");
+   #endif
+
+   #if 0
+   printf("\n");
+   printf("Nodes from children: %d\n",implicitNodes.size);
+   printf("Extra CG size: %d\n",graph.nodes.size);
+
+   printf("Extra clique size: %d\n",extraClique.validNodes.GetNumberBitsSet());
+   #endif
+
+   Array<IndexMapping> cliqueMappings = GetIndexMappingFromClique(extraClique,sub1,sub2,arena);
+
+   Array<IndexMapping> fullMappings = PushArray<IndexMapping>(arena,specificSize + extraClique.validNodes.GetNumberBitsSet());
+   PushPtr<IndexMapping> pushPtr = {};
+   pushPtr.Init(fullMappings);
+
+   region(arena){
+      for(FlattenMapping& m : specificMappings){
+         Subgraph sub1 = {};
+         sub1.nodes = SimpleSublist(ListGet(graph1->instances,m.t1->index),m.t1->subunitsCount);
+         sub1.edges = SimpleSublist(ListGet(graph1->edges,m.t1->edgeStart),m.t1->edgeCount);
+
+         Subgraph sub2 = {};
+         sub2.nodes = SimpleSublist(ListGet(graph2->instances,m.t2->index),m.t2->subunitsCount);
+         sub2.edges = SimpleSublist(ListGet(graph2->edges,m.t2->edgeStart),m.t2->edgeCount);
+
+         //Array<IndexMapping> specific = TransformGenericIntoSpecific(m.mapping->edgeMappings,m.t1,m.t2,arena);
+         for(IndexMapping mapping : m.mapping->edgeMappings){
+            IndexMapping specific = mapping;
+            specific.index0 += m.t1->edgeStart - t1->edgeStart;
+            specific.index1 += m.t2->edgeStart - t2->edgeStart;
+
+            pushPtr.PushValue(specific);
+         }
+      }
+   };
+   pushPtr.Push(cliqueMappings);
+
+   #if 0
+   for(int i = 0; i < fullMappings.size; i++){
+      IndexMapping& m = fullMappings[i];
+      Edge* edge0 = ListGet(sub1.edges.start,m.index0);
+      Edge* edge1 = ListGet(sub2.edges.start,m.index1);
+
+      printf("%d %d\n",m.index0,m.index1);
+   }
+
+   for(int i = 0; i < fullMappings.size; i++){
+      IndexMapping& m = fullMappings[i];
+      Edge* edge0 = ListGet(sub1.edges.start,m.index0);
+      Edge* edge1 = ListGet(sub2.edges.start,m.index1);
+
+      region(arena){
+         String str1 = Repr(edge0->edge,GRAPH_DOT_FORMAT_NAME,arena);
+         String str2 = Repr(edge1->edge,GRAPH_DOT_FORMAT_NAME,arena);
+
+         if(i < specificSize){
+            printf("From specific: %.*s // %.*s\n",UNPACK_SS(str1),UNPACK_SS(str2));
+         } else {
+            printf("From extra   : %.*s // %.*s\n",UNPACK_SS(str1),UNPACK_SS(str2));
+         }
+      };
+   }
+   printf("\n");
+
+   printf("Mapping result: \n");
+   for(int i = 0; i < fullMappings.size; i++){
+      IndexMapping& m = fullMappings[i];
+
+      printf("%d %d\n",m.index0,m.index1);
+   }
+   #endif
+
+   printf("Size found: %d\n",fullMappings.size);
+
+   return fullMappings;
+}
+#endif
+
+Array<IndexMapping> HierarchicalHeuristic(Graph* graph1,Graph* graph2,FlatteningTemp* t1,FlatteningTemp* t2,PushPtr<SubgraphMapping>& allMappings,Arena* arena){
+   Hashmap<FUDeclaration*,FlatteningTemp*> decl1 = {};
+   decl1.Init(arena,999);
+
+   Hashmap<FUDeclaration*,FlatteningTemp*> decl2 = {};
+   decl2.Init(arena,999);
+
+   FOREACH_LIST(ptr,t1->child){
+      decl1.InsertIfNotExist(ptr->decl,ptr);
+   }
+
+   FOREACH_LIST(ptr,t2->child){
+      decl2.InsertIfNotExist(ptr->decl,ptr);
+   }
+
+   // Get any mapping missing from allMappings
+   for(auto pair1 : decl1){
+      for(auto pair2 : decl2){
+         if(pair1.first == pair2.first){
+            continue;
+         }
+
+         bool doContinue = false;
+         for(SubgraphMapping& map : allMappings.AsArray()){
+            if(map.decl1 == pair1.first && map.decl2 == pair2.first){
+               doContinue = true;
+               break;
+            }
+         }
+         if(doContinue){
+            continue;
+         }
+
+         FUDeclaration* t1 = pair1.first;
+         FUDeclaration* t2 = pair2.first;
+
+         #if 0
          Subgraph sub1 = {};
          sub1.nodes = SimpleSublist(ListGet(graph1->instances,pair1.second->index),pair1.second->subunitsCount);
          sub1.edges = SimpleSublist(ListGet(graph1->edges,pair1.second->edgeStart),pair1.second->edgeCount);
@@ -1470,442 +2301,665 @@ MergeGraphResult HierarchicalMergeAccelerators(Versat* versat,Accelerator* accel
 
          OutputDotGraph(sub1,StaticFormat("debug/sub_%.*s_sub.dot",UNPACK_SS(t1->name)),arena);
          OutputDotGraph(sub2,StaticFormat("debug/sub_%.*s_sub.dot",UNPACK_SS(t2->name)),arena);
-
-         CalculateCliqueAndGetMappingsResult res = CalculateCliqueAndGetMappings(versat,sub1,sub2,arena); // Should be, in theory,a pretty good aproximation
-         Array<IndexMapping> indexMappings = res.mappings;
-
-         #if 1
-         for(IndexMapping m : indexMappings){
-            printf("Map edge %d to %d\n",m.index0,m.index1);
-         }
-         printf("\n");
          #endif
 
-         mappings[index].decl1 = t1;
-         mappings[index].decl2 = t2;
-         mappings[index].edgeMappings = indexMappings;
-         mappings[index].table = res.cliqueTable;
-         mappings[index].tableMappings = res.cliqueTableMappings;
-         index += 1;
-      }
-   }
-   mappings.size = index;
+         //CalculateCliqueAndGetMappingsResult res = HierarchicalHeuristic(sub1,sub2,t1,t2,arena); // Should be, in theory,a pretty good aproximation
+         //Array<IndexMapping> indexMappings = res.mappings;
+         Array<IndexMapping> indexMappings = HierarchicalHeuristic(graph1,graph2,pair1.second,pair2.second,allMappings,arena);
 
-   Subgraph sub1 = DefaultSubgraph(graph1);
-   Subgraph sub2 = DefaultSubgraph(graph2);
+         SubgraphMapping* mapping = allMappings.Push(1);
 
-   ConsolidationGraphOptions options = {};
-   ConsolidationResult result = GenerateConsolidationGraph(versat,arena,sub1,sub2,options);
-   ConsolidationGraph graph = result.graph;
-
-   for(FlatteningTemp& t1 : res1){
-      t1.flag = 0;
-   }
-   for(FlatteningTemp& t2 : res2){
-      t2.flag = 0;
-   }
-
-   Byte* mark = MarkArena(arena);
-   for(FlatteningTemp& t1 : res1){
-      if(t1.level != 0){
-         continue;
-      }
-
-      int maxWeight = 0;
-      for(FlatteningTemp& t2 : res2){
-         if(t1.flag || t2.flag){
-            continue;
-         }
-
-         for(SubgraphMapping& sub : mappings){
-            if(sub.decl1 == t1.decl && sub.decl2 == t2.decl){
-               int weight = sub.edgeMappings.size;
-               maxWeight = std::max(maxWeight,weight);
-            }
-         }
-      }
-
-      for(FlatteningTemp& t2 : res2){
-         if(t2.level != 0){
-            continue;
-         }
-
-         if(t1.flag || t2.flag){
-            continue;
-         }
-         for(SubgraphMapping& sub : mappings){
-            if(sub.decl1 == t1.decl && sub.decl2 == t2.decl){
-               int weight = sub.edgeMappings.size;
-
-               #if 0
-               if(weight != maxWeight){
-                  continue;
-               }
-               #else
-               if(weight != maxWeight || maxWeight == 0){
-                  continue;
-               }
-               #endif
-
-               FlattenMapping* map = PushStruct<FlattenMapping>(arena);
-               map->t1 = &t1;
-               map->t2 = &t2;
-               map->mapping = &sub;
-               map->weight = weight;
-               t1.flag = 1;
-               t2.flag = 1;
-
-               break;
-            }
-         }
+         mapping->decl1 = t1;
+         mapping->decl2 = t2;
+         mapping->edgeMappings = indexMappings;
       }
    }
 
-   Array<FlattenMapping> specificMappings = PointArray<FlattenMapping>(arena,mark);
-
-   for(FlattenMapping& m : specificMappings){
-      printf("%.*s:%d %.*s:%d - %d\n",UNPACK_SS(m.t1->decl->name),m.t1->index,UNPACK_SS(m.t2->decl->name),m.t2->index,m.weight);
-   }
+   Array<FlattenMapping> specificMappings = GetSpecificMappings(t1->child,t2->child,allMappings.AsArray(),arena);
 
    for(int i = 0; i < specificMappings.size; i++){
       for(int j = i + 1; j < specificMappings.size; j++){
          if(specificMappings[j].t1->index > specificMappings[i].t1->index){
-            FlattenMapping temp = specificMappings[j];
-            specificMappings[j] = specificMappings[i];
-            specificMappings[i] = temp;
+            SWAP(specificMappings[i],specificMappings[j]);
          }
       }
    }
 
-   #if 0
-   printf("Possible mappings:\n");
-   for(int i = 0; i < graph.nodes.size; i++){
-      IndexMapping map = GetMappingNodeIndexes(graph.nodes[i],graph1->edges,graph2->edges);
-
-      printf("%02d : %02d    ",map.index0,map.index1);
-
-      EdgeNode* e1 = ListGet(graph1->edges,map.index0);
-      EdgeNode* e2 = ListGet(graph2->edges,map.index1);
-
-      ArenaMarker marker(arena);
-      String str1 = Repr(e1->edge,GRAPH_DOT_FORMAT_NAME,arena);
-      String str2 = Repr(e2->edge,GRAPH_DOT_FORMAT_NAME,arena);
-      printf("%.*s // %.*s\n",UNPACK_SS(str1),UNPACK_SS(str2));
-   }
-   #endif
-
-   ConsolidationGraph approximateClique = Copy(graph,arena);
-   approximateClique.validNodes.Fill(0);
-
-   for(FlattenMapping& m : specificMappings){
-      ArenaMarker marker(arena);
-      Array<IndexMapping> graphMappings = TransformGenericIntoSpecific(m.mapping->edgeMappings,m.t1,m.t2,arena);
-
-      Array<IndexMapping> graphTableMappings = TransformGenericIntoSpecific(m.mapping->tableMappings,m.t1,m.t2,arena);
-
-      #if 0
-      for(IndexMapping& map : graphTableMappings){
-         printf("%02d %02d\n",map.index0,map.index1);
-      }
-      #endif
-
-      for(IndexMapping& specific : graphMappings){
-         int bit = GetMappingBit(graph,graph1,graph2,specific);
-
-         approximateClique.validNodes.Set(bit,1);
-      }
-   }
-   Assert(IsClique(approximateClique).result);
-
-   // Full clique
-   #if 0
-   {
-   printf("Full clique:\n");
-   CliqueState* state = InitMaxClique(graph,999,arena);
-
-   RunMaxClique(state,arena);
-   ConsolidationGraph clique = state->clique;
-   printf("Size: %d\n",graph.nodes.size);
-   printf("Size of clique: %d\n",clique.validNodes.GetNumberBitsSet());
-   }
-   #endif
+   TIME_IT("Finding heuristic");
 
    #if 01
-   {
-   printf("Given approximate clique:\n");
-   ConsolidationResult resultingGraph = GenerateConsolidationGraphGivenInitialClique(versat,arena,sub1,sub2,approximateClique);
-   ConsolidationGraph graph = resultingGraph.graph;
-   OutputConsolidationGraph(graph,arena,true,"debug/specificCG.dot");
+   printf("=== Finding heuristic for %.*s [%.*s] %.*s [%.*s] ===\n",UNPACK_SS(t1->name),UNPACK_SS(t1->decl->name),UNPACK_SS(t2->name),UNPACK_SS(t2->decl->name));
 
-   CliqueState* state = InitMaxClique(graph,999,arena);
-   RunMaxClique(state,arena);
-   ConsolidationGraph clique = state->clique;
-   Assert(IsClique(clique).result);
-
-   printf("Size: %d\n",graph.nodes.size);
-   printf("Size Initial clique: %d\n",approximateClique.validNodes.GetNumberBitsSet());
-   printf("Size of clique: %d\n",clique.validNodes.GetNumberBitsSet());
+   for(FlattenMapping& mapping : specificMappings){
+      printf("Mapping %.*s to %.*s\n",UNPACK_SS(mapping.t1->name),UNPACK_SS(mapping.t2->name));
    }
    #endif
 
-   #if 0
-   printf("\n\n");
-   for(int i = 0; i < graph.validNodes.bitSize; i++){
-      IndexMapping map = GetMappingNodeIndexes(graph.nodes[i],graph1->edges,graph2->edges);
-
-      printf("%d : %d\n",map.index0,map.index1);
-   }
-   #endif
-
-   #if 0
-   //CalculateCliqueAndGetMappings(versat,sub1,sub2,arena);
-
-   //Array<ConsolidationGraph> cliques = AllMaxClique(result.graph,999,arena);
-   CliqueState state = MaxClique(result.graph,999,arena);
-   ConsolidationGraph clique = state.clique;
-
-   for(int i = 0; i < clique.nodes.size; i++){
-      IndexMapping map = GetMappingNodeIndexes(clique.nodes[i],graph1->edges,graph2->edges);
-
-      printf("%02d : %02d    ",map.index0,map.index1);
-
-      EdgeNode* e1 = ListGet(graph1->edges,map.index0);
-      EdgeNode* e2 = ListGet(graph2->edges,map.index1);
-
-      ArenaMarker marker(arena);
-      String str1 = Repr(e1->edge,GRAPH_DOT_FORMAT_NAME,arena);
-      String str2 = Repr(e2->edge,GRAPH_DOT_FORMAT_NAME,arena);
-      printf("%.*s // %.*s\n",UNPACK_SS(str1),UNPACK_SS(str2));
-   }
-   #endif
-
-   #if 0
-   printf("Approximate clique:\n");
-   for(int i : approximateClique.validNodes){
-      IndexMapping map = GetMappingNodeIndexes(approximateClique.nodes[i],graph1->edges,graph2->edges);
-
-      printf("%d : %d\n",map.index0,map.index1);
-   }
-   #endif
-
-   #if 0
-   printf("True Cliques:\n");
-   // The best 99 cliques
-   Array<ConsolidationGraph> cliques = AllMaxClique(result.graph,999,arena);
-
-   //CliqueState state = MaxClique(result.graph,999,arena);
-   //ConsolidationGraph clique = state.clique;
-   for(ConsolidationGraph& clique : cliques){
-      for(int i : clique.validNodes){
-         IndexMapping map = GetMappingNodeIndexes(clique.nodes[i],graph1->edges,graph2->edges);
-
-         printf("%d : %d\n",map.index0,map.index1);
-      }
-      printf("\n");
-   }
-   #endif
-
-   #if 0
-   {
-   ArenaMarker marker(arena);
-   printf("Max Clique:\n");
-   CliqueState* state = InitMaxClique(result.graph,999,arena);
-   Memset(state->table,0);
-
-   #if 0
-   for(int i = 0; i < state->table.size; i++){
-      MappingNode node = state->clique.nodes[i];
-
-      IndexMapping map = GetMappingNodeIndexes(node,graph1->edges,graph2->edges);
-
-      printf("%d %d\n",map.index0,map.index1);
-   }
-   #endif
-
-   #if 0
-   printf("Before:\n");
-   int extra = 0;
+   int specificSize = 0;
    for(FlattenMapping& m : specificMappings){
+      specificSize += m.mapping->edgeMappings.size;
+   }
+
+   printf("Specific size: %d\n",specificSize);
+
+   Array<MappingNode> implicitNodes = PushArray<MappingNode>(arena,specificSize);
+   PushPtr<MappingNode> nodesPush = {};
+   nodesPush.Init(implicitNodes);
+
+   for(FlattenMapping& m : specificMappings){
+      Subgraph sub1 = {};
+      sub1.nodes = SimpleSublist(ListGet(graph1->instances,m.t1->index),m.t1->subunitsCount);
+      sub1.edges = SimpleSublist(ListGet(graph1->edges,m.t1->edgeStart),m.t1->edgeCount);
+
+      Subgraph sub2 = {};
+      sub2.nodes = SimpleSublist(ListGet(graph2->instances,m.t2->index),m.t2->subunitsCount);
+      sub2.edges = SimpleSublist(ListGet(graph2->edges,m.t2->edgeStart),m.t2->edgeCount);
+
       ArenaMarker marker(arena);
-      Array<IndexMapping> graphTableMappings = TransformGenericIntoSpecific(m.mapping->tableMappings,m.t1,m.t2,arena);
+      Array<IndexMapping> graphMappings = m.mapping->edgeMappings;
 
-      int maxAdded = 0;
-      int index = 0;
-      for(IndexMapping& map : graphTableMappings){
-         printf("%02d %02d\n",map.index0,map.index1);
+      for(IndexMapping map : graphMappings){
+         MappingNode* node = nodesPush.Push(1);
 
-         int i = GetMappingBit(graph,graph1,graph2,map);
-         state->table[i] = m.mapping->table[index++] + extra;
-         maxAdded = std::max(state->table[i],maxAdded);
-      }
-      extra += maxAdded;
-   }
-   #endif
-
-   Array<int> coreNumbers = CalculateCoreNumbers(graph,arena);
-
-/*
-
-   Implement the AES wrapper. Use the current workspace, do not try to change it to the other branch until you have it working here.
-
-   Try this:
-
-      Use Consolidation Graph method to find best mappings for subunits.
-      Then use information taken to try to find a better mapping, but do not use the Consolidation graph approach.
-         Parallelize this portion and use it.
-      We can technically store multiple cliques, so it might be possible to search over multiple starting points
-
-      Alternatively, we might be able to build a Consolidation Graph with the mappings found already taken. (We only insert nodes which would maintain the clique)
-      The building procedure could be parallelized (even though might not be necessary if amount of potential nodes is low)
-      And furthermore we could keep track of multiple starting points to search multiple cliques extensions.
-         Or at least use them to guide the search, and implement a parallelized search over these more likely paths.
-
-
-*/
-
-   #if 0
-   SwapCliqueUntil(state,91,95);
-   SwapCliqueUntil(state,89,94);
-   SwapCliqueUntil(state,88,93);
-   SwapCliqueUntil(state,83,92);
-   SwapCliqueUntil(state,81,91);
-   SwapCliqueUntil(state,80,90);
-   SwapCliqueUntil(state,75,89);
-   SwapCliqueUntil(state,73,88);
-   SwapCliqueUntil(state,72,87);
-   SwapCliqueUntil(state,67,86);
-   SwapCliqueUntil(state,65,85);
-   SwapCliqueUntil(state,64,84);
-   SwapCliqueUntil(state,59,83);
-   SwapCliqueUntil(state,57,82);
-   SwapCliqueUntil(state,56,81);
-   SwapCliqueUntil(state,51,80);
-   SwapCliqueUntil(state,49,79);
-   SwapCliqueUntil(state,48,78);
-   SwapCliqueUntil(state,21,77);
-   SwapCliqueUntil(state,20,76);
-   SwapCliqueUntil(state,19,75);
-   SwapCliqueUntil(state,18,74);
-   SwapCliqueUntil(state,17,73);
-   SwapCliqueUntil(state,16,72);
-   SwapCliqueUntil(state,15,71);
-   SwapCliqueUntil(state,14,70);
-   SwapCliqueUntil(state,13,69);
-   SwapCliqueUntil(state,12,68);
-   #endif
-
-   #if 0
-   SwapCliqueNodes(state,91,95);
-   SwapCliqueNodes(state,89,94);
-   SwapCliqueNodes(state,88,93);
-   SwapCliqueNodes(state,83,92);
-   SwapCliqueNodes(state,81,91);
-   SwapCliqueNodes(state,80,90);
-   SwapCliqueNodes(state,75,89);
-   SwapCliqueNodes(state,73,88);
-   SwapCliqueNodes(state,72,87);
-   SwapCliqueNodes(state,67,86);
-   SwapCliqueNodes(state,65,85);
-   SwapCliqueNodes(state,64,84);
-   SwapCliqueNodes(state,59,83);
-   SwapCliqueNodes(state,57,82);
-   SwapCliqueNodes(state,56,81);
-   SwapCliqueNodes(state,51,80);
-   SwapCliqueNodes(state,49,79);
-   SwapCliqueNodes(state,48,78);
-   SwapCliqueNodes(state,21,77);
-   SwapCliqueNodes(state,20,76);
-   SwapCliqueNodes(state,19,75);
-   SwapCliqueNodes(state,18,74);
-   SwapCliqueNodes(state,17,73);
-   SwapCliqueNodes(state,16,72);
-   SwapCliqueNodes(state,15,71);
-   SwapCliqueNodes(state,14,70);
-   SwapCliqueNodes(state,13,69);
-   SwapCliqueNodes(state,12,68);
-   #endif
-
-   for(int i = graph.nodes.size - 1; i >= 0; i--){
-      if(state->table[i] == 0){
-         state->startI = i + 1;
-         break;
+         node->type = MappingNode::EDGE;
+         node->edges[0] = ListGet(sub1.edges.start,map.index0)->edge;
+         node->edges[1] = ListGet(sub2.edges.start,map.index1)->edge;
+         //printf("G: %d %d\n",map.index0,map.index1);
       }
    }
-   if(state->startI >= graph.nodes.size){
-      state->startI = graph.nodes.size - 1;
+
+   if(CompareString(t1->decl->name,"AES")){
+      exit(0);
    }
 
-   state->max = 0;
-   for(int i = state->startI; i < graph.nodes.size; i++){
-      state->max = std::max(state->table[i],state->max);
-   }
-   printf("Max: %d\n",state->max);
+   Subgraph sub1 = {};
+   sub1.nodes = SimpleSublist(ListGet(graph1->instances,t1->index),t1->subunitsCount);
+   sub1.edges = SimpleSublist(ListGet(graph1->edges,t1->edgeStart),t1->edgeCount);
 
-   #if 0
-   int size = state->clique.nodes.size;
+   Subgraph sub2 = {};
+   sub2.nodes = SimpleSublist(ListGet(graph2->instances,t2->index),t2->subunitsCount);
+   sub2.edges = SimpleSublist(ListGet(graph2->edges,t2->edgeStart),t2->edgeCount);
 
-   int lastPos = size - 1;
-   for(int i = lastPos; i >= 0; i--){
-      if(state->table[i] != 0){
-         if(i != lastPos){
-            Assert(state->table[lastPos] == 0);
+   ConsolidationResult result = GenerateConsolidationGraphForSubgraphs(sub1,sub2,implicitNodes,arena);
+   ConsolidationGraph graph = result.graph;
 
-            //PrintGraphEdges(&state->clique,arena);
-
-            printf("SwapCliqueNodes(%d,%d);\n",i,lastPos);
-            SwapCliqueNodes(state,i,lastPos);
-
-            //String res = PushIntTableRepresentation(arena,state->table);
-            //printf("%.*s\n",UNPACK_SS(res));
-
-            //PrintGraphEdges(&state->clique,arena);
-
-            //exit(0);
-         }
-         lastPos -= 1;
-      }
-   }
-   state->max = state->table[lastPos + 1];
-   state->startI = lastPos;
-   #endif
-
-   String res = PushIntTableRepresentation(arena,state->table);
-   printf("%.*s\n",UNPACK_SS(res));
-
-   sleep(1);
-
-   //exit(0);
-
-   //clock_t start = clock();
-   MemoryBarrier();
-   uint64 start = RDTSC();
+   #if 01
+   CliqueState* state = InitMaxClique(graph,result.upperBound,arena);
    RunMaxClique(state,arena);
-   uint64 end = RDTSC();
-   //clock_t end = clock();
+   ConsolidationGraph extraClique = state->clique;
+   #else
+   TimeIt pc("Parallel clique");
+   ConsolidationGraph extraClique = ParallelMaxClique(graph,result.upperBound,arena);
+   pc.End();
+   #endif
 
-   printf("%ld\n",end - start);
+   Assert(IsClique(extraClique).result);
 
-   ConsolidationGraph clique = state->clique;
-   for(int i : clique.validNodes){
-      ArenaMarker marker(arena);
-      IndexMapping map = GetMappingNodeIndexes(clique.nodes[i],graph1->edges,graph2->edges);
+   #if 0
+   OutputDotGraph(sub1,StaticFormat("debug/sub_%.*s_sub.dot",UNPACK_SS(t1->name)),arena);
+   OutputDotGraph(sub2,StaticFormat("debug/sub_%.*s_sub.dot",UNPACK_SS(t2->name)),arena);
 
-      String r = Repr(clique.nodes[i],arena);
+   printf("Mapping nodes:\n");
+   for(MappingNode& node : implicitNodes){
+      region(arena){
+         String repr = Repr(node,arena);
+         printf("%.*s\n",UNPACK_SS(repr));
+      };
+   }
+   printf("\n\n");
+   #endif
 
-      printf("%d : %d - %.*s %.*s\n",map.index0,map.index1,UNPACK_SS(r));
+   #if 0
+   printf("\n");
+   printf("Nodes from children: %d\n",implicitNodes.size);
+   printf("Extra CG size: %d\n",graph.nodes.size);
+
+   printf("Extra clique size: %d\n",extraClique.validNodes.GetNumberBitsSet());
+   #endif
+
+   Array<IndexMapping> cliqueMappings = GetIndexMappingFromClique(extraClique,sub1,sub2,arena);
+
+   Array<IndexMapping> fullMappings = PushArray<IndexMapping>(arena,specificSize + extraClique.validNodes.GetNumberBitsSet());
+   PushPtr<IndexMapping> pushPtr = {};
+   pushPtr.Init(fullMappings);
+
+   region(arena){
+      for(FlattenMapping& m : specificMappings){
+         Subgraph sub1 = {};
+         sub1.nodes = SimpleSublist(ListGet(graph1->instances,m.t1->index),m.t1->subunitsCount);
+         sub1.edges = SimpleSublist(ListGet(graph1->edges,m.t1->edgeStart),m.t1->edgeCount);
+
+         Subgraph sub2 = {};
+         sub2.nodes = SimpleSublist(ListGet(graph2->instances,m.t2->index),m.t2->subunitsCount);
+         sub2.edges = SimpleSublist(ListGet(graph2->edges,m.t2->edgeStart),m.t2->edgeCount);
+
+         //Array<IndexMapping> specific = TransformGenericIntoSpecific(m.mapping->edgeMappings,m.t1,m.t2,arena);
+         for(IndexMapping mapping : m.mapping->edgeMappings){
+            IndexMapping specific = mapping;
+            specific.index0 += m.t1->edgeStart - t1->edgeStart;
+            specific.index1 += m.t2->edgeStart - t2->edgeStart;
+
+            pushPtr.PushValue(specific);
+         }
+      }
+   };
+   pushPtr.Push(cliqueMappings);
+
+   #if 0
+   for(int i = 0; i < fullMappings.size; i++){
+      IndexMapping& m = fullMappings[i];
+      Edge* edge0 = ListGet(sub1.edges.start,m.index0);
+      Edge* edge1 = ListGet(sub2.edges.start,m.index1);
+
+      printf("%d %d\n",m.index0,m.index1);
+   }
+
+   for(int i = 0; i < fullMappings.size; i++){
+      IndexMapping& m = fullMappings[i];
+      Edge* edge0 = ListGet(sub1.edges.start,m.index0);
+      Edge* edge1 = ListGet(sub2.edges.start,m.index1);
+
+      region(arena){
+         String str1 = Repr(edge0->edge,GRAPH_DOT_FORMAT_NAME,arena);
+         String str2 = Repr(edge1->edge,GRAPH_DOT_FORMAT_NAME,arena);
+
+         if(i < specificSize){
+            printf("From specific: %.*s // %.*s\n",UNPACK_SS(str1),UNPACK_SS(str2));
+         } else {
+            printf("From extra   : %.*s // %.*s\n",UNPACK_SS(str1),UNPACK_SS(str2));
+         }
+      };
    }
    printf("\n");
 
-   res = PushIntTableRepresentation(arena,state->table);
-   printf("%.*s\n",UNPACK_SS(res));
+   printf("Mapping result: \n");
+   for(int i = 0; i < fullMappings.size; i++){
+      IndexMapping& m = fullMappings[i];
+
+      printf("%d %d\n",m.index0,m.index1);
    }
    #endif
 
+   printf("Size found: %d\n",fullMappings.size);
+
+   return fullMappings;
+}
+
+void PrintGraphInfo(Graph* graph){
+   printf("N nodes: %d\n",Size(graph->instances));
+   printf("N edges: %d\n",Size(graph->edges));
+}
+
+MergeGraphResult HierarchicalHeuristic(Versat* versat,FUDeclaration* decl1,FUDeclaration* decl2,String name){
+   Arena* arena = &versat->temp;
+   ArenaMarker marker(arena);
+
+   Accelerator* accel1 = decl1->baseCircuit;
+   Accelerator* accel2 = decl2->baseCircuit;
+
+   Graph* graph1 = accel1;
+   Array<FlatteningTemp> res1;
+   timeRegion("Flattening graph1"){
+      res1 = HierarchicalFlattening(graph1,arena);
+   };
+
+   FlatteningTemp graph1All = {};
+   graph1All.index = 0;
+   graph1All.parent = decl1;
+   graph1All.decl = decl1;
+   graph1All.name = decl1->name;
+   graph1All.subunitsCount = graph1->numberInstances;
+   graph1All.edgeCount = graph1->numberEdges;
+   graph1All.child = &res1[0];
+
+   #if 0
+   printf("Graph1: \n");
+   PrintGraphInfo(graph1);
+   #endif
+
+   Graph* graph2 = accel2;
+   Array<FlatteningTemp> res2;
+   timeRegion("Flattening graph2"){
+      res2 = HierarchicalFlattening(graph2,arena);
+   };
+
+   FlatteningTemp graph2All = {};
+   graph2All.index = 0;
+   graph2All.parent = decl2;
+   graph2All.decl = decl2;
+   graph2All.name = decl2->name;
+   graph2All.subunitsCount = graph2->numberInstances;
+   graph2All.edgeCount = graph2->numberEdges;
+   graph2All.child = &res2[0];
+
+   #if 0
+   printf("Graph2: \n");
+   PrintGraphInfo(graph2);
+
+   printf("Finding a clique for %.*s\n\n",UNPACK_SS(name));
+   #endif
+
+   Array<SubgraphMapping> allsubgraphMappingsBuffer = PushArray<SubgraphMapping>(arena,99);
+   Memset(allsubgraphMappingsBuffer,{});
+   PushPtr<SubgraphMapping> allsubgraphMappings;
+   allsubgraphMappings.Init(allsubgraphMappingsBuffer);
+
+   Array<IndexMapping> heuristicMapping = HierarchicalHeuristic(graph1,graph2,&graph1All,&graph2All,allsubgraphMappings,arena);
+
+   heuristicMapping = TransformGenericIntoSpecific(heuristicMapping,&graph1All,&graph2All,arena);
+
+   printf("%d\n",heuristicMapping.size);
+   GraphMapping mappingRes = {};
+
+   for(IndexMapping& m : heuristicMapping){
+      Edge* edge0 = ListGet(graph1->edges,m.index0);
+      Edge* edge1 = ListGet(graph2->edges,m.index1);
+
+      #if 0
+      region(arena){
+         String str1 = Repr(edge0->edge,GRAPH_DOT_FORMAT_NAME,arena);
+         String str2 = Repr(edge1->edge,GRAPH_DOT_FORMAT_NAME,arena);
+         printf("Going to insert %.*s // %.*s\n",UNPACK_SS(str1),UNPACK_SS(str2));
+      };
+      FlushStdout();
+      #endif
+
+      InsertMapping(mappingRes,edge0->edge,edge1->edge);
+   }
+
+   printf("%d\n",mappingRes.edgeMap.size());
+
+   return MergeGraph(versat,graph1,graph2,mappingRes,STRING("Test"));
+}
+
+MergeGraphResult HierarchicalMergeAcceleratorsFullClique(Versat* versat,Accelerator* accel1,Accelerator* accel2,String name){
+   Arena* arena = &versat->temp;
+   ArenaMarker marker(arena);
+
+   Graph* graph1 = accel1;
+   Array<FlatteningTemp> res1 = HierarchicalFlattening(graph1,arena);
+
+   Graph* graph2 = accel2;
+   Array<FlatteningTemp> res2 = HierarchicalFlattening(graph2,arena);
+
+   // Looks good until here
+
+   Subgraph sub1 = DefaultSubgraph(graph1);
+   Subgraph sub2 = DefaultSubgraph(graph2);
+
+   TimeIt time0("Building CG");
+   ConsolidationResult result = GenerateConsolidationGraphForSubgraphs(sub1,sub2,{},arena);
+   ConsolidationGraph graph = result.graph;
+   time0.End();
+
    GraphMapping mapping = {};
-   //AddCliqueToMapping(mapping,clique);
-   //AddCliqueToMapping(mapping,approximateClique);
+
+   printf("Full clique:\n");
+
+   TimeIt time1("Finding clique");
+   #if 1
+   CliqueState cliqueState = MaxClique(graph,result.upperBound,arena);
+   ConsolidationGraph clique = cliqueState.clique;
+   #else
+   ConsolidationGraph clique = ParallelMaxClique(graph,result.upperBound,arena);
+   #endif
+   time1.End();
+
+   printf("Size: %d\n",graph.nodes.size);
+   printf("Size of clique: %d\n",clique.validNodes.GetNumberBitsSet());
+
+   AddCliqueToMapping(mapping,clique);
    AddSpecificsToMapping(mapping,result.specificsAdded);
+
+   printf("%d\n",mapping.edgeMap.size());
 
    return MergeGraph(versat,graph1,graph2,mapping,STRING("Test"));
 }
+
+#include <pthread.h>
+#include <semaphore.h>
+#include <unistd.h>
+
+//Array<IndexMapping> ParallelHierarchicalHeuristic(Graph* graph1,Graph* graph2,Array<FlatteningTemp> flattening1,Array<FlatteningTemp> flattening2,Arena* arena){
+void ParallelHierarchicalHeuristicTask(int i,void* arg){
+   HeuristicState* state = (HeuristicState*) arg;
+
+   Graph* graph1 = state->graph1;
+   Graph* graph2 = state->graph2;
+   FlatteningTemp* t1 = state->t1;
+   FlatteningTemp* t2 = state->t2;
+
+   Arena arenaInst = InitArena(Gigabyte(16));
+   Arena* arena = &arenaInst;
+
+   Array<SubgraphMapping> mappings = state->mappings;
+   mappings.size = *state->inserted;
+
+   Array<FlattenMapping> specificMappings = GetSpecificMappings(t1->child,t2->child,mappings,arena);
+
+   for(int i = 0; i < specificMappings.size; i++){
+      for(int j = i + 1; j < specificMappings.size; j++){
+         if(specificMappings[j].t1->index > specificMappings[i].t1->index){
+            SWAP(specificMappings[i],specificMappings[j]);
+         }
+      }
+   }
+
+   #if 1
+   TIME_IT("Finding heuristic");
+
+   printf("=== Finding heuristic for %.*s [%.*s] %.*s [%.*s] ===\n",UNPACK_SS(t1->name),UNPACK_SS(t1->decl->name),UNPACK_SS(t2->name),UNPACK_SS(t2->decl->name));
+
+   for(FlattenMapping& mapping : specificMappings){
+      printf("Mapping %.*s to %.*s\n",UNPACK_SS(mapping.t1->name),UNPACK_SS(mapping.t2->name));
+   }
+   #endif
+
+   int specificSize = 0;
+   for(FlattenMapping& m : specificMappings){
+      specificSize += m.mapping->edgeMappings.size;
+   }
+
+   //printf("Specific size: %d\n",specificSize);
+
+   Array<MappingNode> implicitNodes = PushArray<MappingNode>(arena,specificSize);
+   PushPtr<MappingNode> nodesPush = {};
+   nodesPush.Init(implicitNodes);
+
+   for(FlattenMapping& m : specificMappings){
+      Subgraph sub1 = {};
+      sub1.nodes = SimpleSublist(ListGet(graph1->instances,m.t1->index),m.t1->subunitsCount);
+      sub1.edges = SimpleSublist(ListGet(graph1->edges,m.t1->edgeStart),m.t1->edgeCount);
+
+      Subgraph sub2 = {};
+      sub2.nodes = SimpleSublist(ListGet(graph2->instances,m.t2->index),m.t2->subunitsCount);
+      sub2.edges = SimpleSublist(ListGet(graph2->edges,m.t2->edgeStart),m.t2->edgeCount);
+
+      ArenaMarker marker(arena);
+      Array<IndexMapping> graphMappings = m.mapping->edgeMappings;
+
+      for(IndexMapping map : graphMappings){
+         MappingNode* node = nodesPush.Push(1);
+
+         node->type = MappingNode::EDGE;
+         node->edges[0] = ListGet(sub1.edges.start,map.index0)->edge;
+         node->edges[1] = ListGet(sub2.edges.start,map.index1)->edge;
+      }
+   }
+
+   Subgraph sub1 = {};
+   sub1.nodes = SimpleSublist(ListGet(graph1->instances,t1->index),t1->subunitsCount);
+   sub1.edges = SimpleSublist(ListGet(graph1->edges,t1->edgeStart),t1->edgeCount);
+
+   Subgraph sub2 = {};
+   sub2.nodes = SimpleSublist(ListGet(graph2->instances,t2->index),t2->subunitsCount);
+   sub2.edges = SimpleSublist(ListGet(graph2->edges,t2->edgeStart),t2->edgeCount);
+
+   ConsolidationResult result = GenerateConsolidationGraphForSubgraphs(sub1,sub2,implicitNodes,arena);
+   ConsolidationGraph graph = result.graph;
+
+   #if 01
+   CliqueState* cliqueState = InitMaxClique(graph,result.upperBound,arena);
+   RunMaxClique(cliqueState,arena);
+   ConsolidationGraph extraClique = cliqueState->clique;
+   #else
+   TimeIt pc("Parallel clique");
+   ConsolidationGraph extraClique = ParallelMaxClique(graph,result.upperBound,arena);
+   pc.End();
+   #endif
+
+   Assert(IsClique(extraClique).result);
+
+   Array<IndexMapping> cliqueMappings = GetIndexMappingFromClique(extraClique,sub1,sub2,arena);
+
+   pthread_mutex_lock(state->mappingMutex);
+   Array<IndexMapping> fullMappings = PushArray<IndexMapping>(state->resultArena,specificSize + extraClique.validNodes.GetNumberBitsSet());
+   pthread_mutex_unlock(state->mappingMutex);
+
+   PushPtr<IndexMapping> pushPtr = {};
+   pushPtr.Init(fullMappings);
+
+   region(arena){
+      for(FlattenMapping& m : specificMappings){
+         Subgraph sub1 = {};
+         sub1.nodes = SimpleSublist(ListGet(graph1->instances,m.t1->index),m.t1->subunitsCount);
+         sub1.edges = SimpleSublist(ListGet(graph1->edges,m.t1->edgeStart),m.t1->edgeCount);
+
+         Subgraph sub2 = {};
+         sub2.nodes = SimpleSublist(ListGet(graph2->instances,m.t2->index),m.t2->subunitsCount);
+         sub2.edges = SimpleSublist(ListGet(graph2->edges,m.t2->edgeStart),m.t2->edgeCount);
+
+         //Array<IndexMapping> specific = TransformGenericIntoSpecific(m.mapping->edgeMappings,m.t1,m.t2,arena);
+         for(IndexMapping mapping : m.mapping->edgeMappings){
+            IndexMapping specific = mapping;
+            specific.index0 += m.t1->edgeStart - t1->edgeStart;
+            specific.index1 += m.t2->edgeStart - t2->edgeStart;
+
+            pushPtr.PushValue(specific);
+         }
+      }
+   };
+   pushPtr.Push(cliqueMappings);
+
+   //printf("Size found: %d\n",fullMappings.size);
+
+   pthread_mutex_lock(state->mappingMutex);
+   int finalPos = *state->inserted;
+   state->mappings[finalPos].decl2 = state->t2->decl;
+   state->mappings[finalPos].decl1 = state->t1->decl;
+   state->mappings[finalPos].edgeMappings = fullMappings;
+   *state->inserted += 1;
+
+   pthread_mutex_unlock(state->mappingMutex);
+
+   //printf("Finished: %.*s - %.*s (%d)\n",UNPACK_SS(state->t1->decl->name),UNPACK_SS(state->t2->decl->name),finalPos);
+
+   state->finished = true;
+   Signal(state->cond);
+   Free(arena);
+}
+
+bool CheckIfMappingIsPossible(FlatteningTemp* head1,FlatteningTemp* head2,Array<SubgraphMapping> mappings){
+   FOREACH_LIST(t1,head1->child){
+      FOREACH_LIST(t2,head2->child){
+         bool exists = false;
+         for(SubgraphMapping& sub : mappings){
+            if(sub.decl1 == t1->decl && sub.decl2 == t2->decl){
+               exists = true;
+               break;
+            }
+         }
+
+         if(!exists){
+            //printf("Cannot do: %.*s %.*s because cannot find %.*s %.*s (%d)\n",UNPACK_SS(head1->decl->name),UNPACK_SS(head2->decl->name),UNPACK_SS(t1->decl->name),UNPACK_SS(t2->decl->name),mappings.size);
+            return false;
+         }
+      }
+   }
+
+   return true;
+}
+
+MergeGraphResult ParallelHierarchicalHeuristic(Versat* versat,FUDeclaration* decl1,FUDeclaration* decl2,String name){
+   Arena* arena = &versat->temp;
+   ArenaMarker marker(arena);
+
+   Accelerator* accel1 = decl1->baseCircuit;
+   Accelerator* accel2 = decl2->baseCircuit;
+
+   Graph* graph1 = accel1;
+   Array<FlatteningTemp> flattening1;
+   timeRegion("Flattening graph1"){
+      flattening1 = HierarchicalFlattening(graph1,arena);
+   };
+
+   Graph* graph2 = accel2;
+   Array<FlatteningTemp> flattening2;
+   timeRegion("Flattening graph2"){
+      flattening2 = HierarchicalFlattening(graph2,arena);
+   };
+
+   Arena resultInst = InitArena(Megabyte(1));
+   Arena* resultArena = &resultInst;
+
+   Array<HeuristicState> mappings = PushArray<HeuristicState>(arena,99);
+
+   int numberMappings = 0;
+   for(auto& t1 : flattening1){
+      for(auto& t2 : flattening2){
+         if(t1.level != t2.level){
+            continue;
+         }
+
+         FUDeclaration* decl1 = t1.decl;
+         FUDeclaration* decl2 = t2.decl;
+
+         bool doContinue = false;
+         for(int i = 0; i < numberMappings; i++){
+            if(mappings[i].t1->decl == decl1 && mappings[i].t2->decl == decl2){
+               doContinue = true;
+               break;
+            }
+         }
+         if(doContinue){
+            continue;
+         }
+
+         mappings[numberMappings] = {};
+         mappings[numberMappings].graph1 = graph1;
+         mappings[numberMappings].graph2 = graph2;
+         mappings[numberMappings].t1 = &t1;
+         mappings[numberMappings].t2 = &t2;
+
+         numberMappings += 1;
+      }
+   }
+   printf("Mappings: %d\n",numberMappings);
+   mappings.size = numberMappings;
+
+   Array<SubgraphMapping> subgraphMappings = PushArray<SubgraphMapping>(arena,numberMappings);
+
+   volatile int inserted = 0;
+
+   SimpleCondition cond = InitSimpleCondition();
+   pthread_mutex_t mutex = {};
+   pthread_mutex_init(&mutex,NULL);
+
+   Byte* mark = MarkArena(arena);
+   int index = 0;
+
+   while(inserted != numberMappings){
+      for(auto& map : mappings){
+         Assert(map.t1->level == map.t2->level);
+
+         if(map.finished || map.set){
+            continue;
+         }
+
+         Array<SubgraphMapping> validMappings = subgraphMappings;
+         validMappings.size = inserted;
+         if(!CheckIfMappingIsPossible(map.t1,map.t2,validMappings)){
+            continue;
+         }
+         //printf("Going to do %d: %.*s - %.*s\n",index,UNPACK_SS(map.t1->decl->name),UNPACK_SS(map.t2->decl->name));
+
+         map.set = true;
+         map.inserted = &inserted;
+         map.mappings = subgraphMappings;
+         map.input = index;
+         map.mappingMutex = &mutex;
+         map.resultArena = resultArena;
+         map.cond = &cond;
+
+         Task task = {};
+         task.args = &map;
+         task.function = ParallelHierarchicalHeuristicTask;
+         task.order = map.t1->level;
+
+         #if 1
+         AddTask(task);
+         #else
+         ParallelHierarchicalHeuristicTask(0,(void*) &map);
+         #endif
+
+         index += 1;
+      }
+
+      Wait(&cond);
+   }
+
+   WaitCompletion();
+
+   exit(0);
+
+   FlatteningTemp graph1All = {};
+   graph1All.index = 0;
+   graph1All.parent = decl1;
+   graph1All.decl = decl1;
+   graph1All.name = decl1->name;
+   graph1All.subunitsCount = graph1->numberInstances;
+   graph1All.edgeCount = graph1->numberEdges;
+   graph1All.child = &flattening1[0];
+
+   FlatteningTemp graph2All = {};
+   graph2All.index = 0;
+   graph2All.parent = decl2;
+   graph2All.decl = decl2;
+   graph2All.name = decl2->name;
+   graph2All.subunitsCount = graph2->numberInstances;
+   graph2All.edgeCount = graph2->numberEdges;
+   graph2All.child = &flattening2[0];
+
+   /*
+   Array<SubgraphMapping> allsubgraphMappingsBuffer = PushArray<SubgraphMapping>(arena,99);
+   Memset(allsubgraphMappingsBuffer,{});
+   PushPtr<SubgraphMapping> allsubgraphMappings;
+   allsubgraphMappings.Init(allsubgraphMappingsBuffer);
+   */
+
+   subgraphMappings.size += 1;
+
+   HeuristicState finalState = {};
+   finalState.graph1 = graph1;
+   finalState.graph2 = graph2;
+   finalState.t1 = &graph1All;
+   finalState.t2 = &graph2All;
+   finalState.inserted = &inserted;
+   finalState.mappings = subgraphMappings;
+   finalState.input = 999;
+   finalState.mappingMutex = &mutex;
+   finalState.resultArena = resultArena;
+   finalState.cond = &cond;
+
+   ParallelHierarchicalHeuristicTask(0,(void*) &finalState);
+   Array<IndexMapping> heuristicMapping = subgraphMappings[subgraphMappings.size - 1].edgeMappings;
+
+   //Array<IndexMapping> heuristicMapping = HierarchicalHeuristic(graph1,graph2,&graph1All,&graph2All,subgraphMappings,arena);
+
+   heuristicMapping = TransformGenericIntoSpecific(heuristicMapping,&graph1All,&graph2All,arena);
+
+   printf("%d\n",heuristicMapping.size);
+   GraphMapping mappingRes = {};
+
+   for(IndexMapping& m : heuristicMapping){
+      Edge* edge0 = ListGet(graph1->edges,m.index0);
+      Edge* edge1 = ListGet(graph2->edges,m.index1);
+
+      #if 0
+      region(arena){
+         String str1 = Repr(edge0->edge,GRAPH_DOT_FORMAT_NAME,arena);
+         String str2 = Repr(edge1->edge,GRAPH_DOT_FORMAT_NAME,arena);
+         printf("Going to insert %.*s // %.*s\n",UNPACK_SS(str1),UNPACK_SS(str2));
+      };
+      FlushStdout();
+      #endif
+
+      InsertMapping(mappingRes,edge0->edge,edge1->edge);
+   }
+
+   printf("%d\n",mappingRes.edgeMap.size());
+
+   return (MergeGraphResult){};
+}
+
 

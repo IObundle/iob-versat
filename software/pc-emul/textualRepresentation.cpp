@@ -99,14 +99,13 @@ String Repr(PortInstance port,GraphDotFormat format,Arena* arena){
    Byte* mark = MarkArena(arena);
 
    Repr(port.inst,GRAPH_DOT_FORMAT_NAME,arena);
-   PushString(arena,"_");
 
    bool expl = format & GRAPH_DOT_FORMAT_EXPLICIT;
 
    if(expl){
-      PushString(arena,"Port:");
+      PushString(arena,"_Port:");
    }
-   PushString(arena,"%d",port.port);
+   PushString(arena,":%d",port.port);
 
    String res = PointArena(arena,mark);
    return res;
@@ -151,7 +150,7 @@ String Repr(MappingNode node,Arena* arena){
 
       Byte* mark = MarkArena(arena);
       Repr(e0,format,arena);
-      PushString(arena,"/");
+      PushString(arena," // ");
       Repr(e1,format,arena);
       name = PointArena(arena,mark);
    } else {
@@ -161,10 +160,15 @@ String Repr(MappingNode node,Arena* arena){
    return name;
 }
 
-String PushIntTableRepresentation(Arena* arena,Array<int> values){
+String PushIntTableRepresentation(Arena* arena,Array<int> values,int digitSize){
    int maxDigitSize = 0;
+
    for(int val : values){
       maxDigitSize = std::max(maxDigitSize,NumberDigitsRepresentation(val));
+   }
+
+   if(digitSize > maxDigitSize){
+      maxDigitSize = digitSize;
    }
 
    int valPerLine = 80 / (maxDigitSize + 1); // +1 for spaces

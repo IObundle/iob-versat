@@ -10,6 +10,8 @@
 #include "signal.h"
 #include "assert.h"
 
+#define ALWAYS_INLINE __attribute__((always_inline)) inline
+
 #define CI(x) (x - '0')
 #define TWO_DIGIT(x,y) (CI(x) * 10 + CI(y))
 #define COMPILE_TIME (TWO_DIGIT(__TIME__[0],__TIME__[1]) * 3600 + TWO_DIGIT(__TIME__[3],__TIME__[4]) * 60 + TWO_DIGIT(__TIME__[6],__TIME__[7]))
@@ -33,6 +35,24 @@
 #define NUMBER_ARGS(...) NUMBER_ARGS_(-1,##__VA_ARGS__,16,15,14,13,12,11,10,9,8,7,6,5,4,3,2,1,0)
 
 #define PrintFileAndLine() printf("%s:%d\n",__FILE__,__LINE__)
+
+template<typename F>
+class Defer{
+public:
+   F f;
+   Defer(F f) : f(f){};
+   ~Defer(){f();}
+};
+
+struct _DeferTag{};
+template<typename F>
+ALWAYS_INLINE Defer<F> operator+(_DeferTag,F&& f){
+   return Defer<F>(f);
+}
+
+#define __defer(LINE) defer_ ## LINE
+#define _defer(LINE) __defer( LINE )
+#define defer auto _defer(__LINE__) = _DeferTag() + [&]()
 
 void FlushStdout();
 #if defined(PC) && defined(VERSAT_DEBUG)
@@ -62,8 +82,15 @@ bool CurrentlyDebugging();
 #define UNREACHABLE do{Assert(false); __builtin_unreachable();} while(0)
 
 #define FOREACH_LIST(ITER,START) for(auto* ITER = START; ITER; ITER = ITER->next)
+#define FOREACH_LIST_INDEXED(ITER,START,INDEX) for(auto* ITER = START; ITER; ITER = ITER->next,INDEX += 1)
 #define FOREACH_LIST_BOUNDED(ITER,START,END) for(auto* ITER = START; ITER != END; ITER = ITER->next)
 #define FOREACH_SUBLIST(ITER,SUB) for(auto* ITER = SUB.start; ITER != SUB.end; ITER = ITER->next)
+
+#define SWAP(A,B) do { \
+   auto TEMP = A; \
+   A = B; \
+   B = TEMP; \
+   } while(0)
 
 #ifdef VERSAT
 #include <cstdio>
@@ -90,16 +117,30 @@ typedef uint8_t uint8;
 typedef uint8_t Byte;
 #endif
 
+double GetTime();
+
 // Automatically times a block in number of counts
 class TimeIt{
 public:
-	unsigned long long start;
+	double start;
    const char* id;
+   bool endedEarly;
 
-   TimeIt(const char* id){this->id = id; start = TIME_FUNCTION();};
-   ~TimeIt(){unsigned long long end = TIME_FUNCTION();printf("%s: %llu\n",id,end - start);}
+   TimeIt(const char* id){this->id = id; start = GetTime(); endedEarly = false;};
+   ~TimeIt(){if(!endedEarly) Output();};
+   void Output(){double end = GetTime();printf("[TimeIt] %s: %f\n",id,end - start);}
+   void End(){Output(); endedEarly = true;}
 };
 #define TIME_IT(ID) TimeIt timer_##__LINE__(ID)
+
+template<typename F>
+ALWAYS_INLINE void operator+(TimeIt&& timer,F&& f){
+   f();
+}
+
+#define __timeRegion(LINE) timeRegion_ ## LINE
+#define _timeRegion(LINE) __timeRegion( LINE )
+#define timeRegion(ID) TimeIt(ID) + [&]()
 
 template<typename T>
 class ArrayIterator{
@@ -231,6 +272,9 @@ bool CompareString(const char* str1,String str2);
 bool CompareString(String str1,const char* str2);
 bool CompareString(const char* str1,const char* str2);
 
+// If strings are equal up until a given size, returns a order so that smallest comes first
+int CompareStringOrdered(String str1,String str2);
+
 char GetHexadecimalChar(int value);
 unsigned char* GetHexadecimal(const unsigned char* text, int str_size); // Helper function to display result
 
@@ -324,7 +368,6 @@ int Size(T* start){
    }
    return size;
 }
-
 
 #endif // INCLUDED_UTILS_HPP
 

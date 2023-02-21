@@ -3,7 +3,7 @@
 CalculatedOffsets CalculateConfigOffsetsIgnoringStatics(Accelerator* accel,Arena* out){
    Array<int> array = PushArray<int>(out,accel->numberInstances);
 
-   ARENA_MARKER(out);
+   BLOCK_REGION(out);
 
    Hashmap<int,int> sharedConfigs = {};
    sharedConfigs.Init(out,accel->numberInstances);
@@ -79,7 +79,7 @@ CalculatedOffsets CalculateConfigurationOffset(Accelerator* accel,MemType type,A
 
    Array<int> array = PushArray<int>(out,accel->numberInstances);
 
-   ARENA_MARKER(out);
+   BLOCK_REGION(out);
 
    int index = 0;
    int offset = 0;
@@ -102,7 +102,7 @@ CalculatedOffsets CalculateConfigurationOffset(Accelerator* accel,MemType type,A
 CalculatedOffsets CalculateOutputsOffset(Accelerator* accel,int offset,Arena* out){
    Array<int> array = PushArray<int>(out,accel->numberInstances);
 
-   ARENA_MARKER(out);
+   BLOCK_REGION(out);
 
    int index = 0;
    FOREACH_LIST(inst,accel->instances){

@@ -194,6 +194,10 @@ Hashmap:
 
 Current know bugs/problems:
 
+Misc:
+
+   Check the io_uring interface for async file io. Maybe useful for the output of VCD files, which can slow down a lot the program, especially for large runtime accelerators. Might not need the full library, just check how it works
+
 Legend:
 
    > Currently working on, important

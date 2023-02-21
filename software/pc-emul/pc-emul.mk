@@ -9,7 +9,7 @@ BUILD_DIR :=./build
 #pc sources
 HDR+=$(wildcard $(VERSAT_PC_EMUL)/*.hpp)
 
-VERILATE_FLAGS :=-g -m32
+VERILATE_FLAGS :=-g #-m32
 
 INCLUDE += -I$(VERSAT_PC_EMUL)
 VERSAT_DEFINE += -DPC

@@ -877,7 +877,7 @@ int main(int argc,const char* argv[]){
       return 0;
    }
 
-   InitArena(tempArena,Megabyte(256));
+   tempArenaInst = InitArena(Megabyte(256));
 
    for(int i = 0; i < argc - 2; i++){
       String content = PushFile(tempArena,argv[2+i]);

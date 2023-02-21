@@ -314,6 +314,23 @@ bool CompareString(const char* str1,const char* str2){
    return res;
 }
 
+int CompareStringOrdered(String str1,String str2){
+   int minSize = std::min(str1.size,str2.size);
+   for(int i = 0; i < minSize; i++){
+      if(str1[i] == str2[i]){
+         continue;
+      }
+
+      return (str2[i] - str1[i]);
+   }
+
+   if(str1.size == str2.size){
+      return 0;
+   } else {
+      return (str2.size - str1.size);
+   }
+}
+
 char GetHexadecimalChar(int value){
    if(value < 10){
       return '0' + value;

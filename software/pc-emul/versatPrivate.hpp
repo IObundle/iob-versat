@@ -485,6 +485,7 @@ struct CliqueState{
    int max;
    int upperBound;
    int startI;
+   int iterations;
    Array<int> table;
    ConsolidationGraph clique;
    clock_t start;
@@ -523,7 +524,7 @@ typedef std::unordered_map<ComplexFUInstance*,ComplexFUInstance*> InstanceMap;
 struct GraphMapping;
 
 // Temp
-bool EqualPortMapping(Versat* versat,PortInstance p1,PortInstance p2);
+bool EqualPortMapping(PortInstance p1,PortInstance p2);
 void PopulateAccelerator(Accelerator* topLevel,Accelerator* accel,FUDeclaration* topDeclaration,FUInstanceInterfaces& inter,Hashmap<StaticId,StaticData>& staticMap);
 void PopulateAccelerator2(Accelerator* accel,FUDeclaration* topDeclaration,FUInstanceInterfaces& inter,Hashmap<StaticId,StaticData>& staticMap);
 ConsolidationResult GenerateConsolidationGraph(Versat* versat,Arena* arena,Accelerator* accel1,Accelerator* accel2,ConsolidationGraphOptions options);
@@ -595,6 +596,7 @@ ComplexFUInstance* GetInputInstance(Accelerator* accel,int inputIndex);
 ComplexFUInstance* GetOutputInstance(Accelerator* accel);
 
 MergeGraphResult HierarchicalMergeAccelerators(Versat* versat,Accelerator* accel1,Accelerator* accel2,String name);
+MergeGraphResult HierarchicalMergeAcceleratorsFullClique(Versat* versat,Accelerator* accel1,Accelerator* accel2,String name);
 
 #include "typeSpecifics.inl"
 

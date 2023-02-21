@@ -9,6 +9,7 @@
 
 #include "printf.h"
 
+#include "thread.hpp"
 #include "type.hpp"
 #include "debug.hpp"
 #include "parser.hpp"
@@ -250,16 +251,20 @@ Versat* InitVersat(int base,int numberConfigurations){
    Assert(!doneOnce); // For now, only allow one Versat instance
    doneOnce = true;
 
+   InitThreadPool(16);
    Versat* versat = &versatInst;
 
    versat->debug.outputAccelerator = true;
    versat->debug.outputVersat = true;
-   versat->debug.dotFormat = GRAPH_DOT_FORMAT_NAME |
+
+   versat->debug.dotFormat = GRAPH_DOT_FORMAT_NAME;
+
+   //versat->debug.dotFormat = GRAPH_DOT_FORMAT_NAME |
                              //GRAPH_DOT_FORMAT_ID |
-                             GRAPH_DOT_FORMAT_DELAY |
+                             //GRAPH_DOT_FORMAT_DELAY |
                              //GRAPH_DOT_FORMAT_TYPE |
-                             GRAPH_DOT_FORMAT_EXPLICIT |
-                             GRAPH_DOT_FORMAT_LATENCY;
+                             //GRAPH_DOT_FORMAT_EXPLICIT |
+                             //GRAPH_DOT_FORMAT_LATENCY;
 
    RegisterTypes();
 
@@ -267,9 +272,8 @@ Versat* InitVersat(int base,int numberConfigurations){
    versat->base = base;
 
    //InitArena(&versat->temp,Gigabyte(8));
-   InitArena(&versat->temp,Gigabyte(1));
-
-   InitArena(&versat->permanent,Megabyte(256));
+   versat->temp = InitArena(Gigabyte(16));
+   versat->permanent = InitArena(Megabyte(256));
 
    FUDeclaration nullDeclaration = {};
    nullDeclaration.inputDelays = Array<int>{zeros,1};
@@ -1965,7 +1969,7 @@ int GetOutputValue(Accelerator* accel,int portNumber){
    return value;
 }
 
-int GetInputPortNumber(Versat* versat,FUInstance* inputInstance){
+int GetInputPortNumber(FUInstance* inputInstance){
    Assert(inputInstance->declaration == BasicDeclaration::input);
 
    return ((ComplexFUInstance*) inputInstance)->portIndex;

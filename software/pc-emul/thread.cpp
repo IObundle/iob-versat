@@ -16,7 +16,7 @@ inline void UnlockMutex(){pthread_mutex_unlock(&poolMutex);}
 inline void IncSem(){sem_post(&poolSemaphore);}
 inline void DecSem(){sem_wait(&poolSemaphore);}
 
-static const int MAX_TASKS = 1024;
+static const int MAX_TASKS = 256;
 
 // Pool mutex locked
 static Task tasks[MAX_TASKS];
@@ -53,8 +53,8 @@ void* ThreadFunction(void* arg){
 
       task.function(id,task.args);
 
-      LockMutex(); // Should be a different mutex
-      jobsFinished += 1;
+      LockMutex();
+      jobsFinished += 1; // Should be an atomic increment
       UnlockMutex();
    }
 
@@ -86,15 +86,19 @@ void InitThreadPool(int nThreads){
 
 bool FullTasks(){
    LockMutex();
-   bool full = (taskWrite + 1 == taskRead);
+   bool full = ((taskWrite + 1) % MAX_TASKS == taskRead);
    UnlockMutex();
    return full;
 }
 
 void AddTask(Task task){
+   while(FullTasks()) asm("");
+
+   MemoryBarrier();
+
    LockMutex();
 
-   Assert((taskWrite + 1) != taskRead); // Could also have just a delay, waiting for more free space, but could lock if AddTask called by the tasks themselves
+   Assert((taskWrite + 1) % MAX_TASKS != taskRead); // Could also have just a delay, waiting for more free space, but could lock if AddTask called by the tasks themselves
 
    tasks[taskWrite] = task;
    taskWrite = (taskWrite + 1) % MAX_TASKS;
@@ -153,4 +157,11 @@ void TerminatePool(bool force){
    for(int i = 0; i < numberThreads; i++){
       pthread_join(threads[i],NULL);
    }
+}
+
+WorkGroup* PushWorkGroup(Arena* arena,int numberWork){
+   WorkGroup* work = PushStruct<WorkGroup>(arena);
+   work->tasks = PushArray<Task>(arena,numberWork);
+
+   return work;
 }

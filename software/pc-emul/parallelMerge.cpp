@@ -8,19 +8,6 @@
 
 static pthread_mutex_t bestCliqueMutex;
 
-#define MAX_CLIQUE_TIME 10.0f
-
-inline float MyClock(){
-   timespec out = {};
-   clock_gettime(CLOCK_MONOTONIC,&out);
-   //printf("%d.%d\n",out.tv_sec,out.tv_nsec);
-
-   int milli = out.tv_nsec / 1000000;
-   float res = ((float) out.tv_sec) + (((float) milli) / 1000.0f);
-
-   return res;
-}
-
 struct IterativeCliqueFrame{
    ConsolidationGraph inputGraph;
    ConsolidationGraph tempGraph;
@@ -39,14 +26,16 @@ struct IterativeState{
    IterativeCliqueFrame* current;
    IterativeCliqueFrame firstFrame;
    ConsolidationGraph bestGraphFound;
+   float start;
    int max;
    bool runFully;
+   bool found;
 };
 
 void Init(IterativeState* state,Arena* arena,int index,ConsolidationGraph graph,BitArray* neighbors){
    state->arena = arena;
 
-   InitArena(arena,Megabyte(1));
+   *arena = InitArena(Megabyte(1));
 
    state->bestGraphFound = Copy(graph,arena);
    state->bestGraphFound.validNodes.Fill(0);
@@ -89,12 +78,12 @@ bool IterativeClique(IterativeState* state,BitArray* neighbors,int* table){
             current = current->previousFrame;
             continue;
       } else {
-         #if 0
-         auto end = MyClock();
-         float elapsed = (end - state->start);
+         #if 01
+         auto end = GetTime();
+         float elapsed = end - state->start;
          if(elapsed > MAX_CLIQUE_TIME){
             state->found = true;
-            return;
+            return false;
          }
          #endif
 
@@ -240,8 +229,8 @@ void IterativeClique(ParallelCliqueState* state,ConsolidationGraph graphArg,int 
             continue;
       } else {
          #if 0
-         auto end = MyClock();
-         float elapsed = (end - state->start);
+         auto end = GetTime();
+         float elapsed = end - state->start;
          if(elapsed > MAX_CLIQUE_TIME){
             state->found = true;
             return;
@@ -359,26 +348,40 @@ void ParallelClique(ParallelCliqueState* state,ConsolidationGraph graphArg,Index
          }
          pthread_mutex_unlock(&bestCliqueMutex);
       }
-      return;
+      //return;
    }
 
    state->counter += 1;
-   if(state->counter >= 1000){
+   if(state->counter >= 1000){ // Calling clock is kinda of expensive every iteration
       state->counter = 0;
 
-      auto end = MyClock(); // Calling clock is kinda of expensive every iteration
-      float elapsed = (end - state->start);
+      auto end = GetTime();
+      float elapsed = end - state->start;
       if(elapsed > MAX_CLIQUE_TIME){
          state->found = true;
          state->timeout = true;
+         if(size > state->thisMax){
+            state->thisMax = size;
+         }
          return;
       }
    }
 
    int num = 0;
    while((num = graph.validNodes.GetNumberBitsSet()) != 0){
+      int stateMax = *state->max;
+
       #if 1
-      if(size + num <= *state->max){
+      if(stateMax > state->upperbound){
+         return;
+      }
+      #endif
+
+      #if 1
+      if(size + num <= stateMax){
+         if(size > state->thisMax){
+            state->thisMax = size;
+         }
          return;
       }
       #endif
@@ -386,7 +389,10 @@ void ParallelClique(ParallelCliqueState* state,ConsolidationGraph graphArg,Index
       int i = graph.validNodes.FirstBitSetIndex();
 
       #if 1
-      if(size + state->table[i] <= *state->max){
+      if(size + state->table[i] <= stateMax){
+         if(size > state->thisMax){
+            state->thisMax = size;
+         }
          return;
       }
       #endif
@@ -406,6 +412,9 @@ void ParallelClique(ParallelCliqueState* state,ConsolidationGraph graphArg,Index
       ParallelClique(state,tempGraph,&newRecord,size + 1,arena);
 
       if(state->found){
+         if(size > state->thisMax){
+            state->thisMax = size;
+         }
          return;
       }
    }
@@ -424,12 +433,13 @@ void TaskMaxClique(int id,void* args){
    state.cliqueOut = &task->state->result;
    state.found = false;
    state.thisMax = 0;
-   state.start = task->state->start; //MyClock();
+   state.start = task->state->start;
    state.timeout = false;
    state.index = index;
    state.counter = 0;
+   state.upperbound = task->state->upperBound;
 
-   clock_t taskStart = MyClock();
+   double taskStart = GetTime();
    #if 0
    printf("%d\n",task->index);
    #endif
@@ -446,21 +456,25 @@ void TaskMaxClique(int id,void* args){
    record.index = index;
    ParallelClique(&state,graph,&record,1,arena);
 
-   clock_t taskEnd = MyClock();
-
+   double taskEnd = GetTime();
    //printf("%d: %3f\n",task->index,taskEnd - taskStart);
 
-   #if 1
    // No mutex needed.
-   int max = state.thisMax;
-   for(int i = index; i < task->state->graphCopy.nodes.size; i++){
-      if(task->state->table[i] != 9999){
-         max = std::max(max,task->state->table[i]);
+   if(task->state->table[index] == 9999){
+      //task->state->table[index] = state.thisMax;
+
+      #if 0
+      int max = state.thisMax;
+      for(int i = index; i < task->state->graphCopy.nodes.size; i++){
+         if(task->state->table[i] != 9999){
+            max = std::max(max,task->state->table[i]);
+         }
       }
+
+      //printf("%d %d\n",index,max);
+      task->state->table[index] = max;
+      #endif
    }
-   //printf("%d %d\n",index,max);
-   task->state->table[index] = max;
-   #endif
 }
 
 void Init(RefParallelState* state,ConsolidationGraph graph,int upperBound,Arena* arena,TaskFunction function){
@@ -475,11 +489,12 @@ void Init(RefParallelState* state,ConsolidationGraph graph,int upperBound,Arena*
    state->nThreads = NumberThreads();
    state->threadArenas = PushArray<Arena>(arena,state->nThreads);
    state->taskFunction = function;
+   state->upperBound = upperBound;
    for(Arena& ar : state->threadArenas){
-      InitArena(&ar,Megabyte(4)); // Allocate one per thread
+      ar = InitArena(Megabyte(128)); // Allocate one per thread
    }
    state->i = graph.nodes.size - 1;
-   state->start = MyClock();
+   state->start = GetTime();
 }
 
 ConsolidationGraph AdvanceAll(RefParallelState* parallelState,Arena* arena){
@@ -495,15 +510,18 @@ ConsolidationGraph AdvanceAll(RefParallelState* parallelState,Arena* arena){
 
       task.args = (void*) state;
 
+      auto end = GetTime();
+      float elapsed = end - parallelState->start;
+      if(elapsed > MAX_CLIQUE_TIME){
+         parallelState->timeout = true;
+         printf("Broken because time\n");
+         break;
+      }
+
       while(FullTasks());
       AddTask(task);
    }
    WaitCompletion();
-
-   float end = MyClock();
-   if(end - parallelState->start > MAX_CLIQUE_TIME){
-      parallelState->timeout = true;
-   }
 
    parallelState->i = i;
    Assert(IsClique(parallelState->result).result);
@@ -540,7 +558,9 @@ void PrintTable(Array<int> table){
 ConsolidationGraph ParallelMaxClique(ConsolidationGraph graph,int upperBound,Arena* arena){
    static bool init = false;
    if(!init){
+      #if 0
       InitThreadPool(16);
+      #endif
       pthread_mutex_init(&bestCliqueMutex,NULL);
       init = true;
    }
@@ -550,15 +570,19 @@ ConsolidationGraph ParallelMaxClique(ConsolidationGraph graph,int upperBound,Are
       RefParallelState state = {};
       Init(&state,graph,upperBound,arena,TaskMaxClique);
 
+      #if 0
       PrintTable(state.table);
       printf("\n");
+      #endif
 
       ConsolidationGraph res0 = AdvanceAll(&state,arena);
-      MemoryBarrier();
+      //MemoryBarrier();
 
+      #if 0
       printf("\n");
       PrintTable(state.table);
       printf("\n");
+      #endif
 
       if(state.timeout){
          for(int i = state.table.size - 1; i >= 0; i--){

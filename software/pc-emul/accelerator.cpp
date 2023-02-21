@@ -21,9 +21,9 @@ Accelerator* CreateAccelerator(Versat* versat){
    Reserve(&accel->storedOutputAlloc,Megabyte(1));
    Reserve(&accel->extraDataAlloc,Megabyte(1));
 
-   InitArena(&accel->instancesMemory,Kilobyte(64));
-   InitArena(&accel->edgesMemory,Kilobyte(64));
-   InitArena(&accel->temp,Kilobyte(256));
+   accel->instancesMemory = InitArena(Megabyte(4));
+   accel->edgesMemory = InitArena(Megabyte(1));
+   accel->temp = InitArena(Megabyte(1));
 
    return accel;
 }
@@ -82,7 +82,7 @@ ComplexFUInstance* CreateFUInstance(Accelerator* accel,FUDeclaration* type,Strin
 
    FOREACH_LIST(inst,accel->instances){
       if(inst->name == name){
-         Assert(false);
+         //Assert(false);
          break;
       }
    }
@@ -1624,11 +1624,7 @@ AcceleratorView CreateAcceleratorView(Accelerator* accel,Arena* arena){
    FOREACH_LIST(edge,accel->edges){
       EdgeView newEdge = {};
 
-      ComplexFUInstance* inst0 = edge->units[0].inst;
-      ComplexFUInstance* inst1 = edge->units[1].inst;
-
       newEdge.edge = edge;
-
       *view.edges.Alloc() = newEdge;
    }
 

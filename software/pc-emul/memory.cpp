@@ -58,19 +58,27 @@ void CheckMemoryStats(){
    }
 }
 
-void InitArena(Arena* arena,size_t size){
-   arena->used = 0;
-   arena->totalAllocated = size;
-   arena->mem = (Byte*) calloc(size,sizeof(Byte));
-   Assert(arena->mem);
-   Assert(IS_ALIGNED_8(arena->mem));
+Arena InitArena(size_t size){
+   Arena arena = {};
+
+   arena.used = 0;
+   arena.totalAllocated = size;
+   arena.mem = (Byte*) calloc(size,sizeof(Byte));
+   Assert(arena.mem);
+   Assert(IS_ALIGNED_8(arena.mem));
+
+   return arena;
 }
 
-void InitLargeArena(Arena* arena){
-   arena->used = 0;
-   arena->totalAllocated = Gigabyte(4);
-   arena->mem = (Byte*) AllocatePages(arena->totalAllocated / GetPageSize());
-   Assert(arena->mem);
+Arena InitLargeArena(){
+   Arena arena = {};
+
+   arena.used = 0;
+   arena.totalAllocated = Gigabyte(4);
+   arena.mem = (Byte*) AllocatePages(arena.totalAllocated / GetPageSize());
+   Assert(arena.mem);
+
+   return arena;
 }
 
 Arena SubArena(Arena* arena,size_t size){
@@ -105,7 +113,7 @@ void PopMark(Arena* arena,Byte* mark){
    arena->used = mark - arena->mem;
 }
 
-Byte* PushBytes(Arena* arena, int size){
+Byte* PushBytes(Arena* arena, size_t size){
    Byte* ptr = &arena->mem[arena->used];
 
    Assert(arena->used + size < arena->totalAllocated);

@@ -19,6 +19,7 @@ void RemoveNodeAndEdges(Graph* graph,Node* node){
       FOREACH_LIST(ptr,graph->instances){
          if(ptr == node){
             previous->next = ptr->next;
+            graph->numberInstances -= 1;
             break;
          }
          previous = ptr;
@@ -26,7 +27,6 @@ void RemoveNodeAndEdges(Graph* graph,Node* node){
    }
 
    while(ContainsNode(graph->edges,node)){ // Special case
-      EdgeNode* old = graph->edges;
       graph->edges = graph->edges->next;
    }
 
@@ -34,8 +34,8 @@ void RemoveNodeAndEdges(Graph* graph,Node* node){
    for(EdgeNode* ptr = graph->edges; ptr;){
       if(ContainsNode(ptr,node)){
          previous->next = ptr->next;
-
          ptr = previous->next;
+         graph->numberEdges -= 1;
       } else {
          previous = ptr;
          ptr = ptr->next;
@@ -43,7 +43,94 @@ void RemoveNodeAndEdges(Graph* graph,Node* node){
    }
 }
 
+Array<int> OffsetGivenCounts(Array<int> counts,Arena* out){
+   int size = counts.size;
+   Array<int> offsets = PushArray<int>(out,size);
+
+   offsets[0] = 0;
+   for(int i = 1; i < size; i++){
+      offsets[i] = offsets[i-1] + counts[i-1];
+   }
+   return offsets;
+}
+
 void SortEdgesByVertices(Graph* graph){
+   struct EdgeWithOrder{
+      EdgeNode* node;
+      int outputIndex;
+      int inputIndex;
+   };
+
+   Arena tempInst = InitArena(Megabyte(64));
+   Arena* temp = &tempInst;
+
+   #if 1
+   // Fast
+   region(temp){
+      int instances = Size(graph->instances);
+      int edges = Size(graph->edges);
+
+      Hashmap<ComplexFUInstance*,int> instToIndex = {};
+      instToIndex.Init(temp,instances);
+
+      int index = 0;
+      FOREACH_LIST_INDEXED(ptr,graph->instances,index){
+         Assert(ptr);
+         instToIndex.Insert(ptr,index);
+      }
+      int nodeCount = index;
+
+      Array<EdgeWithOrder> orderedEdges = PushArray<EdgeWithOrder>(temp,edges);
+      Array<int> outCounts = PushArray<int>(temp,nodeCount);
+      Array<int> inCounts = PushArray<int>(temp,nodeCount);
+
+      Memset(outCounts,0);
+      Memset(inCounts,0);
+
+      index = 0;
+      FOREACH_LIST_INDEXED(edge,graph->edges,index){
+         int outIndex = instToIndex.GetOrFail(edge->out.inst);
+         int inIndex = instToIndex.GetOrFail(edge->in.inst);
+
+         orderedEdges[index].node = edge;
+         orderedEdges[index].outputIndex = outIndex;
+         orderedEdges[index].inputIndex = inIndex;
+
+         outCounts[outIndex] += 1;
+         inCounts[inIndex] += 1;
+      }
+      int edgeCount = index;
+      Assert(edges == edgeCount);
+
+      Array<int> inOffsets = OffsetGivenCounts(inCounts,temp);
+      Array<EdgeWithOrder> orderedByIn = PushArray<EdgeWithOrder>(temp,edgeCount);
+
+      for(EdgeWithOrder& edge : orderedEdges){
+         Assert(edge.node);
+         int inIndex = edge.inputIndex;
+         int offset = inOffsets[inIndex]++;
+         //DEBUG_BREAK_IF(offset == 0);
+         orderedByIn[offset] = edge;
+      }
+
+      Array<int> outOffsets = OffsetGivenCounts(outCounts,temp);
+
+      for(EdgeWithOrder& edge : orderedByIn){
+         Assert(edge.node);
+         int outIndex = edge.outputIndex;
+         int offset = outOffsets[outIndex]++;
+         //DEBUG_BREAK_IF(offset == 0);
+         orderedEdges[offset] = edge;
+      }
+
+      for(int i = 0; i < orderedEdges.size - 1; i++){
+         orderedEdges[i].node->next = orderedEdges[i+1].node;
+      }
+      orderedEdges[orderedEdges.size - 1].node->next = nullptr;
+      graph->edges = orderedEdges[0].node;
+   };
+   #else
+   // Slow
    EdgeNode* start = nullptr;
    EdgeNode* ptr = nullptr;
    FOREACH_LIST(outPtr,graph->instances){
@@ -76,9 +163,12 @@ void SortEdgesByVertices(Graph* graph){
             edge = next;
          }
       }
+      //AssertNoLoop(graph->edges,&temp);
    }
-
    graph->edges = start;
+   #endif
+
+   Free(temp);
 }
 
 void ReorganizeAccelerator(Graph* graph,Arena* temp);
@@ -93,9 +183,6 @@ FlattenResult FlattenNode(Graph* graph,Node* node,Arena* arena){
    Accelerator* circuit = decl->baseCircuit;
    ReorganizeAccelerator(circuit,arena);
 
-   ComplexFUInstance* inputPortToNode[99] = {};
-   ComplexFUInstance* outputInstance = nullptr;
-
    Hashmap<ComplexFUInstance*,Node*> map = {};
    map.Init(arena,circuit->numberInstances);
 
@@ -104,11 +191,9 @@ FlattenResult FlattenNode(Graph* graph,Node* node,Arena* arena){
    Node* ptr = node;
    FOREACH_LIST(inst,circuit->instances){
       if(inst->declaration == BasicDeclaration::input){
-         int port = inst->portIndex;
          continue;
       }
       if(inst->declaration == BasicDeclaration::output){
-         outputInstance = inst;
          continue;
       }
 
@@ -252,7 +337,7 @@ FlattenResult FlattenNode(Graph* graph,Node* node,Arena* arena){
 
    RemoveNodeAndEdges(graph,node);
 
-   SortEdgesByVertices(graph);
+   //SortEdgesByVertices(graph);
 
    FlattenResult res = {};
    res.flatUnitStart = flatUnitStart;
@@ -338,6 +423,7 @@ Node* GetOutputInstance(Subgraph sub){
    return nullptr;
 }
 
+#if 0
 ConsolidationResult GenerateConsolidationGraph(Versat* versat,Arena* arena,Subgraph accel1,Subgraph accel2,ConsolidationGraphOptions options){
    ConsolidationGraph graph = {};
 
@@ -430,8 +516,8 @@ ConsolidationResult GenerateConsolidationGraph(Versat* versat,Arena* arena,Subgr
       FOREACH_SUBLIST(edge2,accel2.edges){
          // TODO: some nodes do not care about which port is connected (think the inputs for common operations, like multiplication, adders and the likes)
          // Can augment the algorithm further to find more mappings
-         if(!(EqualPortMapping(versat,edge1->units[0],edge2->units[0]) &&
-            EqualPortMapping(versat,edge1->units[1],edge2->units[1]))){
+         if(!(EqualPortMapping(edge1->units[0],edge2->units[0]) &&
+            EqualPortMapping(edge1->units[1],edge2->units[1]))){
             continue;
          }
 
@@ -684,4 +770,7 @@ ConsolidationResult GenerateConsolidationGraph(Versat* versat,Arena* arena,Subgr
 
    return res;
 }
+
+#endif
+
 

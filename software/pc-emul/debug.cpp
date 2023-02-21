@@ -71,7 +71,7 @@ struct MemoryRange{
 };
 
 void CheckMemory(AcceleratorIterator iter,MemType type,Arena* arena){
-   ARENA_MARKER(arena);
+   BLOCK_REGION(arena);
 
    Byte* mark = MarkArena(arena);
 
@@ -1077,10 +1077,8 @@ static void terminal_sig_handler(int sig){
 void DebugTerminal(Value initialValue){
    Assert(WatchableObject(initialValue));
 
-   Arena arena = {};
-   Arena temp = {};
-   InitArena(&arena,Megabyte(1));
-   InitArena(&temp,Megabyte(1));
+   Arena arena = InitArena(Megabyte(1));
+   Arena temp = InitArena(Megabyte(1));
 
    for(int i = 0; i < MAX_PANELS; i++){
       globalCurrentPanels[i] = 0;

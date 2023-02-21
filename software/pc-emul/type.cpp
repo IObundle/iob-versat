@@ -423,7 +423,7 @@ void RegisterTypes(){
    }
    registered = true;
 
-   InitArena(&permanentArena,Megabyte(16));
+   permanentArena = InitArena(Megabyte(16));
 
    ValueType::NUMBER = RegisterSimpleType(STRING("int"),sizeof(int));
    ValueType::SIZE_T = RegisterSimpleType(STRING("size_t"),sizeof(size_t));

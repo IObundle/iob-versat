@@ -12,6 +12,6 @@ String Repr(MergeEdge node,GraphDotFormat format,Arena* memory);
 String Repr(PortEdge node,GraphDotFormat format,Arena* memory);
 String Repr(MappingNode node,Arena* memory);
 
-String PushIntTableRepresentation(Arena* arena,Array<int> values);
+String PushIntTableRepresentation(Arena* arena,Array<int> values,int digitSize = 0);
 
 #endif // INCLUDED_TEXTUAL_REPRESENTATION

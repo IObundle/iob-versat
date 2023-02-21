@@ -73,12 +73,36 @@ public:
       return res;
    }
 
+   void PushValue(T val){
+      T* space = Push(1);
+      *space = val;
+   }
+
+   void Push(Array<T> array){
+      T* data = Push(array.size);
+
+      for(int i = 0; i < array.size; i++){
+         data[i] = array[i];
+      }
+   }
+
    T* Set(int pos,int times){
       T* res = &ptr[pos];
 
       timesPushed = std::max(timesPushed,pos + times);
       Assert(timesPushed <= maximumTimes);
       return res;
+   }
+
+   Array<T> AsArray(){
+      Array<T> res = {};
+      res.data = ptr;
+      res.size = timesPushed;
+      return res;
+   }
+
+   void Reset(){
+      timesPushed = 0;
    }
 
    bool Empty(){
@@ -95,14 +119,14 @@ struct Arena{
    size_t totalAllocated;
 };
 
-void InitArena(Arena* arena,size_t size); // Calls calloc
-void InitLargeArena(Arena* arena,size_t size); //
+Arena InitArena(size_t size); // Calls calloc
+Arena InitLargeArena(); //
 Arena SubArena(Arena* arena,size_t size);
 void PopToSubArena(Arena* top,Arena subArena);
 void Free(Arena* arena);
 Byte* MarkArena(Arena* arena);
 void PopMark(Arena* arena,Byte* mark);
-Byte* PushBytes(Arena* arena, int size);
+Byte* PushBytes(Arena* arena, size_t size);
 String PointArena(Arena* arena,Byte* mark);
 String PushFile(Arena* arena,const char* filepath);
 String PushString(Arena* arena,String ss);
@@ -119,27 +143,15 @@ public:
    void Pop(){PopMark(this->arena,this->mark);};
 };
 
-#define ARENA_MARKER(ARENA) ArenaMarker marker(ARENA);
-#define START_ARENA_REGION(ARENA) \
-   { ArenaMarker marker(ARENA);
-
-#define END_ARENA_REGION(ARENA) }
-
 template<typename F>
-class Defer{
-public:
-   F f;
-   Defer(F f) : f(f){};
-   ~Defer(){f();}
-};
-
-struct _DeferDummy{};
-template<typename F>
-Defer<F> operator+(_DeferDummy,F&& f){
-   return Defer<F>(f);
+ALWAYS_INLINE void operator+(ArenaMarker&& marker,F&& f){
+   f();
 }
+#define region(ARENA) ArenaMarker(ARENA) + [&]() __attribute__((always_inline))
 
-#define defer auto deferVar = _DeferDummy() + [&]()
+#define __marker(LINE) marker_ ## LINE
+#define _marker(LINE) __marker( LINE )
+#define BLOCK_REGION(ARENA) ArenaMarker _marker(__LINE__)(ARENA)
 
 // Do not abuse stack arenas.
 #define STACK_ARENA(NAME,SIZE) \

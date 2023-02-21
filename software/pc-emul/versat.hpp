@@ -159,7 +159,7 @@ int GetNumberOfInputs(Accelerator* accel);
 int GetNumberOfOutputs(Accelerator* accel);
 void SetInputValue(Accelerator* accel,int portNumber,int number);
 int GetOutputValue(Accelerator* accel,int portNumber);
-int GetInputPortNumber(Versat* versat,FUInstance* inputInstance);
+int GetInputPortNumber(FUInstance* inputInstance);
 
 // General hook function for debugging purposes
 int CalculateMemoryUsage(Versat* versat); // Not accurate, but returns the biggest amount of memory usage.

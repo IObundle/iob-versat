@@ -54,6 +54,7 @@ struct FlattenResult{
 
 struct FlatteningTemp{
    int index;
+   FUDeclaration* parent;
    FUDeclaration* decl;
    String name;
    int flattenedUnits;
@@ -62,6 +63,8 @@ struct FlatteningTemp{
    int edgeStart;
    int level;
    int flag;
+   FlatteningTemp* next;
+   FlatteningTemp* child;
 };
 
 template<typename T>
@@ -91,6 +94,21 @@ struct Subgraph{
    Sublist<Node> nodes;
    Sublist<EdgeNode> edges;
 };
+
+template<typename T>
+void AssertNoLoop(T* head,Arena* arena){
+   BLOCK_REGION(arena);
+
+   Hashmap<T*,int> mapping = {};
+   mapping.Init(arena,10000);
+
+   FOREACH_LIST(ptr,head){
+      GetOrAllocateResult<int> res = mapping.GetOrAllocate(ptr);
+
+      Assert(!res.result);
+      *res.data = 0;
+   }
+}
 
 Node* GetOutputInstance(Subgraph sub);
 

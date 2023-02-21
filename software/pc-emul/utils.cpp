@@ -43,6 +43,15 @@ char* StaticFormat(const char* format,...){
    return buffer;
 }
 
+double GetTime(){
+   timespec time;
+   clock_gettime(CLOCK_MONOTONIC, &time);
+
+   double res = time.tv_sec + 1e-9*time.tv_nsec;
+
+   return res;
+}
+
 // Misc
 void FlushStdout(){
    fflush(stdout);
