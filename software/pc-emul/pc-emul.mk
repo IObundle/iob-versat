@@ -45,6 +45,7 @@ TOOL_SRC += $(VERSAT_DIR)/software/pc-emul/templateEngine.cpp
 TOOL_SRC += $(VERSAT_DIR)/software/pc-emul/type.cpp
 
 CPP_OBJ+=$(BUILD_DIR)/verilated.o
+CPP_OBJ+=$(BUILD_DIR)/verilated_threads.o
 CPP_OBJ+=$(BUILD_DIR)/verilated_vcd_c.o
 
 $(BUILD_DIR)/verilated.o:
@@ -52,6 +53,14 @@ $(BUILD_DIR)/verilated.o:
 	g++ $(VERILATE_FLAGS) -I. -MMD -I$(VERILATOR_INCLUDE) -I$(VERILATOR_INCLUDE)/vltstd -DVL_PRINTF=printf \
 	-DVM_COVERAGE=0 -DVM_SC=0 -DVM_TRACE=0 -Wno-sign-compare -Wno-uninitialized -Wno-unused-but-set-variable \
 	-Wno-unused-parameter -Wno-unused-variable -Wno-shadow -m32 -g -c $(VERILATOR_INCLUDE)/verilated.cpp
+	mv *.o $(BUILD_DIR)/;
+	mv *.d $(BUILD_DIR)/;
+
+$(BUILD_DIR)/verilated_threads.o:
+	mkdir -p $(BUILD_DIR);
+	g++ $(VERILATE_FLAGS) -I. -MMD -I$(VERILATOR_INCLUDE) -I$(VERILATOR_INCLUDE)/vltstd -DVL_PRINTF=printf \
+	-DVM_COVERAGE=0 -DVM_SC=0 -DVM_TRACE=0 -Wno-sign-compare -Wno-uninitialized -Wno-unused-but-set-variable \
+	-Wno-unused-parameter -Wno-unused-variable -Wno-shadow -m32 -g -c $(VERILATOR_INCLUDE)/verilated_threads.cpp
 	mv *.o $(BUILD_DIR)/;
 	mv *.d $(BUILD_DIR)/;
 
