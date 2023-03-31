@@ -186,8 +186,7 @@ Type* InstantiateTemplate(String name){
       return alreadyExists;
    }
 
-   Hashmap<String,String> templateToType;
-   templateToType.Init(&temp,16);
+   Hashmap<String,String>* templateToType = PushHashmap<String,String>(&temp,16);
 
    Token baseName = tok.NextToken();
    Type* templateBase = GetSpecificType(baseName);
@@ -215,7 +214,7 @@ Type* InstantiateTemplate(String name){
 
          templateArgTypes[index] = GetTypeOrFail(simpleType);
 
-         templateToType.Insert(templateArg,simpleType);
+         templateToType->Insert(templateArg,simpleType);
 
          tok.IfNextToken(",");
          index += 1;
@@ -235,7 +234,7 @@ Type* InstantiateTemplate(String name){
       while(!tok.Done()){
          Token token = tok.NextToken();
 
-         String* found = templateToType.Get(token);
+         String* found = templateToType->Get(token);
          if(found){
             PushString(&temp,"%.*s",UNPACK_SS(*found));
          } else {
@@ -340,7 +339,7 @@ Type* GetType(String name){
          tok.AssertNextToken("]");
 
          if(!CheckFormat("%d",arrayExpression)){
-            DEBUG_BREAK;
+            DEBUG_BREAK();
          }
 
          int arraySize = ParseInt(arrayExpression);
@@ -414,6 +413,8 @@ Type* GetArrayType(Type* baseType, int arrayLength){
 
 #include "templateEngine.hpp"
 #include "verilogParser.hpp"
+#include "scratchSpace.hpp"
+#include "utils.hpp"
 #include "typeInfo.inc"
 
 void RegisterTypes(){
@@ -451,12 +452,13 @@ void FreeTypes(){
    types.Clear(true);
 }
 
-String GetValueRepresentation(Value in,Arena* arena){
+String GetDefaultValueRepresentation(Value in,Arena* arena){
    Value val = CollapseArrayIntoPtr(in);
+   Type* type = val.type;
    String res = {};
 
    if(val.type == ValueType::NUMBER){
-      res = PushString(arena,"%ld",val.number);
+      res = PushString(arena,"%lld",val.number);
    } else if(val.type == ValueType::STRING){
       if(val.literal){
          res = PushString(arena,"\"%.*s\"",UNPACK_SS(val.str));
@@ -471,6 +473,8 @@ String GetValueRepresentation(Value in,Arena* arena){
       res = PushString(arena,"%s",val.boolean ? "true" : "false");
    } else if(val.type == ValueType::SIZE_T){
       res = PushString(arena,"%d",*(int*)val.custom);
+   } else if(type == ValueType::NIL){
+      res = STRING("Nullptr");
    } else if(val.type->type == Type::POINTER){
       Assert(!val.isTemp);
 
@@ -481,8 +485,15 @@ String GetValueRepresentation(Value in,Arena* arena){
       } else {
          res = PushString(arena,"%p",ptr);
       }
+   } else if(type->type == Type::TEMPLATED_INSTANCE){
+      if(type->templateBase == ValueType::ARRAY){
+         Value size = AccessStruct(val,STRING("size"));
+         res = PushString(arena,"Size:%lld",size.number);
+      } else {
+         res = PushString(arena,"%.*s",UNPACK_SS(type->name));// Return type name
+      }
    } else {
-      // Return empty
+      res = PushString(arena,"%.*s",UNPACK_SS(type->name));// Return type name
    }
 
    return res;
@@ -609,7 +620,7 @@ Value AccessObjectIndex(Value object,int index){
 }
 
 Value AccessStruct(Value structure,Member* member){
-   Assert(structure.type->type == Type::STRUCT || structure.type->type == Type::TEMPLATED_INSTANCE);
+   Assert(IsStruct(structure.type));
    Assert(!structure.isTemp);
 
    char* view = (char*) structure.custom;
@@ -626,7 +637,7 @@ Value AccessStruct(Value structure,Member* member){
 }
 
 Value AccessStruct(Value val,int index){
-   Assert(val.type->type == Type::STRUCT);
+   Assert(IsStruct(val.type));
 
    Member* member = &val.type->members[index];
    Value res = AccessStruct(val,member);
@@ -692,11 +703,7 @@ int IndexableSize(Value object){
          size = view->size;
       } else if(type->templateBase == ValueType::HASHMAP){
          Hashmap<Byte,Byte>* view = (Hashmap<Byte,Byte>*) object.custom;
-         if(!view->header){
-            size = 0;
-         } else {
-            size = view->header->nodesUsed;
-         }
+         size = view->nodesUsed;
       } else {
          NOT_IMPLEMENTED;
       }
@@ -758,7 +765,9 @@ bool IsIndexableOfBasicType(Type* type){
 }
 
 bool IsEmbeddedListKind(Type* type){
-   Assert(type->type == Type::STRUCT);
+   if(!IsStruct(type)){
+      return false;
+   }
 
    bool res = false;
    for(Member& member : type->members){
@@ -776,7 +785,14 @@ bool IsEmbeddedListKind(Type* type){
    return res;
 }
 
+bool IsStruct(Type* type){
+   bool res = type->type == Type::STRUCT || type->type == Type::TEMPLATED_INSTANCE;
+   return res;
+}
+
 Iterator Iterate(Value iterating){
+   iterating = CollapsePtrIntoStruct(iterating);
+
    Type* type = iterating.type;
 
    Iterator iter = {};
@@ -817,6 +833,10 @@ Iterator Iterate(Value iterating){
       } else {
          NOT_IMPLEMENTED;
       }
+   } else if(IsEmbeddedListKind(type)){
+      // Info stored in iterating
+   } else if(type == ValueType::NIL){
+      // Do nothing. HasNext will fail
    } else {
       NOT_IMPLEMENTED;
    }
@@ -860,6 +880,12 @@ bool HasNext(Iterator iter){
       } else {
          NOT_IMPLEMENTED;
       }
+   } else if(IsEmbeddedListKind(type)){
+      bool res = (iter.iterating.custom != nullptr);
+
+      return res;
+   } else if(type == ValueType::NIL){
+      return false;
    } else {
       NOT_IMPLEMENTED;
    }
@@ -886,6 +912,10 @@ void Advance(Iterator* iter){
       } else {
          NOT_IMPLEMENTED;
       }
+   } else if(IsEmbeddedListKind(type)){
+      Value val = AccessStruct(iter->iterating,STRING("next"));
+      Value collapsed = CollapsePtrIntoStruct(val);
+      iter->iterating = collapsed;
    } else {
       NOT_IMPLEMENTED;
    }
@@ -919,13 +949,15 @@ Value GetValue(Iterator iter){
       } else if(type->templateBase == ValueType::HASHMAP){
          Hashmap<Byte,Byte>* view = (Hashmap<Byte,Byte>*) iter.iterating.custom;
 
-         Byte* data = (Byte*) view->header->data;
+         Byte* data = (Byte*) view->data;
 
          val.custom = &data[iter.currentNumber * iter.hashmapType->size];
          val.type = iter.hashmapType;
       } else {
          NOT_IMPLEMENTED;
       }
+   } else if(IsEmbeddedListKind(type)){
+      return iter.iterating;
    } else {
       NOT_IMPLEMENTED;
    }
@@ -1048,7 +1080,7 @@ bool Equal(Value v1,Value v2){
       c2 = RemoveOnePointerIndirection(c2);
 
       res = (c1.custom == c2.custom);
-   } else if(c1.type->type == Type::STRUCT){
+   } else if(IsStruct(c1.type)){
       Assert(!c1.isTemp);
       Assert(!c2.isTemp);
 
@@ -1106,7 +1138,7 @@ Value ConvertValue(Value in,Type* want,Arena* arena){
          int* pointerValue = (int*) DeferencePointer(in.custom,in.type->pointerType,0);
 
          res.boolean = (pointerValue != nullptr);
-      } else if(in.type->type == Type::STRUCT){
+      } else if(IsStruct(in.type)){
          res.boolean = (in.custom != nullptr);
       } else {
          NOT_IMPLEMENTED;
@@ -1124,7 +1156,7 @@ Value ConvertValue(Value in,Type* want,Arena* arena){
          res = in;
          res.type = want;
       } else if(arena){
-         res.str = GetValueRepresentation(in,arena);
+         res.str = GetDefaultValueRepresentation(in,arena);
       } else {
          NOT_IMPLEMENTED;
       }

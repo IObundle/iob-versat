@@ -4,7 +4,7 @@
 #include "versatPrivate.hpp"
 #include "thread.hpp"
 
-#define MAX_CLIQUE_TIME 10.0f
+//#define MAX_CLIQUE_TIME 10.0f
 
 struct IndexRecord{
    int index;
@@ -47,6 +47,7 @@ struct ParallelCliqueState{
 struct RefParallelTask{
    RefParallelState* state;
    int index;
+   float MAX_CLIQUE_TIME;
 };
 
 struct IsCliqueResult{
@@ -70,6 +71,6 @@ BitArray* CalculateNeighborsTable(ConsolidationGraph graph,Arena* arena);
 
 IsCliqueResult IsClique(ConsolidationGraph graph);
 
-ConsolidationGraph ParallelMaxClique(ConsolidationGraph graph,int upperBound,Arena* arena);
+ConsolidationGraph ParallelMaxClique(ConsolidationGraph graph,int upperBound,Arena* arena,float MAX_CLIQUE_TIME);
 
 #endif // INCLUDED_MERGE

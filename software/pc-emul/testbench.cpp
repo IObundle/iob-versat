@@ -36,6 +36,7 @@ void FuzzVersatSpecification(Versat* versat){
 #include <sys/wait.h>
 #include <errno.h>
 
+#if 0
 void VersatSideVerilatorCall(){
    pid_t pid = fork();
 
@@ -49,6 +50,7 @@ void VersatSideVerilatorCall(){
       pid_t res = wait(&status);
    }
 }
+#endif
 
 void TestVersatSide(Versat* versat){
    #if 0

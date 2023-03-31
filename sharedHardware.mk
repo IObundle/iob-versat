@@ -1,5 +1,5 @@
 VERILATE_UNIT_BASIC += Buffer FixedBuffer SwapEndian LookupTable Mul Generator IntSqrt
-VERILATE_UNIT_BASIC += Reg Mem Muladd VRead VWrite Mux2 CombMux2 Merge Const 
+VERILATE_UNIT_BASIC += Reg Mem Muladd VRead VWrite Mux2 CombMux2 CombMux4 Merge Const 
 VERILATE_UNIT_BASIC += FloatAdd FloatSub FloatMul FloatDiv FloatSqrt Q16Sqrt
 VERILATE_UNIT_BASIC += FloatMax FloatMin Float2Int Float2UInt Int2Float
 

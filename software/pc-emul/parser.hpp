@@ -24,6 +24,11 @@ struct Expression{
 typedef int (*CharFunction) (const char* ptr,int size);
 typedef String Token;
 
+struct FindFirstResult{
+   Token foundFirst;
+   Token peekFindNotIncluded;
+};
+
 class Tokenizer{
    const char* start;
    const char* ptr;
@@ -63,7 +68,7 @@ public:
    bool IsSingleChar(char ch);
    bool IsSingleChar(const char* chars);
 
-   Token FindFirst(std::initializer_list<const char*> strings);
+   FindFirstResult FindFirst(std::initializer_list<const char*> strings);
 
    // For expressions where there is a open and a closing delimiter (think '{...{...}...}') and need to check where an associated close delimiter is
    String PeekUntilDelimiterExpression(std::initializer_list<const char*> open,std::initializer_list<const char*> close, int numberOpenSeen); //

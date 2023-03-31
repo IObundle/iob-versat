@@ -7,6 +7,8 @@
 #include "versatPrivate.hpp"
 #include "parser.hpp"
 #include "debug.hpp"
+#include "debugGUI.hpp"
+#include "graph.hpp"
 
 #define ARRAY_SIZE(array) sizeof(array) / sizeof(array[0])
 
@@ -228,22 +230,22 @@ void ConnectUnit(PortExpression out,PortExpression in){
    }
 }
 
-String GetUniqueName(String name,Arena* arena,InstanceName& names){
+String GetUniqueName(String name,Arena* arena,InstanceName* names){
    int counter = 0;
    String uniqueName = name;
    Byte* mark = MarkArena(arena);
-   while(names.Get(uniqueName) != nullptr){
+   while(names->Get(uniqueName) != nullptr){
       PopMark(arena,mark);
       uniqueName = PushString(arena,"%.*s_%d",UNPACK_SS(name),counter++);
    }
 
-   names.Insert(uniqueName,0);
+   names->Insert(uniqueName,0);
 
    return uniqueName;
 }
 
 // Right now, not using the full portion of PortExpression because technically we would need to instantiate multiple things. Not sure if there is a need, when a case occurs then make the change then
-PortExpression InstantiateExpression(Versat* versat,Expression* root,Accelerator* circuit,InstanceTable& table,InstanceName& names){
+PortExpression InstantiateExpression(Versat* versat,Expression* root,Accelerator* circuit,InstanceTable* table,InstanceName* names){
    PortExpression res = {};
 
    switch(root->type){
@@ -252,7 +254,7 @@ PortExpression InstantiateExpression(Versat* versat,Expression* root,Accelerator
 
       String toSearch = PushString(&versat->temp,"N%d",number);
 
-      FUInstance** found = table.Get(toSearch);
+      FUInstance** found = table->Get(toSearch);
 
       if(!found){
          String permName = PushString(&versat->permanent,"%.*s",UNPACK_SS(toSearch));
@@ -260,7 +262,7 @@ PortExpression InstantiateExpression(Versat* versat,Expression* root,Accelerator
 
          ComplexFUInstance* digitInst = (ComplexFUInstance*) CreateFUInstance(circuit,GetTypeByName(versat,STRING("Literal")),uniqueName);
          digitInst->literal = number;
-         table.Insert(permName,digitInst);
+         table->Insert(permName,digitInst);
          res.inst = digitInst;
       } else {
          res.inst = *found;
@@ -271,7 +273,7 @@ PortExpression InstantiateExpression(Versat* versat,Expression* root,Accelerator
 
       Var var = ParseVar(&tok);
 
-      FUInstance* inst = table.GetOrFail(var.name);
+      FUInstance* inst = table->GetOrFail(var.name);
 
       res.inst = inst;
       res.extra = var.extra;
@@ -352,7 +354,7 @@ PortExpression InstantiateExpression(Versat* versat,Expression* root,Accelerator
    return res;
 }
 
-FUInstance* ParseExpression(Versat* versat,Accelerator* circuit,Tokenizer* tok,InstanceTable& table,InstanceName& names){
+FUInstance* ParseExpression(Versat* versat,Accelerator* circuit,Tokenizer* tok,InstanceTable* table,InstanceName* names){
    Arena* arena = &versat->temp;
    Expression* expr = ParseExpression(tok,arena);
    PortExpression inst = InstantiateExpression(versat,expr,circuit,table,names);
@@ -360,7 +362,7 @@ FUInstance* ParseExpression(Versat* versat,Accelerator* circuit,Tokenizer* tok,I
    return inst.inst;
 }
 
-FUInstance* ParseInstanceDeclaration(Versat* versat,Tokenizer* tok,Accelerator* circuit,InstanceTable& table,InstanceName& names){
+FUInstance* ParseInstanceDeclaration(Versat* versat,Tokenizer* tok,Accelerator* circuit,InstanceTable* table,InstanceName* names){
    Token type = tok->NextToken();
 
    Token possibleParameters = tok->PeekToken();
@@ -391,7 +393,7 @@ FUInstance* ParseInstanceDeclaration(Versat* versat,Tokenizer* tok,Accelerator* 
    FUDeclaration* FUType = GetTypeByName(versat,type);
    FUInstance* inst = CreateFUInstance(circuit,FUType,uniqueName);
 
-   table.Insert(name,inst);
+   table->Insert(name,inst);
    inst->parameters = PushString(&versat->permanent,fullParameters);
 
    Token peek = tok->PeekToken();
@@ -406,7 +408,7 @@ FUInstance* ParseInstanceDeclaration(Versat* versat,Tokenizer* tok,Accelerator* 
       Tokenizer insideList(list,",",{});
 
       for(int i = 0; i < arguments; i++){
-         Token arg = insideList.NextToken();
+         /* Token arg = */ insideList.NextToken();
 
          //inst->config[i] = ParseInt(arg);
 
@@ -433,7 +435,7 @@ FUInstance* ParseInstanceDeclaration(Versat* versat,Tokenizer* tok,Accelerator* 
       //inst->memMapped = PushArray<int>(&versat->permanent,1 << FUType->memoryMapBits).data;
       //inst->savedMemory = true;
       for(int i = 0; i < arguments; i++){
-         Token arg = insideList.NextToken();
+         /* Token arg =  */ insideList.NextToken();
 
          //inst->memMapped[i] =  ParseInt(arg);
 
@@ -462,10 +464,8 @@ FUDeclaration* ParseModule(Versat* versat,Tokenizer* tok){
    Arena* arena = &versat->temp;
    ArenaMarker marker(arena);
 
-   InstanceTable table = {};
-   table.Init(arena,1000);
-   InstanceName names = {};
-   names.Init(arena,1000);
+   InstanceTable* table = PushHashmap<String,FUInstance*>(arena,1000);
+   InstanceName* names = PushHashmap<String,int>(arena,1000);
 
    int insertedInputs = 0;
    for(int i = 0; 1; i++){
@@ -482,8 +482,8 @@ FUDeclaration* ParseModule(Versat* versat,Tokenizer* tok){
 
       String name = PushString(&versat->permanent,token);
       FUInstance* input = CreateOrGetInput(circuit,name,insertedInputs++);
-      names.Insert(name,0);
-      table.Insert(name,input);
+      names->Insert(name,0);
+      table->Insert(name,input);
    }
 
    tok->AssertNextToken("{");
@@ -534,7 +534,7 @@ FUDeclaration* ParseModule(Versat* versat,Tokenizer* tok){
                   String uniqueName = GetUniqueName(name,&versat->permanent,names);
 
                   FUInstance* inst = CreateFUInstance(circuit,type,uniqueName);
-                  table.Insert(name,inst);
+                  table->Insert(name,inst);
 
                   ShareInstanceConfig(inst,shareIndex);
 
@@ -568,8 +568,8 @@ FUDeclaration* ParseModule(Versat* versat,Tokenizer* tok){
             String uniqueName = GetUniqueName(name,&versat->permanent,names);
             inst->name = PushString(&versat->permanent,uniqueName);
 
-            names.Insert(name,0);
-            table.Insert(name,inst);
+            names->Insert(name,0);
+            table->Insert(name,inst);
 
             tok->AssertNextToken(";");
          } else if(CompareToken(op,"^=")){
@@ -579,7 +579,7 @@ FUDeclaration* ParseModule(Versat* versat,Tokenizer* tok){
 
             String name = PushString(&versat->permanent,outVar.name);
 
-            FUInstance* existing = table.GetOrFail(name);
+            FUInstance* existing = table->GetOrFail(name);
             FUInstance* inst = ParseExpression(versat,circuit,tok,table,names);
 
             String uniqueName = GetUniqueName(name,&versat->permanent,names);
@@ -587,14 +587,14 @@ FUDeclaration* ParseModule(Versat* versat,Tokenizer* tok){
 
             ConnectUnits(inst,0,op,0,0);     // Care, we are not taking account port ranges and delays and stuff like that.
             ConnectUnits(existing,0,op,1,0);
-            names.Insert(name,0);
-            table.Insert(name,op);
+            names->Insert(name,0);
+            table->Insert(name,op);
 
             tok->AssertNextToken(";");
          } else if(CompareToken(op,"->")){
             Var inVar = ParseVar(tok);
 
-            FUInstance* inst1 = table.GetOrFail(outVar.name); //GetInstanceByName(circuit,"%.*s",UNPACK_SS(outVar.name));
+            FUInstance* inst1 = table->GetOrFail(outVar.name); //GetInstanceByName(circuit,"%.*s",UNPACK_SS(outVar.name));
             FUInstance* inst2 = nullptr;
             if(CompareString(inVar.name,"out")){
                if(!outputInstance){
@@ -603,7 +603,7 @@ FUDeclaration* ParseModule(Versat* versat,Tokenizer* tok){
 
                inst2 = outputInstance;
             } else {
-               inst2 = table.GetOrFail(inVar.name); //GetInstanceByName(circuit,"%.*s",UNPACK_SS(inVar.name));
+               inst2 = table->GetOrFail(inVar.name); //GetInstanceByName(circuit,"%.*s",UNPACK_SS(inVar.name));
             }
 
             ConnectUnit((PortExpression){inst1,outVar.extra},(PortExpression){inst2,inVar.extra});
@@ -617,11 +617,11 @@ FUDeclaration* ParseModule(Versat* versat,Tokenizer* tok){
                USER_ERROR;
             }
 
-            FUInstance* inst1 = table.GetOrFail(outVar.name);
-            FUInstance* inst2 = table.GetOrFail(inVar.name);
+            FUInstance* inst1 = table->GetOrFail(outVar.name);
+            FUInstance* inst2 = table->GetOrFail(inVar.name);
 
             ConnectUnit((PortExpression){inst1,outVar.extra},(PortExpression){inst2,inVar.extra});
-            table.Insert(outVar.name,inst2);
+            table->Insert(outVar.name,inst2);
             tok->AssertNextToken(";");
          } else {
             String line = tok->GetStartOfCurrentLine();
@@ -639,7 +639,7 @@ FUDeclaration* ParseModule(Versat* versat,Tokenizer* tok){
    }
 
    // Care to never put out inside the table
-   FUInstance** outInTable = table.Get(STRING("out"));
+   FUInstance** outInTable = table->Get(STRING("out"));
    Assert(!outInTable);
 
    #if 0
@@ -791,7 +791,11 @@ void ParseVersatSpecification(Versat* versat,String content){
    while(!tok->Done()){
       Token peek = tok->PeekToken();
 
-      if(CompareString(peek,"module")){
+      if(CompareString(peek,"debug")){
+         tok->AdvancePeek(peek);
+         tok->AssertNextToken(";");
+         debugVariableFlag = true;
+      } else if(CompareString(peek,"module")){
          ParseModule(versat,tok);
       } else if(CompareString(peek,"iterative")){
          ParseIterative(versat,tok);
@@ -808,7 +812,7 @@ void ParseVersatSpecification(Versat* versat,const char* filepath){
 
    if(content.size < 0){
       printf("Failed to open file, filepath: %s\n",filepath);
-      DEBUG_BREAK;
+      DEBUG_BREAK();
    }
 
    ParseVersatSpecification(versat,content);

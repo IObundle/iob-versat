@@ -72,6 +72,33 @@ public:
    }
 };
 
+template<> class std::hash<PortNode>{
+public:
+   std::size_t operator()(PortNode const& s) const noexcept{
+      std::size_t res = std::hash<InstanceNode*>()(s.node);
+      res += s.port;
+      return (std::size_t) res;
+   }
+};
+
+template<> class std::hash<EdgeNode>{
+public:
+   std::size_t operator()(EdgeNode const& s) const noexcept{
+      std::size_t res = std::hash<PortNode>()(s.node0);
+      res += std::hash<PortNode>()(s.node1);
+      return (std::size_t) res;
+   }
+};
+
+template<typename First,typename Second> class std::hash<Pair<First,Second>>{
+public:
+   std::size_t operator()(Pair<First,Second> const& s) const noexcept{
+      std::size_t res = std::hash<First>()(s.first);
+      res += std::hash<Second>()(s.second);
+      return (std::size_t) res;
+   }
+};
+
 // Try to use this function when not using any std functions, if possible
 // I think the hash implementation for pointers is kinda bad, at this this implementation, and not possible to specialize as the compiler complains.
 #include <type_traits>
@@ -111,7 +138,16 @@ inline bool operator<(const String& lhs,const String& rhs){
 
 inline bool operator==(const String& lhs,const String& rhs){
    bool res = CompareString(lhs,rhs);
+   return res;
+}
 
+inline bool operator==(const PortNode& p1,const PortNode& p2){
+   bool res = (p1.node == p2.node) && (p1.port == p2.port);
+   return res;
+}
+
+inline bool operator==(const EdgeNode& e1,const EdgeNode& e2){
+   bool res = (e1.node0 == e2.node0) && (e1.node1 == e2.node1);
    return res;
 }
 

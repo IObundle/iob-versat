@@ -27,13 +27,15 @@
 
     input [DELAY_W-1:0]           delay0,
 
-    output [DATA_W-1:0]           currentValue
+    output [DATA_W-1:0]           currentValue,
+    output [DELAY_W-1:0]          currentDelay
     );
 
 reg [DELAY_W-1:0] delay;
 
 assign rdata = (ready ? out0 : 0);
 assign currentValue = out0;
+assign currentDelay = delay;
 
 always @(posedge clk,posedge rst)
 begin
@@ -53,9 +55,7 @@ begin
       if(run) begin
          done <= 0;
          delay <= delay0;
-      end 
-
-      if(!done) begin
+      end else if(!done) begin
          if(delay == 0) begin
             out0 <= in0;
             done <= 1;

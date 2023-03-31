@@ -47,7 +47,7 @@ static Arena* outputArena;
 static const char* filepath;
 
 static bool IsCommandBlockType(Command* com){
-   static const char* notBlocks[] = {"set","end","inc","else","include","call","return","format","debugTerminal","debugBreak"};
+   static const char* notBlocks[] = {"set","end","inc","else","include","call","return","format","debugBreak"};
 
    for(unsigned int i = 0; i < ARRAY_SIZE(notBlocks); i++){
       if(CompareString(com->name,notBlocks[i])){
@@ -77,7 +77,6 @@ static Command* ParseCommand(Tokenizer* tok){
                                                             {"while",1},
                                                             {"return",1},
                                                             {"format",-1},
-                                                            {"debugTerminal",1},
                                                             {"debugMessage",0},
                                                             {"debugBreak",0}};
 
@@ -392,12 +391,12 @@ int CountNonOperationChilds(Accelerator* accel){
    }
 
    int count = 0;
-   FOREACH_LIST(inst,accel->instances){
-      if(inst->declaration->type == FUDeclaration::COMPOSITE){
-         count += CountNonOperationChilds(inst->declaration->fixedDelayCircuit);
+   FOREACH_LIST(ptr,accel->allocated){
+      if(ptr->inst->declaration->type == FUDeclaration::COMPOSITE){
+         count += CountNonOperationChilds(ptr->inst->declaration->fixedDelayCircuit);
       }
 
-      if(!inst->declaration->isOperation && inst->declaration->type != FUDeclaration::SPECIAL){
+      if(!ptr->inst->declaration->isOperation && ptr->inst->declaration->type != FUDeclaration::SPECIAL){
          count += 1;
       }
    }
@@ -551,7 +550,8 @@ static Value EvalExpression(Expression* expr){
 
          if(iter == envTable.end()){
             printf("Didn't find identifier: %.*s\n",UNPACK_SS(expr->id));
-            exit(0);
+            printf("%.*s\n",UNPACK_SS(expr->text));
+            DEBUG_BREAK();
          }
 
          return iter->second;
@@ -657,7 +657,7 @@ static String EvalBlockCommand(Block* block){
       Value val = EvalExpression(com->expressions[0]);
 
       if(val.boolean){
-         DEBUG_BREAK;
+         DEBUG_BREAK();
          debugging = true;
       }
 
@@ -742,7 +742,7 @@ static ValueAndText EvalNonBlockCommand(Command* com){
       auto iter = envTable.find(id);
       if(iter == envTable.end()){
          printf("Failed to find %.*s\n",UNPACK_SS(id));
-         DEBUG_BREAK;
+         DEBUG_BREAK();
       }
 
       //auto savedTable = envTable;
@@ -808,11 +808,8 @@ static ValueAndText EvalNonBlockCommand(Command* com){
 
          text.size += PushString(outputArena,val.str).size;
       }
-   } else if(CompareString(com->name,"debugTerminal")){
-      Value val = EvalExpression(com->expressions[0]);
-      DebugTerminal(val);
    } else if(CompareString(com->name,"debugBreak")){
-      DEBUG_BREAK;
+      DEBUG_BREAK();
    } else {
       NOT_IMPLEMENTED;
    }
@@ -861,7 +858,7 @@ static String Eval(Block* block){
 
          Value val = EvalExpression(expr);
 
-         res.size += GetValueRepresentation(val,outputArena).size;
+         res.size += GetDefaultValueRepresentation(val,outputArena).size;
 
          //PrintValue(output,val);
       }
@@ -935,6 +932,7 @@ void ProcessTemplate(FILE* outputFile,CompiledTemplate* compiledTemplate,Arena* 
    envTable.clear();
 }
 
+#if 0
 void ProcessTemplate(FILE* outputFile,const char* templateFilepath,Arena* arena){
    ArenaMarker marker(arena);
    tempArena = arena;
@@ -960,6 +958,7 @@ void ProcessTemplate(FILE* outputFile,const char* templateFilepath,Arena* arena)
 
    envTable.clear();
 }
+#endif
 
 void TemplateSetCustom(const char* id,void* entity,const char* typeName){
    Value val = MakeValue(entity,typeName);

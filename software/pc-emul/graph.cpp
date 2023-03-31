@@ -2,10 +2,10 @@
 #include "memory.hpp"
 
 #include "textualRepresentation.hpp"
+#include "debug.hpp"
+#include "debugGUI.hpp"
 
-static Arena nodeArenaInst;
-static Arena* nodeArena = &nodeArenaInst;
-
+#if 0
 bool ContainsNode(EdgeNode* edge,Node* node){
    bool res = (edge->in.inst == node || edge->out.inst == node);
    return res;
@@ -772,5 +772,307 @@ ConsolidationResult GenerateConsolidationGraph(Versat* versat,Arena* arena,Subgr
 }
 
 #endif
+#endif
 
+InstanceNode* GetInstanceNode(Accelerator* accel,ComplexFUInstance* inst){
+   FOREACH_LIST(ptr,accel->allocated){
+      if(ptr->inst == inst){
+         return ptr;
+      }
+   }
+   Assert(false); // For now, this should not fail
+   return nullptr;
+}
 
+void CalculateNodeType(InstanceNode* node){
+   node->type = InstanceNode::TAG_UNCONNECTED;
+
+   bool hasInput = (node->allInputs != nullptr);
+   bool hasOutput = (node->allOutputs != nullptr);
+
+   // If the unit is both capable of acting as a sink or as a source of data
+   if(hasInput && hasOutput){
+      if(CHECK_DELAY(node->inst,DELAY_TYPE_SINK_DELAY) || CHECK_DELAY(node->inst,DELAY_TYPE_SOURCE_DELAY)){
+         node->type = InstanceNode::TAG_SOURCE_AND_SINK;
+      }  else {
+         node->type = InstanceNode::TAG_COMPUTE;
+      }
+   } else if(hasInput){
+      node->type = InstanceNode::TAG_SINK;
+   } else if(hasOutput){
+      node->type = InstanceNode::TAG_SOURCE;
+   } else {
+      // Unconnected
+   }
+}
+
+void FixInputs(InstanceNode* node){
+   Memset(node->inputs,{});
+   node->multipleSamePortInputs = false;
+
+   FOREACH_LIST(ptr,node->allInputs){
+      int port = ptr->port;
+
+      if(node->inputs[port].node){
+         node->multipleSamePortInputs = true;
+      }
+
+      node->inputs[port] = ptr->instConnectedTo;
+   }
+}
+
+Edge* ConnectUnitsGetEdge(PortNode out,PortNode in,int delay){
+   FUDeclaration* inDecl = in.node->inst->declaration;
+   FUDeclaration* outDecl = out.node->inst->declaration;
+
+   Assert(out.node->inst->accel == in.node->inst->accel);
+   Assert(in.port < inDecl->inputDelays.size);
+   Assert(out.port < outDecl->outputLatencies.size);
+
+   Accelerator* accel = out.node->inst->accel;
+
+   Edge* edge = PushStruct<Edge>(&accel->edgesMemory);
+   edge->next = accel->edges;
+   accel->edges = edge;
+
+   edge->units[0].inst = out.node->inst;
+   edge->units[0].port = out.port;
+   edge->units[1].inst = in.node->inst;
+   edge->units[1].port = in.port;
+   edge->delay = delay;
+
+   // Update graph data.
+   InstanceNode* inputNode = in.node;
+   InstanceNode* outputNode = out.node;
+
+   // Add info to outputNode
+   // Update all outputs
+   {
+   ConnectionNode* con = PushStruct<ConnectionNode>(&accel->instancesMemory);
+   con->edgeDelay = delay;
+   con->port = out.port;
+   con->instConnectedTo.node = inputNode;
+   con->instConnectedTo.port = in.port;
+
+   outputNode->allOutputs = ListInsert(outputNode->allOutputs,con);
+   outputNode->outputs += 1;
+   }
+
+   // Add info to inputNode
+   {
+   ConnectionNode* con = PushStruct<ConnectionNode>(&accel->instancesMemory);
+   con->edgeDelay = delay;
+   con->port = in.port;
+   con->instConnectedTo.node = outputNode;
+   con->instConnectedTo.port = out.port;
+
+   inputNode->allInputs = ListInsert(inputNode->allInputs,con);
+
+   if(inputNode->inputs[in.port].node){
+      inputNode->multipleSamePortInputs = true;
+   }
+
+   inputNode->inputs[in.port].node = outputNode;
+   inputNode->inputs[in.port].port = out.port;
+   }
+
+   CalculateNodeType(inputNode);
+   CalculateNodeType(outputNode);
+
+   return edge;
+}
+
+// Connects out -> in
+Edge* ConnectUnitsGetEdge(FUInstance* out,int outIndex,FUInstance* in,int inIndex,int delay,Edge* previous){
+   FUDeclaration* inDecl = in->declaration;
+   FUDeclaration* outDecl = out->declaration;
+
+   Assert(out->accel == in->accel);
+   Assert(inIndex < inDecl->inputDelays.size);
+   Assert(outIndex < outDecl->outputLatencies.size);
+
+   Accelerator* accel = out->accel;
+
+   Edge* edge = PushStruct<Edge>(&accel->edgesMemory);
+
+   if(previous){
+      edge->next = previous->next;
+      previous->next = edge;
+   } else {
+      edge->next = accel->edges;
+      accel->edges = edge;
+   }
+
+   edge->units[0].inst = (ComplexFUInstance*) out;
+   edge->units[0].port = outIndex;
+   edge->units[1].inst = (ComplexFUInstance*) in;
+   edge->units[1].port = inIndex;
+   edge->delay = delay;
+
+   // Update graph data.
+   InstanceNode* inputNode = GetInstanceNode(accel,(ComplexFUInstance*) in);
+   InstanceNode* outputNode = GetInstanceNode(accel,(ComplexFUInstance*) out);
+
+   // Add info to outputNode
+   // Update all outputs
+   {
+   ConnectionNode* con = PushStruct<ConnectionNode>(&accel->instancesMemory);
+   con->edgeDelay = delay;
+   con->port = outIndex;
+   con->instConnectedTo.node = inputNode;
+   con->instConnectedTo.port = inIndex;
+
+   outputNode->allOutputs = ListInsert(outputNode->allOutputs,con);
+   outputNode->outputs += 1;
+   }
+
+   // Add info to inputNode
+   {
+   ConnectionNode* con = PushStruct<ConnectionNode>(&accel->instancesMemory);
+   con->edgeDelay = delay;
+   con->port = inIndex;
+   con->instConnectedTo.node = outputNode;
+   con->instConnectedTo.port = outIndex;
+
+   inputNode->allInputs = ListInsert(inputNode->allInputs,con);
+
+   if(inputNode->inputs[inIndex].node){
+      inputNode->multipleSamePortInputs = true;
+   }
+
+   inputNode->inputs[inIndex].node = outputNode;
+   inputNode->inputs[inIndex].port = outIndex;
+   }
+
+   CalculateNodeType(inputNode);
+   CalculateNodeType(outputNode);
+
+   return edge;
+}
+
+void RemoveConnection(Accelerator* accel,PortNode out,PortNode in){
+   RemoveConnection(accel,out.node,out.port,in.node,in.port);
+}
+
+void RemoveConnection(Accelerator* accel,InstanceNode* out,int outPort,InstanceNode* in,int inPort){
+   accel->edges = ListRemoveAll(accel->edges,[&](Edge* edge){
+      bool res = (edge->out.inst == out->inst && edge->out.port == outPort && edge->in.inst == in->inst && edge->in.port == inPort);
+      return res;
+   });
+
+   out->allOutputs = ListRemoveAll(out->allOutputs,[&](ConnectionNode* n){
+      bool res = (n->port == outPort && n->instConnectedTo.node == in && n->instConnectedTo.port == inPort);
+      return res;
+   });
+   out->outputs = Size(out->allOutputs);
+
+   in->allInputs = ListRemoveAll(in->allInputs,[&](ConnectionNode* n){
+      bool res = (n->port == inPort && n->instConnectedTo.node == out && n->instConnectedTo.port == outPort);
+      return res;
+   });
+   FixInputs(in);
+}
+
+void RemoveAllDirectedConnections(InstanceNode* out,InstanceNode* in){
+   out->allOutputs = ListRemoveAll(out->allOutputs,[&](ConnectionNode* n){
+      return (n->instConnectedTo.node == in);
+   });
+   out->outputs = Size(out->allOutputs);
+
+   in->allInputs = ListRemoveAll(in->allInputs,[&](ConnectionNode* n){
+      return (n->instConnectedTo.node == out);
+   });
+
+   FixInputs(in);
+}
+
+void RemoveAllConnections(InstanceNode* n1,InstanceNode* n2){
+   RemoveAllDirectedConnections(n1,n2);
+   RemoveAllDirectedConnections(n2,n1);
+}
+
+InstanceNode* RemoveUnit(InstanceNode* nodes,InstanceNode* unit){
+   STACK_ARENA(temp,Kilobyte(32));
+
+   Hashmap<InstanceNode*,int>* toRemove = PushHashmap<InstanceNode*,int>(&temp,100);
+
+   for(auto* ptr = unit->allInputs; ptr;){
+      auto* next = ptr->next;
+
+      toRemove->Insert(ptr->instConnectedTo.node,0);
+
+      ptr = next;
+   }
+
+   for(auto* ptr = unit->allOutputs; ptr;){
+      auto* next = ptr->next;
+
+      toRemove->Insert(ptr->instConnectedTo.node,0);
+
+      ptr = next;
+   }
+
+   for(auto& pair : *toRemove){
+      RemoveAllConnections(unit,pair.first);
+   }
+
+   // Remove instance
+   int oldSize = Size(nodes);
+   auto* res = ListRemove(nodes,unit);
+   int newSize = Size(res);
+   Assert(oldSize == newSize + 1);
+
+   return res;
+}
+
+void InsertUnit(Accelerator* accel,PortNode before,PortNode after,PortNode newUnit){
+   RemoveConnection(accel,before.node,before.port,after.node,after.port);
+   ConnectUnitsGetEdge(newUnit,after,0);
+   ConnectUnitsGetEdge(before,newUnit,0);
+}
+
+#if 0
+// Fixes edges such that unit before connected to after, are reconnected to new unit
+void InsertUnit(Accelerator* accel, PortInstance before, PortInstance after, PortInstance newUnit){
+   //UNHANDLED_ERROR; // Do not think any code uses this function. Check if needed and remove otherwise. Seems to be old.
+   FOREACH_LIST(edge,accel->edges){
+      if(edge->units[0] == before && edge->units[1] == after){
+         RemoveConnection(GetInstanceNode(accel,edge->units[0].inst),edge->units[0].port,GetInstanceNode(accel,edge->units[1].inst),edge->units[1].port);
+
+         Edge* newEdge = ConnectUnits(newUnit,after);
+         ConnectUnits(edge->units[0],newUnit);
+
+         return;
+      }
+   }
+
+   Assert(false);
+}
+#endif
+
+void AssertGraphValid(InstanceNode* nodes,Arena* arena){
+   BLOCK_REGION(arena);
+
+   int size = Size(nodes);
+   Hashmap<InstanceNode*,int>* seen = PushHashmap<InstanceNode*,int>(arena,size);
+
+   FOREACH_LIST(ptr,nodes){
+      seen->Insert(ptr,0);
+   }
+
+   FOREACH_LIST(ptr,nodes){
+      FOREACH_LIST(con,ptr->allInputs){
+         seen->GetOrFail(con->instConnectedTo.node);
+      }
+
+      FOREACH_LIST(con,ptr->allOutputs){
+         seen->GetOrFail(con->instConnectedTo.node);
+      }
+
+      for(PortNode& n : ptr->inputs){
+         if(n.node){
+            seen->GetOrFail(n.node);
+         }
+      }
+   }
+}

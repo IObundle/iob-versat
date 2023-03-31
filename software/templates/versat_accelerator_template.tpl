@@ -104,9 +104,9 @@ wire [@{nDones - 1}:0] unitDone;
 assign done = &unitDone;
 #{end}
 
-wire [31:0] #{join ", " for inst instances}
-   #{if inst.graphData.outputs} 
-      #{join ", " for j inst.graphData.outputs} output_@{inst.id}_@{j} #{end}
+wire [31:0] #{join ", " for node instances}
+   #{if node.outputs} 
+      #{join ", " for j node.outputs} output_@{node.inst.id}_@{j} #{end}
    #{end}
 #{end};
 
@@ -118,10 +118,10 @@ begin
    if(valid)
    begin
    #{set counter 0}
-   #{for inst instances}
-   #{if inst.declaration.isMemoryMapped}
-      #{if inst.versatData.memoryMaskSize}
-         if(addr[@{accel.memoryMapBits - 1}:@{accel.memoryMapBits - inst.versatData.memoryMaskSize}] == @{inst.versatData.memoryMaskSize}'b@{inst.versatData.memoryMask})
+   #{for node instances}
+   #{if 0} // TODO: node.inst.declaration.isMemoryMapped
+      #{if node.inst.versatData.memoryMaskSize}
+         if(addr[@{accel.memoryMapBits - 1}:@{accel.memoryMapBits - node.inst.versatData.memoryMaskSize}] == @{node.inst.versatData.memoryMaskSize}'b@{node.inst.versatData.memoryMask})
             memoryMappedEnable[@{counter}] = 1'b1;
       #{else}
          memoryMappedEnable[0] = 1'b1;
@@ -134,19 +134,19 @@ end
 #{end}
 
 #{if nCombOperations}
-reg [31:0] #{join "," for inst instances} #{if inst.declaration.isOperation and inst.declaration.outputLatencies[0] == 0} comb_@{inst.name |> Identify} #{end}#{end}; 
+reg [31:0] #{join "," for node instances} #{if node.inst.declaration.isOperation and node.inst.declaration.outputLatencies[0] == 0} comb_@{node.inst.name |> Identify} #{end}#{end}; 
 
 always @*
 begin
-#{for inst instances}
-   #{set decl inst.declaration}
+#{for node instances}
+   #{set decl node.inst.declaration}
    #{if decl.isOperation and decl.outputLatencies[0] == 0}
-      #{set input1 inst.graphData[0].singleInputs[0]}
+      #{set input1 node.inputs[0]}
       #{if decl.inputDelays.size == 1}
-         #{format decl.operation "comb" @{inst.name |> Identify} #{call retOutputName input1}};
+         #{format decl.operation "comb" @{node.inst.name |> Identify} #{call retOutputName input1}};
       #{else}
-         #{set input2 inst.graphData[0].singleInputs[1]}
-         #{format decl.operation "comb" @{inst.name |> Identify} #{call retOutputName input1} #{call retOutputName input2}};
+         #{set input2 node.inputs[1]}
+         #{format decl.operation "comb" @{node.inst.name |> Identify} #{call retOutputName input1} #{call retOutputName input2}};
       #{end}
    #{end}
 #{end}
@@ -154,15 +154,15 @@ end
 #{end}
 
 #{if nSeqOperations}
-reg [31:0] #{join "," for inst instances} #{if inst.declaration.isOperation and inst.declaration.outputLatencies[0] != 0} seq_@{inst.name |> Identify} #{end}#{end}; 
+reg [31:0] #{join "," for node instances} #{if node.inst.declaration.isOperation and node.inst.declaration.outputLatencies[0] != 0} seq_@{node.inst.name |> Identify} #{end}#{end}; 
 
 always @(posedge clk)
 begin
-#{for inst instances}
-   #{set decl inst.declaration}
+#{for node instances}
+   #{set decl node.inst.declaration}
    #{if decl.isOperation and decl.outputLatencies[0] != 0 }
-      #{set input1 inst.graphData[0].singleInputs[0]}
-      #{format decl.operation "seq" @{inst.name |> Identify} #{call retOutputName input1}};
+      #{set input1 node.inputs[0]}
+      #{format decl.operation "seq" @{node.inst.name |> Identify} #{call retOutputName input1}};
    #{end}
 #{end}   
 end
@@ -175,17 +175,18 @@ end
 #{set delaySeen 0}
 #{set statesSeen 0}
 #{set doneCounter 0}
-#{for inst instances}
+#{for node instances}
+#{set inst node.inst}
 #{set decl inst.declaration}
    #{if (decl != inputDecl and decl != outputDecl and !decl.isOperation)}
       @{decl.name} @{inst.parameters} @{inst.name |> Identify}_@{counter} (
-         #{for i inst.graphData.outputs}
+         #{for i node.inst.declaration.outputLatencies.size}
             .out@{i}(output_@{inst.id}_@{i}),
          #{end}
 
-         #{for input inst.graphData.singleInputs}
-         #{if input.inst and input.inst.declaration.type == 2}
-            .in@{index}(in@{input.inst.id}), // @{input.inst.name |> Identify}
+         #{for input node.inputs}
+         #{if input.node and input.node.inst.declaration.type == 2}
+            .in@{index}(in@{input.node.inst.id}), // @{input.node.inst.name |> Identify}
          #{else}
             .in@{index}(#{call outputName input}),
          #{end}
@@ -257,11 +258,12 @@ end
    #{end}
 #{end}
 
-#{for inst instances}
+#{for node instances}
+#{set inst node.inst}
 #{set decl inst.declaration}
 #{if decl == outputDecl}
-   #{for input inst.graphData.singleInputs}
-   #{if input.inst}
+   #{for input node.inputs}
+   #{if input.node}
    assign out@{index} = #{call outputName input};
    #{end}
    #{end}

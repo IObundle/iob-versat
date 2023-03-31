@@ -451,6 +451,7 @@ MergeGraphResult HierarchicalMergeAccelerators(Versat* versat,Accelerator* accel
 
 #endif
 
+#if 0
 bool Contains(IndexRecord* record,int toCheck){
    FOREACH_LIST(ptr,record){
       if(ptr->index == toCheck){
@@ -476,20 +477,6 @@ void OutputDotGraph(Subgraph graph,const char* filepath,Arena* temp){
    fclose(file);
 }
 
-void ReorganizeAccelerator(Accelerator* accel,Arena* temp){
-   AcceleratorView view = CreateAcceleratorView(accel,temp);
-   view.CalculateGraphData(temp);
-   view.CalculateDAGOrdering(temp);
-
-   // Reorganize nodes based on DAG order
-   DAGOrder order = view.order;
-   int size = view.nodes.Size();
-   accel->instances = order.instances[0];
-   for(int i = 0; i < size - 1; i++){
-      order.instances[i]->next = order.instances[i+1];
-   }
-   order.instances[size-1]->next = nullptr;
-}
 
 Array<MappingNode> ReorderMappingNodes(Array<MappingNode> nodes, Array<int> order,Arena* temp){
    Array<MappingNode> ordered = PushArray<MappingNode>(temp,order.size);
@@ -499,179 +486,6 @@ Array<MappingNode> ReorderMappingNodes(Array<MappingNode> nodes, Array<int> orde
    }
 
    return ordered;
-}
-
-void Clique(CliqueState* state,ConsolidationGraph graphArg,int index,IndexRecord* record,int size,Arena* arena){
-   state->iterations += 1;
-
-   //ConsolidationGraph graph = Copy(graphArg,arena);
-   ConsolidationGraph graph = graphArg;
-
-   int num = graph.validNodes.GetNumberBitsSet();
-   if(num == 0){
-      if(size > state->max){
-         state->max = size;
-
-         // Record best clique found so far
-         state->clique.validNodes.Fill(0);
-         for(IndexRecord* ptr = record; ptr != nullptr; ptr = ptr->next){
-            state->clique.validNodes.Set(ptr->index,1);
-         }
-
-         state->found = true;
-      }
-      return;
-   }
-
-   auto end = GetTime();
-   float elapsed = end - state->start;
-   if(elapsed > MAX_CLIQUE_TIME){
-      state->found = true;
-      return;
-   }
-
-   int lastI = index;
-   do{
-      if(size + num <= state->max){
-         return;
-      }
-
-      #if 0
-      if(size + num <= state->table[index]){ // The problem is that state->max will already be equal to this by the time we arrive here.
-         return;
-      }
-      #endif
-
-      int i = graph.validNodes.FirstBitSetIndex(lastI);
-
-      if(size + state->table[i] <= state->max){
-         return;
-      }
-
-      graph.validNodes.Set(i,0);
-
-      Byte* mark = MarkArena(arena);
-      ConsolidationGraph tempGraph = Copy(graph,arena);
-
-      tempGraph.validNodes &= graph.edges[i];
-
-      IndexRecord newRecord = {};
-      newRecord.index = i;
-      newRecord.next = record;
-
-      //printf("%d\n",i);
-      Clique(state,tempGraph,i,&newRecord,size + 1,arena);
-
-      PopMark(arena,mark);
-
-      if(state->found == true){
-         return;
-      }
-
-      lastI = i;
-   } while((num = graph.validNodes.GetNumberBitsSet()) != 0);
-}
-
-CliqueState* InitMaxClique(ConsolidationGraph graph,int upperBound,Arena* arena){
-   CliqueState* state = PushStruct<CliqueState>(arena);
-   *state = {};
-
-   state->table = PushArray<int>(arena,graph.nodes.size);
-   state->clique = Copy(graph,arena); // Preserve nodes and edges, but allocates different valid nodes
-   state->upperBound = upperBound;
-
-   return state;
-}
-
-void RunMaxClique(CliqueState* state,Arena* arena){
-   ConsolidationGraph graph = Copy(state->clique,arena);
-   graph.validNodes.Fill(0);
-
-   state->start = GetTime();
-
-   int startI = state->startI ? state->startI : graph.nodes.size - 1;
-
-   for(int i = startI; i >= 0; i--){
-      Byte* mark = MarkArena(arena);
-
-      state->found = false;
-      for(int j = i; j < graph.nodes.size; j++){
-         graph.validNodes.Set(j,1);
-      }
-
-      graph.validNodes &= graph.edges[i];
-
-      IndexRecord record = {};
-      record.index = i;
-
-      //printf("%d / %d\r",i,graph.nodes.size);
-      Clique(state,graph,i,&record,1,arena);
-      state->table[i] = state->max;
-
-      PopMark(arena,mark);
-
-      if(state->max == state->upperBound){
-         printf("Upperbound finish, index: %d (from %d)\n",i,graph.nodes.size);
-         break;
-      }
-
-      auto end = GetTime();
-      float elapsed = end - state->start;
-      if(elapsed > MAX_CLIQUE_TIME){
-         printf("Timeout, index: %d (from %d)\n",i,graph.nodes.size);
-         break;
-      }
-   }
-   printf("\nFinished in: %d\n",state->iterations);
-
-   Assert(IsClique(state->clique).result);
-}
-
-CliqueState MaxClique(ConsolidationGraph graph,int upperBound,Arena* arena){
-   CliqueState state = {};
-   state.table = PushArray<int>(arena,graph.nodes.size);
-   state.clique = Copy(graph,arena); // Preserve nodes and edges, but allocates different valid nodes
-   //state.start = std::chrono::steady_clock::now();
-
-   graph.validNodes.Fill(0);
-
-   //printf("Upper:%d\n",upperBound);
-
-   state.start = clock();
-   for(int i = graph.nodes.size - 1; i >= 0; i--){
-      Byte* mark = MarkArena(arena);
-
-      state.found = false;
-      for(int j = i; j < graph.nodes.size; j++){
-         graph.validNodes.Set(j,1);
-      }
-
-      graph.validNodes &= graph.edges[i];
-
-      IndexRecord record = {};
-      record.index = i;
-
-      Clique(&state,graph,i,&record,1,arena);
-      state.table[i] = state.max;
-
-      PopMark(arena,mark);
-
-      if(state.max == upperBound){
-         printf("Upperbound finish, index: %d (from %d)\n",i,graph.nodes.size);
-         break;
-      }
-
-      auto end = clock();
-      float elapsed = (end - state.start) / CLOCKS_PER_SEC;
-      if(elapsed > MAX_CLIQUE_TIME){
-         printf("Timeout, index: %d (from %d)\n",i,graph.nodes.size);
-         break;
-      }
-   }
-
-   Assert(IsClique(state.clique).result);
-
-   return state;
 }
 
 void AllMaxCliques(CliqueState* state,Array<ConsolidationGraph>& allCliques,int& maxCliquesFound,ConsolidationGraph graphArg,int index,IndexRecord* record,int size,Arena* arena){
@@ -845,6 +659,7 @@ void FixFlatteningTempHierarchy(Array<FlatteningTemp> array){
 }
 
 Array<FlatteningTemp> HierarchicalFlattening(Graph* graph,Arena* arena){
+   #if 0
    Array<FlatteningTemp> result = PushArray<FlatteningTemp>(arena,999);
    Memset(result,{});
 
@@ -858,7 +673,7 @@ Array<FlatteningTemp> HierarchicalFlattening(Graph* graph,Arena* arena){
    #endif
 
    // Flattening
-   timeRegion("Flattening part"){
+   timeRegionIf("Flattening part",0){
    int index = 0;
    while(1){
       Node* ptr = graph->instances;
@@ -908,11 +723,11 @@ Array<FlatteningTemp> HierarchicalFlattening(Graph* graph,Arena* arena){
    result.size = index;
    };
 
-   timeRegion("Assert no loop"){
+   timeRegionIf("Assert no loop",0){
       AssertNoLoop(graph->edges,arena);
    };
 
-   timeRegion("Sort by edges"){
+   timeRegionIf("Sort by edges",0){
       SortEdgesByVertices(graph);
    };
 
@@ -1001,6 +816,8 @@ Array<FlatteningTemp> HierarchicalFlattening(Graph* graph,Arena* arena){
    #endif
 
    return result;
+   #endif
+   return (Array<FlatteningTemp>){};
 }
 
 IndexMapping GetMappingNodeIndexes(MappingNode node,Edge* sub1,Edge* sub2){
@@ -1068,7 +885,7 @@ ConsolidationGraph ParallelBuildConsolidationGraphFromNodes(Array<MappingNode> n
       neighbors[i].Fill(0);
    }
 
-   timeRegion("Parallel edge construction"){
+   timeRegionIf("Parallel edge construction",0){
    region(arena){
       Array<ThisTask> data = PushArray<ThisTask>(arena,NumberThreads() * 8);
 
@@ -1091,8 +908,6 @@ ConsolidationGraph ParallelBuildConsolidationGraphFromNodes(Array<MappingNode> n
    };
 
    for(int i = 0; i < nodes.size; i++){
-      BitArray array = neighbors.data[i];
-
       for(int ii = 0; ii < i; ii++){
          int bit = neighbors.data[i].Get(ii);
 
@@ -1131,7 +946,7 @@ int CalculateAmountOfMappings(Array<MappingNode> nodes,Arena* arena){
 }
 
 ConsolidationGraph BuildConsolidationGraphFromNodes(Array<MappingNode> nodes,Arena* arena){
-   //return ParallelBuildConsolidationGraphFromNodes(nodes,arena);
+   return ParallelBuildConsolidationGraphFromNodes(nodes,arena);
 
    Array<BitArray> neighbors = PushArray<BitArray>(arena,nodes.size);
 
@@ -1154,8 +969,6 @@ ConsolidationGraph BuildConsolidationGraphFromNodes(Array<MappingNode> nodes,Are
    }
 
    for(int i = 0; i < nodes.size; i++){
-      BitArray array = neighbors.data[i];
-
       for(int ii = 0; ii < i; ii++){
          int bit = neighbors.data[i].Get(ii);
 
@@ -1208,7 +1021,7 @@ CalculateCliqueAndGetMappingsResult CalculateCliqueAndGetMappings(Subgraph sub1,
    #endif
 
    CliqueState* state = InitMaxClique(result.graph,999,arena);
-   RunMaxClique(state,arena);
+   RunMaxClique(state,arena,10.0f);
    ConsolidationGraph clique = state->clique;
    Memcpy(cliqueTable.data,state->table.data,state->table.size);
 
@@ -1242,6 +1055,7 @@ CalculateCliqueAndGetMappingsResult CalculateCliqueAndGetMappings(Subgraph sub1,
    return res;
 }
 
+#if 0
 Subgraph DefaultSubgraph(Graph* graph){
    Subgraph sub = {};
    sub.nodes.start = graph->instances;
@@ -1471,7 +1285,7 @@ Array<int> RadixReordering(ConsolidationGraph graph,Arena* arena){
          int oneIndex = 0;
 
          for(int ii = 0; ii < size; ii++){
-            int val = indexed[ii].data.Get(i);
+            int val = indexed[ii].Get(i);
 
             if(val){
                one[oneIndex++] = indexed[ii];
@@ -1739,7 +1553,8 @@ int EdgeSize(ConsolidationGraph graph){
 ConsolidationResult GenerateConsolidationGraphForSubgraphs(Subgraph accel1,Subgraph accel2,Array<MappingNode> implicitNodes,Arena* arena){
    // Should be temp memory instead of using memory intended for the graph, but since the graph is expected to use a lot of memory and we are technically saving memory using this mapping, no major problem
    Byte* mark = MarkArena(arena);
-   Arena nodeSpace = SubArena(arena,Size(accel1.edges) * Size(accel2.edges) * sizeof(MappingNode));
+   size_t freeSpace = SpaceAvailable(arena);
+   Arena nodeSpace = SubArena(arena,freeSpace - Megabyte(1));
 
    //TimeIt t1("Node construction");
    GenerateMappingNodesResult nodesResult = GenerateMappingNodes(accel1,accel2,&nodeSpace,arena,implicitNodes);
@@ -1995,8 +1810,7 @@ Array<FlattenMapping> GetSpecificMappings(FlatteningTemp* head1,FlatteningTemp* 
                   FlattenMapping* map = PushStruct<FlattenMapping>(arena);
                   map->t1 = t1;
                   map->t2 = t2;
-                  map->mapping = &sub;
-                  map->weight = weight;
+                  map->edgeMappings = sub.edgeMappings;
                   t1->flag = 1;
                   t2->flag = 1;
 
@@ -2290,21 +2104,6 @@ Array<IndexMapping> HierarchicalHeuristic(Graph* graph1,Graph* graph2,Flattening
          FUDeclaration* t1 = pair1.first;
          FUDeclaration* t2 = pair2.first;
 
-         #if 0
-         Subgraph sub1 = {};
-         sub1.nodes = SimpleSublist(ListGet(graph1->instances,pair1.second->index),pair1.second->subunitsCount);
-         sub1.edges = SimpleSublist(ListGet(graph1->edges,pair1.second->edgeStart),pair1.second->edgeCount);
-
-         Subgraph sub2 = {};
-         sub2.nodes = SimpleSublist(ListGet(graph2->instances,pair2.second->index),pair2.second->subunitsCount);
-         sub2.edges = SimpleSublist(ListGet(graph2->edges,pair2.second->edgeStart),pair2.second->edgeCount);
-
-         OutputDotGraph(sub1,StaticFormat("debug/sub_%.*s_sub.dot",UNPACK_SS(t1->name)),arena);
-         OutputDotGraph(sub2,StaticFormat("debug/sub_%.*s_sub.dot",UNPACK_SS(t2->name)),arena);
-         #endif
-
-         //CalculateCliqueAndGetMappingsResult res = HierarchicalHeuristic(sub1,sub2,t1,t2,arena); // Should be, in theory,a pretty good aproximation
-         //Array<IndexMapping> indexMappings = res.mappings;
          Array<IndexMapping> indexMappings = HierarchicalHeuristic(graph1,graph2,pair1.second,pair2.second,allMappings,arena);
 
          SubgraphMapping* mapping = allMappings.Push(1);
@@ -2325,11 +2124,11 @@ Array<IndexMapping> HierarchicalHeuristic(Graph* graph1,Graph* graph2,Flattening
       }
    }
 
-   TIME_IT("Finding heuristic");
+   TIME_IT_IF("Finding heuristic",0);
 
-   #if 01
    printf("=== Finding heuristic for %.*s [%.*s] %.*s [%.*s] ===\n",UNPACK_SS(t1->name),UNPACK_SS(t1->decl->name),UNPACK_SS(t2->name),UNPACK_SS(t2->decl->name));
 
+   #if 01
    for(FlattenMapping& mapping : specificMappings){
       printf("Mapping %.*s to %.*s\n",UNPACK_SS(mapping.t1->name),UNPACK_SS(mapping.t2->name));
    }
@@ -2337,7 +2136,7 @@ Array<IndexMapping> HierarchicalHeuristic(Graph* graph1,Graph* graph2,Flattening
 
    int specificSize = 0;
    for(FlattenMapping& m : specificMappings){
-      specificSize += m.mapping->edgeMappings.size;
+      specificSize += m.edgeMappings.size;
    }
 
    printf("Specific size: %d\n",specificSize);
@@ -2356,7 +2155,7 @@ Array<IndexMapping> HierarchicalHeuristic(Graph* graph1,Graph* graph2,Flattening
       sub2.edges = SimpleSublist(ListGet(graph2->edges,m.t2->edgeStart),m.t2->edgeCount);
 
       ArenaMarker marker(arena);
-      Array<IndexMapping> graphMappings = m.mapping->edgeMappings;
+      Array<IndexMapping> graphMappings = m.edgeMappings;
 
       for(IndexMapping map : graphMappings){
          MappingNode* node = nodesPush.Push(1);
@@ -2364,12 +2163,7 @@ Array<IndexMapping> HierarchicalHeuristic(Graph* graph1,Graph* graph2,Flattening
          node->type = MappingNode::EDGE;
          node->edges[0] = ListGet(sub1.edges.start,map.index0)->edge;
          node->edges[1] = ListGet(sub2.edges.start,map.index1)->edge;
-         //printf("G: %d %d\n",map.index0,map.index1);
       }
-   }
-
-   if(CompareString(t1->decl->name,"AES")){
-      exit(0);
    }
 
    Subgraph sub1 = {};
@@ -2384,8 +2178,9 @@ Array<IndexMapping> HierarchicalHeuristic(Graph* graph1,Graph* graph2,Flattening
    ConsolidationGraph graph = result.graph;
 
    #if 01
+   printf("Upperbound: %d\n",result.upperBound);
    CliqueState* state = InitMaxClique(graph,result.upperBound,arena);
-   RunMaxClique(state,arena);
+   RunMaxClique(state,arena,1000.0f);
    ConsolidationGraph extraClique = state->clique;
    #else
    TimeIt pc("Parallel clique");
@@ -2434,7 +2229,7 @@ Array<IndexMapping> HierarchicalHeuristic(Graph* graph1,Graph* graph2,Flattening
          sub2.edges = SimpleSublist(ListGet(graph2->edges,m.t2->edgeStart),m.t2->edgeCount);
 
          //Array<IndexMapping> specific = TransformGenericIntoSpecific(m.mapping->edgeMappings,m.t1,m.t2,arena);
-         for(IndexMapping mapping : m.mapping->edgeMappings){
+         for(IndexMapping mapping : m.edgeMappings){
             IndexMapping specific = mapping;
             specific.index0 += m.t1->edgeStart - t1->edgeStart;
             specific.index1 += m.t2->edgeStart - t2->edgeStart;
@@ -2499,9 +2294,9 @@ MergeGraphResult HierarchicalHeuristic(Versat* versat,FUDeclaration* decl1,FUDec
 
    Graph* graph1 = accel1;
    Array<FlatteningTemp> res1;
-   timeRegion("Flattening graph1"){
+   timeRegionIf("Flattening graph1",0){
       res1 = HierarchicalFlattening(graph1,arena);
-   };
+   }
 
    FlatteningTemp graph1All = {};
    graph1All.index = 0;
@@ -2519,9 +2314,9 @@ MergeGraphResult HierarchicalHeuristic(Versat* versat,FUDeclaration* decl1,FUDec
 
    Graph* graph2 = accel2;
    Array<FlatteningTemp> res2;
-   timeRegion("Flattening graph2"){
+   timeRegionIf("Flattening graph2",0){
       res2 = HierarchicalFlattening(graph2,arena);
-   };
+   }
 
    FlatteningTemp graph2All = {};
    graph2All.index = 0;
@@ -2548,7 +2343,7 @@ MergeGraphResult HierarchicalHeuristic(Versat* versat,FUDeclaration* decl1,FUDec
 
    heuristicMapping = TransformGenericIntoSpecific(heuristicMapping,&graph1All,&graph2All,arena);
 
-   printf("%d\n",heuristicMapping.size);
+   //printf("%d\n",heuristicMapping.size);
    GraphMapping mappingRes = {};
 
    for(IndexMapping& m : heuristicMapping){
@@ -2567,7 +2362,7 @@ MergeGraphResult HierarchicalHeuristic(Versat* versat,FUDeclaration* decl1,FUDec
       InsertMapping(mappingRes,edge0->edge,edge1->edge);
    }
 
-   printf("%d\n",mappingRes.edgeMap.size());
+   //printf("%d\n",mappingRes.edgeMap.size());
 
    return MergeGraph(versat,graph1,graph2,mappingRes,STRING("Test"));
 }
@@ -2598,7 +2393,7 @@ MergeGraphResult HierarchicalMergeAcceleratorsFullClique(Versat* versat,Accelera
 
    TimeIt time1("Finding clique");
    #if 1
-   CliqueState cliqueState = MaxClique(graph,result.upperBound,arena);
+   CliqueState cliqueState = MaxClique(graph,result.upperBound,arena,10.0f);
    ConsolidationGraph clique = cliqueState.clique;
    #else
    ConsolidationGraph clique = ParallelMaxClique(graph,result.upperBound,arena);
@@ -2657,7 +2452,7 @@ void ParallelHierarchicalHeuristicTask(int i,void* arg){
 
    int specificSize = 0;
    for(FlattenMapping& m : specificMappings){
-      specificSize += m.mapping->edgeMappings.size;
+      specificSize += m.edgeMappings.size;
    }
 
    //printf("Specific size: %d\n",specificSize);
@@ -2676,7 +2471,7 @@ void ParallelHierarchicalHeuristicTask(int i,void* arg){
       sub2.edges = SimpleSublist(ListGet(graph2->edges,m.t2->edgeStart),m.t2->edgeCount);
 
       ArenaMarker marker(arena);
-      Array<IndexMapping> graphMappings = m.mapping->edgeMappings;
+      Array<IndexMapping> graphMappings = m.edgeMappings;
 
       for(IndexMapping map : graphMappings){
          MappingNode* node = nodesPush.Push(1);
@@ -2699,8 +2494,9 @@ void ParallelHierarchicalHeuristicTask(int i,void* arg){
    ConsolidationGraph graph = result.graph;
 
    #if 01
+   printf("Upperbound: %d\n",result.upperBound);
    CliqueState* cliqueState = InitMaxClique(graph,result.upperBound,arena);
-   RunMaxClique(cliqueState,arena);
+   RunMaxClique(cliqueState,arena,10.0f);
    ConsolidationGraph extraClique = cliqueState->clique;
    #else
    TimeIt pc("Parallel clique");
@@ -2730,7 +2526,7 @@ void ParallelHierarchicalHeuristicTask(int i,void* arg){
          sub2.edges = SimpleSublist(ListGet(graph2->edges,m.t2->edgeStart),m.t2->edgeCount);
 
          //Array<IndexMapping> specific = TransformGenericIntoSpecific(m.mapping->edgeMappings,m.t1,m.t2,arena);
-         for(IndexMapping mapping : m.mapping->edgeMappings){
+         for(IndexMapping mapping : m.edgeMappings){
             IndexMapping specific = mapping;
             specific.index0 += m.t1->edgeStart - t1->edgeStart;
             specific.index1 += m.t2->edgeStart - t2->edgeStart;
@@ -2961,5 +2757,12 @@ MergeGraphResult ParallelHierarchicalHeuristic(Versat* versat,FUDeclaration* dec
 
    return (MergeGraphResult){};
 }
+#endif
+
+#endif
+
+
+
+
 
 

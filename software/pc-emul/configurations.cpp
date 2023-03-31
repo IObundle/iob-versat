@@ -1,22 +1,23 @@
 #include "configurations.hpp"
 
 CalculatedOffsets CalculateConfigOffsetsIgnoringStatics(Accelerator* accel,Arena* out){
-   Array<int> array = PushArray<int>(out,accel->numberInstances);
+   int size = Size(accel->allocated);
+
+   Array<int> array = PushArray<int>(out,size);
 
    BLOCK_REGION(out);
 
-   Hashmap<int,int> sharedConfigs = {};
-   sharedConfigs.Init(out,accel->numberInstances);
+   Hashmap<int,int>* sharedConfigs = PushHashmap<int,int>(out,size);
 
    int index = 0;
    int offset = 0;
-   FOREACH_LIST(inst,accel->instances){
-
+   FOREACH_LIST(ptr,accel->allocated){
+      ComplexFUInstance* inst = ptr->inst;
       Assert(!(inst->sharedEnable && inst->isStatic));
 
       if(inst->sharedEnable){
          int sharedIndex = inst->sharedIndex;
-         GetOrAllocateResult<int> possibleAlreadyShared = sharedConfigs.GetOrAllocate(sharedIndex);
+         GetOrAllocateResult<int> possibleAlreadyShared = sharedConfigs->GetOrAllocate(sharedIndex);
 
          if(possibleAlreadyShared.result){
             array[index] = *possibleAlreadyShared.data;
@@ -39,7 +40,7 @@ loop_end:
 
    CalculatedOffsets res = {};
    res.offsets = array;
-   res.size = offset;
+   res.max = offset;
 
    return res;
 }
@@ -77,13 +78,14 @@ CalculatedOffsets CalculateConfigurationOffset(Accelerator* accel,MemType type,A
       return CalculateConfigOffsetsIgnoringStatics(accel,out);
    }
 
-   Array<int> array = PushArray<int>(out,accel->numberInstances);
+   Array<int> array = PushArray<int>(out,Size(accel->allocated));
 
    BLOCK_REGION(out);
 
    int index = 0;
    int offset = 0;
-   FOREACH_LIST(inst,accel->instances){
+   FOREACH_LIST(ptr,accel->allocated){
+      ComplexFUInstance* inst = ptr->inst;
       array[index] = offset;
 
       int size = GetConfigurationSize(inst->declaration,type);
@@ -94,18 +96,19 @@ CalculatedOffsets CalculateConfigurationOffset(Accelerator* accel,MemType type,A
 
    CalculatedOffsets res = {};
    res.offsets = array;
-   res.size = offset;
+   res.max = offset;
 
    return res;
 }
 
 CalculatedOffsets CalculateOutputsOffset(Accelerator* accel,int offset,Arena* out){
-   Array<int> array = PushArray<int>(out,accel->numberInstances);
+   Array<int> array = PushArray<int>(out,Size(accel->allocated));
 
    BLOCK_REGION(out);
 
    int index = 0;
-   FOREACH_LIST(inst,accel->instances){
+   FOREACH_LIST(ptr,accel->allocated){
+      ComplexFUInstance* inst = ptr->inst;
       array[index] = offset;
 
       int size = inst->declaration->totalOutputs;
@@ -116,7 +119,174 @@ CalculatedOffsets CalculateOutputsOffset(Accelerator* accel,int offset,Arena* ou
 
    CalculatedOffsets res = {};
    res.offsets = array;
-   res.size = offset;
+   res.max = offset;
 
    return res;
 }
+
+// TODO: Do not like this implementation, and should be something more general and not static for this file. Put somewhere in versatPrivate
+int NumberUnits(Accelerator* accel,Arena* arena){
+   BLOCK_REGION(arena);
+
+   int count = 0;
+   AcceleratorIterator iter = {};
+   for(InstanceNode* node = iter.Start(accel,arena,true); node; node = iter.Next()){
+      count += 1;
+   }
+   return count;
+}
+
+CalculatedOffsets ExtractConfig(Accelerator* accel,Arena* out){
+   int count = 0;
+   int maxConfig = 0;
+   AcceleratorIterator iter = {};
+   region(out){
+      for(InstanceNode* node = iter.Start(accel,out,true); node; node = iter.Next()){
+         ComplexFUInstance* inst = node->inst;
+         if(inst->declaration->configs.size && !IsConfigStatic(accel,inst)){
+            int config = inst->config - accel->configAlloc.ptr;
+            maxConfig = std::max(config,maxConfig);
+         }
+
+         count += 1;
+      }
+   }
+
+   Array<int> offsets = PushArray<int>(out,count);
+
+   int index = 0;
+   region(out){
+      for(InstanceNode* node = iter.Start(accel,out,true); node; node = iter.Next(),index += 1){
+         ComplexFUInstance* inst = node->inst;
+         int config = 0;
+         if(IsConfigStatic(accel,inst)){
+            config = inst->config - accel->staticAlloc.ptr + maxConfig;
+         } else {
+            config = inst->config - accel->configAlloc.ptr;
+         }
+
+         offsets[index] = config;
+      }
+   }
+
+   CalculatedOffsets res = {};
+   res.offsets = offsets;
+   res.max = maxConfig;
+   return res;
+}
+
+CalculatedOffsets ExtractState(Accelerator* accel,Arena* out){
+   int count = NumberUnits(accel,out);
+   Array<int> offsets = PushArray<int>(out,count);
+
+   AcceleratorIterator iter = {};
+   int index = 0;
+   int max = 0;
+   for(InstanceNode* node = iter.Start(accel,out,true); node; node = iter.Next(),index += 1){
+      ComplexFUInstance* inst = node->inst;
+      int state = inst->state - accel->stateAlloc.ptr;
+      max = std::max(state,max);
+      offsets[index] = state;
+   }
+
+   CalculatedOffsets res = {};
+   res.offsets = offsets;
+   res.max = max;
+   return res;
+}
+
+CalculatedOffsets ExtractDelay(Accelerator* accel,Arena* out){
+   int count = NumberUnits(accel,out);
+   Array<int> offsets = PushArray<int>(out,count);
+
+   AcceleratorIterator iter = {};
+   int index = 0;
+   int max = 0;
+   for(InstanceNode* node = iter.Start(accel,out,true); node; node = iter.Next(),index += 1){
+      ComplexFUInstance* inst = node->inst;
+      int delay = inst->delay - accel->delayAlloc.ptr;
+      max = std::max(delay,max);
+      offsets[index] = delay;
+   }
+
+   CalculatedOffsets res = {};
+   res.offsets = offsets;
+   res.max = max;
+   return res;
+}
+
+CalculatedOffsets ExtractMem(Accelerator* accel,Arena* out){
+   int count = NumberUnits(accel,out);
+   Array<int> offsets = PushArray<int>(out,count);
+
+   AcceleratorIterator iter = {};
+   int index = 0;
+   int max = 0;
+   for(InstanceNode* node = iter.Start(accel,out,true); node; node = iter.Next(),index += 1){
+      //ComplexFUInstance* inst = node->inst;
+      int mem = 0; // TODO: need to implement outside memory
+      max = std::max(mem,max);
+      offsets[index] = mem;
+   }
+
+   CalculatedOffsets res = {};
+   res.offsets = offsets;
+   res.max = max;
+   return res;
+}
+
+CalculatedOffsets ExtractOutputs(Accelerator* accel,Arena* out){
+   int count = NumberUnits(accel,out);
+   Array<int> offsets = PushArray<int>(out,count);
+
+   AcceleratorIterator iter = {};
+   int index = 0;
+   int max = 0;
+   for(InstanceNode* node = iter.Start(accel,out,true); node; node = iter.Next(),index += 1){
+      ComplexFUInstance* inst = node->inst;
+      int output = inst->outputs - accel->outputAlloc.ptr;
+      int storedOutput = inst->storedOutputs - accel->storedOutputAlloc.ptr;
+      Assert(output == storedOutput || inst->outputs == nullptr); // Should be true for the foreseeable future. Only when we stop allocating storedOutputs for operations should this change. (And we might not do that ever)
+      max = std::max(output,max);
+      offsets[index] = output;
+   }
+
+   CalculatedOffsets res = {};
+   res.offsets = offsets;
+   res.max = max;
+   return res;
+}
+
+CalculatedOffsets ExtractExtraData(Accelerator* accel,Arena* out){
+   int count = NumberUnits(accel,out);
+   Array<int> offsets = PushArray<int>(out,count);
+
+   AcceleratorIterator iter = {};
+   int index = 0;
+   int max = 0;
+   for(InstanceNode* node = iter.Start(accel,out,true); node; node = iter.Next(),index += 1){
+      ComplexFUInstance* inst = node->inst;
+      int extraData = inst->extraData - accel->extraDataAlloc.ptr;
+      max = std::max(extraData,max);
+      offsets[index] = extraData;
+   }
+
+   CalculatedOffsets res = {};
+   res.offsets = offsets;
+   res.max = max;
+   return res;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+

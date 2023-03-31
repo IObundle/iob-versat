@@ -105,7 +105,7 @@ void PreprocessVerilogFile_(Arena* output, String fileContent,std::vector<const 
          FILE* file = nullptr;
          std::string filepath;
          for(const char* str : *includeFilepaths){
-            filepath = str + filename;
+            filepath = std::string(str) + filename;
 
             file = fopen(filepath.c_str(),"r");
 
@@ -123,7 +123,7 @@ void PreprocessVerilogFile_(Arena* output, String fileContent,std::vector<const 
                printf("  %s\n",str);
             }
 
-            DEBUG_BREAK;
+            DEBUG_BREAK();
             exit(0);
          }
 
@@ -147,7 +147,8 @@ void PreprocessVerilogFile_(Arena* output, String fileContent,std::vector<const 
             tok->AdvancePeek(arguments);
          }
 
-         Token first = tok->FindFirst({"\n","//","\\"});
+         FindFirstResult search = tok->FindFirst({"\n","//","\\"});
+         Token first = search.foundFirst;
          Token body = {};
 
          if(CompareString(first,"//")){ // If single comment newline or slash, the macro does not contain the comment
@@ -633,7 +634,7 @@ int main(int argc,const char* argv[]){
          bool hasRunning = false;
          #endif
          for(PortDeclaration decl : module.ports){
-            Tokenizer port(decl.name,"",{"in","out","delay","done","rst","clk","run","databus"});
+            Tokenizer port(decl.name,"",{"in","ext_mem_addr","ext_mem_write","ext_mem_data_out","ext_mem_data","out","delay","done","rst","clk","run","databus"});
 
             if(CheckFormat("in%d",decl.name)){
                port.AssertNextToken("in");
@@ -674,6 +675,32 @@ int main(int argc,const char* argv[]){
                if(CheckFormat("addr",decl.name)){
                   info.memoryMappedBits = (decl.range.high - decl.range.low + 1);
                }
+            } else if(CheckFormat("ext_mem_data_out%d",decl.name)){
+               port.AssertNextToken("ext_mem_data_out");
+               int id = ParseInt(port.NextToken());
+
+               info.externalMemory = true;
+            } else if(CheckFormat("ext_mem_addr%d",decl.name)){
+               port.AssertNextToken("ext_mem_addr");
+               int id = ParseInt(port.NextToken());
+
+               int addressSize = decl.range.high - decl.range.low + 1;
+
+               info.externalMemory = true;
+               info.externalMemoryBitsize = addressSize;
+            } else if(CheckFormat("ext_mem_data%d",decl.name)){
+               port.AssertNextToken("ext_mem_data");
+               int id = ParseInt(port.NextToken());
+
+               int dataSize = decl.range.high - decl.range.low + 1;
+
+               info.externalMemory = true;
+               info.externalMemoryDatasize = dataSize;
+            } else if(CheckFormat("ext_mem_write%d",decl.name)){
+               port.AssertNextToken("ext_mem_write");
+               int id = ParseInt(port.NextToken());
+
+               info.externalMemory = true;
             } else if(CheckFormat("clk",decl.name)){
                info.hasClk = true;
             } else if(CheckFormat("rst",decl.name)){
@@ -720,7 +747,8 @@ int main(int argc,const char* argv[]){
    FILE* output = OpenFileAndCreateDirectories(argv[2],"w");
    TemplateSetString("namespace",argv[1]);
    fflush(stdout);
-   ProcessTemplate(output,"../../submodules/VERSAT/software/templates/unit_verilog_data.tpl",tempArena);
+   CompiledTemplate* comp = CompileTemplate("../../submodules/VERSAT/software/templates/unit_verilog_data.tpl",tempArena);
+   ProcessTemplate(output,comp,tempArena);
 
    return 0;
 }

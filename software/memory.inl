@@ -121,42 +121,46 @@ Pair<Key,Data>& HashmapIterator<Key,Data>::operator*(){
 }
 
 template<typename Key,typename Data>
-void Hashmap<Key,Data>::Init(Arena* arena,int maxAmountOfElements){
+Hashmap<Key,Data>* PushHashmap(Arena* arena,int maxAmountOfElements){
+   Hashmap<Key,Data>* map = PushStruct<Hashmap<Key,Data>>(arena);
+   *map = {};
+
    if(maxAmountOfElements > 0){
       int size = AlignNextPower2(maxAmountOfElements) * 2;
 
-      this->header = PushStruct<HashmapHeader<Key,Data>>(arena);
+      map->nodesAllocated = size;
+      map->nodesUsed = 0;
+      map->buckets = PushArray<Pair<Key,Data>*>(arena,size).data;
+      map->next = PushArray<Pair<Key,Data>*>(arena,size).data;
+      map->data = PushArray<Pair<Key,Data>>(arena,size).data;
 
-      header->nodesAllocated = size;
-      header->nodesUsed = 0;
-      header->buckets = PushArray<Pair<Key,Data>*>(arena,size).data;
-      header->next = PushArray<Pair<Key,Data>*>(arena,size).data;
-      header->data = PushArray<Pair<Key,Data>>(arena,size).data;
-
-      Memset<Pair<Key,Data>*>(header->buckets,nullptr,size);
-      Memset<Pair<Key,Data>*>(header->next,nullptr,size);
+      map->Clear();
    }
+
+   return map;
+}
+
+template<typename Key,typename Data>
+void Hashmap<Key,Data>::Clear(){
+   Memset<Pair<Key,Data>*>(this->buckets,nullptr,this->nodesAllocated);
+   Memset<Pair<Key,Data>*>(this->next,nullptr,this->nodesAllocated);
 }
 
 template<typename Key,typename Data>
 Data* Hashmap<Key,Data>::Insert(Key key,Data data){
-   if(!header){
-      return nullptr;
-   }
-
-   int mask = header->nodesAllocated - 1;
+   int mask = this->nodesAllocated - 1;
    int index = Hash<Key>(key) & mask; // Size is power of 2
 
-   Pair<Key,Data>* ptr = header->buckets[index];
+   Pair<Key,Data>* ptr = this->buckets[index];
    // Do not even need to look
    if(ptr == nullptr){
-      Assert(header->nodesUsed < header->nodesAllocated);
-      Pair<Key,Data>* node = &header->data[header->nodesUsed++];
+      Assert(this->nodesUsed < this->nodesAllocated);
+      Pair<Key,Data>* node = &this->data[this->nodesUsed++];
 
       node->key = key;
       node->data = data;
 
-      header->buckets[index] = node;
+      this->buckets[index] = node;
 
       return &node->data;
    } else {
@@ -167,18 +171,18 @@ Data* Hashmap<Key,Data>::Insert(Key key,Data data){
             return &ptr->data;
          }
 
-         previousNextIndex = ptr - header->data;
-         ptr = header->next[previousNextIndex];
+         previousNextIndex = ptr - this->data;
+         ptr = this->next[previousNextIndex];
       }
 
-      Assert(header->nodesUsed < header->nodesAllocated);
+      Assert(this->nodesUsed < this->nodesAllocated);
 
-      int newNodeIndex = header->nodesUsed++;
-      Pair<Key,Data>* newNode = &header->data[newNodeIndex];
+      int newNodeIndex = this->nodesUsed++;
+      Pair<Key,Data>* newNode = &this->data[newNodeIndex];
       newNode->key = key;
       newNode->data = data;
 
-      header->next[previousNextIndex] = newNode;
+      this->next[previousNextIndex] = newNode;
 
       return &newNode->data;
    }
@@ -188,8 +192,6 @@ Data* Hashmap<Key,Data>::Insert(Key key,Data data){
 
 template<typename Key,typename Data>
 Data* Hashmap<Key,Data>::InsertIfNotExist(Key key,Data data){
-   Assert(header);
-
    Data* ptr = Get(key);
 
    if(ptr == nullptr){
@@ -201,10 +203,6 @@ Data* Hashmap<Key,Data>::InsertIfNotExist(Key key,Data data){
 
 template<typename Key,typename Data>
 bool Hashmap<Key,Data>::Exists(Key key){
-   if(!header){
-      return false;
-   }
-
    Data* ptr = Get(key);
 
    if(ptr == nullptr){
@@ -215,21 +213,17 @@ bool Hashmap<Key,Data>::Exists(Key key){
 
 template<typename Key,typename Data>
 Data* Hashmap<Key,Data>::Get(Key key){
-   if(!header){
-      return nullptr;
-   }
-
-   int mask = header->nodesAllocated - 1;
+   int mask = this->nodesAllocated - 1;
    int index = Hash<Key>(key) & mask; // Size is power of 2
 
-   Pair<Key,Data>* ptr = header->buckets[index];
+   Pair<Key,Data>* ptr = this->buckets[index];
    for(; ptr;){
       if(ptr->key == key){ // Same key
          return &ptr->data;
       }
 
-      int index = ptr - header->data;
-      ptr = header->next[index];
+      int index = ptr - this->data;
+      ptr = this->next[index];
    }
 
    return nullptr;
@@ -262,25 +256,38 @@ GetOrAllocateResult<Data> Hashmap<Key,Data>::GetOrAllocate(Key key){
 template<typename Key,typename Data>
 HashmapIterator<Key,Data> Hashmap<Key,Data>::begin(){
    HashmapIterator<Key,Data> iter = {};
-   if(!header){
-      return iter;
-   }
-
-   iter.pairs = header->data;
-
+   iter.pairs = this->data;
    return iter;
 }
 
 template<typename Key,typename Data>
 HashmapIterator<Key,Data> Hashmap<Key,Data>::end(){
    HashmapIterator<Key,Data> iter = {};
-   if(!header){
-      return iter;
-   }
-   iter.pairs = header->data;
-   iter.index = header->nodesUsed;
+
+   iter.pairs = this->data;
+   iter.index = this->nodesUsed;
 
    return iter;
+}
+
+template<typename Data>
+void Set<Data>::Insert(Data data){
+   map->Insert(data,0);
+}
+
+template<typename Data>
+bool Set<Data>::Exists(Data data){
+   int* possible = map->Get(data);
+   bool res = (possible != nullptr);
+   return res;
+}
+
+template<typename Data>
+Set<Data>* PushSet(Arena* arena,int maxAmountOfElements){
+   Set<Data>* set = PushStruct<Set<Data>>(arena);
+   set->map = PushHashmap<Data,int>(arena,maxAmountOfElements);
+
+   return set;
 }
 
 template<typename T>
@@ -600,6 +607,7 @@ PoolIterator<T> Pool<T>::beginNonValid(){
    return iter;
 }
 
+#if 0
 template<typename T>
 int Pool<T>::MemoryUsage(){
    Byte* page = mem;
@@ -615,5 +623,6 @@ int Pool<T>::MemoryUsage(){
    int memoryUsed = numberPages * GetPageSize();
    return memoryUsed;
 }
+#endif
 
 #endif // INCLUDED_MEMORY_INCLUDE

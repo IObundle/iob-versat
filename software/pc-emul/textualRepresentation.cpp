@@ -59,11 +59,7 @@ String Repr(FUInstance* inst,GraphDotFormat format,Arena* arena){
 }
 
 String Repr(FUDeclaration* decl,Arena* arena){
-   Byte* mark = MarkArena(arena);
-
-   PushString(arena,"%.*s",UNPACK_SS(decl->name));
-
-   String res = PointArena(arena,mark);
+   String res = PushString(arena,"%.*s",UNPACK_SS(decl->name));
    return res;
 }
 
@@ -185,7 +181,46 @@ String PushIntTableRepresentation(Arena* arena,Array<int> values,int digitSize){
    return res;
 }
 
+String Repr(StaticId id,Arena* arena){
+   Byte* mark = MarkArena(arena);
 
+   Repr(id.parent,arena);
+   PushString(arena," %.*s",UNPACK_SS(id.name));
+
+   String res = PointArena(arena,mark);
+   return res;
+}
+
+String Repr(StaticData data,Arena* arena){
+   Byte* mark = MarkArena(arena);
+
+   Repr(data.decl,arena);
+   PushString(arena," (%d)",data.offset);
+
+   String res = PointArena(arena,mark);
+   return res;
+}
+
+String Repr(PortNode portNode,Arena* arena){
+   Byte* mark = MarkArena(arena);
+
+   PushString(arena,"%.*s",UNPACK_SS(portNode.node->inst->name));
+   PushString(arena,":%d",portNode.port);
+
+   String res = PointArena(arena,mark);
+   return res;
+}
+
+String Repr(EdgeNode node,Arena* arena){
+   Byte* mark = MarkArena(arena);
+
+   Repr(node.node0,arena);
+   PushString(arena," -> ");
+   Repr(node.node1,arena);
+
+   String res = PointArena(arena,mark);
+   return res;
+}
 
 
 

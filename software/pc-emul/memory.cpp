@@ -116,12 +116,18 @@ void PopMark(Arena* arena,Byte* mark){
 Byte* PushBytes(Arena* arena, size_t size){
    Byte* ptr = &arena->mem[arena->used];
 
-   Assert(arena->used + size < arena->totalAllocated);
+
+   Assert(arena->used + size <= arena->totalAllocated);
 
    //memset(ptr,0,size);
    arena->used += size;
 
    return ptr;
+}
+
+size_t SpaceAvailable(Arena* arena){
+   size_t remaining = arena->totalAllocated - arena->used;
+   return remaining;
 }
 
 String PointArena(Arena* arena,Byte* mark){
@@ -136,6 +142,7 @@ String PushFile(Arena* arena,const char* filepath){
    FILE* file = fopen(filepath,"r");
 
    if(!file){
+      printf("Failed to open file: %s\n",filepath);
       res.size = -1;
       return res;
    }
@@ -172,7 +179,7 @@ String vPushString(Arena* arena,const char* format,va_list args){
 
    arena->used += (size_t) (size);
 
-   Assert(arena->used < arena->totalAllocated);
+   Assert(arena->used <= arena->totalAllocated);
 
    String res = STRING(buffer,size);
 
@@ -193,6 +200,52 @@ String PushString(Arena* arena,const char* format,...){
 void PushNullByte(Arena* arena){
    Byte* res = PushBytes(arena,1);
    *res = '\0';
+}
+
+static inline DynamicArena* GetDynamicArenaHeader(void* memoryStart,int numberPages){
+   int pageSize = GetPageSize() * numberPages;
+
+   Byte* start = (Byte*) memoryStart;
+   DynamicArena* view = (DynamicArena*) (start + pageSize - sizeof(DynamicArena));
+
+   return view;
+}
+
+DynamicArena* CreateDynamicArena(int numberPages){
+   void* mem = AllocatePages(numberPages);
+
+   DynamicArena* arena = GetDynamicArenaHeader(mem,numberPages);
+   *arena = {};
+   arena->mem = (Byte*) mem;
+   arena->pagesAllocated = numberPages;
+
+   return arena;
+}
+
+Byte* PushBytes(DynamicArena* arena,size_t size){
+   DynamicArena* ptr = arena;
+   Byte* start = arena->mem;
+
+   DynamicArena* previous = ptr;
+   while(start + size > (Byte*) ptr){
+      if(ptr->next){
+         ptr = ptr->next;
+      } else {
+         ptr = CreateDynamicArena((size / GetPageSize()) + 1);
+         previous->next = ptr;
+      }
+   }
+
+   Byte* res = ((Byte*) ptr->mem) + ptr->used;
+   ptr->used += size;
+
+   return res;
+}
+
+void Clear(DynamicArena* arena){
+   FOREACH_LIST(ptr,arena){
+      ptr->used = 0;
+   }
 }
 
 bool BitIterator::operator!=(BitIterator& iter){ // Returns false if passed over iter

@@ -7,6 +7,7 @@
 // No mems or vreads/vwrites, just a unit full of combinatorial logic
 struct SimpleAccelerator{
    Accelerator* accel;
+   FUDeclaration* decl;
    FUInstance* inst;
    FUInstance* inputs[99]; // Inputs are Const
    unsigned int numberInputs;
@@ -17,7 +18,9 @@ struct SimpleAccelerator{
 
 // Does nothing if accel already initialized. Returns true if initialization occured
 bool InitSimpleAccelerator(SimpleAccelerator* simple,Versat* versat,const char* declarationName);
+void RemapSimpleAccelerator(SimpleAccelerator* simple,Versat* versat);
 int* RunSimpleAccelerator(SimpleAccelerator* simple, ...); // Return is statically allocated. Do not reuse between calls to function
+int* RunSimpleAcceleratorDebug(SimpleAccelerator* simple, ...);
 
 void OutputVersatSource(Versat* versat,SimpleAccelerator* accel,const char* sourceFilepath,const char* constantsFilepath,const char* dataFilepath);
 

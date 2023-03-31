@@ -10,6 +10,7 @@
 #include "versat.hpp"
 
 struct ComplexFUInstance;
+struct Versat;
 
 typedef int* (*FUFunction)(ComplexFUInstance*);
 typedef int (*MemoryAccessFunction)(ComplexFUInstance* instance, int address, int value,int write);
@@ -36,6 +37,7 @@ struct StaticId{
 };
 
 struct StaticData{
+   FUDeclaration* decl;
    Array<Wire> configs;
    int offset;
 };
@@ -103,7 +105,7 @@ struct SimpleGraph{
 
 struct CalculatedOffsets{
    Array<int> offsets;
-   int size;
+   int max;
 };
 
 // A declaration is constant after being registered
@@ -134,17 +136,18 @@ struct FUDeclaration{
    int memoryMapBits;
    int nStaticConfigs;
    int extraDataSize;
+   int externalMemoryBitsize;
+   int externalMemoryDatasize;
 
    // Stores different accelerators depending on properties we want
    Accelerator* baseCircuit;
-   Accelerator* fixedMultiEdgeCircuit;
    Accelerator* fixedDelayCircuit;
    SimpleGraph fixedDelayCircuitSimple;
 
    DAGOrder temporaryOrder;
 
    // Merged accelerator
-   FUDeclaration* mergedType[2]; // TODO: probably change it from static to a dynamic allocating with more space, in order to accommodate multiple mergings (merge A with B and then the result with C)
+   Array<FUDeclaration*> mergedType; // TODO: probably change it from static to a dynamic allocating with more space, in order to accommodate multiple mergings (merge A with B and then the result with C)
 
    // Iterative
    String unitName;
@@ -160,7 +163,7 @@ struct FUDeclaration{
    MemoryAccessFunction memAccessFunction;
 
    const char* operation;
-   Hashmap<StaticId,StaticData> staticUnits;
+   Hashmap<StaticId,StaticData>* staticUnits;
 
    enum {SINGLE = 0x0,COMPOSITE = 0x1,SPECIAL = 0x2,MERGED = 0x3,ITERATIVE = 0x4} type;
    DelayType delayType;
@@ -193,27 +196,132 @@ struct Parameter{
    Parameter* next;
 };
 
+struct ComplexFUInstance;
+struct InstanceNode;
+
+struct PortNode{
+   InstanceNode* node;
+   int port;
+};
+
+struct EdgeNode{
+   PortNode node0;
+   PortNode node1;
+};
+
+struct ConnectionNode{
+   PortNode instConnectedTo;
+   int port;
+   int edgeDelay;
+   int* delay; // Maybe not the best approach to calculate delay. TODO: check later
+   ConnectionNode* next;
+};
+
+struct InstanceNode{
+   ComplexFUInstance* inst;
+   InstanceNode* next;
+
+   // Calculated and updated every time a connection is added or removed
+   ConnectionNode* allInputs;
+   ConnectionNode* allOutputs;
+   Array<PortNode> inputs;
+   int outputs; // No single outputs because not much reasons to.
+   bool multipleSamePortInputs;
+   enum {TAG_UNCONNECTED,TAG_COMPUTE,TAG_SOURCE,TAG_SINK,TAG_SOURCE_AND_SINK} type;
+
+   // The following is only calculated by specific functions. Otherwise assume data is old if any change to the graph occurs
+   // In fact, maybe this should be removed and should just be a hashmap + array to save computed data.
+   // But need to care because top level accelerator still needs to be able to calculate this values and persist them somehow
+   int inputDelay;
+   //int order;
+};
+
+struct DAGOrderNodes{
+   InstanceNode** sinks;
+   int numberSinks;
+   InstanceNode** sources;
+   int numberSources;
+   InstanceNode** computeUnits;
+   int numberComputeUnits;
+   InstanceNode** instances;
+   int* order;
+   int maxOrder;
+};
+
 struct ComplexFUInstance : public FUInstance{
    // Various uses
    FUInstance* declarationInstance;
 
    Accelerator* iterative;
 
-   ComplexFUInstance* next;
+   //ComplexFUInstance* next;
+
+   //InstanceNode* inputs;
+   //InstanceNode* outputs;
 
    union{
    int literal;
    int bufferAmount;
    int portIndex;
    };
-   GraphComputedData* graphData;
+   //GraphComputedData* graphData;
    VersatComputedData* versatData;
+   int sharedIndex;
    char tag;
    bool savedConfiguration; // For subunits registered, indicate when we save configuration before hand
    bool savedMemory; // Same for memory
-   int sharedIndex;
    bool sharedEnable;
    bool initialized;
+   bool debugBreak;
+};
+
+struct OrderedInstance{ // This is a more powerful and generic approach to subgraphing. Should not be named ordered, could be used for anything really, not just order iteration
+   InstanceNode* node;
+   OrderedInstance* next;
+};
+
+struct Accelerator{ // Graph + data storage
+   Versat* versat;
+   FUDeclaration* subtype; // Set if subaccelerator (accelerator associated to a FUDeclaration). A "free" accelerator has this set to nullptr
+
+   //ComplexFUInstance* instances;
+   //ComplexFUInstance* lastAdded;
+
+   //int numberInstances;
+   //int numberEdges;
+   Edge* edges;
+
+   OrderedInstance* ordered;
+   //InstanceNode* ordered;
+   InstanceNode* allocated;
+   InstanceNode* lastAllocated;
+   Pool<ComplexFUInstance> instances;
+   Pool<ComplexFUInstance> subInstances;
+
+   Allocation<int> configAlloc;
+   Allocation<int> stateAlloc;
+   Allocation<int> delayAlloc;
+   Allocation<int> staticAlloc;
+   Allocation<Byte> extraDataAlloc;
+   Allocation<int> externalMemoryAlloc;
+
+   Allocation<int> outputAlloc;
+   Allocation<int> storedOutputAlloc;
+
+   Arena instancesMemory;
+   Arena edgesMemory;
+   Arena temp;
+
+   Pool<StaticInfo> staticInfo;
+
+	void* configuration;
+	int configurationSize;
+
+	int cyclesPerRun;
+
+	int created;
+	int entityId;
+	bool init;
 };
 
 struct DebugState{
@@ -238,55 +346,13 @@ struct Versat{
    DebugState debug;
 };
 
-struct Test{
-   FUInstance* inst;
-   ComplexFUInstance storedValues;
-   bool usingStoredValues;
-};
-
-struct Accelerator{ // Graph + data storage
-   Versat* versat;
-   FUDeclaration* subtype; // Set if subaccelerator (accelerator associated to a FUDeclaration). A "free" accelerator has this set to nullptr
-
-   ComplexFUInstance* instances;
-   ComplexFUInstance* lastAdded;
-   int numberInstances;
-   Edge* edges;
-   int numberEdges;
-
-   Pool<ComplexFUInstance> subInstances;
-
-   Allocation<int> configAlloc;
-   Allocation<int> stateAlloc;
-   Allocation<int> delayAlloc;
-   Allocation<int> staticAlloc;
-   Allocation<Byte> extraDataAlloc;
-
-   Allocation<int> outputAlloc;
-   Allocation<int> storedOutputAlloc;
-
-   Arena instancesMemory;
-   Arena edgesMemory;
-   Arena temp;
-
-   Pool<StaticInfo> staticInfo;
-
-	void* configuration;
-	int configurationSize;
-
-	int cyclesPerRun;
-
-	int created;
-	int entityId;
-	bool init;
-};
-
 struct EdgeView{
    Edge* edge; // Points to edge inside accelerator
    int delay;
 };
 
 // A view into an accelerator.
+#if 0
 class AcceleratorView{ // More like a "graph view"
 public:
    // We use dynamic memory for nodes and edges, as we need to add/remove nodes to the graph and to update the associated accelerator view as well
@@ -311,6 +377,7 @@ public:
    DAGOrder CalculateDAGOrdering(Arena* arena);
    void CalculateVersatData(Arena* arena);
 };
+#endif
 
 struct HashKey{
    String key;
@@ -340,6 +407,7 @@ struct UnitValues{
    int extraData;
    int statics;
    int sharedUnits;
+   int externalMemory;
 
    int memoryMappedBits;
    bool isMemoryMapped;
@@ -419,8 +487,7 @@ struct Mapping{
 };
 
 struct ConsolidationGraphOptions{
-   SpecificMergeNodes* specifics;
-   int nSpecifics;
+   Array<SpecificMergeNodes> specifics;
    int order;
    int difference;
    bool mapNodes;
@@ -436,6 +503,7 @@ public:
    PushPtr<int> storedOutputs;
    PushPtr<int> statics;
    PushPtr<Byte> extraData;
+   PushPtr<int> externalMemory;
 
    void Init(Accelerator* accel);
    void Init(Accelerator* topLevel,ComplexFUInstance* inst);
@@ -445,34 +513,51 @@ public:
 
 class AcceleratorIterator{
 public:
-   Array<ComplexFUInstance*> stack;
+   union Type{
+      InstanceNode* node;
+      OrderedInstance* ordered;
+   };
+
+   Array<Type> stack;
    Hashmap<StaticId,StaticData>* staticUnits;
    Accelerator* topLevel;
    int level;
+   int upperLevels;
    bool calledStart;
    bool populate;
+   bool ordered;
+   bool levelBelow;
+
+   InstanceNode* GetInstance(int level);
 
    // Must call first
-   ComplexFUInstance* Start(Accelerator* topLevel,ComplexFUInstance* compositeInst,Arena* temp,bool populate = false);
-   ComplexFUInstance* Start(Accelerator* topLevel,Arena* temp,bool populate = false);
+   InstanceNode* Start(Accelerator* topLevel,ComplexFUInstance* compositeInst,Arena* temp,bool populate = false);
+   InstanceNode* Start(Accelerator* topLevel,Arena* temp,bool populate = false);
 
-   ComplexFUInstance* Descend(); // Current() must be a composite instance, otherwise this will fail
+   InstanceNode* StartOrdered(Accelerator* topLevel,Arena* temp,bool populate = false);
 
-   ComplexFUInstance* Next(); // Iterates over subunits
-   ComplexFUInstance* Skip(); // Next unit on the same level
+   InstanceNode* ParentInstance();
+   String GetParentInstanceFullName(Arena* out);
 
-   ComplexFUInstance* Current(); // Returns nullptr to indicate end of iteration
-   ComplexFUInstance* CurrentAcceleratorInstance(); // Returns the accelerator instance for the Current() instance or nullptr if currently at top level
+   InstanceNode* Descend(); // Current() must be a composite instance, otherwise this will fail
+
+   InstanceNode* Next(); // Iterates over subunits
+   InstanceNode* Skip(); // Next unit on the same level
+
+   InstanceNode* Current(); // Returns nullptr to indicate end of iteration
+   InstanceNode* CurrentAcceleratorInstance(); // Returns the accelerator instance for the Current() instance or nullptr if currently at top level
+
+   String GetFullName(Arena* out);
 
    AcceleratorIterator LevelBelowIterator(Arena* temp); // Current() must be a composite instance, Returns an iterator that will iterate starting from the level below, but will end without going to upper levels.
    AcceleratorIterator LevelBelowIterator(); // Not taking an arena means that the returned iterator uses current iterator memory. Returned iterator must be iterated fully before the current iterator can be used, otherwise memory conflicts will arise as both iterators are sharing the same stack
 };
 
 struct ConsolidationGraph{
-   Array<MappingNode> nodes; // 2
-   Array<BitArray> edges;    // 2
+   Array<MappingNode> nodes;
+   Array<BitArray> edges;
 
-   BitArray validNodes;      // 3 -> 8 quadwords
+   BitArray validNodes;
 };
 
 struct ConsolidationResult{
@@ -495,11 +580,24 @@ struct CliqueState{
 typedef std::unordered_map<ComplexFUInstance*,ComplexFUInstance*> InstanceMap;
 typedef std::unordered_map<PortEdge,PortEdge> PortEdgeMap;
 typedef std::unordered_map<Edge*,Edge*> EdgeMap;
+typedef std::unordered_map<ComplexFUInstance*,ComplexFUInstance*> InstanceMap;
+typedef Hashmap<InstanceNode*,InstanceNode*> InstanceNodeMap;
 
 struct MergeGraphResult{
-   std::vector<Edge*> accel1EdgeMap;
-   std::vector<Edge*> accel2EdgeMap;
+   Accelerator* accel1; // Should pull out the graph stuff instead of using an Accelerator for this
+   Accelerator* accel2;
+
+   InstanceNodeMap* map1; // Maps node from accel1 to newGraph
+   InstanceNodeMap* map2; // Maps node from accel2 to newGraph
+   //std::vector<Edge*> accel1EdgeMap;
+   //std::vector<Edge*> accel2EdgeMap;
    Accelerator* newGraph;
+};
+
+struct MergeGraphResultExisting{
+   Accelerator* result;
+   Accelerator* accel2;
+   InstanceNodeMap* map2;
 };
 
 // Simple operations should also be stored here. They are versat agnostic as well
@@ -517,16 +615,16 @@ namespace BasicDeclaration{
 struct CompiledTemplate;
 namespace BasicTemplates{
    extern CompiledTemplate* acceleratorTemplate;
+   extern CompiledTemplate* topAcceleratorTemplate;
+   extern CompiledTemplate* dataTemplate;
 }
-
-typedef std::unordered_map<ComplexFUInstance*,ComplexFUInstance*> InstanceMap;
 
 struct GraphMapping;
 
 // Temp
 bool EqualPortMapping(PortInstance p1,PortInstance p2);
-void PopulateAccelerator(Accelerator* topLevel,Accelerator* accel,FUDeclaration* topDeclaration,FUInstanceInterfaces& inter,Hashmap<StaticId,StaticData>& staticMap);
-void PopulateAccelerator2(Accelerator* accel,FUDeclaration* topDeclaration,FUInstanceInterfaces& inter,Hashmap<StaticId,StaticData>& staticMap);
+void PopulateAccelerator(Accelerator* topLevel,Accelerator* accel,FUDeclaration* topDeclaration,FUInstanceInterfaces& inter,Hashmap<StaticId,StaticData>* staticMap);
+void PopulateAccelerator2(Accelerator* accel,FUDeclaration* topDeclaration,FUInstanceInterfaces& inter,Hashmap<StaticId,StaticData>* staticMap);
 ConsolidationResult GenerateConsolidationGraph(Versat* versat,Arena* arena,Accelerator* accel1,Accelerator* accel2,ConsolidationGraphOptions options);
 MergeGraphResult MergeGraph(Versat* versat,Accelerator* flatten1,Accelerator* flatten2,GraphMapping& graphMapping,String name);
 void AddCliqueToMapping(GraphMapping& res,ConsolidationGraph clique);
@@ -541,10 +639,15 @@ int CalculateTotalOutputs(FUInstance* inst);
 bool IsConfigStatic(Accelerator* topLevel,ComplexFUInstance* inst);
 bool IsUnitCombinatorial(FUInstance* inst);
 
+void ReorganizeAccelerator(Accelerator* graph,Arena* temp);
+
 // Accelerator
 Accelerator* CopyAccelerator(Versat* versat,Accelerator* accel,InstanceMap* map);
-ComplexFUInstance* CopyInstance(Accelerator* newAccel,ComplexFUInstance* oldInstance,String newName,ComplexFUInstance* previous);
+Accelerator* CopyFlatAccelerator(Versat* versat,Accelerator* accel,InstanceMap* map);
+ComplexFUInstance* CopyInstance(Accelerator* newAccel,ComplexFUInstance* oldInstance,String newName,InstanceNode* previous);
 ComplexFUInstance* CopyInstance(Accelerator* newAccel,ComplexFUInstance* oldInstance,String newName);
+InstanceNode* CopyInstance(Accelerator* newAccel,InstanceNode* oldInstance,String newName);
+InstanceNode* CreateFlatFUInstance(Accelerator* accel,FUDeclaration* type,String name);
 void InitializeFUInstances(Accelerator* accel,bool force);
 int CountNonOperationChilds(Accelerator* accel);
 
@@ -558,42 +661,52 @@ Edge* ConnectUnits(FUInstance* out,int outIndex,FUInstance* in,int inIndex,int d
 
 // Delay
 int CalculateLatency(ComplexFUInstance* inst);
-void CalculateDelay(Versat* versat,Accelerator* accel);
+Hashmap<EdgeNode,int>* CalculateDelay(Versat* versat,Accelerator* accel,Arena* out);
 void SetDelayRecursive(Accelerator* accel);
 
 // Graph fixes
 void FixMultipleInputs(Versat* versat,Accelerator* accel);
-void FixDelays(Versat* versat,Accelerator* accel,AcceleratorView& view);
+void FixMultipleInputs(Versat* versat,Accelerator* accel,Hashmap<ComplexFUInstance*,int>* instanceToInput);
+//void FixDelays(Versat* versat,Accelerator* accel,AcceleratorView& view);
+void FixDelays(Versat* versat,Accelerator* accel,Hashmap<EdgeNode,int>* edgeDelays);
 
 // AcceleratorView related functions
-AcceleratorView CreateAcceleratorView(Accelerator* accel,Arena* arena);
-AcceleratorView CreateAcceleratorView(Accelerator* accel,std::vector<Edge*>& edgeMappings,Arena* arena);
-AcceleratorView SubGraphAroundInstance(Versat* versat,Accelerator* accel,ComplexFUInstance* instance,int layers,Arena* arena);
+//AcceleratorView CreateAcceleratorView(Accelerator* accel,Arena* arena);
+//AcceleratorView CreateAcceleratorView(Accelerator* accel,std::vector<Edge*>& edgeMappings,Arena* arena);
+//AcceleratorView SubGraphAroundInstance(Versat* versat,Accelerator* accel,ComplexFUInstance* instance,int layers,Arena* arena);
 
 // Accelerator merging
 bool MappingConflict(MappingNode map1,MappingNode map2);
-CliqueState MaxClique(ConsolidationGraph graph,int upperBound,Arena* arena);
+CliqueState MaxClique(ConsolidationGraph graph,int upperBound,Arena* arena,float MAX_CLIQUE_TIME);
 ConsolidationGraph GenerateConsolidationGraph(Versat* versat,Arena* arena,Accelerator* accel1,Accelerator* accel2,ConsolidationGraphOptions options,MergingStrategy strategy);
 //GraphMapping MergeAccelerator(Versat* versat,Accelerator* accel1,Accelerator* accel2,SpecificMergeNodes* specificNodes,int nSpecifics,MergingStrategy strategy,String name);
 
+DAGOrderNodes CalculateDAGOrder(InstanceNode* instances,Arena* arena);
+
 // Debug
-bool IsGraphValid(AcceleratorView view);
-void OutputGraphDotFile(Versat* versat,AcceleratorView& view,bool collapseSameEdges,const char* filenameFormat,...) __attribute__ ((format (printf, 4, 5)));
-void OutputGraphDotFile(Versat* versat,AcceleratorView& view,bool collapseSameEdges,ComplexFUInstance* highlighInstance,const char* filenameFormat,...) __attribute__ ((format (printf, 5, 6)));
+void AssertGraphValid(InstanceNode* nodes,Arena* arena);
+void OutputGraphDotFile(Versat* versat,Accelerator* accel,bool collapseSameEdges,const char* filenameFormat,...) __attribute__ ((format (printf, 4, 5)));
+void OutputGraphDotFile(Versat* versat,Accelerator* accel,bool collapseSameEdges,ComplexFUInstance* highlighInstance,const char* filenameFormat,...) __attribute__ ((format (printf, 5, 6)));
+void OutputGraphDotFile(Versat* versat,Accelerator* accel,bool collapseSameEdges,Set<ComplexFUInstance*>* highlight,const char* filenameFormat,...) __attribute__ ((format (printf, 5, 6)));
 void CheckMemory(AcceleratorIterator iter);
 void CheckMemory(AcceleratorIterator iter,MemType type);
 void CheckMemory(AcceleratorIterator iter,MemType type,Arena* arena);
+int NumberUnits(Accelerator* accel,Arena* arena); // TODO: Check configurations.cpp
+Array<String> GetFullNames(Accelerator* accel,Arena* out);
 
 void OutputConsolidationGraph(ConsolidationGraph graph,Arena* memory,bool onlyOutputValid,const char* format,...);
 
 // Misc
 bool CheckValidName(String name); // Check if name can be used as identifier in verilog
 String MappingNodeIdentifier(MappingNode* node,Arena* memory);
-int CountNonSpecialChilds(Accelerator* accel);
-int CountNonSpecialEdges(Accelerator* accel);
+int CountNonSpecialChilds(InstanceNode* nodes);
 void OutputCircuitSource(Versat* versat,FUDeclaration* decl,Accelerator* accel,FILE* file);
-ComplexFUInstance* GetInputInstance(Accelerator* accel,int inputIndex);
-ComplexFUInstance* GetOutputInstance(Accelerator* accel);
+InstanceNode* GetInputNode(InstanceNode* nodes,int inputIndex);
+int GetInputValue(InstanceNode* nodes,int index);
+ComplexFUInstance* GetInputInstance(InstanceNode* nodes,int inputIndex);
+InstanceNode* GetOutputNode(InstanceNode* nodes);
+ComplexFUInstance* GetOutputInstance(InstanceNode* nodes);
+PortNode GetInputValueInstance(FUInstance* inst,int index);
 
 MergeGraphResult HierarchicalMergeAccelerators(Versat* versat,Accelerator* accel1,Accelerator* accel2,String name);
 MergeGraphResult HierarchicalMergeAcceleratorsFullClique(Versat* versat,Accelerator* accel1,Accelerator* accel2,String name);

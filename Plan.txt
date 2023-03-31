@@ -188,15 +188,35 @@ Type:
    Keep and seperate unsigned entities from signed types. 
    Parse and generate enum information.
 
+Threading:
+
+   Right now, the only use for threading is for async file io and to compile things with verilator after making the change from static to dynamic.
+      Otherwise not worth the extra complexity. Only these two parts can actually slow the program to a crawl if we do them sequentially.
+
+   Salvage everything you can from the .
+   Implement a task as something you push into an arena. Add a next pointer to the task. Adding a task to the pool uses that pointer to keep track of tasks instead of using static memory.
+      It's the programmers responsibility to ensure the task memory is properly allocated through the entire time the task is being executed.
+      Add an indicator to the task to check when it's completed or not.
+         Maybe add a special type of task where you can wait on them by using a conditional variable.
+   Implement a taskgroup.
+      Gives common tasks the ability to wait on only those tasks to end, instead of every task currently in the task pool.
+      Also have ideas for things like priority and such, but no need for anything like that, for now. 
+
 Hashmap:
 
-   Fix like the Pool fix (make it so the struct is like a viewer to the true data structure) and change to using buckets
-
-Current know bugs/problems:
-
+   Replace the hashmap implementation with a couple of functions. Use a PushHashmap function, instead of the init one.
+   Everything that goes into the arena in a packed way should just follow the Push convention.
+   
 Misc:
 
    Check the io_uring interface for async file io. Maybe useful for the output of VCD files, which can slow down a lot the program, especially for large runtime accelerators. Might not need the full library, just check how it works
+
+Current know bugs/problems:
+
+Problem: When reordering the top level, we fuck up the allocations.
+         We have 2 orders for instances. Allocation order and DAGOrder.
+         DAGOrder is useful for simulation and calculations.
+         Allocation order is needed for simulations.
 
 Legend:
 

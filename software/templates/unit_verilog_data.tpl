@@ -234,6 +234,15 @@ static int32_t* @{module.name}_UpdateFunction(ComplexFUInstance* inst){
    self->in@{i} = GetInputValue(inst,@{i}); 
 #{end}
 
+#{if module.externalMemoryBitsize}
+   int offset = self->ext_mem_addr0;
+   Assert(offset < (1 << inst->declaration->externalMemoryBitsize));
+
+   if(self->ext_mem_write0){
+      inst->externalMemory[offset] = self->ext_mem_data_out0;
+   }
+#{end}
+
 #{if module.doesIO}
    DatabusAccess* access = (DatabusAccess*) &self[1];
 
@@ -269,6 +278,12 @@ static int32_t* @{module.name}_UpdateFunction(ComplexFUInstance* inst){
 #{end}
 
    UPDATE(self);
+
+#{if module.externalMemoryBitsize}
+   if(!self->ext_mem_write0){
+      self->ext_mem_data0 = inst->externalMemory[offset];
+   }
+#{end}
 
 #{if module.doesIO}
    self->databus_ready = 0;
@@ -325,6 +340,9 @@ static FUDeclaration* @{module.name}_Register(Versat* versat){
    #{else}
    decl.extraDataSize = sizeof(V@{module.name});
    #{end}
+
+   decl.externalMemoryBitsize = @{module.externalMemoryBitsize};
+   decl.externalMemoryDatasize = @{module.externalMemoryDatasize};
 
    decl.initializeFunction = @{module.name}_InitializeFunction;
    decl.startFunction = @{module.name}_StartFunction;

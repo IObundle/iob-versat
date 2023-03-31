@@ -4,7 +4,7 @@
 #include <stdint.h>
 #include <stddef.h>
 
-#include "utils.hpp"
+#include "utilsCore.hpp"
 
 struct FUInstance{
    const char* name;
@@ -30,8 +30,8 @@ struct Accelerator{
 };
 
 struct SpecificMerge{
-   SizedString instA;
-   SizedString instB;
+   String instA;
+   String instB;
 };
 
 enum VersatDebugFlags{
@@ -64,6 +64,8 @@ enum MergingStrategy{
 
 Versat* InitVersat(int base,int numberConfigurations);
 
+//Arena InitArena(size_t size);
+
 // Accelerator functions
 void AcceleratorRun(Accelerator* accel);
 void VersatUnitWrite(FUInstance* instance,int address, int value);
@@ -76,7 +78,7 @@ FUInstance* GetInstanceByName_(Accelerator* accel,int argc, ...);
 FUInstance* GetSubInstanceByName_(Accelerator* topLevel,FUInstance* inst,int argc, ...);
 
 void CalculateDelay(Versat* versat,Accelerator* accel); // In versat space, simple extract delays from configuration data
-FUInstance* CreateFUInstance(Accelerator* accel,FUDeclaration* type,SizedString entityName);
+FUInstance* CreateFUInstance(Accelerator* accel,FUDeclaration* type,String entityName);
 
 void Hook(Versat* versat,Accelerator* accel,FUInstance* inst);
 // Functions that perform no useful work are simple pre processed out
@@ -103,5 +105,8 @@ inline void OutputVersatSource(Versat* versat,SimpleAccelerator* accel,const cha
 inline void Free(Versat* versat){}
 #define DisplayUnitConfiguration(...) ((void)0)
 #define CheckInputAndOutputNumber(...) ((void)0)
+#define MergeThree(...) ((FUDeclaration*)0)
+#define Merge(...) ((FUDeclaration*)0)
+inline void TestVersatSide(Versat* versat){}
 
 #endif // INCLUDED_VERSAT

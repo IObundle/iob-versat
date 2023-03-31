@@ -34,6 +34,15 @@ Versat* InitVersat(int base,int numberConfigurations){
    return &versat;
 }
 
+#if 0
+Arena InitArena(size_t size){
+   Arena arena = {};
+   arena.mem = (Byte*) malloc(size);
+   arena.totalAllocated = size;
+   return arena;
+}
+#endif
+
 // Accelerator functions
 void AcceleratorRun(Accelerator* accel){
    #ifdef DEBUG
@@ -153,7 +162,7 @@ FUInstance* GetSubInstanceByName_(Accelerator* topLevel,FUInstance* inst,int arg
    return res;
 }
 
-FUInstance* CreateFUInstance(Accelerator* accel,FUDeclaration* type,SizedString entityName){
+FUInstance* CreateFUInstance(Accelerator* accel,FUDeclaration* type,String entityName){
    FUInstance* res = GetInstanceByName_(accel,1,entityName.data);
 
    return res;

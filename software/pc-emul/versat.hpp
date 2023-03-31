@@ -17,6 +17,7 @@ struct FUInstance{
    int* config;
    int* state;
    int* delay;
+   int* externalMemory;
 
    // PC only
    int baseDelay;
@@ -96,6 +97,7 @@ void ParseVersatSpecification(Versat* versat,const char* filepath);
 Accelerator* CreateAccelerator(Versat* versat);
 FUInstance* CreateFUInstance(Accelerator* accel,FUDeclaration* type,String entityName);
 void AcceleratorRun(Accelerator* accel);
+void AcceleratorRunDebug(Accelerator* accel);
 void RemoveFUInstance(Accelerator* accel,FUInstance* inst);
 void OutputVersatSource(Versat* versat,Accelerator* accel,const char* sourceFilepath,const char* constantsFilepath,const char* dataFilepath);
 Accelerator* Flatten(Versat* versat,Accelerator* accel,int times); // This should work on the passed accelerator. We should not create a new accelerator
@@ -144,6 +146,12 @@ void EnterDebugTerminal(Versat* versat);
 void CheckMemory(Accelerator* topLevel);
 void CheckMemory(Accelerator* topLevel,MemType type);
 
+#ifdef x86
+#define DebugAccelerator(...) ((void)0)
+#else
+void DebugAccelerator(Accelerator* accel,Arena* temp);
+#endif
+
 // Debug units, only works for pc-emul (no declaration info in embedded)
 bool CheckInputAndOutputNumber(FUDeclaration* type,int inputs,int outputs);
 void PrintAcceleratorInstances(Accelerator* accel);
@@ -163,8 +171,11 @@ int GetInputPortNumber(FUInstance* inputInstance);
 
 // General hook function for debugging purposes
 int CalculateMemoryUsage(Versat* versat); // Not accurate, but returns the biggest amount of memory usage.
-void Hook(Versat* versat,Accelerator* accel,FUInstance* inst);
+void Hook(Versat* versat,FUDeclaration* decl,Accelerator* accel,FUInstance* inst);
 
 void TestVersatSide(Versat* versat); // Calls tests from versat side
+
+FUDeclaration* MergeThree(Versat* versat,FUDeclaration* typeA,FUDeclaration* typeB,FUDeclaration* typeC);
+FUDeclaration* Merge(Versat* versat,Array<FUDeclaration*> types,String name,MergingStrategy strat = MergingStrategy::CONSOLIDATION_GRAPH);
 
 #endif // INCLUDED_VERSAT_HPP

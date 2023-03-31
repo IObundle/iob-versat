@@ -154,11 +154,11 @@ assign wor_ready = (|unitReady);
 assign done = (&unitDone && !run);
 
 #{if versatValues.numberConnections}
-wire [31:0] #{join ", " for inst instances}
-   #{if inst.graphData.outputs} 
-      #{join ", " for j inst.graphData.outputs} output_@{inst.id}_@{j} #{end}
+wire [31:0] #{join ", " for node instances}
+   #{if node.outputs} 
+      #{join ", " for j node.outputs} output_@{node.inst.id}_@{j} #{end}
    #{else}
-      unused_@{inst.id} #{end}
+      unused_@{node.inst.id} #{end}
 #{end};
 #{end}
 
@@ -168,7 +168,7 @@ assign unitRdataFinal = (#{join "|" for i unitsMapped} unitRData[@{i}] #{end});
 #{end}
 
 // Memory mapped
-#{if unitsMapped}
+#{if 0} // TODO: unitsMapped
 always @*
 begin
    memoryMappedEnable = {@{unitsMapped}{1'b0}};
@@ -176,7 +176,8 @@ begin
    if(valid & memoryMappedAddr)
    begin
    #{set counter 0}
-   #{for inst instances}
+   #{for node instances}
+   #{set inst node.inst}
    #{if inst.declaration.isMemoryMapped}
       #{if inst.versatData.memoryMaskSize}
          if(addr[@{memoryAddressBits - 1}:@{memoryAddressBits - inst.versatData.memoryMaskSize}] == @{inst.versatData.memoryMaskSize}'b@{inst.versatData.memoryMask}) // @{versatBase + memoryMappedBase * 4 + inst.versatData.memoryAddressOffset * 4 |> Hex} - @{versatBase + memoryMappedBase + inst.versatData.memoryAddressOffset |> Hex}
@@ -201,7 +202,8 @@ begin
       // Config
       #{set counter 0}
       #{set addr 1}
-      #{for inst instances}
+      #{for node instances}
+      #{set inst node.inst}
       #{set decl inst.declaration}
       #{for wire decl.configs}
       if(addr[@{versatValues.configurationAddressBits - 1}:0] == @{addr}) // @{versatBase + addr * 4 |> Hex}
@@ -222,7 +224,8 @@ begin
       #{end}
 
       // Delays
-      #{for inst instances}
+      #{for node instances}
+      #{set inst node.inst}
       #{set decl inst.declaration}
       #{for i decl.nDelays}
       if(addr[@{versatValues.configurationAddressBits - 1}:0] == @{addr}) // @{versatBase + addr * 4 |> Hex}
@@ -241,7 +244,8 @@ begin
    if(valid & !memoryMappedAddr) begin
       #{set counter 0}
       #{set addr 0}
-      #{for inst instances}
+      #{for node instances}
+      #{set inst node.inst}
       #{set decl inst.declaration}
       #{for wire decl.states}
       if(addr[@{versatValues.stateAddressBits - 1}:0] == @{addr + 1}) // @{versatBase + addr * 4 |> Hex}
@@ -260,15 +264,18 @@ end
 #{set ioIndex 0}
 #{set memoryMappedIndex 0}
 #{set doneCounter 0}
-#{for inst instances}
+#{for node instances}
+#{set inst node.inst}
 #{set decl inst.declaration}
    @{decl.name} @{inst.parameters} @{inst.name |> Identify}_@{counter} (
-      #{for i inst.graphData.outputs}
+      #{for i node.outputs}
          .out@{i}(output_@{inst.id}_@{i}),
       #{end} 
 
-      #{for input inst.graphData.singleInputs}
-         .in@{index}(output_@{input.inst.id}_@{input.port}),
+      #{for input node.inputs}
+      #{if input.node}
+         .in@{index}(output_@{input.node.inst.id}_@{input.port}),
+      #{end}
       #{end}
 
       #{for wire decl.configs}

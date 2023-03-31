@@ -164,7 +164,7 @@ Token Tokenizer::AssertNextToken(const char* format){
       }
       printf("^\n");
 
-      DEBUG_BREAK;
+      DEBUG_BREAK();
    }
 
    return token;
@@ -225,9 +225,9 @@ Token Tokenizer::PeekFindIncluding(const char* str){
    return tok;
 }
 
-Token Tokenizer::FindFirst(std::initializer_list<const char*> strings){
-   Token best = {};
-   best.size = -1;
+FindFirstResult Tokenizer::FindFirst(std::initializer_list<const char*> strings){
+   Token peekFind = {};
+   peekFind.size = -1;
 
    const char* res = nullptr;
    bool first = true;
@@ -237,25 +237,27 @@ Token Tokenizer::FindFirst(std::initializer_list<const char*> strings){
       if(first){
          if(token.size != -1){
             first = false;
-            best = token;
+            peekFind = token;
             res = str;
          }
       }
 
-      if(token.size > 0 && token.size < best.size){
-         best = token;
+      if(token.size > 0 && token.size < peekFind.size){
+         peekFind = token;
          res = str;
       }
    }
 
-   if(res){
-      return STRING(res);
-   } else {
-      Token noFound = {};
-      noFound.size = -1;
+   FindFirstResult result = {};
+   result.peekFindNotIncluded = peekFind;
 
-      return noFound;
+   if(res){
+      result.foundFirst = STRING(res);
+   } else {
+      result.foundFirst.size = -1;
    }
+
+   return result;
 }
 
 Token Tokenizer::NextFindUntil(const char* str){

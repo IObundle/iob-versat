@@ -36,6 +36,8 @@ struct Graph{
 };
 #endif
 
+#if 0
+
 typedef ComplexFUInstance Node;
 typedef PortInstance PortNode;
 typedef Edge EdgeNode;
@@ -126,5 +128,20 @@ String OutputDotGraph(Graph* graph,Arena* arena);
 String OutputDotGraph(Subgraph graph,Arena* output);
 
 ConsolidationResult GenerateConsolidationGraph(Versat* versat,Arena* arena,Subgraph accel1,Subgraph accel2,ConsolidationGraphOptions options);
+#endif
+
+InstanceNode* GetInstanceNode(Accelerator* accel,ComplexFUInstance* inst);
+void CalculateNodeType(InstanceNode* node);
+void FixInputs(InstanceNode* node);
+
+void RemoveConnection(Accelerator* accel,InstanceNode* out,int outPort,InstanceNode* in,int inPort);
+InstanceNode* RemoveUnit(InstanceNode* nodes,InstanceNode* unit);
+
+// Fixes edges such that unit before connected to after, are reconnected to new unit
+void InsertUnit(Accelerator* accel,PortNode output,PortNode input,PortNode newUnit);
+void InsertUnit(Accelerator* accel, PortInstance before, PortInstance after, PortInstance newUnit);
+//void InsertUnit(AcceleratorView& view, PortInstance before, PortInstance after, PortInstance newUnit,ComplexFUInstance** newNode);
+
+Edge* ConnectUnitsGetEdge(PortNode out,PortNode in,int delay);
 
 #endif // INCLUDED_GRAPH

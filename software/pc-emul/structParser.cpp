@@ -629,10 +629,82 @@ String GetBaseType(String name){
    return base;
 }
 
+bool IsTemplatedParam(TypeDef* def,String memberTypeName){
+   if(def->type != TypeDef::STRUCT){
+      return false;
+   }
+
+   FOREACH_LIST(ptr,def->structType.params){
+      if(CompareString(ptr->name,memberTypeName)){
+         return true;
+      }
+   }
+   return false;
+}
+
+bool DependsOnTemplatedParam(TypeDef* def,String memberTypeName){
+   BLOCK_REGION(tempArena);
+
+   String baseName = GetBaseType(memberTypeName);
+   Tokenizer tok(baseName,"[]{}();*<>,=",{});
+
+   String simpleType = tok.NextToken();
+   bool res = IsTemplatedParam(def,simpleType);
+
+   if(res || (simpleType.size == baseName.size)){
+      return res;
+   }
+
+   tok.AssertNextToken("<");
+
+   while(!tok.Done()){
+      FindFirstResult search = tok.FindFirst({",",">"});
+      Assert(search.foundFirst.size);
+
+      if(CompareString(search.foundFirst,",")){
+         bool res = DependsOnTemplatedParam(def,search.peekFindNotIncluded);
+         if(res){
+            return res;
+         }
+         tok.AdvancePeek(search.peekFindNotIncluded);
+         tok.AssertNextToken(",");
+         continue;
+      } else { // ">"
+         bool res = DependsOnTemplatedParam(def,search.peekFindNotIncluded);
+         return res;
+      }
+   }
+
+   UNREACHABLE;
+}
+
 void OutputRegisterTypesFunction(FILE* output){
    std::set<String> seen;
 
+   for(TypeDef* def : typeDefs){
+      switch(def->type){
+      case TypeDef::SIMPLE:{
+      }break;
+      case TypeDef::TYPEDEF:{
+      }break;
+      case TypeDef::ENUM:{
+      }break;
+      case TypeDef::TEMPLATED:{
+         if(CompareString(def->templatedType.baseType,STRING(""))){
+            typeDefs.Remove(def);
+         }
+      }break;
+      case TypeDef::STRUCT:{
+         if(CompareString(def->structType.name,STRING(""))){
+            typeDefs.Remove(def);
+         }
+      }break;
+      default: Assert(false);
+      }
+   }
+
    // HACK, with more time, resolve these. Basically just need to make sure that we correctly identify which are template params or not
+   #if 0
    seen.insert(STRING("void"));
    seen.insert(STRING("const"));
    seen.insert(STRING("T"));
@@ -643,6 +715,7 @@ void OutputRegisterTypesFunction(FILE* output){
    seen.insert(STRING("Array<HashmapNode<Key,Data>>"));
    seen.insert(STRING("HashmapHeader<Key,Data>"));
    seen.insert(STRING("Data"));
+   #endif
 
    fprintf(output,"#pragma GCC diagnostic ignored \"-Winvalid-offsetof\"\n");
    fprintf(output,"static void RegisterParsedTypes(){\n");
@@ -671,15 +744,18 @@ void OutputRegisterTypesFunction(FILE* output){
                continue;
             }
 
-            name = GetBaseType(name);
+            if(DependsOnTemplatedParam(def,name)){
+               continue;
+            }
 
-            auto iter = seen.find(name);
+            String baseName = GetBaseType(name);
+            auto iter = seen.find(baseName);
 
             if(iter == seen.end()){
                if(Contains(name,"<")){
-                  fprintf(output,"   RegisterOpaqueType(STRING(\"%.*s\"),Type::TEMPLATED_INSTANCE,sizeof(%.*s));\n",UNPACK_SS(name),UNPACK_SS(name));
+                  fprintf(output,"   RegisterOpaqueType(STRING(\"%.*s\"),Type::TEMPLATED_INSTANCE,sizeof(%.*s));\n",UNPACK_SS(baseName),UNPACK_SS(baseName));
                } else {
-                  fprintf(output,"   RegisterOpaqueType(STRING(\"%.*s\"),Type::UNKNOWN,sizeof(%.*s));\n",UNPACK_SS(name),UNPACK_SS(name));
+                  fprintf(output,"   RegisterOpaqueType(STRING(\"%.*s\"),Type::UNKNOWN,sizeof(%.*s));\n",UNPACK_SS(baseName),UNPACK_SS(baseName));
                }
 
                seen.insert(name);
@@ -839,8 +915,10 @@ void OutputRegisterTypesFunction(FILE* output){
          continue;
       }
 
+      String baseName = GetBaseType(type);
+
       if(Contains(type,"<")){
-         fprintf(output,"   InstantiateTemplate(STRING(\"%.*s\"));\n",UNPACK_SS(type));
+         fprintf(output,"   InstantiateTemplate(STRING(\"%.*s\"));\n",UNPACK_SS(baseName));
       }
    }
    #endif
@@ -889,6 +967,12 @@ int main(int argc,const char* argv[]){
 
       Tokenizer tok(content,"[]{}();*<>,=",{});
       ParseHeaderFile(&tok);
+   }
+
+   {
+   TypeDef* voidType = typeDefs.Alloc();
+   voidType->type = TypeDef::SIMPLE;
+   voidType->simpleType = STRING("void");
    }
 
    const char* test = "template<typename T> struct std::vector{T* mem; int size; int allocated;};";

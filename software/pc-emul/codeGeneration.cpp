@@ -11,10 +11,11 @@ VersatComputedValues ComputeVersatValues(Versat* versat,Accelerator* accel){
 
    VersatComputedValues res = {};
 
-   FOREACH_LIST(inst,accel->instances){
+   FOREACH_LIST(ptr,accel->allocated){
+      ComplexFUInstance* inst = ptr->inst;
       FUDeclaration* decl = inst->declaration;
 
-      res.numberConnections += inst->graphData->allOutputs.size;
+      res.numberConnections += Size(ptr->allOutputs);
 
       if(decl->isMemoryMapped){
          res.maxMemoryMapDWords = std::max(res.maxMemoryMapDWords,1 << decl->memoryMapBits);
@@ -86,15 +87,27 @@ void OutputCircuitSource(Versat* versat,FUDeclaration* decl,Accelerator* accel,F
 
    // Output configuration file
    TemplateSetCustom("versatValues",&val,"VersatComputedValues");
-   //TemplateSetCustom("instances",&accel->instances,"Pool<ComplexFUInstance>");
-   TemplateSetNumber("numberUnits",accel->numberInstances);
+   TemplateSetNumber("numberUnits",Size(accel->allocated));
 
+   int nonSpecialUnits = CountNonSpecialChilds(accel->allocated);
+
+   #if 0
    int nonSpecialUnits = 0;
    FOREACH_LIST(inst,accel->instances){
       if(inst->declaration->type != FUDeclaration::SPECIAL && !inst->declaration->isOperation){
          nonSpecialUnits += 1;
       }
    }
+   #endif
+
+   int size = Size(accel->allocated);
+   Array<InstanceNode*> nodes = PushArray<InstanceNode*>(arena,size);
+   int i = 0;
+   FOREACH_LIST_INDEXED(ptr,accel->allocated,i){
+      nodes[i] = ptr;
+   }
+
+   TemplateSetCustom("instances",&nodes,"Array<InstanceNode*>");
 
    TemplateSetNumber("nonSpecialUnits",nonSpecialUnits);
 
@@ -122,8 +135,6 @@ void OutputVersatSource(Versat* versat,Accelerator* accel,const char* sourceFile
 
    Arena* arena = &versat->temp;
    ArenaMarker marker(arena);
-   AcceleratorView view = CreateAcceleratorView(accel,arena);
-   view.CalculateVersatData(arena);
 
    SetDelayRecursive(accel);
 
@@ -139,16 +150,17 @@ void OutputVersatSource(Versat* versat,Accelerator* accel,const char* sourceFile
    VersatComputedValues val = ComputeVersatValues(versat,accel);
 
    #if 1
-   std::vector<ComplexFUInstance*> accum;
+   std::vector<ComplexFUInstance> accum;
    AcceleratorIterator iter = {};
-   for(ComplexFUInstance* inst = iter.Start(accel,&versat->temp); inst; inst = iter.Next()){
+   for(InstanceNode* node = iter.Start(accel,arena,true); node; node = iter.Next()){
+      ComplexFUInstance* inst = node->inst;
       if(!inst->declaration->isOperation && inst->declaration->type != FUDeclaration::SPECIAL){
-         accum.push_back(inst);
+         accum.push_back(*inst);
       }
    };
    #endif
 
-   fprintf(c,"`define NUMBER_UNITS %d\n",accel->numberInstances);
+   fprintf(c,"`define NUMBER_UNITS %d\n",Size(accel->allocated));
    fprintf(c,"`define CONFIG_W %d\n",val.configurationBits);
    fprintf(c,"`define STATE_W %d\n",val.stateBits);
    fprintf(c,"`define MAPPED_UNITS %d\n",val.unitsMapped);
@@ -176,7 +188,7 @@ void OutputVersatSource(Versat* versat,Accelerator* accel,const char* sourceFile
       return;
    }
 
-   TemplateSetNumber("numberUnits",accel->numberInstances);
+   TemplateSetNumber("numberUnits",Size(accel->allocated));
    TemplateSetCustom("versatValues",&val,"VersatComputedValues");
    TemplateSetCustom("versat",versat,"Versat");
    TemplateSetCustom("accel",accel,"Accelerator");
@@ -185,7 +197,14 @@ void OutputVersatSource(Versat* versat,Accelerator* accel,const char* sourceFile
    TemplateSetNumber("delayStart",val.delayBitsStart);
 
    // Output configuration file
-   TemplateSetCustom("instances",&accel->instances,"Pool<ComplexFUInstance>");
+   int size = Size(accel->allocated);
+   Array<InstanceNode*> nodes = PushArray<InstanceNode*>(arena,size);
+   int i = 0;
+   FOREACH_LIST_INDEXED(ptr,accel->allocated,i){
+      nodes[i] = ptr;
+   }
+
+   TemplateSetCustom("instances",&nodes,"Array<InstanceNode*>");
 
    TemplateSetNumber("versatBase",versat->base);
    TemplateSetNumber("memoryAddressBits",val.memoryAddressBits);
@@ -194,10 +213,7 @@ void OutputVersatSource(Versat* versat,Accelerator* accel,const char* sourceFile
    TemplateSetNumber("configurationBits",val.configurationBits);
    TemplateSetNumber("memoryMappedBase",1 << val.memoryConfigDecisionBit);
 
-   view = CreateAcceleratorView(accel,arena);
-   view.CalculateVersatData(arena);
-
-   ProcessTemplate(s,"../../submodules/VERSAT/software/templates/versat_top_instance_template.tpl",&versat->temp);
+   ProcessTemplate(s,BasicTemplates::topAcceleratorTemplate,&versat->temp);
 
    TemplateSetNumber("configurationSize",accel->configAlloc.size);
    TemplateSetArray("configurationData","int",accel->configAlloc.ptr,accel->configAlloc.size);
@@ -218,10 +234,10 @@ void OutputVersatSource(Versat* versat,Accelerator* accel,const char* sourceFile
    TemplateSetNumber("nConfigs",val.nConfigs);
    TemplateSetNumber("nDelays",val.nDelays);
    TemplateSetNumber("nStatics",val.nStatics);
-   TemplateSetCustom("instances",&accum,"std::vector<ComplexFUInstance*>");
+   TemplateSetCustom("instances",&accum,"std::vector<ComplexFUInstance>");
    TemplateSetNumber("numberUnits",accum.size());
    TemplateSetBool("IsSimple",false);
-   ProcessTemplate(d,"../../submodules/VERSAT/software/templates/embedData.tpl",&versat->temp);
+   ProcessTemplate(d,BasicTemplates::dataTemplate,&versat->temp);
 
    //PopMark(&versat->temp,mark);
 

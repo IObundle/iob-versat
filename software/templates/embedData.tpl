@@ -23,7 +23,7 @@ FUInstance instancesBuffer[] = {
    #{join "," for inst instances}
    {
       .name = "@{inst.name |> Identify}",
-      #{if inst.declaration.isMemoryMapped} 
+      #{if 0} // TODO: inst.declaration.isMemoryMapped 
          .memMapped = (int*) @{versatBase + memoryMappedBase * 4 + inst.versatData.memoryAddressOffset * 4 |> Hex}, 
       #{else} 
          .memMapped = (int*) 0x0, 
@@ -58,10 +58,13 @@ FUInstance instancesBuffer[] = {
 };
 
 #{if IsSimple}
-
 static int simpleInputs = @{simpleInputs};
 static int simpleOutputs = @{simpleOutputs};
 static int inputStart = @{inputStart};
 static int outputStart = @{outputStart};
-
+#{else}
+static int simpleInputs = 0;
+static int simpleOutputs = 0;
+static int inputStart = 0;
+static int outputStart = 0;
 #{end}

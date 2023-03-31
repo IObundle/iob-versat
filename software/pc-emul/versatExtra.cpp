@@ -15,6 +15,7 @@ bool InitSimpleAccelerator(SimpleAccelerator* simple,Versat* versat,const char* 
 
    FUDeclaration* type = GetTypeByName(versat,STRING(declarationName));
 
+   simple->decl = type;
    simple->accel = CreateAccelerator(versat);
    simple->inst = CreateFUInstance(simple->accel,type,STRING("Test"));
 
@@ -44,6 +45,22 @@ bool InitSimpleAccelerator(SimpleAccelerator* simple,Versat* versat,const char* 
    return true;
 }
 
+void RemapSimpleAccelerator(SimpleAccelerator* simple,Versat* versat){
+   for(unsigned int i = 0; i < simple->numberInputs; i++){
+      Assert(i < ARRAY_SIZE(constIn));
+
+      String name = STRING(constIn[i]);
+      simple->inputs[i] = GetInstanceByName(simple->accel,name);
+   }
+
+   for(unsigned int i = 0; i < simple->numberOutputs; i++){
+      Assert(i < ARRAY_SIZE(regOut));
+
+      String name = STRING(regOut[i]);
+      simple->outputs[i] = GetInstanceByName(simple->accel,name);
+   }
+}
+
 void OutputVersatSource(Versat* versat,SimpleAccelerator* simpleAccel,const char* sourceFilepath,const char* constantsFilepath,const char* dataFilepath){
    if(!versat->debug.outputVersat){
       return;
@@ -53,8 +70,9 @@ void OutputVersatSource(Versat* versat,SimpleAccelerator* simpleAccel,const char
 
    Arena* arena = &versat->temp;
    ArenaMarker marker(arena);
-   AcceleratorView view = CreateAcceleratorView(accel,arena);
-   view.CalculateVersatData(arena);
+
+   //AcceleratorView view = CreateAcceleratorView(accel,arena);
+   //view.CalculateVersatData(arena);
 
    SetDelayRecursive(accel);
 
@@ -72,14 +90,15 @@ void OutputVersatSource(Versat* versat,SimpleAccelerator* simpleAccel,const char
    #if 1
    std::vector<ComplexFUInstance*> accum;
    AcceleratorIterator iter = {};
-   for(ComplexFUInstance* inst = iter.Start(accel,&versat->temp); inst; inst = iter.Next()){
+   for(InstanceNode* node = iter.Start(accel,&versat->temp); node; node = iter.Next()){
+      ComplexFUInstance* inst = node->inst;
       if(!inst->declaration->isOperation && inst->declaration->type != FUDeclaration::SPECIAL){
          accum.push_back(inst);
       }
    };
    #endif
 
-   fprintf(c,"`define NUMBER_UNITS %d\n",accel->numberInstances);
+   fprintf(c,"`define NUMBER_UNITS %d\n",Size(accel->allocated));
    fprintf(c,"`define CONFIG_W %d\n",val.configurationBits);
    fprintf(c,"`define STATE_W %d\n",val.stateBits);
    fprintf(c,"`define MAPPED_UNITS %d\n",val.unitsMapped);
@@ -107,7 +126,7 @@ void OutputVersatSource(Versat* versat,SimpleAccelerator* simpleAccel,const char
       return;
    }
 
-   TemplateSetNumber("numberUnits",accel->numberInstances);
+   TemplateSetNumber("numberUnits",Size(accel->allocated));
    TemplateSetCustom("versatValues",&val,"VersatComputedValues");
    TemplateSetCustom("versat",versat,"Versat");
    TemplateSetCustom("accel",accel,"Accelerator");
@@ -116,7 +135,14 @@ void OutputVersatSource(Versat* versat,SimpleAccelerator* simpleAccel,const char
    TemplateSetNumber("delayStart",val.delayBitsStart);
 
    // Output configuration file
-   TemplateSetCustom("instances",&accel->instances,"Pool<ComplexFUInstance>");
+   int size = Size(accel->allocated);
+   Array<InstanceNode*> nodes = PushArray<InstanceNode*>(arena,size);
+   int i = 0;
+   FOREACH_LIST_INDEXED(ptr,accel->ordered,i){
+      nodes[i] = ptr->node;
+   }
+
+   TemplateSetCustom("instances",&nodes,"Array<InstanceNode*>");
 
    TemplateSetNumber("versatBase",versat->base);
    TemplateSetNumber("memoryAddressBits",val.memoryAddressBits);
@@ -125,10 +151,7 @@ void OutputVersatSource(Versat* versat,SimpleAccelerator* simpleAccel,const char
    TemplateSetNumber("configurationBits",val.configurationBits);
    TemplateSetNumber("memoryMappedBase",1 << val.memoryConfigDecisionBit);
 
-   view = CreateAcceleratorView(accel,arena);
-   view.CalculateVersatData(arena);
-
-   ProcessTemplate(s,"../../submodules/VERSAT/software/templates/versat_top_instance_template.tpl",&versat->temp);
+   ProcessTemplate(s,BasicTemplates::topAcceleratorTemplate,&versat->temp);
 
    TemplateSetBool("IsSimple",true);
    TemplateSetNumber("simpleInputs",simpleAccel->numberInputs);
@@ -159,7 +182,7 @@ void OutputVersatSource(Versat* versat,SimpleAccelerator* simpleAccel,const char
    TemplateSetNumber("nStatics",val.nStatics);
    TemplateSetCustom("instances",&accum,"std::vector<ComplexFUInstance*>");
    TemplateSetNumber("numberUnits",accum.size());
-   ProcessTemplate(d,"../../submodules/VERSAT/software/templates/embedData.tpl",&versat->temp);
+   ProcessTemplate(d,BasicTemplates::dataTemplate,&versat->temp);
 
    //PopMark(&versat->temp,mark);
 
@@ -168,7 +191,7 @@ void OutputVersatSource(Versat* versat,SimpleAccelerator* simpleAccel,const char
    #endif
 }
 
-int* vRunSimpleAccelerator(SimpleAccelerator* simple,va_list args){
+int* vRunSimpleAccelerator(SimpleAccelerator* simple,bool debug,va_list args){
    static int out[99];
 
    for(unsigned int i = 0; i < simple->numberInputs; i++){
@@ -176,7 +199,11 @@ int* vRunSimpleAccelerator(SimpleAccelerator* simple,va_list args){
       simple->inputs[i]->config[0] = val;
    }
 
-   AcceleratorRun(simple->accel);
+   if(debug){
+      //AcceleratorRunDebug(simple->accel);
+   } else {
+      AcceleratorRun(simple->accel);
+   }
 
    for(unsigned int i = 0; i < simple->numberOutputs; i++){
       out[i] = simple->outputs[i]->state[0];
@@ -189,7 +216,18 @@ int* RunSimpleAccelerator(SimpleAccelerator* simple, ...){
    va_list args;
    va_start(args,simple);
 
-   int* out = vRunSimpleAccelerator(simple,args);
+   int* out = vRunSimpleAccelerator(simple,false,args);
+
+   va_end(args);
+
+   return out;
+}
+
+int* RunSimpleAcceleratorDebug(SimpleAccelerator* simple, ...){
+   va_list args;
+   va_start(args,simple);
+
+   int* out = vRunSimpleAccelerator(simple,true,args);
 
    va_end(args);
 

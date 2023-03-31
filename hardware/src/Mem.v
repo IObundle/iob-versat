@@ -29,8 +29,11 @@
    (* versat_latency = 3 *) output [DATA_W-1:0]           out0,
    (* versat_latency = 3 *) output [DATA_W-1:0]           out1,
 
-   //configurations
-   //input [2*`MEMP_CONF_BITS-1:0] configdata
+   // External memory
+   output [ADDR_W-1:0]   ext_mem_addr0,
+   output                ext_mem_write0,
+   input [DATA_W-1:0]    ext_mem_data0,
+   output [DATA_W-1:0]   ext_mem_data_out0,
 
    // Configuration
    input [ADDR_W-1:0]    iterA,
@@ -106,7 +109,8 @@
    reg  [DATA_W-1:0]              outA_reg, outB_reg;
    
    //assign flow_out =            {outA_reg, outB_reg};
-   assign out0 = outA_reg;
+   //assign out0 = outA_reg;
+
    assign out1 = 0;
 
    //function to reverse bits
@@ -246,6 +250,13 @@
       .clkA(clk),
       .clkB(clk)
       );
+
+
+   assign ext_mem_addr0 = addr_a_reg[9:0];
+   assign out0 = outA_reg; // ext_mem_data0;
+
+   assign ext_mem_write0 = we_a_reg;
+   assign ext_mem_data_out0 = data_a_reg;
 
    //register mem outputs
    always @ (posedge clk) begin

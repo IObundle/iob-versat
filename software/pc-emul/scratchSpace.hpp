@@ -8,6 +8,8 @@
 #include "debug.hpp"
 #include "intrinsics.hpp"
 
+#if 0
+
 struct IndexMapping{
    int index0;
    int index1;
@@ -35,8 +37,22 @@ struct CalculateCliqueAndGetMappingsResult{
 struct FlattenMapping{
    FlatteningTemp* t1;
    FlatteningTemp* t2;
-   SubgraphMapping* mapping;
-   int weight;
+   Array<IndexMapping> edgeMappings;
+   //int weight_;
+};
+
+struct MappingState{
+   FUDeclaration* decl1;
+   FUDeclaration* decl2;
+
+   FlatteningTemp* t1;
+   FlatteningTemp* t2;
+
+   Array<IndexMapping> edgeMappings;
+
+   Array<int> submappingsNeeded;
+   bool computing;
+   bool computed;
 };
 
 struct MinResult{
@@ -44,11 +60,8 @@ struct MinResult{
    int index;
 };
 
-template<typename T>
-struct IndexedStruct{
-   int index;
-   T data;
-};
+static const int PROCESS_STATE_WAITING = 0;
+static const int PROCESS_STATE_COMPUTING = 1;
 
 struct ColoredOrderingResult{
    Array<int> order;
@@ -110,18 +123,6 @@ struct HeuristicState{
    bool set;
 };
 
-template<typename T>
-Array<IndexedStruct<T>> IndexArray(Array<T> array,Arena* arena){
-   Array<IndexedStruct<T>> res = PushArray<IndexedStruct<T>>(arena,array.size);
-
-   for(int i = 0; i < array.size; i++){
-      res[i].index = i;
-      res[i].data = array[i];
-   }
-
-   return res;
-}
-
 Subgraph DefaultSubgraph(Graph* graph);
 void AddSpecificsToMapping(GraphMapping& mapping,Pool<MappingNode> specifics);
 Subgraph RemoveInputs(Subgraph sub);
@@ -131,7 +132,7 @@ void PrintGraphEdges(ConsolidationGraph* graph,Arena* arena);
 
 void Clique(CliqueState* state,ConsolidationGraph graphArg,int index,IndexRecord* record,int size,Arena* arena);
 CliqueState* InitMaxClique(ConsolidationGraph graph,int upperBound,Arena* arena);
-void RunMaxClique(CliqueState* state,Arena* arena);
+void RunMaxClique(CliqueState* state,Arena* arena,float MAX_CLIQUE_TIME);
 CliqueState MaxClique(ConsolidationGraph graph,int upperBound,Arena* arena);
 
 void AllMaxCliques(CliqueState* state,Array<ConsolidationGraph>& allCliques,int& maxCliquesFound,ConsolidationGraph graphArg,int index,IndexRecord* record,int size,Arena* arena);
@@ -178,5 +179,9 @@ static bool operator==(const IndexMapping& m0,const IndexMapping& m1){
    bool res = (m0.index0 == m1.index0 && m0.index1 == m1.index1);
    return res;
 }
+
+bool CheckIfMappingIsPossible(FlatteningTemp* head1,FlatteningTemp* head2,Array<SubgraphMapping> mappings);
+
+#endif
 
 #endif // INCLUDED_VERSAT_SCRATCH_SPACE

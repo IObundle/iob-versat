@@ -115,7 +115,7 @@ struct Iterator{
 void RegisterTypes();
 void FreeTypes();
 
-String GetValueRepresentation(Value val,Arena* arena);
+String GetDefaultValueRepresentation(Value val,Arena* arena);
 
 Value RemoveOnePointerIndirection(Value in);
 
@@ -140,7 +140,8 @@ int IndexableSize(Value object); // If type is indexable, return the maximum siz
 bool IsIndexable(Type* type);
 bool IsBasicType(Type* type);
 bool IsIndexableOfBasicType(Type* type);
-bool IsEmbeddedListKind(Type* type); // Any structure with an embedded next pointer to itself is considered an embedded list
+bool IsEmbeddedListKind(Type* type); // Any structure with a next pointer to itself is considered an embedded list
+bool IsStruct(Type* type);
 
 Iterator Iterate(Value iterating);
 bool HasNext(Iterator iter);

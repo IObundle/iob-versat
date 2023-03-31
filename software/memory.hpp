@@ -6,7 +6,7 @@
 #include <cstdlib>
 #include <stdarg.h>
 
-#include "utils.hpp"
+#include "utilsCore.hpp"
 #include "logger.hpp"
 
 template<typename T> inline int Hash(T const& t);
@@ -38,7 +38,7 @@ template<typename T> void RemoveChunkAndCompress(Allocation<T>* alloc,T* ptr,int
 template<typename T> void Alloc(Allocation<T>* alloc,int newSize);
 template<typename T> bool Inside(Allocation<T>* alloc,T* ptr);
 template<typename T> void Free(Allocation<T>* alloc);
-template<typename T> int MemoryUsage(Allocation<T> alloc);
+//template<typename T> int MemoryUsage(Allocation<T> alloc);
 
 template<typename T>
 class PushPtr{
@@ -113,6 +113,7 @@ public:
 
 template<typename T> bool Inside(PushPtr<T>* push,T* ptr);
 
+// Care, functions that push to an arena do not clear it to zero or to any value.
 struct Arena{
    Byte* mem;
    size_t used;
@@ -127,6 +128,7 @@ void Free(Arena* arena);
 Byte* MarkArena(Arena* arena);
 void PopMark(Arena* arena,Byte* mark);
 Byte* PushBytes(Arena* arena, size_t size);
+size_t SpaceAvailable(Arena* arena);
 String PointArena(Arena* arena,Byte* mark);
 String PushFile(Arena* arena,const char* filepath);
 String PushString(Arena* arena,String ss);
@@ -141,17 +143,14 @@ public:
    ArenaMarker(Arena* arena){this->arena = arena; this->mark = MarkArena(arena);};
    ~ArenaMarker(){PopMark(this->arena,this->mark);};
    void Pop(){PopMark(this->arena,this->mark);};
+   operator bool(){return true;}; // For the region trick
 };
-
-template<typename F>
-ALWAYS_INLINE void operator+(ArenaMarker&& marker,F&& f){
-   f();
-}
-#define region(ARENA) ArenaMarker(ARENA) + [&]() __attribute__((always_inline))
 
 #define __marker(LINE) marker_ ## LINE
 #define _marker(LINE) __marker( LINE )
 #define BLOCK_REGION(ARENA) ArenaMarker _marker(__LINE__)(ARENA)
+
+#define region(ARENA) if(ArenaMarker _marker(__LINE__){ARENA})
 
 // Do not abuse stack arenas.
 #define STACK_ARENA(NAME,SIZE) \
@@ -168,6 +167,23 @@ Array<T> PointArray(Arena* arena,Byte* mark){String data = PointArena(arena,mark
 
 template<typename T>
 T* PushStruct(Arena* arena){T* res = (T*) PushBytes(arena,sizeof(T)); return res;};
+
+struct DynamicArena{
+   DynamicArena* next;
+   Byte* mem;
+   size_t used;
+   int pagesAllocated;
+};
+
+DynamicArena* CreateDynamicArena(int numberPages = 1);
+Byte* PushBytes(DynamicArena* arena, size_t size);
+void Clear(DynamicArena* arena);
+
+template<typename T>
+Array<T> PushArray(DynamicArena* arena,int size);
+
+template<typename T>
+T* PushStruct(DynamicArena* arena){T* res = (T*) PushBytes(arena,sizeof(T)); return res;};
 
 class BitArray;
 
@@ -224,8 +240,15 @@ public:
    Pair<Key,Data>& operator*();
 };
 
+template<typename Data>
+struct GetOrAllocateResult{
+   Data* data;
+   bool result;
+};
+
+// An hashmap implementation for arenas. Does not allocate any memory after construction. Construct with PushHashmap function
 template<typename Key,typename Data>
-struct HashmapHeader{
+struct Hashmap{
    int nodesAllocated;
    int nodesUsed;
    Pair<Key,Data>** buckets;
@@ -236,36 +259,40 @@ struct HashmapHeader{
    // Pair<Key,Data>* bucketsData[nodesAllocated];
    // Pair<Key,Data>* nextArray[nodesAllocated];
    // Pair<Key,Data> dataData[nodesAllocated];
-};
 
-template<typename Data>
-struct GetOrAllocateResult{
-   Data* data;
-   bool result;
-};
-
-// An hashmap implementation for arenas. Does not allocate any memory after construction. Need to pass correct amount of maxAmountOfElements
-template<typename Key,typename Data>
-struct Hashmap{
-   HashmapHeader<Key,Data>* header;
-
-public:
-
-   void Init(Arena* arena,int maxAmountOfElements);
+   // Construct by calling PushHashmap
 
    Data* Insert(Key key,Data data);
    Data* InsertIfNotExist(Key key,Data data);
 
-   Data* Get(Key key);
+   Data* Get(Key key); // TODO: Should return an optional
    Data GetOrFail(Key key);
 
-   GetOrAllocateResult<Data> GetOrAllocate(Key key); // More efficient way for the Get, does not exist, Insert pattern
+   void Clear();
+
+   GetOrAllocateResult<Data> GetOrAllocate(Key key); // More efficient way for the Get, check if null, Insert pattern
 
    bool Exists(Key key);
 
    HashmapIterator<Key,Data> begin();
    HashmapIterator<Key,Data> end();
 };
+
+template<typename Key,typename Data>
+Hashmap<Key,Data>* PushHashmap(Arena* arena,int maxAmountOfElements);
+
+// Set implementation for arenas
+template<typename Data>
+struct Set{
+   // TODO: Better impl would not use a map due to wasted space, but its fine for now
+   Hashmap<Data,int>* map;
+
+   void Insert(Data data);
+   bool Exists(Data data);
+};
+
+template<typename Data>
+Set<Data>* PushSet(Arena* arena,int maxAmountOfElements);
 
 /*
    Pool
@@ -317,8 +344,6 @@ class PoolIterator{
    int index;
    Byte* page;
    T* lastVal;
-
-   friend class Pool<T>;
 
 public:
 

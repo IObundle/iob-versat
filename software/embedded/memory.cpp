@@ -1,9 +1,12 @@
 #include "memory.hpp"
 
-void InitArena(Arena* arena,size_t size){
-   arena->used = 0;
-   arena->totalAllocated = size;
-   arena->mem = (Byte*) calloc(size,sizeof(Byte));
+Arena InitArena(size_t size){
+   Arena res = {};
+
+   res.totalAllocated = size;
+   res.mem = (Byte*) calloc(size,sizeof(Byte));
+
+   return res;
 }
 
 Byte* MarkArena(Arena* arena){

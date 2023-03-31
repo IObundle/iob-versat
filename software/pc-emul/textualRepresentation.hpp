@@ -11,6 +11,10 @@ String Repr(PortInstance port,GraphDotFormat format,Arena* memory);
 String Repr(MergeEdge node,GraphDotFormat format,Arena* memory);
 String Repr(PortEdge node,GraphDotFormat format,Arena* memory);
 String Repr(MappingNode node,Arena* memory);
+String Repr(StaticId id,Arena* arena);
+String Repr(StaticData data,Arena* arena);
+String Repr(PortNode portNode,Arena* arena);
+String Repr(EdgeNode node,Arena* arena);
 
 String PushIntTableRepresentation(Arena* arena,Array<int> values,int digitSize = 0);
 

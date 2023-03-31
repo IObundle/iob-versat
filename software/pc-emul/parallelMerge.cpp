@@ -52,6 +52,7 @@ void Init(IterativeState* state,Arena* arena,int index,ConsolidationGraph graph,
    state->current = &state->firstFrame;
 }
 
+#if 0
 bool IterativeClique(IterativeState* state,BitArray* neighbors,int* table){
    // Unpack state
    IterativeCliqueFrame*& current = state->current;
@@ -322,8 +323,10 @@ void IterativeMaxClique(int id,void* args){
    }
 }
 #endif
+#endif
 
-void ParallelClique(ParallelCliqueState* state,ConsolidationGraph graphArg,IndexRecord* record,int size,Arena* arena){
+#if 01
+void ParallelClique(ParallelCliqueState* state,ConsolidationGraph graphArg,IndexRecord* record,int size,Arena* arena,float MAX_CLIQUE_TIME){
    ConsolidationGraph graph = Copy(graphArg,arena);
 
    if(graph.validNodes.GetNumberBitsSet() == 0){
@@ -409,7 +412,7 @@ void ParallelClique(ParallelCliqueState* state,ConsolidationGraph graphArg,Index
       newRecord.index = i;
       newRecord.next = record;
 
-      ParallelClique(state,tempGraph,&newRecord,size + 1,arena);
+      ParallelClique(state,tempGraph,&newRecord,size + 1,arena,MAX_CLIQUE_TIME);
 
       if(state->found){
          if(size > state->thisMax){
@@ -439,7 +442,7 @@ void TaskMaxClique(int id,void* args){
    state.counter = 0;
    state.upperbound = task->state->upperBound;
 
-   double taskStart = GetTime();
+   //double taskStart = GetTime();
    #if 0
    printf("%d\n",task->index);
    #endif
@@ -454,9 +457,9 @@ void TaskMaxClique(int id,void* args){
 
    IndexRecord record = {};
    record.index = index;
-   ParallelClique(&state,graph,&record,1,arena);
+   ParallelClique(&state,graph,&record,1,arena,task->MAX_CLIQUE_TIME);
 
-   double taskEnd = GetTime();
+   //double taskEnd = GetTime();
    //printf("%d: %3f\n",task->index,taskEnd - taskStart);
 
    // No mutex needed.
@@ -497,7 +500,7 @@ void Init(RefParallelState* state,ConsolidationGraph graph,int upperBound,Arena*
    state->start = GetTime();
 }
 
-ConsolidationGraph AdvanceAll(RefParallelState* parallelState,Arena* arena){
+ConsolidationGraph AdvanceAll(RefParallelState* parallelState,Arena* arena,float MAX_CLIQUE_TIME){
    ArenaMarker marker(arena);
 
    Task task = {};
@@ -507,6 +510,7 @@ ConsolidationGraph AdvanceAll(RefParallelState* parallelState,Arena* arena){
       RefParallelTask* state = PushStruct<RefParallelTask>(arena);
       state->state = parallelState;
       state->index = i;
+      state->MAX_CLIQUE_TIME = MAX_CLIQUE_TIME;
 
       task.args = (void*) state;
 
@@ -555,7 +559,7 @@ void PrintTable(Array<int> table){
    }
 }
 
-ConsolidationGraph ParallelMaxClique(ConsolidationGraph graph,int upperBound,Arena* arena){
+ConsolidationGraph ParallelMaxClique(ConsolidationGraph graph,int upperBound,Arena* arena,float MAX_CLIQUE_TIME){
    static bool init = false;
    if(!init){
       #if 0
@@ -575,7 +579,7 @@ ConsolidationGraph ParallelMaxClique(ConsolidationGraph graph,int upperBound,Are
       printf("\n");
       #endif
 
-      ConsolidationGraph res0 = AdvanceAll(&state,arena);
+      ConsolidationGraph res0 = AdvanceAll(&state,arena,MAX_CLIQUE_TIME);
       //MemoryBarrier();
 
       #if 0
@@ -608,6 +612,6 @@ ConsolidationGraph ParallelMaxClique(ConsolidationGraph graph,int upperBound,Are
 
    return res;
 }
-
+#endif
 
 

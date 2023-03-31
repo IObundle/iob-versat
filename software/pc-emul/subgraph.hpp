@@ -9,7 +9,7 @@ struct Subgraph{
    Edge* edges;
 };
 
-Subgraph CreateSubgraph(Accelerator* accel);
+//Subgraph CreateSubgraph(Accelerator* accel);
 
 
 #endif

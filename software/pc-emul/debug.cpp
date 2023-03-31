@@ -9,6 +9,20 @@
 #include "type.hpp"
 #include "textualRepresentation.hpp"
 
+bool debugVariableFlag = false;
+Arena debugArenaInst = {};
+Arena* debugArena = &debugArenaInst;
+
+void InitDebug(){
+   static bool init = false;
+   if(init){
+      return;
+   }
+   init = true;
+
+   debugArenaInst = InitArena(Megabyte(64));
+}
+
 void CheckMemory(Accelerator* topLevel){
    Arena* temp = &topLevel->temp;
    ArenaMarker marker(temp);
@@ -47,6 +61,7 @@ static void CheckMemoryPrint(const char* level,const char* name,int pos,int delt
    }
 }
 
+#if 0
 static void PrintRange(int pos,int delta,bool isComposite,FUDeclaration* decl){
    if(delta == 1){
       printf("%d [%d]",pos,delta);
@@ -54,6 +69,7 @@ static void PrintRange(int pos,int delta,bool isComposite,FUDeclaration* decl){
       printf("%d-%d [%d]",pos,pos + delta - 1,delta);
    }
 }
+#endif
 
 static void PrintLevel(int level){
    for(int i = 0; i < level; i++){
@@ -76,7 +92,8 @@ void CheckMemory(AcceleratorIterator iter,MemType type,Arena* arena){
    Byte* mark = MarkArena(arena);
 
    Accelerator* topLevel = iter.topLevel;
-   for(ComplexFUInstance* inst = iter.Current(); inst; inst = iter.Next()){
+   for(InstanceNode* node = iter.Current(); node; node = iter.Next()){
+      ComplexFUInstance* inst = node->inst;
       FUDeclaration* decl = inst->declaration;
 
       bool isComposite = (decl->type == FUDeclaration::COMPOSITE);
@@ -217,7 +234,8 @@ void CheckMemory(AcceleratorIterator iter){
    char levelBuffer[] = "| | | | | | | | | | | | ";
 
    Accelerator* topLevel = iter.topLevel;
-   for(ComplexFUInstance* inst = iter.Current(); inst; inst = iter.Next()){
+   for(InstanceNode* node = iter.Current(); node; node = iter.Next()){
+      ComplexFUInstance* inst = node->inst;
       FUDeclaration* decl = inst->declaration;
       levelBuffer[iter.level * 2] = '\0';
 
@@ -284,7 +302,8 @@ void DisplayUnitConfiguration(AcceleratorIterator iter){
    Accelerator* accel = iter.topLevel;
    Assert(accel);
 
-   for(ComplexFUInstance* inst = iter.Current(); inst; inst = iter.Next()){
+   for(InstanceNode* node = iter.Current(); node; node = iter.Next()){
+      ComplexFUInstance* inst = node->inst;
       UnitValues val = CalculateIndividualUnitValues(inst);
 
       FUDeclaration* type = inst->declaration;
@@ -313,10 +332,6 @@ void DisplayUnitConfiguration(AcceleratorIterator iter){
    }
 }
 
-void EnterDebugTerminal(Versat* versat){
-   DebugTerminal(MakeValue(versat,"Versat"));
-}
-
 bool CheckInputAndOutputNumber(FUDeclaration* type,int inputs,int outputs){
    if(inputs > type->inputDelays.size){
       return false;
@@ -332,50 +347,13 @@ void PrintAcceleratorInstances(Accelerator* accel){
    ArenaMarker marker(temp);
 
    AcceleratorIterator iter = {};
-   for(ComplexFUInstance* inst = iter.Start(accel,temp,false); inst; inst = iter.Next()){
+   for(InstanceNode* node = iter.Start(accel,temp,false); node; node = iter.Next()){
+      ComplexFUInstance* inst = node->inst;
       for(int ii = 0; ii < iter.level; ii++){
          printf("  ");
       }
       printf("%.*s\n",UNPACK_SS(inst->name));
    }
-}
-
-bool IsGraphValid(AcceleratorView view){
-   Assert(view.graphData.size);
-
-   InstanceMap map;
-
-   for(ComplexFUInstance** instPtr : view.nodes){
-      ComplexFUInstance* inst = *instPtr;
-
-      inst->tag = 0;
-      map.insert({inst,inst});
-   }
-
-   for(EdgeView* edgeView : view.edges){
-      Edge* edge = edgeView->edge;
-
-      for(int i = 0; i < 2; i++){
-         auto res = map.find(edge->units[i].inst);
-
-         Assert(res != map.end());
-
-         res->first->tag = 1;
-      }
-
-      Assert(edge->units[0].port < edge->units[0].inst->declaration->outputLatencies.size && edge->units[0].port >= 0);
-      Assert(edge->units[1].port < edge->units[1].inst->declaration->inputDelays.size && edge->units[1].port >= 0);
-   }
-
-   if(view.edges.Size()){
-      for(ComplexFUInstance** instPtr : view.nodes){
-         ComplexFUInstance* inst = *instPtr;
-
-         Assert(inst->tag == 1 || inst->graphData->nodeType == GraphComputedData::TAG_UNCONNECTED);
-      }
-   }
-
-   return true;
 }
 
 void OutputGraphDotFile_(SimpleGraph graph,bool collapseSameEdges,FILE* file){
@@ -391,6 +369,7 @@ void OutputGraphDotFile_(SimpleGraph graph,bool collapseSameEdges,FILE* file){
    fprintf(file,"}\n");
 }
 
+#if 0
 static void OutputGraphDotFile_(Versat* versat,AcceleratorView& view,bool collapseSameEdges,ComplexFUInstance* highlighInstance,FILE* outputFile){
    Arena* arena = &versat->temp;
 
@@ -443,9 +422,90 @@ static void OutputGraphDotFile_(Versat* versat,AcceleratorView& view,bool collap
 
    fprintf(outputFile,"}\n");
 }
+#endif
 
-void OutputGraphDotFile(Versat* versat,AcceleratorView& view,bool collapseSameEdges,const char* filenameFormat,...){
+static void OutputGraphDotFile_(Versat* versat,Accelerator* accel,bool collapseSameEdges,Set<ComplexFUInstance*>* highlighInstance,FILE* outputFile){
+   Arena* arena = &versat->temp;
+   BLOCK_REGION(arena);
+
+   fprintf(outputFile,"digraph accel {\n\tnode [fontcolor=white,style=filled,color=\"160,60,176\"];\n");
+   FOREACH_LIST(ptr,accel->allocated){
+      ComplexFUInstance* inst = ptr->inst;
+      String id = UniqueRepr(inst,arena);
+      String name = Repr(inst,versat->debug.dotFormat,arena);
+
+      String color = STRING("darkblue");
+
+      if(ptr->type == InstanceNode::TAG_SOURCE || ptr->type == InstanceNode::TAG_SOURCE_AND_SINK){
+         color = STRING("darkgreen");
+      } else if(ptr->type == InstanceNode::TAG_SINK){
+         color = STRING("dark");
+      }
+
+      bool doHighligh = (highlighInstance ? highlighInstance->Exists(inst) : false);
+
+      if(doHighligh){
+         fprintf(outputFile,"\t\"%.*s\" [color=darkred,label=\"%.*s\"];\n",UNPACK_SS(id),UNPACK_SS(name));
+      } else {
+         fprintf(outputFile,"\t\"%.*s\" [color=%.*s label=\"%.*s\"];\n",UNPACK_SS(id),UNPACK_SS(color),UNPACK_SS(name));
+      }
+   }
+
+   int size = Size(accel->edges);
+   Hashmap<Pair<InstanceNode*,InstanceNode*>,int>* seen = PushHashmap<Pair<InstanceNode*,InstanceNode*>,int>(arena,size);
+
+   // TODO: Consider adding a true same edge counter, that collects edges with equal delay and then represents them on the graph as a pair, using [portStart-portEnd]
+   FOREACH_LIST(ptr,accel->allocated){
+      ComplexFUInstance* out = ptr->inst;
+
+      FOREACH_LIST(con,ptr->allOutputs){
+         ComplexFUInstance* in = con->instConnectedTo.node->inst;
+
+         if(collapseSameEdges){
+            Pair<InstanceNode*,InstanceNode*> nodeEdge = {};
+            nodeEdge.first = ptr;
+            nodeEdge.second = con->instConnectedTo.node;
+
+            GetOrAllocateResult res = seen->GetOrAllocate(nodeEdge);
+            if(res.result){
+               continue;
+            }
+         }
+
+         int inPort = con->instConnectedTo.port;
+         int outPort = con->port;
+
+         String first = UniqueRepr(out,arena);
+         String second = UniqueRepr(in,arena);
+         PortInstance start = {out,outPort};
+         PortInstance end = {in,inPort};
+         String label = Repr(start,end,versat->debug.dotFormat,arena);
+         int calculatedDelay = con->delay ? *con->delay : 0;
+
+         bool highlighStart = (highlighInstance ? highlighInstance->Exists(start.inst) : false);
+         bool highlighEnd = (highlighInstance ? highlighInstance->Exists(end.inst) : false);
+
+         bool highlight = highlighStart && highlighEnd;
+
+         fprintf(outputFile,"\t\"%.*s\" -> ",UNPACK_SS(first));
+         fprintf(outputFile,"\"%.*s\"",UNPACK_SS(second));
+
+         if(highlight){
+            fprintf(outputFile,"[color=darkred,label=\"%.*s\\n[%d:%d]\"];\n",UNPACK_SS(label),con->edgeDelay,calculatedDelay);
+         } else {
+            fprintf(outputFile,"[label=\"%.*s\\n[%d:%d]\"];\n",UNPACK_SS(label),con->edgeDelay,calculatedDelay);
+         }
+      }
+   }
+   fprintf(outputFile,"}\n");
+}
+
+void OutputGraphDotFile(Versat* versat,Accelerator* accel,bool collapseSameEdges,const char* filenameFormat,...){
    char buffer[1024];
+
+   if(!versat->debug.outputGraphs){
+      return;
+   }
 
    va_list args;
    va_start(args,filenameFormat);
@@ -453,29 +513,43 @@ void OutputGraphDotFile(Versat* versat,AcceleratorView& view,bool collapseSameEd
    vsprintf(buffer,filenameFormat,args);
 
    FILE* file = OpenFileAndCreateDirectories(buffer,"w");
-   OutputGraphDotFile_(versat,view,collapseSameEdges,nullptr,file);
+   OutputGraphDotFile_(versat,accel,collapseSameEdges,nullptr,file);
    fclose(file);
 
    va_end(args);
 }
 
-void OutputGraphDotFile(SimpleGraph graph,bool collapseSameEdges,const char* filenameFormat,...){
+void OutputGraphDotFile(Versat* versat,Accelerator* accel,bool collapseSameEdges,ComplexFUInstance* highlighInstance,const char* filenameFormat,...){
    char buffer[1024];
+
+   if(!versat->debug.outputGraphs){
+      return;
+   }
 
    va_list args;
    va_start(args,filenameFormat);
 
    vsprintf(buffer,filenameFormat,args);
 
+   Arena* temp = &versat->temp;
+   BLOCK_REGION(temp);
+
+   Set<ComplexFUInstance*>* highlight = PushSet<ComplexFUInstance*>(temp,1);
+   highlight->Insert(highlighInstance);
+
    FILE* file = OpenFileAndCreateDirectories(buffer,"w");
-   OutputGraphDotFile_(graph,collapseSameEdges,file);
+   OutputGraphDotFile_(versat,accel,collapseSameEdges,highlight,file);
    fclose(file);
 
    va_end(args);
 }
 
-void OutputGraphDotFile(Versat* versat,AcceleratorView& view,bool collapseSameEdges,ComplexFUInstance* highlighInstance,const char* filenameFormat,...){
+void OutputGraphDotFile(Versat* versat,Accelerator* accel,bool collapseSameEdges,Set<ComplexFUInstance*>* highlight,const char* filenameFormat,...){
    char buffer[1024];
+
+   if(!versat->debug.outputGraphs){
+      return;
+   }
 
    va_list args;
    va_start(args,filenameFormat);
@@ -483,7 +557,7 @@ void OutputGraphDotFile(Versat* versat,AcceleratorView& view,bool collapseSameEd
    vsprintf(buffer,filenameFormat,args);
 
    FILE* file = OpenFileAndCreateDirectories(buffer,"w");
-   OutputGraphDotFile_(versat,view,collapseSameEdges,highlighInstance,file);
+   OutputGraphDotFile_(versat,accel,collapseSameEdges,highlight,file);
    fclose(file);
 
    va_end(args);
@@ -555,15 +629,16 @@ static void PrintVCDDefinitions_(FILE* accelOutputFile,Accelerator* accel){
    }
    #endif
 
-   FOREACH_LIST(inst,accel->instances){
+   FOREACH_LIST(ptr,accel->allocated){
+      ComplexFUInstance* inst = ptr->inst;
       fprintf(accelOutputFile,"$scope module %.*s_%d $end\n",UNPACK_SS(inst->name),inst->id);
 
-      for(int i = 0; i < inst->graphData->singleInputs.size; i++){
+      for(int i = 0; i < ptr->inputs.size; i++){
          fprintf(accelOutputFile,"$var wire  32 %s %.*s_in%d $end\n",currentMapping.data(),UNPACK_SS(inst->name),i);
          IncrementMapping();
       }
 
-      for(int i = 0; i < inst->graphData->outputs; i++){
+      for(int i = 0; i < inst->declaration->outputLatencies.size; i++){
          fprintf(accelOutputFile,"$var wire  32 %s %.*s_out%d $end\n",currentMapping.data(),UNPACK_SS(inst->name),i);
          IncrementMapping();
          fprintf(accelOutputFile,"$var wire  32 %s %.*s_stored_out%d $end\n",currentMapping.data(),UNPACK_SS(inst->name),i);
@@ -638,9 +713,10 @@ static void PrintVCD_(FILE* accelOutputFile,AcceleratorIterator iter,int time,Ar
    }
    #endif
 
-   for(ComplexFUInstance* inst = iter.Current(); inst; inst = iter.Skip()){
-      for(int i = 0; i < inst->graphData->singleInputs.size; i++){
-         if(inst->graphData->singleInputs[i].inst == nullptr){
+   for(InstanceNode* node = iter.Current(); node; node = iter.Skip()){
+      ComplexFUInstance* inst = node->inst;
+      for(int i = 0; i < node->inputs.size; i++){
+         if(node->inputs[i].node == nullptr){
             if(time == 0){
                fprintf(accelOutputFile,"bx %s\n",currentMapping.data());
             }
@@ -656,7 +732,7 @@ static void PrintVCD_(FILE* accelOutputFile,AcceleratorIterator iter,int time,Ar
          IncrementMapping();
       }
 
-      for(int i = 0; i < inst->graphData->outputs; i++){
+      for(int i = 0; i < inst->declaration->outputLatencies.size; i++){
          if(time == 0 || (inst->outputs[i] != sameValueCheckSpace[mappingIncrements])){
             fprintf(accelOutputFile,"b%s %s\n",Bin(inst->outputs[i]),currentMapping.data());
             sameValueCheckSpace[mappingIncrements] = inst->outputs[i];
@@ -723,434 +799,15 @@ void PrintVCD(FILE* accelOutputFile,Accelerator* accel,int time,int clock,Array<
    PrintVCD_(accelOutputFile,iter,time,sameValueCheckSpace);
 }
 
+#include <sys/types.h>
+#include <sys/ioctl.h>
+#include <termios.h>
+
 void SetDebugSignalHandler(SignalHandler func){
    signal(SIGUSR1, func);
    signal(SIGSEGV, func);
    signal(SIGABRT, func);
 }
 
-#if 0
-#define NCURSES
-#endif
 
-#ifdef NCURSES
-#include <ncurses.h>
-#include <signal.h>
 
-struct PanelState{
-   String name;
-   Value valueLooking;
-   int cursorPosition;
-   Byte* arenaMark;
-};
-
-#define MAX_FRAMES 99
-#define MAX_PANELS 10
-
-static PanelState globalPanels[MAX_PANELS][MAX_FRAMES] = {};
-static int globalCurrentPanels[MAX_PANELS] = {};
-static int globalCurrentPanel;
-
-template<typename T>
-int ListCount(T* listHead){
-   int count = 0;
-
-   for(T* ptr = listHead; ptr != nullptr; ptr = ptr->next){
-      count += 1;
-   }
-
-   return count;
-}
-
-template<typename T>
-T* GetListByIndex(T* listHead,int index){
-   T* ptr = listHead;
-
-   while(index > 0){
-      ptr = ptr->next;
-      index -= 1;
-   }
-
-   return ptr;
-}
-
-// Only allow one input
-enum Input{
-   INPUT_NONE,
-   INPUT_BACKSPACE,
-   INPUT_ENTER,
-   INPUT_UP,
-   INPUT_DOWN,
-   INPUT_LEFT,
-   INPUT_RIGHT
-};
-
-static bool WatchableObject(Value object){
-   Value val = CollapsePtrIntoStruct(object);
-
-   Type* type = val.type;
-
-   if(IsIndexable(type)){
-      return true;
-   } else if(type->type == Type::STRUCT){
-      return true;
-   }
-
-   return false;
-}
-
-void StructPanel(WINDOW* w,Value val,int cursorPosition,int xStart,bool displayOnly,Arena* arena){
-   Type* type = val.type;
-
-   Assert(type->type == Type::STRUCT);
-
-   const int panelWidth = 32;
-
-   int menuIndex = 0;
-   int startPos = 2;
-
-   if(IsEmbeddedListKind(type)){
-      mvaddnstr(1,0,"List kind",9);
-   }
-
-   for(Member& member : type->members){
-      int yPos = startPos + menuIndex;
-
-      if(!displayOnly && menuIndex == cursorPosition){
-         wattron( w, A_STANDOUT );
-      }
-
-      mvaddnstr(yPos, xStart, member.name.data,member.name.size);
-
-      Value memberVal = AccessStruct(val,&member);
-      String repr = GetValueRepresentation(memberVal,arena);
-
-      move(yPos, xStart + panelWidth);
-      addnstr(repr.data,repr.size);
-
-      move(yPos, xStart + panelWidth + panelWidth / 2);
-      addnstr(member.type->name.data,member.type->name.size);
-
-      if(!displayOnly && menuIndex == cursorPosition){
-         wattroff( w, A_STANDOUT );
-      }
-
-      menuIndex += 1;
-   }
-}
-
-void TerminalIteration(int panelIndex,WINDOW* w,Input input,Arena* arena,Arena* temp){
-   PanelState* panel = globalPanels[panelIndex];
-   int& currentPanel = globalCurrentPanels[panelIndex];
-
-   ArenaMarker mark(temp);
-   clear();
-   // Before panel decision
-   {
-   PanelState* currentState = &panel[currentPanel];
-   Value val = currentState->valueLooking;
-   Type* type = val.type;
-
-   if(input == INPUT_BACKSPACE || input == INPUT_LEFT){
-      if(currentPanel > 0){
-         PopMark(arena,currentState->arenaMark);
-
-         currentPanel -= 1;
-      }
-   } else if(input == INPUT_ENTER){
-      // Assume new state will be created and fill with default parameters
-      PanelState* newState = &panel[currentPanel + 1];
-      newState->cursorPosition = 0;
-      newState->arenaMark = MarkArena(arena);
-
-      if(type->type == Type::STRUCT){
-         Member* member = &type->members[currentState->cursorPosition];
-
-         Value selectedValue = AccessStruct(val,currentState->cursorPosition);
-
-         selectedValue = CollapsePtrIntoStruct(selectedValue);
-
-         if(selectedValue.type->type == Type::STRUCT || IsIndexable(selectedValue.type)){
-            currentPanel += 1;
-
-            newState->name = member->name;
-            newState->valueLooking = selectedValue;
-         }
-      } else if(IsIndexable(type)){
-         if(!IsIndexableOfBasicType(type)){
-            Iterator iter = Iterate(val);
-            for(int i = 0; HasNext(iter); i += 1,Advance(&iter)){
-               if(i == currentState->cursorPosition){
-                  Value val = GetValue(iter);
-
-                  currentPanel += 1;
-
-                  newState->name = PushString(arena,"%d\n",i);
-                  newState->valueLooking = val;
-                  break;
-               }
-            }
-         }
-      }
-   } else if(input == INPUT_RIGHT){
-      if(type->type == Type::STRUCT && IsEmbeddedListKind(type)){
-         PanelState* newState = &panel[currentPanel + 1];
-         newState->cursorPosition = 0;
-         newState->arenaMark = MarkArena(arena);
-
-         Value selectedValue = AccessStruct(val,STRING("next"));
-
-         selectedValue = CollapsePtrIntoStruct(selectedValue);
-
-         if(selectedValue.type->type == Type::STRUCT || IsIndexable(selectedValue.type)){
-            currentPanel += 1;
-
-            newState->name = STRING("next");
-            newState->valueLooking = selectedValue;
-         }
-      }
-   }
-   }
-
-   currentPanel = std::max(0,currentPanel);
-
-   // At this point, panel is locked in
-   PanelState* state = &panel[currentPanel];
-
-   Value val = state->valueLooking;
-   Type* type = val.type;
-
-   String panelNumber = PushString(temp,"%d",currentPanel);
-   mvaddnstr(0,0, panelNumber.data,panelNumber.size);
-   mvaddnstr(0,3, val.type->name.data, val.type->name.size);
-
-   if(state->name.size){
-      addnstr(":",1);
-      addnstr(state->name.data,state->name.size);
-   }
-
-   int numberElements = 0;
-   if(type->type == Type::STRUCT){
-      numberElements = type->members.size;
-   } else if(IsIndexable(type)){
-      numberElements = IndexableSize(val);
-   }
-
-   if(input == INPUT_DOWN){
-      state->cursorPosition += 1;
-   } else if(input == INPUT_UP){
-      state->cursorPosition -= 1;
-   }
-
-   state->cursorPosition = RolloverRange(0,state->cursorPosition,numberElements - 1);
-
-   if(type->type == Type::STRUCT){
-      StructPanel(w,state->valueLooking,state->cursorPosition,0,false,arena);
-   } else if(IsIndexable(type)){
-      if(IsIndexableOfBasicType(type)){
-         Iterator iter = Iterate(val);
-
-         int maxSize = 0;
-         for(; HasNext(iter); Advance(&iter)){
-            String repr = GetValueRepresentation(GetValue(iter),temp);
-            maxSize = std::max(maxSize,repr.size);
-         }
-
-         int maxElementsPerLine = 10; // For now, hardcode it
-         int spacing = 2;
-
-         for(int i = 0; i < 10; i++){
-            String integer = PushString(temp,"%d\n",i);
-
-            mvaddnstr(1,(maxSize - 1) + 2+i*(maxSize+spacing),integer.data,integer.size);
-         }
-
-         iter = Iterate(val);
-         int y = 2;
-         int x = 2;
-         for(int index = 0; HasNext(iter); index += 1,Advance(&iter)){
-            if(index % 10 == 0 && index != 0){
-               y += 1;
-               x = 2;
-            }
-
-            String repr = GetValueRepresentation(GetValue(iter),temp);
-            int alignLeft = x + (maxSize - repr.size);
-            mvaddnstr(y,alignLeft,repr.data,repr.size);
-            x += maxSize + spacing;
-         }
-      } else {
-         Iterator iter = Iterate(val);
-
-         Value currentSelected = {};
-
-         for(int index = 0; HasNext(iter); index += 1,Advance(&iter)){
-            if(index == state->cursorPosition){
-               wattron( w, A_STANDOUT );
-               currentSelected = GetValue(iter);
-            }
-
-            move(index + 2,0);
-            String integer = PushString(temp,"%d\n",index);
-            addnstr(integer.data,integer.size);
-
-            if(index == state->cursorPosition){
-               wattroff( w, A_STANDOUT );
-            }
-         }
-
-         if(numberElements){
-            if(currentSelected.type->type == Type::STRUCT){
-               StructPanel(w,currentSelected,0,8,true,arena);
-            } else {
-               String repr = GetValueRepresentation(currentSelected,temp);
-               mvaddnstr(2,8,repr.data,repr.size);
-            }
-         }
-      }
-   } else {
-      String typeName = PushString(temp,"%.*s",UNPACK_SS(type->name));
-      mvaddnstr(1,0,typeName.data,typeName.size);
-   }
-
-   refresh();
-}
-
-#include <sys/types.h>
-#include <sys/ioctl.h>
-#include <termios.h>
-
-static Value storedDebugValue;
-static bool validStoredDebugValue = false;
-
-void StartDebugTerminal(){
-   if(validStoredDebugValue){
-      DebugTerminal(storedDebugValue);
-   }
-}
-
-static void debug_sig_handler(int sig){
-   if(sig == SIGUSR1){
-      StartDebugTerminal();
-   }
-   if(sig == SIGSEGV){
-      StartDebugTerminal();
-      signal(SIGSEGV, SIG_DFL);
-      raise(SIGSEGV);
-   }
-   if(sig == SIGABRT){
-      StartDebugTerminal();
-      signal(SIGABRT, SIG_DFL);
-      raise(SIGABRT);
-   }
-}
-
-void SetDebuggingValue(Value val){
-   static bool init = false;
-
-   if(!init){
-      signal(SIGUSR1, debug_sig_handler);
-      signal(SIGSEGV, debug_sig_handler);
-      signal(SIGABRT, debug_sig_handler);
-      init = true;
-   }
-
-   storedDebugValue = val;
-   validStoredDebugValue = true;
-}
-
-static int terminalWidth,terminalHeight;
-static bool resized;
-
-static void terminal_sig_handler(int sig){
-   if (sig == SIGWINCH) {
-      winsize winsz;
-
-      ioctl(0, TIOCGWINSZ, &winsz);
-
-      terminalWidth = winsz.ws_row;
-      terminalHeight = winsz.ws_col;
-      resized = true;
-  }
-}
-
-void DebugTerminal(Value initialValue){
-   Assert(WatchableObject(initialValue));
-
-   Arena arena = InitArena(Megabyte(1));
-   Arena temp = InitArena(Megabyte(1));
-
-   for(int i = 0; i < MAX_PANELS; i++){
-      globalCurrentPanels[i] = 0;
-   }
-
-   globalPanels[0][0].name = STRING("TOP");
-   globalPanels[0][0].cursorPosition = 0;
-   globalPanels[0][0].valueLooking = CollapsePtrIntoStruct(initialValue);
-
-	WINDOW *w  = initscr();
-
-   cbreak();
-   noecho();
-   keypad(stdscr, TRUE);
-   nodelay(w,true);
-
-   curs_set(0);
-
-   static bool init = false;
-   if(!init){
-      getmaxyx(w, terminalHeight, terminalWidth);
-      resized = false;
-      signal(SIGWINCH, terminal_sig_handler);
-   }
-
-   TerminalIteration(0,w,INPUT_NONE,&arena,&temp);
-
-   int c;
-   while((c = getch()) != 'q'){
-      Input input = {};
-
-      switch(c){
-      case KEY_BACKSPACE:{
-         input = INPUT_BACKSPACE;
-      }break;
-      case 10:
-      case KEY_ENTER:{
-         input = INPUT_ENTER;
-      }break;
-      case KEY_LEFT:{
-         input = INPUT_LEFT;
-      }break;
-      case KEY_RIGHT:{
-         input = INPUT_RIGHT;
-      }break;
-      case KEY_DOWN:{
-         input = INPUT_DOWN;
-      }break;
-      case KEY_UP:{
-         input = INPUT_UP;
-      }break;
-      }
-
-      bool iterate = false;
-      if(resized){
-         resizeterm(terminalWidth,terminalHeight);
-         resized = false;
-         iterate = true;
-      }
-
-      if(input != INPUT_NONE || iterate){
-         TerminalIteration(0,w,input,&arena,&temp);
-      }
-	}
-
-	endwin();
-
-	Free(&arena);
-}
-#else
-void DebugTerminal(Value initialValue){
-   LogOnce(LogModule::DEBUG_SYS,LogLevel::DEBUG,"No ncurses support, no debug terminal");
-   return;
-}
-#endif
