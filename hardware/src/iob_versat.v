@@ -19,6 +19,10 @@ module iob_versat
   	(
  		`include "iob_s_if.vh"
 
+    `ifdef VERSAT_EXTERNAL_MEMORY
+    `include "versat_external_memory_port.vh"
+    `endif
+
    `ifdef VERSAT_IO
       `include "m_versat_axi_m_port.vh"
    `endif
@@ -142,6 +146,10 @@ versat_instance #(.ADDR_W(ADDR_W),.DATA_W(DATA_W)) xversat(
       .rdata(rdata),
       .wdata(wdata),
       .ready(ready),
+
+`ifdef VERSAT_EXTERNAL_MEMORY
+      `include "versat_external_memory_portmap.vh"
+`endif
 
 `ifdef VERSAT_IO
       .m_databus_ready(m_databus_ready),

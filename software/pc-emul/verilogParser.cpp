@@ -608,8 +608,9 @@ int main(int argc,const char* argv[]){
       std::vector<Module> modules = ParseVerilogFile(processed,&includePaths,tempArena);
 
       for(Module& module : modules){
-         ModuleInfo info = {};
+         BLOCK_REGION(tempArena);
 
+         ModuleInfo info = {};
          info.inputDelays = PushArray<int>(&permanent,100).data;
          info.outputLatencies = PushArray<int>(&permanent,100).data;
          info.configs = PushArray<Wire>(&permanent,100).data;
@@ -618,25 +619,69 @@ int main(int argc,const char* argv[]){
          info.name = module.name;
          info.isSource = module.isSource;
 
-         #if 0
-         int nConfigs = 0;
-         int nStates = 0;
-         int nInputs = 0;
-         int nOutputs = 0;
-         int nDelays = 0;
-         int memoryMappedBits = 0;
-         bool doesIO = false;
-         bool memoryMap = false;
-         bool hasDone = false;
-         bool hasClk = false;
-         bool hasReset = false;
-         bool hasRun = false;
-         bool hasRunning = false;
-         #endif
-         for(PortDeclaration decl : module.ports){
-            Tokenizer port(decl.name,"",{"in","ext_mem_addr","ext_mem_write","ext_mem_data_out","ext_mem_data","out","delay","done","rst","clk","run","databus"});
+         Hashmap<ExternalMemoryID,ExternalMemoryInfo>* external = PushHashmap<ExternalMemoryID,ExternalMemoryInfo>(tempArena,100);
 
-            if(CheckFormat("in%d",decl.name)){
+         for(PortDeclaration decl : module.ports){
+            Tokenizer port(decl.name,"",{"in","out","delay","done","rst","clk","run","databus"});
+
+            if(CheckFormat("ext_dp_%s_%d_port_%d",decl.name)){
+               Array<Value> values = ExtractValues("ext_dp_%s_%d_port_%d",decl.name,tempArena);
+
+               ExternalMemoryID id = {};
+               id.interface = values[1].number;
+               id.type = ExternalMemoryType::DP;
+
+               String wire = values[0].str;
+               int port = values[2].number;
+
+               Assert(port < 2);
+
+               ExternalMemoryInfo* info = external->GetOrInsert(id,{});
+               if(CompareString(wire,"addr")){
+                  info->ports[port].addrSize = decl.range.high - decl.range.low + 1;
+               } else if(CompareString(wire,"out")){
+                  info->ports[port].dataOutSize = decl.range.high - decl.range.low + 1;
+               } else if(CompareString(wire,"in")){
+                  info->ports[port].dataInSize = decl.range.high - decl.range.low + 1;
+               } else if(CompareString(wire,"write")){
+                  info->ports[port].write = true;
+               } else if(CompareString(wire,"enable")){
+                  info->ports[port].enable = true;
+               }
+            } else if(CheckFormat("ext_2p_%s",decl.name)){
+               ExternalMemoryID id = {};
+               id.type = ExternalMemoryType::TWO_P;
+
+               String wire = {};
+               if(CheckFormat("ext_2p_%s_%s_%d",decl.name)){
+                  Array<Value> values = ExtractValues("ext_2p_%s_%s_%d",decl.name,tempArena);
+
+                  wire = values[0].str;
+                  id.interface = values[2].number;
+               } else if(CheckFormat("ext_2p_%s_%d",decl.name)){
+                  Array<Value> values = ExtractValues("ext_2p_%s_%d",decl.name,tempArena);
+
+                  wire = values[0].str;
+                  id.interface = values[1].number;
+               } else {
+                  UNHANDLED_ERROR;
+               }
+
+               ExternalMemoryInfo* info = external->GetOrInsert(id,{});
+
+               if(CompareString(wire,"addr")){
+                  info->ports[0].addrSize = decl.range.high - decl.range.low + 1;
+               } else if(CompareString(wire,"data")){
+                  info->ports[0].dataInSize = decl.range.high - decl.range.low + 1;
+                  info->ports[0].dataOutSize = decl.range.high - decl.range.low + 1;
+               } else if(CompareString(wire,"write")){
+                  info->ports[0].write = true;
+               } else if(CompareString(wire,"read")){
+                  info->ports[0].write = true;
+               } else {
+                  UNHANDLED_ERROR;
+               }
+            } else if(CheckFormat("in%d",decl.name)){
                port.AssertNextToken("in");
                int input = ParseInt(port.NextToken());
                int delay = decl.attributes[STRING("versat_latency")].number;
@@ -675,32 +720,6 @@ int main(int argc,const char* argv[]){
                if(CheckFormat("addr",decl.name)){
                   info.memoryMappedBits = (decl.range.high - decl.range.low + 1);
                }
-            } else if(CheckFormat("ext_mem_data_out%d",decl.name)){
-               port.AssertNextToken("ext_mem_data_out");
-               int id = ParseInt(port.NextToken());
-
-               info.externalMemory = true;
-            } else if(CheckFormat("ext_mem_addr%d",decl.name)){
-               port.AssertNextToken("ext_mem_addr");
-               int id = ParseInt(port.NextToken());
-
-               int addressSize = decl.range.high - decl.range.low + 1;
-
-               info.externalMemory = true;
-               info.externalMemoryBitsize = addressSize;
-            } else if(CheckFormat("ext_mem_data%d",decl.name)){
-               port.AssertNextToken("ext_mem_data");
-               int id = ParseInt(port.NextToken());
-
-               int dataSize = decl.range.high - decl.range.low + 1;
-
-               info.externalMemory = true;
-               info.externalMemoryDatasize = dataSize;
-            } else if(CheckFormat("ext_mem_write%d",decl.name)){
-               port.AssertNextToken("ext_mem_write");
-               int id = ParseInt(port.NextToken());
-
-               info.externalMemory = true;
             } else if(CheckFormat("clk",decl.name)){
                info.hasClk = true;
             } else if(CheckFormat("rst",decl.name)){
@@ -722,21 +741,17 @@ int main(int argc,const char* argv[]){
             }
          }
 
-         #if 0
-         info.doesIO = doesIO;
-         info.memoryMapped = memoryMap;
-         info.nInputs = nInputs;
-         info.nOutputs = nOutputs;
-         info.inputDelays = inputDelays;
-         info.latencies = outputLatencies;
-         info.configs = configs;
-         info.nConfigs = nConfigs;
-         info.states = states;
-         info.nStates = nStates;
-         info.hasDone = hasDone;
-         info.nDelays = nDelays;
-         info.memoryMappedBits = memoryMappedBits;
-         #endif
+         Array<ExternalMemoryInterface> interfaces = PushArray<ExternalMemoryInterface>(&permanent,external->nodesUsed);
+         int index = 0;
+         for(Pair<ExternalMemoryID,ExternalMemoryInfo> pair : *external){
+            ExternalMemoryInterface& inter = interfaces[index++];
+
+            inter.interface = pair.first.interface;
+            inter.type = pair.first.type;
+            inter.bitsize = pair.second.ports[0].addrSize;
+            inter.datasize = pair.second.ports[0].dataInSize;
+         }
+         info.externalInterfaces = interfaces;
 
          allModules.push_back(info);
       }

@@ -113,7 +113,15 @@ static Type* RegisterOpaqueType(String name,Type::Subtype subtype,int size){
    return type;
 }
 
-static Type* RegisterEnum(String name){
+static Type* RegisterEnum(String name,Array<Pair<String,int>> enumValues){
+   for(Type* type : types){
+      if(CompareString(type->name,name)){
+         type->type = Type::ENUM;
+         type->enumMembers = enumValues;
+         return type;
+      }
+   }
+
    Type* type = types.Alloc();
 
    type->name = name;
@@ -492,8 +500,22 @@ String GetDefaultValueRepresentation(Value in,Arena* arena){
       } else {
          res = PushString(arena,"%.*s",UNPACK_SS(type->name));// Return type name
       }
+   } else if(type->type == Type::ENUM){
+      int enumValue = in.number;
+      Pair<String,int>* pairFound = nullptr;
+      for(auto pair : type->enumMembers){
+         if(pair.second == enumValue){
+            pairFound = &pair;
+            break;
+         }
+      }
+      if(pairFound){
+         res = PushString(arena,"%.*s::%.*s",UNPACK_SS(type->name),UNPACK_SS(pairFound->first));
+      } else {
+         res = PushString(arena,"(%.*s) %d",UNPACK_SS(type->name),enumValue);
+      }
    } else {
-      res = PushString(arena,"%.*s",UNPACK_SS(type->name));// Return type name
+      res = PushString(arena,"\"[GetValueRepresentation Type: %.*s]\"",UNPACK_SS(type->name));// Return type name
    }
 
    return res;
@@ -606,6 +628,10 @@ Value AccessObjectIndex(Value object,int index){
 
          value.custom = &view[index * size];
          value.type = object.type->templateArgTypes[0];
+      } else if(object.type->templateBase == ValueType::POOL){
+         Iterator iter = Iterate(object);
+         for(int i = 0; HasNext(iter) && i < index; Advance(&iter),i += 1);
+         value = GetValue(iter);
       } else {
          NOT_IMPLEMENTED;
       }
@@ -1237,5 +1263,85 @@ Value MakeValue(void* entity,const char* typeName){
    val.isTemp = false;
 
    return val;
+}
+
+// This shouldn't be here, but cannot be on parser.cpp because otherwise struct parser would fail
+Array<Value> ExtractValues(const char* format,Token tok,Arena* arena){
+   // TODO: This is pretty much a copy of CheckFormat but with small modifications
+   // It probably should be a way to refactor into a single function, and probably less error prone
+   if(!CheckFormat(format,tok)){
+      return {};
+   }
+
+   Byte* mark = MarkArena(arena);
+
+   int tokenIndex = 0;
+   for(int formatIndex = 0; 1;){
+      char formatChar = format[formatIndex];
+
+      if(formatChar == '\0'){
+         break;
+      }
+
+      Assert(tokenIndex < tok.size);
+
+      if(formatChar == '%'){
+         char type = format[formatIndex + 1];
+         formatIndex += 2;
+
+         switch(type){
+         case 'd':{
+            String numberStr = {};
+            numberStr.data = &tok[tokenIndex];
+
+            for(tokenIndex += 1; tokenIndex < tok.size; tokenIndex++){
+               if(!IsNum(tok[tokenIndex])){
+                  break;
+               }
+            }
+
+            numberStr.size = &tok.data[tokenIndex] - numberStr.data;
+            int number = ParseInt(numberStr);
+
+            Value* val = PushStruct<Value>(arena);
+            val->type = ValueType::NUMBER;
+            val->number = number;
+            val->isTemp = true;
+         }break;
+         case 's':{
+            char terminator = format[formatIndex];
+            String str = {};
+            str.data = &tok[tokenIndex];
+
+            for(;tokenIndex < tok.size; tokenIndex++){
+               if(tok[tokenIndex] == terminator){
+                  break;
+               }
+            }
+
+            str.size = &tok.data[tokenIndex] - str.data;
+
+            Value* val = PushStruct<Value>(arena);
+            val->type = ValueType::STRING;
+            val->str = str;
+            val->isTemp = true;
+         }break;
+         case '\0':{
+            NOT_POSSIBLE;
+         }break;
+         default:{
+            NOT_IMPLEMENTED;
+         }break;
+         }
+      } else {
+         Assert(formatChar == tok[tokenIndex]);
+         formatIndex += 1;
+         tokenIndex += 1;
+      }
+   }
+
+   Array<Value> values = PointArray<Value>(arena,mark);
+
+   return values;
 }
 

@@ -20,6 +20,18 @@ module LookupTable #(
       (* versat_latency = 2 *) output reg [DATA_W-1:0] out0,
       (* versat_latency = 2 *) output reg [DATA_W-1:0] out1,
 
+      output [ADDR_W-1:0]   ext_dp_addr_0_port_0,
+      output [DATA_W-1:0]   ext_dp_out_0_port_0,
+      input  [DATA_W-1:0]   ext_dp_in_0_port_0,
+      output                ext_dp_enable_0_port_0,
+      output                ext_dp_write_0_port_0,
+
+      output [ADDR_W-1:0]   ext_dp_addr_0_port_1,
+      output [DATA_W-1:0]   ext_dp_out_0_port_1,
+      input  [DATA_W-1:0]   ext_dp_in_0_port_1,
+      output                ext_dp_enable_0_port_1,
+      output                ext_dp_write_0_port_1,
+
       input clk,
       input rst,
       input run
@@ -51,6 +63,18 @@ module LookupTable #(
 
    wire [DATA_W-1:0] outA,outB;
 
+   assign ext_dp_addr_0_port_0 = write ? addr_reg : in0[ADDR_W-1:0];
+   assign outA = ext_dp_in_0_port_0;
+   assign ext_dp_out_0_port_0 = data;
+   assign ext_dp_enable_0_port_0 = 1'b1;
+   assign ext_dp_write_0_port_0 = write;
+
+   assign ext_dp_addr_0_port_1 = in1[ADDR_W-1:0];
+   assign outB = ext_dp_in_0_port_1;
+   assign ext_dp_out_0_port_1 = 0;
+   assign ext_dp_enable_0_port_1 = 1'b1;
+   assign ext_dp_write_0_port_1 = 1'b0;
+
    always @(posedge clk,posedge rst)
    begin
       if(rst) begin
@@ -61,24 +85,5 @@ module LookupTable #(
          out1 <= outB;
       end
    end
-
-   iob_dp_ram #(
-         .FILE(INIT_MEM_FILE),
-         .DATA_W(DATA_W),
-         .ADDR_W(ADDR_W))
-   mem
-     (
-      .dinA(data),
-      .dinB(0),
-      .addrA(write ? addr_reg : in0[ADDR_W-1:0]),
-      .addrB(in1[ADDR_W-1:0]),
-      .enA(1'b1),
-      .enB(1'b1),
-      .weA(write),
-      .weB(1'b0),
-      .doutA(outA),
-      .doutB(outB),
-      .clk(clk)
-      );
 
 endmodule

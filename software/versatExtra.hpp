@@ -22,6 +22,6 @@ void RemapSimpleAccelerator(SimpleAccelerator* simple,Versat* versat);
 int* RunSimpleAccelerator(SimpleAccelerator* simple, ...); // Return is statically allocated. Do not reuse between calls to function
 int* RunSimpleAcceleratorDebug(SimpleAccelerator* simple, ...);
 
-void OutputVersatSource(Versat* versat,SimpleAccelerator* accel,const char* sourceFilepath,const char* constantsFilepath,const char* dataFilepath);
+void OutputVersatSource(Versat* versat,SimpleAccelerator* accel,const char* directoryPath);
 
 #endif // INCLUDED_VERSAT_EXTRA

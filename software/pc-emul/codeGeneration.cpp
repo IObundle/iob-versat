@@ -11,6 +11,7 @@ VersatComputedValues ComputeVersatValues(Versat* versat,Accelerator* accel){
 
    VersatComputedValues res = {};
 
+   int memoryMappedDWords = 0;
    FOREACH_LIST(ptr,accel->allocated){
       ComplexFUInstance* inst = ptr->inst;
       FUDeclaration* decl = inst->declaration;
@@ -18,8 +19,12 @@ VersatComputedValues ComputeVersatValues(Versat* versat,Accelerator* accel){
       res.numberConnections += Size(ptr->allOutputs);
 
       if(decl->isMemoryMapped){
-         res.maxMemoryMapDWords = std::max(res.maxMemoryMapDWords,1 << decl->memoryMapBits);
-         res.memoryMappedBytes += (1 << (decl->memoryMapBits + 2));
+         memoryMappedDWords = AlignBitBoundary(memoryMappedDWords,decl->memoryMapBits);
+         memoryMappedDWords += 1 << decl->memoryMapBits;
+
+         //res.maxMemoryMapDWords = std::max(res.maxMemoryMapDWords,1 << decl->memoryMapBits);
+         //res.memoryMappedBytes += (1 << (decl->memoryMapBits + 2));
+
          res.unitsMapped += 1;
       }
 
@@ -37,6 +42,8 @@ VersatComputedValues ComputeVersatValues(Versat* versat,Accelerator* accel){
       res.delayBits += decl->nDelays * 32;
 
       res.nUnitsIO += decl->nIOs;
+
+      res.externalMemoryInterfaces += decl->externalMemory.size;
    }
 
    for(StaticInfo* unit : accel->staticInfo){
@@ -57,7 +64,8 @@ VersatComputedValues ComputeVersatValues(Versat* versat,Accelerator* accel){
    res.nConfigurations = res.nConfigs + res.nStatics + res.nDelays;
    res.configurationBits = res.configBits + res.staticBits + res.delayBits;
 
-   res.memoryAddressBits = log2i(res.memoryMappedBytes / 4);
+   res.memoryMappedBytes = memoryMappedDWords * 4;
+   res.memoryAddressBits = log2i(memoryMappedDWords);
 
    res.memoryMappingAddressBits = res.memoryAddressBits;
    res.configurationAddressBits = log2i(res.nConfigurations);
@@ -107,6 +115,10 @@ void OutputCircuitSource(Versat* versat,FUDeclaration* decl,Accelerator* accel,F
       nodes[i] = ptr;
    }
 
+   ComputedData computedData = CalculateVersatComputedData(accel->allocated,val,arena);
+
+   TemplateSetCustom("versatData",&computedData.data,"Array<VersatComputedData>");
+   TemplateSetCustom("external",&computedData.external,"Array<ExternalMemoryInterface>");
    TemplateSetCustom("instances",&nodes,"Array<InstanceNode*>");
 
    TemplateSetNumber("nonSpecialUnits",nonSpecialUnits);
@@ -114,21 +126,17 @@ void OutputCircuitSource(Versat* versat,FUDeclaration* decl,Accelerator* accel,F
    TemplateSetNumber("unitsMapped",val.unitsMapped);
    TemplateSetNumber("configurationBits",val.configurationBits);
 
+   TemplateSetNumber("memoryAddressBits",val.memoryAddressBits);
    TemplateSetNumber("memoryConfigDecisionBit",val.memoryConfigDecisionBit);
    TemplateSetCustom("versat",versat,"Versat");
 
    TemplateSetCustom("inputDecl",BasicDeclaration::input,"FUDeclaration");
    TemplateSetCustom("outputDecl",BasicDeclaration::output,"FUDeclaration");
 
-   if(!BasicTemplates::acceleratorTemplate){
-      BasicTemplates::acceleratorTemplate = CompileTemplate("../../submodules/VERSAT/software/templates/versat_accelerator_template.tpl",&versat->permanent);
-   }
    ProcessTemplate(file,BasicTemplates::acceleratorTemplate,&versat->temp);
-
-   //ProcessTemplate(file,"../../submodules/VERSAT/software/templates/versat_accelerator_template.tpl",&versat->temp);
 }
 
-void OutputVersatSource(Versat* versat,Accelerator* accel,const char* sourceFilepath,const char* constantsFilepath,const char* dataFilepath){
+void OutputVersatSource(Versat* versat,Accelerator* accel,const char* directoryPath){
    if(!versat->debug.outputVersat){
       return;
    }
@@ -136,14 +144,14 @@ void OutputVersatSource(Versat* versat,Accelerator* accel,const char* sourceFile
    Arena* arena = &versat->temp;
    ArenaMarker marker(arena);
 
-   SetDelayRecursive(accel);
+   SetDelayRecursive(accel,arena);
 
    #if 1
    // No need for templating, small file
-   FILE* c = OpenFileAndCreateDirectories(constantsFilepath,"w");
+   FILE* c = OpenFileAndCreateDirectories(StaticFormat("%s/versat_defs.vh",directoryPath),"w");
 
    if(!c){
-      printf("Error creating file, check if filepath is correct: %s\n",constantsFilepath);
+      printf("Error creating file, check if filepath is correct: %s\n",directoryPath);
       return;
    }
 
@@ -171,20 +179,24 @@ void OutputVersatSource(Versat* versat,Accelerator* accel,const char* sourceFile
       fprintf(c,"`define VERSAT_IO\n");
    }
 
+   if(val.externalMemoryInterfaces){
+      fprintf(c,"`define VERSAT_EXTERNAL_MEMORY\n");
+   }
+
    fclose(c);
 
-   FILE* s = OpenFileAndCreateDirectories(sourceFilepath,"w");
+   FILE* s = OpenFileAndCreateDirectories(StaticFormat("%s/versat_instance.v",directoryPath),"w");
 
    if(!s){
-      printf("Error creating file, check if filepath is correct: %s\n",sourceFilepath);
+      printf("Error creating file, check if filepath is correct: %s\n",directoryPath);
       return;
    }
 
-   FILE* d = OpenFileAndCreateDirectories(dataFilepath,"w");
+   FILE* d = OpenFileAndCreateDirectories(StaticFormat("%s/versat_data.inc",directoryPath),"w");
 
    if(!d){
       fclose(s);
-      printf("Error creating file, check if filepath is correct: %s\n",dataFilepath);
+      printf("Error creating file, check if filepath is correct: %s\n",directoryPath);
       return;
    }
 
@@ -204,8 +216,21 @@ void OutputVersatSource(Versat* versat,Accelerator* accel,const char* sourceFile
       nodes[i] = ptr;
    }
 
+   ComputedData computedData = CalculateVersatComputedData(accel->allocated,val,arena);
+
+   TemplateSetCustom("versatData",&computedData.data,"Array<VersatComputedData>");
+   TemplateSetCustom("external",&computedData.external,"Array<ExternalMemoryInterface>");
    TemplateSetCustom("instances",&nodes,"Array<InstanceNode*>");
 
+   int staticStart = 0;
+   FOREACH_LIST(ptr,accel->allocated){
+      FUDeclaration* decl = ptr->inst->declaration;
+      for(Wire& wire : decl->configs){
+         staticStart += wire.bitsize;
+      }
+   }
+
+   TemplateSetNumber("staticStart",staticStart);
    TemplateSetNumber("versatBase",versat->base);
    TemplateSetNumber("memoryAddressBits",val.memoryAddressBits);
    TemplateSetNumber("unitsMapped",val.unitsMapped);
@@ -239,6 +264,26 @@ void OutputVersatSource(Versat* versat,Accelerator* accel,const char* sourceFile
    TemplateSetBool("IsSimple",false);
    ProcessTemplate(d,BasicTemplates::dataTemplate,&versat->temp);
 
+   {
+   FILE* f = OpenFileAndCreateDirectories(StaticFormat("%s/versat_external_memory_inst.vh",directoryPath),"w");
+   TemplateSetCustom("external",&computedData.external,"Array<ExternalMemoryInterface>");
+   ProcessTemplate(f,BasicTemplates::externalInstTemplate,&versat->temp);
+   fclose(f);
+   }
+
+   {
+   FILE* f = OpenFileAndCreateDirectories(StaticFormat("%s/versat_external_memory_port.vh",directoryPath),"w");
+   TemplateSetCustom("external",&computedData.external,"Array<ExternalMemoryInterface>");
+   ProcessTemplate(f,BasicTemplates::externalPortTemplate,&versat->temp);
+   fclose(f);
+   }
+
+   {
+   FILE* f = OpenFileAndCreateDirectories(StaticFormat("%s/versat_external_memory_portmap.vh",directoryPath),"w");
+   TemplateSetCustom("external",&computedData.external,"Array<ExternalMemoryInterface>");
+   ProcessTemplate(f,BasicTemplates::externalPortmapTemplate,&versat->temp);
+   fclose(f);
+   }
    //PopMark(&versat->temp,mark);
 
    fclose(s);

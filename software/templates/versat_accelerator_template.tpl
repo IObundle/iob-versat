@@ -61,6 +61,28 @@ module @{accel.name} #(
    input  [@{accel.nIOs - 1}:0]               databus_last,
    #{end}
 
+   #{for external accel.externalMemory}
+      #{set i index}
+      #{if external.type}
+   // DP
+      #{for port 2}
+   output [ADDR_W-1:0]   ext_dp_addr_@{i}_port_@{port},
+   output [DATA_W-1:0]   ext_dp_out_@{i}_port_@{port},
+   input  [DATA_W-1:0]   ext_dp_in_@{i}_port_@{port},
+   output                ext_dp_enable_@{i}_port_@{port},
+   output                ext_dp_write_@{i}_port_@{port},
+      #{end}
+      #{else}
+   // 2P
+   output [ADDR_W-1:0]   ext_2p_addr_out_@{i},
+   output [ADDR_W-1:0]   ext_2p_addr_in_@{i},
+   output                ext_2p_write_@{i},
+   output                ext_2p_read_@{i},
+   input  [DATA_W-1:0]   ext_2p_data_in_@{i},
+   output [DATA_W-1:0]   ext_2p_data_out_@{i},
+      #{end}
+   #{end}
+
    #{if accel.isMemoryMapped}
    // data/control interface
    input                           valid,
@@ -119,12 +141,13 @@ begin
    begin
    #{set counter 0}
    #{for node instances}
-   #{if 0} // TODO: node.inst.declaration.isMemoryMapped
-      #{if node.inst.versatData.memoryMaskSize}
-         if(addr[@{accel.memoryMapBits - 1}:@{accel.memoryMapBits - node.inst.versatData.memoryMaskSize}] == @{node.inst.versatData.memoryMaskSize}'b@{node.inst.versatData.memoryMask})
-            memoryMappedEnable[@{counter}] = 1'b1;
+   #{set inst node.inst}
+   #{if inst.declaration.isMemoryMapped}
+      #{if versatData[counter].memoryMaskSize}
+      if(addr[@{memoryAddressBits - 1}:@{memoryAddressBits - versatData[counter].memoryMaskSize}] == @{memoryAddressBits - inst.declaration.memoryMapBits}'b@{versatData[counter].memoryMask})
+         memoryMappedEnable[@{counter}] = 1'b1;
       #{else}
-         memoryMappedEnable[0] = 1'b1;
+      memoryMappedEnable[0] = 1'b1;
       #{end}
    #{inc counter}
    #{end}
@@ -172,6 +195,7 @@ end
 #{set ioIndex 0}
 #{set configsSeen 0}
 #{set memoryMappedIndex 0}
+#{set externalCounter 0}
 #{set delaySeen 0}
 #{set statesSeen 0}
 #{set doneCounter 0}
@@ -213,6 +237,29 @@ end
          #{for i decl.nDelays}
             .delay@{i}(delay@{delaySeen}),
          #{inc delaySeen}
+         #{end}
+   
+         #{for external decl.externalMemory}
+            #{set i index}
+            #{if external.type}
+         // DP
+            #{for port 2}
+         .ext_dp_addr_@{i}_port_@{port}(ext_dp_addr_@{externalCounter}_port_@{port}),
+         .ext_dp_out_@{i}_port_@{port}(ext_dp_out_@{externalCounter}_port_@{port}),
+         .ext_dp_in_@{i}_port_@{port}(ext_dp_in_@{externalCounter}_port_@{port}),
+         .ext_dp_enable_@{i}_port_@{port}(ext_dp_enable_@{externalCounter}_port_@{port}),
+         .ext_dp_write_@{i}_port_@{port}(ext_dp_write_@{externalCounter}_port_@{port}),
+            #{end}
+            #{else}
+         // 2P
+         .ext_2p_addr_out_@{i}(ext_2p_addr_out_@{externalCounter}),
+         .ext_2p_addr_in_@{i}(ext_2p_addr_in_@{externalCounter}),
+         .ext_2p_write_@{i}(ext_2p_write_@{externalCounter}),
+         .ext_2p_read_@{i}(ext_2p_read_@{externalCounter}),
+         .ext_2p_data_in_@{i}(ext_2p_data_in_@{externalCounter}),
+         .ext_2p_data_out_@{i}(ext_2p_data_out_@{externalCounter}),
+            #{end}
+         #{inc externalCounter}
          #{end}
 
          #{for wire decl.states}

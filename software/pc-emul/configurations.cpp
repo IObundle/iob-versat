@@ -19,7 +19,7 @@ CalculatedOffsets CalculateConfigOffsetsIgnoringStatics(Accelerator* accel,Arena
          int sharedIndex = inst->sharedIndex;
          GetOrAllocateResult<int> possibleAlreadyShared = sharedConfigs->GetOrAllocate(sharedIndex);
 
-         if(possibleAlreadyShared.result){
+         if(possibleAlreadyShared.alreadyExisted){
             array[index] = *possibleAlreadyShared.data;
             goto loop_end;
          } else {
@@ -223,8 +223,8 @@ CalculatedOffsets ExtractMem(Accelerator* accel,Arena* out){
    int index = 0;
    int max = 0;
    for(InstanceNode* node = iter.Start(accel,out,true); node; node = iter.Next(),index += 1){
-      //ComplexFUInstance* inst = node->inst;
-      int mem = 0; // TODO: need to implement outside memory
+      ComplexFUInstance* inst = node->inst;
+      int mem = inst->externalMemory - accel->externalMemoryAlloc.ptr;
       max = std::max(mem,max);
       offsets[index] = mem;
    }
@@ -277,7 +277,25 @@ CalculatedOffsets ExtractExtraData(Accelerator* accel,Arena* out){
    return res;
 }
 
+CalculatedOffsets ExtractDebugData(Accelerator* accel,Arena* out){
+   int count = NumberUnits(accel,out);
+   Array<int> offsets = PushArray<int>(out,count);
 
+   AcceleratorIterator iter = {};
+   int index = 0;
+   int max = 0;
+   for(InstanceNode* node = iter.Start(accel,out,true); node; node = iter.Next(),index += 1){
+      ComplexFUInstance* inst = node->inst;
+      int debugData = inst->debugData - accel->debugDataAlloc.ptr;
+      max = std::max(debugData,max);
+      offsets[index] = debugData;
+   }
+
+   CalculatedOffsets res = {};
+   res.offsets = offsets;
+   res.max = max;
+   return res;
+}
 
 
 

@@ -408,9 +408,9 @@ FUInstance* ParseInstanceDeclaration(Versat* versat,Tokenizer* tok,Accelerator* 
       Tokenizer insideList(list,",",{});
 
       for(int i = 0; i < arguments; i++){
-         /* Token arg = */ insideList.NextToken();
+         Token arg = insideList.NextToken();
 
-         //inst->config[i] = ParseInt(arg);
+         inst->config[i] = ParseInt(arg);
 
          if(i != arguments - 1){
             insideList.AssertNextToken(",");
@@ -432,12 +432,12 @@ FUInstance* ParseInstanceDeclaration(Versat* versat,Tokenizer* tok,Accelerator* 
 
       Tokenizer insideList(list,",",{});
 
-      //inst->memMapped = PushArray<int>(&versat->permanent,1 << FUType->memoryMapBits).data;
+      inst->memMapped = PushArray<int>(&versat->permanent,1 << FUType->memoryMapBits).data;
       //inst->savedMemory = true;
       for(int i = 0; i < arguments; i++){
-         /* Token arg =  */ insideList.NextToken();
+         Token arg =  insideList.NextToken();
 
-         //inst->memMapped[i] =  ParseInt(arg);
+         inst->memMapped[i] = ParseInt(arg);
 
          if(i != arguments - 1){
             insideList.AssertNextToken(",");

@@ -180,7 +180,7 @@ Byte* PushBytes(DynamicArena* arena, size_t size);
 void Clear(DynamicArena* arena);
 
 template<typename T>
-Array<T> PushArray(DynamicArena* arena,int size);
+Array<T> PushArray(DynamicArena* arena,int size){Array<T> res = {}; res.size = size; res.data = (T*) PushBytes(arena,sizeof(T) * size); return res;};
 
 template<typename T>
 T* PushStruct(DynamicArena* arena){T* res = (T*) PushBytes(arena,sizeof(T)); return res;};
@@ -243,7 +243,7 @@ public:
 template<typename Data>
 struct GetOrAllocateResult{
    Data* data;
-   bool result;
+   bool alreadyExisted;
 };
 
 // An hashmap implementation for arenas. Does not allocate any memory after construction. Construct with PushHashmap function
@@ -266,6 +266,7 @@ struct Hashmap{
    Data* InsertIfNotExist(Key key,Data data);
 
    Data* Get(Key key); // TODO: Should return an optional
+   Data* GetOrInsert(Key key,Data data);
    Data GetOrFail(Key key);
 
    void Clear();
@@ -280,6 +281,12 @@ struct Hashmap{
 
 template<typename Key,typename Data>
 Hashmap<Key,Data>* PushHashmap(Arena* arena,int maxAmountOfElements);
+
+template<typename Key,typename Data>
+Array<Key> HashmapKeyArray(Hashmap<Key,Data>* hashmap,Arena* out);
+
+template<typename Key,typename Data>
+Array<Data> HashmapDataArray(Hashmap<Key,Data>* hashmap,Arena* out);
 
 // Set implementation for arenas
 template<typename Data>
@@ -364,7 +371,7 @@ PageInfo GetPageInfo(PoolInfo poolInfo,Byte* page);
 // Pool
 template<typename T>
 struct Pool{
-   Byte* mem;
+   Byte* mem; // TODO: replace with PoolHeader instead of using Byte and casting
    PoolInfo info;
 
    T* Alloc();

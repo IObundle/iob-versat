@@ -12,8 +12,45 @@
 struct ComplexFUInstance;
 struct Versat;
 
+static const int VCD_MAPPING_SIZE = 5;
+class VCDMapping{
+public:
+   char currentMapping[VCD_MAPPING_SIZE+1];
+   int increments;
+
+public:
+
+   VCDMapping(){Reset();};
+
+   void Increment(){
+      for(int i = VCD_MAPPING_SIZE - 1; i >= 0; i--){
+         increments += 1;
+         currentMapping[i] += 1;
+         if(currentMapping[i] == 'z' + 1){
+            currentMapping[i] = 'a';
+         } else {
+            return;
+         }
+      }
+      Assert(false && "Increase mapping space");
+   }
+
+   void Reset(){
+      currentMapping[VCD_MAPPING_SIZE] = '\0';
+      for(int i = 0; i < VCD_MAPPING_SIZE; i++){
+         currentMapping[i] = 'a';
+      }
+      increments = 0;
+   }
+
+   char* Get(){
+      return currentMapping;
+   }
+};
+
 typedef int* (*FUFunction)(ComplexFUInstance*);
 typedef int (*MemoryAccessFunction)(ComplexFUInstance* instance, int address, int value,int write);
+typedef void (*VCDFunction)(ComplexFUInstance*,FILE*,VCDMapping&,Array<int>,bool firstTime,bool printDefinitions);
 
 enum DelayType {
    DELAY_TYPE_BASE               = 0x0,
@@ -108,6 +145,44 @@ struct CalculatedOffsets{
    int max;
 };
 
+// TODO: Some structures appear to hold more data that necessary.
+//       The current way data is modelled is weird
+//       Until I get more different memory types or
+//       until we allow certain wires to not be used,
+//       It's hard to figure out how to proceed
+//       Let this be for now
+enum ExternalMemoryType{TWO_P = 0,DP};
+
+struct ExternalMemoryInterface{
+   int interface;
+   int bitsize;
+   int datasize;
+   ExternalMemoryType type;
+};
+
+struct ExternalMemoryID{
+   int interface;
+   ExternalMemoryType type;
+};
+
+struct ExternalPortInfo{
+   int addrSize;
+   int dataInSize;
+   int dataOutSize;
+   bool enable;
+   bool write;
+};
+
+// Contain info parsed directly by verilog.
+// This probably should be a union of all the memory types
+// The code in the verilog parser almost demands it
+struct ExternalMemoryInfo{
+   int numberPorts;
+
+   // Maximum of 2 ports
+   ExternalPortInfo ports[2];
+};
+
 // A declaration is constant after being registered
 struct FUDeclaration{
    String name;
@@ -136,8 +211,8 @@ struct FUDeclaration{
    int memoryMapBits;
    int nStaticConfigs;
    int extraDataSize;
-   int externalMemoryBitsize;
-   int externalMemoryDatasize;
+
+   Array<ExternalMemoryInterface> externalMemory;
 
    // Stores different accelerators depending on properties we want
    Accelerator* baseCircuit;
@@ -160,6 +235,7 @@ struct FUDeclaration{
    FUFunction startFunction;
    FUFunction updateFunction;
    FUFunction destroyFunction;
+   VCDFunction printVCD;
    MemoryAccessFunction memAccessFunction;
 
    const char* operation;
@@ -176,7 +252,7 @@ struct FUDeclaration{
 struct GraphComputedData{
    Array<ConnectionInfo> allInputs; // All connections, even repeated ones
    Array<ConnectionInfo> allOutputs;
-   Array<PortInstance> singleInputs; // Assume no repetition. If repetion exists, multipleSamePortInputs is true. If not connected, port instance inst is nullptr
+   Array<PortInstance> singleInputs; // Assume no repetition. If repetition exists, multipleSamePortInputs is true. If not connected, port instance inst is nullptr
    int outputs; // No single outputs because not much reasons to.
    enum {TAG_UNCONNECTED,TAG_COMPUTE,TAG_SOURCE,TAG_SINK,TAG_SOURCE_AND_SINK} nodeType;
    int inputDelay;
@@ -187,7 +263,8 @@ struct GraphComputedData{
 struct VersatComputedData{
    int memoryMaskSize;
    int memoryAddressOffset;
-   char memoryMask[33];
+   char memoryMaskBuffer[33];
+   char* memoryMask;
 };
 
 struct Parameter{
@@ -248,13 +325,25 @@ struct DAGOrderNodes{
    int maxOrder;
 };
 
+struct UnitDebugData{
+   int debugBreak;
+};
+
 struct ComplexFUInstance : public FUInstance{
+   // PC only
+   int baseDelay;
+
+   // Configuration + State variables that versat needs access to
+   int done; // Units that are sink or sources of data must implement done to ensure circuit does not end prematurely
+   bool isStatic;
+
+   bool namedAccess;
+
    // Various uses
-   FUInstance* declarationInstance;
 
    Accelerator* iterative;
 
-   //ComplexFUInstance* next;
+   UnitDebugData* debugData;
 
    //InstanceNode* inputs;
    //InstanceNode* outputs;
@@ -284,19 +373,13 @@ struct Accelerator{ // Graph + data storage
    Versat* versat;
    FUDeclaration* subtype; // Set if subaccelerator (accelerator associated to a FUDeclaration). A "free" accelerator has this set to nullptr
 
-   //ComplexFUInstance* instances;
-   //ComplexFUInstance* lastAdded;
-
-   //int numberInstances;
-   //int numberEdges;
-   Edge* edges;
+   Edge* edges; // TODO: Should be removed, edge info is all contained inside the instance nodes and desync leads to bugs since some code still uses this
 
    OrderedInstance* ordered;
-   //InstanceNode* ordered;
    InstanceNode* allocated;
    InstanceNode* lastAllocated;
    Pool<ComplexFUInstance> instances;
-   Pool<ComplexFUInstance> subInstances;
+   Pool<FUInstance> subInstances; // Essentially a "wrapper" so that user code does not have to deal with reallocations when adding units
 
    Allocation<int> configAlloc;
    Allocation<int> stateAlloc;
@@ -304,15 +387,15 @@ struct Accelerator{ // Graph + data storage
    Allocation<int> staticAlloc;
    Allocation<Byte> extraDataAlloc;
    Allocation<int> externalMemoryAlloc;
+   Allocation<UnitDebugData> debugDataAlloc;
 
    Allocation<int> outputAlloc;
    Allocation<int> storedOutputAlloc;
 
-   Arena instancesMemory;
-   Arena edgesMemory;
-   Arena temp;
+   DynamicArena* accelMemory;
+   //Arena temp;
 
-   Pool<StaticInfo> staticInfo;
+   Pool<StaticInfo> staticInfo; // Things like these could be
 
 	void* configuration;
 	int configurationSize;
@@ -407,7 +490,9 @@ struct UnitValues{
    int extraData;
    int statics;
    int sharedUnits;
-   int externalMemory;
+   int externalMemoryInterfaces;
+   int externalMemorySize;
+   int numberUnits;
 
    int memoryMappedBits;
    bool isMemoryMapped;
@@ -441,6 +526,8 @@ struct VersatComputedValues{
    int nUnitsIO;
 
    int numberConnections;
+
+   int externalMemoryInterfaces;
 
    int stateConfigurationAddressBits;
    int memoryAddressBits;
@@ -499,11 +586,13 @@ public:
    PushPtr<int> config;
    PushPtr<int> state;
    PushPtr<int> delay;
+   PushPtr<Byte> mem;
    PushPtr<int> outputs;
    PushPtr<int> storedOutputs;
    PushPtr<int> statics;
    PushPtr<Byte> extraData;
    PushPtr<int> externalMemory;
+   PushPtr<UnitDebugData> debugData;
 
    void Init(Accelerator* accel);
    void Init(Accelerator* topLevel,ComplexFUInstance* inst);
@@ -617,6 +706,9 @@ namespace BasicTemplates{
    extern CompiledTemplate* acceleratorTemplate;
    extern CompiledTemplate* topAcceleratorTemplate;
    extern CompiledTemplate* dataTemplate;
+   extern CompiledTemplate* externalPortmapTemplate;
+   extern CompiledTemplate* externalPortTemplate;
+   extern CompiledTemplate* externalInstTemplate;
 }
 
 struct GraphMapping;
@@ -635,11 +727,13 @@ UnitValues CalculateAcceleratorUnitValues(Versat* versat,ComplexFUInstance* inst
 UnitValues CalculateAcceleratorValues(Versat* versat,Accelerator* accel);
 VersatComputedValues ComputeVersatValues(Versat* versat,Accelerator* accel);
 int CalculateTotalOutputs(Accelerator* accel);
-int CalculateTotalOutputs(FUInstance* inst);
+int CalculateTotalOutputs(ComplexFUInstance* inst);
 bool IsConfigStatic(Accelerator* topLevel,ComplexFUInstance* inst);
-bool IsUnitCombinatorial(FUInstance* inst);
+bool IsUnitCombinatorial(ComplexFUInstance* inst);
 
 void ReorganizeAccelerator(Accelerator* graph,Arena* temp);
+
+int CalculateNumberOfUnits(InstanceNode* node);
 
 // Accelerator
 Accelerator* CopyAccelerator(Versat* versat,Accelerator* accel,InstanceMap* map);
@@ -662,7 +756,7 @@ Edge* ConnectUnits(FUInstance* out,int outIndex,FUInstance* in,int inIndex,int d
 // Delay
 int CalculateLatency(ComplexFUInstance* inst);
 Hashmap<EdgeNode,int>* CalculateDelay(Versat* versat,Accelerator* accel,Arena* out);
-void SetDelayRecursive(Accelerator* accel);
+void SetDelayRecursive(Accelerator* accel,Arena* arena);
 
 // Graph fixes
 void FixMultipleInputs(Versat* versat,Accelerator* accel);
@@ -706,7 +800,14 @@ int GetInputValue(InstanceNode* nodes,int index);
 ComplexFUInstance* GetInputInstance(InstanceNode* nodes,int inputIndex);
 InstanceNode* GetOutputNode(InstanceNode* nodes);
 ComplexFUInstance* GetOutputInstance(InstanceNode* nodes);
-PortNode GetInputValueInstance(FUInstance* inst,int index);
+PortNode GetInputValueInstance(ComplexFUInstance* inst,int index);
+
+struct ComputedData{
+   Array<ExternalMemoryInterface> external;
+   Array<VersatComputedData> data;
+};
+
+ComputedData CalculateVersatComputedData(InstanceNode* instances,VersatComputedValues val,Arena* out);
 
 MergeGraphResult HierarchicalMergeAccelerators(Versat* versat,Accelerator* accel1,Accelerator* accel2,String name);
 MergeGraphResult HierarchicalMergeAcceleratorsFullClique(Versat* versat,Accelerator* accel1,Accelerator* accel2,String name);

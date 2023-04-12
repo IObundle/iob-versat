@@ -19,24 +19,19 @@ struct FUInstance{
    int* delay;
    int* externalMemory;
 
-   // PC only
-   int baseDelay;
-
-   Accelerator* accel;
-	FUDeclaration* declaration;
-	int id;
-
+   // This should be part of another hierarchy.
+   // Required for accel subunits but not required by embedded or should user code have access to them
 	int* outputs;
 	int* storedOutputs;
    unsigned char* extraData;
+   FUInstance* declarationInstance; // Used because of AccessMemory and the fact that GetInput depends on instance pointer
 
+   // This should be versat side only, but it's easier to have them here for now
+   // User code should not access them directly. Future versions will not have them
    String parameters;
-
-   // Configuration + State variables that versat needs access to
-   int done; // Units that are sink or sources of data must implement done to ensure circuit does not end prematurely
-   bool isStatic;
-
-   bool namedAccess;
+   Accelerator* accel;
+	FUDeclaration* declaration;
+	int id;
 };
 
 struct SpecificMerge{
@@ -99,13 +94,12 @@ FUInstance* CreateFUInstance(Accelerator* accel,FUDeclaration* type,String entit
 void AcceleratorRun(Accelerator* accel);
 void AcceleratorRunDebug(Accelerator* accel);
 void RemoveFUInstance(Accelerator* accel,FUInstance* inst);
-void OutputVersatSource(Versat* versat,Accelerator* accel,const char* sourceFilepath,const char* constantsFilepath,const char* dataFilepath);
+void OutputVersatSource(Versat* versat,Accelerator* accel,const char* directoryPath);
 Accelerator* Flatten(Versat* versat,Accelerator* accel,int times); // This should work on the passed accelerator. We should not create a new accelerator
 
 // Access units and sub units inside an accelerator. Can use printf style arguments, but only chars and integers are currently supported. Format is <format1>,<args1 if any>,<format2>,...
 #define GetInstanceByName(ACCEL,...) GetInstanceByName_(ACCEL,NUMBER_ARGS(__VA_ARGS__),__VA_ARGS__)
 FUInstance* GetInstanceByName_(Accelerator* accel,int argc, ...);
-FUInstance* GetInstanceByName_(FUDeclaration* decl,int argc, ...);
 
 #define GetSubInstanceByName(TOP_LEVEL,INST,...) GetSubInstanceByName_(TOP_LEVEL,INST,NUMBER_ARGS(__VA_ARGS__),__VA_ARGS__)
 FUInstance* GetSubInstanceByName_(Accelerator* topLevel,FUInstance* inst,int argc, ...);

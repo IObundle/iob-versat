@@ -246,6 +246,9 @@ namespace BasicTemplates{
    CompiledTemplate* acceleratorTemplate;
    CompiledTemplate* topAcceleratorTemplate;
    CompiledTemplate* dataTemplate;
+   CompiledTemplate* externalPortmapTemplate;
+   CompiledTemplate* externalPortTemplate;
+   CompiledTemplate* externalInstTemplate;
 }
 
 Versat* InitVersat(int base,int numberConfigurations){
@@ -277,7 +280,7 @@ Versat* InitVersat(int base,int numberConfigurations){
    versat->base = base;
 
    #ifdef x86
-   versat->temp = InitArena(Megabyte(256));
+   versat->temp = InitArena(Megabyte(512));
    #else
    versat->temp = InitArena(Gigabyte(8));
    #endif // x86
@@ -287,6 +290,9 @@ Versat* InitVersat(int base,int numberConfigurations){
    BasicTemplates::acceleratorTemplate = CompileTemplate("../../submodules/VERSAT/software/templates/versat_accelerator_template.tpl",&versat->permanent);
    BasicTemplates::topAcceleratorTemplate = CompileTemplate("../../submodules/VERSAT/software/templates/versat_top_instance_template.tpl",&versat->permanent);
    BasicTemplates::dataTemplate = CompileTemplate("../../submodules/VERSAT/software/templates/embedData.tpl",&versat->permanent);
+   BasicTemplates::externalPortmapTemplate = CompileTemplate("../../submodules/VERSAT/software/templates/external_memory_portmap.tpl",&versat->permanent);
+   BasicTemplates::externalPortTemplate = CompileTemplate("../../submodules/VERSAT/software/templates/external_memory_port.tpl",&versat->permanent);
+   BasicTemplates::externalInstTemplate = CompileTemplate("../../submodules/VERSAT/software/templates/external_memory_inst.tpl",&versat->permanent);
 
    FUDeclaration nullDeclaration = {};
    nullDeclaration.inputDelays = Array<int>{zeros,1};
@@ -473,7 +479,15 @@ static int CompositeMemoryAccess(ComplexFUInstance* instance,int address,int val
 }
 
 static int AccessMemory(FUInstance* inst,int address, int value, int write){
-   ComplexFUInstance* instance = (ComplexFUInstance*) inst;
+   ComplexFUInstance* instance = (ComplexFUInstance*) inst->declarationInstance;
+   instance->memMapped = inst->memMapped;
+   instance->config = inst->config;
+   instance->state = inst->state;
+   instance->delay = inst->delay;
+   instance->externalMemory = inst->externalMemory;
+   instance->outputs = inst->outputs;
+   instance->storedOutputs = inst->storedOutputs;
+   instance->extraData = inst->extraData;
 
    int res = instance->declaration->memAccessFunction(instance,address,value,write);
 
@@ -623,7 +637,13 @@ static FUInstance* GetInstanceByHierarchicalName2(AcceleratorIterator iter,Hiera
                   return res;
                }
             } else if(!hier->next){ // Correct name and type (if specified) and no further hierarchical name to follow
-               return inst;
+               Accelerator* accel = iter.topLevel;
+
+               FUInstance* instBuffer = accel->subInstances.Alloc();
+               *instBuffer = *((FUInstance*)inst);
+               instBuffer->declarationInstance = inst;
+
+               return instBuffer;
             }
          }
 
@@ -723,11 +743,12 @@ static FUInstance* vGetInstanceByName_(AcceleratorIterator iter,Arena* arena,int
 }
 
 FUInstance* GetInstanceByName_(Accelerator* circuit,int argc, ...){
+   Arena* temp = &circuit->versat->temp;
+   BLOCK_REGION(temp);
+
    va_list args;
    va_start(args,argc);
 
-   Arena* temp = &circuit->temp;
-   ArenaMarker marker(temp);
    AcceleratorIterator iter = {};
    iter.Start(circuit,temp,true);
 
@@ -738,31 +759,16 @@ FUInstance* GetInstanceByName_(Accelerator* circuit,int argc, ...){
    return res;
 }
 
-FUInstance* GetInstanceByName_(Versat* versat,FUDeclaration* decl,int argc, ...){
-   STACK_ARENA(temp,Kilobyte(64)); // Arena stack since low memory usage as we do not map FUInstances for FUDeclaration
-   va_list args;
-   va_start(args,argc);
-
-   ArenaMarker marker(&temp);
-   AcceleratorIterator iter = {};
-   iter.Start(decl->fixedDelayCircuit,&temp,false);
-
-   FUInstance* res = vGetInstanceByName_(iter,&temp,argc,args);
-
-   va_end(args);
-
-   return res;
-}
-
 FUInstance* GetSubInstanceByName_(Accelerator* topLevel,FUInstance* instance,int argc, ...){
+   Arena* temp = &topLevel->versat->temp;
+   BLOCK_REGION(temp);
+
    va_list args;
    va_start(args,argc);
 
    ComplexFUInstance* inst = (ComplexFUInstance*) instance;
    Assert(inst->declaration->fixedDelayCircuit);
 
-   Arena* temp = &topLevel->temp;
-   ArenaMarker marker(temp);
    AcceleratorIterator iter = {};
    iter.Start(topLevel,inst,temp,true);
 
@@ -894,8 +900,11 @@ UnitValues CalculateAcceleratorValues(Versat* versat,Accelerator* accel){
 
    Hashmap<StaticId,int>* staticSeen = PushHashmap<StaticId,int>(&accel->versat->temp,1000);
 
+   #if 0
    int memoryMapBits[32];
    memset(memoryMapBits,0,sizeof(int) * 32);
+   #endif
+   int memoryMappedDWords = 0;
 
    // Handle non-static information
    FOREACH_LIST(ptr,accel->allocated){
@@ -919,7 +928,13 @@ UnitValues CalculateAcceleratorValues(Versat* versat,Accelerator* accel){
       }
 
       if(type->isMemoryMapped){
-         memoryMapBits[type->memoryMapBits] += 1;
+         val.isMemoryMapped = true;
+
+         memoryMappedDWords = AlignBitBoundary(memoryMappedDWords,type->memoryMapBits);
+         memoryMappedDWords += 1 << type->memoryMapBits;
+
+         //AlignBitBoundary
+         //memoryMapBits[type->memoryMapBits] += 1;
       }
 
       if(type == BasicDeclaration::input){
@@ -930,8 +945,17 @@ UnitValues CalculateAcceleratorValues(Versat* versat,Accelerator* accel){
       val.delays += type->nDelays;
       val.ios += type->nIOs;
       val.extraData += type->extraDataSize;
-      val.externalMemory += 1 << type->externalMemoryBitsize;
+
+      if(type->externalMemory.size){
+         val.externalMemoryInterfaces += type->externalMemory.size;
+
+         for(ExternalMemoryInterface& inter : type->externalMemory){
+            val.externalMemorySize += (1 << inter.bitsize);
+         }
+      }
    }
+
+   val.memoryMappedBits = log2i(memoryMappedDWords);
 
    ComplexFUInstance* outputInstance = GetOutputInstance(accel->allocated);
    if(outputInstance){
@@ -970,6 +994,7 @@ UnitValues CalculateAcceleratorValues(Versat* versat,Accelerator* accel){
       }
    }
 
+   #if 0
    // Huffman encoding for memory mapping bits
    int last = -1;
    while(1){
@@ -1005,6 +1030,7 @@ UnitValues CalculateAcceleratorValues(Versat* versat,Accelerator* accel){
       val.isMemoryMapped = true;
       val.memoryMappedBits = last;
    }
+   #endif
 
    return val;
 }
@@ -1029,6 +1055,19 @@ FUDeclaration* RegisterSubUnit(Versat* versat,String name,Accelerator* circuit){
    Arena* permanent = &versat->permanent;
    Arena* temp = &versat->temp;
    ArenaMarker marker(temp);
+
+   // Check if it's completely combinatorial
+   bool combinatorial = true;
+   FOREACH_LIST(ptr,circuit->allocated){
+      FUDeclaration* decl = ptr->inst->declaration;
+      if(decl->type != FUDeclaration::SPECIAL && !decl->isOperation){
+         combinatorial = false;
+      }
+   }
+
+   if(combinatorial){
+      circuit = Flatten(versat,circuit,99);
+   }
 
    decl.type = FUDeclaration::COMPOSITE;
    decl.name = name;
@@ -1064,11 +1103,6 @@ FUDeclaration* RegisterSubUnit(Versat* versat,String name,Accelerator* circuit){
    }
 
    // Need to calculate versat data here.
-    #if 0
-   AcceleratorView view = CreateAcceleratorView(circuit,permanent);
-   view.CalculateVersatData(permanent);
-   #endif
-
    UnitValues val = CalculateAcceleratorValues(versat,circuit);
 
    bool anySavedConfiguration = false;
@@ -1086,6 +1120,14 @@ FUDeclaration* RegisterSubUnit(Versat* versat,String name,Accelerator* circuit){
    decl.memAccessFunction = CompositeMemoryAccess;
 
    decl.inputDelays = PushArray<int>(permanent,val.inputs);
+
+   decl.externalMemory = PushArray<ExternalMemoryInterface>(permanent,val.externalMemoryInterfaces);
+   int externalIndex = 0;
+   FOREACH_LIST(ptr,circuit->allocated){
+      for(ExternalMemoryInterface& inter : ptr->inst->declaration->externalMemory){
+         decl.externalMemory[externalIndex++] = inter;
+      }
+   }
 
    for(int i = 0; i < val.inputs; i++){
       ComplexFUInstance* input = GetInputInstance(circuit->allocated,i);
@@ -1143,6 +1185,27 @@ FUDeclaration* RegisterSubUnit(Versat* versat,String name,Accelerator* circuit){
    if(anySavedConfiguration){
       decl.defaultConfig = PushArray<int>(permanent,val.configs);
       decl.defaultStatic = PushArray<int>(permanent,val.statics);
+
+      int configIndex = 0;
+      int staticIndex = 0;
+      bool didOnce = false;
+      FOREACH_LIST(ptr,circuit->allocated){
+         ComplexFUInstance* inst = ptr->inst;
+
+         if(inst->savedConfiguration){
+            if(inst->isStatic){
+               Assert(!didOnce); // In order to properly do default config for statics, we need to first map their location and then copy
+               didOnce = true;
+               for(int i = 0; i < inst->declaration->configs.size; i++){
+                  decl.defaultStatic[configIndex++] = inst->config[i];
+               }
+            } else {
+               for(int i = 0; i < inst->declaration->configs.size; i++){
+                  decl.defaultConfig[configIndex++] = inst->config[i];
+               }
+            }
+         }
+      }
    }
 
    decl.configOffsets = CalculateConfigurationOffset(circuit,MemType::CONFIG,permanent);
@@ -1507,9 +1570,18 @@ void PopulateAccelerator(Accelerator* topLevel,Accelerator* accel,FUDeclaration*
       inst->config = nullptr;
       inst->state = nullptr;
       inst->delay = nullptr;
+      inst->memMapped = nullptr;
       inst->outputs = nullptr;
       inst->storedOutputs = nullptr;
       inst->extraData = nullptr;
+
+      #if 0
+      int numberUnits = 0;
+      if(decl->type == FUDeclaration::COMPOSITE){
+         numberUnits = CalculateNumberOfUnits(decl->fixedDelayCircuit->allocated);
+      }
+      inst->debugData = inter.debugData.Push(numberUnits + 1);
+      #endif
 
       if(inst->isStatic && decl->configs.size){
          StaticId id = {};
@@ -1525,8 +1597,20 @@ void PopulateAccelerator(Accelerator* topLevel,Accelerator* accel,FUDeclaration*
       if(decl->states.size){
          inst->state = inter.state.Set(topDeclaration->stateOffsets.offsets[index],decl->states.size);
       }
+      if(decl->isMemoryMapped){
+         inter.mem.timesPushed = AlignBitBoundary(inter.mem.timesPushed,decl->memoryMapBits);
+         inst->memMapped = (int*) inter.mem.Push(1 << decl->memoryMapBits);
+      }
       if(decl->nDelays){
          inst->delay = inter.delay.Set(topDeclaration->delayOffsets.offsets[index],decl->nDelays);
+      }
+      if(decl->externalMemory.size){
+         for(int i = 0; i < decl->externalMemory.size; i++){
+            int* externalMemory = inter.externalMemory.Push(1 << decl->externalMemory[i].bitsize);
+            if(i == 0){
+               inst->externalMemory = externalMemory;
+            }
+         }
       }
       if(decl->totalOutputs){
          inst->outputs = inter.outputs.Set(topDeclaration->outputOffsets.offsets[index],decl->totalOutputs);
@@ -1543,27 +1627,48 @@ void PopulateAccelerator(Accelerator* topLevel,Accelerator* accel,FUDeclaration*
 }
 
 void FUInstanceInterfaces::Init(Accelerator* accel){
+   VersatComputedValues val = ComputeVersatValues(accel->versat,accel);
+
    config.Init(accel->configAlloc);
    state.Init(accel->stateAlloc);
    delay.Init(accel->delayAlloc);
+   mem.Init(nullptr,val.memoryMappedBytes);
    outputs.Init(accel->outputAlloc);
    storedOutputs.Init(accel->storedOutputAlloc);
    extraData.Init(accel->extraDataAlloc);
    statics.Init(accel->staticAlloc);
    externalMemory.Init(accel->externalMemoryAlloc);
+   debugData.Init(accel->debugDataAlloc);
+}
+
+int MemorySize(Array<ExternalMemoryInterface> interfaces){
+   int size = 0;
+
+   for(ExternalMemoryInterface& inter : interfaces){
+      size = AlignBitBoundary(size,inter.bitsize);
+      size += 1 << inter.bitsize;
+   }
+
+   return size;
 }
 
 void FUInstanceInterfaces::Init(Accelerator* topLevel,ComplexFUInstance* inst){
+   VersatComputedValues val = ComputeVersatValues(topLevel->versat,topLevel);
    FUDeclaration* decl = inst->declaration;
+   int numberUnits = CalculateNumberOfUnits(decl->fixedDelayCircuit->allocated);
 
    config.Init(inst->config,decl->configOffsets.max);
    state.Init(inst->state,decl->stateOffsets.max);
    delay.Init(inst->delay,decl->delayOffsets.max);
+   mem.Init((Byte*) inst->memMapped,val.memoryMappedBytes);
    outputs.Init(inst->outputs,decl->totalOutputs);
    storedOutputs.Init(inst->storedOutputs,decl->totalOutputs);
    extraData.Init(inst->extraData,decl->extraDataOffsets.max);
    statics.Init(topLevel->staticAlloc);
-   externalMemory.Init(inst->externalMemory,1 << decl->externalMemoryBitsize);
+   if(decl->externalMemory.size){
+      externalMemory.Init(inst->externalMemory,MemorySize(decl->externalMemory));
+   }
+   debugData.Init(inst->debugData + 1,numberUnits);
 }
 
 void FUInstanceInterfaces::AssertEmpty(bool checkStatic){
@@ -1582,10 +1687,17 @@ void FUInstanceInterfaces::AssertEmpty(bool checkStatic){
 
 // The true "Accelerator" populator
 void PopulateAccelerator2(Accelerator* accel,FUDeclaration* topDeclaration,FUInstanceInterfaces& inter,Hashmap<StaticId,StaticData>* staticMap){
-   Arena* temp = &accel->temp;
-   ArenaMarker marker(temp);
+   STACK_ARENA(tempInst,Kilobyte(64));
+   Arena* temp = &tempInst;
 
-   Hashmap<int,int*>* sharedToConfigPtr = PushHashmap<int,int*>(temp,Size(accel->allocated));
+   int sharedUnits = 0;
+   FOREACH_LIST(ptr,accel->allocated){
+      if(ptr->inst->sharedEnable){
+         sharedUnits += 1;
+      }
+   }
+
+   Hashmap<int,int*>* sharedToConfigPtr = PushHashmap<int,int*>(temp,sharedUnits);
 
    FOREACH_LIST(ptr,accel->allocated){
       ComplexFUInstance* inst = ptr->inst;
@@ -1595,9 +1707,18 @@ void PopulateAccelerator2(Accelerator* accel,FUDeclaration* topDeclaration,FUIns
       inst->config = nullptr;
       inst->state = nullptr;
       inst->delay = nullptr;
+      inst->memMapped = nullptr;
       inst->outputs = nullptr;
       inst->storedOutputs = nullptr;
       inst->extraData = nullptr;
+
+      #if 0
+      int numberUnits = 0;
+      if(decl->type == FUDeclaration::COMPOSITE){
+         numberUnits = CalculateNumberOfUnits(decl->fixedDelayCircuit->allocated);
+      }
+      inst->debugData = inter.debugData.Push(numberUnits + 1);
+      #endif
 
       if(decl->configs.size){
          if(inst->isStatic){
@@ -1625,11 +1746,20 @@ void PopulateAccelerator2(Accelerator* accel,FUDeclaration* topDeclaration,FUIns
       if(decl->states.size){
          inst->state = inter.state.Push(decl->states.size);
       }
+      if(decl->isMemoryMapped){
+         inter.mem.timesPushed = AlignBitBoundary(inter.mem.timesPushed,decl->memoryMapBits);
+         inst->memMapped = (int*) inter.mem.Push(1 << decl->memoryMapBits);
+      }
       if(decl->nDelays){
          inst->delay = inter.delay.Push(decl->nDelays);
       }
-      if(decl->externalMemoryBitsize){
-         inst->externalMemory = inter.externalMemory.Push(1 << decl->externalMemoryBitsize);
+      if(decl->externalMemory.size){
+         for(int i = 0; i < decl->externalMemory.size; i++){
+            int* externalMemory = inter.externalMemory.Push(1 << decl->externalMemory[i].bitsize);
+            if(i == 0){
+               inst->externalMemory = externalMemory;
+            }
+         }
       }
       #if 1
       if(val.totalOutputs){
@@ -1723,16 +1853,13 @@ void AcceleratorRun(Accelerator* accel){
 
    ReorganizeAccelerator(accel,arena);
 
-   //AcceleratorView view = CreateAcceleratorView(accel,arena);
-   //DAGOrder order = view.CalculateDAGOrdering(arena);
-
    #if 0
    view.CalculateDelay(arena);
    #else
    /* Hashmap<EdgeNode,int>* delay = */ CalculateDelay(accel->versat,accel,arena);
    #endif
 
-   SetDelayRecursive(accel);
+   SetDelayRecursive(accel,arena);
 
    //DebugAccelerator(accel,arena);
 
@@ -1756,32 +1883,23 @@ void AcceleratorRun(Accelerator* accel){
 
       vcdSameCheckSpace = PrintVCDDefinitions(accelOutputFile,accel,arena);
    }
+   defer{if(accelOutputFile) fclose(accelOutputFile);};
 
    AcceleratorRunStart(accel);
 
+   PrintVCD(accelOutputFile,accel,0,0,vcdSameCheckSpace,arena); // Print starting values
+
    AcceleratorIterator iter = {};
-   iter.StartOrdered(accel,arena,true);
-
-   //DebugAcceleratorStart(accel,arena);
-
-   AcceleratorRunIter(iter);
-
-   if(accel->versat->debug.outputVCD){
-      PrintVCD(accelOutputFile,accel,time++,0,vcdSameCheckSpace);
-   }
-
    for(int cycle = 0; cycle < 10000; cycle++){ // Max amount of iterations
       Assert(accel->outputAlloc.size == accel->storedOutputAlloc.size);
       memcpy(accel->outputAlloc.ptr,accel->storedOutputAlloc.ptr,accel->outputAlloc.size * sizeof(int));
-
-      //DebugAcceleratorPersist(accel,arena);
 
       iter.StartOrdered(accel,arena,true);
       AcceleratorRunIter(iter);
 
       if(accel->versat->debug.outputVCD){
-         PrintVCD(accelOutputFile,accel,time++,1,vcdSameCheckSpace);
-         PrintVCD(accelOutputFile,accel,time++,0,vcdSameCheckSpace);
+         PrintVCD(accelOutputFile,accel,time++,1,vcdSameCheckSpace,arena);
+         PrintVCD(accelOutputFile,accel,time++,0,vcdSameCheckSpace,arena);
       }
 
       if(AcceleratorDone(accel)){
@@ -1789,12 +1907,19 @@ void AcceleratorRun(Accelerator* accel){
       }
    }
 
-   //DebugAcceleratorEnd(accel,arena);
+   // A couple of iterations to let units finish writing data to memories and stuff
+   // "Not correct" but follows more closely with what we expected the accelerator to do in embedded
+   for(int cycle = 0; cycle < 3; cycle++){
+      iter.StartOrdered(accel,arena,true);
+      AcceleratorRunIter(iter);
 
-   if(accel->versat->debug.outputVCD){
-      PrintVCD(accelOutputFile,accel,time++,1,vcdSameCheckSpace);
-      PrintVCD(accelOutputFile,accel,time++,0,vcdSameCheckSpace);
-      fclose(accelOutputFile);
+      #if 0
+      // For now, do not print vcd, because we are only repeating the last values and it's probably more confusing than helpful
+      if(accel->versat->debug.outputVCD){
+         PrintVCD(accelOutputFile,accel,time++,1,vcdSameCheckSpace,arena);
+         PrintVCD(accelOutputFile,accel,time++,0,vcdSameCheckSpace,arena);
+      }
+      #endif
    }
 }
 
@@ -1813,9 +1938,6 @@ void AcceleratorRunDebug(Accelerator* accel){
    accel->subtype = &base;
 
    ReorganizeAccelerator(accel,arena);
-
-   //AcceleratorView view = CreateAcceleratorView(accel,arena);
-   //DAGOrder order = view.CalculateDAGOrdering(arena);
 
    #if 0
    view.CalculateDelay(arena);
@@ -2097,11 +2219,11 @@ int CountNonSpecialChilds(InstanceNode* nodes){
    return count;
 }
 
-void SetDelayRecursive(Accelerator* accel){
-   Arena* temp = &accel->temp;
-   ArenaMarker marker(temp);
+void SetDelayRecursive(Accelerator* accel,Arena* arena){
+   BLOCK_REGION(arena);
+
    AcceleratorIterator iter = {};
-   for(InstanceNode* node = iter.Start(accel,temp,true); node; node = iter.Skip()){
+   for(InstanceNode* node = iter.Start(accel,arena,true); node; node = iter.Skip()){
       SetDelayRecursive_(iter,0);
    }
 }
@@ -2157,7 +2279,19 @@ void Hook(Versat* versat,FUDeclaration* decl,Accelerator* accel,FUInstance* inst
    //OutputGraphDotFile(versat,decl->fixedDelayCircuit,true,"debug/fixed.out");
    //OutputGraphDotFile(versat,decl->fixedDelayCircuit,true,"debug/tests.out");
 
-   //DebugAccelerator(accel,arena);
+   #if 1
+   FUDeclaration base = {};
+   base.name = STRING("Top");
+   accel->subtype = &base;
+
+   CalculateDelay(versat,accel,arena);
+   SetDelayRecursive(accel,arena);
+
+   DebugAccelerator(accel,arena);
+   #else
+   ComplexFUInstance* compInst = (ComplexFUInstance*) GetInstanceByName(accel,"Test","stage4","weights");
+   compInst->debugData->debugBreak = true;
+   #endif
 }
 
 

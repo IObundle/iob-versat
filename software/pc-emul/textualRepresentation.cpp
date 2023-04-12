@@ -2,13 +2,13 @@
 
 #include "parser.hpp"
 
-String UniqueRepr(FUInstance* inst,Arena* arena){
+String UniqueRepr(ComplexFUInstance* inst,Arena* arena){
    FUDeclaration* decl = inst->declaration;
    String str = PushString(arena,"%.*s_%.*s_%d",UNPACK_SS(decl->name),UNPACK_SS(inst->name),inst->id);
    return str;
 }
 
-String Repr(FUInstance* inst,GraphDotFormat format,Arena* arena){
+String Repr(ComplexFUInstance* inst,GraphDotFormat format,Arena* arena){
    Byte* mark = MarkArena(arena);
 
    ComplexFUInstance* instance = (ComplexFUInstance*) inst;

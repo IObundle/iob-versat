@@ -29,6 +29,14 @@ module VRead #(
     // input / output data
     (* versat_latency = 1 *) output [DATA_W-1:0]    out0,
 
+   // External memory
+   output [ADDR_W-1:0]   ext_2p_addr_out_0,
+   output [ADDR_W-1:0]   ext_2p_addr_in_0,
+   output                ext_2p_write_0,
+   output                ext_2p_read_0,
+   input  [DATA_W-1:0]   ext_2p_data_in_0,
+   output [DATA_W-1:0]   ext_2p_data_out_0,
+
     // configurations
    input [`IO_ADDR_W-1:0]  ext_addr,
    input [`MEM_ADDR_W-1:0] int_addr,
@@ -73,8 +81,8 @@ module VRead #(
    always @(posedge clk,posedge rst)
    begin
       if(rst) begin
-         doneA <= 1'b0;
-         doneB <= 1'b0;
+         doneA <= 1'b1;
+         doneB <= 1'b1;
       end else if(run) begin
          doneA <= 1'b0;
          doneB <= 1'b0;
@@ -219,22 +227,12 @@ module VRead #(
       .rst(rst)
       );
 
-   iob_2p_ram #(
-               .DATA_W(DATA_W),
-               .ADDR_W(ADDR_W)
-               )
-   mem (
-        .clk(clk),
+   assign ext_2p_write_0 = write_en;
+   assign ext_2p_addr_out_0 = write_addr;
+   assign ext_2p_data_out_0 = write_data;
 
-        // Writting port
-        .w_en(write_en),
-        .w_addr(write_addr),
-        .w_data(write_data),
-
-        // Reading port
-        .r_en(enB),
-        .r_addr(addrB),
-        .r_data(outB)
-        );
+   assign ext_2p_read_0 = enB;
+   assign ext_2p_addr_in_0 = addrB;
+   assign outB = ext_2p_data_in_0;
 
 endmodule

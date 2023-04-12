@@ -1841,7 +1841,7 @@ FUDeclaration* Merge(Versat* versat,Array<FUDeclaration*> types,String name,Merg
 
    for(int i = 0; i < size; i++){
       BLOCK_REGION(arena);
-      Set<ComplexFUInstance*>* firstGraph = PushSet<ComplexFUInstance*>(arena,Size(flatten[0]->allocated));
+      Set<ComplexFUInstance*>* firstGraph = PushSet<ComplexFUInstance*>(arena,Size(flatten[i]->allocated));
       FOREACH_LIST(ptr,flatten[i]->allocated){
          InstanceNode* finalNode = view[i]->GetOrFail(ptr);
 

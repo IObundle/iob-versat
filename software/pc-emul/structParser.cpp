@@ -781,7 +781,35 @@ void OutputRegisterTypesFunction(FILE* output){
 
    for(TypeDef* def : typeDefs){
       if(def->type == TypeDef::ENUM){
-         fprintf(output,"   RegisterEnum(STRING(\"%.*s\"));\n",UNPACK_SS(def->enumType.name));
+         Tokenizer tok(def->enumType.values,",{}",{});
+
+         fprintf(output,"\tstatic Pair<String,int> %.*sData[] = {\n",UNPACK_SS(def->enumType.name));
+
+         tok.AssertNextToken("{");
+         bool first = true;
+         while(!tok.Done()){
+            Token name = tok.NextToken();
+
+            if(first){
+               first = false;
+            } else {
+               fprintf(output,",\n");
+            }
+
+            fprintf(output,"\t\t{STRING(\"%.*s\"),(int) %.*s::%.*s}",UNPACK_SS(name),UNPACK_SS(def->enumType.name),UNPACK_SS(name));
+
+            String peek = tok.PeekFindUntil(",");
+
+            if(peek.size == -1){
+               break;
+            }
+
+            tok.AdvancePeek(peek);
+            tok.AssertNextToken(",");
+         }
+         fprintf(output,"};\n\n");
+         fprintf(output,"   RegisterEnum(STRING(\"%.*s\"),C_ARRAY_TO_ARRAY(%.*sData));\n\n",UNPACK_SS(def->enumType.name),UNPACK_SS(def->enumType.name));
+
          seen.insert(def->enumType.name);
       }
    }
@@ -889,7 +917,6 @@ void OutputRegisterTypesFunction(FILE* output){
 
          size += CountMembers(inheritDef->structType.members);
       }
-
 
       fprintf(output,"   RegisterStructMembers(STRING(\"%.*s\"),(Array<Member>){&members[%d],%d});\n",UNPACK_SS(def->structType.name),index,size);
       index += size;

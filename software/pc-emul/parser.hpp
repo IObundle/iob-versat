@@ -91,8 +91,10 @@ public:
 };
 
 bool CheckStringOnlyWhitespace(Token tok);
-bool CheckFormat(const char* format,Token tok);
 bool Contains(String str,const char* toCheck);
+
+bool CheckFormat(const char* format,Token tok);
+Array<Value> ExtractValues(const char* format,Token tok,Arena* arena);
 
 String TrimWhitespaces(String in);
 

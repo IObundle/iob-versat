@@ -88,8 +88,8 @@ inline void ActivateMergedAccelerator(Versat* versat,Accelerator* accel,FUDeclar
 #define CreateAccelerator(...) ((Accelerator*)0)
 #define RegisterFU(...) ((FUDeclaration*)0)
 #define DisplayAcceleratorMemory(...) ((void)0)
-inline void OutputVersatSource(Versat* versat,Accelerator* accel,const char* sourceFilepath,const char* constantsFilepath,const char* dataFilepath){}
-inline void OutputVersatSource(Versat* versat,SimpleAccelerator* accel,const char* sourceFilepath,const char* constantsFilepath,const char* dataFilepath){}
+inline void OutputVersatSource(Versat* versat,Accelerator* accel,const char* directoryPath){}
+inline void OutputVersatSource(Versat* versat,SimpleAccelerator* accel,const char* directoryPath){}
 #define ConnectUnits(...) ((void)0)
 #define OutputGraphDotFile(...) ((void)0)
 #define RemoveFUInstance(...) ((void)0)

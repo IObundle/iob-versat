@@ -16,10 +16,12 @@ int RoundUpDiv(int dividend,int divisor){
 int log2i(int value){
    int res = 0;
 
+   value -= 1; // If value matches a power of 2, we still want to return the previous value
+
+   // Change the order of this if to after subtracting one.
+   // Any weird bug check this first
    if(value <= 0)
       return 0;
-
-   value -= 1; // If value matches a power of 2, we still want to return the previous value
 
    while(value > 1){
       value /= 2;
@@ -40,6 +42,24 @@ int AlignNextPower2(int val){
    while(res < val){
       res *= 2;
    }
+
+   return res;
+}
+
+unsigned int AlignBitBoundary(unsigned int val,int numberBits){ // Align value so the lower numberBits are all zeros
+   if(numberBits == 0){
+      return val;
+   }
+
+   Assert(numberBits < sizeof(val) * 8);
+
+   unsigned int lowerVal = MASK_VALUE(val,numberBits);
+   if(lowerVal == 0){
+      return val;
+   }
+
+   unsigned int lowerRemoved = val & ~FULL_MASK(numberBits);
+   unsigned int res = lowerRemoved + BIT_MASK(numberBits);
 
    return res;
 }

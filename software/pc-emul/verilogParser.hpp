@@ -40,15 +40,13 @@ struct ModuleInfo{
    bool doesIO;
    bool memoryMapped;
    int memoryMappedBits;
-   int externalMemoryBitsize;
-   int externalMemoryDatasize;
+   Array<ExternalMemoryInterface> externalInterfaces;
    bool hasDone;
    bool hasClk;
    bool hasReset;
    bool hasRun;
    bool hasRunning;
    bool isSource;
-   bool externalMemory;
 };
 
 String PreprocessVerilogFile(Arena* output, String fileContent,std::vector<const char*>* includeFilepaths,Arena* tempArena);

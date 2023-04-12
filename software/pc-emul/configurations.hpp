@@ -16,5 +16,6 @@ CalculatedOffsets ExtractDelay(Accelerator* accel,Arena* out);
 CalculatedOffsets ExtractMem(Accelerator* accel,Arena* out);
 CalculatedOffsets ExtractOutputs(Accelerator* accel,Arena* out);
 CalculatedOffsets ExtractExtraData(Accelerator* accel,Arena* out);
+CalculatedOffsets ExtractDebugData(Accelerator* accel,Arena* out);
 
 #endif // INCLUDED_VERSAT_CONFIGURATIONS_HPP

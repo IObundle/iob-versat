@@ -272,7 +272,7 @@ bool PassFilterConfiguration(Accelerator* topLevel,ComplexFUInstance* inst,Filte
    res |= filter.showStatic && inst->declaration->configs.size && IsConfigStatic(topLevel,inst);
    res |= filter.showState && inst->declaration->states.size;
    res |= filter.showDelay && inst->declaration->nDelays;
-   res |= filter.showMem && inst->declaration->isMemoryMapped;
+   res |= filter.showMem && (inst->declaration->isMemoryMapped || inst->declaration->externalMemory.size);
    res |= filter.showOutputs && inst->declaration->outputLatencies.size;
    res |= filter.showExtraData && inst->declaration->extraDataSize;
 
@@ -438,10 +438,10 @@ Optional<ValueSelected> ShowTable(Value iterable,Arena* arena,int selectedIndex 
 
    Optional<ValueSelected> res = {};
    if(ImGui::BeginTable("split",2,ImGuiTableFlags_RowBg)){
-      Iterator iter = Iterate(iterable);
       int index = 0;
-      for(Value val = GetValue(iter); HasNext(iter); Advance(&iter),index += 1){
+      for(Iterator iter = Iterate(iterable); HasNext(iter) ; Advance(&iter),index += 1){
          BLOCK_REGION(arena);
+         Value val = GetValue(iter);
          String repr = DebugValueRepresentation(val,arena);
 
          bool selected = (index == selectedIndex);
@@ -556,94 +556,6 @@ void AddToWindowState(ValueWindowState* state,Value val){
    state->init = true;
 }
 
-/*
-
-void UpdateWindowState(ValueWindowState* state){
-   for(int i = 0; i < WINDOW_STATE_FRAME_SIZE; i++){
-      if(!state->frame[i]){
-         break;
-      }
-
-      ValueSelection val = state->frame[i].value();
-
-      if(val.index == WINDOW_STATE_INVALID_INDEX){
-         break; // Nothing else to do
-      }
-
-      if(val.type == ValueSelection::EMBEDDED_LIST){
-         if(i + 1 >= WINDOW_STATE_FRAME_SIZE){
-            break;
-         }
-
-         Iterator iter = Iterate(val.val);
-         for(int index = 0; index < val.index; index++){
-            Advance(&iter);
-         }
-
-         Value subValue = GetValue(iter);
-         Value collapsed = CollapsePtrIntoStruct(subValue);
-
-         if(state->frame[i + 1]){
-            state->frame[i + 1].value().val = collapsed;
-         } else {
-            state->frame[i + 1] = ValueSelection{collapsed,WINDOW_STATE_INVALID_INDEX};
-         }
-      } else {
-         Value subValue = AccessStruct(val.val,val.index);
-         Value collapsed = CollapsePtrIntoStruct(subValue);
-         if(state->frame[i + 1]){
-            state->frame[i + 1].value().val = collapsed;
-         } else {
-            AddToWindowState(collapsed,state,i + 1,WINDOW_STATE_INVALID_INDEX);
-         }
-      }
-   }
-}
-
-void AddToWindowState(Value val,ValueWindowState* state,int frame,int index){
-   if(frame >= WINDOW_STATE_FRAME_SIZE){
-      return;
-   }
-
-   Value collapsed = CollapsePtrIntoStruct(val);
-
-   if(!state->frame[frame]){
-      ClearWindowState(state,frame);
-      state->frame[frame] = ValueSelection{collapsed,index};
-      if(IsEmbeddedListKind(collapsed.type)){
-         state->frame[frame].value().type = ValueSelection::EMBEDDED_LIST;
-      }
-
-      UpdateWindowState(state);
-      return;
-   }
-
-   Type* oldType = state->frame[frame].value().val.type;
-   Type* newType = collapsed.type;
-
-   if(oldType != newType){
-      ClearWindowState(state,frame);
-      state->frame[frame] = ValueSelection{collapsed,index};
-      UpdateWindowState(state);
-      return;
-   }
-
-   // Same type as before
-   ValueSelection old = state->frame[frame].value();
-
-   if(old.type == ValueSelection::EMBEDDED_LIST && old.val.custom == collapsed.custom){
-      state->frame[frame].value().index = index;
-   } else {
-      state->frame[frame] = ValueSelection{collapsed,index};
-   }
-
-   if(index != WINDOW_STATE_INVALID_INDEX){
-      UpdateWindowState(state);
-   }
-}
-
-*/
-
 void PrintWindowState(ValueWindowState* state){
    for(int i = 0; i < WINDOW_STATE_FRAME_SIZE; i++){
       printf("%d ",state->frame[i]);
@@ -696,16 +608,23 @@ void DisplayValueWindow(const char* name,ValueWindowState* state,Arena* arena){
             ImGui::TableNextColumn();
 
             Optional<ValueSelected> sel = {};
+            Type* type = nullptr;
             if(embeddedList){
                Value collapsed = CollapsePtrIntoStruct(currentValue);
                sel = ShowTable(collapsed,arena,state->frame[i]);
             } else {
                sel = OutputDebugValues(currentValue,arena); // TODO: This function displays arrays and hashtables, but the rest of the code assumes that everything is a struct. Gives bug when trying to access a Array<T> or something like that, because the code below tries to access the struct instead of the element clicked
+               Value collapsed = CollapsePtrIntoStruct(currentValue);
+               type = collapsed.type;
             }
 
             #if 1
             if(sel){
                state->frame[i] = sel.value().index;
+            }
+
+            if(state->frame[i] == WINDOW_STATE_INVALID_INDEX){
+               break;
             }
 
             // Next value
@@ -719,7 +638,13 @@ void DisplayValueWindow(const char* name,ValueWindowState* state,Arena* arena){
                currentValue = CollapsePtrIntoStruct(subValue);
                embeddedList = false;
             } else {
-               Value subValue = AccessStruct(currentValue,state->frame[i]);
+               Value subValue = {};
+               if(IsIndexable(type)){
+                  subValue = AccessObjectIndex(currentValue,state->frame[i]);
+               } else {
+                  subValue = AccessStruct(currentValue,state->frame[i]);
+               }
+
                currentValue = CollapsePtrIntoStruct(subValue);
 
                Type* type = currentValue.type;
@@ -729,9 +654,6 @@ void DisplayValueWindow(const char* name,ValueWindowState* state,Arena* arena){
             }
 
             #endif
-            if(state->frame[i] == WINDOW_STATE_INVALID_INDEX){
-               break;
-            }
          }
          ImGui::EndTable();
       }
@@ -761,6 +683,9 @@ void ShowConfigurations(Accelerator* accel,Arena* arena,Filter filter){
       }
       if(ImGui::Selectable("ExtraData",selected == 5)){
          selected = 5;
+      }
+      if(ImGui::Selectable("DebugData",selected == 6)){
+         selected = 6;
       }
    }
    ImGui::EndChild();
@@ -794,6 +719,10 @@ void ShowConfigurations(Accelerator* accel,Arena* arena,Filter filter){
    case 5:{
       offsets = ExtractExtraData(accel,arena);
       filter.config.showExtraData = true;
+   }break;
+   case 6:{
+      offsets = ExtractDebugData(accel,arena);
+      memset(&filter.config,0x1,sizeof(filter.config));
    }break;
    }
 
@@ -849,14 +778,18 @@ void OutputAcceleratorRunValues(InstanceNode* node,Arena* arena){
       arr.data = inst->config;
       arr.size = inst->declaration->configs.size;
 
-      ShowDualTable(MakeValue(&inst->declaration->configs,"Array<Wire>"),MakeValue(&arr,"Array<int>"),arena);
+      if(arr.data && arr.size){
+         ShowDualTable(MakeValue(&inst->declaration->configs,"Array<Wire>"),MakeValue(&arr,"Array<int>"),arena);
+      }
    }
    if(ImGui::CollapsingHeader("State")){
       Array<int> arr = {};
       arr.data = inst->state;
       arr.size = inst->declaration->states.size;
 
-      ShowDualTable(MakeValue(&inst->declaration->states,"Array<Wire>"),MakeValue(&arr,"Array<int>"),arena);
+      if(arr.data && arr.size){
+         ShowDualTable(MakeValue(&inst->declaration->states,"Array<Wire>"),MakeValue(&arr,"Array<int>"),arena);
+      }
    }
    if(ImGui::CollapsingHeader("Delay")){
       Array<int> arr = {};
@@ -865,7 +798,7 @@ void OutputAcceleratorRunValues(InstanceNode* node,Arena* arena){
 
       printf("%p %d\n",arr.data,arr.size);
 
-      if(arr.size){
+      if(arr.data && arr.size){
          ShowTable(MakeValue(&arr,"Array<int>"),arena);
       }
    }
@@ -874,14 +807,18 @@ void OutputAcceleratorRunValues(InstanceNode* node,Arena* arena){
       arr.data = inst->outputs;
       arr.size = inst->declaration->outputLatencies.size;
 
-      ShowTable(MakeValue(&arr,"Array<int>"),arena);
+      if(arr.data && arr.size){
+         ShowTable(MakeValue(&arr,"Array<int>"),arena);
+      }
    }
    if(ImGui::CollapsingHeader("Stored Outputs")){
       Array<int> arr = {};
       arr.data = inst->storedOutputs;
       arr.size = inst->declaration->outputLatencies.size;
 
-      ShowTable(MakeValue(&arr,"Array<int>"),arena);
+      if(arr.data && arr.size){
+         ShowTable(MakeValue(&arr,"Array<int>"),arena);
+      }
    }
    if(ImGui::CollapsingHeader("Inputs")){
       int inputs = inst->declaration->inputDelays.size;
@@ -976,7 +913,7 @@ static ValueWindowState valueWindowState;
 
 InstanceNode* GetInstanceFromName(Accelerator* accel,String string,Arena* arena){
    AcceleratorIterator iter = {};
-   for(InstanceNode* node = iter.Start(accel,arena,false); node; node = iter.Next()){
+   for(InstanceNode* node = iter.Start(accel,arena,true); node; node = iter.Next()){
       BLOCK_REGION(arena);
       String name = iter.GetFullName(arena);
 

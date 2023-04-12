@@ -24,8 +24,8 @@ void InitDebug(){
 }
 
 void CheckMemory(Accelerator* topLevel){
-   Arena* temp = &topLevel->temp;
-   ArenaMarker marker(temp);
+   STACK_ARENA(tempInst,Kilobyte(64));
+   Arena* temp = &tempInst;
 
    AcceleratorIterator iter = {};
    iter.Start(topLevel,temp,true);
@@ -34,8 +34,8 @@ void CheckMemory(Accelerator* topLevel){
 }
 
 void CheckMemory(Accelerator* topLevel,MemType type){
-   Arena* temp = &topLevel->temp;
-   ArenaMarker marker(temp);
+   STACK_ARENA(tempInst,Kilobyte(64));
+   Arena* temp = &tempInst;
 
    AcceleratorIterator iter = {};
    iter.Start(topLevel,temp,true);
@@ -290,8 +290,8 @@ void DisplayAcceleratorMemory(Accelerator* topLevel){
 }
 
 void DisplayUnitConfiguration(Accelerator* topLevel){
-   Arena* temp = &topLevel->temp;
-   ArenaMarker marker(temp);
+   STACK_ARENA(tempInst,Kilobyte(64));
+   Arena* temp = &tempInst;
 
    AcceleratorIterator iter = {};
    iter.Start(topLevel,temp,true);
@@ -343,8 +343,8 @@ bool CheckInputAndOutputNumber(FUDeclaration* type,int inputs,int outputs){
 }
 
 void PrintAcceleratorInstances(Accelerator* accel){
-   Arena* temp = &accel->temp;
-   ArenaMarker marker(temp);
+   STACK_ARENA(tempInst,Kilobyte(64));
+   Arena* temp = &tempInst;
 
    AcceleratorIterator iter = {};
    for(InstanceNode* node = iter.Start(accel,temp,false); node; node = iter.Next()){
@@ -467,7 +467,7 @@ static void OutputGraphDotFile_(Versat* versat,Accelerator* accel,bool collapseS
             nodeEdge.second = con->instConnectedTo.node;
 
             GetOrAllocateResult res = seen->GetOrAllocate(nodeEdge);
-            if(res.result){
+            if(res.alreadyExisted){
                continue;
             }
          }
@@ -596,35 +596,12 @@ void OutputMemoryHex(void* memory,int size){
    printf("\n");
 }
 
-static const int VCD_MAPPING_SIZE = 5;
-static std::array<char,VCD_MAPPING_SIZE+1> currentMapping = {'a','a','a','a','a','\0'};
-static int mappingIncrements = 0;
-static void ResetMapping(){
-   for(int i = 0; i < VCD_MAPPING_SIZE; i++){
-      currentMapping[i] = 'a';
-   }
-   mappingIncrements = 0;
-}
-
-static void IncrementMapping(){
-   for(int i = VCD_MAPPING_SIZE-1; i >= 0; i--){
-      mappingIncrements += 1;
-      currentMapping[i] += 1;
-      if(currentMapping[i] == 'z' + 1){
-         currentMapping[i] = 'a';
-      } else {
-         return;
-      }
-   }
-   Assert(false && "Increase mapping space");
-}
-
-static void PrintVCDDefinitions_(FILE* accelOutputFile,Accelerator* accel){
+static void PrintVCDDefinitions_(FILE* accelOutputFile,VCDMapping& currentMapping,Accelerator* accel){
    #if 0
    for(StaticInfo* info : accel->staticInfo){
       for(Wire& wire : info->configs){
-         fprintf(accelOutputFile,"$var wire  %d %s %.*s_%.*s $end\n",wire.bitsize,currentMapping.data(),UNPACK_SS(info->id.name),UNPACK_SS(wire.name));
-         IncrementMapping();
+         fprintf(accelOutputFile,"$var wire  %d %s %.*s_%.*s $end\n",wire.bitsize,currentMapping.Get(),UNPACK_SS(info->id.name),UNPACK_SS(wire.name));
+         currentMapping.Increment();
       }
    }
    #endif
@@ -634,39 +611,43 @@ static void PrintVCDDefinitions_(FILE* accelOutputFile,Accelerator* accel){
       fprintf(accelOutputFile,"$scope module %.*s_%d $end\n",UNPACK_SS(inst->name),inst->id);
 
       for(int i = 0; i < ptr->inputs.size; i++){
-         fprintf(accelOutputFile,"$var wire  32 %s %.*s_in%d $end\n",currentMapping.data(),UNPACK_SS(inst->name),i);
-         IncrementMapping();
+         fprintf(accelOutputFile,"$var wire  32 %s %.*s_in%d $end\n",currentMapping.Get(),UNPACK_SS(inst->name),i);
+         currentMapping.Increment();
       }
 
       for(int i = 0; i < inst->declaration->outputLatencies.size; i++){
-         fprintf(accelOutputFile,"$var wire  32 %s %.*s_out%d $end\n",currentMapping.data(),UNPACK_SS(inst->name),i);
-         IncrementMapping();
-         fprintf(accelOutputFile,"$var wire  32 %s %.*s_stored_out%d $end\n",currentMapping.data(),UNPACK_SS(inst->name),i);
-         IncrementMapping();
+         fprintf(accelOutputFile,"$var wire  32 %s %.*s_out%d $end\n",currentMapping.Get(),UNPACK_SS(inst->name),i);
+         currentMapping.Increment();
+         fprintf(accelOutputFile,"$var wire  32 %s %.*s_stored_out%d $end\n",currentMapping.Get(),UNPACK_SS(inst->name),i);
+         currentMapping.Increment();
       }
 
       for(Wire& wire : inst->declaration->configs){
-         fprintf(accelOutputFile,"$var wire  %d %s %.*s $end\n",wire.bitsize,currentMapping.data(),UNPACK_SS(wire.name));
-         IncrementMapping();
+         fprintf(accelOutputFile,"$var wire  %d %s %.*s $end\n",wire.bitsize,currentMapping.Get(),UNPACK_SS(wire.name));
+         currentMapping.Increment();
       }
 
       for(Wire& wire : inst->declaration->states){
-         fprintf(accelOutputFile,"$var wire  %d %s %.*s $end\n",wire.bitsize,currentMapping.data(),UNPACK_SS(wire.name));
-         IncrementMapping();
+         fprintf(accelOutputFile,"$var wire  %d %s %.*s $end\n",wire.bitsize,currentMapping.Get(),UNPACK_SS(wire.name));
+         currentMapping.Increment();
       }
 
       for(int i = 0; i < inst->declaration->nDelays; i++){
-         fprintf(accelOutputFile,"$var wire 32 %s delay%d $end\n",currentMapping.data(),i);
-         IncrementMapping();
+         fprintf(accelOutputFile,"$var wire 32 %s delay%d $end\n",currentMapping.Get(),i);
+         currentMapping.Increment();
       }
 
       if(inst->declaration->implementsDone){
-         fprintf(accelOutputFile,"$var wire  1 %s done $end\n",currentMapping.data());
-         IncrementMapping();
+         fprintf(accelOutputFile,"$var wire  1 %s done $end\n",currentMapping.Get());
+         currentMapping.Increment();
+      }
+
+      if(inst->declaration->printVCD){
+         inst->declaration->printVCD(inst,accelOutputFile,currentMapping,{},false,true);
       }
 
       if(inst->declaration->fixedDelayCircuit){
-         PrintVCDDefinitions_(accelOutputFile,inst->declaration->fixedDelayCircuit);
+         PrintVCDDefinitions_(accelOutputFile,currentMapping,inst->declaration->fixedDelayCircuit);
       }
 
       fprintf(accelOutputFile,"$upscope $end\n");
@@ -674,17 +655,17 @@ static void PrintVCDDefinitions_(FILE* accelOutputFile,Accelerator* accel){
 }
 
 Array<int> PrintVCDDefinitions(FILE* accelOutputFile,Accelerator* accel,Arena* tempSave){
-   ResetMapping();
+   VCDMapping mapping;
 
    fprintf(accelOutputFile,"$timescale   1ns $end\n");
    fprintf(accelOutputFile,"$scope module TOP $end\n");
    fprintf(accelOutputFile,"$var wire  1 a clk $end\n");
    fprintf(accelOutputFile,"$var wire  32 b counter $end\n");
-   PrintVCDDefinitions_(accelOutputFile,accel);
+   PrintVCDDefinitions_(accelOutputFile,mapping,accel);
    fprintf(accelOutputFile,"$upscope $end\n");
    fprintf(accelOutputFile,"$enddefinitions $end\n");
 
-   Array<int> array = PushArray<int>(tempSave,mappingIncrements);
+   Array<int> array = PushArray<int>(tempSave,mapping.increments);
    return array;
 }
 
@@ -701,14 +682,14 @@ static char* Bin(unsigned int value){
    return buffer;
 }
 
-static void PrintVCD_(FILE* accelOutputFile,AcceleratorIterator iter,int time,Array<int> sameValueCheckSpace){
+static void PrintVCD_(FILE* accelOutputFile,VCDMapping& currentMapping,AcceleratorIterator iter,bool firstTime,Array<int> sameValueCheckSpace){
    #if 0
    for(StaticInfo* info : accel->staticInfo){
       for(int i = 0; i < info->configs.size; i++){
-         if(time == 0){
-            fprintf(accelOutputFile,"b%s %s\n",Bin(info->ptr[i]),currentMapping.data());
+         if(firstTime){
+            fprintf(accelOutputFile,"b%s %s\n",Bin(info->ptr[i]),currentMapping.Get());
          }
-         IncrementMapping();
+         currentMapping.Increment();
       }
    }
    #endif
@@ -717,86 +698,90 @@ static void PrintVCD_(FILE* accelOutputFile,AcceleratorIterator iter,int time,Ar
       ComplexFUInstance* inst = node->inst;
       for(int i = 0; i < node->inputs.size; i++){
          if(node->inputs[i].node == nullptr){
-            if(time == 0){
-               fprintf(accelOutputFile,"bx %s\n",currentMapping.data());
+            if(firstTime){
+               fprintf(accelOutputFile,"bx %s\n",currentMapping.Get());
             }
          } else {
             int value = GetInputValue(inst,i);
 
-            if(time == 0 || (value != sameValueCheckSpace[mappingIncrements])){
-               fprintf(accelOutputFile,"b%s %s\n",Bin(value),currentMapping.data());
-               sameValueCheckSpace[mappingIncrements] = value;
+            if(firstTime || (value != sameValueCheckSpace[currentMapping.increments])){
+               fprintf(accelOutputFile,"b%s %s\n",Bin(value),currentMapping.Get());
+               sameValueCheckSpace[currentMapping.increments] = value;
             }
          }
 
-         IncrementMapping();
+         currentMapping.Increment();
       }
 
       for(int i = 0; i < inst->declaration->outputLatencies.size; i++){
-         if(time == 0 || (inst->outputs[i] != sameValueCheckSpace[mappingIncrements])){
-            fprintf(accelOutputFile,"b%s %s\n",Bin(inst->outputs[i]),currentMapping.data());
-            sameValueCheckSpace[mappingIncrements] = inst->outputs[i];
+         if(firstTime || (inst->outputs[i] != sameValueCheckSpace[currentMapping.increments])){
+            fprintf(accelOutputFile,"b%s %s\n",Bin(inst->outputs[i]),currentMapping.Get());
+            sameValueCheckSpace[currentMapping.increments] = inst->outputs[i];
          }
-         IncrementMapping();
-         if(time == 0 || (inst->storedOutputs[i] != sameValueCheckSpace[mappingIncrements])){
-            fprintf(accelOutputFile,"b%s %s\n",Bin(inst->storedOutputs[i]),currentMapping.data());
-            sameValueCheckSpace[mappingIncrements] = inst->storedOutputs[i];
+         currentMapping.Increment();
+         if(firstTime || (inst->storedOutputs[i] != sameValueCheckSpace[currentMapping.increments])){
+            fprintf(accelOutputFile,"b%s %s\n",Bin(inst->storedOutputs[i]),currentMapping.Get());
+            sameValueCheckSpace[currentMapping.increments] = inst->storedOutputs[i];
          }
-         IncrementMapping();
+         currentMapping.Increment();
       }
 
       for(int i = 0; i < inst->declaration->configs.size; i++){
-         if(time == 0){
-            fprintf(accelOutputFile,"b%s %s\n",Bin(inst->config[i]),currentMapping.data());
+         if(firstTime){
+            fprintf(accelOutputFile,"b%s %s\n",Bin(inst->config[i]),currentMapping.Get());
          }
-         IncrementMapping();
+         currentMapping.Increment();
       }
 
       for(int i = 0; i < inst->declaration->states.size; i++){
-         if(time == 0 || (inst->state[i] != sameValueCheckSpace[mappingIncrements])){
-            fprintf(accelOutputFile,"b%s %s\n",Bin(inst->state[i]),currentMapping.data());
-            sameValueCheckSpace[mappingIncrements] = inst->state[i];
+         if(firstTime || (inst->state[i] != sameValueCheckSpace[currentMapping.increments])){
+            fprintf(accelOutputFile,"b%s %s\n",Bin(inst->state[i]),currentMapping.Get());
+            sameValueCheckSpace[currentMapping.increments] = inst->state[i];
          }
-         IncrementMapping();
+         currentMapping.Increment();
       }
 
       for(int i = 0; i < inst->declaration->nDelays; i++){
-         if(time == 0 || (inst->delay[i] != sameValueCheckSpace[mappingIncrements])){
-            fprintf(accelOutputFile,"b%s %s\n",Bin(inst->delay[i]),currentMapping.data());
-            sameValueCheckSpace[mappingIncrements] = inst->delay[i];
+         if(firstTime || (inst->delay[i] != sameValueCheckSpace[currentMapping.increments])){
+            fprintf(accelOutputFile,"b%s %s\n",Bin(inst->delay[i]),currentMapping.Get());
+            sameValueCheckSpace[currentMapping.increments] = inst->delay[i];
          }
 
-         IncrementMapping();
+         currentMapping.Increment();
       }
 
       if(inst->declaration->implementsDone){
-         if(time == 0 || (inst->done != sameValueCheckSpace[mappingIncrements])){
-            fprintf(accelOutputFile,"%d%s\n",inst->done ? 1 : 0,currentMapping.data());
-            sameValueCheckSpace[mappingIncrements] = inst->done;
+         if(firstTime || (inst->done != sameValueCheckSpace[currentMapping.increments])){
+            fprintf(accelOutputFile,"%d%s\n",inst->done ? 1 : 0,currentMapping.Get());
+            sameValueCheckSpace[currentMapping.increments] = inst->done;
          }
-         IncrementMapping();
+         currentMapping.Increment();
+      }
+
+      if(inst->declaration->printVCD){
+         inst->declaration->printVCD(inst,accelOutputFile,currentMapping,sameValueCheckSpace,firstTime,false);
       }
 
       if(inst->declaration->fixedDelayCircuit){
          AcceleratorIterator it = iter.LevelBelowIterator();
 
-         PrintVCD_(accelOutputFile,it,time,sameValueCheckSpace);
+         PrintVCD_(accelOutputFile,currentMapping,it,firstTime,sameValueCheckSpace);
       }
    }
 }
 
-void PrintVCD(FILE* accelOutputFile,Accelerator* accel,int time,int clock,Array<int> sameValueCheckSpace){ // Need to put some clock signal
-   Arena* temp = &accel->temp;
-   ArenaMarker marker(temp);
-   ResetMapping();
+void PrintVCD(FILE* accelOutputFile,Accelerator* accel,int time,int clock,Array<int> sameValueCheckSpace,Arena* arena){ // Need to put some clock signal
+   BLOCK_REGION(arena);
 
    fprintf(accelOutputFile,"#%d\n",time * 10);
    fprintf(accelOutputFile,"%da\n",clock ? 1 : 0);
-   fprintf(accelOutputFile,"b%s b\n",Bin((time + 1) / 2));
+   fprintf(accelOutputFile,"b%s b\n",Bin((time) / 2));
 
    AcceleratorIterator iter = {};
-   iter.Start(accel,temp,true);
-   PrintVCD_(accelOutputFile,iter,time,sameValueCheckSpace);
+   iter.Start(accel,arena,true);
+   VCDMapping mapping;
+
+   PrintVCD_(accelOutputFile,mapping,iter,time == 0,sameValueCheckSpace);
 }
 
 #include <sys/types.h>

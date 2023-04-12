@@ -35,7 +35,7 @@ struct Type{
       Type* pointerType;
       Type* arrayType; // Array size can by calculated from size (size / size of arrayed type)
       Type* typedefType;
-      EnumMember* enumMembers;
+      Array<Pair<String,int>> enumMembers;
 
       struct{ // TEMPLATED_STRUCT_DEF
          Array<TemplatedMember> templateMembers;

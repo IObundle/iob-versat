@@ -56,6 +56,10 @@
       .m_axi_rready(m_axi_rready[1*1+:1]),
       `endif
 
+`ifdef VERSAT_EXTERNAL_MEMORY
+      `include "versat_external_memory_portmap.vh"
+`endif
+
       .valid(slaves_req[`valid(`VERSAT)]),
       .address(slaves_req[`address(`VERSAT,`VERSAT_ADDR_W+2)-2]),
       .wdata(slaves_req[`wdata(`VERSAT)-(`DATA_W-`VERSAT_WDATA_W)]),

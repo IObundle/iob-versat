@@ -116,8 +116,10 @@ void PopMark(Arena* arena,Byte* mark){
 Byte* PushBytes(Arena* arena, size_t size){
    Byte* ptr = &arena->mem[arena->used];
 
-
-   Assert(arena->used + size <= arena->totalAllocated);
+   if(arena->used + size > arena->totalAllocated){
+      printf("[%s] Used: %d, Size: %d, Total: %d\n",__PRETTY_FUNCTION__,arena->used,size,arena->totalAllocated);
+      DEBUG_BREAK();
+   }
 
    //memset(ptr,0,size);
    arena->used += size;
@@ -175,11 +177,12 @@ String PushString(Arena* arena,String ss){
 
 String vPushString(Arena* arena,const char* format,va_list args){
    char* buffer = (char*) &arena->mem[arena->used];
-   int size = vsprintf(buffer,format,args);
+   size_t maximum = arena->totalAllocated - arena->used;
+   int size = vsnprintf(buffer,maximum,format,args);
+
+   Assert(size < maximum);
 
    arena->used += (size_t) (size);
-
-   Assert(arena->used <= arena->totalAllocated);
 
    String res = STRING(buffer,size);
 
@@ -224,10 +227,9 @@ DynamicArena* CreateDynamicArena(int numberPages){
 
 Byte* PushBytes(DynamicArena* arena,size_t size){
    DynamicArena* ptr = arena;
-   Byte* start = arena->mem;
 
    DynamicArena* previous = ptr;
-   while(start + size > (Byte*) ptr){
+   while(ptr->mem + ptr->used + size > (Byte*) ptr){
       if(ptr->next){
          ptr = ptr->next;
       } else {
@@ -238,6 +240,8 @@ Byte* PushBytes(DynamicArena* arena,size_t size){
 
    Byte* res = ((Byte*) ptr->mem) + ptr->used;
    ptr->used += size;
+
+   Assert(ptr->used <= (GetPageSize() - sizeof(DynamicArena)));
 
    return res;
 }

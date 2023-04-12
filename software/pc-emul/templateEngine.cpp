@@ -596,7 +596,10 @@ static String EvalBlockCommand(Block* block){
 
       Value iterating = EvalExpression(com->expressions[3]);
       int counter = 0;
-      for(Iterator iter = Iterate(iterating); HasNext(iter); Advance(&iter)){
+      int index = 0;
+      for(Iterator iter = Iterate(iterating); HasNext(iter); index += 1,Advance(&iter)){
+         envTable[STRING("index")] = MakeValue(index);
+
          Value val = GetValue(iter);
          envTable[id] = val;
 
@@ -616,6 +619,10 @@ static String EvalBlockCommand(Block* block){
 
          counter += 1;
       }
+      if(counter == 0){
+         return res;
+      }
+
       outputArena->used -= separator.str.size;
       res.size -= separator.str.size;
    } else if(CompareString(com->name,"for")){
@@ -625,9 +632,10 @@ static String EvalBlockCommand(Block* block){
       Value iterating = EvalExpression(com->expressions[1]);
       int index = 0;
       for(Iterator iter = Iterate(iterating); HasNext(iter); index += 1,Advance(&iter)){
+         envTable[STRING("index")] = MakeValue(index);
+
          Value val = GetValue(iter);
          envTable[id] = val;
-         envTable[STRING("index")] = MakeValue(index);
 
          for(Block* ptr = block->nextInner; ptr != nullptr; ptr = ptr->next){
             res.size += Eval(ptr).size; // Push on stack
@@ -810,6 +818,9 @@ static ValueAndText EvalNonBlockCommand(Command* com){
       }
    } else if(CompareString(com->name,"debugBreak")){
       DEBUG_BREAK();
+   } else if(CompareString(com->name,"end")){
+      printf("Error: founded a strain end in the template\n");
+      Assert(false);
    } else {
       NOT_IMPLEMENTED;
    }
@@ -864,6 +875,7 @@ static String Eval(Block* block){
       }
    }
 
+   Assert(res.size >= 0);
    return res;
 }
 

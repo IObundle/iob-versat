@@ -35,7 +35,7 @@ String PushMemoryHex(Arena* arena,void* memory,int size);
 void OutputMemoryHex(void* memory,int size);
 
 Array<int> PrintVCDDefinitions(FILE* accelOutputFile,Accelerator* accel,Arena* sameCheckSpace);
-void PrintVCD(FILE* accelOutputFile,Accelerator* accel,int time,int clock,Array<int> sameCheckSpace);
+void PrintVCD(FILE* accelOutputFile,Accelerator* accel,int time,int clock,Array<int> sameCheckSpace,Arena* arena);
 
 void SetDebugSignalHandler(SignalHandler func);
 

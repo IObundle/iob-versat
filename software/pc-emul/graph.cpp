@@ -831,7 +831,7 @@ Edge* ConnectUnitsGetEdge(PortNode out,PortNode in,int delay){
 
    Accelerator* accel = out.node->inst->accel;
 
-   Edge* edge = PushStruct<Edge>(&accel->edgesMemory);
+   Edge* edge = PushStruct<Edge>(accel->accelMemory);
    edge->next = accel->edges;
    accel->edges = edge;
 
@@ -848,7 +848,7 @@ Edge* ConnectUnitsGetEdge(PortNode out,PortNode in,int delay){
    // Add info to outputNode
    // Update all outputs
    {
-   ConnectionNode* con = PushStruct<ConnectionNode>(&accel->instancesMemory);
+   ConnectionNode* con = PushStruct<ConnectionNode>(accel->accelMemory);
    con->edgeDelay = delay;
    con->port = out.port;
    con->instConnectedTo.node = inputNode;
@@ -860,7 +860,7 @@ Edge* ConnectUnitsGetEdge(PortNode out,PortNode in,int delay){
 
    // Add info to inputNode
    {
-   ConnectionNode* con = PushStruct<ConnectionNode>(&accel->instancesMemory);
+   ConnectionNode* con = PushStruct<ConnectionNode>(accel->accelMemory);
    con->edgeDelay = delay;
    con->port = in.port;
    con->instConnectedTo.node = outputNode;
@@ -893,7 +893,7 @@ Edge* ConnectUnitsGetEdge(FUInstance* out,int outIndex,FUInstance* in,int inInde
 
    Accelerator* accel = out->accel;
 
-   Edge* edge = PushStruct<Edge>(&accel->edgesMemory);
+   Edge* edge = PushStruct<Edge>(accel->accelMemory);
 
    if(previous){
       edge->next = previous->next;
@@ -916,7 +916,7 @@ Edge* ConnectUnitsGetEdge(FUInstance* out,int outIndex,FUInstance* in,int inInde
    // Add info to outputNode
    // Update all outputs
    {
-   ConnectionNode* con = PushStruct<ConnectionNode>(&accel->instancesMemory);
+   ConnectionNode* con = PushStruct<ConnectionNode>(accel->accelMemory);
    con->edgeDelay = delay;
    con->port = outIndex;
    con->instConnectedTo.node = inputNode;
@@ -928,7 +928,7 @@ Edge* ConnectUnitsGetEdge(FUInstance* out,int outIndex,FUInstance* in,int inInde
 
    // Add info to inputNode
    {
-   ConnectionNode* con = PushStruct<ConnectionNode>(&accel->instancesMemory);
+   ConnectionNode* con = PushStruct<ConnectionNode>(accel->accelMemory);
    con->edgeDelay = delay;
    con->port = inIndex;
    con->instConnectedTo.node = outputNode;

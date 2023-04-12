@@ -54,6 +54,7 @@ bool ZeroOutRealloc(Allocation<T>* alloc,int newSize){
 template<typename T>
 void Reserve(Allocation<T>* alloc,int reservedSize){
    alloc->ptr = (T*) calloc(reservedSize,sizeof(T));
+   Assert(alloc->ptr);
    alloc->reserved = reservedSize;
 }
 
@@ -138,6 +139,28 @@ Hashmap<Key,Data>* PushHashmap(Arena* arena,int maxAmountOfElements){
    }
 
    return map;
+}
+
+template<typename Key,typename Data>
+Array<Key> HashmapKeyArray(Hashmap<Key,Data>* hashmap,Arena* out){
+   Array<Key> res = PushArray<Key>(out,hashmap->nodesUsed);
+
+   int index = 0;
+   for(Pair<Key,Data>& pair : *hashmap){
+      res[index++] = pair.first;
+   }
+   return res;
+}
+
+template<typename Key,typename Data>
+Array<Data> HashmapDataArray(Hashmap<Key,Data>* hashmap,Arena* out){
+   Array<Data> res = PushArray<Data>(out,hashmap->nodesUsed);
+
+   int index = 0;
+   for(Pair<Key,Data>& pair : *hashmap){
+      res[index++] = pair.second;
+   }
+   return res;
 }
 
 template<typename Key,typename Data>
@@ -230,6 +253,17 @@ Data* Hashmap<Key,Data>::Get(Key key){
 }
 
 template<typename Key,typename Data>
+Data* Hashmap<Key,Data>::GetOrInsert(Key key,Data data){
+   Data* ptr = Get(key);
+
+   if(ptr == nullptr){
+      return Insert(key,data);
+   }
+
+   return ptr;
+}
+
+template<typename Key,typename Data>
 Data Hashmap<Key,Data>::GetOrFail(Key key){
    Data* ptr = Get(key);
    Assert(ptr);
@@ -244,7 +278,7 @@ GetOrAllocateResult<Data> Hashmap<Key,Data>::GetOrAllocate(Key key){
    GetOrAllocateResult<Data> res = {};
 
    if(ptr){
-      res.result = true;
+      res.alreadyExisted = true;
    } else {
       ptr = Insert(key,(Data){});
    }

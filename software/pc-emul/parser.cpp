@@ -465,7 +465,7 @@ bool CheckFormat(const char* format,Token tok){
          }
       }
 
-      if(tokenIndex > tok.size){
+      if(tokenIndex >= tok.size){
          return false;
       }
 
@@ -479,8 +479,17 @@ bool CheckFormat(const char* format,Token tok){
                return false;
             }
 
-            for(; tokenIndex < tok.size; tokenIndex++){
+            for(tokenIndex += 1; tokenIndex < tok.size; tokenIndex++){
                if(!IsNum(tok[tokenIndex])){
+                  break;
+               }
+            }
+         }break;
+         case 's':{
+            char terminator = format[formatIndex];
+
+            for(;tokenIndex < tok.size; tokenIndex++){
+               if(tok[tokenIndex] == terminator){
                   break;
                }
             }
