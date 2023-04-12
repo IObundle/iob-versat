@@ -12,18 +12,22 @@ struct Command;
 
 struct Expression{
    const char* op;
-   SizedString id;
-   Expression** expressions;
+   String id;
+   Array<Expression*> expressions;
    Command* command;
-   int size;
    Value val;
-   SizedString text;
+   String text;
 
    enum {UNDEFINED,OPERATION,IDENTIFIER,COMMAND,LITERAL,ARRAY_ACCESS,MEMBER_ACCESS} type;
 };
 
 typedef int (*CharFunction) (const char* ptr,int size);
-typedef SizedString Token;
+typedef String Token;
+
+struct FindFirstResult{
+   Token foundFirst;
+   Token peekFindNotIncluded;
+};
 
 class Tokenizer{
    const char* start;
@@ -45,7 +49,7 @@ private:
 
 public:
 
-   Tokenizer(SizedString content,const char* singleChars,std::vector<std::string> specialChars); // Content must remain valid through the entire parsing process
+   Tokenizer(String content,const char* singleChars,std::vector<std::string> specialChars); // Content must remain valid through the entire parsing process
 
    Token PeekToken();
    Token NextToken();
@@ -56,13 +60,18 @@ public:
    Token PeekFindIncluding(const char* str);
    Token NextFindUntil(const char* str);
 
+   String GetStartOfCurrentLine();
+
    bool IfPeekToken(const char* str);
    bool IfNextToken(const char* str);
 
-   Token FindFirst(std::initializer_list<const char*> strings);
+   bool IsSingleChar(char ch);
+   bool IsSingleChar(const char* chars);
+
+   FindFirstResult FindFirst(std::initializer_list<const char*> strings);
 
    // For expressions where there is a open and a closing delimiter (think '{...{...}...}') and need to check where an associated close delimiter is
-   SizedString PeekUntilDelimiterExpression(std::initializer_list<const char*> open,std::initializer_list<const char*> close, int numberOpenSeen); //
+   String PeekUntilDelimiterExpression(std::initializer_list<const char*> open,std::initializer_list<const char*> close, int numberOpenSeen); //
 
    Token PeekWhitespace();
 
@@ -78,24 +87,33 @@ public:
    bool Done();
    int Lines(){return lines;};
 
-   bool IsSpecialOrSingle(SizedString toTest);
+   bool IsSpecialOrSingle(String toTest);
 };
 
 bool CheckStringOnlyWhitespace(Token tok);
+bool Contains(String str,const char* toCheck);
+
 bool CheckFormat(const char* format,Token tok);
-bool Contains(SizedString str,const char* toCheck);
+Array<Value> ExtractValues(const char* format,Token tok,Arena* arena);
+
+String TrimWhitespaces(String in);
+
+String GeneratePointingString(int startPos,int size,Arena* arena);
 
 Token ExtendToken(Token t1,Token t2);
+int GetTokenPositionInside(String text,String token); // Does not compare strings, just uses pointer arithmetic
 
-int CountSubstring(SizedString str,SizedString substr);
+int CountSubstring(String str,String substr);
 
 void StoreToken(Token token,char* buffer);
 #define CompareToken CompareString
 
-int ParseInt(SizedString str);
+int ParseInt(String str);
+double ParseDouble(String str);
+float ParseFloat(String str);
 bool IsNum(char ch);
 
-typedef Expression* (*ParsingFunction)(Tokenizer* tok);
+typedef Expression* (*ParsingFunction)(Tokenizer* tok,Arena* arena);
 Expression* ParseOperationType(Tokenizer* tok,std::initializer_list<std::initializer_list<const char*>> operators,ParsingFunction finalFunction,Arena* tempArena);
 
 #endif // INCLUDED_PARSER

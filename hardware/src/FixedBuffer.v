@@ -24,13 +24,6 @@ generate
       begin
          out0 <= in0;
       end
-   end else if(AMOUNT == 1)begin
-      reg [31:0] bufferData;
-      always @(posedge clk)
-      begin
-         out0 <= bufferData;
-         bufferData <= in0;
-      end
    end else begin
       integer i;
       reg [31:0] bufferData[AMOUNT-1:0];

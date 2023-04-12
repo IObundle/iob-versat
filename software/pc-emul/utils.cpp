@@ -4,29 +4,50 @@
 #include <limits.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <dirent.h>
+#include <sys/ptrace.h>
 
-#include "stdio.h"
-#include "string.h"
+#include <cstdio>
+#include <cstring>
+#include <cstdarg>
 
-bool operator<(const SizedString& lhs,const SizedString& rhs){
-   for(int i = 0; i < mini(lhs.size,rhs.size); i++){
-      if(lhs.str[i] < rhs.str[i]){
-         return true;
-      }
-      if(lhs.str[i] > rhs.str[i]){
-         return false;
+bool CurrentlyDebugging(){
+   static bool init = false;
+   static bool value;
+
+   if(!init){
+      init = true;
+      if(ptrace(PTRACE_TRACEME,0,1,0) < 0){
+         value = true;
+      } else {
+         ptrace(PTRACE_DETACH,0,1,0);
       }
    }
 
-   if(lhs.size < rhs.size){
-      return true;
-   }
-
-   return false;
+   return value;
 }
 
-bool operator==(const SizedString& lhs,const SizedString& rhs){
-   bool res = CompareString(lhs,rhs);
+char* StaticFormat(const char* format,...){
+   static const int BUFFER_SIZE = 1024*4;
+   static char buffer[BUFFER_SIZE];
+
+   va_list args;
+   va_start(args,format);
+
+   int written = vsprintf(buffer,format,args);
+
+   va_end(args);
+
+   Assert(written < BUFFER_SIZE);
+
+   return buffer;
+}
+
+double GetTime(){
+   timespec time;
+   clock_gettime(CLOCK_MONOTONIC, &time);
+
+   double res = time.tv_sec + 1e-9*time.tv_nsec;
 
    return res;
 }
@@ -58,17 +79,40 @@ void MakeDirectory(const char* path){
    mkdir(path, S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
 }
 
-SizedString PathGoUp(char* pathBuffer){
-   SizedString content = MakeSizedString(pathBuffer);
+FILE* OpenFileAndCreateDirectories(const char* path,const char* format){
+   char buffer[PATH_MAX];
+   memset(buffer,0,PATH_MAX);
+
+   for(int i = 0; path[i]; i++){
+      buffer[i] = path[i];
+
+      if(path[i] == '/'){
+         DIR* dir = opendir(buffer);
+         if(!dir && errno == ENOENT){
+            MakeDirectory(buffer);
+         }
+         if(dir){
+            closedir(dir);
+         }
+      }
+   }
+
+   FILE* file = fopen(buffer,format);
+   Assert(file);
+   return file;
+}
+
+String PathGoUp(char* pathBuffer){
+   String content = STRING(pathBuffer);
 
    int i = content.size - 1;
    for(; i >= 0; i--){
-      if(content.str[i] == '/'){
+      if(content[i] == '/'){
          break;
       }
    }
 
-   if(content.str[i] != '/'){
+   if(content[i] != '/'){
       return content;
    }
 

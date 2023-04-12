@@ -29,6 +29,14 @@ module VRead #(
     // input / output data
     (* versat_latency = 1 *) output [DATA_W-1:0]    out0,
 
+   // External memory
+   output [ADDR_W-1:0]   ext_2p_addr_out_0,
+   output [ADDR_W-1:0]   ext_2p_addr_in_0,
+   output                ext_2p_write_0,
+   output                ext_2p_read_0,
+   input  [DATA_W-1:0]   ext_2p_data_in_0,
+   output [DATA_W-1:0]   ext_2p_data_out_0,
+
     // configurations
    input [`IO_ADDR_W-1:0]  ext_addr,
    input [`MEM_ADDR_W-1:0] int_addr,
@@ -47,7 +55,7 @@ module VRead #(
    input [`MEM_ADDR_W-1:0] startB,
    input [`MEM_ADDR_W-1:0] shiftB,
    input [`MEM_ADDR_W-1:0] incrB,
-   input [32-1:0]          delay0,// delayB
+   input [31:0]            delay0,// delayB
    input                   reverseB,
    input                   extB,
    input [`MEM_ADDR_W-1:0] iter2B,
@@ -73,8 +81,8 @@ module VRead #(
    always @(posedge clk,posedge rst)
    begin
       if(rst) begin
-         doneA <= 1'b0;
-         doneB <= 1'b0;
+         doneA <= 1'b1;
+         doneB <= 1'b1;
       end else if(run) begin
          doneA <= 1'b0;
          doneB <= 1'b0;
@@ -98,7 +106,7 @@ module VRead #(
 
    wire [1:0]             direction = 2'b01;
    wire [`MEM_ADDR_W-1:0] startA    = `MEM_ADDR_W'd0;
-   wire [`PERIOD_W-1:0]   delayA    = `PERIOD_W'd0;
+   wire [31:0]   delayA    = 0;
 
    // port addresses and enables
    wire [`MEM_ADDR_W-1:0] addrA, addrA_int, addrA_int2;
@@ -217,22 +225,12 @@ module VRead #(
       .rst(rst)
       );
 
-   iob_2p_ram #(
-               .DATA_W(DATA_W),
-               .ADDR_W(`MEM_ADDR_W)
-               )
-   mem (
-        .clk(clk),
+   assign ext_2p_write_0 = write_en;
+   assign ext_2p_addr_out_0 = write_addr;
+   assign ext_2p_data_out_0 = write_data;
 
-        // Writting port
-        .w_en(write_en),
-        .w_addr(write_addr),
-        .w_data(write_data),
-
-        // Reading port
-        .r_en(enB),
-        .r_addr(addrB),
-        .r_data(outB)
-        );
+   assign ext_2p_read_0 = enB;
+   assign ext_2p_addr_in_0 = addrB;
+   assign outB = ext_2p_data_in_0;
 
 endmodule

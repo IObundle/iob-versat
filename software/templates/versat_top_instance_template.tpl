@@ -31,6 +31,28 @@ module versat_instance #(
    output                          ready,
    output [DATA_W-1:0]             rdata,
 
+   #{for ext external}
+      #{set i index}
+      #{if ext.type}
+   // DP
+      #{for port 2}
+   output [ADDR_W-1:0]   ext_dp_addr_@{i}_port_@{port},
+   output [DATA_W-1:0]   ext_dp_out_@{i}_port_@{port},
+   input  [DATA_W-1:0]   ext_dp_in_@{i}_port_@{port},
+   output                ext_dp_enable_@{i}_port_@{port},
+   output                ext_dp_write_@{i}_port_@{port},
+      #{end}
+      #{else}
+   // 2P
+   output [ADDR_W-1:0]   ext_2p_addr_out_@{i},
+   output [ADDR_W-1:0]   ext_2p_addr_in_@{i},
+   output                ext_2p_write_@{i},
+   output                ext_2p_read_@{i},
+   input  [DATA_W-1:0]   ext_2p_data_in_@{i},
+   output [DATA_W-1:0]   ext_2p_data_out_@{i},
+      #{end}
+   #{end}
+
    input                           clk,
    input                           rst
    );
@@ -127,12 +149,13 @@ begin
    end
 end
 
+wire [31:0] latency_counter = test_counter; // When a unit is producing the correct value in the vcd, the correct versat_latency value is given by this wire
+
 #{if unitsMapped}
 assign rdata = (versat_ready ? versat_rdata : unitRdataFinal);
 #{else}
 assign rdata = versat_rdata;
 #{end}
-
 
 #{if unitsMapped}
 assign ready = versat_ready | wor_ready;
@@ -154,11 +177,11 @@ assign wor_ready = (|unitReady);
 assign done = (&unitDone && !run);
 
 #{if versatValues.numberConnections}
-wire [31:0] #{join ", " for inst instances}
-   #{if inst.tempData.outputPortsUsed} 
-      #{join ", " for j inst.tempData.outputPortsUsed} output_@{inst.id}_@{j} #{end}
+wire [31:0] #{join ", " for node instances}
+   #{if node.outputs} 
+      #{join ", " for j node.outputs} output_@{node.inst.id}_@{j} #{end}
    #{else}
-      unused_@{inst.id} #{end}
+      unused_@{node.inst.id} #{end}
 #{end};
 #{end}
 
@@ -172,23 +195,22 @@ assign unitRdataFinal = (#{join "|" for i unitsMapped} unitRData[@{i}] #{end});
 always @*
 begin
    memoryMappedEnable = {@{unitsMapped}{1'b0}};
-#{if unitsMapped}
    if(valid & memoryMappedAddr)
    begin
    #{set counter 0}
-   #{for inst instances}
+   #{for node instances}
+   #{set inst node.inst}
    #{if inst.declaration.isMemoryMapped}
-      #{if inst.versatData.memoryMaskSize}
-         if(addr[@{memoryAddressBits - 1}:@{memoryAddressBits - inst.versatData.memoryMaskSize}] == @{inst.versatData.memoryMaskSize}'b@{inst.versatData.memoryMask}) // @{versatBase + memoryMappedBase * 4 + inst.versatData.memoryAddressOffset * 4 |> Hex} - @{versatBase + memoryMappedBase + inst.versatData.memoryAddressOffset |> Hex}
-            memoryMappedEnable[@{counter}] = 1'b1;
+      #{if versatData[counter].memoryMaskSize}
+      if(addr[@{memoryAddressBits - 1}:@{memoryAddressBits - versatData[counter].memoryMaskSize}] == @{memoryAddressBits - inst.declaration.memoryMapBits}'b@{versatData[counter].memoryMask}) // @{versatBase + memoryMappedBase * 4 + inst.memMapped * 4 |> Hex}
+         memoryMappedEnable[@{counter}] = 1'b1;
       #{else}
-         memoryMappedEnable[0] = 1'b1;
+      memoryMappedEnable[0] = 1'b1;
       #{end}
    #{inc counter}
    #{end}
    #{end}
    end
-#{end}
 end
 #{end}
 
@@ -201,10 +223,10 @@ begin
       // Config
       #{set counter 0}
       #{set addr 1}
-      #{for inst instances}
+      #{for node instances}
+      #{set inst node.inst}
       #{set decl inst.declaration}
-      #{for i decl.nConfigs}
-      #{set wire decl.configWires[i]}
+      #{for wire decl.configs}
       if(addr[@{versatValues.configurationAddressBits - 1}:0] == @{addr}) // @{versatBase + addr * 4 |> Hex}
          configdata[@{counter}+:@{wire.bitsize}] <= wdata[@{wire.bitsize - 1}:0]; // @{wire.name} - @{decl.name}
       #{inc addr}
@@ -214,17 +236,17 @@ begin
 
       // Static
       #{for unit accel.staticInfo}
-      #{for i unit.nConfigs}
-      #{set wire unit.wires[i]}
+      #{for wire unit.data.configs}
       if(addr[@{versatValues.configurationAddressBits - 1}:0] == @{addr}) // @{versatBase + addr * 4 |> Hex}
-         configdata[@{counter}+:@{wire.bitsize}] <= wdata[@{wire.bitsize - 1}:0]; //  @{unit.module.name}_@{unit.name}_@{wire.name}
+         configdata[@{counter}+:@{wire.bitsize}] <= wdata[@{wire.bitsize - 1}:0]; //  @{unit.id.parent.name}_@{unit.id.name}_@{wire.name}
       #{inc addr}
       #{set counter counter + wire.bitsize}
       #{end}
       #{end}
 
       // Delays
-      #{for inst instances}
+      #{for node instances}
+      #{set inst node.inst}
       #{set decl inst.declaration}
       #{for i decl.nDelays}
       if(addr[@{versatValues.configurationAddressBits - 1}:0] == @{addr}) // @{versatBase + addr * 4 |> Hex}
@@ -243,10 +265,10 @@ begin
    if(valid & !memoryMappedAddr) begin
       #{set counter 0}
       #{set addr 0}
-      #{for inst instances}
+      #{for node instances}
+      #{set inst node.inst}
       #{set decl inst.declaration}
-      #{for i decl.nStates}
-      #{set wire decl.stateWires[i]}
+      #{for wire decl.states}
       if(addr[@{versatValues.stateAddressBits - 1}:0] == @{addr + 1}) // @{versatBase + addr * 4 |> Hex}
          stateRead = statedata[@{counter}+:@{wire.bitsize}];
       #{inc addr}
@@ -258,23 +280,28 @@ end
 
 #{set counter 0}
 #{set configDataIndex 0}
+#{set staticDataIndex staticStart}
 #{set stateDataIndex 0}
+#{set delaySeen 0}
 #{set ioIndex 0}
+#{set externalCounter 0}
 #{set memoryMappedIndex 0}
 #{set doneCounter 0}
-#{for inst instances}
+#{for node instances}
+#{set inst node.inst}
 #{set decl inst.declaration}
    @{decl.name} @{inst.parameters} @{inst.name |> Identify}_@{counter} (
-      #{for i inst.tempData.outputPortsUsed}
+      #{for i node.outputs}
          .out@{i}(output_@{inst.id}_@{i}),
       #{end} 
 
-      #{for i inst.tempData.inputPortsUsed}
-         .in@{i}(output_@{inst.tempData.inputs[i].instConnectedTo.inst.id}_@{inst.tempData.inputs[i].instConnectedTo.port}),
+      #{for input node.inputs}
+      #{if input.node}
+         .in@{index}(output_@{input.node.inst.id}_@{input.port}),
+      #{end}
       #{end}
 
-      #{for i decl.nConfigs}
-      #{set wire decl.configWires[i]}
+      #{for wire decl.configs}
       #{if decl.type}
          .@{wire.name}(configdata[@{configDataIndex}+:@{wire.bitsize}]),
       #{else}
@@ -284,20 +311,42 @@ end
       #{end}
 
       #{for unit decl.staticUnits}
-      #{for i unit.nConfigs}
-      #{set wire unit.wires[i]}
-         .@{unit.module.name}_@{unit.name}_@{wire.name}(configdata[@{configDataIndex}+:@{wire.bitsize}]),
-      #{set configDataIndex configDataIndex + wire.bitsize}
+      #{set id unit.first}
+      #{for wire unit.second.configs}
+         .@{id.parent.name}_@{id.name}_@{wire.name}(configdata[@{staticDataIndex}+:@{wire.bitsize}]),
+      #{set staticDataIndex staticDataIndex + wire.bitsize}
       #{end}
       #{end}
 
       #{for i decl.nDelays}
-         .delay@{i}(configdata[@{configDataIndex}+:32]),
-      #{set configDataIndex configDataIndex + 32}
+         .delay@{i}(configdata[@{delayStart + (delaySeen * 32)}+:32]),
+      #{inc delaySeen}
       #{end}
 
-      #{for i decl.nStates}
-      #{set wire decl.stateWires[i]}
+      #{for external decl.externalMemory}
+         #{set i index}
+         #{if external.type}
+      // DP
+         #{for port 2}
+      .ext_dp_addr_@{i}_port_@{port}(ext_dp_addr_@{externalCounter}_port_@{port}),
+      .ext_dp_out_@{i}_port_@{port}(ext_dp_out_@{externalCounter}_port_@{port}),
+      .ext_dp_in_@{i}_port_@{port}(ext_dp_in_@{externalCounter}_port_@{port}),
+      .ext_dp_enable_@{i}_port_@{port}(ext_dp_enable_@{externalCounter}_port_@{port}),
+      .ext_dp_write_@{i}_port_@{port}(ext_dp_write_@{externalCounter}_port_@{port}),
+         #{end}
+         #{else}
+      // 2P
+      .ext_2p_addr_out_@{i}(ext_2p_addr_out_@{externalCounter}),
+      .ext_2p_addr_in_@{i}(ext_2p_addr_in_@{externalCounter}),
+      .ext_2p_write_@{i}(ext_2p_write_@{externalCounter}),
+      .ext_2p_read_@{i}(ext_2p_read_@{externalCounter}),
+      .ext_2p_data_in_@{i}(ext_2p_data_in_@{externalCounter}),
+      .ext_2p_data_out_@{i}(ext_2p_data_out_@{externalCounter}),
+         #{end}
+      #{inc externalCounter}
+      #{end}
+
+      #{for wire decl.states}
       #{if decl.type}
          .@{wire.name}(statedata[@{stateDataIndex}+:@{wire.bitsize}]),
       #{else}
@@ -338,7 +387,7 @@ end
       .clk(clk),
       .rst(rst_int)
    );
-#{set counter counter + 1}
+#{inc counter}
 #{end}
 
 endmodule

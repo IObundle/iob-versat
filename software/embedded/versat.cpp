@@ -34,6 +34,15 @@ Versat* InitVersat(int base,int numberConfigurations){
    return &versat;
 }
 
+#if 0
+Arena InitArena(size_t size){
+   Arena arena = {};
+   arena.mem = (Byte*) malloc(size);
+   arena.totalAllocated = size;
+   return arena;
+}
+#endif
+
 // Accelerator functions
 void AcceleratorRun(Accelerator* accel){
    #ifdef DEBUG
@@ -141,7 +150,7 @@ FUInstance* GetInstanceByName_(Accelerator* accel,int argc, ...){
    return res;
 }
 
-FUInstance* GetInstanceByName_(FUInstance* inst,int argc, ...){
+FUInstance* GetSubInstanceByName_(Accelerator* topLevel,FUInstance* inst,int argc, ...){
    va_list args;
    va_start(args,argc);
 
@@ -153,12 +162,58 @@ FUInstance* GetInstanceByName_(FUInstance* inst,int argc, ...){
    return res;
 }
 
-FUInstance* CreateFUInstance(Accelerator* accel,FUDeclaration* type,SizedString entityName){
-   FUInstance* res = GetInstanceByName_(accel,1,entityName.str);
+FUInstance* CreateFUInstance(Accelerator* accel,FUDeclaration* type,String entityName){
+   FUInstance* res = GetInstanceByName_(accel,1,entityName.data);
 
    return res;
 }
 
 void Hook(Versat* versat,Accelerator* accel,FUInstance* inst){
 
+}
+
+#include "versatExtra.hpp"
+
+bool InitSimpleAccelerator(SimpleAccelerator* simple,Versat* versat,const char* declarationName){
+   bool res = simple->init;
+   simple->inst = &instancesBuffer[0];
+   for(int i = 0; i < simpleInputs; i++){
+      simple->inputs[i] = &instancesBuffer[inputStart + i];
+   }
+   for(int i = 0; i < simpleOutputs; i++){
+      simple->outputs[i] = &instancesBuffer[outputStart + i];
+   }
+   simple->numberInputs = simpleInputs;
+   simple->numberOutputs = simpleOutputs;
+   simple->init = true;
+
+   return res;
+}
+
+int* vRunSimpleAccelerator(SimpleAccelerator* simple,va_list args){
+   static int out[99];
+
+   for(unsigned int i = 0; i < simple->numberInputs; i++){
+      int val = va_arg(args,int);
+      simple->inputs[i]->config[0] = val;
+   }
+
+   AcceleratorRun(simple->accel);
+
+   for(unsigned int i = 0; i < simple->numberOutputs; i++){
+      out[i] = simple->outputs[i]->state[0];
+   }
+
+   return out;
+}
+
+int* RunSimpleAccelerator(SimpleAccelerator* simple, ...){
+   va_list args;
+   va_start(args,simple);
+
+   int* out = vRunSimpleAccelerator(simple,args);
+
+   va_end(args);
+
+   return out;
 }

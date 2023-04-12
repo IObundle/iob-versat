@@ -6,7 +6,8 @@
 `include "versat-io.vh"
 
 module VWrite #(
-   parameter DATA_W=32
+   parameter DATA_W = 32,
+   parameter ADDR_W = 10
    )
    (
    input                  clk,
@@ -27,6 +28,14 @@ module VWrite #(
 
    // input / output data
    input [DATA_W-1:0]     in0,
+
+   // External memory
+   output [ADDR_W-1:0]   ext_2p_addr_out_0,
+   output [ADDR_W-1:0]   ext_2p_addr_in_0,
+   output                ext_2p_write_0,
+   output                ext_2p_read_0, // Changes without clk change
+   input  [DATA_W-1:0]   ext_2p_data_in_0,
+   output [DATA_W-1:0]   ext_2p_data_out_0,
 
    // configurations
    input [`IO_ADDR_W-1:0]  ext_addr,
@@ -68,16 +77,15 @@ module VWrite #(
    always @(posedge clk,posedge rst)
    begin
       if(rst) begin
-         doneA <= 1'b0;
-         doneB <= 1'b0;
+         doneA <= 1'b1;
+         doneB <= 1'b1;
       end else if(run) begin
          doneA <= 1'b0;
          doneB <= 1'b0;
       end else  begin
+         doneB <= doneB_int;
          if(databus_valid && databus_ready && databus_last)
             doneA <= 1'b1;
-         if(doneB_int)
-            doneB <= 1'b1;
       end
    end
 
@@ -93,7 +101,7 @@ module VWrite #(
 
    wire [`MEM_ADDR_W-1:0] startA    = `MEM_ADDR_W'd0;
    wire [1:0]             direction = 2'b10;
-   wire [`PERIOD_W-1:0]   delayA    = `PERIOD_W'd0;
+   wire [31:0]   delayA    = 0;
 
    // port addresses and enables
    wire [`MEM_ADDR_W-1:0] addrA, addrA_int, addrA_int2;
@@ -189,23 +197,13 @@ module VWrite #(
       .rst(rst)
    );
 
-   iob_2p_ram #(
-                .DATA_W(DATA_W),
-                .ADDR_W(`MEM_ADDR_W)
-                )
-   mem (
-        .clk(clk),
+   assign ext_2p_write_0 = enB & wrB;
+   assign ext_2p_addr_out_0 = addrB;
+   assign ext_2p_data_out_0 = data_to_wrB;
 
-        // Reading port
-        .r_en(read_en),
-        .r_addr(read_addr),
-        .r_data(read_data),
-
-        // Writing port
-        .w_en(enB & wrB),
-        .w_addr(addrB),
-        .w_data(data_to_wrB)
-        );
+   assign ext_2p_read_0 = read_en;
+   assign ext_2p_addr_in_0 = read_addr;
+   assign read_data = ext_2p_data_in_0;
 
 endmodule
 

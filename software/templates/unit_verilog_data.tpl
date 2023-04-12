@@ -1,5 +1,5 @@
-#ifndef INCLUDED_VERILOG_DATA
-#define INCLUDED_VERILOG_DATA
+#ifndef INCLUDED_VERILOG_DATA_@{namespace}
+#define INCLUDED_VERILOG_DATA_@{namespace}
 
 #{for module modules}
 #{if module.nConfigs}
@@ -35,8 +35,6 @@ int @{wire.name};
 #include "V@{module.name}.h"
 #{end}
 
-
-//#define TRACE
 #define ARRAY_SIZE(array) sizeof(array) / sizeof(array[0])
 
 #define INIT(unit) \
@@ -64,6 +62,22 @@ int @{wire.name};
    type* self = &data->unit; \
    VCDData* vcd = &data->vcd;
 
+#ifndef INCLUDED_WRAPPER_FUNCTIONS
+#define INCLUDED_WRAPPER_FUNCTIONS
+
+static char* Bin(unsigned int value){
+   static char buffer[33];
+   buffer[32] = '\0';
+
+   unsigned int val = value;
+   for(int i = 31; i >= 0; i--){
+      buffer[i] = '0' + (val & 0x1);
+      val >>= 1;
+   }
+
+   return buffer;
+}
+
 template<typename T>
 static int32_t MemoryAccessNoAddress(ComplexFUInstance* inst,int address,int value,int write){
    T* self = (T*) inst->extraData;
@@ -76,14 +90,14 @@ static int32_t MemoryAccessNoAddress(ComplexFUInstance* inst,int address,int val
       self->eval();
 
       while(!self->ready){
-         UPDATE(self);
+         inst->declaration->updateFunction(inst);
       }
 
       self->valid = 0;
       self->wstrb = 0x00;
       self->wdata = 0x00000000;
 
-      UPDATE(self);
+      inst->declaration->updateFunction(inst);
 
       return 0;
    } else {
@@ -93,14 +107,14 @@ static int32_t MemoryAccessNoAddress(ComplexFUInstance* inst,int address,int val
       self->eval();
 
       while(!self->ready){
-         UPDATE(self);
+         inst->declaration->updateFunction(inst);
       }
 
       int32_t res = self->rdata;
 
       self->valid = 0;
 
-      UPDATE(self);
+      inst->declaration->updateFunction(inst);
 
       return res;
    }
@@ -120,7 +134,7 @@ static int32_t MemoryAccess(ComplexFUInstance* inst,int address,int value,int wr
       self->eval();
 
       while(!self->ready){
-         UPDATE(self);
+         inst->declaration->updateFunction(inst);
       }
 
       self->valid = 0;
@@ -128,7 +142,7 @@ static int32_t MemoryAccess(ComplexFUInstance* inst,int address,int value,int wr
       self->addr = 0x00000000;
       self->wdata = 0x00000000;
 
-      UPDATE(self);
+      inst->declaration->updateFunction(inst);
 
       return 0;
    } else {
@@ -139,7 +153,7 @@ static int32_t MemoryAccess(ComplexFUInstance* inst,int address,int value,int wr
       self->eval();
 
       while(!self->ready){
-         UPDATE(self);
+         inst->declaration->updateFunction(inst);
       }
 
       int32_t res = self->rdata;
@@ -147,7 +161,7 @@ static int32_t MemoryAccess(ComplexFUInstance* inst,int address,int value,int wr
       self->valid = 0;
       self->addr = 0;
 
-      UPDATE(self);
+      inst->declaration->updateFunction(inst);
 
       return res;
    }
@@ -158,11 +172,20 @@ struct DatabusAccess{
    int latencyCounter;
 };
 
-#define INITIAL_MEMORY_LATENCY 5
-#define MEMORY_LATENCY 2
+static const int INITIAL_MEMORY_LATENCY = 5;
+static const int MEMORY_LATENCY = 2;
+
+#endif // INCLUDED_WRAPPER_FUNCTIONS
+
+// Memories are evaluated after databus because most of the time
+// databus is used to read data to memories
+// while memory to databus usually passes through a register that holds the data.
+// and therefore order of evaluation usually favours databus first and memories after
 
 #{for module modules}
 static int32_t* @{module.name}_InitializeFunction(ComplexFUInstance* inst){
+   memset(inst->extraData,0,inst->declaration->extraDataSize);
+
    V@{module.name}* self = new (inst->extraData) V@{module.name}();
 
    INIT(self);
@@ -196,7 +219,6 @@ static int32_t* @{module.name}_StartFunction(ComplexFUInstance* inst){
 #{end}
 #{end}
 
-
 #{if module.doesIO}
    DatabusAccess* memoryLatency = (DatabusAccess*) &self[1];
 
@@ -212,7 +234,7 @@ static int32_t* @{module.name}_StartFunction(ComplexFUInstance* inst){
 
 #{if module.nOutputs}
    #{for i module.nOutputs}
-      out[@{i}] = self->out@{i};
+   out[@{i}] = self->out@{i};
    #{end}
 
    return out;
@@ -220,6 +242,67 @@ static int32_t* @{module.name}_StartFunction(ComplexFUInstance* inst){
    return NULL;
 #{end}
 }
+
+   /*
+      output [ADDR_W-1:0]   ext_dp_addr_0_port_0,
+      output [DATA_W-1:0]   ext_dp_out_0_port_0,
+      input  [DATA_W-1:0]   ext_dp_in_0_port_0,
+      output                ext_dp_enable_0_port_0,
+      output                ext_dp_write_0_port_0,
+   */
+
+static void @{module.name}_VCDFunction(ComplexFUInstance* inst,FILE* out,VCDMapping& currentMapping,Array<int>,bool firstTime,bool printDefinitions){
+   V@{module.name}* self = (V@{module.name}*) inst->extraData;
+
+   if(printDefinitions){
+   #{for external module.externalInterfaces}
+      #{set id external.interface}
+      #{if external.type}
+      #{for port 2}
+      // DP
+      fprintf(out,"$var wire @{external.bitsize} %s ext_dp_addr_@{id}_port_@{port} $end\n",currentMapping.Get());
+      currentMapping.Increment();
+      fprintf(out,"$var wire @{external.datasize} %s ext_dp_out_@{id}_port_@{port} $end\n",currentMapping.Get());
+      currentMapping.Increment();
+      fprintf(out,"$var wire @{external.datasize} %s ext_dp_in_@{id}_port_@{port} $end\n",currentMapping.Get());
+      currentMapping.Increment();
+      fprintf(out,"$var wire 1 %s ext_dp_enable_@{id}_port_@{port} $end\n",currentMapping.Get());
+      currentMapping.Increment();
+      fprintf(out,"$var wire 1 %s ext_dp_write_@{id}_port_@{port} $end\n",currentMapping.Get());
+      currentMapping.Increment();
+      #{end}
+      #{else}
+      // 2P
+      {
+      }
+      #{end}
+   #{end}
+   } else {
+   #{for external module.externalInterfaces}
+      #{set id external.interface}
+      #{if external.type}
+      #{for port 2}
+      // DP
+      fprintf(out,"b%s %s\n",Bin(self->ext_dp_addr_@{id}_port_@{port}),currentMapping.Get());
+      currentMapping.Increment();
+      fprintf(out,"b%s %s\n",Bin(self->ext_dp_out_@{id}_port_@{port}),currentMapping.Get());
+      currentMapping.Increment();
+      fprintf(out,"b%s %s\n",Bin(self->ext_dp_in_@{id}_port_@{port}),currentMapping.Get());
+      currentMapping.Increment();
+      fprintf(out,"%d%s\n",self->ext_dp_enable_@{id}_port_@{port} ? 1 : 0,currentMapping.Get());
+      currentMapping.Increment();
+      fprintf(out,"%d%s\n",self->ext_dp_write_@{id}_port_@{port} ? 1 : 0,currentMapping.Get());
+      currentMapping.Increment();
+      #{end}
+      #{else}
+      // 2P
+      {
+      }
+      #{end}
+   #{end}
+   }
+}
+
 
 static int32_t* @{module.name}_UpdateFunction(ComplexFUInstance* inst){
 #{if module.nOutputs}
@@ -232,22 +315,32 @@ static int32_t* @{module.name}_UpdateFunction(ComplexFUInstance* inst){
    self->in@{i} = GetInputValue(inst,@{i}); 
 #{end}
 
+   self->eval();
+
 #{if module.doesIO}
+   self->databus_ready = 0;
+   self->databus_last = 0;
+
    DatabusAccess* access = (DatabusAccess*) &self[1];
 
    if(self->databus_valid){
       if(access->latencyCounter > 0){
          access->latencyCounter -= 1;
       } else {
+         int* ptr = (int*) (self->databus_addr);
+         
          if(self->databus_wstrb == 0){
-            int* ptr = (int*) (self->databus_addr);
-            self->databus_rdata = ptr[access->counter];
-            self->databus_ready = 1;
+            if(ptr == nullptr){
+               self->databus_rdata = 0xfeeffeef; // Feed bad data if not set (in pc-emul is needed otherwise segfault)
+            } else {
+               self->databus_rdata = ptr[access->counter];
+            }            
          } else { // self->databus_wstrb != 0
-            int* ptr = (int*) self->databus_addr;
-            ptr[access->counter] = self->databus_wdata;
-            self->databus_ready = 1;
+            if(ptr != nullptr){
+               ptr[access->counter] = self->databus_wdata;
+            }
          }
+         self->databus_ready = 1;
          
          if(access->counter == self->databus_len){
             access->counter = 0;
@@ -259,14 +352,74 @@ static int32_t* @{module.name}_UpdateFunction(ComplexFUInstance* inst){
          access->latencyCounter = MEMORY_LATENCY;
       }
    }
+
+   self->eval();
 #{end}
 
-   UPDATE(self);
+#{for external module.externalInterfaces}
+   #{set id external.interface}
+   #{if external.type}
+   #{for port 2}
+   // DP
+   {
+      int* memoryAddressView = (int*) &self[1];
+      #{if module.doesIO}
+      memoryAddressView = (int*) &access[1];
+      #{end}
 
-#{if module.doesIO}
-   self->databus_ready = 0;
-   self->databus_last = 0;
+      memoryAddressView = &memoryAddressView[8 * @{id} + 4 * @{port}];
+
+      int readOffset = self->ext_dp_addr_@{id}_port_@{port};
+      memoryAddressView[2] = memoryAddressView[1];
+      memoryAddressView[1] = memoryAddressView[0];
+      memoryAddressView[0] = readOffset;
+
+      if(self->ext_dp_enable_@{id}_port_@{port}){
+         if(self->ext_dp_write_@{id}_port_@{port}){
+            int writeOffset = self->ext_dp_addr_@{id}_port_@{port};
+            Assert(writeOffset < (1 << inst->declaration->externalMemory[@{id}].bitsize));
+            inst->externalMemory[writeOffset] = self->ext_dp_out_@{id}_port_@{port};
+         } else {
+            readOffset = memoryAddressView[0];
+            //int readOffset = self->ext_dp_addr_@{id}_port_@{port};
+            Assert(readOffset < (1 << inst->declaration->externalMemory[@{id}].bitsize));
+            self->ext_dp_in_@{id}_port_@{port} = inst->externalMemory[readOffset];
+         }
+      }
+   }
+   #{end}
+   #{else}
+   // 2P
+   {
+      int* memoryAddressView = (int*) &self[1];
+      #{if module.doesIO}
+      memoryAddressView = (int*) &access[1];
+      #{end}
+
+      memoryAddressView = &memoryAddressView[8 * @{id}];
+
+      int readOffset = self->ext_2p_addr_in_@{id};
+      memoryAddressView[2] = memoryAddressView[1];
+      memoryAddressView[1] = memoryAddressView[0];
+      memoryAddressView[0] = readOffset;
+
+      if(self->ext_2p_write_@{id}){
+         int writeOffset = self->ext_2p_addr_out_@{id};
+         Assert(writeOffset < (1 << inst->declaration->externalMemory[@{id}].bitsize));
+         inst->externalMemory[writeOffset] = self->ext_2p_data_out_@{id};
+      }
+      // 2P
+      if(self->ext_2p_read_@{id}){
+         readOffset = memoryAddressView[0];
+         //int readOffset = self->ext_2p_addr_in_@{id};
+         Assert(readOffset < (1 << inst->declaration->externalMemory[@{id}].bitsize));
+         self->ext_2p_data_in_@{id} = inst->externalMemory[readOffset];
+      }
+   }
+   #{end}
 #{end}
+
+   UPDATE(self); // Below this line no write to self (only read)
 
 #{if module.nStates}
 @{module.name}State* state = (@{module.name}State*) inst->state;
@@ -302,40 +455,51 @@ static FUDeclaration* @{module.name}_Register(Versat* versat){
    FUDeclaration decl = {};
 
    #{if module.nInputs}
-   decl.nInputs = @{module.nInputs};
    static int inputDelays[] =  {#{join "," for i module.nInputs}@{module.inputDelays[i]}#{end}};
-   decl.inputDelays = inputDelays;
+   decl.inputDelays = Array<int>{inputDelays,@{module.nInputs}};
    #{end}
 
    #{if module.nOutputs}
-   decl.nOutputs = @{module.nOutputs};
-   static int latencies[] = {#{join "," for i module.nOutputs}@{module.outputLatencies[i]}#{end}};
-   decl.latencies = latencies;
+   static int outputLatencies[] = {#{join "," for i module.nOutputs}@{module.outputLatencies[i]}#{end}};
+   decl.outputLatencies = Array<int>{outputLatencies,@{module.nOutputs}};
    #{end}
 
-   decl.name = MakeSizedString("@{module.name}");
+   decl.name = STRING("@{module.name}");
+
+   decl.extraDataSize = sizeof(V@{module.name});
 
    #{if module.doesIO}
-   decl.extraDataSize = sizeof(V@{module.name}) + sizeof(DatabusAccess);
-   #{else}
-   decl.extraDataSize = sizeof(V@{module.name});
+   decl.extraDataSize += sizeof(DatabusAccess);
+   #{end}
+
+   #{if module.externalInterfaces.size}
+   decl.extraDataSize += sizeof(int) * 2 * 4 * @{module.externalInterfaces.size};
+
+   static ExternalMemoryInterface externalMemory[@{module.externalInterfaces.size}];
+
+   #{for external module.externalInterfaces}
+   externalMemory[@{index}].interface = @{external.interface};
+   externalMemory[@{index}].bitsize = @{external.bitsize};
+   externalMemory[@{index}].datasize =  @{external.datasize};
+   externalMemory[@{index}].type = @{external.type};
+   #{end}
+   decl.externalMemory = C_ARRAY_TO_ARRAY(externalMemory);
    #{end}
 
    decl.initializeFunction = @{module.name}_InitializeFunction;
    decl.startFunction = @{module.name}_StartFunction;
    decl.updateFunction = @{module.name}_UpdateFunction;
    decl.destroyFunction = @{module.name}_DestroyFunction;
+   decl.printVCD = @{module.name}_VCDFunction;
 
    #{if module.nConfigs}
-   static Wire @{module.name}ConfigWires[] = {#{join "," for i module.nConfigs} {MakeSizedString("@{module.configs[i].name}"),@{module.configs[i].bitsize}} #{end}};
-   decl.nConfigs = @{module.nConfigs};
-   decl.configWires = @{module.name}ConfigWires;
+   static Wire @{module.name}ConfigWires[] = {#{join "," for i module.nConfigs} {STRING("@{module.configs[i].name}"),@{module.configs[i].bitsize}} #{end}};
+   decl.configs = Array<Wire>{@{module.name}ConfigWires,@{module.nConfigs}};
    #{end}
 
    #{if module.nStates}
-   static Wire @{module.name}StateWires[] = {#{join "," for i module.nStates} {MakeSizedString("@{module.states[i].name}"),@{module.states[i].bitsize}} #{end}};
-   decl.nStates = @{module.nStates};
-   decl.stateWires = @{module.name}StateWires;
+   static Wire @{module.name}StateWires[] = {#{join "," for i module.nStates} {STRING("@{module.states[i].name}"),@{module.states[i].bitsize}} #{end}};
+   decl.states = Array<Wire>{@{module.name}StateWires,@{module.nStates}};
    #{end}
 
    #{if module.hasDone}
@@ -367,7 +531,7 @@ static FUDeclaration* @{module.name}_Register(Versat* versat){
 
 #{end}
 
-static void RegisterAllVerilogUnits(Versat* versat){
+static void RegisterAllVerilogUnits@{namespace}(Versat* versat){
    #{for module modules}
    @{module.name}_Register(versat);
    #{end}
@@ -375,4 +539,10 @@ static void RegisterAllVerilogUnits(Versat* versat){
 
 #endif
 
-#endif // INCLUDED_VERILOG_DATA
+#undef INIT
+#undef UPDATE
+#undef RESET
+#undef START_RUN
+#undef PREAMBLE
+
+#endif // INCLUDED_VERILOG_DATA_@{namespace}

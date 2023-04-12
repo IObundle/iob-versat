@@ -7,10 +7,9 @@
 struct Expression;
 
 struct Command{
-   SizedString name;
+   String name;
 
-   Expression** expressions;
-   int nExpressions;
+   Array<Expression*> expressions;
 };
 
 struct Block{
@@ -31,11 +30,21 @@ struct TemplateFunction{
    Block* block;
 };
 
-void ProcessTemplate(FILE* outputFile,const char* templateFilepath,Arena* tempArena);
+struct CompiledTemplate{
+   int totalMemoryUsed;
+   const char* filepath;
+   String content;
+   Block* blocks;
+   // Followed by file name, then content and then the block/expression structure
+};
 
-// TODO: Probably should all have the same name and overload
+void ProcessTemplate(FILE* outputFile,const char* templateFilepath,Arena* arena);
+void ProcessTemplate(FILE* outputFile,CompiledTemplate* compiledTemplate,Arena* arena);
+CompiledTemplate* CompileTemplate(const char* templateFilepath,Arena* arena);
+
 void TemplateSetCustom(const char* id,void* entity,const char* typeName);
 void TemplateSetNumber(const char* id,int number);
+void TemplateSet(const char* id,void* ptr);
 void TemplateSetString(const char* id,const char* str);
 void TemplateSetArray(const char* id,const char* baseType,void* array,int size);
 void TemplateSetBool(const char* id,bool boolean);

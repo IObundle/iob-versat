@@ -22,28 +22,26 @@ module @{accel.name} #(
    output done,
    #{end}
 
-   #{for i accel.nInputs}
-   input [DATA_W-1:0]              in@{i},
+   #{for i accel.inputDelays}
+   input [DATA_W-1:0]              in@{index},
    #{end}
 
-   #{for i accel.nOutputs}
-   output [DATA_W-1:0]             out@{i},
+   #{for i accel.outputLatencies}
+   output [DATA_W-1:0]             out@{index},
    #{end}
 
-   #{for i accel.nConfigs}
-   #{set wire accel.configWires[i]}
+   #{for wire accel.configs}
    input [@{wire.bitsize-1}:0]     @{wire.name},
    #{end}
 
    #{for unit accel.staticUnits}
-   #{for i unit.nConfigs}
-   #{set wire unit.wires[i]}
-   input [@{wire.bitsize-1}:0]     @{unit.module.name}_@{unit.name}_@{wire.name},
+   #{set id unit.first}
+   #{for wire unit.second.configs}
+   input [@{wire.bitsize-1}:0]     @{id.parent.name}_@{id.name}_@{wire.name},
    #{end}
    #{end}
 
-   #{for i accel.nStates}
-   #{set wire accel.stateWires[i]}
+   #{for wire accel.states}
    output [@{wire.bitsize-1}:0]    @{wire.name},
    #{end}
 
@@ -61,6 +59,28 @@ module @{accel.name} #(
    output [@{accel.nIOs} * `DATAPATH_W/8-1:0] databus_wstrb,
    output [@{accel.nIOs} * 8-1:0]             databus_len,
    input  [@{accel.nIOs - 1}:0]               databus_last,
+   #{end}
+
+   #{for external accel.externalMemory}
+      #{set i index}
+      #{if external.type}
+   // DP
+      #{for port 2}
+   output [ADDR_W-1:0]   ext_dp_addr_@{i}_port_@{port},
+   output [DATA_W-1:0]   ext_dp_out_@{i}_port_@{port},
+   input  [DATA_W-1:0]   ext_dp_in_@{i}_port_@{port},
+   output                ext_dp_enable_@{i}_port_@{port},
+   output                ext_dp_write_@{i}_port_@{port},
+      #{end}
+      #{else}
+   // 2P
+   output [ADDR_W-1:0]   ext_2p_addr_out_@{i},
+   output [ADDR_W-1:0]   ext_2p_addr_in_@{i},
+   output                ext_2p_write_@{i},
+   output                ext_2p_read_@{i},
+   input  [DATA_W-1:0]   ext_2p_data_in_@{i},
+   output [DATA_W-1:0]   ext_2p_data_out_@{i},
+      #{end}
    #{end}
 
    #{if accel.isMemoryMapped}
@@ -106,9 +126,9 @@ wire [@{nDones - 1}:0] unitDone;
 assign done = &unitDone;
 #{end}
 
-wire [31:0] #{join ", " for inst instances}
-   #{if inst.tempData.outputPortsUsed} 
-      #{join ", " for j inst.tempData.outputPortsUsed} output_@{inst.id}_@{j} #{end}
+wire [31:0] #{join ", " for node instances}
+   #{if node.outputs} 
+      #{join ", " for j node.outputs} output_@{node.inst.id}_@{j} #{end}
    #{end}
 #{end};
 
@@ -120,13 +140,14 @@ begin
    if(valid)
    begin
    #{set counter 0}
-   #{for inst instances}
+   #{for node instances}
+   #{set inst node.inst}
    #{if inst.declaration.isMemoryMapped}
-      #{if inst.versatData.memoryMaskSize}
-         if(addr[@{accel.memoryMapBits - 1}:@{accel.memoryMapBits - inst.versatData.memoryMaskSize}] == @{inst.versatData.memoryMaskSize}'b@{inst.versatData.memoryMask})
-            memoryMappedEnable[@{counter}] = 1'b1;
+      #{if versatData[counter].memoryMaskSize}
+      if(addr[@{memoryAddressBits - 1}:@{memoryAddressBits - versatData[counter].memoryMaskSize}] == @{memoryAddressBits - inst.declaration.memoryMapBits}'b@{versatData[counter].memoryMask})
+         memoryMappedEnable[@{counter}] = 1'b1;
       #{else}
-         memoryMappedEnable[0] = 1'b1;
+      memoryMappedEnable[0] = 1'b1;
       #{end}
    #{inc counter}
    #{end}
@@ -136,19 +157,19 @@ end
 #{end}
 
 #{if nCombOperations}
-reg [31:0] #{join "," for inst instances} #{if inst.declaration.isOperation and inst.declaration.latencies[0] == 0} comb_@{inst.name |> Identify} #{end}#{end}; 
+reg [31:0] #{join "," for node instances} #{if node.inst.declaration.isOperation and node.inst.declaration.outputLatencies[0] == 0} comb_@{node.inst.name |> Identify} #{end}#{end}; 
 
 always @*
 begin
-#{for inst instances}
-   #{set decl inst.declaration}
-   #{if decl.isOperation and decl.latencies[0] == 0}
-      #{set input1 inst.tempData[0].inputs[0].instConnectedTo}
-      #{if decl.nInputs == 1}
-         #{format decl.operation "comb" @{inst.name |> Identify} #{call retOutputName input1}};
+#{for node instances}
+   #{set decl node.inst.declaration}
+   #{if decl.isOperation and decl.outputLatencies[0] == 0}
+      #{set input1 node.inputs[0]}
+      #{if decl.inputDelays.size == 1}
+         #{format decl.operation "comb" @{node.inst.name |> Identify} #{call retOutputName input1}};
       #{else}
-         #{set input2 inst.tempData[0].inputs[1].instConnectedTo}
-         #{format decl.operation "comb" @{inst.name |> Identify} #{call retOutputName input1} #{call retOutputName input2}};
+         #{set input2 node.inputs[1]}
+         #{format decl.operation "comb" @{node.inst.name |> Identify} #{call retOutputName input1} #{call retOutputName input2}};
       #{end}
    #{end}
 #{end}
@@ -156,15 +177,15 @@ end
 #{end}
 
 #{if nSeqOperations}
-reg [31:0] #{join "," for inst instances} #{if inst.declaration.isOperation and inst.declaration.latencies[0] != 0} seq_@{inst.name |> Identify} #{end}#{end}; 
+reg [31:0] #{join "," for node instances} #{if node.inst.declaration.isOperation and node.inst.declaration.outputLatencies[0] != 0} seq_@{node.inst.name |> Identify} #{end}#{end}; 
 
 always @(posedge clk)
 begin
-#{for inst instances}
-   #{set decl inst.declaration}
-   #{if decl.isOperation and decl.latencies[0] != 0 }
-      #{set input1 inst.tempData[0].inputs[0].instConnectedTo}
-      #{format decl.operation "seq" @{inst.name |> Identify} #{call retOutputName input1}};
+#{for node instances}
+   #{set decl node.inst.declaration}
+   #{if decl.isOperation and decl.outputLatencies[0] != 0 }
+      #{set input1 node.inputs[0]}
+      #{format decl.operation "seq" @{node.inst.name |> Identify} #{call retOutputName input1}};
    #{end}
 #{end}   
 end
@@ -174,41 +195,41 @@ end
 #{set ioIndex 0}
 #{set configsSeen 0}
 #{set memoryMappedIndex 0}
+#{set externalCounter 0}
 #{set delaySeen 0}
 #{set statesSeen 0}
 #{set doneCounter 0}
-#{for inst instances}
+#{for node instances}
+#{set inst node.inst}
 #{set decl inst.declaration}
-   #{if (decl != versat.input and decl != versat.output and !decl.isOperation)}
+   #{if (decl != inputDecl and decl != outputDecl and !decl.isOperation)}
       @{decl.name} @{inst.parameters} @{inst.name |> Identify}_@{counter} (
-         #{for i inst.tempData.outputPortsUsed}
+         #{for i node.inst.declaration.outputLatencies.size}
             .out@{i}(output_@{inst.id}_@{i}),
          #{end}
 
-         #{for i inst.tempData.inputPortsUsed}
-         #{if inst.tempData.inputs[i].instConnectedTo.inst.declaration.type == 2}
-            .in@{inst.tempData.inputs[i].port}(in@{inst.tempData.inputs[i].instConnectedTo.inst.id}), // @{inst.tempData.inputs[i].instConnectedTo.inst.name |> Identify}
+         #{for input node.inputs}
+         #{if input.node and input.node.inst.declaration.type == 2}
+            .in@{index}(in@{input.node.inst.id}), // @{input.node.inst.name |> Identify}
          #{else}
-            .in@{inst.tempData.inputs[i].port}(#{call outputName inst.tempData.inputs[i].instConnectedTo}),
+            .in@{index}(#{call outputName input}),
          #{end}
          #{end}
 
          #{if inst.isStatic}
-         #{for i inst.declaration.nConfigs}
-         #{set wire inst.declaration.configWires[i]}
+         #{for wire inst.declaration.configs}
          .@{wire.name}(@{accel.name}_@{inst.name |> Identify}_@{wire.name}),
          #{end}
 
          #{else}
-         #{for i decl.nConfigs}
-         #{set wire decl.configWires[i]}
-         .@{wire.name}(@{accel.configWires[configsSeen].name}),
+         #{for wire decl.configs}
+         .@{wire.name}(@{accel.configs[configsSeen].name}),
          #{inc configsSeen}
          #{end}
          #{for unit decl.staticUnits}         
-         #{for i unit.nConfigs}
-         #{set wire unit.wires[i]}
-         .@{unit.module.name}_@{unit.name}_@{wire.name}(@{unit.module.name}_@{unit.name}_@{wire.name}),
+         #{set id unit.first}
+         #{for wire unit.second.configs}
+         .@{id.parent.name}_@{id.name}_@{wire.name}(@{id.parent.name}_@{id.name}_@{wire.name}),
          #{end}
          #{end}
          #{end}
@@ -217,12 +238,34 @@ end
             .delay@{i}(delay@{delaySeen}),
          #{inc delaySeen}
          #{end}
+   
+         #{for external decl.externalMemory}
+            #{set i index}
+            #{if external.type}
+         // DP
+            #{for port 2}
+         .ext_dp_addr_@{i}_port_@{port}(ext_dp_addr_@{externalCounter}_port_@{port}),
+         .ext_dp_out_@{i}_port_@{port}(ext_dp_out_@{externalCounter}_port_@{port}),
+         .ext_dp_in_@{i}_port_@{port}(ext_dp_in_@{externalCounter}_port_@{port}),
+         .ext_dp_enable_@{i}_port_@{port}(ext_dp_enable_@{externalCounter}_port_@{port}),
+         .ext_dp_write_@{i}_port_@{port}(ext_dp_write_@{externalCounter}_port_@{port}),
+            #{end}
+            #{else}
+         // 2P
+         .ext_2p_addr_out_@{i}(ext_2p_addr_out_@{externalCounter}),
+         .ext_2p_addr_in_@{i}(ext_2p_addr_in_@{externalCounter}),
+         .ext_2p_write_@{i}(ext_2p_write_@{externalCounter}),
+         .ext_2p_read_@{i}(ext_2p_read_@{externalCounter}),
+         .ext_2p_data_in_@{i}(ext_2p_data_in_@{externalCounter}),
+         .ext_2p_data_out_@{i}(ext_2p_data_out_@{externalCounter}),
+            #{end}
+         #{inc externalCounter}
+         #{end}
 
-         #{for i decl.nStates}
-         #{set wire decl.stateWires[i]}
-            .@{wire.name}(@{accel.stateWires[statesSeen].name}),
+         #{for wire decl.states}
+            .@{wire.name}(@{accel.states[statesSeen].name}),
          #{inc statesSeen}
-         #{end}      
+         #{end}
 
          #{if decl.isMemoryMapped}
          .valid(memoryMappedEnable[@{memoryMappedIndex}]),
@@ -262,12 +305,14 @@ end
    #{end}
 #{end}
 
-#{for inst instances}
+#{for node instances}
+#{set inst node.inst}
 #{set decl inst.declaration}
-#{if decl == versat.output}
-   #{for i inst.tempData.numberInputs}
-   #{set in inst.tempData.inputs[i].instConnectedTo}
-   assign out@{inst.tempData.inputs[i].port} = #{call outputName in};
+#{if decl == outputDecl}
+   #{for input node.inputs}
+   #{if input.node}
+   assign out@{index} = #{call outputName input};
+   #{end}
    #{end}
 #{end}
 #{end}
