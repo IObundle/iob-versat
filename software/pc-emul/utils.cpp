@@ -7,9 +7,14 @@
 #include <dirent.h>
 #include <sys/ptrace.h>
 
+extern "C" {
+#include <time.h>
+}
+
 #include <cstdio>
 #include <cstring>
 #include <cstdarg>
+#include <cerrno>
 
 bool CurrentlyDebugging(){
    static bool init = false;

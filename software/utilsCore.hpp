@@ -3,6 +3,7 @@
 
 // Utilities that do not depend on anything else (like memory.hpp)
 
+#include <cstdio>
 #include <iosfwd>
 #include <string.h>
 #include <new>
@@ -54,9 +55,9 @@ ALWAYS_INLINE Defer<F> operator+(_DeferTag,F&& f){
    return Defer<F>(f);
 }
 
-#define __defer(LINE) defer_ ## LINE
-#define _defer(LINE) __defer( LINE )
-#define defer auto _defer(__LINE__) = _DeferTag() + [&]()
+// #define __defer(LINE) defer_ ## LINE
+// #define _defer(LINE) __defer( LINE )
+// #define defer auto _defer(__LINE__) = _DeferTag() + [&]()
 
 void FlushStdout();
 #if defined(PC) && defined(VERSAT_DEBUG)

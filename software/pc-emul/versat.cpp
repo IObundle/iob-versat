@@ -1883,11 +1883,13 @@ void AcceleratorRun(Accelerator* accel){
 
       vcdSameCheckSpace = PrintVCDDefinitions(accelOutputFile,accel,arena);
    }
-   defer{if(accelOutputFile) fclose(accelOutputFile);};
+   // defer{if(accelOutputFile) fclose(accelOutputFile);};
 
    AcceleratorRunStart(accel);
 
-   PrintVCD(accelOutputFile,accel,0,0,vcdSameCheckSpace,arena); // Print starting values
+   if(accel->versat->debug.outputVCD){
+       PrintVCD(accelOutputFile,accel,0,0,vcdSameCheckSpace,arena); // Print starting values
+   }
 
    AcceleratorIterator iter = {};
    for(int cycle = 0; cycle < 10000; cycle++){ // Max amount of iterations
