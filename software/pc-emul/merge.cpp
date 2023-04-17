@@ -871,8 +871,6 @@ GraphMapping ConsolidationGraphMapping(Versat* versat,Accelerator* accel1,Accele
       }
    }
 
-   OutputConsolidationGraph(graph,arena,true,"debug/test.dot");
-
    if(graph.validNodes.bitSize == 0){
       return res;
    }
@@ -1724,7 +1722,7 @@ FUDeclaration* Merge(Versat* versat,Array<FUDeclaration*> types,String name,Merg
    for(int i = 0; i < size; i++){
       mapMultipleInputsToSubgraphs[i] = PushHashmap<InstanceNode*,InstanceNode*>(arena,numberOfMultipleInputs);
 
-      for(Pair<InstanceNode*,InstanceNode*> pair : *view[i]){
+      for(Pair<InstanceNode*,InstanceNode*> pair : view[i]){
          if(pair.second->multipleSamePortInputs){
             mapMultipleInputsToSubgraphs[i]->Insert(pair.second,pair.first);
 

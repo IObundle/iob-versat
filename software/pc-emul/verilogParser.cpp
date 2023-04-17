@@ -743,7 +743,7 @@ int main(int argc,const char* argv[]){
 
          Array<ExternalMemoryInterface> interfaces = PushArray<ExternalMemoryInterface>(&permanent,external->nodesUsed);
          int index = 0;
-         for(Pair<ExternalMemoryID,ExternalMemoryInfo> pair : *external){
+         for(Pair<ExternalMemoryID,ExternalMemoryInfo> pair : external){
             ExternalMemoryInterface& inter = interfaces[index++];
 
             inter.interface = pair.first.interface;

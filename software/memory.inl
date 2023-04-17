@@ -287,6 +287,7 @@ GetOrAllocateResult<Data> Hashmap<Key,Data>::GetOrAllocate(Key key){
    return res;
 }
 
+#if 0
 template<typename Key,typename Data>
 HashmapIterator<Key,Data> Hashmap<Key,Data>::begin(){
    HashmapIterator<Key,Data> iter = {};
@@ -300,6 +301,29 @@ HashmapIterator<Key,Data> Hashmap<Key,Data>::end(){
 
    iter.pairs = this->data;
    iter.index = this->nodesUsed;
+
+   return iter;
+}
+#endif
+
+template<typename Key,typename Data>
+HashmapIterator<Key,Data> begin(Hashmap<Key,Data>* hashmap){
+   HashmapIterator<Key,Data> iter = {};
+
+   if(hashmap){
+      iter.pairs = hashmap->data;
+   }
+   return iter;
+}
+
+template<typename Key,typename Data>
+HashmapIterator<Key,Data> end(Hashmap<Key,Data>* hashmap){
+   HashmapIterator<Key,Data> iter = {};
+
+   if(hashmap){
+      iter.pairs = hashmap->data;
+      iter.index = hashmap->nodesUsed;
+   }
 
    return iter;
 }

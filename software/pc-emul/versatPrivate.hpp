@@ -9,6 +9,7 @@
 
 #include "versat.hpp"
 
+struct InstanceNode;
 struct ComplexFUInstance;
 struct Versat;
 
@@ -48,8 +49,8 @@ public:
    }
 };
 
-typedef int* (*FUFunction)(ComplexFUInstance*);
-typedef int (*MemoryAccessFunction)(ComplexFUInstance* instance, int address, int value,int write);
+typedef int* (*FUFunction)(InstanceNode*);
+typedef int (*MemoryAccessFunction)(InstanceNode*, int address, int value,int write);
 typedef void (*VCDFunction)(ComplexFUInstance*,FILE*,VCDMapping&,Array<int>,bool firstTime,bool printDefinitions);
 
 enum DelayType {
@@ -222,7 +223,7 @@ struct FUDeclaration{
    DAGOrder temporaryOrder;
 
    // Merged accelerator
-   Array<FUDeclaration*> mergedType; // TODO: probably change it from static to a dynamic allocating with more space, in order to accommodate multiple mergings (merge A with B and then the result with C)
+   Array<FUDeclaration*> mergedType;
 
    // Iterative
    String unitName;

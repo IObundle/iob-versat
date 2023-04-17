@@ -71,7 +71,7 @@ void InitializeSubaccelerator(AcceleratorIterator iter){
       #endif
 
       if(inst->declaration->initializeFunction){
-         inst->declaration->initializeFunction(inst);
+         inst->declaration->initializeFunction(node);
       }
 
       if(inst->declaration->type == FUDeclaration::COMPOSITE){
@@ -111,14 +111,12 @@ InstanceNode* CreateFlatFUInstance(Accelerator* accel,FUDeclaration* type,String
    inst->declaration = type;
    inst->namedAccess = true;
 
-   if(type->staticUnits){
-      for(auto pair : *type->staticUnits){
-         // TODO: Check this, isn't adding static info multiple times? No checking is being done
-         StaticInfo* info = accel->staticInfo.Alloc();
+   for(auto pair : type->staticUnits){
+      // TODO: Check this, isn't adding static info multiple times? No checking is being done
+      StaticInfo* info = accel->staticInfo.Alloc();
 
-         info->id = pair.first;
-         info->data = pair.second;
-      }
+      info->id = pair.first;
+      info->data = pair.second;
    }
 
    return ptr;
@@ -204,24 +202,22 @@ InstanceNode* CreateAndConfigureFUInstance(Accelerator* accel,FUDeclaration* typ
       // Initialize sub units
       if(type->type == FUDeclaration::COMPOSITE){ // TODO: Iterative units
          // Fix static info
-         if(type->staticUnits){
-            for(Pair<StaticId,StaticData> pair : *type->staticUnits){
-               bool found = false;
-               for(StaticInfo* info : accel->staticInfo){
-                  if(pair.first == info->id){
-                     found = true;
-                     break;
-                  }
+         for(Pair<StaticId,StaticData> pair : type->staticUnits){
+            bool found = false;
+            for(StaticInfo* info : accel->staticInfo){
+               if(pair.first == info->id){
+                  found = true;
+                  break;
                }
-               if(found){
-                  continue;
-               }
-
-               StaticInfo* info = accel->staticInfo.Alloc();
-
-               info->id = pair.first;
-               info->data = pair.second;
             }
+            if(found){
+               continue;
+            }
+
+            StaticInfo* info = accel->staticInfo.Alloc();
+
+            info->id = pair.first;
+            info->data = pair.second;
          }
 
          AcceleratorIterator iter = {};
@@ -239,7 +235,7 @@ InstanceNode* CreateAndConfigureFUInstance(Accelerator* accel,FUDeclaration* typ
             }
          }
       } else if(type->initializeFunction){
-         type->initializeFunction(inst);
+         type->initializeFunction(node);
       }
    }
 
@@ -539,44 +535,6 @@ void FlattenRemoveFUInstance(Accelerator* accel,ComplexFUInstance* inst){
    #endif
 }
 
-#if 0
-void CompressAcceleratorMemory(Accelerator* accel){
-   InstanceMap oldPosToNew;
-
-   PoolIterator<ComplexFUInstance> iter = accel->instances.beginNonValid();
-
-   for(ComplexFUInstance* inst : accel->instances){
-      ComplexFUInstance* pos = *iter;
-
-      iter.Advance();
-
-      if(pos == inst){
-         oldPosToNew.insert({inst,pos});
-         continue;
-      } else {
-         ComplexFUInstance* newPos = accel->instances.Alloc();
-
-         *newPos = *inst;
-         oldPosToNew.insert({inst,newPos});
-
-         accel->instances.Remove(inst);
-      }
-   }
-
-   for(Edge* edge : accel->edges){
-      auto unit1 = oldPosToNew.find(edge->units[0].inst);
-      auto unit2 = oldPosToNew.find(edge->units[1].inst);
-
-      if(unit1 != oldPosToNew.end()){
-         edge->units[0].inst = unit1->second;
-      }
-      if(unit2 != oldPosToNew.end()){
-         edge->units[1].inst = unit2->second;
-      }
-   }
-}
-#endif
-
 Accelerator* Flatten(Versat* versat,Accelerator* accel,int times){
    Arena* arena = &versat->temp;
    BLOCK_REGION(arena);
@@ -854,6 +812,13 @@ Accelerator* Flatten(Versat* versat,Accelerator* accel,int times){
    }
    #endif
 
+   FUDeclaration base = {};
+   base.name = STRING("Top");
+   newAccel->subtype = &base;
+
+   Hashmap<EdgeNode,int>* delay = CalculateDelay(versat,newAccel,arena);
+   FixDelays(versat,newAccel,delay);
+
    newAccel->staticInfo.Clear();
 
    UnitValues val = CalculateAcceleratorValues(versat,newAccel);
@@ -870,7 +835,7 @@ Accelerator* Flatten(Versat* versat,Accelerator* accel,int times){
    for(InstanceNode* node = iter.Start(newAccel,arena,true); node; node = iter.Next()){
       ComplexFUInstance* inst = node->inst;
       if(inst->declaration->initializeFunction){
-         inst->declaration->initializeFunction(inst);
+         inst->declaration->initializeFunction(node);
          inst->initialized = true;
       }
    }
@@ -2711,7 +2676,7 @@ void FixMultipleInputs(Versat* versat,Accelerator* accel,Hashmap<ComplexFUInstan
 
             OutputGraphDotFile(versat,accel,true,multiplexer,"debug/%.*s/beforeConnect.dot",UNPACK_SS(accel->subtype->name));
 
-            for(auto& pair : *inputInstances){
+            for(auto& pair : inputInstances){
                if(pair.second != port){
                   continue;
                }
@@ -2772,7 +2737,7 @@ void FixMultipleInputs(Versat* versat,Accelerator* accel,Hashmap<ComplexFUInstan
 #if 1
 void FixDelays(Versat* versat,Accelerator* accel,Hashmap<EdgeNode,int>* edgeDelays){
    int buffersInserted = 0;
-   for(auto& edgePair : *edgeDelays){
+   for(auto& edgePair : edgeDelays){
       EdgeNode edge = edgePair.first;
       int delay = edgePair.second;
 

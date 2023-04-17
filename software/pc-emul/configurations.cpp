@@ -298,6 +298,251 @@ CalculatedOffsets ExtractDebugData(Accelerator* accel,Arena* out){
 }
 
 
+bool CheckCorrectConfiguration(Accelerator* topLevel,ComplexFUInstance* inst){
+   if(IsConfigStatic(topLevel,inst)){
+      Assert(inst->config == nullptr || Inside(&topLevel->staticAlloc,inst->config));
+   } else {
+      Assert(inst->config == nullptr || Inside(&topLevel->configAlloc,inst->config));
+   }
+
+   Assert(inst->state == nullptr || Inside(&topLevel->stateAlloc,inst->state));
+   Assert(inst->delay == nullptr || Inside(&topLevel->delayAlloc,inst->delay));
+   Assert(inst->extraData == nullptr || Inside(&topLevel->extraDataAlloc,inst->extraData));
+   Assert(inst->outputs == nullptr || Inside(&topLevel->outputAlloc,inst->outputs));
+   Assert(inst->storedOutputs == nullptr || Inside(&topLevel->storedOutputAlloc,inst->storedOutputs));
+
+   return true;
+}
+
+void CheckCorrectConfiguration(Accelerator* topLevel,FUInstanceInterfaces& inter,ComplexFUInstance* inst){
+   if(IsConfigStatic(topLevel,inst)){
+      Assert(inst->config == nullptr || Inside(&inter.statics,inst->config));
+   } else {
+      Assert(inst->config == nullptr || Inside(&inter.config,inst->config));
+   }
+
+   Assert(inst->state == nullptr || Inside(&inter.state,inst->state));
+   Assert(inst->delay == nullptr || Inside(&inter.delay,inst->delay));
+   Assert(inst->extraData == nullptr || Inside(&inter.extraData,inst->extraData));
+   Assert(inst->outputs == nullptr || Inside(&inter.outputs,inst->outputs));
+   Assert(inst->storedOutputs == nullptr || Inside(&inter.storedOutputs,inst->storedOutputs));
+}
+
+// Populates sub accelerator
+void PopulateAccelerator(Accelerator* topLevel,Accelerator* accel,FUDeclaration* topDeclaration,FUInstanceInterfaces& inter,Hashmap<StaticId,StaticData>* staticMap){
+   int index = 0;
+   FOREACH_LIST(ptr,accel->allocated){
+      ComplexFUInstance* inst = ptr->inst;
+      FUDeclaration* decl = inst->declaration;
+
+      inst->config = nullptr;
+      inst->state = nullptr;
+      inst->delay = nullptr;
+      inst->memMapped = nullptr;
+      inst->outputs = nullptr;
+      inst->storedOutputs = nullptr;
+      inst->extraData = nullptr;
+
+      #if 0
+      int numberUnits = 0;
+      if(decl->type == FUDeclaration::COMPOSITE){
+         numberUnits = CalculateNumberOfUnits(decl->fixedDelayCircuit->allocated);
+      }
+      inst->debugData = inter.debugData.Push(numberUnits + 1);
+      #endif
+
+      if(inst->isStatic && decl->configs.size){
+         StaticId id = {};
+         id.parent = topDeclaration;
+         id.name = inst->name;
+
+         StaticData* staticInfo = staticMap->Get(id);
+         Assert(staticInfo);
+         inst->config = inter.statics.Set(staticInfo->offset,decl->configs.size);
+      } else if(decl->configs.size){
+         inst->config = inter.config.Set(topDeclaration->configOffsets.offsets[index],decl->configs.size);
+      }
+      if(decl->states.size){
+         inst->state = inter.state.Set(topDeclaration->stateOffsets.offsets[index],decl->states.size);
+      }
+      if(decl->isMemoryMapped){
+         inter.mem.timesPushed = AlignBitBoundary(inter.mem.timesPushed,decl->memoryMapBits);
+         inst->memMapped = (int*) inter.mem.Push(1 << decl->memoryMapBits);
+      }
+      if(decl->nDelays){
+         inst->delay = inter.delay.Set(topDeclaration->delayOffsets.offsets[index],decl->nDelays);
+      }
+      if(decl->externalMemory.size){
+         for(int i = 0; i < decl->externalMemory.size; i++){
+            int* externalMemory = inter.externalMemory.Push(1 << decl->externalMemory[i].bitsize);
+            if(i == 0){
+               inst->externalMemory = externalMemory;
+            }
+         }
+      }
+      if(decl->totalOutputs){
+         inst->outputs = inter.outputs.Set(topDeclaration->outputOffsets.offsets[index],decl->totalOutputs);
+         inst->storedOutputs = inter.storedOutputs.Set(topDeclaration->outputOffsets.offsets[index],decl->totalOutputs);
+      }
+      if(decl->extraDataSize){
+         inst->extraData = inter.extraData.Set(topDeclaration->extraDataOffsets.offsets[index],decl->extraDataSize);
+      }
+
+      CheckCorrectConfiguration(topLevel,inter,inst);
+      CheckCorrectConfiguration(topLevel,inst);
+      index += 1;
+   }
+}
+
+void FUInstanceInterfaces::Init(Accelerator* accel){
+   VersatComputedValues val = ComputeVersatValues(accel->versat,accel);
+
+   config.Init(accel->configAlloc);
+   state.Init(accel->stateAlloc);
+   delay.Init(accel->delayAlloc);
+   mem.Init(nullptr,val.memoryMappedBytes);
+   outputs.Init(accel->outputAlloc);
+   storedOutputs.Init(accel->storedOutputAlloc);
+   extraData.Init(accel->extraDataAlloc);
+   statics.Init(accel->staticAlloc);
+   externalMemory.Init(accel->externalMemoryAlloc);
+   debugData.Init(accel->debugDataAlloc);
+}
+
+int MemorySize(Array<ExternalMemoryInterface> interfaces){
+   int size = 0;
+
+   for(ExternalMemoryInterface& inter : interfaces){
+      size = AlignBitBoundary(size,inter.bitsize);
+      size += 1 << inter.bitsize;
+   }
+
+   return size;
+}
+
+void FUInstanceInterfaces::Init(Accelerator* topLevel,ComplexFUInstance* inst){
+   VersatComputedValues val = ComputeVersatValues(topLevel->versat,topLevel);
+   FUDeclaration* decl = inst->declaration;
+   int numberUnits = CalculateNumberOfUnits(decl->fixedDelayCircuit->allocated);
+
+   config.Init(inst->config,decl->configOffsets.max);
+   state.Init(inst->state,decl->stateOffsets.max);
+   delay.Init(inst->delay,decl->delayOffsets.max);
+   mem.Init((Byte*) inst->memMapped,val.memoryMappedBytes);
+   outputs.Init(inst->outputs,decl->totalOutputs);
+   storedOutputs.Init(inst->storedOutputs,decl->totalOutputs);
+   extraData.Init(inst->extraData,decl->extraDataOffsets.max);
+   statics.Init(topLevel->staticAlloc);
+   if(decl->externalMemory.size){
+      externalMemory.Init(inst->externalMemory,MemorySize(decl->externalMemory));
+   }
+   debugData.Init(inst->debugData + 1,numberUnits);
+}
+
+void FUInstanceInterfaces::AssertEmpty(bool checkStatic){
+   #if 0
+   Assert(config.Empty());
+   Assert(state.Empty());
+   Assert(delay.Empty());
+   Assert(outputs.Empty());
+   Assert(storedOutputs.Empty());
+   Assert(extraData.Empty());
+   if(checkStatic){
+      Assert(statics.Empty());
+   }
+   #endif
+}
+
+// The true "Accelerator" populator
+void PopulateAccelerator2(Accelerator* accel,FUDeclaration* topDeclaration,FUInstanceInterfaces& inter,Hashmap<StaticId,StaticData>* staticMap){
+   STACK_ARENA(tempInst,Kilobyte(64));
+   Arena* temp = &tempInst;
+
+   int sharedUnits = 0;
+   FOREACH_LIST(ptr,accel->allocated){
+      if(ptr->inst->sharedEnable){
+         sharedUnits += 1;
+      }
+   }
+
+   Hashmap<int,int*>* sharedToConfigPtr = PushHashmap<int,int*>(temp,sharedUnits);
+
+   FOREACH_LIST(ptr,accel->allocated){
+      ComplexFUInstance* inst = ptr->inst;
+      FUDeclaration* decl = inst->declaration;
+      UnitValues val = CalculateAcceleratorUnitValues(accel->versat,inst);
+
+      inst->config = nullptr;
+      inst->state = nullptr;
+      inst->delay = nullptr;
+      inst->memMapped = nullptr;
+      inst->outputs = nullptr;
+      inst->storedOutputs = nullptr;
+      inst->extraData = nullptr;
+
+      #if 0
+      int numberUnits = 0;
+      if(decl->type == FUDeclaration::COMPOSITE){
+         numberUnits = CalculateNumberOfUnits(decl->fixedDelayCircuit->allocated);
+      }
+      inst->debugData = inter.debugData.Push(numberUnits + 1);
+      #endif
+
+      if(decl->configs.size){
+         if(inst->isStatic){
+            StaticId id = {};
+            id.parent = topDeclaration;
+            id.name = inst->name;
+
+            StaticData* staticInfo = staticMap->Get(id);
+            Assert(staticInfo);
+            inst->config = &inter.statics.ptr[staticInfo->offset];
+         } else if(inst->sharedEnable){
+            int** ptr = sharedToConfigPtr->Get(inst->sharedIndex);
+
+            if(ptr){
+               inst->config = *ptr;
+            } else {
+               inst->config = inter.config.Push(decl->configs.size);
+               sharedToConfigPtr->Insert(inst->sharedIndex,inst->config);
+            }
+         } else {
+            inst->config = inter.config.Push(decl->configs.size);
+         }
+      }
+
+      if(decl->states.size){
+         inst->state = inter.state.Push(decl->states.size);
+      }
+      if(decl->isMemoryMapped){
+         inter.mem.timesPushed = AlignBitBoundary(inter.mem.timesPushed,decl->memoryMapBits);
+         inst->memMapped = (int*) inter.mem.Push(1 << decl->memoryMapBits);
+      }
+      if(decl->nDelays){
+         inst->delay = inter.delay.Push(decl->nDelays);
+      }
+      if(decl->externalMemory.size){
+         for(int i = 0; i < decl->externalMemory.size; i++){
+            int* externalMemory = inter.externalMemory.Push(1 << decl->externalMemory[i].bitsize);
+            if(i == 0){
+               inst->externalMemory = externalMemory;
+            }
+         }
+      }
+      #if 1
+      if(val.totalOutputs){
+         inst->outputs = inter.outputs.Push(val.totalOutputs);
+         inst->storedOutputs = inter.storedOutputs.Push(val.totalOutputs);
+      }
+      #endif
+      if(decl->extraDataSize){
+         inst->extraData = inter.extraData.Push(decl->extraDataSize);
+      }
+
+      CheckCorrectConfiguration(accel,inst);
+   }
+}
+
 
 
 

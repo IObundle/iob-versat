@@ -1012,7 +1012,7 @@ InstanceNode* RemoveUnit(InstanceNode* nodes,InstanceNode* unit){
       ptr = next;
    }
 
-   for(auto& pair : *toRemove){
+   for(auto& pair : toRemove){
       RemoveAllConnections(unit,pair.first);
    }
 

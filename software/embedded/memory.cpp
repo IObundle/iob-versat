@@ -16,3 +16,8 @@ Byte* MarkArena(Arena* arena){
 void PopMark(Arena* arena,Byte* mark){
    arena->used = mark - arena->mem;
 }
+
+void Free(Arena* arena){
+   free(arena->mem);
+   *arena = {};
+}
