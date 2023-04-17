@@ -275,9 +275,15 @@ struct Hashmap{
 
    bool Exists(Key key);
 
-   HashmapIterator<Key,Data> begin();
-   HashmapIterator<Key,Data> end();
+   //HashmapIterator<Key,Data> begin();
+   //HashmapIterator<Key,Data> end();
 };
+
+template<typename Key,typename Data>
+HashmapIterator<Key,Data> begin(Hashmap<Key,Data>* hashmap);
+
+template<typename Key,typename Data>
+HashmapIterator<Key,Data> end(Hashmap<Key,Data>* hashmap);
 
 template<typename Key,typename Data>
 Hashmap<Key,Data>* PushHashmap(Arena* arena,int maxAmountOfElements);

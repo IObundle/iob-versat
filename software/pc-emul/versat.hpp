@@ -142,8 +142,10 @@ void CheckMemory(Accelerator* topLevel,MemType type);
 
 #ifdef x86
 #define DebugAccelerator(...) ((void)0)
+#define DebugVersat(...) ((void)0)
 #else
 void DebugAccelerator(Accelerator* accel,Arena* temp);
+void DebugVersat(Versat* versat);
 #endif
 
 // Debug units, only works for pc-emul (no declaration info in embedded)

@@ -1252,6 +1252,10 @@ static void ClearState(){
    last = false;
 }
 
+void DebugVersat(Versat* versat){
+   DebugValue("Versat",MakeValue(versat,"Versat"),&versat->temp);
+}
+
 void DebugAccelerator(Accelerator* accel,Arena* arena){
    selectedAccelerator = accel;
    DebugGUI(arena);
@@ -1322,9 +1326,10 @@ void DebugWindowAccelerator(const char* label,Accelerator* accel){
 void DebugValue(const char* windowName,Value val,Arena* arena){
    ClearState();
 
-   valueWindowState.windowName = windowName;
    ClearWindowState(&valueWindowState,0);
+   valueWindowState.windowName = windowName;
    valueWindowState.startValue = val;
+   valueWindowState.init = true;
 
    DebugGUI(arena);
 }

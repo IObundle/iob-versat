@@ -79,7 +79,8 @@ static char* Bin(unsigned int value){
 }
 
 template<typename T>
-static int32_t MemoryAccessNoAddress(ComplexFUInstance* inst,int address,int value,int write){
+static int32_t MemoryAccessNoAddress(InstanceNode* node,int address,int value,int write){
+   ComplexFUInstance* inst = node->inst;
    T* self = (T*) inst->extraData;
 
    if(write){
@@ -90,14 +91,14 @@ static int32_t MemoryAccessNoAddress(ComplexFUInstance* inst,int address,int val
       self->eval();
 
       while(!self->ready){
-         inst->declaration->updateFunction(inst);
+         inst->declaration->updateFunction(node);
       }
 
       self->valid = 0;
       self->wstrb = 0x00;
       self->wdata = 0x00000000;
 
-      inst->declaration->updateFunction(inst);
+      inst->declaration->updateFunction(node);
 
       return 0;
    } else {
@@ -107,21 +108,22 @@ static int32_t MemoryAccessNoAddress(ComplexFUInstance* inst,int address,int val
       self->eval();
 
       while(!self->ready){
-         inst->declaration->updateFunction(inst);
+         inst->declaration->updateFunction(node);
       }
 
       int32_t res = self->rdata;
 
       self->valid = 0;
 
-      inst->declaration->updateFunction(inst);
+      inst->declaration->updateFunction(node);
 
       return res;
    }
 }
 
 template<typename T>
-static int32_t MemoryAccess(ComplexFUInstance* inst,int address,int value,int write){
+static int32_t MemoryAccess(InstanceNode* node,int address,int value,int write){
+   ComplexFUInstance* inst = node->inst;   
    T* self = (T*) inst->extraData;
 
    if(write){
@@ -134,7 +136,7 @@ static int32_t MemoryAccess(ComplexFUInstance* inst,int address,int value,int wr
       self->eval();
 
       while(!self->ready){
-         inst->declaration->updateFunction(inst);
+         inst->declaration->updateFunction(node);
       }
 
       self->valid = 0;
@@ -142,7 +144,7 @@ static int32_t MemoryAccess(ComplexFUInstance* inst,int address,int value,int wr
       self->addr = 0x00000000;
       self->wdata = 0x00000000;
 
-      inst->declaration->updateFunction(inst);
+      inst->declaration->updateFunction(node);
 
       return 0;
    } else {
@@ -153,7 +155,7 @@ static int32_t MemoryAccess(ComplexFUInstance* inst,int address,int value,int wr
       self->eval();
 
       while(!self->ready){
-         inst->declaration->updateFunction(inst);
+         inst->declaration->updateFunction(node);
       }
 
       int32_t res = self->rdata;
@@ -161,7 +163,7 @@ static int32_t MemoryAccess(ComplexFUInstance* inst,int address,int value,int wr
       self->valid = 0;
       self->addr = 0;
 
-      inst->declaration->updateFunction(inst);
+      inst->declaration->updateFunction(node);
 
       return res;
    }
@@ -183,73 +185,6 @@ static const int MEMORY_LATENCY = 2;
 // and therefore order of evaluation usually favours databus first and memories after
 
 #{for module modules}
-static int32_t* @{module.name}_InitializeFunction(ComplexFUInstance* inst){
-   memset(inst->extraData,0,inst->declaration->extraDataSize);
-
-   V@{module.name}* self = new (inst->extraData) V@{module.name}();
-
-   INIT(self);
-
-#{for i module.nInputs}
-   self->in@{i} = 0;
-#{end}
-
-   RESET(self);
-
-   return NULL;
-}
-
-static int32_t* @{module.name}_StartFunction(ComplexFUInstance* inst){
-#{if module.nOutputs}
-   static int32_t out[@{module.nOutputs}];
-#{end}
-
-   V@{module.name}* self = (V@{module.name}*) inst->extraData;
-
-#{if module.nDelays}
-#{for i module.nDelays}
-   self->delay@{i} = inst->delay[@{i}];
-#{end}
-#{end}
-
-#{if module.nConfigs}
-@{module.name}Config* config = (@{module.name}Config*) inst->config;
-#{for i module.nConfigs}
-   self->@{module.configs[i].name} = config->@{module.configs[i].name};
-#{end}
-#{end}
-
-#{if module.doesIO}
-   DatabusAccess* memoryLatency = (DatabusAccess*) &self[1];
-
-   memoryLatency->counter = 0;
-   memoryLatency->latencyCounter = INITIAL_MEMORY_LATENCY;
-#{end}
-
-   START_RUN(self);
-
-#{if module.hasDone}
-   inst->done = self->done;
-#{end}
-
-#{if module.nOutputs}
-   #{for i module.nOutputs}
-   out[@{i}] = self->out@{i};
-   #{end}
-
-   return out;
-#{else}
-   return NULL;
-#{end}
-}
-
-   /*
-      output [ADDR_W-1:0]   ext_dp_addr_0_port_0,
-      output [DATA_W-1:0]   ext_dp_out_0_port_0,
-      input  [DATA_W-1:0]   ext_dp_in_0_port_0,
-      output                ext_dp_enable_0_port_0,
-      output                ext_dp_write_0_port_0,
-   */
 
 static void @{module.name}_VCDFunction(ComplexFUInstance* inst,FILE* out,VCDMapping& currentMapping,Array<int>,bool firstTime,bool printDefinitions){
    V@{module.name}* self = (V@{module.name}*) inst->extraData;
@@ -303,8 +238,70 @@ static void @{module.name}_VCDFunction(ComplexFUInstance* inst,FILE* out,VCDMapp
    }
 }
 
+static int32_t* @{module.name}_InitializeFunction(InstanceNode* node){
+   ComplexFUInstance* inst = node->inst;
+   memset(inst->extraData,0,inst->declaration->extraDataSize);
 
-static int32_t* @{module.name}_UpdateFunction(ComplexFUInstance* inst){
+   V@{module.name}* self = new (inst->extraData) V@{module.name}();
+
+   INIT(self);
+
+#{for i module.nInputs}
+   self->in@{i} = 0;
+#{end}
+
+   RESET(self);
+
+   return NULL;
+}
+
+static int32_t* @{module.name}_StartFunction(InstanceNode* node){
+   ComplexFUInstance* inst = node->inst;
+#{if module.nOutputs}
+   static int32_t out[@{module.nOutputs}];
+#{end}
+
+   V@{module.name}* self = (V@{module.name}*) inst->extraData;
+
+#{if module.nDelays}
+#{for i module.nDelays}
+   self->delay@{i} = inst->delay[@{i}];
+#{end}
+#{end}
+
+#{if module.nConfigs}
+@{module.name}Config* config = (@{module.name}Config*) inst->config;
+#{for i module.nConfigs}
+   self->@{module.configs[i].name} = config->@{module.configs[i].name};
+#{end}
+#{end}
+
+#{if module.doesIO}
+   DatabusAccess* memoryLatency = (DatabusAccess*) &self[1];
+
+   memoryLatency->counter = 0;
+   memoryLatency->latencyCounter = INITIAL_MEMORY_LATENCY;
+#{end}
+
+   START_RUN(self);
+
+#{if module.hasDone}
+   inst->done = self->done;
+#{end}
+
+#{if module.nOutputs}
+   #{for i module.nOutputs}
+   out[@{i}] = self->out@{i};
+   #{end}
+
+   return out;
+#{else}
+   return NULL;
+#{end}
+}
+
+static int32_t* @{module.name}_UpdateFunction(InstanceNode* node){
+   ComplexFUInstance* inst = node->inst;
 #{if module.nOutputs}
    static int32_t out[@{module.nOutputs}];
 #{end}
@@ -359,67 +356,68 @@ static int32_t* @{module.name}_UpdateFunction(ComplexFUInstance* inst){
 #{for external module.externalInterfaces}
    #{set id external.interface}
    #{if external.type}
-   #{for port 2}
    // DP
-   {
-      int* memoryAddressView = (int*) &self[1];
-      #{if module.doesIO}
-      memoryAddressView = (int*) &access[1];
-      #{end}
+   #{for port 2}
+   int saved_dp_enable_@{id}_port_@{port} = self->ext_dp_enable_@{id}_port_@{port};
+   int saved_dp_write_@{id}_port_@{port} = self->ext_dp_write_@{id}_port_@{port};
+   int saved_dp_addr_@{id}_port_@{port} = self->ext_dp_addr_@{id}_port_@{port};
+   int saved_dp_data_@{id}_port_@{port} = self->ext_dp_out_@{id}_port_@{port};
 
-      memoryAddressView = &memoryAddressView[8 * @{id} + 4 * @{port}];
-
-      int readOffset = self->ext_dp_addr_@{id}_port_@{port};
-      memoryAddressView[2] = memoryAddressView[1];
-      memoryAddressView[1] = memoryAddressView[0];
-      memoryAddressView[0] = readOffset;
-
-      if(self->ext_dp_enable_@{id}_port_@{port}){
-         if(self->ext_dp_write_@{id}_port_@{port}){
-            int writeOffset = self->ext_dp_addr_@{id}_port_@{port};
-            Assert(writeOffset < (1 << inst->declaration->externalMemory[@{id}].bitsize));
-            inst->externalMemory[writeOffset] = self->ext_dp_out_@{id}_port_@{port};
-         } else {
-            readOffset = memoryAddressView[0];
-            //int readOffset = self->ext_dp_addr_@{id}_port_@{port};
-            Assert(readOffset < (1 << inst->declaration->externalMemory[@{id}].bitsize));
-            self->ext_dp_in_@{id}_port_@{port} = inst->externalMemory[readOffset];
-         }
-      }
-   }
    #{end}
    #{else}
    // 2P
-   {
-      int* memoryAddressView = (int*) &self[1];
-      #{if module.doesIO}
-      memoryAddressView = (int*) &access[1];
-      #{end}
+   int saved_2p_r_enable_@{id} = self->ext_2p_read_@{id};
+   int saved_2p_r_addr_@{id} = self->ext_2p_addr_in_@{id}; // Instead of saving address, should access memory and save data. Would simulate better what is actually happening
+   int saved_2p_w_enable_@{id} = self->ext_2p_write_@{id};
+   int saved_2p_w_addr_@{id} = self->ext_2p_addr_out_@{id};
+   int saved_2p_w_data_@{id} = self->ext_2p_data_out_@{id};
 
-      memoryAddressView = &memoryAddressView[8 * @{id}];
-
-      int readOffset = self->ext_2p_addr_in_@{id};
-      memoryAddressView[2] = memoryAddressView[1];
-      memoryAddressView[1] = memoryAddressView[0];
-      memoryAddressView[0] = readOffset;
-
-      if(self->ext_2p_write_@{id}){
-         int writeOffset = self->ext_2p_addr_out_@{id};
-         Assert(writeOffset < (1 << inst->declaration->externalMemory[@{id}].bitsize));
-         inst->externalMemory[writeOffset] = self->ext_2p_data_out_@{id};
-      }
-      // 2P
-      if(self->ext_2p_read_@{id}){
-         readOffset = memoryAddressView[0];
-         //int readOffset = self->ext_2p_addr_in_@{id};
-         Assert(readOffset < (1 << inst->declaration->externalMemory[@{id}].bitsize));
-         self->ext_2p_data_in_@{id} = inst->externalMemory[readOffset];
-      }
-   }
    #{end}
 #{end}
 
-   UPDATE(self); // Below this line no write to self (only read)
+   UPDATE(self); // This line causes posedge clk events to activate
+
+#{for external module.externalInterfaces}
+   #{set id external.interface}
+   #{if external.type}
+   // DP
+   #{for port 2}
+      if(saved_dp_enable_@{id}_port_@{port} && !saved_dp_write_@{id}_port_@{port}){
+         int readOffset = saved_dp_addr_@{id}_port_@{port};
+         Assert(readOffset < (1 << inst->declaration->externalMemory[@{id}].bitsize));
+         self->ext_dp_in_@{id}_port_@{port} = inst->externalMemory[readOffset];
+      }
+   #{end}
+   #{else}
+   // 2P
+      if(saved_2p_r_enable_@{id}){
+         int readOffset = saved_2p_r_addr_@{id};
+         Assert(readOffset < (1 << inst->declaration->externalMemory[@{id}].bitsize));
+         self->ext_2p_data_in_@{id} = inst->externalMemory[readOffset];
+      }
+   #{end}
+#{end}
+
+#{for external module.externalInterfaces}
+   #{set id external.interface}
+   #{if external.type}
+   // DP
+   #{for port 2}
+      if(saved_dp_enable_@{id}_port_@{port} && saved_dp_write_@{id}_port_@{port}){
+         int writeOffset = saved_dp_addr_@{id}_port_@{port};
+         Assert(writeOffset < (1 << inst->declaration->externalMemory[@{id}].bitsize));
+         inst->externalMemory[writeOffset] = saved_dp_data_@{id}_port_@{port};
+      }
+   #{end}
+   #{else}
+   // 2P
+      if(saved_2p_w_enable_@{id}){
+         int writeOffset = saved_2p_w_addr_@{id};
+         Assert(writeOffset < (1 << inst->declaration->externalMemory[@{id}].bitsize));
+         inst->externalMemory[writeOffset] = saved_2p_w_data_@{id};
+      }
+   #{end}
+#{end}
 
 #{if module.nStates}
 @{module.name}State* state = (@{module.name}State*) inst->state;
@@ -432,6 +430,8 @@ static int32_t* @{module.name}_UpdateFunction(ComplexFUInstance* inst){
    inst->done = self->done;
 #{end}
 
+   self->eval();
+
 #{if module.nOutputs}
    #{for i module.nOutputs}
       out[@{i}] = self->out@{i};
@@ -443,7 +443,8 @@ static int32_t* @{module.name}_UpdateFunction(ComplexFUInstance* inst){
 #{end}
 }
 
-static int32_t* @{module.name}_DestroyFunction(ComplexFUInstance* inst){
+static int32_t* @{module.name}_DestroyFunction(InstanceNode* node){
+   ComplexFUInstance* inst = node->inst;
    V@{module.name}* self = (V@{module.name}*) inst->extraData;
 
    self->~V@{module.name}();
@@ -473,8 +474,6 @@ static FUDeclaration* @{module.name}_Register(Versat* versat){
    #{end}
 
    #{if module.externalInterfaces.size}
-   decl.extraDataSize += sizeof(int) * 2 * 4 * @{module.externalInterfaces.size};
-
    static ExternalMemoryInterface externalMemory[@{module.externalInterfaces.size}];
 
    #{for external module.externalInterfaces}

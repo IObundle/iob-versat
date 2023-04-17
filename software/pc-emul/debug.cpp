@@ -661,6 +661,7 @@ Array<int> PrintVCDDefinitions(FILE* accelOutputFile,Accelerator* accel,Arena* t
    fprintf(accelOutputFile,"$scope module TOP $end\n");
    fprintf(accelOutputFile,"$var wire  1 a clk $end\n");
    fprintf(accelOutputFile,"$var wire  32 b counter $end\n");
+   fprintf(accelOutputFile,"$var wire  1 c run $end\n");
    PrintVCDDefinitions_(accelOutputFile,mapping,accel);
    fprintf(accelOutputFile,"$upscope $end\n");
    fprintf(accelOutputFile,"$enddefinitions $end\n");
@@ -770,12 +771,21 @@ static void PrintVCD_(FILE* accelOutputFile,VCDMapping& currentMapping,Accelerat
    }
 }
 
-void PrintVCD(FILE* accelOutputFile,Accelerator* accel,int time,int clock,Array<int> sameValueCheckSpace,Arena* arena){ // Need to put some clock signal
+void PrintVCD(FILE* accelOutputFile,Accelerator* accel,int time,int clock,int run,Array<int> sameValueCheckSpace,Arena* arena){ // Need to put some clock signal
    BLOCK_REGION(arena);
 
    fprintf(accelOutputFile,"#%d\n",time * 10);
    fprintf(accelOutputFile,"%da\n",clock ? 1 : 0);
-   fprintf(accelOutputFile,"b%s b\n",Bin((time) / 2));
+
+   int counter = time - 1;
+
+   if(counter < 0){
+      fprintf(accelOutputFile,"bx b\n");
+   } else {
+      fprintf(accelOutputFile,"b%s b\n",Bin(counter / 2));
+   }
+
+   fprintf(accelOutputFile,"%dc\n",run ? 1 : 0);
 
    AcceleratorIterator iter = {};
    iter.Start(accel,arena,true);
@@ -793,6 +803,4 @@ void SetDebugSignalHandler(SignalHandler func){
    signal(SIGSEGV, func);
    signal(SIGABRT, func);
 }
-
-
 

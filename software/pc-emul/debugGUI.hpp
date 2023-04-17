@@ -22,6 +22,7 @@ using Optional = std::optional<T>;
 #define DebugValue(...) ((void)0)
 #else
 void DebugGUI(Arena* arena);
+void DebugVersat(Versat* versat);
 
 void DebugAccelerator(Accelerator* accel,Arena* arena);
 void DebugAcceleratorPersist(Accelerator* accel,Arena* arena);
