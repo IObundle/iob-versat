@@ -309,7 +309,7 @@ static int32_t* @{module.name}_UpdateFunction(InstanceNode* node){
    V@{module.name}* self = (V@{module.name}*) inst->extraData;
 
 #{for i module.nInputs}
-   self->in@{i} = GetInputValue(inst,@{i}); 
+   self->in@{i} = GetInputValue(node,@{i}); 
 #{end}
 
    self->eval();

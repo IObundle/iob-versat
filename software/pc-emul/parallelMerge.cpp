@@ -80,6 +80,7 @@ bool IterativeClique(IterativeState* state,BitArray* neighbors,int* table){
             continue;
       } else {
          #if 01
+         UNHANDLED_ERROR; // Get time changed, check this later
          auto end = GetTime();
          float elapsed = end - state->start;
          if(elapsed > MAX_CLIQUE_TIME){
@@ -229,6 +230,7 @@ void IterativeClique(ParallelCliqueState* state,ConsolidationGraph graphArg,int 
             current = current->previousFrame;
             continue;
       } else {
+         UNHANDLED_ERROR; // Get time changed, check this later
          #if 0
          auto end = GetTime();
          float elapsed = end - state->start;
@@ -358,6 +360,8 @@ void ParallelClique(ParallelCliqueState* state,ConsolidationGraph graphArg,Index
    if(state->counter >= 1000){ // Calling clock is kinda of expensive every iteration
       state->counter = 0;
 
+      UNHANDLED_ERROR; // Get time changed, check this later
+      #if 0
       auto end = GetTime();
       float elapsed = end - state->start;
       if(elapsed > MAX_CLIQUE_TIME){
@@ -368,6 +372,7 @@ void ParallelClique(ParallelCliqueState* state,ConsolidationGraph graphArg,Index
          }
          return;
       }
+      #endif
    }
 
    int num = 0;
@@ -497,7 +502,10 @@ void Init(RefParallelState* state,ConsolidationGraph graph,int upperBound,Arena*
       ar = InitArena(Megabyte(128)); // Allocate one per thread
    }
    state->i = graph.nodes.size - 1;
+   UNHANDLED_ERROR; // Get time changed, check this later
+   #if 0
    state->start = GetTime();
+   #endif
 }
 
 ConsolidationGraph AdvanceAll(RefParallelState* parallelState,Arena* arena,float MAX_CLIQUE_TIME){
@@ -514,6 +522,8 @@ ConsolidationGraph AdvanceAll(RefParallelState* parallelState,Arena* arena,float
 
       task.args = (void*) state;
 
+      UNHANDLED_ERROR; // Get time changed, check this later
+      #if 0
       auto end = GetTime();
       float elapsed = end - parallelState->start;
       if(elapsed > MAX_CLIQUE_TIME){
@@ -521,6 +531,7 @@ ConsolidationGraph AdvanceAll(RefParallelState* parallelState,Arena* arena,float
          printf("Broken because time\n");
          break;
       }
+      #endif
 
       while(FullTasks());
       AddTask(task);

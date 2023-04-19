@@ -7,14 +7,13 @@
 #include <dirent.h>
 #include <sys/ptrace.h>
 
-extern "C" {
-#include <time.h>
-}
-
+#include <cerrno>
 #include <cstdio>
 #include <cstring>
 #include <cstdarg>
 #include <cerrno>
+
+#include <time.h>
 
 bool CurrentlyDebugging(){
    static bool init = false;
@@ -48,11 +47,15 @@ char* StaticFormat(const char* format,...){
    return buffer;
 }
 
-double GetTime(){
+MicroSecond GetTime(){
    timespec time;
    clock_gettime(CLOCK_MONOTONIC, &time);
 
-   double res = time.tv_sec + 1e-9*time.tv_nsec;
+   long long top = (long long) time.tv_sec * 1e6;
+   long long bottom = (long long) time.tv_nsec * 1e-3;
+
+   MicroSecond res = {};
+   res.time = top + bottom;
 
    return res;
 }

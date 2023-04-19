@@ -1656,7 +1656,7 @@ static void AcceleratorRunIter(AcceleratorIterator iter){
    }
 }
 
-void AcceleratorRun(Accelerator* accel){
+static void AcceleratorRunOnce(Accelerator* accel){
    static int numberRuns = 0;
    int time = 0;
 
@@ -1697,42 +1697,38 @@ void AcceleratorRun(Accelerator* accel){
    AcceleratorIterator iter = {};
 
    if(accel->versat->debug.outputVCD){
+      iter.StartOrdered(accel,arena,true); // Probably overkill, but guarantees that print vcd gets the correct result
+      AcceleratorEval(iter);
       PrintVCD(accelOutputFile,accel,time++,0,1,vcdSameCheckSpace,arena); // Print starting values
    }
 
    AcceleratorRunStart(accel);
-
-   iter.StartOrdered(accel,arena,true);
-   AcceleratorEval(iter);
-
    memcpy(accel->outputAlloc.ptr,accel->storedOutputAlloc.ptr,accel->outputAlloc.size * sizeof(int));
 
    if(accel->versat->debug.outputVCD){
+      iter.StartOrdered(accel,arena,true);
+      AcceleratorEval(iter);
       PrintVCD(accelOutputFile,accel,time++,1,0,vcdSameCheckSpace,arena);
    }
-
-   iter.StartOrdered(accel,arena,true);
-   AcceleratorEval(iter);
 
    for(int cycle = 0; cycle < 10000; cycle++){ // Max amount of iterations
       Assert(accel->outputAlloc.size == accel->storedOutputAlloc.size);
 
       if(accel->versat->debug.outputVCD){
+         iter.StartOrdered(accel,arena,true);
+         AcceleratorEval(iter);
          PrintVCD(accelOutputFile,accel,time++,0,0,vcdSameCheckSpace,arena);
       }
-
-      iter.StartOrdered(accel,arena,true);
-      AcceleratorEval(iter);
 
       iter.StartOrdered(accel,arena,true);
       AcceleratorRunIter(iter);
 
       memcpy(accel->outputAlloc.ptr,accel->storedOutputAlloc.ptr,accel->outputAlloc.size * sizeof(int));
 
-      iter.StartOrdered(accel,arena,true);
-      AcceleratorEval(iter);
-
       if(accel->versat->debug.outputVCD){
+         iter.StartOrdered(accel,arena,true);
+         AcceleratorEval(iter);
+
          PrintVCD(accelOutputFile,accel,time++,1,0,vcdSameCheckSpace,arena);
       }
 
@@ -1763,6 +1759,12 @@ void AcceleratorRun(Accelerator* accel){
 
    if(accel->versat->debug.outputVCD){
       PrintVCD(accelOutputFile,accel,time++,0,0,vcdSameCheckSpace,arena);
+   }
+}
+
+void AcceleratorRun(Accelerator* accel,int times){
+   for(int i = 0; i < times; i++){
+      AcceleratorRunOnce(accel);
    }
 }
 

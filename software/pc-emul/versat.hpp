@@ -91,7 +91,7 @@ void ParseVersatSpecification(Versat* versat,const char* filepath);
 // Accelerator functions
 Accelerator* CreateAccelerator(Versat* versat);
 FUInstance* CreateFUInstance(Accelerator* accel,FUDeclaration* type,String entityName);
-void AcceleratorRun(Accelerator* accel);
+void AcceleratorRun(Accelerator* accel,int times = 1);
 void AcceleratorRunDebug(Accelerator* accel);
 void RemoveFUInstance(Accelerator* accel,FUInstance* inst);
 void OutputVersatSource(Versat* versat,Accelerator* accel,const char* directoryPath);

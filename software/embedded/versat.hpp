@@ -67,7 +67,7 @@ Versat* InitVersat(int base,int numberConfigurations);
 //Arena InitArena(size_t size);
 
 // Accelerator functions
-void AcceleratorRun(Accelerator* accel);
+void AcceleratorRun(Accelerator* accel,int times = 1);
 void VersatUnitWrite(FUInstance* instance,int address, int value);
 int32_t VersatUnitRead(FUInstance* instance,int address);
 
@@ -106,6 +106,7 @@ inline void Free(Versat* versat){}
 #define DisplayUnitConfiguration(...) ((void)0)
 #define CheckInputAndOutputNumber(...) ((void)0)
 #define MergeThree(...) ((FUDeclaration*)0)
+#define DebugAccelerator(...) ((void)0)
 #define Merge(...) ((FUDeclaration*)0)
 inline void TestVersatSide(Versat* versat){}
 

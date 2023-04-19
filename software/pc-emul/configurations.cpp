@@ -297,7 +297,6 @@ CalculatedOffsets ExtractDebugData(Accelerator* accel,Arena* out){
    return res;
 }
 
-
 bool CheckCorrectConfiguration(Accelerator* topLevel,ComplexFUInstance* inst){
    if(IsConfigStatic(topLevel,inst)){
       Assert(inst->config == nullptr || Inside(&topLevel->staticAlloc,inst->config));
@@ -388,12 +387,16 @@ void PopulateAccelerator(Accelerator* topLevel,Accelerator* accel,FUDeclaration*
          inst->extraData = inter.extraData.Set(topDeclaration->extraDataOffsets.offsets[index],decl->extraDataSize);
       }
 
+      #if 0 // Should be a debug flag
       CheckCorrectConfiguration(topLevel,inter,inst);
       CheckCorrectConfiguration(topLevel,inst);
+      #endif
+
       index += 1;
    }
 }
 
+// Top level
 void FUInstanceInterfaces::Init(Accelerator* accel){
    VersatComputedValues val = ComputeVersatValues(accel->versat,accel);
 
@@ -420,15 +423,15 @@ int MemorySize(Array<ExternalMemoryInterface> interfaces){
    return size;
 }
 
+// Sub instance
 void FUInstanceInterfaces::Init(Accelerator* topLevel,ComplexFUInstance* inst){
-   VersatComputedValues val = ComputeVersatValues(topLevel->versat,topLevel);
    FUDeclaration* decl = inst->declaration;
-   int numberUnits = CalculateNumberOfUnits(decl->fixedDelayCircuit->allocated);
+   //int numberUnits = CalculateNumberOfUnits(decl->fixedDelayCircuit->allocated);
 
    config.Init(inst->config,decl->configOffsets.max);
    state.Init(inst->state,decl->stateOffsets.max);
    delay.Init(inst->delay,decl->delayOffsets.max);
-   mem.Init((Byte*) inst->memMapped,val.memoryMappedBytes);
+   mem.Init((Byte*) inst->memMapped,1 << decl->memoryMapBits);
    outputs.Init(inst->outputs,decl->totalOutputs);
    storedOutputs.Init(inst->storedOutputs,decl->totalOutputs);
    extraData.Init(inst->extraData,decl->extraDataOffsets.max);
@@ -436,7 +439,9 @@ void FUInstanceInterfaces::Init(Accelerator* topLevel,ComplexFUInstance* inst){
    if(decl->externalMemory.size){
       externalMemory.Init(inst->externalMemory,MemorySize(decl->externalMemory));
    }
+   #if 0
    debugData.Init(inst->debugData + 1,numberUnits);
+   #endif
 }
 
 void FUInstanceInterfaces::AssertEmpty(bool checkStatic){
@@ -470,7 +475,6 @@ void PopulateAccelerator2(Accelerator* accel,FUDeclaration* topDeclaration,FUIns
    FOREACH_LIST(ptr,accel->allocated){
       ComplexFUInstance* inst = ptr->inst;
       FUDeclaration* decl = inst->declaration;
-      UnitValues val = CalculateAcceleratorUnitValues(accel->versat,inst);
 
       inst->config = nullptr;
       inst->state = nullptr;
@@ -530,9 +534,9 @@ void PopulateAccelerator2(Accelerator* accel,FUDeclaration* topDeclaration,FUIns
          }
       }
       #if 1
-      if(val.totalOutputs){
-         inst->outputs = inter.outputs.Push(val.totalOutputs);
-         inst->storedOutputs = inter.storedOutputs.Push(val.totalOutputs);
+      if(decl->totalOutputs){
+         inst->outputs = inter.outputs.Push(decl->totalOutputs);
+         inst->storedOutputs = inter.storedOutputs.Push(decl->totalOutputs);
       }
       #endif
       if(decl->extraDataSize){
@@ -543,12 +547,32 @@ void PopulateAccelerator2(Accelerator* accel,FUDeclaration* topDeclaration,FUIns
    }
 }
 
+Hashmap<String,int*>* ExtractNamedSingleConfigs(Accelerator* accel,Arena* out){
+   int count = 0;
+   AcceleratorIterator iter = {};
+   region(out){
+      for(InstanceNode* node = iter.Start(accel,out,true); node; node = iter.Next()){
+         ComplexFUInstance* inst = node->inst;
+         FUDeclaration* decl = inst->declaration;
+         if(decl->type == FUDeclaration::SINGLE && decl->configs.size){
+            count += 1;
+         }
+      }
+   }
 
+   Hashmap<String,int*>* res = PushHashmap<String,int*>(out,count);
 
+   for(InstanceNode* node = iter.Start(accel,out,true); node; node = iter.Next()){
+      ComplexFUInstance* inst = node->inst;
+      FUDeclaration* decl = inst->declaration;
+      if(decl->type == FUDeclaration::SINGLE && decl->configs.size){
+         String name = iter.GetFullName(out);
+         res->Insert(name,inst->config);
+      }
+   }
 
-
-
-
+   return res;
+}
 
 
 
