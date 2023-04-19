@@ -18,6 +18,8 @@ extern int  versat_configurations;
 Versat* InitVersat(int base,int numberConfigurations){
    static Versat versat = {};
 
+   printf("Embedded Versat\n");
+
    #ifdef DEBUG
    printf("E\n");
    #endif
@@ -28,36 +30,32 @@ Versat* InitVersat(int base,int numberConfigurations){
    printf("BASE:%x\n",base);
    #endif
 
-   MEMSET(versat_base,0x0,2);
+   MEMSET(versat_base,0x0,0x80000000);
    MEMSET(versat_base,0x0,0);
 
    return &versat;
 }
 
-#if 0
-Arena InitArena(size_t size){
-   Arena arena = {};
-   arena.mem = (Byte*) malloc(size);
-   arena.totalAllocated = size;
-   return arena;
-}
-#endif
-
 // Accelerator functions
-void AcceleratorRun(Accelerator* accel){
+void AcceleratorRun(Accelerator* accel,int times){
+   static bool init = false;
+
+   if(!init){
+      // Set delay and static values
+      for(int i = 0; i < ARRAY_SIZE(delayBuffer); i++){
+         delayBase[i] = delayBuffer[i];
+      }
+      for(int i = 0; i < ARRAY_SIZE(staticBuffer); i++){ // Hackish, for now
+         staticBase[i] = staticBuffer[i];
+      }
+      init = true;
+   }
+
    #ifdef DEBUG
    printf("B\n");
    #endif
 
-   // Set delay and static values
-   for(int i = 0; i < ARRAY_SIZE(delayBuffer); i++){
-      delayBase[i] = delayBuffer[i];
-   }
-   for(int i = 0; i < ARRAY_SIZE(staticBuffer); i++){ // Hackish, for now
-      staticBase[i] = staticBuffer[i];
-   }
-
-   MEMSET(versat_base,0x0,1);
+   MEMSET(versat_base,0x0,times);
 
    while(1){
       int val = MEMGET(versat_base,0x0);
@@ -165,6 +163,12 @@ FUInstance* GetSubInstanceByName_(Accelerator* topLevel,FUInstance* inst,int arg
 FUInstance* CreateFUInstance(Accelerator* accel,FUDeclaration* type,String entityName){
    FUInstance* res = GetInstanceByName_(accel,1,entityName.data);
 
+   return res;
+}
+
+MicroSecond GetTime(){
+   MicroSecond res = {};
+   res.time = (uint64) timer_time_us();
    return res;
 }
 

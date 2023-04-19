@@ -2,6 +2,40 @@
 
 #include <limits>
 
+extern "C"{
+int printf_(const char* format, ...);
+}
+
+#ifndef PC
+#define printf printf_
+#endif
+
+void TimeIt::Output(){
+   char buffer[32];
+   // Cannot use floating point because of embedded
+   MicroSecond end = GetTime();
+
+   uint64 diff = end.time - start.time;
+   int digits = NumberDigitsRepresentation(diff);
+   sprintf(buffer,"%d",diff);
+
+   printf("[TimeIt] %s: ",id);
+
+   int charSeen = 0;
+   for(int i = std::max(6,digits); i >= 0; i--){
+      if(i < digits){
+         printf("%c",buffer[charSeen++]);
+      } else if(i <= 6){
+         printf("0");
+      }
+
+      if(i == 6){
+         printf(".");
+      }
+   }
+   printf("\n");
+}
+
 // Misc
 int RoundUpDiv(int dividend,int divisor){
    int div = dividend / divisor;
@@ -217,16 +251,16 @@ int SwapEndianess(int val){
    return res;
 }
 
-int NumberDigitsRepresentation(int number){
+int NumberDigitsRepresentation(int64 number){
    int nDigits = 0;
 
    if(number == 0){
       return 1;
    }
 
-   int num = number;
+   int64 num = number;
    if(num < 0){
-      nDigits += 1;
+      nDigits += 1; // minus sign
       num *= -1;
    }
 

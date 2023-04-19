@@ -60,7 +60,7 @@ module versat_instance #(
 wire wor_ready;
 
 wire done;
-reg run;
+reg [30:0] runCounter;
 reg [31:0] stateRead;
 #{if unitsMapped}
 wire [31:0] unitRdataFinal;
@@ -97,22 +97,26 @@ always @(posedge clk,posedge rst) // Care, rst because writing to soft reset reg
          if(addr == 0) begin
             versat_ready <= 1'b1;
             if(we)
-               soft_reset <= wdata[1];
+               soft_reset <= wdata[31];
             else
                versat_rdata <= {31'h0,done}; 
          end
       end
    end
 
+wire run = |runCounter && (&unitDone);
+assign done = (!(|runCounter) && (&unitDone));
+
 always @(posedge clk,posedge rst_int)
 begin
    if(rst_int) begin
-      run <= 1'b0;
+      runCounter <= 0;
    end else begin
-      run <= 1'b0;
+      if(run)
+         runCounter <= runCounter - 1;
 
       if(valid && we && addr == 0)
-         run <= wdata[0];
+         runCounter <= runCounter + wdata[30:0];
    end
 end
 
@@ -173,8 +177,6 @@ reg [@{unitsMapped - 1}:0] memoryMappedEnable;
 wire[@{unitsMapped - 1}:0] unitReady;
 assign wor_ready = (|unitReady);
 #{end}
-
-assign done = (&unitDone && !run);
 
 #{if versatValues.numberConnections}
 wire [31:0] #{join ", " for node instances}

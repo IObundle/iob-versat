@@ -362,7 +362,6 @@ struct ComplexFUInstance : public FUInstance{
    bool savedMemory; // Same for memory
    bool sharedEnable;
    bool initialized;
-   bool debugBreak;
 };
 
 struct OrderedInstance{ // This is a more powerful and generic approach to subgraphing. Should not be named ordered, could be used for anything really, not just order iteration

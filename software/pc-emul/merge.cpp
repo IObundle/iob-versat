@@ -5,6 +5,7 @@
 #include "debugGUI.hpp"
 #include "graph.hpp"
 
+#include <ctime>
 #include <cstdio>
 #include <cstdarg>
 #include <unordered_map>
@@ -603,12 +604,15 @@ void Clique(CliqueState* state,ConsolidationGraph graphArg,int index,IndexRecord
       return;
    }
 
+   UNHANDLED_ERROR; // Get time changed, check this later
+   #if 0
    auto end = GetTime();
    float elapsed = end - state->start;
    if(elapsed > MAX_CLIQUE_TIME){
       state->found = true;
       return;
    }
+   #endif
 
    int lastI = index;
    do{
@@ -656,7 +660,10 @@ void RunMaxClique(CliqueState* state,Arena* arena,float MAX_CLIQUE_TIME){
    ConsolidationGraph graph = Copy(state->clique,arena);
    graph.validNodes.Fill(0);
 
+   UNHANDLED_ERROR; // Get time changed, check this later
+   #if 0
    state->start = GetTime();
+   #endif
 
    int startI = state->startI ? state->startI : graph.nodes.size - 1;
 
@@ -684,12 +691,15 @@ void RunMaxClique(CliqueState* state,Arena* arena,float MAX_CLIQUE_TIME){
          break;
       }
 
+      UNHANDLED_ERROR; // Get time changed, check this later
+      #if 0
       auto end = GetTime();
       float elapsed = end - state->start;
       if(elapsed > MAX_CLIQUE_TIME){
          printf("Timeout, index: %d (from %d)\n",i,graph.nodes.size);
          break;
       }
+      #endif
    }
    printf("\nFinished in: %d\n",state->iterations);
 

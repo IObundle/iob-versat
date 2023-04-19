@@ -7,6 +7,7 @@
 #include <string.h>
 #include <new>
 #include <functional>
+#include <cstdio>
 #include <stdint.h>
 
 #include "signal.h"
@@ -54,9 +55,9 @@ ALWAYS_INLINE Defer<F> operator+(_DeferTag,F&& f){
    return Defer<F>(f);
 }
 
-#define __defer(LINE) defer_ ## LINE
-#define _defer(LINE) __defer( LINE )
-#define defer auto _defer(__LINE__) = _DeferTag() + [&]()
+#define TEMP__defer(LINE) TEMPdefer_ ## LINE
+#define TEMP_defer(LINE) TEMP__defer( LINE )
+#define defer auto TEMP_defer(__LINE__) = _DeferTag() + [&]()
 
 void FlushStdout();
 #if defined(PC) && defined(VERSAT_DEBUG)
@@ -124,21 +125,29 @@ typedef uint8_t Byte;
 #else
 typedef unsigned char Byte;
 typedef intptr_t iptr;
+typedef int64_t int64;
+typedef uint64_t uint64;
+//typedef long long int int64; // Long long is at least 64, so
+//typedef long long unsigned int uint64;
 #endif
 
-double GetTime();
+struct MicroSecond{
+   uint64 time;
+};
+
+MicroSecond GetTime();
 
 // Automatically times a block in number of counts
 class TimeIt{
 public:
-	double start;
+	MicroSecond start;
    const char* id;
    bool endedEarly;
 
    TimeIt(const char* id){this->id = id; start = GetTime(); endedEarly = false;};
    TimeIt(const char* id, bool activated){this->id = id; start = GetTime(); endedEarly = !activated;};
    ~TimeIt(){if(!endedEarly) Output();};
-   void Output(){double end = GetTime();printf("[TimeIt] %s: %f\n",id,end - start);}
+   void Output();
    void End(){Output(); endedEarly = true;}
    operator bool(){return true;}; // For the timeRegion trick
 };
@@ -279,7 +288,7 @@ float PackFloat(int val);
 float PackFloat(Byte sign,Byte exponent,int mantissa);
 int SwapEndianess(int val);
 
-int NumberDigitsRepresentation(int number); // Number of digits if printed (negative includes - sign )
+int NumberDigitsRepresentation(int64 number); // Number of digits if printed (negative includes - sign )
 char GetHex(int value);
 Byte HexCharToNumber(char ch);
 

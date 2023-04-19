@@ -455,6 +455,20 @@ void RemoveFUInstance(Accelerator* accel,InstanceNode* node){
    #endif
 }
 
+ComplexFUInstance GetNodeByName(Accelerator* accel,String string,Arena* arena){
+   AcceleratorIterator iter = {};
+   for(InstanceNode* node = iter.Start(accel,arena,true); node; node = iter.Next()){
+      BLOCK_REGION(arena);
+      String name = iter.GetFullName(arena);
+
+      if(CompareString(name,string)){
+         return *node->inst;
+      }
+   }
+   Assert(false);
+   return (ComplexFUInstance){};
+}
+
 void FlattenRemoveFUInstance(Accelerator* accel,ComplexFUInstance* inst){
    UNHANDLED_ERROR;
    #if 0
@@ -792,25 +806,10 @@ Accelerator* Flatten(Versat* versat,Accelerator* accel,int times){
       OutputGraphDotFile(versat,newAccel,true,"./debug/flatten.dot");
    }
 
-   ReorganizeAccelerator(newAccel,arena);
-
    toRemove.Clear(true);
    compositeInstances.Clear(true);
 
-   #if 0
-   //AcceleratorView view = CreateAcceleratorView(newAccel,arena);
-   //view.CalculateDelay(arena);
-   //FixDelays(versat,newAccel,view);
-
-   UnitValues val1 = CalculateAcceleratorValues(versat,accel);
-   UnitValues val2 = CalculateAcceleratorValues(versat,newAccel);
-
-   if(times == 99){
-      Assert((val1.configs + val1.statics) == val2.configs); // New accel shouldn't have statics, unless they are from delay units added (which should also be shared configs)
-      Assert(val1.states == val2.states);
-      Assert(val1.delays == val2.delays);
-   }
-   #endif
+   newAccel->staticInfo.Clear();
 
    FUDeclaration base = {};
    base.name = STRING("Top");
@@ -819,7 +818,7 @@ Accelerator* Flatten(Versat* versat,Accelerator* accel,int times){
    Hashmap<EdgeNode,int>* delay = CalculateDelay(versat,newAccel,arena);
    FixDelays(versat,newAccel,delay);
 
-   newAccel->staticInfo.Clear();
+   ReorganizeAccelerator(newAccel,arena);
 
    UnitValues val = CalculateAcceleratorValues(versat,newAccel);
    Assert(!ZeroOutRealloc(&newAccel->configAlloc,val.configs));
@@ -838,6 +837,81 @@ Accelerator* Flatten(Versat* versat,Accelerator* accel,int times){
          inst->declaration->initializeFunction(node);
          inst->initialized = true;
       }
+   }
+
+   ReorganizeAccelerator(accel,arena);
+   ReorganizeAccelerator(newAccel,arena);
+
+   #if 1
+   region(arena){
+      Hashmap<String,int*>* oldConfigs = ExtractNamedSingleConfigs(accel,arena);
+      Hashmap<String,int*>* newConfigs = ExtractNamedSingleConfigs(newAccel,arena);
+
+      for(Pair<String,int*>& pair : oldConfigs){
+         int** possibleConfig = newConfigs->Get(pair.first);
+
+         if(!possibleConfig){
+            continue;
+         } else {
+            int* newConfig = *possibleConfig;
+
+            ComplexFUInstance inst = GetNodeByName(accel,pair.first,arena);
+            FUDeclaration* decl = inst.declaration;
+
+            Memcpy(newConfig,pair.second,decl->configs.size);
+         }
+      }
+   }
+   #else
+   AcceleratorIterator iterOld = {};
+   AcceleratorIterator iterNew = {};
+   iterOld.Start(accel,arena,true);
+   iterNew.Start(newAccel,arena,true);
+
+   while(1){
+      InstanceNode* oldNode = iterOld.Current();
+      InstanceNode* newNode = iterNew.Current();
+
+      if(!oldNode || !newNode){
+         break;
+      }
+
+      ComplexFUInstance* oldInst = oldNode->inst;
+      ComplexFUInstance* newInst = newNode->inst;
+
+      if(oldInst->declaration->type != FUDeclaration::SINGLE){
+         iterOld.Next();
+         continue;
+      }
+      if(newInst->declaration->type != FUDeclaration::SINGLE){
+         iterNew.Next();
+         continue;
+      }
+      if(oldInst->declaration == BasicDeclaration::buffer || oldInst->declaration == BasicDeclaration::fixedBuffer){
+         iterOld.Next();
+         continue;
+      }
+      if(newInst->declaration == BasicDeclaration::buffer || newInst->declaration == BasicDeclaration::fixedBuffer){
+         iterNew.Next();
+         continue;
+      }
+
+      region(arena){
+         String oldName = iterOld.GetFullName(arena);
+         String newName = iterNew.GetFullName(arena);
+
+         Assert(CompareString(oldName,newName));
+      }
+
+      Memcpy(newInst->config,oldInst->config,oldInst->declaration->configs.size);
+
+      iterOld.Next();
+      iterNew.Next();
+   }
+   #endif
+
+   debugControlledRegion(){
+      DebugAccelerator(newAccel,arena);
    }
 
    return newAccel;
@@ -1161,8 +1235,6 @@ InstanceNode* AcceleratorIterator::GetInstance(int level){
    if(level + upperLevels < 0){
       return nullptr;
    }
-
-   long signed int long a = 0;
 
    if(ordered){
       return stack[level].ordered->node;
