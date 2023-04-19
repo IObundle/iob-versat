@@ -20,6 +20,7 @@ endif
 INCLUDE+=$(incdir)$(VERSAT_HW_DIR)/include
 INCLUDE+=$(incdir)$(VERSAT_DIR)/submodules/LIB/hardware/include
 INCLUDE+=$(incdir)$(VERSAT_DIR)/submodules/FPU/hardware/include
+VHDR+=$(wildcard $(VERSAT_DIR)/submodules/FPU/hardware/include/*.vh)
 
 INCLUDE+=$(V_INCLUDE)
 
