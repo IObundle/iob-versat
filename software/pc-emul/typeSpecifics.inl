@@ -17,6 +17,7 @@ public:
    }
 };
 
+#if 0
 template<> class std::hash<String>{
 public:
    std::size_t operator()(String const& s) const noexcept{
@@ -32,6 +33,7 @@ public:
    return res;
    }
 };
+#endif
 
 template<> class std::hash<PortInstance>{
    public:
@@ -43,6 +45,7 @@ template<> class std::hash<PortInstance>{
    }
 };
 
+#if 0
 template<> class std::hash<StaticId>{
    public:
    std::size_t operator()(StaticId const& s) const noexcept{
@@ -52,6 +55,7 @@ template<> class std::hash<StaticId>{
       return (std::size_t) res;
    }
 };
+#endif
 
 template<> class std::hash<PortEdge>{
    public:

@@ -328,7 +328,7 @@ void CheckCorrectConfiguration(Accelerator* topLevel,FUInstanceInterfaces& inter
 }
 
 // Populates sub accelerator
-void PopulateAccelerator(Accelerator* topLevel,Accelerator* accel,FUDeclaration* topDeclaration,FUInstanceInterfaces& inter,Hashmap<StaticId,StaticData>* staticMap){
+void PopulateAccelerator(Accelerator* topLevel,Accelerator* accel,FUDeclaration* topDeclaration,FUInstanceInterfaces& inter,std::unordered_map<StaticId,StaticData>* staticMap){
    int index = 0;
    FOREACH_LIST(ptr,accel->allocated){
       ComplexFUInstance* inst = ptr->inst;
@@ -355,9 +355,14 @@ void PopulateAccelerator(Accelerator* topLevel,Accelerator* accel,FUDeclaration*
          id.parent = topDeclaration;
          id.name = inst->name;
 
+         #if 0
          StaticData* staticInfo = staticMap->Get(id);
-         Assert(staticInfo);
-         inst->config = inter.statics.Set(staticInfo->offset,decl->configs.size);
+         #endif
+
+         auto iter = staticMap->find(id);
+
+         Assert(iter != staticMap->end());
+         inst->config = &inter.statics.ptr[iter->second.offset];
       } else if(decl->configs.size){
          inst->config = inter.config.Set(topDeclaration->configOffsets.offsets[index],decl->configs.size);
       }
@@ -459,7 +464,7 @@ void FUInstanceInterfaces::AssertEmpty(bool checkStatic){
 }
 
 // The true "Accelerator" populator
-void PopulateAccelerator2(Accelerator* accel,FUDeclaration* topDeclaration,FUInstanceInterfaces& inter,Hashmap<StaticId,StaticData>* staticMap){
+void PopulateTopLevelAccelerator(Accelerator* accel){
    STACK_ARENA(tempInst,Kilobyte(64));
    Arena* temp = &tempInst;
 
@@ -469,6 +474,9 @@ void PopulateAccelerator2(Accelerator* accel,FUDeclaration* topDeclaration,FUIns
          sharedUnits += 1;
       }
    }
+
+   FUInstanceInterfaces inter = {};
+   inter.Init(accel);
 
    Hashmap<int,int*>* sharedToConfigPtr = PushHashmap<int,int*>(temp,sharedUnits);
 
@@ -495,12 +503,12 @@ void PopulateAccelerator2(Accelerator* accel,FUDeclaration* topDeclaration,FUIns
       if(decl->configs.size){
          if(inst->isStatic){
             StaticId id = {};
-            id.parent = topDeclaration;
             id.name = inst->name;
 
-            StaticData* staticInfo = staticMap->Get(id);
-            Assert(staticInfo);
-            inst->config = &inter.statics.ptr[staticInfo->offset];
+            auto iter = accel->staticUnits.find(id);
+
+            Assert(iter != accel->staticUnits.end());
+            inst->config = &inter.statics.ptr[iter->second.offset];
          } else if(inst->sharedEnable){
             int** ptr = sharedToConfigPtr->Get(inst->sharedIndex);
 
@@ -547,7 +555,7 @@ void PopulateAccelerator2(Accelerator* accel,FUDeclaration* topDeclaration,FUIns
    }
 }
 
-Hashmap<String,int*>* ExtractNamedSingleConfigs(Accelerator* accel,Arena* out){
+Hashmap<String,SizedConfig>* ExtractNamedSingleConfigs(Accelerator* accel,Arena* out){
    int count = 0;
    AcceleratorIterator iter = {};
    region(out){
@@ -560,14 +568,14 @@ Hashmap<String,int*>* ExtractNamedSingleConfigs(Accelerator* accel,Arena* out){
       }
    }
 
-   Hashmap<String,int*>* res = PushHashmap<String,int*>(out,count);
+   Hashmap<String,SizedConfig>* res = PushHashmap<String,SizedConfig>(out,count);
 
    for(InstanceNode* node = iter.Start(accel,out,true); node; node = iter.Next()){
       ComplexFUInstance* inst = node->inst;
       FUDeclaration* decl = inst->declaration;
       if(decl->type == FUDeclaration::SINGLE && decl->configs.size){
          String name = iter.GetFullName(out);
-         res->Insert(name,inst->config);
+         res->Insert(name,{inst->config,inst->declaration->configs.size});
       }
    }
 

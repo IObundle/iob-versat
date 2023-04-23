@@ -51,23 +51,15 @@ bool ZeroOutRealloc(Allocation<T>* alloc,int newSize){
    return didRealloc;
 }
 
+#if 1
 template<typename T>
 void Reserve(Allocation<T>* alloc,int reservedSize){
+   Assert(!alloc->ptr);
    alloc->ptr = (T*) calloc(reservedSize,sizeof(T));
    Assert(alloc->ptr);
    alloc->reserved = reservedSize;
 }
-
-template<typename T>
-void Alloc(Allocation<T>* alloc,int newSize){
-   if(alloc->ptr != nullptr){
-      LogOnce(LogModule::MEMORY,LogLevel::WARN,"Allocating memory without previously freeing");
-   }
-
-   alloc->ptr = (T*) malloc(sizeof(T) * newSize);
-   alloc->reserved = newSize;
-   alloc->size = newSize;
-}
+#endif
 
 template<typename T>
 void RemoveChunkAndCompress(Allocation<T>* alloc,T* ptr,int size){
@@ -92,6 +84,18 @@ void Free(Allocation<T>* alloc){
    alloc->ptr = nullptr;
    alloc->reserved = 0;
    alloc->size = 0;
+}
+
+template<typename T> T* Push(Allocation<T>* alloc, int amount){
+   if(alloc->size + amount > alloc->reserved){
+      Assert(false);
+      return nullptr;
+   }
+
+   T* res = &alloc->ptr[alloc->size];
+   alloc->size += amount;
+
+   return res;
 }
 
 template<typename T>

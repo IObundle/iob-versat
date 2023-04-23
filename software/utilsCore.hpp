@@ -73,6 +73,13 @@ void FlushStdout();
 #define Assert(EXPR) do {} while(0)
 #endif
 
+// Assert that gets replaced by the expression if debug is disabled (instead of simply disappearing like a normal assert)
+#if defined(VERSAT_DEBUG)
+#define AssertAndDo(EXPR) Assert(EXPR)
+#else
+#define AssertAndDo(EXPR) EXPR
+#endif
+
 #define DEBUG_BREAK() do{ FlushStdout(); raise(SIGTRAP); } while(0)
 #define DEBUG_BREAK_IF(COND) if(COND){FlushStdout(); raise(SIGTRAP);}
 
@@ -243,7 +250,7 @@ struct Pair{
       Second data;
       Second second;
    };
-} __attribute__((packed));
+};
 
 template<typename F,typename S>
 static bool operator==(const Pair<F,S>& p1,const Pair<F,S>& p2){

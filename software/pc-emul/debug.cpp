@@ -9,7 +9,7 @@
 #include "type.hpp"
 #include "textualRepresentation.hpp"
 
-bool debugVariableFlag = false;
+bool debugFlag = false;
 Arena debugArenaInst = {};
 Arena* debugArena = &debugArenaInst;
 
@@ -355,74 +355,6 @@ void PrintAcceleratorInstances(Accelerator* accel){
       printf("%.*s\n",UNPACK_SS(inst->name));
    }
 }
-
-void OutputGraphDotFile_(SimpleGraph graph,bool collapseSameEdges,FILE* file){
-   fprintf(file,"digraph accel {\n\tnode [fontcolor=white,style=filled,color=\"160,60,176\"];\n");
-
-   for(int i = 0; i < graph.nodes.size; i++){
-      fprintf(file,"%d [label=\"%.*s\"]\n",i,UNPACK_SS(graph.nodes[i].decl->name));
-   }
-   for(int i = 0; i < graph.edges.size; i++){
-      SimpleEdge e = graph.edges[i];
-      fprintf(file,"%d:%d -> %d:%d\n",e.out,e.outPort,e.in,e.inPort);
-   }
-   fprintf(file,"}\n");
-}
-
-#if 0
-static void OutputGraphDotFile_(Versat* versat,AcceleratorView& view,bool collapseSameEdges,ComplexFUInstance* highlighInstance,FILE* outputFile){
-   Arena* arena = &versat->temp;
-
-   fprintf(outputFile,"digraph accel {\n\tnode [fontcolor=white,style=filled,color=\"160,60,176\"];\n");
-   for(ComplexFUInstance** instPtr : view.nodes){
-      ComplexFUInstance* inst = *instPtr;
-      String id = UniqueRepr(inst,arena);
-      String name = Repr(inst,versat->debug.dotFormat,arena);
-
-      if(inst == highlighInstance){
-         fprintf(outputFile,"\t\"%.*s\" [color=blue,label=\"%.*s\"];\n",UNPACK_SS(id),UNPACK_SS(name));
-      } else {
-         fprintf(outputFile,"\t\"%.*s\" [label=\"%.*s\"];\n",UNPACK_SS(id),UNPACK_SS(name));
-      }
-   }
-
-   std::set<std::pair<ComplexFUInstance*,ComplexFUInstance*>> sameEdgeCounter;
-
-   // TODO: Consider adding a true same edge counter, that collects edges with equal delay and then represents them on the graph as a pair, using [portStart-portEnd]
-   for(EdgeView* edgeView : view.edges){
-      Edge* edge = edgeView->edge;
-      if(collapseSameEdges){
-         std::pair<ComplexFUInstance*,ComplexFUInstance*> key{edge->units[0].inst,edge->units[1].inst};
-
-         if(sameEdgeCounter.count(key) == 1){
-            continue;
-         }
-
-         sameEdgeCounter.insert(key);
-      }
-
-      String first = UniqueRepr(edge->units[0].inst,arena);
-      String second = UniqueRepr(edge->units[1].inst,arena);
-      PortInstance start = edge->units[0];
-      PortInstance end = edge->units[1];
-      String label = Repr(start,end,versat->debug.dotFormat,arena);
-      int calculatedDelay = edgeView->delay;
-
-      bool highlight = (start.inst == highlighInstance || end.inst == highlighInstance);
-
-      fprintf(outputFile,"\t\"%.*s\" -> ",UNPACK_SS(first));
-      fprintf(outputFile,"\"%.*s\"",UNPACK_SS(second));
-
-      if(highlight){
-         fprintf(outputFile,"[color=blue,label=\"%.*s\\n[%d:%d]\"];\n",UNPACK_SS(label),edge->delay,calculatedDelay);
-      } else {
-         fprintf(outputFile,"[label=\"%.*s\\n[%d:%d]\"];\n",UNPACK_SS(label),edge->delay,calculatedDelay);
-      }
-   }
-
-   fprintf(outputFile,"}\n");
-}
-#endif
 
 static void OutputGraphDotFile_(Versat* versat,Accelerator* accel,bool collapseSameEdges,Set<ComplexFUInstance*>* highlighInstance,FILE* outputFile){
    Arena* arena = &versat->temp;

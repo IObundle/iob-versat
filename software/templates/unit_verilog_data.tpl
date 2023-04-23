@@ -78,9 +78,10 @@ static char* Bin(unsigned int value){
    return buffer;
 }
 
+// static Array<int> zerosArray defined in versat.cpp
+
 template<typename T>
-static int32_t MemoryAccessNoAddress(InstanceNode* node,int address,int value,int write){
-   ComplexFUInstance* inst = node->inst;
+static int32_t MemoryAccessNoAddress(ComplexFUInstance* inst,int address,int value,int write){
    T* self = (T*) inst->extraData;
 
    if(write){
@@ -91,14 +92,14 @@ static int32_t MemoryAccessNoAddress(InstanceNode* node,int address,int value,in
       self->eval();
 
       while(!self->ready){
-         inst->declaration->updateFunction(node);
+         inst->declaration->updateFunction(inst,zerosArray);
       }
 
       self->valid = 0;
       self->wstrb = 0x00;
       self->wdata = 0x00000000;
 
-      inst->declaration->updateFunction(node);
+      inst->declaration->updateFunction(inst,zerosArray);
 
       return 0;
    } else {
@@ -108,22 +109,21 @@ static int32_t MemoryAccessNoAddress(InstanceNode* node,int address,int value,in
       self->eval();
 
       while(!self->ready){
-         inst->declaration->updateFunction(node);
+         inst->declaration->updateFunction(inst,zerosArray);
       }
 
       int32_t res = self->rdata;
 
       self->valid = 0;
 
-      inst->declaration->updateFunction(node);
+      inst->declaration->updateFunction(inst,zerosArray);
 
       return res;
    }
 }
 
 template<typename T>
-static int32_t MemoryAccess(InstanceNode* node,int address,int value,int write){
-   ComplexFUInstance* inst = node->inst;   
+static int32_t MemoryAccess(ComplexFUInstance* inst,int address,int value,int write){
    T* self = (T*) inst->extraData;
 
    if(write){
@@ -136,7 +136,7 @@ static int32_t MemoryAccess(InstanceNode* node,int address,int value,int write){
       self->eval();
 
       while(!self->ready){
-         inst->declaration->updateFunction(node);
+         inst->declaration->updateFunction(inst,zerosArray);
       }
 
       self->valid = 0;
@@ -144,7 +144,7 @@ static int32_t MemoryAccess(InstanceNode* node,int address,int value,int write){
       self->addr = 0x00000000;
       self->wdata = 0x00000000;
 
-      inst->declaration->updateFunction(node);
+      inst->declaration->updateFunction(inst,zerosArray);
 
       return 0;
    } else {
@@ -155,7 +155,7 @@ static int32_t MemoryAccess(InstanceNode* node,int address,int value,int write){
       self->eval();
 
       while(!self->ready){
-         inst->declaration->updateFunction(node);
+         inst->declaration->updateFunction(inst,zerosArray);
       }
 
       int32_t res = self->rdata;
@@ -163,7 +163,7 @@ static int32_t MemoryAccess(InstanceNode* node,int address,int value,int write){
       self->valid = 0;
       self->addr = 0;
 
-      inst->declaration->updateFunction(node);
+      inst->declaration->updateFunction(inst,zerosArray);
 
       return res;
    }
@@ -175,7 +175,7 @@ struct DatabusAccess{
 };
 
 static const int INITIAL_MEMORY_LATENCY = 5;
-static const int MEMORY_LATENCY = 2;
+static const int MEMORY_LATENCY = 0;
 
 #endif // INCLUDED_WRAPPER_FUNCTIONS
 
@@ -187,8 +187,6 @@ static const int MEMORY_LATENCY = 2;
 #{for module modules}
 
 static void @{module.name}_VCDFunction(ComplexFUInstance* inst,FILE* out,VCDMapping& currentMapping,Array<int>,bool firstTime,bool printDefinitions){
-   V@{module.name}* self = (V@{module.name}*) inst->extraData;
-
    if(printDefinitions){
    #{for external module.externalInterfaces}
       #{set id external.interface}
@@ -218,6 +216,9 @@ static void @{module.name}_VCDFunction(ComplexFUInstance* inst,FILE* out,VCDMapp
       #{if external.type}
       #{for port 2}
       // DP
+      {
+      V@{module.name}* self = (V@{module.name}*) inst->extraData;
+
       fprintf(out,"b%s %s\n",Bin(self->ext_dp_addr_@{id}_port_@{port}),currentMapping.Get());
       currentMapping.Increment();
       fprintf(out,"b%s %s\n",Bin(self->ext_dp_out_@{id}_port_@{port}),currentMapping.Get());
@@ -228,6 +229,7 @@ static void @{module.name}_VCDFunction(ComplexFUInstance* inst,FILE* out,VCDMapp
       currentMapping.Increment();
       fprintf(out,"%d%s\n",self->ext_dp_write_@{id}_port_@{port} ? 1 : 0,currentMapping.Get());
       currentMapping.Increment();
+      }
       #{end}
       #{else}
       // 2P
@@ -238,8 +240,7 @@ static void @{module.name}_VCDFunction(ComplexFUInstance* inst,FILE* out,VCDMapp
    }
 }
 
-static int32_t* @{module.name}_InitializeFunction(InstanceNode* node){
-   ComplexFUInstance* inst = node->inst;
+static int32_t* @{module.name}_InitializeFunction(ComplexFUInstance* inst){
    memset(inst->extraData,0,inst->declaration->extraDataSize);
 
    V@{module.name}* self = new (inst->extraData) V@{module.name}();
@@ -255,8 +256,7 @@ static int32_t* @{module.name}_InitializeFunction(InstanceNode* node){
    return NULL;
 }
 
-static int32_t* @{module.name}_StartFunction(InstanceNode* node){
-   ComplexFUInstance* inst = node->inst;
+static int32_t* @{module.name}_StartFunction(ComplexFUInstance* inst){
 #{if module.nOutputs}
    static int32_t out[@{module.nOutputs}];
 #{end}
@@ -300,8 +300,7 @@ static int32_t* @{module.name}_StartFunction(InstanceNode* node){
 #{end}
 }
 
-static int32_t* @{module.name}_UpdateFunction(InstanceNode* node){
-   ComplexFUInstance* inst = node->inst;
+static int32_t* @{module.name}_UpdateFunction(ComplexFUInstance* inst,Array<int> inputs){
 #{if module.nOutputs}
    static int32_t out[@{module.nOutputs}];
 #{end}
@@ -309,7 +308,7 @@ static int32_t* @{module.name}_UpdateFunction(InstanceNode* node){
    V@{module.name}* self = (V@{module.name}*) inst->extraData;
 
 #{for i module.nInputs}
-   self->in@{i} = GetInputValue(node,@{i}); 
+   self->in@{i} = inputs[@{i}]; //GetInputValue(node,@{i}); 
 #{end}
 
    self->eval();
@@ -443,8 +442,7 @@ static int32_t* @{module.name}_UpdateFunction(InstanceNode* node){
 #{end}
 }
 
-static int32_t* @{module.name}_DestroyFunction(InstanceNode* node){
-   ComplexFUInstance* inst = node->inst;
+static int32_t* @{module.name}_DestroyFunction(ComplexFUInstance* inst){
    V@{module.name}* self = (V@{module.name}*) inst->extraData;
 
    self->~V@{module.name}();

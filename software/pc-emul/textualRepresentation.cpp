@@ -194,7 +194,6 @@ String Repr(StaticId id,Arena* arena){
 String Repr(StaticData data,Arena* arena){
    Byte* mark = MarkArena(arena);
 
-   Repr(data.decl,arena);
    PushString(arena," (%d)",data.offset);
 
    String res = PointArena(arena,mark);

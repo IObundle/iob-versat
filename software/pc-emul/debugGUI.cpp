@@ -386,7 +386,7 @@ String DebugValueRepresentation(Value val,Arena* arena){
       repr = Repr(decl,arena);
    } else if(type == ComplexInstanceType){
       auto inst = (ComplexFUInstance*) collapsed.custom;
-      repr = inst->name;
+      repr = PushString(arena,"[%p] %.*s",collapsed.custom,UNPACK_SS(inst->name));
    } else if(type == WireType){
       auto wire = (Wire*) collapsed.custom;
       repr = PushString(arena,"%.*s(%d)",UNPACK_SS(wire->name),wire->bitsize);
@@ -858,11 +858,11 @@ void OutputAcceleratorStaticValues(Accelerator* accel,Arena* arena){
    if(ImGui::CollapsingHeader("Static")){
       if(ImGui::BeginTable("split",2,ImGuiTableFlags_RowBg)){
          int index = 0;
-         for(auto info : accel->staticInfo){
+         for(auto info : accel->staticUnits){
             BLOCK_REGION(arena);
 
-            String repr1 = Repr(info->id,arena);
-            String repr2 = Repr(info->data,arena);
+            String repr1 = Repr(info.first,arena);
+            String repr2 = Repr(info.second,arena);
 
             ImGui::TableNextRow();
             ImGui::TableNextColumn(); ImGui::Text("[%d] %.*s",index++,UNPACK_SS(repr1));
@@ -1030,7 +1030,7 @@ void DebugGUI(Arena* arena){
                         }
 
                         OutputAcceleratorRunValues(inst,arena);
-                        OutputAcceleratorStaticValues(accel,arena);
+                        //OutputAcceleratorStaticValues(accel,arena);
                      }
                      ImGui::EndChild();
                   }
@@ -1164,7 +1164,7 @@ void DebugGUI(Arena* arena){
                   }
 
                   OutputAcceleratorRunValues(node,arena);
-                  OutputAcceleratorStaticValues(accel,arena);
+                  //OutputAcceleratorStaticValues(accel,arena);
                }
 
                ImGui::EndChild();

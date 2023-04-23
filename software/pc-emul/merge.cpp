@@ -1384,7 +1384,7 @@ MergeGraphResult MergeGraph(Versat* versat,Accelerator* flatten1,Accelerator* fl
       ComplexFUInstance* mappedInst = map->GetOrFail(edge->units[0].inst);
       ComplexFUInstance* mappedOther = map->GetOrFail(edge->units[1].inst);
 
-      Edge* newEdge = ConnectUnitsGetEdge(mappedInst,edge->units[0].port,mappedOther,edge->units[1].port,edge->delay);
+      ConnectUnitsGetEdge(mappedInst,edge->units[0].port,mappedOther,edge->units[1].port,edge->delay);
    }
    #endif
 
@@ -1412,7 +1412,7 @@ MergeGraphResult MergeGraph(Versat* versat,Accelerator* flatten1,Accelerator* fl
 
       ComplexFUInstance* mappedInst = map->GetOrFail(edge->units[0].inst);
       ComplexFUInstance* mappedOther = map->GetOrFail(edge->units[1].inst);
-      Edge* newEdge = ConnectUnitsIfNotConnectedGetEdge(mappedInst,edge->units[0].port,mappedOther,edge->units[1].port,edge->delay);
+      ConnectUnitsIfNotConnectedGetEdge(mappedInst,edge->units[0].port,mappedOther,edge->units[1].port,edge->delay);
    }
    #endif
 
@@ -1500,7 +1500,7 @@ MergeGraphResultExisting MergeGraphToExisting(Versat* versat,Accelerator* existi
 
       ComplexFUInstance* mappedInst = map->GetOrFail(edge->units[0].inst);
       ComplexFUInstance* mappedOther = map->GetOrFail(edge->units[1].inst);
-      Edge* newEdge = ConnectUnitsIfNotConnectedGetEdge(mappedInst,edge->units[0].port,mappedOther,edge->units[1].port,edge->delay);
+      ConnectUnitsIfNotConnectedGetEdge(mappedInst,edge->units[0].port,mappedOther,edge->units[1].port,edge->delay);
    }
    #endif
 
@@ -1773,9 +1773,11 @@ FUDeclaration* Merge(Versat* versat,Array<FUDeclaration*> types,String name,Merg
                   node.node1 = {ptr,con->port};
                   problematicEdgesInFinalGraph[index++] = node;
 
+                  #if 0
                   BLOCK_REGION(arena);
                   String repr = Repr(node,arena);
-                  //printf("%.*s\n",UNPACK_SS(repr));
+                  printf("%.*s\n",UNPACK_SS(repr));
+                  #endif
                }
             }
 
@@ -1855,7 +1857,7 @@ FUDeclaration* Merge(Versat* versat,Array<FUDeclaration*> types,String name,Merg
 
          firstGraph->Insert(finalNode->inst);
       }
-      OutputGraphDotFile(versat,result,false,firstGraph,StaticFormat("debug/finalMerged_%d.dot",i));
+      OutputGraphDotFile(versat,result,false,firstGraph,"debug/finalMerged_%d.dot",i);
    }
 
    FUDeclaration* decl = RegisterSubUnit(versat,name,result);

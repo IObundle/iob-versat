@@ -1,5 +1,6 @@
 #include "utils.hpp"
 
+#include <cinttypes>
 #include <limits>
 
 extern "C"{
@@ -17,7 +18,7 @@ void TimeIt::Output(){
 
    uint64 diff = end.time - start.time;
    int digits = NumberDigitsRepresentation(diff);
-   sprintf(buffer,"%d",diff);
+   sprintf(buffer,"%" PRId64,diff);
 
    printf("[TimeIt] %s: ",id);
 
@@ -85,7 +86,7 @@ unsigned int AlignBitBoundary(unsigned int val,int numberBits){ // Align value s
       return val;
    }
 
-   Assert(numberBits < sizeof(val) * 8);
+   Assert(((size_t) numberBits) < sizeof(val) * 8);
 
    unsigned int lowerVal = MASK_VALUE(val,numberBits);
    if(lowerVal == 0){

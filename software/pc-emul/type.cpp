@@ -1,5 +1,7 @@
 #include "type.hpp"
 
+#include <cinttypes>
+
 #include "parser.hpp"
 #include "versatPrivate.hpp"
 
@@ -466,7 +468,7 @@ String GetDefaultValueRepresentation(Value in,Arena* arena){
    String res = {};
 
    if(val.type == ValueType::NUMBER){
-      res = PushString(arena,"%lld",val.number);
+      res = PushString(arena,"%" PRId64,val.number);
    } else if(val.type == ValueType::STRING){
       if(val.literal){
          res = PushString(arena,"\"%.*s\"",UNPACK_SS(val.str));
@@ -496,7 +498,7 @@ String GetDefaultValueRepresentation(Value in,Arena* arena){
    } else if(type->type == Type::TEMPLATED_INSTANCE){
       if(type->templateBase == ValueType::ARRAY){
          Value size = AccessStruct(val,STRING("size"));
-         res = PushString(arena,"Size:%lld",size.number);
+         res = PushString(arena,"Size:%" PRId64,size.number);
       } else {
          res = PushString(arena,"%.*s",UNPACK_SS(type->name));// Return type name
       }

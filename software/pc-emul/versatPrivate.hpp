@@ -49,8 +49,9 @@ public:
    }
 };
 
-typedef int* (*FUFunction)(InstanceNode*);
-typedef int (*MemoryAccessFunction)(InstanceNode*, int address, int value,int write);
+typedef int* (*FUFunction)(ComplexFUInstance* inst);
+typedef int* (*FUUpdateFunction)(ComplexFUInstance* inst,Array<int> inputs);
+typedef int (*MemoryAccessFunction)(ComplexFUInstance* inst, int address, int value,int write);
 typedef void (*VCDFunction)(ComplexFUInstance*,FILE*,VCDMapping&,Array<int>,bool firstTime,bool printDefinitions);
 
 enum DelayType {
@@ -75,7 +76,7 @@ struct StaticId{
 };
 
 struct StaticData{
-   FUDeclaration* decl;
+   //FUDeclaration* decl;
    Array<Wire> configs;
    int offset;
 };
@@ -123,22 +124,6 @@ struct DAGOrder{
    ComplexFUInstance** computeUnits;
    int numberComputeUnits;
    ComplexFUInstance** instances;
-};
-
-struct SimpleNode{
-   FUDeclaration* decl;
-};
-
-struct SimpleEdge{
-   int out;
-   int outPort;
-   int in;
-   int inPort;
-};
-
-struct SimpleGraph{
-   Array<SimpleNode> nodes;
-   Array<SimpleEdge> edges;
 };
 
 struct CalculatedOffsets{
@@ -218,7 +203,7 @@ struct FUDeclaration{
    // Stores different accelerators depending on properties we want
    Accelerator* baseCircuit;
    Accelerator* fixedDelayCircuit;
-   SimpleGraph fixedDelayCircuitSimple;
+   //SimpleGraph fixedDelayCircuitSimple;
 
    DAGOrder temporaryOrder;
 
@@ -234,7 +219,7 @@ struct FUDeclaration{
 
    FUFunction initializeFunction;
    FUFunction startFunction;
-   FUFunction updateFunction;
+   FUUpdateFunction updateFunction;
    FUFunction destroyFunction;
    VCDFunction printVCD;
    MemoryAccessFunction memAccessFunction;
@@ -303,7 +288,7 @@ struct InstanceNode{
    ConnectionNode* allInputs;
    ConnectionNode* allOutputs;
    Array<PortNode> inputs;
-   int outputs; // No single outputs because not much reasons to.
+   int outputs;
    bool multipleSamePortInputs;
    enum {TAG_UNCONNECTED,TAG_COMPUTE,TAG_SOURCE,TAG_SINK,TAG_SOURCE_AND_SINK} type;
 
@@ -323,6 +308,7 @@ struct DAGOrderNodes{
    int numberComputeUnits;
    InstanceNode** instances;
    int* order;
+   int size;
    int maxOrder;
 };
 
@@ -341,18 +327,14 @@ struct ComplexFUInstance : public FUInstance{
    bool namedAccess;
 
    // Various uses
-
    Accelerator* iterative;
 
    UnitDebugData* debugData;
 
-   //InstanceNode* inputs;
-   //InstanceNode* outputs;
-
    union{
-   int literal;
-   int bufferAmount;
-   int portIndex;
+      int literal;
+      int bufferAmount;
+      int portIndex;
    };
    //GraphComputedData* graphData;
    VersatComputedData* versatData;
@@ -367,6 +349,32 @@ struct ComplexFUInstance : public FUInstance{
 struct OrderedInstance{ // This is a more powerful and generic approach to subgraphing. Should not be named ordered, could be used for anything really, not just order iteration
    InstanceNode* node;
    OrderedInstance* next;
+};
+
+template<> class std::hash<String>{
+public:
+   std::size_t operator()(String const& s) const noexcept{
+   std::size_t res = 0;
+
+   std::size_t prime = 5;
+   for(int i = 0; i < s.size; i++){
+      res += (std::size_t) s[i] * prime;
+      res <<= 4;
+      prime += 6; // Some not prime, but will find most of them
+   }
+
+   return res;
+   }
+};
+
+template<> class std::hash<StaticId>{
+   public:
+   std::size_t operator()(StaticId const& s) const noexcept{
+      std::size_t res = std::hash<String>()(s.name);
+      res += (std::size_t) s.parent;
+
+      return (std::size_t) res;
+   }
 };
 
 struct Accelerator{ // Graph + data storage
@@ -393,9 +401,8 @@ struct Accelerator{ // Graph + data storage
    Allocation<int> storedOutputAlloc;
 
    DynamicArena* accelMemory;
-   //Arena temp;
 
-   Pool<StaticInfo> staticInfo; // Things like these could be
+   std::unordered_map<StaticId,StaticData> staticUnits;
 
 	void* configuration;
 	int configurationSize;
@@ -433,34 +440,6 @@ struct EdgeView{
    Edge* edge; // Points to edge inside accelerator
    int delay;
 };
-
-// A view into an accelerator.
-#if 0
-class AcceleratorView{ // More like a "graph view"
-public:
-   // We use dynamic memory for nodes and edges, as we need to add/remove nodes to the graph and to update the associated accelerator view as well
-   Pool<ComplexFUInstance*> nodes;
-   Pool<EdgeView> edges;
-
-   Versat* versat;
-   Accelerator* accel;
-
-   // All the other memory is meant to be stored in an arena. A temp arena for temporary use or permanent if to store in a FUDeclaration
-   Array<Byte> graphData;
-   Array<VersatComputedData> versatData;
-   DAGOrder order;
-   bool dagOrder;
-
-public:
-
-   void CalculateGraphData(Arena* arena);
-   void SetGraphData();
-
-   void CalculateDelay(Arena* arena,bool outputDebugGraph = false);
-   DAGOrder CalculateDAGOrdering(Arena* arena);
-   void CalculateVersatData(Arena* arena);
-};
-#endif
 
 struct HashKey{
    String key;
@@ -608,7 +587,6 @@ public:
    };
 
    Array<Type> stack;
-   Hashmap<StaticId,StaticData>* staticUnits;
    Accelerator* topLevel;
    int level;
    int upperLevels;
@@ -715,8 +693,8 @@ struct GraphMapping;
 
 // Temp
 bool EqualPortMapping(PortInstance p1,PortInstance p2);
-void PopulateAccelerator(Accelerator* topLevel,Accelerator* accel,FUDeclaration* topDeclaration,FUInstanceInterfaces& inter,Hashmap<StaticId,StaticData>* staticMap);
-void PopulateAccelerator2(Accelerator* accel,FUDeclaration* topDeclaration,FUInstanceInterfaces& inter,Hashmap<StaticId,StaticData>* staticMap);
+void PopulateAccelerator(Accelerator* topLevel,Accelerator* accel,FUDeclaration* topDeclaration,FUInstanceInterfaces& inter,std::unordered_map<StaticId,StaticData>* staticMap);
+void PopulateTopLevelAccelerator(Accelerator* accel);
 ConsolidationResult GenerateConsolidationGraph(Versat* versat,Arena* arena,Accelerator* accel1,Accelerator* accel2,ConsolidationGraphOptions options);
 MergeGraphResult MergeGraph(Versat* versat,Accelerator* flatten1,Accelerator* flatten2,GraphMapping& graphMapping,String name);
 void AddCliqueToMapping(GraphMapping& res,ConsolidationGraph clique);

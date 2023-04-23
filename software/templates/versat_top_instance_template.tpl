@@ -237,10 +237,14 @@ begin
       #{end}
 
       // Static
-      #{for unit accel.staticInfo}
+      #{for unit staticUnits}
       #{for wire unit.data.configs}
       if(addr[@{versatValues.configurationAddressBits - 1}:0] == @{addr}) // @{versatBase + addr * 4 |> Hex}
-         configdata[@{counter}+:@{wire.bitsize}] <= wdata[@{wire.bitsize - 1}:0]; //  @{unit.id.parent.name}_@{unit.id.name}_@{wire.name}
+         #{if unit.first.parent}
+         configdata[@{counter}+:@{wire.bitsize}] <= wdata[@{wire.bitsize - 1}:0]; //  @{unit.first.parent.name}_@{unit.first.name}_@{wire.name}
+         #{else}
+         configdata[@{counter}+:@{wire.bitsize}] <= wdata[@{wire.bitsize - 1}:0]; //  @{unit.first.name}_@{wire.name}
+         #{end}
       #{inc addr}
       #{set counter counter + wire.bitsize}
       #{end}

@@ -664,7 +664,7 @@ FUDeclaration* ParseIterative(Versat* versat,Tokenizer* tok){
    Accelerator* firstPhase = CreateAccelerator(versat);
    Accelerator* secondPhase = CreateAccelerator(versat);
 
-   /*FUInstance* firstOut = */ CreateFUInstance(firstPhase,BasicDeclaration::output,STRING("out"));
+   /* FUInstance* firstOut = */ CreateFUInstance(firstPhase,BasicDeclaration::output,STRING("out"));
    FUInstance* firstData = CreateFUInstance(firstPhase,BasicDeclaration::data,STRING("data"));
 
    FUInstance* secondOut = CreateFUInstance(secondPhase,BasicDeclaration::output,STRING("out"));
@@ -794,7 +794,7 @@ void ParseVersatSpecification(Versat* versat,String content){
       if(CompareString(peek,"debug")){
          tok->AdvancePeek(peek);
          tok->AssertNextToken(";");
-         debugVariableFlag = true;
+         debugFlag = true;
       } else if(CompareString(peek,"module")){
          ParseModule(versat,tok);
       } else if(CompareString(peek,"iterative")){

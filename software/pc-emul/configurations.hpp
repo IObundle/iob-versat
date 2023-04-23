@@ -18,6 +18,11 @@ CalculatedOffsets ExtractOutputs(Accelerator* accel,Arena* out);
 CalculatedOffsets ExtractExtraData(Accelerator* accel,Arena* out);
 CalculatedOffsets ExtractDebugData(Accelerator* accel,Arena* out);
 
-Hashmap<String,int*>* ExtractNamedSingleConfigs(Accelerator* accel,Arena* out);
+struct SizedConfig{
+   int* ptr;
+   int size;
+};
+
+Hashmap<String,SizedConfig>* ExtractNamedSingleConfigs(Accelerator* accel,Arena* out);
 
 #endif // INCLUDED_VERSAT_CONFIGURATIONS_HPP

@@ -46,10 +46,11 @@ VersatComputedValues ComputeVersatValues(Versat* versat,Accelerator* accel){
       res.externalMemoryInterfaces += decl->externalMemory.size;
    }
 
-   for(StaticInfo* unit : accel->staticInfo){
-      res.nStatics += unit->data.configs.size;
+   for(auto pair : accel->staticUnits){
+      StaticData data = pair.second;
+      res.nStatics += data.configs.size;
 
-      for(Wire& wire : unit->data.configs){
+      for(Wire& wire : data.configs){
          res.staticBits += wire.bitsize;
       }
    }
@@ -116,6 +117,8 @@ void OutputCircuitSource(Versat* versat,FUDeclaration* decl,Accelerator* accel,F
    }
 
    ComputedData computedData = CalculateVersatComputedData(accel->allocated,val,arena);
+
+   TemplateSetCustom("staticUnits",decl->staticUnits,"Hashmap<StaticId,StaticData>");
 
    TemplateSetCustom("versatData",&computedData.data,"Array<VersatComputedData>");
    TemplateSetCustom("external",&computedData.external,"Array<ExternalMemoryInterface>");
@@ -229,6 +232,25 @@ void OutputVersatSource(Versat* versat,Accelerator* accel,const char* directoryP
          staticStart += wire.bitsize;
       }
    }
+
+   Hashmap<StaticId,StaticData>* staticUnits = PushHashmap<StaticId,StaticData>(arena,accel->staticUnits.size());
+   for(InstanceNode* node = iter.Start(accel,arena,true); node; node = iter.Next()){
+      if(node->inst->isStatic){
+         InstanceNode* parent = iter.ParentInstance();
+
+         StaticId id = {};
+         id.parent = parent ? parent->inst->declaration : nullptr;
+         id.name = node->inst->name;
+
+         StaticData data = {};
+         data.configs = node->inst->declaration->configs;
+         data.offset = node->inst->config - accel->staticAlloc.ptr;
+
+         staticUnits->Insert(id,data);
+      }
+   }
+
+   TemplateSetCustom("staticUnits",staticUnits,"Hashmap<StaticId,StaticData>");
 
    TemplateSetNumber("staticStart",staticStart);
    TemplateSetNumber("versatBase",versat->base);
