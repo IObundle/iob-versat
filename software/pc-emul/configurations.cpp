@@ -1,5 +1,58 @@
 #include "configurations.hpp"
 
+#include "acceleratorStats.hpp"
+
+// Top level
+void FUInstanceInterfaces::Init(Accelerator* accel){
+   VersatComputedValues val = ComputeVersatValues(accel->versat,accel);
+
+   config.Init(accel->configAlloc);
+   state.Init(accel->stateAlloc);
+   delay.Init(accel->delayAlloc);
+   mem.Init(nullptr,val.memoryMappedBytes);
+   outputs.Init(accel->outputAlloc);
+   storedOutputs.Init(accel->storedOutputAlloc);
+   extraData.Init(accel->extraDataAlloc);
+   statics.Init(accel->staticAlloc);
+   externalMemory.Init(accel->externalMemoryAlloc);
+   debugData.Init(accel->debugDataAlloc);
+}
+
+// Sub instance
+void FUInstanceInterfaces::Init(Accelerator* topLevel,ComplexFUInstance* inst){
+   FUDeclaration* decl = inst->declaration;
+   //int numberUnits = CalculateNumberOfUnits(decl->fixedDelayCircuit->allocated);
+
+   config.Init(inst->config,decl->configOffsets.max);
+   state.Init(inst->state,decl->stateOffsets.max);
+   delay.Init(inst->delay,decl->delayOffsets.max);
+   mem.Init((Byte*) inst->memMapped,1 << decl->memoryMapBits);
+   outputs.Init(inst->outputs,decl->totalOutputs);
+   storedOutputs.Init(inst->storedOutputs,decl->totalOutputs);
+   extraData.Init(inst->extraData,decl->extraDataOffsets.max);
+   statics.Init(topLevel->staticAlloc);
+   if(decl->externalMemory.size){
+      externalMemory.Init(inst->externalMemory,MemorySize(decl->externalMemory));
+   }
+   #if 0
+   debugData.Init(inst->debugData + 1,numberUnits);
+   #endif
+}
+
+void FUInstanceInterfaces::AssertEmpty(bool checkStatic){
+   #if 0
+   Assert(config.Empty());
+   Assert(state.Empty());
+   Assert(delay.Empty());
+   Assert(outputs.Empty());
+   Assert(storedOutputs.Empty());
+   Assert(extraData.Empty());
+   if(checkStatic){
+      Assert(statics.Empty());
+   }
+   #endif
+}
+
 CalculatedOffsets CalculateConfigOffsetsIgnoringStatics(Accelerator* accel,Arena* out){
    int size = Size(accel->allocated);
 
@@ -124,18 +177,6 @@ CalculatedOffsets CalculateOutputsOffset(Accelerator* accel,int offset,Arena* ou
    return res;
 }
 
-// TODO: Do not like this implementation, and should be something more general and not static for this file. Put somewhere in versatPrivate
-int NumberUnits(Accelerator* accel,Arena* arena){
-   BLOCK_REGION(arena);
-
-   int count = 0;
-   AcceleratorIterator iter = {};
-   for(InstanceNode* node = iter.Start(accel,arena,true); node; node = iter.Next()){
-      count += 1;
-   }
-   return count;
-}
-
 CalculatedOffsets ExtractConfig(Accelerator* accel,Arena* out){
    int count = 0;
    int maxConfig = 0;
@@ -176,7 +217,7 @@ CalculatedOffsets ExtractConfig(Accelerator* accel,Arena* out){
 }
 
 CalculatedOffsets ExtractState(Accelerator* accel,Arena* out){
-   int count = NumberUnits(accel,out);
+   int count = NumberUnits(accel);
    Array<int> offsets = PushArray<int>(out,count);
 
    AcceleratorIterator iter = {};
@@ -196,7 +237,7 @@ CalculatedOffsets ExtractState(Accelerator* accel,Arena* out){
 }
 
 CalculatedOffsets ExtractDelay(Accelerator* accel,Arena* out){
-   int count = NumberUnits(accel,out);
+   int count = NumberUnits(accel);
    Array<int> offsets = PushArray<int>(out,count);
 
    AcceleratorIterator iter = {};
@@ -216,7 +257,7 @@ CalculatedOffsets ExtractDelay(Accelerator* accel,Arena* out){
 }
 
 CalculatedOffsets ExtractMem(Accelerator* accel,Arena* out){
-   int count = NumberUnits(accel,out);
+   int count = NumberUnits(accel);
    Array<int> offsets = PushArray<int>(out,count);
 
    AcceleratorIterator iter = {};
@@ -236,7 +277,7 @@ CalculatedOffsets ExtractMem(Accelerator* accel,Arena* out){
 }
 
 CalculatedOffsets ExtractOutputs(Accelerator* accel,Arena* out){
-   int count = NumberUnits(accel,out);
+   int count = NumberUnits(accel);
    Array<int> offsets = PushArray<int>(out,count);
 
    AcceleratorIterator iter = {};
@@ -258,7 +299,7 @@ CalculatedOffsets ExtractOutputs(Accelerator* accel,Arena* out){
 }
 
 CalculatedOffsets ExtractExtraData(Accelerator* accel,Arena* out){
-   int count = NumberUnits(accel,out);
+   int count = NumberUnits(accel);
    Array<int> offsets = PushArray<int>(out,count);
 
    AcceleratorIterator iter = {};
@@ -278,7 +319,7 @@ CalculatedOffsets ExtractExtraData(Accelerator* accel,Arena* out){
 }
 
 CalculatedOffsets ExtractDebugData(Accelerator* accel,Arena* out){
-   int count = NumberUnits(accel,out);
+   int count = NumberUnits(accel);
    Array<int> offsets = PushArray<int>(out,count);
 
    AcceleratorIterator iter = {};
@@ -401,66 +442,18 @@ void PopulateAccelerator(Accelerator* topLevel,Accelerator* accel,FUDeclaration*
    }
 }
 
-// Top level
-void FUInstanceInterfaces::Init(Accelerator* accel){
-   VersatComputedValues val = ComputeVersatValues(accel->versat,accel);
+bool IsConfigStatic(Accelerator* topLevel,ComplexFUInstance* inst){
+   iptr* config = inst->config;
 
-   config.Init(accel->configAlloc);
-   state.Init(accel->stateAlloc);
-   delay.Init(accel->delayAlloc);
-   mem.Init(nullptr,val.memoryMappedBytes);
-   outputs.Init(accel->outputAlloc);
-   storedOutputs.Init(accel->storedOutputAlloc);
-   extraData.Init(accel->extraDataAlloc);
-   statics.Init(accel->staticAlloc);
-   externalMemory.Init(accel->externalMemoryAlloc);
-   debugData.Init(accel->debugDataAlloc);
-}
-
-int MemorySize(Array<ExternalMemoryInterface> interfaces){
-   int size = 0;
-
-   for(ExternalMemoryInterface& inter : interfaces){
-      size = AlignBitBoundary(size,inter.bitsize);
-      size += 1 << inter.bitsize;
+   if(config == nullptr){
+      return false;
    }
 
-   return size;
-}
-
-// Sub instance
-void FUInstanceInterfaces::Init(Accelerator* topLevel,ComplexFUInstance* inst){
-   FUDeclaration* decl = inst->declaration;
-   //int numberUnits = CalculateNumberOfUnits(decl->fixedDelayCircuit->allocated);
-
-   config.Init(inst->config,decl->configOffsets.max);
-   state.Init(inst->state,decl->stateOffsets.max);
-   delay.Init(inst->delay,decl->delayOffsets.max);
-   mem.Init((Byte*) inst->memMapped,1 << decl->memoryMapBits);
-   outputs.Init(inst->outputs,decl->totalOutputs);
-   storedOutputs.Init(inst->storedOutputs,decl->totalOutputs);
-   extraData.Init(inst->extraData,decl->extraDataOffsets.max);
-   statics.Init(topLevel->staticAlloc);
-   if(decl->externalMemory.size){
-      externalMemory.Init(inst->externalMemory,MemorySize(decl->externalMemory));
+   if(Inside(&topLevel->configAlloc,config)){
+      return false;
+   } else {
+      return true;
    }
-   #if 0
-   debugData.Init(inst->debugData + 1,numberUnits);
-   #endif
-}
-
-void FUInstanceInterfaces::AssertEmpty(bool checkStatic){
-   #if 0
-   Assert(config.Empty());
-   Assert(state.Empty());
-   Assert(delay.Empty());
-   Assert(outputs.Empty());
-   Assert(storedOutputs.Empty());
-   Assert(extraData.Empty());
-   if(checkStatic){
-      Assert(statics.Empty());
-   }
-   #endif
 }
 
 // The true "Accelerator" populator
@@ -478,7 +471,7 @@ void PopulateTopLevelAccelerator(Accelerator* accel){
    FUInstanceInterfaces inter = {};
    inter.Init(accel);
 
-   Hashmap<int,int*>* sharedToConfigPtr = PushHashmap<int,int*>(temp,sharedUnits);
+   Hashmap<int,iptr*>* sharedToConfigPtr = PushHashmap<int,iptr*>(temp,sharedUnits);
 
    FOREACH_LIST(ptr,accel->allocated){
       ComplexFUInstance* inst = ptr->inst;
@@ -510,7 +503,7 @@ void PopulateTopLevelAccelerator(Accelerator* accel){
             Assert(iter != accel->staticUnits.end());
             inst->config = &inter.statics.ptr[iter->second.offset];
          } else if(inst->sharedEnable){
-            int** ptr = sharedToConfigPtr->Get(inst->sharedIndex);
+            iptr** ptr = sharedToConfigPtr->Get(inst->sharedIndex);
 
             if(ptr){
                inst->config = *ptr;

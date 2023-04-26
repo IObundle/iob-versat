@@ -3,6 +3,30 @@
 
 #include "versatPrivate.hpp"
 
+struct SizedConfig{
+   iptr* ptr;
+   int size;
+};
+
+class FUInstanceInterfaces{
+public:
+   PushPtr<iptr> config;
+   PushPtr<int> state;
+   PushPtr<int> delay;
+   PushPtr<Byte> mem;
+   PushPtr<int> outputs;
+   PushPtr<int> storedOutputs;
+   PushPtr<iptr> statics;
+   PushPtr<Byte> extraData;
+   PushPtr<int> externalMemory;
+   PushPtr<UnitDebugData> debugData;
+
+   void Init(Accelerator* accel);
+   void Init(Accelerator* topLevel,ComplexFUInstance* inst);
+
+   void AssertEmpty(bool checkStatic = true);
+};
+
 CalculatedOffsets CalculateConfigOffsetsIgnoringStatics(Accelerator* accel,Arena* out);
 CalculatedOffsets CalculateConfigurationOffset(Accelerator* accel,MemType type,Arena* out);
 CalculatedOffsets CalculateOutputsOffset(Accelerator* accel,int offset,Arena* out);
@@ -18,11 +42,9 @@ CalculatedOffsets ExtractOutputs(Accelerator* accel,Arena* out);
 CalculatedOffsets ExtractExtraData(Accelerator* accel,Arena* out);
 CalculatedOffsets ExtractDebugData(Accelerator* accel,Arena* out);
 
-struct SizedConfig{
-   int* ptr;
-   int size;
-};
-
 Hashmap<String,SizedConfig>* ExtractNamedSingleConfigs(Accelerator* accel,Arena* out);
+
+void PopulateAccelerator(Accelerator* topLevel,Accelerator* accel,FUDeclaration* topDeclaration,FUInstanceInterfaces& inter,std::unordered_map<StaticId,StaticData>* staticMap);
+void PopulateTopLevelAccelerator(Accelerator* accel);
 
 #endif // INCLUDED_VERSAT_CONFIGURATIONS_HPP

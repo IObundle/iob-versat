@@ -404,7 +404,9 @@ int CountNonOperationChilds(Accelerator* accel){
    return count;
 }
 
-static Value EvalExpression(Expression* expr){
+static Value EvalExpression(Expression* expr);
+
+static Value EvalExpression_(Expression* expr){
    switch(expr->type){
       case Expression::OPERATION:{
          if(expr->op[0] == '|'){ // Pipe operation
@@ -581,6 +583,24 @@ static Value EvalExpression(Expression* expr){
    return MakeValue();
 }
 
+struct StoredDebug{
+   Expression* input;
+   Value result;
+};
+
+static Value EvalExpression(Expression* expr){
+   static StoredDebug data[16];
+   static int counter = 0;
+
+   Value val = EvalExpression_(expr);
+
+   data[counter % 16].input = expr;
+   data[counter % 16].result = val;
+   counter += 1;
+
+   return val;
+}
+
 static String EvalBlockCommand(Block* block){
    Command* com = block->command;
    String res = {};
@@ -615,9 +635,8 @@ static String EvalBlockCommand(Block* block){
 
          if(outputSeparator){
             res.size += PushString(outputArena,"%.*s",separator.str.size,separator.str.data).size;
+            counter += 1;
          }
-
-         counter += 1;
       }
       if(counter == 0){
          return res;
@@ -625,6 +644,7 @@ static String EvalBlockCommand(Block* block){
 
       outputArena->used -= separator.str.size;
       res.size -= separator.str.size;
+      Assert(res.size >= 0);
    } else if(CompareString(com->name,"for")){
       Assert(com->expressions[0]->type == Expression::IDENTIFIER);
       String id = com->expressions[0]->id;

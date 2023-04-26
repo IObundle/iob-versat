@@ -8,6 +8,7 @@
 #include "logger.hpp"
 
 #include "versat.hpp"
+#include "accelerator.hpp"
 
 struct InstanceNode;
 struct ComplexFUInstance;
@@ -187,8 +188,8 @@ struct FUDeclaration{
    CalculatedOffsets outputOffsets;
    CalculatedOffsets extraDataOffsets;
 
-   Array<int> defaultConfig;
-   Array<int> defaultStatic;
+   Array<iptr> defaultConfig;
+   Array<iptr> defaultStatic;
 
    int totalOutputs; // Temp
 
@@ -288,7 +289,8 @@ struct InstanceNode{
    ConnectionNode* allInputs;
    ConnectionNode* allOutputs;
    Array<PortNode> inputs;
-   int outputs;
+   Array<bool> outputs;
+   //int outputs;
    bool multipleSamePortInputs;
    enum {TAG_UNCONNECTED,TAG_COMPUTE,TAG_SOURCE,TAG_SINK,TAG_SOURCE_AND_SINK} type;
 
@@ -389,10 +391,10 @@ struct Accelerator{ // Graph + data storage
    Pool<ComplexFUInstance> instances;
    Pool<FUInstance> subInstances; // Essentially a "wrapper" so that user code does not have to deal with reallocations when adding units
 
-   Allocation<int> configAlloc;
+   Allocation<iptr> configAlloc;
    Allocation<int> stateAlloc;
    Allocation<int> delayAlloc;
-   Allocation<int> staticAlloc;
+   Allocation<iptr> staticAlloc;
    Allocation<Byte> extraDataAlloc;
    Allocation<int> externalMemoryAlloc;
    Allocation<UnitDebugData> debugDataAlloc;
@@ -560,66 +562,6 @@ struct ConsolidationGraphOptions{
    enum {NOTHING,SAME_ORDER,EXACT_ORDER} type;
 };
 
-class FUInstanceInterfaces{
-public:
-   PushPtr<int> config;
-   PushPtr<int> state;
-   PushPtr<int> delay;
-   PushPtr<Byte> mem;
-   PushPtr<int> outputs;
-   PushPtr<int> storedOutputs;
-   PushPtr<int> statics;
-   PushPtr<Byte> extraData;
-   PushPtr<int> externalMemory;
-   PushPtr<UnitDebugData> debugData;
-
-   void Init(Accelerator* accel);
-   void Init(Accelerator* topLevel,ComplexFUInstance* inst);
-
-   void AssertEmpty(bool checkStatic = true);
-};
-
-class AcceleratorIterator{
-public:
-   union Type{
-      InstanceNode* node;
-      OrderedInstance* ordered;
-   };
-
-   Array<Type> stack;
-   Accelerator* topLevel;
-   int level;
-   int upperLevels;
-   bool calledStart;
-   bool populate;
-   bool ordered;
-   bool levelBelow;
-
-   InstanceNode* GetInstance(int level);
-
-   // Must call first
-   InstanceNode* Start(Accelerator* topLevel,ComplexFUInstance* compositeInst,Arena* temp,bool populate = false);
-   InstanceNode* Start(Accelerator* topLevel,Arena* temp,bool populate = false);
-
-   InstanceNode* StartOrdered(Accelerator* topLevel,Arena* temp,bool populate = false);
-
-   InstanceNode* ParentInstance();
-   String GetParentInstanceFullName(Arena* out);
-
-   InstanceNode* Descend(); // Current() must be a composite instance, otherwise this will fail
-
-   InstanceNode* Next(); // Iterates over subunits
-   InstanceNode* Skip(); // Next unit on the same level
-
-   InstanceNode* Current(); // Returns nullptr to indicate end of iteration
-   InstanceNode* CurrentAcceleratorInstance(); // Returns the accelerator instance for the Current() instance or nullptr if currently at top level
-
-   String GetFullName(Arena* out);
-
-   AcceleratorIterator LevelBelowIterator(Arena* temp); // Current() must be a composite instance, Returns an iterator that will iterate starting from the level below, but will end without going to upper levels.
-   AcceleratorIterator LevelBelowIterator(); // Not taking an arena means that the returned iterator uses current iterator memory. Returned iterator must be iterated fully before the current iterator can be used, otherwise memory conflicts will arise as both iterators are sharing the same stack
-};
-
 struct ConsolidationGraph{
    Array<MappingNode> nodes;
    Array<BitArray> edges;
@@ -640,7 +582,7 @@ struct CliqueState{
    int iterations;
    Array<int> table;
    ConsolidationGraph clique;
-   clock_t start;
+   NanoSecond start;
    bool found;
 };
 
@@ -693,8 +635,6 @@ struct GraphMapping;
 
 // Temp
 bool EqualPortMapping(PortInstance p1,PortInstance p2);
-void PopulateAccelerator(Accelerator* topLevel,Accelerator* accel,FUDeclaration* topDeclaration,FUInstanceInterfaces& inter,std::unordered_map<StaticId,StaticData>* staticMap);
-void PopulateTopLevelAccelerator(Accelerator* accel);
 ConsolidationResult GenerateConsolidationGraph(Versat* versat,Arena* arena,Accelerator* accel1,Accelerator* accel2,ConsolidationGraphOptions options);
 MergeGraphResult MergeGraph(Versat* versat,Accelerator* flatten1,Accelerator* flatten2,GraphMapping& graphMapping,String name);
 void AddCliqueToMapping(GraphMapping& res,ConsolidationGraph clique);
@@ -739,13 +679,7 @@ void SetDelayRecursive(Accelerator* accel,Arena* arena);
 // Graph fixes
 void FixMultipleInputs(Versat* versat,Accelerator* accel);
 void FixMultipleInputs(Versat* versat,Accelerator* accel,Hashmap<ComplexFUInstance*,int>* instanceToInput);
-//void FixDelays(Versat* versat,Accelerator* accel,AcceleratorView& view);
 void FixDelays(Versat* versat,Accelerator* accel,Hashmap<EdgeNode,int>* edgeDelays);
-
-// AcceleratorView related functions
-//AcceleratorView CreateAcceleratorView(Accelerator* accel,Arena* arena);
-//AcceleratorView CreateAcceleratorView(Accelerator* accel,std::vector<Edge*>& edgeMappings,Arena* arena);
-//AcceleratorView SubGraphAroundInstance(Versat* versat,Accelerator* accel,ComplexFUInstance* instance,int layers,Arena* arena);
 
 // Accelerator merging
 bool MappingConflict(MappingNode map1,MappingNode map2);
@@ -760,10 +694,6 @@ void AssertGraphValid(InstanceNode* nodes,Arena* arena);
 void OutputGraphDotFile(Versat* versat,Accelerator* accel,bool collapseSameEdges,const char* filenameFormat,...) __attribute__ ((format (printf, 4, 5)));
 void OutputGraphDotFile(Versat* versat,Accelerator* accel,bool collapseSameEdges,ComplexFUInstance* highlighInstance,const char* filenameFormat,...) __attribute__ ((format (printf, 5, 6)));
 void OutputGraphDotFile(Versat* versat,Accelerator* accel,bool collapseSameEdges,Set<ComplexFUInstance*>* highlight,const char* filenameFormat,...) __attribute__ ((format (printf, 5, 6)));
-void CheckMemory(AcceleratorIterator iter);
-void CheckMemory(AcceleratorIterator iter,MemType type);
-void CheckMemory(AcceleratorIterator iter,MemType type,Arena* arena);
-int NumberUnits(Accelerator* accel,Arena* arena); // TODO: Check configurations.cpp
 Array<String> GetFullNames(Accelerator* accel,Arena* out);
 
 void OutputConsolidationGraph(ConsolidationGraph graph,Arena* memory,bool onlyOutputValid,const char* format,...);

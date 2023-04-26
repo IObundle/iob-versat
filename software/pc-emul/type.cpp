@@ -186,7 +186,7 @@ Type* GetSpecificType(String name){
    return nullptr;
 }
 
-Type* InstantiateTemplate(String name){
+Type* InstantiateTemplate(String name,Arena* arena = nullptr){
    STACK_ARENA(temp,Kilobyte(4));
    Tokenizer tok(name,"<>,",{});
 
@@ -280,6 +280,10 @@ Type* InstantiateTemplate(String name){
       newType = types.Alloc();
    }
 
+   if(arena){
+      name = PushString(arena,"%.*s",UNPACK_SS(name));
+   }
+
    newType->type = Type::TEMPLATED_INSTANCE;
    newType->name = name;
    newType->members = members;
@@ -307,7 +311,7 @@ Type* GetType(String name){
 
    Type* res = nullptr;
    if(CompareString(name,templatedName)){ // Name equal to templated name means that no pointers or arrays, only templated arguments are not found
-      Type* res = InstantiateTemplate(name);
+      Type* res = InstantiateTemplate(name,&permanentArena);
       return res;
    } else if(templatedName.size > 0){
       res = GetType(templatedName);
@@ -624,6 +628,9 @@ Value AccessObjectIndex(Value object,int index){
    } else if(object.type->type == Type::TEMPLATED_INSTANCE){
       if(object.type->templateBase == ValueType::ARRAY){
          Array<Byte>* byteArray = (Array<Byte>*) object.custom;
+
+         int arrayLength = byteArray->size;
+         Assert(index < arrayLength);
 
          int size = object.type->templateArgTypes[0]->size;
          Byte* view = (Byte*) byteArray->data;

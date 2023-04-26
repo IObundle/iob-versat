@@ -166,9 +166,9 @@ FUInstance* CreateFUInstance(Accelerator* accel,FUDeclaration* type,String entit
    return res;
 }
 
-MicroSecond GetTime(){
-   MicroSecond res = {};
-   res.time = (uint64) timer_time_us();
+NanoSecond GetTime(){
+   NanoSecond res = {};
+   res.time = (uint64) timer_time_us() * 1000;
    return res;
 }
 

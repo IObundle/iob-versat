@@ -821,6 +821,15 @@ void FixInputs(InstanceNode* node){
    }
 }
 
+void FixOutputs(InstanceNode* node){
+   Memset(node->outputs,false);
+
+   FOREACH_LIST(ptr,node->allOutputs){
+      int port = ptr->port;
+      node->outputs[port] = true;
+   }
+}
+
 Edge* ConnectUnitsGetEdge(PortNode out,PortNode in,int delay){
    FUDeclaration* inDecl = in.node->inst->declaration;
    FUDeclaration* outDecl = out.node->inst->declaration;
@@ -855,7 +864,8 @@ Edge* ConnectUnitsGetEdge(PortNode out,PortNode in,int delay){
    con->instConnectedTo.port = in.port;
 
    outputNode->allOutputs = ListInsert(outputNode->allOutputs,con);
-   outputNode->outputs += 1;
+   outputNode->outputs[out.port] = true;
+   //outputNode->outputs += 1;
    }
 
    // Add info to inputNode
@@ -923,7 +933,8 @@ Edge* ConnectUnitsGetEdge(FUInstance* out,int outIndex,FUInstance* in,int inInde
    con->instConnectedTo.port = inIndex;
 
    outputNode->allOutputs = ListInsert(outputNode->allOutputs,con);
-   outputNode->outputs += 1;
+   outputNode->outputs[outIndex] = true;
+   //outputNode->outputs += 1;
    }
 
    // Add info to inputNode
@@ -964,7 +975,8 @@ void RemoveConnection(Accelerator* accel,InstanceNode* out,int outPort,InstanceN
       bool res = (n->port == outPort && n->instConnectedTo.node == in && n->instConnectedTo.port == inPort);
       return res;
    });
-   out->outputs = Size(out->allOutputs);
+   //out->outputs = Size(out->allOutputs);
+   FixOutputs(out);
 
    in->allInputs = ListRemoveAll(in->allInputs,[&](ConnectionNode* n){
       bool res = (n->port == inPort && n->instConnectedTo.node == out && n->instConnectedTo.port == outPort);
@@ -977,7 +989,8 @@ void RemoveAllDirectedConnections(InstanceNode* out,InstanceNode* in){
    out->allOutputs = ListRemoveAll(out->allOutputs,[&](ConnectionNode* n){
       return (n->instConnectedTo.node == in);
    });
-   out->outputs = Size(out->allOutputs);
+   //out->outputs = Size(out->allOutputs);
+   FixOutputs(out);
 
    in->allInputs = ListRemoveAll(in->allInputs,[&](ConnectionNode* n){
       return (n->instConnectedTo.node == out);
@@ -1030,25 +1043,6 @@ void InsertUnit(Accelerator* accel,PortNode before,PortNode after,PortNode newUn
    ConnectUnitsGetEdge(newUnit,after,0);
    ConnectUnitsGetEdge(before,newUnit,0);
 }
-
-#if 0
-// Fixes edges such that unit before connected to after, are reconnected to new unit
-void InsertUnit(Accelerator* accel, PortInstance before, PortInstance after, PortInstance newUnit){
-   //UNHANDLED_ERROR; // Do not think any code uses this function. Check if needed and remove otherwise. Seems to be old.
-   FOREACH_LIST(edge,accel->edges){
-      if(edge->units[0] == before && edge->units[1] == after){
-         RemoveConnection(GetInstanceNode(accel,edge->units[0].inst),edge->units[0].port,GetInstanceNode(accel,edge->units[1].inst),edge->units[1].port);
-
-         Edge* newEdge = ConnectUnits(newUnit,after);
-         ConnectUnits(edge->units[0],newUnit);
-
-         return;
-      }
-   }
-
-   Assert(false);
-}
-#endif
 
 void AssertGraphValid(InstanceNode* nodes,Arena* arena){
    BLOCK_REGION(arena);

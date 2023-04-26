@@ -87,6 +87,7 @@ InstanceNode* CreateFlatFUInstance(Accelerator* accel,FUDeclaration* type,String
    ptr->inst = inst;
 
    ptr->inputs = PushArray<PortNode>(accel->accelMemory,type->inputDelays.size);
+   ptr->outputs = PushArray<bool>(accel->accelMemory,type->outputLatencies.size);
 
    if(accel->lastAllocated){
       Assert(accel->lastAllocated->next == nullptr);
@@ -835,10 +836,6 @@ Accelerator* Flatten(Versat* versat,Accelerator* accel,int times){
    ReorganizeAccelerator(accel,arena);
    ReorganizeAccelerator(newAccel,arena);
 
-   debugControlledRegion(){
-      DebugAccelerator(accel,arena);
-   }
-
    // Copy configuration
    region(arena){
       Hashmap<String,SizedConfig>* oldConfigs = ExtractNamedSingleConfigs(accel,arena);
@@ -855,10 +852,6 @@ Accelerator* Flatten(Versat* versat,Accelerator* accel,int times){
             Memcpy(newConfig.ptr,oldConfig.ptr,oldConfig.size);
          }
       }
-   }
-
-   debugControlledRegion(){
-      DebugAccelerator(newAccel,arena);
    }
 
    return newAccel;

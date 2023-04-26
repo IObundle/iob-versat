@@ -14,7 +14,7 @@ int printf_(const char* format, ...);
 void TimeIt::Output(){
    char buffer[32];
    // Cannot use floating point because of embedded
-   MicroSecond end = GetTime();
+   NanoSecond end = GetTime();
 
    uint64 diff = end.time - start.time;
    int digits = NumberDigitsRepresentation(diff);
@@ -35,6 +35,17 @@ void TimeIt::Output(){
       }
    }
    printf("\n");
+}
+
+NanoSecond operator-(const NanoSecond& s1,const NanoSecond& s2){
+   NanoSecond res = {};
+   res.time = s1.time - s2.time;
+   return res;
+}
+
+bool operator>(const NanoSecond& s1,const NanoSecond& s2){
+   bool res = s1.time > s2.time;
+   return res;
 }
 
 // Misc

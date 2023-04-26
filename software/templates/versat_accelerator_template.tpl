@@ -61,25 +61,25 @@ module @{accel.name} #(
    input  [@{accel.nIOs - 1}:0]               databus_last,
    #{end}
 
-   #{for external accel.externalMemory}
+   #{for ext accel.externalMemory}
       #{set i index}
-      #{if external.type}
+      #{if ext.type}
    // DP
       #{for port 2}
-   output [ADDR_W-1:0]   ext_dp_addr_@{i}_port_@{port},
-   output [DATA_W-1:0]   ext_dp_out_@{i}_port_@{port},
-   input  [DATA_W-1:0]   ext_dp_in_@{i}_port_@{port},
+   output [@{ext.bitsize}-1:0]   ext_dp_addr_@{i}_port_@{port},
+   output [@{ext.datasize}-1:0]   ext_dp_out_@{i}_port_@{port},
+   input  [@{ext.datasize}-1:0]   ext_dp_in_@{i}_port_@{port},
    output                ext_dp_enable_@{i}_port_@{port},
    output                ext_dp_write_@{i}_port_@{port},
       #{end}
       #{else}
    // 2P
-   output [ADDR_W-1:0]   ext_2p_addr_out_@{i},
-   output [ADDR_W-1:0]   ext_2p_addr_in_@{i},
+   output [@{ext.bitsize}-1:0]   ext_2p_addr_out_@{i},
+   output [@{ext.bitsize}-1:0]   ext_2p_addr_in_@{i},
    output                ext_2p_write_@{i},
    output                ext_2p_read_@{i},
-   input  [DATA_W-1:0]   ext_2p_data_in_@{i},
-   output [DATA_W-1:0]   ext_2p_data_out_@{i},
+   input  [@{ext.datasize}-1:0]   ext_2p_data_in_@{i},
+   output [@{ext.datasize}-1:0]   ext_2p_data_out_@{i},
       #{end}
    #{end}
 
@@ -127,9 +127,7 @@ assign done = &unitDone;
 #{end}
 
 wire [31:0] #{join ", " for node instances}
-   #{if node.outputs} 
-      #{join ", " for j node.outputs} output_@{node.inst.id}_@{j} #{end}
-   #{end}
+   #{join ", " for j node.outputs} #{if j} output_@{node.inst.id}_@{index} #{end} #{end}
 #{end};
 
 #{if unitsMapped}
@@ -161,7 +159,7 @@ reg [31:0] #{join "," for node instances} #{if node.inst.declaration.isOperation
 
 always @*
 begin
-#{for node instances}
+#{for node ordered}
    #{set decl node.inst.declaration}
    #{if decl.isOperation and decl.outputLatencies[0] == 0}
       #{set input1 node.inputs[0]}
@@ -193,7 +191,6 @@ end
 
 #{set counter 0}
 #{set ioIndex 0}
-#{set configsSeen 0}
 #{set memoryMappedIndex 0}
 #{set externalCounter 0}
 #{set delaySeen 0}
@@ -204,8 +201,8 @@ end
 #{set decl inst.declaration}
    #{if (decl != inputDecl and decl != outputDecl and !decl.isOperation)}
       @{decl.name} @{inst.parameters} @{inst.name |> Identify}_@{counter} (
-         #{for i node.inst.declaration.outputLatencies.size}
-            .out@{i}(output_@{inst.id}_@{i}),
+         #{for j node.outputs}
+            .out@{index}(output_@{inst.id}_@{index}),
          #{end}
 
          #{for input node.inputs}
@@ -222,9 +219,9 @@ end
          #{end}
 
          #{else}
+         #{set configStart accel.configOffsets.offsets[counter]}
          #{for wire decl.configs}
-         .@{wire.name}(@{accel.configs[configsSeen].name}),
-         #{inc configsSeen}
+         .@{wire.name}(@{accel.configs[configStart + index].name}),
          #{end}
          #{for unit decl.staticUnits}         
          #{set id unit.first}

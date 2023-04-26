@@ -21,20 +21,20 @@ using Optional = std::optional<T>;
 
 #define DebugValue(...) ((void)0)
 #else
-void DebugGUI(Arena* arena);
+void DebugGUI();
 void DebugVersat(Versat* versat);
 
-void DebugAccelerator(Accelerator* accel,Arena* arena);
-void DebugAcceleratorPersist(Accelerator* accel,Arena* arena);
-void DebugAcceleratorStart(Accelerator* accel,Arena* arena);
-void DebugAcceleratorEnd(Accelerator* accel,Arena* arena);
+void DebugAccelerator(Accelerator* accel);
+void DebugAcceleratorPersist(Accelerator* accel);
+void DebugAcceleratorStart(Accelerator* accel);
+void DebugAcceleratorEnd(Accelerator* accel);
 
 void DebugWindowValue(const char* label,Value val);
 void DebugWindowAccelerator(const char* label,Accelerator* accel);
 
-void DebugValue(const char* windowName,Value val,Arena* arena);
+void DebugValue(const char* windowName,Value val);
 #endif
 
-//void DebugAcceleratorRun(Accelerator* accel,Arena* arena,int cycle);
+//void DebugAcceleratorRun(Accelerator* accel,int cycle);
 
 #endif // INCLUDED_VERSAT_DEBUG_GUI

@@ -16,6 +16,7 @@
 #include "configurations.hpp"
 #include "debugGUI.hpp"
 #include "graph.hpp"
+#include "acceleratorSimulation.hpp"
 
 #include "templateEngine.hpp"
 
@@ -440,7 +441,7 @@ void SetStatic(Accelerator* accel,FUInstance* instance){
    ComplexFUInstance* inst = (ComplexFUInstance*) instance;
 
    int size = inst->declaration->configs.size;
-   int* oldConfig = inst->config;
+   iptr* oldConfig = inst->config;
 
    StaticId id = {};
    id.name = inst->name;
@@ -456,7 +457,7 @@ void SetStatic(Accelerator* accel,FUInstance* instance){
          repopulate = true;
       }
 
-      int* ptr = Push(&accel->staticAlloc,size);
+      iptr* ptr = Push(&accel->staticAlloc,size);
 
       StaticData data = {};
       data.offset = ptr - accel->staticAlloc.ptr;
@@ -672,7 +673,7 @@ static FUInstance* GetInstanceByHierarchicalName2(AcceleratorIterator iter,Hiera
             } else if(!hier->next){ // Correct name and type (if specified) and no further hierarchical name to follow
                Accelerator* accel = iter.topLevel;
 
-               #if 1
+               #if 0
                if(iter.level == 0){
                   return node->inst;
                } else {
@@ -682,7 +683,7 @@ static FUInstance* GetInstanceByHierarchicalName2(AcceleratorIterator iter,Hiera
                   instBuffer->declarationInstance = inst;
 
                   return instBuffer;
-               }
+               //}
             }
          }
 
@@ -720,14 +721,11 @@ static FUInstance* vGetInstanceByName_(AcceleratorIterator iter,Arena* arena,int
       if(arguments){
          name = vPushString(arena,str,args);
          i += arguments;
-         #ifdef x86 // 0 for 64 bits
-         //#ifndef BIT_32 // For some reason this is needed for 32 bits but not for 64 bits. Hack for now, but need to do a full debug and see what is happening
+         #ifdef x86 // For some reason this is needed for 32 bits but not for 64 bits. Hack for now, but need to do a full debug and see what is happening
          for(int ii = 0; ii < arguments; ii++){
             /* int unused = */ va_arg(args, int); // Need to consume something
-            //printf("%d\n",unused);
          }
          #endif
-         //#endif
       } else {
          name = PushString(arena,"%s",str);
       }
@@ -760,8 +758,6 @@ static FUInstance* vGetInstanceByName_(AcceleratorIterator iter,Arena* arena,int
 
    FUInstance* res = GetInstanceByHierarchicalName2(iter,&fullName,arena);
 
-   //Assert(res); // We are asserting, but we should return nullptr and let outside code handle error
-
    if(!res){
       printf("Couldn't find: ");
       bool first = true;
@@ -773,8 +769,6 @@ static FUInstance* vGetInstanceByName_(AcceleratorIterator iter,Arena* arena,int
          first = false;
       }
       printf("\n");
-
-      //DebugAccelerator(iter.topLevel,arena);
       Assert(res);
    }
 
@@ -939,10 +933,6 @@ UnitValues CalculateAcceleratorValues(Versat* versat,Accelerator* accel){
 
    Hashmap<StaticId,int>* staticSeen = PushHashmap<StaticId,int>(&accel->versat->temp,1000);
 
-   #if 0
-   int memoryMapBits[32];
-   memset(memoryMapBits,0,sizeof(int) * 32);
-   #endif
    int memoryMappedDWords = 0;
 
    // Handle non-static information
@@ -971,9 +961,6 @@ UnitValues CalculateAcceleratorValues(Versat* versat,Accelerator* accel){
 
          memoryMappedDWords = AlignBitBoundary(memoryMappedDWords,type->memoryMapBits);
          memoryMappedDWords += 1 << type->memoryMapBits;
-
-         //AlignBitBoundary
-         //memoryMapBits[type->memoryMapBits] += 1;
       }
 
       if(type == BasicDeclaration::input){
@@ -1072,20 +1059,6 @@ UnitValues CalculateAcceleratorValues(Versat* versat,Accelerator* accel){
    #endif
 
    return val;
-}
-
-bool IsConfigStatic(Accelerator* topLevel,ComplexFUInstance* inst){
-   int* config = inst->config;
-
-   if(config == nullptr){
-      return false;
-   }
-
-   if(Inside(&topLevel->configAlloc,config)){
-      return false;
-   } else {
-      return true;
-   }
 }
 
 FUDeclaration* RegisterSubUnit(Versat* versat,String name,Accelerator* circuit){
@@ -1222,8 +1195,8 @@ FUDeclaration* RegisterSubUnit(Versat* versat,String name,Accelerator* circuit){
    }
 
    if(anySavedConfiguration){
-      decl.defaultConfig = PushArray<int>(permanent,val.configs);
-      decl.defaultStatic = PushArray<int>(permanent,val.statics);
+      decl.defaultConfig = PushArray<iptr>(permanent,val.configs);
+      decl.defaultStatic = PushArray<iptr>(permanent,val.statics);
 
       int configIndex = 0;
       //int staticIndex = 0;
@@ -1279,7 +1252,6 @@ FUDeclaration* RegisterSubUnit(Versat* versat,String name,Accelerator* circuit){
       if(inst->declaration->implementsDone){
          implementsDone = true;
       }
-      #if 1
       if(ptr->type == InstanceNode::TAG_SINK){
          hasSinkDelay = CHECK_DELAY(inst,DELAY_TYPE_SINK_DELAY);
       }
@@ -1290,28 +1262,18 @@ FUDeclaration* RegisterSubUnit(Versat* versat,String name,Accelerator* circuit){
          hasSinkDelay = CHECK_DELAY(inst,DELAY_TYPE_SINK_DELAY);
          hasSourceDelay = CHECK_DELAY(inst,DELAY_TYPE_SOURCE_DELAY);
       }
-      #endif
    }
 
-   #if 1
    if(hasSourceDelay){
       decl.delayType = (DelayType) ((int)decl.delayType | (int) DelayType::DELAY_TYPE_SOURCE_DELAY);
    }
    if (hasSinkDelay){
       decl.delayType = (DelayType) ((int)decl.delayType | (int) DelayType::DELAY_TYPE_SINK_DELAY);
    }
-   #endif
 
    decl.implementsDone = implementsDone;
 
-   FUDeclaration* res = RegisterFU(versat,decl);
-   res->baseCircuit->subtype = res;
-   res->fixedDelayCircuit->subtype = res;
-
-   // TODO: Hackish, change Pool so that copying it around does nothing and then put this before the register unit
-   #if 1
-   //Hashmap<StaticId,int> staticMap(temp,1000);
-   res->staticUnits = PushHashmap<StaticId,StaticData>(permanent,1000); // TODO: Set correct number of elements
+   decl.staticUnits = PushHashmap<StaticId,StaticData>(permanent,1000); // TODO: Set correct number of elements
    int staticOffset = 0;
    // Start by collecting all the existing static allocated units in subinstances
    FOREACH_LIST(ptr,circuit->allocated){
@@ -1323,14 +1285,18 @@ FUDeclaration* RegisterSubUnit(Versat* versat,String name,Accelerator* circuit){
             StaticData newData = pair.second;
             newData.offset = staticOffset;
 
-            if(res->staticUnits->InsertIfNotExist(pair.first,newData)){
+            if(decl.staticUnits->InsertIfNotExist(pair.first,newData)){
                staticOffset += newData.configs.size;
             }
          }
       }
    }
 
-   // Add this units static instances
+   FUDeclaration* res = RegisterFU(versat,decl);
+   res->baseCircuit->subtype = res;
+   res->fixedDelayCircuit->subtype = res;
+
+   // Add this units static instances (needs be done after Registering the declaration because the parent is a pointer to the declaration)
    FOREACH_LIST(ptr,circuit->allocated){
       ComplexFUInstance* inst = ptr->inst;
       if(inst->isStatic){
@@ -1347,17 +1313,14 @@ FUDeclaration* RegisterSubUnit(Versat* versat,String name,Accelerator* circuit){
          }
       }
    }
-   #endif
 
-   #if 1
-   {
-   char buffer[256];
-   sprintf(buffer,"src/%.*s.v",UNPACK_SS(decl.name));
-   FILE* sourceCode = OpenFileAndCreateDirectories(buffer,"w");
-   OutputCircuitSource(versat,res,circuit,sourceCode);
-   fclose(sourceCode);
+   if(versat->debug.outputAccelerator){
+      char buffer[256];
+      sprintf(buffer,"src/%.*s.v",UNPACK_SS(decl.name));
+      FILE* sourceCode = OpenFileAndCreateDirectories(buffer,"w");
+      OutputCircuitSource(versat,res,circuit,sourceCode);
+      fclose(sourceCode);
    }
-   #endif
 
    return res;
 }
@@ -1374,7 +1337,6 @@ static int* IterativeStartFunction(ComplexFUInstance* inst){
    return nullptr;
 }
 
-static void AcceleratorRunComposite(AcceleratorIterator iter);
 static int* IterativeUpdateFunction(ComplexFUInstance* inst,Array<int> inputs){
    static int out[99];
 
@@ -1527,343 +1489,6 @@ void LoadConfiguration(Accelerator* accel,int configuration){
 void SaveConfiguration(Accelerator* accel,int configuration){
    //Assert(configuration < accel->versat->numberConfigurations);
 }
-
-static void AcceleratorRunStart(Accelerator* accel){
-   AcceleratorIterator iter = {};
-   for(InstanceNode* node = iter.Start(accel,&accel->versat->temp,true); node; node = iter.Next()){
-      ComplexFUInstance* inst = node->inst;
-      FUDeclaration* type = inst->declaration;
-
-      if(type->startFunction){
-         int* startingOutputs = type->startFunction(inst);
-
-         if(startingOutputs){
-            memcpy(inst->outputs,startingOutputs,inst->declaration->outputLatencies.size * sizeof(int));
-            memcpy(inst->storedOutputs,startingOutputs,inst->declaration->outputLatencies.size * sizeof(int));
-         }
-      }
-   }
-}
-
-static bool AcceleratorDone(Accelerator* accel){
-   bool done = true;
-   FOREACH_LIST(ptr,accel->allocated){
-      ComplexFUInstance* inst = ptr->inst;
-      if(inst->declaration->type == FUDeclaration::COMPOSITE && inst->declaration->fixedDelayCircuit){
-         bool subDone = AcceleratorDone(inst->declaration->fixedDelayCircuit);
-         done &= subDone;
-      } else if(inst->declaration->implementsDone && !inst->done){
-         return false;
-      }
-   }
-
-   return done;
-}
-
-static void AcceleratorEvalIter(AcceleratorIterator iter){
-   // Set accelerator input to instance input
-   InstanceNode* compositeNode = iter.Current();
-   ComplexFUInstance* compositeInst = compositeNode->inst;
-   Assert(compositeInst->declaration->type == FUDeclaration::COMPOSITE);
-   Accelerator* accel = compositeInst->declaration->fixedDelayCircuit;
-
-   // Order is very important. Need to populate before setting input values
-   /* AcceleratorIterator it = */ iter.LevelBelowIterator();
-
-   for(int i = 0; i < compositeNode->inputs.size; i++){
-      if(compositeNode->inputs[i].node == nullptr){
-         continue;
-      }
-
-      InstanceNode* inputNode = GetInputNode(accel->allocated,i);
-      Assert(inputNode);
-      ComplexFUInstance* input = inputNode->inst;
-      int val = GetInputValue(compositeNode,i);
-      for(int ii = 0; ii < input->declaration->outputLatencies.size; ii++){
-         input->outputs[ii] = val;
-         input->storedOutputs[ii] = val;
-      }
-   }
-
-   // Set output instance value to accelerator output
-   InstanceNode* output = GetOutputNode(accel->allocated);
-   if(output){
-      for(int ii = 0; ii < output->inputs.size; ii++){
-         if(output->inputs[ii].node == nullptr){
-            continue;
-         }
-
-         int val = GetInputValue(output,ii);
-         compositeInst->outputs[ii] = val;
-         compositeInst->storedOutputs[ii] = val;
-      }
-   }
-}
-
-static void AcceleratorEval(AcceleratorIterator iter){
-   for(InstanceNode* node = iter.Current(); node; node = iter.Skip()){
-      ComplexFUInstance* inst = node->inst;
-      if(inst->declaration->type == FUDeclaration::SPECIAL){
-         continue;
-      } else if(inst->declaration->type == FUDeclaration::COMPOSITE){
-         AcceleratorEvalIter(iter);
-      }
-   }
-}
-
-static void AcceleratorRunIter(AcceleratorIterator iter);
-static void AcceleratorRunComposite(AcceleratorIterator iter){
-   // Set accelerator input to instance input
-   InstanceNode* compositeNode = iter.Current();
-   ComplexFUInstance* compositeInst = compositeNode->inst;
-   Assert(compositeInst->declaration->type == FUDeclaration::COMPOSITE);
-   Accelerator* accel = compositeInst->declaration->fixedDelayCircuit;
-
-   // Order is very important. Need to populate before setting input values
-   AcceleratorIterator it = iter.LevelBelowIterator();
-
-   for(int i = 0; i < compositeNode->inputs.size; i++){
-      if(compositeNode->inputs[i].node == nullptr){
-         continue;
-      }
-
-      InstanceNode* inputNode = GetInputNode(accel->allocated,i);
-      Assert(inputNode);
-      ComplexFUInstance* input = inputNode->inst;
-      int val = GetInputValue(compositeNode,i);
-      for(int ii = 0; ii < input->declaration->outputLatencies.size; ii++){
-         input->outputs[ii] = val;
-         input->storedOutputs[ii] = val;
-      }
-   }
-
-   AcceleratorRunIter(it);
-
-   // Set output instance value to accelerator output
-   InstanceNode* output = GetOutputNode(accel->allocated);
-   if(output){
-      for(int ii = 0; ii < output->inputs.size; ii++){
-         if(output->inputs[ii].node == nullptr){
-            continue;
-         }
-
-         int val = GetInputValue(output,ii);
-         compositeInst->outputs[ii] = val;
-         compositeInst->storedOutputs[ii] = val;
-      }
-   }
-}
-
-static void AcceleratorRunIter(AcceleratorIterator iter){
-   int buffer[99];
-   Array<int> bufferArray = {buffer,99};
-
-   for(InstanceNode* node = iter.Current(); node; node = iter.Skip()){
-      ComplexFUInstance* inst = node->inst;
-      if(inst->declaration->type == FUDeclaration::SPECIAL){
-         continue;
-      } else if(inst->declaration->type == FUDeclaration::COMPOSITE){
-         AcceleratorRunComposite(iter);
-      } else {
-         bufferArray.size = node->inputs.size;
-         for(int i = 0; i < node->inputs.size; i++){
-            PortNode& other = node->inputs[i];
-
-            if(other.node){
-               buffer[i] = other.node->inst->outputs[other.port];
-            } else {
-               buffer[i] = 0;
-            }
-         }
-
-         int* newOutputs = inst->declaration->updateFunction(inst,bufferArray);
-
-         if(inst->declaration->outputLatencies.size && inst->declaration->outputLatencies[0] == 0 && node->type != InstanceNode::TAG_SOURCE){
-            memcpy(inst->outputs,newOutputs,inst->declaration->outputLatencies.size * sizeof(int));
-            memcpy(inst->storedOutputs,newOutputs,inst->declaration->outputLatencies.size * sizeof(int));
-         } else {
-            memcpy(inst->storedOutputs,newOutputs,inst->declaration->outputLatencies.size * sizeof(int));
-         }
-      }
-   }
-}
-
-static void AcceleratorRunOnce(Accelerator* accel){
-   static int numberRuns = 0;
-   int time = 0;
-
-   Arena* arena = &accel->versat->temp;
-   ArenaMarker marker(arena);
-
-   // TODO: Eventually retire this portion. Make the Accelerator structure a map, maybe a std::unordered_map
-   #if 1
-   FUDeclaration base = {};
-   base.name = STRING("Top");
-   accel->subtype = &base;
-
-   ReorganizeAccelerator(accel,arena);
-
-   /* Hashmap<EdgeNode,int>* delay = */ CalculateDelay(accel->versat,accel,arena);
-   //FixDelays(accel->versat,accel,delay);
-   SetDelayRecursive(accel,arena);
-
-   //DebugValue("t",MakeValue(delay,"Hashmap<EdgeNode,int>"),arena);
-
-   if(!accel->ordered){
-      ReorganizeAccelerator(accel,arena);
-   }
-   #endif
-
-   FILE* accelOutputFile = nullptr;
-   Array<int> vcdSameCheckSpace = {};
-   if(accel->versat->debug.outputVCD){
-      char buffer[128];
-      sprintf(buffer,"debug/accelRun%d.vcd",numberRuns++);
-      accelOutputFile = OpenFileAndCreateDirectories(buffer,"w");
-      Assert(accelOutputFile);
-
-      vcdSameCheckSpace = PrintVCDDefinitions(accelOutputFile,accel,arena);
-   }
-   defer{if(accelOutputFile) fclose(accelOutputFile);};
-
-   Assert(accel->outputAlloc.size == accel->storedOutputAlloc.size);
-
-   AcceleratorIterator iter = {};
-
-   if(accel->versat->debug.outputVCD){
-      iter.StartOrdered(accel,arena,true); // Probably overkill, but guarantees that print vcd gets the correct result
-      AcceleratorEval(iter);
-      PrintVCD(accelOutputFile,accel,time++,0,1,vcdSameCheckSpace,arena); // Print starting values
-   }
-
-   AcceleratorRunStart(accel);
-   memcpy(accel->outputAlloc.ptr,accel->storedOutputAlloc.ptr,accel->outputAlloc.size * sizeof(int));
-
-   if(accel->versat->debug.outputVCD){
-      iter.StartOrdered(accel,arena,true);
-      AcceleratorEval(iter);
-      PrintVCD(accelOutputFile,accel,time++,1,0,vcdSameCheckSpace,arena);
-   }
-
-   for(int cycle = 0; cycle < 10000; cycle++){ // Max amount of iterations
-      Assert(accel->outputAlloc.size == accel->storedOutputAlloc.size);
-
-      if(accel->versat->debug.outputVCD){
-         iter.StartOrdered(accel,arena,true);
-         AcceleratorEval(iter);
-         PrintVCD(accelOutputFile,accel,time++,0,0,vcdSameCheckSpace,arena);
-      }
-
-      iter.StartOrdered(accel,arena,true);
-      AcceleratorRunIter(iter);
-
-      memcpy(accel->outputAlloc.ptr,accel->storedOutputAlloc.ptr,accel->outputAlloc.size * sizeof(int));
-
-      if(accel->versat->debug.outputVCD){
-         iter.StartOrdered(accel,arena,true);
-         AcceleratorEval(iter);
-
-         PrintVCD(accelOutputFile,accel,time++,1,0,vcdSameCheckSpace,arena);
-      }
-
-      if(AcceleratorDone(accel)){
-         break;
-      }
-   }
-
-   // A couple of iterations to let units finish writing data to memories and stuff
-   // "Not correct" but follows more closely with what we expected the accelerator to do in embedded
-   for(int cycle = 0; cycle < 3; cycle++){
-      #if 0
-      if(accel->versat->debug.outputVCD){
-         PrintVCD(accelOutputFile,accel,time++,0,0,vcdSameCheckSpace,arena);
-      }
-      #endif
-
-      iter.StartOrdered(accel,arena,true);
-      AcceleratorRunIter(iter);
-
-      #if 0
-      // For now, do not print vcd, because we are only repeating the last values and it's probably more confusing than helpful
-      if(accel->versat->debug.outputVCD){
-         PrintVCD(accelOutputFile,accel,time++,1,0,vcdSameCheckSpace,arena);
-      }
-      #endif
-   }
-
-   if(accel->versat->debug.outputVCD){
-      PrintVCD(accelOutputFile,accel,time++,0,0,vcdSameCheckSpace,arena);
-   }
-}
-
-void AcceleratorRun(Accelerator* accel,int times){
-   for(int i = 0; i < times; i++){
-      AcceleratorRunOnce(accel);
-   }
-}
-
-#if 0
-void AcceleratorRunDebug(Accelerator* accel){
-   static int numberRuns = 0;
-   int time = 0;
-
-   Arena* arena = &accel->versat->temp;
-   ArenaMarker marker(arena);
-
-   // TODO: Eventually retire this portion. Make the Accelerator structure a map, maybe a std::unordered_map
-   #if 1
-   FUDeclaration base = {};
-   base.name = STRING("Top");
-   accel->subtype = &base;
-
-   ReorganizeAccelerator(accel,arena);
-
-   #if 0
-   view.CalculateDelay(arena);
-   #else
-   /* Hashmap<EdgeNode,int>* delay = */ CalculateDelay(accel->versat,accel,arena);
-   #endif
-
-   SetDelayRecursive(accel);
-
-   //DebugAccelerator(accel,arena);
-
-   #if 0
-   int size = Size(accel->instances);
-   for(int i = 0; i < size - 1; i++){
-      order.instances[i]->next = order.instances[i+1];
-   }
-   order.instances[size-1]->next = nullptr;
-   accel->instances = order.instances[0];
-   #endif
-   #endif
-
-   AcceleratorRunStart(accel);
-
-   AcceleratorIterator iter = {};
-   iter.StartOrdered(accel,arena,true);
-
-   DebugAcceleratorStart(accel,arena);
-
-   AcceleratorRunIter(iter);
-
-   for(int cycle = 0; cycle < 10000; cycle++){ // Max amount of iterations
-      Assert(accel->outputAlloc.size == accel->storedOutputAlloc.size);
-      memcpy(accel->outputAlloc.ptr,accel->storedOutputAlloc.ptr,accel->outputAlloc.size * sizeof(int));
-
-      DebugAcceleratorPersist(accel,arena);
-
-      iter.StartOrdered(accel,arena,true);
-      AcceleratorRunIter(iter);
-
-      if(AcceleratorDone(accel)){
-         break;
-      }
-   }
-
-   DebugAcceleratorEnd(accel,arena);
-}
-#endif
 
 void OutputMemoryMap(Versat* versat,Accelerator* accel){
    UNHANDLED_ERROR; // Might need to create a view so that ComputeVersatValues works
@@ -2151,26 +1776,7 @@ int CalculateMemoryUsage(Versat* versat){
 #include "debugGUI.hpp"
 
 void Hook(Versat* versat,FUDeclaration* decl,Accelerator* accel,FUInstance* inst){
-   Arena* arena = &versat->temp;
-   BLOCK_REGION(arena);
 
-   //OutputGraphDotFile(versat,decl->baseCircuit,true,"debug/basic.out");
-   //OutputGraphDotFile(versat,decl->fixedDelayCircuit,true,"debug/fixed.out");
-   //OutputGraphDotFile(versat,decl->fixedDelayCircuit,true,"debug/tests.out");
-
-   #if 1
-   FUDeclaration base = {};
-   base.name = STRING("Top");
-   accel->subtype = &base;
-
-   CalculateDelay(versat,accel,arena);
-   SetDelayRecursive(accel,arena);
-
-   DebugAccelerator(accel,arena);
-   #else
-   ComplexFUInstance* compInst = (ComplexFUInstance*) GetInstanceByName(accel,"Test","stage4","weights");
-   compInst->debugData->debugBreak = true;
-   #endif
 }
 
 

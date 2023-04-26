@@ -7,7 +7,7 @@
 struct @{module.name}Config{
 #{for i module.nConfigs}
 #{set wire module.configs[i]}
-int @{wire.name};
+iptr @{wire.name};
 #{end}
 };
 

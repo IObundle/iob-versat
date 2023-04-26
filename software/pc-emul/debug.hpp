@@ -21,13 +21,6 @@ typedef void (*SignalHandler)(int sig);
 
 String FuzzText(String formattedExample,Arena* arena,int seed = COMPILE_TIME); // Pass a string of valid tokens separated by spaces
 
-void CheckMemory(AcceleratorIterator iter);
-void CheckMemory(AcceleratorIterator iter,MemType type,Arena* arena);
-void DisplayInstanceMemory(ComplexFUInstance* inst);
-void DisplayAcceleratorMemory(Accelerator* topLevel);
-void DisplayUnitConfiguration(Accelerator* topLevel);
-void DisplayUnitConfiguration(AcceleratorIterator iter);
-
 //bool IsGraphValid(AcceleratorView view);
 void OutputGraphDotFile(Versat* versat,Accelerator* accel,bool collapseSameEdges,const char* filenameFormat,...);
 

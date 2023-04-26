@@ -2,90 +2,10 @@
 
 #include "templateEngine.hpp"
 
-VersatComputedValues ComputeVersatValues(Versat* versat,Accelerator* accel){
-   #if 0
-   ArenaMarker marker(&versat->temp);
-   AcceleratorView view = CreateAcceleratorView(accel,&versat->temp);
-   view.CalculateDAGOrdering(&versat->temp);
-   #endif
-
-   VersatComputedValues res = {};
-
-   int memoryMappedDWords = 0;
-   FOREACH_LIST(ptr,accel->allocated){
-      ComplexFUInstance* inst = ptr->inst;
-      FUDeclaration* decl = inst->declaration;
-
-      res.numberConnections += Size(ptr->allOutputs);
-
-      if(decl->isMemoryMapped){
-         memoryMappedDWords = AlignBitBoundary(memoryMappedDWords,decl->memoryMapBits);
-         memoryMappedDWords += 1 << decl->memoryMapBits;
-
-         //res.maxMemoryMapDWords = std::max(res.maxMemoryMapDWords,1 << decl->memoryMapBits);
-         //res.memoryMappedBytes += (1 << (decl->memoryMapBits + 2));
-
-         res.unitsMapped += 1;
-      }
-
-      res.nConfigs += decl->configs.size;
-      for(Wire& wire : decl->configs){
-         res.configBits += wire.bitsize;
-      }
-
-      res.nStates += decl->states.size;
-      for(Wire& wire : decl->states){
-         res.stateBits += wire.bitsize;
-      }
-
-      res.nDelays += decl->nDelays;
-      res.delayBits += decl->nDelays * 32;
-
-      res.nUnitsIO += decl->nIOs;
-
-      res.externalMemoryInterfaces += decl->externalMemory.size;
-   }
-
-   for(auto pair : accel->staticUnits){
-      StaticData data = pair.second;
-      res.nStatics += data.configs.size;
-
-      for(Wire& wire : data.configs){
-         res.staticBits += wire.bitsize;
-      }
-   }
-
-   res.staticBitsStart = res.configBits;
-   res.delayBitsStart = res.staticBitsStart + res.staticBits;
-
-   // Versat specific registers are treated as a special maping (all 0's) of 1 configuration and 1 state register
-   res.nConfigs += 1;
-   res.nStates += 1;
-
-   res.nConfigurations = res.nConfigs + res.nStatics + res.nDelays;
-   res.configurationBits = res.configBits + res.staticBits + res.delayBits;
-
-   res.memoryMappedBytes = memoryMappedDWords * 4;
-   res.memoryAddressBits = log2i(memoryMappedDWords);
-
-   res.memoryMappingAddressBits = res.memoryAddressBits;
-   res.configurationAddressBits = log2i(res.nConfigurations);
-   res.stateAddressBits = log2i(res.nStates);
-   res.stateConfigurationAddressBits = std::max(res.configurationAddressBits,res.stateAddressBits);
-
-   res.lowerAddressSize = std::max(res.stateConfigurationAddressBits,res.memoryMappingAddressBits);
-
-   res.memoryConfigDecisionBit = res.lowerAddressSize;
-
-   return res;
-}
-
 #include "debug.hpp"
 
 void OutputCircuitSource(Versat* versat,FUDeclaration* decl,Accelerator* accel,FILE* file){
-   if(!versat->debug.outputAccelerator){
-      return;
-   }
+   Assert(versat->debug.outputAccelerator); // Because FILE is created outside, code should not call this function if flag is set
 
    Arena* arena = &versat->temp;
    ArenaMarker marker(arena);
@@ -100,20 +20,19 @@ void OutputCircuitSource(Versat* versat,FUDeclaration* decl,Accelerator* accel,F
 
    int nonSpecialUnits = CountNonSpecialChilds(accel->allocated);
 
-   #if 0
-   int nonSpecialUnits = 0;
-   FOREACH_LIST(inst,accel->instances){
-      if(inst->declaration->type != FUDeclaration::SPECIAL && !inst->declaration->isOperation){
-         nonSpecialUnits += 1;
-      }
-   }
-   #endif
-
    int size = Size(accel->allocated);
    Array<InstanceNode*> nodes = PushArray<InstanceNode*>(arena,size);
    int i = 0;
    FOREACH_LIST_INDEXED(ptr,accel->allocated,i){
       nodes[i] = ptr;
+   }
+
+   Array<InstanceNode*> ordered = PushArray<InstanceNode*>(arena,size);
+   {
+   int i = 0;
+   FOREACH_LIST_INDEXED(ptr,accel->ordered,i){
+      ordered[i] = ptr->node;
+   }
    }
 
    ComputedData computedData = CalculateVersatComputedData(accel->allocated,val,arena);
@@ -123,6 +42,7 @@ void OutputCircuitSource(Versat* versat,FUDeclaration* decl,Accelerator* accel,F
    TemplateSetCustom("versatData",&computedData.data,"Array<VersatComputedData>");
    TemplateSetCustom("external",&computedData.external,"Array<ExternalMemoryInterface>");
    TemplateSetCustom("instances",&nodes,"Array<InstanceNode*>");
+   TemplateSetCustom("ordered",&ordered,"Array<InstanceNode*>");
 
    TemplateSetNumber("nonSpecialUnits",nonSpecialUnits);
 
