@@ -36,20 +36,20 @@ module versat_instance #(
       #{if ext.type}
    // DP
       #{for port 2}
-   output [ADDR_W-1:0]   ext_dp_addr_@{i}_port_@{port},
-   output [DATA_W-1:0]   ext_dp_out_@{i}_port_@{port},
-   input  [DATA_W-1:0]   ext_dp_in_@{i}_port_@{port},
+   output [@{ext.bitsize}-1:0]   ext_dp_addr_@{i}_port_@{port},
+   output [@{ext.datasize}-1:0]   ext_dp_out_@{i}_port_@{port},
+   input  [@{ext.datasize}-1:0]   ext_dp_in_@{i}_port_@{port},
    output                ext_dp_enable_@{i}_port_@{port},
    output                ext_dp_write_@{i}_port_@{port},
       #{end}
       #{else}
    // 2P
-   output [ADDR_W-1:0]   ext_2p_addr_out_@{i},
-   output [ADDR_W-1:0]   ext_2p_addr_in_@{i},
+   output [@{ext.bitsize}-1:0]   ext_2p_addr_out_@{i},
+   output [@{ext.bitsize}-1:0]   ext_2p_addr_in_@{i},
    output                ext_2p_write_@{i},
    output                ext_2p_read_@{i},
-   input  [DATA_W-1:0]   ext_2p_data_in_@{i},
-   output [DATA_W-1:0]   ext_2p_data_out_@{i},
+   input  [@{ext.datasize}-1:0]   ext_2p_data_in_@{i},
+   output [@{ext.datasize}-1:0]   ext_2p_data_out_@{i},
       #{end}
    #{end}
 
@@ -237,10 +237,14 @@ begin
       #{end}
 
       // Static
-      #{for unit accel.staticInfo}
+      #{for unit staticUnits}
       #{for wire unit.data.configs}
       if(addr[@{versatValues.configurationAddressBits - 1}:0] == @{addr}) // @{versatBase + addr * 4 |> Hex}
-         configdata[@{counter}+:@{wire.bitsize}] <= wdata[@{wire.bitsize - 1}:0]; //  @{unit.id.parent.name}_@{unit.id.name}_@{wire.name}
+         #{if unit.first.parent}
+         configdata[@{counter}+:@{wire.bitsize}] <= wdata[@{wire.bitsize - 1}:0]; //  @{unit.first.parent.name}_@{unit.first.name}_@{wire.name}
+         #{else}
+         configdata[@{counter}+:@{wire.bitsize}] <= wdata[@{wire.bitsize - 1}:0]; //  @{unit.first.name}_@{wire.name}
+         #{end}
       #{inc addr}
       #{set counter counter + wire.bitsize}
       #{end}

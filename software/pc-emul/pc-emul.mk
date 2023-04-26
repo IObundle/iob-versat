@@ -18,9 +18,11 @@ INCLUDE += -I$(VERSAT_PC_EMUL)/IMGUI
 INCLUDE += -I$(VERSAT_PC_EMUL)/IMNODES
 
 VERSAT_DEFINE += -DDEBUG_GUI
+VERILATOR_FLAGS += -Dx64
 else
 VERSAT_DEFINE += -Dx86 
 VERILATE_FLAGS += -m32
+VERILATOR_FLAGS += -Dx86
 endif
 
 VERSAT_INCLUDE := -I$(VERSAT_SW_DIR) -I$(VERSAT_PC_EMUL) -I$(VERILATOR_INCLUDE) -I$(BUILD_DIR)/ 
@@ -64,7 +66,6 @@ TYPE_INFO_HDR += $(VERSAT_PC_EMUL)/versat.hpp
 TYPE_INFO_HDR += $(VERSAT_PC_EMUL)/versatPrivate.hpp
 TYPE_INFO_HDR += $(VERSAT_PC_EMUL)/verilogParser.hpp
 TYPE_INFO_HDR += $(VERSAT_PC_EMUL)/templateEngine.hpp
-#TYPE_INFO_HDR += $(VERSAT_PC_EMUL)/scratchSpace.hpp
 TYPE_INFO_HDR += $(VERSAT_PC_EMUL)/parser.hpp
 
 TOOL_COMMON_SRC += $(VERSAT_DIR)/software/pc-emul/parser.cpp
@@ -106,7 +107,7 @@ $(BUILD_DIR)/verilated_vcd_c.o:
 	mv *.d $(BUILD_DIR)/;
 
 $(BUILD_DIR)/V%.h: $(VERSAT_HW_DIR)/src/%.v
-	verilator --trace -CFLAGS "$(VERILATE_FLAGS)" -I$(VERSAT_HW_DIR)/src -I$(VERSAT_HW_DIR)/include $(V_INCLUDE) -cc -Mdir $(BUILD_DIR) $<;
+	verilator -DPC=1 $(VERILATOR_FLAGS) --trace -CFLAGS "$(VERILATE_FLAGS)" -I$(VERSAT_HW_DIR)/src -I$(VERSAT_HW_DIR)/include $(V_INCLUDE) -cc -Mdir $(BUILD_DIR) $<;
 	$(MAKE) -C $(BUILD_DIR) -f V$*.mk;
 
 $(BUILD_DIR)/typeInfo.inc: $(BUILD_DIR)/structParser.out $(TYPE_INFO_HDR)

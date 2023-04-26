@@ -9,7 +9,7 @@
 #include "type.hpp"
 #include "textualRepresentation.hpp"
 
-bool debugVariableFlag = false;
+bool debugFlag = false;
 Arena debugArenaInst = {};
 Arena* debugArena = &debugArenaInst;
 
@@ -22,54 +22,6 @@ void InitDebug(){
 
    debugArenaInst = InitArena(Megabyte(64));
 }
-
-void CheckMemory(Accelerator* topLevel){
-   STACK_ARENA(tempInst,Kilobyte(64));
-   Arena* temp = &tempInst;
-
-   AcceleratorIterator iter = {};
-   iter.Start(topLevel,temp,true);
-
-   CheckMemory(iter);
-}
-
-void CheckMemory(Accelerator* topLevel,MemType type){
-   STACK_ARENA(tempInst,Kilobyte(64));
-   Arena* temp = &tempInst;
-
-   AcceleratorIterator iter = {};
-   iter.Start(topLevel,temp,true);
-
-   CheckMemory(iter,type,temp);
-}
-
-static void CheckMemoryPrint(const char* level,const char* name,int pos,int delta,ComplexFUInstance* inst = nullptr){ // inst is for total outputs, if the unit is composite
-   bool isComposite = (inst && inst->declaration->type == FUDeclaration::COMPOSITE);
-
-   if(delta == 1 || (isComposite && delta == 0)){
-      printf("%s%s:%d [%d",level,name,pos,delta);
-   } else if(delta > 0 || isComposite){
-      printf("%s%s:%d-%d [%d",level,name,pos,pos + delta - 1,delta);
-   } else {
-      return;
-   }
-
-   if(isComposite){
-      printf("+%d]\n",inst->declaration->totalOutputs);
-   } else {
-      printf("]\n");
-   }
-}
-
-#if 0
-static void PrintRange(int pos,int delta,bool isComposite,FUDeclaration* decl){
-   if(delta == 1){
-      printf("%d [%d]",pos,delta);
-   } else if(delta > 0 || isComposite){
-      printf("%d-%d [%d]",pos,pos + delta - 1,delta);
-   }
-}
-#endif
 
 static void PrintLevel(int level){
    for(int i = 0; i < level; i++){
@@ -230,108 +182,6 @@ CheckRangeResult CheckNoGaps(Array<Range> ranges){
    return res;
 }
 
-void CheckMemory(AcceleratorIterator iter){
-   char levelBuffer[] = "| | | | | | | | | | | | ";
-
-   Accelerator* topLevel = iter.topLevel;
-   for(InstanceNode* node = iter.Current(); node; node = iter.Next()){
-      ComplexFUInstance* inst = node->inst;
-      FUDeclaration* decl = inst->declaration;
-      levelBuffer[iter.level * 2] = '\0';
-
-      printf("%s\n",levelBuffer);
-
-      printf("%s[%.*s] %.*s:\n",levelBuffer,UNPACK_SS(inst->declaration->name),UNPACK_SS(inst->name));
-
-      if(IsConfigStatic(topLevel,inst)){
-         CheckMemoryPrint(levelBuffer,"c",inst->config - topLevel->staticAlloc.ptr,decl->configs.size);
-      } else {
-         CheckMemoryPrint(levelBuffer,"C",inst->config - topLevel->configAlloc.ptr,decl->configs.size);
-      }
-
-      UnitValues val = CalculateIndividualUnitValues(inst);
-
-      CheckMemoryPrint(levelBuffer,"S",inst->state - topLevel->stateAlloc.ptr,decl->states.size);
-      CheckMemoryPrint(levelBuffer,"D",inst->delay - topLevel->delayAlloc.ptr,decl->nDelays);
-      CheckMemoryPrint(levelBuffer,"E",inst->extraData - topLevel->extraDataAlloc.ptr,decl->extraDataSize);
-      CheckMemoryPrint(levelBuffer,"O",inst->outputs - topLevel->outputAlloc.ptr,val.outputs,inst);
-      CheckMemoryPrint(levelBuffer,"o",inst->storedOutputs - topLevel->storedOutputAlloc.ptr,val.outputs,inst);
-
-      levelBuffer[iter.level * 2] = '|';
-   }
-}
-
-void DisplayInstanceMemory(ComplexFUInstance* inst){
-   printf("%.*s\n",UNPACK_SS(inst->name));
-   printf("  C: %p\n",inst->config);
-   printf("  S: %p\n",inst->state);
-   printf("  D: %p\n",inst->delay);
-   printf("  O: %p\n",inst->outputs);
-   printf("  o: %p\n",inst->storedOutputs);
-   printf("  E: %p\n",inst->extraData);
-}
-
-static void OutputSimpleIntegers(int* mem,int size){
-   for(int i = 0; i < size; i++){
-      printf("%d ",mem[i]);
-   }
-}
-
-void DisplayAcceleratorMemory(Accelerator* topLevel){
-   printf("Config:\n");
-   OutputSimpleIntegers(topLevel->configAlloc.ptr,topLevel->configAlloc.size);
-
-   printf("\nStatic:\n");
-   OutputSimpleIntegers(topLevel->staticAlloc.ptr,topLevel->staticAlloc.size);
-
-   printf("\nDelay:\n");
-   OutputSimpleIntegers(topLevel->delayAlloc.ptr,topLevel->delayAlloc.size);
-   printf("\n");
-}
-
-void DisplayUnitConfiguration(Accelerator* topLevel){
-   STACK_ARENA(tempInst,Kilobyte(64));
-   Arena* temp = &tempInst;
-
-   AcceleratorIterator iter = {};
-   iter.Start(topLevel,temp,true);
-   DisplayUnitConfiguration(iter);
-}
-
-void DisplayUnitConfiguration(AcceleratorIterator iter){
-   Accelerator* accel = iter.topLevel;
-   Assert(accel);
-
-   for(InstanceNode* node = iter.Current(); node; node = iter.Next()){
-      ComplexFUInstance* inst = node->inst;
-      UnitValues val = CalculateIndividualUnitValues(inst);
-
-      FUDeclaration* type = inst->declaration;
-
-      if(val.configs | val.states | val.delays){
-         printf("[%.*s] %.*s:",UNPACK_SS(type->name),UNPACK_SS(inst->name));
-         if(val.configs){
-            if(IsConfigStatic(accel,inst)){
-               printf("\nStatic [%ld]: ",inst->config - accel->staticAlloc.ptr);
-            } else {
-               printf("\nConfig [%ld]: ",inst->config - accel->configAlloc.ptr);
-            }
-
-            OutputSimpleIntegers(inst->config,val.configs);
-         }
-         if(val.states){
-            printf("\nState [%ld]: ",inst->state - accel->stateAlloc.ptr);
-            OutputSimpleIntegers(inst->state,val.states);
-         }
-         if(val.delays){
-            printf("\nDelay [%ld]: ",inst->delay - accel->delayAlloc.ptr);
-            OutputSimpleIntegers(inst->delay,val.delays);
-         }
-         printf("\n\n");
-      }
-   }
-}
-
 bool CheckInputAndOutputNumber(FUDeclaration* type,int inputs,int outputs){
    if(inputs > type->inputDelays.size){
       return false;
@@ -355,74 +205,6 @@ void PrintAcceleratorInstances(Accelerator* accel){
       printf("%.*s\n",UNPACK_SS(inst->name));
    }
 }
-
-void OutputGraphDotFile_(SimpleGraph graph,bool collapseSameEdges,FILE* file){
-   fprintf(file,"digraph accel {\n\tnode [fontcolor=white,style=filled,color=\"160,60,176\"];\n");
-
-   for(int i = 0; i < graph.nodes.size; i++){
-      fprintf(file,"%d [label=\"%.*s\"]\n",i,UNPACK_SS(graph.nodes[i].decl->name));
-   }
-   for(int i = 0; i < graph.edges.size; i++){
-      SimpleEdge e = graph.edges[i];
-      fprintf(file,"%d:%d -> %d:%d\n",e.out,e.outPort,e.in,e.inPort);
-   }
-   fprintf(file,"}\n");
-}
-
-#if 0
-static void OutputGraphDotFile_(Versat* versat,AcceleratorView& view,bool collapseSameEdges,ComplexFUInstance* highlighInstance,FILE* outputFile){
-   Arena* arena = &versat->temp;
-
-   fprintf(outputFile,"digraph accel {\n\tnode [fontcolor=white,style=filled,color=\"160,60,176\"];\n");
-   for(ComplexFUInstance** instPtr : view.nodes){
-      ComplexFUInstance* inst = *instPtr;
-      String id = UniqueRepr(inst,arena);
-      String name = Repr(inst,versat->debug.dotFormat,arena);
-
-      if(inst == highlighInstance){
-         fprintf(outputFile,"\t\"%.*s\" [color=blue,label=\"%.*s\"];\n",UNPACK_SS(id),UNPACK_SS(name));
-      } else {
-         fprintf(outputFile,"\t\"%.*s\" [label=\"%.*s\"];\n",UNPACK_SS(id),UNPACK_SS(name));
-      }
-   }
-
-   std::set<std::pair<ComplexFUInstance*,ComplexFUInstance*>> sameEdgeCounter;
-
-   // TODO: Consider adding a true same edge counter, that collects edges with equal delay and then represents them on the graph as a pair, using [portStart-portEnd]
-   for(EdgeView* edgeView : view.edges){
-      Edge* edge = edgeView->edge;
-      if(collapseSameEdges){
-         std::pair<ComplexFUInstance*,ComplexFUInstance*> key{edge->units[0].inst,edge->units[1].inst};
-
-         if(sameEdgeCounter.count(key) == 1){
-            continue;
-         }
-
-         sameEdgeCounter.insert(key);
-      }
-
-      String first = UniqueRepr(edge->units[0].inst,arena);
-      String second = UniqueRepr(edge->units[1].inst,arena);
-      PortInstance start = edge->units[0];
-      PortInstance end = edge->units[1];
-      String label = Repr(start,end,versat->debug.dotFormat,arena);
-      int calculatedDelay = edgeView->delay;
-
-      bool highlight = (start.inst == highlighInstance || end.inst == highlighInstance);
-
-      fprintf(outputFile,"\t\"%.*s\" -> ",UNPACK_SS(first));
-      fprintf(outputFile,"\"%.*s\"",UNPACK_SS(second));
-
-      if(highlight){
-         fprintf(outputFile,"[color=blue,label=\"%.*s\\n[%d:%d]\"];\n",UNPACK_SS(label),edge->delay,calculatedDelay);
-      } else {
-         fprintf(outputFile,"[label=\"%.*s\\n[%d:%d]\"];\n",UNPACK_SS(label),edge->delay,calculatedDelay);
-      }
-   }
-
-   fprintf(outputFile,"}\n");
-}
-#endif
 
 static void OutputGraphDotFile_(Versat* versat,Accelerator* accel,bool collapseSameEdges,Set<ComplexFUInstance*>* highlighInstance,FILE* outputFile){
    Arena* arena = &versat->temp;

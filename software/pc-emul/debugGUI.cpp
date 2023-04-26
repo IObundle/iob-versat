@@ -16,6 +16,7 @@
 #endif
 #include "imnodes.h"
 
+#include "debug.hpp"
 #include "utils.hpp"
 #include "type.hpp"
 #include "textualRepresentation.hpp"
@@ -386,7 +387,7 @@ String DebugValueRepresentation(Value val,Arena* arena){
       repr = Repr(decl,arena);
    } else if(type == ComplexInstanceType){
       auto inst = (ComplexFUInstance*) collapsed.custom;
-      repr = inst->name;
+      repr = PushString(arena,"[%p] %.*s",collapsed.custom,UNPACK_SS(inst->name));
    } else if(type == WireType){
       auto wire = (Wire*) collapsed.custom;
       repr = PushString(arena,"%.*s(%d)",UNPACK_SS(wire->name),wire->bitsize);
@@ -774,7 +775,7 @@ void OutputAcceleratorRunValues(InstanceNode* node,Arena* arena){
    ComplexFUInstance* inst = node->inst;
 
    if(ImGui::CollapsingHeader("Config")){
-      Array<int> arr = {};
+      Array<iptr> arr = {};
       arr.data = inst->config;
       arr.size = inst->declaration->configs.size;
 
@@ -858,11 +859,11 @@ void OutputAcceleratorStaticValues(Accelerator* accel,Arena* arena){
    if(ImGui::CollapsingHeader("Static")){
       if(ImGui::BeginTable("split",2,ImGuiTableFlags_RowBg)){
          int index = 0;
-         for(auto info : accel->staticInfo){
+         for(auto info : accel->staticUnits){
             BLOCK_REGION(arena);
 
-            String repr1 = Repr(info->id,arena);
-            String repr2 = Repr(info->data,arena);
+            String repr1 = Repr(info.first,arena);
+            String repr2 = Repr(info.second,arena);
 
             ImGui::TableNextRow();
             ImGui::TableNextColumn(); ImGui::Text("[%d] %.*s",index++,UNPACK_SS(repr1));
@@ -925,11 +926,14 @@ InstanceNode* GetInstanceFromName(Accelerator* accel,String string,Arena* arena)
    return nullptr;
 }
 
-void DebugGUI(Arena* arena){
-   static bool permanentlyDone = false;
+void DebugGUI(){
+      static bool permanentlyDone = false;
    if(permanentlyDone){
       return;
    }
+
+   Arena* arena = debugArena;
+   BLOCK_REGION(arena);
 
    SDL_Window* window = InitWindow();
    ImGuiIO& io = ImGui::GetIO();
@@ -1030,7 +1034,7 @@ void DebugGUI(Arena* arena){
                         }
 
                         OutputAcceleratorRunValues(inst,arena);
-                        OutputAcceleratorStaticValues(accel,arena);
+                        //OutputAcceleratorStaticValues(accel,arena);
                      }
                      ImGui::EndChild();
                   }
@@ -1164,7 +1168,7 @@ void DebugGUI(Arena* arena){
                   }
 
                   OutputAcceleratorRunValues(node,arena);
-                  OutputAcceleratorStaticValues(accel,arena);
+                  //OutputAcceleratorStaticValues(accel,arena);
                }
 
                ImGui::EndChild();
@@ -1253,38 +1257,38 @@ static void ClearState(){
 }
 
 void DebugVersat(Versat* versat){
-   DebugValue("Versat",MakeValue(versat,"Versat"),&versat->temp);
+   DebugValue("Versat",MakeValue(versat,"Versat"));
 }
 
-void DebugAccelerator(Accelerator* accel,Arena* arena){
+void DebugAccelerator(Accelerator* accel){
    selectedAccelerator = accel;
-   DebugGUI(arena);
+   DebugGUI();
 
    ClearState();
 }
 
-void DebugAcceleratorPersist(Accelerator* accel,Arena* arena){
+void DebugAcceleratorPersist(Accelerator* accel){
    if(!selectedAccelerator || (selectedAccelerator && selectedAccelerator.value() != accel)){
       ClearState();
    }
 
    selectedAccelerator = accel;
-   DebugGUI(arena);
+   DebugGUI();
 }
 
-void DebugAcceleratorStart(Accelerator* accel,Arena* arena){
+void DebugAcceleratorStart(Accelerator* accel){
    if(!selectedAccelerator || (selectedAccelerator && selectedAccelerator.value() != accel)){
       ClearState();
    }
 
    cycle = -1;
    selectedAccelerator = accel;
-   DebugGUI(arena);
+   DebugGUI();
 }
 
-void DebugAcceleratorEnd(Accelerator* accel,Arena* arena){
+void DebugAcceleratorEnd(Accelerator* accel){
    last = true;
-   DebugGUI(arena);
+   DebugGUI();
    ClearState();
 }
 
@@ -1323,7 +1327,7 @@ void DebugWindowAccelerator(const char* label,Accelerator* accel){
    printf("Too many debug windows open\n");
 }
 
-void DebugValue(const char* windowName,Value val,Arena* arena){
+void DebugValue(const char* windowName,Value val){
    ClearState();
 
    ClearWindowState(&valueWindowState,0);
@@ -1331,7 +1335,7 @@ void DebugValue(const char* windowName,Value val,Arena* arena){
    valueWindowState.startValue = val;
    valueWindowState.init = true;
 
-   DebugGUI(arena);
+   DebugGUI();
 }
 
 #endif

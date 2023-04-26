@@ -158,6 +158,24 @@ void OutputVersatSource(Versat* versat,SimpleAccelerator* simpleAccel,const char
       }
    }
 
+   Hashmap<StaticId,StaticData>* staticUnits = PushHashmap<StaticId,StaticData>(arena,accel->staticUnits.size());
+   for(InstanceNode* node = iter.Start(accel,arena,true); node; node = iter.Next()){
+      if(node->inst->isStatic){
+         InstanceNode* parent = iter.ParentInstance();
+
+         StaticId id = {};
+         id.parent = parent ? parent->inst->declaration : nullptr;
+         id.name = node->inst->name;
+
+         StaticData data = {};
+         data.configs = node->inst->declaration->configs;
+         data.offset = node->inst->config - accel->staticAlloc.ptr;
+
+         staticUnits->Insert(id,data);
+      }
+   }
+   TemplateSetCustom("staticUnits",staticUnits,"Hashmap<StaticId,StaticData>");
+
    TemplateSetNumber("staticStart",staticStart);
    TemplateSetNumber("versatBase",versat->base);
    TemplateSetNumber("memoryAddressBits",val.memoryAddressBits);

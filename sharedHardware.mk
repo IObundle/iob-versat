@@ -17,4 +17,5 @@ VSRC+=$(VERSAT_DIR)/submodules/MEM/hardware/ram/2p_ram/iob_2p_ram.v # used by vr
 VSRC+=$(VERSAT_DIR)/submodules/MEM/hardware/ram/dp_ram/iob_dp_ram.v # Lookup table
 VSRC+=$(VERSAT_DIR)/submodules/MEM/hardware/fifo/sfifo/iob_sync_fifo.v
 VSRC+=$(VERSAT_DIR)/submodules/MEM/hardware/fifo/bin_counter.v
+VSRC+=$(VERSAT_DIR)/submodules/FPU/submodules/DIV/hardware/src/div_subshift.v
 VSRC+=$(wildcard $(VERSAT_DIR)/submodules/FPU/hardware/src/*.v)

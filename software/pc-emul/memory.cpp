@@ -117,7 +117,7 @@ Byte* PushBytes(Arena* arena, size_t size){
    Byte* ptr = &arena->mem[arena->used];
 
    if(arena->used + size > arena->totalAllocated){
-      printf("[%s] Used: %d, Size: %d, Total: %d\n",__PRETTY_FUNCTION__,arena->used,size,arena->totalAllocated);
+      printf("[%s] Used: %zd, Size: %zd, Total: %zd\n",__PRETTY_FUNCTION__,arena->used,size,arena->totalAllocated);
       DEBUG_BREAK();
    }
 
@@ -180,7 +180,8 @@ String vPushString(Arena* arena,const char* format,va_list args){
    size_t maximum = arena->totalAllocated - arena->used;
    int size = vsnprintf(buffer,maximum,format,args);
 
-   Assert(size < maximum);
+   Assert(size >= 0);
+   Assert(((size_t) size) < maximum);
 
    arena->used += (size_t) (size);
 

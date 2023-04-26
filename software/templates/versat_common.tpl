@@ -19,7 +19,7 @@
 #{set inst2 portNode.node.inst}
 #{set decl2 inst2.declaration}
    #{if decl2.type == 2}
-      #{return "in" # inst2.id}
+      #{return "in" # inst2.portIndex}
    #{else}
       #{if decl2.isOperation}
          #{if decl2.outputLatencies[0] == 0}
@@ -32,7 +32,7 @@
       #{end}
    #{end}
 #{else}
-#{return ""}
+#{return "0"}
 #{end}
 #{end}
 

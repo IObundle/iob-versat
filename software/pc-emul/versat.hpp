@@ -14,7 +14,7 @@ struct FUInstance{
 
    // Embedded memory
    int* memMapped;
-   int* config;
+   iptr* config;
    int* state;
    int* delay;
    int* externalMemory;
@@ -137,14 +137,12 @@ void OutputUnitInfo(FUInstance* instance);
 void DisplayAcceleratorMemory(Accelerator* topLevel);
 void DisplayUnitConfiguration(Accelerator* topLevel);
 void EnterDebugTerminal(Versat* versat);
-void CheckMemory(Accelerator* topLevel);
-void CheckMemory(Accelerator* topLevel,MemType type);
 
 #ifdef x86
 #define DebugAccelerator(...) ((void)0)
 #define DebugVersat(...) ((void)0)
 #else
-void DebugAccelerator(Accelerator* accel,Arena* temp);
+void DebugAccelerator(Accelerator* accel);
 void DebugVersat(Versat* versat);
 #endif
 

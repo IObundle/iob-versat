@@ -1,5 +1,6 @@
 #include "utils.hpp"
 
+#include <cinttypes>
 #include <limits>
 
 extern "C"{
@@ -13,11 +14,11 @@ int printf_(const char* format, ...);
 void TimeIt::Output(){
    char buffer[32];
    // Cannot use floating point because of embedded
-   MicroSecond end = GetTime();
+   NanoSecond end = GetTime();
 
    uint64 diff = end.time - start.time;
    int digits = NumberDigitsRepresentation(diff);
-   sprintf(buffer,"%d",diff);
+   sprintf(buffer,"%" PRId64,diff);
 
    printf("[TimeIt] %s: ",id);
 
@@ -34,6 +35,17 @@ void TimeIt::Output(){
       }
    }
    printf("\n");
+}
+
+NanoSecond operator-(const NanoSecond& s1,const NanoSecond& s2){
+   NanoSecond res = {};
+   res.time = s1.time - s2.time;
+   return res;
+}
+
+bool operator>(const NanoSecond& s1,const NanoSecond& s2){
+   bool res = s1.time > s2.time;
+   return res;
 }
 
 // Misc
@@ -85,7 +97,7 @@ unsigned int AlignBitBoundary(unsigned int val,int numberBits){ // Align value s
       return val;
    }
 
-   Assert(numberBits < sizeof(val) * 8);
+   Assert(((size_t) numberBits) < sizeof(val) * 8);
 
    unsigned int lowerVal = MASK_VALUE(val,numberBits);
    if(lowerVal == 0){

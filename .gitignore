@@ -1,4 +1,5 @@
 software/*.out
 software/*.exe
 
-software/pc-emul/versat_instance_template.h
+software/pc-emul/IMGUI/
+software/pc-emul/IMNODES/

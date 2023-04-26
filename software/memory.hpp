@@ -24,6 +24,7 @@ void DeallocatePages(void* ptr,int pages);
 long PagesAvailable();
 void CheckMemoryStats();
 
+// Similar to std::vector but reallocations can only be done explicitly. No random reallocations or bugs from their random occurance
 template<typename T>
 struct Allocation{
    T* ptr;
@@ -31,15 +32,14 @@ struct Allocation{
    int reserved;
 };
 
-template<typename T> bool ZeroOutAlloc(Allocation<T>* alloc,int newSize); // Possible reallocs (returns true if so) but clears all memory allocated to zero
-template<typename T> bool ZeroOutRealloc(Allocation<T>* alloc,int newSize); // Returns true if it actually performed reallocation
-template<typename T> void Reserve(Allocation<T>* alloc,int reservedSize);
+template<typename T> bool ZeroOutAlloc(Allocation<T>* alloc,int newSize); // Clears all memory, returns true if reallocation occurs
+template<typename T> bool ZeroOutRealloc(Allocation<T>* alloc,int newSize); // Only clears memory from buffer growth, returns true if reallocation occurs
 template<typename T> void RemoveChunkAndCompress(Allocation<T>* alloc,T* ptr,int size);
-template<typename T> void Alloc(Allocation<T>* alloc,int newSize);
 template<typename T> bool Inside(Allocation<T>* alloc,T* ptr);
 template<typename T> void Free(Allocation<T>* alloc);
-//template<typename T> int MemoryUsage(Allocation<T> alloc);
+template<typename T> T* Push(Allocation<T>* alloc, int amount); // Fails if not enough memory
 
+// A wrapper for a "push" type interface for a block of memory
 template<typename T>
 class PushPtr{
 public:
@@ -168,6 +168,7 @@ Array<T> PointArray(Arena* arena,Byte* mark){String data = PointArena(arena,mark
 template<typename T>
 T* PushStruct(Arena* arena){T* res = (T*) PushBytes(arena,sizeof(T)); return res;};
 
+// Arena that allocates more blocks of memory like a list.
 struct DynamicArena{
    DynamicArena* next;
    Byte* mem;
@@ -246,7 +247,7 @@ struct GetOrAllocateResult{
    bool alreadyExisted;
 };
 
-// An hashmap implementation for arenas. Does not allocate any memory after construction. Construct with PushHashmap function
+// An hashmap implementation for arenas. Does not allocate any memory after construction and also iterates by order of insertion. Construct with PushHashmap function
 template<typename Key,typename Data>
 struct Hashmap{
    int nodesAllocated;
@@ -374,7 +375,7 @@ public:
 PoolInfo CalculatePoolInfo(int elemSize);
 PageInfo GetPageInfo(PoolInfo poolInfo,Byte* page);
 
-// Pool
+// A vector like class except no reallocations. Useful for storing entities that cannot be reallocated.
 template<typename T>
 struct Pool{
    Byte* mem; // TODO: replace with PoolHeader instead of using Byte and casting

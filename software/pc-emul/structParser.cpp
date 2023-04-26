@@ -703,19 +703,7 @@ void OutputRegisterTypesFunction(FILE* output){
       }
    }
 
-   // HACK, with more time, resolve these. Basically just need to make sure that we correctly identify which are template params or not
-   #if 0
    seen.insert(STRING("void"));
-   seen.insert(STRING("const"));
-   seen.insert(STRING("T"));
-   seen.insert(STRING("Array<Pair<Key,Data>>"));
-   seen.insert(STRING("Pair<Key,Data>"));
-   seen.insert(STRING("HashmapNode"));
-   seen.insert(STRING("Array<HashmapNode<Key,Data>*>"));
-   seen.insert(STRING("Array<HashmapNode<Key,Data>>"));
-   seen.insert(STRING("HashmapHeader<Key,Data>"));
-   seen.insert(STRING("Data"));
-   #endif
 
    fprintf(output,"#pragma GCC diagnostic ignored \"-Winvalid-offsetof\"\n");
    fprintf(output,"static void RegisterParsedTypes(){\n");

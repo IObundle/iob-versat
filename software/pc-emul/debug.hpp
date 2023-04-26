@@ -4,29 +4,22 @@
 #include "type.hpp"
 
 // Set this during debugging (either in code or by using gdb set command) and check using the macros below for better control on debugging events
-extern bool debugVariableFlag;
+extern bool debugFlag;
 
 // Useful to have a bit of memory for debugging
 extern Arena* debugArena;
 
 void InitDebug();
 
-#define DEBUG_CONTROLLED_BREAK() DEBUG_BREAK_IF(debugVariableFlag)
-#define DEBUG_CONTROLLED_BREAK_IF(COND) DEBUG_BREAK_IF(debugVariableFlag && (COND))
+#define DEBUG_CONTROLLED_BREAK() DEBUG_BREAK_IF(debugFlag)
+#define DEBUG_CONTROLLED_BREAK_IF(COND) DEBUG_BREAK_IF(debugFlag && (COND))
 
-#define debugControlledRegion() if(debugVariableFlag)
-#define debugControlledRegionIf(COND) if(debugVariableFlag && (COND))
+#define debugControlledRegion() if(debugFlag)
+#define debugControlledRegionIf(COND) if(debugFlag && (COND))
 
 typedef void (*SignalHandler)(int sig);
 
 String FuzzText(String formattedExample,Arena* arena,int seed = COMPILE_TIME); // Pass a string of valid tokens separated by spaces
-
-void CheckMemory(AcceleratorIterator iter);
-void CheckMemory(AcceleratorIterator iter,MemType type,Arena* arena);
-void DisplayInstanceMemory(ComplexFUInstance* inst);
-void DisplayAcceleratorMemory(Accelerator* topLevel);
-void DisplayUnitConfiguration(Accelerator* topLevel);
-void DisplayUnitConfiguration(AcceleratorIterator iter);
 
 //bool IsGraphValid(AcceleratorView view);
 void OutputGraphDotFile(Versat* versat,Accelerator* accel,bool collapseSameEdges,const char* filenameFormat,...);

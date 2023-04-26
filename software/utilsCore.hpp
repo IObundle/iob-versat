@@ -74,6 +74,13 @@ void FlushStdout();
 #define Assert(EXPR) do {} while(0)
 #endif
 
+// Assert that gets replaced by the expression if debug is disabled (instead of simply disappearing like a normal assert)
+#if defined(VERSAT_DEBUG)
+#define AssertAndDo(EXPR) Assert(EXPR)
+#else
+#define AssertAndDo(EXPR) EXPR
+#endif
+
 #define DEBUG_BREAK() do{ FlushStdout(); raise(SIGTRAP); } while(0)
 #define DEBUG_BREAK_IF(COND) if(COND){FlushStdout(); raise(SIGTRAP);}
 
@@ -132,16 +139,20 @@ typedef uint64_t uint64;
 //typedef long long unsigned int uint64;
 #endif
 
-struct MicroSecond{
+struct NanoSecond{
    uint64 time;
 };
 
-MicroSecond GetTime();
+NanoSecond GetTime();
+NanoSecond operator-(const NanoSecond& s1,const NanoSecond& s2);
+bool operator>(const NanoSecond& s1,const NanoSecond& s2);
+
+static constexpr NanoSecond Seconds(uint64 seconds){return (NanoSecond){seconds * 1000000000};};
 
 // Automatically times a block in number of counts
 class TimeIt{
 public:
-	MicroSecond start;
+	NanoSecond start;
    const char* id;
    bool endedEarly;
 
@@ -244,7 +255,7 @@ struct Pair{
       Second data;
       Second second;
    };
-} __attribute__((packed));
+} /* __attribute__((packed)) */;
 
 template<typename F,typename S>
 static bool operator==(const Pair<F,S>& p1,const Pair<F,S>& p2){

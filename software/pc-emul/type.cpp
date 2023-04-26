@@ -1,5 +1,7 @@
 #include "type.hpp"
 
+#include <cinttypes>
+
 #include "parser.hpp"
 #include "versatPrivate.hpp"
 
@@ -184,7 +186,7 @@ Type* GetSpecificType(String name){
    return nullptr;
 }
 
-Type* InstantiateTemplate(String name){
+Type* InstantiateTemplate(String name,Arena* arena = nullptr){
    STACK_ARENA(temp,Kilobyte(4));
    Tokenizer tok(name,"<>,",{});
 
@@ -278,6 +280,10 @@ Type* InstantiateTemplate(String name){
       newType = types.Alloc();
    }
 
+   if(arena){
+      name = PushString(arena,"%.*s",UNPACK_SS(name));
+   }
+
    newType->type = Type::TEMPLATED_INSTANCE;
    newType->name = name;
    newType->members = members;
@@ -305,7 +311,7 @@ Type* GetType(String name){
 
    Type* res = nullptr;
    if(CompareString(name,templatedName)){ // Name equal to templated name means that no pointers or arrays, only templated arguments are not found
-      Type* res = InstantiateTemplate(name);
+      Type* res = InstantiateTemplate(name,&permanentArena);
       return res;
    } else if(templatedName.size > 0){
       res = GetType(templatedName);
@@ -466,7 +472,7 @@ String GetDefaultValueRepresentation(Value in,Arena* arena){
    String res = {};
 
    if(val.type == ValueType::NUMBER){
-      res = PushString(arena,"%lld",val.number);
+      res = PushString(arena,"%" PRId64,val.number);
    } else if(val.type == ValueType::STRING){
       if(val.literal){
          res = PushString(arena,"\"%.*s\"",UNPACK_SS(val.str));
@@ -496,7 +502,7 @@ String GetDefaultValueRepresentation(Value in,Arena* arena){
    } else if(type->type == Type::TEMPLATED_INSTANCE){
       if(type->templateBase == ValueType::ARRAY){
          Value size = AccessStruct(val,STRING("size"));
-         res = PushString(arena,"Size:%lld",size.number);
+         res = PushString(arena,"Size:%" PRId64,size.number);
       } else {
          res = PushString(arena,"%.*s",UNPACK_SS(type->name));// Return type name
       }
@@ -622,6 +628,9 @@ Value AccessObjectIndex(Value object,int index){
    } else if(object.type->type == Type::TEMPLATED_INSTANCE){
       if(object.type->templateBase == ValueType::ARRAY){
          Array<Byte>* byteArray = (Array<Byte>*) object.custom;
+
+         int arrayLength = byteArray->size;
+         Assert(index < arrayLength);
 
          int size = object.type->templateArgTypes[0]->size;
          Byte* view = (Byte*) byteArray->data;
