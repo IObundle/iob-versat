@@ -197,12 +197,16 @@ end
 #{set statesSeen 0}
 #{set doneCounter 0}
 #{for node instances}
+#{set temp index}
 #{set inst node.inst}
 #{set decl inst.declaration}
    #{if (decl != inputDecl and decl != outputDecl and !decl.isOperation)}
       @{decl.name} @{inst.parameters} @{inst.name |> Identify}_@{counter} (
-         #{for j node.outputs}
+         #{for j node.outputs} #{if j}
             .out@{index}(output_@{inst.id}_@{index}),
+         #{else}
+            .out@{index}(),
+         #{end}
          #{end}
 
          #{for input node.inputs}
@@ -219,9 +223,9 @@ end
          #{end}
 
          #{else}
-         #{set configStart accel.configOffsets.offsets[counter]}
+         #{set configStart accel.configOffsets.offsets[temp]}
          #{for wire decl.configs}
-         .@{wire.name}(@{accel.configs[configStart + index].name}),
+         .@{wire.name}(@{accel.configs[configStart + index].name}), // @{configStart + index}
          #{end}
          #{for unit decl.staticUnits}         
          #{set id unit.first}
