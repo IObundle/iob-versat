@@ -565,6 +565,8 @@ void StartDebugTerminal(){
 void DebugTerminal(Value val){
 }
 
+#include "templateData.inc"
+
 int main(int argc,const char* argv[]){
    if(argc < 4){
       printf("Error, need at least 4 arguments: <program> <namespace> <outputFile> <inputFile1> ...");
@@ -762,7 +764,7 @@ int main(int argc,const char* argv[]){
    FILE* output = OpenFileAndCreateDirectories(argv[2],"w");
    TemplateSetString("namespace",argv[1]);
    fflush(stdout);
-   CompiledTemplate* comp = CompileTemplate("../../submodules/VERSAT/software/templates/unit_verilog_data.tpl",tempArena);
+   CompiledTemplate* comp = CompileTemplate(unit_verilog_data,tempArena);
    ProcessTemplate(output,comp,tempArena);
 
    return 0;

@@ -1,7 +1,5 @@
 #include <cstdio>
 
-#define STRUCT_PARSER
-
 #include "parser.hpp"
 #include "utils.hpp"
 

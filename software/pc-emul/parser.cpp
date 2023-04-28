@@ -225,6 +225,26 @@ Token Tokenizer::PeekFindIncluding(const char* str){
    return tok;
 }
 
+Token Tokenizer::PeekFindIncludingLast(const char* str){
+   void* mark = Mark();
+
+   while(!Done()){
+      Token peek = PeekFindIncluding(str);
+
+      if(peek.size <= 0){
+         break;
+      }
+
+      AdvancePeek(peek);
+   }
+
+   String res = Point(mark);
+
+   Rollback(mark);
+
+   return res;
+}
+
 FindFirstResult Tokenizer::FindFirst(std::initializer_list<const char*> strings){
    Token peekFind = {};
    peekFind.size = -1;

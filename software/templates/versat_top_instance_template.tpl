@@ -180,10 +180,7 @@ assign wor_ready = (|unitReady);
 
 #{if versatValues.numberConnections}
 wire [31:0] #{join ", " for node instances}
-   #{if node.outputs} 
-      #{join ", " for j node.outputs} output_@{node.inst.id}_@{j} #{end}
-   #{else}
-      unused_@{node.inst.id} #{end}
+   #{join ", " for j node.outputs} #{if j} output_@{node.inst.id}_@{index} #{end} #{end}
 #{end};
 #{end}
 
@@ -297,9 +294,12 @@ end
 #{set inst node.inst}
 #{set decl inst.declaration}
    @{decl.name} @{inst.parameters} @{inst.name |> Identify}_@{counter} (
-      #{for i node.outputs}
-         .out@{i}(output_@{inst.id}_@{i}),
-      #{end} 
+      #{for j node.outputs} #{if j}
+         .out@{index}(output_@{inst.id}_@{index}),
+      #{else}
+         .out@{index}(),
+      #{end}
+      #{end}
 
       #{for input node.inputs}
       #{if input.node}

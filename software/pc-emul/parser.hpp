@@ -58,6 +58,7 @@ public:
 
    Token PeekFindUntil(const char* str);
    Token PeekFindIncluding(const char* str);
+   Token PeekFindIncludingLast(const char* str);
    Token NextFindUntil(const char* str);
 
    String GetStartOfCurrentLine();

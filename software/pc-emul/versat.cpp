@@ -26,6 +26,7 @@ static Array<int> zerosArray = {zeros,99};
 #define IMPLEMENT_VERILOG_UNITS
 #include "basicWrapper.inc"
 #include "verilogWrapper.inc"
+#include "templateData.inc"
 
 static int ones[64] = {1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1};
 static int* DefaultInitFunction(ComplexFUInstance* inst){
@@ -290,12 +291,12 @@ Versat* InitVersat(int base,int numberConfigurations){
    versat->permanent = InitArena(Megabyte(256));
 
    // Technically, if more than 1 versat in the future, could move this outside
-   BasicTemplates::acceleratorTemplate = CompileTemplate("../../submodules/VERSAT/software/templates/versat_accelerator_template.tpl",&versat->permanent);
-   BasicTemplates::topAcceleratorTemplate = CompileTemplate("../../submodules/VERSAT/software/templates/versat_top_instance_template.tpl",&versat->permanent);
-   BasicTemplates::dataTemplate = CompileTemplate("../../submodules/VERSAT/software/templates/embedData.tpl",&versat->permanent);
-   BasicTemplates::externalPortmapTemplate = CompileTemplate("../../submodules/VERSAT/software/templates/external_memory_portmap.tpl",&versat->permanent);
-   BasicTemplates::externalPortTemplate = CompileTemplate("../../submodules/VERSAT/software/templates/external_memory_port.tpl",&versat->permanent);
-   BasicTemplates::externalInstTemplate = CompileTemplate("../../submodules/VERSAT/software/templates/external_memory_inst.tpl",&versat->permanent);
+   BasicTemplates::acceleratorTemplate = CompileTemplate(versat_accelerator_template,&versat->permanent);
+   BasicTemplates::topAcceleratorTemplate = CompileTemplate(versat_top_instance_template,&versat->permanent);
+   BasicTemplates::dataTemplate = CompileTemplate(embedData,&versat->permanent);
+   BasicTemplates::externalPortmapTemplate = CompileTemplate(external_memory_portmap,&versat->permanent);
+   BasicTemplates::externalPortTemplate = CompileTemplate(external_memory_port,&versat->permanent);
+   BasicTemplates::externalInstTemplate = CompileTemplate(external_memory_inst,&versat->permanent);
 
    FUDeclaration nullDeclaration = {};
    nullDeclaration.inputDelays = Array<int>{zeros,1};

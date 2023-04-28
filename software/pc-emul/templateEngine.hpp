@@ -38,8 +38,9 @@ struct CompiledTemplate{
    // Followed by file name, then content and then the block/expression structure
 };
 
-void ProcessTemplate(FILE* outputFile,const char* templateFilepath,Arena* arena);
 void ProcessTemplate(FILE* outputFile,CompiledTemplate* compiledTemplate,Arena* arena);
+void ProcessTemplate(FILE* outputFile,const char* templateFilepath,Arena* arena);
+CompiledTemplate* CompileTemplate(String content,Arena* arena);
 CompiledTemplate* CompileTemplate(const char* templateFilepath,Arena* arena);
 
 void TemplateSetCustom(const char* id,void* entity,const char* typeName);
