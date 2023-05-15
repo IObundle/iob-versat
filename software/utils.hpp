@@ -24,4 +24,16 @@ Array<IndexedStruct<T>> IndexArray(Array<T> array,Arena* arena){
    return res;
 }
 
+template<typename T>
+Array<T*> ListToArray(T* head,int size,Arena* arena){
+   Array<T*> arr = PushArray<T*>(arena,size);
+
+   int i = 0;
+   FOREACH_LIST_INDEXED(ptr,head,i){
+      arr[i] = ptr;
+   }
+
+   return arr;
+}
+
 #endif // INCLUDED_UTILS_HPP

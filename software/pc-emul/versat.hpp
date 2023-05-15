@@ -111,6 +111,8 @@ void ConnectUnitsIfNotConnected(FUInstance* out,int outIndex,FUInstance* in,int 
 // Read/Write to unit
 void VersatUnitWrite(FUInstance* instance,int address, int value);
 int VersatUnitRead(FUInstance* instance,int address);
+void VersatMemoryCopy(FUInstance* instance,int* dest,int* data,int size);
+void VersatMemoryCopy(FUInstance* instance,int* dest,Array<int> data);
 
 // Unit default configuration and configuration sharing
 void SetDefaultConfiguration(FUInstance* inst);
@@ -120,7 +122,7 @@ void SetStatic(Accelerator* accel,FUInstance* inst);
 // Declaration functions
 FUDeclaration* RegisterFU(Versat* versat,FUDeclaration declaration);
 FUDeclaration* GetTypeByName(Versat* versat,String str);
-FUDeclaration* RegisterIterativeUnit(Versat* versat,IterativeUnitDeclaration* decl); // TODO: Cannot let the IterativeUnitDeclaration leak to the public interface.
+FUDeclaration* RegisterIterativeUnit(Versat* versat,Accelerator* accel,FUInstance* inst,int latency,String name);
 FUDeclaration* RegisterSubUnit(Versat* versat,String name,Accelerator* accel);
 FUDeclaration* MergeAccelerators(Versat* versat,FUDeclaration* accel1,FUDeclaration* accel2,String name,int flatteningOrder = 99,
                                  MergingStrategy strategy = MergingStrategy::CONSOLIDATION_GRAPH,SpecificMerge* specifics = nullptr,int nSpecifics = 0);
@@ -165,6 +167,7 @@ int GetInputPortNumber(FUInstance* inputInstance);
 
 // General hook function for debugging purposes
 int CalculateMemoryUsage(Versat* versat); // Not accurate, but returns the biggest amount of memory usage.
+void VersatSimDebug(Versat* versat);
 void Hook(Versat* versat,FUDeclaration* decl,Accelerator* accel,FUInstance* inst);
 
 void TestVersatSide(Versat* versat); // Calls tests from versat side

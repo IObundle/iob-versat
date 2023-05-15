@@ -279,9 +279,13 @@ char* StaticFormat(const char* format,...);
 int RoundUpDiv(int dividend,int divisor);
 int log2i(int value); // Log function customized to calculating bits needed for a number of possible addresses (ex: log2i(1024) = 10)
 int AlignNextPower2(int val);
+int Align(int val,int alignment);
 unsigned int AlignBitBoundary(unsigned int val,int numberBits); // Align value so the lower numberBits are all zeros
 bool IsPowerOf2(int val);
 int RandomNumberBetween(int minimum,int maximum,int randomValue);
+
+void Print(Array<int> array,int digitSize = 0);
+int GetMaxDigitSize(Array<int> array);
 
 // Math related functions
 int RolloverRange(int min,int val,int max);

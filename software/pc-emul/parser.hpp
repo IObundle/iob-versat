@@ -58,6 +58,7 @@ public:
 
    Token PeekFindUntil(const char* str);
    Token PeekFindIncluding(const char* str);
+   Token PeekFindIncludingLast(const char* str);
    Token NextFindUntil(const char* str);
 
    String GetStartOfCurrentLine();
@@ -116,4 +117,30 @@ bool IsNum(char ch);
 typedef Expression* (*ParsingFunction)(Tokenizer* tok,Arena* arena);
 Expression* ParseOperationType(Tokenizer* tok,std::initializer_list<std::initializer_list<const char*>> operators,ParsingFunction finalFunction,Arena* tempArena);
 
+/*
+struct Trie{
+   int value;
+};
+
+struct TokenizerTable{
+
+};
+
+struct TokenizerSpecialChars{
+   String string;
+   int tokenNumber;
+};
+
+static TokenizerTable* CompileTokenizer(Array<TokenizerSpecialChars> specialChars,Arena* arena){
+
+}
+
+TokenizerSpecialChars[] = {{"-",TOKEN_MINUS,},
+                           {"+",TOKEN_ADD,}};
+
+*/
+
 #endif // INCLUDED_PARSER
+
+
+

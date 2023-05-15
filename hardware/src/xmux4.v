@@ -8,7 +8,8 @@ module xmux4 #(
     //control
     input                         clk,
     input                         rst,
-    
+    input                         running,
+
     input                         run,
     output                        done,
 

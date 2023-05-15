@@ -14,6 +14,7 @@ module Muladd #(
                 input                        rst,
                 input                        clk,
                 input                        run,
+                input                        running,
                 output reg                   done,
 
                 input [DATA_W-1:0]           in0,

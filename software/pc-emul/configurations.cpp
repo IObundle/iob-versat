@@ -200,6 +200,11 @@ CalculatedOffsets ExtractConfig(Accelerator* accel,Arena* out){
       for(InstanceNode* node = iter.Start(accel,out,true); node; node = iter.Next(),index += 1){
          ComplexFUInstance* inst = node->inst;
          int config = 0;
+         if(inst->config == nullptr){
+            offsets[index] = -1;
+            continue;
+         }
+
          if(IsConfigStatic(accel,inst)){
             config = inst->config - accel->staticAlloc.ptr + maxConfig;
          } else {
@@ -225,6 +230,12 @@ CalculatedOffsets ExtractState(Accelerator* accel,Arena* out){
    int max = 0;
    for(InstanceNode* node = iter.Start(accel,out,true); node; node = iter.Next(),index += 1){
       ComplexFUInstance* inst = node->inst;
+
+      if(inst->state == nullptr){
+         offsets[index] = -1;
+         continue;
+      }
+
       int state = inst->state - accel->stateAlloc.ptr;
       max = std::max(state,max);
       offsets[index] = state;
@@ -245,6 +256,12 @@ CalculatedOffsets ExtractDelay(Accelerator* accel,Arena* out){
    int max = 0;
    for(InstanceNode* node = iter.Start(accel,out,true); node; node = iter.Next(),index += 1){
       ComplexFUInstance* inst = node->inst;
+
+      if(inst->delay == nullptr){
+         offsets[index] = -1;
+         continue;
+      }
+
       int delay = inst->delay - accel->delayAlloc.ptr;
       max = std::max(delay,max);
       offsets[index] = delay;
@@ -265,6 +282,12 @@ CalculatedOffsets ExtractMem(Accelerator* accel,Arena* out){
    int max = 0;
    for(InstanceNode* node = iter.Start(accel,out,true); node; node = iter.Next(),index += 1){
       ComplexFUInstance* inst = node->inst;
+
+      if(inst->externalMemory == nullptr){
+         offsets[index] = -1;
+         continue;
+      }
+
       int mem = inst->externalMemory - accel->externalMemoryAlloc.ptr;
       max = std::max(mem,max);
       offsets[index] = mem;
@@ -285,6 +308,12 @@ CalculatedOffsets ExtractOutputs(Accelerator* accel,Arena* out){
    int max = 0;
    for(InstanceNode* node = iter.Start(accel,out,true); node; node = iter.Next(),index += 1){
       ComplexFUInstance* inst = node->inst;
+
+      if(inst->outputs == nullptr){
+         offsets[index] = -1;
+         continue;
+      }
+
       int output = inst->outputs - accel->outputAlloc.ptr;
       int storedOutput = inst->storedOutputs - accel->storedOutputAlloc.ptr;
       Assert(output == storedOutput || inst->outputs == nullptr); // Should be true for the foreseeable future. Only when we stop allocating storedOutputs for operations should this change. (And we might not do that ever)
@@ -307,6 +336,12 @@ CalculatedOffsets ExtractExtraData(Accelerator* accel,Arena* out){
    int max = 0;
    for(InstanceNode* node = iter.Start(accel,out,true); node; node = iter.Next(),index += 1){
       ComplexFUInstance* inst = node->inst;
+
+      if(inst->extraData == nullptr){
+         offsets[index] = -1;
+         continue;
+      }
+
       int extraData = inst->extraData - accel->extraDataAlloc.ptr;
       max = std::max(extraData,max);
       offsets[index] = extraData;
@@ -327,6 +362,12 @@ CalculatedOffsets ExtractDebugData(Accelerator* accel,Arena* out){
    int max = 0;
    for(InstanceNode* node = iter.Start(accel,out,true); node; node = iter.Next(),index += 1){
       ComplexFUInstance* inst = node->inst;
+
+      if(inst->debugData == nullptr){
+         offsets[index] = -1;
+         continue;
+      }
+
       int debugData = inst->debugData - accel->debugDataAlloc.ptr;
       max = std::max(debugData,max);
       offsets[index] = debugData;
@@ -385,7 +426,7 @@ void PopulateAccelerator(Accelerator* topLevel,Accelerator* accel,FUDeclaration*
 
       #if 0
       int numberUnits = 0;
-      if(decl->type == FUDeclaration::COMPOSITE){
+      if(IsTypeHierarchical(decl)){
          numberUnits = CalculateNumberOfUnits(decl->fixedDelayCircuit->allocated);
       }
       inst->debugData = inter.debugData.Push(numberUnits + 1);
@@ -487,7 +528,7 @@ void PopulateTopLevelAccelerator(Accelerator* accel){
 
       #if 0
       int numberUnits = 0;
-      if(decl->type == FUDeclaration::COMPOSITE){
+      if(IsTypeHierarchical(decl)){
          numberUnits = CalculateNumberOfUnits(decl->fixedDelayCircuit->allocated);
       }
       inst->debugData = inter.debugData.Push(numberUnits + 1);

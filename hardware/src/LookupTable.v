@@ -3,7 +3,7 @@
 module LookupTable #(
        parameter INIT_MEM_FILE="none",
        parameter DATA_W = 32,
-       parameter ADDR_W = 8
+       parameter ADDR_W = 12
    )
    (
       //databus interface
@@ -32,6 +32,7 @@ module LookupTable #(
       output                ext_dp_enable_0_port_1,
       output                ext_dp_write_0_port_1,
 
+      input running,
       input clk,
       input rst,
       input run

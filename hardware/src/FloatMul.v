@@ -10,6 +10,7 @@ module FloatMul #(
     input                         clk,
     input                         rst,
     
+    input                         running,
     input                         run,
 
     //input / output data

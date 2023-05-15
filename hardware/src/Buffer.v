@@ -9,7 +9,8 @@ module Buffer #(
     input                         clk,
     input                         rst,
     
-    input                         run,
+   input                          running,
+   input                          run,
 
     //input / output data
     input [DATA_W-1:0]            in0,
@@ -20,8 +21,8 @@ module Buffer #(
     );
 
 wire [ADDR_W-1:0] occupancy;
-wire read_en = (occupancy >= amount);
-wire write_en = (occupancy <= amount);
+wire read_en = (running && occupancy >= amount);
+wire write_en = (running && occupancy <= amount);
 
 reg [DATA_W-1:0] inData;
 wire [DATA_W-1:0] fifo_data;

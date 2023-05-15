@@ -44,7 +44,6 @@ static std::map<String,Value,CompareFunction> envTable;
 static FILE* output;
 static Arena* tempArena;
 static Arena* outputArena;
-static const char* filepath;
 
 static bool IsCommandBlockType(Command* com){
    static const char* notBlocks[] = {"set","end","inc","else","include","call","return","format","debugBreak"};
@@ -392,7 +391,7 @@ int CountNonOperationChilds(Accelerator* accel){
 
    int count = 0;
    FOREACH_LIST(ptr,accel->allocated){
-      if(ptr->inst->declaration->type == FUDeclaration::COMPOSITE){
+      if(IsTypeHierarchical(ptr->inst->declaration)){
          count += CountNonOperationChilds(ptr->inst->declaration->fixedDelayCircuit);
       }
 
@@ -729,6 +728,8 @@ static String EvalBlockCommand(Block* block){
    return res;
 }
 
+extern Array<Pair<String,String>> templateNameToContent; // TODO: Kinda of a quick hack to make this work. Need to revise the way templates are done
+
 static ValueAndText EvalNonBlockCommand(Command* com){
    Value val = MakeValue();
    String text = {};
@@ -749,19 +750,18 @@ static ValueAndText EvalNonBlockCommand(Command* com){
 
       envTable[com->expressions[0]->id] = val;
    } else if(CompareString(com->name,"include")){
-      char buffer[4096];
-
       Value filenameString = EvalExpression(com->expressions[0]);
       Assert(filenameString.type == ValueType::STRING);
 
-      strcpy(buffer,filepath);
-      String path = PathGoUp(buffer);
+      String content = {};
+      for(Pair<String,String>& nameToContent : templateNameToContent){
+         if(CompareString(nameToContent.first,filenameString.str)){
+            content = nameToContent.second;
+            break;
+         }
+      }
 
-      String filename = filenameString.str;
-      sprintf(&buffer[path.size],"/%.*s",UNPACK_SS(filename));
-
-      String content = PushFile(tempArena,buffer);
-      Assert(content.size >= 0);
+      Assert(content.size);
 
       ParseAndEvaluate(content);
    } else if(CompareString(com->name,"call")){
@@ -914,16 +914,12 @@ void ParseAndEvaluate(String content){
    }
 }
 
-CompiledTemplate* CompileTemplate(const char* templateFilepath,Arena* arena){
+CompiledTemplate* CompileTemplate(String content,Arena* arena){
+   tempArena = arena;
+
    Byte* mark = MarkArena(arena);
 
    CompiledTemplate* res = PushStruct<CompiledTemplate>(arena);
-
-   const char* filepath = PushString(arena,"%s",templateFilepath).data;
-   PushNullByte(arena);
-
-   tempArena = arena;
-   String content = PushFile(arena,templateFilepath);
 
    Tokenizer tokenizer(content,"!()[]{}+-:;.,*~><\"",{"#{","@{","==","!=","**","|>",">=","<=","!="});
    Tokenizer* tok = &tokenizer;
@@ -938,10 +934,19 @@ CompiledTemplate* CompileTemplate(const char* templateFilepath,Arena* arena){
    }
 
    String totalMemory = PointArena(arena,mark);
-   res->filepath = filepath;
    res->blocks = initial;
    res->totalMemoryUsed = totalMemory.size;
    res->content = content;
+
+   return res;
+}
+
+CompiledTemplate* CompileTemplate(const char* templateFilepath,Arena* arena){
+   tempArena = arena;
+   String content = PushFile(arena,templateFilepath);
+
+   CompiledTemplate* res = CompileTemplate(content,arena);
+   res->totalMemoryUsed += content.size;
 
    return res;
 }
@@ -953,7 +958,6 @@ void ProcessTemplate(FILE* outputFile,CompiledTemplate* compiledTemplate,Arena* 
    Arena outputArenaInst = SubArena(arena,Megabyte(64));
    outputArena = &outputArenaInst;
    output = outputFile;
-   filepath = compiledTemplate->filepath;
 
    for(Block* block = compiledTemplate->blocks; block; block = block->next){
       String text = Eval(block);
@@ -968,8 +972,6 @@ void ProcessTemplate(FILE* outputFile,CompiledTemplate* compiledTemplate,Arena* 
 void ProcessTemplate(FILE* outputFile,const char* templateFilepath,Arena* arena){
    ArenaMarker marker(arena);
    tempArena = arena;
-
-   filepath = templateFilepath;
 
    Arena outputArenaInst = SubArena(arena,Megabyte(64));
    outputArena = &outputArenaInst;

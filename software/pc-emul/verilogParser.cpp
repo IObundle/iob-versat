@@ -378,23 +378,25 @@ static Expression* ParseExpression(Tokenizer* tok){
    return res;
 }
 
-static Range ParseRange(Tokenizer* tok,ValueMap& map){
+static RangeAndExpr ParseRange(Tokenizer* tok,ValueMap& map){
    Token peek = tok->PeekToken();
 
    if(!CompareString(peek,"[")){
-      Range range = {};
+      RangeAndExpr range = {};
 
       return range;
    }
 
    tok->AssertNextToken("[");
 
-   Range res = {};
-   res.high = Eval(ParseExpression(tok),map).number;
+   RangeAndExpr res = {};
+   res.top = ParseExpression(tok);
+   res.range.high = Eval(res.top,map).number;
 
    tok->AssertNextToken(":");
 
-   res.low = Eval(ParseExpression(tok),map).number;
+   res.bottom = ParseExpression(tok);
+   res.range.low = Eval(res.bottom,map).number;
    tok->AssertNextToken("]");
 
    return res;
@@ -473,7 +475,10 @@ static Module ParseModule(Tokenizer* tok){
          tok->AdvancePeek(peek);
       }
 
-      port.range = ParseRange(tok,values);
+      RangeAndExpr res = ParseRange(tok,values);
+      port.range = res.range;
+      port.top = res.top;
+      port.bottom = res.bottom;
       port.name = tok->NextToken();
 
       module.ports.push_back(port);
@@ -565,6 +570,8 @@ void StartDebugTerminal(){
 void DebugTerminal(Value val){
 }
 
+#include "templateData.inc"
+
 int main(int argc,const char* argv[]){
    if(argc < 4){
       printf("Error, need at least 4 arguments: <program> <namespace> <outputFile> <inputFile1> ...");
@@ -622,7 +629,7 @@ int main(int argc,const char* argv[]){
          Hashmap<ExternalMemoryID,ExternalMemoryInfo>* external = PushHashmap<ExternalMemoryID,ExternalMemoryInfo>(tempArena,100);
 
          for(PortDeclaration decl : module.ports){
-            Tokenizer port(decl.name,"",{"in","out","delay","done","rst","clk","run","databus"});
+            Tokenizer port(decl.name,"",{"in","out","delay","done","rst","clk","run","running","databus"});
 
             if(CheckFormat("ext_dp_%s_%d_port_%d",decl.name)){
                Array<Value> values = ExtractValues("ext_dp_%s_%d_port_%d",decl.name,tempArena);
@@ -762,7 +769,7 @@ int main(int argc,const char* argv[]){
    FILE* output = OpenFileAndCreateDirectories(argv[2],"w");
    TemplateSetString("namespace",argv[1]);
    fflush(stdout);
-   CompiledTemplate* comp = CompileTemplate("../../submodules/VERSAT/software/templates/unit_verilog_data.tpl",tempArena);
+   CompiledTemplate* comp = CompileTemplate(unit_verilog_data,tempArena);
    ProcessTemplate(output,comp,tempArena);
 
    return 0;

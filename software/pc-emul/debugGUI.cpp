@@ -324,7 +324,7 @@ Optional<String> AcceleratorTreeNodes(AcceleratorIterator iter,Filter filter){
       ComplexFUInstance* inst = node->inst;
       bool doNode = PassFilter(iter.topLevel,inst,filter);
 
-      if(inst->declaration->type == FUDeclaration::COMPOSITE){
+      if(IsTypeHierarchical(inst->declaration)){
          int flags = ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_OpenOnDoubleClick | ImGuiTreeNodeFlags_Framed;
          if(ImGui::TreeNodeEx(inst,flags,"%.*s",UNPACK_SS(inst->name))){
             if(ImGui::IsItemClicked()){
@@ -599,7 +599,7 @@ void DisplayValueWindow(const char* name,ValueWindowState* state,Arena* arena){
       // TODO: Need to collect the types of values before
       //       and if I detect a different type change, call ClearWindowState to the next rows
 
-      if(frameSize && ImGui::BeginTable("split",frameSize + 1,ImGuiTableFlags_RowBg)){
+      if(frameSize && ImGui::BeginTable("split",frameSize,ImGuiTableFlags_RowBg)){
          Value currentValue = *state->startValue;
 
          ImGui::TableNextRow();
@@ -889,10 +889,12 @@ bool IsInspectable(Value val){
 
 struct DebugWindow{
    const char* label;
-   Value val[99];
    int stackIndex;
-   Optional<Accelerator*> accel;
    Optional<String> selectedInstance;
+   Optional<FUDeclaration*> selectedDeclaration;
+   Optional<Accelerator*> selectedAccelerator;
+   Optional<Value> selectedValue;
+   ValueWindowState valueWindowState;
    bool value;
    bool inUse;
 };
@@ -903,14 +905,19 @@ struct DebugWindow{
 static DebugWindow windows[DEBUG_WINDOW_SIZE] = {};
 static Filter filter = {};
 
+#if 0
 static Optional<String> selectedInstance = {};
 static Optional<FUDeclaration*> selectedDeclaration = {};
 static Optional<Accelerator*> selectedAccelerator = {};
 static Optional<Value> selectedValue = {};
+
+static ValueWindowState valueWindowState;
+#endif
+
 static Optional<int> cycle = {};
 static bool last = false;
 
-static ValueWindowState valueWindowState;
+static int lastWindow = 0;
 
 InstanceNode* GetInstanceFromName(Accelerator* accel,String string,Arena* arena){
    AcceleratorIterator iter = {};
@@ -927,7 +934,7 @@ InstanceNode* GetInstanceFromName(Accelerator* accel,String string,Arena* arena)
 }
 
 void DebugGUI(){
-      static bool permanentlyDone = false;
+   static bool permanentlyDone = false;
    if(permanentlyDone){
       return;
    }
@@ -942,6 +949,7 @@ void DebugGUI(){
 
    // Main loop
    bool done = false;
+   int frames = 0;
    while (!done){
       BLOCK_REGION(arena);
 
@@ -969,9 +977,6 @@ void DebugGUI(){
       ImGui::ShowDemoWindow(nullptr);
       #endif
 
-      //ImGui::SetNextWindowPos(ImVec2(0.0f, 0.0f), ImGuiCond_FirstUseEver);
-      //ImGui::SetNextWindowSize(ImVec2(550, 380), ImGuiCond_FirstUseEver);
-
       if(ImGui::Begin("Control")){
          if(ImGui::Button("Close")){
             done = true;
@@ -993,91 +998,6 @@ void DebugGUI(){
          }
       }
       ImGui::End();
-
-      #if 0
-      for(int i = 0; i < DEBUG_WINDOW_SIZE; i++){
-         DebugWindow* dw = &windows[i];
-         if(!dw->inUse){
-            continue;
-         }
-
-         if(ImGui::Begin(dw->label)){
-            if(ImGui::BeginTabBar("TabBar")){
-               if(dw->accel && ImGui::BeginTabItem("Accelerator")){
-                  Accelerator* accel = dw->accel.value();
-                  if(ImGui::BeginChild("Tree",ImVec2(200.0f,500.0f))){
-                     AcceleratorIterator iter = {};
-                     iter.Start(accel,arena,false);
-
-                     Optional<String> res = AcceleratorTreeNodes(iter,filter);
-                     if(res){
-                        dw->selectedInstance = res;
-                     }
-                  }
-                  ImGui::EndChild();
-
-                  ImGui::SameLine();
-
-                  if(dw->selectedInstance){
-                     if(ImGui::BeginChild("Values")){
-                        String name = dw->selectedInstance.value();
-                        selectedDeclaration = GetInstanceFromName(accel,name,arena)->inst->declaration;
-                        ComplexFUInstance* inst = (ComplexFUInstance*) &dw->selectedInstance.value();
-
-                        Optional<ValueSelected> res = OutputDebugValues(MakeValue(inst,"ComplexFUInstance"),arena);
-
-                        if(res){
-                           Value val = CollapsePtrIntoStruct(res.value().val);
-                           if(IsStruct(val.type)){
-                              selectedValue = val;
-                           }
-                        }
-
-                        OutputAcceleratorRunValues(inst,arena);
-                        //OutputAcceleratorStaticValues(accel,arena);
-                     }
-                     ImGui::EndChild();
-                  }
-                  ImGui::EndTabItem();
-               }
-               #if 1
-               if(dw->value && ImGui::BeginTabItem("Values")){
-                  ImGui::BeginGroup();
-                  ImGui::Text("%d",dw->stackIndex);
-                  if(ImGui::Button("<=")){
-                     dw->stackIndex -= 1;
-                     if(dw->stackIndex < 0){
-                        dw->stackIndex = 0;
-                     }
-                  }
-                  ImGui::SameLine();
-                  ImGui::Text("%.*s",UNPACK_SS(dw->val[dw->stackIndex].type->name));
-                  ImGui::EndGroup();
-
-                  Optional<ValueSelected> res = OutputDebugValues(dw->val[dw->stackIndex],arena);
-
-                  if(res){
-                     Value trueVal = CollapsePtrIntoStruct(res.value().val);
-
-                     if(IsInspectable(trueVal)){
-                        dw->stackIndex += 1;
-                        dw->val[dw->stackIndex] = res.value().val;
-                     }
-                  }
-                  ImGui::EndTabItem();
-               }
-               #endif
-               if(dw->accel && ImGui::BeginTabItem("Configurations")){
-                  Accelerator* accel = dw->accel.value();
-                  ShowConfigurations(accel,arena,filter);
-                  ImGui::EndTabItem();
-               }
-               ImGui::EndTabBar();
-            }
-         }
-         ImGui::End();
-      }
-      #endif
 
       ImGui::SetNextWindowPos(ImVec2(0.0f, 600.0f), ImGuiCond_FirstUseEver);
       ImGui::SetNextWindowSize(ImVec2(-1.0f, -1.0f), ImGuiCond_FirstUseEver);
@@ -1130,106 +1050,76 @@ void DebugGUI(){
       }
       ImGui::End();
 
-      DisplayValueWindow("Value Window",&valueWindowState,arena);
+      for(int i = 0; i < lastWindow; i++){
+         DebugWindow* dw = &windows[i];
 
-      if(selectedAccelerator){
-         Accelerator* accel = selectedAccelerator.value();
+         DisplayValueWindow(dw->label,&dw->valueWindowState,arena);
 
-         if(ImGui::Begin("Accelerator Units")){
-            ImGui::BeginChild("Tree",ImVec2(200.0f,500.0f));   // Pass a pointer to our bool variable (the window will have a closing button that will clear the bool when clicked)
-            AcceleratorIterator iter = {};
-            iter.Start(accel,arena,false);
+         if(dw->selectedAccelerator){
+            Accelerator* accel = dw->selectedAccelerator.value();
 
-            Optional<String> res = AcceleratorTreeNodes(iter,filter);
-            if(res){
-               String name = res.value();
-               printf("%.*s\n",UNPACK_SS(name));
-               selectedInstance = res;
-            }
-            ImGui::EndChild();
+            if(ImGui::Begin("Accelerator Units")){
+               ImGui::BeginChild("Tree",ImVec2(200.0f,500.0f));   // Pass a pointer to our bool variable (the window will have a closing button that will clear the bool when clicked)
+               AcceleratorIterator iter = {};
+               iter.Start(accel,arena,false);
 
-            ImGui::SameLine();
+               Optional<String> res = AcceleratorTreeNodes(iter,filter);
+               if(res){
+                  String name = res.value();
+                  printf("%.*s\n",UNPACK_SS(name));
+                  dw->selectedInstance = res;
+               }
+               ImGui::EndChild();
 
-            if(selectedInstance){
-               String name = selectedInstance.value();
-               InstanceNode* node = GetInstanceFromName(accel,name,arena);
-               ComplexFUInstance* inst = node->inst;
-               if(ImGui::BeginChild("Values")){
-                  selectedDeclaration = inst->declaration;
+               ImGui::SameLine();
 
-                  Optional<ValueSelected> res = OutputDebugValues(MakeValue(inst,"ComplexFUInstance"),arena);
+               if(dw->selectedInstance){
+                  String name = dw->selectedInstance.value();
+                  InstanceNode* node = GetInstanceFromName(accel,name,arena);
+                  ComplexFUInstance* inst = node->inst;
+                  if(ImGui::BeginChild("Values")){
+                     dw->selectedDeclaration = inst->declaration;
 
-                  if(res){
-                     Value val = CollapsePtrIntoStruct(res.value().val);
-                     if(IsStruct(val.type)){
-                        selectedValue = val;
-                        AddToWindowState(&valueWindowState,val);
+                     Optional<ValueSelected> res = OutputDebugValues(MakeValue(inst,"ComplexFUInstance"),arena);
+
+                     if(res){
+                        Value val = CollapsePtrIntoStruct(res.value().val);
+                        if(IsStruct(val.type)){
+                           dw->selectedValue = val;
+                           AddToWindowState(&dw->valueWindowState,val);
+                        }
                      }
+
+                     OutputAcceleratorRunValues(node,arena);
+                     //OutputAcceleratorStaticValues(accel,arena);
                   }
 
-                  OutputAcceleratorRunValues(node,arena);
-                  //OutputAcceleratorStaticValues(accel,arena);
-               }
-
-               ImGui::EndChild();
-            }
-         }
-         ImGui::End();
-
-         if(ImGui::Begin("Accelerator")){
-            Optional<ValueSelected> res = OutputDebugValues(MakeValue(accel,"Accelerator"),arena);
-
-            if(res){
-               Value val = CollapsePtrIntoStruct(res.value().val);
-               if(IsStruct(val.type)){
-                  selectedValue = val;
-                  AddToWindowState(&valueWindowState,val);
+                  ImGui::EndChild();
                }
             }
-         }
-         ImGui::End();
+            ImGui::End();
 
-         if(ImGui::Begin("Configurations")){
-            ShowConfigurations(accel,arena,filter);
-         }
-         ImGui::End();
+            if(ImGui::Begin("Accelerator")){
+               Optional<ValueSelected> res = OutputDebugValues(MakeValue(accel,"Accelerator"),arena);
 
-         //AcceleratorGraph(accel,arena,filter);
-      }
-
-      #if 0
-      if(selectedDeclaration){
-         if(ImGui::Begin("Declaration")){
-            Optional<ValueSelected> res = OutputDebugValues(MakeValue(selectedDeclaration.value(),"FUDeclaration"),arena);
-
-            if(res){
-               Value val = CollapsePtrIntoStruct(res.value().val);
-               if(IsStruct(val.type)){
-                  AddToWindowState(&valueWindowState,val);
-                  selectedValue = val;
+               if(res){
+                  Value val = CollapsePtrIntoStruct(res.value().val);
+                  if(IsStruct(val.type)){
+                     dw->selectedValue = val;
+                     AddToWindowState(&dw->valueWindowState,val);
+                  }
                }
             }
-         }
-         ImGui::End();
-      }
-      #endif
+            ImGui::End();
 
-      #if 0
-      if(selectedValue){
-         if(ImGui::Begin("Value viewer")){
-            Value val = CollapsePtrIntoStruct(selectedValue.value());
-
-            if(IsStruct(val.type)){
-               Optional<Value> res = OutputDebugValues(selectedValue.value(),arena);
-               selectedValue = OrElse(res,selectedValue);
-            } else if(IsIndexable(val.type)){
-               Optional<Value> res = ShowTable(val,arena);
-               selectedValue = OrElse(res,selectedValue);
+            if(ImGui::Begin("Configurations")){
+               ShowConfigurations(accel,arena,filter);
             }
+            ImGui::End();
+
+            //AcceleratorGraph(accel,arena,filter);
          }
-         ImGui::End();
       }
-      #endif
 
       // Rendering
       ImGui::Render();
@@ -1246,27 +1136,62 @@ void DebugGUI(){
 }
 
 static void ClearState(){
+   #if 0
    valueWindowState = {};
    selectedInstance = {};
    selectedDeclaration = {};
    selectedAccelerator = {};
    selectedValue = {};
+   #endif
    cycle = {};
-   ClearWindowState(&valueWindowState,0);
+   for(int i = 0; i < lastWindow; i++){
+      ClearWindowState(&windows[i].valueWindowState,0);
+   }
+   lastWindow = 0;
    last = false;
 }
 
+const char* labels[] = {"1","2","3","4","5","6","7","8","9"};
+
+void SetDebugValue(Value val){
+   Assert(lastWindow < DEBUG_WINDOW_SIZE);
+
+   DebugWindow* dw = &windows[lastWindow];
+
+   dw->inUse = true;
+   dw->label = labels[lastWindow];
+   dw->stackIndex = 0;
+   dw->value = true;
+   AddToWindowState(&dw->valueWindowState,val);
+
+   lastWindow += 1;
+}
+
+void SetDebugAccelerator(Accelerator* accel){
+   Assert(lastWindow < DEBUG_WINDOW_SIZE);
+
+   DebugWindow* dw = &windows[lastWindow];
+
+   dw->inUse = true;
+   dw->label = labels[lastWindow];
+   dw->stackIndex = 0;
+   dw->selectedAccelerator = accel;
+
+   lastWindow += 1;
+}
+
 void DebugVersat(Versat* versat){
-   DebugValue("Versat",MakeValue(versat,"Versat"));
+   DebugValue(MakeValue(versat));
 }
 
 void DebugAccelerator(Accelerator* accel){
-   selectedAccelerator = accel;
+   SetDebugAccelerator(accel);
    DebugGUI();
 
    ClearState();
 }
 
+#if 0
 void DebugAcceleratorPersist(Accelerator* accel){
    if(!selectedAccelerator || (selectedAccelerator && selectedAccelerator.value() != accel)){
       ClearState();
@@ -1291,51 +1216,12 @@ void DebugAcceleratorEnd(Accelerator* accel){
    DebugGUI();
    ClearState();
 }
+#endif
 
-void DebugWindowValue(const char* label,Value val){
-   for(int i = 0; i < DEBUG_WINDOW_SIZE; i++){
-      DebugWindow* dw = &windows[i];
-      if(dw->inUse){
-         continue;
-      }
-
-      dw->inUse = true;
-      dw->label = label;
-      dw->stackIndex = 0;
-      dw->val[0] = val;
-      dw->value = true;
-      return;
-   }
-
-   printf("Too many debug windows open\n");
-}
-
-void DebugWindowAccelerator(const char* label,Accelerator* accel){
-   for(int i = 0; i < DEBUG_WINDOW_SIZE; i++){
-      DebugWindow* dw = &windows[i];
-      if(dw->inUse){
-         continue;
-      }
-
-      dw->inUse = true;
-      dw->label = label;
-      dw->stackIndex = 0;
-      dw->accel = accel;
-      return;
-   }
-
-   printf("Too many debug windows open\n");
-}
-
-void DebugValue(const char* windowName,Value val){
-   ClearState();
-
-   ClearWindowState(&valueWindowState,0);
-   valueWindowState.windowName = windowName;
-   valueWindowState.startValue = val;
-   valueWindowState.init = true;
-
+void DebugValue(Value val){
+   SetDebugValue(val);
    DebugGUI();
+   ClearState();
 }
 
 #endif

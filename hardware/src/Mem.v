@@ -2,7 +2,7 @@
 `include "xversat.vh"
 `include "xmemdefs.vh"
 
-(* source *) module Mem #(
+module Mem #(
          parameter MEM_INIT_FILE="none",
          parameter DATA_W = 32,
          parameter ADDR_W = 7
@@ -12,6 +12,7 @@
    input                         clk,
    input                         rst,
    
+   input                         running,
    input                         run,
    output                        done,
    
@@ -74,6 +75,17 @@
    input [ADDR_W-1:0]    incr2B
    );
 
+   wire we = |wstrb;
+
+   wire doneA,doneB;
+
+   //output databus
+   wire [DATA_W-1:0]              outA, outB;
+   reg  [DATA_W-1:0]              outA_reg, outB_reg;
+   
+   assign out0 = outA_reg;
+   assign out1 = outB_reg;
+
    reg [31:0] testDelay;
 
    always @(posedge clk,posedge rst)
@@ -86,10 +98,6 @@
          testDelay <= testDelay - 1;
       end
    end
-
-   wire we = |wstrb;
-
-   wire doneA,doneB;
 
    // Delay done by 3 cycles so that pc-emul matches simulation
    reg doneA_1,doneB_1;
@@ -114,13 +122,6 @@
 
    assign done = (doneA & doneB & doneA_2 & doneB_2 & doneA_3 & doneB_3);
 
-   //output databus
-   wire [DATA_W-1:0]              outA, outB;
-   reg  [DATA_W-1:0]              outA_reg, outB_reg;
-   
-   //assign flow_out =            {outA_reg, outB_reg};
-   assign out0 = outA_reg;
-   assign out1 = outB_reg;
 
    //function to reverse bits
    function [ADDR_W-1:0] reverseBits;

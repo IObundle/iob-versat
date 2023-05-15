@@ -7,6 +7,7 @@ module Generator #(
    input                   clk,
    input                   rst,
 
+   input                   running,
    input                   run,
 
    //configurations 

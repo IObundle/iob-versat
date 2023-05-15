@@ -134,6 +134,9 @@ InstanceNode* GetInstanceNode(Accelerator* accel,ComplexFUInstance* inst);
 void CalculateNodeType(InstanceNode* node);
 void FixInputs(InstanceNode* node);
 
+Array<int> GetNumberOfInputConnections(InstanceNode* node,Arena* out);
+Array<Array<PortNode>> GetAllInputs(InstanceNode* node,Arena* out);
+
 void RemoveConnection(Accelerator* accel,InstanceNode* out,int outPort,InstanceNode* in,int inPort);
 InstanceNode* RemoveUnit(InstanceNode* nodes,InstanceNode* unit);
 

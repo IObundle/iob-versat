@@ -90,7 +90,7 @@ void AcceleratorRunComposite(AcceleratorIterator iter){
    // Set accelerator input to instance input
    InstanceNode* compositeNode = iter.Current();
    ComplexFUInstance* compositeInst = compositeNode->inst;
-   Assert(compositeInst->declaration->type == FUDeclaration::COMPOSITE);
+   Assert(IsTypeHierarchical(compositeInst->declaration));
    Accelerator* accel = compositeInst->declaration->fixedDelayCircuit;
 
    // Order is very important. Need to populate before setting input values
@@ -136,7 +136,7 @@ void AcceleratorRunIter(AcceleratorIterator iter){
       ComplexFUInstance* inst = node->inst;
       if(inst->declaration->type == FUDeclaration::SPECIAL){
          continue;
-      } else if(inst->declaration->type == FUDeclaration::COMPOSITE){
+      } else if(IsTypeHierarchical(inst->declaration)){
          AcceleratorRunComposite(iter);
       } else {
          bufferArray.size = node->inputs.size;
@@ -177,7 +177,7 @@ void AcceleratorRunOnce(Accelerator* accel){
 
    ReorganizeAccelerator(accel,arena);
 
-   /* Hashmap<EdgeNode,int>* delay = */ CalculateDelay(accel->versat,accel,arena);
+   Hashmap<EdgeNode,int>* delay = CalculateDelay(accel->versat,accel,arena);
    SetDelayRecursive(accel,arena);
 
    if(!accel->ordered){
@@ -204,7 +204,7 @@ void AcceleratorRunOnce(Accelerator* accel){
    if(accel->versat->debug.outputVCD){
       iter.StartOrdered(accel,arena,true); // Probably overkill, but guarantees that print vcd gets the correct result
       AcceleratorEval(iter);
-      PrintVCD(accelOutputFile,accel,time++,0,1,vcdSameCheckSpace,arena); // Print starting values
+      PrintVCD(accelOutputFile,accel,time++,1,1,vcdSameCheckSpace,arena); // Print starting values
    }
 
    AcceleratorRunStart(accel);
@@ -213,29 +213,23 @@ void AcceleratorRunOnce(Accelerator* accel){
    if(accel->versat->debug.outputVCD){
       iter.StartOrdered(accel,arena,true);
       AcceleratorEval(iter);
-      PrintVCD(accelOutputFile,accel,time++,1,0,vcdSameCheckSpace,arena);
+      PrintVCD(accelOutputFile,accel,time++,0,1,vcdSameCheckSpace,arena);
    }
 
    for(int cycle = 0; cycle < 10000; cycle++){ // Max amount of iterations
       Assert(accel->outputAlloc.size == accel->storedOutputAlloc.size);
 
-      if(accel->versat->debug.outputVCD){
-         iter.StartOrdered(accel,arena,true);
-         AcceleratorEval(iter);
-         PrintVCD(accelOutputFile,accel,time++,0,0,vcdSameCheckSpace,arena);
-      }
-
       iter.StartOrdered(accel,arena,true);
       AcceleratorRunIter(iter);
 
-      memcpy(accel->outputAlloc.ptr,accel->storedOutputAlloc.ptr,accel->outputAlloc.size * sizeof(int));
-
       if(accel->versat->debug.outputVCD){
          iter.StartOrdered(accel,arena,true);
          AcceleratorEval(iter);
-
          PrintVCD(accelOutputFile,accel,time++,1,0,vcdSameCheckSpace,arena);
+         PrintVCD(accelOutputFile,accel,time++,0,0,vcdSameCheckSpace,arena);
       }
+
+      memcpy(accel->outputAlloc.ptr,accel->storedOutputAlloc.ptr,accel->outputAlloc.size * sizeof(int));
 
       if(AcceleratorDone(accel)){
          break;

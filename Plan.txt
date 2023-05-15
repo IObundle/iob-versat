@@ -3,9 +3,6 @@ Misc:
    I'm tired of having to handle printf style functions.
       Just code an alternative, have it support the kind of expressions that you frequently use, everything else can be equal to printf style
 
-   Check if the change to Arena functions to be templates wouldn't be better implemented as they used to be.
-      For the cases where we push types with ',', we should just use a typedef. That way we know for sure that we are reusing the same function. No need to instantiate all that template bullshit as well.
-
    Stop using asserts for likely user errors. Parser is full of asserts that are actually faulty user data. Need to grapple with things now before they become more complex, even if in the future there is likelihood that things will change.
    Maybe do some fuzz testing? Especially for parsers
    Hard to reason with fixed buffer because we immediatly transform delay into a parameter string. Having to parse the delay is not a solution. Figure out what to do and remove all the portions of code that parse the delay out from the unit
@@ -13,7 +10,6 @@ Misc:
 
    Change the SizedString to simple String or Str. Change the UNPACK_SS to STR* or something more simple, if allowed.
    Change the CompareString functions to a operator ==
-   Tired of having to write a lot for nothing. Also maybe remove the MakeSizedString functions. Probably no gain, especially if the alternative can be inlined in some way or form. Worse case generation call the function Str and call the struct String (or function is String and struct is Str or function is String and struct is string, maybe better this way, more explicit where it needs to). Have people call Str("") everywhere, if no good alternative exists.
    (Which doesn't appear to exist, because adding a constructor makes a mess with unions and I don't think an alternative exists)
 
 Literal:
@@ -204,19 +200,26 @@ Threading:
 
 Hashmap:
 
-   Replace the hashmap implementation with a couple of functions. Use a PushHashmap function, instead of the init one.
    Everything that goes into the arena in a packed way should just follow the Push convention.
+
+Static and share 
    
+   Technically, there isn't anything stopping us from having static share units (Static share config Const {...}).
+      Static inside share blocks is not allowed, because what would we do inside a share block if a unit is static and the other is not?.
+
+Threaded accelerator simulation
+
+   Should be simple, but test whether we can simulate the accelerator in another thread.
+      The only problem is the fact that right now memory mapped units have to go through the verilator layer.
+      We would need to stop the accelerator from running or let the main thread be the one doing the write (but the read would be problematic).
+
 Misc:
 
    Check the io_uring interface for async file io. Maybe useful for the output of VCD files, which can slow down a lot the program, especially for large runtime accelerators. Might not need the full library, just check how it works
 
 Current know bugs/problems:
 
-Problem: When reordering the top level, we fuck up the allocations.
-         We have 2 orders for instances. Allocation order and DAGOrder.
-         DAGOrder is useful for simulation and calculations.
-         Allocation order is needed for simulations.
+   We are not freeing the nodes for accelerators.
 
 Legend:
 

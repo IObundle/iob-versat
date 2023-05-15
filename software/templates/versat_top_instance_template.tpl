@@ -77,6 +77,8 @@ reg soft_reset;
 
 wire rst_int = (rst | soft_reset);
 
+reg [1:0] dma_state;
+
 // Interface does not use soft_rest
 always @(posedge clk,posedge rst) // Care, rst because writing to soft reset register
    if(rst) begin
@@ -101,24 +103,121 @@ always @(posedge clk,posedge rst) // Care, rst because writing to soft reset reg
             else
                versat_rdata <= {31'h0,done}; 
          end
+         if(addr == 1) begin
+            versat_ready <= 1'b1;
+            versat_rdata <= {31'h0,dma_state == 0};
+         end
       end
    end
 
 wire run = |runCounter && (&unitDone);
 assign done = (!(|runCounter) && (&unitDone));
 
+reg running;
+
+always @(posedge clk,posedge rst)
+begin
+   if(rst) begin
+      running <= 0;
+   end else if(run) begin
+      running <= 1;
+   end else if(running && done) begin
+      running <= 0;
+   end
+end
+
+reg [7:0] dma_length;
+reg [31:0] dma_addr_in;
+reg [31:0] dma_addr_read;
+
+reg dma_valid;
+reg [AXI_ADDR_W-1:0] dma_addr;
+reg [`DATAPATH_W-1:0] dma_wdata;
+reg [`DATAPATH_W/8-1:0] dma_wstrb;
+reg [7:0] dma_len;
+
+wire dma_ready;
+wire [`DATAPATH_W-1:0] dma_rdata;
+wire dma_last;
+
 always @(posedge clk,posedge rst_int)
 begin
    if(rst_int) begin
+      dma_length <= 0;
+      dma_addr_in <= 0;
+      dma_addr_read <= 0;
+      dma_state <= 0;
       runCounter <= 0;
    end else begin
       if(run)
          runCounter <= runCounter - 1;
 
-      if(valid && we && addr == 0)
-         runCounter <= runCounter + wdata[30:0];
+      case(dma_state)
+      2'b00: ;
+      2'b01: begin
+         if(dma_ready && dma_last) begin
+            dma_state <= 0;
+         end
+         if(dma_ready) begin
+            dma_addr_in <= dma_addr_in + 4;
+         end
+      end
+      2'b10: begin
+      end
+      2'b11: begin
+      end
+      endcase
+
+      if(valid && we) begin
+         if(addr == 0)
+            runCounter <= runCounter + wdata[30:0];
+         if(addr == 1)
+            dma_addr_in <= wdata;
+         if(addr == 2)
+            dma_addr_read <= wdata;
+         if(addr == 3)
+            dma_length <= wdata[7:0];
+         if(addr == 4)
+            dma_state <= 2'b01;
+      end
    end
 end
+
+assign dma_ready = m_databus_ready[0];
+assign m_databus_valid[0] = dma_valid;
+assign m_databus_addr[AXI_ADDR_W-1:0] = dma_addr;
+assign dma_rdata = m_databus_rdata[31:0];
+assign m_databus_wdata[31:0] = dma_wdata;
+assign m_databus_wstrb[3:0] = dma_wstrb;
+assign m_databus_len[7:0] = dma_len;
+assign dma_last = m_databus_last[0];
+
+always @*
+begin
+   dma_valid = 1'b0;
+   dma_addr = dma_addr_read;
+   dma_wdata = 0;
+   dma_wstrb = 0; // Only read, for now
+   dma_len = dma_length;
+
+   case(dma_state)
+   2'b00: ;
+   2'b01: begin
+      dma_valid = 1'b1;
+   end
+   2'b10: begin
+   end
+   2'b11: begin
+   end
+   endcase
+end
+
+wire data_valid = (dma_ready || valid);
+wire data_write = (dma_ready || (valid && we)); // Dma ready is always a write, dma cannot be used to read, for now
+wire [ADDR_W-1:0] address = dma_ready ? (dma_addr_in >> 2) : addr;
+wire [31:0] data_data = dma_ready ? dma_rdata : wdata;
+wire dataMemoryMapped = address[@{memoryConfigDecisionBit}];
+wire [3:0] data_wstrb = dma_ready ? 4'hf : wstrb;
 
 reg [31:0] read_test_counter;
 reg enableReadCounter;
@@ -134,7 +233,6 @@ begin
       read_test_counter <= read_test_counter + 1;
    end   
 end
-
 
 reg [31:0] test_counter;
 reg enableCounter;
@@ -180,10 +278,7 @@ assign wor_ready = (|unitReady);
 
 #{if versatValues.numberConnections}
 wire [31:0] #{join ", " for node instances}
-   #{if node.outputs} 
-      #{join ", " for j node.outputs} output_@{node.inst.id}_@{j} #{end}
-   #{else}
-      unused_@{node.inst.id} #{end}
+   #{join ", " for j node.outputs} #{if j} output_@{node.inst.id}_@{index} #{end} #{end}
 #{end};
 #{end}
 
@@ -197,14 +292,14 @@ assign unitRdataFinal = (#{join "|" for i unitsMapped} unitRData[@{i}] #{end});
 always @*
 begin
    memoryMappedEnable = {@{unitsMapped}{1'b0}};
-   if(valid & memoryMappedAddr)
+   if(data_valid & dataMemoryMapped)
    begin
    #{set counter 0}
    #{for node instances}
    #{set inst node.inst}
    #{if inst.declaration.isMemoryMapped}
       #{if versatData[counter].memoryMaskSize}
-      if(addr[@{memoryAddressBits - 1}:@{memoryAddressBits - versatData[counter].memoryMaskSize}] == @{memoryAddressBits - inst.declaration.memoryMapBits}'b@{versatData[counter].memoryMask}) // @{versatBase + memoryMappedBase * 4 + inst.memMapped * 4 |> Hex}
+      if(address[@{memoryAddressBits - 1}:@{memoryAddressBits - versatData[counter].memoryMaskSize}] == @{memoryAddressBits - inst.declaration.memoryMapBits}'b@{versatData[counter].memoryMask}) // @{versatBase + memoryMappedBase * 4 + inst.memMapped * 4 |> Hex}
          memoryMappedEnable[@{counter}] = 1'b1;
       #{else}
       memoryMappedEnable[0] = 1'b1;
@@ -221,16 +316,16 @@ always @(posedge clk,posedge rst_int)
 begin
    if(rst_int) begin
       configdata <= {@{configurationBits}{1'b0}};
-   end else if(valid & we & !memoryMappedAddr) begin
+   end else if(data_valid & !dataMemoryMapped) begin
       // Config
       #{set counter 0}
-      #{set addr 1}
+      #{set addr versatConfig}
       #{for node instances}
       #{set inst node.inst}
       #{set decl inst.declaration}
       #{for wire decl.configs}
-      if(addr[@{versatValues.configurationAddressBits - 1}:0] == @{addr}) // @{versatBase + addr * 4 |> Hex}
-         configdata[@{counter}+:@{wire.bitsize}] <= wdata[@{wire.bitsize - 1}:0]; // @{wire.name} - @{decl.name}
+      if(address[@{versatValues.configurationAddressBits - 1}:0] == @{addr}) // @{versatBase + addr * 4 |> Hex}
+         configdata[@{counter}+:@{wire.bitsize}] <= data_data[@{wire.bitsize - 1}:0]; // @{wire.name} - @{decl.name}
       #{inc addr}
       #{set counter counter + wire.bitsize}
       #{end}
@@ -239,11 +334,11 @@ begin
       // Static
       #{for unit staticUnits}
       #{for wire unit.data.configs}
-      if(addr[@{versatValues.configurationAddressBits - 1}:0] == @{addr}) // @{versatBase + addr * 4 |> Hex}
+      if(address[@{versatValues.configurationAddressBits - 1}:0] == @{addr}) // @{versatBase + addr * 4 |> Hex}
          #{if unit.first.parent}
-         configdata[@{counter}+:@{wire.bitsize}] <= wdata[@{wire.bitsize - 1}:0]; //  @{unit.first.parent.name}_@{unit.first.name}_@{wire.name}
+         configdata[@{counter}+:@{wire.bitsize}] <= data_data[@{wire.bitsize - 1}:0]; //  @{unit.first.parent.name}_@{unit.first.name}_@{wire.name}
          #{else}
-         configdata[@{counter}+:@{wire.bitsize}] <= wdata[@{wire.bitsize - 1}:0]; //  @{unit.first.name}_@{wire.name}
+         configdata[@{counter}+:@{wire.bitsize}] <= data_data[@{wire.bitsize - 1}:0]; //  @{unit.first.name}_@{wire.name}
          #{end}
       #{inc addr}
       #{set counter counter + wire.bitsize}
@@ -255,8 +350,8 @@ begin
       #{set inst node.inst}
       #{set decl inst.declaration}
       #{for i decl.nDelays}
-      if(addr[@{versatValues.configurationAddressBits - 1}:0] == @{addr}) // @{versatBase + addr * 4 |> Hex}
-         configdata[@{counter}+:32] <= wdata[31:0]; // Delay
+      if(address[@{versatValues.configurationAddressBits - 1}:0] == @{addr}) // @{versatBase + addr * 4 |> Hex}
+         configdata[@{counter}+:32] <= data_data[31:0]; // Delay
       #{inc addr}
       #{set counter counter + 32}
       #{end}
@@ -268,14 +363,14 @@ end
 always @*
 begin
    stateRead = 32'h0;
-   if(valid & !memoryMappedAddr) begin
+   if(valid & !we & !memoryMappedAddr) begin // This if could be removed, stateRead could be updated every time, the if just adds unnecesary logic, but easier to debug, I guess
       #{set counter 0}
-      #{set addr 0}
+      #{set addr versatState}
       #{for node instances}
       #{set inst node.inst}
       #{set decl inst.declaration}
       #{for wire decl.states}
-      if(addr[@{versatValues.stateAddressBits - 1}:0] == @{addr + 1}) // @{versatBase + addr * 4 |> Hex}
+      if(addr[@{versatValues.stateAddressBits - 1}:0] == @{addr}) // @{versatBase + addr * 4 |> Hex}
          stateRead = statedata[@{counter}+:@{wire.bitsize}];
       #{inc addr}
       #{set counter counter + wire.bitsize}
@@ -289,7 +384,7 @@ end
 #{set staticDataIndex staticStart}
 #{set stateDataIndex 0}
 #{set delaySeen 0}
-#{set ioIndex 0}
+#{set ioIndex 1}
 #{set externalCounter 0}
 #{set memoryMappedIndex 0}
 #{set doneCounter 0}
@@ -297,9 +392,12 @@ end
 #{set inst node.inst}
 #{set decl inst.declaration}
    @{decl.name} @{inst.parameters} @{inst.name |> Identify}_@{counter} (
-      #{for i node.outputs}
-         .out@{i}(output_@{inst.id}_@{i}),
-      #{end} 
+      #{for j node.outputs} #{if j}
+         .out@{index}(output_@{inst.id}_@{index}),
+      #{else}
+         .out@{index}(),
+      #{end}
+      #{end}
 
       #{for input node.inputs}
       #{if input.node}
@@ -363,13 +461,13 @@ end
 
       #{if decl.isMemoryMapped}
       .valid(memoryMappedEnable[@{memoryMappedIndex}]),
-      .wstrb(wstrb),
+      .wstrb(data_wstrb),
       #{if decl.memoryMapBits}
-      .addr(addr[@{decl.memoryMapBits - 1}:0]),
+      .addr(address[@{decl.memoryMapBits - 1}:0]),
       #{end}
       .rdata(unitRData[@{memoryMappedIndex}]),
       .ready(unitReady[@{memoryMappedIndex}]),
-      .wdata(wdata),
+      .wdata(data_data),
       #{inc memoryMappedIndex}
       #{end}
 
@@ -385,6 +483,8 @@ end
       #{set ioIndex ioIndex + decl.nIOs}
       #{end} 
       
+      .running(running),
+
       .run(run),
       #{if decl.implementsDone}
       .done(unitDone[@{doneCounter}]),

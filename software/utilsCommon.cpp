@@ -11,19 +11,40 @@ int printf_(const char* format, ...);
 #define printf printf_
 #endif
 
+static char* GetNumberRepr(uint64 number){
+   static char buffer[32];
+
+   if(number == 0){
+      buffer[0] = '0';
+      buffer[1] = '\0';
+      return buffer;
+   }
+
+   uint64 val = number;
+   buffer[31] = '\0';
+   int index = 30;
+   while(val){
+      buffer[index] = '0' + (val % 10);
+      val /= 10;
+      index -= 1;
+   }
+
+   return &buffer[index+1];
+}
+
 void TimeIt::Output(){
-   char buffer[32];
    // Cannot use floating point because of embedded
    NanoSecond end = GetTime();
 
    uint64 diff = end.time - start.time;
    int digits = NumberDigitsRepresentation(diff);
-   sprintf(buffer,"%" PRId64,diff);
+   //sprintf(buffer,"%" PRId64,diff);
+   char* buffer = GetNumberRepr(diff);
 
    printf("[TimeIt] %s: ",id);
 
    int charSeen = 0;
-   for(int i = std::max(6,digits); i >= 0; i--){
+   for(int i = std::max(6,digits); i >= 3; i--){
       if(i < digits){
          printf("%c",buffer[charSeen++]);
       } else if(i <= 6){
@@ -92,6 +113,17 @@ int AlignNextPower2(int val){
    return res;
 }
 
+int Align(int val,int alignment){
+   Assert(alignment != 0);
+   int remainder = val % alignment;
+   if(remainder == 0){
+      return val;
+   }
+
+   int res = val + (alignment - remainder);
+   return res;
+}
+
 unsigned int AlignBitBoundary(unsigned int val,int numberBits){ // Align value so the lower numberBits are all zeros
    if(numberBits == 0){
       return val;
@@ -122,8 +154,27 @@ int RandomNumberBetween(int minimum,int maximum,int randomValue){
       return minimum;
    }
 
-   int res = minimum + (randomValue % (delta + 1));
+   int res = minimum + Abs(randomValue % (delta + 1));
    return res;
+}
+
+int GetMaxDigitSize(Array<int> array){
+   int maxReprSize = 0;
+   for(int val : array){
+      maxReprSize = std::max(maxReprSize,NumberDigitsRepresentation(val));
+   }
+
+   return maxReprSize;
+}
+
+void Print(Array<int> array,int digitSize){
+   if(digitSize == 0){
+      digitSize = GetMaxDigitSize(array);
+   }
+
+   for(int val : array){
+      printf("%*d ",digitSize,val);
+   }
 }
 
 int RolloverRange(int min,int val,int max){
@@ -351,6 +402,9 @@ bool CompareString(String str1,String str2){
       return false;
    }
 
+   bool res = (memcmp(str1.data,str2.data,str1.size) == 0);
+
+   #if 0
    if(str1.data == str2.data){
       return true;
    }
@@ -360,8 +414,9 @@ bool CompareString(String str1,String str2){
          return false;
       }
    }
+   #endif
 
-   return true;
+   return res;
 }
 
 bool CompareString(const char* str1,String str2){

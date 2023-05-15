@@ -12,9 +12,17 @@ typedef std::unordered_map<String,String> MacroMap;
 
 struct Arena;
 
+struct RangeAndExpr{
+   Range range;
+   Expression* top;
+   Expression* bottom;
+};
+
 struct PortDeclaration{
    ValueMap attributes;
-   Range range;
+   Range range; // Cannot be a range, otherwise we cannot deal with parameters
+   Expression* top;
+   Expression* bottom;
    String name;
    enum {INPUT,OUTPUT,INOUT} type;
 };
@@ -24,6 +32,14 @@ struct Module{
    std::vector<PortDeclaration> ports;
    String name;
    bool isSource;
+};
+
+struct ExternalMemoryDPDef{
+   PortDeclaration* addr[2];
+   PortDeclaration* out[2];
+   PortDeclaration* in[2];
+   PortDeclaration* write[2];
+   PortDeclaration* enable[2];
 };
 
 struct ModuleInfo{
