@@ -475,7 +475,7 @@ void PrintVCD(FILE* accelOutputFile,Accelerator* accel,int time,int clock,int ru
    fprintf(accelOutputFile,"#%d\n",time * 10);
    fprintf(accelOutputFile,"%da\n",clock ? 1 : 0);
 
-   int counter = time - 1;
+   int counter = time - 2;
 
    if(counter < 0){
       fprintf(accelOutputFile,"bx b\n");

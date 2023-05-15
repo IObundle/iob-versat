@@ -499,6 +499,25 @@ T* ListRemoveAll(T* start,Func compareFunction){
 }
 
 template<typename T>
+T* ReverseList(T* head){
+   if(head == nullptr){
+      return head;
+   }
+
+   T* ptr = nullptr;
+   T* next = head;
+
+   while(next != nullptr){
+      T* nextNext = next->next;
+      next->next = ptr;
+      ptr = next;
+      next = nextNext;
+   }
+
+   return ptr;
+}
+
+template<typename T>
 T* ListInsertEnd(T* head,T* toAdd){
    T* last = nullptr;
    FOREACH_LIST(ptr,head){

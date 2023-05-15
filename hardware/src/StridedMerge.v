@@ -15,23 +15,23 @@ module StridedMerge #(
 
     //input / output data
     input [DATA_W-1:0]            in0,
-    (* versat_latency = 1 *) input [DATA_W-1:0]            in1,
-    (* versat_latency = 2 *) input [DATA_W-1:0]            in2,
-    (* versat_latency = 3 *) input [DATA_W-1:0]            in3,
-    (* versat_latency = 4 *) input [DATA_W-1:0]            in4,
-    (* versat_latency = 5 *) input [DATA_W-1:0]            in5,
-    (* versat_latency = 6 *) input [DATA_W-1:0]            in6,
-    (* versat_latency = 7 *) input [DATA_W-1:0]            in7,
-    (* versat_latency = 8 *) input [DATA_W-1:0]            in8,
-    (* versat_latency = 9 *) input [DATA_W-1:0]            in9,
-    (* versat_latency = 10 *) input [DATA_W-1:0]            in10,
-    (* versat_latency = 11 *) input [DATA_W-1:0]            in11,
-    (* versat_latency = 12 *) input [DATA_W-1:0]            in12,
-    (* versat_latency = 13 *) input [DATA_W-1:0]            in13,
-    (* versat_latency = 14 *) input [DATA_W-1:0]            in14,
-    (* versat_latency = 15 *) input [DATA_W-1:0]            in15,
+    (* versat_latency = 1 *) input [DATA_W-1:0]      in1,
+    (* versat_latency = 2 *) input [DATA_W-1:0]      in2,
+    (* versat_latency = 3 *) input [DATA_W-1:0]      in3,
+    (* versat_latency = 4 *) input [DATA_W-1:0]      in4,
+    (* versat_latency = 5 *) input [DATA_W-1:0]      in5,
+    (* versat_latency = 6 *) input [DATA_W-1:0]      in6,
+    (* versat_latency = 7 *) input [DATA_W-1:0]      in7,
+    (* versat_latency = 8 *) input [DATA_W-1:0]      in8,
+    (* versat_latency = 9 *) input [DATA_W-1:0]      in9,
+    (* versat_latency = 10 *) input [DATA_W-1:0]     in10,
+    (* versat_latency = 11 *) input [DATA_W-1:0]     in11,
+    (* versat_latency = 12 *) input [DATA_W-1:0]     in12,
+    (* versat_latency = 13 *) input [DATA_W-1:0]     in13,
+    (* versat_latency = 14 *) input [DATA_W-1:0]     in14,
+    (* versat_latency = 15 *) input [DATA_W-1:0]     in15,
 
-    (* versat_latency = 0 *) output [DATA_W-1:0]       out0,
+    (* versat_latency = 1 *) output reg [DATA_W-1:0] out0,
 
     input [DELAY_W-1:0]                      delay0,
     input [DELAY_W-1:0]                      stride
@@ -61,7 +61,7 @@ assign select[15] = in15;
 
 reg [3:0] counter;
 
-assign out0 = running ? select[counter] : 0;
+//assign out0 = running ? select[counter] : 0;
 
 always @(posedge clk,posedge rst)
 begin
@@ -90,7 +90,7 @@ begin
           end
 
 
-          //out0 <= select[counter];
+          out0 <= select[counter];
      end
 end
 

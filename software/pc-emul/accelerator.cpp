@@ -1453,6 +1453,7 @@ void ReorganizeIterative(Accelerator* accel,Arena* temp){
    FOREACH_LIST(ptr,accel->allocated){
       if(ptr->allInputs == nullptr){
          seen->Insert(ptr,true);
+         order->Insert(ptr,0);
       }
    }
 
@@ -1510,6 +1511,10 @@ void ReorganizeIterative(Accelerator* accel,Arena* temp){
          ordered = newOrdered;
       }
    }
+
+   accel->ordered = ReverseList(accel->ordered);
+
+   DebugValue(MakeValue(order));
 }
 
 int CalculateNumberOfUnits(InstanceNode* node){
