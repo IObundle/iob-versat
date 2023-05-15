@@ -12,18 +12,20 @@ module TimedMux #(
     input                         running,
     input                         run,
 
+    output reg                    done,
+
     //input / output data
     input [DATA_W-1:0]            in0,
     input [DATA_W-1:0]            in1,
 
-    (* versat_latency = 0 *) output reg [DATA_W-1:0]       out0,
+    (* versat_latency = 1 *) output reg [DATA_W-1:0]       out0,
     
     input [31:0]                  delay0
     );
 
 reg [31:0] delay;
-reg done;
 
+/*
 always @*
 begin
    out0 = 0;
@@ -32,6 +34,7 @@ begin
       out0 = (done ? in1 : in0);
    end
 end
+*/
 
 always @(posedge clk,posedge rst)
 begin
@@ -39,13 +42,15 @@ begin
       delay <= 0;
       done <= 0;
    end else if(run) begin
-      delay <= delay0;
+      delay <= delay0 + 1;
       done <= 0;
-   end else if(|delay) begin
+   end else if(running && |delay) begin
       delay <= delay - 1;
       done <= 0;
-   end else begin
+      out0 <= in0;
+   end else if(running) begin
       done <= 1;
+      out0 <= in1;
    end
 end
 

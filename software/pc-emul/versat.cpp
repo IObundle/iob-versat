@@ -705,7 +705,7 @@ static FUInstance* GetInstanceByHierarchicalName2(AcceleratorIterator iter,Hiera
             } else if(!hier->next){ // Correct name and type (if specified) and no further hierarchical name to follow
                Accelerator* accel = iter.topLevel;
 
-               #if 1
+               #if 0
                return node->inst;
                #else
                if(iter.level == 0){
@@ -1507,7 +1507,7 @@ FUDeclaration* RegisterIterativeUnit(Versat* versat,Accelerator* accel,FUInstanc
    // TODO: We are not checking connections here, we are just assuming that unit is directly connected to out.
    //       Probably a bad ideia but still do not have an example which would make it not ideal
    for(int i = 0; i < declaration.outputLatencies.size; i++){
-      declaration.outputLatencies[i] = (latency + 1) * node->inst->declaration->outputLatencies[i];
+      declaration.outputLatencies[i] = (latency + 1) * (node->inst->declaration->outputLatencies[i] + 1);
    }
 
    // Values from iterative declaration
