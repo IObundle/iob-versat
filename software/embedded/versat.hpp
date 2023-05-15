@@ -68,8 +68,11 @@ Versat* InitVersat(int base,int numberConfigurations);
 
 // Accelerator functions
 void AcceleratorRun(Accelerator* accel,int times = 1);
+
 void VersatUnitWrite(FUInstance* instance,int address, int value);
 int32_t VersatUnitRead(FUInstance* instance,int address);
+void VersatMemoryCopy(FUInstance* instance,volatile int* dest,int* data,int size);
+void VersatMemoryCopy(FUInstance* instance,volatile int* dest,Array<int> data);
 
 #define GetInstanceByName(ACCEL,...) GetInstanceByName_(ACCEL,NUMBER_ARGS(__VA_ARGS__),__VA_ARGS__)
 FUInstance* GetInstanceByName_(Accelerator* accel,int argc, ...);
@@ -80,6 +83,7 @@ FUInstance* GetSubInstanceByName_(Accelerator* topLevel,FUInstance* inst,int arg
 void CalculateDelay(Versat* versat,Accelerator* accel); // In versat space, simple extract delays from configuration data
 FUInstance* CreateFUInstance(Accelerator* accel,FUDeclaration* type,String entityName);
 
+void VersatSimDebug(Versat* versat);
 void Hook(Versat* versat,Accelerator* accel,FUInstance* inst);
 // Functions that perform no useful work are simple pre processed out
 inline uint SetDebug(Versat* versat,VersatDebugFlags flags,uint flag){return 0;}
@@ -107,6 +111,7 @@ inline void Free(Versat* versat){}
 #define CheckInputAndOutputNumber(...) ((void)0)
 #define MergeThree(...) ((FUDeclaration*)0)
 #define DebugAccelerator(...) ((void)0)
+#define DebugVersat(...) ((void)0)
 #define Merge(...) ((FUDeclaration*)0)
 inline void TestVersatSide(Versat* versat){}
 

@@ -88,17 +88,18 @@ static String ParseSimpleType(Tokenizer* tok){
    return res;
 }
 
-static Type* RegisterSimpleType(String name,int size){
+static Type* RegisterSimpleType(String name,int size,int align){
    Type* type = types.Alloc();
 
    type->type = Type::BASE;
    type->size = size;
    type->name = name;
+   type->align = align;
 
    return type;
 }
 
-static Type* RegisterOpaqueType(String name,Type::Subtype subtype,int size){
+static Type* RegisterOpaqueType(String name,Type::Subtype subtype,int size,int align){
    for(Type* type : types){
       if(CompareString(type->name,name)){
          Assert(type->size == size);
@@ -111,6 +112,7 @@ static Type* RegisterOpaqueType(String name,Type::Subtype subtype,int size){
    type->name = name;
    type->type = subtype;
    type->size = size;
+   type->align = align;
 
    return type;
 }
@@ -129,6 +131,7 @@ static Type* RegisterEnum(String name,Array<Pair<String,int>> enumValues){
    type->name = name;
    type->type = Type::ENUM;
    type->size = sizeof(int);
+   type->align = sizeof(int);
 
    return type;
 }
@@ -142,6 +145,7 @@ static Type* RegisterTypedef(String oldName,String newName){
    type->name = newName;
    type->typedefType = typedefType;
    type->size = typedefType->size;
+   type->align = typedefType->align;
 
    return type;
 }
@@ -232,10 +236,18 @@ Type* InstantiateTemplate(String name,Arena* arena = nullptr){
    }
 
    int nMembers = templateBase->templateMembers.size;
+   int numberPositions = 0;
+   for(TemplatedMember& m : templateBase->templateMembers){
+      numberPositions = std::max(numberPositions,m.memberOffset);
+   }
+   numberPositions += 1;
+
    Array<Member> members = PushArray<Member>(&permanentArena,nMembers);
-   Array<int> sizes = PushArray<int>(&temp,nMembers);
+   Array<int> sizes = PushArray<int>(&temp,numberPositions);
+   Array<int> align = PushArray<int>(&temp,numberPositions);
    Memset(sizes,0);
-   for(int i = 0; i < nMembers; i++){
+   Memset(align,0);
+   for(int i = 0; i < templateBase->templateMembers.size; i++){
       TemplatedMember templateMember = templateBase->templateMembers[i];
       Tokenizer tok(templateMember.typeName,"*&[],<>",{});
 
@@ -259,14 +271,15 @@ Type* InstantiateTemplate(String name,Arena* arena = nullptr){
       members[i].name = templateMember.name;
       members[i].offset = templateMember.memberOffset; // Temporarely store member position as the offset, for use later in this function
       sizes[templateMember.memberOffset] = std::max(sizes[templateMember.memberOffset],type->size);
+      align[templateMember.memberOffset] = std::max(align[templateMember.memberOffset],type->align);
 
       PopMark(&temp,mark);
    }
 
-   Array<int> offsets = PushArray<int>(&temp,nMembers + 1);
+   Array<int> offsets = PushArray<int>(&temp,numberPositions + 1);
    offsets[0] = 0;
    for(int i = 1; i < offsets.size; i++){
-      offsets[i] = offsets[i-1] + sizes[i - 1];
+      offsets[i] = Align(offsets[i-1],align[i-1]) + sizes[i - 1];
    }
 
    for(Member& member : members){
@@ -290,8 +303,13 @@ Type* InstantiateTemplate(String name,Arena* arena = nullptr){
    newType->templateBase = templateBase;
    newType->templateArgTypes = templateArgTypes;
 
+   int maxAlign = 0;
+   for(int val : align){
+      maxAlign = std::max(val,maxAlign);
+   }
+
    if(structDefined){
-      newType->size = offsets[sizes.size];
+      newType->size = Align(offsets[sizes.size],maxAlign);
    } else {
       newType-> size = templateBase->size;
    }
@@ -402,6 +420,7 @@ Type* GetPointerType(Type* baseType){
    ret->type = Type::POINTER;
    ret->pointerType = baseType;
    ret->size = sizeof(void*);
+   ret->align = alignof(void*);
 
    return ret;
 }
@@ -418,6 +437,7 @@ Type* GetArrayType(Type* baseType, int arrayLength){
    ret->type = Type::ARRAY;
    ret->pointerType = baseType;
    ret->size = arrayLength * baseType->size;
+   ret->align = baseType->align;
 
    return ret;
 }
@@ -440,15 +460,19 @@ void RegisterTypes(){
 
    permanentArena = InitArena(Megabyte(16));
 
-   ValueType::NUMBER = RegisterSimpleType(STRING("int"),sizeof(int));
-   ValueType::SIZE_T = RegisterSimpleType(STRING("size_t"),sizeof(size_t));
-   ValueType::BOOLEAN = RegisterSimpleType(STRING("bool"),sizeof(bool));
-   ValueType::CHAR = RegisterSimpleType(STRING("char"),sizeof(char));
-   ValueType::NIL = RegisterSimpleType(STRING("void"),sizeof(char));
-   RegisterSimpleType(STRING("unsigned int"),sizeof(unsigned int));
-   RegisterSimpleType(STRING("unsigned char"),sizeof(unsigned char));
-   RegisterSimpleType(STRING("float"),sizeof(float));
-   RegisterSimpleType(STRING("double"),sizeof(double));
+   #define REGISTER(TYPE) RegisterSimpleType(STRING(#TYPE),sizeof(TYPE),alignof(TYPE));
+
+   ValueType::NUMBER = REGISTER(int);
+   ValueType::SIZE_T = REGISTER(size_t);
+   ValueType::BOOLEAN = REGISTER(bool);
+   ValueType::CHAR = REGISTER(char);
+   ValueType::NIL = RegisterSimpleType(STRING("void"),sizeof(char),alignof(char));
+   REGISTER(unsigned int);
+   REGISTER(unsigned char);
+   REGISTER(float);
+   REGISTER(double);
+
+   #undef REGISTER
 
    RegisterParsedTypes();
 
@@ -1274,6 +1298,16 @@ Value MakeValue(void* entity,const char* typeName){
    return val;
 }
 
+Value MakeValue(void* entity,String typeName){
+   Value val = {};
+
+   val.type = GetType(typeName);
+   val.custom = entity;
+   val.isTemp = false;
+
+   return val;
+}
+
 // This shouldn't be here, but cannot be on parser.cpp because otherwise struct parser would fail
 Array<Value> ExtractValues(const char* format,Token tok,Arena* arena){
    // TODO: This is pretty much a copy of CheckFormat but with small modifications
@@ -1353,4 +1387,18 @@ Array<Value> ExtractValues(const char* format,Token tok,Arena* arena){
 
    return values;
 }
+
+// Very dependent on compiler and enviromnent.
+// Probably need to at least insert a few more asserts to make it sure that no weird bug escapes from this function in case of any environment change
+String ExtractTypeNameFromPrettyFunction(String prettyFunctionFormat,Arena* out){
+   Array<Value> values = ExtractValues("String GetTemplateTypeName(Arena*) [with T = %s; String = Array<const char>]",prettyFunctionFormat,out);
+
+   Assert(values.size == 1);
+
+   return values[0].str;
+}
+
+
+
+
 

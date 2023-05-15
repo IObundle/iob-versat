@@ -5,8 +5,11 @@
 #include "type.hpp"
 
 static const char* constIn[] = {"constIn0","constIn1","constIn2","constIn3","constIn4","constIn5","constIn6","constIn7","constIn8","constIn9","constIn10","constIn11","constIn12","constIn13","constIn14","constIn15","constIn16",
-                       "constIn17","constIn18","constIn19","constIn20","constIn21","constIn22","constIn23","constIn24","constIn25","constIn26","constIn27","constIn28","constIn29","constIn30","constIn31","constIn32",};
-static const char* regOut[] = {"regOut0","regOut1","regOut2","regOut3","regOut4","regOut5","regOut6","regOut7","regOut8","regOut9","regOut10","regOut11","regOut12","regOut13","regOut14","regOut15","regOut16","regOut17"};
+                       "constIn17","constIn18","constIn19","constIn20","constIn21","constIn22","constIn23","constIn24","constIn25","constIn26","constIn27","constIn28","constIn29","constIn30","constIn31","constIn32","constIn33",
+                       "constIn34","constIn35","constIn36","constIn37","constIn38","constIn39","constIn40","constIn41","constIn42","constIn43","constIn44"};
+static const char* regOut[] = {"regOut0","regOut1","regOut2","regOut3","regOut4","regOut5","regOut6","regOut7","regOut8","regOut9","regOut10","regOut11","regOut12","regOut13","regOut14","regOut15","regOut16","regOut17","regOut18",
+                       "regOut19","regOut20","regOut21","regOut22","regOut23","regOut24","regOut25","regOut26","regOut27","regOut28","regOut29","regOut30","regOut31","regOut32","regOut33","regOut34","regOut35","regOut36","regOut37",
+                       "regOut38","regOut39","regOut40","regOut41","regOut42","regOut43","regOut44"};
 
 bool InitSimpleAccelerator(SimpleAccelerator* simple,Versat* versat,const char* declarationName){
    if(simple->init){
@@ -22,7 +25,7 @@ bool InitSimpleAccelerator(SimpleAccelerator* simple,Versat* versat,const char* 
    simple->numberInputs = type->inputDelays.size;
    simple->numberOutputs = type->outputLatencies.size;
 
-   FUDeclaration* constType = GetTypeByName(versat,STRING("TestConst"));
+   FUDeclaration* constType = GetTypeByName(versat,STRING("TestConst")); // TODO: Used to be TestConst, but using Const while testing Iterative units
    FUDeclaration* regType = GetTypeByName(versat,STRING("Reg"));
 
    for(unsigned int i = 0; i < simple->numberInputs; i++){
@@ -183,6 +186,8 @@ void OutputVersatSource(Versat* versat,SimpleAccelerator* simpleAccel,const char
    TemplateSetNumber("memoryConfigDecisionBit",val.memoryConfigDecisionBit);
    TemplateSetNumber("configurationBits",val.configurationBits);
    TemplateSetNumber("memoryMappedBase",1 << val.memoryConfigDecisionBit);
+   TemplateSetNumber("versatConfig",val.versatConfigs);
+   TemplateSetNumber("versatState",val.versatStates);
 
    ProcessTemplate(s,BasicTemplates::topAcceleratorTemplate,&versat->temp);
 
@@ -215,6 +220,8 @@ void OutputVersatSource(Versat* versat,SimpleAccelerator* simpleAccel,const char
    TemplateSetNumber("nStatics",val.nStatics);
    TemplateSetCustom("instances",&accum,"std::vector<ComplexFUInstance>");
    TemplateSetNumber("numberUnits",accum.size());
+   TemplateSetNumber("versatConfig",val.versatConfigs);
+   TemplateSetNumber("versatState",val.versatStates);
    ProcessTemplate(d,BasicTemplates::dataTemplate,&versat->temp);
 
    {

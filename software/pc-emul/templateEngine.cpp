@@ -44,7 +44,6 @@ static std::map<String,Value,CompareFunction> envTable;
 static FILE* output;
 static Arena* tempArena;
 static Arena* outputArena;
-static const char* filepath;
 
 static bool IsCommandBlockType(Command* com){
    static const char* notBlocks[] = {"set","end","inc","else","include","call","return","format","debugBreak"};
@@ -392,7 +391,7 @@ int CountNonOperationChilds(Accelerator* accel){
 
    int count = 0;
    FOREACH_LIST(ptr,accel->allocated){
-      if(ptr->inst->declaration->type == FUDeclaration::COMPOSITE){
+      if(IsTypeHierarchical(ptr->inst->declaration)){
          count += CountNonOperationChilds(ptr->inst->declaration->fixedDelayCircuit);
       }
 
@@ -935,7 +934,6 @@ CompiledTemplate* CompileTemplate(String content,Arena* arena){
    }
 
    String totalMemory = PointArena(arena,mark);
-   res->filepath = filepath;
    res->blocks = initial;
    res->totalMemoryUsed = totalMemory.size;
    res->content = content;
@@ -944,9 +942,6 @@ CompiledTemplate* CompileTemplate(String content,Arena* arena){
 }
 
 CompiledTemplate* CompileTemplate(const char* templateFilepath,Arena* arena){
-   const char* filepath = PushString(arena,"%s",templateFilepath).data;
-   PushNullByte(arena);
-
    tempArena = arena;
    String content = PushFile(arena,templateFilepath);
 
@@ -963,7 +958,6 @@ void ProcessTemplate(FILE* outputFile,CompiledTemplate* compiledTemplate,Arena* 
    Arena outputArenaInst = SubArena(arena,Megabyte(64));
    outputArena = &outputArenaInst;
    output = outputFile;
-   filepath = compiledTemplate->filepath;
 
    for(Block* block = compiledTemplate->blocks; block; block = block->next){
       String text = Eval(block);
@@ -978,8 +972,6 @@ void ProcessTemplate(FILE* outputFile,CompiledTemplate* compiledTemplate,Arena* 
 void ProcessTemplate(FILE* outputFile,const char* templateFilepath,Arena* arena){
    ArenaMarker marker(arena);
    tempArena = arena;
-
-   filepath = templateFilepath;
 
    Arena outputArenaInst = SubArena(arena,Megabyte(64));
    outputArena = &outputArenaInst;

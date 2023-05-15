@@ -212,11 +212,13 @@ struct FUDeclaration{
    Array<FUDeclaration*> mergedType;
 
    // Iterative
+   /*
    String unitName;
    FUDeclaration* baseDeclaration;
    Accelerator* initial;
    Accelerator* forLoop;
    int dataSize;
+   */
 
    FUFunction initializeFunction;
    FUFunction startFunction;
@@ -226,6 +228,9 @@ struct FUDeclaration{
    MemoryAccessFunction memAccessFunction;
 
    const char* operation;
+
+   // TODO: this is probably not needed, only used for verilog generation (which could be calculated inside the functions)
+   //       the info is all contained inside the units themselves.
    Hashmap<StaticId,StaticData>* staticUnits;
 
    enum {SINGLE = 0x0,COMPOSITE = 0x1,SPECIAL = 0x2,MERGED = 0x3,ITERATIVE = 0x4} type;
@@ -235,6 +240,11 @@ struct FUDeclaration{
    bool implementsDone;
    bool isMemoryMapped;
 };
+
+static bool IsTypeHierarchical(FUDeclaration* decl){
+   bool res = (decl->type == FUDeclaration::COMPOSITE || decl->type == FUDeclaration::ITERATIVE);
+   return res;
+}
 
 struct GraphComputedData{
    Array<ConnectionInfo> allInputs; // All connections, even repeated ones
@@ -483,6 +493,9 @@ struct VersatComputedValues{
    int nConfigs;
    int configBits;
 
+   int versatConfigs;
+   int versatStates;
+
    int nStatics;
    int staticBits;
    int staticBitsStart;
@@ -617,6 +630,8 @@ namespace BasicDeclaration{
    extern FUDeclaration* output;
    extern FUDeclaration* multiplexer;
    extern FUDeclaration* combMultiplexer;
+   extern FUDeclaration* timedMultiplexer;
+   extern FUDeclaration* stridedMerge;
    extern FUDeclaration* pipelineRegister;
    extern FUDeclaration* data;
 }
@@ -629,6 +644,7 @@ namespace BasicTemplates{
    extern CompiledTemplate* externalPortmapTemplate;
    extern CompiledTemplate* externalPortTemplate;
    extern CompiledTemplate* externalInstTemplate;
+   extern CompiledTemplate* iterativeTemplate;
 }
 
 struct GraphMapping;
@@ -650,6 +666,7 @@ bool IsConfigStatic(Accelerator* topLevel,ComplexFUInstance* inst);
 bool IsUnitCombinatorial(ComplexFUInstance* inst);
 
 void ReorganizeAccelerator(Accelerator* graph,Arena* temp);
+void ReorganizeIterative(Accelerator* accel,Arena* temp);
 
 int CalculateNumberOfUnits(InstanceNode* node);
 
@@ -669,6 +686,7 @@ Edge* ConnectUnitsGetEdge(FUInstance* out,int outIndex,FUInstance* in,int inInde
 Edge* ConnectUnitsGetEdge(FUInstance* out,int outIndex,FUInstance* in,int inIndex,int delay,Edge* previous);
 Edge* ConnectUnitsIfNotConnectedGetEdge(FUInstance* out,int outIndex,FUInstance* in,int inIndex,int delay = 0);
 Edge* ConnectUnits(PortInstance out,PortInstance in,int delay = 0);
+Edge* ConnectUnits(InstanceNode* out,int outPort,InstanceNode* in,int inPort,int delay = 0);
 Edge* ConnectUnits(FUInstance* out,int outIndex,FUInstance* in,int inIndex,int delay,Edge* previousEdge);
 
 // Delay

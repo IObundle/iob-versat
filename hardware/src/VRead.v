@@ -13,31 +13,32 @@ module VRead #(
    input                  clk,
    input                  rst,
 
+   input                  running,
    input                  run,
    output                 done,
 
-   // Native interface
-   input                  databus_ready,
-   output                 databus_valid,
+   // Databus interface
+   input                       databus_ready,
+   output                      databus_valid,
    output reg [`IO_ADDR_W-1:0] databus_addr,
-   input [DATA_W-1:0]     databus_rdata,
-   output [DATA_W-1:0]    databus_wdata,
-   output [DATA_W/8-1:0]  databus_wstrb,
-   output [7:0]           databus_len,
-   input                  databus_last,
+   input [DATA_W-1:0]          databus_rdata,
+   output [DATA_W-1:0]         databus_wdata,
+   output [DATA_W/8-1:0]       databus_wstrb,
+   output [7:0]                databus_len,
+   input                       databus_last,
 
-    // input / output data
-    (* versat_latency = 1 *) output [DATA_W-1:0]    out0,
+   // input / output data
+   (* versat_latency = 1 *) output [DATA_W-1:0]    out0,
 
    // External memory
-   output [ADDR_W-1:0]   ext_2p_addr_out_0,
-   output [ADDR_W-1:0]   ext_2p_addr_in_0,
-   output                ext_2p_write_0,
-   output                ext_2p_read_0,
-   input  [DATA_W-1:0]   ext_2p_data_in_0,
-   output [DATA_W-1:0]   ext_2p_data_out_0,
+   output [ADDR_W-1:0]     ext_2p_addr_out_0,
+   output [ADDR_W-1:0]     ext_2p_addr_in_0,
+   output                  ext_2p_write_0,
+   output                  ext_2p_read_0,
+   input  [DATA_W-1:0]     ext_2p_data_in_0,
+   output [DATA_W-1:0]     ext_2p_data_out_0,
 
-    // configurations
+   // configurations
    input [`IO_ADDR_W-1:0]  ext_addr,
    input [`MEM_ADDR_W-1:0] int_addr,
    input [`IO_SIZE_W-1:0]  size,
@@ -55,13 +56,14 @@ module VRead #(
    input [`MEM_ADDR_W-1:0] startB,
    input [`MEM_ADDR_W-1:0] shiftB,
    input [`MEM_ADDR_W-1:0] incrB,
-   input [31:0]            delay0,// delayB
    input                   reverseB,
    input                   extB,
    input [`MEM_ADDR_W-1:0] iter2B,
    input [`PERIOD_W-1:0]   per2B,
    input [`MEM_ADDR_W-1:0] shift2B,
-   input [`MEM_ADDR_W-1:0] incr2B
+   input [`MEM_ADDR_W-1:0] incr2B,
+
+   input [31:0]            delay0
    );
 
    assign databus_wdata = 0;
@@ -105,7 +107,14 @@ module VRead #(
    endfunction
 
    wire [1:0]             direction = 2'b01;
-   wire [`MEM_ADDR_W-1:0] startA    = `MEM_ADDR_W'd0;
+   reg [`MEM_ADDR_W-1:0] startA;
+
+   always @*
+   begin
+      startA = 0;
+      startA[`MEM_ADDR_W-1] = !pingPongState;
+   end
+
    wire [31:0]   delayA    = 0;
 
    // port addresses and enables
@@ -120,8 +129,7 @@ module VRead #(
    wire [DATA_W-1:0]      data_in = 0;
 
    reg                    pingPongState;
-   wire [ADDR_W-1:0]      int_addr_inst;
-   wire [ADDR_W-1:0]      startB_inst;
+   wire [ADDR_W-1:0]      startB_inst = pingPong ? {pingPongState,startB[ADDR_W-2:0]} : startB;
 
    // mem enables output by addr gen
    wire enA = req;
@@ -131,9 +139,6 @@ module VRead #(
    wire wrA = req & ~rnw;
 
    wire [DATA_W-1:0]      data_to_wrA = inA;
-
-   assign int_addr_inst = pingPong ? {pingPongState,int_addr[ADDR_W-2:0]} : int_addr;
-   assign startB_inst   = pingPong ? {pingPongState,startB[ADDR_W-2:0]} : startB;
 
    // Ping pong 
    always @(posedge clk,posedge rst)

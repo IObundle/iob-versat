@@ -50,6 +50,7 @@ struct Type{
    };
 
    int size; // Size of type (total size in case of arrays)
+   int align;
    enum Subtype {UNKNOWN = 0,BASE,STRUCT,POINTER,ARRAY,TEMPLATED_STRUCT_DEF,TEMPLATED_INSTANCE,ENUM,TYPEDEF} type;
 };
 
@@ -160,5 +161,27 @@ Value MakeValue(String str);
 Value MakeValue(bool boolean);
 
 Value MakeValue(void* val,const char* typeName);
+Value MakeValue(void* val,String typeName);
+
+String ExtractTypeNameFromPrettyFunction(String prettyFunctionFormat,Arena* out);
+
+template<typename T>
+String GetTemplateTypeName(Arena* out){
+   String func = STRING(__PRETTY_FUNCTION__);
+   String typeName = ExtractTypeNameFromPrettyFunction(func,out);
+
+   return typeName;
+}
+
+template<typename T>
+Value MakeValue(T* t){
+   STACK_ARENA(temp,Kilobyte(1));
+
+   String str = GetTemplateTypeName<T>(&temp);
+   Value val = MakeValue(t,str);
+
+   return val;
+}
+
 
 #endif // INCLUDED_TYPE

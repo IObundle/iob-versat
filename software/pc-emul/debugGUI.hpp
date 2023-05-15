@@ -21,18 +21,22 @@ using Optional = std::optional<T>;
 
 #define DebugValue(...) ((void)0)
 #else
+
+void SetDebugValue(Value val);
+void SetDebugAccelerator(Accelerator* accel);
+
 void DebugGUI();
 void DebugVersat(Versat* versat);
 
 void DebugAccelerator(Accelerator* accel);
+
+#if 0
 void DebugAcceleratorPersist(Accelerator* accel);
 void DebugAcceleratorStart(Accelerator* accel);
 void DebugAcceleratorEnd(Accelerator* accel);
+#endif
 
-void DebugWindowValue(const char* label,Value val);
-void DebugWindowAccelerator(const char* label,Accelerator* accel);
-
-void DebugValue(const char* windowName,Value val);
+void DebugValue(Value val);
 #endif
 
 //void DebugAcceleratorRun(Accelerator* accel,int cycle);

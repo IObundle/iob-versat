@@ -3,12 +3,15 @@
 
 #include "versat_data.inc"
 
-#define MEMSET(base, location, value) (*((volatile int*) (base + (sizeof(int)) * location)) = value)
+#define MEMSET(base, location, value) (*((volatile int*) (base + (sizeof(int)) * location)) = (int) value)
 #define MEMGET(base, location)        (*((volatile int*) (base + (sizeof(int)) * location)))
 
 #if 0
 #define DEBUG
 #endif
+
+#undef TIME_IT
+#define TIME_IT(...) ((void)0)
 
 static int versat_base;
 
@@ -41,6 +44,8 @@ void AcceleratorRun(Accelerator* accel,int times){
    static bool init = false;
 
    if(!init){
+
+      TIME_IT("Init accel");
       // Set delay and static values
       for(int i = 0; i < ARRAY_SIZE(delayBuffer); i++){
          delayBase[i] = delayBuffer[i];
@@ -54,6 +59,8 @@ void AcceleratorRun(Accelerator* accel,int times){
    #ifdef DEBUG
    printf("B\n");
    #endif
+
+   TIME_IT("Accel run");
 
    MEMSET(versat_base,0x0,times);
 
@@ -84,6 +91,30 @@ int32_t VersatUnitRead(FUInstance* instance,int address){
    #endif
 
    return res;
+}
+
+void VersatMemoryCopy(FUInstance* instance,volatile int* dest,int* data,int size){
+   if(size <= 0){
+      return;
+   }
+
+   TIME_IT("Memory copy");
+
+   MEMSET(versat_base,0x1,dest);
+   MEMSET(versat_base,0x2,data);
+   MEMSET(versat_base,0x3,size - 1); // AXI size
+   MEMSET(versat_base,0x4,0x1);
+
+   while(1){
+      int val = MEMGET(versat_base,0x1);
+
+      if(val)
+         break;
+   }
+}
+
+void VersatMemoryCopy(FUInstance* instance,volatile int* dest,Array<int> data){
+   VersatMemoryCopy(instance,dest,data.data,data.size);
 }
 
 static FUInstance* vGetInstanceByName_(int startIndex,int argc, va_list args){
@@ -141,6 +172,8 @@ FUInstance* GetInstanceByName_(Accelerator* accel,int argc, ...){
    va_list args;
    va_start(args,argc);
 
+   TIME_IT("Get Instance");
+
    FUInstance* res = vGetInstanceByName_(0,argc,args);
 
    va_end(args);
@@ -151,6 +184,8 @@ FUInstance* GetInstanceByName_(Accelerator* accel,int argc, ...){
 FUInstance* GetSubInstanceByName_(Accelerator* topLevel,FUInstance* inst,int argc, ...){
    va_list args;
    va_start(args,argc);
+
+   TIME_IT("Get SubInstance");
 
    int index = inst - instancesBuffer;
    FUInstance* res = vGetInstanceByName_(index + 1,argc,args);
@@ -170,6 +205,10 @@ NanoSecond GetTime(){
    NanoSecond res = {};
    res.time = (uint64) timer_time_us() * 1000;
    return res;
+}
+
+void VersatSimDebug(Versat* versat){
+   MEMSET(versat_base,0x5,0);
 }
 
 void Hook(Versat* versat,Accelerator* accel,FUInstance* inst){

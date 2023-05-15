@@ -70,8 +70,12 @@ VersatComputedValues ComputeVersatValues(Versat* versat,Accelerator* accel){
    res.delayBitsStart = res.staticBitsStart + res.staticBits;
 
    // Versat specific registers are treated as a special maping (all 0's) of 1 configuration and 1 state register
-   res.nConfigs += 1;
-   res.nStates += 1;
+   res.versatConfigs = 4;
+   res.versatStates = 4;
+   res.nUnitsIO += 1; // For the DMA
+
+   res.nConfigs += res.versatConfigs;
+   res.nStates += res.versatStates;
 
    res.nConfigurations = res.nConfigs + res.nStatics + res.nDelays;
    res.configurationBits = res.configBits + res.staticBits + res.delayBits;

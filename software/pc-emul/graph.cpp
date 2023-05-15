@@ -961,6 +961,40 @@ Edge* ConnectUnitsGetEdge(FUInstance* out,int outIndex,FUInstance* in,int inInde
    return edge;
 }
 
+Array<int> GetNumberOfInputConnections(InstanceNode* node,Arena* out){
+   Array<int> res = PushArray<int>(out,node->inputs.size);
+   Memset(res,0);
+
+   FOREACH_LIST(ptr,node->allInputs){
+      int port = ptr->port;
+      res[port] += 1;
+   }
+
+   return res;
+}
+
+Array<Array<PortNode>> GetAllInputs(InstanceNode* node,Arena* out){
+   Array<int> connections = GetNumberOfInputConnections(node,out); // Wastes a bit of memory because not deallocated after, its irrelevant
+
+   Array<Array<PortNode>> res = PushArray<Array<PortNode>>(out,node->inputs.size);
+   Memset(res,{});
+
+   for(int i = 0; i < res.size; i++){
+      res[i] = PushArray<PortNode>(out,connections[i]);
+   }
+
+   FOREACH_LIST(ptr,node->allInputs){
+      int port = ptr->port;
+
+      Array<PortNode> array = res[port];
+      int index = connections[port] - 1;
+      connections[port] -= 1;
+      array[index] = ptr->instConnectedTo;
+   }
+
+   return res;
+}
+
 void RemoveConnection(Accelerator* accel,PortNode out,PortNode in){
    RemoveConnection(accel,out.node,out.port,in.node,in.port);
 }

@@ -40,7 +40,8 @@ int @{wire.name};
 #define INIT(unit) \
    unit->run = 0; \
    unit->clk = 0; \
-   unit->rst = 0;
+   unit->rst = 0; \
+   unit->running = 1;
 
 #define UPDATE(unit) \
    unit->clk = 0; \

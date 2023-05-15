@@ -63,7 +63,7 @@ void InitializeSubaccelerator(AcceleratorIterator iter){
          inst->declaration->initializeFunction(inst);
       }
 
-      if(inst->declaration->type == FUDeclaration::COMPOSITE){
+      if(IsTypeHierarchical(inst->declaration)){
          AcceleratorIterator it = iter.LevelBelowIterator();
          InitializeSubaccelerator(it);
       }
@@ -114,6 +114,8 @@ InstanceNode* CreateFlatFUInstance(Accelerator* accel,FUDeclaration* type,String
 
 InstanceNode* CreateAndConfigureFUInstance(Accelerator* accel,FUDeclaration* type,String name){
    //SetDebuggingValue(MakeValue(accel,"Accelerator"));
+
+   accel->ordered = nullptr; // Added recently, might cause bugs
 
    Arena* arena = &accel->versat->temp;
    BLOCK_REGION(arena);
@@ -175,7 +177,7 @@ InstanceNode* CreateAndConfigureFUInstance(Accelerator* accel,FUDeclaration* typ
       #endif
 
       // Initialize sub units
-      if(type->type == FUDeclaration::COMPOSITE){ // TODO: Iterative units
+      if(IsTypeHierarchical(type)){
          // Fix static info
          for(Pair<StaticId,StaticData>& pair : type->staticUnits){
             #if 0
@@ -469,86 +471,6 @@ ComplexFUInstance GetNodeByName(Accelerator* accel,String string,Arena* arena){
    }
    Assert(false);
    return (ComplexFUInstance){};
-}
-
-void FlattenRemoveFUInstance(Accelerator* accel,ComplexFUInstance* inst){
-   UNHANDLED_ERROR;
-   #if 0
-   FOREACH_LIST(edge,accel->edges){
-      if(edge->units[0].inst == inst){
-         accel->edges = ListRemove(accel->edges,edge);
-      } else if(edge->units[1].inst == inst){
-         accel->edges = ListRemove(accel->edges,edge);
-      }
-   }
-
-   #if 01
-   // Change allocations for all the other units
-   int nConfigs = inst->declaration->configs.size;
-   int nStates = inst->declaration->states.size;
-   int nDelays = inst->declaration->nDelays;
-   int nOutputs = inst->declaration->outputLatencies.size;
-   int nTotalOutputs = inst->declaration->totalOutputs;
-   int nExtraData = inst->declaration->extraDataSize;
-
-   int* oldConfig = inst->config;
-   int* oldState = inst->state;
-   int* oldDelay = inst->delay;
-   int* oldOutputs = inst->outputs;
-   int* oldStoredOutputs = inst->storedOutputs;
-   Byte* oldExtraData = inst->extraData;
-
-   if(inst->config) RemoveChunkAndCompress(&accel->configAlloc,inst->config,nConfigs);
-   if(inst->state) RemoveChunkAndCompress(&accel->stateAlloc,inst->state,nStates);
-   if(inst->delay) RemoveChunkAndCompress(&accel->delayAlloc,inst->delay,nDelays);
-   if(inst->outputs) RemoveChunkAndCompress(&accel->outputAlloc,inst->outputs,nOutputs);
-   if(inst->storedOutputs) RemoveChunkAndCompress(&accel->storedOutputAlloc,inst->storedOutputs,nOutputs);
-   if(inst->extraData) RemoveChunkAndCompress(&accel->extraDataAlloc,inst->extraData,nExtraData);
-
-   if(inst->declaration->type == FUDeclaration::COMPOSITE){
-      accel->outputAlloc.size -= (nTotalOutputs - nOutputs); // Total outputs already includes nOutputs, and RemoveChunkAndCompress already removes nOutputs
-      accel->storedOutputAlloc.size -= (nTotalOutputs - nOutputs);
-      nOutputs = nTotalOutputs;
-   }
-   #endif
-
-   // Remove instance
-   accel->instances = ListRemove(accel->instances,inst);
-   accel->numberInstances -= 1;
-
-   #if 01
-   // Fix config pointers
-   FOREACH_LIST(in,accel->instances){
-   //for(ComplexFUInstance* in : accel->instances){
-      if(!IsConfigStatic(accel,in) && in->config > oldConfig){
-         in->config -= nConfigs;
-         Assert(Inside(&accel->configAlloc,in->config));
-      }
-      if(in->state > oldState){
-         in->state -= nStates;
-         Assert(Inside(&accel->stateAlloc,in->state));
-      }
-      if(in->delay > oldDelay){
-         in->delay -= nDelays;
-         Assert(Inside(&accel->delayAlloc,in->delay));
-      }
-      #if 1
-      if(in->outputs > oldOutputs){
-         in->outputs -= nOutputs;
-         Assert(Inside(&accel->outputAlloc,in->outputs));
-      }
-      if(in->storedOutputs > oldStoredOutputs){
-         in->storedOutputs -= nOutputs;
-         Assert(Inside(&accel->storedOutputAlloc,in->storedOutputs));
-      }
-      #endif
-      if(in->extraData > oldExtraData){
-         in->extraData -= nExtraData;
-         Assert(Inside(&accel->extraDataAlloc,in->extraData));
-      }
-   }
-   #endif
-   #endif
 }
 
 Accelerator* Flatten(Versat* versat,Accelerator* accel,int times){
@@ -857,214 +779,6 @@ Accelerator* Flatten(Versat* versat,Accelerator* accel,int times){
    return newAccel;
 }
 
-// Returns the instances connected to the output instance.
-// The index in the array is the associated port
-Array<PortInstance> RecursiveFlattenCreate(Versat* versat,Accelerator* newAccel,Accelerator* accel,Array<PortInstance> inputs,Arena* arena){
-   UNHANDLED_ERROR;
-   #if 0
-   int count = 0;
-   FOREACH_LIST(inst,accel->instances){
-      count += inst->declaration->outputLatencies.size * 50;
-   }
-
-   Array<PortInstance> outputs = PushArray<PortInstance>(arena,BasicDeclaration::output->inputDelays.size);
-   // Arena marker here, I think
-
-   // The key is in topLevel space
-   // The data is in newAccel space
-   Hashmap<PortInstance,PortInstance> mapOutputsToNewInstances = {};
-   mapOutputsToNewInstances.Init(arena,count);
-   Hashmap<ComplexFUInstance*,ComplexFUInstance*> oldToNew = {};
-   oldToNew.Init(arena,accel->numberInstances);
-
-   // In theory, should not work for accelerators with loops
-   FOREACH_LIST(inst,accel->instances){
-      if(inst->declaration == BasicDeclaration::input){
-         int port = inst->portIndex;
-         PortInstance mapped = inputs[port];
-
-         mapOutputsToNewInstances.Insert((PortInstance){inst,port},mapped);
-      } else if(inst->declaration->type == FUDeclaration::COMPOSITE){
-         Array<PortInstance> inputs = PushArray<PortInstance>(arena,inst->graphData->singleInputs.size);
-         int i = 0;
-         for(PortInstance portInst : inst->graphData->singleInputs){ // Map top level space to new accel space
-            if(portInst.inst){
-               PortInstance* possible = mapOutputsToNewInstances.Get(portInst);
-
-               if(possible){
-                  inputs[i] = *possible;
-               }
-            }
-            i += 1;
-         }
-
-         Array<PortInstance> outputs = RecursiveFlattenCreate(versat,newAccel,inst->declaration->fixedDelayCircuit,inputs,arena);
-         i = 0;
-         for(PortInstance portInst : outputs){
-            PortInstance topLevelSpace = (PortInstance){inst,i};
-
-            mapOutputsToNewInstances.Insert(topLevelSpace,portInst);
-            i += 1;
-         }
-      } else if(inst->declaration->type == FUDeclaration::SINGLE){
-         ComplexFUInstance* newUnit = (ComplexFUInstance*) CreateFUInstance(newAccel,inst->declaration,inst->name);
-
-         if(inst->isStatic){
-            SetStatic(newAccel,newUnit);
-         }
-
-         oldToNew.Insert(inst,newUnit);
-
-         int i = 0;
-         for(PortInstance portInst : inst->graphData->singleInputs){
-            if(portInst.inst){
-               PortInstance correct = {};
-               if(portInst.inst->declaration == BasicDeclaration::input){
-                  int port = portInst.inst->portIndex;
-                  correct = inputs[port];
-               } else {
-                  PortInstance* possible = mapOutputsToNewInstances.Get(portInst);
-                  if(possible){
-                     correct = *possible;
-                  } else {
-                     correct.inst = oldToNew.GetOrFail(portInst.inst);
-                     correct.port = portInst.port;
-                  }
-               }
-
-               if(correct.inst){
-                  ConnectUnits(correct,(PortInstance){newUnit,i},0);
-               }
-            }
-            i += 1;
-         }
-      }
-   }
-
-   ComplexFUInstance* output = GetOutputInstance(accel);
-
-   int i = 0;
-   for(PortInstance portInst : output->graphData->singleInputs){
-      if(portInst.inst){
-         PortInstance correct = {};
-         if(portInst.inst->declaration == BasicDeclaration::input){
-            int port = portInst.inst->portIndex;
-            correct = inputs[port];
-         } else {
-            PortInstance* possible = mapOutputsToNewInstances.Get(portInst);
-            if(possible){
-               correct = *possible;
-            } else {
-               correct.inst = oldToNew.GetOrFail(portInst.inst);
-               correct.port = portInst.port;
-            }
-         }
-
-         outputs[i] = correct;
-      }
-      i += 1;
-   }
-
-   return outputs;
-   #endif
-   return {};
-}
-
-Accelerator* RecursiveFlatten(Versat* versat,Accelerator* topLevel){
-   Arena* arena = &versat->temp;
-   ArenaMarker marker(arena);
-
-   UNHANDLED_ERROR;
-   #if 0
-   Accelerator* newAccel = CreateAccelerator(versat);
-
-   AcceleratorView view = CreateAcceleratorView(topLevel,arena);
-   view.CalculateDAGOrdering(arena);
-
-   int count = 0;
-   FOREACH_LIST(inst,topLevel->instances){
-      count += inst->declaration->outputLatencies.size * 50;
-   }
-
-   // The key is in topLevel space
-   // The data is in newAccel space
-   Hashmap<PortInstance,PortInstance> mapOutputsToNewInstances = {};
-   mapOutputsToNewInstances.Init(arena,count);
-   Hashmap<ComplexFUInstance*,ComplexFUInstance*> oldToNew = {};
-   oldToNew.Init(arena,topLevel->numberInstances);
-
-   // In theory, should not work for accelerators with loops
-   for(int index = 0; index < view.nodes.Size(); index++){
-      ComplexFUInstance* inst = view.order.instances[index];
-
-      if(inst->declaration->type == FUDeclaration::COMPOSITE){
-         Array<PortInstance> inputs = PushArray<PortInstance>(arena,inst->graphData->singleInputs.size);
-         int i = 0;
-         for(PortInstance portInst : inst->graphData->singleInputs){ // Map top level space to new topLevel space
-            if(portInst.inst){
-               PortInstance* possible = mapOutputsToNewInstances.Get(portInst);
-
-               if(possible){
-                  inputs[i] = *possible;
-               } else {
-                  inputs[i].inst = oldToNew.GetOrFail(portInst.inst);
-                  inputs[i].port = portInst.port;
-               }
-            }
-            i += 1;
-         }
-
-         Array<PortInstance> outputs = RecursiveFlattenCreate(versat,newAccel,inst->declaration->fixedDelayCircuit,inputs,arena);
-         for(PortInstance portInst : outputs){
-            PortInstance topLevelSpace = (PortInstance){inst,i};
-
-            mapOutputsToNewInstances.Insert(topLevelSpace,portInst);
-            i += 1;
-         }
-      } else {
-         ComplexFUInstance* newUnit = (ComplexFUInstance*) CreateFUInstance(newAccel,inst->declaration,inst->name);
-
-         if(inst->isStatic){
-            SetStatic(newAccel,newUnit);
-         }
-
-         oldToNew.Insert(inst,newUnit);
-
-         int i = 0;
-         for(PortInstance portInst : inst->graphData->singleInputs){
-            if(portInst.inst){
-               PortInstance correct = {};
-               PortInstance* possible = mapOutputsToNewInstances.Get(portInst);
-               if(possible){
-                  correct = *possible;
-               } else {
-                  correct.inst = oldToNew.GetOrFail(portInst.inst);
-                  correct.port = portInst.port;
-               }
-
-               ConnectUnits(correct,(PortInstance){newUnit,i},0);
-            }
-            i += 1;
-         }
-      }
-   }
-
-   view = CreateAcceleratorView(newAccel,arena);
-   view.CalculateDAGOrdering(arena);
-   OutputGraphDotFile(versat,view,true,nullptr,"debug/flatten.dot");
-
-   #if 0
-   Assert(topLevel->configAlloc.size == newAccel->configAlloc.size);
-   Assert(topLevel->stateAlloc.size == newAccel->stateAlloc.size);
-   Assert(topLevel->delayAlloc.size == newAccel->delayAlloc.size);
-   Assert(topLevel->extraDataAlloc.size == newAccel->extraDataAlloc.size);
-   #endif
-
-   return newAccel;
-   #endif
-   return nullptr;
-}
-
 InstanceNode* AcceleratorIterator::Start(Accelerator* topLevel,ComplexFUInstance* compositeInst,Arena* arena,bool populate){
    this->topLevel = topLevel;
    this->level = 0;
@@ -1233,13 +947,8 @@ InstanceNode* AcceleratorIterator::Current(){
 }
 
 InstanceNode* AcceleratorIterator::CurrentAcceleratorInstance(){
-   #if 0 // Only because of LevelBelowIterator. Ideally should have a flag to signal this situation and let the function access stack[-1] for iterators that we know they have a bigger stack
-   if(level == 0){
-      return nullptr;
-   }
-   #endif
-
    if(levelBelow && level == 0){
+      // Accessing parent iterator stack
       if(ordered){
          return stack[-1].ordered->node;
       } else {
@@ -1296,7 +1005,7 @@ InstanceNode* AcceleratorIterator::Skip(){
 AcceleratorIterator AcceleratorIterator::LevelBelowIterator(Arena* arena){
    ComplexFUInstance* inst = Current()->inst;
 
-   Assert(inst && (inst->declaration->type == FUDeclaration::COMPOSITE || inst->declaration->type == FUDeclaration::ITERATIVE));
+   Assert(inst && IsTypeHierarchical(inst->declaration));
 
    AcceleratorIterator iter = {};
 
@@ -1397,8 +1106,6 @@ Hashmap<EdgeNode,int>* CalculateDelay(Versat* versat,Accelerator* accel,Arena* o
          con->delay = edgeToDelay->Insert(edge,0);
       }
    }
-
-
 
    int graphs = 0;
    OrderedInstance* ptr = accel->ordered;
@@ -1728,13 +1435,90 @@ void ReorganizeAccelerator(Accelerator* accel,Arena* temp){
    }
 }
 
+void ReorganizeIterative(Accelerator* accel,Arena* temp){
+   if(accel->ordered){
+      return;
+   }
+
+   int size = Size(accel->allocated);
+   Hashmap<InstanceNode*,int>* order = PushHashmap<InstanceNode*,int>(temp,size);
+   Hashmap<InstanceNode*,bool>* seen = PushHashmap<InstanceNode*,bool>(temp,size);
+
+   FOREACH_LIST(ptr,accel->allocated){
+      order->Insert(ptr,0);
+      seen->Insert(ptr,false);
+   }
+
+   // Start by seeing all inputs
+   FOREACH_LIST(ptr,accel->allocated){
+      if(ptr->allInputs == nullptr){
+         seen->Insert(ptr,true);
+      }
+   }
+
+   FOREACH_LIST(ptr,accel->allocated){
+      bool allInputsSeen = true;
+      FOREACH_LIST(input,ptr->allInputs){
+         InstanceNode* node = input->instConnectedTo.node;
+         if(node == ptr){
+            continue;
+         }
+
+         bool inputSeen = seen->GetOrFail(node);
+         if(!inputSeen){
+            allInputsSeen = false;
+            break;
+         }
+      }
+
+      if(!allInputsSeen){
+         continue;
+      }
+
+      int maxOrder = 0;
+      FOREACH_LIST(input,ptr->allInputs){
+         InstanceNode* node = input->instConnectedTo.node;
+         maxOrder = std::max(maxOrder,order->GetOrFail(node));
+      }
+
+      order->Insert(ptr,maxOrder + 1);
+   }
+
+   Array<InstanceNode*> nodes = PushArray<InstanceNode*>(temp,size);
+   int index = 0;
+   for(int i = 0; i < size; i++){
+      FOREACH_LIST(ptr,accel->allocated){
+         int ord = order->GetOrFail(ptr);
+         if(ord == i){
+            nodes[index++] = ptr;
+         }
+      }
+   }
+
+   OrderedInstance* ordered = nullptr;
+   for(int i = 0; i < size; i++){
+      InstanceNode* ptr = nodes[i];
+
+      OrderedInstance* newOrdered = PushStruct<OrderedInstance>(accel->accelMemory);
+      newOrdered->node = ptr;
+
+      if(!accel->ordered){
+         accel->ordered = newOrdered;
+         ordered = newOrdered;
+      } else {
+         ordered->next = newOrdered;
+         ordered = newOrdered;
+      }
+   }
+}
+
 int CalculateNumberOfUnits(InstanceNode* node){
    int res = 0;
 
    FOREACH_LIST(ptr,node){
       res += 1;
 
-      if(ptr->inst->declaration->type == FUDeclaration::COMPOSITE){
+      if(IsTypeHierarchical(ptr->inst->declaration)){
          res += CalculateNumberOfUnits(ptr->inst->declaration->fixedDelayCircuit->allocated);
       }
    }
@@ -1793,7 +1577,6 @@ int CalculateLatency(ComplexFUInstance* inst){
    return maxLatency;
 }
 #endif
-
 
 void FixMultipleInputs(Versat* versat,Accelerator* accel){
    Arena* arena = &versat->temp;

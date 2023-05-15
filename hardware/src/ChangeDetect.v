@@ -1,7 +1,7 @@
 `timescale 1ns / 1ps
 `include "xversat.vh"
 
-module Const #(
+module ChangeDetect #(
          parameter DATA_W = 32
               )
     (
@@ -12,11 +12,13 @@ module Const #(
     input               running,
     input               run,
 
-    output [DATA_W-1:0] out0,
+    //input / output data
+    input [DATA_W-1:0] in0,
+    (* versat_latency = 1 *) input [DATA_W-1:0] in1,
 
-    input [DATA_W-1:0]  constant // config
+    output [DATA_W-1:0] out0
     );
 
-assign out0 = constant;
+assign out0 = ((in0 != in1) ? ~0 : 0);
 
 endmodule

@@ -10,7 +10,7 @@
 #include "debugGUI.hpp"
 #include "graph.hpp"
 
-#define ARRAY_SIZE(array) sizeof(array) / sizeof(array[0])
+#define ARRAY_SIZE(array) (sizeof(array) / sizeof(array[0]))
 
 typedef Hashmap<String,FUInstance*> InstanceTable;
 typedef Hashmap<String,int> InstanceName;
@@ -193,7 +193,7 @@ Expression* ParseTerm(Tokenizer* tok,Arena* arena){
 }
 
 Expression* ParseExpression(Tokenizer* tok,Arena* arena){
-   Expression* expr = ParseOperationType(tok,{{"+","-"},{"&","|","^"},{">><",">>","<<>","<<"}},ParseTerm,arena);
+   Expression* expr = ParseOperationType(tok,{{"+","-"},{"&","|","^"},{">><",">>","><<","<<"}},ParseTerm,arena);
 
    return expr;
 }
@@ -319,7 +319,7 @@ PortExpression InstantiateExpression(Versat* versat,Expression* root,Accelerator
          typeName = "RHR";
       } else if(CompareToken(op,">>")){
          typeName = "SHR";
-      } else if(CompareToken(op,"<<>")){
+      } else if(CompareToken(op,"><<")){
          typeName = "RHL";
       } else if(CompareToken(op,"<<")){
          typeName = "SHL";
@@ -653,22 +653,14 @@ FUDeclaration* ParseModule(Versat* versat,Tokenizer* tok){
 }
 
 FUDeclaration* ParseIterative(Versat* versat,Tokenizer* tok){
-   IterativeUnitDeclaration decl = {};
-
    tok->AssertNextToken("iterative");
+
+   Arena* arena = &versat->temp;
+   BLOCK_REGION(arena);
 
    String name = tok->NextToken();
 
-   decl.name = PushString(&versat->permanent,name);
-
-   Accelerator* firstPhase = CreateAccelerator(versat);
-   Accelerator* secondPhase = CreateAccelerator(versat);
-
-   /* FUInstance* firstOut = */ CreateFUInstance(firstPhase,BasicDeclaration::output,STRING("out"));
-   FUInstance* firstData = CreateFUInstance(firstPhase,BasicDeclaration::data,STRING("data"));
-
-   FUInstance* secondOut = CreateFUInstance(secondPhase,BasicDeclaration::output,STRING("out"));
-   FUInstance* secondData = CreateFUInstance(secondPhase,BasicDeclaration::data,STRING("data"));
+   Accelerator* iterative = CreateAccelerator(versat);
 
    tok->AssertNextToken("(");
    // Arguments
@@ -688,14 +680,18 @@ FUDeclaration* ParseIterative(Versat* versat,Tokenizer* tok){
 
       String name = PushString(&versat->permanent,argument);
 
-      CreateOrGetInput(firstPhase,name,insertedInputs);
-      CreateOrGetInput(secondPhase,name,insertedInputs++);
+      CreateOrGetInput(iterative,name,insertedInputs++);
    }
    tok->AssertNextToken(")");
    tok->AssertNextToken("{");
 
+   FUInstance* unit = nullptr;
    // Instance instantiation;
-   if(!tok->IfPeekToken("#")){
+   while(1){
+      if(tok->IfPeekToken("#")){
+         break;
+      }
+
       Token instanceTypeName = tok->NextToken();
       Token instanceName = tok->NextToken();
       tok->AssertNextToken(";");
@@ -703,48 +699,37 @@ FUDeclaration* ParseIterative(Versat* versat,Tokenizer* tok){
       FUDeclaration* type = GetTypeByName(versat,instanceTypeName);
       String name = PushString(&versat->permanent,instanceName);
 
-      decl.baseDeclaration = type;
-      decl.unitName = name;
+      FUInstance* created = CreateFUInstance(iterative,type,name);
 
-      CreateFUInstance(firstPhase,type,name);
-      CreateFUInstance(secondPhase,type,name);
+      if(!unit){
+         unit = created;
+      }
    }
    tok->AssertNextToken("#");
 
    String latencyStr = tok->NextToken();
-   decl.latency = ParseInt(latencyStr);
+   int latency = ParseInt(latencyStr);
 
-   // Initial
-   while(1){
-      if(tok->IfPeekToken("#")){
-         break;
-      }
+   //DebugAccelerator(iterative);
+   FUInstance* outputInstance = nullptr;
 
-      Var start = ParseVar(tok);
+   Hashmap<PortInstance,FUInstance*>* portInstanceToMux = PushHashmap<PortInstance,FUInstance*>(arena,10);
 
-      tok->AssertNextToken("->");
-
-      Var end = ParseVar(tok);
-      tok->AssertNextToken(";");
-
-      FUInstance* inst1 = GetInstanceByName(firstPhase,"%.*s",UNPACK_SS(start.name));
-      FUInstance* inst2 = nullptr;
-
-      if(CompareString(end.name,"data")){
-         inst2 = firstData;
-         decl.dataSize = std::max(decl.dataSize,end.extra.portEnd);
-      } else {
-         inst2 = GetInstanceByName(firstPhase,"%.*s",UNPACK_SS(end.name));
-      }
-
-      ConnectUnit((PortExpression){inst1,start.extra},(PortExpression){inst2,end.extra});
-   }
-   tok->AssertNextToken("#");
-
+   FUDeclaration* type = BasicDeclaration::stridedMerge;
+   int index = 0;
    // For in
    while(1){
       if(tok->IfPeekToken("}")){
          break;
+      }
+
+      Token peek = tok->PeekToken();
+
+      int num = -1;
+      if(CompareString(peek,"%")){
+         tok->AdvancePeek(peek);
+         String number = tok->NextToken();
+         num = ParseInt(number);
       }
 
       Var start = ParseVar(tok);
@@ -757,35 +742,57 @@ FUDeclaration* ParseIterative(Versat* versat,Tokenizer* tok){
       FUInstance* inst1 = nullptr;
       FUInstance* inst2 = nullptr;
 
-      if(CompareString(start.name,"data")){
-         inst1 = secondData;
-         decl.dataSize = std::max(decl.dataSize,end.extra.portEnd);
-      } else {
-         inst1 = GetInstanceByName(secondPhase,"%.*s",UNPACK_SS(start.name));
-      }
+      inst1 = GetInstanceByName(iterative,"%.*s",UNPACK_SS(start.name));
 
       if(CompareString(end.name,"out")){
-         inst2 = secondOut;
-      } else if(CompareString(end.name,"data")){
-         inst2 = secondData;
-         decl.dataSize = std::max(decl.dataSize,end.extra.portEnd);
+         if(!outputInstance){
+            outputInstance = (ComplexFUInstance*) CreateFUInstance(iterative,BasicDeclaration::output,STRING("out"));
+         }
+
+         inst2 = outputInstance;
       } else {
-         inst2 = GetInstanceByName(secondPhase,"%.*s",UNPACK_SS(end.name));
+         inst2 = GetInstanceByName(iterative,"%.*s",UNPACK_SS(end.name));
       }
 
-      ConnectUnit((PortExpression){inst1,start.extra},(PortExpression){inst2,end.extra});
+      if(num == -1){
+         ConnectUnit((PortExpression){inst1,start.extra},(PortExpression){inst2,end.extra});
+         continue;
+      }
+
+      PortInstance instance = {};
+      instance.inst = (ComplexFUInstance*) inst2;
+      instance.port = end.extra.portEnd;
+
+      Assert(end.extra.portStart == end.extra.portEnd); // For now do not handle ranges.
+
+      GetOrAllocateResult<FUInstance*> res = portInstanceToMux->GetOrAllocate(instance);
+
+      if(!res.alreadyExisted){
+         static String names[] = {STRING("Merge0"),
+                                  STRING("Merge1"),
+                                  STRING("Merge2"),
+                                  STRING("Merge3"),
+                                  STRING("Merge4"),
+                                  STRING("Merge5"),
+                                  STRING("Merge6"),
+                                  STRING("Merge7")};
+
+         *res.data = CreateFUInstance(iterative,type,names[index++]);
+
+         ConnectUnit((PortExpression){*res.data,start.extra},(PortExpression){inst2,end.extra});
+      }
+
+      Assert(num >= 0);
+      end.extra.portEnd = end.extra.portStart = num;
+      ConnectUnit((PortExpression){inst1,start.extra},(PortExpression){*res.data,end.extra});
    }
    tok->AssertNextToken("}");
-   decl.dataSize += 1;
 
-   decl.initial = firstPhase;
-   decl.forLoop = secondPhase;
-
-   return RegisterIterativeUnit(versat,&decl);
+   return RegisterIterativeUnit(versat,iterative,unit,latency,name);
 }
 
 void ParseVersatSpecification(Versat* versat,String content){
-   Tokenizer tokenizer = Tokenizer(content, "=#[](){}+:;,*~.-",{"->=","->",">><","<<>",">>","<<","..","^="});
+   Tokenizer tokenizer = Tokenizer(content, "%=#[](){}+:;,*~.-",{"->=","->",">><","><<",">>","<<","..","^="});
    Tokenizer* tok = &tokenizer;
 
    while(!tok->Done()){

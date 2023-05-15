@@ -10,7 +10,8 @@ module Q16Sqrt #(
     input                         rst,
     
     input                         run,
-    
+    input                         running,
+
     //input / output data
     input [DATA_W-1:0]            in0,
 

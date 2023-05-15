@@ -13,6 +13,7 @@ module VWrite #(
    input                  clk,
    input                  rst,
 
+   input                  running,
    input                  run,
    output                 done,
 
@@ -99,7 +100,15 @@ module VWrite #(
       end
    endfunction
 
-   wire [`MEM_ADDR_W-1:0] startA    = `MEM_ADDR_W'd0;
+   reg pingPongState;
+
+   reg [`MEM_ADDR_W-1:0] startA;
+   always @*
+   begin
+      startA = 0;
+      startA[`MEM_ADDR_W-1] = pingPong ? !pingPongState : 0;
+   end
+
    wire [1:0]             direction = 2'b10;
    wire [31:0]   delayA    = 0;
 
@@ -107,10 +116,21 @@ module VWrite #(
    wire [`MEM_ADDR_W-1:0] addrA, addrA_int, addrA_int2;
    wire [`MEM_ADDR_W-1:0] addrB, addrB_int, addrB_int2;
 
+   wire [`MEM_ADDR_W-1:0]      startB_inst = pingPong ? {pingPongState,startB[`MEM_ADDR_W-2:0]} : startB;
+
    // data inputs
    wire                   req;
    wire                   rnw;
    wire [DATA_W-1:0]      data_out;
+
+   // Ping pong 
+   always @(posedge clk,posedge rst)
+   begin
+      if(rst)
+         pingPongState <= 0;
+      else if(run)
+         pingPongState <= pingPong ? (!pingPongState) : 1'b0;
+   end
 
    // mem enables output by addr gen
    wire enA = req;
@@ -152,7 +172,7 @@ module VWrite #(
                        .iterations(iterB),
                        .period(perB),
                        .duty(dutyB),
-                       .start(startB),
+                       .start(startB_inst),
                        .shift(shiftB),
                        .incr(incrB),
                        .delay(delay0[9:0]),

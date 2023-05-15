@@ -17,6 +17,7 @@ module @{accel.name} #(
    (
 
    input run,
+   input running,
    
    #{if nDones}
    output done,
@@ -292,6 +293,7 @@ end
          #{set ioIndex ioIndex + decl.nIOs}
          #{end} 
          
+         .running(running),
          .run(run),
 
          #{if decl.implementsDone}

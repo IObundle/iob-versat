@@ -1,7 +1,7 @@
 `timescale 1ns / 1ps
 `include "xversat.vh"
 
-module Merge #(
+module StridedMerge #(
          parameter DELAY_W = 32,
          parameter DATA_W = 32
               )
@@ -31,12 +31,14 @@ module Merge #(
     (* versat_latency = 14 *) input [DATA_W-1:0]            in14,
     (* versat_latency = 15 *) input [DATA_W-1:0]            in15,
 
-    (* versat_latency = 1 *) output reg [DATA_W-1:0]       out0,
+    (* versat_latency = 0 *) output [DATA_W-1:0]       out0,
 
-    input [DELAY_W-1:0]           delay0
+    input [DELAY_W-1:0]                      delay0,
+    input [DELAY_W-1:0]                      stride
     );
 
 reg [DELAY_W-1:0] delay;
+reg [DELAY_W-1:0] delay2;
 
 wire [DATA_W-1:0] select[15:0];
 
@@ -59,6 +61,8 @@ assign select[15] = in15;
 
 reg [3:0] counter;
 
+assign out0 = running ? select[counter] : 0;
+
 always @(posedge clk,posedge rst)
 begin
      if(rst) begin
@@ -67,16 +71,26 @@ begin
      end else if(run) begin
           delay <= delay0;
           counter <= 0;
-     end else begin
+          delay2 <= stride;
+     end else if(running) begin
           if(|delay) begin
                delay <= delay - 1;
+               if(delay == 1) begin
+                    delay2 <= stride;
+               end
+          end else if(delay == 0) begin
+               if(|delay2) begin
+                    delay2 <= delay2 - 1;
+               end
+
+               if(delay2 == 0) begin
+                    counter <= counter + 1;
+                    delay2 <= stride;
+               end
           end
 
-          if(delay == 0) begin
-               counter <= counter + 1;
-          end
 
-          out0 <= select[counter];
+          //out0 <= select[counter];
      end
 end
 

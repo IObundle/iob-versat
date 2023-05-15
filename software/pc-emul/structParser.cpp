@@ -708,14 +708,14 @@ void OutputRegisterTypesFunction(FILE* output){
 
    for(TypeDef* def : typeDefs){
       if(def->type == TypeDef::TYPEDEF){
-         fprintf(output,"   RegisterOpaqueType(STRING(\"%.*s\"),Type::TYPEDEF,sizeof(%.*s));\n",UNPACK_SS(def->typedefType.newType),UNPACK_SS(def->typedefType.newType));
+         fprintf(output,"   RegisterOpaqueType(STRING(\"%.*s\"),Type::TYPEDEF,sizeof(%.*s),alignof(%.*s));\n",UNPACK_SS(def->typedefType.newType),UNPACK_SS(def->typedefType.newType),UNPACK_SS(def->typedefType.newType));
          seen.insert(def->typedefType.newType);
       }
    }
    fprintf(output,"\n");
    for(TypeDef* def : typeDefs){
       if(def->type == TypeDef::STRUCT && !def->structType.params){
-         fprintf(output,"   RegisterOpaqueType(STRING(\"%.*s\"),Type::STRUCT,sizeof(%.*s));\n",UNPACK_SS(def->structType.name),UNPACK_SS(def->structType.name));
+         fprintf(output,"   RegisterOpaqueType(STRING(\"%.*s\"),Type::STRUCT,sizeof(%.*s),alignof(%.*s));\n",UNPACK_SS(def->structType.name),UNPACK_SS(def->structType.name),UNPACK_SS(def->structType.name));
          seen.insert(def->structType.name);
       }
    }
@@ -739,9 +739,9 @@ void OutputRegisterTypesFunction(FILE* output){
 
             if(iter == seen.end()){
                if(Contains(name,"<")){
-                  fprintf(output,"   RegisterOpaqueType(STRING(\"%.*s\"),Type::TEMPLATED_INSTANCE,sizeof(%.*s));\n",UNPACK_SS(baseName),UNPACK_SS(baseName));
+                  fprintf(output,"   RegisterOpaqueType(STRING(\"%.*s\"),Type::TEMPLATED_INSTANCE,sizeof(%.*s),alignof(%.*s));\n",UNPACK_SS(baseName),UNPACK_SS(baseName),UNPACK_SS(baseName));
                } else {
-                  fprintf(output,"   RegisterOpaqueType(STRING(\"%.*s\"),Type::UNKNOWN,sizeof(%.*s));\n",UNPACK_SS(baseName),UNPACK_SS(baseName));
+                  fprintf(output,"   RegisterOpaqueType(STRING(\"%.*s\"),Type::UNKNOWN,sizeof(%.*s),alignof(%.*s));\n",UNPACK_SS(baseName),UNPACK_SS(baseName),UNPACK_SS(baseName));
                }
 
                seen.insert(name);
@@ -755,9 +755,9 @@ void OutputRegisterTypesFunction(FILE* output){
 
          if(iter == seen.end()){
             if(Contains(name,"<")){
-               fprintf(output,"   RegisterOpaqueType(STRING(\"%.*s\"),Type::TEMPLATED_INSTANCE,sizeof(%.*s));\n",UNPACK_SS(name),UNPACK_SS(name));
+               fprintf(output,"   RegisterOpaqueType(STRING(\"%.*s\"),Type::TEMPLATED_INSTANCE,sizeof(%.*s),alignof(%.*s));\n",UNPACK_SS(name),UNPACK_SS(name),UNPACK_SS(name));
             } else {
-               fprintf(output,"   RegisterOpaqueType(STRING(\"%.*s\"),Type::UNKNOWN,sizeof(%.*s));\n",UNPACK_SS(name),UNPACK_SS(name));
+               fprintf(output,"   RegisterOpaqueType(STRING(\"%.*s\"),Type::UNKNOWN,sizeof(%.*s),alignof(%.*s));\n",UNPACK_SS(name),UNPACK_SS(name),UNPACK_SS(name));
             }
             seen.insert(name);
          }

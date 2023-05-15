@@ -82,9 +82,6 @@ CPP_OBJ+=$(BUILD_DIR)/verilated.o
 #CPP_OBJ+=$(BUILD_DIR)/verilated_threads.o
 CPP_OBJ+=$(BUILD_DIR)/verilated_vcd_c.o
 
-VERSAT_HDR+=$(wildcard $(VERSAT_SW_DIR)/*.inl)
-VERSAT_HDR+=$(wildcard $(VERSAT_PC_EMUL)/*.inl)
-
 TEMPLATES:=$(wildcard $(VERSAT_TEMPLATE_DIR)/*.tpl)
 
 $(BUILD_DIR)/verilated.o: | 
@@ -125,16 +122,16 @@ $(BUILD_DIR)/verilogWrapper.inc: $(BUILD_DIR)/verilogParser.out $(BUILD_DIR)/tem
 $(BUILD_DIR)/templateData.inc: $(BUILD_DIR)/embedFile.out $(TEMPLATES)
 	$(BUILD_DIR)/embedFile.out $(BUILD_DIR)/templateData.inc $(TEMPLATES) $(TEMPLATES_NAME)
 
-$(BUILD_DIR)/versat.o: $(VERSAT_PC_EMUL)/versat.cpp $(HDR) $(UNIT_HDR) $(VERSAT_HDR) $(BUILD_DIR)/typeInfo.inc $(BUILD_DIR)/basicWrapper.inc $(BUILD_DIR)/verilogWrapper.inc
+$(BUILD_DIR)/versat.o: $(VERSAT_PC_EMUL)/versat.cpp $(HDR) $(UNIT_HDR) $(BUILD_DIR)/typeInfo.inc $(BUILD_DIR)/basicWrapper.inc $(BUILD_DIR)/verilogWrapper.inc
 	-g++ $(VERSAT_DEFINE) -c -o $@ $(GLOBAL_CFLAGS) $< $(VERSAT_INCLUDE)
 
-$(BUILD_DIR)/type.o: $(VERSAT_PC_EMUL)/type.cpp $(HDR) $(UNIT_HDR) $(VERSAT_HDR) $(BUILD_DIR)/typeInfo.inc
+$(BUILD_DIR)/type.o: $(VERSAT_PC_EMUL)/type.cpp $(HDR) $(UNIT_HDR) $(BUILD_DIR)/typeInfo.inc
 	-g++ $(VERSAT_DEFINE) -c -o $@ $(GLOBAL_CFLAGS) $< $(VERSAT_INCLUDE)
 
-$(BUILD_DIR)/%.o: $(VERSAT_SW_DIR)/%.cpp $(HDR) $(UNIT_HDR) $(VERSAT_HDR)
+$(BUILD_DIR)/%.o: $(VERSAT_SW_DIR)/%.cpp $(HDR)
 	-g++ $(VERSAT_DEFINE) -c -o $@ $(GLOBAL_CFLAGS) $< $(VERSAT_INCLUDE)
 
-$(BUILD_DIR)/%.o: $(VERSAT_PC_EMUL)/%.cpp $(HDR) $(UNIT_HDR) $(VERSAT_HDR)
+$(BUILD_DIR)/%.o: $(VERSAT_PC_EMUL)/%.cpp $(HDR)
 	-g++ $(VERSAT_DEFINE) -c -o $@ $(GLOBAL_CFLAGS) $< $(VERSAT_INCLUDE)
 
 $(BUILD_DIR)/structParser.out: $(VERSAT_SW_DIR)/pc-emul/structParser.cpp $(TOOL_COMMON_SRC)

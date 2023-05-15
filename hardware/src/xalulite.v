@@ -15,6 +15,7 @@ module xalulite # (
                  input  clk,
                  input  rst,
                  input  run,
+                 input  running,
 
                  // Inputs
                  input  [DATA_W-1:0] in1,

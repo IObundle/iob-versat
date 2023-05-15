@@ -11,18 +11,19 @@
 module Mul #( 
 		parameter		      DATA_W = 32
 	) (
-                input                        rst,
-                input                        clk,
-                input                        run,
+   input                        rst,
+   input                        clk,
+   input                        run,
+   input                        running,
 
-                input [DATA_W-1:0]           in0,
-                input [DATA_W-1:0]           in1,
-                (* versat_latency = 4 *) output [DATA_W-1:0] out0,
-                (* versat_latency = 4 *) output [DATA_W-1:0] out1,                
+   input [DATA_W-1:0]           in0,
+   input [DATA_W-1:0]           in1,
+   
+   (* versat_latency = 4 *) output [DATA_W-1:0] out0,              
 
-                // config interface
-                input [31:0]                 delay0
-                );
+   // config interface
+   input [31:0]                 delay0
+   );
 
 // select multiplier statically
 reg signed [DATA_W-1:0] in0_reg, in1_reg;

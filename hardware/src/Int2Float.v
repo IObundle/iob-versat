@@ -9,6 +9,7 @@ module Int2Float #(
     input                         clk,
     input                         rst,
     
+    input                         running,
     input                         run,
     
     //input / output data
