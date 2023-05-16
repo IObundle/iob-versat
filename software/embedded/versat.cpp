@@ -103,7 +103,7 @@ void VersatMemoryCopy(FUInstance* instance,volatile int* dest,int* data,int size
    MEMSET(versat_base,0x1,dest);
    MEMSET(versat_base,0x2,data);
    MEMSET(versat_base,0x3,size - 1); // AXI size
-   MEMSET(versat_base,0x4,0x1);
+   MEMSET(versat_base,0x4,0x1); // Start DMA
 
    while(1){
       int val = MEMGET(versat_base,0x1);
@@ -208,7 +208,7 @@ NanoSecond GetTime(){
 }
 
 void VersatSimDebug(Versat* versat){
-   MEMSET(versat_base,0x5,0);
+   //MEMSET(versat_base,0x5,0);
 }
 
 void Hook(Versat* versat,Accelerator* accel,FUInstance* inst){

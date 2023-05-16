@@ -654,6 +654,22 @@ static FUInstance* GetInstanceByHierarchicalName(Accelerator* accel,Hierarchical
    return res;
 }
 
+static String GetFullHierarchicalName(HierarchicalName* head,Arena* arena){
+   Byte* mark = MarkArena(arena);
+
+   bool first = true;
+   FOREACH_LIST(ptr,head){
+      if(!first){
+         PushString(arena,STRING("."));
+      }
+      PushString(arena,"%.*s",UNPACK_SS(ptr->name));
+      first = false;
+   }
+
+   String res = PointArena(arena,mark);
+   return res;
+}
+
 static FUInstance* GetInstanceByHierarchicalName2(AcceleratorIterator iter,HierarchicalName* hier,Arena* arena){
    HierarchicalName* savedHier = hier;
    FUInstance* res = nullptr;
@@ -697,7 +713,7 @@ static FUInstance* GetInstanceByHierarchicalName2(AcceleratorIterator iter,Hiera
                hier = hier->next;
                continue;
             } else if(inst->declaration->fixedDelayCircuit && hier->next){
-               AcceleratorIterator it = iter.LevelBelowIterator(arena);
+               AcceleratorIterator it = iter.LevelBelowIterator();
                FUInstance* res = GetInstanceByHierarchicalName2(it,hier->next,arena);
                if(res){
                   return res;
@@ -705,21 +721,23 @@ static FUInstance* GetInstanceByHierarchicalName2(AcceleratorIterator iter,Hiera
             } else if(!hier->next){ // Correct name and type (if specified) and no further hierarchical name to follow
                Accelerator* accel = iter.topLevel;
 
-               #if 0
-               return node->inst;
-               #else
-               if(iter.level == 0){
+               //#if 0
+               //return node->inst;
+               //#else
+               if(iter.GetFullLevel() == 0){
                   return node->inst;
                } else {
                   FUInstance* instBuffer = accel->subInstances.Alloc();
                   *instBuffer = *((FUInstance*)inst);
                   instBuffer->declarationInstance = inst;
 
-                  // TODO: We should save the full name here
+                  Accelerator* accel = iter.topLevel;
+                  Arena arena = SubArena(accel->accelMemory,256);
+                  instBuffer->name = GetFullHierarchicalName(savedHier,&arena);
 
                   return instBuffer;
                }
-               #endif
+               //#endif
             }
          }
 
@@ -795,16 +813,10 @@ static FUInstance* vGetInstanceByName_(AcceleratorIterator iter,Arena* arena,int
    FUInstance* res = GetInstanceByHierarchicalName2(iter,&fullName,arena);
 
    if(!res){
-      printf("Couldn't find: ");
-      bool first = true;
-      FOREACH_LIST(ptr,&fullName){
-         if(!first){
-            printf(":");
-         }
-         printf("%.*s",UNPACK_SS(ptr->name));
-         first = false;
-      }
-      printf("\n");
+      String name = GetFullHierarchicalName(&fullName,arena);
+
+      printf("Couldn't find: %.*s\n",UNPACK_SS(name));
+
       Assert(res);
    }
 
@@ -1507,7 +1519,7 @@ FUDeclaration* RegisterIterativeUnit(Versat* versat,Accelerator* accel,FUInstanc
    // TODO: We are not checking connections here, we are just assuming that unit is directly connected to out.
    //       Probably a bad ideia but still do not have an example which would make it not ideal
    for(int i = 0; i < declaration.outputLatencies.size; i++){
-      declaration.outputLatencies[i] = (latency + 1) * (node->inst->declaration->outputLatencies[i] + 1);
+      declaration.outputLatencies[i] = latency * (node->inst->declaration->outputLatencies[i] + 1);
    }
 
    // Values from iterative declaration

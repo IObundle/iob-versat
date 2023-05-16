@@ -177,6 +177,7 @@ struct DynamicArena{
 };
 
 DynamicArena* CreateDynamicArena(int numberPages = 1);
+Arena SubArena(DynamicArena* arena,size_t size);
 Byte* PushBytes(DynamicArena* arena, size_t size);
 void Clear(DynamicArena* arena);
 

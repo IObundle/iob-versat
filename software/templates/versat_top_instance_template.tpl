@@ -219,39 +219,22 @@ wire [31:0] data_data = dma_ready ? dma_rdata : wdata;
 wire dataMemoryMapped = address[@{memoryConfigDecisionBit}];
 wire [3:0] data_wstrb = dma_ready ? 4'hf : wstrb;
 
-reg [31:0] read_test_counter;
-reg enableReadCounter;
-always @(posedge clk,posedge rst)
-begin
-   if(rst) begin
-      read_test_counter <= 0;
-      enableReadCounter <= 0;
-   end else if(valid) begin
-      read_test_counter <= 0;
-      enableReadCounter <= 1;
-   end else if(enableReadCounter) begin
-      read_test_counter <= read_test_counter + 1;
-   end   
-end
-
-reg [31:0] test_counter;
+reg [31:0] latency_counter;
 reg enableCounter;
 always @(posedge clk,posedge rst)
 begin
    if(rst) begin
-      test_counter <= 0;
+      latency_counter <= 0;
       enableCounter <= 0;
    end else if(run) begin
-      test_counter <= 0;
+      latency_counter <= 0;
       enableCounter <= 1;
    end else if(done) begin
       enableCounter <= 0;
    end else if(enableCounter) begin
-      test_counter <= test_counter + 1;
+      latency_counter <= latency_counter + 1;
    end
 end
-
-wire [31:0] latency_counter = test_counter; // When a unit is producing the correct value in the vcd, the correct versat_latency value is given by this wire
 
 #{if unitsMapped}
 assign rdata = (versat_ready ? versat_rdata : unitRdataFinal);
@@ -316,7 +299,7 @@ always @(posedge clk,posedge rst_int)
 begin
    if(rst_int) begin
       configdata <= {@{configurationBits}{1'b0}};
-   end else if(data_valid & !dataMemoryMapped) begin
+   end else if(data_write & !dataMemoryMapped) begin
       // Config
       #{set counter 0}
       #{set addr versatConfig}
