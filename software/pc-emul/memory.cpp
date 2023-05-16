@@ -226,6 +226,15 @@ DynamicArena* CreateDynamicArena(int numberPages){
    return arena;
 }
 
+Arena SubArena(DynamicArena* arena,size_t size){
+   Arena res = {};
+
+   res.totalAllocated = size;
+   res.mem = PushBytes(arena,size);
+
+   return res;
+}
+
 Byte* PushBytes(DynamicArena* arena,size_t size){
    DynamicArena* ptr = arena;
 

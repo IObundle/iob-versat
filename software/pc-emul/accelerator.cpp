@@ -914,6 +914,11 @@ String AcceleratorIterator::GetFullName(Arena* out){
    return res;
 }
 
+int AcceleratorIterator::GetFullLevel(){
+   int level = this->level + this->upperLevels;
+   return level;
+}
+
 InstanceNode* AcceleratorIterator::Descend(){
    ComplexFUInstance* inst = GetInstance(level)->inst;
 
@@ -1000,19 +1005,6 @@ InstanceNode* AcceleratorIterator::Skip(){
    }
 
    return Current();
-}
-
-AcceleratorIterator AcceleratorIterator::LevelBelowIterator(Arena* arena){
-   ComplexFUInstance* inst = Current()->inst;
-
-   Assert(inst && IsTypeHierarchical(inst->declaration));
-
-   AcceleratorIterator iter = {};
-
-   Assert(!ordered); // If needed, implement a Start for ordered that takes an instance
-   iter.Start(topLevel,inst,arena,populate);
-
-   return iter;
 }
 
 AcceleratorIterator AcceleratorIterator::LevelBelowIterator(){
@@ -1445,8 +1437,8 @@ void ReorganizeIterative(Accelerator* accel,Arena* temp){
    Hashmap<InstanceNode*,bool>* seen = PushHashmap<InstanceNode*,bool>(temp,size);
 
    FOREACH_LIST(ptr,accel->allocated){
-      order->Insert(ptr,0);
       seen->Insert(ptr,false);
+         order->Insert(ptr,size - 1);
    }
 
    // Start by seeing all inputs
@@ -1457,32 +1449,34 @@ void ReorganizeIterative(Accelerator* accel,Arena* temp){
       }
    }
 
-   FOREACH_LIST(ptr,accel->allocated){
-      bool allInputsSeen = true;
-      FOREACH_LIST(input,ptr->allInputs){
-         InstanceNode* node = input->instConnectedTo.node;
-         if(node == ptr){
+   FOREACH_LIST(outerPtr,accel->allocated){
+      FOREACH_LIST(ptr,accel->allocated){
+         bool allInputsSeen = true;
+         FOREACH_LIST(input,ptr->allInputs){
+            InstanceNode* node = input->instConnectedTo.node;
+            if(node == ptr){
+               continue;
+            }
+
+            bool inputSeen = seen->GetOrFail(node);
+            if(!inputSeen){
+               allInputsSeen = false;
+               break;
+            }
+         }
+
+         if(!allInputsSeen){
             continue;
          }
 
-         bool inputSeen = seen->GetOrFail(node);
-         if(!inputSeen){
-            allInputsSeen = false;
-            break;
+         int maxOrder = 0;
+         FOREACH_LIST(input,ptr->allInputs){
+            InstanceNode* node = input->instConnectedTo.node;
+            maxOrder = std::max(maxOrder,order->GetOrFail(node));
          }
-      }
 
-      if(!allInputsSeen){
-         continue;
+         order->Insert(ptr,maxOrder + 1);
       }
-
-      int maxOrder = 0;
-      FOREACH_LIST(input,ptr->allInputs){
-         InstanceNode* node = input->instConnectedTo.node;
-         maxOrder = std::max(maxOrder,order->GetOrFail(node));
-      }
-
-      order->Insert(ptr,maxOrder + 1);
    }
 
    Array<InstanceNode*> nodes = PushArray<InstanceNode*>(temp,size);
@@ -1513,8 +1507,6 @@ void ReorganizeIterative(Accelerator* accel,Arena* temp){
    }
 
    accel->ordered = ReverseList(accel->ordered);
-
-   DebugValue(MakeValue(order));
 }
 
 int CalculateNumberOfUnits(InstanceNode* node){
