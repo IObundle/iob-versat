@@ -6,10 +6,10 @@
 
 static const char* constIn[] = {"constIn0","constIn1","constIn2","constIn3","constIn4","constIn5","constIn6","constIn7","constIn8","constIn9","constIn10","constIn11","constIn12","constIn13","constIn14","constIn15","constIn16",
                        "constIn17","constIn18","constIn19","constIn20","constIn21","constIn22","constIn23","constIn24","constIn25","constIn26","constIn27","constIn28","constIn29","constIn30","constIn31","constIn32","constIn33",
-                       "constIn34","constIn35","constIn36","constIn37","constIn38","constIn39","constIn40","constIn41","constIn42","constIn43","constIn44"};
+                       "constIn34","constIn35","constIn36","constIn37","constIn38","constIn39","constIn40","constIn41","constIn42","constIn43","constIn44","constIn45","constIn46","constIn47","constIn48","constIn49","constIn50","constIn51","constIn52","constIn53","constIn54","constIn55"};
 static const char* regOut[] = {"regOut0","regOut1","regOut2","regOut3","regOut4","regOut5","regOut6","regOut7","regOut8","regOut9","regOut10","regOut11","regOut12","regOut13","regOut14","regOut15","regOut16","regOut17","regOut18",
                        "regOut19","regOut20","regOut21","regOut22","regOut23","regOut24","regOut25","regOut26","regOut27","regOut28","regOut29","regOut30","regOut31","regOut32","regOut33","regOut34","regOut35","regOut36","regOut37",
-                       "regOut38","regOut39","regOut40","regOut41","regOut42","regOut43","regOut44"};
+                       "regOut38","regOut39","regOut40","regOut41","regOut42","regOut43","regOut44","regOut45","regOut46","regOut47","regOut48","regOut49","regOut50","regOut51","regOut52","regOut53","regOut54","regOut55"};
 
 bool InitSimpleAccelerator(SimpleAccelerator* simple,Versat* versat,const char* declarationName){
    if(simple->init){
