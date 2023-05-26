@@ -1,47 +1,76 @@
-#ifndef INCLUDED_MERGE_GRAPH
-#define INCLUDED_MERGE_GRAPH
+#ifndef INCLUDED_MERGE
+#define INCLUDED_MERGE
 
 #include "versatPrivate.hpp"
+#include "thread.hpp"
 
-struct MergeEdge{
-   FUInstance* instances[2];
+//#define MAX_CLIQUE_TIME 10.0f
+
+struct IndexRecord{
+   int index;
+   IndexRecord* next;
 };
 
-struct PortEdge{
-   PortInstance units[2];
+// Represents the full algorithm
+struct RefParallelState{
+   ConsolidationGraph result;
+   ConsolidationGraph graphCopy;
+   Byte* arenaMark; // Stores everything expect result, allocated before hand
+   Arena* arena;
+   TaskFunction taskFunction;
+   clock_t start;
+   int nThreads;
+   int upperBound;
+   int i;
+
+   Array<Arena> threadArenas;
+   Array<int> table; // Shared by threads
+   int max;
+   bool timeout;
 };
 
-struct MappingNode{ // Mapping (edge to edge or node to node)
-   union{
-      MergeEdge nodes;
-      PortEdge edges[2];
-   };
-
-   enum {NODE,EDGE} type;
+struct ParallelCliqueState{
+   volatile int* max;
+   volatile int thisMax;
+   Array<int> table;
+   Array<bool> tableLooked;
+   ConsolidationGraph* cliqueOut;
+   clock_t start;
+   int counter;
+   int index;
+   int upperbound;
+   bool timeout;
+   bool found;
 };
 
-struct MappingEdge{ // Edge between mapping from edge to edge
-   MappingNode nodes[2];
+// Allocated for each task
+struct RefParallelTask{
+   RefParallelState* state;
+   int index;
+   float MAX_CLIQUE_TIME;
 };
 
-struct ConsolidationGraph{
-   MappingNode* nodes;
-   int numberNodes;
-   MappingEdge* edges;
-   int numberEdges;
-
-   // Used in get clique;
-   int* validNodes;
+struct IsCliqueResult{
+   bool result;
+   int failedIndex;
 };
 
-struct Mapping{
-   FUInstance* source;
-   FUInstance* sink;
-};
+void InsertMapping(GraphMapping& map,PortEdge& edge0,PortEdge& edge1);
+void Clique(CliqueState* state,ConsolidationGraph graphArg,int index,IndexRecord* record,int size,Arena* arena);
 
-SizedString MappingNodeIdentifier(MappingNode* node,Arena* memory);
+bool NodeMappingConflict(PortEdge edge1,PortEdge edge2);
+bool MappingConflict(MappingNode map1,MappingNode map2);
+ConsolidationGraph Copy(ConsolidationGraph graph,Arena* arena);
+int NodeIndex(ConsolidationGraph graph,MappingNode* node);
 
-ConsolidationGraph GenerateConsolidationGraph(Accelerator* accel1,Accelerator* accel2);
-ConsolidationGraph MaxClique(ConsolidationGraph graph);
+MergeGraphResult HierarchicalHeuristic(Versat* versat,FUDeclaration* decl1,FUDeclaration* decl2,String name);
 
-#endif // INCLUDED_MERGE_GRAPH
+int ValidNodes(ConsolidationGraph graph);
+
+BitArray* CalculateNeighborsTable(ConsolidationGraph graph,Arena* arena);
+
+IsCliqueResult IsClique(ConsolidationGraph graph);
+
+ConsolidationGraph ParallelMaxClique(ConsolidationGraph graph,int upperBound,Arena* arena,float MAX_CLIQUE_TIME);
+
+#endif // INCLUDED_MERGE

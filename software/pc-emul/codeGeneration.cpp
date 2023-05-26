@@ -1,136 +1,89 @@
-#include "codeGeneration.hpp"
-
 #include "versatPrivate.hpp"
+
 #include "templateEngine.hpp"
 
-VersatComputedValues ComputeVersatValues(Versat* versat,Accelerator* accel){
-   LockAccelerator(accel,Accelerator::Locked::GRAPH);
+#include "debug.hpp"
+#include "debugGUI.hpp"
 
-   VersatComputedValues res = {};
-
-   for(ComplexFUInstance* inst : accel->instances){
-      FUDeclaration* decl = inst->declaration;
-
-      res.numberConnections += inst->tempData->numberOutputs;
-
-      if(decl->isMemoryMapped){
-         res.maxMemoryMapDWords = maxi(res.maxMemoryMapDWords,1 << decl->memoryMapBits);
-         res.memoryMappedBytes += (1 << (decl->memoryMapBits + 2));
-         res.unitsMapped += 1;
-      }
-
-      res.nConfigs += decl->nConfigs;
-      for(int i = 0; i < decl->nConfigs; i++){
-         res.configBits += decl->configWires[i].bitsize;
-      }
-
-      res.nStates += decl->nStates;
-      for(int i = 0; i < decl->nStates; i++){
-         res.stateBits += decl->stateWires[i].bitsize;
-      }
-
-      res.nDelays += decl->nDelays;
-      res.delayBits += decl->nDelays * 32;
-
-      res.nUnitsIO += decl->nIOs;
-   }
-
-   for(StaticInfo* unit : accel->staticInfo){
-      res.nStatics += unit->nConfigs;
-
-      for(int i = 0; i < unit->nConfigs; i++){
-         res.staticBits += unit->wires[i].bitsize;
-      }
-   }
-
-   // Versat specific registers are treated as a special maping (all 0's) of 1 configuration and 1 state register
-   res.nConfigs += 1;
-   res.nStates += 1;
-
-   res.nConfigurations = res.nConfigs + res.nStatics + res.nDelays;
-   res.configurationBits = res.configBits + res.staticBits + res.delayBits;
-
-   res.memoryAddressBits = log2i(res.memoryMappedBytes / 4);
-
-   res.memoryMappingAddressBits = res.memoryAddressBits;
-   res.configurationAddressBits = log2i(res.nConfigurations);
-   res.stateAddressBits = log2i(res.nStates);
-   res.stateConfigurationAddressBits = maxi(res.configurationAddressBits,res.stateAddressBits);
-
-   res.lowerAddressSize = maxi(res.stateConfigurationAddressBits,res.memoryMappingAddressBits);
-
-   res.memoryConfigDecisionBit = res.lowerAddressSize;
-
-   return res;
+void TemplateSetDefaults(Versat* versat){
+   TemplateSetCustom("versat",versat,"Versat");
+   TemplateSetCustom("inputDecl",BasicDeclaration::input,"FUDeclaration");
+   TemplateSetCustom("outputDecl",BasicDeclaration::output,"FUDeclaration");
 }
 
 void OutputCircuitSource(Versat* versat,FUDeclaration* decl,Accelerator* accel,FILE* file){
-   if(!versat->debug.outputAccelerator){
-      return;
-   }
+   Assert(versat->debug.outputAccelerator); // Because FILE is created outside, code should not call this function if flag is set
 
-   #if 1
-   LockAccelerator(accel,Accelerator::Locked::FIXED);
-
-   TemplateSetCustom("accel",decl,"FUDeclaration");
+   Arena* arena = &versat->temp;
+   ArenaMarker marker(arena);
 
    VersatComputedValues val = ComputeVersatValues(versat,accel);
 
    // Output configuration file
-   TemplateSetCustom("versatValues",&val,"VersatComputedValues");
-   TemplateSetCustom("instances",&accel->instances,"Pool<ComplexFUInstance>");
-   TemplateSetNumber("numberUnits",accel->instances.Size());
+   int nonSpecialUnits = CountNonSpecialChilds(accel->allocated);
 
-   int nonSpecialUnits = 0;
-   for(ComplexFUInstance* inst : accel->instances){
-      if(inst->declaration->type != FUDeclaration::SPECIAL && !inst->declaration->isOperation){
-         nonSpecialUnits += 1;
-      }
+   int size = Size(accel->allocated);
+   Array<InstanceNode*> nodes = ListToArray(accel->allocated,size,arena);
+
+   Array<InstanceNode*> ordered = PushArray<InstanceNode*>(arena,size);
+   int i = 0;
+   FOREACH_LIST_INDEXED(ptr,accel->ordered,i){
+      ordered[i] = ptr->node;
    }
 
-   TemplateSetNumber("nonSpecialUnits",nonSpecialUnits);
+   ComputedData computedData = CalculateVersatComputedData(accel->allocated,val,arena);
 
+   TemplateSetDefaults(versat);
+   TemplateSetCustom("accel",decl,"FUDeclaration");
+   TemplateSetCustom("versatValues",&val,"VersatComputedValues");
+   TemplateSetCustom("staticUnits",decl->staticUnits,"Hashmap<StaticId,StaticData>");
+   TemplateSetCustom("versatData",&computedData.data,"Array<VersatComputedData>");
+   TemplateSetCustom("external",&computedData.external,"Array<ExternalMemoryInterface>");
+   TemplateSetCustom("instances",&nodes,"Array<InstanceNode*>");
+   TemplateSetCustom("ordered",&ordered,"Array<InstanceNode*>");
+   TemplateSetNumber("numberUnits",Size(accel->allocated));
+   TemplateSetNumber("nonSpecialUnits",nonSpecialUnits);
    TemplateSetNumber("unitsMapped",val.unitsMapped);
    TemplateSetNumber("configurationBits",val.configurationBits);
-
+   TemplateSetNumber("memoryAddressBits",val.memoryAddressBits);
    TemplateSetNumber("memoryConfigDecisionBit",val.memoryConfigDecisionBit);
-   TemplateSetCustom("versat",versat,"Versat");
 
-   ProcessTemplate(file,"../../submodules/VERSAT/software/templates/versat_accelerator_template.tpl",&versat->temp);
-   #endif
+   ProcessTemplate(file,BasicTemplates::acceleratorTemplate,&versat->temp);
 }
 
-void OutputVersatSource(Versat* versat,Accelerator* accel,const char* sourceFilepath,const char* constantsFilepath,const char* dataFilepath){
+void OutputVersatSource(Versat* versat,Accelerator* accel,const char* directoryPath){
    if(!versat->debug.outputVersat){
       return;
    }
 
-   LockAccelerator(accel,Accelerator::Locked::FIXED);
+   Arena* arena = &versat->temp;
+   ArenaMarker marker(arena);
 
-   SetDelayRecursive(accel);
+   SetDelayRecursive(accel,arena);
 
    #if 1
    // No need for templating, small file
-   FILE* c = fopen(constantsFilepath,"w");
+   FILE* c = OpenFileAndCreateDirectories(StaticFormat("%s/versat_defs.vh",directoryPath),"w");
 
    if(!c){
-      printf("Error creating file, check if filepath is correct: %s\n",constantsFilepath);
+      printf("Error creating file, check if filepath is correct: %s\n",directoryPath);
       return;
    }
 
    VersatComputedValues val = ComputeVersatValues(versat,accel);
 
    #if 1
-   std::vector<ComplexFUInstance*> accum;
+   std::vector<ComplexFUInstance> accum;
    AcceleratorIterator iter = {};
-   for(ComplexFUInstance* inst = iter.Start(accel); inst; inst = iter.Next()){
+   for(InstanceNode* node = iter.Start(accel,arena,true); node; node = iter.Next()){
+      ComplexFUInstance* inst = node->inst;
       if(!inst->declaration->isOperation && inst->declaration->type != FUDeclaration::SPECIAL){
-         accum.push_back(inst);
+         accum.push_back(*inst);
       }
    };
    #endif
 
-   fprintf(c,"`define NUMBER_UNITS %d\n",accel->instances.Size());
+   fprintf(c,"`define NUMBER_UNITS %d\n",Size(accel->allocated));
    fprintf(c,"`define CONFIG_W %d\n",val.configurationBits);
    fprintf(c,"`define STATE_W %d\n",val.stateBits);
    fprintf(c,"`define MAPPED_UNITS %d\n",val.unitsMapped);
@@ -141,91 +94,83 @@ void OutputVersatSource(Versat* versat,Accelerator* accel,const char* sourceFile
       fprintf(c,"`define VERSAT_IO\n");
    }
 
+   if(val.externalMemoryInterfaces){
+      fprintf(c,"`define VERSAT_EXTERNAL_MEMORY\n");
+   }
+
    fclose(c);
 
-   FILE* s = fopen(sourceFilepath,"w");
+   FILE* s = OpenFileAndCreateDirectories(StaticFormat("%s/versat_instance.v",directoryPath),"w");
 
    if(!s){
-      printf("Error creating file, check if filepath is correct: %s\n",sourceFilepath);
+      printf("Error creating file, check if filepath is correct: %s\n",directoryPath);
       return;
    }
 
-   FILE* d = fopen(dataFilepath,"w");
+   FILE* d = OpenFileAndCreateDirectories(StaticFormat("%s/versat_data.inc",directoryPath),"w");
 
    if(!d){
       fclose(s);
-      printf("Error creating file, check if filepath is correct: %s\n",dataFilepath);
+      printf("Error creating file, check if filepath is correct: %s\n",directoryPath);
       return;
    }
 
-   TemplateSetNumber("numberUnits",accel->instances.Size());
-   TemplateSetCustom("versatValues",&val,"VersatComputedValues");
-   TemplateSetCustom("versat",versat,"Versat");
-   TemplateSetCustom("accel",accel,"Accelerator");
-   TemplateSetNumber("nStatics",val.nStatics);
-   TemplateSetNumber("nDelays",val.nDelays);
-
    // Output configuration file
-   TemplateSetCustom("instances",&accel->instances,"Pool<ComplexFUInstance>");
+   Array<InstanceNode*> nodes = ListToArray(accel->allocated,Size(accel->allocated),arena);
 
+   ComputedData computedData = CalculateVersatComputedData(accel->allocated,val,arena);
+
+   TemplateSetCustom("versatValues",&val,"VersatComputedValues");
+   TemplateSetNumber("delayStart",val.delayBitsStart);
+   TemplateSetCustom("versatData",&computedData.data,"Array<VersatComputedData>");
+   TemplateSetCustom("external",&computedData.external,"Array<ExternalMemoryInterface>");
+   TemplateSetCustom("instances",&nodes,"Array<InstanceNode*>");
+
+   int staticStart = 0;
+   FOREACH_LIST(ptr,accel->allocated){
+      FUDeclaration* decl = ptr->inst->declaration;
+      for(Wire& wire : decl->configs){
+         staticStart += wire.bitsize;
+      }
+   }
+
+   Hashmap<StaticId,StaticData>* staticUnits = PushHashmap<StaticId,StaticData>(arena,accel->staticUnits.size());
+   for(InstanceNode* node = iter.Start(accel,arena,true); node; node = iter.Next()){
+      if(node->inst->isStatic){
+         InstanceNode* parent = iter.ParentInstance();
+
+         StaticId id = {};
+         id.parent = parent ? parent->inst->declaration : nullptr;
+         id.name = node->inst->name;
+
+         StaticData data = {};
+         data.configs = node->inst->declaration->configs;
+         data.offset = node->inst->config - accel->staticAlloc.ptr;
+
+         staticUnits->Insert(id,data);
+      }
+   }
+
+   TemplateSetCustom("staticUnits",staticUnits,"Hashmap<StaticId,StaticData>");
+
+   TemplateSetNumber("staticStart",staticStart);
    TemplateSetNumber("versatBase",versat->base);
-   TemplateSetNumber("memoryAddressBits",val.memoryAddressBits);
    TemplateSetNumber("unitsMapped",val.unitsMapped);
    TemplateSetNumber("memoryConfigDecisionBit",val.memoryConfigDecisionBit);
    TemplateSetNumber("configurationBits",val.configurationBits);
-   TemplateSetNumber("memoryMappedBase",1 << val.memoryConfigDecisionBit);
+   TemplateSetNumber("versatConfig",val.versatConfigs);
+   TemplateSetNumber("versatState",val.versatStates);
 
-   ProcessTemplate(s,"../../submodules/VERSAT/software/templates/versat_top_instance_template.tpl",&versat->temp);
-
-   /*
-   unsigned int hashTableSize = 2048;
-   Assert(accum.size() < (hashTableSize / 2));
-   HashKey hashMap[hashTableSize];
-   for(size_t i = 0; i < hashTableSize; i++){
-      hashMap[i].data = -1;
-      hashMap[i].key = (SizedString){nullptr,0};
-   }
-
-   Byte* mark = MarkArena(&versat->temp);
-   for(size_t i = 0; i < accum.size(); i++){
-      char* name = GetHierarchyNameRepr(accum[i]->name);
-
-      SizedString ss = PushString(&versat->temp,MakeSizedString(name));
-
-      unsigned int hash = 0;
-      for(int ii = 0; ii < ss.size; ii++){
-         hash *= 17;
-         hash += ss.str[ii];
-      }
-
-      if(hashMap[hash % hashTableSize].data == -1){
-         hashMap[hash % hashTableSize].data = i;
-         hashMap[hash % hashTableSize].key = ss;
-      } else {
-         unsigned int counter;
-         for(counter = 0; counter < hashTableSize; counter++){
-            if(hashMap[(hash + counter) % hashTableSize].data == -1){
-               hashMap[(hash + counter) % hashTableSize].data = i;
-               hashMap[(hash + counter) % hashTableSize].key = ss;
-               break;
-            }
-         }
-         Assert(counter != hashTableSize);
-      }
-   }
-
-   TemplateSetNumber("hashTableSize",hashTableSize);
-   TemplateSetArray("instanceHashmap","HashKey",hashMap,hashTableSize);
-   */
+   ProcessTemplate(s,BasicTemplates::topAcceleratorTemplate,&versat->temp);
 
    TemplateSetNumber("configurationSize",accel->configAlloc.size);
    TemplateSetArray("configurationData","int",accel->configAlloc.ptr,accel->configAlloc.size);
 
-   TemplateSetNumber("config",(int)accel->configAlloc.ptr);
-   TemplateSetNumber("state",(int)accel->stateAlloc.ptr);
-   TemplateSetNumber("memMapped",(int)0);
-   TemplateSetNumber("static",(int)accel->staticAlloc.ptr);
-   TemplateSetNumber("staticEnd",(int)&accel->staticAlloc.ptr[accel->staticAlloc.reserved]);
+   TemplateSet("config",accel->configAlloc.ptr);
+   TemplateSet("state",accel->stateAlloc.ptr);
+   TemplateSet("memMapped",nullptr);
+   TemplateSet("static",accel->staticAlloc.ptr);
+   TemplateSet("staticEnd",&accel->staticAlloc.ptr[accel->staticAlloc.reserved]);
 
    TemplateSetArray("delay","int",accel->delayAlloc.ptr,accel->delayAlloc.size);
    TemplateSetArray("staticBuffer","int",accel->staticAlloc.ptr,accel->staticAlloc.size);
@@ -236,11 +181,34 @@ void OutputVersatSource(Versat* versat,Accelerator* accel,const char* sourceFile
    TemplateSetNumber("memoryMappedBase",1 << val.memoryConfigDecisionBit);
    TemplateSetNumber("nConfigs",val.nConfigs);
    TemplateSetNumber("nDelays",val.nDelays);
+   TemplateSetNumber("versatConfig",val.versatConfigs);
+   TemplateSetNumber("versatState",val.versatStates);
    TemplateSetNumber("nStatics",val.nStatics);
-   TemplateSetCustom("instances",&accum,"std::vector<ComplexFUInstance*>");
+   TemplateSetCustom("instances",&accum,"std::vector<ComplexFUInstance>");
    TemplateSetNumber("numberUnits",accum.size());
-   ProcessTemplate(d,"../../submodules/VERSAT/software/templates/embedData.tpl",&versat->temp);
+   TemplateSetBool("IsSimple",false);
+   ProcessTemplate(d,BasicTemplates::dataTemplate,&versat->temp);
 
+   {
+   FILE* f = OpenFileAndCreateDirectories(StaticFormat("%s/versat_external_memory_inst.vh",directoryPath),"w");
+   TemplateSetCustom("external",&computedData.external,"Array<ExternalMemoryInterface>");
+   ProcessTemplate(f,BasicTemplates::externalInstTemplate,&versat->temp);
+   fclose(f);
+   }
+
+   {
+   FILE* f = OpenFileAndCreateDirectories(StaticFormat("%s/versat_external_memory_port.vh",directoryPath),"w");
+   TemplateSetCustom("external",&computedData.external,"Array<ExternalMemoryInterface>");
+   ProcessTemplate(f,BasicTemplates::externalPortTemplate,&versat->temp);
+   fclose(f);
+   }
+
+   {
+   FILE* f = OpenFileAndCreateDirectories(StaticFormat("%s/versat_external_memory_portmap.vh",directoryPath),"w");
+   TemplateSetCustom("external",&computedData.external,"Array<ExternalMemoryInterface>");
+   ProcessTemplate(f,BasicTemplates::externalPortmapTemplate,&versat->temp);
+   fclose(f);
+   }
    //PopMark(&versat->temp,mark);
 
    fclose(s);

@@ -9,6 +9,7 @@ module SwapEndian #(
     input               clk,
     input               rst,
     
+    input               running,
     input               run,
 
     (* versat_latency = 0 *) input [DATA_W-1:0]  in0,

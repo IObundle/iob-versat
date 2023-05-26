@@ -32,6 +32,6 @@ void Log_(LogModule module,LogLevel level,int line,const char* filename,const ch
    va_end(args);
 
    if(level == LogLevel::FATAL){
-      DEBUG_BREAK;
+      DEBUG_BREAK();
    }
 }

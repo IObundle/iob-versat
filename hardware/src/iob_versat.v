@@ -19,6 +19,10 @@ module iob_versat
   	(
  		`include "iob_s_if.vh"
 
+    `ifdef VERSAT_EXTERNAL_MEMORY
+    `include "versat_external_memory_port.vh"
+    `endif
+
    `ifdef VERSAT_IO
       `include "m_versat_axi_m_port.vh"
    `endif
@@ -79,32 +83,6 @@ xmerge #(.N_SLAVES(`nIO),.ADDR_W(`IO_ADDR_W),.DATA_W(`DATAPATH_W)) merge(
   .rst(rst)
 );
 
-/*
-wire d_r_ready,d_r_valid,d_w_ready,d_w_valid;
-
-AxiDelay #(.MAX_DELAY(5)) delayR(
-    .s_valid(r_valid),
-    .s_ready(r_ready),
-
-    .m_valid(d_r_valid),
-    .m_ready(d_r_ready),
-
-    .clk(clk),
-    .rst(rst)
-  );
-
-AxiDelay #(.MAX_DELAY(5)) delayW(
-    .s_valid(w_valid),
-    .s_ready(w_ready),
-
-    .m_valid(d_w_valid),
-    .m_ready(d_w_ready),
-
-    .clk(clk),
-    .rst(rst)
-  );
-*/
-
 SimpleAXItoAXI #(
     .ADDR_W(AXI_ADDR_W),
     .DATA_W(DATA_W),
@@ -142,6 +120,10 @@ versat_instance #(.ADDR_W(ADDR_W),.DATA_W(DATA_W)) xversat(
       .rdata(rdata),
       .wdata(wdata),
       .ready(ready),
+
+`ifdef VERSAT_EXTERNAL_MEMORY
+      `include "versat_external_memory_portmap.vh"
+`endif
 
 `ifdef VERSAT_IO
       .m_databus_ready(m_databus_ready),

@@ -3,7 +3,8 @@
 
 module MyAddressGen # (
    parameter           ADDR_W = `MEM_ADDR_W,
-   parameter           PERIOD_W = `PERIOD_W
+   parameter           PERIOD_W = `PERIOD_W,
+   parameter           DELAY_W = 32
    ) (
    input                              clk,
    input                              rst,
@@ -14,7 +15,7 @@ module MyAddressGen # (
    input [ADDR_W - 1:0]           iterations,
    input [PERIOD_W - 1:0]             period,
    input [PERIOD_W - 1:0]             duty,
-   input [PERIOD_W - 1:0]             delay,
+   input [DELAY_W - 1:0]              delay,
    input [ADDR_W - 1:0]           start,
    input signed [ADDR_W - 1:0]    shift,
    input signed [ADDR_W - 1:0]    incr,
@@ -28,7 +29,7 @@ module MyAddressGen # (
    output reg                         done
 );
 
-reg [PERIOD_W-1:0] delayCounter;
+reg [DELAY_W-1:0] delayCounter;
 
 reg [ADDR_W - 1:0] iter;
 reg [PERIOD_W - 1:0] per;

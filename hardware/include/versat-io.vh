@@ -1,5 +1,9 @@
 // External memory address width 2**32 = 4GB
+`ifdef x64
+`define IO_ADDR_W 64
+`else
 `define IO_ADDR_W 32
+`endif
 
 // Transfer size width 2**11 = 2048 words (same as parameter ADDR_W)
 `define IO_SIZE_W 11

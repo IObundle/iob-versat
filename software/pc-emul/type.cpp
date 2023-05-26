@@ -1,155 +1,348 @@
 #include "type.hpp"
 
-#include <new>
-#include <map>
-#include <tuple>
+#include <cinttypes>
 
 #include "parser.hpp"
 #include "versatPrivate.hpp"
 
 namespace ValueType{
    Type* NUMBER;
+   Type* SIZE_T;
    Type* BOOLEAN;
    Type* CHAR;
    Type* STRING;
    Type* NIL;
+   Type* HASHMAP;
    Type* SIZED_STRING;
    Type* TEMPLATE_FUNCTION;
    Type* SET;
    Type* POOL;
+   Type* ARRAY;
    Type* STD_VECTOR;
 };
 
 static Arena permanentArena;
 static Pool<Type> types;
 
-static Type* RegisterSimpleType(SizedString name,int size){
+static void SkipQualifiers(Tokenizer* tok){
+   while(1){
+      Token peek = tok->PeekToken();
+
+      if(CompareToken(peek,"const")){
+         tok->AdvancePeek(peek);
+         continue;
+      }
+      if(CompareToken(peek,"volatile")){
+         tok->AdvancePeek(peek);
+         continue;
+      }
+      if(CompareToken(peek,"static")){
+         tok->AdvancePeek(peek);
+         continue;
+      }
+      if(CompareToken(peek,"inline")){
+         tok->AdvancePeek(peek);
+         continue;
+      }
+
+      break;
+   }
+}
+
+static String ParseSimpleType(Tokenizer* tok){
+   Assert(tok->IsSingleChar("<>,"));
+
+   SkipQualifiers(tok);
+
+   void* mark = tok->Mark();
+   Token name = tok->NextToken();
+
+   if(CompareString(name,"unsigned")){
+      Token next = tok->NextToken();
+      name = ExtendToken(name,next);
+   }
+
+   Token peek = tok->PeekToken();
+   if(CompareToken(peek,"<")){ // Template
+      Token nameRemaining = tok->PeekFindIncluding(">");
+      name = ExtendToken(name,nameRemaining);
+      tok->AdvancePeek(peek);
+
+      while(1){
+         ParseSimpleType(tok);
+
+         Token peek = tok->PeekToken();
+
+         if(CompareString(peek,",")){
+            tok->AdvancePeek(peek);
+         } else if(CompareString(peek,">")){
+            tok->AdvancePeek(peek);
+            break;
+         }
+      }
+   }
+
+   String res = tok->Point(mark);
+   res = TrimWhitespaces(res);
+
+   return res;
+}
+
+static Type* RegisterSimpleType(String name,int size,int align){
    Type* type = types.Alloc();
 
    type->type = Type::BASE;
    type->size = size;
    type->name = name;
+   type->align = align;
 
    return type;
 }
 
-static Type* RegisterOpaqueType(SizedString name,Type::Subtype subtype,int size){
+static Type* RegisterOpaqueType(String name,Type::Subtype subtype,int size,int align){
+   for(Type* type : types){
+      if(CompareString(type->name,name)){
+         Assert(type->size == size);
+         return type;
+      }
+   }
+
    Type* type = types.Alloc();
 
    type->name = name;
    type->type = subtype;
    type->size = size;
+   type->align = align;
 
    return type;
 }
 
-static Type* RegisterOpaqueTemplateStruct(SizedString name){
-   Type* type = types.Alloc();
+static Type* RegisterEnum(String name,Array<Pair<String,int>> enumValues){
+   for(Type* type : types){
+      if(CompareString(type->name,name)){
+         type->type = Type::ENUM;
+         type->enumMembers = enumValues;
+         return type;
+      }
+   }
 
-   type->name = name;
-   type->type = Type::TEMPLATED_STRUCT;
-
-   return type;
-}
-
-static Type* RegisterEnum(SizedString name){
    Type* type = types.Alloc();
 
    type->name = name;
    type->type = Type::ENUM;
    type->size = sizeof(int);
+   type->align = sizeof(int);
 
    return type;
 }
 
-static Type* RegisterTypedef(SizedString name,SizedString typedefName){
-   Type* type = GetType(name);
-   Type* typedefType = GetType(typedefName);
+static Type* RegisterTypedef(String oldName,String newName){
+   Type* type = GetType(newName);
+   Type* typedefType = GetType(oldName);
 
    Assert(type->type == Type::TYPEDEF);
 
-   type->name = name;
+   type->name = newName;
    type->typedefType = typedefType;
    type->size = typedefType->size;
+   type->align = typedefType->align;
 
    return type;
 }
 
-static Type* RegisterTemplateInstance(SizedString fullName,SizedString baseName,std::initializer_list<SizedString> data){
-   Type* type = GetType(fullName);
-   Assert(type->type == Type::TEMPLATED_INSTANCE);
+static Type* RegisterTemplate(String baseName,Array<String> templateArgNames){
+   Type* type = types.Alloc();
 
-   type->templateBase = GetType(baseName);
-
-   for(SizedString name : data){
-      TemplateArg* arg = PushStruct(&permanentArena,TemplateArg);
-
-      arg->type = GetType(name);
-      arg->next = type->templateArgs;
-
-      type->templateArgs = arg;
-   }
+   type->name = baseName;
+   type->type = Type::TEMPLATED_STRUCT_DEF;
+   type->templateArgs = templateArgNames;
 
    return type;
 }
 
-static Type* RegisterStructMembers(SizedString name,std::initializer_list<Member*> data){
+static Type* RegisterStructMembers(String name,Array<Member> members){
    Type* type = GetType(name);
 
-   Assert(type->type == Type::STRUCT || type->type == Type::TEMPLATED_INSTANCE);
+   Assert(type->type == Type::STRUCT);
 
-   Member* ptr = nullptr;
-   for(Member* m : data){
-      m->next = ptr;
-      ptr = m;
-   }
-
-   type->members = ptr;
+   type->members = members;
 
    return type;
 }
 
-Type* GetType(SizedString name){
-   for(Type* type : types){
+static Type* RegisterTemplateMembers(String name,Array<TemplatedMember> members){
+   Type* type = GetType(name);
+
+   Assert(type->type == Type::TEMPLATED_STRUCT_DEF);
+
+   type->templateMembers = members;
+
+   return type;
+}
+
+Type* GetSpecificType(String name){
+  for(Type* type : types){
       if(CompareString(type->name,name)){
          return type;
       }
    }
 
-   Tokenizer tok(name,"*[]<>",{});
+   return nullptr;
+}
 
-   Token templatedName = tok.PeekFindIncluding(">");
+Type* InstantiateTemplate(String name,Arena* arena = nullptr){
+   STACK_ARENA(temp,Kilobyte(4));
+   Tokenizer tok(name,"<>,",{});
+
+   // This check probably shouldn't be here.
+   Type* alreadyExists = GetSpecificType(name);
+   if(alreadyExists && alreadyExists->members.size > 0){
+      return alreadyExists;
+   }
+
+   Hashmap<String,String>* templateToType = PushHashmap<String,String>(&temp,16);
+
+   Token baseName = tok.NextToken();
+   Type* templateBase = GetSpecificType(baseName);
+
+   if(!templateBase){
+      return nullptr;
+   }
+
+   tok.AssertNextToken("<");
+   int index = 0;
+
+   bool structDefined = (templateBase->templateArgs.size > 0);
+
+   Array<Type*> templateArgTypes = {};
+   if(structDefined){
+      templateArgTypes = PushArray<Type*>(&permanentArena,templateBase->templateArgs.size);
+      while(!tok.Done()){
+         Token peek = tok.PeekToken();
+         if(CompareString(peek,">")){
+            break;
+         }
+
+         String simpleType = ParseSimpleType(&tok);
+         String templateArg = templateBase->templateArgs[index];
+
+         templateArgTypes[index] = GetTypeOrFail(simpleType);
+
+         templateToType->Insert(templateArg,simpleType);
+
+         tok.IfNextToken(",");
+         index += 1;
+      }
+   }
+
+   int nMembers = templateBase->templateMembers.size;
+   int numberPositions = 0;
+   for(TemplatedMember& m : templateBase->templateMembers){
+      numberPositions = std::max(numberPositions,m.memberOffset);
+   }
+   numberPositions += 1;
+
+   Array<Member> members = PushArray<Member>(&permanentArena,nMembers);
+   Array<int> sizes = PushArray<int>(&temp,numberPositions);
+   Array<int> align = PushArray<int>(&temp,numberPositions);
+   Memset(sizes,0);
+   Memset(align,0);
+   for(int i = 0; i < templateBase->templateMembers.size; i++){
+      TemplatedMember templateMember = templateBase->templateMembers[i];
+      Tokenizer tok(templateMember.typeName,"*&[],<>",{});
+
+      Byte* mark = MarkArena(&temp);
+
+      while(!tok.Done()){
+         Token token = tok.NextToken();
+
+         String* found = templateToType->Get(token);
+         if(found){
+            PushString(&temp,"%.*s",UNPACK_SS(*found));
+         } else {
+            PushString(&temp,"%.*s",UNPACK_SS(token));
+         }
+      }
+
+      String trueType = PointArena(&temp,mark);
+      Type* type = GetTypeOrFail(trueType);
+
+      members[i].type = type;
+      members[i].name = templateMember.name;
+      members[i].offset = templateMember.memberOffset; // Temporarely store member position as the offset, for use later in this function
+      sizes[templateMember.memberOffset] = std::max(sizes[templateMember.memberOffset],type->size);
+      align[templateMember.memberOffset] = std::max(align[templateMember.memberOffset],type->align);
+
+      PopMark(&temp,mark);
+   }
+
+   Array<int> offsets = PushArray<int>(&temp,numberPositions + 1);
+   offsets[0] = 0;
+   for(int i = 1; i < offsets.size; i++){
+      offsets[i] = Align(offsets[i-1],align[i-1]) + sizes[i - 1];
+   }
+
+   for(Member& member : members){
+      member.offset = offsets[member.offset];
+   }
+
+   Type* newType = nullptr;
+   if(alreadyExists){
+      newType = alreadyExists;
+   } else {
+      newType = types.Alloc();
+   }
+
+   if(arena){
+      name = PushString(arena,"%.*s",UNPACK_SS(name));
+   }
+
+   newType->type = Type::TEMPLATED_INSTANCE;
+   newType->name = name;
+   newType->members = members;
+   newType->templateBase = templateBase;
+   newType->templateArgTypes = templateArgTypes;
+
+   int maxAlign = 0;
+   for(int val : align){
+      maxAlign = std::max(val,maxAlign);
+   }
+
+   if(structDefined){
+      newType->size = Align(offsets[sizes.size],maxAlign);
+   } else {
+      newType-> size = templateBase->size;
+   }
+
+   return newType;
+}
+
+Type* GetType(String name){
+   Type* typeExists = GetSpecificType(name);
+   if(typeExists){
+      return typeExists;
+   }
+
+   Tokenizer tok(name,"*[]<>,",{});
+
+   Token templatedName = ParseSimpleType(&tok);
 
    Type* res = nullptr;
    if(CompareString(name,templatedName)){ // Name equal to templated name means that no pointers or arrays, only templated arguments are not found
-      Token baseName = tok.NextToken();
-      tok.AssertNextToken("<");
-
-      Type* base = GetType(baseName);
-
-      Token argName = tok.PeekFindUntil(">");
-      tok.AdvancePeek(argName);
-      tok.AssertNextToken(">");
-
-      Assert(!Contains(argName,",")); // Only handle 1 argument, for now
-
-      Type* arg = GetType(argName);
-
-      Type* newType = types.Alloc();
-
-      newType->type = Type::TEMPLATED_INSTANCE;
-      newType->name = PushString(&permanentArena,name);
-      newType->templateBase = base;
-      newType->templateArgs = PushStruct(&permanentArena,TemplateArg);
-
-      newType->templateArgs->type = arg;
-
-      res = newType;
+      Type* res = InstantiateTemplate(name,&permanentArena);
+      return res;
    } else if(templatedName.size > 0){
       res = GetType(templatedName);
    } else {
-      Token typeName = tok.NextToken();
+      Token typeName = ParseSimpleType(&tok);
+      if(CompareString(typeName,name)){
+         return nullptr;
+      }
       res = GetType(typeName);
+   }
+
+   if(res == nullptr){
+      return nullptr;
    }
 
    while(!tok.Done()){
@@ -178,7 +371,7 @@ Type* GetType(SizedString name){
          tok.AssertNextToken("]");
 
          if(!CheckFormat("%d",arrayExpression)){
-            DEBUG_BREAK;
+            DEBUG_BREAK();
          }
 
          int arraySize = ParseInt(arrayExpression);
@@ -200,9 +393,19 @@ Type* GetType(SizedString name){
 
       NOT_POSSIBLE;
    }
-   Assert(res);
 
    return res;
+}
+
+Type* GetTypeOrFail(String name){
+   Type* type = GetType(name);
+
+   if(!type){
+      printf("Failed to find type: %.*s\n",UNPACK_SS(name));
+      Assert(false);
+   }
+
+   return type;
 }
 
 Type* GetPointerType(Type* baseType){
@@ -213,10 +416,11 @@ Type* GetPointerType(Type* baseType){
    }
 
    Type* ret = types.Alloc();
-   ret->name = PushString(&permanentArena,"%.*s*",UNPACK_SS(baseType->name));;
+   ret->name = PushString(&permanentArena,"%.*s*",UNPACK_SS(baseType->name));
    ret->type = Type::POINTER;
    ret->pointerType = baseType;
    ret->size = sizeof(void*);
+   ret->align = alignof(void*);
 
    return ret;
 }
@@ -233,15 +437,9 @@ Type* GetArrayType(Type* baseType, int arrayLength){
    ret->type = Type::ARRAY;
    ret->pointerType = baseType;
    ret->size = arrayLength * baseType->size;
+   ret->align = baseType->align;
 
    return ret;
-}
-
-static Type* GetArrayType(SizedString name,int arrayLength){
-   Type* type = GetType(name);
-   Type* res = GetArrayType(type,arrayLength);
-
-   return res;
 }
 
 #define A(STRUCT) #STRUCT,sizeof(STRUCT)
@@ -249,8 +447,8 @@ static Type* GetArrayType(SizedString name,int arrayLength){
 
 #include "templateEngine.hpp"
 #include "verilogParser.hpp"
-#include "codeGeneration.hpp"
-#include "merge.hpp"
+#include "scratchSpace.hpp"
+#include "utils.hpp"
 #include "typeInfo.inc"
 
 void RegisterTypes(){
@@ -260,32 +458,31 @@ void RegisterTypes(){
    }
    registered = true;
 
-   InitArena(&permanentArena,Megabyte(16));
-   permanentArena.align = true;
+   permanentArena = InitArena(Megabyte(16));
+
+   #define REGISTER(TYPE) RegisterSimpleType(STRING(#TYPE),sizeof(TYPE),alignof(TYPE));
+
+   ValueType::NUMBER = REGISTER(int);
+   ValueType::SIZE_T = REGISTER(size_t);
+   ValueType::BOOLEAN = REGISTER(bool);
+   ValueType::CHAR = REGISTER(char);
+   ValueType::NIL = RegisterSimpleType(STRING("void"),sizeof(char),alignof(char));
+   REGISTER(unsigned int);
+   REGISTER(unsigned char);
+   REGISTER(float);
+   REGISTER(double);
+
+   #undef REGISTER
 
    RegisterParsedTypes();
 
-   ValueType::NUMBER = GetType(MakeSizedString("int"));
-   ValueType::BOOLEAN =  GetType(MakeSizedString("bool"));
-   ValueType::CHAR =  GetType(MakeSizedString("char"));
-   ValueType::NIL = GetType(MakeSizedString("void"));
+   ValueType::HASHMAP = GetTypeOrFail(STRING("Hashmap"));
    ValueType::STRING = GetPointerType(ValueType::CHAR);
-   ValueType::SIZED_STRING = GetType(MakeSizedString("SizedString"));
-   ValueType::TEMPLATE_FUNCTION = GetPointerType(GetType(MakeSizedString("TemplateFunction")));
-   ValueType::POOL = GetType(MakeSizedString("Pool"));
-   ValueType::STD_VECTOR = GetType(MakeSizedString("std::vector"));
-
-   #if 0
-   for(Type* type : types){
-      printf("%.*s: Size:%d Type:%d\n",UNPACK_SS(type->name),type->size,(int) type->type);
-
-      if(type->type == Type::STRUCT ){
-         for(Member* m = type->members; m != nullptr; m = m->next){
-            printf("  [%.*s: Size:%d Type:%d] %.*s Offset: %d\n",UNPACK_SS(m->type->name),m->type->size,(int) m->type->type,UNPACK_SS(m->name),m->offset);
-         }
-      }
-   }
-   #endif
+   ValueType::SIZED_STRING = GetTypeOrFail(STRING("String"));
+   ValueType::TEMPLATE_FUNCTION = GetPointerType(GetTypeOrFail(STRING("TemplateFunction")));
+   ValueType::POOL = GetTypeOrFail(STRING("Pool"));
+   ValueType::ARRAY = GetTypeOrFail(STRING("Array"));
+   ValueType::STD_VECTOR = GetTypeOrFail(STRING("std::vector"));
 }
 
 void FreeTypes(){
@@ -293,23 +490,13 @@ void FreeTypes(){
    types.Clear(true);
 }
 
-int ArrayLength(Type* type){
-   Assert(type->type == Type::ARRAY);
-
-   int arraySize = type->size;
-   int baseTypeSize = type->arrayType->size;
-
-   int res = (arraySize / baseTypeSize);
-
-   return res;
-}
-
-SizedString GetValueRepresentation(Value in,Arena* arena){
+String GetDefaultValueRepresentation(Value in,Arena* arena){
    Value val = CollapseArrayIntoPtr(in);
-   SizedString res = {};
+   Type* type = val.type;
+   String res = {};
 
    if(val.type == ValueType::NUMBER){
-      res = PushString(arena,"%d",val.number);
+      res = PushString(arena,"%" PRId64,val.number);
    } else if(val.type == ValueType::STRING){
       if(val.literal){
          res = PushString(arena,"\"%.*s\"",UNPACK_SS(val.str));
@@ -322,6 +509,10 @@ SizedString GetValueRepresentation(Value in,Arena* arena){
       res = PushString(arena,"%.*s",UNPACK_SS(val.str));
    } else if(val.type == ValueType::BOOLEAN){
       res = PushString(arena,"%s",val.boolean ? "true" : "false");
+   } else if(val.type == ValueType::SIZE_T){
+      res = PushString(arena,"%d",*(int*)val.custom);
+   } else if(type == ValueType::NIL){
+      res = STRING("Nullptr");
    } else if(val.type->type == Type::POINTER){
       Assert(!val.isTemp);
 
@@ -332,8 +523,29 @@ SizedString GetValueRepresentation(Value in,Arena* arena){
       } else {
          res = PushString(arena,"%p",ptr);
       }
+   } else if(type->type == Type::TEMPLATED_INSTANCE){
+      if(type->templateBase == ValueType::ARRAY){
+         Value size = AccessStruct(val,STRING("size"));
+         res = PushString(arena,"Size:%" PRId64,size.number);
+      } else {
+         res = PushString(arena,"%.*s",UNPACK_SS(type->name));// Return type name
+      }
+   } else if(type->type == Type::ENUM){
+      int enumValue = in.number;
+      Pair<String,int>* pairFound = nullptr;
+      for(auto pair : type->enumMembers){
+         if(pair.second == enumValue){
+            pairFound = &pair;
+            break;
+         }
+      }
+      if(pairFound){
+         res = PushString(arena,"%.*s::%.*s",UNPACK_SS(type->name),UNPACK_SS(pairFound->first));
+      } else {
+         res = PushString(arena,"(%.*s) %d",UNPACK_SS(type->name),enumValue);
+      }
    } else {
-      // Return empty
+      res = PushString(arena,"\"[GetValueRepresentation Type: %.*s]\"",UNPACK_SS(type->name));// Return type name
    }
 
    return res;
@@ -386,9 +598,15 @@ Value CollapseValue(Value val){
    } else if(val.type == ValueType::NIL){
       val.number = 0;
    } else if(val.type == ValueType::STRING){
-      val.str = MakeSizedString(*(char**) val.custom);
+      char* str = *(char**) val.custom;
+
+      if(str == nullptr){
+         val.str = STRING("");
+      } else {
+         val.str = STRING(str);
+      }
    } else if(val.type == ValueType::SIZED_STRING){
-      val.str = *((SizedString*) val.custom);
+      val.str = *((String*) val.custom);
    } else if(val.type == ValueType::TEMPLATE_FUNCTION){
       val.templateFunction = *((TemplateFunction**) val.custom);
    } else if(val.type->type == Type::ENUM){
@@ -412,18 +630,6 @@ static void* DeferencePointer(void* object,Type* info,int index){
 Value AccessObjectIndex(Value object,int index){
    Value value = {};
 
-   #if 0
-   if(object.type == ValueType::POOL){
-      Pool<ComplexFUInstance>* pool = object.pool;
-
-      Assert(index < pool->Size());
-
-      ComplexFUInstance* inst = pool->Get(index);
-
-      value.type = GetType(MakeSizedString("FUInstance")); // TODO: place to replace when adding template support
-      value.custom = (void*) inst;
-   } else
-   #endif
    if(object.type->type == Type::ARRAY){
       Type* arrayType = object.type;
       Byte* array = (Byte*) object.custom;
@@ -443,6 +649,25 @@ Value AccessObjectIndex(Value object,int index){
 
       value.type = object.type->pointerType;
       value.custom = objectPtr;
+   } else if(object.type->type == Type::TEMPLATED_INSTANCE){
+      if(object.type->templateBase == ValueType::ARRAY){
+         Array<Byte>* byteArray = (Array<Byte>*) object.custom;
+
+         int arrayLength = byteArray->size;
+         Assert(index < arrayLength);
+
+         int size = object.type->templateArgTypes[0]->size;
+         Byte* view = (Byte*) byteArray->data;
+
+         value.custom = &view[index * size];
+         value.type = object.type->templateArgTypes[0];
+      } else if(object.type->templateBase == ValueType::POOL){
+         Iterator iter = Iterate(object);
+         for(int i = 0; HasNext(iter) && i < index; Advance(&iter),i += 1);
+         value = GetValue(iter);
+      } else {
+         NOT_IMPLEMENTED;
+      }
    } else {
       NOT_IMPLEMENTED;
    }
@@ -454,7 +679,7 @@ Value AccessObjectIndex(Value object,int index){
 }
 
 Value AccessStruct(Value structure,Member* member){
-   Assert(structure.type->type == Type::STRUCT);
+   Assert(IsStruct(structure.type));
    Assert(!structure.isTemp);
 
    char* view = (char*) structure.custom;
@@ -471,36 +696,29 @@ Value AccessStruct(Value structure,Member* member){
 }
 
 Value AccessStruct(Value val,int index){
-   Assert(val.type->type == Type::STRUCT);
+   Assert(IsStruct(val.type));
 
-   Member* member = val.type->members;
-
-   for(int i = 0; i < index && member != nullptr; i++){
-      member = member->next;
-   }
-
+   Member* member = &val.type->members[index];
    Value res = AccessStruct(val,member);
 
    return res;
 }
 
-Value AccessStruct(Value object,SizedString memberName){
+Value AccessStruct(Value object,String memberName){
    Value structure = CollapsePtrIntoStruct(object);
    Type* type = structure.type;
 
-   Assert(type->members); // Type is incomplete
+   Assert(type->members.size); // Type is incomplete
 
-   int offset = -1;
    Member* member = nullptr;
-   for(Member* m = type->members; m != nullptr; m = m->next){
-      if(CompareString(m->name,memberName)){
-         offset = m->offset;
-         member = m;
+   for(Member& m : type->members){
+      if(CompareString(m.name,memberName)){
+         member = &m;
          break;
       }
    }
 
-   if(offset == -1){
+   if(member == nullptr){
       Log(LogModule::PARSER,LogLevel::FATAL,"Failure to find member named: %.*s on structure: %.*s",UNPACK_SS(memberName),UNPACK_SS(structure.type->name));
    }
 
@@ -509,7 +727,131 @@ Value AccessStruct(Value object,SizedString memberName){
    return res;
 }
 
+int ArrayLength(Type* type){
+   Assert(type->type == Type::ARRAY);
+
+   int arraySize = type->size;
+   int baseTypeSize = type->arrayType->size;
+
+   int res = (arraySize / baseTypeSize);
+
+   return res;
+}
+
+int IndexableSize(Value object){
+   Type* type = object.type;
+
+   Assert(IsIndexable(type));
+
+   int size = 0;
+
+   if(type->type == Type::ARRAY){
+      size = ArrayLength(type);
+   } else if(type->type == Type::TEMPLATED_INSTANCE){
+      if(type->templateBase == ValueType::POOL){
+         for(Iterator iter = Iterate(object); HasNext(iter); Advance(&iter)){
+            size += 1;
+         }
+      } else if(type->templateBase == ValueType::STD_VECTOR){ // TODO: A lot of assumptions are being made for std::vector so this works. Probably not safe (change later)
+         std::vector<Byte>* b = (std::vector<Byte>*) object.custom;
+
+         int byteSize = b->size();
+         size = byteSize / type->templateArgTypes[0]->size;
+      } else if(type->templateBase == ValueType::ARRAY){
+         Array<Byte>* view = (Array<Byte>*) object.custom;
+         size = view->size;
+      } else if(type->templateBase == ValueType::HASHMAP){
+         Hashmap<Byte,Byte>* view = (Hashmap<Byte,Byte>*) object.custom;
+         size = view->nodesUsed;
+      } else {
+         NOT_IMPLEMENTED;
+      }
+   }
+
+   return size;
+}
+
+bool IsIndexable(Type* type){
+   bool res = false;
+
+   if(type->type == Type::ARRAY){
+      res = true;
+   } else if(type->type == Type::TEMPLATED_INSTANCE){
+      if(type->templateBase == ValueType::POOL){
+         res = true;
+      } else if(type->templateBase == ValueType::STD_VECTOR){ // TODO: A lot of assumptions are being made for std::vector so this works. Probably not safe (change later)
+         res = true;
+      } else if(type->templateBase == ValueType::ARRAY){
+         res = true;
+      } else if(type->templateBase == ValueType::HASHMAP){
+         res = true;
+      }
+   }
+
+   return res;
+}
+
+bool IsBasicType(Type* type){
+   bool res = (type == ValueType::NUMBER ||
+               type == ValueType::SIZE_T ||
+               type == ValueType::BOOLEAN ||
+               type == ValueType::CHAR ||
+               type == ValueType::STRING ||
+               type == ValueType::SIZED_STRING);
+
+   return res;
+}
+
+bool IsIndexableOfBasicType(Type* type){
+   Assert(IsIndexable(type));
+
+   bool res = false;
+   if(type->type == Type::ARRAY){
+      res = IsBasicType(type->arrayType);
+   } else if(type->type == Type::TEMPLATED_INSTANCE){
+      if(type->templateBase == ValueType::POOL){
+         res = IsBasicType(type->templateArgTypes[0]);
+      } else if(type->templateBase == ValueType::STD_VECTOR){ // TODO: A lot of assumptions are being made for std::vector so this works. Probably not safe (change later)
+         res = IsBasicType(type->templateArgTypes[0]);
+      } else if(type->templateBase == ValueType::ARRAY){
+         res = IsBasicType(type->templateArgTypes[0]);
+      } else if(type->templateBase == ValueType::HASHMAP){
+         res = false; //res = IsBasicType(type->templateArgTypes[1]);
+      }
+   }
+
+   return res;
+}
+
+bool IsEmbeddedListKind(Type* type){
+   if(!IsStruct(type)){
+      return false;
+   }
+
+   bool res = false;
+   for(Member& member : type->members){
+      if(CompareString(member.name,"next")){
+         Type* memberType = member.type;
+
+         if(memberType->type == Type::POINTER && memberType->pointerType == type){
+            res = true;
+         }
+
+         break;
+      }
+   }
+
+   return res;
+}
+
+bool IsStruct(Type* type){
+   bool res = type->type == Type::STRUCT || type->type == Type::TEMPLATED_INSTANCE;
+   return res;
+}
+
 Iterator Iterate(Value iterating){
+   iterating = CollapsePtrIntoStruct(iterating);
+
    Type* type = iterating.type;
 
    Iterator iter = {};
@@ -523,20 +865,37 @@ Iterator Iterate(Value iterating){
       Assert(iterating.isTemp == false);
 
       if(type->templateBase == ValueType::POOL){
-         Assert(type->templateArgs);
-
          Pool<Byte>* pool = (Pool<Byte>*) iterating.custom; // Any type of pool is good enough
 
          Byte* page = pool->GetMemoryPtr();
 
-         new (&iter.poolIterator) GenericPoolIterator(page,pool->Size(),type->templateArgs->type->size);
+         iter.poolIterator.Init(page,type->templateArgTypes[0]->size);
       } else if(type->templateBase == ValueType::STD_VECTOR){ // TODO: A lot of assumptions are being made for std::vector so this works. Probably not safe (change later)
-         Assert(sizeof(std::vector<Byte>) == sizeof(std::vector<ComplexFUInstance>)); // Assuming std::vector<T> is same for any T (otherwise, cast does not work)
-
          iter.currentNumber = 0;
+      } else if(type->templateBase == ValueType::ARRAY){
+         iter.currentNumber = 0;
+      } else if(type->templateBase == ValueType::HASHMAP){
+         iter.currentNumber = 0;
+
+         Type* keyType = type->templateArgTypes[0];
+         Type* dataType = type->templateArgTypes[1];
+
+         STACK_ARENA(temp,256);
+         String pairName = PushString(&temp,"Pair<%.*s,%.*s>",UNPACK_SS(keyType->name),UNPACK_SS(dataType->name));
+
+         Type* exists = GetSpecificType(pairName);
+         if(!exists){
+            String permanentName = PushString(&permanentArena,pairName);
+            exists = GetType(permanentName);
+         }
+         iter.hashmapType = exists;
       } else {
          NOT_IMPLEMENTED;
       }
+   } else if(IsEmbeddedListKind(type)){
+      // Info stored in iterating
+   } else if(type == ValueType::NIL){
+      // Do nothing. HasNext will fail
    } else {
       NOT_IMPLEMENTED;
    }
@@ -563,16 +922,29 @@ bool HasNext(Iterator iter){
 
          return res;
       } else if(type->templateBase == ValueType::STD_VECTOR){
-         std::vector<Byte>* b = (std::vector<Byte>*) iter.iterating.custom;
+         int len = IndexableSize(iter.iterating);
 
-         int byteSize = b->size();
-         int len = byteSize / type->templateArgs->type->size;
+         bool res = (iter.currentNumber < len);
+         return res;
+      } else if(type->templateBase == ValueType::ARRAY){
+         int len = IndexableSize(iter.iterating);
+
+         bool res = (iter.currentNumber < len);
+         return res;
+      } else if(type->templateBase == ValueType::HASHMAP){
+         int len = IndexableSize(iter.iterating);
 
          bool res = (iter.currentNumber < len);
          return res;
       } else {
          NOT_IMPLEMENTED;
       }
+   } else if(IsEmbeddedListKind(type)){
+      bool res = (iter.iterating.custom != nullptr);
+
+      return res;
+   } else if(type == ValueType::NIL){
+      return false;
    } else {
       NOT_IMPLEMENTED;
    }
@@ -592,9 +964,17 @@ void Advance(Iterator* iter){
          ++iter->poolIterator;
       } else if(type->templateBase == ValueType::STD_VECTOR){
          iter->currentNumber += 1;
+      } else if(type->templateBase == ValueType::ARRAY){
+         iter->currentNumber += 1;
+      } else if(type->templateBase == ValueType::HASHMAP){
+         iter->currentNumber += 1;
       } else {
          NOT_IMPLEMENTED;
       }
+   } else if(IsEmbeddedListKind(type)){
+      Value val = AccessStruct(iter->iterating,STRING("next"));
+      Value collapsed = CollapsePtrIntoStruct(val);
+      iter->iterating = collapsed;
    } else {
       NOT_IMPLEMENTED;
    }
@@ -612,20 +992,31 @@ Value GetValue(Iterator iter){
    } else if(type->type == Type::TEMPLATED_INSTANCE){
       if(type->templateBase == ValueType::POOL){
          val.custom = *iter.poolIterator;
-         val.type = type->templateArgs->type;
+         val.type = type->templateArgTypes[0];
       } else if(type->templateBase == ValueType::STD_VECTOR){
          std::vector<Byte>* b = (std::vector<Byte>*) iter.iterating.custom;
 
-         int size = type->templateArgs->type->size;
+         int size = type->templateArgTypes[0]->size;
          int index = iter.currentNumber;
 
          Byte* view = b->data();
 
          val.custom = &view[index * size];
-         val.type = type->templateArgs->type;
+         val.type = type->templateArgTypes[0];
+      } else if(type->templateBase == ValueType::ARRAY){
+         val = AccessObjectIndex(iter.iterating,iter.currentNumber);
+      } else if(type->templateBase == ValueType::HASHMAP){
+         Hashmap<Byte,Byte>* view = (Hashmap<Byte,Byte>*) iter.iterating.custom;
+
+         Byte* data = (Byte*) view->data;
+
+         val.custom = &data[iter.currentNumber * iter.hashmapType->size];
+         val.type = iter.hashmapType;
       } else {
          NOT_IMPLEMENTED;
       }
+   } else if(IsEmbeddedListKind(type)){
+      return iter.iterating;
    } else {
       NOT_IMPLEMENTED;
    }
@@ -704,14 +1095,14 @@ bool Equal(Value v1,Value v2){
    Value c2 = CollapseArrayIntoPtr(v2);
 
    if(c1.type == ValueType::STRING && c2.type == ValueType::SIZED_STRING){
-      SizedString str = c1.str;
-      SizedString ss = c2.str;
+      String str = c1.str;
+      String ss = c2.str;
       Assert(c1.isTemp == true && c2.isTemp == true);
 
       return CompareString(ss,str);
    } else if(c1.type == ValueType::SIZED_STRING && c2.type == ValueType::STRING){
-      SizedString str = c2.str;
-      SizedString ss = c1.str;
+      String str = c2.str;
+      String ss = c1.str;
       Assert(c2.isTemp == true && c1.isTemp == true);
 
       return CompareString(ss,str);
@@ -748,7 +1139,7 @@ bool Equal(Value v1,Value v2){
       c2 = RemoveOnePointerIndirection(c2);
 
       res = (c1.custom == c2.custom);
-   } else if(c1.type->type == Type::STRUCT){
+   } else if(IsStruct(c1.type)){
       Assert(!c1.isTemp);
       Assert(!c2.isTemp);
 
@@ -806,29 +1197,25 @@ Value ConvertValue(Value in,Type* want,Arena* arena){
          int* pointerValue = (int*) DeferencePointer(in.custom,in.type->pointerType,0);
 
          res.boolean = (pointerValue != nullptr);
-      } else if(in.type->type == Type::STRUCT){
+      } else if(IsStruct(in.type)){
          res.boolean = (in.custom != nullptr);
       } else {
          NOT_IMPLEMENTED;
       }
    } else if(want == ValueType::NUMBER){
       if(in.type->type == Type::POINTER){
-         int* pointerValue = (int*) DeferencePointer(in.custom,in.type->pointerType,0);
+         void* pointerValue = (void*) DeferencePointer(in.custom,in.type->pointerType,0);
 
-         res.number = (int) pointerValue;
+         res.number = (int64) pointerValue;
       } else {
          NOT_IMPLEMENTED;
       }
    } else if(want == ValueType::SIZED_STRING){
-      if(in.type == GetType(MakeSizedString("HierarchyName"))){
-         HierarchyName* name = (HierarchyName*) in.custom;
-
-         res = MakeValue(MakeSizedString(name->str));
-      } else if(in.type == ValueType::STRING){
+      if(in.type == ValueType::STRING){
          res = in;
          res.type = want;
       } else if(arena){
-         res.str = GetValueRepresentation(in,arena);
+         res.str = GetDefaultValueRepresentation(in,arena);
       } else {
          NOT_IMPLEMENTED;
       }
@@ -853,15 +1240,7 @@ Value MakeValue(){
    return val;
 }
 
-Value MakeValue(unsigned int integer){
-   Value val = {};
-   val.number = (int) integer;
-   val.type = ValueType::NUMBER;
-   val.isTemp = true;
-   return val;
-}
-
-Value MakeValue(int integer){
+Value MakeValue(int64 integer){
    Value val = {};
    val.number = integer;
    val.type = ValueType::NUMBER;
@@ -869,13 +1248,31 @@ Value MakeValue(int integer){
    return val;
 }
 
+Value MakeValue(unsigned int integer){
+   Value val = {};
+   val.number = (uint64) integer; // Should probably maintain the unsigned information. TODO
+   val.type = ValueType::NUMBER;
+   val.isTemp = true;
+   return val;
+}
+
+Value MakeValue(int integer){
+   Value val = {};
+   val.number = (int64) integer;
+   val.type = ValueType::NUMBER;
+   val.isTemp = true;
+   return val;
+}
+
+Value MakeValue(unsigned int integer);
+
 Value MakeValue(const char* str){
-   Value res = MakeValue(MakeSizedString(str));
+   Value res = MakeValue(STRING(str));
    res.isTemp = true;
    return res;
 }
 
-Value MakeValue(SizedString str){
+Value MakeValue(String str){
    Value val = {};
    val.str = str;
    val.type = ValueType::STRING;
@@ -894,10 +1291,114 @@ Value MakeValue(bool boolean){
 Value MakeValue(void* entity,const char* typeName){
    Value val = {};
 
-   val.type = GetType(MakeSizedString(typeName));
+   val.type = GetType(STRING(typeName));
    val.custom = entity;
    val.isTemp = false;
 
    return val;
 }
+
+Value MakeValue(void* entity,String typeName){
+   Value val = {};
+
+   val.type = GetType(typeName);
+   val.custom = entity;
+   val.isTemp = false;
+
+   return val;
+}
+
+// This shouldn't be here, but cannot be on parser.cpp because otherwise struct parser would fail
+Array<Value> ExtractValues(const char* format,Token tok,Arena* arena){
+   // TODO: This is pretty much a copy of CheckFormat but with small modifications
+   // It probably should be a way to refactor into a single function, and probably less error prone
+   if(!CheckFormat(format,tok)){
+      return {};
+   }
+
+   Byte* mark = MarkArena(arena);
+
+   int tokenIndex = 0;
+   for(int formatIndex = 0; 1;){
+      char formatChar = format[formatIndex];
+
+      if(formatChar == '\0'){
+         break;
+      }
+
+      Assert(tokenIndex < tok.size);
+
+      if(formatChar == '%'){
+         char type = format[formatIndex + 1];
+         formatIndex += 2;
+
+         switch(type){
+         case 'd':{
+            String numberStr = {};
+            numberStr.data = &tok[tokenIndex];
+
+            for(tokenIndex += 1; tokenIndex < tok.size; tokenIndex++){
+               if(!IsNum(tok[tokenIndex])){
+                  break;
+               }
+            }
+
+            numberStr.size = &tok.data[tokenIndex] - numberStr.data;
+            int number = ParseInt(numberStr);
+
+            Value* val = PushStruct<Value>(arena);
+            val->type = ValueType::NUMBER;
+            val->number = number;
+            val->isTemp = true;
+         }break;
+         case 's':{
+            char terminator = format[formatIndex];
+            String str = {};
+            str.data = &tok[tokenIndex];
+
+            for(;tokenIndex < tok.size; tokenIndex++){
+               if(tok[tokenIndex] == terminator){
+                  break;
+               }
+            }
+
+            str.size = &tok.data[tokenIndex] - str.data;
+
+            Value* val = PushStruct<Value>(arena);
+            val->type = ValueType::STRING;
+            val->str = str;
+            val->isTemp = true;
+         }break;
+         case '\0':{
+            NOT_POSSIBLE;
+         }break;
+         default:{
+            NOT_IMPLEMENTED;
+         }break;
+         }
+      } else {
+         Assert(formatChar == tok[tokenIndex]);
+         formatIndex += 1;
+         tokenIndex += 1;
+      }
+   }
+
+   Array<Value> values = PointArray<Value>(arena,mark);
+
+   return values;
+}
+
+// Very dependent on compiler and enviromnent.
+// Probably need to at least insert a few more asserts to make it sure that no weird bug escapes from this function in case of any environment change
+String ExtractTypeNameFromPrettyFunction(String prettyFunctionFormat,Arena* out){
+   Array<Value> values = ExtractValues("String GetTemplateTypeName(Arena*) [with T = %s; String = Array<const char>]",prettyFunctionFormat,out);
+
+   Assert(values.size == 1);
+
+   return values[0].str;
+}
+
+
+
+
 

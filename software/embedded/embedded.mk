@@ -3,7 +3,10 @@ include $(VERSAT_DIR)/software/software.mk
 
 #pc sources
 SRC+=$(VERSAT_SW_DIR)/embedded/versat.cpp
+SRC+=$(VERSAT_SW_DIR)/embedded/memory.cpp
 SRC+=$(VERSAT_DIR)/software/utilsCommon.cpp
 
+BUILD_DIR :=./build
+
 # includes
-INCLUDE+= -I$(VERSAT_SW_DIR)/embedded/
+INCLUDE+= -I$(VERSAT_SW_DIR)/embedded/ -I$(BUILD_DIR)/ 

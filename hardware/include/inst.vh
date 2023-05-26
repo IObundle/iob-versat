@@ -16,7 +16,7 @@
       // AXI4 master interface
       `ifdef VERSAT_IO
       //address write
-      .m_axi_awid(m_axi_awlen[1*1+:1]), 
+      .m_axi_awid(m_axi_awid[1*1+:1]), 
       .m_axi_awaddr(versat_awaddr), 
       .m_axi_awlen(m_axi_awlen[1*8+:8]), 
       .m_axi_awsize(m_axi_awsize[1*3+:3]), 
@@ -58,6 +58,10 @@
       .m_axi_rvalid(m_axi_rvalid[1*1+:1]),  
       .m_axi_rready(m_axi_rready[1*1+:1]),
       `endif
+
+`ifdef VERSAT_EXTERNAL_MEMORY
+      `include "versat_external_memory_portmap.vh"
+`endif
 
       .valid(slaves_req[`valid(`VERSAT)]),
       .address(slaves_req[`address(`VERSAT,`VERSAT_ADDR_W+2)-2]),

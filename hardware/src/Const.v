@@ -9,12 +9,12 @@ module Const #(
     input               clk,
     input               rst,
     
+    input               running,
     input               run,
 
-    //input / output data
     output [DATA_W-1:0] out0,
 
-    input [DATA_W-1:0]  constant
+    input [DATA_W-1:0]  constant // config
     );
 
 assign out0 = constant;
