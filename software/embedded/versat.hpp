@@ -114,5 +114,7 @@ inline void Free(Versat* versat){}
 #define DebugVersat(...) ((void)0)
 #define Merge(...) ((FUDeclaration*)0)
 inline void TestVersatSide(Versat* versat){}
+#define CreateOrGetInput(...) nullptr
+#define CreateOrGetOutput(...) nullptr
 
 #endif // INCLUDED_VERSAT

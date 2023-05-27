@@ -67,16 +67,6 @@ enum MergingStrategy{
    ORDERED_FIT
 };
 
-enum MemType{
-   CONFIG,
-   STATE,
-   DELAY,
-   STATIC,
-   EXTRA,
-   OUTPUT,
-   STORED_OUTPUT
-};
-
 // Temp
 Accelerator* RecursiveFlatten(Versat* versat,Accelerator* topLevel);
 
@@ -157,6 +147,7 @@ int GetInputValue(FUInstance* instance,int port);
 int GetNumberOfInputs(FUInstance* inst);
 int GetNumberOfOutputs(FUInstance* inst);
 FUInstance* CreateOrGetInput(Accelerator* accel,String name,int portNumber);
+FUInstance* CreateOrGetOutput(Accelerator* accel);
 
 // Helper functions to create sub accelerators
 int GetNumberOfInputs(Accelerator* accel);

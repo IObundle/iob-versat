@@ -1,11 +1,48 @@
 #ifndef INCLUDED_VERSAT_CONFIGURATIONS_HPP
 #define INCLUDED_VERSAT_CONFIGURATIONS_HPP
 
-#include "versatPrivate.hpp"
+//#include "versatPrivate.hpp"
+#include "memory.hpp"
+
+struct ComplexFUInstance;
+struct InstanceNode;
+struct OrderedInstance;
+struct Accelerator;
+struct FUDeclaration;
+struct Wire;
 
 struct SizedConfig{
    iptr* ptr;
    int size;
+};
+
+struct StaticId{
+   FUDeclaration* parent;
+   String name;
+};
+
+template<> class std::hash<StaticId>{
+   public:
+   std::size_t operator()(StaticId const& s) const noexcept{
+      std::size_t res = std::hash<String>()(s.name);
+      res += (std::size_t) s.parent;
+
+      return (std::size_t) res;
+   }
+};
+
+struct StaticData{
+   Array<Wire> configs;
+   int offset;
+};
+
+struct StaticInfo{
+   StaticId id;
+   StaticData data;
+};
+
+struct UnitDebugData{
+   int debugBreak;
 };
 
 class FUInstanceInterfaces{
@@ -19,7 +56,7 @@ public:
    PushPtr<iptr> statics;
    PushPtr<Byte> extraData;
    PushPtr<int> externalMemory;
-   PushPtr<UnitDebugData> debugData;
+   //PushPtr<UnitDebugData> debugData;
 
    void Init(Accelerator* accel);
    void Init(Accelerator* topLevel,ComplexFUInstance* inst);
@@ -27,9 +64,25 @@ public:
    void AssertEmpty(bool checkStatic = true);
 };
 
+struct CalculatedOffsets{
+   Array<int> offsets;
+   int max;
+};
+
+enum MemType{
+   CONFIG,
+   STATE,
+   DELAY,
+   STATIC,
+   EXTRA,
+   OUTPUT,
+   STORED_OUTPUT
+};
+
 CalculatedOffsets CalculateConfigOffsetsIgnoringStatics(Accelerator* accel,Arena* out);
 CalculatedOffsets CalculateConfigurationOffset(Accelerator* accel,MemType type,Arena* out);
 CalculatedOffsets CalculateOutputsOffset(Accelerator* accel,int offset,Arena* out);
+void AddOffset(CalculatedOffsets* offsets,int amount);
 
 int GetConfigurationSize(FUDeclaration* decl,MemType type);
 

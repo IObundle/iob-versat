@@ -1,7 +1,6 @@
 #ifndef TEMPLATE_ENGINE_INCLUDED
 #define TEMPLATE_ENGINE_INCLUDED
 
-#include "versatPrivate.hpp"
 #include "parser.hpp"
 
 struct Expression;
@@ -52,6 +51,7 @@ void TemplateSetCustom(const char* id,void* entity,const char* typeName);
 void TemplateSetNumber(const char* id,int number);
 void TemplateSet(const char* id,void* ptr);
 void TemplateSetString(const char* id,const char* str);
+void TemplateSetString(const char* id,String str);
 void TemplateSetArray(const char* id,const char* baseType,void* array,int size);
 void TemplateSetBool(const char* id,bool boolean);
 

@@ -1,5 +1,6 @@
 #include "configurations.hpp"
 
+#include "versatPrivate.hpp"
 #include "acceleratorStats.hpp"
 
 // Top level
@@ -15,7 +16,7 @@ void FUInstanceInterfaces::Init(Accelerator* accel){
    extraData.Init(accel->extraDataAlloc);
    statics.Init(accel->staticAlloc);
    externalMemory.Init(accel->externalMemoryAlloc);
-   debugData.Init(accel->debugDataAlloc);
+   //debugData.Init(accel->debugDataAlloc);
 }
 
 // Sub instance
@@ -27,8 +28,8 @@ void FUInstanceInterfaces::Init(Accelerator* topLevel,ComplexFUInstance* inst){
    state.Init(inst->state,decl->stateOffsets.max);
    delay.Init(inst->delay,decl->delayOffsets.max);
    mem.Init((Byte*) inst->memMapped,1 << decl->memoryMapBits);
-   outputs.Init(inst->outputs,decl->totalOutputs);
-   storedOutputs.Init(inst->storedOutputs,decl->totalOutputs);
+   outputs.Init(inst->outputs,decl->outputOffsets.max);
+   storedOutputs.Init(inst->storedOutputs,decl->outputOffsets.max);
    extraData.Init(inst->extraData,decl->extraDataOffsets.max);
    statics.Init(topLevel->staticAlloc);
    if(decl->externalMemory.size){
@@ -51,6 +52,13 @@ void FUInstanceInterfaces::AssertEmpty(bool checkStatic){
       Assert(statics.Empty());
    }
    #endif
+}
+
+void AddOffset(CalculatedOffsets* offsets,int amount){
+   for(int i = 0; i < offsets->offsets.size; i++){
+      offsets->offsets[i] += amount;
+   }
+   offsets->max += amount;
 }
 
 CalculatedOffsets CalculateConfigOffsetsIgnoringStatics(Accelerator* accel,Arena* out){
@@ -106,19 +114,19 @@ int GetConfigurationSize(FUDeclaration* decl,MemType type){
       size = decl->configs.size;
    }break;
    case MemType::DELAY:{
-      size = decl->nDelays;
+      size = decl->delayOffsets.max;
    }break;
    case MemType::EXTRA:{
-      size = decl->extraDataSize;
+      size = decl->extraDataOffsets.max;
    }break;
    case MemType::OUTPUT:{
-      size = decl->totalOutputs;
+      size = decl->outputOffsets.max;
    }break;
    case MemType::STATE:{
       size = decl->states.size;
    }break;
    case MemType::STORED_OUTPUT:{
-      size = decl->totalOutputs;
+      size = decl->outputOffsets.max;
    }break;
    default: NOT_IMPLEMENTED;
    }
@@ -164,7 +172,7 @@ CalculatedOffsets CalculateOutputsOffset(Accelerator* accel,int offset,Arena* ou
       ComplexFUInstance* inst = ptr->inst;
       array[index] = offset;
 
-      int size = inst->declaration->totalOutputs;
+      int size = inst->declaration->outputOffsets.max;
 
       offset += size;
       index += 1;
@@ -354,6 +362,7 @@ CalculatedOffsets ExtractExtraData(Accelerator* accel,Arena* out){
 }
 
 CalculatedOffsets ExtractDebugData(Accelerator* accel,Arena* out){
+   #if 0
    int count = NumberUnits(accel);
    Array<int> offsets = PushArray<int>(out,count);
 
@@ -377,6 +386,8 @@ CalculatedOffsets ExtractDebugData(Accelerator* accel,Arena* out){
    res.offsets = offsets;
    res.max = max;
    return res;
+   #endif
+   return (CalculatedOffsets){};
 }
 
 bool CheckCorrectConfiguration(Accelerator* topLevel,ComplexFUInstance* inst){
@@ -455,8 +466,8 @@ void PopulateAccelerator(Accelerator* topLevel,Accelerator* accel,FUDeclaration*
          inter.mem.timesPushed = AlignBitBoundary(inter.mem.timesPushed,decl->memoryMapBits);
          inst->memMapped = (int*) inter.mem.Push(1 << decl->memoryMapBits);
       }
-      if(decl->nDelays){
-         inst->delay = inter.delay.Set(topDeclaration->delayOffsets.offsets[index],decl->nDelays);
+      if(decl->delayOffsets.max){
+         inst->delay = inter.delay.Set(topDeclaration->delayOffsets.offsets[index],decl->delayOffsets.max);
       }
       if(decl->externalMemory.size){
          for(int i = 0; i < decl->externalMemory.size; i++){
@@ -466,12 +477,12 @@ void PopulateAccelerator(Accelerator* topLevel,Accelerator* accel,FUDeclaration*
             }
          }
       }
-      if(decl->totalOutputs){
-         inst->outputs = inter.outputs.Set(topDeclaration->outputOffsets.offsets[index],decl->totalOutputs);
-         inst->storedOutputs = inter.storedOutputs.Set(topDeclaration->outputOffsets.offsets[index],decl->totalOutputs);
+      if(decl->outputOffsets.max){
+         inst->outputs = inter.outputs.Set(topDeclaration->outputOffsets.offsets[index],decl->outputOffsets.max);
+         inst->storedOutputs = inter.storedOutputs.Set(topDeclaration->outputOffsets.offsets[index],decl->outputOffsets.max);
       }
-      if(decl->extraDataSize){
-         inst->extraData = inter.extraData.Set(topDeclaration->extraDataOffsets.offsets[index],decl->extraDataSize);
+      if(decl->extraDataOffsets.max){
+         inst->extraData = inter.extraData.Set(topDeclaration->extraDataOffsets.offsets[index],decl->extraDataOffsets.max);
       }
 
       #if 0 // Should be a debug flag
@@ -564,8 +575,8 @@ void PopulateTopLevelAccelerator(Accelerator* accel){
          inter.mem.timesPushed = AlignBitBoundary(inter.mem.timesPushed,decl->memoryMapBits);
          inst->memMapped = (int*) inter.mem.Push(1 << decl->memoryMapBits);
       }
-      if(decl->nDelays){
-         inst->delay = inter.delay.Push(decl->nDelays);
+      if(decl->delayOffsets.max){
+         inst->delay = inter.delay.Push(decl->delayOffsets.max);
       }
       if(decl->externalMemory.size){
          for(int i = 0; i < decl->externalMemory.size; i++){
@@ -576,13 +587,13 @@ void PopulateTopLevelAccelerator(Accelerator* accel){
          }
       }
       #if 1
-      if(decl->totalOutputs){
-         inst->outputs = inter.outputs.Push(decl->totalOutputs);
-         inst->storedOutputs = inter.storedOutputs.Push(decl->totalOutputs);
+      if(decl->outputOffsets.max){
+         inst->outputs = inter.outputs.Push(decl->outputOffsets.max);
+         inst->storedOutputs = inter.storedOutputs.Push(decl->outputOffsets.max);
       }
       #endif
-      if(decl->extraDataSize){
-         inst->extraData = inter.extraData.Push(decl->extraDataSize);
+      if(decl->extraDataOffsets.max){
+         inst->extraData = inter.extraData.Push(decl->extraDataOffsets.max);
       }
 
       CheckCorrectConfiguration(accel,inst);

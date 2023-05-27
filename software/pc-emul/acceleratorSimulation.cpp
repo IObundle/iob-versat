@@ -21,25 +21,33 @@ void AcceleratorRunStart(Accelerator* accel){
 }
 
 bool AcceleratorDone(Accelerator* accel){
-   bool done = true;
    FOREACH_LIST(ptr,accel->allocated){
       ComplexFUInstance* inst = ptr->inst;
-      if(inst->declaration->type == FUDeclaration::COMPOSITE && inst->declaration->fixedDelayCircuit){
+//      DEBUG_BREAK_IF(CompareString(inst->name,"mk0"));
+      if(IsTypeHierarchical(inst->declaration) && !IsTypeSimulatable(inst->declaration)){
          bool subDone = AcceleratorDone(inst->declaration->fixedDelayCircuit);
-         done &= subDone;
-      } else if(inst->declaration->implementsDone && !inst->done){
-         return false;
+         if(subDone){
+            continue;
+         } else {
+            return false;
+         }
+      } else if(inst->declaration->implementsDone){
+         if(inst->done){
+            continue;
+         } else {
+            return false;
+         }
       }
    }
 
-   return done;
+   return true;
 }
 
 void AcceleratorEvalIter(AcceleratorIterator iter){
    // Set accelerator input to instance input
    InstanceNode* compositeNode = iter.Current();
    ComplexFUInstance* compositeInst = compositeNode->inst;
-   Assert(compositeInst->declaration->type == FUDeclaration::COMPOSITE);
+   Assert(IsTypeHierarchical(compositeInst->declaration));
    Accelerator* accel = compositeInst->declaration->fixedDelayCircuit;
 
    // Order is very important. Need to populate before setting input values
@@ -78,9 +86,7 @@ void AcceleratorEvalIter(AcceleratorIterator iter){
 void AcceleratorEval(AcceleratorIterator iter){
    for(InstanceNode* node = iter.Current(); node; node = iter.Skip()){
       ComplexFUInstance* inst = node->inst;
-      if(inst->declaration->type == FUDeclaration::SPECIAL){
-         continue;
-      } else if(inst->declaration->type == FUDeclaration::COMPOSITE){
+      if(IsTypeHierarchical(inst->declaration)){
          AcceleratorEvalIter(iter);
       }
    }
@@ -134,11 +140,7 @@ void AcceleratorRunIter(AcceleratorIterator iter){
 
    for(InstanceNode* node = iter.Current(); node; node = iter.Skip()){
       ComplexFUInstance* inst = node->inst;
-      if(inst->declaration->type == FUDeclaration::SPECIAL){
-         continue;
-      } else if(IsTypeHierarchical(inst->declaration)){
-         AcceleratorRunComposite(iter);
-      } else {
+      if(IsTypeSimulatable(inst->declaration)){
          bufferArray.size = node->inputs.size;
          for(int i = 0; i < node->inputs.size; i++){
             PortNode& other = node->inputs[i];
@@ -158,6 +160,10 @@ void AcceleratorRunIter(AcceleratorIterator iter){
          } else {
             memcpy(inst->storedOutputs,newOutputs,inst->declaration->outputLatencies.size * sizeof(int));
          }
+      } else if(IsTypeHierarchical(inst->declaration)){
+         AcceleratorRunComposite(iter);
+      } else if(inst->declaration->type != FUDeclaration::SPECIAL){
+         Assert(false && "Type is neither simulatable or hiearchical");
       }
    }
 }
@@ -177,7 +183,7 @@ void AcceleratorRunOnce(Accelerator* accel){
 
    ReorganizeAccelerator(accel,arena);
 
-   Hashmap<EdgeNode,int>* delay = CalculateDelay(accel->versat,accel,arena);
+   /* Hashmap<EdgeNode,int>* delay = */ CalculateDelay(accel->versat,accel,arena);
    SetDelayRecursive(accel,arena);
 
    if(!accel->ordered){

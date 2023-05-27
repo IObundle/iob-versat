@@ -67,6 +67,12 @@
       .rdata(slaves_resp[`rdata(`VERSAT)]),
       .ready(slaves_resp[`ready(`VERSAT)]),
 
+      `ifdef EXTERNAL_PORTS
+      .in0(versat_in0),
+      .in1(versat_in1),
+      .out0(versat_out),
+      `endif
+
       //CPU interface
       .clk       (clk),
       .rst       (cpu_reset)

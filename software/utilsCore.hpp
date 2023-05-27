@@ -7,8 +7,8 @@
 #include <string.h>
 #include <new>
 #include <functional>
-#include <cstdio>
 #include <stdint.h>
+#include <optional>
 
 #include "signal.h"
 #include "assert.h"
@@ -25,7 +25,7 @@
 #define ALIGN_16(val) (((val) + 15) & ~15)
 #define ALIGN_32(val) (((val) + 31) & ~31)
 #define ALIGN_64(val) (((val) + 63) & ~63) // Usually a cache line
-#define ARRAY_SIZE(array) sizeof(array) / sizeof(array[0])
+#define ARRAY_SIZE(array) ((int) (sizeof(array) / sizeof(array[0])))
 
 #define IS_ALIGNED_2(val) ((((uptr) val) & 1) == 0x0)
 #define IS_ALIGNED_4(val) ((((uptr) val) & 3) == 0x0)
@@ -215,6 +215,22 @@ inline String STRING(const char* str,int size){return (String){str,size};}
 inline String STRING(const unsigned char* str){return (String){(const char*)str,(int) strlen((const char*) str)};}
 inline String STRING(const unsigned char* str,int size){return (String){(const char*)str,size};}
 
+template<> class std::hash<String>{
+public:
+   std::size_t operator()(String const& s) const noexcept{
+   std::size_t res = 0;
+
+   std::size_t prime = 5;
+   for(int i = 0; i < s.size; i++){
+      res += (std::size_t) s[i] * prime;
+      res <<= 4;
+      prime += 6; // Some not prime, but will find most of them
+   }
+
+   return res;
+   }
+};
+
 struct Range{
    union{
       int high;
@@ -313,10 +329,12 @@ void HexStringToHex(unsigned char* buffer,String str);
 void SeedRandomNumber(uint seed);
 uint GetRandomNumber();
 
+bool CheckIfFileExists(const char* file);
 long int GetFileSize(FILE* file);
 char* GetCurrentDirectory();
 void MakeDirectory(const char* path);
 FILE* OpenFileAndCreateDirectories(const char* path,const char* format);
+void CreateDirectories(const char* path);
 
 void FixedStringCpy(char* dest,String src);
 
@@ -335,6 +353,19 @@ unsigned char* GetHexadecimal(const unsigned char* text, int str_size); // Helpe
 bool IsAlpha(char ch);
 
 String PathGoUp(char* pathBuffer);
+
+template<typename T>
+using Optional = std::optional<T>;
+
+// Simulate c++23 feature
+template<typename T>
+Optional<T> OrElse(Optional<T> first,Optional<T> elseOpt){
+   if(first){
+      return first;
+   } else {
+      return elseOpt;
+   }
+}
 
 template<typename T>
 inline void Memset(T* buffer,T elem,int bufferSize){
@@ -371,6 +402,15 @@ inline unsigned char SelectByte(int val,int index){
    conv.val = ((val >> i) & 0x000000ff);
 
    return conv.asChar;
+}
+
+static inline bool Contains(String str,char ch){
+   for(int i = 0; i < str.size; i++){
+      if(str.data[i] == ch){
+         return true;
+      }
+   }
+   return false;
 }
 
 template<typename T>

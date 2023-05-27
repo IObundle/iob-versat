@@ -39,80 +39,6 @@ template<typename T> bool Inside(Allocation<T>* alloc,T* ptr);
 template<typename T> void Free(Allocation<T>* alloc);
 template<typename T> T* Push(Allocation<T>* alloc, int amount); // Fails if not enough memory
 
-// A wrapper for a "push" type interface for a block of memory
-template<typename T>
-class PushPtr{
-public:
-   T* ptr;
-   int maximumTimes;
-   int timesPushed;
-
-   void Init(T* ptr,int maximum){
-      this->ptr = ptr;
-      this->maximumTimes = maximum;
-      this->timesPushed = 0;
-   }
-
-   void Init(Array<T> arr){
-      this->ptr = arr.data;
-      this->maximumTimes = arr.size;
-      this->timesPushed = 0;
-   }
-
-   void Init(Allocation<T> alloc){
-      this->ptr = alloc.ptr;
-      this->maximumTimes = alloc.size;
-      this->timesPushed = 0;
-   }
-
-   T* Push(int times){
-      T* res = &ptr[timesPushed];
-      timesPushed += times;
-
-      Assert(timesPushed <= maximumTimes);
-      return res;
-   }
-
-   void PushValue(T val){
-      T* space = Push(1);
-      *space = val;
-   }
-
-   void Push(Array<T> array){
-      T* data = Push(array.size);
-
-      for(int i = 0; i < array.size; i++){
-         data[i] = array[i];
-      }
-   }
-
-   T* Set(int pos,int times){
-      T* res = &ptr[pos];
-
-      timesPushed = std::max(timesPushed,pos + times);
-      Assert(timesPushed <= maximumTimes);
-      return res;
-   }
-
-   Array<T> AsArray(){
-      Array<T> res = {};
-      res.data = ptr;
-      res.size = timesPushed;
-      return res;
-   }
-
-   void Reset(){
-      timesPushed = 0;
-   }
-
-   bool Empty(){
-      bool res = (maximumTimes == timesPushed);
-      return res;
-   }
-};
-
-template<typename T> bool Inside(PushPtr<T>* push,T* ptr);
-
 // Care, functions that push to an arena do not clear it to zero or to any value.
 struct Arena{
    Byte* mem;
@@ -186,6 +112,93 @@ Array<T> PushArray(DynamicArena* arena,int size){Array<T> res = {}; res.size = s
 
 template<typename T>
 T* PushStruct(DynamicArena* arena){T* res = (T*) PushBytes(arena,sizeof(T)); return res;};
+
+
+// A wrapper for a "push" type interface for a block of memory
+template<typename T>
+class PushPtr{
+public:
+   T* ptr;
+   int maximumTimes;
+   int timesPushed;
+
+   PushPtr(){
+      ptr = nullptr;
+      maximumTimes = 0;
+      timesPushed = 0;
+   }
+
+   PushPtr(Arena* arena,int maximum){
+      this->ptr = PushArray<T>(arena,maximum).data;
+      this->maximumTimes = maximum;
+      this->timesPushed = 0;
+   }
+
+   void Init(T* ptr,int maximum){
+      this->ptr = ptr;
+      this->maximumTimes = maximum;
+      this->timesPushed = 0;
+   }
+
+   void Init(Array<T> arr){
+      this->ptr = arr.data;
+      this->maximumTimes = arr.size;
+      this->timesPushed = 0;
+   }
+
+   void Init(Allocation<T> alloc){
+      this->ptr = alloc.ptr;
+      this->maximumTimes = alloc.size;
+      this->timesPushed = 0;
+   }
+
+   T* Push(int times){
+      T* res = &ptr[timesPushed];
+      timesPushed += times;
+
+      Assert(timesPushed <= maximumTimes);
+      return res;
+   }
+
+   void PushValue(T val){
+      T* space = Push(1);
+      *space = val;
+   }
+
+   void Push(Array<T> array){
+      T* data = Push(array.size);
+
+      for(int i = 0; i < array.size; i++){
+         data[i] = array[i];
+      }
+   }
+
+   T* Set(int pos,int times){
+      T* res = &ptr[pos];
+
+      timesPushed = std::max(timesPushed,pos + times);
+      Assert(timesPushed <= maximumTimes);
+      return res;
+   }
+
+   Array<T> AsArray(){
+      Array<T> res = {};
+      res.data = ptr;
+      res.size = timesPushed;
+      return res;
+   }
+
+   void Reset(){
+      timesPushed = 0;
+   }
+
+   bool Empty(){
+      bool res = (maximumTimes == timesPushed);
+      return res;
+   }
+};
+
+template<typename T> bool Inside(PushPtr<T>* push,T* ptr);
 
 class BitArray;
 

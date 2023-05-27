@@ -49,8 +49,8 @@ VersatComputedValues ComputeVersatValues(Versat* versat,Accelerator* accel){
          res.stateBits += wire.bitsize;
       }
 
-      res.nDelays += decl->nDelays;
-      res.delayBits += decl->nDelays * 32;
+      res.nDelays += decl->delayOffsets.max;
+      res.delayBits += decl->delayOffsets.max * 32;
 
       res.nUnitsIO += decl->nIOs;
 
@@ -94,3 +94,7 @@ VersatComputedValues ComputeVersatValues(Versat* versat,Accelerator* accel){
 
    return res;
 }
+
+
+
+

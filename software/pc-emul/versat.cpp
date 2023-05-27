@@ -17,6 +17,7 @@
 #include "debugGUI.hpp"
 #include "graph.hpp"
 #include "acceleratorSimulation.hpp"
+#include "unitVerilation.hpp"
 
 #include "templateEngine.hpp"
 
@@ -252,6 +253,7 @@ namespace BasicTemplates{
    CompiledTemplate* acceleratorTemplate;
    CompiledTemplate* topAcceleratorTemplate;
    CompiledTemplate* dataTemplate;
+   CompiledTemplate* unitVerilogData;
    CompiledTemplate* externalPortmapTemplate;
    CompiledTemplate* externalPortTemplate;
    CompiledTemplate* externalInstTemplate;
@@ -297,6 +299,7 @@ Versat* InitVersat(int base,int numberConfigurations){
    BasicTemplates::acceleratorTemplate = CompileTemplate(versat_accelerator_template,&versat->permanent);
    BasicTemplates::topAcceleratorTemplate = CompileTemplate(versat_top_instance_template,&versat->permanent);
    BasicTemplates::dataTemplate = CompileTemplate(embedData,&versat->permanent);
+   BasicTemplates::unitVerilogData = CompileTemplate(unit_verilog_data,&versat->permanent);
    BasicTemplates::externalPortmapTemplate = CompileTemplate(external_memory_portmap,&versat->permanent);
    BasicTemplates::externalPortTemplate = CompileTemplate(external_memory_port,&versat->permanent);
    BasicTemplates::externalInstTemplate = CompileTemplate(external_memory_inst,&versat->permanent);
@@ -307,6 +310,7 @@ Versat* InitVersat(int base,int numberConfigurations){
    nullDeclaration.outputLatencies = Array<int>{zeros,1};
 
    // Kinda of a hack, for now. We register on versat and then move the basic declarations out
+
    RegisterFU(versat,nullDeclaration);
    RegisterAllVerilogUnitsBasic(versat);
    RegisterOperators(versat);
@@ -370,9 +374,9 @@ void Free(Versat* versat){
       Free(&accel->staticAlloc);
       Free(&accel->extraDataAlloc);
       Free(&accel->externalMemoryAlloc);
-      Free(&accel->debugDataAlloc);
       Free(&accel->outputAlloc);
       Free(&accel->storedOutputAlloc);
+      //Free(&accel->debugDataAlloc);
 
       accel->staticUnits.clear();
    }
@@ -587,6 +591,8 @@ FUDeclaration* GetTypeByName(Versat* versat,String name){
    return nullptr;
 }
 
+// TODO: Does anything use this function or is it only the Get...Name2 that is used?
+#if 0
 static FUInstance* GetInstanceByHierarchicalName(Accelerator* accel,HierarchicalName* hier){
    Assert(hier != nullptr);
 
@@ -612,6 +618,8 @@ static FUInstance* GetInstanceByHierarchicalName(Accelerator* accel,Hierarchical
 
             Token possibleTypeQualifier = hierTok.PeekToken();
 
+            // TODO: The type qualifier ideia does not appear to be very good, even if it technically solves the problem
+            //       If the merge problem can be solved by behaving diferently based on currently activated merged accelerator, remove this portion of code
             if(CompareString(possibleTypeQualifier,":")){
                hierTok.AdvancePeek(possibleTypeQualifier);
 
@@ -653,6 +661,7 @@ static FUInstance* GetInstanceByHierarchicalName(Accelerator* accel,Hierarchical
 
    return res;
 }
+#endif
 
 static String GetFullHierarchicalName(HierarchicalName* head,Arena* arena){
    Byte* mark = MarkArena(arena);
@@ -860,6 +869,7 @@ FUInstance* GetSubInstanceByName_(Accelerator* topLevel,FUInstance* instance,int
    return res;
 }
 
+// TODO: Bunch of functions that could go to graph.hpp
 Edge* FindEdge(FUInstance* out,int outIndex,FUInstance* in,int inIndex,int delay){
    FUDeclaration* inDecl = in->declaration;
    FUDeclaration* outDecl = out->declaration;
@@ -922,8 +932,8 @@ Edge* ConnectUnits(FUInstance* out,int outIndex,FUInstance* in,int inIndex,int d
 }
 
 FUDeclaration* RegisterFU(Versat* versat,FUDeclaration decl){
-   if(decl.type == FUDeclaration::SINGLE || decl.type == FUDeclaration::SPECIAL){
-      decl.totalOutputs = decl.outputLatencies.size;
+   if(!IsTypeHierarchical(&decl)){
+      decl.outputOffsets.max = decl.outputLatencies.size;
    }
 
    FUDeclaration* type = versat->declarations.Alloc();
@@ -932,6 +942,7 @@ FUDeclaration* RegisterFU(Versat* versat,FUDeclaration decl){
    return type;
 }
 
+// Bunch of functions that could go to accelerator stats
 // Returns the values when looking at a unit individually
 UnitValues CalculateIndividualUnitValues(ComplexFUInstance* inst){
    UnitValues res = {};
@@ -939,17 +950,17 @@ UnitValues CalculateIndividualUnitValues(ComplexFUInstance* inst){
    FUDeclaration* type = inst->declaration;
 
    res.outputs = type->outputLatencies.size; // Common all cases
-   if(type->type == FUDeclaration::COMPOSITE){
+   if(IsTypeHierarchical(type)){
       Assert(inst->declaration->fixedDelayCircuit);
-   } else if(type->type == FUDeclaration::ITERATIVE){
-      Assert(inst->declaration->fixedDelayCircuit);
-      res.delays = 1;
-      //res.extraData = sizeof(int);
+   //} else if(type->type == FUDeclaration::ITERATIVE){
+   //   Assert(inst->declaration->fixedDelayCircuit);
+   //   res.delays = 1;
+   //   res.extraData = sizeof(int);
    } else {
       res.configs = type->configs.size;
       res.states = type->states.size;
-      res.delays = type->nDelays;
-      res.extraData = type->extraDataSize;
+      res.delays = type->delayOffsets.max;
+      res.extraData = type->extraDataOffsets.max;
    }
 
    return res;
@@ -963,7 +974,7 @@ UnitValues CalculateAcceleratorUnitValues(Versat* versat,ComplexFUInstance* inst
    FUDeclaration* type = inst->declaration;
 
    if(IsTypeHierarchical(type)){
-      res.totalOutputs = type->totalOutputs;
+      res.totalOutputs = type->outputOffsets.max;
    } else {
       res = CalculateIndividualUnitValues(inst);
       res.totalOutputs = res.outputs;
@@ -1016,9 +1027,9 @@ UnitValues CalculateAcceleratorValues(Versat* versat,Accelerator* accel){
       }
 
       val.states += type->states.size;
-      val.delays += type->nDelays;
+      val.delays += type->delayOffsets.max;
       val.ios += type->nIOs;
-      val.extraData += type->extraDataSize;
+      val.extraData += type->extraDataOffsets.max;
 
       if(type->externalMemory.size){
          val.externalMemoryInterfaces += type->externalMemory.size;
@@ -1084,9 +1095,9 @@ void FillDeclarationWithAcceleratorValues(Versat* versat,FUDeclaration* decl,Acc
       anySavedConfiguration |= inst->savedConfiguration;
    }
 
-   decl->nDelays = val.delays;
+   decl->delayOffsets.max = val.delays;
    decl->nIOs = val.ios;
-   decl->extraDataSize = val.extraData;
+   decl->extraDataOffsets.max = val.extraData;
    decl->nStaticConfigs = val.statics;
    decl->isMemoryMapped = val.isMemoryMapped;
    decl->memoryMapBits = val.memoryMappedBits;
@@ -1191,7 +1202,7 @@ void FillDeclarationWithAcceleratorValues(Versat* versat,FUDeclaration* decl,Acc
 
    decl->outputOffsets = CalculateOutputsOffset(accel,val.outputs,permanent);
    Assert(decl->outputOffsets.max == val.totalOutputs + val.outputs);
-   decl->totalOutputs = val.totalOutputs + val.outputs; // Includes the output portion of the composite instance
+   decl->outputOffsets.max = val.totalOutputs + val.outputs; // Includes the output portion of the composite instance
 
    decl->extraDataOffsets = CalculateConfigurationOffset(accel,MemType::EXTRA,permanent);
    Assert(decl->extraDataOffsets.max == val.extraData);
@@ -1204,16 +1215,7 @@ FUDeclaration* RegisterSubUnit(Versat* versat,String name,Accelerator* circuit){
    Arena* temp = &versat->temp;
    ArenaMarker marker(temp);
 
-   // Check if it's completely combinatorial
-   bool combinatorial = true;
-   FOREACH_LIST(ptr,circuit->allocated){
-      FUDeclaration* decl = ptr->inst->declaration;
-      if(decl->type != FUDeclaration::SPECIAL && !decl->isOperation){
-         combinatorial = false;
-      }
-   }
-
-   if(combinatorial){
+   if(IsCombinatorial(circuit)){
       circuit = Flatten(versat,circuit,99);
    }
 
@@ -1337,9 +1339,29 @@ FUDeclaration* RegisterSubUnit(Versat* versat,String name,Accelerator* circuit){
       fclose(sourceCode);
    }
 
+   #if 0
+   UnitFunctions func = CheckOrCompileUnit(name,temp);
+
+   res->printVCD = func.vcd;
+   res->initializeFunction = func.init;
+   res->startFunction = func.start;
+   res->updateFunction = func.update;
+   res->destroyFunction = func.destroy;
+   //res->extraDataSize = func.size;
+
+   FUDeclaration createdDecl = func.createDeclaration();
+
+   AddOffset(&res->extraDataOffsets,createdDecl.extraDataOffsets.max);
+   AddOffset(&res->outputOffsets,createdDecl.outputLatencies.size);
+
+   res->implementsDone = createdDecl.implementsDone;
+   res->type = FUDeclaration::SINGLE; // Need to go through the code and standardize the meaning of these things.
+   #endif
+
    return res;
 }
 
+#if 0
 static int* IterativeInitializeFunction(ComplexFUInstance* inst){
    return nullptr;
 }
@@ -1401,6 +1423,7 @@ static int* IterativeUpdateFunction(ComplexFUInstance* inst,Array<int> inputs){
 static int* IterativeDestroyFunction(ComplexFUInstance* inst){
    return nullptr;
 }
+#endif
 
 struct Connection{
    InstanceNode* input;
@@ -1613,98 +1636,30 @@ FUDeclaration* RegisterIterativeUnit(Versat* versat,Accelerator* accel,FUInstanc
    FILE* sourceCode = OpenFileAndCreateDirectories(buffer,"w");
    ProcessTemplate(sourceCode,BasicTemplates::iterativeTemplate,&versat->temp);
 
-   return registeredType;
+   #if 1
+   UnitFunctions func = CheckOrCompileUnit(name,arena);
 
-#if 0
-   FUInstance* comb = nullptr;
-   FOREACH_LIST(node,decl->forLoop->allocated){
-      if(node->inst->declaration == decl->baseDeclaration){
-         comb = node->inst;
-      }
-   }
+   registeredType->printVCD = func.vcd;
+   registeredType->initializeFunction = func.init;
+   registeredType->startFunction = func.start;
+   registeredType->updateFunction = func.update;
+   registeredType->destroyFunction = func.destroy;
+   //registeredType->extraDataSize = func.size;
 
-   FUDeclaration* combType = comb->declaration;
-   FUDeclaration declaration = {};
+   FUDeclaration createdDecl = func.createDeclaration();
 
-   // Default combinatorial values
-   declaration = *combType; // By default, copy everything from combinatorial declaration
-   declaration.type = FUDeclaration::ITERATIVE;
-   declaration.staticUnits = combType->staticUnits;
-   declaration.nDelays = 1; // At least one delay
+   AddOffset(&registeredType->extraDataOffsets,registeredType->extraDataOffsets.max);
+   AddOffset(&registeredType->outputOffsets,createdDecl.outputLatencies.size);
+   //registeredType->outputOffsets.max = registeredType->outputOffsets.max;
 
-   // Accelerator computed values
-   UnitValues val = CalculateAcceleratorValues(versat,decl->forLoop);
-   declaration.extraDataSize = val.extraData + sizeof(int); // Save delay
+   registeredType->implementsDone = createdDecl.implementsDone;
+   registeredType->type = FUDeclaration::SINGLE; // Need to go through the code and standardize the meaning of these things.
 
-   // Values from iterative declaration
-   declaration.name = decl->name;
-   declaration.unitName = decl->unitName;
-   declaration.initial = decl->initial;
-   declaration.forLoop = decl->forLoop;
-   declaration.dataSize = decl->dataSize;
-
-   declaration.initializeFunction = IterativeInitializeFunction;
-   declaration.startFunction = IterativeStartFunction;
-   declaration.updateFunction = IterativeUpdateFunction;
-   declaration.destroyFunction = IterativeDestroyFunction;
-   declaration.memAccessFunction = CompositeMemoryAccess;
-
-   declaration.inputDelays = PushArray<int>(&versat->permanent,val.inputs);
-   declaration.outputLatencies = PushArray<int>(&versat->permanent,val.outputs);
-   Memset(declaration.inputDelays,0);
-   Memset(declaration.outputLatencies,decl->latency);
-
-   FUDeclaration* registeredType = RegisterFU(versat,declaration);
-
-   if(!versat->debug.outputAccelerator){
-      return registeredType;
-   }
-
-   char buffer[256];
-   sprintf(buffer,"src/%.*s.v",UNPACK_SS(decl->name));
-   FILE* sourceCode = OpenFileAndCreateDirectories(buffer,"w");
-
-   TemplateSetCustom("base",registeredType,"FUDeclaration");
-   TemplateSetCustom("comb",comb,"ComplexFUInstance");
-
-   #if 0
-   FUInstance* firstPartComb = nullptr;
-   FUInstance* firstData = nullptr;
-   FUInstance* secondPartComb = nullptr;
-   FUInstance* secondData = nullptr;
-
-   for(FUInstance* inst : decl->initial->instances){
-      if(inst->declaration == decl->baseDeclaration){
-         firstPartComb = inst;
-      }
-      if(inst->declaration == BasicDeclaration::data){
-         firstData = inst;
-      }
-   }
-   for(FUInstance* inst : decl->forLoop->instances){
-      if(inst->declaration == decl->baseDeclaration){
-         secondPartComb = inst;
-      }
-      if(inst->declaration == BasicDeclaration::data){
-         secondData = inst;
-      }
-   }
-
-   TemplateSetCustom("versat",versat,"Versat");
-   TemplateSetCustom("firstComb",firstPartComb,"ComplexFUInstance");
-   TemplateSetCustom("secondComb",secondPartComb,"ComplexFUInstance");
-   TemplateSetCustom("firstOut",decl->initial->outputInstance,"ComplexFUInstance");
-   TemplateSetCustom("secondOut",decl->forLoop->outputInstance,"ComplexFUInstance");
-   TemplateSetCustom("firstData",firstData,"ComplexFUInstance");
-   TemplateSetCustom("secondData",secondData,"ComplexFUInstance");
+   // Create a bunch of functions like IsTypeHierarchical if needed, maybe we can also just see if we can remove the type variable and use the value of other variables
+   // Something like, if fixedDelayCircuit is not null, we can go down in the hiearchy. If a update function is not null, we can call it, instead of checking the type.
    #endif
 
-   //ProcessTemplate(sourceCode,"../../submodules/VERSAT/software/templates/versat_iterative_template.tpl",&versat->temp);
-
-   fclose(sourceCode);
-
    return registeredType;
-#endif
 }
 
 void ClearConfigurations(Accelerator* accel){
@@ -1721,9 +1676,8 @@ void SaveConfiguration(Accelerator* accel,int configuration){
    //Assert(configuration < accel->versat->numberConfigurations);
 }
 
+// TODO: Move to debug because it is debug code. Probably not needed to be gui because it's helpful to be able to copy everything in it as text
 void OutputMemoryMap(Versat* versat,Accelerator* accel){
-   // TODO: Move to debug because it is debug code
-
    UNHANDLED_ERROR; // Might need to create a view so that ComputeVersatValues works
    VersatComputedValues val = ComputeVersatValues(versat,accel);
 
@@ -1826,6 +1780,7 @@ void OutputMemoryMap(Versat* versat,Accelerator* accel){
    printf("State range: [%d:0]\n",val.stateAddressBits - 1);
 }
 
+//TODO: functions that should go to accelerator
 int GetInputValue(InstanceNode* node,int index){
    if(!node->inputs.size){
       return 0;
@@ -1876,6 +1831,18 @@ FUInstance* CreateOrGetInput(Accelerator* accel,String name,int portNumber){
    ComplexFUInstance* inst = (ComplexFUInstance*) CreateFUInstance(accel,BasicDeclaration::input,name);
    inst->portIndex = portNumber;
 
+   return inst;
+}
+
+FUInstance* CreateOrGetOutput(Accelerator* accel){
+   FOREACH_LIST(ptr,accel->allocated){
+      ComplexFUInstance* inst = ptr->inst;
+      if(inst->declaration == BasicDeclaration::output){
+         return inst;
+      }
+   }
+
+   ComplexFUInstance* inst = (ComplexFUInstance*) CreateFUInstance(accel,BasicDeclaration::output,STRING("out"));
    return inst;
 }
 
@@ -1936,7 +1903,7 @@ void SetDelayRecursive_(AcceleratorIterator iter,int delay){
       for(InstanceNode* child = it.Current(); child; child = it.Skip()){
          SetDelayRecursive_(it,totalDelay);
       }
-   } else if(inst->declaration->nDelays){
+   } else if(inst->declaration->delayOffsets.max){
       inst->delay[0] = totalDelay;
    }
 }
@@ -2005,6 +1972,7 @@ int CalculateMemoryUsage(Versat* versat){
 
    return totalSize;
 }
+
 
 #include "debugGUI.hpp"
 

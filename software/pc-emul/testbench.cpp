@@ -2,6 +2,7 @@
 
 #include "debug.hpp"
 #include "templateEngine.hpp"
+#include "unitVerilation.hpp"
 
 static unsigned seed = 0;
 static String fuzzed;
@@ -40,11 +41,52 @@ void FuzzVersatSpecification(Versat* versat){
 void VersatSideVerilatorCall(){
    pid_t pid = fork();
 
+   char* const verilatorArgs[] = {
+      "verilator",
+      "--cc",
+      "-CFLAGS",
+      "-m32 -g",
+      "-I../../submodules/VERSAT/hardware/src",
+      "-I../../submodules/VERSAT/hardware/include",
+      "-I../../submodules/VERSAT/submodules/MEM/hardware/ram/tdp_ram",
+      "-I../../submodules/VERSAT/submodules/MEM/hardware/ram/2p_ram",
+      "-I../../submodules/VERSAT/submodules/MEM/hardware/ram/dp_ram",
+      "-I../../submodules/VERSAT/submodules/MEM/hardware/fifo/sfifo",
+      "-I../../submodules/VERSAT/submodules/MEM/hardware/fifo",
+      "-I../../submodules/VERSAT/submodules/FPU/hardware/include",
+      "-I../../submodules/VERSAT/submodules/FPU/hardware/src",
+      "-I../../submodules/VERSAT/submodules/FPU/submodules/DIV/hardware/src",
+      "-Isrc",
+      "src/AESPathExample.v",
+      nullptr
+   };
+
    if(pid < 0){
       printf("Error calling fork\n");
    } else if(pid == 0){
-      int res = execlp("verilator",(char*) NULL);
-      printf("Error calling execlp: %s\n",strerror(errno));
+      int res = execvp("verilator",verilatorArgs);
+      printf("Error calling execvp for verilator: %s\n",strerror(errno));
+   } else {
+      int status;
+      pid_t res = wait(&status);
+   }
+
+   char* const makeArgs[] = {
+      "make",
+      "-C",
+      "obj_dir",
+      "-f",
+      "VAESPathExample.mk",
+      nullptr
+   };
+
+   pid = fork();
+
+   if(pid < 0){
+      printf("Error calling fork\n");
+   } else if(pid == 0){
+      int res = execvp("make",makeArgs);
+      printf("Error calling execvp for verilator: %s\n",strerror(errno));
    } else {
       int status;
       pid_t res = wait(&status);
@@ -53,11 +95,13 @@ void VersatSideVerilatorCall(){
 #endif
 
 void TestVersatSide(Versat* versat){
+   //CheckOrCompileUnit(STRING("AESPathExample"),&versat->temp);
+
    #if 0
    FuzzVersatSpecification(versat);
-   #endif // 0
+   #endif
 
    #if 0
    VersatSideVerilatorCall();
-   #endif // 0
+   #endif
 }

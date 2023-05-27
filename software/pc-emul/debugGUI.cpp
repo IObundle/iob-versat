@@ -1,7 +1,5 @@
 #include "debugGUI.hpp"
 
-//#define DEBUG_GUI
-
 #ifdef DEBUG_GUI
 #include "imgui.h"
 #include "imgui_internal.h"
@@ -21,16 +19,7 @@
 #include "type.hpp"
 #include "textualRepresentation.hpp"
 #include "configurations.hpp"
-
-// Simulate c++23 feature
-template<typename T>
-Optional<T> OrElse(Optional<T> first,Optional<T> elseOpt){
-   if(first){
-      return first;
-   } else {
-      return elseOpt;
-   }
-}
+#include "versatPrivate.hpp"
 
 SDL_Window* InitWindow(){
    static SDL_Window* window = nullptr;
@@ -272,10 +261,10 @@ bool PassFilterConfiguration(Accelerator* topLevel,ComplexFUInstance* inst,Filte
    res |= filter.showConfig && inst->declaration->configs.size && !IsConfigStatic(topLevel,inst);
    res |= filter.showStatic && inst->declaration->configs.size && IsConfigStatic(topLevel,inst);
    res |= filter.showState && inst->declaration->states.size;
-   res |= filter.showDelay && inst->declaration->nDelays;
+   res |= filter.showDelay && inst->declaration->delayOffsets.max;
    res |= filter.showMem && (inst->declaration->isMemoryMapped || inst->declaration->externalMemory.size);
    res |= filter.showOutputs && inst->declaration->outputLatencies.size;
-   res |= filter.showExtraData && inst->declaration->extraDataSize;
+   res |= filter.showExtraData && inst->declaration->extraDataOffsets.max;
 
    return res;
 }
@@ -795,7 +784,7 @@ void OutputAcceleratorRunValues(InstanceNode* node,Arena* arena){
    if(ImGui::CollapsingHeader("Delay")){
       Array<int> arr = {};
       arr.data = inst->delay;
-      arr.size = inst->declaration->nDelays;
+      arr.size = inst->declaration->delayOffsets.max;
 
       printf("%p %d\n",arr.data,arr.size);
 
@@ -949,7 +938,6 @@ void DebugGUI(){
 
    // Main loop
    bool done = false;
-   int frames = 0;
    while (!done){
       BLOCK_REGION(arena);
 
@@ -1128,6 +1116,7 @@ void DebugGUI(){
       glClear(GL_COLOR_BUFFER_BIT);
       ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
       SDL_GL_SwapWindow(window);
+      SDL_Delay(1);
    }
 
    if(cycle){

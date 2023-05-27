@@ -3,8 +3,6 @@
 
 #include "accelerator.hpp"
 
-struct Accelerator;
-
 void AcceleratorRunStart(Accelerator* accel);
 bool AcceleratorDone(Accelerator* accel);
 

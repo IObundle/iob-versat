@@ -1,23 +1,35 @@
 #ifndef INCLUDED_VERILOG_DATA_@{namespace}
 #define INCLUDED_VERILOG_DATA_@{namespace}
 
+#{if export}
+#define MODIFIER __attribute__((visibility("default")))
+#include <new>
+
+#include "versatPrivate.hpp"
+#include "utils.hpp"
+
+static int zeros[99] = {};
+static Array<int> zerosArray = {zeros,99};
+#{else}
+// Local include
+#define MODIFIER static
+#{end}
+
 #{for module modules}
-#{if module.nConfigs}
+#{if module.configs}
 
 struct @{module.name}Config{
-#{for i module.nConfigs}
-#{set wire module.configs[i]}
+#{for wire module.configs}
 iptr @{wire.name};
 #{end}
 };
 
 #{end}
 
-#{if module.nStates}
+#{if module.states}
 
 struct @{module.name}State{
-#{for i module.nStates}
-#{set wire module.states[i]}
+#{for wire module.states}
 int @{wire.name};
 #{end}
 };
@@ -25,7 +37,10 @@ int @{wire.name};
 #{end}
 #{end}
 
+#{if !export}
 #ifdef IMPLEMENT_VERILOG_UNITS
+#{end}
+
 #include <new>
 
 #include "versatPrivate.hpp"
@@ -34,8 +49,6 @@ int @{wire.name};
 #{for module modules}
 #include "V@{module.name}.h"
 #{end}
-
-#define ARRAY_SIZE(array) sizeof(array) / sizeof(array[0])
 
 #define INIT(unit) \
    unit->run = 0; \
@@ -185,9 +198,13 @@ static const int MEMORY_LATENCY = 0;
 // while memory to databus usually passes through a register that holds the data.
 // and therefore order of evaluation usually favours databus first and memories after
 
+#{if export}
+extern "C" {
+#{end}
+
 #{for module modules}
 
-static void @{module.name}_VCDFunction(ComplexFUInstance* inst,FILE* out,VCDMapping& currentMapping,Array<int>,bool firstTime,bool printDefinitions){
+MODIFIER void @{module.name}_VCDFunction(ComplexFUInstance* inst,FILE* out,VCDMapping& currentMapping,Array<int>,bool firstTime,bool printDefinitions){
    if(printDefinitions){
    #{for external module.externalInterfaces}
       #{set id external.interface}
@@ -241,14 +258,14 @@ static void @{module.name}_VCDFunction(ComplexFUInstance* inst,FILE* out,VCDMapp
    }
 }
 
-static int32_t* @{module.name}_InitializeFunction(ComplexFUInstance* inst){
-   memset(inst->extraData,0,inst->declaration->extraDataSize);
+MODIFIER int32_t* @{module.name}_InitializeFunction(ComplexFUInstance* inst){
+   memset(inst->extraData,0,inst->declaration->extraDataOffsets.max);
 
    V@{module.name}* self = new (inst->extraData) V@{module.name}();
 
    INIT(self);
 
-#{for i module.nInputs}
+#{for i module.inputDelays.size}
    self->in@{i} = 0;
 #{end}
 
@@ -257,9 +274,9 @@ static int32_t* @{module.name}_InitializeFunction(ComplexFUInstance* inst){
    return NULL;
 }
 
-static int32_t* @{module.name}_StartFunction(ComplexFUInstance* inst){
-#{if module.nOutputs}
-   static int32_t out[@{module.nOutputs}];
+MODIFIER int32_t* @{module.name}_StartFunction(ComplexFUInstance* inst){
+#{if module.outputLatencies}
+   static int32_t out[@{module.outputLatencies.size}];
 #{end}
 
    V@{module.name}* self = (V@{module.name}*) inst->extraData;
@@ -270,18 +287,20 @@ static int32_t* @{module.name}_StartFunction(ComplexFUInstance* inst){
 #{end}
 #{end}
 
-#{if module.nConfigs}
+#{if module.configs}
 @{module.name}Config* config = (@{module.name}Config*) inst->config;
-#{for i module.nConfigs}
-   self->@{module.configs[i].name} = config->@{module.configs[i].name};
+#{for wire module.configs}
+   self->@{wire.name} = config->@{wire.name};
 #{end}
 #{end}
 
-#{if module.doesIO}
-   DatabusAccess* memoryLatency = (DatabusAccess*) &self[1];
+#{for i module.nIO}
+{
+   DatabusAccess* memoryLatency = ((DatabusAccess*) &self[1]) + @{i};
 
    memoryLatency->counter = 0;
    memoryLatency->latencyCounter = INITIAL_MEMORY_LATENCY;
+}\
 #{end}
 
    START_RUN(self);
@@ -290,8 +309,8 @@ static int32_t* @{module.name}_StartFunction(ComplexFUInstance* inst){
    inst->done = self->done;
 #{end}
 
-#{if module.nOutputs}
-   #{for i module.nOutputs}
+#{if module.outputLatencies}
+   #{for i module.outputLatencies.size}
    out[@{i}] = self->out@{i};
    #{end}
 
@@ -301,47 +320,48 @@ static int32_t* @{module.name}_StartFunction(ComplexFUInstance* inst){
 #{end}
 }
 
-static int32_t* @{module.name}_UpdateFunction(ComplexFUInstance* inst,Array<int> inputs){
-#{if module.nOutputs}
-   static int32_t out[@{module.nOutputs}];
+MODIFIER int32_t* @{module.name}_UpdateFunction(ComplexFUInstance* inst,Array<int> inputs){
+#{if module.outputLatencies}
+   static int32_t out[@{module.outputLatencies.size}];
 #{end}
 
    V@{module.name}* self = (V@{module.name}*) inst->extraData;
 
-#{for i module.nInputs}
+#{for i module.inputDelays.size}
    self->in@{i} = inputs[@{i}]; //GetInputValue(node,@{i}); 
 #{end}
 
    self->eval();
 
-#{if module.doesIO}
-   self->databus_ready = 0;
-   self->databus_last = 0;
+#{for i module.nIO}
+{
+   self->databus_ready_@{i} = 0;
+   self->databus_last_@{i} = 0;
 
-   DatabusAccess* access = (DatabusAccess*) &self[1];
+   DatabusAccess* access = ((DatabusAccess*) &self[1]) + @{i};
 
-   if(self->databus_valid){
+   if(self->databus_valid_@{i}){
       if(access->latencyCounter > 0){
          access->latencyCounter -= 1;
       } else {
-         int* ptr = (int*) (self->databus_addr);
+         int* ptr = (int*) (self->databus_addr_@{i});
          
-         if(self->databus_wstrb == 0){
+         if(self->databus_wstrb_@{i} == 0){
             if(ptr == nullptr){
-               self->databus_rdata = 0xfeeffeef; // Feed bad data if not set (in pc-emul is needed otherwise segfault)
+               self->databus_rdata_@{i} = 0xfeeffeef; // Feed bad data if not set (in pc-emul is needed otherwise segfault)
             } else {
-               self->databus_rdata = ptr[access->counter];
+               self->databus_rdata_@{i} = ptr[access->counter];
             }            
-         } else { // self->databus_wstrb != 0
+         } else { // self->databus_wstrb_@{i} != 0
             if(ptr != nullptr){
-               ptr[access->counter] = self->databus_wdata;
+               ptr[access->counter] = self->databus_wdata_@{i};
             }
          }
-         self->databus_ready = 1;
+         self->databus_ready_@{i} = 1;
          
-         if(access->counter == self->databus_len){
+         if(access->counter == self->databus_len_@{i}){
             access->counter = 0;
-            self->databus_last = 1;
+            self->databus_last_@{i} = 1;
          } else {
             access->counter += 1;            
          }
@@ -351,6 +371,7 @@ static int32_t* @{module.name}_UpdateFunction(ComplexFUInstance* inst,Array<int>
    }
 
    self->eval();
+}
 #{end}
 
 #{for external module.externalInterfaces}
@@ -419,10 +440,10 @@ static int32_t* @{module.name}_UpdateFunction(ComplexFUInstance* inst,Array<int>
    #{end}
 #{end}
 
-#{if module.nStates}
+#{if module.states}
 @{module.name}State* state = (@{module.name}State*) inst->state;
-#{for i module.nStates}
-   state->@{module.states[i].name} = self->@{module.states[i].name};
+#{for wire module.states}
+   state->@{wire.name} = self->@{wire.name};
 #{end}
 #{end}
 
@@ -432,8 +453,8 @@ static int32_t* @{module.name}_UpdateFunction(ComplexFUInstance* inst,Array<int>
 
    self->eval();
 
-#{if module.nOutputs}
-   #{for i module.nOutputs}
+#{if module.outputLatencies}
+   #{for i module.outputLatencies.size}
       out[@{i}] = self->out@{i};
    #{end}
 
@@ -443,7 +464,7 @@ static int32_t* @{module.name}_UpdateFunction(ComplexFUInstance* inst,Array<int>
 #{end}
 }
 
-static int32_t* @{module.name}_DestroyFunction(ComplexFUInstance* inst){
+MODIFIER int32_t* @{module.name}_DestroyFunction(ComplexFUInstance* inst){
    V@{module.name}* self = (V@{module.name}*) inst->extraData;
 
    self->~V@{module.name}();
@@ -451,26 +472,32 @@ static int32_t* @{module.name}_DestroyFunction(ComplexFUInstance* inst){
    return nullptr;
 }
 
-static FUDeclaration* @{module.name}_Register(Versat* versat){
-   FUDeclaration decl = {};
+MODIFIER int @{module.name}_ExtraDataSize(){
+   int extraSize = sizeof(V@{module.name});
 
-   #{if module.nInputs}
-   static int inputDelays[] =  {#{join "," for i module.nInputs}@{module.inputDelays[i]}#{end}};
-   decl.inputDelays = Array<int>{inputDelays,@{module.nInputs}};
+   #{if module.nIO}
+   extraSize += sizeof(DatabusAccess) * @{module.nIO};
    #{end}
 
-   #{if module.nOutputs}
-   static int outputLatencies[] = {#{join "," for i module.nOutputs}@{module.outputLatencies[i]}#{end}};
-   decl.outputLatencies = Array<int>{outputLatencies,@{module.nOutputs}};
+   return extraSize;
+}
+
+MODIFIER FUDeclaration @{module.name}_CreateDeclaration(){
+   FUDeclaration decl = {};
+
+   #{if module.inputDelays}
+   static int inputDelays[] =  {#{join "," for delay module.inputDelays}@{delay}#{end}};
+   decl.inputDelays = Array<int>{inputDelays,@{module.inputDelays.size}};
+   #{end}
+
+   #{if module.outputLatencies}
+   static int outputLatencies[] = {#{join "," for latency module.outputLatencies}@{latency}#{end}};
+   decl.outputLatencies = Array<int>{outputLatencies,@{module.outputLatencies.size}};
    #{end}
 
    decl.name = STRING("@{module.name}");
 
-   decl.extraDataSize = sizeof(V@{module.name});
-
-   #{if module.doesIO}
-   decl.extraDataSize += sizeof(DatabusAccess);
-   #{end}
+   decl.extraDataOffsets.max = @{module.name}_ExtraDataSize();
 
    #{if module.externalInterfaces.size}
    static ExternalMemoryInterface externalMemory[@{module.externalInterfaces.size}];
@@ -490,14 +517,14 @@ static FUDeclaration* @{module.name}_Register(Versat* versat){
    decl.destroyFunction = @{module.name}_DestroyFunction;
    decl.printVCD = @{module.name}_VCDFunction;
 
-   #{if module.nConfigs}
-   static Wire @{module.name}ConfigWires[] = {#{join "," for i module.nConfigs} {STRING("@{module.configs[i].name}"),@{module.configs[i].bitsize}} #{end}};
-   decl.configs = Array<Wire>{@{module.name}ConfigWires,@{module.nConfigs}};
+   #{if module.configs}
+   static Wire @{module.name}ConfigWires[] = {#{join "," for wire module.configs} {STRING("@{wire.name}"),@{wire.bitsize}} #{end}};
+   decl.configs = Array<Wire>{@{module.name}ConfigWires,@{module.configs.size}};
    #{end}
 
-   #{if module.nStates}
-   static Wire @{module.name}StateWires[] = {#{join "," for i module.nStates} {STRING("@{module.states[i].name}"),@{module.states[i].bitsize}} #{end}};
-   decl.states = Array<Wire>{@{module.name}StateWires,@{module.nStates}};
+   #{if module.states}
+   static Wire @{module.name}StateWires[] = {#{join "," for wire module.states} {STRING("@{wire.name}"),@{wire.bitsize}} #{end}};
+   decl.states = Array<Wire>{@{module.name}StateWires,@{module.states.size}};
    #{end}
 
    #{if module.hasDone}
@@ -508,8 +535,8 @@ static FUDeclaration* @{module.name}_Register(Versat* versat){
    decl.delayType = decl.delayType | DelayType::DELAY_TYPE_SINK_DELAY;
    #{end}
 
-   #{if module.doesIO}
-   decl.nIOs = 1;
+   #{if module.nIO}
+   decl.nIOs = @{module.nIO};
    #{end}
 
    #{if module.memoryMapped}
@@ -522,20 +549,32 @@ static FUDeclaration* @{module.name}_Register(Versat* versat){
    #{end}
    #{end}
 
-   decl.nDelays = @{module.nDelays};
+   decl.delayOffsets.max = @{module.nDelays};
+
+   return decl;
+}
+
+MODIFIER FUDeclaration* @{module.name}_Register(Versat* versat){
+   FUDeclaration decl = @{module.name}_CreateDeclaration();
 
    return RegisterFU(versat,decl);
 }
 
 #{end}
 
-static void RegisterAllVerilogUnits@{namespace}(Versat* versat){
+MODIFIER void RegisterAllVerilogUnits@{namespace}(Versat* versat){
    #{for module modules}
    @{module.name}_Register(versat);
    #{end}
 }
 
-#endif
+#{if export}
+} // extern "C"
+#{end}
+
+#{if !export}
+#endif // IMPLEMENT_VERILOG_UNITS
+#{end}
 
 #undef INIT
 #undef UPDATE

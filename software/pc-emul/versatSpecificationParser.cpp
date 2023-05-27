@@ -10,8 +10,6 @@
 #include "debugGUI.hpp"
 #include "graph.hpp"
 
-#define ARRAY_SIZE(array) (sizeof(array) / sizeof(array[0]))
-
 typedef Hashmap<String,FUInstance*> InstanceTable;
 typedef Hashmap<String,int> InstanceName;
 
@@ -176,14 +174,14 @@ Expression* ParseAtomS(Tokenizer* tok,Arena* arena){
    return expr;
 }
 
-Expression* ParseExpression(Tokenizer* tok,Arena* arena);
+Expression* SpecParseExpression(Tokenizer* tok,Arena* arena);
 Expression* ParseTerm(Tokenizer* tok,Arena* arena){
    Token peek = tok->PeekToken();
 
    Expression* expr = nullptr;
    if(CompareString(peek,"(")){
       tok->AdvancePeek(peek);
-      expr = ParseExpression(tok,arena);
+      expr = SpecParseExpression(tok,arena);
       tok->AssertNextToken(")");
    } else {
       expr = ParseAtomS(tok,arena);
@@ -192,7 +190,7 @@ Expression* ParseTerm(Tokenizer* tok,Arena* arena){
    return expr;
 }
 
-Expression* ParseExpression(Tokenizer* tok,Arena* arena){
+Expression* SpecParseExpression(Tokenizer* tok,Arena* arena){
    Expression* expr = ParseOperationType(tok,{{"+","-"},{"&","|","^"},{">><",">>","><<","<<"}},ParseTerm,arena);
 
    return expr;
@@ -356,7 +354,7 @@ PortExpression InstantiateExpression(Versat* versat,Expression* root,Accelerator
 
 FUInstance* ParseExpression(Versat* versat,Accelerator* circuit,Tokenizer* tok,InstanceTable* table,InstanceName* names){
    Arena* arena = &versat->temp;
-   Expression* expr = ParseExpression(tok,arena);
+   Expression* expr = SpecParseExpression(tok,arena);
    PortExpression inst = InstantiateExpression(versat,expr,circuit,table,names);
 
    return inst.inst;

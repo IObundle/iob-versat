@@ -18,14 +18,14 @@ module VWrite #(
    output                 done,
 
    // Databus interface
-   input                  databus_ready,
-   output                 databus_valid,
-   output[`IO_ADDR_W-1:0] databus_addr,
-   input [DATA_W-1:0]     databus_rdata,
-   output [DATA_W-1:0]    databus_wdata,
-   output [DATA_W/8-1:0]  databus_wstrb,
-   output [7:0]           databus_len,
-   input                  databus_last,
+   input                  databus_ready_0,
+   output                 databus_valid_0,
+   output[`IO_ADDR_W-1:0] databus_addr_0,
+   input [DATA_W-1:0]     databus_rdata_0,
+   output [DATA_W-1:0]    databus_wdata_0,
+   output [DATA_W/8-1:0]  databus_wstrb_0,
+   output [7:0]           databus_len_0,
+   input                  databus_last_0,
 
    // input / output data
    input [DATA_W-1:0]     in0,
@@ -65,9 +65,9 @@ module VWrite #(
    input [`MEM_ADDR_W-1:0] incr2B
    );
 
-   assign databus_addr = ext_addr;
-   assign databus_wstrb = 4'b1111;
-   assign databus_len = length;
+   assign databus_addr_0 = ext_addr;
+   assign databus_wstrb_0 = 4'b1111;
+   assign databus_len_0 = length;
 
    wire gen_done;
    reg doneA;
@@ -85,7 +85,7 @@ module VWrite #(
          doneB <= 1'b0;
       end else  begin
          doneB <= doneB_int;
-         if(databus_valid && databus_ready && databus_last)
+         if(databus_valid_0 && databus_ready_0 && databus_last_0)
             doneA <= 1'b1;
       end
    end
@@ -203,10 +203,10 @@ module VWrite #(
       .s_addr(gen_addr),
 
       // Master
-      .m_valid(databus_valid),
-      .m_ready(databus_ready),
+      .m_valid(databus_valid_0),
+      .m_ready(databus_ready_0),
       .m_addr(),
-      .m_data(databus_wdata),
+      .m_data(databus_wdata_0),
 
       // Connect to memory
       .mem_enable(read_en),

@@ -156,15 +156,15 @@ InstanceNode* CreateAndConfigureFUInstance(Accelerator* accel,FUDeclaration* typ
       AssertAndDo(!ZeroOutRealloc(&accel->extraDataAlloc,val.extraData));
       AssertAndDo(!ZeroOutRealloc(&accel->staticAlloc,val.statics));
       AssertAndDo(!ZeroOutRealloc(&accel->externalMemoryAlloc,val.externalMemorySize));
-      AssertAndDo(!ZeroOutRealloc(&accel->debugDataAlloc,numberUnits));
+      //AssertAndDo(!ZeroOutRealloc(&accel->debugDataAlloc,numberUnits));
 
       #if 1
       if(type->configs.size) inst->config = &accel->configAlloc.ptr[configOffset];
       if(type->states.size) inst->state = &accel->stateAlloc.ptr[stateOffset];
-      if(type->nDelays) inst->delay = &accel->delayAlloc.ptr[delayOffset];
-      if(type->outputLatencies.size || type->totalOutputs) inst->outputs = &accel->outputAlloc.ptr[outputOffset];
-      if(type->outputLatencies.size || type->totalOutputs) inst->storedOutputs = &accel->storedOutputAlloc.ptr[outputOffset];
-      if(type->extraDataSize) inst->extraData = &accel->extraDataAlloc.ptr[extraDataOffset];
+      if(type->delayOffsets.max) inst->delay = &accel->delayAlloc.ptr[delayOffset];
+      if(type->outputOffsets.max) inst->outputs = &accel->outputAlloc.ptr[outputOffset];
+      if(type->outputOffsets.max) inst->storedOutputs = &accel->storedOutputAlloc.ptr[outputOffset];
+      if(type->extraDataOffsets.max) inst->extraData = &accel->extraDataAlloc.ptr[extraDataOffset];
       if(type->externalMemory.size) inst->externalMemory = &accel->externalMemoryAlloc.ptr[externalDataOffset];
 
       if(type->memoryMapBits){
@@ -215,7 +215,9 @@ InstanceNode* CreateAndConfigureFUInstance(Accelerator* accel,FUDeclaration* typ
                InitializeSubaccelerator(it);
             }
          }
-      } else if(type->initializeFunction){
+      }
+
+      if(type->initializeFunction){
          #if 1 // Force population of top accelerator
          {
          PopulateTopLevelAccelerator(accel);
@@ -1355,6 +1357,7 @@ struct HuffmanBlock{
    enum {LEAF,NODE} type;
 };
 
+#if 0
 static void SaveMemoryMappingInfo(char* buffer,int size,HuffmanBlock* block){
    if(block->type == HuffmanBlock::LEAF){
       ComplexFUInstance* inst = block->instance;
@@ -1369,12 +1372,13 @@ static void SaveMemoryMappingInfo(char* buffer,int size,HuffmanBlock* block){
       SaveMemoryMappingInfo(buffer,size + 1,block->right);
    }
 }
+#endif
 
 int CalculateTotalOutputs(Accelerator* accel){
    int total = 0;
    FOREACH_LIST(ptr,accel->allocated){
       ComplexFUInstance* inst = ptr->inst;
-      total += inst->declaration->totalOutputs;
+      total += inst->declaration->outputOffsets.max;
    }
 
    return total;
@@ -1929,6 +1933,29 @@ ComputedData CalculateVersatComputedData(InstanceNode* instances,VersatComputedV
    return res;
 }
 
+bool IsCombinatorial(FUDeclaration* decl){
+   bool res;
+   if(IsTypeHierarchical(decl)){
+      res = IsCombinatorial(decl->fixedDelayCircuit);
+   } else {
+      int maxLatency = 0;
+      for(int val : decl->outputLatencies){
+         maxLatency = std::max(maxLatency,val);
+      }
 
+      res = (decl->isOperation || (maxLatency != 0));
+   }
+   return res;
+}
+
+bool IsCombinatorial(Accelerator* accel){
+   FOREACH_LIST(ptr,accel->allocated){
+      bool isComb = IsCombinatorial(ptr->inst->declaration);
+      if(!isComb){
+         return false;
+      }
+   }
+   return true;
+}
 
 

@@ -8,7 +8,7 @@
 module @{accel.name} #(
       parameter DELAY_W = 32,
       parameter DATA_W = 32,
-      parameter ADDR_W = `ADDR_W,
+      parameter ADDR_W = 32,
       parameter AXI_ADDR_W = 32
    )
    (
@@ -43,7 +43,7 @@ module @{accel.name} #(
    output [@{wire.bitsize-1}:0]    @{wire.name},
    #{end}
 
-   #{for i accel.nDelays}
+   #{for i accel.delayOffsets.max}
    input  [31:0]                   delay@{i},
    #{end}
 
@@ -233,7 +233,7 @@ end
          #{end}
          #{end}
 
-         #{for i decl.nDelays}
+         #{for i decl.delayOffsets.max}
             .delay@{i}(delay@{delaySeen}),
          #{inc delaySeen}
          #{end}

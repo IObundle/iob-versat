@@ -1,404 +1,17 @@
+#include "structParsing.hpp"
+
 #include <cstdio>
-
-#include "parser.hpp"
-#include "utils.hpp"
-
 #include <set>
 
+#include "versatPrivate.hpp"
+#include "parser.hpp"
+
 #define UNNAMED_ENUM_TEMPLATE "unnamed_enum_%d"
-
-static Arena tempArenaInst;
-static Arena* tempArena = &tempArenaInst;
-
-struct MemberDef;
-
-// Only support one inheritance for now
-#if 0
-struct InheritanceDef{
-   String name;
-   enum {PUBLIC,PRIVATE} type;
-   InheritanceDef* next;
-};
-#endif
-
-struct TemplateParamDef{
-   String name;
-   TemplateParamDef* next;
-};
-
-struct StructDef{
-   String fullExpression;
-   String name;
-   String inherit;
-   TemplateParamDef* params;
-   MemberDef* members;
-   bool isUnion;
-};
-
-struct TemplatedDef{
-   String baseType;
-   TemplateParamDef* next;
-};
-
-struct EnumDef{
-   String name;
-   String values;
-};
-
-struct TypedefDef{
-   String oldType;
-   String newType;
-};
-
-struct TypeDef{
-   union{
-      String simpleType;
-      TypedefDef typedefType;
-      EnumDef enumType;
-      TemplatedDef templatedType;
-      StructDef structType;
-   };
-   enum {SIMPLE,TYPEDEF,ENUM,TEMPLATED,STRUCT} type;
-};
-
-struct MemberDef{
-   String fullExpression; // In theory, should be a combination of all the below
-   TypeDef type;
-   String pointersAndReferences;
-   String name;
-   String arrays;
-
-   MemberDef* next;
-};
 
 static Pool<MemberDef> defs = {};
 static Pool<TypeDef> typeDefs = {};
 
-static void SkipQualifiers(Tokenizer* tok){
-   while(1){
-      Token peek = tok->PeekToken();
-
-      if(CompareToken(peek,"const")){
-         tok->AdvancePeek(peek);
-         continue;
-      }
-      if(CompareToken(peek,"volatile")){
-         tok->AdvancePeek(peek);
-         continue;
-      }
-      if(CompareToken(peek,"static")){
-         tok->AdvancePeek(peek);
-         continue;
-      }
-      if(CompareToken(peek,"inline")){
-         tok->AdvancePeek(peek);
-         continue;
-      }
-      if(CompareToken(peek,"public:")){
-         tok->AdvancePeek(peek);
-         continue;
-      }
-      if(CompareToken(peek,"private:")){
-         tok->AdvancePeek(peek);
-         continue;
-      }
-
-      break;
-   }
-}
-
-static String ParseSimpleType(Tokenizer* tok){
-   SkipQualifiers(tok);
-
-   void* mark = tok->Mark();
-   Token name = tok->NextToken();
-
-   if(CompareString(name,"unsigned")){
-      Token next = tok->NextToken();
-      name = ExtendToken(name,next);
-   }
-
-   Token peek = tok->PeekToken();
-   if(CompareToken(peek,"<")){ // Template
-      Token nameRemaining = tok->PeekFindIncluding(">");
-      name = ExtendToken(name,nameRemaining);
-      tok->AdvancePeek(peek);
-
-      while(1){
-         ParseSimpleType(tok);
-
-         Token peek = tok->PeekToken();
-
-         if(CompareString(peek,",")){
-            tok->AdvancePeek(peek);
-         } else if(CompareString(peek,">")){
-            tok->AdvancePeek(peek);
-            break;
-         }
-      }
-   }
-
-   peek = tok->PeekToken();
-   while(CompareToken(peek,"*") || CompareToken(peek,"&")){
-      tok->AdvancePeek(peek);
-
-      peek = tok->PeekToken();
-   }
-
-   String res = tok->Point(mark);
-   res = TrimWhitespaces(res);
-
-   return res;
-}
-
-static StructDef ParseStruct(Tokenizer* tok);
-
-// Add enum members and default init values so that we can generate code that iterates over enums or prints strings automatically
-
-static EnumDef ParseEnum(Tokenizer* tok){
-   tok->AssertNextToken("enum");
-
-   Token peek = tok->PeekToken();
-   Token enumName = {};
-   if(!CompareToken(peek,"{")){ // Unnamed enum
-      enumName = tok->NextToken();
-   }
-
-   peek = tok->PeekToken();
-   void* valuesMark = tok->Mark();
-   String values = {};
-   if(CompareToken(peek,"{")){
-      tok->AdvancePeek(peek);
-
-      while(1){
-         Token peek = tok->PeekToken();
-
-         if(CompareString(peek,"}")){
-            tok->AdvancePeek(peek);
-
-            values = tok->Point(valuesMark);
-            break;
-         }
-         if(CompareString(peek,",")){
-            tok->AdvancePeek(peek);
-         }
-
-         /*Token enumMemberName = */ tok->NextToken();
-
-         Token value = {};
-         peek = tok->PeekToken();
-         if(CompareString(peek,"=")){
-            tok->AdvancePeek(peek);
-
-            value = tok->NextToken();
-         }
-      }
-   }
-
-   EnumDef def = {};
-   def.name = enumName;
-   def.values = values;
-
-   return def;
-}
-
-static MemberDef* ParseMember(Tokenizer* tok){
-   Token token = tok->PeekToken();
-
-   MemberDef def = {};
-
-   if(CompareString(token,"struct") || CompareString(token,"union")){
-      StructDef structDef = ParseStruct(tok);
-
-      def.type.structType = structDef;
-      def.type.type = TypeDef::STRUCT;
-
-      Token next = tok->NextToken();
-      if(CompareString(next,";")){ // Unnamed struct
-      } else {
-         // No array for named structure declarations, for now
-         tok->AssertNextToken(";");
-      }
-   } else if(CompareString(token,"enum")){
-      EnumDef enumDef = ParseEnum(tok);
-
-      def.type.enumType = enumDef;
-      def.type.type = TypeDef::ENUM;
-
-      def.name = tok->NextToken();
-      tok->AssertNextToken(";");
-   } else {
-      def.type.simpleType = ParseSimpleType(tok);
-      def.type.type = TypeDef::SIMPLE;
-
-      Token name = tok->NextToken();
-      def.name = name;
-
-      Token peek = tok->PeekToken();
-      void* arraysMark = tok->Mark();
-      if(CompareToken(peek,"[")){
-         tok->AdvancePeek(peek);
-         /*Token arrayExpression =*/ tok->NextFindUntil("]");
-         tok->AssertNextToken("]");
-
-         def.arrays = tok->Point(arraysMark);
-      } else if(CompareToken(peek,"(")){
-         Token advanceList = tok->PeekUntilDelimiterExpression({"("},{")"},0);
-         tok->AdvancePeek(advanceList);
-         tok->AssertNextToken(")");
-         if(!tok->IfNextToken(";")){
-            Token advanceFunctionBody = tok->PeekUntilDelimiterExpression({"{"},{"}"},0);
-            tok->AdvancePeek(advanceFunctionBody);
-            tok->AssertNextToken("}");
-            tok->IfNextToken(";");
-         }
-
-         // We are inside a function declaration
-         return nullptr;
-      }
-
-      Token finalToken = tok->NextToken();
-
-      if(CompareString(finalToken,"(")){
-         Token advanceList = tok->PeekUntilDelimiterExpression({"("},{")"},1);
-         tok->AdvancePeek(advanceList);
-         tok->AssertNextToken(")");
-         if(!tok->IfNextToken(";")){
-            Token advanceFunctionBody = tok->PeekUntilDelimiterExpression({"{"},{"}"},0);
-            tok->AdvancePeek(advanceFunctionBody);
-            tok->AssertNextToken("}");
-            tok->IfNextToken(";");
-         }
-
-         // We are inside a function declaration
-         return nullptr;
-      } else {
-         Assert(CompareString(finalToken,";"));
-      }
-   }
-
-   MemberDef* mem = defs.Alloc();
-   *mem = def;
-
-   return mem;
-}
-
-static StructDef ParseStruct(Tokenizer* tok){
-   void* mark = tok->Mark();
-
-   Token token = tok->NextToken();
-   Assert(CompareToken(token,"struct") || CompareToken(token,"union"));
-   String name = {};
-
-   StructDef def = {};
-   if(CompareToken(token,"union")){
-      def.isUnion = true;
-   }
-
-   token = tok->PeekToken();
-   if(CompareToken(token,"{")){ // Unnamed
-   } else { // Named struct
-      name = tok->NextToken();
-
-      token = tok->PeekToken();
-      if(CompareToken(token,":")){ // inheritance
-         tok->AssertNextToken(":");
-
-         tok->AssertNextToken("public"); // Forced to be a public inheritance
-
-         def.inherit = ParseSimpleType(tok);
-      }
-   }
-
-   def.name = name;
-
-   token = tok->PeekToken();
-   if(CompareToken(token,";")){
-      def.fullExpression = tok->Point(mark);
-
-      return def;
-   }
-
-   tok->AssertNextToken("{");
-
-   Token peek = tok->PeekToken();
-   if(CompareString(peek,"}")){
-      tok->AdvancePeek(peek);
-      def.fullExpression = tok->Point(mark);
-
-      return def;
-   }
-
-   while(!tok->Done()){
-      token = tok->PeekToken();
-
-      if(CompareToken(token,"}")){
-         tok->AdvancePeek(token);
-         break;
-      }
-
-      MemberDef* member = ParseMember(tok);
-
-      if(member == nullptr){
-         continue;
-      }
-
-      if(tok->Done()){
-         break;
-      }
-
-      member->next = def.members;
-      def.members = member;
-   }
-
-   def.fullExpression = tok->Point(mark);
-   def.members = ReverseList(def.members);
-
-   return def;
-}
-
-StructDef ParseTemplatedStructDefinition(Tokenizer* tok){
-   tok->AssertNextToken("template");
-   tok->AssertNextToken("<");
-
-   Token peek = tok->PeekToken();
-
-   TemplateParamDef* ptr = nullptr;
-   while(!tok->Done()){
-      if(tok->IfPeekToken(">")){
-         break;
-      }
-
-      tok->AssertNextToken("typename");
-
-      Token parameter = tok->NextToken();
-
-      TemplateParamDef* newParam = PushStruct<TemplateParamDef>(tempArena);
-      newParam->name = parameter;
-      newParam->next = ptr;
-      ptr = newParam;
-
-      if(!tok->IfNextToken(",")){
-         break;
-      }
-   }
-
-   tok->AssertNextToken(">");
-
-   peek = tok->PeekToken();
-   if(!CompareString(peek,"struct")){
-      StructDef def = {};
-      return def; // Only parse structs
-   }
-
-   StructDef def = ParseStruct(tok);
-
-   def.params = ReverseList(ptr);
-
-   return def;
-}
-
-void ParseHeaderFile(Tokenizer* tok){
+void ParseHeaderFile(Tokenizer* tok,Arena* arena){
    while(!tok->Done()){
       Token type = tok->PeekToken();
 
@@ -410,14 +23,14 @@ void ParseHeaderFile(Tokenizer* tok){
          newType->enumType = def;
 
       } else if(CompareString(type,"struct")){
-         StructDef def = ParseStruct(tok);
+         StructDef def = ParseStruct(tok,arena);
          if(def.members){
             TypeDef* typeDef = typeDefs.Alloc();
             typeDef->type = TypeDef::STRUCT;
             typeDef->structType = def;
          }
       } else if(CompareString(type,"template")){
-         StructDef def = ParseTemplatedStructDefinition(tok);
+         StructDef def = ParseTemplatedStructDefinition(tok,arena);
 
          if(def.members){
             TypeDef* typeDef = typeDefs.Alloc();
@@ -444,7 +57,7 @@ void ParseHeaderFile(Tokenizer* tok){
 
          Token peek = tok->PeekToken();
          if(CompareString(peek,"struct")){
-            StructDef def = ParseStruct(tok);
+            StructDef def = ParseStruct(tok,arena);
 
             if(def.members){
                TypeDef* typeDef = typeDefs.Alloc();
@@ -452,7 +65,7 @@ void ParseHeaderFile(Tokenizer* tok){
                typeDef->structType = def;
             }
          } else {
-            ParseSimpleType(tok);
+            ParseSimpleFullType(tok);
          }
 
          String old = tok->Point(oldMark);
@@ -521,16 +134,17 @@ TypeDef* GetDef(String name){
    return nullptr;
 }
 
-void OutputMembers(FILE* output,String structName,MemberDef* m,bool first){
+void OutputMembers(FILE* output,String structName,MemberDef* m,bool first,Arena* arena){
+   BLOCK_REGION(arena);
    for(; m != nullptr; m = m->next){
       if(m->type.type == TypeDef::STRUCT){
          StructDef def = m->type.structType;
          if(def.name.size > 0){
-            String name = PushString(tempArena,"%.*s::%.*s",UNPACK_SS(structName),UNPACK_SS(def.name));
+            String name = PushString(arena,"%.*s::%.*s",UNPACK_SS(structName),UNPACK_SS(def.name));
 
-            OutputMembers(output,name,m->type.structType.members,first);
+            OutputMembers(output,name,m->type.structType.members,first,arena);
          } else {
-            OutputMembers(output,structName,m->type.structType.members,first); // anonymous struct
+            OutputMembers(output,structName,m->type.structType.members,first,arena); // anonymous struct
          }
       } else {
          const char* preamble = "        ";
@@ -621,8 +235,8 @@ bool IsTemplatedParam(TypeDef* def,String memberTypeName){
    return false;
 }
 
-bool DependsOnTemplatedParam(TypeDef* def,String memberTypeName){
-   BLOCK_REGION(tempArena);
+bool DependsOnTemplatedParam(TypeDef* def,String memberTypeName,Arena* arena){
+   BLOCK_REGION(arena);
 
    String baseName = GetBaseType(memberTypeName);
    Tokenizer tok(baseName,"[]{}();*<>,=",{});
@@ -641,7 +255,7 @@ bool DependsOnTemplatedParam(TypeDef* def,String memberTypeName){
       Assert(search.foundFirst.size);
 
       if(CompareString(search.foundFirst,",")){
-         bool res = DependsOnTemplatedParam(def,search.peekFindNotIncluded);
+         bool res = DependsOnTemplatedParam(def,search.peekFindNotIncluded,arena);
          if(res){
             return res;
          }
@@ -649,7 +263,7 @@ bool DependsOnTemplatedParam(TypeDef* def,String memberTypeName){
          tok.AssertNextToken(",");
          continue;
       } else { // ">"
-         bool res = DependsOnTemplatedParam(def,search.peekFindNotIncluded);
+         bool res = DependsOnTemplatedParam(def,search.peekFindNotIncluded,arena);
          return res;
       }
    }
@@ -657,7 +271,7 @@ bool DependsOnTemplatedParam(TypeDef* def,String memberTypeName){
    UNREACHABLE;
 }
 
-void OutputRegisterTypesFunction(FILE* output){
+void OutputRegisterTypesFunction(FILE* output,Arena* arena){
    std::set<String> seen;
 
    for(TypeDef* def : typeDefs){
@@ -711,7 +325,7 @@ void OutputRegisterTypesFunction(FILE* output){
                continue;
             }
 
-            if(DependsOnTemplatedParam(def,name)){
+            if(DependsOnTemplatedParam(def,name,arena)){
                continue;
             }
 
@@ -863,10 +477,10 @@ void OutputRegisterTypesFunction(FILE* output){
       if(def->structType.inherit.size){
          TypeDef* inheritDef = GetDef(def->structType.inherit);
 
-         OutputMembers(output,inheritDef->structType.name,inheritDef->structType.members,first);
+         OutputMembers(output,inheritDef->structType.name,inheritDef->structType.members,first,arena);
       }
 
-      OutputMembers(output,def->structType.name,def->structType.members,first);
+      OutputMembers(output,def->structType.name,def->structType.members,first,arena);
       first = false;
    }
    fprintf(output,"   };\n\n");
@@ -920,27 +534,20 @@ void OutputRegisterTypesFunction(FILE* output){
    fprintf(output,"\n}\n");
 }
 
-String OutputMember(MemberDef* def){
-   Byte* mark = MarkArena(tempArena);
+String OutputMember(MemberDef* def,Arena* arena){
+   Byte* mark = MarkArena(arena);
 
-   PushString(tempArena,"%.*s | ",UNPACK_SS(def->type.simpleType));
-   PushString(tempArena,"%.*s",UNPACK_SS(def->name));
+   PushString(arena,"%.*s | ",UNPACK_SS(def->type.simpleType));
+   PushString(arena,"%.*s",UNPACK_SS(def->name));
    if(def->arrays.size){
-      PushString(tempArena,"%.*s",UNPACK_SS(def->arrays));
+      PushString(arena,"%.*s",UNPACK_SS(def->arrays));
    }
 
-   String res = PointArena(tempArena,mark);
+   String res = PointArena(arena,mark);
    return res;
 }
 
 //#define STANDALONE
-
-#ifdef STANDALONE
-// Empty impl otherwise debug won't work on template engine
-void StartDebugTerminal(){
-}
-void DebugTerminal(Value val){
-}
 
 int main(int argc,const char* argv[]){
    if(argc < 3){
@@ -949,10 +556,11 @@ int main(int argc,const char* argv[]){
       return 0;
    }
 
-   tempArenaInst = InitArena(Megabyte(256));
+   Arena tempArena = InitArena(Megabyte(256));
+   Arena* arena = &tempArena;
 
    for(int i = 0; i < argc - 2; i++){
-      String content = PushFile(tempArena,argv[2+i]);
+      String content = PushFile(arena,argv[2+i]);
 
       if(content.size < 0){
          printf("Failed to open file: %s\n",argv[2+i]);
@@ -960,7 +568,7 @@ int main(int argc,const char* argv[]){
       }
 
       Tokenizer tok(content,"[]{}();*<>,=",{});
-      ParseHeaderFile(&tok);
+      ParseHeaderFile(&tok,arena);
    }
 
    {
@@ -971,15 +579,11 @@ int main(int argc,const char* argv[]){
 
    const char* test = "template<typename T> struct std::vector{T* mem; int size; int allocated;};";
    Tokenizer tok(STRING(test),"[]{}();*<>,=",{});
-   ParseHeaderFile(&tok);
+   ParseHeaderFile(&tok,arena);
 
    FILE* output = OpenFileAndCreateDirectories(argv[1],"w");
 
-   OutputRegisterTypesFunction(output);
+   OutputRegisterTypesFunction(output,arena);
 
    return 0;
 }
-#endif
-
-
-

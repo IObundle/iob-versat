@@ -83,12 +83,18 @@ void OutputVersatSource(Versat* versat,Accelerator* accel,const char* directoryP
    };
    #endif
 
+   UnitValues unit = CalculateAcceleratorValues(versat,accel);
+
    fprintf(c,"`define NUMBER_UNITS %d\n",Size(accel->allocated));
    fprintf(c,"`define CONFIG_W %d\n",val.configurationBits);
    fprintf(c,"`define STATE_W %d\n",val.stateBits);
    fprintf(c,"`define MAPPED_UNITS %d\n",val.unitsMapped);
    fprintf(c,"`define MAPPED_BIT %d\n",val.memoryConfigDecisionBit);
    fprintf(c,"`define nIO %d\n",val.nUnitsIO);
+
+   if(unit.inputs || unit.outputs){
+      fprintf(c,"`define EXTERNAL_PORTS\n");
+   }
 
    if(val.nUnitsIO){
       fprintf(c,"`define VERSAT_IO\n");
@@ -116,15 +122,29 @@ void OutputVersatSource(Versat* versat,Accelerator* accel,const char* directoryP
    }
 
    // Output configuration file
-   Array<InstanceNode*> nodes = ListToArray(accel->allocated,Size(accel->allocated),arena);
+   int size = Size(accel->allocated);
+   Array<InstanceNode*> nodes = ListToArray(accel->allocated,size,arena);
+
+   ReorganizeAccelerator(accel,arena);
+   Array<InstanceNode*> ordered = PushArray<InstanceNode*>(arena,size);
+   int i = 0;
+   FOREACH_LIST_INDEXED(ptr,accel->ordered,i){
+      ordered[i] = ptr->node;
+   }
 
    ComputedData computedData = CalculateVersatComputedData(accel->allocated,val,arena);
 
+   TemplateSetDefaults(versat);
+
+   TemplateSetNumber("nInputs",unit.inputs);
+   TemplateSetNumber("nOutputs",unit.outputs);
+   TemplateSetCustom("ordered",&ordered,"Array<InstanceNode*>");
    TemplateSetCustom("versatValues",&val,"VersatComputedValues");
    TemplateSetNumber("delayStart",val.delayBitsStart);
    TemplateSetCustom("versatData",&computedData.data,"Array<VersatComputedData>");
    TemplateSetCustom("external",&computedData.external,"Array<ExternalMemoryInterface>");
    TemplateSetCustom("instances",&nodes,"Array<InstanceNode*>");
+   TemplateSetNumber("nIO",val.nUnitsIO);
 
    int staticStart = 0;
    FOREACH_LIST(ptr,accel->allocated){

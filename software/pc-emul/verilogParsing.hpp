@@ -4,6 +4,7 @@
 #include <vector>
 #include <unordered_map>
 
+#include "versatPrivate.hpp"
 #include "utils.hpp"
 #include "parser.hpp"
 
@@ -44,19 +45,16 @@ struct ExternalMemoryDPDef{
 
 struct ModuleInfo{
    String name;
-   int nInputs;
-   int nOutputs;
-   int* inputDelays;
-   int* outputLatencies;
-   int nConfigs;
-   Wire* configs;
-   int nStates;
-   Wire* states;
+   Array<int> inputDelays;
+   Array<int> outputLatencies;
+   Array<Wire> configs;
+   Array<Wire> states;
+   Array<ExternalMemoryInterface> externalInterfaces;
    int nDelays;
+   int nIO;
+   int memoryMappedBits;
    bool doesIO;
    bool memoryMapped;
-   int memoryMappedBits;
-   Array<ExternalMemoryInterface> externalInterfaces;
    bool hasDone;
    bool hasClk;
    bool hasReset;
@@ -66,6 +64,8 @@ struct ModuleInfo{
 };
 
 String PreprocessVerilogFile(Arena* output, String fileContent,std::vector<const char*>* includeFilepaths,Arena* tempArena);
-std::vector<Module> ParseVerilogFile(String fileContent, std::vector<const char*>* includeFilepaths, Arena* tempArena);
+std::vector<Module> ParseVerilogFile(String fileContent, std::vector<const char*>* includeFilepaths, Arena* tempArena); // Only handles preprocessed files
+ModuleInfo ExtractModuleInfo(Module& module,Arena* permanent,Arena* tempArena);
+void OutputModuleInfos(FILE* output,bool doExport,Array<ModuleInfo> infos,String nameSpace,CompiledTemplate* unitVerilogData,Arena* temp);
 
 #endif // INCLUDED_VERILOG_PARSER

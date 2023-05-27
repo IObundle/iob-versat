@@ -236,7 +236,6 @@ double Abs(double val){
    return res;
 }
 
-
 int Abs(int val){
    int res = val;
    if(val < 0){

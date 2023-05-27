@@ -1,7 +1,13 @@
 #ifndef INCLUDED_DEBUG
 #define INCLUDED_DEBUG
 
-#include "type.hpp"
+#include <cstdio>
+
+#include "utils.hpp"
+
+struct Versat;
+struct Accelerator;
+struct Arena;
 
 // Set this during debugging (either in code or by using gdb set command) and check using the macros below for better control on debugging events
 extern bool debugFlag;

@@ -1,134 +1,137 @@
 #ifndef INCLUDED_GRAPH
 #define INCLUDED_GRAPH
 
-#include "versatPrivate.hpp"
+//#include "versatPrivate.hpp"
+#include "utils.hpp"
 
+struct Accelerator;
 struct Arena;
+struct ComplexFUInstance;
+struct FUInstance;
 
-#if 0
-struct Node{
-   Node* next;
-   String name;
+struct PortInstance{
    ComplexFUInstance* inst;
+   int port;
 };
 
+inline bool operator==(const PortInstance& p1,const PortInstance& p2){
+   bool res = (p1.inst == p2.inst && p1.port == p2.port);
+   return res;
+}
+
+inline bool operator!=(const PortInstance& p1,const PortInstance& p2){
+   bool res = !(p1 == p2);
+   return res;
+}
+
+template<> class std::hash<PortInstance>{
+   public:
+   std::size_t operator()(PortInstance const& s) const noexcept{
+      std::size_t res = std::hash<ComplexFUInstance*>()(s.inst);
+      res += s.port;
+
+      return res;
+   }
+};
+
+struct ConnectionInfo{
+   PortInstance instConnectedTo;
+   int port;
+   int edgeDelay; // Stores the edge delay information
+   int* delay; // Used to calculate delay. Does not store edge delay information
+};
+
+struct PortEdge{
+   PortInstance units[2];
+};
+
+inline bool operator==(const PortEdge& e1,const PortEdge& e2){
+   bool res = (e1.units[0] == e2.units[0] && e1.units[1] == e2.units[1]);
+   return res;
+}
+
+inline bool operator!=(const PortEdge& e1,const PortEdge& e2){
+   bool res = !(e1 == e2);
+   return res;
+}
+
+template<> class std::hash<PortEdge>{
+   public:
+   std::size_t operator()(PortEdge const& s) const noexcept{
+      std::size_t res = std::hash<PortInstance>()(s.units[0]);
+      res += std::hash<PortInstance>()(s.units[1]);
+      return res;
+   }
+};
+
+struct Edge{ // A edge in a graph
+   union{
+      struct{
+         PortInstance out;
+         PortInstance in;
+      };
+      PortEdge edge;
+      PortInstance units[2];
+   };
+
+   int delay;
+   Edge* next;
+};
+
+struct ComplexFUInstance;
+struct InstanceNode;
+
 struct PortNode{
-   Node* node;
+   InstanceNode* node;
    int port;
 };
 
 struct EdgeNode{
-   EdgeNode* next;
-
-   union {
-      struct {
-      PortNode out;
-      PortNode in;
-      };
-      PortNode units[2];
-   };
+   PortNode node0;
+   PortNode node1;
 };
 
-struct Graph{
-   Node* nodes;
-   EdgeNode* edges;
-   Accelerator* accel;
-};
-#endif
-
-#if 0
-
-typedef ComplexFUInstance Node;
-typedef PortInstance PortNode;
-typedef Edge EdgeNode;
-typedef Accelerator Graph;
-
-struct FlattenResult{
-   Node* flatUnitStart;
-   Node* flatUnitEnd; // One node after the flattening
-   EdgeNode* flatEdgeStart;
-   EdgeNode* flatEdgeEnd;
-   int flattenedUnits;
-   int flattenedEdges;
-   int circuitEdgesStart;
-   int circuitEdgesEnd;
+struct ConnectionNode{
+   PortNode instConnectedTo;
+   int port;
+   int edgeDelay;
+   int* delay; // Maybe not the best approach to calculate delay. TODO: check later
+   ConnectionNode* next;
 };
 
-struct FlatteningTemp{
-   int index;
-   FUDeclaration* parent;
-   FUDeclaration* decl;
-   String name;
-   int flattenedUnits;
-   int subunitsCount;
-   int edgeCount;
-   int edgeStart;
-   int level;
-   int flag;
-   FlatteningTemp* next;
-   FlatteningTemp* child;
+struct InstanceNode{
+   ComplexFUInstance* inst;
+   InstanceNode* next;
+
+   // Calculated and updated every time a connection is added or removed
+   ConnectionNode* allInputs;
+   ConnectionNode* allOutputs;
+   Array<PortNode> inputs;
+   Array<bool> outputs;
+   //int outputs;
+   bool multipleSamePortInputs;
+   enum {TAG_UNCONNECTED,TAG_COMPUTE,TAG_SOURCE,TAG_SINK,TAG_SOURCE_AND_SINK} type;
+
+   // The following is only calculated by specific functions. Otherwise assume data is old if any change to the graph occurs
+   // In fact, maybe this should be removed and should just be a hashmap + array to save computed data.
+   // But need to care because top level accelerator still needs to be able to calculate this values and persist them somehow
+   int inputDelay;
+   //int order;
 };
 
-template<typename T>
-struct Sublist{
-   T* start;
-   T* end;
+struct OrderedInstance{ // This is a more powerful and generic approach to subgraphing. Should not be named ordered, could be used for anything really, not just order iteration
+   InstanceNode* node;
+   OrderedInstance* next;
 };
 
-template<typename T>
-int Size(Sublist<T> sub){
-   int count = 0;
-   FOREACH_LIST_BOUNDED(ptr,sub.start,sub.end){
-      count += 1;
-   }
-   return count;
-}
-
-template<typename T>
-Sublist<T> SimpleSublist(T* start,int size){
-   Sublist<T> res = {};
-   res.start = start;
-   res.end = ListGet(start,size);
-   return res;
-}
-
-struct Subgraph{
-   Sublist<Node> nodes;
-   Sublist<EdgeNode> edges;
-};
-
-template<typename T>
-void AssertNoLoop(T* head,Arena* arena){
-   BLOCK_REGION(arena);
-
-   Hashmap<T*,int> mapping = {};
-   mapping.Init(arena,10000);
-
-   FOREACH_LIST(ptr,head){
-      GetOrAllocateResult<int> res = mapping.GetOrAllocate(ptr);
-
-      Assert(!res.result);
-      *res.data = 0;
-   }
-}
-
-Node* GetOutputInstance(Subgraph sub);
-
-Graph* PushGraph(Arena* arena);
-
-// Adds at the beginning.
-Node*     AddNode(Graph* graph,ComplexFUInstance* inst,Node* previous = nullptr);
-EdgeNode* AddEdge(Graph* graph,Node* out,int outPort,Node* in,int inPort,EdgeNode* previous = nullptr);
-
-void RemoveNodeAndEdges(Graph* graph,Node* node);
-
-FlattenResult FlattenNode(Graph* graph,Node* node,Arena* arena);
-
-String OutputDotGraph(Graph* graph,Arena* arena);
-String OutputDotGraph(Subgraph graph,Arena* output);
-
-ConsolidationResult GenerateConsolidationGraph(Versat* versat,Arena* arena,Subgraph accel1,Subgraph accel2,ConsolidationGraphOptions options);
-#endif
+// Unit connection
+Edge* FindEdge(FUInstance* out,int outIndex,FUInstance* in,int inIndex,int delay = 0);
+Edge* ConnectUnitsGetEdge(FUInstance* out,int outIndex,FUInstance* in,int inIndex,int delay = 0);
+Edge* ConnectUnitsGetEdge(FUInstance* out,int outIndex,FUInstance* in,int inIndex,int delay,Edge* previous);
+Edge* ConnectUnitsIfNotConnectedGetEdge(FUInstance* out,int outIndex,FUInstance* in,int inIndex,int delay = 0);
+Edge* ConnectUnits(PortInstance out,PortInstance in,int delay = 0);
+Edge* ConnectUnits(InstanceNode* out,int outPort,InstanceNode* in,int inPort,int delay = 0);
+Edge* ConnectUnits(FUInstance* out,int outIndex,FUInstance* in,int inIndex,int delay,Edge* previousEdge);
 
 InstanceNode* GetInstanceNode(Accelerator* accel,ComplexFUInstance* inst);
 void CalculateNodeType(InstanceNode* node);
@@ -143,7 +146,6 @@ InstanceNode* RemoveUnit(InstanceNode* nodes,InstanceNode* unit);
 // Fixes edges such that unit before connected to after, are reconnected to new unit
 void InsertUnit(Accelerator* accel,PortNode output,PortNode input,PortNode newUnit);
 void InsertUnit(Accelerator* accel, PortInstance before, PortInstance after, PortInstance newUnit);
-//void InsertUnit(AcceleratorView& view, PortInstance before, PortInstance after, PortInstance newUnit,ComplexFUInstance** newNode);
 
 Edge* ConnectUnitsGetEdge(PortNode out,PortNode in,int delay);
 

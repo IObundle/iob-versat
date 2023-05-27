@@ -45,9 +45,9 @@ FUInstance instancesBuffer[] = {
          .state = (int*) 0x0,
       #{end}
 
-      #{if inst.declaration.nDelays}
+      #{if inst.declaration.delayOffsets.max}
          .delay = (int*) 0x0, // &delayBase[@{delaySeen}], - not working because composite accelerator is double adding delay 
-      #{set delaySeen delaySeen + inst.declaration.nDelays}
+      #{set delaySeen delaySeen + inst.declaration.delayOffsets.max}
       #{else}
          .delay = (int*) 0x0,
       #{end}

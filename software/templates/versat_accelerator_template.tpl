@@ -1,8 +1,11 @@
 `timescale 1ns / 1ps
+
+/*
 `include "system.vh"
 `include "axi.vh"
 `include "xversat.vh"
 `include "xdefs.vh"
+*/
 
 #{include "versat_common.tpl"}
 
@@ -10,8 +13,8 @@
 #{call CountOperations instances}
 
 module @{accel.name} #(
-      parameter ADDR_W = `ADDR_W,
-      parameter DATA_W = `DATA_W,
+      parameter ADDR_W = 32,
+      parameter DATA_W = 32,
       parameter AXI_ADDR_W = 32
    )
    (
@@ -46,20 +49,20 @@ module @{accel.name} #(
    output [@{wire.bitsize-1}:0]    @{wire.name},
    #{end}
 
-   #{for i accel.nDelays}
+   #{for i accel.delayOffsets.max}
    input  [31:0]                   delay@{i},
    #{end}
 
-   #{if accel.nIOs}
+   #{for i accel.nIOs}
    // Databus master interface
-   input [@{accel.nIOs - 1}:0]                databus_ready,
-   output [@{accel.nIOs - 1}:0]               databus_valid,
-   output [@{accel.nIOs} * AXI_ADDR_W-1:0]    databus_addr,
-   input [`DATAPATH_W-1:0]                    databus_rdata,
-   output [@{accel.nIOs} * `DATAPATH_W-1:0]   databus_wdata,
-   output [@{accel.nIOs} * `DATAPATH_W/8-1:0] databus_wstrb,
-   output [@{accel.nIOs} * 8-1:0]             databus_len,
-   input  [@{accel.nIOs - 1}:0]               databus_last,
+   input                   databus_ready_@{i},
+   output                  databus_valid_@{i},
+   output [AXI_ADDR_W-1:0] databus_addr_@{i},
+   input [31:0]            databus_rdata_@{i},
+   output [31:0]           databus_wdata_@{i},
+   output [32/8 - 1:0]     databus_wstrb_@{i},
+   output [7:0]            databus_len_@{i},
+   input                   databus_last_@{i},
    #{end}
 
    #{for ext accel.externalMemory}
@@ -236,7 +239,7 @@ end
          #{end}
          #{end}
 
-         #{for i decl.nDelays}
+         #{for i decl.delayOffsets.max}
             .delay@{i}(delay@{delaySeen}),
          #{inc delaySeen}
          #{end}
@@ -281,18 +284,18 @@ end
          #{inc memoryMappedIndex}
          #{end}
 
-         #{if decl.nIOs}
-         .databus_ready(databus_ready[@{ioIndex} +: @{decl.nIOs}]),
-         .databus_valid(databus_valid[@{ioIndex} +: @{decl.nIOs}]),
-         .databus_addr(databus_addr[@{ioIndex * 32} +: @{32 * decl.nIOs}]),
-         .databus_rdata(databus_rdata),
-         .databus_wdata(databus_wdata[@{ioIndex * 32} +: @{32 * decl.nIOs}]),
-         .databus_wstrb(databus_wstrb[@{ioIndex * 4} +: @{4 * decl.nIOs}]),
-         .databus_len(databus_len[@{ioIndex * 8} +: @{8 * decl.nIOs}]),
-         .databus_last(databus_last[@{ioIndex} +: @{decl.nIOs}]),
+         #{for i decl.nIOs}
+         .databus_ready_@{i}(databus_ready_@{ioIndex}),
+         .databus_valid_@{i}(databus_valid_@{ioIndex}),
+         .databus_addr_@{i}(databus_addr_@{ioIndex}),
+         .databus_rdata_@{i}(databus_rdata_@{ioIndex}),
+         .databus_wdata_@{i}(databus_wdata_@{ioIndex}),
+         .databus_wstrb_@{i}(databus_wstrb_@{ioIndex}),
+         .databus_len_@{i}(databus_len_@{ioIndex}),
+         .databus_last_@{i}(databus_last_@{ioIndex}),
          #{set ioIndex ioIndex + decl.nIOs}
-         #{end} 
-         
+         #{end}
+
          .running(running),
          .run(run),
 

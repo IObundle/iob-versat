@@ -4,6 +4,7 @@
 
 #include "parser.hpp"
 #include "versatPrivate.hpp"
+#include "structParsing.hpp"
 
 namespace ValueType{
    Type* NUMBER;
@@ -24,31 +25,7 @@ namespace ValueType{
 static Arena permanentArena;
 static Pool<Type> types;
 
-static void SkipQualifiers(Tokenizer* tok){
-   while(1){
-      Token peek = tok->PeekToken();
-
-      if(CompareToken(peek,"const")){
-         tok->AdvancePeek(peek);
-         continue;
-      }
-      if(CompareToken(peek,"volatile")){
-         tok->AdvancePeek(peek);
-         continue;
-      }
-      if(CompareToken(peek,"static")){
-         tok->AdvancePeek(peek);
-         continue;
-      }
-      if(CompareToken(peek,"inline")){
-         tok->AdvancePeek(peek);
-         continue;
-      }
-
-      break;
-   }
-}
-
+#if 0
 static String ParseSimpleType(Tokenizer* tok){
    Assert(tok->IsSingleChar("<>,"));
 
@@ -87,6 +64,7 @@ static String ParseSimpleType(Tokenizer* tok){
 
    return res;
 }
+#endif
 
 static Type* RegisterSimpleType(String name,int size,int align){
    Type* type = types.Alloc();
@@ -323,22 +301,26 @@ Type* GetType(String name){
       return typeExists;
    }
 
-   Tokenizer tok(name,"*[]<>,",{});
-
-   Token templatedName = ParseSimpleType(&tok);
-
    Type* res = nullptr;
-   if(CompareString(name,templatedName)){ // Name equal to templated name means that no pointers or arrays, only templated arguments are not found
-      Type* res = InstantiateTemplate(name,&permanentArena);
-      return res;
-   } else if(templatedName.size > 0){
-      res = GetType(templatedName);
+   Tokenizer tok(name,"*&[]<>,",{});
+   if(Contains(name,'<')){
+      Token templatedName = ParseSimpleType(&tok);
+
+      if(CompareString(name,templatedName)){ // Name equal to templated name means that no pointers or arrays, only templated arguments are not found
+         Type* res = InstantiateTemplate(name,&permanentArena);
+         return res;
+      } else if(templatedName.size > 0){
+         res = GetType(templatedName);
+      }
    } else {
-      Token typeName = ParseSimpleType(&tok);
-      if(CompareString(typeName,name)){
+      //Tokenizer tok(name,"*&[]",{});
+      tok.SetSingleChars("*&[]");
+
+      Token noPointers = ParseSimpleType(&tok);
+      if(CompareString(noPointers,name)){
          return nullptr;
       }
-      res = GetType(typeName);
+      res = GetType(noPointers);
    }
 
    if(res == nullptr){
@@ -446,7 +428,7 @@ Type* GetArrayType(Type* baseType, int arrayLength){
 #define B(STRUCT,FULLTYPE,TYPE,NAME,PTR,HAS_ARRAY,ARRAY_ELEMENTS)  ((Member){#TYPE,#NAME,sizeof(FULLTYPE),sizeof(TYPE),offsetof(STRUCT,NAME),PTR,ARRAY_ELEMENTS,HAS_ARRAY})
 
 #include "templateEngine.hpp"
-#include "verilogParser.hpp"
+#include "verilogParsing.hpp"
 #include "scratchSpace.hpp"
 #include "utils.hpp"
 #include "typeInfo.inc"
@@ -1197,6 +1179,10 @@ Value ConvertValue(Value in,Type* want,Arena* arena){
          int* pointerValue = (int*) DeferencePointer(in.custom,in.type->pointerType,0);
 
          res.boolean = (pointerValue != nullptr);
+      } else if(in.type->type == Type::TEMPLATED_INSTANCE && in.type->templateBase == ValueType::ARRAY){
+         int size = IndexableSize(in);
+
+         res.boolean = (size != 0);
       } else if(IsStruct(in.type)){
          res.boolean = (in.custom != nullptr);
       } else {

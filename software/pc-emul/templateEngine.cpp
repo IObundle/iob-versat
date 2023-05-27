@@ -32,17 +32,16 @@ public:
    }
 };
 
-void ParseAndEvaluate(String content);
-
-static Expression* ParseExpression(Tokenizer* tok);
-static String Eval(Block* block);
-static ValueAndText EvalNonBlockCommand(Command* com);
+static void ParseAndEvaluate(String content,Arena* temp);
+static String Eval(Block* block,Arena* temp);
+static ValueAndText EvalNonBlockCommand(Command* com,Arena* temp);
+static Expression* ParseExpression(Tokenizer* tok,Arena* temp);
 
 // Static variables
 static bool debugging = false;
 static std::map<String,Value,CompareFunction> envTable;
 static FILE* output;
-static Arena* tempArena;
+//static Arena* tempArena;
 static Arena* outputArena;
 
 static bool IsCommandBlockType(Command* com){
@@ -57,8 +56,8 @@ static bool IsCommandBlockType(Command* com){
    return true;
 }
 
-static Command* ParseCommand(Tokenizer* tok){
-   Command* com = PushStruct<Command>(tempArena);
+static Command* ParseCommand(Tokenizer* tok,Arena* out){
+   Command* com = PushStruct<Command>(out);
 
    com->name = tok->NextToken();
 
@@ -115,16 +114,16 @@ static Command* ParseCommand(Tokenizer* tok){
       }
    }
 
-   com->expressions = PushArray<Expression*>(tempArena,commandSize);
+   com->expressions = PushArray<Expression*>(out,commandSize);
    for(int i = 0; i < com->expressions.size; i++){
-      com->expressions[i] = ParseExpression(tok);
+      com->expressions[i] = ParseExpression(tok,out);
    }
 
    return com;
 }
 
 // Crude parser for identifiers
-static Expression* ParseIdentifier(Expression* current,Tokenizer* tok){
+static Expression* ParseIdentifier(Expression* current,Tokenizer* tok,Arena* temp){
    void* start = tok->Mark();
    Token firstId = tok->NextToken();
 
@@ -136,12 +135,12 @@ static Expression* ParseIdentifier(Expression* current,Tokenizer* tok){
 
       if(CompareString(token,"[")){
          tok->AdvancePeek(token);
-         Expression* expr = PushStruct<Expression>(tempArena);
-         expr->expressions = PushArray<Expression*>(tempArena,2);
+         Expression* expr = PushStruct<Expression>(temp);
+         expr->expressions = PushArray<Expression*>(temp,2);
 
          expr->type = Expression::ARRAY_ACCESS;
          expr->expressions[0] = current;
-         expr->expressions[1] = ParseExpression(tok);
+         expr->expressions[1] = ParseExpression(tok,temp);
 
          tok->AssertNextToken("]");
 
@@ -150,8 +149,8 @@ static Expression* ParseIdentifier(Expression* current,Tokenizer* tok){
          tok->AdvancePeek(token);
          Token memberName = tok->NextToken();
 
-         Expression* expr = PushStruct<Expression>(tempArena);
-         expr->expressions = PushArray<Expression*>(tempArena,1);
+         Expression* expr = PushStruct<Expression>(temp);
+         expr->expressions = PushArray<Expression*>(temp,1);
 
          expr->type = Expression::MEMBER_ACCESS;
          expr->id = memberName;
@@ -192,19 +191,19 @@ static Expression* ParseAtom(Tokenizer* tok,Arena* arena){
       expr->val = MakeValue(str);
    } else if(CompareString(token,"@{")){
       tok->AdvancePeek(token);
-      expr = ParseExpression(tok);
+      expr = ParseExpression(tok,arena);
       tok->AssertNextToken("}");
    } else if(CompareString(token,"#{")){
       tok->AdvancePeek(token);
 
       expr->type = Expression::COMMAND;
-      expr->command = ParseCommand(tok);
+      expr->command = ParseCommand(tok,arena);
 
       Assert(!IsCommandBlockType(expr->command));
       tok->AssertNextToken("}");
    } else {
       expr->type = Expression::IDENTIFIER;
-      expr = ParseIdentifier(expr,tok);
+      expr = ParseIdentifier(expr,tok,arena);
    }
 
    expr->text = tok->Point(start);
@@ -219,12 +218,12 @@ static Expression* ParseFactor(Tokenizer* tok,Arena* arena){
    Expression* expr = nullptr;
    if(CompareString(peek,"(")){
       tok->AdvancePeek(peek);
-      expr = ParseExpression(tok);
+      expr = ParseExpression(tok,arena);
       tok->AssertNextToken(")");
    } else if(CompareString(peek,"!")){
       tok->AdvancePeek(peek);
 
-      Expression* child = ParseExpression(tok);
+      Expression* child = ParseExpression(tok,arena);
 
       expr = PushStruct<Expression>(arena);
       expr->expressions = PushArray<Expression*>(arena,1);
@@ -242,7 +241,7 @@ static Expression* ParseFactor(Tokenizer* tok,Arena* arena){
    return expr;
 }
 
-static Expression* ParseExpression(Tokenizer* tok){
+static Expression* ParseExpression(Tokenizer* tok,Arena* temp){
    void* start = tok->Mark();
 
    #if 0
@@ -252,8 +251,8 @@ static Expression* ParseExpression(Tokenizer* tok){
 
       Expression* child = ParseExpression(tok);
 
-      Expression* expr = PushStruct(tempArena,Expression);
-      expr->expressions = PushStruct(tempArena,Expression*);
+      Expression* expr = PushStruct(temp,Expression);
+      expr->expressions = PushStruct(temp,Expression*);
 
       expr->type = Expression::OPERATION;
       expr->op = "!";
@@ -265,14 +264,14 @@ static Expression* ParseExpression(Tokenizer* tok){
    }
    #endif
 
-   Expression* res = ParseOperationType(tok,{{"#"},{"|>"},{"and","or","xor"},{">","<",">=","<=","==","!="},{"+","-"},{"*","/","&","**"}},ParseFactor,tempArena);
+   Expression* res = ParseOperationType(tok,{{"#"},{"|>"},{"and","or","xor"},{">","<",">=","<=","==","!="},{"+","-"},{"*","/","&","**"}},ParseFactor,temp);
 
    res->text = tok->Point(start);
    return res;
 }
 
-static Block* Parse(Tokenizer* tok){
-   Block* block = PushStruct<Block>(tempArena);
+static Block* Parse(Tokenizer* tok,Arena* out){
+   Block* block = PushStruct<Block>(out);
    *block = {};
 
    void* start = tok->Mark();
@@ -282,7 +281,7 @@ static Block* Parse(Tokenizer* tok){
       block->type = Block::COMMAND;
 
       tok->AdvancePeek(token);
-      block->command = ParseCommand(tok);
+      block->command = ParseCommand(tok,out);
       tok->AssertNextToken("}");
 
       if(!IsCommandBlockType(block->command)){
@@ -291,7 +290,7 @@ static Block* Parse(Tokenizer* tok){
 
       Block* ptr = block;
       while(1){
-         Block* child = Parse(tok);
+         Block* child = Parse(tok,out);
          if(child->type == Block::COMMAND && CompareString(child->command->name,"end")){
             break;
          } else {
@@ -343,7 +342,7 @@ static void Print(Block* block, int level = 0){
    }
 }
 
-static Value HexValue(Value in){
+static Value HexValue(Value in,Arena* out){
    static char buffer[128];
 
    int number = ConvertValue(in,ValueType::NUMBER,nullptr).number;
@@ -352,18 +351,18 @@ static Value HexValue(Value in){
 
    Value res = {};
    res.type = ValueType::STRING;
-   res.str = PushString(tempArena,String{buffer,size});
+   res.str = PushString(out,String{buffer,size});
 
    return res;
 }
 
-static Value EscapeString(Value val){
+static Value EscapeString(Value val,Arena* out){
    Assert(val.type == ValueType::SIZED_STRING || val.type == ValueType::STRING);
    Assert(val.isTemp);
 
    String str = val.str;
 
-   String escaped = PushString(tempArena,str);
+   String escaped = PushString(out,str);
    char* view = (char*) escaped.data;
 
    for(int i = 0; i < escaped.size; i++){
@@ -384,6 +383,7 @@ static Value EscapeString(Value val){
    return res;
 }
 
+
 int CountNonOperationChilds(Accelerator* accel){
    if(accel == nullptr){
       return 0;
@@ -403,16 +403,16 @@ int CountNonOperationChilds(Accelerator* accel){
    return count;
 }
 
-static Value EvalExpression(Expression* expr);
+static Value EvalExpression(Expression* expr,Arena* temp);
 
-static Value EvalExpression_(Expression* expr){
+static Value EvalExpression_(Expression* expr,Arena* temp){
    switch(expr->type){
       case Expression::OPERATION:{
          if(expr->op[0] == '|'){ // Pipe operation
-            Value val = EvalExpression(expr->expressions[0]);
+            Value val = EvalExpression(expr->expressions[0],temp);
 
             if(CompareString(expr->expressions[1]->id,"Hex")){
-               val = HexValue(val);
+               val = HexValue(val,temp);
             } else if(CompareString(expr->expressions[1]->id,"String")){
                Assert(val.type == ValueType::STRING);
                val.literal = true;
@@ -421,7 +421,7 @@ static Value EvalExpression_(Expression* expr){
 
                val = MakeValue(CountNonOperationChilds(accel));
             } else if(CompareString(expr->expressions[1]->id,"Identify")){
-               val = EscapeString(val);
+               val = EscapeString(val,temp);
             } else {
                NOT_IMPLEMENTED;
             }
@@ -430,14 +430,14 @@ static Value EvalExpression_(Expression* expr){
          }
 
          if(CompareString(expr->op,"!")){
-            Value op = EvalExpression(expr->expressions[0]);
+            Value op = EvalExpression(expr->expressions[0],temp);
             bool val = ConvertValue(op,ValueType::BOOLEAN,nullptr).boolean;
 
             return MakeValue(!val);
          }
 
          // Two or more op operations
-         Value op1 = EvalExpression(expr->expressions[0]);
+         Value op1 = EvalExpression(expr->expressions[0],temp);
 
          // Short circuit
          if(CompareString(expr->op,"and")){
@@ -454,7 +454,7 @@ static Value EvalExpression_(Expression* expr){
             }
          }
 
-         Value op2 = EvalExpression(expr->expressions[1]);
+         Value op2 = EvalExpression(expr->expressions[1],temp);
 
          if(CompareString(expr->op,"==")){
             return MakeValue(Equal(op1,op2));
@@ -476,10 +476,10 @@ static Value EvalExpression_(Expression* expr){
 
             return MakeValue((bool1 && !bool2) || (!bool1 && bool2));
          } else if(CompareString(expr->op,"#")){
-            String first = ConvertValue(op1,ValueType::SIZED_STRING,tempArena).str;
-            String second = ConvertValue(op2,ValueType::SIZED_STRING,tempArena).str;
+            String first = ConvertValue(op1,ValueType::SIZED_STRING,temp).str;
+            String second = ConvertValue(op2,ValueType::SIZED_STRING,temp).str;
 
-            String res = PushString(tempArena,"%.*s%.*s",UNPACK_SS(first),UNPACK_SS(second));
+            String res = PushString(temp,"%.*s%.*s",UNPACK_SS(first),UNPACK_SS(second));
 
             return MakeValue(res);
          }
@@ -542,7 +542,7 @@ static Value EvalExpression_(Expression* expr){
 
          Assert(!IsCommandBlockType(com));
 
-         Value result = EvalNonBlockCommand(com).val;
+         Value result = EvalNonBlockCommand(com,temp).val;
 
          return result;
       } break;
@@ -558,8 +558,8 @@ static Value EvalExpression_(Expression* expr){
          return iter->second;
       } break;
       case Expression::ARRAY_ACCESS:{
-         Value object = EvalExpression(expr->expressions[0]);
-         Value index  = EvalExpression(expr->expressions[1]);
+         Value object = EvalExpression(expr->expressions[0],temp);
+         Value index  = EvalExpression(expr->expressions[1],temp);
 
          Assert(index.type == ValueType::NUMBER);
 
@@ -568,7 +568,7 @@ static Value EvalExpression_(Expression* expr){
          return res;
       } break;
       case Expression::MEMBER_ACCESS:{
-         Value object = EvalExpression(expr->expressions[0]);
+         Value object = EvalExpression(expr->expressions[0],temp);
 
          Value res = AccessStruct(object,expr->id);
 
@@ -587,11 +587,11 @@ struct StoredDebug{
    Value result;
 };
 
-static Value EvalExpression(Expression* expr){
+static Value EvalExpression(Expression* expr,Arena* temp){
    static StoredDebug data[16];
    static int counter = 0;
 
-   Value val = EvalExpression_(expr);
+   Value val = EvalExpression_(expr,temp);
 
    data[counter % 16].input = expr;
    data[counter % 16].result = val;
@@ -600,20 +600,20 @@ static Value EvalExpression(Expression* expr){
    return val;
 }
 
-static String EvalBlockCommand(Block* block){
+static String EvalBlockCommand(Block* block,Arena* temp){
    Command* com = block->command;
    String res = {};
    res.data = (char*) MarkArena(outputArena);
 
    if(CompareString(com->name,"join")){
-      Value separator = EvalExpression(com->expressions[0]);
+      Value separator = EvalExpression(com->expressions[0],temp);
 
       Assert(separator.type == ValueType::STRING);
 
       Assert(com->expressions[2]->type == Expression::IDENTIFIER);
       String id = com->expressions[2]->id;
 
-      Value iterating = EvalExpression(com->expressions[3]);
+      Value iterating = EvalExpression(com->expressions[3],temp);
       int counter = 0;
       int index = 0;
       for(Iterator iter = Iterate(iterating); HasNext(iter); index += 1,Advance(&iter)){
@@ -624,7 +624,7 @@ static String EvalBlockCommand(Block* block){
 
          bool outputSeparator = false;
          for(Block* ptr = block->nextInner; ptr != nullptr; ptr = ptr->next){
-            String text = Eval(ptr);
+            String text = Eval(ptr,temp);
 
             if(!CheckStringOnlyWhitespace(text)){
                res.size += text.size; // Push on stack
@@ -648,7 +648,7 @@ static String EvalBlockCommand(Block* block){
       Assert(com->expressions[0]->type == Expression::IDENTIFIER);
       String id = com->expressions[0]->id;
 
-      Value iterating = EvalExpression(com->expressions[1]);
+      Value iterating = EvalExpression(com->expressions[1],temp);
       int index = 0;
       for(Iterator iter = Iterate(iterating); HasNext(iter); index += 1,Advance(&iter)){
          envTable[STRING("index")] = MakeValue(index);
@@ -657,31 +657,31 @@ static String EvalBlockCommand(Block* block){
          envTable[id] = val;
 
          for(Block* ptr = block->nextInner; ptr != nullptr; ptr = ptr->next){
-            res.size += Eval(ptr).size; // Push on stack
+            res.size += Eval(ptr,temp).size; // Push on stack
          }
       }
    } else if (CompareString(com->name,"if")){
-      Value val = ConvertValue(EvalExpression(com->expressions[0]),ValueType::BOOLEAN,nullptr);
+      Value val = ConvertValue(EvalExpression(com->expressions[0],temp),ValueType::BOOLEAN,nullptr);
 
       if(val.boolean){
          for(Block* ptr = block->nextInner; ptr != nullptr; ptr = ptr->next){
             if(ptr->type == Block::COMMAND && CompareString(ptr->command->name,"else")){
                break;
             }
-            res.size += Eval(ptr).size; // Push on stack
+            res.size += Eval(ptr,temp).size; // Push on stack
          }
       } else {
          for(Block* ptr = block->nextInner; ptr != nullptr; ptr = ptr->next){
             if(ptr->type == Block::COMMAND && CompareString(ptr->command->name,"else")){
                for(ptr = ptr->next; ptr != nullptr; ptr = ptr->next){
-                  res.size += Eval(ptr).size; // Push on stack
+                  res.size += Eval(ptr,temp).size; // Push on stack
                }
                break;
             }
          }
       }
    } else if(CompareString(com->name,"debug")){
-      Value val = EvalExpression(com->expressions[0]);
+      Value val = EvalExpression(com->expressions[0],temp);
 
       if(val.boolean){
          DEBUG_BREAK();
@@ -689,20 +689,20 @@ static String EvalBlockCommand(Block* block){
       }
 
       for(Block* ptr = block->nextInner; ptr != nullptr; ptr = ptr->next){
-         res.size += Eval(ptr).size; // Push on stack
+         res.size += Eval(ptr,temp).size; // Push on stack
       }
 
       debugging = false;
    } else if(CompareString(com->name,"while")){
-      while(ConvertValue(EvalExpression(com->expressions[0]),ValueType::BOOLEAN,nullptr).boolean){
+      while(ConvertValue(EvalExpression(com->expressions[0],temp),ValueType::BOOLEAN,nullptr).boolean){
          for(Block* ptr = block->nextInner; ptr != nullptr; ptr = ptr->next){
-            res.size += Eval(ptr).size; // Push on stack
+            res.size += Eval(ptr,temp).size; // Push on stack
          }
       }
    } else if(CompareString(com->name,"define")) {
       String id = com->expressions[0]->id;
 
-      TemplateFunction* func = PushStruct<TemplateFunction>(tempArena);
+      TemplateFunction* func = PushStruct<TemplateFunction>(temp);
 
       func->arguments = &com->expressions[1];
       func->numberArguments = com->expressions.size - 1;
@@ -718,7 +718,7 @@ static String EvalBlockCommand(Block* block){
       ArenaMarker marker(outputArena);
 
       for(Block* ptr = block->nextInner; ptr != nullptr; ptr = ptr->next){
-         String res = Eval(ptr); // Push on stack
+         String res = Eval(ptr,temp); // Push on stack
          printf("%.*s\n",UNPACK_SS(res));
       }
    } else {
@@ -730,19 +730,19 @@ static String EvalBlockCommand(Block* block){
 
 extern Array<Pair<String,String>> templateNameToContent; // TODO: Kinda of a quick hack to make this work. Need to revise the way templates are done
 
-static ValueAndText EvalNonBlockCommand(Command* com){
+static ValueAndText EvalNonBlockCommand(Command* com,Arena* temp){
    Value val = MakeValue();
    String text = {};
    text.data = (char*) MarkArena(outputArena);
 
    if(CompareString(com->name,"set")){
-      val = EvalExpression(com->expressions[1]);
+      val = EvalExpression(com->expressions[1],temp);
 
       Assert(com->expressions[0]->type == Expression::IDENTIFIER);
 
       envTable[com->expressions[0]->id] = val;
    } else if(CompareString(com->name,"inc")){
-      val = EvalExpression(com->expressions[0]);
+      val = EvalExpression(com->expressions[0],temp);
 
       Assert(val.type == ValueType::NUMBER);
 
@@ -750,7 +750,7 @@ static ValueAndText EvalNonBlockCommand(Command* com){
 
       envTable[com->expressions[0]->id] = val;
    } else if(CompareString(com->name,"include")){
-      Value filenameString = EvalExpression(com->expressions[0]);
+      Value filenameString = EvalExpression(com->expressions[0],temp);
       Assert(filenameString.type == ValueType::STRING);
 
       String content = {};
@@ -763,7 +763,7 @@ static ValueAndText EvalNonBlockCommand(Command* com){
 
       Assert(content.size);
 
-      ParseAndEvaluate(content);
+      ParseAndEvaluate(content,temp);
    } else if(CompareString(com->name,"call")){
       String id = com->expressions[0]->id;
 
@@ -782,24 +782,24 @@ static ValueAndText EvalNonBlockCommand(Command* com){
       for(int i = 0; i < func->numberArguments; i++){
          String id = func->arguments[i]->id;
 
-         Value val = EvalExpression(com->expressions[1+i]);
+         Value val = EvalExpression(com->expressions[1+i],temp);
 
          envTable[id] = val;
       }
 
       for(Block* ptr = func->block; ptr != nullptr; ptr = ptr->next){
-         text.size += Eval(ptr).size;
+         text.size += Eval(ptr,temp).size;
       }
 
       val = envTable[STRING("return")];
 
       //envTable = savedTable;
    } else if(CompareString(com->name,"return")){
-      val = EvalExpression(com->expressions[0]);
+      val = EvalExpression(com->expressions[0],temp);
 
       envTable[STRING("return")] = val;
    } else if(CompareString(com->name,"format")){
-      Value formatExpr = EvalExpression(com->expressions[0]);
+      Value formatExpr = EvalExpression(com->expressions[0],temp);
 
       Assert(formatExpr.type == ValueType::SIZED_STRING || formatExpr.type == ValueType::STRING);
 
@@ -832,7 +832,7 @@ static ValueAndText EvalNonBlockCommand(Command* com){
 
          Assert(index < com->expressions.size + 1);
 
-         Value val = ConvertValue(EvalExpression(com->expressions[index + 1]),ValueType::SIZED_STRING,tempArena);
+         Value val = ConvertValue(EvalExpression(com->expressions[index + 1],temp),ValueType::SIZED_STRING,temp);
 
          text.size += PushString(outputArena,val.str).size;
       }
@@ -852,15 +852,15 @@ static ValueAndText EvalNonBlockCommand(Command* com){
    return res;
 }
 
-static String Eval(Block* block){
+static String Eval(Block* block,Arena* temp){
    String res = {};
    res.data = (char*) MarkArena(outputArena);
 
    if(block->type == Block::COMMAND){
       if(IsCommandBlockType(block->command)){
-         res = EvalBlockCommand(block);
+         res = EvalBlockCommand(block,temp);
       } else {
-         res = EvalNonBlockCommand(block->command).text;
+         res = EvalNonBlockCommand(block->command,temp).text;
       }
    } else {
       // Print text
@@ -875,8 +875,6 @@ static String Eval(Block* block){
          }
          tok.AdvancePeek(text);
 
-         //fprintf(output,"%.*s",text.size,text.str);
-
          res.size += PushString(outputArena,text).size;
 
          if(tok.Done()){
@@ -884,14 +882,12 @@ static String Eval(Block* block){
          }
 
          tok.AssertNextToken("@{");
-         Expression* expr = ParseExpression(&tok);
+         Expression* expr = ParseExpression(&tok,temp);
          tok.AssertNextToken("}");
 
-         Value val = EvalExpression(expr);
+         Value val = EvalExpression(expr,temp);
 
          res.size += GetDefaultValueRepresentation(val,outputArena).size;
-
-         //PrintValue(output,val);
       }
    }
 
@@ -899,24 +895,22 @@ static String Eval(Block* block){
    return res;
 }
 
-void ParseAndEvaluate(String content){
+void ParseAndEvaluate(String content,Arena* temp){
    Tokenizer tokenizer(content,"!()[]{}+-:;.,*~><\"",{"#{","@{","==","!=","**","|>",">=","<=","!="});
    Tokenizer* tok = &tokenizer;
 
    tok->keepComments = true;
 
    while(!tok->Done()){
-      Block* block = Parse(tok);
+      Block* block = Parse(tok,temp);
 
-      String text = Eval(block);
+      String text = Eval(block,temp);
       fprintf(output,"%.*s",text.size,text.data);
       fflush(output);
    }
 }
 
 CompiledTemplate* CompileTemplate(String content,Arena* arena){
-   tempArena = arena;
-
    Byte* mark = MarkArena(arena);
 
    CompiledTemplate* res = PushStruct<CompiledTemplate>(arena);
@@ -925,11 +919,11 @@ CompiledTemplate* CompileTemplate(String content,Arena* arena){
    Tokenizer* tok = &tokenizer;
    tok->keepComments = true;
 
-   Block* initial = Parse(tok);
+   Block* initial = Parse(tok,arena);
    Block* ptr = initial;
    while(!tok->Done()){
       Assert(ptr->next == nullptr);
-      ptr->next = Parse(tok);
+      ptr->next = Parse(tok,arena);
       ptr = ptr->next;
    }
 
@@ -942,7 +936,6 @@ CompiledTemplate* CompileTemplate(String content,Arena* arena){
 }
 
 CompiledTemplate* CompileTemplate(const char* templateFilepath,Arena* arena){
-   tempArena = arena;
    String content = PushFile(arena,templateFilepath);
 
    CompiledTemplate* res = CompileTemplate(content,arena);
@@ -953,14 +946,12 @@ CompiledTemplate* CompileTemplate(const char* templateFilepath,Arena* arena){
 
 void ProcessTemplate(FILE* outputFile,CompiledTemplate* compiledTemplate,Arena* arena){
    ArenaMarker marker(arena);
-   tempArena = arena;
-
    Arena outputArenaInst = SubArena(arena,Megabyte(64));
    outputArena = &outputArenaInst;
    output = outputFile;
 
    for(Block* block = compiledTemplate->blocks; block; block = block->next){
-      String text = Eval(block);
+      String text = Eval(block,arena);
       fprintf(output,"%.*s",text.size,text.data);
       fflush(output);
    }
@@ -1013,6 +1004,10 @@ void TemplateSet(const char* id,void* ptr){
 
 void TemplateSetString(const char* id,const char* str){
    envTable[STRING(id)] = MakeValue(STRING(str));
+}
+
+void TemplateSetString(const char* id,String str){
+   envTable[STRING(id)] = MakeValue(str);
 }
 
 void TemplateSetBool(const char* id,bool boolean){

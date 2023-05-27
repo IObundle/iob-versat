@@ -23,12 +23,6 @@ void InitDebug(){
    debugArenaInst = InitArena(Megabyte(64));
 }
 
-static void PrintLevel(int level){
-   for(int i = 0; i < level; i++){
-      printf("  ");
-   }
-}
-
 struct MemoryRange{
    int start;
    int delta;
@@ -306,6 +300,7 @@ static void PrintVCDDefinitions_(FILE* accelOutputFile,VCDMapping& currentMappin
 
    FOREACH_LIST(ptr,accel->allocated){
       ComplexFUInstance* inst = ptr->inst;
+      FUDeclaration* decl = inst->declaration;
       fprintf(accelOutputFile,"$scope module %.*s_%d $end\n",UNPACK_SS(inst->name),inst->id);
 
       for(int i = 0; i < ptr->inputs.size; i++){
@@ -313,39 +308,39 @@ static void PrintVCDDefinitions_(FILE* accelOutputFile,VCDMapping& currentMappin
          currentMapping.Increment();
       }
 
-      for(int i = 0; i < inst->declaration->outputLatencies.size; i++){
+      for(int i = 0; i < decl->outputLatencies.size; i++){
          fprintf(accelOutputFile,"$var wire  32 %s %.*s_out%d $end\n",currentMapping.Get(),UNPACK_SS(inst->name),i);
          currentMapping.Increment();
          fprintf(accelOutputFile,"$var wire  32 %s %.*s_stored_out%d $end\n",currentMapping.Get(),UNPACK_SS(inst->name),i);
          currentMapping.Increment();
       }
 
-      for(Wire& wire : inst->declaration->configs){
+      for(Wire& wire : decl->configs){
          fprintf(accelOutputFile,"$var wire  %d %s %.*s $end\n",wire.bitsize,currentMapping.Get(),UNPACK_SS(wire.name));
          currentMapping.Increment();
       }
 
-      for(Wire& wire : inst->declaration->states){
+      for(Wire& wire : decl->states){
          fprintf(accelOutputFile,"$var wire  %d %s %.*s $end\n",wire.bitsize,currentMapping.Get(),UNPACK_SS(wire.name));
          currentMapping.Increment();
       }
 
-      for(int i = 0; i < inst->declaration->nDelays; i++){
+      for(int i = 0; i < decl->delayOffsets.max; i++){
          fprintf(accelOutputFile,"$var wire 32 %s delay%d $end\n",currentMapping.Get(),i);
          currentMapping.Increment();
       }
 
-      if(inst->declaration->implementsDone){
+      if(decl->implementsDone){
          fprintf(accelOutputFile,"$var wire  1 %s done $end\n",currentMapping.Get());
          currentMapping.Increment();
       }
 
-      if(inst->declaration->printVCD){
-         inst->declaration->printVCD(inst,accelOutputFile,currentMapping,{},false,true);
+      if(decl->printVCD){
+         decl->printVCD(inst,accelOutputFile,currentMapping,{},false,true);
       }
 
-      if(inst->declaration->fixedDelayCircuit){
-         PrintVCDDefinitions_(accelOutputFile,currentMapping,inst->declaration->fixedDelayCircuit);
+      if(IsTypeHierarchical(decl) && !IsTypeSimulatable(decl)){
+         PrintVCDDefinitions_(accelOutputFile,currentMapping,decl->fixedDelayCircuit);
       }
 
       fprintf(accelOutputFile,"$upscope $end\n");
@@ -395,6 +390,7 @@ static void PrintVCD_(FILE* accelOutputFile,VCDMapping& currentMapping,Accelerat
 
    for(InstanceNode* node = iter.Current(); node; node = iter.Skip()){
       ComplexFUInstance* inst = node->inst;
+      FUDeclaration* decl = inst->declaration;
       for(int i = 0; i < node->inputs.size; i++){
          if(node->inputs[i].node == nullptr){
             if(firstTime){
@@ -412,7 +408,7 @@ static void PrintVCD_(FILE* accelOutputFile,VCDMapping& currentMapping,Accelerat
          currentMapping.Increment();
       }
 
-      for(int i = 0; i < inst->declaration->outputLatencies.size; i++){
+      for(int i = 0; i < decl->outputLatencies.size; i++){
          if(firstTime || (inst->outputs[i] != sameValueCheckSpace[currentMapping.increments])){
             fprintf(accelOutputFile,"b%s %s\n",Bin(inst->outputs[i]),currentMapping.Get());
             sameValueCheckSpace[currentMapping.increments] = inst->outputs[i];
@@ -425,14 +421,14 @@ static void PrintVCD_(FILE* accelOutputFile,VCDMapping& currentMapping,Accelerat
          currentMapping.Increment();
       }
 
-      for(int i = 0; i < inst->declaration->configs.size; i++){
+      for(int i = 0; i < decl->configs.size; i++){
          if(firstTime){
             fprintf(accelOutputFile,"b%s %s\n",Bin(inst->config[i]),currentMapping.Get());
          }
          currentMapping.Increment();
       }
 
-      for(int i = 0; i < inst->declaration->states.size; i++){
+      for(int i = 0; i < decl->states.size; i++){
          if(firstTime || (inst->state[i] != sameValueCheckSpace[currentMapping.increments])){
             fprintf(accelOutputFile,"b%s %s\n",Bin(inst->state[i]),currentMapping.Get());
             sameValueCheckSpace[currentMapping.increments] = inst->state[i];
@@ -440,7 +436,7 @@ static void PrintVCD_(FILE* accelOutputFile,VCDMapping& currentMapping,Accelerat
          currentMapping.Increment();
       }
 
-      for(int i = 0; i < inst->declaration->nDelays; i++){
+      for(int i = 0; i < decl->delayOffsets.max; i++){
          if(firstTime || (inst->delay[i] != sameValueCheckSpace[currentMapping.increments])){
             fprintf(accelOutputFile,"b%s %s\n",Bin(inst->delay[i]),currentMapping.Get());
             sameValueCheckSpace[currentMapping.increments] = inst->delay[i];
@@ -449,7 +445,7 @@ static void PrintVCD_(FILE* accelOutputFile,VCDMapping& currentMapping,Accelerat
          currentMapping.Increment();
       }
 
-      if(inst->declaration->implementsDone){
+      if(decl->implementsDone){
          if(firstTime || (inst->done != sameValueCheckSpace[currentMapping.increments])){
             fprintf(accelOutputFile,"%d%s\n",inst->done ? 1 : 0,currentMapping.Get());
             sameValueCheckSpace[currentMapping.increments] = inst->done;
@@ -457,11 +453,11 @@ static void PrintVCD_(FILE* accelOutputFile,VCDMapping& currentMapping,Accelerat
          currentMapping.Increment();
       }
 
-      if(inst->declaration->printVCD){
-         inst->declaration->printVCD(inst,accelOutputFile,currentMapping,sameValueCheckSpace,firstTime,false);
+      if(decl->printVCD){
+         decl->printVCD(inst,accelOutputFile,currentMapping,sameValueCheckSpace,firstTime,false);
       }
 
-      if(inst->declaration->fixedDelayCircuit){
+      if(IsTypeHierarchical(decl) && !IsTypeSimulatable(decl)){
          AcceleratorIterator it = iter.LevelBelowIterator();
 
          PrintVCD_(accelOutputFile,currentMapping,it,firstTime,sameValueCheckSpace);

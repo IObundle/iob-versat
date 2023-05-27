@@ -2,12 +2,9 @@
 #define INCLUDED_VERSAT_DEBUG_GUI
 
 #include "type.hpp"
-#include "versatPrivate.hpp"
 
-#include <optional>
-
-template<typename T>
-using Optional = std::optional<T>;
+struct Versat;
+struct Accelerator;
 
 #ifdef x86
 #define DebugGUI(...) ((void)0)

@@ -87,6 +87,7 @@ void OutputVersatSource(Versat* versat,SimpleAccelerator* simpleAccel,const char
    }
 
    VersatComputedValues val = ComputeVersatValues(versat,accel);
+   UnitValues unit = CalculateAcceleratorValues(versat,accel);
 
    #if 1
    std::vector<ComplexFUInstance> accum;
@@ -105,6 +106,10 @@ void OutputVersatSource(Versat* versat,SimpleAccelerator* simpleAccel,const char
    fprintf(c,"`define MAPPED_UNITS %d\n",val.unitsMapped);
    fprintf(c,"`define MAPPED_BIT %d\n",val.memoryConfigDecisionBit);
    fprintf(c,"`define nIO %d\n",val.nUnitsIO);
+
+   if(unit.inputs || unit.outputs){
+      fprintf(c,"`define EXTERNAL_PORTS\n");
+   }
 
    if(val.nUnitsIO){
       fprintf(c,"`define VERSAT_IO\n");
@@ -179,6 +184,9 @@ void OutputVersatSource(Versat* versat,SimpleAccelerator* simpleAccel,const char
    }
    TemplateSetCustom("staticUnits",staticUnits,"Hashmap<StaticId,StaticData>");
 
+   TemplateSetDefaults(versat);
+   TemplateSetNumber("nInputs",unit.inputs);
+   TemplateSetNumber("nOutputs",unit.outputs);
    TemplateSetNumber("staticStart",staticStart);
    TemplateSetNumber("versatBase",versat->base);
    TemplateSetNumber("memoryAddressBits",val.memoryAddressBits);
@@ -188,6 +196,7 @@ void OutputVersatSource(Versat* versat,SimpleAccelerator* simpleAccel,const char
    TemplateSetNumber("memoryMappedBase",1 << val.memoryConfigDecisionBit);
    TemplateSetNumber("versatConfig",val.versatConfigs);
    TemplateSetNumber("versatState",val.versatStates);
+   TemplateSetNumber("nIO",val.nUnitsIO);
 
    ProcessTemplate(s,BasicTemplates::topAcceleratorTemplate,&versat->temp);
 

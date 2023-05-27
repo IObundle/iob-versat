@@ -3,10 +3,9 @@
 
 #include <vector>
 
-#include "versatPrivate.hpp"
-#include "memory.hpp"
 #include "utils.hpp"
 
+struct Arena;
 struct Member;
 struct Type;
 

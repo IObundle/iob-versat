@@ -109,6 +109,25 @@ FILE* OpenFileAndCreateDirectories(const char* path,const char* format){
    return file;
 }
 
+void CreateDirectories(const char* path){
+   char buffer[PATH_MAX];
+   memset(buffer,0,PATH_MAX);
+
+   for(int i = 0; path[i]; i++){
+      buffer[i] = path[i];
+
+      if(path[i] == '/'){
+         DIR* dir = opendir(buffer);
+         if(!dir && errno == ENOENT){
+            MakeDirectory(buffer);
+         }
+         if(dir){
+            closedir(dir);
+         }
+      }
+   }
+}
+
 String PathGoUp(char* pathBuffer){
    String content = STRING(pathBuffer);
 

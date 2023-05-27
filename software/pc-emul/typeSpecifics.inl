@@ -35,16 +35,6 @@ public:
 };
 #endif
 
-template<> class std::hash<PortInstance>{
-   public:
-   std::size_t operator()(PortInstance const& s) const noexcept{
-      std::size_t res = std::hash<ComplexFUInstance*>()(s.inst);
-      res += s.port;
-
-      return res;
-   }
-};
-
 #if 0
 template<> class std::hash<StaticId>{
    public:
@@ -56,15 +46,6 @@ template<> class std::hash<StaticId>{
    }
 };
 #endif
-
-template<> class std::hash<PortEdge>{
-   public:
-   std::size_t operator()(PortEdge const& s) const noexcept{
-      std::size_t res = std::hash<PortInstance>()(s.units[0]);
-      res += std::hash<PortInstance>()(s.units[1]);
-      return res;
-   }
-};
 
 template<> class std::hash<Edge>{
 public:
@@ -112,7 +93,7 @@ public:
 };
 
 // Try to use this function when not using any std functions, if possible
-// I think the hash implementation for pointers is kinda bad, at this this implementation, and not possible to specialize as the compiler complains.
+// I think the hash implementation for pointers is kinda bad, at this implementation, and not possible to specialize as the compiler complains.
 #include <type_traits>
 template<typename T>
 inline int Hash(T const& t){
@@ -169,37 +150,10 @@ inline bool operator!=(const String& lhs,const String& rhs){
    return res;
 }
 
-inline bool operator==(const PortInstance& p1,const PortInstance& p2){
-   bool res = (p1.inst == p2.inst && p1.port == p2.port);
-   return res;
-}
-
-inline bool operator!=(const PortInstance& p1,const PortInstance& p2){
-   bool res = !(p1 == p2);
-   return res;
-}
-
-inline bool operator==(const PortEdge& e1,const PortEdge& e2){
-   bool res = (e1.units[0] == e2.units[0] && e1.units[1] == e2.units[1]);
-   return res;
-}
-
-inline bool operator!=(const PortEdge& e1,const PortEdge& e2){
-   bool res = !(e1 == e2);
-   return res;
-}
-
 inline bool operator==(const ExternalMemoryID& lhs,const ExternalMemoryID& rhs){
    bool res = (memcmp(&lhs,&rhs,sizeof(ExternalMemoryID)) == 0);
    return res;
 }
-
-inline bool operator==(const MappingNode& node1,const MappingNode& node2){
-   bool res = (node1.edges[0] == node2.edges[0] &&
-               node1.edges[1] == node2.edges[1]);
-   return res;
-}
-
 inline bool operator==(const StaticId& id1,const StaticId& id2){
    bool res = CompareString(id1.name,id2.name) && id1.parent == id2.parent;
    return res;
