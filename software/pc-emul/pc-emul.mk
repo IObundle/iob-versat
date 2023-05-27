@@ -35,9 +35,9 @@ endif
 VERSAT_DEFINE += -DPC
 
 CPP_FILES := $(wildcard $(VERSAT_PC_EMUL)/*.cpp)
-#CPP_OBJ := $(patsubst $(VERSAT_PC_EMUL)/%.cpp,$(BUILD_DIR)/%.o,$(CPP_FILES))
-CPP_OBJ := $(BUILD_DIR)/unityBuild.o
-CPP_OBJ := $(BUILD_DIR)/versat.o
+CPP_OBJ := $(patsubst $(VERSAT_PC_EMUL)/%.cpp,$(BUILD_DIR)/%.o,$(CPP_FILES))
+#CPP_OBJ := $(BUILD_DIR)/unityBuild.o
+CPP_OBJ += $(BUILD_DIR)/versat.o
 
 ifeq ($(DEBUG_GUI),1)
 IMGUI_FILES := $(wildcard $(VERSAT_PC_EMUL)/IMGUI/*.cpp)
@@ -54,7 +54,13 @@ CPP_OBJ += $(IMGUI_OBJ) $(IMGUI_BACKEND_OBJ) $(IMNODES_OBJ)
 endif
 
 CPP_FILES += $(VERSAT_DIR)/software/utilsCommon.cpp
-#CPP_OBJ += $(BUILD_DIR)/utilsCommon.o
+CPP_OBJ += $(BUILD_DIR)/utilsCommon.o
+
+#CPP_OBJ+=$(BUILD_DIR)/unityBuild.o
+
+CPP_OBJ+=$(BUILD_DIR)/verilated.o
+#CPP_OBJ+=$(BUILD_DIR)/verilated_threads.o
+CPP_OBJ+=$(BUILD_DIR)/verilated_vcd_c.o
 
 #Units to verilate
 UNIT_VERILOG_BASIC := $(foreach unit,$(VERILATE_UNIT_BASIC),$(VERSAT_DIR)/hardware/src/$(unit).v)
@@ -83,12 +89,6 @@ TOOL_SRC += $(TOOL_COMMON_SRC)
 TOOL_SRC += $(VERSAT_DIR)/software/pc-emul/templateEngine.cpp
 TOOL_SRC += $(VERSAT_DIR)/software/pc-emul/type.cpp
 TOOL_SRC += $(VERSAT_DIR)/software/pc-emul/unitStats.cpp
-
-CPP_OBJ+=$(BUILD_DIR)/unityBuild.o
-
-CPP_OBJ+=$(BUILD_DIR)/verilated.o
-#CPP_OBJ+=$(BUILD_DIR)/verilated_threads.o
-CPP_OBJ+=$(BUILD_DIR)/verilated_vcd_c.o
 
 TEMPLATES:=$(wildcard $(VERSAT_TEMPLATE_DIR)/*.tpl)
 
@@ -130,8 +130,8 @@ $(BUILD_DIR)/verilogWrapper.inc: $(BUILD_DIR)/verilogParser.out $(BUILD_DIR)/tem
 $(BUILD_DIR)/templateData.inc: $(BUILD_DIR)/embedFile.out $(TEMPLATES)
 	$(BUILD_DIR)/embedFile.out $(BUILD_DIR)/templateData.inc $(TEMPLATES) $(TEMPLATES_NAME)
 
-$(BUILD_DIR)/unityBuild.o: $(CPP_FILES) $(VERSAT_PC_EMUL)/unityBuild.cpp
-	time g++ $(VERSAT_DEFINE) -MMD -c -o $@ $(GLOBAL_CFLAGS) $(VERSAT_PC_EMUL)/unityBuild.cpp $(VERSAT_INCLUDE)
+$(BUILD_DIR)/unityBuild.o: $(CPP_FILES) $(VERSAT_SW_DIR)/unityBuild.cpp
+	time g++ $(VERSAT_DEFINE) -MMD -c -o $@ $(GLOBAL_CFLAGS) $(VERSAT_SW_DIR)/unityBuild.cpp $(VERSAT_INCLUDE)
 
 $(BUILD_DIR)/versat.o: $(VERSAT_PC_EMUL)/versat.cpp $(HDR) $(UNIT_HDR) $(BUILD_DIR)/basicWrapper.inc $(BUILD_DIR)/verilogWrapper.inc
 	time g++ $(VERSAT_DEFINE) -c -o $@ $(GLOBAL_CFLAGS) $< $(VERSAT_INCLUDE)
@@ -171,6 +171,6 @@ verilator_test: $(CPP_OBJ)
 
 .PRECIOUS: $(UNIT_HDR)
 
-.NOTPARALLEL: $(BUILD_DIR)/V%.h
+#.NOTPARALLEL: $(BUILD_DIR)/V%.h
 
 .SUFFIXES:
