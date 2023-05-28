@@ -41,6 +41,7 @@ void CallVerilator(const char* unitPath,const char* outputPath){
       (char*) "-I../../submodules/VERSAT/submodules/FPU/hardware/src",
       (char*) "-I../../submodules/VERSAT/submodules/FPU/submodules/DIV/hardware/src",
       (char*) "-Isrc",
+      (char*) "-I../src",
       (char*) "-Mdir",
       (char*) outputPath,
       (char*) unitPath,
@@ -116,7 +117,7 @@ void CompileWrapper(String objNames,String wrapperName,String soName,Arena* temp
 #endif
    args[i++] = (char*) "-g";
    args[i++] = (char*) "-I./obj_dir";
-   args[i++] = (char*) "-I/usr/local/share/verilator/include";
+   args[i++] = (char*) "-I/usr/local/share/verilator/include"; // How would I find these automatically???
    args[i++] = (char*) "-I../../submodules/VERSAT/software";
    args[i++] = (char*) "-I../../submodules/VERSAT/software/pc-emul";
    args[i++] = (char*) "-I../../../submodules/VERSAT/software";
@@ -124,12 +125,13 @@ void CompileWrapper(String objNames,String wrapperName,String soName,Arena* temp
    args[i++] = (char*) "-o";
    args[i++] = (char*) soName.data;
    args[i++] = (char*) wrapperName.data;
-#if 0
+#if 1
    args[i++] = (char*) "build/verilated.o";
    args[i++] = (char*) "build/verilated_vcd_c.o";
-#endif
+#else
    args[i++] = (char*) "../build/verilated.o";
    args[i++] = (char*) "../build/verilated_vcd_c.o";
+#endif
 
    wordexp_t exp;
    wordexp(objNames.data,&exp,0);
@@ -155,6 +157,60 @@ void CompileWrapper(String objNames,String wrapperName,String soName,Arena* temp
       int status;
       wait(&status);
    }
+}
+
+#include <unistd.h>
+
+String FindProgramLocation(String name,Arena* out){
+   // Using whereis for now. Better would be to look at PATH and do the whole search thing
+   int pipefd[2]; // 0 is read, 1 is write (for child)
+
+   int res = pipe(pipefd);
+
+   pid_t pid = fork();
+
+   String result = {};
+   if(pid < 0){
+      printf("Error calling fork\n");
+   } else if(pid == 0){
+      close(pipefd[0]);
+      close(1);
+      dup(pipefd[1]);
+
+      char* args[3] = {"whereis",StaticFormat("%.*s",UNPACK_SS(name)),nullptr}; // StaticFormat guarantees that it is null terminated, needed by the call
+
+      execvp("whereis",(char* const*) args);
+      printf("Error calling execvp for whereis: %s\n",strerror(errno));
+      exit(0);
+   } else {
+      close(pipefd[1]);
+
+      char buffer[1024];
+      int size = read(pipefd[0],buffer,1024);
+      close(pipefd[0]);
+
+      String content = STRING(buffer,size);
+      //printf("%.*s\n",UNPACK_SS(STRING(content));
+
+      int status;
+      wait(&status);
+
+      Tokenizer tok(content,":",{});
+      Token programName = tok.NextToken();
+      tok.AssertNextToken(":");
+
+      Token location = tok.NextToken();
+      if(location.size == 0){
+         //printf("Could not find %.*s, pls for the love of good add it to the path\n",UNPACK_SS(name));
+      } else {
+         //printf("Found: %.*s\n",UNPACK_SS(location));
+
+         result = PushString(out,location);
+         PushNullByte(out);
+      }
+   }
+
+   return result;
 }
 
 typedef int (*SizeFunction)();

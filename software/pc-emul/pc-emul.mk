@@ -75,6 +75,7 @@ TYPE_INFO_HDR += $(VERSAT_PC_EMUL)/versat.hpp
 TYPE_INFO_HDR += $(VERSAT_PC_EMUL)/graph.hpp
 TYPE_INFO_HDR += $(VERSAT_PC_EMUL)/declaration.hpp
 TYPE_INFO_HDR += $(VERSAT_PC_EMUL)/versatPrivate.hpp
+TYPE_INFO_HDR += $(VERSAT_PC_EMUL)/accelerator.hpp
 TYPE_INFO_HDR += $(VERSAT_PC_EMUL)/configurations.hpp
 TYPE_INFO_HDR += $(VERSAT_PC_EMUL)/verilogParsing.hpp
 TYPE_INFO_HDR += $(VERSAT_PC_EMUL)/templateEngine.hpp
@@ -92,7 +93,7 @@ TOOL_SRC += $(VERSAT_DIR)/software/pc-emul/unitStats.cpp
 
 TEMPLATES:=$(wildcard $(VERSAT_TEMPLATE_DIR)/*.tpl)
 
-$(BUILD_DIR)/verilated.o: | 
+$(BUILD_DIR)/verilated.o:
 	g++ $(VERILATE_FLAGS) -I. -MMD -I$(VERILATOR_INCLUDE) -I$(VERILATOR_INCLUDE)/vltstd -DVL_PRINTF=printf \
 	-DVM_COVERAGE=0 -DVM_SC=0 -DVM_TRACE=0 -Wno-sign-compare -Wno-uninitialized -Wno-unused-but-set-variable \
 	-Wno-unused-parameter -Wno-unused-variable -Wno-shadow -g -c $(VERILATOR_INCLUDE)/verilated.cpp
@@ -119,31 +120,7 @@ $(VERILATE_DIR)/V%.h: $(VERSAT_HW_DIR)/src/%.v
 	$(MAKE) -C $(VERILATE_DIR) -f V$*.mk;
 
 $(BUILD_DIR)/typeInfo.inc: $(BUILD_DIR)/structParser.out $(TYPE_INFO_HDR)
-	$(BUILD_DIR)/structParser.out $(BUILD_DIR)/typeInfo.inc $(TYPE_INFO_HDR)
-
-$(BUILD_DIR)/basicWrapper.inc: $(BUILD_DIR)/verilogParser.out $(BUILD_DIR)/templateData.inc
-	$(BUILD_DIR)/verilogParser.out Basic $(BUILD_DIR)/basicWrapper.inc -I $(VERSAT_DIR)/submodules/INTERCON/hardware/include/ -I $(VERSAT_DIR)/hardware/include/ -I $(VERSAT_DIR)/hardware/src/ $(UNIT_VERILOG_BASIC)
-
-$(BUILD_DIR)/verilogWrapper.inc: $(BUILD_DIR)/verilogParser.out $(BUILD_DIR)/templateData.inc
-	$(BUILD_DIR)/verilogParser.out Verilog $(BUILD_DIR)/verilogWrapper.inc -I $(VERSAT_DIR)/submodules/INTERCON/hardware/include/ -I $(VERSAT_DIR)/hardware/include/ -I $(VERSAT_DIR)/hardware/src/ $(UNIT_VERILOG)
-
-$(BUILD_DIR)/templateData.inc: $(BUILD_DIR)/embedFile.out $(TEMPLATES)
-	$(BUILD_DIR)/embedFile.out $(BUILD_DIR)/templateData.inc $(TEMPLATES) $(TEMPLATES_NAME)
-
-$(BUILD_DIR)/unityBuild.o: $(CPP_FILES) $(VERSAT_SW_DIR)/unityBuild.cpp
-	time g++ $(VERSAT_DEFINE) -MMD -c -o $@ $(GLOBAL_CFLAGS) $(VERSAT_SW_DIR)/unityBuild.cpp $(VERSAT_INCLUDE)
-
-$(BUILD_DIR)/versat.o: $(VERSAT_PC_EMUL)/versat.cpp $(HDR) $(UNIT_HDR) $(BUILD_DIR)/basicWrapper.inc $(BUILD_DIR)/verilogWrapper.inc
-	time g++ $(VERSAT_DEFINE) -c -o $@ $(GLOBAL_CFLAGS) $< $(VERSAT_INCLUDE)
-
-$(BUILD_DIR)/type.o: $(VERSAT_PC_EMUL)/type.cpp $(HDR) $(UNIT_HDR) $(BUILD_DIR)/typeInfo.inc
-	time g++ $(VERSAT_DEFINE) -c -o $@ $(GLOBAL_CFLAGS) $< $(VERSAT_INCLUDE)
-
-$(BUILD_DIR)/%.o: $(VERSAT_SW_DIR)/%.cpp $(HDR)
-	time g++ $(VERSAT_DEFINE) -MMD -c -o $@ $(GLOBAL_CFLAGS) $< $(VERSAT_INCLUDE)
-
-$(BUILD_DIR)/%.o: $(VERSAT_PC_EMUL)/%.cpp $(HDR)
-	time g++ $(VERSAT_DEFINE) -MMD -c -o $@ $(GLOBAL_CFLAGS) $< $(VERSAT_INCLUDE)
+	time $(BUILD_DIR)/structParser.out $(BUILD_DIR)/typeInfo.inc $(TYPE_INFO_HDR)
 
 $(BUILD_DIR)/structParser.out: $(VERSAT_SW_DIR)/pc-emul/tools/structParser.cpp $(VERSAT_SW_DIR)/pc-emul/structParsing.cpp $(TOOL_COMMON_SRC)
 	-g++ -DPC -std=c++17 -DVERSAT_DEBUG -DSTANDALONE -o $@ -g -m32 $(VERSAT_SW_DIR)/pc-emul/tools/structParser.cpp $(VERSAT_SW_DIR)/pc-emul/structParsing.cpp $(VERSAT_INCLUDE) $(TOOL_COMMON_SRC)
@@ -153,6 +130,33 @@ $(BUILD_DIR)/embedFile.out: $(VERSAT_SW_DIR)/pc-emul/embedFile.cpp $(TOOL_COMMON
 
 $(BUILD_DIR)/verilogParser.out: $(VERSAT_SW_DIR)/pc-emul/structParsing.cpp $(VERSAT_SW_DIR)/pc-emul/verilogParsing.cpp $(VERSAT_SW_DIR)/pc-emul/tools/verilogParser.cpp $(TOOL_SRC) $(BUILD_DIR)/templateData.inc $(BUILD_DIR)/typeInfo.inc
 	-g++ -DPC -std=c++17 -DVERSAT_DEBUG -DSTANDALONE -o $@ -g -m32 $(VERSAT_SW_DIR)/pc-emul/structParsing.cpp $(VERSAT_SW_DIR)/pc-emul/verilogParsing.cpp $(VERSAT_SW_DIR)/pc-emul/tools/verilogParser.cpp $(VERSAT_INCLUDE) $(TOOL_SRC)
+
+$(BUILD_DIR)/basicWrapper.inc: $(BUILD_DIR)/verilogParser.out $(BUILD_DIR)/templateData.inc
+	time $(BUILD_DIR)/verilogParser.out Basic $(BUILD_DIR)/basicWrapper.inc -I $(VERSAT_DIR)/submodules/INTERCON/hardware/include/ -I $(VERSAT_DIR)/hardware/include/ -I $(VERSAT_DIR)/hardware/src/ $(UNIT_VERILOG_BASIC)
+
+$(BUILD_DIR)/verilogWrapper.inc: $(BUILD_DIR)/verilogParser.out $(BUILD_DIR)/templateData.inc
+	time $(BUILD_DIR)/verilogParser.out Verilog $(BUILD_DIR)/verilogWrapper.inc -I $(VERSAT_DIR)/submodules/INTERCON/hardware/include/ -I $(VERSAT_DIR)/hardware/include/ -I $(VERSAT_DIR)/hardware/src/ $(UNIT_VERILOG)
+
+$(BUILD_DIR)/templateData.inc: $(BUILD_DIR)/embedFile.out $(TEMPLATES)
+	time $(BUILD_DIR)/embedFile.out $(BUILD_DIR)/templateData.inc $(TEMPLATES) $(TEMPLATES_NAME)
+
+$(BUILD_DIR)/unityBuild.o: $(CPP_FILES) $(VERSAT_SW_DIR)/unityBuild.cpp
+	g++ $(VERSAT_DEFINE) -MMD -c -o $@ $(GLOBAL_CFLAGS) $(VERSAT_SW_DIR)/unityBuild.cpp $(VERSAT_INCLUDE)
+
+$(BUILD_DIR)/versat.o: $(VERSAT_PC_EMUL)/versat.cpp $(HDR) $(UNIT_HDR) $(BUILD_DIR)/basicWrapper.inc $(BUILD_DIR)/verilogWrapper.inc
+	g++ $(VERSAT_DEFINE) -c -o $@ $(GLOBAL_CFLAGS) $< $(VERSAT_INCLUDE)
+
+$(BUILD_DIR)/type.o: $(VERSAT_PC_EMUL)/type.cpp $(HDR) $(UNIT_HDR) $(BUILD_DIR)/typeInfo.inc
+	g++ $(VERSAT_DEFINE) -c -o $@ $(GLOBAL_CFLAGS) $< $(VERSAT_INCLUDE)
+
+#$(BUILD_DIR)/versatCompiler: $(CPP_OBJ)
+#	g++ $(VERSAT_DEFINE)
+
+$(BUILD_DIR)/%.o: $(VERSAT_SW_DIR)/%.cpp $(HDR)
+	g++ $(VERSAT_DEFINE) -MMD -c -o $@ $(GLOBAL_CFLAGS) $< $(VERSAT_INCLUDE)
+
+$(BUILD_DIR)/%.o: $(VERSAT_PC_EMUL)/%.cpp $(HDR)
+	g++ $(VERSAT_DEFINE) -MMD -c -o $@ $(GLOBAL_CFLAGS) $< $(VERSAT_INCLUDE)
 
 ifeq ($(DEBUG_GUI),1)
 $(BUILD_DIR)/%.o: $(VERSAT_PC_EMUL)/IMGUI/%.cpp

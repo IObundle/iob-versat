@@ -358,6 +358,8 @@ String DebugValueRepresentation(Value val,Arena* arena){
    Type* FUDeclType = GetType(STRING("FUDeclaration"));
    Type* ComplexInstanceType = GetType(STRING("ComplexFUInstance"));
    Type* WireType = GetType(STRING("Wire"));
+   Type* StaticIdType = GetType(STRING("StaticId"));
+   Type* StaticDataType = GetType(STRING("StaticData"));
    //Type* SimpleInstanceType = GetType(STRING("SimpleFUInstance"));
    Type* EdgeNodeType = GetType(STRING("EdgeNode"));
 
@@ -383,6 +385,12 @@ String DebugValueRepresentation(Value val,Arena* arena){
    } else if(type == EdgeNodeType){
       EdgeNode* node = (EdgeNode*) collapsed.custom;
       repr = Repr(*node,arena);
+   } else if(type == StaticIdType){
+      StaticId* id = (StaticId*) collapsed.custom;
+      repr = Repr(*id,arena);
+   } else if(type == StaticDataType){
+      StaticData* id = (StaticData*) collapsed.custom;
+      repr = Repr(*id,arena);
    } else {
       repr = GetDefaultValueRepresentation(val,arena);
    }

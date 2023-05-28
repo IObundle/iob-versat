@@ -395,6 +395,12 @@ static RangeAndExpr ParseRange(Tokenizer* tok,ValueMap& map,Arena* out){
    return res;
 }
 
+#define VERSAT_LATENCY STRING("versat_latency")
+#define VERSAT_STATIC  STRING("versat_static")
+
+static String possibleAttributesData[] = {VERSAT_LATENCY,VERSAT_STATIC};
+static Array<String> possibleAttributes = C_ARRAY_TO_ARRAY(possibleAttributesData);
+
 static Module ParseModule(Tokenizer* tok,Arena* arena){
    Module module = {};
    ValueMap values;
@@ -423,7 +429,7 @@ static Module ParseModule(Tokenizer* tok,Arena* arena){
          while(1){
             Token attributeName = tok->NextToken();
 
-            if(!CompareString(attributeName,"versat_latency")){
+            if(!Contains(possibleAttributes,attributeName)){
                printf("ERROR: Do not know attribute named: %.*s\n",UNPACK_SS(attributeName));
                exit(-1);
             }
@@ -437,6 +443,8 @@ static Module ParseModule(Tokenizer* tok,Arena* arena){
                peek = tok->PeekToken();
 
                port.attributes[attributeName] = value;
+            } else {
+               port.attributes[attributeName] = MakeValue();
             }
 
             if(CompareString(peek,",")){
@@ -628,13 +636,13 @@ ModuleInfo ExtractModuleInfo(Module& module,Arena* permanent,Arena* tempArena){
       } else if(CheckFormat("in%d",decl.name)){
          port.AssertNextToken("in");
          /* int input = */ ParseInt(port.NextToken());
-         int delay = decl.attributes[STRING("versat_latency")].number;
+         int delay = decl.attributes[VERSAT_LATENCY].number;
 
          *inputDelay.Push(1) = delay;
       } else if(CheckFormat("out%d",decl.name)){
          port.AssertNextToken("out");
          /* int output = */ ParseInt(port.NextToken());
-         int latency = decl.attributes[STRING("versat_latency")].number;
+         int latency = decl.attributes[VERSAT_LATENCY].number;
 
          *outputLatency.Push(1) = latency;
       } else if(CheckFormat("delay%d",decl.name)){
@@ -680,6 +688,7 @@ ModuleInfo ExtractModuleInfo(Module& module,Arena* permanent,Arena* tempArena){
 
          wire->bitsize = decl.range.high - decl.range.low + 1;
          wire->name = decl.name;
+         wire->isStatic = (decl.attributes.find(VERSAT_STATIC) != decl.attributes.end());
       } else if(decl.type == PortDeclaration::OUTPUT){ // State
          Wire* wire = states.Push(1);
 

@@ -35,7 +35,7 @@ module @{accel.name} #(
    #{for unit accel.staticUnits}
    #{set id unit.first}
    #{for wire unit.second.configs}
-   input [@{wire.bitsize-1}:0]     @{id.parent.name}_@{id.name}_@{wire.name},
+   (* versat_static *) input [@{wire.bitsize-1}:0]     @{id.parent.name}_@{id.name}_@{wire.name},
    #{end}
    #{end}
 

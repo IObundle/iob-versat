@@ -8,7 +8,6 @@
 #include <new>
 #include <functional>
 #include <stdint.h>
-#include <optional>
 
 #include "signal.h"
 #include "assert.h"
@@ -354,6 +353,9 @@ bool IsAlpha(char ch);
 
 String PathGoUp(char* pathBuffer);
 
+#if __cplusplus >= 201703L
+#include <optional>
+
 template<typename T>
 using Optional = std::optional<T>;
 
@@ -366,6 +368,7 @@ Optional<T> OrElse(Optional<T> first,Optional<T> elseOpt){
       return elseOpt;
    }
 }
+#endif
 
 template<typename T>
 inline void Memset(T* buffer,T elem,int bufferSize){
@@ -414,22 +417,23 @@ static inline bool Contains(String str,char ch){
 }
 
 template<typename T>
-int Contains(Array<T> array,T toCheck){
+bool Contains(Array<T> array,T toCheck){
    for(int i = 0; i < array.size; i++){
       if(array.data[i] == toCheck){
-         return i;
+         return true;
       }
    }
-   return -1;
+   return false;
 }
 
-static inline bool Contains(Array<String> array,String toCheck){
+template<>
+inline bool Contains(Array<String> array,String toCheck){
    for(int i = 0; i < array.size; i++){
       if(CompareString(array.data[i],toCheck)){
-         return i;
+         return true;
       }
    }
-   return -1;
+   return false;
 }
 
 template<typename T>

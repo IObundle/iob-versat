@@ -20,7 +20,9 @@ static Array<int> zerosArray = {zeros,99};
 
 struct @{module.name}Config{
 #{for wire module.configs}
+#{if !wire.isStatic}
 iptr @{wire.name};
+#{end}
 #{end}
 };
 
@@ -290,7 +292,9 @@ MODIFIER int32_t* @{module.name}_StartFunction(ComplexFUInstance* inst){
 #{if module.configs}
 @{module.name}Config* config = (@{module.name}Config*) inst->config;
 #{for wire module.configs}
+#{if !wire.isStatic}
    self->@{wire.name} = config->@{wire.name};
+#{end}
 #{end}
 #{end}
 
@@ -518,7 +522,7 @@ MODIFIER FUDeclaration @{module.name}_CreateDeclaration(){
    decl.printVCD = @{module.name}_VCDFunction;
 
    #{if module.configs}
-   static Wire @{module.name}ConfigWires[] = {#{join "," for wire module.configs} {STRING("@{wire.name}"),@{wire.bitsize}} #{end}};
+   static Wire @{module.name}ConfigWires[] = {#{join "," for wire module.configs} #{if !wire.isStatic} {STRING("@{wire.name}"),@{wire.bitsize},@{wire.isStatic}} #{end} #{end}};
    decl.configs = Array<Wire>{@{module.name}ConfigWires,@{module.configs.size}};
    #{end}
 

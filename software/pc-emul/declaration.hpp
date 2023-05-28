@@ -51,6 +51,7 @@ typedef void (*VCDFunction)(ComplexFUInstance*,FILE*,VCDMapping&,Array<int>,bool
 struct Wire{
    String name;
    int bitsize;
+   bool isStatic; // This is only used by the verilog parser (?) to store info. TODO: Use a different structure in the verilog parser which contains this and remove from Wire
 };
 
 // TODO: Some structures appear to hold more data that necessary.
