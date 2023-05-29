@@ -109,6 +109,8 @@ module VRead #(
    wire [1:0]             direction = 2'b01;
    reg [`MEM_ADDR_W-1:0] startA;
 
+   reg                    pingPongState;
+
    always @*
    begin
       startA = 0;
@@ -128,7 +130,6 @@ module VRead #(
    wire                   rnw;
    wire [DATA_W-1:0]      data_in = 0;
 
-   reg                    pingPongState;
    wire [ADDR_W-1:0]      startB_inst = pingPong ? {pingPongState,startB[ADDR_W-2:0]} : startB;
 
    // mem enables output by addr gen
