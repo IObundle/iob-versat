@@ -1,3 +1,5 @@
+#if 0
+
 #include "versat.hpp"
 #include "printf.h"
 
@@ -260,3 +262,5 @@ int* RunSimpleAccelerator(SimpleAccelerator* simple, ...){
 
    return out;
 }
+
+#endif

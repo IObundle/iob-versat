@@ -11,6 +11,8 @@
 #include "debug.hpp"
 #include "versatPrivate.hpp"
 
+#include "templateData.inc"
+
 struct ValueAndText{
    Value val;
    String text;
@@ -313,7 +315,14 @@ static Block* Parse(Tokenizer* tok,Arena* out){
       if(block->textBlock.size == -1){
          block->textBlock = tok->Finish();
       }
+
       tok->AdvancePeek(block->textBlock);
+
+      // TODO: Small fix for the fact that peek token removes whitespaces
+      #if 0
+      block->textBlock.size += (block->textBlock.data - (const char*) start);
+      block->textBlock.data = (char*) start;
+      #endif
    }
 
    block->fullText = tok->Point(start);

@@ -3,6 +3,8 @@ VERILATE_UNIT_BASIC += Reg Mem Muladd VRead VWrite Mux2 CombMux2 CombMux4 Merge 
 VERILATE_UNIT_BASIC += FloatAdd FloatSub FloatMul FloatDiv FloatSqrt Q16Sqrt DoneCycle ChangeDetect Store
 VERILATE_UNIT_BASIC += FloatMax FloatMin Float2Int Float2UInt Int2Float SignalMemStorage SignalAccum Equality
 
+SHARED_HARDWARE := $(patsubst %,$(VERSAT_DIR)/hardware/src/%.v,$(VERILATE_UNIT_BASIC))
+
 V_INCLUDE+=-I$(VERSAT_DIR)/submodules/MEM/hardware/ram/tdp_ram
 V_INCLUDE+=-I$(VERSAT_DIR)/submodules/MEM/hardware/ram/2p_ram
 V_INCLUDE+=-I$(VERSAT_DIR)/submodules/MEM/hardware/ram/dp_ram

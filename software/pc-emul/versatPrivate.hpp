@@ -110,29 +110,6 @@ struct Versat{
    DebugState debug;
 };
 
-/*
-struct EdgeView{
-   Edge* edge; // Points to edge inside accelerator
-   int delay;
-};
-
-struct HashKey{
-   String key;
-   int data;
-};
-
-struct IterativeUnitDeclaration{
-   String name;
-   String unitName;
-   FUDeclaration* baseDeclaration;
-   Accelerator* initial;
-   Accelerator* forLoop;
-
-   int dataSize;
-   int latency;
-};
-*/
-
 struct UnitValues{
    int inputs;
    int outputs;
@@ -223,6 +200,7 @@ namespace BasicTemplates{
    extern CompiledTemplate* topAcceleratorTemplate;
    extern CompiledTemplate* dataTemplate;
    extern CompiledTemplate* unitVerilogData;
+   extern CompiledTemplate* acceleratorHeaderTemplate;
    extern CompiledTemplate* externalPortmapTemplate;
    extern CompiledTemplate* externalPortTemplate;
    extern CompiledTemplate* externalInstTemplate;

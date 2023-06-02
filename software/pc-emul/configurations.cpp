@@ -601,13 +601,81 @@ void PopulateTopLevelAccelerator(Accelerator* accel){
 }
 
 Hashmap<String,SizedConfig>* ExtractNamedSingleConfigs(Accelerator* accel,Arena* out){
+   STACK_ARENA(temp,Kilobyte(1));
+
    int count = 0;
    AcceleratorIterator iter = {};
    region(out){
-      for(InstanceNode* node = iter.Start(accel,out,true); node; node = iter.Next()){
+      for(InstanceNode* node = iter.Start(accel,out,false); node; node = iter.Next()){
          ComplexFUInstance* inst = node->inst;
          FUDeclaration* decl = inst->declaration;
-         if(decl->type == FUDeclaration::SINGLE && decl->configs.size){
+         if(decl->type == FUDeclaration::SINGLE){
+            count += decl->configs.size;
+         }
+      }
+   }
+
+   Hashmap<String,SizedConfig>* res = PushHashmap<String,SizedConfig>(out,count);
+
+   for(InstanceNode* node = iter.Start(accel,out,false); node; node = iter.Next()){
+      ComplexFUInstance* inst = node->inst;
+      FUDeclaration* decl = inst->declaration;
+      if(decl->type == FUDeclaration::SINGLE && decl->configs.size){
+         BLOCK_REGION(&temp);
+         String name = iter.GetFullName(&temp,"_");
+
+         for(int i = 0; i < decl->configs.size; i++){
+            String fullName = PushString(out,"%.*s_%.*s",UNPACK_SS(name),UNPACK_SS(decl->configs[i].name));
+            res->Insert(fullName,{inst->config,inst->declaration->configs.size});
+         }
+      }
+   }
+
+   return res;
+}
+
+Hashmap<String,SizedConfig>* ExtractNamedSingleStates(Accelerator* accel,Arena* out){
+   STACK_ARENA(temp,Kilobyte(1));
+
+   int count = 0;
+   AcceleratorIterator iter = {};
+   region(out){
+      for(InstanceNode* node = iter.Start(accel,out,false); node; node = iter.Next()){
+         ComplexFUInstance* inst = node->inst;
+         FUDeclaration* decl = inst->declaration;
+         if(decl->type == FUDeclaration::SINGLE){
+            count += decl->states.size;
+         }
+      }
+   }
+
+   Hashmap<String,SizedConfig>* res = PushHashmap<String,SizedConfig>(out,count);
+
+   for(InstanceNode* node = iter.Start(accel,out,false); node; node = iter.Next()){
+      ComplexFUInstance* inst = node->inst;
+      FUDeclaration* decl = inst->declaration;
+      if(decl->type == FUDeclaration::SINGLE && decl->states.size){
+         BLOCK_REGION(&temp);
+         String name = iter.GetFullName(&temp,"_");
+
+         for(int i = 0; i < decl->states.size; i++){
+            String fullName = PushString(out,"%.*s_%.*s",UNPACK_SS(name),UNPACK_SS(decl->states[i].name));
+            res->Insert(fullName,{inst->config,inst->declaration->states.size});
+         }
+      }
+   }
+
+   return res;
+}
+
+Hashmap<String,SizedConfig>* ExtractNamedSingleMem(Accelerator* accel,Arena* out){
+   int count = 0;
+   AcceleratorIterator iter = {};
+   region(out){
+      for(InstanceNode* node = iter.Start(accel,out,false); node; node = iter.Next()){
+         ComplexFUInstance* inst = node->inst;
+         FUDeclaration* decl = inst->declaration;
+         if(decl->type == FUDeclaration::SINGLE){
             count += 1;
          }
       }
@@ -615,18 +683,16 @@ Hashmap<String,SizedConfig>* ExtractNamedSingleConfigs(Accelerator* accel,Arena*
 
    Hashmap<String,SizedConfig>* res = PushHashmap<String,SizedConfig>(out,count);
 
-   for(InstanceNode* node = iter.Start(accel,out,true); node; node = iter.Next()){
+   for(InstanceNode* node = iter.Start(accel,out,false); node; node = iter.Next()){
       ComplexFUInstance* inst = node->inst;
       FUDeclaration* decl = inst->declaration;
-      if(decl->type == FUDeclaration::SINGLE && decl->configs.size){
-         String name = iter.GetFullName(out);
-         res->Insert(name,{inst->config,inst->declaration->configs.size});
+      if(decl->type == FUDeclaration::SINGLE && decl->states.size){
+         String name = iter.GetFullName(out,"_");
+         res->Insert(name,(SizedConfig){(iptr*) inst->memMapped,1 << decl->memoryMapBits});
       }
    }
 
    return res;
 }
-
-
 
 

@@ -465,7 +465,7 @@ ComplexFUInstance GetNodeByName(Accelerator* accel,String string,Arena* arena){
    AcceleratorIterator iter = {};
    for(InstanceNode* node = iter.Start(accel,arena,true); node; node = iter.Next()){
       BLOCK_REGION(arena);
-      String name = iter.GetFullName(arena);
+      String name = iter.GetFullName(arena,".");
 
       if(CompareString(name,string)){
          return *node->inst;
@@ -904,11 +904,11 @@ String AcceleratorIterator::GetParentInstanceFullName(Arena* out){
    return res;
 }
 
-String AcceleratorIterator::GetFullName(Arena* out){
+String AcceleratorIterator::GetFullName(Arena* out,const char* sep){
    Byte* mark = MarkArena(out);
    for(int i = 0; i < level + upperLevels + 1; i++){
       if(i != 0){
-         PushString(out,".");
+         PushString(out,sep);
       }
       PushString(out,"%.*s",UNPACK_SS(GetInstance(i - upperLevels)->inst->name));
    }

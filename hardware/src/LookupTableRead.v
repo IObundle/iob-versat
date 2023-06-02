@@ -1,24 +1,19 @@
 `timescale 1ns / 1ps
 
-`include "xversat.vh"
-`include "xmemdefs.vh"
-`include "versat-io.vh"
-`include "xdefs.vh"
-
 module LookupTableRead #(
        parameter DATA_W = 32,
        parameter ADDR_W = 12
    )
    (
       //databus interface
-      input                       databus_ready_0,
-      output                      databus_valid_0,
-      output reg [`IO_ADDR_W-1:0] databus_addr_0,
-      input [DATA_W-1:0]          databus_rdata_0,
-      output [DATA_W-1:0]         databus_wdata_0,
-      output [DATA_W/8-1:0]       databus_wstrb_0,
-      output [7:0]                databus_len_0,
-      input                       databus_last_0,
+      input                 databus_ready_0,
+      output                databus_valid_0,
+      output reg [31:0]     databus_addr_0,
+      input [DATA_W-1:0]    databus_rdata_0,
+      output [DATA_W-1:0]   databus_wdata_0,
+      output [DATA_W/8-1:0] databus_wstrb_0,
+      output [7:0]          databus_len_0,
+      input                 databus_last_0,
 
       output reg done,
 
@@ -41,31 +36,31 @@ module LookupTableRead #(
       output                ext_dp_write_0_port_1,
 
        // configurations
-      input [`IO_ADDR_W-1:0]  ext_addr,
-      input [ADDR_W-1:0]      int_addr,
-      input [`IO_SIZE_W-1:0]  size,
-      input [ADDR_W-1:0]      iterA,
-      input [`PERIOD_W-1:0]   perA,
-      input [`PERIOD_W-1:0]   dutyA,
-      input [ADDR_W-1:0]      shiftA,
-      input [ADDR_W-1:0]      incrA,
-      input [7:0]             length,
-      input                   pingPong,
+      input [31:0]       ext_addr,
+      input [ADDR_W-1:0] int_addr,
+      input [31:0]       size,
+      input [ADDR_W-1:0] iterA,
+      input [9:0]        perA,
+      input [9:0]        dutyA,
+      input [ADDR_W-1:0] shiftA,
+      input [ADDR_W-1:0] incrA,
+      input [7:0]        length,
+      input              pingPong,
 
-      input [`MEM_ADDR_W-1:0] iterB,
-      input [`PERIOD_W-1:0]   perB,
-      input [`PERIOD_W-1:0]   dutyB,
-      input [`MEM_ADDR_W-1:0] startB,
-      input [`MEM_ADDR_W-1:0] shiftB,
-      input [`MEM_ADDR_W-1:0] incrB,
-      input                   reverseB,
-      input                   extB,
-      input [`MEM_ADDR_W-1:0] iter2B,
-      input [`PERIOD_W-1:0]   per2B,
-      input [`MEM_ADDR_W-1:0] shift2B,
-      input [`MEM_ADDR_W-1:0] incr2B,
+      input [9:0] iterB,
+      input [9:0] perB,
+      input [9:0] dutyB,
+      input [9:0] startB,
+      input [9:0] shiftB,
+      input [9:0] incrB,
+      input       reverseB,
+      input       extB,
+      input [9:0] iter2B,
+      input [9:0] per2B,
+      input [9:0] shift2B,
+      input [9:0] incr2B,
 
-      input [31:0]            delay0,
+      input [31:0] delay0,
 
       input running,
       input clk,

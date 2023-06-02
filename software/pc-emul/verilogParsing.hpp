@@ -69,3 +69,4 @@ ModuleInfo ExtractModuleInfo(Module& module,Arena* permanent,Arena* tempArena);
 void OutputModuleInfos(FILE* output,bool doExport,Array<ModuleInfo> infos,String nameSpace,CompiledTemplate* unitVerilogData,Arena* temp);
 
 #endif // INCLUDED_VERILOG_PARSER
+

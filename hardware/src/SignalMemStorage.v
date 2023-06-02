@@ -1,6 +1,4 @@
 `timescale 1ns / 1ps
-`include "xversat.vh"
-`include "xmemdefs.vh"
 
 (* source *) module SignalMemStorage #(
          parameter MEM_INIT_FILE="none",

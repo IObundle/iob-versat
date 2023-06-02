@@ -158,7 +158,7 @@ static void OutputGraphDotFile_(Versat* versat,Accelerator* accel,bool collapseS
             nodeEdge.first = ptr;
             nodeEdge.second = con->instConnectedTo.node;
 
-            GetOrAllocateResult res = seen->GetOrAllocate(nodeEdge);
+            GetOrAllocateResult<int> res = seen->GetOrAllocate(nodeEdge);
             if(res.alreadyExisted){
                continue;
             }

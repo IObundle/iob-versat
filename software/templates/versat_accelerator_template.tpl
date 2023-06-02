@@ -1,12 +1,5 @@
 `timescale 1ns / 1ps
 
-/*
-`include "system.vh"
-`include "axi.vh"
-`include "xversat.vh"
-`include "xdefs.vh"
-*/
-
 #{include "versat_common.tpl"}
 
 #{call CountDones instances}

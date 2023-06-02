@@ -1,6 +1,4 @@
 `timescale 1ns / 1ps
-`include "xversat.vh"
-`include "xmemdefs.vh"
 
 module Mem #(
          parameter MEM_INIT_FILE="none",
@@ -44,35 +42,35 @@ module Mem #(
    output                ext_dp_write_0_port_1,
 
    // Configuration
-   input [ADDR_W-1:0]    iterA,
-   input [`PERIOD_W-1:0] perA,
-   input [`PERIOD_W-1:0] dutyA,    
-   input [ADDR_W-1:0]    startA,   
-   input [ADDR_W-1:0]    shiftA,   
-   input [ADDR_W-1:0]    incrA,    
-   input [32-1:0]        delay0,   
-   input                 reverseA, 
-   input                 extA,     
-   input                 in0_wr,   
-   input [ADDR_W-1:0]    iter2A,   
-   input [`PERIOD_W-1:0] per2A,    
-   input [ADDR_W-1:0]    shift2A,  
-   input [ADDR_W-1:0]    incr2A,
+   input [ADDR_W-1:0] iterA,
+   input [9:0]        perA,
+   input [9:0]        dutyA,    
+   input [ADDR_W-1:0] startA,   
+   input [ADDR_W-1:0] shiftA,   
+   input [ADDR_W-1:0] incrA,    
+   input [32-1:0]     delay0,   
+   input              reverseA, 
+   input              extA,     
+   input              in0_wr,   
+   input [ADDR_W-1:0] iter2A,   
+   input [9:0]        per2A,    
+   input [ADDR_W-1:0] shift2A,
+   input [ADDR_W-1:0] incr2A,
 
-   input [ADDR_W-1:0]    iterB,    
-   input [`PERIOD_W-1:0] perB,     
-   input [`PERIOD_W-1:0] dutyB,
-   input [ADDR_W-1:0]    startB,
-   input [ADDR_W-1:0]    shiftB,
-   input [ADDR_W-1:0]    incrB,
-   input [32-1:0]        delay1,
-   input                 reverseB, 
-   input                 extB,
-   input                 in1_wr,
-   input [ADDR_W-1:0]    iter2B,
-   input [`PERIOD_W-1:0] per2B,
-   input [ADDR_W-1:0]    shift2B,
-   input [ADDR_W-1:0]    incr2B
+   input [ADDR_W-1:0] iterB,    
+   input [9:0]        perB,     
+   input [9:0]        dutyB,
+   input [ADDR_W-1:0] startB,
+   input [ADDR_W-1:0] shiftB,
+   input [ADDR_W-1:0] incrB,
+   input [32-1:0]     delay1,
+   input              reverseB, 
+   input              extB,
+   input              in1_wr,
+   input [ADDR_W-1:0] iter2B,
+   input [9:0]        per2B,
+   input [ADDR_W-1:0] shift2B,
+   input [ADDR_W-1:0] incr2B
    );
 
    wire we = |wstrb;

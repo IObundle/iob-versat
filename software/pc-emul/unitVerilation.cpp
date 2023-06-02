@@ -177,7 +177,7 @@ String FindProgramLocation(String name,Arena* out){
       close(1);
       dup(pipefd[1]);
 
-      char* args[3] = {"whereis",StaticFormat("%.*s",UNPACK_SS(name)),nullptr}; // StaticFormat guarantees that it is null terminated, needed by the call
+      char* args[3] = {(char*) "whereis",StaticFormat("%.*s",UNPACK_SS(name)),nullptr}; // StaticFormat guarantees that it is null terminated, needed by the call
 
       execvp("whereis",(char* const*) args);
       printf("Error calling execvp for whereis: %s\n",strerror(errno));

@@ -18,6 +18,7 @@
 #include "graph.hpp"
 #include "acceleratorSimulation.hpp"
 #include "unitVerilation.hpp"
+#include "verilogParsing.hpp"
 
 #include "templateEngine.hpp"
 
@@ -25,8 +26,7 @@ static int zeros[99] = {};
 static Array<int> zerosArray = {zeros,99};
 
 #define IMPLEMENT_VERILOG_UNITS
-#include "basicWrapper.inc"
-#include "verilogWrapper.inc"
+//#include "wrapper.inc"
 #include "templateData.inc"
 
 static int ones[64] = {1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1};
@@ -254,13 +254,16 @@ namespace BasicTemplates{
    CompiledTemplate* topAcceleratorTemplate;
    CompiledTemplate* dataTemplate;
    CompiledTemplate* unitVerilogData;
+   CompiledTemplate* acceleratorHeaderTemplate;
    CompiledTemplate* externalPortmapTemplate;
    CompiledTemplate* externalPortTemplate;
    CompiledTemplate* externalInstTemplate;
    CompiledTemplate* iterativeTemplate;
 }
 
-Versat* InitVersat(int base,int numberConfigurations){
+void RegisterSpecificUnits(Versat* versat);
+
+Versat* InitVersat(int base,int numberConfigurations,bool initUnits){
    static Versat versatInst = {};
    static bool doneOnce = false;
 
@@ -300,6 +303,7 @@ Versat* InitVersat(int base,int numberConfigurations){
    BasicTemplates::topAcceleratorTemplate = CompileTemplate(versat_top_instance_template,&versat->permanent);
    BasicTemplates::dataTemplate = CompileTemplate(embedData,&versat->permanent);
    BasicTemplates::unitVerilogData = CompileTemplate(unit_verilog_data,&versat->permanent);
+   BasicTemplates::acceleratorHeaderTemplate = CompileTemplate(versat_accelerator_header_template,&versat->permanent);
    BasicTemplates::externalPortmapTemplate = CompileTemplate(external_memory_portmap,&versat->permanent);
    BasicTemplates::externalPortTemplate = CompileTemplate(external_memory_port,&versat->permanent);
    BasicTemplates::externalInstTemplate = CompileTemplate(external_memory_inst,&versat->permanent);
@@ -312,13 +316,13 @@ Versat* InitVersat(int base,int numberConfigurations){
    // Kinda of a hack, for now. We register on versat and then move the basic declarations out
 
    RegisterFU(versat,nullDeclaration);
-   RegisterAllVerilogUnitsBasic(versat);
    RegisterOperators(versat);
    RegisterPipelineRegister(versat);
    RegisterCircuitInput(versat);
    RegisterCircuitOutput(versat);
    RegisterData(versat);
    RegisterLiteral(versat);
+   // RegisterSpecificUnits(versat); // TODO: Should not do it this way, but want something working for now
 
    for(FUDeclaration* decl : versat->declarations){
       FUDeclaration* newSpace = basicDeclarations.Alloc();
@@ -327,18 +331,21 @@ Versat* InitVersat(int base,int numberConfigurations){
    versat->declarations.Clear(false);
 
    // This ones are specific for the instance
-   RegisterAllVerilogUnitsVerilog(versat);
+   //RegisterAllVerilogUnitsVerilog(versat);
 
-   BasicDeclaration::buffer = GetTypeByName(versat,STRING("Buffer"));
-   BasicDeclaration::fixedBuffer = GetTypeByName(versat,STRING("FixedBuffer"));
-   BasicDeclaration::pipelineRegister = GetTypeByName(versat,STRING("PipelineRegister"));
-   BasicDeclaration::multiplexer = GetTypeByName(versat,STRING("Mux2"));
-   BasicDeclaration::combMultiplexer = GetTypeByName(versat,STRING("CombMux2"));
-   BasicDeclaration::stridedMerge = GetTypeByName(versat,STRING("StridedMerge"));
-   BasicDeclaration::timedMultiplexer = GetTypeByName(versat,STRING("TimedMux"));
-   BasicDeclaration::input = GetTypeByName(versat,STRING("CircuitInput"));
-   BasicDeclaration::output = GetTypeByName(versat,STRING("CircuitOutput"));
-   BasicDeclaration::data = GetTypeByName(versat,STRING("Data"));
+   // TODO: Not a good approach. Fix it when finishing versat compiler
+   if(initUnits){
+      BasicDeclaration::buffer = GetTypeByName(versat,STRING("Buffer"));
+      BasicDeclaration::fixedBuffer = GetTypeByName(versat,STRING("FixedBuffer"));
+      BasicDeclaration::pipelineRegister = GetTypeByName(versat,STRING("PipelineRegister"));
+      BasicDeclaration::multiplexer = GetTypeByName(versat,STRING("Mux2"));
+      BasicDeclaration::combMultiplexer = GetTypeByName(versat,STRING("CombMux2"));
+      BasicDeclaration::stridedMerge = GetTypeByName(versat,STRING("StridedMerge"));
+      BasicDeclaration::timedMultiplexer = GetTypeByName(versat,STRING("TimedMux"));
+      BasicDeclaration::input = GetTypeByName(versat,STRING("CircuitInput"));
+      BasicDeclaration::output = GetTypeByName(versat,STRING("CircuitOutput"));
+      BasicDeclaration::data = GetTypeByName(versat,STRING("Data"));
+   }
 
    Log(LogModule::TOP_SYS,LogLevel::INFO,"Init versat");
 
@@ -929,6 +936,29 @@ Edge* ConnectUnits(FUInstance* out,int outIndex,FUInstance* in,int inIndex,int d
    Edge* edge = ConnectUnitsGetEdge(out,outIndex,in,inIndex,delay,previousEdge);
 
    return edge;
+}
+
+// TODO: Need to remake this function and probably ModuleInfo has the versat compiler change is made
+FUDeclaration* RegisterModuleInfo(Versat* versat,ModuleInfo* info){
+   FUDeclaration decl = {};
+
+   decl.name = info->name;
+   decl.inputDelays = info->inputDelays;
+   decl.outputLatencies = info->outputLatencies;
+   decl.configs = info->configs;
+   decl.states = info->states;
+   decl.externalMemory = info->externalInterfaces;
+   decl.delayOffsets.max = info->nDelays;
+   decl.nIOs = info->nIO;
+   decl.memoryMapBits = info->memoryMappedBits;
+   decl.isMemoryMapped = info->memoryMapped;
+   decl.implementsDone = info->hasDone;
+
+   decl.configOffsets.max = info->configs.size;
+   decl.stateOffsets.max = info->states.size;
+
+   FUDeclaration* res = RegisterFU(versat,decl);
+   return res;
 }
 
 FUDeclaration* RegisterFU(Versat* versat,FUDeclaration decl){

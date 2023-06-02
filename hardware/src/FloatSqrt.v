@@ -1,5 +1,4 @@
 `timescale 1ns / 1ps
-`include "xversat.vh"
 
 module FloatSqrt #(
          parameter DATA_W = 32

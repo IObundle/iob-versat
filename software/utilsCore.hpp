@@ -106,7 +106,7 @@ bool CurrentlyDebugging();
    } while(0)
 
 #ifdef VERSAT
-#include <cstdio>
+//#include <cstdio>
 extern "C"{
 #include "iob-timer.h"
 }

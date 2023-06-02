@@ -9,6 +9,8 @@ int printf_(const char* format, ...);
 
 #ifndef PC
 #define printf printf_
+#else
+#include <cstdio>
 #endif
 
 static char* GetNumberRepr(uint64 number){

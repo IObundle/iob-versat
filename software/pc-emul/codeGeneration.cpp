@@ -51,7 +51,7 @@ void OutputCircuitSource(Versat* versat,FUDeclaration* decl,Accelerator* accel,F
    ProcessTemplate(file,BasicTemplates::acceleratorTemplate,&versat->temp);
 }
 
-void OutputVersatSource(Versat* versat,Accelerator* accel,const char* directoryPath){
+void OutputVersatSource(Versat* versat,Accelerator* accel,const char* directoryPath,String accelName,bool isSimple){
    if(!versat->debug.outputVersat){
       return;
    }
@@ -208,6 +208,33 @@ void OutputVersatSource(Versat* versat,Accelerator* accel,const char* directoryP
    TemplateSetNumber("numberUnits",accum.size());
    TemplateSetBool("IsSimple",false);
    ProcessTemplate(d,BasicTemplates::dataTemplate,&versat->temp);
+
+   {
+   Hashmap<String,SizedConfig>* namedConfigs = ExtractNamedSingleConfigs(accel,arena);
+   Hashmap<String,SizedConfig>* namedStates = ExtractNamedSingleStates(accel,arena);
+   Hashmap<String,SizedConfig>* namedMem = ExtractNamedSingleMem(accel,arena);
+
+   TemplateSetCustom("namedConfigs",namedConfigs,"Hashmap<String,SizedConfig>");
+   TemplateSetCustom("namedStates",namedStates,"Hashmap<String,SizedConfig>");
+   TemplateSetCustom("namedMem",namedMem,"Hashmap<String,SizedConfig>");
+   TemplateSetString("accelType",accelName);
+   TemplateSetBool("isSimple",isSimple);
+
+   TemplateSetArray("delay","int",accel->delayAlloc.ptr,accel->delayAlloc.size);
+   TemplateSetArray("staticBuffer","int",accel->staticAlloc.ptr,accel->staticAlloc.size);
+
+   TemplateSetNumber("versatBase",versat->base);
+   TemplateSetNumber("nStatics",val.nStatics);
+   TemplateSetNumber("nConfigs",val.nConfigs);
+   TemplateSetNumber("nDelays",val.nDelays);
+   TemplateSetNumber("versatConfig",val.versatConfigs);
+   TemplateSetNumber("versatState",val.versatStates);
+   TemplateSetNumber("memoryMappedBase",1 << val.memoryConfigDecisionBit);
+
+   FILE* f = OpenFileAndCreateDirectories(StaticFormat("%s/accel.hpp",directoryPath),"w");
+   ProcessTemplate(f,BasicTemplates::acceleratorHeaderTemplate,&versat->temp);
+   fclose(f);
+   }
 
    {
    FILE* f = OpenFileAndCreateDirectories(StaticFormat("%s/versat_external_memory_inst.vh",directoryPath),"w");

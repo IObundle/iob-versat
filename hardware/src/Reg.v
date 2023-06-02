@@ -1,5 +1,4 @@
 `timescale 1ns / 1ps
-`include "xversat.vh"
 
 (* source *) module Reg #(
          parameter DELAY_W = 32,

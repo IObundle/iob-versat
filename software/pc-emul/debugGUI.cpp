@@ -318,7 +318,7 @@ Optional<String> AcceleratorTreeNodes(AcceleratorIterator iter,Filter filter){
          if(ImGui::TreeNodeEx(inst,flags,"%.*s",UNPACK_SS(inst->name))){
             if(ImGui::IsItemClicked()){
                nameArena.used = 0;
-               res = iter.GetFullName(&nameArena);
+               res = iter.GetFullName(&nameArena,".");
                //res = *inst;
             }
 
@@ -334,7 +334,7 @@ Optional<String> AcceleratorTreeNodes(AcceleratorIterator iter,Filter filter){
             ImGui::TreePop();
          } else if(ImGui::IsItemClicked()){
             nameArena.used = 0;
-            res = iter.GetFullName(&nameArena);
+            res = iter.GetFullName(&nameArena,".");
             //res = *inst;
          }
       } else {
@@ -345,7 +345,7 @@ Optional<String> AcceleratorTreeNodes(AcceleratorIterator iter,Filter filter){
 
          if(selected){
             nameArena.used = 0;
-            res = iter.GetFullName(&nameArena);
+            res = iter.GetFullName(&nameArena,".");
             //res = *inst;
          }
       }
@@ -737,7 +737,7 @@ void ShowConfigurations(Accelerator* accel,Arena* arena,Filter filter){
 
          int offset = offsets.offsets[index];
 
-         String fullName = iter.GetFullName(arena);
+         String fullName = iter.GetFullName(arena,".");
 
          ImGui::TableNextRow();
          ImGui::TableNextColumn(); ImGui::Text("[%d] %.*s",index,UNPACK_SS(fullName));
@@ -920,7 +920,7 @@ InstanceNode* GetInstanceFromName(Accelerator* accel,String string,Arena* arena)
    AcceleratorIterator iter = {};
    for(InstanceNode* node = iter.Start(accel,arena,true); node; node = iter.Next()){
       BLOCK_REGION(arena);
-      String name = iter.GetFullName(arena);
+      String name = iter.GetFullName(arena,".");
 
       if(CompareString(name,string)){
          return node;

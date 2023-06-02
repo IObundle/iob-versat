@@ -96,7 +96,7 @@ int main(int argc,const char* argv[]){
       fprintf(output,");\n\n");
    }
 
-   fprintf(output,"Pair<String,String> templateNameToContentData[] = {\n");
+   fprintf(output,"static Pair<String,String> templateNameToContentData[] = {\n");
 
    for(int i = 0; i < templatesFound; i++){
       fprintf(output,"{STRING(\"%.*s.tpl\"),%.*s}",UNPACK_SS(templateFiles[i]),UNPACK_SS(templateFiles[i]));
@@ -107,7 +107,7 @@ int main(int argc,const char* argv[]){
    }
    fprintf(output,"};\n\n");
 
-   fprintf(output,"Array<Pair<String,String>> templateNameToContent = {templateNameToContentData,%d};\n\n",templatesFound);
+   fprintf(output,"static Array<Pair<String,String>> templateNameToContent = {templateNameToContentData,%d};\n\n",templatesFound);
 
    fclose(output);
 

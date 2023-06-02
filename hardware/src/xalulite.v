@@ -1,8 +1,57 @@
 `timescale 1ns / 1ps
-`include "xversat.vh"
-`include "xdefs.vh"
-`include "xalulitedefs.vh"
 
+`define ALU_FNS_W       4
+`define ALU_CONF_BITS (2*`N_W + `ALU_FNS_W)
+
+// ALU functions
+`define ALU_ADD           `ALU_FNS_W'd0
+`define ALU_SUB           `ALU_FNS_W'd1
+`define ALU_CMP_SIG       `ALU_FNS_W'd2    
+`define ALU_MUX        `ALU_FNS_W'd3
+`define ALU_MAX           `ALU_FNS_W'd4      
+`define ALU_MIN           `ALU_FNS_W'd5
+`define ALU_OR            `ALU_FNS_W'd6
+`define ALU_AND           `ALU_FNS_W'd7
+`define ALU_CMP_UNS       `ALU_FNS_W'd8
+`define ALU_XOR           `ALU_FNS_W'd9
+`define ALU_SEXT8         `ALU_FNS_W'd10
+`define ALU_SEXT16        `ALU_FNS_W'd11
+`define ALU_SHIFTR_ARTH   `ALU_FNS_W'd12
+`define ALU_SHIFTR_LOG    `ALU_FNS_W'd13
+`define ALU_CLZ           `ALU_FNS_W'd14
+`define ALU_ABS           `ALU_FNS_W'd15
+
+//ALU internal configuration address offsets
+`define ALU_CONF_SELA     0
+`define ALU_CONF_SELB     1
+`define ALU_CONF_FNS      2
+`define ALU_CONF_OFFSET   3
+
+//ALU latency
+`define ALU_LAT 2
+
+`define ALULITE_FNS_W     4
+`define ALULITE_CONF_BITS (`ALULITE_FNS_W)
+
+// ALULITE functions
+// concat a 1 to the left to get the feedback versions of these functions
+`define ALULITE_ADD              3'd0
+`define ALULITE_SUB              3'd1
+`define ALULITE_CMP_SIG          3'd2    
+`define ALULITE_MUX              3'd3
+`define ALULITE_MAX              3'd4     
+`define ALULITE_MIN              3'd5
+`define ALULITE_OR               3'd6
+`define ALULITE_AND              3'd7
+
+//ALULITE internal configuration address offsets
+`define ALULITE_CONF_SELA        0
+`define ALULITE_CONF_SELB        1
+`define ALULITE_CONF_FNS         2
+`define ALULITE_CONF_OFFSET      3
+
+//ALULITE latency
+`define ALULITE_LAT               2
 /*
 
  Description: simpler ALU with feedback

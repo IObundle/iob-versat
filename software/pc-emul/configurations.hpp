@@ -1,6 +1,8 @@
 #ifndef INCLUDED_VERSAT_CONFIGURATIONS_HPP
 #define INCLUDED_VERSAT_CONFIGURATIONS_HPP
 
+#include <unordered_map>
+
 //#include "versatPrivate.hpp"
 #include "memory.hpp"
 
@@ -96,6 +98,8 @@ CalculatedOffsets ExtractExtraData(Accelerator* accel,Arena* out);
 CalculatedOffsets ExtractDebugData(Accelerator* accel,Arena* out);
 
 Hashmap<String,SizedConfig>* ExtractNamedSingleConfigs(Accelerator* accel,Arena* out);
+Hashmap<String,SizedConfig>* ExtractNamedSingleStates(Accelerator* accel,Arena* out);
+Hashmap<String,SizedConfig>* ExtractNamedSingleMem(Accelerator* accel,Arena* arena);
 
 void PopulateAccelerator(Accelerator* topLevel,Accelerator* accel,FUDeclaration* topDeclaration,FUInstanceInterfaces& inter,std::unordered_map<StaticId,StaticData>* staticMap);
 void PopulateTopLevelAccelerator(Accelerator* accel);

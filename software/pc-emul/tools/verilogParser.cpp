@@ -38,7 +38,6 @@ int main(int argc,const char* argv[]){
    std::vector<ModuleInfo> allModules;
    for(const char* str : filePaths){
       Byte* mark = MarkArena(tempArena);
-      printf("%s\n",str);
 
       String content = PushFile(tempArena,str);
 

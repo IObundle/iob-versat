@@ -84,7 +84,7 @@ static void DoIfStatement(Arena* output,Tokenizer* tok,MacroMap& macros,std::vec
 }
 
 void PreprocessVerilogFile_(Arena* output, String fileContent,MacroMap& macros,std::vector<const char*>* includeFilepaths,Arena* temp){
-   Tokenizer tokenizer = Tokenizer(fileContent, "()`\\\",+-/*",{"`include","`define","`timescale","`ifdef","`else","`elsif","`endif","`ifndef"});
+   Tokenizer tokenizer = Tokenizer(fileContent, "()`\\\",+-/*",{"`include","`define","`timescale","`ifdef","`else","`elsif","`endif","`ifndef"}); // TODO: these keywords should not be special chars.
    Tokenizer* tok = &tokenizer;
 
    while(!tok->Done()){
@@ -99,9 +99,15 @@ void PreprocessVerilogFile_(Arena* output, String fileContent,MacroMap& macros,s
          // Open include file
          std::string filename(UNPACK_SS_REVERSE(fileName));
          FILE* file = nullptr;
-         std::string filepath;
          for(const char* str : *includeFilepaths){
-            filepath = std::string(str) + filename;
+            std::string string(str);
+
+            std::string filepath;
+            if(string.back() == '/'){
+               filepath = string + filename;
+            } else {
+               filepath = string + '/' + filename;
+            }
 
             file = fopen(filepath.c_str(),"r");
 
@@ -518,7 +524,7 @@ static Module ParseModule(Tokenizer* tok,Arena* arena){
 std::vector<Module> ParseVerilogFile(String fileContent, std::vector<const char*>* includeFilepaths, Arena* arena){
    BLOCK_REGION(arena);
 
-   Tokenizer tokenizer = Tokenizer(fileContent,":,()[]{}\"+-/*=",{"#(","+:","-:","(*","*)","module","endmodule"});
+   Tokenizer tokenizer = Tokenizer(fileContent,":,()[]{}\"+-/*=",{"#(","+:","-:","(*","*)"});
    Tokenizer* tok = &tokenizer;
 
    std::vector<Module> modules;

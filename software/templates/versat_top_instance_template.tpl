@@ -4,12 +4,10 @@
 #{call CountOperations instances}
 
 `timescale 1ns / 1ps
-`include "axi.vh"
-`include "versat_defs.vh"
 
 module versat_instance #(
-      parameter ADDR_W = `ADDR_W,
-      parameter DATA_W = `DATA_W,
+      parameter ADDR_W = 32,
+      parameter DATA_W = 32,
       parameter AXI_ADDR_W = 32
    )
    (
@@ -118,6 +116,15 @@ always @(posedge clk,posedge rst) // Care, rst because writing to soft reset reg
          end
       end
    end
+
+wire databus_ready[@{nIO}];
+wire databus_valid[@{nIO}];
+wire [31:0] databus_addr[@{nIO}];
+wire [31:0] databus_rdata[@{nIO}];
+wire [31:0] databus_wdata[@{nIO}];
+wire [3:0]  databus_wstrb[@{nIO}];
+wire [7:0]  databus_len[@{nIO}];
+wire databus_last[@{nIO}];
 
 #{for i (nIO - 1)}
 assign databus_ready[@{i + 1}] = m_databus_ready[@{i + 1}];
@@ -525,7 +532,7 @@ end
          .databus_wstrb_@{i}(databus_wstrb[@{ioIndex}]),
          .databus_len_@{i}(databus_len[@{ioIndex}]),
          .databus_last_@{i}(databus_last[@{ioIndex}]),
-         #{set ioIndex ioIndex + decl.nIOs}
+         #{set ioIndex ioIndex + 1}
          #{end}
          
          .running(running),

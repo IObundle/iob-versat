@@ -1,5 +1,4 @@
 `timescale 1ns / 1ps
-`include "xversat.vh"
 
 module FloatMax #(
          parameter DATA_W = 32

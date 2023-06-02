@@ -93,7 +93,7 @@ public:
    InstanceNode* Current(); // Returns nullptr to indicate end of iteration
    InstanceNode* CurrentAcceleratorInstance(); // Returns the accelerator instance for the Current() instance or nullptr if currently at top level
 
-   String GetFullName(Arena* out);
+   String GetFullName(Arena* out,const char* sep);
    int    GetFullLevel();
 
    AcceleratorIterator LevelBelowIterator(); // Not taking an arena means that the returned iterator uses current iterator memory. Returned iterator must be iterated fully before the current iterator can be used, otherwise memory conflicts will arise as both iterators are sharing the same stack

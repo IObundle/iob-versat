@@ -68,10 +68,13 @@ enum MergingStrategy{
 };
 
 // Temp
+struct ModuleInfo;
+FUDeclaration* RegisterModuleInfo(Versat* versat,ModuleInfo* info);
+
 Accelerator* RecursiveFlatten(Versat* versat,Accelerator* topLevel);
 
 // Versat functions
-Versat* InitVersat(int base,int numberConfigurations);
+Versat* InitVersat(int base,int numberConfigurations,bool initUnits = false);
 void Free(Versat* versat); // Usually not needed, as memory is freed on program termination and Versat is supposed to be "active" from start to finish, but usuful for debugging memory problems
 void ParseCommandLineOptions(Versat* versat,int argc,const char** argv);
 uint SetDebug(Versat* versat,VersatDebugFlags flags,uint flag);
@@ -84,7 +87,7 @@ FUInstance* CreateFUInstance(Accelerator* accel,FUDeclaration* type,String entit
 void AcceleratorRun(Accelerator* accel,int times = 1);
 void AcceleratorRunDebug(Accelerator* accel);
 void RemoveFUInstance(Accelerator* accel,FUInstance* inst);
-void OutputVersatSource(Versat* versat,Accelerator* accel,const char* directoryPath);
+void OutputVersatSource(Versat* versat,Accelerator* accel,const char* directoryPath,String accelName = STRING("TOP"),bool isSimple = false); // Not actually the name but the type.
 Accelerator* Flatten(Versat* versat,Accelerator* accel,int times); // This should work on the passed accelerator. We should not create a new accelerator
 
 // Access units and sub units inside an accelerator. Can use printf style arguments, but only chars and integers are currently supported. Format is <format1>,<args1 if any>,<format2>,...
