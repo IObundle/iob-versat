@@ -6,7 +6,11 @@ HARDWARE_SRC := #{join " " for file verilogFiles}@{file}#{end}
 
 VERILATOR_ROOT := /usr/local/share/verilator
 
-VERILATOR_SRC := $(VERILATOR_ROOT)/include/verilated.cpp $(VERILATOR_ROOT)/include/verilated_vcd_c.cpp #$(VERILATOR_ROOT)/include/verilated_threads.cpp 
+VERILATOR_SRC := $(VERILATOR_ROOT)/include/verilated.cpp $(VERILATOR_ROOT)/include/verilated_vcd_c.cpp
+#{if verilatorVersion == 5}
+VERILATOR_SRC += $(VERILATOR_ROOT)/include/verilated_threads.cpp
+#{end}
+
 VERILATOR_OBJ := $(patsubst $(VERILATOR_ROOT)/include/%.cpp,%.o,$(VERILATOR_SRC))
 
 all: V$(TYPE_NAME).h $(VERILATOR_OBJ)

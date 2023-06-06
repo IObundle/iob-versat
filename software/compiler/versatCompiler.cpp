@@ -292,6 +292,7 @@ int main(int argc,const char* argv[]){
       TemplateSetArray("verilogFiles","String",opts->verilogFiles.data(),opts->verilogFiles.size());
       TemplateSetString("typename",topLevelTypeStr);
       TemplateSetString("hack",STRING("#"));
+      TemplateSetNumber("verilatorVersion",GetVerilatorMajorVersion(&versat->temp));
       ProcessTemplate(output,comp,temp);
    }
 

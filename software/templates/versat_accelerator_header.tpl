@@ -19,12 +19,6 @@ int @{name};
 
 static const int memMappedStart = @{memoryMappedBase * 4 |> Hex};
 
-#{set counter 0}
-#{for pair namedMem}
-static volatile int* @{pair.first} = (volatile int*) (@{memoryMappedBase * 4 |> Hex} + @{counter});
-#{set counter counter + pair.second.size}
-#{end}
-
 static unsigned int delayBuffer[] = {
    #{join "," for d delay} 
       @{d |> Hex}

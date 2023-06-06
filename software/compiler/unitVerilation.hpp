@@ -17,5 +17,6 @@ struct UnitFunctions{
 
 //UnitFunctions CompileUnit(String unitName,String soName,Arena* temp); Only allow the CheckOrCompile function, for now
 UnitFunctions CheckOrCompileUnit(String unitName,Arena* temp);
+int GetVerilatorMajorVersion(Arena* temp);
 
 #endif // INCLUDED_VERSAT_UNIT_VERILATION

@@ -13,6 +13,50 @@ struct Versat;
 
 typedef FUDeclaration* (*RegisterFunction)(Versat* versat);
 
+int GetVerilatorMajorVersion(Arena* temp){
+   int pipefd[2]; // 0 is read, 1 is write (for child)
+
+   int res = pipe(pipefd);
+
+   pid_t pid = fork();
+
+   int result = 5; // By default, assume that it's version 5
+   if(pid < 0){
+      printf("Error calling fork\n");
+   } else if(pid == 0){
+      close(pipefd[0]);
+      close(1);
+      dup(pipefd[1]);
+
+      char* args[3] = {(char*) "verilator","--version",nullptr}; // StaticFormat guarantees that it is null terminated, needed by the call
+
+      execvp("verilator",(char* const*) args);
+      printf("Error calling execvp for verilator: %s\n",strerror(errno));
+      exit(0);
+   } else {
+      close(pipefd[1]);
+
+      char buffer[1024];
+      int size = read(pipefd[0],buffer,1024);
+      close(pipefd[0]);
+
+      String content = STRING(buffer,size);
+
+      int status;
+      wait(&status);
+
+      Tokenizer tok(content,".",{});
+      tok.AssertNextToken("Verilator");
+
+      String majorNumberContent = tok.NextToken();
+      if(majorNumberContent.size == 1){
+         result = ParseInt(majorNumberContent);
+      }
+   }
+
+   return result;
+}
+
 void CallVerilator(const char* unitPath,const char* outputPath){
    pid_t pid = fork();
 
@@ -316,8 +360,6 @@ UnitFunctions CheckOrCompileUnit(String unitName,Arena* temp){
 
    return res;
 }
-
-
 
 
 

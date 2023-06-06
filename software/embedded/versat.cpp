@@ -31,7 +31,6 @@ void versat_init(int base){
 
    accelConfig = (volatile AcceleratorConfig*) (versat_base + configStart);
    accelState  = (volatile AcceleratorState*)  (versat_base + stateStart);
-   TOP_output_0  = (volatile int*)  (versat_base + memMappedStart);
 
    volatile int* delayBase = (volatile int*) (versat_base + delayStart);
    volatile int* staticBase = (volatile int*) (versat_base + staticStart);
@@ -48,7 +47,7 @@ void RunAccelerator(int times){
    MEMSET(versat_base,0x0,times);
    while(1){
       int val = MEMGET(versat_base,0x0);
-      if(val){ // We wait until accelerator finishes before returning. Not mandatory, but less error prone and no need to squeeze a lot of performance  
+      if(val){ // We wait until accelerator finishes before returning. Not mandatory, but less error prone and no need to squeeze a lot of performance for now (In the future, the concept of returning immediatly and having the driver tell when to wait will be implemented)  
          break;
       }
    }
