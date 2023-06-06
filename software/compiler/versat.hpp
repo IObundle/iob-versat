@@ -21,7 +21,7 @@ struct FUInstance{
 
    // This should be part of another hierarchy.
    // Required for accel subunits but not required by embedded or should user code have access to them
-	int* outputs;
+   int* outputs;
 	int* storedOutputs;
    unsigned char* extraData;
    FUInstance* declarationInstance; // Used because of AccessMemory and the fact that GetInput depends on instance pointer

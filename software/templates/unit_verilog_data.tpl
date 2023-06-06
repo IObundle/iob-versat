@@ -21,7 +21,7 @@ static Array<int> zerosArray = {zeros,99};
 struct @{module.name}Config{
 #{for wire module.configs}
 #{if !wire.isStatic}
-iptr @{wire.name};
+int @{wire.name};
 #{end}
 #{end}
 };

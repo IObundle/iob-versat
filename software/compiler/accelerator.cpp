@@ -773,7 +773,11 @@ Accelerator* Flatten(Versat* versat,Accelerator* accel,int times){
             continue;
          } else {
             SizedConfig newConfig = *possibleConfig;
-            Memcpy(newConfig.ptr,oldConfig.ptr,oldConfig.size);
+            Assert((newConfig.ptr == nullptr && oldConfig.ptr == nullptr) ||
+                   (newConfig.ptr != nullptr && oldConfig.ptr != nullptr)); // TODO: Is it possible for newConfig to be null and oldConfig not or vice versa?
+            if(newConfig.ptr && oldConfig.ptr){
+               Memcpy(newConfig.ptr,oldConfig.ptr,oldConfig.size);
+            }
          }
       }
    }
@@ -908,7 +912,7 @@ String AcceleratorIterator::GetFullName(Arena* out,const char* sep){
    Byte* mark = MarkArena(out);
    for(int i = 0; i < level + upperLevels + 1; i++){
       if(i != 0){
-         PushString(out,sep);
+         PushString(out,"%s",sep);
       }
       PushString(out,"%.*s",UNPACK_SS(GetInstance(i - upperLevels)->inst->name));
    }

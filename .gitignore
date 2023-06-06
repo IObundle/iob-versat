@@ -1,5 +1,5 @@
 software/*.out
 software/*.exe
 
-software/pc-emul/IMGUI/
-software/pc-emul/IMNODES/
+software/compiler/IMGUI/
+software/compiler/IMNODES/

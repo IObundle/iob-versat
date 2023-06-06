@@ -1,6 +1,8 @@
 #ifndef INCLUDED_INTRINSICS
 #define INCLUDED_INTRINSICS
 
+#include "utils.hpp"
+
 #include <immintrin.h>
 #include <mmintrin.h>
 

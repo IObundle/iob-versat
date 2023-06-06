@@ -4,6 +4,7 @@
 #include <cstdio>
 
 #include "configurations.hpp"
+#include "verilogParsing.hpp"
 
 struct ComplexFUInstance;
 
@@ -47,50 +48,6 @@ typedef int* (*FUFunction)(ComplexFUInstance* inst);
 typedef int* (*FUUpdateFunction)(ComplexFUInstance* inst,Array<int> inputs);
 typedef int (*MemoryAccessFunction)(ComplexFUInstance* inst, int address, int value,int write);
 typedef void (*VCDFunction)(ComplexFUInstance*,FILE*,VCDMapping&,Array<int>,bool firstTime,bool printDefinitions);
-
-struct Wire{
-   String name;
-   int bitsize;
-   bool isStatic; // This is only used by the verilog parser (?) to store info. TODO: Use a different structure in the verilog parser which contains this and remove from Wire
-};
-
-// TODO: Some structures appear to hold more data that necessary.
-//       The current way data is modelled is weird
-//       Until I get more different memory types or
-//       until we allow certain wires to not be used,
-//       It's hard to figure out how to proceed
-//       Let this be for now
-enum ExternalMemoryType{TWO_P = 0,DP};
-
-struct ExternalMemoryInterface{
-   int interface;
-   int bitsize;
-   int datasize;
-   ExternalMemoryType type;
-};
-
-struct ExternalMemoryID{
-   int interface;
-   ExternalMemoryType type;
-};
-
-struct ExternalPortInfo{
-   int addrSize;
-   int dataInSize;
-   int dataOutSize;
-   bool enable;
-   bool write;
-};
-
-// Contain info parsed directly by verilog.
-// This probably should be a union of all the memory types
-// The code in the verilog parser almost demands it
-struct ExternalMemoryInfo{
-   int numberPorts;
-
-   // Maximum of 2 ports
-   ExternalPortInfo ports[2];
-};
 
 enum DelayType {
    DELAY_TYPE_BASE               = 0x0,

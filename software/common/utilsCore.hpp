@@ -59,7 +59,7 @@ ALWAYS_INLINE Defer<F> operator+(_DeferTag,F&& f){
 #define defer auto TEMP_defer(__LINE__) = _DeferTag() + [&]()
 
 void FlushStdout();
-#if defined(PC) && defined(VERSAT_DEBUG)
+#if defined(VERSAT_DEBUG)
 #define Assert(EXPR) \
    do { \
    bool _ = !(EXPR);   \
@@ -105,6 +105,9 @@ bool CurrentlyDebugging();
    B = TEMP; \
    } while(0)
 
+#define TIME_FUNCTION clock
+
+#if 0
 #ifdef VERSAT
 //#include <cstdio>
 extern "C"{
@@ -114,8 +117,9 @@ extern "C"{
 #else
 #define TIME_FUNCTION clock
 #endif
+#endif
 
-#ifdef PC
+#ifndef SIM // #ifdef PC TODO: I do not think these will be needed anymore
 typedef intptr_t iptr;
 typedef uintptr_t uptr;
 typedef uint32_t uint;
@@ -181,7 +185,6 @@ ALWAYS_INLINE void operator+(TimeIt&& timer,F&& f){
 #define timeRegion(ID) TimeIt(ID) + [&]()
 */
 
-
 template<typename T>
 class ArrayIterator{
 public:
@@ -229,6 +232,20 @@ public:
    return res;
    }
 };
+
+template<typename T>
+bool operator==(Array<T> first,Array<T> second){
+   if(first.size != second.size){
+      return false;
+   }
+
+   for(int i = 0; i < first.size; i++){
+      if(!(first.data[i] == second.data[i])){
+         return false;
+      }
+   }
+   return true;
+}
 
 struct Range{
    union{
@@ -334,6 +351,7 @@ char* GetCurrentDirectory();
 void MakeDirectory(const char* path);
 FILE* OpenFileAndCreateDirectories(const char* path,const char* format);
 void CreateDirectories(const char* path);
+String ExtractFilenameOnly(String filepath);
 
 void FixedStringCpy(char* dest,String src);
 

@@ -75,14 +75,6 @@ public:
    }
 };
 
-template<> class std::hash<ExternalMemoryID>{
-public:
-   std::size_t operator()(ExternalMemoryID const& s) const noexcept{
-      std::size_t hash = s.interface * 2 + (int) s.type;
-      return hash;
-   }
-};
-
 template<typename First,typename Second> class std::hash<Pair<First,Second>>{
 public:
    std::size_t operator()(Pair<First,Second> const& s) const noexcept{
@@ -150,10 +142,6 @@ inline bool operator!=(const String& lhs,const String& rhs){
    return res;
 }
 
-inline bool operator==(const ExternalMemoryID& lhs,const ExternalMemoryID& rhs){
-   bool res = (memcmp(&lhs,&rhs,sizeof(ExternalMemoryID)) == 0);
-   return res;
-}
 inline bool operator==(const StaticId& id1,const StaticId& id2){
    bool res = CompareString(id1.name,id2.name) && id1.parent == id2.parent;
    return res;

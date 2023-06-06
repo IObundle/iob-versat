@@ -1,9 +1,8 @@
 #include "structParsing.hpp"
 
 #include <cstdio>
-#include <set>
+#include <unordered_set>
 
-#include "versatPrivate.hpp"
 #include "parser.hpp"
 
 #define UNNAMED_ENUM_TEMPLATE "unnamed_enum_%d"
@@ -272,7 +271,7 @@ bool DependsOnTemplatedParam(TypeDef* def,String memberTypeName,Arena* arena){
 }
 
 void OutputRegisterTypesFunction(FILE* output,Arena* arena){
-   std::set<String> seen;
+   std::unordered_set<String> seen;
 
    for(TypeDef* def : typeDefs){
       switch(def->type){
@@ -298,8 +297,11 @@ void OutputRegisterTypesFunction(FILE* output,Arena* arena){
 
    seen.insert(STRING("void"));
 
-   fprintf(output,"#pragma GCC diagnostic ignored \"-Winvalid-offsetof\"\n");
-   fprintf(output,"static void RegisterParsedTypes(){\n");
+   fprintf(output,"#include \"utils.hpp\"\n");
+   fprintf(output,"#include \"memory.hpp\"\n");
+   fprintf(output,"#include \"type.hpp\"\n\n");
+
+   fprintf(output,"void RegisterParsedTypes(){\n");
 
    for(TypeDef* def : typeDefs){
       if(def->type == TypeDef::TYPEDEF){
@@ -559,6 +561,20 @@ int main(int argc,const char* argv[]){
    Arena tempArena = InitArena(Megabyte(256));
    Arena* arena = &tempArena;
 
+   FILE* output = OpenFileAndCreateDirectories(argv[1],"w");
+
+   if(!output){
+      printf("Failed to open file: %s\n",argv[1]);
+      printf("Exiting\n");
+      return -1;
+   }
+
+   fprintf(output,"#pragma GCC diagnostic ignored \"-Winvalid-offsetof\"\n\n");
+   for(int i = 0; i < argc - 2; i++){
+      String name = ExtractFilenameOnly(STRING(argv[2+i]));
+      fprintf(output,"#include \"%.*s\"\n",UNPACK_SS(name));
+   }
+
    for(int i = 0; i < argc - 2; i++){
       String content = PushFile(arena,argv[2+i]);
 
@@ -580,8 +596,6 @@ int main(int argc,const char* argv[]){
    const char* test = "template<typename T> struct std::vector{T* mem; int size; int allocated;};";
    Tokenizer tok(STRING(test),"[]{}();*<>,=",{});
    ParseHeaderFile(&tok,arena);
-
-   FILE* output = OpenFileAndCreateDirectories(argv[1],"w");
 
    OutputRegisterTypesFunction(output,arena);
 

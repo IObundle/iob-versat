@@ -3,35 +3,15 @@
 #include "stdlib.h"
 #include "stdio.h"
 
-#include <map>
 #include <cstring>
+#include <unordered_map>
 
 #include "utils.hpp"
 #include "type.hpp"
-#include "debug.hpp"
-#include "versatPrivate.hpp"
-
-#include "templateData.inc"
 
 struct ValueAndText{
    Value val;
    String text;
-};
-
-struct CompareFunction : public std::binary_function<String, String, bool> {
-public:
-   bool operator() (String str1, String str2) const{
-      for(int i = 0; i < std::min(str1.size,str2.size); i++){
-         if(str1[i] < str2[i]){
-            return true;
-         }
-         if(str1[i] > str2[i]){
-            return false;
-         }
-      }
-
-      return (str1.size < str2.size);
-   }
 };
 
 static void ParseAndEvaluate(String content,Arena* temp);
@@ -41,7 +21,7 @@ static Expression* ParseExpression(Tokenizer* tok,Arena* temp);
 
 // Static variables
 static bool debugging = false;
-static std::map<String,Value,CompareFunction> envTable;
+static std::unordered_map<String,Value> envTable;
 static FILE* output;
 //static Arena* tempArena;
 static Arena* outputArena;
@@ -351,65 +331,10 @@ static void Print(Block* block, int level = 0){
    }
 }
 
-static Value HexValue(Value in,Arena* out){
-   static char buffer[128];
+std::unordered_map<String,PipeFunction> pipeFunctions;
 
-   int number = ConvertValue(in,ValueType::NUMBER,nullptr).number;
-
-   int size = sprintf(buffer,"0x%x",number);
-
-   Value res = {};
-   res.type = ValueType::STRING;
-   res.str = PushString(out,String{buffer,size});
-
-   return res;
-}
-
-static Value EscapeString(Value val,Arena* out){
-   Assert(val.type == ValueType::SIZED_STRING || val.type == ValueType::STRING);
-   Assert(val.isTemp);
-
-   String str = val.str;
-
-   String escaped = PushString(out,str);
-   char* view = (char*) escaped.data;
-
-   for(int i = 0; i < escaped.size; i++){
-      char ch = view[i];
-
-      if(   (ch >= 'a' && ch <= 'z')
-         || (ch >= 'A' && ch <= 'Z')
-         || (ch >= '0' && ch <= '9')){
-         continue;
-      } else {
-         view[i] = '_'; // Replace any foreign symbol with a underscore
-      }
-   }
-
-   Value res = val;
-   res.str = escaped;
-
-   return res;
-}
-
-
-int CountNonOperationChilds(Accelerator* accel){
-   if(accel == nullptr){
-      return 0;
-   }
-
-   int count = 0;
-   FOREACH_LIST(ptr,accel->allocated){
-      if(IsTypeHierarchical(ptr->inst->declaration)){
-         count += CountNonOperationChilds(ptr->inst->declaration->fixedDelayCircuit);
-      }
-
-      if(!ptr->inst->declaration->isOperation && ptr->inst->declaration->type != FUDeclaration::SPECIAL){
-         count += 1;
-      }
-   }
-
-   return count;
+void RegisterPipeOperation(String name,PipeFunction func){
+   pipeFunctions.insert({name,func});
 }
 
 static Value EvalExpression(Expression* expr,Arena* temp);
@@ -420,6 +345,7 @@ static Value EvalExpression_(Expression* expr,Arena* temp){
          if(expr->op[0] == '|'){ // Pipe operation
             Value val = EvalExpression(expr->expressions[0],temp);
 
+         #if 0
             if(CompareString(expr->expressions[1]->id,"Hex")){
                val = HexValue(val,temp);
             } else if(CompareString(expr->expressions[1]->id,"String")){
@@ -434,7 +360,15 @@ static Value EvalExpression_(Expression* expr,Arena* temp){
             } else {
                NOT_IMPLEMENTED;
             }
+         #endif
 
+            auto iter = pipeFunctions.find(expr->expressions[1]->id);
+            if(iter == pipeFunctions.end()){
+               NOT_IMPLEMENTED;
+            }
+
+            PipeFunction func = iter->second;
+            val = func(val,temp);
             return val;
          }
 
@@ -967,32 +901,6 @@ void ProcessTemplate(FILE* outputFile,CompiledTemplate* compiledTemplate,Arena* 
 
    envTable.clear();
 }
-
-#if 0
-void ProcessTemplate(FILE* outputFile,const char* templateFilepath,Arena* arena){
-   ArenaMarker marker(arena);
-   tempArena = arena;
-
-   Arena outputArenaInst = SubArena(arena,Megabyte(64));
-   outputArena = &outputArenaInst;
-
-   #if 0
-      output = stdout;
-   #endif
-   #if 0
-      output = fopen("/dev/null","w");
-   #endif
-   #if 1
-      output = outputFile;
-   #endif
-
-   String content = PushFile(tempArena,templateFilepath);
-
-   ParseAndEvaluate(content);
-
-   envTable.clear();
-}
-#endif
 
 void TemplateSetCustom(const char* id,void* entity,const char* typeName){
    Value val = MakeValue(entity,typeName);

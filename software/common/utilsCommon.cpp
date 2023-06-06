@@ -3,6 +3,9 @@
 #include <cinttypes>
 #include <limits>
 
+#include <cstdio>
+
+#if 0
 extern "C"{
 int printf_(const char* format, ...);
 }
@@ -11,6 +14,7 @@ int printf_(const char* format, ...);
 #define printf printf_
 #else
 #include <cstdio>
+#endif
 #endif
 
 static char* GetNumberRepr(uint64 number){

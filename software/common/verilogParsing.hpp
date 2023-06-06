@@ -4,7 +4,7 @@
 #include <vector>
 #include <unordered_map>
 
-#include "versatPrivate.hpp"
+//#include "versatPrivate.hpp"
 #include "utils.hpp"
 #include "parser.hpp"
 
@@ -12,6 +12,7 @@ typedef std::unordered_map<String,Value> ValueMap;
 typedef std::unordered_map<String,String> MacroMap;
 
 struct Arena;
+struct CompiledTemplate;
 
 struct RangeAndExpr{
    Range range;
@@ -42,6 +43,58 @@ struct ExternalMemoryDPDef{
    PortDeclaration* write[2];
    PortDeclaration* enable[2];
 };
+
+// TODO: Follow structures are a copy from declarations.hpp. Should find a better place to store these declaration which are "shared" between normal code and parsing code
+struct Wire{
+   String name;
+   int bitsize;
+   bool isStatic; // This is only used by the verilog parser (?) to store info. TODO: Use a different structure in the verilog parser which contains this and remove from Wire
+};
+
+enum ExternalMemoryType{TWO_P = 0,DP};
+
+struct ExternalMemoryInterface{
+   int interface;
+   int bitsize;
+   int datasize;
+   ExternalMemoryType type;
+};
+
+struct ExternalMemoryID{
+   int interface;
+   ExternalMemoryType type;
+};
+
+template<> class std::hash<ExternalMemoryID>{
+public:
+   std::size_t operator()(ExternalMemoryID const& s) const noexcept{
+      std::size_t hash = s.interface * 2 + (int) s.type;
+      return hash;
+   }
+};
+
+struct ExternalPortInfo{
+   int addrSize;
+   int dataInSize;
+   int dataOutSize;
+   bool enable;
+   bool write;
+};
+
+// Contain info parsed directly by verilog.
+// This probably should be a union of all the memory types
+// The code in the verilog parser almost demands it
+struct ExternalMemoryInfo{
+   int numberPorts;
+
+   // Maximum of 2 ports
+   ExternalPortInfo ports[2];
+};
+
+inline bool operator==(const ExternalMemoryID& lhs,const ExternalMemoryID& rhs){
+   bool res = (memcmp(&lhs,&rhs,sizeof(ExternalMemoryID)) == 0);
+   return res;
+}
 
 struct ModuleInfo{
    String name;

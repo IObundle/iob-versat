@@ -112,6 +112,15 @@ struct Iterator{
    Value iterating;
 };
 
+Type* RegisterSimpleType(String name,int size,int align);
+Type* RegisterOpaqueType(String name,Type::Subtype subtype,int size,int align);
+Type* RegisterEnum(String name,Array<Pair<String,int>> enumValues);
+Type* RegisterTypedef(String oldName,String newName);
+Type* RegisterTemplate(String baseName,Array<String> templateArgNames);
+Type* RegisterStructMembers(String name,Array<Member> members);
+Type* RegisterTemplateMembers(String name,Array<TemplatedMember> members);
+Type* InstantiateTemplate(String name,Arena* arena = nullptr);
+
 void RegisterTypes();
 void FreeTypes();
 

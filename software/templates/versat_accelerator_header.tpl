@@ -6,14 +6,14 @@
 struct AcceleratorConfig{
 #{for pair namedConfigs}
 #{set name pair.first} #{set conf pair.second}
-iptr @{name};
+int @{name};
 #{end}
 };
 
 struct AcceleratorState{
 #{for pair namedStates}
 #{set name pair.first} #{set conf pair.second}
-iptr @{name};
+int @{name};
 #{end}
 };
 

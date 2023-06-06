@@ -4,11 +4,12 @@
 #include "verilogParsing.hpp"
 #include "type.hpp"
 #include "templateEngine.hpp"
-#include "templateData.inc"
 #include "unitVerilation.hpp"
 
 #include <filesystem>
 namespace fs = std::filesystem;
+
+#include "templateData.hpp"
 
 #if 0
 struct OptionFormat{
@@ -272,13 +273,13 @@ int main(int argc,const char* argv[]){
    finalModule.push_back(info);
 
    region(temp){
-   String wrapper = PushString(temp,"%s/wrapper.inc",opts->outputFilepath);
-   PushNullByte(temp);
+      String wrapper = PushString(temp,"%s/wrapper.inc",opts->outputFilepath);
+      PushNullByte(temp);
 
-   FILE* output = OpenFileAndCreateDirectories(wrapper.data,"w");
-   CompiledTemplate* comp = CompileTemplate(unit_verilog_data,temp);
-   OutputModuleInfos(output,false,(Array<ModuleInfo>){finalModule.data(),(int) finalModule.size()},STRING("Verilog"),comp,temp);
-   fclose(output);
+      FILE* output = OpenFileAndCreateDirectories(wrapper.data,"w");
+      CompiledTemplate* comp = CompileTemplate(unit_verilog_data_template,temp);
+      OutputModuleInfos(output,false,(Array<ModuleInfo>){finalModule.data(),(int) finalModule.size()},STRING("Verilog"),comp,temp);
+      fclose(output);
    }
 
    region(temp){
@@ -286,7 +287,7 @@ int main(int argc,const char* argv[]){
       PushNullByte(temp);
 
       FILE* output = OpenFileAndCreateDirectories(name.data,"w");
-      CompiledTemplate* comp = CompileTemplate(versat_makefile,temp);
+      CompiledTemplate* comp = CompileTemplate(versat_makefile_template,temp);
 
       TemplateSetArray("verilogFiles","String",opts->verilogFiles.data(),opts->verilogFiles.size());
       TemplateSetString("typename",topLevelTypeStr);

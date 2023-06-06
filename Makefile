@@ -1,16 +1,21 @@
 VERSAT_DIR:=.
-include core.mk
-include sharedHardware.mk
 
-HARDWARE := $(patsubst %,./hardware/src/%.v,$(VERILATE_UNIT_BASIC))
+# Default rule
+all: versat
 
-compiler:
-	$(MAKE) -C $(VERSAT_PC_EMUL) compiler
+include $(VERSAT_DIR)/core.mk
+include $(VERSAT_DIR)/sharedHardware.mk
 
-run:
-	./versatCompiler -I /home/zettasticks/IOBundle/iob-soc-sha/submodules/VERSAT/hardware/include/ $(HARDWARE) testVersatSpecification.txt -s -T CH
+#HARDWARE := $(patsubst %,./hardware/src/%.v,$(VERILATE_UNIT_BASIC))
+
+tools:
+	$(MAKE) -C $(VERSAT_TOOLS_DIR) all
+
+versat: tools
+	$(MAKE) -C $(VERSAT_COMP_DIR) versat
 
 clean:
-	$(MAKE) -C $(VERSAT_SW_DIR) clean
+	-rm -fr build
+	-rm -f *.a versat versat.d
 
 .PHONY: pc-sim clean

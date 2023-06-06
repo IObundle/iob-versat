@@ -75,6 +75,20 @@ long int GetFileSize(FILE* file){
    return size;
 }
 
+String ExtractFilenameOnly(String filepath){
+   int i;
+   for(i = filepath.size - 1; i >= 0; i--){
+      if(filepath[i] == '/'){
+         break;
+      }
+   }
+
+   String res = {};
+   res.data = &filepath.data[i + 1];
+   res.size = filepath.size - (i + 1);
+   return res;
+}
+
 char* GetCurrentDirectory(){
    static char buffer[PATH_MAX];
    buffer[0] = '\0';

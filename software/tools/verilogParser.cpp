@@ -3,7 +3,7 @@
 #include "type.hpp"
 #include "templateEngine.hpp"
 
-#include "templateData.inc"
+#include "templateData.hpp"
 
 int main(int argc,const char* argv[]){
    if(argc < 4){
@@ -56,7 +56,7 @@ int main(int argc,const char* argv[]){
    }
 
    FILE* output = OpenFileAndCreateDirectories(argv[2],"w");
-   CompiledTemplate* comp = CompileTemplate(unit_verilog_data,tempArena);
+   CompiledTemplate* comp = CompileTemplate(unit_verilog_data_template,tempArena);
 
    OutputModuleInfos(output,false,(Array<ModuleInfo>){allModules.data(),(int) allModules.size()},STRING(argv[1]),comp,tempArena);
 

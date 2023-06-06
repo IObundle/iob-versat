@@ -3,7 +3,6 @@
 #include <cinttypes>
 
 #include "parser.hpp"
-#include "versatPrivate.hpp"
 #include "structParsing.hpp"
 
 namespace ValueType{
@@ -25,48 +24,7 @@ namespace ValueType{
 static Arena permanentArena;
 static Pool<Type> types;
 
-#if 0
-static String ParseSimpleType(Tokenizer* tok){
-   Assert(tok->IsSingleChar("<>,"));
-
-   SkipQualifiers(tok);
-
-   void* mark = tok->Mark();
-   Token name = tok->NextToken();
-
-   if(CompareString(name,"unsigned")){
-      Token next = tok->NextToken();
-      name = ExtendToken(name,next);
-   }
-
-   Token peek = tok->PeekToken();
-   if(CompareToken(peek,"<")){ // Template
-      Token nameRemaining = tok->PeekFindIncluding(">");
-      name = ExtendToken(name,nameRemaining);
-      tok->AdvancePeek(peek);
-
-      while(1){
-         ParseSimpleType(tok);
-
-         Token peek = tok->PeekToken();
-
-         if(CompareString(peek,",")){
-            tok->AdvancePeek(peek);
-         } else if(CompareString(peek,">")){
-            tok->AdvancePeek(peek);
-            break;
-         }
-      }
-   }
-
-   String res = tok->Point(mark);
-   res = TrimWhitespaces(res);
-
-   return res;
-}
-#endif
-
-static Type* RegisterSimpleType(String name,int size,int align){
+Type* RegisterSimpleType(String name,int size,int align){
    Type* type = types.Alloc();
 
    type->type = Type::BASE;
@@ -77,7 +35,7 @@ static Type* RegisterSimpleType(String name,int size,int align){
    return type;
 }
 
-static Type* RegisterOpaqueType(String name,Type::Subtype subtype,int size,int align){
+Type* RegisterOpaqueType(String name,Type::Subtype subtype,int size,int align){
    for(Type* type : types){
       if(CompareString(type->name,name)){
          Assert(type->size == size);
@@ -95,7 +53,7 @@ static Type* RegisterOpaqueType(String name,Type::Subtype subtype,int size,int a
    return type;
 }
 
-static Type* RegisterEnum(String name,Array<Pair<String,int>> enumValues){
+Type* RegisterEnum(String name,Array<Pair<String,int>> enumValues){
    for(Type* type : types){
       if(CompareString(type->name,name)){
          type->type = Type::ENUM;
@@ -114,7 +72,7 @@ static Type* RegisterEnum(String name,Array<Pair<String,int>> enumValues){
    return type;
 }
 
-static Type* RegisterTypedef(String oldName,String newName){
+Type* RegisterTypedef(String oldName,String newName){
    Type* type = GetType(newName);
    Type* typedefType = GetType(oldName);
 
@@ -128,7 +86,7 @@ static Type* RegisterTypedef(String oldName,String newName){
    return type;
 }
 
-static Type* RegisterTemplate(String baseName,Array<String> templateArgNames){
+Type* RegisterTemplate(String baseName,Array<String> templateArgNames){
    Type* type = types.Alloc();
 
    type->name = baseName;
@@ -138,7 +96,7 @@ static Type* RegisterTemplate(String baseName,Array<String> templateArgNames){
    return type;
 }
 
-static Type* RegisterStructMembers(String name,Array<Member> members){
+Type* RegisterStructMembers(String name,Array<Member> members){
    Type* type = GetType(name);
 
    Assert(type->type == Type::STRUCT);
@@ -148,7 +106,7 @@ static Type* RegisterStructMembers(String name,Array<Member> members){
    return type;
 }
 
-static Type* RegisterTemplateMembers(String name,Array<TemplatedMember> members){
+Type* RegisterTemplateMembers(String name,Array<TemplatedMember> members){
    Type* type = GetType(name);
 
    Assert(type->type == Type::TEMPLATED_STRUCT_DEF);
@@ -168,7 +126,7 @@ Type* GetSpecificType(String name){
    return nullptr;
 }
 
-Type* InstantiateTemplate(String name,Arena* arena = nullptr){
+Type* InstantiateTemplate(String name,Arena* arena){
    STACK_ARENA(temp,Kilobyte(4));
    Tokenizer tok(name,"<>,",{});
 
@@ -427,11 +385,7 @@ Type* GetArrayType(Type* baseType, int arrayLength){
 #define A(STRUCT) #STRUCT,sizeof(STRUCT)
 #define B(STRUCT,FULLTYPE,TYPE,NAME,PTR,HAS_ARRAY,ARRAY_ELEMENTS)  ((Member){#TYPE,#NAME,sizeof(FULLTYPE),sizeof(TYPE),offsetof(STRUCT,NAME),PTR,ARRAY_ELEMENTS,HAS_ARRAY})
 
-#include "templateEngine.hpp"
-#include "verilogParsing.hpp"
-#include "scratchSpace.hpp"
-#include "utils.hpp"
-#include "typeInfo.inc"
+void RegisterParsedTypes();
 
 void RegisterTypes(){
    static bool registered = false;
@@ -440,7 +394,7 @@ void RegisterTypes(){
    }
    registered = true;
 
-   permanentArena = InitArena(Megabyte(16));
+   permanentArena = InitArena(Megabyte(1));
 
    #define REGISTER(TYPE) RegisterSimpleType(STRING(#TYPE),sizeof(TYPE),alignof(TYPE));
 

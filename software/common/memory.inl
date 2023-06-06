@@ -176,7 +176,7 @@ void Hashmap<Key,Data>::Clear(){
 template<typename Key,typename Data>
 Data* Hashmap<Key,Data>::Insert(Key key,Data data){
    int mask = this->nodesAllocated - 1;
-   int index = Hash<Key>(key) & mask; // Size is power of 2
+   int index = std::hash<Key>()(key) & mask; // Size is power of 2
 
    Pair<Key,Data>* ptr = this->buckets[index];
    // Do not even need to look
@@ -241,7 +241,7 @@ bool Hashmap<Key,Data>::Exists(Key key){
 template<typename Key,typename Data>
 Data* Hashmap<Key,Data>::Get(Key key){
    int mask = this->nodesAllocated - 1;
-   int index = Hash<Key>(key) & mask; // Size is power of 2
+   int index = std::hash<Key>()(key) & mask; // Size is power of 2
 
    Pair<Key,Data>* ptr = this->buckets[index];
    for(; ptr;){
