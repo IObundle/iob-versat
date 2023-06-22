@@ -25,3 +25,16 @@ make sim
 source path/to/vivado/settings64.sh
 make fpga
 ```
+
+## Setup Verilator
+- Install the Verilator simulator following the instructions in the 
+[official page](https://verilator.org/guide/latest/install.html).
+- Set the `VERILATOR_INCLUDE` environment variable in `$HOME/.bashrc`:
+```
+export VERILATOR_INCLUDE=<path>/share/verilator/include
+```
+  - The `<path>` to Verilator can be obtained with the command `which verilator` 
+  after installation. For example if `which verilator` returns 
+  `/usr/local/bin/verilog`, therefore: `<path>`=`/usr/local`. Final command:
+  `export VERILATOR_INCLUDE=/usr/local/share/verilator/include`
+

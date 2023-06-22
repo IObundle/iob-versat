@@ -10,17 +10,23 @@
  */
 
 module xalulite # ( 
-		 parameter			  DATA_W = 32
-	) (
-                 input                            clk,
-                 input                            rst,
+       parameter          DATA_W = 32
+   ) (
+                 input  clk,
+                 input  rst,
+                 input  run,
+                 input  running,
 
-                 //flow interface
-                 input [2*`DATABUS_W-1:0]         flow_in,
-                 output reg [DATA_W-1:0]    	  flow_out,
+                 // Inputs
+                 input  [DATA_W-1:0] in1,
+                 input  [DATA_W-1:0] in2,
 
-                 // config interface
-                 input [`ALULITE_CONF_BITS - 1:0] configdata
+                 // Output
+                 output reg [DATA_W-1:0] out,
+
+                 // Config interface
+                 input self_loop, 
+                 input [`ALULITE_FNS_W-2 : 0] fns
                  );
 
 
@@ -31,52 +37,22 @@ module xalulite # (
 
    reg signed [DATA_W-1:0]                        result_int;
 
-   wire [`N_W-1: 0]                               sela;
-   wire [`N_W-1: 0]                               selb;
-
-   wire [DATA_W-1:0]                              op_a;
-   wire [DATA_W-1:0]                              op_b;
-   reg                                            op_a_msb;
-   reg                                            op_b_msb;
-   wire [DATA_W-1:0]                              op_a_int;
-   reg [DATA_W-1:0]                               op_a_reg;
-   reg [DATA_W-1:0]                               op_b_reg;
-   wire [`ALULITE_FNS_W-2:0]                      fns;
-   wire                                           self_loop;
-
-   // Unpack config data
-   assign sela = configdata[`ALULITE_CONF_BITS-1 -: `N_W];
-   assign selb = configdata[`ALULITE_CONF_BITS-`N_W-1 -: `N_W];
-   assign self_loop = configdata[`ALULITE_FNS_W-1];
-   assign fns = configdata[`ALULITE_FNS_W-2 : 0];
-
-   // Input selection
-   xinmux # ( 
-	.DATA_W(DATA_W)
-   ) muxa (
-        .sel(sela),
-        .data_in(flow_in),
-        .data_out(op_a)
-	);
-
-   xinmux # ( 
-	.DATA_W(DATA_W)
-   ) muxb (
-        .sel(selb),
-        .data_in(flow_in),
-        .data_out(op_b)
-	);
+   reg                                            in1_msb;
+   reg                                            in2_msb;
+   wire [DATA_W-1:0]                              in1_int;
+   reg [DATA_W-1:0]                               in1_reg;
+   reg [DATA_W-1:0]                               in2_reg;
 
    always @ (posedge clk, posedge rst)
      if (rst) begin
-	op_b_reg <= {DATA_W{1'b0}};
-	op_a_reg <= {DATA_W{1'b0}};
+   in2_reg <= {DATA_W{1'b0}};
+   in1_reg <= {DATA_W{1'b0}};
      end else begin
-	op_b_reg <= op_b;
-	op_a_reg <= op_a;
+   in2_reg <= in2;
+   in1_reg <= in1;
      end
 
-   assign op_a_int = self_loop? flow_out : op_a_reg;
+   assign in1_int = self_loop? out : in1_reg;
 
    // Computes result_int
    always @ * begin
@@ -84,107 +60,107 @@ module xalulite # (
       result_int = temp_adder[DATA_W-1:0];
 
       case (fns)
-	`ALULITE_OR : begin
-	   result_int = op_a_int | op_b_reg;
-	end
-	`ALULITE_AND : begin
-	   result_int = op_a_int & op_b_reg;
-	end
-	`ALULITE_CMP_SIG : begin
-	   result_int[DATA_W-1] = temp_adder[DATA_W] ;
-	end
-	`ALULITE_MUX : begin
-	   result_int = op_b_reg;
+   `ALULITE_OR : begin
+      result_int = in1_int | in2_reg;
+   end
+   `ALULITE_AND : begin
+      result_int = in1_int & in2_reg;
+   end
+   `ALULITE_CMP_SIG : begin
+      result_int[DATA_W-1] = temp_adder[DATA_W] ;
+   end
+   `ALULITE_MUX : begin
+      result_int = in2_reg;
 
-	   if(~op_a_reg[DATA_W-1]) begin
-	      if(self_loop)
-	        result_int = flow_out;
-	      else
-	        result_int = {DATA_W{1'b0}};
-	   end
-	end
-	`ALULITE_SUB : begin
-	end
-	`ALULITE_ADD : begin
-	   if(self_loop) begin
-	      if(op_a_reg[DATA_W-1])
-	        result_int = op_b_reg;
-	   end
-	end
-	`ALULITE_MAX : begin
-	   if (temp_adder[DATA_W] == 1'b0) begin
-	      result_int = op_b_reg;
+      if(~in1_reg[DATA_W-1]) begin
+         if(self_loop)
+           result_int = out;
+         else
+           result_int = {DATA_W{1'b0}};
+      end
+   end
+   `ALULITE_SUB : begin
+   end
+   `ALULITE_ADD : begin
+      if(self_loop) begin
+         if(in1_reg[DATA_W-1])
+           result_int = in2_reg;
+      end
+   end
+   `ALULITE_MAX : begin
+      if (temp_adder[DATA_W] == 1'b0) begin
+         result_int = in2_reg;
            end else begin
-	      result_int = op_a_int;
+         result_int = in1_int;
            end
 
-	   if(self_loop) begin
-	      if(op_a_reg[DATA_W-1])
-	        result_int = flow_out;
-	   end
-	end
-	`ALULITE_MIN : begin
-	   if (temp_adder[DATA_W] == 1'b0) begin
-	      result_int = op_a_int;
+      if(self_loop) begin
+         if(in1_reg[DATA_W-1])
+           result_int = out;
+      end
+   end
+   `ALULITE_MIN : begin
+      if (temp_adder[DATA_W] == 1'b0) begin
+         result_int = in1_int;
            end else begin
-	      result_int = op_b_reg;
+         result_int = in2_reg;
            end
 
-	   if(self_loop) begin
-	      if(op_a_reg[DATA_W-1])
-	        result_int = flow_out;
-	   end
-	end
-	default : begin
-	end
+      if(self_loop) begin
+         if(in1_reg[DATA_W-1])
+           result_int = out;
+      end
+   end
+   default : begin
+   end
       endcase // case (fns)
    end
 
    // Computes temp_adder
-   assign temp_adder = ((bz & ({op_b_msb,op_b_reg}))) + ((ai ^ ({op_a_msb,op_a_int}))) + {{DATA_W{1'b0}},cin};
+   assign temp_adder = ((bz & ({in2_msb,in2_reg}))) + ((ai ^ ({in1_msb,in1_int}))) + {{DATA_W{1'b0}},cin};
 
    // Compute ai, cin, bz
    always @ * begin
       cin = 1'b 0;
-      ai = {DATA_W+1{1'b0}}; // will invert op_a_int if set to all ones
-      bz = {DATA_W+1{1'b1}}; // will zero op_b_reg if set to all zeros
+      ai = {DATA_W+1{1'b0}}; // will invert in1_int if set to all ones
+      bz = {DATA_W+1{1'b1}}; // will zero in2_reg if set to all zeros
 
-      op_a_msb = 1'b0;
-      op_b_msb = 1'b0;
+      in1_msb = 1'b0;
+      in2_msb = 1'b0;
 
       case(fns)
-	`ALULITE_CMP_SIG : begin
-	   ai = {DATA_W+1{1'b1}};
-	   cin = 1'b 1;
-	   op_a_msb = op_a_reg[DATA_W-1];
-	   op_b_msb = op_b_reg[DATA_W-1];
-	end
-	`ALULITE_SUB : begin
-	   ai = {DATA_W+1{1'b1}};
-	   cin = 1'b 1;
-	end
-	`ALULITE_MAX : begin
+   `ALULITE_CMP_SIG : begin
+      ai = {DATA_W+1{1'b1}};
+      cin = 1'b 1;
+      in1_msb = in1_reg[DATA_W-1];
+      in2_msb = in2_reg[DATA_W-1];
+   end
+   `ALULITE_SUB : begin
+      ai = {DATA_W+1{1'b1}};
+      cin = 1'b 1;
+   end
+   `ALULITE_MAX : begin
            ai = {DATA_W+1{1'b1}};
            cin = 1'b 1;
-	   op_a_msb = op_a_int[DATA_W-1];
-	   op_b_msb = op_b_reg[DATA_W-1];
-	end
-	`ALULITE_MIN : begin
+      in1_msb = in1_int[DATA_W-1];
+      in2_msb = in2_reg[DATA_W-1];
+   end
+   `ALULITE_MIN : begin
            ai = {DATA_W+1{1'b1}};
            cin = 1'b 1;
-	   op_a_msb = op_a_int[DATA_W-1];
-	   op_b_msb = op_b_reg[DATA_W-1];
-	end
-	default : begin
-	end
+      in1_msb = in1_int[DATA_W-1];
+      in2_msb = in2_reg[DATA_W-1];
+   end
+   default : begin
+   end
       endcase
 
    end
 
    always @ (posedge clk, posedge rst)
      if (rst)
-       flow_out <= {DATA_W{1'b0}};
+       out <= {DATA_W{1'b0}};
      else 
-       flow_out <= result_int;
+       out <= result_int;
 
 endmodule

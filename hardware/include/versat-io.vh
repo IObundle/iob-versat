@@ -1,18 +1,19 @@
 // External memory address width 2**32 = 4GB
+`ifdef x64
+`define IO_ADDR_W 64
+`else
 `define IO_ADDR_W 32
+`endif
 
 // Transfer size width 2**11 = 2048 words (same as parameter ADDR_W)
 `define IO_SIZE_W 11
-
-// Number of versat-io units (versat-i + versat-o)
-`define nIO (`nVI+`nVO)
 
 // Configuration
 
 // `MEMP_CONF_BITS = `N_W + 7*`MEM_ADDR_W + 4*`PERIOD_W + 1 + 1 + 1
 
 // Configuration versat-i
-`define VI_MEMP_CONF_BITS (`MEMP_CONF_BITS-`N_W-1) // No select and write enable
+`define VI_MEMP_CONF_BITS (`MEMP_CONF_BITS - 1) // No select and write enable
 
 `define VI_CONFIG_BITS (`IO_ADDR_W+`IO_SIZE_W+4*`MEM_ADDR_W+2*`PERIOD_W+`VI_MEMP_CONF_BITS)
 
