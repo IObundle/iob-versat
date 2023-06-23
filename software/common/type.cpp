@@ -601,6 +601,18 @@ Value AccessObjectIndex(Value object,int index){
          Iterator iter = Iterate(object);
          for(int i = 0; HasNext(iter) && i < index; Advance(&iter),i += 1);
          value = GetValue(iter);
+      } else if(object.type->templateBase == ValueType::HASHMAP){
+         HashmapUnpackedIndex unpacked = UnpackHashmapIndex(index);
+
+         Iterator iter = Iterate(object);
+         for(int i = 0; HasNext(iter) && i < unpacked.index; Advance(&iter),i += 1);
+         Value pair = GetValue(iter);
+
+         if(unpacked.data){
+            value = AccessStruct(pair,STRING("data"));
+         } else {
+            value = AccessStruct(pair,STRING("key"));
+         }
       } else {
          NOT_IMPLEMENTED;
       }
@@ -782,6 +794,23 @@ bool IsEmbeddedListKind(Type* type){
 
 bool IsStruct(Type* type){
    bool res = type->type == Type::STRUCT || type->type == Type::TEMPLATED_INSTANCE;
+   return res;
+}
+
+int HashmapIndex(int index,bool data){
+   uint res = index;
+   if(data){
+      res = SET_BIT(res,31);
+   }
+   return res;
+}
+
+HashmapUnpackedIndex UnpackHashmapIndex(int index){
+   HashmapUnpackedIndex res = {};
+
+   res.data = GET_BIT(index,31);
+   res.index = CLEAR_BIT(index,31);
+
    return res;
 }
 

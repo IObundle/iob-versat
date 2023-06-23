@@ -1,12 +1,10 @@
-VERSAT_DIR:=.
+VERSAT_DIR:=$(shell pwd)
 
 # Default rule
 all: versat
 
 include $(VERSAT_DIR)/core.mk
 include $(VERSAT_DIR)/sharedHardware.mk
-
-#HARDWARE := $(patsubst %,./hardware/src/%.v,$(VERILATE_UNIT_BASIC))
 
 tools:
 	$(MAKE) -C $(VERSAT_TOOLS_DIR) all

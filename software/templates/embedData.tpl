@@ -29,14 +29,10 @@ FUInstance instancesBuffer[] = {
          .memMapped = (int*) 0x0, 
       #{end}
       
-      #{if inst.config >= static and inst.config < staticEnd}
-         .config = (int*) @{inst.config - static + (nConfigs * 4) + versatBase |> Hex},
-      #{else}
-         #{if inst.config} 
-            .config = (int*) @{inst.config - config + versatConfig * 4 + versatBase |> Hex}, 
-         #{else} 
-            .config = (int*) 0x0, 
-         #{end}
+      #{if inst.config} 
+           .config = (int*) @{inst.config - config + versatConfig * 4 + versatBase |> Hex}, 
+      #{else} 
+           .config = (int*) 0x0, 
       #{end}
       
       #{if inst.state} 

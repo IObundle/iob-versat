@@ -3,41 +3,25 @@
 
 #include "utils.hpp"
 
+#include <vector>
+#include <unordered_map>
+
+#include "memory.hpp"
+#include "logger.hpp"
+
+#include "accelerator.hpp"
+#include "configurations.hpp"
+#include "merge.hpp"
+#include "graph.hpp"
+
 // Forward declarations
 struct Versat;
 struct Accelerator;
 struct FUDeclaration;
-struct IterativeUnitDeclaration; // TODO: Cannot leak this struct to public
-
-struct FUInstance{
-   String name;
-
-   // Embedded memory
-   int* memMapped;
-   iptr* config;
-   int* state;
-   int* delay;
-   int* externalMemory;
-
-   // This should be part of another hierarchy.
-   // Required for accel subunits but not required by embedded or should user code have access to them
-   int* outputs;
-	int* storedOutputs;
-   unsigned char* extraData;
-   FUInstance* declarationInstance; // Used because of AccessMemory and the fact that GetInput depends on instance pointer
-
-   // This should be versat side only, but it's easier to have them here for now
-   // User code should not access them directly. Future versions will not have them
-   String parameters;
-   Accelerator* accel;
-	FUDeclaration* declaration;
-	int id;
-};
-
-struct SpecificMerge{
-   String instA;
-   String instB;
-};
+struct IterativeUnitDeclaration;
+struct InstanceNode;
+struct FUInstance;
+struct Versat;
 
 enum VersatDebugFlags{
    OUTPUT_GRAPH_DOT,
@@ -59,13 +43,272 @@ enum GraphDotFormat_{
    GRAPH_DOT_FORMAT_LATENCY = 0x40 // Outputs latency information for edges and port instances which know their latency information
 };
 
-enum MergingStrategy{
-   SIMPLE_COMBINATION,
-   CONSOLIDATION_GRAPH,
-   PIECEWISE_CONSOLIDATION_GRAPH,
-   FIRST_FIT,
-   ORDERED_FIT
+struct DAGOrder{
+   FUInstance** sinks;
+   int numberSinks;
+   FUInstance** sources;
+   int numberSources;
+   FUInstance** computeUnits;
+   int numberComputeUnits;
+   FUInstance** instances;
 };
+
+struct VersatComputedData{
+   int memoryMaskSize;
+   int memoryAddressOffset;
+   char memoryMaskBuffer[33];
+   char* memoryMask;
+};
+
+struct ComputedData{
+   Array<ExternalMemoryInterface> external;
+   Array<VersatComputedData> data;
+};
+
+struct Parameter{
+   String name;
+   String value;
+   Parameter* next;
+};
+
+struct DAGOrderNodes{
+   InstanceNode** sinks;
+   int numberSinks;
+   InstanceNode** sources;
+   int numberSources;
+   InstanceNode** computeUnits;
+   int numberComputeUnits;
+   InstanceNode** instances;
+   int* order;
+   int size;
+   int maxOrder;
+};
+
+struct FUInstance{
+   String name;
+
+   // Embedded memory
+   int* memMapped;
+   int* config;
+   int* state;
+   int* delay;
+   int* externalMemory;
+
+   // This should be part of another hierarchy.
+   // Required for accel subunits but not required by embedded or should user code have access to them
+   int* outputs;
+   int* storedOutputs;
+   unsigned char* extraData;
+   FUInstance* declarationInstance; // Used because of AccessMemory and the fact that GetInput depends on instance pointer
+
+   // This should be versat side only, but it's easier to have them here for now
+   // User code should not access them directly. Future versions will not have them
+   String parameters;
+   Accelerator* accel;
+   FUDeclaration* declaration;
+   int id;
+
+  // PC only
+   int baseDelay;
+
+   // Configuration + State variables that versat needs access to
+   int done; // Units that are sink or sources of data must implement done to ensure circuit does not end prematurely
+   bool isStatic;
+
+   bool namedAccess;
+
+   // Various uses
+   Accelerator* iterative;
+
+   UnitDebugData* debugData;
+
+   union{
+      int literal;
+      int bufferAmount;
+      int portIndex;
+   };
+   //GraphComputedData* graphData;
+   //VersatComputedData* versatData;
+   int sharedIndex;
+   char tag;
+   bool savedConfiguration; // For subunits registered, indicate when we save configuration before hand
+   bool savedMemory; // Same for memory
+   bool sharedEnable;
+   bool initialized;
+};
+
+struct DebugState{
+   uint dotFormat;
+   bool outputGraphs;
+   bool outputAccelerator;
+   bool outputVersat;
+   bool outputVCD;
+   bool useFixedBuffers;
+};
+
+struct Versat{
+   Pool<FUDeclaration> declarations;
+   Pool<Accelerator> accelerators;
+
+   Arena permanent;
+   Arena temp;
+
+   int base;
+   int numberConfigurations;
+
+   DebugState debug;
+};
+
+struct UnitValues{
+   int inputs;
+   int outputs;
+
+   int configs;
+   int states;
+   int delays;
+   int ios;
+   int totalOutputs;
+   int extraData;
+   int statics;
+   int sharedUnits;
+   int externalMemoryInterfaces;
+   int externalMemorySize;
+   int numberUnits;
+
+   int memoryMappedBits;
+   bool isMemoryMapped;
+};
+
+struct VersatComputedValues{
+   int nConfigs;
+   int configBits;
+
+   int versatConfigs;
+   int versatStates;
+
+   int nStatics;
+   int staticBits;
+   int staticBitsStart;
+
+   int nDelays;
+   int delayBits;
+   int delayBitsStart;
+
+   // Configurations = config + static + delays
+   int nConfigurations;
+   int configurationBits;
+   int configurationAddressBits;
+
+   int nStates;
+   int stateBits;
+   int stateAddressBits;
+
+   int unitsMapped;
+   int memoryMappedBytes;
+   int maxMemoryMapDWords;
+
+   int nUnitsIO;
+
+   int numberConnections;
+
+   int externalMemoryInterfaces;
+
+   int stateConfigurationAddressBits;
+   int memoryAddressBits;
+   int memoryMappingAddressBits;
+   int memoryConfigDecisionBit;
+   int lowerAddressSize;
+};
+
+struct HierarchicalName{
+   String name;
+   HierarchicalName* next;
+};
+
+struct SharingInfo{
+   int* ptr;
+   bool init;
+};
+// Simple operations should also be stored here. They are versat agnostic as well
+namespace BasicDeclaration{
+   extern FUDeclaration* buffer;
+   extern FUDeclaration* fixedBuffer;
+   extern FUDeclaration* input;
+   extern FUDeclaration* output;
+   extern FUDeclaration* multiplexer;
+   extern FUDeclaration* combMultiplexer;
+   extern FUDeclaration* timedMultiplexer;
+   extern FUDeclaration* stridedMerge;
+   extern FUDeclaration* pipelineRegister;
+   extern FUDeclaration* data;
+}
+
+struct CompiledTemplate;
+namespace BasicTemplates{
+   extern CompiledTemplate* acceleratorTemplate;
+   extern CompiledTemplate* topAcceleratorTemplate;
+   extern CompiledTemplate* dataTemplate;
+   extern CompiledTemplate* unitVerilogData;
+   extern CompiledTemplate* acceleratorHeaderTemplate;
+   extern CompiledTemplate* externalPortmapTemplate;
+   extern CompiledTemplate* externalPortTemplate;
+   extern CompiledTemplate* externalInstTemplate;
+   extern CompiledTemplate* iterativeTemplate;
+}
+
+struct GraphMapping;
+
+// Temp
+bool EqualPortMapping(PortInstance p1,PortInstance p2);
+
+// General info
+UnitValues CalculateIndividualUnitValues(FUInstance* inst); // Values for individual unit, not taking into account sub units. For a composite, this pretty much returns empty except for total outputs, as the unit itself must allocate output memory
+UnitValues CalculateAcceleratorUnitValues(Versat* versat,FUInstance* inst); // Values taking into account sub units
+UnitValues CalculateAcceleratorValues(Versat* versat,Accelerator* accel);
+VersatComputedValues ComputeVersatValues(Versat* versat,Accelerator* accel);
+int CalculateTotalOutputs(Accelerator* accel);
+int CalculateTotalOutputs(FUInstance* inst);
+bool IsConfigStatic(Accelerator* topLevel,FUInstance* inst);
+bool IsUnitCombinatorial(FUInstance* inst);
+
+int CalculateNumberOfUnits(InstanceNode* node);
+
+// Delay
+int CalculateLatency(FUInstance* inst);
+Hashmap<EdgeNode,int>* CalculateDelay(Versat* versat,Accelerator* accel,Arena* out);
+void SetDelayRecursive(Accelerator* accel,Arena* arena);
+
+// Graph fixes
+void FixMultipleInputs(Versat* versat,Accelerator* accel);
+void FixMultipleInputs(Versat* versat,Accelerator* accel,Hashmap<FUInstance*,int>* instanceToInput);
+void FixDelays(Versat* versat,Accelerator* accel,Hashmap<EdgeNode,int>* edgeDelays);
+
+// Accelerator merging
+DAGOrderNodes CalculateDAGOrder(InstanceNode* instances,Arena* arena);
+
+// Debug
+void AssertGraphValid(InstanceNode* nodes,Arena* arena);
+void OutputGraphDotFile(Versat* versat,Accelerator* accel,bool collapseSameEdges,const char* filenameFormat,...) __attribute__ ((format (printf, 4, 5)));
+void OutputGraphDotFile(Versat* versat,Accelerator* accel,bool collapseSameEdges,FUInstance* highlighInstance,const char* filenameFormat,...) __attribute__ ((format (printf, 5, 6)));
+void OutputGraphDotFile(Versat* versat,Accelerator* accel,bool collapseSameEdges,Set<FUInstance*>* highlight,const char* filenameFormat,...) __attribute__ ((format (printf, 5, 6)));
+Array<String> GetFullNames(Accelerator* accel,Arena* out);
+
+void TemplateSetDefaults(Versat*);
+
+// Misc
+bool CheckValidName(String name); // Check if name can be used as identifier in verilog
+bool IsTypeHierarchical(FUDeclaration* decl);
+bool IsTypeSimulatable(FUDeclaration* decl);
+int CountNonSpecialChilds(InstanceNode* nodes);
+void OutputCircuitSource(Versat* versat,FUDeclaration* decl,Accelerator* accel,FILE* file);
+InstanceNode* GetInputNode(InstanceNode* nodes,int inputIndex);
+int GetInputValue(InstanceNode* nodes,int index);
+FUInstance* GetInputInstance(InstanceNode* nodes,int inputIndex);
+InstanceNode* GetOutputNode(InstanceNode* nodes);
+FUInstance* GetOutputInstance(InstanceNode* nodes);
+PortNode GetInputValueInstance(FUInstance* inst,int index);
+
+ComputedData CalculateVersatComputedData(InstanceNode* instances,VersatComputedValues val,Arena* out);
 
 // Temp
 struct ModuleInfo;
@@ -117,8 +360,6 @@ FUDeclaration* RegisterFU(Versat* versat,FUDeclaration declaration);
 FUDeclaration* GetTypeByName(Versat* versat,String str);
 FUDeclaration* RegisterIterativeUnit(Versat* versat,Accelerator* accel,FUInstance* inst,int latency,String name);
 FUDeclaration* RegisterSubUnit(Versat* versat,String name,Accelerator* accel);
-FUDeclaration* MergeAccelerators(Versat* versat,FUDeclaration* accel1,FUDeclaration* accel2,String name,int flatteningOrder = 99,
-                                 MergingStrategy strategy = MergingStrategy::CONSOLIDATION_GRAPH,SpecificMerge* specifics = nullptr,int nSpecifics = 0);
 
 // Configuration loading and storing
 void ClearConfigurations(Accelerator* accel);
@@ -133,13 +374,8 @@ void DisplayAcceleratorMemory(Accelerator* topLevel);
 void DisplayUnitConfiguration(Accelerator* topLevel);
 void EnterDebugTerminal(Versat* versat);
 
-#ifdef x86
-#define DebugAccelerator(...) ((void)0)
-#define DebugVersat(...) ((void)0)
-#else
 void DebugAccelerator(Accelerator* accel);
 void DebugVersat(Versat* versat);
-#endif
 
 // Debug units, only works for pc-emul (no declaration info in embedded)
 bool CheckInputAndOutputNumber(FUDeclaration* type,int inputs,int outputs);
@@ -166,7 +402,6 @@ void Hook(Versat* versat,FUDeclaration* decl,Accelerator* accel,FUInstance* inst
 
 void TestVersatSide(Versat* versat); // Calls tests from versat side
 
-FUDeclaration* MergeThree(Versat* versat,FUDeclaration* typeA,FUDeclaration* typeB,FUDeclaration* typeC);
-FUDeclaration* Merge(Versat* versat,Array<FUDeclaration*> types,String name,MergingStrategy strat = MergingStrategy::CONSOLIDATION_GRAPH);
+#include "typeSpecifics.inl"
 
 #endif // INCLUDED_VERSAT_HPP

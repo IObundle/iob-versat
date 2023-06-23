@@ -108,7 +108,7 @@ void PrintAcceleratorInstances(Accelerator* accel){
 
    AcceleratorIterator iter = {};
    for(InstanceNode* node = iter.Start(accel,temp,false); node; node = iter.Next()){
-      ComplexFUInstance* inst = node->inst;
+      FUInstance* inst = node->inst;
       for(int ii = 0; ii < iter.level; ii++){
          printf("  ");
       }
@@ -116,13 +116,13 @@ void PrintAcceleratorInstances(Accelerator* accel){
    }
 }
 
-static void OutputGraphDotFile_(Versat* versat,Accelerator* accel,bool collapseSameEdges,Set<ComplexFUInstance*>* highlighInstance,FILE* outputFile){
+static void OutputGraphDotFile_(Versat* versat,Accelerator* accel,bool collapseSameEdges,Set<FUInstance*>* highlighInstance,FILE* outputFile){
    Arena* arena = &versat->temp;
    BLOCK_REGION(arena);
 
    fprintf(outputFile,"digraph accel {\n\tnode [fontcolor=white,style=filled,color=\"160,60,176\"];\n");
    FOREACH_LIST(ptr,accel->allocated){
-      ComplexFUInstance* inst = ptr->inst;
+      FUInstance* inst = ptr->inst;
       String id = UniqueRepr(inst,arena);
       String name = Repr(inst,versat->debug.dotFormat,arena);
 
@@ -148,10 +148,10 @@ static void OutputGraphDotFile_(Versat* versat,Accelerator* accel,bool collapseS
 
    // TODO: Consider adding a true same edge counter, that collects edges with equal delay and then represents them on the graph as a pair, using [portStart-portEnd]
    FOREACH_LIST(ptr,accel->allocated){
-      ComplexFUInstance* out = ptr->inst;
+      FUInstance* out = ptr->inst;
 
       FOREACH_LIST(con,ptr->allOutputs){
-         ComplexFUInstance* in = con->instConnectedTo.node->inst;
+         FUInstance* in = con->instConnectedTo.node->inst;
 
          if(collapseSameEdges){
             Pair<InstanceNode*,InstanceNode*> nodeEdge = {};
@@ -211,7 +211,7 @@ void OutputGraphDotFile(Versat* versat,Accelerator* accel,bool collapseSameEdges
    va_end(args);
 }
 
-void OutputGraphDotFile(Versat* versat,Accelerator* accel,bool collapseSameEdges,ComplexFUInstance* highlighInstance,const char* filenameFormat,...){
+void OutputGraphDotFile(Versat* versat,Accelerator* accel,bool collapseSameEdges,FUInstance* highlighInstance,const char* filenameFormat,...){
    char buffer[1024];
 
    if(!versat->debug.outputGraphs){
@@ -226,7 +226,7 @@ void OutputGraphDotFile(Versat* versat,Accelerator* accel,bool collapseSameEdges
    Arena* temp = &versat->temp;
    BLOCK_REGION(temp);
 
-   Set<ComplexFUInstance*>* highlight = PushSet<ComplexFUInstance*>(temp,1);
+   Set<FUInstance*>* highlight = PushSet<FUInstance*>(temp,1);
    highlight->Insert(highlighInstance);
 
    FILE* file = OpenFileAndCreateDirectories(buffer,"w");
@@ -236,7 +236,7 @@ void OutputGraphDotFile(Versat* versat,Accelerator* accel,bool collapseSameEdges
    va_end(args);
 }
 
-void OutputGraphDotFile(Versat* versat,Accelerator* accel,bool collapseSameEdges,Set<ComplexFUInstance*>* highlight,const char* filenameFormat,...){
+void OutputGraphDotFile(Versat* versat,Accelerator* accel,bool collapseSameEdges,Set<FUInstance*>* highlight,const char* filenameFormat,...){
    char buffer[1024];
 
    if(!versat->debug.outputGraphs){
@@ -299,7 +299,7 @@ static void PrintVCDDefinitions_(FILE* accelOutputFile,VCDMapping& currentMappin
    #endif
 
    FOREACH_LIST(ptr,accel->allocated){
-      ComplexFUInstance* inst = ptr->inst;
+      FUInstance* inst = ptr->inst;
       FUDeclaration* decl = inst->declaration;
       fprintf(accelOutputFile,"$scope module %.*s_%d $end\n",UNPACK_SS(inst->name),inst->id);
 
@@ -389,7 +389,7 @@ static void PrintVCD_(FILE* accelOutputFile,VCDMapping& currentMapping,Accelerat
    #endif
 
    for(InstanceNode* node = iter.Current(); node; node = iter.Skip()){
-      ComplexFUInstance* inst = node->inst;
+      FUInstance* inst = node->inst;
       FUDeclaration* decl = inst->declaration;
       for(int i = 0; i < node->inputs.size; i++){
          if(node->inputs[i].node == nullptr){

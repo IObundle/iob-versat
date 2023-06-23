@@ -729,9 +729,12 @@ ModuleInfo ExtractModuleInfo(Module& module,Arena* permanent,Arena* tempArena){
    return info;
 }
 
-void OutputModuleInfos(FILE* output,bool doExport,Array<ModuleInfo> infos,String nameSpace,CompiledTemplate* unitVerilogData,Arena* temp){
+void OutputModuleInfos(FILE* output,bool doExport,Array<ModuleInfo> infos,String nameSpace,CompiledTemplate* unitVerilogData,Arena* temp,Array<Wire> configsHeaderSide,Array<String> statesHeaderSide){
    TemplateSetBool("export",doExport);
    TemplateSetArray("modules","ModuleInfo",infos.data,infos.size);
    TemplateSetString("namespace",nameSpace);
+   TemplateSetArray("configsHeader","Wire",configsHeaderSide.data,configsHeaderSide.size);
+   TemplateSetArray("statesHeader","String",statesHeaderSide.data,statesHeaderSide.size);
+   
    ProcessTemplate(output,unitVerilogData,temp);
 }

@@ -119,7 +119,7 @@ struct ModuleInfo{
 String PreprocessVerilogFile(Arena* output, String fileContent,std::vector<const char*>* includeFilepaths,Arena* tempArena);
 std::vector<Module> ParseVerilogFile(String fileContent, std::vector<const char*>* includeFilepaths, Arena* tempArena); // Only handles preprocessed files
 ModuleInfo ExtractModuleInfo(Module& module,Arena* permanent,Arena* tempArena);
-void OutputModuleInfos(FILE* output,bool doExport,Array<ModuleInfo> infos,String nameSpace,CompiledTemplate* unitVerilogData,Arena* temp);
+void OutputModuleInfos(FILE* output,bool doExport,Array<ModuleInfo> infos,String nameSpace,CompiledTemplate* unitVerilogData,Arena* temp,Array<Wire> configsHeaderSide,Array<String> statesHeaderSide); // TODO: This portion should be remade, parameters are not the ones we want (VerilogParsing do not need to know about Accelerator)
 
 #endif // INCLUDED_VERILOG_PARSER
 

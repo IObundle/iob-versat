@@ -1,10 +1,10 @@
 #ifndef INCLUDED_TEXTUAL_REPRESENTATION
 #define INCLUDED_TEXTUAL_REPRESENTATION
 
-#include "versatPrivate.hpp"
+#include "versat.hpp"
 
-String UniqueRepr(ComplexFUInstance* inst,Arena* arena); // Returns a representation that uniquely identifies the instance. Not necessarily useful for outputing
-String Repr(ComplexFUInstance* inst,GraphDotFormat format,Arena* arena);
+String UniqueRepr(FUInstance* inst,Arena* arena); // Returns a representation that uniquely identifies the instance. Not necessarily useful for outputing
+String Repr(FUInstance* inst,GraphDotFormat format,Arena* arena);
 String Repr(PortInstance in,PortInstance out,GraphDotFormat format,Arena* arena);
 String Repr(FUDeclaration* decl,Arena* arena);
 String Repr(PortInstance port,GraphDotFormat format,Arena* memory);

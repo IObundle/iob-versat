@@ -2,16 +2,16 @@
 
 #include "parser.hpp"
 
-String UniqueRepr(ComplexFUInstance* inst,Arena* arena){
+String UniqueRepr(FUInstance* inst,Arena* arena){
    FUDeclaration* decl = inst->declaration;
    String str = PushString(arena,"%.*s_%.*s_%d",UNPACK_SS(decl->name),UNPACK_SS(inst->name),inst->id);
    return str;
 }
 
-String Repr(ComplexFUInstance* inst,GraphDotFormat format,Arena* arena){
+String Repr(FUInstance* inst,GraphDotFormat format,Arena* arena){
    Byte* mark = MarkArena(arena);
 
-   ComplexFUInstance* instance = (ComplexFUInstance*) inst;
+   FUInstance* instance = (FUInstance*) inst;
 
    bool expl  = format & GRAPH_DOT_FORMAT_EXPLICIT;
    bool name  = format & GRAPH_DOT_FORMAT_NAME;

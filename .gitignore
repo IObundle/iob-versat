@@ -1,5 +1,7 @@
-software/*.out
-software/*.exe
+build/*
+libversat.a
+versat
+TAGS
 
 software/compiler/IMGUI/
 software/compiler/IMNODES/

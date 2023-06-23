@@ -2,8 +2,10 @@
 
 #{include "versat_common.tpl"}
 
-#{call CountDones instances}
-#{call CountOperations instances}
+#{set nDones #{call CountDones instances}}
+#{set nOperations #{call CountOperations instances}}
+#{set nCombOperations #{call CountCombOperations instances}}
+#{set nSeqOperations  #{call CountSeqOperations instances}}
 
 module @{accel.name} #(
       parameter DELAY_W = 32,

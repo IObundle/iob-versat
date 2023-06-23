@@ -111,7 +111,6 @@ Array<T> PushArray(DynamicArena* arena,int size){Array<T> res = {}; res.size = s
 template<typename T>
 T* PushStruct(DynamicArena* arena){T* res = (T*) PushBytes(arena,sizeof(T)); return res;};
 
-
 // A wrapper for a "push" type interface for a block of memory
 template<typename T>
 class PushPtr{
@@ -300,6 +299,9 @@ HashmapIterator<Key,Data> end(Hashmap<Key,Data>* hashmap);
 
 template<typename Key,typename Data>
 Hashmap<Key,Data>* PushHashmap(Arena* arena,int maxAmountOfElements);
+
+template<typename Key,typename Data>
+Hashmap<Key,Data>* PushHashmap(DynamicArena* arena,int maxAmountOfElements);
 
 template<typename Key,typename Data>
 Array<Key> HashmapKeyArray(Hashmap<Key,Data>* hashmap,Arena* out);

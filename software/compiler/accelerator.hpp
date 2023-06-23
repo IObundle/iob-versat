@@ -7,7 +7,7 @@
 #include "memory.hpp"
 #include "declaration.hpp"
 
-struct ComplexFUInstance;
+struct FUInstance;
 struct InstanceNode;
 struct OrderedInstance;
 struct FUDeclaration;
@@ -16,7 +16,7 @@ struct PortEdge;
 struct Versat;
 struct FUInstance;
 
-typedef std::unordered_map<ComplexFUInstance*,ComplexFUInstance*> InstanceMap;
+typedef std::unordered_map<FUInstance*,FUInstance*> InstanceMap;
 typedef std::unordered_map<PortEdge,PortEdge> PortEdgeMap;
 typedef std::unordered_map<Edge*,Edge*> EdgeMap;
 typedef Hashmap<InstanceNode*,InstanceNode*> InstanceNodeMap;
@@ -30,13 +30,13 @@ struct Accelerator{ // Graph + data storage
    OrderedInstance* ordered;
    InstanceNode* allocated;
    InstanceNode* lastAllocated;
-   Pool<ComplexFUInstance> instances;
-   Pool<FUInstance> subInstances; // Essentially a "wrapper" so that user code does not have to deal with reallocations when adding units
-
-   Allocation<iptr> configAlloc;
+   Pool<FUInstance> instances;
+   Pool<FUInstance> subInstances; // Essentially a "wrapper" so that user code does not have to dealwith reallocations when adding units
+  
+   Allocation<int> configAlloc;
    Allocation<int> stateAlloc;
-   Allocation<int> delayAlloc;
-   Allocation<iptr> staticAlloc;
+   //Allocation<int> delayAlloc;
+   //Allocation<iptr> staticAlloc;
    Allocation<Byte> extraDataAlloc;
    Allocation<int> externalMemoryAlloc;
    //Allocation<UnitDebugData> debugDataAlloc;
@@ -47,7 +47,11 @@ struct Accelerator{ // Graph + data storage
    DynamicArena* accelMemory;
 
    std::unordered_map<StaticId,StaticData> staticUnits;
-
+   Hashmap<StaticId,StaticData>* calculatedStaticPos;
+   int startOfDelay;
+   int startOfStatic;
+   int staticSize;
+   
 	void* configuration;
 	int configurationSize;
 
@@ -77,7 +81,7 @@ public:
    InstanceNode* GetInstance(int level);
 
    // Must call first
-   InstanceNode* Start(Accelerator* topLevel,ComplexFUInstance* compositeInst,Arena* temp,bool populate = false);
+   InstanceNode* Start(Accelerator* topLevel,FUInstance* compositeInst,Arena* temp,bool populate = false);
    InstanceNode* Start(Accelerator* topLevel,Arena* temp,bool populate = false);
 
    InstanceNode* StartOrdered(Accelerator* topLevel,Arena* temp,bool populate = false);
@@ -102,8 +106,8 @@ public:
 // Accelerator
 Accelerator* CopyAccelerator(Versat* versat,Accelerator* accel,InstanceMap* map);
 Accelerator* CopyFlatAccelerator(Versat* versat,Accelerator* accel,InstanceMap* map);
-ComplexFUInstance* CopyInstance(Accelerator* newAccel,ComplexFUInstance* oldInstance,String newName,InstanceNode* previous);
-ComplexFUInstance* CopyInstance(Accelerator* newAccel,ComplexFUInstance* oldInstance,String newName);
+FUInstance* CopyInstance(Accelerator* newAccel,FUInstance* oldInstance,String newName,InstanceNode* previous);
+FUInstance* CopyInstance(Accelerator* newAccel,FUInstance* oldInstance,String newName);
 InstanceNode* CopyInstance(Accelerator* newAccel,InstanceNode* oldInstance,String newName);
 InstanceNode* CreateFlatFUInstance(Accelerator* accel,FUDeclaration* type,String name);
 void InitializeFUInstances(Accelerator* accel,bool force);

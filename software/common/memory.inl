@@ -146,6 +146,27 @@ Hashmap<Key,Data>* PushHashmap(Arena* arena,int maxAmountOfElements){
 }
 
 template<typename Key,typename Data>
+Hashmap<Key,Data>* PushHashmap(DynamicArena* arena,int maxAmountOfElements){
+   //TODO: This is a copy of PushHashmap but with a DynamicArena. Should just refactor the init to a common function
+   Hashmap<Key,Data>* map = PushStruct<Hashmap<Key,Data>>(arena);
+   *map = {};
+
+   if(maxAmountOfElements > 0){
+      int size = AlignNextPower2(maxAmountOfElements) * 2;
+
+      map->nodesAllocated = size;
+      map->nodesUsed = 0;
+      map->buckets = PushArray<Pair<Key,Data>*>(arena,size).data;
+      map->next = PushArray<Pair<Key,Data>*>(arena,size).data;
+      map->data = PushArray<Pair<Key,Data>>(arena,size).data;
+
+      map->Clear();
+   }
+
+   return map;
+}
+
+template<typename Key,typename Data>
 Array<Key> HashmapKeyArray(Hashmap<Key,Data>* hashmap,Arena* out){
    Array<Key> res = PushArray<Key>(out,hashmap->nodesUsed);
 

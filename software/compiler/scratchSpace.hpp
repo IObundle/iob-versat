@@ -1,7 +1,7 @@
 #ifndef INCLUDED_VERSAT_SCRATCH_SPACE
 #define INCLUDED_VERSAT_SCRATCH_SPACE
 
-#include "versatPrivate.hpp"
+#include "versat.hpp"
 #include "merge.hpp"
 #include "graph.hpp"
 #include "textualRepresentation.hpp"

@@ -3,8 +3,6 @@
 #include <pthread.h>
 
 #include "thread.hpp"
-//#include "debug.hpp"
-//#include "textualRepresentation.hpp"
 
 static pthread_mutex_t bestCliqueMutex;
 
@@ -34,7 +32,7 @@ struct IterativeState{
 
 void Init(IterativeState* state,Arena* arena,int index,ConsolidationGraph graph,BitArray* neighbors){
    state->arena = arena;
-
+   
    *arena = InitArena(Megabyte(1));
 
    state->bestGraphFound = Copy(graph,arena);
@@ -624,5 +622,6 @@ ConsolidationGraph ParallelMaxClique(ConsolidationGraph graph,int upperBound,Are
    return res;
 }
 #endif
+
 
 

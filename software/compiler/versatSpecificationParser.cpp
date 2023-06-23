@@ -4,7 +4,7 @@
 #include <cassert>
 #include <cstdint>
 
-#include "versatPrivate.hpp"
+#include "versat.hpp"
 #include "parser.hpp"
 #include "debug.hpp"
 #include "debugGUI.hpp"
@@ -124,10 +124,10 @@ PortInstance ParseTerm(Versat* versat,Accelerator* circuit,Tokenizer* tok,Instan
 
       ConnectUnits(inst,var.portStart,negation,0);
 
-      res.inst = (ComplexFUInstance*) negation;
+      res.inst = (FUInstance*) negation;
       res.port = 0;
    } else {
-      res.inst = (ComplexFUInstance*) inst;
+      res.inst = (FUInstance*) inst;
       res.port = var.portStart;
    }
 
@@ -258,7 +258,7 @@ PortExpression InstantiateExpression(Versat* versat,Expression* root,Accelerator
          String permName = PushString(&versat->permanent,"%.*s",UNPACK_SS(toSearch));
          String uniqueName = GetUniqueName(permName,&versat->permanent,names);
 
-         ComplexFUInstance* digitInst = (ComplexFUInstance*) CreateFUInstance(circuit,GetTypeByName(versat,STRING("Literal")),uniqueName);
+         FUInstance* digitInst = (FUInstance*) CreateFUInstance(circuit,GetTypeByName(versat,STRING("Literal")),uniqueName);
          digitInst->literal = number;
          table->Insert(permName,digitInst);
          res.inst = digitInst;
@@ -408,7 +408,7 @@ FUInstance* ParseInstanceDeclaration(Versat* versat,Tokenizer* tok,Accelerator* 
       for(int i = 0; i < arguments; i++){
          Token arg = insideList.NextToken();
 
-         inst->config[i] = ParseInt(arg);
+         /* inst->config[i] = */ ParseInt(arg); // TODO
 
          if(i != arguments - 1){
             insideList.AssertNextToken(",");
@@ -488,7 +488,7 @@ FUDeclaration* ParseModule(Versat* versat,Tokenizer* tok){
 
    int shareIndex = 0;
    int state = 0;
-   ComplexFUInstance* outputInstance = nullptr;
+   FUInstance* outputInstance = nullptr;
    while(!tok->Done()){
       Token token = tok->PeekToken();
 
@@ -596,7 +596,7 @@ FUDeclaration* ParseModule(Versat* versat,Tokenizer* tok){
             FUInstance* inst2 = nullptr;
             if(CompareString(inVar.name,"out")){
                if(!outputInstance){
-                  outputInstance = (ComplexFUInstance*) CreateFUInstance(circuit,BasicDeclaration::output,STRING("out"));
+                  outputInstance = (FUInstance*) CreateFUInstance(circuit,BasicDeclaration::output,STRING("out"));
                }
 
                inst2 = outputInstance;
@@ -642,7 +642,7 @@ FUDeclaration* ParseModule(Versat* versat,Tokenizer* tok){
 
    #if 0
    printf("\n\n");
-   for(ComplexFUInstance* inst : circuit->instances){
+   for(FUInstance* inst : circuit->instances){
       printf("%.*s\n",UNPACK_SS(inst->name));
    }
    #endif
@@ -708,7 +708,6 @@ FUDeclaration* ParseIterative(Versat* versat,Tokenizer* tok){
    String latencyStr = tok->NextToken();
    int latency = ParseInt(latencyStr);
 
-   //DebugAccelerator(iterative);
    FUInstance* outputInstance = nullptr;
 
    Hashmap<PortInstance,FUInstance*>* portInstanceToMux = PushHashmap<PortInstance,FUInstance*>(arena,10);
@@ -744,7 +743,7 @@ FUDeclaration* ParseIterative(Versat* versat,Tokenizer* tok){
 
       if(CompareString(end.name,"out")){
          if(!outputInstance){
-            outputInstance = (ComplexFUInstance*) CreateFUInstance(iterative,BasicDeclaration::output,STRING("out"));
+            outputInstance = (FUInstance*) CreateFUInstance(iterative,BasicDeclaration::output,STRING("out"));
          }
 
          inst2 = outputInstance;
@@ -758,7 +757,7 @@ FUDeclaration* ParseIterative(Versat* versat,Tokenizer* tok){
       }
 
       PortInstance instance = {};
-      instance.inst = (ComplexFUInstance*) inst2;
+      instance.inst = (FUInstance*) inst2;
       instance.port = end.extra.portEnd;
 
       Assert(end.extra.portStart == end.extra.portEnd); // For now do not handle ranges.

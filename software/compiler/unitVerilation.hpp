@@ -1,7 +1,7 @@
 #ifndef INCLUDED_VERSAT_UNIT_VERILATION
 #define INCLUDED_VERSAT_UNIT_VERILATION
 
-#include "versatPrivate.hpp"
+#include "versat.hpp"
 
 typedef FUDeclaration (*CreateDecl)();
 

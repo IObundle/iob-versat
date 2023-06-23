@@ -88,7 +88,7 @@ void FlushStdout();
 
 bool CurrentlyDebugging();
 
-#define NOT_IMPLEMENTED do{ FlushStdout(); Assert(false); } while(0) // Doesn't mean that something is necessarily future planned
+#define NOT_IMPLEMENTED do{ printf("%s:%d:1: error: Not implemented: %s",__FILE__,__LINE__,__PRETTY_FUNCTION__); FlushStdout(); Assert(false); } while(0) // Doesn't mean that something is necessarily future planned
 #define NOT_POSSIBLE DEBUG_BREAK()
 #define UNHANDLED_ERROR do{ FlushStdout(); Assert(false); } while(0) // Know it's an error, but only exit, for now
 #define USER_ERROR do{ FlushStdout(); exit(0); } while(0) // User error and program does not try to repair or keep going (report error before and exit)

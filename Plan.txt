@@ -1,3 +1,7 @@
+Need to check out:
+
+   I can find out the include path for verilator by calling verilator with a simple example and then passing a couple of flags to the g++ compiler which print out the location of includes searched. That way, if verilator works, then my program works.
+
 Misc:
 
    I'm tired of having to handle printf style functions.

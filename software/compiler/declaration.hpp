@@ -6,7 +6,7 @@
 #include "configurations.hpp"
 #include "verilogParsing.hpp"
 
-struct ComplexFUInstance;
+struct FUInstance;
 
 static const int VCD_MAPPING_SIZE = 5;
 class VCDMapping{
@@ -44,10 +44,10 @@ public:
    }
 };
 
-typedef int* (*FUFunction)(ComplexFUInstance* inst);
-typedef int* (*FUUpdateFunction)(ComplexFUInstance* inst,Array<int> inputs);
-typedef int (*MemoryAccessFunction)(ComplexFUInstance* inst, int address, int value,int write);
-typedef void (*VCDFunction)(ComplexFUInstance*,FILE*,VCDMapping&,Array<int>,bool firstTime,bool printDefinitions);
+typedef int* (*FUFunction)(FUInstance* inst);
+typedef int* (*FUUpdateFunction)(FUInstance* inst,Array<int> inputs);
+typedef int (*MemoryAccessFunction)(FUInstance* inst, int address, int value,int write);
+typedef void (*VCDFunction)(FUInstance*,FILE*,VCDMapping&,Array<int>,bool firstTime,bool printDefinitions);
 
 enum DelayType {
    DELAY_TYPE_BASE               = 0x0,

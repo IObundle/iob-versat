@@ -27,15 +27,13 @@
 
     input [DELAY_W-1:0]           delay0,
 
-    output [DATA_W-1:0]           currentValue,
-    output [DELAY_W-1:0]          currentDelay
+    output [DATA_W-1:0]           currentValue    
     );
 
 reg [DELAY_W-1:0] delay;
 
 assign rdata = (ready ? out0 : 0);
 assign currentValue = out0;
-assign currentDelay = delay;
 
 always @(posedge clk,posedge rst)
 begin

@@ -4,9 +4,14 @@
 #define INCLUDED_VERSAT_ACCELERATOR_HEADER
 
 struct AcceleratorConfig{
-#{for pair namedConfigs}
-#{set name pair.first} #{set conf pair.second}
-int @{name};
+#{for wire orderedConfigs.configs}
+   int @{wire.name};
+#{end}
+#{for wire orderedConfigs.statics}
+   int @{wire.name};
+#{end}
+#{for wire orderedConfigs.delays}
+   int @{wire.name};
 #{end}
 };
 
@@ -33,6 +38,8 @@ static unsigned int staticBuffer[] = {
 
 void versat_init(int base);
 void RunAccelerator(int times);
+void VersatMemoryCopy(int* dest,int* data,int size);
+void VersatUnitWrite(int addr,int val);
 
 // Needed by PC-EMUL to correctly simulate the design, embedded compiler should remove these symbols from firmware because not used by them 
 static const char* acceleratorTypeName = "@{accelType}";
@@ -46,14 +53,25 @@ static const int stateStart = @{versatState * 4 |> Hex};
 extern volatile AcceleratorConfig* accelConfig;
 extern volatile AcceleratorState* accelState;
 
-#{for pair namedConfigs}
-#{set name pair.first} #{set conf pair.second}
-#define @{name} accelConfig->@{name}
+#{if isSimple}
+// Simple input and output connection for simple accelerators
+#define SimpleInputStart ((int*) accelConfig)
+#define SimpleOutputStart ((int*) accelState)
+#{end}
+
+#{for wire orderedConfigs.configs}
+#define ACCEL_@{wire.name} accelConfig->@{wire.name}
+#{end}
+#{for wire orderedConfigs.statics}
+#define ACCEL_@{wire.name} accelConfig->@{wire.name}
+#{end}
+#{for wire orderedConfigs.delays}
+#define ACCEL_@{wire.name} accelConfig->@{wire.name}
 #{end}
 
 #{for pair namedStates}
 #{set name pair.first} #{set conf pair.second}
-#define @{name} accelState->@{name}
+#define ACCEL_@{name} accelState->@{name}
 #{end}
 
 

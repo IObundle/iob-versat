@@ -14,16 +14,64 @@ struct ValueAndText{
    String text;
 };
 
-static void ParseAndEvaluate(String content,Arena* temp);
-static String Eval(Block* block,Arena* temp);
-static ValueAndText EvalNonBlockCommand(Command* com,Arena* temp);
+struct Frame{
+   Hashmap<String,Value>* table;
+   Frame* previousFrame;
+};
+
+static Optional<Value> GetValue(Frame* frame,String var){
+   Frame* ptr = frame;
+
+   while(ptr){
+      Value* possible = ptr->table->Get(var);
+      if(possible){
+         return *possible;
+      } else {
+         ptr = ptr->previousFrame;
+      }
+   }
+   return {};
+}
+
+static Value* ValueExists(Frame* frame,String id){
+   Frame* ptr = frame;
+
+   while(ptr){
+      Value* possible = ptr->table->Get(id);
+      if(possible){
+         return possible;
+      }
+      ptr = ptr->previousFrame;
+   }
+   return nullptr;
+}
+
+static void SetValue(Frame* frame,String id,Value val){
+   Value* possible = ValueExists(frame,id);
+   if(possible){
+      *possible = val;
+   } else {
+      frame->table->Insert(id,val);
+   }
+}
+
+static Frame* CreateFrame(Frame* previous,Arena* arena){
+   Frame* frame = PushStruct<Frame>(arena);
+   frame->table = PushHashmap<String,Value>(arena,16); // Testing a fixed hashmap for now.
+   frame->previousFrame = previous;
+   return frame;
+}
+
+static void ParseAndEvaluate(String content,Frame* frame,Arena* temp);
+static String Eval(Block* block,Frame* frame,Arena* temp);
+static ValueAndText EvalNonBlockCommand(Command* com,Frame* frame,Arena* temp);
 static Expression* ParseExpression(Tokenizer* tok,Arena* temp);
 
 // Static variables
 static bool debugging = false;
-static std::unordered_map<String,Value> envTable;
+static Frame globalFrameInst = {};
+static Frame* globalFrame = &globalFrameInst;
 static FILE* output;
-//static Arena* tempArena;
 static Arena* outputArena;
 
 static bool IsCommandBlockType(Command* com){
@@ -337,13 +385,13 @@ void RegisterPipeOperation(String name,PipeFunction func){
    pipeFunctions.insert({name,func});
 }
 
-static Value EvalExpression(Expression* expr,Arena* temp);
+static Value EvalExpression(Expression* expr,Frame* frame,Arena* temp);
 
-static Value EvalExpression_(Expression* expr,Arena* temp){
+static Value EvalExpression_(Expression* expr,Frame* frame,Arena* temp){
    switch(expr->type){
       case Expression::OPERATION:{
          if(expr->op[0] == '|'){ // Pipe operation
-            Value val = EvalExpression(expr->expressions[0],temp);
+            Value val = EvalExpression(expr->expressions[0],frame,temp);
 
          #if 0
             if(CompareString(expr->expressions[1]->id,"Hex")){
@@ -373,14 +421,14 @@ static Value EvalExpression_(Expression* expr,Arena* temp){
          }
 
          if(CompareString(expr->op,"!")){
-            Value op = EvalExpression(expr->expressions[0],temp);
+            Value op = EvalExpression(expr->expressions[0],frame,temp);
             bool val = ConvertValue(op,ValueType::BOOLEAN,nullptr).boolean;
 
             return MakeValue(!val);
          }
 
          // Two or more op operations
-         Value op1 = EvalExpression(expr->expressions[0],temp);
+         Value op1 = EvalExpression(expr->expressions[0],frame,temp);
 
          // Short circuit
          if(CompareString(expr->op,"and")){
@@ -397,7 +445,7 @@ static Value EvalExpression_(Expression* expr,Arena* temp){
             }
          }
 
-         Value op2 = EvalExpression(expr->expressions[1],temp);
+         Value op2 = EvalExpression(expr->expressions[1],frame,temp);
 
          if(CompareString(expr->op,"==")){
             return MakeValue(Equal(op1,op2));
@@ -485,24 +533,24 @@ static Value EvalExpression_(Expression* expr,Arena* temp){
 
          Assert(!IsCommandBlockType(com));
 
-         Value result = EvalNonBlockCommand(com,temp).val;
+         Value result = EvalNonBlockCommand(com,frame,temp).val;
 
          return result;
       } break;
       case Expression::IDENTIFIER:{
-         auto iter = envTable.find(expr->id);
+         Optional<Value> iter = GetValue(frame,expr->id);
 
-         if(iter == envTable.end()){
+         if(!iter){
             printf("Didn't find identifier: %.*s\n",UNPACK_SS(expr->id));
             printf("%.*s\n",UNPACK_SS(expr->text));
             DEBUG_BREAK();
          }
 
-         return iter->second;
+         return iter.value();
       } break;
       case Expression::ARRAY_ACCESS:{
-         Value object = EvalExpression(expr->expressions[0],temp);
-         Value index  = EvalExpression(expr->expressions[1],temp);
+         Value object = EvalExpression(expr->expressions[0],frame,temp);
+         Value index  = EvalExpression(expr->expressions[1],frame,temp);
 
          Assert(index.type == ValueType::NUMBER);
 
@@ -511,7 +559,7 @@ static Value EvalExpression_(Expression* expr,Arena* temp){
          return res;
       } break;
       case Expression::MEMBER_ACCESS:{
-         Value object = EvalExpression(expr->expressions[0],temp);
+         Value object = EvalExpression(expr->expressions[0],frame,temp);
 
          Value res = AccessStruct(object,expr->id);
 
@@ -530,11 +578,11 @@ struct StoredDebug{
    Value result;
 };
 
-static Value EvalExpression(Expression* expr,Arena* temp){
+static Value EvalExpression(Expression* expr,Frame* frame,Arena* temp){
    static StoredDebug data[16];
    static int counter = 0;
 
-   Value val = EvalExpression_(expr,temp);
+   Value val = EvalExpression_(expr,frame,temp);
 
    data[counter % 16].input = expr;
    data[counter % 16].result = val;
@@ -543,31 +591,32 @@ static Value EvalExpression(Expression* expr,Arena* temp){
    return val;
 }
 
-static String EvalBlockCommand(Block* block,Arena* temp){
+static String EvalBlockCommand(Block* block,Frame* previousFrame,Arena* temp){
    Command* com = block->command;
    String res = {};
    res.data = (char*) MarkArena(outputArena);
 
    if(CompareString(com->name,"join")){
-      Value separator = EvalExpression(com->expressions[0],temp);
+      Frame* frame = CreateFrame(previousFrame,temp);
+      Value separator = EvalExpression(com->expressions[0],frame,temp);
 
       Assert(separator.type == ValueType::STRING);
 
       Assert(com->expressions[2]->type == Expression::IDENTIFIER);
       String id = com->expressions[2]->id;
 
-      Value iterating = EvalExpression(com->expressions[3],temp);
+      Value iterating = EvalExpression(com->expressions[3],frame,temp);
       int counter = 0;
       int index = 0;
       for(Iterator iter = Iterate(iterating); HasNext(iter); index += 1,Advance(&iter)){
-         envTable[STRING("index")] = MakeValue(index);
+         SetValue(frame,STRING("index"),MakeValue(index));
 
          Value val = GetValue(iter);
-         envTable[id] = val;
+         SetValue(frame,id,val);
 
          bool outputSeparator = false;
          for(Block* ptr = block->nextInner; ptr != nullptr; ptr = ptr->next){
-            String text = Eval(ptr,temp);
+            String text = Eval(ptr,frame,temp);
 
             if(!CheckStringOnlyWhitespace(text)){
                res.size += text.size; // Push on stack
@@ -588,43 +637,46 @@ static String EvalBlockCommand(Block* block,Arena* temp){
       res.size -= separator.str.size;
       Assert(res.size >= 0);
    } else if(CompareString(com->name,"for")){
+      Frame* frame = CreateFrame(previousFrame,temp);
       Assert(com->expressions[0]->type == Expression::IDENTIFIER);
       String id = com->expressions[0]->id;
 
-      Value iterating = EvalExpression(com->expressions[1],temp);
+      Value iterating = EvalExpression(com->expressions[1],frame,temp);
       int index = 0;
       for(Iterator iter = Iterate(iterating); HasNext(iter); index += 1,Advance(&iter)){
-         envTable[STRING("index")] = MakeValue(index);
+         SetValue(frame,STRING("index"),MakeValue(index));
 
          Value val = GetValue(iter);
-         envTable[id] = val;
+         SetValue(frame,id,val);
 
          for(Block* ptr = block->nextInner; ptr != nullptr; ptr = ptr->next){
-            res.size += Eval(ptr,temp).size; // Push on stack
+            res.size += Eval(ptr,frame,temp).size; // Push on stack
          }
       }
    } else if (CompareString(com->name,"if")){
-      Value val = ConvertValue(EvalExpression(com->expressions[0],temp),ValueType::BOOLEAN,nullptr);
+      Value val = ConvertValue(EvalExpression(com->expressions[0],previousFrame,temp),ValueType::BOOLEAN,nullptr);
 
+      Frame* frame = CreateFrame(previousFrame,temp);
       if(val.boolean){
          for(Block* ptr = block->nextInner; ptr != nullptr; ptr = ptr->next){
             if(ptr->type == Block::COMMAND && CompareString(ptr->command->name,"else")){
                break;
             }
-            res.size += Eval(ptr,temp).size; // Push on stack
+            res.size += Eval(ptr,frame,temp).size; // Push on stack
          }
       } else {
          for(Block* ptr = block->nextInner; ptr != nullptr; ptr = ptr->next){
             if(ptr->type == Block::COMMAND && CompareString(ptr->command->name,"else")){
                for(ptr = ptr->next; ptr != nullptr; ptr = ptr->next){
-                  res.size += Eval(ptr,temp).size; // Push on stack
+                  res.size += Eval(ptr,frame,temp).size; // Push on stack
                }
                break;
             }
          }
       }
    } else if(CompareString(com->name,"debug")){
-      Value val = EvalExpression(com->expressions[0],temp);
+      Frame* frame = CreateFrame(previousFrame,temp);
+      Value val = EvalExpression(com->expressions[0],frame,temp);
 
       if(val.boolean){
          DEBUG_BREAK();
@@ -632,14 +684,15 @@ static String EvalBlockCommand(Block* block,Arena* temp){
       }
 
       for(Block* ptr = block->nextInner; ptr != nullptr; ptr = ptr->next){
-         res.size += Eval(ptr,temp).size; // Push on stack
+         res.size += Eval(ptr,frame,temp).size; // Push on stack
       }
 
       debugging = false;
    } else if(CompareString(com->name,"while")){
-      while(ConvertValue(EvalExpression(com->expressions[0],temp),ValueType::BOOLEAN,nullptr).boolean){
+      Frame* frame = CreateFrame(previousFrame,temp);
+      while(ConvertValue(EvalExpression(com->expressions[0],frame,temp),ValueType::BOOLEAN,nullptr).boolean){
          for(Block* ptr = block->nextInner; ptr != nullptr; ptr = ptr->next){
-            res.size += Eval(ptr,temp).size; // Push on stack
+            res.size += Eval(ptr,frame,temp).size; // Push on stack
          }
       }
    } else if(CompareString(com->name,"define")) {
@@ -656,12 +709,13 @@ static String EvalBlockCommand(Block* block,Arena* temp){
       val.type = ValueType::TEMPLATE_FUNCTION;
       val.isTemp = true;
 
-      envTable[id] = val;
+      SetValue(previousFrame,id,val);
    } else if(CompareString(com->name,"debugMessage")){
+      Frame* frame = CreateFrame(previousFrame,temp);
       ArenaMarker marker(outputArena);
 
       for(Block* ptr = block->nextInner; ptr != nullptr; ptr = ptr->next){
-         String res = Eval(ptr,temp); // Push on stack
+         String res = Eval(ptr,frame,temp); // Push on stack
          printf("%.*s\n",UNPACK_SS(res));
       }
    } else {
@@ -673,27 +727,27 @@ static String EvalBlockCommand(Block* block,Arena* temp){
 
 extern Array<Pair<String,String>> templateNameToContent; // TODO: Kinda of a quick hack to make this work. Need to revise the way templates are done
 
-static ValueAndText EvalNonBlockCommand(Command* com,Arena* temp){
+static ValueAndText EvalNonBlockCommand(Command* com,Frame* previousFrame,Arena* temp){
    Value val = MakeValue();
    String text = {};
    text.data = (char*) MarkArena(outputArena);
 
    if(CompareString(com->name,"set")){
-      val = EvalExpression(com->expressions[1],temp);
+      val = EvalExpression(com->expressions[1],previousFrame,temp);
 
       Assert(com->expressions[0]->type == Expression::IDENTIFIER);
 
-      envTable[com->expressions[0]->id] = val;
+      SetValue(previousFrame,com->expressions[0]->id,val);
    } else if(CompareString(com->name,"inc")){
-      val = EvalExpression(com->expressions[0],temp);
+      val = EvalExpression(com->expressions[0],previousFrame,temp);
 
       Assert(val.type == ValueType::NUMBER);
 
       val.number += 1;
 
-      envTable[com->expressions[0]->id] = val;
+      SetValue(previousFrame,com->expressions[0]->id,val);
    } else if(CompareString(com->name,"include")){
-      Value filenameString = EvalExpression(com->expressions[0],temp);
+      Value filenameString = EvalExpression(com->expressions[0],previousFrame,temp);
       Assert(filenameString.type == ValueType::STRING);
 
       String content = {};
@@ -706,43 +760,44 @@ static ValueAndText EvalNonBlockCommand(Command* com,Arena* temp){
 
       Assert(content.size);
 
-      ParseAndEvaluate(content,temp);
+      ParseAndEvaluate(content,previousFrame,temp); // Use previous frame. Include should techically be global
    } else if(CompareString(com->name,"call")){
+      Frame* frame = CreateFrame(previousFrame,temp);
       String id = com->expressions[0]->id;
 
-      auto iter = envTable.find(id);
-      if(iter == envTable.end()){
+      Optional<Value> optVal = GetValue(frame,id);
+      if(!optVal){
          printf("Failed to find %.*s\n",UNPACK_SS(id));
          DEBUG_BREAK();
       }
 
-      //auto savedTable = envTable;
-
-      TemplateFunction* func = iter->second.templateFunction;
+      TemplateFunction* func = optVal.value().templateFunction;
 
       Assert(func->numberArguments == com->expressions.size - 1);
 
       for(int i = 0; i < func->numberArguments; i++){
          String id = func->arguments[i]->id;
 
-         Value val = EvalExpression(com->expressions[1+i],temp);
+         Value val = EvalExpression(com->expressions[1+i],frame,temp);
 
-         envTable[id] = val;
+         SetValue(frame,id,val);
       }
 
       for(Block* ptr = func->block; ptr != nullptr; ptr = ptr->next){
-         text.size += Eval(ptr,temp).size;
+         text.size += Eval(ptr,frame,temp).size;
       }
 
-      val = envTable[STRING("return")];
-
-      //envTable = savedTable;
+      optVal = GetValue(frame,STRING("return"));
+      if(optVal){
+         val = optVal.value();
+      }
    } else if(CompareString(com->name,"return")){
-      val = EvalExpression(com->expressions[0],temp);
+      val = EvalExpression(com->expressions[0],previousFrame,temp);
 
-      envTable[STRING("return")] = val;
+      SetValue(previousFrame,STRING("return"),val);
    } else if(CompareString(com->name,"format")){
-      Value formatExpr = EvalExpression(com->expressions[0],temp);
+      Frame* frame = CreateFrame(previousFrame,temp);
+      Value formatExpr = EvalExpression(com->expressions[0],frame,temp);
 
       Assert(formatExpr.type == ValueType::SIZED_STRING || formatExpr.type == ValueType::STRING);
 
@@ -775,7 +830,7 @@ static ValueAndText EvalNonBlockCommand(Command* com,Arena* temp){
 
          Assert(index < com->expressions.size + 1);
 
-         Value val = ConvertValue(EvalExpression(com->expressions[index + 1],temp),ValueType::SIZED_STRING,temp);
+         Value val = ConvertValue(EvalExpression(com->expressions[index + 1],frame,temp),ValueType::SIZED_STRING,temp);
 
          text.size += PushString(outputArena,val.str).size;
       }
@@ -795,15 +850,15 @@ static ValueAndText EvalNonBlockCommand(Command* com,Arena* temp){
    return res;
 }
 
-static String Eval(Block* block,Arena* temp){
+static String Eval(Block* block,Frame* frame,Arena* temp){
    String res = {};
    res.data = (char*) MarkArena(outputArena);
 
    if(block->type == Block::COMMAND){
       if(IsCommandBlockType(block->command)){
-         res = EvalBlockCommand(block,temp);
+         res = EvalBlockCommand(block,frame,temp);
       } else {
-         res = EvalNonBlockCommand(block->command,temp).text;
+         res = EvalNonBlockCommand(block->command,frame,temp).text;
       }
    } else {
       // Print text
@@ -828,7 +883,7 @@ static String Eval(Block* block,Arena* temp){
          Expression* expr = ParseExpression(&tok,temp);
          tok.AssertNextToken("}");
 
-         Value val = EvalExpression(expr,temp);
+         Value val = EvalExpression(expr,frame,temp);
 
          res.size += GetDefaultValueRepresentation(val,outputArena).size;
       }
@@ -838,7 +893,12 @@ static String Eval(Block* block,Arena* temp){
    return res;
 }
 
-void ParseAndEvaluate(String content,Arena* temp){
+void InitializeTemplateEngine(Arena* perm){
+   globalFrame->table = PushHashmap<String,Value>(perm,99);
+   globalFrame->previousFrame = nullptr;
+}
+
+void ParseAndEvaluate(String content,Frame* frame,Arena* temp){
    Tokenizer tokenizer(content,"!()[]{}+-:;.,*~><\"",{"#{","@{","==","!=","**","|>",">=","<=","!="});
    Tokenizer* tok = &tokenizer;
 
@@ -847,7 +907,7 @@ void ParseAndEvaluate(String content,Arena* temp){
    while(!tok->Done()){
       Block* block = Parse(tok,temp);
 
-      String text = Eval(block,temp);
+      String text = Eval(block,frame,temp);
       fprintf(output,"%.*s",text.size,text.data);
       fflush(output);
    }
@@ -888,47 +948,51 @@ CompiledTemplate* CompileTemplate(const char* templateFilepath,Arena* arena){
 }
 
 void ProcessTemplate(FILE* outputFile,CompiledTemplate* compiledTemplate,Arena* arena){
+   Assert(globalFrame && "Call InitializeTemplateEngine first!");
+
    ArenaMarker marker(arena);
    Arena outputArenaInst = SubArena(arena,Megabyte(64));
    outputArena = &outputArenaInst;
    output = outputFile;
 
    for(Block* block = compiledTemplate->blocks; block; block = block->next){
-      String text = Eval(block,arena);
+      String text = Eval(block,globalFrame,arena);
       fprintf(output,"%.*s",text.size,text.data);
       fflush(output);
    }
+}
 
-   envTable.clear();
+void ClearTemplateEngine(){
+   globalFrame->table->Clear();
 }
 
 void TemplateSetCustom(const char* id,void* entity,const char* typeName){
    Value val = MakeValue(entity,typeName);
 
-   envTable[STRING(id)] = val;
+   SetValue(globalFrame,STRING(id),val);
 }
 
 void TemplateSetNumber(const char* id,int number){
-   envTable[STRING(id)] = MakeValue(number);
+   SetValue(globalFrame,STRING(id),MakeValue(number));
 }
 
 void TemplateSet(const char* id,void* ptr){
    Value val = {};
    val.custom = ptr;
    val.type = ValueType::NUMBER;
-   envTable[STRING(id)] = val;
+   SetValue(globalFrame,STRING(id),val);
 }
 
 void TemplateSetString(const char* id,const char* str){
-   envTable[STRING(id)] = MakeValue(STRING(str));
+   SetValue(globalFrame,STRING(id),MakeValue(STRING(str)));
 }
 
 void TemplateSetString(const char* id,String str){
-   envTable[STRING(id)] = MakeValue(str);
+   SetValue(globalFrame,STRING(id),MakeValue(str));
 }
 
 void TemplateSetBool(const char* id,bool boolean){
-   envTable[STRING(id)] = MakeValue(boolean);
+   SetValue(globalFrame,STRING(id),MakeValue(boolean));
 }
 
 void TemplateSetArray(const char* id,const char* baseType,void* array,int size){
@@ -937,5 +1001,5 @@ void TemplateSetArray(const char* id,const char* baseType,void* array,int size){
    val.type = GetArrayType(GetType(STRING(baseType)),size);
    val.custom = array;
 
-   envTable[STRING(id)] = val;
+   SetValue(globalFrame,STRING(id),val);
 }

@@ -27,7 +27,7 @@ VersatComputedValues ComputeVersatValues(Versat* versat,Accelerator* accel){
 
    int memoryMappedDWords = 0;
    FOREACH_LIST(ptr,accel->allocated){
-      ComplexFUInstance* inst = ptr->inst;
+      FUInstance* inst = ptr->inst;
       FUDeclaration* decl = inst->declaration;
 
       res.numberConnections += Size(ptr->allOutputs);

@@ -15,9 +15,16 @@ static Array<int> zerosArray = {zeros,99};
 #define MODIFIER static
 #{end}
 
+#if 0
+
 #{for module modules}
 #{if module.configs}
 
+// The config for individual units is not the same for the accelerator
+// That is because we group configs + statics + delays for the accelerator
+// But no such grouping is done for individual units
+// TODO: Differentiate between accelerator level and individual level wrapper generation
+// For now, I do not know if individual units wrappers will ever be needed again.
 struct @{module.name}Config{
 #{for wire module.configs}
 #{if !wire.isStatic}
@@ -38,6 +45,7 @@ int @{wire.name};
 
 #{end}
 #{end}
+#endif
 
 #{if !export}
 #ifdef IMPLEMENT_VERILOG_UNITS
@@ -45,11 +53,19 @@ int @{wire.name};
 
 #include <new>
 
+#include "accel.hpp"
 #include "versatPrivate.hpp"
 #include "utils.hpp"
 
+#include "verilated.h"
+#include "verilated_vcd_c.h"
+
+static VerilatedVcdC* tfp = NULL;
+VerilatedContext* contextp = new VerilatedContext;
+
 #{for module modules}
 #include "V@{module.name}.h"
+static V@{module.name}* dut = NULL;
 #{end}
 
 #define INIT(unit) \
@@ -61,8 +77,12 @@ int @{wire.name};
 #define UPDATE(unit) \
    unit->clk = 0; \
    unit->eval(); \
+   tfp->dump(contextp->time()); \
+   contextp->timeInc(1); \
    unit->clk = 1; \
-   unit->eval();
+   unit->eval(); \
+   tfp->dump(contextp->time()); \
+   contextp->timeInc(1);
 
 #define RESET(unit) \
    unit->rst = 1; \
@@ -97,7 +117,7 @@ static char* Bin(unsigned int value){
 // static Array<int> zerosArray defined in versat.cpp
 
 template<typename T>
-static int32_t MemoryAccessNoAddress(ComplexFUInstance* inst,int address,int value,int write){
+static int32_t MemoryAccessNoAddress(FUInstance* inst,int address,int value,int write){
    T* self = (T*) inst->extraData;
 
    if(write){
@@ -139,7 +159,7 @@ static int32_t MemoryAccessNoAddress(ComplexFUInstance* inst,int address,int val
 }
 
 template<typename T>
-static int32_t MemoryAccess(ComplexFUInstance* inst,int address,int value,int write){
+static int32_t MemoryAccess(FUInstance* inst,int address,int value,int write){
    T* self = (T*) inst->extraData;
 
    if(write){
@@ -206,7 +226,7 @@ extern "C" {
 
 #{for module modules}
 
-MODIFIER void @{module.name}_VCDFunction(ComplexFUInstance* inst,FILE* out,VCDMapping& currentMapping,Array<int>,bool firstTime,bool printDefinitions){
+MODIFIER void @{module.name}_VCDFunction(FUInstance* inst,FILE* out,VCDMapping& currentMapping,Array<int>,bool firstTime,bool printDefinitions){
    if(printDefinitions){
    #{for external module.externalInterfaces}
       #{set id external.interface}
@@ -260,10 +280,29 @@ MODIFIER void @{module.name}_VCDFunction(ComplexFUInstance* inst,FILE* out,VCDMa
    }
 }
 
-MODIFIER int32_t* @{module.name}_InitializeFunction(ComplexFUInstance* inst){
+static void CloseWaveform(){
+   if(tfp){
+      tfp->close();
+   }
+}
+
+MODIFIER int32_t* @{module.name}_InitializeFunction(FUInstance* inst){
+   tfp = new VerilatedVcdC;
+
    memset(inst->extraData,0,inst->declaration->extraDataOffsets.max);
 
    V@{module.name}* self = new (inst->extraData) V@{module.name}();
+
+   if(dut){
+      printf("Initialize function is being called multiple times\n");
+      exit(-1);
+   }
+
+   dut = self;
+   self->trace(tfp, 99);
+   tfp->open("system.vcd");
+
+   atexit(CloseWaveform);
 
    INIT(self);
 
@@ -276,7 +315,7 @@ MODIFIER int32_t* @{module.name}_InitializeFunction(ComplexFUInstance* inst){
    return NULL;
 }
 
-MODIFIER int32_t* @{module.name}_StartFunction(ComplexFUInstance* inst){
+MODIFIER int32_t* @{module.name}_StartFunction(FUInstance* inst){
 #{if module.outputLatencies}
    static int32_t out[@{module.outputLatencies.size}];
 #{end}
@@ -290,11 +329,11 @@ MODIFIER int32_t* @{module.name}_StartFunction(ComplexFUInstance* inst){
 #{end}
 
 #{if module.configs}
-@{module.name}Config* config = (@{module.name}Config*) inst->config;
-#{for wire module.configs}
-#{if !wire.isStatic}
-   self->@{wire.name} = config->@{wire.name};
-#{end}
+AcceleratorConfig* config = (AcceleratorConfig*) inst->config;
+
+#{for i module.configs.size}
+#{set wire module.configs[i]}
+   self->@{wire.name} = config->@{configsHeader[i].name};
 #{end}
 #{end}
 
@@ -324,7 +363,7 @@ MODIFIER int32_t* @{module.name}_StartFunction(ComplexFUInstance* inst){
 #{end}
 }
 
-MODIFIER int32_t* @{module.name}_UpdateFunction(ComplexFUInstance* inst,Array<int> inputs){
+MODIFIER int32_t* @{module.name}_UpdateFunction(FUInstance* inst,Array<int> inputs){
 #{if module.outputLatencies}
    static int32_t out[@{module.outputLatencies.size}];
 #{end}
@@ -445,9 +484,10 @@ MODIFIER int32_t* @{module.name}_UpdateFunction(ComplexFUInstance* inst,Array<in
 #{end}
 
 #{if module.states}
-@{module.name}State* state = (@{module.name}State*) inst->state;
-#{for wire module.states}
-   state->@{wire.name} = self->@{wire.name};
+AcceleratorState* state = (AcceleratorState*) inst->state;
+#{for i module.states.size}
+#{set wire module.states[i]}
+   state->@{statesHeader[i]} = self->@{wire.name};
 #{end}
 #{end}
 
@@ -468,7 +508,7 @@ MODIFIER int32_t* @{module.name}_UpdateFunction(ComplexFUInstance* inst,Array<in
 #{end}
 }
 
-MODIFIER int32_t* @{module.name}_DestroyFunction(ComplexFUInstance* inst){
+MODIFIER int32_t* @{module.name}_DestroyFunction(FUInstance* inst){
    V@{module.name}* self = (V@{module.name}*) inst->extraData;
 
    self->~V@{module.name}();

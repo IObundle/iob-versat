@@ -1,7 +1,9 @@
 #{include "versat_common.tpl"}
 
-#{call CountDones instances}
-#{call CountOperations instances}
+#{set nDones #{call CountDones instances}}
+#{set nOperations #{call CountOperations instances}}
+#{set nCombOperations #{call CountCombOperations instances}}
+#{set nSeqOperations  #{call CountSeqOperations instances}}
 
 `timescale 1ns / 1ps
 
@@ -452,9 +454,7 @@ end
          #{end}
 
          #{for input node.inputs}
-         #{if input.node}
-            .in@{index}(output_@{input.node.inst.id}_@{input.port}),
-         #{end}
+            .in@{index}(#{call outputName input}),
          #{end}
 
          #{for wire decl.configs}

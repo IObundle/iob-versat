@@ -1069,8 +1069,8 @@ void AddSpecificsToMapping(GraphMapping& mapping,Pool<MappingNode> specifics){
       Assert(n->type == MappingNode::NODE);
 
       MergeEdge edge = n->nodes;
-      ComplexFUInstance* i0 = edge.instances[0];
-      ComplexFUInstance* i1 = edge.instances[1];
+      FUInstance* i0 = edge.instances[0];
+      FUInstance* i1 = edge.instances[1];
 
       mapping.instanceMap.insert({i1,i0});
       mapping.reverseInstanceMap.insert({i0,i1});
@@ -1106,7 +1106,7 @@ Subgraph RemoveInputs(Subgraph sub){
 Subgraph RemoveInputsAndOutputs(Subgraph sub){
    Subgraph res = {};
 
-{  ComplexFUInstance* ptr = sub.nodes.start;
+{  FUInstance* ptr = sub.nodes.start;
    for(; ptr != nullptr; ptr = ptr->next){
       if(ptr->declaration != BasicDeclaration::input){
          break;
@@ -1403,10 +1403,10 @@ ColoredOrderingResult ColoredOrdering(ConsolidationGraph graph,Arena* arena){
 GenerateMappingNodesResult GenerateMappingNodes(Subgraph accel1,Subgraph accel2,Arena* out,Arena* temp,Array<MappingNode> implicitNodes){
    BLOCK_REGION(temp);
 
-   Hashmap<ComplexFUInstance*,MergeEdge> specificsMapping;
+   Hashmap<FUInstance*,MergeEdge> specificsMapping;
    specificsMapping.Init(temp,1000);
    Pool<MappingNode> specificsAdded = {};
-   Hashmap<ComplexFUInstance*,int> nodeExists;
+   Hashmap<FUInstance*,int> nodeExists;
    nodeExists.Init(temp,Size(accel1.nodes) + Size(accel2.nodes));
 
    FOREACH_SUBLIST(ptr,accel1.nodes){

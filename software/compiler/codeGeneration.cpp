@@ -1,4 +1,4 @@
-#include "versatPrivate.hpp"
+#include "versat.hpp"
 
 #include "templateEngine.hpp"
 
@@ -61,7 +61,6 @@ void OutputVersatSource(Versat* versat,Accelerator* accel,const char* directoryP
 
    SetDelayRecursive(accel,arena);
 
-   #if 1
    // No need for templating, small file
    FILE* c = OpenFileAndCreateDirectories(StaticFormat("%s/versat_defs.vh",directoryPath),"w");
 
@@ -72,16 +71,14 @@ void OutputVersatSource(Versat* versat,Accelerator* accel,const char* directoryP
 
    VersatComputedValues val = ComputeVersatValues(versat,accel);
 
-   #if 1
-   std::vector<ComplexFUInstance> accum;
+   std::vector<FUInstance> accum;
    AcceleratorIterator iter = {};
    for(InstanceNode* node = iter.Start(accel,arena,true); node; node = iter.Next()){
-      ComplexFUInstance* inst = node->inst;
+      FUInstance* inst = node->inst;
       if(!inst->declaration->isOperation && inst->declaration->type != FUDeclaration::SPECIAL){
          accum.push_back(*inst);
       }
    };
-   #endif
 
    UnitValues unit = CalculateAcceleratorValues(versat,accel);
 
@@ -132,7 +129,7 @@ void OutputVersatSource(Versat* versat,Accelerator* accel,const char* directoryP
       ordered[i] = ptr->node;
    }
 
-   ComputedData computedData = CalculateVersatComputedData(accel->allocated,val,arena);
+    ComputedData computedData = CalculateVersatComputedData(accel->allocated,val,arena);
 
    TemplateSetDefaults(versat);
 
@@ -145,6 +142,7 @@ void OutputVersatSource(Versat* versat,Accelerator* accel,const char* directoryP
    TemplateSetCustom("external",&computedData.external,"Array<ExternalMemoryInterface>");
    TemplateSetCustom("instances",&nodes,"Array<InstanceNode*>");
    TemplateSetNumber("nIO",val.nUnitsIO);
+   TemplateSetBool("isSimple",isSimple);
 
    int staticStart = 0;
    FOREACH_LIST(ptr,accel->allocated){
@@ -154,24 +152,12 @@ void OutputVersatSource(Versat* versat,Accelerator* accel,const char* directoryP
       }
    }
 
-   Hashmap<StaticId,StaticData>* staticUnits = PushHashmap<StaticId,StaticData>(arena,accel->staticUnits.size());
-   for(InstanceNode* node = iter.Start(accel,arena,true); node; node = iter.Next()){
-      if(node->inst->isStatic){
-         InstanceNode* parent = iter.ParentInstance();
-
-         StaticId id = {};
-         id.parent = parent ? parent->inst->declaration : nullptr;
-         id.name = node->inst->name;
-
-         StaticData data = {};
-         data.configs = node->inst->declaration->configs;
-         data.offset = node->inst->config - accel->staticAlloc.ptr;
-
-         staticUnits->Insert(id,data);
-      }
-   }
+   Hashmap<StaticId,StaticData>* staticUnits = accel->calculatedStaticPos;
 
    TemplateSetCustom("staticUnits",staticUnits,"Hashmap<StaticId,StaticData>");
+   TemplateSetArray("staticBuffer","int",accel->configAlloc.ptr + accel->startOfStatic,accel->staticSize);
+
+   OrderedConfigurations orderedConfigs = ExtractOrderedConfigurationNames(versat,accel,&versat->permanent,&versat->temp);
 
    TemplateSetNumber("staticStart",staticStart);
    TemplateSetNumber("versatBase",versat->base);
@@ -186,25 +172,19 @@ void OutputVersatSource(Versat* versat,Accelerator* accel,const char* directoryP
    TemplateSetNumber("configurationSize",accel->configAlloc.size);
    TemplateSetArray("configurationData","int",accel->configAlloc.ptr,accel->configAlloc.size);
 
+   TemplateSet("static",accel->configAlloc.ptr + accel->startOfStatic);
+   TemplateSetArray("delay","int",accel->configAlloc.ptr + accel->startOfDelay,val.nDelays);
+
    TemplateSet("config",accel->configAlloc.ptr);
    TemplateSet("state",accel->stateAlloc.ptr);
    TemplateSet("memMapped",nullptr);
-   TemplateSet("static",accel->staticAlloc.ptr);
-   TemplateSet("staticEnd",&accel->staticAlloc.ptr[accel->staticAlloc.reserved]);
-
-   TemplateSetArray("delay","int",accel->delayAlloc.ptr,accel->delayAlloc.size);
-   TemplateSetArray("staticBuffer","int",accel->staticAlloc.ptr,accel->staticAlloc.size);
 
    TemplateSetNumber("memoryAddressBits",val.memoryAddressBits);
-   TemplateSetNumber("memoryConfigDecisionBit",val.memoryConfigDecisionBit);
-   TemplateSetNumber("versatBase",versat->base);
    TemplateSetNumber("memoryMappedBase",1 << val.memoryConfigDecisionBit);
    TemplateSetNumber("nConfigs",val.nConfigs);
    TemplateSetNumber("nDelays",val.nDelays);
-   TemplateSetNumber("versatConfig",val.versatConfigs);
-   TemplateSetNumber("versatState",val.versatStates);
    TemplateSetNumber("nStatics",val.nStatics);
-   TemplateSetCustom("instances",&accum,"std::vector<ComplexFUInstance>");
+   TemplateSetCustom("instances",&accum,"std::vector<FUInstance>");
    TemplateSetNumber("numberUnits",accum.size());
    TemplateSetBool("IsSimple",false);
    ProcessTemplate(d,BasicTemplates::dataTemplate,&versat->temp);
@@ -218,18 +198,8 @@ void OutputVersatSource(Versat* versat,Accelerator* accel,const char* directoryP
    TemplateSetCustom("namedStates",namedStates,"Hashmap<String,SizedConfig>");
    TemplateSetCustom("namedMem",namedMem,"Hashmap<String,SizedConfig>");
    TemplateSetString("accelType",accelName);
-   TemplateSetBool("isSimple",isSimple);
 
-   TemplateSetArray("delay","int",accel->delayAlloc.ptr,accel->delayAlloc.size);
-   TemplateSetArray("staticBuffer","int",accel->staticAlloc.ptr,accel->staticAlloc.size);
-
-   TemplateSetNumber("versatBase",versat->base);
-   TemplateSetNumber("nStatics",val.nStatics);
-   TemplateSetNumber("nConfigs",val.nConfigs);
-   TemplateSetNumber("nDelays",val.nDelays);
-   TemplateSetNumber("versatConfig",val.versatConfigs);
-   TemplateSetNumber("versatState",val.versatStates);
-   TemplateSetNumber("memoryMappedBase",1 << val.memoryConfigDecisionBit);
+   TemplateSetCustom("orderedConfigs",&orderedConfigs,"OrderedConfigurations");
 
    FILE* f = OpenFileAndCreateDirectories(StaticFormat("%s/accel.hpp",directoryPath),"w");
    ProcessTemplate(f,BasicTemplates::acceleratorHeaderTemplate,&versat->temp);
@@ -245,20 +215,18 @@ void OutputVersatSource(Versat* versat,Accelerator* accel,const char* directoryP
 
    {
    FILE* f = OpenFileAndCreateDirectories(StaticFormat("%s/versat_external_memory_port.vh",directoryPath),"w");
-   TemplateSetCustom("external",&computedData.external,"Array<ExternalMemoryInterface>");
    ProcessTemplate(f,BasicTemplates::externalPortTemplate,&versat->temp);
    fclose(f);
    }
 
    {
    FILE* f = OpenFileAndCreateDirectories(StaticFormat("%s/versat_external_memory_portmap.vh",directoryPath),"w");
-   TemplateSetCustom("external",&computedData.external,"Array<ExternalMemoryInterface>");
    ProcessTemplate(f,BasicTemplates::externalPortmapTemplate,&versat->temp);
    fclose(f);
    }
-   //PopMark(&versat->temp,mark);
 
    fclose(s);
    fclose(d);
-   #endif
+
+   ClearTemplateEngine();
 }

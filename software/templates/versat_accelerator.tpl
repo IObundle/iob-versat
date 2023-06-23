@@ -2,8 +2,10 @@
 
 #{include "versat_common.tpl"}
 
-#{call CountDones instances}
-#{call CountOperations instances}
+#{set nDones #{call CountDones instances}}
+#{set nOperations #{call CountOperations instances}}
+#{set nCombOperations #{call CountCombOperations instances}}
+#{set nSeqOperations  #{call CountSeqOperations instances}}
 
 module @{accel.name} #(
       parameter ADDR_W = 32,
@@ -207,11 +209,7 @@ end
          #{end}
 
          #{for input node.inputs}
-         #{if input.node and input.node.inst.declaration.type == 2}
-            .in@{index}(in@{input.node.inst.id}), // @{input.node.inst.name |> Identify}
-         #{else}
             .in@{index}(#{call outputName input}),
-         #{end}
          #{end}
 
          #{if inst.isStatic}

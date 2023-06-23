@@ -28,7 +28,7 @@ int GetVerilatorMajorVersion(Arena* temp){
       close(1);
       dup(pipefd[1]);
 
-      char* args[3] = {(char*) "verilator","--version",nullptr}; // StaticFormat guarantees that it is null terminated, needed by the call
+      char* args[3] = {(char*) "verilator",(char*) "--version",nullptr}; // StaticFormat guarantees that it is null terminated, needed by the call
 
       execvp("verilator",(char* const*) args);
       printf("Error calling execvp for verilator: %s\n",strerror(errno));
@@ -142,7 +142,7 @@ void CreateWrapper(String unitPath,String wrapperName,Arena* temp){
    ModuleInfo info = ExtractModuleInfo(modules[0],&perm,temp);
 
    FILE* wrapper = fopen(wrapperName.data,"w");
-   OutputModuleInfos(wrapper,true,(Array<ModuleInfo>){&info,1},STRING("Top"),BasicTemplates::unitVerilogData,temp);
+   OutputModuleInfos(wrapper,true,(Array<ModuleInfo>){&info,1},STRING("Top"),BasicTemplates::unitVerilogData,temp,(Array<Wire>){},(Array<String>){});
 }
 
 #include <wordexp.h>

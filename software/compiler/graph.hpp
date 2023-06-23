@@ -1,16 +1,16 @@
 #ifndef INCLUDED_GRAPH
 #define INCLUDED_GRAPH
 
-//#include "versatPrivate.hpp"
+//#include "versat.hpp"
 #include "utils.hpp"
 
 struct Accelerator;
 struct Arena;
-struct ComplexFUInstance;
+struct FUInstance;
 struct FUInstance;
 
 struct PortInstance{
-   ComplexFUInstance* inst;
+   FUInstance* inst;
    int port;
 };
 
@@ -27,7 +27,7 @@ inline bool operator!=(const PortInstance& p1,const PortInstance& p2){
 template<> class std::hash<PortInstance>{
    public:
    std::size_t operator()(PortInstance const& s) const noexcept{
-      std::size_t res = std::hash<ComplexFUInstance*>()(s.inst);
+      std::size_t res = std::hash<FUInstance*>()(s.inst);
       res += s.port;
 
       return res;
@@ -78,7 +78,7 @@ struct Edge{ // A edge in a graph
    Edge* next;
 };
 
-struct ComplexFUInstance;
+struct FUInstance;
 struct InstanceNode;
 
 struct PortNode{
@@ -100,7 +100,7 @@ struct ConnectionNode{
 };
 
 struct InstanceNode{
-   ComplexFUInstance* inst;
+   FUInstance* inst;
    InstanceNode* next;
 
    // Calculated and updated every time a connection is added or removed
@@ -133,7 +133,7 @@ Edge* ConnectUnits(PortInstance out,PortInstance in,int delay = 0);
 Edge* ConnectUnits(InstanceNode* out,int outPort,InstanceNode* in,int inPort,int delay = 0);
 Edge* ConnectUnits(FUInstance* out,int outIndex,FUInstance* in,int inIndex,int delay,Edge* previousEdge);
 
-InstanceNode* GetInstanceNode(Accelerator* accel,ComplexFUInstance* inst);
+InstanceNode* GetInstanceNode(Accelerator* accel,FUInstance* inst);
 void CalculateNodeType(InstanceNode* node);
 void FixInputs(InstanceNode* node);
 

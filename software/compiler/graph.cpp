@@ -70,7 +70,7 @@ void SortEdgesByVertices(Graph* graph){
       int instances = Size(graph->instances);
       int edges = Size(graph->edges);
 
-      Hashmap<ComplexFUInstance*,int> instToIndex = {};
+      Hashmap<FUInstance*,int> instToIndex = {};
       instToIndex.Init(temp,instances);
 
       int index = 0;
@@ -183,7 +183,7 @@ FlattenResult FlattenNode(Graph* graph,Node* node,Arena* arena){
    Accelerator* circuit = decl->baseCircuit;
    ReorganizeAccelerator(circuit,arena);
 
-   Hashmap<ComplexFUInstance*,Node*> map = {};
+   Hashmap<FUInstance*,Node*> map = {};
    map.Init(arena,circuit->numberInstances);
 
    int inserted = 0;
@@ -198,7 +198,7 @@ FlattenResult FlattenNode(Graph* graph,Node* node,Arena* arena){
       }
 
       String newName = PushString(&graph->versat->permanent,"%.*s.%.*s",UNPACK_SS(node->name),UNPACK_SS(inst->name));
-      ComplexFUInstance* res = CopyInstance(graph,inst,newName,ptr);
+      FUInstance* res = CopyInstance(graph,inst,newName,ptr);
 
       map.Insert(inst,res);
 
@@ -228,7 +228,7 @@ FlattenResult FlattenNode(Graph* graph,Node* node,Arena* arena){
       Assert(edge->units[0].port == 0); // Must be connected to port 0
 
       int outsidePort = edge->units[0].inst->portIndex; // The input port is stored in the id of the input unit
-      ComplexFUInstance* instInside = edge->units[1].inst;
+      FUInstance* instInside = edge->units[1].inst;
       Node* nodeInside = map.GetOrFail(instInside);
       int portInside = edge->units[1].port;
 
@@ -299,8 +299,8 @@ FlattenResult FlattenNode(Graph* graph,Node* node,Arena* arena){
          continue;
       }
 
-      ComplexFUInstance* outInside = edge->units[0].inst;
-      ComplexFUInstance* inInside = edge->units[1].inst;
+      FUInstance* outInside = edge->units[0].inst;
+      FUInstance* inInside = edge->units[1].inst;
       int outPort = edge->units[0].port;
       int inPort = edge->units[1].port;
 
@@ -320,7 +320,7 @@ FlattenResult FlattenNode(Graph* graph,Node* node,Arena* arena){
          continue;
       }
 
-      ComplexFUInstance* instInside = edge->units[0].inst;
+      FUInstance* instInside = edge->units[0].inst;
       Node* nodeInside = map.GetOrFail(instInside);
       int portInside = edge->units[0].port;
       int outsidePort = edge->units[1].port;
@@ -428,7 +428,7 @@ ConsolidationResult GenerateConsolidationGraph(Versat* versat,Arena* arena,Subgr
    ConsolidationGraph graph = {};
 
    // Should be temp memory instead of using memory intended for the graph, but since the graph is expected to use a lot of memory and we are technically saving memory using this mapping, no major problem
-   Hashmap<ComplexFUInstance*,MergeEdge> specificsMapping;
+   Hashmap<FUInstance*,MergeEdge> specificsMapping;
    specificsMapping.Init(arena,1000);
    Pool<MappingNode> specificsAdded = {};
 
@@ -582,10 +582,10 @@ ConsolidationResult GenerateConsolidationGraph(Versat* versat,Arena* arena,Subgr
    // Check node mapping
    #if 0
    if(options.mapNodes){
-      ComplexFUInstance* accel1Output = GetOutputInstance(accel1);
-      ComplexFUInstance* accel2Output = GetOutputInstance(accel2);
+      FUInstance* accel1Output = GetOutputInstance(accel1);
+      FUInstance* accel2Output = GetOutputInstance(accel2);
 
-      for(ComplexFUInstance* instA : accel1->instances){
+      for(FUInstance* instA : accel1->instances){
          PortInstance portA = {};
          portA.inst = instA;
 
@@ -599,7 +599,7 @@ ConsolidationResult GenerateConsolidationGraph(Versat* versat,Arena* arena,Subgr
             continue;
          }
 
-         for(ComplexFUInstance* instB : accel2->instances){
+         for(FUInstance* instB : accel2->instances){
             PortInstance portB = {};
             portB.inst = instB;
 
@@ -774,7 +774,7 @@ ConsolidationResult GenerateConsolidationGraph(Versat* versat,Arena* arena,Subgr
 #endif
 #endif
 
-InstanceNode* GetInstanceNode(Accelerator* accel,ComplexFUInstance* inst){
+InstanceNode* GetInstanceNode(Accelerator* accel,FUInstance* inst){
    FOREACH_LIST(ptr,accel->allocated){
       if(ptr->inst == inst){
          return ptr;
@@ -913,15 +913,15 @@ Edge* ConnectUnitsGetEdge(FUInstance* out,int outIndex,FUInstance* in,int inInde
       accel->edges = edge;
    }
 
-   edge->units[0].inst = (ComplexFUInstance*) out;
+   edge->units[0].inst = (FUInstance*) out;
    edge->units[0].port = outIndex;
-   edge->units[1].inst = (ComplexFUInstance*) in;
+   edge->units[1].inst = (FUInstance*) in;
    edge->units[1].port = inIndex;
    edge->delay = delay;
 
    // Update graph data.
-   InstanceNode* inputNode = GetInstanceNode(accel,(ComplexFUInstance*) in);
-   InstanceNode* outputNode = GetInstanceNode(accel,(ComplexFUInstance*) out);
+   InstanceNode* inputNode = GetInstanceNode(accel,(FUInstance*) in);
+   InstanceNode* outputNode = GetInstanceNode(accel,(FUInstance*) out);
 
    // Add info to outputNode
    // Update all outputs

@@ -3,15 +3,16 @@
 
 #include <unordered_map>
 
-//#include "versatPrivate.hpp"
 #include "memory.hpp"
 
-struct ComplexFUInstance;
+struct FUInstance;
 struct InstanceNode;
 struct OrderedInstance;
 struct Accelerator;
 struct FUDeclaration;
 struct Wire;
+struct FUInstance;
+struct Versat;
 
 struct SizedConfig{
    iptr* ptr;
@@ -49,21 +50,23 @@ struct UnitDebugData{
 
 class FUInstanceInterfaces{
 public:
-   PushPtr<iptr> config;
-   PushPtr<int> state;
+   // Config delay and statics share the same configuration space. They are separated here to facilitate accelerator population
+   PushPtr<int> config;
    PushPtr<int> delay;
+   PushPtr<int> statics;
+
+   PushPtr<int> state;
    PushPtr<Byte> mem;
    PushPtr<int> outputs;
    PushPtr<int> storedOutputs;
-   PushPtr<iptr> statics;
    PushPtr<Byte> extraData;
    PushPtr<int> externalMemory;
    //PushPtr<UnitDebugData> debugData;
 
    void Init(Accelerator* accel);
-   void Init(Accelerator* topLevel,ComplexFUInstance* inst);
+   void Init(Accelerator* topLevel,FUInstance* inst);
 
-   void AssertEmpty(bool checkStatic = true);
+   void AssertEmpty();
 };
 
 struct CalculatedOffsets{
@@ -103,5 +106,22 @@ Hashmap<String,SizedConfig>* ExtractNamedSingleMem(Accelerator* accel,Arena* are
 
 void PopulateAccelerator(Accelerator* topLevel,Accelerator* accel,FUDeclaration* topDeclaration,FUInstanceInterfaces& inter,std::unordered_map<StaticId,StaticData>* staticMap);
 void PopulateTopLevelAccelerator(Accelerator* accel);
+
+void InitializeAccelerator(Versat* versat,Accelerator* accel,Arena* temp);
+
+void SetDefaultConfiguration(FUInstance* instance);
+void ShareInstanceConfig(FUInstance* instance, int shareBlockIndex);
+void SetStatic(Accelerator* accel,FUInstance* instance);
+
+String ReprStaticConfig(StaticId id,Wire* wire,Arena* out);
+
+struct OrderedConfigurations{
+   Array<Wire> configs;
+   Array<Wire> statics;
+   Array<Wire> delays;
+};  
+
+OrderedConfigurations ExtractOrderedConfigurationNames(Versat* versat,Accelerator* accel,Arena* out,Arena* temp);
+Array<Wire> OrderedConfigurationsAsArray(OrderedConfigurations configs,Arena* out);
 
 #endif // INCLUDED_VERSAT_CONFIGURATIONS_HPP

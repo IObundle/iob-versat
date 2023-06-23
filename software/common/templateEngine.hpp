@@ -42,8 +42,12 @@ struct Value;
 typedef Value (*PipeFunction)(Value in,Arena* temp);
 void RegisterPipeOperation(String name,PipeFunction func);
 
+void InitializeTemplateEngine(Arena* perm);
+
 void ProcessTemplate(FILE* outputFile,CompiledTemplate* compiledTemplate,Arena* arena);
 CompiledTemplate* CompileTemplate(String content,Arena* arena);
+
+void ClearTemplateEngine();
 
 void TemplateSetCustom(const char* id,void* entity,const char* typeName);
 void TemplateSetNumber(const char* id,int number);

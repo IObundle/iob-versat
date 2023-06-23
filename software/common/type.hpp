@@ -112,6 +112,11 @@ struct Iterator{
    Value iterating;
 };
 
+struct HashmapUnpackedIndex{
+   int index;
+   bool data;
+};
+
 Type* RegisterSimpleType(String name,int size,int align);
 Type* RegisterOpaqueType(String name,Type::Subtype subtype,int size,int align);
 Type* RegisterEnum(String name,Array<Pair<String,int>> enumValues);
@@ -151,6 +156,9 @@ bool IsBasicType(Type* type);
 bool IsIndexableOfBasicType(Type* type);
 bool IsEmbeddedListKind(Type* type); // Any structure with a next pointer to itself is considered an embedded list
 bool IsStruct(Type* type);
+
+int HashmapIndex(int fullIndex,bool data); 
+HashmapUnpackedIndex UnpackHashmapIndex(int index);
 
 Iterator Iterate(Value iterating);
 bool HasNext(Iterator iter);

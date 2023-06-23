@@ -1,18 +1,23 @@
 #ifndef INCLUDED_MERGE
 #define INCLUDED_MERGE
 
-#include "versatPrivate.hpp"
+#include "versat.hpp"
 #include "thread.hpp"
 #include "graph.hpp"
 #include <unordered_map>
 
 //#define MAX_CLIQUE_TIME 10.0f
 
-struct ComplexFUInstance;
+struct FUInstance;
 struct InstanceNode;
 struct OrderedInstance;
 struct Accelerator;
 struct FUDeclaration;
+
+struct SpecificMerge{
+   String instA;
+   String instB;
+};
 
 struct IndexRecord{
    int index;
@@ -20,13 +25,13 @@ struct IndexRecord{
 };
 
 struct SpecificMergeNodes{
-   ComplexFUInstance* instA;
-   ComplexFUInstance* instB;
+   FUInstance* instA;
+   FUInstance* instB;
 };
 
 
 struct MergeEdge{
-   ComplexFUInstance* instances[2];
+   FUInstance* instances[2];
 };
 
 struct MappingNode{ // Mapping (edge to edge or node to node)
@@ -131,7 +136,7 @@ struct IsCliqueResult{
    int failedIndex;
 };
 
-typedef std::unordered_map<ComplexFUInstance*,ComplexFUInstance*> InstanceMap;
+typedef std::unordered_map<FUInstance*,FUInstance*> InstanceMap;
 typedef std::unordered_map<PortEdge,PortEdge> PortEdgeMap;
 typedef std::unordered_map<Edge*,Edge*> EdgeMap;
 typedef Hashmap<InstanceNode*,InstanceNode*> InstanceNodeMap;
@@ -157,6 +162,14 @@ struct GraphMapping{
    InstanceMap instanceMap;
    InstanceMap reverseInstanceMap;
    PortEdgeMap edgeMap;
+};
+
+enum MergingStrategy{
+   SIMPLE_COMBINATION,
+   CONSOLIDATION_GRAPH,
+   PIECEWISE_CONSOLIDATION_GRAPH,
+   FIRST_FIT,
+   ORDERED_FIT
 };
 
 void OutputConsolidationGraph(ConsolidationGraph graph,Arena* memory,bool onlyOutputValid,const char* format,...);
@@ -190,5 +203,9 @@ ConsolidationGraph ParallelMaxClique(ConsolidationGraph graph,int upperBound,Are
 String MappingNodeIdentifier(MappingNode* node,Arena* memory);
 MergeGraphResult HierarchicalMergeAccelerators(Versat* versat,Accelerator* accel1,Accelerator* accel2,String name);
 MergeGraphResult HierarchicalMergeAcceleratorsFullClique(Versat* versat,Accelerator* accel1,Accelerator* accel2,String name);
+
+FUDeclaration* MergeAccelerators(Versat* versat,FUDeclaration* accel1,FUDeclaration* accel2,String name,int flatteningOrder = 99,MergingStrategy strategy = MergingStrategy::CONSOLIDATION_GRAPH,SpecificMerge* specifics = nullptr,int nSpecifics = 0);
+FUDeclaration* MergeThree(Versat* versat,FUDeclaration* typeA,FUDeclaration* typeB,FUDeclaration* typeC);
+FUDeclaration* Merge(Versat* versat,Array<FUDeclaration*> types,String name,MergingStrategy strat = MergingStrategy::CONSOLIDATION_GRAPH);
 
 #endif // INCLUDED_MERGE

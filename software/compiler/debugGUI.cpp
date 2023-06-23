@@ -1,6 +1,5 @@
 #include "debugGUI.hpp"
 
-#ifdef DEBUG_GUI
 #include "imgui.h"
 #include "imgui_internal.h"
 #include "imgui_impl_sdl.h"
@@ -19,7 +18,7 @@
 #include "type.hpp"
 #include "textualRepresentation.hpp"
 #include "configurations.hpp"
-#include "versatPrivate.hpp"
+#include "versat.hpp"
 
 SDL_Window* InitWindow(){
    static SDL_Window* window = nullptr;
@@ -81,7 +80,7 @@ SDL_Window* InitWindow(){
 
 #if 0
 struct GraphNode{
-   ComplexFUInstance* inst;
+   FUInstance* inst;
    ImVec2 pos;
    int order;
 };
@@ -256,7 +255,7 @@ void AcceleratorGraph(Accelerator* accel,Arena* arena,Filter filter){
 #endif
 }
 
-bool PassFilterConfiguration(Accelerator* topLevel,ComplexFUInstance* inst,FilterConfigurations filter){
+bool PassFilterConfiguration(Accelerator* topLevel,FUInstance* inst,FilterConfigurations filter){
    bool res = false;
    res |= filter.showConfig && inst->declaration->configs.size && !IsConfigStatic(topLevel,inst);
    res |= filter.showStatic && inst->declaration->configs.size && IsConfigStatic(topLevel,inst);
@@ -269,7 +268,7 @@ bool PassFilterConfiguration(Accelerator* topLevel,ComplexFUInstance* inst,Filte
    return res;
 }
 
-bool PassFilterTypes(ComplexFUInstance* inst,FilterTypes filter){
+bool PassFilterTypes(FUInstance* inst,FilterTypes filter){
    bool res = false;
 
    bool simple = filter.showSimple && inst->declaration->type == FUDeclaration::SINGLE;
@@ -287,7 +286,7 @@ bool PassFilterTypes(ComplexFUInstance* inst,FilterTypes filter){
    return res;
 }
 
-bool PassFilter(Accelerator* topLevel,ComplexFUInstance* inst,Filter filter){
+bool PassFilter(Accelerator* topLevel,FUInstance* inst,Filter filter){
    bool configuration = PassFilterConfiguration(topLevel,inst,filter.config);
    bool type = PassFilterTypes(inst,filter.types);
 
@@ -310,7 +309,7 @@ Optional<String> AcceleratorTreeNodes(AcceleratorIterator iter,Filter filter){
    Optional<String> res = {};
 
    for(InstanceNode* node = iter.Current(); node; node = iter.Skip()){
-      ComplexFUInstance* inst = node->inst;
+      FUInstance* inst = node->inst;
       bool doNode = PassFilter(iter.topLevel,inst,filter);
 
       if(IsTypeHierarchical(inst->declaration)){
@@ -356,7 +355,7 @@ Optional<String> AcceleratorTreeNodes(AcceleratorIterator iter,Filter filter){
 
 String DebugValueRepresentation(Value val,Arena* arena){
    Type* FUDeclType = GetType(STRING("FUDeclaration"));
-   Type* ComplexInstanceType = GetType(STRING("ComplexFUInstance"));
+   Type* ComplexInstanceType = GetType(STRING("FUInstance"));
    Type* WireType = GetType(STRING("Wire"));
    Type* StaticIdType = GetType(STRING("StaticId"));
    Type* StaticDataType = GetType(STRING("StaticData"));
@@ -377,7 +376,7 @@ String DebugValueRepresentation(Value val,Arena* arena){
       auto decl = (FUDeclaration*) collapsed.custom;
       repr = Repr(decl,arena);
    } else if(type == ComplexInstanceType){
-      auto inst = (ComplexFUInstance*) collapsed.custom;
+      auto inst = (FUInstance*) collapsed.custom;
       repr = PushString(arena,"[%p] %.*s",collapsed.custom,UNPACK_SS(inst->name));
    } else if(type == WireType){
       auto wire = (Wire*) collapsed.custom;
@@ -444,8 +443,10 @@ Optional<ValueSelected> ShowTable(Value iterable,Arena* arena,int selectedIndex 
 
          bool selected = (index == selectedIndex);
          ImGui::TableNextRow();
-         ImGui::TableNextColumn(); ImGui::Text("%d",index);
-         ImGui::TableNextColumn(); selected = ImGui::Selectable(StaticFormat("%.*s##%d",UNPACK_SS(repr),index),&selected,ImGuiSelectableFlags_SpanAllColumns);
+         ImGui::TableNextColumn();
+         ImGui::Text("%d",index);
+         ImGui::TableNextColumn();
+         selected = ImGui::Selectable(StaticFormat("%.*s##%d",UNPACK_SS(repr),index),&selected,ImGuiSelectableFlags_SpanAllColumns);
 
          if(selected){
             res = ValueSelected{val,index};
@@ -477,9 +478,10 @@ void ShowDualTable(Value iterable1,Value iterable2,Arena* arena){
    }
 }
 
-void ShowHashmapTable(Value hashmap,Arena* arena){
+Optional<ValueSelected> ShowHashmapTable(Value hashmap,Arena* arena){
    BLOCK_REGION(arena);
 
+   Optional<ValueSelected> res = {};
    if(ImGui::BeginTable("split",2,ImGuiTableFlags_RowBg)){
       Iterator iter = Iterate(hashmap);
       int index = 0;
@@ -493,12 +495,29 @@ void ShowHashmapTable(Value hashmap,Arena* arena){
          String repr1 = DebugValueRepresentation(val1,arena);
          String repr2 = DebugValueRepresentation(val2,arena);
 
+         bool selected1 = false;
+         bool selected2 = false;
+         
          ImGui::TableNextRow();
-         ImGui::TableNextColumn(); ImGui::Text("[%d] %.*s",index,UNPACK_SS(repr1));
-         ImGui::TableNextColumn(); ImGui::Text("%.*s",UNPACK_SS(repr2));
+         ImGui::TableNextColumn();
+         selected1 = ImGui::Selectable(StaticFormat("[%d] %.*s",index,UNPACK_SS(repr1)),&selected1,0);
+         ImGui::TableNextColumn();
+         selected2 = ImGui::Selectable(StaticFormat("%.*s",UNPACK_SS(repr2)),&selected2,0);
+
+         if(selected1){
+            res = ValueSelected{val1,HashmapIndex(index,false)};
+         }
+         if(selected2){
+            res = ValueSelected{val2,HashmapIndex(index,true)};
+         }
       }
       ImGui::EndTable();
    }
+
+   if(res){
+      printf("%d\n",res.value().index);    
+   }
+   return res;
 }
 
 Optional<ValueSelected> OutputDebugValues(Value value,Arena* arena){
@@ -508,7 +527,7 @@ Optional<ValueSelected> OutputDebugValues(Value value,Arena* arena){
 
    Optional<ValueSelected> res = {};
    if(type->type == Type::TEMPLATED_INSTANCE && type->templateBase == ValueType::HASHMAP){
-      ShowHashmapTable(collapsed,arena);
+      res = ShowHashmapTable(collapsed,arena);
    } else if(IsIndexable(type)){
       res = ShowTable(collapsed,arena);
    } else if(IsStruct(type)){
@@ -729,7 +748,7 @@ void ShowConfigurations(Accelerator* accel,Arena* arena,Filter filter){
 
       int index = 0;
       for(InstanceNode* node = iter.Start(accel,arena,true); node; node = iter.Next(),index += 1){
-         ComplexFUInstance* inst = node->inst;
+         FUInstance* inst = node->inst;
          if(!PassFilter(accel,inst,filter)){
             continue;
          }
@@ -744,8 +763,8 @@ void ShowConfigurations(Accelerator* accel,Arena* arena,Filter filter){
          ImGui::TableNextColumn();
 
          if(selected == 0){
-            if(inst->isStatic){
-               ImGui::Text("(Static:%d)",offset - offsets.max);
+            if(IsConfigStatic(accel,inst)){
+               ImGui::Text("(Static:%d)",offset);
             } else if(inst->sharedEnable){
                BLOCK_REGION(arena);
                InstanceNode* parent = iter.ParentInstance();
@@ -769,10 +788,10 @@ void ShowConfigurations(Accelerator* accel,Arena* arena,Filter filter){
 
 void OutputAcceleratorRunValues(InstanceNode* node,Arena* arena){
    BLOCK_REGION(arena);
-   ComplexFUInstance* inst = node->inst;
+   FUInstance* inst = node->inst;
 
    if(ImGui::CollapsingHeader("Config")){
-      Array<iptr> arr = {};
+      Array<int> arr = {};
       arr.data = inst->config;
       arr.size = inst->declaration->configs.size;
 
@@ -1072,11 +1091,11 @@ void DebugGUI(){
                if(dw->selectedInstance){
                   String name = dw->selectedInstance.value();
                   InstanceNode* node = GetInstanceFromName(accel,name,arena);
-                  ComplexFUInstance* inst = node->inst;
+                  FUInstance* inst = node->inst;
                   if(ImGui::BeginChild("Values")){
                      dw->selectedDeclaration = inst->declaration;
 
-                     Optional<ValueSelected> res = OutputDebugValues(MakeValue(inst,"ComplexFUInstance"),arena);
+                     Optional<ValueSelected> res = OutputDebugValues(MakeValue(inst,"FUInstance"),arena);
 
                      if(res){
                         Value val = CollapsePtrIntoStruct(res.value().val);
@@ -1220,5 +1239,3 @@ void DebugValue(Value val){
    DebugGUI();
    ClearState();
 }
-
-#endif

@@ -1,12 +1,12 @@
 #include "acceleratorSimulation.hpp"
 
-#include "versatPrivate.hpp"
+#include "versat.hpp"
 #include "debug.hpp"
 
 void AcceleratorRunStart(Accelerator* accel){
    AcceleratorIterator iter = {};
    for(InstanceNode* node = iter.Start(accel,&accel->versat->temp,true); node; node = iter.Next()){
-      ComplexFUInstance* inst = node->inst;
+      FUInstance* inst = node->inst;
       FUDeclaration* type = inst->declaration;
 
       if(type->startFunction){
@@ -22,8 +22,7 @@ void AcceleratorRunStart(Accelerator* accel){
 
 bool AcceleratorDone(Accelerator* accel){
    FOREACH_LIST(ptr,accel->allocated){
-      ComplexFUInstance* inst = ptr->inst;
-//      DEBUG_BREAK_IF(CompareString(inst->name,"mk0"));
+      FUInstance* inst = ptr->inst;
       if(IsTypeHierarchical(inst->declaration) && !IsTypeSimulatable(inst->declaration)){
          bool subDone = AcceleratorDone(inst->declaration->fixedDelayCircuit);
          if(subDone){
@@ -46,7 +45,7 @@ bool AcceleratorDone(Accelerator* accel){
 void AcceleratorEvalIter(AcceleratorIterator iter){
    // Set accelerator input to instance input
    InstanceNode* compositeNode = iter.Current();
-   ComplexFUInstance* compositeInst = compositeNode->inst;
+   FUInstance* compositeInst = compositeNode->inst;
    Assert(IsTypeHierarchical(compositeInst->declaration));
    Accelerator* accel = compositeInst->declaration->fixedDelayCircuit;
 
@@ -60,7 +59,7 @@ void AcceleratorEvalIter(AcceleratorIterator iter){
 
       InstanceNode* inputNode = GetInputNode(accel->allocated,i);
       Assert(inputNode);
-      ComplexFUInstance* input = inputNode->inst;
+      FUInstance* input = inputNode->inst;
       int val = GetInputValue(compositeNode,i);
       for(int ii = 0; ii < input->declaration->outputLatencies.size; ii++){
          input->outputs[ii] = val;
@@ -85,7 +84,7 @@ void AcceleratorEvalIter(AcceleratorIterator iter){
 
 void AcceleratorEval(AcceleratorIterator iter){
    for(InstanceNode* node = iter.Current(); node; node = iter.Skip()){
-      ComplexFUInstance* inst = node->inst;
+      FUInstance* inst = node->inst;
       if(IsTypeHierarchical(inst->declaration)){
          AcceleratorEvalIter(iter);
       }
@@ -95,7 +94,7 @@ void AcceleratorEval(AcceleratorIterator iter){
 void AcceleratorRunComposite(AcceleratorIterator iter){
    // Set accelerator input to instance input
    InstanceNode* compositeNode = iter.Current();
-   ComplexFUInstance* compositeInst = compositeNode->inst;
+   FUInstance* compositeInst = compositeNode->inst;
    Assert(IsTypeHierarchical(compositeInst->declaration));
    Accelerator* accel = compositeInst->declaration->fixedDelayCircuit;
 
@@ -109,7 +108,7 @@ void AcceleratorRunComposite(AcceleratorIterator iter){
 
       InstanceNode* inputNode = GetInputNode(accel->allocated,i);
       Assert(inputNode);
-      ComplexFUInstance* input = inputNode->inst;
+      FUInstance* input = inputNode->inst;
       int val = GetInputValue(compositeNode,i);
       for(int ii = 0; ii < input->declaration->outputLatencies.size; ii++){
          input->outputs[ii] = val;
@@ -139,7 +138,7 @@ void AcceleratorRunIter(AcceleratorIterator iter){
    Array<int> bufferArray = {buffer,99};
 
    for(InstanceNode* node = iter.Current(); node; node = iter.Skip()){
-      ComplexFUInstance* inst = node->inst;
+      FUInstance* inst = node->inst;
       if(IsTypeSimulatable(inst->declaration)){
          bufferArray.size = node->inputs.size;
          for(int i = 0; i < node->inputs.size; i++){

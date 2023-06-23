@@ -1,10 +1,10 @@
 #include "versat.hpp"
-#include "versatPrivate.hpp"
 #include "utils.hpp"
 #include "verilogParsing.hpp"
 #include "type.hpp"
 #include "templateEngine.hpp"
 #include "unitVerilation.hpp"
+#include "debugGUI.hpp"
 
 #include <filesystem>
 namespace fs = std::filesystem;
@@ -163,14 +163,6 @@ int main(int argc,const char* argv[]){
    }
    #endif
 
-   //String wrapper = PushString(temp,"%s/wrapper.inc",opts->outputFilepath);
-   //PushNullByte(temp);
-
-   //FILE* output = OpenFileAndCreateDirectories(wrapper.data,"w");
-   //CompiledTemplate* comp = CompileTemplate(unit_verilog_data,temp);
-
-   //OutputModuleInfos(output,false,(Array<ModuleInfo>){allModules.data(),(int) allModules.size()},STRING("Verilog"),comp,temp);
-
    #if 1
    BasicDeclaration::buffer = GetTypeByName(versat,STRING("Buffer"));
    BasicDeclaration::fixedBuffer = GetTypeByName(versat,STRING("FixedBuffer"));
@@ -193,83 +185,120 @@ int main(int argc,const char* argv[]){
    Accelerator* accel = CreateAccelerator(versat);
    FUInstance* TOP = nullptr;
 
-   if(opts->addInputAndOutputsToTop){
-      TOP = CreateFUInstance(accel,type,STRING("simple"));
+   bool isSimple = false;
+   if(opts->addInputAndOutputsToTop && !(type->inputDelays.size == 0 && type->outputLatencies.size == 0)){
+      int input = type->inputDelays.size;
+      int output = type->outputLatencies.size;
+
+      Array<FUInstance*> inputs = PushArray<FUInstance*>(perm,input);
+      Array<FUInstance*> outputs = PushArray<FUInstance*>(perm,output);
 
       FUDeclaration* constType = GetTypeByName(versat,STRING("Const"));
       FUDeclaration* regType = GetTypeByName(versat,STRING("Reg"));
-      for(int i = 0; i < type->inputDelays.size; i++){
+
+      // We need to create input and outputs first before instance
+      // to guarantee that the configs and states are at the beginning of the accelerator structs
+      for(int i = 0; i < input; i++){
          String name = PushString(perm,"input_%d",i);
-         FUInstance* inst = CreateFUInstance(accel,constType,name);
-         ConnectUnits(inst,0,TOP,i);
+         inputs[i] = CreateFUInstance(accel,constType,name);
       }
-      for(int i = 0; i < type->outputLatencies.size; i++){
+      for(int i = 0; i < output; i++){
          String name = PushString(perm,"output_%d",i);
-         FUInstance* inst = CreateFUInstance(accel,regType,name);
-         ConnectUnits(TOP,i,inst,0);
+         outputs[i] = CreateFUInstance(accel,regType,name);
       }
+
+      TOP = CreateFUInstance(accel,type,STRING("simple"));
+
+      for(int i = 0; i < input; i++){
+         ConnectUnits(inputs[i],0,TOP,i);
+      }
+      for(int i = 0; i < output; i++){
+         ConnectUnits(TOP,i,outputs[i],0);
+      }
+
       topLevelTypeStr = PushString(perm,"%.*s_Simple",UNPACK_SS(topLevelTypeStr));
       type = RegisterSubUnit(versat,topLevelTypeStr,accel);
       accel = CreateAccelerator(versat);
-   }
+      TOP = CreateFUInstance(accel,type,STRING("TOP"));
+   } else {
+      bool isSimple = true;
+      TOP = CreateFUInstance(accel,type,STRING("TOP"));
 
-   TOP = CreateFUInstance(accel,type,STRING("TOP"));
+      for(int i = 0; i < type->inputDelays.size; i++){
+         String name = PushString(&versat->permanent,"input%d",i);
+         FUInstance* input = CreateOrGetInput(accel,name,i);
+         ConnectUnits(input,0,TOP,i);
+      }
+      FUInstance* output = CreateOrGetOutput(accel);
+      for(int i = 0; i < type->outputLatencies.size; i++){
+         ConnectUnits(TOP,i,output,i);
+      }
+   }
 
    if(!opts->outputFilepath){
       opts->outputFilepath = ".";
    }
 
+   InitializeAccelerator(versat,accel,&versat->temp);
    OutputVersatSource(versat,accel,opts->outputFilepath,topLevelTypeStr,opts->addInputAndOutputsToTop);
 
-   // Need to create an accelerator wrapper of module given
-   /*
-   String generatedVerilogPath = PushString(temp,"%s/%.*s.v",opts->outputFilepath,UNPACK_SS(topLevelTypeStr));
-   PushNullByte(temp);
-   CheckOrCompileUnit(generatedVerilogPath,temp);
+   if(isSimple){
+      accel = CreateAccelerator(versat);
+      TOP = CreateFUInstance(accel,type,STRING("TOP"));
+      InitializeAccelerator(versat,accel,&versat->temp);
+   }
 
-   String content = PushFile(temp,generatedVerilogPath.data);
-   String processed = PreprocessVerilogFile(preprocess,content,&opts->includePaths,temp);
-   std::vector<Module> modules = ParseVerilogFile(processed,&opts->includePaths,temp);
+   OrderedConfigurations configs = ExtractOrderedConfigurationNames(versat,accel,&versat->permanent,&versat->temp);
+   Array<Wire> allConfigsHeaderSide = OrderedConfigurationsAsArray(configs,&versat->permanent);
 
-   Assert(modules.size() == 1);
-   */
-
-   //CheckOrCompileUnit(generatedVerilogPath,temp);
-   #if 0
-   region(temp){
-   String wrapper = PushString(temp,"%s/%.*s.v",opts->outputFilepath,UNPACK_SS(topLevelTypeStr));
-   PushNullByte(temp);
-   FILE* output = OpenFileAndCreateDirectories(wrapper.data,"w");
-
-   OutputCircuitSource(versat,type,type->fixedDelayCircuit,output);
-   fclose(output);
+   Array<Wire> allConfigsVerilatorSide = PushArray<Wire>(temp,99); // TODO: Correct size
+   #if 1
+   {
+      int index = 0;
+      for(Wire& config : type->configs){
+         allConfigsVerilatorSide[index++] = config;
+      }
+      for(Pair<StaticId,StaticData> p : type->staticUnits){
+         for(Wire& config : p.second.configs){
+            allConfigsVerilatorSide[index] = config;
+            allConfigsVerilatorSide[index].name = ReprStaticConfig(p.first,&config,&versat->permanent);
+            //printf("%.*s\n",UNPACK_SS(allConfigsVerilatorSide[index].name));
+            index += 1;
+         }
+      }
+      allConfigsVerilatorSide.size = index;
    }
    #endif
+
+   Hashmap<String,SizedConfig>* namedStates = ExtractNamedSingleStates(accel,&versat->permanent);
+   Array<String> statesHeaderSize = PushArray<String>(temp,namedStates->nodesUsed);
+   int index = 0;
+   for(Pair<String,SizedConfig> pair : namedStates){
+      statesHeaderSize[index++] = pair.first;
+   }
 
    ModuleInfo info = {};
    info.name = type->name;
    info.inputDelays = type->inputDelays;
    info.outputLatencies = type->outputLatencies;
-   info.configs = type->configs;
-   info.states = type->states;
+   info.configs = allConfigsVerilatorSide;
+   info.states = type->states; //allStatesVerilatorSide
    info.externalInterfaces = type->externalMemory;
    info.nDelays = type->delayOffsets.max;
    info.nIO = type->nIOs;
    info.memoryMappedBits = type->memoryMapBits;
    info.doesIO = type->nIOs > 0;
-   info.memoryMapped = type->memoryMapBits >= 0;
+   info.memoryMapped = type->isMemoryMapped; //type->memoryMapBits >= 0;
    info.hasDone = type->implementsDone;
    info.hasClk = true;
    info.hasReset = true;
    info.hasRun = true;
    info.hasRunning = true;
-   info.isSource = false; // Hack but maybe not a problem doing it this way
+   info.isSource = false; // Hack but maybe not a problem doing it this way, we only care to generate the wrapper and the instance is only done individually
 
-   info.configs.size = type->configOffsets.max;
    info.states.size = type->delayOffsets.max;
 
    std::vector<ModuleInfo> finalModule;
-   //ModuleInfo info = ExtractModuleInfo(modules[0],perm,temp);
    finalModule.push_back(info);
 
    region(temp){
@@ -278,7 +307,7 @@ int main(int argc,const char* argv[]){
 
       FILE* output = OpenFileAndCreateDirectories(wrapper.data,"w");
       CompiledTemplate* comp = CompileTemplate(unit_verilog_data_template,temp);
-      OutputModuleInfos(output,false,(Array<ModuleInfo>){finalModule.data(),(int) finalModule.size()},STRING("Verilog"),comp,temp);
+      OutputModuleInfos(output,false,(Array<ModuleInfo>){finalModule.data(),(int) finalModule.size()},STRING("Verilog"),comp,temp,allConfigsHeaderSide,statesHeaderSize);
       fclose(output);
    }
 
@@ -289,28 +318,20 @@ int main(int argc,const char* argv[]){
       FILE* output = OpenFileAndCreateDirectories(name.data,"w");
       CompiledTemplate* comp = CompileTemplate(versat_makefile_template,temp);
 
+      fs::path outputPath = opts->outputFilepath;
+      fs::path srcLocation = fs::current_path();
+      fs::path fixedPath = fs::weakly_canonical(outputPath / srcLocation);
+
       TemplateSetArray("verilogFiles","String",opts->verilogFiles.data(),opts->verilogFiles.size());
       TemplateSetString("typename",topLevelTypeStr);
       TemplateSetString("hack",STRING("#"));
       TemplateSetNumber("verilatorVersion",GetVerilatorMajorVersion(&versat->temp));
+      TemplateSetString("rootPath",STRING(fixedPath.c_str()));
       ProcessTemplate(output,comp,temp);
    }
 
-   //RegisterModuleInfo(versat,&info);
-
-   //UnitFunctions functions =
-
-   //String wrapper = PushString(temp,"%s/wrapper.inc",opts->outputFilepath);
-   //PushNullByte(temp);
-
-   //FILE* output = OpenFileAndCreateDirectories(wrapper.data,"w");
-   //CompiledTemplate* comp = CompileTemplate(unit_verilog_data,temp);
-
-   //OutputModuleInfos(output,false,(Array<ModuleInfo>){allModules.data(),(int) allModules.size()},STRING("Verilog"),comp,temp);
-
    return 0;
 }
-
 
 
 

@@ -1,7 +1,7 @@
 #ifndef INCLUDED_VERSAT_ACCELERATOR_STATS
 #define INCLUDED_VERSAT_ACCELERATOR_STATS
 
-#include "versatPrivate.hpp"
+#include "versat.hpp"
 
 int MemorySize(Array<ExternalMemoryInterface> interfaces); // Size of a simple memory mapping.
 
