@@ -1,5 +1,7 @@
 #include "debugGUI.hpp"
 
+#ifdef VERSAT_DEBUG
+
 #include "imgui.h"
 #include "imgui_internal.h"
 #include "imgui_impl_sdl.h"
@@ -1239,3 +1241,5 @@ void DebugValue(Value val){
    DebugGUI();
    ClearState();
 }
+
+#endif // VERSAT_DEBUG

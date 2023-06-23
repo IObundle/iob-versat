@@ -4,7 +4,7 @@ VERSAT_DIR:=$(abspath $(shell pwd)/../..)
 include $(VERSAT_DIR)/core.mk
 include $(VERSAT_TOOLS_DIR)/tools.mk
 
-VERSAT_DEBUG:= 1
+VERSAT_DEBUG:= 0
 
 BUILD_DIR:=$(VERSAT_DIR)/build
 
@@ -26,6 +26,7 @@ CPP_OBJ := $(VERSAT_COMPILER_OBJ)
 ifeq ($(VERSAT_DEBUG),1)
 VERSAT_LIBS+= -lSDL2  -lGL -ldl
 VERSAT_INCLUDE+= -I$(VERSAT_COMPILER_DIR)/IMNODES -I$(VERSAT_COMPILER_DIR)/IMGUI -I$(VERSAT_COMPILER_DIR)/IMGUI/backends -I/usr/include/SDL2
+VERSAT_FLAGS:=-DVERSAT_DEBUG
 
 IMGUI_SRC := $(wildcard $(VERSAT_COMPILER_DIR)/IMGUI/*.cpp)
 IMGUI_OBJ := $(patsubst $(VERSAT_COMPILER_DIR)/IMGUI/%.cpp,$(BUILD_DIR)/%.o,$(IMGUI_SRC))
@@ -47,7 +48,7 @@ CPP_OBJ += $(BUILD_DIR)/typeInfo.o
 CPP_OBJ_WITHOUT_COMPILER:=$(filter-out $(BUILD_DIR)/versatCompiler.o,$(CPP_OBJ))
 
 $(VERSAT_DIR)/versat: $(CPP_OBJ)
-	g++ -MMD -MP -std=c++17 -DVERSAT_DEBUG -o $@ -g $(CPP_OBJ) $(VERSAT_INCLUDE) $(VERSAT_LIBS)
+	g++ -MMD -MP -std=c++17 $(VERSAT_FLAGS) -o $@ -g $(CPP_OBJ) $(VERSAT_INCLUDE) $(VERSAT_LIBS)
 
 $(VERSAT_DIR)/libversat.a: $(CPP_OBJ_WITHOUT_COMPILER)
 	ar rcs $(VERSAT_DIR)/libversat.a $(CPP_OBJ_WITHOUT_COMPILER)
@@ -58,7 +59,7 @@ VERSAT_COMPILER_DEPENDS := $(patsubst %.o,%.d,$(VERSAT_COMPILER_OBJ))
 -include  $(VERSAT_COMPILER_DEPENDS)
 
 $(BUILD_DIR)/%.o : $(VERSAT_COMPILER_DIR)/%.cpp
-	g++ -MMD -MP -std=c++17 -DVERSAT_DEBUG -g -c -o $@ $(GLOBAL_CFLAGS) $< $(VERSAT_INCLUDE)
+	g++ -MMD -MP -std=c++17 $(VERSAT_FLAGS) -g -c -o $@ $(GLOBAL_CFLAGS) $< $(VERSAT_INCLUDE)
 
 ifeq ($(VERSAT_DEBUG),1)
 $(BUILD_DIR)/%.o: $(VERSAT_COMPILER_DIR)/IMGUI/%.cpp
