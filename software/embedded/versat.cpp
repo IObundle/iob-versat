@@ -1,4 +1,4 @@
-#include "accel.hpp"
+#include "versat_accel.hpp"
 
 #include "printf.h"
 #define MEMSET(base, location, value) (*((volatile int*) (base + (sizeof(int)) * location)) = (int) value)
@@ -8,7 +8,6 @@
 
 extern "C"{
 #include "iob-timer.h"
-}
 
 NanoSecond GetTime(){
    NanoSecond res = {};
@@ -16,7 +15,7 @@ NanoSecond GetTime(){
    return res;
 }
 
-static int versat_base;
+int versat_base;
 
 volatile AcceleratorConfig* accelConfig = nullptr;
 volatile AcceleratorState*  accelState  = nullptr;
@@ -78,4 +77,5 @@ void VersatUnitWrite(int addr,int val){
    *ptr = val;
 }
 
+}
 

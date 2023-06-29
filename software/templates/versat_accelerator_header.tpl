@@ -3,10 +3,13 @@
 #ifndef INCLUDED_VERSAT_ACCELERATOR_HEADER
 #define INCLUDED_VERSAT_ACCELERATOR_HEADER
 
-#include <cstdint>
+#include <stdint.h>
 typedef intptr_t iptr;
+#define bool char
+#define true 1
+#define false 0
 
-struct AcceleratorConfig{
+typedef struct AcceleratorConfigType{
 #{for wire orderedConfigs.configs}
    iptr @{wire.name};
 #{end}
@@ -16,14 +19,14 @@ struct AcceleratorConfig{
 #{for wire orderedConfigs.delays}
    iptr @{wire.name};
 #{end}
-};
+} AcceleratorConfig;
 
-struct AcceleratorState{
+typedef struct AcceleratorStateType{
 #{for pair namedStates}
 #{set name pair.first} #{set conf pair.second}
 int @{name};
 #{end}
-};
+} AcceleratorState;
 
 static const int memMappedStart = @{memoryMappedBase * 4 |> Hex};
 
@@ -84,5 +87,9 @@ extern volatile AcceleratorState* accelState;
 #define ACCEL_@{name} accelState->@{name}
 #{end}
 
+#undef bool
+#undef true
+#undef false
 
 #endif // INCLUDED_VERSAT_ACCELERATOR_HEADER
+

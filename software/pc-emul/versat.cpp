@@ -1,4 +1,4 @@
-#include "accel.hpp"
+#include "versat_accel.hpp"
 
 #include "versat.hpp"
 #include "accelerator.hpp"

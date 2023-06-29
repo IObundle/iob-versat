@@ -53,7 +53,7 @@ int @{wire.name};
 
 #include <new>
 
-#include "accel.hpp"
+#include "versat_accel.hpp"
 #include "versatPrivate.hpp"
 #include "utils.hpp"
 

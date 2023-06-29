@@ -207,7 +207,7 @@ void OutputVersatSource(Versat* versat,Accelerator* accel,const char* directoryP
       pair.second.ptr = (iptr*) view;
    }
    #endif
-   
+
    TemplateSetCustom("namedConfigs",namedConfigs,"Hashmap<String,SizedConfig>");
    TemplateSetCustom("namedStates",namedStates,"Hashmap<String,SizedConfig>");
    TemplateSetCustom("namedMem",namedMem,"Hashmap<String,SizedConfig>");
@@ -215,7 +215,7 @@ void OutputVersatSource(Versat* versat,Accelerator* accel,const char* directoryP
 
    TemplateSetCustom("orderedConfigs",&orderedConfigs,"OrderedConfigurations");
 
-   FILE* f = OpenFileAndCreateDirectories(StaticFormat("%s/accel.hpp",directoryPath),"w");
+   FILE* f = OpenFileAndCreateDirectories(StaticFormat("%s/versat_accel.hpp",directoryPath),"w");
    ProcessTemplate(f,BasicTemplates::acceleratorHeaderTemplate,&versat->temp);
    fclose(f);
    }

@@ -33,9 +33,13 @@ struct Options{
 Optional<String> GetFormat(String filename){
    int size = filename.size;
    for(int i = 0; i < filename.size; i++){
-      if(filename[size - i - 1] == '.'){
+      char ch = filename[size - i - 1];
+      if(ch == '.'){
          String res = (String){&filename[size - i],i};
          return res;
+      }
+      if(ch == '/'){
+         break;
       }
    }
 
@@ -51,25 +55,6 @@ Options* ParseCommandLineOptions(int argc,const char* argv[],Arena* perm,Arena* 
       String str = STRING(argv[i]);
 
       Optional<String> formatOpt = GetFormat(str);
-
-      if(formatOpt){
-         String format = formatOpt.value();
-         if(CompareString(format,"v")){
-            fs::path relative = argv[i];
-            fs::path absolute = fs::canonical(fs::absolute(relative));
-            opts->verilogFiles.push_back(PushString(perm,"%s",absolute.c_str()));
-            continue;
-         } else { // Assume to be the specification file, for now
-            if(opts->specificationFilepath){
-               printf("Error, multiple specification files specified, not supported for now\n");
-               exit(-1);
-            }
-
-            opts->specificationFilepath = argv[i];
-         }
-
-         continue;
-      }
 
       if(str.size >= 2 && str[0] == '-' && str[1] == 'S'){
          if(str.size == 2){
@@ -113,6 +98,7 @@ Options* ParseCommandLineOptions(int argc,const char* argv[],Arena* perm,Arena* 
 
       if(str.size >= 2 && str[0] == '-' && str[1] == 's'){
          opts->addInputAndOutputsToTop = true;
+         continue;
       }
 
       if(str.size >= 2 && str[0] == '-' && str[1] == 'o'){
@@ -122,6 +108,25 @@ Options* ParseCommandLineOptions(int argc,const char* argv[],Arena* perm,Arena* 
          }
          opts->outputFilepath = argv[i + 1];
          i += 1;
+         continue;
+      }
+
+      if(formatOpt){
+         String format = formatOpt.value();
+         if(CompareString(format,"v")){
+            fs::path relative = argv[i];
+            fs::path absolute = fs::canonical(fs::absolute(relative));
+            opts->verilogFiles.push_back(PushString(perm,"%s",absolute.c_str()));
+            continue;
+         } else { // Assume to be the specification file, for now
+            if(opts->specificationFilepath){
+               printf("Error, multiple specification files specified, not supported for now\n");
+               exit(-1);
+            }
+
+            opts->specificationFilepath = argv[i];
+         }
+         continue;
       }
    }
 
@@ -151,8 +156,7 @@ int main(int argc,const char* argv[]){
 
    Options* opts = ParseCommandLineOptions(argc,argv,perm,temp);
 
-   if(!opts->specificationFilepath || !opts->topName){
-      printf("Missing specification filepath or accelerator type\n");
+   if(!opts->topName){
       printf("Specify accelerator type using -T <type>\n");
       exit(-1);
    }
@@ -195,7 +199,9 @@ int main(int argc,const char* argv[]){
    const char* specFilepath = opts->specificationFilepath;
    String topLevelTypeStr = STRING(opts->topName);
 
-   ParseVersatSpecification(versat,specFilepath);
+   if(specFilepath){
+      ParseVersatSpecification(versat,specFilepath);
+   }
 
    FUDeclaration* type = GetTypeByName(versat,topLevelTypeStr);
    Accelerator* accel = CreateAccelerator(versat);
@@ -255,6 +261,8 @@ int main(int argc,const char* argv[]){
       opts->outputFilepath = ".";
    }
 
+   TemplateSetNumber("bitWidth",sizeof(void*) * 8); // TODO
+   
    TOP->parameters = STRING("#(.AXI_ADDR_W(AXI_ADDR_W))");
    InitializeAccelerator(versat,accel,&versat->temp);
    OutputVersatSource(versat,accel,opts->outputFilepath,topLevelTypeStr,opts->addInputAndOutputsToTop);
@@ -320,6 +328,7 @@ int main(int argc,const char* argv[]){
       String wrapper = PushString(temp,"%s/wrapper.inc",opts->outputFilepath);
       PushNullByte(temp);
 
+      TemplateSetNumber("bitWidth",sizeof(void*) * 8); // TODO
       FILE* output = OpenFileAndCreateDirectories(wrapper.data,"w");
       CompiledTemplate* comp = CompileTemplate(unit_verilog_data_template,temp);
       OutputModuleInfos(output,false,(Array<ModuleInfo>){finalModule.data(),(int) finalModule.size()},STRING("Verilog"),comp,temp,allConfigsHeaderSide,statesHeaderSize);
@@ -338,6 +347,7 @@ int main(int argc,const char* argv[]){
       fs::path srcLocation = fs::current_path();
       fs::path fixedPath = fs::weakly_canonical(outputPath / srcLocation);
 
+      TemplateSetNumber("bitWidth",sizeof(void*) * 8);
       TemplateSetArray("verilogFiles","String",opts->verilogFiles.data(),opts->verilogFiles.size());
       TemplateSetArray("extraSources","char*",opts->extraSources.data(),opts->extraSources.size());
       TemplateSetArray("includePaths","char*",opts->includePaths.data(),opts->includePaths.size());
@@ -349,6 +359,10 @@ int main(int argc,const char* argv[]){
 
    return 0;
 }
+
+
+
+
 
 
 
