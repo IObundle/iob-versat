@@ -89,9 +89,9 @@ struct FUInstance{
 
    // Embedded memory
    int* memMapped;
-   int* config;
+   iptr* config;
    int* state;
-   int* delay;
+   iptr* delay;
    int* externalMemory;
 
    // This should be part of another hierarchy.

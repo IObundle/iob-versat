@@ -1,3 +1,5 @@
+SHELL := /bin/bash
+
 VERSAT_DIR:=$(shell pwd)
 
 # Default rule
@@ -5,6 +7,9 @@ all: versat
 
 include $(VERSAT_DIR)/core.mk
 include $(VERSAT_DIR)/sharedHardware.mk
+
+libverilator.a: tools
+	$(MAKE) -C $(VERSAT_COMP_DIR) libversat
 
 tools:
 	$(MAKE) -C $(VERSAT_TOOLS_DIR) all

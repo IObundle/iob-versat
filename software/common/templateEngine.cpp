@@ -9,6 +9,8 @@
 #include "utils.hpp"
 #include "type.hpp"
 
+//#define DEBUG_TEMPLATE_ENGINE
+
 struct ValueAndText{
    Value val;
    String text;
@@ -171,6 +173,7 @@ static Expression* ParseIdentifier(Expression* current,Tokenizer* tok,Arena* tem
          expr->type = Expression::ARRAY_ACCESS;
          expr->expressions[0] = current;
          expr->expressions[1] = ParseExpression(tok,temp);
+         expr->text = tok->Point(start);
 
          tok->AssertNextToken("]");
 
@@ -185,6 +188,7 @@ static Expression* ParseIdentifier(Expression* current,Tokenizer* tok,Arena* tem
          expr->type = Expression::MEMBER_ACCESS;
          expr->id = memberName;
          expr->expressions[0] = current;
+         expr->text = tok->Point(start);
 
          current = expr;
       } else {
@@ -273,26 +277,6 @@ static Expression* ParseFactor(Tokenizer* tok,Arena* arena){
 
 static Expression* ParseExpression(Tokenizer* tok,Arena* temp){
    void* start = tok->Mark();
-
-   #if 0
-   Token peek = tok->PeekToken();
-   if(CompareString(peek,"!")){
-      tok->AdvancePeek(peek);
-
-      Expression* child = ParseExpression(tok);
-
-      Expression* expr = PushStruct(temp,Expression);
-      expr->expressions = PushStruct(temp,Expression*);
-
-      expr->type = Expression::OPERATION;
-      expr->op = "!";
-      expr->size = 1;
-      expr->expressions[0] = child;
-
-      expr->text = tok->Point(start);
-      return expr;
-   }
-   #endif
 
    Expression* res = ParseOperationType(tok,{{"#"},{"|>"},{"and","or","xor"},{">","<",">=","<=","==","!="},{"+","-"},{"*","/","&","**"}},ParseFactor,temp);
 
@@ -387,28 +371,16 @@ void RegisterPipeOperation(String name,PipeFunction func){
 
 static Value EvalExpression(Expression* expr,Frame* frame,Arena* temp);
 
-static Value EvalExpression_(Expression* expr,Frame* frame,Arena* temp){
+static Value EvalExpression(Expression* expr,Frame* frame,Arena* temp){
+   #ifdef DEBUG_TEMPLATE_ENGINE
+   printf("%.*s:\n",UNPACK_SS(expr->text));
+   #endif // DEBUG_TEMPLATE_ENGINE
+
+   Value val = {};
    switch(expr->type){
       case Expression::OPERATION:{
          if(expr->op[0] == '|'){ // Pipe operation
-            Value val = EvalExpression(expr->expressions[0],frame,temp);
-
-         #if 0
-            if(CompareString(expr->expressions[1]->id,"Hex")){
-               val = HexValue(val,temp);
-            } else if(CompareString(expr->expressions[1]->id,"String")){
-               Assert(val.type == ValueType::STRING);
-               val.literal = true;
-            } else if(CompareString(expr->expressions[1]->id,"CountNonOperationChilds")){
-               Accelerator* accel = *((Accelerator**) val.custom);
-
-               val = MakeValue(CountNonOperationChilds(accel));
-            } else if(CompareString(expr->expressions[1]->id,"Identify")){
-               val = EscapeString(val,temp);
-            } else {
-               NOT_IMPLEMENTED;
-            }
-         #endif
+            val = EvalExpression(expr->expressions[0],frame,temp);
 
             auto iter = pipeFunctions.find(expr->expressions[1]->id);
             if(iter == pipeFunctions.end()){
@@ -417,14 +389,16 @@ static Value EvalExpression_(Expression* expr,Frame* frame,Arena* temp){
 
             PipeFunction func = iter->second;
             val = func(val,temp);
-            return val;
+
+            goto EvalExpressionEnd;
          }
 
          if(CompareString(expr->op,"!")){
             Value op = EvalExpression(expr->expressions[0],frame,temp);
-            bool val = ConvertValue(op,ValueType::BOOLEAN,nullptr).boolean;
+            bool boolean = ConvertValue(op,ValueType::BOOLEAN,nullptr).boolean;
 
-            return MakeValue(!val);
+            val = MakeValue(!boolean);
+            goto EvalExpressionEnd;
          }
 
          // Two or more op operations
@@ -435,47 +409,54 @@ static Value EvalExpression_(Expression* expr,Frame* frame,Arena* temp){
             bool bool1 = ConvertValue(op1,ValueType::BOOLEAN,nullptr).boolean;
 
             if(!bool1){
-               return MakeValue(false);
+               val = MakeValue(false);
+               goto EvalExpressionEnd;
             }
          } else if(CompareString(expr->op,"or")){
             bool bool1 = ConvertValue(op1,ValueType::BOOLEAN,nullptr).boolean;
 
             if(bool1){
-               return MakeValue(true);
+               val = MakeValue(true);
+               goto EvalExpressionEnd;
             }
          }
 
          Value op2 = EvalExpression(expr->expressions[1],frame,temp);
 
          if(CompareString(expr->op,"==")){
-            return MakeValue(Equal(op1,op2));
+            val = MakeValue(Equal(op1,op2));
+            goto EvalExpressionEnd;
          } else if(CompareString(expr->op,"!=")){
-            return MakeValue(!Equal(op1,op2));
+            val = MakeValue(!Equal(op1,op2));
+            goto EvalExpressionEnd;
          }else if(CompareString(expr->op,"and")){
             // At this point bool1 is true
             bool bool2 = ConvertValue(op2,ValueType::BOOLEAN,nullptr).boolean;
 
-            return MakeValue(bool2);
+            val = MakeValue(bool2);
+            goto EvalExpressionEnd;
          } else if(CompareString(expr->op,"or")){
             // At this point bool1 is false
             bool bool2 = ConvertValue(op2,ValueType::BOOLEAN,nullptr).boolean;
 
-            return MakeValue(bool2);
+            val = MakeValue(bool2);
+            goto EvalExpressionEnd;
          } else if(CompareString(expr->op,"xor")){
             bool bool1 = ConvertValue(op1,ValueType::BOOLEAN,nullptr).boolean;
             bool bool2 = ConvertValue(op2,ValueType::BOOLEAN,nullptr).boolean;
 
-            return MakeValue((bool1 && !bool2) || (!bool1 && bool2));
+            val = MakeValue((bool1 && !bool2) || (!bool1 && bool2));
+            goto EvalExpressionEnd;
          } else if(CompareString(expr->op,"#")){
             String first = ConvertValue(op1,ValueType::SIZED_STRING,temp).str;
             String second = ConvertValue(op2,ValueType::SIZED_STRING,temp).str;
 
             String res = PushString(temp,"%.*s%.*s",UNPACK_SS(first),UNPACK_SS(second));
 
-            return MakeValue(res);
+            val =  MakeValue(res);
+            goto EvalExpressionEnd;
          }
 
-         Value val = {};
          val.type = ValueType::NUMBER;
 
          int val1 = ConvertValue(op1,ValueType::NUMBER,nullptr).number;
@@ -522,20 +503,16 @@ static Value EvalExpression_(Expression* expr,Frame* frame,Arena* temp){
                NOT_IMPLEMENTED;
             }break;
          }
-
-         return val;
       } break;
       case Expression::LITERAL:{
-         return expr->val;
+         val = expr->val;
       } break;
       case Expression::COMMAND:{
          Command* com = expr->command;
 
          Assert(!IsCommandBlockType(com));
 
-         Value result = EvalNonBlockCommand(com,frame,temp).val;
-
-         return result;
+         val = EvalNonBlockCommand(com,frame,temp).val;
       } break;
       case Expression::IDENTIFIER:{
          Optional<Value> iter = GetValue(frame,expr->id);
@@ -546,7 +523,7 @@ static Value EvalExpression_(Expression* expr,Frame* frame,Arena* temp){
             DEBUG_BREAK();
          }
 
-         return iter.value();
+         val = iter.value();
       } break;
       case Expression::ARRAY_ACCESS:{
          Value object = EvalExpression(expr->expressions[0],frame,temp);
@@ -554,39 +531,23 @@ static Value EvalExpression_(Expression* expr,Frame* frame,Arena* temp){
 
          Assert(index.type == ValueType::NUMBER);
 
-         Value res = AccessObjectIndex(object,index.number);
-
-         return res;
+         val = AccessObjectIndex(object,index.number);
       } break;
       case Expression::MEMBER_ACCESS:{
          Value object = EvalExpression(expr->expressions[0],frame,temp);
 
-         Value res = AccessStruct(object,expr->id);
-
-         return res;
+         val = AccessStruct(object,expr->id);
       }break;
       default:{
          NOT_IMPLEMENTED;
       } break;
    }
 
-   return MakeValue();
-}
+EvalExpressionEnd:
 
-struct StoredDebug{
-   Expression* input;
-   Value result;
-};
-
-static Value EvalExpression(Expression* expr,Frame* frame,Arena* temp){
-   static StoredDebug data[16];
-   static int counter = 0;
-
-   Value val = EvalExpression_(expr,frame,temp);
-
-   data[counter % 16].input = expr;
-   data[counter % 16].result = val;
-   counter += 1;
+   #ifdef DEBUG_TEMPLATE_ENGINE
+   printf("%.*s\n",UNPACK_SS(val.type->name));
+   #endif // DEBUG_TEMPLATE_ENGINE
 
    return val;
 }
@@ -878,6 +839,9 @@ static String Eval(Block* block,Frame* frame,Arena* temp){
          if(tok.Done()){
             break;
          }
+
+         //static int counter = 0;
+         //DEBUG_BREAK_IF(++counter == 25702);
 
          tok.AssertNextToken("@{");
          Expression* expr = ParseExpression(&tok,temp);

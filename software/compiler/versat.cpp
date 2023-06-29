@@ -355,7 +355,7 @@ Versat* InitVersat(int base,int numberConfigurations,bool initUnits){
    versat->permanent = InitArena(Megabyte(256));
 
    InitializeTemplateEngine(&versat->permanent);
-   
+
    // Technically, if more than 1 versat in the future, could move this outside
    BasicTemplates::acceleratorTemplate = CompileTemplate(versat_accelerator_template,&versat->permanent);
    BasicTemplates::topAcceleratorTemplate = CompileTemplate(versat_top_instance_template,&versat->permanent);
@@ -1147,8 +1147,11 @@ void FillDeclarationWithAcceleratorValues(Versat* versat,FUDeclaration* decl,Acc
    decl->externalMemory = PushArray<ExternalMemoryInterface>(permanent,val.externalMemoryInterfaces);
    int externalIndex = 0;
    FOREACH_LIST(ptr,accel->allocated){
-      for(ExternalMemoryInterface& inter : ptr->inst->declaration->externalMemory){
-         decl->externalMemory[externalIndex++] = inter;
+      Array<ExternalMemoryInterface> arr = ptr->inst->declaration->externalMemory;
+      for(int i = 0; i < arr.size; i++){
+         decl->externalMemory[externalIndex] = arr[i];
+         decl->externalMemory[externalIndex].interface = externalIndex;
+         externalIndex += 1;
       }
    }
 
@@ -1232,7 +1235,7 @@ void FillDeclarationWithAcceleratorValues(Versat* versat,FUDeclaration* decl,Acc
       }
    }
    #endif
-   
+
    decl->configOffsets = CalculateConfigurationOffset(accel,MemType::CONFIG,permanent);
    decl->stateOffsets = CalculateConfigurationOffset(accel,MemType::STATE,permanent);
    decl->delayOffsets = CalculateConfigurationOffset(accel,MemType::DELAY,permanent);
@@ -1380,25 +1383,6 @@ FUDeclaration* RegisterSubUnit(Versat* versat,String name,Accelerator* circuit){
       OutputCircuitSource(versat,res,circuit,sourceCode);
       fclose(sourceCode);
    }
-
-   #if 0
-   UnitFunctions func = CheckOrCompileUnit(name,temp);
-
-   res->printVCD = func.vcd;
-   res->initializeFunction = func.init;
-   res->startFunction = func.start;
-   res->updateFunction = func.update;
-   res->destroyFunction = func.destroy;
-   //res->extraDataSize = func.size;
-
-   FUDeclaration createdDecl = func.createDeclaration();
-
-   AddOffset(&res->extraDataOffsets,createdDecl.extraDataOffsets.max);
-   AddOffset(&res->outputOffsets,createdDecl.outputLatencies.size);
-
-   res->implementsDone = createdDecl.implementsDone;
-   res->type = FUDeclaration::SINGLE; // Need to go through the code and standardize the meaning of these things.
-   #endif
 
    return res;
 }

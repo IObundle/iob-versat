@@ -354,7 +354,7 @@ static ValueMap ParseParameters(Tokenizer* tok,ValueMap& map,Arena* arena){
       } else if(CompareToken(peek,",")){
          tok->AdvancePeek(peek);
          continue;
-      } else { // Must be a parameter assignemnt
+      } else { // Must be a parameter assignment
          Token paramName = tok->NextToken();
 
          tok->AssertNextToken("=");
@@ -730,11 +730,12 @@ ModuleInfo ExtractModuleInfo(Module& module,Arena* permanent,Arena* tempArena){
 }
 
 void OutputModuleInfos(FILE* output,bool doExport,Array<ModuleInfo> infos,String nameSpace,CompiledTemplate* unitVerilogData,Arena* temp,Array<Wire> configsHeaderSide,Array<String> statesHeaderSide){
+   ClearTemplateEngine();
    TemplateSetBool("export",doExport);
    TemplateSetArray("modules","ModuleInfo",infos.data,infos.size);
    TemplateSetString("namespace",nameSpace);
    TemplateSetArray("configsHeader","Wire",configsHeaderSide.data,configsHeaderSide.size);
    TemplateSetArray("statesHeader","String",statesHeaderSide.data,statesHeaderSide.size);
-   
+
    ProcessTemplate(output,unitVerilogData,temp);
 }

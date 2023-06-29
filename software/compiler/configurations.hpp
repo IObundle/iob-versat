@@ -14,11 +14,13 @@ struct Wire;
 struct FUInstance;
 struct Versat;
 
+// print: {1[2]}
 struct SizedConfig{
    iptr* ptr;
    int size;
 };
 
+// print="{1}:{2}"
 struct StaticId{
    FUDeclaration* parent;
    String name;
@@ -51,9 +53,9 @@ struct UnitDebugData{
 class FUInstanceInterfaces{
 public:
    // Config delay and statics share the same configuration space. They are separated here to facilitate accelerator population
-   PushPtr<int> config;
-   PushPtr<int> delay;
-   PushPtr<int> statics;
+   PushPtr<iptr> config;
+   PushPtr<iptr> delay;
+   PushPtr<iptr> statics;
 
    PushPtr<int> state;
    PushPtr<Byte> mem;
@@ -119,7 +121,7 @@ struct OrderedConfigurations{
    Array<Wire> configs;
    Array<Wire> statics;
    Array<Wire> delays;
-};  
+};
 
 OrderedConfigurations ExtractOrderedConfigurationNames(Versat* versat,Accelerator* accel,Arena* out,Arena* temp);
 Array<Wire> OrderedConfigurationsAsArray(OrderedConfigurations configs,Arena* out);

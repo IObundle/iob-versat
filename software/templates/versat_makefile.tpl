@@ -1,25 +1,14 @@
 TYPE_NAME := @{typename}
 
-HARDWARE_SRC := #{join " " for file verilogFiles}@{file}#{end}
+HARDWARE_SRC := #{join " " for file verilogFiles}@{file}#{end} @{hack}
+HARDWARE_SRC += #{join " " for file extraSources}@{file}#{end} @{hack}
 
-@{hack}
-
-VERILATOR_ROOT ?= /usr/local/share/verilator
-
-VERILATOR_SRC := $(VERILATOR_ROOT)/include/verilated.cpp $(VERILATOR_ROOT)/include/verilated_vcd_c.cpp
-#{if verilatorVersion == 5}
-VERILATOR_SRC += $(VERILATOR_ROOT)/include/verilated_threads.cpp
-#{end}
-
-VERILATOR_OBJ := $(patsubst $(VERILATOR_ROOT)/include/%.cpp,%.o,$(VERILATOR_SRC))
+INCLUDE := #{join " " for file includePaths}-I@{file}#{end} @{hack}
 
 all: V$(TYPE_NAME).h $(VERILATOR_OBJ)
 
 V$(TYPE_NAME).h: $(HARDWARE_SRC)
-	verilator  --trace --cc $(HARDWARE_SRC) $(wildcard @{rootPath}/src/*.v) --top-module $(TYPE_NAME)
-	$(MAKE) -C obj_dir -f V$(TYPE_NAME).mk
+	verilator -GAXI_ADDR_W=64 --build --trace --cc $(HARDWARE_SRC) $(wildcard @{rootPath}/src/*.v) $(INCLUDE) --top-module $(TYPE_NAME)
 	cp ./obj_dir/*.h ./
 	cp ./obj_dir/*.o ./
-
-%.o: $(VERILATOR_ROOT)/include/%.cpp
-	-g++ -g -w -c -o $@ $< -I$(VERILATOR_ROOT)/include
+	cp ./obj_dir/*.a ./libversat.a

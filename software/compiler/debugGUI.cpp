@@ -363,6 +363,7 @@ String DebugValueRepresentation(Value val,Arena* arena){
    Type* StaticDataType = GetType(STRING("StaticData"));
    //Type* SimpleInstanceType = GetType(STRING("SimpleFUInstance"));
    Type* EdgeNodeType = GetType(STRING("EdgeNode"));
+   Type* iptrType = GetType(STRING("iptr"));
 
    String repr = {};
 
@@ -392,6 +393,9 @@ String DebugValueRepresentation(Value val,Arena* arena){
    } else if(type == StaticDataType){
       StaticData* id = (StaticData*) collapsed.custom;
       repr = Repr(*id,arena);
+   } else if(type == iptrType){
+      iptr* data = (iptr*) collapsed.custom;
+      repr = PushString(arena,"%ld",*data);
    } else {
       repr = GetDefaultValueRepresentation(val,arena);
    }
@@ -793,12 +797,12 @@ void OutputAcceleratorRunValues(InstanceNode* node,Arena* arena){
    FUInstance* inst = node->inst;
 
    if(ImGui::CollapsingHeader("Config")){
-      Array<int> arr = {};
+      Array<iptr> arr = {};
       arr.data = inst->config;
       arr.size = inst->declaration->configs.size;
 
       if(arr.data && arr.size){
-         ShowDualTable(MakeValue(&inst->declaration->configs,"Array<Wire>"),MakeValue(&arr,"Array<int>"),arena);
+         ShowDualTable(MakeValue(&inst->declaration->configs,"Array<Wire>"),MakeValue(&arr,"Array<iptr>"),arena);
       }
    }
    if(ImGui::CollapsingHeader("State")){
@@ -811,14 +815,14 @@ void OutputAcceleratorRunValues(InstanceNode* node,Arena* arena){
       }
    }
    if(ImGui::CollapsingHeader("Delay")){
-      Array<int> arr = {};
+      Array<iptr> arr = {};
       arr.data = inst->delay;
       arr.size = inst->declaration->delayOffsets.max;
 
       printf("%p %d\n",arr.data,arr.size);
 
       if(arr.data && arr.size){
-         ShowTable(MakeValue(&arr,"Array<int>"),arena);
+         ShowTable(MakeValue(&arr,"Array<iptr>"),arena);
       }
    }
    if(ImGui::CollapsingHeader("Output values")){

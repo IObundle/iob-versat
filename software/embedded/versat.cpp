@@ -73,5 +73,9 @@ void VersatMemoryCopy(volatile int* dest,int* data,int size){
    }
 }
 
+void VersatUnitWrite(int addr,int val){
+   int* ptr = (int*) addr;
+   *ptr = val;
+}
 
 

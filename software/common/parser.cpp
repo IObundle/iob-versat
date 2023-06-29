@@ -765,6 +765,8 @@ Expression* ParseOperationType_(Tokenizer* tok,OperationList* operators,ParsingF
 }
 
 Expression* ParseOperationType(Tokenizer* tok,std::initializer_list<std::initializer_list<const char*>> operators,ParsingFunction finalFunction,Arena* tempArena){
+   void* mark = tok->Mark();
+
    OperationList head = {};
    OperationList* ptr = nullptr;
 
@@ -785,6 +787,7 @@ Expression* ParseOperationType(Tokenizer* tok,std::initializer_list<std::initial
    }
 
    Expression* expr = ParseOperationType_(tok,&head,finalFunction,tempArena);
+   expr->text = tok->Point(mark);
 
    return expr;
 }

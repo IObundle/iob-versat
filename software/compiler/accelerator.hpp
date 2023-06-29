@@ -31,15 +31,12 @@ struct Accelerator{ // Graph + data storage
    InstanceNode* allocated;
    InstanceNode* lastAllocated;
    Pool<FUInstance> instances;
-   Pool<FUInstance> subInstances; // Essentially a "wrapper" so that user code does not have to dealwith reallocations when adding units
+   Pool<FUInstance> subInstances; // TODO: Since do not care about user code anymore, can remove this. Essentially a "wrapper" so that user code does not have to deal with reallocations when adding units.
   
-   Allocation<int> configAlloc;
+   Allocation<iptr> configAlloc;
    Allocation<int> stateAlloc;
-   //Allocation<int> delayAlloc;
-   //Allocation<iptr> staticAlloc;
    Allocation<Byte> extraDataAlloc;
    Allocation<int> externalMemoryAlloc;
-   //Allocation<UnitDebugData> debugDataAlloc;
 
    Allocation<int> outputAlloc;
    Allocation<int> storedOutputAlloc;

@@ -1176,6 +1176,9 @@ Value ConvertValue(Value in,Type* want,Arena* arena){
          void* pointerValue = (void*) DeferencePointer(in.custom,in.type->pointerType,0);
 
          res.number = (int64) pointerValue;
+      } else if(CompareString(in.type->name,"iptr")) { // TODO: could be handled by the typedef and setting all values from cstdint as knows
+         iptr* data = (iptr*) in.custom;
+         res.number = (int64) *data;
       } else {
          NOT_IMPLEMENTED;
       }

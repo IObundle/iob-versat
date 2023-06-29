@@ -508,7 +508,7 @@ void PopulateTopLevelAccelerator(Accelerator* accel){
    FUInstanceInterfaces inter = {};
    inter.Init(accel);
 
-   Hashmap<int,int*>* sharedToConfigPtr = PushHashmap<int,int*>(temp,sharedUnits);
+   Hashmap<int,iptr*>* sharedToConfigPtr = PushHashmap<int,iptr*>(temp,sharedUnits);
 
    FOREACH_LIST(ptr,accel->allocated){
       FUInstance* inst = ptr->inst;
@@ -540,7 +540,7 @@ void PopulateTopLevelAccelerator(Accelerator* accel){
             Assert(iter != accel->staticUnits.end());
             inst->config = &inter.statics.ptr[iter->second.offset];
          } else if(inst->sharedEnable){
-            int** ptr = sharedToConfigPtr->Get(inst->sharedIndex);
+            iptr** ptr = sharedToConfigPtr->Get(inst->sharedIndex);
 
             if(ptr){
                inst->config = *ptr;
@@ -671,9 +671,11 @@ Hashmap<String,SizedConfig>* ExtractNamedSingleMem(Accelerator* accel,Arena* out
    for(InstanceNode* node = iter.Start(accel,out,false); node; node = iter.Next()){
       FUInstance* inst = node->inst;
       FUDeclaration* decl = inst->declaration;
-      if(decl->type == FUDeclaration::SINGLE && decl->states.size){
+      if(decl->type == FUDeclaration::SINGLE && decl->isMemoryMapped){
          String name = iter.GetFullName(out,"_");
-         res->Insert(name,(SizedConfig){(iptr*) inst->memMapped,1 << decl->memoryMapBits});
+         String fullName = PushString(out,"%.*s_addr",UNPACK_SS(name)); // TODO: We could just extend the previous string 
+         
+         res->Insert(fullName,(SizedConfig){(iptr*) inst->memMapped,1 << decl->memoryMapBits});
       }
    }
 

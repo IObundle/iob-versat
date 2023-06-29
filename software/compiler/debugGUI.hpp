@@ -6,6 +6,8 @@
 struct Versat;
 struct Accelerator;
 
+#ifdef VERSAT_DEBUG
+
 void SetDebugValue(Value val);
 void SetDebugAccelerator(Accelerator* accel);
 
@@ -14,14 +16,8 @@ void DebugVersat(Versat* versat);
 
 void DebugAccelerator(Accelerator* accel);
 
-#if 0
-void DebugAcceleratorPersist(Accelerator* accel);
-void DebugAcceleratorStart(Accelerator* accel);
-void DebugAcceleratorEnd(Accelerator* accel);
-#endif
-
 void DebugValue(Value val);
 
-//void DebugAcceleratorRun(Accelerator* accel,int cycle);
+#endif
 
 #endif // INCLUDED_VERSAT_DEBUG_GUI

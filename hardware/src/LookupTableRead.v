@@ -2,13 +2,14 @@
 
 module LookupTableRead #(
        parameter DATA_W = 32,
-       parameter ADDR_W = 12
+       parameter ADDR_W = 12,
+       parameter AXI_ADDR_W = 64
    )
    (
       //databus interface
       input                 databus_ready_0,
       output                databus_valid_0,
-      output reg [31:0]     databus_addr_0,
+      output reg [AXI_ADDR_W-1:0]     databus_addr_0,
       input [DATA_W-1:0]    databus_rdata_0,
       output [DATA_W-1:0]   databus_wdata_0,
       output [DATA_W/8-1:0] databus_wstrb_0,
@@ -36,7 +37,7 @@ module LookupTableRead #(
       output                ext_dp_write_0_port_1,
 
        // configurations
-      input [31:0]       ext_addr,
+      input [AXI_ADDR_W-1:0] ext_addr,
       input [ADDR_W-1:0] int_addr,
       input [31:0]       size,
       input [ADDR_W-1:0] iterA,

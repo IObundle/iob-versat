@@ -23,6 +23,7 @@ OptionFormat optionsAvailable[] = {STRING(}
 struct Options{
    std::vector<String> verilogFiles;
    std::vector<const char*> includePaths;
+   std::vector<const char*> extraSources;
    const char* specificationFilepath;
    const char* topName;
    const char* outputFilepath;
@@ -65,6 +66,21 @@ Options* ParseCommandLineOptions(int argc,const char* argv[],Arena* perm,Arena* 
             }
 
             opts->specificationFilepath = argv[i];
+         }
+
+         continue;
+      }
+
+      if(str.size >= 2 && str[0] == '-' && str[1] == 'S'){
+         if(str.size == 2){
+            if(i + 1 >= argc){
+               printf("Missing argument\n");
+               exit(-1);
+            }
+            opts->extraSources.push_back(argv[i + 1]);
+            i += 1;
+         } else {
+            opts->extraSources.push_back(&str.data[2]);
          }
 
          continue;
@@ -184,7 +200,7 @@ int main(int argc,const char* argv[]){
    FUDeclaration* type = GetTypeByName(versat,topLevelTypeStr);
    Accelerator* accel = CreateAccelerator(versat);
    FUInstance* TOP = nullptr;
-
+   
    bool isSimple = false;
    if(opts->addInputAndOutputsToTop && !(type->inputDelays.size == 0 && type->outputLatencies.size == 0)){
       int input = type->inputDelays.size;
@@ -239,6 +255,7 @@ int main(int argc,const char* argv[]){
       opts->outputFilepath = ".";
    }
 
+   TOP->parameters = STRING("#(.AXI_ADDR_W(AXI_ADDR_W))");
    InitializeAccelerator(versat,accel,&versat->temp);
    OutputVersatSource(versat,accel,opts->outputFilepath,topLevelTypeStr,opts->addInputAndOutputsToTop);
 
@@ -262,7 +279,6 @@ int main(int argc,const char* argv[]){
          for(Wire& config : p.second.configs){
             allConfigsVerilatorSide[index] = config;
             allConfigsVerilatorSide[index].name = ReprStaticConfig(p.first,&config,&versat->permanent);
-            //printf("%.*s\n",UNPACK_SS(allConfigsVerilatorSide[index].name));
             index += 1;
          }
       }
@@ -282,7 +298,7 @@ int main(int argc,const char* argv[]){
    info.inputDelays = type->inputDelays;
    info.outputLatencies = type->outputLatencies;
    info.configs = allConfigsVerilatorSide;
-   info.states = type->states; //allStatesVerilatorSide
+   info.states = type->states;
    info.externalInterfaces = type->externalMemory;
    info.nDelays = type->delayOffsets.max;
    info.nIO = type->nIOs;
@@ -295,12 +311,11 @@ int main(int argc,const char* argv[]){
    info.hasRun = true;
    info.hasRunning = true;
    info.isSource = false; // Hack but maybe not a problem doing it this way, we only care to generate the wrapper and the instance is only done individually
-
-   info.states.size = type->delayOffsets.max;
-
+   
    std::vector<ModuleInfo> finalModule;
    finalModule.push_back(info);
 
+   // Wrapper
    region(temp){
       String wrapper = PushString(temp,"%s/wrapper.inc",opts->outputFilepath);
       PushNullByte(temp);
@@ -311,6 +326,7 @@ int main(int argc,const char* argv[]){
       fclose(output);
    }
 
+   // Makefile
    region(temp){
       String name = PushString(temp,"%s/Makefile",opts->outputFilepath);
       PushNullByte(temp);
@@ -323,9 +339,10 @@ int main(int argc,const char* argv[]){
       fs::path fixedPath = fs::weakly_canonical(outputPath / srcLocation);
 
       TemplateSetArray("verilogFiles","String",opts->verilogFiles.data(),opts->verilogFiles.size());
+      TemplateSetArray("extraSources","char*",opts->extraSources.data(),opts->extraSources.size());
+      TemplateSetArray("includePaths","char*",opts->includePaths.data(),opts->includePaths.size());
       TemplateSetString("typename",topLevelTypeStr);
       TemplateSetString("hack",STRING("#"));
-      TemplateSetNumber("verilatorVersion",GetVerilatorMajorVersion(&versat->temp));
       TemplateSetString("rootPath",STRING(fixedPath.c_str()));
       ProcessTemplate(output,comp,temp);
    }

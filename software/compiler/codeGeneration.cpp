@@ -129,8 +129,8 @@ void OutputVersatSource(Versat* versat,Accelerator* accel,const char* directoryP
       ordered[i] = ptr->node;
    }
 
-    ComputedData computedData = CalculateVersatComputedData(accel->allocated,val,arena);
-
+   ComputedData computedData = CalculateVersatComputedData(accel->allocated,val,arena);
+   
    TemplateSetDefaults(versat);
 
    TemplateSetNumber("nInputs",unit.inputs);
@@ -155,7 +155,7 @@ void OutputVersatSource(Versat* versat,Accelerator* accel,const char* directoryP
    Hashmap<StaticId,StaticData>* staticUnits = accel->calculatedStaticPos;
 
    TemplateSetCustom("staticUnits",staticUnits,"Hashmap<StaticId,StaticData>");
-   TemplateSetArray("staticBuffer","int",accel->configAlloc.ptr + accel->startOfStatic,accel->staticSize);
+   TemplateSetArray("staticBuffer","iptr",accel->configAlloc.ptr + accel->startOfStatic,accel->staticSize);
 
    OrderedConfigurations orderedConfigs = ExtractOrderedConfigurationNames(versat,accel,&versat->permanent,&versat->temp);
 
@@ -170,10 +170,10 @@ void OutputVersatSource(Versat* versat,Accelerator* accel,const char* directoryP
    ProcessTemplate(s,BasicTemplates::topAcceleratorTemplate,&versat->temp);
 
    TemplateSetNumber("configurationSize",accel->configAlloc.size);
-   TemplateSetArray("configurationData","int",accel->configAlloc.ptr,accel->configAlloc.size);
+   TemplateSetArray("configurationData","iptr",accel->configAlloc.ptr,accel->configAlloc.size);
 
    TemplateSet("static",accel->configAlloc.ptr + accel->startOfStatic);
-   TemplateSetArray("delay","int",accel->configAlloc.ptr + accel->startOfDelay,val.nDelays);
+   TemplateSetArray("delay","iptr",accel->configAlloc.ptr + accel->startOfDelay,val.nDelays);
 
    TemplateSet("config",accel->configAlloc.ptr);
    TemplateSet("state",accel->stateAlloc.ptr);
@@ -187,13 +187,27 @@ void OutputVersatSource(Versat* versat,Accelerator* accel,const char* directoryP
    TemplateSetCustom("instances",&accum,"std::vector<FUInstance>");
    TemplateSetNumber("numberUnits",accum.size());
    TemplateSetBool("IsSimple",false);
-   ProcessTemplate(d,BasicTemplates::dataTemplate,&versat->temp);
+   ProcessTemplate(d,BasicTemplates::dataTemplate,&versat->temp); // TODO: We could remove this, everything is on the header
 
    {
    Hashmap<String,SizedConfig>* namedConfigs = ExtractNamedSingleConfigs(accel,arena);
    Hashmap<String,SizedConfig>* namedStates = ExtractNamedSingleStates(accel,arena);
    Hashmap<String,SizedConfig>* namedMem = ExtractNamedSingleMem(accel,arena);
 
+   for(Pair<String,SizedConfig>& pair : namedMem){
+      iptr view = (iptr) pair.second.ptr;
+      view *= sizeof(int);
+      pair.second.ptr = (iptr*) view;
+   }
+   
+   #if 0
+   for(Pair<String,SizedConfig>& pair : namedMem){
+      int* view = (int*) pair.second.ptr;
+      view += (1 << val.memoryConfigDecisionBit);
+      pair.second.ptr = (iptr*) view;
+   }
+   #endif
+   
    TemplateSetCustom("namedConfigs",namedConfigs,"Hashmap<String,SizedConfig>");
    TemplateSetCustom("namedStates",namedStates,"Hashmap<String,SizedConfig>");
    TemplateSetCustom("namedMem",namedMem,"Hashmap<String,SizedConfig>");

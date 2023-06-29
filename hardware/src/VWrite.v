@@ -4,7 +4,8 @@ module VWrite #(
    parameter DATA_W = 32,
    parameter ADDR_W = 10,
    parameter MEM_ADDR_W = 10,
-   parameter PERIOD_W = 10
+   parameter PERIOD_W = 10,
+   parameter AXI_ADDR_W = 64
    )
    (
    input                  clk,
@@ -17,7 +18,7 @@ module VWrite #(
    // Databus interface
    input                  databus_ready_0,
    output                 databus_valid_0,
-   output[31:0]           databus_addr_0,
+   output[AXI_ADDR_W-1:0] databus_addr_0,
    input [DATA_W-1:0]     databus_rdata_0,
    output [DATA_W-1:0]    databus_wdata_0,
    output [DATA_W/8-1:0]  databus_wstrb_0,
@@ -36,7 +37,7 @@ module VWrite #(
    output [DATA_W-1:0]   ext_2p_data_out_0,
 
    // configurations
-   input [31:0]           ext_addr,
+   input [AXI_ADDR_W-1:0] ext_addr,
    input [MEM_ADDR_W-1:0] int_addr,
    input [10:0]           size,
    input [MEM_ADDR_W-1:0] iterA,
@@ -106,7 +107,7 @@ module VWrite #(
       startA[MEM_ADDR_W-1] = pingPong ? !pingPongState : 0;
    end
 
-   wire [1:0]             direction = 2'b10;
+   wire [1:0]    direction = 2'b10;
    wire [31:0]   delayA    = 0;
 
    // port addresses and enables

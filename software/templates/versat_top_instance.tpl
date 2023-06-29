@@ -121,7 +121,7 @@ always @(posedge clk,posedge rst) // Care, rst because writing to soft reset reg
 
 wire databus_ready[@{nIO}];
 wire databus_valid[@{nIO}];
-wire [31:0] databus_addr[@{nIO}];
+wire [AXI_ADDR_W-1:0] databus_addr[@{nIO}];
 wire [31:0] databus_rdata[@{nIO}];
 wire [31:0] databus_wdata[@{nIO}];
 wire [3:0]  databus_wstrb[@{nIO}];
@@ -131,7 +131,7 @@ wire databus_last[@{nIO}];
 #{for i (nIO - 1)}
 assign databus_ready[@{i + 1}] = m_databus_ready[@{i + 1}];
 assign m_databus_valid[@{i + 1}] = databus_valid[@{i + 1}];
-assign m_databus_addr[@{(i + 1) * 32} +: 32] = databus_addr[@{i + 1}];
+assign m_databus_addr[(@{(i + 1)} * AXI_ADDR_W) +: AXI_ADDR_W] = databus_addr[@{i + 1}];
 assign databus_rdata[@{i + 1}] = m_databus_rdata;
 assign m_databus_wdata[@{(i + 1) * 32} +: 32] = databus_wdata[@{i + 1}];
 assign m_databus_wstrb[@{(i + 1) * 4} +: 4] = databus_wstrb[@{i + 1}];
@@ -162,8 +162,8 @@ begin
 end
 
 reg [7:0] dma_length;
-reg [31:0] dma_addr_in;
-reg [31:0] dma_addr_read;
+reg [AXI_ADDR_W-1:0] dma_addr_in;
+reg [AXI_ADDR_W-1:0] dma_addr_read;
 
 reg dma_valid;
 reg [AXI_ADDR_W-1:0] dma_addr;

@@ -62,6 +62,13 @@ void CallVerilator(const char* unitPath,const char* outputPath){
 
    CreateDirectories(outputPath);
 
+   printf("here\n");
+   printf("here\n");
+   printf("here\n");
+   printf("here\n");
+   printf("here\n");
+   printf("here\n");
+   
    char* const verilatorArgs[] = {
       (char*) "verilator",
       (char*) "--cc",

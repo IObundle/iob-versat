@@ -195,12 +195,13 @@ public:
    inline T& operator*(){return *ptr;};
 };
 
+// This struct is associated to a gdb pretty printer.
 template<typename T>
 struct Array{
    T* data;
    int size;
 
-   inline T& operator[](int index) const {Assert(index < size); return data[index];} // Assert + function call could trash performance really bad. Eventually profile and replace with direct access if the case
+   inline T& operator[](int index) const {Assert(index < size); return data[index];}
    ArrayIterator<T> begin(){return ArrayIterator<T>{data};};
    ArrayIterator<T> end(){return ArrayIterator<T>{data + size};};
 };

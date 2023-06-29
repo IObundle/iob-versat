@@ -28,7 +28,7 @@ static Array<int> zerosArray = {zeros,99};
 struct @{module.name}Config{
 #{for wire module.configs}
 #{if !wire.isStatic}
-int @{wire.name};
+iptr @{wire.name};
 #{end}
 #{end}
 };
@@ -152,7 +152,10 @@ static int32_t MemoryAccessNoAddress(FUInstance* inst,int address,int value,int 
 
       self->valid = 0;
 
-      inst->declaration->updateFunction(inst,zerosArray);
+      self->eval();
+      while(self->ready){
+         inst->declaration->updateFunction(inst,zerosArray);
+      }
 
       return res;
    }
@@ -199,7 +202,10 @@ static int32_t MemoryAccess(FUInstance* inst,int address,int value,int write){
       self->valid = 0;
       self->addr = 0;
 
-      inst->declaration->updateFunction(inst,zerosArray);
+      self->eval();
+      while(self->ready){
+         inst->declaration->updateFunction(inst,zerosArray);
+      }
 
       return res;
    }
@@ -441,6 +447,11 @@ MODIFIER int32_t* @{module.name}_UpdateFunction(FUInstance* inst,Array<int> inpu
 
    UPDATE(self); // This line causes posedge clk events to activate
 
+//TODO: There might be a bug with the fact that we do not align the base address.
+//      I do not remember how external memory is allocated and destributed, check later and confirm this part
+//      At a minimum, we should align to make sure that 
+{
+   int baseAddress = 0;
 #{for external module.externalInterfaces}
    #{set id external.interface}
    #{if external.type}
@@ -449,7 +460,7 @@ MODIFIER int32_t* @{module.name}_UpdateFunction(FUInstance* inst,Array<int> inpu
       if(saved_dp_enable_@{id}_port_@{port} && !saved_dp_write_@{id}_port_@{port}){
          int readOffset = saved_dp_addr_@{id}_port_@{port};
          Assert(readOffset < (1 << inst->declaration->externalMemory[@{id}].bitsize));
-         self->ext_dp_in_@{id}_port_@{port} = inst->externalMemory[readOffset];
+         self->ext_dp_in_@{id}_port_@{port} = inst->externalMemory[baseAddress + readOffset];
       }
    #{end}
    #{else}
@@ -457,11 +468,15 @@ MODIFIER int32_t* @{module.name}_UpdateFunction(FUInstance* inst,Array<int> inpu
       if(saved_2p_r_enable_@{id}){
          int readOffset = saved_2p_r_addr_@{id};
          Assert(readOffset < (1 << inst->declaration->externalMemory[@{id}].bitsize));
-         self->ext_2p_data_in_@{id} = inst->externalMemory[readOffset];
+         self->ext_2p_data_in_@{id} = inst->externalMemory[baseAddress + readOffset];
       }
    #{end}
+   baseAddress += (1 << inst->declaration->externalMemory[@{id}].bitsize);
 #{end}
+}  
 
+{
+   int baseAddress = 0;
 #{for external module.externalInterfaces}
    #{set id external.interface}
    #{if external.type}
@@ -470,7 +485,7 @@ MODIFIER int32_t* @{module.name}_UpdateFunction(FUInstance* inst,Array<int> inpu
       if(saved_dp_enable_@{id}_port_@{port} && saved_dp_write_@{id}_port_@{port}){
          int writeOffset = saved_dp_addr_@{id}_port_@{port};
          Assert(writeOffset < (1 << inst->declaration->externalMemory[@{id}].bitsize));
-         inst->externalMemory[writeOffset] = saved_dp_data_@{id}_port_@{port};
+         inst->externalMemory[baseAddress + writeOffset] = saved_dp_data_@{id}_port_@{port};
       }
    #{end}
    #{else}
@@ -478,10 +493,12 @@ MODIFIER int32_t* @{module.name}_UpdateFunction(FUInstance* inst,Array<int> inpu
       if(saved_2p_w_enable_@{id}){
          int writeOffset = saved_2p_w_addr_@{id};
          Assert(writeOffset < (1 << inst->declaration->externalMemory[@{id}].bitsize));
-         inst->externalMemory[writeOffset] = saved_2p_w_data_@{id};
+         inst->externalMemory[baseAddress + writeOffset] = saved_2p_w_data_@{id};
       }
    #{end}
+   baseAddress += (1 << inst->declaration->externalMemory[@{id}].bitsize);
 #{end}
+}
 
 #{if module.states}
 AcceleratorState* state = (AcceleratorState*) inst->state;
