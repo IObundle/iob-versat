@@ -205,6 +205,14 @@ int main(int argc,const char* argv[]){
 #endif
 
       if(lackOfVerilator){
+         char* possible = getenv("VERILATOR_ROOT");
+         if(possible){
+            vr = STRING(possible);
+            lackOfVerilator = false;
+         }
+      }
+      
+      if(lackOfVerilator){
          printf("===\n\n");
          printf("Verilator root is not defined. Make sure that verilator is correctly installed or\n");
          printf("set VERILATOR_ROOT to the top folder of verilator\n");
