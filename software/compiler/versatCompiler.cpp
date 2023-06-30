@@ -29,6 +29,7 @@ struct Options{
    const char* outputFilepath;
    bool addInputAndOutputsToTop;
    String verilatorRoot;
+   int bitSize;
 };
 
 Optional<String> GetFormat(String filename){
@@ -52,6 +53,8 @@ Optional<String> GetFormat(String filename){
 Options* ParseCommandLineOptions(int argc,const char* argv[],Arena* perm,Arena* temp){
    Options* opts = PushStruct<Options>(perm);
 
+   opts->bitSize = sizeof(void*) * 8; // TODO: After rewriting, need to take into account default values 
+   
    for(int i = 1; i < argc; i++){
       String str = STRING(argv[i]);
 
@@ -72,6 +75,22 @@ Options* ParseCommandLineOptions(int argc,const char* argv[],Arena* perm,Arena* 
          continue;
       }
 
+      // TODO: This code indicates that we need an "arquitecture" generic portion of code
+      //       Things should be parameterizable
+      if(str.size >= 4 && str[0] == '-' && str[1] == 'x' && str[2] == '3' && str[3] == '2'){
+         Assert(str.size == 4);
+
+         opts->bitSize = 32;
+         continue;
+      }
+
+      if(str.size >= 4 && str[0] == '-' && str[1] == 'x' && str[2] == '6' && str[3] == '4'){
+         Assert(str.size == 4);
+
+         opts->bitSize = 64;
+         continue;
+      }
+      
       if(str.size >= 4 && str[0] == '-' && str[1] == '-' && str[2] == 'V' && str[3] == 'R'){
          Assert(str.size == 4);
 
@@ -174,6 +193,7 @@ int main(int argc,const char* argv[]){
       if(vr.size == 0){
          lackOfVerilator = true;
       }
+      printf("%s\n",VERILATOR_ROOT);
 #else
       lackOfVerilator = true;
 #endif
@@ -363,7 +383,7 @@ int main(int argc,const char* argv[]){
 
       TemplateSetString("versatDir",VERSAT_DIR);
       TemplateSetString("verilatorRoot",opts->verilatorRoot);
-      TemplateSetNumber("bitWidth",sizeof(void*) * 8); // TODO
+      TemplateSetNumber("bitWidth",opts->bitSize);
       FILE* output = OpenFileAndCreateDirectories(wrapper.data,"w");
       CompiledTemplate* comp = CompileTemplate(versat_wrapper_template,temp);
       OutputModuleInfos(output,false,(Array<ModuleInfo>){finalModule.data(),(int) finalModule.size()},STRING("Verilog"),comp,temp,allConfigsHeaderSide,statesHeaderSize);
@@ -384,7 +404,7 @@ int main(int argc,const char* argv[]){
 
       TemplateSetString("versatDir",VERSAT_DIR);
       TemplateSetString("verilatorRoot",opts->verilatorRoot);
-      TemplateSetNumber("bitWidth",sizeof(void*) * 8);
+      TemplateSetNumber("bitWidth",opts->bitSize);
       TemplateSetArray("verilogFiles","String",opts->verilogFiles.data(),opts->verilogFiles.size());
       TemplateSetArray("extraSources","char*",opts->extraSources.data(),opts->extraSources.size());
       TemplateSetArray("includePaths","char*",opts->includePaths.data(),opts->includePaths.size());

@@ -1,5 +1,17 @@
-#include "memory.hpp"
 #include "printf.h"
+
+#ifndef __cplusplus
+#include <stdlib.h>
+#else
+#include <cstdlib>
+#endif
+
+typedef unsigned char Byte;
+typedef struct{
+   Byte* mem;
+   size_t used;
+   size_t totalAllocated;
+} Arena;
 
 Arena InitArena(size_t size){
    Arena res = {};
@@ -20,7 +32,9 @@ void PopMark(Arena* arena,Byte* mark){
 
 void Free(Arena* arena){
    free(arena->mem);
-   *arena = {};
+   arena->mem = 0;
+   arena->used = 0;
+   arena->totalAllocated = 0;
 }
 
 Byte* PushBytes(Arena* arena, size_t size){

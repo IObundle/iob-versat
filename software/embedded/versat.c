@@ -4,21 +4,23 @@
 #define MEMSET(base, location, value) (*((volatile int*) (base + (sizeof(int)) * location)) = (int) value)
 #define MEMGET(base, location)        (*((volatile int*) (base + (sizeof(int)) * location)))
 
-#include "utilsCore.hpp"
-
-extern "C"{
 #include "iob-timer.h"
 
+#define ARRAY_SIZE(arr) (sizeof(arr) / sizeof(arr[0]))
+#define TIME_IT(...) ((void)0)
+
+#if 0
 NanoSecond GetTime(){
    NanoSecond res = {};
    res.time = (uint64) timer_time_us() * 1000;
    return res;
 }
+#endif
 
 int versat_base;
 
-volatile AcceleratorConfig* accelConfig = nullptr;
-volatile AcceleratorState*  accelState  = nullptr;
+volatile AcceleratorConfig* accelConfig = 0;
+volatile AcceleratorState*  accelState  = 0;
 
 void versat_init(int base){
    versat_base = base;
@@ -52,7 +54,7 @@ void RunAccelerator(int times){
    }
 }
 
-void VersatMemoryCopy(volatile int* dest,int* data,int size){
+void VersatMemoryCopy(iptr* dest,iptr* data,int size){
    if(size <= 0){
       return;
    }
@@ -75,7 +77,5 @@ void VersatMemoryCopy(volatile int* dest,int* data,int size){
 void VersatUnitWrite(int addr,int val){
    int* ptr = (int*) addr;
    *ptr = val;
-}
-
 }
 

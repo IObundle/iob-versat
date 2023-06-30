@@ -21,8 +21,9 @@ VSRC+=$(VERSAT_DIR)/submodules/MEM/hardware/fifo/sfifo/iob_sync_fifo.v
 VSRC+=$(VERSAT_DIR)/submodules/MEM/hardware/fifo/bin_counter.v
 VSRC+=$(VERSAT_DIR)/submodules/FPU/submodules/DIV/hardware/src/div_subshift.v
 VSRC+=$(wildcard $(VERSAT_DIR)/submodules/FPU/hardware/src/*.v)
-VSRC+=$(VERSAT_DIR)/hardware/src/MyAddressGen.v 
-VSRC+=$(VERSAT_DIR)/hardware/src/xaddrgen.v 
-VSRC+=$(VERSAT_DIR)/hardware/src/xaddrgen2.v 
-VSRC+=$(VERSAT_DIR)/hardware/src/MemoryWriter.v
-VSRC+=$(VERSAT_DIR)/hardware/src/MemoryReader.v
+
+VERSAT_VSRC+=$(VERSAT_DIR)/hardware/src/MyAddressGen.v 
+VERSAT_VSRC+=$(VERSAT_DIR)/hardware/src/xaddrgen.v 
+VERSAT_VSRC+=$(VERSAT_DIR)/hardware/src/xaddrgen2.v 
+VERSAT_VSRC+=$(VERSAT_DIR)/hardware/src/MemoryWriter.v
+VERSAT_VSRC+=$(VERSAT_DIR)/hardware/src/MemoryReader.v

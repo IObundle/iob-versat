@@ -1,4 +1,4 @@
-include $(VERSAT_DIR)/core.mk
+include $(VERSAT_DIR)/software/software.mk
 include $(VERSAT_DIR)/sharedHardware.mk
 
 SRC+=$(VERSAT_PC_DIR)/versat.c

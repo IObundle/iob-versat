@@ -1,10 +1,6 @@
-#if 1
-
 #include "versat_accel.hpp"
 
 #define IMPLEMENT_VERILOG_UNITS
-
-//#include "wrapper.inc"
 
 #define ARRAY_SIZE(arr) (sizeof(arr) / sizeof(arr[0]))
 
@@ -82,5 +78,3 @@ int VersatUnitRead(int base,int index){
    int addr = base + index - (versat_base + memMappedStart); // Convert back to zero based address
    return UnitRead(versat,accel,addr);
 }
-
-#endif
