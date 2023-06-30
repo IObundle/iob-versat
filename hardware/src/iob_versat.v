@@ -154,6 +154,7 @@ versat_instance #(.ADDR_W(ADDR_W),.DATA_W(DATA_W)) xversat(
 
 endmodule
 
+`ifdef VERSAT_IO // Easier to just remove everything from consideration
 module xmerge #(
     parameter ADDR_W = 0,
     parameter DATA_W = 32,
@@ -709,3 +710,4 @@ assign in_ready = out_ready;
 
 endmodule
 
+`endif // ifdef VERSAT_IO

@@ -80,7 +80,8 @@
 
    `ifndef VERSAT_IO
       initial $display("No Versat IO\n");
-      
+
+      `ifdef VERSAT_ARCH_HAS_IO
       assign m_axi_awid[1*1+:1] = 1'b0;
       assign m_axi_awaddr[1*`DDR_ADDR_W+:`DDR_ADDR_W] = 0;
       assign m_axi_awlen[1*8+:8] = 0;
@@ -111,5 +112,6 @@
       assign m_axi_arvalid[1*1+:1] = 0; //
 
       assign m_axi_rready[1*1+:1] = 1'b1; // To prevent lookup, "ready" for everything
-   `endif
+      `endif // VERSAT_ARCH_HAS_IO
+   `endif // VERSAT_IO
 
