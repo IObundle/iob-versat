@@ -12,6 +12,7 @@ void AcceleratorEval(AcceleratorIterator iter);
 void AcceleratorRunComposite(AcceleratorIterator iter);
 void AcceleratorRunIter(AcceleratorIterator iter);
 void AcceleratorRunOnce(Accelerator* accel);
+
 void AcceleratorRun(Accelerator* accel,int times);
 
 #endif // INCLUDED_VERSAT_ACCELERATOR_SIMULATION

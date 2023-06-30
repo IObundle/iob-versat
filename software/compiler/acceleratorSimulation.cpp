@@ -272,4 +272,9 @@ void AcceleratorRun(Accelerator* accel,int times){
    }
 }
 
+extern "C" void AcceleratorRunC(Accelerator* accel,int times){
+   for(int i = 0; i < times; i++){
+      AcceleratorRunOnce(accel);
+   }
+}
 

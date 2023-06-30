@@ -2,9 +2,9 @@
 include $(VERSAT_DIR)/software/software.mk
 
 #pc sources
-SRC+=$(VERSAT_SW_DIR)/embedded/versat.cpp
-SRC+=$(VERSAT_SW_DIR)/embedded/memory.cpp
-SRC+=$(VERSAT_COMMON_DIR)/utilsCommon.cpp
+SRC+=$(VERSAT_SW_DIR)/embedded/versat.c
+SRC+=$(VERSAT_SW_DIR)/embedded/memory.c
+SRC+=$(VERSAT_COMMON_DIR)/utilsCommon.c
 
 BUILD_DIR :=./build
 

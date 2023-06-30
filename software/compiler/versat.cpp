@@ -256,7 +256,7 @@ namespace BasicTemplates{
    CompiledTemplate* acceleratorTemplate;
    CompiledTemplate* topAcceleratorTemplate;
    CompiledTemplate* dataTemplate;
-   CompiledTemplate* unitVerilogData;
+   CompiledTemplate* wrapperTemplate;
    CompiledTemplate* acceleratorHeaderTemplate;
    CompiledTemplate* externalPortmapTemplate;
    CompiledTemplate* externalPortTemplate;
@@ -326,6 +326,10 @@ int CountNonOperationChilds(Accelerator* accel){
 
 void RegisterSpecificUnits(Versat* versat);
 
+extern "C" Versat* InitVersatC(int base,int numberConfigurations,bool initUnits){
+   return InitVersat(base,numberConfigurations,initUnits);
+}
+
 Versat* InitVersat(int base,int numberConfigurations,bool initUnits){
    static Versat versatInst = {};
    static bool doneOnce = false;
@@ -359,9 +363,8 @@ Versat* InitVersat(int base,int numberConfigurations,bool initUnits){
    // Technically, if more than 1 versat in the future, could move this outside
    BasicTemplates::acceleratorTemplate = CompileTemplate(versat_accelerator_template,&versat->permanent);
    BasicTemplates::topAcceleratorTemplate = CompileTemplate(versat_top_instance_template,&versat->permanent);
-   BasicTemplates::dataTemplate = CompileTemplate(embedData_template,&versat->permanent);
-   BasicTemplates::unitVerilogData = CompileTemplate(unit_verilog_data_template,&versat->permanent);
-   BasicTemplates::acceleratorHeaderTemplate = CompileTemplate(versat_accelerator_header_template,&versat->permanent);
+   BasicTemplates::wrapperTemplate = CompileTemplate(versat_wrapper_template,&versat->permanent);
+   BasicTemplates::acceleratorHeaderTemplate = CompileTemplate(versat_header_template,&versat->permanent);
    BasicTemplates::externalPortmapTemplate = CompileTemplate(external_memory_portmap_template,&versat->permanent);
    BasicTemplates::externalPortTemplate = CompileTemplate(external_memory_port_template,&versat->permanent);
    BasicTemplates::externalInstTemplate = CompileTemplate(external_memory_inst_template,&versat->permanent);
@@ -508,37 +511,6 @@ uint SetDebug(Versat* versat,VersatDebugFlags flags,uint flag){
    return last;
 }
 
-static int CompositeMemoryAccess(FUInstance* instance,int address,int value,int write){
-   int offset = 0;
-
-   // TODO: Probably should use Accelerator Iterator ?
-   FOREACH_LIST(ptr,instance->declaration->fixedDelayCircuit->allocated){
-      FUInstance* inst = ptr->inst;
-
-      if(!inst->declaration->isMemoryMapped){
-         continue;
-      }
-
-      int mappedWords = 1 << inst->declaration->memoryMapBits;
-      if(mappedWords){
-         if(address >= offset && address <= offset + mappedWords){
-            if(write){
-               VersatUnitWrite(inst,address - offset,value);
-               return 0;
-            } else {
-               int result = VersatUnitRead(inst,address - offset);
-               return result;
-            }
-         } else {
-            offset += mappedWords;
-         }
-      }
-   }
-
-   NOT_POSSIBLE; // TODO: Figure out what to do in this situation
-   return 0;
-}
-
 static int AccessMemory(FUInstance* inst,int address, int value, int write){
    FUInstance* instance = (FUInstance*) inst->declarationInstance;
    instance->memMapped = inst->memMapped;
@@ -555,13 +527,72 @@ static int AccessMemory(FUInstance* inst,int address, int value, int write){
    return res;
 }
 
-void VersatUnitWrite(FUInstance* instance,int address, int value){
-   AccessMemory(instance,address,value,1);
+static int CompositeMemoryAccess(FUInstance* instance,int address,int value,int write){
+   int offset = 0;
+
+   // TODO: Probably should use Accelerator Iterator ?
+   FOREACH_LIST(ptr,instance->declaration->fixedDelayCircuit->allocated){
+      FUInstance* inst = ptr->inst;
+
+      if(!inst->declaration->isMemoryMapped){
+         continue;
+      }
+
+      int mappedWords = 1 << inst->declaration->memoryMapBits;
+      if(mappedWords){
+         if(address >= offset && address <= offset + mappedWords){
+            if(write){
+               AccessMemory(inst,address - offset,value,1);
+               return 0;
+            } else {
+               int result = AccessMemory(inst,address - offset,0,0);
+               return result;
+            }
+         } else {
+            offset += mappedWords;
+         }
+      }
+   }
+
+   NOT_POSSIBLE; // TODO: Figure out what to do in this situation
+   return 0;
 }
 
-int VersatUnitRead(FUInstance* instance,int address){
-   int res = AccessMemory(instance,address,0,0);
-   return res;
+extern "C" void UnitWrite(Versat* versat,Accelerator* accel,int addr,int val){
+   Arena* temp = &versat->temp;
+   BLOCK_REGION(temp);
+
+   AcceleratorIterator iter = {};
+   for(InstanceNode* node = iter.Start(accel,temp,true); node; node = iter.Skip()){
+      FUInstance* inst = node->inst;
+      FUDeclaration* decl = inst->declaration;
+      iptr memAddress = (iptr) inst->memMapped;
+      iptr delta = (1 << (decl->memoryMapBits + 2));
+      if(addr >= memAddress && addr < (memAddress + delta)){
+         AccessMemory(inst,addr - memAddress,val,1);
+         return;
+      }
+   }
+
+   assert("Failed to write to unit.");
+}
+
+extern "C" int UnitRead(Versat* versat,Accelerator* accel,int addr){
+   Arena* temp = &versat->temp;
+   BLOCK_REGION(temp);
+   
+   AcceleratorIterator iter = {};
+   for(InstanceNode* node = iter.Start(accel,temp,true); node; node = iter.Skip()){
+      FUInstance* inst = node->inst;
+      FUDeclaration* decl = inst->declaration;
+      iptr memAddress = (iptr) inst->memMapped;
+      iptr delta = (1 << (decl->memoryMapBits + 2));
+      if(addr >= memAddress && addr < (memAddress + delta)){
+         return AccessMemory(inst,addr - memAddress,0,0);
+      }
+   }
+   assert("Failed to read unit");
+   return 0; // Unreachable, prevent compiler complaining
 }
 
 void VersatMemoryCopy(FUInstance* instance,int* dest,int* data,int size){
@@ -574,7 +605,7 @@ void VersatMemoryCopy(FUInstance* instance,int* dest,int* data,int size){
       Assert(memMappedDelta + size <= (1 << decl->memoryMapBits));
 
       for(int i = 0; i < size; i++){
-         VersatUnitWrite(instance,i + memMappedDelta,data[i]);
+         AccessMemory(instance,i + memMappedDelta,data[i],1);
       }
    } else {
       Memcpy(dest,data,size);
@@ -674,6 +705,24 @@ static FUInstance* GetInstanceByHierarchicalName(Accelerator* accel,Hierarchical
    return res;
 }
 #endif
+
+// Function used by pc-emul/versat.cpp
+extern "C" Accelerator* CreateSimulableAccelerator(Versat* versat,const char* acceleratorTypeName){
+   Accelerator* accel = CreateAccelerator(versat);
+   FUDeclaration* type = GetTypeByName(versat,STRING(acceleratorTypeName));
+   CreateFUInstance(accel,type,STRING("TOP"));
+
+   InitializeAccelerator(versat,accel,&versat->temp);
+   return accel;
+}
+
+extern "C" void* GetStartOfConfig(Accelerator* accel){
+   return accel->configAlloc.ptr;
+}
+
+extern "C" void* GetStartOfState(Accelerator* accel){
+   return accel->stateAlloc.ptr;
+}
 
 static String GetFullHierarchicalName(HierarchicalName* head,Arena* arena){
    Byte* mark = MarkArena(arena);
@@ -1662,7 +1711,7 @@ FUDeclaration* RegisterIterativeUnit(Versat* versat,Accelerator* accel,FUInstanc
    FILE* sourceCode = OpenFileAndCreateDirectories(buffer,"w");
    ProcessTemplate(sourceCode,BasicTemplates::iterativeTemplate,&versat->temp);
 
-   #if 1
+   #if 0
    UnitFunctions func = CheckOrCompileUnit(name,arena);
 
    registeredType->printVCD = func.vcd;

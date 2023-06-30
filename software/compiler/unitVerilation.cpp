@@ -1,5 +1,8 @@
 #include "unitVerilation.hpp"
 
+// Old code, before change to two stage compilation
+#if 0
+
 #include <unistd.h>
 #include <sys/wait.h>
 #include <errno.h>
@@ -368,7 +371,7 @@ UnitFunctions CheckOrCompileUnit(String unitName,Arena* temp){
    return res;
 }
 
-
+#endif
 
 
 

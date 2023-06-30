@@ -99,7 +99,7 @@ String FindProgramLocation(String name,Arena* out);
 void TestVersatSide(Versat* versat){
    //CheckOrCompileUnit(STRING("AESPathExample"),&versat->temp);
 
-   #if 1
+   #if 0
    String res = FindProgramLocation(STRING("verilator"),&versat->temp);
    printf("%.*s\n",UNPACK_SS(res));
    #endif // 1

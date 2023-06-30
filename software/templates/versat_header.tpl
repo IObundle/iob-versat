@@ -9,7 +9,7 @@ typedef intptr_t iptr;
 #define true 1
 #define false 0
 
-typedef struct AcceleratorConfigType{
+typedef struct{
 #{for wire orderedConfigs.configs}
    iptr @{wire.name};
 #{end}
@@ -21,7 +21,7 @@ typedef struct AcceleratorConfigType{
 #{end}
 } AcceleratorConfig;
 
-typedef struct AcceleratorStateType{
+typedef struct{
 #{for pair namedStates}
 #{set name pair.first} #{set conf pair.second}
 int @{name};

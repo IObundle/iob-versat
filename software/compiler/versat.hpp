@@ -247,8 +247,7 @@ struct CompiledTemplate;
 namespace BasicTemplates{
    extern CompiledTemplate* acceleratorTemplate;
    extern CompiledTemplate* topAcceleratorTemplate;
-   extern CompiledTemplate* dataTemplate;
-   extern CompiledTemplate* unitVerilogData;
+   extern CompiledTemplate* wrapperTemplate;
    extern CompiledTemplate* acceleratorHeaderTemplate;
    extern CompiledTemplate* externalPortmapTemplate;
    extern CompiledTemplate* externalPortTemplate;

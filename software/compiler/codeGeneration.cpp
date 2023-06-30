@@ -187,7 +187,7 @@ void OutputVersatSource(Versat* versat,Accelerator* accel,const char* directoryP
    TemplateSetCustom("instances",&accum,"std::vector<FUInstance>");
    TemplateSetNumber("numberUnits",accum.size());
    TemplateSetBool("IsSimple",false);
-   ProcessTemplate(d,BasicTemplates::dataTemplate,&versat->temp); // TODO: We could remove this, everything is on the header
+   //ProcessTemplate(d,BasicTemplates::dataTemplate,&versat->temp); // TODO: We could remove this, everything is on the header
 
    {
    Hashmap<String,SizedConfig>* namedConfigs = ExtractNamedSingleConfigs(accel,arena);

@@ -45,25 +45,29 @@ CPP_OBJ += $(BUILD_DIR)/typeInfo.o
 
 CPP_OBJ_WITHOUT_COMPILER:=$(filter-out $(BUILD_DIR)/versatCompiler.o,$(CPP_OBJ))
 
-$(VERSAT_DIR)/versat: $(CPP_OBJ)
-	g++ -MMD -MP -std=c++17 $(VERSAT_FLAGS) -o $@ -g $(CPP_OBJ) $(VERSAT_INCLUDE) $(VERSAT_LIBS)
-
 # Rules to generate the verilated objects. We call verilator with a simple file and extract info from the generated makefile
 /tmp/versat_test_verilator.v: Makefile
 	printf "\`timescale 1ns / 1ps\nmodule Test(); endmodule" > $@
 
 /tmp/versat_makefile.mk: Makefile
-	printf 'include Vversat_test_verilator.mk\nALL_O:=$$(addsuffix .o,$$(VM_GLOBAL_FAST) $$(VM_GLOBAL_SLOW))\nALL_C:=$$(patsubst %%.o,%%.cpp,$$(ALL_O))\nOUT:=$$(patsubst %%.o,$(BUILD_DIR)/%%.o,$$(ALL_O))\n$(BUILD_DIR)/%%.o: %%.cpp Makefile\n\t@g++ -g -w -c -o $$@ $$< -I$$(VERILATOR_ROOT)/include\nmyCode: $$(OUT) Makefile\n\t@echo $$(OUT)\n' > $@
+	printf 'include Vversat_test_verilator.mk\nALL_O:=$$(addsuffix .o,$$(VM_GLOBAL_FAST) $$(VM_GLOBAL_SLOW)) verilatorCode.o\nALL_C:=$$(patsubst %%.o,%%.cpp,$$(ALL_O))\nOUT:=$$(patsubst %%.o,$(BUILD_DIR)/%%.o,$$(ALL_O))\n$(BUILD_DIR)/%%.o: %%.cpp\n\t@g++ -g -w -c -o $$@ $$< -I$$(VERILATOR_ROOT)/include\n$(BUILD_DIR)/verilatorCode.o: $(VERSAT_DIR)/software/verilatorCode.cpp\n\t@g++ -g -w -c -o $$@ $$< -I$$(VERILATOR_ROOT)/include\nmyCode: $$(OUT) Makefile\n\t@echo $$(OUT)\n' > $@
+
+/tmp/versat_makefile2.mk: Makefile
+	printf 'include Vversat_test_verilator.mk\nmyCode:\n\t@echo $$(VERILATOR_ROOT)' > $@
+
+$(VERSAT_DIR)/versat: $(CPP_OBJ) $(VERSAT_DIR)/libversat.a /tmp/versat_makefile2.mk
+	$(eval VERILATOR_ROOT := $(shell $(MAKE) --no-print-directory -I$(BUILD_DIR)/obj_dir -f /tmp/versat_makefile2.mk myCode)) # Care, this eval gets expanded before any rule is executed, needs to be first to guarantee correct usage	
+	g++ -MMD -MP -std=c++17 -DVERSAT_DIR=\"$(VERSAT_DIR)\" -DVERILATOR_ROOT=\"$(VERILATOR_ROOT)\" $(VERSAT_FLAGS) -o $@ -g $(CPP_OBJ) $(VERSAT_INCLUDE) $(VERSAT_LIBS) $(VERSAT_DIR)/libversat.a
 
 $(BUILD_DIR)/obj_dir/Vversat_test_verilator.mk:
-	verilator --trace --cc --Mdir $(BUILD_DIR)/obj_dir /tmp/versat_test_verilator.v # Generate the makefile from which we extract VERILATOR_ROOT
+	verilator --trace --cc --Mdir $(BUILD_DIR)/obj_dir /tmp/versat_test_verilator.v # Generate the makefile from which we extract VERILATOR_ROOT and the verilator .o and .cpp files needed
 
 $(VERSAT_DIR)/libversat.a: $(CPP_OBJ_WITHOUT_COMPILER) /tmp/versat_test_verilator.v /tmp/versat_makefile.mk $(BUILD_DIR)/obj_dir/Vversat_test_verilator.mk
-	$(eval VERILATOR_OBJECTS = $(shell $(MAKE) --no-print-directory -I$(BUILD_DIR)/obj_dir -f /tmp/versat_makefile.mk myCode)) # Care, this eval gets expanded before any rule is executed, needs to be first to guarantee correct usage
-	@echo $(VERILATOR_OBJECTS)
+	$(eval VERILATOR_OBJECTS := $(shell $(MAKE) --no-print-directory -I$(BUILD_DIR)/obj_dir -f /tmp/versat_makefile.mk myCode)) # Care, this eval gets expanded before any rule is executed, needs to be first to guarantee correct usage
+	echo $(VERILATOR_OBJECTS)
 	ar rcs $(VERSAT_DIR)/libversat.a $(CPP_OBJ_WITHOUT_COMPILER) $(VERILATOR_OBJECTS)
-	rm /tmp/versat_test_verilator.v
-	rm /tmp/versat_makefile.mk
+	#rm /tmp/versat_test_verilator.v
+	#rm /tmp/versat_makefile.mk
 
 libversat: $(VERSAT_DIR)/libversat.a
 
@@ -73,7 +77,8 @@ VERSAT_COMPILER_DEPENDS := $(patsubst %.o,%.d,$(VERSAT_COMPILER_OBJ))
 -include  $(VERSAT_COMPILER_DEPENDS)
 
 $(BUILD_DIR)/%.o : $(VERSAT_COMPILER_DIR)/%.cpp
-	g++ -MMD -MP -std=c++17 $(VERSAT_FLAGS) -g -c -o $@ $(GLOBAL_CFLAGS) $< $(VERSAT_INCLUDE)
+	$(eval VERILATOR_ROOT := $(shell $(MAKE) --no-print-directory -I$(BUILD_DIR)/obj_dir -f /tmp/versat_makefile2.mk myCode)) # Care, this eval gets expanded before any rule is executed, needs to be first to guarantee correct usage	
+	g++ -MMD -MP -DVERSAT_DIR=\"$(VERSAT_DIR)\" -DVERILATOR_ROOT=\"$(VERILATOR_ROOT)\" -std=c++17 $(VERSAT_FLAGS) -g -c -o $@ $(GLOBAL_CFLAGS) $< $(VERSAT_INCLUDE)
 
 ifeq ($(VERSAT_DEBUG),1)
 $(BUILD_DIR)/%.o: $(VERSAT_COMPILER_DIR)/IMGUI/%.cpp

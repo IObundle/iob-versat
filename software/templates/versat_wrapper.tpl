@@ -1,60 +1,7 @@
-#ifndef INCLUDED_VERILOG_DATA_@{namespace}
-#define INCLUDED_VERILOG_DATA_@{namespace}
-
-#{if export}
-#define MODIFIER __attribute__((visibility("default")))
-#include <new>
-
-#include "versatPrivate.hpp"
-#include "utils.hpp"
-
-static int zeros[99] = {};
-static Array<int> zerosArray = {zeros,99};
-#{else}
-// Local include
-#define MODIFIER static
-#{end}
-
-#if 0
-
-#{for module modules}
-#{if module.configs}
-
-// The config for individual units is not the same for the accelerator
-// That is because we group configs + statics + delays for the accelerator
-// But no such grouping is done for individual units
-// TODO: Differentiate between accelerator level and individual level wrapper generation
-// For now, I do not know if individual units wrappers will ever be needed again.
-struct @{module.name}Config{
-#{for wire module.configs}
-#{if !wire.isStatic}
-iptr @{wire.name};
-#{end}
-#{end}
-};
-
-#{end}
-
-#{if module.states}
-
-struct @{module.name}State{
-#{for wire module.states}
-int @{wire.name};
-#{end}
-};
-
-#{end}
-#{end}
-#endif
-
-#{if !export}
-#ifdef IMPLEMENT_VERILOG_UNITS
-#{end}
-
 #include <new>
 
 #include "versat_accel.hpp"
-#include "versatPrivate.hpp"
+#include "versat.hpp"
 #include "utils.hpp"
 
 #include "verilated.h"
@@ -62,6 +9,9 @@ int @{wire.name};
 
 static VerilatedVcdC* tfp = NULL;
 VerilatedContext* contextp = new VerilatedContext;
+
+static int zeros[99] = {};
+static Array<int> zerosArray = {zeros,99};
 
 #{for module modules}
 #include "V@{module.name}.h"
@@ -97,9 +47,6 @@ static V@{module.name}* dut = NULL;
 #define PREAMBLE(type) \
    type* self = &data->unit; \
    VCDData* vcd = &data->vcd;
-
-#ifndef INCLUDED_WRAPPER_FUNCTIONS
-#define INCLUDED_WRAPPER_FUNCTIONS
 
 static char* Bin(unsigned int value){
    static char buffer[33];
@@ -219,20 +166,14 @@ struct DatabusAccess{
 static const int INITIAL_MEMORY_LATENCY = 5;
 static const int MEMORY_LATENCY = 0;
 
-#endif // INCLUDED_WRAPPER_FUNCTIONS
-
 // Memories are evaluated after databus because most of the time
 // databus is used to read data to memories
 // while memory to databus usually passes through a register that holds the data.
 // and therefore order of evaluation usually favours databus first and memories after
 
-#{if export}
-extern "C" {
-#{end}
-
 #{for module modules}
 
-MODIFIER void @{module.name}_VCDFunction(FUInstance* inst,FILE* out,VCDMapping& currentMapping,Array<int>,bool firstTime,bool printDefinitions){
+void @{module.name}_VCDFunction(FUInstance* inst,FILE* out,VCDMapping& currentMapping,Array<int>,bool firstTime,bool printDefinitions){
    if(printDefinitions){
    #{for external module.externalInterfaces}
       #{set id external.interface}
@@ -292,7 +233,7 @@ static void CloseWaveform(){
    }
 }
 
-MODIFIER int32_t* @{module.name}_InitializeFunction(FUInstance* inst){
+int32_t* @{module.name}_InitializeFunction(FUInstance* inst){
    tfp = new VerilatedVcdC;
 
    memset(inst->extraData,0,inst->declaration->extraDataOffsets.max);
@@ -321,7 +262,7 @@ MODIFIER int32_t* @{module.name}_InitializeFunction(FUInstance* inst){
    return NULL;
 }
 
-MODIFIER int32_t* @{module.name}_StartFunction(FUInstance* inst){
+int32_t* @{module.name}_StartFunction(FUInstance* inst){
 #{if module.outputLatencies}
    static int32_t out[@{module.outputLatencies.size}];
 #{end}
@@ -369,7 +310,7 @@ AcceleratorConfig* config = (AcceleratorConfig*) inst->config;
 #{end}
 }
 
-MODIFIER int32_t* @{module.name}_UpdateFunction(FUInstance* inst,Array<int> inputs){
+int32_t* @{module.name}_UpdateFunction(FUInstance* inst,Array<int> inputs){
 #{if module.outputLatencies}
    static int32_t out[@{module.outputLatencies.size}];
 #{end}
@@ -525,7 +466,7 @@ AcceleratorState* state = (AcceleratorState*) inst->state;
 #{end}
 }
 
-MODIFIER int32_t* @{module.name}_DestroyFunction(FUInstance* inst){
+int32_t* @{module.name}_DestroyFunction(FUInstance* inst){
    V@{module.name}* self = (V@{module.name}*) inst->extraData;
 
    self->~V@{module.name}();
@@ -533,7 +474,7 @@ MODIFIER int32_t* @{module.name}_DestroyFunction(FUInstance* inst){
    return nullptr;
 }
 
-MODIFIER int @{module.name}_ExtraDataSize(){
+int @{module.name}_ExtraDataSize(){
    int extraSize = sizeof(V@{module.name});
 
    #{if module.nIO}
@@ -543,7 +484,7 @@ MODIFIER int @{module.name}_ExtraDataSize(){
    return extraSize;
 }
 
-MODIFIER FUDeclaration @{module.name}_CreateDeclaration(){
+FUDeclaration @{module.name}_CreateDeclaration(){
    FUDeclaration decl = {};
 
    #{if module.inputDelays}
@@ -615,7 +556,7 @@ MODIFIER FUDeclaration @{module.name}_CreateDeclaration(){
    return decl;
 }
 
-MODIFIER FUDeclaration* @{module.name}_Register(Versat* versat){
+FUDeclaration* @{module.name}_Register(Versat* versat){
    FUDeclaration decl = @{module.name}_CreateDeclaration();
 
    return RegisterFU(versat,decl);
@@ -623,24 +564,18 @@ MODIFIER FUDeclaration* @{module.name}_Register(Versat* versat){
 
 #{end}
 
-MODIFIER void RegisterAllVerilogUnits@{namespace}(Versat* versat){
+extern "C" void RegisterAllVerilogUnits@{namespace}(Versat* versat){
    #{for module modules}
    @{module.name}_Register(versat);
    #{end}
 }
 
-#{if export}
-} // extern "C"
-#{end}
-
-#{if !export}
-#endif // IMPLEMENT_VERILOG_UNITS
-#{end}
+extern "C" void InitializeVerilator(){
+   Verilated::traceEverOn(true);
+}
 
 #undef INIT
 #undef UPDATE
 #undef RESET
 #undef START_RUN
 #undef PREAMBLE
-
-#endif // INCLUDED_VERILOG_DATA_@{namespace}
