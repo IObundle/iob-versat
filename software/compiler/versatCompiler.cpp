@@ -190,7 +190,8 @@ int main(int argc,const char* argv[]){
 
    Options* opts = ParseCommandLineOptions(argc,argv,perm,temp);
 
-#define STRINGIFY(ARG) #(ARG)
+#define DO_STRINGIFY(ARG) #ARG
+#define STRINGIFY(ARG) DO_STRINGIFY(ARG)
    
    if(opts->verilatorRoot.size == 0){
       bool lackOfVerilator = false;
