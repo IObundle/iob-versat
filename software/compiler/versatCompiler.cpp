@@ -190,22 +190,24 @@ int main(int argc,const char* argv[]){
 
    Options* opts = ParseCommandLineOptions(argc,argv,perm,temp);
 
+#define STRINGIFY(ARG) #(ARG)
+   
    if(opts->verilatorRoot.size == 0){
       bool lackOfVerilator = false;
       String vr = {};
 #ifdef VERILATOR_ROOT
-      vr = TrimWhitespaces(STRING("VERILATOR_ROOT"));
+      vr = TrimWhitespaces(STRING(STRINGIFY(VERILATOR_ROOT)));
       //TODO: Could have some extra checks here, like make sure that it's a valid path    
       if(vr.size == 0){
          lackOfVerilator = true;
       }
-      printf("VERILATOR_ROOT: %s\n","VERILATOR_ROOT");
+      printf("VERILATOR_ROOT: %s\n",STRINGIFY(VERILATOR_ROOT));
 #else
       lackOfVerilator = true;
 #endif
 
       if(lackOfVerilator){
-         char* possible = getenv("VERILATOR_ROOT");
+         char* possible = getenv(STRINGIFY(VERILATOR_ROOT));
          if(possible){
             vr = STRING(possible);
             lackOfVerilator = false;
@@ -398,7 +400,7 @@ int main(int argc,const char* argv[]){
       String wrapper = PushString(temp,"%s/wrapper.cpp",opts->outputFilepath);
       PushNullByte(temp);
 
-      TemplateSetString("versatDir","VERSAT_DIR");
+      TemplateSetString("versatDir",STRINGIFY(VERSAT_DIR));
       TemplateSetString("verilatorRoot",opts->verilatorRoot);
       TemplateSetNumber("bitWidth",opts->bitSize);
       FILE* output = OpenFileAndCreateDirectories(wrapper.data,"w");
@@ -419,7 +421,7 @@ int main(int argc,const char* argv[]){
       fs::path srcLocation = fs::current_path();
       fs::path fixedPath = fs::weakly_canonical(outputPath / srcLocation);
 
-      TemplateSetString("versatDir","VERSAT_DIR");
+      TemplateSetString("versatDir",STRINGIFY(VERSAT_DIR));
       TemplateSetString("verilatorRoot",opts->verilatorRoot);
       TemplateSetNumber("bitWidth",opts->bitSize);
       TemplateSetArray("verilogFiles","String",opts->verilogFiles.data(),opts->verilogFiles.size());
