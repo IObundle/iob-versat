@@ -27,9 +27,10 @@ struct Options{
    const char* specificationFilepath;
    const char* topName;
    const char* outputFilepath;
-   bool addInputAndOutputsToTop;
    String verilatorRoot;
    int bitSize;
+   bool addInputAndOutputsToTop;
+   bool useDMA;
 };
 
 Optional<String> GetFormat(String filename){
@@ -99,6 +100,11 @@ Options* ParseCommandLineOptions(int argc,const char* argv[],Arena* perm,Arena* 
          continue;
       }
       
+      if(str.size >= 2 && str[0] == '-' && str[1] == 'd'){
+         Assert(str.size == 2);
+         opts->useDMA = true;
+      }
+
       if(str.size >= 2 && str[0] == '-' && str[1] == 'I'){
          if(str.size == 2){
             if(i + 1 >= argc){
@@ -193,7 +199,7 @@ int main(int argc,const char* argv[]){
       if(vr.size == 0){
          lackOfVerilator = true;
       }
-      printf("%s\n",VERILATOR_ROOT);
+      printf("VERILATOR_ROOT: %s\n",VERILATOR_ROOT);
 #else
       lackOfVerilator = true;
 #endif
@@ -202,7 +208,7 @@ int main(int argc,const char* argv[]){
          printf("===\n\n");
          printf("Verilator root is not defined. Make sure that verilator is correctly installed or\n");
          printf("set VERILATOR_ROOT to the top folder of verilator\n");
-         printf("Folders $(VERILATOR_ROOT)/bin and $(VERILATOR_ROOT) include\n");
+         printf("Folders $(VERILATOR_ROOT)/bin and $(VERILATOR_ROOT)/include\n");
          printf("\n\n===\n");
          exit(-1);
       }
@@ -259,6 +265,8 @@ int main(int argc,const char* argv[]){
    FUDeclaration* type = GetTypeByName(versat,topLevelTypeStr);
    Accelerator* accel = CreateAccelerator(versat);
    FUInstance* TOP = nullptr;
+
+   accel->useDMA = opts->useDMA;
    
    bool isSimple = false;
    if(opts->addInputAndOutputsToTop && !(type->inputDelays.size == 0 && type->outputLatencies.size == 0)){
@@ -294,6 +302,7 @@ int main(int argc,const char* argv[]){
       topLevelTypeStr = PushString(perm,"%.*s_Simple",UNPACK_SS(topLevelTypeStr));
       type = RegisterSubUnit(versat,topLevelTypeStr,accel);
       accel = CreateAccelerator(versat);
+      accel->useDMA = opts->useDMA;
       TOP = CreateFUInstance(accel,type,STRING("TOP"));
    } else {
       bool isSimple = true;

@@ -166,6 +166,7 @@ void OutputVersatSource(Versat* versat,Accelerator* accel,const char* directoryP
    TemplateSetNumber("configurationBits",val.configurationBits);
    TemplateSetNumber("versatConfig",val.versatConfigs);
    TemplateSetNumber("versatState",val.versatStates);
+   TemplateSetBool("useDMA",accel->useDMA);
 
    ProcessTemplate(s,BasicTemplates::topAcceleratorTemplate,&versat->temp);
 

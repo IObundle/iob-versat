@@ -57,6 +57,7 @@ int VersatUnitRead(int base,int index);
 // Needed by PC-EMUL to correctly simulate the design, embedded compiler should remove these symbols from firmware because not used by them 
 static const char* acceleratorTypeName = "@{accelType}";
 static bool isSimpleAccelerator = @{isSimple};
+static bool acceleratorSupportsDMA = @{useDMA};
 
 static const int staticStart = @{nConfigs |> Hex} * sizeof(iptr);
 static const int delayStart = @{(nConfigs + nStatics) |> Hex} * sizeof(iptr);

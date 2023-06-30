@@ -5,6 +5,8 @@
 #{set nCombOperations #{call CountCombOperations instances}}
 #{set nSeqOperations  #{call CountSeqOperations instances}}
 
+#{set databusCounter 0}
+
 `timescale 1ns / 1ps
 
 module versat_instance #(
@@ -86,7 +88,9 @@ reg soft_reset;
 
 wire rst_int = (rst | soft_reset);
 
+#{if useDMA}
 reg [1:0] dma_state;
+#{end}
 
 // Interface does not use soft_rest
 always @(posedge clk,posedge rst) // Care, rst because writing to soft reset register
@@ -112,13 +116,16 @@ always @(posedge clk,posedge rst) // Care, rst because writing to soft reset reg
             else
                versat_rdata <= {31'h0,done}; 
          end
+#{if useDMA}
          if(addr == 1) begin
             versat_ready <= 1'b1;
             versat_rdata <= {31'h0,dma_state == 0};
          end
+#{end}
       end
    end
 
+#{if nIO}
 wire databus_ready[@{nIO}];
 wire databus_valid[@{nIO}];
 wire [AXI_ADDR_W-1:0] databus_addr[@{nIO}];
@@ -129,14 +136,16 @@ wire [7:0]  databus_len[@{nIO}];
 wire databus_last[@{nIO}];
 
 #{for i (nIO - 1)}
-assign databus_ready[@{i + 1}] = m_databus_ready[@{i + 1}];
-assign m_databus_valid[@{i + 1}] = databus_valid[@{i + 1}];
-assign m_databus_addr[(@{(i + 1)} * AXI_ADDR_W) +: AXI_ADDR_W] = databus_addr[@{i + 1}];
-assign databus_rdata[@{i + 1}] = m_databus_rdata;
-assign m_databus_wdata[@{(i + 1) * 32} +: 32] = databus_wdata[@{i + 1}];
-assign m_databus_wstrb[@{(i + 1) * 4} +: 4] = databus_wstrb[@{i + 1}];
-assign m_databus_len[@{(i + 1) * 8} +: 8] = databus_len[@{i + 1}];
-assign databus_last[@{i + 1}] = m_databus_last[@{i + 1}];
+assign databus_ready[@{databusCounter + 1}] = m_databus_ready[@{databusCounter + 1}];
+assign m_databus_valid[@{databusCounter + 1}] = databus_valid[@{databusCounter + 1}];
+assign m_databus_addr[(@{(databusCounter + 1)} * AXI_ADDR_W) +: AXI_ADDR_W] = databus_addr[@{databusCounter + 1}];
+assign databus_rdata[@{databusCounter + 1}] = m_databus_rdata;
+assign m_databus_wdata[@{(databusCounter + 1) * 32} +: 32] = databus_wdata[@{databusCounter + 1}];
+assign m_databus_wstrb[@{(databusCounter + 1) * 4} +: 4] = databus_wstrb[@{databusCounter + 1}];
+assign m_databus_len[@{(databusCounter + 1) * 8} +: 8] = databus_len[@{databusCounter + 1}];
+assign databus_last[@{databusCounter + 1}] = m_databus_last[@{databusCounter + 1}];
+#{inc databusCounter}
+#{end}
 #{end}
 
 #{if nDones}
@@ -161,6 +170,7 @@ begin
    end
 end
 
+#{if useDMA}
 reg [7:0] dma_length;
 reg [AXI_ADDR_W-1:0] dma_addr_in;
 reg [AXI_ADDR_W-1:0] dma_addr_read;
@@ -218,14 +228,15 @@ begin
    end
 end
 
-assign dma_ready = m_databus_ready[0];
-assign m_databus_valid[0] = dma_valid;
-assign m_databus_addr[AXI_ADDR_W-1:0] = dma_addr;
+assign dma_ready = m_databus_ready[@{databusCounter}];
+assign m_databus_valid[@{databusCounter}] = dma_valid;
+assign m_databus_addr[@{databusCounter} * AXI_ADDR_W +: AXI_ADDR_W] = dma_addr;
 assign dma_rdata = m_databus_rdata[31:0];
-assign m_databus_wdata[31:0] = dma_wdata;
-assign m_databus_wstrb[3:0] = dma_wstrb;
-assign m_databus_len[7:0] = dma_len;
-assign dma_last = m_databus_last[0];
+assign m_databus_wdata[@{databusCounter} * 32 +: 32] = dma_wdata;
+assign m_databus_wstrb[@{databusCounter} * 4 +: 4] = dma_wstrb;
+assign m_databus_len[@{databusCounter} * 8 +: 8] = dma_len;
+assign dma_last = m_databus_last[@{databusCounter}];
+#{inc databusCounter}
 
 always @*
 begin
@@ -246,13 +257,40 @@ begin
    end
    endcase
 end
+#{else}
+// No DMA
+always @(posedge clk,posedge rst_int)
+begin
+   if(rst_int) begin
+      runCounter <= 0;
+   end else begin
+      if(run)
+         runCounter <= runCounter - 1;
 
+      if(valid && we) begin
+         if(addr == 0)
+            runCounter <= runCounter + wdata[30:0];
+      end
+   end
+end
+
+
+#{end}
+
+#{if useDMA}
 wire data_valid = (dma_ready || valid);
 wire data_write = (dma_ready || (valid && we)); // Dma ready is always a write, dma cannot be used to read, for now
 wire [ADDR_W-1:0] address = dma_ready ? (dma_addr_in >> 2) : addr;
 wire [31:0] data_data = dma_ready ? dma_rdata : wdata;
-wire dataMemoryMapped = address[@{memoryConfigDecisionBit}];
 wire [3:0] data_wstrb = dma_ready ? 4'hf : wstrb;
+#{else}
+wire data_valid = valid;
+wire data_write = valid && we;
+wire [ADDR_W-1:0] address = addr;
+wire [31:0] data_data = wdata;
+wire [3:0] data_wstrb = wstrb;
+#{end}
+wire dataMemoryMapped = address[@{memoryConfigDecisionBit}];
 
 reg [31:0] latency_counter;
 reg enableCounter;

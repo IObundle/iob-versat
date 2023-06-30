@@ -57,6 +57,7 @@ struct Accelerator{ // Graph + data storage
 	int created;
 	int entityId;
 	bool init;
+   bool useDMA;
 };
 
 class AcceleratorIterator{

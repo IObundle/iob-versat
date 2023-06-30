@@ -1693,7 +1693,7 @@ FUDeclaration* RegisterIterativeUnit(Versat* versat,Accelerator* accel,FUInstanc
    }
 
    {
-   VersatComputedValues val = ComputeVersatValues(versat,accel);
+      VersatComputedValues val = ComputeVersatValues(versat,accel);
    ComputedData computedData = CalculateVersatComputedData(accel->allocated,val,arena);
 
    TemplateSetCustom("staticUnits",registeredType->staticUnits,"Hashmap<StaticId,StaticData>");

@@ -7,6 +7,6 @@ int MemorySize(Array<ExternalMemoryInterface> interfaces); // Size of a simple m
 
 int NumberUnits(Accelerator* accel);
 
-VersatComputedValues ComputeVersatValues(Versat* versat,Accelerator* accel);
+VersatComputedValues ComputeVersatValues(Versat* versat,Accelerator* accel,bool useDMA);
 
 #endif // INCLUDED_VERSAT_ACCELERATOR_STATS
