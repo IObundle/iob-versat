@@ -11,13 +11,16 @@ namespace fs = std::filesystem;
 
 #include "templateData.hpp"
 
+// TODO: For some reason, in the makefile we cannot stringify the arguments that we want to
+//       Do not actually want to do these preprocessor things. Fix the makefile so that it passes as a string
+#define DO_STRINGIFY(ARG) #ARG
+#define STRINGIFY(ARG) DO_STRINGIFY(ARG)
+
 #if 0
 struct OptionFormat{
    String name;
 
 };
-
-OptionFormat optionsAvailable[] = {STRING(}
 #endif
 
 struct Options{
@@ -26,13 +29,20 @@ struct Options{
    std::vector<const char*> extraSources;
    const char* specificationFilepath;
    const char* topName;
-   const char* outputFilepath;
+   String outputFilepath;
    String verilatorRoot;
    int bitSize;
    bool addInputAndOutputsToTop;
    bool useDMA;
 };
 
+String GetAbsolutePath(const char* path,Arena* arena){
+   fs::path relative = path;
+   fs::path absolute = fs::canonical(fs::absolute(relative));
+   String res = PushString(arena,"%s",absolute.c_str());
+   return res;
+}
+                                   
 Optional<String> GetFormat(String filename){
    int size = filename.size;
    for(int i = 0; i < filename.size; i++){
@@ -140,7 +150,8 @@ Options* ParseCommandLineOptions(int argc,const char* argv[],Arena* perm,Arena* 
             printf("Missing argument\n");
             exit(-1);
          }
-         opts->outputFilepath = argv[i + 1];
+         opts->outputFilepath = GetAbsolutePath(argv[i+1],perm);
+         PushNullByte(perm);
          i += 1;
          continue;
       }
@@ -148,9 +159,7 @@ Options* ParseCommandLineOptions(int argc,const char* argv[],Arena* perm,Arena* 
       if(formatOpt){
          String format = formatOpt.value();
          if(CompareString(format,"v")){
-            fs::path relative = argv[i];
-            fs::path absolute = fs::canonical(fs::absolute(relative));
-            opts->verilogFiles.push_back(PushString(perm,"%s",absolute.c_str()));
+            opts->verilogFiles.push_back(GetAbsolutePath(argv[i],perm));
             continue;
          } else { // Assume to be the specification file, for now
             if(opts->specificationFilepath){
@@ -189,9 +198,6 @@ int main(int argc,const char* argv[]){
    Arena* temp = &tempInst;
 
    Options* opts = ParseCommandLineOptions(argc,argv,perm,temp);
-
-#define DO_STRINGIFY(ARG) #ARG
-#define STRINGIFY(ARG) DO_STRINGIFY(ARG)
    
    if(opts->verilatorRoot.size == 0){
       bool lackOfVerilator = false;
@@ -330,15 +336,15 @@ int main(int argc,const char* argv[]){
       }
    }
 
-   if(!opts->outputFilepath){
-      opts->outputFilepath = ".";
+   if(!opts->outputFilepath.data){
+      opts->outputFilepath = GetAbsolutePath(".",perm);
    }
 
    TemplateSetNumber("bitWidth",sizeof(void*) * 8); // TODO
    
    TOP->parameters = STRING("#(.AXI_ADDR_W(AXI_ADDR_W))");
    InitializeAccelerator(versat,accel,&versat->temp);
-   OutputVersatSource(versat,accel,opts->outputFilepath,topLevelTypeStr,opts->addInputAndOutputsToTop);
+   OutputVersatSource(versat,accel,opts->outputFilepath.data,topLevelTypeStr,opts->addInputAndOutputsToTop);
 
    if(isSimple){
       accel = CreateAccelerator(versat);
@@ -418,10 +424,13 @@ int main(int argc,const char* argv[]){
       FILE* output = OpenFileAndCreateDirectories(name.data,"w");
       CompiledTemplate* comp = CompileTemplate(versat_makefile_template,temp);
 
-      fs::path outputPath = opts->outputFilepath;
+      fs::path outputPath = opts->outputFilepath.data;
       fs::path srcLocation = fs::current_path();
       fs::path fixedPath = fs::weakly_canonical(outputPath / srcLocation);
 
+      String srcDir = PushString(perm,"%.*s/../src",UNPACK_SS(opts->outputFilepath));
+      
+      TemplateSetString("srcDir",srcDir);
       TemplateSetString("versatDir",STRINGIFY(VERSAT_DIR));
       TemplateSetString("verilatorRoot",opts->verilatorRoot);
       TemplateSetNumber("bitWidth",opts->bitSize);

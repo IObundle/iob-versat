@@ -17,8 +17,9 @@ libaccel.a: V$(TYPE_NAME).h wrapper.o
    #ar -racs SMVM__ALL.o libaccel.a wrapper.o 
 	#ar -rbs libaccel.a $(VERSAT_DIR)/libaccel.a 
 
+# TODO: src folder should be set to absolute. Versat compiler knows the location 
 V$(TYPE_NAME).h: $(HARDWARE_SRC)
-	verilator -GAXI_ADDR_W=64 --build --trace --cc $(HARDWARE_SRC) $(wildcard /home/zettasticks/IOBundle/iob-soc-sha/software/pc-emul/src/*.v) $(INCLUDE) --top-module $(TYPE_NAME)
+	verilator -GAXI_ADDR_W=64 --build --trace --cc $(HARDWARE_SRC) $(wildcard @{srcDir}/*.v) $(INCLUDE) --top-module $(TYPE_NAME)
 	cp ./obj_dir/*.h ./
 
 wrapper.o: V$(TYPE_NAME).h wrapper.cpp
