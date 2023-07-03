@@ -20,7 +20,7 @@ module xaddrgen # (
        input signed [MEM_ADDR_W - 1:0]    incr,
 
        //outputs 
-       output reg [MEM_ADDR_W - 1:0]      addr,
+       output [MEM_ADDR_W - 1:0]          addr,
        output reg                         mem_en,
        output reg                         done
        );

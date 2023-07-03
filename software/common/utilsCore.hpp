@@ -3,6 +3,7 @@
 
 // Utilities that do not depend on anything else (like memory.hpp)
 
+#include <cstdio>
 #include <iosfwd>
 #include <string.h>
 #include <new>

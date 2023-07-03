@@ -20,6 +20,7 @@ endif
 INCLUDE+=$(incdir)$(VERSAT_HW_DIR)/include
 INCLUDE+=$(incdir)$(VERSAT_DIR)/submodules/LIB/hardware/include
 INCLUDE+=$(incdir)$(VERSAT_DIR)/submodules/FPU/hardware/include
+VHDR+=$(wildcard $(VERSAT_DIR)/submodules/FPU/hardware/include/*.vh)
 
 INCLUDE+=$(V_INCLUDE)
 
@@ -31,8 +32,8 @@ VHDR+=$(wildcard $(VERSAT_HW_DIR)/include/*.vh)
 VHDR+=m_versat_axi_m_port.vh
 VHDR+=m_versat_axi_m_write_port.vh
 VHDR+=m_versat_axi_m_read_port.vh
-VHDR+=m_m_versat_axi_write_portmap.vh
-VHDR+=m_m_versat_axi_read_portmap.vh
+VHDR+=m_versat_axi_write_portmap.vh
+VHDR+=m_versat_axi_read_portmap.vh
 
 #sources
 VSRC+=$(wildcard $(VERSAT_HW_DIR)/src/*.v)
@@ -46,8 +47,8 @@ m_versat_axi_m_write_port.vh:
 m_versat_axi_m_read_port.vh:
 	$(LIB_DIR)/software/python/axi_gen.py axi_m_read_port 'm_versat_' 'm_'
 
-m_m_versat_axi_write_portmap.vh:
+m_versat_axi_write_portmap.vh:
 	$(LIB_DIR)/software/python/axi_gen.py axi_write_portmap 'm_versat_' 'm_' 'm_'
 
-m_m_versat_axi_read_portmap.vh:
+m_versat_axi_read_portmap.vh:
 	$(LIB_DIR)/software/python/axi_gen.py axi_read_portmap 'm_versat_' 'm_' 'm_'

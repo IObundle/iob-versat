@@ -1,5 +1,9 @@
 #include "merge.hpp"
 
+extern "C"{
+#include <time.h>
+}
+
 #include "debug.hpp"
 #include "textualRepresentation.hpp"
 #include "debugGUI.hpp"

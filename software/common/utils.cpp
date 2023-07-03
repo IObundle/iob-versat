@@ -11,6 +11,7 @@
 #include <cstdio>
 #include <cstring>
 #include <cstdarg>
+#include <cerrno>
 
 #include <time.h>
 
