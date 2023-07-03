@@ -1,26 +1,26 @@
+Need to check out:
+
+   I can find out the include path for verilator by calling verilator with a simple example and then passing a couple of flags to the g++ compiler which print out the location of includes searched. That way, if verilator works, then my program works.
+
 Misc:
 
    I'm tired of having to handle printf style functions.
       Just code an alternative, have it support the kind of expressions that you frequently use, everything else can be equal to printf style
 
    Stop using asserts for likely user errors. Parser is full of asserts that are actually faulty user data. Need to grapple with things now before they become more complex, even if in the future there is likelihood that things will change.
-   Maybe do some fuzz testing? Especially for parsers
    Hard to reason with fixed buffer because we immediatly transform delay into a parameter string. Having to parse the delay is not a solution. Figure out what to do and remove all the portions of code that parse the delay out from the unit
    Should probably generate a FUInstance unit test, that runs an unit individually and make sure that the unit correctly implements the interface expected by Versat. The user simply calls a function with the unit it wants to test and it outputs a verilog testbench that exercises the unit. Most common sources of errors are gonna be delay = 0, not outputting done when done (the testbench should enter an infinite loop, do not know any other way to test this), following the specifications of the "iob" interface and the semi axi interface, among other things.
 
-   Change the SizedString to simple String or Str. Change the UNPACK_SS to STR* or something more simple, if allowed.
    Change the CompareString functions to a operator ==
-   (Which doesn't appear to exist, because adding a constructor makes a mess with unions and I don't think an alternative exists)
 
 Literal:
 
    In verilog, it should compile into a literal as well.
-   Do not know where to store it in pc-emul. Do not like the idea of having a FUInstance specific value that gets carried around but for only a small amount of units.
-   Should probably be something akin to a parameter.
+      Store literal inside FUInstance, like the delay value for buffers and stuff like that. Eventually make it a union
 
 Specification Parser:
 
-   The parser is not taking into account the delay inside expressions.
+   The parser is not taking into account the delay inside expressions. (ex: b = a[0] + a[1] + a[2])
    Add arrays, instead of having to type every unit repeatedly.
 
 Testbench:
@@ -28,6 +28,7 @@ Testbench:
    Rework testbench
       Add subtests
       Use a more data oriented approach. Kinda problematic when running in embedded, so make small changes and test in embedded to make sure not doing anything too much complicated.
+      Define test groups, instead of using the preprocessor thingy.
 
    Use more randomized testcases, specially for floating point numbers and things that are "hard" in hardware but easy to check in software
 
@@ -47,7 +48,7 @@ Major change:
    This is actually expected. The registerSub function expects to receive an actual working Accelerator, and from them to generate a generic template instance.
    We make a couple of changes, like removing multiple inputs and adding delays, but somethings I think could be carried over, like static info and such
    See if it's possible to keep the composite instance "existing" even after the flattening. The only major problem I see is the way memory mapped accesses work.
-      The may objective is to make it so that the code works by getting subinstances from other instances, and that we keep the same code working even after doing flattening of the hierarchy.
+      The main objective is to make it so that the code works by getting subinstances from other instances, and that we keep the same code working even after doing flattening of the hierarchy.
 
 Graph optimizations:
 
@@ -74,6 +75,10 @@ Accelerator
    It would be helpful and easier if top level static units didn't allocate config space as static space, it would be useful if it allocated everything continuously.
    The main issue is that if we do that, then dealing with a top level acceleration and an equal subaccelerator would lead to different results.
    A function F that expects to receive any accelerator of a certain type, would produce different results for F(topLevel) and F(compositeInstance of RegisterSub(topLevel)).
+      Techinically there would be no problem if we still used the auxiliary hashmap to static data.
+      Basically the code would stay the same, the only difference would be that we would allocate config and static in the same space, the rest would be similar.
+         And in doing so, we would simplify the code that interacts with the accelerator.
+         Probably would do the same with delays and call it a day. Allocate everything in a row, but still keep auxiliary pointers and structures if needed.
 
 Embedded data:
 
@@ -82,8 +87,6 @@ Embedded data:
       This allows the user to separate the generation of versat from the test code.
       But on the other hand, we must force the user to always run the simulation code before compiling.
       Maybe add a debug flag to output all the data available anyway.
-
-   Also consider adding a debug flag to output declaration data so that we do not need to tiptoe around it during the creation of tests.
 
 Delay and Time:
 
@@ -96,6 +99,8 @@ Delay and Time:
 |  Add a "constant" edge, which is time agnostic (no buffer is ever added to a constant edge)
       Useful for units that produce a constant value.
       Maybe the concept should be applied to the unit itself, and not to the edge. But if so, it would be hard to propagate that info accross hierarquies. 
+         Technically, the way we handle hierarquies, we try to push everything outwards as much as possible.
+            Therefore appling the concept to the unit is probably a decent idea.
          For now, let the circuit designer handle this by setting himself the constant edges and stuff.
       Or maybe the concept should be applied to the port? The common use case would be a input unit, think const, that is connected to two other units with different delay requirements.
          The most important part is to make sure that we do not add buffer units for values that are constant from the moment unit starts producing valid data.
@@ -107,10 +112,6 @@ Delay and Time:
       A "hack" that shouldn't have been made, doesn't even work for merged accelerators, as we can have multiple base delays. Also delays should be port based, not instance based.
 
    Check how merging affects delay and buffer calculations.
-      First thing I think is that for variable buffers, use an AcceleratorView and allow the function to only had delays units if the merging mapping needs it.
-         The problem is that adding a buffer unit might affect the latency for previous circuits. Probably would get stuck looping around until no new unit was needed.
-         Probably would need to do a full accelerator calculate delay and fix buffers, then use AcceleratorView for each graph to extract the correct values for each accelerator.
-      For fixed buffers, I don't think using AcceleratorView does anything. Have to perform CalculateDelay and FixBuffers globally.
 
    Should the concept of data validity be extended to remove the fact that data is assumed valid forever after the unit starts producing valid data?
       Some units only produce valid data after X cycles. Think things like iterative units and complex FPU units that aren't pipelined.
@@ -124,10 +125,6 @@ Delay and Time:
 
  Iterative units:
    
-   Simplify the process of creating and make it more code based instead of versat specifications based.
-      Develop a simple code path to create iterative units, also push the generation code to the codeGeneration file.
-      Versat specifications should depend on 
-
 Configuration management:
 
    Add an interface to provide the user with the ability to save and load configurations.
@@ -169,14 +166,45 @@ Template Engine:
    The engine isn't fully parsing the templates.
       The Eval call is parsing some things. Everything should be parsed on the Parse function and the Eval function should never have to parse a single line.
 
+   A little bit of code would be enough to make the output look more consistent, instead of having random lines being forward or backwards compared to other lines.
+      Basically, if a line only contains commands and no text, it should just be "removed", in the sense that it shouldn't produce any effect in the output.
+         Lines of text should just be copied to the output with the same spacing. (Probably would be best to change processing to be more line based.)
+      If a line contains a mixture of commands and text, probably should just remain the same.
+
 Templates:
 
    Do a template pass to remove duplicate code, lock down on the approach used to identify units and wires. Different templates should almost resemble each other. All the logic should be shared between units and should rely on common ground.
    Allow the use of enums inside templates. (See parsing enum info on Type)
    Add local variables. Need to introduce the concept of "stack frames".
-   Take a look at the way whitespace is handled. Nothing too important, but I think some places could generate files with errors because they don't handle whitespace correctly
 
    The Command structure is not needed, I think. Does the same thing as an expression.
+
+Parser:
+
+   The single and special chars of the parser should be a detachable portion of the parser which is costructed inside an arena.
+   The standalone thingy would be constructed by passing the single and special chars which the tokenizer class is currently receiving.
+   The construction phase would guarantee that things would be correctly ordered. (meaning that if we had something like "=" first and "==" second, it would check for "==" instead of just checking for "=" and returning).
+   It would then be possible to change the special chars that the tokenizer responds to easier, instead of creating a new tokenizer class.
+      A region or something like that could even be used to make it easer to change back after exiting a function
+         (It would be a class that points to the tokenizer, saves the old thingy and restores it in the destructor).
+   We would have to change the implementation of the tokenizer to return a integer that is associated to the token (passed when constructing the thingy).
+      We could then use the return value inside a switch statement, simplifing the code somewhat.
+      I would implement the thingy first as an array of ~96 chars (common ascii plus spaces and tabs and stuff like that [which we can check ]) which would quickly indicate if (it's a token, it's not a token, can be a token (points to a trie))
+
+Merge:
+
+   In order to handle the type and name problem, the specify type info in the GetInstance function is not the way to go.
+      We should keep extra info inside the accelerator (or use information from the declaration) and the GetInstance function should match based on the currently activated Accelerator.
+
+GUI:
+
+   After spending sometime using gui, two changes would greatly improve the experience:
+      The filter as it stands it's kinda of clubersome. Would be great to:
+         Change the Single, Composite Or and And stuff into checking for special units. (Buffer, Muxs, stuff that Versat instantiates).
+         Would also be useful to implement a name filter, so that we quickly could get 
+      There should be a specialized window for looking at a FUDeclaration, the same way there exists for the Accelerator.
+         Show the default configurations associated to which wires.
+         Show 
 
 Type:
 
@@ -198,10 +226,6 @@ Threading:
       Gives common tasks the ability to wait on only those tasks to end, instead of every task currently in the task pool.
       Also have ideas for things like priority and such, but no need for anything like that, for now. 
 
-Hashmap:
-
-   Everything that goes into the arena in a packed way should just follow the Push convention.
-
 Static and share 
    
    Technically, there isn't anything stopping us from having static share units (Static share config Const {...}).
@@ -219,7 +243,15 @@ Misc:
 
 Current know bugs/problems:
 
-   We are not freeing the nodes for accelerators.
+   The memory used by the accelerator is all over the place. List nodes, units names and the like.
+   We are also not freeing the nodes for accelerators when reorganizing.
+      Easiest change would be to add a function that allocates a new dynamic arena, copies the instance nodes, the instances names, free the old arena, replace it and then call reorganize accel, thus guaranteeing that all the memory being used is actually needed.
+
+Small stuff, almost a TODO:
+
+   Change the function from RegisterUnit to a function that simple returns the declaration.
+      Some parts of the code do not want to register, they want the declaration first and then perform some small changes. Functions just want to be pure
+   The concept of combinatorial unit is not fully realized. 
 
 Legend:
 

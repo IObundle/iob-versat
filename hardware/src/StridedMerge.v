@@ -1,5 +1,4 @@
 `timescale 1ns / 1ps
-`include "xversat.vh"
 
 module StridedMerge #(
          parameter DELAY_W = 32,

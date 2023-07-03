@@ -1,13 +1,11 @@
 `timescale 1ns / 1ps
 
-`include "xdefs.vh"
-`include "xversat.vh"
-`include "xmemdefs.vh"
-`include "versat-io.vh"
-
 module VWrite #(
    parameter DATA_W = 32,
-   parameter ADDR_W = 10
+   parameter ADDR_W = 10,
+   parameter MEM_ADDR_W = 10,
+   parameter PERIOD_W = 10,
+   parameter AXI_ADDR_W = 64
    )
    (
    input                  clk,
@@ -18,14 +16,14 @@ module VWrite #(
    output                 done,
 
    // Databus interface
-   input                  databus_ready,
-   output                 databus_valid,
-   output[`IO_ADDR_W-1:0] databus_addr,
-   input [DATA_W-1:0]     databus_rdata,
-   output [DATA_W-1:0]    databus_wdata,
-   output [DATA_W/8-1:0]  databus_wstrb,
-   output [7:0]           databus_len,
-   input                  databus_last,
+   input                  databus_ready_0,
+   output                 databus_valid_0,
+   output[AXI_ADDR_W-1:0] databus_addr_0,
+   input [DATA_W-1:0]     databus_rdata_0,
+   output [DATA_W-1:0]    databus_wdata_0,
+   output [DATA_W/8-1:0]  databus_wstrb_0,
+   output [7:0]           databus_len_0,
+   input                  databus_last_0,
 
    // input / output data
    input [DATA_W-1:0]     in0,
@@ -39,35 +37,35 @@ module VWrite #(
    output [DATA_W-1:0]   ext_2p_data_out_0,
 
    // configurations
-   input [`IO_ADDR_W-1:0]  ext_addr,
-   input [`MEM_ADDR_W-1:0] int_addr,
-   input [`IO_SIZE_W-1:0]  size,
-   input [`MEM_ADDR_W-1:0] iterA,
-   input [`PERIOD_W-1:0]   perA,
-   input [`PERIOD_W-1:0]   dutyA,
-   input [`MEM_ADDR_W-1:0] shiftA,
-   input [`MEM_ADDR_W-1:0] incrA,
+   input [AXI_ADDR_W-1:0] ext_addr,
+   input [MEM_ADDR_W-1:0] int_addr,
+   input [10:0]           size,
+   input [MEM_ADDR_W-1:0] iterA,
+   input [PERIOD_W-1:0]   perA,
+   input [PERIOD_W-1:0]   dutyA,
+   input [MEM_ADDR_W-1:0] shiftA,
+   input [MEM_ADDR_W-1:0] incrA,
    input [7:0]             length,
    input                   pingPong,
 
-   input [`MEM_ADDR_W-1:0] iterB,
-   input [`PERIOD_W-1:0]   perB,
-   input [`PERIOD_W-1:0]   dutyB,
-   input [`MEM_ADDR_W-1:0] startB,
-   input [`MEM_ADDR_W-1:0] shiftB,
-   input [`MEM_ADDR_W-1:0] incrB,
+   input [MEM_ADDR_W-1:0] iterB,
+   input [PERIOD_W-1:0]   perB,
+   input [PERIOD_W-1:0]   dutyB,
+   input [MEM_ADDR_W-1:0] startB,
+   input [MEM_ADDR_W-1:0] shiftB,
+   input [MEM_ADDR_W-1:0] incrB,
    input [31:0]            delay0, // delayB
    input                   reverseB,
    input                   extB,
-   input [`MEM_ADDR_W-1:0] iter2B,
-   input [`PERIOD_W-1:0]   per2B,
-   input [`MEM_ADDR_W-1:0] shift2B,
-   input [`MEM_ADDR_W-1:0] incr2B
+   input [MEM_ADDR_W-1:0] iter2B,
+   input [PERIOD_W-1:0]   per2B,
+   input [MEM_ADDR_W-1:0] shift2B,
+   input [MEM_ADDR_W-1:0] incr2B
    );
 
-   assign databus_addr = ext_addr;
-   assign databus_wstrb = 4'b1111;
-   assign databus_len = length;
+   assign databus_addr_0 = ext_addr;
+   assign databus_wstrb_0 = 4'b1111;
+   assign databus_len_0 = length;
 
    wire gen_done;
    reg doneA;
@@ -85,38 +83,38 @@ module VWrite #(
          doneB <= 1'b0;
       end else  begin
          doneB <= doneB_int;
-         if(databus_valid && databus_ready && databus_last)
+         if(databus_valid_0 && databus_ready_0 && databus_last_0)
             doneA <= 1'b1;
       end
    end
 
-   function [`MEM_ADDR_W-1:0] reverseBits;
-      input [`MEM_ADDR_W-1:0]   word;
+   function [MEM_ADDR_W-1:0] reverseBits;
+      input [MEM_ADDR_W-1:0]   word;
       integer                   i;
 
       begin
-        for (i=0; i < `MEM_ADDR_W; i=i+1)
-          reverseBits[i] = word[`MEM_ADDR_W-1 - i];
+        for (i=0; i < MEM_ADDR_W; i=i+1)
+          reverseBits[i] = word[MEM_ADDR_W-1 - i];
       end
    endfunction
 
    reg pingPongState;
 
-   reg [`MEM_ADDR_W-1:0] startA;
+   reg [MEM_ADDR_W-1:0] startA;
    always @*
    begin
       startA = 0;
-      startA[`MEM_ADDR_W-1] = pingPong ? !pingPongState : 0;
+      startA[MEM_ADDR_W-1] = pingPong ? !pingPongState : 0;
    end
 
-   wire [1:0]             direction = 2'b10;
+   wire [1:0]    direction = 2'b10;
    wire [31:0]   delayA    = 0;
 
    // port addresses and enables
-   wire [`MEM_ADDR_W-1:0] addrA, addrA_int, addrA_int2;
-   wire [`MEM_ADDR_W-1:0] addrB, addrB_int, addrB_int2;
+   wire [MEM_ADDR_W-1:0] addrA, addrA_int, addrA_int2;
+   wire [MEM_ADDR_W-1:0] addrB, addrB_int, addrB_int2;
 
-   wire [`MEM_ADDR_W-1:0]      startB_inst = pingPong ? {pingPongState,startB[`MEM_ADDR_W-2:0]} : startB;
+   wire [MEM_ADDR_W-1:0]      startB_inst = pingPong ? {pingPongState,startB[MEM_ADDR_W-2:0]} : startB;
 
    // data inputs
    wire                   req;
@@ -142,7 +140,7 @@ module VWrite #(
    wire [DATA_W-1:0]      data_to_wrB = in0;
 
    wire gen_valid,gen_ready;
-   wire [`MEM_ADDR_W-1:0] gen_addr;
+   wire [MEM_ADDR_W-1:0] gen_addr;
 
    MyAddressGen addrgenA(
       .clk(clk),
@@ -192,10 +190,10 @@ module VWrite #(
    assign addrB_int2 = reverseB? reverseBits(addrB_int) : addrB_int;
    
    wire read_en;
-   wire [`MEM_ADDR_W-1:0] read_addr;
+   wire [MEM_ADDR_W-1:0] read_addr;
    wire [DATA_W-1:0] read_data;
 
-   MemoryReader #(.ADDR_W(`MEM_ADDR_W))
+   MemoryReader #(.ADDR_W(MEM_ADDR_W))
    reader(
       // Slave
       .s_valid(gen_valid),
@@ -203,10 +201,10 @@ module VWrite #(
       .s_addr(gen_addr),
 
       // Master
-      .m_valid(databus_valid),
-      .m_ready(databus_ready),
+      .m_valid(databus_valid_0),
+      .m_ready(databus_ready_0),
       .m_addr(),
-      .m_data(databus_wdata),
+      .m_data(databus_wdata_0),
 
       // Connect to memory
       .mem_enable(read_en),

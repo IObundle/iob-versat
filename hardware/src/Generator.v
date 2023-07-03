@@ -1,8 +1,7 @@
 `timescale 1ns / 1ps
-`include "xversat.vh"
 
 module Generator #(
-   parameter           PERIOD_W = `PERIOD_W
+   parameter PERIOD_W = 10
    ) (
    input                   clk,
    input                   rst,

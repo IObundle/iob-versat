@@ -70,6 +70,12 @@
       .rdata(slaves_resp[`rdata(`VERSAT)]),
       .ready(slaves_resp[`ready(`VERSAT)]),
 
+      `ifdef EXTERNAL_PORTS
+      .in0(versat_in0),
+      .in1(versat_in1),
+      .out0(versat_out),
+      `endif
+
       //CPU interface
       .clk       (clk),
       .rst       (cpu_reset)
@@ -77,7 +83,8 @@
 
    `ifndef VERSAT_IO
       initial $display("No Versat IO\n");
-      
+
+      `ifdef VERSAT_ARCH_HAS_IO
       assign m_axi_awid[1*1+:1] = 1'b0;
       assign m_axi_awaddr[1*`DDR_ADDR_W+:`DDR_ADDR_W] = 0;
       assign m_axi_awlen[1*8+:8] = 0;
@@ -108,8 +115,6 @@
       assign m_axi_arvalid[1*1+:1] = 0; //
 
       assign m_axi_rready[1*1+:1] = 1'b1; // To prevent lookup, "ready" for everything
-   `else
-      assign m_axi_awaddr[1*`DDR_ADDR_W+:`DDR_ADDR_W] = versat_awaddr[`DDR_ADDR_W-1:0];
-      assign m_axi_araddr[1*`DDR_ADDR_W+:`DDR_ADDR_W] = versat_araddr[`DDR_ADDR_W-1:0];
-   `endif
+      `endif // VERSAT_ARCH_HAS_IO
+   `endif // VERSAT_IO
 

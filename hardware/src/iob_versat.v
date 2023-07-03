@@ -27,6 +27,12 @@ module iob_versat
       `include "m_versat_axi_m_port.vh"
    `endif
 
+   `ifdef EXTERNAL_PORTS
+   input [31:0]              in0,
+   input [31:0]              in1,
+   output [31:0]             out0,
+   `endif
+
    input clk,
    input rst
 	);
@@ -136,12 +142,19 @@ versat_instance #(.ADDR_W(ADDR_W),.DATA_W(DATA_W)) xversat(
       .m_databus_last(m_databus_last),
 `endif
 
+`ifdef EXTERNAL_PORTS
+      .in0(in0),
+      .in1(in1),
+      .out0(out0),
+`endif
+
       .clk(clk),
       .rst(rst)
 ); 
 
 endmodule
 
+`ifdef VERSAT_IO // Easier to just remove everything from consideration
 module xmerge #(
     parameter ADDR_W = 0,
     parameter DATA_W = 32,
@@ -697,3 +710,4 @@ assign in_ready = out_ready;
 
 endmodule
 
+`endif // ifdef VERSAT_IO
