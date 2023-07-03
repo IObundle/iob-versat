@@ -1,4 +1,4 @@
-#include "versat_accel.hpp"
+#include "versat_accel.h"
 
 #define IMPLEMENT_VERILOG_UNITS
 
@@ -10,7 +10,12 @@ typedef struct Versat Versat;
 typedef struct Accelerator Accelerator;
 typedef struct FUDeclaration FUDeclaration;
 
+#ifndef __cplusplus
 typedef unsigned char bool;
+#else
+#include <cstdlib>
+#include <cstring>
+#endif
 
 static Versat* versat = nullptr;
 static Accelerator* accel = nullptr;
@@ -19,19 +24,23 @@ volatile AcceleratorState* accelState = nullptr;
 
 int versat_base;
 
+extern "C"{
 void InitializeVerilator();
 Versat* InitVersatC(int base,int numberConfigurations,bool initUnits);
+void DebugAcceleratorC(Accelerator* accel);
 void RegisterAllVerilogUnitsVerilog(Versat* versat);
-Accelerator* CreateSimulableAccelerator(Versat* versat,const char* typename);
+Accelerator* CreateSimulableAccelerator(Versat* versat,const char* typeName);
 void AcceleratorRunC(Accelerator* accel,int times);
 void UnitWrite(Versat* versat,Accelerator* accel,int addrArg,int val);
 int UnitRead(Versat* versat,Accelerator* accel,int addr);
-
+void SignalLoopC(Accelerator* accel);
+   
 void* GetStartOfConfig(Accelerator* accel);
 void* GetStartOfState(Accelerator* accel);
+}
 
 void Debug(){
-   //DebugAccelerator(accel);
+   DebugAcceleratorC(accel);
 }
 
 void versat_init(int base){
@@ -77,4 +86,9 @@ void VersatUnitWrite(int addrArg,int val){
 int VersatUnitRead(int base,int index){
    int addr = base + index - (versat_base + memMappedStart); // Convert back to zero based address
    return UnitRead(versat,accel,addr);
+}
+
+void SignalLoop(){
+   SignalLoopC(accel);
+   // Do nothing, for now
 }

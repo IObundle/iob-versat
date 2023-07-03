@@ -326,6 +326,10 @@ int CountNonOperationChilds(Accelerator* accel){
 
 void RegisterSpecificUnits(Versat* versat);
 
+extern "C" void DebugAcceleratorC(Accelerator* accel){
+   DebugAccelerator(accel);
+}
+
 extern "C" Versat* InitVersatC(int base,int numberConfigurations,bool initUnits){
    return InitVersat(base,numberConfigurations,initUnits);
 }
@@ -361,14 +365,14 @@ Versat* InitVersat(int base,int numberConfigurations,bool initUnits){
    InitializeTemplateEngine(&versat->permanent);
 
    // Technically, if more than 1 versat in the future, could move this outside
-   BasicTemplates::acceleratorTemplate = CompileTemplate(versat_accelerator_template,&versat->permanent);
-   BasicTemplates::topAcceleratorTemplate = CompileTemplate(versat_top_instance_template,&versat->permanent);
-   BasicTemplates::wrapperTemplate = CompileTemplate(versat_wrapper_template,&versat->permanent);
-   BasicTemplates::acceleratorHeaderTemplate = CompileTemplate(versat_header_template,&versat->permanent);
-   BasicTemplates::externalPortmapTemplate = CompileTemplate(external_memory_portmap_template,&versat->permanent);
-   BasicTemplates::externalPortTemplate = CompileTemplate(external_memory_port_template,&versat->permanent);
-   BasicTemplates::externalInstTemplate = CompileTemplate(external_memory_inst_template,&versat->permanent);
-   BasicTemplates::iterativeTemplate = CompileTemplate(versat_iterative_template,&versat->permanent);
+   BasicTemplates::acceleratorTemplate = CompileTemplate(versat_accelerator_template,"accel",&versat->permanent);
+   BasicTemplates::topAcceleratorTemplate = CompileTemplate(versat_top_instance_template,"top",&versat->permanent);
+   BasicTemplates::wrapperTemplate = CompileTemplate(versat_wrapper_template,"wrapper",&versat->permanent);
+   BasicTemplates::acceleratorHeaderTemplate = CompileTemplate(versat_header_template,"header",&versat->permanent);
+   BasicTemplates::externalPortmapTemplate = CompileTemplate(external_memory_portmap_template,"ext_portmap",&versat->permanent);
+   BasicTemplates::externalPortTemplate = CompileTemplate(external_memory_port_template,"ext_port",&versat->permanent);
+   BasicTemplates::externalInstTemplate = CompileTemplate(external_memory_inst_template,"ext_inst",&versat->permanent);
+   BasicTemplates::iterativeTemplate = CompileTemplate(versat_iterative_template,"iter",&versat->permanent);
 
    FUDeclaration nullDeclaration = {};
    nullDeclaration.inputDelays = Array<int>{zeros,1};
@@ -580,7 +584,7 @@ extern "C" void UnitWrite(Versat* versat,Accelerator* accel,int addr,int val){
 extern "C" int UnitRead(Versat* versat,Accelerator* accel,int addr){
    Arena* temp = &versat->temp;
    BLOCK_REGION(temp);
-   
+
    AcceleratorIterator iter = {};
    for(InstanceNode* node = iter.Start(accel,temp,true); node; node = iter.Skip()){
       FUInstance* inst = node->inst;
@@ -629,7 +633,7 @@ FUDeclaration* GetTypeByName(Versat* versat,String name){
       }
    }
 
-   Log(LogModule::TOP_SYS,LogLevel::FATAL,"[GetTypeByName] Didn't find the following type: %.*s",UNPACK_SS(name));
+   Log(LogModule::TOP_SYS,LogLevel::FATAL,"Didn't find the following type: %.*s",UNPACK_SS(name));
 
    return nullptr;
 }
@@ -659,9 +663,10 @@ static FUInstance* GetInstanceByHierarchicalName(Accelerator* accel,Hierarchical
                break;
             }
 
+            // TODO: The type qualifier ideia does not appear to be very good, even if it technically solves the problem
+            // TODO: With 2 stage, we can generate all the different structs to different types and let the programmer select the one it wants to use. Can safely remove this portion of code
             Token possibleTypeQualifier = hierTok.PeekToken();
 
-            // TODO: The type qualifier ideia does not appear to be very good, even if it technically solves the problem
             //       If the merge problem can be solved by behaving diferently based on currently activated merged accelerator, remove this portion of code
             if(CompareString(possibleTypeQualifier,":")){
                hierTok.AdvancePeek(possibleTypeQualifier);
@@ -714,6 +719,18 @@ extern "C" Accelerator* CreateSimulableAccelerator(Versat* versat,const char* ac
 
    InitializeAccelerator(versat,accel,&versat->temp);
    return accel;
+}
+
+extern "C" void SignalLoopC(Accelerator* accel){
+   STACK_ARENA(temp,Kilobyte(4));
+   AcceleratorIterator iter = {};
+   for(InstanceNode* node = iter.Start(accel,&temp,true); node; node = iter.Skip()){
+      FUInstance* inst = node->inst;
+      FUDeclaration* decl = inst->declaration;
+      if(decl->signalFunction){
+         decl->signalFunction(inst);
+      }
+   }
 }
 
 extern "C" void* GetStartOfConfig(Accelerator* accel){
@@ -996,6 +1013,13 @@ Edge* ConnectUnits(FUInstance* out,int outIndex,FUInstance* in,int inIndex,int d
 FUDeclaration* RegisterModuleInfo(Versat* versat,ModuleInfo* info){
    FUDeclaration decl = {};
 
+   // Check same name
+   for(FUDeclaration* decl : versat->declarations){
+      if(CompareString(decl->name,info->name)){
+         Log(LogModule::TOP_SYS,LogLevel::FATAL,"Found a module with a same name (%.*s). Cannot proceed",UNPACK_SS(info->name));
+      }
+   }
+
    decl.name = info->name;
    decl.inputDelays = info->inputDelays;
    decl.outputLatencies = info->outputLatencies;
@@ -1007,6 +1031,7 @@ FUDeclaration* RegisterModuleInfo(Versat* versat,ModuleInfo* info){
    decl.memoryMapBits = info->memoryMappedBits;
    decl.isMemoryMapped = info->memoryMapped;
    decl.implementsDone = info->hasDone;
+   decl.signalLoop = info->signalLoop;
 
    if(info->isSource){
       decl.delayType = decl.delayType | DelayType::DELAY_TYPE_SINK_DELAY;
@@ -1126,6 +1151,8 @@ UnitValues CalculateAcceleratorValues(Versat* versat,Accelerator* accel){
             val.externalMemorySize += (1 << inter.bitsize);
          }
       }
+
+      val.signalLoop |= type->signalLoop;
    }
 
    val.memoryMappedBits = log2i(memoryMappedDWords);
@@ -1285,6 +1312,8 @@ void FillDeclarationWithAcceleratorValues(Versat* versat,FUDeclaration* decl,Acc
    }
    #endif
 
+   decl->signalLoop = val.signalLoop;
+
    decl->configOffsets = CalculateConfigurationOffset(accel,MemType::CONFIG,permanent);
    decl->stateOffsets = CalculateConfigurationOffset(accel,MemType::STATE,permanent);
    decl->delayOffsets = CalculateConfigurationOffset(accel,MemType::DELAY,permanent);
@@ -1425,13 +1454,15 @@ FUDeclaration* RegisterSubUnit(Versat* versat,String name,Accelerator* circuit){
       }
    }
 
+#if 1
    if(versat->debug.outputAccelerator){
       char buffer[256];
-      sprintf(buffer,"src/%.*s.v",UNPACK_SS(decl.name));
+      sprintf(buffer,"%.*s/src/%.*s.v",UNPACK_SS(versat->outputLocation),UNPACK_SS(decl.name));
       FILE* sourceCode = OpenFileAndCreateDirectories(buffer,"w");
       OutputCircuitSource(versat,res,circuit,sourceCode);
       fclose(sourceCode);
    }
+#endif
 
    return res;
 }

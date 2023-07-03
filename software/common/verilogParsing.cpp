@@ -582,7 +582,9 @@ ModuleInfo ExtractModuleInfo(Module& module,Arena* permanent,Arena* tempArena){
    for(PortDeclaration decl : module.ports){
       Tokenizer port(decl.name,"",{"in","out","delay","done","rst","clk","run","running","databus"});
 
-      if(CheckFormat("ext_dp_%s_%d_port_%d",decl.name)){
+      if(CompareString("signal_loop",decl.name)){
+         info.signalLoop = true;
+      } else if(CheckFormat("ext_dp_%s_%d_port_%d",decl.name)){
          Array<Value> values = ExtractValues("ext_dp_%s_%d_port_%d",decl.name,tempArena);
 
          ExternalMemoryID id = {};

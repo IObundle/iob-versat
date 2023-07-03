@@ -461,8 +461,12 @@ String GetDefaultValueRepresentation(Value in,Arena* arena){
       }
    } else if(type->type == Type::TEMPLATED_INSTANCE){
       if(type->templateBase == ValueType::ARRAY){
-         Value size = AccessStruct(val,STRING("size"));
-         res = PushString(arena,"Size:%" PRId64,size.number);
+         Optional<Value> size = AccessStruct(val,STRING("size"));
+         if(!size){
+            Log(LogModule::TYPE,LogLevel::FATAL,"Not an Array");
+         }
+
+         res = PushString(arena,"Size:%" PRId64,size.value().number);
       } else {
          res = PushString(arena,"%.*s",UNPACK_SS(type->name));// Return type name
       }
@@ -563,7 +567,7 @@ static void* DeferencePointer(void* object,Type* info,int index){
    return objectPtr;
 }
 
-Value AccessObjectIndex(Value object,int index){
+Optional<Value> AccessObjectIndex(Value object,int index){
    Value value = {};
 
    if(object.type->type == Type::ARRAY){
@@ -608,11 +612,17 @@ Value AccessObjectIndex(Value object,int index){
          for(int i = 0; HasNext(iter) && i < unpacked.index; Advance(&iter),i += 1);
          Value pair = GetValue(iter);
 
+         Optional<Value> optVal;
          if(unpacked.data){
-            value = AccessStruct(pair,STRING("data"));
+            optVal = AccessStruct(pair,STRING("data"));
          } else {
-            value = AccessStruct(pair,STRING("key"));
+            optVal = AccessStruct(pair,STRING("key"));
          }
+
+         if(!optVal){
+            Log(LogModule::TYPE,LogLevel::FATAL,"Not a Hashmap");
+         }
+         value = optVal.value();
       } else {
          NOT_IMPLEMENTED;
       }
@@ -626,7 +636,7 @@ Value AccessObjectIndex(Value object,int index){
    return value;
 }
 
-Value AccessStruct(Value structure,Member* member){
+Optional<Value> AccessStruct(Value structure,Member* member){
    Assert(IsStruct(structure.type));
    Assert(!structure.isTemp);
 
@@ -643,16 +653,16 @@ Value AccessStruct(Value structure,Member* member){
    return newValue;
 }
 
-Value AccessStruct(Value val,int index){
+Optional<Value> AccessStruct(Value val,int index){
    Assert(IsStruct(val.type));
 
    Member* member = &val.type->members[index];
-   Value res = AccessStruct(val,member);
+   Optional<Value> res = AccessStruct(val,member);
 
    return res;
 }
 
-Value AccessStruct(Value object,String memberName){
+Optional<Value> AccessStruct(Value object,String memberName){
    Value structure = CollapsePtrIntoStruct(object);
    Type* type = structure.type;
 
@@ -667,10 +677,11 @@ Value AccessStruct(Value object,String memberName){
    }
 
    if(member == nullptr){
-      Log(LogModule::PARSER,LogLevel::FATAL,"Failure to find member named: %.*s on structure: %.*s",UNPACK_SS(memberName),UNPACK_SS(structure.type->name));
+      Log(LogModule::TYPE,LogLevel::ERROR,"Failure to find member named: %.*s on structure: %.*s",UNPACK_SS(memberName),UNPACK_SS(structure.type->name));
+      return Optional<Value>();
    }
 
-   Value res = AccessStruct(structure,member);
+   Optional<Value> res = AccessStruct(structure,member);
 
    return res;
 }
@@ -937,8 +948,12 @@ void Advance(Iterator* iter){
          NOT_IMPLEMENTED;
       }
    } else if(IsEmbeddedListKind(type)){
-      Value val = AccessStruct(iter->iterating,STRING("next"));
-      Value collapsed = CollapsePtrIntoStruct(val);
+      Optional<Value> optVal = AccessStruct(iter->iterating,STRING("next"));
+      if(!optVal){
+         Log(LogModule::TYPE,LogLevel::FATAL,"No next member. Somehow returned a different type");
+      }
+
+      Value collapsed = CollapsePtrIntoStruct(optVal.value());
       iter->iterating = collapsed;
    } else {
       NOT_IMPLEMENTED;
@@ -953,7 +968,11 @@ Value GetValue(Iterator iter){
    if(type == ValueType::NUMBER){
       val = MakeValue(iter.currentNumber);
    } else if(type->type == Type::ARRAY){
-      val = AccessObjectIndex(iter.iterating,iter.currentNumber);
+      Optional<Value> optVal = AccessObjectIndex(iter.iterating,iter.currentNumber);
+      if(!optVal){
+         Log(LogModule::TYPE,LogLevel::FATAL,"Somehow went past the end? Should not be possible");
+      }
+      val = optVal.value();
    } else if(type->type == Type::TEMPLATED_INSTANCE){
       if(type->templateBase == ValueType::POOL){
          val.custom = *iter.poolIterator;
@@ -969,7 +988,11 @@ Value GetValue(Iterator iter){
          val.custom = &view[index * size];
          val.type = type->templateArgTypes[0];
       } else if(type->templateBase == ValueType::ARRAY){
-         val = AccessObjectIndex(iter.iterating,iter.currentNumber);
+         Optional<Value> optVal = AccessObjectIndex(iter.iterating,iter.currentNumber);
+         if(!optVal){
+            Log(LogModule::TYPE,LogLevel::FATAL,"Somehow went past the end? Should not be possible");
+         }
+         val = optVal.value();
       } else if(type->templateBase == ValueType::HASHMAP){
          Hashmap<Byte,Byte>* view = (Hashmap<Byte,Byte>*) iter.iterating.custom;
 

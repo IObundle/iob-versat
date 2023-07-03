@@ -55,9 +55,6 @@ FL:=-DVERSAT_DIR="$(VERSAT_DIR)" -DVERILATOR_ROOT="$(VERILATOR_ROOT)"
 $(VERSAT_DIR)/versat: $(CPP_OBJ) $(VERSAT_DIR)/libversat.a
 	g++ -MMD -MP -std=c++17 $(FL) $(VERSAT_FLAGS) -o $@ -g $(CPP_OBJ) $(VERSAT_INCLUDE) $(VERSAT_LIBS) $(VERSAT_DIR)/libversat.a
 
-$(BUILD_DIR)/obj_dir/Vversat_test_verilator.mk:
-	verilator --trace --cc --Mdir $(BUILD_DIR)/obj_dir /tmp/versat_test_verilator.v # Generate the makefile from which we extract VERILATOR_ROOT and the verilator .o and .cpp files needed
-
 $(VERSAT_DIR)/libversat.a: $(CPP_OBJ_WITHOUT_COMPILER)
 	@echo $(VERILATOR_OBJECTS)
 	ar rcs $(VERSAT_DIR)/libversat.a $(CPP_OBJ_WITHOUT_COMPILER) $(VERILATOR_OBJECTS)

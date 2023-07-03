@@ -82,6 +82,10 @@ module @{accel.name} #(
       #{end}
    #{end}
 
+   #{if accel.signalLoop}
+   input signal_loop,
+   #{end}
+
    #{if accel.isMemoryMapped}
    // data/control interface
    input                           valid,
@@ -125,9 +129,11 @@ wire [@{nDones - 1}:0] unitDone;
 assign done = &unitDone;
 #{end}
 
+#{if versatValues.numberConnections}
 wire [31:0] #{join ", " for node instances}
    #{join ", " for j node.outputs} #{if j} output_@{node.inst.id}_@{index} #{end} #{end}
 #{end};
+#{end}
 
 #{if unitsMapped}
 // Memory mapped
@@ -285,6 +291,10 @@ end
          .databus_len_@{i}(databus_len_@{ioIndex}),
          .databus_last_@{i}(databus_last_@{ioIndex}),
          #{set ioIndex ioIndex + decl.nIOs}
+         #{end}
+
+         #{if decl.signalLoop}
+         .signal_loop(signal_loop),
          #{end}
 
          .running(running),

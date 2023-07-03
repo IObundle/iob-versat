@@ -49,10 +49,13 @@ static unsigned int staticBuffer[] = {
 };
 
 void versat_init(int base);
+
+void Debug();
 void RunAccelerator(int times);
 void VersatMemoryCopy(iptr* dest,iptr* data,int size);
 void VersatUnitWrite(int addr,int val);
 int VersatUnitRead(int base,int index);
+void SignalLoop();
 
 // Needed by PC-EMUL to correctly simulate the design, embedded compiler should remove these symbols from firmware because not used by them 
 static const char* acceleratorTypeName = "@{accelType}";

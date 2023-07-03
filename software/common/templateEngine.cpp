@@ -11,6 +11,8 @@
 
 //#define DEBUG_TEMPLATE_ENGINE
 
+static String globalTemplateName = {}; // The current name that is being parsed / evaluated. For error reporting reasons. TODO: Do not like it, not a big deal for now. Only change if needed
+
 struct ValueAndText{
    Value val;
    String text;
@@ -75,6 +77,12 @@ static Frame globalFrameInst = {};
 static Frame* globalFrame = &globalFrameInst;
 static FILE* output;
 static Arena* outputArena;
+
+static void FatalError(const char* reason){
+   printf("Template: error on template (%.*s):\n",UNPACK_SS(globalTemplateName));
+   printf("\t%s\n",reason);
+   DEBUG_BREAK();
+}
 
 static bool IsCommandBlockType(Command* com){
    static const char* notBlocks[] = {"set","end","inc","else","include","call","return","format","debugBreak"};
@@ -531,12 +539,20 @@ static Value EvalExpression(Expression* expr,Frame* frame,Arena* temp){
 
          Assert(index.type == ValueType::NUMBER);
 
-         val = AccessObjectIndex(object,index.number);
+         Optional<Value> optVal = AccessObjectIndex(object,index.number);
+         if(!optVal){
+            FatalError(StaticFormat("Tried to access array at an index greater than size: %d/%d (%.*s)",index.number,IndexableSize(object),UNPACK_SS(object.type->name)));
+         }
+         val = optVal.value();
       } break;
       case Expression::MEMBER_ACCESS:{
          Value object = EvalExpression(expr->expressions[0],frame,temp);
 
-         val = AccessStruct(object,expr->id);
+         Optional<Value> optVal = AccessStruct(object,expr->id);
+         if(!optVal){
+            FatalError(StaticFormat("Tried to access member (%.*s) that does not exist for type (%.*s)",UNPACK_SS(expr->id),UNPACK_SS(object.type->name)));
+         }
+         val = optVal.value();
       }break;
       default:{
          NOT_IMPLEMENTED;
@@ -877,8 +893,11 @@ void ParseAndEvaluate(String content,Frame* frame,Arena* temp){
    }
 }
 
-CompiledTemplate* CompileTemplate(String content,Arena* arena){
+CompiledTemplate* CompileTemplate(String content,const char* name,Arena* arena){
    Byte* mark = MarkArena(arena);
+
+   String storedName = PushString(arena,STRING(name));
+   globalTemplateName = storedName;
 
    CompiledTemplate* res = PushStruct<CompiledTemplate>(arena);
 
@@ -898,27 +917,21 @@ CompiledTemplate* CompileTemplate(String content,Arena* arena){
    res->blocks = initial;
    res->totalMemoryUsed = totalMemory.size;
    res->content = content;
-
-   return res;
-}
-
-CompiledTemplate* CompileTemplate(const char* templateFilepath,Arena* arena){
-   String content = PushFile(arena,templateFilepath);
-
-   CompiledTemplate* res = CompileTemplate(content,arena);
-   res->totalMemoryUsed += content.size;
-
+   res->name = storedName;
+   
    return res;
 }
 
 void ProcessTemplate(FILE* outputFile,CompiledTemplate* compiledTemplate,Arena* arena){
    Assert(globalFrame && "Call InitializeTemplateEngine first!");
 
+   globalTemplateName = compiledTemplate->name;
+
    ArenaMarker marker(arena);
    Arena outputArenaInst = SubArena(arena,Megabyte(64));
    outputArena = &outputArenaInst;
    output = outputFile;
-
+  
    for(Block* block = compiledTemplate->blocks; block; block = block->next){
       String text = Eval(block,globalFrame,arena);
       fprintf(output,"%.*s",text.size,text.data);

@@ -114,6 +114,7 @@ struct ModuleInfo{
    bool hasRun;
    bool hasRunning;
    bool isSource;
+   bool signalLoop;
 };
 
 String PreprocessVerilogFile(Arena* output, String fileContent,std::vector<const char*>* includeFilepaths,Arena* tempArena);

@@ -55,6 +55,7 @@ VersatComputedValues ComputeVersatValues(Versat* versat,Accelerator* accel){
       res.nUnitsIO += decl->nIOs;
 
       res.externalMemoryInterfaces += decl->externalMemory.size;
+      res.signalLoop |= decl->signalLoop;
    }
 
    for(auto pair : accel->staticUnits){

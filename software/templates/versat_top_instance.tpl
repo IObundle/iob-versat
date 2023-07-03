@@ -84,7 +84,7 @@ wire memoryMappedAddr = addr[@{memoryConfigDecisionBit}];
 reg versat_ready;
 reg [31:0] versat_rdata;
 
-reg soft_reset;
+reg soft_reset,signal_loop; // Self resetting 
 
 wire rst_int = (rst | soft_reset);
 
@@ -97,9 +97,12 @@ always @(posedge clk,posedge rst) // Care, rst because writing to soft reset reg
    if(rst) begin
       versat_rdata <= 32'h0;
       versat_ready <= 1'b0;
+      signal_loop <= 1'b0;
       soft_reset <= 0;
    end else begin
       versat_ready <= 1'b0;
+      soft_reset <= 1'b0;
+      signal_loop <= 1'b0;
 
       if(valid) begin 
          // Config/State register access
@@ -113,6 +116,7 @@ always @(posedge clk,posedge rst) // Care, rst because writing to soft reset reg
             versat_ready <= 1'b1;
             if(we)
                soft_reset <= wdata[31];
+               signal_loop <= wdata[30];    
             else
                versat_rdata <= {31'h0,done}; 
          end
@@ -154,7 +158,20 @@ wire [@{nDones - 1}:0] unitDone;
 wire unitDone = 1'b1;
 #{end}
 
-wire run = |runCounter && (&unitDone);
+wire canRun = |runCounter && (&unitDone);
+reg canRun1;
+
+always @(posedge clk,posedge rst)
+begin
+   if(rst) begin
+       canRun1 <= 0;
+   end else begin
+       canRun1 <= canRun;
+   end
+end
+
+wire run = (canRun && canRun1);
+
 assign done = (!(|runCounter) && (&unitDone));
 
 reg running;
@@ -215,7 +232,7 @@ begin
 
       if(valid && we) begin
          if(addr == 0)
-            runCounter <= runCounter + wdata[30:0];
+            runCounter <= runCounter + wdata[15:0];
          if(addr == 1)
             dma_addr_in <= wdata;
          if(addr == 2)
@@ -321,9 +338,6 @@ assign ready = versat_ready | wor_ready;
 assign ready = versat_ready;
 #{end}
 
-#{if versatValues.configurationBits} reg [@{versatValues.configurationBits-1}:0] configdata; #{end}
-#{if versatValues.stateBits} wire [@{versatValues.stateBits - 1}:0] statedata; #{end}
-
 #{if unitsMapped}
 reg [@{unitsMapped - 1}:0] memoryMappedEnable;
 wire[@{unitsMapped - 1}:0] unitReady;
@@ -365,12 +379,20 @@ begin
 end
 #{end}
 
+#{if versatValues.configurationBits} reg [@{versatValues.configurationBits-1}:0] configdata; #{end}
+#{if opts.shadowRegister} reg [@{versatValues.configurationBits-1}:0] shadow_configdata; #{end}
+
+#{set configReg "configdata"}
+#{if opts.shadowRegister}
+     #{set configReg "shadow_configdata"}
+#{end}
+
 #{if versatValues.configurationBits}
 // Config writing
 always @(posedge clk,posedge rst_int)
 begin
    if(rst_int) begin
-      configdata <= {@{configurationBits}{1'b0}};
+      @{configReg} <= {@{configurationBits}{1'b0}};
    end else if(data_write & !dataMemoryMapped) begin
       // Config
       #{set counter 0}
@@ -380,7 +402,7 @@ begin
       #{set decl inst.declaration}
       #{for wire decl.configs}
       if(address[@{versatValues.configurationAddressBits - 1}:0] == @{addr}) // @{versatBase + addr * 4 |> Hex}
-         configdata[@{counter}+:@{wire.bitsize}] <= data_data[@{wire.bitsize - 1}:0]; // @{wire.name} - @{decl.name}
+         @{configReg}[@{counter}+:@{wire.bitsize}] <= data_data[@{wire.bitsize - 1}:0]; // @{wire.name} - @{decl.name}
       #{inc addr}
       #{set counter counter + wire.bitsize}
       #{end}
@@ -391,7 +413,7 @@ begin
       #{for wire unit.data.configs}
       if(address[@{versatValues.configurationAddressBits - 1}:0] == @{addr}) // @{versatBase + addr * 4 |> Hex}
          #{if unit.first.parent}
-         configdata[@{counter}+:@{wire.bitsize}] <= data_data[@{wire.bitsize - 1}:0]; //  @{unit.first.parent.name}_@{unit.first.name}_@{wire.name}
+         @{configReg}[@{counter}+:@{wire.bitsize}] <= data_data[@{wire.bitsize - 1}:0]; //  @{unit.first.parent.name}_@{unit.first.name}_@{wire.name}
          #{else}
          configdata[@{counter}+:@{wire.bitsize}] <= data_data[@{wire.bitsize - 1}:0]; //  @{unit.first.name}_@{wire.name}
          #{end}
@@ -406,7 +428,7 @@ begin
       #{set decl inst.declaration}
       #{for i decl.delayOffsets.max}
       if(address[@{versatValues.configurationAddressBits - 1}:0] == @{addr}) // @{versatBase + addr * 4 |> Hex}
-         configdata[@{counter}+:32] <= data_data[31:0]; // Delay
+         @{configReg}[@{counter}+:32] <= data_data[31:0]; // Delay
       #{inc addr}
       #{set counter counter + 32}
       #{end}
@@ -414,6 +436,20 @@ begin
    end
 end
 #{end}
+
+#{if opts.shadowRegister}
+always @(posedge clk,posedge rst_int)
+begin
+   if(rst_int) begin
+      configdata <= 0;
+   end else if(canRun) begin
+      configdata <= shadow_configdata;
+   end
+end
+
+#{end}
+
+#{if versatValues.stateBits} wire [@{versatValues.stateBits - 1}:0] statedata; #{end}
 
 // State reading
 always @*
@@ -572,7 +608,11 @@ end
          .databus_last_@{i}(databus_last[@{ioIndex}]),
          #{set ioIndex ioIndex + 1}
          #{end}
-         
+
+         #{if decl.signalLoop}
+         .signal_loop(signal_loop),
+         #{end}
+
          .running(running),
 
          .run(run),

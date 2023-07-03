@@ -182,12 +182,14 @@ void AcceleratorRunOnce(Accelerator* accel){
 
    ReorganizeAccelerator(accel,arena);
 
+   #if 0
    /* Hashmap<EdgeNode,int>* delay = */ CalculateDelay(accel->versat,accel,arena);
-   SetDelayRecursive(accel,arena);
+   SetDelayRecursive(accel,arena); // Setting delay to zero
 
    if(!accel->ordered){
       ReorganizeAccelerator(accel,arena);
    }
+   #endif
    #endif
 
    FILE* accelOutputFile = nullptr;

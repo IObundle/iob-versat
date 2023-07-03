@@ -171,7 +171,9 @@ void OutputVersatSource(Versat* versat,Accelerator* accel,const char* directoryP
    TemplateSetNumber("versatConfig",val.versatConfigs);
    TemplateSetNumber("versatState",val.versatStates);
    TemplateSetBool("useDMA",accel->useDMA);
-
+   versat->opts.shadowRegister = true;
+   TemplateSetCustom("opts",&versat->opts,"Options");
+   
    ProcessTemplate(s,BasicTemplates::topAcceleratorTemplate,&versat->temp);
 
    TemplateSetNumber("configurationSize",accel->configAlloc.size);
@@ -220,7 +222,7 @@ void OutputVersatSource(Versat* versat,Accelerator* accel,const char* directoryP
 
    TemplateSetCustom("orderedConfigs",&orderedConfigs,"OrderedConfigurations");
 
-   FILE* f = OpenFileAndCreateDirectories(StaticFormat("%s/versat_accel.hpp",directoryPath),"w");
+   FILE* f = OpenFileAndCreateDirectories(StaticFormat("%s/versat_accel.h",directoryPath),"w");
    ProcessTemplate(f,BasicTemplates::acceleratorHeaderTemplate,&versat->temp);
    fclose(f);
    }

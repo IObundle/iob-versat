@@ -23,7 +23,7 @@ struct OptionFormat{
 };
 #endif
 
-struct Options{
+struct ArgumentOptions{
    std::vector<String> verilogFiles;
    std::vector<const char*> includePaths;
    std::vector<const char*> extraSources;
@@ -42,7 +42,7 @@ String GetAbsolutePath(const char* path,Arena* arena){
    String res = PushString(arena,"%s",absolute.c_str());
    return res;
 }
-                                   
+
 Optional<String> GetFormat(String filename){
    int size = filename.size;
    for(int i = 0; i < filename.size; i++){
@@ -61,11 +61,11 @@ Optional<String> GetFormat(String filename){
 
 // Before continuing, find a more generic approach, check getopt or related functions
 // Try to follow the gcc conventions
-Options* ParseCommandLineOptions(int argc,const char* argv[],Arena* perm,Arena* temp){
-   Options* opts = PushStruct<Options>(perm);
+ArgumentOptions* ParseCommandLineOptions(int argc,const char* argv[],Arena* perm,Arena* temp){
+   ArgumentOptions* opts = PushStruct<ArgumentOptions>(perm);
 
-   opts->bitSize = sizeof(void*) * 8; // TODO: After rewriting, need to take into account default values 
-   
+   opts->bitSize = sizeof(void*) * 8; // TODO: After rewriting, need to take into account default values
+
    for(int i = 1; i < argc; i++){
       String str = STRING(argv[i]);
 
@@ -101,7 +101,7 @@ Options* ParseCommandLineOptions(int argc,const char* argv[],Arena* perm,Arena* 
          opts->bitSize = 64;
          continue;
       }
-      
+
       if(str.size >= 4 && str[0] == '-' && str[1] == '-' && str[2] == 'V' && str[3] == 'R'){
          Assert(str.size == 4);
 
@@ -109,7 +109,7 @@ Options* ParseCommandLineOptions(int argc,const char* argv[],Arena* perm,Arena* 
          i += 1;
          continue;
       }
-      
+
       if(str.size >= 2 && str[0] == '-' && str[1] == 'd'){
          Assert(str.size == 2);
          opts->useDMA = true;
@@ -176,6 +176,8 @@ Options* ParseCommandLineOptions(int argc,const char* argv[],Arena* perm,Arena* 
    return opts;
 }
 
+//General TODO: There is a lot of code that makes sense for the old one phase versat, but that are just overhead for the two phase versat. We do not have to guarantee that the Accelerator is "valid" at all times, like the previous version did. We can use more immediate mode APIs and rely on correct function calling instead of pre doing work.
+
 int main(int argc,const char* argv[]){
    if(argc < 3){
       printf("Need specifications and a top level type\n");
@@ -184,6 +186,7 @@ int main(int argc,const char* argv[]){
 
    Versat* versat = InitVersat(0,1);
 
+   // TODO: This is not a good idea, after changing versat to 2 phases
    SetDebug(versat,VersatDebugFlags::OUTPUT_ACCELERATORS_CODE,1);
    SetDebug(versat,VersatDebugFlags::OUTPUT_VERSAT_CODE,1);
    SetDebug(versat,VersatDebugFlags::USE_FIXED_BUFFERS,0);
@@ -197,14 +200,17 @@ int main(int argc,const char* argv[]){
    Arena tempInst = InitArena(Megabyte(256));
    Arena* temp = &tempInst;
 
-   Options* opts = ParseCommandLineOptions(argc,argv,perm,temp);
-   
+   // TODO: Add options directly to versat
+   ArgumentOptions* opts = ParseCommandLineOptions(argc,argv,perm,temp);
+   versat->outputLocation = opts->outputFilepath;
+
+   // Check existance of Verilator. We cannot proceed without Verilator
    if(opts->verilatorRoot.size == 0){
       bool lackOfVerilator = false;
       String vr = {};
 #ifdef VERILATOR_ROOT
       vr = TrimWhitespaces(STRING(STRINGIFY(VERILATOR_ROOT)));
-      //TODO: Could have some extra checks here, like make sure that it's a valid path    
+      //TODO: Could have some extra checks here, like make sure that it's a valid path
       if(vr.size == 0){
          lackOfVerilator = true;
       }
@@ -220,7 +226,7 @@ int main(int argc,const char* argv[]){
             lackOfVerilator = false;
          }
       }
-      
+
       if(lackOfVerilator){
          printf("===\n\n");
          printf("Verilator root is not defined. Make sure that verilator is correctly installed or\n");
@@ -231,7 +237,7 @@ int main(int argc,const char* argv[]){
       }
       opts->verilatorRoot = vr;
    }
-   
+
    if(!opts->topName){
       printf("Specify accelerator type using -T <type>\n");
       exit(-1);
@@ -259,6 +265,7 @@ int main(int argc,const char* argv[]){
    }
    #endif
 
+   // Compile all templates before hand
    #if 1
    BasicDeclaration::buffer = GetTypeByName(versat,STRING("Buffer"));
    BasicDeclaration::fixedBuffer = GetTypeByName(versat,STRING("FixedBuffer"));
@@ -283,8 +290,8 @@ int main(int argc,const char* argv[]){
    Accelerator* accel = CreateAccelerator(versat);
    FUInstance* TOP = nullptr;
 
-   accel->useDMA = opts->useDMA;
-   
+   accel->useDMA = opts->useDMA; // TODO: Maybe should be a versat configuration, instead of accelerator
+
    bool isSimple = false;
    if(opts->addInputAndOutputsToTop && !(type->inputDelays.size == 0 && type->outputLatencies.size == 0)){
       int input = type->inputDelays.size;
@@ -340,21 +347,25 @@ int main(int argc,const char* argv[]){
       opts->outputFilepath = GetAbsolutePath(".",perm);
    }
 
-   TemplateSetNumber("bitWidth",sizeof(void*) * 8); // TODO
-   
+   TemplateSetNumber("bitWidth",sizeof(void*) * 8); // TODO: Move to correct location
+
    TOP->parameters = STRING("#(.AXI_ADDR_W(AXI_ADDR_W))");
    InitializeAccelerator(versat,accel,&versat->temp);
    OutputVersatSource(versat,accel,opts->outputFilepath.data,topLevelTypeStr,opts->addInputAndOutputsToTop);
 
+   //TODO: Repeated code because we must use a modified accelerator to outputVersatSource but use a normal accelerator for simulation. We could just reorder, so that outputVersatSource is done afterwards, and the wrapper is done before.
    if(isSimple){
       accel = CreateAccelerator(versat);
       TOP = CreateFUInstance(accel,type,STRING("TOP"));
       InitializeAccelerator(versat,accel,&versat->temp);
    }
 
+   // TODO: Both config and states can implement hierarchical composition, instead of being everything single config
+   // We need to extract configs and states with the expected TOP level name (not module name)
    OrderedConfigurations configs = ExtractOrderedConfigurationNames(versat,accel,&versat->permanent,&versat->temp);
    Array<Wire> allConfigsHeaderSide = OrderedConfigurationsAsArray(configs,&versat->permanent);
 
+   // We need to bundle config + static (type->config) only contains config, but not static 
    Array<Wire> allConfigsVerilatorSide = PushArray<Wire>(temp,99); // TODO: Correct size
    #if 1
    {
@@ -373,6 +384,7 @@ int main(int argc,const char* argv[]){
    }
    #endif
 
+   // Extract states with the expected TOP level name (not module name)
    Hashmap<String,SizedConfig>* namedStates = ExtractNamedSingleStates(accel,&versat->permanent);
    Array<String> statesHeaderSize = PushArray<String>(temp,namedStates->nodesUsed);
    int index = 0;
@@ -380,12 +392,13 @@ int main(int argc,const char* argv[]){
       statesHeaderSize[index++] = pair.first;
    }
 
+   // Module info for top level
    ModuleInfo info = {};
    info.name = type->name;
    info.inputDelays = type->inputDelays;
    info.outputLatencies = type->outputLatencies;
-   info.configs = allConfigsVerilatorSide;
-   info.states = type->states;
+   info.configs = allConfigsVerilatorSide; // Bundled config + state (delay is not needed, because we know how many delays we have
+   info.states = type->states; 
    info.externalInterfaces = type->externalMemory;
    info.nDelays = type->delayOffsets.max;
    info.nIO = type->nIOs;
@@ -398,38 +411,39 @@ int main(int argc,const char* argv[]){
    info.hasRun = true;
    info.hasRunning = true;
    info.isSource = false; // Hack but maybe not a problem doing it this way, we only care to generate the wrapper and the instance is only done individually
+   info.signalLoop = type->signalLoop;
    
    std::vector<ModuleInfo> finalModule;
    finalModule.push_back(info);
 
    // Wrapper
    region(temp){
-      String wrapper = PushString(temp,"%s/wrapper.cpp",opts->outputFilepath);
+      String wrapper = PushString(temp,"%s/wrapper.cpp",opts->outputFilepath.data);
       PushNullByte(temp);
 
       TemplateSetString("versatDir",STRINGIFY(VERSAT_DIR));
       TemplateSetString("verilatorRoot",opts->verilatorRoot);
       TemplateSetNumber("bitWidth",opts->bitSize);
       FILE* output = OpenFileAndCreateDirectories(wrapper.data,"w");
-      CompiledTemplate* comp = CompileTemplate(versat_wrapper_template,temp);
+      CompiledTemplate* comp = CompileTemplate(versat_wrapper_template,"wrapper",temp);
       OutputModuleInfos(output,false,(Array<ModuleInfo>){finalModule.data(),(int) finalModule.size()},STRING("Verilog"),comp,temp,allConfigsHeaderSide,statesHeaderSize);
       fclose(output);
    }
 
    // Makefile
    region(temp){
-      String name = PushString(temp,"%s/Makefile",opts->outputFilepath);
+      String name = PushString(temp,"%s/Makefile",opts->outputFilepath.data);
       PushNullByte(temp);
 
       FILE* output = OpenFileAndCreateDirectories(name.data,"w");
-      CompiledTemplate* comp = CompileTemplate(versat_makefile_template,temp);
+      CompiledTemplate* comp = CompileTemplate(versat_makefile_template,"makefile",temp);
 
       fs::path outputPath = opts->outputFilepath.data;
       fs::path srcLocation = fs::current_path();
       fs::path fixedPath = fs::weakly_canonical(outputPath / srcLocation);
 
-      String srcDir = PushString(perm,"%.*s/../src",UNPACK_SS(opts->outputFilepath));
-      
+      String srcDir = PushString(perm,"%.*s/src",UNPACK_SS(opts->outputFilepath));
+
       TemplateSetString("srcDir",srcDir);
       TemplateSetString("versatDir",STRINGIFY(VERSAT_DIR));
       TemplateSetString("verilatorRoot",opts->verilatorRoot);

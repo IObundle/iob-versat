@@ -146,6 +146,10 @@ struct DebugState{
    bool useFixedBuffers;
 };
 
+struct Options{
+   bool shadowRegister;
+};
+
 struct Versat{
    Pool<FUDeclaration> declarations;
    Pool<Accelerator> accelerators;
@@ -157,6 +161,9 @@ struct Versat{
    int numberConfigurations;
 
    DebugState debug;
+
+   String outputLocation;
+   Options opts;
 };
 
 struct UnitValues{
@@ -177,6 +184,7 @@ struct UnitValues{
 
    int memoryMappedBits;
    bool isMemoryMapped;
+   bool signalLoop;
 };
 
 struct VersatComputedValues{
@@ -218,6 +226,8 @@ struct VersatComputedValues{
    int memoryMappingAddressBits;
    int memoryConfigDecisionBit;
    int lowerAddressSize;
+
+   bool signalLoop;
 };
 
 struct HierarchicalName{
@@ -229,6 +239,7 @@ struct SharingInfo{
    int* ptr;
    bool init;
 };
+
 // Simple operations should also be stored here. They are versat agnostic as well
 namespace BasicDeclaration{
    extern FUDeclaration* buffer;

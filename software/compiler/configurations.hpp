@@ -123,6 +123,7 @@ struct OrderedConfigurations{
    Array<Wire> delays;
 };
 
+// Extract configurations named with the top level expected name (not module name)
 OrderedConfigurations ExtractOrderedConfigurationNames(Versat* versat,Accelerator* accel,Arena* out,Arena* temp);
 Array<Wire> OrderedConfigurationsAsArray(OrderedConfigurations configs,Arena* out);
 

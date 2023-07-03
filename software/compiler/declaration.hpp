@@ -48,6 +48,7 @@ typedef int* (*FUFunction)(FUInstance* inst);
 typedef int* (*FUUpdateFunction)(FUInstance* inst,Array<int> inputs);
 typedef int (*MemoryAccessFunction)(FUInstance* inst, int address, int value,int write);
 typedef void (*VCDFunction)(FUInstance*,FILE*,VCDMapping&,Array<int>,bool firstTime,bool printDefinitions);
+typedef void (*SignalFunction)(FUInstance* inst);
 
 enum DelayType {
    DELAY_TYPE_BASE               = 0x0,
@@ -60,6 +61,8 @@ enum DelayType {
 inline DelayType operator|(DelayType a, DelayType b)
 {return static_cast<DelayType>(static_cast<int>(a) | static_cast<int>(b));}
 
+// TODO: There is a lot of crux between parsing and creating the FUDeclaration for composite accelerators 
+//       the FUDeclaration should be composed of something that is in common to all of them.
 // A declaration is constant after being registered
 struct FUDeclaration{
    String name;
@@ -98,7 +101,8 @@ struct FUDeclaration{
    FUFunction destroyFunction;
    VCDFunction printVCD;
    MemoryAccessFunction memAccessFunction;
-
+   SignalFunction signalFunction;
+   
    const char* operation;
 
    // TODO: this is probably not needed, only used for verilog generation (which could be calculated inside the code generation functions)
@@ -111,6 +115,7 @@ struct FUDeclaration{
    bool isOperation;
    bool implementsDone;
    bool isMemoryMapped;
+   bool signalLoop;
 };
 
 bool IsCombinatorial(FUDeclaration* decl);

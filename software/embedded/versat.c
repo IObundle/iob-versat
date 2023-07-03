@@ -1,4 +1,4 @@
-#include "versat_accel.hpp"
+#include "versat_accel.h"
 
 #include "printf.h"
 #define MEMSET(base, location, value) (*((volatile int*) (base + (sizeof(int)) * location)) = (int) value)
@@ -27,8 +27,7 @@ void versat_init(int base){
 
    printf("Embedded Versat\n");
 
-   MEMSET(versat_base,0x0,0x80000000);
-   MEMSET(versat_base,0x0,0);
+   MEMSET(versat_base,0x0,0x80000000); // Soft reset
 
    accelConfig = (volatile AcceleratorConfig*) (versat_base + configStart);
    accelState  = (volatile AcceleratorState*)  (versat_base + stateStart);
@@ -44,14 +43,26 @@ void versat_init(int base){
    }
 }
 
-void RunAccelerator(int times){
+static inline RunAcceleratorOnce(int times){ // times inside value amount
    MEMSET(versat_base,0x0,times);
    while(1){
       int val = MEMGET(versat_base,0x0);
       if(val){ // We wait until accelerator finishes before returning. Not mandatory, but less error prone and no need to squeeze a lot of performance for now (In the future, the concept of returning immediatly and having the driver tell when to wait will be implemented)  
          break;
       }
-   }
+   } 
+}
+
+void RunAccelerator(int times){
+   for(; times > 0xffff; times -= 0xffff){
+      RunAcceleratorOnce(times);
+   } 
+
+   RunAcceleratorOnce(times);
+}
+
+void SignalLoop(){
+   MEMSET(versat_base,0x1,0x40000000);
 }
 
 void VersatMemoryCopy(iptr* dest,iptr* data,int size){

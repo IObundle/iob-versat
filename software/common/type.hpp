@@ -144,10 +144,10 @@ Type* GetTypeOrFail(String typeName);
 Type* GetPointerType(Type* baseType);
 Type* GetArrayType(Type* baseType, int arrayLength);
 
-Value AccessStruct(Value object,Member* member);
-Value AccessStruct(Value val,int index);
-Value AccessStruct(Value object,String memberName);
-Value AccessObjectIndex(Value object,int index);
+Optional<Value> AccessStruct(Value object,Member* member);
+Optional<Value> AccessStruct(Value val,int index);
+Optional<Value> AccessStruct(Value object,String memberName);
+Optional<Value> AccessObjectIndex(Value object,int index);
 
 int ArrayLength(Type* type);
 int IndexableSize(Value object); // If type is indexable, return the maximum size

@@ -56,7 +56,7 @@ int main(int argc,const char* argv[]){
    }
 
    FILE* output = OpenFileAndCreateDirectories(argv[2],"w");
-   CompiledTemplate* comp = CompileTemplate(versat_wrapper_template,tempArena);
+   CompiledTemplate* comp = CompileTemplate(versat_wrapper_template,"wrapper",tempArena);
 
    OutputModuleInfos(output,false,(Array<ModuleInfo>){allModules.data(),(int) allModules.size()},STRING(argv[1]),comp,tempArena,(Array<Wire>){},(Array<String>){});
 

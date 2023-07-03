@@ -418,8 +418,12 @@ Optional<ValueSelected> ShowStructTable(Value value,Arena* arena){
       for(Member& member : type->members){
          BLOCK_REGION(arena);
 
-         Value memberVal = AccessStruct(value,&member);
-         String repr = DebugValueRepresentation(memberVal,arena);
+         Optional<Value> optMemberVal = AccessStruct(value,&member);
+         if(!optMemberVal){
+            return res;
+         }
+
+         String repr = DebugValueRepresentation(optMemberVal.value(),arena);
 
          bool selected = false;
          ImGui::TableNextRow();
@@ -427,7 +431,7 @@ Optional<ValueSelected> ShowStructTable(Value value,Arena* arena){
          ImGui::TableNextColumn(); ImGui::Text("%.*s",UNPACK_SS(repr));
 
          if(selected){
-            res = ValueSelected{memberVal,index};
+            res = ValueSelected{optMemberVal.value(),index};
          }
          index += 1;
       }
@@ -495,11 +499,15 @@ Optional<ValueSelected> ShowHashmapTable(Value hashmap,Arena* arena){
          BLOCK_REGION(arena);
          Value pair = GetValue(iter);
 
-         Value val1 = AccessStruct(pair,STRING("first"));
-         Value val2 = AccessStruct(pair,STRING("second"));
+         Optional<Value> val1 = AccessStruct(pair,STRING("first"));
+         Optional<Value> val2 = AccessStruct(pair,STRING("second"));
 
-         String repr1 = DebugValueRepresentation(val1,arena);
-         String repr2 = DebugValueRepresentation(val2,arena);
+         if(!val1 || !val2){
+            return res;
+         }
+         
+         String repr1 = DebugValueRepresentation(val1.value(),arena);
+         String repr2 = DebugValueRepresentation(val2.value(),arena);
 
          bool selected1 = false;
          bool selected2 = false;
@@ -511,10 +519,10 @@ Optional<ValueSelected> ShowHashmapTable(Value hashmap,Arena* arena){
          selected2 = ImGui::Selectable(StaticFormat("%.*s",UNPACK_SS(repr2)),&selected2,0);
 
          if(selected1){
-            res = ValueSelected{val1,HashmapIndex(index,false)};
+            res = ValueSelected{val1.value(),HashmapIndex(index,false)};
          }
          if(selected2){
-            res = ValueSelected{val2,HashmapIndex(index,true)};
+            res = ValueSelected{val2.value(),HashmapIndex(index,true)};
          }
       }
       ImGui::EndTable();
@@ -661,14 +669,18 @@ void DisplayValueWindow(const char* name,ValueWindowState* state,Arena* arena){
                currentValue = CollapsePtrIntoStruct(subValue);
                embeddedList = false;
             } else {
-               Value subValue = {};
+               Optional<Value> subValue = {};
                if(IsIndexable(type)){
                   subValue = AccessObjectIndex(currentValue,state->frame[i]);
                } else {
                   subValue = AccessStruct(currentValue,state->frame[i]);
                }
 
-               currentValue = CollapsePtrIntoStruct(subValue);
+               if(!subValue){
+                  continue; // TODO: probably not good. Check later
+               }
+
+               currentValue = CollapsePtrIntoStruct(subValue.value());
 
                Type* type = currentValue.type;
                if(IsEmbeddedListKind(type)){

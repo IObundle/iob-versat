@@ -1,6 +1,6 @@
 #include <new>
 
-#include "versat_accel.hpp"
+#include "versat_accel.h"
 #include "versat.hpp"
 #include "utils.hpp"
 
@@ -269,18 +269,18 @@ int32_t* @{module.name}_StartFunction(FUInstance* inst){
 
    V@{module.name}* self = (V@{module.name}*) inst->extraData;
 
-#{if module.nDelays}
-#{for i module.nDelays}
-   self->delay@{i} = inst->delay[@{i}];
-#{end}
-#{end}
-
 #{if module.configs}
 AcceleratorConfig* config = (AcceleratorConfig*) inst->config;
 
 #{for i module.configs.size}
 #{set wire module.configs[i]}
    self->@{wire.name} = config->@{configsHeader[i].name};
+#{end}
+#{end}
+
+#{if module.nDelays}
+#{for i module.nDelays}
+   self->delay@{i} = config->TOP_Delay@{i};
 #{end}
 #{end}
 
@@ -484,6 +484,19 @@ int @{module.name}_ExtraDataSize(){
    return extraSize;
 }
 
+#{if module.signalLoop}
+void SignalFunction@{module.name}(FUInstance* inst){
+   V@{module.name}* self = (V@{module.name}*) inst->extraData;
+
+   self->signal_loop = 1;
+
+   UPDATE(self);
+
+   self->signal_loop = 0;
+   self->eval();
+}
+#{end}
+
 FUDeclaration @{module.name}_CreateDeclaration(){
    FUDeclaration decl = {};
 
@@ -539,6 +552,10 @@ FUDeclaration @{module.name}_CreateDeclaration(){
 
    #{if module.nIO}
    decl.nIOs = @{module.nIO};
+   #{end}
+
+   #{if module.signalLoop}
+   decl.signalFunction = SignalFunction@{module.name};
    #{end}
 
    #{if module.memoryMapped}

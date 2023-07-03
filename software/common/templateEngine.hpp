@@ -33,9 +33,9 @@ struct CompiledTemplate{
    int totalMemoryUsed;
    String content;
    Block* blocks;
-   //const char* filepath;
+   String name;
 
-   // Followed by content and then the block/expression structure
+   // Followed by content and the block/expression structure
 };
 
 struct Value;
@@ -45,7 +45,7 @@ void RegisterPipeOperation(String name,PipeFunction func);
 void InitializeTemplateEngine(Arena* perm);
 
 void ProcessTemplate(FILE* outputFile,CompiledTemplate* compiledTemplate,Arena* arena);
-CompiledTemplate* CompileTemplate(String content,Arena* arena);
+CompiledTemplate* CompileTemplate(String content,const char* name,Arena* arena);
 
 void ClearTemplateEngine();
 
