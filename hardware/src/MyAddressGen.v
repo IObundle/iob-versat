@@ -1,10 +1,9 @@
 `timescale 1ns / 1ps
-`include "xversat.vh"
 
 module MyAddressGen # (
-   parameter           ADDR_W = `MEM_ADDR_W,
-   parameter           PERIOD_W = `PERIOD_W,
-   parameter           DELAY_W = 32
+   parameter ADDR_W = 10,
+   parameter PERIOD_W = 10,
+   parameter DELAY_W = 32
    ) (
    input                              clk,
    input                              rst,

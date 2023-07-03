@@ -1,5 +1,4 @@
 `timescale 1ns / 1ps
-`include "xversat.vh"
 
 module FloatMin #(
          parameter DATA_W = 32
@@ -9,6 +8,7 @@ module FloatMin #(
     input                         clk,
     input                         rst,
     
+    input                         running,
     input                         run,
     
     //input / output data

@@ -1,5 +1,4 @@
 `timescale 1ns / 1ps
-`include "xversat.vh"
 
 module SwapEndian #(
          parameter DATA_W = 32
@@ -9,6 +8,7 @@ module SwapEndian #(
     input               clk,
     input               rst,
     
+    input               running,
     input               run,
 
     (* versat_latency = 0 *) input [DATA_W-1:0]  in0,

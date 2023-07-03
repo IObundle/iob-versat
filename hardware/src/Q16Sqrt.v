@@ -1,5 +1,4 @@
 `timescale 1ns / 1ps
-`include "xversat.vh"
 
 module Q16Sqrt #(
          parameter DATA_W = 32
@@ -10,7 +9,8 @@ module Q16Sqrt #(
     input                         rst,
     
     input                         run,
-    
+    input                         running,
+
     //input / output data
     input [DATA_W-1:0]            in0,
 

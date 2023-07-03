@@ -56,12 +56,22 @@
       .m_axi_rready(m_axi_rready[1*1+:1]),
       `endif
 
+`ifdef VERSAT_EXTERNAL_MEMORY
+      `include "versat_external_memory_portmap.vh"
+`endif
+
       .valid(slaves_req[`valid(`VERSAT)]),
       .address(slaves_req[`address(`VERSAT,`VERSAT_ADDR_W+2)-2]),
       .wdata(slaves_req[`wdata(`VERSAT)-(`DATA_W-`VERSAT_WDATA_W)]),
       .wstrb(slaves_req[`wstrb(`VERSAT)]),
       .rdata(slaves_resp[`rdata(`VERSAT)]),
       .ready(slaves_resp[`ready(`VERSAT)]),
+
+      `ifdef EXTERNAL_PORTS
+      .in0(versat_in0),
+      .in1(versat_in1),
+      .out0(versat_out),
+      `endif
 
       //CPU interface
       .clk       (clk),
@@ -70,7 +80,8 @@
 
    `ifndef VERSAT_IO
       initial $display("No Versat IO\n");
-      
+
+      `ifdef VERSAT_ARCH_HAS_IO
       assign m_axi_awid[1*1+:1] = 1'b0;
       assign m_axi_awaddr[1*`DDR_ADDR_W+:`DDR_ADDR_W] = 0;
       assign m_axi_awlen[1*8+:8] = 0;
@@ -101,5 +112,6 @@
       assign m_axi_arvalid[1*1+:1] = 0; //
 
       assign m_axi_rready[1*1+:1] = 1'b1; // To prevent lookup, "ready" for everything
-   `endif
+      `endif // VERSAT_ARCH_HAS_IO
+   `endif // VERSAT_IO
 

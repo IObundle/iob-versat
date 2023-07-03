@@ -19,8 +19,18 @@ module iob_versat
   	(
  		`include "iob_s_if.vh"
 
+    `ifdef VERSAT_EXTERNAL_MEMORY
+    `include "versat_external_memory_port.vh"
+    `endif
+
    `ifdef VERSAT_IO
       `include "m_versat_axi_m_port.vh"
+   `endif
+
+   `ifdef EXTERNAL_PORTS
+   input [31:0]              in0,
+   input [31:0]              in1,
+   output [31:0]             out0,
    `endif
 
    input clk,
@@ -79,32 +89,6 @@ xmerge #(.N_SLAVES(`nIO),.ADDR_W(`IO_ADDR_W),.DATA_W(`DATAPATH_W)) merge(
   .rst(rst)
 );
 
-/*
-wire d_r_ready,d_r_valid,d_w_ready,d_w_valid;
-
-AxiDelay #(.MAX_DELAY(5)) delayR(
-    .s_valid(r_valid),
-    .s_ready(r_ready),
-
-    .m_valid(d_r_valid),
-    .m_ready(d_r_ready),
-
-    .clk(clk),
-    .rst(rst)
-  );
-
-AxiDelay #(.MAX_DELAY(5)) delayW(
-    .s_valid(w_valid),
-    .s_ready(w_ready),
-
-    .m_valid(d_w_valid),
-    .m_ready(d_w_ready),
-
-    .clk(clk),
-    .rst(rst)
-  );
-*/
-
 SimpleAXItoAXI #(
     .ADDR_W(AXI_ADDR_W),
     .DATA_W(DATA_W),
@@ -143,6 +127,10 @@ versat_instance #(.ADDR_W(ADDR_W),.DATA_W(DATA_W)) xversat(
       .wdata(wdata),
       .ready(ready),
 
+`ifdef VERSAT_EXTERNAL_MEMORY
+      `include "versat_external_memory_portmap.vh"
+`endif
+
 `ifdef VERSAT_IO
       .m_databus_ready(m_databus_ready),
       .m_databus_valid(m_databus_valid),
@@ -154,12 +142,19 @@ versat_instance #(.ADDR_W(ADDR_W),.DATA_W(DATA_W)) xversat(
       .m_databus_last(m_databus_last),
 `endif
 
+`ifdef EXTERNAL_PORTS
+      .in0(in0),
+      .in1(in1),
+      .out0(out0),
+`endif
+
       .clk(clk),
       .rst(rst)
 ); 
 
 endmodule
 
+`ifdef VERSAT_IO // Easier to just remove everything from consideration
 module xmerge #(
     parameter ADDR_W = 0,
     parameter DATA_W = 32,
@@ -715,3 +710,4 @@ assign in_ready = out_ready;
 
 endmodule
 
+`endif // ifdef VERSAT_IO

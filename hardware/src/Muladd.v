@@ -1,6 +1,6 @@
 `timescale 1ns / 1ps
-`include "xversat.vh"
-`include "xmuladddefs.vh"
+
+`define MULADD_MACC 1'b0
 
 /*
 
@@ -11,20 +11,21 @@
 module Muladd #( 
 		parameter		      DATA_W = 32
 	) (
-                input                        rst,
-                input                        clk,
-                input                        run,
-                output reg                   done,
+                input              rst,
+                input              clk,
+                input              run,
+                input              running,
+                output reg         done,
 
-                input [DATA_W-1:0]           in0,
-                input [DATA_W-1:0]           in1,
-                (* versat_latency = 3 *) output [DATA_W-1:0]          out0,
+                input [DATA_W-1:0] in0,
+                input [DATA_W-1:0] in1,
+                (* versat_latency = 3 *) output [DATA_W-1:0] out0,
 
                 // config interface
                 input opcode,
-                input [`MEM_ADDR_W-1:0]       iterations,
-                input [`PERIOD_W-1:0]         period,
-                input [5:0]                   shift,
+                input [9:0] iterations,
+                input [9:0] period,
+                input [5:0] shift,
 
                 input [31:0]                 delay0
                 );
@@ -41,7 +42,7 @@ begin
       currentIteration <= 0;
       currentPeriod <= 0;
    end else if(run) begin
-      delay <= delay0 + 2;
+      delay <= delay0 + 2; // Add 2 because it takes 2 cycles for the accumulator to start working and this whole logic is just the control for the accumulator
       done <= 1'b0;
    end else if(|delay) begin
       delay <= delay - 1;

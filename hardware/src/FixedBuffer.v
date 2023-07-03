@@ -10,6 +10,7 @@ module FixedBuffer #(
     input                         clk,
     input                         rst,
     
+    input                         running,
     input                         run,
 
     //input / output data
@@ -23,13 +24,6 @@ generate
       always @(posedge clk)
       begin
          out0 <= in0;
-      end
-   end else if(AMOUNT == 1)begin
-      reg [31:0] bufferData;
-      always @(posedge clk)
-      begin
-         out0 <= bufferData;
-         bufferData <= in0;
       end
    end else begin
       integer i;

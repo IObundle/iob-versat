@@ -1,5 +1,4 @@
 `timescale 1ns / 1ps
-`include "xversat.vh"
 
 (* source *) module Reg #(
          parameter DELAY_W = 32,
@@ -10,7 +9,8 @@
     //control
     input                         clk,
     input                         rst,
-    
+
+    input                         running,    
     input                         run,
     output reg                    done,
 
@@ -23,11 +23,11 @@
 
     //input / output data
     input [DATA_W-1:0]            in0,
-    output reg [DATA_W-1:0]       out0,
+    output reg [DATA_W-1:0]       out0, /* technically should have versat_latency 1 but since it's not a computing unit, output is only used to start a datapath, we save 1 cycle */ 
 
     input [DELAY_W-1:0]           delay0,
 
-    output [DATA_W-1:0]           currentValue
+    output [DATA_W-1:0]           currentValue    
     );
 
 reg [DELAY_W-1:0] delay;
@@ -53,9 +53,7 @@ begin
       if(run) begin
          done <= 0;
          delay <= delay0;
-      end 
-
-      if(!done) begin
+      end else if(!done) begin
          if(delay == 0) begin
             out0 <= in0;
             done <= 1;

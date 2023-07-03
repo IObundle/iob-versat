@@ -1,5 +1,4 @@
 `timescale 1ns / 1ps
-`include "xversat.vh"
 
 module xmux4 #(
          parameter DATA_W = 32
@@ -8,7 +7,8 @@ module xmux4 #(
     //control
     input                         clk,
     input                         rst,
-    
+    input                         running,
+
     input                         run,
     output                        done,
 

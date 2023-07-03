@@ -1,10 +1,24 @@
-VERSAT_DIR:=.
-include core.mk
+SHELL := /bin/bash
 
-pc-emul:
-	make -C $(VERSAT_SW_DIR)
+VERSAT_DIR:=$(shell pwd)
+
+# Default rule
+all: versat
+
+include $(VERSAT_DIR)/core.mk
+include $(VERSAT_DIR)/sharedHardware.mk
+
+libverilator.a: tools
+	$(MAKE) -C $(VERSAT_COMP_DIR) libversat
+
+tools:
+	$(MAKE) -C $(VERSAT_TOOLS_DIR) all
+
+versat: tools
+	$(MAKE) -C $(VERSAT_COMP_DIR) versat
 
 clean:
-	make -C $(VERSAT_SW_DIR) clean
+	-rm -fr build
+	-rm -f *.a versat versat.d
 
 .PHONY: pc-sim clean

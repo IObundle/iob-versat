@@ -1,49 +1,52 @@
 #{define retIterativeOutputName portInstance port}
+#{set res ""}
 #{if portInstance.inst.declaration == versat.data}
-   #{return "data[" # port # "]"}
+   #{set res "data[" # port # "]"}
 #{else}
 #{if portInstance.inst.declaration.type == 2}
-   #{return "in" # port}
+   #{set res "in" # port}
 #{else}
-   #{return "unitOut[" # port # "]"}
+   #{set res "unitOut[" # port # "]"}
 #{end}
 #{end}
+#{return res}
 #{end}
 
 #{define iterativeOutputName portInstance port}
 #{set val #{call retIterativeOutputName portInstance port}}
 @{val}#{end}
 
-#{define retOutputName portInstance}
-#{set inst2 portInstance.inst}
-#{if inst2}
+#{define retOutputName portNode}
+#{set res ""}
+#{if portNode.node}
+#{set inst2 portNode.node.inst}
 #{set decl2 inst2.declaration}
    #{if decl2.type == 2}
-      #{return "in" # inst2.id}
+      #{set res "in" # inst2.portIndex}
    #{else}
       #{if decl2.isOperation}
-         #{if decl2.latencies[0] == 0}
-            #{return "comb_" # inst2.name |> Identify}
+         #{if decl2.outputLatencies[0] == 0}
+            #{set res "comb_" # inst2.name |> Identify}
          #{else}
-            #{return "seq_" # inst2.name |> Identify}
+            #{set res "seq_" # inst2.name |> Identify}
          #{end} 
       #{else}
-         #{return "output_" # inst2.id # "_" # portInstance.port} 
+         #{set res "output_" # inst2.id # "_" # portNode.port} 
       #{end}
    #{end}
 #{else}
-#{return ""}
+#{set res "0"}
 #{end}
+#{return res}
 #{end}
 
 #{define outputName portInstance}
-#{set val #{call retOutputName portInstance}}
-@{val}#{end}
+#{set val #{call retOutputName portInstance}} @{val} #{end}
 
 #{define CountDones instances}
    #{set nDones 0}
-   #{for inst instances}
-   #{if inst.declaration.implementsDone}
+   #{for node instances}
+   #{if node.inst.declaration.implementsDone}
    #{inc nDones}
    #{end}
    #{end}
@@ -52,18 +55,35 @@
 
 #{define CountOperations instances}
    #{set nOperations 0}
-   #{set nCombOperations 0}
-   #{set nSeqOperations 0}
-   #{for inst instances}
-      #{if inst.declaration.isOperation}
+   #{for node instances}
+      #{if node.inst.declaration.isOperation}
          #{inc nOperations}
-         #{if inst.declaration.latencies[0] == 0}
+      #{end}
+   #{end}
+   #{return nOperations}
+#{end}
+
+#{define CountCombOperations instances}
+   #{set nCombOperations 0}
+   #{for node instances}
+      #{if node.inst.declaration.isOperation}
+         #{if node.inst.declaration.outputLatencies[0] == 0}
             #{inc nCombOperations}
-         #{else}
+         #{end}
+      #{end}
+   #{end}
+   #{return nCombOperations}
+#{end}
+
+#{define CountSeqOperations instances}
+   #{set nSeqOperations 0}
+   #{for node instances}
+      #{if node.inst.declaration.isOperation}
+         #{if node.inst.declaration.outputLatencies[0] != 0}
             #{inc nSeqOperations}
          #{end}
       #{end}
    #{end}
-   #{return nOperations}
+   #{return nSeqOperations}
 #{end}
 

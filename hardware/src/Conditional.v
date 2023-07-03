@@ -1,5 +1,4 @@
 `timescale 1ns / 1ps
-`include "xversat.vh"
 
 module Conditional #(
          parameter DELAY_W = 32
@@ -8,6 +7,7 @@ module Conditional #(
    input                   clk,
    input                   rst,
 
+   input                   running,
    input                   run,
 
    input [31:0]            in0, // Selector
