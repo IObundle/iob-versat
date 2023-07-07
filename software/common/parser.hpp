@@ -21,6 +21,8 @@ struct Expression{
    enum {UNDEFINED,OPERATION,IDENTIFIER,COMMAND,LITERAL,ARRAY_ACCESS,MEMBER_ACCESS} type;
 };
 
+void PrintExpression(Expression* exp);
+
 typedef int (*CharFunction) (const char* ptr,int size);
 typedef String Token;
 

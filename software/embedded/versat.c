@@ -1,13 +1,17 @@
 #include "versat_accel.h"
 
+#ifdef __cplusplus
+#include "utils.hpp"
+#else
+#define ARRAY_SIZE(arr) (sizeof(arr) / sizeof(arr[0]))
+#define TIME_IT(...) 
+#endif
+
 #include "printf.h"
 #define MEMSET(base, location, value) (*((volatile int*) (base + (sizeof(int)) * location)) = (int) value)
 #define MEMGET(base, location)        (*((volatile int*) (base + (sizeof(int)) * location)))
 
 #include "iob-timer.h"
-
-#define ARRAY_SIZE(arr) (sizeof(arr) / sizeof(arr[0]))
-#define TIME_IT(...) ((void)0)
 
 #if 0
 NanoSecond GetTime(){
@@ -43,7 +47,7 @@ void versat_init(int base){
    }
 }
 
-static inline RunAcceleratorOnce(int times){ // times inside value amount
+static inline void RunAcceleratorOnce(int times){ // times inside value amount
    MEMSET(versat_base,0x0,times);
    while(1){
       int val = MEMGET(versat_base,0x0);
@@ -62,7 +66,7 @@ void RunAccelerator(int times){
 }
 
 void SignalLoop(){
-   MEMSET(versat_base,0x1,0x40000000);
+   MEMSET(versat_base,0x0,0x40000000);
 }
 
 void VersatMemoryCopy(iptr* dest,iptr* data,int size){

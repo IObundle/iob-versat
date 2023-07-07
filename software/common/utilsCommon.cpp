@@ -3,14 +3,14 @@
 #include <cinttypes>
 #include <limits>
 
-#include <cstdio>
+//#include <cstdio>
 
-#if 0
+#if 1
+
+#ifndef PC
 extern "C"{
 int printf_(const char* format, ...);
 }
-
-#ifndef PC
 #define printf printf_
 #else
 #include <cstdio>

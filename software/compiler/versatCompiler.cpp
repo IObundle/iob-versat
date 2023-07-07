@@ -37,9 +37,8 @@ struct ArgumentOptions{
 };
 
 String GetAbsolutePath(const char* path,Arena* arena){
-   fs::path relative = path;
-   fs::path absolute = fs::canonical(fs::absolute(relative));
-   String res = PushString(arena,"%s",absolute.c_str());
+   fs::path canonical = fs::weakly_canonical(path);
+   String res = PushString(arena,"%s",canonical.c_str());
    return res;
 }
 
@@ -244,7 +243,7 @@ int main(int argc,const char* argv[]){
    }
 
    #if 1
-   std::vector<ModuleInfo> allModules;
+   PushPtr<ModuleInfo> allModulesPush(perm,999); // For debugging purposes
    for(String file : opts->verilogFiles){
       String content = PushFile(temp,StaticFormat("%.*s",UNPACK_SS(file)));
 
@@ -258,11 +257,12 @@ int main(int argc,const char* argv[]){
 
       for(Module& mod : modules){
          ModuleInfo info = ExtractModuleInfo(mod,perm,temp);
-         allModules.push_back(info);
+         allModulesPush.PushValue(info);
 
          RegisterModuleInfo(versat,&info);
       }
    }
+   Array<ModuleInfo> allModules = allModulesPush.AsArray();
    #endif
 
    // Compile all templates before hand
@@ -365,7 +365,7 @@ int main(int argc,const char* argv[]){
    OrderedConfigurations configs = ExtractOrderedConfigurationNames(versat,accel,&versat->permanent,&versat->temp);
    Array<Wire> allConfigsHeaderSide = OrderedConfigurationsAsArray(configs,&versat->permanent);
 
-   // We need to bundle config + static (type->config) only contains config, but not static 
+   // We need to bundle config + static (type->config) only contains config, but not static
    Array<Wire> allConfigsVerilatorSide = PushArray<Wire>(temp,99); // TODO: Correct size
    #if 1
    {
@@ -393,12 +393,12 @@ int main(int argc,const char* argv[]){
    }
 
    // Module info for top level
-   ModuleInfo info = {};
+   ModuleInfoInstance info = {};
    info.name = type->name;
    info.inputDelays = type->inputDelays;
    info.outputLatencies = type->outputLatencies;
    info.configs = allConfigsVerilatorSide; // Bundled config + state (delay is not needed, because we know how many delays we have
-   info.states = type->states; 
+   info.states = type->states;
    info.externalInterfaces = type->externalMemory;
    info.nDelays = type->delayOffsets.max;
    info.nIO = type->nIOs;
@@ -412,8 +412,8 @@ int main(int argc,const char* argv[]){
    info.hasRunning = true;
    info.isSource = false; // Hack but maybe not a problem doing it this way, we only care to generate the wrapper and the instance is only done individually
    info.signalLoop = type->signalLoop;
-   
-   std::vector<ModuleInfo> finalModule;
+
+   std::vector<ModuleInfoInstance> finalModule;
    finalModule.push_back(info);
 
    // Wrapper
@@ -426,7 +426,7 @@ int main(int argc,const char* argv[]){
       TemplateSetNumber("bitWidth",opts->bitSize);
       FILE* output = OpenFileAndCreateDirectories(wrapper.data,"w");
       CompiledTemplate* comp = CompileTemplate(versat_wrapper_template,"wrapper",temp);
-      OutputModuleInfos(output,false,(Array<ModuleInfo>){finalModule.data(),(int) finalModule.size()},STRING("Verilog"),comp,temp,allConfigsHeaderSide,statesHeaderSize);
+      OutputModuleInfos(output,info,STRING("Verilog"),comp,temp,allConfigsHeaderSide,statesHeaderSize);
       fclose(output);
    }
 

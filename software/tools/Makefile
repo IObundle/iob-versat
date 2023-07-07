@@ -1,5 +1,7 @@
 VERSAT_DIR:=../..
 
+VERSAT_DEFINE=-DPC
+
 include $(VERSAT_DIR)/core.mk
 include $(VERSAT_TOOLS_DIR)/tools.mk
 

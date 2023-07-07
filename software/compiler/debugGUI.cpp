@@ -528,9 +528,6 @@ Optional<ValueSelected> ShowHashmapTable(Value hashmap,Arena* arena){
       ImGui::EndTable();
    }
 
-   if(res){
-      printf("%d\n",res.value().index);    
-   }
    return res;
 }
 
@@ -831,8 +828,6 @@ void OutputAcceleratorRunValues(InstanceNode* node,Arena* arena){
       arr.data = inst->delay;
       arr.size = inst->declaration->delayOffsets.max;
 
-      printf("%p %d\n",arr.data,arr.size);
-
       if(arr.data && arr.size){
          ShowTable(MakeValue(&arr,"Array<iptr>"),arena);
       }
@@ -1099,7 +1094,6 @@ void DebugGUI(){
                Optional<String> res = AcceleratorTreeNodes(iter,filter);
                if(res){
                   String name = res.value();
-                  printf("%.*s\n",UNPACK_SS(name));
                   dw->selectedInstance = res;
                }
                ImGui::EndChild();

@@ -7,6 +7,7 @@
 //#include "versatPrivate.hpp"
 #include "utils.hpp"
 #include "parser.hpp"
+//#include "configurations.hpp"
 
 typedef std::unordered_map<String,Value> ValueMap;
 typedef std::unordered_map<String,String> MacroMap;
@@ -29,8 +30,14 @@ struct PortDeclaration{
    enum {INPUT,OUTPUT,INOUT} type;
 };
 
+struct ParameterExpression{
+   String name;
+   Expression* expr;
+};
+
 struct Module{
-   ValueMap parameters;
+   Array<ParameterExpression> parameters;
+   //ValueMap parameters;
    std::vector<PortDeclaration> ports;
    String name;
    bool isSource;
@@ -44,14 +51,31 @@ struct ExternalMemoryDPDef{
    PortDeclaration* enable[2];
 };
 
-// TODO: Follow structures are a copy from declarations.hpp. Should find a better place to store these declaration which are "shared" between normal code and parsing code
+// TODO: This is a copy of Wire from configurations.hpp, but we do not include because this file should not include from the compiler code.
 struct Wire{
    String name;
    int bitsize;
+   bool isStatic; // This is only used by the verilog parser (?) to store info. TODO: Use a different structure in the verilog parser which contains this and remove from Wire   
+};
+
+struct WireExpression{
+   String name;
+   Expression* top;
+   Expression* bottom;
+   //int bitsize;
    bool isStatic; // This is only used by the verilog parser (?) to store info. TODO: Use a different structure in the verilog parser which contains this and remove from Wire
 };
 
 enum ExternalMemoryType{TWO_P = 0,DP};
+
+struct ExternalMemoryInterfaceExpression{
+   int interface;
+   Expression* bitSize;
+   Expression* dataSize;
+   //int bitsize;
+   //int datasize;
+   ExternalMemoryType type;
+};
 
 struct ExternalMemoryInterface{
    int interface;
@@ -98,6 +122,31 @@ inline bool operator==(const ExternalMemoryID& lhs,const ExternalMemoryID& rhs){
 
 struct ModuleInfo{
    String name;
+   Array<ParameterExpression> defaultParameters;
+   Array<int> inputDelays;
+   Array<int> outputLatencies;
+   Array<WireExpression> configs;
+   Array<WireExpression> states;
+   Array<ExternalMemoryInterface> externalInterfaces; // TODO: Implement expressions later
+   int nDelays;
+   int nIO;
+   int memoryMappedBits;
+   Expression* databusAddrBottom;
+   Expression* databusAddrTop;
+   bool doesIO;
+   bool memoryMapped;
+   bool hasDone;
+   bool hasClk;
+   bool hasReset;
+   bool hasRun;
+   bool hasRunning;
+   bool isSource;
+   bool signalLoop;
+};
+
+struct ModuleInfoInstance{
+   String name;
+   Array<ParameterExpression> parameters;
    Array<int> inputDelays;
    Array<int> outputLatencies;
    Array<Wire> configs;
@@ -106,6 +155,9 @@ struct ModuleInfo{
    int nDelays;
    int nIO;
    int memoryMappedBits;
+   int databusAddrSize;
+   //Expression* databusAddrBottom;
+   //Expression* databusAddrTop;
    bool doesIO;
    bool memoryMapped;
    bool hasDone;
@@ -120,7 +172,10 @@ struct ModuleInfo{
 String PreprocessVerilogFile(Arena* output, String fileContent,std::vector<const char*>* includeFilepaths,Arena* tempArena);
 std::vector<Module> ParseVerilogFile(String fileContent, std::vector<const char*>* includeFilepaths, Arena* tempArena); // Only handles preprocessed files
 ModuleInfo ExtractModuleInfo(Module& module,Arena* permanent,Arena* tempArena);
-void OutputModuleInfos(FILE* output,bool doExport,Array<ModuleInfo> infos,String nameSpace,CompiledTemplate* unitVerilogData,Arena* temp,Array<Wire> configsHeaderSide,Array<String> statesHeaderSide); // TODO: This portion should be remade, parameters are not the ones we want (VerilogParsing do not need to know about Accelerator)
+void OutputModuleInfos(FILE* output,ModuleInfoInstance info,String nameSpace,CompiledTemplate* unitVerilogData,Arena* temp,Array<Wire> configsHeaderSide,Array<String> statesHeaderSide); // TODO: This portion should be remade, parameters are not the ones we want (VerilogParsing do not need to know about Accelerator)
+
+Array<String> GetAllIdentifiers(Expression* expr,Arena* arena);
+Value Eval(Expression* expr,Array<ParameterExpression> parameters);
 
 #endif // INCLUDED_VERILOG_PARSER
 

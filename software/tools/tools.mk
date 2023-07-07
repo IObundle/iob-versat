@@ -30,4 +30,4 @@ $(BUILD_DIR)/typeInfo.cpp : $(TYPE_INFO_HDR) $(BUILD_DIR)/structParser
 	$(BUILD_DIR)/structParser $@ $(TYPE_INFO_HDR)
 
 $(BUILD_DIR)/typeInfo.o: $(BUILD_DIR)/typeInfo.cpp
-	g++ -MMD -MP -std=c++17 -g -c -o $@ $(GLOBAL_CFLAGS) $< $(VERSAT_INCLUDE)
+	g++ -DPC -MMD -MP -std=c++17 -g -c -o $@ $(GLOBAL_CFLAGS) $< $(VERSAT_INCLUDE)

@@ -24,7 +24,10 @@ volatile AcceleratorState* accelState = nullptr;
 
 int versat_base;
 
+#ifdef __cplusplus
 extern "C"{
+#endif
+
 void InitializeVerilator();
 Versat* InitVersatC(int base,int numberConfigurations,bool initUnits);
 void DebugAcceleratorC(Accelerator* accel);
@@ -37,7 +40,10 @@ void SignalLoopC(Accelerator* accel);
    
 void* GetStartOfConfig(Accelerator* accel);
 void* GetStartOfState(Accelerator* accel);
+
+#ifdef __cplusplus
 }
+#endif
 
 void Debug(){
    DebugAcceleratorC(accel);

@@ -5,7 +5,7 @@ module VWrite #(
    parameter ADDR_W = 10,
    parameter MEM_ADDR_W = 10,
    parameter PERIOD_W = 10,
-   parameter AXI_ADDR_W = 64
+   parameter AXI_ADDR_W = 32
    )
    (
    input                  clk,
@@ -32,7 +32,7 @@ module VWrite #(
    output [ADDR_W-1:0]   ext_2p_addr_out_0,
    output [ADDR_W-1:0]   ext_2p_addr_in_0,
    output                ext_2p_write_0,
-   output                ext_2p_read_0, // Changes without clk change
+   output                ext_2p_read_0,
    input  [DATA_W-1:0]   ext_2p_data_in_0,
    output [DATA_W-1:0]   ext_2p_data_out_0,
 

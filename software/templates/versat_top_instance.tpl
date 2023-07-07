@@ -114,11 +114,12 @@ always @(posedge clk,posedge rst) // Care, rst because writing to soft reset reg
          // Versat specific registers
          if(addr == 0) begin
             versat_ready <= 1'b1;
-            if(we)
+            if(we) begin
                soft_reset <= wdata[31];
                signal_loop <= wdata[30];    
-            else
+            end else begin
                versat_rdata <= {31'h0,done}; 
+            end
          end
 #{if useDMA}
          if(addr == 1) begin
@@ -286,7 +287,7 @@ begin
 
       if(valid && we) begin
          if(addr == 0)
-            runCounter <= runCounter + wdata[30:0];
+            runCounter <= runCounter + wdata[15:0];
       end
    end
 end

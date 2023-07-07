@@ -743,6 +743,7 @@ Expression* ParseOperationType_(Tokenizer* tok,OperationList* operators,ParsingF
          if(CompareString(peek,elem)){
             tok->AdvancePeek(peek);
             Expression* expr = PushStruct<Expression>(tempArena);
+            *expr = {};
             expr->expressions = PushArray<Expression*>(tempArena,2);
 
             expr->type = Expression::OPERATION;
@@ -790,5 +791,59 @@ Expression* ParseOperationType(Tokenizer* tok,std::initializer_list<std::initial
    expr->text = tok->Point(mark);
 
    return expr;
+}
+
+static void PrintSpaces(int amount){
+   for(int i = 0; i < amount; i++){
+      printf(" ");
+   }
+}
+
+static void PrintExpression(Expression* exp,int level){
+   PrintSpaces(level);
+   switch(exp->type){
+   case Expression::UNDEFINED:{
+      printf("UNDEFINED\n");
+   }break;
+   case Expression::OPERATION:{
+      printf("OPERATION\n");
+   }break;
+   case Expression::IDENTIFIER:{
+      printf("IDENTIFIER\n");
+   }break;
+   case Expression::COMMAND:{
+      printf("COMMAND\n");
+   }break;
+   case Expression::LITERAL:{
+      Value val = exp->val;
+      printf("LITERAL: %d\n",val.number);
+   }break;
+   case Expression::ARRAY_ACCESS:{
+      printf("ARRAY_ACCESS\n");
+   }break;
+   case Expression::MEMBER_ACCESS:{
+      printf("MEMBER_ACCESS\n");
+   }break;
+   default: NOT_IMPLEMENTED;
+   }
+
+   if(exp->op){
+      PrintSpaces(level);
+      printf("op: %s\n",exp->op);
+   }
+
+   if(exp->id.size){
+      PrintSpaces(level);
+      printf("id: %.*s\n",UNPACK_SS(exp->id));
+   }
+
+   for(Expression* subExpressions : exp->expressions){
+      PrintExpression(subExpressions,level + 2);
+      printf("\n");
+   }
+}
+
+void PrintExpression(Expression* exp){
+   PrintExpression(exp,0);
 }
 

@@ -130,7 +130,7 @@ public:
       this->maximumTimes = maximum;
       this->timesPushed = 0;
    }
-
+   
    void Init(T* ptr,int maximum){
       this->ptr = ptr;
       this->maximumTimes = maximum;
@@ -194,6 +194,12 @@ public:
       return res;
    }
 };
+
+template<typename T>
+static void PopPushPtr(Arena* arena,PushPtr<T>& ptr){
+   Byte* lastPos = (Byte*) &ptr.ptr[ptr.timesPushed];
+   PopMark(arena,lastPos);
+}
 
 template<typename T> bool Inside(PushPtr<T>* push,T* ptr);
 

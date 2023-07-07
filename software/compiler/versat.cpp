@@ -1011,6 +1011,8 @@ Edge* ConnectUnits(FUInstance* out,int outIndex,FUInstance* in,int inIndex,int d
 
 // TODO: Need to remake this function and probably ModuleInfo has the versat compiler change is made
 FUDeclaration* RegisterModuleInfo(Versat* versat,ModuleInfo* info){
+   Arena* arena = &versat->permanent;
+
    FUDeclaration decl = {};
 
    // Check same name
@@ -1020,11 +1022,66 @@ FUDeclaration* RegisterModuleInfo(Versat* versat,ModuleInfo* info){
       }
    }
 
+   Array<Wire> configs = PushArray<Wire>(arena,info->configs.size);
+   Array<Wire> states = PushArray<Wire>(arena,info->states.size);
+
+   //DebugValue(MakeValue(info));
+
+   region(arena){
+      Array<ParameterExpression> instantiated = PushArray<ParameterExpression>(arena,info->defaultParameters.size);
+
+      for(int i = 0; i < instantiated.size; i++){
+         ParameterExpression def = info->defaultParameters[i];
+
+         // Override databus size for current architecture
+         if(CompareString(def.name,STRING("AXI_ADDR_W"))){
+            Expression* expr = PushStruct<Expression>(arena);
+
+            expr->type = Expression::LITERAL;
+            expr->val = MakeValue(64);
+            
+            def.expr = expr;
+         }
+
+         instantiated[i] = def;
+      }
+   
+      for(int i = 0; i < info->configs.size; i++){
+         WireExpression& wire = info->configs[i];
+
+         int delta = 0;
+         if(wire.top && wire.bottom){
+            int top = Eval(wire.top,instantiated).number;
+            int bottom = Eval(wire.bottom,instantiated).number;
+            delta = top - bottom;
+         }
+      
+         configs[i].name = info->configs[i].name;
+         configs[i].bitsize = delta + 1;
+         configs[i].isStatic = false;
+      }
+
+      for(int i = 0; i < info->states.size; i++){
+         WireExpression& wire = info->states[i];
+
+         int delta = 0;
+         if(wire.top && wire.bottom){
+            int top = Eval(wire.top,instantiated).number;
+            int bottom = Eval(wire.bottom,instantiated).number;
+            delta = top - bottom;
+         }
+
+         states[i].name = info->states[i].name;
+         states[i].bitsize = delta + 1;
+         states[i].isStatic = false;
+      }
+   }
+   
    decl.name = info->name;
    decl.inputDelays = info->inputDelays;
    decl.outputLatencies = info->outputLatencies;
-   decl.configs = info->configs;
-   decl.states = info->states;
+   decl.configs = configs;
+   decl.states = states;
    decl.externalMemory = info->externalInterfaces;
    decl.delayOffsets.max = info->nDelays;
    decl.nIOs = info->nIO;

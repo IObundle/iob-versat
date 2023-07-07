@@ -594,7 +594,10 @@ Optional<Value> AccessObjectIndex(Value object,int index){
          Array<Byte>* byteArray = (Array<Byte>*) object.custom;
 
          int arrayLength = byteArray->size;
-         Assert(index < arrayLength);
+         if(index >= arrayLength){
+            Log(LogModule::TYPE,LogLevel::ERROR,"Try to access member past array size");
+            return (Optional<Value>{});
+         }
 
          int size = object.type->templateArgTypes[0]->size;
          Byte* view = (Byte*) byteArray->data;

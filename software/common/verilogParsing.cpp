@@ -84,7 +84,7 @@ static void DoIfStatement(Arena* output,Tokenizer* tok,MacroMap& macros,std::vec
 }
 
 void PreprocessVerilogFile_(Arena* output, String fileContent,MacroMap& macros,std::vector<const char*>* includeFilepaths,Arena* temp){
-   Tokenizer tokenizer = Tokenizer(fileContent, "()`\\\",+-/*",{"`include","`define","`timescale","`ifdef","`else","`elsif","`endif","`ifndef"}); // TODO: these keywords should not be special chars.
+   Tokenizer tokenizer = Tokenizer(fileContent, "()`\\\",+-/*",{"`include","`define","`timescale","`ifdef","`else","`elsif","`endif","`ifndef"});
    Tokenizer* tok = &tokenizer;
 
    while(!tok->Done()){
@@ -188,7 +188,6 @@ void PreprocessVerilogFile_(Arena* output, String fileContent,MacroMap& macros,s
             }
          }
 
-         //printf("`%.*s  %.*s\n",defineName.size,defineName.str,mini(10,body.size),body.str);
          macros[defineName] = body;
       } else if(CompareToken(peek,"`timescale")){
          Token line = tok->PeekFindIncluding("\n");
@@ -229,17 +228,12 @@ String PreprocessVerilogFile(Arena* output, String fileContent,std::vector<const
    PushString(output,STRING("\0"));
    res.size = MarkArena(output) - mark;
 
-   #if 0
-   for(auto key : macros){
-      printf("%.*s\n",key.first.size,key.first.str);
-   }
-   #endif
-
    return res;
 }
 
 static Expression* VerilogParseAtom(Tokenizer* tok,Arena* out){
    Expression* expr = PushStruct<Expression>(out);
+   *expr = {};
 
    Token peek = tok->PeekToken();
 
@@ -331,13 +325,17 @@ static Value Eval(Expression* expr,ValueMap& map){
    return MakeValue();
 }
 
-static ValueMap ParseParameters(Tokenizer* tok,ValueMap& map,Arena* arena){
+static Array<ParameterExpression> ParseParameters(Tokenizer* tok,ValueMap& map,Arena* arena){
    //TODO: Add type and range to parsing
    /*
    Range currentRange;
    ParameterType type;
    */
-   ValueMap parameters;
+
+   PushPtr<ParameterExpression> params(arena,99); // TODO: Calculate correct amount
+
+   //Array<DefaultParameters> params =
+   //ValueMap parameters;
 
    while(1){
       Token peek = tok->PeekToken();
@@ -360,15 +358,18 @@ static ValueMap ParseParameters(Tokenizer* tok,ValueMap& map,Arena* arena){
          tok->AssertNextToken("=");
 
          Expression* expr = VerilogParseAtom(tok,arena);
-
          Value val = Eval(expr,map);
 
          map[paramName] = val;
-         parameters[paramName] = val;
+
+         ParameterExpression* p = params.Push(1);
+         p->name = paramName;
+         p->expr = expr;
+         //parameters[paramName] = val;
       }
    }
 
-   return parameters;
+   return params.AsArray();
 }
 
 static Expression* VerilogParseExpression(Tokenizer* tok,Arena* out){
@@ -475,13 +476,20 @@ static Module ParseModule(Tokenizer* tok,Arena* arena){
          UNHANDLED_ERROR;
       }
 
-      peek = tok->PeekToken();
-
       // TODO: Add a new function to parser to "ignore" the following list of tokens (loop every time until it doesn't find one from the list), and replace this function here with reg and all the different types it can be
-      if(CompareString("reg",peek)){
-         tok->AdvancePeek(peek);
+      while(1){
+         peek = tok->PeekToken();
+         if(CompareString("reg",peek)){
+            tok->AdvancePeek(peek);
+            continue;
+         }
+         if(CompareString("signed",peek)){
+            tok->AdvancePeek(peek);
+            continue;
+         }
+         break;
       }
-
+      
       RangeAndExpr res = ParseRange(tok,values,arena);
       port.range = res.range;
       port.top = res.top;
@@ -522,8 +530,6 @@ static Module ParseModule(Tokenizer* tok,Arena* arena){
 }
 
 std::vector<Module> ParseVerilogFile(String fileContent, std::vector<const char*>* includeFilepaths, Arena* arena){
-   BLOCK_REGION(arena);
-
    Tokenizer tokenizer = Tokenizer(fileContent,":,()[]{}\"+-/*=",{"#(","+:","-:","(*","*)"});
    Tokenizer* tok = &tokenizer;
 
@@ -569,10 +575,12 @@ ModuleInfo ExtractModuleInfo(Module& module,Arena* permanent,Arena* tempArena){
 
    ModuleInfo info = {};
 
+   info.defaultParameters = module.parameters;
+
    PushPtr<int> inputDelay(permanent,100);
    PushPtr<int> outputLatency(permanent,100);
-   PushPtr<Wire> configs(permanent,1000);
-   PushPtr<Wire> states(permanent,1000);
+   PushPtr<WireExpression> configs(permanent,1000);
+   PushPtr<WireExpression> states(permanent,1000);
 
    info.name = module.name;
    info.isSource = module.isSource;
@@ -668,6 +676,20 @@ ModuleInfo ExtractModuleInfo(Module& module,Arena* permanent,Arena* tempArena){
                || CheckFormat("databus_last_%d",decl.name)){
          Array<Value> val = ExtractValues("databus_%s_%d",decl.name,tempArena);
 
+         if(CheckFormat("databus_addr_%d",decl.name)){
+            info.databusAddrBottom = decl.top;
+            info.databusAddrTop = decl.bottom;
+         }
+
+         #if 0
+         info.addrTop = decl.top;
+         info.addrBottom = decl.bottom;
+
+         if(info.addrTop) {
+            PrintExpression(info.addrTop);
+         }
+         #endif
+
          info.nIO = val[1].number;
          info.doesIO = true;
       } else if(  CheckFormat("ready",decl.name)
@@ -692,15 +714,18 @@ ModuleInfo ExtractModuleInfo(Module& module,Arena* permanent,Arena* tempArena){
       } else if(CheckFormat("done",decl.name)){
          info.hasDone = true;
       } else if(decl.type == PortDeclaration::INPUT){ // Config
-         Wire* wire = configs.Push(1);
+         WireExpression* wire = configs.Push(1);
 
-         wire->bitsize = decl.range.high - decl.range.low + 1;
+         //wire->bitsize = decl.range.high - decl.range.low + 1;
+         wire->top = decl.top;
+         wire->bottom = decl.bottom;
          wire->name = decl.name;
          wire->isStatic = (decl.attributes.find(VERSAT_STATIC) != decl.attributes.end());
       } else if(decl.type == PortDeclaration::OUTPUT){ // State
-         Wire* wire = states.Push(1);
+         WireExpression* wire = states.Push(1);
 
-         wire->bitsize = decl.range.high - decl.range.low + 1;
+         wire->top = decl.top;
+         wire->bottom = decl.bottom;
          wire->name = decl.name;
       } else {
          NOT_IMPLEMENTED;
@@ -731,13 +756,92 @@ ModuleInfo ExtractModuleInfo(Module& module,Arena* permanent,Arena* tempArena){
    return info;
 }
 
-void OutputModuleInfos(FILE* output,bool doExport,Array<ModuleInfo> infos,String nameSpace,CompiledTemplate* unitVerilogData,Arena* temp,Array<Wire> configsHeaderSide,Array<String> statesHeaderSide){
+void OutputModuleInfos(FILE* output,ModuleInfoInstance info,String nameSpace,CompiledTemplate* unitVerilogData,Arena* temp,Array<Wire> configsHeaderSide,Array<String> statesHeaderSide){
    ClearTemplateEngine();
-   TemplateSetBool("export",doExport);
-   TemplateSetArray("modules","ModuleInfo",infos.data,infos.size);
+   TemplateSetCustom("module",&info,"ModuleInfoInstance");
    TemplateSetString("namespace",nameSpace);
    TemplateSetArray("configsHeader","Wire",configsHeaderSide.data,configsHeaderSide.size);
    TemplateSetArray("statesHeader","String",statesHeaderSide.data,statesHeaderSide.size);
 
    ProcessTemplate(output,unitVerilogData,temp);
 }
+
+void GetAllIdentifiers_(Expression* expr,PushPtr<String>& ptr){
+   if(expr->type == Expression::IDENTIFIER){
+      String id = expr->id;
+
+      Array<String> arr = ptr.AsArray();
+      if(Contains(arr,id)){
+         return;
+      } else {
+         ptr.PushValue(id);
+      }
+   }
+
+   for(Expression* child : expr->expressions){
+      GetAllIdentifiers_(child,ptr);
+   }
+}
+
+Array<String> GetAllIdentifiers(Expression* expr,Arena* arena){
+   PushPtr<String> ptr(arena,99);
+
+   GetAllIdentifiers_(expr,ptr);
+
+   PopPushPtr(arena,ptr);
+
+   return ptr.AsArray();
+}
+
+Value Eval(Expression* expr,Array<ParameterExpression> parameters){
+   Value ret = {};
+   switch(expr->type){
+   case Expression::LITERAL: {
+      ret = expr->val;
+   } break;
+   case Expression::OPERATION: {
+      // TODO: Not first place where we have default operation behaviour. Refactor into a single place
+      switch(expr->op[0]){
+      case '+': {
+         ret = MakeValue(Eval(expr->expressions[0],parameters).number
+                         + Eval(expr->expressions[1],parameters).number);
+      } break;
+      case '-': {
+         ret = MakeValue(Eval(expr->expressions[0],parameters).number
+                         - Eval(expr->expressions[1],parameters).number);
+      } break;
+      case '*': {
+         ret = MakeValue(Eval(expr->expressions[0],parameters).number
+                         * Eval(expr->expressions[1],parameters).number);
+      } break;
+      case '/': {
+         ret = MakeValue(Eval(expr->expressions[0],parameters).number
+                         / Eval(expr->expressions[1],parameters).number);
+      } break;
+      default: {
+         printf("%s\n",expr->op);
+         NOT_IMPLEMENTED;
+      } break;
+      }
+   } break;
+   case Expression::IDENTIFIER: {
+      String id = expr->id;
+
+      for(ParameterExpression& p : parameters){
+         if(CompareString(p.name,id)){
+            ret = Eval(p.expr,parameters);
+            break;
+         }
+      }
+   } break;
+   default: {
+      printf("%d\n",(int) expr->type);
+      NOT_IMPLEMENTED;
+   } break;
+   }
+
+   return ret;
+}
+
+
+

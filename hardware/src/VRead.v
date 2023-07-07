@@ -5,7 +5,7 @@ module VRead #(
    parameter ADDR_W = 10,
    parameter MEM_ADDR_W = 10,
    parameter PERIOD_W = 10,
-   parameter AXI_ADDR_W = 64
+   parameter AXI_ADDR_W = 32
    )
    (
    input                  clk,

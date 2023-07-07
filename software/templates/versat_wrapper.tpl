@@ -13,10 +13,8 @@ VerilatedContext* contextp = new VerilatedContext;
 static int zeros[99] = {};
 static Array<int> zerosArray = {zeros,99};
 
-#{for module modules}
 #include "V@{module.name}.h"
 static V@{module.name}* dut = NULL;
-#{end}
 
 #define INIT(unit) \
    unit->run = 0; \
@@ -170,8 +168,6 @@ static const int MEMORY_LATENCY = 0;
 // databus is used to read data to memories
 // while memory to databus usually passes through a register that holds the data.
 // and therefore order of evaluation usually favours databus first and memories after
-
-#{for module modules}
 
 void @{module.name}_VCDFunction(FUInstance* inst,FILE* out,VCDMapping& currentMapping,Array<int>,bool firstTime,bool printDefinitions){
    if(printDefinitions){
@@ -579,12 +575,8 @@ FUDeclaration* @{module.name}_Register(Versat* versat){
    return RegisterFU(versat,decl);
 }
 
-#{end}
-
 extern "C" void RegisterAllVerilogUnits@{namespace}(Versat* versat){
-   #{for module modules}
    @{module.name}_Register(versat);
-   #{end}
 }
 
 extern "C" void InitializeVerilator(){
