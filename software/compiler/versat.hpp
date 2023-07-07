@@ -147,6 +147,7 @@ struct DebugState{
 };
 
 struct Options{
+   int architectureBitSize;
    bool shadowRegister;
 };
 

@@ -327,7 +327,9 @@ int CountNonOperationChilds(Accelerator* accel){
 void RegisterSpecificUnits(Versat* versat);
 
 extern "C" void DebugAcceleratorC(Accelerator* accel){
+   #ifdef VERSAT_DEBUG
    DebugAccelerator(accel);
+   #endif
 }
 
 extern "C" Versat* InitVersatC(int base,int numberConfigurations,bool initUnits){
@@ -1038,7 +1040,7 @@ FUDeclaration* RegisterModuleInfo(Versat* versat,ModuleInfo* info){
             Expression* expr = PushStruct<Expression>(arena);
 
             expr->type = Expression::LITERAL;
-            expr->val = MakeValue(64);
+            expr->val = MakeValue(versat->opts.architectureBitSize);
             
             def.expr = expr;
          }

@@ -202,7 +202,8 @@ int main(int argc,const char* argv[]){
    // TODO: Add options directly to versat
    ArgumentOptions* opts = ParseCommandLineOptions(argc,argv,perm,temp);
    versat->outputLocation = opts->outputFilepath;
-
+   versat->opts.architectureBitSize = opts->bitSize;
+   
    // Check existance of Verilator. We cannot proceed without Verilator
    if(opts->verilatorRoot.size == 0){
       bool lackOfVerilator = false;
