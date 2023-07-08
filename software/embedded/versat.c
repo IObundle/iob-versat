@@ -3,17 +3,28 @@
 #ifdef __cplusplus
 #include "utils.hpp"
 #else
+#undef  ARRAY_SIZE
 #define ARRAY_SIZE(arr) (sizeof(arr) / sizeof(arr[0]))
 #define TIME_IT(...) 
 #endif
-
-#include "printf.h"
+  
 #define MEMSET(base, location, value) (*((volatile int*) (base + (sizeof(int)) * location)) = (int) value)
 #define MEMGET(base, location)        (*((volatile int*) (base + (sizeof(int)) * location)))
 
 #include "iob-timer.h"
 
-#if 0
+#include "printf.h"
+
+#ifndef __cplusplus
+#include "stdint.h"
+typedef uint64_t uint64;
+
+typedef struct{
+   uint64 time;
+} NanoSecond;
+#endif
+
+#if 1
 NanoSecond GetTime(){
    NanoSecond res = {};
    res.time = (uint64) timer_time_us() * 1000;
@@ -100,3 +111,7 @@ void VersatUnitWrite(int addr,int val){
    *ptr = val;
 }
 
+int VersatUnitRead(int base,int index){
+   int* ptr = (int*) base + index;
+   return *ptr;
+}

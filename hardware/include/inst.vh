@@ -9,9 +9,11 @@
    `endif
    wire [32-1:0] versat_awaddr;
    wire [32-1:0] versat_araddr;
+   wire m_axi_awlock_extra;
+   wire m_axi_arlock_extra;
 
    iob_versat #(
-       .AXI_ID_W(AXI_ID_W)
+       .AXI_ID_W(1)
    ) versat ( 
       // AXI4 master interface
       `ifdef VERSAT_IO
@@ -21,7 +23,7 @@
       .m_axi_awlen(m_axi_awlen[1*8+:8]), 
       .m_axi_awsize(m_axi_awsize[1*3+:3]), 
       .m_axi_awburst(m_axi_awburst[1*2+:2]), 
-      .m_axi_awlock(m_axi_awlock[1*2+:2]), 
+      .m_axi_awlock({m_axi_awlock_extra,m_axi_awlock[1*1+:1]}), 
       .m_axi_awcache(m_axi_awcache[1*4+:4]), 
       .m_axi_awprot(m_axi_awprot[1*3+:3]),
       .m_axi_awqos(m_axi_awqos[1*4+:4]), 
@@ -44,7 +46,7 @@
       .m_axi_arlen(m_axi_arlen[1*8+:8]), 
       .m_axi_arsize(m_axi_arsize[1*3+:3]), 
       .m_axi_arburst(m_axi_arburst[1*2+:2]), 
-      .m_axi_arlock(m_axi_arlock[1*2+:2]), 
+      .m_axi_arlock({m_axi_arlock_extra,m_axi_arlock[1*1+:1]}), 
       .m_axi_arcache(m_axi_arcache[1*4+:4]), 
       .m_axi_arprot(m_axi_arprot[1*3+:3]), 
       .m_axi_arqos(m_axi_arqos[1*4+:4]), 
@@ -90,7 +92,7 @@
       assign m_axi_awlen[1*8+:8] = 0;
       assign m_axi_awsize[1*3+:3] = 0;
       assign m_axi_awburst[1*2+:2] = 0;
-      assign m_axi_awlock[1*2+:2] = 0;
+      assign m_axi_awlock[1*1+:1] = 0;
       assign m_axi_awcache[1*4+:4] = 0;
       assign m_axi_awprot[1*3+:3] = 0;
       assign m_axi_awqos[1*4+:4] = 0;

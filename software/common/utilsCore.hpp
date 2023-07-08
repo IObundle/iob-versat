@@ -25,6 +25,8 @@
 #define ALIGN_16(val) (((val) + 15) & ~15)
 #define ALIGN_32(val) (((val) + 31) & ~31)
 #define ALIGN_64(val) (((val) + 63) & ~63) // Usually a cache line
+
+#undef  ARRAY_SIZE
 #define ARRAY_SIZE(array) ((int) (sizeof(array) / sizeof(array[0])))
 
 #define IS_ALIGNED_2(val) ((((uptr) val) & 1) == 0x0)

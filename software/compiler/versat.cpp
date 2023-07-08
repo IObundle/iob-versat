@@ -1047,7 +1047,7 @@ FUDeclaration* RegisterModuleInfo(Versat* versat,ModuleInfo* info){
 
          instantiated[i] = def;
       }
-   
+
       for(int i = 0; i < info->configs.size; i++){
          WireExpression& wire = info->configs[i];
 

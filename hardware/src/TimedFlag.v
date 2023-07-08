@@ -1,5 +1,7 @@
 `timescale 1ns / 1ps
 
+/*
+
 module TimedFlag #(
    parameter DATA_W = 32,
    parameter ADDR_W = 10,
@@ -131,3 +133,5 @@ always @(posedge clk,posedge rst) begin
 end
 
 endmodule
+
+*/

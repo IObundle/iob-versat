@@ -141,14 +141,14 @@ wire [7:0]  databus_len[@{nIO}];
 wire databus_last[@{nIO}];
 
 #{for i (nIO - 1)}
-assign databus_ready[@{databusCounter + 1}] = m_databus_ready[@{databusCounter + 1}];
-assign m_databus_valid[@{databusCounter + 1}] = databus_valid[@{databusCounter + 1}];
-assign m_databus_addr[(@{(databusCounter + 1)} * AXI_ADDR_W) +: AXI_ADDR_W] = databus_addr[@{databusCounter + 1}];
-assign databus_rdata[@{databusCounter + 1}] = m_databus_rdata;
-assign m_databus_wdata[@{(databusCounter + 1) * 32} +: 32] = databus_wdata[@{databusCounter + 1}];
-assign m_databus_wstrb[@{(databusCounter + 1) * 4} +: 4] = databus_wstrb[@{databusCounter + 1}];
-assign m_databus_len[@{(databusCounter + 1) * 8} +: 8] = databus_len[@{databusCounter + 1}];
-assign databus_last[@{databusCounter + 1}] = m_databus_last[@{databusCounter + 1}];
+assign databus_ready[@{databusCounter}] = m_databus_ready[@{i}];
+assign m_databus_valid[@{databusCounter}] = databus_valid[@{i}];
+assign m_databus_addr[(@{(databusCounter)} * AXI_ADDR_W) +: AXI_ADDR_W] = databus_addr[@{i}];
+assign databus_rdata[@{databusCounter}] = m_databus_rdata;
+assign m_databus_wdata[@{(databusCounter) * 32} +: 32] = databus_wdata[@{i}];
+assign m_databus_wstrb[@{(databusCounter) * 4} +: 4] = databus_wstrb[@{i}];
+assign m_databus_len[@{(databusCounter) * 8} +: 8] = databus_len[@{i}];
+assign databus_last[@{databusCounter}] = m_databus_last[@{i}];
 #{inc databusCounter}
 #{end}
 #{end}
@@ -512,7 +512,7 @@ end
 #{set staticDataIndex staticStart}
 #{set stateDataIndex 0}
 #{set delaySeen 0}
-#{set ioIndex 1}
+#{set ioIndex 0}
 #{set externalCounter 0}
 #{set memoryMappedIndex 0}
 #{set doneCounter 0}
