@@ -327,7 +327,7 @@ int CountNonOperationChilds(Accelerator* accel){
 void RegisterSpecificUnits(Versat* versat);
 
 extern "C" void DebugAcceleratorC(Accelerator* accel){
-   DebugAccelerator(accel);
+   //DebugAccelerator(accel);
 }
 
 extern "C" Versat* InitVersatC(int base,int numberConfigurations,bool initUnits){
