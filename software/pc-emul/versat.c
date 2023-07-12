@@ -1,4 +1,5 @@
 #include "versat_accel.h"
+#include <string.h>
 
 #define IMPLEMENT_VERILOG_UNITS
 
@@ -24,7 +25,7 @@ volatile AcceleratorState* accelState = nullptr;
 
 int versat_base;
 
-extern "C"{
+//extern "C"{
 void InitializeVerilator();
 Versat* InitVersatC(int base,int numberConfigurations,bool initUnits);
 void DebugAcceleratorC(Accelerator* accel);
@@ -37,7 +38,7 @@ void SignalLoopC(Accelerator* accel);
    
 void* GetStartOfConfig(Accelerator* accel);
 void* GetStartOfState(Accelerator* accel);
-}
+//}
 
 void Debug(){
    DebugAcceleratorC(accel);
