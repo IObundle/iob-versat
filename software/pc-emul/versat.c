@@ -1,5 +1,13 @@
 #include "versat_accel.h"
 
+#ifndef __cplusplus
+typedef unsigned char bool;
+#include <string.h>
+#else
+#include <cstdlib>
+#include <cstring>
+#endif
+
 #define IMPLEMENT_VERILOG_UNITS
 
 #define ARRAY_SIZE(arr) (sizeof(arr) / sizeof(arr[0]))
@@ -9,13 +17,6 @@
 typedef struct Versat Versat;
 typedef struct Accelerator Accelerator;
 typedef struct FUDeclaration FUDeclaration;
-
-#ifndef __cplusplus
-typedef unsigned char bool;
-#else
-#include <cstdlib>
-#include <cstring>
-#endif
 
 static Versat* versat = nullptr;
 static Accelerator* accel = nullptr;
