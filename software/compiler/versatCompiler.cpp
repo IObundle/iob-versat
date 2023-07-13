@@ -34,6 +34,7 @@ struct ArgumentOptions{
    int bitSize;
    bool addInputAndOutputsToTop;
    bool useDMA;
+   bool archHasDatabus;
 };
 
 String GetAbsolutePath(const char* path,Arena* arena){
@@ -112,6 +113,11 @@ ArgumentOptions* ParseCommandLineOptions(int argc,const char* argv[],Arena* perm
       if(str.size >= 2 && str[0] == '-' && str[1] == 'd'){
          Assert(str.size == 2);
          opts->useDMA = true;
+      }
+
+      if(str.size >= 2 && str[0] == '-' && str[1] == 'D'){
+         Assert(str.size == 2);
+         opts->archHasDatabus = true;
       }
 
       if(str.size >= 2 && str[0] == '-' && str[1] == 'I'){
@@ -203,7 +209,8 @@ int main(int argc,const char* argv[]){
    ArgumentOptions* opts = ParseCommandLineOptions(argc,argv,perm,temp);
    versat->outputLocation = opts->outputFilepath;
    versat->opts.architectureBitSize = opts->bitSize;
-
+   versat->opts.architectureHasDatabus = opts->archHasDatabus;
+   
    // Check existance of Verilator. We cannot proceed without Verilator
    if(opts->verilatorRoot.size == 0){
       bool lackOfVerilator = false;

@@ -102,8 +102,10 @@ void OutputVersatSource(Versat* versat,Accelerator* accel,const char* directoryP
    fprintf(c,"`define MAPPED_UNITS %d\n",val.unitsMapped);
    fprintf(c,"`define MAPPED_BIT %d\n",val.memoryConfigDecisionBit);
    fprintf(c,"`define nIO %d\n",val.nUnitsIO);
-   fprintf(c,"`define VERSAT_ARCH_HAS_IO 1\n"); // TODO: Add concept of architecture. Need to make this generic.
-   //fprintf(c,"`define VERSAT_ARCH_IO_INDEX 1"\n); // To make it easier to integrate with other peripherals
+
+   if(versat->opts.architectureHasDatabus){
+      fprintf(c,"`define VERSAT_ARCH_HAS_IO 1\n");
+   }
 
    if(unit.inputs || unit.outputs){
       fprintf(c,"`define EXTERNAL_PORTS\n");
