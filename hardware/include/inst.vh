@@ -19,7 +19,7 @@
       `ifdef VERSAT_IO
       //address write
       .m_axi_awid(m_axi_awid[1*1+:1]), 
-      .m_axi_awaddr(versat_awaddr), 
+      .m_axi_awaddr(m_axi_awaddr[1*`DDR_ADDR_W+:`DDR_ADDR_W]), 
       .m_axi_awlen(m_axi_awlen[1*8+:8]), 
       .m_axi_awsize(m_axi_awsize[1*3+:3]), 
       .m_axi_awburst(m_axi_awburst[1*2+:2]), 
@@ -42,7 +42,7 @@
       .m_axi_bready(m_axi_bready[1*1+:1]), 
       //address read
       .m_axi_arid(m_axi_arid[1*1+:1]), 
-      .m_axi_araddr(versat_araddr), 
+      .m_axi_araddr(m_axi_araddr[1*`DDR_ADDR_W+:`DDR_ADDR_W]), 
       .m_axi_arlen(m_axi_arlen[1*8+:8]), 
       .m_axi_arsize(m_axi_arsize[1*3+:3]), 
       .m_axi_arburst(m_axi_arburst[1*2+:2]), 

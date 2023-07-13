@@ -1,8 +1,6 @@
-Need to check out:
-
-   I can find out the include path for verilator by calling verilator with a simple example and then passing a couple of flags to the g++ compiler which print out the location of includes searched. That way, if verilator works, then my program works.
-
 Misc:
+
+   Add byte space and symbol space structs and functions, rework code to use them throught the codebase.
 
    I'm tired of having to handle printf style functions.
       Just code an alternative, have it support the kind of expressions that you frequently use, everything else can be equal to printf style

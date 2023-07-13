@@ -16,12 +16,18 @@ module Generator #(
    input [31:0]            start,
    input [31:0]            shift,
    input [31:0]            incr,
+   input [31:0]            off_value,
 
    input [31:0]            delay0,
 
    //outputs 
    (* versat_latency = 0 *) output [31:0] out0 // Latency zero because Address Gen is one cycle ahead in providing the address
    );
+
+wire [31:0] genOut;
+wire done;
+
+assign out0 = genOut; //done ? off_value : genOut;
 
 MyAddressGen #(.ADDR_W(32)) addrGen(
    .clk(clk),
@@ -41,9 +47,9 @@ MyAddressGen #(.ADDR_W(32)) addrGen(
    //outputs 
    .valid(),
    .ready(1'b1),
-   .addr(out0),
+   .addr(genOut),
 
-   .done()
+   .done(done)
    );
 
 endmodule

@@ -58,14 +58,22 @@ void versat_init(int base){
    }
 }
 
-static inline void RunAcceleratorOnce(int times){ // times inside value amount
-   MEMSET(versat_base,0x0,times);
+void StartAccelerator(){
+   MEMSET(versat_base,0x0,1);
+}
+
+void EndAccelerator(){
    while(1){
       int val = MEMGET(versat_base,0x0);
-      if(val){ // We wait until accelerator finishes before returning. Not mandatory, but less error prone and no need to squeeze a lot of performance for now (In the future, the concept of returning immediatly and having the driver tell when to wait will be implemented)  
+      if(val){
          break;
       }
    } 
+}
+
+static inline void RunAcceleratorOnce(int times){ // times inside value amount
+   MEMSET(versat_base,0x0,times);
+   EndAccelerator();
 }
 
 void RunAccelerator(int times){

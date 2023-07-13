@@ -52,6 +52,8 @@ void versat_init(int base);
 
 void Debug();
 void RunAccelerator(int times);
+void StartAccelerator();
+void EndAccelerator();
 void VersatMemoryCopy(iptr* dest,iptr* data,int size);
 void VersatUnitWrite(int addr,int val);
 int VersatUnitRead(int base,int index);

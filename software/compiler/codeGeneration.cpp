@@ -15,7 +15,7 @@ void OutputCircuitSource(Versat* versat,FUDeclaration* decl,Accelerator* accel,F
    Assert(versat->debug.outputAccelerator); // Because FILE is created outside, code should not call this function if flag is set
 
    Arena* arena = &versat->temp;
-   ArenaMarker marker(arena);
+   BLOCK_REGION(arena);
 
    VersatComputedValues val = ComputeVersatValues(versat,accel);
 
@@ -29,6 +29,20 @@ void OutputCircuitSource(Versat* versat,FUDeclaration* decl,Accelerator* accel,F
    int i = 0;
    FOREACH_LIST_INDEXED(ptr,accel->ordered,i){
       ordered[i] = ptr->node;
+   }
+
+   {
+      int memoryPos = 0;
+      FOREACH_LIST(ptr,accel->allocated){
+         FUInstance* inst = ptr->inst;
+         FUDeclaration* decl = inst->declaration;
+
+         if(decl->isMemoryMapped) {
+            memoryPos = AlignBitBoundary(memoryPos,decl->memoryMapBits);
+            inst->memMapped = (int*) memoryPos;
+            memoryPos += 1 << decl->memoryMapBits;
+         }
+      }
    }
 
    ComputedData computedData = CalculateVersatComputedData(accel->allocated,val,arena);
@@ -90,7 +104,7 @@ void OutputVersatSource(Versat* versat,Accelerator* accel,const char* directoryP
    fprintf(c,"`define nIO %d\n",val.nUnitsIO);
    fprintf(c,"`define VERSAT_ARCH_HAS_IO 1\n"); // TODO: Add concept of architecture. Need to make this generic.
    //fprintf(c,"`define VERSAT_ARCH_IO_INDEX 1"\n); // To make it easier to integrate with other peripherals
-   
+
    if(unit.inputs || unit.outputs){
       fprintf(c,"`define EXTERNAL_PORTS\n");
    }
@@ -132,7 +146,7 @@ void OutputVersatSource(Versat* versat,Accelerator* accel,const char* directoryP
    }
 
    ComputedData computedData = CalculateVersatComputedData(accel->allocated,val,arena);
-   
+
    TemplateSetDefaults(versat);
 
    TemplateSetNumber("nInputs",unit.inputs);
@@ -171,7 +185,7 @@ void OutputVersatSource(Versat* versat,Accelerator* accel,const char* directoryP
    TemplateSetBool("useDMA",accel->useDMA);
    versat->opts.shadowRegister = true;
    TemplateSetCustom("opts",&versat->opts,"Options");
-   
+
    ProcessTemplate(s,BasicTemplates::topAcceleratorTemplate,&versat->temp);
 
    TemplateSetNumber("configurationSize",accel->configAlloc.size);
@@ -204,7 +218,7 @@ void OutputVersatSource(Versat* versat,Accelerator* accel,const char* directoryP
       view *= sizeof(int);
       pair.second.ptr = (iptr*) view;
    }
-   
+
    #if 0
    for(Pair<String,SizedConfig>& pair : namedMem){
       int* view = (int*) pair.second.ptr;

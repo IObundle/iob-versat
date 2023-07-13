@@ -160,7 +160,7 @@ int RandomNumberBetween(int minimum,int maximum,int randomValue){
       return minimum;
    }
 
-   int res = minimum + Abs(randomValue % (delta + 1));
+   int res = minimum + Abs(randomValue % delta);
    return res;
 }
 

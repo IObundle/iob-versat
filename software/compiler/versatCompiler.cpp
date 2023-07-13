@@ -203,7 +203,7 @@ int main(int argc,const char* argv[]){
    ArgumentOptions* opts = ParseCommandLineOptions(argc,argv,perm,temp);
    versat->outputLocation = opts->outputFilepath;
    versat->opts.architectureBitSize = opts->bitSize;
-   
+
    // Check existance of Verilator. We cannot proceed without Verilator
    if(opts->verilatorRoot.size == 0){
       bool lackOfVerilator = false;
@@ -367,7 +367,7 @@ int main(int argc,const char* argv[]){
    Array<Wire> allConfigsHeaderSide = OrderedConfigurationsAsArray(configs,&versat->permanent);
 
    // We need to bundle config + static (type->config) only contains config, but not static
-   Array<Wire> allConfigsVerilatorSide = PushArray<Wire>(temp,99); // TODO: Correct size
+   Array<Wire> allConfigsVerilatorSide = PushArray<Wire>(temp,999); // TODO: Correct size
    #if 1
    {
       int index = 0;

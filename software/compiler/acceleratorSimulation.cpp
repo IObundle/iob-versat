@@ -223,7 +223,7 @@ void AcceleratorRunOnce(Accelerator* accel){
       PrintVCD(accelOutputFile,accel,time++,0,1,vcdSameCheckSpace,arena);
    }
 
-   for(int cycle = 0; cycle < 10000; cycle++){ // Max amount of iterations
+   for(int cycle = 0; cycle < 1000; cycle++){ // Max amount of iterations
       Assert(accel->outputAlloc.size == accel->storedOutputAlloc.size);
 
       iter.StartOrdered(accel,arena,true);

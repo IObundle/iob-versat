@@ -594,7 +594,7 @@ extern "C" int UnitRead(Versat* versat,Accelerator* accel,int addr){
       iptr memAddress = (iptr) inst->memMapped;
       iptr delta = (1 << (decl->memoryMapBits + 2));
       if(addr >= memAddress && addr < (memAddress + delta)){
-         return AccessMemory(inst,addr - memAddress,0,0);
+         return AccessMemory(inst,(addr - memAddress) / 4 ,0,0); // Convert to symbol space
       }
    }
    assert("Failed to read unit");

@@ -51,7 +51,7 @@ reg [31:0] delay;
 assign ext_dp_write_0_port_0 = 1'b1;
 
 assign ext_dp_addr_0_port_1 = addr;
-assign rdata = ext_dp_in_0_port_1;
+assign rdata = ready ? ext_dp_in_0_port_1 : 0;
 assign ext_dp_enable_0_port_1 = valid;
 assign ext_dp_write_0_port_1 = 1'b0;
 

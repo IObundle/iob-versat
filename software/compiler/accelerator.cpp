@@ -1920,6 +1920,7 @@ ComputedData CalculateVersatComputedData(InstanceNode* instances,VersatComputedV
          FUDeclaration* decl = ptr->inst->declaration;
          iptr offset = (iptr) ptr->inst->memMapped;
          iptr mask = offset >> decl->memoryMapBits;
+
          iptr maskSize = val.memoryAddressBits - decl->memoryMapBits;
 
          //maskSize += 1;

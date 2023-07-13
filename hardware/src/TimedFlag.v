@@ -1,7 +1,5 @@
 `timescale 1ns / 1ps
 
-/*
-
 module TimedFlag #(
    parameter DATA_W = 32,
    parameter ADDR_W = 10,
@@ -42,6 +40,21 @@ module TimedFlag #(
 
    input [31:0] delay0
 );
+
+assign ext_dp_addr_0_port_1 = addr;
+assign ext_dp_out_0_port_1 = wdata;
+assign ext_dp_enable_0_port_1 = valid;
+assign ext_dp_write_0_port_1 = valid;
+
+always @(posedge clk,posedge rst) begin
+   if(rst) begin
+      ready <= 1'b0;
+   end if(valid) begin
+      ready <= 1'b1;
+   end else begin
+      ready <= 1'b0;
+   end
+end
 
 assign ext_dp_write_0_port_0 = 1'b0;
 
@@ -114,6 +127,8 @@ module MemoryScanner #(
 
 reg hasValueStored;
 
+assign currentValue = dataIn;
+
 assign enable = nextValue || (!nextValue && !hasValueStored);
 
 always @(posedge clk,posedge rst) begin
@@ -133,5 +148,3 @@ always @(posedge clk,posedge rst) begin
 end
 
 endmodule
-
-*/

@@ -76,6 +76,14 @@ void versat_init(int base){
    }   
 }
 
+void StartAccelerator(){
+   RunAccelerator(1);
+}
+
+void EndAccelerator(){
+   // Do nothing. Start accelerator does everything, for now
+}
+
 void RunAccelerator(int times){
    AcceleratorRunC(accel,times);
 }
@@ -90,7 +98,7 @@ void VersatUnitWrite(int addrArg,int val){
 }
 
 int VersatUnitRead(int base,int index){
-   int addr = base + index - (versat_base + memMappedStart); // Convert back to zero based address
+   int addr = base + (index * 4) - (versat_base + memMappedStart); // Convert back to zero based byte space address
    return UnitRead(versat,accel,addr);
 }
 
