@@ -32,9 +32,9 @@ void PerformDefineSubstitution(Arena* output,MacroMap& macros,String name){
    PushString(output,finish);
 }
 
-void PreprocessVerilogFile_(Arena* output, String fileContent,MacroMap& macros,std::vector<const char*>* includeFilepaths,Arena* temp);
+void PreprocessVerilogFile_(Arena* output, String fileContent,MacroMap& macros,std::vector<String>* includeFilepaths,Arena* temp);
 
-static void DoIfStatement(Arena* output,Tokenizer* tok,MacroMap& macros,std::vector<const char*>* includeFilepaths,Arena* temp){
+static void DoIfStatement(Arena* output,Tokenizer* tok,MacroMap& macros,std::vector<String>* includeFilepaths,Arena* temp){
    Token first = tok->NextToken();
    Token macroName = tok->NextToken();
 
@@ -83,7 +83,7 @@ static void DoIfStatement(Arena* output,Tokenizer* tok,MacroMap& macros,std::vec
    }
 }
 
-void PreprocessVerilogFile_(Arena* output, String fileContent,MacroMap& macros,std::vector<const char*>* includeFilepaths,Arena* temp){
+void PreprocessVerilogFile_(Arena* output, String fileContent,MacroMap& macros,std::vector<String>* includeFilepaths,Arena* temp){
    Tokenizer tokenizer = Tokenizer(fileContent, "()`\\\",+-/*",{"`include","`define","`timescale","`ifdef","`else","`elsif","`endif","`ifndef"});
    Tokenizer* tok = &tokenizer;
 
@@ -99,8 +99,8 @@ void PreprocessVerilogFile_(Arena* output, String fileContent,MacroMap& macros,s
          // Open include file
          std::string filename(UNPACK_SS_REVERSE(fileName));
          FILE* file = nullptr;
-         for(const char* str : *includeFilepaths){
-            std::string string(str);
+         for(String str : *includeFilepaths){
+            std::string string(str.data,str.size);
 
             std::string filepath;
             if(string.back() == '/'){
@@ -121,8 +121,8 @@ void PreprocessVerilogFile_(Arena* output, String fileContent,MacroMap& macros,s
             printf("Looked on the following folders:\n");
 
             printf("  %s\n",GetCurrentDirectory());
-            for(const char* str : *includeFilepaths){
-               printf("  %s\n",str);
+            for(String str : *includeFilepaths){
+               printf("  %.*s\n",UNPACK_SS(str));
             }
 
             DEBUG_BREAK();
@@ -216,7 +216,7 @@ void PreprocessVerilogFile_(Arena* output, String fileContent,MacroMap& macros,s
    }
 }
 
-String PreprocessVerilogFile(Arena* output, String fileContent,std::vector<const char*>* includeFilepaths,Arena* arena){
+String PreprocessVerilogFile(Arena* output, String fileContent,std::vector<String>* includeFilepaths,Arena* arena){
    MacroMap macros;
 
    String res = {};
@@ -529,7 +529,7 @@ static Module ParseModule(Tokenizer* tok,Arena* arena){
    return module;
 }
 
-std::vector<Module> ParseVerilogFile(String fileContent, std::vector<const char*>* includeFilepaths, Arena* arena){
+std::vector<Module> ParseVerilogFile(String fileContent, std::vector<String>* includeFilepaths, Arena* arena){
    Tokenizer tokenizer = Tokenizer(fileContent,":,()[]{}\"+-/*=",{"#(","+:","-:","(*","*)"});
    Tokenizer* tok = &tokenizer;
 

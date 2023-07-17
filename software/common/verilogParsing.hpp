@@ -169,8 +169,8 @@ struct ModuleInfoInstance{
    bool signalLoop;
 };
 
-String PreprocessVerilogFile(Arena* output, String fileContent,std::vector<const char*>* includeFilepaths,Arena* tempArena);
-std::vector<Module> ParseVerilogFile(String fileContent, std::vector<const char*>* includeFilepaths, Arena* tempArena); // Only handles preprocessed files
+String PreprocessVerilogFile(Arena* output, String fileContent,std::vector<String>* includeFilepaths,Arena* tempArena);
+std::vector<Module> ParseVerilogFile(String fileContent, std::vector<String>* includeFilepaths, Arena* tempArena); // Only handles preprocessed files
 ModuleInfo ExtractModuleInfo(Module& module,Arena* permanent,Arena* tempArena);
 void OutputModuleInfos(FILE* output,ModuleInfoInstance info,String nameSpace,CompiledTemplate* unitVerilogData,Arena* temp,Array<Wire> configsHeaderSide,Array<String> statesHeaderSide); // TODO: This portion should be remade, parameters are not the ones we want (VerilogParsing do not need to know about Accelerator)
 

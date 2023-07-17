@@ -61,6 +61,8 @@ module VRead #(
    input [MEM_ADDR_W-1:0] shift2B,
    input [MEM_ADDR_W-1:0] incr2B,
 
+   input                  disabled,
+
    input [31:0]            delay0
    );
 
@@ -83,7 +85,7 @@ module VRead #(
       if(rst) begin
          doneA <= 1'b1;
          doneB <= 1'b1;
-      end else if(run) begin
+      end else if(run && !disabled) begin
          doneA <= 1'b0;
          doneB <= 1'b0;
       end else begin 
@@ -144,7 +146,7 @@ module VRead #(
    begin
       if(rst)
          pingPongState <= 0;
-      else if(run)
+      else if(run && !disabled)
          pingPongState <= pingPong ? (!pingPongState) : 1'b0;
    end
 
@@ -156,14 +158,14 @@ module VRead #(
    begin
       if(rst)
          databus_addr_0 <= 0;
-      else if(run)
+      else if(run && !disabled)
          databus_addr_0 <= ext_addr;
    end
 
    MyAddressGen addrgenA(
       .clk(clk),
       .rst(rst),
-      .run(run),
+      .run(run && !disabled),
 
       //configurations 
       .iterations(iterA),
@@ -184,7 +186,7 @@ module VRead #(
     xaddrgen2 addrgen2B (
                        .clk(clk),
                        .rst(rst),
-                       .run(run),
+                       .run(run && !disabled),
                        .iterations(iterB),
                        .period(perB),
                        .duty(dutyB),

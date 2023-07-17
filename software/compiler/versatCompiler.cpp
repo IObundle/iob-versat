@@ -25,8 +25,8 @@ struct OptionFormat{
 
 struct ArgumentOptions{
    std::vector<String> verilogFiles;
-   std::vector<const char*> includePaths;
-   std::vector<const char*> extraSources;
+   std::vector<String> extraSources;
+   std::vector<String> includePaths;
    const char* specificationFilepath;
    const char* topName;
    String outputFilepath;
@@ -77,10 +77,10 @@ ArgumentOptions* ParseCommandLineOptions(int argc,const char* argv[],Arena* perm
                printf("Missing argument\n");
                exit(-1);
             }
-            opts->extraSources.push_back(argv[i + 1]);
+            opts->extraSources.push_back(GetAbsolutePath(argv[i + 1],perm));
             i += 1;
          } else {
-            opts->extraSources.push_back(&str.data[2]);
+            opts->extraSources.push_back(GetAbsolutePath(&str.data[2],perm));
          }
 
          continue;
@@ -126,10 +126,10 @@ ArgumentOptions* ParseCommandLineOptions(int argc,const char* argv[],Arena* perm
                printf("Missing argument\n");
                exit(-1);
             }
-            opts->includePaths.push_back(argv[i + 1]);
+            opts->includePaths.push_back(GetAbsolutePath(argv[i + 1],perm));
             i += 1;
          } else {
-            opts->includePaths.push_back(&str.data[2]);
+            opts->includePaths.push_back(GetAbsolutePath(&str.data[2],perm));
          }
 
          continue;
@@ -255,6 +255,8 @@ int main(int argc,const char* argv[]){
    for(String file : opts->verilogFiles){
       String content = PushFile(temp,StaticFormat("%.*s",UNPACK_SS(file)));
 
+      printf("%.*s\n",UNPACK_SS(file));
+      
       if(content.size == 0){
          printf("Failed to open file %.*s\n. Exiting\n",UNPACK_SS(file));
          exit(-1);
@@ -457,8 +459,8 @@ int main(int argc,const char* argv[]){
       TemplateSetString("verilatorRoot",opts->verilatorRoot);
       TemplateSetNumber("bitWidth",opts->bitSize);
       TemplateSetArray("verilogFiles","String",opts->verilogFiles.data(),opts->verilogFiles.size());
-      TemplateSetArray("extraSources","char*",opts->extraSources.data(),opts->extraSources.size());
-      TemplateSetArray("includePaths","char*",opts->includePaths.data(),opts->includePaths.size());
+      TemplateSetArray("extraSources","String",opts->extraSources.data(),opts->extraSources.size());
+      TemplateSetArray("includePaths","String",opts->includePaths.data(),opts->includePaths.size());
       TemplateSetString("typename",topLevelTypeStr);
       TemplateSetString("hack",STRING("#"));
       TemplateSetString("rootPath",STRING(fixedPath.c_str()));

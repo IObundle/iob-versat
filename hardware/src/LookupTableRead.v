@@ -61,6 +61,8 @@ module LookupTableRead #(
       input [9:0] shift2B,
       input [9:0] incr2B,
 
+      input       disabled,
+
       input [31:0] delay0,
 
       input running,
@@ -75,7 +77,7 @@ module LookupTableRead #(
       if(rst)
          ext_dp_addr_0_port_0 <= 0;
       else
-         ext_dp_addr_0_port_0 <= {pingPongState ^ in0[ADDR_W-1],in0[ADDR_W-2:0]};
+         ext_dp_addr_0_port_0 <= pingPong ? {!pingPongState ^ in0[ADDR_W-1],in0[ADDR_W-2:0]} : in0[ADDR_W-1:0];
    end
 
    assign ext_dp_enable_0_port_0 = 1'b1;
@@ -90,7 +92,7 @@ module LookupTableRead #(
    begin
       if(rst) begin
          done <= 1'b1;
-      end else if(run) begin
+      end else if(run && !disabled) begin
          done <= 1'b0;
       end else begin 
          if(databus_valid_0 && databus_ready_0 && databus_last_0)
@@ -103,7 +105,7 @@ module LookupTableRead #(
    begin
       if(rst)
          pingPongState <= 0;
-      else if(run)
+      else if(run && !disabled)
          pingPongState <= pingPong ? (!pingPongState) : 1'b0;
    end
    
@@ -111,7 +113,7 @@ module LookupTableRead #(
    begin
       if(rst)
          databus_addr_0 <= 0;
-      else if(run)
+      else if(run && !disabled)
          databus_addr_0 <= ext_addr;
    end
 
@@ -127,7 +129,7 @@ module LookupTableRead #(
    MyAddressGen #(.ADDR_W(ADDR_W)) addrgenA(
       .clk(clk),
       .rst(rst),
-      .run(run),
+      .run(run && !disabled),
 
       //configurations 
       .iterations(iterA),
@@ -169,7 +171,7 @@ module LookupTableRead #(
       .rst(rst)
       );
 
-   assign ext_dp_addr_0_port_1 = {(!pingPongState) ^ write_addr[ADDR_W-1],write_addr[ADDR_W-2:0]};
+   assign ext_dp_addr_0_port_1 = pingPong ? {(pingPongState) ^ write_addr[ADDR_W-1],write_addr[ADDR_W-2:0]} : write_addr;
    assign ext_dp_enable_0_port_1 = write_en;
    assign ext_dp_write_0_port_1 = 1'b1;
    assign ext_dp_out_0_port_1 = write_data;
