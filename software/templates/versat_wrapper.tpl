@@ -16,6 +16,8 @@ static Array<int> zerosArray = {zeros,99};
 #include "V@{module.name}.h"
 static V@{module.name}* dut = NULL;
 
+extern bool CreateVCD;
+
 #define INIT(unit) \
    unit->run = 0; \
    unit->clk = 0; \
@@ -25,11 +27,11 @@ static V@{module.name}* dut = NULL;
 #define UPDATE(unit) \
    unit->clk = 0; \
    unit->eval(); \
-   tfp->dump(contextp->time()); \
+   if(CreateVCD) tfp->dump(contextp->time()); \
    contextp->timeInc(1); \
    unit->clk = 1; \
    unit->eval(); \
-   tfp->dump(contextp->time()); \
+   if(CreateVCD) tfp->dump(contextp->time()); \
    contextp->timeInc(1);
 
 #define RESET(unit) \
@@ -224,14 +226,16 @@ void @{module.name}_VCDFunction(FUInstance* inst,FILE* out,VCDMapping& currentMa
 }
 
 static void CloseWaveform(){
-   if(tfp){
+   if(CreateVCD && tfp){
       tfp->close();
    }
 }
 
 int32_t* @{module.name}_InitializeFunction(FUInstance* inst){
-   tfp = new VerilatedVcdC;
-
+   if(CreateVCD){
+      tfp = new VerilatedVcdC;
+   }
+   
    memset(inst->extraData,0,inst->declaration->extraDataOffsets.max);
 
    V@{module.name}* self = new (inst->extraData) V@{module.name}();
@@ -242,10 +246,13 @@ int32_t* @{module.name}_InitializeFunction(FUInstance* inst){
    }
 
    dut = self;
-   self->trace(tfp, 99);
-   tfp->open("system.vcd");
 
-   atexit(CloseWaveform);
+   if(CreateVCD){
+      self->trace(tfp, 99);
+      tfp->open("system.vcd");
+
+      atexit(CloseWaveform);
+   }        
 
    INIT(self);
 

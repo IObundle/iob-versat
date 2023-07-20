@@ -47,17 +47,15 @@ char* StaticFormat(const char* format,...){
    return buffer;
 }
 
-NanoSecond GetTime(){
+Time GetTime(){
    timespec time;
    clock_gettime(CLOCK_MONOTONIC, &time);
 
-   uint64 top = (uint64) Seconds(time.tv_sec).time;
-   uint64 bottom = (uint64) time.tv_nsec;
+   Time t = {};
+   t.seconds = time.tv_sec;
+   t.nanoSeconds = time.tv_nsec;
 
-   NanoSecond res = {};
-   res.time = top + bottom;
-
-   return res;
+   return t;
 }
 
 // Misc

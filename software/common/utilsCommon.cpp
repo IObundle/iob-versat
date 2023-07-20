@@ -40,38 +40,52 @@ static char* GetNumberRepr(uint64 number){
 
 void TimeIt::Output(){
    // Cannot use floating point because of embedded
-   NanoSecond end = GetTime();
+   Time end = GetTime();
 
-   uint64 diff = end.time - start.time;
-   int digits = NumberDigitsRepresentation(diff);
-   //sprintf(buffer,"%" PRId64,diff);
-   char* buffer = GetNumberRepr(diff);
+   Assert(end > start);
 
    printf("[TimeIt] %s: ",id);
 
-   int charSeen = 0;
-   for(int i = std::max(6,digits); i >= 3; i--){
-      if(i < digits){
-         printf("%c",buffer[charSeen++]);
-      } else if(i <= 6){
-         printf("0");
-      }
+   {
+      uint64 diff = end.seconds - start.seconds;
+      int digits = NumberDigitsRepresentation(diff);
+      char* secondsRepr = GetNumberRepr(diff);
 
-      if(i == 6){
-         printf(".");
+      for(int i = 0; i < digits; i++){
+         printf("%c",secondsRepr[i]);
+      }
+   }
+   printf(".");
+   {
+      uint64 diff = end.nanoSeconds - start.nanoSeconds;
+      int digits = NumberDigitsRepresentation(diff);
+      char* nanoRepr = GetNumberRepr(diff);
+
+      for(int i = 0; i < digits; i++){
+         printf("%c",nanoRepr[i]);
       }
    }
    printf("\n");
 }
 
-NanoSecond operator-(const NanoSecond& s1,const NanoSecond& s2){
-   NanoSecond res = {};
-   res.time = s1.time - s2.time;
+Time operator-(const Time& s1,const Time& s2){
+   Time res = {};
+
+   Assert(s1 > s2 || s1 == s2);
+
+   res.seconds = s1.seconds - s2.seconds;
+   res.nanoSeconds = s1.nanoSeconds - s2.nanoSeconds;
+   
    return res;
 }
 
-bool operator>(const NanoSecond& s1,const NanoSecond& s2){
-   bool res = s1.time > s2.time;
+bool operator>(const Time& s1,const Time& s2){
+   bool res = (s1.seconds == s2.seconds ? s1.nanoSeconds > s2.nanoSeconds : s1.seconds > s2.seconds);
+   return res;
+}
+
+bool operator==(const Time& s1,const Time& s2){
+   bool res = (s1.seconds == s2.seconds && s1.nanoSeconds == s2.nanoSeconds);
    return res;
 }
 

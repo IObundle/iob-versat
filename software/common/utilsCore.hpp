@@ -144,20 +144,22 @@ typedef uint64_t uint64;
 //typedef long long unsigned int uint64;
 #endif
 
-struct NanoSecond{
-   uint64 time;
+struct Time{
+   uint64 seconds;
+   uint64 nanoSeconds;
 };
 
-NanoSecond GetTime();
-NanoSecond operator-(const NanoSecond& s1,const NanoSecond& s2);
-bool operator>(const NanoSecond& s1,const NanoSecond& s2);
+Time GetTime();
+Time operator-(const Time& s1,const Time& s2);
+bool operator>(const Time& s1,const Time& s2);
+bool operator==(const Time& s1,const Time& s2);
 
-static constexpr NanoSecond Seconds(uint64 seconds){return (NanoSecond){seconds * 1000000000};};
+static constexpr Time Seconds(uint64 seconds){Time t = {}; t.seconds = seconds; return t;};
 
 // Automatically times a block in number of counts
 class TimeIt{
 public:
-	NanoSecond start;
+	Time start;
    const char* id;
    bool endedEarly;
 

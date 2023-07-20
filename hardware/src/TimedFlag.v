@@ -36,7 +36,10 @@ module TimedFlag #(
    output                ext_dp_enable_0_port_1,
    output                ext_dp_write_0_port_1,
 
-   (* versat_latency = 1 *) output reg [31:0] out0,
+   input [31:0]          in0,
+
+   (* versat_latency = 1 *) output reg [31:0] out0, // Current value
+   (* versat_latency = 1 *) output reg [31:0] out1, // Signal indicating change
 
    input [31:0] delay0
 );

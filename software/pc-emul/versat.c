@@ -50,7 +50,11 @@ void Debug(){
    DebugAcceleratorC(accel);
 }
 
+bool CreateVCD;
+
 void versat_init(int base){
+   CreateVCD = false;
+
    InitializeVerilator();
 
    versat_base = base;

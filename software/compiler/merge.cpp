@@ -586,7 +586,7 @@ CliqueState* InitMaxClique(ConsolidationGraph graph,int upperBound,Arena* arena)
    return state;
 }
 
-void Clique(CliqueState* state,ConsolidationGraph graphArg,int index,IndexRecord* record,int size,Arena* arena,NanoSecond MAX_CLIQUE_TIME){
+void Clique(CliqueState* state,ConsolidationGraph graphArg,int index,IndexRecord* record,int size,Arena* arena,Time MAX_CLIQUE_TIME){
    state->iterations += 1;
 
    //ConsolidationGraph graph = Copy(graphArg,arena);
@@ -609,7 +609,7 @@ void Clique(CliqueState* state,ConsolidationGraph graphArg,int index,IndexRecord
    }
 
    auto end = GetTime();
-   NanoSecond elapsed = end - state->start;
+   Time elapsed = end - state->start;
    if(elapsed > MAX_CLIQUE_TIME){
       state->found = true;
       return;
@@ -657,7 +657,7 @@ void Clique(CliqueState* state,ConsolidationGraph graphArg,int index,IndexRecord
    } while((num = graph.validNodes.GetNumberBitsSet()) != 0);
 }
 
-void RunMaxClique(CliqueState* state,Arena* arena,NanoSecond MAX_CLIQUE_TIME){
+void RunMaxClique(CliqueState* state,Arena* arena,Time MAX_CLIQUE_TIME){
    ConsolidationGraph graph = Copy(state->clique,arena);
    graph.validNodes.Fill(0);
 
@@ -707,7 +707,7 @@ void RunMaxClique(CliqueState* state,Arena* arena,NanoSecond MAX_CLIQUE_TIME){
    Assert(IsClique(state->clique).result);
 }
 
-CliqueState MaxClique(ConsolidationGraph graph,int upperBound,Arena* arena,NanoSecond MAX_CLIQUE_TIME){
+CliqueState MaxClique(ConsolidationGraph graph,int upperBound,Arena* arena,Time MAX_CLIQUE_TIME){
    CliqueState state = {};
    state.table = PushArray<int>(arena,graph.nodes.size);
    state.clique = Copy(graph,arena); // Preserve nodes and edges, but allocates different valid nodes
@@ -742,7 +742,7 @@ CliqueState MaxClique(ConsolidationGraph graph,int upperBound,Arena* arena,NanoS
       }
 
       auto end = GetTime();
-      NanoSecond elapsed = end - state.start;
+      Time elapsed = end - state.start;
       if(elapsed > MAX_CLIQUE_TIME){
          printf("Timeout, index: %d (from %d)\n",i,graph.nodes.size);
          break;

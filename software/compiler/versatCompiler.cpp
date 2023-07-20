@@ -71,6 +71,7 @@ ArgumentOptions* ParseCommandLineOptions(int argc,const char* argv[],Arena* perm
 
       Optional<String> formatOpt = GetFormat(str);
 
+      // TODO: Verilator does not actually need the source files, it only needs a include path to the folder that contains the sources. This could be removed.
       if(str.size >= 2 && str[0] == '-' && str[1] == 'S'){
          if(str.size == 2){
             if(i + 1 >= argc){

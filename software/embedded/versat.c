@@ -19,15 +19,19 @@
 #include "stdint.h"
 typedef uint64_t uint64;
 
+// Care, this structure must be the same as the one from utils.
+// TODO: Find a way of sharing these even if embedded
 typedef struct{
-   uint64 time;
+   uint64 seconds;
+   uint64 nanoSeconds;
 } NanoSecond;
 #endif
 
 #if 1
-NanoSecond GetTime(){
-   NanoSecond res = {};
-   res.time = (uint64) timer_time_us() * 1000;
+Time GetTime(){
+   Time res = {};
+   res.seconds = (uint64) timer_time_s();
+   res.nanoSeconds = (uint64) timer_time_us() * 1000;
    return res;
 }
 #endif
@@ -62,11 +66,18 @@ void StartAccelerator(){
    MEMSET(versat_base,0x0,1);
 }
 
+int timesWaiting = 0;
+
 void EndAccelerator(){
+   bool seenWaiting = false;
    while(1){
       int val = MEMGET(versat_base,0x0);
       if(val){
          break;
+      }
+      if(!seenWaiting){
+         timesWaiting += 1;
+         seenWaiting = true;
       }
    } 
 }

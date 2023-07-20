@@ -1,5 +1,7 @@
 Misc:
 
+   Note: I "fixed" a small bug with signal mem storage to 
+
    Add byte space and symbol space structs and functions, rework code to use them throught the codebase.
 
    I'm tired of having to handle printf style functions.

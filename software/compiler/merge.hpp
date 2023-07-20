@@ -88,7 +88,7 @@ struct CliqueState{
    int iterations;
    Array<int> table;
    ConsolidationGraph clique;
-   NanoSecond start;
+   Time start;
    bool found;
 };
 
