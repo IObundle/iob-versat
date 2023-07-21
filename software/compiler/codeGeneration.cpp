@@ -29,6 +29,11 @@ void OutputCircuitSource(Versat* versat,FUDeclaration* decl,Accelerator* accel,F
    int i = 0;
    FOREACH_LIST_INDEXED(ptr,accel->ordered,i){
       ordered[i] = ptr->node;
+
+      FUInstance* inst = ptr->node->inst;
+      if(inst->declaration->nIOs){
+         inst->parameters = STRING("#(.AXI_ADDR_W(AXI_ADDR_W))"); // TODO: placeholder hack.
+      }
    }
 
    {
@@ -145,6 +150,11 @@ void OutputVersatSource(Versat* versat,Accelerator* accel,const char* directoryP
    int i = 0;
    FOREACH_LIST_INDEXED(ptr,accel->ordered,i){
       ordered[i] = ptr->node;
+
+      FUInstance* inst = ptr->node->inst;
+      if(inst->declaration->nIOs){
+         inst->parameters = STRING("#(.AXI_ADDR_W(AXI_ADDR_W))"); // TODO: placeholder hack.
+      }
    }
 
    ComputedData computedData = CalculateVersatComputedData(accel->allocated,val,arena);
