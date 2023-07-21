@@ -1,7 +1,7 @@
 #include "versat_accel.h"
 
 #ifndef __cplusplus
-typedef unsigned char bool;
+#include "stdbool.h"
 #include <string.h>
 #else
 #include <cstdlib>
@@ -38,7 +38,7 @@ void AcceleratorRunC(Accelerator* accel,int times);
 void UnitWrite(Versat* versat,Accelerator* accel,int addrArg,int val);
 int UnitRead(Versat* versat,Accelerator* accel,int addr);
 void SignalLoopC(Accelerator* accel);
-   
+
 void* GetStartOfConfig(Accelerator* accel);
 void* GetStartOfState(Accelerator* accel);
 

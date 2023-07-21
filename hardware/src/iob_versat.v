@@ -12,6 +12,7 @@ module iob_versat
     	parameter AXI_ADDR_W = 32,
       parameter AXI_DATA_W = 32,
       parameter AXI_ID_W = 1,
+      parameter AXI_LEN_W = 8,
       parameter ADDR_W = `VERSAT_ADDR_W, //NODOC Address width
     	parameter DATA_W = `VERSAT_RDATA_W, //NODOC CPU data width
     	parameter WDATA_W = `VERSAT_WDATA_W //NODOC CPU data width
@@ -94,7 +95,6 @@ SimpleAXItoAXI #(
     .DATA_W(DATA_W),
     .AXI_ID_W(AXI_ID_W)
   ) simpleToAxi(
-
   .m_wvalid(w_valid),
   .m_wready(w_ready),
   .m_waddr(w_addr),
@@ -308,7 +308,8 @@ endmodule
 module SimpleAXItoAXI #(
     parameter AXI_ADDR_W = 32,
     parameter AXI_DATA_W = 32,
-    parameter AXI_ID_W = 4,
+    parameter AXI_ID_W = 1,
+    parameter AXI_LEN_W = 8,
     parameter ADDR_W = 0,
     parameter DATA_W = 32
   )
