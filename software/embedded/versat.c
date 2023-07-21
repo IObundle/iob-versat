@@ -18,13 +18,14 @@
 #ifndef __cplusplus
 #include "stdint.h"
 typedef uint64_t uint64;
+#include "stdbool.h"
 
 // Care, this structure must be the same as the one from utils.
 // TODO: Find a way of sharing these even if embedded
 typedef struct{
    uint64 seconds;
    uint64 nanoSeconds;
-} NanoSecond;
+} Time;
 #endif
 
 #if 1
