@@ -12,19 +12,21 @@
 module versat_instance #(
       parameter ADDR_W = 32,
       parameter DATA_W = 32,
-      parameter AXI_ADDR_W = 32
+      parameter AXI_ADDR_W = 32,
+      parameter AXI_DATA_W = 64,
+      parameter LEN_W = 8
    )
    (
    // Databus master interface
 `ifdef VERSAT_IO
-   input [`nIO-1:0]                m_databus_ready,
-   output [`nIO-1:0]               m_databus_valid,
-   output [`nIO*AXI_ADDR_W-1:0]    m_databus_addr,
-   input [`DATAPATH_W-1:0]         m_databus_rdata,
-   output [`nIO*`DATAPATH_W-1:0]   m_databus_wdata,
-   output [`nIO*`DATAPATH_W/8-1:0] m_databus_wstrb,
-   output [`nIO*8-1:0]             m_databus_len,
-   input [`nIO-1:0]                m_databus_last,
+   input  [`nIO-1:0]                m_databus_ready,
+   output [`nIO-1:0]                m_databus_valid,
+   output [`nIO*AXI_ADDR_W-1:0]     m_databus_addr,
+   input  [AXI_DATA_W-1:0]          m_databus_rdata,
+   output [`nIO*AXI_DATA_W-1:0]     m_databus_wdata,
+   output [`nIO*(AXI_DATA_W/8)-1:0] m_databus_wstrb,
+   output [`nIO*LEN_W-1:0]          m_databus_len,
+   input  [`nIO-1:0]                m_databus_last,
 `endif
    // data/control interface
    input                           valid,
@@ -133,11 +135,11 @@ always @(posedge clk,posedge rst) // Care, rst because writing to soft reset reg
 #{if nIO}
 wire databus_ready[@{nIO}];
 wire databus_valid[@{nIO}];
-wire [AXI_ADDR_W-1:0] databus_addr[@{nIO}];
-wire [31:0] databus_rdata[@{nIO}];
-wire [31:0] databus_wdata[@{nIO}];
-wire [3:0]  databus_wstrb[@{nIO}];
-wire [7:0]  databus_len[@{nIO}];
+wire [AXI_ADDR_W-1:0]   databus_addr[@{nIO}];
+wire [AXI_DATA_W-1:0]   databus_rdata[@{nIO}];
+wire [AXI_DATA_W-1:0]   databus_wdata[@{nIO}];
+wire [AXI_DATA_W/8-1:0] databus_wstrb[@{nIO}];
+wire [LEN_W-1:0]        databus_len[@{nIO}];
 wire databus_last[@{nIO}];
 
 #{for i (nIO - 1)}
@@ -145,9 +147,9 @@ assign databus_ready[@{databusCounter}] = m_databus_ready[@{i}];
 assign m_databus_valid[@{databusCounter}] = databus_valid[@{i}];
 assign m_databus_addr[(@{(databusCounter)} * AXI_ADDR_W) +: AXI_ADDR_W] = databus_addr[@{i}];
 assign databus_rdata[@{databusCounter}] = m_databus_rdata;
-assign m_databus_wdata[@{(databusCounter) * 32} +: 32] = databus_wdata[@{i}];
-assign m_databus_wstrb[@{(databusCounter) * 4} +: 4] = databus_wstrb[@{i}];
-assign m_databus_len[@{(databusCounter) * 8} +: 8] = databus_len[@{i}];
+assign m_databus_wdata[@{(databusCounter)} * AXI_DATA_W +: AXI_DATA_W] = databus_wdata[@{i}];
+assign m_databus_wstrb[@{(databusCounter)} * (AXI_DATA_W/8) +: (AXI_DATA_W/8)] = databus_wstrb[@{i}];
+assign m_databus_len[@{(databusCounter)} * LEN_W +: LEN_W] = databus_len[@{i}];
 assign databus_last[@{databusCounter}] = m_databus_last[@{i}];
 #{inc databusCounter}
 #{end}
@@ -189,15 +191,15 @@ begin
 end
 
 #{if useDMA}
-reg [7:0] dma_length;
+reg [LEN_W-1:0] dma_length;
 reg [AXI_ADDR_W-1:0] dma_addr_in;
 reg [AXI_ADDR_W-1:0] dma_addr_read;
 
 reg dma_valid;
 reg [AXI_ADDR_W-1:0] dma_addr;
-reg [`DATAPATH_W-1:0] dma_wdata;
-reg [`DATAPATH_W/8-1:0] dma_wstrb;
-reg [7:0] dma_len;
+reg [DATA_W-1:0] dma_wdata;
+reg [(DATA_W/8)-1:0] dma_wstrb;
+reg [LEN_W-1:0] dma_len;
 
 wire dma_ready;
 wire [`DATAPATH_W-1:0] dma_rdata;
@@ -249,10 +251,10 @@ end
 assign dma_ready = m_databus_ready[@{databusCounter}];
 assign m_databus_valid[@{databusCounter}] = dma_valid;
 assign m_databus_addr[@{databusCounter} * AXI_ADDR_W +: AXI_ADDR_W] = dma_addr;
-assign dma_rdata = m_databus_rdata[31:0];
-assign m_databus_wdata[@{databusCounter} * 32 +: 32] = dma_wdata;
-assign m_databus_wstrb[@{databusCounter} * 4 +: 4] = dma_wstrb;
-assign m_databus_len[@{databusCounter} * 8 +: 8] = dma_len;
+assign dma_rdata = m_databus_rdata[AXI_DATA_W-1:0];
+assign m_databus_wdata[@{databusCounter} * AXI_DATA_W +: AXI_DATA_W] = dma_wdata;
+assign m_databus_wstrb[@{databusCounter} * (AXI_DATA_W/8) +: (AXI_DATA_W/8)] = dma_wstrb;
+assign m_databus_len[@{databusCounter} * LEN_W +: LEN_W] = dma_len;
 assign dma_last = m_databus_last[@{databusCounter}];
 #{inc databusCounter}
 
@@ -299,14 +301,14 @@ end
 wire data_valid = (dma_ready || valid);
 wire data_write = (dma_ready || (valid && we)); // Dma ready is always a write, dma cannot be used to read, for now
 wire [ADDR_W-1:0] address = dma_ready ? (dma_addr_in >> 2) : addr;
-wire [31:0] data_data = dma_ready ? dma_rdata : wdata;
-wire [3:0] data_wstrb = dma_ready ? 4'hf : wstrb;
+wire [DATA_W-1:0] data_data = dma_ready ? dma_rdata : wdata;
+wire [(DATA_W/8)-1:0] data_wstrb = dma_ready ? ~0 : wstrb;
 #{else}
 wire data_valid = valid;
 wire data_write = valid && we;
 wire [ADDR_W-1:0] address = addr;
-wire [31:0] data_data = wdata;
-wire [3:0] data_wstrb = wstrb;
+wire [DATA_W-1:0] data_data = wdata;
+wire [(DATA_W/8)-1:0] data_wstrb = wstrb;
 #{end}
 wire dataMemoryMapped = address[@{memoryConfigDecisionBit}];
 

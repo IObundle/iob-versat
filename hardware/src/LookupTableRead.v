@@ -3,18 +3,20 @@
 module LookupTableRead #(
        parameter DATA_W = 32,
        parameter ADDR_W = 12,
-       parameter AXI_ADDR_W = 64
+       parameter AXI_ADDR_W = 32,
+       parameter AXI_DATA_W = 64,
+       parameter LEN_W = 8
    )
    (
       //databus interface
-      input                 databus_ready_0,
-      output                databus_valid_0,
-      output reg [AXI_ADDR_W-1:0]     databus_addr_0,
-      input [DATA_W-1:0]    databus_rdata_0,
-      output [DATA_W-1:0]   databus_wdata_0,
-      output [DATA_W/8-1:0] databus_wstrb_0,
-      output [7:0]          databus_len_0,
-      input                 databus_last_0,
+      input                       databus_ready_0,
+      output                      databus_valid_0,
+      output reg [AXI_ADDR_W-1:0] databus_addr_0,
+      input [AXI_DATA_W-1:0]      databus_rdata_0,
+      output [AXI_DATA_W-1:0]     databus_wdata_0,
+      output [AXI_DATA_W/8-1:0]   databus_wstrb_0,
+      output [LEN_W:0]            databus_len_0,
+      input                       databus_last_0,
 
       output reg done,
 
@@ -24,29 +26,29 @@ module LookupTableRead #(
 
       // Used by lookup table
       output reg [ADDR_W-1:0] ext_dp_addr_0_port_0,
-      output [DATA_W-1:0]   ext_dp_out_0_port_0,
-      input  [DATA_W-1:0]   ext_dp_in_0_port_0,
-      output                ext_dp_enable_0_port_0,
-      output                ext_dp_write_0_port_0,
+      output [AXI_DATA_W-1:0] ext_dp_out_0_port_0,
+      input  [AXI_DATA_W-1:0] ext_dp_in_0_port_0,
+      output                  ext_dp_enable_0_port_0,
+      output                  ext_dp_write_0_port_0,
 
-      // Used by read
-      output [ADDR_W-1:0]   ext_dp_addr_0_port_1,
-      output [DATA_W-1:0]   ext_dp_out_0_port_1,
-      input  [DATA_W-1:0]   ext_dp_in_0_port_1,
-      output                ext_dp_enable_0_port_1,
-      output                ext_dp_write_0_port_1,
+      // Used to write data into lookup table
+      output [ADDR_W-1:0]     ext_dp_addr_0_port_1,
+      output [AXI_DATA_W-1:0] ext_dp_out_0_port_1,
+      input  [AXI_DATA_W-1:0] ext_dp_in_0_port_1,
+      output                  ext_dp_enable_0_port_1,
+      output                  ext_dp_write_0_port_1,
 
        // configurations
       input [AXI_ADDR_W-1:0] ext_addr,
-      input [ADDR_W-1:0] int_addr,
-      input [31:0]       size,
-      input [ADDR_W-1:0] iterA,
-      input [9:0]        perA,
-      input [9:0]        dutyA,
-      input [ADDR_W-1:0] shiftA,
-      input [ADDR_W-1:0] incrA,
-      input [7:0]        length,
-      input              pingPong,
+      input [ADDR_W-1:0]     int_addr,
+      input [31:0]           size,
+      input [ADDR_W-1:0]     iterA,
+      input [9:0]            perA,
+      input [9:0]            dutyA,
+      input [ADDR_W-1:0]     shiftA,
+      input [ADDR_W-1:0]     incrA,
+      input [7:0]            length,
+      input                  pingPong,
 
       input [9:0] iterB,
       input [9:0] perB,
@@ -71,18 +73,56 @@ module LookupTableRead #(
       input run
    );
 
+   localparam DIFF = AXI_DATA_W/DATA_W;
+   localparam DECISION_BIT_W = $clog2(DIFF);
+
+   function [ADDR_W-DECISION_BIT_W-1:0] byteToSymbolSpace(input [ADDR_W-1:0] in);
+      begin
+         byteToSymbolSpace = in >> DECISION_BIT_W;
+      end
+   endfunction
+
    reg pingPongState;
+
+   reg [ADDR_W-1:0] addr_0;
+   always @* begin
+      addr_0 = 0;
+      addr_0[ADDR_W-1] = pingPong && pingPongState;
+   end
 
    always @(posedge clk,posedge rst) begin
       if(rst)
          ext_dp_addr_0_port_0 <= 0;
       else
-         ext_dp_addr_0_port_0 <= pingPong ? {!pingPongState ^ in0[ADDR_W-1],in0[ADDR_W-2:0]} : in0[ADDR_W-1:0];
+         ext_dp_addr_0_port_0 <= addr_0;
    end
+
+   // Byte selector needs to be saved to later indicate which lane to output (for 64)
+   reg sel_0; // Matches addr_0_port_0
+   reg sel_1; // Matches rdata_0_port_0
+   always @(posedge clk,posedge rst) begin
+      if(rst) begin
+         sel_0 <= 0;
+         sel_1 <= 0;
+      end else begin
+         sel_0 <= in0[0];
+         sel_1 <= sel_0;
+      end
+   end
+
+   WideAdapter #(
+   .INPUT_W(AXI_DATA_W),
+   .OUTPUT_W(DATA_W)
+   )
+   adapter
+   (
+      .sel(sel_1),
+      .in(ext_dp_in_0_port_0),
+      .out(out0)
+   );
 
    assign ext_dp_enable_0_port_0 = 1'b1;
    assign ext_dp_write_0_port_0 = 1'b0;
-   assign out0 = ext_dp_in_0_port_0;
 
    assign databus_wdata_0 = 0;
    assign databus_wstrb_0 = 4'b0000;
@@ -149,9 +189,9 @@ module LookupTableRead #(
 
    wire write_en;
    wire [ADDR_W-1:0] write_addr;
-   wire [DATA_W-1:0] write_data;
+   wire [AXI_DATA_W-1:0] write_data;
    
-   MemoryWriter #(.ADDR_W(ADDR_W)) 
+   MemoryWriter #(.ADDR_W(ADDR_W),.DATA_W(AXI_DATA_W)) 
    writer(
       .gen_valid(gen_valid),
       .gen_ready(gen_ready),

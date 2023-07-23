@@ -604,17 +604,17 @@ ModuleInfo ExtractModuleInfo(Module& module,Arena* permanent,Arena* tempArena){
 
          Assert(port < 2);
 
-         ExternalMemoryInfo* info = external->GetOrInsert(id,{});
+         ExternalMemoryInfo* ext = external->GetOrInsert(id,{});
          if(CompareString(wire,"addr")){
-            info->ports[port].addrSize = decl.range.high - decl.range.low + 1;
+            ext->ports[port].addrSize = decl.range.high - decl.range.low + 1;
          } else if(CompareString(wire,"out")){
-            info->ports[port].dataOutSize = decl.range.high - decl.range.low + 1;
+            ext->ports[port].dataOutSize = decl.range.high - decl.range.low + 1;
          } else if(CompareString(wire,"in")){
-            info->ports[port].dataInSize = decl.range.high - decl.range.low + 1;
+            ext->ports[port].dataInSize = decl.range.high - decl.range.low + 1;
          } else if(CompareString(wire,"write")){
-            info->ports[port].write = true;
+            ext->ports[port].write = true;
          } else if(CompareString(wire,"enable")){
-            info->ports[port].enable = true;
+            ext->ports[port].enable = true;
          }
       } else if(CheckFormat("ext_2p_%s",decl.name)){
          ExternalMemoryID id = {};
@@ -635,17 +635,17 @@ ModuleInfo ExtractModuleInfo(Module& module,Arena* permanent,Arena* tempArena){
             UNHANDLED_ERROR;
          }
 
-         ExternalMemoryInfo* info = external->GetOrInsert(id,{});
+         ExternalMemoryInfo* ext = external->GetOrInsert(id,{});
 
          if(CompareString(wire,"addr")){
-            info->ports[0].addrSize = decl.range.high - decl.range.low + 1;
+            ext->ports[0].addrSize = decl.range.high - decl.range.low + 1;
          } else if(CompareString(wire,"data")){
-            info->ports[0].dataInSize = decl.range.high - decl.range.low + 1;
-            info->ports[0].dataOutSize = decl.range.high - decl.range.low + 1;
+            ext->ports[0].dataInSize = decl.range.high - decl.range.low + 1;
+            ext->ports[0].dataOutSize = decl.range.high - decl.range.low + 1;
          } else if(CompareString(wire,"write")){
-            info->ports[0].write = true;
+            ext->ports[0].write = true;
          } else if(CompareString(wire,"read")){
-            info->ports[0].write = true;
+            ext->ports[0].write = true;
          } else {
             UNHANDLED_ERROR;
          }

@@ -10,7 +10,9 @@
 module @{accel.name} #(
       parameter ADDR_W = 32,
       parameter DATA_W = 32,
-      parameter AXI_ADDR_W = 32
+      parameter AXI_ADDR_W = 32,
+      parameter AXI_DATA_W = 64,
+      parameter LEN_W = 8
    )
    (
 
@@ -53,10 +55,10 @@ module @{accel.name} #(
    input                   databus_ready_@{i},
    output                  databus_valid_@{i},
    output [AXI_ADDR_W-1:0] databus_addr_@{i},
-   input [31:0]            databus_rdata_@{i},
-   output [31:0]           databus_wdata_@{i},
-   output [32/8 - 1:0]     databus_wstrb_@{i},
-   output [7:0]            databus_len_@{i},
+   input  [AXI_DATA_W-1:0] databus_rdata_@{i},
+   output [AXI_DATA_W-1:0] databus_wdata_@{i},
+   output [(AXI_DATA_W)/8 - 1:0] databus_wstrb_@{i},
+   output [LEN_W-1:0]      databus_len_@{i},
    input                   databus_last_@{i},
    #{end}
 
@@ -66,19 +68,19 @@ module @{accel.name} #(
    // DP
       #{for port 2}
    output [@{ext.bitsize}-1:0]   ext_dp_addr_@{i}_port_@{port},
-   output [@{ext.datasize}-1:0]   ext_dp_out_@{i}_port_@{port},
-   input  [@{ext.datasize}-1:0]   ext_dp_in_@{i}_port_@{port},
-   output                ext_dp_enable_@{i}_port_@{port},
-   output                ext_dp_write_@{i}_port_@{port},
+   output [@{ext.datasize}-1:0]  ext_dp_out_@{i}_port_@{port},
+   input  [@{ext.datasize}-1:0]  ext_dp_in_@{i}_port_@{port},
+   output                        ext_dp_enable_@{i}_port_@{port},
+   output                        ext_dp_write_@{i}_port_@{port},
       #{end}
       #{else}
    // 2P
    output [@{ext.bitsize}-1:0]   ext_2p_addr_out_@{i},
    output [@{ext.bitsize}-1:0]   ext_2p_addr_in_@{i},
-   output                ext_2p_write_@{i},
-   output                ext_2p_read_@{i},
-   input  [@{ext.datasize}-1:0]   ext_2p_data_in_@{i},
-   output [@{ext.datasize}-1:0]   ext_2p_data_out_@{i},
+   output                        ext_2p_write_@{i},
+   output                        ext_2p_read_@{i},
+   input  [@{ext.datasize}-1:0]  ext_2p_data_in_@{i},
+   output [@{ext.datasize}-1:0]  ext_2p_data_out_@{i},
       #{end}
    #{end}
 

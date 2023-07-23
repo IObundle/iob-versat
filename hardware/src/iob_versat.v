@@ -38,29 +38,29 @@ module iob_versat
 	);
 
 `ifdef VERSAT_IO
-wire [`nIO-1:0]               m_databus_ready;
-wire [`nIO-1:0]               m_databus_valid;
-wire [`nIO*`IO_ADDR_W-1:0]    m_databus_addr;
-wire [`DATAPATH_W-1:0]        m_databus_rdata;
-wire [`nIO*`DATAPATH_W-1:0]   m_databus_wdata;
-wire [`nIO*`DATAPATH_W/8-1:0] m_databus_wstrb;
-wire [`nIO*8-1:0]             m_databus_len;
-wire [`nIO-1:0]               m_databus_last;
+wire [`nIO-1:0]                m_databus_ready;
+wire [`nIO-1:0]                m_databus_valid;
+wire [`nIO*AXI_ADDR_W-1:0]     m_databus_addr;
+wire [AXI_DATA_W-1:0]          m_databus_rdata;
+wire [`nIO*AXI_DATA_W-1:0]     m_databus_wdata;
+wire [`nIO*(AXI_DATA_W/8)-1:0] m_databus_wstrb;
+wire [`nIO*8-1:0]              m_databus_len;
+wire [`nIO-1:0]                m_databus_last;
 
 wire w_ready,w_valid;
-wire [`IO_ADDR_W-1:0]    w_addr;
-wire [`DATAPATH_W-1:0]   w_data;
-wire [`DATAPATH_W/8-1:0] w_strb;
-wire [7:0]               w_len;
+wire [AXI_ADDR_W-1:0]   w_addr;
+wire [AXI_DATA_W-1:0]   w_data;
+wire [AXI_DATA_W/8-1:0] w_strb;
+wire [7:0]              w_len;
 
 wire r_ready,r_valid;
-wire [`IO_ADDR_W-1:0]    r_addr;
-wire [`DATAPATH_W-1:0]   r_data;
-wire [7:0]               r_len;
+wire [AXI_ADDR_W-1:0]   r_addr;
+wire [AXI_DATA_W-1:0]   r_data;
+wire [7:0]              r_len;
 
 wire w_last,r_last;
 
-xmerge #(.N_SLAVES(`nIO),.ADDR_W(`IO_ADDR_W),.DATA_W(`DATAPATH_W)) merge(
+xmerge #(.N_SLAVES(`nIO),.ADDR_W(AXI_ADDR_W),.DATA_W(AXI_DATA_W),.LEN_W(`LEN_W)) merge(
   .s_valid(m_databus_valid),
   .s_ready(m_databus_ready),
   .s_addr(m_databus_addr),
@@ -90,11 +90,11 @@ xmerge #(.N_SLAVES(`nIO),.ADDR_W(`IO_ADDR_W),.DATA_W(`DATAPATH_W)) merge(
 );
 
 SimpleAXItoAXI #(
-    .ADDR_W(AXI_ADDR_W),
-    .DATA_W(DATA_W),
-    .AXI_ID_W(AXI_ID_W)
+    .AXI_ADDR_W(AXI_ADDR_W),
+    .AXI_DATA_W(AXI_DATA_W),
+    .AXI_ID_W(AXI_ID_W),
+    .LEN_W(`LEN_W)
   ) simpleToAxi(
-
   .m_wvalid(w_valid),
   .m_wready(w_ready),
   .m_waddr(w_addr),
@@ -119,7 +119,7 @@ SimpleAXItoAXI #(
 
 `endif
 
-versat_instance #(.ADDR_W(ADDR_W),.DATA_W(DATA_W)) xversat(
+versat_instance #(.ADDR_W(ADDR_W),.DATA_W(DATA_W),.AXI_DATA_W(AXI_DATA_W),.LEN_W(`LEN_W)) xversat(
       .valid(valid),
       .wstrb(wstrb),
       .addr(address),
@@ -158,7 +158,8 @@ endmodule
 module xmerge #(
     parameter ADDR_W = 0,
     parameter DATA_W = 32,
-    parameter N_SLAVES = 2
+    parameter N_SLAVES = 2,
+    parameter LEN_W = 8
   )
   (
     // Slaves
@@ -169,7 +170,7 @@ module xmerge #(
     input [DATA_W * N_SLAVES-1:0] s_wdata,
     input [(DATA_W / 8) * N_SLAVES-1:0] s_wstrb,
     output [DATA_W-1:0] s_rdata,
-    input [8 * N_SLAVES - 1:0] s_len,
+    input [LEN_W * N_SLAVES - 1:0] s_len,
 
     // Write interface
     output reg m_wvalid,
@@ -177,7 +178,7 @@ module xmerge #(
     output reg [ADDR_W-1:0] m_waddr,
     output reg [DATA_W-1:0] m_wdata,
     output reg [(DATA_W / 8)-1:0] m_wstrb,
-    output reg [7:0] m_wlen,
+    output reg [LEN_W-1:0] m_wlen,
     input  m_wlast,
 
     // Read interface
@@ -185,7 +186,7 @@ module xmerge #(
     input  m_rready,
     output reg [ADDR_W-1:0] m_raddr,
     input [DATA_W-1:0] m_rdata,
-    output reg [7:0] m_rlen,
+    output reg [LEN_W-1:0] m_rlen,
     input  m_rlast,
 
     input clk,
@@ -195,7 +196,7 @@ module xmerge #(
 wire [ADDR_W-1:0] st_addr[N_SLAVES-1:0];
 wire [DATA_W-1:0] st_wdata[N_SLAVES-1:0];
 wire [(DATA_W / 8)-1:0] st_wstrb[N_SLAVES-1:0];
-wire [7:0] st_len[N_SLAVES-1:0];
+wire [LEN_W-1:0] st_len[N_SLAVES-1:0];
 
 generate
 genvar g;
@@ -204,7 +205,7 @@ begin
   assign st_addr[g] = s_addr[ADDR_W * g +: ADDR_W];
   assign st_wdata[g] = s_wdata[DATA_W * g +: DATA_W];
   assign st_wstrb[g] = s_wstrb[(DATA_W/8) * g +: (DATA_W/8)];
-  assign st_len[g] = s_len[8 * g +: 8];
+  assign st_len[g] = s_len[LEN_W * g +: LEN_W];
 end
 endgenerate
 
@@ -309,23 +310,22 @@ module SimpleAXItoAXI #(
     parameter AXI_ADDR_W = 32,
     parameter AXI_DATA_W = 32,
     parameter AXI_ID_W = 4,
-    parameter ADDR_W = 0,
-    parameter DATA_W = 32
+    parameter LEN_W = 8
   )
   (
     input  m_wvalid,
     output reg m_wready,
-    input  [ADDR_W-1:0] m_waddr,
-    input  [DATA_W-1:0] m_wdata,
-    input  [(DATA_W / 8)-1:0] m_wstrb,
-    input  [7:0] m_wlen,
+    input  [AXI_ADDR_W-1:0] m_waddr,
+    input  [AXI_DATA_W-1:0] m_wdata,
+    input  [(AXI_DATA_W / 8)-1:0] m_wstrb,
+    input  [LEN_W-1:0] m_wlen,
     output m_wlast,
     
     input  m_rvalid,
     output reg m_rready,
-    input  [ADDR_W-1:0] m_raddr,
-    output [DATA_W-1:0] m_rdata,
-    input  [7:0] m_rlen,
+    input  [AXI_ADDR_W-1:0] m_raddr,
+    output [AXI_DATA_W-1:0] m_rdata,
+    input  [LEN_W-1:0] m_rlen,
     output m_rlast,
 
     `include "m_versat_axi_m_port.vh"
@@ -334,10 +334,28 @@ module SimpleAXItoAXI #(
     input rst
   );
 
+reg [2:0] axi_size;
+always @* begin
+  axi_size = 3'b000;
+
+  if(AXI_DATA_W >= 16)
+    axi_size = 3'b001;
+  if(AXI_DATA_W >= 32)
+    axi_size = 3'b010;
+  if(AXI_DATA_W >= 64)
+    axi_size = 3'b011;
+  if(AXI_DATA_W >= 128)
+    axi_size = 3'b101;
+  if(AXI_DATA_W >= 256)
+    axi_size = 3'b110;
+  if(AXI_DATA_W >= 512)
+    axi_size = 3'b111;
+end
+
 assign m_axi_arid = `AXI_ID_W'b0;
 assign m_axi_araddr = m_raddr;
 assign m_axi_arlen = m_rlen;
-assign m_axi_arsize = 2;
+assign m_axi_arsize = axi_size;
 assign m_axi_arburst = `AXI_BURST_W'b01; // INCR
 assign m_axi_arlock = `AXI_LOCK_W'b0;
 assign m_axi_arcache = `AXI_CACHE_W'h2;
@@ -348,7 +366,7 @@ assign m_axi_arqos = `AXI_QOS_W'h0;
 assign m_axi_awid = `AXI_ID_W'b0;
 assign m_axi_awaddr = m_waddr;
 assign m_axi_awlen = m_wlen;
-assign m_axi_awsize = 2;
+assign m_axi_awsize = axi_size;
 assign m_axi_awburst = `AXI_BURST_W'b01; // INCR
 assign m_axi_awlock = `AXI_LOCK_W'b0;
 assign m_axi_awcache = `AXI_CACHE_W'h2;
@@ -442,99 +460,6 @@ begin
     m_rready = m_axi_rvalid;
   end
 end
-
-
-/*
-reg [7:0] counter;
-reg [2:0] wstate;
-always @(posedge clk,posedge rst)
-begin
-  if(rst) begin
-    wstate <= 0;
-    awvalid <= 0;
-    counter <= 0;
-  end else begin
-    case(wstate)
-    3'h0: begin
-      if(m_wvalid) begin
-        awvalid <= 1'b1;
-        wstate <= 3'h1;
-      end
-    end
-    3'h1: begin // Write address set
-      if(m_axi_awready) begin
-        awvalid <= 1'b0;
-        wstate <= 3'h2;
-      end
-    end
-    3'h2: begin
-      if(m_axi_wvalid && m_axi_wready) begin
-        counter <= counter + 1;
-        if(wlast) begin
-          wstate <= 3'h0;
-          counter <= 0;
-        end
-      end
-    end
-    endcase
-  end
-end
-
-always @*
-begin
-  wvalid = 1'b0;
-  m_wready = 1'b0;
-  wlast = 1'b0;
-
-  if(wstate == 3'h2) begin
-    wvalid = m_wvalid;
-    m_wready = m_axi_wready;
-    
-    if(counter == m_wlen)
-      wlast = 1'b1;
-  end
-end
-
-reg [2:0] rstate;
-always @(posedge clk,posedge rst)
-begin
-  if(rst) begin
-    rstate <= 0;
-    arvalid <= 0;
-  end else begin
-    case(rstate)
-    3'h0: begin
-      if(m_rvalid) begin
-        arvalid <= 1'b1;
-        rstate <= 3'h1;
-      end
-    end
-    3'h1: begin // Write address set
-      if(m_axi_arready) begin
-        arvalid <= 1'b0;
-        rstate <= 3'h2;
-      end
-    end
-    3'h2: begin
-      if(m_axi_rvalid && m_axi_rready && m_axi_rlast) begin
-        rstate <= 3'h0;
-      end
-    end
-    endcase
-  end
-end
-
-always @*
-begin
-  rready = 1'b0;
-  m_rready = 1'b0;
-
-  if(rstate == 3'h2) begin
-    rready = m_rvalid;
-    m_rready = m_axi_rvalid;
-  end
-end
-*/
 
 endmodule 
 

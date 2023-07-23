@@ -856,9 +856,6 @@ static String Eval(Block* block,Frame* frame,Arena* temp){
             break;
          }
 
-         //static int counter = 0;
-         //DEBUG_BREAK_IF(++counter == 25702);
-
          tok.AssertNextToken("@{");
          Expression* expr = ParseExpression(&tok,temp);
          tok.AssertNextToken("}");
@@ -918,7 +915,7 @@ CompiledTemplate* CompileTemplate(String content,const char* name,Arena* arena){
    res->totalMemoryUsed = totalMemory.size;
    res->content = content;
    res->name = storedName;
-   
+
    return res;
 }
 
@@ -931,7 +928,7 @@ void ProcessTemplate(FILE* outputFile,CompiledTemplate* compiledTemplate,Arena* 
    Arena outputArenaInst = SubArena(arena,Megabyte(64));
    outputArena = &outputArenaInst;
    output = outputFile;
-  
+
    for(Block* block = compiledTemplate->blocks; block; block = block->next){
       String text = Eval(block,globalFrame,arena);
       fprintf(output,"%.*s",text.size,text.data);
