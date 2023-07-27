@@ -37,30 +37,33 @@ module iob_versat
    input rst
 	);
 
+localparam LEN_W = `LEN_W;
+localparam IO = `nIO;
+
 `ifdef VERSAT_IO
-wire [`nIO-1:0]                m_databus_ready;
-wire [`nIO-1:0]                m_databus_valid;
-wire [`nIO*AXI_ADDR_W-1:0]     m_databus_addr;
-wire [AXI_DATA_W-1:0]          m_databus_rdata;
-wire [`nIO*AXI_DATA_W-1:0]     m_databus_wdata;
-wire [`nIO*(AXI_DATA_W/8)-1:0] m_databus_wstrb;
-wire [`nIO*8-1:0]              m_databus_len;
-wire [`nIO-1:0]                m_databus_last;
+wire [IO-1:0]                m_databus_ready;
+wire [IO-1:0]                m_databus_valid;
+wire [IO*AXI_ADDR_W-1:0]     m_databus_addr;
+wire [AXI_DATA_W-1:0]        m_databus_rdata;
+wire [IO*AXI_DATA_W-1:0]     m_databus_wdata;
+wire [IO*(AXI_DATA_W/8)-1:0] m_databus_wstrb;
+wire [IO*LEN_W-1:0]          m_databus_len;
+wire [IO-1:0]                m_databus_last;
 
 wire w_ready,w_valid;
 wire [AXI_ADDR_W-1:0]   w_addr;
 wire [AXI_DATA_W-1:0]   w_data;
 wire [AXI_DATA_W/8-1:0] w_strb;
-wire [7:0]              w_len;
+wire [LEN_W-1:0]        w_len;
 
 wire r_ready,r_valid;
-wire [AXI_ADDR_W-1:0]   r_addr;
-wire [AXI_DATA_W-1:0]   r_data;
-wire [7:0]              r_len;
+wire [AXI_ADDR_W-1:0]  r_addr;
+wire [AXI_DATA_W-1:0]  r_data;
+wire [LEN_W-1:0]       r_len;
 
 wire w_last,r_last;
 
-xmerge #(.N_SLAVES(`nIO),.ADDR_W(AXI_ADDR_W),.DATA_W(AXI_DATA_W),.LEN_W(`LEN_W)) merge(
+xmerge #(.N_SLAVES(IO),.ADDR_W(AXI_ADDR_W),.DATA_W(AXI_DATA_W),.LEN_W(LEN_W)) merge(
   .s_valid(m_databus_valid),
   .s_ready(m_databus_ready),
   .s_addr(m_databus_addr),
@@ -93,7 +96,7 @@ SimpleAXItoAXI #(
     .AXI_ADDR_W(AXI_ADDR_W),
     .AXI_DATA_W(AXI_DATA_W),
     .AXI_ID_W(AXI_ID_W),
-    .LEN_W(`LEN_W)
+    .LEN_W(LEN_W)
   ) simpleToAxi(
   .m_wvalid(w_valid),
   .m_wready(w_ready),
@@ -119,7 +122,7 @@ SimpleAXItoAXI #(
 
 `endif
 
-versat_instance #(.ADDR_W(ADDR_W),.DATA_W(DATA_W),.AXI_DATA_W(AXI_DATA_W),.LEN_W(`LEN_W)) xversat(
+versat_instance #(.ADDR_W(ADDR_W),.DATA_W(DATA_W),.AXI_DATA_W(AXI_DATA_W),.LEN_W(LEN_W)) xversat(
       .valid(valid),
       .wstrb(wstrb),
       .addr(address),
@@ -352,15 +355,119 @@ always @* begin
     axi_size = 3'b111;
 end
 
+// Read
+
 assign m_axi_arid = `AXI_ID_W'b0;
-assign m_axi_araddr = m_raddr;
-assign m_axi_arlen = m_rlen;
 assign m_axi_arsize = axi_size;
 assign m_axi_arburst = `AXI_BURST_W'b01; // INCR
 assign m_axi_arlock = `AXI_LOCK_W'b0;
 assign m_axi_arcache = `AXI_CACHE_W'h2;
 assign m_axi_arprot = `AXI_PROT_W'b010;
 assign m_axi_arqos = `AXI_QOS_W'h0;
+
+assign m_axi_arvalid = arvalid;
+assign m_axi_rready = (read_state == 2'h3);
+assign m_rlast = m_axi_rlast;
+
+reg arvalid,rready;
+
+reg [1:0] read_state;
+wire output_last; // TODO: Need to assert for the last transfer of the full transfer
+
+// Read
+burst_align #(
+    .AXI_DATA_W(AXI_DATA_W)
+  ) aligner (
+    .offset(m_raddr[1:0]),
+    .start(read_state == 0),
+
+    .last(output_last),
+
+    // Simple interface for data_in
+    .data_in(m_axi_rdata),
+    .valid_in(m_axi_rvalid),
+
+    // Simple interface for data_out
+    .data_out(m_rdata),
+    .valid_out(m_rready),
+
+    .clk(clk),
+    .rst(rst)
+  );
+
+reg transfer_start,burst_start;
+wire last_transfer;
+
+reg [AXI_ADDR_W-1:0] true_axi_araddr;
+reg [7:0] true_axi_arlen;
+
+transfer_controller #(
+   .AXI_ADDR_W(AXI_ADDR_W),
+   .AXI_DATA_W(AXI_DATA_W),
+   .LEN_W(LEN_W) 
+   )
+  read_controller
+   (
+      .address(m_raddr),
+      .length(m_rlen), // In bytes
+
+      .transfer_start(read_state == 2'h0 && m_rvalid),
+      .burst_start(read_state == 2'h2 && m_axi_arready && m_axi_arvalid),
+
+      // Do not need them for read operation
+      .initial_strb(),
+      .final_strb(),
+
+      .true_axi_axaddr(m_axi_araddr),
+
+      // TODO: Register these signals to 
+      .true_axi_axlen(true_axi_arlen),
+      .last_transfer(last_transfer),
+   
+      .clk(clk),
+      .rst(rst)
+   );
+
+assign output_last = (last_transfer && m_axi_rvalid && m_axi_rready && m_axi_rlast);
+
+always @(posedge clk,posedge rst)
+begin
+  if(rst) begin
+    read_state <= 0;
+    arvalid <= 0;
+    m_axi_arlen <= 0;
+  end else begin
+    case(read_state)
+    2'h0: begin
+      if(m_rvalid) begin
+        read_state <= 2'h1;
+      end
+    end
+    2'h1: begin
+      arvalid <= 1'b1;
+      read_state <= 2'h2;
+      m_axi_arlen <= true_axi_arlen;
+    end
+    2'h2: begin // Write address set
+      if(m_axi_arready) begin
+        arvalid <= 1'b0;
+        read_state <= 2'h3;
+      end
+    end
+    2'h3: begin
+      if(m_axi_rvalid && m_axi_rready && m_axi_rlast) begin
+        if(last_transfer) begin      
+          read_state <= 2'h0;
+        end else begin
+          read_state <= 2'h1;
+        end
+      end
+    end
+    endcase
+  end
+end
+
+// Write
 
 // Address write constants
 assign m_axi_awid = `AXI_ID_W'b0;
@@ -375,64 +482,45 @@ assign m_axi_awqos = `AXI_QOS_W'h0;
 
 assign m_axi_wdata = m_wdata;
 assign m_axi_wstrb = m_wstrb;
-assign m_rdata = m_axi_rdata;
 
 assign m_axi_bready = 1'b1; // We ignore write response
 
-reg awvalid,arvalid,wvalid,rready,wlast;
+reg awvalid,wvalid,wlast;
 assign m_axi_awvalid = awvalid;
-assign m_axi_arvalid = arvalid;
 assign m_axi_wvalid = wvalid;
-assign m_axi_rready = rready;
 assign m_axi_wlast = wlast;
 
 assign m_wlast = wlast;
-assign m_rlast = m_axi_rlast;
 
 reg [7:0] counter;
-reg [2:0] state;
+reg [1:0] write_state;
 always @(posedge clk,posedge rst)
 begin
   if(rst) begin
-    state <= 0;
+    write_state <= 0;
     awvalid <= 0;
-    arvalid <= 0;
     counter <= 0;
   end else begin
-    case(state)
-    3'h0: begin
+    case(write_state)
+    2'h0: begin
       if(m_wvalid) begin
         awvalid <= 1'b1;
-        state <= 3'h1;
-      end else if(m_rvalid) begin
-        arvalid <= 1'b1;
-        state <= 3'h3;
+        write_state <= 2'h1;
       end
     end
-    3'h1: begin // Write address set
+    2'h1: begin // Write address set
       if(m_axi_awready) begin
         awvalid <= 1'b0;
-        state <= 3'h2;
+        write_state <= 2'h2;
       end
     end
-    3'h2: begin
+    2'h2: begin
       if(m_axi_wvalid && m_axi_wready) begin
         counter <= counter + 1;
         if(wlast) begin
-          state <= 3'h0;
+          write_state <= 2'h0;
           counter <= 0;
         end
-      end
-    end
-    3'h3: begin // Write address set
-      if(m_axi_arready) begin
-        arvalid <= 1'b0;
-        state <= 3'h4;
-      end
-    end
-    3'h4: begin
-      if(m_axi_rvalid && m_axi_rready && m_axi_rlast) begin
-        state <= 3'h0;
       end
     end
     endcase
@@ -444,20 +532,13 @@ begin
   wvalid = 1'b0;
   m_wready = 1'b0;
   wlast = 1'b0;
-  rready = 1'b0;
-  m_rready = 1'b0;
 
-  if(state == 3'h2) begin
+  if(write_state == 2'h2) begin
     wvalid = m_wvalid;
     m_wready = m_axi_wready;
     
     if(counter == m_wlen)
       wlast = 1'b1;
-  end
-
-  if(state == 3'h4) begin
-    rready = m_rvalid;
-    m_rready = m_axi_rvalid;
   end
 end
 

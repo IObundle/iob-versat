@@ -107,7 +107,7 @@ void OutputVersatSource(Versat* versat,Accelerator* accel,const char* directoryP
    fprintf(c,"`define MAPPED_UNITS %d\n",val.unitsMapped);
    fprintf(c,"`define MAPPED_BIT %d\n",val.memoryConfigDecisionBit);
    fprintf(c,"`define nIO %d\n",val.nUnitsIO);
-   fprintf(c,"`define LEN_W %d\n",8);
+   fprintf(c,"`define LEN_W %d\n",16);
 
    if(versat->opts.architectureHasDatabus){
       fprintf(c,"`define VERSAT_ARCH_HAS_IO 1\n");

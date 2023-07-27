@@ -3,7 +3,7 @@ VERILATE_UNIT_BASIC += Reg Mem SignalMulAdd Muladd VRead VWrite Mux2 CombMux2 Co
 VERILATE_UNIT_BASIC += FloatAdd FloatSub FloatMul FloatDiv FloatSqrt Q16Sqrt DoneCycle ChangeDetect Store TimedFlag
 VERILATE_UNIT_BASIC += FloatMax FloatMin Float2Int Float2UInt Int2Float SignalMemStorage SignalAccum Equality IncrementFlag
 
-SHARED_HARDWARE := $(patsubst %,$(VERSAT_DIR)/hardware/src/%.v,$(VERILATE_UNIT_BASIC))
+SHARED_HARDWARE := $(patsubst %,$(VERSAT_DIR)/hardware/src/units/%.v,$(VERILATE_UNIT_BASIC))
 
 V_INCLUDE+=$(incdir)$(VERSAT_DIR)/submodules/MEM/hardware/ram/tdp_ram
 V_INCLUDE+=$(incdir)$(VERSAT_DIR)/submodules/MEM/hardware/ram/2p_ram
@@ -13,6 +13,7 @@ V_INCLUDE+=$(incdir)$(VERSAT_DIR)/submodules/MEM/hardware/fifo
 V_INCLUDE+=$(incdir)$(VERSAT_DIR)/submodules/FPU/hardware/include
 V_INCLUDE+=$(incdir)$(VERSAT_DIR)/submodules/FPU/hardware/src
 V_INCLUDE+=$(incdir)$(VERSAT_DIR)/submodules/FPU/submodules/DIV/hardware/src
+V_INCLUDE+=$(incdir)$(VERSAT_DIR)/hardware/src/units
 V_INCLUDE+=$(incdir)$(VERSAT_DIR)/hardware/src
 
 VSRC+=$(VERSAT_DIR)/submodules/MEM/hardware/ram/tdp_ram/iob_tdp_ram.v # used by xmem

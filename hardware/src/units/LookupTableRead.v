@@ -86,8 +86,8 @@ module LookupTableRead #(
 
    reg [ADDR_W-1:0] addr_0;
    always @* begin
-      addr_0 = 0;
-      addr_0[ADDR_W-1] = pingPong && pingPongState;
+      addr_0 = byteToSymbolSpace(in0);
+      addr_0[ADDR_W-1] = pingPong && !pingPongState;
    end
 
    always @(posedge clk,posedge rst) begin
@@ -158,11 +158,11 @@ module LookupTableRead #(
    end
 
    wire [ADDR_W-1:0] startA = 0;
-   wire [31:0]   delayA    = 0;
+   wire [31:0]       delayA = 0;
    wire [ADDR_W-1:0] addrA, addrA_int, addrA_int2;
 
    wire next;
-   wire gen_valid,gen_ready;
+   wire gen_ready;
    wire [ADDR_W-1:0] gen_addr;
    wire gen_done;
 
@@ -181,7 +181,7 @@ module LookupTableRead #(
       .incr(incrA),
 
       //outputs 
-      .valid(gen_valid),
+      .valid(),
       .ready(gen_ready),
       .addr(gen_addr),
       .done(gen_done)
@@ -191,6 +191,19 @@ module LookupTableRead #(
    wire [ADDR_W-1:0] write_addr;
    wire [AXI_DATA_W-1:0] write_data;
    
+   reg gen_valid;
+   always @(posedge clk,posedge rst) begin
+      if(rst) begin
+         gen_valid <= 1'b0;
+      end else if(run) begin
+         gen_valid <= !disabled;
+      end else if(running) begin
+         if(databus_valid_0 && databus_ready_0 && databus_last_0) begin
+            gen_valid <= 1'b0;
+         end
+      end
+   end
+
    MemoryWriter #(.ADDR_W(ADDR_W),.DATA_W(AXI_DATA_W)) 
    writer(
       .gen_valid(gen_valid),
