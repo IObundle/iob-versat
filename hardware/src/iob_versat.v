@@ -375,7 +375,7 @@ reg arvalid,rready;
 
 reg [1:0] read_state;
 
-wire last_transfer;
+wire read_last_transfer;
 wire burst_align_empty;
 // Read
 burst_align #(
@@ -385,7 +385,7 @@ burst_align #(
     .start(read_state == 0),
 
     .burst_last(m_axi_rvalid && m_axi_rready && m_axi_rlast),
-    .transfer_last(last_transfer),
+    .transfer_last(read_last_transfer),
 
     .last_transfer(m_rlast),
     .empty(burst_align_empty),
@@ -427,21 +427,21 @@ transfer_controller #(
 
       // TODO: Register these signals to 
       .true_axi_axlen(true_axi_arlen),
-      .last_transfer(last_transfer),
+      .last_transfer(read_last_transfer),
    
       .clk(clk),
       .rst(rst)
    );
 
-reg [7:0] axi_len;
-assign m_axi_arlen = axi_len;
+reg [7:0] read_axi_len;
+assign m_axi_arlen = read_axi_len;
 
 always @(posedge clk,posedge rst)
 begin
   if(rst) begin
     read_state <= 0;
     arvalid <= 0;
-    axi_len <= 0;
+    read_axi_len <= 0;
   end else begin
     case(read_state)
     2'h0: begin
@@ -452,7 +452,7 @@ begin
     2'h1: begin
       arvalid <= 1'b1;
       read_state <= 2'h2;
-      axi_len <= true_axi_arlen;
+      read_axi_len <= true_axi_arlen;
     end
     2'h2: begin // Write address set
       if(m_axi_arready) begin
@@ -462,7 +462,7 @@ begin
     end
     2'h3: begin
       if(m_axi_rvalid && m_axi_rready && m_axi_rlast) begin
-        if(last_transfer) begin      
+        if(read_last_transfer) begin      
           read_state <= 2'h0;
         end else begin
           read_state <= 2'h1;
@@ -474,11 +474,39 @@ begin
 end
 
 // Write
+wire write_last_transfer;
+
+transfer_controller #(
+   .AXI_ADDR_W(AXI_ADDR_W),
+   .AXI_DATA_W(AXI_DATA_W),
+   .LEN_W(LEN_W) 
+   )
+   write_controller
+   (
+      .address(m_waddr),
+      .length(m_wlen), // In bytes
+
+      .transfer_start(write_state == 2'h0 && m_wvalid && burst_align_empty),
+      .burst_start(write_state == 2'h2 && m_axi_awready && m_axi_awvalid),
+
+      .initial_strb(),
+      .final_strb(),
+
+      .true_axi_axaddr(m_axi_awaddr),
+
+      // TODO: Register these signals to 
+      .true_axi_axlen(true_axi_awlen),
+      .last_transfer(last_transfer),
+   
+      .clk(clk),
+      .rst(rst)
+   );
+
+reg [7:0] write_axi_len;
+assign m_axi_awlen = write_axi_len;
 
 // Address write constants
 assign m_axi_awid = `AXI_ID_W'b0;
-assign m_axi_awaddr = m_waddr;
-assign m_axi_awlen = m_wlen;
 assign m_axi_awsize = axi_size;
 assign m_axi_awburst = `AXI_BURST_W'b01; // INCR
 assign m_axi_awlock = `AXI_LOCK_W'b0;
@@ -490,6 +518,8 @@ assign m_axi_wdata = m_wdata;
 assign m_axi_wstrb = m_wstrb;
 
 assign m_axi_bready = 1'b1; // We ignore write response
+
+assign m_axi_awaddr = m_waddr;
 
 reg awvalid,wvalid,wlast;
 assign m_axi_awvalid = awvalid;

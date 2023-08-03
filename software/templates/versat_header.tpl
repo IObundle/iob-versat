@@ -3,11 +3,14 @@
 #ifndef INCLUDED_VERSAT_ACCELERATOR_HEADER
 #define INCLUDED_VERSAT_ACCELERATOR_HEADER
 
-#include <stdint.h>
+#ifdef __cplusplus
+#include <cstdint>
+#else
+#include "stdbool.h"
+#include "stdint.h"
+#endif
+
 typedef intptr_t iptr;
-#define bool char
-#define true 1
-#define false 0
 
 typedef struct{
 #{for wire orderedConfigs.configs}
@@ -101,10 +104,6 @@ extern volatile AcceleratorState* accelState;
 #{set name pair.first} #{set conf pair.second}
 #define ACCEL_@{name} accelState->@{name}
 #{end}
-
-#undef bool
-#undef true
-#undef false
 
 #endif // INCLUDED_VERSAT_ACCELERATOR_HEADER
 

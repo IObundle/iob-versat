@@ -1,17 +1,15 @@
 #include "versat_accel.h"
 
-#ifndef __cplusplus
-#include "stdbool.h"
-#include <string.h>
-#else
+#ifdef __cplusplus
 #include <cstdlib>
 #include <cstring>
+#else
+#include <string.h>
+#include <stdbool.h>
 #endif
 
 #define IMPLEMENT_VERILOG_UNITS
-
 #define ARRAY_SIZE(arr) (sizeof(arr) / sizeof(arr[0]))
-
 #define nullptr 0
 
 typedef struct Versat Versat;
