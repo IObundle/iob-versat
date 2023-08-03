@@ -51,10 +51,20 @@ void Debug(){
 }
 
 bool CreateVCD;
+bool SimulateDatabus;
+
+void ConfigCreateVCD(bool value){
+   CreateVCD = value;
+}
+
+void ConfigSimulateDatabus(bool value){
+   SimulateDatabus = value;
+}
 
 void versat_init(int base){
-   CreateVCD = false;
-
+   CreateVCD = true;
+   SimulateDatabus = true;
+   
    InitializeVerilator();
 
    versat_base = base;

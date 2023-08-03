@@ -1,5 +1,6 @@
 `timescale 1ns / 1ps
 
+`default_nettype none
 module LookupTableRead #(
        parameter DATA_W = 32,
        parameter ADDR_W = 12,
@@ -15,7 +16,7 @@ module LookupTableRead #(
       input [AXI_DATA_W-1:0]      databus_rdata_0,
       output [AXI_DATA_W-1:0]     databus_wdata_0,
       output [AXI_DATA_W/8-1:0]   databus_wstrb_0,
-      output [LEN_W:0]            databus_len_0,
+      output [LEN_W-1:0]          databus_len_0,
       input                       databus_last_0,
 
       output reg done,
@@ -47,7 +48,7 @@ module LookupTableRead #(
       input [9:0]            dutyA,
       input [ADDR_W-1:0]     shiftA,
       input [ADDR_W-1:0]     incrA,
-      input [7:0]            length,
+      input [LEN_W-1:0]      length,
       input                  pingPong,
 
       input [9:0] iterB,
@@ -76,9 +77,11 @@ module LookupTableRead #(
    localparam DIFF = AXI_DATA_W/DATA_W;
    localparam DECISION_BIT_W = $clog2(DIFF);
 
-   function [ADDR_W-DECISION_BIT_W-1:0] byteToSymbolSpace(input [ADDR_W-1:0] in);
+   function [ADDR_W-DECISION_BIT_W-1:0] symbolSpaceConvert(input [ADDR_W-1:0] in);
+      reg [ADDR_W-1:0] shiftRes;
       begin
-         byteToSymbolSpace = in >> DECISION_BIT_W;
+         shiftRes = in >> DECISION_BIT_W;
+         symbolSpaceConvert = shiftRes[ADDR_W-DECISION_BIT_W-1:0];
       end
    endfunction
 
@@ -86,7 +89,8 @@ module LookupTableRead #(
 
    reg [ADDR_W-1:0] addr_0;
    always @* begin
-      addr_0 = byteToSymbolSpace(in0);
+      addr_0 = 0;
+      addr_0[ADDR_W-DECISION_BIT_W-1:0] = symbolSpaceConvert(in0[ADDR_W-1:0]);
       addr_0[ADDR_W-1] = pingPong && !pingPongState;
    end
 
@@ -125,7 +129,7 @@ module LookupTableRead #(
    assign ext_dp_write_0_port_0 = 1'b0;
 
    assign databus_wdata_0 = 0;
-   assign databus_wstrb_0 = 4'b0000;
+   assign databus_wstrb_0 = 0;
    assign databus_len_0 = length;
 
    always @(posedge clk,posedge rst)
@@ -145,7 +149,7 @@ module LookupTableRead #(
    begin
       if(rst)
          pingPongState <= 0;
-      else if(run && !disabled)
+      else if(run) // && !disabled
          pingPongState <= pingPong ? (!pingPongState) : 1'b0;
    end
    

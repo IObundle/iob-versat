@@ -39,15 +39,16 @@ class Tokenizer{
    std::string singleChars; // TODO: Why use string instead of sized string?
    std::vector<std::string> specialChars; // TODO: Why use string instead of sized string?
 
-public:
-
-   bool keepWhitespaces;
-   bool keepComments;
-
 private:
 
    int SpecialChars(const char* ptr,size_t size);
    void ConsumeWhitespace();
+
+public:
+
+   // Can change mid way to alter manner in which the tokenizer handles special cases
+   bool keepWhitespaces;
+   bool keepComments;
 
 public:
 
@@ -85,7 +86,7 @@ public:
    void Rollback(void* mark);
 
    void AdvancePeek(Token tok);
-
+  
    void SetSingleChars(const char* singleChars);
    bool Done();
    int Lines(){return lines;};

@@ -54,10 +54,10 @@ struct DAGOrder{
 };
 
 struct VersatComputedData{
-   int memoryMaskSize;
-   int memoryAddressOffset;
-   char memoryMaskBuffer[33];
-   char* memoryMask;
+  int memoryMaskSize;
+  int memoryAddressOffset;
+  char memoryMaskBuffer[33];
+  char* memoryMask;
 };
 
 struct ComputedData{
@@ -66,9 +66,11 @@ struct ComputedData{
 };
 
 struct Parameter{
-   String name;
-   String value;
-   Parameter* next;
+  // Repr : .{name}({value})
+
+  String name;
+  String value;
+  Parameter* next;
 };
 
 struct DAGOrderNodes{

@@ -80,7 +80,8 @@ struct ExternalMemoryInterfaceExpression{
 struct ExternalMemoryInterface{
    int interface;
    int bitsize;
-   int datasize;
+   int datasizeIn[2];
+   int datasizeOut[2];
    ExternalMemoryType type;
 };
 

@@ -283,7 +283,7 @@ static Value EscapeString(Value val,Arena* out){
    Assert(val.isTemp);
 
    String str = val.str;
-
+  
    String escaped = PushString(out,str);
    char* view = (char*) escaped.data;
 
@@ -635,7 +635,7 @@ FUDeclaration* GetTypeByName(Versat* versat,String name){
       }
    }
 
-   Log(LogModule::TOP_SYS,LogLevel::FATAL,"Didn't find the following type: %.*s",UNPACK_SS(name));
+   LogFatal(LogModule::TOP_SYS,"Didn't find the following type: %.*s",UNPACK_SS(name));
 
    return nullptr;
 }
@@ -1020,7 +1020,7 @@ FUDeclaration* RegisterModuleInfo(Versat* versat,ModuleInfo* info){
    // Check same name
    for(FUDeclaration* decl : versat->declarations){
       if(CompareString(decl->name,info->name)){
-         Log(LogModule::TOP_SYS,LogLevel::FATAL,"Found a module with a same name (%.*s). Cannot proceed",UNPACK_SS(info->name));
+         LogFatal(LogModule::TOP_SYS,"Found a module with a same name (%.*s). Cannot proceed",UNPACK_SS(info->name));
       }
    }
 
@@ -1035,6 +1035,7 @@ FUDeclaration* RegisterModuleInfo(Versat* versat,ModuleInfo* info){
       for(int i = 0; i < instantiated.size; i++){
          ParameterExpression def = info->defaultParameters[i];
 
+         // TODO: Make this more generic. Probably gonna need to take a look at a FUDeclaration as a instance of a more generic FUType construct. FUDeclaration has constant values, the FUType stores the expressions to compute them. 
          // Override databus size for current architecture
          if(CompareString(def.name,STRING("AXI_ADDR_W"))){
             Expression* expr = PushStruct<Expression>(arena);
@@ -1045,6 +1046,16 @@ FUDeclaration* RegisterModuleInfo(Versat* versat,ModuleInfo* info){
             def.expr = expr;
          }
 
+         // Override length. Use 16 as maximum, for now
+         if(CompareString(def.name,STRING("LEN_W"))){
+            Expression* expr = PushStruct<Expression>(arena);
+
+            expr->type = Expression::LITERAL;
+            expr->val = MakeValue(16);
+            
+            def.expr = expr;
+         }
+         
          instantiated[i] = def;
       }
 

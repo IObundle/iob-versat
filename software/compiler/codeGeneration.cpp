@@ -9,6 +9,7 @@ void TemplateSetDefaults(Versat* versat){
    TemplateSetCustom("versat",versat,"Versat");
    TemplateSetCustom("inputDecl",BasicDeclaration::input,"FUDeclaration");
    TemplateSetCustom("outputDecl",BasicDeclaration::output,"FUDeclaration");
+   TemplateSetCustom("arch",&versat->opts,"Options");
 }
 
 void OutputCircuitSource(Versat* versat,FUDeclaration* decl,Accelerator* accel,FILE* file){
@@ -32,7 +33,7 @@ void OutputCircuitSource(Versat* versat,FUDeclaration* decl,Accelerator* accel,F
 
       FUInstance* inst = ptr->node->inst;
       if(inst->declaration->nIOs){
-         inst->parameters = STRING("#(.AXI_ADDR_W(AXI_ADDR_W),.AXI_DATA_W(AXI_DATA_W))"); // TODO: placeholder hack.
+         inst->parameters = STRING("#(.AXI_ADDR_W(AXI_ADDR_W),.AXI_DATA_W(AXI_DATA_W),.LEN_W(LEN_W))"); // TODO: placeholder hack.
       }
    }
 
@@ -154,7 +155,7 @@ void OutputVersatSource(Versat* versat,Accelerator* accel,const char* directoryP
 
       FUInstance* inst = ptr->node->inst;
       if(inst->declaration->nIOs){
-         inst->parameters = STRING("#(.AXI_ADDR_W(AXI_ADDR_W),.AXI_DATA_W(AXI_DATA_W))"); // TODO: placeholder hack.
+         inst->parameters = STRING("#(.AXI_ADDR_W(AXI_ADDR_W),.AXI_DATA_W(AXI_DATA_W),.LEN_W(LEN_W))"); // TODO: placeholder hack.
       }
    }
 

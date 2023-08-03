@@ -25,6 +25,7 @@ struct StructDef{
    String fullExpression;
    String name;
    String inherit;
+   String representationFormat;
    TemplateParamDef* params;
    MemberDef* members;
    bool isUnion;

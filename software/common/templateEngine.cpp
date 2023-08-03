@@ -526,8 +526,7 @@ static Value EvalExpression(Expression* expr,Frame* frame,Arena* temp){
          Optional<Value> iter = GetValue(frame,expr->id);
 
          if(!iter){
-            printf("Didn't find identifier: %.*s\n",UNPACK_SS(expr->id));
-            printf("%.*s\n",UNPACK_SS(expr->text));
+            LogFatal(LogModule::TEMPLATE,"Did not find %.*s in template: %.*s",UNPACK_SS(expr->id),UNPACK_SS(globalTemplateName));
             DEBUG_BREAK();
          }
 

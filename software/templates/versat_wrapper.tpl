@@ -17,6 +17,7 @@ static Array<int> zerosArray = {zeros,99};
 static V@{module.name}* dut = NULL;
 
 extern bool CreateVCD;
+extern bool SimulateDatabus;
 
 #define INIT(unit) \
    unit->run = 0; \
@@ -166,6 +167,14 @@ struct DatabusAccess{
 static const int INITIAL_MEMORY_LATENCY = 5;
 static const int MEMORY_LATENCY = 0;
 
+union Int64{
+   int64 val;
+   struct{
+       int32 i0;
+       int32 i1;
+   };
+};
+
 // Memories are evaluated after databus because most of the time
 // databus is used to read data to memories
 // while memory to databus usually passes through a register that holds the data.
@@ -180,9 +189,9 @@ void @{module.name}_VCDFunction(FUInstance* inst,FILE* out,VCDMapping& currentMa
       // DP
       fprintf(out,"$var wire @{external.bitsize} %s ext_dp_addr_@{id}_port_@{port} $end\n",currentMapping.Get());
       currentMapping.Increment();
-      fprintf(out,"$var wire @{external.datasize} %s ext_dp_out_@{id}_port_@{port} $end\n",currentMapping.Get());
+      fprintf(out,"$var wire @{external.datasizeOut[port]} %s ext_dp_out_@{id}_port_@{port} $end\n",currentMapping.Get());
       currentMapping.Increment();
-      fprintf(out,"$var wire @{external.datasize} %s ext_dp_in_@{id}_port_@{port} $end\n",currentMapping.Get());
+      fprintf(out,"$var wire @{external.datasizeIn[port]} %s ext_dp_in_@{id}_port_@{port} $end\n",currentMapping.Get());
       currentMapping.Increment();
       fprintf(out,"$var wire 1 %s ext_dp_enable_@{id}_port_@{port} $end\n",currentMapping.Get());
       currentMapping.Increment();
@@ -293,7 +302,7 @@ AcceleratorConfig* config = (AcceleratorConfig*) inst->config;
 
    memoryLatency->counter = 0;
    memoryLatency->latencyCounter = INITIAL_MEMORY_LATENCY;
-}\
+}
 #{end}
 
    START_RUN(self);
@@ -327,7 +336,7 @@ int32_t* @{module.name}_UpdateFunction(FUInstance* inst,Array<int> inputs){
    self->eval();
 
 #{for i module.nIO}
-{
+if(SimulateDatabus){
    self->databus_ready_@{i} = 0;
    self->databus_last_@{i} = 0;
 
@@ -337,7 +346,15 @@ int32_t* @{module.name}_UpdateFunction(FUInstance* inst,Array<int> inputs){
       if(access->latencyCounter > 0){
          access->latencyCounter -= 1;
       } else {
+
+         #{if arch.architectureBitSize == 64}
+		 //TODO: Need to be able to generate wires depending on parameter specifications
+		 //		 And probably to make it explicit the difference between a parameterizable and a type instance
          int* ptr = (int*) (self->databus_addr_@{i});
+         //int64* ptr = (int64*) (self->databus_addr_@{i});
+         #{else}
+         int* ptr = (int*) (self->databus_addr_@{i});
+         #{end}
          
          if(self->databus_wstrb_@{i} == 0){
             if(ptr == nullptr){
@@ -351,8 +368,24 @@ int32_t* @{module.name}_UpdateFunction(FUInstance* inst,Array<int> inputs){
             }
          }
          self->databus_ready_@{i} = 1;
-         
-         if(access->counter == self->databus_len_@{i}){
+
+		 int transferLength = self->databus_len_@{i};
+
+		 #{if arch.architectureBitSize == 64}
+		 //TODO: Need to be able to generate wires depending on parameter specifications
+		 //		 And probably to make it explicit the difference between a parameterizable and a type instance
+		 //#define COUNTER_LENGTH(VAL) ALIGN_8(VAL) / 8
+
+		 #define COUNTER_LENGTH(VAL) ALIGN_4(VAL) / 4
+		 #{else}
+		 #define COUNTER_LENGTH(VAL) ALIGN_4(VAL) / 4
+		 #{end}
+
+		 int countersLength = COUNTER_LENGTH(transferLength);
+
+		 #undef COUNTER_LENGTH
+
+         if(access->counter >= countersLength - 1){
             access->counter = 0;
             self->databus_last_@{i} = 1;
          } else {
@@ -523,7 +556,10 @@ FUDeclaration @{module.name}_CreateDeclaration(){
    #{for external module.externalInterfaces}
    externalMemory[@{index}].interface = @{external.interface};
    externalMemory[@{index}].bitsize = @{external.bitsize};
-   externalMemory[@{index}].datasize =  @{external.datasize};
+   externalMemory[@{index}].datasizeOut[0] =  @{external.datasizeOut[0]};
+   externalMemory[@{index}].datasizeOut[1] =  @{external.datasizeOut[1]};
+   externalMemory[@{index}].datasizeIn[0] =  @{external.datasizeIn[0]};
+   externalMemory[@{index}].datasizeIn[1] =  @{external.datasizeIn[1]};
    externalMemory[@{index}].type = @{external.type};
    #{end}
    decl.externalMemory = C_ARRAY_TO_ARRAY(externalMemory);

@@ -20,7 +20,7 @@ module transfer_controller #(
 
       // All these signals are combinatorial. Register them outside this module if needed
       output reg [AXI_DATA_W/8-1:0] initial_strb, // First strobe of the transfer. The rest is always full 1
-      output reg [AXI_DATA_W/8-1:0] final_strb,   // Last strobe of the transfer.
+      output reg [AXI_DATA_W/8-1:0] final_strb,   // Last strobe of the transfer. Only valid if last_transfer is asserted
 
       output reg [7:0] true_axi_axlen,
       output reg last_transfer,
@@ -28,6 +28,11 @@ module transfer_controller #(
       input clk,
       input rst
    );
+
+localparam OFFSET_W = calculate_AXI_OFFSET_W(AXI_DATA_W);
+localparam STROBE_W = AXI_DATA_W/8;
+
+wire [AXI_DATA_W-1:0] OFFSET_MASK = (0 | {OFFSET_W{1'b1}});
 
 function [15:0] min(input [15:0] a,b);
     begin
@@ -40,82 +45,108 @@ reg [LEN_W-1:0] stored_len;
 reg first_transfer;
 
 // Generic variables outside generate
-reg last_transfer_next;
 reg [LEN_W-1:0] transfer_byte_size;
-
-wire [AXI_ADDR_W-1:0] true_address;
-
-//generate
-//if(AXI_DATA_W == 32) begin
-
-reg [15:0] boundary_transfer_len;
 reg [LEN_W-1:0] last_transfer_len;
 
-assign true_address = {address[AXI_ADDR_W-1:2],2'b00};
+wire [12:0] max_transfer_len_minus_one; // Assigned inside the generate
 
-wire [15:0] first_transfer_len = (32'd1020 + (32'd4 - address[1:0]));
+wire [12:0] first_transfer_len = (max_transfer_len_minus_one + (STROBE_W - address[OFFSET_W-1:0]));
+wire [12:0] boundary_transfer_len = (13'h1000 - address[11:0]);
+wire [AXI_ADDR_W-1:0] true_address = address & (~OFFSET_MASK);
+
+wire last_transfer_next = (transfer_byte_size == stored_len);
 
 always @* begin
-   last_transfer_len = 0;
-
-   if(address[1:0] == 2'b00 & stored_len[1:0] == 2'b00)
-      last_transfer_len = stored_len[9:2] - 8'h1;
-   else if((address[1:0] == 2'b10 && stored_len[1:0] == 2'b11) || (address[1:0] == 2'b11 && stored_len[1:0] >= 2'b10))
-      last_transfer_len = stored_len[9:2] + 8'h1;
+   if(first_transfer)
+      transfer_byte_size = min(boundary_transfer_len,min(stored_len,first_transfer_len));
    else
-      last_transfer_len = stored_len[9:2];
+      transfer_byte_size = min(boundary_transfer_len,stored_len);
 
-    boundary_transfer_len = 16'h1000 - address[11:0]; // Maximum bytes that can be transfer before crossing a border
-
-    if(first_transfer)
-        transfer_byte_size = min(boundary_transfer_len,min(stored_len,first_transfer_len));
-    else
-        transfer_byte_size = min(boundary_transfer_len,stored_len);
-
-    last_transfer_next = (transfer_byte_size == stored_len);
-
-    if(last_transfer_next)
-        true_axi_axlen = last_transfer_len;
-    else
-        true_axi_axlen = (transfer_byte_size - 1) >> 2;
-
-    case(address[1:0])
-        2'b00: initial_strb = 4'b1111;
-        2'b01: initial_strb = 4'b1110;
-        2'b10: initial_strb = 4'b1100;
-        2'b11: initial_strb = 4'b1000;
-    endcase
-    
-    case(address[1:0])
-        2'b00: case(stored_len[1:0])
-            2'b00: final_strb = 4'b1111; 
-            2'b01: final_strb = 4'b0001;
-            2'b10: final_strb = 4'b0011;
-            2'b11: final_strb = 4'b0111;
-        endcase
-        2'b01: case(stored_len[1:0])
-            2'b00: final_strb = 4'b0001; 
-            2'b01: final_strb = 4'b0011;
-            2'b10: final_strb = 4'b0111;
-            2'b11: final_strb = 4'b1111;
-        endcase
-        2'b10: case(stored_len[1:0])
-            2'b00: final_strb = 4'b0011; 
-            2'b01: final_strb = 4'b0111;
-            2'b10: final_strb = 4'b1111;
-            2'b11: final_strb = 4'b0001;
-        endcase
-        2'b11: case(stored_len[1:0])
-            2'b00: final_strb = 4'b0111; 
-            2'b01: final_strb = 4'b1111;
-            2'b10: final_strb = 4'b0001;
-            2'b11: final_strb = 4'b0011;
-        endcase
-    endcase
+   if(last_transfer_next)
+      true_axi_axlen = last_transfer_len;
+   else
+      true_axi_axlen = (transfer_byte_size - 1) >> OFFSET_W;
 end
 
-//end // if(AXI_DATA_W == 32)
-//endgenerate
+integer i;
+always @*
+begin
+   initial_strb = 0;
+   for(i = 0; i < (AXI_DATA_W/8); i = i + 1) begin
+      if(i >= address[OFFSET_W-1:0]) initial_strb[i] = 1'b1;
+   end
+
+   final_strb = ~0;
+   for(i = 0; i < (AXI_DATA_W/8); i = i + 1) begin
+      if(i > address[OFFSET_W-1:0]) final_strb[i] = 1'b0;
+   end
+end
+
+generate
+if(AXI_DATA_W == 32) begin
+assign max_transfer_len_minus_one = 13'h03FC;
+   always @* begin
+      last_transfer_len = 0;
+
+      if(address[1:0] == 2'b00 & stored_len[1:0] == 2'b00)
+         last_transfer_len = stored_len[9:2] - 8'h1;
+      else if((address[1:0] == 2'b10 && stored_len[1:0] == 2'b11) || (address[1:0] == 2'b11 && stored_len[1:0] >= 2'b10))
+         last_transfer_len = stored_len[9:2] + 8'h1;
+      else
+         last_transfer_len = stored_len[9:2];
+   end
+end // if(AXI_DATA_W == 32)
+if(AXI_DATA_W == 64) begin
+assign max_transfer_len_minus_one = 13'h07F8;
+   always @* begin
+      last_transfer_len = 0;
+
+      if(address[2:0] == 3'b000 && stored_len[2:0] == 3'b000)
+         last_transfer_len = stored_len[10:3] - 8'h1;
+      else if((address[2:0] == 3'b111 && stored_len[2:0] >= 3'b010) 
+           || (address[2:0] == 3'b110 && stored_len[2:0] >= 3'b011)
+           || (address[2:0] == 3'b101 && stored_len[2:0] >= 3'b100)
+           || (address[2:0] == 3'b100 && stored_len[2:0] >= 3'b101)
+           || (address[2:0] == 3'b011 && stored_len[2:0] >= 3'b110)
+           || (address[2:0] == 3'b010 && stored_len[2:0] == 3'b111))
+         last_transfer_len = stored_len[10:3] + 8'h1;
+      else
+         last_transfer_len = stored_len[10:3];
+
+   end
+end // if(AXI_DATA_W == 64)
+if(AXI_DATA_W == 128) begin
+assign max_transfer_len_minus_one = 13'h0FF0;
+   always @* begin
+      last_transfer_len = 0;
+
+      if(address[3:0] == 4'b0000 && stored_len[3:0] == 4'b0000)
+         last_transfer_len = stored_len[11:4] - 8'h1;
+      else if((address[3:0] == 4'b1111 && stored_len[3:0] >= 4'b0010) 
+           || (address[3:0] == 4'b1110 && stored_len[3:0] >= 4'b0011)
+           || (address[3:0] == 4'b1101 && stored_len[3:0] >= 4'b0100)
+           || (address[3:0] == 4'b1100 && stored_len[3:0] >= 4'b0101)
+           || (address[3:0] == 4'b1011 && stored_len[3:0] >= 4'b0110)
+           || (address[3:0] == 4'b1010 && stored_len[3:0] >= 4'b0111)
+           || (address[3:0] == 4'b1001 && stored_len[3:0] >= 4'b1000) 
+           || (address[3:0] == 4'b1000 && stored_len[3:0] >= 4'b1001)
+           || (address[3:0] == 4'b0111 && stored_len[3:0] >= 4'b1010)
+           || (address[3:0] == 4'b0110 && stored_len[3:0] >= 4'b1011)
+           || (address[3:0] == 4'b0101 && stored_len[3:0] >= 4'b1100)
+           || (address[3:0] == 4'b0100 && stored_len[3:0] >= 4'b1101)
+           || (address[3:0] == 4'b0011 && stored_len[3:0] >= 4'b1110)
+           || (address[3:0] == 4'b0010 && stored_len[3:0] == 4'b1111))
+         last_transfer_len = stored_len[11:4] + 8'h1;
+      else
+         last_transfer_len = stored_len[11:4];
+
+   end
+end // if(AXI_DATA_W == 128)
+if(AXI_DATA_W == 128) begin
+assign max_transfer_len_minus_one = 13'h0FE0; // Because of boundary conditions, cannot go higher
+
+end
+endgenerate
 
 // Outside generate, logic is generic enough
 always @(posedge clk,posedge rst) begin
@@ -133,7 +164,7 @@ always @(posedge clk,posedge rst) begin
       if(burst_start) begin
          first_transfer <= 1'b0;
          last_transfer <= last_transfer_next;
-         true_axi_axaddr <= true_axi_axaddr + (true_axi_axlen + 1) * 4;
+         true_axi_axaddr <= true_axi_axaddr + (true_axi_axlen + 1) * (AXI_DATA_W / 8);
          stored_len <= stored_len - transfer_byte_size;
       end
    end

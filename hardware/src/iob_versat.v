@@ -7,6 +7,7 @@
 
 `include "versat_defs.vh"
 
+`default_nettype none
 module iob_versat
   # (//the below parameters are used in cpu if includes below
     	parameter AXI_ADDR_W = 32,
@@ -337,6 +338,8 @@ module SimpleAXItoAXI #(
     input rst
   );
 
+localparam OFFSET_W = calculate_AXI_OFFSET_W(AXI_DATA_W);
+
 reg [2:0] axi_size;
 always @* begin
   axi_size = 3'b000;
@@ -367,21 +370,25 @@ assign m_axi_arqos = `AXI_QOS_W'h0;
 
 assign m_axi_arvalid = arvalid;
 assign m_axi_rready = (read_state == 2'h3);
-assign m_rlast = m_axi_rlast;
 
 reg arvalid,rready;
 
 reg [1:0] read_state;
-wire output_last; // TODO: Need to assert for the last transfer of the full transfer
 
+wire last_transfer;
+wire burst_align_empty;
 // Read
 burst_align #(
     .AXI_DATA_W(AXI_DATA_W)
   ) aligner (
-    .offset(m_raddr[1:0]),
+    .offset(m_raddr[OFFSET_W-1:0]),
     .start(read_state == 0),
 
-    .last(output_last),
+    .burst_last(m_axi_rvalid && m_axi_rready && m_axi_rlast),
+    .transfer_last(last_transfer),
+
+    .last_transfer(m_rlast),
+    .empty(burst_align_empty),
 
     // Simple interface for data_in
     .data_in(m_axi_rdata),
@@ -396,9 +403,7 @@ burst_align #(
   );
 
 reg transfer_start,burst_start;
-wire last_transfer;
 
-reg [AXI_ADDR_W-1:0] true_axi_araddr;
 reg [7:0] true_axi_arlen;
 
 transfer_controller #(
@@ -411,7 +416,7 @@ transfer_controller #(
       .address(m_raddr),
       .length(m_rlen), // In bytes
 
-      .transfer_start(read_state == 2'h0 && m_rvalid),
+      .transfer_start(read_state == 2'h0 && m_rvalid && burst_align_empty),
       .burst_start(read_state == 2'h2 && m_axi_arready && m_axi_arvalid),
 
       // Do not need them for read operation
@@ -428,25 +433,26 @@ transfer_controller #(
       .rst(rst)
    );
 
-assign output_last = (last_transfer && m_axi_rvalid && m_axi_rready && m_axi_rlast);
+reg [7:0] axi_len;
+assign m_axi_arlen = axi_len;
 
 always @(posedge clk,posedge rst)
 begin
   if(rst) begin
     read_state <= 0;
     arvalid <= 0;
-    m_axi_arlen <= 0;
+    axi_len <= 0;
   end else begin
     case(read_state)
     2'h0: begin
-      if(m_rvalid) begin
+      if(m_rvalid && burst_align_empty) begin
         read_state <= 2'h1;
       end
     end
     2'h1: begin
       arvalid <= 1'b1;
       read_state <= 2'h2;
-      m_axi_arlen <= true_axi_arlen;
+      axi_len <= true_axi_arlen;
     end
     2'h2: begin // Write address set
       if(m_axi_arready) begin

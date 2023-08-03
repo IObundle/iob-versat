@@ -59,6 +59,15 @@ void VersatUnitWrite(int addr,int val);
 int VersatUnitRead(int base,int index);
 void SignalLoop();
 
+// PC-Emul side functions that allow to enable or disable certain portions of the emulation
+#ifdef PC
+void ConfigCreateVCD(bool value);
+void ConfigSimulateDatabus(bool value); 
+#else
+#define ConfigCreateVCD(...) ((void)0)
+#define ConfigSimulateDatabus(...) ((void)0)
+#endif
+
 // Needed by PC-EMUL to correctly simulate the design, embedded compiler should remove these symbols from firmware because not used by them 
 static const char* acceleratorTypeName = "@{accelType}";
 static bool isSimpleAccelerator = @{isSimple};

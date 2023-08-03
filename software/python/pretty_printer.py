@@ -1,3 +1,31 @@
+"""
+Problem 1: Codeblocks does not display the raw value for any child node.
+
+Example: $1 = Pair<Array<char const>, Array<char const> > = {first = "123" = {data = 0x55dd301bd476 "123", size = 3}, second = "234" = {data = 0x55dd301bd47a "234", size = 3}}
+
+   The first = "123" = ... is the value for the first member. The "123" inside the '=' is useless. Codeblocks does not display that as a raw value, when it would be really good if it did.
+
+p.first gives: $2 = "123" = {data = 0x55dd301bd476 "123", size = 3}
+   
+   And in that case, Codeblocks does pick on the "123" and displays it as the raw value, as expected.
+
+   Very likely that the problem is more Codeblocks fault than the pretty printers.
+
+Seems to me like the format for a simple struct is:
+
+<VarName> = <VarRawValue> = <VarChildren>
+
+but codeblocks only follows that format for the first and the last children. The middle children, codeblocks just ignores <VarRawValue>
+
+Problem 2: For some reason, code blocks does what I want for hashmaps, except that I need to put a ':' which also gets displayed as the raw value for the second pair.
+   At the very least, it "works" 
+
+$1 = std::unordered_map with 3 elements = {["3" = {data = 0x55a162218472 "3", size = 1}] = "4" = {data = 0x55a162218474 "4", size = 1}, ["2" = {data = 0x55a162218470 "2", size = 1}] = "3" = {data = 0x55a162218472 "3", size = 1}, ["1" = {data = 0x55a16221846e "1", size = 1}] = "2" = {data = 0x55a162218470 "2", size = 1}}
+> print *map
+$1 = Hashmap<Array<char const>, Array<char const> > of size 3 = {["1":"2" = {first = "1" = {data = 0x55c858afb46e "1", size = 1}, second = "2" = {data = 0x55c858afb470 "2", size = 1}}] = "2":"3" = {first = "2" = {data = 0x55c858afb470 "2", size = 1}, second = "3" = {data = 0x55c858afb472 "3", size = 1}}, ["3":"4" = {first = "3" = {data = 0x55c858afb472 "3", size = 1}, second = "4" = {data = 0x55c858afb474 "4", size = 1}}] = }
+
+"""
+
 import gdb
 import gdb.types
 import gdb.printing
@@ -120,7 +148,7 @@ class HashmapPrinter(MyPrinter):
          self.count = self.count + 1
          elt = self.item.dereference()
          self.item = self.item + 1
-         return ('[%d tert]' % count, elt)
+         return ('[%d]' % count, elt)
 
    def __init__(self, typename, val):
       self.typename = typename
@@ -173,12 +201,38 @@ def PredicatePair(typeStr):
       return True
    return False
 
+class TestPrinter(MyPrinter):
+   "Print Test"
+
+   def __init__(self, typename, val):
+      self.typename = typename
+      self.val = val
+
+   def children(self):
+      return (("val",self.val["val"]),) #(("firstArg","1"),("secondArg","2"))
+
+   def to_string(self):
+      return "test"
+#      size = int(self.val["size"])
+#      data = self.val["data"]
+#      size = min(size,1024)
+#      res = "%s" % data.string(encoding = "ascii",errors = "replace",length = size)
+#      return res;
+
+   def display_hint(self):
+      return "string"
+
 def build_pretty_printer():
    pp = MyPrinter("lol")
+   # Seem fine
    pp.add_printer("string",CompileAndPredicate("^Array<char const>$"),StringPrinter)
-   pp.add_printer("pair",PredicatePair,PairPrinter)
-   pp.add_printer("hashmap",PredicateHashmap,HashmapPrinter)
+   pp.add_printer("string",CompileAndPredicate("^String$"),StringPrinter)
    pp.add_printer("array",CompileAndPredicate("^Array<.*>$"),ArrayPrinter)
+   pp.add_printer("test",CompileAndPredicate("^Test$"),TestPrinter)
+   pp.add_printer("pair",PredicatePair,PairPrinter)
+
+   # Not working good.
+   pp.add_printer("hashmap",PredicateHashmap,HashmapPrinter)
    return pp
 
 gdb.printing.register_pretty_printer(

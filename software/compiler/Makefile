@@ -5,6 +5,7 @@ VERSAT_DIR:=$(abspath $(shell pwd)/../..)
 #versat common parameters
 include $(VERSAT_DIR)/core.mk
 include $(VERSAT_TOOLS_DIR)/tools.mk
+include $(VERSAT_DIR)/sharedHardware.mk
 
 BUILD_DIR:=$(VERSAT_DIR)/build
 
@@ -56,10 +57,7 @@ $(VERSAT_DIR)/versat: $(CPP_OBJ) $(VERSAT_DIR)/libversat.a
 	g++ -MMD -MP -std=c++17 $(FL) $(VERSAT_FLAGS) -o $@ -g $(CPP_OBJ) $(VERSAT_INCLUDE) $(VERSAT_LIBS) $(VERSAT_DIR)/libversat.a
 
 $(VERSAT_DIR)/libversat.a: $(CPP_OBJ_WITHOUT_COMPILER)
-	@echo $(VERILATOR_OBJECTS)
 	ar rcs $(VERSAT_DIR)/libversat.a $(CPP_OBJ_WITHOUT_COMPILER) $(VERILATOR_OBJECTS)
-	#rm /tmp/versat_test_verilator.v
-	#rm /tmp/versat_makefile.mk
 
 libversat: $(VERSAT_DIR)/libversat.a
 
@@ -69,9 +67,7 @@ VERSAT_COMPILER_DEPENDS := $(patsubst %.o,%.d,$(VERSAT_COMPILER_OBJ))
 -include  $(VERSAT_COMPILER_DEPENDS)
 
 $(BUILD_DIR)/%.o : $(VERSAT_COMPILER_DIR)/%.cpp
-	@echo $(VERILATOR_ROOT)
-	@echo $(VERILATOR_OBJECTS)
-	g++ -MMD -MP -std=c++17 $(VERSAT_FLAGS) $(FL) -g -c -o $@ $(GLOBAL_CFLAGS) $< $(VERSAT_INCLUDE)
+	g++ -MMD -MP -std=c++17 -DDEFAULT_UNIT_PATHS="$(SHARED_UNITS_PATH)" $(VERSAT_FLAGS) $(FL) -g -c -o $@ $(GLOBAL_CFLAGS) $< $(VERSAT_INCLUDE)
 
 ifeq ($(VERSAT_DEBUG),1)
 $(BUILD_DIR)/%.o: $(VERSAT_COMPILER_DIR)/IMGUI/%.cpp

@@ -8,7 +8,7 @@ module burst_split #(
     parameter AXI_DATA_W = 32
     )
     (
-        offset,
+        input [calculate_AXI_OFFSET_W(AXI_DATA_W)-1:0] offset,
         input firstValid,
 
         // Simple interface for data_in
@@ -24,7 +24,6 @@ module burst_split #(
     );
 
 localparam OFFSET_W = calculate_AXI_OFFSET_W(AXI_DATA_W);
-input [OFFSET_W-1:0] offset;
 
 assign ready_in = firstValid | ready_out;
 
