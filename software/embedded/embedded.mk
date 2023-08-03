@@ -6,8 +6,6 @@ include $(VERSAT_DIR)/sharedHardware.mk
 SRC+=$(VERSAT_SW_DIR)/embedded/versat.c
 SRC+=$(VERSAT_SW_DIR)/embedded/memory.c
 
-CPP_SRC+=$(VERSAT_COMMON_DIR)/utilsCommon.cpp
-
 BUILD_DIR :=./build
 
 CFLAGS+=-DSIM

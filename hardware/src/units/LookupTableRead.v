@@ -5,7 +5,7 @@ module LookupTableRead #(
        parameter DATA_W = 32,
        parameter ADDR_W = 12,
        parameter AXI_ADDR_W = 32,
-       parameter AXI_DATA_W = 64,
+       parameter AXI_DATA_W = 32,
        parameter LEN_W = 8
    )
    (
@@ -23,7 +23,7 @@ module LookupTableRead #(
 
       input [DATA_W-1:0] in0,
 
-      (* versat_latency = 2 *) output reg [DATA_W-1:0] out0,
+      (* versat_latency = 2 *) output [DATA_W-1:0] out0,
 
       // Used by lookup table
       output reg [ADDR_W-1:0] ext_dp_addr_0_port_0,
@@ -101,6 +101,8 @@ module LookupTableRead #(
          ext_dp_addr_0_port_0 <= addr_0;
    end
 
+   generate
+   if(AXI_DATA_W > DATA_W) begin
    // Byte selector needs to be saved to later indicate which lane to output (for 64)
    reg sel_0; // Matches addr_0_port_0
    reg sel_1; // Matches rdata_0_port_0
@@ -124,6 +126,10 @@ module LookupTableRead #(
       .in(ext_dp_in_0_port_0),
       .out(out0)
    );
+   end else begin
+   assign out0 = ext_dp_in_0_port_0;
+   end
+   endgenerate
 
    assign ext_dp_enable_0_port_0 = 1'b1;
    assign ext_dp_write_0_port_0 = 1'b0;

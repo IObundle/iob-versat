@@ -1,12 +1,7 @@
 #include "versat_accel.h"
 
-#ifdef __cplusplus
-#include "utils.hpp"
-#else
-#undef  ARRAY_SIZE
 #define ARRAY_SIZE(arr) (sizeof(arr) / sizeof(arr[0]))
 #define TIME_IT(...) 
-#endif
   
 #define MEMSET(base, location, value) (*((volatile int*) (base + (sizeof(int)) * location)) = (int) value)
 #define MEMGET(base, location)        (*((volatile int*) (base + (sizeof(int)) * location)))
@@ -15,27 +10,28 @@
 
 #include "printf.h"
 
-#ifndef __cplusplus
+#ifdef __cplusplus
+#include <cstdint>
+#else
 #include "stdint.h"
-typedef uint64_t uint64;
 #include "stdbool.h"
+#endif
 
-// Care, this structure must be the same as the one from utils.
-// TODO: Find a way of sharing these even if embedded
+typedef uint64_t uint64;
+
+// There should be a shared header for common structures, but do not share code.
+// It does not work as well and keeps giving compile and linker errors. It's not worth it.
 typedef struct{
    uint64 seconds;
    uint64 nanoSeconds;
 } Time;
-#endif
 
-#if 1
 Time GetTime(){
    Time res = {};
    res.seconds = (uint64) timer_time_s();
    res.nanoSeconds = (uint64) timer_time_us() * 1000;
    return res;
 }
-#endif
 
 int versat_base;
 

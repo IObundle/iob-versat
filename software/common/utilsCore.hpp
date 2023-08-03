@@ -137,6 +137,7 @@ typedef uint8_t uint8;
 typedef uint8_t Byte;
 #else
 typedef unsigned char Byte;
+typedef unsigned int uint;
 typedef intptr_t iptr;
 typedef int64_t int64;
 typedef uint64_t uint64;
