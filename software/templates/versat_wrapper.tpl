@@ -5,9 +5,9 @@
 #include "utils.hpp"
 
 #include "verilated.h"
-#include "verilated_vcd_c.h"
+#include "verilated_fst_c.h"
 
-static VerilatedVcdC* tfp = NULL;
+static VerilatedFstC* tfp = NULL;
 VerilatedContext* contextp = new VerilatedContext;
 
 static int zeros[99] = {};
@@ -242,7 +242,7 @@ static void CloseWaveform(){
 
 int32_t* @{module.name}_InitializeFunction(FUInstance* inst){
    if(CreateVCD){
-      tfp = new VerilatedVcdC;
+      tfp = new VerilatedFstC;
    }
    
    memset(inst->extraData,0,inst->declaration->extraDataOffsets.max);
@@ -258,7 +258,7 @@ int32_t* @{module.name}_InitializeFunction(FUInstance* inst){
 
    if(CreateVCD){
       self->trace(tfp, 99);
-      tfp->open("system.vcd");
+      tfp->open("system.fst");
 
       atexit(CloseWaveform);
    }        

@@ -48,10 +48,11 @@ reg first_transfer;
 reg [LEN_W-1:0] transfer_byte_size;
 reg [LEN_W-1:0] last_transfer_len;
 
+wire [12:0] max_transfer_len; // Assigned inside the generate
 wire [12:0] max_transfer_len_minus_one; // Assigned inside the generate
 
 wire [12:0] first_transfer_len = (max_transfer_len_minus_one + (STROBE_W - address[OFFSET_W-1:0]));
-wire [12:0] boundary_transfer_len = (13'h1000 - address[11:0]);
+wire [12:0] boundary_transfer_len = (13'h1000 - true_axi_axaddr[11:0]);
 wire [AXI_ADDR_W-1:0] true_address = address & (~OFFSET_MASK);
 
 wire last_transfer_next = (transfer_byte_size == stored_len);
@@ -60,7 +61,7 @@ always @* begin
    if(first_transfer)
       transfer_byte_size = min(boundary_transfer_len,min(stored_len,first_transfer_len));
    else
-      transfer_byte_size = min(boundary_transfer_len,stored_len);
+      transfer_byte_size = min(boundary_transfer_len,min(stored_len,max_transfer_len));
 
    if(last_transfer_next)
       true_axi_axlen = last_transfer_len;
@@ -84,6 +85,7 @@ end
 
 generate
 if(AXI_DATA_W == 32) begin
+assign max_transfer_len = 13'h0400;
 assign max_transfer_len_minus_one = 13'h03FC;
    always @* begin
       last_transfer_len = 0;
@@ -97,6 +99,7 @@ assign max_transfer_len_minus_one = 13'h03FC;
    end
 end // if(AXI_DATA_W == 32)
 if(AXI_DATA_W == 64) begin
+assign max_transfer_len = 13'h0800;
 assign max_transfer_len_minus_one = 13'h07F8;
    always @* begin
       last_transfer_len = 0;
@@ -116,6 +119,7 @@ assign max_transfer_len_minus_one = 13'h07F8;
    end
 end // if(AXI_DATA_W == 64)
 if(AXI_DATA_W == 128) begin
+assign max_transfer_len = 13'h1000;
 assign max_transfer_len_minus_one = 13'h0FF0;
    always @* begin
       last_transfer_len = 0;
@@ -142,7 +146,8 @@ assign max_transfer_len_minus_one = 13'h0FF0;
 
    end
 end // if(AXI_DATA_W == 128)
-if(AXI_DATA_W == 128) begin
+if(AXI_DATA_W == 256) begin
+assign max_transfer_len = 13'h1000;
 assign max_transfer_len_minus_one = 13'h0FE0; // Because of boundary conditions, cannot go higher
 
 end

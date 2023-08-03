@@ -404,7 +404,7 @@ burst_align #(
 
 reg transfer_start,burst_start;
 
-reg [7:0] true_axi_arlen;
+wire [7:0] true_axi_arlen;
 
 transfer_controller #(
    .AXI_ADDR_W(AXI_ADDR_W),
@@ -475,6 +475,9 @@ end
 
 // Write
 wire write_last_transfer;
+reg [1:0] write_state;
+
+wire [7:0] true_axi_awlen;
 
 transfer_controller #(
    .AXI_ADDR_W(AXI_ADDR_W),
@@ -486,7 +489,7 @@ transfer_controller #(
       .address(m_waddr),
       .length(m_wlen), // In bytes
 
-      .transfer_start(write_state == 2'h0 && m_wvalid && burst_align_empty),
+      .transfer_start(write_state == 2'h0 && m_wvalid),
       .burst_start(write_state == 2'h2 && m_axi_awready && m_axi_awvalid),
 
       .initial_strb(),
@@ -496,14 +499,11 @@ transfer_controller #(
 
       // TODO: Register these signals to 
       .true_axi_axlen(true_axi_awlen),
-      .last_transfer(last_transfer),
+      .last_transfer(write_last_transfer),
    
       .clk(clk),
       .rst(rst)
    );
-
-reg [7:0] write_axi_len;
-assign m_axi_awlen = write_axi_len;
 
 // Address write constants
 assign m_axi_awid = `AXI_ID_W'b0;
@@ -519,43 +519,53 @@ assign m_axi_wstrb = m_wstrb;
 
 assign m_axi_bready = 1'b1; // We ignore write response
 
-assign m_axi_awaddr = m_waddr;
-
 reg awvalid,wvalid,wlast;
 assign m_axi_awvalid = awvalid;
 assign m_axi_wvalid = wvalid;
 assign m_axi_wlast = wlast;
 
-assign m_wlast = wlast;
+assign m_wlast = wlast && write_last_transfer;
+
+reg [7:0] write_axi_len;
+assign m_axi_awlen = write_axi_len;
 
 reg [7:0] counter;
-reg [1:0] write_state;
 always @(posedge clk,posedge rst)
 begin
   if(rst) begin
     write_state <= 0;
     awvalid <= 0;
     counter <= 0;
+    write_axi_len <= 0;
   end else begin
     case(write_state)
     2'h0: begin
       if(m_wvalid) begin
-        awvalid <= 1'b1;
+        //awvalid <= 1'b1;
         write_state <= 2'h1;
       end
     end
-    2'h1: begin // Write address set
+    2'h1: begin
+      awvalid <= 1'b1;
+      write_state <= 2'h2;
+      write_axi_len <= true_axi_awlen;
+    end
+    2'h2: begin // Write address set
       if(m_axi_awready) begin
         awvalid <= 1'b0;
-        write_state <= 2'h2;
+        write_state <= 2'h3;
       end
     end
-    2'h2: begin
+    2'h3: begin
       if(m_axi_wvalid && m_axi_wready) begin
         counter <= counter + 1;
         if(wlast) begin
-          write_state <= 2'h0;
           counter <= 0;
+          if(write_last_transfer) begin
+            write_state <= 2'h0;
+          end else begin
+            write_state <= 2'h1;
+          end
         end
       end
     end
@@ -569,11 +579,11 @@ begin
   m_wready = 1'b0;
   wlast = 1'b0;
 
-  if(write_state == 2'h2) begin
+  if(write_state == 2'h3) begin
     wvalid = m_wvalid;
     m_wready = m_axi_wready;
     
-    if(counter == m_wlen)
+    if(counter == m_axi_awlen)
       wlast = 1'b1;
   end
 end

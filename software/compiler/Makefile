@@ -9,7 +9,9 @@ include $(VERSAT_DIR)/sharedHardware.mk
 
 BUILD_DIR:=$(VERSAT_DIR)/build
 
-VERSAT_LIBS:=-lstdc++ -lm -lgcc -lc -pthread -ldl #
+OUTPUT_FST := 1
+
+VERSAT_LIBS:=$(VERSAT_DIR)/libversat.a -lstdc++ -lm -lgcc -lc -pthread -ldl -lz # -lz is zlib
 #pc headers
 VERSAT_HDR+=$(wildcard $(VERSAT_PC_DIR)/*.hpp)
 VERSAT_HDR+=$(wildcard $(VERSAT_COMPILER_DIR)/*.hpp)
@@ -51,12 +53,25 @@ CPP_OBJ_WITHOUT_COMPILER:=$(filter-out $(BUILD_DIR)/versatCompiler.o,$(CPP_OBJ))
 VERILATOR_ROOT := $(shell ./getRoot.sh $(BUILD_DIR)) # Must come first
 VERILATOR_OBJECTS := $(shell ./getVerilatorObjects.sh $(BUILD_DIR))
 
+ifeq ($(OUTPUT_FST),1)
+FST_INCLUDE_FILES := $(strip $(VERILATOR_ROOT))/include/gtkwave
+FST_C_FILES := $(wildcard $(FST_INCLUDE_FILES)/*.c)
+FST_C_VAR := $(patsubst $(FST_INCLUDE_FILES)/%.c,%,$(FST_C_FILES))
+FST_C_OBJECTS := $(patsubst $(FST_INCLUDE_FILES)/%.c,$(BUILD_DIR)/%.o,$(FST_C_FILES))
+
+CPP_OBJ += $(FST_C_OBJECTS)
+
+$(BUILD_DIR)/%.o: $(FST_INCLUDE_FILES)/%.c
+	g++ -c -o $@ $< -DFST_CONFIG_INCLUDE=\"fst_config.h\" -I$(strip $(VERILATOR_ROOT))/include/gtkwave -I$(strip $(VERILATOR_ROOT))/include
+endif
+
 FL:=-DVERSAT_DIR="$(VERSAT_DIR)" -DVERILATOR_ROOT="$(VERILATOR_ROOT)"
 
 $(VERSAT_DIR)/versat: $(CPP_OBJ) $(VERSAT_DIR)/libversat.a
 	g++ -MMD -MP -std=c++17 $(FL) $(VERSAT_FLAGS) -o $@ -g $(CPP_OBJ) $(VERSAT_INCLUDE) $(VERSAT_LIBS) $(VERSAT_DIR)/libversat.a
 
 $(VERSAT_DIR)/libversat.a: $(CPP_OBJ_WITHOUT_COMPILER)
+	echo $(FST_C_OBJECTS)
 	ar rcs $(VERSAT_DIR)/libversat.a $(CPP_OBJ_WITHOUT_COMPILER) $(VERILATOR_OBJECTS)
 
 libversat: $(VERSAT_DIR)/libversat.a
