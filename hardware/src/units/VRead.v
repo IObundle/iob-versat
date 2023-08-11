@@ -1,5 +1,7 @@
 `timescale 1ns / 1ps
 
+//`define COMPLEX_INTERFACE
+
 `default_nettype none
 module VRead #(
    parameter DATA_W = 32,
@@ -38,30 +40,32 @@ module VRead #(
    input  [AXI_DATA_W-1:0] ext_2p_data_in_0,
    output [AXI_DATA_W-1:0] ext_2p_data_out_0,
 
-   // configurations
    input [AXI_ADDR_W-1:0] ext_addr,
-   input [ADDR_W-1:0] int_addr,
-   input [10:0]  size,
-   input [ADDR_W-1:0] iterA,
    input [PERIOD_W-1:0]   perA,
-   input [PERIOD_W-1:0]   dutyA,
-   input [ADDR_W-1:0] shiftA,
-   input [ADDR_W-1:0] incrA,
+   input [ADDR_W-1:0]     incrA,
    input [LEN_W-1:0]      length,
    input                  pingPong,
 
-   input [ADDR_W-1:0] iterB,
+   // configurations
+   `ifdef COMPLEX_INTERFACE
+   input [PERIOD_W-1:0]   dutyA,
+   input [ADDR_W-1:0]     int_addr,
+   input [ADDR_W-1:0]     iterA,
+   input [ADDR_W-1:0]     shiftA,
+   `endif
+
+   input [ADDR_W-1:0]     iterB,
    input [PERIOD_W-1:0]   perB,
    input [PERIOD_W-1:0]   dutyB,
-   input [ADDR_W-1:0] startB,
-   input [ADDR_W-1:0] shiftB,
-   input [ADDR_W-1:0] incrB,
+   input [ADDR_W-1:0]     startB,
+   input [ADDR_W-1:0]     shiftB,
+   input [ADDR_W-1:0]     incrB,
    input                  reverseB,
    input                  extB,
-   input [ADDR_W-1:0] iter2B,
+   input [ADDR_W-1:0]     iter2B,
    input [PERIOD_W-1:0]   per2B,
-   input [ADDR_W-1:0] shift2B,
-   input [ADDR_W-1:0] incr2B,
+   input [ADDR_W-1:0]     shift2B,
+   input [ADDR_W-1:0]     incr2B,
 
    input                  disabled,
 
@@ -157,19 +161,27 @@ module VRead #(
          databus_addr_0 <= ext_addr;
    end
 
-   MyAddressGen #(.ADDR_W(ADDR_W)) addrgenA(
+   `ifdef COMPLEX_INTERFACE
+      MyAddressGen
+   `else
+      SimpleAddressGen
+   `endif
+      #(.ADDR_W(ADDR_W)) addrgenA (
       .clk(clk),
       .rst(rst),
       .run(run && !disabled),
 
       //configurations 
-      .iterations(iterA),
       .period(perA),
-      .duty(dutyA),
       .delay(delayA),
       .start(startA),
-      .shift(shiftA),
       .incr(incrA),
+
+      `ifdef COMPLEX_INTERFACE
+      .iterations(iterA),
+      .duty(dutyA),
+      .shift(shiftA),
+      `endif
 
       //outputs 
       .valid(gen_valid),
@@ -208,6 +220,8 @@ module VRead #(
    wire [ADDR_W-1:0] write_addr;
    wire [AXI_DATA_W-1:0] write_data;
    
+   wire data_ready;
+
    MemoryWriter #(.ADDR_W(ADDR_W),.DATA_W(AXI_DATA_W)) 
    writer(
       .gen_valid(gen_valid),
@@ -216,7 +230,7 @@ module VRead #(
 
       // Slave connected to data source
       .data_valid(databus_ready_0),
-      .data_ready(databus_valid_0),
+      .data_ready(data_ready),
       .data_in(databus_rdata_0),
 
       // Connect to memory
@@ -228,13 +242,18 @@ module VRead #(
       .rst(rst)
       );
 
+   assign databus_valid_0 = (data_ready && !doneA);
+
    localparam DIFF = AXI_DATA_W/DATA_W;
    localparam DECISION_BIT_W = $clog2(DIFF);
 
    function [ADDR_W-DECISION_BIT_W-1:0] symbolSpaceConvert(input [ADDR_W-1:0] in);
+      reg [ADDR_W-1:0] noPingPong;
       reg [ADDR_W-1:0] shiftRes;
       begin
-         shiftRes = in >> DECISION_BIT_W;
+         noPingPong = in;
+         noPingPong[ADDR_W-1] = 1'b0;
+         shiftRes = noPingPong >> DECISION_BIT_W;
          symbolSpaceConvert = shiftRes[ADDR_W-DECISION_BIT_W-1:0];
       end
    endfunction
@@ -250,14 +269,14 @@ module VRead #(
       end
 
       reg[DECISION_BIT_W-1:0] sel_0; // Matches addr_0_port_0
-      reg[DECISION_BIT_W-1:0] sel_1; // Matches rdata_0_port_0
+      //reg[DECISION_BIT_W-1:0] sel_1; // Matches rdata_0_port_0
       always @(posedge clk,posedge rst) begin
          if(rst) begin
             sel_0 <= 0;
-            sel_1 <= 0;
+            //sel_1 <= 0;
          end else begin
-            sel_0 <= addrB[DECISION_BIT_W-1];
-            sel_1 <= sel_0;
+            sel_0 <= addrB[DECISION_BIT_W-1:0];
+            //sel_1 <= sel_0;
          end
       end
 
@@ -267,7 +286,7 @@ module VRead #(
       )
       adapter
       (
-         .sel(sel_1),
+         .sel(sel_0),
          .in(ext_2p_data_in_0),
          .out(outB)
       );

@@ -31,7 +31,7 @@ Array<T*> ListToArray(T* head,int size,Arena* arena){
    Array<T*> arr = PushArray<T*>(arena,size);
 
    int i = 0;
-   FOREACH_LIST_INDEXED(ptr,head,i){
+   FOREACH_LIST_INDEXED(T*,ptr,head,i){
       arr[i] = ptr;
    }
 

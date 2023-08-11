@@ -40,21 +40,22 @@ module versat_instance #(
       #{set i index}
       #{if ext.type}
    // DP
-      #{for port 2}
-   output [@{ext.bitsize}-1:0]  ext_dp_addr_@{i}_port_@{port},
-   output [@{ext.datasizeOut[port]}-1:0] ext_dp_out_@{i}_port_@{port},
-   input  [@{ext.datasizeIn[port]}-1:0] ext_dp_in_@{i}_port_@{port},
-   output                       ext_dp_enable_@{i}_port_@{port},
-   output                       ext_dp_write_@{i}_port_@{port},
+      #{for it 2}
+	  #{set dp ext.dp[it]}
+output [@{dp.bitSize}-1:0]  ext_dp_addr_@{i}_port_@{index},
+   output [@{dp.dataSizeOut}-1:0] ext_dp_out_@{i}_port_@{index},
+   input  [@{dp.dataSizeIn}-1:0] ext_dp_in_@{i}_port_@{index},
+   output                       ext_dp_enable_@{i}_port_@{index},
+   output                       ext_dp_write_@{i}_port_@{index},
       #{end}
       #{else}
    // 2P
-   output [@{ext.bitsize}-1:0]  ext_2p_addr_out_@{i},
-   output [@{ext.bitsize}-1:0]  ext_2p_addr_in_@{i},
+   output [@{ext.tp.bitSizeOut}-1:0]  ext_2p_addr_out_@{i},
+   output [@{ext.tp.bitSizeIn}-1:0]  ext_2p_addr_in_@{i},
    output                       ext_2p_write_@{i},
    output                       ext_2p_read_@{i},
-   input  [@{ext.datasizeIn[0]}-1:0] ext_2p_data_in_@{i},
-   output [@{ext.datasizeOut[0]}-1:0] ext_2p_data_out_@{i},
+   input  [@{ext.tp.dataSizeIn}-1:0] ext_2p_data_in_@{i},
+   output [@{ext.tp.dataSizeOut}-1:0] ext_2p_data_out_@{i},
       #{end}
    #{end}
 
@@ -405,9 +406,9 @@ begin
       #{set decl inst.declaration}
       #{for wire decl.configs}
       if(address[@{versatValues.configurationAddressBits - 1}:0] == @{addr}) // @{versatBase + addr * 4 |> Hex}
-         @{configReg}[@{counter}+:@{wire.bitsize}] <= data_data[@{wire.bitsize - 1}:0]; // @{wire.name} - @{decl.name}
+         @{configReg}[@{counter}+:@{wire.bitSize}] <= data_data[@{wire.bitSize - 1}:0]; // @{wire.name} - @{decl.name}
       #{inc addr}
-      #{set counter counter + wire.bitsize}
+      #{set counter counter + wire.bitSize}
       #{end}
       #{end}
 
@@ -416,12 +417,12 @@ begin
       #{for wire unit.data.configs}
       if(address[@{versatValues.configurationAddressBits - 1}:0] == @{addr}) // @{versatBase + addr * 4 |> Hex}
          #{if unit.first.parent}
-         @{configReg}[@{counter}+:@{wire.bitsize}] <= data_data[@{wire.bitsize - 1}:0]; //  @{unit.first.parent.name}_@{unit.first.name}_@{wire.name}
+         @{configReg}[@{counter}+:@{wire.bitSize}] <= data_data[@{wire.bitSize - 1}:0]; //  @{unit.first.parent.name}_@{unit.first.name}_@{wire.name}
          #{else}
-         configdata[@{counter}+:@{wire.bitsize}] <= data_data[@{wire.bitsize - 1}:0]; //  @{unit.first.name}_@{wire.name}
+         configdata[@{counter}+:@{wire.bitSize}] <= data_data[@{wire.bitSize - 1}:0]; //  @{unit.first.name}_@{wire.name}
          #{end}
       #{inc addr}
-      #{set counter counter + wire.bitsize}
+      #{set counter counter + wire.bitSize}
       #{end}
       #{end}
 
@@ -466,9 +467,9 @@ begin
       #{set decl inst.declaration}
       #{for wire decl.states}
       if(addr[@{versatValues.stateAddressBits - 1}:0] == @{addr}) // @{versatBase + addr * 4 |> Hex}
-         stateRead = statedata[@{counter}+:@{wire.bitsize}];
+         stateRead = statedata[@{counter}+:@{wire.bitSize}];
       #{inc addr}
-      #{set counter counter + wire.bitsize}
+      #{set counter counter + wire.bitSize}
       #{end}
       #{end}
    end
@@ -536,18 +537,18 @@ end
 
          #{for wire decl.configs}
          #{if decl.type}
-            .@{wire.name}(configdata[@{configDataIndex}+:@{wire.bitsize}]),
+            .@{wire.name}(configdata[@{configDataIndex}+:@{wire.bitSize}]),
          #{else}
-            .@{wire.name}(configdata[@{configDataIndex}+:@{wire.bitsize}]),
+            .@{wire.name}(configdata[@{configDataIndex}+:@{wire.bitSize}]),
          #{end}
-         #{set configDataIndex configDataIndex + wire.bitsize}
+         #{set configDataIndex configDataIndex + wire.bitSize}
          #{end}
 
          #{for unit decl.staticUnits}
          #{set id unit.first}
          #{for wire unit.second.configs}
-            .@{id.parent.name}_@{id.name}_@{wire.name}(configdata[@{staticDataIndex}+:@{wire.bitsize}]),
-         #{set staticDataIndex staticDataIndex + wire.bitsize}
+            .@{id.parent.name}_@{id.name}_@{wire.name}(configdata[@{staticDataIndex}+:@{wire.bitSize}]),
+         #{set staticDataIndex staticDataIndex + wire.bitSize}
          #{end}
          #{end}
 
@@ -581,11 +582,11 @@ end
 
          #{for wire decl.states}
          #{if decl.type}
-            .@{wire.name}(statedata[@{stateDataIndex}+:@{wire.bitsize}]),
+            .@{wire.name}(statedata[@{stateDataIndex}+:@{wire.bitSize}]),
          #{else}
-            .@{wire.name}(statedata[@{stateDataIndex}+:@{wire.bitsize}]),
+            .@{wire.name}(statedata[@{stateDataIndex}+:@{wire.bitSize}]),
          #{end}
-         #{set stateDataIndex stateDataIndex + wire.bitsize}
+         #{set stateDataIndex stateDataIndex + wire.bitSize}
          #{end}      
 
          #{if decl.isMemoryMapped}

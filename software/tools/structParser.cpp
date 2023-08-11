@@ -111,10 +111,11 @@ String GetTypeName(TypeDef* type){
     name = type->structType.name;
   }break;
   case TypeDef::TEMPLATED:{
-    name = type->templatedType.baseType;
+	NOT_IMPLEMENTED; // TypeDef::TEMPLATED 
+	//name = type->templatedType.baseType;
   }break;
   case TypeDef::TYPEDEF:{
-    name = type->typedefType.oldType;
+    name = type->typedefType.newType;
   }break;
   }
 
@@ -122,10 +123,20 @@ String GetTypeName(TypeDef* type){
 }
 
 TypeDef* GetDef(String name){
+  // TODO: This is basically a hack to handled templated structures because
+  //       we do not actually parse the structures. We just tokenize them.
+  //       The best thing to do would be to divide the processing into two parts.
+  //       The first part "tokenize" everything into strings.
+  //       The second part parses type info in such a way that it would be simple to serialize.
+  //       That way we could actually do some processing in here and let the actual program just load data directly.
+  //          Only problem is the fact that code can create new types at runtime.
+  Tokenizer tok(name,"<",{});
+  String baseName = tok.NextToken();
+
   for(TypeDef* def : typeDefs){
     String typeName = GetTypeName(def);
 
-    if(CompareString(typeName,name)){
+    if(CompareString(typeName,baseName)){
       return def;
     }
   }
@@ -133,17 +144,18 @@ TypeDef* GetDef(String name){
   return nullptr;
 }
 
-void OutputMembers(FILE* output,String structName,MemberDef* m,bool first,Arena* arena){
+int OutputMembers(FILE* output,String structName,MemberDef* m,bool first,Arena* arena){
   BLOCK_REGION(arena);
+  int count = 0;
   for(; m != nullptr; m = m->next){
     if(m->type.type == TypeDef::STRUCT){
       StructDef def = m->type.structType;
       if(def.name.size > 0){
         String name = PushString(arena,"%.*s::%.*s",UNPACK_SS(structName),UNPACK_SS(def.name));
 
-        OutputMembers(output,name,m->type.structType.members,first,arena);
+        count += OutputMembers(output,name,m->type.structType.members,first,arena);
       } else {
-        OutputMembers(output,structName,m->type.structType.members,first,arena); // anonymous struct
+        count += OutputMembers(output,structName,m->type.structType.members,first,arena); // anonymous struct
       }
     } else {
       const char* preamble = "        ";
@@ -167,16 +179,20 @@ void OutputMembers(FILE* output,String structName,MemberDef* m,bool first,Arena*
       fprintf(output,"GetType(STRING(\"%.*s\"))",UNPACK_SS(typeName));
       fprintf(output,",STRING(\"%.*s\")",UNPACK_SS(m->name));
       fprintf(output,",offsetof(%.*s,%.*s)}\n",UNPACK_SS(structName),UNPACK_SS(m->name));
+
+	  count += 1;
     }
     first = false;
   }
+
+  return count;
 }
 
-int OutputTemplateMembers(FILE* output,MemberDef* m,int index,bool insideUnion, bool first){
+int OutputTemplateMembers(FILE* output,MemberDef* m,int index,bool insideUnion, bool first,Arena* arena){
   for(; m != nullptr; m = m->next){
     if(m->type.type == TypeDef::STRUCT){
       StructDef def = m->type.structType;
-      int count = OutputTemplateMembers(output,m->type.structType.members,index,def.isUnion,first); // anonymous struct
+      int count = OutputTemplateMembers(output,m->type.structType.members,index,def.isUnion,first,arena); // anonymous struct
 
       if(def.isUnion){
         index += 1;
@@ -189,7 +205,14 @@ int OutputTemplateMembers(FILE* output,MemberDef* m,int index,bool insideUnion, 
         preamble = "        ,";
       }
       fprintf(output,"%s(TemplatedMember){",preamble);
-      fprintf(output,"STRING(\"%.*s\")",UNPACK_SS(m->type.simpleType));
+
+	  String typeName = GetTypeName(&m->type);
+
+	  if(m->arrays.size){
+		typeName = PushString(arena,"%.*s%.*s",UNPACK_SS(typeName),UNPACK_SS(m->arrays));
+	  }
+	  
+	  fprintf(output,"STRING(\"%.*s\")",UNPACK_SS(typeName));
       fprintf(output,",STRING(\"%.*s\")",UNPACK_SS(m->name));
       fprintf(output,",%d}\n",index);
 
@@ -230,7 +253,7 @@ bool IsTemplatedParam(TypeDef* def,String memberTypeName){
     return false;
   }
 
-  FOREACH_LIST(ptr,def->structType.params){
+  FOREACH_LIST(TemplateParamDef*,ptr,def->structType.params){
   if(CompareString(ptr->name,memberTypeName)){
     return true;
   }
@@ -455,7 +478,28 @@ void OutputRegisterTypesFunction(FILE* output,Arena* arena){
       continue;
     }
 
-    OutputTemplateMembers(output,def->structType.members,0,def->structType.isUnion,first);
+	int count = 0;
+	if(def->structType.inherit.size){
+	  // Make sure we are not inheriting directly from a templated typename (something like T for template<typename T>)
+      bool inheritFromTypename = false;
+      FOREACH_LIST(TemplateParamDef*,ptr,def->structType.params){
+		if(CompareString(ptr->name,def->structType.inherit)){
+		  inheritFromTypename = true;
+		}
+      }
+
+	  if(!inheritFromTypename){
+		TypeDef* inheritDef = GetDef(def->structType.inherit);
+
+		if(inheritDef->structType.params){
+		  count = OutputTemplateMembers(output,inheritDef->structType.members,0,inheritDef->structType.isUnion,first,arena);
+		} else {
+		  count = OutputMembers(output,inheritDef->structType.name,inheritDef->structType.members,first,arena);
+		}
+	  }
+	}
+
+    OutputTemplateMembers(output,def->structType.members,count,def->structType.isUnion,first,arena);
     first = false;
   }
   fprintf(output,"   };\n\n");
@@ -467,6 +511,19 @@ void OutputRegisterTypesFunction(FILE* output,Arena* arena){
     }
 
     int size = CountMembers(def->structType.members);
+
+    bool inheritFromTypename = false;
+    FOREACH_LIST(TemplateParamDef*,ptr,def->structType.params){
+	  if(CompareString(ptr->name,def->structType.inherit)){
+		inheritFromTypename = true;
+	  }
+    }
+
+	if(!inheritFromTypename && def->structType.inherit.size){
+	  TypeDef* inheritDef = GetDef(def->structType.inherit);
+	  size += CountMembers(inheritDef->structType.members);
+	}
+	
     fprintf(output,"   RegisterTemplateMembers(STRING(\"%.*s\"),(Array<TemplatedMember>){&templateMembers[%d],%d});\n",UNPACK_SS(def->structType.name),index,size);
     index += size;
   }
@@ -576,23 +633,43 @@ String EscapeStringForPrintf(String input,Arena* arena){
   return res;
 }
 
-void OutputRepresentationFunction(FILE* output,Arena* arena){
+void OutputRepresentationFunction(FILE* hppFile,FILE* cppFile,Arena* arena){
+
+  Byte* mark = MarkArena(arena);
   for(TypeDef* def : typeDefs){
     if(def->type != TypeDef::STRUCT){
 	  continue;
 	}
-	 
+
 	if(!def->structType.representationFormat.size){
 	  continue;
 	}
 
+	*(PushStruct<TypeDef*>(arena)) = def;
+  }
+  Array<TypeDef*> structs = PointArray<TypeDef*>(arena,mark);
+  
+  fprintf(hppFile,"#include \"utils.hpp\"\n");
+  fprintf(hppFile,"#include \"type.hpp\"\n");
+  fprintf(hppFile,"struct Arena;\n");
+
+  for(TypeDef* def : structs){
+	fprintf(hppFile,"struct %.*s;\n",UNPACK_SS(def->structType.name));
+  }
+
+  fprintf(cppFile,"#include \"repr.hpp\"\n\n");
+  fprintf(cppFile,"#include \"memory.hpp\"\n\n");
+  fprintf(cppFile,"String Repr(String* str,Arena* arena){\n");
+  fprintf(cppFile,"\treturn *str;\n}\n");
+  
+  for(TypeDef* def : structs){
 	String structName = def->structType.name;
     String reprFormat = def->structType.representationFormat;
 
 	printf("%.*s\n",UNPACK_SS(reprFormat));
 
 	BLOCK_REGION(arena);
-	 
+
 	Tokenizer tokInst(reprFormat,"{}",{});
 	Tokenizer* tok = &tokInst;
 
@@ -602,7 +679,7 @@ void OutputRepresentationFunction(FILE* output,Arena* arena){
 	  Token string = tok->PeekFindUntil("{");
 
 	  printf("%d\n",string.size);
-	   
+
 	  if(string.size > 0){
 		RepresentationExpression* expr = PushStruct<RepresentationExpression>(arena);
 		expr->text = string;
@@ -620,17 +697,17 @@ void OutputRepresentationFunction(FILE* output,Arena* arena){
 	  if(tok->Done()){
 		break;
 	  }
-	   
+
 	  // Right on top of a variable
 	  tok->AssertNextToken("{");
 	  Token name = tok->NextToken();
 	  tok->AssertNextToken("}");
-	   
+
 	  RepresentationExpression* expr = PushStruct<RepresentationExpression>(arena);
 	  expr->text = name;
 	  expr->type = RepresentationExpression::VAR_NAME;
 	}
-	 
+
 	Array<RepresentationExpression> expressions = PointArray<RepresentationExpression>(arena,mark);
 
 	// Make sure that every variable exists inside the struct and error out early
@@ -654,18 +731,21 @@ void OutputRepresentationFunction(FILE* output,Arena* arena){
 	  }
 	}
 
-	fprintf(output,"String Repr(%.*s* val,Arena* arena){\n",UNPACK_SS(structName));
-	fprintf(output,"\tByte* mark = MarkArena(arena);\n");
+	fprintf(hppFile,"String Repr(%.*s* val,Arena* arena);\n",UNPACK_SS(structName));
+
+	fprintf(cppFile,"%.*s;\n",UNPACK_SS(def->structType.fullExpression));
+	fprintf(cppFile,"String Repr(%.*s* val,Arena* arena){\n",UNPACK_SS(structName));
+	fprintf(cppFile,"\tByte* mark = MarkArena(arena);\n");
 
 	for(RepresentationExpression expr : expressions){
 	  BLOCK_REGION(arena);
 	  switch(expr.type){
 	  case RepresentationExpression::TEXT:{
 		String toOutput = EscapeStringForPrintf(expr.text,arena);
-		fprintf(output,"\tPushString(arena,\"%.*s\");\n",UNPACK_SS(toOutput));
+		fprintf(cppFile,"\tPushString(arena,\"%.*s\");\n",UNPACK_SS(toOutput));
 	  }break;
 	  case RepresentationExpression::VAR_NAME:{
-		fprintf(output,"\tRepr(&val->%.*s);\n",UNPACK_SS(expr.text));
+		fprintf(cppFile,"\tRepr(&val->%.*s,arena);\n",UNPACK_SS(expr.text));
 	  }break;
 	  default:{
 		NOT_IMPLEMENTED;
@@ -673,30 +753,34 @@ void OutputRepresentationFunction(FILE* output,Arena* arena){
 	  }
 	}
 
-	fprintf(output,"\tString res = PointArena(arena,mark);\n");
-	fprintf(output,"\treturn res;\n");
-	fprintf(output,"}\n\n");
-#if 0	 
-	printf("%d\n",expressions.size);
-	for(RepresentationExpression r : expressions){
-	  printf("%.*s ",UNPACK_SS(r.text));
-	}
-#endif
-	 
-	 
-#if 0
-    if(def->type == TypeDef::STRUCT){
-      for(MemberDef* m = def->structType.members; m; m = m->next){
-		   
-	  }
-	}
-#endif
+	fprintf(cppFile,"\tString res = PointArena(arena,mark);\n");
+	fprintf(cppFile,"\treturn res;\n");
+	fprintf(cppFile,"}\n\n");
   }
+
+  fprintf(hppFile,"String ValueRepresentation(Value val,Arena* arena);\n");
+
+  fprintf(cppFile,"String ValueRepresentation(Value val,Arena* arena){\n");
+  for(TypeDef* def : structs){
+	String structName = def->structType.name;
+
+	fprintf(cppFile,"\tstatic Type* %.*sType = GetType(STRING(\"%.*s\"));\n",UNPACK_SS(structName),UNPACK_SS(structName));
+  }
+  fprintf(cppFile,"\tString res = {};\n");
+  fprintf(cppFile,"\tType* type = val.type;\n");
+  for(TypeDef* def : structs){
+	String structName = def->structType.name;
+
+	fprintf(cppFile,"\tif(type ==  %.*sType){\n",UNPACK_SS(structName));
+	fprintf(cppFile,"\t\tres = Repr((%.*s*) val.custom,arena);\n",UNPACK_SS(structName));
+	fprintf(cppFile,"\t}\n");
+  }
+  fprintf(cppFile,"\treturn res;\n}\n"); 
 }
 
 int main(int argc,const char* argv[]){
   if(argc < 3){
-    printf("Error, need at least 3 arguments: <program> <outputFile> <inputFile1> ...");
+    printf("Error, need at least 3 arguments: <program> <path to output typeInfo.cpp,repr.hpp,repr.cpp> <inputFile1> ...");
 
     return 0;
   }
@@ -727,7 +811,10 @@ int main(int argc,const char* argv[]){
   ParseHeaderFile(&tok,arena);
 
   region(arena){
-	FILE* output = OpenFileAndCreateDirectories(argv[1],"w");
+	String typeInfoPath = PushString(arena,"%s/typeInfo.cpp",argv[1]);
+	PushNullByte(arena);
+	
+	FILE* output = OpenFileAndCreateDirectories(typeInfoPath.data,"w");
 
 	fprintf(output,"#pragma GCC diagnostic ignored \"-Winvalid-offsetof\"\n\n");
 	for(int i = 0; i < argc - 2; i++){
@@ -736,7 +823,7 @@ int main(int argc,const char* argv[]){
 	}
 
 	if(!output){
-      printf("Failed to open file: %s\n",argv[1]);
+      printf("Failed to open file: %s\n",typeInfoPath.data);
       printf("Exiting\n");
       return -1;
 	}
@@ -746,22 +833,34 @@ int main(int argc,const char* argv[]){
 	fclose(output);
   }
 
-#if 0
-  // Work in progress
+#if 1
   region(arena){
-	FILE* output = OpenFileAndCreateDirectories("representation.cpp","w");
+	String cppPath = PushString(arena,"%s/repr.cpp",argv[1]);
+	PushNullByte(arena);
+	String hppPath = PushString(arena,"%s/repr.hpp",argv[1]);
+	PushNullByte(arena);
 
-	if(!output){
-      printf("Failed to open file: %s\n","representation.cpp");
+	FILE* cppFile = OpenFileAndCreateDirectories(cppPath.data,"w");
+	FILE* hppFile = OpenFileAndCreateDirectories(hppPath.data,"w");
+
+	if(!cppFile){
+      printf("Failed to open file: %s\n",cppPath.data);
       printf("Exiting\n");
       return -1;
 	}
 
-	OutputRepresentationFunction(output,arena);
+	if(!hppFile){
+      printf("Failed to open file: %s\n",hppPath.data);
+      printf("Exiting\n");
+      return -1;
+	}
 
-	fclose(output);
+	OutputRepresentationFunction(hppFile,cppFile,arena);
+
+	fclose(cppFile);
+	fclose(hppFile);
   }
 #endif
-  
+
   return 0;
 }

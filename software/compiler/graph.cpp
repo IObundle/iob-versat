@@ -775,7 +775,7 @@ ConsolidationResult GenerateConsolidationGraph(Versat* versat,Arena* arena,Subgr
 #endif
 
 InstanceNode* GetInstanceNode(Accelerator* accel,FUInstance* inst){
-   FOREACH_LIST(ptr,accel->allocated){
+   FOREACH_LIST(InstanceNode*,ptr,accel->allocated){
       if(ptr->inst == inst){
          return ptr;
       }
@@ -810,7 +810,7 @@ void FixInputs(InstanceNode* node){
    Memset(node->inputs,{});
    node->multipleSamePortInputs = false;
 
-   FOREACH_LIST(ptr,node->allInputs){
+   FOREACH_LIST(ConnectionNode*,ptr,node->allInputs){
       int port = ptr->port;
 
       if(node->inputs[port].node){
@@ -824,7 +824,7 @@ void FixInputs(InstanceNode* node){
 void FixOutputs(InstanceNode* node){
    Memset(node->outputs,false);
 
-   FOREACH_LIST(ptr,node->allOutputs){
+   FOREACH_LIST(ConnectionNode*,ptr,node->allOutputs){
       int port = ptr->port;
       node->outputs[port] = true;
    }
@@ -965,7 +965,7 @@ Array<int> GetNumberOfInputConnections(InstanceNode* node,Arena* out){
    Array<int> res = PushArray<int>(out,node->inputs.size);
    Memset(res,0);
 
-   FOREACH_LIST(ptr,node->allInputs){
+   FOREACH_LIST(ConnectionNode*,ptr,node->allInputs){
       int port = ptr->port;
       res[port] += 1;
    }
@@ -983,7 +983,7 @@ Array<Array<PortNode>> GetAllInputs(InstanceNode* node,Arena* out){
       res[i] = PushArray<PortNode>(out,connections[i]);
    }
 
-   FOREACH_LIST(ptr,node->allInputs){
+   FOREACH_LIST(ConnectionNode*,ptr,node->allInputs){
       int port = ptr->port;
 
       Array<PortNode> array = res[port];
@@ -1084,16 +1084,16 @@ void AssertGraphValid(InstanceNode* nodes,Arena* arena){
    int size = Size(nodes);
    Hashmap<InstanceNode*,int>* seen = PushHashmap<InstanceNode*,int>(arena,size);
 
-   FOREACH_LIST(ptr,nodes){
+   FOREACH_LIST(InstanceNode*,ptr,nodes){
       seen->Insert(ptr,0);
    }
 
-   FOREACH_LIST(ptr,nodes){
-      FOREACH_LIST(con,ptr->allInputs){
+   FOREACH_LIST(InstanceNode*,ptr,nodes){
+     FOREACH_LIST(ConnectionNode*,con,ptr->allInputs){
          seen->GetOrFail(con->instConnectedTo.node);
       }
 
-      FOREACH_LIST(con,ptr->allOutputs){
+     FOREACH_LIST(ConnectionNode*,con,ptr->allOutputs){
          seen->GetOrFail(con->instConnectedTo.node);
       }
 

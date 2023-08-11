@@ -268,7 +268,7 @@ Byte* PushBytes(DynamicArena* arena,size_t size){
 }
 
 void Clear(DynamicArena* arena){
-   FOREACH_LIST(ptr,arena){
+  FOREACH_LIST(DynamicArena*,ptr,arena){
       ptr->used = 0;
    }
 }

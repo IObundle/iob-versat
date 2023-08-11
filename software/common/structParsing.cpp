@@ -193,7 +193,7 @@ MemberDef* ParseMember(Tokenizer* tok,Arena* out){
          tok->AdvancePeek(peek);
          /*Token arrayExpression =*/ tok->NextFindUntil("]");
          tok->AssertNextToken("]");
-
+ 
          def.arrays = tok->Point(arraysMark);
       } else if(CompareToken(peek,"(")){
          Token advanceList = tok->PeekUntilDelimiterExpression({"("},{")"},0);

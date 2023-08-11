@@ -171,6 +171,9 @@ Template Engine:
          Lines of text should just be copied to the output with the same spacing. (Probably would be best to change processing to be more line based.)
       If a line contains a mixture of commands and text, probably should just remain the same.
 
+   Rework the parser to operate in a line by line basis.
+      Augment error reporting with indication of the line where the error occured.
+
 Templates:
 
    Do a template pass to remove duplicate code, lock down on the approach used to identify units and wires. Different templates should almost resemble each other. All the logic should be shared between units and should rely on common ground.
@@ -196,6 +199,8 @@ Merge:
    In order to handle the type and name problem, the specify type info in the GetInstance function is not the way to go.
       We should keep extra info inside the accelerator (or use information from the declaration) and the GetInstance function should match based on the currently activated Accelerator.
 
+   It would be helpful to have a way of storing the result of a merge, so that multiple invocations of versat do not spend time recomputing.
+
 GUI:
 
    After spending sometime using gui, two changes would greatly improve the experience:
@@ -204,7 +209,9 @@ GUI:
          Would also be useful to implement a name filter, so that we quickly could get 
       There should be a specialized window for looking at a FUDeclaration, the same way there exists for the Accelerator.
          Show the default configurations associated to which wires.
-         Show 
+
+   Add a option to quickly search for text in any given "panel". Put a small search bar in every panel and implement some helm style matching.
+      Just be careful with the fact that the index "returned" must still be the original one, not the search and sorted index.
 
 Type:
 
@@ -214,10 +221,9 @@ Type:
 
 Threading:
 
-   Right now, the only use for threading is for async file io and to compile things with verilator after making the change from static to dynamic.
-      Otherwise not worth the extra complexity. Only these two parts can actually slow the program to a crawl if we do them sequentially.
+   Probably the only use for threading at the moment is to speed up merging of units or to implement the accelerator in a seperate thread. Everything else is simple enough that a single thread program could run it in less than a second.
 
-   Salvage everything you can from the .
+   Salvage everything you can from the Parallel Merge implementation.
    Implement a task as something you push into an arena. Add a next pointer to the task. Adding a task to the pool uses that pointer to keep track of tasks instead of using static memory.
       It's the programmers responsibility to ensure the task memory is properly allocated through the entire time the task is being executed.
       Add an indicator to the task to check when it's completed or not.

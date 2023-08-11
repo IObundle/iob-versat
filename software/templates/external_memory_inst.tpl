@@ -5,17 +5,17 @@
 #{if ext.type}
 // DP
 
-#{for port 2}
-wire ext_dp_write_@{i}_port_@{port};
-wire ext_dp_enable_@{i}_port_@{port};
-wire [@{ext.bitsize}-1:0] ext_dp_addr_@{i}_port_@{port};
-wire [@{ext.datasizeOut[port]}-1:0] ext_dp_out_@{i}_port_@{port};
-wire [@{ext.datasizeIn[port]}-1:0] ext_dp_in_@{i}_port_@{port};
+#{for dp ext.dp}
+wire ext_dp_write_@{i}_port_@{index};
+wire ext_dp_enable_@{i}_port_@{index};
+wire [@{dp.bitSize}-1:0] ext_dp_addr_@{i}_port_@{index};
+wire [@{dp.dataSizeOut}-1:0] ext_dp_out_@{i}_port_@{index};
+wire [@{dp.dataSizeIn}-1:0] ext_dp_in_@{i}_port_@{index};
 #{end}
 
    iob_dp_ram #(
-         .DATA_W(@{ext.datasizeOut[0]}),
-         .ADDR_W(@{ext.bitsize})
+         .DATA_W(@{ext.dp[0].dataSizeOut}),
+         .ADDR_W(@{ext.dp[0].bitSize})
    )
    ext_dp_@{i}
    (
@@ -36,23 +36,23 @@ wire [@{ext.datasizeIn[port]}-1:0] ext_dp_in_@{i}_port_@{port};
 #{else}
 // 2P
 wire ext_2p_write_@{i};
-wire [@{ext.bitsize}-1:0] ext_2p_addr_out_@{i};
-wire [@{ext.datasizeOut[0]}-1:0] ext_2p_data_out_@{i};
+wire [@{ext.tp.bitSizeOut}-1:0] ext_2p_addr_out_@{i};
+wire [@{ext.tp.dataSizeOut}-1:0] ext_2p_data_out_@{i};
 
 wire ext_2p_read_@{i};
-wire [@{ext.bitsize}-1:0] ext_2p_addr_in_@{i};
-wire [@{ext.datasizeIn[0]}-1:0] ext_2p_data_in_@{i};
+wire [@{ext.tp.bitSizeIn}-1:0] ext_2p_addr_in_@{i};
+wire [@{ext.tp.dataSizeIn}-1:0] ext_2p_data_in_@{i};
 
-#{if ext.datasizeOut[0] == ext.datasizeIn[0]}
+#{if ext.tp.dataSizeOut == ext.tp.dataSizeIn}
    iob_2p_ram #(
-               .DATA_W(@{ext.datasizeOut[0]}),
-               .ADDR_W(@{ext.bitsize})
+               .DATA_W(@{ext.tp.dataSizeOut}),
+               .ADDR_W(@{ext.tp.bitSizeIn})
    )
 #{else}
    iob_2p_asym_ram #(
-               .W_DATA_W(@{ext.datasizeOut[0]}),
-               .R_DATA_W(@{ext.datasizeIn[0]}),
-               .ADDR_W(@{ext.bitsize})
+               .W_DATA_W(@{ext.tp.dataSizeOut}),
+               .R_DATA_W(@{ext.tp.dataSizeIn}),
+               .MAXADDR_W(@{ext.tp.bitSizeIn})
    )
 #{end}
    ext_2p_@{i} 

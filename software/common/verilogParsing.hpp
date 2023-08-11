@@ -15,159 +15,170 @@ typedef std::unordered_map<String,String> MacroMap;
 struct Arena;
 struct CompiledTemplate;
 
-struct RangeAndExpr{
-   Range range;
-   Expression* top;
-   Expression* bottom;
-};
+typedef Range<Expression*> ExpressionRange;
 
 struct PortDeclaration{
-   ValueMap attributes;
-   Range range; // Cannot be a range, otherwise we cannot deal with parameters
-   Expression* top;
-   Expression* bottom;
-   String name;
-   enum {INPUT,OUTPUT,INOUT} type;
+  ValueMap attributes;
+  //Range range; // Cannot be a range, otherwise we cannot deal with parameters
+  ExpressionRange range;
+  String name;
+  enum {INPUT,OUTPUT,INOUT} type;
 };
 
 struct ParameterExpression{
-   String name;
-   Expression* expr;
+  String name;
+  Expression* expr;
 };
 
 struct Module{
-   Array<ParameterExpression> parameters;
-   //ValueMap parameters;
-   std::vector<PortDeclaration> ports;
-   String name;
-   bool isSource;
-};
-
-struct ExternalMemoryDPDef{
-   PortDeclaration* addr[2];
-   PortDeclaration* out[2];
-   PortDeclaration* in[2];
-   PortDeclaration* write[2];
-   PortDeclaration* enable[2];
+  Array<ParameterExpression> parameters;
+  //ValueMap parameters;
+  std::vector<PortDeclaration> ports;
+  String name;
+  bool isSource;
 };
 
 // TODO: This is a copy of Wire from configurations.hpp, but we do not include because this file should not include from the compiler code.
-struct Wire{
-   String name;
-   int bitsize;
-   bool isStatic; // This is only used by the verilog parser (?) to store info. TODO: Use a different structure in the verilog parser which contains this and remove from Wire   
+template<typename T>
+struct WireTemplate{
+  String name;
+  T bitSize;
+  bool isStatic; // This is only used by the verilog parser (?) to store info. TODO: Use a different structure in the verilog parser which contains this and remove from Wire   
 };
 
-struct WireExpression{
-   String name;
-   Expression* top;
-   Expression* bottom;
-   //int bitsize;
-   bool isStatic; // This is only used by the verilog parser (?) to store info. TODO: Use a different structure in the verilog parser which contains this and remove from Wire
+typedef WireTemplate<int> Wire;
+typedef WireTemplate<ExpressionRange> WireExpression;
+
+enum ExternalMemoryType{TWO_P = 0,DP}; // Two ports: one input and one output (think FIFO). Dual port: two input or output ports (think LUT)
+
+template<typename T>
+struct ExternalMemoryTwoPortsTemplate{ // tp
+  T bitSizeIn;
+  T bitSizeOut;
+  T dataSizeIn;
+  T dataSizeOut;
 };
 
-enum ExternalMemoryType{TWO_P = 0,DP};
+typedef ExternalMemoryTwoPortsTemplate<int> ExternalMemoryTwoPorts;
+typedef ExternalMemoryTwoPortsTemplate<ExpressionRange> ExternalMemoryTwoPortsExpression;
 
-struct ExternalMemoryInterfaceExpression{
-   int interface;
-   Expression* bitSize;
-   Expression* dataSize;
-   //int bitsize;
-   //int datasize;
-   ExternalMemoryType type;
+template<typename T>
+struct ExternalMemoryDualPortTemplate{ // dp
+  T bitSize;
+  T dataSizeIn;
+  T dataSizeOut;
 };
 
-struct ExternalMemoryInterface{
-   int interface;
-   int bitsize;
-   int datasizeIn[2];
-   int datasizeOut[2];
-   ExternalMemoryType type;
+typedef ExternalMemoryDualPortTemplate<int> ExternalMemoryDualPort;
+typedef ExternalMemoryDualPortTemplate<ExpressionRange> ExternalMemoryDualPortExpression;
+
+template<typename T>
+struct ExternalMemoryTemplate{
+  union{
+	ExternalMemoryTwoPortsTemplate<T> tp;
+	ExternalMemoryDualPortTemplate<T> dp[2];
+  };
 };
+
+typedef ExternalMemoryTemplate<int> ExternalMemory;
+typedef ExternalMemoryTemplate<ExpressionRange> ExternalMemoryExpression;
+
+// TODO: Do not know if it was better if this was a union. There are some differences that we currently ignore because we can always fill the interface with the information that we need. It's just that the code must take those into account, while the union approach would "simplify" somewhat the type system.
+template<typename T>
+struct ExternalMemoryInterfaceTemplate : public ExternalMemoryTemplate<T>{
+  // tp
+  // dp[2]
+  ExternalMemoryType type;
+  int interface;
+};
+
+typedef ExternalMemoryInterfaceTemplate<int> ExternalMemoryInterface;
+typedef ExternalMemoryInterfaceTemplate<ExpressionRange> ExternalMemoryInterfaceExpression;
 
 struct ExternalMemoryID{
-   int interface;
-   ExternalMemoryType type;
+  int interface;
+  ExternalMemoryType type;
 };
 
 template<> class std::hash<ExternalMemoryID>{
 public:
-   std::size_t operator()(ExternalMemoryID const& s) const noexcept{
-      std::size_t hash = s.interface * 2 + (int) s.type;
-      return hash;
-   }
+  std::size_t operator()(ExternalMemoryID const& s) const noexcept{
+    std::size_t hash = s.interface * 2 + (int) s.type;
+    return hash;
+  }
 };
 
-struct ExternalPortInfo{
-   int addrSize;
-   int dataInSize;
-   int dataOutSize;
-   bool enable;
-   bool write;
+struct ExternalInfoTwoPorts : public ExternalMemoryTwoPortsExpression{
+  bool write;
+  bool read;
+};
+
+struct ExternalInfoDualPort : public ExternalMemoryDualPortExpression{
+  bool enable;
+  bool write;
+};
+
+struct ExternalMemoryInfo{
+  union{
+	ExternalInfoTwoPorts tp;
+	ExternalInfoDualPort dp[2];
+  };
+  ExternalMemoryType type;
 };
 
 // Contain info parsed directly by verilog.
 // This probably should be a union of all the memory types
 // The code in the verilog parser almost demands it
-struct ExternalMemoryInfo{
-   int numberPorts;
-
-   // Maximum of 2 ports
-   ExternalPortInfo ports[2];
-};
 
 inline bool operator==(const ExternalMemoryID& lhs,const ExternalMemoryID& rhs){
-   bool res = (memcmp(&lhs,&rhs,sizeof(ExternalMemoryID)) == 0);
-   return res;
+  bool res = (memcmp(&lhs,&rhs,sizeof(ExternalMemoryID)) == 0);
+  return res;
 }
 
 struct ModuleInfo{
-   String name;
-   Array<ParameterExpression> defaultParameters;
-   Array<int> inputDelays;
-   Array<int> outputLatencies;
-   Array<WireExpression> configs;
-   Array<WireExpression> states;
-   Array<ExternalMemoryInterface> externalInterfaces; // TODO: Implement expressions later
-   int nDelays;
-   int nIO;
-   int memoryMappedBits;
-   Expression* databusAddrBottom;
-   Expression* databusAddrTop;
-   bool doesIO;
-   bool memoryMapped;
-   bool hasDone;
-   bool hasClk;
-   bool hasReset;
-   bool hasRun;
-   bool hasRunning;
-   bool isSource;
-   bool signalLoop;
+  String name;
+  Array<ParameterExpression> defaultParameters;
+  Array<int> inputDelays;
+  Array<int> outputLatencies;
+  Array<WireExpression> configs;
+  Array<WireExpression> states;
+  Array<ExternalMemoryInterfaceExpression> externalInterfaces;
+  int nDelays;
+  int nIO;
+  ExpressionRange memoryMappedBits;
+  ExpressionRange databusAddrSize;
+  bool doesIO;
+  bool memoryMapped;
+  bool hasDone;
+  bool hasClk;
+  bool hasReset;
+  bool hasRun;
+  bool hasRunning;
+  bool isSource;
+  bool signalLoop;
 };
 
 struct ModuleInfoInstance{
-   String name;
-   Array<ParameterExpression> parameters;
-   Array<int> inputDelays;
-   Array<int> outputLatencies;
-   Array<Wire> configs;
-   Array<Wire> states;
-   Array<ExternalMemoryInterface> externalInterfaces;
-   int nDelays;
-   int nIO;
-   int memoryMappedBits;
-   int databusAddrSize;
-   //Expression* databusAddrBottom;
-   //Expression* databusAddrTop;
-   bool doesIO;
-   bool memoryMapped;
-   bool hasDone;
-   bool hasClk;
-   bool hasReset;
-   bool hasRun;
-   bool hasRunning;
-   bool isSource;
-   bool signalLoop;
+  String name;
+  Array<ParameterExpression> parameters;
+  Array<int> inputDelays;
+  Array<int> outputLatencies;
+  Array<Wire> configs;
+  Array<Wire> states;
+  Array<ExternalMemoryInterface> externalInterfaces;
+  int nDelays;
+  int nIO;
+  int memoryMappedBits;
+  int databusAddrSize;
+  bool doesIO;
+  bool memoryMapped;
+  bool hasDone;
+  bool hasClk;
+  bool hasReset;
+  bool hasRun;
+  bool hasRunning;
+  bool isSource;
+  bool signalLoop;
 };
 
 String PreprocessVerilogFile(Arena* output, String fileContent,std::vector<String>* includeFilepaths,Arena* tempArena);

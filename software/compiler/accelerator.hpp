@@ -22,7 +22,7 @@ typedef std::unordered_map<Edge*,Edge*> EdgeMap;
 typedef Hashmap<InstanceNode*,InstanceNode*> InstanceNodeMap;
 
 struct Accelerator{ // Graph + data storage
-   Versat* versat;
+  Versat* versat;
    FUDeclaration* subtype; // Set if subaccelerator (accelerator associated to a FUDeclaration). A "free" accelerator has this set to nullptr
 
    Edge* edges; // TODO: Should be removed, edge info is all contained inside the instance nodes and desync leads to bugs since some code still uses this
@@ -36,7 +36,7 @@ struct Accelerator{ // Graph + data storage
    Allocation<iptr> configAlloc;
    Allocation<int> stateAlloc;
    Allocation<Byte> extraDataAlloc;
-   Allocation<int> externalMemoryAlloc;
+   Allocation<Byte> externalMemoryAlloc;
 
    Allocation<int> outputAlloc;
    Allocation<int> storedOutputAlloc;

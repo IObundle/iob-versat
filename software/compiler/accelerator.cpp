@@ -76,7 +76,7 @@ InstanceNode* CreateFlatFUInstance(Accelerator* accel,FUDeclaration* type,String
 
    accel->ordered = nullptr; // TODO: Will leak
 
-   FOREACH_LIST(ptr,accel->allocated){
+   FOREACH_LIST(InstanceNode*,ptr,accel->allocated){
       if(ptr->inst->name == name){
          //Assert(false);
          break;
@@ -251,7 +251,7 @@ Accelerator* CopyAccelerator(Versat* versat,Accelerator* accel,InstanceMap* map)
    }
 
    // Copy of instances
-   FOREACH_LIST(ptr,accel->allocated){
+   FOREACH_LIST(InstanceNode*,ptr,accel->allocated){
       FUInstance* inst = ptr->inst;
       FUInstance* newInst = CopyInstance(newAccel,inst,inst->name);
       newInst->declarationInstance = inst;
@@ -268,7 +268,7 @@ Accelerator* CopyAccelerator(Versat* versat,Accelerator* accel,InstanceMap* map)
    }
 
    // Flat copy of edges
-   FOREACH_LIST(edge,accel->edges){
+   FOREACH_LIST(Edge*,edge,accel->edges){
       FUInstance* out = (FUInstance*) map->at(edge->units[0].inst);
       int outPort = edge->units[0].port;
       FUInstance* in = (FUInstance*) map->at(edge->units[1].inst);
@@ -344,7 +344,7 @@ Accelerator* CopyFlatAccelerator(Versat* versat,Accelerator* accel,InstanceMap* 
    }
 
    // Copy of instances
-   FOREACH_LIST(ptr,accel->allocated){
+   FOREACH_LIST(InstanceNode*,ptr,accel->allocated){
       FUInstance* inst = ptr->inst;
       FUInstance* newInst = CopyFlatInstance(newAccel,inst,inst->name);
       newInst->declarationInstance = inst;
@@ -356,7 +356,7 @@ Accelerator* CopyFlatAccelerator(Versat* versat,Accelerator* accel,InstanceMap* 
    }
 
    // Flat copy of edges
-   FOREACH_LIST(edge,accel->edges){
+   FOREACH_LIST(Edge*,edge,accel->edges){
       FUInstance* out = (FUInstance*) map->at(edge->units[0].inst);
       int outPort = edge->units[0].port;
       FUInstance* in = (FUInstance*) map->at(edge->units[1].inst);
@@ -390,7 +390,7 @@ void RemoveFUInstance(Accelerator* accel,InstanceNode* node){
 
    FUInstance* inst = node->inst;
 
-   FOREACH_LIST(edge,accel->edges){
+   FOREACH_LIST(Edge*,edge,accel->edges){
       if(edge->units[0].inst == inst){
          accel->edges = ListRemove(accel->edges,edge);
       } else if(edge->units[1].inst == inst){
@@ -494,7 +494,7 @@ Accelerator* Flatten(Versat* versat,Accelerator* accel,int times){
 
    for(int i = 0; i < times; i++){
       int maxSharedIndex = -1;
-      FOREACH_LIST(instPtr,newAccel->allocated){
+      FOREACH_LIST(InstanceNode*,instPtr,newAccel->allocated){
          FUInstance* inst = instPtr->inst;
          if(inst->declaration->type == FUDeclaration::COMPOSITE){
             InstanceNode** ptr = compositeInstances.Alloc();
@@ -538,7 +538,7 @@ Accelerator* Flatten(Versat* versat,Accelerator* accel,int times){
 
          std::unordered_map<int,int> sharedToShared;
          // Create new instance and map then
-         FOREACH_LIST(ptr,circuit->allocated){
+         FOREACH_LIST(InstanceNode*,ptr,circuit->allocated){
             FUInstance* circuitInst = ptr->inst;
             if(circuitInst->declaration->type == FUDeclaration::SPECIAL){
                continue;
@@ -604,9 +604,9 @@ Accelerator* Flatten(Versat* versat,Accelerator* accel,int times){
          }
 
          // Add accel edges to output instances
-         FOREACH_LIST(edge,newAccel->edges){
+         FOREACH_LIST(Edge*,edge,newAccel->edges){
             if(edge->units[0].inst == inst){
-               FOREACH_LIST(circuitEdge,circuit->edges){
+              FOREACH_LIST(Edge*,circuitEdge,circuit->edges){
                   if(circuitEdge->units[1].inst == outputInstance && circuitEdge->units[1].port == edge->units[0].port){
                      auto iter = map.find(circuitEdge->units[0].inst);
 
@@ -627,11 +627,11 @@ Accelerator* Flatten(Versat* versat,Accelerator* accel,int times){
          }
 
          // Add accel edges to input instances
-         FOREACH_LIST(edge,newAccel->edges){
+         FOREACH_LIST(Edge*,edge,newAccel->edges){
             if(edge->units[1].inst == inst){
                FUInstance* circuitInst = GetInputInstance(circuit->allocated,edge->units[1].port);
 
-               FOREACH_LIST(circuitEdge,circuit->edges){
+               FOREACH_LIST(Edge*,circuitEdge,circuit->edges){
                   if(circuitEdge->units[0].inst == circuitInst){
                      auto iter = map.find(circuitEdge->units[1].inst);
 
@@ -652,7 +652,7 @@ Accelerator* Flatten(Versat* versat,Accelerator* accel,int times){
          }
 
          // Add circuit specific edges
-         FOREACH_LIST(circuitEdge,circuit->edges){
+         FOREACH_LIST(Edge*,circuitEdge,circuit->edges){
             auto input = map.find(circuitEdge->units[0].inst);
             auto output = map.find(circuitEdge->units[1].inst);
 
@@ -670,17 +670,17 @@ Accelerator* Flatten(Versat* versat,Accelerator* accel,int times){
          }
 
          // Add input to output specific edges
-         FOREACH_LIST(edge1,newAccel->edges){
+         FOREACH_LIST(Edge*,edge1,newAccel->edges){
             if(edge1->units[1].inst == inst){
                PortInstance input = edge1->units[0];
                FUInstance* circuitInput = GetInputInstance(circuit->allocated,edge1->units[1].port);
 
-               FOREACH_LIST(edge2,newAccel->edges){
+               FOREACH_LIST(Edge*,edge2,newAccel->edges){
                   if(edge2->units[0].inst == inst){
                      PortInstance output = edge2->units[1];
                      int outputPort = edge2->units[0].port;
 
-                     FOREACH_LIST(circuitEdge,circuit->edges){
+                     FOREACH_LIST(Edge*,circuitEdge,circuit->edges){
                         if(circuitEdge->units[0].inst == circuitInput
                         && circuitEdge->units[1].inst == outputInstance
                         && circuitEdge->units[1].port == outputPort){
@@ -811,7 +811,7 @@ InstanceNode* AcceleratorIterator::Start(Accelerator* topLevel,FUInstance* compo
       inter.AssertEmpty();
       #endif
    } else { // Detects bugs if we clear everything for the non populate case
-      FOREACH_LIST(ptr,accel->allocated){
+      FOREACH_LIST(InstanceNode*,ptr,accel->allocated){
          ptr->inst->config = nullptr;
          ptr->inst->state = nullptr;
          ptr->inst->delay = nullptr;
@@ -838,7 +838,7 @@ InstanceNode* AcceleratorIterator::Start(Accelerator* topLevel,Arena* arena,bool
       PopulateTopLevelAccelerator(topLevel);
       //inter.AssertEmpty(false);
    } else { // Detects bugs if we clear everything for the non populate case
-      FOREACH_LIST(ptr,topLevel->allocated){
+      FOREACH_LIST(InstanceNode*,ptr,topLevel->allocated){
          ptr->inst->config = nullptr;
          ptr->inst->state = nullptr;
          ptr->inst->delay = nullptr;
@@ -1043,7 +1043,7 @@ static void SendLatencyUpwards(InstanceNode* node,Hashmap<EdgeNode,int>* delays)
    int b = node->inputDelay;
    FUInstance* inst = node->inst;
 
-   FOREACH_LIST(info,node->allOutputs){
+   FOREACH_LIST(ConnectionNode*,info,node->allOutputs){
       InstanceNode* other = info->instConnectedTo.node;
 
       // Do not set delay for source and sink units. Source units cannot be found in this, otherwise they wouldn't be source
@@ -1052,7 +1052,7 @@ static void SendLatencyUpwards(InstanceNode* node,Hashmap<EdgeNode,int>* delays)
       int a = inst->declaration->outputLatencies[info->port];
       int e = info->edgeDelay;
 
-      FOREACH_LIST(otherInfo,other->allInputs){
+      FOREACH_LIST(ConnectionNode*,otherInfo,other->allInputs){
          int c = other->inst->declaration->inputDelays[info->instConnectedTo.port];
 
          if(info->instConnectedTo.port == otherInfo->port &&
@@ -1085,10 +1085,10 @@ Hashmap<EdgeNode,int>* CalculateDelay(Versat* versat,Accelerator* accel,Arena* o
    Hashmap<EdgeNode,int>* edgeToDelay = PushHashmap<EdgeNode,int>(out,edges);
 
    // Clear everything, just in case
-   FOREACH_LIST(ptr,accel->allocated){
+   FOREACH_LIST(InstanceNode*,ptr,accel->allocated){
       ptr->inputDelay = 0;
 
-      FOREACH_LIST(con,ptr->allInputs){
+      FOREACH_LIST(ConnectionNode*,con,ptr->allInputs){
          EdgeNode edge = {};
 
          edge.node0 = con->instConnectedTo;
@@ -1099,7 +1099,7 @@ Hashmap<EdgeNode,int>* CalculateDelay(Versat* versat,Accelerator* accel,Arena* o
          con->delay = edgeToDelay->Insert(edge,0);
       }
 
-      FOREACH_LIST(con,ptr->allOutputs){
+      FOREACH_LIST(ConnectionNode*,con,ptr->allOutputs){
          EdgeNode edge = {};
 
          edge.node0.node = ptr;
@@ -1135,12 +1135,12 @@ Hashmap<EdgeNode,int>* CalculateDelay(Versat* versat,Accelerator* accel,Arena* o
       }
 
       int maximum = -(1 << 30);
-      FOREACH_LIST(info,node->allInputs){
+      FOREACH_LIST(ConnectionNode*,info,node->allInputs){
          maximum = std::max(maximum,*info->delay);
       }
 
       #if 1
-      FOREACH_LIST(info,node->allInputs){
+     FOREACH_LIST(ConnectionNode*,info,node->allInputs){
          *info->delay = maximum - *info->delay;
       }
       #endif
@@ -1156,7 +1156,7 @@ Hashmap<EdgeNode,int>* CalculateDelay(Versat* versat,Accelerator* accel,Arena* o
    }
 
    #if 1
-   FOREACH_LIST(ptr,accel->ordered){
+  FOREACH_LIST(OrderedInstance*,ptr,accel->ordered){
       InstanceNode* node = ptr->node;
 
       if(node->type != InstanceNode::TAG_SOURCE_AND_SINK){
@@ -1164,18 +1164,18 @@ Hashmap<EdgeNode,int>* CalculateDelay(Versat* versat,Accelerator* accel,Arena* o
       }
 
       // Source and sink units never have output delay. They can't
-      FOREACH_LIST(con,node->allOutputs){
+      FOREACH_LIST(ConnectionNode*,con,node->allOutputs){
          *con->delay = 0;
       }
    }
    #endif
 
    int minimum = 0;
-   FOREACH_LIST(ptr,accel->ordered){
+   FOREACH_LIST(OrderedInstance*,ptr,accel->ordered){
       InstanceNode* node = ptr->node;
       minimum = std::min(minimum,node->inputDelay);
    }
-   FOREACH_LIST(ptr,accel->ordered){
+   FOREACH_LIST(OrderedInstance*,ptr,accel->ordered){
       InstanceNode* node = ptr->node;
       node->inputDelay = node->inputDelay - minimum;
    }
@@ -1183,7 +1183,7 @@ Hashmap<EdgeNode,int>* CalculateDelay(Versat* versat,Accelerator* accel,Arena* o
    OutputGraphDotFile(versat,accel,true,"debug/%.*s/out3.dot",UNPACK_SS(accel->subtype->name));
 
    #if 1
-   FOREACH_LIST(ptr,accel->ordered){
+  FOREACH_LIST(OrderedInstance*,ptr,accel->ordered){
       InstanceNode* node = ptr->node;
 
       if(node->type != InstanceNode::TAG_SOURCE && node->type != InstanceNode::TAG_SOURCE_AND_SINK){
@@ -1191,7 +1191,7 @@ Hashmap<EdgeNode,int>* CalculateDelay(Versat* versat,Accelerator* accel,Arena* o
       }
 
       int minimum = 1 << 30;
-      FOREACH_LIST(info,node->allOutputs){
+      FOREACH_LIST(ConnectionNode*,info,node->allOutputs){
          minimum = std::min(minimum,*info->delay);
       }
 
@@ -1199,7 +1199,7 @@ Hashmap<EdgeNode,int>* CalculateDelay(Versat* versat,Accelerator* accel,Arena* o
       node->inputDelay = minimum;
       node->inst->baseDelay = minimum;
 
-      FOREACH_LIST(info,node->allOutputs){
+      FOREACH_LIST(ConnectionNode*,info,node->allOutputs){
          *info->delay -= minimum;
       }
    }
@@ -1207,7 +1207,7 @@ Hashmap<EdgeNode,int>* CalculateDelay(Versat* versat,Accelerator* accel,Arena* o
 
    OutputGraphDotFile(versat,accel,true,"debug/%.*s/out4.dot",UNPACK_SS(accel->subtype->name));
 
-   FOREACH_LIST(ptr,accel->ordered){
+   FOREACH_LIST(OrderedInstance*,ptr,accel->ordered){
       InstanceNode* node = ptr->node;
 
       if(node->type == InstanceNode::TAG_UNCONNECTED){
@@ -1242,7 +1242,7 @@ static int Visit(PushPtr<InstanceNode*>* ordering,InstanceNode* node,Hashmap<Ins
 
    int count = 0;
    if(node->type == InstanceNode::TAG_COMPUTE){
-      FOREACH_LIST(ptr,node->allInputs){
+     FOREACH_LIST(ConnectionNode*,ptr,node->allInputs){
          count += Visit(ordering,ptr->instConnectedTo.node,tags);
       }
    }
@@ -1276,14 +1276,14 @@ DAGOrderNodes CalculateDAGOrder(InstanceNode* instances,Arena* arena){
 
    Hashmap<InstanceNode*,int>* tags = PushHashmap<InstanceNode*,int>(arena,size);
 
-   FOREACH_LIST(ptr,instances){
+   FOREACH_LIST(InstanceNode*,ptr,instances){
       res.size += 1;
       tags->Insert(ptr,0);
    }
 
    res.sources = pushPtr.Push(0);
    // Add source units, guaranteed to come first
-   FOREACH_LIST(ptr,instances){
+   FOREACH_LIST(InstanceNode*,ptr,instances){
       FUInstance* inst = ptr->inst;
       if(ptr->type == InstanceNode::TAG_SOURCE || (ptr->type == InstanceNode::TAG_SOURCE_AND_SINK && CHECK_DELAY(inst,DelayType::DELAY_TYPE_SOURCE_DELAY))){
          *pushPtr.Push(1) = ptr;
@@ -1295,7 +1295,7 @@ DAGOrderNodes CalculateDAGOrder(InstanceNode* instances,Arena* arena){
 
    // Add compute units
    res.computeUnits = pushPtr.Push(0);
-   FOREACH_LIST(ptr,instances){
+   FOREACH_LIST(InstanceNode*,ptr,instances){
       if(ptr->type == InstanceNode::TAG_UNCONNECTED){
          *pushPtr.Push(1) = ptr;
          res.numberComputeUnits += 1;
@@ -1310,7 +1310,7 @@ DAGOrderNodes CalculateDAGOrder(InstanceNode* instances,Arena* arena){
 
    // Add sink units
    res.sinks = pushPtr.Push(0);
-   FOREACH_LIST(ptr,instances){
+   FOREACH_LIST(InstanceNode*,ptr,instances){
       FUInstance* inst = ptr->inst;
       if(ptr->type == InstanceNode::TAG_SINK || (ptr->type == InstanceNode::TAG_SOURCE_AND_SINK && CHECK_DELAY(inst,DelayType::DELAY_TYPE_SINK_DELAY))){
          *pushPtr.Push(1) = ptr;
@@ -1323,7 +1323,7 @@ DAGOrderNodes CalculateDAGOrder(InstanceNode* instances,Arena* arena){
       }
    }
 
-   FOREACH_LIST(ptr,instances){
+   FOREACH_LIST(InstanceNode*,ptr,instances){
       int tag = tags->GetOrFail(ptr);
       Assert(tag == TAG_PERMANENT_MARK);
    }
@@ -1339,7 +1339,7 @@ DAGOrderNodes CalculateDAGOrder(InstanceNode* instances,Arena* arena){
       InstanceNode* node = res.instances[i];
 
       int order = 0;
-      FOREACH_LIST(ptr,node->allInputs){
+      FOREACH_LIST(ConnectionNode*,ptr,node->allInputs){
          InstanceNode* other = ptr->instConnectedTo.node;
 
          if(other->type == InstanceNode::TAG_SOURCE_AND_SINK){
@@ -1386,7 +1386,7 @@ static void SaveMemoryMappingInfo(char* buffer,int size,HuffmanBlock* block){
 
 int CalculateTotalOutputs(Accelerator* accel){
    int total = 0;
-   FOREACH_LIST(ptr,accel->allocated){
+   FOREACH_LIST(InstanceNode*,ptr,accel->allocated){
       FUInstance* inst = ptr->inst;
       total += inst->declaration->outputOffsets.max;
    }
@@ -1450,23 +1450,23 @@ void ReorganizeIterative(Accelerator* accel,Arena* temp){
    Hashmap<InstanceNode*,int>* order = PushHashmap<InstanceNode*,int>(temp,size);
    Hashmap<InstanceNode*,bool>* seen = PushHashmap<InstanceNode*,bool>(temp,size);
 
-   FOREACH_LIST(ptr,accel->allocated){
+   FOREACH_LIST(InstanceNode*,ptr,accel->allocated){
       seen->Insert(ptr,false);
          order->Insert(ptr,size - 1);
    }
 
    // Start by seeing all inputs
-   FOREACH_LIST(ptr,accel->allocated){
+   FOREACH_LIST(InstanceNode*,ptr,accel->allocated){
       if(ptr->allInputs == nullptr){
          seen->Insert(ptr,true);
          order->Insert(ptr,0);
       }
    }
 
-   FOREACH_LIST(outerPtr,accel->allocated){
-      FOREACH_LIST(ptr,accel->allocated){
+   FOREACH_LIST(InstanceNode*,outerPtr,accel->allocated){
+     FOREACH_LIST(InstanceNode*,ptr,accel->allocated){
          bool allInputsSeen = true;
-         FOREACH_LIST(input,ptr->allInputs){
+         FOREACH_LIST(ConnectionNode*,input,ptr->allInputs){
             InstanceNode* node = input->instConnectedTo.node;
             if(node == ptr){
                continue;
@@ -1484,7 +1484,7 @@ void ReorganizeIterative(Accelerator* accel,Arena* temp){
          }
 
          int maxOrder = 0;
-         FOREACH_LIST(input,ptr->allInputs){
+         FOREACH_LIST(ConnectionNode*,input,ptr->allInputs){
             InstanceNode* node = input->instConnectedTo.node;
             maxOrder = std::max(maxOrder,order->GetOrFail(node));
          }
@@ -1496,7 +1496,7 @@ void ReorganizeIterative(Accelerator* accel,Arena* temp){
    Array<InstanceNode*> nodes = PushArray<InstanceNode*>(temp,size);
    int index = 0;
    for(int i = 0; i < size; i++){
-      FOREACH_LIST(ptr,accel->allocated){
+     FOREACH_LIST(InstanceNode*,ptr,accel->allocated){
          int ord = order->GetOrFail(ptr);
          if(ord == i){
             nodes[index++] = ptr;
@@ -1526,7 +1526,7 @@ void ReorganizeIterative(Accelerator* accel,Arena* temp){
 int CalculateNumberOfUnits(InstanceNode* node){
    int res = 0;
 
-   FOREACH_LIST(ptr,node){
+   FOREACH_LIST(InstanceNode*,ptr,node){
       res += 1;
 
       if(IsTypeHierarchical(ptr->inst->declaration)){
@@ -1597,7 +1597,7 @@ void FixMultipleInputs(Versat* versat,Accelerator* accel){
 
    bool isComb = true;
    int portUsedCount[99];
-   FOREACH_LIST(ptr,accel->allocated){
+   FOREACH_LIST(InstanceNode*,ptr,accel->allocated){
       FUInstance* inst = ptr->inst;
       if(inst->declaration == BasicDeclaration::multiplexer || inst->declaration == BasicDeclaration::combMultiplexer){ // Not good, but works for now (otherwise newly added muxes would break the algorithm)
          continue;
@@ -1609,7 +1609,7 @@ void FixMultipleInputs(Versat* versat,Accelerator* accel){
          isComb = false;
       }
 
-      FOREACH_LIST(con,ptr->allInputs){
+      FOREACH_LIST(ConnectionNode*,con,ptr->allInputs){
          Assert(con->port < 99 && con->port >= 0);
          portUsedCount[con->port] += 1;
 
@@ -1633,7 +1633,7 @@ void FixMultipleInputs(Versat* versat,Accelerator* accel){
 
             // Connect edges to multiplexer
             int portsConnected = 0;
-            FOREACH_LIST(edge,accel->edges){
+            FOREACH_LIST(Edge*,edge,accel->edges){
                if(edge->units[1] == PortInstance{inst,port}){
                   edge->units[1].inst = multiplexer;
                   edge->units[1].port = portsConnected;
@@ -1661,7 +1661,7 @@ void FixMultipleInputs(Versat* versat,Accelerator* accel,Hashmap<FUInstance*,int
 
    bool isComb = true;
    int portUsedCount[99];
-   FOREACH_LIST(ptr,accel->allocated){
+   FOREACH_LIST(InstanceNode*,ptr,accel->allocated){
       FUInstance* inst = ptr->inst;
       if(inst->declaration == BasicDeclaration::multiplexer || inst->declaration == BasicDeclaration::combMultiplexer){ // Not good, but works for now (otherwise newly added muxes would break the algorithm)
          continue;
@@ -1674,7 +1674,7 @@ void FixMultipleInputs(Versat* versat,Accelerator* accel,Hashmap<FUInstance*,int
       Memset(portUsedCount,0,99);
       inputInstances->Clear();
 
-      FOREACH_LIST(con,ptr->allInputs){
+      FOREACH_LIST(ConnectionNode*,con,ptr->allInputs){
          Assert(con->port < 99 && con->port >= 0);
          inputInstances->Insert(con->instConnectedTo,con->port);
 
@@ -1839,7 +1839,7 @@ void ActivateMergedAccelerator(Versat* versat,Accelerator* accel,FUDeclaration* 
 }
 
 InstanceNode* GetInputNode(InstanceNode* nodes,int inputIndex){
-   FOREACH_LIST(ptr,nodes){
+  FOREACH_LIST(InstanceNode*,ptr,nodes){
       FUInstance* inst = ptr->inst;
       if(inst->declaration == BasicDeclaration::input && inst->portIndex == inputIndex){
          return ptr;
@@ -1849,7 +1849,7 @@ InstanceNode* GetInputNode(InstanceNode* nodes,int inputIndex){
 }
 
 FUInstance* GetInputInstance(InstanceNode* nodes,int inputIndex){
-   FOREACH_LIST(ptr,nodes){
+  FOREACH_LIST(InstanceNode*,ptr,nodes){
       FUInstance* inst = ptr->inst;
       if(inst->declaration == BasicDeclaration::input && inst->portIndex == inputIndex){
          return inst;
@@ -1859,7 +1859,7 @@ FUInstance* GetInputInstance(InstanceNode* nodes,int inputIndex){
 }
 
 InstanceNode* GetOutputNode(InstanceNode* nodes){
-   FOREACH_LIST(ptr,nodes){
+  FOREACH_LIST(InstanceNode*,ptr,nodes){
       FUInstance* inst = ptr->inst;
       if(inst->declaration == BasicDeclaration::output){
          return ptr;
@@ -1870,7 +1870,7 @@ InstanceNode* GetOutputNode(InstanceNode* nodes){
 }
 
 FUInstance* GetOutputInstance(InstanceNode* nodes){
-   FOREACH_LIST(ptr,nodes){
+  FOREACH_LIST(InstanceNode*,ptr,nodes){
       FUInstance* inst = ptr->inst;
       if(inst->declaration == BasicDeclaration::output){
          return inst;
@@ -1902,7 +1902,7 @@ ComputedData CalculateVersatComputedData(InstanceNode* instances,VersatComputedV
    int index = 0;
    int externalIndex = 0;
    int memoryMapped = 0;
-   FOREACH_LIST(ptr,instances){
+   FOREACH_LIST(InstanceNode*,ptr,instances){
       for(ExternalMemoryInterface& inter : ptr->inst->declaration->externalMemory){
          external[externalIndex++] = inter;
       }
@@ -1915,7 +1915,7 @@ ComputedData CalculateVersatComputedData(InstanceNode* instances,VersatComputedV
    Array<VersatComputedData> data = PushArray<VersatComputedData>(out,memoryMapped);
 
    index = 0;
-   FOREACH_LIST(ptr,instances){
+   FOREACH_LIST(InstanceNode*,ptr,instances){
       if(ptr->inst->declaration->isMemoryMapped){
          FUDeclaration* decl = ptr->inst->declaration;
          iptr offset = (iptr) ptr->inst->memMapped;
@@ -1960,7 +1960,7 @@ bool IsCombinatorial(FUDeclaration* decl){
 }
 
 bool IsCombinatorial(Accelerator* accel){
-   FOREACH_LIST(ptr,accel->allocated){
+  FOREACH_LIST(InstanceNode*,ptr,accel->allocated){
       bool isComb = IsCombinatorial(ptr->inst->declaration);
       if(!isComb){
          return false;

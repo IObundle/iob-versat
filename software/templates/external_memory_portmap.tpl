@@ -2,12 +2,12 @@
    #{set i index}
    #{if ext.type}
 // DP
-   #{for port 2}
-.ext_dp_addr_@{i}_port_@{port}(ext_dp_addr_@{i}_port_@{port}),
-.ext_dp_out_@{i}_port_@{port}(ext_dp_out_@{i}_port_@{port}),
-.ext_dp_in_@{i}_port_@{port}(ext_dp_in_@{i}_port_@{port}),
-.ext_dp_enable_@{i}_port_@{port}(ext_dp_enable_@{i}_port_@{port}),
-.ext_dp_write_@{i}_port_@{port}(ext_dp_write_@{i}_port_@{port}),
+   #{for dp ext.dp}
+.ext_dp_addr_@{i}_port_@{index}(ext_dp_addr_@{i}_port_@{index}),
+.ext_dp_out_@{i}_port_@{index}(ext_dp_out_@{i}_port_@{index}),
+.ext_dp_in_@{i}_port_@{index}(ext_dp_in_@{i}_port_@{index}),
+.ext_dp_enable_@{i}_port_@{index}(ext_dp_enable_@{i}_port_@{index}),
+.ext_dp_write_@{i}_port_@{index}(ext_dp_write_@{i}_port_@{index}),
    #{end}
    #{else}
 // 2P

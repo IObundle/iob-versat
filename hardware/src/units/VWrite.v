@@ -1,5 +1,7 @@
 `timescale 1ns / 1ps
 
+//`define COMPLEX_INTERFACE
+
 module VWrite #(
    parameter DATA_W = 32,
    parameter ADDR_W = 12,
@@ -17,17 +19,17 @@ module VWrite #(
    output                 done,
 
    // Databus interface
-   input                  databus_ready_0,
-   output                 databus_valid_0,
-   output[AXI_ADDR_W-1:0] databus_addr_0,
+   input                      databus_ready_0,
+   output                     databus_valid_0,
+   output[AXI_ADDR_W-1:0]     databus_addr_0,
    input [AXI_DATA_W-1:0]     databus_rdata_0,
    output [AXI_DATA_W-1:0]    databus_wdata_0,
    output [AXI_DATA_W/8-1:0]  databus_wstrb_0,
    output [LEN_W-1:0]         databus_len_0,
-   input                  databus_last_0,
+   input                      databus_last_0,
 
    // input / output data
-   input [DATA_W-1:0]     in0,
+   input [DATA_W-1:0]      in0,
 
    // External memory
    output [ADDR_W-1:0]     ext_2p_addr_out_0,
@@ -39,34 +41,37 @@ module VWrite #(
 
    // configurations
    input [AXI_ADDR_W-1:0] ext_addr,
-   input [ADDR_W-1:0] int_addr,
-   input [10:0]           size,
-   input [ADDR_W-1:0] iterA,
    input [PERIOD_W-1:0]   perA,
-   input [PERIOD_W-1:0]   dutyA,
-   input [ADDR_W-1:0] shiftA,
-   input [ADDR_W-1:0] incrA,
+   input [ADDR_W-1:0]     incrA,
    input [LEN_W-1:0]      length,
    input                  pingPong,
 
-   input [ADDR_W-1:0] iterB,
-   input [PERIOD_W-1:0]   perB,
-   input [PERIOD_W-1:0]   dutyB,
-   input [ADDR_W-1:0] startB,
-   input [ADDR_W-1:0] shiftB,
-   input [ADDR_W-1:0] incrB,
-   input [31:0]           delay0, // delayB
-   input                  reverseB,
-   input                  extB,
-   input [ADDR_W-1:0] iter2B,
-   input [PERIOD_W-1:0]   per2B,
-   input [ADDR_W-1:0] shift2B,
-   input [ADDR_W-1:0] incr2B
+   // configurations
+   `ifdef COMPLEX_INTERFACE
+   input [PERIOD_W-1:0]   dutyA,
+   input [ADDR_W-1:0]     int_addr,
+   input [ADDR_W-1:0]     iterA,
+   input [ADDR_W-1:0]     shiftA,
+   `endif
+
+   input [ADDR_W-1:0]      iterB,
+   input [PERIOD_W-1:0]    perB,
+   input [PERIOD_W-1:0]    dutyB,
+   input [ADDR_W-1:0]      startB,
+   input [ADDR_W-1:0]      shiftB,
+   input [ADDR_W-1:0]      incrB,
+   input [31:0]            delay0, // delayB
+   input                   reverseB,
+   input                   extB,
+   input [ADDR_W-1:0]      iter2B,
+   input [PERIOD_W-1:0]    per2B,
+   input [ADDR_W-1:0]      shift2B,
+   input [ADDR_W-1:0]      incr2B
    );
 
-   assign databus_addr_0 = ext_addr;
-   assign databus_wstrb_0 = ~0;
-   assign databus_len_0 = length;
+   assign databus_addr_0   = ext_addr;
+   assign databus_wstrb_0  = ~0;
+   assign databus_len_0    = length;
 
    wire gen_done;
    reg doneA;
@@ -143,19 +148,30 @@ module VWrite #(
    wire gen_valid,gen_ready;
    wire [ADDR_W-1:0] gen_addr;
 
-   MyAddressGen #(.ADDR_W(ADDR_W)) addrgenA(
+   localparam DIFF = AXI_DATA_W/DATA_W;
+   localparam DIFF_BIT_W = $clog2(DIFF);
+
+   `ifdef COMPLEX_INTERFACE
+      MyAddressGen
+   `else
+      SimpleAddressGen
+   `endif
+   #(.ADDR_W(ADDR_W),.OFFSET_W(DIFF_BIT_W)) addrgenA(
       .clk(clk),
       .rst(rst),
       .run(run),
 
       //configurations 
-      .iterations(iterA),
       .period(perA),
-      .duty(dutyA),
       .delay(delayA),
       .start(startA),
-      .shift(shiftA),
       .incr(incrA),
+
+      `ifdef COMPLEX_INTERFACE
+      .iterations(iterA),
+      .duty(dutyA),
+      .shift(shiftA),
+      `endif
 
       //outputs 
       .valid(gen_valid),
@@ -194,6 +210,8 @@ module VWrite #(
    wire [ADDR_W-1:0] read_addr;
    wire [AXI_DATA_W-1:0] read_data;
 
+   wire m_valid;
+
    MemoryReader #(.ADDR_W(ADDR_W),.DATA_W(AXI_DATA_W))
    reader(
       // Slave
@@ -202,7 +220,7 @@ module VWrite #(
       .s_addr(gen_addr),
 
       // Master
-      .m_valid(databus_valid_0),
+      .m_valid(m_valid),
       .m_ready(databus_ready_0),
       .m_addr(),
       .m_data(databus_wdata_0),
@@ -216,12 +234,27 @@ module VWrite #(
       .rst(rst)
    );
 
+   wire [ADDR_W-1:0] true_read_addr;
+
+   generate
+   if(AXI_DATA_W == 64) begin
+   assign true_read_addr = (read_addr >> 1);      
+   end
+   if(AXI_DATA_W == 32) begin
+   assign true_read_addr = read_addr;      
+   end
+   endgenerate
+
+
+
+   assign databus_valid_0 = (m_valid & !doneA);
+
    assign ext_2p_write_0 = enB & wrB;
    assign ext_2p_addr_out_0 = addrB;
    assign ext_2p_data_out_0 = data_to_wrB;
 
    assign ext_2p_read_0 = read_en;
-   assign ext_2p_addr_in_0 = read_addr;
+   assign ext_2p_addr_in_0 = true_read_addr;
    assign read_data = ext_2p_data_in_0;
 
 endmodule

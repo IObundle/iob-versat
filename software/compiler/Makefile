@@ -9,8 +9,6 @@ include $(VERSAT_DIR)/sharedHardware.mk
 
 BUILD_DIR:=$(VERSAT_DIR)/build
 
-OUTPUT_FST := 1
-
 VERSAT_LIBS:=$(VERSAT_DIR)/libversat.a -lstdc++ -lm -lgcc -lc -pthread -ldl -lz # -lz is zlib
 #pc headers
 VERSAT_HDR+=$(wildcard $(VERSAT_PC_DIR)/*.hpp)
@@ -27,9 +25,9 @@ CPP_OBJ := $(VERSAT_COMPILER_OBJ)
 
 # Still need to check, because other people do not want to build the compiler with debug code
 ifeq ($(VERSAT_DEBUG),1)
-VERSAT_LIBS+= -lSDL2  -lGL -ldl
+VERSAT_LIBS+= -lSDL2  -lGL
 VERSAT_INCLUDE+= -I$(VERSAT_COMPILER_DIR)/IMNODES -I$(VERSAT_COMPILER_DIR)/IMGUI -I$(VERSAT_COMPILER_DIR)/IMGUI/backends -I/usr/include/SDL2
-VERSAT_FLAGS:=-DVERSAT_DEBUG
+VERSAT_FLAGS:=-DVERSAT_DEBUG 
 
 IMGUI_SRC := $(wildcard $(VERSAT_COMPILER_DIR)/IMGUI/*.cpp)
 IMGUI_OBJ := $(patsubst $(VERSAT_COMPILER_DIR)/IMGUI/%.cpp,$(BUILD_DIR)/%.o,$(IMGUI_SRC))
@@ -47,28 +45,30 @@ endif
 CPP_OBJ += $(VERSAT_COMMON_OBJ)
 CPP_OBJ += $(VERSAT_TEMPLATES_OBJ)
 CPP_OBJ += $(BUILD_DIR)/typeInfo.o
+CPP_OBJ += $(BUILD_DIR)/repr.o
 
 CPP_OBJ_WITHOUT_COMPILER:=$(filter-out $(BUILD_DIR)/versatCompiler.o,$(CPP_OBJ))
 
-VERILATOR_ROOT := $(shell ./getRoot.sh $(BUILD_DIR)) # Must come first
+VERILATOR_ROOT := $(shell ./getRoot.sh $(BUILD_DIR) $(USE_FST_FORMAT)) # Must come first
 VERILATOR_OBJECTS := $(shell ./getVerilatorObjects.sh $(BUILD_DIR))
 
-ifeq ($(OUTPUT_FST),1)
+ifeq ($(USE_FST_FORMAT),1)
 FST_INCLUDE_FILES := $(strip $(VERILATOR_ROOT))/include/gtkwave
 FST_C_FILES := $(wildcard $(FST_INCLUDE_FILES)/*.c)
 FST_C_VAR := $(patsubst $(FST_INCLUDE_FILES)/%.c,%,$(FST_C_FILES))
 FST_C_OBJECTS := $(patsubst $(FST_INCLUDE_FILES)/%.c,$(BUILD_DIR)/%.o,$(FST_C_FILES))
+VERSAT_FLAGS += -DUSE_FST_FORMAT
 
 CPP_OBJ += $(FST_C_OBJECTS)
 
 $(BUILD_DIR)/%.o: $(FST_INCLUDE_FILES)/%.c
-	g++ -c -o $@ $< -DFST_CONFIG_INCLUDE=\"fst_config.h\" -I$(strip $(VERILATOR_ROOT))/include/gtkwave -I$(strip $(VERILATOR_ROOT))/include
+	-g++ -c -o $@ $< -DFST_CONFIG_INCLUDE=\"fst_config.h\" -I$(strip $(VERILATOR_ROOT))/include/gtkwave -I$(strip $(VERILATOR_ROOT))/include
 endif
 
 FL:=-DVERSAT_DIR="$(VERSAT_DIR)" -DVERILATOR_ROOT="$(VERILATOR_ROOT)"
 
 $(VERSAT_DIR)/versat: $(CPP_OBJ) $(VERSAT_DIR)/libversat.a
-	g++ -MMD -MP -std=c++17 $(FL) $(VERSAT_FLAGS) -o $@ -g $(CPP_OBJ) $(VERSAT_INCLUDE) $(VERSAT_LIBS) $(VERSAT_DIR)/libversat.a
+	-g++ -MMD -MP -std=c++17 $(FL) $(VERSAT_FLAGS) -o $@ -g $(CPP_OBJ) $(VERSAT_INCLUDE) $(VERSAT_LIBS) $(VERSAT_DIR)/libversat.a
 
 $(VERSAT_DIR)/libversat.a: $(CPP_OBJ_WITHOUT_COMPILER)
 	echo $(FST_C_OBJECTS)
@@ -82,7 +82,7 @@ VERSAT_COMPILER_DEPENDS := $(patsubst %.o,%.d,$(VERSAT_COMPILER_OBJ))
 -include  $(VERSAT_COMPILER_DEPENDS)
 
 $(BUILD_DIR)/%.o : $(VERSAT_COMPILER_DIR)/%.cpp
-	g++ -MMD -MP -std=c++17 -DDEFAULT_UNIT_PATHS="$(SHARED_UNITS_PATH)" $(VERSAT_FLAGS) $(FL) -g -c -o $@ $(GLOBAL_CFLAGS) $< $(VERSAT_INCLUDE)
+	-g++ -MMD -MP -std=c++17 -DDEFAULT_UNIT_PATHS="$(SHARED_UNITS_PATH)" $(VERSAT_FLAGS) $(FL) -g -c -o $@ $(GLOBAL_CFLAGS) $< $(VERSAT_INCLUDE)
 
 ifeq ($(VERSAT_DEBUG),1)
 $(BUILD_DIR)/%.o: $(VERSAT_COMPILER_DIR)/IMGUI/%.cpp

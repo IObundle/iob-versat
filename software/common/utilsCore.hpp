@@ -97,10 +97,10 @@ bool CurrentlyDebugging();
 #define USER_ERROR do{ FlushStdout(); exit(0); } while(0) // User error and program does not try to repair or keep going (report error before and exit)
 #define UNREACHABLE do{Assert(false); __builtin_unreachable();} while(0)
 
-#define FOREACH_LIST(ITER,START) for(auto* ITER = START; ITER; ITER = ITER->next)
-#define FOREACH_LIST_INDEXED(ITER,START,INDEX) for(auto* ITER = START; ITER; ITER = ITER->next,INDEX += 1)
-#define FOREACH_LIST_BOUNDED(ITER,START,END) for(auto* ITER = START; ITER != END; ITER = ITER->next)
-#define FOREACH_SUBLIST(ITER,SUB) for(auto* ITER = SUB.start; ITER != SUB.end; ITER = ITER->next)
+#define FOREACH_LIST(TYPE,ITER,START) for(TYPE ITER = START; ITER; ITER = ITER->next)
+#define FOREACH_LIST_INDEXED(TYPE,ITER,START,INDEX) for(TYPE ITER = START; ITER; ITER = ITER->next,INDEX += 1)
+#define FOREACH_LIST_BOUNDED(TYPE,ITER,START,END) for(TYPE ITER = START; ITER != END; ITER = ITER->next)
+#define FOREACH_SUBLIST(TYPE,ITER,SUB) for(TYPE ITER = SUB.start; ITER != SUB.end; ITER = ITER->next)
 
 #define SWAP(A,B) do { \
    auto TEMP = A; \
@@ -254,16 +254,19 @@ bool operator==(Array<T> first,Array<T> second){
    return true;
 }
 
+template<typename T>
 struct Range{
-   union{
-      int high;
-      int start;
-   };
+  union{
+    T high;
+    T start;
+    T top;
+  };
 
-   union{
-      int low;
-      int end;
-   };
+  union{
+    T low;
+    T end;
+ 	 T bottom;
+  };
 };
 
 struct CheckRangeResult{
@@ -271,11 +274,11 @@ struct CheckRangeResult{
    int problemIndex;
 };
 
-void SortRanges(Array<Range> ranges);
+void SortRanges(Array<Range<int>> ranges);
 
 // These functions require sorted ranges
-CheckRangeResult CheckNoOverlap(Array<Range> ranges);
-CheckRangeResult CheckNoGaps(Array<Range> ranges);
+CheckRangeResult CheckNoOverlap(Array<Range<int>> ranges);
+CheckRangeResult CheckNoGaps(Array<Range<int>> ranges);
 
 union Conversion{
    float f;
@@ -481,7 +484,7 @@ T* ListGet(T* start,int index){
 template<typename T>
 int ListIndex(T* start,T* toFind){
    int i = 0;
-   FOREACH_LIST(ptr,start){
+   FOREACH_LIST(T*,ptr,start){
       if(ptr == toFind){
          break;
       }
@@ -496,7 +499,7 @@ T* ListRemove(T* start,T* toRemove){ // Returns start of new list. ToRemove is s
       return start->next;
    } else {
       T* previous = nullptr;
-      FOREACH_LIST(ptr,start){
+      FOREACH_LIST(T*,ptr,start){
          if(ptr == toRemove){
             previous->next = ptr->next;
          }
@@ -515,7 +518,7 @@ T* ListRemoveOne(T* start,Func compareFunction){ // Only removes one and returns
       return start->next;
    } else {
       T* previous = nullptr;
-      FOREACH_LIST(ptr,start){
+      FOREACH_LIST(T*,ptr,start){
          if(compareFunction(ptr)){
             previous->next = ptr->next;
          }
@@ -589,7 +592,7 @@ T* ReverseList(T* head){
 template<typename T>
 T* ListInsertEnd(T* head,T* toAdd){
    T* last = nullptr;
-   FOREACH_LIST(ptr,head){
+   FOREACH_LIST(T*,ptr,head){
       last = ptr;
    }
    Assert(last->next == nullptr);
@@ -609,7 +612,7 @@ T* ListInsert(T* head,T* toAdd){
 template<typename T>
 int Size(T* start){
    int size = 0;
-   FOREACH_LIST(ptr,start){
+   FOREACH_LIST(T*,ptr,start){
       size += 1;
    }
    return size;

@@ -36,7 +36,7 @@ void FUInstanceInterfaces::Init(Accelerator* topLevel,FUInstance* inst){
    storedOutputs.Init(inst->storedOutputs,decl->outputOffsets.max);
    extraData.Init(inst->extraData,decl->extraDataOffsets.max);
    if(decl->externalMemory.size){
-      externalMemory.Init(inst->externalMemory,MemorySize(decl->externalMemory));
+      externalMemory.Init(inst->externalMemory,ExternalMemoryByteSize(decl->externalMemory));
    }
 
    #if 0
@@ -73,7 +73,7 @@ CalculatedOffsets CalculateConfigOffsetsIgnoringStatics(Accelerator* accel,Arena
 
    int index = 0;
    int offset = 0;
-   FOREACH_LIST(ptr,accel->allocated){
+   FOREACH_LIST(InstanceNode*,ptr,accel->allocated){
       FUInstance* inst = ptr->inst;
       Assert(!(inst->sharedEnable && inst->isStatic));
 
@@ -146,7 +146,7 @@ CalculatedOffsets CalculateConfigurationOffset(Accelerator* accel,MemType type,A
 
    int index = 0;
    int offset = 0;
-   FOREACH_LIST(ptr,accel->allocated){
+   FOREACH_LIST(InstanceNode*,ptr,accel->allocated){
       FUInstance* inst = ptr->inst;
       array[index] = offset;
 
@@ -169,7 +169,7 @@ CalculatedOffsets CalculateOutputsOffset(Accelerator* accel,int offset,Arena* ou
    BLOCK_REGION(out);
 
    int index = 0;
-   FOREACH_LIST(ptr,accel->allocated){
+   FOREACH_LIST(InstanceNode*,ptr,accel->allocated){
       FUInstance* inst = ptr->inst;
       array[index] = offset;
 
@@ -414,7 +414,7 @@ void CheckCorrectConfiguration(Accelerator* topLevel,FUInstanceInterfaces& inter
 // Populates sub accelerator
 void PopulateAccelerator(Accelerator* topLevel,Accelerator* accel,FUDeclaration* topDeclaration,FUInstanceInterfaces& inter,std::unordered_map<StaticId,StaticData>* staticMap){
    int index = 0;
-   FOREACH_LIST(ptr,accel->allocated){
+   FOREACH_LIST(InstanceNode*,ptr,accel->allocated){
       FUInstance* inst = ptr->inst;
       FUDeclaration* decl = inst->declaration;
 
@@ -461,12 +461,7 @@ void PopulateAccelerator(Accelerator* topLevel,Accelerator* accel,FUDeclaration*
          inst->delay = inter.delay.Set(topDeclaration->delayOffsets.offsets[index],decl->delayOffsets.max);
       }
       if(decl->externalMemory.size){
-         for(int i = 0; i < decl->externalMemory.size; i++){
-            int* externalMemory = inter.externalMemory.Push(1 << decl->externalMemory[i].bitsize);
-            if(i == 0){
-               inst->externalMemory = externalMemory;
-            }
-         }
+		inst->externalMemory = inter.externalMemory.Push(ExternalMemoryByteSize(decl->externalMemory));
       }
       if(decl->outputOffsets.max){
          inst->outputs = inter.outputs.Set(topDeclaration->outputOffsets.offsets[index],decl->outputOffsets.max);
@@ -499,7 +494,7 @@ void PopulateTopLevelAccelerator(Accelerator* accel){
    Arena* temp = &tempInst;
 
    int sharedUnits = 0;
-   FOREACH_LIST(ptr,accel->allocated){
+   FOREACH_LIST(InstanceNode*,ptr,accel->allocated){
       if(ptr->inst->sharedEnable){
          sharedUnits += 1;
       }
@@ -510,7 +505,7 @@ void PopulateTopLevelAccelerator(Accelerator* accel){
 
    Hashmap<int,iptr*>* sharedToConfigPtr = PushHashmap<int,iptr*>(temp,sharedUnits);
 
-   FOREACH_LIST(ptr,accel->allocated){
+   FOREACH_LIST(InstanceNode*,ptr,accel->allocated){
       FUInstance* inst = ptr->inst;
       FUDeclaration* decl = inst->declaration;
 
@@ -564,12 +559,7 @@ void PopulateTopLevelAccelerator(Accelerator* accel){
          inst->delay = inter.delay.Push(decl->delayOffsets.max);
       }
       if(decl->externalMemory.size){
-         for(int i = 0; i < decl->externalMemory.size; i++){
-            int* externalMemory = inter.externalMemory.Push(1 << decl->externalMemory[i].bitsize);
-            if(i == 0){
-               inst->externalMemory = externalMemory;
-            }
-         }
+		inst->externalMemory = inter.externalMemory.Push(ExternalMemoryByteSize(decl->externalMemory));
       }
       #if 1
       if(decl->outputOffsets.max){
@@ -786,7 +776,7 @@ void InitializeAccelerator(Versat* versat,Accelerator* accel,Arena* temp){
    ZeroOutAlloc(&accel->outputAlloc,val.totalOutputs);
    ZeroOutAlloc(&accel->storedOutputAlloc,val.totalOutputs);
    ZeroOutAlloc(&accel->extraDataAlloc,val.extraData);
-   ZeroOutAlloc(&accel->externalMemoryAlloc,val.externalMemorySize);
+   ZeroOutAlloc(&accel->externalMemoryAlloc,val.externalMemoryByteSize);
 
    CalculateStaticConfigurationPositions(versat,accel,temp);
    accel->startOfStatic = val.configs;
@@ -851,7 +841,7 @@ OrderedConfigurations ExtractOrderedConfigurationNames(Versat* versat,Accelerato
 
    for(int i = 0; i < val.delays; i++){
       res.delays[i].name = PushString(out,"TOP_Delay%d",i);
-      res.delays[i].bitsize = 32; // TODO: For now, delay is set at 32 bits
+      res.delays[i].bitSize = 32; // TODO: For now, delay is set at 32 bits
    }
 
    return res;

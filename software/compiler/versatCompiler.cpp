@@ -31,7 +31,8 @@ struct ArgumentOptions{
   const char* topName;
   String outputFilepath;
   String verilatorRoot;
-  int bitSize;
+  int bitSize; // AXI_ADDR_W
+  int dataSize; // AXI_DATA_W
   bool addInputAndOutputsToTop;
   bool useDMA;
   bool archHasDatabus;
@@ -59,11 +60,14 @@ Optional<String> GetFormat(String filename){
   return Optional<String>();
 }
 
-// Before continuing, find a more generic approach, check getopt or related functions
-// Try to follow the gcc conventions
+// Before continuing, find a more generic approach, check getopt, argparse or any other related functions that you can find
+// Try to follow the gcc conventions.
+// What I want: Default values, must have values, generate help automatically, stuff like that.
+//
 ArgumentOptions* ParseCommandLineOptions(int argc,const char* argv[],Arena* perm,Arena* temp){
   ArgumentOptions* opts = PushStruct<ArgumentOptions>(perm);
-  opts->bitSize = sizeof(void*) * 8; // TODO: After rewriting, need to take into account default values
+  opts->dataSize = 32; // By default.
+  opts->bitSize = 32;
 
   for(int i = 1; i < argc; i++){
     String str = STRING(argv[i]);
@@ -85,6 +89,18 @@ ArgumentOptions* ParseCommandLineOptions(int argc,const char* argv[],Arena* perm
 
       continue;
     }
+
+	if(str.size > 3 && str[0] == '-' && str[1] == 'b' && str[2] == '='){
+	  Tokenizer tok(str,"=",{});
+
+	  tok.AssertNextToken("-b");
+	  tok.AssertNextToken("=");
+	  Token dataSize = tok.NextToken();
+	  Assert(tok.Done());
+
+	  int size = ParseInt(dataSize); // TODO: Should check for errors, probably have ParseInt return an optional
+	  opts->dataSize = size;
+	}
 
     // TODO: This code indicates that we need an "arquitecture" generic portion of code
     //       Things should be parameterizable
@@ -246,12 +262,17 @@ int main(int argc,const char* argv[]){
   }
 #endif
   
-  // TODO: Add options directly to versat
+  // TODO: Add options directly to versat instead of having two different structures
   ArgumentOptions* opts = ParseCommandLineOptions(argc,argv,perm,temp);
   versat->outputLocation = opts->outputFilepath;
-  versat->opts.architectureBitSize = opts->bitSize;
+  versat->opts.addrSize = opts->bitSize;
   versat->opts.architectureHasDatabus = opts->archHasDatabus;
+  versat->opts.dataSize = opts->dataSize;
 
+#ifdef USE_FST_FORMAT
+  versat->opts.generateFSTFormat = 1;
+#endif
+  
   printf("%s\n",STRINGIFY(DEFAULT_UNIT_PATHS));
 
   String dirPaths = STRING(STRINGIFY(DEFAULT_UNIT_PATHS));
@@ -283,11 +304,11 @@ int main(int argc,const char* argv[]){
     }
   }
 
+#if 0
   for(String& str : opts->verilogFiles){
     printf("%.*s\n",UNPACK_SS(str));
   }
-
-  //return 0;
+#endif
 
   // Check existance of Verilator. We cannot proceed without Verilator
   if(opts->verilatorRoot.size == 0){
@@ -353,7 +374,7 @@ int main(int argc,const char* argv[]){
   Array<ModuleInfo> allModules = allModulesPush.AsArray();
 #endif
 
-  // Compile all templates before hand
+  // Compile all templates beforehand
 #if 1
   BasicDeclaration::buffer = GetTypeByName(versat,STRING("Buffer"));
   BasicDeclaration::fixedBuffer = GetTypeByName(versat,STRING("FixedBuffer"));
@@ -373,6 +394,8 @@ int main(int argc,const char* argv[]){
   if(specFilepath){
     ParseVersatSpecification(versat,specFilepath);
   }
+
+  //DebugVersat(versat);
 
   FUDeclaration* type = GetTypeByName(versat,topLevelTypeStr);
   Accelerator* accel = CreateAccelerator(versat);
@@ -435,7 +458,7 @@ int main(int argc,const char* argv[]){
     opts->outputFilepath = GetAbsolutePath(".",perm);
   }
 
-  TemplateSetNumber("bitWidth",sizeof(void*) * 4); // TODO: Move to correct location and have the value calculated/given from parameter
+  //TemplateSetNumber("bitWidth",sizeof(void*) * 8); // TODO: Move to correct location and have the value calculated/given from parameter
 
   TOP->parameters = STRING("#(.AXI_ADDR_W(AXI_ADDR_W),.LEN_W(LEN_W))");
   InitializeAccelerator(versat,accel,&versat->temp);
@@ -533,6 +556,7 @@ int main(int argc,const char* argv[]){
 
     String srcDir = PushString(perm,"%.*s/src",UNPACK_SS(opts->outputFilepath));
 
+    TemplateSetCustom("arch",&versat->opts,"Options");
     TemplateSetString("srcDir",srcDir);
     TemplateSetString("versatDir",STRINGIFY(VERSAT_DIR));
     TemplateSetString("verilatorRoot",opts->verilatorRoot);

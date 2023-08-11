@@ -21,7 +21,7 @@ void AcceleratorRunStart(Accelerator* accel){
 }
 
 bool AcceleratorDone(Accelerator* accel){
-   FOREACH_LIST(ptr,accel->allocated){
+  FOREACH_LIST(InstanceNode*,ptr,accel->allocated){
       FUInstance* inst = ptr->inst;
       if(IsTypeHierarchical(inst->declaration) && !IsTypeSimulatable(inst->declaration)){
          bool subDone = AcceleratorDone(inst->declaration->fixedDelayCircuit);

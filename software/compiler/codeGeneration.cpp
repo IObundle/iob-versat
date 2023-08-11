@@ -28,7 +28,7 @@ void OutputCircuitSource(Versat* versat,FUDeclaration* decl,Accelerator* accel,F
 
    Array<InstanceNode*> ordered = PushArray<InstanceNode*>(arena,size);
    int i = 0;
-   FOREACH_LIST_INDEXED(ptr,accel->ordered,i){
+   FOREACH_LIST_INDEXED(OrderedInstance*,ptr,accel->ordered,i){
       ordered[i] = ptr->node;
 
       FUInstance* inst = ptr->node->inst;
@@ -39,7 +39,7 @@ void OutputCircuitSource(Versat* versat,FUDeclaration* decl,Accelerator* accel,F
 
    {
       int memoryPos = 0;
-      FOREACH_LIST(ptr,accel->allocated){
+      FOREACH_LIST(InstanceNode*,ptr,accel->allocated){
          FUInstance* inst = ptr->inst;
          FUDeclaration* decl = inst->declaration;
 
@@ -150,7 +150,7 @@ void OutputVersatSource(Versat* versat,Accelerator* accel,const char* directoryP
    ReorganizeAccelerator(accel,arena);
    Array<InstanceNode*> ordered = PushArray<InstanceNode*>(arena,size);
    int i = 0;
-   FOREACH_LIST_INDEXED(ptr,accel->ordered,i){
+   FOREACH_LIST_INDEXED(OrderedInstance*,ptr,accel->ordered,i){
       ordered[i] = ptr->node;
 
       FUInstance* inst = ptr->node->inst;
@@ -175,10 +175,10 @@ void OutputVersatSource(Versat* versat,Accelerator* accel,const char* directoryP
    TemplateSetBool("isSimple",isSimple);
 
    int staticStart = 0;
-   FOREACH_LIST(ptr,accel->allocated){
+   FOREACH_LIST(InstanceNode*,ptr,accel->allocated){
       FUDeclaration* decl = ptr->inst->declaration;
       for(Wire& wire : decl->configs){
-         staticStart += wire.bitsize;
+         staticStart += wire.bitSize;
       }
    }
 

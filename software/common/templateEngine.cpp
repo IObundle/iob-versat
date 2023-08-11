@@ -549,7 +549,8 @@ static Value EvalExpression(Expression* expr,Frame* frame,Arena* temp){
 
          Optional<Value> optVal = AccessStruct(object,expr->id);
          if(!optVal){
-            FatalError(StaticFormat("Tried to access member (%.*s) that does not exist for type (%.*s)",UNPACK_SS(expr->id),UNPACK_SS(object.type->name)));
+		   PrintStructDefinition(object.type);
+           FatalError(StaticFormat("Tried to access member (%.*s) that does not exist for type (%.*s)",UNPACK_SS(expr->id),UNPACK_SS(object.type->name)));
          }
          val = optVal.value();
       }break;
@@ -630,7 +631,8 @@ static String EvalBlockCommand(Block* block,Frame* previousFrame,Arena* temp){
          }
       }
    } else if (CompareString(com->name,"if")){
-      Value val = ConvertValue(EvalExpression(com->expressions[0],previousFrame,temp),ValueType::BOOLEAN,nullptr);
+      Value expr = EvalExpression(com->expressions[0],previousFrame,temp);
+      Value val = ConvertValue(expr,ValueType::BOOLEAN,nullptr);
 
       Frame* frame = CreateFrame(previousFrame,temp);
       if(val.boolean){
@@ -709,7 +711,9 @@ static ValueAndText EvalNonBlockCommand(Command* com,Frame* previousFrame,Arena*
    text.data = (char*) MarkArena(outputArena);
 
    if(CompareString(com->name,"set")){
-      val = EvalExpression(com->expressions[1],previousFrame,temp);
+	 // TODO: Maybe change set to act as a declaration and initializar + setter and separate them.
+	 //       Something like, set fails if variable does not exist. Use "let" to create variable which fails if it exists. That way we stop having problems with variables declaration and initialization
+     val = EvalExpression(com->expressions[1],previousFrame,temp);
 
       Assert(com->expressions[0]->type == Expression::IDENTIFIER);
 

@@ -33,7 +33,7 @@ struct StructDef{
 
 struct TemplatedDef{
    String baseType;
-   TemplateParamDef* next;
+   TemplateParamDef* params;
 };
 
 struct EnumDef{

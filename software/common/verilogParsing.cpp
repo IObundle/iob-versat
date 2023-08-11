@@ -378,25 +378,23 @@ static Expression* VerilogParseExpression(Tokenizer* tok,Arena* out){
   return res;
 }
 
-static RangeAndExpr ParseRange(Tokenizer* tok,ValueMap& map,Arena* out){
+static ExpressionRange ParseRange(Tokenizer* tok,ValueMap& map,Arena* out){
   Token peek = tok->PeekToken();
 
   if(!CompareString(peek,"[")){
-    RangeAndExpr range = {};
+    ExpressionRange range = {};
 
     return range;
   }
 
   tok->AssertNextToken("[");
 
-  RangeAndExpr res = {};
+  ExpressionRange res = {};
   res.top = VerilogParseExpression(tok,out);
-  res.range.high = Eval(res.top,map).number;
 
   tok->AssertNextToken(":");
 
   res.bottom = VerilogParseExpression(tok,out);
-  res.range.low = Eval(res.bottom,map).number;
   tok->AssertNextToken("]");
 
   return res;
@@ -490,10 +488,8 @@ static Module ParseModule(Tokenizer* tok,Arena* arena){
       break;
     }
 
-    RangeAndExpr res = ParseRange(tok,values,arena);
-    port.range = res.range;
-    port.top = res.top;
-    port.bottom = res.bottom;
+    ExpressionRange res = ParseRange(tok,values,arena);
+    port.range = res;
     port.name = tok->NextToken();
 
     module.ports.push_back(port);
@@ -606,15 +602,15 @@ ModuleInfo ExtractModuleInfo(Module& module,Arena* permanent,Arena* tempArena){
 
       ExternalMemoryInfo* ext = external->GetOrInsert(id,{});
       if(CompareString(wire,"addr")){
-        ext->ports[port].addrSize = decl.range.high - decl.range.low + 1;
+        ext->dp[port].bitSize = decl.range;
       } else if(CompareString(wire,"out")){
-        ext->ports[port].dataOutSize = decl.range.high - decl.range.low + 1;
+        ext->dp[port].dataSizeOut = decl.range;
       } else if(CompareString(wire,"in")){
-        ext->ports[port].dataInSize = decl.range.high - decl.range.low + 1;
+        ext->dp[port].dataSizeIn = decl.range;
       } else if(CompareString(wire,"write")){
-        ext->ports[port].write = true;
+        ext->dp[port].write = true;
       } else if(CompareString(wire,"enable")){
-        ext->ports[port].enable = true;
+        ext->dp[port].enable = true;
       }
     } else if(CheckFormat("ext_2p_%s",decl.name)){
       ExternalMemoryID id = {};
@@ -648,20 +644,20 @@ ModuleInfo ExtractModuleInfo(Module& module,Arena* permanent,Arena* tempArena){
 
       if(CompareString(wire,"addr")){
 		if(out){
-		  ext->ports[0].addrSize = decl.range.high - decl.range.low + 1;
+		  ext->tp.bitSizeOut = decl.range;
 		} else {
-          ext->ports[1].addrSize = decl.range.high - decl.range.low + 1;
+          ext->tp.bitSizeIn = decl.range; // We are using the second port to store the address despite the fact that it's only one port. It just has two addresses.
 		}
       } else if(CompareString(wire,"data")){
 		if(out){
-          ext->ports[0].dataOutSize = decl.range.high - decl.range.low + 1;
+          ext->tp.dataSizeOut = decl.range;
 		} else {
-		  ext->ports[0].dataInSize = decl.range.high - decl.range.low + 1;
+          ext->tp.dataSizeIn = decl.range;
 		}
       } else if(CompareString(wire,"write")){
-        ext->ports[0].write = true;
+        ext->tp.write = true;
       } else if(CompareString(wire,"read")){
-        ext->ports[0].write = true;
+        ext->tp.read = true;
       } else {
         UNHANDLED_ERROR;
       }
@@ -693,8 +689,7 @@ ModuleInfo ExtractModuleInfo(Module& module,Arena* permanent,Arena* tempArena){
       Array<Value> val = ExtractValues("databus_%s_%d",decl.name,tempArena);
 
       if(CheckFormat("databus_addr_%d",decl.name)){
-        info.databusAddrBottom = decl.top;
-        info.databusAddrTop = decl.bottom;
+        info.databusAddrSize = decl.range;
       }
 
 #if 0
@@ -717,7 +712,7 @@ ModuleInfo ExtractModuleInfo(Module& module,Arena* permanent,Arena* tempArena){
       info.memoryMapped = true;
 
       if(CheckFormat("addr",decl.name)){
-        info.memoryMappedBits = (decl.range.high - decl.range.low + 1);
+        info.memoryMappedBits = decl.range;
       }
     } else if(CheckFormat("clk",decl.name)){
       info.hasClk = true;
@@ -733,15 +728,13 @@ ModuleInfo ExtractModuleInfo(Module& module,Arena* permanent,Arena* tempArena){
          WireExpression* wire = configs.Push(1);
 
          //wire->bitsize = decl.range.high - decl.range.low + 1;
-         wire->top = decl.top;
-         wire->bottom = decl.bottom;
+         wire->bitSize = decl.range;
          wire->name = decl.name;
          wire->isStatic = (decl.attributes.find(VERSAT_STATIC) != decl.attributes.end());
     } else if(decl.type == PortDeclaration::OUTPUT){ // State
          WireExpression* wire = states.Push(1);
 
-         wire->top = decl.top;
-         wire->bottom = decl.bottom;
+         wire->bitSize = decl.range;
          wire->name = decl.name;
     } else {
       NOT_IMPLEMENTED;
@@ -757,23 +750,25 @@ ModuleInfo ExtractModuleInfo(Module& module,Arena* permanent,Arena* tempArena){
     info.nIO += 1;
   }
 
-  Array<ExternalMemoryInterface> interfaces = PushArray<ExternalMemoryInterface>(permanent,external->nodesUsed);
+  Array<ExternalMemoryInterfaceExpression> interfaces = PushArray<ExternalMemoryInterfaceExpression>(permanent,external->nodesUsed);
   int index = 0;
   for(Pair<ExternalMemoryID,ExternalMemoryInfo> pair : external){
-    ExternalMemoryInterface& inter = interfaces[index++];
+	//printf("%.*s\n",UNPACK_SS(module.name));
+    ExternalMemoryInterfaceExpression& inter = interfaces[index++];
 
     inter.interface = pair.first.interface;
     inter.type = pair.first.type;
-    inter.bitsize = pair.second.ports[0].addrSize;
 
-	printf("%.*s\n",UNPACK_SS(module.name));
-	Assert(pair.second.ports[0].addrSize == pair.second.ports[1].addrSize); // TODO: Make this an user error instead of Assert
-	 
-	inter.datasizeIn[0] = pair.second.ports[0].dataInSize;
-	inter.datasizeIn[1] = pair.second.ports[1].dataInSize;
-
-    inter.datasizeOut[0] = pair.second.ports[0].dataOutSize;
-    inter.datasizeOut[1] = pair.second.ports[1].dataOutSize;
+	switch(inter.type){
+	case ExternalMemoryType::TWO_P:{
+	  inter.tp = pair.second.tp;
+	} break;
+	case ExternalMemoryType::DP:{
+	  inter.dp[0] = pair.second.dp[0];
+	  inter.dp[1] = pair.second.dp[1];
+	}break;
+	default: NOT_IMPLEMENTED;
+	}
   }
   info.externalInterfaces = interfaces;
 
