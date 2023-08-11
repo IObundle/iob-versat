@@ -292,7 +292,7 @@ end
          .databus_wstrb_@{i}(databus_wstrb_@{ioIndex}),
          .databus_len_@{i}(databus_len_@{ioIndex}),
          .databus_last_@{i}(databus_last_@{ioIndex}),
-         #{set ioIndex ioIndex + decl.nIOs}
+         #{inc ioIndex}
          #{end}
 
          #{if decl.signalLoop}

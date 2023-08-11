@@ -379,11 +379,19 @@ static Expression* VerilogParseExpression(Tokenizer* tok,Arena* out){
 }
 
 static ExpressionRange ParseRange(Tokenizer* tok,ValueMap& map,Arena* out){
+  static Expression zeroExpression = {};
+
   Token peek = tok->PeekToken();
 
-  if(!CompareString(peek,"[")){
+  if(!CompareString(peek,"[")){ // No range is equal to range [0:0]. Do not known if it's worth/need to  differentiate
     ExpressionRange range = {};
 
+    zeroExpression.type = Expression::LITERAL;
+    zeroExpression.val = MakeValue(0);
+    
+    range.top = &zeroExpression;
+    range.bottom = &zeroExpression;
+    
     return range;
   }
 

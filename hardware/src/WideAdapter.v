@@ -8,11 +8,13 @@ module WideAdapter #(
    parameter OUTPUT_W = 32
    )
    (
-      input [$clog2(INPUT_W / OUTPUT_W)-1:0] sel,
+      input [DIFF_W-1:0] sel,
 
       input [INPUT_W-1:0] in,
       output [OUTPUT_W-1:0] out
    );
+
+localparam DIFF_W = $clog2(INPUT_W / OUTPUT_W);
 
 assign out = in[sel * OUTPUT_W +: OUTPUT_W];
 
