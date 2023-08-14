@@ -117,13 +117,11 @@ module VWrite #(
    wire [31:0]   delayA    = 0;
 
    // port addresses and enables
-   wire [ADDR_W-1:0] addrA, addrA_int, addrA_int2;
    wire [ADDR_W-1:0] addrB, addrB_int, addrB_int2;
 
    wire [ADDR_W-1:0]      startB_inst = pingPong ? {pingPongState,startB[ADDR_W-2:0]} : startB;
 
    // data inputs
-   wire                   req;
    wire                   rnw;
    wire [DATA_W-1:0]      data_out;
 
@@ -137,7 +135,6 @@ module VWrite #(
    end
 
    // mem enables output by addr gen
-   wire enA = req;
    wire enB;
 
    // write enables
@@ -200,10 +197,8 @@ module VWrite #(
                        .done(doneB_int)
                        );
 
-   assign addrA = addrA_int2;
    assign addrB = addrB_int2;
 
-   assign addrA_int2 = addrA_int;
    assign addrB_int2 = reverseB? reverseBits(addrB_int) : addrB_int;
    
    wire read_en;
@@ -237,15 +232,24 @@ module VWrite #(
    wire [ADDR_W-1:0] true_read_addr;
 
    generate
-   if(AXI_DATA_W == 64) begin
+   if(AXI_DATA_W == 32) begin
+   assign true_read_addr = read_addr;
+   end   
+   else if(AXI_DATA_W == 64) begin
    assign true_read_addr = (read_addr >> 1);      
    end
-   if(AXI_DATA_W == 32) begin
-   assign true_read_addr = read_addr;      
+   else if(AXI_DATA_W == 128) begin
+   assign true_read_addr = (read_addr >> 2);      
+   end
+   else if(AXI_DATA_W == 256) begin
+   assign true_read_addr = (read_addr >> 3);      
+   end
+   else if(AXI_DATA_W == 512) begin
+   assign true_read_addr = (read_addr >> 4);      
+   end else begin
+      initial begin $display("NOT IMPLEMENTED\n"); $finish(); end
    end
    endgenerate
-
-
 
    assign databus_valid_0 = (m_valid & !doneA);
 

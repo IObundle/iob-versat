@@ -7,7 +7,7 @@ module burst_align #(
     parameter AXI_DATA_W = 32
     )
     (
-        input [calculate_AXI_OFFSET_W(AXI_DATA_W)-1:0] offset,
+        input [OFFSET_W-1:0] offset,
         input start,
 
         input burst_last, // Assert if on the last cycle of a burst. Most likely is gonna be (xvalid && xready && xlast)
@@ -142,7 +142,7 @@ always @* begin
     5'b11111: data_out = {data_in[247:0],stored_data[255:248]};
     endcase
 end
-end // if(AXI_DATA_W == 128)
+end // if(AXI_DATA_W == 256)
 endgenerate
 
 // Logic that does not depend on generate

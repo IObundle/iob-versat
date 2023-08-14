@@ -126,11 +126,9 @@ module VRead #(
    wire [31:0]   delayA    = 0;
 
    // port addresses and enables
-   wire [ADDR_W-1:0] addrA, addrA_int, addrA_int2;
    wire [ADDR_W-1:0] addrB, addrB_int, addrB_int2;
 
    // data inputs
-   wire                   req;
    wire                   rnw;
 
    wire [ADDR_W-1:0]      startB_inst = pingPong ? {pingPongState,startB[ADDR_W-2:0]} : startB;
@@ -210,10 +208,7 @@ module VRead #(
                        .done(doneB_int)
                        );
 
-   assign addrA = addrA_int2;
    assign addrB = addrB_int2;
-
-   assign addrA_int2 = addrA_int;
    assign addrB_int2 = reverseB ? reverseBits(addrB_int) : addrB_int;
    
    wire write_en;

@@ -22,6 +22,8 @@ module transfer_controller #(
       output reg [AXI_DATA_W/8-1:0] initial_strb, // First strobe of the transfer. The rest is always full 1
       output reg [AXI_DATA_W/8-1:0] final_strb,   // Last strobe of the transfer. Only valid if last_transfer is asserted
 
+      output [31:0] symbolsToRead, // How many symbols (data transfers) to expect from the source
+
       output reg [7:0] true_axi_axlen,
       output reg last_transfer,
    
@@ -79,12 +81,13 @@ begin
 
    final_strb = ~0;
    for(i = 0; i < (AXI_DATA_W/8); i = i + 1) begin
-      if(i > address[OFFSET_W-1:0]) final_strb[i] = 1'b0;
+      if(i >= address[OFFSET_W-1:0]) final_strb[i] = 1'b0;
    end
 end
 
 generate
 if(AXI_DATA_W == 32) begin
+assign symbolsToRead = length >> 2;
 assign max_transfer_len = 13'h0400;
 assign max_transfer_len_minus_one = 13'h03FC;
    always @* begin
@@ -99,47 +102,32 @@ assign max_transfer_len_minus_one = 13'h03FC;
    end
 end // if(AXI_DATA_W == 32)
 if(AXI_DATA_W == 64) begin
+assign symbolsToRead = length >> 3;
 assign max_transfer_len = 13'h0800;
 assign max_transfer_len_minus_one = 13'h07F8;
+wire [2:0] address_plus_len = address[2:0] + stored_len[2:0];
    always @* begin
       last_transfer_len = 0;
 
       if(address[2:0] == 3'b000 && stored_len[2:0] == 3'b000)
          last_transfer_len = stored_len[10:3] - 8'h1;
-      else if((address[2:0] == 3'b111 && stored_len[2:0] >= 3'b010) 
-           || (address[2:0] == 3'b110 && stored_len[2:0] >= 3'b011)
-           || (address[2:0] == 3'b101 && stored_len[2:0] >= 3'b100)
-           || (address[2:0] == 3'b100 && stored_len[2:0] >= 3'b101)
-           || (address[2:0] == 3'b011 && stored_len[2:0] >= 3'b110)
-           || (address[2:0] == 3'b010 && stored_len[2:0] == 3'b111))
+      else if(!(address_plus_len >= address[2:0] || address_plus_len == 0))
          last_transfer_len = stored_len[10:3] + 8'h1;
       else
          last_transfer_len = stored_len[10:3];
-
    end
 end // if(AXI_DATA_W == 64)
 if(AXI_DATA_W == 128) begin
+assign symbolsToRead = length >> 4;
 assign max_transfer_len = 13'h1000;
 assign max_transfer_len_minus_one = 13'h0FF0;
+wire [3:0] address_plus_len = address[3:0] + stored_len[3:0];
    always @* begin
       last_transfer_len = 0;
 
       if(address[3:0] == 4'b0000 && stored_len[3:0] == 4'b0000)
          last_transfer_len = stored_len[11:4] - 8'h1;
-      else if((address[3:0] == 4'b1111 && stored_len[3:0] >= 4'b0010) 
-           || (address[3:0] == 4'b1110 && stored_len[3:0] >= 4'b0011)
-           || (address[3:0] == 4'b1101 && stored_len[3:0] >= 4'b0100)
-           || (address[3:0] == 4'b1100 && stored_len[3:0] >= 4'b0101)
-           || (address[3:0] == 4'b1011 && stored_len[3:0] >= 4'b0110)
-           || (address[3:0] == 4'b1010 && stored_len[3:0] >= 4'b0111)
-           || (address[3:0] == 4'b1001 && stored_len[3:0] >= 4'b1000) 
-           || (address[3:0] == 4'b1000 && stored_len[3:0] >= 4'b1001)
-           || (address[3:0] == 4'b0111 && stored_len[3:0] >= 4'b1010)
-           || (address[3:0] == 4'b0110 && stored_len[3:0] >= 4'b1011)
-           || (address[3:0] == 4'b0101 && stored_len[3:0] >= 4'b1100)
-           || (address[3:0] == 4'b0100 && stored_len[3:0] >= 4'b1101)
-           || (address[3:0] == 4'b0011 && stored_len[3:0] >= 4'b1110)
-           || (address[3:0] == 4'b0010 && stored_len[3:0] == 4'b1111))
+      else if(!(address_plus_len >= address[3:0] || address_plus_len == 0))
          last_transfer_len = stored_len[11:4] + 8'h1;
       else
          last_transfer_len = stored_len[11:4];
@@ -147,9 +135,37 @@ assign max_transfer_len_minus_one = 13'h0FF0;
    end
 end // if(AXI_DATA_W == 128)
 if(AXI_DATA_W == 256) begin
+assign symbolsToRead = length >> 5;
 assign max_transfer_len = 13'h1000;
 assign max_transfer_len_minus_one = 13'h0FE0; // Because of boundary conditions, cannot go higher
+wire [4:0] address_plus_len = address[4:0] + stored_len[4:0];
+   always @* begin
+      last_transfer_len = 0;
 
+      if(address[4:0] == 5'b0000 && stored_len[4:0] == 5'b0000)
+         last_transfer_len = stored_len[12:5] - 8'h1;
+      else if(!(address_plus_len >= address[4:0] || address_plus_len == 0))
+         last_transfer_len = stored_len[12:5] + 8'h1;
+      else
+         last_transfer_len = stored_len[12:5];
+
+   end
+end
+if(AXI_DATA_W == 512) begin
+assign symbolsToRead = length >> 5;
+assign max_transfer_len = 13'h1000;
+assign max_transfer_len_minus_one = 13'h0FC0; // Because of boundary conditions, cannot go higher
+wire [5:0] address_plus_len = address[5:0] + stored_len[5:0];
+   always @* begin
+      last_transfer_len = 0;
+
+      if(address[5:0] == 6'b0000 && stored_len[5:0] == 6'b0000)
+         last_transfer_len = stored_len[13:6] - 8'h1;
+      else if(!(address_plus_len >= address[5:0] || address_plus_len == 0))
+         last_transfer_len = stored_len[13:6] + 8'h1;
+      else
+         last_transfer_len = stored_len[13:6];
+   end
 end
 endgenerate
 
@@ -159,6 +175,7 @@ always @(posedge clk,posedge rst) begin
       first_transfer <= 1'b0;
       stored_len <= 0;
       last_transfer <= 0;
+      true_axi_axaddr <= 0;
    end else begin
       if(transfer_start) begin
          first_transfer <= 1'b1;

@@ -15,7 +15,7 @@ output [@{ext.tp.bitSizeOut}-1:0]   ext_2p_addr_out_@{i},
 output [@{ext.tp.bitSizeIn}-1:0]   ext_2p_addr_in_@{i},
 output                ext_2p_write_@{i},
 output                ext_2p_read_@{i},
-input  [@{ext.tp.dataSizeOut}-1:0]   ext_2p_data_in_@{i},
-output [@{ext.tp.dataSizeIn}-1:0]   ext_2p_data_out_@{i},
+input  [@{ext.tp.dataSizeIn}-1:0]   ext_2p_data_in_@{i},
+output [@{ext.tp.dataSizeOut}-1:0]   ext_2p_data_out_@{i},
    #{end}
 #{end}

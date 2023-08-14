@@ -1,6 +1,6 @@
-VERILATE_UNIT_BASIC += Buffer FixedBuffer SwapEndian LookupTable Mul Generator IntSqrt LookupTableRead StridedMerge
+VERILATE_UNIT_BASIC += Buffer FixedBuffer SwapEndian LookupTable Mul Generator IntSqrt LookupTableRead StridedMerge FloatAddAccum
 VERILATE_UNIT_BASIC += Reg Mem SignalMulAdd Muladd VRead VWrite Mux2 CombMux2 CombMux4 Merge Const TestConst TimedMux
-VERILATE_UNIT_BASIC += FloatAdd FloatSub FloatMul FloatDiv FloatSqrt Q16Sqrt DoneCycle ChangeDetect Store TimedFlag
+VERILATE_UNIT_BASIC += FloatAdd FloatSub FloatMul FloatDiv FloatSqrt Q16Sqrt DoneCycle ChangeDetect Store TimedFlag PipelineRegister
 VERILATE_UNIT_BASIC += FloatMax FloatMin Float2Int Float2UInt Int2Float SignalMemStorage SignalAccum Equality IncrementFlag
 
 SHARED_UNITS_PATH := $(VERSAT_DIR)/hardware/src/units

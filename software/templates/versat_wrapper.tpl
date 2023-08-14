@@ -499,9 +499,9 @@ if(SimulateDatabus){
 
        self->ext_dp_in_@{id}_port_@{index} = *ptr;
       }
-   }
    #{end}
    baseAddress += memSize;
+   }
    #{else}
    {
      int memSize = ExternalMemoryByteSize(&inst->declaration->externalMemory[@{id}]);
