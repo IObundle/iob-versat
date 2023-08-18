@@ -137,6 +137,12 @@ static int* UnaryNot(FUInstance* inst,Array<int> inputs){
   inst->done = true;
   return (int*) &out;
 }
+static int* UnaryNegate(FUInstance* inst,Array<int> inputs){
+  static unsigned int out;
+  out = -inputs[0];
+  inst->done = true;
+  return (int*) &out;
+}
 static int* BinaryXOR(FUInstance* inst,Array<int> inputs){
   static unsigned int out;
   out = inputs[0] ^ inputs[1];
@@ -207,7 +213,8 @@ static void RegisterOperators(Versat* versat){
     const char* operation;
   };
 
-  Operation unary[] =  {{"NOT",UnaryNot,"{0}_{1} = ~{2}"}};
+  Operation unary[] =  {{"NOT",UnaryNot,"{0}_{1} = ~{2}"},
+                        {"NEG",UnaryNegate,"{0}_{1} = -{2}"}};
   Operation binary[] = {{"XOR",BinaryXOR,"{0}_{1} = {2} ^ {3}"},
                          {"ADD",BinaryADD,"{0}_{1} = {2} + {3}"},
                          {"SUB",BinarySUB,"{0}_{1} = {2} - {3}"},

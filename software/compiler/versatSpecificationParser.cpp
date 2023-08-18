@@ -55,8 +55,17 @@ Var ParseVar(Tokenizer* tok){
       tok->AdvancePeek(peek);
 
       Token delayToken = tok->NextToken();
+
+      bool negate = false;
+      if(CompareString(delayToken,"-")){
+        negate = true;
+        delayToken = tok->NextToken();
+      }
+     
       delayStart = ParseInt(delayToken);
 
+      if(negate) delayStart = -delayStart;
+     
       peek = tok->PeekToken();
       if(CompareToken(peek,"..")){
          tok->AdvancePeek(peek);
@@ -139,8 +148,15 @@ Expression* ParseAtomS(Tokenizer* tok,Arena* arena){
    Token peek = tok->PeekToken();
 
    bool negate = false;
+   const char* negateType = nullptr;
    if(CompareToken(peek,"~")){
+     negate = true;
+     negateType = "~";
+      tok->AdvancePeek(peek);
+   }
+   if(CompareToken(peek,"-")){
       negate = true;
+     negateType = "-";
       tok->AdvancePeek(peek);
    }
 
@@ -163,7 +179,7 @@ Expression* ParseAtomS(Tokenizer* tok,Arena* arena){
 
    if(negate){
       Expression* negateExpr = PushStruct<Expression>(arena);
-      negateExpr->op = "~";
+      negateExpr->op = negateType;
       negateExpr->type = Expression::OPERATION;
       negateExpr->expressions = PushArray<Expression*>(arena,1);
       negateExpr->expressions[0] = expr;
@@ -284,9 +300,21 @@ PortExpression InstantiateExpression(Versat* versat,Expression* root,Accelerator
       Assert(expr0.extra.delayStart == expr0.extra.delayEnd);
 
       if(root->expressions.size == 1){
-         Assert(root->op[0] == '~');
-         String permName = GetUniqueName(STRING("NOT"),&versat->permanent,names);
-         FUInstance* inst = CreateFUInstance(circuit,GetTypeByName(versat,STRING("NOT")),permName);
+         Assert(root->op[0] == '~' || root->op[0] == '-');
+
+         String typeName = {};
+
+         switch(root->op[0]){
+         case '~':{
+           typeName = STRING("NOT");
+         }break;
+         case '-':{
+           typeName = STRING("NEG");
+         }break;
+         }
+
+         String permName = GetUniqueName(typeName,&versat->permanent,names);
+         FUInstance* inst = CreateFUInstance(circuit,GetTypeByName(versat,typeName),permName);
 
          ConnectUnits(expr0.inst,expr0.extra.portStart,inst,0,expr0.extra.delayStart);
 
@@ -500,6 +528,7 @@ FUDeclaration* ParseModule(Versat* versat,Tokenizer* tok){
       if(CompareToken(token,"#")){
          tok->AdvancePeek(token);
          state = 1;
+         continue;
       }
 
       if(state == 0){
