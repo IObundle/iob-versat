@@ -165,7 +165,7 @@ String PushFile(Arena* arena,const char* filepath){
 
 String PushChar(Arena* arena,const char ch){
   Byte* mem = PushBytes(arena,1);
-  
+
   *mem = ch;
   String res = {};
   res.data = (const char*) mem;
@@ -262,7 +262,7 @@ Byte* PushBytes(DynamicArena* arena,size_t size){
    Byte* res = ((Byte*) ptr->mem) + ptr->used;
    ptr->used += size;
 
-   Assert(ptr->used <= (GetPageSize() - sizeof(DynamicArena)));
+   Assert(ptr->used <= (GetPageSize() * ptr->pagesAllocated - sizeof(DynamicArena)));
 
    return res;
 }
