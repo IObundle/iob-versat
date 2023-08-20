@@ -1,9 +1,9 @@
 `timescale 1ns / 1ps
+`include "AXIInfo.vh"
 
 // TODO: Replace code with generic instantiation for 128,256,512 and 1024
 
 // Given aligned data, splits the data in order to meet byte alignment in a burst transfer starting with offset byte
-`default_nettype none
 module burst_split #(
     parameter DATA_W = 32
     )

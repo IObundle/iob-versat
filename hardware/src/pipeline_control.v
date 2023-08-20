@@ -1,7 +1,6 @@
 `timescale 1ns/1ps
 
 // Usually for a unit that can always process the data in one cycle and needs to be integrated into a handshake chain
-`default_nettype none
 module pipeline_control(
     input in_valid,
     output reg in_ready,

@@ -230,7 +230,6 @@ module VWrite #(
    );
 
    wire [ADDR_W-1:0] true_read_addr;
-
    generate
    if(AXI_DATA_W == 32) begin
    assign true_read_addr = read_addr;

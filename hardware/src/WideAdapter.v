@@ -2,7 +2,6 @@
 
 // Ex: 64 bits input and 32 bits output, sel == 0 selects lower 32 bits. sel == 1 selects upper 32 bits
 
-`default_nettype none
 module WideAdapter #(
    parameter INPUT_W = 64,
    parameter OUTPUT_W = 32

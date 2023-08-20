@@ -90,7 +90,7 @@ void versat_init(int base){
 }
 
 void StartAccelerator(){
-   RunAccelerator(1);
+  RunAccelerator(1);
 }
 
 void EndAccelerator(){
@@ -113,6 +113,13 @@ void VersatUnitWrite(int addrArg,int val){
 int VersatUnitRead(int base,int index){
    int addr = base + (index * 4) - (versat_base + memMappedStart); // Convert back to zero based byte space address
    return UnitRead(versat,accel,addr);
+}
+
+float VersatUnitReadFloat(int base,int index){
+   int addr = base + (index * 4) - (versat_base + memMappedStart); // Convert back to zero based byte space address
+   int value = UnitRead(versat,accel,addr);
+   float* view = (float*) &value;
+   return *view;
 }
 
 void SignalLoop(){

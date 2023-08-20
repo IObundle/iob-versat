@@ -21,6 +21,8 @@ module TimedFlag #(
    output [DATA_W-1:0]           rdata,
 
    input [31:0]                  amount,
+   input [31:0]                  period,
+   input                         disabled,
 
    // read port
    output [ADDR_W-1:0]   ext_dp_addr_0_port_0,
@@ -38,8 +40,7 @@ module TimedFlag #(
 
    input [31:0]          in0,
 
-   (* versat_latency = 1 *) output reg [31:0] out0, // Current value
-   (* versat_latency = 1 *) output reg [31:0] out1, // Signal indicating change
+   (* versat_latency = 1 *) output reg [31:0] out0, // Signal indicating change
 
    input [31:0] delay0
 );
@@ -61,7 +62,7 @@ end
 
 assign ext_dp_write_0_port_0 = 1'b0;
 
-reg [31:0] cycle;
+//reg [31:0] cycle;
 wire [31:0] currentValue;
 
 wire loadNext;
@@ -84,68 +85,21 @@ MemoryScanner #(.DATA_W(DATA_W),.ADDR_W(ADDR_W)) scanner(
 reg [31:0] needToSee;
 assign done = (needToSee == 0);
 
-assign nextValue = (running && cycle == currentValue);
+assign nextValue = (running && in0 == currentValue);
+assign out0 = ((delay == 0 && !disabled) ? {32{(in0 == currentValue)}} : 0);
 
 reg [31:0] delay;
 always @(posedge clk,posedge rst) begin
    if(rst) begin
-      cycle <= 0;
       needToSee <= 0;
-   end else if(run) begin
-      cycle <= 0;
-      needToSee <= 0;
+   end else if(run && !disabled) begin
       delay <= delay0;
       needToSee <= amount;
    end else if(|delay) begin
       delay <= delay - 1;
    end else if(delay == 0 && needToSee != 0) begin
-      cycle <= cycle + 1;
-      if(cycle == currentValue) begin
-         out0 <= 1;
+      if(in0 == currentValue) begin
          needToSee <= needToSee - 1;
-      end else begin
-         out0 <= 0;
-      end
-   end
-end
-
-endmodule
-
-module MemoryScanner #(
-      parameter DATA_W = 32,
-      parameter ADDR_W = 10
-   )(
-   output reg [ADDR_W-1:0] addr,
-   input  [DATA_W-1:0]     dataIn,
-   output                  enable,
-   
-   input               nextValue,
-   output [DATA_W-1:0] currentValue,
-
-   input reset,
-
-   input clk,
-   input rst
-);
-
-reg hasValueStored;
-
-assign currentValue = dataIn;
-
-assign enable = nextValue || (!nextValue && !hasValueStored);
-
-always @(posedge clk,posedge rst) begin
-   if(rst) begin
-      addr <= 0;
-   end else if(reset) begin
-      addr <= 0;
-      hasValueStored <= 1'b0;
-   end else begin
-      if(enable) begin
-         hasValueStored <= 1'b1;
-      end
-      if(nextValue) begin
-         addr <= addr + 1;
       end
    end
 end

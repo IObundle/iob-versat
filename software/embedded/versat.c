@@ -131,3 +131,43 @@ int VersatUnitRead(int base,int index){
    int* ptr = (int*) base + index;
    return *ptr;
 }
+
+// Implementation of common functionality
+
+static unsigned int randomSeed = 1;
+void SeedRandomNumber(unsigned int val){
+   if(val == 0){
+      randomSeed = 1;
+   } else {
+      randomSeed = val;
+   }
+}
+
+unsigned int GetRandomNumber(){
+   // Xorshift
+   randomSeed ^= randomSeed << 13;
+   randomSeed ^= randomSeed >> 17;
+   randomSeed ^= randomSeed << 5;
+   return randomSeed;
+}
+
+static int Abs(int val){
+   int res = val;
+   if(val < 0){
+      res = -val;
+   }
+   return res;
+}
+
+int RandomNumberBetween(int minimum,int maximum){
+  int randomValue = GetRandomNumber();
+  int delta = maximum - minimum;
+
+   if(delta <= 0){
+      return minimum;
+   }
+
+   int res = minimum + Abs(randomValue % delta);
+   return res;
+}
+

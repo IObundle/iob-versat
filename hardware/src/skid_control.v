@@ -1,6 +1,5 @@
 `timescale 1ns/1ps
 
-`default_nettype none
 module skid_control(
     input in_valid,
     output reg in_ready,

@@ -1,9 +1,9 @@
 `timescale 1ns / 1ps
 
+`include "AXIInfo.vh"
 // A transfer is equal to a N amount of AXI bursts intended to transfer a variable amount of bytes.
 // 
 
-`default_nettype none
 module transfer_controller #(
    parameter AXI_ADDR_W = 32,
    parameter AXI_DATA_W = 32,

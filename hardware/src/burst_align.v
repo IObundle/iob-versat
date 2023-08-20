@@ -1,8 +1,8 @@
 `timescale 1ns / 1ps
+`include "AXIInfo.vh"
 
 // Given the initial byte offset, this module aligns incoming data
 // Start must be asserted once before the first valid data in a new burst transfer
-`default_nettype none
 module burst_align #(
     parameter AXI_DATA_W = 32
     )

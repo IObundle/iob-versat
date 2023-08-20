@@ -7,7 +7,6 @@
 
 `include "versat_defs.vh"
 
-`default_nettype none
 module iob_versat
   # (//the below parameters are used in cpu if includes below
     	parameter AXI_ADDR_W = 32,

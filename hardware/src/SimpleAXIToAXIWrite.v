@@ -1,7 +1,7 @@
 `timescale 1ns/1ps
 `include "axi.vh"
+`include "AXIInfo.vh"
 
-`default_nettype none
 module SimpleAXItoAXIWrite #(
     parameter AXI_ADDR_W = 32,
     parameter AXI_DATA_W = 32,

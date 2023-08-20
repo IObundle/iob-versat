@@ -1,6 +1,5 @@
 `timescale 1ns / 1ps
 
-`default_nettype none
 module LookupTableRead #(
        parameter DATA_W = 32,
        parameter ADDR_W = 12,
@@ -50,19 +49,6 @@ module LookupTableRead #(
       input [ADDR_W-1:0]     incrA,
       input [LEN_W-1:0]      length,
       input                  pingPong,
-
-      input [9:0] iterB,
-      input [9:0] perB,
-      input [9:0] dutyB,
-      input [9:0] startB,
-      input [9:0] shiftB,
-      input [9:0] incrB,
-      input       reverseB,
-      input       extB,
-      input [9:0] iter2B,
-      input [9:0] per2B,
-      input [9:0] shift2B,
-      input [9:0] incr2B,
 
       input       disabled,
 

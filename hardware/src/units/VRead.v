@@ -2,7 +2,6 @@
 
 //`define COMPLEX_INTERFACE
 
-`default_nettype none
 module VRead #(
    parameter DATA_W = 32,
    parameter ADDR_W = 12,

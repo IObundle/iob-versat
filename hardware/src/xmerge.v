@@ -1,6 +1,5 @@
 `timescale 1ns/1ps
 
-`default_nettype none
 module xmerge #(
     parameter ADDR_W = 0,
     parameter DATA_W = 32,

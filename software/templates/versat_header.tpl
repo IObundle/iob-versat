@@ -60,6 +60,7 @@ void EndAccelerator();
 void VersatMemoryCopy(iptr* dest,iptr* data,int size);
 void VersatUnitWrite(int addr,int val);
 int VersatUnitRead(int base,int index);
+float VersatUnitReadFloat(int base,int index);
 void SignalLoop();
 
 // PC-Emul side functions that allow to enable or disable certain portions of the emulation

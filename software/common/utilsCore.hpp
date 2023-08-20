@@ -323,10 +323,12 @@ int AlignNextPower2(int val);
 int Align(int val,int alignment);
 unsigned int AlignBitBoundary(unsigned int val,int numberBits); // Align value so the lower numberBits are all zeros
 bool IsPowerOf2(int val);
-int RandomNumberBetween(int minimum,int maximum,int randomValue); // Maximum not included
+int RandomNumberBetween(int minimum,int maximum); // Maximum not included
 
 void Print(Array<int> array,int digitSize = 0);
+void Print(Array<float> array,int digitSize = 0);
 int GetMaxDigitSize(Array<int> array);
+int GetMaxDigitSize(Array<float> array);
 
 // Math related functions
 int RolloverRange(int min,int val,int max);

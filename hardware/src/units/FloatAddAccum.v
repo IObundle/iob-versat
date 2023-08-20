@@ -1,6 +1,6 @@
 `timescale 1ns / 1ps
 
-module FloatAdd #(
+module FloatAddAccum #(
          parameter DATA_W = 32
               )
     (
@@ -15,28 +15,50 @@ module FloatAdd #(
     input [DATA_W-1:0]            in0,
     input [DATA_W-1:0]            in1, // Signal
     
-    (* versat_latency = 6 *) output reg [DATA_W-1:0] out0
+    input [31:0]                  delay0,
+
+    (* versat_latency = 6 *) output reg [DATA_W-1:0] out0,
+    (* versat_latency = 6 *) output [DATA_W-1:0] out1
     );
 
+assign out1 = in1;
+
+reg [31:0] delay;
 reg [2:0] counter;
-//reg [31:0] accum;
+reg started;
 
 wire [31:0] addResult;
 
+localparam COUNTER_AMOUNT = 5;
+
 always @(posedge clk,posedge rst) begin
      if(rst) begin
-          accum <= 0;
+          out0 <= 0;
+          delay <= 0;
+          counter <= 0;
+          started <= 0;
+     end else if(run) begin
+          delay <= delay0;
+          counter <= 0;
+          started <= 0;
+     end else if(|delay) begin
+          delay <= delay - 1;
      end else begin
-          if(in1) begin
-               out0 <= in0;
-               counter <= 5;               
-          end
-
-          if(counter) begin
+          if(|counter) begin
                counter <= counter - 1;
           end else begin
-               counter <= 5;
+               counter <= COUNTER_AMOUNT;
                out0 <= addResult;
+          end
+
+          if(|in1) begin
+               out0 <= in0;
+               counter <= COUNTER_AMOUNT;
+          end
+
+          if(!started) begin
+               started <= 1;
+               out0 <= in0;
           end
      end
 end
