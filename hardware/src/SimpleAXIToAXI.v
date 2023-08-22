@@ -4,6 +4,7 @@
 module SimpleAXItoAXI #(
     parameter AXI_ADDR_W = 32,
     parameter AXI_DATA_W = 32,
+    parameter AXI_LEN_W = 8,
     parameter AXI_ID_W = 4,
     parameter LEN_W = 8
   )
@@ -29,7 +30,7 @@ module SimpleAXItoAXI #(
     input rst
   );
 
-SimpleAXItoAXIWrite #(.AXI_ADDR_W(AXI_ADDR_W),.AXI_DATA_W(AXI_DATA_W),.AXI_ID_W(AXI_ID_W),.LEN_W(LEN_W)) simpleWrite
+SimpleAXItoAXIWrite #(.AXI_ADDR_W(AXI_ADDR_W),.AXI_DATA_W(AXI_DATA_W),.AXI_ID_W(AXI_ID_W),.AXI_LEN_W(AXI_LEN_W),.LEN_W(LEN_W)) simpleWrite
   (
     .m_wvalid(m_wvalid),
     .m_wready(m_wready),
@@ -45,7 +46,7 @@ SimpleAXItoAXIWrite #(.AXI_ADDR_W(AXI_ADDR_W),.AXI_DATA_W(AXI_DATA_W),.AXI_ID_W(
     .rst(rst)
   );
 
-SimpleAXItoAXIRead #(.AXI_ADDR_W(AXI_ADDR_W),.AXI_DATA_W(AXI_DATA_W),.AXI_ID_W(AXI_ID_W),.LEN_W(LEN_W)) simpleRead
+SimpleAXItoAXIRead #(.AXI_ADDR_W(AXI_ADDR_W),.AXI_DATA_W(AXI_DATA_W),.AXI_ID_W(AXI_ID_W),.AXI_LEN_W(AXI_LEN_W),.LEN_W(LEN_W)) simpleRead
   (
     .m_rvalid(m_rvalid),
     .m_rready(m_rready),

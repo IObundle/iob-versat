@@ -5,6 +5,7 @@
 module SimpleAXItoAXIRead #(
     parameter AXI_ADDR_W = 32,
     parameter AXI_DATA_W = 32,
+    parameter AXI_LEN_W = 8,
     parameter AXI_ID_W = 4,
     parameter LEN_W = 8
   )
