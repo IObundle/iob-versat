@@ -25,6 +25,7 @@ struct StructDef{
    String fullExpression;
    String name;
    String inherit;
+   String representationFormat;
    TemplateParamDef* params;
    MemberDef* members;
    bool isUnion;
@@ -32,7 +33,7 @@ struct StructDef{
 
 struct TemplatedDef{
    String baseType;
-   TemplateParamDef* next;
+   TemplateParamDef* params;
 };
 
 struct EnumDef{

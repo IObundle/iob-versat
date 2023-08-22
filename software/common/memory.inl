@@ -192,12 +192,25 @@ template<typename Key,typename Data>
 void Hashmap<Key,Data>::Clear(){
    Memset<Pair<Key,Data>*>(this->buckets,nullptr,this->nodesAllocated);
    Memset<Pair<Key,Data>*>(this->next,nullptr,this->nodesAllocated);
+   nodesUsed = 0;
+}
+
+template<typename T>
+static void DebugBreak2(T t){
+   // Nothing
+}
+
+template<>
+void DebugBreak2<String>(String t){
+   //DEBUG_BREAK_IF(CompareString(t,STRING("arch")));
 }
 
 template<typename Key,typename Data>
 Data* Hashmap<Key,Data>::Insert(Key key,Data data){
    int mask = this->nodesAllocated - 1;
    int index = std::hash<Key>()(key) & mask; // Size is power of 2
+
+   DebugBreak2<Key>(key);
 
    Pair<Key,Data>* ptr = this->buckets[index];
    // Do not even need to look

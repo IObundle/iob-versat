@@ -54,7 +54,7 @@ long PagesAvailable(){
 
 void CheckMemoryStats(){
    if(pagesAllocated != pagesDeallocated){
-      Log(LogModule::MEMORY,LogLevel::WARN,"Number of pages freed/allocated: %d/%d",pagesDeallocated,pagesAllocated);
+      LogWarn(LogModule::MEMORY,"Number of pages freed/allocated: %d/%d",pagesDeallocated,pagesAllocated);
    }
 }
 
@@ -163,6 +163,17 @@ String PushFile(Arena* arena,const char* filepath){
    return res;
 }
 
+String PushChar(Arena* arena,const char ch){
+  Byte* mem = PushBytes(arena,1);
+
+  *mem = ch;
+  String res = {};
+  res.data = (const char*) mem;
+  res.size = 1;
+
+  return res;
+}
+
 String PushString(Arena* arena,String ss){
    Byte* mem = PushBytes(arena,ss.size);
 
@@ -251,13 +262,13 @@ Byte* PushBytes(DynamicArena* arena,size_t size){
    Byte* res = ((Byte*) ptr->mem) + ptr->used;
    ptr->used += size;
 
-   Assert(ptr->used <= (GetPageSize() - sizeof(DynamicArena)));
+   Assert(ptr->used <= (GetPageSize() * ptr->pagesAllocated - sizeof(DynamicArena)));
 
    return res;
 }
 
 void Clear(DynamicArena* arena){
-   FOREACH_LIST(ptr,arena){
+  FOREACH_LIST(DynamicArena*,ptr,arena){
       ptr->used = 0;
    }
 }

@@ -526,8 +526,7 @@ static Value EvalExpression(Expression* expr,Frame* frame,Arena* temp){
          Optional<Value> iter = GetValue(frame,expr->id);
 
          if(!iter){
-            printf("Didn't find identifier: %.*s\n",UNPACK_SS(expr->id));
-            printf("%.*s\n",UNPACK_SS(expr->text));
+            LogFatal(LogModule::TEMPLATE,"Did not find %.*s in template: %.*s",UNPACK_SS(expr->id),UNPACK_SS(globalTemplateName));
             DEBUG_BREAK();
          }
 
@@ -550,7 +549,8 @@ static Value EvalExpression(Expression* expr,Frame* frame,Arena* temp){
 
          Optional<Value> optVal = AccessStruct(object,expr->id);
          if(!optVal){
-            FatalError(StaticFormat("Tried to access member (%.*s) that does not exist for type (%.*s)",UNPACK_SS(expr->id),UNPACK_SS(object.type->name)));
+		   PrintStructDefinition(object.type);
+           FatalError(StaticFormat("Tried to access member (%.*s) that does not exist for type (%.*s)",UNPACK_SS(expr->id),UNPACK_SS(object.type->name)));
          }
          val = optVal.value();
       }break;
@@ -631,7 +631,8 @@ static String EvalBlockCommand(Block* block,Frame* previousFrame,Arena* temp){
          }
       }
    } else if (CompareString(com->name,"if")){
-      Value val = ConvertValue(EvalExpression(com->expressions[0],previousFrame,temp),ValueType::BOOLEAN,nullptr);
+      Value expr = EvalExpression(com->expressions[0],previousFrame,temp);
+      Value val = ConvertValue(expr,ValueType::BOOLEAN,nullptr);
 
       Frame* frame = CreateFrame(previousFrame,temp);
       if(val.boolean){
@@ -710,7 +711,9 @@ static ValueAndText EvalNonBlockCommand(Command* com,Frame* previousFrame,Arena*
    text.data = (char*) MarkArena(outputArena);
 
    if(CompareString(com->name,"set")){
-      val = EvalExpression(com->expressions[1],previousFrame,temp);
+	 // TODO: Maybe change set to act as a declaration and initializar + setter and separate them.
+	 //       Something like, set fails if variable does not exist. Use "let" to create variable which fails if it exists. That way we stop having problems with variables declaration and initialization
+     val = EvalExpression(com->expressions[1],previousFrame,temp);
 
       Assert(com->expressions[0]->type == Expression::IDENTIFIER);
 
@@ -856,9 +859,6 @@ static String Eval(Block* block,Frame* frame,Arena* temp){
             break;
          }
 
-         //static int counter = 0;
-         //DEBUG_BREAK_IF(++counter == 25702);
-
          tok.AssertNextToken("@{");
          Expression* expr = ParseExpression(&tok,temp);
          tok.AssertNextToken("}");
@@ -918,7 +918,7 @@ CompiledTemplate* CompileTemplate(String content,const char* name,Arena* arena){
    res->totalMemoryUsed = totalMemory.size;
    res->content = content;
    res->name = storedName;
-   
+
    return res;
 }
 
@@ -931,7 +931,7 @@ void ProcessTemplate(FILE* outputFile,CompiledTemplate* compiledTemplate,Arena* 
    Arena outputArenaInst = SubArena(arena,Megabyte(64));
    outputArena = &outputArenaInst;
    output = outputFile;
-  
+
    for(Block* block = compiledTemplate->blocks; block; block = block->next){
       String text = Eval(block,globalFrame,arena);
       fprintf(output,"%.*s",text.size,text.data);

@@ -61,9 +61,24 @@ enum DelayType {
 inline DelayType operator|(DelayType a, DelayType b)
 {return static_cast<DelayType>(static_cast<int>(a) | static_cast<int>(b));}
 
+  // TODO: Finish making a FUType. FUDeclaration should be the instance of a type and should contain a pointer to the type that contains all the non parameterizable values.
+/*
+struct FUType{
+  String name;
+
+  Array<int> inputDelays;
+  Array<int> outputLatencies;
+
+  Array<WireExpression> configs;
+  Array<WireExpression> states;
+
+  Array<ExternalMemoryInterfaceExpression> externalMemory;
+}
+*/
+
 // TODO: There is a lot of crux between parsing and creating the FUDeclaration for composite accelerators 
 //       the FUDeclaration should be composed of something that is in common to all of them.
-// A declaration is constant after being registered
+// A declaration is the instantiation of a type
 struct FUDeclaration{
    String name;
 

@@ -36,7 +36,7 @@ begin
      end else if(|delay) begin
           delay <= delay - 1;
           out0 <= 0;
-     end else begin
+     end else if(running) begin
           if(|in1) begin
                out0 <= in0;
           end else begin

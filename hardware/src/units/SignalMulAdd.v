@@ -36,15 +36,18 @@ reg [31:0] toProcess;
 always @(posedge clk,posedge rst)
 begin
    if(rst) begin
-      done <= 1'b0;
+      done <= 1'b1;
       delay <= 0;
       toProcess <= 0;
    end else if(run) begin
       delay <= delay0 + 1; // Add 2 because it takes 2 cycles for the accumulator to start working and this whole logic is just the control for the accumulator
       done <= 1'b0;
-      toProcess <= amount;
    end else if(|delay) begin
       delay <= delay - 1;
+      if(toProcess == amount) begin
+         done <= 1;
+      end
+      toProcess <= amount;
    end else if(delay == 0 && !done) begin
       if(toProcess != 0) begin
          toProcess <= toProcess - 1;
@@ -72,7 +75,7 @@ always @ (posedge clk,posedge rst) begin
 
       if(signal_loop) begin
          acc <= 0;
-      end else if(delay == 0 && !done) begin
+      end else if(toProcess != 0) begin
          if(opcode == `MULADD_MACC)
             acc <= acc + result_mult_reg;
          else

@@ -17,7 +17,7 @@ Arena InitArena(size_t size){
    Arena res = {};
 
    res.totalAllocated = size;
-   res.mem = (Byte*) calloc(size,sizeof(Byte));
+   res.mem = (Byte*) malloc(size * sizeof(Byte));
 
    return res;
 }

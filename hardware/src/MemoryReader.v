@@ -17,8 +17,8 @@ module MemoryReader #(
       output [DATA_W-1:0] m_data,      
 
       // Connect to memory
-      output                  mem_enable,
-      output [ADDR_W-1:0]     mem_addr,
+      output              mem_enable,
+      output [ADDR_W-1:0] mem_addr,
       input  [DATA_W-1:0] mem_data,
 
       input clk,
