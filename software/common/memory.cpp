@@ -65,7 +65,7 @@ Arena InitArena(size_t size){
    arena.totalAllocated = size;
    arena.mem = (Byte*) calloc(size,sizeof(Byte));
    Assert(arena.mem);
-   Assert(IS_ALIGNED_8(arena.mem));
+   Assert(IS_ALIGNED_64(arena.mem));
 
    return arena;
 }
@@ -332,13 +332,13 @@ void BitArray::Init(Byte* memory,int bitSize){
    this->memory = memory;
    this->bitSize = bitSize;
    this->byteSize = BitSizeToByteSize(bitSize);
-   Assert(IS_ALIGNED_4(this->byteSize));
+   Assert(IS_ALIGNED_32(this->byteSize));
 }
 
 void BitArray::Init(Arena* arena,int bitSize){
    this->memory = MarkArena(arena);
    this->bitSize = bitSize;
-   this->byteSize = ALIGN_4(BitSizeToByteSize(bitSize));
+   this->byteSize = ALIGN_UP_32(BitSizeToByteSize(bitSize));
    PushBytes(arena,this->byteSize); // Makes it easier to use popcount
 }
 
@@ -457,7 +457,7 @@ int BitArray::FirstBitSetIndex(int start){
    #endif
 
    Assert(start < this->bitSize);
-   int i = ALIGN_32(start - 31);
+   int i = ALIGN_UP_32(start - 31);
    uint32 startDWord = BitSizeToDWordSize(i);
    uint32* ptr = (uint32*) this->memory;
    ptr = &ptr[startDWord];

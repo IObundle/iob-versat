@@ -1,9 +1,11 @@
 `timescale 1ns / 1ps
 
-module LookupTableRead #(
+// Because Versat is currently incapable of carrying multiple modules with different parameters, duplicated file so we can have SIZE_W = 16
+
+module LookupTableRead2 #(
        parameter DATA_W = 32,
+       parameter SIZE_W = 16,
        parameter ADDR_W = 12,
-       parameter SIZE_W = 32,
        parameter AXI_ADDR_W = 32,
        parameter AXI_DATA_W = 32,
        parameter LEN_W = 8
@@ -26,7 +28,7 @@ module LookupTableRead #(
       (* versat_latency = 2 *) output [DATA_W-1:0] out0,
 
       // Used by lookup table
-      output reg [ADDR_W-1:0] ext_dp_addr_0_port_0,
+      output reg [ADDR_W-1:0] ext_dp_addr_0_port_0, // One more bit because of size difference
       output [AXI_DATA_W-1:0] ext_dp_out_0_port_0,
       input  [AXI_DATA_W-1:0] ext_dp_in_0_port_0,
       output                  ext_dp_enable_0_port_0,
@@ -63,8 +65,10 @@ module LookupTableRead #(
 
    assign ext_dp_out_0_port_0 = 0;
 
-   localparam DIFF = AXI_DATA_W/DATA_W;
+   localparam DIFF = AXI_DATA_W/SIZE_W;
    localparam DECISION_BIT_W = $clog2(DIFF);
+
+   reg pingPongState;
 
    /*
    function [ADDR_W-DECISION_BIT_W-1:0] symbolSpaceConvert(input [ADDR_W-1:0] in);
@@ -74,26 +78,23 @@ module LookupTableRead #(
          symbolSpaceConvert = shiftRes[ADDR_W-DECISION_BIT_W-1:0];
       end
    endfunction
-   */
 
-   reg pingPongState;
 
-   reg [ADDR_W-1:0] addr_0;
+   reg [ADDR_W:0] addr_0;
    always @* begin
       addr_0 = 0;
-      addr_0[ADDR_W-1:0] = {in0[ADDR_W-3:0],2'b00}; // Increments by 4 because SIZE_W == 32 //symbolSpaceConvert(in0[ADDR_W-1:0]);
-      addr_0[ADDR_W-1] = pingPong && !pingPongState;
+      addr_0[ADDR_W-DECISION_BIT_W-1:0] = symbolSpaceConvert(in0[ADDR_W-1:0]);
+      addr_0[ADDR_W] = pingPong && !pingPongState;
    end
+   */
 
    always @(posedge clk,posedge rst) begin
       if(rst)
          ext_dp_addr_0_port_0 <= 0;
       else
-         ext_dp_addr_0_port_0 <= addr_0;
+         ext_dp_addr_0_port_0 <= {pingPong && !pingPongState,in0[ADDR_W-3:0],1'b0}; // Increments by 2 each time because SIZE_W == 2
    end
 
-   generate
-   if(AXI_DATA_W > DATA_W) begin
    // Byte selector needs to be saved to later indicate which lane to output (for 64)
    reg [DECISION_BIT_W-1:0] sel_0; // Matches addr_0_port_0
    reg [DECISION_BIT_W-1:0] sel_1; // Matches rdata_0_port_0
@@ -109,6 +110,7 @@ module LookupTableRead #(
 
    WideAdapter #(
    .INPUT_W(AXI_DATA_W),
+   .SIZE_W(SIZE_W),
    .OUTPUT_W(DATA_W)
    )
    adapter
@@ -117,10 +119,6 @@ module LookupTableRead #(
       .in(ext_dp_in_0_port_0),
       .out(out0)
    );
-   end else begin
-   assign out0 = ext_dp_in_0_port_0;
-   end
-   endgenerate
 
    assign ext_dp_enable_0_port_0 = 1'b1;
    assign ext_dp_write_0_port_0 = 1'b0;

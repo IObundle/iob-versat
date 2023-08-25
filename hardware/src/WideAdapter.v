@@ -4,7 +4,8 @@
 
 module WideAdapter #(
    parameter INPUT_W = 64,
-   parameter OUTPUT_W = 32
+   parameter SIZE_W = 32, // Size of data (data can be smaller than output, in which case the output is zero extended)
+   parameter OUTPUT_W = 32 // Size of output
    )
    (
       input [DIFF_W-1:0] sel,
@@ -13,8 +14,12 @@ module WideAdapter #(
       output [OUTPUT_W-1:0] out
    );
 
-localparam DIFF_W = $clog2(INPUT_W / OUTPUT_W);
+localparam DIFF_W = $clog2(INPUT_W / SIZE_W);
 
-assign out = in[sel * OUTPUT_W +: OUTPUT_W];
+ZeroExtend #(.INPUT_W(SIZE_W),.OUTPUT_W(OUTPUT_W)) extend
+   (
+      .in(in[sel * SIZE_W +: SIZE_W]),
+      .out(out)
+   );
 
 endmodule

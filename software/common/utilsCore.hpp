@@ -19,22 +19,36 @@
 #define TWO_DIGIT(x,y) (CI(x) * 10 + CI(y))
 #define COMPILE_TIME (TWO_DIGIT(__TIME__[0],__TIME__[1]) * 3600 + TWO_DIGIT(__TIME__[3],__TIME__[4]) * 60 + TWO_DIGIT(__TIME__[6],__TIME__[7]))
 
-#define ALIGN_2(val) (((val) + 1) & ~1)
-#define ALIGN_4(val) (((val) + 3) & ~3)
-#define ALIGN_8(val) (((val) + 7) & ~7)
-#define ALIGN_16(val) (((val) + 15) & ~15)
-#define ALIGN_32(val) (((val) + 31) & ~31)
-#define ALIGN_64(val) (((val) + 63) & ~63) // Usually a cache line
+#define ALIGN_DOWN(val,size) (val & (~(size - 1)))
+
+// Helper functions named after bitsize. If using byte size, use the X(val,size) functions
+#define ALIGN_DOWN_16(val) (val & (~1))
+#define ALIGN_DOWN_32(val) (val & (~3))
+#define ALIGN_DOWN_64(val) (val & (~7))
+#define ALIGN_DOWN_128(val) (val & (~15))
+#define ALIGN_DOWN_256(val) (val & (~31))
+#define ALIGN_DOWN_512(val) (val & (~63))
+
+#define ALIGN_UP(val,size) (((val) + (size - 1)) & ~(size - 1))
+
+#define ALIGN_UP_16(val) (((val) + 1) & ~1)
+#define ALIGN_UP_32(val) (((val) + 3) & ~3)
+#define ALIGN_UP_64(val) (((val) + 7) & ~7)
+#define ALIGN_UP_128(val) (((val) + 15) & ~15)
+#define ALIGN_UP_256(val) (((val) + 31) & ~31)
+#define ALIGN_UP_512(val) (((val) + 63) & ~63) // Usually a cache line
+
+#define IS_ALIGNED(val,size) ((((uptr) val) & (size-1)) == 0x0)
+
+#define IS_ALIGNED_16(val) ((((uptr) val) & 1) == 0x0)
+#define IS_ALIGNED_32(val) ((((uptr) val) & 3) == 0x0)
+#define IS_ALIGNED_64(val) ((((uptr) val) & 7) == 0x0)
+#define IS_ALIGNED_128(val) ((((uptr) val) & 15) == 0x0)
+#define IS_ALIGNED_256(val) ((((uptr) val) & 31) == 0x0)
+#define IS_ALIGNED_512(val) ((((uptr) val) & 63) == 0x0)
 
 #undef  ARRAY_SIZE
 #define ARRAY_SIZE(array) ((int) (sizeof(array) / sizeof(array[0])))
-
-#define IS_ALIGNED_2(val) ((((uptr) val) & 1) == 0x0)
-#define IS_ALIGNED_4(val) ((((uptr) val) & 3) == 0x0)
-#define IS_ALIGNED_8(val) ((((uptr) val) & 7) == 0x0)
-#define IS_ALIGNED_16(val) ((((uptr) val) & 15) == 0x0)
-#define IS_ALIGNED_32(val) ((((uptr) val) & 31) == 0x0)
-#define IS_ALIGNED_64(val) ((((uptr) val) & 63) == 0x0)
 
 #define NUMBER_ARGS_(T1,T2,T3,T4,T5,T6,T7,T8,T9,TA,TB,TC,TD,TE,TF,TG,TH,Arg, ...) Arg
 #define NUMBER_ARGS(...) NUMBER_ARGS_(-1,##__VA_ARGS__,16,15,14,13,12,11,10,9,8,7,6,5,4,3,2,1,0)
@@ -417,6 +431,12 @@ inline void Memset(Array<T> buffer,T elem){
 template<typename T>
 inline void Memcpy(T* dest,T* src,int numberElements){
    memcpy(dest,src,numberElements * sizeof(T));
+}
+
+template<typename T>
+inline void Memcpy(Array<T> dest,Array<T> src){
+  Assert(src.size <= dest.size);
+  memcpy(dest.data,src.data,src.size * sizeof(T));
 }
 
 // Mainly change return meaning (true means equal)

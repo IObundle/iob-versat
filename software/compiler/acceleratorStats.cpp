@@ -1,21 +1,39 @@
 #include "acceleratorStats.hpp"
 
-int ExternalMemoryByteSize(ExternalMemoryInterface* inter){
-  int size = 0;
+// Checks wether the external memory conforms to the expected interface or not (has valid values)
+bool VerifyExternalMemory(ExternalMemoryInterface* inter){
+  bool res;
 
   switch(inter->type){
   case ExternalMemoryType::TWO_P:{
-	size = std::max((1 << inter->tp.bitSizeIn)  * (inter->tp.dataSizeIn / 8),
-                  (1 << inter->tp.bitSizeOut) * (inter->tp.dataSizeOut / 8));
+    res = (inter->tp.bitSizeIn == inter->tp.bitSizeOut);
   }break;
   case ExternalMemoryType::DP:{
-	size = std::max((1 << inter->dp[0].bitSize) * std::max(inter->dp[0].dataSizeIn,inter->dp[0].dataSizeOut),
-                  (1 << inter->dp[1].bitSize) * std::max(inter->dp[1].dataSizeIn,inter->dp[1].dataSizeOut));
+    res = (inter->dp[0].bitSize == inter->dp[1].bitSize);
   }break;
   default: NOT_IMPLEMENTED;
   }
 
-  return size;
+  return res;
+}
+
+int ExternalMemoryByteSize(ExternalMemoryInterface* inter){
+  Assert(VerifyExternalMemory(inter));
+
+  int addressBitSize = 0;
+  switch(inter->type){
+  case ExternalMemoryType::TWO_P:{
+    addressBitSize = inter->tp.bitSizeIn;
+  }break;
+  case ExternalMemoryType::DP:{
+    addressBitSize = inter->dp[0].bitSize;
+  }break;
+  default: NOT_IMPLEMENTED;
+  }
+
+  int byteSize = (1 << addressBitSize);
+
+  return byteSize;
 }
 
 int ExternalMemoryByteSize(Array<ExternalMemoryInterface> interfaces){

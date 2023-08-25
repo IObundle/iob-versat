@@ -87,7 +87,7 @@ end
 
 generate
 if(AXI_DATA_W == 32) begin
-assign symbolsToRead = length >> 2;
+assign symbolsToRead = (|length[1:0]) ? (length >> 2) + 1 : length >> 2;
 assign max_transfer_len = 13'h0400;
 assign max_transfer_len_minus_one = 13'h03FC;
    always @* begin
@@ -102,7 +102,7 @@ assign max_transfer_len_minus_one = 13'h03FC;
    end
 end // if(AXI_DATA_W == 32)
 if(AXI_DATA_W == 64) begin
-assign symbolsToRead = length >> 3;
+assign symbolsToRead = (|length[2:0]) ? (length >> 3) + 1 : length >> 3;
 assign max_transfer_len = 13'h0800;
 assign max_transfer_len_minus_one = 13'h07F8;
 wire [2:0] address_plus_len = address[2:0] + stored_len[2:0];
@@ -118,7 +118,7 @@ wire [2:0] address_plus_len = address[2:0] + stored_len[2:0];
    end
 end // if(AXI_DATA_W == 64)
 if(AXI_DATA_W == 128) begin
-assign symbolsToRead = length >> 4;
+assign symbolsToRead = (|length[3:0]) ? (length >> 4) + 1 : length >> 4;
 assign max_transfer_len = 13'h1000;
 assign max_transfer_len_minus_one = 13'h0FF0;
 wire [3:0] address_plus_len = address[3:0] + stored_len[3:0];
@@ -135,7 +135,7 @@ wire [3:0] address_plus_len = address[3:0] + stored_len[3:0];
    end
 end // if(AXI_DATA_W == 128)
 if(AXI_DATA_W == 256) begin
-assign symbolsToRead = length >> 5;
+assign symbolsToRead = (|length[4:0]) ? (length >> 5) + 1 : length >> 5;
 assign max_transfer_len = 13'h1000;
 assign max_transfer_len_minus_one = 13'h0FE0; // Because of boundary conditions, cannot go higher
 wire [4:0] address_plus_len = address[4:0] + stored_len[4:0];
@@ -152,7 +152,7 @@ wire [4:0] address_plus_len = address[4:0] + stored_len[4:0];
    end
 end
 if(AXI_DATA_W == 512) begin
-assign symbolsToRead = length >> 5;
+assign symbolsToRead = (|length[5:0]) ? (length >> 6) + 1 : length >> 6;
 assign max_transfer_len = 13'h1000;
 assign max_transfer_len_minus_one = 13'h0FC0; // Because of boundary conditions, cannot go higher
 wire [5:0] address_plus_len = address[5:0] + stored_len[5:0];

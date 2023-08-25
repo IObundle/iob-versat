@@ -3,6 +3,7 @@
 //`define COMPLEX_INTERFACE
 
 module VRead #(
+   parameter SIZE_W = 32,
    parameter DATA_W = 32,
    parameter ADDR_W = 12,
    parameter PERIOD_W = 10,
@@ -163,7 +164,7 @@ module VRead #(
    `else
       SimpleAddressGen
    `endif
-      #(.ADDR_W(ADDR_W)) addrgenA (
+      #(.ADDR_W(ADDR_W),.DATA_W(SIZE_W)) addrgenA (
       .clk(clk),
       .rst(rst),
       .run(run && !disabled),
@@ -275,8 +276,9 @@ module VRead #(
       end
 
       WideAdapter #(
-      .INPUT_W(AXI_DATA_W),
-      .OUTPUT_W(DATA_W)
+         .INPUT_W(AXI_DATA_W),
+         .OUTPUT_W(DATA_W),
+         .SIZE_W(SIZE_W)
       )
       adapter
       (

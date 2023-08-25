@@ -43,7 +43,7 @@ always @(posedge clk,posedge rst) begin
           started <= 0;
      end else if(|delay) begin
           delay <= delay - 1;
-     end else begin
+     end else if(running) begin
           if(|counter) begin
                counter <= counter - 1;
           end else begin

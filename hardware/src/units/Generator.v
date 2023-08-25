@@ -29,7 +29,7 @@ wire done;
 
 assign out0 = genOut; //done ? off_value : genOut;
 
-MyAddressGen #(.ADDR_W(32)) addrGen(
+MyAddressGen #(.ADDR_W(32),.DATA_W(8)) addrGen(
    .clk(clk),
    .rst(rst),
 

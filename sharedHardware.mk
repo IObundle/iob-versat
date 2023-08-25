@@ -1,10 +1,7 @@
-VERILATE_UNIT_BASIC += Buffer FixedBuffer SwapEndian LookupTable Mul Generator IntSqrt LookupTableRead StridedMerge FloatAddAccum
-VERILATE_UNIT_BASIC += Reg Mem SignalMulAdd Muladd VRead VWrite Mux2 CombMux2 CombMux4 Merge Const TestConst TimedMux
-VERILATE_UNIT_BASIC += FloatAdd FloatSub FloatMul FloatDiv FloatSqrt Q16Sqrt DoneCycle ChangeDetect Store TimedFlag PipelineRegister
-VERILATE_UNIT_BASIC += FloatMax FloatMin Float2Int Float2UInt Int2Float SignalMemStorage SignalAccum Equality IncrementFlag
-
 SHARED_UNITS_PATH := $(VERSAT_DIR)/hardware/src/units
-SHARED_HARDWARE := $(patsubst %,$(SHARED_UNITS_PATH)/%.v,$(VERILATE_UNIT_BASIC))
+
+VERILATE_UNIT_FILES := $(wildcard $(SHARED_UNITS_PATH)/*.v)
+VERILATE_UNIT_BASIC := $(patsubst $(SHARED_UNITS_PATH)/%.v,%,$(VERILATE_UNIT_FILES))
 
 V_INCLUDE+=$(incdir)$(VERSAT_DIR)/submodules/MEM/hardware/ram/tdp_ram
 V_INCLUDE+=$(incdir)$(VERSAT_DIR)/submodules/MEM/hardware/ram/2p_ram
@@ -31,4 +28,4 @@ VSRC+=$(VERSAT_DIR)/submodules/FPU/submodules/DIV/hardware/src/div_subshift.v
 #VSRC+=$(VERSAT_DIR)/hardware/src/MemoryReader.v
 VSRC+=$(wildcard $(VERSAT_DIR)/submodules/FPU/hardware/src/*.v)
 
-VSRC+=$(SHARED_HARDWARE) # Required by Icarus
+VSRC+=$(VERILATE_UNIT_FILES) # Required by Icarus

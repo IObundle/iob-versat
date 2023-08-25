@@ -87,3 +87,22 @@
    #{return nSeqOperations}
 #{end}
 
+#{define IntName count}
+#{set name "int"}
+#{if count == 8}
+#{set name "int8"}
+#{end}
+#{if count == 16}
+#{set name "int16"}
+#{end}
+#{if count == 64}
+#{set name "int64"}
+#{end}
+#{if count == 128}
+#{set name "Int128"}
+#{end}
+#{if count == 256}
+#{set name "Int256"}
+#{end}
+#{return name}
+#{end}
