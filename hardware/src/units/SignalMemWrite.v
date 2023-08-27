@@ -4,7 +4,7 @@
          parameter MEM_INIT_FILE="none",
          parameter DATA_W = 32,
          parameter SIZE_W = 32,
-         parameter ADDR_W = 12,
+         parameter ADDR_W = 10,
          parameter PERIOD_W = 10,
          parameter AXI_ADDR_W = 32,
          parameter AXI_DATA_W = 32,
@@ -21,7 +21,7 @@
    output                        done,
 
    input                         databus_ready_0,
-   output                        databus_valid_0,
+   output reg                    databus_valid_0,
    output[AXI_ADDR_W-1:0]        databus_addr_0,
    input [AXI_DATA_W-1:0]        databus_rdata_0,
    output [AXI_DATA_W-1:0]       databus_wdata_0,
@@ -133,15 +133,18 @@ begin
    if(rst) begin
       counter <= 0;
       writting <= 1'b0;
+      databus_valid_0 <= 1'b0;
    end else if(run && !disabled) begin
       counter <= 0;
       writting <= (currentStored != 0);
    end else if(running && !disabled) begin
+      databus_valid_0 <= writting;
+      if(databus_valid_0 && databus_ready_0 && databus_last_0) begin
+         writting <= 1'b0;
+         databus_valid_0 <= 1'b0;
+      end
       if(writting && gen_ready) begin
          counter <= counter + 1;
-         if(counter + 1 >= (stored >> TRANSFER_W)) begin
-            writting <= 1'b0;
-         end
       end
    end
 end
@@ -158,7 +161,7 @@ reader(
    .s_addr(gen_addr),
 
    // Master
-   .m_valid(databus_valid_0),
+   .m_valid(),
    .m_ready(databus_ready_0),
    .m_addr(),
    .m_data(databus_wdata_0),

@@ -44,8 +44,8 @@ module TimedFlagRead #(
    input [ADDR_W-1:0]     int_addr,
    input [31:0]           size,
    input [ADDR_W-1:0]     iterA,
-   input [9:0]            perA,
-   input [9:0]            dutyA,
+   input [ADDR_W-1:0]     perA,
+   input [ADDR_W-1:0]     dutyA,
    input [ADDR_W-1:0]     shiftA,
    input [ADDR_W-1:0]     incrA,
    input [LEN_W-1:0]      length,
@@ -98,7 +98,7 @@ end
 
 reg [31:0] amount;
 reg [31:0] needToSee;
-assign done = ((needToSee == 0) && !databus_valid_0);
+assign done = (!running || disabled || ((needToSee == 0) && !databus_valid_0));
 
 assign nextValue = (running && in0[SIZE_W-1:0] == currentValue);
 
@@ -142,7 +142,7 @@ end
    wire [ADDR_W-1:0] gen_addr;
    wire gen_done;
 
-   MyAddressGen #(.ADDR_W(ADDR_W),.DATA_W(AXI_DATA_W)) addrgenA(
+   MyAddressGen #(.ADDR_W(ADDR_W),.DATA_W(AXI_DATA_W),.PERIOD_W(ADDR_W)) addrgenA(
       .clk(clk),
       .rst(rst),
       .run(run),
@@ -175,7 +175,7 @@ end
       end else if(run) begin
          gen_valid <= 1'b1;
          amount <= 0;
-      end else if(running) begin
+      end else if(gen_valid) begin //if(running) begin
          if(databus_valid_0 && databus_ready_0) begin
             amount <= amount + 1;
          end

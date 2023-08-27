@@ -65,7 +65,7 @@ void StartAccelerator(){
 }
 
 int timesWaiting = 0;
-
+ 
 void EndAccelerator(){
    printf("End accelerator\n");
    bool seenWaiting = false;

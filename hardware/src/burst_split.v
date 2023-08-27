@@ -21,18 +21,18 @@ module burst_split #(
 
 localparam OFFSET_W = calculate_AXI_OFFSET_W(DATA_W);
 
+reg [DATA_W-8-1:0] stored_data;
+always @(posedge clk,posedge rst)
+begin
+    if(rst) begin
+        stored_data <= 0;
+    end else if(data_valid) begin
+        stored_data <= data_in[DATA_W-1:8];
+    end
+end
+
 generate 
 if(DATA_W == 32) begin
-    reg [23:0] stored_data;
-    always @(posedge clk,posedge rst)
-    begin
-        if(rst) begin
-            stored_data <= 0;
-        end else begin
-            stored_data <= data_in[31:8];
-        end
-    end
-
     always @* begin
         data_out = data_in;
         case(offset)
@@ -44,16 +44,6 @@ if(DATA_W == 32) begin
     end
 end // if(DATA_W == 32)
 if(DATA_W == 64) begin
-    reg [55:0] stored_data;
-    always @(posedge clk,posedge rst)
-    begin
-        if(rst) begin
-            stored_data <= 0;
-        end else if(data_valid) begin
-            stored_data <= data_in[63:8];
-        end
-    end
-
     always @* begin
         data_out = data_in;        
         case(offset)
@@ -69,16 +59,6 @@ if(DATA_W == 64) begin
     end
 end // if(DATA_W == 64)
 if(DATA_W == 128) begin
-    reg [119:0] stored_data;
-    always @(posedge clk,posedge rst)
-    begin
-        if(rst) begin
-            stored_data <= 0;
-        end else if(data_valid) begin
-            stored_data <= data_in[119:8];
-        end
-    end
-
     always @* begin
         data_out = data_in;        
         case(offset)
@@ -102,16 +82,6 @@ if(DATA_W == 128) begin
     end
 end // if(DATA_W == 128)
 if(DATA_W == 256) begin
-    reg [247:0] stored_data;
-    always @(posedge clk,posedge rst)
-    begin
-        if(rst) begin
-            stored_data <= 0;
-        end else if(data_valid) begin
-            stored_data <= data_in[247:8];
-        end
-    end
-
     always @* begin
         data_out = data_in;        
         case(offset)

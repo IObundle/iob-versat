@@ -154,14 +154,15 @@ begin
     end
     3'h4: begin
       wstrb <= ~0;
-      
-      if(flush_burst_split) begin
-         wstrb <= final_strb;
-      end
 
       if(m_axi_wvalid && m_axi_wready) begin
          read_counter <= read_counter + 1;
          counter <= counter + 1;
+      
+         if(counter + 1 == m_axi_awlen) begin
+            wstrb <= final_strb;
+         end
+
          full_counter <= full_counter + 1;
          if(m_axi_last) begin
             counter <= 0;

@@ -2,7 +2,7 @@
 
 module LookupTableRead #(
        parameter DATA_W = 32,
-       parameter ADDR_W = 12,
+       parameter ADDR_W = 16,
        parameter SIZE_W = 32,
        parameter AXI_ADDR_W = 32,
        parameter AXI_DATA_W = 32,
@@ -44,8 +44,8 @@ module LookupTableRead #(
       input [ADDR_W-1:0]     int_addr,
       input [31:0]           size,
       input [ADDR_W-1:0]     iterA,
-      input [9:0]            perA,
-      input [9:0]            dutyA,
+      input [ADDR_W-1:0]     perA,
+      input [ADDR_W-1:0]     dutyA,
       input [ADDR_W-1:0]     shiftA,
       input [ADDR_W-1:0]     incrA,
       input [LEN_W-1:0]      length,
@@ -167,7 +167,7 @@ module LookupTableRead #(
    wire [ADDR_W-1:0] gen_addr;
    wire gen_done;
 
-   MyAddressGen #(.ADDR_W(ADDR_W),.DATA_W(AXI_DATA_W)) addrgenA(
+   MyAddressGen #(.ADDR_W(ADDR_W),.DATA_W(AXI_DATA_W),.PERIOD_W(ADDR_W)) addrgenA(
       .clk(clk),
       .rst(rst),
       .run(run && !disabled),
