@@ -50,6 +50,8 @@ module TimedFlagRead #(
    input [ADDR_W-1:0]     incrA,
    input [LEN_W-1:0]      length,
 
+   input [31:0]           maximum,
+
    input                  disabled,
 
    input [31:0]          in0,
@@ -97,29 +99,35 @@ begin
 end
 
 reg [31:0] amount;
-reg [31:0] needToSee;
-assign done = (!running || disabled || ((needToSee == 0) && !databus_valid_0));
+reg stillValid;
+assign done = (!running || disabled || !stillValid) && !databus_valid_0 ;
 
-assign nextValue = (running && in0[SIZE_W-1:0] == currentValue);
-
-assign out0 = ((delay == 0 && !disabled) ? {32{(in0[SIZE_W-1:0] == currentValue)}} : 0);
-
-reg [31:0] delay;
 always @(posedge clk,posedge rst) begin
    if(rst) begin
-      delay <= 0;
-      needToSee <= 0;
+      stillValid <= 1'b0;
    end else if(run) begin
-      delay <= delay0;
-      needToSee <= amount;
-   end else if(|delay) begin
-      delay <= delay - 1;
-   end else if(delay == 0 && needToSee != 0) begin
-      if(in0[SIZE_W-1:0] == currentValue) begin
-         needToSee <= needToSee - 1;
+      stillValid <= 1'b1; 
+   end else if(running) begin
+      if(in0 >= maximum) begin
+         stillValid <= 1'b0;
       end
    end
 end
+
+assign nextValue = (running && in0[SIZE_W-1:0] == currentValue);
+
+reg [31:0] delay;
+assign out0 = ((delay == 0 && !disabled) ? {32{(in0[SIZE_W-1:0] == currentValue)}} : 0);
+
+   always @(posedge clk,posedge rst) begin
+       if(rst) begin
+            delay <= 0;
+       end else if(run) begin
+            delay <= delay0 + 1;
+       end else if(|delay) begin
+            delay <= delay - 1;
+       end
+   end
 
    wire [ADDR_W-1:0] startA = 0;
    wire [31:0]       delayA = 0;

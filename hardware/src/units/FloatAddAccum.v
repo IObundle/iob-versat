@@ -17,11 +17,8 @@ module FloatAddAccum #(
     
     input [31:0]                  delay0,
 
-    (* versat_latency = 6 *) output reg [DATA_W-1:0] out0,
-    (* versat_latency = 6 *) output [DATA_W-1:0] out1
+    (* versat_latency = 5 *) output reg [DATA_W-1:0] out0
     );
-
-assign out1 = in1;
 
 reg [31:0] delay;
 reg [2:0] counter;

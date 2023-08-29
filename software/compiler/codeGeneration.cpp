@@ -227,12 +227,14 @@ void OutputVersatSource(Versat* versat,Accelerator* accel,const char* directoryP
    Hashmap<String,SizedConfig>* namedStates = ExtractNamedSingleStates(accel,arena);
    Hashmap<String,SizedConfig>* namedMem = ExtractNamedSingleMem(accel,arena);
 
+#if 0 // Mems are now in byte space
    for(Pair<String,SizedConfig>& pair : namedMem){
       iptr view = (iptr) pair.second.ptr;
       view *= sizeof(int);
       pair.second.ptr = (iptr*) view;
    }
-
+#endif
+     
    #if 0
    for(Pair<String,SizedConfig>& pair : namedMem){
       int* view = (int*) pair.second.ptr;

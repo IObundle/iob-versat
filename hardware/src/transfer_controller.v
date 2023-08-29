@@ -81,8 +81,9 @@ begin
 
    final_strb = ~0;
    for(i = 0; i < (AXI_DATA_W/8); i = i + 1) begin
-      if(i >= address[OFFSET_W-1:0]) final_strb[i] = 1'b0;
+      if(i >= (address[OFFSET_W-1:0] + length[OFFSET_W-1:0])) final_strb[i] = 1'b0;
    end
+
 end
 
 generate

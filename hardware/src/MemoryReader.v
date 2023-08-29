@@ -15,6 +15,7 @@ module MemoryReader #(
       input m_ready,
       output [ADDR_W-1:0] m_addr,
       output [DATA_W-1:0] m_data,      
+      input m_last,
 
       // Connect to memory
       output              mem_enable,
@@ -40,7 +41,7 @@ begin
          m_valid <= 1'b0;
       end
 
-      if(s_transfer) begin
+      if(s_transfer && !m_last) begin
          m_valid <= 1'b1;
          last_addr <= s_addr;
       end

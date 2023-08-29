@@ -122,14 +122,14 @@ void VersatMemoryCopy(iptr* dest,iptr* data,int size){
    }
 }
 
-void VersatUnitWrite(int addr,int val){
-   int* ptr = (int*) addr;
-   *ptr = val;
+void VersatUnitWrite(int baseaddr,int index,int val){
+  int* ptr = (int*) (baseaddr + index * sizeof(int));
+  *ptr = val;
 }
 
 int VersatUnitRead(int base,int index){
-   int* ptr = (int*) base + index;
-   return *ptr;
+  int* ptr = (int*) (base + index * sizeof(int));
+  return *ptr;
 }
 
 // Implementation of common functionality

@@ -221,6 +221,7 @@ module VWrite #(
       .m_ready(databus_ready_0),
       .m_addr(),
       .m_data(databus_wdata_0),
+      .m_last(databus_last_0),
 
       // Connect to memory
       .mem_enable(read_en),

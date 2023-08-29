@@ -1020,7 +1020,7 @@ Edge* ConnectUnits(FUInstance* out,int outIndex,FUInstance* in,int inIndex,int d
 }
 
 int EvalRange(ExpressionRange range,Array<ParameterExpression> expressions){
-  // TODO: Right now nullptr indicates that the wire does not exist. Do not know if it's worth to make it more explicit or not. Appears to be fine for now. 
+  // TODO: Right now nullptr indicates that the wire does not exist. Do not know if it's worth to make it more explicit or not. Appears to be fine for now.
   if(range.top == nullptr || range.bottom == nullptr){
 	Assert(range.top == range.bottom); // They must both be nullptr if one is
 	return 0;

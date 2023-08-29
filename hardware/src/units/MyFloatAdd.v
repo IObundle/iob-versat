@@ -15,7 +15,7 @@ module MyFloatAdd #(
     input [DATA_W-1:0]            in0,
     input [DATA_W-1:0]            in1,
 
-    (* versat_latency = 1 *) output reg [31:0] out0 // Much higher order
+    (* versat_latency = 1 *) output reg [31:0] out0
     );
 
    localparam MAN_W = 23;

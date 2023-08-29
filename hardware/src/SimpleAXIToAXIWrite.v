@@ -99,7 +99,7 @@ assign m_axi_awcache = `AXI_CACHE_W'h2;
 assign m_axi_awprot = `AXI_PROT_W'b010;
 assign m_axi_awqos = `AXI_QOS_W'h0;
 
-reg [AXI_DATA_W/8:0] wstrb;
+reg [AXI_DATA_W/8-1:0] wstrb;
 //assign m_axi_wdata = m_wdata;
 assign m_axi_wstrb = wstrb;
 
