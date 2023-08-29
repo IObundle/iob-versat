@@ -64,7 +64,7 @@ module LookupTable #(
 
    wire [DATA_W-1:0] outA,outB;
 
-   assign ext_dp_addr_0_port_0 = write ? addr_reg : in0[ADDR_W-1:0];
+   assign ext_dp_addr_0_port_0 = write ? addr_reg >> $clog2(DATA_W/8) : in0[ADDR_W-1:0];
    assign outA = ext_dp_in_0_port_0;
    assign ext_dp_out_0_port_0 = data;
    assign ext_dp_enable_0_port_0 = 1'b1;
