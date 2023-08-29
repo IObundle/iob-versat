@@ -1,11 +1,11 @@
 `timescale 1ns / 1ps
 
-// Generates an address for a 32 bit memory. 32 bits is symbol space
+// Generates an address for a 8 bit memory. Byte space
 module SimpleAddressGen # (
    parameter ADDR_W = 10,
    parameter PERIOD_W = 10,
    parameter DELAY_W = 32,
-   parameter OFFSET_W = 0 // Offset. 1 = 64 bits (ex: increment of 1 is turned into 2, period of 10 is turned into 5), 2 = 128 bits and so on.
+   parameter DATA_W = 32 // Size of data. Addr is in byte space and the size of data tells how much to increment. A size of 32 with an incr of 1 leads to an increase of addr by 4.
    ) (
    input                          clk,
    input                          rst,
@@ -26,6 +26,8 @@ module SimpleAddressGen # (
    //output reg                   mem_en,
    output reg                     done
 );
+
+localparam OFFSET_W = $clog2(DATA_W/8);
 
 reg [DELAY_W-1:0] delayCounter;
 

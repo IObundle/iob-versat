@@ -1,7 +1,7 @@
 `timescale 1ns / 1ps
 
 module Generator #(
-   parameter PERIOD_W = 10
+   parameter PERIOD_W = 16
    ) (
    input                   clk,
    input                   rst,
@@ -29,7 +29,7 @@ wire done;
 
 assign out0 = genOut; //done ? off_value : genOut;
 
-MyAddressGen #(.ADDR_W(32)) addrGen(
+MyAddressGen #(.ADDR_W(32),.DATA_W(8),.PERIOD_W(PERIOD_W)) addrGen(
    .clk(clk),
    .rst(rst),
 

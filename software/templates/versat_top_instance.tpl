@@ -81,7 +81,7 @@ wire [31:0] unitRdataFinal;
 #{end}
 
 wire we = (|wstrb);
-wire memoryMappedAddr = addr[@{memoryConfigDecisionBit}];
+wire memoryMappedAddr = addr[@{memoryConfigDecisionBit} - 2];
 
 // Versat registers and memory access
 reg versat_ready;
@@ -311,7 +311,7 @@ wire [ADDR_W-1:0] address = addr;
 wire [DATA_W-1:0] data_data = wdata;
 wire [(DATA_W/8)-1:0] data_wstrb = wstrb;
 #{end}
-wire dataMemoryMapped = address[@{memoryConfigDecisionBit}];
+wire dataMemoryMapped = address[@{memoryConfigDecisionBit-2}];
 
 reg [31:0] latency_counter;
 reg enableCounter;
@@ -593,7 +593,7 @@ end
          .valid(memoryMappedEnable[@{memoryMappedIndex}]),
          .wstrb(data_wstrb),
          #{if decl.memoryMapBits}
-         .addr(address[@{decl.memoryMapBits - 1}:0]),
+         .addr({address[@{decl.memoryMapBits - 1 - 2}:0],2'b00}),
          #{end}
          .rdata(unitRData[@{memoryMappedIndex}]),
          .ready(unitReady[@{memoryMappedIndex}]),

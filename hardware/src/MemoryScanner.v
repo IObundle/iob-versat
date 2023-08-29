@@ -17,15 +17,18 @@ module MemoryScanner #(
    input rst
 );
 
+localparam INCREMENT = DATA_W/8;
+
 reg hasValueStored;
 
 assign currentValue = dataIn;
 
-assign enable = nextValue || (!nextValue && !hasValueStored);
+assign enable = nextValue || !hasValueStored;
 
 always @(posedge clk,posedge rst) begin
    if(rst) begin
       addr <= 0;
+      hasValueStored <= 1'b0;
    end else if(reset) begin
       addr <= 0;
       hasValueStored <= 1'b0;
@@ -34,7 +37,7 @@ always @(posedge clk,posedge rst) begin
          hasValueStored <= 1'b1;
       end
       if(nextValue || enable) begin
-         addr <= addr + 1;
+         addr <= addr + INCREMENT;
       end
    end
 end

@@ -49,3 +49,12 @@ Byte* PushBytes(Arena* arena, size_t size){
 
    return ptr;
 }
+
+Arena SubArena(Arena* arena,size_t size){
+   Arena res = {};
+
+   res.totalAllocated = size;
+   res.mem = PushBytes(arena,size);
+  
+   return res;
+}

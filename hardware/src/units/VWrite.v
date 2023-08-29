@@ -153,7 +153,7 @@ module VWrite #(
    `else
       SimpleAddressGen
    `endif
-   #(.ADDR_W(ADDR_W),.OFFSET_W(DIFF_BIT_W)) addrgenA(
+   #(.ADDR_W(ADDR_W),.DATA_W(AXI_DATA_W)) addrgenA(
       .clk(clk),
       .rst(rst),
       .run(run),
@@ -199,7 +199,9 @@ module VWrite #(
 
    assign addrB = addrB_int2;
 
-   assign addrB_int2 = reverseB? reverseBits(addrB_int) : addrB_int;
+   localparam OFFSET_W = $clog2(AXI_DATA_W);
+
+   assign addrB_int2 = (reverseB? reverseBits(addrB_int) : addrB_int) << OFFSET_W;
    
    wire read_en;
    wire [ADDR_W-1:0] read_addr;
@@ -219,6 +221,7 @@ module VWrite #(
       .m_ready(databus_ready_0),
       .m_addr(),
       .m_data(databus_wdata_0),
+      .m_last(databus_last_0),
 
       // Connect to memory
       .mem_enable(read_en),
@@ -229,6 +232,7 @@ module VWrite #(
       .rst(rst)
    );
 
+   /*
    wire [ADDR_W-1:0] true_read_addr;
    generate
    if(AXI_DATA_W == 32) begin
@@ -249,6 +253,7 @@ module VWrite #(
       initial begin $display("NOT IMPLEMENTED\n"); $finish(); end
    end
    endgenerate
+   */
 
    assign databus_valid_0 = (m_valid & !doneA);
 
@@ -257,7 +262,7 @@ module VWrite #(
    assign ext_2p_data_out_0 = data_to_wrB;
 
    assign ext_2p_read_0 = read_en;
-   assign ext_2p_addr_in_0 = true_read_addr;
+   assign ext_2p_addr_in_0 = read_addr;
    assign read_data = ext_2p_data_in_0;
 
 endmodule

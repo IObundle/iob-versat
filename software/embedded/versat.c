@@ -1,7 +1,7 @@
 #include "versat_accel.h"
 
 #define ARRAY_SIZE(arr) (sizeof(arr) / sizeof(arr[0]))
-#define TIME_IT(...) 
+#define TIME_IT(...) ((void)0)
   
 #define MEMSET(base, location, value) (*((volatile int*) (base + (sizeof(int)) * location)) = (int) value)
 #define MEMGET(base, location)        (*((volatile int*) (base + (sizeof(int)) * location)))
@@ -60,12 +60,14 @@ void versat_init(int base){
 }
 
 void StartAccelerator(){
+   printf("Start accelerator\n");
    MEMSET(versat_base,0x0,1);
 }
 
 int timesWaiting = 0;
-
+ 
 void EndAccelerator(){
+   printf("End accelerator\n");
    bool seenWaiting = false;
    while(1){
       int val = MEMGET(versat_base,0x0);
@@ -111,9 +113,7 @@ void VersatMemoryCopy(iptr* dest,iptr* data,int size){
 
       while(1){
          int val = MEMGET(versat_base,0x1);
-
-         if(val)
-            break;
+         if(val) break;
       }
    } else {
       for(int i = 0; i < size; i++){
@@ -122,14 +122,14 @@ void VersatMemoryCopy(iptr* dest,iptr* data,int size){
    }
 }
 
-void VersatUnitWrite(int addr,int val){
-   int* ptr = (int*) addr;
-   *ptr = val;
+void VersatUnitWrite(int baseaddr,int index,int val){
+  int* ptr = (int*) (baseaddr + index * sizeof(int));
+  *ptr = val;
 }
 
 int VersatUnitRead(int base,int index){
-   int* ptr = (int*) base + index;
-   return *ptr;
+  int* ptr = (int*) (base + index * sizeof(int));
+  return *ptr;
 }
 
 // Implementation of common functionality

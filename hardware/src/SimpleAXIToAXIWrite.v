@@ -40,10 +40,10 @@ wire burst_ready_in;
 reg flush_burst_split;
 wire data_valid = m_wvalid && m_wready;
 
-reg [AXI_ADDR_W-1:0] stored_address;
+reg [OFFSET_W-1:0] stored_offset;
 
 burst_split #(.DATA_W(AXI_DATA_W)) split(
-        .offset(stored_address[OFFSET_W-1:0]),
+        .offset(stored_offset),
 
         .data_in(m_wdata),
         .data_valid(data_valid),
@@ -61,7 +61,7 @@ wire [7:0] true_axi_awlen;
 wire [31:0] symbolsToRead_next;
 reg [31:0] symbolsToRead;
 
-reg [AXI_DATA_W/4:0] initial_strb,final_strb;
+reg [(AXI_DATA_W/8)-1:0] initial_strb,final_strb;
 
 transfer_controller #(
    .AXI_ADDR_W(AXI_ADDR_W),
@@ -70,7 +70,7 @@ transfer_controller #(
    )
    write_controller
    (
-      .address(stored_address),
+      .address(m_waddr),
       .length(m_wlen), // In bytes
 
       .transfer_start(state == 3'h0 && m_wvalid),
@@ -100,7 +100,7 @@ assign m_axi_awcache = `AXI_CACHE_W'h2;
 assign m_axi_awprot = `AXI_PROT_W'b010;
 assign m_axi_awqos = `AXI_QOS_W'h0;
 
-reg [AXI_DATA_W/8:0] wstrb;
+reg [AXI_DATA_W/8-1:0] wstrb;
 //assign m_axi_wdata = m_wdata;
 assign m_axi_wstrb = wstrb;
 
@@ -129,14 +129,14 @@ begin
     read_counter <= 0;
     write_axi_len <= 0;
     symbolsToRead <= 0;
-    stored_address <= 0;
+    stored_offset <= 0;
     wstrb <= 0;
   end else begin
     case(state)
     3'h0: begin // Wait one cycle for transfer controller to calculate things.
       if(m_wvalid) begin
         //awvalid <= 1'b1;
-        stored_address <= m_waddr;
+        stored_offset <= m_waddr[OFFSET_W-1:0];
         state <= 3'h1;
       end
     end
@@ -155,14 +155,15 @@ begin
     end
     3'h4: begin
       wstrb <= ~0;
-      
-      if(flush_burst_split) begin
-         wstrb <= final_strb;
-      end
 
       if(m_axi_wvalid && m_axi_wready) begin
          read_counter <= read_counter + 1;
          counter <= counter + 1;
+      
+         if(counter + 1 == m_axi_awlen) begin
+            wstrb <= final_strb;
+         end
+
          full_counter <= full_counter + 1;
          if(m_axi_last) begin
             counter <= 0;

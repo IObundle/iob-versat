@@ -105,13 +105,13 @@ void VersatMemoryCopy(iptr* dest,iptr* data,int size){
    memcpy(dest,data,sizeof(iptr) * size);
 }
 
-void VersatUnitWrite(int addrArg,int val){
-   int addr = addrArg - (versat_base + memMappedStart); // Convert back to zero based address
-   UnitWrite(versat,accel,addr,val);
+void VersatUnitWrite(int baseaddr,int index,int val){
+  int addr = baseaddr + (index * sizeof(int)) - (versat_base + memMappedStart); // Convert back to zero based address
+  UnitWrite(versat,accel,addr,val);
 }
 
-int VersatUnitRead(int base,int index){
-   int addr = base + (index * 4) - (versat_base + memMappedStart); // Convert back to zero based byte space address
+int VersatUnitRead(int baseaddr,int index){
+  int addr = baseaddr + (index * sizeof(int)) - (versat_base + memMappedStart); // Convert back to zero based byte space address
    return UnitRead(versat,accel,addr);
 }
 

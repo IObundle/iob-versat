@@ -2,7 +2,8 @@
 
 module TimedFlagRead #(
    parameter DATA_W = 32,
-   parameter ADDR_W = 12,
+   parameter SIZE_W = 16,
+   parameter ADDR_W = 16,
    parameter AXI_ADDR_W = 32,
    parameter AXI_DATA_W = 32,
    parameter LEN_W = 8
@@ -24,17 +25,17 @@ module TimedFlagRead #(
    output [LEN_W-1:0]          databus_len_0,
    input                       databus_last_0,
 
-   // read port
-   output [ADDR_W-1:0]   ext_dp_addr_0_port_0,
-   output [DATA_W-1:0]   ext_dp_out_0_port_0,
-   input  [DATA_W-1:0]   ext_dp_in_0_port_0,
+   // read port 
+   output [ADDR_W-1:0]   ext_dp_addr_0_port_0, // ADDR set to SIZE_W == 16 and AXI_ADDR_W == 32.
+   output [SIZE_W-1:0]   ext_dp_out_0_port_0,
+   input  [SIZE_W-1:0]   ext_dp_in_0_port_0,
    output                ext_dp_enable_0_port_0,
    output                ext_dp_write_0_port_0,
 
    // connect directly to databus
    output [ADDR_W-1:0]   ext_dp_addr_0_port_1,
-   output [DATA_W-1:0]   ext_dp_out_0_port_1,
-   input  [DATA_W-1:0]   ext_dp_in_0_port_1,
+   output [AXI_DATA_W-1:0]   ext_dp_out_0_port_1,
+   input  [AXI_DATA_W-1:0]   ext_dp_in_0_port_1,
    output                ext_dp_enable_0_port_1,
    output                ext_dp_write_0_port_1,
 
@@ -43,11 +44,13 @@ module TimedFlagRead #(
    input [ADDR_W-1:0]     int_addr,
    input [31:0]           size,
    input [ADDR_W-1:0]     iterA,
-   input [9:0]            perA,
-   input [9:0]            dutyA,
+   input [ADDR_W-1:0]     perA,
+   input [ADDR_W-1:0]     dutyA,
    input [ADDR_W-1:0]     shiftA,
    input [ADDR_W-1:0]     incrA,
    input [LEN_W-1:0]      length,
+
+   input [31:0]           maximum,
 
    input                  disabled,
 
@@ -58,10 +61,11 @@ module TimedFlagRead #(
    input [31:0] delay0
 );
 
+assign ext_dp_out_0_port_0 = 0;
 assign ext_dp_write_0_port_0 = 1'b0;
 
 //reg [31:0] cycle;
-wire [31:0] currentValue;
+wire [SIZE_W-1:0] currentValue;
 reg pingPongState;
 
 wire loadNext;
@@ -69,7 +73,7 @@ reg nextValue;
 
 wire [ADDR_W-1:0] scannerAddress;
 
-MemoryScanner #(.DATA_W(DATA_W),.ADDR_W(ADDR_W)) scanner(
+MemoryScanner #(.DATA_W(SIZE_W),.ADDR_W(ADDR_W)) scanner(
    .addr(scannerAddress),
    .dataIn(ext_dp_in_0_port_0),
    .enable(ext_dp_enable_0_port_0),
@@ -95,28 +99,35 @@ begin
 end
 
 reg [31:0] amount;
+reg stillValid;
+assign done = (!running || disabled || !stillValid) && !databus_valid_0 ;
 
-reg [31:0] needToSee;
-assign done = (needToSee == 0);
-
-assign nextValue = (running && in0 == currentValue);
-assign out0 = ((delay == 0 && !disabled) ? {32{(in0 == currentValue)}} : 0);
-
-reg [31:0] delay;
 always @(posedge clk,posedge rst) begin
    if(rst) begin
-      needToSee <= 0;
+      stillValid <= 1'b0;
    end else if(run) begin
-      delay <= delay0;
-      needToSee <= amount;
-   end else if(|delay) begin
-      delay <= delay - 1;
-   end else if(delay == 0 && needToSee != 0) begin
-      if(in0 == currentValue) begin
-         needToSee <= needToSee - 1;
+      stillValid <= 1'b1; 
+   end else if(running) begin
+      if(in0 >= maximum) begin
+         stillValid <= 1'b0;
       end
    end
 end
+
+assign nextValue = (running && in0[SIZE_W-1:0] == currentValue);
+
+reg [31:0] delay;
+assign out0 = ((delay == 0 && !disabled) ? {32{(in0[SIZE_W-1:0] == currentValue)}} : 0);
+
+   always @(posedge clk,posedge rst) begin
+       if(rst) begin
+            delay <= 0;
+       end else if(run) begin
+            delay <= delay0 + 1;
+       end else if(|delay) begin
+            delay <= delay - 1;
+       end
+   end
 
    wire [ADDR_W-1:0] startA = 0;
    wire [31:0]       delayA = 0;
@@ -139,7 +150,7 @@ end
    wire [ADDR_W-1:0] gen_addr;
    wire gen_done;
 
-   MyAddressGen #(.ADDR_W(ADDR_W)) addrgenA(
+   MyAddressGen #(.ADDR_W(ADDR_W),.DATA_W(AXI_DATA_W),.PERIOD_W(ADDR_W)) addrgenA(
       .clk(clk),
       .rst(rst),
       .run(run),
@@ -168,10 +179,11 @@ end
    always @(posedge clk,posedge rst) begin
       if(rst) begin
          gen_valid <= 1'b0;
+         amount <= 0;
       end else if(run) begin
          gen_valid <= 1'b1;
          amount <= 0;
-      end else if(running) begin
+      end else if(gen_valid) begin //if(running) begin
          if(databus_valid_0 && databus_ready_0) begin
             amount <= amount + 1;
          end
@@ -201,7 +213,7 @@ end
       .rst(rst)
       );
 
-   assign ext_dp_addr_0_port_1 = {pingPongState,write_addr[ADDR_W-2:0]};
+   assign ext_dp_addr_0_port_1 = {pingPongState,write_addr[ADDR_W-2:0]}; // This should increament by 4 more.
    assign ext_dp_enable_0_port_1 = write_en;
    assign ext_dp_write_0_port_1 = 1'b1;
    assign ext_dp_out_0_port_1 = write_data;

@@ -10,9 +10,9 @@
 module @{accel.name} #(
       parameter ADDR_W = 32,
       parameter DATA_W = 32,
-      parameter AXI_ADDR_W = 32,
-      parameter AXI_DATA_W = 32,
-      parameter LEN_W = 8
+      parameter AXI_ADDR_W = @{arch.addrSize},
+      parameter AXI_DATA_W = @{arch.dataSize},
+      parameter LEN_W = 16
    )
    (
 

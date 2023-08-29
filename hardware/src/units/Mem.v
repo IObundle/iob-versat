@@ -1,6 +1,6 @@
 `timescale 1ns / 1ps
 
-module Mem #(
+(* source *) module Mem #(
          parameter MEM_INIT_FILE="none",
          parameter DATA_W = 32,
          parameter ADDR_W = 7
@@ -202,6 +202,7 @@ module Mem #(
    always @ (posedge clk) begin
       data_a_reg <= data_to_wrA;
       data_b_reg <= in1;
+      // Transform byte space to symbol space
       addr_a_reg <= addrA;
       addr_b_reg <= addrB;
       en_a_reg <= enA;
