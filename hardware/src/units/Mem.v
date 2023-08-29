@@ -3,8 +3,8 @@
 (* source *) module Mem #(
          parameter MEM_INIT_FILE="none",
          parameter DATA_W = 32,
-         parameter ADDR_W = 7
-              )
+         parameter ADDR_W = 12
+     )
     (
    //control
    input                         clk,
