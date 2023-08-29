@@ -25,8 +25,8 @@
    //input / output data
    input [DATA_W-1:0]            in0,
    input [DATA_W-1:0]            in1,
-   (* versat_latency = 3 *) output [DATA_W-1:0]           out0,
-   (* versat_latency = 3 *) output [DATA_W-1:0]           out1,
+   (* versat_latency = 4 *) output [DATA_W-1:0]           out0,
+   (* versat_latency = 4 *) output [DATA_W-1:0]           out1,
 
    // External memory
    output [ADDR_W-1:0]   ext_dp_addr_0_port_0,
@@ -190,8 +190,8 @@
             );
 
    //define addresses based on ext and rvrs
-   assign addrA = valid? addr[ADDR_W-1:0] : extA? in0[ADDR_W-1:0] : addrA_int2[ADDR_W-1:0];
-   assign addrB = extB? in1[ADDR_W-1:0] : addrB_int2[ADDR_W-1:0];
+   assign addrA = valid ? addr[ADDR_W-1:0] : (extA ? in0[ADDR_W-1:0] : addrA_int2[ADDR_W-1:0]) << $clog2(DATA_W/8);
+   assign addrB = (extB ? in1[ADDR_W-1:0] : addrB_int2[ADDR_W-1:0]) << $clog2(DATA_W/8);
    assign addrA_int2 = reverseA? reverseBits(addrA_int) : addrA_int;
    assign addrB_int2 = reverseB? reverseBits(addrB_int) : addrB_int;
 
