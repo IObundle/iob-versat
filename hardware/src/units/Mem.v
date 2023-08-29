@@ -203,8 +203,8 @@
       data_a_reg <= data_to_wrA;
       data_b_reg <= in1;
       // Transform byte space to symbol space
-      addr_a_reg <= addrA;
-      addr_b_reg <= addrB;
+      addr_a_reg <= addrA >> $clog(DATA_W/8);
+      addr_b_reg <= addrB >> $clog(DATA_W/8);
       en_a_reg <= enA;
       en_b_reg <= enB;
       we_a_reg <= wrA;
