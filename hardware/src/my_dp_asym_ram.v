@@ -59,7 +59,7 @@ module my_dp_asym_ram
    genvar                 i;
    generate 
       for (i=0; i<N; i=i+1) begin
-         iob_dp_ram
+         my_iob_dp_ram
              #(
                .DATA_W(MINDATA_W),
                .ADDR_W(M_ADDR_W)
