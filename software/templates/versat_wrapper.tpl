@@ -34,7 +34,7 @@ extern bool SimulateDatabus;
    unit->run = 0; \
    unit->clk = 0; \
    unit->rst = 0; \
-   unit->running = 1;
+   unit->running = 0;
 
 #define UPDATE(unit) \
    unit->clk = 0; \
@@ -53,16 +53,15 @@ extern bool SimulateDatabus;
    if(CreateVCD) tfp->dump(contextp->time()); \
    contextp->timeInc(1);
 
-
 #define START_RUN(unit) \
    unit->run = 1; \
    UPDATE(unit); \
+   unit->running = 1; \
    unit->run = 0; \
    if(CreateVCD) tfp->dump(contextp->time()); \
    contextp->timeInc(1); \
    if(CreateVCD) tfp->dump(contextp->time()); \
    contextp->timeInc(1);
-
 
 #define PREAMBLE(type) \
    type* self = &data->unit; \

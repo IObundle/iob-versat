@@ -70,7 +70,7 @@ module LookupTable #(
    assign ext_dp_enable_0_port_0 = 1'b1;
    assign ext_dp_write_0_port_0 = write;
 
-   assign ext_dp_addr_0_port_1 = in1[ADDR_W-1:0];
+   assign ext_dp_addr_0_port_1 = {in1[ADDR_W-1-2:0],2'b00};
    assign outB = ext_dp_in_0_port_1;
    assign ext_dp_out_0_port_1 = 0;
    assign ext_dp_enable_0_port_1 = 1'b1;
