@@ -11,6 +11,7 @@ module iob_versat
   # (//the below parameters are used in cpu if includes below
     	parameter AXI_ADDR_W = 32,
       parameter AXI_DATA_W = 32,
+      parameter AXI_LEN_W = 8,
       parameter AXI_ID_W = 1,
       parameter ADDR_W = `VERSAT_ADDR_W, //NODOC Address width
     	parameter DATA_W = `VERSAT_RDATA_W, //NODOC CPU data width
@@ -98,6 +99,7 @@ SimpleAXItoAXI #(
     .AXI_ADDR_W(AXI_ADDR_W),
     .AXI_DATA_W(AXI_DATA_W),
     .AXI_ID_W(AXI_ID_W),
+    .AXI_LEN_W(AXI_LEN_W),
     .LEN_W(LEN_W)
   ) simpleToAxi(
   .m_wvalid(w_valid),

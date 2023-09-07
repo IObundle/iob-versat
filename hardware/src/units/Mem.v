@@ -1,8 +1,11 @@
 `timescale 1ns / 1ps
 
+`define COMPLEX_INTERFACE
+
 (* source *) module Mem #(
          parameter MEM_INIT_FILE="none",
          parameter DATA_W = 32,
+         parameter SIZE_W = 32,
          parameter ADDR_W = 12
      )
     (
@@ -13,6 +16,7 @@
    input                         running,
    input                         run,
    output                        done,
+   input                         disabled,
    
    //databus interface
    input [DATA_W/8-1:0]          wstrb,
@@ -80,22 +84,33 @@
    //output databus
    wire [DATA_W-1:0]              outA, outB;
    reg  [DATA_W-1:0]              outA_reg, outB_reg;
-   
-   assign out0 = outA_reg;
-   assign out1 = outB_reg;
 
-   reg [31:0] testDelay;
-
+   reg [31:0] testDelay0;
    always @(posedge clk,posedge rst)
    begin
       if(rst) begin
-         testDelay <= 0;
+         testDelay0 <= 0;
       end else if (run) begin
-         testDelay <= delay0;
-      end else if(|testDelay) begin
-         testDelay <= testDelay - 1;
+         testDelay0 <= delay0 + 3;
+      end else if(|testDelay0) begin
+         testDelay0 <= testDelay0 - 1;
       end
    end
+
+   reg [31:0] testDelay1;
+   always @(posedge clk,posedge rst)
+   begin
+      if(rst) begin
+         testDelay1 <= 0;
+      end else if (run) begin
+         testDelay1 <= delay1 + 3;
+      end else if(|testDelay1) begin
+         testDelay1 <= testDelay1 - 1;
+      end
+   end
+
+   assign out0 = (running & (|testDelay0) == 0) ? outA_reg : 0;
+   assign out1 = (running & (|testDelay1) == 0) ? outB_reg : 0;
 
    // Delay done by 3 cycles so that pc-emul matches simulation
    reg doneA_1,doneB_1;
@@ -149,6 +164,56 @@
    wire [DATA_W-1:0]     data_to_wrA = valid? wdata : in0 ;
 
    //address generators
+
+   MyAddressGen #(.ADDR_W(ADDR_W),.DATA_W(SIZE_W)) addrgenA (
+   .clk(clk),
+   .rst(rst),
+   .run(run && !disabled),
+
+   //configurations 
+   .period(perA),
+   .start(startA),
+   .incr(incrA),
+   .delay(delay0),
+
+   `ifdef COMPLEX_INTERFACE
+   .iterations(iterA),
+   .duty(dutyA),
+   .shift(shiftA),
+   `endif
+
+   //outputs 
+   .valid(enA_int),
+   .ready(1'b1),
+   .addr(addrA_int),
+   .done(doneA)
+   );
+
+   MyAddressGen #(.ADDR_W(ADDR_W),.DATA_W(SIZE_W)) addrgenB (
+   .clk(clk),
+   .rst(rst),
+   .run(run && !disabled),
+
+   //configurations 
+   .period(perB),
+   .start(startB),
+   .incr(incrB),
+   .delay(delay1),
+
+   `ifdef COMPLEX_INTERFACE
+   .iterations(iterB),
+   .duty(dutyB),
+   .shift(shiftB),
+   `endif
+
+   //outputs 
+   .valid(enB),
+   .ready(1'b1),
+   .addr(addrB_int),
+   .done(doneB)
+   );
+
+   /*
    xaddrgen2 #(.MEM_ADDR_W(ADDR_W)) addrgen2A (
             .clk(clk),
             .rst(rst),
@@ -168,7 +233,9 @@
             .mem_en(enA_int),
             .done(doneA)
             );
+   */
 
+   /*
    xaddrgen2 #(.MEM_ADDR_W(ADDR_W)) addrgen2B (
             .clk(clk),
             .rst(rst),
@@ -188,10 +255,11 @@
             .mem_en(enB),
             .done(doneB)
             );
+   */
 
    //define addresses based on ext and rvrs
-   assign addrA = valid? addr[ADDR_W-1:0] : extA? in0[ADDR_W-1:0] : addrA_int2[ADDR_W-1:0];
-   assign addrB = extB? in1[ADDR_W-1:0] : addrB_int2[ADDR_W-1:0];
+   assign addrA = valid ? addr[ADDR_W-1:0] : (extA ? in0[ADDR_W-1:0] : addrA_int2[ADDR_W-1:0]);
+   assign addrB = (extB ? in1[ADDR_W-1:0] : addrB_int2[ADDR_W-1:0]);
    assign addrA_int2 = reverseA? reverseBits(addrA_int) : addrA_int;
    assign addrB_int2 = reverseB? reverseBits(addrB_int) : addrB_int;
 

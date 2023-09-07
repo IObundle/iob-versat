@@ -116,7 +116,7 @@ int VersatUnitRead(int baseaddr,int index){
 }
 
 float VersatUnitReadFloat(int base,int index){
-   int addr = base + (index * 4) - (versat_base + memMappedStart); // Convert back to zero based byte space address
+   int addr = base + (index * sizeof(int)) - (versat_base + memMappedStart); // Convert back to zero based byte space address
    int value = UnitRead(versat,accel,addr);
    float* view = (float*) &value;
    return *view;
