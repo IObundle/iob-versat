@@ -22,14 +22,17 @@ typedef uint64_t uint64;
 // There should be a shared header for common structures, but do not share code.
 // It does not work as well and keeps giving compile and linker errors. It's not worth it.
 typedef struct{
+   uint64 microSeconds;
    uint64 seconds;
-   uint64 nanoSeconds;
 } Time;
 
 Time GetTime(){
    Time res = {};
    res.seconds = (uint64) timer_time_s();
-   res.nanoSeconds = (uint64) timer_time_us() * 1000;
+
+   res.microSeconds = (uint64) timer_time_us();
+   res.microSeconds -= (res.seconds * 1000000);
+  
    return res;
 }
 
@@ -60,17 +63,17 @@ void versat_init(int base){
 }
 
 void StartAccelerator(){
-   printf("Start accelerator\n");
+   //printf("Start accelerator\n");
    MEMSET(versat_base,0x0,1);
 }
 
 int timesWaiting = 0;
  
 void EndAccelerator(){
-   printf("End accelerator\n");
+   //printf("End accelerator\n");
    bool seenWaiting = false;
    while(1){
-      int val = MEMGET(versat_base,0x0);
+      volatile int val = MEMGET(versat_base,0x0);
       if(val){
          break;
       }
@@ -129,6 +132,11 @@ void VersatUnitWrite(int baseaddr,int index,int val){
 
 int VersatUnitRead(int base,int index){
   int* ptr = (int*) (base + index * sizeof(int));
+  return *ptr;
+}
+
+float VersatUnitReadFloat(int base,int index){
+  float* ptr = (float*) (base + index * sizeof(float));
   return *ptr;
 }
 
