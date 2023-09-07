@@ -3,7 +3,7 @@
 module TimedFlagRead #(
    parameter DATA_W = 32,
    parameter SIZE_W = 16,
-   parameter ADDR_W = 16,
+   parameter ADDR_W = 12,
    parameter AXI_ADDR_W = 32,
    parameter AXI_DATA_W = 32,
    parameter LEN_W = 8
@@ -108,7 +108,7 @@ always @(posedge clk,posedge rst) begin
    end else if(run) begin
       stillValid <= 1'b1; 
    end else if(running) begin
-      if(in0 >= maximum) begin
+      if(in0 + 1 >= maximum) begin
          stillValid <= 1'b0;
       end
    end
@@ -117,13 +117,13 @@ end
 assign nextValue = (running && in0[SIZE_W-1:0] == currentValue);
 
 reg [31:0] delay;
-assign out0 = ((delay == 0 && !disabled) ? {32{(in0[SIZE_W-1:0] == currentValue)}} : 0);
+assign out0 = ((delay == 0 && !disabled && stillValid) ? {32{(in0[SIZE_W-1:0] == currentValue)}} : 0);
 
    always @(posedge clk,posedge rst) begin
        if(rst) begin
             delay <= 0;
        end else if(run) begin
-            delay <= delay0 + 1;
+            delay <= delay0;
        end else if(|delay) begin
             delay <= delay - 1;
        end

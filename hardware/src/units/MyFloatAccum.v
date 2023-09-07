@@ -38,8 +38,6 @@ module MyFloatAccum #(
           end
      end
 
-   wire [278:0] in0_decoded;
-
    reg [278:0] res;
 
    localparam MAN_W = 23;

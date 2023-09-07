@@ -5,7 +5,7 @@
 module LookupTableRead2 #(
        parameter DATA_W = 32,
        parameter SIZE_W = 16,
-       parameter ADDR_W = 16,
+       parameter ADDR_W = 12,
        parameter AXI_ADDR_W = 32,
        parameter AXI_DATA_W = 32,
        parameter LEN_W = 8

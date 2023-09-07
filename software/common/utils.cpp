@@ -53,7 +53,7 @@ Time GetTime(){
 
    Time t = {};
    t.seconds = time.tv_sec;
-   t.nanoSeconds = time.tv_nsec;
+   t.microSeconds = time.tv_nsec * 1000;
 
    return t;
 }

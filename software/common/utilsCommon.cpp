@@ -42,14 +42,17 @@ void TimeIt::Output(){
   // Cannot use floating point because of embedded
   Time end = GetTime();
 
+  Time diff = {};
+  diff.seconds = end.seconds - start.seconds;
+  diff.microSeconds = end.microSeconds - start.microSeconds;
+
   Assert(end > start);
 
-  printf("[TimeIt] %s: ",id);
+  printf("[TimeIt] %15s: ",id);
 
   {
-    uint64 diff = end.seconds - start.seconds;
-    int digits = NumberDigitsRepresentation(diff);
-    char* secondsRepr = GetNumberRepr(diff);
+    int digits = NumberDigitsRepresentation(diff.seconds);
+    char* secondsRepr = GetNumberRepr(diff.seconds);
 
     for(int i = 0; i < digits; i++){
       printf("%c",secondsRepr[i]);
@@ -57,14 +60,25 @@ void TimeIt::Output(){
   }
   printf(".");
   {
-    uint64 diff = end.nanoSeconds - start.nanoSeconds;
-    int digits = NumberDigitsRepresentation(diff);
-    char* nanoRepr = GetNumberRepr(diff);
+    int digits = NumberDigitsRepresentation(diff.microSeconds);
+    char* nanoRepr = GetNumberRepr(diff.microSeconds);
 
+    for(int i = 0; i < (6 - digits); i++){
+      printf("0");
+    }
+    
     for(int i = 0; i < digits; i++){
       printf("%c",nanoRepr[i]);
     }
   }
+
+  Time temp = diff;
+  temp.seconds = SwapEndianess(diff.seconds);
+  temp.microSeconds = SwapEndianess(diff.microSeconds);
+  
+  unsigned char* hexVal = GetHexadecimal((const unsigned char*) &temp,sizeof(Time)); // Helper function to display result
+  printf(" %s ",hexVal);
+
   printf("\n");
 }
 
@@ -74,18 +88,18 @@ Time operator-(const Time& s1,const Time& s2){
   Assert(s1 > s2 || s1 == s2);
 
   res.seconds = s1.seconds - s2.seconds;
-  res.nanoSeconds = s1.nanoSeconds - s2.nanoSeconds;
+  res.microSeconds = s1.microSeconds - s2.microSeconds;
    
   return res;
 }
 
 bool operator>(const Time& s1,const Time& s2){
-  bool res = (s1.seconds == s2.seconds ? s1.nanoSeconds > s2.nanoSeconds : s1.seconds > s2.seconds);
+  bool res = (s1.seconds == s2.seconds ? s1.microSeconds > s2.microSeconds : s1.seconds > s2.seconds);
   return res;
 }
 
 bool operator==(const Time& s1,const Time& s2){
-  bool res = (s1.seconds == s2.seconds && s1.nanoSeconds == s2.nanoSeconds);
+  bool res = (s1.seconds == s2.seconds && s1.microSeconds == s2.microSeconds);
   return res;
 }
 
@@ -344,6 +358,21 @@ int SwapEndianess(int val){
             (view[1] << 16) |
             (view[2] << 8)  |
             (view[3]);
+
+  return res;
+}
+
+uint64 SwapEndianess(uint64 val){
+  unsigned char* view = (unsigned char*) &val;
+
+  uint64 res = (view[0] << 56) |
+               (view[1] << 48) |
+               (view[2] << 40) |
+               (view[3] << 32) |
+               (view[4] << 24) |
+               (view[5] << 16) |
+               (view[6] << 8)  |
+               (view[7]);
 
   return res;
 }

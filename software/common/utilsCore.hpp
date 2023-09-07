@@ -36,7 +36,7 @@
 #define ALIGN_UP_64(val) (((val) + 7) & ~7)
 #define ALIGN_UP_128(val) (((val) + 15) & ~15)
 #define ALIGN_UP_256(val) (((val) + 31) & ~31)
-#define ALIGN_UP_512(val) (((val) + 63) & ~63) // Usually a cache line
+#define ALIGN_UP_512(val) (((val) + 63) & ~63)
 
 #define IS_ALIGNED(val,size) ((((uptr) val) & (size-1)) == 0x0)
 
@@ -160,8 +160,8 @@ typedef uint64_t uint64;
 #endif
 
 struct Time{
+   uint64 microSeconds;
    uint64 seconds;
-   uint64 nanoSeconds;
 };
 
 Time GetTime();
@@ -205,6 +205,7 @@ ALWAYS_INLINE void operator+(TimeIt&& timer,F&& f){
 #define timeRegion(ID) TimeIt(ID) + [&]()
 */
 
+#ifndef TEMPORARY_MARK
 template<typename T>
 class ArrayIterator{
 public:
@@ -218,13 +219,14 @@ public:
 // This struct is associated to a gdb pretty printer.
 template<typename T>
 struct Array{
-   T* data;
-   int size;
+  T* data;
+  int size;
 
-   inline T& operator[](int index) const {Assert(index < size); return data[index];}
-   ArrayIterator<T> begin(){return ArrayIterator<T>{data};};
-   ArrayIterator<T> end(){return ArrayIterator<T>{data + size};};
+  inline T& operator[](int index) const {Assert(index < size); return data[index];}
+  ArrayIterator<T> begin(){return ArrayIterator<T>{data};};
+  ArrayIterator<T> end(){return ArrayIterator<T>{data + size};};
 };
+#endif
 
 typedef Array<const char> String;
 
@@ -360,6 +362,7 @@ int PackInt(float val);
 float PackFloat(int val);
 float PackFloat(Byte sign,Byte exponent,int mantissa);
 int SwapEndianess(int val);
+uint64 SwapEndianess(uint64 val);
 
 int NumberDigitsRepresentation(int64 number); // Number of digits if printed (negative includes - sign )
 char GetHex(int value);

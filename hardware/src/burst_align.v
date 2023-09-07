@@ -143,6 +143,78 @@ always @* begin
     endcase
 end
 end // if(AXI_DATA_W == 256)
+if(AXI_DATA_W == 512) begin
+always @* begin
+    data_out = 0;
+
+    case(offset)
+    6'b000000: data_out = stored_data; 
+    6'b000001: data_out = {data_in[7:0],stored_data[511:8]};
+    6'b000010: data_out = {data_in[15:0],stored_data[511:16]};
+    6'b000011: data_out = {data_in[23:0],stored_data[511:24]};
+    6'b000100: data_out = {data_in[31:0],stored_data[511:32]};
+    6'b000101: data_out = {data_in[39:0],stored_data[511:40]};
+    6'b000110: data_out = {data_in[47:0],stored_data[511:48]};
+    6'b000111: data_out = {data_in[55:0],stored_data[511:56]};
+    6'b001000: data_out = {data_in[63:0],stored_data[511:64]}; 
+    6'b001001: data_out = {data_in[71:0],stored_data[511:72]};
+    6'b001010: data_out = {data_in[79:0],stored_data[511:80]};
+    6'b001011: data_out = {data_in[87:0],stored_data[511:88]};
+    6'b001100: data_out = {data_in[95:0],stored_data[511:96]};
+    6'b001101: data_out = {data_in[103:0],stored_data[511:104]};
+    6'b001110: data_out = {data_in[111:0],stored_data[511:112]};
+    6'b001111: data_out = {data_in[119:0],stored_data[511:120]};
+    6'b010000: data_out = {data_in[127:0],stored_data[511:128]}; 
+    6'b010001: data_out = {data_in[135:0],stored_data[511:136]};
+    6'b010010: data_out = {data_in[143:0],stored_data[511:144]};
+    6'b010011: data_out = {data_in[151:0],stored_data[511:152]};
+    6'b010100: data_out = {data_in[159:0],stored_data[511:160]};
+    6'b010101: data_out = {data_in[167:0],stored_data[511:168]};
+    6'b010110: data_out = {data_in[175:0],stored_data[511:176]};
+    6'b010111: data_out = {data_in[183:0],stored_data[511:184]};
+    6'b011000: data_out = {data_in[191:0],stored_data[511:192]}; 
+    6'b011001: data_out = {data_in[199:0],stored_data[511:200]};
+    6'b011010: data_out = {data_in[207:0],stored_data[511:208]};
+    6'b011011: data_out = {data_in[215:0],stored_data[511:216]};
+    6'b011100: data_out = {data_in[223:0],stored_data[511:224]};
+    6'b011101: data_out = {data_in[231:0],stored_data[511:232]};
+    6'b011110: data_out = {data_in[239:0],stored_data[511:240]};
+    6'b011111: data_out = {data_in[247:0],stored_data[511:248]};
+    6'b100000: data_out = {data_in[255:0],stored_data[511:256]};
+    6'b100001: data_out = {data_in[263:0],stored_data[511:264]};
+    6'b100010: data_out = {data_in[271:0],stored_data[511:272]};
+    6'b100011: data_out = {data_in[279:0],stored_data[511:280]};
+    6'b100100: data_out = {data_in[287:0],stored_data[511:288]};
+    6'b100101: data_out = {data_in[295:0],stored_data[511:296]};
+    6'b100110: data_out = {data_in[303:0],stored_data[511:304]};
+    6'b100111: data_out = {data_in[311:0],stored_data[511:312]};
+    6'b101000: data_out = {data_in[319:0],stored_data[511:320]}; 
+    6'b101001: data_out = {data_in[327:0],stored_data[511:328]};
+    6'b101010: data_out = {data_in[335:0],stored_data[511:336]};
+    6'b101011: data_out = {data_in[343:0],stored_data[511:344]};
+    6'b101100: data_out = {data_in[351:0],stored_data[511:352]};
+    6'b101101: data_out = {data_in[359:0],stored_data[511:360]};
+    6'b101110: data_out = {data_in[367:0],stored_data[511:368]};
+    6'b101111: data_out = {data_in[375:0],stored_data[511:376]};
+    6'b110000: data_out = {data_in[383:0],stored_data[511:384]}; 
+    6'b110001: data_out = {data_in[391:0],stored_data[511:392]};
+    6'b110010: data_out = {data_in[399:0],stored_data[511:400]};
+    6'b110011: data_out = {data_in[407:0],stored_data[511:408]};
+    6'b110100: data_out = {data_in[415:0],stored_data[511:416]};
+    6'b110101: data_out = {data_in[423:0],stored_data[511:424]};
+    6'b110110: data_out = {data_in[431:0],stored_data[511:432]};
+    6'b110111: data_out = {data_in[439:0],stored_data[511:440]};
+    6'b111000: data_out = {data_in[447:0],stored_data[511:448]}; 
+    6'b111001: data_out = {data_in[455:0],stored_data[511:456]};
+    6'b111010: data_out = {data_in[463:0],stored_data[511:464]};
+    6'b111011: data_out = {data_in[471:0],stored_data[511:472]};
+    6'b111100: data_out = {data_in[479:0],stored_data[511:480]};
+    6'b111101: data_out = {data_in[487:0],stored_data[511:488]};
+    6'b111110: data_out = {data_in[495:0],stored_data[511:496]};
+    6'b111111: data_out = {data_in[503:0],stored_data[511:504]};
+    endcase
+end
+end // if(AXI_DATA_W == 256)
 endgenerate
 
 // Logic that does not depend on generate

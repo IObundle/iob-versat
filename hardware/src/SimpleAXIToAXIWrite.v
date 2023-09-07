@@ -55,6 +55,7 @@ burst_split #(.DATA_W(AXI_DATA_W)) split(
     );
 
 wire write_last_transfer;
+wire write_last_transfer_next;
 
 wire [7:0] true_axi_awlen;
 wire [31:0] symbolsToRead_next;
@@ -85,6 +86,7 @@ transfer_controller #(
       // TODO: Register these signals to 
       .true_axi_axlen(true_axi_awlen),
       .last_transfer(write_last_transfer),
+      .last_transfer_next(write_last_transfer_next),
    
       .clk(clk),
       .rst(rst)
@@ -115,6 +117,8 @@ assign m_axi_wlast = m_axi_last;
 reg [7:0] write_axi_len;
 assign m_axi_awlen = write_axi_len;
 
+reg first_transfer;
+
 reg [7:0] counter;
 reg [31:0] full_counter;
 reg [31:0] read_counter;
@@ -129,6 +133,7 @@ begin
     write_axi_len <= 0;
     symbolsToRead <= 0;
     stored_offset <= 0;
+    first_transfer <= 0;
     wstrb <= 0;
   end else begin
     case(state)
@@ -137,6 +142,7 @@ begin
         //awvalid <= 1'b1;
         stored_offset <= m_waddr[OFFSET_W-1:0];
         state <= 3'h1;
+        first_transfer <= 1'b1;
       end
     end
     3'h1: begin // Save values that change 
@@ -149,18 +155,26 @@ begin
       if(m_axi_awready) begin
         awvalid <= 1'b0;
         state <= 3'h4;
-        wstrb <= initial_strb;
+        if(first_transfer) begin
+           first_transfer <= 1'b0;
+           wstrb <= initial_strb;
+        end else begin
+           wstrb <= ~0;
+           if(write_axi_len == 8'h0 && write_last_transfer_next) begin
+              wstrb <= final_strb;
+           end
+        end
       end
     end
     3'h4: begin
-      wstrb <= ~0;
-
       if(m_axi_wvalid && m_axi_wready) begin
          read_counter <= read_counter + 1;
          counter <= counter + 1;
-      
-         if(counter + 1 == m_axi_awlen) begin
+
+         if((counter + 1 == m_axi_awlen) && write_last_transfer) begin
             wstrb <= final_strb;
+         end else begin
+            wstrb <= ~0;      
          end
 
          full_counter <= full_counter + 1;
@@ -190,9 +204,14 @@ begin
    m_axi_last = 1'b0;
    wvalid = 1'b0;
 
+   if(m_axi_wvalid && m_axi_wready && m_axi_wlast && write_last_transfer) begin
+      m_wlast = 1'b1;
+   end
+   /*
    if(read_counter + 1 >= symbolsToRead) begin
       m_wlast = 1'b1;
    end
+   */
 
    if(full_counter == symbolsToRead) begin
       flush_burst_split = 1'b1;

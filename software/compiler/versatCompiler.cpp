@@ -36,6 +36,7 @@ struct ArgumentOptions{
   bool addInputAndOutputsToTop;
   bool useDMA;
   bool archHasDatabus;
+  bool debug;
 };
 
 String GetAbsolutePath(const char* path,Arena* arena){
@@ -166,6 +167,11 @@ ArgumentOptions* ParseCommandLineOptions(int argc,const char* argv[],Arena* perm
       continue;
     }
 
+    if(str.size >= 2 && str[0] == '-' && str[1] == 'g'){
+      opts->debug = true;
+      continue;
+    }
+
     if(str.size >= 2 && str[0] == '-' && str[1] == 'o'){
       if(i + 1 >= argc){
         printf("Missing argument\n");
@@ -176,7 +182,7 @@ ArgumentOptions* ParseCommandLineOptions(int argc,const char* argv[],Arena* perm
       i += 1;
       continue;
     }
-
+    
     if(formatOpt){
       String format = formatOpt.value();
       if(CompareString(format,"v")){
@@ -570,6 +576,12 @@ int main(int argc,const char* argv[]){
     ProcessTemplate(output,comp,temp);
   }
 
+#ifdef VERSAT_DEBUG
+  if(opts->debug){
+    DebugVersat(versat);
+  }
+#endif
+  
   return 0;
 }
 

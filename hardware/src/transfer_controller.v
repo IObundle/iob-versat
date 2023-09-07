@@ -26,6 +26,7 @@ module transfer_controller #(
 
       output reg [7:0] true_axi_axlen,
       output reg last_transfer,
+      output last_transfer_next,
    
       input clk,
       input rst
@@ -57,7 +58,7 @@ wire [12:0] first_transfer_len = (max_transfer_len_minus_one + (STROBE_W - addre
 wire [12:0] boundary_transfer_len = (13'h1000 - true_axi_axaddr[11:0]);
 wire [AXI_ADDR_W-1:0] true_address = address & (~OFFSET_MASK);
 
-wire last_transfer_next = (transfer_byte_size == stored_len);
+assign last_transfer_next = (transfer_byte_size == stored_len);
 
 always @* begin
    if(first_transfer)
@@ -71,19 +72,51 @@ always @* begin
       true_axi_axlen = (transfer_byte_size - 1) >> OFFSET_W;
 end
 
+/*
+length => need 8 bits of strobe at 1.
+Need two F.
+
+length[4:0] => 16
+
+legnth[OFFSET_W:0] - initial_strb_count == final_strb_count.
+*/
+
+reg [$clog2(STROBE_W):0] final_strb_count; // Values for 128, right?
+reg [$clog2(STROBE_W):0] initial_strb_count;
+reg [$clog2(STROBE_W)-1:0] true_final_strb_count; // $clog2(16) = 4.
+reg [$clog2(STROBE_W)-1:0] initial_strb_last_zero;
+reg [STROBE_W-1:0] temp_initial_strb;
+reg [STROBE_W-1:0] base_strb;
+wire [OFFSET_W:0] lengthPlusAddress = length[OFFSET_W:0] + address[OFFSET_W:0];
+
 integer i;
 always @*
 begin
-   initial_strb = 0;
+   // Strobe for a address == 0 and length smaller then a full transfer
+   base_strb = 0;
    for(i = 0; i < (AXI_DATA_W/8); i = i + 1) begin
-      if(i >= address[OFFSET_W-1:0]) initial_strb[i] = 1'b1;
+      if(i < length[OFFSET_W-1:0]) base_strb[i] = 1'b1;
    end
 
-   final_strb = ~0;
-   for(i = 0; i < (AXI_DATA_W/8); i = i + 1) begin
-      if(i >= (address[OFFSET_W-1:0] + length[OFFSET_W-1:0])) final_strb[i] = 1'b0;
+   if(length >= ((1 << OFFSET_W) - address[OFFSET_W-1:0])) begin
+      initial_strb = (~0) << address[OFFSET_W-1:0];
+      initial_strb_count = ((1 << OFFSET_W) - address[OFFSET_W-1:0]);
+   end else begin
+      initial_strb = base_strb << address[OFFSET_W-1:0];
+      initial_strb_count = (1 << OFFSET_W);
    end
 
+   final_strb_count = {1'b1,length[OFFSET_W-1:0]} - initial_strb_count;
+   true_final_strb_count = final_strb_count[OFFSET_W-1:0];
+
+   if(true_final_strb_count == 0) begin
+      final_strb = ~0; 
+   end else begin
+      final_strb = 0; 
+      for(i = 0; i < (AXI_DATA_W/8); i = i + 1) begin
+         if(i < true_final_strb_count) final_strb[i] = 1'b1;
+      end
+   end
 end
 
 generate
@@ -143,7 +176,7 @@ wire [4:0] address_plus_len = address[4:0] + stored_len[4:0];
    always @* begin
       last_transfer_len = 0;
 
-      if(address[4:0] == 5'b0000 && stored_len[4:0] == 5'b0000)
+      if(address[4:0] == 5'h00 && stored_len[4:0] == 5'h00)
          last_transfer_len = stored_len[12:5] - 8'h1;
       else if(!(address_plus_len >= address[4:0] || address_plus_len == 0))
          last_transfer_len = stored_len[12:5] + 8'h1;
@@ -151,7 +184,7 @@ wire [4:0] address_plus_len = address[4:0] + stored_len[4:0];
          last_transfer_len = stored_len[12:5];
 
    end
-end
+end // if(AXI_DATA_W == 256)
 if(AXI_DATA_W == 512) begin
 assign symbolsToRead = (|length[5:0]) ? (length >> 6) + 1 : length >> 6;
 assign max_transfer_len = 13'h1000;
@@ -160,14 +193,14 @@ wire [5:0] address_plus_len = address[5:0] + stored_len[5:0];
    always @* begin
       last_transfer_len = 0;
 
-      if(address[5:0] == 6'b0000 && stored_len[5:0] == 6'b0000)
+      if(address[5:0] == 6'h00 && stored_len[5:0] == 6'h00)
          last_transfer_len = stored_len[13:6] - 8'h1;
       else if(!(address_plus_len >= address[5:0] || address_plus_len == 0))
          last_transfer_len = stored_len[13:6] + 8'h1;
       else
          last_transfer_len = stored_len[13:6];
    end
-end
+end // if(AXI_DATA_W == 512)
 endgenerate
 
 // Outside generate, logic is generic enough

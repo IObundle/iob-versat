@@ -4,8 +4,8 @@
          parameter MEM_INIT_FILE="none",
          parameter DATA_W = 32,
          parameter SIZE_W = 32,
-         parameter ADDR_W = 10,
-         parameter PERIOD_W = 10,
+         parameter ADDR_W = 12,
+         parameter PERIOD_W = 12,
          parameter AXI_ADDR_W = 32,
          parameter AXI_DATA_W = 32,
          parameter LEN_W = 8
