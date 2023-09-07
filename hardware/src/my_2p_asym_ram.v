@@ -48,7 +48,7 @@ module my_2p_asym_ram
          iob_2p_ram
              #(
                .DATA_W(MINDATA_W),
-               .ADDR_W(ADDR_W)
+               .ADDR_W(ADDR_W - (N_W + SYMBOL_W))
                )
          iob_2p_ram_inst
              (

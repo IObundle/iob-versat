@@ -62,7 +62,7 @@ module my_dp_asym_ram
          my_iob_dp_ram
              #(
                .DATA_W(MINDATA_W),
-               .ADDR_W(M_ADDR_W)
+               .ADDR_W(M_ADDR_W - SYMBOL_W)
                )
          iob_dp_ram_inst
              (
