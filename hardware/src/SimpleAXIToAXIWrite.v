@@ -122,7 +122,6 @@ reg first_transfer;
 
 reg [7:0] counter;
 reg [31:0] full_counter;
-reg [31:0] read_counter;
 always @(posedge clk,posedge rst)
 begin
   if(rst) begin
@@ -130,7 +129,6 @@ begin
     awvalid <= 0;
     counter <= 0;
     full_counter <= 0;
-    read_counter <= 0;
     write_axi_len <= 0;
     symbolsToRead <= 0;
     stored_offset <= 0;
@@ -169,7 +167,6 @@ begin
     end
     3'h4: begin
       if(m_axi_wvalid && m_axi_wready) begin
-         read_counter <= read_counter + 1;
          counter <= counter + 1;
 
          if((counter + 1 == m_axi_awlen) && write_last_transfer) begin
@@ -183,7 +180,6 @@ begin
             counter <= 0;
             if(write_last_transfer) begin
                full_counter <= 0;
-               read_counter <= 0;
                symbolsToRead <= 0;
                write_axi_len <= 0;
                state <= 3'h0;
@@ -208,11 +204,6 @@ begin
    if(m_axi_wvalid && m_axi_wready && m_axi_wlast && write_last_transfer) begin
       m_wlast = 1'b1;
    end
-   /*
-   if(read_counter + 1 >= symbolsToRead) begin
-      m_wlast = 1'b1;
-   end
-   */
 
    if(full_counter == symbolsToRead) begin
       flush_burst_split = 1'b1;

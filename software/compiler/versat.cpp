@@ -1081,13 +1081,13 @@ FUDeclaration* RegisterModuleInfo(Versat* versat,ModuleInfo* info){
         def.expr = expr;
       }
 
-      // Override length. Use 16 as maximum, for now
+      // Override length. Use 20 for now
       if(CompareString(def.name,STRING("LEN_W"))){
         Expression* expr = PushStruct<Expression>(arena);
 
         expr->type = Expression::LITERAL;
         expr->id = def.name;
-        expr->val = MakeValue(16);
+        expr->val = MakeValue(20);
 
         def.expr = expr;
       }

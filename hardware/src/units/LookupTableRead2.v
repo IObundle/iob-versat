@@ -5,7 +5,7 @@
 module LookupTableRead2 #(
        parameter DATA_W = 32,
        parameter SIZE_W = 16,
-       parameter ADDR_W = 12,
+       parameter ADDR_W = 16,
        parameter AXI_ADDR_W = 32,
        parameter AXI_DATA_W = 32,
        parameter LEN_W = 8
@@ -44,10 +44,9 @@ module LookupTableRead2 #(
        // configurations
       input [AXI_ADDR_W-1:0] ext_addr,
       input [ADDR_W-1:0]     int_addr,
-      input [31:0]           size,
       input [ADDR_W-1:0]     iterA,
-      input [ADDR_W-1:0]            perA,
-      input [ADDR_W-1:0]            dutyA,
+      input [ADDR_W-1:0]     perA,
+      input [ADDR_W-1:0]     dutyA,
       input [ADDR_W-1:0]     shiftA,
       input [ADDR_W-1:0]     incrA,
       input [LEN_W-1:0]      length,

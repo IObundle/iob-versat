@@ -149,6 +149,10 @@ typedef uint16_t uint16;
 typedef int8_t int8;
 typedef uint8_t uint8;
 typedef uint8_t Byte;
+typedef uint8 u8;
+typedef int8 i8;
+typedef uint32 u32;
+typedef int32 i32;
 #else
 typedef unsigned char Byte;
 typedef unsigned int uint;
@@ -165,6 +169,7 @@ struct Time{
 };
 
 Time GetTime();
+void PrintTime(Time time,const char* id);
 Time operator-(const Time& s1,const Time& s2);
 bool operator>(const Time& s1,const Time& s2);
 bool operator==(const Time& s1,const Time& s2);

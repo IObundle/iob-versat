@@ -68,20 +68,22 @@ void StartAccelerator(){
 }
 
 int timesWaiting = 0;
- 
+
+void ClearCache(void*);
+
 void EndAccelerator(){
-   //printf("End accelerator\n");
-   bool seenWaiting = false;
-   while(1){
-      volatile int val = MEMGET(versat_base,0x0);
-      if(val){
-         break;
-      }
-      if(!seenWaiting){
-         timesWaiting += 1;
-         seenWaiting = true;
-      }
-   } 
+  //printf("End accelerator\n");
+  bool seenWaiting = false;
+  while(1){
+    volatile int val = MEMGET(versat_base,0x0);
+    if(val){
+      break;
+    }
+    if(!seenWaiting){
+      timesWaiting += 1;
+      seenWaiting = true;
+    }
+  } 
 }
 
 static inline void RunAcceleratorOnce(int times){ // times inside value amount

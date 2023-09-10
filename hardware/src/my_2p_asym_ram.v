@@ -35,11 +35,9 @@ module my_2p_asym_ram
    //write buses
    reg [N-1:0]                en_wr;
    reg [MINDATA_W-1:0]        data_wr [N-1:0];
-   reg [ADDR_W-1:0]        addr_wr [N-1:0];
 
    //read buses
    wire [MINDATA_W-1:0]       data_rd [N-1:0];
-   reg [ADDR_W-1:0]        addr_rd [N-1:0];
 
    //instantiate N symmetric RAM blocks and connect them to the buses
    genvar                 i;
@@ -54,10 +52,10 @@ module my_2p_asym_ram
              (
               .clk(clk),
               .w_en(en_wr[i]),
-              .w_addr(addr_wr[i]),
+              .w_addr(w_addr[ADDR_W-1:N_W + SYMBOL_W]),
               .w_data(data_wr[i]),
               .r_en(r_en),
-              .r_addr(addr_rd[i]),
+              .r_addr(r_addr[ADDR_W-1:N_W + SYMBOL_W]),
               .r_data(data_rd[i])              
               );
          
@@ -74,17 +72,9 @@ module my_2p_asym_ram
             for (j=0; j < N; j= j+1) begin
                en_wr[j] = w_en;
                data_wr[j] = w_data[j*MINDATA_W +: MINDATA_W];
-               addr_wr[j] = w_addr >> (N_W + SYMBOL_W);
             end
          end
          
-         //read serial
-         always @* begin
-            for (k=0; k < N; k= k+1) begin
-               addr_rd[k] = r_addr[ADDR_W-1-:ADDR_W] >> SYMBOL_W;
-            end
-         end
-
          //read address register
          reg [ADDR_W-1:0] r_addr_lsbs_reg;
          always @(posedge clk)
@@ -106,14 +96,12 @@ module my_2p_asym_ram
             for (j=0; j < N; j= j+1) begin
                en_wr[j] = w_en & (byteAddr[N_W-1:0] == j[N_W-1:0]);
                data_wr[j] = w_data;
-               addr_wr[j] = w_addr >> (N_W + SYMBOL_W);
             end
          end
          //read parallel
          always @* begin
             r_data = 1'b0;
             for (k=0; k < N; k= k+1) begin
-               addr_rd[k] = r_addr >> (N_W + SYMBOL_W);
                r_data[k*MINDATA_W +: MINDATA_W] = data_rd[k];
             end
          end
@@ -123,11 +111,9 @@ module my_2p_asym_ram
          always @* begin
             en_wr[0] = w_en;
             data_wr[0] = w_data;
-            addr_wr[0] = w_addr >> SYMBOL_W;
          end
          //read parallel
          always @* begin
-            addr_rd[0] = r_addr >> SYMBOL_W;
             r_data = data_rd[0];
          end
       end

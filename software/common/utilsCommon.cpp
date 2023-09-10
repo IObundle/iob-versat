@@ -38,21 +38,12 @@ static char* GetNumberRepr(uint64 number){
   return &buffer[index+1];
 }
 
-void TimeIt::Output(){
-  // Cannot use floating point because of embedded
-  Time end = GetTime();
-
-  Time diff = {};
-  diff.seconds = end.seconds - start.seconds;
-  diff.microSeconds = end.microSeconds - start.microSeconds;
-
-  Assert(end > start);
-
+void PrintTime(Time time,const char* id){
   printf("[TimeIt] %15s: ",id);
 
   {
-    int digits = NumberDigitsRepresentation(diff.seconds);
-    char* secondsRepr = GetNumberRepr(diff.seconds);
+    int digits = NumberDigitsRepresentation(time.seconds);
+    char* secondsRepr = GetNumberRepr(time.seconds);
 
     for(int i = 0; i < digits; i++){
       printf("%c",secondsRepr[i]);
@@ -60,8 +51,8 @@ void TimeIt::Output(){
   }
   printf(".");
   {
-    int digits = NumberDigitsRepresentation(diff.microSeconds);
-    char* nanoRepr = GetNumberRepr(diff.microSeconds);
+    int digits = NumberDigitsRepresentation(time.microSeconds);
+    char* nanoRepr = GetNumberRepr(time.microSeconds);
 
     for(int i = 0; i < (6 - digits); i++){
       printf("0");
@@ -72,14 +63,28 @@ void TimeIt::Output(){
     }
   }
 
-  Time temp = diff;
-  temp.seconds = SwapEndianess(diff.seconds);
-  temp.microSeconds = SwapEndianess(diff.microSeconds);
+  Time temp = time;
+  temp.seconds = SwapEndianess(time.seconds);
+  temp.microSeconds = SwapEndianess(time.microSeconds);
   
   unsigned char* hexVal = GetHexadecimal((const unsigned char*) &temp,sizeof(Time)); // Helper function to display result
   printf(" %s ",hexVal);
 
   printf("\n");
+
+}
+
+void TimeIt::Output(){
+  // Cannot use floating point because of embedded
+  Time end = GetTime();
+
+  Time diff = {};
+  diff.seconds = end.seconds - start.seconds;
+  diff.microSeconds = end.microSeconds - start.microSeconds;
+
+  Assert(end > start);
+
+  PrintTime(diff,id);
 }
 
 Time operator-(const Time& s1,const Time& s2){

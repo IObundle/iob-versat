@@ -16,7 +16,6 @@ module Generator #(
    input [31:0]            start,
    input [31:0]            shift,
    input [31:0]            incr,
-   input [31:0]            off_value,
 
    input [31:0]            delay0,
 

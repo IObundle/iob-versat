@@ -14,7 +14,7 @@ module versat_instance #(
       parameter DATA_W = 32,
       parameter AXI_ADDR_W = 32,
       parameter AXI_DATA_W = 32,
-      parameter LEN_W = 8
+      parameter LEN_W = 20
    )
    (
    // Databus master interface

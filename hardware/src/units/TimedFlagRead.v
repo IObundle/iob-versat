@@ -3,7 +3,7 @@
 module TimedFlagRead #(
    parameter DATA_W = 32,
    parameter SIZE_W = 16,
-   parameter ADDR_W = 12,
+   parameter ADDR_W = 16,
    parameter AXI_ADDR_W = 32,
    parameter AXI_DATA_W = 32,
    parameter LEN_W = 8
@@ -42,7 +42,6 @@ module TimedFlagRead #(
    // configurations
    input [AXI_ADDR_W-1:0] ext_addr,
    input [ADDR_W-1:0]     int_addr,
-   input [31:0]           size,
    input [ADDR_W-1:0]     iterA,
    input [ADDR_W-1:0]     perA,
    input [ADDR_W-1:0]     dutyA,
@@ -98,7 +97,6 @@ begin
       pingPongState <= !pingPongState;
 end
 
-reg [31:0] amount;
 reg stillValid;
 assign done = (!running || disabled || !stillValid) && !databus_valid_0 ;
 
@@ -179,14 +177,9 @@ assign out0 = ((delay == 0 && !disabled && stillValid) ? {32{(in0[SIZE_W-1:0] ==
    always @(posedge clk,posedge rst) begin
       if(rst) begin
          gen_valid <= 1'b0;
-         amount <= 0;
       end else if(run) begin
          gen_valid <= 1'b1;
-         amount <= 0;
       end else if(gen_valid) begin //if(running) begin
-         if(databus_valid_0 && databus_ready_0) begin
-            amount <= amount + 1;
-         end
          if(databus_valid_0 && databus_ready_0 && databus_last_0) begin
             gen_valid <= 1'b0;
          end

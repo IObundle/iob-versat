@@ -45,13 +45,11 @@ module my_dp_asym_ram
    //write buses
    reg [N-1:0]             bus_enA;
    reg [N-1:0]             bus_weA;
-   reg [M_ADDR_W-1:0]      bus_addrA[N-1:0];
    reg [MINDATA_W-1:0]     bus_inA[N-1:0];
    wire [MINDATA_W-1:0]    bus_outA[N-1:0];
 
    reg [N-1:0]             bus_enB;
    reg [N-1:0]             bus_weB;
-   reg [M_ADDR_W-1:0]      bus_addrB[N-1:0];
    reg [MINDATA_W-1:0]     bus_inB[N-1:0];
    wire [MINDATA_W-1:0]    bus_outB[N-1:0];
 
@@ -70,14 +68,14 @@ module my_dp_asym_ram
 
             // Port A
             .dinA(bus_inA[i]),
-            .addrA(bus_addrA[i]),
+            .addrA(addrA[ADDR_W-1:SYMBOL_W + N_W]),
             .enA(bus_enA[i]),
             .weA(bus_weA[i]),
             .doutA(bus_outA[i]),
 
             // Port B
             .dinB(bus_inB[i]),
-            .addrB(bus_addrB[i]),
+            .addrB(addrB[ADDR_W-1:SYMBOL_W + N_W]),
             .enB(bus_enB[i]),
             .weB(bus_weB[i]),
             .doutB(bus_outB[i])
@@ -103,7 +101,6 @@ module my_dp_asym_ram
             for (j=0; j < N; j= j+1) begin
               bus_enA[j] = enA;
               bus_weA[j] = weA;
-              bus_addrA[j] = addrA[ADDR_W-1:SYMBOL_W] >> N_W;
               bus_inA[j] = dinA[j*MINDATA_W +: MINDATA_W];
               doutA[j*MINDATA_W +: MINDATA_W] = bus_outA[j];
             end
@@ -122,7 +119,6 @@ module my_dp_asym_ram
                 bus_enB[k] = 1'b0;
               end
               bus_weB[k] = weB;
-              bus_addrB[k] = addrB[ADDR_W-1:SYMBOL_W] >> N_W;
               bus_inB[k] = dinB;
             end
          end
@@ -133,7 +129,6 @@ module my_dp_asym_ram
             for (j=0; j < N; j= j+1) begin
               bus_enB[j] = enB;
               bus_weB[j] = weB;
-              bus_addrB[j] = addrB[ADDR_W-1:SYMBOL_W] >> N_W;
               bus_inB[j] = dinB[j*MINDATA_W +: MINDATA_W];
               doutB[j*MINDATA_W +: MINDATA_W] = bus_outB[j];
             end
@@ -152,7 +147,6 @@ module my_dp_asym_ram
                 bus_enA[k] = 1'b0;
               end
               bus_weA[k] = weA;
-              bus_addrA[k] = addrA[ADDR_W-1:SYMBOL_W] >> N_W;
               bus_inA[k] = dinA;
             end
          end
@@ -161,7 +155,6 @@ module my_dp_asym_ram
          always @* begin
            bus_enA[0] = enA;
            bus_weA[0] = weA;
-           bus_addrA[0] = addrA[ADDR_W-1:SYMBOL_W]; // Byte space to symbol space 
            bus_inA[0] = dinA;
            doutA = bus_outA[0];
          end
@@ -170,7 +163,6 @@ module my_dp_asym_ram
          always @* begin
            bus_enB[0] = enB;
            bus_weB[0] = weB;
-           bus_addrB[0] = addrB[ADDR_W-1:SYMBOL_W]; // Byte space to symbol space
            bus_inB[0] = dinB;
            doutB = bus_outB[0];
          end         

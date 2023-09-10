@@ -97,6 +97,8 @@ transfer_controller #(
       // Do not need them for read operation
       .initial_strb(),
       .final_strb(),
+      .symbolsToRead(),
+      .last_transfer_next(),
 
       .true_axi_axaddr(m_axi_araddr),
 
