@@ -426,10 +426,15 @@ REGISTER(double);
 
 RegisterParsedTypes();
 
-ValueType::HASHMAP = GetTypeOrFail(STRING("Hashmap"));
 ValueType::STRING = GetPointerType(ValueType::CHAR);
+ValueType::HASHMAP = GetTypeOrFail(STRING("Hashmap"));
 ValueType::SIZED_STRING = GetTypeOrFail(STRING("String"));
-ValueType::TEMPLATE_FUNCTION = GetPointerType(GetTypeOrFail(STRING("TemplateFunction")));
+
+Type* normalTemplateFunction = GetTypeOrFail(STRING("TemplateFunction"));
+
+if(normalTemplateFunction){
+ValueType::TEMPLATE_FUNCTION = GetPointerType(normalTemplateFunction);
+}
 ValueType::POOL = GetTypeOrFail(STRING("Pool"));
 ValueType::ARRAY = GetTypeOrFail(STRING("Array"));
 ValueType::STD_VECTOR = GetTypeOrFail(STRING("std::vector"));

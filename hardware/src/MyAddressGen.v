@@ -47,7 +47,7 @@ begin
       iter <= 0;
       per <= 0;
       valid <= 0;
-      done <= 1'b0;
+      done <= 1'b1;
    end else if(run) begin
       delayCounter <= delay;
       addr <= start;
