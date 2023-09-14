@@ -19,20 +19,36 @@
 #define TWO_DIGIT(x,y) (CI(x) * 10 + CI(y))
 #define COMPILE_TIME (TWO_DIGIT(__TIME__[0],__TIME__[1]) * 3600 + TWO_DIGIT(__TIME__[3],__TIME__[4]) * 60 + TWO_DIGIT(__TIME__[6],__TIME__[7]))
 
-#define ALIGN_2(val) (((val) + 1) & ~1)
-#define ALIGN_4(val) (((val) + 3) & ~3)
-#define ALIGN_8(val) (((val) + 7) & ~7)
-#define ALIGN_16(val) (((val) + 15) & ~15)
-#define ALIGN_32(val) (((val) + 31) & ~31)
-#define ALIGN_64(val) (((val) + 63) & ~63) // Usually a cache line
-#define ARRAY_SIZE(array) ((int) (sizeof(array) / sizeof(array[0])))
+#define ALIGN_DOWN(val,size) (val & (~(size - 1)))
 
-#define IS_ALIGNED_2(val) ((((uptr) val) & 1) == 0x0)
-#define IS_ALIGNED_4(val) ((((uptr) val) & 3) == 0x0)
-#define IS_ALIGNED_8(val) ((((uptr) val) & 7) == 0x0)
-#define IS_ALIGNED_16(val) ((((uptr) val) & 15) == 0x0)
-#define IS_ALIGNED_32(val) ((((uptr) val) & 31) == 0x0)
-#define IS_ALIGNED_64(val) ((((uptr) val) & 63) == 0x0)
+// Helper functions named after bitsize. If using byte size, use the X(val,size) functions
+#define ALIGN_DOWN_16(val) (val & (~1))
+#define ALIGN_DOWN_32(val) (val & (~3))
+#define ALIGN_DOWN_64(val) (val & (~7))
+#define ALIGN_DOWN_128(val) (val & (~15))
+#define ALIGN_DOWN_256(val) (val & (~31))
+#define ALIGN_DOWN_512(val) (val & (~63))
+
+#define ALIGN_UP(val,size) (((val) + (size - 1)) & ~(size - 1))
+
+#define ALIGN_UP_16(val) (((val) + 1) & ~1)
+#define ALIGN_UP_32(val) (((val) + 3) & ~3)
+#define ALIGN_UP_64(val) (((val) + 7) & ~7)
+#define ALIGN_UP_128(val) (((val) + 15) & ~15)
+#define ALIGN_UP_256(val) (((val) + 31) & ~31)
+#define ALIGN_UP_512(val) (((val) + 63) & ~63)
+
+#define IS_ALIGNED(val,size) ((((uptr) val) & (size-1)) == 0x0)
+
+#define IS_ALIGNED_16(val) ((((uptr) val) & 1) == 0x0)
+#define IS_ALIGNED_32(val) ((((uptr) val) & 3) == 0x0)
+#define IS_ALIGNED_64(val) ((((uptr) val) & 7) == 0x0)
+#define IS_ALIGNED_128(val) ((((uptr) val) & 15) == 0x0)
+#define IS_ALIGNED_256(val) ((((uptr) val) & 31) == 0x0)
+#define IS_ALIGNED_512(val) ((((uptr) val) & 63) == 0x0)
+
+#undef  ARRAY_SIZE
+#define ARRAY_SIZE(array) ((int) (sizeof(array) / sizeof(array[0])))
 
 #define NUMBER_ARGS_(T1,T2,T3,T4,T5,T6,T7,T8,T9,TA,TB,TC,TD,TE,TF,TG,TH,Arg, ...) Arg
 #define NUMBER_ARGS(...) NUMBER_ARGS_(-1,##__VA_ARGS__,16,15,14,13,12,11,10,9,8,7,6,5,4,3,2,1,0)
@@ -58,6 +74,8 @@ ALWAYS_INLINE Defer<F> operator+(_DeferTag,F&& f){
 #define TEMP__defer(LINE) TEMPdefer_ ## LINE
 #define TEMP_defer(LINE) TEMP__defer( LINE )
 #define defer auto TEMP_defer(__LINE__) = _DeferTag() + [&]()
+
+// TODO: Implement a once region as well. Only executes one time using something like defer() or region()
 
 void FlushStdout();
 #if defined(VERSAT_DEBUG)
@@ -95,10 +113,10 @@ bool CurrentlyDebugging();
 #define USER_ERROR do{ FlushStdout(); exit(0); } while(0) // User error and program does not try to repair or keep going (report error before and exit)
 #define UNREACHABLE do{Assert(false); __builtin_unreachable();} while(0)
 
-#define FOREACH_LIST(ITER,START) for(auto* ITER = START; ITER; ITER = ITER->next)
-#define FOREACH_LIST_INDEXED(ITER,START,INDEX) for(auto* ITER = START; ITER; ITER = ITER->next,INDEX += 1)
-#define FOREACH_LIST_BOUNDED(ITER,START,END) for(auto* ITER = START; ITER != END; ITER = ITER->next)
-#define FOREACH_SUBLIST(ITER,SUB) for(auto* ITER = SUB.start; ITER != SUB.end; ITER = ITER->next)
+#define FOREACH_LIST(TYPE,ITER,START) for(TYPE ITER = START; ITER; ITER = ITER->next)
+#define FOREACH_LIST_INDEXED(TYPE,ITER,START,INDEX) for(TYPE ITER = START; ITER; ITER = ITER->next,INDEX += 1)
+#define FOREACH_LIST_BOUNDED(TYPE,ITER,START,END) for(TYPE ITER = START; ITER != END; ITER = ITER->next)
+#define FOREACH_SUBLIST(TYPE,ITER,SUB) for(TYPE ITER = SUB.start; ITER != SUB.end; ITER = ITER->next)
 
 #define SWAP(A,B) do { \
    auto TEMP = A; \
@@ -133,8 +151,13 @@ typedef uint16_t uint16;
 typedef int8_t int8;
 typedef uint8_t uint8;
 typedef uint8_t Byte;
+typedef uint8 u8;
+typedef int8 i8;
+typedef uint32 u32;
+typedef int32 i32;
 #else
 typedef unsigned char Byte;
+typedef unsigned int uint;
 typedef intptr_t iptr;
 typedef int64_t int64;
 typedef uint64_t uint64;
@@ -142,20 +165,23 @@ typedef uint64_t uint64;
 //typedef long long unsigned int uint64;
 #endif
 
-struct NanoSecond{
-   uint64 time;
+struct Time{
+   uint64 microSeconds;
+   uint64 seconds;
 };
 
-NanoSecond GetTime();
-NanoSecond operator-(const NanoSecond& s1,const NanoSecond& s2);
-bool operator>(const NanoSecond& s1,const NanoSecond& s2);
+Time GetTime();
+void PrintTime(Time time,const char* id);
+Time operator-(const Time& s1,const Time& s2);
+bool operator>(const Time& s1,const Time& s2);
+bool operator==(const Time& s1,const Time& s2);
 
-static constexpr NanoSecond Seconds(uint64 seconds){return (NanoSecond){seconds * 1000000000};};
+static constexpr Time Seconds(uint64 seconds){Time t = {}; t.seconds = seconds; return t;};
 
 // Automatically times a block in number of counts
 class TimeIt{
 public:
-	NanoSecond start;
+	Time start;
    const char* id;
    bool endedEarly;
 
@@ -186,6 +212,7 @@ ALWAYS_INLINE void operator+(TimeIt&& timer,F&& f){
 #define timeRegion(ID) TimeIt(ID) + [&]()
 */
 
+#ifndef TEMPORARY_MARK
 template<typename T>
 class ArrayIterator{
 public:
@@ -199,13 +226,14 @@ public:
 // This struct is associated to a gdb pretty printer.
 template<typename T>
 struct Array{
-   T* data;
-   int size;
+  T* data;
+  int size;
 
-   inline T& operator[](int index) const {Assert(index < size); return data[index];}
-   ArrayIterator<T> begin(){return ArrayIterator<T>{data};};
-   ArrayIterator<T> end(){return ArrayIterator<T>{data + size};};
+  inline T& operator[](int index) const {Assert(index < size); return data[index];}
+  ArrayIterator<T> begin(){return ArrayIterator<T>{data};};
+  ArrayIterator<T> end(){return ArrayIterator<T>{data + size};};
 };
+#endif
 
 typedef Array<const char> String;
 
@@ -249,16 +277,19 @@ bool operator==(Array<T> first,Array<T> second){
    return true;
 }
 
+template<typename T>
 struct Range{
-   union{
-      int high;
-      int start;
-   };
+  union{
+    T high;
+    T start;
+    T top;
+  };
 
-   union{
-      int low;
-      int end;
-   };
+  union{
+    T low;
+    T end;
+ 	 T bottom;
+  };
 };
 
 struct CheckRangeResult{
@@ -266,11 +297,11 @@ struct CheckRangeResult{
    int problemIndex;
 };
 
-void SortRanges(Array<Range> ranges);
+void SortRanges(Array<Range<int>> ranges);
 
 // These functions require sorted ranges
-CheckRangeResult CheckNoOverlap(Array<Range> ranges);
-CheckRangeResult CheckNoGaps(Array<Range> ranges);
+CheckRangeResult CheckNoOverlap(Array<Range<int>> ranges);
+CheckRangeResult CheckNoGaps(Array<Range<int>> ranges);
 
 union Conversion{
    float f;
@@ -315,10 +346,12 @@ int AlignNextPower2(int val);
 int Align(int val,int alignment);
 unsigned int AlignBitBoundary(unsigned int val,int numberBits); // Align value so the lower numberBits are all zeros
 bool IsPowerOf2(int val);
-int RandomNumberBetween(int minimum,int maximum,int randomValue);
+int RandomNumberBetween(int minimum,int maximum); // Maximum not included
 
 void Print(Array<int> array,int digitSize = 0);
+void Print(Array<float> array,int digitSize = 0);
 int GetMaxDigitSize(Array<int> array);
+int GetMaxDigitSize(Array<float> array);
 
 // Math related functions
 int RolloverRange(int min,int val,int max);
@@ -336,6 +369,7 @@ int PackInt(float val);
 float PackFloat(int val);
 float PackFloat(Byte sign,Byte exponent,int mantissa);
 int SwapEndianess(int val);
+uint64 SwapEndianess(uint64 val);
 
 int NumberDigitsRepresentation(int64 number); // Number of digits if printed (negative includes - sign )
 char GetHex(int value);
@@ -409,6 +443,12 @@ inline void Memcpy(T* dest,T* src,int numberElements){
    memcpy(dest,src,numberElements * sizeof(T));
 }
 
+template<typename T>
+inline void Memcpy(Array<T> dest,Array<T> src){
+  Assert(src.size <= dest.size);
+  memcpy(dest.data,src.data,src.size * sizeof(T));
+}
+
 // Mainly change return meaning (true means equal)
 template<typename T>
 inline bool Memcmp(T* a,T* b,int numberElements){
@@ -476,7 +516,7 @@ T* ListGet(T* start,int index){
 template<typename T>
 int ListIndex(T* start,T* toFind){
    int i = 0;
-   FOREACH_LIST(ptr,start){
+   FOREACH_LIST(T*,ptr,start){
       if(ptr == toFind){
          break;
       }
@@ -491,7 +531,7 @@ T* ListRemove(T* start,T* toRemove){ // Returns start of new list. ToRemove is s
       return start->next;
    } else {
       T* previous = nullptr;
-      FOREACH_LIST(ptr,start){
+      FOREACH_LIST(T*,ptr,start){
          if(ptr == toRemove){
             previous->next = ptr->next;
          }
@@ -510,7 +550,7 @@ T* ListRemoveOne(T* start,Func compareFunction){ // Only removes one and returns
       return start->next;
    } else {
       T* previous = nullptr;
-      FOREACH_LIST(ptr,start){
+      FOREACH_LIST(T*,ptr,start){
          if(compareFunction(ptr)){
             previous->next = ptr->next;
          }
@@ -584,7 +624,7 @@ T* ReverseList(T* head){
 template<typename T>
 T* ListInsertEnd(T* head,T* toAdd){
    T* last = nullptr;
-   FOREACH_LIST(ptr,head){
+   FOREACH_LIST(T*,ptr,head){
       last = ptr;
    }
    Assert(last->next == nullptr);
@@ -604,7 +644,7 @@ T* ListInsert(T* head,T* toAdd){
 template<typename T>
 int Size(T* start){
    int size = 0;
-   FOREACH_LIST(ptr,start){
+   FOREACH_LIST(T*,ptr,start){
       size += 1;
    }
    return size;

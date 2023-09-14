@@ -21,6 +21,8 @@ struct Expression{
    enum {UNDEFINED,OPERATION,IDENTIFIER,COMMAND,LITERAL,ARRAY_ACCESS,MEMBER_ACCESS} type;
 };
 
+void PrintExpression(Expression* exp);
+
 typedef int (*CharFunction) (const char* ptr,int size);
 typedef String Token;
 
@@ -37,15 +39,16 @@ class Tokenizer{
    std::string singleChars; // TODO: Why use string instead of sized string?
    std::vector<std::string> specialChars; // TODO: Why use string instead of sized string?
 
-public:
-
-   bool keepWhitespaces;
-   bool keepComments;
-
 private:
 
    int SpecialChars(const char* ptr,size_t size);
    void ConsumeWhitespace();
+
+public:
+
+   // Can change mid way to alter manner in which the tokenizer handles special cases
+   bool keepWhitespaces;
+   bool keepComments;
 
 public:
 
@@ -83,7 +86,7 @@ public:
    void Rollback(void* mark);
 
    void AdvancePeek(Token tok);
-
+  
    void SetSingleChars(const char* singleChars);
    bool Done();
    int Lines(){return lines;};
@@ -109,6 +112,7 @@ int CountSubstring(String str,String substr);
 void StoreToken(Token token,char* buffer);
 #define CompareToken CompareString
 
+// This functions should check for errors. Also these functions should return an error if they do not parse everything. Something like STRING("3 a") should flag an error for ParseInt, for example, instead of just returning 3. Either they consume everything or it's an error
 int ParseInt(String str);
 double ParseDouble(String str);
 float ParseFloat(String str);

@@ -32,15 +32,15 @@ struct MemoryRange{
    bool isComposite;
 };
 
-void SortRanges(Array<Range> ranges){
-   qsort(ranges.data,ranges.size,sizeof(Range),[](const void* v1,const void* v2){
-            Range* r1 = (Range*) v1;
-            Range* r2 = (Range*) v2;
+void SortRanges(Array<Range<int>> ranges){
+   qsort(ranges.data,ranges.size,sizeof(Range<int>),[](const void* v1,const void* v2){
+            Range<int>* r1 = (Range<int>*) v1;
+            Range<int>* r2 = (Range<int>*) v2;
             return r1->start - r2->start;
          });
 }
 
-static bool IsSorted(Array<Range> ranges){
+static bool IsSorted(Array<Range<int>> ranges){
    for(int i = 0; i < ranges.size - 1; i++){
       if(ranges[i + 1].start < ranges[i].start){
          DEBUG_BREAK_IF_DEBUGGING();
@@ -50,7 +50,7 @@ static bool IsSorted(Array<Range> ranges){
    return true;
 }
 
-CheckRangeResult CheckNoOverlap(Array<Range> ranges){
+CheckRangeResult CheckNoOverlap(Array<Range<int>> ranges){
    CheckRangeResult res = {};
 
    Assert(IsSorted(ranges));
@@ -71,7 +71,7 @@ CheckRangeResult CheckNoOverlap(Array<Range> ranges){
    return res;
 }
 
-CheckRangeResult CheckNoGaps(Array<Range> ranges){
+CheckRangeResult CheckNoGaps(Array<Range<int>> ranges){
    CheckRangeResult res = {};
 
    Assert(IsSorted(ranges));
@@ -121,7 +121,7 @@ static void OutputGraphDotFile_(Versat* versat,Accelerator* accel,bool collapseS
    BLOCK_REGION(arena);
 
    fprintf(outputFile,"digraph accel {\n\tnode [fontcolor=white,style=filled,color=\"160,60,176\"];\n");
-   FOREACH_LIST(ptr,accel->allocated){
+   FOREACH_LIST(InstanceNode*,ptr,accel->allocated){
       FUInstance* inst = ptr->inst;
       String id = UniqueRepr(inst,arena);
       String name = Repr(inst,versat->debug.dotFormat,arena);
@@ -147,10 +147,10 @@ static void OutputGraphDotFile_(Versat* versat,Accelerator* accel,bool collapseS
    Hashmap<Pair<InstanceNode*,InstanceNode*>,int>* seen = PushHashmap<Pair<InstanceNode*,InstanceNode*>,int>(arena,size);
 
    // TODO: Consider adding a true same edge counter, that collects edges with equal delay and then represents them on the graph as a pair, using [portStart-portEnd]
-   FOREACH_LIST(ptr,accel->allocated){
+   FOREACH_LIST(InstanceNode*,ptr,accel->allocated){
       FUInstance* out = ptr->inst;
 
-      FOREACH_LIST(con,ptr->allOutputs){
+      FOREACH_LIST(ConnectionNode*,con,ptr->allOutputs){
          FUInstance* in = con->instConnectedTo.node->inst;
 
          if(collapseSameEdges){
@@ -298,7 +298,7 @@ static void PrintVCDDefinitions_(FILE* accelOutputFile,VCDMapping& currentMappin
    }
    #endif
 
-   FOREACH_LIST(ptr,accel->allocated){
+   FOREACH_LIST(InstanceNode*,ptr,accel->allocated){
       FUInstance* inst = ptr->inst;
       FUDeclaration* decl = inst->declaration;
       fprintf(accelOutputFile,"$scope module %.*s_%d $end\n",UNPACK_SS(inst->name),inst->id);
@@ -316,12 +316,12 @@ static void PrintVCDDefinitions_(FILE* accelOutputFile,VCDMapping& currentMappin
       }
 
       for(Wire& wire : decl->configs){
-         fprintf(accelOutputFile,"$var wire  %d %s %.*s $end\n",wire.bitsize,currentMapping.Get(),UNPACK_SS(wire.name));
+         fprintf(accelOutputFile,"$var wire  %d %s %.*s $end\n",wire.bitSize,currentMapping.Get(),UNPACK_SS(wire.name));
          currentMapping.Increment();
       }
 
       for(Wire& wire : decl->states){
-         fprintf(accelOutputFile,"$var wire  %d %s %.*s $end\n",wire.bitsize,currentMapping.Get(),UNPACK_SS(wire.name));
+         fprintf(accelOutputFile,"$var wire  %d %s %.*s $end\n",wire.bitSize,currentMapping.Get(),UNPACK_SS(wire.name));
          currentMapping.Increment();
       }
 

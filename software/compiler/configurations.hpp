@@ -10,7 +10,10 @@ struct InstanceNode;
 struct OrderedInstance;
 struct Accelerator;
 struct FUDeclaration;
-struct Wire;
+
+template<typename T> struct WireTemplate;
+typedef WireTemplate<int> Wire;
+
 struct FUInstance;
 struct Versat;
 
@@ -62,7 +65,7 @@ public:
    PushPtr<int> outputs;
    PushPtr<int> storedOutputs;
    PushPtr<Byte> extraData;
-   PushPtr<int> externalMemory;
+   PushPtr<Byte> externalMemory;
    //PushPtr<UnitDebugData> debugData;
 
    void Init(Accelerator* accel);

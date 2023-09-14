@@ -17,7 +17,7 @@ Arena InitArena(size_t size){
    Arena res = {};
 
    res.totalAllocated = size;
-   res.mem = (Byte*) calloc(size,sizeof(Byte));
+   res.mem = (Byte*) malloc(size * sizeof(Byte));
 
    return res;
 }
@@ -48,4 +48,13 @@ Byte* PushBytes(Arena* arena, size_t size){
    arena->used += size;
 
    return ptr;
+}
+
+Arena SubArena(Arena* arena,size_t size){
+   Arena res = {};
+
+   res.totalAllocated = size;
+   res.mem = PushBytes(arena,size);
+  
+   return res;
 }

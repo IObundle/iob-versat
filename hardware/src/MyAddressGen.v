@@ -3,7 +3,8 @@
 module MyAddressGen # (
    parameter ADDR_W = 10,
    parameter PERIOD_W = 10,
-   parameter DELAY_W = 32
+   parameter DELAY_W = 32,
+   parameter DATA_W = 32
    ) (
    input                              clk,
    input                              rst,
@@ -28,6 +29,8 @@ module MyAddressGen # (
    output reg                         done
 );
 
+localparam OFFSET_W = $clog2(DATA_W/8);
+
 reg [DELAY_W-1:0] delayCounter;
 
 reg [ADDR_W - 1:0] iter;
@@ -44,7 +47,7 @@ begin
       iter <= 0;
       per <= 0;
       valid <= 0;
-      done <= 1'b0;
+      done <= 1'b1;
    end else if(run) begin
       delayCounter <= delay;
       addr <= start;
@@ -66,13 +69,13 @@ begin
          valid <= 0;
       end
       if(perCond && !iterCond) begin
-         addr <= addr + shift;
+         addr <= addr + (shift << OFFSET_W);
          per <= 0;
          iter <= iter + 1;
       end
       if(!perCond) begin
          if(per < duty) begin
-            addr <= addr + incr;
+            addr <= addr + (incr << OFFSET_W);
          end
          per <= per + 1;
       end

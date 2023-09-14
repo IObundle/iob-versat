@@ -9,13 +9,14 @@ void TemplateSetDefaults(Versat* versat){
    TemplateSetCustom("versat",versat,"Versat");
    TemplateSetCustom("inputDecl",BasicDeclaration::input,"FUDeclaration");
    TemplateSetCustom("outputDecl",BasicDeclaration::output,"FUDeclaration");
+   TemplateSetCustom("arch",&versat->opts,"Options");
 }
 
 void OutputCircuitSource(Versat* versat,FUDeclaration* decl,Accelerator* accel,FILE* file){
    Assert(versat->debug.outputAccelerator); // Because FILE is created outside, code should not call this function if flag is set
 
    Arena* arena = &versat->temp;
-   ArenaMarker marker(arena);
+   BLOCK_REGION(arena);
 
    VersatComputedValues val = ComputeVersatValues(versat,accel);
 
@@ -27,8 +28,27 @@ void OutputCircuitSource(Versat* versat,FUDeclaration* decl,Accelerator* accel,F
 
    Array<InstanceNode*> ordered = PushArray<InstanceNode*>(arena,size);
    int i = 0;
-   FOREACH_LIST_INDEXED(ptr,accel->ordered,i){
+   FOREACH_LIST_INDEXED(OrderedInstance*,ptr,accel->ordered,i){
       ordered[i] = ptr->node;
+
+      FUInstance* inst = ptr->node->inst;
+      if(inst->declaration->nIOs){
+         inst->parameters = STRING("#(.AXI_ADDR_W(AXI_ADDR_W),.AXI_DATA_W(AXI_DATA_W),.LEN_W(LEN_W))"); // TODO: placeholder hack.
+      }
+   }
+
+   {
+      int memoryPos = 0;
+      FOREACH_LIST(InstanceNode*,ptr,accel->allocated){
+         FUInstance* inst = ptr->inst;
+         FUDeclaration* decl = inst->declaration;
+
+         if(decl->isMemoryMapped) {
+            memoryPos = AlignBitBoundary(memoryPos,decl->memoryMapBits);
+            inst->memMapped = (int*) memoryPos;
+            memoryPos += 1 << decl->memoryMapBits;
+         }
+      }
    }
 
    ComputedData computedData = CalculateVersatComputedData(accel->allocated,val,arena);
@@ -88,11 +108,12 @@ void OutputVersatSource(Versat* versat,Accelerator* accel,const char* directoryP
    fprintf(c,"`define MAPPED_UNITS %d\n",val.unitsMapped);
    fprintf(c,"`define MAPPED_BIT %d\n",val.memoryConfigDecisionBit);
    fprintf(c,"`define nIO %d\n",val.nUnitsIO);
+   fprintf(c,"`define LEN_W %d\n",20);
 
-   // TODO: Add concept of architecture. Need to make this generic.
-   //fprintf(c,"`define VERSAT_ARCH_HAS_IO\n");
-   //fprintf(c,"`define VERSAT_ARCH_IO_INDEX 1"\n);
-   
+   if(versat->opts.architectureHasDatabus){
+      fprintf(c,"`define VERSAT_ARCH_HAS_IO 1\n");
+   }
+
    if(unit.inputs || unit.outputs){
       fprintf(c,"`define EXTERNAL_PORTS\n");
    }
@@ -129,12 +150,17 @@ void OutputVersatSource(Versat* versat,Accelerator* accel,const char* directoryP
    ReorganizeAccelerator(accel,arena);
    Array<InstanceNode*> ordered = PushArray<InstanceNode*>(arena,size);
    int i = 0;
-   FOREACH_LIST_INDEXED(ptr,accel->ordered,i){
+   FOREACH_LIST_INDEXED(OrderedInstance*,ptr,accel->ordered,i){
       ordered[i] = ptr->node;
+
+      FUInstance* inst = ptr->node->inst;
+      if(inst->declaration->nIOs){
+         inst->parameters = STRING("#(.AXI_ADDR_W(AXI_ADDR_W),.AXI_DATA_W(AXI_DATA_W),.LEN_W(LEN_W))"); // TODO: placeholder hack.
+      }
    }
 
    ComputedData computedData = CalculateVersatComputedData(accel->allocated,val,arena);
-   
+
    TemplateSetDefaults(versat);
 
    TemplateSetNumber("nInputs",unit.inputs);
@@ -149,10 +175,10 @@ void OutputVersatSource(Versat* versat,Accelerator* accel,const char* directoryP
    TemplateSetBool("isSimple",isSimple);
 
    int staticStart = 0;
-   FOREACH_LIST(ptr,accel->allocated){
+   FOREACH_LIST(InstanceNode*,ptr,accel->allocated){
       FUDeclaration* decl = ptr->inst->declaration;
       for(Wire& wire : decl->configs){
-         staticStart += wire.bitsize;
+         staticStart += wire.bitSize;
       }
    }
 
@@ -173,7 +199,7 @@ void OutputVersatSource(Versat* versat,Accelerator* accel,const char* directoryP
    TemplateSetBool("useDMA",accel->useDMA);
    versat->opts.shadowRegister = true;
    TemplateSetCustom("opts",&versat->opts,"Options");
-   
+
    ProcessTemplate(s,BasicTemplates::topAcceleratorTemplate,&versat->temp);
 
    TemplateSetNumber("configurationSize",accel->configAlloc.size);
@@ -201,12 +227,14 @@ void OutputVersatSource(Versat* versat,Accelerator* accel,const char* directoryP
    Hashmap<String,SizedConfig>* namedStates = ExtractNamedSingleStates(accel,arena);
    Hashmap<String,SizedConfig>* namedMem = ExtractNamedSingleMem(accel,arena);
 
+#if 0 // Mems are now in byte space
    for(Pair<String,SizedConfig>& pair : namedMem){
       iptr view = (iptr) pair.second.ptr;
       view *= sizeof(int);
       pair.second.ptr = (iptr*) view;
    }
-   
+#endif
+     
    #if 0
    for(Pair<String,SizedConfig>& pair : namedMem){
       int* view = (int*) pair.second.ptr;

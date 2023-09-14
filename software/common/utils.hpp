@@ -1,6 +1,8 @@
 #ifndef INCLUDED_UTILS_HPP
 #define INCLUDED_UTILS_HPP
 
+// Utilities that depend on memory 
+
 #include "utilsCore.hpp"
 #include "memory.hpp"
 
@@ -29,11 +31,13 @@ Array<T*> ListToArray(T* head,int size,Arena* arena){
    Array<T*> arr = PushArray<T*>(arena,size);
 
    int i = 0;
-   FOREACH_LIST_INDEXED(ptr,head,i){
+   FOREACH_LIST_INDEXED(T*,ptr,head,i){
       arr[i] = ptr;
    }
 
    return arr;
 }
+
+Optional<Array<String>> GetAllFilesInsideDirectory(String dirPath,Arena* arena);
 
 #endif // INCLUDED_UTILS_HPP

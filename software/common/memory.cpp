@@ -54,7 +54,7 @@ long PagesAvailable(){
 
 void CheckMemoryStats(){
    if(pagesAllocated != pagesDeallocated){
-      Log(LogModule::MEMORY,LogLevel::WARN,"Number of pages freed/allocated: %d/%d",pagesDeallocated,pagesAllocated);
+      LogWarn(LogModule::MEMORY,"Number of pages freed/allocated: %d/%d",pagesDeallocated,pagesAllocated);
    }
 }
 
@@ -65,7 +65,7 @@ Arena InitArena(size_t size){
    arena.totalAllocated = size;
    arena.mem = (Byte*) calloc(size,sizeof(Byte));
    Assert(arena.mem);
-   Assert(IS_ALIGNED_8(arena.mem));
+   Assert(IS_ALIGNED_64(arena.mem));
 
    return arena;
 }
@@ -163,6 +163,17 @@ String PushFile(Arena* arena,const char* filepath){
    return res;
 }
 
+String PushChar(Arena* arena,const char ch){
+  Byte* mem = PushBytes(arena,1);
+
+  *mem = ch;
+  String res = {};
+  res.data = (const char*) mem;
+  res.size = 1;
+
+  return res;
+}
+
 String PushString(Arena* arena,String ss){
    Byte* mem = PushBytes(arena,ss.size);
 
@@ -251,13 +262,13 @@ Byte* PushBytes(DynamicArena* arena,size_t size){
    Byte* res = ((Byte*) ptr->mem) + ptr->used;
    ptr->used += size;
 
-   Assert(ptr->used <= (GetPageSize() - sizeof(DynamicArena)));
+   Assert(ptr->used <= (GetPageSize() * ptr->pagesAllocated - sizeof(DynamicArena)));
 
    return res;
 }
 
 void Clear(DynamicArena* arena){
-   FOREACH_LIST(ptr,arena){
+  FOREACH_LIST(DynamicArena*,ptr,arena){
       ptr->used = 0;
    }
 }
@@ -321,13 +332,13 @@ void BitArray::Init(Byte* memory,int bitSize){
    this->memory = memory;
    this->bitSize = bitSize;
    this->byteSize = BitSizeToByteSize(bitSize);
-   Assert(IS_ALIGNED_4(this->byteSize));
+   Assert(IS_ALIGNED_32(this->byteSize));
 }
 
 void BitArray::Init(Arena* arena,int bitSize){
    this->memory = MarkArena(arena);
    this->bitSize = bitSize;
-   this->byteSize = ALIGN_4(BitSizeToByteSize(bitSize));
+   this->byteSize = ALIGN_UP_32(BitSizeToByteSize(bitSize));
    PushBytes(arena,this->byteSize); // Makes it easier to use popcount
 }
 
@@ -446,7 +457,7 @@ int BitArray::FirstBitSetIndex(int start){
    #endif
 
    Assert(start < this->bitSize);
-   int i = ALIGN_32(start - 31);
+   int i = ALIGN_UP_32(start - 31);
    uint32 startDWord = BitSizeToDWordSize(i);
    uint32* ptr = (uint32*) this->memory;
    ptr = &ptr[startDWord];

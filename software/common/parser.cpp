@@ -1,16 +1,9 @@
 #include "parser.hpp"
 
 #include <cstring>
+#include <cctype>
 
 #include "utils.hpp"
-
-static int IsWhitespace(char ch){
-   if(ch == '\n' || ch == ' ' || ch == '\t'){
-      return 1;
-   }
-
-   return 0;
-}
 
 void Tokenizer::ConsumeWhitespace(){
    if(keepWhitespaces){
@@ -27,7 +20,7 @@ void Tokenizer::ConsumeWhitespace(){
          continue;
       }
 
-      if(IsWhitespace(ptr[0])){
+      if(std::isspace(ptr[0])){
          ptr += 1;
          continue;
       }
@@ -109,7 +102,7 @@ Token Tokenizer::PeekToken(){
 
    for(int i = 1; &ptr[i] <= end; i++){
       token.size = i;
-      if((SpecialChars(&ptr[i],end - &ptr[i])) || IsWhitespace(ptr[i])){
+      if((SpecialChars(&ptr[i],end - &ptr[i])) || std::isspace(ptr[i])){
          return token;
       }
    }
@@ -332,7 +325,7 @@ Token Tokenizer::PeekWhitespace(){
    token.data = ptr;
 
    for(int i = 0; &ptr[i] <= end; i++){
-      if(!IsWhitespace(ptr[i])){
+      if(!std::isspace(ptr[i])){
          token.size = i;
          break;
       }
@@ -465,7 +458,7 @@ end:
 bool CheckStringOnlyWhitespace(Token tok){
    for(int i = 0; i < tok.size; i++){
       char ch = tok[i];
-      if(!IsWhitespace(ch)){
+      if(!std::isspace(ch)){
          return false;
       }
    }
@@ -550,8 +543,8 @@ String TrimWhitespaces(String in){
    const char* start = in.data;
    const char* end = &in.data[in.size-1];
 
-   while(IsWhitespace(*start) && start < end) ++start;
-   while(IsWhitespace(*end) && end > start) --end;
+   while(std::isspace(*start) && start < end) ++start;
+   while(std::isspace(*end) && end > start) --end;
 
    String res = {};
    res.data = start;
@@ -743,6 +736,7 @@ Expression* ParseOperationType_(Tokenizer* tok,OperationList* operators,ParsingF
          if(CompareString(peek,elem)){
             tok->AdvancePeek(peek);
             Expression* expr = PushStruct<Expression>(tempArena);
+            *expr = {};
             expr->expressions = PushArray<Expression*>(tempArena,2);
 
             expr->type = Expression::OPERATION;
@@ -790,5 +784,59 @@ Expression* ParseOperationType(Tokenizer* tok,std::initializer_list<std::initial
    expr->text = tok->Point(mark);
 
    return expr;
+}
+
+static void PrintSpaces(int amount){
+   for(int i = 0; i < amount; i++){
+      printf(" ");
+   }
+}
+
+static void PrintExpression(Expression* exp,int level){
+   PrintSpaces(level);
+   switch(exp->type){
+   case Expression::UNDEFINED:{
+      printf("UNDEFINED\n");
+   }break;
+   case Expression::OPERATION:{
+      printf("OPERATION\n");
+   }break;
+   case Expression::IDENTIFIER:{
+      printf("IDENTIFIER\n");
+   }break;
+   case Expression::COMMAND:{
+      printf("COMMAND\n");
+   }break;
+   case Expression::LITERAL:{
+      Value val = exp->val;
+      printf("LITERAL: %d\n",val.number);
+   }break;
+   case Expression::ARRAY_ACCESS:{
+      printf("ARRAY_ACCESS\n");
+   }break;
+   case Expression::MEMBER_ACCESS:{
+      printf("MEMBER_ACCESS\n");
+   }break;
+   default: NOT_IMPLEMENTED;
+   }
+
+   if(exp->op){
+      PrintSpaces(level);
+      printf("op: %s\n",exp->op);
+   }
+
+   if(exp->id.size){
+      PrintSpaces(level);
+      printf("id: %.*s\n",UNPACK_SS(exp->id));
+   }
+
+   for(Expression* subExpressions : exp->expressions){
+      PrintExpression(subExpressions,level + 2);
+      printf("\n");
+   }
+}
+
+void PrintExpression(Expression* exp){
+   PrintExpression(exp,0);
 }
 

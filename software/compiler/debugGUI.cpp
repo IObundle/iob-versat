@@ -356,7 +356,7 @@ Optional<String> AcceleratorTreeNodes(AcceleratorIterator iter,Filter filter){
 }
 
 String DebugValueRepresentation(Value val,Arena* arena){
-   Type* FUDeclType = GetType(STRING("FUDeclaration"));
+  Type* FUDeclType = GetType(STRING("FUDeclaration"));
    Type* ComplexInstanceType = GetType(STRING("FUInstance"));
    Type* WireType = GetType(STRING("Wire"));
    Type* StaticIdType = GetType(STRING("StaticId"));
@@ -383,7 +383,7 @@ String DebugValueRepresentation(Value val,Arena* arena){
       repr = PushString(arena,"[%p] %.*s",collapsed.custom,UNPACK_SS(inst->name));
    } else if(type == WireType){
       auto wire = (Wire*) collapsed.custom;
-      repr = PushString(arena,"%.*s(%d)",UNPACK_SS(wire->name),wire->bitsize);
+      repr = PushString(arena,"%.*s(%d)",UNPACK_SS(wire->name),wire->bitSize);
    } else if(type == EdgeNodeType){
       EdgeNode* node = (EdgeNode*) collapsed.custom;
       repr = Repr(*node,arena);
@@ -396,8 +396,10 @@ String DebugValueRepresentation(Value val,Arena* arena){
    } else if(type == iptrType){
       iptr* data = (iptr*) collapsed.custom;
       repr = PushString(arena,"%ld",*data);
+   } else if(CompareString(type->name,STRING("ExternalMemoryInterface"))){
+	 repr = PushString(arena,"Test");
    } else {
-      repr = GetDefaultValueRepresentation(val,arena);
+	 repr = ValueRepresentation(val,arena);
    }
 
    return repr;
@@ -528,9 +530,6 @@ Optional<ValueSelected> ShowHashmapTable(Value hashmap,Arena* arena){
       ImGui::EndTable();
    }
 
-   if(res){
-      printf("%d\n",res.value().index);    
-   }
    return res;
 }
 
@@ -831,8 +830,6 @@ void OutputAcceleratorRunValues(InstanceNode* node,Arena* arena){
       arr.data = inst->delay;
       arr.size = inst->declaration->delayOffsets.max;
 
-      printf("%p %d\n",arr.data,arr.size);
-
       if(arr.data && arr.size){
          ShowTable(MakeValue(&arr,"Array<iptr>"),arena);
       }
@@ -879,7 +876,7 @@ void OutputAcceleratorRunValues(InstanceNode* node,Arena* arena){
       Array<String> names = PushArray<String>(arena,outputs);
 
       int i = 0;
-      FOREACH_LIST_INDEXED(con,node->allOutputs,i){
+      FOREACH_LIST_INDEXED(ConnectionNode*,con,node->allOutputs,i){
          portValue[i] = PushString(arena,"Val: %d [Port: %d]",inst->outputs[con->port],con->port);
          names[i] = PushString(arena,"%.*s:%d",UNPACK_SS(con->instConnectedTo.node->inst->name),con->instConnectedTo.port);
       }
@@ -1099,7 +1096,6 @@ void DebugGUI(){
                Optional<String> res = AcceleratorTreeNodes(iter,filter);
                if(res){
                   String name = res.value();
-                  printf("%.*s\n",UNPACK_SS(name));
                   dw->selectedInstance = res;
                }
                ImGui::EndChild();

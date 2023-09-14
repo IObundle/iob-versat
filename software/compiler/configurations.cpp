@@ -7,7 +7,7 @@
 // Top level
 void FUInstanceInterfaces::Init(Accelerator* accel){
    VersatComputedValues val = ComputeVersatValues(accel->versat,accel);
-   
+
    config.Init(accel->configAlloc.ptr,val.nConfigs);
    delay.Init(accel->configAlloc.ptr + accel->startOfDelay,val.nDelays);
    statics.Init(accel->configAlloc.ptr + accel->startOfStatic,val.nStatics);
@@ -27,7 +27,7 @@ void FUInstanceInterfaces::Init(Accelerator* topLevel,FUInstance* inst){
 
    VersatComputedValues val = ComputeVersatValues(topLevel->versat,topLevel);
    statics.Init(topLevel->configAlloc.ptr + topLevel->startOfStatic,val.nStatics);
-   
+
    config.Init(inst->config,decl->configOffsets.max);
    state.Init(inst->state,decl->stateOffsets.max);
    delay.Init(inst->delay,decl->delayOffsets.max);
@@ -36,7 +36,7 @@ void FUInstanceInterfaces::Init(Accelerator* topLevel,FUInstance* inst){
    storedOutputs.Init(inst->storedOutputs,decl->outputOffsets.max);
    extraData.Init(inst->extraData,decl->extraDataOffsets.max);
    if(decl->externalMemory.size){
-      externalMemory.Init(inst->externalMemory,MemorySize(decl->externalMemory));
+      externalMemory.Init(inst->externalMemory,ExternalMemoryByteSize(decl->externalMemory));
    }
 
    #if 0
@@ -73,7 +73,7 @@ CalculatedOffsets CalculateConfigOffsetsIgnoringStatics(Accelerator* accel,Arena
 
    int index = 0;
    int offset = 0;
-   FOREACH_LIST(ptr,accel->allocated){
+   FOREACH_LIST(InstanceNode*,ptr,accel->allocated){
       FUInstance* inst = ptr->inst;
       Assert(!(inst->sharedEnable && inst->isStatic));
 
@@ -146,7 +146,7 @@ CalculatedOffsets CalculateConfigurationOffset(Accelerator* accel,MemType type,A
 
    int index = 0;
    int offset = 0;
-   FOREACH_LIST(ptr,accel->allocated){
+   FOREACH_LIST(InstanceNode*,ptr,accel->allocated){
       FUInstance* inst = ptr->inst;
       array[index] = offset;
 
@@ -167,9 +167,9 @@ CalculatedOffsets CalculateOutputsOffset(Accelerator* accel,int offset,Arena* ou
    Array<int> array = PushArray<int>(out,Size(accel->allocated));
 
    BLOCK_REGION(out);
-   
+
    int index = 0;
-   FOREACH_LIST(ptr,accel->allocated){
+   FOREACH_LIST(InstanceNode*,ptr,accel->allocated){
       FUInstance* inst = ptr->inst;
       array[index] = offset;
 
@@ -241,7 +241,7 @@ CalculatedOffsets ExtractState(Accelerator* accel,Arena* out){
 
       int state = inst->state - accel->stateAlloc.ptr;
       Assert(state < accel->stateAlloc.size);
-      
+
       max = std::max(state,max);
       offsets[index] = state;
    }
@@ -414,7 +414,7 @@ void CheckCorrectConfiguration(Accelerator* topLevel,FUInstanceInterfaces& inter
 // Populates sub accelerator
 void PopulateAccelerator(Accelerator* topLevel,Accelerator* accel,FUDeclaration* topDeclaration,FUInstanceInterfaces& inter,std::unordered_map<StaticId,StaticData>* staticMap){
    int index = 0;
-   FOREACH_LIST(ptr,accel->allocated){
+   FOREACH_LIST(InstanceNode*,ptr,accel->allocated){
       FUInstance* inst = ptr->inst;
       FUDeclaration* decl = inst->declaration;
 
@@ -461,12 +461,7 @@ void PopulateAccelerator(Accelerator* topLevel,Accelerator* accel,FUDeclaration*
          inst->delay = inter.delay.Set(topDeclaration->delayOffsets.offsets[index],decl->delayOffsets.max);
       }
       if(decl->externalMemory.size){
-         for(int i = 0; i < decl->externalMemory.size; i++){
-            int* externalMemory = inter.externalMemory.Push(1 << decl->externalMemory[i].bitsize);
-            if(i == 0){
-               inst->externalMemory = externalMemory;
-            }
-         }
+		inst->externalMemory = inter.externalMemory.Push(ExternalMemoryByteSize(decl->externalMemory));
       }
       if(decl->outputOffsets.max){
          inst->outputs = inter.outputs.Set(topDeclaration->outputOffsets.offsets[index],decl->outputOffsets.max);
@@ -499,7 +494,7 @@ void PopulateTopLevelAccelerator(Accelerator* accel){
    Arena* temp = &tempInst;
 
    int sharedUnits = 0;
-   FOREACH_LIST(ptr,accel->allocated){
+   FOREACH_LIST(InstanceNode*,ptr,accel->allocated){
       if(ptr->inst->sharedEnable){
          sharedUnits += 1;
       }
@@ -510,7 +505,7 @@ void PopulateTopLevelAccelerator(Accelerator* accel){
 
    Hashmap<int,iptr*>* sharedToConfigPtr = PushHashmap<int,iptr*>(temp,sharedUnits);
 
-   FOREACH_LIST(ptr,accel->allocated){
+   FOREACH_LIST(InstanceNode*,ptr,accel->allocated){
       FUInstance* inst = ptr->inst;
       FUDeclaration* decl = inst->declaration;
 
@@ -564,12 +559,7 @@ void PopulateTopLevelAccelerator(Accelerator* accel){
          inst->delay = inter.delay.Push(decl->delayOffsets.max);
       }
       if(decl->externalMemory.size){
-         for(int i = 0; i < decl->externalMemory.size; i++){
-            int* externalMemory = inter.externalMemory.Push(1 << decl->externalMemory[i].bitsize);
-            if(i == 0){
-               inst->externalMemory = externalMemory;
-            }
-         }
+		inst->externalMemory = inter.externalMemory.Push(ExternalMemoryByteSize(decl->externalMemory));
       }
       #if 1
       if(decl->outputOffsets.max){
@@ -673,8 +663,8 @@ Hashmap<String,SizedConfig>* ExtractNamedSingleMem(Accelerator* accel,Arena* out
       FUDeclaration* decl = inst->declaration;
       if(decl->type == FUDeclaration::SINGLE && decl->isMemoryMapped){
          String name = iter.GetFullName(out,"_");
-         String fullName = PushString(out,"%.*s_addr",UNPACK_SS(name)); // TODO: We could just extend the previous string 
-         
+         String fullName = PushString(out,"%.*s_addr",UNPACK_SS(name)); // TODO: We could just extend the previous string
+
          res->Insert(fullName,(SizedConfig){(iptr*) inst->memMapped,1 << decl->memoryMapBits});
       }
    }
@@ -694,16 +684,16 @@ void CalculateStaticConfigurationPositions(Versat* versat,Accelerator* accel,Are
    AcceleratorIterator iter = {};
    for(InstanceNode* node = iter.Start(accel,temp,false); node; node = iter.Next()){
       FUInstance* inst = node->inst;
-      FUDeclaration* decl = inst->declaration; 
+      FUDeclaration* decl = inst->declaration;
       if(inst->isStatic){
          FUDeclaration* parentDecl = iter.ParentInstance()->inst->declaration;
-         
+
          StaticId id = {};
          id.name = inst->name;
          id.parent = parentDecl;
 
          GetOrAllocateResult res = accel->calculatedStaticPos->GetOrAllocate(id);
-         
+
          if(res.alreadyExisted){
             //Assert(data == *res.data);
          } else {
@@ -733,7 +723,7 @@ void ShareInstanceConfig(FUInstance* inst, int shareBlockIndex){
 }
 
 void SetStatic(Accelerator* accel,FUInstance* inst){
-   // After two phase compilation change, we only need to store the change in the instance. 
+   // After two phase compilation change, we only need to store the change in the instance.
    #if 0
    int size = inst->declaration->configs.size;
    iptr* oldConfig = inst->config;
@@ -773,7 +763,7 @@ void SetStatic(Accelerator* accel,FUInstance* inst){
 
    RemoveChunkAndCompress(&accel->configAlloc,oldConfig,size);
    #endif
-   
+
    inst->isStatic = true;
 }
 
@@ -786,19 +776,19 @@ void InitializeAccelerator(Versat* versat,Accelerator* accel,Arena* temp){
    ZeroOutAlloc(&accel->outputAlloc,val.totalOutputs);
    ZeroOutAlloc(&accel->storedOutputAlloc,val.totalOutputs);
    ZeroOutAlloc(&accel->extraDataAlloc,val.extraData);
-   ZeroOutAlloc(&accel->externalMemoryAlloc,val.externalMemorySize);
+   ZeroOutAlloc(&accel->externalMemoryAlloc,val.externalMemoryByteSize);
 
    CalculateStaticConfigurationPositions(versat,accel,temp);
    accel->startOfStatic = val.configs;
    accel->startOfDelay = val.configs + val.statics;
-   
+
    AcceleratorIterator iter = {};
    for(InstanceNode* node = iter.Start(accel,temp,true); node; node = iter.Next()){
       FUInstance* inst = node->inst;
       FUDeclaration* type = inst->declaration;
       if(type->initializeFunction){
          type->initializeFunction(inst);
-      }  
+      }
    }
 }
 
@@ -815,7 +805,7 @@ OrderedConfigurations ExtractOrderedConfigurationNames(Versat* versat,Accelerato
    res.configs = PushArray<Wire>(out,val.configs);
    res.statics = PushArray<Wire>(out,val.statics);
    res.delays  = PushArray<Wire>(out,val.delays);
-   
+
    for(int i = 0; i < val.configs; i++){
       AcceleratorIterator iter = {};
       for(InstanceNode* node = iter.Start(accel,temp,true); node; node = iter.Next()){
@@ -829,7 +819,7 @@ OrderedConfigurations ExtractOrderedConfigurationNames(Versat* versat,Accelerato
             }
 
             String name = iter.GetFullName(temp,"_");
-            
+
             for(int ii = 0; ii < decl->configs.size; ii++){
                res.configs[index + ii] = decl->configs[ii];
                res.configs[index + ii].name = PushString(out,"%.*s_%.*s",UNPACK_SS(name),UNPACK_SS(decl->configs[ii].name));
@@ -837,7 +827,7 @@ OrderedConfigurations ExtractOrderedConfigurationNames(Versat* versat,Accelerato
          }
       }
    }
-   
+
    for(Pair<StaticId,StaticData>& pair : accel->calculatedStaticPos){
       int offset = pair.second.offset;
       StaticId& id = pair.first;
@@ -848,10 +838,10 @@ OrderedConfigurations ExtractOrderedConfigurationNames(Versat* versat,Accelerato
          res.statics[ii + offset].name = identifier;
       }
    }
-   
+
    for(int i = 0; i < val.delays; i++){
       res.delays[i].name = PushString(out,"TOP_Delay%d",i);
-      res.delays[i].bitsize = 32; // TODO: For now, delay is set at 32 bits
+      res.delays[i].bitSize = 32; // TODO: For now, delay is set at 32 bits
    }
 
    return res;

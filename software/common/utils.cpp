@@ -47,17 +47,15 @@ char* StaticFormat(const char* format,...){
    return buffer;
 }
 
-NanoSecond GetTime(){
+Time GetTime(){
    timespec time;
    clock_gettime(CLOCK_MONOTONIC, &time);
 
-   uint64 top = (uint64) Seconds(time.tv_sec).time;
-   uint64 bottom = (uint64) time.tv_nsec;
+   Time t = {};
+   t.seconds = time.tv_sec;
+   t.microSeconds = time.tv_nsec * 1000;
 
-   NanoSecond res = {};
-   res.time = top + bottom;
-
-   return res;
+   return t;
 }
 
 // Misc
@@ -163,5 +161,57 @@ String PathGoUp(char* pathBuffer){
    return content;
 }
 
+Optional<Array<String>> GetAllFilesInsideDirectory(String dirPath,Arena* arena){
+   DIR* dir = opendir(StaticFormat("%.*s",UNPACK_SS(dirPath))); // Make sure it's zero terminated
 
+   if(dir == nullptr){
+      return {};
+   }
+
+   // Count number of files
+   int amount = 0;
+   while(1){      
+      dirent* d = readdir(dir);
+
+      if(d == nullptr){
+         break;
+      }
+
+      printf("%s\n",d->d_name);
+      
+      if(d->d_name[0] == '.' && d->d_name[1] == '\0'){
+         continue;
+      }
+      if(d->d_name[0] == '.' && d->d_name[1] == '.' && d->d_name[2] == '\0'){
+         continue;
+      }
+
+      amount += 1;
+   }
+
+   Array<String> arr = PushArray<String>(arena,amount);
+
+   rewinddir(dir);
+
+   int index = 0;
+   while(1){      
+      dirent* d = readdir(dir);
+
+      if(d == nullptr){
+         break;
+      }
+
+      if(d->d_name[0] == '.' && d->d_name[1] == '\0'){
+         continue;
+      }
+      if(d->d_name[0] == '.' && d->d_name[1] == '.' && d->d_name[2] == '\0'){
+         continue;
+      }
+
+      arr[index] = PushString(arena,"%s",d->d_name);
+      index += 1;
+   }
+   
+   return arr;
+}
 

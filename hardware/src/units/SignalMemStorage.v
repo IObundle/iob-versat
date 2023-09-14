@@ -42,37 +42,59 @@
 
    input [31:0]                  delay0,
 
+   input                         pingPong,
+
    // Configuration
-   output reg [ADDR_W-1:0]             stored
+   output [ADDR_W-1:0]           stored
    );
 
 reg [31:0] delay;
 
+reg [ADDR_W-1:0] currentStored;
+reg [ADDR_W-1:0] lastStored;
+
+assign stored = pingPong ? lastStored : currentStored;
+
+reg pingPongState;
+
+// Ping pong 
+always @(posedge clk,posedge rst)
+begin
+   if(rst)
+      pingPongState <= 0;
+   else if(run)
+      pingPongState <= pingPong ? (!pingPongState) : 1'b0;
+end
+
 assign ext_dp_write_0_port_0 = 1'b1;
 
-assign ext_dp_addr_0_port_1 = addr;
-assign rdata = ext_dp_in_0_port_1;
+assign ext_dp_addr_0_port_1 = pingPong ? {pingPongState,addr[ADDR_W-2:0]} : addr;
+assign rdata = ready ? ext_dp_in_0_port_1 : 0;
 assign ext_dp_enable_0_port_1 = valid;
 assign ext_dp_write_0_port_1 = 1'b0;
 
+reg [ADDR_W-1:0] port_0_address;
+assign ext_dp_addr_0_port_0 = pingPong ? {!pingPongState,port_0_address[ADDR_W-2:0]} : port_0_address;
+
 always @(posedge clk,posedge rst)
 begin
-   ext_dp_addr_0_port_0 <= 0;
+   port_0_address <= 0;
    ext_dp_out_0_port_0 <= 0;
    ext_dp_enable_0_port_0 <= 0;
 
    if(rst) begin
       delay <= 0;      
-      stored <= 0;
+      currentStored <= 0;
    end else if(run) begin
       delay <= delay0;
-      stored <= 0;
+      lastStored <= currentStored;
+      currentStored <= 0;
    end else if(|delay) begin
       delay <= delay - 1;
    end else begin
       if(|in1) begin
-         stored <= stored + 1;
-         ext_dp_addr_0_port_0 <= stored;
+         currentStored <= currentStored + 1;
+         port_0_address <= currentStored;
          ext_dp_out_0_port_0 <= in0;
          ext_dp_enable_0_port_0 <= 1;
       end
@@ -89,7 +111,7 @@ begin
       ready <= 0;
    end else begin   
       ready_delay0 <= valid;
-      ready_delay1 <= valid;
+      ready_delay1 <= ready_delay0;
       ready <= ready_delay1;
    end
 end

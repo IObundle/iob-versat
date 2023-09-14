@@ -272,13 +272,13 @@ ConsolidationResult GenerateConsolidationGraph(Versat* versat,Arena* arena,Accel
    }
 
    // Map inputs
-   FOREACH_LIST(ptr1,accel1->allocated){
+   FOREACH_LIST(InstanceNode*,ptr1,accel1->allocated){
       FUInstance* instA = ptr1->inst;
       if(instA->declaration != BasicDeclaration::input){
          continue;
       }
 
-      FOREACH_LIST(ptr2,accel2->allocated){
+      FOREACH_LIST(InstanceNode*,ptr2,accel2->allocated){
          FUInstance* instB = ptr2->inst;
          if(instB->declaration != BasicDeclaration::input){
             continue;
@@ -321,12 +321,12 @@ ConsolidationResult GenerateConsolidationGraph(Versat* versat,Arena* arena,Accel
 
    #if 1
    // Check possible edge mapping
-   FOREACH_LIST(edge1,accel1->edges){
+   FOREACH_LIST(Edge*,edge1,accel1->edges){
       if(!EdgeOrder(edge1,options)){
          continue;
       }
 
-      FOREACH_LIST(edge2,accel2->edges){
+      FOREACH_LIST(Edge*,edge2,accel2->edges){
          // TODO: some nodes do not care about which port is connected (think the inputs for common operations, like multiplication, adders and the likes)
          // Can augment the algorithm further to find more mappings
          if(!EdgeOrder(edge2,options)){
@@ -586,7 +586,7 @@ CliqueState* InitMaxClique(ConsolidationGraph graph,int upperBound,Arena* arena)
    return state;
 }
 
-void Clique(CliqueState* state,ConsolidationGraph graphArg,int index,IndexRecord* record,int size,Arena* arena,NanoSecond MAX_CLIQUE_TIME){
+void Clique(CliqueState* state,ConsolidationGraph graphArg,int index,IndexRecord* record,int size,Arena* arena,Time MAX_CLIQUE_TIME){
    state->iterations += 1;
 
    //ConsolidationGraph graph = Copy(graphArg,arena);
@@ -609,7 +609,7 @@ void Clique(CliqueState* state,ConsolidationGraph graphArg,int index,IndexRecord
    }
 
    auto end = GetTime();
-   NanoSecond elapsed = end - state->start;
+   Time elapsed = end - state->start;
    if(elapsed > MAX_CLIQUE_TIME){
       state->found = true;
       return;
@@ -657,7 +657,7 @@ void Clique(CliqueState* state,ConsolidationGraph graphArg,int index,IndexRecord
    } while((num = graph.validNodes.GetNumberBitsSet()) != 0);
 }
 
-void RunMaxClique(CliqueState* state,Arena* arena,NanoSecond MAX_CLIQUE_TIME){
+void RunMaxClique(CliqueState* state,Arena* arena,Time MAX_CLIQUE_TIME){
    ConsolidationGraph graph = Copy(state->clique,arena);
    graph.validNodes.Fill(0);
 
@@ -707,7 +707,7 @@ void RunMaxClique(CliqueState* state,Arena* arena,NanoSecond MAX_CLIQUE_TIME){
    Assert(IsClique(state->clique).result);
 }
 
-CliqueState MaxClique(ConsolidationGraph graph,int upperBound,Arena* arena,NanoSecond MAX_CLIQUE_TIME){
+CliqueState MaxClique(ConsolidationGraph graph,int upperBound,Arena* arena,Time MAX_CLIQUE_TIME){
    CliqueState state = {};
    state.table = PushArray<int>(arena,graph.nodes.size);
    state.clique = Copy(graph,arena); // Preserve nodes and edges, but allocates different valid nodes
@@ -742,7 +742,7 @@ CliqueState MaxClique(ConsolidationGraph graph,int upperBound,Arena* arena,NanoS
       }
 
       auto end = GetTime();
-      NanoSecond elapsed = end - state.start;
+      Time elapsed = end - state.start;
       if(elapsed > MAX_CLIQUE_TIME){
          printf("Timeout, index: %d (from %d)\n",i,graph.nodes.size);
          break;
@@ -1335,7 +1335,7 @@ MergeGraphResult MergeGraph(Versat* versat,Accelerator* flatten1,Accelerator* fl
    Accelerator* newGraph = CreateAccelerator(versat);
 
    // Create base instances from accel 1
-   FOREACH_LIST(ptr,flatten1->allocated){
+   FOREACH_LIST(InstanceNode*,ptr,flatten1->allocated){
       FUInstance* inst = ptr->inst;
 
       InstanceNode* newNode = CopyInstance(newGraph,ptr,inst->name);
@@ -1346,7 +1346,7 @@ MergeGraphResult MergeGraph(Versat* versat,Accelerator* flatten1,Accelerator* fl
 
    #if 1
    // Create base instances from accel 2, unless they are mapped to nodes from accel1
-   FOREACH_LIST(ptr,flatten2->allocated){
+   FOREACH_LIST(InstanceNode*,ptr,flatten2->allocated){
       FUInstance* inst = ptr->inst;
 
       auto mapping = graphMapping.instanceMap.find(inst); // Returns mapping from accel2 to accel1
@@ -1381,7 +1381,7 @@ MergeGraphResult MergeGraph(Versat* versat,Accelerator* flatten1,Accelerator* fl
 
    #if 1
    // Create base edges from accel 1
-   FOREACH_LIST(edge,flatten1->edges){
+   FOREACH_LIST(Edge*,edge,flatten1->edges){
       FUInstance* mappedInst = map->GetOrFail(edge->units[0].inst);
       FUInstance* mappedOther = map->GetOrFail(edge->units[1].inst);
 
@@ -1391,7 +1391,7 @@ MergeGraphResult MergeGraph(Versat* versat,Accelerator* flatten1,Accelerator* fl
 
    #if 1
    // Create base edges from accel 2, unless they are mapped to edges from accel 1
-   FOREACH_LIST(edge,flatten2->edges){
+   FOREACH_LIST(Edge*,edge,flatten2->edges){
       PortEdge searchEdge = {};
       searchEdge.units[0] = edge->units[0];
       searchEdge.units[1] = edge->units[1];
@@ -1438,13 +1438,13 @@ MergeGraphResultExisting MergeGraphToExisting(Versat* versat,Accelerator* existi
 
    Hashmap<FUInstance*,FUInstance*>* map = PushHashmap<FUInstance*,FUInstance*>(out,size1 + size2);
 
-   FOREACH_LIST(ptr,existing->allocated){
+   FOREACH_LIST(InstanceNode*,ptr,existing->allocated){
       map->Insert(ptr->inst,ptr->inst);
    }
 
    #if 1
    // Create base instances from accel 2, unless they are mapped to nodes from accel1
-   FOREACH_LIST(ptr,flatten2->allocated){
+   FOREACH_LIST(InstanceNode*,ptr,flatten2->allocated){
       FUInstance* inst = ptr->inst;
 
       auto mapping = graphMapping.instanceMap.find(inst); // Returns mapping from accel2 to accel1
@@ -1479,7 +1479,7 @@ MergeGraphResultExisting MergeGraphToExisting(Versat* versat,Accelerator* existi
 
    #if 1
    // Create base edges from accel 2, unless they are mapped to edges from accel 1
-   FOREACH_LIST(edge,flatten2->edges){
+   FOREACH_LIST(Edge*,edge,flatten2->edges){
       PortEdge searchEdge = {};
       searchEdge.units[0] = edge->units[0];
       searchEdge.units[1] = edge->units[1];
@@ -1651,14 +1651,14 @@ FUDeclaration* MergeThree(Versat* versat,FUDeclaration* typeA,FUDeclaration* typ
 
 Array<int> GetPortConnections(InstanceNode* node,Arena* arena){
    int maxPorts = 0;
-   FOREACH_LIST(con,node->allInputs){
+   FOREACH_LIST(ConnectionNode*,con,node->allInputs){
       maxPorts = std::max(maxPorts,con->port);
    }
 
    Array<int> res = PushArray<int>(arena,maxPorts + 1);
    Memset(res,0);
 
-   FOREACH_LIST(con,node->allInputs){
+   FOREACH_LIST(ConnectionNode*,con,node->allInputs){
       res[con->port] += 1;
    }
 
@@ -1719,7 +1719,7 @@ FUDeclaration* Merge(Versat* versat,Array<FUDeclaration*> types,String name,Merg
 
    // Need to map from final to each input graph
    int numberOfMultipleInputs = 0;
-   FOREACH_LIST(ptr,result->allocated){
+   FOREACH_LIST(InstanceNode*,ptr,result->allocated){
       if(ptr->multipleSamePortInputs){
          numberOfMultipleInputs += 1;
       }
@@ -1741,7 +1741,7 @@ FUDeclaration* Merge(Versat* versat,Array<FUDeclaration*> types,String name,Merg
 
    FUDeclaration* muxType = GetTypeByName(versat,STRING("CombMux4"));
    int multiplexersAdded = 0;
-   FOREACH_LIST(ptr,result->allocated){
+   FOREACH_LIST(InstanceNode*,ptr,result->allocated){
       if(ptr->multipleSamePortInputs){
          // Need to figure out which port, (which might be multiple), has the same inputs
          Array<int> portConnections = GetPortConnections(ptr,arena);
@@ -1764,7 +1764,7 @@ FUDeclaration* Merge(Versat* versat,Array<FUDeclaration*> types,String name,Merg
             Array<EdgeNode> problematicEdgesInFinalGraph = PushArray<EdgeNode>(arena,numberOfMultiple);
             int index = 0;
 
-            FOREACH_LIST(con,ptr->allInputs){
+            FOREACH_LIST(ConnectionNode*,con,ptr->allInputs){
                if(con->port == port){
                   EdgeNode node = {};
                   node.node0 = con->instConnectedTo;
@@ -1798,7 +1798,7 @@ FUDeclaration* Merge(Versat* versat,Array<FUDeclaration*> types,String name,Merg
                      // Kinda like we have with the mapMultipleInputsToSubgraphs, except that we can map all the nodes instead of only the multiple inputs
                      // Then we could use the map here, instead of searching the all inputs of the node.
                      // TODO: The correct approach would be to use a Bimap to perform the mapping from final graph to inputs, and to not use the mapMultipleInputsToSubgraphs (because this is just an incomplete map, if we add a complete map we could do the same thing)
-                     FOREACH_LIST(con,node->allInputs){
+                     FOREACH_LIST(ConnectionNode*,con,node->allInputs){
                         InstanceNode* other = view[ii]->GetOrFail(con->instConnectedTo.node);
 
                         // In here, we could save edge information for the view graphs, so that we could add a multiplexer to the view graph later
@@ -1850,7 +1850,7 @@ FUDeclaration* Merge(Versat* versat,Array<FUDeclaration*> types,String name,Merg
    for(int i = 0; i < size; i++){
       BLOCK_REGION(arena);
       Set<FUInstance*>* firstGraph = PushSet<FUInstance*>(arena,Size(flatten[i]->allocated));
-      FOREACH_LIST(ptr,flatten[i]->allocated){
+      FOREACH_LIST(InstanceNode*,ptr,flatten[i]->allocated){
          InstanceNode* finalNode = view[i]->GetOrFail(ptr);
 
          firstGraph->Insert(finalNode->inst);

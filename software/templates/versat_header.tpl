@@ -3,11 +3,14 @@
 #ifndef INCLUDED_VERSAT_ACCELERATOR_HEADER
 #define INCLUDED_VERSAT_ACCELERATOR_HEADER
 
-#include <stdint.h>
+#ifdef __cplusplus
+#include <cstdint>
+#else
+#include "stdbool.h"
+#include "stdint.h"
+#endif
+
 typedef intptr_t iptr;
-#define bool char
-#define true 1
-#define false 0
 
 typedef struct{
 #{for wire orderedConfigs.configs}
@@ -28,10 +31,12 @@ int @{name};
 #{end}
 } AcceleratorState;
 
-static const int memMappedStart = @{memoryMappedBase * 4 |> Hex};
+static const int memMappedStart = @{memoryMappedBase |> Hex};
+static const int versatAddressSpace = 2 * @{memoryMappedBase |> Hex};
 
 extern int versat_base;
 
+// Base address for each memory mapped unit
 #{for pair namedMem}
 #define @{pair.first} (versat_base + memMappedStart + @{pair.second.ptr})
 #{end}
@@ -52,10 +57,22 @@ void versat_init(int base);
 
 void Debug();
 void RunAccelerator(int times);
+void StartAccelerator();
+void EndAccelerator();
 void VersatMemoryCopy(iptr* dest,iptr* data,int size);
-void VersatUnitWrite(int addr,int val);
-int VersatUnitRead(int base,int index);
+void VersatUnitWrite(int baseaddr,int index,int val);
+int VersatUnitRead(int baseaddr,int index);
+float VersatUnitReadFloat(int base,int index);
 void SignalLoop();
+
+// PC-Emul side functions that allow to enable or disable certain portions of the emulation
+#ifdef PC
+void ConfigCreateVCD(bool value);
+void ConfigSimulateDatabus(bool value); 
+#else
+#define ConfigCreateVCD(...) ((void)0)
+#define ConfigSimulateDatabus(...) ((void)0)
+#endif
 
 // Needed by PC-EMUL to correctly simulate the design, embedded compiler should remove these symbols from firmware because not used by them 
 static const char* acceleratorTypeName = "@{accelType}";
@@ -90,10 +107,6 @@ extern volatile AcceleratorState* accelState;
 #{set name pair.first} #{set conf pair.second}
 #define ACCEL_@{name} accelState->@{name}
 #{end}
-
-#undef bool
-#undef true
-#undef false
 
 #endif // INCLUDED_VERSAT_ACCELERATOR_HEADER
 

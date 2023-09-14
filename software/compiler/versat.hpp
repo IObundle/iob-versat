@@ -54,10 +54,10 @@ struct DAGOrder{
 };
 
 struct VersatComputedData{
-   int memoryMaskSize;
-   int memoryAddressOffset;
-   char memoryMaskBuffer[33];
-   char* memoryMask;
+  int memoryMaskSize;
+  int memoryAddressOffset;
+  char memoryMaskBuffer[33];
+  char* memoryMask;
 };
 
 struct ComputedData{
@@ -66,9 +66,9 @@ struct ComputedData{
 };
 
 struct Parameter{
-   String name;
-   String value;
-   Parameter* next;
+  String name;
+  String value;
+  Parameter* next;
 };
 
 struct DAGOrderNodes{
@@ -85,56 +85,56 @@ struct DAGOrderNodes{
 };
 
 struct FUInstance{
-   String name;
+  String name;
 
-   // Embedded memory
-   int* memMapped;
-   iptr* config;
-   int* state;
-   iptr* delay;
-   int* externalMemory;
+  // Embedded memory
+  int* memMapped;
+  iptr* config;
+  int* state;
+  iptr* delay;
+  Byte* externalMemory;
 
-   // This should be part of another hierarchy.
-   // Required for accel subunits but not required by embedded or should user code have access to them
-   int* outputs;
-   int* storedOutputs;
-   unsigned char* extraData;
-   FUInstance* declarationInstance; // Used because of AccessMemory and the fact that GetInput depends on instance pointer
+  // This should be part of another hierarchy.
+  // Required for accel subunits but not required by embedded or should user code have access to them
+  int* outputs;
+  int* storedOutputs;
+  unsigned char* extraData;
+  FUInstance* declarationInstance; // Used because of AccessMemory and the fact that GetInput depends on instance pointer
 
-   // This should be versat side only, but it's easier to have them here for now
-   // User code should not access them directly. Future versions will not have them
-   String parameters;
-   Accelerator* accel;
-   FUDeclaration* declaration;
-   int id;
+  // This should be versat side only, but it's easier to have them here for now
+  // User code should not access them directly. Future versions will not have them
+  String parameters;
+  Accelerator* accel;
+  FUDeclaration* declaration;
+  int id;
 
   // PC only
-   int baseDelay;
+  int baseDelay;
 
-   // Configuration + State variables that versat needs access to
-   int done; // Units that are sink or sources of data must implement done to ensure circuit does not end prematurely
-   bool isStatic;
+  // Configuration + State variables that versat needs access to
+  int done; // Units that are sink or sources of data must implement done to ensure circuit does not end prematurely
+  bool isStatic;
 
-   bool namedAccess;
+  bool namedAccess;
 
-   // Various uses
-   Accelerator* iterative;
+  // Various uses
+  Accelerator* iterative;
 
-   UnitDebugData* debugData;
+  UnitDebugData* debugData;
 
-   union{
-      int literal;
-      int bufferAmount;
-      int portIndex;
-   };
-   //GraphComputedData* graphData;
-   //VersatComputedData* versatData;
-   int sharedIndex;
-   char tag;
-   bool savedConfiguration; // For subunits registered, indicate when we save configuration before hand
-   bool savedMemory; // Same for memory
-   bool sharedEnable;
-   bool initialized;
+  union{
+    int literal;
+    int bufferAmount;
+    int portIndex;
+  };
+  //GraphComputedData* graphData;
+  //VersatComputedData* versatData;
+  int sharedIndex;
+  char tag;
+  bool savedConfiguration; // For subunits registered, indicate when we save configuration before hand
+  bool savedMemory; // Same for memory
+  bool sharedEnable;
+  bool initialized;
 };
 
 struct DebugState{
@@ -147,7 +147,12 @@ struct DebugState{
 };
 
 struct Options{
-   bool shadowRegister;
+  // Repr : test
+  int addrSize;
+  int dataSize;
+  bool shadowRegister;
+  bool architectureHasDatabus;
+  bool generateFSTFormat;
 };
 
 struct Versat{
@@ -179,7 +184,7 @@ struct UnitValues{
    int statics;
    int sharedUnits;
    int externalMemoryInterfaces;
-   int externalMemorySize;
+   int externalMemoryByteSize;
    int numberUnits;
 
    int memoryMappedBits;

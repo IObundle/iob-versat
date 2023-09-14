@@ -2,8 +2,10 @@
 #define INCLUDED_VERSAT_ACCELERATOR_STATS
 
 #include "versat.hpp"
+#include "verilogParsing.hpp"
 
-int MemorySize(Array<ExternalMemoryInterface> interfaces); // Size of a simple memory mapping.
+int ExternalMemoryByteSize(ExternalMemoryInterface* inter);
+int ExternalMemoryByteSize(Array<ExternalMemoryInterface> interfaces); // Size of a simple memory mapping.
 int NumberUnits(Accelerator* accel);
 
 // TODO: Instead of versatComputedValues, could return something like a FUDeclaration

@@ -55,6 +55,7 @@ Byte* PushBytes(Arena* arena, size_t size);
 size_t SpaceAvailable(Arena* arena);
 String PointArena(Arena* arena,Byte* mark);
 String PushFile(Arena* arena,const char* filepath);
+String PushChar(Arena* arena,const char);
 String PushString(Arena* arena,String ss);
 String PushString(Arena* arena,const char* format,...) __attribute__ ((format (printf, 2, 3)));
 String vPushString(Arena* arena,const char* format,va_list args);
@@ -130,7 +131,7 @@ public:
       this->maximumTimes = maximum;
       this->timesPushed = 0;
    }
-
+   
    void Init(T* ptr,int maximum){
       this->ptr = ptr;
       this->maximumTimes = maximum;
@@ -194,6 +195,12 @@ public:
       return res;
    }
 };
+
+template<typename T>
+static void PopPushPtr(Arena* arena,PushPtr<T>& ptr){
+   Byte* lastPos = (Byte*) &ptr.ptr[ptr.timesPushed];
+   PopMark(arena,lastPos);
+}
 
 template<typename T> bool Inside(PushPtr<T>* push,T* ptr);
 
@@ -287,8 +294,8 @@ struct Hashmap{
 
    bool Exists(Key key);
 
-   //HashmapIterator<Key,Data> begin();
-   //HashmapIterator<Key,Data> end();
+   // HashmapIterator<Key,Data> begin();
+   // HashmapIterator<Key,Data> end();
 };
 
 template<typename Key,typename Data>

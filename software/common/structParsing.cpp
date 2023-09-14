@@ -193,7 +193,7 @@ MemberDef* ParseMember(Tokenizer* tok,Arena* out){
          tok->AdvancePeek(peek);
          /*Token arrayExpression =*/ tok->NextFindUntil("]");
          tok->AssertNextToken("]");
-
+ 
          def.arrays = tok->Point(arraysMark);
       } else if(CompareToken(peek,"(")){
          Token advanceList = tok->PeekUntilDelimiterExpression({"("},{")"},0);
@@ -274,6 +274,9 @@ StructDef ParseStruct(Tokenizer* tok,Arena* arena){
 
    tok->AssertNextToken("{");
 
+   defer{tok->keepComments = false;}; // TODO: A lit bit of a hack, part of the reason is that the tokenizer should be able to freely change types of special characters and such midway.
+
+   tok->keepComments = true; // TODO: A little bit hacky to get the Repr to work. Need to do this before hand because the peek goes over if it's the first comment.
    Token peek = tok->PeekToken();
    if(CompareString(peek,"}")){
       tok->AdvancePeek(peek);
@@ -283,12 +286,40 @@ StructDef ParseStruct(Tokenizer* tok,Arena* arena){
    }
 
    while(!tok->Done()){
-      token = tok->PeekToken();
+	  tok->keepComments = true;
+	  token = tok->PeekToken();
 
+	  //UNHANDLED_ERROR; // LEFT: The program was not finding the Repr that it was supposed to find.
+	                     //       Or maybe the data was not being caried over.
+	  //printf("%.*s %.*s\n",UNPACK_SS(name),UNPACK_SS(token));
       if(CompareToken(token,"}")){
          tok->AdvancePeek(token);
-         break;
-      }
+		 break;
+      } else if(CompareString(token,STRING("//"))){ // The // symbol and the /* */ must be part of the special chars of the tokenizer
+		tok->AdvancePeek(token);
+
+		Token specialType = tok->NextToken();
+
+		if(CompareString(specialType,"Repr")){
+		  tok->AssertNextToken(":");
+
+		  Token formatString = tok->NextFindUntil("\n");
+
+		  if(def.representationFormat.size){
+			LogWarn(LogModule::PARSER,"Struct already has a representation format: %.*s",UNPACK_SS(name));
+		  }
+		  def.representationFormat = TrimWhitespaces(formatString);
+		  continue;
+		} else {
+		  // We are in a normal comment
+		  tok->NextFindUntil("\n");
+		  continue;
+		}
+	  } else if(CompareString(token,STRING("/*"))){
+		tok->NextFindUntil("*/");
+		continue;
+	  }
+	  tok->keepComments = false;
 
       MemberDef* member = ParseMember(tok,arena);
 
