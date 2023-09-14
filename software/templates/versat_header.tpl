@@ -32,6 +32,7 @@ int @{name};
 } AcceleratorState;
 
 static const int memMappedStart = @{memoryMappedBase |> Hex};
+static const int versatAddressSpace = 2 * @{memoryMappedBase |> Hex};
 
 extern int versat_base;
 

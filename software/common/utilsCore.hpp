@@ -75,6 +75,8 @@ ALWAYS_INLINE Defer<F> operator+(_DeferTag,F&& f){
 #define TEMP_defer(LINE) TEMP__defer( LINE )
 #define defer auto TEMP_defer(__LINE__) = _DeferTag() + [&]()
 
+// TODO: Implement a once region as well. Only executes one time using something like defer() or region()
+
 void FlushStdout();
 #if defined(VERSAT_DEBUG)
 #define Assert(EXPR) \
