@@ -22,7 +22,8 @@ void FuzzVersatSpecification(Versat* versat){
 
    time_t t;
    seed = (unsigned) time(&t);
-   #if 01
+
+   #if 0
    seed = 1674883351;
    #endif // 0
 

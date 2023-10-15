@@ -742,8 +742,8 @@ Accelerator* Flatten(Versat* versat,Accelerator* accel,int times){
    newAccel->ordered = nullptr;
    ReorganizeAccelerator(newAccel,arena);
 
-   NOT_IMPLEMENTED;
    #if 0
+   NOT_IMPLEMENTED;
    UnitValues val = CalculateAcceleratorValues(versat,newAccel);
    AssertAndDo(!ZeroOutRealloc(&newAccel->configAlloc,val.configs));
    AssertAndDo(!ZeroOutRealloc(&newAccel->stateAlloc,val.states));

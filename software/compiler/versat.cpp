@@ -320,19 +320,17 @@ int CountNonOperationChilds(Accelerator* accel){
 
   int count = 0;
   FOREACH_LIST(InstanceNode*,ptr,accel->allocated){
-  if(IsTypeHierarchical(ptr->inst->declaration)){
-    count += CountNonOperationChilds(ptr->inst->declaration->fixedDelayCircuit);
-  }
+    if(IsTypeHierarchical(ptr->inst->declaration)){
+      count += CountNonOperationChilds(ptr->inst->declaration->fixedDelayCircuit);
+    }
 
-  if(!ptr->inst->declaration->isOperation && ptr->inst->declaration->type != FUDeclaration::SPECIAL){
-    count += 1;
+    if(!ptr->inst->declaration->isOperation && ptr->inst->declaration->type != FUDeclaration::SPECIAL){
+      count += 1;
+    }
   }
-}
 
   return count;
 }
-
-void RegisterSpecificUnits(Versat* versat);
 
 extern "C" void DebugAcceleratorC(Accelerator* accel){
 #ifdef VERSAT_DEBUG
@@ -405,7 +403,6 @@ Versat* InitVersat(int base,int numberConfigurations,bool initUnits){
   RegisterCircuitOutput(versat);
   RegisterData(versat);
   RegisterLiteral(versat);
-  // RegisterSpecificUnits(versat); // TODO: Should not do it this way, but want something working for now
 
   for(FUDeclaration* decl : versat->declarations){
     FUDeclaration* newSpace = basicDeclarations.Alloc();
@@ -546,27 +543,27 @@ static int CompositeMemoryAccess(FUInstance* instance,int address,int value,int 
 
   // TODO: Probably should use Accelerator Iterator ?
   FOREACH_LIST(InstanceNode*,ptr,instance->declaration->fixedDelayCircuit->allocated){
-  FUInstance* inst = ptr->inst;
+    FUInstance* inst = ptr->inst;
 
-  if(!inst->declaration->isMemoryMapped){
-    continue;
-  }
+    if(!inst->declaration->isMemoryMapped){
+      continue;
+    }
 
-  int mappedWords = 1 << inst->declaration->memoryMapBits;
-  if(mappedWords){
-    if(address >= offset && address <= offset + mappedWords){
-      if(write){
-        AccessMemory(inst,address - offset,value,1);
-        return 0;
+    int mappedWords = 1 << inst->declaration->memoryMapBits;
+    if(mappedWords){
+      if(address >= offset && address <= offset + mappedWords){
+        if(write){
+          AccessMemory(inst,address - offset,value,1);
+          return 0;
+        } else {
+          int result = AccessMemory(inst,address - offset,0,0);
+          return result;
+        }
       } else {
-        int result = AccessMemory(inst,address - offset,0,0);
-        return result;
+        offset += mappedWords;
       }
-    } else {
-      offset += mappedWords;
     }
   }
-}
 
   NOT_POSSIBLE; // TODO: Figure out what to do in this situation
   return 0;
@@ -969,14 +966,14 @@ Edge* FindEdge(FUInstance* out,int outIndex,FUInstance* in,int inIndex,int delay
   Accelerator* accel = out->accel;
 
   FOREACH_LIST(Edge*,edge,accel->edges){
-  if(edge->units[0].inst == (FUInstance*) out &&
-     edge->units[0].port == outIndex &&
-     edge->units[1].inst == (FUInstance*) in &&
-     edge->units[1].port == inIndex &&
-     edge->delay == delay) {
-    return edge;
+    if(edge->units[0].inst == (FUInstance*) out &&
+       edge->units[0].port == outIndex &&
+       edge->units[1].inst == (FUInstance*) in &&
+       edge->units[1].port == inIndex &&
+       edge->delay == delay) {
+      return edge;
+    }
   }
-}
 
   return nullptr;
 }
@@ -999,12 +996,12 @@ Edge* ConnectUnitsIfNotConnectedGetEdge(FUInstance* out,int outIndex,FUInstance*
   Accelerator* accel = out->accel;
 
   FOREACH_LIST(Edge*,edge,accel->edges){
-  if(edge->units[0].inst == out && edge->units[0].port == outIndex &&
-     edge->units[1].inst == in  && edge->units[1].port == inIndex &&
-     delay == edge->delay){
-    return edge;
+    if(edge->units[0].inst == out && edge->units[0].port == outIndex &&
+       edge->units[1].inst == in  && edge->units[1].port == inIndex &&
+       delay == edge->delay){
+      return edge;
+    }
   }
-}
 
   return ConnectUnitsGetEdge(out,outIndex,in,inIndex,delay);
 }
@@ -1087,7 +1084,7 @@ FUDeclaration* RegisterModuleInfo(Versat* versat,ModuleInfo* info){
 
         expr->type = Expression::LITERAL;
         expr->id = def.name;
-        expr->val = MakeValue(20);
+        expr->val = MakeValue(16);
 
         def.expr = expr;
       }
@@ -1123,17 +1120,17 @@ FUDeclaration* RegisterModuleInfo(Versat* versat,ModuleInfo* info){
 
       switch(expr.type){
       case ExternalMemoryType::TWO_P:{
-      external[i].tp.bitSizeIn = EvalRange(expr.tp.bitSizeIn,instantiated);
-      external[i].tp.bitSizeOut = EvalRange(expr.tp.bitSizeOut,instantiated);
-      external[i].tp.dataSizeIn = EvalRange(expr.tp.dataSizeIn,instantiated);
-      external[i].tp.dataSizeOut = EvalRange(expr.tp.dataSizeOut,instantiated);
+        external[i].tp.bitSizeIn = EvalRange(expr.tp.bitSizeIn,instantiated);
+        external[i].tp.bitSizeOut = EvalRange(expr.tp.bitSizeOut,instantiated);
+        external[i].tp.dataSizeIn = EvalRange(expr.tp.dataSizeIn,instantiated);
+        external[i].tp.dataSizeOut = EvalRange(expr.tp.dataSizeOut,instantiated);
       }break;
       case ExternalMemoryType::DP:{
-      for(int ii = 0; ii < 2; ii++){
-        external[i].dp[ii].bitSize = EvalRange(expr.dp[ii].bitSize,instantiated);
-        external[i].dp[ii].dataSizeIn = EvalRange(expr.dp[ii].dataSizeIn,instantiated);
-        external[i].dp[ii].dataSizeOut = EvalRange(expr.dp[ii].dataSizeOut,instantiated);
-      }
+        for(int ii = 0; ii < 2; ii++){
+          external[i].dp[ii].bitSize = EvalRange(expr.dp[ii].bitSize,instantiated);
+          external[i].dp[ii].dataSizeIn = EvalRange(expr.dp[ii].dataSizeIn,instantiated);
+          external[i].dp[ii].dataSizeOut = EvalRange(expr.dp[ii].dataSizeOut,instantiated);
+        }
       }break;
       default: NOT_IMPLEMENTED;
       }
@@ -1233,87 +1230,87 @@ UnitValues CalculateAcceleratorValues(Versat* versat,Accelerator* accel){
 
   // Handle non-static information
   FOREACH_LIST(InstanceNode*,ptr,accel->allocated){
-  FUInstance* inst = ptr->inst;
-  FUDeclaration* type = inst->declaration;
+    FUInstance* inst = ptr->inst;
+    FUDeclaration* type = inst->declaration;
 
-  // Check if shared
-  if(inst->sharedEnable){
-    if(inst->sharedIndex >= (int) seenShared.size()){
-      seenShared.resize(inst->sharedIndex + 1);
-    }
+    // Check if shared
+    if(inst->sharedEnable){
+      if(inst->sharedIndex >= (int) seenShared.size()){
+        seenShared.resize(inst->sharedIndex + 1);
+      }
 
-    if(!seenShared[inst->sharedIndex]){
-      val.configs += type->configs.size;
-      val.sharedUnits += 1;
-    }
+      if(!seenShared[inst->sharedIndex]){
+        val.configs += type->configs.size;
+        val.sharedUnits += 1;
+      }
 
-    seenShared[inst->sharedIndex] = true;
-  } else if(!inst->isStatic){ // Shared cannot be static
+      seenShared[inst->sharedIndex] = true;
+    } else if(!inst->isStatic){ // Shared cannot be static
          val.configs += type->configs.size;
+    }
+
+    if(type->isMemoryMapped){
+      val.isMemoryMapped = true;
+
+      memoryMappedDWords = AlignBitBoundary(memoryMappedDWords,type->memoryMapBits);
+      memoryMappedDWords += 1 << type->memoryMapBits;
+    }
+
+    if(type == BasicDeclaration::input){
+      val.inputs += 1;
+    }
+
+    val.states += type->states.size;
+    val.delays += type->delayOffsets.max;
+    val.ios += type->nIOs;
+    val.extraData += type->extraDataOffsets.max;
+
+    if(type->externalMemory.size){
+      val.externalMemoryInterfaces += type->externalMemory.size;
+	  val.externalMemoryByteSize = ExternalMemoryByteSize(type->externalMemory);
+    }
+
+    val.signalLoop |= type->signalLoop;
   }
-
-  if(type->isMemoryMapped){
-    val.isMemoryMapped = true;
-
-    memoryMappedDWords = AlignBitBoundary(memoryMappedDWords,type->memoryMapBits);
-    memoryMappedDWords += 1 << type->memoryMapBits;
-  }
-
-  if(type == BasicDeclaration::input){
-    val.inputs += 1;
-  }
-
-  val.states += type->states.size;
-  val.delays += type->delayOffsets.max;
-  val.ios += type->nIOs;
-  val.extraData += type->extraDataOffsets.max;
-
-  if(type->externalMemory.size){
-    val.externalMemoryInterfaces += type->externalMemory.size;
-	val.externalMemoryByteSize = ExternalMemoryByteSize(type->externalMemory);
-  }
-
-  val.signalLoop |= type->signalLoop;
-}
 
   val.memoryMappedBits = log2i(memoryMappedDWords);
 
   FUInstance* outputInstance = GetOutputInstance(accel->allocated);
   if(outputInstance){
     FOREACH_LIST(Edge*,edge,accel->edges){
-    if(edge->units[0].inst == outputInstance){
-      val.outputs = std::max(val.outputs - 1,edge->units[0].port) + 1;
+      if(edge->units[0].inst == outputInstance){
+        val.outputs = std::max(val.outputs - 1,edge->units[0].port) + 1;
+      }
+      if(edge->units[1].inst == outputInstance){
+        val.outputs = std::max(val.outputs - 1,edge->units[1].port) + 1;
+      }
     }
-    if(edge->units[1].inst == outputInstance){
-      val.outputs = std::max(val.outputs - 1,edge->units[1].port) + 1;
-    }
-  }
   }
   val.totalOutputs = CalculateTotalOutputs(accel);
 
   // Handle static information
   FOREACH_LIST(InstanceNode*,ptr,accel->allocated){
-  FUInstance* inst = ptr->inst;
-  if(inst->isStatic){
-    StaticId id = {};
+    FUInstance* inst = ptr->inst;
+    if(inst->isStatic){
+      StaticId id = {};
 
-    id.name = inst->name;
+      id.name = inst->name;
 
-    staticSeen->Insert(id,1);
-    val.statics += inst->declaration->configs.size;
-  }
+      staticSeen->Insert(id,1);
+      val.statics += inst->declaration->configs.size;
+    }
 
-  if(IsTypeHierarchical(inst->declaration)){
-    for(Pair<StaticId,StaticData> pair : inst->declaration->staticUnits){
-      int* possibleFind = staticSeen->Get(pair.first);
+    if(IsTypeHierarchical(inst->declaration)){
+      for(Pair<StaticId,StaticData> pair : inst->declaration->staticUnits){
+        int* possibleFind = staticSeen->Get(pair.first);
 
-      if(!possibleFind){
-        staticSeen->Insert(pair.first,1);
-        val.statics += pair.second.configs.size;
+        if(!possibleFind){
+          staticSeen->Insert(pair.first,1);
+          val.statics += pair.second.configs.size;
+        }
       }
     }
   }
-}
 
   return val;
 }
@@ -1327,9 +1324,9 @@ void FillDeclarationWithAcceleratorValues(Versat* versat,FUDeclaration* decl,Acc
 
   bool anySavedConfiguration = false;
   FOREACH_LIST(InstanceNode*,ptr,accel->allocated){
-  FUInstance* inst = ptr->inst;
-  anySavedConfiguration |= inst->savedConfiguration;
-}
+    FUInstance* inst = ptr->inst;
+    anySavedConfiguration |= inst->savedConfiguration;
+  }
 
   decl->delayOffsets.max = val.delays;
   decl->nIOs = val.ios;
@@ -1344,13 +1341,13 @@ void FillDeclarationWithAcceleratorValues(Versat* versat,FUDeclaration* decl,Acc
   decl->externalMemory = PushArray<ExternalMemoryInterface>(permanent,val.externalMemoryInterfaces);
   int externalIndex = 0;
   FOREACH_LIST(InstanceNode*,ptr,accel->allocated){
-  Array<ExternalMemoryInterface> arr = ptr->inst->declaration->externalMemory;
-  for(int i = 0; i < arr.size; i++){
-    decl->externalMemory[externalIndex] = arr[i];
-    decl->externalMemory[externalIndex].interface = externalIndex;
-    externalIndex += 1;
+    Array<ExternalMemoryInterface> arr = ptr->inst->declaration->externalMemory;
+    for(int i = 0; i < arr.size; i++){
+      decl->externalMemory[externalIndex] = arr[i];
+      decl->externalMemory[externalIndex].interface = externalIndex;
+      externalIndex += 1;
+    }
   }
-}
 
   for(int i = 0; i < val.inputs; i++){
     FUInstance* input = GetInputInstance(accel->allocated,i);
@@ -1380,30 +1377,30 @@ void FillDeclarationWithAcceleratorValues(Versat* versat,FUDeclaration* decl,Acc
   int stateIndex = 0;
 
   FOREACH_LIST(InstanceNode*,ptr,accel->allocated){
-  FUInstance* inst = ptr->inst;
-  FUDeclaration* d = inst->declaration;
+    FUInstance* inst = ptr->inst;
+    FUDeclaration* d = inst->declaration;
 
-  if(!inst->isStatic){
-    if(inst->sharedEnable){
-      if(staticsSeen->InsertIfNotExist(inst->sharedIndex,0)){
+    if(!inst->isStatic){
+      if(inst->sharedEnable){
+        if(staticsSeen->InsertIfNotExist(inst->sharedIndex,0)){
+          for(Wire& wire : d->configs){
+            decl->configs[configIndex].name = PushString(permanent,"%.*s_%.*s",UNPACK_SS(inst->name),UNPACK_SS(wire.name));
+            decl->configs[configIndex++].bitSize = wire.bitSize;
+          }
+        }
+      } else {
         for(Wire& wire : d->configs){
           decl->configs[configIndex].name = PushString(permanent,"%.*s_%.*s",UNPACK_SS(inst->name),UNPACK_SS(wire.name));
           decl->configs[configIndex++].bitSize = wire.bitSize;
         }
       }
-    } else {
-      for(Wire& wire : d->configs){
-        decl->configs[configIndex].name = PushString(permanent,"%.*s_%.*s",UNPACK_SS(inst->name),UNPACK_SS(wire.name));
-        decl->configs[configIndex++].bitSize = wire.bitSize;
-      }
+    }
+
+    for(Wire& wire : d->states){
+      decl->states[stateIndex].name = PushString(permanent,"%.*s_%.2d",UNPACK_SS(wire.name),stateIndex);
+      decl->states[stateIndex++].bitSize = wire.bitSize;
     }
   }
-
-  for(Wire& wire : d->states){
-    decl->states[stateIndex].name = PushString(permanent,"%.*s_%.2d",UNPACK_SS(wire.name),stateIndex);
-    decl->states[stateIndex++].bitSize = wire.bitSize;
-  }
-}
 
 #if 0
   if(anySavedConfiguration){
@@ -1490,11 +1487,11 @@ FUDeclaration* RegisterSubUnit(Versat* versat,String name,Accelerator* circuit){
   decl.fixedDelayCircuit = circuit;
 
   FOREACH_LIST(InstanceNode*,ptr,circuit->allocated){
-  if(ptr->multipleSamePortInputs){
-    printf("Multiple inputs: %.*s\n",UNPACK_SS(name));
-    break;
+    if(ptr->multipleSamePortInputs){
+      printf("Multiple inputs: %.*s\n",UNPACK_SS(name));
+      break;
+    }
   }
-}
 
   // Need to calculate versat data here.
   FillDeclarationWithAcceleratorValues(versat,&decl,circuit);
@@ -1506,25 +1503,25 @@ FUDeclaration* RegisterSubUnit(Versat* versat,String name,Accelerator* circuit){
   bool implementsDone = false;
 
   FOREACH_LIST(InstanceNode*,ptr,circuit->allocated){
-  FUInstance* inst = ptr->inst;
-  if(inst->declaration->type == FUDeclaration::SPECIAL){
-    continue;
-  }
+    FUInstance* inst = ptr->inst;
+    if(inst->declaration->type == FUDeclaration::SPECIAL){
+      continue;
+    }
 
-  if(inst->declaration->implementsDone){
-    implementsDone = true;
+    if(inst->declaration->implementsDone){
+      implementsDone = true;
+    }
+    if(ptr->type == InstanceNode::TAG_SINK){
+      hasSinkDelay = CHECK_DELAY(inst,DELAY_TYPE_SINK_DELAY);
+    }
+    if(ptr->type == InstanceNode::TAG_SOURCE){
+      hasSourceDelay = CHECK_DELAY(inst,DELAY_TYPE_SOURCE_DELAY);
+    }
+    if(ptr->type == InstanceNode::TAG_SOURCE_AND_SINK){
+      hasSinkDelay = CHECK_DELAY(inst,DELAY_TYPE_SINK_DELAY);
+      hasSourceDelay = CHECK_DELAY(inst,DELAY_TYPE_SOURCE_DELAY);
+    }
   }
-  if(ptr->type == InstanceNode::TAG_SINK){
-    hasSinkDelay = CHECK_DELAY(inst,DELAY_TYPE_SINK_DELAY);
-  }
-  if(ptr->type == InstanceNode::TAG_SOURCE){
-    hasSourceDelay = CHECK_DELAY(inst,DELAY_TYPE_SOURCE_DELAY);
-  }
-  if(ptr->type == InstanceNode::TAG_SOURCE_AND_SINK){
-    hasSinkDelay = CHECK_DELAY(inst,DELAY_TYPE_SINK_DELAY);
-    hasSourceDelay = CHECK_DELAY(inst,DELAY_TYPE_SOURCE_DELAY);
-  }
-}
 
   if(hasSourceDelay){
     decl.delayType = (DelayType) ((int)decl.delayType | (int) DelayType::DELAY_TYPE_SOURCE_DELAY);
@@ -1539,19 +1536,19 @@ FUDeclaration* RegisterSubUnit(Versat* versat,String name,Accelerator* circuit){
   int staticOffset = 0;
   // Start by collecting all the existing static allocated units in subinstances
   FOREACH_LIST(InstanceNode*,ptr,circuit->allocated){
-  FUInstance* inst = ptr->inst;
-  if(IsTypeHierarchical(inst->declaration)){
+    FUInstance* inst = ptr->inst;
+    if(IsTypeHierarchical(inst->declaration)){
 
-    for(auto pair : inst->declaration->staticUnits){
-      StaticData newData = pair.second;
-      newData.offset = staticOffset;
+      for(auto pair : inst->declaration->staticUnits){
+        StaticData newData = pair.second;
+        newData.offset = staticOffset;
 
-      if(decl.staticUnits->InsertIfNotExist(pair.first,newData)){
-        staticOffset += newData.configs.size;
+        if(decl.staticUnits->InsertIfNotExist(pair.first,newData)){
+          staticOffset += newData.configs.size;
+        }
       }
     }
   }
-}
 
   FUDeclaration* res = RegisterFU(versat,decl);
   res->baseCircuit->subtype = res;
@@ -1559,21 +1556,21 @@ FUDeclaration* RegisterSubUnit(Versat* versat,String name,Accelerator* circuit){
 
   // Add this units static instances (needs be done after Registering the declaration because the parent is a pointer to the declaration)
   FOREACH_LIST(InstanceNode*,ptr,circuit->allocated){
-  FUInstance* inst = ptr->inst;
-  if(inst->isStatic){
-    StaticId id = {};
-    id.name = inst->name;
-    id.parent = res;
+    FUInstance* inst = ptr->inst;
+    if(inst->isStatic){
+      StaticId id = {};
+      id.name = inst->name;
+      id.parent = res;
 
-    StaticData data = {};
-    data.configs = inst->declaration->configs;
-    data.offset = staticOffset;
+      StaticData data = {};
+      data.configs = inst->declaration->configs;
+      data.offset = staticOffset;
 
-    if(res->staticUnits->InsertIfNotExist(id,data)){
-      staticOffset += inst->declaration->configs.size;
+      if(res->staticUnits->InsertIfNotExist(id,data)){
+        staticOffset += inst->declaration->configs.size;
+      }
     }
   }
-}
 
 #if 1
   if(versat->debug.outputAccelerator){
@@ -1810,39 +1807,39 @@ FUDeclaration* RegisterIterativeUnit(Versat* versat,Accelerator* accel,FUInstanc
   int staticOffset = 0;
   // Start by collecting all the existing static allocated units in subinstances
   FOREACH_LIST(InstanceNode*,ptr,accel->allocated){
-  FUInstance* inst = ptr->inst;
-  if(IsTypeHierarchical(inst->declaration)){
+    FUInstance* inst = ptr->inst;
+    if(IsTypeHierarchical(inst->declaration)){
 
-    for(auto pair : inst->declaration->staticUnits){
-      StaticData newData = pair.second;
-      newData.offset = staticOffset;
+      for(auto pair : inst->declaration->staticUnits){
+        StaticData newData = pair.second;
+        newData.offset = staticOffset;
 
-      if(declaration.staticUnits->InsertIfNotExist(pair.first,newData)){
-        staticOffset += newData.configs.size;
+        if(declaration.staticUnits->InsertIfNotExist(pair.first,newData)){
+          staticOffset += newData.configs.size;
+        }
       }
     }
   }
-}
 
   FUDeclaration* registeredType = RegisterFU(versat,declaration);
 
   // Add this units static instances (needs be done after Registering the declaration because the parent is a pointer to the declaration)
   FOREACH_LIST(InstanceNode*,ptr,accel->allocated){
-  FUInstance* inst = ptr->inst;
-  if(inst->isStatic){
-    StaticId id = {};
-    id.name = inst->name;
-    id.parent = registeredType;
+    FUInstance* inst = ptr->inst;
+    if(inst->isStatic){
+      StaticId id = {};
+      id.name = inst->name;
+      id.parent = registeredType;
 
-    StaticData data = {};
-    data.configs = inst->declaration->configs;
-    data.offset = staticOffset;
+      StaticData data = {};
+      data.configs = inst->declaration->configs;
+      data.offset = staticOffset;
 
-    if(registeredType->staticUnits->InsertIfNotExist(id,data)){
-      staticOffset += inst->declaration->configs.size;
+      if(registeredType->staticUnits->InsertIfNotExist(id,data)){
+        staticOffset += inst->declaration->configs.size;
+      }
     }
   }
-}
 
   {
     VersatComputedValues val = ComputeVersatValues(versat,accel);
@@ -1862,29 +1859,6 @@ FUDeclaration* RegisterIterativeUnit(Versat* versat,Accelerator* accel,FUInstanc
   sprintf(buffer,"src/%.*s.v",UNPACK_SS(name));
   FILE* sourceCode = OpenFileAndCreateDirectories(buffer,"w");
   ProcessTemplate(sourceCode,BasicTemplates::iterativeTemplate,&versat->temp);
-
-#if 0
-  UnitFunctions func = CheckOrCompileUnit(name,arena);
-
-  registeredType->printVCD = func.vcd;
-  registeredType->initializeFunction = func.init;
-  registeredType->startFunction = func.start;
-  registeredType->updateFunction = func.update;
-  registeredType->destroyFunction = func.destroy;
-  //registeredType->extraDataSize = func.size;
-
-  FUDeclaration createdDecl = func.createDeclaration();
-
-  AddOffset(&registeredType->extraDataOffsets,registeredType->extraDataOffsets.max);
-  AddOffset(&registeredType->outputOffsets,createdDecl.outputLatencies.size);
-  //registeredType->outputOffsets.max = registeredType->outputOffsets.max;
-
-  registeredType->implementsDone = createdDecl.implementsDone;
-  registeredType->type = FUDeclaration::SINGLE; // Need to go through the code and standardize the meaning of these things.
-
-  // Create a bunch of functions like IsTypeHierarchical if needed, maybe we can also just see if we can remove the type variable and use the value of other variables
-  // Something like, if fixedDelayCircuit is not null, we can go down in the hiearchy. If a update function is not null, we can call it, instead of checking the type.
-#endif
 
   return registeredType;
 }
@@ -2041,11 +2015,11 @@ int GetNumberOfOutputs(FUInstance* inst){
 
 FUInstance* CreateOrGetInput(Accelerator* accel,String name,int portNumber){
   FOREACH_LIST(InstanceNode*,ptr,accel->allocated){
-  FUInstance* inst = ptr->inst;
-  if(inst->declaration == BasicDeclaration::input && inst->portIndex == portNumber){
-    return inst;
+    FUInstance* inst = ptr->inst;
+    if(inst->declaration == BasicDeclaration::input && inst->portIndex == portNumber){
+      return inst;
+    }
   }
-}
 
   FUInstance* inst = (FUInstance*) CreateFUInstance(accel,BasicDeclaration::input,name);
   inst->portIndex = portNumber;
@@ -2055,11 +2029,11 @@ FUInstance* CreateOrGetInput(Accelerator* accel,String name,int portNumber){
 
 FUInstance* CreateOrGetOutput(Accelerator* accel){
   FOREACH_LIST(InstanceNode*,ptr,accel->allocated){
-  FUInstance* inst = ptr->inst;
-  if(inst->declaration == BasicDeclaration::output){
-    return inst;
+    FUInstance* inst = ptr->inst;
+    if(inst->declaration == BasicDeclaration::output){
+      return inst;
+    }
   }
-}
 
   FUInstance* inst = (FUInstance*) CreateFUInstance(accel,BasicDeclaration::output,STRING("out"));
   return inst;
@@ -2068,11 +2042,11 @@ FUInstance* CreateOrGetOutput(Accelerator* accel){
 int GetNumberOfInputs(Accelerator* accel){
   int count = 0;
   FOREACH_LIST(InstanceNode*,ptr,accel->allocated){
-  FUInstance* inst = ptr->inst;
-  if(inst->declaration == BasicDeclaration::input){
-    count += 1;
+    FUInstance* inst = ptr->inst;
+    if(inst->declaration == BasicDeclaration::input){
+      count += 1;
+    }
   }
-}
 
   return count;
 }

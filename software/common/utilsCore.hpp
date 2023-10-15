@@ -75,7 +75,17 @@ ALWAYS_INLINE Defer<F> operator+(_DeferTag,F&& f){
 #define TEMP_defer(LINE) TEMP__defer( LINE )
 #define defer auto TEMP_defer(__LINE__) = _DeferTag() + [&]()
 
-// TODO: Implement a once region as well. Only executes one time using something like defer() or region()
+struct Once{};
+struct _OnceTag{};
+template<typename F>
+ALWAYS_INLINE Once operator+(_OnceTag,F&& f){
+  f();
+  return Once{};
+}
+
+#define TEMP__once(LINE) TEMPonce_ ## LINE
+#define TEMP_once(LINE) TEMP__once( LINE )
+#define once static Once TEMP_once(__LINE__) = _OnceTag() + [&]()
 
 void FlushStdout();
 #if defined(VERSAT_DEBUG)
@@ -92,6 +102,7 @@ void FlushStdout();
 #endif
 
 // Assert that gets replaced by the expression if debug is disabled (instead of simply disappearing like a normal assert)
+// Probably not a good idea now that I think about it. It's probably leads to more confusing code 
 #if defined(VERSAT_DEBUG)
 #define AssertAndDo(EXPR) Assert(EXPR)
 #else
@@ -212,7 +223,6 @@ ALWAYS_INLINE void operator+(TimeIt&& timer,F&& f){
 #define timeRegion(ID) TimeIt(ID) + [&]()
 */
 
-#ifndef TEMPORARY_MARK
 template<typename T>
 class ArrayIterator{
 public:
@@ -233,7 +243,6 @@ struct Array{
   ArrayIterator<T> begin(){return ArrayIterator<T>{data};};
   ArrayIterator<T> end(){return ArrayIterator<T>{data + size};};
 };
-#endif
 
 typedef Array<const char> String;
 

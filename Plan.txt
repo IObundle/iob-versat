@@ -1,6 +1,6 @@
 Misc:
 
-   Note: I "fixed" a small bug with signal mem storage to 
+   Need to standardize the Makefile. Put common flags and stuff like that in a shared env variable. Should also start using more warnings. I think Wall is not enabled. Would also like to have -Wswitch-enum and probably a few others.
 
    Add byte space and symbol space structs and functions, rework code to use them throught the codebase.
 
@@ -38,14 +38,6 @@ Major change:
 
    Need to start standarizing a lot of things. Types sizes and stuff like that.
 
-   To implement different bit widths, have Versat generate the sources it wants to instantiate and run Verilator over it.
-      Compile and build everything into a shared library, which is then opened by Versat.
-      Also, if we require units to use the ADDR_W parameter, we can switch to compiling for 64 bits again.
-
-   As an optimization, it should be possible to generate the entire circuit and use it, instead of relying on simulating individual units.
-      Should check it out as a possibility. The biggest issue is the potential problem for Verilator to spend much more time during compilation for barely any gain, but at that point need to check if so.
-      Even if slower, should be good to support it, as we then have the ability both ways. Fully verilated and partially verilated
-
    A lot of the calculations being done in the FUDeclaration is already being done in the CreateFUInstance function of the Accelerator.
    This is actually expected. The registerSub function expects to receive an actual working Accelerator, and from them to generate a generic template instance.
    We make a couple of changes, like removing multiple inputs and adding delays, but somethings I think could be carried over, like static info and such
@@ -82,14 +74,6 @@ Accelerator
          And in doing so, we would simplify the code that interacts with the accelerator.
          Probably would do the same with delays and call it a day. Allocate everything in a row, but still keep auxiliary pointers and structures if needed.
 
-Embedded data:
-
-   The named access to FUInstances is actually the best way to go. 
-      All we need is to separate the generation of the versat_data.inc file from the remaining of the code.
-      This allows the user to separate the generation of versat from the test code.
-      But on the other hand, we must force the user to always run the simulation code before compiling.
-      Maybe add a debug flag to output all the data available anyway.
-
 Delay and Time:
 
    Introduce the concept of input delay and output delay.
@@ -124,17 +108,11 @@ Delay and Time:
       Some units, like FPU div and such, work like iterative units.
       Ultimately, we use the concept of "iterative units" as a hack for the fact that Versat cannot represent units that only output valid data after every X cycles.
       It should be possible to define normal units as iterative, instead of only defined as graphs and through the use of ParseVersatSpecifications.
-
- Iterative units:
    
 Configuration management:
 
    Add an interface to provide the user with the ability to save and load configurations.
-      Need to add two types. Software sided saving and loading of configuration (Data is not stored on accelerator).
       Hardware sided saving and loading of configuration (Data is stored on accelerator).
-      Provide ways to change from one side to the other.
-      Provide ways to save data in PC-Emul and load it in embedded.
-      Need to clearly separate where data is stored.
 
 Parser:
 
@@ -180,7 +158,6 @@ Templates:
 
    Do a template pass to remove duplicate code, lock down on the approach used to identify units and wires. Different templates should almost resemble each other. All the logic should be shared between units and should rely on common ground.
    Allow the use of enums inside templates. (See parsing enum info on Type)
-   Add local variables. Need to introduce the concept of "stack frames".
 
    The Command structure is not needed, I think. Does the same thing as an expression.
 
@@ -234,16 +211,16 @@ Threading:
       Gives common tasks the ability to wait on only those tasks to end, instead of every task currently in the task pool.
       Also have ideas for things like priority and such, but no need for anything like that, for now. 
 
-Static and share 
-   
-   Technically, there isn't anything stopping us from having static share units (Static share config Const {...}).
-      Static inside share blocks is not allowed, because what would we do inside a share block if a unit is static and the other is not?.
-
 Threaded accelerator simulation
 
    Should be simple, but test whether we can simulate the accelerator in another thread.
       The only problem is the fact that right now memory mapped units have to go through the verilator layer.
       We would need to stop the accelerator from running or let the main thread be the one doing the write (but the read would be problematic).
+
+Static and share 
+   
+   Technically, there isn't anything stopping us from having static share units (Static share config Const {...}).
+      Static inside share blocks is not allowed, because what would we do inside a share block if a unit is static and the other is not?.
 
 Misc:
 

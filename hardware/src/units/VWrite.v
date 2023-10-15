@@ -177,6 +177,31 @@ module VWrite #(
       .done(gen_done)
       );
 
+   SimpleAddressGen #(.ADDR_W(ADDR_W),.DATA_W(DATA_W)) addrgenB(
+      .clk(clk),
+      .rst(rst),
+      .run(run),
+
+      //configurations 
+      .period(perB),
+      .delay(delay0),
+      .start(startB_inst),
+      .incr(incrB),
+
+      `ifdef COMPLEX_INTERFACE
+      .iterations(iterB),
+      .duty(dutyB),
+      .shift(shiftB),
+      `endif
+
+      //outputs 
+      .valid(enB),
+      .ready(1'b1),
+      .addr(addrB_int),
+      .done(doneB_int)
+      );
+
+   /*
     xaddrgen2 #(.MEM_ADDR_W(ADDR_W)) addrgen2B (
                        .clk(clk),
                        .rst(rst),
@@ -196,13 +221,11 @@ module VWrite #(
                        .mem_en(enB),
                        .done(doneB_int)
                        );
+   */
 
+   assign addrB_int2 = addrB_int; //(reverseB ? reverseBits(addrB_int) : addrB_int) << OFFSET_W;
    assign addrB = addrB_int2;
 
-   localparam OFFSET_W = $clog2(AXI_DATA_W);
-
-   assign addrB_int2 = (reverseB? reverseBits(addrB_int) : addrB_int) << OFFSET_W;
-   
    wire read_en;
    wire [ADDR_W-1:0] read_addr;
    wire [AXI_DATA_W-1:0] read_data;
@@ -267,3 +290,4 @@ module VWrite #(
 
 endmodule
 
+`undef COMPLEX_INTERFACE

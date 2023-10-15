@@ -280,7 +280,8 @@ struct Hashmap{
    // Pair<Key,Data> dataData[nodesAllocated];
 
    // Construct by calling PushHashmap
-
+public:
+  
    Data* Insert(Key key,Data data);
    Data* InsertIfNotExist(Key key,Data data);
 
@@ -401,7 +402,7 @@ template<typename T>
 struct Pool{
    Byte* mem; // TODO: replace with PoolHeader instead of using Byte and casting
    PoolInfo info;
-
+public:
    T* Alloc();
    T* Alloc(int index); // Returns nullptr if element already allocated at given position
    void Remove(T* elem);

@@ -28,9 +28,10 @@ module versat_instance #(
    output [`nIO*LEN_W-1:0]          m_databus_len,
    input  [`nIO-1:0]                m_databus_last,
 `endif
-   // data/control interface
+
+// data/control interface
    input                           valid,
-   input [ADDR_W-1:0]              addr,
+   input [ADDR_W-1:0]              addr, // Use address in the code below, it uses byte addresses
    input [DATA_W/8-1:0]            wstrb,
    input [DATA_W-1:0]              wdata,
    output                          ready,
@@ -71,6 +72,8 @@ output [@{dp.bitSize}-1:0]  ext_dp_addr_@{i}_port_@{index},
    input                           rst
    );
 
+wire [ADDR_W-1:0] byteAddress = {address[ADDR_W-3:0],2'b00};
+
 wire wor_ready;
 
 wire done;
@@ -81,7 +84,8 @@ wire [31:0] unitRdataFinal;
 #{end}
 
 wire we = (|wstrb);
-wire memoryMappedAddr = addr[@{memoryConfigDecisionBit}];
+wire memoryMappedAddr = address[@{memoryConfigDecisionBit}];
+wire rst_int = (rst | soft_reset);
 
 // Versat registers and memory access
 reg versat_ready;
@@ -89,7 +93,6 @@ reg [31:0] versat_rdata;
 
 reg soft_reset,signal_loop; // Self resetting 
 
-wire rst_int = (rst | soft_reset);
 
 #{if useDMA}
 reg [1:0] dma_state;
@@ -242,7 +245,7 @@ begin
          if(addr == 2)
             dma_addr_read <= wdata;
          if(addr == 3)
-            dma_length <= wdata[7:0];
+            dma_length <= wdata[LEN_W-1:0];
          if(addr == 4)
             dma_state <= 2'b01;
       end
@@ -311,7 +314,6 @@ wire [ADDR_W-1:0] address = addr;
 wire [DATA_W-1:0] data_data = wdata;
 wire [(DATA_W/8)-1:0] data_wstrb = wstrb;
 #{end}
-wire dataMemoryMapped = address[@{memoryConfigDecisionBit}];
 
 reg [31:0] latency_counter;
 reg enableCounter;
@@ -364,7 +366,7 @@ assign unitRdataFinal = (#{join "|" for i unitsMapped} unitRData[@{i}] #{end});
 always @*
 begin
    memoryMappedEnable = {@{unitsMapped}{1'b0}};
-   if(data_valid & dataMemoryMapped)
+   if(data_valid & memoryMappedAddr)
    begin
    #{set counter 0}
    #{for node instances}
@@ -397,7 +399,7 @@ always @(posedge clk,posedge rst_int)
 begin
    if(rst_int) begin
       @{configReg} <= {@{configurationBits}{1'b0}};
-   end else if(data_write & !dataMemoryMapped) begin
+   end else if(data_write & !memoryMappedAddr) begin
       // Config
       #{set counter 0}
       #{set addr versatConfig}

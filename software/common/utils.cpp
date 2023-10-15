@@ -176,8 +176,6 @@ Optional<Array<String>> GetAllFilesInsideDirectory(String dirPath,Arena* arena){
       if(d == nullptr){
          break;
       }
-
-      printf("%s\n",d->d_name);
       
       if(d->d_name[0] == '.' && d->d_name[1] == '\0'){
          continue;

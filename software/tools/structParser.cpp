@@ -237,10 +237,9 @@ String GetBaseType(String name){
 
   Token peek = tok.PeekToken();
   if(CompareString(peek,"<")){
-    Token templateInst = tok.PeekUntilDelimiterExpression({"<"},{">"},0);
+    Token templateInst = tok.PeekIncludingDelimiterExpression({"<"},{">"},0);
     base = ExtendToken(base,templateInst);
     tok.AdvancePeek(templateInst);
-    base = ExtendToken(base,tok.AssertNextToken(">"));
   }
 
   base = TrimWhitespaces(base);

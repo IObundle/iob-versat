@@ -220,28 +220,11 @@ void OutputVersatSource(Versat* versat,Accelerator* accel,const char* directoryP
    TemplateSetCustom("instances",&accum,"std::vector<FUInstance>");
    TemplateSetNumber("numberUnits",accum.size());
    TemplateSetBool("IsSimple",false);
-   //ProcessTemplate(d,BasicTemplates::dataTemplate,&versat->temp); // TODO: We could remove this, everything is on the header
 
    {
    Hashmap<String,SizedConfig>* namedConfigs = ExtractNamedSingleConfigs(accel,arena);
    Hashmap<String,SizedConfig>* namedStates = ExtractNamedSingleStates(accel,arena);
    Hashmap<String,SizedConfig>* namedMem = ExtractNamedSingleMem(accel,arena);
-
-#if 0 // Mems are now in byte space
-   for(Pair<String,SizedConfig>& pair : namedMem){
-      iptr view = (iptr) pair.second.ptr;
-      view *= sizeof(int);
-      pair.second.ptr = (iptr*) view;
-   }
-#endif
-     
-   #if 0
-   for(Pair<String,SizedConfig>& pair : namedMem){
-      int* view = (int*) pair.second.ptr;
-      view += (1 << val.memoryConfigDecisionBit);
-      pair.second.ptr = (iptr*) view;
-   }
-   #endif
 
    TemplateSetCustom("namedConfigs",namedConfigs,"Hashmap<String,SizedConfig>");
    TemplateSetCustom("namedStates",namedStates,"Hashmap<String,SizedConfig>");

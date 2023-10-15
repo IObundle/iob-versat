@@ -36,13 +36,14 @@ extern bool SimulateDatabus;
    unit->rst = 0; \
    unit->running = 0;
 
+// TODO: Maybe this should not exist. There should exist one update function and every other function that needs to update stuff should just call that function. UPDATE as it stands should only be called inside the update function. Instead of having macros that call UPDATE, we should just call the update function directly inside the RESET macro and the START_RUN macro and so one. Everything depends on the update function and the UPDATE macro is removed and replaced inside the function. The only problem is that I do not know if the RESET macro can call the update function without something. Nonetheless, every "update" should go trough the update function and none should go through this macro.
 #define UPDATE(unit) \
    unit->clk = 0; \
    unit->eval(); \
    if(CreateVCD) tfp->dump(contextp->time()); \
    contextp->timeInc(2); \
    unit->clk = 1; \
-   unit->eval(); \
+   unit->eval();
 
 #define RESET(unit) \
    unit->rst = 1; \
@@ -351,6 +352,15 @@ AcceleratorConfig* config = (AcceleratorConfig*) inst->config;
 #{end}
 }
 
+int32_t* @{module.name}_EndFunction(FUInstance* inst){
+   V@{module.name}* self = (V@{module.name}*) inst->extraData;
+
+   self->running = 0;
+   inst->declaration->updateFunction(inst,zerosArray);
+ 
+   return NULL;
+}
+
 #define Int128ToVerilator(VAL,TO_STORE) \
   TO_STORE[0] = (((int32*)VAL)[0]); \
   TO_STORE[1] = (((int32*)VAL)[1]); \
@@ -358,6 +368,8 @@ AcceleratorConfig* config = (AcceleratorConfig*) inst->config;
   TO_STORE[3] = (((int32*)VAL)[3]); 
 
 int32_t* @{module.name}_UpdateFunction(FUInstance* inst,Array<int> inputs){
+   int baseAddress = 0;
+
 #{if module.outputLatencies}
    static int32_t out[@{module.outputLatencies.size}];
 #{end}
@@ -370,35 +382,7 @@ int32_t* @{module.name}_UpdateFunction(FUInstance* inst,Array<int> inputs){
 
    self->eval();
 
-#{for external module.externalInterfaces}
-   #{set id external.interface}
-   #{if external.type}
-   // DP
-   #{for dp external.dp}
-   #{set dataType #{call IntName dp.dataSizeIn}}
-
-   int saved_dp_enable_@{id}_port_@{index} = self->ext_dp_enable_@{id}_port_@{index};
-   int saved_dp_write_@{id}_port_@{index} = self->ext_dp_write_@{id}_port_@{index};
-   int saved_dp_addr_@{id}_port_@{index} = self->ext_dp_addr_@{id}_port_@{index};
-   @{dataType} saved_dp_data_@{id}_port_@{index};
-   memcpy(&saved_dp_data_@{id}_port_@{index},&self->ext_dp_out_@{id}_port_@{index},sizeof(@{dataType}));
-
-   #{end}
-   #{else}
-   // 2P
-   #{set dataType #{call IntName external.tp.dataSizeOut}}
-
-   int saved_2p_r_enable_@{id} = self->ext_2p_read_@{id};
-   int saved_2p_r_addr_@{id} = self->ext_2p_addr_in_@{id}; // Instead of saving address, should access memory and save data. Would simulate better what is actually happening
-   int saved_2p_w_enable_@{id} = self->ext_2p_write_@{id};
-   int saved_2p_w_addr_@{id} = self->ext_2p_addr_out_@{id};
-   @{dataType} saved_2p_w_data_@{id};
-   memcpy(&saved_2p_w_data_@{id},&self->ext_2p_data_out_@{id},sizeof(@{dataType}));
-
-   #{end}
-   self->eval();
-#{end}
-
+   // Databus must be updated before memories because databus could drive memories but memories "cannot" drive databus (in the sense that databus acts like a master if connected directly to memories but memories do not act like a master when connected to a databus. The unit logic is the one that acts like a master)
 #{for i module.nIO}
 if(SimulateDatabus){
    self->databus_ready_@{i} = 0;
@@ -462,11 +446,67 @@ if(SimulateDatabus){
    self->eval();
 }
 #{end}
+   
+   baseAddress = 0;
+#{for external module.externalInterfaces}
+   #{set id external.interface}
+   #{if external.type}
+   // DP
+   #{for dp external.dp}
+   #{set dataType #{call IntName dp.dataSizeIn}}
+
+   int saved_dp_enable_@{id}_port_@{index} = self->ext_dp_enable_@{id}_port_@{index};
+   int saved_dp_write_@{id}_port_@{index} = self->ext_dp_write_@{id}_port_@{index};
+   int saved_dp_addr_@{id}_port_@{index} = self->ext_dp_addr_@{id}_port_@{index};
+   @{dataType} saved_dp_data_@{id}_port_@{index};
+   memcpy(&saved_dp_data_@{id}_port_@{index},&self->ext_dp_out_@{id}_port_@{index},sizeof(@{dataType}));
+
+   {
+     int memSize = ExternalMemoryByteSize(&inst->declaration->externalMemory[@{id}]);
+     baseAddress += memSize;
+   }
+   #{end}
+   #{else}
+   // 2P
+   #{set dataType #{call IntName external.tp.dataSizeOut}}
+
+   @{dataType} saved_2p_r_data_@{id};
+   {
+     int memSize = ExternalMemoryByteSize(&inst->declaration->externalMemory[@{id}]);
+   // 2P
+      if(self->ext_2p_read_@{id}){
+         int readOffset = self->ext_2p_addr_in_@{id};
+
+         int address = baseAddress + readOffset; // * sizeof(@{dataType});
+         Assert(address < memSize);
+
+         address = ALIGN_DOWN(address,sizeof(@{dataType}));
+
+         @{dataType}* ptr = (@{dataType}*) &inst->externalMemory[address];
+         memcpy(&saved_2p_r_data_@{id},ptr,sizeof(@{dataType}));
+      }
+     baseAddress += memSize;
+   }
+
+#if 1
+   int saved_2p_r_enable_@{id} = self->ext_2p_read_@{id};
+   int saved_2p_r_addr_@{id} = self->ext_2p_addr_in_@{id}; // Instead of saving address, should access memory and save data. Would simulate better what is actually happening
+#endif
+   
+   int saved_2p_w_enable_@{id} = self->ext_2p_write_@{id};
+   int saved_2p_w_addr_@{id} = self->ext_2p_addr_out_@{id};
+   @{dataType} saved_2p_w_data_@{id};
+   memcpy(&saved_2p_w_data_@{id},&self->ext_2p_data_out_@{id},sizeof(@{dataType}));
+
+   #{end}
+   self->eval();
+#{end}
 
    UPDATE(self); // This line causes posedge clk events to activate
-
+   
+   // Memory Read
 {
-   int baseAddress = 0;
+   baseAddress = 0;
 #{for external module.externalInterfaces}
    #{set id external.interface}
    #{if external.type}
@@ -514,8 +554,9 @@ if(SimulateDatabus){
 #{end}
 }
 
+// Memory write
 {
-   int baseAddress = 0;
+   baseAddress = 0;
 #{for external module.externalInterfaces}
    #{set id external.interface}
    #{if external.type}
@@ -550,7 +591,7 @@ if(SimulateDatabus){
        Assert(address < memSize);
 
        address = ALIGN_DOWN(address,sizeof(@{dataType}));
-
+       
        @{dataType}* ptr = (@{dataType}*) &inst->externalMemory[address];
        memcpy(ptr,&saved_2p_w_data_@{id},sizeof(@{dataType}));
      }
@@ -568,7 +609,7 @@ if(SimulateDatabus){
 AcceleratorState* state = (AcceleratorState*) inst->state;
 #{for i module.states.size}
 #{set wire module.states[i]}
-   state->@{statesHeader[i]} = self->@{wire.name};
+   state->@{statesHeader[i]} = self->@{wire.name}; // TODO: Check this on the template
 #{end}
 #{end}
 
@@ -611,15 +652,10 @@ void SignalFunction@{module.name}(FUInstance* inst){
 
    self->signal_loop = 1;
 
-   UPDATE(self);
+   inst->declaration->updateFunction(inst,zeroArray);
+   //UPDATE(self);
 
    self->signal_loop = 0;
-   self->eval();
-
-   if(CreateVCD) tfp->dump(contextp->time());
-   contextp->timeInc(1);
-   if(CreateVCD) tfp->dump(contextp->time());
-   contextp->timeInc(1);
 }
 #{end}
 
@@ -667,10 +703,11 @@ FUDeclaration @{module.name}_CreateDeclaration(){
 
    decl.initializeFunction = @{module.name}_InitializeFunction;
    decl.startFunction = @{module.name}_StartFunction;
+   decl.endFunction = @{module.name}_EndFunction;
    decl.updateFunction = @{module.name}_UpdateFunction;
    decl.destroyFunction = @{module.name}_DestroyFunction;
    decl.printVCD = @{module.name}_VCDFunction;
-
+   
    #{if module.configs}
    static Wire @{module.name}ConfigWires[] = {#{join "," for wire module.configs} #{if !wire.isStatic} {STRING("@{wire.name}"),@{wire.bitSize},@{wire.isStatic}} #{end} #{end}};
    decl.configs = Array<Wire>{@{module.name}ConfigWires,@{module.configs.size}};

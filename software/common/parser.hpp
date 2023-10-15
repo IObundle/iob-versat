@@ -11,14 +11,14 @@
 struct Command;
 
 struct Expression{
-   const char* op;
-   String id;
-   Array<Expression*> expressions;
-   Command* command;
-   Value val;
-   String text;
+  const char* op;
+  String id;
+  Array<Expression*> expressions;
+  Command* command;
+  Value val;
+  String text;
 
-   enum {UNDEFINED,OPERATION,IDENTIFIER,COMMAND,LITERAL,ARRAY_ACCESS,MEMBER_ACCESS} type;
+  enum {UNDEFINED,OPERATION,IDENTIFIER,COMMAND,LITERAL,ARRAY_ACCESS,MEMBER_ACCESS} type;
 };
 
 void PrintExpression(Expression* exp);
@@ -27,71 +27,73 @@ typedef int (*CharFunction) (const char* ptr,int size);
 typedef String Token;
 
 struct FindFirstResult{
-   Token foundFirst;
-   Token peekFindNotIncluded;
+  Token foundFirst;
+  Token peekFindNotIncluded;
 };
 
 class Tokenizer{
-   const char* start;
-   const char* ptr;
-   const char* end;
-   int lines;
-   std::string singleChars; // TODO: Why use string instead of sized string?
-   std::vector<std::string> specialChars; // TODO: Why use string instead of sized string?
+  const char* start;
+  const char* ptr;
+  const char* end;
+  int lines;
+  std::string singleChars; // TODO: Why use string instead of sized string?
+  std::vector<std::string> specialChars; // TODO: Why use string instead of sized string?
 
 private:
 
-   int SpecialChars(const char* ptr,size_t size);
-   void ConsumeWhitespace();
+  int SpecialChars(const char* ptr,size_t size);
+  void ConsumeWhitespace();
 
 public:
 
-   // Can change mid way to alter manner in which the tokenizer handles special cases
-   bool keepWhitespaces;
-   bool keepComments;
+  // Can change mid way to alter manner in which the tokenizer handles special cases
+  bool keepWhitespaces;
+  bool keepComments;
 
 public:
 
-   Tokenizer(String content,const char* singleChars,std::vector<std::string> specialChars); // Content must remain valid through the entire parsing process
+  // TODO: Make some asserts. Special chars should not contain empty chars
+  Tokenizer(String content,const char* singleChars,std::vector<std::string> specialChars); // Content must remain valid through the entire parsing process
 
-   Token PeekToken();
-   Token NextToken();
+  Token PeekToken();
+  Token NextToken();
 
-   Token AssertNextToken(const char* str);
+  Token AssertNextToken(const char* str);
 
-   Token PeekFindUntil(const char* str);
-   Token PeekFindIncluding(const char* str);
-   Token PeekFindIncludingLast(const char* str);
-   Token NextFindUntil(const char* str);
+  Token PeekFindUntil(const char* str);
+  Token PeekFindIncluding(const char* str);
+  Token PeekFindIncludingLast(const char* str);
+  Token NextFindUntil(const char* str);
 
-   String GetStartOfCurrentLine();
+  String GetStartOfCurrentLine();
 
-   bool IfPeekToken(const char* str);
-   bool IfNextToken(const char* str);
+  bool IfPeekToken(const char* str);
+  bool IfNextToken(const char* str);
 
-   bool IsSingleChar(char ch);
-   bool IsSingleChar(const char* chars);
+  bool IsSingleChar(char ch);
+  bool IsSingleChar(const char* chars);
 
-   FindFirstResult FindFirst(std::initializer_list<const char*> strings);
+  FindFirstResult FindFirst(std::initializer_list<const char*> strings);
 
-   // For expressions where there is a open and a closing delimiter (think '{...{...}...}') and need to check where an associated close delimiter is
-   String PeekUntilDelimiterExpression(std::initializer_list<const char*> open,std::initializer_list<const char*> close, int numberOpenSeen); //
+  Token PeekWhitespace();
 
-   Token PeekWhitespace();
+  Token Finish();
 
-   Token Finish();
+  void* Mark();
+  Token Point(void* mark);
+  void Rollback(void* mark);
 
-   void* Mark();
-   Token Point(void* mark);
-   void Rollback(void* mark);
+  void AdvancePeek(Token tok);
 
-   void AdvancePeek(Token tok);
-  
-   void SetSingleChars(const char* singleChars);
-   bool Done();
-   int Lines(){return lines;};
+  void SetSingleChars(const char* singleChars);
+  bool Done();
+  int Lines(){return lines;};
 
-   bool IsSpecialOrSingle(String toTest);
+  bool IsSpecialOrSingle(String toTest);
+
+  // For expressions where there is a open and a closing delimiter (think '{ { } }') and need to check where the matching close delimiter is.
+  String PeekUntilDelimiterExpression(std::initializer_list<const char*> open,std::initializer_list<const char*> close, int numberOpenSeen);
+  String PeekIncludingDelimiterExpression(std::initializer_list<const char*> open,std::initializer_list<const char*> close, int numberOpenSeen);
 };
 
 bool CheckStringOnlyWhitespace(Token tok);
@@ -122,17 +124,17 @@ typedef Expression* (*ParsingFunction)(Tokenizer* tok,Arena* arena);
 Expression* ParseOperationType(Tokenizer* tok,std::initializer_list<std::initializer_list<const char*>> operators,ParsingFunction finalFunction,Arena* tempArena);
 
 /*
-Possible
+  Possible
 
 struct Trie{
-   int value;
+int value;
 };
 
 Trie specialFoundTrie;
 
 struct TokTableEntry{
-   Trie* trie; // if nullptr, no token. If trie == &specialFoundTrie, we found the token and there is nothing more, return the value.
-   int value;
+Trie* trie; // if nullptr, no token. If trie == &specialFoundTrie, we found the token and there is nothing more, return the value.
+int value;
 }
 
 struct TokenizerTable{
@@ -140,18 +142,18 @@ struct TokenizerTable{
 };
 
 struct TokenizerSpecialChars{
-   String string;
-   int tokenNumber;
+String string;
+int tokenNumber;
 };
 
 static TokenizerTable* CompileTokenizer(Array<TokenizerSpecialChars> specialChars,Arena* perm,Arena* temp){
-   // Make sure that the tries are constructed near each other in memory.
+// Make sure that the tries are constructed near each other in memory.
 }
 
 TokenizerSpecialChars[] = {{"-",TOKEN_MINUS,},
                            {"+",TOKEN_ADD,}};
 
-*/
+ */
 
 #endif // INCLUDED_PARSER
 

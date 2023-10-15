@@ -84,12 +84,12 @@ static void DoIfStatement(Arena* output,Tokenizer* tok,MacroMap& macros,std::vec
 }
 
 void PreprocessVerilogFile_(Arena* output, String fileContent,MacroMap& macros,std::vector<String>* includeFilepaths,Arena* temp){
-  Tokenizer tokenizer = Tokenizer(fileContent, "()`\\\",+-/*",{"`include","`define","`timescale","`ifdef","`else","`elsif","`endif","`ifndef"});
+  Tokenizer tokenizer = Tokenizer(fileContent, "()`,+-/*\\\"",{"`include","`define","`timescale","`ifdef","`else","`elsif","`endif","`ifndef"});
   Tokenizer* tok = &tokenizer;
 
   while(!tok->Done()){
     Token peek = tok->PeekToken();
-    if(CompareToken(peek,"`include")){ // Assuming defines only happen outside module (Not correct but follows common usage, never seen include between parameters or port definitions)
+    if(CompareToken(peek,"`include")){ // Assuming includes only happen outside module (Not correct but follows common usage, never seen include between parameters or port definitions)
          tok->AdvancePeek(peek);
          tok->AssertNextToken("\"");
 
@@ -141,7 +141,7 @@ void PreprocessVerilogFile_(Arena* output, String fileContent,MacroMap& macros,s
     } else if(CompareToken(peek,"`define")){ // Same for defines
          tok->AdvancePeek(peek);
          Token defineName = tok->NextToken();
-
+      
          Token emptySpace = tok->PeekWhitespace();
          if(emptySpace.size == 0){ // Function macro
             Token arguments = tok->PeekFindIncluding(")");
@@ -217,7 +217,7 @@ void PreprocessVerilogFile_(Arena* output, String fileContent,MacroMap& macros,s
 }
 
 String PreprocessVerilogFile(Arena* output, String fileContent,std::vector<String>* includeFilepaths,Arena* arena){
-  MacroMap macros;
+  MacroMap macros = {};
 
   String res = {};
   res.data = (const char*) &output->mem[output->used];
@@ -671,16 +671,16 @@ ModuleInfo ExtractModuleInfo(Module& module,Arena* permanent,Arena* tempArena){
       }
     } else if(CheckFormat("in%d",decl.name)){
       port.AssertNextToken("in");
-      /* int input = */ ParseInt(port.NextToken());
+      int input = ParseInt(port.NextToken());
       int delay = decl.attributes[VERSAT_LATENCY].number;
 
-      *inputDelay.Push(1) = delay;
+      *inputDelay.Set(input,1) = delay;
     } else if(CheckFormat("out%d",decl.name)){
       port.AssertNextToken("out");
-      /* int output = */ ParseInt(port.NextToken());
+      int output = ParseInt(port.NextToken());
       int latency = decl.attributes[VERSAT_LATENCY].number;
 
-      *outputLatency.Push(1) = latency;
+      *outputLatency.Set(output,1) = latency;
     } else if(CheckFormat("delay%d",decl.name)){
       port.AssertNextToken("delay");
       int delay = ParseInt(port.NextToken());
@@ -826,7 +826,7 @@ Value Eval(Expression* expr,Array<ParameterExpression> parameters){
     ret = expr->val;
   } break;
   case Expression::OPERATION: {
-    // TODO: Not first place where we have default operation behaviour. Refactor into a single place
+    // TODO: Not the first place where we have default operation behaviour. Refactor into a single place
     switch(expr->op[0]){
     case '+': {
       ret = MakeValue(Eval(expr->expressions[0],parameters).number

@@ -1779,8 +1779,6 @@ FUDeclaration* Merge(Versat* versat,Array<FUDeclaration*> types,String name,Merg
                }
             }
 
-            // For now, not adding multiplexers to the view graphs. Still do not know if they will be used for anything afterwards or if they can be discarded
-
             // Need to map edgeNode into the integer that indicates which input graph it belongs to.
             Array<int> inputNumberToEdgeNodeIndex = PushArray<int>(arena,size);
             Memset(inputNumberToEdgeNodeIndex,0);
@@ -1870,39 +1868,4 @@ FUDeclaration* Merge(Versat* versat,Array<FUDeclaration*> types,String name,Merg
 
    return decl;
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 

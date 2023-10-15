@@ -11,7 +11,6 @@
 
 #include "accelerator.hpp"
 #include "configurations.hpp"
-#include "merge.hpp"
 #include "graph.hpp"
 
 // Forward declarations
@@ -238,6 +237,11 @@ struct VersatComputedValues{
 struct HierarchicalName{
    String name;
    HierarchicalName* next;
+};
+
+struct TypeAndInstance{
+  String typeName;
+  String instanceName;
 };
 
 struct SharingInfo{

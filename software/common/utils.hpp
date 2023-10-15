@@ -1,7 +1,7 @@
 #ifndef INCLUDED_UTILS_HPP
 #define INCLUDED_UTILS_HPP
 
-// Utilities that depend on memory 
+// Utilities that depend on memory
 
 #include "utilsCore.hpp"
 #include "memory.hpp"
@@ -39,5 +39,46 @@ Array<T*> ListToArray(T* head,int size,Arena* arena){
 }
 
 Optional<Array<String>> GetAllFilesInsideDirectory(String dirPath,Arena* arena);
+
+template<typename T>
+struct ArenaList{
+  ListedStruct<T>* head;
+  ListedStruct<T>* tail;
+};
+
+template<typename T>
+ArenaList<T>* PushArenaList(Arena* arena){
+  ArenaList<T>* res = PushStruct<ArenaList<T>>(arena);
+  *res = {};
+
+  return res;
+}
+
+template<typename T>
+T* PushListElement(Arena* arena,ArenaList<T>* list){
+  ListedStruct<T>* s = PushStruct<ListedStruct<T>>(arena);
+
+  if(!list->head){
+    list->head = s;
+    list->tail = s;
+  } else {
+    list->tail->next = s;
+    list->tail = s;
+  }
+
+  return s;
+}
+
+template<typename T>
+int Size(ArenaList<T>* list){
+  ListedStruct<T>* ptr = list->head;
+
+  int count = 0;
+  while(ptr){
+    count += 1;
+    ptr = ptr->next;
+  }
+  return count;
+}
 
 #endif // INCLUDED_UTILS_HPP

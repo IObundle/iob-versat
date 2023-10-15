@@ -33,7 +33,7 @@ reg [DELAY_W-1:0] delayCounter;
 
 reg [PERIOD_W - 1:0] per;
 
-wire perCond = ((per + 1) >= (period >> OFFSET_W));
+wire perCond = (per + 1) >= period; /* Do not know why there was a "period >> OFFSET_W" */
 
 always @(posedge clk,posedge rst)
 begin

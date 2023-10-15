@@ -1,3 +1,4 @@
+#include "configurations.hpp"
 #include "versat.hpp"
 #include "utils.hpp"
 #include "verilogParsing.hpp"
@@ -15,13 +16,6 @@ namespace fs = std::filesystem;
 //       Do not actually want to do these preprocessor things. Fix the makefile so that it passes as a string
 #define DO_STRINGIFY(ARG) #ARG
 #define STRINGIFY(ARG) DO_STRINGIFY(ARG)
-
-#if 0
-struct OptionFormat{
-  String name;
-
-};
-#endif
 
 struct ArgumentOptions{
   std::vector<String> verilogFiles;
@@ -65,6 +59,7 @@ Optional<String> GetFormat(String filename){
 // Try to follow the gcc conventions.
 // What I want: Default values, must have values, generate help automatically, stuff like that.
 //
+// TODO: Change things so that we use a ArenaList to store everything while processing and then convert to Array when storing permanently in the permanent Arena
 ArgumentOptions* ParseCommandLineOptions(int argc,const char* argv[],Arena* perm,Arena* temp){
   ArgumentOptions* opts = PushStruct<ArgumentOptions>(perm);
   opts->dataSize = 32; // By default.
@@ -203,13 +198,29 @@ ArgumentOptions* ParseCommandLineOptions(int argc,const char* argv[],Arena* perm
   return opts;
 }
 
-//General TODO: There is a lot of code that makes sense for the old one phase versat, but that are just overhead for the two phase versat. We do not have to guarantee that the Accelerator is "valid" at all times, like the previous version did. We can use more immediate mode APIs and rely on correct function calling instead of pre doing work.
-
-struct Test{
-  String val;
-};
+//General TODO: There is a lot of code that makes sense for the old one phase versat, but that is just overhead for the two phase versat. We do not have to guarantee that the Accelerator is "valid" at all times, like the previous version did. We can use more immediate mode APIs and rely on correct function calling instead of pre doing work.
 
 #include <unordered_map>
+
+#include <execinfo.h>
+
+void print_trace(){
+  void *array[10];
+  char **strings;
+  int size, i;
+
+  size = backtrace (array, 10);
+  strings = backtrace_symbols (array, size);
+  if (strings != NULL)
+  {
+
+    printf ("Obtained %d stack frames.\n", size);
+    for (i = 0; i < size; i++)
+      printf ("%s\n", strings[i]);
+  }
+
+  free (strings);
+}
 
 int main(int argc,const char* argv[]){
   if(argc < 3){
@@ -217,8 +228,10 @@ int main(int argc,const char* argv[]){
     return -1;
   }
 
+  //print_trace();
+  
   Versat* versat = InitVersat(0,1);
-
+  
   // TODO: This is not a good idea, after changing versat to 2 phases
   SetDebug(versat,VersatDebugFlags::OUTPUT_ACCELERATORS_CODE,1);
   SetDebug(versat,VersatDebugFlags::OUTPUT_VERSAT_CODE,1);
@@ -233,41 +246,6 @@ int main(int argc,const char* argv[]){
   Arena tempInst = InitArena(Megabyte(256));
   Arena* temp = &tempInst;
 
-#if 0
-  {
-    Test t = {};
-    t.val = STRING("test");
-    Arena* arena = temp;
-
-    std::unordered_map<String,String> test;
-
-    test.insert({STRING("1"),STRING("2")});
-    test.insert({STRING("2"),STRING("3")});
-    test.insert({STRING("3"),STRING("4")});
-
-    std::vector<String> vec;
-    vec.push_back(STRING("1"));
-    vec.push_back(STRING("2"));
-    vec.push_back(STRING("3"));
-
-    Array<String> array = PushArray<String>(arena,3);
-    array[0] = STRING("1");
-    array[1] = STRING("2");
-    array[2] = STRING("3");
-
-    Hashmap<String,String>* map = PushHashmap<String,String>(arena,3);
-    map->Insert(STRING("1"),STRING("2"));
-    map->Insert(STRING("2"),STRING("3"));
-    map->Insert(STRING("3"),STRING("4"));
-
-    Pair<String,String> p;
-    p.first = STRING("123");
-    p.second = STRING("234");
-
-    printf("here\n");
-  }
-#endif
-  
   // TODO: Add options directly to versat instead of having two different structures
   ArgumentOptions* opts = ParseCommandLineOptions(argc,argv,perm,temp);
   versat->outputLocation = opts->outputFilepath;
@@ -279,7 +257,7 @@ int main(int argc,const char* argv[]){
   versat->opts.generateFSTFormat = 1;
 #endif
   
-  printf("%s\n",STRINGIFY(DEFAULT_UNIT_PATHS));
+  //printf("%s\n",STRINGIFY(DEFAULT_UNIT_PATHS));
 
   String dirPaths = STRING(STRINGIFY(DEFAULT_UNIT_PATHS));
   Tokenizer pathSplitter(dirPaths,"",{});
@@ -291,7 +269,6 @@ int main(int argc,const char* argv[]){
     if(!res){
       printf("\n\nCannot open dir: %.*s\n\n",UNPACK_SS(path));
     } else {
-      printf("\n");
       for(String& str : res.value()){
         String fullPath = PushString(perm,"%.*s/%.*s",UNPACK_SS(path),UNPACK_SS(str));
 
@@ -310,12 +287,6 @@ int main(int argc,const char* argv[]){
     }
   }
 
-#if 0
-  for(String& str : opts->verilogFiles){
-    printf("%.*s\n",UNPACK_SS(str));
-  }
-#endif
-
   // Check existance of Verilator. We cannot proceed without Verilator
   if(opts->verilatorRoot.size == 0){
     bool lackOfVerilator = false;
@@ -326,7 +297,7 @@ int main(int argc,const char* argv[]){
     if(vr.size == 0){
       lackOfVerilator = true;
     }
-    printf("VERILATOR_ROOT: %s\n",STRINGIFY(VERILATOR_ROOT));
+    //printf("VERILATOR_ROOT: %s\n",STRINGIFY(VERILATOR_ROOT));
 #else
     lackOfVerilator = true;
 #endif
@@ -355,12 +326,9 @@ int main(int argc,const char* argv[]){
     exit(-1);
   }
 
-#if 1
   PushPtr<ModuleInfo> allModulesPush(perm,999); // For debugging purposes
   for(String file : opts->verilogFiles){
     String content = PushFile(temp,StaticFormat("%.*s",UNPACK_SS(file)));
-
-    printf("%.*s\n",UNPACK_SS(file));
 
     if(content.size == 0){
       printf("Failed to open file %.*s\n. Exiting\n",UNPACK_SS(file));
@@ -378,10 +346,9 @@ int main(int argc,const char* argv[]){
     }
   }
   Array<ModuleInfo> allModules = allModulesPush.AsArray();
-#endif
 
-  // Compile all templates beforehand
-#if 1
+  FUDeclaration* decl = nullptr;
+  
   BasicDeclaration::buffer = GetTypeByName(versat,STRING("Buffer"));
   BasicDeclaration::fixedBuffer = GetTypeByName(versat,STRING("FixedBuffer"));
   BasicDeclaration::pipelineRegister = GetTypeByName(versat,STRING("PipelineRegister"));
@@ -392,7 +359,6 @@ int main(int argc,const char* argv[]){
   BasicDeclaration::input = GetTypeByName(versat,STRING("CircuitInput"));
   BasicDeclaration::output = GetTypeByName(versat,STRING("CircuitOutput"));
   BasicDeclaration::data = GetTypeByName(versat,STRING("Data"));
-#endif
 
   const char* specFilepath = opts->specificationFilepath;
   String topLevelTypeStr = STRING(opts->topName);
@@ -401,8 +367,9 @@ int main(int argc,const char* argv[]){
     ParseVersatSpecification(versat,specFilepath);
   }
 
+  // MARK
   //DebugVersat(versat);
-
+  
   FUDeclaration* type = GetTypeByName(versat,topLevelTypeStr);
   Accelerator* accel = CreateAccelerator(versat);
   FUInstance* TOP = nullptr;
@@ -484,7 +451,6 @@ int main(int argc,const char* argv[]){
 
   // We need to bundle config + static (type->config) only contains config, but not static
   Array<Wire> allConfigsVerilatorSide = PushArray<Wire>(temp,999); // TODO: Correct size
-#if 1
   {
     int index = 0;
     for(Wire& config : type->configs){
@@ -499,7 +465,6 @@ int main(int argc,const char* argv[]){
     }
     allConfigsVerilatorSide.size = index;
   }
-#endif
 
   // Extract states with the expected TOP level name (not module name)
   Hashmap<String,SizedConfig>* namedStates = ExtractNamedSingleStates(accel,&versat->permanent);
@@ -508,6 +473,8 @@ int main(int argc,const char* argv[]){
   for(Pair<String,SizedConfig> pair : namedStates){
     statesHeaderSize[index++] = pair.first;
   }
+  // TODO: There is some bug with the state header not having the correct amount of entries
+  //printf("%d\n",namedStates->nodesUsed);
 
   // Module info for top level
   ModuleInfoInstance info = {};

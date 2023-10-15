@@ -196,14 +196,12 @@ MemberDef* ParseMember(Tokenizer* tok,Arena* out){
  
          def.arrays = tok->Point(arraysMark);
       } else if(CompareToken(peek,"(")){
-         Token advanceList = tok->PeekUntilDelimiterExpression({"("},{")"},0);
+         Token advanceList = tok->PeekIncludingDelimiterExpression({"("},{")"},0);
          tok->AdvancePeek(advanceList);
-         tok->AssertNextToken(")");
          if(!tok->IfNextToken(";")){
-            Token advanceFunctionBody = tok->PeekUntilDelimiterExpression({"{"},{"}"},0);
+            Token advanceFunctionBody = tok->PeekIncludingDelimiterExpression({"{"},{"}"},0);
             tok->AdvancePeek(advanceFunctionBody);
-            tok->AssertNextToken("}");
-            tok->IfNextToken(";");
+            tok->IfNextToken(";"); // Consume any extra ';'
          }
 
          // We are inside a function declaration
@@ -213,14 +211,12 @@ MemberDef* ParseMember(Tokenizer* tok,Arena* out){
       Token finalToken = tok->NextToken();
 
       if(CompareString(finalToken,"(")){
-         Token advanceList = tok->PeekUntilDelimiterExpression({"("},{")"},1);
+         Token advanceList = tok->PeekIncludingDelimiterExpression({"("},{")"},1);
          tok->AdvancePeek(advanceList);
-         tok->AssertNextToken(")");
          if(!tok->IfNextToken(";")){
-            Token advanceFunctionBody = tok->PeekUntilDelimiterExpression({"{"},{"}"},0);
+            Token advanceFunctionBody = tok->PeekIncludingDelimiterExpression({"{"},{"}"},0);
             tok->AdvancePeek(advanceFunctionBody);
-            tok->AssertNextToken("}");
-            tok->IfNextToken(";");
+            tok->IfNextToken(";"); // Consume any extra ';'
          }
 
          // We are inside a function declaration

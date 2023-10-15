@@ -136,7 +136,7 @@ void VersatMemoryCopy(iptr* dest,iptr* data,int size){
   if(acceleratorSupportsDMA && (dataInsideVersat != destInsideVersat)){
     MEMSET(versat_base,0x1,dest); // Dest inside 
     MEMSET(versat_base,0x2,data); // Memory address
-    MEMSET(versat_base,0x3,size - 1); // AXI size
+    MEMSET(versat_base,0x3,size); // Byte size
     MEMSET(versat_base,0x4,0x1); // Start DMA
 
     while(1){

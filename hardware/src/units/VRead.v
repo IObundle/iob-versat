@@ -188,6 +188,31 @@ module VRead #(
       .done(gen_done)
       );
 
+   SimpleAddressGen #(.ADDR_W(ADDR_W),.DATA_W(DATA_W)) addrgenB(
+      .clk(clk),
+      .rst(rst),
+      .run(run),
+
+      //configurations 
+      .period(perB),
+      .delay(delay0),
+      .start(startB_inst),
+      .incr(incrB),
+
+      `ifdef COMPLEX_INTERFACE
+      .iterations(iterB),
+      .duty(dutyB),
+      .shift(shiftB),
+      `endif
+
+      //outputs 
+      .valid(enB),
+      .ready(1'b1),
+      .addr(addrB_int),
+      .done(doneB_int)
+      );
+
+   /*
     xaddrgen2 #(.MEM_ADDR_W(ADDR_W)) addrgen2B (
                        .clk(clk),
                        .rst(rst),
@@ -207,6 +232,7 @@ module VRead #(
                        .mem_en(enB),
                        .done(doneB_int)
                        );
+   */
 
    assign addrB = addrB_int2;
    assign addrB_int2 = reverseB ? reverseBits(addrB_int) : addrB_int;
@@ -255,6 +281,8 @@ module VRead #(
 
    reg [ADDR_W-1:0] addr_out;
 
+   localparam OFFSET_W = $clog2(DATA_W/8);
+
    generate 
    if(AXI_DATA_W > DATA_W) begin
       always @* begin
@@ -302,3 +330,5 @@ module VRead #(
    assign ext_2p_addr_in_0 = addr_out;
 
 endmodule
+
+`undef COMPLEX_INTERFACE
