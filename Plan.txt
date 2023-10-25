@@ -141,19 +141,6 @@ Optimizations:
       In fact, currently units are having their configuration pointers point to somebody else configuration space. Ideally we should set the pointers to nullptr, as it should be a segfault accessing other units configurations.
       Also, investigate wether we need the offset arrays for outputs and extraData, instead of just using push pointers.
 
-Template Engine:
-
-   The engine isn't fully parsing the templates.
-      The Eval call is parsing some things. Everything should be parsed on the Parse function and the Eval function should never have to parse a single line.
-
-   A little bit of code would be enough to make the output look more consistent, instead of having random lines being forward or backwards compared to other lines.
-      Basically, if a line only contains commands and no text, it should just be "removed", in the sense that it shouldn't produce any effect in the output.
-         Lines of text should just be copied to the output with the same spacing. (Probably would be best to change processing to be more line based.)
-      If a line contains a mixture of commands and text, probably should just remain the same.
-
-   Rework the parser to operate in a line by line basis.
-      Augment error reporting with indication of the line where the error occured.
-
 Templates:
 
    Do a template pass to remove duplicate code, lock down on the approach used to identify units and wires. Different templates should almost resemble each other. All the logic should be shared between units and should rely on common ground.
@@ -237,6 +224,30 @@ Small stuff, almost a TODO:
    Change the function from RegisterUnit to a function that simple returns the declaration.
       Some parts of the code do not want to register, they want the declaration first and then perform some small changes. Functions just want to be pure
    The concept of combinatorial unit is not fully realized. 
+
+Template Engine:
+
+   The engine isn't fully parsing the templates.
+      The Eval call is parsing some things. Everything should be parsed on the Parse function and the Eval function should never have to parse a single line.
+
+   A little bit of code would be enough to make the output look more consistent, instead of having random lines being forward or backwards compared to other lines.
+      Basically, if a line only contains commands and no text, it should just be "removed", in the sense that it shouldn't produce any effect in the output.
+         Lines of text should just be copied to the output with the same spacing. (Probably would be best to change processing to be more line based.)
+      If a line contains a mixture of commands and text, probably should just remain the same.
+
+   Rework the parser to operate in a line by line basis.
+      Augment error reporting with indication of the line where the error occured.
+
+   Need better debugging / error reporting.
+   When an error occurs the tool should be able to report the location inside the template the same way gcc would report.
+   Should be able to do dry runs or expression tree checks with the types to see if the members exist.
+      Make it easier to make a change to the structures in C++, we make a dry run that checks if every member access for every type actually works or which members are missing.
+   The engine should be able to deal with errors and continue working.
+      Should report all the errors that it can find per makefile and generate as best as it can or simply not generate anything after finding errors.
+         All we want is to find all the errors in one go instead of having to recompile everything and run one at a time.
+
+   The entire thing should be lift up into a separate "module" or something. Make it more generic.
+      The type system should also be lifted up into its own separate module.
 
 Legend:
 

@@ -415,7 +415,7 @@ FUInstance* ParseInstanceDeclaration(Versat* versat,Tokenizer* tok,Accelerator* 
 
     Token list = tok->NextFindUntil(")");
     int arguments = 1 + CountSubstring(list,STRING(","));
-    Assert(arguments <= FUType->configs.size);
+    Assert(arguments <= FUType->configInfo.configs.size);
 
     Tokenizer insideList(list,",",{});
 

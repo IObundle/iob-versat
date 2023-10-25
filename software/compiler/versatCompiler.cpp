@@ -236,8 +236,8 @@ int main(int argc,const char* argv[]){
   SetDebug(versat,VersatDebugFlags::OUTPUT_ACCELERATORS_CODE,1);
   SetDebug(versat,VersatDebugFlags::OUTPUT_VERSAT_CODE,1);
   SetDebug(versat,VersatDebugFlags::USE_FIXED_BUFFERS,0);
-  SetDebug(versat,VersatDebugFlags::OUTPUT_GRAPH_DOT,0);
-  SetDebug(versat,VersatDebugFlags::OUTPUT_VCD,0);
+  SetDebug(versat,VersatDebugFlags::OUTPUT_GRAPH_DOT,1);
+  //SetDebug(versat,VersatDebugFlags::OUTPUT_VCD,0);
 
   Arena permInst = InitArena(Megabyte(256));
   Arena* perm = &permInst;
@@ -453,7 +453,7 @@ int main(int argc,const char* argv[]){
   Array<Wire> allConfigsVerilatorSide = PushArray<Wire>(temp,999); // TODO: Correct size
   {
     int index = 0;
-    for(Wire& config : type->configs){
+    for(Wire& config : type->configInfo.configs){
       allConfigsVerilatorSide[index++] = config;
     }
     for(Pair<StaticId,StaticData> p : type->staticUnits){
@@ -482,9 +482,9 @@ int main(int argc,const char* argv[]){
   info.inputDelays = type->inputDelays;
   info.outputLatencies = type->outputLatencies;
   info.configs = allConfigsVerilatorSide; // Bundled config + state (delay is not needed, because we know how many delays we have
-  info.states = type->states;
+  info.states = type->configInfo.states;
   info.externalInterfaces = type->externalMemory;
-  info.nDelays = type->delayOffsets.max;
+  info.nDelays = type->configInfo.delayOffsets.max;
   info.nIO = type->nIOs;
   info.memoryMappedBits = type->memoryMapBits;
   info.doesIO = type->nIOs > 0;
@@ -543,11 +543,7 @@ int main(int argc,const char* argv[]){
     ProcessTemplate(output,comp,temp);
   }
 
-#ifdef VERSAT_DEBUG
-  if(opts->debug){
-    DebugVersat(versat);
-  }
-#endif
+//  DebugVersat(versat);
   
   return 0;
 }

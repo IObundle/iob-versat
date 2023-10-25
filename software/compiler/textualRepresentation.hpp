@@ -2,6 +2,7 @@
 #define INCLUDED_TEXTUAL_REPRESENTATION
 
 #include "versat.hpp"
+#include "merge.hpp"
 
 #include "repr.hpp"
 

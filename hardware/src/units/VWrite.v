@@ -87,7 +87,7 @@ module VWrite #(
       end else if(run) begin
          doneA <= 1'b0;
          doneB <= 1'b0;
-      end else  begin
+      end else if(running) begin
          doneB <= doneB_int;
          if(databus_valid_0 && databus_ready_0 && databus_last_0)
             doneA <= 1'b1;

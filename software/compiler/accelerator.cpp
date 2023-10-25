@@ -1,3 +1,4 @@
+#include "acceleratorStats.hpp"
 #include "versat.hpp"
 
 #include <unordered_map>
@@ -1388,7 +1389,7 @@ int CalculateTotalOutputs(Accelerator* accel){
    int total = 0;
    FOREACH_LIST(InstanceNode*,ptr,accel->allocated){
       FUInstance* inst = ptr->inst;
-      total += inst->declaration->outputOffsets.max;
+      total += inst->declaration->configInfo.outputOffsets.max;
    }
 
    return total;
@@ -1814,7 +1815,7 @@ void ActivateMergedAccelerator(Versat* versat,Accelerator* accel,FUDeclaration* 
 
    FUDeclaration* combMux4 = GetTypeByName(versat,STRING("CombMux4"));
 
-   #if 01
+   #if 0
    AcceleratorIterator iter = {};
 
    for(InstanceNode* node = iter.Start(accel,&versat->temp,true); node; node = iter.Skip()){
@@ -1944,6 +1945,11 @@ ComputedData CalculateVersatComputedData(InstanceNode* instances,VersatComputedV
    return res;
 }
 
+bool IsComposite(FUDeclaration* decl){
+  bool res = (decl->baseCircuit != nullptr);
+  return res;
+}
+
 bool IsCombinatorial(FUDeclaration* decl){
    bool res;
    if(IsTypeHierarchical(decl)){
@@ -1968,3 +1974,46 @@ bool IsCombinatorial(Accelerator* accel){
    }
    return true;
 }
+
+bool ContainsConfigs(FUDeclaration* decl){
+  bool res = (decl->configInfo.configs.size);
+  return res;
+}
+
+bool ContainsStatics(FUDeclaration* decl){
+  bool res = false;
+  for(auto& pair : decl->staticUnits){
+    if(pair.data.configs.size){
+      res = true;
+      break;
+    }
+  }
+
+  return res;
+}
+
+Array<FUDeclaration*> SubTypes(FUDeclaration* decl,Arena* out,Arena* temp){
+  if(!IsComposite(decl)){
+    return {};
+  }
+  
+  int numberUnits = NumberUnits(decl->fixedDelayCircuit);
+
+  BLOCK_REGION(temp);
+  
+  Set<FUDeclaration*>* maps = PushSet<FUDeclaration*>(temp,99);
+  AcceleratorIterator iter = {};
+  for(InstanceNode* node = iter.Start(decl->fixedDelayCircuit,temp,false); node; node = iter.Next()){
+    FUInstance* inst = node->inst;
+    FUDeclaration* decl = inst->declaration;
+
+    if(decl->type != FUDeclaration::SPECIAL && (ContainsConfigs(decl) || ContainsStatics(decl))){
+      maps->Insert(decl);
+    }
+  }
+  
+  Array<FUDeclaration*> subTypes = PushArrayFromSet(out,maps);
+  return subTypes;
+}
+
+

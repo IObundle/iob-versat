@@ -47,6 +47,18 @@ struct ArenaList{
 };
 
 template<typename T>
+int Size(ArenaList<T>* list){
+  ListedStruct<T>* ptr = list->head;
+
+  int count = 0;
+  while(ptr){
+    count += 1;
+    ptr = ptr->next;
+  }
+  return count;
+}
+
+template<typename T>
 ArenaList<T>* PushArenaList(Arena* arena){
   ArenaList<T>* res = PushStruct<ArenaList<T>>(arena);
   *res = {};
@@ -70,15 +82,29 @@ T* PushListElement(Arena* arena,ArenaList<T>* list){
 }
 
 template<typename T>
-int Size(ArenaList<T>* list){
-  ListedStruct<T>* ptr = list->head;
+Array<T> PushArrayFromList(Arena* arena,ArenaList<T>* list){
+  Byte* mark = MarkArena(arena);
 
-  int count = 0;
-  while(ptr){
-    count += 1;
-    ptr = ptr->next;
+  FOREACH_LIST(T*,iter,list->head){
+    T* ptr = PushStruct<T>(arena);
+    *ptr = iter;
   }
-  return count;
+
+  Array<T> res = PointArray<T>(arena,mark);
+  return res;
+}
+
+template<typename T>
+Array<T> PushArrayFromSet(Arena* arena,Set<T>* set){
+  Byte* mark = MarkArena(arena);
+
+  for(auto& pair : set->map){
+    T* ptr = PushStruct<T>(arena);
+    *ptr = pair.first;
+  }
+
+  Array<T> res = PointArray<T>(arena,mark);
+  return res;
 }
 
 #endif // INCLUDED_UTILS_HPP

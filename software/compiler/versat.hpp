@@ -217,7 +217,7 @@ struct VersatComputedValues{
 
    int unitsMapped;
    int memoryMappedBytes;
-   int maxMemoryMapDWords;
+//   int maxMemoryMapDWords;
 
    int nUnitsIO;
 
@@ -229,7 +229,7 @@ struct VersatComputedValues{
    int memoryAddressBits;
    int memoryMappingAddressBits;
    int memoryConfigDecisionBit;
-   int lowerAddressSize;
+   //int lowerAddressSize;
 
    bool signalLoop;
 };
@@ -276,6 +276,16 @@ namespace BasicTemplates{
 }
 
 struct GraphMapping;
+
+struct TypeStructInfoElement{
+  String type;
+  String name;
+};
+
+struct TypeStructInfo{
+  String name;
+  Array<TypeStructInfoElement> entries;
+};
 
 // Temp
 bool EqualPortMapping(PortInstance p1,PortInstance p2);

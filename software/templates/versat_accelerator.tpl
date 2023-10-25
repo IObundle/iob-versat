@@ -31,7 +31,7 @@ module @{accel.name} #(
    output [DATA_W-1:0]             out@{index},
    #{end}
 
-   #{for wire accel.configs}
+   #{for wire accel.configInfo.configs}
    input [@{wire.bitSize-1}:0]     @{wire.name},
    #{end}
 
@@ -42,11 +42,11 @@ module @{accel.name} #(
    #{end}
    #{end}
 
-   #{for wire accel.states}
+   #{for wire accel.configInfo.states}
    output [@{wire.bitSize-1}:0]    @{wire.name},
    #{end}
 
-   #{for i accel.delayOffsets.max}
+   #{for i accel.configInfo.delayOffsets.max}
    input  [31:0]                   delay@{i},
    #{end}
 
@@ -221,14 +221,14 @@ end
          #{end}
 
          #{if inst.isStatic}
-         #{for wire inst.declaration.configs}
+         #{for wire inst.declaration.configInfo.configs}
          .@{wire.name}(@{accel.name}_@{inst.name |> Identify}_@{wire.name}),
          #{end}
 
          #{else}
-         #{set configStart accel.configOffsets.offsets[temp]}
-         #{for wire decl.configs}
-         .@{wire.name}(@{accel.configs[configStart + index].name}), // @{configStart + index}
+         #{set configStart accel.configInfo.configOffsets.offsets[temp]}
+         #{for wire decl.configInfo.configs}
+         .@{wire.name}(@{accel.configInfo.configs[configStart + index].name}), // @{configStart + index}
          #{end}
          #{for unit decl.staticUnits}         
          #{set id unit.first}
@@ -238,7 +238,7 @@ end
          #{end}
          #{end}
 
-         #{for i decl.delayOffsets.max}
+         #{for i decl.configInfo.delayOffsets.max}
             .delay@{i}(delay@{delaySeen}),
          #{inc delaySeen}
          #{end}
@@ -266,8 +266,8 @@ end
          #{inc externalCounter}
          #{end}
 
-         #{for wire decl.states}
-            .@{wire.name}(@{accel.states[statesSeen].name}),
+         #{for wire decl.configInfo.states}
+            .@{wire.name}(@{accel.configInfo.states[statesSeen].name}),
          #{inc statesSeen}
          #{end}
 

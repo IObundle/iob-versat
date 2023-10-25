@@ -101,8 +101,8 @@ void RunAccelerator(int times){
    AcceleratorRunC(accel,times);
 }
 
-void VersatMemoryCopy(iptr* dest,iptr* data,int size){
-   memcpy(dest,data,sizeof(iptr) * size);
+void VersatMemoryCopy(void* dest,void* data,int size){
+   memcpy(dest,data,size);
 }
 
 void VersatUnitWrite(int baseaddr,int index,int val){

@@ -541,7 +541,7 @@ static Value EvalExpression(Expression* expr,Frame* frame,Arena* temp){
          Optional<Value> optVal = AccessStruct(object,expr->id);
          if(!optVal){
 		   PrintStructDefinition(object.type);
-           FatalError(StaticFormat("Tried to access member (%.*s) that does not exist for type (%.*s)",UNPACK_SS(expr->id),UNPACK_SS(object.type->name)));
+           FatalError(StaticFormat("Tried to access member (%.*s) that does not exist for type (%.*s)",UNPACK_SS(expr->text),UNPACK_SS(object.type->name)));
          }
          val = optVal.value();
       }break;

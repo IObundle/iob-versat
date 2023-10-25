@@ -454,6 +454,7 @@ int BitArray::FirstBitSetIndex(int start){
          break;
       }
    }
+   return correct; // TODO: For now I want correctness, find the bug to trailing zero.
    #endif
 
    Assert(start < this->bitSize);
@@ -472,8 +473,10 @@ int BitArray::FirstBitSetIndex(int start){
          return -1;
       }
       if(index >= start){
+#ifdef VERSAT_DEBUG
          Assert(index == correct);
-         return index;
+#endif
+        return index;
       }
 
       val = CLEAR_BIT(val,bitIndex);

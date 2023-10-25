@@ -84,7 +84,7 @@ wire [31:0] unitRdataFinal;
 #{end}
 
 wire we = (|wstrb);
-wire memoryMappedAddr = address[@{memoryConfigDecisionBit}];
+wire memoryMappedAddr = byteAddress[@{memoryConfigDecisionBit}];
 wire rst_int = (rst | soft_reset);
 
 // Versat registers and memory access
@@ -406,7 +406,7 @@ begin
       #{for node instances}
       #{set inst node.inst}
       #{set decl inst.declaration}
-      #{for wire decl.configs}
+      #{for wire decl.configInfo.configs}
       if(address[@{versatValues.configurationAddressBits - 1}:0] == @{addr}) // @{versatBase + addr * 4 |> Hex}
          @{configReg}[@{counter}+:@{wire.bitSize}] <= data_data[@{wire.bitSize - 1}:0]; // @{wire.name} - @{decl.name}
       #{inc addr}
@@ -432,7 +432,7 @@ begin
       #{for node instances}
       #{set inst node.inst}
       #{set decl inst.declaration}
-      #{for i decl.delayOffsets.max}
+      #{for i decl.configInfo.delayOffsets.max}
       if(address[@{versatValues.configurationAddressBits - 1}:0] == @{addr}) // @{versatBase + addr * 4 |> Hex}
          @{configReg}[@{counter}+:32] <= data_data[31:0]; // Delay
       #{inc addr}
@@ -467,7 +467,7 @@ begin
       #{for node instances}
       #{set inst node.inst}
       #{set decl inst.declaration}
-      #{for wire decl.states}
+      #{for wire decl.configInfo.states}
       if(addr[@{versatValues.stateAddressBits - 1}:0] == @{addr}) // @{versatBase + addr * 4 |> Hex}
          stateRead = statedata[@{counter}+:@{wire.bitSize}];
       #{inc addr}
@@ -537,7 +537,7 @@ end
             .in@{index}(#{call outputName input}),
          #{end}
 
-         #{for wire decl.configs}
+         #{for wire decl.configInfo.configs}
          #{if decl.type}
             .@{wire.name}(configdata[@{configDataIndex}+:@{wire.bitSize}]),
          #{else}
@@ -554,7 +554,7 @@ end
          #{end}
          #{end}
 
-         #{for i decl.delayOffsets.max}
+         #{for i decl.configInfo.delayOffsets.max}
             .delay@{i}(configdata[@{delayStart + (delaySeen * 32)}+:32]),
          #{inc delaySeen}
          #{end}
@@ -582,7 +582,7 @@ end
          #{inc externalCounter}
          #{end}
 
-         #{for wire decl.states}
+         #{for wire decl.configInfo.states}
          #{if decl.type}
             .@{wire.name}(statedata[@{stateDataIndex}+:@{wire.bitSize}]),
          #{else}

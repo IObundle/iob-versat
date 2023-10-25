@@ -1036,7 +1036,7 @@ FUDeclaration* RegisterModuleInfo(Versat* versat,ModuleInfo* info){
   Arena* arena = &versat->permanent;
 
   FUDeclaration decl = {};
-
+  
   // Check same name
   for(FUDeclaration* decl : versat->declarations){
     if(CompareString(decl->name,info->name)){
@@ -1143,10 +1143,10 @@ FUDeclaration* RegisterModuleInfo(Versat* versat,ModuleInfo* info){
   decl.name = info->name;
   decl.inputDelays = info->inputDelays;
   decl.outputLatencies = info->outputLatencies;
-  decl.configs = configs;
-  decl.states = states;
+  decl.configInfo.configs = configs;
+  decl.configInfo.states = states;
   decl.externalMemory = external;
-  decl.delayOffsets.max = info->nDelays;
+  decl.configInfo.delayOffsets.max = info->nDelays;
   decl.nIOs = info->nIO;
   decl.memoryMapBits = memoryMapBits;
   //decl.databusAddrSize = databusAddrSize; // TODO: How to handle different units with different databus address sizes??? For now do nothing. Do not even know if it's worth to bother with this, I think that all units should be force to use AXI_ADDR_W for databus addresses.
@@ -1158,8 +1158,8 @@ FUDeclaration* RegisterModuleInfo(Versat* versat,ModuleInfo* info){
     decl.delayType = decl.delayType | DelayType::DELAY_TYPE_SINK_DELAY;
   }
 
-  decl.configOffsets.max = info->configs.size;
-  decl.stateOffsets.max = info->states.size;
+  decl.configInfo.configOffsets.max = info->configs.size;
+  decl.configInfo.stateOffsets.max = info->states.size;
 
   FUDeclaration* res = RegisterFU(versat,decl);
   return res;
@@ -1167,7 +1167,7 @@ FUDeclaration* RegisterModuleInfo(Versat* versat,ModuleInfo* info){
 
 FUDeclaration* RegisterFU(Versat* versat,FUDeclaration decl){
   if(!IsTypeHierarchical(&decl)){
-    decl.outputOffsets.max = decl.outputLatencies.size;
+    decl.configInfo.outputOffsets.max = decl.outputLatencies.size;
   }
 
   FUDeclaration* type = versat->declarations.Alloc();
@@ -1191,10 +1191,10 @@ UnitValues CalculateIndividualUnitValues(FUInstance* inst){
 	//   res.delays = 1;
 	//   res.extraData = sizeof(int);
   } else {
-    res.configs = type->configs.size;
-    res.states = type->states.size;
-    res.delays = type->delayOffsets.max;
-    res.extraData = type->extraDataOffsets.max;
+    res.configs = type->configInfo.configs.size;
+    res.states = type->configInfo.states.size;
+    res.delays = type->configInfo.delayOffsets.max;
+    res.extraData = type->configInfo.extraDataOffsets.max;
   }
 
   return res;
@@ -1208,7 +1208,7 @@ UnitValues CalculateAcceleratorUnitValues(Versat* versat,FUInstance* inst){
   FUDeclaration* type = inst->declaration;
 
   if(IsTypeHierarchical(type)){
-    res.totalOutputs = type->outputOffsets.max;
+    res.totalOutputs = type->configInfo.outputOffsets.max;
   } else {
     res = CalculateIndividualUnitValues(inst);
     res.totalOutputs = res.outputs;
@@ -1240,13 +1240,13 @@ UnitValues CalculateAcceleratorValues(Versat* versat,Accelerator* accel){
       }
 
       if(!seenShared[inst->sharedIndex]){
-        val.configs += type->configs.size;
+        val.configs += type->configInfo.configs.size;
         val.sharedUnits += 1;
       }
 
       seenShared[inst->sharedIndex] = true;
     } else if(!inst->isStatic){ // Shared cannot be static
-         val.configs += type->configs.size;
+         val.configs += type->configInfo.configs.size;
     }
 
     if(type->isMemoryMapped){
@@ -1260,10 +1260,10 @@ UnitValues CalculateAcceleratorValues(Versat* versat,Accelerator* accel){
       val.inputs += 1;
     }
 
-    val.states += type->states.size;
-    val.delays += type->delayOffsets.max;
+    val.states += type->configInfo.states.size;
+    val.delays += type->configInfo.delayOffsets.max;
     val.ios += type->nIOs;
-    val.extraData += type->extraDataOffsets.max;
+    val.extraData += type->configInfo.extraDataOffsets.max;
 
     if(type->externalMemory.size){
       val.externalMemoryInterfaces += type->externalMemory.size;
@@ -1297,7 +1297,7 @@ UnitValues CalculateAcceleratorValues(Versat* versat,Accelerator* accel){
       id.name = inst->name;
 
       staticSeen->Insert(id,1);
-      val.statics += inst->declaration->configs.size;
+      val.statics += inst->declaration->configInfo.configs.size;
     }
 
     if(IsTypeHierarchical(inst->declaration)){
@@ -1328,9 +1328,9 @@ void FillDeclarationWithAcceleratorValues(Versat* versat,FUDeclaration* decl,Acc
     anySavedConfiguration |= inst->savedConfiguration;
   }
 
-  decl->delayOffsets.max = val.delays;
+  decl->configInfo.delayOffsets.max = val.delays;
   decl->nIOs = val.ios;
-  decl->extraDataOffsets.max = val.extraData;
+  decl->configInfo.extraDataOffsets.max = val.extraData;
   decl->nStaticConfigs = val.statics;
   decl->isMemoryMapped = val.isMemoryMapped;
   decl->memoryMapBits = val.memoryMappedBits;
@@ -1368,8 +1368,8 @@ void FillDeclarationWithAcceleratorValues(Versat* versat,FUDeclaration* decl,Acc
     }
   }
 
-  decl->configs = PushArray<Wire>(permanent,val.configs);
-  decl->states = PushArray<Wire>(permanent,val.states);
+  decl->configInfo.configs = PushArray<Wire>(permanent,val.configs);
+  decl->configInfo.states = PushArray<Wire>(permanent,val.states);
 
   Hashmap<int,int>* staticsSeen = PushHashmap<int,int>(temp,val.sharedUnits);
 
@@ -1383,22 +1383,22 @@ void FillDeclarationWithAcceleratorValues(Versat* versat,FUDeclaration* decl,Acc
     if(!inst->isStatic){
       if(inst->sharedEnable){
         if(staticsSeen->InsertIfNotExist(inst->sharedIndex,0)){
-          for(Wire& wire : d->configs){
-            decl->configs[configIndex].name = PushString(permanent,"%.*s_%.*s",UNPACK_SS(inst->name),UNPACK_SS(wire.name));
-            decl->configs[configIndex++].bitSize = wire.bitSize;
+          for(Wire& wire : d->configInfo.configs){
+            decl->configInfo.configs[configIndex].name = PushString(permanent,"%.*s_%.*s",UNPACK_SS(inst->name),UNPACK_SS(wire.name));
+            decl->configInfo.configs[configIndex++].bitSize = wire.bitSize;
           }
         }
       } else {
-        for(Wire& wire : d->configs){
-          decl->configs[configIndex].name = PushString(permanent,"%.*s_%.*s",UNPACK_SS(inst->name),UNPACK_SS(wire.name));
-          decl->configs[configIndex++].bitSize = wire.bitSize;
+        for(Wire& wire : d->configInfo.configs){
+          decl->configInfo.configs[configIndex].name = PushString(permanent,"%.*s_%.*s",UNPACK_SS(inst->name),UNPACK_SS(wire.name));
+          decl->configInfo.configs[configIndex++].bitSize = wire.bitSize;
         }
       }
     }
 
-    for(Wire& wire : d->states){
-      decl->states[stateIndex].name = PushString(permanent,"%.*s_%.2d",UNPACK_SS(wire.name),stateIndex);
-      decl->states[stateIndex++].bitSize = wire.bitSize;
+    for(Wire& wire : d->configInfo.states){
+      decl->configInfo.states[stateIndex].name = PushString(permanent,"%.*s_%.2d",UNPACK_SS(wire.name),stateIndex);
+      decl->configInfo.states[stateIndex++].bitSize = wire.bitSize;
     }
   }
 
@@ -1432,20 +1432,20 @@ void FillDeclarationWithAcceleratorValues(Versat* versat,FUDeclaration* decl,Acc
 
   decl->signalLoop = val.signalLoop;
 
-  decl->configOffsets = CalculateConfigurationOffset(accel,MemType::CONFIG,permanent);
-  decl->stateOffsets = CalculateConfigurationOffset(accel,MemType::STATE,permanent);
-  decl->delayOffsets = CalculateConfigurationOffset(accel,MemType::DELAY,permanent);
+  decl->configInfo.configOffsets = CalculateConfigurationOffset(accel,MemType::CONFIG,permanent);
+  decl->configInfo.stateOffsets = CalculateConfigurationOffset(accel,MemType::STATE,permanent);
+  decl->configInfo.delayOffsets = CalculateConfigurationOffset(accel,MemType::DELAY,permanent);
 
-  Assert(decl->configOffsets.max == val.configs);
-  Assert(decl->stateOffsets.max == val.states);
-  Assert(decl->delayOffsets.max == val.delays);
+  Assert(decl->configInfo.configOffsets.max == val.configs);
+  Assert(decl->configInfo.stateOffsets.max == val.states);
+  Assert(decl->configInfo.delayOffsets.max == val.delays);
 
-  decl->outputOffsets = CalculateOutputsOffset(accel,val.outputs,permanent);
-  Assert(decl->outputOffsets.max == val.totalOutputs + val.outputs);
-  decl->outputOffsets.max = val.totalOutputs + val.outputs; // Includes the output portion of the composite instance
+  decl->configInfo.outputOffsets = CalculateOutputsOffset(accel,val.outputs,permanent);
+  Assert(decl->configInfo.outputOffsets.max == val.totalOutputs + val.outputs);
+  decl->configInfo.outputOffsets.max = val.totalOutputs + val.outputs; // Includes the output portion of the composite instance
 
-  decl->extraDataOffsets = CalculateConfigurationOffset(accel,MemType::EXTRA,permanent);
-  Assert(decl->extraDataOffsets.max == val.extraData);
+  decl->configInfo.extraDataOffsets = CalculateConfigurationOffset(accel,MemType::EXTRA,permanent);
+  Assert(decl->configInfo.extraDataOffsets.max == val.extraData);
 }
 
 FUDeclaration* RegisterSubUnit(Versat* versat,String name,Accelerator* circuit){
@@ -1563,11 +1563,11 @@ FUDeclaration* RegisterSubUnit(Versat* versat,String name,Accelerator* circuit){
       id.parent = res;
 
       StaticData data = {};
-      data.configs = inst->declaration->configs;
+      data.configs = inst->declaration->configInfo.configs;
       data.offset = staticOffset;
 
       if(res->staticUnits->InsertIfNotExist(id,data)){
-        staticOffset += inst->declaration->configs.size;
+        staticOffset += inst->declaration->configInfo.configs.size;
       }
     }
   }
@@ -1832,11 +1832,11 @@ FUDeclaration* RegisterIterativeUnit(Versat* versat,Accelerator* accel,FUInstanc
       id.parent = registeredType;
 
       StaticData data = {};
-      data.configs = inst->declaration->configs;
+      data.configs = inst->declaration->configInfo.configs;
       data.offset = staticOffset;
 
       if(registeredType->staticUnits->InsertIfNotExist(id,data)){
-        staticOffset += inst->declaration->configs.size;
+        staticOffset += inst->declaration->configInfo.configs.size;
       }
     }
   }
@@ -1870,6 +1870,7 @@ void ClearConfigurations(Accelerator* accel){
 }
 
 // TODO: Move to debug because it is debug code. Probably not needed to be gui because it's helpful to be able to copy everything in it as text
+#if 0
 void OutputMemoryMap(Versat* versat,Accelerator* accel){
   UNHANDLED_ERROR; // Might need to create a view so that ComputeVersatValues works
   VersatComputedValues val = ComputeVersatValues(versat,accel);
@@ -1972,6 +1973,7 @@ printf("Memory range: [%d:0]\n",val.memoryAddressBits - 1);
 printf("Config range: [%d:0]\n",val.configurationAddressBits - 1);
 printf("State range: [%d:0]\n",val.stateAddressBits - 1);
 }
+#endif
 
 //TODO: functions that should go to accelerator
 int GetInputValue(InstanceNode* node,int index){
@@ -2096,7 +2098,7 @@ void SetDelayRecursive_(AcceleratorIterator iter,int delay){
     for(InstanceNode* child = it.Current(); child; child = it.Skip()){
       SetDelayRecursive_(it,totalDelay);
     }
-  } else if(inst->declaration->delayOffsets.max){
+  } else if(inst->declaration->configInfo.delayOffsets.max){
     inst->delay[0] = totalDelay;
   }
 }

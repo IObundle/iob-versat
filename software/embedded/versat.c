@@ -36,13 +36,13 @@ Time GetTime(){
   return res;
 }
 
-int versat_base;
+iptr versat_base;
 
 volatile AcceleratorConfig* accelConfig = 0;
 volatile AcceleratorState*  accelState  = 0;
 
 void versat_init(int base){
-  versat_base = base;
+  versat_base = (iptr) base;
 
   printf("Embedded Versat\n");
 
@@ -103,15 +103,15 @@ void SignalLoop(){
   MEMSET(versat_base,0x0,0x40000000);
 }
 
-void VersatMemoryCopy(iptr* dest,iptr* data,int size){
+void VersatMemoryCopy(void* dest,void* data,int size){
   if(size <= 0){
     return;
   }
 
   TIME_IT("Memory copy");
 
-  int destInt = (int) dest;
-  int dataInt = (int) data;
+  iptr destInt = (iptr) dest;
+  iptr dataInt = (iptr) data;
 
   bool destInsideVersat = false;
   bool dataInsideVersat = false;
@@ -134,8 +134,15 @@ void VersatMemoryCopy(iptr* dest,iptr* data,int size){
   }
 
   if(acceleratorSupportsDMA && (dataInsideVersat != destInsideVersat)){
-    MEMSET(versat_base,0x1,dest); // Dest inside 
-    MEMSET(versat_base,0x2,data); // Memory address
+    if(destInsideVersat){
+      destInt = destInt - versat_base;
+    }
+    if(dataInsideVersat){
+      dataInt = dataInt - versat_base;
+    }
+
+    MEMSET(versat_base,0x1,destInt); // Dest inside 
+    MEMSET(versat_base,0x2,dataInt); // Memory address
     MEMSET(versat_base,0x3,size); // Byte size
     MEMSET(versat_base,0x4,0x1); // Start DMA
 
@@ -144,8 +151,10 @@ void VersatMemoryCopy(iptr* dest,iptr* data,int size){
       if(val) break;
     }
   } else {
-    for(int i = 0; i < size; i++){
-      dest[i] = data[i];
+    int* destView = (int*) dest;
+    int* dataView = (int*) data;
+    for(int i = 0; i < size / sizeof(int); i++){
+      destView[i] = dataView[i];
     }
   }
 }

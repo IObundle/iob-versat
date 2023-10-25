@@ -270,7 +270,7 @@ int32_t* @{module.name}_InitializeFunction(FUInstance* inst){
    #{end}
    }
 
-   memset(inst->extraData,0,inst->declaration->extraDataOffsets.max);
+   memset(inst->extraData,0,inst->declaration->configInfo.extraDataOffsets.max);
 
    V@{module.name}* self = new (inst->extraData) V@{module.name}();
 
@@ -674,7 +674,7 @@ FUDeclaration @{module.name}_CreateDeclaration(){
 
    decl.name = STRING("@{module.name}");
 
-   decl.extraDataOffsets.max = @{module.name}_ExtraDataSize();
+   decl.configInfo.extraDataOffsets.max = @{module.name}_ExtraDataSize();
 
    #{if module.externalInterfaces.size}
    static ExternalMemoryInterface externalMemory[@{module.externalInterfaces.size}];
@@ -710,12 +710,12 @@ FUDeclaration @{module.name}_CreateDeclaration(){
    
    #{if module.configs}
    static Wire @{module.name}ConfigWires[] = {#{join "," for wire module.configs} #{if !wire.isStatic} {STRING("@{wire.name}"),@{wire.bitSize},@{wire.isStatic}} #{end} #{end}};
-   decl.configs = Array<Wire>{@{module.name}ConfigWires,@{module.configs.size}};
+   decl.configInfo.configs = Array<Wire>{@{module.name}ConfigWires,@{module.configs.size}};
    #{end}
 
    #{if module.states}
    static Wire @{module.name}StateWires[] = {#{join "," for wire module.states} {STRING("@{wire.name}"),@{wire.bitSize}} #{end}};
-   decl.states = Array<Wire>{@{module.name}StateWires,@{module.states.size}};
+   decl.configInfo.states = Array<Wire>{@{module.name}StateWires,@{module.states.size}};
    #{end}
 
    #{if module.hasDone}
@@ -744,7 +744,7 @@ FUDeclaration @{module.name}_CreateDeclaration(){
    #{end}
    #{end}
 
-   decl.delayOffsets.max = @{module.nDelays};
+   decl.configInfo.delayOffsets.max = @{module.nDelays};
 
    return decl;
 }

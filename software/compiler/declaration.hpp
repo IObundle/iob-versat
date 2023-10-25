@@ -76,6 +76,25 @@ inline DelayType operator|(DelayType a, DelayType b)
   }
  */
 
+struct ConfigurationInfo{
+  Array<Wire> configs;
+  Array<Wire> states;
+
+  CalculatedOffsets configOffsets;
+  CalculatedOffsets stateOffsets;
+  CalculatedOffsets delayOffsets;
+  CalculatedOffsets outputOffsets;    // TODO: Do not need this for merged graphs
+  CalculatedOffsets extraDataOffsets; // TODO: Do not need this for merged graphs
+
+  Array<iptr> defaultConfig;
+  Array<iptr> defaultStatic;
+};
+
+struct MergeInfo{
+  ConfigurationInfo config;
+  FUDeclaration* baseType;
+};
+
 // TODO: There is a lot of crux between parsing and creating the FUDeclaration for composite accelerators 
 //       the FUDeclaration should be composed of something that is in common to all of them.
 // A declaration is the instantiation of a type
@@ -85,18 +104,8 @@ struct FUDeclaration{
   Array<int> inputDelays;
   Array<int> outputLatencies;
 
-  Array<Wire> configs;
-  Array<Wire> states;
-
-  CalculatedOffsets configOffsets;
-  CalculatedOffsets stateOffsets;
-  CalculatedOffsets delayOffsets;
-  CalculatedOffsets outputOffsets;
-  CalculatedOffsets extraDataOffsets;
-
-  Array<iptr> defaultConfig;
-  Array<iptr> defaultStatic;
-
+  ConfigurationInfo configInfo;
+  
   int nIOs;
   int memoryMapBits;
   int nStaticConfigs;
@@ -108,7 +117,7 @@ struct FUDeclaration{
   Accelerator* fixedDelayCircuit;
 
   // Merged accelerator
-  Array<FUDeclaration*> mergedType;
+  Array<MergeInfo> mergeInfo;
 
   FUFunction initializeFunction;
   FUFunction startFunction;
@@ -134,7 +143,14 @@ struct FUDeclaration{
   bool signalLoop;
 };
 
-bool IsCombinatorial(FUDeclaration* decl);
+bool IsComposite(FUDeclaration* decl);
 
+bool IsCombinatorial(FUDeclaration* decl);
+bool ContainsConfigs(FUDeclaration* decl);
+bool ContainsStatics(FUDeclaration* decl);
+
+int NumberOfSubunits(FUDeclaration* decl);
+
+Array<FUDeclaration*> SubTypes(FUDeclaration* decl,Arena* out,Arena* sub);
 
 #endif // INCLUDED_VERSAT_DECLARATION

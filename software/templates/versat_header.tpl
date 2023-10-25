@@ -12,6 +12,15 @@
 
 typedef intptr_t iptr;
 
+#{for type structures}
+typedef struct {
+#{for entry type.entries}
+@{entry.type} @{entry.name};
+#{end}
+} @{type.name}Config;
+
+#{end}
+
 typedef struct{
 #{for wire orderedConfigs.configs}
    iptr @{wire.name};
@@ -23,6 +32,17 @@ typedef struct{
    iptr @{wire.name};
 #{end}
 } AcceleratorConfig;
+
+#{if doingMerged}
+#{for arr mergedConfigs}
+#{set i index}
+typedef struct{
+#{for str arr}
+  iptr @{str};
+#{end}
+} Merged@{i};
+#{end}
+#{end}
 
 typedef struct{
 #{for pair namedStates}
@@ -59,7 +79,7 @@ void Debug();
 void RunAccelerator(int times);
 void StartAccelerator();
 void EndAccelerator();
-void VersatMemoryCopy(iptr* dest,iptr* data,int size);
+void VersatMemoryCopy(void* dest,void* data,int size);
 void VersatUnitWrite(int baseaddr,int index,int val);
 int VersatUnitRead(int baseaddr,int index);
 float VersatUnitReadFloat(int base,int index);
@@ -101,6 +121,15 @@ extern volatile AcceleratorState* accelState;
 #{end}
 #{for wire orderedConfigs.delays}
 #define ACCEL_@{wire.name} accelConfig->@{wire.name}
+#{end}
+
+#{if doingMerged}
+#{for arr mergedConfigs}
+#{set i index}
+#{for str arr}
+#define MERGED_@{i}_@{str} ((Merged@{i}*) accelConfig)->@{str}
+#{end}
+#{end}
 #{end}
 
 #{for pair namedStates}
