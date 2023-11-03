@@ -9,7 +9,7 @@ include $(VERSAT_DIR)/sharedHardware.mk
 
 BUILD_DIR:=$(VERSAT_DIR)/build
 
-VERSAT_LIBS:=$(VERSAT_DIR)/libversat.a -lstdc++ -lm -lgcc -lc -pthread -ldl -lz # -lz is zlib
+VERSAT_LIBS:=$(VERSAT_DIR)/libversat.a -lstdc++ -lm -lgcc -lc -pthread -ldl # -lz  -lz is zlib
 #pc headers
 VERSAT_HDR+=$(wildcard $(VERSAT_PC_DIR)/*.hpp)
 VERSAT_HDR+=$(wildcard $(VERSAT_COMPILER_DIR)/*.hpp)
