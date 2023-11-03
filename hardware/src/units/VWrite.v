@@ -1,7 +1,5 @@
 `timescale 1ns / 1ps
 
-//`define COMPLEX_INTERFACE
-
 module VWrite #(
    parameter DATA_W = 32,
    parameter ADDR_W = 12,
@@ -148,12 +146,7 @@ module VWrite #(
    localparam DIFF = AXI_DATA_W/DATA_W;
    localparam DIFF_BIT_W = $clog2(DIFF);
 
-   `ifdef COMPLEX_INTERFACE
-      MyAddressGen
-   `else
-      SimpleAddressGen
-   `endif
-   #(.ADDR_W(ADDR_W),.DATA_W(AXI_DATA_W)) addrgenA(
+   SimpleAddressGen #(.ADDR_W(ADDR_W),.DATA_W(AXI_DATA_W)) addrgenA(
       .clk(clk),
       .rst(rst),
       .run(run),
@@ -288,6 +281,5 @@ module VWrite #(
    assign ext_2p_addr_in_0 = read_addr;
    assign read_data = ext_2p_data_in_0;
 
-endmodule
+endmodule // VWrite
 
-`undef COMPLEX_INTERFACE

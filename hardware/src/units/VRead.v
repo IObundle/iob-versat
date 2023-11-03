@@ -1,7 +1,5 @@
 `timescale 1ns / 1ps
 
-//`define COMPLEX_INTERFACE
-
 module VRead #(
    parameter SIZE_W = 32,
    parameter DATA_W = 32,
@@ -159,12 +157,7 @@ module VRead #(
          databus_addr_0 <= ext_addr;
    end
 
-   `ifdef COMPLEX_INTERFACE
-      MyAddressGen
-   `else
-      SimpleAddressGen
-   `endif
-      #(.ADDR_W(ADDR_W),.DATA_W(SIZE_W)) addrgenA (
+   SimpleAddressGen #(.ADDR_W(ADDR_W),.DATA_W(SIZE_W)) addrgenA (
       .clk(clk),
       .rst(rst),
       .run(run && !disabled),
@@ -330,5 +323,3 @@ module VRead #(
    assign ext_2p_addr_in_0 = addr_out;
 
 endmodule
-
-`undef COMPLEX_INTERFACE

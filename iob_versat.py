@@ -64,7 +64,11 @@ class iob_versat(iob_module):
         ''' Create submodules list with dependencies of this module
         '''
         super()._create_submodules_list([
-            iob_reg_re,
+            {"interface": "axi_m_m_portmap"},
+            {"interface": "axi_m_write_port"},
+            {"interface": "axi_m_m_write_portmap"},
+            {"interface": "axi_m_read_port"},
+            {"interface": "axi_m_m_read_portmap"},
         ])
 
     @classmethod
@@ -75,9 +79,6 @@ class iob_versat(iob_module):
             # Parameters
             {'name':'ADDR_W', 'type':'P', 'val':'32', 'min':'1', 'max':'?', 'descr':'description here'},
             {'name':'DATA_W', 'type':'P', 'val':'32', 'min':'1', 'max':'?', 'descr':'description here'},
-            {'name':'E_BIT', 'type':'P', 'val':'67', 'min':'1', 'max':'?', 'descr':'description here'},
-            {'name':'P_BIT', 'type':'P', 'val':'66', 'min':'1', 'max':'?', 'descr':'description here'},
-            {'name':'USE_EXTMEM', 'type':'P', 'val':'0', 'min':'0', 'max':'1', 'descr':'Select if configured for usage with external memory.'},
         ])
 
     @classmethod
@@ -86,16 +87,7 @@ class iob_versat(iob_module):
             {'name': 'general', 'descr':'General interface signals', 'ports': [
                 {'name':"clk", 'type':"I", 'n_bits':'1', 'descr':"CPU clock input"},
                 {'name':"rst", 'type':"I", 'n_bits':'1', 'descr':"CPU reset input"},
-                {'name':"boot", 'type':"I", 'n_bits':'1', 'descr':"CPU boot input"},
             ]},
-            {'name': 'instruction_bus', 'descr':'Instruction bus', 'ports': [
-                {'name':"ibus_req", 'type':"O", 'n_bits':'`REQ_W', 'descr':"Instruction bus request"},
-                {'name':"ibus_resp", 'type':"I", 'n_bits':'`RESP_W', 'descr':"Instruction bus response"},
-            ]},
-            {'name': 'data_bus', 'descr':'Data bus', 'ports': [
-                {'name':"dbus_req", 'type':"O", 'n_bits':'`REQ_W', 'descr':"Data bus request"},
-                {'name':"dbus_resp", 'type':"I", 'n_bits':'`RESP_W', 'descr':"Data bus response"},
-            ]}
         ]
 
     @classmethod
