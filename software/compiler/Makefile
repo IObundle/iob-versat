@@ -58,23 +58,23 @@ CPP_OBJ_WITHOUT_COMPILER:=$(filter-out $(BUILD_DIR)/versatCompiler.o,$(CPP_OBJ))
 # 		./generateVerilatorMakefile.sh
 # include "$(BUILD_DIR)/verilatorMakefile.mk"
 
-VERILATOR_ROOT := $(shell ./getRoot.sh $(BUILD_DIR) $(USE_FST_FORMAT)) # Must come first
-VERILATOR_OBJECTS := $(shell ./getVerilatorObjects.sh $(BUILD_DIR))
+#VERILATOR_ROOT := $(shell ./getRoot.sh $(BUILD_DIR) $(USE_FST_FORMAT)) # Must come first
+#VERILATOR_OBJECTS := $(shell ./getVerilatorObjects.sh $(BUILD_DIR))
 
-ifeq ($(USE_FST_FORMAT),1)
-FST_INCLUDE_FILES := $(strip $(VERILATOR_ROOT))/include/gtkwave
-FST_C_FILES := $(wildcard $(FST_INCLUDE_FILES)/*.c)
-FST_C_VAR := $(patsubst $(FST_INCLUDE_FILES)/%.c,%,$(FST_C_FILES))
-FST_C_OBJECTS := $(patsubst $(FST_INCLUDE_FILES)/%.c,$(BUILD_DIR)/%.o,$(FST_C_FILES))
-VERSAT_FLAGS += -DUSE_FST_FORMAT
+#ifeq ($(USE_FST_FORMAT),1)
+#FST_INCLUDE_FILES := $(strip $(VERILATOR_ROOT))/include/gtkwave
+#FST_C_FILES := $(wildcard $(FST_INCLUDE_FILES)/*.c)
+#FST_C_VAR := $(patsubst $(FST_INCLUDE_FILES)/%.c,%,$(FST_C_FILES))
+#FST_C_OBJECTS := $(patsubst $(FST_INCLUDE_FILES)/%.c,$(BUILD_DIR)/%.o,$(FST_C_FILES))
+#VERSAT_FLAGS += -DUSE_FST_FORMAT
 
-CPP_OBJ += $(FST_C_OBJECTS)
+#CPP_OBJ += $(FST_C_OBJECTS)
 
-$(BUILD_DIR)/%.o: $(FST_INCLUDE_FILES)/%.c
-	-g++ -c -o $@ $< -DFST_CONFIG_INCLUDE=\"fst_config.h\" -I$(strip $(VERILATOR_ROOT))/include/gtkwave -I$(strip $(VERILATOR_ROOT))/include
-endif
+#$(BUILD_DIR)/%.o: $(FST_INCLUDE_FILES)/%.c
+#	-g++ -c -o $@ $< -DFST_CONFIG_INCLUDE=\"fst_config.h\" -I$(strip $(VERILATOR_ROOT))/include/gtkwave -I$(strip $(VERILATOR_ROOT))/include
+#endif
 
-FL:=-DVERSAT_DIR="$(VERSAT_DIR)" -DVERILATOR_ROOT="$(VERILATOR_ROOT)"
+FL:=-DVERSAT_DIR="$(VERSAT_DIR)" # -DVERILATOR_ROOT="$(VERILATOR_ROOT)"
 
 $(VERSAT_DIR)/versat: $(CPP_OBJ) $(VERSAT_DIR)/libversat.a
 	-g++ -MMD -MP -std=c++17 $(FL) $(VERSAT_FLAGS) -Wswitch-enum -o $@ -g $(CPP_OBJ) $(VERSAT_INCLUDE) $(VERSAT_LIBS) $(VERSAT_DIR)/libversat.a
@@ -90,7 +90,7 @@ VERSAT_COMPILER_DEPENDS := $(patsubst %.o,%.d,$(VERSAT_COMPILER_OBJ))
 -include  $(VERSAT_COMPILER_DEPENDS)
 
 $(BUILD_DIR)/%.o : $(VERSAT_COMPILER_DIR)/%.cpp
-	-g++ -MMD -MP -std=c++17 -Wswitch-enum -DDEFAULT_UNIT_PATHS="$(SHARED_UNITS_PATH)" $(VERSAT_FLAGS) $(FL) -g -c -o $@ $(GLOBAL_CFLAGS) $< $(VERSAT_INCLUDE)
+	-g++ -MMD -MP -std=c++17 -Wswitch-enum $(VERSAT_FLAGS) $(FL) -g -c -o $@ $(GLOBAL_CFLAGS) $< $(VERSAT_INCLUDE) #-DDEFAULT_UNIT_PATHS="$(SHARED_UNITS_PATH)" 
 
 ifeq ($(VERSAT_DEBUG),1)
 $(BUILD_DIR)/%.o: $(VERSAT_COMPILER_DIR)/IMGUI/%.cpp

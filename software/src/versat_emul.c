@@ -16,8 +16,8 @@ typedef struct Versat Versat;
 typedef struct Accelerator Accelerator;
 typedef struct FUDeclaration FUDeclaration;
 
-static Versat* versat = nullptr;
-static Accelerator* accel = nullptr;
+//static Versat* versat = nullptr;
+//static Accelerator* accel = nullptr;
 volatile AcceleratorConfig* accelConfig = nullptr;
 volatile AcceleratorState* accelState = nullptr;
 
@@ -27,7 +27,7 @@ int versat_base;
 extern "C"{
 #endif
 
-void InitializeVerilator();
+#if 0
 Versat* InitVersatC(int base,int numberConfigurations,bool initUnits);
 void DebugAcceleratorC(Accelerator* accel);
 void RegisterAllVerilogUnitsVerilog(Versat* versat);
@@ -36,17 +36,19 @@ void AcceleratorRunC(Accelerator* accel,int times);
 void UnitWrite(Versat* versat,Accelerator* accel,int addrArg,int val);
 int UnitRead(Versat* versat,Accelerator* accel,int addr);
 void SignalLoopC(Accelerator* accel);
+#endif
 
-void* GetStartOfConfig(Accelerator* accel);
-void* GetStartOfState(Accelerator* accel);
+// Functions exported by wrapper that allow the accelerator to be simulated
+void InitializeVerilator();
+void VersatAcceleratorCreate();
+void VersatAcceleratorSimulate();
+
+AcceleratorConfig* GetStartOfConfig();
+AcceleratorState* GetStartOfState();
 
 #ifdef __cplusplus
 }
 #endif
-
-void Debug(){
-   DebugAcceleratorC(accel);
-}
 
 bool CreateVCD;
 bool SimulateDatabus;
@@ -62,9 +64,11 @@ void ConfigSimulateDatabus(bool value){
 void versat_init(int base){
    CreateVCD = true;
    SimulateDatabus = true;
-   
-   InitializeVerilator();
 
+   InitializeVerilator();
+   VersatAcceleratorCreate();
+
+#if 0
    versat_base = base;
    versat = InitVersatC(base,1,0);
 
@@ -86,9 +90,21 @@ void versat_init(int base){
 
    for(int i = 0; i < ARRAY_SIZE(staticBuffer); i++){
       staticPtr[i] = staticBuffer[i];
-   }   
+   }
+#endif
 }
 
+void RunAccelerator(int times){
+  for(int i = 0; i < times; i++){
+    VersatAcceleratorSimulate();
+  }
+}
+
+void VersatMemoryCopy(void* dest,void* data,int size){
+   memcpy(dest,data,size);
+}
+
+#if 0
 void StartAccelerator(){
   RunAccelerator(1);
 }
@@ -126,3 +142,4 @@ void SignalLoop(){
    SignalLoopC(accel);
    // Do nothing, for now
 }
+#endif

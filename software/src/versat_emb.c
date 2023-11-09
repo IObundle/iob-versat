@@ -6,7 +6,7 @@
 #define MEMSET(base, location, value) (*((volatile int*) (base + (sizeof(int)) * location)) = (int) value)
 #define MEMGET(base, location)        (*((volatile int*) (base + (sizeof(int)) * location)))
 
-#include "iob-timer.h"
+//#include "iob-timer.h"
 
 #include "printf.h"
 
@@ -21,6 +21,8 @@ typedef uint64_t uint64;
 
 // There should be a shared header for common structures, but do not share code.
 // It does not work as well and keeps giving compile and linker errors. It's not worth it.
+
+#if 0
 typedef struct{
   uint64 microSeconds;
   uint64 seconds;
@@ -35,6 +37,7 @@ Time GetTime(){
   
   return res;
 }
+#endif
 
 iptr versat_base;
 
@@ -173,6 +176,9 @@ float VersatUnitReadFloat(int base,int index){
   float* ptr = (float*) (base + index * sizeof(float));
   return *ptr;
 }
+
+void ConfigCreateVCD(bool value){}
+void ConfigSimulateDatabus(bool value){}
 
 // Implementation of common functionality
 

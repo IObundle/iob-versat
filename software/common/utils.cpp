@@ -118,7 +118,11 @@ FILE* OpenFileAndCreateDirectories(const char* path,const char* format){
    }
 
    FILE* file = fopen(buffer,format);
-   Assert(file);
+   if(file == nullptr){
+     printf("Failed to open file: %s\n",path);
+     exit(-1);
+   }
+
    return file;
 }
 

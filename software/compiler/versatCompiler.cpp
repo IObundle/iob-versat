@@ -6,6 +6,7 @@
 #include "templateEngine.hpp"
 #include "unitVerilation.hpp"
 #include "debugGUI.hpp"
+#include "acceleratorStats.hpp"
 
 #include <filesystem>
 namespace fs = std::filesystem;
@@ -23,7 +24,9 @@ struct ArgumentOptions{
   std::vector<String> includePaths;
   const char* specificationFilepath;
   const char* topName;
-  String outputFilepath;
+  std::vector<String> unitPaths;
+  String hardwareOutputFilepath;
+  String softwareOutputFilepath;
   String verilatorRoot;
   int bitSize; // AXI_ADDR_W
   int dataSize; // AXI_DATA_W
@@ -167,12 +170,37 @@ ArgumentOptions* ParseCommandLineOptions(int argc,const char* argv[],Arena* perm
       continue;
     }
 
+    if(str.size >= 2 && str[0] == '-' && str[1] == 'O'){
+      if(i + 1 >= argc){
+        printf("Missing argument\n");
+        exit(-1);
+      }
+
+      String unitPath = GetAbsolutePath(argv[i+1],perm);
+      PushNullByte(perm);
+
+      opts->unitPaths.push_back(unitPath);
+      i += 1;
+      continue;
+    }
+
     if(str.size >= 2 && str[0] == '-' && str[1] == 'o'){
       if(i + 1 >= argc){
         printf("Missing argument\n");
         exit(-1);
       }
-      opts->outputFilepath = GetAbsolutePath(argv[i+1],perm);
+      opts->hardwareOutputFilepath = GetAbsolutePath(argv[i+1],perm);
+      PushNullByte(perm);
+      i += 1;
+      continue;
+    }
+
+    if(str.size >= 2 && str[0] == '-' && str[1] == 'H'){
+      if(i + 1 >= argc){
+        printf("Missing argument\n");
+        exit(-1);
+      }
+      opts->softwareOutputFilepath = GetAbsolutePath(argv[i+1],perm);
       PushNullByte(perm);
       i += 1;
       continue;
@@ -240,7 +268,7 @@ int unlink_cb(const char *fpath, const struct stat *sb, int typeflag, struct FTW
     return rv;
 }
 
-int RemoveDirectory(char *path)
+int RemoveDirectory(const char *path)
 {
     return nftw(path, unlink_cb, 64, FTW_DEPTH | FTW_PHYS);
 }
@@ -367,7 +395,7 @@ int main(int argc,const char* argv[]){
 
   // TODO: Add options directly to versat instead of having two different structures
   ArgumentOptions* opts = ParseCommandLineOptions(argc,argv,perm,temp);
-  versat->outputLocation = opts->outputFilepath;
+  versat->outputLocation = opts->hardwareOutputFilepath;
   versat->opts.addrSize = opts->bitSize;
   versat->opts.architectureHasDatabus = opts->archHasDatabus;
   versat->opts.dataSize = opts->dataSize;
@@ -378,70 +406,39 @@ int main(int argc,const char* argv[]){
   
   //printf("%s\n",STRINGIFY(DEFAULT_UNIT_PATHS));
 
-  String dirPaths = STRING(STRINGIFY(DEFAULT_UNIT_PATHS));
-  Tokenizer pathSplitter(dirPaths,"",{});
+  for(String& path : opts->unitPaths){
+    String dirPaths = path;
+    Tokenizer pathSplitter(dirPaths,"",{});
 
-  while(!pathSplitter.Done()){
-    Token path = pathSplitter.NextToken();
+    while(!pathSplitter.Done()){
+      Token path = pathSplitter.NextToken();
 
-    Optional<Array<String>> res = GetAllFilesInsideDirectory(path,temp);
-    if(!res){
-      printf("\n\nCannot open dir: %.*s\n\n",UNPACK_SS(path));
-    } else {
-      for(String& str : res.value()){
-        String fullPath = PushString(perm,"%.*s/%.*s",UNPACK_SS(path),UNPACK_SS(str));
+      Optional<Array<String>> res = GetAllFilesInsideDirectory(path,temp);
+      if(!res){
+        printf("\n\nCannot open dir: %.*s\n\n",UNPACK_SS(path));
+      } else {
+        for(String& str : res.value()){
+          String fullPath = PushString(perm,"%.*s/%.*s",UNPACK_SS(path),UNPACK_SS(str));
 
-        // Crude avoid duplicated files
-        bool add = true;
-        for(String& insideVec : opts->verilogFiles){
-          if(CompareString(insideVec,fullPath)){
-            add = false;
-            break;
+          // Crude avoid duplicated files
+          bool add = true;
+          for(String& insideVec : opts->verilogFiles){
+            if(CompareString(insideVec,fullPath)){
+              add = false;
+              break;
+            }
           }
-        }
-        if(add){
-          opts->verilogFiles.push_back(fullPath);
+          if(add){
+            opts->verilogFiles.push_back(fullPath);
+          }
         }
       }
     }
   }
-
+    
   // Check existance of Verilator. We cannot proceed without Verilator
   if(opts->verilatorRoot.size == 0){
     opts->verilatorRoot = GetVerilatorRoot(&versat->permanent);
-
-#if 0
-    bool lackOfVerilator = false;
-    String vr = {};
-#ifdef VERILATOR_ROOT
-    vr = TrimWhitespaces(STRING(STRINGIFY(VERILATOR_ROOT)));
-    //TODO: Could have some extra checks here, like make sure that it's a valid path
-    if(vr.size == 0){
-      lackOfVerilator = true;
-    }
-    //printf("VERILATOR_ROOT: %s\n",STRINGIFY(VERILATOR_ROOT));
-#else
-    lackOfVerilator = true;
-#endif
-
-    if(lackOfVerilator){
-      char* possible = getenv(STRINGIFY(VERILATOR_ROOT));
-      if(possible){
-        vr = STRING(possible);
-        lackOfVerilator = false;
-      }
-    }
-
-    if(lackOfVerilator){
-      printf("===\n\n");
-      printf("Verilator root is not defined. Make sure that verilator is correctly installed or\n");
-      printf("set VERILATOR_ROOT to the top folder of verilator\n");
-      printf("Folders $(VERILATOR_ROOT)/bin and $(VERILATOR_ROOT)/include\n");
-      printf("\n\n===\n");
-      exit(-1);
-    }
-    opts->verilatorRoot = vr;
-#endif
   }
 
   if(!opts->topName){
@@ -550,15 +547,9 @@ int main(int argc,const char* argv[]){
     }
   }
 
-  if(!opts->outputFilepath.data){
-    opts->outputFilepath = GetAbsolutePath(".",perm);
-  }
-
-  //TemplateSetNumber("bitWidth",sizeof(void*) * 8); // TODO: Move to correct location and have the value calculated/given from parameter
-
   TOP->parameters = STRING("#(.AXI_ADDR_W(AXI_ADDR_W),.LEN_W(LEN_W))");
   InitializeAccelerator(versat,accel,&versat->temp);
-  OutputVersatSource(versat,accel,opts->outputFilepath.data,topLevelTypeStr,opts->addInputAndOutputsToTop);
+  OutputVersatSource(versat,accel,opts->hardwareOutputFilepath.data,opts->softwareOutputFilepath.data,topLevelTypeStr,opts->addInputAndOutputsToTop);
 
   //TODO: Repeated code because we must use a modified accelerator to outputVersatSource but use a normal accelerator for simulation. We could just reorder, so that outputVersatSource is done afterwards, and the wrapper is done before.
   if(isSimple){
@@ -625,9 +616,14 @@ int main(int argc,const char* argv[]){
 
   // Wrapper
   region(temp){
-    String wrapper = PushString(temp,"%s/wrapper.cpp",opts->outputFilepath.data);
+    String wrapper = PushString(temp,"%.*s/wrapper_emul.cpp",UNPACK_SS(opts->softwareOutputFilepath));
     PushNullByte(temp);
 
+    printf("Wrapper: %.*s\n",UNPACK_SS(wrapper));
+
+    int totalExternalMemory = ExternalMemoryByteSize(info.externalInterfaces);
+    
+    TemplateSetNumber("totalExternalMemory",totalExternalMemory);
     TemplateSetString("versatDir",STRINGIFY(SAT_DIR));
     //TemplateSetString("verilatorRoot",opts->verilatorRoot);
     TemplateSetNumber("bitWidth",opts->bitSize);
@@ -640,17 +636,19 @@ int main(int argc,const char* argv[]){
 
   // Makefile
   region(temp){
-    String name = PushString(temp,"%s/Makefile",opts->outputFilepath.data);
+    String name = PushString(temp,"%.*s/VerilatorMake.mk",UNPACK_SS(opts->softwareOutputFilepath));
     PushNullByte(temp);
+
+    printf("Makefile: %.*s\n",UNPACK_SS(name));
 
     FILE* output = OpenFileAndCreateDirectories(name.data,"w");
     CompiledTemplate* comp = CompileTemplate(versat_makefile_template,"makefile",temp);
-
-    fs::path outputPath = opts->outputFilepath.data;
+    
+    fs::path outputPath = opts->softwareOutputFilepath.data;
     fs::path srcLocation = fs::current_path();
     fs::path fixedPath = fs::weakly_canonical(outputPath / srcLocation);
 
-    String srcDir = PushString(perm,"%.*s/src",UNPACK_SS(opts->outputFilepath));
+    String srcDir = PushString(perm,"%.*s/src",UNPACK_SS(opts->softwareOutputFilepath));
 
     TemplateSetCustom("arch",&versat->opts,"Options");
     TemplateSetString("srcDir",srcDir);

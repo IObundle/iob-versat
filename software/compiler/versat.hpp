@@ -359,7 +359,7 @@ FUInstance* CreateFUInstance(Accelerator* accel,FUDeclaration* type,String entit
 void AcceleratorRun(Accelerator* accel,int times = 1);
 void AcceleratorRunDebug(Accelerator* accel);
 void RemoveFUInstance(Accelerator* accel,FUInstance* inst);
-void OutputVersatSource(Versat* versat,Accelerator* accel,const char* directoryPath,String accelName = STRING("TOP"),bool isSimple = false); // Not actually the name but the type.
+void OutputVersatSource(Versat* versat,Accelerator* accel,const char* hardwarePath,const char* softwarePath,String accelName = STRING("TOP"),bool isSimple = false); // Not actually the name but the type.
 Accelerator* Flatten(Versat* versat,Accelerator* accel,int times); // This should work on the passed accelerator. We should not create a new accelerator
 
 // Access units and sub units inside an accelerator. Can use printf style arguments, but only chars and integers are currently supported. Format is <format1>,<args1 if any>,<format2>,...

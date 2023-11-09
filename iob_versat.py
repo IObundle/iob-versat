@@ -2,6 +2,7 @@
 
 import os
 import sys
+import subprocess as sp
 
 from iob_module import iob_module
 
@@ -18,8 +19,42 @@ from iob_ram_sp_be import iob_ram_sp_be
 class iob_versat(iob_module):
     name = "iob_versat"
     version = "V0.10"
-    flows = "emb"
+    flows = "sim emb"
     setup_dir=os.path.dirname(__file__)
+
+    def __init__(
+        self,
+        name="",
+        description="default description",
+        parameters={},
+    ):
+        super().__init__(name,description,parameters)
+
+        versat_spec = parameters["versat_spec"]
+        versat_top = parameters["versat_top"]
+        versat_extra = parameters["extra_units"]
+
+        versat_dir = os.path.dirname(__file__)
+        build_dir = self.build_dir
+
+        versat_args = ["versat",versat_spec,
+                                "-s",
+                                "-T",versat_top,
+                                "-O",versat_dir + "/hardware/src/units",
+                                "-O",versat_extra,
+                                "-H",build_dir + "/software",
+                                "-o",build_dir + "/hardware/src"
+                                ]
+
+        print(*versat_args)
+        result = sp.call(versat_args)
+
+        if(result != 0):
+            exit(result)
+
+        #sp.call(["verilator"])
+        #sp.call(["versat","versat_spec","-T","versat_top"])
+        #exit(0)
 
     @classmethod
     def _init_attributes(cls):
@@ -72,6 +107,38 @@ class iob_versat(iob_module):
         ])
 
     @classmethod
+    def _setup_regs(cls):
+        cls.autoaddr = False
+        cls.regs += [
+            {
+                "name": "versat",
+                "descr": "VERSAT software accessible registers.",
+                "regs": [
+                    {
+                        "name": "CONFIG",
+                        "type": "W",
+                        "n_bits": 32,
+                        "rst_val": 0,
+                        "addr": 0,
+                        "log2n_items": 0,
+                        "autoreg": False,
+                        "descr": "CONFIG",
+                    },
+                    {
+                        "name": "STATUS",
+                        "type": "R",
+                        "n_bits": 32,
+                        "rst_val": 0,
+                        "addr": 0,
+                        "log2n_items": 0,
+                        "autoreg": False,
+                        "descr": "STATUS",
+                    },
+                ],
+            }
+        ]
+
+    @classmethod
     def _setup_confs(cls):
         super()._setup_confs([
             # Macros
@@ -84,12 +151,15 @@ class iob_versat(iob_module):
     @classmethod
     def _setup_ios(cls):
         cls.ios += [
-            {'name': 'general', 'descr':'General interface signals', 'ports': [
-                {'name':"clk", 'type':"I", 'n_bits':'1', 'descr':"CPU clock input"},
-                {'name':"rst", 'type':"I", 'n_bits':'1', 'descr':"CPU reset input"},
-            ]},
+            {
+                "name": "clk_en_rst_s_port",
+                "descr": "Clock, clock enable and reset",
+                "ports": [],
+            },
+            {"name": "iob_s_port", "descr": "CPU native interface", "ports": []},
         ]
 
     @classmethod
     def _setup_block_groups(cls):
-        cls.block_groups += []
+        pass
+        #cls.block_groups += []

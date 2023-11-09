@@ -1,4 +1,4 @@
-SHARED_UNITS_PATH := $(VERSAT_DIR)/hardware/src/units
+SHARED_UNITS_PATH := $(VERSAT_DIR)/hardware/src
 
 VERILATE_UNIT_FILES := $(wildcard $(SHARED_UNITS_PATH)/*.v)
 VERILATE_UNIT_BASIC := $(patsubst $(SHARED_UNITS_PATH)/%.v,%,$(VERILATE_UNIT_FILES))

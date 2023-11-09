@@ -197,7 +197,7 @@ Array<TypeStructInfoElement> GenerateStructFromType(FUDeclaration* decl,Arena* a
    return entries;
 }
 
-void OutputVersatSource(Versat* versat,Accelerator* accel,const char* directoryPath,String accelName,bool isSimple){
+void OutputVersatSource(Versat* versat,Accelerator* accel,const char* hardwarePath,const char* softwarePath,String accelName,bool isSimple){
    if(!versat->debug.outputVersat){
       return;
    }
@@ -211,10 +211,10 @@ void OutputVersatSource(Versat* versat,Accelerator* accel,const char* directoryP
    SetDelayRecursive(accel,arena);
 
    // No need for templating, small file
-   FILE* c = OpenFileAndCreateDirectories(StaticFormat("%s/versat_defs.vh",directoryPath),"w");
+   FILE* c = OpenFileAndCreateDirectories(StaticFormat("%s/versat_defs.vh",hardwarePath),"w");
 
    if(!c){
-      printf("Error creating file, check if filepath is correct: %s\n",directoryPath);
+      printf("Error creating file, check if filepath is correct: %s\n",hardwarePath);
       return;
    }
 
@@ -259,10 +259,10 @@ void OutputVersatSource(Versat* versat,Accelerator* accel,const char* directoryP
 
    fclose(c);
 
-   FILE* s = OpenFileAndCreateDirectories(StaticFormat("%s/versat_instance.v",directoryPath),"w");
+   FILE* s = OpenFileAndCreateDirectories(StaticFormat("%s/versat_instance.v",hardwarePath),"w");
 
    if(!s){
-      printf("Error creating file, check if filepath is correct: %s\n",directoryPath);
+      printf("Error creating file, check if filepath is correct: %s\n",hardwarePath);
       return;
    }
 
@@ -444,26 +444,26 @@ void OutputVersatSource(Versat* versat,Accelerator* accel,const char* directoryP
 
    TemplateSetCustom("orderedConfigs",&orderedConfigs,"OrderedConfigurations");
 
-   FILE* f = OpenFileAndCreateDirectories(StaticFormat("%s/versat_accel.h",directoryPath),"w");
+   FILE* f = OpenFileAndCreateDirectories(StaticFormat("%s/versat_accel.h",softwarePath),"w");
    ProcessTemplate(f,BasicTemplates::acceleratorHeaderTemplate,&versat->temp);
    fclose(f);
    }
 
    {
-   FILE* f = OpenFileAndCreateDirectories(StaticFormat("%s/versat_external_memory_inst.vh",directoryPath),"w");
+   FILE* f = OpenFileAndCreateDirectories(StaticFormat("%s/versat_external_memory_inst.vh",hardwarePath),"w");
    TemplateSetCustom("external",&computedData.external,"Array<ExternalMemoryInterface>");
    ProcessTemplate(f,BasicTemplates::externalInstTemplate,&versat->temp);
    fclose(f);
    }
 
    {
-   FILE* f = OpenFileAndCreateDirectories(StaticFormat("%s/versat_external_memory_port.vh",directoryPath),"w");
+   FILE* f = OpenFileAndCreateDirectories(StaticFormat("%s/versat_external_memory_port.vh",hardwarePath),"w");
    ProcessTemplate(f,BasicTemplates::externalPortTemplate,&versat->temp);
    fclose(f);
    }
 
    {
-   FILE* f = OpenFileAndCreateDirectories(StaticFormat("%s/versat_external_memory_portmap.vh",directoryPath),"w");
+   FILE* f = OpenFileAndCreateDirectories(StaticFormat("%s/versat_external_memory_portmap.vh",hardwarePath),"w");
    ProcessTemplate(f,BasicTemplates::externalPortmapTemplate,&versat->temp);
    fclose(f);
    }
