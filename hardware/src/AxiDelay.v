@@ -1,26 +1,29 @@
 `timescale 1ns / 1ps
+// Comment so that verible-format will not put timescale and defaultt_nettype into same line
+`default_nettype none
 
-module AxiDelay #(
-      parameter MAX_DELAY = 3
-   )
+module AxiDelay 
+  #(
+    parameter MAX_DELAY = 3
+    )
    (
-      input s_valid,
-      output reg s_ready,
+    input      s_valid_i,
+    output reg s_ready_o,
 
-      output reg m_valid,
-      input m_ready,
+    output reg m_valid_o,
+    input      m_ready_i,
 
-      input clk,
-      input rst
-   );
+    input      clk_i,
+    input      rst_i
+    );
 
 reg [$clog2(MAX_DELAY):0] counter;
-always @(posedge clk,posedge rst)
+always @(posedge clk_i,posedge rst_i)
 begin
-   if(rst) begin
+   if(rst_i) begin
       counter <= 0;
    end else begin
-      if(counter == 0 && m_valid && m_ready) begin
+      if(counter == 0 && m_valid_o && m_ready_i) begin
          counter <= ($urandom % MAX_DELAY);
       end
 
@@ -31,13 +34,15 @@ end
 
 always @*
 begin
-   s_ready = 1'b0;
-   m_valid = 1'b0;
+   s_ready_o = 1'b0;
+   m_valid_o = 1'b0;
 
    if(counter == 0) begin
-      s_ready = m_ready;
-      m_valid = s_valid;
+      s_ready_o = m_ready_i;
+      m_valid_o = s_valid_i;
    end
 end
 
-endmodule
+endmodule // AxiDelay
+
+`default_nettype wire

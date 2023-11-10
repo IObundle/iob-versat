@@ -192,6 +192,65 @@ void AcceleratorRunOnce(Accelerator* accel){
    #endif
    #endif
 
+   Assert(accel->outputAlloc.size == accel->storedOutputAlloc.size);
+
+   AcceleratorIterator iter = {};
+
+   AcceleratorRunStart(accel);
+   memcpy(accel->outputAlloc.ptr,accel->storedOutputAlloc.ptr,accel->outputAlloc.size * sizeof(int));
+
+   bool fullyDone = false;
+   for(int cycle = 0; cycle < 10000; cycle++){ // Max amount of iterations
+      Assert(accel->outputAlloc.size == accel->storedOutputAlloc.size);
+
+      iter.StartOrdered(accel,arena,true);
+      AcceleratorRunIter(iter);
+
+      memcpy(accel->outputAlloc.ptr,accel->storedOutputAlloc.ptr,accel->outputAlloc.size * sizeof(int));
+
+      if(AcceleratorDone(accel)){
+          fullyDone = true;
+          break;
+      }
+   }
+
+   if(!fullyDone){
+       once{
+           printf("======= Accelerator appears to be stuck =======\n");
+           printf("======= Reached simulation hard limit   =======\n");
+       };
+   }
+
+   iter.StartOrdered(accel,arena,true);
+   for(InstanceNode* node = iter.Current(); node; node = iter.Next()){
+      FUInstance* inst = node->inst;
+
+      inst->declaration->endFunction(inst);
+   }
+
+   // A couple of iterations to let units finish writing data to memories and stuff
+   // "Not correct" but follows more closely with what we expected the accelerator to do in embedded
+   for(int cycle = 0; cycle < 3; cycle++){
+      iter.StartOrdered(accel,arena,true);
+      AcceleratorRunIter(iter);
+   }
+}
+
+#if 0
+void AcceleratorRunOnce_OLD(Accelerator* accel){
+   static int numberRuns = 0;
+   int time = 0;
+
+   Arena* arena = &accel->versat->temp;
+   ArenaMarker marker(arena);
+
+   // TODO: Eventually retire this portion. Make the Accelerator structure a map, maybe a std::unordered_map
+   FUDeclaration base = {};
+   base.name = STRING("Top");
+   accel->subtype = &base;
+
+   ReorganizeAccelerator(accel,arena);
+
    FILE* accelOutputFile = nullptr;
    Array<int> vcdSameCheckSpace = {};
    if(accel->versat->debug.outputVCD){
@@ -239,8 +298,15 @@ void AcceleratorRunOnce(Accelerator* accel){
       memcpy(accel->outputAlloc.ptr,accel->storedOutputAlloc.ptr,accel->outputAlloc.size * sizeof(int));
 
       if(AcceleratorDone(accel)){
-         break;
+          break;
       }
+   }
+   
+   iter.StartOrdered(accel,arena,true);
+   for(InstanceNode* node = iter.Current(); node; node = iter.Next()){
+      FUInstance* inst = node->inst;
+
+      inst->declaration->endFunction(inst);
    }
 
    // A couple of iterations to let units finish writing data to memories and stuff
@@ -267,6 +333,7 @@ void AcceleratorRunOnce(Accelerator* accel){
       PrintVCD(accelOutputFile,accel,time++,0,0,vcdSameCheckSpace,arena);
    }
 }
+#endif
 
 void AcceleratorRun(Accelerator* accel,int times){
    for(int i = 0; i < times; i++){

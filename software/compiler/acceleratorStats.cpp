@@ -70,36 +70,36 @@ VersatComputedValues ComputeVersatValues(Versat* versat,Accelerator* accel){
 
   int memoryMappedDWords = 0;
   FOREACH_LIST(InstanceNode*,ptr,accel->allocated){
-  FUInstance* inst = ptr->inst;
-  FUDeclaration* decl = inst->declaration;
+    FUInstance* inst = ptr->inst;
+    FUDeclaration* decl = inst->declaration;
 
-  res.numberConnections += Size(ptr->allOutputs);
+    res.numberConnections += Size(ptr->allOutputs);
 
-  if(decl->isMemoryMapped){
-    memoryMappedDWords = AlignBitBoundary(memoryMappedDWords,decl->memoryMapBits);
-    memoryMappedDWords += 1 << decl->memoryMapBits;
+    if(decl->isMemoryMapped){
+      memoryMappedDWords = AlignBitBoundary(memoryMappedDWords,decl->memoryMapBits);
+      memoryMappedDWords += 1 << decl->memoryMapBits;
 
-    res.unitsMapped += 1;
+      res.unitsMapped += 1;
+    }
+
+    res.nConfigs += decl->configInfo.configs.size;
+    for(Wire& wire : decl->configInfo.configs){
+      res.configBits += wire.bitSize;
+    }
+
+    res.nStates += decl->configInfo.states.size;
+    for(Wire& wire : decl->configInfo.states){
+      res.stateBits += wire.bitSize;
+    }
+
+    res.nDelays += decl->configInfo.delayOffsets.max;
+    res.delayBits += decl->configInfo.delayOffsets.max * 32;
+
+    res.nUnitsIO += decl->nIOs;
+
+    res.externalMemoryInterfaces += decl->externalMemory.size;
+    res.signalLoop |= decl->signalLoop;
   }
-
-  res.nConfigs += decl->configs.size;
-  for(Wire& wire : decl->configs){
-    res.configBits += wire.bitSize;
-  }
-
-  res.nStates += decl->states.size;
-  for(Wire& wire : decl->states){
-    res.stateBits += wire.bitSize;
-  }
-
-  res.nDelays += decl->delayOffsets.max;
-  res.delayBits += decl->delayOffsets.max * 32;
-
-  res.nUnitsIO += decl->nIOs;
-
-  res.externalMemoryInterfaces += decl->externalMemory.size;
-  res.signalLoop |= decl->signalLoop;
-}
 
   for(auto pair : accel->staticUnits){
     StaticData data = pair.second;
@@ -138,10 +138,10 @@ VersatComputedValues ComputeVersatValues(Versat* versat,Accelerator* accel){
   res.stateAddressBits = log2i(res.nStates);
   res.stateConfigurationAddressBits = std::max(res.configurationAddressBits,res.stateAddressBits);
 
-  res.lowerAddressSize = std::max(res.stateConfigurationAddressBits,res.memoryMappingAddressBits);
-
-  res.memoryConfigDecisionBit = res.lowerAddressSize;
-
+  //res.lowerAddressSize = std::max(res.stateConfigurationAddressBits,res.memoryMappingAddressBits);
+  //res.memoryConfigDecisionBit = res.lowerAddressSize;
+  res.memoryConfigDecisionBit = std::max(res.stateConfigurationAddressBits,res.memoryMappingAddressBits) + 2;
+  
   return res;
 }
 

@@ -1,42 +1,45 @@
-`timescale 1ns/1ps
+`timescale 1ns / 1ps
+// Comment so that verible-format will not put timescale and defaultt_nettype into same line
+`default_nettype none
 
-module xmerge #(
+module xmerge 
+  #(
     parameter ADDR_W = 0,
     parameter DATA_W = 32,
     parameter N_SLAVES = 2,
     parameter LEN_W = 8
-  )
-  (
+    )
+   (
     // Slaves
-    input [N_SLAVES-1:0] s_valid,
-    output [N_SLAVES-1:0] s_ready,
-    output [N_SLAVES-1:0] s_last, 
-    input [ADDR_W * N_SLAVES-1:0] s_addr,
-    input [DATA_W * N_SLAVES-1:0] s_wdata,
-    input [(DATA_W / 8) * N_SLAVES-1:0] s_wstrb,
-    output [DATA_W-1:0] s_rdata,
-    input [LEN_W * N_SLAVES - 1:0] s_len,
+    input [N_SLAVES-1:0]                s_valid_i,
+    output [N_SLAVES-1:0]               s_ready_o,
+    output [N_SLAVES-1:0]               s_last_o, 
+    input [ADDR_W * N_SLAVES-1:0]       s_addr_i,
+    input [DATA_W * N_SLAVES-1:0]       s_wdata_i,
+    input [(DATA_W / 8) * N_SLAVES-1:0] s_wstrb_i,
+    output [DATA_W-1:0]                 s_rdata_o,
+    input [LEN_W * N_SLAVES - 1:0]      s_len_i,
 
     // Write interface
-    output reg m_wvalid,
-    input  m_wready,
-    output reg [ADDR_W-1:0] m_waddr,
-    output reg [DATA_W-1:0] m_wdata,
-    output reg [(DATA_W / 8)-1:0] m_wstrb,
-    output reg [LEN_W-1:0] m_wlen,
-    input  m_wlast,
+    output reg                          m_wvalid_o,
+    input                               m_wready_i,
+    output reg [ADDR_W-1:0]             m_waddr_o,
+    output reg [DATA_W-1:0]             m_wdata_o,
+    output reg [(DATA_W / 8)-1:0]       m_wstrb_o,
+    output reg [LEN_W-1:0]              m_wlen_o,
+    input                               m_wlast_i,
 
     // Read interface
-    output reg m_rvalid,
-    input  m_rready,
-    output reg [ADDR_W-1:0] m_raddr,
-    input [DATA_W-1:0] m_rdata,
-    output reg [LEN_W-1:0] m_rlen,
-    input  m_rlast,
+    output reg                          m_rvalid_o,
+    input                               m_rready_i,
+    output reg [ADDR_W-1:0]             m_raddr_o,
+    input [DATA_W-1:0]                  m_rdata_i,
+    output reg [LEN_W-1:0]              m_rlen_o,
+    input                               m_rlast_i,
 
-    input clk,
-    input rst
-  );
+    input                               clk_i,
+    input                               rst_i
+    );
 
 wire [ADDR_W-1:0] st_addr[N_SLAVES-1:0];
 wire [DATA_W-1:0] st_wdata[N_SLAVES-1:0];
@@ -47,14 +50,14 @@ generate
 genvar g;
 for(g = 0; g < N_SLAVES; g = g + 1)
 begin
-  assign st_addr[g] = s_addr[ADDR_W * g +: ADDR_W];
-  assign st_wdata[g] = s_wdata[DATA_W * g +: DATA_W];
-  assign st_wstrb[g] = s_wstrb[(DATA_W/8) * g +: (DATA_W/8)];
-  assign st_len[g] = s_len[LEN_W * g +: LEN_W];
+  assign st_addr[g] = s_addr_i[ADDR_W * g +: ADDR_W];
+  assign st_wdata[g] = s_wdata_i[DATA_W * g +: DATA_W];
+  assign st_wstrb[g] = s_wstrb_i[(DATA_W/8) * g +: (DATA_W/8)];
+  assign st_len[g] = s_len_i[LEN_W * g +: LEN_W];
 end
 endgenerate
 
-assign s_rdata = m_rdata;
+assign s_rdata_o = m_rdata_i;
 
 // If currently working and which interface it is servicing
 reg w_running;
@@ -78,7 +81,7 @@ begin
 
   for(i = 0; i < N_SLAVES; i = i + 1)
   begin
-    if(s_valid[i]) begin
+    if(s_valid_i[i]) begin
       if(|st_wstrb[i]) begin
         w_req_valid = 1'b1;
         w_req = i;
@@ -90,12 +93,12 @@ begin
   end
 end
 
-wire r_transfer = (m_rvalid && m_rready);
-wire w_transfer = (m_wvalid && m_wready);
+wire r_transfer = (m_rvalid_o && m_rready_i);
+wire w_transfer = (m_wvalid_o && m_wready_i);
 
-always @(posedge clk,posedge rst)
+always @(posedge clk_i,posedge rst_i)
 begin
-  if(rst) begin
+  if(rst_i) begin
     w_running <= 0;
     w_slave <= 0;
     r_running <= 0;
@@ -105,7 +108,7 @@ begin
       w_running <= 1'b1;
       w_slave <= w_req;
     end 
-    if(w_running && m_wlast && w_transfer) begin
+    if(w_running && m_wlast_i && w_transfer) begin
       w_running <= 1'b0;
     end
 
@@ -113,40 +116,42 @@ begin
       r_running <= 1'b1;
       r_slave <= r_req;
     end 
-    if(r_running && m_rlast && r_transfer) begin
+    if(r_running && m_rlast_i && r_transfer) begin
       r_running <= 1'b0;
     end
   end
 end
 
-assign s_ready = ((w_running && m_wready ? 1 : 0) << w_slave) | ((r_running && m_rready ? 1 : 0) << r_slave);
-assign s_last = ((w_running && m_wlast ? 1 : 0 ) << w_slave) | ((r_running && m_rlast ? 1 : 0 ) << r_slave);
+assign s_ready_o = ((w_running && m_wready_i ? 1 : 0) << w_slave) | ((r_running && m_rready_i ? 1 : 0) << r_slave);
+assign s_last_o = ((w_running && m_wlast_i ? 1 : 0 ) << w_slave) | ((r_running && m_rlast_i ? 1 : 0 ) << r_slave);
 
 always @*
 begin
-  m_rvalid = 0; 
-  m_raddr = 0;
-  m_rlen = 0;
+  m_rvalid_o = 0; 
+  m_raddr_o = 0;
+  m_rlen_o = 0;
  
-  m_wvalid = 0; 
-  m_waddr = 0;
-  m_wdata = 0;
-  m_wstrb = 0;
-  m_wlen = 0;
+  m_wvalid_o = 0; 
+  m_waddr_o = 0;
+  m_wdata_o = 0;
+  m_wstrb_o = 0;
+  m_wlen_o = 0;
   
   if(w_running) begin
-    m_wvalid = s_valid[w_slave];
-    m_waddr = st_addr[w_slave];
-    m_wdata = st_wdata[w_slave];
-    m_wstrb = st_wstrb[w_slave];
-    m_wlen = st_len[w_slave];
+    m_wvalid_o = s_valid_i[w_slave];
+    m_waddr_o = st_addr[w_slave];
+    m_wdata_o = st_wdata[w_slave];
+    m_wstrb_o = st_wstrb[w_slave];
+    m_wlen_o = st_len[w_slave];
   end 
 
   if(r_running) begin
-    m_rvalid = s_valid[r_slave];
-    m_raddr = st_addr[r_slave];
-    m_rlen = st_len[r_slave];
+    m_rvalid_o = s_valid_i[r_slave];
+    m_raddr_o = st_addr[r_slave];
+    m_rlen_o = st_len[r_slave];
   end
 end
 
-endmodule 
+endmodule // xmerge
+
+`default_nettype wire

@@ -83,4 +83,7 @@ end
 wire [LEN_W-1:0] m_axi_awlen = (32'd1020 + (32'd4 - address[1:0]));
 
 endmodule
+
 */
+
+`default_nettype wire

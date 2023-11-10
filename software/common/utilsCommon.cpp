@@ -57,7 +57,7 @@ void PrintTime(Time time,const char* id){
     for(int i = 0; i < (6 - digits); i++){
       printf("0");
     }
-    
+
     for(int i = 0; i < digits; i++){
       printf("%c",nanoRepr[i]);
     }
@@ -66,7 +66,7 @@ void PrintTime(Time time,const char* id){
   Time temp = time;
   temp.seconds = SwapEndianess(time.seconds);
   temp.microSeconds = SwapEndianess(time.microSeconds);
-  
+
   unsigned char* hexVal = GetHexadecimal((const unsigned char*) &temp,sizeof(Time)); // Helper function to display result
   printf(" %s ",hexVal);
 
@@ -94,7 +94,7 @@ Time operator-(const Time& s1,const Time& s2){
 
   res.seconds = s1.seconds - s2.seconds;
   res.microSeconds = s1.microSeconds - s2.microSeconds;
-   
+
   return res;
 }
 
@@ -210,7 +210,7 @@ int GetMaxDigitSize(Array<int> array){
 int GetMaxDigitSize(Array<float> array){
   return 2; // Floating points is hard to figure out how many digits. 2 should be enough
 }
-  
+
 void Print(Array<float> array,int digitSize){
   if(digitSize == 0){
     digitSize = GetMaxDigitSize(array);
@@ -407,7 +407,7 @@ char GetHex(int value){
   if(value < 10){
     return '0' + value;
   } else{
-    return 'a' + (value - 10);
+    return 'A' + (value - 10);
   }
 }
 

@@ -1,7 +1,5 @@
 `timescale 1ns / 1ps
 
-//`define COMPLEX_INTERFACE
-
 module VWrite #(
    parameter DATA_W = 32,
    parameter ADDR_W = 12,
@@ -87,7 +85,7 @@ module VWrite #(
       end else if(run) begin
          doneA <= 1'b0;
          doneB <= 1'b0;
-      end else  begin
+      end else if(running) begin
          doneB <= doneB_int;
          if(databus_valid_0 && databus_ready_0 && databus_last_0)
             doneA <= 1'b1;
@@ -148,12 +146,7 @@ module VWrite #(
    localparam DIFF = AXI_DATA_W/DATA_W;
    localparam DIFF_BIT_W = $clog2(DIFF);
 
-   `ifdef COMPLEX_INTERFACE
-      MyAddressGen
-   `else
-      SimpleAddressGen
-   `endif
-   #(.ADDR_W(ADDR_W),.DATA_W(AXI_DATA_W)) addrgenA(
+   SimpleAddressGen #(.ADDR_W(ADDR_W),.DATA_W(AXI_DATA_W)) addrgenA(
       .clk(clk),
       .rst(rst),
       .run(run),
@@ -177,6 +170,31 @@ module VWrite #(
       .done(gen_done)
       );
 
+   SimpleAddressGen #(.ADDR_W(ADDR_W),.DATA_W(DATA_W)) addrgenB(
+      .clk(clk),
+      .rst(rst),
+      .run(run),
+
+      //configurations 
+      .period(perB),
+      .delay(delay0),
+      .start(startB_inst),
+      .incr(incrB),
+
+      `ifdef COMPLEX_INTERFACE
+      .iterations(iterB),
+      .duty(dutyB),
+      .shift(shiftB),
+      `endif
+
+      //outputs 
+      .valid(enB),
+      .ready(1'b1),
+      .addr(addrB_int),
+      .done(doneB_int)
+      );
+
+   /*
     xaddrgen2 #(.MEM_ADDR_W(ADDR_W)) addrgen2B (
                        .clk(clk),
                        .rst(rst),
@@ -196,13 +214,11 @@ module VWrite #(
                        .mem_en(enB),
                        .done(doneB_int)
                        );
+   */
 
+   assign addrB_int2 = addrB_int; //(reverseB ? reverseBits(addrB_int) : addrB_int) << OFFSET_W;
    assign addrB = addrB_int2;
 
-   localparam OFFSET_W = $clog2(AXI_DATA_W);
-
-   assign addrB_int2 = (reverseB? reverseBits(addrB_int) : addrB_int) << OFFSET_W;
-   
    wire read_en;
    wire [ADDR_W-1:0] read_addr;
    wire [AXI_DATA_W-1:0] read_data;
@@ -265,5 +281,5 @@ module VWrite #(
    assign ext_2p_addr_in_0 = read_addr;
    assign read_data = ext_2p_data_in_0;
 
-endmodule
+endmodule // VWrite
 

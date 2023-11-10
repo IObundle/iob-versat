@@ -1,45 +1,50 @@
 `timescale 1ns / 1ps
+// Comment so that verible-format will not put timescale and defaultt_nettype into same line
+`default_nettype none
 
-module MemoryScanner #(
-      parameter DATA_W = 32,
-      parameter ADDR_W = 10
-   )(
-   output reg [ADDR_W-1:0] addr,
-   input  [DATA_W-1:0]     dataIn,
-   output                  enable,
-   
-   input               nextValue,
-   output [DATA_W-1:0] currentValue,
+module MemoryScanner 
+  #(
+    parameter DATA_W = 32,
+    parameter ADDR_W = 10
+    )(
+      output reg [ADDR_W-1:0] addr_o,
+      input [DATA_W-1:0]      dataIn_i,
+      output                  enable_o,
+  
+      input                   nextValue_i,
+      output [DATA_W-1:0]     currentValue_o,
 
-   input reset,
+      input                   reset_i,
 
-   input clk,
-   input rst
-);
+      input                   clk_i,
+      input                   rst_i
+      );
 
 localparam INCREMENT = DATA_W/8;
 
 reg hasValueStored;
 
-assign currentValue = dataIn;
+assign currentValue_o = dataIn_i;
 
-assign enable = nextValue || !hasValueStored;
+assign enable_o = nextValue_i || !hasValueStored;
 
-always @(posedge clk,posedge rst) begin
-   if(rst) begin
-      addr <= 0;
+always @(posedge clk_i,posedge rst_i) begin
+   if(rst_i) begin
+      addr_o <= 0;
       hasValueStored <= 1'b0;
-   end else if(reset) begin
-      addr <= 0;
+   end else if(reset_i) begin
+      addr_o <= 0;
       hasValueStored <= 1'b0;
    end else begin
-      if(enable) begin
+      if(enable_o) begin
          hasValueStored <= 1'b1;
       end
-      if(nextValue || enable) begin
-         addr <= addr + INCREMENT;
+      if(nextValue_i || enable_o) begin
+         addr_o <= addr_o + INCREMENT;
       end
    end
 end
 
-endmodule
+endmodule // MemoryScanner
+
+`default_nettype wire

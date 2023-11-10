@@ -113,6 +113,7 @@
    assign out1 = (running & (|testDelay1) == 0) ? outB_reg : 0;
 
    // Delay done by 3 cycles so that pc-emul matches simulation
+   /*
    reg doneA_1,doneB_1;
    reg doneA_2,doneB_2;
    reg doneA_3,doneB_3;
@@ -132,9 +133,10 @@
          doneB_3 <= doneB_2;
       end
    end
+   */
+   //assign done = (doneA & doneB & doneA_2 & doneB_2 & doneA_3 & doneB_3);
 
-   assign done = (doneA & doneB & doneA_2 & doneB_2 & doneA_3 & doneB_3);
-
+   assign done = (doneA & doneB);
 
    //function to reverse bits
    function [ADDR_W-1:0] reverseBits;
@@ -332,3 +334,5 @@
    end
 
 endmodule
+
+`undef COMPLEX_INTERFACE

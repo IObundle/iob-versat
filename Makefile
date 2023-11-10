@@ -1,20 +1,21 @@
-SHELL := /bin/bash
+#CORE := iob_versat
+
+#DISABLE_LINT:=1
+#include submodules/LIB/setup.mk
 
 VERSAT_DIR:=$(shell pwd)
 
 # Default rule
-all: versat
-
 include $(VERSAT_DIR)/core.mk
 include $(VERSAT_DIR)/sharedHardware.mk
 
-libverilator.a: tools
+libverilator.a: versat-tools
 	$(MAKE) -C $(VERSAT_COMP_DIR) libversat
 
-tools:
+versat-tools:
 	$(MAKE) -C $(VERSAT_TOOLS_DIR) all
 
-versat: tools
+versat: versat-tools
 	$(MAKE) -C $(VERSAT_COMP_DIR) versat
 
 clean:

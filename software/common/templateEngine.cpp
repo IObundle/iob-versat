@@ -133,7 +133,6 @@ static Command* ParseCommand(Tokenizer* tok,Arena* out){
 
    if(commandSize == -1){
       Token peek = tok->PeekUntilDelimiterExpression({"{","@{","#{"},{"}"},1);
-
       Tokenizer arguments(peek,"}",{"@{","#{"});
 
       commandSize = 0;
@@ -141,13 +140,11 @@ static Command* ParseCommand(Tokenizer* tok,Arena* out){
          Token token = arguments.NextToken();
 
          if(CompareString(token,"@{")){
-            Token insidePeek = arguments.PeekUntilDelimiterExpression({"@{"},{"}"},1);
+            Token insidePeek = arguments.PeekIncludingDelimiterExpression({"@{"},{"}"},1);
             arguments.AdvancePeek(insidePeek);
-            arguments.AssertNextToken("}");
          } else if(CompareString(token,"#{")){
-            Token insidePeek = arguments.PeekUntilDelimiterExpression({"#{"},{"}"},1);
+            Token insidePeek = arguments.PeekIncludingDelimiterExpression({"#{"},{"}"},1);
             arguments.AdvancePeek(insidePeek);
-            arguments.AssertNextToken("}");
          }
 
          commandSize += 1;
@@ -337,12 +334,6 @@ static Block* Parse(Tokenizer* tok,Arena* out){
       }
 
       tok->AdvancePeek(block->textBlock);
-
-      // TODO: Small fix for the fact that peek token removes whitespaces
-      #if 0
-      block->textBlock.size += (block->textBlock.data - (const char*) start);
-      block->textBlock.data = (char*) start;
-      #endif
    }
 
    block->fullText = tok->Point(start);
@@ -550,7 +541,7 @@ static Value EvalExpression(Expression* expr,Frame* frame,Arena* temp){
          Optional<Value> optVal = AccessStruct(object,expr->id);
          if(!optVal){
 		   PrintStructDefinition(object.type);
-           FatalError(StaticFormat("Tried to access member (%.*s) that does not exist for type (%.*s)",UNPACK_SS(expr->id),UNPACK_SS(object.type->name)));
+           FatalError(StaticFormat("Tried to access member (%.*s) that does not exist for type (%.*s)",UNPACK_SS(expr->text),UNPACK_SS(object.type->name)));
          }
          val = optVal.value();
       }break;

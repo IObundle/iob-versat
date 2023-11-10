@@ -1,7 +1,5 @@
 `timescale 1ns / 1ps
 
-//`define COMPLEX_INTERFACE
-
 module VRead #(
    parameter SIZE_W = 32,
    parameter DATA_W = 32,
@@ -159,12 +157,7 @@ module VRead #(
          databus_addr_0 <= ext_addr;
    end
 
-   `ifdef COMPLEX_INTERFACE
-      MyAddressGen
-   `else
-      SimpleAddressGen
-   `endif
-      #(.ADDR_W(ADDR_W),.DATA_W(SIZE_W)) addrgenA (
+   SimpleAddressGen #(.ADDR_W(ADDR_W),.DATA_W(SIZE_W)) addrgenA (
       .clk(clk),
       .rst(rst),
       .run(run && !disabled),
@@ -188,6 +181,31 @@ module VRead #(
       .done(gen_done)
       );
 
+   SimpleAddressGen #(.ADDR_W(ADDR_W),.DATA_W(DATA_W)) addrgenB(
+      .clk(clk),
+      .rst(rst),
+      .run(run),
+
+      //configurations 
+      .period(perB),
+      .delay(delay0),
+      .start(startB_inst),
+      .incr(incrB),
+
+      `ifdef COMPLEX_INTERFACE
+      .iterations(iterB),
+      .duty(dutyB),
+      .shift(shiftB),
+      `endif
+
+      //outputs 
+      .valid(enB),
+      .ready(1'b1),
+      .addr(addrB_int),
+      .done(doneB_int)
+      );
+
+   /*
     xaddrgen2 #(.MEM_ADDR_W(ADDR_W)) addrgen2B (
                        .clk(clk),
                        .rst(rst),
@@ -207,6 +225,7 @@ module VRead #(
                        .mem_en(enB),
                        .done(doneB_int)
                        );
+   */
 
    assign addrB = addrB_int2;
    assign addrB_int2 = reverseB ? reverseBits(addrB_int) : addrB_int;
@@ -254,6 +273,8 @@ module VRead #(
    endfunction
 
    reg [ADDR_W-1:0] addr_out;
+
+   localparam OFFSET_W = $clog2(DATA_W/8);
 
    generate 
    if(AXI_DATA_W > DATA_W) begin

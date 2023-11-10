@@ -315,17 +315,17 @@ static void PrintVCDDefinitions_(FILE* accelOutputFile,VCDMapping& currentMappin
          currentMapping.Increment();
       }
 
-      for(Wire& wire : decl->configs){
+      for(Wire& wire : decl->configInfo.configs){
          fprintf(accelOutputFile,"$var wire  %d %s %.*s $end\n",wire.bitSize,currentMapping.Get(),UNPACK_SS(wire.name));
          currentMapping.Increment();
       }
 
-      for(Wire& wire : decl->states){
+      for(Wire& wire : decl->configInfo.states){
          fprintf(accelOutputFile,"$var wire  %d %s %.*s $end\n",wire.bitSize,currentMapping.Get(),UNPACK_SS(wire.name));
          currentMapping.Increment();
       }
 
-      for(int i = 0; i < decl->delayOffsets.max; i++){
+      for(int i = 0; i < decl->configInfo.delayOffsets.max; i++){
          fprintf(accelOutputFile,"$var wire 32 %s delay%d $end\n",currentMapping.Get(),i);
          currentMapping.Increment();
       }
@@ -421,14 +421,14 @@ static void PrintVCD_(FILE* accelOutputFile,VCDMapping& currentMapping,Accelerat
          currentMapping.Increment();
       }
 
-      for(int i = 0; i < decl->configs.size; i++){
+      for(int i = 0; i < decl->configInfo.configs.size; i++){
          if(firstTime){
             fprintf(accelOutputFile,"b%s %s\n",Bin(inst->config[i]),currentMapping.Get());
          }
          currentMapping.Increment();
       }
 
-      for(int i = 0; i < decl->states.size; i++){
+      for(int i = 0; i < decl->configInfo.states.size; i++){
          if(firstTime || (inst->state[i] != sameValueCheckSpace[currentMapping.increments])){
             fprintf(accelOutputFile,"b%s %s\n",Bin(inst->state[i]),currentMapping.Get());
             sameValueCheckSpace[currentMapping.increments] = inst->state[i];
@@ -436,7 +436,7 @@ static void PrintVCD_(FILE* accelOutputFile,VCDMapping& currentMapping,Accelerat
          currentMapping.Increment();
       }
 
-      for(int i = 0; i < decl->delayOffsets.max; i++){
+      for(int i = 0; i < decl->configInfo.delayOffsets.max; i++){
          if(firstTime || (inst->delay[i] != sameValueCheckSpace[currentMapping.increments])){
             fprintf(accelOutputFile,"b%s %s\n",Bin(inst->delay[i]),currentMapping.Get());
             sameValueCheckSpace[currentMapping.increments] = inst->delay[i];

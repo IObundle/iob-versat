@@ -1,4 +1,5 @@
 #include "merge.hpp"
+#include "declaration.hpp"
 
 extern "C"{
 #include <time.h>
@@ -254,10 +255,10 @@ ConsolidationResult GenerateConsolidationGraph(Versat* versat,Arena* arena,Accel
       n->type = MappingNode::NODE;
    }
 
-   #if 1
-   // Map outputs
    FUInstance* accel1Output = (FUInstance*) GetOutputInstance(accel1->allocated);
    FUInstance* accel2Output = (FUInstance*) GetOutputInstance(accel2->allocated);
+   #if 1
+   // Map outputs
    if(accel1Output && accel2Output){
       MergeEdge node = {};
       node.instances[0] = accel1Output;
@@ -318,7 +319,6 @@ ConsolidationResult GenerateConsolidationGraph(Versat* versat,Arena* arena,Accel
    #endif
 
    graph.nodes.data = (MappingNode*) MarkArena(arena);
-
    #if 1
    // Check possible edge mapping
    FOREACH_LIST(Edge*,edge1,accel1->edges){
@@ -386,21 +386,20 @@ ConsolidationResult GenerateConsolidationGraph(Versat* versat,Arena* arena,Accel
    #endif
 
    // Check node mapping
-   #if 0
-   if(options.mapNodes){
-      FUInstance* accel1Output = GetOutputInstance(accel1);
-      FUInstance* accel2Output = GetOutputInstance(accel2);
-
+   #if 01
+   if(1 /*options.mapNodes */){
       for(FUInstance* instA : accel1->instances){
          PortInstance portA = {};
          portA.inst = instA;
 
+#if 0
          int deltaA = instA->graphData->order - options.order;
 
          if(options.type == ConsolidationGraphOptions::EXACT_ORDER && deltaA >= 0 && deltaA <= options.difference){
             continue;
          }
-
+#endif
+        
          if(instA == accel1Output || instA->declaration == BasicDeclaration::input){
             continue;
          }
@@ -409,6 +408,7 @@ ConsolidationResult GenerateConsolidationGraph(Versat* versat,Arena* arena,Accel
             PortInstance portB = {};
             portB.inst = instB;
 
+#if 0
             int deltaB = instB->graphData->order - options.order;
 
             if(options.type == ConsolidationGraphOptions::SAME_ORDER && instA->graphData->order != instB->graphData->order){
@@ -417,11 +417,12 @@ ConsolidationResult GenerateConsolidationGraph(Versat* versat,Arena* arena,Accel
             if(options.type == ConsolidationGraphOptions::EXACT_ORDER && deltaB >= 0 && deltaB <= options.difference){
                continue;
             }
+#endif
             if(instB == accel2Output || instB->declaration == BasicDeclaration::input){
                continue;
             }
 
-            if(!EqualPortMapping(versat,portA,portB)){
+            if(!EqualPortMapping(portA,portB)){
                continue;
             }
 
@@ -854,7 +855,8 @@ GraphMapping ConsolidationGraphMapping(Versat* versat,Accelerator* accel1,Accele
    ConsolidationResult result = GenerateConsolidationGraph(versat,arena,accel1,accel2,options);
    ConsolidationGraph graph = result.graph;
 
-   #if 0
+   printf("%d\n",graph.validNodes.bitSize);
+   #if 1
    printf("CQ:\n");
    for(int i = 0; i < result.graph.nodes.size; i++){
       String repr = Repr(result.graph.nodes[i],arena);
@@ -1295,16 +1297,19 @@ static GraphMapping MergeAccelerator(Versat* versat,Accelerator* accel1,Accelera
 
    GraphMapping graphMapping = {};
 
+   OutputGraphDotFile(versat,accel1,true,"debug/accel1.dot");
+   OutputGraphDotFile(versat,accel2,true,"debug/accel2.dot");
+   
    switch(strategy){
    case MergingStrategy::SIMPLE_COMBINATION:{
       // Do nothing, no mapping leads to simple combination
    }break;
    case MergingStrategy::CONSOLIDATION_GRAPH:{
-      ConsolidationGraphOptions options = {};
-      options.mapNodes = false;
-      options.specifics = specificNodes;
+     ConsolidationGraphOptions options = {};
+     options.mapNodes = false;
+     options.specifics = specificNodes;
 
-      graphMapping = ConsolidationGraphMapping(versat,accel1,accel2,options,arena,name);
+     graphMapping = ConsolidationGraphMapping(versat,accel1,accel2,options,arena,name);
    }break;
    case MergingStrategy::PIECEWISE_CONSOLIDATION_GRAPH:{
       graphMapping = TestingGraphMapping(versat,accel1,accel2,arena);
@@ -1365,7 +1370,7 @@ MergeGraphResult MergeGraph(Versat* versat,Accelerator* flatten1,Accelerator* fl
 
          // For now, change name even if they have the same name
          //if(!CompareString(inst->name,mappedNode->name)){
-            String newName = PushString(&versat->permanent,"%.*s/%.*s",UNPACK_SS(mappedNode->name),UNPACK_SS(inst->name));
+            String newName = PushString(&versat->permanent,"%.*s_%.*s",UNPACK_SS(mappedNode->name),UNPACK_SS(inst->name));
 
             mappedNode->name = newName;
          //}
@@ -1463,7 +1468,7 @@ MergeGraphResultExisting MergeGraphToExisting(Versat* versat,Accelerator* existi
 
          // For now, change name even if they have the same name
          //if(!CompareString(inst->name,mappedNode->name)){
-            String newName = PushString(&versat->permanent,"%.*s/%.*s",UNPACK_SS(mappedNode->name),UNPACK_SS(inst->name));
+            String newName = PushString(&versat->permanent,"%.*s_%.*s",UNPACK_SS(mappedNode->name),UNPACK_SS(inst->name));
 
             mappedNode->name = newName;
          //}
@@ -1603,11 +1608,13 @@ FUDeclaration* MergeAccelerators(Versat* versat,FUDeclaration* accel1,FUDeclarat
    printf("\n");
    #endif
 
+#if 0
    //decl->type = FUDeclaration::MERGED;
    decl->mergedType = PushArray<FUDeclaration*>(&versat->permanent,2);
    decl->mergedType[0] = accel1;
    decl->mergedType[1] = accel2;
-
+#endif
+  
    return decl;
 }
 
@@ -1641,10 +1648,12 @@ FUDeclaration* MergeThree(Versat* versat,FUDeclaration* typeA,FUDeclaration* typ
 
    FUDeclaration* decl = RegisterSubUnit(versat,name2,finalGraph);
 
+#if 0
    decl->mergedType = PushArray<FUDeclaration*>(&versat->permanent,3);
    decl->mergedType[0] = typeA;
    decl->mergedType[1] = typeB;
    decl->mergedType[2] = typeC;
+#endif
 
    return decl;
 }
@@ -1664,6 +1673,27 @@ Array<int> GetPortConnections(InstanceNode* node,Arena* arena){
 
    return res;
 }
+
+#if 1
+Optional<int> GetConfigurationIndexFromInstanceNode(FUDeclaration* type,InstanceNode* node){
+  // While configuration array is fully defined, no need to do this check beforehand.
+#if 0
+  if(node->inst->declaration->configInfo.configs.size == 0){
+    return (Optional<int>){};
+  }
+#endif
+  
+  int index = 0;
+  FOREACH_LIST_INDEXED(InstanceNode*,iter,type->fixedDelayCircuit->allocated,index){
+    if(iter == node){
+      return type->configInfo.configOffsets.offsets[index];
+    }
+  }
+
+  Assert(false);
+  return Optional<int>{};
+}
+#endif
 
 FUDeclaration* Merge(Versat* versat,Array<FUDeclaration*> types,String name,MergingStrategy strat){
    Assert(types.size >= 2);
@@ -1733,8 +1763,6 @@ FUDeclaration* Merge(Versat* versat,Array<FUDeclaration*> types,String name,Merg
       for(Pair<InstanceNode*,InstanceNode*> pair : view[i]){
          if(pair.second->multipleSamePortInputs){
             mapMultipleInputsToSubgraphs[i]->Insert(pair.second,pair.first);
-
-            //printf("%d %.*s -> %.*s\n",i,UNPACK_SS(pair.second->inst->name),UNPACK_SS(pair.first->inst->name));
          }
       }
    }
@@ -1778,8 +1806,6 @@ FUDeclaration* Merge(Versat* versat,Array<FUDeclaration*> types,String name,Merg
                   #endif
                }
             }
-
-            // For now, not adding multiplexers to the view graphs. Still do not know if they will be used for anything afterwards or if they can be discarded
 
             // Need to map edgeNode into the integer that indicates which input graph it belongs to.
             Array<int> inputNumberToEdgeNodeIndex = PushArray<int>(arena,size);
@@ -1859,6 +1885,33 @@ FUDeclaration* Merge(Versat* versat,Array<FUDeclaration*> types,String name,Merg
    }
 
    FUDeclaration* decl = RegisterSubUnit(versat,name,result);
+
+   decl->mergeInfo = PushArray<MergeInfo>(&versat->permanent,size);
+
+   for(int i = 0; i < size; i++){
+     // For any given original graph unit, need to fetch the associated configuration index and associated to the corerect values.
+     decl->mergeInfo[i].config.configs = types[i]->configInfo.configs;
+     decl->mergeInfo[i].config.states = types[i]->configInfo.states;
+     
+     decl->mergeInfo[i].config.configOffsets.offsets = PushArray<int>(&versat->permanent,types[i]->configInfo.configOffsets.offsets.size);
+     decl->mergeInfo[i].config.configOffsets.max = types[i]->configInfo.configOffsets.max;
+     
+     int index = 0;
+     for(Pair<InstanceNode*,InstanceNode*> pair : view[i]){
+       Optional<int> res = GetConfigurationIndexFromInstanceNode(decl,pair.second);
+
+       if(res.has_value()){
+         decl->mergeInfo[i].config.configOffsets.offsets[index] = res.value();
+       } else {
+         Assert(false); // Since configs are fully defined, should never happen, for now
+       }
+       index += 1;
+     }
+     
+     decl->mergeInfo[i].baseType = types[i];
+   }
+  
+#if 0
    decl->mergedType = PushArray<FUDeclaration*>(&versat->permanent,types.size);
    Memcpy(decl->mergedType.data,types.data,size);
    OutputGraphDotFile(versat,decl->baseCircuit,true,"debug/finalMerged.dot");
@@ -1867,42 +1920,8 @@ FUDeclaration* Merge(Versat* versat,Array<FUDeclaration*> types,String name,Merg
    for(int i = 0; i < types.size; i++){
       decl->mergedType[i] = types[i];
    }
-
+#endif
+  
    return decl;
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 

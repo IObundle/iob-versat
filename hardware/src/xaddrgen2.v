@@ -1,104 +1,109 @@
 `timescale 1ns / 1ps
+// Comment so that verible-format will not put timescale and defaultt_nettype into same line
+`default_nettype none
 
-module xaddrgen2 # ( 
-       parameter MEM_ADDR_W = 10,
-       parameter PERIOD_W = 10
-      ) (
-       input                                  clk,
-       input                                  rst,
-       input                                  run,
+module xaddrgen2 
+  #( 
+     parameter MEM_ADDR_W = 10,
+     parameter PERIOD_W = 10
+     ) (
+        input                           clk_i,
+        input                           rst_i,
+        input                           run_i,
 
-       //configurations
-       input [MEM_ADDR_W - 1:0]              iterations,
-       input [PERIOD_W - 1:0]                period,
-       input [PERIOD_W - 1:0]                duty,
-       input [PERIOD_W - 1:0]                delay,
-       input [MEM_ADDR_W - 1:0]              start,
-       input signed [MEM_ADDR_W - 1:0]       shift,
-       input signed [MEM_ADDR_W - 1:0]       incr,
-       input [MEM_ADDR_W - 1:0]              iterations2,
-       input [PERIOD_W - 1:0]                period2,
-       input signed [MEM_ADDR_W - 1:0]       shift2,
-       input signed [MEM_ADDR_W - 1:0]       incr2,
+        //configurations
+        input [MEM_ADDR_W - 1:0]        iterations_i,
+        input [PERIOD_W - 1:0]          period_i,
+        input [PERIOD_W - 1:0]          duty_i,
+        input [PERIOD_W - 1:0]          delay_i,
+        input [MEM_ADDR_W - 1:0]        start_i,
+        input signed [MEM_ADDR_W - 1:0] shift_i,
+        input signed [MEM_ADDR_W - 1:0] incr_i,
+        input [MEM_ADDR_W - 1:0]        iterations2_i,
+        input [PERIOD_W - 1:0]          period2_i,
+        input signed [MEM_ADDR_W - 1:0] shift2_i,
+        input signed [MEM_ADDR_W - 1:0] incr2_i,
 
-       //outputs
-       output [MEM_ADDR_W - 1:0]             addr,
-       output                                mem_en,
-       output                                done
-       );
+        //outputs
+        output [MEM_ADDR_W - 1:0]       addr_o,
+        output                          mem_en_o,
+        output                          done_o
+        );
 
    //connection wires
-   wire [MEM_ADDR_W - 1:0]                             addrB;
-   wire                                                 mem_enB;
-   wire                                                 doneA, doneB;
-   wire                                                 mem_en_reg_w;
+   wire [MEM_ADDR_O_W - 1:0]                             addr_oB;
+   wire                                                 mem_en_oB;
+   wire                                                 done_oA, done_oB;
+   wire                                                 mem_en_o_reg_w;
 
-   //only run if iterations > 0
-   wire                                                 readyA = |iterations;
-   wire                                                 readyB = |iterations2;
+   //only run_i if iterations_i > 0
+   wire                                                 readyA = |iterations_i;
+   wire                                                 readyB = |iterations_i2;
 
-   //keep running addrgenA while addrgenB is enabled
-   wire                                                 runA = run | mem_enB;
+   //keep run_ining addr_ogenA while addr_ogenB is enabled
+   wire                                                 run_iA = run_i | mem_en_oB;
 
-   //done if both addrgen are done
-   assign                                               done = doneA & (doneB | ~readyB);
+   //done_o if both addr_ogen are done_o
+   assign                                               done_o = done_oA & (done_oB | ~readyB);
 
-   //update addrgenB after addrgenA is done
-   wire                                                 pause = mem_en_reg_w & ~doneA;
+   //update addr_ogenB after addr_ogenA is done_o
+   wire                                                 pause = mem_en_o_reg_w & ~done_oA;
 
-   //after first run, addrgenA start comes from addrgenB addr
-   wire  [MEM_ADDR_W - 1:0]            startA = run ? start : addrB;
+   //after first_i run_i, addr_ogenA start_i comes from addr_ogenB addr_o
+   wire  [MEM_ADDR_O_W - 1:0]            start_iA = run_i ? start_i : addr_oB;
 
-   //instantiate address generators
-   xaddrgen # (
-   .MEM_ADDR_W(MEM_ADDR_W),
-   .PERIOD_W(PERIOD_W)
-   ) addrgenA (
-        .clk(clk),
-        .rst(rst),
-        .init(runA),
-        .run(runA & readyA),
+   //instantiate addr_oess generators
+   xaddr_ogen # (
+   .MEM_ADDR_O_W(MEM_ADDR_O_W),
+   .PERIOD_I_W(PERIOD_I_W)
+   ) addr_ogenA (
+        .clk_i(clk_i),
+        .rst_i(rst_i),
+        .init(run_iA),
+        .run_i(run_iA & readyA),
         .pause(1'b0),
-        .iterations(iterations),
-        .period(period),
-        .duty(duty),
-        .delay(delay),
-        .start(startA),
-        .shift(shift),
-        .incr(incr),
-        .addr(addr),
-        .mem_en(mem_en),
-        .done(doneA)
+        .iterations_i(iterations_i),
+        .period_i(period_i),
+        .duty_i(duty_i),
+        .delay_i(delay_i),
+        .start_i(start_iA),
+        .shift_i(shift_i),
+        .incr_i(incr_i),
+        .addr_o(addr_o),
+        .mem_en_o(mem_en_o),
+        .done_o(done_oA)
         );
 
-   xaddrgen # ( 
-   .MEM_ADDR_W(MEM_ADDR_W),
-   .PERIOD_W(PERIOD_W)
-   ) addrgenB (
-        .clk(clk),
-        .rst(rst),
-        .init(run),
-        .run(run & readyB),
+   xaddr_ogen # ( 
+   .MEM_ADDR_O_W(MEM_ADDR_O_W),
+   .PERIOD_I_W(PERIOD_I_W)
+   ) addr_ogenB (
+        .clk_i(clk_i),
+        .rst_i(rst_i),
+        .init(run_i),
+        .run_i(run_i & readyB),
         .pause(pause),
-        .iterations(iterations2),
-        .period(period2),
-        .duty(period2),
-        .delay(delay),
-        .start(start),
-        .shift(shift2),
-        .incr(incr2),
-        .addr(addrB),
-        .mem_en(mem_enB),
-        .done(doneB)
+        .iterations_i(iterations_i2),
+        .period_i(period_i2),
+        .duty_i(period_i2),
+        .delay_i(delay_i),
+        .start_i(start_i),
+        .shift_i(shift_i2),
+        .incr_i(incr_i2),
+        .addr_o(addr_oB),
+        .mem_en_o(mem_en_oB),
+        .done_o(done_oB)
         );
 
-   //register mem_en of addrgenA
-   reg mem_en_reg;
-   always @ (posedge clk, posedge rst)
-     if(rst)
-       mem_en_reg <= 1'b0;
+   //register mem_en_o of addr_ogenA
+   reg mem_en_o_reg;
+   always @ (posedge clk_i, posedge rst_i)
+     if(rst_i)
+       mem_en_o_reg <= 1'b0;
      else
-       mem_en_reg <= mem_en;
-   assign mem_en_reg_w = mem_en_reg;
+       mem_en_o_reg <= mem_en_o;
+   assign mem_en_o_reg_w = mem_en_o_reg;
 
-endmodule
+endmodule // xaddrgen2
+
+`default_nettype wire

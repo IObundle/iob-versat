@@ -1,65 +1,68 @@
-`timescale 1ns/1ps
-`include "axi.vh"
+`timescale 1ns / 1ps
+// Comment so that verible-format will not put timescale and defaultt_nettype into same line
+`default_nettype none
 
-module SimpleAXItoAXI #(
+module SimpleAXItoAXI 
+  #(
     parameter AXI_ADDR_W = 32,
     parameter AXI_DATA_W = 32,
     parameter AXI_LEN_W = 8,
     parameter AXI_ID_W = 4,
     parameter LEN_W = 8
-  )
-  (
-    input  m_wvalid,
-    output reg m_wready,
-    input  [AXI_ADDR_W-1:0] m_waddr,
-    input  [AXI_DATA_W-1:0] m_wdata,
-    input  [(AXI_DATA_W / 8)-1:0] m_wstrb,
-    input  [LEN_W-1:0] m_wlen,
-    output reg m_wlast,
-    
-    input  m_rvalid,
-    output reg m_rready,
-    input  [AXI_ADDR_W-1:0] m_raddr,
-    output [AXI_DATA_W-1:0] m_rdata,
-    input  [LEN_W-1:0] m_rlen,
-    output m_rlast,
+    )
+   (
+    input                        m_wvalid_i,
+    output reg                   m_wready_o,
+    input [AXI_ADDR_W-1:0]       m_waddr_i,
+    input [AXI_DATA_W-1:0]       m_wdata_i,
+    input [(AXI_DATA_W / 8)-1:0] m_wstrb_i,
+    input [LEN_W-1:0]            m_wlen_i,
+    output reg                   m_wlast_o,
+   
+    input                        m_rvalid_i,
+    output reg                   m_rready_o,
+    input [AXI_ADDR_W-1:0]       m_raddr_i,
+    output [AXI_DATA_W-1:0]      m_rdata_o,
+    input [LEN_W-1:0]            m_rlen_i,
+    output                       m_rlast_o,
 
-    `include "m_versat_axi_m_port.vh"
+`include "axi_m_port.vs"
 
-    input clk,
-    input rst
-  );
+    input                        clk_i,
+    input                        rst_i
+    );
 
 SimpleAXItoAXIWrite #(.AXI_ADDR_W(AXI_ADDR_W),.AXI_DATA_W(AXI_DATA_W),.AXI_ID_W(AXI_ID_W),.AXI_LEN_W(AXI_LEN_W),.LEN_W(LEN_W)) simpleWrite
   (
-    .m_wvalid(m_wvalid),
-    .m_wready(m_wready),
-    .m_waddr(m_waddr),
-    .m_wdata(m_wdata),
-    .m_wstrb(m_wstrb),
-    .m_wlen(m_wlen),
-    .m_wlast(m_wlast),
+    .m_wvalid_i(m_wvalid_i),
+    .m_wready_o(m_wready_o),
+    .m_waddr_i(m_waddr_i),
+    .m_wdata_i(m_wdata_i),
+    .m_wstrb_i(m_wstrb_i),
+    .m_wlen_i(m_wlen_i),
+    .m_wlast_o(m_wlast_o),
 
-    `include "m_versat_axi_write_portmap.vh"
+    `include "axi_m_m_write_portmap.vs"
 
-    .clk(clk),
-    .rst(rst)
+    .clk_i(clk_i),
+    .rst_i(rst_i)
   );
 
 SimpleAXItoAXIRead #(.AXI_ADDR_W(AXI_ADDR_W),.AXI_DATA_W(AXI_DATA_W),.AXI_ID_W(AXI_ID_W),.AXI_LEN_W(AXI_LEN_W),.LEN_W(LEN_W)) simpleRead
   (
-    .m_rvalid(m_rvalid),
-    .m_rready(m_rready),
-    .m_raddr(m_raddr),
-    .m_rdata(m_rdata),
-    .m_rlen(m_rlen),
-    .m_rlast(m_rlast),
+    .m_rvalid_i(m_rvalid_i),
+    .m_rready_o(m_rready_o),
+    .m_raddr_i(m_raddr_i),
+    .m_rdata_o(m_rdata_o),
+    .m_rlen_i(m_rlen_i),
+    .m_rlast_o(m_rlast_o),
 
-    `include "m_versat_axi_read_portmap.vh"
+    `include "axi_m_m_read_portmap.vs"
 
-    .clk(clk),
-    .rst(rst)
+    .clk_i(clk_i),
+    .rst_i(rst_i)
   );
 
-endmodule
+endmodule // SimpleAXItoAXI
 
+`default_nettype wire
