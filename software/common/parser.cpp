@@ -824,7 +824,7 @@ static void PrintExpression(Expression* exp,int level){
   }break;
   case Expression::LITERAL:{
     Value val = exp->val;
-    printf("LITERAL: %d\n",val.number);
+    printf("LITERAL: %ld\n",val.number);
   }break;
   case Expression::ARRAY_ACCESS:{
     printf("ARRAY_ACCESS\n");

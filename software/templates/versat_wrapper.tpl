@@ -5,9 +5,10 @@
 #include <new>
 
 #include "versat_accel.h" // TODO: Is this needed? We technically have all the data that we need to not depend on this header and removing this dependency could simplify the build process. Take a look later
-#include "versat.hpp"
-#include "utils.hpp"
-#include "acceleratorStats.hpp"
+
+//#include "versat.hpp"
+//#include "utils.hpp"
+//#include "acceleratorStats.hpp"
 
 #include "verilated.h"
 
@@ -20,9 +21,6 @@ static VerilatedVcdC* tfp = NULL;
 #{end}
 
 VerilatedContext* contextp = new VerilatedContext;
-
-static int zeros[99] = {};
-static Array<int> zerosArray = {zeros,99};
 
 #include "V@{module.name}.h"
 static V@{module.name}* dut = NULL;
@@ -81,8 +79,15 @@ static char* Bin(unsigned int value){
    return buffer;
 }
 
-// static Array<int> zerosArray defined in versat.cpp
+struct DatabusAccess{
+   int counter;
+   int latencyCounter;
+};
 
+static const int INITIAL_MEMORY_LATENCY = 5;
+static const int MEMORY_LATENCY = 0;
+
+#if 0
 template<typename T>
 static int32_t MemoryAccessNoAddress(FUInstance* inst,int address,int value,int write){
    T* self = (T*) inst->extraData;
@@ -178,23 +183,6 @@ static int32_t MemoryAccess(FUInstance* inst,int address,int value,int write){
    }
 }
 
-struct DatabusAccess{
-   int counter;
-   int latencyCounter;
-};
-
-static const int INITIAL_MEMORY_LATENCY = 5;
-static const int MEMORY_LATENCY = 0;
-
-struct Int128{
-   int32 i[4];
-};
-
-struct Int256{
-   int32 i[8];
-};
-
-#if 0
 // Memories are evaluated after databus because most of the time
 // databus is used to read data to memories
 // while memory to databus usually passes through a register that holds the data.
@@ -254,12 +242,6 @@ void @{module.name}_VCDFunction(FUInstance* inst,FILE* out,VCDMapping& currentMa
    #{end}
    }
    #endif
-}
-
-static void CloseWaveform(){
-   if(CreateVCD && tfp){
-      tfp->close();
-   }
 }
 
 int32_t* @{module.name}_InitializeFunction(FUInstance* inst){
@@ -361,12 +343,6 @@ int32_t* @{module.name}_EndFunction(FUInstance* inst){
  
    return NULL;
 }
-
-#define Int128ToVerilator(VAL,TO_STORE) \
-  TO_STORE[0] = (((int32*)VAL)[0]); \
-  TO_STORE[1] = (((int32*)VAL)[1]); \
-  TO_STORE[2] = (((int32*)VAL)[2]); \
-  TO_STORE[3] = (((int32*)VAL)[3]); 
 
 int32_t* @{module.name}_UpdateFunction(FUInstance* inst,Array<int> inputs){
    int baseAddress = 0;
@@ -765,6 +741,8 @@ extern "C" void InitializeVerilator(){
    Verilated::traceEverOn(true);
 }
 
+typedef char Byte;
+
 // Allocate state and config buffers
 static AcceleratorConfig configBuffer = {};
 static AcceleratorState stateBuffer = {};
@@ -779,6 +757,12 @@ extern "C" AcceleratorState* GetStartOfState(){
   return &stateBuffer;
 }
 
+static void CloseWaveform(){
+   if(CreateVCD && tfp){
+      tfp->close();
+   }
+}
+
 extern "C" void VersatAcceleratorCreate(){
    if(CreateVCD){
    #{if arch.generateFSTFormat}
@@ -788,7 +772,7 @@ extern "C" void VersatAcceleratorCreate(){
    #{end}
    }
 
-   V@{module.name}* self = V@{module.name}();
+   V@{module.name}* self = new V@{module.name}();
 
    if(dut){
       printf("Initialize function is being called multiple times\n");
@@ -816,15 +800,9 @@ extern "C" void VersatAcceleratorCreate(){
 #{end}
 
    RESET(self);
-
-   return NULL;  
 }
 
-void UpdateAccelerator(){
-
-}
-
-extern "C" void VersatAcceleratorSimulate(){
+static void InternalUpdateAccelerator(){
    int baseAddress = 0;
 
    V@{module.name}* self = dut;
@@ -1062,7 +1040,9 @@ AcceleratorState* state = &stateBuffer;
 #{end}
 }
 
-bool IsDone(){
+static bool IsDone(){
+  V@{module.name}* self = dut;
+
 #{if module.hasDone}
 bool done = self->done;
 #{else}
@@ -1071,12 +1051,55 @@ bool done = true;
 return done;
 }
 
-extern "C" AcceleratorConfig* GetStartOfConfig(){
-  
+static void InternalStartAccelerator(){
+   V@{module.name}* self = dut;
+
+#{if module.configs}
+AcceleratorConfig* config = (AcceleratorConfig*) &configBuffer;
+
+#{for i module.configs.size}
+#{set wire module.configs[i]}
+   self->@{wire.name} = config->@{configsHeader[i].name};
+#{end}
+#{end}
+
+#{if module.nDelays}
+#{for i module.nDelays}
+   self->delay@{i} = config->TOP_Delay@{i};
+#{end}
+#{end}
+
+#{for i module.nIO}
+{
+   DatabusAccess* memoryLatency = ((DatabusAccess*) &self[1]) + @{i};
+
+   memoryLatency->counter = 0;
+   memoryLatency->latencyCounter = INITIAL_MEMORY_LATENCY;
+}
+#{end}
+
+   START_RUN(self);
 }
 
-extern "C" AcceleratorState* GetStartOfState(){
+static void InternalEndAccelerator(){
+   V@{module.name}* self = dut;
 
+   self->running = 0;
+
+   // TODO: Is this update call needed?
+   InternalUpdateAccelerator();
+
+   // TODO: We could put the copy of state variables here
+}
+
+extern "C" void VersatAcceleratorSimulate(){
+  InternalStartAccelerator();
+  
+  while(!IsDone()){
+    InternalUpdateAccelerator();
+  }
+
+  InternalEndAccelerator();
 }
 
 #undef INIT

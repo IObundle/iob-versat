@@ -40,16 +40,23 @@ class iob_versat(iob_module):
         versat_args = ["versat",versat_spec,
                                 "-s",
                                 "-T",versat_top,
-                                "-O",versat_dir + "/hardware/src/units",
+                                "-O",versat_dir + "/hardware/src/units", # Location of versat units
+                                #"-S",versat_dir + "/submodules/FPU/hardware/src/",
+                                "-I",versat_dir + "/submodules/FPU/hardware/src/",
+                                "-I",versat_dir + "/submodules/FPU/hardware/include/",
+                                "-I",versat_dir + "/submodules/FPU/submodules/DIV/hardware/src/",
                                 "-O",versat_extra,
-                                "-H",build_dir + "/software",
-                                "-o",build_dir + "/hardware/src"
+                                "-H",build_dir + "/software", # Output software files
+                                "-o",build_dir + "/hardware/src/units" # Output hardware files
                                 ]
 
         print(*versat_args)
         result = sp.call(versat_args)
 
+        #exit(0);
+
         if(result != 0):
+            print("Failed to generate accelerator\n")
             exit(result)
 
         #sp.call(["verilator"])
@@ -161,5 +168,4 @@ class iob_versat(iob_module):
 
     @classmethod
     def _setup_block_groups(cls):
-        pass
-        #cls.block_groups += []
+        cls.block_groups += []

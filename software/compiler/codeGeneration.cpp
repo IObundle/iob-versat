@@ -44,7 +44,7 @@ void OutputCircuitSource(Versat* versat,FUDeclaration* decl,Accelerator* accel,F
    }
 
    {
-      int memoryPos = 0;
+      iptr memoryPos = 0;
       FOREACH_LIST(InstanceNode*,ptr,accel->allocated){
          FUInstance* inst = ptr->inst;
          FUDeclaration* decl = inst->declaration;

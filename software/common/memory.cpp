@@ -152,7 +152,13 @@ String PushFile(Arena* arena,const char* filepath){
    long int size = GetFileSize(file);
 
    Byte* mem = PushBytes(arena,size + 1);
-   fread(mem,sizeof(Byte),size,file);
+   int amountRead = fread(mem,sizeof(Byte),size,file);
+
+   if(amountRead != size){
+     fprintf(stderr,"Memory PushFile failed to read entire file\n");
+     exit(-1);
+   }
+
    mem[size] = '\0';
 
    fclose(file);

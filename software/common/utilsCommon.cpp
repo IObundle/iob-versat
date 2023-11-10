@@ -370,14 +370,14 @@ int SwapEndianess(int val){
 uint64 SwapEndianess(uint64 val){
   unsigned char* view = (unsigned char*) &val;
 
-  uint64 res = (view[0] << 56) |
-               (view[1] << 48) |
-               (view[2] << 40) |
-               (view[3] << 32) |
-               (view[4] << 24) |
-               (view[5] << 16) |
-               (view[6] << 8)  |
-               (view[7]);
+  uint64 res = ((uint64) view[0] << 56) |
+               ((uint64) view[1] << 48) |
+               ((uint64) view[2] << 40) |
+               ((uint64) view[3] << 32) |
+               ((uint64) view[4] << 24) |
+               ((uint64) view[5] << 16) |
+               ((uint64) view[6] << 8)  |
+               ((uint64) view[7]);
 
   return res;
 }

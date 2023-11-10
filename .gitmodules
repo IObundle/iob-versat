@@ -1,0 +1,3 @@
+[submodule "submodules/FPU"]
+	path = submodules/FPU
+	url = git@github.com:IObundle/iob-fpu.git

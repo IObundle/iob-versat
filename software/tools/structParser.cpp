@@ -665,7 +665,7 @@ void OutputRepresentationFunction(FILE* hppFile,FILE* cppFile,Arena* arena){
 	String structName = def->structType.name;
     String reprFormat = def->structType.representationFormat;
 
-	printf("%.*s\n",UNPACK_SS(reprFormat));
+	//printf("%.*s\n",UNPACK_SS(reprFormat));
 
 	BLOCK_REGION(arena);
 
@@ -677,7 +677,7 @@ void OutputRepresentationFunction(FILE* hppFile,FILE* cppFile,Arena* arena){
 	while(!tok->Done()){
 	  Token string = tok->PeekFindUntil("{");
 
-	  printf("%d\n",string.size);
+	  //printf("%d\n",string.size);
 
 	  if(string.size > 0){
 		RepresentationExpression* expr = PushStruct<RepresentationExpression>(arena);

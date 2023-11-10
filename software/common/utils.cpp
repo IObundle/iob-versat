@@ -89,10 +89,12 @@ String ExtractFilenameOnly(String filepath){
 }
 
 char* GetCurrentDirectory(){
-   static char buffer[PATH_MAX];
+  // TODO: Maybe receive arena and remove use of static buffer
+  static char buffer[PATH_MAX];
    buffer[0] = '\0';
-   getcwd(buffer,PATH_MAX);
-   return buffer;
+   char* res = getcwd(buffer,PATH_MAX);
+
+   return res;
 }
 
 void MakeDirectory(const char* path){

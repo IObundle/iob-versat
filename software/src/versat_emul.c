@@ -68,19 +68,10 @@ void versat_init(int base){
    InitializeVerilator();
    VersatAcceleratorCreate();
 
-#if 0
-   versat_base = base;
-   versat = InitVersatC(base,1,0);
+   accelConfig = GetStartOfConfig();
+   accelState = GetStartOfState();
 
-   RegisterAllVerilogUnitsVerilog(versat);
-
-   accel = CreateSimulableAccelerator(versat,acceleratorTypeName);
-
-   char* configView = (char*) GetStartOfConfig(accel);
-
-   accelConfig = (volatile AcceleratorConfig*) GetStartOfConfig(accel);
-   accelState = (volatile AcceleratorState*) GetStartOfState(accel);
-
+   char* configView = (char*) accelConfig;
    iptr* delayPtr = (iptr*) (configView + (delayStart - configStart));
    iptr* staticPtr = (iptr*) (configView + (staticStart - configStart));
 
@@ -91,7 +82,6 @@ void versat_init(int base){
    for(int i = 0; i < ARRAY_SIZE(staticBuffer); i++){
       staticPtr[i] = staticBuffer[i];
    }
-#endif
 }
 
 void RunAccelerator(int times){

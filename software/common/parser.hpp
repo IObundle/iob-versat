@@ -10,6 +10,7 @@
 
 struct Command;
 
+// TODO: The entire code base reuses "Expression" in a lot of different situations while in reality every single Expression should be unique for the given file/module. 
 struct Expression{
   const char* op;
   String id;

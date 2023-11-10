@@ -132,8 +132,14 @@ void PreprocessVerilogFile_(Arena* output, String fileContent,MacroMap& macros,s
          size_t fileSize = GetFileSize(file);
 
          Byte* mem = PushBytes(temp,fileSize + 1);
-         fread(mem,sizeof(char),fileSize,file);
-         mem[fileSize] = '\0';
+         int amountRead = fread(mem,sizeof(char),fileSize,file);
+      
+         if(amountRead != fileSize){
+           fprintf(stderr,"Verilog Parsing, error reading the full contents of a file\n");
+           exit(-1);
+         }
+
+         mem[amountRead] = '\0';
 
          PreprocessVerilogFile_(output,STRING((const char*) mem,fileSize),macros,includeFilepaths,temp);
 
