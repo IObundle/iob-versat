@@ -155,24 +155,24 @@ wire [AXI_DATA_W-1:0] read_data;
 MemoryReader #(.ADDR_W(ADDR_W),.DATA_W(AXI_DATA_W))
 reader(
    // Slave
-   .s_valid(writting),
-   .s_ready(gen_ready),
-   .s_addr(gen_addr),
+   .s_valid_i(writting),
+   .s_ready_o(gen_ready),
+   .s_addr_i(gen_addr),
 
    // Master
-   .m_valid(),
-   .m_ready(databus_ready_0),
-   .m_addr(),
-   .m_data(databus_wdata_0),
-   .m_last(databus_last_0),
+   .m_valid_o(),
+   .m_ready_i(databus_ready_0),
+   .m_addr_o(),
+   .m_data_o(databus_wdata_0),
+   .m_last_i(databus_last_0),
 
    // Connect to memory
-   .mem_enable(read_en),
-   .mem_addr(read_addr),
-   .mem_data(read_data),
+   .mem_enable_o(read_en),
+   .mem_addr_o(read_addr),
+   .mem_data_i(read_data),
 
-   .clk(clk),
-   .rst(rst)
+   .clk_i(clk),
+   .rst_i(rst)
 );
 
 assign done = (!writting && !databus_valid_0);

@@ -27,8 +27,8 @@ module MyFloatAdd #(
 
    reg [278:0] res;
 
-   FloatToLargeInteger conv1(.in(in0),.out(in0_decoded));
-   FloatToLargeInteger conv2(.in(in1),.out(in1_decoded));
+   FloatToLargeInteger conv1(.in_i(in0),.out_o(in0_decoded));
+   FloatToLargeInteger conv2(.in_i(in1),.out_o(in1_decoded));
 
    always @(posedge clk,posedge rst) begin
      if(rst) begin

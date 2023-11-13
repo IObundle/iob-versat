@@ -29,26 +29,26 @@ wire done;
 assign out0 = genOut; //done ? off_value : genOut;
 
 MyAddressGen #(.ADDR_W(32),.DATA_W(8),.PERIOD_W(PERIOD_W)) addrGen(
-   .clk(clk),
-   .rst(rst),
+   .clk_i(clk),
+   .rst_i(rst),
 
-   .run(run),
+   .run_i(run),
 
    //configurations 
-   .iterations(iterations),
-   .period(period),
-   .duty(duty),
-   .delay(delay0),
-   .start(start),
-   .shift(shift),
-   .incr(incr),
+   .iterations_i(iterations),
+   .period_i(period),
+   .duty_i(duty),
+   .delay_i(delay0),
+   .start_i(start),
+   .shift_i(shift),
+   .incr_i(incr),
 
    //outputs 
-   .valid(),
-   .ready(1'b1),
-   .addr(genOut),
+   .valid_o(),
+   .ready_i(1'b1),
+   .addr_o(genOut),
 
-   .done(done)
+   .done_o(done)
    );
 
 endmodule

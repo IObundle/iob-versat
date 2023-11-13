@@ -158,51 +158,51 @@ module VRead #(
    end
 
    SimpleAddressGen #(.ADDR_W(ADDR_W),.DATA_W(SIZE_W)) addrgenA (
-      .clk(clk),
-      .rst(rst),
-      .run(run && !disabled),
+      .clk_i(clk),
+      .rst_i(rst),
+      .run_i(run && !disabled),
 
       //configurations 
-      .period(perA),
-      .delay(delayA),
-      .start(startA),
-      .incr(incrA),
+      .period_i(perA),
+      .delay_i(delayA),
+      .start_i(startA),
+      .incr_i(incrA),
 
       `ifdef COMPLEX_INTERFACE
-      .iterations(iterA),
-      .duty(dutyA),
-      .shift(shiftA),
+      .iterations_i(iterA),
+      .duty_i(dutyA),
+      .shift_i(shiftA),
       `endif
 
       //outputs 
-      .valid(gen_valid),
-      .ready(gen_ready),
-      .addr(gen_addr),
-      .done(gen_done)
+      .valid_o(gen_valid),
+      .ready_i(gen_ready),
+      .addr_o(gen_addr),
+      .done_o(gen_done)
       );
 
    SimpleAddressGen #(.ADDR_W(ADDR_W),.DATA_W(DATA_W)) addrgenB(
-      .clk(clk),
-      .rst(rst),
-      .run(run),
+      .clk_i(clk),
+      .rst_i(rst),
+      .run_i(run),
 
       //configurations 
-      .period(perB),
-      .delay(delay0),
-      .start(startB_inst),
-      .incr(incrB),
+      .period_i(perB),
+      .delay_i(delay0),
+      .start_i(startB_inst),
+      .incr_i(incrB),
 
       `ifdef COMPLEX_INTERFACE
-      .iterations(iterB),
-      .duty(dutyB),
-      .shift(shiftB),
+      .iterations_i(iterB),
+      .duty_i(dutyB),
+      .shift_i(shiftB),
       `endif
 
       //outputs 
-      .valid(enB),
-      .ready(1'b1),
-      .addr(addrB_int),
-      .done(doneB_int)
+      .valid_o(enB),
+      .ready_i(1'b1),
+      .addr_o(addrB_int),
+      .done_o(doneB_int)
       );
 
    /*
@@ -238,22 +238,22 @@ module VRead #(
 
    MemoryWriter #(.ADDR_W(ADDR_W),.DATA_W(AXI_DATA_W)) 
    writer(
-      .gen_valid(gen_valid),
-      .gen_ready(gen_ready),
-      .gen_addr(gen_addr),
+      .gen_valid_i(gen_valid),
+      .gen_ready_o(gen_ready),
+      .gen_addr_i(gen_addr),
 
       // Slave connected to data source
-      .data_valid(databus_ready_0),
-      .data_ready(data_ready),
-      .data_in(databus_rdata_0),
+      .data_valid_i(databus_ready_0),
+      .data_ready_o(data_ready),
+      .data_in_i(databus_rdata_0),
 
       // Connect to memory
-      .mem_enable(write_en),
-      .mem_addr(write_addr),
-      .mem_data(write_data),
+      .mem_enable_o(write_en),
+      .mem_addr_o(write_addr),
+      .mem_data_o(write_data),
 
-      .clk(clk),
-      .rst(rst)
+      .clk_i(clk),
+      .rst_i(rst)
       );
 
    assign databus_valid_0 = (data_ready && !doneA);
@@ -303,9 +303,9 @@ module VRead #(
       )
       adapter
       (
-         .sel(sel_0),
-         .in(ext_2p_data_in_0),
-         .out(outB)
+         .sel_i(sel_0),
+         .in_i(ext_2p_data_in_0),
+         .out_o(outB)
       );
    end else begin
       always @* begin

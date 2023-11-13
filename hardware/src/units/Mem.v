@@ -168,51 +168,51 @@
    //address generators
 
    MyAddressGen #(.ADDR_W(ADDR_W),.DATA_W(SIZE_W)) addrgenA (
-   .clk(clk),
-   .rst(rst),
-   .run(run && !disabled),
+   .clk_i(clk),
+   .rst_i(rst),
+   .run_i(run && !disabled),
 
    //configurations 
-   .period(perA),
-   .start(startA),
-   .incr(incrA),
-   .delay(delay0),
+   .period_i(perA),
+   .start_i(startA),
+   .incr_i(incrA),
+   .delay_i(delay0),
 
    `ifdef COMPLEX_INTERFACE
-   .iterations(iterA),
-   .duty(dutyA),
-   .shift(shiftA),
+   .iterations_i(iterA),
+   .duty_i(dutyA),
+   .shift_i(shiftA),
    `endif
 
    //outputs 
-   .valid(enA_int),
-   .ready(1'b1),
-   .addr(addrA_int),
-   .done(doneA)
+   .valid_o(enA_int),
+   .ready_i(1'b1),
+   .addr_o(addrA_int),
+   .done_o(doneA)
    );
 
    MyAddressGen #(.ADDR_W(ADDR_W),.DATA_W(SIZE_W)) addrgenB (
-   .clk(clk),
-   .rst(rst),
-   .run(run && !disabled),
+   .clk_i(clk),
+   .rst_i(rst),
+   .run_i(run && !disabled),
 
    //configurations 
-   .period(perB),
-   .start(startB),
-   .incr(incrB),
-   .delay(delay1),
+   .period_i(perB),
+   .start_i(startB),
+   .incr_i(incrB),
+   .delay_i(delay1),
 
    `ifdef COMPLEX_INTERFACE
-   .iterations(iterB),
-   .duty(dutyB),
-   .shift(shiftB),
+   .iterations_i(iterB),
+   .duty_i(dutyB),
+   .shift_i(shiftB),
    `endif
 
    //outputs 
-   .valid(enB),
-   .ready(1'b1),
-   .addr(addrB_int),
-   .done(doneB)
+   .valid_o(enB),
+   .ready_i(1'b1),
+   .addr_o(addrB_int),
+   .done_o(doneB)
    );
 
    /*

@@ -54,7 +54,7 @@ int @{name};
 static const int memMappedStart = @{memoryMappedBase |> Hex};
 static const int versatAddressSpace = 2 * @{memoryMappedBase |> Hex};
 
-extern int versat_base;
+extern iptr versat_base;
 
 // Base address for each memory mapped unit
 #{for pair namedMem}

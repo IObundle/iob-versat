@@ -43,6 +43,8 @@ class iob_versat(iob_module):
                                 "-T",versat_top,
                                 "-O",versat_dir + "/hardware/src/units", # Location of versat units
                                 #"-S",versat_dir + "/submodules/FPU/hardware/src/",
+                                "-I",versat_dir + "/hardware/include/",
+                                "-I",versat_dir + "/hardware/src/",
                                 "-I",versat_dir + "/submodules/FPU/hardware/src/",
                                 "-I",versat_dir + "/submodules/FPU/hardware/include/",
                                 "-I",versat_dir + "/submodules/FPU/submodules/DIV/hardware/src/",
@@ -51,8 +53,14 @@ class iob_versat(iob_module):
                                 "-o",build_dir + "/hardware/src" # Output hardware files
                                 ]
 
+        print(*versat_args)
+        result = sp.call(versat_args)
+
         shutil.copytree(
             f"{versat_dir}/hardware/src/units", f"{build_dir}/hardware/src",dirs_exist_ok = True
+        )
+        shutil.copytree(
+            f"{build_dir}/hardware/src/modules", f"{build_dir}/hardware/src",dirs_exist_ok = True
         )
         # FPU and DIV should be changed to support python-setup but for now we hack away
         shutil.copytree(
@@ -64,9 +72,6 @@ class iob_versat(iob_module):
         shutil.copytree(
             f"{versat_dir}/submodules/FPU/submodules/DIV/hardware/src", f"{build_dir}/hardware/src",dirs_exist_ok = True
         )
-
-        print(*versat_args)
-        result = sp.call(versat_args)
 
         #exit(0);
 

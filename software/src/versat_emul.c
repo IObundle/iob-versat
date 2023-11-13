@@ -21,22 +21,7 @@ typedef struct FUDeclaration FUDeclaration;
 volatile AcceleratorConfig* accelConfig = nullptr;
 volatile AcceleratorState* accelState = nullptr;
 
-int versat_base;
-
-#ifdef __cplusplus
-extern "C"{
-#endif
-
-#if 0
-Versat* InitVersatC(int base,int numberConfigurations,bool initUnits);
-void DebugAcceleratorC(Accelerator* accel);
-void RegisterAllVerilogUnitsVerilog(Versat* versat);
-Accelerator* CreateSimulableAccelerator(Versat* versat,const char* typeName);
-void AcceleratorRunC(Accelerator* accel,int times);
-void UnitWrite(Versat* versat,Accelerator* accel,int addrArg,int val);
-int UnitRead(Versat* versat,Accelerator* accel,int addr);
-void SignalLoopC(Accelerator* accel);
-#endif
+iptr versat_base;
 
 // Functions exported by wrapper that allow the accelerator to be simulated
 void InitializeVerilator();
@@ -45,10 +30,6 @@ void VersatAcceleratorSimulate();
 
 AcceleratorConfig* GetStartOfConfig();
 AcceleratorState* GetStartOfState();
-
-#ifdef __cplusplus
-}
-#endif
 
 bool CreateVCD;
 bool SimulateDatabus;

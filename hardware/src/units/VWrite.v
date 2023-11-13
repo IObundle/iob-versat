@@ -147,51 +147,51 @@ module VWrite #(
    localparam DIFF_BIT_W = $clog2(DIFF);
 
    SimpleAddressGen #(.ADDR_W(ADDR_W),.DATA_W(AXI_DATA_W)) addrgenA(
-      .clk(clk),
-      .rst(rst),
-      .run(run),
+      .clk_i(clk),
+      .rst_i(rst),
+      .run_i(run),
 
       //configurations 
-      .period(perA),
-      .delay(delayA),
-      .start(startA),
-      .incr(incrA),
+      .period_i(perA),
+      .delay_i(delayA),
+      .start_i(startA),
+      .incr_i(incrA),
 
       `ifdef COMPLEX_INTERFACE
-      .iterations(iterA),
-      .duty(dutyA),
-      .shift(shiftA),
+      .iterations_i(iterA),
+      .duty_i(dutyA),
+      .shift_i(shiftA),
       `endif
 
       //outputs 
-      .valid(gen_valid),
-      .ready(gen_ready),
-      .addr(gen_addr),
-      .done(gen_done)
+      .valid_o(gen_valid),
+      .ready_i(gen_ready),
+      .addr_o(gen_addr),
+      .done_o(gen_done)
       );
 
    SimpleAddressGen #(.ADDR_W(ADDR_W),.DATA_W(DATA_W)) addrgenB(
-      .clk(clk),
-      .rst(rst),
-      .run(run),
+      .clk_i(clk),
+      .rst_i(rst),
+      .run_i(run),
 
       //configurations 
-      .period(perB),
-      .delay(delay0),
-      .start(startB_inst),
-      .incr(incrB),
+      .period_i(perB),
+      .delay_i(delay0),
+      .start_i(startB_inst),
+      .incr_i(incrB),
 
       `ifdef COMPLEX_INTERFACE
-      .iterations(iterB),
-      .duty(dutyB),
-      .shift(shiftB),
+      .iterations_i(iterB),
+      .duty_i(dutyB),
+      .shift_i(shiftB),
       `endif
 
       //outputs 
-      .valid(enB),
-      .ready(1'b1),
-      .addr(addrB_int),
-      .done(doneB_int)
+      .valid_o(enB),
+      .ready_i(1'b1),
+      .addr_o(addrB_int),
+      .done_o(doneB_int)
       );
 
    /*
@@ -228,24 +228,24 @@ module VWrite #(
    MemoryReader #(.ADDR_W(ADDR_W),.DATA_W(AXI_DATA_W))
    reader(
       // Slave
-      .s_valid(gen_valid),
-      .s_ready(gen_ready),
-      .s_addr(gen_addr),
+      .s_valid_i(gen_valid),
+      .s_ready_o(gen_ready),
+      .s_addr_i(gen_addr),
 
       // Master
-      .m_valid(m_valid),
-      .m_ready(databus_ready_0),
-      .m_addr(),
-      .m_data(databus_wdata_0),
-      .m_last(databus_last_0),
+      .m_valid_o(m_valid),
+      .m_ready_i(databus_ready_0),
+      .m_addr_o(0),
+      .m_data_o(databus_wdata_0),
+      .m_last_i(databus_last_0),
 
       // Connect to memory
-      .mem_enable(read_en),
-      .mem_addr(read_addr),
-      .mem_data(read_data),
+      .mem_enable_o(read_en),
+      .mem_addr_o(read_addr),
+      .mem_data_i(read_data),
 
-      .clk(clk),
-      .rst(rst)
+      .clk_i(clk),
+      .rst_i(rst)
    );
 
    /*

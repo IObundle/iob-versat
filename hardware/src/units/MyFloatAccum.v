@@ -49,7 +49,7 @@ module MyFloatAccum #(
 
 // Stage 1 - Decode in0
 
-   FloatToLargeInteger conv(.in(in0),.out(in0_decoded));
+   FloatToLargeInteger conv(.in_i(in0),.out_o(in0_decoded));
 
    reg [278:0] in0_decoded_reg;
    always @(posedge clk,posedge rst) begin

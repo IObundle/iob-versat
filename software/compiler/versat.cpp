@@ -1576,7 +1576,7 @@ FUDeclaration* RegisterSubUnit(Versat* versat,String name,Accelerator* circuit){
 #if 1
   if(versat->debug.outputAccelerator){
     char buffer[256];
-    sprintf(buffer,"%.*s/%.*s.v",UNPACK_SS(versat->outputLocation),UNPACK_SS(decl.name));
+    sprintf(buffer,"%.*s/modules/%.*s.v",UNPACK_SS(versat->outputLocation),UNPACK_SS(decl.name));
     FILE* sourceCode = OpenFileAndCreateDirectories(buffer,"w");
     OutputCircuitSource(versat,res,circuit,sourceCode);
     fclose(sourceCode);

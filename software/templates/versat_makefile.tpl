@@ -3,8 +3,9 @@
 
 TYPE_NAME := @{typename}
 
-#HARDWARE_SRC := #{join " " for file verilogFiles}@{file}#{end} @{hack}
-HARDWARE_SRC := $(wildcard @{generatedUnitsLocation}/*.v) @{hack}
+HARDWARE_SRC := #{join " " for file verilogFiles}@{file}#{end} @{hack}
+#HARDWARE_SRC := $(wildcard @{generatedUnitsLocation}/*.v) @{hack}
+HARDWARE_SRC += $(wildcard @{generatedUnitsLocation}/modules/*.v)
 
 #{for source extraSources}
 HARDWARE_SRC += $(wildcard @{source}/*.v) @{hack}

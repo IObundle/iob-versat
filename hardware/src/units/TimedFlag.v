@@ -69,17 +69,17 @@ wire loadNext;
 reg nextValue;
 
 MemoryScanner #(.DATA_W(DATA_W),.ADDR_W(ADDR_W)) scanner(
-   .addr(ext_dp_addr_0_port_0),
-   .dataIn(ext_dp_in_0_port_0),
-   .enable(ext_dp_enable_0_port_0),
+   .addr_o(ext_dp_addr_0_port_0),
+   .dataIn_i(ext_dp_in_0_port_0),
+   .enable_o(ext_dp_enable_0_port_0),
    
-   .nextValue(nextValue),
-   .currentValue(currentValue),
+   .nextValue_i(nextValue),
+   .currentValue_o(currentValue),
 
-   .reset(run),
+   .reset_i(run),
 
-   .clk(clk),
-   .rst(rst)
+   .clk_i(clk),
+   .rst_i(rst)
    );
 
 reg [31:0] needToSee;

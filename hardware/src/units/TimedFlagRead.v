@@ -73,17 +73,17 @@ reg nextValue;
 wire [ADDR_W-1:0] scannerAddress;
 
 MemoryScanner #(.DATA_W(SIZE_W),.ADDR_W(ADDR_W)) scanner(
-   .addr(scannerAddress),
-   .dataIn(ext_dp_in_0_port_0),
-   .enable(ext_dp_enable_0_port_0),
+   .addr_o(scannerAddress),
+   .dataIn_i(ext_dp_in_0_port_0),
+   .enable_o(ext_dp_enable_0_port_0),
    
-   .nextValue(nextValue),
-   .currentValue(currentValue),
+   .nextValue_i(nextValue),
+   .currentValue_o(currentValue),
 
-   .reset(run),
+   .reset_i(run),
 
-   .clk(clk),
-   .rst(rst)
+   .clk_i(clk),
+   .rst_i(rst)
    );
 
 assign ext_dp_addr_0_port_0 = {!pingPongState,scannerAddress[ADDR_W-2:0]};
@@ -149,24 +149,24 @@ assign out0 = ((delay == 0 && !disabled && stillValid) ? {32{(in0[SIZE_W-1:0] ==
    wire gen_done;
 
    MyAddressGen #(.ADDR_W(ADDR_W),.DATA_W(AXI_DATA_W),.PERIOD_W(ADDR_W)) addrgenA(
-      .clk(clk),
-      .rst(rst),
-      .run(run),
+      .clk_i(clk),
+      .rst_i(rst),
+      .run_i(run),
 
       //configurations 
-      .iterations(iterA),
-      .period(perA),
-      .duty(dutyA),
-      .delay(delayA),
-      .start(startA),
-      .shift(shiftA),
-      .incr(incrA),
+      .iterations_i(iterA),
+      .period_i(perA),
+      .duty_i(dutyA),
+      .delay_i(delayA),
+      .start_i(startA),
+      .shift_i(shiftA),
+      .incr_i(incrA),
 
       //outputs 
-      .valid(),
-      .ready(gen_ready),
-      .addr(gen_addr),
-      .done(gen_done)
+      .valid_o(),
+      .ready_i(gen_ready),
+      .addr_o(gen_addr),
+      .done_o(gen_done)
       );
 
    wire write_en;
@@ -188,22 +188,22 @@ assign out0 = ((delay == 0 && !disabled && stillValid) ? {32{(in0[SIZE_W-1:0] ==
 
    MemoryWriter #(.ADDR_W(ADDR_W),.DATA_W(AXI_DATA_W)) 
    writer(
-      .gen_valid(gen_valid),
-      .gen_ready(gen_ready),
-      .gen_addr(gen_addr),
+      .gen_valid_i(gen_valid),
+      .gen_ready_o(gen_ready),
+      .gen_addr_i(gen_addr),
 
       // Slave connected to data source
-      .data_valid(databus_ready_0),
-      .data_ready(databus_valid_0),
-      .data_in(databus_rdata_0),
+      .data_valid_i(databus_ready_0),
+      .data_ready_o(databus_valid_0),
+      .data_in_i(databus_rdata_0),
 
       // Connect to memory
-      .mem_enable(write_en),
-      .mem_addr(write_addr),
-      .mem_data(write_data),
+      .mem_enable_o(write_en),
+      .mem_addr_o(write_addr),
+      .mem_data_o(write_data),
 
-      .clk(clk),
-      .rst(rst)
+      .clk_i(clk),
+      .rst_i(rst)
       );
 
    assign ext_dp_addr_0_port_1 = {pingPongState,write_addr[ADDR_W-2:0]}; // This should increament by 4 more.
