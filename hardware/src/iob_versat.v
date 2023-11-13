@@ -21,13 +21,13 @@ module iob_versat
      parameter WDATA_W = 32
      )
    (
-    input                   avalid_i,
-    input [ADDR_W-1:0]      addr_i,
-    input [ DATA_W-1:0]     wdata_i,
-    input [ (DATA_W/8)-1:0] wstrb_i,
-    output [ DATA_W-1:0]    rdata_o,
-    output                  rvalid_o,
-    output                  ready_o,
+    input                   iob_avalid_i,
+    input [ADDR_W-1:0]      iob_addr_i,
+    input [ DATA_W-1:0]     iob_wdata_i,
+    input [ (DATA_W/8)-1:0] iob_wstrb_i,
+    output                  iob_rvalid_o,
+    output [ DATA_W-1:0]    iob_rdata_o,
+    output                  iob_ready_o,
 
 `ifdef VERSAT_EXTERNAL_MEMORY
  `include "versat_external_memory_port.vh"
@@ -43,9 +43,13 @@ module iob_versat
     output [31:0]           out0_o,
 `endif
 
+    input                   cke_i,
     input                   clk_i,
+    input                   arst_i,
     input                   rst_i
 	);
+
+assign iob_ready_o = 1'b1;
 
 localparam LEN_W = `LEN_W;
 localparam IO = `nIO;
@@ -135,13 +139,14 @@ SimpleAXItoAXI #(
 
 `endif
 
+// For now keep the versat_instance using old names (no _i or _o)
 versat_instance #(.ADDR_W(ADDR_W),.DATA_W(DATA_W),.AXI_DATA_W(AXI_DATA_W),.LEN_W(LEN_W)) xversat(
-      .valid(valid),
-      .wstrb(wstrb),
-      .addr(address),
-      .rdata(rdata),
-      .wdata(wdata),
-      .ready(ready),
+      .valid(iob_avalid_i),
+      .wstrb(iob_wstrb_i),
+      .addr(iob_addr_i >> 2), // Address is now byte space so for now simple hack it into the dword space previously used
+      .wdata(iob_wdata_i),
+      .rdata(iob_rdata_o),
+      .ready(iob_rvalid_o),
 
 `ifdef VERSAT_EXTERNAL_MEMORY
       `include "versat_external_memory_portmap.vh"
@@ -159,13 +164,13 @@ versat_instance #(.ADDR_W(ADDR_W),.DATA_W(DATA_W),.AXI_DATA_W(AXI_DATA_W),.LEN_W
 `endif
 
 `ifdef EXTERNAL_PORTS
-      .in0_i(in0_i),
-      .in1_i(in1_i),
-      .out0_o(out0_o),
+      .in0(in0_i),
+      .in1(in1_i),
+      .out0(out0_o),
 `endif
 
-      .clk_i(clk_i),
-      .rst_i(rst_i)
+      .clk(clk_i),
+      .rst(rst_i)
 ); 
 
 endmodule // iob_versat

@@ -2,6 +2,7 @@
 
 import os
 import sys
+import shutil
 import subprocess as sp
 
 from iob_module import iob_module
@@ -47,8 +48,22 @@ class iob_versat(iob_module):
                                 "-I",versat_dir + "/submodules/FPU/submodules/DIV/hardware/src/",
                                 "-O",versat_extra,
                                 "-H",build_dir + "/software", # Output software files
-                                "-o",build_dir + "/hardware/src/units" # Output hardware files
+                                "-o",build_dir + "/hardware/src" # Output hardware files
                                 ]
+
+        shutil.copytree(
+            f"{versat_dir}/hardware/src/units", f"{build_dir}/hardware/src",dirs_exist_ok = True
+        )
+        # FPU and DIV should be changed to support python-setup but for now we hack away
+        shutil.copytree(
+            f"{versat_dir}/submodules/FPU/hardware/src", f"{build_dir}/hardware/src",dirs_exist_ok = True
+        )
+        shutil.copytree(
+            f"{versat_dir}/submodules/FPU/hardware/include", f"{build_dir}/hardware/src",dirs_exist_ok = True
+        )
+        shutil.copytree(
+            f"{versat_dir}/submodules/FPU/submodules/DIV/hardware/src", f"{build_dir}/hardware/src",dirs_exist_ok = True
+        )
 
         print(*versat_args)
         result = sp.call(versat_args)
@@ -122,24 +137,24 @@ class iob_versat(iob_module):
                 "descr": "VERSAT software accessible registers.",
                 "regs": [
                     {
-                        "name": "CONFIG",
+                        "name": "MAX_CONFIG",
                         "type": "W",
                         "n_bits": 32,
                         "rst_val": 0,
-                        "addr": 0,
+                        "addr": (2**16)-8, # -8 becuase -4 allocates 17 bits
                         "log2n_items": 0,
                         "autoreg": False,
-                        "descr": "CONFIG",
+                        "descr": "Force iob_soc to allocate 16 bits of address for versat",
                     },
                     {
-                        "name": "STATUS",
+                        "name": "MAX_STATUS",
                         "type": "R",
                         "n_bits": 32,
                         "rst_val": 0,
-                        "addr": 0,
+                        "addr": (2**16)-8, # -8 becuase -4 allocates 17 bits
                         "log2n_items": 0,
                         "autoreg": False,
-                        "descr": "STATUS",
+                        "descr": "Force iob_soc to allocate 16 bits of address for versat",
                     },
                 ],
             }
