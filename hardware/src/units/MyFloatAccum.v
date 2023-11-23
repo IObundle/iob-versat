@@ -81,8 +81,8 @@ module MyFloatAccum #(
    // Repack
    wire [8:0] lzc,nlzc;
    wire [278:0] negatedAccum = -accum;
-   clz #(.DATA_W(279)) count(.data_in(accum),.data_out(lzc));
-   clz #(.DATA_W(279)) countNeg(.data_in(negatedAccum),.data_out(nlzc));
+   iob_fp_clz #(.DATA_W(279)) count(.data_i(accum),.data_o(lzc));
+   iob_fp_clz #(.DATA_W(279)) countNeg(.data_i(negatedAccum),.data_o(nlzc));
 
    reg sign_reg;
    reg [7:0] exponent;

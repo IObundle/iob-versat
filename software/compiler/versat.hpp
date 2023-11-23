@@ -1,13 +1,12 @@
 #ifndef INCLUDED_VERSAT_HPP
 #define INCLUDED_VERSAT_HPP
 
-#include "utils.hpp"
-
 #include <vector>
 #include <unordered_map>
 
-#include "memory.hpp"
-#include "logger.hpp"
+#include "../common/utils.hpp"
+#include "../common/memory.hpp"
+#include "../common/logger.hpp"
 
 #include "accelerator.hpp"
 #include "configurations.hpp"

@@ -34,21 +34,21 @@ end
 
 wire [DATA_W-1:0] mul_out;
 
-fp_mul Mul(
-    .clk(clk),
-    .rst(rst),
+iob_fp_mul Mul(
+    .clk_i(clk),
+    .rst_i(rst),
 
-    .start(1'b1),
-    .done(),
+    .start_i(1'b1),
+    .done_o(),
 
-    .op_a(in0),
-    .op_b(in1),
+    .op_a_i(in0),
+    .op_b_i(in1),
 
-    .overflow(),
-    .underflow(),
-    .exception(),
+    .overflow_o(),
+    .underflow_o(),
+    .exception_o(),
 
-    .res(mul_out)
+    .res_o(mul_out)
      );
 
 assign out0 = (running && (|delay) == 0) ? mul_out : 0;

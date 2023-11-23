@@ -17,9 +17,9 @@ module WideAdapter
     output [OUTPUT_W-1:0] out_o
     );
 
-localparam DIFF_W = $clog2(IN_IPUT_W / SIZE_W);
+localparam DIFF_W = $clog2(INPUT_W / SIZE_W);
 
-ZeroExtend #(.IN_IPUT_W(SIZE_W),.OUT_OPUT_W(OUT_OPUT_W)) extend
+ZeroExtend #(.INPUT_W(SIZE_W),.OUTPUT_W(OUTPUT_W)) extend
    (
       .in_i(in_i[sel_i * SIZE_W +: SIZE_W]),
       .out_o(out_o)

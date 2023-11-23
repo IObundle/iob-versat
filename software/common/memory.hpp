@@ -54,12 +54,16 @@ void PopMark(Arena* arena,Byte* mark);
 Byte* PushBytes(Arena* arena, size_t size);
 size_t SpaceAvailable(Arena* arena);
 String PointArena(Arena* arena,Byte* mark);
-String PushFile(Arena* arena,const char* filepath);
 String PushChar(Arena* arena,const char);
 String PushString(Arena* arena,String ss);
 String PushString(Arena* arena,const char* format,...) __attribute__ ((format (printf, 2, 3)));
 String vPushString(Arena* arena,const char* format,va_list args);
 void PushNullByte(Arena* arena);
+
+// TODO: Maybe add Optional to indicate error opening file
+//       In general error handling is pretty lacking overall.
+String PushFile(Arena* arena,FILE* file);
+String PushFile(Arena* arena,const char* filepath);
 
 class ArenaMarker{
 public:

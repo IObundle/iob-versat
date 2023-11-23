@@ -32,11 +32,17 @@ struct FindFirstResult{
   Token peekFindNotIncluded;
 };
 
+// TODO: Vast majority of extra functions could be removed if we allowed a quick change in
+//       the values for single char, special chars and other configurations (like parse words or something like that)
+//       Changing the tokenizer to allow this greater amount of freedom would simplify future changes. Things like
+//       FindFirst and stuff are just a product of not being able to change things on the fly. 
 class Tokenizer{
   const char* start;
   const char* ptr;
   const char* end;
   int lines;
+
+public:
   std::string singleChars; // TODO: Why use string instead of sized string?
   std::vector<std::string> specialChars; // TODO: Why use string instead of sized string?
 
@@ -65,7 +71,7 @@ public:
   Token PeekFindIncluding(const char* str);
   Token PeekFindIncludingLast(const char* str);
   Token NextFindUntil(const char* str);
-
+  
   String GetStartOfCurrentLine();
 
   bool IfPeekToken(const char* str);
@@ -88,6 +94,7 @@ public:
 
   void SetSingleChars(const char* singleChars);
   bool Done();
+  Token Remaining();
   int Lines(){return lines;};
 
   bool IsSpecialOrSingle(String toTest);

@@ -4,32 +4,35 @@
 #include <cstdlib>
 #include <cstring>
 #else
+#define nullptr 0
 #include <string.h>
 #include <stdbool.h>
 #endif
 
-#define IMPLEMENT_VERILOG_UNITS
 #define ARRAY_SIZE(arr) (sizeof(arr) / sizeof(arr[0]))
-#define nullptr 0
 
-typedef struct Versat Versat;
-typedef struct Accelerator Accelerator;
-typedef struct FUDeclaration FUDeclaration;
-
-//static Versat* versat = nullptr;
-//static Accelerator* accel = nullptr;
 volatile AcceleratorConfig* accelConfig = nullptr;
 volatile AcceleratorState* accelState = nullptr;
 
 iptr versat_base;
 
 // Functions exported by wrapper that allow the accelerator to be simulated
+
+#ifdef __cplusplus
+extern "C"{
+#endif
+
 void InitializeVerilator();
 void VersatAcceleratorCreate();
 void VersatAcceleratorSimulate();
+int MemoryAccess(int address,int value,int write);
 
 AcceleratorConfig* GetStartOfConfig();
 AcceleratorState* GetStartOfState();
+
+#ifdef __cplusplus
+}
+#endif
 
 bool CreateVCD;
 bool SimulateDatabus;
@@ -72,45 +75,30 @@ void RunAccelerator(int times){
 }
 
 void VersatMemoryCopy(void* dest,void* data,int size){
-   memcpy(dest,data,size);
+  memcpy(dest,data,size);
 }
 
-#if 0
 void StartAccelerator(){
-  RunAccelerator(1);
+  VersatAcceleratorSimulate();
 }
 
 void EndAccelerator(){
    // Do nothing. Start accelerator does everything, for now
 }
 
-void RunAccelerator(int times){
-   AcceleratorRunC(accel,times);
-}
-
-void VersatMemoryCopy(void* dest,void* data,int size){
-   memcpy(dest,data,size);
-}
-
 void VersatUnitWrite(int baseaddr,int index,int val){
   int addr = baseaddr + (index * sizeof(int)) - (versat_base + memMappedStart); // Convert back to zero based address
-  UnitWrite(versat,accel,addr,val);
+  MemoryAccess(addr,val,1);
 }
 
 int VersatUnitRead(int baseaddr,int index){
   int addr = baseaddr + (index * sizeof(int)) - (versat_base + memMappedStart); // Convert back to zero based byte space address
-   return UnitRead(versat,accel,addr);
+  int res = MemoryAccess(addr,0,0);
+  return res;
 }
 
 float VersatUnitReadFloat(int base,int index){
-   int addr = base + (index * sizeof(int)) - (versat_base + memMappedStart); // Convert back to zero based byte space address
-   int value = UnitRead(versat,accel,addr);
-   float* view = (float*) &value;
-   return *view;
+  int res = VersatUnitRead(base,index);
+  float* view = (float*) &res;
+  return *view;
 }
-
-void SignalLoop(){
-   SignalLoopC(accel);
-   // Do nothing, for now
-}
-#endif

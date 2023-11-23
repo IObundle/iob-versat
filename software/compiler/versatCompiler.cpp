@@ -347,8 +347,12 @@ String GetVerilatorRoot(Arena* out,Arena* temp){
   BLOCK_REGION(temp);
 
   int res = 0;
+
+  String tempDir = PushString(temp,"/tmp/versatTmp_%d",getpid());
+  PushNullByte(temp);
+  const char* tempDirC = tempDir.data;
   
-  res = mkdir("/tmp/versatTmp",0770);
+  res = mkdir(tempDirC,0770);
   if(res == -1 && errno != EEXIST){
     printf("Problem making tmp directory errno: %d\n",errno);
     exit(-1);
@@ -356,8 +360,8 @@ String GetVerilatorRoot(Arena* out,Arena* temp){
 
   String testFile = PushString(temp,"`timescale 1ns / 1ps\nmodule Test(); endmodule");
   PushNullByte(temp);
-  
-  FILE* f = fopen("/tmp/versatTmp/Test.v","w");
+
+  FILE* f = fopen(StaticFormat("%.*s/Test.v",UNPACK_SS(tempDir)),"w");
   if(f == nullptr){
     printf("Error creating file\n");
     exit(-1);
@@ -373,9 +377,9 @@ String GetVerilatorRoot(Arena* out,Arena* temp){
   fflush(f);
   fclose(f);
 
-  CallVerilator("/tmp/versatTmp/Test.v","/tmp/versatTmp");
+  CallVerilator(StaticFormat("%.*s/Test.v",UNPACK_SS(tempDir)),tempDirC);
 
-  String fileContent = PushFile(temp,"/tmp/versatTmp/VTest.mk");
+  String fileContent = PushFile(temp,StaticFormat("%.*s/VTest.mk",UNPACK_SS(tempDir)));
 
   if(fileContent.size == 0){
     printf("Problem opening verilator generated file\n");
@@ -405,7 +409,7 @@ String GetVerilatorRoot(Arena* out,Arena* temp){
     }
   }
   
-  RemoveDirectory("/tmp/versatTmp");
+  RemoveDirectory(tempDirC);
   
   return root;
 }

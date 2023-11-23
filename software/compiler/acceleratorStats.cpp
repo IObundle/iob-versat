@@ -17,21 +17,43 @@ bool VerifyExternalMemory(ExternalMemoryInterface* inter){
   return res;
 }
 
+// Function that calculates byte offset from size of data_w
+int DataWidthToByteOffset(int dataWidth){
+  // 0-8 : 0,
+  // 9-16 : 1
+  // 17 - 32 : 2,
+  // 33 - 64 : 3
+
+  // 0 : 0
+  // 8 : 0
+
+  if(dataWidth == 0){
+    return 0;
+  }
+
+  int res = log2i((dataWidth - 1) / 8);
+  return res;
+}
+
 int ExternalMemoryByteSize(ExternalMemoryInterface* inter){
   Assert(VerifyExternalMemory(inter));
 
+  // TODO: The memories size and address is still error prone. We should just store the total size and the address width in the structures (and then we can derive the data width from the given address width and the total size). Storing data width and address size at the same time gives more degrees of freedom than need. The parser is responsible to ensuring that data is given in the correct format and this code should never have to worry about having to deal with values out of phase
   int addressBitSize = 0;
+  int byteOffset = 0;
   switch(inter->type){
   case ExternalMemoryType::TWO_P:{
     addressBitSize = inter->tp.bitSizeIn;
+    byteOffset = std::min(DataWidthToByteOffset(inter->tp.dataSizeIn),DataWidthToByteOffset(inter->tp.dataSizeOut));
   }break;
   case ExternalMemoryType::DP:{
     addressBitSize = inter->dp[0].bitSize;
+    byteOffset = std::min(DataWidthToByteOffset(inter->dp[0].dataSizeIn),DataWidthToByteOffset(inter->dp[1].dataSizeIn));
   }break;
   default: NOT_IMPLEMENTED;
   }
 
-  int byteSize = (1 << addressBitSize);
+  int byteSize = (1 << (addressBitSize + byteOffset));
 
   return byteSize;
 }

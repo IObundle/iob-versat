@@ -383,7 +383,9 @@ static Value EvalExpression(Expression* expr,Frame* frame,Arena* temp){
 
             auto iter = pipeFunctions.find(expr->expressions[1]->id);
             if(iter == pipeFunctions.end()){
-               NOT_IMPLEMENTED;
+              printf("Did not find the following pipe function\n");
+              printf("%.*s\n",UNPACK_SS(expr->expressions[1]->id));
+              NOT_IMPLEMENTED;
             }
 
             PipeFunction func = iter->second;

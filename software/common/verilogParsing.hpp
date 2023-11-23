@@ -51,7 +51,7 @@ typedef WireTemplate<ExpressionRange> WireExpression;
 
 enum ExternalMemoryType{TWO_P = 0,DP}; // Two ports: one input and one output (think FIFO). Dual port: two input or output ports (think LUT)
 
-// TODO: Because we changed memories to be byte space instead of symbol space, maybe it would be best to change how the address bit size is stored. These structures are supposed to be clean, and so the parser should identify any differences in address size and report and error. These structures should only have one address if we keep going with the byte space memories idea.
+// TODO: Because we changed memories to be byte space instead of symbol space, maybe it would be best to change how the address bit size is stored. These structures are supposed to be clean, and so the parser should identify any differences in address size and report an error. These structures should only have one address if we keep going with the byte space memories idea and the data size is used to calculate the bitSize for each respective port
 template<typename T>
 struct ExternalMemoryTwoPortsTemplate{ // tp
   T bitSizeIn;

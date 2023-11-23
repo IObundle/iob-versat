@@ -235,7 +235,7 @@ module VWrite #(
       // Master
       .m_valid_o(m_valid),
       .m_ready_i(databus_ready_0),
-      .m_addr_o(0),
+      .m_addr_o(),
       .m_data_o(databus_wdata_0),
       .m_last_i(databus_last_0),
 

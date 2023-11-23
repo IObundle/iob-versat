@@ -32,22 +32,22 @@ module SimpleAddressGen
 
 localparam OFFSET_W = $clog2(DATA_W/8);
 
-reg [DELAY_I_W-1:0] delay_iCounter;
+reg [DELAY_W-1:0] delay_Counter;
 
-reg [PERIOD_I_W - 1:0] per;
+reg [PERIOD_W - 1:0] per;
 
 wire perCond = (per + 1) >= period_i; /* Do not know why there was a "period_i >> OFFSET_W" */
 
 always @(posedge clk_i,posedge rst_i)
 begin
    if(rst_i) begin
-      delay_iCounter <= 0;
+      delay_Counter <= 0;
       addr_o <= 0;
       per <= 0;
       valid_o <= 0;
       done_o <= 1'b0;
    end else if(run_i) begin
-      delay_iCounter <= delay_i;
+      delay_Counter <= delay_i;
       addr_o <= start_i;
       per <= 0;
       valid_o <= 0;
@@ -55,8 +55,8 @@ begin
       if(delay_i == 0) begin
          valid_o <= 1'b1;
       end
-   end else if(|delay_iCounter) begin
-      delay_iCounter <= delay_iCounter - 1;
+   end else if(|delay_Counter) begin
+      delay_Counter <= delay_Counter - 1;
       valid_o <= 1'b1;
    end else if(valid_o && ready_i) begin
       if(perCond) begin

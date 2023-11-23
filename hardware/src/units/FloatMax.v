@@ -18,19 +18,19 @@ module FloatMax #(
     (* versat_latency = 1 *) output [DATA_W-1:0]       out0
     );
 
-fp_minmax max(
-     .start(1'bx),
-     .done(),
+iob_fp_minmax min(
+     .start_i(1'bx),
+     .done_o(),
 
-     .op_a(in0),
-     .op_b(in1),
+     .op_a_i(in0),
+     .op_b_i(in1),
 
-     .res(out0),
+     .res_o(out0),
 
-     .max_n_min(1'b1),
+     .max_n_min_i(1'b1),
 
-     .clk(clk),
-     .rst(rst)
+     .clk_i(clk),
+     .rst_i(rst)
      );
 
 endmodule

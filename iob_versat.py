@@ -16,6 +16,7 @@ from iob_ram_sp import iob_ram_sp
 from iob_reg import iob_reg
 from iob_reg_re import iob_reg_re
 from iob_ram_sp_be import iob_ram_sp_be
+#from iob_fp_fpu import iob_fp_fpu # Will also import all the other fp files
 
 class iob_versat(iob_module):
     name = "iob_versat"
@@ -48,13 +49,28 @@ class iob_versat(iob_module):
                                 "-I",versat_dir + "/submodules/FPU/hardware/src/",
                                 "-I",versat_dir + "/submodules/FPU/hardware/include/",
                                 "-I",versat_dir + "/submodules/FPU/submodules/DIV/hardware/src/",
+                                "-I",build_dir  + "/hardware/src/", # TODO: If this works then all the other "versat_dir + ..." could be removed
                                 "-O",versat_extra,
                                 "-H",build_dir + "/software", # Output software files
                                 "-o",build_dir + "/hardware/src" # Output hardware files
                                 ]
 
+        # Set True to add debugger
+        if(False):
+            versat_args = ["gdb","-iex","set auto-load safe-path /","--args"] + versat_args
+
         print(*versat_args)
         result = sp.call(versat_args)
+
+        if(result != 0):
+            print("Failed to generate accelerator\n")
+            exit(result)
+
+        # Removes folders used when compiling versat but not needed by the runtime
+        shutil.rmtree(f"{build_dir}/software/common")
+        shutil.rmtree(f"{build_dir}/software/compiler")
+        shutil.rmtree(f"{build_dir}/software/templates")
+        shutil.rmtree(f"{build_dir}/software/tools")
 
         shutil.copytree(
             f"{versat_dir}/hardware/src/units", f"{build_dir}/hardware/src",dirs_exist_ok = True
@@ -62,26 +78,6 @@ class iob_versat(iob_module):
         shutil.copytree(
             f"{build_dir}/hardware/src/modules", f"{build_dir}/hardware/src",dirs_exist_ok = True
         )
-        # FPU and DIV should be changed to support python-setup but for now we hack away
-        shutil.copytree(
-            f"{versat_dir}/submodules/FPU/hardware/src", f"{build_dir}/hardware/src",dirs_exist_ok = True
-        )
-        shutil.copytree(
-            f"{versat_dir}/submodules/FPU/hardware/include", f"{build_dir}/hardware/src",dirs_exist_ok = True
-        )
-        shutil.copytree(
-            f"{versat_dir}/submodules/FPU/submodules/DIV/hardware/src", f"{build_dir}/hardware/src",dirs_exist_ok = True
-        )
-
-        #exit(0);
-
-        if(result != 0):
-            print("Failed to generate accelerator\n")
-            exit(result)
-
-        #sp.call(["verilator"])
-        #sp.call(["versat","versat_spec","-T","versat_top"])
-        #exit(0)
 
     @classmethod
     def _init_attributes(cls):
@@ -126,11 +122,13 @@ class iob_versat(iob_module):
         ''' Create submodules list with dependencies of this module
         '''
         super()._create_submodules_list([
+            iob_fifo_sync,
             {"interface": "axi_m_m_portmap"},
             {"interface": "axi_m_write_port"},
             {"interface": "axi_m_m_write_portmap"},
             {"interface": "axi_m_read_port"},
             {"interface": "axi_m_m_read_portmap"},
+            #iob_fp_fpu # Imports all the FPU related files
         ])
 
     @classmethod
@@ -146,7 +144,7 @@ class iob_versat(iob_module):
                         "type": "W",
                         "n_bits": 32,
                         "rst_val": 0,
-                        "addr": (2**16)-8, # -8 becuase -4 allocates 17 bits
+                        "addr": (2**16)-8, # -8 because -4 allocates 17 bits
                         "log2n_items": 0,
                         "autoreg": False,
                         "descr": "Force iob_soc to allocate 16 bits of address for versat",
@@ -156,7 +154,7 @@ class iob_versat(iob_module):
                         "type": "R",
                         "n_bits": 32,
                         "rst_val": 0,
-                        "addr": (2**16)-8, # -8 becuase -4 allocates 17 bits
+                        "addr": (2**16)-8, # -8 because -4 allocates 17 bits
                         "log2n_items": 0,
                         "autoreg": False,
                         "descr": "Force iob_soc to allocate 16 bits of address for versat",

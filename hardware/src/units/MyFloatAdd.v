@@ -40,12 +40,12 @@ module MyFloatAdd #(
      
    // Repack
    wire [8:0] lzc;
-   clz #(.DATA_W(279)) count(.data_in(res),.data_out(lzc));
+   iob_fp_clz #(.DATA_W(279)) count(.data_i(res),.data_o(lzc));
 
    wire [278:0] negatedRes = -res;
 
    wire [8:0] nlzc; // Negative
-   clz #(.DATA_W(279)) countNeg(.data_in(negatedRes),.data_out(nlzc));
+   iob_fp_clz #(.DATA_W(279)) countNeg(.data_i(negatedRes),.data_o(nlzc));
 
    wire sign = res[278];
 

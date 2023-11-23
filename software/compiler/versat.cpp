@@ -20,7 +20,6 @@
 #include "unitVerilation.hpp"
 #include "verilogParsing.hpp"
 #include "acceleratorStats.hpp"
-
 #include "templateEngine.hpp"
 #include "templateData.hpp"
 
@@ -386,6 +385,11 @@ Versat* InitVersat(int base,int numberConfigurations,bool initUnits){
   nullDeclaration.inputDelays = Array<int>{zeros,1};
   nullDeclaration.outputLatencies = Array<int>{zeros,1};
 
+  RegisterPipeOperation(STRING("MemorySize"),[](Value val,Arena* out){
+    ExternalMemoryInterface* inter = (ExternalMemoryInterface*) val.custom;
+    int byteSize = ExternalMemoryByteSize(inter);
+    return MakeValue(byteSize);
+  });
   RegisterPipeOperation(STRING("Hex"),HexValue);
   RegisterPipeOperation(STRING("Identify"),EscapeString);
   RegisterPipeOperation(STRING("CountNonOperationChilds"),[](Value val,Arena* out){

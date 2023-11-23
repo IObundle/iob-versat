@@ -60,21 +60,21 @@ always @(posedge clk,posedge rst) begin
      end
 end
 
-fp_add adder(
-     .start(1'b1),
-     .done(),
+iob_fp_add adder(
+     .start_i(1'b1),
+     .done_o(),
 
-     .op_a(in0),
-     .op_b(out0),
+     .op_a_i(in0),
+     .op_b_i(out0),
 
-     .res(addResult),
+     .res_o(addResult),
 
-     .overflow(),
-     .underflow(),
-     .exception(),
+     .overflow_o(),
+     .underflow_o(),
+     .exception_o(),
 
-     .clk(clk),
-     .rst(rst)
+     .clk_i(clk),
+     .rst_i(rst)
      );
 
 endmodule

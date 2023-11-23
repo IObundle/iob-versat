@@ -73,6 +73,10 @@ static unsigned int staticBuffer[] = {
    #{end} 
 };
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 void versat_init(int base);
 
 void Debug();
@@ -89,6 +93,10 @@ void SignalLoop();
 // Their embedded counterparts simply do nothing
 void ConfigCreateVCD(bool value);
 void ConfigSimulateDatabus(bool value); 
+
+#ifdef __cplusplus
+} // extern "C"
+#endif
 
 // Needed by PC-EMUL to correctly simulate the design, embedded compiler should remove these symbols from firmware because not used by them 
 static const char* acceleratorTypeName = "@{accelType}";

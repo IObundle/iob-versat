@@ -6,9 +6,16 @@
 #define MEMSET(base, location, value) (*((volatile int*) (base + (sizeof(int)) * location)) = (int) value)
 #define MEMGET(base, location)        (*((volatile int*) (base + (sizeof(int)) * location)))
 
-//#include "iob-timer.h"
+#ifdef __cplusplus
+extern "C"{
+#endif
 
+#include "iob-uart.h"
 #include "printf.h"
+
+#ifdef __cplusplus
+  }
+#endif
 
 #ifdef __cplusplus
 #include <cstdint>
@@ -22,23 +29,6 @@ typedef uint64_t uint64;
 // There should be a shared header for common structures, but do not share code.
 // It does not work as well and keeps giving compile and linker errors. It's not worth it.
 
-#if 0
-typedef struct{
-  uint64 microSeconds;
-  uint64 seconds;
-} Time;
-
-Time GetTime(){
-  Time res = {};
-  res.seconds = (uint64) timer_time_s();
-
-  res.microSeconds = (uint64) timer_time_us();
-  res.microSeconds -= (res.seconds * 1000000);
-  
-  return res;
-}
-#endif
-
 iptr versat_base;
 
 volatile AcceleratorConfig* accelConfig = 0;
@@ -47,7 +37,7 @@ volatile AcceleratorState*  accelState  = 0;
 void versat_init(int base){
   versat_base = (iptr) base;
 
-  printf("Embedded Versat\n");
+  //printf("Embedded Versat\n");
 
   MEMSET(versat_base,0x0,0x80000000); // Soft reset
 
@@ -170,43 +160,4 @@ float VersatUnitReadFloat(int base,int index){
 
 void ConfigCreateVCD(bool value){}
 void ConfigSimulateDatabus(bool value){}
-
-// Implementation of common functionality
-
-static unsigned int randomSeed = 1;
-void SeedRandomNumber(unsigned int val){
-  if(val == 0){
-    randomSeed = 1;
-  } else {
-    randomSeed = val;
-  }
-}
-
-unsigned int GetRandomNumber(){
-  // Xorshift
-  randomSeed ^= randomSeed << 13;
-  randomSeed ^= randomSeed >> 17;
-  randomSeed ^= randomSeed << 5;
-  return randomSeed;
-}
-
-static int Abs(int val){
-  int res = val;
-  if(val < 0){
-    res = -val;
-  }
-  return res;
-}
-
-int RandomNumberBetween(int minimum,int maximum){
-  int randomValue = GetRandomNumber();
-  int delta = maximum - minimum;
-
-  if(delta <= 0){
-    return minimum;
-  }
-
-  int res = minimum + Abs(randomValue % delta);
-  return res;
-}
 

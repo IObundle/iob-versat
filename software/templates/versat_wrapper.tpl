@@ -4,11 +4,17 @@
 #{include "versat_common.tpl"}
 #include <new>
 
+#include <cassert>
+#define Assert(x) assert(x)
+
 #include "versat_accel.h" // TODO: Is this needed? We technically have all the data that we need to not depend on this header and removing this dependency could simplify the build process. Take a look later
 
 //#include "versat.hpp"
 //#include "utils.hpp"
 //#include "acceleratorStats.hpp"
+
+#define ALIGN_UP(val,size) (((val) + (size - 1)) & ~(size - 1))
+#define ALIGN_DOWN(val,size) (val & (~(size - 1)))
 
 #include "verilated.h"
 
@@ -743,11 +749,12 @@ extern "C" void InitializeVerilator(){
 
 typedef char Byte;
 
-// Allocate state and config buffers
+// Everything is statically allocated
+static constexpr int totalExternalMemory = @{totalExternalMemory};
+static Byte externalMemory[totalExternalMemory]; 
 static AcceleratorConfig configBuffer = {};
 static AcceleratorState stateBuffer = {};
 static DatabusAccess databusBuffer[@{module.nIO}] = {}; 
-static Byte externalMemory[@{totalExternalMemory}]; 
 
 extern "C" AcceleratorConfig* GetStartOfConfig(){
   return &configBuffer;
@@ -887,7 +894,7 @@ if(SimulateDatabus){
    memcpy(&saved_dp_data_@{id}_port_@{index},&self->ext_dp_out_@{id}_port_@{index},sizeof(@{dataType}));
 
    {
-     int memSize = @{external.memorySize}; // Template add something about id but do not know if needed
+     int memSize = @{external |> MemorySize}; // Template add something about id but do not know if needed
      baseAddress += memSize;
    }
    #{end}
@@ -897,15 +904,17 @@ if(SimulateDatabus){
 
    @{dataType} saved_2p_r_data_@{id};
    {
-     int memSize = @{external.memorySize};
+     int memSize = @{external |> MemorySize};
    // 2P
       if(self->ext_2p_read_@{id}){
          int readOffset = self->ext_2p_addr_in_@{id};
 
+         Assert(readOffset < memSize);
          int address = baseAddress + readOffset; // * sizeof(@{dataType});
-         Assert(address < memSize);
-
+         
          address = ALIGN_DOWN(address,sizeof(@{dataType}));
+
+         Assert(address + sizeof(@{dataType}) <= totalExternalMemory);
 
          @{dataType}* ptr = (@{dataType}*) &externalMemory[address];
          memcpy(&saved_2p_r_data_@{id},ptr,sizeof(@{dataType}));
@@ -938,17 +947,18 @@ if(SimulateDatabus){
    // DP
    {
 
-   int memSize = @{external.memorySize};
+   int memSize = @{external |> MemorySize};
 
    #{for dp external.dp}
    #{set dataType #{call IntName dp.dataSizeIn}}
       if(saved_dp_enable_@{id}_port_@{index} && !saved_dp_write_@{id}_port_@{index}){
-         int readOffset = saved_dp_addr_@{id}_port_@{index};
+       int readOffset = saved_dp_addr_@{id}_port_@{index}; // Byte space
 
-       int address = baseAddress + readOffset; // * sizeof(@{dataType});
-       Assert(address < memSize);
+       Assert(readOffset < memSize);
+       int address = baseAddress + readOffset;
 
        address = ALIGN_DOWN(address,sizeof(@{dataType}));
+       Assert(address + sizeof(@{dataType}) <= totalExternalMemory);
 
        @{dataType}* ptr = (@{dataType}*) &externalMemory[address];
        memcpy(&self->ext_dp_in_@{id}_port_@{index},ptr,sizeof(@{dataType}));
@@ -959,15 +969,16 @@ if(SimulateDatabus){
    #{else}
    #{set dataType #{call IntName external.tp.dataSizeIn}}
    {
-     int memSize = @{external.memorySize};
+     int memSize = @{external |> MemorySize};
    // 2P
       if(saved_2p_r_enable_@{id}){
-         int readOffset = saved_2p_r_addr_@{id};
+       int readOffset = saved_2p_r_addr_@{id};
 
+       Assert(readOffset < memSize);
        int address = baseAddress + readOffset; // * sizeof(@{dataType});
-       Assert(address < memSize);
 
        address = ALIGN_DOWN(address,sizeof(@{dataType}));
+       Assert(address + sizeof(@{dataType}) <= totalExternalMemory);
 
        @{dataType}* ptr = (@{dataType}*) &externalMemory[address];
        memcpy(&self->ext_2p_data_in_@{id},ptr,sizeof(@{dataType}));
@@ -987,16 +998,17 @@ if(SimulateDatabus){
    #{if external.type}
    {
       // DP
-      int memSize = @{external.memorySize};
+      int memSize = @{external |> MemorySize};
    #{for dp external.dp}
    #{set dataType #{call IntName dp.dataSizeIn}}
       if(saved_dp_enable_@{id}_port_@{index} && saved_dp_write_@{id}_port_@{index}){
        int writeOffset = saved_dp_addr_@{id}_port_@{index};
 
+       Assert(writeOffset < memSize);
        int address = baseAddress + writeOffset; // * sizeof(@{dataType});
-       Assert(address < memSize);
 
        address = ALIGN_DOWN(address,sizeof(@{dataType}));
+       Assert(address + sizeof(@{dataType}) <= totalExternalMemory);
 
        @{dataType}* ptr = (@{dataType}*) &externalMemory[address];
        memcpy(ptr,&saved_dp_data_@{id}_port_@{index},sizeof(@{dataType}));
@@ -1007,15 +1019,16 @@ if(SimulateDatabus){
    #{else}
    #{set dataType #{call IntName external.tp.dataSizeOut}}
      {
-     int memSize = @{external.memorySize};
+     int memSize = @{external |> MemorySize};
      // 2P
      if(saved_2p_w_enable_@{id}){
        int writeOffset = saved_2p_w_addr_@{id};
 
+       Assert(writeOffset < memSize);
        int address = baseAddress + writeOffset; // * sizeof(@{dataType});
-       Assert(address < memSize);
 
        address = ALIGN_DOWN(address,sizeof(@{dataType}));
+       Assert(address + sizeof(@{dataType}) <= totalExternalMemory);
        
        @{dataType}* ptr = (@{dataType}*) &externalMemory[address];
        memcpy(ptr,&saved_2p_w_data_@{id},sizeof(@{dataType}));
@@ -1102,6 +1115,79 @@ extern "C" void VersatAcceleratorSimulate(){
   InternalEndAccelerator();
 }
 
+extern "C" int MemoryAccess(int address,int value,int write){
+    #{if module.memoryMapped}
+   
+    V@{module.name}* self = dut;
+
+   if(write){
+      self->valid = 1;
+      self->wstrb = 0xf;
+
+      #{if module.memoryMappedBits != 0}
+      self->addr = address;
+      #{end}
+      self->wdata = value;
+
+      self->eval();
+
+      while(!self->ready){
+          InternalUpdateAccelerator();
+      }
+
+      self->valid = 0;
+      self->wstrb = 0x00;
+      #{if module.memoryMappedBits != 0}
+      self->addr = 0x00000000;
+      #{end}
+      
+      self->wdata = 0x00000000;
+
+      InternalUpdateAccelerator();
+
+      return 0;
+   } else {
+      self->valid = 1;
+      self->wstrb = 0x0;
+      #{if module.memoryMappedBits != 0}
+      self->addr = address;
+      #{end}
+
+      self->eval();
+
+      while(!self->ready){
+          InternalUpdateAccelerator();
+      }
+
+      int res = self->rdata;
+
+      self->valid = 0;
+      #{if module.memoryMappedBits != 0}
+      self->addr = 0;
+      #{end}
+
+      self->eval();
+      while(self->ready){
+          InternalUpdateAccelerator();
+      }
+
+      return res;
+   }
+
+   #{end}
+}
+    
+extern "C" void VersatSignalLoop(){
+#{if module.signalLoop}
+   V@{module.name}* self = dut;
+
+   self->signal_loop = 1;
+   InternalUpdateAccelerator();
+   self->signal_loop = 0;
+   self->eval();
+#{end}
+}
+                                
 #undef INIT
 #undef UPDATE
 #undef RESET

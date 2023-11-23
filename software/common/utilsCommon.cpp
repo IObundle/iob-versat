@@ -3,20 +3,6 @@
 #include <cinttypes>
 #include <limits>
 
-//#include <cstdio>
-
-#if 1
-
-#ifndef PC
-  extern "C"{
-    int printf_(const char* format, ...);
-  }
-#define printf printf_
-#else
-#include <cstdio>
-#endif
-#endif
-
 static char* GetNumberRepr(uint64 number){
   static char buffer[32];
 
@@ -124,7 +110,6 @@ int log2i(int value){
 
   value -= 1; // If value matches a power of 2, we still want to return the previous value
 
-  // Change the order of this if to after subtracting one.
   // Any weird bug check this first
   if(value <= 0)
     return 0;

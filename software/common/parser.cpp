@@ -389,6 +389,15 @@ bool Tokenizer::Done(){
   return res;
 }
 
+Token Tokenizer::Remaining(){
+  String res = {};
+
+  res.data = ptr;
+  res.size = end - ptr;
+
+  return res;
+}
+
 bool Tokenizer::IsSpecialOrSingle(String toTest){
   if(toTest.size > 1){
     for(std::string& str : specialChars){

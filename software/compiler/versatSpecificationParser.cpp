@@ -31,6 +31,20 @@ struct Var{
   ConnectionExtra extra;
 };
 
+int NumberOfConnections(ConnectionExtra e){
+  int connections = e.portEnd - e.portStart + 1;
+
+  return connections;
+}
+  
+int NumberOfConnections(Array<Var> var){
+  int connections = 0;
+  for(Var& v : var){
+    connections += NumberOfConnections(v.extra);
+  }
+  return connections;
+}
+  
 static Name identifiers[256];
 static int identifiersIndex;
 
@@ -111,6 +125,38 @@ Var ParseVar(Tokenizer* tok){
   var.extra.portEnd = portEnd;
 
   return var;
+}
+
+Array<Var> ParseGroup(Tokenizer* tok,Arena* arena){
+  Token peek = tok->PeekToken();
+
+  if(CompareString(peek,"{")){
+    tok->AdvancePeek(peek);
+
+    Byte* mark = MarkArena(arena);
+    while(!tok->Done()){
+      Var* var = PushStruct<Var>(arena);
+      *var = ParseVar(tok);
+
+      Token sepOrEnd = tok->NextToken();
+
+      if(CompareString(sepOrEnd,",")){
+        continue;
+      } else if(CompareString(sepOrEnd,"}")){
+        break;
+      } else {
+        // TODO: Need to start paying more attention to errors
+        Assert("Error\n");
+      }
+    }
+    Array<Var> res = PointArray<Var>(arena,mark);
+    return res;
+  } else {
+    Var var = ParseVar(tok);
+    Array<Var> res = PushArray<Var>(arena,1);
+    res[0] = var;
+    return res;
+  }
 }
 
 #if 0
@@ -218,6 +264,14 @@ struct PortExpression{
   ConnectionExtra extra;
 };
 
+int NumberOfConnections(Array<PortExpression> arr){
+  int connections = 0;
+  for(PortExpression& e : arr){
+    connections += NumberOfConnections(e.extra);
+  }
+  return connections;
+}
+
 void ConnectUnit(PortExpression out,PortExpression in){
   FUInstance* inst1 = out.inst;
   FUInstance* inst2 = in.inst;
@@ -241,6 +295,42 @@ void ConnectUnit(PortExpression out,PortExpression in){
   } else {
     for(int i = 0; i < inRange; i++){
       ConnectUnits(inst1,outE.portStart + i,inst2,inE.portStart + i,outE.delayStart + delayDelta * i);
+    }
+  }
+}
+
+void ConnectUnit(Array<PortExpression> outs, PortExpression in){
+  if(outs.size == 1){
+    // TODO: The 1-to-1 connection implements more connection logic than this function currently implements
+    //       Still not have a good ideia how to handle more complex cases, implement them as they appear.
+    //       Specially how to match everything together: groups + port ranges + delays.
+    ConnectUnit(outs[0],in);
+    return;
+  }
+
+  ConnectionExtra inE = in.extra;
+
+  int outRange = NumberOfConnections(outs);
+  int inRange = NumberOfConnections(in.extra);
+
+  Assert(outRange == inRange);
+
+  FUInstance* instIn = in.inst;
+  int portIndex = 0;
+  int unitIndex = 0;
+  for(int i = 0; i < inRange; i++){
+    PortExpression& expr = outs[unitIndex];
+
+    FUInstance* inst = expr.inst;
+    int portStart = expr.extra.portStart + portIndex;
+    
+    ConnectUnits(inst,portStart,instIn,inE.portStart + i); // TODO: For now we are assuming no delay
+
+    portIndex += 1;
+
+    if(portIndex >= NumberOfConnections(expr.extra)){
+      unitIndex += 1;
+      portIndex = 0;
     }
   }
 }
@@ -568,7 +658,16 @@ FUDeclaration* ParseModule(Versat* versat,Tokenizer* tok){
         tok->AssertNextToken(";");
       }
     } else {
-      Var outVar = ParseVar(tok);
+      BLOCK_REGION(arena);
+        
+      Array<Var> outPortion = ParseGroup(tok,arena);
+
+      Var outVar = {};
+      if(outPortion.size == 1){
+        outVar = outPortion[0];
+      }
+
+      //Var outVar = ParseVar(tok);
 
       Token op = tok->NextToken();
       if(CompareToken(op,"=")){
@@ -605,9 +704,19 @@ FUDeclaration* ParseModule(Versat* versat,Tokenizer* tok){
 
         tok->AssertNextToken(";");
       } else if(CompareToken(op,"->")){
+        BLOCK_REGION(arena);
+
+        // For now only allow one var on the input side
+        // Makes it easier to match
         Var inVar = ParseVar(tok);
 
-        FUInstance* inst1 = table->GetOrFail(outVar.name); //GetInstanceByName(circuit,"%.*s",UNPACK_SS(outVar.name));
+        Array<PortExpression> ports = PushArray<PortExpression>(arena,outPortion.size);
+        for(int i = 0; i < outPortion.size; i++){
+          Var& var = outPortion[i];
+          ports[i].inst = table->GetOrFail(var.name);
+          ports[i].extra = var.extra;
+        }
+
         FUInstance* inst2 = nullptr;
         if(CompareString(inVar.name,"out")){
           if(!outputInstance){
@@ -616,10 +725,10 @@ FUDeclaration* ParseModule(Versat* versat,Tokenizer* tok){
 
           inst2 = outputInstance;
         } else {
-          inst2 = table->GetOrFail(inVar.name); //GetInstanceByName(circuit,"%.*s",UNPACK_SS(inVar.name));
+          inst2 = table->GetOrFail(inVar.name);
         }
 
-        ConnectUnit((PortExpression){inst1,outVar.extra},(PortExpression){inst2,inVar.extra});
+        ConnectUnit(ports,(PortExpression){inst2,inVar.extra});
 
         tok->AssertNextToken(";");
         // The problem is when using port based expressions. We cannot have variables represent ports, only instances. And it kinda of messes up the way a programmer thinks. If I use a port based expression on the right, the variable only takes the instance
@@ -697,7 +806,7 @@ FUDeclaration* ParseIterative(Versat* versat,Tokenizer* tok){
   }
   tok->AssertNextToken(")");
   tok->AssertNextToken("{");
-
+  
   FUInstance* unit = nullptr;
   // Instance instantiation;
   while(1){

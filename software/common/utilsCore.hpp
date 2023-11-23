@@ -9,6 +9,7 @@
 #include <new>
 #include <functional>
 #include <stdint.h>
+#include <optional>
 
 #include "signal.h"
 #include "assert.h"
@@ -88,7 +89,7 @@ ALWAYS_INLINE Once operator+(_OnceTag,F&& f){
 #define once static Once TEMP_once(__LINE__) = _OnceTag() + [&]()
 
 void FlushStdout();
-#if defined(VERSAT_DEBUG)
+//#if defined(VERSAT_DEBUG)
 #define Assert(EXPR) \
    do { \
    bool _ = !(EXPR);   \
@@ -97,9 +98,9 @@ void FlushStdout();
       assert(_ && (EXPR)); \
    } \
    } while(0)
-#else
-#define Assert(EXPR) do {} while(0)
-#endif
+//#else
+//#define Assert(EXPR) do {} while(0)
+//#endif
 
 // Assert that gets replaced by the expression if debug is disabled (instead of simply disappearing like a normal assert)
 // Probably not a good idea now that I think about it. It's probably leads to more confusing code 
@@ -416,9 +417,6 @@ bool IsAlpha(char ch);
 
 String PathGoUp(char* pathBuffer);
 
-#if __cplusplus >= 201703L
-#include <optional>
-
 template<typename T>
 using Optional = std::optional<T>;
 
@@ -431,7 +429,6 @@ Optional<T> OrElse(Optional<T> first,Optional<T> elseOpt){
       return elseOpt;
    }
 }
-#endif
 
 template<typename T>
 inline void Memset(T* buffer,T elem,int bufferSize){

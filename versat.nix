@@ -37,5 +37,7 @@ pkgs.stdenv.mkDerivation rec {
     mkdir -p $out/bin
     mv versat $out/bin
   '';
+
+  dontStrip = true;
 }
 

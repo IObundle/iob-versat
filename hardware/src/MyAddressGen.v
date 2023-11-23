@@ -34,10 +34,10 @@ module MyAddressGen
 
 localparam OFFSET_W = $clog2(DATA_W/8);
 
-reg [DELAY_I_W-1:0] delay_iCounter;
+reg [DELAY_W-1:0] delay_iCounter;
 
-reg [ADDR_O_W - 1:0] iter;
-reg [PERIOD_I_W - 1:0] per;
+reg [ADDR_W - 1:0] iter;
+reg [PERIOD_W - 1:0] per;
 
 wire perCond = ((per + 1) >= period_i);
 wire iterCond = ((iter + 1) >= iterations_i);

@@ -139,34 +139,41 @@ String PointArena(Arena* arena,Byte* mark){
    return res;
 }
 
+String PushFile(Arena* arena,FILE* file){
+  String res;
+  long int size = GetFileSize(file);
+
+  Byte* mem = PushBytes(arena,size + 1);
+  int amountRead = fread(mem,sizeof(Byte),size,file);
+
+  if(amountRead != size){
+    fprintf(stderr,"Memory PushFile failed to read entire file\n");
+    exit(-1);
+  }
+
+  mem[size] = '\0';
+
+  res.size = size;
+  res.data = (const char*) mem;
+
+  return res;
+}
+
 String PushFile(Arena* arena,const char* filepath){
-   String res = {};
-   FILE* file = fopen(filepath,"r");
+  FILE* file = fopen(filepath,"r");
 
-   if(!file){
-      printf("Failed to open file: %s\n",filepath);
-      res.size = -1;
-      return res;
-   }
+  if(!file){
+    String res = {};
+    printf("Failed to open file: %s\n",filepath);
+    res.size = -1;
+    return res;
+  }
 
-   long int size = GetFileSize(file);
+  String res = PushFile(arena,file);
 
-   Byte* mem = PushBytes(arena,size + 1);
-   int amountRead = fread(mem,sizeof(Byte),size,file);
+  fclose(file);
 
-   if(amountRead != size){
-     fprintf(stderr,"Memory PushFile failed to read entire file\n");
-     exit(-1);
-   }
-
-   mem[size] = '\0';
-
-   fclose(file);
-
-   res.size = size;
-   res.data = (const char*) mem;
-
-   return res;
+  return res;
 }
 
 String PushChar(Arena* arena,const char ch){
@@ -427,7 +434,7 @@ int BitArray::GetNumberBitsSet(){
 }
 
 int BitArray::FirstBitSetIndex(){
-   #ifdef VERSAT_DEBUG
+#ifdef VERSAT_DEBUG
    int correct = 0;
    for(int i = 0; i < this->bitSize; i++){
       if(Get(i)){
@@ -435,14 +442,16 @@ int BitArray::FirstBitSetIndex(){
          break;
       }
    }
-   #endif
-
+#endif
+   
    uint32* ptr = (uint32*) this->memory;
    int i = 0;
    for(;i < this->bitSize; i += 32){
       if(*ptr != 0){
          int index = i + TrailingZerosCount(*ptr);
-         Assert(index == correct);
+#ifdef VERSAT_DEBUG
+            Assert(index == correct);
+#endif
          return index;
       }
       ptr += 1;
@@ -493,7 +502,9 @@ int BitArray::FirstBitSetIndex(int start){
    for(;i < this->bitSize; i += 32){
       if(*ptr != 0){
          int index = i + TrailingZerosCount(*ptr);
+#ifdef VERSAT_DEBUG
          Assert(index == correct);
+#endif
          return index;
       }
       ptr += 1;
