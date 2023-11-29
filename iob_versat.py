@@ -41,6 +41,8 @@ class iob_versat(iob_module):
 
         versat_args = ["versat",versat_spec,
                                 "-s",
+                                "-b=32",
+                                "-x64", # TODO: This should be only for pc-emul, otherwise should be 32 bits
                                 "-T",versat_top,
                                 "-O",versat_dir + "/hardware/src/units", # Location of versat units
                                 #"-S",versat_dir + "/submodules/FPU/hardware/src/",

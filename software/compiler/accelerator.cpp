@@ -1992,7 +1992,7 @@ bool ContainsStatics(FUDeclaration* decl){
   return res;
 }
 
-Array<FUDeclaration*> SubTypes(FUDeclaration* decl,Arena* out,Arena* temp){
+Array<FUDeclaration*> ConfigSubTypes(FUDeclaration* decl,Arena* out,Arena* temp){
   if(!IsComposite(decl)){
     return {};
   }
@@ -2008,6 +2008,30 @@ Array<FUDeclaration*> SubTypes(FUDeclaration* decl,Arena* out,Arena* temp){
     FUDeclaration* decl = inst->declaration;
 
     if(decl->type != FUDeclaration::SPECIAL && (ContainsConfigs(decl) || ContainsStatics(decl))){
+      maps->Insert(decl);
+    }
+  }
+  
+  Array<FUDeclaration*> subTypes = PushArrayFromSet(out,maps);
+  return subTypes;
+}
+
+Array<FUDeclaration*> MemSubTypes(FUDeclaration* decl,Arena* out,Arena* temp){
+  if(!IsComposite(decl)){
+    return {};
+  }
+  
+  int numberUnits = NumberUnits(decl->fixedDelayCircuit);
+
+  BLOCK_REGION(temp);
+  
+  Set<FUDeclaration*>* maps = PushSet<FUDeclaration*>(temp,99);
+  AcceleratorIterator iter = {};
+  for(InstanceNode* node = iter.Start(decl->fixedDelayCircuit,temp,false); node; node = iter.Next()){
+    FUInstance* inst = node->inst;
+    FUDeclaration* decl = inst->declaration;
+
+    if(decl->isMemoryMapped){
       maps->Insert(decl);
     }
   }

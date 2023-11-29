@@ -177,6 +177,9 @@ typedef uint64_t uint64;
 //typedef long long unsigned int uint64;
 #endif
 
+template<typename T>
+using Optional = std::optional<T>;
+
 struct Time{
    uint64 microSeconds;
    uint64 seconds;
@@ -398,6 +401,7 @@ void MakeDirectory(const char* path);
 FILE* OpenFileAndCreateDirectories(const char* path,const char* format);
 void CreateDirectories(const char* path);
 String ExtractFilenameOnly(String filepath);
+String PathGoUp(char* pathBuffer);
 
 void FixedStringCpy(char* dest,String src);
 
@@ -414,11 +418,6 @@ char GetHexadecimalChar(int value);
 unsigned char* GetHexadecimal(const unsigned char* text, int str_size); // Helper function to display result
 
 bool IsAlpha(char ch);
-
-String PathGoUp(char* pathBuffer);
-
-template<typename T>
-using Optional = std::optional<T>;
 
 // Simulate c++23 feature
 template<typename T>
@@ -500,160 +499,6 @@ inline bool Contains(Array<String> array,String toCheck){
       }
    }
    return false;
-}
-
-template<typename T>
-struct ListedStruct : public T{
-   ListedStruct<T>* next;
-};
-
-// Generic list manipulation, as long as the structure has a next pointer of equal type
-template<typename T>
-T* ListGet(T* start,int index){
-   T* ptr = start;
-   for(int i = 0; i < index; i++){
-      if(ptr){
-         ptr = ptr->next;
-      }
-   }
-   return ptr;
-}
-
-template<typename T>
-int ListIndex(T* start,T* toFind){
-   int i = 0;
-   FOREACH_LIST(T*,ptr,start){
-      if(ptr == toFind){
-         break;
-      }
-      i += 1;
-   }
-   return i;
-}
-
-template<typename T>
-T* ListRemove(T* start,T* toRemove){ // Returns start of new list. ToRemove is still valid afterwards
-   if(start == toRemove){
-      return start->next;
-   } else {
-      T* previous = nullptr;
-      FOREACH_LIST(T*,ptr,start){
-         if(ptr == toRemove){
-            previous->next = ptr->next;
-         }
-         previous = ptr;
-      }
-
-      return start;
-   }
-}
-
-// For now, we are not returning the "deleted" node.
-// TODO: add a free node list and change this function
-template<typename T,typename Func>
-T* ListRemoveOne(T* start,Func compareFunction){ // Only removes one and returns.
-   if(compareFunction(start)){
-      return start->next;
-   } else {
-      T* previous = nullptr;
-      FOREACH_LIST(T*,ptr,start){
-         if(compareFunction(ptr)){
-            previous->next = ptr->next;
-         }
-         previous = ptr;
-      }
-
-      return start;
-   }
-}
-
-// TODO: This function leaks memory, because it does not return the free nodes
-template<typename T,typename Func>
-T* ListRemoveAll(T* start,Func compareFunction){
-   #if 0
-   T* freeListHead = nullptr;
-   T* freeListPtr = nullptr;
-   #endif
-
-   T* head = nullptr;
-   T* listPtr = nullptr;
-   for(T* ptr = start; ptr;){
-      T* next = ptr->next;
-      ptr->next = nullptr;
-      bool comp = compareFunction(ptr);
-
-      if(comp){ // Add to free list
-         #if 0
-         if(freeListPtr){
-            freeListPtr->next = ptr;
-            freeListPtr = ptr;
-         } else {
-            freeListHead = ptr;
-            freeListPtr = ptr;
-         }
-         #endif
-      } else { // "Add" to return list
-         if(listPtr){
-            listPtr->next = ptr;
-            listPtr = ptr;
-         } else {
-            head = ptr;
-            listPtr = ptr;
-         }
-      }
-
-      ptr = next;
-   }
-
-   return head;
-}
-
-template<typename T>
-T* ReverseList(T* head){
-   if(head == nullptr){
-      return head;
-   }
-
-   T* ptr = nullptr;
-   T* next = head;
-
-   while(next != nullptr){
-      T* nextNext = next->next;
-      next->next = ptr;
-      ptr = next;
-      next = nextNext;
-   }
-
-   return ptr;
-}
-
-template<typename T>
-T* ListInsertEnd(T* head,T* toAdd){
-   T* last = nullptr;
-   FOREACH_LIST(T*,ptr,head){
-      last = ptr;
-   }
-   Assert(last->next == nullptr);
-   last->next = toAdd;
-}
-
-template<typename T>
-T* ListInsert(T* head,T* toAdd){
-   if(!head){
-      return toAdd;
-   }
-
-   toAdd->next = head;
-   return toAdd;
-}
-
-template<typename T>
-int Size(T* start){
-   int size = 0;
-   FOREACH_LIST(T*,ptr,start){
-      size += 1;
-   }
-   return size;
 }
 
 #endif // VERSAT_INCLUDED_UTILS_CORE

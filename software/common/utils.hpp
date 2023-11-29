@@ -6,6 +6,8 @@
 #include "utilsCore.hpp"
 #include "memory.hpp"
 
+Optional<Array<String>> GetAllFilesInsideDirectory(String dirPath,Arena* arena);
+
 // A templated type for carrying the index in an array
 // A performant design would allocate a separate array because these functions copy data around.
 // Use these for prototyping, easing of debugging and stuff
@@ -13,6 +15,178 @@ template<typename T>
 struct IndexedStruct : public T{
    int index;
 };
+
+template<typename T>
+struct ListedStruct : public T{
+   ListedStruct<T>* next;
+};
+
+template<typename T>
+struct PointerListNode{
+  T* elem;
+  PointerListNode<T>* next;
+};
+
+template<typename T>
+struct ArenaList{
+  ListedStruct<T>* head;
+  ListedStruct<T>* tail;
+};
+
+template<typename T>
+struct PointerList{
+  PointerListNode<T>* head;
+  PointerListNode<T>* tail;
+};
+
+// Generic list manipulation, as long as the structure has a next pointer of equal type
+template<typename T>
+T* ListGet(T* start,int index){
+   T* ptr = start;
+   for(int i = 0; i < index; i++){
+      if(ptr){
+         ptr = ptr->next;
+      }
+   }
+   return ptr;
+}
+
+template<typename T>
+int ListIndex(T* start,T* toFind){
+   int i = 0;
+   FOREACH_LIST(T*,ptr,start){
+      if(ptr == toFind){
+         break;
+      }
+      i += 1;
+   }
+   return i;
+}
+
+template<typename T>
+T* ListRemove(T* start,T* toRemove){ // Returns start of new list. ToRemove is still valid afterwards
+   if(start == toRemove){
+      return start->next;
+   } else {
+      T* previous = nullptr;
+      FOREACH_LIST(T*,ptr,start){
+         if(ptr == toRemove){
+            previous->next = ptr->next;
+         }
+         previous = ptr;
+      }
+
+      return start;
+   }
+}
+
+// For now, we are not returning the "deleted" node.
+// TODO: add a free node list and change this function
+template<typename T,typename Func>
+T* ListRemoveOne(T* start,Func compareFunction){ // Only removes one and returns.
+   if(compareFunction(start)){
+      return start->next;
+   } else {
+      T* previous = nullptr;
+      FOREACH_LIST(T*,ptr,start){
+         if(compareFunction(ptr)){
+            previous->next = ptr->next;
+         }
+         previous = ptr;
+      }
+
+      return start;
+   }
+}
+
+// TODO: This function leaks memory, because it does not return the free nodes
+template<typename T,typename Func>
+T* ListRemoveAll(T* start,Func compareFunction){
+   #if 0
+   T* freeListHead = nullptr;
+   T* freeListPtr = nullptr;
+   #endif
+
+   T* head = nullptr;
+   T* listPtr = nullptr;
+   for(T* ptr = start; ptr;){
+      T* next = ptr->next;
+      ptr->next = nullptr;
+      bool comp = compareFunction(ptr);
+
+      if(comp){ // Add to free list
+         #if 0
+         if(freeListPtr){
+            freeListPtr->next = ptr;
+            freeListPtr = ptr;
+         } else {
+            freeListHead = ptr;
+            freeListPtr = ptr;
+         }
+         #endif
+      } else { // "Add" to return list
+         if(listPtr){
+            listPtr->next = ptr;
+            listPtr = ptr;
+         } else {
+            head = ptr;
+            listPtr = ptr;
+         }
+      }
+
+      ptr = next;
+   }
+
+   return head;
+}
+
+template<typename T>
+T* ReverseList(T* head){
+   if(head == nullptr){
+      return head;
+   }
+
+   T* ptr = nullptr;
+   T* next = head;
+
+   while(next != nullptr){
+      T* nextNext = next->next;
+      next->next = ptr;
+      ptr = next;
+      next = nextNext;
+   }
+
+   return ptr;
+}
+
+template<typename T>
+T* ListInsertEnd(T* head,T* toAdd){
+   T* last = nullptr;
+   FOREACH_LIST(T*,ptr,head){
+      last = ptr;
+   }
+   Assert(last->next == nullptr);
+   last->next = toAdd;
+}
+
+template<typename T>
+T* ListInsert(T* head,T* toAdd){
+   if(!head){
+      return toAdd;
+   }
+
+   toAdd->next = head;
+   return toAdd;
+}
+
+template<typename T>
+int Size(T* start){
+   int size = 0;
+   FOREACH_LIST(T*,ptr,start){
+      size += 1;
+   }
+   return size;
+}
 
 template<typename T>
 Array<IndexedStruct<T>> IndexArray(Array<T> array,Arena* arena){
@@ -38,14 +212,6 @@ Array<T*> ListToArray(T* head,int size,Arena* arena){
    return arr;
 }
 
-Optional<Array<String>> GetAllFilesInsideDirectory(String dirPath,Arena* arena);
-
-template<typename T>
-struct ArenaList{
-  ListedStruct<T>* head;
-  ListedStruct<T>* tail;
-};
-
 template<typename T>
 int Size(ArenaList<T>* list){
   ListedStruct<T>* ptr = list->head;
@@ -67,9 +233,18 @@ ArenaList<T>* PushArenaList(Arena* arena){
 }
 
 template<typename T>
+PointerList<T>* PushPointerList(Arena* arena){
+  PointerList<T>* res = PushStruct<PointerList<T>>(arena);
+  *res = {};
+
+  return res;
+}
+
+template<typename T>
 T* PushListElement(Arena* arena,ArenaList<T>* list){
   ListedStruct<T>* s = PushStruct<ListedStruct<T>>(arena);
-
+  *s = {};
+  
   if(!list->head){
     list->head = s;
     list->tail = s;
@@ -79,6 +254,22 @@ T* PushListElement(Arena* arena,ArenaList<T>* list){
   }
 
   return s;
+}
+
+template<typename T>
+T** PushListElement(Arena* arena,PointerList<T>* list){
+  PointerListNode<T>* s = PushStruct<PointerListNode<T>>(arena);
+  *s = {};
+
+  if(!list->head){
+    list->head = s;
+    list->tail = s;
+  } else {
+    list->tail->next = s;
+    list->tail = s;
+  }
+
+  return &s->elem;
 }
 
 template<typename T>
@@ -95,6 +286,19 @@ Array<T> PushArrayFromList(Arena* arena,ArenaList<T>* list){
 }
 
 template<typename T>
+Array<T*> PushArrayFromList(Arena* arena,PointerList<T>* list){
+  Byte* mark = MarkArena(arena);
+
+  FOREACH_LIST(PointerListNode<T>*,iter,list->head){
+    T** ptr = PushStruct<T*>(arena);
+    *ptr = iter->elem;
+  }
+
+  Array<T*> res = PointArray<T*>(arena,mark);
+  return res;
+}
+
+template<typename T>
 Array<T> PushArrayFromSet(Arena* arena,Set<T>* set){
   Byte* mark = MarkArena(arena);
 
@@ -105,6 +309,19 @@ Array<T> PushArrayFromSet(Arena* arena,Set<T>* set){
 
   Array<T> res = PointArray<T>(arena,mark);
   return res;
+}
+
+template<typename T,typename P>
+Hashmap<T,P>* PushHashmapFromList(Arena* arena,ArenaList<Pair<T,P>>* list){
+  int size = Size(list);
+  
+  Hashmap<T,P>* map = PushHashmap<T,P>(arena,size);
+  
+  FOREACH_LIST(auto*,iter,list->head){
+    map->Insert(iter->first,iter->second);
+  }
+
+  return map;
 }
 
 #endif // INCLUDED_UTILS_HPP

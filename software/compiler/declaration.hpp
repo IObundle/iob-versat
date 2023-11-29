@@ -151,6 +151,9 @@ bool ContainsStatics(FUDeclaration* decl);
 
 int NumberOfSubunits(FUDeclaration* decl);
 
-Array<FUDeclaration*> SubTypes(FUDeclaration* decl,Arena* out,Arena* sub);
+// TODO: This functions could be abstracted, to receive a function pointer that receives a declaration and checks wether the unit is a config type or a mem type or etc.
+//       Check the functions that sort types by dependency to also use the same function pointer technique (in codeGeneration.cpp)
+Array<FUDeclaration*> ConfigSubTypes(FUDeclaration* decl,Arena* out,Arena* sub);
+Array<FUDeclaration*> MemSubTypes(FUDeclaration* decl,Arena* out,Arena* sub);
 
 #endif // INCLUDED_VERSAT_DECLARATION

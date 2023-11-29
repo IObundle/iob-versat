@@ -18,7 +18,16 @@ typedef struct {
 @{entry.type} @{entry.name};
 #{end}
 } @{type.name}Config;
+#define VERSAT_DEFINED_@{type.name}
+#{end}
 
+#{for type addressStructures}
+typedef struct {
+#{for entry type.entries}
+@{entry.type} @{entry.name};
+#{end}
+} @{type.name}Addr;
+#define VERSAT_DEFINED_@{type.name}Addr
 #{end}
 
 typedef struct{
@@ -60,6 +69,8 @@ extern iptr versat_base;
 #{for pair namedMem}
 #define @{pair.first} (versat_base + memMappedStart + @{pair.second.ptr})
 #{end}
+
+#define ACCELERATOR_TOP_ADDR_INIT {#{join "," for pair namedMem} (void*) @{pair.first} #{end}}
 
 static unsigned int delayBuffer[] = {
    #{join "," for d delay} 

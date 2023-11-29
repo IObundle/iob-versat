@@ -77,7 +77,7 @@ void OutputCircuitSource(Versat* versat,FUDeclaration* decl,Accelerator* accel,F
    ProcessTemplate(file,BasicTemplates::acceleratorTemplate,&versat->temp);
 }
 
-Array<FUDeclaration*> SortTypesByDependency(Array<FUDeclaration*> types,Arena* out,Arena* temp){
+Array<FUDeclaration*> SortTypesByConfigDependency(Array<FUDeclaration*> types,Arena* out,Arena* temp){
   BLOCK_REGION(temp);
 
   int size = types.size;
@@ -90,7 +90,7 @@ Array<FUDeclaration*> SortTypesByDependency(Array<FUDeclaration*> types,Arena* o
   Memset(subTypes,{});
 
   for(int i = 0; i < size; i++){
-    subTypes[i] = SubTypes(types[i],temp,out);
+    subTypes[i] = ConfigSubTypes(types[i],temp,out);
     seen->Insert(types[i],false);
   }
 
@@ -128,8 +128,71 @@ Array<FUDeclaration*> SortTypesByDependency(Array<FUDeclaration*> types,Arena* o
     }
   }
 
+  for(Pair<FUDeclaration*,bool> p : seen){
+    Assert(p.second);
+  }
+  
   return result;
 }
+
+Array<FUDeclaration*> SortTypesByMemDependency(Array<FUDeclaration*> types,Arena* out,Arena* temp){
+  BLOCK_REGION(temp);
+
+  int size = types.size;
+
+  int stored = 0;
+  Array<FUDeclaration*> result = PushArray<FUDeclaration*>(out,size);
+
+  Hashmap<FUDeclaration*,bool>* seen = PushHashmap<FUDeclaration*,bool>(temp,size);
+  Array<Array<FUDeclaration*>> subTypes = PushArray<Array<FUDeclaration*>>(temp,size);
+  Memset(subTypes,{});
+
+  for(int i = 0; i < size; i++){
+    subTypes[i] = MemSubTypes(types[i],temp,out);
+    seen->Insert(types[i],false);
+  }
+
+  for(int iter = 0; iter < size; iter++){
+    bool breakEarly = true;
+    for(int i = 0; i < size; i++){
+      FUDeclaration* type = types[i];
+      Array<FUDeclaration*> sub = subTypes[i];
+
+      bool* seenType = seen->Get(type);
+
+      if(seenType && *seenType){
+        continue;
+      }
+
+      bool allSeen = true;
+      for(FUDeclaration* subIter : sub){
+        bool* res = seen->Get(subIter);
+
+        if(res && !*res){
+          allSeen = false;
+          break;
+        }
+      }
+
+      if(allSeen){
+        *seenType = true;
+        result[stored++] = types[i];
+        breakEarly = false;
+      }
+    }
+
+    if(breakEarly){
+      break;
+    }
+  }
+
+  for(Pair<FUDeclaration*,bool> p : seen){
+    Assert(p.second);
+  }
+  
+  return result;
+}
+
 
 Array<TypeStructInfoElement> GenerateStructFromType(FUDeclaration* decl,Arena* arena){
    if(decl->type == FUDeclaration::SPECIAL){
@@ -156,13 +219,6 @@ Array<TypeStructInfoElement> GenerateStructFromType(FUDeclaration* decl,Arena* a
      }
 
      configSize += 1;
-#if 0
-     if(decl->type == FUDeclaration::SINGLE){
-       configSize += decl->configInfo.configs.size;
-     } else {
-       configSize += 1;
-     }
-#endif
    }
 
    CalculatedOffsets& offsets = decl->configInfo.configOffsets;
@@ -177,23 +233,53 @@ Array<TypeStructInfoElement> GenerateStructFromType(FUDeclaration* decl,Arena* a
        continue;
      }
 
-#if 0
-     if(decl->type == FUDeclaration::SINGLE){
-       for(int i = 0; i < decl->configInfo.configs.size; i++){
-         entries[index].type = STRING("iptr");
-         entries[index].name = PushString(arena,"%.*s_%.*s",UNPACK_SS(node->inst->name),UNPACK_SS(decl->configInfo.configs[i].name));
-         index += 1;
-       }
-     } else {
-#endif       
-       entries[index].type = PushString(arena,"%.*sConfig",UNPACK_SS(decl->name));
-       entries[index].name = node->inst->name;
-       index += 1;
-#if 0
+     entries[index].type = PushString(arena,"%.*sConfig",UNPACK_SS(decl->name));
+     entries[index].name = node->inst->name;
+     index += 1;
+   }
+
+   return entries;
+}
+
+Array<TypeStructInfoElement> GenerateAddressStructFromType(FUDeclaration* decl,Arena* arena){
+   if(decl->type == FUDeclaration::SINGLE){
+     int size = 1;
+     Array<TypeStructInfoElement> entries = PushArray<TypeStructInfoElement>(arena,size);
+
+     for(int i = 0; i < size; i++){
+       entries[i].type = STRING("void*");
+       entries[i].name = STRING("addr");
      }
-#endif
+     return entries;
+   }
+
+   int memoryMapped = 0;
+   FOREACH_LIST(InstanceNode*,node,decl->baseCircuit->allocated){
+     FUDeclaration* decl = node->inst->declaration;
+
+     if(!(decl->isMemoryMapped)){
+       continue;
      }
 
+     memoryMapped += 1;
+   }
+
+   CalculatedOffsets& offsets = decl->configInfo.configOffsets;
+   Array<TypeStructInfoElement> entries = PushArray<TypeStructInfoElement>(arena,memoryMapped);
+
+   int i = 0;
+   int index = 0;
+   FOREACH_LIST_INDEXED(InstanceNode*,node,decl->baseCircuit->allocated,i){
+     FUDeclaration* decl = node->inst->declaration;
+
+     if(!(decl->isMemoryMapped)){
+       continue;
+     }
+
+     entries[index].type = PushString(arena,"%.*sAddr",UNPACK_SS(decl->name));
+     entries[index].name = node->inst->name;
+     index += 1;
+   }
    return entries;
 }
 
@@ -225,10 +311,10 @@ void OutputVersatSource(Versat* versat,Accelerator* accel,const char* hardwarePa
    std::vector<FUInstance> accum;
    AcceleratorIterator iter = {};
    for(InstanceNode* node = iter.Start(accel,arena,true); node; node = iter.Next()){
-      FUInstance* inst = node->inst;
-      if(!inst->declaration->isOperation && inst->declaration->type != FUDeclaration::SPECIAL){
-         accum.push_back(*inst);
-      }
+     FUInstance* inst = node->inst;
+     if(!inst->declaration->isOperation && inst->declaration->type != FUDeclaration::SPECIAL){
+       accum.push_back(*inst);
+     }
    };
 
    UnitValues unit = CalculateAcceleratorValues(versat,accel);
@@ -344,7 +430,6 @@ void OutputVersatSource(Versat* versat,Accelerator* accel,const char* hardwarePa
    TemplateSetNumber("numberUnits",accum.size());
    TemplateSetBool("IsSimple",false);
 
-   Array<FUDeclaration*> typesUsed = {};
    region(temp){
      Set<FUDeclaration*>* maps = PushSet<FUDeclaration*>(temp,99);
      AcceleratorIterator iter = {};
@@ -352,26 +437,52 @@ void OutputVersatSource(Versat* versat,Accelerator* accel,const char* hardwarePa
        FUInstance* inst = node->inst;
        FUDeclaration* decl = inst->declaration;
 
-       if(/*decl->type != FUDeclaration::SPECIAL && */ (ContainsConfigs(decl) || ContainsStatics(decl))){
+       if(ContainsConfigs(decl) || ContainsStatics(decl)){
          maps->Insert(decl);
        }
      }
 
+     Array<FUDeclaration*> typesUsed = {};
      typesUsed = PushArrayFromSet(arena,maps);
-     typesUsed = SortTypesByDependency(typesUsed,arena,temp);
+     typesUsed = SortTypesByConfigDependency(typesUsed,arena,temp);
+
+     Array<TypeStructInfo> structures = PushArray<TypeStructInfo>(arena,typesUsed.size);
+     int index = 0;
+     for(auto& decl : typesUsed){
+       Array<TypeStructInfoElement> val = GenerateStructFromType(decl,arena);
+       structures[index].name = decl->name;
+       structures[index].entries = val;
+       index += 1;
+     }
+     TemplateSetCustom("structures",&structures,"Array<TypeStructInfo>");
    }
 
-   Array<TypeStructInfo> structures = PushArray<TypeStructInfo>(arena,typesUsed.size);
-   int index = 0;
-   for(auto& decl : typesUsed){
-     Array<TypeStructInfoElement> val = GenerateStructFromType(decl,arena);
-     structures[index].name = decl->name;
-     structures[index].entries = val;
-     index += 1;
-   }
+   region(temp){
+     Set<FUDeclaration*>* maps = PushSet<FUDeclaration*>(temp,99);
+     AcceleratorIterator iter = {};
+     for(InstanceNode* node = iter.Start(accel,arena,false); node; node = iter.Next()){
+       FUInstance* inst = node->inst;
+       FUDeclaration* decl = inst->declaration;
 
-   //DebugValue(MakeValue(&structures));
-   TemplateSetCustom("structures",&structures,"Array<TypeStructInfo>");
+       if(decl->isMemoryMapped){
+         maps->Insert(decl);
+       }
+     }
+
+     Array<FUDeclaration*> typesUsed = {};
+     typesUsed = PushArrayFromSet(arena,maps);
+     typesUsed = SortTypesByMemDependency(typesUsed,arena,temp);
+
+     Array<TypeStructInfo> addressStructures = PushArray<TypeStructInfo>(arena,typesUsed.size);
+     int index = 0;
+     for(auto& decl : typesUsed){
+       Array<TypeStructInfoElement> val = GenerateAddressStructFromType(decl,arena);
+       addressStructures[index].name = decl->name;
+       addressStructures[index].entries = val;
+       index += 1;
+     }
+     TemplateSetCustom("addressStructures",&addressStructures,"Array<TypeStructInfo>");
+   }
 
    {
    Hashmap<String,SizedConfig>* namedConfigs = ExtractNamedSingleConfigs(accel,arena);
@@ -393,14 +504,6 @@ void OutputVersatSource(Versat* versat,Accelerator* accel,const char* hardwarePa
        }
      }
    }
-
-   /* What I have: I have the indexes where the given configuration values should reside inside an array.
-      Basically for each unit inside the accelerator a map from unit to the position inside the struct where the
-      values will reside.
-
-      I also have the default configurations for the normal accelerators inside the configs.
-
-    */
 
    if(merged){
      Array<Array<String>> mergedConfigs = PushArray<Array<String>>(arena,2); // TODO: Only using 2 for now.
@@ -430,8 +533,6 @@ void OutputVersatSource(Versat* versat,Accelerator* accel,const char* hardwarePa
 
      TemplateSetBool("doingMerged",true);
      TemplateSetCustom("mergedConfigs",&mergedConfigs,"Array<Array<String>>");
-
-//     DebugValue(MakeValue(&mergedConfigs));
    }
 
    }// TEMPORARY_MARK

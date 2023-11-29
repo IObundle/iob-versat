@@ -289,6 +289,8 @@ public:
    Data* Insert(Key key,Data data);
    Data* InsertIfNotExist(Key key,Data data);
 
+  //void Remove(Key key); // TODO: For current implementation, It is difficult to remove keys and keep the same requirements (iterate by order of insertion). 
+  
    Data* Get(Key key); // TODO: Should return an optional
    Data* GetOrInsert(Key key,Data data);
    Data GetOrFail(Key key);

@@ -195,25 +195,13 @@ void Hashmap<Key,Data>::Clear(){
    nodesUsed = 0;
 }
 
-template<typename T>
-static void DebugBreak2(T t){
-   // Nothing
-}
-
-template<>
-void DebugBreak2<String>(String t){
-   //DEBUG_BREAK_IF(CompareString(t,STRING("arch")));
-}
-
 template<typename Key,typename Data>
 Data* Hashmap<Key,Data>::Insert(Key key,Data data){
    int mask = this->nodesAllocated - 1;
    int index = std::hash<Key>()(key) & mask; // Size is power of 2
 
-   DebugBreak2<Key>(key);
-
    Pair<Key,Data>* ptr = this->buckets[index];
-   // Do not even need to look
+
    if(ptr == nullptr){
       Assert(this->nodesUsed < this->nodesAllocated);
       Pair<Key,Data>* node = &this->data[this->nodesUsed++];
@@ -262,18 +250,55 @@ Data* Hashmap<Key,Data>::InsertIfNotExist(Key key,Data data){
    return nullptr;
 }
 
+#if 0
+template<typename Key,typename Data>
+void Hashmap<Key,Data>::Remove(Key key){
+  Assert(Get(key) != nullptr);
+
+  int mask = this->nodesAllocated - 1;
+  int index = std::hash<Key>()(key) & mask; // Size is power of 2
+
+  Pair<Key,Data>* ptr = this->buckets[index];
+  Assert(ptr);
+
+  int previousNextIndex = -1;
+  int nextIndex = 0;
+  for(; ptr;){
+    if(ptr->key == key){ // Same key
+       nextIndex = ptr - this->data;
+       break;
+    }
+
+    previousNextIndex = ptr - this->data;
+    ptr = this->next[previousNextIndex];
+  }
+
+  if(previousNextIndex == -1){
+    this->next[nextIndex] = nullptr;
+  } else {
+    this->next[previousNextIndex] = this->next[nextIndex];
+  }
+
+  nodesUsed -= 1;
+}
+#endif
+
 template<typename Key,typename Data>
 bool Hashmap<Key,Data>::Exists(Key key){
-   Data* ptr = Get(key);
+  Data* ptr = Get(key);
 
-   if(ptr == nullptr){
-      return false;
-   }
-   return true;
+  if(ptr == nullptr){
+    return false;
+  }
+  return true;
 }
 
 template<typename Key,typename Data>
 Data* Hashmap<Key,Data>::Get(Key key){
+   if(this->nodesUsed == 0){
+      return nullptr;
+   }
+
    int mask = this->nodesAllocated - 1;
    int index = std::hash<Key>()(key) & mask; // Size is power of 2
 

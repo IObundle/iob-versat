@@ -542,6 +542,7 @@ static int AccessMemory(FUInstance* inst,int address, int value, int write){
   return res;
 }
 
+#if 0
 static int CompositeMemoryAccess(FUInstance* instance,int address,int value,int write){
   int offset = 0;
 
@@ -630,6 +631,7 @@ void VersatMemoryCopy(FUInstance* instance,int* dest,int* data,int size){
 void VersatMemoryCopy(FUInstance* instance,int* dest,Array<int> data){
   VersatMemoryCopy(instance,dest,data.data,data.size);
 }
+#endif
 
 FUDeclaration* GetTypeByName(Versat* versat,String name){
   for(FUDeclaration* decl : versat->declarations){
@@ -722,6 +724,7 @@ static FUInstance* GetInstanceByHierarchicalName(Accelerator* accel,Hierarchical
 }
 #endif
 
+#if 0
 // Function used by pc-emul/versat.cpp
 extern "C" Accelerator* CreateSimulableAccelerator(Versat* versat,const char* acceleratorTypeName){
   Accelerator* accel = CreateAccelerator(versat);
@@ -751,6 +754,7 @@ extern "C" void* GetStartOfConfig(Accelerator* accel){
 extern "C" void* GetStartOfState(Accelerator* accel){
   return accel->stateAlloc.ptr;
 }
+#endif
 
 static String GetFullHierarchicalName(HierarchicalName* head,Arena* arena){
   Byte* mark = MarkArena(arena);
@@ -1338,7 +1342,7 @@ void FillDeclarationWithAcceleratorValues(Versat* versat,FUDeclaration* decl,Acc
   decl->nStaticConfigs = val.statics;
   decl->isMemoryMapped = val.isMemoryMapped;
   decl->memoryMapBits = val.memoryMappedBits;
-  decl->memAccessFunction = CompositeMemoryAccess;
+  //decl->memAccessFunction = CompositeMemoryAccess;
 
   decl->inputDelays = PushArray<int>(permanent,val.inputs);
 
@@ -1806,7 +1810,7 @@ FUDeclaration* RegisterIterativeUnit(Versat* versat,Accelerator* accel,FUInstanc
   declaration.updateFunction = IterativeUpdateFunction;
   declaration.destroyFunction = IterativeDestroyFunction;
 #endif
-  declaration.memAccessFunction = CompositeMemoryAccess;
+//declaration.memAccessFunction = CompositeMemoryAccess;
 
   declaration.staticUnits = PushHashmap<StaticId,StaticData>(&versat->permanent,1000); // TODO: Set correct number of elements
   int staticOffset = 0;

@@ -658,7 +658,7 @@ Hashmap<String,SizedConfig>* ExtractNamedSingleMem(Accelerator* accel,Arena* out
 
    Hashmap<String,SizedConfig>* res = PushHashmap<String,SizedConfig>(out,count);
 
-   for(InstanceNode* node = iter.Start(accel,out,false); node; node = iter.Next()){
+   for(InstanceNode* node = iter.Start(accel,out,true); node; node = iter.Next()){
       FUInstance* inst = node->inst;
       FUDeclaration* decl = inst->declaration;
       if(decl->type == FUDeclaration::SINGLE && decl->isMemoryMapped){
