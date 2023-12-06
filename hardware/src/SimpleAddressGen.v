@@ -1,70 +1,75 @@
 `timescale 1ns / 1ps
+// Comment so that verible-format will not put timescale and defaultt_nettype into same line
+`default_nettype none
 
 // Generates an address for a 8 bit memory. Byte space
-module SimpleAddressGen # (
-   parameter ADDR_W = 10,
-   parameter PERIOD_W = 10,
-   parameter DELAY_W = 32,
-   parameter DATA_W = 32 // Size of data. Addr is in byte space and the size of data tells how much to increment. A size of 32 with an incr of 1 leads to an increase of addr by 4.
-   ) (
-   input                          clk,
-   input                          rst,
+module SimpleAddressGen 
+  #(
+    parameter ADDR_W = 10,
+    parameter PERIOD_W = 10,
+    parameter DELAY_W = 32,
+    parameter DATA_W = 32 // Size of data. Addr is in byte space and the size of data tells how much to increment. A size of 32 with an incr of 1 leads to an increase of addr by 4.
+    ) (
+       input                       clk_i,
+       input                       rst_i,
 
-   input                          run,
+       input                       run_i,
 
-   //configurations 
-   input [PERIOD_W - 1:0]         period,
-   input [DELAY_W - 1:0]          delay,
-   input [ADDR_W - 1:0]           start,
-   input signed [ADDR_W - 1:0]    incr,
+       //configurations 
+       input [PERIOD_W - 1:0]      period_i,
+       input [DELAY_W - 1:0]       delay_i,
+       input [ADDR_W - 1:0]        start_i,
+       input signed [ADDR_W - 1:0] incr_i,
 
-   //outputs 
-   output reg                     valid,
-   input                          ready,
-   output reg [ADDR_W - 1:0]      addr,
+       //outputs 
+       output reg                  valid_o,
+       input                       ready_i,
+       output reg [ADDR_W - 1:0]   addr_o,
 
-   //output reg                   mem_en,
-   output reg                     done
-);
+       //output reg                  mem_en_o,
+       output reg                  done_o
+       );
 
 localparam OFFSET_W = $clog2(DATA_W/8);
 
-reg [DELAY_W-1:0] delayCounter;
+reg [DELAY_W-1:0] delay_Counter;
 
 reg [PERIOD_W - 1:0] per;
 
-wire perCond = ((per + 1) >= (period >> OFFSET_W));
+wire perCond = (per + 1) >= period_i; /* Do not know why there was a "period_i >> OFFSET_W" */
 
-always @(posedge clk,posedge rst)
+always @(posedge clk_i,posedge rst_i)
 begin
-   if(rst) begin
-      delayCounter <= 0;
-      addr <= 0;
+   if(rst_i) begin
+      delay_Counter <= 0;
+      addr_o <= 0;
       per <= 0;
-      valid <= 0;
-      done <= 1'b0;
-   end else if(run) begin
-      delayCounter <= delay;
-      addr <= start;
+      valid_o <= 0;
+      done_o <= 1'b0;
+   end else if(run_i) begin
+      delay_Counter <= delay_i;
+      addr_o <= start_i;
       per <= 0;
-      valid <= 0;
-      done <= 1'b0;
-      if(delay == 0) begin
-         valid <= 1'b1;
+      valid_o <= 0;
+      done_o <= 1'b0;
+      if(delay_i == 0) begin
+         valid_o <= 1'b1;
       end
-   end else if(|delayCounter) begin
-      delayCounter <= delayCounter - 1;
-      valid <= 1'b1;
-   end else if(valid && ready) begin
+   end else if(|delay_Counter) begin
+      delay_Counter <= delay_Counter - 1;
+      valid_o <= 1'b1;
+   end else if(valid_o && ready_i) begin
       if(perCond) begin
          per <= 0;
-         done <= 1'b1;
-         valid <= 0;
+         done_o <= 1'b1;
+         valid_o <= 0;
       end else  begin
-         addr <= addr + (incr << OFFSET_W);
+         addr_o <= addr_o + (incr_i << OFFSET_W);
          per <= per + 1;
       end
    end
 end
 
-endmodule
+endmodule // SimpleAddressGen
+
+`default_nettype wire

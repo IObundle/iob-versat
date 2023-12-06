@@ -1,59 +1,64 @@
 `timescale 1ns / 1ps
+// Comment so that verible-format will not put timescale and defaultt_nettype into same line
+`default_nettype none
 
 // Axi like interface 
-module MemoryReader #(
-      parameter ADDR_W = 32,
-      parameter DATA_W = 32
-   )(
+module MemoryReader 
+  #(
+    parameter ADDR_W = 32,
+    parameter DATA_W = 32
+    )(
       // Slave
-      input s_valid,
-      output s_ready,
-      input [ADDR_W-1:0] s_addr,
+      input               s_valid_i,
+      output              s_ready_o,
+      input [ADDR_W-1:0]  s_addr_i,
 
       // Master
-      output reg m_valid,
-      input m_ready,
-      output [ADDR_W-1:0] m_addr,
-      output [DATA_W-1:0] m_data,      
-      input m_last,
+      output reg          m_valid_o,
+      input               m_ready_i,
+      output [ADDR_W-1:0] m_addr_o,
+      output [DATA_W-1:0] m_data_o, 
+      input               m_last_i,
 
       // Connect to memory
-      output              mem_enable,
-      output [ADDR_W-1:0] mem_addr,
-      input  [DATA_W-1:0] mem_data,
+      output              mem_enable_o,
+      output [ADDR_W-1:0] mem_addr_o,
+      input [DATA_W-1:0]  mem_data_i,
 
-      input clk,
-      input rst
-   );
+      input               clk_i,
+      input               rst_i
+      );
 
-wire s_transfer = (s_valid && s_ready);
-wire m_transfer = (m_valid && m_ready);
+wire s_transfer = (s_valid_i && s_ready_o);
+wire m_transfer = (m_valid_o && m_ready_i);
 
 reg [ADDR_W-1:0] last_addr;
 
-always @(posedge clk,posedge rst)
+always @(posedge clk_i,posedge rst_i)
 begin
-   if(rst) begin
-      m_valid <= 1'b0;
+   if(rst_i) begin
+      m_valid_o <= 1'b0;
       last_addr <= 0;
    end else begin
       if(m_transfer) begin
-         m_valid <= 1'b0;
+         m_valid_o <= 1'b0;
       end
 
-      if(s_transfer && !m_last) begin
-         m_valid <= 1'b1;
-         last_addr <= s_addr;
+      if(s_transfer && !m_last_i) begin
+         m_valid_o <= 1'b1;
+         last_addr <= s_addr_i;
       end
    end
 end
 
-assign s_ready = m_valid ? m_ready : 1'b1;
+assign s_ready_o = m_valid_o ? m_ready_i : 1'b1;
 
-assign mem_enable = s_transfer;
-assign mem_addr = s_addr;
+assign mem_enable_o = s_transfer;
+assign mem_addr_o = s_addr_i;
 
-assign m_data = mem_data;
-assign m_addr = last_addr;
+assign m_data_o = mem_data_i;
+assign m_addr_o = last_addr;
 
-endmodule 
+endmodule // MemoryReader
+
+`default_nettype wire

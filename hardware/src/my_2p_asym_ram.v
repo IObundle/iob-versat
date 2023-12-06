@@ -1,4 +1,7 @@
 `timescale 1ns / 1ps
+// Comment so that verible-format will not put timescale and defaultt_nettype into same line
+`default_nettype none
+
 `define max(a,b) {(a) > (b) ? (a) : (b)}
 `define min(a,b) {(a) < (b) ? (a) : (b)}
 
@@ -13,20 +16,20 @@ module my_2p_asym_ram
     parameter ADDR_W = 0
     )
    (
-    input                     clk,
+    input                     clk_i,
     //write port
-    input                     w_en,
-    input [W_DATA_W-1:0]      w_data,
-    input [ADDR_W-1:0]        w_addr,
+    input                     w_en_i,
+    input [W_DATA_W-1:0]      w_data_i,
+    input [ADDR_W-1:0]        w_addr_i,
     //read port
-    input                     r_en,
-    input [ADDR_W-1:0]        r_addr,
-    output reg [R_DATA_W-1:0] r_data
+    input                     r_en_i,
+    input [ADDR_W-1:0]        r_addr_i,
+    output reg [R_DATA_W-1:0] r_data_o
     );
 
    //determine the number of blocks N
-   localparam MAXDATA_W = `max(W_DATA_W, R_DATA_W);
-   localparam MINDATA_W = `min(W_DATA_W, R_DATA_W);
+   localparam MAXDATA_W = `max(W_DATA_I_W, R_DATA_O_W);
+   localparam MINDATA_W = `min(W_DATA_I_W, R_DATA_O_W);
    localparam N = MAXDATA_W/MINDATA_W;
    localparam N_W = $clog2(N);
    localparam SYMBOL_W = $clog2(MINDATA_W/8);
@@ -50,13 +53,13 @@ module my_2p_asym_ram
                )
          iob_2p_ram_inst
              (
-              .clk(clk),
-              .w_en(en_wr[i]),
-              .w_addr(w_addr[ADDR_W-1:N_W + SYMBOL_W]),
-              .w_data(data_wr[i]),
-              .r_en(r_en),
-              .r_addr(r_addr[ADDR_W-1:N_W + SYMBOL_W]),
-              .r_data(data_rd[i])              
+              .clk_i(clk_i),
+              .w_en_i(en_wr[i]),
+              .w_addr_i(w_addr_i[ADDR_W-1:N_W + SYMBOL_W]),
+              .w_data_i(data_wr[i]),
+              .r_en_i(r_en_i),
+              .r_addr_i(r_addr_i[ADDR_W-1:N_W + SYMBOL_W]),
+              .r_data_o(data_rd[i])              
               );
          
       end
@@ -65,57 +68,59 @@ module my_2p_asym_ram
    integer j,k,l;
    generate
 
-      if (W_DATA_W > R_DATA_W) begin
+      if (W_DATA_I_W > R_DATA_O_W) begin
          
          //write parallel
          always @* begin
             for (j=0; j < N; j= j+1) begin
-               en_wr[j] = w_en;
-               data_wr[j] = w_data[j*MINDATA_W +: MINDATA_W];
+               en_wr[j] = w_en_i;
+               data_wr[j] = w_data_i[j*MINDATA_W +: MINDATA_W];
             end
          end
          
          //read address register
-         reg [ADDR_W-1:0] r_addr_lsbs_reg;
-         always @(posedge clk)
-           r_addr_lsbs_reg <= r_addr[ADDR_W-1:0] >> SYMBOL_W;
+         reg [ADDR_W-1:0] r_addr_i_lsbs_reg;
+         always @(posedge clk_i)
+           r_addr_i_lsbs_reg <= r_addr_i[ADDR_W-1:0] >> SYMBOL_W;
            
          //read mux
          always @* begin
-            r_data = 1'b0;
+            r_data_o = 1'b0;
             for (l=0; l < N; l= l+1) begin
-               r_data = data_rd[r_addr_lsbs_reg];
+               r_data_o = data_rd[r_addr_i_lsbs_reg];
             end
          end
          
-      end else  if (W_DATA_W < R_DATA_W) begin
-         wire [ADDR_W-1:0] byteAddr = w_addr[ADDR_W-1:0] >> SYMBOL_W;
+      end else  if (W_DATA_I_W < R_DATA_O_W) begin
+         wire [ADDR_W-1:0] byteAddr = w_addr_i[ADDR_W-1:0] >> SYMBOL_W;
 
          //write serial
          always @* begin
             for (j=0; j < N; j= j+1) begin
-               en_wr[j] = w_en & (byteAddr[N_W-1:0] == j[N_W-1:0]);
-               data_wr[j] = w_data;
+               en_wr[j] = w_en_i & (byteAddr[N_W-1:0] == j[N_W-1:0]);
+               data_wr[j] = w_data_i;
             end
          end
          //read parallel
          always @* begin
-            r_data = 1'b0;
+            r_data_o = 1'b0;
             for (k=0; k < N; k= k+1) begin
-               r_data[k*MINDATA_W +: MINDATA_W] = data_rd[k];
+               r_data_o[k*MINDATA_W +: MINDATA_W] = data_rd[k];
             end
          end
 
-      end else begin //W_DATA_W = R_DATA_W
+      end else begin //W_DATA_I_W = R_DATA_O_W
          //write serial
          always @* begin
-            en_wr[0] = w_en;
-            data_wr[0] = w_data;
+            en_wr[0] = w_en_i;
+            data_wr[0] = w_data_i;
          end
          //read parallel
          always @* begin
-            r_data = data_rd[0];
+            r_data_o = data_rd[0];
          end
       end
    endgenerate
-endmodule
+endmodule // my_2p_asym_ram
+
+`default_nettype wire

@@ -54,12 +54,16 @@ void PopMark(Arena* arena,Byte* mark);
 Byte* PushBytes(Arena* arena, size_t size);
 size_t SpaceAvailable(Arena* arena);
 String PointArena(Arena* arena,Byte* mark);
-String PushFile(Arena* arena,const char* filepath);
 String PushChar(Arena* arena,const char);
 String PushString(Arena* arena,String ss);
 String PushString(Arena* arena,const char* format,...) __attribute__ ((format (printf, 2, 3)));
 String vPushString(Arena* arena,const char* format,va_list args);
 void PushNullByte(Arena* arena);
+
+// TODO: Maybe add Optional to indicate error opening file
+//       In general error handling is pretty lacking overall.
+String PushFile(Arena* arena,FILE* file);
+String PushFile(Arena* arena,const char* filepath);
 
 class ArenaMarker{
 public:
@@ -280,10 +284,13 @@ struct Hashmap{
    // Pair<Key,Data> dataData[nodesAllocated];
 
    // Construct by calling PushHashmap
-
+public:
+  
    Data* Insert(Key key,Data data);
    Data* InsertIfNotExist(Key key,Data data);
 
+  //void Remove(Key key); // TODO: For current implementation, It is difficult to remove keys and keep the same requirements (iterate by order of insertion). 
+  
    Data* Get(Key key); // TODO: Should return an optional
    Data* GetOrInsert(Key key,Data data);
    Data GetOrFail(Key key);
@@ -401,7 +408,7 @@ template<typename T>
 struct Pool{
    Byte* mem; // TODO: replace with PoolHeader instead of using Byte and casting
    PoolInfo info;
-
+public:
    T* Alloc();
    T* Alloc(int index); // Returns nullptr if element already allocated at given position
    void Remove(T* elem);

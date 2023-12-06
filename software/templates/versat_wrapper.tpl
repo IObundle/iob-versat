@@ -4,10 +4,17 @@
 #{include "versat_common.tpl"}
 #include <new>
 
-#include "versat_accel.h"
-#include "versat.hpp"
-#include "utils.hpp"
-#include "acceleratorStats.hpp"
+#include <cassert>
+#define Assert(x) assert(x)
+
+#include "versat_accel.h" // TODO: Is this needed? We technically have all the data that we need to not depend on this header and removing this dependency could simplify the build process. Take a look later
+
+//#include "versat.hpp"
+//#include "utils.hpp"
+//#include "acceleratorStats.hpp"
+
+#define ALIGN_UP(val,size) (((val) + (size - 1)) & ~(size - 1))
+#define ALIGN_DOWN(val,size) (val & (~(size - 1)))
 
 #include "verilated.h"
 
@@ -21,51 +28,20 @@ static VerilatedVcdC* tfp = NULL;
 
 VerilatedContext* contextp = new VerilatedContext;
 
-static int zeros[99] = {};
-static Array<int> zerosArray = {zeros,99};
-
 #include "V@{module.name}.h"
 static V@{module.name}* dut = NULL;
 
 extern bool CreateVCD;
 extern bool SimulateDatabus;
 
-#define INIT(unit) \
-   unit->run = 0; \
-   unit->clk = 0; \
-   unit->rst = 0; \
-   unit->running = 0;
-
+// TODO: Maybe this should not exist. There should exist one update function and every other function that needs to update stuff should just call that function. UPDATE as it stands should only be called inside the update function. Instead of having macros that call UPDATE, we should just call the update function directly inside the RESET macro and the START_RUN macro and so one. Everything depends on the update function and the UPDATE macro is removed and replaced inside the function. The only problem is that I do not know if the RESET macro can call the update function without something. Nonetheless, every "update" should go trough the update function and none should go through this macro.
 #define UPDATE(unit) \
    unit->clk = 0; \
    unit->eval(); \
    if(CreateVCD) tfp->dump(contextp->time()); \
    contextp->timeInc(2); \
    unit->clk = 1; \
-   unit->eval(); \
-
-#define RESET(unit) \
-   unit->rst = 1; \
-   UPDATE(unit); \
-   unit->rst = 0; \
-   if(CreateVCD) tfp->dump(contextp->time()); \
-   contextp->timeInc(1); \
-   if(CreateVCD) tfp->dump(contextp->time()); \
-   contextp->timeInc(1);
-
-#define START_RUN(unit) \
-   unit->run = 1; \
-   UPDATE(unit); \
-   unit->running = 1; \
-   unit->run = 0; \
-   if(CreateVCD) tfp->dump(contextp->time()); \
-   contextp->timeInc(1); \
-   if(CreateVCD) tfp->dump(contextp->time()); \
-   contextp->timeInc(1);
-
-#define PREAMBLE(type) \
-   type* self = &data->unit; \
-   VCDData* vcd = &data->vcd;
+   unit->eval();
 
 static char* Bin(unsigned int value){
    static char buffer[33];
@@ -80,103 +56,6 @@ static char* Bin(unsigned int value){
    return buffer;
 }
 
-// static Array<int> zerosArray defined in versat.cpp
-
-template<typename T>
-static int32_t MemoryAccessNoAddress(FUInstance* inst,int address,int value,int write){
-   T* self = (T*) inst->extraData;
-
-   if(write){
-      self->valid = 1;
-      self->wstrb = 0xf;
-      self->wdata = value;
-
-      self->eval();
-
-      while(!self->ready){
-         inst->declaration->updateFunction(inst,zerosArray);
-      }
-
-      self->valid = 0;
-      self->wstrb = 0x00;
-      self->wdata = 0x00000000;
-
-      inst->declaration->updateFunction(inst,zerosArray);
-
-      return 0;
-   } else {
-      self->valid = 1;
-      self->wstrb = 0x0;
-
-      self->eval();
-
-      while(!self->ready){
-         inst->declaration->updateFunction(inst,zerosArray);
-      }
-
-      int32_t res = self->rdata;
-
-      self->valid = 0;
-
-      self->eval();
-      while(self->ready){
-         inst->declaration->updateFunction(inst,zerosArray);
-      }
-
-      return res;
-   }
-}
-
-template<typename T>
-static int32_t MemoryAccess(FUInstance* inst,int address,int value,int write){
-   T* self = (T*) inst->extraData;
-
-   if(write){
-      self->valid = 1;
-      self->wstrb = 0xf;
-
-      self->addr = address;
-      self->wdata = value;
-
-      self->eval();
-
-      while(!self->ready){
-         inst->declaration->updateFunction(inst,zerosArray);
-      }
-
-      self->valid = 0;
-      self->wstrb = 0x00;
-      self->addr = 0x00000000;
-      self->wdata = 0x00000000;
-
-      inst->declaration->updateFunction(inst,zerosArray);
-
-      return 0;
-   } else {
-      self->valid = 1;
-      self->wstrb = 0x0;
-      self->addr = address;
-
-      self->eval();
-
-      while(!self->ready){
-         inst->declaration->updateFunction(inst,zerosArray);
-      }
-
-      int32_t res = self->rdata;
-
-      self->valid = 0;
-      self->addr = 0;
-
-      self->eval();
-      while(self->ready){
-         inst->declaration->updateFunction(inst,zerosArray);
-      }
-
-      return res;
-   }
-}
-
 struct DatabusAccess{
    int counter;
    int latencyCounter;
@@ -185,73 +64,25 @@ struct DatabusAccess{
 static const int INITIAL_MEMORY_LATENCY = 5;
 static const int MEMORY_LATENCY = 0;
 
-struct Int128{
-   int32 i[4];
-};
+typedef char Byte;
 
-struct Int256{
-   int32 i[8];
-};
+// Everything is statically allocated
+static constexpr int totalExternalMemory = @{totalExternalMemory};
+static Byte externalMemory[totalExternalMemory]; 
+static AcceleratorConfig configBuffer = {};
+static AcceleratorState stateBuffer = {};
+static DatabusAccess databusBuffer[@{module.nIO}] = {}; 
 
-// Memories are evaluated after databus because most of the time
-// databus is used to read data to memories
-// while memory to databus usually passes through a register that holds the data.
-// and therefore order of evaluation usually favours databus first and memories after
+extern "C" void InitializeVerilator(){
+   Verilated::traceEverOn(true);
+}
 
-void @{module.name}_VCDFunction(FUInstance* inst,FILE* out,VCDMapping& currentMapping,Array<int>,bool firstTime,bool printDefinitions){
-   #if 0
-   if(printDefinitions){
-   #{for external module.externalInterfaces}
-      #{set id external.interface}
-      #{if external.type}
-      #{for dp external.dp}
-      // DP
-      fprintf(out,"$var wire @{dp.bitSize} %s ext_dp_addr_@{id}_port_@{index} $end\n",currentMapping.Get());
-      currentMapping.Increment();
-      fprintf(out,"$var wire @{dp.dataSizeOut} %s ext_dp_out_@{id}_port_@{index} $end\n",currentMapping.Get());
-      currentMapping.Increment();
-      fprintf(out,"$var wire @{dp.dataSizeIn} %s ext_dp_in_@{id}_port_@{index} $end\n",currentMapping.Get());
-      currentMapping.Increment();
-      fprintf(out,"$var wire 1 %s ext_dp_enable_@{id}_port_@{index} $end\n",currentMapping.Get());
-      currentMapping.Increment();
-      fprintf(out,"$var wire 1 %s ext_dp_write_@{id}_port_@{index} $end\n",currentMapping.Get());
-      currentMapping.Increment();
-      #{end}
-      #{else}
-      // 2P
-      {
-      }
-      #{end}
-   #{end}
-   } else {
-   #{for external module.externalInterfaces}
-      #{set id external.interface}
-      #{if external.type}
-      #{for dp external.dp}
-      // DP
-      {
-      V@{module.name}* self = (V@{module.name}*) inst->extraData;
+extern "C" AcceleratorConfig* GetStartOfConfig(){
+  return &configBuffer;
+}
 
-      fprintf(out,"b%s %s\n",Bin(self->ext_dp_addr_@{id}_port_@{index}),currentMapping.Get());
-      currentMapping.Increment();
-      fprintf(out,"b%s %s\n",Bin(self->ext_dp_out_@{id}_port_@{index}),currentMapping.Get());
-      currentMapping.Increment();
-      fprintf(out,"b%s %s\n",Bin(self->ext_dp_in_@{id}_port_@{index}),currentMapping.Get());
-      currentMapping.Increment();
-      fprintf(out,"%d%s\n",self->ext_dp_enable_@{id}_port_@{index} ? 1 : 0,currentMapping.Get());
-      currentMapping.Increment();
-      fprintf(out,"%d%s\n",self->ext_dp_write_@{id}_port_@{index} ? 1 : 0,currentMapping.Get());
-      currentMapping.Increment();
-      }
-      #{end}
-      #{else}
-      // 2P
-      {
-      }
-      #{end}
-   #{end}
-   }
-   #endif
+extern "C" AcceleratorState* GetStartOfState(){
+  return &stateBuffer;
 }
 
 static void CloseWaveform(){
@@ -260,7 +91,7 @@ static void CloseWaveform(){
    }
 }
 
-int32_t* @{module.name}_InitializeFunction(FUInstance* inst){
+extern "C" void VersatAcceleratorCreate(){
    if(CreateVCD){
    #{if arch.generateFSTFormat}
       tfp = new VerilatedFstC;
@@ -269,9 +100,7 @@ int32_t* @{module.name}_InitializeFunction(FUInstance* inst){
    #{end}
    }
 
-   memset(inst->extraData,0,inst->declaration->extraDataOffsets.max);
-
-   V@{module.name}* self = new (inst->extraData) V@{module.name}();
+   V@{module.name}* self = new V@{module.name}();
 
    if(dut){
       printf("Initialize function is being called multiple times\n");
@@ -292,119 +121,37 @@ int32_t* @{module.name}_InitializeFunction(FUInstance* inst){
       atexit(CloseWaveform);
    }
 
-   INIT(self);
+   self->run = 0;
+   self->clk = 0;
+   self->rst = 0;
+   self->running = 0;
 
 #{for i module.inputDelays.size}
    self->in@{i} = 0;
 #{end}
 
-   RESET(self);
+   self->rst = 1;
+   UPDATE(self);
+   self->rst = 0;
+   if(CreateVCD) tfp->dump(contextp->time());
+   contextp->timeInc(1);
+   if(CreateVCD) tfp->dump(contextp->time());
+   contextp->timeInc(1);
 
-   return NULL;
 }
 
-int32_t* @{module.name}_StartFunction(FUInstance* inst){
-#{if module.outputLatencies}
-   static int32_t out[@{module.outputLatencies.size}];
-#{end}
+static void InternalUpdateAccelerator(){
+   int baseAddress = 0;
 
-   V@{module.name}* self = (V@{module.name}*) inst->extraData;
+   V@{module.name}* self = dut;
 
-#{if module.configs}
-AcceleratorConfig* config = (AcceleratorConfig*) inst->config;
-
-#{for i module.configs.size}
-#{set wire module.configs[i]}
-   self->@{wire.name} = config->@{configsHeader[i].name};
-#{end}
-#{end}
-
-#{if module.nDelays}
-#{for i module.nDelays}
-   self->delay@{i} = config->TOP_Delay@{i};
-#{end}
-#{end}
-
-#{for i module.nIO}
-{
-   DatabusAccess* memoryLatency = ((DatabusAccess*) &self[1]) + @{i};
-
-   memoryLatency->counter = 0;
-   memoryLatency->latencyCounter = INITIAL_MEMORY_LATENCY;
-}
-#{end}
-
-   START_RUN(self);
-
-#{if module.hasDone}
-   inst->done = self->done;
-#{end}
-
-#{if module.outputLatencies}
-   #{for i module.outputLatencies.size}
-   out[@{i}] = self->out@{i};
-   #{end}
-
-   return out;
-#{else}
-   return NULL;
-#{end}
-}
-
-#define Int128ToVerilator(VAL,TO_STORE) \
-  TO_STORE[0] = (((int32*)VAL)[0]); \
-  TO_STORE[1] = (((int32*)VAL)[1]); \
-  TO_STORE[2] = (((int32*)VAL)[2]); \
-  TO_STORE[3] = (((int32*)VAL)[3]); 
-
-int32_t* @{module.name}_UpdateFunction(FUInstance* inst,Array<int> inputs){
-#{if module.outputLatencies}
-   static int32_t out[@{module.outputLatencies.size}];
-#{end}
-
-   V@{module.name}* self = (V@{module.name}*) inst->extraData;
-
-#{for i module.inputDelays.size}
-   self->in@{i} = inputs[@{i}]; //GetInputValue(node,@{i});
-#{end}
-
-   self->eval();
-
-#{for external module.externalInterfaces}
-   #{set id external.interface}
-   #{if external.type}
-   // DP
-   #{for dp external.dp}
-   #{set dataType #{call IntName dp.dataSizeIn}}
-
-   int saved_dp_enable_@{id}_port_@{index} = self->ext_dp_enable_@{id}_port_@{index};
-   int saved_dp_write_@{id}_port_@{index} = self->ext_dp_write_@{id}_port_@{index};
-   int saved_dp_addr_@{id}_port_@{index} = self->ext_dp_addr_@{id}_port_@{index};
-   @{dataType} saved_dp_data_@{id}_port_@{index};
-   memcpy(&saved_dp_data_@{id}_port_@{index},&self->ext_dp_out_@{id}_port_@{index},sizeof(@{dataType}));
-
-   #{end}
-   #{else}
-   // 2P
-   #{set dataType #{call IntName external.tp.dataSizeOut}}
-
-   int saved_2p_r_enable_@{id} = self->ext_2p_read_@{id};
-   int saved_2p_r_addr_@{id} = self->ext_2p_addr_in_@{id}; // Instead of saving address, should access memory and save data. Would simulate better what is actually happening
-   int saved_2p_w_enable_@{id} = self->ext_2p_write_@{id};
-   int saved_2p_w_addr_@{id} = self->ext_2p_addr_out_@{id};
-   @{dataType} saved_2p_w_data_@{id};
-   memcpy(&saved_2p_w_data_@{id},&self->ext_2p_data_out_@{id},sizeof(@{dataType}));
-
-   #{end}
-   self->eval();
-#{end}
-
+   // Databus must be updated before memories because databus could drive memories but memories "cannot" drive databus (in the sense that databus acts like a master if connected directly to memories but memories do not act like a master when connected to a databus. The unit logic is the one that acts like a master)
 #{for i module.nIO}
 if(SimulateDatabus){
    self->databus_ready_@{i} = 0;
    self->databus_last_@{i} = 0;
 
-   DatabusAccess* access = ((DatabusAccess*) &self[1]) + @{i};
+   DatabusAccess* access = &databusBuffer[@{i}];
 
    if(self->databus_valid_@{i}){
       if(access->latencyCounter > 0){
@@ -462,30 +209,89 @@ if(SimulateDatabus){
    self->eval();
 }
 #{end}
+   
+   baseAddress = 0;
+#{for external module.externalInterfaces}
+   #{set id external.interface}
+   #{if external.type}
+   // DP
+   #{for dp external.dp}
+   #{set dataType #{call IntName dp.dataSizeIn}}
+
+   int saved_dp_enable_@{id}_port_@{index} = self->ext_dp_enable_@{id}_port_@{index};
+   int saved_dp_write_@{id}_port_@{index} = self->ext_dp_write_@{id}_port_@{index};
+   int saved_dp_addr_@{id}_port_@{index} = self->ext_dp_addr_@{id}_port_@{index};
+   @{dataType} saved_dp_data_@{id}_port_@{index};
+   memcpy(&saved_dp_data_@{id}_port_@{index},&self->ext_dp_out_@{id}_port_@{index},sizeof(@{dataType}));
+   #{end}
+
+   {
+     int memSize = @{external |> MemorySize}; // Template add something about id but do not know if needed
+     baseAddress += memSize;
+   }
+   #{else}
+   // 2P
+   #{set dataType #{call IntName external.tp.dataSizeOut}}
+
+   @{dataType} saved_2p_r_data_@{id};
+   {
+     int memSize = @{external |> MemorySize};
+   // 2P
+      if(self->ext_2p_read_@{id}){
+         int readOffset = self->ext_2p_addr_in_@{id};
+
+         Assert(readOffset < memSize);
+         int address = baseAddress + readOffset; // * sizeof(@{dataType});
+         
+         address = ALIGN_DOWN(address,sizeof(@{dataType}));
+
+         Assert(address + sizeof(@{dataType}) <= totalExternalMemory);
+
+         @{dataType}* ptr = (@{dataType}*) &externalMemory[address];
+         memcpy(&saved_2p_r_data_@{id},ptr,sizeof(@{dataType}));
+      }
+     baseAddress += memSize;
+   }
+
+#if 1
+   int saved_2p_r_enable_@{id} = self->ext_2p_read_@{id};
+   int saved_2p_r_addr_@{id} = self->ext_2p_addr_in_@{id}; // Instead of saving address, should access memory and save data. Would simulate better what is actually happening
+#endif
+   
+   int saved_2p_w_enable_@{id} = self->ext_2p_write_@{id};
+   int saved_2p_w_addr_@{id} = self->ext_2p_addr_out_@{id};
+   @{dataType} saved_2p_w_data_@{id};
+   memcpy(&saved_2p_w_data_@{id},&self->ext_2p_data_out_@{id},sizeof(@{dataType}));
+
+   #{end}
+   self->eval();
+#{end}
 
    UPDATE(self); // This line causes posedge clk events to activate
-
+   
+   // Memory Read
 {
-   int baseAddress = 0;
+   baseAddress = 0;
 #{for external module.externalInterfaces}
    #{set id external.interface}
    #{if external.type}
    // DP
    {
 
-   int memSize = ExternalMemoryByteSize(&inst->declaration->externalMemory[@{id}]);
+   int memSize = @{external |> MemorySize};
 
    #{for dp external.dp}
    #{set dataType #{call IntName dp.dataSizeIn}}
       if(saved_dp_enable_@{id}_port_@{index} && !saved_dp_write_@{id}_port_@{index}){
-         int readOffset = saved_dp_addr_@{id}_port_@{index};
+       int readOffset = saved_dp_addr_@{id}_port_@{index}; // Byte space
 
-       int address = baseAddress + readOffset; // * sizeof(@{dataType});
-       Assert(address < memSize);
+       Assert(readOffset < memSize);
+       int address = baseAddress + readOffset;
 
        address = ALIGN_DOWN(address,sizeof(@{dataType}));
+       Assert(address + sizeof(@{dataType}) <= totalExternalMemory);
 
-       @{dataType}* ptr = (@{dataType}*) &inst->externalMemory[address];
+       @{dataType}* ptr = (@{dataType}*) &externalMemory[address];
        memcpy(&self->ext_dp_in_@{id}_port_@{index},ptr,sizeof(@{dataType}));
       }
    #{end}
@@ -494,17 +300,18 @@ if(SimulateDatabus){
    #{else}
    #{set dataType #{call IntName external.tp.dataSizeIn}}
    {
-     int memSize = ExternalMemoryByteSize(&inst->declaration->externalMemory[@{id}]);
+     int memSize = @{external |> MemorySize};
    // 2P
       if(saved_2p_r_enable_@{id}){
-         int readOffset = saved_2p_r_addr_@{id};
+       int readOffset = saved_2p_r_addr_@{id};
 
+       Assert(readOffset < memSize);
        int address = baseAddress + readOffset; // * sizeof(@{dataType});
-       Assert(address < memSize);
 
        address = ALIGN_DOWN(address,sizeof(@{dataType}));
+       Assert(address + sizeof(@{dataType}) <= totalExternalMemory);
 
-       @{dataType}* ptr = (@{dataType}*) &inst->externalMemory[address];
+       @{dataType}* ptr = (@{dataType}*) &externalMemory[address];
        memcpy(&self->ext_2p_data_in_@{id},ptr,sizeof(@{dataType}));
       }
      baseAddress += memSize;
@@ -514,25 +321,27 @@ if(SimulateDatabus){
 #{end}
 }
 
+// Memory write
 {
-   int baseAddress = 0;
+   baseAddress = 0;
 #{for external module.externalInterfaces}
    #{set id external.interface}
    #{if external.type}
    {
       // DP
-      int memSize = ExternalMemoryByteSize(&inst->declaration->externalMemory[@{id}]);
+      int memSize = @{external |> MemorySize};
    #{for dp external.dp}
    #{set dataType #{call IntName dp.dataSizeIn}}
       if(saved_dp_enable_@{id}_port_@{index} && saved_dp_write_@{id}_port_@{index}){
        int writeOffset = saved_dp_addr_@{id}_port_@{index};
 
+       Assert(writeOffset < memSize);
        int address = baseAddress + writeOffset; // * sizeof(@{dataType});
-       Assert(address < memSize);
 
        address = ALIGN_DOWN(address,sizeof(@{dataType}));
+       Assert(address + sizeof(@{dataType}) <= totalExternalMemory);
 
-       @{dataType}* ptr = (@{dataType}*) &inst->externalMemory[address];
+       @{dataType}* ptr = (@{dataType}*) &externalMemory[address];
        memcpy(ptr,&saved_dp_data_@{id}_port_@{index},sizeof(@{dataType}));
    }
    #{end}
@@ -541,17 +350,18 @@ if(SimulateDatabus){
    #{else}
    #{set dataType #{call IntName external.tp.dataSizeOut}}
      {
-     int memSize = ExternalMemoryByteSize(&inst->declaration->externalMemory[@{id}]);
+     int memSize = @{external |> MemorySize};
      // 2P
      if(saved_2p_w_enable_@{id}){
        int writeOffset = saved_2p_w_addr_@{id};
 
+       Assert(writeOffset < memSize);
        int address = baseAddress + writeOffset; // * sizeof(@{dataType});
-       Assert(address < memSize);
 
        address = ALIGN_DOWN(address,sizeof(@{dataType}));
-
-       @{dataType}* ptr = (@{dataType}*) &inst->externalMemory[address];
+       Assert(address + sizeof(@{dataType}) <= totalExternalMemory);
+       
+       @{dataType}* ptr = (@{dataType}*) &externalMemory[address];
        memcpy(ptr,&saved_2p_w_data_@{id},sizeof(@{dataType}));
      }
      baseAddress += memSize;
@@ -564,170 +374,156 @@ if(SimulateDatabus){
    if(CreateVCD) tfp->dump(contextp->time());
    contextp->timeInc(2);
 
+// TODO: Technically only need to do this at the end of an accelerator run, do not need to do this every single update
 #{if module.states}
-AcceleratorState* state = (AcceleratorState*) inst->state;
+AcceleratorState* state = &stateBuffer;
 #{for i module.states.size}
 #{set wire module.states[i]}
    state->@{statesHeader[i]} = self->@{wire.name};
 #{end}
 #{end}
+}
+
+static bool IsDone(){
+  V@{module.name}* self = dut;
 
 #{if module.hasDone}
-   inst->done = self->done;
-#{end}
-
-#{if module.outputLatencies}
-   #{for i module.outputLatencies.size}
-      out[@{i}] = self->out@{i};
-   #{end}
-
-   return out;
+bool done = self->done;
 #{else}
-   return NULL;
+bool done = true;
 #{end}
+return done;
 }
 
-int32_t* @{module.name}_DestroyFunction(FUInstance* inst){
-   V@{module.name}* self = (V@{module.name}*) inst->extraData;
+static void InternalStartAccelerator(){
+   V@{module.name}* self = dut;
 
-   self->~V@{module.name}();
+#{if module.configs}
+AcceleratorConfig* config = (AcceleratorConfig*) &configBuffer;
 
-   return nullptr;
+#{for i module.configs.size}
+#{set wire module.configs[i]}
+   self->@{wire.name} = config->@{configsHeader[i].name};
+#{end}
+#{end}
+
+#{if module.nDelays}
+#{for i module.nDelays}
+   self->delay@{i} = config->TOP_Delay@{i};
+#{end}
+#{end}
+
+#{for i module.nIO}
+{
+   DatabusAccess* memoryLatency = ((DatabusAccess*) &self[1]) + @{i};
+
+   memoryLatency->counter = 0;
+   memoryLatency->latencyCounter = INITIAL_MEMORY_LATENCY;
+}
+#{end}
+
+   self->run = 1;
+   UPDATE(self);
+   self->running = 1;
+   self->run = 0;
+   if(CreateVCD) tfp->dump(contextp->time());
+   contextp->timeInc(1);
+   if(CreateVCD) tfp->dump(contextp->time());
+   contextp->timeInc(1);
 }
 
-int @{module.name}_ExtraDataSize(){
-   int extraSize = sizeof(V@{module.name});
+static void InternalEndAccelerator(){
+   V@{module.name}* self = dut;
 
-   #{if module.nIO}
-   extraSize += sizeof(DatabusAccess) * @{module.nIO};
+   self->running = 0;
+
+   // TODO: Is this update call needed?
+   InternalUpdateAccelerator();
+
+   // TODO: We could put the copy of state variables here
+}
+
+extern "C" void VersatAcceleratorSimulate(){
+  InternalStartAccelerator();
+  
+  while(!IsDone()){
+    InternalUpdateAccelerator();
+  }
+
+  InternalEndAccelerator();
+}
+
+extern "C" int MemoryAccess(int address,int value,int write){
+    #{if module.memoryMapped}
+   
+    V@{module.name}* self = dut;
+
+   if(write){
+      self->valid = 1;
+      self->wstrb = 0xf;
+
+      #{if module.memoryMappedBits != 0}
+      self->addr = address;
+      #{end}
+      self->wdata = value;
+
+      self->eval();
+
+      while(!self->ready){
+          InternalUpdateAccelerator();
+      }
+
+      self->valid = 0;
+      self->wstrb = 0x00;
+      #{if module.memoryMappedBits != 0}
+      self->addr = 0x00000000;
+      #{end}
+      
+      self->wdata = 0x00000000;
+
+      InternalUpdateAccelerator();
+
+      return 0;
+   } else {
+      self->valid = 1;
+      self->wstrb = 0x0;
+      #{if module.memoryMappedBits != 0}
+      self->addr = address;
+      #{end}
+
+      self->eval();
+
+      while(!self->ready){
+          InternalUpdateAccelerator();
+      }
+
+      int res = self->rdata;
+
+      self->valid = 0;
+      #{if module.memoryMappedBits != 0}
+      self->addr = 0;
+      #{end}
+
+      self->eval();
+      while(self->ready){
+          InternalUpdateAccelerator();
+      }
+
+      return res;
+   }
+
    #{end}
-
-   return extraSize;
 }
-
+    
+extern "C" void VersatSignalLoop(){
 #{if module.signalLoop}
-void SignalFunction@{module.name}(FUInstance* inst){
-   V@{module.name}* self = (V@{module.name}*) inst->extraData;
+   V@{module.name}* self = dut;
 
    self->signal_loop = 1;
-
-   UPDATE(self);
-
+   InternalUpdateAccelerator();
    self->signal_loop = 0;
    self->eval();
-
-   if(CreateVCD) tfp->dump(contextp->time());
-   contextp->timeInc(1);
-   if(CreateVCD) tfp->dump(contextp->time());
-   contextp->timeInc(1);
-}
 #{end}
-
-FUDeclaration @{module.name}_CreateDeclaration(){
-   FUDeclaration decl = {};
-
-   #{if module.inputDelays}
-   static int inputDelays[] =  {#{join "," for delay module.inputDelays}@{delay}#{end}};
-   decl.inputDelays = Array<int>{inputDelays,@{module.inputDelays.size}};
-   #{end}
-
-   #{if module.outputLatencies}
-   static int outputLatencies[] = {#{join "," for latency module.outputLatencies}@{latency}#{end}};
-   decl.outputLatencies = Array<int>{outputLatencies,@{module.outputLatencies.size}};
-   #{end}
-
-   decl.name = STRING("@{module.name}");
-
-   decl.extraDataOffsets.max = @{module.name}_ExtraDataSize();
-
-   #{if module.externalInterfaces.size}
-   static ExternalMemoryInterface externalMemory[@{module.externalInterfaces.size}];
-
-   #{for ext module.externalInterfaces}
-   #{set loopIndex index}
-   externalMemory[@{loopIndex}].interface = @{ext.interface};
-      #{if ext.type}
-   externalMemory[@{loopIndex}].type = ExternalMemoryType::DP;
-   // DP
-           #{for dp ext.dp}
-   externalMemory[@{loopIndex}].dp[@{index}].bitSize = @{dp.bitSize};
-   externalMemory[@{loopIndex}].dp[@{index}].dataSizeIn =  @{dp.dataSizeOut};
-   externalMemory[@{loopIndex}].dp[@{index}].dataSizeOut =  @{dp.dataSizeOut};
-         #{end}
-      #{else}
-   externalMemory[@{loopIndex}].type = ExternalMemoryType::TWO_P;
-   externalMemory[@{loopIndex}].tp.bitSizeIn = @{ext.tp.bitSizeIn};
-   externalMemory[@{loopIndex}].tp.bitSizeOut = @{ext.tp.bitSizeOut};
-   externalMemory[@{loopIndex}].tp.dataSizeIn =  @{ext.tp.dataSizeOut};
-   externalMemory[@{loopIndex}].tp.dataSizeOut =  @{ext.tp.dataSizeOut};
-      #{end}
-   decl.externalMemory = C_ARRAY_TO_ARRAY(externalMemory);
-   #{end}
-   #{end}
-
-   decl.initializeFunction = @{module.name}_InitializeFunction;
-   decl.startFunction = @{module.name}_StartFunction;
-   decl.updateFunction = @{module.name}_UpdateFunction;
-   decl.destroyFunction = @{module.name}_DestroyFunction;
-   decl.printVCD = @{module.name}_VCDFunction;
-
-   #{if module.configs}
-   static Wire @{module.name}ConfigWires[] = {#{join "," for wire module.configs} #{if !wire.isStatic} {STRING("@{wire.name}"),@{wire.bitSize},@{wire.isStatic}} #{end} #{end}};
-   decl.configs = Array<Wire>{@{module.name}ConfigWires,@{module.configs.size}};
-   #{end}
-
-   #{if module.states}
-   static Wire @{module.name}StateWires[] = {#{join "," for wire module.states} {STRING("@{wire.name}"),@{wire.bitSize}} #{end}};
-   decl.states = Array<Wire>{@{module.name}StateWires,@{module.states.size}};
-   #{end}
-
-   #{if module.hasDone}
-   decl.implementsDone = true;
-   #{end}
-
-   #{if module.isSource}
-   decl.delayType = decl.delayType | DelayType::DELAY_TYPE_SINK_DELAY;
-   #{end}
-
-   #{if module.nIO}
-   decl.nIOs = @{module.nIO};
-   #{end}
-
-   #{if module.signalLoop}
-   decl.signalFunction = SignalFunction@{module.name};
-   #{end}
-
-   #{if module.memoryMapped}
-   decl.isMemoryMapped = true;
-   decl.memoryMapBits = @{module.memoryMappedBits};
-   #{if module.memoryMappedBits == 0}
-   decl.memAccessFunction = MemoryAccessNoAddress<V@{module.name}>;
-   #{else}
-   decl.memAccessFunction = MemoryAccess<V@{module.name}>;
-   #{end}
-   #{end}
-
-   decl.delayOffsets.max = @{module.nDelays};
-
-   return decl;
 }
-
-FUDeclaration* @{module.name}_Register(Versat* versat){
-   FUDeclaration decl = @{module.name}_CreateDeclaration();
-
-   return RegisterFU(versat,decl);
-}
-
-extern "C" void RegisterAllVerilogUnits@{namespace}(Versat* versat){
-   @{module.name}_Register(versat);
-}
-
-extern "C" void InitializeVerilator(){
-   Verilated::traceEverOn(true);
-}
-
-#undef INIT
+                                
 #undef UPDATE
-#undef RESET
-#undef START_RUN
-#undef PREAMBLE

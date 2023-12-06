@@ -1,27 +1,30 @@
-`timescale 1ns/1ps
-`include "axi.vh"
-`include "AXIInfo.vh"
+`timescale 1ns / 1ps
+// Comment so that verible-format will not put timescale and defaultt_nettype into same line
+`default_nettype none
 
-module SimpleAXItoAXIRead #(
+//`include "AXIInfo.vh"
+
+module SimpleAXItoAXIRead 
+  #(
     parameter AXI_ADDR_W = 32,
     parameter AXI_DATA_W = 32,
     parameter AXI_LEN_W = 8,
     parameter AXI_ID_W = 4,
     parameter LEN_W = 8
-  )
-  (
-    input  m_rvalid,
-    output reg m_rready,
-    input  [AXI_ADDR_W-1:0] m_raddr,
-    output [AXI_DATA_W-1:0] m_rdata,
-    input  [LEN_W-1:0] m_rlen,
-    output m_rlast,
+    )
+   (
+    input                   m_rvalid_i,
+    output reg              m_rready_o,
+    input [AXI_ADDR_W-1:0]  m_raddr_i,
+    output [AXI_DATA_W-1:0] m_rdata_o,
+    input [LEN_W-1:0]       m_rlen_i,
+    output                  m_rlast_o,
 
-    `include "m_versat_axi_m_read_port.vh"
+`include "axi_m_read_port.vs"
 
-    input clk,
-    input rst
-  );
+    input                   clk_i,
+    input                   rst_i
+    );
 
 localparam OFFSET_W = calculate_AXI_OFFSET_W(AXI_DATA_W);
 
@@ -35,49 +38,51 @@ localparam [2:0] axi_size = (AXI_DATA_W == 16   ? 3'b001 :
 
 // Read
 
-assign m_axi_arid = `AXI_ID_W'b0;
-assign m_axi_arsize = axi_size;
-assign m_axi_arburst = `AXI_BURST_W'b01; // INCR
-assign m_axi_arlock = `AXI_LOCK_W'b0;
-assign m_axi_arcache = `AXI_CACHE_W'h2;
-assign m_axi_arprot = `AXI_PROT_W'b010;
-assign m_axi_arqos = `AXI_QOS_W'h0;
+assign axi_arid_o = 0;
+assign axi_arsize_o = axi_size;
+assign axi_arburst_o = 'b01; // INCR
+assign axi_arlock_o = 'b0;
+assign axi_arcache_o = 'h2;
+assign axi_arprot_o = 'b010;
+assign axi_arqos_o = 'h0;
 
-assign m_axi_arvalid = arvalid;
-assign m_axi_rready = (read_state == 2'h3);
+assign axi_arvalid_o = arvalid;
+assign axi_rready_o = (read_state == 2'h3);
 
 reg arvalid,rready;
 
 reg [1:0] read_state;
 
-wire read_last_transfer;
-wire burst_align_empty;
-// Read
-burst_align #(
-    .AXI_DATA_W(AXI_DATA_W)
-  ) aligner (
-    .offset(m_raddr[OFFSET_W-1:0]),
-    .start(read_state == 0),
+   wire   read_last_transfer;
+   wire   burst_i_align_empty;
+   // Read
+   burst_i_align 
+     #(
+       .AXI_DATA_W(AXI_DATA_W)
+       ) aligner 
+       (
+        .offset(m_raddr_i[OFFSET_W-1:0]),
+        .start(read_state == 0),
 
-    .burst_last(m_axi_rvalid && m_axi_rready && m_axi_rlast),
-    .transfer_last(read_last_transfer),
+        .burst_i_last(axi_rvalid_i && axi_rready_o && axi_rlast_i),
+        .transfer_last(read_last_transfer),
 
-    .last_transfer(m_rlast),
-    .empty(burst_align_empty),
+        .last_transfer(m_rlast_o),
+        .empty(burst_i_align_empty),
 
-    // Simple interface for data_in
-    .data_in(m_axi_rdata),
-    .valid_in(m_axi_rvalid),
+        // Simple interface for data_in
+        .data_in(axi_rdata_i),
+        .valid_in(axi_rvalid_i),
 
-    // Simple interface for data_out
-    .data_out(m_rdata),
-    .valid_out(m_rready),
+        // Simple interface for data_out
+        .data_out(m_rdata_o),
+        .valid_out(m_rready_o),
 
-    .clk(clk),
-    .rst(rst)
-  );
+        .clk_i(clk_i),
+        .rst_i(rst_i)
+        );
 
-reg transfer_start,burst_start;
+reg transfer_start,burst_i_start;
 
 wire [7:0] true_axi_arlen;
 
@@ -88,11 +93,11 @@ transfer_controller #(
    )
   read_controller
    (
-      .address(m_raddr),
-      .length(m_rlen), // In bytes
+      .address(m_raddr_i),
+      .length(m_rlen_i), // In bytes
 
-      .transfer_start(read_state == 2'h0 && m_rvalid && burst_align_empty),
-      .burst_start(read_state == 2'h2 && m_axi_arready && m_axi_arvalid),
+      .transfer_start(read_state == 2'h0 && m_rvalid_i && burst_i_align_empty),
+      .burst_i_start(read_state == 2'h2 && axi_arready_i && axi_arvalid_o),
 
       // Do not need them for read operation
       .initial_strb(),
@@ -100,29 +105,29 @@ transfer_controller #(
       .symbolsToRead(),
       .last_transfer_next(),
 
-      .true_axi_axaddr(m_axi_araddr),
+      .true_axi_axaddr(axi_araddr_o),
 
       // TODO: Register these signals to 
       .true_axi_axlen(true_axi_arlen),
       .last_transfer(read_last_transfer),
    
-      .clk(clk),
-      .rst(rst)
+      .clk_i(clk_i),
+      .rst_i(rst_i)
    );
 
 reg [7:0] read_axi_len;
-assign m_axi_arlen = read_axi_len;
+assign axi_arlen_o = read_axi_len;
 
-always @(posedge clk,posedge rst)
+always @(posedge clk_i,posedge rst_i)
 begin
-  if(rst) begin
+  if(rst_i) begin
     read_state <= 0;
     arvalid <= 0;
     read_axi_len <= 0;
   end else begin
     case(read_state)
     2'h0: begin
-      if(m_rvalid && burst_align_empty) begin
+      if(m_rvalid_i && burst_i_align_empty) begin
         read_state <= 2'h1;
       end
     end
@@ -132,13 +137,13 @@ begin
       read_axi_len <= true_axi_arlen;
     end
     2'h2: begin // Write address set
-      if(m_axi_arready) begin
+      if(axi_arready_i) begin
         arvalid <= 1'b0;
         read_state <= 2'h3;
       end
     end
     2'h3: begin
-      if(m_axi_rvalid && m_axi_rready && m_axi_rlast) begin
+      if(axi_rvalid_i && axi_rready_o && axi_rlast_i) begin
         if(read_last_transfer) begin      
           read_state <= 2'h0;
         end else begin
@@ -150,6 +155,6 @@ begin
   end
 end
 
+endmodule // SimpleAXItoAXIRead
 
-endmodule
-
+`default_nettype wire

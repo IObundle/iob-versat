@@ -17,21 +17,43 @@ bool VerifyExternalMemory(ExternalMemoryInterface* inter){
   return res;
 }
 
+// Function that calculates byte offset from size of data_w
+int DataWidthToByteOffset(int dataWidth){
+  // 0-8 : 0,
+  // 9-16 : 1
+  // 17 - 32 : 2,
+  // 33 - 64 : 3
+
+  // 0 : 0
+  // 8 : 0
+
+  if(dataWidth == 0){
+    return 0;
+  }
+
+  int res = log2i((dataWidth - 1) / 8);
+  return res;
+}
+
 int ExternalMemoryByteSize(ExternalMemoryInterface* inter){
   Assert(VerifyExternalMemory(inter));
 
+  // TODO: The memories size and address is still error prone. We should just store the total size and the address width in the structures (and then we can derive the data width from the given address width and the total size). Storing data width and address size at the same time gives more degrees of freedom than need. The parser is responsible to ensuring that data is given in the correct format and this code should never have to worry about having to deal with values out of phase
   int addressBitSize = 0;
+  int byteOffset = 0;
   switch(inter->type){
   case ExternalMemoryType::TWO_P:{
     addressBitSize = inter->tp.bitSizeIn;
+    byteOffset = std::min(DataWidthToByteOffset(inter->tp.dataSizeIn),DataWidthToByteOffset(inter->tp.dataSizeOut));
   }break;
   case ExternalMemoryType::DP:{
     addressBitSize = inter->dp[0].bitSize;
+    byteOffset = std::min(DataWidthToByteOffset(inter->dp[0].dataSizeIn),DataWidthToByteOffset(inter->dp[1].dataSizeIn));
   }break;
   default: NOT_IMPLEMENTED;
   }
 
-  int byteSize = (1 << addressBitSize);
+  int byteSize = (1 << (addressBitSize + byteOffset));
 
   return byteSize;
 }
@@ -70,36 +92,36 @@ VersatComputedValues ComputeVersatValues(Versat* versat,Accelerator* accel){
 
   int memoryMappedDWords = 0;
   FOREACH_LIST(InstanceNode*,ptr,accel->allocated){
-  FUInstance* inst = ptr->inst;
-  FUDeclaration* decl = inst->declaration;
+    FUInstance* inst = ptr->inst;
+    FUDeclaration* decl = inst->declaration;
 
-  res.numberConnections += Size(ptr->allOutputs);
+    res.numberConnections += Size(ptr->allOutputs);
 
-  if(decl->isMemoryMapped){
-    memoryMappedDWords = AlignBitBoundary(memoryMappedDWords,decl->memoryMapBits);
-    memoryMappedDWords += 1 << decl->memoryMapBits;
+    if(decl->isMemoryMapped){
+      memoryMappedDWords = AlignBitBoundary(memoryMappedDWords,decl->memoryMapBits);
+      memoryMappedDWords += 1 << decl->memoryMapBits;
 
-    res.unitsMapped += 1;
+      res.unitsMapped += 1;
+    }
+
+    res.nConfigs += decl->configInfo.configs.size;
+    for(Wire& wire : decl->configInfo.configs){
+      res.configBits += wire.bitSize;
+    }
+
+    res.nStates += decl->configInfo.states.size;
+    for(Wire& wire : decl->configInfo.states){
+      res.stateBits += wire.bitSize;
+    }
+
+    res.nDelays += decl->configInfo.delayOffsets.max;
+    res.delayBits += decl->configInfo.delayOffsets.max * 32;
+
+    res.nUnitsIO += decl->nIOs;
+
+    res.externalMemoryInterfaces += decl->externalMemory.size;
+    res.signalLoop |= decl->signalLoop;
   }
-
-  res.nConfigs += decl->configs.size;
-  for(Wire& wire : decl->configs){
-    res.configBits += wire.bitSize;
-  }
-
-  res.nStates += decl->states.size;
-  for(Wire& wire : decl->states){
-    res.stateBits += wire.bitSize;
-  }
-
-  res.nDelays += decl->delayOffsets.max;
-  res.delayBits += decl->delayOffsets.max * 32;
-
-  res.nUnitsIO += decl->nIOs;
-
-  res.externalMemoryInterfaces += decl->externalMemory.size;
-  res.signalLoop |= decl->signalLoop;
-}
 
   for(auto pair : accel->staticUnits){
     StaticData data = pair.second;
@@ -138,10 +160,10 @@ VersatComputedValues ComputeVersatValues(Versat* versat,Accelerator* accel){
   res.stateAddressBits = log2i(res.nStates);
   res.stateConfigurationAddressBits = std::max(res.configurationAddressBits,res.stateAddressBits);
 
-  res.lowerAddressSize = std::max(res.stateConfigurationAddressBits,res.memoryMappingAddressBits);
-
-  res.memoryConfigDecisionBit = res.lowerAddressSize;
-
+  //res.lowerAddressSize = std::max(res.stateConfigurationAddressBits,res.memoryMappingAddressBits);
+  //res.memoryConfigDecisionBit = res.lowerAddressSize;
+  res.memoryConfigDecisionBit = std::max(res.stateConfigurationAddressBits,res.memoryMappingAddressBits) + 2;
+  
   return res;
 }
 

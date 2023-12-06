@@ -17,15 +17,15 @@ module Int2Float #(
     (* versat_latency = 5 *) output [DATA_W-1:0]       out0
     );
 
-fp_int2float conv(
-   .clk(clk),
-   .rst(rst),
+iob_fp_int2float conv(
+   .clk_i(clk),
+   .rst_i(rst),
 
-   .start(1'bx),
-   .done(),
+   .start_i(1'bx),
+   .done_o(),
 
-   .op(in0),
-   .res(out0)
+   .op_i(in0),
+   .res_o(out0)
     );
 
 endmodule 

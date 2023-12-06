@@ -6,9 +6,16 @@
 #define MEMSET(base, location, value) (*((volatile int*) (base + (sizeof(int)) * location)) = (int) value)
 #define MEMGET(base, location)        (*((volatile int*) (base + (sizeof(int)) * location)))
 
-#include "iob-timer.h"
+#ifdef __cplusplus
+extern "C"{
+#endif
 
+#include "iob-uart.h"
 #include "printf.h"
+
+#ifdef __cplusplus
+  }
+#endif
 
 #ifdef __cplusplus
 #include <cstdint>
@@ -21,30 +28,16 @@ typedef uint64_t uint64;
 
 // There should be a shared header for common structures, but do not share code.
 // It does not work as well and keeps giving compile and linker errors. It's not worth it.
-typedef struct{
-  uint64 microSeconds;
-  uint64 seconds;
-} Time;
 
-Time GetTime(){
-  Time res = {};
-  res.seconds = (uint64) timer_time_s();
-
-  res.microSeconds = (uint64) timer_time_us();
-  res.microSeconds -= (res.seconds * 1000000);
-  
-  return res;
-}
-
-int versat_base;
+iptr versat_base;
 
 volatile AcceleratorConfig* accelConfig = 0;
 volatile AcceleratorState*  accelState  = 0;
 
 void versat_init(int base){
-  versat_base = base;
+  versat_base = (iptr) base;
 
-  printf("Embedded Versat\n");
+  //printf("Embedded Versat\n");
 
   MEMSET(versat_base,0x0,0x80000000); // Soft reset
 
@@ -67,21 +60,12 @@ void StartAccelerator(){
   MEMSET(versat_base,0x0,1);
 }
 
-int timesWaiting = 0;
-
-void ClearCache(void*);
-
 void EndAccelerator(){
   //printf("End accelerator\n");
-  bool seenWaiting = false;
   while(1){
     volatile int val = MEMGET(versat_base,0x0);
     if(val){
       break;
-    }
-    if(!seenWaiting){
-      timesWaiting += 1;
-      seenWaiting = true;
     }
   } 
 }
@@ -103,15 +87,15 @@ void SignalLoop(){
   MEMSET(versat_base,0x0,0x40000000);
 }
 
-void VersatMemoryCopy(iptr* dest,iptr* data,int size){
+void VersatMemoryCopy(void* dest,void* data,int size){
   if(size <= 0){
     return;
   }
 
   TIME_IT("Memory copy");
 
-  int destInt = (int) dest;
-  int dataInt = (int) data;
+  iptr destInt = (iptr) dest;
+  iptr dataInt = (iptr) data;
 
   bool destInsideVersat = false;
   bool dataInsideVersat = false;
@@ -134,9 +118,16 @@ void VersatMemoryCopy(iptr* dest,iptr* data,int size){
   }
 
   if(acceleratorSupportsDMA && (dataInsideVersat != destInsideVersat)){
-    MEMSET(versat_base,0x1,dest); // Dest inside 
-    MEMSET(versat_base,0x2,data); // Memory address
-    MEMSET(versat_base,0x3,size - 1); // AXI size
+    if(destInsideVersat){
+      destInt = destInt - versat_base;
+    }
+    if(dataInsideVersat){
+      dataInt = dataInt - versat_base;
+    }
+
+    MEMSET(versat_base,0x1,destInt); // Dest inside 
+    MEMSET(versat_base,0x2,dataInt); // Memory address
+    MEMSET(versat_base,0x3,size); // Byte size
     MEMSET(versat_base,0x4,0x1); // Start DMA
 
     while(1){
@@ -144,8 +135,10 @@ void VersatMemoryCopy(iptr* dest,iptr* data,int size){
       if(val) break;
     }
   } else {
-    for(int i = 0; i < size; i++){
-      dest[i] = data[i];
+    int* destView = (int*) dest;
+    int* dataView = (int*) data;
+    for(int i = 0; i < size / sizeof(int); i++){
+      destView[i] = dataView[i];
     }
   }
 }
@@ -165,42 +158,6 @@ float VersatUnitReadFloat(int base,int index){
   return *ptr;
 }
 
-// Implementation of common functionality
-
-static unsigned int randomSeed = 1;
-void SeedRandomNumber(unsigned int val){
-  if(val == 0){
-    randomSeed = 1;
-  } else {
-    randomSeed = val;
-  }
-}
-
-unsigned int GetRandomNumber(){
-  // Xorshift
-  randomSeed ^= randomSeed << 13;
-  randomSeed ^= randomSeed >> 17;
-  randomSeed ^= randomSeed << 5;
-  return randomSeed;
-}
-
-static int Abs(int val){
-  int res = val;
-  if(val < 0){
-    res = -val;
-  }
-  return res;
-}
-
-int RandomNumberBetween(int minimum,int maximum){
-  int randomValue = GetRandomNumber();
-  int delta = maximum - minimum;
-
-  if(delta <= 0){
-    return minimum;
-  }
-
-  int res = minimum + Abs(randomValue % delta);
-  return res;
-}
+void ConfigCreateVCD(bool value){}
+void ConfigSimulateDatabus(bool value){}
 

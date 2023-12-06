@@ -44,20 +44,20 @@ begin
      end
 end
 
-fp_sqrt sqrt(
-     .start(start),
-     .done(done),
+iob_fp_sqrt sqrt(
+     .start_i(start),
+     .done_o(done),
 
-     .op(in0),
+     .op_i(in0),
 
-     .res(out0),
+     .res_o(out0),
 
-     .overflow(),
-     .underflow(),
-     .exception(),
+     .overflow_o(),
+     .underflow_o(),
+     .exception_o(),
 
-     .clk(clk),
-     .rst(rst)
+     .clk_i(clk),
+     .rst_i(rst)
      );
 
 endmodule

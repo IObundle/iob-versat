@@ -64,13 +64,6 @@ void CallVerilator(const char* unitPath,const char* outputPath){
    pid_t pid = fork();
 
    CreateDirectories(outputPath);
-
-   printf("here\n");
-   printf("here\n");
-   printf("here\n");
-   printf("here\n");
-   printf("here\n");
-   printf("here\n");
    
    char* const verilatorArgs[] = {
       (char*) "verilator",

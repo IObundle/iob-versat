@@ -1,59 +1,60 @@
 `timescale 1ns / 1ps
+// Comment so that verible-format will not put timescale and defaultt_nettype into same line
+`default_nettype none
 
-module MemoryWriter #(
-   parameter ADDR_W = 32,
-   parameter DATA_W = 32
-   )(
+module MemoryWriter 
+  #(
+    parameter ADDR_W = 32,
+    parameter DATA_W = 32
+    )(
       // Slave connected to address gen
-      input gen_valid,
-      output reg gen_ready,
-      input [ADDR_W-1:0] gen_addr,
+      input                   gen_valid_i,
+      output reg              gen_ready_o,
+      input [ADDR_W-1:0]      gen_addr_i,
 
       // Slave connected to data source
-      input data_valid,
-      output reg data_ready,
-      input [DATA_W-1:0] data_in,
+      input                   data_valid_i,
+      output reg              data_ready_o,
+      input [DATA_W-1:0]      data_in_i,
 
       // Connect to memory
-      output reg              mem_enable,
-      output reg [ADDR_W-1:0] mem_addr,
-      output reg [DATA_W-1:0] mem_data,
+      output reg              mem_enable_o,
+      output reg [ADDR_W-1:0] mem_addr_o,
+      output reg [DATA_W-1:0] mem_data_o,
 
-      input clk,
-      input rst
-   );
+      input                   clk_i,
+      input                   rst_i
+      );
 
-always @(posedge clk,posedge rst)
+always @(posedge clk_i,posedge rst_i)
 begin
-   if(rst) begin
-      mem_enable <= 0;
-      mem_addr <= 0;
-      mem_data <= 0;
+   if(rst_i) begin
+      mem_enable_o <= 0;
+      mem_addr_o <= 0;
+      mem_data_o <= 0;
    end else begin
-      mem_enable <= 1'b0;
+      mem_enable_o <= 1'b0;
 
-      if(gen_valid && data_valid) begin
-         mem_addr <= gen_addr;
-         mem_data <= data_in;
-         mem_enable <= 1'b1; 
+      if(gen_valid_i && data_valid_i) begin
+         mem_addr_o <= gen_addr_i;
+         mem_data_o <= data_in_i;
+         mem_enable_o <= 1'b1; 
       end
    end
 end
 
 always @*
 begin
-   gen_ready = 1'b0;
-   data_ready = 1'b0;
+   gen_ready_o = 1'b0;
+   data_ready_o = 1'b0;
 
-   data_ready = gen_valid;
+   data_ready_o = gen_valid_i;
 
-   if(data_valid) begin
-      gen_ready = 1'b1;
+   if(data_valid_i) begin
+      gen_ready_o = 1'b1;
    end
 end
 
-endmodule
+endmodule // MemoryWriter
 
-
-
-
+`default_nettype wire

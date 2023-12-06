@@ -1,17 +1,15 @@
 #ifndef INCLUDED_VERSAT_HPP
 #define INCLUDED_VERSAT_HPP
 
-#include "utils.hpp"
-
 #include <vector>
 #include <unordered_map>
 
-#include "memory.hpp"
-#include "logger.hpp"
+#include "../common/utils.hpp"
+#include "../common/memory.hpp"
+#include "../common/logger.hpp"
 
 #include "accelerator.hpp"
 #include "configurations.hpp"
-#include "merge.hpp"
 #include "graph.hpp"
 
 // Forward declarations
@@ -218,7 +216,7 @@ struct VersatComputedValues{
 
    int unitsMapped;
    int memoryMappedBytes;
-   int maxMemoryMapDWords;
+//   int maxMemoryMapDWords;
 
    int nUnitsIO;
 
@@ -230,7 +228,7 @@ struct VersatComputedValues{
    int memoryAddressBits;
    int memoryMappingAddressBits;
    int memoryConfigDecisionBit;
-   int lowerAddressSize;
+   //int lowerAddressSize;
 
    bool signalLoop;
 };
@@ -238,6 +236,11 @@ struct VersatComputedValues{
 struct HierarchicalName{
    String name;
    HierarchicalName* next;
+};
+
+struct TypeAndInstance{
+  String typeName;
+  String instanceName;
 };
 
 struct SharingInfo{
@@ -272,6 +275,16 @@ namespace BasicTemplates{
 }
 
 struct GraphMapping;
+
+struct TypeStructInfoElement{
+  String type;
+  String name;
+};
+
+struct TypeStructInfo{
+  String name;
+  Array<TypeStructInfoElement> entries;
+};
 
 // Temp
 bool EqualPortMapping(PortInstance p1,PortInstance p2);
@@ -345,7 +358,7 @@ FUInstance* CreateFUInstance(Accelerator* accel,FUDeclaration* type,String entit
 void AcceleratorRun(Accelerator* accel,int times = 1);
 void AcceleratorRunDebug(Accelerator* accel);
 void RemoveFUInstance(Accelerator* accel,FUInstance* inst);
-void OutputVersatSource(Versat* versat,Accelerator* accel,const char* directoryPath,String accelName = STRING("TOP"),bool isSimple = false); // Not actually the name but the type.
+void OutputVersatSource(Versat* versat,Accelerator* accel,const char* hardwarePath,const char* softwarePath,String accelName = STRING("TOP"),bool isSimple = false); // Not actually the name but the type.
 Accelerator* Flatten(Versat* versat,Accelerator* accel,int times); // This should work on the passed accelerator. We should not create a new accelerator
 
 // Access units and sub units inside an accelerator. Can use printf style arguments, but only chars and integers are currently supported. Format is <format1>,<args1 if any>,<format2>,...

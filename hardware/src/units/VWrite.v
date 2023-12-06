@@ -1,7 +1,5 @@
 `timescale 1ns / 1ps
 
-//`define COMPLEX_INTERFACE
-
 module VWrite #(
    parameter DATA_W = 32,
    parameter ADDR_W = 12,
@@ -87,7 +85,7 @@ module VWrite #(
       end else if(run) begin
          doneA <= 1'b0;
          doneB <= 1'b0;
-      end else  begin
+      end else if(running) begin
          doneB <= doneB_int;
          if(databus_valid_0 && databus_ready_0 && databus_last_0)
             doneA <= 1'b1;
@@ -148,35 +146,55 @@ module VWrite #(
    localparam DIFF = AXI_DATA_W/DATA_W;
    localparam DIFF_BIT_W = $clog2(DIFF);
 
-   `ifdef COMPLEX_INTERFACE
-      MyAddressGen
-   `else
-      SimpleAddressGen
-   `endif
-   #(.ADDR_W(ADDR_W),.DATA_W(AXI_DATA_W)) addrgenA(
-      .clk(clk),
-      .rst(rst),
-      .run(run),
+   SimpleAddressGen #(.ADDR_W(ADDR_W),.DATA_W(AXI_DATA_W)) addrgenA(
+      .clk_i(clk),
+      .rst_i(rst),
+      .run_i(run),
 
       //configurations 
-      .period(perA),
-      .delay(delayA),
-      .start(startA),
-      .incr(incrA),
+      .period_i(perA),
+      .delay_i(delayA),
+      .start_i(startA),
+      .incr_i(incrA),
 
       `ifdef COMPLEX_INTERFACE
-      .iterations(iterA),
-      .duty(dutyA),
-      .shift(shiftA),
+      .iterations_i(iterA),
+      .duty_i(dutyA),
+      .shift_i(shiftA),
       `endif
 
       //outputs 
-      .valid(gen_valid),
-      .ready(gen_ready),
-      .addr(gen_addr),
-      .done(gen_done)
+      .valid_o(gen_valid),
+      .ready_i(gen_ready),
+      .addr_o(gen_addr),
+      .done_o(gen_done)
       );
 
+   SimpleAddressGen #(.ADDR_W(ADDR_W),.DATA_W(DATA_W)) addrgenB(
+      .clk_i(clk),
+      .rst_i(rst),
+      .run_i(run),
+
+      //configurations 
+      .period_i(perB),
+      .delay_i(delay0),
+      .start_i(startB_inst),
+      .incr_i(incrB),
+
+      `ifdef COMPLEX_INTERFACE
+      .iterations_i(iterB),
+      .duty_i(dutyB),
+      .shift_i(shiftB),
+      `endif
+
+      //outputs 
+      .valid_o(enB),
+      .ready_i(1'b1),
+      .addr_o(addrB_int),
+      .done_o(doneB_int)
+      );
+
+   /*
     xaddrgen2 #(.MEM_ADDR_W(ADDR_W)) addrgen2B (
                        .clk(clk),
                        .rst(rst),
@@ -196,13 +214,11 @@ module VWrite #(
                        .mem_en(enB),
                        .done(doneB_int)
                        );
+   */
 
+   assign addrB_int2 = addrB_int; //(reverseB ? reverseBits(addrB_int) : addrB_int) << OFFSET_W;
    assign addrB = addrB_int2;
 
-   localparam OFFSET_W = $clog2(AXI_DATA_W);
-
-   assign addrB_int2 = (reverseB? reverseBits(addrB_int) : addrB_int) << OFFSET_W;
-   
    wire read_en;
    wire [ADDR_W-1:0] read_addr;
    wire [AXI_DATA_W-1:0] read_data;
@@ -212,24 +228,24 @@ module VWrite #(
    MemoryReader #(.ADDR_W(ADDR_W),.DATA_W(AXI_DATA_W))
    reader(
       // Slave
-      .s_valid(gen_valid),
-      .s_ready(gen_ready),
-      .s_addr(gen_addr),
+      .s_valid_i(gen_valid),
+      .s_ready_o(gen_ready),
+      .s_addr_i(gen_addr),
 
       // Master
-      .m_valid(m_valid),
-      .m_ready(databus_ready_0),
-      .m_addr(),
-      .m_data(databus_wdata_0),
-      .m_last(databus_last_0),
+      .m_valid_o(m_valid),
+      .m_ready_i(databus_ready_0),
+      .m_addr_o(),
+      .m_data_o(databus_wdata_0),
+      .m_last_i(databus_last_0),
 
       // Connect to memory
-      .mem_enable(read_en),
-      .mem_addr(read_addr),
-      .mem_data(read_data),
+      .mem_enable_o(read_en),
+      .mem_addr_o(read_addr),
+      .mem_data_i(read_data),
 
-      .clk(clk),
-      .rst(rst)
+      .clk_i(clk),
+      .rst_i(rst)
    );
 
    /*
@@ -265,5 +281,5 @@ module VWrite #(
    assign ext_2p_addr_in_0 = read_addr;
    assign read_data = ext_2p_data_in_0;
 
-endmodule
+endmodule // VWrite
 

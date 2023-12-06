@@ -259,13 +259,13 @@ void AcceleratorGraph(Accelerator* accel,Arena* arena,Filter filter){
 
 bool PassFilterConfiguration(Accelerator* topLevel,FUInstance* inst,FilterConfigurations filter){
    bool res = false;
-   res |= filter.showConfig && inst->declaration->configs.size && !IsConfigStatic(topLevel,inst);
-   res |= filter.showStatic && inst->declaration->configs.size && IsConfigStatic(topLevel,inst);
-   res |= filter.showState && inst->declaration->states.size;
-   res |= filter.showDelay && inst->declaration->delayOffsets.max;
+   res |= filter.showConfig && inst->declaration->configInfo.configs.size && !IsConfigStatic(topLevel,inst);
+   res |= filter.showStatic && inst->declaration->configInfo.configs.size && IsConfigStatic(topLevel,inst);
+   res |= filter.showState && inst->declaration->configInfo.states.size;
+   res |= filter.showDelay && inst->declaration->configInfo.delayOffsets.max;
    res |= filter.showMem && (inst->declaration->isMemoryMapped || inst->declaration->externalMemory.size);
    res |= filter.showOutputs && inst->declaration->outputLatencies.size;
-   res |= filter.showExtraData && inst->declaration->extraDataOffsets.max;
+   res |= filter.showExtraData && inst->declaration->configInfo.extraDataOffsets.max;
 
    return res;
 }
@@ -810,25 +810,25 @@ void OutputAcceleratorRunValues(InstanceNode* node,Arena* arena){
    if(ImGui::CollapsingHeader("Config")){
       Array<iptr> arr = {};
       arr.data = inst->config;
-      arr.size = inst->declaration->configs.size;
+      arr.size = inst->declaration->configInfo.configs.size;
 
       if(arr.data && arr.size){
-         ShowDualTable(MakeValue(&inst->declaration->configs,"Array<Wire>"),MakeValue(&arr,"Array<iptr>"),arena);
+         ShowDualTable(MakeValue(&inst->declaration->configInfo.configs,"Array<Wire>"),MakeValue(&arr,"Array<iptr>"),arena);
       }
    }
    if(ImGui::CollapsingHeader("State")){
       Array<int> arr = {};
       arr.data = inst->state;
-      arr.size = inst->declaration->states.size;
+      arr.size = inst->declaration->configInfo.states.size;
 
       if(arr.data && arr.size){
-         ShowDualTable(MakeValue(&inst->declaration->states,"Array<Wire>"),MakeValue(&arr,"Array<int>"),arena);
+         ShowDualTable(MakeValue(&inst->declaration->configInfo.states,"Array<Wire>"),MakeValue(&arr,"Array<int>"),arena);
       }
    }
    if(ImGui::CollapsingHeader("Delay")){
       Array<iptr> arr = {};
       arr.data = inst->delay;
-      arr.size = inst->declaration->delayOffsets.max;
+      arr.size = inst->declaration->configInfo.delayOffsets.max;
 
       if(arr.data && arr.size){
          ShowTable(MakeValue(&arr,"Array<iptr>"),arena);

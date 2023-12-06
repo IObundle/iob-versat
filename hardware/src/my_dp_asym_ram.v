@@ -1,4 +1,6 @@
-`timescale 1ns/1ps
+`timescale 1ns / 1ps
+// Comment so that verible-format will not put timescale and defaultt_nettype into same line
+`default_nettype none
 
 `define max(a,b) {(a) > (b) ? (a) : (b)}
 `define min(a,b) {(a) < (b) ? (a) : (b)}
@@ -15,21 +17,21 @@ module my_dp_asym_ram
     parameter ADDR_W = 6
     )
    (
-    input                   clk,
+    input                     clk_i,
 
     // Port A
-    input [A_DATA_W-1:0]      dinA,
-    input [ADDR_W-1:0]        addrA,
-    input                     enA,
-    input                     weA,
-    output reg [A_DATA_W-1:0] doutA,
+    input [A_DATA_W-1:0]      dinA_i,
+    input [ADDR_W-1:0]        addrA_i,
+    input                     enA_i,
+    input                     weA_i,
+    output reg [A_DATA_W-1:0] doutA_o,
 
     // Port B
-    input [B_DATA_W-1:0]      dinB,
-    input [ADDR_W-1:0]        addrB,
-    input                     enB,
-    input                     weB,
-    output reg [B_DATA_W-1:0] doutB
+    input [B_DATA_W-1:0]      dinB_i,
+    input [ADDR_W-1:0]        addrB_i,
+    input                     enB_i,
+    input                     weB_i,
+    output reg [B_DATA_W-1:0] doutB_o
     );
 
    //determine the number of blocks N
@@ -43,13 +45,13 @@ module my_dp_asym_ram
 
    //symmetric memory block buses
    //write buses
-   reg [N-1:0]             bus_enA;
-   reg [N-1:0]             bus_weA;
+   reg [N-1:0]             bus_enA_i;
+   reg [N-1:0]             bus_weA_i;
    reg [MINDATA_W-1:0]     bus_inA[N-1:0];
    wire [MINDATA_W-1:0]    bus_outA[N-1:0];
 
-   reg [N-1:0]             bus_enB;
-   reg [N-1:0]             bus_weB;
+   reg [N-1:0]             bus_enB_i;
+   reg [N-1:0]             bus_weB_i;
    reg [MINDATA_W-1:0]     bus_inB[N-1:0];
    wire [MINDATA_W-1:0]    bus_outB[N-1:0];
 
@@ -64,21 +66,21 @@ module my_dp_asym_ram
                )
          iob_dp_ram_inst
              (
-            .clk(clk),
+            .clk_i(clk_i),
 
             // Port A
-            .dinA(bus_inA[i]),
-            .addrA(addrA[ADDR_W-1:SYMBOL_W + N_W]),
-            .enA(bus_enA[i]),
-            .weA(bus_weA[i]),
-            .doutA(bus_outA[i]),
+            .dinA_i(bus_inA[i]),
+            .addrA_i(addrA_i[ADDR_W-1:SYMBOL_W + N_W]),
+            .enA_i(bus_enA_i[i]),
+            .weA_i(bus_weA_i[i]),
+            .doutA_o(bus_outA[i]),
 
             // Port B
-            .dinB(bus_inB[i]),
-            .addrB(addrB[ADDR_W-1:SYMBOL_W + N_W]),
-            .enB(bus_enB[i]),
-            .weB(bus_weB[i]),
-            .doutB(bus_outB[i])
+            .dinB_i(bus_inB[i]),
+            .addrB_i(addrB_i[ADDR_W-1:SYMBOL_W + N_W]),
+            .enB_i(bus_enB_i[i]),
+            .weB_i(bus_weB_i[i]),
+            .doutB_o(bus_outB[i])
             );
       end
   endgenerate
@@ -87,9 +89,9 @@ module my_dp_asym_ram
    
    generate
       if (A_DATA_W > B_DATA_W) begin
-         always @(posedge clk) if(enB) selector <= addrB[N_W+SYMBOL_W-1:SYMBOL_W];
+         always @(posedge clk_i) if(enB_i) selector <= addrB_i[N_W+SYMBOL_W-1:SYMBOL_W];
       end else if (A_DATA_W < B_DATA_W) begin
-         always @(posedge clk) if(enA) selector <= addrA[N_W+SYMBOL_W-1:SYMBOL_W];
+         always @(posedge clk_i) if(enA_i) selector <= addrA_i[N_W+SYMBOL_W-1:SYMBOL_W];
       end
    endgenerate
 
@@ -99,10 +101,10 @@ module my_dp_asym_ram
          // Port A
          always @* begin
             for (j=0; j < N; j= j+1) begin
-              bus_enA[j] = enA;
-              bus_weA[j] = weA;
-              bus_inA[j] = dinA[j*MINDATA_W +: MINDATA_W];
-              doutA[j*MINDATA_W +: MINDATA_W] = bus_outA[j];
+              bus_enA_i[j] = enA_i;
+              bus_weA_i[j] = weA_i;
+              bus_inA[j] = dinA_i[j*MINDATA_W +: MINDATA_W];
+              doutA_o[j*MINDATA_W +: MINDATA_W] = bus_outA[j];
             end
          end
 
@@ -110,16 +112,16 @@ module my_dp_asym_ram
          always @* begin
             for (k=0; k < N; k= k+1) begin
               if(selector == k) begin
-               doutB = bus_outB[k];
+               doutB_o = bus_outB[k];
               end
 
-              if(addrB[N_W+SYMBOL_W-1:SYMBOL_W] == k) begin
-                bus_enB[k] = enB;
+              if(addrB_i[N_W+SYMBOL_W-1:SYMBOL_W] == k) begin
+                bus_enB_i[k] = enB_i;
               end else begin
-                bus_enB[k] = 1'b0;
+                bus_enB_i[k] = 1'b0;
               end
-              bus_weB[k] = weB;
-              bus_inB[k] = dinB;
+              bus_weB_i[k] = weB_i;
+              bus_inB[k] = dinB_i;
             end
          end
          
@@ -127,10 +129,10 @@ module my_dp_asym_ram
          // Port B
          always @* begin
             for (j=0; j < N; j= j+1) begin
-              bus_enB[j] = enB;
-              bus_weB[j] = weB;
-              bus_inB[j] = dinB[j*MINDATA_W +: MINDATA_W];
-              doutB[j*MINDATA_W +: MINDATA_W] = bus_outB[j];
+              bus_enB_i[j] = enB_i;
+              bus_weB_i[j] = weB_i;
+              bus_inB[j] = dinB_i[j*MINDATA_W +: MINDATA_W];
+              doutB_o[j*MINDATA_W +: MINDATA_W] = bus_outB[j];
             end
          end
 
@@ -138,35 +140,37 @@ module my_dp_asym_ram
          always @* begin
             for (k=0; k < N; k= k+1) begin
               if(selector == k) begin
-               doutA = bus_outA[k];
+               doutA_o = bus_outA[k];
               end
 
-              if(addrA[N_W+SYMBOL_W-1:SYMBOL_W] == k) begin
-                bus_enA[k] = enA;
+              if(addrA_i[N_W+SYMBOL_W-1:SYMBOL_W] == k) begin
+                bus_enA_i[k] = enA_i;
               end else begin
-                bus_enA[k] = 1'b0;
+                bus_enA_i[k] = 1'b0;
               end
-              bus_weA[k] = weA;
-              bus_inA[k] = dinA;
+              bus_weA_i[k] = weA_i;
+              bus_inA[k] = dinA_i;
             end
          end
       end else begin //A_DATA_W = B_DATA_W
          // Port A
          always @* begin
-           bus_enA[0] = enA;
-           bus_weA[0] = weA;
-           bus_inA[0] = dinA;
-           doutA = bus_outA[0];
+           bus_enA_i[0] = enA_i;
+           bus_weA_i[0] = weA_i;
+           bus_inA[0] = dinA_i;
+           doutA_o = bus_outA[0];
          end
          
          // Port B
          always @* begin
-           bus_enB[0] = enB;
-           bus_weB[0] = weB;
-           bus_inB[0] = dinB;
-           doutB = bus_outB[0];
+           bus_enB_i[0] = enB_i;
+           bus_weB_i[0] = weB_i;
+           bus_inB[0] = dinB_i;
+           doutB_o = bus_outB[0];
          end         
       end
    endgenerate
 
-endmodule   
+endmodule // my_dp_asym_ram
+
+`default_nettype wire

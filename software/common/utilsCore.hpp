@@ -9,6 +9,7 @@
 #include <new>
 #include <functional>
 #include <stdint.h>
+#include <optional>
 
 #include "signal.h"
 #include "assert.h"
@@ -75,23 +76,37 @@ ALWAYS_INLINE Defer<F> operator+(_DeferTag,F&& f){
 #define TEMP_defer(LINE) TEMP__defer( LINE )
 #define defer auto TEMP_defer(__LINE__) = _DeferTag() + [&]()
 
-// TODO: Implement a once region as well. Only executes one time using something like defer() or region()
+struct Once{};
+struct _OnceTag{};
+template<typename F>
+ALWAYS_INLINE Once operator+(_OnceTag,F&& f){
+  f();
+  return Once{};
+}
 
+#define TEMP__once(LINE) TEMPonce_ ## LINE
+#define TEMP_once(LINE) TEMP__once( LINE )
+#define once static Once TEMP_once(__LINE__) = _OnceTag() + [&]()
+
+void PrintStacktrace();
 void FlushStdout();
-#if defined(VERSAT_DEBUG)
+
+//#if defined(VERSAT_DEBUG)
 #define Assert(EXPR) \
    do { \
    bool _ = !(EXPR);   \
    if(_){ \
+      PrintStacktrace(); \
       FlushStdout(); \
       assert(_ && (EXPR)); \
    } \
    } while(0)
-#else
-#define Assert(EXPR) do {} while(0)
-#endif
+//#else
+//#define Assert(EXPR) do {} while(0)
+//#endif
 
 // Assert that gets replaced by the expression if debug is disabled (instead of simply disappearing like a normal assert)
+// Probably not a good idea now that I think about it. It's probably leads to more confusing code 
 #if defined(VERSAT_DEBUG)
 #define AssertAndDo(EXPR) Assert(EXPR)
 #else
@@ -165,6 +180,9 @@ typedef uint64_t uint64;
 //typedef long long unsigned int uint64;
 #endif
 
+template<typename T>
+using Optional = std::optional<T>;
+
 struct Time{
    uint64 microSeconds;
    uint64 seconds;
@@ -212,7 +230,6 @@ ALWAYS_INLINE void operator+(TimeIt&& timer,F&& f){
 #define timeRegion(ID) TimeIt(ID) + [&]()
 */
 
-#ifndef TEMPORARY_MARK
 template<typename T>
 class ArrayIterator{
 public:
@@ -233,7 +250,6 @@ struct Array{
   ArrayIterator<T> begin(){return ArrayIterator<T>{data};};
   ArrayIterator<T> end(){return ArrayIterator<T>{data + size};};
 };
-#endif
 
 typedef Array<const char> String;
 
@@ -242,6 +258,8 @@ typedef Array<const char> String;
 #define UNPACK_SS(STR) (STR).size,(STR).data
 #define UNPACK_SS_REVERSE(STR) (STR).data,(STR).size
 
+// Assuming that compiler can optimize the strlen out when passing literal strings
+// Otherwise transform these into macros
 inline String STRING(const char* str){return (String){str,(int) strlen(str)};}
 inline String STRING(const char* str,int size){return (String){str,size};}
 inline String STRING(const unsigned char* str){return (String){(const char*)str,(int) strlen((const char*) str)};}
@@ -288,13 +306,13 @@ struct Range{
   union{
     T low;
     T end;
- 	 T bottom;
+ 	T bottom;
   };
 };
 
 struct CheckRangeResult{
-   bool result;
-   int problemIndex;
+  bool result;
+  int problemIndex;
 };
 
 void SortRanges(Array<Range<int>> ranges);
@@ -319,7 +337,7 @@ struct Pair{
       Second data;
       Second second;
    };
-} /* __attribute__((packed)) */;
+} /* __attribute__((packed)) */; // TODO: Check if type info works correctly without this. It technically should after we added align info to the type system
 
 template<typename F,typename S>
 static bool operator==(const Pair<F,S>& p1,const Pair<F,S>& p2){
@@ -336,7 +354,7 @@ static bool operator==(const Pair<F,S>& p1,const Pair<F,S>& p2){
 #define MASK_VALUE(VAL,BITS) (VAL & FULL_MASK(BITS))
 
 // Returns a statically allocated string, instead of implementing varg for everything
-// Returned string uses statically allocated memory. Intended to be used to create quick strings for other functions, instead of having to implement them as variadic
+// Returned string uses statically allocated memory. Intended to be used to create quick strings for other functions, instead of having to implement them as variadic. Can also be used to temporarely transform a String into a C-String
 char* StaticFormat(const char* format,...);
 
 // Misc
@@ -388,6 +406,7 @@ void MakeDirectory(const char* path);
 FILE* OpenFileAndCreateDirectories(const char* path,const char* format);
 void CreateDirectories(const char* path);
 String ExtractFilenameOnly(String filepath);
+String PathGoUp(char* pathBuffer);
 
 void FixedStringCpy(char* dest,String src);
 
@@ -405,14 +424,6 @@ unsigned char* GetHexadecimal(const unsigned char* text, int str_size); // Helpe
 
 bool IsAlpha(char ch);
 
-String PathGoUp(char* pathBuffer);
-
-#if __cplusplus >= 201703L
-#include <optional>
-
-template<typename T>
-using Optional = std::optional<T>;
-
 // Simulate c++23 feature
 template<typename T>
 Optional<T> OrElse(Optional<T> first,Optional<T> elseOpt){
@@ -422,7 +433,6 @@ Optional<T> OrElse(Optional<T> first,Optional<T> elseOpt){
       return elseOpt;
    }
 }
-#endif
 
 template<typename T>
 inline void Memset(T* buffer,T elem,int bufferSize){
@@ -494,160 +504,6 @@ inline bool Contains(Array<String> array,String toCheck){
       }
    }
    return false;
-}
-
-template<typename T>
-struct ListedStruct : public T{
-   ListedStruct<T>* next;
-};
-
-// Generic list manipulation, as long as the structure has a next pointer of equal type
-template<typename T>
-T* ListGet(T* start,int index){
-   T* ptr = start;
-   for(int i = 0; i < index; i++){
-      if(ptr){
-         ptr = ptr->next;
-      }
-   }
-   return ptr;
-}
-
-template<typename T>
-int ListIndex(T* start,T* toFind){
-   int i = 0;
-   FOREACH_LIST(T*,ptr,start){
-      if(ptr == toFind){
-         break;
-      }
-      i += 1;
-   }
-   return i;
-}
-
-template<typename T>
-T* ListRemove(T* start,T* toRemove){ // Returns start of new list. ToRemove is still valid afterwards
-   if(start == toRemove){
-      return start->next;
-   } else {
-      T* previous = nullptr;
-      FOREACH_LIST(T*,ptr,start){
-         if(ptr == toRemove){
-            previous->next = ptr->next;
-         }
-         previous = ptr;
-      }
-
-      return start;
-   }
-}
-
-// For now, we are not returning the "deleted" node.
-// TODO: add a free node list and change this function
-template<typename T,typename Func>
-T* ListRemoveOne(T* start,Func compareFunction){ // Only removes one and returns.
-   if(compareFunction(start)){
-      return start->next;
-   } else {
-      T* previous = nullptr;
-      FOREACH_LIST(T*,ptr,start){
-         if(compareFunction(ptr)){
-            previous->next = ptr->next;
-         }
-         previous = ptr;
-      }
-
-      return start;
-   }
-}
-
-// TODO: This function leaks memory, because it does not return the free nodes
-template<typename T,typename Func>
-T* ListRemoveAll(T* start,Func compareFunction){
-   #if 0
-   T* freeListHead = nullptr;
-   T* freeListPtr = nullptr;
-   #endif
-
-   T* head = nullptr;
-   T* listPtr = nullptr;
-   for(T* ptr = start; ptr;){
-      T* next = ptr->next;
-      ptr->next = nullptr;
-      bool comp = compareFunction(ptr);
-
-      if(comp){ // Add to free list
-         #if 0
-         if(freeListPtr){
-            freeListPtr->next = ptr;
-            freeListPtr = ptr;
-         } else {
-            freeListHead = ptr;
-            freeListPtr = ptr;
-         }
-         #endif
-      } else { // "Add" to return list
-         if(listPtr){
-            listPtr->next = ptr;
-            listPtr = ptr;
-         } else {
-            head = ptr;
-            listPtr = ptr;
-         }
-      }
-
-      ptr = next;
-   }
-
-   return head;
-}
-
-template<typename T>
-T* ReverseList(T* head){
-   if(head == nullptr){
-      return head;
-   }
-
-   T* ptr = nullptr;
-   T* next = head;
-
-   while(next != nullptr){
-      T* nextNext = next->next;
-      next->next = ptr;
-      ptr = next;
-      next = nextNext;
-   }
-
-   return ptr;
-}
-
-template<typename T>
-T* ListInsertEnd(T* head,T* toAdd){
-   T* last = nullptr;
-   FOREACH_LIST(T*,ptr,head){
-      last = ptr;
-   }
-   Assert(last->next == nullptr);
-   last->next = toAdd;
-}
-
-template<typename T>
-T* ListInsert(T* head,T* toAdd){
-   if(!head){
-      return toAdd;
-   }
-
-   toAdd->next = head;
-   return toAdd;
-}
-
-template<typename T>
-int Size(T* start){
-   int size = 0;
-   FOREACH_LIST(T*,ptr,start){
-      size += 1;
-   }
-   return size;
 }
 
 #endif // VERSAT_INCLUDED_UTILS_CORE

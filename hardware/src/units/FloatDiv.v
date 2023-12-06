@@ -45,21 +45,21 @@ begin
      end
 end
 
-fp_div div(
-     .start(start),
-     .done(done),
+iob_fp_div div(
+     .start_i(start),
+     .done_o(done),
 
-     .op_a(in0),
-     .op_b(in1),
+     .op_a_i(in0),
+     .op_b_i(in1),
 
-     .res(out0),
+     .res_o(out0),
 
-     .overflow(),
-     .underflow(),
-     .exception(),
+     .overflow_o(),
+     .underflow_o(),
+     .exception_o(),
 
-     .clk(clk),
-     .rst(rst)
+     .clk_i(clk),
+     .rst_i(rst)
      );
 
 endmodule

@@ -43,7 +43,8 @@ char* StaticFormat(const char* format,...){
    va_end(args);
 
    Assert(written < BUFFER_SIZE);
-
+   buffer[written] = '\0';
+  
    return buffer;
 }
 
@@ -89,10 +90,12 @@ String ExtractFilenameOnly(String filepath){
 }
 
 char* GetCurrentDirectory(){
-   static char buffer[PATH_MAX];
+  // TODO: Maybe receive arena and remove use of static buffer
+  static char buffer[PATH_MAX];
    buffer[0] = '\0';
-   getcwd(buffer,PATH_MAX);
-   return buffer;
+   char* res = getcwd(buffer,PATH_MAX);
+
+   return res;
 }
 
 void MakeDirectory(const char* path){
@@ -118,7 +121,11 @@ FILE* OpenFileAndCreateDirectories(const char* path,const char* format){
    }
 
    FILE* file = fopen(buffer,format);
-   Assert(file);
+   if(file == nullptr){
+     printf("Failed to open file: %s\n",path);
+     exit(-1);
+   }
+
    return file;
 }
 
@@ -176,8 +183,6 @@ Optional<Array<String>> GetAllFilesInsideDirectory(String dirPath,Arena* arena){
       if(d == nullptr){
          break;
       }
-
-      printf("%s\n",d->d_name);
       
       if(d->d_name[0] == '.' && d->d_name[1] == '\0'){
          continue;

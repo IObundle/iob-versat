@@ -55,21 +55,21 @@ end
 wire [DATA_W-1:0] negative = {~in1[31],in1[30:0]};
 wire [DATA_W-1:0] out;
 
-fp_add adder(
-    .clk(clk),
-    .rst(rst),
+iob_fp_add adder(
+    .clk_i(clk),
+    .rst_i(rst),
 
-    .start(1'b1),
-    .done(),
+    .start_i(1'b1),
+    .done_o(),
 
-    .op_a(in0),
-    .op_b(negative),
+    .op_a_i(in0),
+    .op_b_i(negative),
 
-    .overflow(),
-    .underflow(),
-    .exception(),
+    .overflow_o(),
+    .underflow_o(),
+    .exception_o(),
 
-    .res(out)
+    .res_o(out)
      );
 
 assign out0 = (running & (|delay) == 0) ? (equalReg[0] ? 0 : out) 

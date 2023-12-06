@@ -3,20 +3,6 @@
 #include <cinttypes>
 #include <limits>
 
-//#include <cstdio>
-
-#if 1
-
-#ifndef PC
-  extern "C"{
-    int printf_(const char* format, ...);
-  }
-#define printf printf_
-#else
-#include <cstdio>
-#endif
-#endif
-
 static char* GetNumberRepr(uint64 number){
   static char buffer[32];
 
@@ -57,7 +43,7 @@ void PrintTime(Time time,const char* id){
     for(int i = 0; i < (6 - digits); i++){
       printf("0");
     }
-    
+
     for(int i = 0; i < digits; i++){
       printf("%c",nanoRepr[i]);
     }
@@ -66,7 +52,7 @@ void PrintTime(Time time,const char* id){
   Time temp = time;
   temp.seconds = SwapEndianess(time.seconds);
   temp.microSeconds = SwapEndianess(time.microSeconds);
-  
+
   unsigned char* hexVal = GetHexadecimal((const unsigned char*) &temp,sizeof(Time)); // Helper function to display result
   printf(" %s ",hexVal);
 
@@ -94,7 +80,7 @@ Time operator-(const Time& s1,const Time& s2){
 
   res.seconds = s1.seconds - s2.seconds;
   res.microSeconds = s1.microSeconds - s2.microSeconds;
-   
+
   return res;
 }
 
@@ -124,7 +110,6 @@ int log2i(int value){
 
   value -= 1; // If value matches a power of 2, we still want to return the previous value
 
-  // Change the order of this if to after subtracting one.
   // Any weird bug check this first
   if(value <= 0)
     return 0;
@@ -210,7 +195,7 @@ int GetMaxDigitSize(Array<int> array){
 int GetMaxDigitSize(Array<float> array){
   return 2; // Floating points is hard to figure out how many digits. 2 should be enough
 }
-  
+
 void Print(Array<float> array,int digitSize){
   if(digitSize == 0){
     digitSize = GetMaxDigitSize(array);
@@ -370,14 +355,14 @@ int SwapEndianess(int val){
 uint64 SwapEndianess(uint64 val){
   unsigned char* view = (unsigned char*) &val;
 
-  uint64 res = (view[0] << 56) |
-               (view[1] << 48) |
-               (view[2] << 40) |
-               (view[3] << 32) |
-               (view[4] << 24) |
-               (view[5] << 16) |
-               (view[6] << 8)  |
-               (view[7]);
+  uint64 res = ((uint64) view[0] << 56) |
+               ((uint64) view[1] << 48) |
+               ((uint64) view[2] << 40) |
+               ((uint64) view[3] << 32) |
+               ((uint64) view[4] << 24) |
+               ((uint64) view[5] << 16) |
+               ((uint64) view[6] << 8)  |
+               ((uint64) view[7]);
 
   return res;
 }
@@ -407,7 +392,7 @@ char GetHex(int value){
   if(value < 10){
     return '0' + value;
   } else{
-    return 'a' + (value - 10);
+    return 'A' + (value - 10);
   }
 }
 

@@ -140,6 +140,28 @@ Type* GetSpecificType(String name){
   return nullptr;
 }
 
+String GetBaseTypeName(String name){
+  Tokenizer tok(name,"*[]",{});
+
+  void* mark = tok.Mark();
+  while(!tok.Done()){
+    Token t = tok.PeekToken();
+
+    if(CompareString(t,"*")){
+      break;
+    } else if(CompareString(t,"[")){
+      break;
+    } else if(CompareString(t,"]")){
+      break;
+    }
+
+    tok.AdvancePeek(t);
+  }
+
+  String res = tok.Point(mark);
+  return res;
+}
+
 Type* InstantiateTemplate(String name,Arena* arena){
   STACK_ARENA(temp,Kilobyte(4));
   Tokenizer tok(name,"<>,",{});
@@ -192,6 +214,7 @@ Type* InstantiateTemplate(String name,Arena* arena){
   }
   numberPositions += 1;
 
+  bool mustFixRecursion = false;
   Array<Member> members = PushArray<Member>(&permanentArena,nMembers);
   Array<int> sizes = PushArray<int>(&temp,numberPositions);
   Array<int> align = PushArray<int>(&temp,numberPositions);
@@ -201,6 +224,7 @@ Type* InstantiateTemplate(String name,Arena* arena){
     TemplatedMember templateMember = templateBase->templateMembers[i];
     Tokenizer tok(templateMember.typeName,"*&[],<>",{});
 
+    BLOCK_REGION(&temp);
     Byte* mark = MarkArena(&temp);
 
     while(!tok.Done()){
@@ -215,15 +239,30 @@ Type* InstantiateTemplate(String name,Arena* arena){
     }
 
     String trueType = PointArena(&temp,mark);
-    Type* type = GetTypeOrFail(trueType);
+    String baseType = GetBaseTypeName(trueType);
+
+    // TODO: This feels a bit like a hack. But it does work. Maybe it's fine with a bit of a cleanup and comments
+    // Must be a pointer otherwise struct contains itself
+    if(CompareString(baseType,name)){
+      mustFixRecursion = true;
+
+      Type* type = ValueType::NIL;
+      members[i].type = ValueType::NIL;
+      members[i].name = templateMember.name;
+      members[i].offset = templateMember.memberOffset; // Temporarely store member position as the offset, for use later in this function
+      sizes[templateMember.memberOffset] = std::max(sizes[templateMember.memberOffset],type->size);
+      align[templateMember.memberOffset] = std::max(align[templateMember.memberOffset],type->align);
+
+      continue;
+    }
+
+    Type* type = GetTypeOrFail(trueType); // MARKER - Fails when member contains same type as instantiated type (such as linked lists). Need to check for this situation and possibly change the code.
 
     members[i].type = type;
     members[i].name = templateMember.name;
     members[i].offset = templateMember.memberOffset; // Temporarely store member position as the offset, for use later in this function
     sizes[templateMember.memberOffset] = std::max(sizes[templateMember.memberOffset],type->size);
     align[templateMember.memberOffset] = std::max(align[templateMember.memberOffset],type->align);
-
-    PopMark(&temp,mark);
   }
 
   Array<int> offsets = PushArray<int>(&temp,numberPositions + 1);
@@ -261,7 +300,15 @@ Type* InstantiateTemplate(String name,Arena* arena){
   if(structDefined){
     newType->size = Align(offsets[sizes.size],maxAlign);
   } else {
-    newType-> size = templateBase->size;
+    newType->size = templateBase->size;
+  }
+
+  if(mustFixRecursion){
+    for(Member& member : newType->members){
+      if(member.type == ValueType::NIL){
+        member.type = newType;
+      }
+    }
   }
 
   return newType;
@@ -401,6 +448,8 @@ Type* GetArrayType(Type* baseType, int arrayLength){
 
 void RegisterParsedTypes();
 
+#define REGISTER(TYPE) RegisterSimpleType(STRING(#TYPE),sizeof(TYPE),alignof(TYPE));
+
 void RegisterTypes(){
   static bool registered = false;
   if(registered){
@@ -410,35 +459,37 @@ void RegisterTypes(){
 
   permanentArena = InitArena(Megabyte(1));
 
-#define REGISTER(TYPE) RegisterSimpleType(STRING(#TYPE),sizeof(TYPE),alignof(TYPE));
+  ValueType::NUMBER = REGISTER(int);
+  ValueType::SIZE_T = REGISTER(size_t);
+  ValueType::BOOLEAN = REGISTER(bool);
+  ValueType::CHAR = REGISTER(char);
 
-ValueType::NUMBER = REGISTER(int);
-ValueType::SIZE_T = REGISTER(size_t);
-ValueType::BOOLEAN = REGISTER(bool);
-ValueType::CHAR = REGISTER(char);
-ValueType::NIL = RegisterSimpleType(STRING("void"),sizeof(char),alignof(char));
-REGISTER(unsigned int);
-REGISTER(unsigned char);
-REGISTER(float);
-REGISTER(double);
+  ValueType::STRING = GetPointerType(ValueType::CHAR);
+  ValueType::NIL = RegisterSimpleType(STRING("void"),sizeof(char),alignof(char));
+
+  REGISTER(unsigned int);
+  REGISTER(unsigned char);
+  REGISTER(float);
+  REGISTER(double);
+
+  RegisterParsedTypes();
+
+#ifndef SIMPLE_TYPES
+  ValueType::HASHMAP = GetTypeOrFail(STRING("Hashmap"));
+  ValueType::SIZED_STRING = GetTypeOrFail(STRING("String"));
+
+  Type* normalTemplateFunction = GetTypeOrFail(STRING("TemplateFunction"));
+
+  if(normalTemplateFunction){
+    ValueType::TEMPLATE_FUNCTION = GetPointerType(normalTemplateFunction);
+  }
+  ValueType::POOL = GetTypeOrFail(STRING("Pool"));
+  ValueType::ARRAY = GetTypeOrFail(STRING("Array"));
+  ValueType::STD_VECTOR = GetTypeOrFail(STRING("std::vector"));
+#endif
+}
 
 #undef REGISTER
-
-RegisterParsedTypes();
-
-ValueType::STRING = GetPointerType(ValueType::CHAR);
-ValueType::HASHMAP = GetTypeOrFail(STRING("Hashmap"));
-ValueType::SIZED_STRING = GetTypeOrFail(STRING("String"));
-
-Type* normalTemplateFunction = GetTypeOrFail(STRING("TemplateFunction"));
-
-if(normalTemplateFunction){
-ValueType::TEMPLATE_FUNCTION = GetPointerType(normalTemplateFunction);
-}
-ValueType::POOL = GetTypeOrFail(STRING("Pool"));
-ValueType::ARRAY = GetTypeOrFail(STRING("Array"));
-ValueType::STD_VECTOR = GetTypeOrFail(STRING("std::vector"));
-}
 
 void FreeTypes(){
   Free(&permanentArena);
