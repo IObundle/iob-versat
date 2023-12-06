@@ -66,7 +66,6 @@ public:
    PushPtr<int> storedOutputs;
    PushPtr<Byte> extraData;
    PushPtr<Byte> externalMemory;
-   //PushPtr<UnitDebugData> debugData;
 
    void Init(Accelerator* accel);
    void Init(Accelerator* topLevel,FUInstance* inst);

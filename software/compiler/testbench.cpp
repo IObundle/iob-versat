@@ -1,6 +1,6 @@
 #include "versat.hpp"
 
-#include "debug.hpp"
+#include "debugVersat.hpp"
 #include "templateEngine.hpp"
 #include "unitVerilation.hpp"
 

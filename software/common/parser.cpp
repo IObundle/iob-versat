@@ -202,7 +202,7 @@ Token Tokenizer::PeekFindUntil(const char* str){
     i += 1;
   }
 
-  token.size = -1; // Didn't find anything
+  token.size = -1; // Didn't find anything. TODO: Not a good way of reporting errors
 
   return token;
 }

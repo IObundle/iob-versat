@@ -448,6 +448,8 @@ Type* GetArrayType(Type* baseType, int arrayLength){
 
 void RegisterParsedTypes();
 
+#define REGISTER(TYPE) RegisterSimpleType(STRING(#TYPE),sizeof(TYPE),alignof(TYPE));
+
 void RegisterTypes(){
   static bool registered = false;
   if(registered){
@@ -457,35 +459,37 @@ void RegisterTypes(){
 
   permanentArena = InitArena(Megabyte(1));
 
-#define REGISTER(TYPE) RegisterSimpleType(STRING(#TYPE),sizeof(TYPE),alignof(TYPE));
+  ValueType::NUMBER = REGISTER(int);
+  ValueType::SIZE_T = REGISTER(size_t);
+  ValueType::BOOLEAN = REGISTER(bool);
+  ValueType::CHAR = REGISTER(char);
 
-ValueType::NUMBER = REGISTER(int);
-ValueType::SIZE_T = REGISTER(size_t);
-ValueType::BOOLEAN = REGISTER(bool);
-ValueType::CHAR = REGISTER(char);
-ValueType::NIL = RegisterSimpleType(STRING("void"),sizeof(char),alignof(char));
-REGISTER(unsigned int);
-REGISTER(unsigned char);
-REGISTER(float);
-REGISTER(double);
+  ValueType::STRING = GetPointerType(ValueType::CHAR);
+  ValueType::NIL = RegisterSimpleType(STRING("void"),sizeof(char),alignof(char));
+
+  REGISTER(unsigned int);
+  REGISTER(unsigned char);
+  REGISTER(float);
+  REGISTER(double);
+
+  RegisterParsedTypes();
+
+#ifndef SIMPLE_TYPES
+  ValueType::HASHMAP = GetTypeOrFail(STRING("Hashmap"));
+  ValueType::SIZED_STRING = GetTypeOrFail(STRING("String"));
+
+  Type* normalTemplateFunction = GetTypeOrFail(STRING("TemplateFunction"));
+
+  if(normalTemplateFunction){
+    ValueType::TEMPLATE_FUNCTION = GetPointerType(normalTemplateFunction);
+  }
+  ValueType::POOL = GetTypeOrFail(STRING("Pool"));
+  ValueType::ARRAY = GetTypeOrFail(STRING("Array"));
+  ValueType::STD_VECTOR = GetTypeOrFail(STRING("std::vector"));
+#endif
+}
 
 #undef REGISTER
-
-RegisterParsedTypes();
-
-ValueType::STRING = GetPointerType(ValueType::CHAR);
-ValueType::HASHMAP = GetTypeOrFail(STRING("Hashmap"));
-ValueType::SIZED_STRING = GetTypeOrFail(STRING("String"));
-
-Type* normalTemplateFunction = GetTypeOrFail(STRING("TemplateFunction"));
-
-if(normalTemplateFunction){
-ValueType::TEMPLATE_FUNCTION = GetPointerType(normalTemplateFunction);
-}
-ValueType::POOL = GetTypeOrFail(STRING("Pool"));
-ValueType::ARRAY = GetTypeOrFail(STRING("Array"));
-ValueType::STD_VECTOR = GetTypeOrFail(STRING("std::vector"));
-}
 
 void FreeTypes(){
   Free(&permanentArena);

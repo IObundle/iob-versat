@@ -1,4 +1,7 @@
 #include "configurations.hpp"
+#include "debugVersat.hpp"
+#include "memory.hpp"
+#include "utilsCore.hpp"
 #include "versat.hpp"
 #include "utils.hpp"
 #include "verilogParsing.hpp"
@@ -36,6 +39,7 @@ struct ArgumentOptions{
   bool debug;
 };
 
+// TODO: Same function is being used in debug.cpp
 String GetAbsolutePath(const char* path,Arena* arena){
   fs::path canonical = fs::weakly_canonical(path);
   String res = PushString(arena,"%s",canonical.c_str());
@@ -229,27 +233,6 @@ ArgumentOptions* ParseCommandLineOptions(int argc,const char* argv[],Arena* perm
 //General TODO: There is a lot of code that makes sense for the old one phase versat, but that is just overhead for the two phase versat. We do not have to guarantee that the Accelerator is "valid" at all times, like the previous version did. We can use more immediate mode APIs and rely on correct function calling instead of pre doing work.
 
 #include <unordered_map>
-
-#include <execinfo.h>
-
-void print_trace(){
-  void *array[10];
-  char **strings;
-  int size, i;
-
-  size = backtrace (array, 10);
-  strings = backtrace_symbols (array, size);
-  if (strings != NULL)
-  {
-
-    printf ("Obtained %d stack frames.\n", size);
-    for (i = 0; i < size; i++)
-      printf ("%s\n", strings[i]);
-  }
-
-  free (strings);
-}
-
 #include <unistd.h>
 #include <sys/wait.h>
 #include <sys/stat.h>
@@ -381,7 +364,7 @@ String GetVerilatorRoot(Arena* out,Arena* temp){
 
   String fileContent = PushFile(temp,StaticFormat("%.*s/VTest.mk",UNPACK_SS(tempDir)));
 
-  if(fileContent.size == 0){
+  if(fileContent.size <= 0){
     printf("Problem opening verilator generated file\n");
     exit(-1);
   }
@@ -415,14 +398,22 @@ String GetVerilatorRoot(Arena* out,Arena* temp){
 }
 
 int main(int argc,const char* argv[]){
-#if 1
+#if 0
   if(argc < 3){
     printf("Need specifications and a top level type\n");
     return -1;
   }
 #endif
-  
+
+  InitDebug();
+
   Versat* versat = InitVersat(0,1);
+
+#if 0
+  {
+    ArgumentOptions* opts = ParseCommandLineOptions(argc,nullptr,{},{});
+  }
+  #endif
   
   // TODO: This is not a good idea, after changing versat to 2 phases
   SetDebug(versat,VersatDebugFlags::OUTPUT_ACCELERATORS_CODE,1);

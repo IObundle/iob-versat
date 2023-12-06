@@ -567,7 +567,7 @@ FUDeclaration* ParseModule(Versat* versat,Tokenizer* tok){
   ArenaMarker marker(arena);
 
   InstanceTable* table = PushHashmap<String,FUInstance*>(arena,1000);
-  InstanceName* names = PushHashmap<String,int>(arena,1000);
+  InstanceName* names = PushHashmap<String,int>(arena,1000); // TODO: Can be replaced by Set
 
   int insertedInputs = 0;
   for(int i = 0; 1; i++){
@@ -780,6 +780,9 @@ FUDeclaration* ParseIterative(Versat* versat,Tokenizer* tok){
   Arena* arena = &versat->temp;
   BLOCK_REGION(arena);
 
+  InstanceTable* table = PushHashmap<String,FUInstance*>(arena,1000);
+  Set<String>* names = PushSet<String>(arena,1000);
+
   String name = tok->NextToken();
 
   Accelerator* iterative = CreateAccelerator(versat);
@@ -802,7 +805,7 @@ FUDeclaration* ParseIterative(Versat* versat,Tokenizer* tok){
 
     String name = PushString(&versat->permanent,argument);
 
-    CreateOrGetInput(iterative,name,insertedInputs++);
+    table->Insert(name,CreateOrGetInput(iterative,name,insertedInputs++));
   }
   tok->AssertNextToken(")");
   tok->AssertNextToken("{");
@@ -822,7 +825,8 @@ FUDeclaration* ParseIterative(Versat* versat,Tokenizer* tok){
     String name = PushString(&versat->permanent,instanceName);
 
     FUInstance* created = CreateFUInstance(iterative,type,name);
-
+    table->Insert(name,created);
+    
     if(!unit){
       unit = created;
     }
@@ -863,16 +867,19 @@ FUDeclaration* ParseIterative(Versat* versat,Tokenizer* tok){
     FUInstance* inst1 = nullptr;
     FUInstance* inst2 = nullptr;
 
-    inst1 = GetInstanceByName(iterative,"%.*s",UNPACK_SS(start.name));
+    inst1 = table->GetOrFail(start.name);
+    //inst1 = GetInstanceByName(iterative,"%.*s",UNPACK_SS(start.name));
 
     if(CompareString(end.name,"out")){
       if(!outputInstance){
         outputInstance = (FUInstance*) CreateFUInstance(iterative,BasicDeclaration::output,STRING("out"));
+        table->Insert(STRING("out"),outputInstance);
       }
 
       inst2 = outputInstance;
     } else {
-      inst2 = GetInstanceByName(iterative,"%.*s",UNPACK_SS(end.name));
+      //inst2 = GetInstanceByName(iterative,"%.*s",UNPACK_SS(end.name));
+      inst2 = table->GetOrFail(end.name);
     }
 
     if(num == -1){
@@ -898,7 +905,9 @@ FUDeclaration* ParseIterative(Versat* versat,Tokenizer* tok){
                                STRING("Merge6"),
                                STRING("Merge7")};
 
-      *res.data = CreateFUInstance(iterative,type,names[index++]);
+      *res.data = CreateFUInstance(iterative,type,names[index]);
+      table->Insert(names[index],*res.data);
+      index += 1;
 
       ConnectUnit((PortExpression){*res.data,start.extra},(PortExpression){inst2,end.extra});
     }

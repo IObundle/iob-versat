@@ -324,4 +324,18 @@ Hashmap<T,P>* PushHashmapFromList(Arena* arena,ArenaList<Pair<T,P>>* list){
   return map;
 }
 
+template<typename T,typename P>
+Array<Pair<T,P>> PushArrayFromList(Arena* arena,ArenaList<Pair<T,P>>* list){
+  int size = Size(list);
+  
+  Array<Pair<T,P>> arr = PushArray<Pair<T,P>>(arena,size);
+
+  int i = 0;
+  FOREACH_LIST_INDEXED(auto*,iter,list->head,i){
+    arr[i] = {iter->first,iter->second};
+  }
+
+  return arr;
+}
+
 #endif // INCLUDED_UTILS_HPP

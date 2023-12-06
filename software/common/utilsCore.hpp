@@ -88,12 +88,15 @@ ALWAYS_INLINE Once operator+(_OnceTag,F&& f){
 #define TEMP_once(LINE) TEMP__once( LINE )
 #define once static Once TEMP_once(__LINE__) = _OnceTag() + [&]()
 
+void PrintStacktrace();
 void FlushStdout();
+
 //#if defined(VERSAT_DEBUG)
 #define Assert(EXPR) \
    do { \
    bool _ = !(EXPR);   \
    if(_){ \
+      PrintStacktrace(); \
       FlushStdout(); \
       assert(_ && (EXPR)); \
    } \
@@ -255,6 +258,8 @@ typedef Array<const char> String;
 #define UNPACK_SS(STR) (STR).size,(STR).data
 #define UNPACK_SS_REVERSE(STR) (STR).data,(STR).size
 
+// Assuming that compiler can optimize the strlen out when passing literal strings
+// Otherwise transform these into macros
 inline String STRING(const char* str){return (String){str,(int) strlen(str)};}
 inline String STRING(const char* str,int size){return (String){str,size};}
 inline String STRING(const unsigned char* str){return (String){(const char*)str,(int) strlen((const char*) str)};}
@@ -301,13 +306,13 @@ struct Range{
   union{
     T low;
     T end;
- 	 T bottom;
+ 	T bottom;
   };
 };
 
 struct CheckRangeResult{
-   bool result;
-   int problemIndex;
+  bool result;
+  int problemIndex;
 };
 
 void SortRanges(Array<Range<int>> ranges);
@@ -332,7 +337,7 @@ struct Pair{
       Second data;
       Second second;
    };
-} /* __attribute__((packed)) */;
+} /* __attribute__((packed)) */; // TODO: Check if type info works correctly without this. It technically should after we added align info to the type system
 
 template<typename F,typename S>
 static bool operator==(const Pair<F,S>& p1,const Pair<F,S>& p2){
@@ -349,7 +354,7 @@ static bool operator==(const Pair<F,S>& p1,const Pair<F,S>& p2){
 #define MASK_VALUE(VAL,BITS) (VAL & FULL_MASK(BITS))
 
 // Returns a statically allocated string, instead of implementing varg for everything
-// Returned string uses statically allocated memory. Intended to be used to create quick strings for other functions, instead of having to implement them as variadic
+// Returned string uses statically allocated memory. Intended to be used to create quick strings for other functions, instead of having to implement them as variadic. Can also be used to temporarely transform a String into a C-String
 char* StaticFormat(const char* format,...);
 
 // Misc

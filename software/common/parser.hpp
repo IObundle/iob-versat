@@ -18,7 +18,8 @@ struct Expression{
   Command* command;
   Value val;
   String text;
-
+  int approximateLine;
+  
   enum {UNDEFINED,OPERATION,IDENTIFIER,COMMAND,LITERAL,ARRAY_ACCESS,MEMBER_ACCESS} type;
 };
 
@@ -40,7 +41,6 @@ class Tokenizer{
   const char* start;
   const char* ptr;
   const char* end;
-  int lines;
 
 public:
   std::string singleChars; // TODO: Why use string instead of sized string?
@@ -53,6 +53,7 @@ private:
 
 public:
 
+  int lines;
   // Can change mid way to alter manner in which the tokenizer handles special cases
   bool keepWhitespaces;
   bool keepComments;

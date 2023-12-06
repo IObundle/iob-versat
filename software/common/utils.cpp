@@ -43,7 +43,8 @@ char* StaticFormat(const char* format,...){
    va_end(args);
 
    Assert(written < BUFFER_SIZE);
-
+   buffer[written] = '\0';
+  
    return buffer;
 }
 

@@ -11,7 +11,7 @@
 
 #include "thread.hpp"
 #include "type.hpp"
-#include "debug.hpp"
+#include "debugVersat.hpp"
 #include "parser.hpp"
 #include "configurations.hpp"
 #include "debugGUI.hpp"
@@ -821,25 +821,21 @@ static FUInstance* GetInstanceByHierarchicalName2(AcceleratorIterator iter,Hiera
             return res;
           }
         } else if(!hier->next){ // Correct name and type (if specified) and no further hierarchical name to follow
-               Accelerator* accel = iter.topLevel;
+          Accelerator* accel = iter.topLevel;
+          
+          if(iter.GetFullLevel() == 0){
+            return node->inst;
+          } else {
+            FUInstance* instBuffer = accel->subInstances.Alloc();
+            *instBuffer = *((FUInstance*)inst);
+            instBuffer->declarationInstance = inst;
 
-               //#if 0
-               //return node->inst;
-               //#else
-               if(iter.GetFullLevel() == 0){
-                 return node->inst;
-               } else {
-                 FUInstance* instBuffer = accel->subInstances.Alloc();
-                 *instBuffer = *((FUInstance*)inst);
-                 instBuffer->declarationInstance = inst;
+            Accelerator* accel = iter.topLevel;
+            Arena arena = SubArena(accel->accelMemory,256);
+            instBuffer->name = GetFullHierarchicalName(savedHier,&arena);
 
-                 Accelerator* accel = iter.topLevel;
-                 Arena arena = SubArena(accel->accelMemory,256);
-                 instBuffer->name = GetFullHierarchicalName(savedHier,&arena);
-
-                 return instBuffer;
-               }
-               //#endif
+            return instBuffer;
+          }
         }
       }
 
@@ -1804,14 +1800,6 @@ FUDeclaration* RegisterIterativeUnit(Versat* versat,Accelerator* accel,FUInstanc
   declaration.fixedDelayCircuit = f;
 #endif
 
-#if 0
-  declaration.initializeFunction = IterativeInitializeFunction;
-  declaration.startFunction = IterativeStartFunction;
-  declaration.updateFunction = IterativeUpdateFunction;
-  declaration.destroyFunction = IterativeDestroyFunction;
-#endif
-//declaration.memAccessFunction = CompositeMemoryAccess;
-
   declaration.staticUnits = PushHashmap<StaticId,StaticData>(&versat->permanent,1000); // TODO: Set correct number of elements
   int staticOffset = 0;
   // Start by collecting all the existing static allocated units in subinstances
@@ -1865,7 +1853,7 @@ FUDeclaration* RegisterIterativeUnit(Versat* versat,Accelerator* accel,FUInstanc
   }
 
   char buffer[256];
-  sprintf(buffer,"src/%.*s.v",UNPACK_SS(name));
+  sprintf(buffer,"%.*s/modules/%.*s.v",UNPACK_SS(versat->outputLocation),UNPACK_SS(name));
   FILE* sourceCode = OpenFileAndCreateDirectories(buffer,"w");
   ProcessTemplate(sourceCode,BasicTemplates::iterativeTemplate,&versat->temp);
 
