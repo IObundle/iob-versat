@@ -31,41 +31,42 @@ AcceleratorConfig* GetStartOfConfig();
 AcceleratorState* GetStartOfState();
 
 #ifdef __cplusplus
-}
+  }
 #endif
 
 bool CreateVCD;
 bool SimulateDatabus;
 
 void ConfigCreateVCD(bool value){
-   CreateVCD = value;
+  CreateVCD = value;
 }
 
 void ConfigSimulateDatabus(bool value){
-   SimulateDatabus = value;
+  SimulateDatabus = value;
 }
 
 void versat_init(int base){
-   CreateVCD = true;
-   SimulateDatabus = true;
+  CreateVCD = true;
+  SimulateDatabus = true;
+  versat_base = base;
 
-   InitializeVerilator();
-   VersatAcceleratorCreate();
+  InitializeVerilator();
+  VersatAcceleratorCreate();
 
-   accelConfig = GetStartOfConfig();
-   accelState = GetStartOfState();
+  accelConfig = GetStartOfConfig();
+  accelState = GetStartOfState();
 
-   char* configView = (char*) accelConfig;
-   iptr* delayPtr = (iptr*) (configView + (delayStart - configStart));
-   iptr* staticPtr = (iptr*) (configView + (staticStart - configStart));
+  char* configView = (char*) accelConfig;
+  iptr* delayPtr = (iptr*) (configView + (delayStart - configStart));
+  iptr* staticPtr = (iptr*) (configView + (staticStart - configStart));
 
-   for(int i = 0; i < ARRAY_SIZE(delayBuffer); i++){
-      delayPtr[i] = delayBuffer[i];
-   }
+  for(int i = 0; i < ARRAY_SIZE(delayBuffer); i++){
+    delayPtr[i] = delayBuffer[i];
+  }
 
-   for(int i = 0; i < ARRAY_SIZE(staticBuffer); i++){
-      staticPtr[i] = staticBuffer[i];
-   }
+  for(int i = 0; i < ARRAY_SIZE(staticBuffer); i++){
+    staticPtr[i] = staticBuffer[i];
+  }
 }
 
 void RunAccelerator(int times){
@@ -74,8 +75,16 @@ void RunAccelerator(int times){
   }
 }
 
+
 void VersatMemoryCopy(void* dest,void* data,int size){
-  memcpy(dest,data,size);
+  int* view = (int*) data;
+
+  for(int i = 0; i < (size / 4); i++){
+    VersatUnitWrite((int) dest,i,view[i]);
+  }
+
+  // TODO: cannot only memcpy because do not know if writing to mem mapped or config  
+  //memcpy(dest,data,size);
 }
 
 void StartAccelerator(){
@@ -83,7 +92,7 @@ void StartAccelerator(){
 }
 
 void EndAccelerator(){
-   // Do nothing. Start accelerator does everything, for now
+  // Do nothing. Start accelerator does everything, for now
 }
 
 void VersatUnitWrite(int baseaddr,int index,int val){

@@ -8,7 +8,7 @@ VERSAT_DIR:=$(shell pwd)
 # Default rule
 all: versat
 
-include $(VERSAT_DIR)/core.mk
+include $(VERSAT_DIR)/config.mk
 include $(VERSAT_DIR)/sharedHardware.mk
 
 versat-tools:

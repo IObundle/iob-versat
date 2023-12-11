@@ -123,6 +123,8 @@ int CountSubstring(String str,String substr);
 void StoreToken(Token token,char* buffer);
 #define CompareToken CompareString
 
+void PrintEscapedToken(Token tok);
+
 // This functions should check for errors. Also these functions should return an error if they do not parse everything. Something like STRING("3 a") should flag an error for ParseInt, for example, instead of just returning 3. Either they consume everything or it's an error
 int ParseInt(String str);
 double ParseDouble(String str);

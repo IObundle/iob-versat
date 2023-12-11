@@ -398,12 +398,11 @@ String GetVerilatorRoot(Arena* out,Arena* temp){
 }
 
 int main(int argc,const char* argv[]){
-#if 0
+  // TODO: Need to actually parse and give an error, instead of just checking for less than 3
   if(argc < 3){
     printf("Need specifications and a top level type\n");
     return -1;
   }
-#endif
 
   InitDebug();
 
@@ -419,7 +418,7 @@ int main(int argc,const char* argv[]){
   SetDebug(versat,VersatDebugFlags::OUTPUT_ACCELERATORS_CODE,1);
   SetDebug(versat,VersatDebugFlags::OUTPUT_VERSAT_CODE,1);
   SetDebug(versat,VersatDebugFlags::USE_FIXED_BUFFERS,0);
-  SetDebug(versat,VersatDebugFlags::OUTPUT_GRAPH_DOT,0);
+  SetDebug(versat,VersatDebugFlags::OUTPUT_GRAPH_DOT,1);
   SetDebug(versat,VersatDebugFlags::OUTPUT_VCD,0);
 
   Arena permInst = InitArena(Megabyte(256));

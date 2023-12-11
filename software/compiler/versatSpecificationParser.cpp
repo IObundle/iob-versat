@@ -868,7 +868,6 @@ FUDeclaration* ParseIterative(Versat* versat,Tokenizer* tok){
     FUInstance* inst2 = nullptr;
 
     inst1 = table->GetOrFail(start.name);
-    //inst1 = GetInstanceByName(iterative,"%.*s",UNPACK_SS(start.name));
 
     if(CompareString(end.name,"out")){
       if(!outputInstance){
@@ -878,7 +877,6 @@ FUDeclaration* ParseIterative(Versat* versat,Tokenizer* tok){
 
       inst2 = outputInstance;
     } else {
-      //inst2 = GetInstanceByName(iterative,"%.*s",UNPACK_SS(end.name));
       inst2 = table->GetOrFail(end.name);
     }
 
@@ -917,7 +915,7 @@ FUDeclaration* ParseIterative(Versat* versat,Tokenizer* tok){
     ConnectUnit((PortExpression){inst1,start.extra},(PortExpression){*res.data,end.extra});
   }
   tok->AssertNextToken("}");
-
+  
   return RegisterIterativeUnit(versat,iterative,unit,latency,name);
 }
 

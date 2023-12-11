@@ -62,24 +62,24 @@ module @{accel.name} #(
    #{end}
 
    #{for ext accel.externalMemory}
-      #{set i index}
+#{set i index}
       #{if ext.type}
    // DP
-      #{for port 2}
-   output [@{ext.bitSize}-1:0]   ext_dp_addr_@{i}_port_@{port},
-   output [@{ext.dataSize}-1:0]   ext_dp_out_@{i}_port_@{port},
-   input  [@{ext.dataSize}-1:0]   ext_dp_in_@{i}_port_@{port},
-   output                ext_dp_enable_@{i}_port_@{port},
-   output                ext_dp_write_@{i}_port_@{port},
+      #{for dp ext.dp}
+   output [@{dp.bitSize}-1:0]   ext_dp_addr_@{i}_port_@{index},
+   output [@{dp.dataSizeOut}-1:0]  ext_dp_out_@{i}_port_@{index},
+   input  [@{dp.dataSizeIn}-1:0]  ext_dp_in_@{i}_port_@{index},
+   output                        ext_dp_enable_@{i}_port_@{index},
+   output                        ext_dp_write_@{i}_port_@{index},
       #{end}
       #{else}
    // 2P
-   output [@{ext.bitSize}-1:0]   ext_2p_addr_out_@{i},
-   output [@{ext.bitSize}-1:0]   ext_2p_addr_in_@{i},
-   output                ext_2p_write_@{i},
-   output                ext_2p_read_@{i},
-   input  [@{ext.dataSize}-1:0]   ext_2p_data_in_@{i},
-   output [@{ext.dataSize}-1:0]   ext_2p_data_out_@{i},
+   output [@{ext.tp.bitSizeOut}-1:0]   ext_2p_addr_out_@{i},
+   output [@{ext.tp.bitSizeIn}-1:0]   ext_2p_addr_in_@{i},
+   output                        ext_2p_write_@{i},
+   output                        ext_2p_read_@{i},
+   input  [@{ext.tp.dataSizeIn}-1:0]  ext_2p_data_in_@{i},
+   output [@{ext.tp.dataSizeOut}-1:0]  ext_2p_data_out_@{i},
       #{end}
    #{end}
 
@@ -217,8 +217,13 @@ end
          #{end}
          #{end}
 
+         #{if inst.name == "Merge0"}
+         .stride(@{special}),
+
+         #{else}
+         
          #{if inst.isStatic}
-         #{for wire inst.declaration.configs}
+         #{for wire decl.configInfo.configs}
          .@{wire.name}(@{accel.name}_@{inst.name |> Identify}_@{wire.name}),
          #{end}
 
@@ -233,6 +238,8 @@ end
          .@{id.parent.name}_@{id.name}_@{wire.name}(@{id.parent.name}_@{id.name}_@{wire.name}),
          #{end}
          #{end}
+         #{end}
+
          #{end}
 
          #{for i decl.configInfo.delayOffsets.max}

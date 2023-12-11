@@ -1,4 +1,4 @@
-include $(VERSAT_DIR)/core.mk
+include $(VERSAT_DIR)/config.mk
 
 VERSAT_REQUIRE_TYPE:= type verilogParsing templateEngine
 

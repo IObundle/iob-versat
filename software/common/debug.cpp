@@ -236,7 +236,6 @@ static String GetAbsolutePath(const char* path,Arena* arena){
 void PrintStacktrace(){
   const String rootPath = STRING(ROOT_PATH); // ROOT_PATH must have the pathname to the top of the source code folder (the largest subpath common to all code files)
 
-  printf("Here: %d\n",debugArena->used);
   BLOCK_REGION(debugArena);
 
   Arena tempInst = SubArena(debugArena,Kilobyte(128));

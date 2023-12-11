@@ -1674,7 +1674,7 @@ FUDeclaration* RegisterIterativeUnit(Versat* versat,Accelerator* accel,FUInstanc
     Assert(arr.size <= 2); // Do not know what to do if size bigger than 2.
   }
 
-  static String MuxNames[] = {STRING("Mux1"),STRING("Mux2"),STRING("Mux3"),STRING("Mux4"),STRING("Mux5"),STRING("Mux6"),STRING("Mux7"),
+  static String muxNames[] = {STRING("Mux1"),STRING("Mux2"),STRING("Mux3"),STRING("Mux4"),STRING("Mux5"),STRING("Mux6"),STRING("Mux7"),
                                STRING("Mux8"),STRING("Mux9"),STRING("Mux10"),STRING("Mux11"),STRING("Mux12"),STRING("Mux13"),STRING("Mux14"),STRING("Mux15"),
                                STRING("Mux16"),STRING("Mux17"),STRING("Mux18"),STRING("Mux19"),STRING("Mux20"),STRING("Mux21"),STRING("Mux22"),STRING("Mux23"),
                                STRING("Mux24"),STRING("Mux25"),STRING("Mux26"),STRING("Mux27"),STRING("Mux28"),STRING("Mux29"),STRING("Mux30"),STRING("Mux31"),STRING("Mux32"),STRING("Mux33"),STRING("Mux34"),
@@ -1702,8 +1702,8 @@ FUDeclaration* RegisterIterativeUnit(Versat* versat,Accelerator* accel,FUInstanc
 
     Assert(arr[0].node->inst->declaration == BasicDeclaration::input);
 
-    Assert(i < ARRAY_SIZE(MuxNames));
-    FUInstance* mux = CreateFUInstance(accel,type,MuxNames[i]);
+    Assert(i < ARRAY_SIZE(muxNames));
+    FUInstance* mux = CreateFUInstance(accel,type,muxNames[i]);
     InstanceNode* muxNode = GetInstanceNode(accel,(FUInstance*) mux);
 
     RemoveConnection(accel,arr[0].node,arr[0].port,node,i);
@@ -1850,6 +1850,9 @@ FUDeclaration* RegisterIterativeUnit(Versat* versat,Accelerator* accel,FUInstanc
 	TemplateSetNumber("unitsMapped",val.unitsMapped);
 	TemplateSetCustom("inputDecl",BasicDeclaration::input,"FUDeclaration");
 	TemplateSetCustom("outputDecl",BasicDeclaration::output,"FUDeclaration");
+
+    int lat = node->inst->declaration->outputLatencies[0];
+	TemplateSetNumber("special",lat);
   }
 
   char buffer[256];
