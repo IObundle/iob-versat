@@ -138,7 +138,7 @@ def CreateVersatClass(pc_emul,versat_spec,versat_top,versat_extra):
             ''' Create submodules list with dependencies of this module
             '''
 
-            submodules = [iob_fifo_sync]
+            submodules = [iob_fifo_sync,iob_ram_sp,iob_ram_2p]
 
             if(HAS_AXI):
                 submodules += [
