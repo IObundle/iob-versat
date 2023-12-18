@@ -1,10 +1,12 @@
 #include "versat_accel.h"
 
 #ifdef __cplusplus
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #else
 #define nullptr 0
+#include <stdio.h>
 #include <string.h>
 #include <stdbool.h>
 #endif
@@ -75,16 +77,27 @@ void RunAccelerator(int times){
   }
 }
 
-
 void VersatMemoryCopy(void* dest,void* data,int size){
+  char* byteViewDest = (char*) dest;
+  char* configView = (char*) accelConfig;
   int* view = (int*) data;
 
-  for(int i = 0; i < (size / 4); i++){
-    VersatUnitWrite((int) dest,i,view[i]);
-  }
+  bool destInsideConfig = (byteViewDest >= configView && byteViewDest < configView + sizeof(AcceleratorConfig));
+  bool destEndOutsideConfig = destInsideConfig && (byteViewDest + size >= configView + sizeof(AcceleratorConfig));
 
-  // TODO: cannot only memcpy because do not know if writing to mem mapped or config  
-  //memcpy(dest,data,size);
+  if(destEndOutsideConfig){
+    printf("VersatMemoryCopy: Destination starts inside config and ends outside\n");
+    printf("This is most likely an error, no transfer is being made\n");
+    return;
+  }
+  
+  if(destInsideConfig){
+    memcpy(dest,data,size);
+  } else {
+    for(int i = 0; i < (size / 4); i++){
+      VersatUnitWrite((iptr) dest,i,view[i]);
+    }
+  }
 }
 
 void StartAccelerator(){

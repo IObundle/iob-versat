@@ -408,11 +408,7 @@ int main(int argc,const char* argv[]){
 
   Versat* versat = InitVersat(0,1);
 
-#if 0
-  {
-    ArgumentOptions* opts = ParseCommandLineOptions(argc,nullptr,{},{});
-  }
-  #endif
+  //versat->opts.noDelayPropagation = true;
   
   // TODO: This is not a good idea, after changing versat to 2 phases
   SetDebug(versat,VersatDebugFlags::OUTPUT_ACCELERATORS_CODE,1);
@@ -445,7 +441,6 @@ int main(int argc,const char* argv[]){
     exit(-1);
   }
 
-  // Check existance of Verilator. Technically verilator is only needed for pc-emul and we could still run versat for embedded, but for now terminate early if verilator not found
   opts->verilatorRoot = GetVerilatorRoot(&versat->permanent,&versat->temp);
   if(opts->verilatorRoot.size == 0){
     fprintf(stderr,"Versat could not find verilator. Check that it is installed\n");
@@ -538,7 +533,7 @@ int main(int argc,const char* argv[]){
     Array<FUInstance*> inputs = PushArray<FUInstance*>(perm,input);
     Array<FUInstance*> outputs = PushArray<FUInstance*>(perm,output);
 
-    FUDeclaration* constType = GetTypeByName(versat,STRING("Const"));
+    FUDeclaration* constType = GetTypeByName(versat,STRING("TestConst"));
     FUDeclaration* regType = GetTypeByName(versat,STRING("Reg"));
 
     // We need to create input and outputs first before instance

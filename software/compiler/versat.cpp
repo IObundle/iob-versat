@@ -1478,8 +1478,8 @@ FUDeclaration* RegisterSubUnit(Versat* versat,String name,Accelerator* circuit){
   ReorganizeAccelerator(circuit,temp);
 
   region(temp){
-    auto delays = CalculateDelay(versat,circuit,temp);
-
+    Hashmap<EdgeNode,int>* delays = CalculateDelay(versat,circuit,temp);
+    
     OutputGraphDotFile(versat,circuit,false,"debug/%.*s/beforeFixDelay.dot",UNPACK_SS(name));
 
     FixDelays(versat,circuit,delays);
@@ -2166,14 +2166,4 @@ int CalculateMemoryUsage(Versat* versat){
 #endif
 
   return totalSize;
-}
-
-
-#include "debugGUI.hpp"
-
-void VersatSimDebug(Versat* versat){
-}
-
-void Hook(Versat* versat,FUDeclaration* decl,Accelerator* accel,FUInstance* inst){
-
 }

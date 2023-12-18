@@ -72,7 +72,7 @@ output [@{dp.bitSize}-1:0]  ext_dp_addr_@{i}_port_@{index},
    input                           rst
    );
 
-wire [ADDR_W-1:0] byteAddress = {address[ADDR_W-3:0],2'b00};
+wire [ADDR_W+1:0] byteAddress = {address[ADDR_W-1:0],2'b00};
 
 wire wor_ready;
 
@@ -84,7 +84,14 @@ wire [31:0] unitRdataFinal;
 #{end}
 
 wire we = (|wstrb);
+
+// @{memoryMappedBytes}
+#{if memoryMappedBytes == 0}
+wire memoryMappedAddr = 1'b0;
+#{else}
 wire memoryMappedAddr = byteAddress[@{memoryConfigDecisionBit}];
+#{end}
+
 wire rst_int = (rst | soft_reset);
 
 // Versat registers and memory access
@@ -595,7 +602,7 @@ end
          .valid(memoryMappedEnable[@{memoryMappedIndex}]),
          .wstrb(data_wstrb),
          #{if decl.memoryMapBits}
-         .addr({address[@{decl.memoryMapBits - 1}:0],2'b00}),
+         .addr(address[@{decl.memoryMapBits - 1}:0]),
          #{end}
          .rdata(unitRData[@{memoryMappedIndex}]),
          .ready(unitReady[@{memoryMappedIndex}]),

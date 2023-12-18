@@ -4,8 +4,10 @@ import os
 import sys
 import shutil
 import subprocess as sp
+import codecs
 
 from iob_module import iob_module
+from re import match
 
 # Submodules
 from iob_utils import iob_utils
@@ -16,176 +18,208 @@ from iob_ram_sp import iob_ram_sp
 from iob_reg import iob_reg
 from iob_reg_re import iob_reg_re
 from iob_ram_sp_be import iob_ram_sp_be
-#from iob_fp_fpu import iob_fp_fpu # Will also import all the other fp files
+from iob_fp_fpu import iob_fp_fpu # Will also import all the other fp files
 
-class iob_versat(iob_module):
-    name = "iob_versat"
-    version = "V0.10"
-    flows = "sim emb"
-    setup_dir=os.path.dirname(__file__)
+def CreateVersatClass(pc_emul,versat_spec,versat_top,versat_extra):
+    versat_dir = os.path.dirname(__file__)
+    build_dir = iob_module.build_dir
 
-    def __init__(
-        self,
-        name="",
-        description="default description",
-        parameters={},
-    ):
-        super().__init__(name,description,parameters)
+    versat_args = ["versat",versat_spec,
+                            "-s",
+                            "-b=32",
+                            "-T",versat_top,
+                            "-O",versat_dir + "/hardware/src/units", # Location of versat units
+                            #"-S",versat_dir + "/submodules/FPU/hardware/src/",
+                            "-I",versat_dir + "/hardware/include/",
+                            "-I",versat_dir + "/hardware/src/",
+                            "-I",versat_dir + "/submodules/FPU/hardware/src/",
+                            "-I",versat_dir + "/submodules/FPU/hardware/include/",
+                            "-I",versat_dir + "/submodules/FPU/submodules/DIV/hardware/src/",
+                            "-I",build_dir  + "/hardware/src/", # TODO: If this works then all the other "versat_dir + ..." could be removed
+                            "-O",versat_extra,
+                            "-H",build_dir + "/software", # Output software files
+                            "-o",build_dir + "/hardware/src" # Output hardware files
+                            ]
 
-        versat_spec = parameters["versat_spec"]
-        versat_top = parameters["versat_top"]
-        versat_extra = parameters["extra_units"]
+    if(pc_emul):
+        versat_args = versat_args + ["-x64"]
 
-        versat_dir = os.path.dirname(__file__)
-        build_dir = self.build_dir
+    # Set True to add debugger
+    if(False):
+        versat_args = ["gdb","-iex","set auto-load safe-path /","--args"] + versat_args
 
-        versat_args = ["versat",versat_spec,
-                                "-s",
-                                "-b=32",
-                                "-x64", # TODO: This should be only for pc-emul, otherwise should be 32 bits
-                                "-T",versat_top,
-                                "-O",versat_dir + "/hardware/src/units", # Location of versat units
-                                #"-S",versat_dir + "/submodules/FPU/hardware/src/",
-                                "-I",versat_dir + "/hardware/include/",
-                                "-I",versat_dir + "/hardware/src/",
-                                "-I",versat_dir + "/submodules/FPU/hardware/src/",
-                                "-I",versat_dir + "/submodules/FPU/hardware/include/",
-                                "-I",versat_dir + "/submodules/FPU/submodules/DIV/hardware/src/",
-                                "-I",build_dir  + "/hardware/src/", # TODO: If this works then all the other "versat_dir + ..." could be removed
-                                "-O",versat_extra,
-                                "-H",build_dir + "/software", # Output software files
-                                "-o",build_dir + "/hardware/src" # Output hardware files
-                                ]
+    print(*versat_args,file=sys.stderr)
+    result = sp.run(versat_args,capture_output=True)
 
-        # Set True to add debugger
-        if(False):
-            versat_args = ["gdb","-iex","set auto-load safe-path /","--args"] + versat_args
+    returnCode = result.returncode
+    output = codecs.getdecoder("unicode_escape")(result.stdout)[0]
 
-        print(*versat_args)
-        result = sp.call(versat_args)
+    if(returnCode != 0):
+        print("Failed to generate accelerator\n",file=sys.stderr)
+        print(output,file=sys.stderr)
 
-        if(result != 0):
-            print("Failed to generate accelerator\n")
-            exit(result)
+        exit(returnCode)
 
-        # Removes folders used when compiling versat but not needed by the runtime
-        shutil.rmtree(f"{build_dir}/software/common")
-        shutil.rmtree(f"{build_dir}/software/compiler")
-        shutil.rmtree(f"{build_dir}/software/templates")
-        shutil.rmtree(f"{build_dir}/software/tools")
+    lines = output.split('\n')
 
-        shutil.copytree(
-            f"{versat_dir}/hardware/src/units", f"{build_dir}/hardware/src",dirs_exist_ok = True
-        )
-        shutil.copytree(
-            f"{build_dir}/hardware/src/modules", f"{build_dir}/hardware/src",dirs_exist_ok = True
-        )
+    #print(lines,file=sys.stderr)
 
-    @classmethod
-    def _init_attributes(cls):
-        # Do not know how useful is this, it depends upon the accelerator generated by the user
-        cls.AXI_CONFS = [
+    ADDR_W = 32
+    HAS_AXI = False
+
+    for line in lines:
+        tokens = line.split()
+
+        if(len(tokens) == 3 and tokens[1] == '-'):
+            if(tokens[0] == "ADDR_W"):
+                ADDR_W = int(tokens[2])
+            if(tokens[0] == "HAS_AXI"):
+                HAS_AXI = True
+
+    class iob_versat(iob_module):
+        name = "iob_versat"
+        version = "V0.10"
+        flows = "pc-emul sim emb fpga"
+        setup_dir=os.path.dirname(__file__)
+
+        @classmethod
+        def _init_attributes(cls):
+            cls.AXI_CONFS = [
+                    {
+                        "name": "AXI",
+                        "type": "M",
+                        "val": "NA",
+                        "min": "NA",
+                        "max": "NA",
+                        "descr": "AXI interface",
+                    },
+                    {
+                        "name": "AXI_ID_W",
+                        "type": "M",
+                        "val": "1",
+                        "min": "?",
+                        "max": "?",
+                        "descr": "description",
+                    },
+                    {
+                        "name": "AXI_LEN_W",
+                        "type": "M",
+                        "val": "8",
+                        "min": "?",
+                        "max": "?",
+                        "descr": "description",
+                    },
+                    {
+                        "name": "AXI_ID",
+                        "type": "M",
+                        "val": "0",
+                        "min": "?",
+                        "max": "?",
+                        "descr": "description",
+                    },
+                ]
+
+        @classmethod
+        def _post_setup(cls):
+            super()._post_setup()
+            shutil.copytree(
+                f"{versat_dir}/hardware/src/units", f"{build_dir}/hardware/src",dirs_exist_ok = True
+            )
+            shutil.copytree(
+                f"{build_dir}/hardware/src/modules", f"{build_dir}/hardware/src",dirs_exist_ok = True
+            )
+            #shutil.rmtree(f"{build_dir}/software/common")
+            #shutil.rmtree(f"{build_dir}/software/compiler")
+            #shutil.rmtree(f"{build_dir}/software/templates")
+            #shutil.rmtree(f"{build_dir}/software/tools")
+
+        @classmethod
+        def _create_submodules_list(cls):
+            ''' Create submodules list with dependencies of this module
+            '''
+
+            submodules = [iob_fifo_sync]
+
+            if(HAS_AXI):
+                submodules += [
+                    {"interface": "axi_m_port"},
+                    {"interface": "axi_m_m_portmap"},
+                    {"interface": "axi_m_write_port"},
+                    {"interface": "axi_m_m_write_portmap"},
+                    {"interface": "axi_m_read_port"},
+                    {"interface": "axi_m_m_read_portmap"},
+                    #iob_fp_fpu # Imports all the FPU related files
+                ]
+
+            super()._create_submodules_list(submodules)
+
+        @classmethod
+        def _setup_regs(cls):
+            cls.autoaddr = False
+            cls.regs += [
                 {
-                    "name": "AXI",
-                    "type": "M",
-                    "val": "NA",
-                    "min": "NA",
-                    "max": "NA",
-                    "descr": "AXI interface",
-                },
-                {
-                    "name": "AXI_ID_W",
-                    "type": "M",
-                    "val": "1",
-                    "min": "?",
-                    "max": "?",
-                    "descr": "description",
-                },
-                {
-                    "name": "AXI_LEN_W",
-                    "type": "M",
-                    "val": "4",
-                    "min": "?",
-                    "max": "?",
-                    "descr": "description",
-                },
-                {
-                    "name": "AXI_ID",
-                    "type": "M",
-                    "val": "0",
-                    "min": "?",
-                    "max": "?",
-                    "descr": "description",
-                },
+                    "name": "versat",
+                    "descr": "VERSAT software accessible registers.",
+                    "regs": [
+                        {
+                            "name": "MAX_CONFIG",
+                            "type": "W",
+                            "n_bits": ADDR_W,
+                            "rst_val": 0,
+                            "addr": (2**ADDR_W)-8, # -8 because -4 allocates 17 bits
+                            "log2n_items": 0,
+                            "autoreg": False,
+                            "descr": "Force iob_soc to allocate 16 bits of address for versat",
+                        },
+                        {
+                            "name": "MAX_STATUS",
+                            "type": "R",
+                            "n_bits": ADDR_W,
+                            "rst_val": 0,
+                            "addr": (2**ADDR_W)-8, # -8 because -4 allocates 17 bits
+                            "log2n_items": 0,
+                            "autoreg": False,
+                            "descr": "Force iob_soc to allocate 16 bits of address for versat",
+                        },
+                    ],
+                }
             ]
 
-    @classmethod
-    def _create_submodules_list(cls):
-        ''' Create submodules list with dependencies of this module
-        '''
-        super()._create_submodules_list([
-            iob_fifo_sync,
-            {"interface": "axi_m_m_portmap"},
-            {"interface": "axi_m_write_port"},
-            {"interface": "axi_m_m_write_portmap"},
-            {"interface": "axi_m_read_port"},
-            {"interface": "axi_m_m_read_portmap"},
-            #iob_fp_fpu # Imports all the FPU related files
-        ])
+        @classmethod
+        def _setup_confs(cls):
+            confs = [
+                {'name':'ADDR_W', 'type':'P', 'val':str(ADDR_W), 'min':'1', 'max':'?', 'descr':'description here'},
+                {'name':'DATA_W', 'type':'P', 'val':'32', 'min':'1', 'max':'?', 'descr':'description here'},
+                {'name':'AXI_ID_W', 'type':'P', 'val':'1', 'min':'1', 'max':'?', 'descr':'description here'},
+                {'name':'AXI_LEN_W', 'type':'P', 'val':'8', 'min':'1', 'max':'?', 'descr':'description here'},
+            ]
 
-    @classmethod
-    def _setup_regs(cls):
-        cls.autoaddr = False
-        cls.regs += [
-            {
-                "name": "versat",
-                "descr": "VERSAT software accessible registers.",
-                "regs": [
+            if(HAS_AXI):
+                confs.append({"name": "USE_EXTMEM","type": "M","val": True,"min": "0","max": "1","descr": "Versat AXI implies External memory"})
+
+            super()._setup_confs(confs)
+
+        @classmethod
+        def _setup_ios(cls):
+            cls.ios += [
+                {
+                    "name": "clk_en_rst_s_port",
+                    "descr": "Clock, clock enable and reset",
+                    "ports": [],
+                },
+                {"name": "iob_s_port", "descr": "CPU native interface", "ports": []},
+            ]
+            if(HAS_AXI):
+                cls.ios += [
                     {
-                        "name": "MAX_CONFIG",
-                        "type": "W",
-                        "n_bits": 32,
-                        "rst_val": 0,
-                        "addr": (2**16)-8, # -8 because -4 allocates 17 bits
-                        "log2n_items": 0,
-                        "autoreg": False,
-                        "descr": "Force iob_soc to allocate 16 bits of address for versat",
+                        "name": "axi_m_port",
+                        "descr": "AXI interface",
+                        "ports": [],
                     },
-                    {
-                        "name": "MAX_STATUS",
-                        "type": "R",
-                        "n_bits": 32,
-                        "rst_val": 0,
-                        "addr": (2**16)-8, # -8 because -4 allocates 17 bits
-                        "log2n_items": 0,
-                        "autoreg": False,
-                        "descr": "Force iob_soc to allocate 16 bits of address for versat",
-                    },
-                ],
-            }
-        ]
+            ]
 
-    @classmethod
-    def _setup_confs(cls):
-        super()._setup_confs([
-            # Macros
+        @classmethod
+        def _setup_block_groups(cls):
+            cls.block_groups += []
 
-            # Parameters
-            {'name':'ADDR_W', 'type':'P', 'val':'32', 'min':'1', 'max':'?', 'descr':'description here'},
-            {'name':'DATA_W', 'type':'P', 'val':'32', 'min':'1', 'max':'?', 'descr':'description here'},
-        ])
-
-    @classmethod
-    def _setup_ios(cls):
-        cls.ios += [
-            {
-                "name": "clk_en_rst_s_port",
-                "descr": "Clock, clock enable and reset",
-                "ports": [],
-            },
-            {"name": "iob_s_port", "descr": "CPU native interface", "ports": []},
-        ]
-
-    @classmethod
-    def _setup_block_groups(cls):
-        cls.block_groups += []
+    return iob_versat

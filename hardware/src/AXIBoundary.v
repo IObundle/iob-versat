@@ -1,39 +1,37 @@
-`timescale 1ns / 1ps 
+`timescale 1ns / 1ps
 // Comment so that verible-format will not put timescale and defaultt_nettype into same line
 `default_nettype none
 
-module AXIBoundaryWrite 
-  #(
-    parameter ADDR_W = 0,
-    parameter DATA_W = 32
-    )
-   (
-    input                     s_valid_i,
-    output                    s_ready_o,
-    input [ADDR_W-1:0]        s_addr_i,
-    input [DATA_W-1:0]        s_wdata_i,
-    input [(DATA_W / 8)-1:0]  s_wstrb_i,
-    input [7:0]               s_len_i,
+module AXIBoundaryWrite #(
+   parameter ADDR_W = 0,
+   parameter DATA_W = 32
+) (
+   input                     s_valid_i,
+   output                    s_ready_o,
+   input  [      ADDR_W-1:0] s_addr_i,
+   input  [      DATA_W-1:0] s_wdata_i,
+   input  [(DATA_W / 8)-1:0] s_wstrb_i,
+   input  [             7:0] s_len_i,
 
-    output                    m_valid_o,
-    input                     m_ready_i,
-    output [ADDR_W-1:0]       m_addr_o,
-    output [DATA_W-1:0]       m_wdata_o,
-    output [(DATA_W / 8)-1:0] m_wstrb_o,
-    output [7:0]              m_len_o,
+   output                    m_valid_o,
+   input                     m_ready_i,
+   output [      ADDR_W-1:0] m_addr_o,
+   output [      DATA_W-1:0] m_wdata_o,
+   output [(DATA_W / 8)-1:0] m_wstrb_o,
+   output [             7:0] m_len_o,
 
-    input                     clk_i,
-    input                     rst_i
-    );
+   input clk_i,
+   input rst_i
+);
 
-assign m_valid_o = s_valid_i;
-assign s_ready_o = m_ready_i;
-assign m_addr_o = s_addr_i;
-assign m_wdata_o = s_wdata_i;
-assign m_wstrb_o = s_wstrb_i;
-assign m_len_o = s_len_i;
+   assign m_valid_o = s_valid_i;
+   assign s_ready_o = m_ready_i;
+   assign m_addr_o  = s_addr_i;
+   assign m_wdata_o = s_wdata_i;
+   assign m_wstrb_o = s_wstrb_i;
+   assign m_len_o   = s_len_i;
 
-/*
+   /*
 wire [ADDR_W-1:0] addr_boundary = {s_addr_i[ADDR_W-1:12],12'h0};
 wire [ADDR_W-1:0] start_addr = {s_addr_i[ADDR_W-1:2],2'b00};
 wire [ADDR_W-1:0] end_addr = (start_addr + (s_len_i + 1) * 4);
@@ -76,6 +74,6 @@ begin
 end
 */
 
-endmodule // AXIBoundaryWrite
+endmodule  // AXIBoundaryWrite
 
 `default_nettype wire

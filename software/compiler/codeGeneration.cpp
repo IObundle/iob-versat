@@ -305,8 +305,6 @@ void OutputVersatSource(Versat* versat,Accelerator* accel,const char* hardwarePa
    }
 
    VersatComputedValues val = ComputeVersatValues(versat,accel);
-
-   //DebugValue(MakeValue(&val));
   
    std::vector<FUInstance> accum;
    AcceleratorIterator iter = {};
@@ -318,7 +316,12 @@ void OutputVersatSource(Versat* versat,Accelerator* accel,const char* hardwarePa
    };
 
    UnitValues unit = CalculateAcceleratorValues(versat,accel);
-
+  
+   printf("ADDR_W - %d\n",val.configurationAddressBits + 2);
+   if(val.nUnitsIO){
+     printf("HAS_AXI - True\n");
+   }
+  
    fprintf(c,"`define NUMBER_UNITS %d\n",Size(accel->allocated));
    fprintf(c,"`define CONFIG_W %d\n",val.configurationBits);
    fprintf(c,"`define STATE_W %d\n",val.stateBits);
@@ -401,6 +404,7 @@ void OutputVersatSource(Versat* versat,Accelerator* accel,const char* hardwarePa
    TemplateSetNumber("staticStart",staticStart);
    TemplateSetNumber("versatBase",versat->base);
    TemplateSetNumber("unitsMapped",val.unitsMapped);
+   TemplateSetNumber("memoryMappedBytes",val.memoryMappedBytes);
    TemplateSetNumber("memoryConfigDecisionBit",val.memoryConfigDecisionBit);
    TemplateSetNumber("configurationBits",val.configurationBits);
    TemplateSetNumber("versatConfig",val.versatConfigs);

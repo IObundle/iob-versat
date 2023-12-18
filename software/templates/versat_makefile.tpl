@@ -38,7 +38,7 @@ V@{typename}.h: $(HARDWARE_SRC)
 	cp ./obj_dir/*.h ./
 
 wrapper.o: V@{typename}.h wrapper.cpp
-	g++ -std=c++17 -O2 -g -c -o wrapper.o -I $(VERILATOR_ROOT)/include wrapper.cpp 
+	g++ -std=c++17 -O2 -g -c -o wrapper.o -I $(VERILATOR_ROOT)/include $(abspath wrapper.cpp)
 
 # Created after calling verilator. Need to recall make to have access to the variables 
 -include ./obj_dir/V@{typename}_classes.mk
