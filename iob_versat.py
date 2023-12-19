@@ -62,7 +62,7 @@ def CreateVersatClass(pc_emul,versat_spec,versat_top,versat_extra):
 
     lines = output.split('\n')
 
-    #print(lines,file=sys.stderr)
+    print(lines,file=sys.stderr)
 
     ADDR_W = 32
     HAS_AXI = False
@@ -96,7 +96,7 @@ def CreateVersatClass(pc_emul,versat_spec,versat_top,versat_extra):
                     {
                         "name": "AXI_ID_W",
                         "type": "M",
-                        "val": "1",
+                        "val": "4",
                         "min": "?",
                         "max": "?",
                         "descr": "description",
@@ -112,7 +112,7 @@ def CreateVersatClass(pc_emul,versat_spec,versat_top,versat_extra):
                     {
                         "name": "AXI_ID",
                         "type": "M",
-                        "val": "0",
+                        "val": "4",
                         "min": "?",
                         "max": "?",
                         "descr": "description",
@@ -217,6 +217,38 @@ def CreateVersatClass(pc_emul,versat_spec,versat_top,versat_extra):
                         "ports": [],
                     },
             ]
+
+            # TODO: Actual good output directly from versat and parsing.
+            for line in lines:
+                tokens = line.split()
+
+                if(len(tokens) == 3 and tokens[1] == '-'):
+                    if(tokens[0] == "DP"):
+                        inter,bitSize0,dataSizeOut0,dataSizeIn0,bitSize1,dataSizeOut1,dataSizeIn1 = [int(x) for x in tokens[2].split(',')]
+
+                        cls.ios += [{"name": f"ext_mem_{inter}", "descr": "External memory", "ports": [
+                            {"name": f"ext_dp_addr_{inter}_port_0_o","type": "O","n_bits": str(bitSize0),"descr": ""},
+                            {"name": f"ext_dp_out_{inter}_port_0_o","type": "O","n_bits": str(dataSizeOut0),"descr": ""},
+                            {"name": f"ext_dp_in_{inter}_port_0_i","type": "I","n_bits": str(dataSizeIn0),"descr": ""},
+                            {"name": f"ext_dp_enable_{inter}_port_0_o","type": "O","n_bits": "1","descr": ""},
+                            {"name": f"ext_dp_write_{inter}_port_0_o","type": "O","n_bits": "1","descr": ""},
+
+                            {"name": f"ext_dp_addr_{inter}_port_1_o","type": "O","n_bits": str(bitSize1),"descr": ""},
+                            {"name": f"ext_dp_out_{inter}_port_1_o","type": "O","n_bits": str(dataSizeOut1),"descr": ""},
+                            {"name": f"ext_dp_in_{inter}_port_1_i","type": "I","n_bits": str(dataSizeIn1),"descr": ""},
+                            {"name": f"ext_dp_enable_{inter}_port_1_o","type": "O","n_bits": "1","descr": ""},
+                            {"name": f"ext_dp_write_{inter}_port_1_o","type": "O","n_bits": "1","descr": ""},
+                        ]}]
+                    if(tokens[0] == "2P"):
+                        inter,bitSizeOut,bitSizeIn,dataSizeOut,dataSizeIn = [int(x) for x in tokens[2].split(',')]
+                        cls.ios += [{"name": f"ext_mem_{inter}", "descr": "External memory", "ports": [
+                            {"name": f"ext_2p_addr_out_{inter}_o","type": "O","n_bits": str(bitSizeOut),"descr": ""},
+                            {"name": f"ext_2p_addr_in_{inter}_o","type": "O","n_bits": str(bitSizeIn),"descr": ""},
+                            {"name": f"ext_2p_write_{inter}_o","type": "O","n_bits": "1","descr": ""},
+                            {"name": f"ext_2p_read_{inter}_o","type": "O","n_bits": "1","descr": ""},
+                            {"name": f"ext_2p_data_in_{inter}_i","type": "I","n_bits": str(dataSizeIn),"descr": ""},
+                            {"name": f"ext_2p_data_out_{inter}_o","type": "O","n_bits": str(dataSizeOut),"descr": ""},
+                        ]}]
 
         @classmethod
         def _setup_block_groups(cls):

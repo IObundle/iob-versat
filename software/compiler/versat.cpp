@@ -266,6 +266,7 @@ namespace BasicTemplates{
   CompiledTemplate* wrapperTemplate;
   CompiledTemplate* acceleratorHeaderTemplate;
   CompiledTemplate* externalPortmapTemplate;
+  CompiledTemplate* externalInternalPortmapTemplate;
   CompiledTemplate* externalPortTemplate;
   CompiledTemplate* externalInstTemplate;
   CompiledTemplate* iterativeTemplate;
@@ -377,6 +378,7 @@ Versat* InitVersat(int base,int numberConfigurations,bool initUnits){
   BasicTemplates::wrapperTemplate = CompileTemplate(versat_wrapper_template,"wrapper",&versat->permanent);
   BasicTemplates::acceleratorHeaderTemplate = CompileTemplate(versat_header_template,"header",&versat->permanent);
   BasicTemplates::externalPortmapTemplate = CompileTemplate(external_memory_portmap_template,"ext_portmap",&versat->permanent);
+  BasicTemplates::externalInternalPortmapTemplate = CompileTemplate(external_memory_internal_portmap_template,"ext_internal_port",&versat->permanent);
   BasicTemplates::externalPortTemplate = CompileTemplate(external_memory_port_template,"ext_port",&versat->permanent);
   BasicTemplates::externalInstTemplate = CompileTemplate(external_memory_inst_template,"ext_inst",&versat->permanent);
   BasicTemplates::iterativeTemplate = CompileTemplate(versat_iterative_template,"iter",&versat->permanent);

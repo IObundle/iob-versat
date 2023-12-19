@@ -3,6 +3,7 @@
 #include "memory.hpp"
 #include "type.hpp"
 #include "utilsCore.hpp"
+#include "verilogParsing.hpp"
 #include "versat.hpp"
 
 #include "templateEngine.hpp"
@@ -317,7 +318,7 @@ void OutputVersatSource(Versat* versat,Accelerator* accel,const char* hardwarePa
 
    UnitValues unit = CalculateAcceleratorValues(versat,accel);
   
-   printf("ADDR_W - %d\n",val.configurationAddressBits + 2);
+   printf("ADDR_W - %d\n",val.memoryConfigDecisionBit + 1);
    if(val.nUnitsIO){
      printf("HAS_AXI - True\n");
    }
@@ -373,6 +374,29 @@ void OutputVersatSource(Versat* versat,Accelerator* accel,const char* hardwarePa
 
    ComputedData computedData = CalculateVersatComputedData(accel->allocated,val,arena);
 
+   for(ExternalMemoryInterface inter : computedData.external){
+     switch(inter.type){
+     case ExternalMemoryType::DP:{
+       printf("DP - %d",inter.interface);
+       for(int i = 0; i < 2; i++){
+         printf(",%d",inter.dp[i].bitSize);
+         printf(",%d",inter.dp[i].dataSizeOut);
+         printf(",%d",inter.dp[i].dataSizeIn);
+       }
+       printf("\n");
+     }break;
+     case ExternalMemoryType::TWO_P:{
+       printf("2P - %d",inter.interface);
+       printf(",%d",inter.tp.bitSizeOut);
+       printf(",%d",inter.tp.bitSizeIn);
+       printf(",%d",inter.tp.dataSizeOut);
+       printf(",%d",inter.tp.dataSizeIn);
+       printf("\n");
+     }break;
+     default: NOT_IMPLEMENTED;
+     }
+   }
+  
    TemplateSetDefaults(versat);
 
    TemplateSetNumber("nInputs",unit.inputs);
@@ -570,6 +594,12 @@ void OutputVersatSource(Versat* versat,Accelerator* accel,const char* hardwarePa
    {
    FILE* f = OpenFileAndCreateDirectories(StaticFormat("%s/versat_external_memory_portmap.vh",hardwarePath),"w");
    ProcessTemplate(f,BasicTemplates::externalPortmapTemplate,&versat->temp);
+   fclose(f);
+   }
+
+   {
+   FILE* f = OpenFileAndCreateDirectories(StaticFormat("%s/versat_external_memory_internal_portmap.vh",hardwarePath),"w");
+   ProcessTemplate(f,BasicTemplates::externalInternalPortmapTemplate,&versat->temp);
    fclose(f);
    }
 

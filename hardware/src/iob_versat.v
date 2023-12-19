@@ -151,13 +151,13 @@ module iob_versat #(  //the below parameters are used in cpu if includes below
    ) xversat (
       .valid(iob_avalid_i),
       .wstrb(iob_wstrb_i),
-      .addr(iob_addr_i >> 2), // Address is now byte space so for now simple hack it into the dword space previously used
+      .addr(iob_addr_i), // Address is now byte space so for now simple hack it into the dword space previously used
       .wdata(iob_wdata_i),
       .rdata(iob_rdata_o),
       .ready(iob_rvalid_o),
 
 `ifdef VERSAT_EXTERNAL_MEMORY
-      `include "versat_external_memory_portmap.vh"
+      `include "versat_external_memory_internal_portmap.vh"
 `endif
 
 `ifdef VERSAT_IO

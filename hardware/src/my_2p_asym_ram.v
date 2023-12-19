@@ -112,7 +112,7 @@ module my_2p_asym_ram #(
             data_wr[0] = w_data_i;
          end
          //read parallel
-         always @* begin
+         always @(data_rd[0]) begin
             r_data_o = data_rd[0];
          end
       end

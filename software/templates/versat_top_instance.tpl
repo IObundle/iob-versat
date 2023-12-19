@@ -43,20 +43,20 @@ module versat_instance #(
    // DP
       #{for it 2}
 	  #{set dp ext.dp[it]}
-output [@{dp.bitSize}-1:0]  ext_dp_addr_@{i}_port_@{index},
-   output [@{dp.dataSizeOut}-1:0] ext_dp_out_@{i}_port_@{index},
-   input  [@{dp.dataSizeIn}-1:0] ext_dp_in_@{i}_port_@{index},
-   output                       ext_dp_enable_@{i}_port_@{index},
-   output                       ext_dp_write_@{i}_port_@{index},
+output [@{dp.bitSize}-1:0]  ext_dp_addr_@{i}_port_@{index}_o,
+   output [@{dp.dataSizeOut}-1:0] ext_dp_out_@{i}_port_@{index}_o,
+   input  [@{dp.dataSizeIn}-1:0] ext_dp_in_@{i}_port_@{index}_i,
+   output                       ext_dp_enable_@{i}_port_@{index}_o,
+   output                       ext_dp_write_@{i}_port_@{index}_o,
       #{end}
       #{else}
    // 2P
-   output [@{ext.tp.bitSizeOut}-1:0]  ext_2p_addr_out_@{i},
-   output [@{ext.tp.bitSizeIn}-1:0]  ext_2p_addr_in_@{i},
-   output                       ext_2p_write_@{i},
-   output                       ext_2p_read_@{i},
-   input  [@{ext.tp.dataSizeIn}-1:0] ext_2p_data_in_@{i},
-   output [@{ext.tp.dataSizeOut}-1:0] ext_2p_data_out_@{i},
+   output [@{ext.tp.bitSizeOut}-1:0]  ext_2p_addr_out_@{i}_o,
+   output [@{ext.tp.bitSizeIn}-1:0]  ext_2p_addr_in_@{i}_o,
+   output                       ext_2p_write_@{i}_o,
+   output                       ext_2p_read_@{i}_o,
+   input  [@{ext.tp.dataSizeIn}-1:0] ext_2p_data_in_@{i}_i,
+   output [@{ext.tp.dataSizeOut}-1:0] ext_2p_data_out_@{i}_o,
       #{end}
    #{end}
 
@@ -71,8 +71,6 @@ output [@{dp.bitSize}-1:0]  ext_dp_addr_@{i}_port_@{index},
    input                           clk,
    input                           rst
    );
-
-wire [ADDR_W+1:0] byteAddress = {address[ADDR_W-1:0],2'b00};
 
 wire wor_ready;
 
@@ -89,7 +87,7 @@ wire we = (|wstrb);
 #{if memoryMappedBytes == 0}
 wire memoryMappedAddr = 1'b0;
 #{else}
-wire memoryMappedAddr = byteAddress[@{memoryConfigDecisionBit}];
+wire memoryMappedAddr = address[@{memoryConfigDecisionBit}];
 #{end}
 
 wire rst_int = (rst | soft_reset);
@@ -153,7 +151,11 @@ wire [AXI_DATA_W/8-1:0] databus_wstrb[@{nIO}];
 wire [LEN_W-1:0]        databus_len[@{nIO}];
 wire databus_last[@{nIO}];
 
-#{for i (nIO - 1)}
+#{set numberIOs nIO}
+#{if useDMA}
+#{set numberIOs (nIO - 1)}
+#{end}
+#{for i numberIOs}
 assign databus_ready[@{databusCounter}] = m_databus_ready[@{i}];
 assign m_databus_valid[@{databusCounter}] = databus_valid[@{i}];
 assign m_databus_addr[(@{(databusCounter)} * AXI_ADDR_W) +: AXI_ADDR_W] = databus_addr[@{i}];
@@ -311,7 +313,7 @@ end
 #{if useDMA}
 wire data_valid = (dma_ready || valid);
 wire data_write = (dma_ready || (valid && we)); // Dma ready is always a write, dma cannot be used to read, for now
-wire [ADDR_W-1:0] address = dma_ready ? (dma_addr_in >> 2) : addr;
+wire [ADDR_W-1:0] address = dma_ready ? dma_addr_in : addr;
 wire [DATA_W-1:0] data_data = dma_ready ? dma_rdata : wdata;
 wire [(DATA_W/8)-1:0] data_wstrb = dma_ready ? ~0 : wstrb;
 #{else}
@@ -414,7 +416,7 @@ begin
       #{set inst node.inst}
       #{set decl inst.declaration}
       #{for wire decl.configInfo.configs}
-      if(address[@{versatValues.configurationAddressBits - 1}:0] == @{addr}) // @{versatBase + addr * 4 |> Hex}
+      if(address[@{versatValues.configurationAddressBits + 1}:0] == @{addr * 4}) // @{versatBase + addr * 4 |> Hex}
          @{configReg}[@{counter}+:@{wire.bitSize}] <= data_data[@{wire.bitSize - 1}:0]; // @{wire.name} - @{decl.name}
       #{inc addr}
       #{set counter counter + wire.bitSize}
@@ -424,7 +426,7 @@ begin
       // Static
       #{for unit staticUnits}
       #{for wire unit.data.configs}
-      if(address[@{versatValues.configurationAddressBits - 1}:0] == @{addr}) // @{versatBase + addr * 4 |> Hex}
+      if(address[@{versatValues.configurationAddressBits + 1}:0] == @{addr * 4}) // @{versatBase + addr * 4 |> Hex}
          #{if unit.first.parent}
          @{configReg}[@{counter}+:@{wire.bitSize}] <= data_data[@{wire.bitSize - 1}:0]; //  @{unit.first.parent.name}_@{unit.first.name}_@{wire.name}
          #{else}
@@ -440,7 +442,7 @@ begin
       #{set inst node.inst}
       #{set decl inst.declaration}
       #{for i decl.configInfo.delayOffsets.max}
-      if(address[@{versatValues.configurationAddressBits - 1}:0] == @{addr}) // @{versatBase + addr * 4 |> Hex}
+      if(address[@{versatValues.configurationAddressBits + 1}:0] == @{addr * 4}) // @{versatBase + addr * 4 |> Hex}
          @{configReg}[@{counter}+:32] <= data_data[31:0]; // Delay
       #{inc addr}
       #{set counter counter + 32}
@@ -475,7 +477,7 @@ begin
       #{set inst node.inst}
       #{set decl inst.declaration}
       #{for wire decl.configInfo.states}
-      if(addr[@{versatValues.stateAddressBits - 1}:0] == @{addr}) // @{versatBase + addr * 4 |> Hex}
+      if(addr[@{versatValues.stateAddressBits + 1}:0] == @{addr * 4}) // @{versatBase + addr * 4 |> Hex}
          stateRead = statedata[@{counter}+:@{wire.bitSize}];
       #{inc addr}
       #{set counter counter + wire.bitSize}
@@ -571,20 +573,20 @@ end
             #{if external.type}
          // DP
             #{for port 2}
-         .ext_dp_addr_@{i}_port_@{port}(ext_dp_addr_@{externalCounter}_port_@{port}),
-         .ext_dp_out_@{i}_port_@{port}(ext_dp_out_@{externalCounter}_port_@{port}),
-         .ext_dp_in_@{i}_port_@{port}(ext_dp_in_@{externalCounter}_port_@{port}),
-         .ext_dp_enable_@{i}_port_@{port}(ext_dp_enable_@{externalCounter}_port_@{port}),
-         .ext_dp_write_@{i}_port_@{port}(ext_dp_write_@{externalCounter}_port_@{port}),
+         .ext_dp_addr_@{i}_port_@{port}(ext_dp_addr_@{externalCounter}_port_@{port}_o),
+         .ext_dp_out_@{i}_port_@{port}(ext_dp_out_@{externalCounter}_port_@{port}_o),
+         .ext_dp_in_@{i}_port_@{port}(ext_dp_in_@{externalCounter}_port_@{port}_i),
+         .ext_dp_enable_@{i}_port_@{port}(ext_dp_enable_@{externalCounter}_port_@{port}_o),
+         .ext_dp_write_@{i}_port_@{port}(ext_dp_write_@{externalCounter}_port_@{port}_o),
             #{end}
             #{else}
          // 2P
-         .ext_2p_addr_out_@{i}(ext_2p_addr_out_@{externalCounter}),
-         .ext_2p_addr_in_@{i}(ext_2p_addr_in_@{externalCounter}),
-         .ext_2p_write_@{i}(ext_2p_write_@{externalCounter}),
-         .ext_2p_read_@{i}(ext_2p_read_@{externalCounter}),
-         .ext_2p_data_in_@{i}(ext_2p_data_in_@{externalCounter}),
-         .ext_2p_data_out_@{i}(ext_2p_data_out_@{externalCounter}),
+         .ext_2p_addr_out_@{i}(ext_2p_addr_out_@{externalCounter}_o),
+         .ext_2p_addr_in_@{i}(ext_2p_addr_in_@{externalCounter}_o),
+         .ext_2p_write_@{i}(ext_2p_write_@{externalCounter}_o),
+         .ext_2p_read_@{i}(ext_2p_read_@{externalCounter}_o),
+         .ext_2p_data_in_@{i}(ext_2p_data_in_@{externalCounter}_i),
+         .ext_2p_data_out_@{i}(ext_2p_data_out_@{externalCounter}_o),
             #{end}
          #{inc externalCounter}
          #{end}
