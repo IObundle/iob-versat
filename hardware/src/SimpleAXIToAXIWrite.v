@@ -1,6 +1,4 @@
 `timescale 1ns / 1ps
-// Comment so that verible-format will not put timescale and defaultt_nettype into same line
-`default_nettype none
 
 //`include "AXIInfo.vh"
 
@@ -222,5 +220,3 @@ module SimpleAXItoAXIWrite #(
    end
 
 endmodule  // SimpleAXItoAXIWrite
-
-`default_nettype wire

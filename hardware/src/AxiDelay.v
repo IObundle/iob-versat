@@ -1,6 +1,4 @@
 `timescale 1ns / 1ps
-// Comment so that verible-format will not put timescale and defaultt_nettype into same line
-`default_nettype none
 
 module AxiDelay #(
    parameter MAX_DELAY = 3
@@ -39,5 +37,3 @@ module AxiDelay #(
    end
 
 endmodule  // AxiDelay
-
-`default_nettype wire

@@ -3,6 +3,3 @@ libversat.a
 versat
 TAGS
 compile_flags.txt
-
-software/compiler/IMGUI/
-software/compiler/IMNODES/

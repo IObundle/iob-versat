@@ -1,6 +1,4 @@
 `timescale 1ns / 1ps
-// Comment so that verible-format will not put timescale and defaultt_nettype into same line
-`default_nettype none
 
 // Usually for a unit that can always process the data in one cycle and needs to be integrated into a handshake chain
 module pipeline_control (
@@ -27,5 +25,3 @@ module pipeline_control (
    end
 
 endmodule  // pipeline_control
-
-`default_nettype wire

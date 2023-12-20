@@ -1,6 +1,4 @@
 `timescale 1ns / 1ps
-// Comment so that verible-format will not put timescale and defaultt_nettype into same line
-`default_nettype none
 
 module skid_control (
    input      in_valid_i,
@@ -146,5 +144,3 @@ module skid_control (
    end
 
 endmodule  // skid_control
-
-`default_nettype wire

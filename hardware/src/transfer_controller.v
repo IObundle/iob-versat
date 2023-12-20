@@ -1,6 +1,4 @@
 `timescale 1ns / 1ps
-// Comment so that verible-format will not put timescale and defaultt_nettype into same line
-`default_nettype none
 
 `include "AXIInfo.vh"
 // A transfer is equal to a N amount of AXI bursts intended to transfer a variable amount of bytes.
@@ -219,5 +217,3 @@ legnth[OFFSET_W:0] - initial_strb_o_count == final_strb_o_count.
    end
 
 endmodule  // transfer_controller
-
-`default_nettype wire
