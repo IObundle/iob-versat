@@ -416,38 +416,44 @@ begin
       #{set inst node.inst}
       #{set decl inst.declaration}
       #{for wire decl.configInfo.configs}
-      if(address[@{versatValues.configurationAddressBits + 1}:0] == @{addr * 4}) // @{versatBase + addr * 4 |> Hex}
-         @{configReg}[@{counter}+:@{wire.bitSize}] <= data_data[@{wire.bitSize - 1}:0]; // @{wire.name} - @{decl.name}
+      if(address[@{versatValues.configurationAddressBits + 1}:0] == @{addr * 4}) begin // @{versatBase + addr * 4 |> Hex} // @{wire.name} - @{decl.name}
+      #{set size wire.bitSize}
+      #{set wstrb 0}
+      #{set wstrbAmount 0}
+      #{while size > 0}
+      #{set amount 8}
+      #{if size < 8} #{set amount size} #{end}
+      if(wstrb[@{wstrb}]) @{configReg}[@{counter + wstrbAmount}+:@{amount}] <= data_data[@{wstrbAmount}+:@{amount}];
+      #{set size (size - 8)}
+      #{inc wstrb}
+      #{set wstrbAmount (wstrbAmount + amount)}
+      #{end}
+      end
       #{inc addr}
       #{set counter counter + wire.bitSize}
       #{end}
       #{end}
 
       // Static
-      #{for unit staticUnits}
-      #{for wire unit.data.configs}
+      #{for unit staticUnits} #{for wire unit.data.configs}
       if(address[@{versatValues.configurationAddressBits + 1}:0] == @{addr * 4}) // @{versatBase + addr * 4 |> Hex}
+         // TODO: Need to also take into account strobes
          #{if unit.first.parent}
          @{configReg}[@{counter}+:@{wire.bitSize}] <= data_data[@{wire.bitSize - 1}:0]; //  @{unit.first.parent.name}_@{unit.first.name}_@{wire.name}
          #{else}
          configdata[@{counter}+:@{wire.bitSize}] <= data_data[@{wire.bitSize - 1}:0]; //  @{unit.first.name}_@{wire.name}
          #{end}
-      #{inc addr}
-      #{set counter counter + wire.bitSize}
-      #{end}
-      #{end}
+      #{inc addr} #{set counter counter + wire.bitSize}
+      #{end} #{end}
 
       // Delays
-      #{for node instances}
-      #{set inst node.inst}
-      #{set decl inst.declaration}
+      #{for node instances} #{set inst node.inst} #{set decl inst.declaration}
       #{for i decl.configInfo.delayOffsets.max}
+      // TODO: Need to also take into account strobes
       if(address[@{versatValues.configurationAddressBits + 1}:0] == @{addr * 4}) // @{versatBase + addr * 4 |> Hex}
          @{configReg}[@{counter}+:32] <= data_data[31:0]; // Delay
-      #{inc addr}
-      #{set counter counter + 32}
-      #{end}
-      #{end}
+      #{inc addr} #{set counter counter + 32}
+      #{end} #{end}
    end
 end
 #{end}
