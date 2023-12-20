@@ -738,14 +738,14 @@ CliqueState MaxClique(ConsolidationGraph graph,int upperBound,Arena* arena,Time 
       PopMark(arena,mark);
 
       if(state.max == upperBound){
-         printf("Upperbound finish, index: %d (from %d)\n",i,graph.nodes.size);
+         //printf("Upperbound finish, index: %d (from %d)\n",i,graph.nodes.size);
          break;
       }
 
       auto end = GetTime();
       Time elapsed = end - state.start;
       if(elapsed > MAX_CLIQUE_TIME){
-         printf("Timeout, index: %d (from %d)\n",i,graph.nodes.size);
+         //printf("Timeout, index: %d (from %d)\n",i,graph.nodes.size);
          break;
       }
    }
@@ -855,8 +855,8 @@ GraphMapping ConsolidationGraphMapping(Versat* versat,Accelerator* accel1,Accele
    ConsolidationResult result = GenerateConsolidationGraph(versat,arena,accel1,accel2,options);
    ConsolidationGraph graph = result.graph;
 
+   #if 0
    printf("%d\n",graph.validNodes.bitSize);
-   #if 1
    printf("CQ:\n");
    for(int i = 0; i < result.graph.nodes.size; i++){
       String repr = Repr(result.graph.nodes[i],arena);

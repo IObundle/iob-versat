@@ -64,7 +64,7 @@ module LookupTable #(
 
    wire [DATA_W-1:0] outA,outB;
 
-   assign ext_dp_addr_0_port_0 = write ? addr_reg : {in0[ADDR_W-1-2:0],2'b00}; // Since memories are now byte addressable, need to 
+   assign ext_dp_addr_0_port_0 = write ? addr_reg : {in0[ADDR_W-1-2:0],2'b00}; // Since memories are now byte addressable, need to transform to byte space
    assign outA = ext_dp_in_0_port_0;
    assign ext_dp_out_0_port_0 = data;
    assign ext_dp_enable_0_port_0 = 1'b1;

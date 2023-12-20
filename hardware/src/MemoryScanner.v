@@ -2,49 +2,48 @@
 // Comment so that verible-format will not put timescale and defaultt_nettype into same line
 `default_nettype none
 
-module MemoryScanner 
-  #(
-    parameter DATA_W = 32,
-    parameter ADDR_W = 10
-    )(
-      output reg [ADDR_W-1:0] addr_o,
-      input [DATA_W-1:0]      dataIn_i,
-      output                  enable_o,
-  
-      input                   nextValue_i,
-      output [DATA_W-1:0]     currentValue_o,
+module MemoryScanner #(
+   parameter DATA_W = 32,
+   parameter ADDR_W = 10
+) (
+   output reg [ADDR_W-1:0] addr_o,
+   input      [DATA_W-1:0] dataIn_i,
+   output                  enable_o,
 
-      input                   reset_i,
+   input               nextValue_i,
+   output [DATA_W-1:0] currentValue_o,
 
-      input                   clk_i,
-      input                   rst_i
-      );
+   input reset_i,
 
-localparam INCREMENT = DATA_W/8;
+   input clk_i,
+   input rst_i
+);
 
-reg hasValueStored;
+   localparam INCREMENT = DATA_W / 8;
 
-assign currentValue_o = dataIn_i;
+   reg hasValueStored;
 
-assign enable_o = nextValue_i || !hasValueStored;
+   assign currentValue_o = dataIn_i;
 
-always @(posedge clk_i,posedge rst_i) begin
-   if(rst_i) begin
-      addr_o <= 0;
-      hasValueStored <= 1'b0;
-   end else if(reset_i) begin
-      addr_o <= 0;
-      hasValueStored <= 1'b0;
-   end else begin
-      if(enable_o) begin
-         hasValueStored <= 1'b1;
-      end
-      if(nextValue_i || enable_o) begin
-         addr_o <= addr_o + INCREMENT;
+   assign enable_o       = nextValue_i || !hasValueStored;
+
+   always @(posedge clk_i, posedge rst_i) begin
+      if (rst_i) begin
+         addr_o         <= 0;
+         hasValueStored <= 1'b0;
+      end else if (reset_i) begin
+         addr_o         <= 0;
+         hasValueStored <= 1'b0;
+      end else begin
+         if (enable_o) begin
+            hasValueStored <= 1'b1;
+         end
+         if (nextValue_i || enable_o) begin
+            addr_o <= addr_o + INCREMENT;
+         end
       end
    end
-end
 
-endmodule // MemoryScanner
+endmodule  // MemoryScanner
 
 `default_nettype wire

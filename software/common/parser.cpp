@@ -141,6 +141,23 @@ String Tokenizer::GetStartOfCurrentLine(){
   return fullLine;
 }
 
+void PrintEscapedToken(Token tok){
+  // Not very good in terms of performance but should suffice
+  for(int i = 0; i < tok.size; i++){
+    switch(tok[i]){
+    case '\a': printf("\\a");
+    case '\b': printf("\\b");
+    case '\r': printf("\\r");
+    case '\f': printf("\\f");
+    case '\t': printf("\\t");
+    case '\n': printf("\\n");
+    case '\0': printf("\\0");
+    case '\v': printf("\\v");
+    default: printf("%c",tok[i]);
+    }
+  }
+}
+
 Token Tokenizer::AssertNextToken(const char* format){
   Token token = NextToken();
 
@@ -148,7 +165,12 @@ Token Tokenizer::AssertNextToken(const char* format){
     String fullLine = GetStartOfCurrentLine();
     int lineStart = GetTokenPositionInside(fullLine,token);
 
-    printf("Parser Error. Expected to find: '%s'\n",format);
+    printf("Parser Error.\n Expected to find:");
+    PrintEscapedToken(STRING(format));
+    printf("\n");
+    printf("  Got:");
+    PrintEscapedToken(token);
+    printf("\n");
     printf("%6d | %.*s\n",lines,UNPACK_SS(fullLine));
     printf("      "); // 6 spaces to match the 6 digits above
     printf(" | ");

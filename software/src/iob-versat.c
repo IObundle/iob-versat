@@ -144,17 +144,21 @@ void VersatMemoryCopy(void* dest,void* data,int size){
 }
 
 void VersatUnitWrite(int baseaddr,int index,int val){
-  int* ptr = (int*) (baseaddr + index * sizeof(int));
-  *ptr = val;
+  //int* ptr = (int*) (baseaddr + index * sizeof(int));
+  //*ptr = val;
+  MEMSET(baseaddr,index,val);
 }
 
 int VersatUnitRead(int base,int index){
-  int* ptr = (int*) (base + index * sizeof(int));
-  return *ptr;
+  return MEMGET(base,index);
+  //int* ptr = (int*) (base + index * sizeof(int));
+  //return *ptr;
 }
 
 float VersatUnitReadFloat(int base,int index){
-  float* ptr = (float*) (base + index * sizeof(float));
+  // float* ptr = (float*) (base + index * sizeof(float)
+  int val = MEMGET(base,index);
+  float* ptr = (float*) &val;
   return *ptr;
 }
 

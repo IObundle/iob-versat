@@ -2,7 +2,7 @@ VERSAT_DIR:=../..
 
 VERSAT_DEFINE=-DPC
 
-include $(VERSAT_DIR)/core.mk
+include $(VERSAT_DIR)/config.mk
 include $(VERSAT_TOOLS_DIR)/tools.mk
 
 structParser: $(BUILD_DIR)/structParser 

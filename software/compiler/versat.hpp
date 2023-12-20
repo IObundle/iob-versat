@@ -22,33 +22,33 @@ struct FUInstance;
 struct Versat;
 
 enum VersatDebugFlags{
-   OUTPUT_GRAPH_DOT,
-   GRAPH_DOT_FORMAT,
-   OUTPUT_ACCELERATORS_CODE,
-   OUTPUT_VERSAT_CODE,
-   OUTPUT_VCD,
-   USE_FIXED_BUFFERS
+  OUTPUT_GRAPH_DOT,
+  GRAPH_DOT_FORMAT,
+  OUTPUT_ACCELERATORS_CODE,
+  OUTPUT_VERSAT_CODE,
+  OUTPUT_VCD,
+  USE_FIXED_BUFFERS
 };
 
 typedef uint GraphDotFormat;
 enum GraphDotFormat_{
-   GRAPH_DOT_FORMAT_NAME = 0x1,
-   GRAPH_DOT_FORMAT_TYPE = 0x2,
-   GRAPH_DOT_FORMAT_ID = 0x4,
-   GRAPH_DOT_FORMAT_DELAY = 0x8,
-   GRAPH_DOT_FORMAT_EXPLICIT = 0x10, // indicates which field is which when outputting name
-   GRAPH_DOT_FORMAT_PORT = 0x20, // Outputs port information for edges and port instance
-   GRAPH_DOT_FORMAT_LATENCY = 0x40 // Outputs latency information for edges and port instances which know their latency information
+  GRAPH_DOT_FORMAT_NAME = 0x1,
+  GRAPH_DOT_FORMAT_TYPE = 0x2,
+  GRAPH_DOT_FORMAT_ID = 0x4,
+  GRAPH_DOT_FORMAT_DELAY = 0x8,
+  GRAPH_DOT_FORMAT_EXPLICIT = 0x10, // indicates which field is which when outputting name
+  GRAPH_DOT_FORMAT_PORT = 0x20, // Outputs port information for edges and port instance
+  GRAPH_DOT_FORMAT_LATENCY = 0x40 // Outputs latency information for edges and port instances which know their latency information
 };
 
 struct DAGOrder{
-   FUInstance** sinks;
-   int numberSinks;
-   FUInstance** sources;
-   int numberSources;
-   FUInstance** computeUnits;
-   int numberComputeUnits;
-   FUInstance** instances;
+  FUInstance** sinks;
+  int numberSinks;
+  FUInstance** sources;
+  int numberSources;
+  FUInstance** computeUnits;
+  int numberComputeUnits;
+  FUInstance** instances;
 };
 
 struct VersatComputedData{
@@ -59,8 +59,8 @@ struct VersatComputedData{
 };
 
 struct ComputedData{
-   Array<ExternalMemoryInterface> external;
-   Array<VersatComputedData> data;
+  Array<ExternalMemoryInterface> external;
+  Array<VersatComputedData> data;
 };
 
 struct Parameter{
@@ -70,16 +70,16 @@ struct Parameter{
 };
 
 struct DAGOrderNodes{
-   InstanceNode** sinks;
-   int numberSinks;
-   InstanceNode** sources;
-   int numberSources;
-   InstanceNode** computeUnits;
-   int numberComputeUnits;
-   InstanceNode** instances;
-   int* order;
-   int size;
-   int maxOrder;
+  InstanceNode** sinks;
+  int numberSinks;
+  InstanceNode** sources;
+  int numberSources;
+  InstanceNode** computeUnits;
+  int numberComputeUnits;
+  InstanceNode** instances;
+  int* order;
+  int size;
+  int maxOrder;
 };
 
 struct FUInstance{
@@ -136,12 +136,12 @@ struct FUInstance{
 };
 
 struct DebugState{
-   uint dotFormat;
-   bool outputGraphs;
-   bool outputAccelerator;
-   bool outputVersat;
-   bool outputVCD;
-   bool useFixedBuffers;
+  uint dotFormat;
+  bool outputGraphs;
+  bool outputAccelerator;
+  bool outputVersat;
+  bool outputVCD;
+  bool useFixedBuffers;
 };
 
 struct Options{
@@ -151,91 +151,92 @@ struct Options{
   bool shadowRegister;
   bool architectureHasDatabus;
   bool generateFSTFormat;
+  bool noDelayPropagation;
 };
 
 struct Versat{
-   Pool<FUDeclaration> declarations;
-   Pool<Accelerator> accelerators;
+  Pool<FUDeclaration> declarations;
+  Pool<Accelerator> accelerators;
 
-   Arena permanent;
-   Arena temp;
+  Arena permanent;
+  Arena temp;
 
-   int base;
-   int numberConfigurations;
+  int base;
+  int numberConfigurations;
 
-   DebugState debug;
+  DebugState debug;
 
-   String outputLocation;
-   Options opts;
+  String outputLocation;
+  Options opts;
 };
 
 struct UnitValues{
-   int inputs;
-   int outputs;
+  int inputs;
+  int outputs;
 
-   int configs;
-   int states;
-   int delays;
-   int ios;
-   int totalOutputs;
-   int extraData;
-   int statics;
-   int sharedUnits;
-   int externalMemoryInterfaces;
-   int externalMemoryByteSize;
-   int numberUnits;
+  int configs;
+  int states;
+  int delays;
+  int ios;
+  int totalOutputs;
+  int extraData;
+  int statics;
+  int sharedUnits;
+  int externalMemoryInterfaces;
+  int externalMemoryByteSize;
+  int numberUnits;
 
-   int memoryMappedBits;
-   bool isMemoryMapped;
-   bool signalLoop;
+  int memoryMappedBits;
+  bool isMemoryMapped;
+  bool signalLoop;
 };
 
 struct VersatComputedValues{
-   int nConfigs;
-   int configBits;
+  int nConfigs;
+  int configBits;
 
-   int versatConfigs;
-   int versatStates;
+  int versatConfigs;
+  int versatStates;
 
-   int nStatics;
-   int staticBits;
-   int staticBitsStart;
+  int nStatics;
+  int staticBits;
+  int staticBitsStart;
 
-   int nDelays;
-   int delayBits;
-   int delayBitsStart;
+  int nDelays;
+  int delayBits;
+  int delayBitsStart;
 
-   // Configurations = config + static + delays
-   int nConfigurations;
-   int configurationBits;
-   int configurationAddressBits;
+  // Configurations = config + static + delays
+  int nConfigurations;
+  int configurationBits;
+  int configurationAddressBits;
 
-   int nStates;
-   int stateBits;
-   int stateAddressBits;
+  int nStates;
+  int stateBits;
+  int stateAddressBits;
 
-   int unitsMapped;
-   int memoryMappedBytes;
-//   int maxMemoryMapDWords;
+  int unitsMapped;
+  int memoryMappedBytes;
+  //   int maxMemoryMapDWords;
 
-   int nUnitsIO;
+  int nUnitsIO;
 
-   int numberConnections;
+  int numberConnections;
 
-   int externalMemoryInterfaces;
+  int externalMemoryInterfaces;
 
-   int stateConfigurationAddressBits;
-   int memoryAddressBits;
-   int memoryMappingAddressBits;
-   int memoryConfigDecisionBit;
-   //int lowerAddressSize;
+  int stateConfigurationAddressBits;
+  int memoryAddressBits;
+  int memoryMappingAddressBits;
+  int memoryConfigDecisionBit;
+  //int lowerAddressSize;
 
-   bool signalLoop;
+  bool signalLoop;
 };
 
 struct HierarchicalName{
-   String name;
-   HierarchicalName* next;
+  String name;
+  HierarchicalName* next;
 };
 
 struct TypeAndInstance{
@@ -244,34 +245,35 @@ struct TypeAndInstance{
 };
 
 struct SharingInfo{
-   int* ptr;
-   bool init;
+  int* ptr;
+  bool init;
 };
 
 // Simple operations should also be stored here. They are versat agnostic as well
 namespace BasicDeclaration{
-   extern FUDeclaration* buffer;
-   extern FUDeclaration* fixedBuffer;
-   extern FUDeclaration* input;
-   extern FUDeclaration* output;
-   extern FUDeclaration* multiplexer;
-   extern FUDeclaration* combMultiplexer;
-   extern FUDeclaration* timedMultiplexer;
-   extern FUDeclaration* stridedMerge;
-   extern FUDeclaration* pipelineRegister;
-   extern FUDeclaration* data;
+  extern FUDeclaration* buffer;
+  extern FUDeclaration* fixedBuffer;
+  extern FUDeclaration* input;
+  extern FUDeclaration* output;
+  extern FUDeclaration* multiplexer;
+  extern FUDeclaration* combMultiplexer;
+  extern FUDeclaration* timedMultiplexer;
+  extern FUDeclaration* stridedMerge;
+  extern FUDeclaration* pipelineRegister;
+  extern FUDeclaration* data;
 }
 
 struct CompiledTemplate;
 namespace BasicTemplates{
-   extern CompiledTemplate* acceleratorTemplate;
-   extern CompiledTemplate* topAcceleratorTemplate;
-   extern CompiledTemplate* wrapperTemplate;
-   extern CompiledTemplate* acceleratorHeaderTemplate;
-   extern CompiledTemplate* externalPortmapTemplate;
-   extern CompiledTemplate* externalPortTemplate;
-   extern CompiledTemplate* externalInstTemplate;
-   extern CompiledTemplate* iterativeTemplate;
+  extern CompiledTemplate* acceleratorTemplate;
+  extern CompiledTemplate* topAcceleratorTemplate;
+  extern CompiledTemplate* wrapperTemplate;
+  extern CompiledTemplate* acceleratorHeaderTemplate;
+  extern CompiledTemplate* externalPortmapTemplate;
+  extern CompiledTemplate* externalInternalPortmapTemplate;
+  extern CompiledTemplate* externalPortTemplate;
+  extern CompiledTemplate* externalInstTemplate;
+  extern CompiledTemplate* iterativeTemplate;
 }
 
 struct GraphMapping;
@@ -400,7 +402,6 @@ void OutputMemoryMap(Versat* versat,Accelerator* accel);
 void OutputUnitInfo(FUInstance* instance);
 void DisplayAcceleratorMemory(Accelerator* topLevel);
 void DisplayUnitConfiguration(Accelerator* topLevel);
-void EnterDebugTerminal(Versat* versat);
 
 void DebugAccelerator(Accelerator* accel);
 void DebugVersat(Versat* versat);
@@ -425,8 +426,6 @@ int GetInputPortNumber(FUInstance* inputInstance);
 
 // General hook function for debugging purposes
 int CalculateMemoryUsage(Versat* versat); // Not accurate, but returns the biggest amount of memory usage.
-void VersatSimDebug(Versat* versat);
-void Hook(Versat* versat,FUDeclaration* decl,Accelerator* accel,FUInstance* inst);
 
 void TestVersatSide(Versat* versat); // Calls tests from versat side
 
