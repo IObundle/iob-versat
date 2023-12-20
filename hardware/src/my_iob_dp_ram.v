@@ -1,6 +1,4 @@
 `timescale 1ns / 1ps
-// Comment so that verible-format will not put timescale and defaultt_nettype into same line
-`default_nettype none
 
 module my_iob_dp_ram #(
    parameter FILE   = "none",
@@ -55,5 +53,3 @@ module my_iob_dp_ram #(
    end
 
 endmodule  // my_iob_dp_ram
-
-`default_nettype wire

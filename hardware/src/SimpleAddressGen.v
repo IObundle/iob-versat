@@ -1,6 +1,4 @@
 `timescale 1ns / 1ps
-// Comment so that verible-format will not put timescale and defaultt_nettype into same line
-`default_nettype none
 
 // Generates an address for a 8 bit memory. Byte space
 module SimpleAddressGen #(
@@ -69,5 +67,3 @@ module SimpleAddressGen #(
    end
 
 endmodule  // SimpleAddressGen
-
-`default_nettype wire

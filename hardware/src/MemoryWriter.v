@@ -1,6 +1,4 @@
 `timescale 1ns / 1ps
-// Comment so that verible-format will not put timescale and defaultt_nettype into same line
-`default_nettype none
 
 module MemoryWriter #(
    parameter ADDR_W = 32,
@@ -53,5 +51,3 @@ module MemoryWriter #(
    end
 
 endmodule  // MemoryWriter
-
-`default_nettype wire

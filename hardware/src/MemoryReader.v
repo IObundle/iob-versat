@@ -1,6 +1,4 @@
 `timescale 1ns / 1ps
-// Comment so that verible-format will not put timescale and defaultt_nettype into same line
-`default_nettype none
 
 // Axi like interface 
 module MemoryReader #(
@@ -58,5 +56,3 @@ module MemoryReader #(
    assign m_addr_o     = last_addr;
 
 endmodule  // MemoryReader
-
-`default_nettype wire

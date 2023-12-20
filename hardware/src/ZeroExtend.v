@@ -1,6 +1,4 @@
 `timescale 1ns / 1ps
-// Comment so that verible-format will not put timescale and defaultt_nettype into same line
-`default_nettype none
 
 // Assumes input is smaller than output, otherwise will produce an error
 module ZeroExtend #(
@@ -17,5 +15,3 @@ module ZeroExtend #(
    end
 
 endmodule  // ZeroExtend
-
-`default_nettype wire
