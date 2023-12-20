@@ -1,6 +1,4 @@
 `timescale 1ns / 1ps
-// Comment so that verible-format will not put timescale and defaultt_nettype into same line
-`default_nettype none
 
 module xaddrgen2 #(
    parameter MEM_ADDR_W = 10,
@@ -102,5 +100,3 @@ module xaddrgen2 #(
    assign mem_en_o_reg_w = mem_en_o_reg;
 
 endmodule  // xaddrgen2
-
-`default_nettype wire

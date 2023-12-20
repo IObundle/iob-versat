@@ -1,6 +1,4 @@
 `timescale 1ns / 1ps
-// Comment so that verible-format will not put timescale and defaultt_nettype into same line
-`default_nettype none
 
 module MemoryScanner #(
    parameter DATA_W = 32,
@@ -45,5 +43,3 @@ module MemoryScanner #(
    end
 
 endmodule  // MemoryScanner
-
-`default_nettype wire

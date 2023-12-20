@@ -1,6 +1,4 @@
 `timescale 1ns / 1ps
-// Comment so that verible-format will not put timescale and defaultt_nettype into same line
-`default_nettype none
 
 `include "AXIInfo.vh"
 
@@ -250,5 +248,3 @@ module burst_align #(
    end
 
 endmodule  // burst_align
-
-`default_nettype wire

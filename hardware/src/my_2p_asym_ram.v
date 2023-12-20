@@ -1,6 +1,4 @@
 `timescale 1ns / 1ps
-// Comment so that verible-format will not put timescale and defaultt_nettype into same line
-`default_nettype none
 
 `define max(a, b) (a) > (b) ? (a) : (b)
 `define min(a, b) (a) < (b) ? (a) : (b)
@@ -119,7 +117,6 @@ module my_2p_asym_ram #(
    endgenerate
 endmodule  // my_2p_asym_ram
 
-`default_nettype wire
 `undef max
 `undef min
 

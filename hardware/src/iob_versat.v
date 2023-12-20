@@ -1,6 +1,4 @@
 `timescale 1ns / 1ps
-// Comment so that verible-format will not put timescale and defaultt_nettype into same line
-`default_nettype none
 
 //`include "axi.vh"
 //`include "system.vh"
@@ -182,5 +180,3 @@ module iob_versat #(  //the below parameters are used in cpu if includes below
    );
 
 endmodule  // iob_versat
-
-`default_nettype wire
