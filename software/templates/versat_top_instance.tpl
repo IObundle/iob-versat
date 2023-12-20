@@ -483,7 +483,7 @@ begin
       #{set inst node.inst}
       #{set decl inst.declaration}
       #{for wire decl.configInfo.states}
-      if(addr[@{versatValues.stateAddressBits + 1}:0] == @{addr * 4}) // @{versatBase + addr * 4 |> Hex}
+      if(addr[@{versatValues.stateAddressBits + 1}:0] >= @{addr * 4} && addr[@{versatValues.stateAddressBits + 1}:0] < @{(addr + 1) * 4}) // @{versatBase + addr * 4 |> Hex}
          stateRead = statedata[@{counter}+:@{wire.bitSize}];
       #{inc addr}
       #{set counter counter + wire.bitSize}

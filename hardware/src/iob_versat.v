@@ -151,7 +151,7 @@ module iob_versat #(  //the below parameters are used in cpu if includes below
    ) xversat (
       .valid(iob_avalid_i),
       .wstrb(iob_wstrb_i),
-      .addr(iob_addr_i), // Address is now byte space so for now simple hack it into the dword space previously used
+      .addr(iob_addr_i),
       .wdata(iob_wdata_i),
       .rdata(iob_rdata_o),
       .ready(iob_rvalid_o),

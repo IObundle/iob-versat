@@ -36,10 +36,12 @@ def CreateVersatClass(pc_emul,versat_spec,versat_top,versat_extra):
                             "-I",versat_dir + "/submodules/FPU/hardware/include/",
                             "-I",versat_dir + "/submodules/FPU/submodules/DIV/hardware/src/",
                             "-I",build_dir  + "/hardware/src/", # TODO: If this works then all the other "versat_dir + ..." could be removed
-                            "-O",versat_extra,
                             "-H",build_dir + "/software", # Output software files
                             "-o",build_dir + "/hardware/src" # Output hardware files
                             ]
+
+    if(versat_extra):
+        versat_args = versat_args + ["-O",versat_extra]
 
     if(pc_emul):
         versat_args = versat_args + ["-x64"]
@@ -140,7 +142,7 @@ def CreateVersatClass(pc_emul,versat_spec,versat_top,versat_extra):
 
             submodules = [iob_fifo_sync,iob_ram_sp,iob_ram_2p]
 
-            if(HAS_AXI):
+            if(True): # HAS_AXI
                 submodules += [
                     {"interface": "axi_m_port"},
                     {"interface": "axi_m_m_portmap"},
