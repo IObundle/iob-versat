@@ -1,6 +1,4 @@
 `timescale 1ns / 1ps
-// Comment so that verible-format will not put timescale and defaultt_nettype into same line
-`default_nettype none
 
 // Log2 number of states
 `define STATES_W 2
@@ -166,5 +164,3 @@ module ext_addrgen #(
    end
 
 endmodule  // ext_addrgen
-
-`default_nettype wire

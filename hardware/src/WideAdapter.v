@@ -1,6 +1,4 @@
 `timescale 1ns / 1ps
-// Comment so that verible-format will not put timescale and defaultt_nettype into same line
-`default_nettype none
 
 // Ex: 64 bits input and 32 bits output, sel == 0 selects lower 32 bits. sel == 1 selects upper 32 bits
 
@@ -26,5 +24,3 @@ module WideAdapter #(
    );
 
 endmodule  // WideAdapter
-
-`default_nettype wire
