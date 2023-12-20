@@ -1,4 +1,4 @@
-include $(VERSAT_DIR)/core.mk
+include $(VERSAT_DIR)/config.mk
 include $(VERSAT_COMMON_DIR)/common.mk
 include $(VERSAT_TEMPLATE_DIR)/templates.mk
 

@@ -266,6 +266,7 @@ namespace BasicTemplates{
   CompiledTemplate* wrapperTemplate;
   CompiledTemplate* acceleratorHeaderTemplate;
   CompiledTemplate* externalPortmapTemplate;
+  CompiledTemplate* externalInternalPortmapTemplate;
   CompiledTemplate* externalPortTemplate;
   CompiledTemplate* externalInstTemplate;
   CompiledTemplate* iterativeTemplate;
@@ -377,6 +378,7 @@ Versat* InitVersat(int base,int numberConfigurations,bool initUnits){
   BasicTemplates::wrapperTemplate = CompileTemplate(versat_wrapper_template,"wrapper",&versat->permanent);
   BasicTemplates::acceleratorHeaderTemplate = CompileTemplate(versat_header_template,"header",&versat->permanent);
   BasicTemplates::externalPortmapTemplate = CompileTemplate(external_memory_portmap_template,"ext_portmap",&versat->permanent);
+  BasicTemplates::externalInternalPortmapTemplate = CompileTemplate(external_memory_internal_portmap_template,"ext_internal_port",&versat->permanent);
   BasicTemplates::externalPortTemplate = CompileTemplate(external_memory_port_template,"ext_port",&versat->permanent);
   BasicTemplates::externalInstTemplate = CompileTemplate(external_memory_inst_template,"ext_inst",&versat->permanent);
   BasicTemplates::iterativeTemplate = CompileTemplate(versat_iterative_template,"iter",&versat->permanent);
@@ -1478,8 +1480,8 @@ FUDeclaration* RegisterSubUnit(Versat* versat,String name,Accelerator* circuit){
   ReorganizeAccelerator(circuit,temp);
 
   region(temp){
-    auto delays = CalculateDelay(versat,circuit,temp);
-
+    Hashmap<EdgeNode,int>* delays = CalculateDelay(versat,circuit,temp);
+    
     OutputGraphDotFile(versat,circuit,false,"debug/%.*s/beforeFixDelay.dot",UNPACK_SS(name));
 
     FixDelays(versat,circuit,delays);
@@ -1674,7 +1676,7 @@ FUDeclaration* RegisterIterativeUnit(Versat* versat,Accelerator* accel,FUInstanc
     Assert(arr.size <= 2); // Do not know what to do if size bigger than 2.
   }
 
-  static String MuxNames[] = {STRING("Mux1"),STRING("Mux2"),STRING("Mux3"),STRING("Mux4"),STRING("Mux5"),STRING("Mux6"),STRING("Mux7"),
+  static String muxNames[] = {STRING("Mux1"),STRING("Mux2"),STRING("Mux3"),STRING("Mux4"),STRING("Mux5"),STRING("Mux6"),STRING("Mux7"),
                                STRING("Mux8"),STRING("Mux9"),STRING("Mux10"),STRING("Mux11"),STRING("Mux12"),STRING("Mux13"),STRING("Mux14"),STRING("Mux15"),
                                STRING("Mux16"),STRING("Mux17"),STRING("Mux18"),STRING("Mux19"),STRING("Mux20"),STRING("Mux21"),STRING("Mux22"),STRING("Mux23"),
                                STRING("Mux24"),STRING("Mux25"),STRING("Mux26"),STRING("Mux27"),STRING("Mux28"),STRING("Mux29"),STRING("Mux30"),STRING("Mux31"),STRING("Mux32"),STRING("Mux33"),STRING("Mux34"),
@@ -1702,8 +1704,8 @@ FUDeclaration* RegisterIterativeUnit(Versat* versat,Accelerator* accel,FUInstanc
 
     Assert(arr[0].node->inst->declaration == BasicDeclaration::input);
 
-    Assert(i < ARRAY_SIZE(MuxNames));
-    FUInstance* mux = CreateFUInstance(accel,type,MuxNames[i]);
+    Assert(i < ARRAY_SIZE(muxNames));
+    FUInstance* mux = CreateFUInstance(accel,type,muxNames[i]);
     InstanceNode* muxNode = GetInstanceNode(accel,(FUInstance*) mux);
 
     RemoveConnection(accel,arr[0].node,arr[0].port,node,i);
@@ -1850,6 +1852,9 @@ FUDeclaration* RegisterIterativeUnit(Versat* versat,Accelerator* accel,FUInstanc
 	TemplateSetNumber("unitsMapped",val.unitsMapped);
 	TemplateSetCustom("inputDecl",BasicDeclaration::input,"FUDeclaration");
 	TemplateSetCustom("outputDecl",BasicDeclaration::output,"FUDeclaration");
+
+    int lat = node->inst->declaration->outputLatencies[0];
+	TemplateSetNumber("special",lat);
   }
 
   char buffer[256];
@@ -2163,14 +2168,4 @@ int CalculateMemoryUsage(Versat* versat){
 #endif
 
   return totalSize;
-}
-
-
-#include "debugGUI.hpp"
-
-void VersatSimDebug(Versat* versat){
-}
-
-void Hook(Versat* versat,FUDeclaration* decl,Accelerator* accel,FUInstance* inst){
-
 }

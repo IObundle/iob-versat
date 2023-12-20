@@ -1039,7 +1039,6 @@ AcceleratorIterator AcceleratorIterator::LevelBelowIterator(){
   return iter;
 }
 
-#if 1
 static void SendLatencyUpwards(InstanceNode* node,Hashmap<EdgeNode,int>* delays){
   int b = node->inputDelay;
   FUInstance* inst = node->inst;
@@ -1061,24 +1060,15 @@ static void SendLatencyUpwards(InstanceNode* node,Hashmap<EdgeNode,int>* delays)
 
         int delay = b + a + e - c;
 
-#if 0
-        EdgeNode edgeNode = {};
-        edgeNode.node0 = PortNode{node,info->port};
-        edgeNode.node1 = PortNode{other,otherInfo->port};
-
-        delays->Insert(edgeNode,delay);
-#endif
-
         *otherInfo->delay = delay;
       }
     }
   }
 }
-#endif
 
 // Instead of an accelerator, it could take a ordered list of instances, and potently the max amount of edges for the hashmap instantiation.
 // Therefore abstracting from the accelerator completely and being able to be used for things like subgraphs.
-// Change later when needed.
+// Change later if needed.
 Hashmap<EdgeNode,int>* CalculateDelay(Versat* versat,Accelerator* accel,Arena* out){
   // TODO: We are currently using the delay pointer inside the ConnectionNode structure. When correct, eventually change to just use the hashmap
 
@@ -1140,11 +1130,9 @@ Hashmap<EdgeNode,int>* CalculateDelay(Versat* versat,Accelerator* accel,Arena* o
       maximum = std::max(maximum,*info->delay);
     }
 
-#if 1
     FOREACH_LIST(ConnectionNode*,info,node->allInputs){
       *info->delay = maximum - *info->delay;
     }
-#endif
 
     node->inputDelay = maximum;
     node->inst->baseDelay = maximum;
@@ -1156,7 +1144,6 @@ Hashmap<EdgeNode,int>* CalculateDelay(Versat* versat,Accelerator* accel,Arena* o
     OutputGraphDotFile(versat,accel,true,node->inst,"debug/%.*s/out2_%d.dot",UNPACK_SS(accel->subtype->name),graphs++);
   }
 
-#if 1
   FOREACH_LIST(OrderedInstance*,ptr,accel->ordered){
     InstanceNode* node = ptr->node;
 
@@ -1169,7 +1156,6 @@ Hashmap<EdgeNode,int>* CalculateDelay(Versat* versat,Accelerator* accel,Arena* o
       *con->delay = 0;
     }
   }
-#endif
 
   int minimum = 0;
   FOREACH_LIST(OrderedInstance*,ptr,accel->ordered){
@@ -1183,29 +1169,30 @@ Hashmap<EdgeNode,int>* CalculateDelay(Versat* versat,Accelerator* accel,Arena* o
 
   OutputGraphDotFile(versat,accel,true,"debug/%.*s/out3.dot",UNPACK_SS(accel->subtype->name));
 
-#if 1
-  FOREACH_LIST(OrderedInstance*,ptr,accel->ordered){
-    InstanceNode* node = ptr->node;
+  if(!versat->opts.noDelayPropagation){
+    // Normalizes everything to start on zero
+    FOREACH_LIST(OrderedInstance*,ptr,accel->ordered){
+      InstanceNode* node = ptr->node;
 
-    if(node->type != InstanceNode::TAG_SOURCE && node->type != InstanceNode::TAG_SOURCE_AND_SINK){
-      break;
-    }
+      if(node->type != InstanceNode::TAG_SOURCE && node->type != InstanceNode::TAG_SOURCE_AND_SINK){
+        break;
+      }
 
-    int minimum = 1 << 30;
-    FOREACH_LIST(ConnectionNode*,info,node->allOutputs){
-      minimum = std::min(minimum,*info->delay);
-    }
+      int minimum = 1 << 30;
+      FOREACH_LIST(ConnectionNode*,info,node->allOutputs){
+        minimum = std::min(minimum,*info->delay);
+      }
 
-    // Does not take into account unit latency
-    node->inputDelay = minimum;
-    node->inst->baseDelay = minimum;
+      // Does not take into account unit latency
+      node->inputDelay = minimum;
+      node->inst->baseDelay = minimum;
 
-    FOREACH_LIST(ConnectionNode*,info,node->allOutputs){
-      *info->delay -= minimum;
+      FOREACH_LIST(ConnectionNode*,info,node->allOutputs){
+        *info->delay -= minimum;
+      }
     }
   }
-#endif
-
+  
   OutputGraphDotFile(versat,accel,true,"debug/%.*s/out4.dot",UNPACK_SS(accel->subtype->name));
 
   FOREACH_LIST(OrderedInstance*,ptr,accel->ordered){

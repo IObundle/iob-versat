@@ -384,19 +384,19 @@ static Value EvalExpression(Expression* expr,Frame* frame,Arena* temp){
   switch(expr->type){
   case Expression::OPERATION:{
     if(expr->op[0] == '|'){ // Pipe operation
-            val = EvalExpression(expr->expressions[0],frame,temp);
+      val = EvalExpression(expr->expressions[0],frame,temp);
+      
+      auto iter = pipeFunctions.find(expr->expressions[1]->id);
+      if(iter == pipeFunctions.end()){
+        printf("Did not find the following pipe function\n");
+        printf("%.*s\n",UNPACK_SS(expr->expressions[1]->id));
+        NOT_IMPLEMENTED;
+      }
 
-            auto iter = pipeFunctions.find(expr->expressions[1]->id);
-            if(iter == pipeFunctions.end()){
-              printf("Did not find the following pipe function\n");
-              printf("%.*s\n",UNPACK_SS(expr->expressions[1]->id));
-              NOT_IMPLEMENTED;
-            }
+      PipeFunction func = iter->second;
+      val = func(val,temp);
 
-            PipeFunction func = iter->second;
-            val = func(val,temp);
-
-            goto EvalExpressionEnd;
+      goto EvalExpressionEnd;
     }
 
     if(CompareString(expr->op,"!")){

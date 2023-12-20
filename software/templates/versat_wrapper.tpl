@@ -395,6 +395,18 @@ bool done = true;
 return done;
 }
 
+struct Once{};
+struct _OnceTag{};
+template<typename F>
+Once operator+(_OnceTag t,F&& f){
+  f();
+  return Once{};
+}
+
+#define TEMP__once(LINE) TEMPonce_ ## LINE
+#define TEMP_once(LINE) TEMP__once( LINE )
+#define once static Once TEMP_once(__LINE__) = _OnceTag() + [&]()
+
 static void InternalStartAccelerator(){
    V@{module.name}* self = dut;
 
@@ -403,7 +415,17 @@ AcceleratorConfig* config = (AcceleratorConfig*) &configBuffer;
 
 #{for i module.configs.size}
 #{set wire module.configs[i]}
-   self->@{wire.name} = config->@{configsHeader[i].name};
+ #{if configsHeader[i].bitSize != 64}
+ once{
+     if((long long int) config->@{configsHeader[i].name} >= ((long long int) 1 << @{configsHeader[i].bitSize})){
+      printf("[Once] Warning, configuration value contains more bits\n");
+      printf("set than the hardware unit is capable of handling\n");
+      printf("Name: %s, BitSize: %d, Value: 0x%lx\n","@{configsHeader[i].name}",@{configsHeader[i].bitSize},config->@{configsHeader[i].name});
+    }
+  };
+ #{end}
+
+  self->@{wire.name} = config->@{configsHeader[i].name};
 #{end}
 #{end}
 
@@ -454,17 +476,17 @@ extern "C" void VersatAcceleratorSimulate(){
 }
 
 extern "C" int MemoryAccess(int address,int value,int write){
-    #{if module.memoryMapped}
+  #{if module.memoryMapped}
    
-    V@{module.name}* self = dut;
+  V@{module.name}* self = dut;
 
-   if(write){
-      self->valid = 1;
-      self->wstrb = 0xf;
+  if(write){
+    self->valid = 1;
+    self->wstrb = 0xf;
 
-      #{if module.memoryMappedBits != 0}
+    #{if module.memoryMappedBits != 0}
       self->addr = address;
-      #{end}
+    #{end}
       self->wdata = value;
 
       self->eval();
@@ -482,14 +504,14 @@ extern "C" int MemoryAccess(int address,int value,int write){
       self->wdata = 0x00000000;
 
       InternalUpdateAccelerator();
-
+                
       return 0;
    } else {
       self->valid = 1;
       self->wstrb = 0x0;
-      #{if module.memoryMappedBits != 0}
+    #{if module.memoryMappedBits != 0}
       self->addr = address;
-      #{end}
+    #{end}
 
       self->eval();
 
@@ -500,9 +522,9 @@ extern "C" int MemoryAccess(int address,int value,int write){
       int res = self->rdata;
 
       self->valid = 0;
-      #{if module.memoryMappedBits != 0}
+    #{if module.memoryMappedBits != 0}
       self->addr = 0;
-      #{end}
+    #{end}
 
       self->eval();
       while(self->ready){
@@ -511,10 +533,10 @@ extern "C" int MemoryAccess(int address,int value,int write){
 
       return res;
    }
-
    #{end}
+   return 0;
 }
-    
+
 extern "C" void VersatSignalLoop(){
 #{if module.signalLoop}
    V@{module.name}* self = dut;

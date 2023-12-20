@@ -3,7 +3,7 @@ SHELL:=/bin/sh
 VERSAT_DIR:=$(abspath $(shell pwd)/../..)
 
 #versat common parameters
-include $(VERSAT_DIR)/core.mk
+include $(VERSAT_DIR)/config.mk
 include $(VERSAT_TOOLS_DIR)/tools.mk
 include $(VERSAT_DIR)/sharedHardware.mk
 
