@@ -17,7 +17,7 @@ module TimedFlag #(
    input [ADDR_W-1:0]            addr,
    input [DATA_W-1:0]            wdata,
    input                         valid,
-   output reg                    ready,
+   output reg                    rvalid,
    output [DATA_W-1:0]           rdata,
 
    input [31:0]                  amount,
@@ -50,13 +50,16 @@ assign ext_dp_out_0_port_1 = wdata;
 assign ext_dp_enable_0_port_1 = valid;
 assign ext_dp_write_0_port_1 = valid;
 
+// Does not allow memory mapped to read data.
+assign rdata = 0;
+
 always @(posedge clk,posedge rst) begin
    if(rst) begin
-      ready <= 1'b0;
-   end if(valid) begin
-      ready <= 1'b1;
+      rvalid <= 1'b0;
+   end if(valid && wstrb == 0) begin
+      rvalid <= 1'b1;
    end else begin
-      ready <= 1'b0;
+      rvalid <= 1'b0;
    end
 end
 

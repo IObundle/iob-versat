@@ -19,7 +19,7 @@
     input [DATA_W/8-1:0]          wstrb,
     input [DATA_W-1:0]            wdata,
     input                         valid,
-    output reg                    ready,
+    output reg                    rvalid,
     output [DATA_W-1:0]           rdata,
 
     //input / output data
@@ -33,7 +33,7 @@
 
 reg [DELAY_W-1:0] delay;
 
-assign rdata = (ready ? out0 : 0);
+assign rdata = (rvalid ? out0 : 0);
 assign currentValue = out0;
 
 always @(posedge clk,posedge rst)
@@ -41,14 +41,18 @@ begin
    if(rst) begin
       out0 <= 0;
       delay <= 0;
-      ready <= 0;
+      rvalid <= 1'b0;
       done <= 1;
    end else begin
       // Native interface
-      ready <= valid;
+      rvalid <= 1'b0;
 
       if(valid & |wstrb) begin
          out0 <= wdata;
+      end
+
+      if(valid & wstrb == 0) begin
+         rvalid <= 1'b1;
       end
 
       if(run) begin

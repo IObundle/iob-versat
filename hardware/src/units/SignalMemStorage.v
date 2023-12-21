@@ -18,7 +18,7 @@
    input [ADDR_W-1:0]            addr,
    input [DATA_W-1:0]            wdata,
    input                         valid,
-   output reg                    ready,
+   output reg                    rvalid,
    output [DATA_W-1:0]           rdata,
 
    //input / output data
@@ -69,7 +69,7 @@ end
 assign ext_dp_write_0_port_0 = 1'b1;
 
 assign ext_dp_addr_0_port_1 = pingPong ? {pingPongState,addr[ADDR_W-2:0]} : addr;
-assign rdata = ready ? ext_dp_in_0_port_1 : 0;
+assign rdata = rvalid ? ext_dp_in_0_port_1 : 0;
 assign ext_dp_enable_0_port_1 = valid;
 assign ext_dp_write_0_port_1 = 1'b0;
 
@@ -101,18 +101,18 @@ begin
    end
 end
 
-reg ready_delay0,ready_delay1;
+reg rvalid_delay0,rvalid_delay1;
 
 always @(posedge clk,posedge rst)
 begin
    if(rst) begin
-      ready_delay1 <= 0;
-      ready_delay0 <= 0;
-      ready <= 0;
+      rvalid_delay1 <= 0;
+      rvalid_delay0 <= 0;
+      rvalid <= 0;
    end else begin   
-      ready_delay0 <= valid;
-      ready_delay1 <= ready_delay0;
-      ready <= ready_delay1;
+      if(wstrb == 0) rvalid_delay0 <= valid;
+      rvalid_delay1 <= rvalid_delay0;
+      rvalid <= rvalid_delay1;
    end
 end
 

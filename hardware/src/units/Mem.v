@@ -23,7 +23,7 @@
    input [ADDR_W-1:0]            addr,
    input [DATA_W-1:0]            wdata,
    input                         valid,
-   output reg                    ready,
+   output reg                    rvalid,
    output [DATA_W-1:0]           rdata,
 
    //input / output data
@@ -281,30 +281,30 @@
    end
 
    // Read 
-   assign rdata = (ready ? outA_reg : 32'h0);
+   assign rdata = (rvalid ? outA_reg : 32'h0);
 
    // Delay by a cycle to match memory read latency
    reg readCounter[1:0];
    always @(posedge clk,posedge rst)
    begin
       if(rst) begin
-         ready <= 1'b0;
+         rvalid <= 1'b0;
          readCounter[0] <= 1'b0;
          readCounter[1] <= 1'b0;
       end else begin
-         if(ready) begin
-            ready <= 1'b0;
+         if(rvalid) begin
+            rvalid <= 1'b0;
             readCounter[0] <= 1'b0;
             readCounter[1] <= 1'b0;
          end else begin
             // Write
-            if(valid && we)
-               ready <= 1'b1;
+            //if(valid && we)
+            //   ready <= 1'b1;
 
             // Read
-            ready <= readCounter[0];
+            rvalid <= readCounter[0];
             readCounter[0] <= readCounter[1];
-            readCounter[1] <= valid;
+            if(wstrb == 0) readCounter[1] <= valid;
          end
       end
    end

@@ -11,7 +11,7 @@ module LookupTable #(
       input [ADDR_W-1:0]            addr,
       input [DATA_W-1:0]            wdata,
       input                         valid,
-      output reg                    ready,
+      output reg                    rvalid,
       output [DATA_W-1:0]           rdata,
 
       input [DATA_W-1:0] in0,
@@ -38,6 +38,8 @@ module LookupTable #(
       input run
    );
 
+   assign rdata = 0;
+
    reg [ADDR_W-1:0] addr_reg;
    reg [DATA_W-1:0] data;
    reg write;
@@ -48,16 +50,19 @@ module LookupTable #(
          data <= 0;
          addr_reg <= 0;
          write <= 1'b0;
-         ready <= 1'b0;
+         rvalid <= 1'b0;
       end else begin
          write <= 1'b0;
-         ready <= 1'b0;
+         rvalid <= 1'b0;
+
+         if(valid && wstrb == 0) begin
+            rvalid <= 1'b1;
+         end
 
          if(valid && |wstrb) begin
             data <= wdata;
             addr_reg <= addr;
             write <= 1'b1;
-            ready <= 1'b1;
          end
       end
    end

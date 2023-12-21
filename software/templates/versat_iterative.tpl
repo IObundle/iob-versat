@@ -92,7 +92,7 @@ module @{accel.name} #(
 
    input [DATA_W/8-1:0]            wstrb,
    input [DATA_W-1:0]              wdata,
-   output                          ready,
+   output                          rvalid,
    output [DATA_W-1:0]             rdata,
    #{end}
 
@@ -100,7 +100,7 @@ module @{accel.name} #(
    input                           rst
    );
 
-wire wor_ready;
+wire wor_rvalid;
 
 wire [31:0] unitRdataFinal;
 reg [31:0] stateRead;
@@ -108,13 +108,13 @@ reg [31:0] stateRead;
 #{if unitsMapped}
 // Memory access
 wire we = (|wstrb);
-wire[@{unitsMapped - 1}:0] unitReady;
+wire[@{unitsMapped - 1}:0] unitRValid;
 reg [@{unitsMapped - 1}:0] memoryMappedEnable;
 wire [31:0] unitRData[@{unitsMapped - 1}:0];
 
 assign rdata = unitRdataFinal;
-assign ready = wor_ready;
-assign wor_ready = (|unitReady);
+assign rvalid = wor_rvalid;
+assign wor_rvalid = (|unitRValid);
 
 wire [31:0] #{join ", " for i unitsMapped} rdata_@{i} #{end};
 
@@ -282,7 +282,7 @@ end
          .addr(addr[@{decl.memoryMapBits - 1}:0]),
          #{end}
          .rdata(unitRData[@{memoryMappedIndex}]),
-         .ready(unitReady[@{memoryMappedIndex}]),
+         .rvalid(unitRValid[@{memoryMappedIndex}]),
          .wdata(wdata),
          #{inc memoryMappedIndex}
          #{end}

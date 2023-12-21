@@ -34,7 +34,7 @@ module versat_instance #(
    input [ADDR_W-1:0]              addr, // Use address in the code below, it uses byte addresses
    input [DATA_W/8-1:0]            wstrb,
    input [DATA_W-1:0]              wdata,
-   output                          ready,
+   output                          rvalid,
    output reg [DATA_W-1:0]         rdata,
 
    #{for ext external}
@@ -72,7 +72,7 @@ output [@{dp.bitSize}-1:0]  ext_dp_addr_@{i}_port_@{index}_o,
    input                           rst
    );
 
-wire wor_ready;
+wire wor_rvalid;
 
 wire done;
 reg [30:0] runCounter;
@@ -93,7 +93,7 @@ wire memoryMappedAddr = address[@{memoryConfigDecisionBit}];
 wire rst_int = (rst | soft_reset);
 
 // Versat registers and memory access
-reg versat_ready;
+reg versat_rvalid;
 reg [31:0] versat_rdata;
 
 reg soft_reset,signal_loop; // Self resetting 
@@ -107,24 +107,24 @@ reg [1:0] dma_state;
 always @(posedge clk,posedge rst) // Care, rst because writing to soft reset register
    if(rst) begin
       versat_rdata <= 32'h0;
-      versat_ready <= 1'b0;
+      versat_rvalid <= 1'b0;
       signal_loop <= 1'b0;
       soft_reset <= 0;
    end else begin
-      versat_ready <= 1'b0;
+      versat_rvalid <= 1'b0;
       soft_reset <= 1'b0;
       signal_loop <= 1'b0;
 
       if(valid) begin 
          // Config/State register access
          if(!memoryMappedAddr) begin
-            versat_ready <= 1'b1;
+            if(wstrb == 0) versat_rvalid <= 1'b1;
             versat_rdata <= stateRead;
          end
 
          // Versat specific registers
          if(addr == 0) begin
-            versat_ready <= 1'b1;
+            if(wstrb == 0) versat_rvalid <= 1'b1;
             if(we) begin
                soft_reset <= wdata[31];
                signal_loop <= wdata[30];    
@@ -134,7 +134,7 @@ always @(posedge clk,posedge rst) // Care, rst because writing to soft reset reg
          end
 #{if useDMA}
          if(addr == 1) begin
-            versat_ready <= 1'b1;
+            if(wstrb == 0) versat_rvalid <= 1'b1;
             versat_rdata <= {31'h0,dma_state == 0};
          end
 #{end}
@@ -342,21 +342,22 @@ begin
 end
 
 #{if unitsMapped}
-assign rdata = (versat_ready ? versat_rdata : unitRdataFinal);
+assign rdata = (versat_rvalid ? versat_rdata : unitRdataFinal);
 #{else}
 assign rdata = versat_rdata;
 #{end}
 
+// MARK
 #{if unitsMapped}
-assign ready = versat_ready | wor_ready;
+assign rvalid = versat_rvalid | wor_rvalid;
 #{else}
-assign ready = versat_ready;
+assign rvalid = versat_rvalid;
 #{end}
 
 #{if unitsMapped}
 reg [@{unitsMapped - 1}:0] memoryMappedEnable;
-wire[@{unitsMapped - 1}:0] unitReady;
-assign wor_ready = (|unitReady);
+wire[@{unitsMapped - 1}:0] unitRValid;
+assign wor_rvalid = (|unitRValid);
 #{end}
 
 #{if versatValues.numberConnections}
@@ -613,7 +614,7 @@ end
          .addr(address[@{decl.memoryMapBits - 1}:0]),
          #{end}
          .rdata(unitRData[@{memoryMappedIndex}]),
-         .ready(unitReady[@{memoryMappedIndex}]),
+         .rvalid(unitRValid[@{memoryMappedIndex}]),
          .wdata(data_data),
          #{inc memoryMappedIndex}
          #{end}

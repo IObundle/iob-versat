@@ -152,7 +152,8 @@ module iob_versat #(  //the below parameters are used in cpu if includes below
       .addr(iob_addr_i),
       .wdata(iob_wdata_i),
       .rdata(iob_rdata_o),
-      .ready(iob_rvalid_o),
+      .rvalid(iob_rvalid_o),
+      //.ready(iob_ready_o),
 
 `ifdef VERSAT_EXTERNAL_MEMORY
       `include "versat_external_memory_internal_portmap.vh"

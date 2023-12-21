@@ -717,7 +717,7 @@ ModuleInfo ExtractModuleInfo(Module& module,Arena* permanent,Arena* tempArena){
 
       info.nIO = val[1].number;
       info.doesIO = true;
-    } else if(  CheckFormat("ready",decl.name)
+    } else if(  CheckFormat("rvalid",decl.name)
 				|| CheckFormat("valid",decl.name)
 				|| CheckFormat("addr",decl.name)
 				|| CheckFormat("rdata",decl.name)
