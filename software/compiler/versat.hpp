@@ -269,7 +269,6 @@ namespace BasicTemplates{
   extern CompiledTemplate* topAcceleratorTemplate;
   extern CompiledTemplate* wrapperTemplate;
   extern CompiledTemplate* acceleratorHeaderTemplate;
-  extern CompiledTemplate* externalPortmapTemplate;
   extern CompiledTemplate* externalInternalPortmapTemplate;
   extern CompiledTemplate* externalPortTemplate;
   extern CompiledTemplate* externalInstTemplate;

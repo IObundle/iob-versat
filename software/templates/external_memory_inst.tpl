@@ -4,15 +4,6 @@
 #{set i index}
 #{if ext.type}
 // DP
-
-#{for dp ext.dp}
-//wire VERSAT0_ext_dp_write_@{i}_port_@{index};
-//wire VERSAT0_ext_dp_enable_@{i}_port_@{index};
-//wire [@{dp.bitSize}-1:0] VERSAT0_ext_dp_addr_@{i}_port_@{index};
-//wire [@{dp.dataSizeOut}-1:0] VERSAT0_ext_dp_out_@{i}_port_@{index};
-//wire [@{dp.dataSizeIn}-1:0] VERSAT0_ext_dp_in_@{i}_port_@{index};
-#{end}
-
    my_dp_asym_ram #(
       .A_DATA_W(@{ext.dp[0].dataSizeOut}),
       .B_DATA_W(@{ext.dp[1].dataSizeOut}),
@@ -36,14 +27,6 @@
    );
 #{else}
 // 2P
-//wire VERSAT0_ext_2p_write_@{i};
-//wire [@{ext.tp.bitSizeOut}-1:0] VERSAT0_ext_2p_addr_out_@{i};
-//wire [@{ext.tp.dataSizeOut}-1:0] VERSAT0_ext_2p_data_out_@{i};
-
-//wire VERSAT0_ext_2p_read_@{i};
-//wire [@{ext.tp.bitSizeIn}-1:0] VERSAT0_ext_2p_addr_in_@{i};
-//wire [@{ext.tp.dataSizeIn}-1:0] VERSAT0_ext_2p_data_in_@{i};
-
    my_2p_asym_ram #(
      .W_DATA_W(@{ext.tp.dataSizeOut}),
      .R_DATA_W(@{ext.tp.dataSizeIn}),

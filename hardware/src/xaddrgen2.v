@@ -35,7 +35,7 @@ module xaddrgen2 #(
 
    //only run_i if iterations_i > 0
    wire readyA = |iterations_i;
-   wire readyB = |iterations_i2;
+   wire readyB = |iterations2_i;
 
    //keep run_ining addr_ogenA while addr_ogenB is enabled
    wire run_iA = run_i | mem_en_oB;
@@ -80,13 +80,13 @@ module xaddrgen2 #(
       .init        (run_i),
       .run_i       (run_i & readyB),
       .pause       (pause),
-      .iterations_i(iterations_i2),
-      .period_i    (period_i2),
-      .duty_i      (period_i2),
+      .iterations_i(iterations2_i),
+      .period_i    (period2_i),
+      .duty_i      (period2_i),
       .delay_i     (delay_i),
       .start_i     (start_i),
-      .shift_i     (shift_i2),
-      .incr_i      (incr_i2),
+      .shift_i     (shift2_i),
+      .incr_i      (incr2_i),
       .addr_o      (addr_oB),
       .mem_en_o    (mem_en_oB),
       .done_o      (done_oB)

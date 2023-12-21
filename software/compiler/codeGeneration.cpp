@@ -591,11 +591,13 @@ void OutputVersatSource(Versat* versat,Accelerator* accel,const char* hardwarePa
    fclose(f);
    }
 
+   #if 0
    {
    FILE* f = OpenFileAndCreateDirectories(StaticFormat("%s/versat_external_memory_portmap.vh",hardwarePath),"w");
    ProcessTemplate(f,BasicTemplates::externalPortmapTemplate,&versat->temp);
    fclose(f);
    }
+   #endif
 
    {
    FILE* f = OpenFileAndCreateDirectories(StaticFormat("%s/versat_external_memory_internal_portmap.vh",hardwarePath),"w");

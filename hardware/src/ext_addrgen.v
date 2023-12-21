@@ -70,7 +70,7 @@ module ext_addrgen #(
    // link int mem and ext databus
    assign data_out_o     = databus_rdata;
    assign databus_wdata  = data_in_i;
-   /* verilator lint_off WIDTH */assign databus_addr_o = ext_addr_o_i + (addr_o_gen << 2);
+   /* verilator lint_off WIDTH */assign databus_addr = ext_addr_o_i + (addr_o_gen << 2);
    assign addr_o         = int_addr_o_i + counter_int;
 
    //assign req_o = (direction_i == 2'b01) ? req_o_int_reg : req_o_int;
