@@ -13,6 +13,7 @@
 #include <termios.h>
 #include <fcntl.h>
 #include <execinfo.h>
+#include <link.h>
 
 #include "parser.hpp"
 #include "memory.hpp"
@@ -92,7 +93,6 @@ static Addr2LineConnection StartAddr2Line(){
                     (char*) "-C",
                     (char*) "-f",
                     (char*) "-i",
-                    //(char*) "-p",
                     (char*) "-e",
                     (char*) exePathBuffer,
                     nullptr};
@@ -119,8 +119,10 @@ static Addr2LineConnection StartAddr2Line(){
 
 // Note: We cannot use Assert here otherwise we might enter a infinite loop. Only the C assert
 static Array<Location> CollectStackTrace(Arena* out,Arena* temp){
-  void* addrBuffer[100];
+  BLOCK_REGION(temp);
 
+  void* addrBuffer[100];
+  
   Addr2LineConnection connection = StartAddr2Line();
   Addr2LineConnection* con = &connection;
   
@@ -130,12 +132,26 @@ static Array<Location> CollectStackTrace(Arena* out,Arena* temp){
     printf("Error getting stack trace\n");
   }
 
+  Array<size_t> fileAddresses = PushArray<size_t>(temp,lines);
+  
+  for(int i = 0; i < lines; i++){
+    Dl_info info;
+    link_map* link_map;
+    if(dladdr1(addrBuffer[i],&info,(void**) &link_map,RTLD_DL_LINKMAP)){
+      //printf("Out:\n%p\n%s\n%p\n%s\n%p\n",link_map,info.dli_fname,info.dli_fbase,info.dli_sname,info.dli_saddr);
+      //printf("%lx\n",((size_t) addrBuffer[i]) - link_map->l_addr);
+      fileAddresses[i] = ((size_t) addrBuffer[i]) - link_map->l_addr - 1; // - 1 to get the actual instruction, PC points to the next one
+    }
+  }
+  
   defer{ free(strings); };
   //printf("Lines: %d\n",lines);
   
   for(int i = 0; i < lines; i++){
+#if 0
     String line = STRING(strings[i]);
 
+    printf("%.*s",UNPACK_SS(line));
     Tokenizer tok(line,"()",{});
 
     Token name = tok.NextToken();
@@ -146,9 +162,15 @@ static Array<Location> CollectStackTrace(Arena* out,Arena* temp){
     if(offset.size <= 0){
       continue;
     }
+
+    printf(" | %.*s",UNPACK_SS(offset));
+    printf("\n");
+#endif
     
     region(temp){
-      String toWrite = PushString(temp,"%.*s\n",UNPACK_SS(offset));
+      String toWrite = PushString(temp,"%lx\n",fileAddresses[i]);
+      //String toWrite = PushString(temp,"%.*s\n",UNPACK_SS(offset));
+      //printf("W: %.*s\n",UNPACK_SS(toWrite));
       int written = write(con->writePipe,toWrite.data,toWrite.size);
       if(written != toWrite.size){
         printf("Failed to write: (%d/%d)\n",written,toWrite.size);
@@ -163,7 +185,7 @@ static Array<Location> CollectStackTrace(Arena* out,Arena* temp){
   }
   
   int bufferSize = Kilobyte(64);
-  Byte* buffer = PushBytes(temp,bufferSize);
+  Byte* buffer = PushBytes(out,bufferSize);
   int amountRead = 0;
 
   while(1){
@@ -193,7 +215,7 @@ static Array<Location> CollectStackTrace(Arena* out,Arena* temp){
   String content = {(char*) buffer,amountRead};
   Array<Location> result = PushArray<Location>(out,lineCount / 2);
 
-  //printf("%.*s\n",UNPACK_SS(content));
+  //printf("Content:\n%.*s\n",UNPACK_SS(content));
   
   Tokenizer tok(content,":",{"\n"});
   tok.keepWhitespaces = true;
@@ -208,6 +230,9 @@ static Array<Location> CollectStackTrace(Arena* out,Arena* temp){
     tok.NextFindUntil("\n");
     assert(CompareString(tok.NextToken(),"\n"));
 
+    //printf("FN: %.*s\n",UNPACK_SS(functionName));
+    //printf("fN: %.*s\n",UNPACK_SS(fileName));
+    //printf("ls: %.*s\n",UNPACK_SS(lineString));
     if(CompareString(functionName,"??") || CompareString(fileName,"??") || CompareString(lineString,"?")){
       continue;
     }
@@ -249,6 +274,7 @@ void PrintStacktrace(){
     canonical[i] = GetAbsolutePath(StaticFormat("%.*s",UNPACK_SS(traces[i].fileName)),temp);
   }
 
+#if 1
   int maxSize = 0;
   for(String& str : canonical){
     if(str.size > rootPath.size){
@@ -262,6 +288,7 @@ void PrintStacktrace(){
 
     //printf("%.*s\n",UNPACK_SS(str));
   }
+#endif
 
   for(int i = 0; i < size; i++){
     String str = canonical[i];
@@ -277,23 +304,25 @@ void PrintStacktrace(){
 }
 
 static void SignalPrintStacktrace(int sign){
-  // Install old handlers first so that any bug afterwards does not cause an infinite loop
+  // Need to Install old handlers first so that any bug afterwards does not cause an infinite loop
   switch(sign){
   case SIGUSR1:{
-    old_SIGUSR1(sign);
+    signal(SIGUSR1,old_SIGUSR1);
   }break;
   case SIGSEGV:{
-    old_SIGSEGV(sign);
+    signal(SIGSEGV,old_SIGSEGV);
   }break;
   case SIGABRT:{
-    old_SIGABRT(sign);
+    signal(SIGABRT,old_SIGABRT);
   }break;
-  default: NOT_IMPLEMENTED;
   }
 
   printf("\nProgram encountered an error. Stack trace:\n");
   PrintStacktrace();
   printf("\n");
+  fflush(stdout);
+  
+  raise(sign);
 }
 
 void InitDebug(){

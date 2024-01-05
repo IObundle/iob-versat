@@ -43,14 +43,16 @@ typedef struct{
 } AcceleratorConfig;
 
 #{if doingMerged}
-#{for arr mergedConfigs}
-#{set i index}
 typedef struct{
-#{for str arr}
+#{for str mergedConfigs0}
   iptr @{str};
 #{end}
-} Merged@{i};
+} Merged0;
+typedef struct{
+#{for str mergedConfigs1}
+  iptr @{str};
 #{end}
+} Merged1;
 #{end}
 
 typedef struct{
@@ -139,11 +141,11 @@ extern volatile AcceleratorState* accelState;
 #{end}
 
 #{if doingMerged}
-#{for arr mergedConfigs}
-#{set i index}
-#{for str arr}
-#define MERGED_@{i}_@{str} ((Merged@{i}*) accelConfig)->@{str}
+#{for str mergedConfigs0}
+#define MERGED_0_@{str} ((Merged0*) accelConfig)->@{str}
 #{end}
+#{for str mergedConfigs1}
+#define MERGED_1_@{str} ((Merged1*) accelConfig)->@{str}
 #{end}
 #{end}
 

@@ -827,3 +827,22 @@ Array<Wire> OrderedConfigurationsAsArray(OrderedConfigurations ordered,Arena* ou
   return res;
 }
 
+void PrintConfigurations(FUDeclaration* type){
+  STACK_ARENA(tempInst,Kilobyte(1));
+  Arena* temp = &tempInst;
+  
+  ConfigurationInfo& info = type->configInfo;
+
+  printf("Config:\n");
+  for(Wire& wire : info.configs){
+    BLOCK_REGION(temp);
+
+    //String repr = Repr(&wire,temp);
+  }
+
+  printf("State:\n");
+  for(Wire& wire : info.states){
+    
+  }
+  printf("\n");
+}

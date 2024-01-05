@@ -9,7 +9,7 @@
 #include "utils.hpp"
 #include "type.hpp"
 
-//#define DEBUG_TEMPLATE_ENGINE
+#define DEBUG_TEMPLATE_ENGINE
 
 static String globalTemplateName = {}; // The current name that is being parsed / evaluated. For error reporting reasons. TODO: Do not like it, not a big deal for now. Only change if needed
 
@@ -375,11 +375,17 @@ void RegisterPipeOperation(String name,PipeFunction func){
 
 static Value EvalExpression(Expression* expr,Frame* frame,Arena* temp);
 
-static Value EvalExpression(Expression* expr,Frame* frame,Arena* temp){
-#ifdef DEBUG_TEMPLATE_ENGINE
-  printf("%.*s:\n",UNPACK_SS(expr->text));
-#endif // DEBUG_TEMPLATE_ENGINE
+struct DebugValues{
+  Expression expr;
+  Value val;
+};
 
+#ifdef DEBUG_TEMPLATE_ENGINE
+static DebugValues savedDebug[64];
+static int savedIndex; 
+#endif
+
+static Value EvalExpression(Expression* expr,Frame* frame,Arena* temp){
   Value val = {};
   switch(expr->type){
   case Expression::OPERATION:{
@@ -560,7 +566,9 @@ static Value EvalExpression(Expression* expr,Frame* frame,Arena* temp){
  EvalExpressionEnd:
 
 #ifdef DEBUG_TEMPLATE_ENGINE
-  printf("%.*s\n",UNPACK_SS(val.type->name));
+  savedDebug[savedIndex].expr = *expr;
+  savedDebug[savedIndex].val = val;
+  savedIndex = (savedIndex + 1) % 64;
 #endif // DEBUG_TEMPLATE_ENGINE
 
   return val;

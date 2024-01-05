@@ -950,7 +950,7 @@ void ParseMerge(Versat* versat,Tokenizer* tok){
   tok->AssertNextToken("=");
 
   ArenaList<TypeAndInstance>* list = PushArenaList<TypeAndInstance>(temp);
-  *PushListElement(temp,list) = ParseTypeAndInstance(tok);
+  *PushListElement(list) = ParseTypeAndInstance(tok);
   
   // TODO: At the very least put a check to see if it is a valid type name.
   //       Perform type verification afterwards
@@ -959,23 +959,26 @@ void ParseMerge(Versat* versat,Tokenizer* tok){
     Token next = tok->NextToken();
 
     if(CompareString(next,"{")){
+      // TODO: Need to finish parsing this part
+      while(!tok->Done()){
+        String first = tok->NextToken();
+        tok->AssertNextToken("-");
+        String second = tok->NextToken();
+        tok->AssertNextToken(";");
+
+        if(tok->IfNextToken("}")){
+          break;
+        }
+      }
+      
       break;
     } else if(CompareString(next,"|")){
-      *PushListElement(temp,list) = ParseTypeAndInstance(tok);
+      *PushListElement(list) = ParseTypeAndInstance(tok);
+    } else if(CompareString(next,";")){
+      break;
     } else {
       // User error.
       Assert(false);
-    }
-  }
-
-  while(!tok->Done()){
-    String first = tok->NextToken();
-    tok->AssertNextToken("-");
-    String second = tok->NextToken();
-    tok->AssertNextToken(";");
-
-    if(tok->IfNextToken("}")){
-      break;
     }
   }
 

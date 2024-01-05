@@ -58,7 +58,7 @@ struct Member{
    String name;
    int offset;
 
-   Member* next;
+  //Member* next; // TODO: Appears to not be used. If no compile error, remove later
 
 // STRUCT_PARSER
    Type* structType;
@@ -200,6 +200,5 @@ Value MakeValue(T* t){
 
    return val;
 }
-
 
 #endif // INCLUDED_TYPE

@@ -20,24 +20,23 @@ from iob_reg_re import iob_reg_re
 from iob_ram_sp_be import iob_ram_sp_be
 from iob_fp_fpu import iob_fp_fpu # Will also import all the other fp files
 
-def CreateVersatClass(pc_emul,versat_spec,versat_top,versat_extra):
+def RunVersat(pc_emul,versat_spec,versat_top,versat_extra,build_dir):
     versat_dir = os.path.dirname(__file__)
-    build_dir = iob_module.build_dir
 
-    versat_args = ["versat",versat_spec,
+    versat_args = ["versat",os.path.realpath(versat_spec),
                             "-s",
                             "-b=32",
                             "-T",versat_top,
-                            "-O",versat_dir + "/hardware/src/units", # Location of versat units
+                            "-O",os.path.realpath(versat_dir + "/hardware/src/units"), # Location of versat units
                             #"-S",versat_dir + "/submodules/FPU/hardware/src/",
-                            "-I",versat_dir + "/hardware/include/",
-                            "-I",versat_dir + "/hardware/src/",
-                            "-I",versat_dir + "/submodules/FPU/hardware/src/",
-                            "-I",versat_dir + "/submodules/FPU/hardware/include/",
-                            "-I",versat_dir + "/submodules/FPU/submodules/DIV/hardware/src/",
-                            "-I",build_dir  + "/hardware/src/", # TODO: If this works then all the other "versat_dir + ..." could be removed
-                            "-H",build_dir + "/software", # Output software files
-                            "-o",build_dir + "/hardware/src" # Output hardware files
+                            "-I",os.path.realpath(versat_dir + "/hardware/include/"),
+                            "-I",os.path.realpath(versat_dir + "/hardware/src/"),
+                            "-I",os.path.realpath(versat_dir + "/submodules/FPU/hardware/src/"),
+                            "-I",os.path.realpath(versat_dir + "/submodules/FPU/hardware/include/"),
+                            "-I",os.path.realpath(versat_dir + "/submodules/FPU/submodules/DIV/hardware/src/"),
+                            "-I",os.path.realpath(build_dir  + "/hardware/src/"), # TODO: If this works then all the other "versat_dir + ..." could be removed
+                            "-H",os.path.realpath(build_dir + "/software"), # Output software files
+                            "-o",os.path.realpath(build_dir + "/hardware/src") # Output hardware files
                             ]
 
     if(versat_extra):
@@ -46,26 +45,56 @@ def CreateVersatClass(pc_emul,versat_spec,versat_top,versat_extra):
     if(pc_emul):
         versat_args = versat_args + ["-x64"]
 
-    # Set True to add debugger
-    if(False):
-        versat_args = ["gdb","-iex","set auto-load safe-path /","--args"] + versat_args
-
-    print(*versat_args,file=sys.stderr)
+    print("\n",*versat_args,"\n",file=sys.stderr)
     result = sp.run(versat_args,capture_output=True)
 
+    print(result,file=sys.stderr)
+    
     returnCode = result.returncode
     output = codecs.getdecoder("unicode_escape")(result.stdout)[0]
 
     if(returnCode != 0):
         print("Failed to generate accelerator\n",file=sys.stderr)
+        errorOutput = codecs.getdecoder("unicode_escape")(result.stderr)[0]
         print(output,file=sys.stderr)
+        print(errorOutput,file=sys.stderr)
 
         exit(returnCode)
 
     lines = output.split('\n')
 
-    print(lines,file=sys.stderr)
+    return lines
 
+def SaveSetupInfo(filepath,lines):
+    try:
+        with open(filepath,"w") as file:
+           file.write("\n".join(lines))
+    except:
+        print(f"Failed to open versat setup file: {filepath}",file=sys.stderr)
+        print("This might cause versat to run multiple times even if not needed",file=sys.stderr)
+
+def CreateVersatClass(pc_emul,versat_spec,versat_top,versat_extra,build_dir):
+    versat_dir = os.path.dirname(__file__)
+    #build_dir = iob_module.build_dir
+
+    versatSetupFilepath = os.path.realpath(build_dir + "/software/versatSetup.txt")
+    alreadyRunned = os.path.isfile(versatSetupFilepath)
+
+    lines = []
+    if(alreadyRunned):
+        try:
+            with open(versatSetupFilepath,"r") as file:
+               lines = [x.strip() for x in file.readlines()]
+        except:
+            lines = RunVersat(pc_emul,versat_spec,versat_top,versat_extra,build_dir)
+            SaveSetupInfo(versatSetupFilepath,lines)
+    else:
+        lines = RunVersat(pc_emul,versat_spec,versat_top,versat_extra,build_dir)
+        SaveSetupInfo(versatSetupFilepath,lines)
+
+    print("Lines:",lines,file=sys.stderr)
+
+    # Info needed by class, ADDR_W, HAS_AXI, lines
     ADDR_W = 32
     HAS_AXI = False
 
@@ -130,10 +159,10 @@ def CreateVersatClass(pc_emul,versat_spec,versat_top,versat_extra):
             shutil.copytree(
                 f"{build_dir}/hardware/src/modules", f"{build_dir}/hardware/src",dirs_exist_ok = True
             )
-            #shutil.rmtree(f"{build_dir}/software/common")
-            #shutil.rmtree(f"{build_dir}/software/compiler")
-            #shutil.rmtree(f"{build_dir}/software/templates")
-            #shutil.rmtree(f"{build_dir}/software/tools")
+            shutil.rmtree(f"{build_dir}/software/common")
+            shutil.rmtree(f"{build_dir}/software/compiler")
+            shutil.rmtree(f"{build_dir}/software/templates")
+            shutil.rmtree(f"{build_dir}/software/tools")
 
         @classmethod
         def _create_submodules_list(cls):

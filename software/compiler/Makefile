@@ -26,6 +26,7 @@ CPP_FILES := $(wildcard $(VERSAT_COMPILER_DIR)/*.cpp)
 VERSAT_COMPILER_OBJ := $(patsubst $(VERSAT_COMPILER_DIR)/%.cpp,$(BUILD_DIR)/%.o,$(CPP_FILES))
 CPP_OBJ := $(VERSAT_COMPILER_OBJ)
 
+# -rdynamic needed to ensure backtraces work
 VERSAT_FLAGS := -rdynamic -DROOT_PATH=\"$(abspath ../)\" 
 
 CPP_OBJ += $(VERSAT_COMMON_OBJ)

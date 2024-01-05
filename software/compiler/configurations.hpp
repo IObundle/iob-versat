@@ -17,13 +17,11 @@ typedef WireTemplate<int> Wire;
 struct FUInstance;
 struct Versat;
 
-// print: {1[2]}
 struct SizedConfig{
    iptr* ptr;
    int size;
 };
 
-// print="{1}:{2}"
 struct StaticId{
    FUDeclaration* parent;
    String name;
@@ -128,5 +126,7 @@ struct OrderedConfigurations{
 // Extract configurations named with the top level expected name (not module name)
 OrderedConfigurations ExtractOrderedConfigurationNames(Versat* versat,Accelerator* accel,Arena* out,Arena* temp);
 Array<Wire> OrderedConfigurationsAsArray(OrderedConfigurations configs,Arena* out);
+
+void PrintConfigurations(FUDeclaration* type);
 
 #endif // INCLUDED_VERSAT_CONFIGURATIONS_HPP

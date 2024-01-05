@@ -96,7 +96,6 @@ void FlushStdout();
    do { \
    bool _ = !(EXPR);   \
    if(_){ \
-      PrintStacktrace(); \
       FlushStdout(); \
       assert(_ && (EXPR)); \
    } \

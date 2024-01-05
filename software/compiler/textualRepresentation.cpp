@@ -1,6 +1,6 @@
 #include "textualRepresentation.hpp"
 
-#include "parser.hpp"
+//#include "parser.hpp"
 
 String UniqueRepr(FUInstance* inst,Arena* arena){
    FUDeclaration* decl = inst->declaration;

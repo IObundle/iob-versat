@@ -489,11 +489,9 @@ extern "C" int MemoryAccess(int address,int value,int write){
     #{end}
       self->wdata = value;
 
-      self->eval();
-
-      while(!self->ready){
+      //while(!self->ready){ For now we assume all writes have no delay 
           InternalUpdateAccelerator();
-      }
+      //}
 
       self->valid = 0;
       self->wstrb = 0x00;
@@ -515,7 +513,7 @@ extern "C" int MemoryAccess(int address,int value,int write){
 
       self->eval();
 
-      while(!self->ready){
+      while(!self->rvalid){
           InternalUpdateAccelerator();
       }
 
@@ -527,7 +525,7 @@ extern "C" int MemoryAccess(int address,int value,int write){
     #{end}
 
       self->eval();
-      while(self->ready){
+      while(self->rvalid){
           InternalUpdateAccelerator();
       }
 

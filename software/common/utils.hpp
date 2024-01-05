@@ -29,6 +29,7 @@ struct PointerListNode{
 
 template<typename T>
 struct ArenaList{
+  Arena* arena; // For now store arena inside structure. 
   ListedStruct<T>* head;
   ListedStruct<T>* tail;
 };
@@ -228,7 +229,8 @@ template<typename T>
 ArenaList<T>* PushArenaList(Arena* arena){
   ArenaList<T>* res = PushStruct<ArenaList<T>>(arena);
   *res = {};
-
+  res->arena = arena;
+  
   return res;
 }
 
@@ -241,7 +243,8 @@ PointerList<T>* PushPointerList(Arena* arena){
 }
 
 template<typename T>
-T* PushListElement(Arena* arena,ArenaList<T>* list){
+T* PushListElement(ArenaList<T>* list){
+  Arena* arena = list->arena;
   ListedStruct<T>* s = PushStruct<ListedStruct<T>>(arena);
   *s = {};
   
@@ -276,9 +279,9 @@ template<typename T>
 Array<T> PushArrayFromList(Arena* arena,ArenaList<T>* list){
   Byte* mark = MarkArena(arena);
 
-  FOREACH_LIST(T*,iter,list->head){
+  FOREACH_LIST(ListedStruct<T>*,iter,list->head){
     T* ptr = PushStruct<T>(arena);
-    *ptr = iter;
+    *ptr = *iter;
   }
 
   Array<T> res = PointArray<T>(arena,mark);
@@ -312,7 +315,8 @@ Array<T> PushArrayFromSet(Arena* arena,Set<T>* set){
 }
 
 template<typename T,typename P>
-Hashmap<T,P>* PushHashmapFromList(Arena* arena,ArenaList<Pair<T,P>>* list){
+Hashmap<T,P>* PushHashmapFromList(ArenaList<Pair<T,P>>* list){
+  Arena* arena = list->arena;
   int size = Size(list);
   
   Hashmap<T,P>* map = PushHashmap<T,P>(arena,size);
@@ -325,7 +329,8 @@ Hashmap<T,P>* PushHashmapFromList(Arena* arena,ArenaList<Pair<T,P>>* list){
 }
 
 template<typename T,typename P>
-Array<Pair<T,P>> PushArrayFromList(Arena* arena,ArenaList<Pair<T,P>>* list){
+Array<Pair<T,P>> PushArrayFromList(ArenaList<Pair<T,P>>* list){
+  Arena* arena = list->arena;
   int size = Size(list);
   
   Array<Pair<T,P>> arr = PushArray<Pair<T,P>>(arena,size);

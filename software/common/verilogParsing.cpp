@@ -5,6 +5,7 @@
 #include "memory.hpp"
 
 #include "templateEngine.hpp"
+#include "utils.hpp"
 
 void PerformDefineSubstitution(Arena* output,MacroMap& macros,String name){
   String subs = macros[name];
@@ -420,7 +421,7 @@ static ExpressionRange ParseRange(Tokenizer* tok,ValueMap& map,Arena* out){
 static String possibleAttributesData[] = {VERSAT_LATENCY,VERSAT_STATIC};
 static Array<String> possibleAttributes = C_ARRAY_TO_ARRAY(possibleAttributesData);
 
-static Module ParseModule(Tokenizer* tok,Arena* arena){
+static Module ParseModule(Tokenizer* tok,Arena* out,Arena* temp){
   Module module = {};
   ValueMap values;
 
@@ -431,18 +432,21 @@ static Module ParseModule(Tokenizer* tok,Arena* arena){
   Token peek = tok->PeekToken();
   if(CompareToken(peek,"#(")){
     tok->AdvancePeek(peek);
-    module.parameters = ParseParameters(tok,values,arena);
+    module.parameters = ParseParameters(tok,values,out);
     tok->AssertNextToken(")");
   }
 
   tok->AssertNextToken("(");
 
+  ArenaList<PortDeclaration>* portList = PushArenaList<PortDeclaration>(temp);
   // Parse ports
   while(!tok->Done()){
     peek = tok->PeekToken();
 
     PortDeclaration port;
-
+    ArenaList<Pair<String,Value>>* attributeList = PushArenaList<Pair<String,Value>>(temp);
+    //Hashmap<String,Value>* attributes = 
+    
     if(CompareToken(peek,"(*")){
       tok->AdvancePeek(peek);
       while(1){
@@ -456,14 +460,16 @@ static Module ParseModule(Tokenizer* tok,Arena* arena){
         peek = tok->PeekToken();
         if(CompareString(peek,"=")){
           tok->AdvancePeek(peek);
-          Expression* expr = VerilogParseExpression(tok,arena);
+          Expression* expr = VerilogParseExpression(tok,out);
           Value value = Eval(expr,values);
 
           peek = tok->PeekToken();
 
-          port.attributes[attributeName] = value;
+          *PushListElement(attributeList) = {attributeName,value};
+          //port.attributes[attributeName] = value;
         } else {
-          port.attributes[attributeName] = MakeValue();
+          *PushListElement(attributeList) = {attributeName,MakeValue()};
+          //port.attributes[attributeName] = MakeValue();
         }
 
         if(CompareString(peek,",")){
@@ -476,6 +482,7 @@ static Module ParseModule(Tokenizer* tok,Arena* arena){
         }
       }
     }
+    port.attributes = PushHashmapFromList(attributeList);
 
     Token portType = tok->NextToken();
     if(CompareString(portType,"input")){
@@ -502,11 +509,11 @@ static Module ParseModule(Tokenizer* tok,Arena* arena){
       break;
     }
 
-    ExpressionRange res = ParseRange(tok,values,arena);
+    ExpressionRange res = ParseRange(tok,values,out);
     port.range = res;
     port.name = tok->NextToken();
 
-    module.ports.push_back(port);
+    *PushListElement(portList) = port;
 
     peek = tok->PeekToken();
     if(CompareToken(peek,")")){
@@ -516,6 +523,7 @@ static Module ParseModule(Tokenizer* tok,Arena* arena){
 
     tok->AssertNextToken(",");
   }
+  module.ports = PushArrayFromList(out,portList);
 
   // Any inside module parameters
 #if 0
@@ -539,7 +547,7 @@ static Module ParseModule(Tokenizer* tok,Arena* arena){
   return module;
 }
 
-std::vector<Module> ParseVerilogFile(String fileContent, std::vector<String>* includeFilepaths, Arena* arena){
+std::vector<Module> ParseVerilogFile(String fileContent, std::vector<String>* includeFilepaths, Arena* out,Arena* temp){
   Tokenizer tokenizer = Tokenizer(fileContent,":,()[]{}\"+-/*=",{"#(","+:","-:","(*","*)"});
   Tokenizer* tok = &tokenizer;
 
@@ -565,7 +573,7 @@ std::vector<Module> ParseVerilogFile(String fileContent, std::vector<String>* in
     }
 
     if(CompareToken(peek,"module")){
-      Module module = ParseModule(tok,arena);
+      Module module = ParseModule(tok,out,temp);
 
       module.isSource = isSource;
       modules.push_back(module);
@@ -678,14 +686,20 @@ ModuleInfo ExtractModuleInfo(Module& module,Arena* permanent,Arena* tempArena){
     } else if(CheckFormat("in%d",decl.name)){
       port.AssertNextToken("in");
       int input = ParseInt(port.NextToken());
-      int delay = decl.attributes[VERSAT_LATENCY].number;
+      Value* delayValue = decl.attributes->Get(VERSAT_LATENCY);
 
+      int delay = 0;
+      if(delayValue) delay = delayValue->number;
+      
       *inputDelay.Set(input,1) = delay;
     } else if(CheckFormat("out%d",decl.name)){
       port.AssertNextToken("out");
       int output = ParseInt(port.NextToken());
-      int latency = decl.attributes[VERSAT_LATENCY].number;
+      Value* latencyValue = decl.attributes->Get(VERSAT_LATENCY);
 
+      int latency = 0;
+      if(latencyValue) latency = latencyValue->number;
+      
       *outputLatency.Set(output,1) = latency;
     } else if(CheckFormat("delay%d",decl.name)){
       port.AssertNextToken("delay");
@@ -744,7 +758,7 @@ ModuleInfo ExtractModuleInfo(Module& module,Arena* permanent,Arena* tempArena){
          //wire->bitsize = decl.range.high - decl.range.low + 1;
          wire->bitSize = decl.range;
          wire->name = decl.name;
-         wire->isStatic = (decl.attributes.find(VERSAT_STATIC) != decl.attributes.end());
+         wire->isStatic = decl.attributes->Exists(VERSAT_STATIC);
     } else if(decl.type == PortDeclaration::OUTPUT){ // State
          WireExpression* wire = states.Push(1);
 

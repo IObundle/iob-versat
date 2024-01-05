@@ -487,7 +487,7 @@ int main(int argc,const char* argv[]){
     }
 
     String processed = PreprocessVerilogFile(preprocess,content,&opts->includePaths,temp);
-    std::vector<Module> modules = ParseVerilogFile(processed,&opts->includePaths,temp);
+    std::vector<Module> modules = ParseVerilogFile(processed,&opts->includePaths,temp,perm);
 
     for(Module& mod : modules){
       ModuleInfo info = ExtractModuleInfo(mod,perm,temp);
@@ -648,7 +648,7 @@ int main(int argc,const char* argv[]){
     String wrapper = PushString(temp,"%.*s/wrapper.cpp",UNPACK_SS(opts->softwareOutputFilepath));
     PushNullByte(temp);
 
-    printf("Wrapper: %.*s\n",UNPACK_SS(wrapper));
+    //printf("Wrapper: %.*s\n",UNPACK_SS(wrapper));
 
     int totalExternalMemory = ExternalMemoryByteSize(info.externalInterfaces);
     
@@ -668,7 +668,7 @@ int main(int argc,const char* argv[]){
     String name = PushString(temp,"%.*s/VerilatorMake.mk",UNPACK_SS(opts->softwareOutputFilepath));
     PushNullByte(temp);
 
-    printf("Makefile: %.*s\n",UNPACK_SS(name));
+    //printf("Makefile: %.*s\n",UNPACK_SS(name));
 
     FILE* output = OpenFileAndCreateDirectories(name.data,"w");
     CompiledTemplate* comp = CompileTemplate(versat_makefile_template,"makefile",temp);

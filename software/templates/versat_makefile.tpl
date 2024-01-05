@@ -47,6 +47,6 @@ ALL_VERILATOR_CPPS:=$(patsubst %,$(VERILATOR_SOURCE_DIR)/%.cpp,$(ALL_VERILATOR_F
 	g++ -g -w -c -o $@ $< -I$(VERILATOR_ROOT)/include
 
 verilatorObjects: $(ALL_VERILATOR_O)
-	echo $(ALL_VERILATOR_FILES)
-	echo $(ALL_VERILATOR_CPPS)
-	echo $(ALL_VERILATOR_O)
+#	@echo $(ALL_VERILATOR_FILES)
+#	@echo $(ALL_VERILATOR_CPPS)
+#	@echo $(ALL_VERILATOR_O)
