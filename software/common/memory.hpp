@@ -38,6 +38,7 @@ template<typename T> void Free(Allocation<T>* alloc);
 template<typename T> T* Push(Allocation<T>* alloc, int amount); // Fails if not enough memory
 
 // Care, functions that push to an arena do not clear it to zero or to any value.
+// Need to initialize the values directly.
 struct Arena{
    Byte* mem;
    size_t used;
@@ -77,7 +78,7 @@ public:
 
 #define __marker(LINE) marker_ ## LINE
 #define _marker(LINE) __marker( LINE )
-#define BLOCK_REGION(ARENA) ArenaMarker _marker(__LINE__)(ARENA)
+#define BLOCK_REGION(ARENA) ArenaMarker _marker(__LINE__)(ARENA) // TODO: Probably would be better to rename this.
 
 #define region(ARENA) if(ArenaMarker _marker(__LINE__){ARENA})
 

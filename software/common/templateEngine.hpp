@@ -3,39 +3,55 @@
 
 #include "parser.hpp"
 
+/*
+
+What I should tackle first:
+
+  Implement PrintAllTypesAndFieldsUsed(CompiledTemplate* compiled,Arena* temp);  
+
+  Includes should be handled better, instead of being parsed and evaluated inside, they should be parsed once and kept around.
+  Command could just be an expression.
+  Maybe should check the seperation of expressions.
+  Should also completely implement the parsing, instead of parsing some at eval. 
+  Should also completely parse commands into an enum, instead of a simple string. Change if/else chains into switch
+
+Rework ParseAndEvaluate. Parsing should be kept distinct from evaluation.
+
+ */
+
 struct Expression;
 
+// TODO: A Command could just be an expression.
 struct Command{
-   String name;
+  String name;
 
-   Array<Expression*> expressions;
+  Array<Expression*> expressions;
 };
 
 struct Block{
-   Token fullText;
+  Token fullText;
 
-   union{
-      Token textBlock;
-      Command* command;
-   };
-   Block* next;
-   Block* nextInner;
-   enum {TEXT,COMMAND} type;
+  union{
+    Token textBlock;
+    Command* command;
+  };
+  Array<Block*> innerBlocks;
+  enum {TEXT,COMMAND} type;
 };
 
 struct TemplateFunction{
-   Expression** arguments;
-   int numberArguments;
-   Block* block;
+  Expression** arguments;
+  int numberArguments;
+  Array<Block*> blocks;
 };
 
 struct CompiledTemplate{
-   int totalMemoryUsed;
-   String content;
-   Block* blocks;
-   String name;
+  int totalMemoryUsed;
+  String content;
+  Array<Block*> blocks;
+  String name;
 
-   // Followed by content and the block/expression structure
+  // Followed by content and the block/expression structure
 };
 
 struct Value;
@@ -45,7 +61,10 @@ void RegisterPipeOperation(String name,PipeFunction func);
 void InitializeTemplateEngine(Arena* perm);
 
 void ProcessTemplate(FILE* outputFile,CompiledTemplate* compiledTemplate,Arena* arena);
-CompiledTemplate* CompileTemplate(String content,const char* name,Arena* arena);
+CompiledTemplate* CompileTemplate(String content,const char* name,Arena* out,Arena* temp);
+
+void PrintTemplate(CompiledTemplate* compiled,Arena* arena);
+void PrintAllTypesAndFieldsUsed(CompiledTemplate* compiled,Arena* temp); // Quick way of checking useless values 
 
 void ClearTemplateEngine();
 

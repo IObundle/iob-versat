@@ -1677,7 +1677,7 @@ Array<int> GetPortConnections(InstanceNode* node,Arena* arena){
 #if 1
 Optional<int> GetConfigurationIndexFromInstanceNode(FUDeclaration* type,InstanceNode* node){
   // While configuration array is fully defined, no need to do this check beforehand.
-#if 1
+#if 0
   if(node->inst->declaration->configInfo.configs.size == 0){
     return (Optional<int>){};
   }

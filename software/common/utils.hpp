@@ -17,16 +17,12 @@ struct IndexedStruct : public T{
 };
 
 template<typename T>
-struct ListedStruct : public T{
-   ListedStruct<T>* next;
+struct ListedStruct{
+  T elem;
+  ListedStruct<T>* next;
 };
 
-template<typename T>
-struct PointerListNode{
-  T* elem;
-  PointerListNode<T>* next;
-};
-
+// A list inside an arena. Normally used with a temp arena and then converted to an array in a out arena 
 template<typename T>
 struct ArenaList{
   Arena* arena; // For now store arena inside structure. 
@@ -35,9 +31,9 @@ struct ArenaList{
 };
 
 template<typename T>
-struct PointerList{
-  PointerListNode<T>* head;
-  PointerListNode<T>* tail;
+struct Stack{
+  Array<T> mem;
+  int index;
 };
 
 // Generic list manipulation, as long as the structure has a next pointer of equal type
@@ -235,35 +231,11 @@ ArenaList<T>* PushArenaList(Arena* arena){
 }
 
 template<typename T>
-PointerList<T>* PushPointerList(Arena* arena){
-  PointerList<T>* res = PushStruct<PointerList<T>>(arena);
-  *res = {};
-
-  return res;
-}
-
-template<typename T>
 T* PushListElement(ArenaList<T>* list){
   Arena* arena = list->arena;
   ListedStruct<T>* s = PushStruct<ListedStruct<T>>(arena);
   *s = {};
   
-  if(!list->head){
-    list->head = s;
-    list->tail = s;
-  } else {
-    list->tail->next = s;
-    list->tail = s;
-  }
-
-  return s;
-}
-
-template<typename T>
-T** PushListElement(Arena* arena,PointerList<T>* list){
-  PointerListNode<T>* s = PushStruct<PointerListNode<T>>(arena);
-  *s = {};
-
   if(!list->head){
     list->head = s;
     list->tail = s;
@@ -281,23 +253,10 @@ Array<T> PushArrayFromList(Arena* arena,ArenaList<T>* list){
 
   FOREACH_LIST(ListedStruct<T>*,iter,list->head){
     T* ptr = PushStruct<T>(arena);
-    *ptr = *iter;
-  }
-
-  Array<T> res = PointArray<T>(arena,mark);
-  return res;
-}
-
-template<typename T>
-Array<T*> PushArrayFromList(Arena* arena,PointerList<T>* list){
-  Byte* mark = MarkArena(arena);
-
-  FOREACH_LIST(PointerListNode<T>*,iter,list->head){
-    T** ptr = PushStruct<T*>(arena);
     *ptr = iter->elem;
   }
 
-  Array<T*> res = PointArray<T*>(arena,mark);
+  Array<T> res = PointArray<T>(arena,mark);
   return res;
 }
 
@@ -321,8 +280,8 @@ Hashmap<T,P>* PushHashmapFromList(ArenaList<Pair<T,P>>* list){
   
   Hashmap<T,P>* map = PushHashmap<T,P>(arena,size);
   
-  FOREACH_LIST(auto*,iter,list->head){
-    map->Insert(iter->first,iter->second);
+  FOREACH_LIST(auto*,iter,list->head){ // auto = ListedStruct<Pair<T,P>> (auto used because the ',' in Pair<T,P> does not play well with the foreach macro
+    map->Insert(iter->elem.first,iter->elem.second);
   }
 
   return map;
@@ -337,10 +296,20 @@ Array<Pair<T,P>> PushArrayFromList(ArenaList<Pair<T,P>>* list){
 
   int i = 0;
   FOREACH_LIST_INDEXED(auto*,iter,list->head,i){
-    arr[i] = {iter->first,iter->second};
+    arr[i] = {iter->elem.first,iter->elem.second};
   }
 
   return arr;
+}
+
+template<typename T>
+Stack<T>* PushStack(Arena* arena,int size){
+  Stack<T>* stack = PushStruct<Stack<T>>(arena);
+  *stack = {};
+
+  stack->mem = PushArray<T>(arena,size);
+
+  return stack;
 }
 
 #endif // INCLUDED_UTILS_HPP

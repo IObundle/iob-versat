@@ -1,4 +1,5 @@
 #include "textualRepresentation.hpp"
+#include "memory.hpp"
 
 //#include "parser.hpp"
 
@@ -221,8 +222,91 @@ String Repr(EdgeNode node,Arena* arena){
    return res;
 }
 
+String Repr(Wire wire,Arena* arena){
+  Byte* mark = MarkArena(arena);
 
+  PushString(arena,wire.name);
+  PushString(arena,":%d",wire.bitSize);
 
+  String res = PointArena(arena,mark);
+  return res;
+}
 
+String Repr(InstanceInfo info,Arena* arena){
+  Byte* mark = MarkArena(arena);
 
+  PushString(arena,"[");
+  Repr(info.decl,arena);
+  PushString(arena,"]");
+  PushString(arena,"-");
+  PushString(arena,info.fullName);
+  PushString(arena,":");
+  Repr(info.configPos,arena);
+  PushString(arena,":");
+  Repr(info.statePos,arena);
+  PushString(arena,":");
+  Repr(info.memoryMapped,arena);
 
+  String res = PointArena(arena,mark);
+  return res;
+}
+
+String Repr(int i,Arena* arena){
+  return PushString(arena,"%d",i);
+}
+
+String Repr(String str,Arena* arena){
+  return PushString(arena,str);
+}
+
+String Repr(SizedConfig config,Arena* arena){
+  // This is a weird structure to repr. Check if it's actually useful.
+  return PushString(arena,"%p",config.ptr);
+}
+
+String Repr(Optional<int> opt,Arena* arena){
+  if(opt.has_value()){
+    return Repr(opt.value(),arena);
+  } else {
+    return PushString(arena,"-");
+  }
+}
+
+#define INSTANCE_INFO_FIELDS 5
+Array<String> GetRepr(InstanceInfo info,Arena* arena){
+  Array<String> res = PushArray<String>(arena,INSTANCE_INFO_FIELDS);
+
+  res[0] = Repr(info.decl,arena);
+  res[1] = PushString(arena,info.fullName);
+  res[2] = Repr(info.configPos,arena);
+  res[3] = Repr(info.statePos,arena);
+  res[4] = Repr(info.memoryMapped,arena);
+
+  return res;
+}
+
+void PrintAll(Array<InstanceInfo> arr,Arena* temp){
+  BLOCK_REGION(temp);
+
+  int fieldSize = INSTANCE_INFO_FIELDS;
+  int size = arr.size;
+  Array<Array<String>> strings = PushArray<Array<String>>(temp,size);
+  Array<int> maxSize = PushArray<int>(temp,fieldSize);
+
+  Memset(maxSize,0);
+
+  for(int i = 0; i < size; i++){
+    strings[i] = GetRepr(arr[i],temp);
+
+    for(int ii = 0; ii < fieldSize; ii++){
+      maxSize[ii] = std::max(maxSize[ii],strings[i][ii].size);
+    }
+  }
+  
+  for(int i = 0; i < size; i++){
+    for(int ii = 0; ii < fieldSize; ii++){
+      printf("%*.*s ",maxSize[ii],UNPACK_SS(strings[i][ii]));
+    }
+    printf("\n");
+  }
+}

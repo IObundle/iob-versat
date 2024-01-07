@@ -372,14 +372,14 @@ Versat* InitVersat(int base,int numberConfigurations,bool initUnits){
   InitializeTemplateEngine(&versat->permanent);
 
   // Technically, if more than 1 versat in the future, could move this outside
-  BasicTemplates::acceleratorTemplate = CompileTemplate(versat_accelerator_template,"accel",&versat->permanent);
-  BasicTemplates::topAcceleratorTemplate = CompileTemplate(versat_top_instance_template,"top",&versat->permanent);
-  BasicTemplates::wrapperTemplate = CompileTemplate(versat_wrapper_template,"wrapper",&versat->permanent);
-  BasicTemplates::acceleratorHeaderTemplate = CompileTemplate(versat_header_template,"header",&versat->permanent);
-  BasicTemplates::externalInternalPortmapTemplate = CompileTemplate(external_memory_internal_portmap_template,"ext_internal_port",&versat->permanent);
-  BasicTemplates::externalPortTemplate = CompileTemplate(external_memory_port_template,"ext_port",&versat->permanent);
-  BasicTemplates::externalInstTemplate = CompileTemplate(external_memory_inst_template,"ext_inst",&versat->permanent);
-  BasicTemplates::iterativeTemplate = CompileTemplate(versat_iterative_template,"iter",&versat->permanent);
+  BasicTemplates::acceleratorTemplate = CompileTemplate(versat_accelerator_template,"accel",&versat->permanent,&versat->temp);
+  BasicTemplates::topAcceleratorTemplate = CompileTemplate(versat_top_instance_template,"top",&versat->permanent,&versat->temp);
+  BasicTemplates::wrapperTemplate = CompileTemplate(versat_wrapper_template,"wrapper",&versat->permanent,&versat->temp);
+  BasicTemplates::acceleratorHeaderTemplate = CompileTemplate(versat_header_template,"header",&versat->permanent,&versat->temp);
+  BasicTemplates::externalInternalPortmapTemplate = CompileTemplate(external_memory_internal_portmap_template,"ext_internal_port",&versat->permanent,&versat->temp);
+  BasicTemplates::externalPortTemplate = CompileTemplate(external_memory_port_template,"ext_port",&versat->permanent,&versat->temp);
+  BasicTemplates::externalInstTemplate = CompileTemplate(external_memory_inst_template,"ext_inst",&versat->permanent,&versat->temp);
+  BasicTemplates::iterativeTemplate = CompileTemplate(versat_iterative_template,"iter",&versat->permanent,&versat->temp);
 
   FUDeclaration nullDeclaration = {};
   nullDeclaration.inputDelays = Array<int>{zeros,1};

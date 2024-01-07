@@ -57,7 +57,7 @@ typedef struct{
 
 typedef struct{
 #{for pair namedStates}
-#{set name pair.first} #{set conf pair.second}
+#{set name pair.first}
 int @{name};
 #{end}
 } AcceleratorState;
@@ -66,7 +66,7 @@ static const int memMappedStart = @{memoryMappedBase |> Hex};
 static const int versatAddressSpace = 2 * @{memoryMappedBase |> Hex};
 
 extern iptr versat_base;
-
+ 
 // Base address for each memory mapped unit
 #{for pair namedMem}
 #define @{pair.first} (versat_base + memMappedStart + @{pair.second.ptr})

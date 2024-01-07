@@ -17,7 +17,7 @@ VERSAT_LIBS:=-lstdc++ -lm -lgcc -lc -pthread -ldl
 VERSAT_HDR+=$(wildcard $(VERSAT_PC_DIR)/*.hpp)
 VERSAT_HDR+=$(wildcard $(VERSAT_COMPILER_DIR)/*.hpp)
 
-VERILATE_FLAGS := -g -fPIC
+#VERILATE_FLAGS := -g -fPIC
 
 VERSAT_INCLUDE += -I$(VERSAT_PC_DIR) -I$(VERSAT_COMPILER_DIR) -I$(BUILD_DIR)/ -I$(VERSAT_COMMON_DIR)
 VERSAT_DEFINE += -DPC
@@ -39,7 +39,7 @@ CPP_OBJ_WITHOUT_COMPILER:=$(filter-out $(BUILD_DIR)/versatCompiler.o,$(CPP_OBJ))
 FL:=-DVERSAT_DIR="$(VERSAT_DIR)"
 
 $(VERSAT_DIR)/versat: $(CPP_OBJ)
-	-g++ -MMD -MP -std=c++17 $(FL) $(VERSAT_FLAGS) -Wswitch-enum -o $@ -g $(CPP_OBJ) $(VERSAT_INCLUDE) $(VERSAT_LIBS) 
+	-g++ -MMD -MP -std=c++17 $(FL) $(VERSAT_FLAGS) -Wswitch-enum -o $@ $(VERSAT_COMMON_FLAGS) $(CPP_OBJ) $(VERSAT_INCLUDE) $(VERSAT_LIBS) 
 
 versat: $(VERSAT_DIR)/versat
 
@@ -47,7 +47,7 @@ VERSAT_COMPILER_DEPENDS := $(patsubst %.o,%.d,$(VERSAT_COMPILER_OBJ))
 -include  $(VERSAT_COMPILER_DEPENDS)
 
 $(BUILD_DIR)/%.o : $(VERSAT_COMPILER_DIR)/%.cpp
-	-g++ -MMD -MP -std=c++17 -Wswitch-enum $(VERSAT_FLAGS) $(FL) -g -c -o $@ $(GLOBAL_CFLAGS) $< $(VERSAT_INCLUDE) #-DDEFAULT_UNIT_PATHS="$(SHARED_UNITS_PATH)" 
+	-g++ -MMD -MP -std=c++17 -Wswitch-enum $(VERSAT_FLAGS) $(FL) $(VERSAT_COMMON_FLAGS) -c -o $@ $(GLOBAL_CFLAGS) $< $(VERSAT_INCLUDE) #-DDEFAULT_UNIT_PATHS="$(SHARED_UNITS_PATH)" 
 
 $(shell mkdir -p $(BUILD_DIR))
 

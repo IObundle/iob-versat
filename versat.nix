@@ -29,7 +29,7 @@ pkgs.stdenv.mkDerivation rec {
   ];
 
   buildPhase = ''
-    make clean
+    #make clean
     make -j versat
   '';
 

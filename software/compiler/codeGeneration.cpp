@@ -5,6 +5,7 @@
 #include "utilsCore.hpp"
 #include "verilogParsing.hpp"
 #include "versat.hpp"
+#include "textualRepresentation.hpp"
 
 #include "templateEngine.hpp"
 
@@ -528,6 +529,14 @@ void OutputVersatSource(Versat* versat,Accelerator* accel,const char* hardwarePa
    Hashmap<String,SizedConfig>* namedStates = ExtractNamedSingleStates(accel,arena);
    Hashmap<String,SizedConfig>* namedMem = ExtractNamedSingleMem(accel,arena);
 
+   printf("Configs:\n");
+   PrintAll(namedConfigs,temp);
+   printf("\nStates:\n");
+   PrintAll(namedStates,temp);
+   printf("\nMem:\n");
+   PrintAll(namedMem,temp);
+   printf("\n");
+     
    TemplateSetCustom("namedConfigs",namedConfigs,"Hashmap<String,SizedConfig>");
    TemplateSetCustom("namedStates",namedStates,"Hashmap<String,SizedConfig>");
    TemplateSetCustom("namedMem",namedMem,"Hashmap<String,SizedConfig>");
@@ -535,6 +544,13 @@ void OutputVersatSource(Versat* versat,Accelerator* accel,const char* hardwarePa
 
    TemplateSetString("accelType",accelName);
 
+   region(arena){
+     Array<InstanceInfo> test = TransformGraphIntoArray(accel,arena,temp);
+
+     printf("All\n");
+     PrintAll(test,temp);
+   }
+     
 #if 0
 /*
      It would be really useful if we could mark the configuration entries in such a way that we could quickly identify their purpose.

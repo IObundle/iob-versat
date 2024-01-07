@@ -1,5 +1,6 @@
 #include "templateEngine.hpp"
 
+#include "memory.hpp"
 #include "stdlib.h"
 #include "stdio.h"
 
@@ -8,8 +9,9 @@
 
 #include "utils.hpp"
 #include "type.hpp"
+#include "utilsCore.hpp"
 
-#define DEBUG_TEMPLATE_ENGINE
+//#define DEBUG_TEMPLATE_ENGINE
 
 static String globalTemplateName = {}; // The current name that is being parsed / evaluated. For error reporting reasons. TODO: Do not like it, not a big deal for now. Only change if needed
 
@@ -294,7 +296,15 @@ static Expression* ParseExpression(Tokenizer* tok,Arena* temp){
   return res;
 }
 
-static Block* Parse(Tokenizer* tok,Arena* out){
+#if 0
+Parse returns one block.
+At the top we call Parse in a loop until parsing all the blocks.
+There are two loops. 
+
+Parse simple performs the inner child looping
+#endif
+
+static Block* Parse(Tokenizer* tok,Arena* out,Arena* temp){
   Block* block = PushStruct<Block>(out);
   *block = {};
 
@@ -312,12 +322,27 @@ static Block* Parse(Tokenizer* tok,Arena* out){
       return block;
     }
 
+    ArenaList<Block*>* innerList = PushArenaList<Block*>(temp);
+    
+    while(1){
+      Block* child = Parse(tok,out,temp);
+      if(child->type == Block::COMMAND && CompareString(child->command->name,"end")){
+        break;
+      } else {
+        *PushListElement(innerList) = child;
+      }
+    }
+
+    block->innerBlocks = PushArrayFromList(out,innerList);
+
+#if 0    
     Block* ptr = block;
     while(1){
       Block* child = Parse(tok,out);
       if(child->type == Block::COMMAND && CompareString(child->command->name,"end")){
         break;
       } else {
+        // Add parsed block into inner child list.
         if(block->nextInner == nullptr){
           block->nextInner = child;
           ptr = child;
@@ -329,6 +354,7 @@ static Block* Parse(Tokenizer* tok,Arena* out){
         }
       }
     }
+#endif
   } else {
     block->type = Block::TEXT;
 
@@ -359,7 +385,7 @@ if(block == nullptr){
 PRINT_LEVEL();
 if(block->type == Block::COMMAND){
   printf("Command  : %.*s\n",UNPACK_SS(block->command->name));
-  for(Block* ptr = block->nextInner; ptr != nullptr; ptr = ptr->next){
+  for(Block* ptr : block->innerBlocks){
     Print(ptr,level + 1);
   }
 } else {
@@ -598,7 +624,7 @@ static String EvalBlockCommand(Block* block,Frame* previousFrame,Arena* temp){
       SetValue(frame,id,val);
 
       bool outputSeparator = false;
-      for(Block* ptr = block->nextInner; ptr != nullptr; ptr = ptr->next){
+      for(Block* ptr : block->innerBlocks){
         String text = Eval(ptr,frame,temp);
 
         if(!CheckStringOnlyWhitespace(text)){
@@ -632,7 +658,7 @@ static String EvalBlockCommand(Block* block,Frame* previousFrame,Arena* temp){
       Value val = GetValue(iter);
       SetValue(frame,id,val);
 
-      for(Block* ptr = block->nextInner; ptr != nullptr; ptr = ptr->next){
+      for(Block* ptr : block->innerBlocks){
         res.size += Eval(ptr,frame,temp).size; // Push on stack
       }
     }
@@ -642,19 +668,22 @@ static String EvalBlockCommand(Block* block,Frame* previousFrame,Arena* temp){
 
     Frame* frame = CreateFrame(previousFrame,temp);
     if(val.boolean){
-      for(Block* ptr = block->nextInner; ptr != nullptr; ptr = ptr->next){
+      for(Block* ptr : block->innerBlocks){
         if(ptr->type == Block::COMMAND && CompareString(ptr->command->name,"else")){
           break;
         }
         res.size += Eval(ptr,frame,temp).size; // Push on stack
       }
     } else {
-      for(Block* ptr = block->nextInner; ptr != nullptr; ptr = ptr->next){
+      bool sawElse = false;
+      for(Block* ptr : block->innerBlocks){
+        if(sawElse){
+          res.size += Eval(ptr,frame,temp).size; // Push on stack
+        }
+
         if(ptr->type == Block::COMMAND && CompareString(ptr->command->name,"else")){
-          for(ptr = ptr->next; ptr != nullptr; ptr = ptr->next){
-            res.size += Eval(ptr,frame,temp).size; // Push on stack
-          }
-          break;
+          Assert(!sawElse); // Cannot have more than one else per if block
+          sawElse = true;
         }
       }
     }
@@ -667,7 +696,7 @@ static String EvalBlockCommand(Block* block,Frame* previousFrame,Arena* temp){
       debugging = true;
     }
 
-    for(Block* ptr = block->nextInner; ptr != nullptr; ptr = ptr->next){
+    for(Block* ptr : block->innerBlocks){
       res.size += Eval(ptr,frame,temp).size; // Push on stack
     }
 
@@ -675,18 +704,18 @@ static String EvalBlockCommand(Block* block,Frame* previousFrame,Arena* temp){
   } else if(CompareString(com->name,"while")){
     Frame* frame = CreateFrame(previousFrame,temp);
     while(ConvertValue(EvalExpression(com->expressions[0],frame,temp),ValueType::BOOLEAN,nullptr).boolean){
-      for(Block* ptr = block->nextInner; ptr != nullptr; ptr = ptr->next){
+      for(Block* ptr : block->innerBlocks){
         res.size += Eval(ptr,frame,temp).size; // Push on stack
       }
     }
   } else if(CompareString(com->name,"define")) {
     String id = com->expressions[0]->id;
 
-    TemplateFunction* func = PushStruct<TemplateFunction>(temp);
-
+    TemplateFunction* func = (TemplateFunction*) malloc(sizeof(TemplateFunction)); // TODO: Cannot Push to temp. This should be dealt with at Parse time, not eval time.
+    
     func->arguments = &com->expressions[1];
     func->numberArguments = com->expressions.size - 1;
-    func->block = block->nextInner;
+    func->blocks = block->innerBlocks;
 
     Value val = {};
     val.templateFunction = func;
@@ -698,7 +727,7 @@ static String EvalBlockCommand(Block* block,Frame* previousFrame,Arena* temp){
     Frame* frame = CreateFrame(previousFrame,temp);
     ArenaMarker marker(outputArena);
 
-    for(Block* ptr = block->nextInner; ptr != nullptr; ptr = ptr->next){
+    for(Block* ptr : block->innerBlocks){
       String res = Eval(ptr,frame,temp); // Push on stack
       printf("%.*s\n",UNPACK_SS(res));
     }
@@ -758,7 +787,6 @@ static ValueAndText EvalNonBlockCommand(Command* com,Frame* previousFrame,Arena*
     }
 
     TemplateFunction* func = optVal.value().templateFunction;
-
     Assert(func->numberArguments == com->expressions.size - 1);
 
     for(int i = 0; i < func->numberArguments; i++){
@@ -769,7 +797,7 @@ static ValueAndText EvalNonBlockCommand(Command* com,Frame* previousFrame,Arena*
       SetValue(frame,id,val);
     }
 
-    for(Block* ptr = func->block; ptr != nullptr; ptr = ptr->next){
+    for(Block* ptr : func->blocks){
       text.size += Eval(ptr,frame,temp).size;
     }
 
@@ -890,37 +918,46 @@ void ParseAndEvaluate(String content,Frame* frame,Arena* temp){
 
   tok->keepComments = true;
 
+  Arena temp2Inst = InitArena(Megabyte(1));
+  Arena* temp2 = &temp2Inst; // TODO: This needs to change. Parsing and evaluation shouldn't mix. All parsing should be done before any evaluation. Only includes uses ParseAndEvaluate so need to rewrite how includes work  
+
+  // TODO: Templates and the entire thing about includes stop us from clearing out temp arena. Correct impl would only need one temp arena
+
+  //BLOCK_REGION(temp);
+  //BLOCK_REGION(temp2);
+  
   while(!tok->Done()){
-    Block* block = Parse(tok,temp);
+    Block* block = Parse(tok,temp,temp2);
 
     String text = Eval(block,frame,temp);
     fprintf(output,"%.*s",text.size,text.data);
     fflush(output);
   }
+
+  //Free(temp2);
 }
 
-CompiledTemplate* CompileTemplate(String content,const char* name,Arena* arena){
-  Byte* mark = MarkArena(arena);
+CompiledTemplate* CompileTemplate(String content,const char* name,Arena* out,Arena* temp){
+  BLOCK_REGION(temp);
+  Byte* mark = MarkArena(out);
 
-  String storedName = PushString(arena,STRING(name));
+  String storedName = PushString(out,STRING(name));
   globalTemplateName = storedName;
 
-  CompiledTemplate* res = PushStruct<CompiledTemplate>(arena);
+  CompiledTemplate* res = PushStruct<CompiledTemplate>(out);
 
   Tokenizer tokenizer(content,"!()[]{}+-:;.,*~><\"",{"#{","@{","==","!=","**","|>",">=","<=","!="});
   Tokenizer* tok = &tokenizer;
   tok->keepComments = true;
 
-  Block* initial = Parse(tok,arena);
-  Block* ptr = initial;
+  ArenaList<Block*>* blockList = PushArenaList<Block*>(temp);
+
   while(!tok->Done()){
-    Assert(ptr->next == nullptr);
-    ptr->next = Parse(tok,arena);
-    ptr = ptr->next;
+    *PushListElement(blockList) = Parse(tok,out,temp);
   }
 
-  String totalMemory = PointArena(arena,mark);
-  res->blocks = initial;
+  String totalMemory = PointArena(out,mark);
+  res->blocks = PushArrayFromList(out,blockList);
   res->totalMemoryUsed = totalMemory.size;
   res->content = content;
   res->name = storedName;
@@ -928,21 +965,25 @@ CompiledTemplate* CompileTemplate(String content,const char* name,Arena* arena){
   return res;
 }
 
-void ProcessTemplate(FILE* outputFile,CompiledTemplate* compiledTemplate,Arena* arena){
+void ProcessTemplate(FILE* outputFile,CompiledTemplate* compiledTemplate,Arena* temp){
+  BLOCK_REGION(temp);
   Assert(globalFrame && "Call InitializeTemplateEngine first!");
 
   globalTemplateName = compiledTemplate->name;
 
-  ArenaMarker marker(arena);
-  Arena outputArenaInst = SubArena(arena,Megabyte(64));
+  Arena outputArenaInst = SubArena(temp,Megabyte(64));
   outputArena = &outputArenaInst;
   output = outputFile;
 
-  for(Block* block = compiledTemplate->blocks; block; block = block->next){
-    String text = Eval(block,globalFrame,arena);
+  for(Block* block : compiledTemplate->blocks){
+    String text = Eval(block,globalFrame,temp);
     fprintf(output,"%.*s",text.size,text.data);
     fflush(output);
   }
+}
+
+void PrintTemplate(CompiledTemplate* compiled,Arena* arena){
+
 }
 
 void ClearTemplateEngine(){

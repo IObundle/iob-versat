@@ -354,6 +354,11 @@ PortExpression InstantiateExpression(Versat* versat,Expression* root,Accelerator
   PortExpression res = {};
 
   switch(root->type){
+    // Just to remove warnings. TODO: Change expression so that multiple locations have their own expression struct, instead of reusing the same one.
+  case Expression::UNDEFINED: break;
+  case Expression::COMMAND: break;
+  case Expression::ARRAY_ACCESS: break;
+  case Expression::MEMBER_ACCESS: break;
   case Expression::LITERAL:{
     int number = root->val.number;
 
@@ -986,7 +991,7 @@ void ParseMerge(Versat* versat,Tokenizer* tok){
   Array<FUDeclaration*> declarations = PushArray<FUDeclaration*>(temp,amount);
   int index = 0;
   FOREACH_LIST_INDEXED(ListedStruct<TypeAndInstance>*,iter,list->head,index){
-    FUDeclaration* type = GetTypeByName(versat,iter->typeName);
+    FUDeclaration* type = GetTypeByName(versat,iter->elem.typeName);
     Assert(type); // Should report error to user, but technically GetTypeByName already does that, for now
     declarations[index] = type;
   }

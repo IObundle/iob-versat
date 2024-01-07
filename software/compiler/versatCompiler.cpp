@@ -640,9 +640,6 @@ int main(int argc,const char* argv[]){
   info.isSource = false; // Hack but maybe not a problem doing it this way, we only care to generate the wrapper and the instance is only done individually
   info.signalLoop = type->signalLoop;
 
-  std::vector<ModuleInfoInstance> finalModule;
-  finalModule.push_back(info);
-
   // Wrapper
   region(temp){
     String wrapper = PushString(temp,"%.*s/wrapper.cpp",UNPACK_SS(opts->softwareOutputFilepath));
@@ -658,7 +655,7 @@ int main(int argc,const char* argv[]){
     TemplateSetNumber("bitWidth",opts->bitSize);
     TemplateSetCustom("arch",&versat->opts,"Options");
     FILE* output = OpenFileAndCreateDirectories(wrapper.data,"w");
-    CompiledTemplate* comp = CompileTemplate(versat_wrapper_template,"wrapper",temp);
+    CompiledTemplate* comp = CompileTemplate(versat_wrapper_template,"wrapper",temp,perm);
     OutputModuleInfos(output,info,STRING("Verilog"),comp,temp,allConfigsHeaderSide,statesHeaderSize);
     fclose(output);
   }
@@ -671,7 +668,7 @@ int main(int argc,const char* argv[]){
     //printf("Makefile: %.*s\n",UNPACK_SS(name));
 
     FILE* output = OpenFileAndCreateDirectories(name.data,"w");
-    CompiledTemplate* comp = CompileTemplate(versat_makefile_template,"makefile",temp);
+    CompiledTemplate* comp = CompileTemplate(versat_makefile_template,"makefile",temp,perm);
     
     fs::path outputPath = opts->softwareOutputFilepath.data;
     fs::path srcLocation = fs::current_path();
@@ -695,17 +692,23 @@ int main(int argc,const char* argv[]){
     TemplateSetString("rootPath",STRING(fixedPath.c_str()));
     ProcessTemplate(output,comp,temp);
   }
-
-//  DebugVersat(versat);
   
   return 0;
 }
 
+/*
 
+Current plan:
 
+For now I'm currently simplifing the entire configuration process.
+Currently working on a function that extracts everything needed from the accelerator into an array.
+  Tired of implementing different functions that scather the logic everywhere.
+  The function is implemented on top of AcceleratorIterator, but after finishing it, we no longer need the AcceleratorIterator, because the function will generate all the data that we need.
+    Meaning that any function that dependend on AcceleratorIterator will simply extract the info from the Array.
 
+  Potentially could change from Array of Structs into a Struct of Arrays depending on how the other code turns out. No need to make functions to "extract" data if the extraction is simply copying the data from one place to the other. Might as well offer the Array directly.
 
+Also, keep making more Representation functions. Tired of working "blind", it should be easy to print all the structs and all their data
 
-
-
+*/
 

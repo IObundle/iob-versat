@@ -1,11 +1,16 @@
 #include "configurations.hpp"
 
+#include "debug.hpp"
 #include "debugGUI.hpp"
+#include "memory.hpp"
+#include "utils.hpp"
 #include "versat.hpp"
 #include "acceleratorStats.hpp"
+#include "textualRepresentation.hpp"
 
 // Top level
 void FUInstanceInterfaces::Init(Accelerator* accel){
+  //PrintStacktrace();
   VersatComputedValues val = ComputeVersatValues(accel->versat,accel);
 
   config.Init(accel->configAlloc.ptr,val.nConfigs);
@@ -22,6 +27,7 @@ void FUInstanceInterfaces::Init(Accelerator* accel){
 
 // Sub instance
 void FUInstanceInterfaces::Init(Accelerator* topLevel,FUInstance* inst){
+  //PrintStacktrace();
   FUDeclaration* decl = inst->declaration;
 
   VersatComputedValues val = ComputeVersatValues(topLevel->versat,topLevel);
@@ -123,6 +129,8 @@ int GetConfigurationSize(FUDeclaration* decl,MemType type){
   }break;
   case MemType::STORED_OUTPUT:{
     size = decl->configInfo.outputOffsets.max;
+  }break;
+  case MemType::STATIC:{
   }break;
   default: NOT_IMPLEMENTED;
   }
@@ -537,6 +545,8 @@ void PopulateTopLevelAccelerator(Accelerator* accel){
   }
 }
 
+// TODO: I do not think that I actually use the size in the SizedConfig structs.
+//       Remove / Rework these functions, I think they are recalculating data that we already have a better way of getting it.
 Hashmap<String,SizedConfig>* ExtractNamedSingleConfigs(Accelerator* accel,Arena* out){
   STACK_ARENA(temp,Kilobyte(1));
 
@@ -563,7 +573,7 @@ Hashmap<String,SizedConfig>* ExtractNamedSingleConfigs(Accelerator* accel,Arena*
 
       for(int i = 0; i < decl->configInfo.configs.size; i++){
         String fullName = PushString(out,"%.*s_%.*s",UNPACK_SS(name),UNPACK_SS(decl->configInfo.configs[i].name));
-        res->Insert(fullName,(SizedConfig){(iptr*)inst->config,inst->declaration->configInfo.configs.size});
+        res->Insert(fullName,(SizedConfig){(iptr*)inst->config});
       }
     }
   }
@@ -597,7 +607,7 @@ Hashmap<String,SizedConfig>* ExtractNamedSingleStates(Accelerator* accel,Arena* 
 
       for(int i = 0; i < decl->configInfo.states.size; i++){
         String fullName = PushString(out,"%.*s_%.*s",UNPACK_SS(name),UNPACK_SS(decl->configInfo.states[i].name));
-        res->Insert(fullName,(SizedConfig){(iptr*)inst->config,inst->declaration->configInfo.states.size});
+        res->Insert(fullName,(SizedConfig){(iptr*)inst->config});
       }
     }
   }
@@ -627,7 +637,7 @@ Hashmap<String,SizedConfig>* ExtractNamedSingleMem(Accelerator* accel,Arena* out
       String name = iter.GetFullName(out,"_");
       String fullName = PushString(out,"%.*s_addr",UNPACK_SS(name)); // TODO: We could just extend the previous string
 
-      res->Insert(fullName,(SizedConfig){(iptr*) inst->memMapped,1 << decl->memoryMapBits});
+      res->Insert(fullName,(SizedConfig){(iptr*) inst->memMapped});
     }
   }
 
@@ -760,6 +770,54 @@ String ReprStaticConfig(StaticId id,Wire* wire,Arena* out){
   return identifier;
 }
 
+// TODO: Move this function to a better place
+Array<InstanceInfo> TransformGraphIntoArray(Accelerator* accel,Arena* out,Arena* temp){
+  // TODO: Have this function return everything that needs to be arraified  
+  //       Printing a GraphArray struct should tell me everything I need to know about the accelerator
+
+  Byte* mark = MarkArena(out);
+
+  ArenaList<InstanceInfo>* infoList = PushArenaList<InstanceInfo>(temp);
+
+  AcceleratorIterator iter = {};
+  for(InstanceNode* node = iter.Start(accel,temp,true); node; node = iter.Next()){ // For now use iter with true, but I want to rewrite this part so it is not needed and remove the entire Populate thing. It's unecessary and complicated
+    FUInstance* inst = node->inst;
+    FUDeclaration* decl = inst->declaration;
+
+    InstanceInfo* info = PushListElement(infoList);
+    
+    *info = {};
+
+    info->decl = decl;
+    info->fullName = iter.GetFullName(out,"_");
+    if(decl->configInfo.configs.size && inst->config && !IsConfigStatic(accel,inst)){
+      info->configPos = inst->config - accel->configAlloc.ptr;
+    }
+    if(decl->configInfo.states.size && inst->state){
+      info->statePos = inst->state - accel->stateAlloc.ptr;
+    }
+    if(inst->externalMemory){
+      info->memoryMapped = inst->externalMemory - accel->externalMemoryAlloc.ptr;
+    }
+  }
+
+  Array<InstanceInfo> res = PushArrayFromList<InstanceInfo>(out,infoList);
+  
+  return res;
+}
+
+#if 0
+Array<String> GetConfigNames(Accelerator* accel,Arena* out,Arena* temp){
+  BLOCK_REGION(temp);
+  
+  AcceleratorIterator iter = {};
+  for(InstanceNode* node = iter.Start(accel,temp,false); node; node = iter.Next()){
+  }
+
+  return {};
+}
+#endif
+
 OrderedConfigurations ExtractOrderedConfigurationNames(Versat* versat,Accelerator* accel,Arena* out,Arena* temp){
   UnitValues val = CalculateAcceleratorValues(versat,accel);
 
@@ -806,6 +864,24 @@ OrderedConfigurations ExtractOrderedConfigurationNames(Versat* versat,Accelerato
     res.delays[i].bitSize = 32; // TODO: For now, delay is set at 32 bits
   }
 
+#if 0
+  for(Wire& wire : res.configs){
+    BLOCK_REGION(temp);
+    String str = Repr(wire,temp);
+    printf("%.*s\n",UNPACK_SS(str));
+  }
+  for(Wire& wire : res.statics){
+    BLOCK_REGION(temp);
+    String str = Repr(wire,temp);
+    printf("%.*s\n",UNPACK_SS(str));
+  }
+  for(Wire& wire : res.delays){
+    BLOCK_REGION(temp);
+    String str = Repr(wire,temp);
+    printf("%.*s\n",UNPACK_SS(str));
+  }
+#endif
+  
   return res;
 }
 
@@ -828,6 +904,9 @@ Array<Wire> OrderedConfigurationsAsArray(OrderedConfigurations ordered,Arena* ou
 }
 
 void PrintConfigurations(FUDeclaration* type){
+
+#if 0
+  PrintLocation();
   STACK_ARENA(tempInst,Kilobyte(1));
   Arena* temp = &tempInst;
   
@@ -836,8 +915,6 @@ void PrintConfigurations(FUDeclaration* type){
   printf("Config:\n");
   for(Wire& wire : info.configs){
     BLOCK_REGION(temp);
-
-    //String repr = Repr(&wire,temp);
   }
 
   printf("State:\n");
@@ -845,4 +922,5 @@ void PrintConfigurations(FUDeclaration* type){
     
   }
   printf("\n");
+#endif
 }

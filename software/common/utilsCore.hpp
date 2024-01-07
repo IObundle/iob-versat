@@ -1,7 +1,7 @@
 #ifndef VERSAT_INCLUDED_UTILS_CORE
 #define VERSAT_INCLUDED_UTILS_CORE
 
-// Utilities that do not depend on anything else (like memory.hpp)
+// Utilities that do not depend on anything else from versat (like memory.hpp, it's fine to depend on standard library)
 
 #include <cstdio>
 #include <iosfwd>
@@ -74,7 +74,7 @@ ALWAYS_INLINE Defer<F> operator+(_DeferTag,F&& f){
 
 #define TEMP__defer(LINE) TEMPdefer_ ## LINE
 #define TEMP_defer(LINE) TEMP__defer( LINE )
-#define defer auto TEMP_defer(__LINE__) = _DeferTag() + [&]()
+#define defer auto TEMP_defer(__LINE__) = _DeferTag() + [&]() // Only executes at the end of the code block
 
 struct Once{};
 struct _OnceTag{};
@@ -86,10 +86,13 @@ ALWAYS_INLINE Once operator+(_OnceTag,F&& f){
 
 #define TEMP__once(LINE) TEMPonce_ ## LINE
 #define TEMP_once(LINE) TEMP__once( LINE )
-#define once static Once TEMP_once(__LINE__) = _OnceTag() + [&]()
+#define once static Once TEMP_once(__LINE__) = _OnceTag() + [&]() // Executes once even if called multiple times
 
 void PrintStacktrace();
 void FlushStdout();
+
+#define NEWLINE() do{ printf("\n"); FlushStdout();} while(0)
+#define PrintLocation() do{ printf("%s:%d\n",__FILE__,__LINE__); FlushStdout();} while(0)
 
 //#if defined(VERSAT_DEBUG)
 #define Assert(EXPR) \
@@ -105,7 +108,8 @@ void FlushStdout();
 //#endif
 
 // Assert that gets replaced by the expression if debug is disabled (instead of simply disappearing like a normal assert)
-// Probably not a good idea now that I think about it. It's probably leads to more confusing code 
+// Probably not a good idea now that I think about it. It probably leads to more confusing code 
+// TODO: Remove this and change affected code 
 #if defined(VERSAT_DEBUG)
 #define AssertAndDo(EXPR) Assert(EXPR)
 #else

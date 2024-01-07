@@ -19,7 +19,7 @@ struct Versat;
 
 struct SizedConfig{
    iptr* ptr;
-   int size;
+//   int size;
 };
 
 struct StaticId{
@@ -85,6 +85,16 @@ enum MemType{
    OUTPUT,
    STORED_OUTPUT
 };
+
+struct InstanceInfo{
+  FUDeclaration* decl;
+  String fullName;
+  Optional<int> configPos;
+  Optional<int> statePos;
+  Optional<int> memoryMapped;
+};
+
+Array<InstanceInfo> TransformGraphIntoArray(Accelerator* accel,Arena* out,Arena* temp);
 
 CalculatedOffsets CalculateConfigOffsetsIgnoringStatics(Accelerator* accel,Arena* out);
 CalculatedOffsets CalculateConfigurationOffset(Accelerator* accel,MemType type,Arena* out);
