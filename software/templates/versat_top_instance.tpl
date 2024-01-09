@@ -347,7 +347,6 @@ assign rdata = (versat_rvalid ? versat_rdata : unitRdataFinal);
 assign rdata = versat_rdata;
 #{end}
 
-// MARK
 #{if unitsMapped}
 assign rvalid = versat_rvalid | wor_rvalid;
 #{else}

@@ -8,40 +8,46 @@
 What I should tackle first:
 
   Implement PrintAllTypesAndFieldsUsed(CompiledTemplate* compiled,Arena* temp);  
+    The original 
 
-  Includes should be handled better, instead of being parsed and evaluated inside, they should be parsed once and kept around.
+  Only common.tpl including is working. For now there is no need for full includes
   Command could just be an expression.
   Maybe should check the seperation of expressions.
-  Should also completely implement the parsing, instead of parsing some at eval. 
-  Should also completely parse commands into an enum, instead of a simple string. Change if/else chains into switch
-
-Rework ParseAndEvaluate. Parsing should be kept distinct from evaluation.
+  Should also completely parse commands into an enum, instead of a simple string. Change if/else chains into switch. Speeds up evaluation.
+  #{} should never print. @{} should always print. The logic should be unified and enforced, right now #{} gets parsed as commands and @{} gets parsed as expressions but realistically we could figure out if its a command or an expression by finding if the first id is a command id or not (but if so we cannot have identifiers with the same name as a command).
 
  */
 
 struct Expression;
 
-// TODO: A Command could just be an expression.
+// TODO: A Command could just be an expression, I think
 struct Command{
   String name;
-
   Array<Expression*> expressions;
+  String fullText;
+};
+
+enum BlockType {
+  BlockType_TEXT,
+  BlockType_COMMAND,
+  BlockType_EXPRESSION
 };
 
 struct Block{
   Token fullText;
 
   union{
-    Token textBlock;
+    String textBlock;
     Command* command;
+    Expression* expression;
   };
   Array<Block*> innerBlocks;
-  enum {TEXT,COMMAND} type;
+  BlockType type;
+  int line;
 };
 
 struct TemplateFunction{
-  Expression** arguments;
-  int numberArguments;
+  Array<Expression*> arguments;
   Array<Block*> blocks;
 };
 

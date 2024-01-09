@@ -751,7 +751,8 @@ FUDeclaration* ParseModule(Versat* versat,Tokenizer* tok){
         table->Insert(outVar.name,inst2);
         tok->AssertNextToken(";");
       } else {
-        String line = tok->GetStartOfCurrentLine();
+        // Not fully tested after change to PeekCurrentLine
+        String line = tok->PeekCurrentLine();
 
         int start = GetTokenPositionInside(line,op);
 

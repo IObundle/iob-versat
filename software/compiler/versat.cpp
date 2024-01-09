@@ -341,6 +341,9 @@ extern "C" Versat* InitVersatC(int base,int numberConfigurations,bool initUnits)
   return InitVersat(base,numberConfigurations,initUnits);
 }
 
+// MARK TODO: Small fix for common template. Works for now 
+void SetIncludeHeader(CompiledTemplate* tpl,String name);
+
 Versat* InitVersat(int base,int numberConfigurations,bool initUnits){
   static Versat versatInst = {};
   static bool doneOnce = false;
@@ -371,6 +374,9 @@ Versat* InitVersat(int base,int numberConfigurations,bool initUnits){
 
   InitializeTemplateEngine(&versat->permanent);
 
+  CompiledTemplate* commonTpl = CompileTemplate(versat_common_template,"common",&versat->permanent,&versat->temp);
+  SetIncludeHeader(commonTpl,STRING("common"));
+  
   // Technically, if more than 1 versat in the future, could move this outside
   BasicTemplates::acceleratorTemplate = CompileTemplate(versat_accelerator_template,"accel",&versat->permanent,&versat->temp);
   BasicTemplates::topAcceleratorTemplate = CompileTemplate(versat_top_instance_template,"top",&versat->permanent,&versat->temp);

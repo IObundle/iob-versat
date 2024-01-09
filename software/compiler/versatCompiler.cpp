@@ -430,7 +430,7 @@ int main(int argc,const char* argv[]){
   versat->opts.addrSize = opts->bitSize;
   versat->opts.architectureHasDatabus = opts->archHasDatabus;
   versat->opts.dataSize = opts->dataSize;
-
+  
 #ifdef USE_FST_FORMAT
   versat->opts.generateFSTFormat = 1;
 #endif
@@ -515,9 +515,6 @@ int main(int argc,const char* argv[]){
   if(specFilepath){
     ParseVersatSpecification(versat,specFilepath);
   }
-
-  // MARK
-  //DebugVersat(versat);
   
   FUDeclaration* type = GetTypeByName(versat,topLevelTypeStr);
   Accelerator* accel = CreateAccelerator(versat);
@@ -688,7 +685,6 @@ int main(int argc,const char* argv[]){
     TemplateSetArray("extraSources","String",opts->extraSources.data(),opts->extraSources.size());
     TemplateSetArray("includePaths","String",opts->includePaths.data(),opts->includePaths.size());
     TemplateSetString("typename",topLevelTypeStr);
-    TemplateSetString("hack",STRING("#"));
     TemplateSetString("rootPath",STRING(fixedPath.c_str()));
     ProcessTemplate(output,comp,temp);
   }
@@ -708,7 +704,7 @@ Currently working on a function that extracts everything needed from the acceler
 
   Potentially could change from Array of Structs into a Struct of Arrays depending on how the other code turns out. No need to make functions to "extract" data if the extraction is simply copying the data from one place to the other. Might as well offer the Array directly.
 
-Also, keep making more Representation functions. Tired of working "blind", it should be easy to print all the structs and all their data
+Also, keep making more Representation functions. Tired of working "blind", it should be easy to print all the structs and all their data.
 
 */
 

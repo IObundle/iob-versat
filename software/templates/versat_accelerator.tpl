@@ -132,8 +132,7 @@ assign done = &unitDone;
 #{end}
 
 #{if versatValues.numberConnections}
-wire [31:0] #{join ", " for node instances}
-   #{join ", " for j node.outputs} #{if j} output_@{node.inst.id}_@{index} #{end} #{end}
+wire [31:0] #{join ", " for node instances}#{join ", " for j node.outputs}#{if j} output_@{node.inst.id}_@{index} #{end}#{end}
 #{end};
 #{end}
 
@@ -162,7 +161,7 @@ end
 #{end}
 
 #{if nCombOperations}
-reg [31:0] #{join "," for node instances} #{if node.inst.declaration.isOperation and node.inst.declaration.outputLatencies[0] == 0} comb_@{node.inst.name |> Identify} #{end}#{end}; 
+reg [31:0] #{join "," for node instances}#{if node.inst.declaration.isOperation and node.inst.declaration.outputLatencies[0] == 0}comb_@{node.inst.name |> Identify}#{end}#{end}; 
 
 always @*
 begin

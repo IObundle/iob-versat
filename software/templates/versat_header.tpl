@@ -19,6 +19,7 @@ typedef struct {
 #{end}
 } @{type.name}Config;
 #define VERSAT_DEFINED_@{type.name}
+
 #{end}
 
 #{for type addressStructures}
@@ -74,17 +75,8 @@ extern iptr versat_base;
 
 #define ACCELERATOR_TOP_ADDR_INIT {#{join "," for pair namedMem} (void*) @{pair.first} #{end}}
 
-static unsigned int delayBuffer[] = {
-   #{join "," for d delay} 
-      @{d |> Hex}
-   #{end}
-};
-
-static unsigned int staticBuffer[] = {
-   #{join "," for d staticBuffer} 
-      @{d |> Hex}
-   #{end} 
-};
+static unsigned int delayBuffer[] = {#{join "," for d delay} @{d |> Hex} #{end}};
+static unsigned int staticBuffer[] = {#{join "," for d staticBuffer} @{d |> Hex} #{end} };
 
 #ifdef __cplusplus
 extern "C" {

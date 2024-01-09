@@ -8,6 +8,8 @@
 
 Optional<Array<String>> GetAllFilesInsideDirectory(String dirPath,Arena* arena);
 
+String EscapeString(String toEscape,char spaceSubstitute,Arena* out);
+
 // A templated type for carrying the index in an array
 // A performant design would allocate a separate array because these functions copy data around.
 // Use these for prototyping, easing of debugging and stuff

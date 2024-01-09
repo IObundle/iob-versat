@@ -255,7 +255,7 @@ Type* InstantiateTemplate(String name,Arena* arena){
 
       continue;
     }
-
+ 
     Type* type = GetTypeOrFail(trueType); // MARKER - Fails when member contains same type as instantiated type (such as linked lists). Need to check for this situation and possibly change the code.
 
     members[i].type = type;
