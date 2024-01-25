@@ -4,117 +4,119 @@
 #include <vector>
 
 #include "utils.hpp"
+#include "utilsCore.hpp"
 
 struct Arena;
 struct Member;
 struct Type;
 
 struct EnumMember{
-   String name;
-   String value;
+  String name;
+  String value;
 
-   EnumMember* next;
+  EnumMember* next;
 };
 
 struct TemplateArg{
-   String name;
-   TemplateArg* next;
+  String name;
+  TemplateArg* next;
 };
 
 struct TemplatedMember{
-   String typeName;
-   String name;
-   int memberOffset;
+  String typeName;
+  String name;
+  int memberOffset;
 };
 
 struct Type{
-   String name;
-   Type* baseType; // For struct inheritance
-   union{
-      Type* pointerType;
-      Type* arrayType; // Array size can by calculated from size (size / size of arrayed type)
-      Type* typedefType;
-      Array<Pair<String,int>> enumMembers;
+  String name;
+  Type* baseType; // For struct inheritance
+  union{
+    Type* pointerType;
+    Type* arrayType; // Array size can by calculated from size (size / size of arrayed type)
+    Type* typedefType;
+    Array<Pair<String,int>> enumMembers;
 
-      struct{ // TEMPLATED_STRUCT_DEF
-         Array<TemplatedMember> templateMembers;
-         Array<String> templateArgs;
-      };
+    struct{ // TEMPLATED_STRUCT_DEF
+      Array<TemplatedMember> templateMembers;
+      Array<String> templateArgs;
+    };
 
-      struct{ // TEMPLATED_INSTANCE
-         Array<Member> members;
-         Type* templateBase; // Points to the template base type that lead to this instance
-         Array<Type*> templateArgTypes;
-      };
-   };
+    struct{ // TEMPLATED_INSTANCE
+      Array<Member> members;
+      Type* templateBase; // Points to the template base type that lead to this instance
+      Array<Type*> templateArgTypes;
+    };
+  };
 
-   int size; // Size of type (total size in case of arrays)
-   int align;
-   enum Subtype {UNKNOWN = 0,BASE,STRUCT,POINTER,ARRAY,TEMPLATED_STRUCT_DEF,TEMPLATED_INSTANCE,ENUM,TYPEDEF} type;
+  int size; // Size of type (total size in case of arrays)
+  int align;
+  enum Subtype {UNKNOWN = 0,BASE,STRUCT,POINTER,ARRAY,TEMPLATED_STRUCT_DEF,TEMPLATED_INSTANCE,ENUM,TYPEDEF} type;
 };
 
 struct Member{
-   Type* type;
-   String name;
-   int offset;
+  Type* type;
+  String name;
+  int offset;
 
   //Member* next; // TODO: Appears to not be used. If no compile error, remove later
 
-// STRUCT_PARSER
-   Type* structType;
-   String arrayExpression;
-   int index;
+  // STRUCT_PARSER
+  Type* structType;
+  String arrayExpression;
+  int index;
 };
 
 namespace ValueType{
-   extern Type* NUMBER;
-   extern Type* SIZE_T;
-   extern Type* BOOLEAN;
-   extern Type* CHAR;
-   extern Type* STRING;
-   extern Type* NIL;
-   extern Type* HASHMAP;
-   extern Type* SIZED_STRING;
-   extern Type* TEMPLATE_FUNCTION;
-   extern Type* POOL;
-   extern Type* ARRAY; // Array templated structure, not to confuse with a normal C style array
-   extern Type* STD_VECTOR;
+  extern Type* NUMBER;
+  extern Type* SIZE_T;
+  extern Type* BOOLEAN;
+  extern Type* CHAR;
+  extern Type* STRING;
+  extern Type* NIL;
+  extern Type* HASHMAP;
+  extern Type* SIZED_STRING;
+  extern Type* SIZED_STRING_BASE;
+  extern Type* TEMPLATE_FUNCTION;
+  extern Type* POOL;
+  extern Type* ARRAY; // Array templated structure, not to confuse with a normal C style array
+  extern Type* STD_VECTOR;
 };
 
 struct TemplateFunction;
 
 struct Value{
-   union{
-      bool boolean;
-      char ch;
-      int64 number;
-      struct{
-         String str;
-         bool literal;
-      };
-      TemplateFunction* templateFunction;
-      struct {
-         void* custom;
-      };
-   };
+  union{
+    bool boolean;
+    char ch;
+    int64 number;
+    struct{
+      String str;
+      bool literal;
+    };
+    TemplateFunction* templateFunction;
+    struct {
+      void* custom;
+    };
+  };
 
-   Type* type;
-   bool isTemp; // Temp is stored inside the Value, instead of storing a pointer to it in the custom variable
+  Type* type;
+  bool isTemp; // Temp is stored inside the Value, instead of storing a pointer to it in the custom variable
 };
 
 struct Iterator{
-   union{
-      int currentNumber;
-      GenericPoolIterator poolIterator;
-   };
-   Type* hashmapType;
+  union{
+    int currentNumber;
+    GenericPoolIterator poolIterator;
+  };
+  Type* hashmapType;
 
-   Value iterating;
+  Value iterating;
 };
 
 struct HashmapUnpackedIndex{
-   int index;
-   bool data;
+  int index;
+  bool data;
 };
 
 Type* RegisterSimpleType(String name,int size,int align);
@@ -148,6 +150,7 @@ Optional<Value> AccessObjectIndex(Value object,int index);
 Optional<Value> AccessStruct(Value object,Member* member);
 Optional<Value> AccessStruct(Value val,int index);
 Optional<Value> AccessStruct(Value object,String memberName);
+Optional<Member*> GetMember(Type* structType,String memberName);
 
 void PrintStructDefinition(Type* type); // Mainly for debug purposes
 
@@ -158,6 +161,7 @@ bool IsBasicType(Type* type);
 bool IsIndexableOfBasicType(Type* type);
 bool IsEmbeddedListKind(Type* type); // Any structure with a next pointer to itself is considered an embedded list
 bool IsStruct(Type* type);
+Type* GetBaseTypeOfIterating(Type* iterating);
 
 int HashmapIndex(int fullIndex,bool data); 
 HashmapUnpackedIndex UnpackHashmapIndex(int index);
@@ -180,25 +184,26 @@ Value MakeValue(bool boolean);
 
 Value MakeValue(void* val,const char* typeName);
 Value MakeValue(void* val,String typeName);
+Value MakeValue(void* val,Type* type);
 
 String ExtractTypeNameFromPrettyFunction(String prettyFunctionFormat,Arena* out);
 
 template<typename T>
 String GetTemplateTypeName(Arena* out){
-   String func = STRING(__PRETTY_FUNCTION__);
-   String typeName = ExtractTypeNameFromPrettyFunction(func,out);
+  String func = STRING(__PRETTY_FUNCTION__);
+  String typeName = ExtractTypeNameFromPrettyFunction(func,out);
 
-   return typeName;
+  return typeName;
 }
 
 template<typename T>
 Value MakeValue(T* t){
-   STACK_ARENA(temp,Kilobyte(1));
+  STACK_ARENA(temp,Kilobyte(1));
 
-   String str = GetTemplateTypeName<T>(&temp);
-   Value val = MakeValue(t,str);
+  String str = GetTemplateTypeName<T>(&temp);
+  Value val = MakeValue(t,str);
 
-   return val;
+  return val;
 }
 
 #endif // INCLUDED_TYPE

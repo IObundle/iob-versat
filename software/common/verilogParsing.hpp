@@ -161,6 +161,7 @@ struct ModuleInfo{
   bool signalLoop;
 };
 
+/*
 struct ModuleInfoInstance{
   String name;
   Array<ParameterExpression> parameters;
@@ -171,10 +172,9 @@ struct ModuleInfoInstance{
   Array<ExternalMemoryInterface> externalInterfaces;
   int nDelays;
   int nIO;
-  int memoryMappedBits;
+  Optional<int> memoryMappedBits;
   int databusAddrSize;
   bool doesIO;
-  bool memoryMapped;
   bool hasDone;
   bool hasClk;
   bool hasReset;
@@ -183,11 +183,11 @@ struct ModuleInfoInstance{
   bool isSource;
   bool signalLoop;
 };
+*/
 
-String PreprocessVerilogFile(Arena* output, String fileContent,std::vector<String>* includeFilepaths,Arena* tempArena);
-std::vector<Module> ParseVerilogFile(String fileContent, std::vector<String>* includeFilepaths,Arena* out,Arena* temp); // Only handles preprocessed files
+String PreprocessVerilogFile(Arena* output, String fileContent,Array<String> includeFilepaths,Arena* tempArena);
+Array<Module> ParseVerilogFile(String fileContent,Array<String> includeFilepaths,Arena* out,Arena* temp); // Only handles preprocessed files
 ModuleInfo ExtractModuleInfo(Module& module,Arena* permanent,Arena* tempArena);
-void OutputModuleInfos(FILE* output,ModuleInfoInstance info,String nameSpace,CompiledTemplate* unitVerilogData,Arena* temp,Array<Wire> configsHeaderSide,Array<String> statesHeaderSide); // TODO: This portion should be remade, parameters are not the ones we want (VerilogParsing do not need to know about Accelerator)
 
 Array<String> GetAllIdentifiers(Expression* expr,Arena* arena);
 Value Eval(Expression* expr,Array<ParameterExpression> parameters);

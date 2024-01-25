@@ -21,7 +21,5 @@ void OutputGraphDotFile(Versat* versat,Accelerator* accel,bool collapseSameEdges
 String PushMemoryHex(Arena* arena,void* memory,int size);
 void OutputMemoryHex(void* memory,int size);
 
-Array<int> PrintVCDDefinitions(FILE* accelOutputFile,Accelerator* accel,Arena* sameCheckSpace);
-
 #endif // INCLUDED_DEBUG_VERSAT
  

@@ -535,11 +535,11 @@ FUInstance* ParseInstanceDeclaration(Versat* versat,Tokenizer* tok,Accelerator* 
 
     Token list = tok->NextFindUntil("}");
     int arguments = 1 + CountSubstring(list,STRING(","));
-    Assert(arguments <= (1 << FUType->memoryMapBits));
+    //Assert(arguments <= (1 << FUType->memoryMapBits));
 
     Tokenizer insideList(list,",",{});
 
-    inst->memMapped = PushArray<int>(&versat->permanent,1 << FUType->memoryMapBits).data;
+    //inst->memMapped = PushArray<int>(&versat->permanent,1 << FUType->memoryMapBits).data;
     //inst->savedMemory = true;
     for(int i = 0; i < arguments; i++){
       Token arg =  insideList.NextToken();

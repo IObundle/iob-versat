@@ -950,6 +950,7 @@ static bool last = false;
 
 static int lastWindow = 0;
 
+// MARKED
 InstanceNode* GetInstanceFromName(Accelerator* accel,String string,Arena* arena){
    AcceleratorIterator iter = {};
    for(InstanceNode* node = iter.Start(accel,arena,true); node; node = iter.Next()){

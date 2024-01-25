@@ -28,7 +28,7 @@ module xaddrgen2 #(
 );
 
    //connection wires
-   wire [MEM_ADDR_O_W - 1:0] addr_oB;
+   wire [MEM_ADDR_W - 1:0] addr_oB;
    wire                      mem_en_oB;
    wire done_oA, done_oB;
    wire                             mem_en_o_reg_w;
@@ -47,13 +47,13 @@ module xaddrgen2 #(
    wire pause = mem_en_o_reg_w & ~done_oA;
 
    //after first_i run_i, addr_ogenA start_i comes from addr_ogenB addr_o
-   wire [MEM_ADDR_O_W - 1:0] start_iA = run_i ? start_i : addr_oB;
+   wire [MEM_ADDR_W - 1:0] start_iA = run_i ? start_i : addr_oB;
 
    //instantiate addr_oess generators
-   xaddr_ogen #(
-      .MEM_ADDR_O_W(MEM_ADDR_O_W),
-      .PERIOD_I_W  (PERIOD_I_W)
-   ) addr_ogenA (
+   xaddrgen #(
+      .MEM_ADDR_W(MEM_ADDR_W),
+      .PERIOD_W  (PERIOD_W)
+   ) addrgenA (
       .clk_i       (clk_i),
       .rst_i       (rst_i),
       .init        (run_iA),
@@ -71,10 +71,10 @@ module xaddrgen2 #(
       .done_o      (done_oA)
    );
 
-   xaddr_ogen #(
-      .MEM_ADDR_O_W(MEM_ADDR_O_W),
-      .PERIOD_I_W  (PERIOD_I_W)
-   ) addr_ogenB (
+   xaddrgen #(
+      .MEM_ADDR_W(MEM_ADDR_W),
+      .PERIOD_W  (PERIOD_W)
+   ) addrgenB (
       .clk_i       (clk_i),
       .rst_i       (rst_i),
       .init        (run_i),

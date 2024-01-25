@@ -3,7 +3,7 @@
 
 TYPE_NAME := @{typename}
 
-HARDWARE_SRC := #{join " " for file verilogFiles}@{file}#{end}
+HARDWARE_SRC := #{join " " file verilogFiles}@{file}#{end}
 #HARDWARE_SRC := $(wildcard @{generatedUnitsLocation}/*.v)
 HARDWARE_SRC += $(wildcard @{generatedUnitsLocation}/modules/*.v)
 
@@ -13,7 +13,7 @@ HARDWARE_SRC += $(wildcard @{source}/*.v)
 
 VERILATOR_ROOT?=@{verilatorRoot}
 
-INCLUDE := #{join " " for file includePaths}-I@{file}#{end}
+INCLUDE := #{join " " file includePaths}-I@{file}#{end}
 
 all: libaccel.a
 

@@ -18,7 +18,7 @@
 
 #include "verilated.h"
 
-#{if arch.generateFSTFormat}
+#{if opts.generateFSTFormat}
 #include "verilated_fst_c.h"
 static VerilatedFstC* tfp = NULL;
 #{else}
@@ -28,8 +28,8 @@ static VerilatedVcdC* tfp = NULL;
 
 VerilatedContext* contextp = new VerilatedContext;
 
-#include "V@{module.name}.h"
-static V@{module.name}* dut = NULL;
+#include "V@{type.name}.h"
+static V@{type.name}* dut = NULL;
 
 extern bool CreateVCD;
 extern bool SimulateDatabus;
@@ -71,7 +71,7 @@ static constexpr int totalExternalMemory = @{totalExternalMemory};
 static Byte externalMemory[totalExternalMemory]; 
 static AcceleratorConfig configBuffer = {};
 static AcceleratorState stateBuffer = {};
-static DatabusAccess databusBuffer[@{module.nIO}] = {}; 
+static DatabusAccess databusBuffer[@{type.nIOs}] = {}; 
 
 extern "C" void InitializeVerilator(){
    Verilated::traceEverOn(true);
@@ -93,14 +93,14 @@ static void CloseWaveform(){
 
 extern "C" void VersatAcceleratorCreate(){
    if(CreateVCD){
-   #{if arch.generateFSTFormat}
+   #{if opts.generateFSTFormat}
       tfp = new VerilatedFstC;
    #{else}
       tfp = new VerilatedVcdC;
    #{end}
    }
 
-   V@{module.name}* self = new V@{module.name}();
+   V@{type.name}* self = new V@{type.name}();
 
    if(dut){
       printf("Initialize function is being called multiple times\n");
@@ -112,7 +112,7 @@ extern "C" void VersatAcceleratorCreate(){
    if(CreateVCD){
       self->trace(tfp, 99);
       
-      #{if arch.generateFSTFormat}
+      #{if opts.generateFSTFormat}
       tfp->open("system.fst");
       #{else}
       tfp->open("system.vcd");
@@ -126,7 +126,7 @@ extern "C" void VersatAcceleratorCreate(){
    self->rst = 0;
    self->running = 0;
 
-#{for i module.inputDelays.size}
+#{for i type.inputDelays.size}
    self->in@{i} = 0;
 #{end}
 
@@ -143,10 +143,10 @@ extern "C" void VersatAcceleratorCreate(){
 static void InternalUpdateAccelerator(){
    int baseAddress = 0;
 
-   V@{module.name}* self = dut;
+   V@{type.name}* self = dut;
 
    // Databus must be updated before memories because databus could drive memories but memories "cannot" drive databus (in the sense that databus acts like a master if connected directly to memories but memories do not act like a master when connected to a databus. The unit logic is the one that acts like a master)
-#{for i module.nIO}
+#{for i type.nIOs}
 if(SimulateDatabus){
    self->databus_ready_@{i} = 0;
    self->databus_last_@{i} = 0;
@@ -157,21 +157,21 @@ if(SimulateDatabus){
       if(access->latencyCounter > 0){
          access->latencyCounter -= 1;
       } else {
-         #{set dataType #{call IntName arch.dataSize}}
+         #{set dataType #{call IntName opts.dataSize}}
          @{dataType}* ptr = (@{dataType}*) (self->databus_addr_@{i});
 
          if(self->databus_wstrb_@{i} == 0){
             if(ptr == nullptr){
-            #{if arch.dataSize > 64}
-            for(int i = 0; i < (@{arch.dataSize} / sizeof(int)); i++){
+            #{if opts.dataSize > 64}
+            for(int i = 0; i < (@{opts.dataSize} / sizeof(int)); i++){
                self->databus_rdata_@{i}[i] = 0xfeeffeef;
             }
             #{else}
                self->databus_rdata_@{i} = 0xfeeffeef; // Feed bad data if not set (in pc-emul is needed otherwise segfault)
             #{end}
             } else {
-            #{if arch.dataSize > 64}
-               for(int i = 0; i < (@{arch.dataSize} / sizeof(int)); i++){
+            #{if opts.dataSize > 64}
+               for(int i = 0; i < (@{opts.dataSize} / sizeof(int)); i++){
                    self->databus_rdata_@{i}[i] = ptr[access->counter].i[i];
                }
             #{else}
@@ -180,8 +180,8 @@ if(SimulateDatabus){
             }
          } else { // self->databus_wstrb_@{i} != 0
             if(ptr != nullptr){
-            #{if arch.dataSize > 64}
-               for(int i = 0; i < (@{arch.dataSize} / sizeof(int)); i++){
+            #{if opts.dataSize > 64}
+               for(int i = 0; i < (@{opts.dataSize} / sizeof(int)); i++){
                   ptr[access->counter].i[i] = self->databus_wdata_@{i}[i];
                }
             #{else}
@@ -211,7 +211,7 @@ if(SimulateDatabus){
 #{end}
    
    baseAddress = 0;
-#{for external module.externalInterfaces}
+#{for external type.externalMemory}
    #{set id external.interface}
    #{if external.type}
    // DP
@@ -272,7 +272,7 @@ if(SimulateDatabus){
    // Memory Read
 {
    baseAddress = 0;
-#{for external module.externalInterfaces}
+#{for external type.externalMemory}
    #{set id external.interface}
    #{if external.type}
    // DP
@@ -324,7 +324,7 @@ if(SimulateDatabus){
 // Memory write
 {
    baseAddress = 0;
-#{for external module.externalInterfaces}
+#{for external type.externalMemory}
    #{set id external.interface}
    #{if external.type}
    {
@@ -375,19 +375,19 @@ if(SimulateDatabus){
    contextp->timeInc(2);
 
 // TODO: Technically only need to do this at the end of an accelerator run, do not need to do this every single update
-#{if module.states}
+#{if type.configInfo.states}
 AcceleratorState* state = &stateBuffer;
-#{for i module.states.size}
-#{set wire module.states[i]}
+#{for i type.configInfo.states.size}
+#{set wire type.configInfo.states[i]}
    state->@{statesHeader[i]} = self->@{wire.name};
 #{end}
 #{end}
 }
 
 static bool IsDone(){
-  V@{module.name}* self = dut;
+  V@{type.name}* self = dut;
 
-#{if module.hasDone}
+#{if type.implementsDone}
 bool done = self->done;
 #{else}
 bool done = true;
@@ -408,34 +408,33 @@ Once operator+(_OnceTag t,F&& f){
 #define once static Once TEMP_once(__LINE__) = _OnceTag() + [&]()
 
 static void InternalStartAccelerator(){
-   V@{module.name}* self = dut;
+   V@{type.name}* self = dut;
 
-#{if module.configs}
+#{if allConfigsVerilatorSide.size}
 AcceleratorConfig* config = (AcceleratorConfig*) &configBuffer;
 
-#{for i module.configs.size}
-#{set wire module.configs[i]}
- #{if configsHeader[i].bitSize != 64}
+#{for wire allConfigsVerilatorSide}
+ #{if configsHeader[index].bitSize != 64}
  once{
-     if((long long int) config->@{configsHeader[i].name} >= ((long long int) 1 << @{configsHeader[i].bitSize})){
+     if((long long int) config->@{configsHeader[index].name} >= ((long long int) 1 << @{configsHeader[index].bitSize})){
       printf("[Once] Warning, configuration value contains more bits\n");
       printf("set than the hardware unit is capable of handling\n");
-      printf("Name: %s, BitSize: %d, Value: 0x%lx\n","@{configsHeader[i].name}",@{configsHeader[i].bitSize},config->@{configsHeader[i].name});
+      printf("Name: %s, BitSize: %d, Value: 0x%lx\n","@{configsHeader[index].name}",@{configsHeader[index].bitSize},config->@{configsHeader[index].name});
     }
   };
  #{end}
 
-  self->@{wire.name} = config->@{configsHeader[i].name};
+  self->@{wire.name} = config->@{configsHeader[index].name};
 #{end}
 #{end}
 
-#{if module.nDelays}
-#{for i module.nDelays}
+#{if type.configInfo.delayOffsets.max}
+#{for i type.configInfo.delayOffsets.max}
    self->delay@{i} = config->TOP_Delay@{i};
 #{end}
 #{end}
 
-#{for i module.nIO}
+#{for i type.nIOs}
 {
    DatabusAccess* memoryLatency = ((DatabusAccess*) &self[1]) + @{i};
 
@@ -455,7 +454,7 @@ AcceleratorConfig* config = (AcceleratorConfig*) &configBuffer;
 }
 
 static void InternalEndAccelerator(){
-   V@{module.name}* self = dut;
+   V@{type.name}* self = dut;
 
    self->running = 0;
 
@@ -476,15 +475,15 @@ extern "C" void VersatAcceleratorSimulate(){
 }
 
 extern "C" int MemoryAccess(int address,int value,int write){
-  #{if module.memoryMapped}
+  #{if type.memoryMapBits}
    
-  V@{module.name}* self = dut;
+  V@{type.name}* self = dut;
 
   if(write){
     self->valid = 1;
     self->wstrb = 0xf;
 
-    #{if module.memoryMappedBits != 0}
+    #{if type.memoryMapBits != 0}
       self->addr = address;
     #{end}
       self->wdata = value;
@@ -495,7 +494,7 @@ extern "C" int MemoryAccess(int address,int value,int write){
 
       self->valid = 0;
       self->wstrb = 0x00;
-      #{if module.memoryMappedBits != 0}
+      #{if type.memoryMapBits != 0}
       self->addr = 0x00000000;
       #{end}
       
@@ -507,7 +506,7 @@ extern "C" int MemoryAccess(int address,int value,int write){
    } else {
       self->valid = 1;
       self->wstrb = 0x0;
-    #{if module.memoryMappedBits != 0}
+    #{if type.memoryMapBits != 0}
       self->addr = address;
     #{end}
 
@@ -520,7 +519,7 @@ extern "C" int MemoryAccess(int address,int value,int write){
       int res = self->rdata;
 
       self->valid = 0;
-    #{if module.memoryMappedBits != 0}
+    #{if type.memoryMapBits != 0}
       self->addr = 0;
     #{end}
 
@@ -536,8 +535,8 @@ extern "C" int MemoryAccess(int address,int value,int write){
 }
 
 extern "C" void VersatSignalLoop(){
-#{if module.signalLoop}
-   V@{module.name}* self = dut;
+#{if type.signalLoop}
+   V@{type.name}* self = dut;
 
    self->signal_loop = 1;
    InternalUpdateAccelerator();

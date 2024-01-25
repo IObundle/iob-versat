@@ -53,25 +53,25 @@ module ext_addrgen #(
 );
 
    // addr_o gen wires
-   wire                        [EXT_ADDR_O_I_W-1:0] addr_o_gen;
+   wire                        [EXT_ADDR_W-1:0] addr_o_gen;
    wire ready = |iterations_i;
    wire                                             mem_en;
 
    // int mem regs
-   reg [MEM_ADDR_O_W-1:0] counter_int, counter_int_nxt;
+   reg [MEM_ADDR_W-1:0] counter_int, counter_int_nxt;
 
    reg                    req_o_int;
    reg                    req_o_int_reg;
    reg                    rnw_o_int;
    reg                    rnw_o_int_reg;
-   reg [MEM_ADDR_O_W-1:0] addr_o_int;
-   reg [MEM_ADDR_O_W-1:0] addr_o_int_reg;
+   reg [MEM_ADDR_W-1:0] addr_o_int;
+   reg [MEM_ADDR_W-1:0] addr_o_int_reg;
 
    // link int mem and ext databus
    assign data_out_o     = databus_rdata;
    assign databus_wdata  = data_in_i;
-   /* verilator lint_off WIDTH */assign databus_addr = ext_addr_o_i + (addr_o_gen << 2);
-   assign addr_o         = int_addr_o_i + counter_int;
+   /* verilator lint_off WIDTH */assign databus_addr = ext_addr_i + (addr_o_gen << 2);
+   assign addr_o         = int_addr_i + counter_int;
 
    //assign req_o = (direction_i == 2'b01) ? req_o_int_reg : req_o_int;
    //assign rnw_o = (direction_i == 2'b01) ? rnw_o_int_reg : rnw_o_int;
@@ -80,15 +80,15 @@ module ext_addrgen #(
    assign rnw_o          = rnw_o_int;
 
    // instantiate addr_ogen for ext mem access
-   xaddr_ogen #(
-      .MEM_ADDR_O_W(EXT_ADDR_O_I_W),
-      .PERIOD_I_W  (EXT_PERIOD_I_W)
-   ) addr_ogen (
-      .clk         (clk),
-      .rst         (rst),
-      .init        (run),
-      .run         (run & ready),
-      .pause       (~databus_ready & databus_valid),
+   xaddrgen #(
+      .MEM_ADDR_W(EXT_ADDR_W),
+      .PERIOD_W  (EXT_PERIOD_W)
+   ) addrgen (
+      .clk_i       (clk),
+      .rst_i       (rst),
+      .init_i      (run),
+      .run_i       (run & ready),
+      .pause_i     (~databus_ready & databus_valid),
       .iterations_i(iterations_i),
       .period_i    (period_i),
       .duty_i      (duty_i),
@@ -97,8 +97,8 @@ module ext_addrgen #(
       .shift_i     (shift_i),
       .incr_i      (incr_i),
       .addr_o      (addr_o_gen),
-      .mem_en      (mem_en),
-      .done        ()
+      .mem_en_o    (mem_en),
+      .done_o      ()
    );
 
    // State and counter registers
@@ -106,7 +106,7 @@ module ext_addrgen #(
    always @(posedge rst, posedge clk)
       if (rst) begin
          state          <= `IDLE;
-         counter_int    <= {MEM_ADDR_O_W{1'b0}};
+         counter_int    <= {MEM_ADDR_W{1'b0}};
          req_o_int_reg  <= 0;
          rnw_o_int_reg  <= 1;
          addr_o_int_reg <= 0;
@@ -129,7 +129,7 @@ module ext_addrgen #(
       counter_int_nxt = counter_int;
       case (state)
          `IDLE: begin
-            counter_int_nxt = {MEM_ADDR_O_W{1'b0}};
+            counter_int_nxt = {MEM_ADDR_W{1'b0}};
             if (run) begin
                if (direction_i == 2'b01) state_nxt = `EXT2INT;
                else if (direction_i == 2'b10) state_nxt = `INT2EXT;

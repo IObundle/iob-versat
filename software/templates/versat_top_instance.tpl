@@ -360,14 +360,14 @@ assign wor_rvalid = (|unitRValid);
 #{end}
 
 #{if versatValues.numberConnections}
-wire [31:0] #{join ", " for node instances}
-   #{join ", " for j node.outputs} #{if j} output_@{node.inst.id}_@{index} #{end} #{end}
+wire [31:0] #{join ", " node instances} #{set id index}
+   #{join ", "  j node.outputs} #{if j} output_@{id}_@{index} #{end} #{end}
 #{end};
 #{end}
 
 #{if unitsMapped}
 wire [31:0] unitRData[@{unitsMapped - 1}:0];
-assign unitRdataFinal = (#{join "|" for i unitsMapped} unitRData[@{i}] #{end});
+assign unitRdataFinal = (#{join "|" i unitsMapped} unitRData[@{i}] #{end});
 #{end}
 
 // Memory mapped
@@ -380,7 +380,7 @@ begin
    #{set counter 0}
    #{for node instances}
    #{set inst node.inst}
-   #{if inst.declaration.isMemoryMapped}
+   #{if inst.declaration.memoryMapBits}
       #{if versatData[counter].memoryMaskSize}
       if(address[@{memoryAddressBits - 1}:@{memoryAddressBits - versatData[counter].memoryMaskSize}] == @{memoryAddressBits - inst.declaration.memoryMapBits}'b@{versatData[counter].memoryMask}) // @{versatBase + memoryMappedBase * 4 + inst.memMapped * 4 |> Hex}
          memoryMappedEnable[@{counter}] = 1'b1;
@@ -493,7 +493,7 @@ begin
 end
 
 #{if nCombOperations}
-reg [31:0] #{join "," for node instances} #{if node.inst.declaration.isOperation and node.inst.declaration.outputLatencies[0] == 0} comb_@{node.inst.name |> Identify} #{end}#{end}; 
+reg [31:0] #{join "," node instances} #{if node.inst.declaration.isOperation and node.inst.declaration.outputLatencies[0] == 0} comb_@{node.inst.name |> Identify} #{end}#{end}; 
 
 always @*
 begin
@@ -502,10 +502,10 @@ begin
    #{if decl.isOperation and decl.outputLatencies[0] == 0}
       #{set input1 node.inputs[0]}
       #{if decl.inputDelays.size == 1}
-         #{format decl.operation "comb" @{node.inst.name |> Identify} #{call retOutputName input1}};
+         #{format decl.operation "comb" @{node.inst.name |> Identify} #{call retOutputName2 instances input1}};
       #{else}
          #{set input2 node.inputs[1]}
-         #{format decl.operation "comb" @{node.inst.name |> Identify} #{call retOutputName input1} #{call retOutputName input2}};
+         #{format decl.operation "comb" @{node.inst.name |> Identify} #{call retOutputName2 instances input1} #{call retOutputName2 instances input2}};
       #{end}
    #{end}
 #{end}
@@ -513,7 +513,7 @@ end
 #{end}
 
 #{if nSeqOperations}
-reg [31:0] #{join "," for node instances} #{if node.inst.declaration.isOperation and node.inst.declaration.outputLatencies[0] != 0} seq_@{node.inst.name |> Identify} #{end}#{end}; 
+reg [31:0] #{join "," node instances} #{if node.inst.declaration.isOperation and node.inst.declaration.outputLatencies[0] != 0} seq_@{node.inst.name |> Identify} #{end}#{end}; 
 
 always @(posedge clk)
 begin
@@ -521,7 +521,7 @@ begin
    #{set decl node.inst.declaration}
    #{if decl.isOperation and decl.outputLatencies[0] != 0 }
       #{set input1 node.inputs[0]}
-      #{format decl.operation "seq" @{node.inst.name |> Identify} #{call retOutputName input1}};
+      #{format decl.operation "seq" @{node.inst.name |> Identify} #{call retOutputName2 instances input1}};
    #{end}
 #{end}   
 end
@@ -537,19 +537,24 @@ end
 #{set memoryMappedIndex 0}
 #{set doneCounter 0}
 #{for node instances}
+#{set id index}
 #{set inst node.inst}
 #{set decl inst.declaration}
    #{if (decl != inputDecl and decl != outputDecl and !decl.isOperation)}
       @{decl.name} @{inst.parameters} @{inst.name |> Identify}_@{counter} (
          #{for j node.outputs} #{if j}
-            .out@{index}(output_@{inst.id}_@{index}),
+            .out@{index}(output_@{id}_@{index}),
          #{else}
             .out@{index}(),
          #{end}
          #{end}
 
          #{for input node.inputs}
-            .in@{index}(#{call outputName input}),
+         #{if input.node}
+            .in@{index}(@{#{call retOutputName2 instances input}}),
+         #{else}
+            .in@{index}(0),
+         #{end}
          #{end}
 
          #{for wire decl.configInfo.configs}
@@ -606,7 +611,7 @@ end
          #{set stateDataIndex stateDataIndex + wire.bitSize}
          #{end}      
 
-         #{if decl.isMemoryMapped}
+         #{if decl.memoryMapBits}
          .valid(memoryMappedEnable[@{memoryMappedIndex}]),
          .wstrb(data_wstrb),
          #{if decl.memoryMapBits}
@@ -654,7 +659,7 @@ end
 #{if decl == outputDecl}
    #{for input node.inputs}
    #{if input.node}
-   assign out@{index} = #{call outputName input};
+   assign out@{index} = @{#{call retOutputName2 instances input}};
    #{end}
    #{end}
 #{end}

@@ -5,7 +5,6 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <dirent.h>
-#include <sys/ptrace.h>
 #include <cinttypes>
 #include <limits>
 #include <time.h>
@@ -15,22 +14,6 @@
 #include <cstring>
 #include <cstdarg>
 #include <cerrno>
-
-bool CurrentlyDebugging(){
-   static bool init = false;
-   static bool value;
-
-   if(!init){
-      init = true;
-      if(ptrace(PTRACE_TRACEME,0,1,0) < 0){
-         value = true;
-      } else {
-         ptrace(PTRACE_DETACH,0,1,0);
-      }
-   }
-
-   return value;
-}
 
 char* StaticFormat(const char* format,...){
    static const int BUFFER_SIZE = 1024*4;
@@ -49,6 +32,14 @@ char* StaticFormat(const char* format,...){
    return buffer;
 }
 
+int CountNonZeros(Array<int> arr){
+  int count = 0;
+  for(int val : arr){
+    if(val) count++;
+  }
+  return count;
+}
+
 Time GetTime(){
    timespec time;
    clock_gettime(CLOCK_MONOTONIC, &time);
@@ -61,6 +52,20 @@ Time GetTime(){
 }
 
 // Misc
+const char* GetFilename(const char* fullpath){
+  const char* lastGood = fullpath;
+  const char* ptr = fullpath;
+
+  while(*ptr != '\0'){
+    if(*ptr == '/'){
+      lastGood = ptr + 1;
+    }
+    ptr += 1;
+  }
+
+  return lastGood;
+}
+
 void FlushStdout(){
    fflush(stdout);
 }

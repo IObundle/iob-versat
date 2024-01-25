@@ -2,6 +2,9 @@
 
 #include <dirent.h>
 
+#include <filesystem>
+namespace fs = std::filesystem;
+
 Optional<Array<String>> GetAllFilesInsideDirectory(String dirPath,Arena* arena){
    DIR* dir = opendir(StaticFormat("%.*s",UNPACK_SS(dirPath))); // Make sure it's zero terminated
 
@@ -76,3 +79,18 @@ String EscapeString(String toEscape,char spaceSubstitute,Arena* out){
   return res;
 }
 
+String GetAbsolutePath(const char* path,Arena* arena){
+  fs::path canonical = fs::weakly_canonical(path);
+  String res = PushString(arena,"%s",canonical.c_str());
+  return res;
+}
+
+Array<int> GetNonZeroIndexes(Array<int> arr,Arena* out){
+  Byte* mark = MarkArena(out);
+  for(int i = 0; i < arr.size; i++){
+    if(arr[i])
+      *PushStruct<int>(out) = i;
+  }
+
+  return PointArray<int>(out,mark);
+}

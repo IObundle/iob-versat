@@ -91,9 +91,15 @@ ALWAYS_INLINE Once operator+(_OnceTag,F&& f){
 void PrintStacktrace();
 void FlushStdout();
 
-#define NEWLINE() do{ printf("\n"); FlushStdout();} while(0)
-#define PrintLocation() do{ printf("%s:%d\n",__FILE__,__LINE__); FlushStdout();} while(0)
+const char* GetFilename(const char* fullpath);
 
+// Quick print functions used when doing "print" debugging
+#define NEWLINE() do{ printf("\n"); FlushStdout();} while(0)
+#define LOCATION() do{ printf("%s:%d\n",GetFilename(__FILE__),__LINE__); FlushStdout();} while(0)
+#define PRINTF_WITH_LOCATION(...) do{ printf("%s:%d-",__FILE__,__LINE__); printf(__VA_ARGS__); FlushStdout();} while(0)
+#define PRINT_STRING(STR) do{ printf("%.*s",UNPACK_SS((STR))); FlushStdout();} while(0)
+
+static void Terminate(){FlushStdout(); exit(-1);}
 //#if defined(VERSAT_DEBUG)
 #define Assert(EXPR) \
    do { \
@@ -116,14 +122,8 @@ void FlushStdout();
 #define AssertAndDo(EXPR) EXPR
 #endif
 
-#define DEBUG_BREAK() do{ FlushStdout(); raise(SIGTRAP); } while(0)
+#define DEBUG_BREAK() do{ PrintStacktrace(); FlushStdout(); raise(SIGTRAP); } while(0)
 #define DEBUG_BREAK_IF(COND) if(COND){FlushStdout(); raise(SIGTRAP);}
-
-#define DEBUG_BREAK_IF_DEBUGGING() DEBUG_BREAK_IF(CurrentlyDebugging())
-
-#define debugRegion if(CurrentlyDebugging())
-
-bool CurrentlyDebugging();
 
 #define NOT_IMPLEMENTED do{ printf("%s:%d:1: error: Not implemented: %s",__FILE__,__LINE__,__PRETTY_FUNCTION__); FlushStdout(); Assert(false); } while(0) // Doesn't mean that something is necessarily future planned
 #define NOT_POSSIBLE DEBUG_BREAK()
@@ -359,6 +359,9 @@ static bool operator==(const Pair<F,S>& p1,const Pair<F,S>& p2){
 // Returns a statically allocated string, instead of implementing varg for everything
 // Returned string uses statically allocated memory. Intended to be used to create quick strings for other functions, instead of having to implement them as variadic. Can also be used to temporarely transform a String into a C-String
 char* StaticFormat(const char* format,...);
+
+// Array useful functions
+int CountNonZeros(Array<int> arr);
 
 // Misc
 int RoundUpDiv(int dividend,int divisor);

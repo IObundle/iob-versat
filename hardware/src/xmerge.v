@@ -1,6 +1,4 @@
 `timescale 1ns / 1ps
-// Comment so that verible-format will not put timescale and defaultt_nettype into same line
-`default_nettype none
 
 module xmerge #(
    parameter ADDR_W   = 0,
@@ -146,5 +144,3 @@ module xmerge #(
    end
 
 endmodule  // xmerge
-
-`default_nettype wire

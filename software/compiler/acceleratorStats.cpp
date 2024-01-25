@@ -76,6 +76,7 @@ int ExternalMemoryByteSize(Array<ExternalMemoryInterface> interfaces){
   return size;
 }
 
+// MARKED
 int NumberUnits(Accelerator* accel){
   STACK_ARENA(temp,Kilobyte(1));
 
@@ -87,7 +88,7 @@ int NumberUnits(Accelerator* accel){
   return count;
 }
 
-VersatComputedValues ComputeVersatValues(Versat* versat,Accelerator* accel){
+VersatComputedValues ComputeVersatValues(Versat* versat,Accelerator* accel,bool useDMA){
   VersatComputedValues res = {};
 
   int memoryMappedDWords = 0;
@@ -97,9 +98,9 @@ VersatComputedValues ComputeVersatValues(Versat* versat,Accelerator* accel){
 
     res.numberConnections += Size(ptr->allOutputs);
 
-    if(decl->isMemoryMapped){
-      memoryMappedDWords = AlignBitBoundary(memoryMappedDWords,decl->memoryMapBits);
-      memoryMappedDWords += 1 << decl->memoryMapBits;
+    if(decl->memoryMapBits.has_value()){
+      memoryMappedDWords = AlignBitBoundary(memoryMappedDWords,decl->memoryMapBits.value());
+      memoryMappedDWords += 1 << decl->memoryMapBits.value();
 
       res.unitsMapped += 1;
     }
@@ -139,7 +140,7 @@ VersatComputedValues ComputeVersatValues(Versat* versat,Accelerator* accel){
   res.versatConfigs = 1;
   res.versatStates = 1;
 
-  if(accel->useDMA){
+  if(useDMA){
     res.versatConfigs += 4;
     res.versatStates += 4;
 

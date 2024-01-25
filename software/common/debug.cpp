@@ -10,6 +10,7 @@
 #include <cstdlib>
 #include <sys/types.h>
 #include <sys/ioctl.h>
+#include <sys/ptrace.h>
 #include <termios.h>
 #include <fcntl.h>
 #include <execinfo.h>
@@ -34,6 +35,29 @@ struct Location{
 static Arena debugArenaInst = {};
 bool debugFlag = false;
 Arena* debugArena = &debugArenaInst;
+
+bool CurrentlyDebugging(){
+  static bool init = false;
+  static bool value;
+
+  NOT_IMPLEMENTED;
+  
+  return false;  
+
+  // TODO: This was giving an error when calling from makefile. Not using this for now.
+#if 0
+  if(!init){
+    init = true;
+    if(ptrace(PTRACE_TRACEME,0,1,0) < 0){
+      value = true;
+    } else {
+      ptrace(PTRACE_DETACH,0,1,0);
+    }
+  }
+
+  return value;
+#endif
+}
 
 static SignalHandler old_SIGUSR1 = nullptr;
 static SignalHandler old_SIGSEGV = nullptr;
@@ -131,6 +155,7 @@ static Array<Location> CollectStackTrace(Arena* out,Arena* temp){
   if (strings == NULL) {
     printf("Error getting stack trace\n");
   }
+  defer{ free(strings); };
 
   Array<size_t> fileAddresses = PushArray<size_t>(temp,lines);
   
@@ -138,39 +163,25 @@ static Array<Location> CollectStackTrace(Arena* out,Arena* temp){
     Dl_info info;
     link_map* link_map;
     if(dladdr1(addrBuffer[i],&info,(void**) &link_map,RTLD_DL_LINKMAP)){
-      //printf("Out:\n%p\n%s\n%p\n%s\n%p\n",link_map,info.dli_fname,info.dli_fbase,info.dli_sname,info.dli_saddr);
-      //printf("%lx\n",((size_t) addrBuffer[i]) - link_map->l_addr);
       fileAddresses[i] = ((size_t) addrBuffer[i]) - link_map->l_addr - 1; // - 1 to get the actual instruction, PC points to the next one
     }
   }
   
-  defer{ free(strings); };
   //printf("Lines: %d\n",lines);
-  
   for(int i = 0; i < lines; i++){
-#if 0
     String line = STRING(strings[i]);
-
-    printf("%.*s",UNPACK_SS(line));
     Tokenizer tok(line,"()",{});
-
-    Token name = tok.NextToken();
-    assert(CompareString(tok.NextToken(),"("));
-    Token offset = tok.NextFindUntil(")");
-    assert(CompareString(tok.NextToken(),")"));
-
-    if(offset.size <= 0){
+    String first = tok.NextFindUntil("(");
+    if(!CompareString(first,STRING("./versat"))){ // A bit hardcoded but appears to work fine
       continue;
     }
-
-    printf(" | %.*s",UNPACK_SS(offset));
-    printf("\n");
+#if 0
+    printf("%.*s\n",UNPACK_SS(line));
 #endif
     
     region(temp){
       String toWrite = PushString(temp,"%lx\n",fileAddresses[i]);
-      //String toWrite = PushString(temp,"%.*s\n",UNPACK_SS(offset));
-      //printf("W: %.*s\n",UNPACK_SS(toWrite));
+      //printf("%.*s\n",UNPACK_SS(toWrite));
       int written = write(con->writePipe,toWrite.data,toWrite.size);
       if(written != toWrite.size){
         printf("Failed to write: (%d/%d)\n",written,toWrite.size);
@@ -248,16 +259,6 @@ static Array<Location> CollectStackTrace(Arena* out,Arena* temp){
   return result;
 }
 
-#include <filesystem>
-namespace fs = std::filesystem;
-
-// TODO: Same function is being used in versatCompiler.cpp
-static String GetAbsolutePath(const char* path,Arena* arena){
-  fs::path canonical = fs::weakly_canonical(path);
-  String res = PushString(arena,"%s",canonical.c_str());
-  return res;
-}
-
 void PrintStacktrace(){
   const String rootPath = STRING(ROOT_PATH); // ROOT_PATH must have the pathname to the top of the source code folder (the largest subpath common to all code files)
 
@@ -330,8 +331,10 @@ void InitDebug(){
   if(init){
     return;
   }
-  init = true;
 
+  init = true;
+  //debugFlag = CurrentlyDebugging();
+  
   debugArenaInst = InitArena(Megabyte(1));
   SetDebugSignalHandler(SignalPrintStacktrace);
 }

@@ -80,6 +80,7 @@ def CreateVersatClass(pc_emul,versat_spec,versat_top,versat_extra,build_dir):
     versatSetupFilepath = os.path.realpath(build_dir + "/software/versatSetup.txt")
     alreadyRunned = os.path.isfile(versatSetupFilepath)
 
+    # TODO: This still runs Versat 2 times if an error occurs. Probably better to save the fact that a error occured and exit twice
     lines = []
     if(alreadyRunned):
         try:

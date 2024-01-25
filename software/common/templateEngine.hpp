@@ -3,26 +3,39 @@
 
 #include "parser.hpp"
 
-/*
-
-What I should tackle first:
-
-  Implement PrintAllTypesAndFieldsUsed(CompiledTemplate* compiled,Arena* temp);  
-    The original 
-
-  Only common.tpl including is working. For now there is no need for full includes
-  Command could just be an expression.
-  Maybe should check the seperation of expressions.
-  Should also completely parse commands into an enum, instead of a simple string. Change if/else chains into switch. Speeds up evaluation.
-  #{} should never print. @{} should always print. The logic should be unified and enforced, right now #{} gets parsed as commands and @{} gets parsed as expressions but realistically we could figure out if its a command or an expression by finding if the first id is a command id or not (but if so we cannot have identifiers with the same name as a command).
-
- */
-
 struct Expression;
+
+enum CommandType{
+  CommandType_JOIN = 0,
+  CommandType_FOR,
+  CommandType_IF,
+  CommandType_END,
+  CommandType_SET,
+  CommandType_LET,
+  CommandType_INC,
+  CommandType_ELSE,
+  CommandType_DEBUG,
+  CommandType_INCLUDE,
+  CommandType_DEFINE,
+  CommandType_CALL,
+  CommandType_WHILE,
+  CommandType_RETURN,
+  CommandType_FORMAT,
+  CommandType_DEBUG_MESSAGE,
+  CommandType_DEBUG_BREAK
+};
+
+struct CommandDefinition{
+  String name;
+  int numberExpressions;
+  CommandType type;
+  bool isBlockType;
+};
 
 // TODO: A Command could just be an expression, I think
 struct Command{
-  String name;
+  CommandDefinition* definition;
+  //String name;
   Array<Expression*> expressions;
   String fullText;
 };
@@ -51,6 +64,26 @@ struct TemplateFunction{
   Array<Block*> blocks;
 };
 
+enum TemplateRecordType{
+  TemplateRecordType_FIELD,
+  TemplateRecordType_IDENTIFER
+};
+
+struct TemplateRecord{
+  TemplateRecordType type;
+
+  union{
+    struct {
+      Type* identifierType;
+      String identifierName;
+    };
+    struct {
+      Type* structType;
+      String fieldName;
+    };
+  };
+};
+
 struct CompiledTemplate{
   int totalMemoryUsed;
   String content;
@@ -69,17 +102,20 @@ void InitializeTemplateEngine(Arena* perm);
 void ProcessTemplate(FILE* outputFile,CompiledTemplate* compiledTemplate,Arena* arena);
 CompiledTemplate* CompileTemplate(String content,const char* name,Arena* out,Arena* temp);
 
+String Repr(TemplateRecord record,Arena* arena);
 void PrintTemplate(CompiledTemplate* compiled,Arena* arena);
-void PrintAllTypesAndFieldsUsed(CompiledTemplate* compiled,Arena* temp); // Quick way of checking useless values 
+Array<TemplateRecord> RecordTypesAndFieldsUsed(CompiledTemplate* compiled,Arena* out,Arena* temp); // Quick way of checking useless values 
 
+Hashmap<String,Value>* GetAllTemplateValues();
 void ClearTemplateEngine();
 
-void TemplateSetCustom(const char* id,void* entity,const char* typeName);
+void TemplateSetCustom(const char* id,Value val);
+//void TemplateSetCustom(const char* id,void* entity,const char* typeName);
 void TemplateSetNumber(const char* id,int number);
 void TemplateSet(const char* id,void* ptr);
 void TemplateSetString(const char* id,const char* str);
 void TemplateSetString(const char* id,String str);
-void TemplateSetArray(const char* id,const char* baseType,void* array,int size);
+void TemplateSetArray(const char* id,const char* baseType,int size,void* array);
 void TemplateSetBool(const char* id,bool boolean);
 
 #endif // TEMPLATE_ENGINE_INCLUDED

@@ -81,17 +81,32 @@ enum MemType{
    STATE,
    DELAY,
    STATIC,
-   EXTRA,
-   OUTPUT,
-   STORED_OUTPUT
+   EXTRA
 };
 
 struct InstanceInfo{
   FUDeclaration* decl;
   String fullName;
   Optional<int> configPos;
+  int configSize;
   Optional<int> statePos;
-  Optional<int> memoryMapped;
+  int stateSize;
+  Optional<iptr> memMapped;
+  Optional<int> memMappedSize;
+  Optional<int> delayPos;
+  int delaySize;
+  int level;
+  bool isComposite;
+  bool isStatic;
+  bool isShared;
+};
+
+struct AcceleratorInfo{
+  Array<InstanceInfo> info;
+  int configSize;
+  int stateSize;
+  int delaySize;
+  int memSize;
 };
 
 Array<InstanceInfo> TransformGraphIntoArray(Accelerator* accel,Arena* out,Arena* temp);
@@ -108,9 +123,11 @@ CalculatedOffsets ExtractConfig(Accelerator* accel,Arena* out); // Extracts offs
 CalculatedOffsets ExtractState(Accelerator* accel,Arena* out);
 CalculatedOffsets ExtractDelay(Accelerator* accel,Arena* out);
 CalculatedOffsets ExtractMem(Accelerator* accel,Arena* out);
-CalculatedOffsets ExtractOutputs(Accelerator* accel,Arena* out);
 CalculatedOffsets ExtractExtraData(Accelerator* accel,Arena* out);
 CalculatedOffsets ExtractDebugData(Accelerator* accel,Arena* out);
+
+Array<String> ExtractStates(Array<InstanceInfo> info,Arena* arena);
+Array<Pair<String,iptr>> ExtractMem(Array<InstanceInfo> info,Arena* out);
 
 Hashmap<String,SizedConfig>* ExtractNamedSingleConfigs(Accelerator* accel,Arena* out);
 Hashmap<String,SizedConfig>* ExtractNamedSingleStates(Accelerator* accel,Arena* out);
@@ -137,6 +154,6 @@ struct OrderedConfigurations{
 OrderedConfigurations ExtractOrderedConfigurationNames(Versat* versat,Accelerator* accel,Arena* out,Arena* temp);
 Array<Wire> OrderedConfigurationsAsArray(OrderedConfigurations configs,Arena* out);
 
-void PrintConfigurations(FUDeclaration* type);
+void PrintConfigurations(FUDeclaration* type,Arena* temp);
 
 #endif // INCLUDED_VERSAT_CONFIGURATIONS_HPP

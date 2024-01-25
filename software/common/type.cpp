@@ -4,6 +4,7 @@
 
 #include "parser.hpp"
 #include "structParsing.hpp"
+#include "utilsCore.hpp"
 
 namespace ValueType{
   Type* NUMBER;
@@ -14,6 +15,7 @@ namespace ValueType{
   Type* NIL;
   Type* HASHMAP;
   Type* SIZED_STRING;
+  Type* SIZED_STRING_BASE;  // TODO: This is ugly and comes from the fact that SizedString is a typedef of Array<const char>. There should be an equality function that checks 
   Type* TEMPLATE_FUNCTION;
   Type* SET;
   Type* POOL;
@@ -457,16 +459,16 @@ void RegisterTypes(){
   }
   registered = true;
 
-  permanentArena = InitArena(Megabyte(1));
+  permanentArena = InitArena(Kilobyte(16));
 
   ValueType::NUMBER = REGISTER(int);
   ValueType::SIZE_T = REGISTER(size_t);
   ValueType::BOOLEAN = REGISTER(bool);
   ValueType::CHAR = REGISTER(char);
-
   ValueType::STRING = GetPointerType(ValueType::CHAR);
   ValueType::NIL = RegisterSimpleType(STRING("void"),sizeof(char),alignof(char));
 
+  REGISTER(long int);
   REGISTER(unsigned int);
   REGISTER(unsigned char);
   REGISTER(float);
@@ -475,17 +477,17 @@ void RegisterTypes(){
   RegisterParsedTypes();
 
 #ifndef SIMPLE_TYPES
-  ValueType::HASHMAP = GetTypeOrFail(STRING("Hashmap"));
-  ValueType::SIZED_STRING = GetTypeOrFail(STRING("String"));
-
-  Type* normalTemplateFunction = GetTypeOrFail(STRING("TemplateFunction"));
-
-  if(normalTemplateFunction){
-    ValueType::TEMPLATE_FUNCTION = GetPointerType(normalTemplateFunction);
-  }
   ValueType::POOL = GetTypeOrFail(STRING("Pool"));
   ValueType::ARRAY = GetTypeOrFail(STRING("Array"));
   ValueType::STD_VECTOR = GetTypeOrFail(STRING("std::vector"));
+  ValueType::HASHMAP = GetTypeOrFail(STRING("Hashmap"));
+  ValueType::SIZED_STRING = GetTypeOrFail(STRING("String"));
+  ValueType::SIZED_STRING_BASE = GetTypeOrFail(STRING("Array<const char>"));
+
+  Type* normalTemplateFunction = GetTypeOrFail(STRING("TemplateFunction"));
+  if(normalTemplateFunction){
+    ValueType::TEMPLATE_FUNCTION = GetPointerType(normalTemplateFunction);
+  }
 #endif
 }
 
@@ -495,31 +497,34 @@ void FreeTypes(){
   Free(&permanentArena);
   types.Clear(true);
 }
-
+ 
 String GetDefaultValueRepresentation(Value in,Arena* arena){
   Value val = CollapseArrayIntoPtr(in);
   Type* type = val.type;
   String res = {};
 
-  if(val.type == ValueType::NUMBER){
+  if(CompareString(type->name,"long int")){
+    res = PushString(arena,"%ld",val.number);
+    return res;
+  } else if(type == ValueType::NUMBER){
     res = PushString(arena,"%" PRId64,val.number);
-  } else if(val.type == ValueType::STRING){
+  } else if(type == ValueType::STRING){
     if(val.literal){
       res = PushString(arena,"\"%.*s\"",UNPACK_SS(val.str));
     } else {
       res = PushString(arena,"%.*s",UNPACK_SS(val.str));
     }
-  } else if(val.type == ValueType::CHAR){
+  } else if(type == ValueType::CHAR){
     res = PushString(arena,"%c",val.ch);
-  } else if(val.type == ValueType::SIZED_STRING){
+  } else if(type == ValueType::SIZED_STRING || val.type == ValueType::SIZED_STRING_BASE){
     res = PushString(arena,"%.*s",UNPACK_SS(val.str));
-  } else if(val.type == ValueType::BOOLEAN){
+  } else if(type == ValueType::BOOLEAN){
     res = PushString(arena,"%s",val.boolean ? "true" : "false");
-  } else if(val.type == ValueType::SIZE_T){
+  } else if(type == ValueType::SIZE_T){
     res = PushString(arena,"%d",*(int*)val.custom);
   } else if(type == ValueType::NIL){
     res = STRING("Nullptr");
-  } else if(val.type->type == Type::POINTER){
+  } else if(type->type == Type::POINTER){
     Assert(!val.isTemp);
 
     void* ptr = *(void**) val.custom;
@@ -538,7 +543,7 @@ String GetDefaultValueRepresentation(Value in,Arena* arena){
 
       res = PushString(arena,"Size:%" PRId64,size.value().number);
     } else {
-      res = PushString(arena,"%.*s",UNPACK_SS(type->name));// Return type name
+      res = PushString(arena,"%.*s",UNPACK_SS(type->name)); // Return type name
     }
   } else if(type->type == Type::ENUM){
     int enumValue = in.number;
@@ -555,7 +560,7 @@ String GetDefaultValueRepresentation(Value in,Arena* arena){
       res = PushString(arena,"(%.*s) %d",UNPACK_SS(type->name),enumValue);
     }
   } else {
-    res = PushString(arena,"\"[GetValueRepresentation Type: %.*s]\"",UNPACK_SS(type->name));// Return type name
+    res = PushString(arena,"\"[GetDefaultValueRepresentation Type:%.*s]\"",UNPACK_SS(type->name)); // Return type name
   }
 
   return res;
@@ -583,7 +588,7 @@ Value CollapsePtrIntoStruct(Value object){
 	  continue;
 	}
 
-  if(deference != nullptr){
+    if(deference != nullptr){
       deference = *((char**) deference);
       type = type->pointerType;
     } else {
@@ -625,7 +630,7 @@ Value CollapseValue(Value val){
     } else {
       val.str = STRING(str);
     }
-  } else if(val.type == ValueType::SIZED_STRING){
+  } else if(val.type == ValueType::SIZED_STRING || val.type == ValueType::SIZED_STRING_BASE){
     val.str = *((String*) val.custom);
   } else if(val.type == ValueType::TEMPLATE_FUNCTION){
     val.templateFunction = *((TemplateFunction**) val.custom);
@@ -769,6 +774,39 @@ Optional<Value> AccessStruct(Value object,String memberName){
   return res;
 }
 
+static Type* GetBaseType(Type* type){
+  // For now only recurse on arrays and pointers
+  switch(type->type){
+  case Type::ARRAY:{
+    Type* base = GetBaseType(type->arrayType);
+    return base;
+  } break;
+  case Type::POINTER:{
+    return GetBaseType(type->pointerType);
+  } break;
+  case Type::TYPEDEF:{
+    return GetBaseType(type->typedefType);
+  } break;
+  default: break;
+  }
+  
+  return type;
+}
+
+Optional<Member*> GetMember(Type* structType,String memberName){
+  Type* type = GetBaseType(structType);
+
+  Assert(type->type == Type::STRUCT || type->type == Type::TEMPLATED_INSTANCE);
+  
+  for(Member& m : type->members){
+    if(CompareString(m.name,memberName)){
+      return &m;
+    }
+  }
+
+  return {};
+}
+
 void PrintStructDefinition(Type* type){
   Type* collapsed = CollapseTypeUntilBase(type);
   Assert(IsStruct(collapsed));
@@ -827,7 +865,9 @@ int IndexableSize(Value object){
 bool IsIndexable(Type* type){
   bool res = false;
 
-  if(type->type == Type::ARRAY){
+  if(type->type == Type::POINTER){
+    res = true;
+  }if(type->type == Type::ARRAY){
     res = true;
   } else if(type->type == Type::TEMPLATED_INSTANCE){
     if(type->templateBase == ValueType::POOL){
@@ -850,7 +890,8 @@ bool IsBasicType(Type* type){
               type == ValueType::BOOLEAN ||
               type == ValueType::CHAR ||
               type == ValueType::STRING ||
-              type == ValueType::SIZED_STRING);
+              type == ValueType::SIZED_STRING ||
+              type == ValueType::SIZED_STRING_BASE);
 
   return res;
 }
@@ -917,6 +958,42 @@ HashmapUnpackedIndex UnpackHashmapIndex(int index){
   res.index = CLEAR_BIT(index,31);
 
   return res;
+}
+
+Type* GetBaseTypeOfIterating(Type* iterating){
+  if(iterating->type == Type::BASE){
+    return iterating;
+  }
+
+  Assert(IsIndexable(iterating)); // should suffice as a check
+  Type* type = GetBaseType(iterating);
+  
+  switch(type->type){
+  case Type::TEMPLATED_INSTANCE:{
+    // TODO: Technically should check if the types are iterating and recurse
+    //       on GetBaseTypeOfIterating instead of calling GetBaseType. Do now yet know if need to.
+    if(type->templateBase == ValueType::ARRAY){
+      return GetBaseType(type->templateArgTypes[0]);
+    } else if(type->templateBase == ValueType::POOL){
+      return GetBaseType(type = type->templateArgTypes[0]);
+    } else if(type->templateBase == ValueType::HASHMAP){
+      Type* keyType = type->templateArgTypes[0];
+      Type* dataType = type->templateArgTypes[1];
+
+      STACK_ARENA(temp,256);
+      String pairName = PushString(&temp,"Pair<%.*s,%.*s>",UNPACK_SS(keyType->name),UNPACK_SS(dataType->name));
+
+      Type* exists = GetSpecificType(pairName);
+      if(!exists){
+        String permanentName = PushString(&permanentArena,pairName);
+        exists = GetType(permanentName);
+      }
+      return GetBaseType(exists);
+    }
+  } break;
+  default: break;
+  }
+  return type;
 }
 
 Iterator Iterate(Value iterating){
@@ -1199,7 +1276,11 @@ bool Equal(Value v1,Value v2){
   }
 
   if(c2.type != c1.type){
-    c2 = ConvertValue(c2,c1.type,nullptr);
+    if(IsBasicType(c2.type)){
+      c1 = ConvertValue(c1,c2.type,nullptr);
+    } else {
+      c2 = ConvertValue(c2,c1.type,nullptr);
+    }
   }
 
   bool res = false;
@@ -1275,7 +1356,10 @@ Value ConvertValue(Value in,Type* want,Arena* arena){
   res.type = want;
 
   if(want == ValueType::BOOLEAN){
-    if(in.type == ValueType::NUMBER || in.type->type == Type::ENUM){
+    if(CompareString(in.type->name,"Optional<int>")){
+      Optional<int>* view = (Optional<int>*) in.custom;
+      res.boolean = view->has_value();
+    } else if(in.type == ValueType::NUMBER || in.type->type == Type::ENUM){
       res.boolean = (in.number != 0);
     } else if(in.type->type == Type::POINTER){
       int* pointerValue = (int*) DeferencePointer(in.custom,in.type->pointerType,0);
@@ -1298,6 +1382,9 @@ Value ConvertValue(Value in,Type* want,Arena* arena){
     } else if(CompareString(in.type->name,"iptr")) { // TODO: could be handled by the typedef and setting all values from cstdint as knows
          iptr* data = (iptr*) in.custom;
          res.number = (int64) *data;
+    } else if(CompareString(in.type->name,"Optional<int>")){
+      Optional<int>* view = (Optional<int>*) in.custom;
+      res.number = view->value_or(0);
     } else {
       NOT_IMPLEMENTED;
     }
@@ -1389,6 +1476,16 @@ Value MakeValue(void* entity,const char* typeName){
   return val;
 }
 
+Value MakeValue(void* entity,Type* type){
+  Value val = {};
+
+  val.type = type;
+  val.custom = entity;
+  val.isTemp = false;
+
+  return val;
+}
+
 Value MakeValue(void* entity,String typeName){
   Value val = {};
 
@@ -1402,7 +1499,7 @@ Value MakeValue(void* entity,String typeName){
 // This shouldn't be here, but cannot be on parser.cpp because otherwise struct parser would fail
 Array<Value> ExtractValues(const char* format,Token tok,Arena* arena){
   // TODO: This is pretty much a copy of CheckFormat but with small modifications
-  // It probably should be a way to refactor into a single function, and probably less error prone
+  // There should be a way to refactor into a single function, and probably less error prone
   if(!CheckFormat(format,tok)){
     return {};
   }
@@ -1438,6 +1535,7 @@ Array<Value> ExtractValues(const char* format,Token tok,Arena* arena){
         int number = ParseInt(numberStr);
 
         Value* val = PushStruct<Value>(arena);
+        *val = {};
         val->type = ValueType::NUMBER;
         val->number = number;
         val->isTemp = true;
@@ -1456,6 +1554,7 @@ Array<Value> ExtractValues(const char* format,Token tok,Arena* arena){
         str.size = &tok.data[tokenIndex] - str.data;
 
         Value* val = PushStruct<Value>(arena);
+        *val = {};
         val->type = ValueType::STRING;
         val->str = str;
         val->isTemp = true;

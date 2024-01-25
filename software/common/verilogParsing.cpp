@@ -33,9 +33,9 @@ void PerformDefineSubstitution(Arena* output,MacroMap& macros,String name){
   PushString(output,finish);
 }
 
-void PreprocessVerilogFile_(Arena* output, String fileContent,MacroMap& macros,std::vector<String>* includeFilepaths,Arena* temp);
+void PreprocessVerilogFile_(Arena* output, String fileContent,MacroMap& macros,Array<String> includeFilepaths,Arena* temp);
 
-static void DoIfStatement(Arena* output,Tokenizer* tok,MacroMap& macros,std::vector<String>* includeFilepaths,Arena* temp){
+static void DoIfStatement(Arena* output,Tokenizer* tok,MacroMap& macros,Array<String> includeFilepaths,Arena* temp){
   Token first = tok->NextToken();
   Token macroName = tok->NextToken();
 
@@ -84,7 +84,7 @@ static void DoIfStatement(Arena* output,Tokenizer* tok,MacroMap& macros,std::vec
   }
 }
 
-void PreprocessVerilogFile_(Arena* output, String fileContent,MacroMap& macros,std::vector<String>* includeFilepaths,Arena* temp){
+void PreprocessVerilogFile_(Arena* output, String fileContent,MacroMap& macros,Array<String> includeFilepaths,Arena* temp){
   Tokenizer tokenizer = Tokenizer(fileContent, "()`,+-/*\\\"",{"`include","`define","`timescale","`ifdef","`else","`elsif","`endif","`ifndef"});
   Tokenizer* tok = &tokenizer;
 
@@ -100,7 +100,7 @@ void PreprocessVerilogFile_(Arena* output, String fileContent,MacroMap& macros,s
          // Open include file
          std::string filename(UNPACK_SS_REVERSE(fileName));
          FILE* file = nullptr;
-         for(String str : *includeFilepaths){
+         for(String str : includeFilepaths){
            std::string string(str.data,str.size);
 
            std::string filepath;
@@ -122,7 +122,7 @@ void PreprocessVerilogFile_(Arena* output, String fileContent,MacroMap& macros,s
            printf("Looked on the following folders:\n");
 
            printf("  %s\n",GetCurrentDirectory());
-           for(String str : *includeFilepaths){
+           for(String str : includeFilepaths){
              printf("  %.*s\n",UNPACK_SS(str));
            }
 
@@ -223,7 +223,7 @@ void PreprocessVerilogFile_(Arena* output, String fileContent,MacroMap& macros,s
   }
 }
 
-String PreprocessVerilogFile(Arena* output, String fileContent,std::vector<String>* includeFilepaths,Arena* arena){
+String PreprocessVerilogFile(Arena* output,String fileContent,Array<String> includeFilepaths,Arena* arena){
   MacroMap macros = {};
 
   String res = {};
@@ -482,7 +482,7 @@ static Module ParseModule(Tokenizer* tok,Arena* out,Arena* temp){
         }
       }
     }
-    port.attributes = PushHashmapFromList(attributeList);
+    port.attributes = PushHashmapFromList(out,attributeList);
 
     Token portType = tok->NextToken();
     if(CompareString(portType,"input")){
@@ -547,11 +547,13 @@ static Module ParseModule(Tokenizer* tok,Arena* out,Arena* temp){
   return module;
 }
 
-std::vector<Module> ParseVerilogFile(String fileContent, std::vector<String>* includeFilepaths, Arena* out,Arena* temp){
+Array<Module> ParseVerilogFile(String fileContent,Array<String> includeFilepaths,Arena* out,Arena* temp){
+  BLOCK_REGION(temp);
+
   Tokenizer tokenizer = Tokenizer(fileContent,":,()[]{}\"+-/*=",{"#(","+:","-:","(*","*)"});
   Tokenizer* tok = &tokenizer;
 
-  std::vector<Module> modules;
+  ArenaList<Module>* modules = PushArenaList<Module>(temp);
 
   bool isSource = false;
   while(!tok->Done()){
@@ -576,7 +578,7 @@ std::vector<Module> ParseVerilogFile(String fileContent, std::vector<String>* in
       Module module = ParseModule(tok,out,temp);
 
       module.isSource = isSource;
-      modules.push_back(module);
+      *PushListElement(modules) = module;
 
       isSource = false;
       break; // For now, only parse the first module found
@@ -585,7 +587,7 @@ std::vector<Module> ParseVerilogFile(String fileContent, std::vector<String>* in
     tok->AdvancePeek(peek);
   }
 
-  return modules;
+  return PushArrayFromList(out,modules);
 }
 
 ModuleInfo ExtractModuleInfo(Module& module,Arena* permanent,Arena* tempArena){
@@ -801,15 +803,6 @@ ModuleInfo ExtractModuleInfo(Module& module,Arena* permanent,Arena* tempArena){
   info.externalInterfaces = interfaces;
 
   return info;
-}
-
-void OutputModuleInfos(FILE* output,ModuleInfoInstance info,String nameSpace,CompiledTemplate* unitVerilogData,Arena* temp,Array<Wire> configsHeaderSide,Array<String> statesHeaderSide){
-  TemplateSetCustom("module",&info,"ModuleInfoInstance");
-  TemplateSetString("namespace",nameSpace);
-  TemplateSetArray("configsHeader","Wire",configsHeaderSide.data,configsHeaderSide.size);
-  TemplateSetArray("statesHeader","String",statesHeaderSide.data,statesHeaderSide.size);
-
-  ProcessTemplate(output,unitVerilogData,temp);
 }
 
 void GetAllIdentifiers_(Expression* expr,PushPtr<String>& ptr){

@@ -92,6 +92,7 @@ bool CheckInputAndOutputNumber(FUDeclaration* type,int inputs,int outputs){
   return true;
 }
 
+// MARKED
 void PrintAcceleratorInstances(Accelerator* accel){
   STACK_ARENA(tempInst,Kilobyte(64));
   Arena* temp = &tempInst;
@@ -163,7 +164,7 @@ static void OutputGraphDotFile_(Versat* versat,Accelerator* accel,bool collapseS
       String second = UniqueRepr(in,arena);
       PortInstance start = {out,outPort};
       PortInstance end = {in,inPort};
-      String label = Repr(start,end,versat->debug.dotFormat,arena);
+      String label = Repr(&start,&end,versat->debug.dotFormat,arena);
       int calculatedDelay = con->delay ? *con->delay : 0;
 
       bool highlighStart = (highlighInstance ? highlighInstance->Exists(start.inst) : false);
@@ -187,9 +188,11 @@ static void OutputGraphDotFile_(Versat* versat,Accelerator* accel,bool collapseS
 void OutputGraphDotFile(Versat* versat,Accelerator* accel,bool collapseSameEdges,const char* filenameFormat,...){
   char buffer[1024];
 
+#if 0
   if(!versat->debug.outputGraphs){
     return;
   }
+#endif
 
   va_list args;
   va_start(args,filenameFormat);
@@ -206,9 +209,11 @@ void OutputGraphDotFile(Versat* versat,Accelerator* accel,bool collapseSameEdges
 void OutputGraphDotFile(Versat* versat,Accelerator* accel,bool collapseSameEdges,FUInstance* highlighInstance,const char* filenameFormat,...){
   char buffer[1024];
 
+#if 0
   if(!versat->debug.outputGraphs){
     return;
   }
+#endif
 
   va_list args;
   va_start(args,filenameFormat);

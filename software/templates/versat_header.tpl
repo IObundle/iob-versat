@@ -12,20 +12,27 @@
 
 typedef intptr_t iptr;
 
-#{for type structures}
+#{for type nonMergedStructures}
 typedef struct {
 #{for entry type.entries}
-@{entry.type} @{entry.name};
+#{if entry.typeAndNames.size > 1}
+union{
+#{for typeAndName entry.typeAndNames}
+@{typeAndName.type} @{typeAndName.name};
+#{end}
+};
+#{else}
+@{entry.typeAndNames[0].type} @{entry.typeAndNames[0].name};
+#{end}
 #{end}
 } @{type.name}Config;
 #define VERSAT_DEFINED_@{type.name}
-
 #{end}
 
 #{for type addressStructures}
 typedef struct {
 #{for entry type.entries}
-@{entry.type} @{entry.name};
+  @{entry.typeAndNames[0].type} @{entry.typeAndNames[0].name};
 #{end}
 } @{type.name}Addr;
 #define VERSAT_DEFINED_@{type.name}Addr
@@ -33,13 +40,13 @@ typedef struct {
 
 typedef struct{
 #{for wire orderedConfigs.configs}
-   iptr @{wire.name};
+  iptr @{wire.name};
 #{end}
 #{for wire orderedConfigs.statics}
-   iptr @{wire.name};
+  iptr @{wire.name};
 #{end}
 #{for wire orderedConfigs.delays}
-   iptr @{wire.name};
+  iptr @{wire.name};
 #{end}
 } AcceleratorConfig;
 
@@ -57,9 +64,8 @@ typedef struct{
 #{end}
 
 typedef struct{
-#{for pair namedStates}
-#{set name pair.first}
-int @{name};
+#{for name namedStates}
+  int @{name};
 #{end}
 } AcceleratorState;
 
@@ -73,10 +79,10 @@ extern iptr versat_base;
 #define @{pair.first} (versat_base + memMappedStart + @{pair.second.ptr})
 #{end}
 
-#define ACCELERATOR_TOP_ADDR_INIT {#{join "," for pair namedMem} (void*) @{pair.first} #{end}}
+#define ACCELERATOR_TOP_ADDR_INIT {#{join "," pair namedMem} (void*) @{pair.first} #{end}}
 
-static unsigned int delayBuffer[] = {#{join "," for d delay} @{d |> Hex} #{end}};
-static unsigned int staticBuffer[] = {#{join "," for d staticBuffer} @{d |> Hex} #{end} };
+static unsigned int delayBuffer[] = {#{join "," d delay} @{d |> Hex} #{end}};
+static unsigned int staticBuffer[] = {#{join "," d staticBuffer} @{d |> Hex} #{end} };
 
 #ifdef __cplusplus
 extern "C" {
@@ -141,8 +147,7 @@ extern volatile AcceleratorState* accelState;
 #{end}
 #{end}
 
-#{for pair namedStates}
-#{set name pair.first} #{set conf pair.second}
+#{for name namedStates}
 #define ACCEL_@{name} accelState->@{name}
 #{end}
 

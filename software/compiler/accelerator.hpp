@@ -23,7 +23,7 @@ typedef Hashmap<InstanceNode*,InstanceNode*> InstanceNodeMap;
 
 struct Accelerator{ // Graph + data storage
   Versat* versat;
-  FUDeclaration* subtype; // Set if subaccelerator (accelerator associated to a FUDeclaration). A "free" accelerator has this set to nullptr
+  //FUDeclaration* subtype; // Set if subaccelerator (accelerator associated to a FUDeclaration). A "free" accelerator has this set to nullptr
 
   Edge* edges; // TODO: Should be removed, edge info is all contained inside the instance nodes and desync leads to bugs since some code still uses this
 
@@ -32,14 +32,14 @@ struct Accelerator{ // Graph + data storage
   InstanceNode* lastAllocated;
   Pool<FUInstance> instances;
   Pool<FUInstance> subInstances; // TODO: Since do not care about user code anymore, can remove this. Essentially a "wrapper" so that user code does not have to deal with reallocations when adding units.
-  
+
+  // TODO: I do not need any of this, but first need to retire the use of the Populate function.
   Allocation<iptr> configAlloc;
   Allocation<int> stateAlloc;
   Allocation<Byte> extraDataAlloc;
   Allocation<Byte> externalMemoryAlloc;
-
-  Allocation<int> outputAlloc;
-  Allocation<int> storedOutputAlloc;
+  //Allocation<int> outputAlloc;
+  //Allocation<int> storedOutputAlloc;
 
   DynamicArena* accelMemory;
 
@@ -48,18 +48,12 @@ struct Accelerator{ // Graph + data storage
   int startOfDelay;
   int startOfStatic;
   int staticSize;
-   
-  void* configuration;
-  int configurationSize;
 
-  int cyclesPerRun;
-
-  int created;
-  int entityId;
-  bool init;
-  bool useDMA;
+  String name; // For debugging purposes it's useful to give accelerators a name
 };
 
+// TODO: The reason we had ordered was because we wanted to simulate at runtime, but that is not needed anymore.
+//       I think ordered can just be replaced by a simple function that computes the ordered instanceNodes.
 class AcceleratorIterator{
 public:
   union Type{

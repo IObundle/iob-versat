@@ -411,6 +411,36 @@ Set<Data>* PushSet(Arena* arena,int maxAmountOfElements){
    return set;
 }
 
+template<typename Data>
+bool SetIterator<Data>::operator!=(SetIterator<Data>& iter){
+   return (this->innerIter != iter.innerIter);
+}
+
+template<typename Data>
+void SetIterator<Data>::operator++(){
+  ++this->innerIter;  
+}
+
+template<typename Data>
+Data& SetIterator<Data>::operator*(){
+  return (*this->innerIter).first;
+}
+
+template<typename Data>
+SetIterator<Data> begin(Set<Data>* set){
+  SetIterator<Data> iter = {};
+  iter.innerIter = begin(set->map);
+  return iter;
+}
+
+template<typename Data>
+SetIterator<Data> end(Set<Data>* set){
+  SetIterator<Data> iter = {};
+  iter.innerIter = end(set->map);
+  return iter;
+}
+
+
 template<typename T>
 void PoolIterator<T>::Init(Pool<T>* pool,Byte* page){
    *this = {};

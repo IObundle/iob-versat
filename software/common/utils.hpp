@@ -9,6 +9,9 @@
 Optional<Array<String>> GetAllFilesInsideDirectory(String dirPath,Arena* arena);
 
 String EscapeString(String toEscape,char spaceSubstitute,Arena* out);
+String GetAbsolutePath(const char* path,Arena* arena);
+
+Array<int> GetNonZeroIndexes(Array<int> array,Arena* out);
 
 // A templated type for carrying the index in an array
 // A performant design would allocate a separate array because these functions copy data around.
@@ -276,8 +279,7 @@ Array<T> PushArrayFromSet(Arena* arena,Set<T>* set){
 }
 
 template<typename T,typename P>
-Hashmap<T,P>* PushHashmapFromList(ArenaList<Pair<T,P>>* list){
-  Arena* arena = list->arena;
+Hashmap<T,P>* PushHashmapFromList(Arena* arena,ArenaList<Pair<T,P>>* list){
   int size = Size(list);
   
   Hashmap<T,P>* map = PushHashmap<T,P>(arena,size);
@@ -290,8 +292,7 @@ Hashmap<T,P>* PushHashmapFromList(ArenaList<Pair<T,P>>* list){
 }
 
 template<typename T,typename P>
-Array<Pair<T,P>> PushArrayFromList(ArenaList<Pair<T,P>>* list){
-  Arena* arena = list->arena;
+Array<Pair<T,P>> PushArrayFromList(Arena* arena,ArenaList<Pair<T,P>>* list){
   int size = Size(list);
   
   Array<Pair<T,P>> arr = PushArray<Pair<T,P>>(arena,size);
@@ -302,6 +303,20 @@ Array<Pair<T,P>> PushArrayFromList(ArenaList<Pair<T,P>>* list){
   }
 
   return arr;
+}
+
+template<typename T>
+Set<T>* PushSetFromList(Arena* arena,ArenaList<T>* list){
+  int size = Size(list);
+
+  Set<T>* set = PushSet<T>(arena,size);
+
+  int i = 0;
+  FOREACH_LIST_INDEXED(auto*,iter,list->head,i){
+    set->Insert(iter->elem);
+  }
+
+  return set;
 }
 
 template<typename T>

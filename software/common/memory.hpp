@@ -301,9 +301,6 @@ public:
    GetOrAllocateResult<Data> GetOrAllocate(Key key); // More efficient way for the Get, check if null, Insert pattern
 
    bool Exists(Key key);
-
-   // HashmapIterator<Key,Data> begin();
-   // HashmapIterator<Key,Data> end();
 };
 
 template<typename Key,typename Data>
@@ -335,7 +332,24 @@ struct Set{
 };
 
 template<typename Data>
+class SetIterator{
+public:
+  HashmapIterator<Data,int> innerIter;
+
+public:
+   bool operator!=(SetIterator& iter);
+   void operator++();
+   Data& operator*();
+};
+
+template<typename Data>
 Set<Data>* PushSet(Arena* arena,int maxAmountOfElements);
+
+template<typename Data>
+SetIterator<Data> begin(Set<Data>* set);
+
+template<typename Data>
+SetIterator<Data> end(Set<Data>* set);
 
 /*
    Pool
