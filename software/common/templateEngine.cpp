@@ -343,6 +343,7 @@ static Array<IndividualBlock> ParseIndividualLine(String line, int lineNumber,Ar
   }
 
   Tokenizer tok(line,"}",{"@{","#{"});
+  tok.keepComments = true;
   ArenaList<IndividualBlock>* strings = PushArenaList<IndividualBlock>(temp);
 
   while(1){
@@ -514,12 +515,12 @@ CompiledTemplate* CompileTemplate(String content,const char* name,Arena* out,Are
 
   ArenaList<IndividualBlock>* blockList = PushArenaList<IndividualBlock>(temp);
   Array<String> lines = Split(content,'\n',temp);
-
+  
   for(int i = 0; i < lines.size; i++){
     String& line = lines[i];
     int lineNumber = i + 1;
     Array<IndividualBlock> sep = ParseIndividualLine(line,lineNumber,temp,out);
-
+    
     bool containsText = false;
     bool containsCommand = false;
     bool containsExpression = false;
@@ -1073,6 +1074,8 @@ static ValueAndText EvalNonBlockCommand(Command* com,Frame* previousFrame,Arena*
 }
 
 static String Eval(Block* block,Frame* frame,Arena* temp){
+  BLOCK_REGION(temp);
+
   String res = {};
   res.data = (char*) MarkArena(outputArena);
 
@@ -1102,15 +1105,21 @@ void InitializeTemplateEngine(Arena* perm){
   globalFrame->previousFrame = nullptr;
 }
 
-void ProcessTemplate(FILE* outputFile,CompiledTemplate* compiledTemplate,Arena* temp){
+void ProcessTemplate(FILE* outputFile,CompiledTemplate* compiledTemplate,Arena* temp,Arena* temp2){
   BLOCK_REGION(temp);
+  BLOCK_REGION(temp2);
   Assert(globalFrame && "Call InitializeTemplateEngine first!");
 
   globalTemplateName = compiledTemplate->name;
 
+  outputArena = temp2;
+  output = outputFile;
+
+#if 0
   Arena outputArenaInst = SubArena(temp,Megabyte(64));
   outputArena = &outputArenaInst;
   output = outputFile;
+#endif
 
   Frame* top = CreateFrame(globalFrame,temp);
   for(Block* block : compiledTemplate->blocks){

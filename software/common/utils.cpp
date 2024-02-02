@@ -5,7 +5,7 @@
 #include <filesystem>
 namespace fs = std::filesystem;
 
-Optional<Array<String>> GetAllFilesInsideDirectory(String dirPath,Arena* arena){
+Optional<Array<String>> GetAllFilesInsideDirectory(String dirPath,Arena* out){
    DIR* dir = opendir(StaticFormat("%.*s",UNPACK_SS(dirPath))); // Make sure it's zero terminated
 
    if(dir == nullptr){
@@ -31,7 +31,7 @@ Optional<Array<String>> GetAllFilesInsideDirectory(String dirPath,Arena* arena){
       amount += 1;
    }
 
-   Array<String> arr = PushArray<String>(arena,amount);
+   Array<String> arr = PushArray<String>(out,amount);
 
    rewinddir(dir);
 
@@ -50,7 +50,7 @@ Optional<Array<String>> GetAllFilesInsideDirectory(String dirPath,Arena* arena){
          continue;
       }
 
-      arr[index] = PushString(arena,"%s",d->d_name);
+      arr[index] = PushString(out,"%s",d->d_name);
       index += 1;
    }
    
@@ -79,9 +79,9 @@ String EscapeString(String toEscape,char spaceSubstitute,Arena* out){
   return res;
 }
 
-String GetAbsolutePath(const char* path,Arena* arena){
+String GetAbsolutePath(const char* path,Arena* out){
   fs::path canonical = fs::weakly_canonical(path);
-  String res = PushString(arena,"%s",canonical.c_str());
+  String res = PushString(out,"%s",canonical.c_str());
   return res;
 }
 

@@ -5,7 +5,11 @@
 // Given the initial byte offset, this module aligns incoming data
 // Start must be asserted once before the first valid data in a new burst transfer
 module burst_align #(
-   parameter AXI_DATA_W = 32
+   parameter AXI_DATA_W = 32,
+
+   parameter OFFSET_W = calculate_AXI_OFFSET_W(
+       AXI_DATA_W
+   )  // Local parameter, needed by input definition
 ) (
    input [OFFSET_W-1:0] offset_i,
    input                start_i,
@@ -29,8 +33,6 @@ module burst_align #(
    input clk_i,
    input rst_i
 );
-
-   localparam OFFSET_W = calculate_AXI_OFFSET_W(AXI_DATA_W);
 
    reg valid;
    reg flush;

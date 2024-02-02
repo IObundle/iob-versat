@@ -50,18 +50,6 @@ struct DAGOrder{
   FUInstance** instances;
 };
 
-struct VersatComputedData{
-  int memoryMaskSize;
-  int memoryAddressOffset;
-  char memoryMaskBuffer[33];
-  char* memoryMask;
-};
-
-struct ComputedData{
-  Array<ExternalMemoryInterface> external;
-  Array<VersatComputedData> data;
-};
-
 struct Parameter{
   String name;
   String value;
@@ -114,8 +102,6 @@ struct FUInstance{
   // Various uses
   Accelerator* iterative;
 
-  UnitDebugData* debugData;
-
   union{
     int literal;
     int bufferAmount;
@@ -135,21 +121,9 @@ struct DebugState{
   bool outputAccelerator;
   bool outputVersat;
   bool outputVCD;
+  bool outputAcceleratorInfo;
   bool useFixedBuffers;
 };
-
-#if 0
-struct Options{
-  // Repr : test
-  int addrSize;
-  int dataSize;
-  bool shadowRegister;
-  bool architectureHasDatabus;
-  bool generateFSTFormat;
-  bool noDelayPropagation;
-  bool useDMA;
-};
-#endif
 
 struct Options{
   Array<String> verilogFiles;
@@ -170,6 +144,7 @@ struct Options{
   bool debug;
   bool shadowRegister;
   bool architectureHasDatabus;
+  bool useFixedBuffers;
   bool generateFSTFormat;
   bool noDelayPropagation;
   bool useDMA;
@@ -209,49 +184,6 @@ struct UnitValues{
   bool signalLoop;
 };
 
-struct VersatComputedValues{
-  int nConfigs;
-  int configBits;
-
-  int versatConfigs;
-  int versatStates;
-
-  int nStatics;
-  int staticBits;
-  int staticBitsStart;
-
-  int nDelays;
-  int delayBits;
-  int delayBitsStart;
-
-  // Configurations = config + static + delays
-  int nConfigurations;
-  int configurationBits;
-  int configurationAddressBits;
-
-  int nStates;
-  int stateBits;
-  int stateAddressBits;
-
-  int unitsMapped;
-  int memoryMappedBytes;
-  //   int maxMemoryMapDWords;
-
-  int nUnitsIO;
-
-  int numberConnections;
-
-  int externalMemoryInterfaces;
-
-  int stateConfigurationAddressBits;
-  int memoryAddressBits;
-  int memoryMappingAddressBits;
-  int memoryConfigDecisionBit;
-  //int lowerAddressSize;
-
-  bool signalLoop;
-};
-
 struct HierarchicalName{
   String name;
   HierarchicalName* next;
@@ -266,20 +198,6 @@ struct SharingInfo{
   int* ptr;
   bool init;
 };
-
-// Simple operations should also be stored here. They are versat agnostic as well
-namespace BasicDeclaration{
-  extern FUDeclaration* buffer;
-  extern FUDeclaration* fixedBuffer;
-  extern FUDeclaration* input;
-  extern FUDeclaration* output;
-  extern FUDeclaration* multiplexer;
-  extern FUDeclaration* combMultiplexer;
-  extern FUDeclaration* timedMultiplexer;
-  extern FUDeclaration* stridedMerge;
-  extern FUDeclaration* pipelineRegister;
-  extern FUDeclaration* data;
-}
 
 struct CompiledTemplate;
 namespace BasicTemplates{
@@ -308,6 +226,11 @@ struct TypeStructInfo{
   Array<TypeStructInfoElement> entries;
 };
 
+struct CalculateDelayResult{
+  Hashmap<EdgeNode,int>* edgesDelay;
+  Hashmap<InstanceNode*,int>* nodeDelay;
+};
+
 // Temp
 bool EqualPortMapping(PortInstance p1,PortInstance p2);
 
@@ -322,7 +245,7 @@ int CalculateNumberOfUnits(InstanceNode* node);
 
 // Delay
 int CalculateLatency(FUInstance* inst);
-Hashmap<EdgeNode,int>* CalculateDelay(Versat* versat,Accelerator* accel,Arena* out);
+CalculateDelayResult CalculateDelay(Versat* versat,Accelerator* accel,Arena* out);
 void SetDelayRecursive(Accelerator* accel,Arena* arena);
 
 // Graph fixes
@@ -369,7 +292,7 @@ void ParseVersatSpecification(Versat* versat,String content);
 void ParseVersatSpecification(Versat* versat,const char* filepath);
 
 // Accelerator functions
-Accelerator* CreateAccelerator(Versat* versat);
+Accelerator* CreateAccelerator(Versat* versat,String name);
 FUInstance* CreateFUInstance(Accelerator* accel,FUDeclaration* type,String entityName);
 void AcceleratorRun(Accelerator* accel,int times = 1);
 void AcceleratorRunDebug(Accelerator* accel);
@@ -418,6 +341,7 @@ void DisplayUnitConfiguration(Accelerator* topLevel);
 
 void DebugAccelerator(Accelerator* accel);
 void DebugVersat(Versat* versat);
+void PrintDeclaration(FILE* out,FUDeclaration* decl,Arena* temp,Arena* temp2);
 
 // Debug units, only works for pc-emul (no declaration info in embedded)
 bool CheckInputAndOutputNumber(FUDeclaration* type,int inputs,int outputs);

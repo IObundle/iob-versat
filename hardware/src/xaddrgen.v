@@ -37,7 +37,7 @@ module xaddrgen #(
    reg run_i_reg, run_i_nxt;
    reg rep, rep_nxt;
 
-   parameter IDLE = 1'b0, RUN = 1'b1;
+   localparam IDLE = 1'b0, RUN = 1'b1;
    reg state, state_nxt;
 
    assign period_i_int = {1'b0, period_i};

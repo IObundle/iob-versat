@@ -1,48 +1,46 @@
 `timescale 1ns / 1ps
 
 module SignalAccum #(
-         parameter DATA_W = 32
-              )
-    (
-    //control
-    input               clk,
-    input               rst,
-    
-    input               running,
-    input               run,
+   parameter DATA_W = 32
+) (
+   //control
+   input clk,
+   input rst,
 
-    //input / output data
-    input [DATA_W-1:0] in0,
-    input [DATA_W-1:0] in1, // Signal
+   input running,
+   input run,
 
-    (* versat_latency = 1 *) output reg [DATA_W-1:0] out0,
-    (* versat_latency = 1 *) output [DATA_W-1:0] out1,
+   //input / output data
+   input [DATA_W-1:0] in0,
+   input [DATA_W-1:0] in1,  // Signal
 
-    input [31:0]       delay0
-     );
+   (* versat_latency = 1 *) output reg [DATA_W-1:0] out0,
+   (* versat_latency = 1 *) output     [DATA_W-1:0] out1,
 
-reg [31:0] delay;
+   input [31:0] delay0
+);
 
-assign out1 = in1;
+   reg [31:0] delay;
 
-always @(posedge clk,posedge rst)
-begin
-     if(rst) begin
-          delay <= 0;
-          out0 <= 0;
-     end else if(run) begin
-          delay <= delay0;
-          out0 <= 0;
-     end else if(|delay) begin
-          delay <= delay - 1;
-          out0 <= 0;
-     end else if(running) begin
-          if(|in1) begin
-               out0 <= in0;
-          end else begin
-               out0 <= out0 + in0;
-          end
-     end
-end
+   assign out1 = in1;
+
+   always @(posedge clk, posedge rst) begin
+      if (rst) begin
+         delay <= 0;
+         out0  <= 0;
+      end else if (run) begin
+         delay <= delay0;
+         out0  <= 0;
+      end else if (|delay) begin
+         delay <= delay - 1;
+         out0  <= 0;
+      end else if (running) begin
+         if (|in1) begin
+            out0 <= in0;
+         end else begin
+            out0 <= out0 + in0;
+         end
+      end
+   end
 
 endmodule

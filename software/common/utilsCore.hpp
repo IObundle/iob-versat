@@ -1,5 +1,4 @@
-#ifndef VERSAT_INCLUDED_UTILS_CORE
-#define VERSAT_INCLUDED_UTILS_CORE
+#pragma once
 
 // Utilities that do not depend on anything else from versat (like memory.hpp, it's fine to depend on standard library)
 
@@ -102,13 +101,13 @@ const char* GetFilename(const char* fullpath);
 static void Terminate(){FlushStdout(); exit(-1);}
 //#if defined(VERSAT_DEBUG)
 #define Assert(EXPR) \
-   do { \
-   bool _ = !(EXPR);   \
-   if(_){ \
+  do { \
+    bool _ = !(EXPR);   \
+    if(_){ \
       FlushStdout(); \
-      assert(_ && (EXPR)); \
-   } \
-   } while(0)
+      __builtin_trap(); \
+    } \
+  } while(0)
 //#else
 //#define Assert(EXPR) do {} while(0)
 //#endif
@@ -348,7 +347,7 @@ static bool operator==(const Pair<F,S>& p1,const Pair<F,S>& p2){
    return res;
 }
 
-#define BIT_MASK(BIT) (1 << BIT)
+#define BIT_MASK(BIT) (1 << (BIT))
 #define GET_BIT(VAL,INDEX) (VAL & (BIT_MASK(INDEX)))
 #define SET_BIT(VAL,INDEX) (VAL | (BIT_MASK(INDEX)))
 #define CLEAR_BIT(VAL,INDEX) (VAL & ~(BIT_MASK(INDEX)))
@@ -405,7 +404,8 @@ void HexStringToHex(unsigned char* buffer,String str);
 void SeedRandomNumber(uint seed);
 uint GetRandomNumber();
 
-bool CheckIfFileExists(const char* file);
+bool RemoveDirectory(const char* path);
+//bool CheckIfFileExists(const char* file);
 long int GetFileSize(FILE* file);
 char* GetCurrentDirectory();
 void MakeDirectory(const char* path);
@@ -511,5 +511,3 @@ inline bool Contains(Array<String> array,String toCheck){
    }
    return false;
 }
-
-#endif // VERSAT_INCLUDED_UTILS_CORE

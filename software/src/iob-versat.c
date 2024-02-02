@@ -45,14 +45,17 @@ void versat_init(int base){
   accelState  = (volatile AcceleratorState*)  (versat_base + stateStart);
 
   volatile int* delayBase = (volatile int*) (versat_base + delayStart);
-  volatile int* staticBase = (volatile int*) (versat_base + staticStart);
 
   for(int i = 0; i < ARRAY_SIZE(delayBuffer); i++){  // Hackish, for now
       delayBase[i] = delayBuffer[i];
   }
+
+#if 0
+  volatile int* staticBase = (volatile int*) (versat_base + staticStart);
   for(int i = 0; i < ARRAY_SIZE(staticBuffer); i++){ // Hackish, for now
       staticBase[i] = staticBuffer[i];
   }
+#endif
 }
 
 void StartAccelerator(){

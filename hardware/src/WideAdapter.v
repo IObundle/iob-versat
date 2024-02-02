@@ -5,15 +5,15 @@
 module WideAdapter #(
    parameter INPUT_W = 64,
    parameter SIZE_W = 32, // Size of data (data can be smaller than output, in which case the output is zero extended)
-   parameter OUTPUT_W = 32  // Size of output
+   parameter OUTPUT_W = 32,  // Size of output
+
+   parameter DIFF_W = $clog2(INPUT_W / SIZE_W)  // Local parameter, needed by input definition
 ) (
    input [DIFF_W-1:0] sel_i,
 
    input  [ INPUT_W-1:0] in_i,
    output [OUTPUT_W-1:0] out_o
 );
-
-   localparam DIFF_W = $clog2(INPUT_W / SIZE_W);
 
    ZeroExtend #(
       .INPUT_W (SIZE_W),

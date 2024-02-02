@@ -1,5 +1,4 @@
-#ifndef INCLUDED_MEMORY
-#define INCLUDED_MEMORY
+#pragma once
 
 #include <cstddef>
 #include <cstdint>
@@ -25,9 +24,9 @@ void CheckMemoryStats();
 // Similar to std::vector but reallocations can only be done explicitly. No random reallocations or bugs from their random occurance
 template<typename T>
 struct Allocation{
-   T* ptr;
-   int size;
-   int reserved;
+  T* ptr;
+  int size;
+  int reserved;
 };
 
 template<typename T> bool ZeroOutAlloc(Allocation<T>* alloc,int newSize); // Clears all memory, returns true if reallocation occurs
@@ -40,9 +39,10 @@ template<typename T> T* Push(Allocation<T>* alloc, int amount); // Fails if not 
 // Care, functions that push to an arena do not clear it to zero or to any value.
 // Need to initialize the values directly.
 struct Arena{
-   Byte* mem;
-   size_t used;
-   size_t totalAllocated;
+  Byte* mem;
+  size_t used;
+  size_t totalAllocated;
+  size_t maximum;
 };
 
 Arena InitArena(size_t size); // Calls calloc
@@ -68,12 +68,12 @@ String PushFile(Arena* arena,const char* filepath);
 
 class ArenaMarker{
 public:
-   Arena* arena;
-   Byte* mark;
-   ArenaMarker(Arena* arena){this->arena = arena; this->mark = MarkArena(arena);};
-   ~ArenaMarker(){PopMark(this->arena,this->mark);};
-   void Pop(){PopMark(this->arena,this->mark);};
-   operator bool(){return true;}; // For the region trick
+  Arena* arena;
+  Byte* mark;
+  ArenaMarker(Arena* arena){this->arena = arena; this->mark = MarkArena(arena);};
+  ~ArenaMarker(){PopMark(this->arena,this->mark);};
+  void Pop(){PopMark(this->arena,this->mark);};
+  operator bool(){return true;}; // For the region trick
 };
 
 #define __marker(LINE) marker_ ## LINE
@@ -85,9 +85,9 @@ public:
 // Do not abuse stack arenas.
 #define STACK_ARENA(NAME,SIZE) \
    Arena NAME = {}; \
-   char buffer_##NAME[SIZE]; \
-   NAME.mem = (Byte*) buffer_##NAME; \
-   NAME.totalAllocated = SIZE;
+  char buffer_##NAME[SIZE]; \
+  NAME.mem = (Byte*) buffer_##NAME; \
+  NAME.totalAllocated = SIZE;
 
 template<typename T>
 Array<T> PushArray(Arena* arena,int size){Array<T> res = {}; res.size = size; res.data = (T*) PushBytes(arena,sizeof(T) * size); return res;};
@@ -100,10 +100,10 @@ T* PushStruct(Arena* arena){T* res = (T*) PushBytes(arena,sizeof(T)); return res
 
 // Arena that allocates more blocks of memory like a list.
 struct DynamicArena{
-   DynamicArena* next;
-   Byte* mem;
-   size_t used;
-   int pagesAllocated;
+  DynamicArena* next;
+  Byte* mem;
+  size_t used;
+  int pagesAllocated;
 };
 
 DynamicArena* CreateDynamicArena(int numberPages = 1);
@@ -121,90 +121,90 @@ T* PushStruct(DynamicArena* arena){T* res = (T*) PushBytes(arena,sizeof(T)); ret
 template<typename T>
 class PushPtr{
 public:
-   T* ptr;
-   int maximumTimes;
-   int timesPushed;
+  T* ptr;
+  int maximumTimes;
+  int timesPushed;
 
-   PushPtr(){
-      ptr = nullptr;
-      maximumTimes = 0;
-      timesPushed = 0;
-   }
+  PushPtr(){
+    ptr = nullptr;
+    maximumTimes = 0;
+    timesPushed = 0;
+  }
 
-   PushPtr(Arena* arena,int maximum){
-      this->ptr = PushArray<T>(arena,maximum).data;
-      this->maximumTimes = maximum;
-      this->timesPushed = 0;
-   }
+  PushPtr(Arena* arena,int maximum){
+    this->ptr = PushArray<T>(arena,maximum).data;
+    this->maximumTimes = maximum;
+    this->timesPushed = 0;
+  }
    
-   void Init(T* ptr,int maximum){
-      this->ptr = ptr;
-      this->maximumTimes = maximum;
-      this->timesPushed = 0;
-   }
+  void Init(T* ptr,int maximum){
+    this->ptr = ptr;
+    this->maximumTimes = maximum;
+    this->timesPushed = 0;
+  }
 
-   void Init(Array<T> arr){
-      this->ptr = arr.data;
-      this->maximumTimes = arr.size;
-      this->timesPushed = 0;
-   }
+  void Init(Array<T> arr){
+    this->ptr = arr.data;
+    this->maximumTimes = arr.size;
+    this->timesPushed = 0;
+  }
 
-   void Init(Allocation<T> alloc){
-      this->ptr = alloc.ptr;
-      this->maximumTimes = alloc.size;
-      this->timesPushed = 0;
-   }
+  void Init(Allocation<T> alloc){
+    this->ptr = alloc.ptr;
+    this->maximumTimes = alloc.size;
+    this->timesPushed = 0;
+  }
 
-   T* Push(int times){
-      T* res = &ptr[timesPushed];
-      timesPushed += times;
+  T* Push(int times){
+    T* res = &ptr[timesPushed];
+    timesPushed += times;
 
-      Assert(timesPushed <= maximumTimes);
-      return res;
-   }
+    Assert(timesPushed <= maximumTimes);
+    return res;
+  }
 
-   void PushValue(T val){
-      T* space = Push(1);
-      *space = val;
-   }
+  void PushValue(T val){
+    T* space = Push(1);
+    *space = val;
+  }
 
-   void Push(Array<T> array){
-      T* data = Push(array.size);
+  void Push(Array<T> array){
+    T* data = Push(array.size);
 
-      for(int i = 0; i < array.size; i++){
-         data[i] = array[i];
-      }
-   }
+    for(int i = 0; i < array.size; i++){
+      data[i] = array[i];
+    }
+  }
 
-   T* Set(int pos,int times){
-      T* res = &ptr[pos];
+  T* Set(int pos,int times){
+    T* res = &ptr[pos];
 
-      timesPushed = std::max(timesPushed,pos + times);
-      Assert(timesPushed <= maximumTimes);
-      return res;
-   }
+    timesPushed = std::max(timesPushed,pos + times);
+    Assert(timesPushed <= maximumTimes);
+    return res;
+  }
 
-   Array<T> AsArray(){
-      Array<T> res = {};
-      res.data = ptr;
-      res.size = timesPushed;
-      return res;
-   }
+  Array<T> AsArray(){
+    Array<T> res = {};
+    res.data = ptr;
+    res.size = timesPushed;
+    return res;
+  }
 
-   void Reset(){
-      timesPushed = 0;
-   }
+  void Reset(){
+    timesPushed = 0;
+  }
 
-   bool Empty(){
-      bool res = (maximumTimes == timesPushed);
-      return res;
-   }
+  bool Empty(){
+    bool res = (maximumTimes == timesPushed);
+    return res;
+  }
 };
 
 template<typename T>
 static void PopPushPtr(Arena* arena,PushPtr<T>& ptr){
-   Byte* lastPos = (Byte*) &ptr.ptr[ptr.timesPushed];
-   PopMark(arena,lastPos);
+  Byte* lastPos = (Byte*) &ptr.ptr[ptr.timesPushed];
+  PopMark(arena,lastPos);
 }
 
 template<typename T> bool Inside(PushPtr<T>* push,T* ptr);
@@ -213,94 +213,94 @@ class BitArray;
 
 class BitIterator{
 public:
-   BitArray* array;
-   int currentByte;
-   int currentBit;
+  BitArray* array;
+  int currentByte;
+  int currentBit;
 
 public:
-   bool operator!=(BitIterator& iter);
-   void operator++();
-   int operator*(); // Returns index where it is set to one;
+  bool operator!=(BitIterator& iter);
+  void operator++();
+  int operator*(); // Returns index where it is set to one;
 };
 
 class BitArray{
 public:
-   Byte* memory;
-   int bitSize;
-   int byteSize;
+  Byte* memory;
+  int bitSize;
+  int byteSize;
 
 public:
-   void Init(Byte* memory,int bitSize);
-   void Init(Arena* arena,int bitSize);
+  void Init(Byte* memory,int bitSize);
+  void Init(Arena* arena,int bitSize);
 
-   void Fill(bool value);
-   void Copy(BitArray array);
+  void Fill(bool value);
+  void Copy(BitArray array);
 
-   int Get(int index);
-   void Set(int index,bool value);
+  int Get(int index);
+  void Set(int index,bool value);
 
-   int GetNumberBitsSet();
+  int GetNumberBitsSet();
 
-   int FirstBitSetIndex();
-   int FirstBitSetIndex(int start);
+  int FirstBitSetIndex();
+  int FirstBitSetIndex(int start);
 
-   String PrintRepresentation(Arena* output);
+  String PrintRepresentation(Arena* output);
 
-   void operator&=(BitArray& other);
+  void operator&=(BitArray& other);
 
-   BitIterator begin();
-   BitIterator end();
+  BitIterator begin();
+  BitIterator end();
 };
 
 template<typename Key,typename Data>
 class HashmapIterator{
 public:
-   Pair<Key,Data>* pairs;
-   int index;
+  Pair<Key,Data>* pairs;
+  int index;
 
 public:
-   bool operator!=(HashmapIterator& iter);
-   void operator++();
-   Pair<Key,Data>& operator*();
+  bool operator!=(HashmapIterator& iter);
+  void operator++();
+  Pair<Key,Data>& operator*();
 };
 
 template<typename Data>
 struct GetOrAllocateResult{
-   Data* data;
-   bool alreadyExisted;
+  Data* data;
+  bool alreadyExisted;
 };
 
 // An hashmap implementation for arenas. Does not allocate any memory after construction and also iterates by order of insertion. Construct with PushHashmap function
 template<typename Key,typename Data>
 struct Hashmap{
-   int nodesAllocated;
-   int nodesUsed;
-   Pair<Key,Data>** buckets;
-   Pair<Key,Data>*  data;
-   Pair<Key,Data>** next; // Next is separated from data, to allow easy iteration of the data
+  int nodesAllocated;
+  int nodesUsed;
+  Pair<Key,Data>** buckets;
+  Pair<Key,Data>*  data;
+  Pair<Key,Data>** next; // Next is separated from data, to allow easy iteration of the data
 
-   // Remaining data is:
-   // Pair<Key,Data>* bucketsData[nodesAllocated];
-   // Pair<Key,Data>* nextArray[nodesAllocated];
-   // Pair<Key,Data> dataData[nodesAllocated];
+  // Remaining data is:
+  // Pair<Key,Data>* bucketsData[nodesAllocated];
+  // Pair<Key,Data>* nextArray[nodesAllocated];
+  // Pair<Key,Data> dataData[nodesAllocated];
 
-   // Construct by calling PushHashmap
+  // Construct by calling PushHashmap
 public:
   
-   Data* Insert(Key key,Data data);
-   Data* InsertIfNotExist(Key key,Data data);
+  Data* Insert(Key key,Data data);
+  Data* InsertIfNotExist(Key key,Data data);
 
   //void Remove(Key key); // TODO: For current implementation, It is difficult to remove keys and keep the same requirements (iterate by order of insertion). 
   
-   Data* Get(Key key); // TODO: Should return an optional
-   Data* GetOrInsert(Key key,Data data);
-   Data GetOrFail(Key key);
+  Data* Get(Key key); // TODO: Should return an optional
+  Data* GetOrInsert(Key key,Data data);
+  Data GetOrFail(Key key);
 
-   void Clear();
+  void Clear();
 
-   GetOrAllocateResult<Data> GetOrAllocate(Key key); // More efficient way for the Get, check if null, Insert pattern
+  GetOrAllocateResult<Data> GetOrAllocate(Key key); // More efficient way for the Get, check if null, Insert pattern
 
-   bool Exists(Key key);
+  bool Exists(Key key);
 };
 
 template<typename Key,typename Data>
@@ -324,11 +324,11 @@ Array<Data> HashmapDataArray(Hashmap<Key,Data>* hashmap,Arena* out);
 // Set implementation for arenas
 template<typename Data>
 struct Set{
-   // TODO: Better impl would not use a map due to wasted space, but its fine for now
-   Hashmap<Data,int>* map;
+  // TODO: Better impl would not use a map due to wasted space, but its fine for now
+  Hashmap<Data,int>* map;
 
-   void Insert(Data data);
-   bool Exists(Data data);
+  void Insert(Data data);
+  bool Exists(Data data);
 };
 
 template<typename Data>
@@ -337,9 +337,9 @@ public:
   HashmapIterator<Data,int> innerIter;
 
 public:
-   bool operator!=(SetIterator& iter);
-   void operator++();
-   Data& operator*();
+  bool operator!=(SetIterator& iter);
+  void operator++();
+  Data& operator*();
 };
 
 template<typename Data>
@@ -352,67 +352,67 @@ template<typename Data>
 SetIterator<Data> end(Set<Data>* set);
 
 /*
-   Pool
-*/
+  Pool
+ */
 
 struct PoolHeader{
-   Byte* nextPage;
-   int allocatedUnits;
+  Byte* nextPage;
+  int allocatedUnits;
 };
 
 struct PoolInfo{
-   int unitsPerFullPage;
-   int bitmapSize;
-   int unitsPerPage;
-   int pageGranuality;
+  int unitsPerFullPage;
+  int bitmapSize;
+  int unitsPerPage;
+  int pageGranuality;
 };
 
 struct PageInfo{
-   PoolHeader* header;
-   Byte* bitmap;
+  PoolHeader* header;
+  Byte* bitmap;
 };
 
 class GenericPoolIterator{
-   PoolInfo poolInfo;
-   PageInfo pageInfo;
-   int fullIndex;
-   int bit;
-   int index;
-   int elemSize;
-   Byte* page;
+  PoolInfo poolInfo;
+  PageInfo pageInfo;
+  int fullIndex;
+  int bit;
+  int index;
+  int elemSize;
+  Byte* page;
 
 public:
 
-   void Init(Byte* page,int elemSize);
+  void Init(Byte* page,int elemSize);
 
-   bool HasNext();
-   void operator++();
-   Byte* operator*();
+  bool HasNext();
+  void operator++();
+  Byte* operator*();
 };
 
 template<typename T> class Pool;
 
 template<typename T>
 class PoolIterator{
-   Pool<T>* pool;
-   PageInfo pageInfo;
-   int fullIndex;
-   int bit;
-   int index;
-   Byte* page;
-   T* lastVal;
+  Pool<T>* pool;
+  PageInfo pageInfo;
+  int fullIndex;
+  int bit;
+  int index;
+  Byte* page;
+  T* lastVal;
 
 public:
 
-   void Init(Pool<T>* pool,Byte* page);
+  void Init(Pool<T>* pool,Byte* page);
 
-   void Advance(); // Does not care if valid or not, always advance one position
-   bool IsValid();
+  void Advance(); // Does not care if valid or not, always advance one position
+  bool IsValid();
 
-   bool HasNext(){return (page != nullptr);};
-   bool operator!=(PoolIterator& iter);
-   void operator++();
-   T* operator*();
+  bool HasNext(){return (page != nullptr);};
+  bool operator!=(PoolIterator& iter);
+  void operator++();
+  T* operator*();
 };
 
 PoolInfo CalculatePoolInfo(int elemSize);
@@ -421,29 +421,27 @@ PageInfo GetPageInfo(PoolInfo poolInfo,Byte* page);
 // A vector like class except no reallocations. Useful for storing entities that cannot be reallocated.
 template<typename T>
 struct Pool{
-   Byte* mem; // TODO: replace with PoolHeader instead of using Byte and casting
-   PoolInfo info;
+  Byte* mem; // TODO: replace with PoolHeader instead of using Byte and casting
+  PoolInfo info;
 public:
-   T* Alloc();
-   T* Alloc(int index); // Returns nullptr if element already allocated at given position
-   void Remove(T* elem);
+  T* Alloc();
+  T* Alloc(int index); // Returns nullptr if element already allocated at given position
+  void Remove(T* elem);
 
-   T* Get(int index); // Returns nullptr if element not allocated (call Alloc(int index) to allocate)
-   T& GetOrFail(int index);
-   Byte* GetMemoryPtr();
+  T* Get(int index); // Returns nullptr if element not allocated (call Alloc(int index) to allocate)
+  T& GetOrFail(int index);
+  Byte* GetMemoryPtr();
 
-   int Size();
-   void Clear(bool clearMemory = false);
-   Pool<T> Copy();
+  int Size();
+  void Clear(bool clearMemory = false);
+  Pool<T> Copy();
 
-   PoolIterator<T> begin();
-   PoolIterator<T> end();
+  PoolIterator<T> begin();
+  PoolIterator<T> end();
 
-   PoolIterator<T> beginNonValid();
+  PoolIterator<T> beginNonValid();
 
-   int MemoryUsage();
+  int MemoryUsage();
 };
 
 #include "memory.inl"
-
-#endif // INCLUDED_MEMORY

@@ -33,9 +33,9 @@ void PerformDefineSubstitution(Arena* output,MacroMap& macros,String name){
   PushString(output,finish);
 }
 
-void PreprocessVerilogFile_(Arena* output, String fileContent,MacroMap& macros,Array<String> includeFilepaths,Arena* temp);
+void PreprocessVerilogFile_(String fileContent,MacroMap& macros,Array<String> includeFilepaths,Arena* out,Arena* temp);
 
-static void DoIfStatement(Arena* output,Tokenizer* tok,MacroMap& macros,Array<String> includeFilepaths,Arena* temp){
+static void DoIfStatement(Tokenizer* tok,MacroMap& macros,Array<String> includeFilepaths,Arena* out,Arena* temp){
   Token first = tok->NextToken();
   Token macroName = tok->NextToken();
 
@@ -58,7 +58,7 @@ static void DoIfStatement(Arena* output,Tokenizer* tok,MacroMap& macros,Array<St
     if(CompareString(peek,"`endif")){
       if(doIf){
         Token content = tok->Point(mark);
-        PreprocessVerilogFile_(output,content,macros,includeFilepaths,temp);
+        PreprocessVerilogFile_(content,macros,includeFilepaths,out,temp);
       }
       tok->AdvancePeek(peek);
       break;
@@ -67,7 +67,7 @@ static void DoIfStatement(Arena* output,Tokenizer* tok,MacroMap& macros,Array<St
     if(CompareString(peek,"`else")){
       if(doIf){
         Token content = tok->Point(mark);
-        PreprocessVerilogFile_(output,content,macros,includeFilepaths,temp);
+        PreprocessVerilogFile_(content,macros,includeFilepaths,out,temp);
       } else {
         tok->AdvancePeek(peek);
         mark = tok->Mark();
@@ -77,14 +77,14 @@ static void DoIfStatement(Arena* output,Tokenizer* tok,MacroMap& macros,Array<St
     }
 
     if(CompareString(peek,"`ifdef") || CompareString(peek,"`ifndef") || CompareString(first,"`elsif")){
-      DoIfStatement(output,tok,macros,includeFilepaths,temp);
+      DoIfStatement(tok,macros,includeFilepaths,out,temp);
     } else {
       tok->AdvancePeek(peek);
     }
   }
 }
 
-void PreprocessVerilogFile_(Arena* output, String fileContent,MacroMap& macros,Array<String> includeFilepaths,Arena* temp){
+void PreprocessVerilogFile_(String fileContent,MacroMap& macros,Array<String> includeFilepaths,Arena* out,Arena* temp){
   Tokenizer tokenizer = Tokenizer(fileContent, "()`,+-/*\\\"",{"`include","`define","`timescale","`ifdef","`else","`elsif","`endif","`ifndef"});
   Tokenizer* tok = &tokenizer;
 
@@ -142,7 +142,7 @@ void PreprocessVerilogFile_(Arena* output, String fileContent,MacroMap& macros,A
 
          mem[amountRead] = '\0';
 
-         PreprocessVerilogFile_(output,STRING((const char*) mem,fileSize),macros,includeFilepaths,temp);
+         PreprocessVerilogFile_(STRING((const char*) mem,fileSize),macros,includeFilepaths,out,temp);
 
          fclose(file);
     } else if(CompareToken(peek,"`define")){ // Same for defines
@@ -204,9 +204,9 @@ void PreprocessVerilogFile_(Arena* output, String fileContent,MacroMap& macros,A
       tok->AdvancePeek(peek);
       Token name = tok->NextToken();
 
-      PerformDefineSubstitution(output,macros,name);
+      PerformDefineSubstitution(out,macros,name);
     } else if(CompareToken(peek,"`ifdef") || CompareToken(peek,"`ifndef")){
-      DoIfStatement(output,tok,macros,includeFilepaths,temp);
+      DoIfStatement(tok,macros,includeFilepaths,out,temp);
     } else if(CompareToken(peek,"`else")){
       NOT_POSSIBLE;
     } else if(CompareToken(peek,"`endif")){
@@ -216,24 +216,31 @@ void PreprocessVerilogFile_(Arena* output, String fileContent,MacroMap& macros,A
     } else {
       tok->AdvancePeek(peek);
 
-      PushString(output,peek);
+      PushString(out,peek);
     }
 
-    PushString(output,tok->PeekWhitespace());
+    PushString(out,tok->PeekWhitespace());
   }
 }
 
-String PreprocessVerilogFile(Arena* output,String fileContent,Array<String> includeFilepaths,Arena* arena){
+String PreprocessVerilogFile(String fileContent,Array<String> includeFilepaths,Arena* out,Arena* temp){
   MacroMap macros = {};
 
+  BLOCK_REGION(temp);
+
+#if 0
   String res = {};
-  res.data = (const char*) &output->mem[output->used];
-  Byte* mark = MarkArena(output);
+  res.data = (const char*) &out->mem[out->used];
+#endif
 
-  PreprocessVerilogFile_(output,fileContent,macros,includeFilepaths,arena);
+  Byte* mark = MarkArena(out);
 
-  PushString(output,STRING("\0"));
-  res.size = MarkArena(output) - mark;
+  PreprocessVerilogFile_(fileContent,macros,includeFilepaths,out,temp);
+
+  PushString(out,STRING("\0"));
+  String res = PointArena(out,mark);
+
+  //res.size = MarkArena(out) - mark;
 
   return res;
 }

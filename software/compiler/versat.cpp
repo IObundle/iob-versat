@@ -16,234 +16,13 @@
 #include "configurations.hpp"
 #include "debugGUI.hpp"
 #include "graph.hpp"
+#include "utils.hpp"
 #include "utilsCore.hpp"
 #include "verilogParsing.hpp"
 #include "acceleratorStats.hpp"
 #include "templateEngine.hpp"
 #include "textualRepresentation.hpp"
 #include "templateData.hpp"
-
-static int zeros[99] = {};
-static Array<int> zerosArray = {zeros,99};
-
-static int ones[64] = {1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1};
-
-static int* DefaultInitFunction(FUInstance* inst){
-  inst->done = true;
-  return nullptr;
-}
-
-static int* DefaultUpdateFunction(FUInstance* inst,Array<int> inputs){
-  static int out[99];
-
-  for(int i = 0; i < inputs.size; i++){
-    out[i] = inputs[i];
-  }
-
-  return out;
-}
-
-static FUDeclaration* RegisterCircuitInput(Versat* versat){
-  FUDeclaration decl = {};
-
-  decl.name = STRING("CircuitInput");
-  decl.inputDelays = Array<int>{zeros,0};
-  decl.outputLatencies = Array<int>{zeros,1};
-  decl.delayType = DelayType::DELAY_TYPE_SOURCE_DELAY;
-  decl.type = FUDeclaration::SPECIAL;
-
-  return RegisterFU(versat,decl);
-}
-static FUDeclaration* RegisterCircuitOutput(Versat* versat){
-  FUDeclaration decl = {};
-
-  decl.name = STRING("CircuitOutput");
-  decl.inputDelays = Array<int>{zeros,50};
-  decl.outputLatencies = Array<int>{zeros,0};
-  decl.delayType = DelayType::DELAY_TYPE_SINK_DELAY;
-  decl.type = FUDeclaration::SPECIAL;
-
-  return RegisterFU(versat,decl);
-}
-
-static FUDeclaration* RegisterData(Versat* versat){
-  FUDeclaration decl = {};
-
-  decl.name = STRING("Data");
-  decl.inputDelays = Array<int>{zeros,50};
-  decl.outputLatencies = Array<int>{ones,50};
-  decl.delayType = DelayType::DELAY_TYPE_SINK_DELAY;
-
-  return RegisterFU(versat,decl);
-}
-static int* UpdatePipelineRegister(FUInstance* inst,Array<int> inputs){
-  static int out;
-
-  out = inputs[0];
-  inst->done = true;
-
-  return &out;
-}
-static FUDeclaration* RegisterPipelineRegister(Versat* versat){
-  FUDeclaration decl = {};
-  static int ones[] = {1};
-
-  decl.name = STRING("PipelineRegister");
-  decl.inputDelays = Array<int>{zeros,1};
-  decl.outputLatencies = Array<int>{ones,1};
-  decl.isOperation = true;
-  decl.operation = "{0}_{1} <= {2}";
-
-  return RegisterFU(versat,decl);
-}
-
-static int* LiteralStartFunction(FUInstance* inst){
-  static int out;
-  out = inst->literal;
-  inst->done = true;
-  return &out;
-}
-static int* LiteraltUpdateFunction(FUInstance* inst,Array<int> inputs){
-  static int out;
-  out = inst->literal;
-  return &out;
-}
-
-static FUDeclaration* RegisterLiteral(Versat* versat){
-  FUDeclaration decl = {};
-
-  decl.name = STRING("Literal");
-  decl.outputLatencies = Array<int>{zeros,1};
-
-  return RegisterFU(versat,decl);
-}
-
-static int* UnaryNot(FUInstance* inst,Array<int> inputs){
-  static unsigned int out;
-  out = ~inputs[0];
-  inst->done = true;
-  return (int*) &out;
-}
-static int* UnaryNegate(FUInstance* inst,Array<int> inputs){
-  static unsigned int out;
-  out = -inputs[0];
-  inst->done = true;
-  return (int*) &out;
-}
-static int* BinaryXOR(FUInstance* inst,Array<int> inputs){
-  static unsigned int out;
-  out = inputs[0] ^ inputs[1];
-  inst->done = true;
-  return (int*) &out;
-}
-static int* BinaryADD(FUInstance* inst,Array<int> inputs){
-  static unsigned int out;
-  out = inputs[0] + inputs[1];
-  inst->done = true;
-  return (int*) &out;
-}
-static int* BinarySUB(FUInstance* inst,Array<int> inputs){
-  static unsigned int out;
-  out = inputs[0] - inputs[1];
-  inst->done = true;
-  return (int*) &out;
-}
-static int* BinaryAND(FUInstance* inst,Array<int> inputs){
-  static unsigned int out;
-  out = inputs[0] & inputs[1];
-  inst->done = true;
-  return (int*) &out;
-}
-static int* BinaryOR(FUInstance* inst,Array<int> inputs){
-  static unsigned int out;
-  out = inputs[0] | inputs[1];
-  inst->done = true;
-  return (int*) &out;
-}
-static int* BinaryRHR(FUInstance* inst,Array<int> inputs){
-  static unsigned int out;
-  unsigned int value = inputs[0];
-  unsigned int shift = inputs[1];
-  out = (value >> shift) | (value << (32 - shift));
-  inst->done = true;
-  return (int*) &out;
-}
-static int* BinaryRHL(FUInstance* inst,Array<int> inputs){
-  static unsigned int out;
-  unsigned int value = inputs[0];
-  unsigned int shift = inputs[1];
-  out = (value << shift) | (value >> (32 - shift));
-  inst->done = true;
-  return (int*) &out;
-}
-static int* BinarySHR(FUInstance* inst,Array<int> inputs){
-  static unsigned int out;
-  unsigned int value = inputs[0];
-  unsigned int shift = inputs[1];
-  out = (value >> shift);
-  inst->done = true;
-  return (int*) &out;
-}
-static int* BinarySHL(FUInstance* inst,Array<int> inputs){
-  static unsigned int out;
-  unsigned int value = inputs[0];
-  unsigned int shift = inputs[1];
-  out = (value << shift);
-  inst->done = true;
-  return (int*) &out;
-}
-
-static void RegisterOperators(Versat* versat){
-  struct Operation{
-    const char* name;
-    FUUpdateFunction function;
-    const char* operation;
-  };
-
-  Operation unary[] =  {{"NOT",UnaryNot,"{0}_{1} = ~{2}"},
-                        {"NEG",UnaryNegate,"{0}_{1} = -{2}"}};
-  Operation binary[] = {{"XOR",BinaryXOR,"{0}_{1} = {2} ^ {3}"},
-                         {"ADD",BinaryADD,"{0}_{1} = {2} + {3}"},
-                         {"SUB",BinarySUB,"{0}_{1} = {2} - {3}"},
-                         {"AND",BinaryAND,"{0}_{1} = {2} & {3}"},
-                         {"OR" ,BinaryOR ,"{0}_{1} = {2} | {3}"},
-                         {"RHR",BinaryRHR,"{0}_{1} = ({2} >> {3}) | ({2} << (32 - {3}))"}, // TODO: Only for 32 bits
-                         {"SHR",BinarySHR,"{0}_{1} = {2} >> {3}"},
-                         {"RHL",BinaryRHL,"{0}_{1} = ({2} << {3}) | ({2} >> (32 - {3}))"}, // TODO: Only for 32 bits
-                         {"SHL",BinarySHL,"{0}_{1} = {2} << {3}"}};
-
-  FUDeclaration decl = {};
-  decl.inputDelays = Array<int>{zeros,1};
-  decl.outputLatencies = Array<int>{zeros,1};
-  decl.isOperation = true;
-
-  for(unsigned int i = 0; i < ARRAY_SIZE(unary); i++){
-    decl.name = STRING(unary[i].name);
-    decl.operation = unary[i].operation;
-    RegisterFU(versat,decl);
-  }
-
-  decl.inputDelays = Array<int>{zeros,2};
-  for(unsigned int i = 0; i < ARRAY_SIZE(binary); i++){
-    decl.name = STRING(binary[i].name);
-    decl.operation = binary[i].operation;
-    RegisterFU(versat,decl);
-  }
-}
-
-static Pool<FUDeclaration> basicDeclarations;
-namespace BasicDeclaration{
-  FUDeclaration* buffer;
-  FUDeclaration* fixedBuffer;
-  FUDeclaration* input;
-  FUDeclaration* output;
-  FUDeclaration* multiplexer;
-  FUDeclaration* combMultiplexer;
-  FUDeclaration* stridedMerge;
-  FUDeclaration* timedMultiplexer;
-  FUDeclaration* pipelineRegister;
-  FUDeclaration* data;
-}
 
 namespace BasicTemplates{
   CompiledTemplate* acceleratorTemplate;
@@ -359,10 +138,6 @@ Versat* InitVersat(){
   BasicTemplates::externalInstTemplate = CompileTemplate(external_memory_inst_template,"ext_inst",&versat->permanent,&versat->temp);
   BasicTemplates::iterativeTemplate = CompileTemplate(versat_iterative_template,"iter",&versat->permanent,&versat->temp);
 
-  FUDeclaration nullDeclaration = {};
-  nullDeclaration.inputDelays = Array<int>{zeros,1};
-  nullDeclaration.outputLatencies = Array<int>{zeros,1};
-
   RegisterPipeOperation(STRING("MemorySize"),[](Value val,Arena* out){
     ExternalMemoryInterface* inter = (ExternalMemoryInterface*) val.custom;
     int byteSize = ExternalMemoryByteSize(inter);
@@ -382,442 +157,10 @@ Versat* InitVersat(){
     return val;
   });
 
-  // Kinda of a hack, for now. We register on versat and then move the basic declarations out
-  RegisterFU(versat,nullDeclaration);
-  RegisterOperators(versat);
-  RegisterPipelineRegister(versat);
-  RegisterCircuitInput(versat);
-  RegisterCircuitOutput(versat);
-  RegisterData(versat);
-  RegisterLiteral(versat);
-
-  for(FUDeclaration* decl : versat->declarations){
-    FUDeclaration* newSpace = basicDeclarations.Alloc();
-    *newSpace = *decl;
-  }
   versat->declarations.Clear(false);
-
-  // This ones are specific for the instance
-  //RegisterAllVerilogUnitsVerilog(versat);
-
-#if 0
-  // TODO: Not a good approach. Fix it when finishing versat compiler
-  if(initUnits){
-    BasicDeclaration::buffer = GetTypeByName(versat,STRING("Buffer"));
-    BasicDeclaration::fixedBuffer = GetTypeByName(versat,STRING("FixedBuffer"));
-    BasicDeclaration::pipelineRegister = GetTypeByName(versat,STRING("PipelineRegister"));
-    BasicDeclaration::multiplexer = GetTypeByName(versat,STRING("Mux2"));
-    BasicDeclaration::combMultiplexer = GetTypeByName(versat,STRING("CombMux2"));
-    BasicDeclaration::stridedMerge = GetTypeByName(versat,STRING("StridedMerge"));
-    BasicDeclaration::timedMultiplexer = GetTypeByName(versat,STRING("TimedMux"));
-    BasicDeclaration::input = GetTypeByName(versat,STRING("CircuitInput"));
-    BasicDeclaration::output = GetTypeByName(versat,STRING("CircuitOutput"));
-    BasicDeclaration::data = GetTypeByName(versat,STRING("Data"));
-  }
-#endif
-  
-  //Log(LogModule::TOP_SYS,LogLevel::INFO,"Init versat");
 
   return versat;
 }
-
-void Free(Versat* versat){
-#if 0
-  Arena* arena = &versat->temp;
-  for(Accelerator* accel : versat->accelerators){
-#if 0
-    if(accel->type == Accelerator::CIRCUIT){
-      continue;
-    }
-#endif
-
-    // Cannot free this way because most of accelerators are bound to a FUDeclaration but are incomplete.
-    // Therefore
-    AcceleratorIterator iter = {};
-    for(InstanceNode* node = iter.Start(accel,arena,true); node; node = iter.Next()){
-      FUInstance* inst = node->inst;
-      if(inst->declaration->destroyFunction){
-        inst->declaration->destroyFunction(inst);
-      }
-    }
-  }
-#endif
-
-  for(Accelerator* accel : versat->accelerators){
-    Free(&accel->configAlloc);
-    Free(&accel->stateAlloc);
-    //Free(&accel->delayAlloc);
-    //Free(&accel->staticAlloc);
-    Free(&accel->extraDataAlloc);
-    Free(&accel->externalMemoryAlloc);
-    //Free(&accel->outputAlloc);
-    //Free(&accel->storedOutputAlloc);
-    //Free(&accel->debugDataAlloc);
-
-    accel->staticUnits.clear();
-  }
-
-  versat->accelerators.Clear(true);
-  versat->declarations.Clear(true);
-
-  Free(&versat->temp);
-  Free(&versat->permanent);
-
-  FreeTypes();
-
-  CheckMemoryStats();
-}
-
-void ParseCommandLineOptions(Versat* versat,int argc,const char** argv){
-#if 0
-  for(int i = 0; i < argc; i++){
-    printf("Arg %d: %s\n",i,argv[i]);
-  }
-#endif
-}
-
-uint SetDebug(Versat* versat,VersatDebugFlags flags,uint flag){
-  uint last;
-  switch(flags){
-  case VersatDebugFlags::OUTPUT_GRAPH_DOT:{
-    last = versat->debug.outputGraphs;
-    versat->debug.outputGraphs = flag;
-  }break;
-  case VersatDebugFlags::GRAPH_DOT_FORMAT:{
-    last = versat->debug.dotFormat;
-    versat->debug.dotFormat = flag;
-  }break;
-  case VersatDebugFlags::OUTPUT_ACCELERATORS_CODE:{
-    last = versat->debug.outputAccelerator;
-    versat->debug.outputAccelerator = flag;
-  }break;
-  case VersatDebugFlags::OUTPUT_VERSAT_CODE:{
-    last = versat->debug.outputVersat;
-    versat->debug.outputVersat = flag;
-  }break;
-  case VersatDebugFlags::USE_FIXED_BUFFERS:{
-    last = versat->debug.useFixedBuffers;
-    versat->debug.useFixedBuffers = flag;
-  }break;
-  default:{
-    NOT_POSSIBLE;
-  }break;
-  }
-
-  return last;
-}
-
-#if 0
-static int AccessMemory(FUInstance* inst,int address, int value, int write){
-  FUInstance* instance = (FUInstance*) inst->declarationInstance;
-  instance->memMapped = inst->memMapped;
-  instance->config = inst->config;
-  instance->state = inst->state;
-  instance->delay = inst->delay;
-  instance->externalMemory = inst->externalMemory;
-  instance->outputs = inst->outputs;
-  instance->storedOutputs = inst->storedOutputs;
-  instance->extraData = inst->extraData;
-
-  return res;
-}
-#endif
-
-FUDeclaration* GetTypeByName(Versat* versat,String name){
-  for(FUDeclaration* decl : versat->declarations){
-    if(CompareString(decl->name,name)){
-      return decl;
-    }
-  }
-
-  for(FUDeclaration* decl : basicDeclarations){
-    if(CompareString(decl->name,name)){
-      return decl;
-    }
-  }
-
-  LogFatal(LogModule::TOP_SYS,"Didn't find the following type: %.*s",UNPACK_SS(name));
-
-  return nullptr;
-}
-
-// TODO: Does anything use this function or is it only the Get...Name2 that is used?
-#if 0
-static FUInstance* GetInstanceByHierarchicalName(Accelerator* accel,HierarchicalName* hier){
-  Assert(hier != nullptr);
-
-  HierarchicalName* savedHier = hier;
-  FUInstance* res = nullptr;
-  FOREACH_LIST(ptr,accel->allocated){
-  FUInstance* inst = ptr->inst;
-  Tokenizer tok(inst->name,"./",{});
-
-  while(true){
-    // Unpack individual name
-    hier = savedHier;
-    while(true){
-      Token name = tok.NextToken();
-
-      // Unpack hierarchical name
-      Tokenizer hierTok(hier->name,":",{});
-      Token hierName = hierTok.NextToken();
-
-      if(!CompareString(name,hierName)){
-        break;
-      }
-
-      // TODO: The type qualifier ideia does not appear to be very good, even if it technically solves the problem
-      // TODO: With 2 stage, we can generate all the different structs to different types and let the programmer select the one it wants to use. Can safely remove this portion of code
-      Token possibleTypeQualifier = hierTok.PeekToken();
-
-      //       If the merge problem can be solved by behaving diferently based on currently activated merged accelerator, remove this portion of code
-      if(CompareString(possibleTypeQualifier,":")){
-        hierTok.AdvancePeek(possibleTypeQualifier);
-
-        Token type = hierTok.NextToken();
-
-        if(!CompareString(type,inst->declaration->name)){
-          break;
-        }
-      }
-
-      Token possibleDot = tok.PeekToken();
-
-      // If hierarchical name, need to advance through hierarchy
-      if(CompareString(possibleDot,".") && hier->next){
-        tok.AdvancePeek(possibleDot);
-        Assert(hier); // Cannot be nullptr
-
-        hier = hier->next;
-        continue;
-      } else if(inst->declaration->fixedDelayCircuit && hier->next){
-        FUInstance* res = GetInstanceByHierarchicalName(inst->declaration->fixedDelayCircuit,hier->next);
-        if(res){
-          return res;
-        }
-      } else if(!hier->next){ // Correct name and type (if specified) and no further hierarchical name to follow
-               return inst;
-      }
-    }
-
-    // Check if multiple names
-    Token possibleDuplicateName = tok.PeekFindIncluding("/");
-    if(possibleDuplicateName.size > 0){
-      tok.AdvancePeek(possibleDuplicateName);
-    } else {
-      break;
-    }
-  }
-}
-
-  return res;
-}
-#endif
-
-static String GetFullHierarchicalName(HierarchicalName* head,Arena* arena){
-  Byte* mark = MarkArena(arena);
-
-  bool first = true;
-  FOREACH_LIST(HierarchicalName*,ptr,head){
-    if(!first){
-      PushString(arena,STRING("."));
-    }
-    PushString(arena,"%.*s",UNPACK_SS(ptr->name));
-    first = false;
-  }
-
-  String res = PointArena(arena,mark);
-  return res;
-}
-
-static FUInstance* GetInstanceByHierarchicalName2(AcceleratorIterator iter,HierarchicalName* hier,Arena* arena){
-  HierarchicalName* savedHier = hier;
-  FUInstance* res = nullptr;
-  for(InstanceNode* node = iter.Current(); node; node = iter.Skip()){
-    FUInstance* inst = node->inst;
-    Tokenizer tok(inst->name,"./",{});
-
-    while(true){
-      // Unpack individual name
-      hier = savedHier;
-      while(true){
-        Token name = tok.NextToken();
-
-        // Unpack hierarchical name
-        Tokenizer hierTok(hier->name,":",{});
-        Token hierName = hierTok.NextToken();
-
-        if(!CompareString(name,hierName)){
-          break;
-        }
-
-        Token possibleTypeQualifier = hierTok.PeekToken();
-
-        if(CompareString(possibleTypeQualifier,":")){
-          hierTok.AdvancePeek(possibleTypeQualifier);
-
-          Token type = hierTok.NextToken();
-
-          if(!CompareString(type,inst->declaration->name)){
-            break;
-          }
-        }
-
-        Token possibleDot = tok.PeekToken();
-
-        // If hierarchical name, need to advance through hierarchy
-        if(CompareString(possibleDot,".") && hier->next){
-          tok.AdvancePeek(possibleDot);
-          Assert(hier); // Cannot be nullptr
-
-          hier = hier->next;
-          continue;
-        } else if(inst->declaration->fixedDelayCircuit && hier->next){
-          AcceleratorIterator it = iter.LevelBelowIterator();
-          FUInstance* res = GetInstanceByHierarchicalName2(it,hier->next,arena);
-          if(res){
-            return res;
-          }
-        } else if(!hier->next){ // Correct name and type (if specified) and no further hierarchical name to follow
-          Accelerator* accel = iter.topLevel;
-          
-          if(iter.GetFullLevel() == 0){
-            return node->inst;
-          } else {
-            FUInstance* instBuffer = accel->subInstances.Alloc();
-            *instBuffer = *((FUInstance*)inst);
-            //instBuffer->declarationInstance = inst;
-
-            Accelerator* accel = iter.topLevel;
-            Arena arena = SubArena(accel->accelMemory,256);
-            instBuffer->name = GetFullHierarchicalName(savedHier,&arena);
-
-            return instBuffer;
-          }
-        }
-      }
-
-      // Check if multiple names
-      Token possibleDuplicateName = tok.PeekFindIncluding("/");
-      if(possibleDuplicateName.size > 0){
-        tok.AdvancePeek(possibleDuplicateName);
-      } else {
-        break;
-      }
-    }
-  }
-
-  return res;
-}
-
-static FUInstance* vGetInstanceByName_(AcceleratorIterator iter,Arena* arena,int argc,va_list args){
-  HierarchicalName fullName = {};
-  HierarchicalName* namePtr = &fullName;
-  HierarchicalName* lastPtr = nullptr;
-
-  for (int i = 0; i < argc; i++){
-    char* str = va_arg(args, char*);
-    int arguments = parse_printf_format(str,0,nullptr);
-
-    if(namePtr == nullptr){
-      HierarchicalName* newBlock = PushStruct<HierarchicalName>(arena);
-      *newBlock = {};
-
-      lastPtr->next = newBlock;
-      namePtr = newBlock;
-    }
-
-    String name = {};
-    if(arguments){
-      name = vPushString(arena,str,args);
-      i += arguments;
-#ifdef x86 // For some reason this is needed for 32 bits but not for 64 bits. Hack for now, but need to do a full debug and see what is happening
-      for(int ii = 0; ii < arguments; ii++){
-        /* int unused = */ va_arg(args, int); // Need to consume something
-      }
-#endif
-    } else {
-      name = PushString(arena,"%s",str);
-    }
-
-    Tokenizer tok(name,".",{});
-    while(!tok.Done()){
-      if(namePtr == nullptr){
-        HierarchicalName* newBlock = PushStruct<HierarchicalName>(arena);
-        *newBlock = {};
-
-        lastPtr->next = newBlock;
-        namePtr = newBlock;
-      }
-
-      Token name = tok.NextToken();
-
-      namePtr->name = name;
-      lastPtr = namePtr;
-      namePtr = namePtr->next;
-
-      Token peek = tok.PeekToken();
-      if(CompareString(peek,".")){
-        tok.AdvancePeek(peek);
-        continue;
-      }
-
-      break;
-    }
-  }
-
-  FUInstance* res = GetInstanceByHierarchicalName2(iter,&fullName,arena);
-
-  if(!res){
-    String name = GetFullHierarchicalName(&fullName,arena);
-
-    printf("Couldn't find: %.*s\n",UNPACK_SS(name));
-
-    Assert(res);
-  }
-
-  return res;
-}
-
-FUInstance* GetInstanceByName_(Accelerator* circuit,int argc, ...){
-  NOT_IMPLEMENTED; // TODO: This is a relic from the old versat version. Remove this and maybe just add a loop over the instance allocated pool.
-  Arena* temp = &circuit->versat->temp;
-  BLOCK_REGION(temp);
-
-  va_list args;
-  va_start(args,argc);
-
-  AcceleratorIterator iter = {};
-  iter.Start(circuit,temp,true);
-
-  FUInstance* res = vGetInstanceByName_(iter,temp,argc,args);
-
-  va_end(args);
-
-  return res;
-}
-
-#if 0
-FUInstance* GetSubInstanceByName_(Accelerator* topLevel,FUInstance* instance,int argc, ...){
-  Arena* temp = &topLevel->versat->temp;
-  BLOCK_REGION(temp);
-
-  va_list args;
-  va_start(args,argc);
-
-  FUInstance* inst = (FUInstance*) instance;
-  Assert(inst->declaration->fixedDelayCircuit);
-
-  AcceleratorIterator iter = {};
-  iter.Start(topLevel,inst,temp,true);
-
-  FUInstance* res = vGetInstanceByName_(iter,temp,argc,args);
-
-  va_end(args);
-
-  return res;
-}
-#endif
 
 // TODO: Bunch of functions that could go to graph.hpp
 Edge* FindEdge(FUInstance* out,int outIndex,FUInstance* in,int inIndex,int delay){
@@ -1028,13 +371,6 @@ FUDeclaration* RegisterModuleInfo(Versat* versat,ModuleInfo* info){
 
   FUDeclaration* res = RegisterFU(versat,decl);
   return res;
-}
-
-FUDeclaration* RegisterFU(Versat* versat,FUDeclaration decl){
-  FUDeclaration* type = versat->declarations.Alloc();
-  *type = decl;
-
-  return type;
 }
 
 // Bunch of functions that could go to accelerator stats
@@ -1291,21 +627,37 @@ FUDeclaration* RegisterSubUnit(Versat* versat,String name,Accelerator* circuit){
   }
 #endif
 
-  circuit->name = name; // TODO: This should not be here, every accelerator should need a name when being built
   FUDeclaration decl = {};
   decl.type = FUDeclaration::COMPOSITE;
   decl.name = name;
 
-  OutputGraphDotFile(versat,circuit,false,"debug/%.*s/base.dot",UNPACK_SS(name));
+  String basePath = PushString(temp,"debug/%.*s/base.dot",UNPACK_SS(name));
+  String base2Path = PushString(temp,"debug/%.*s/base2.dot",UNPACK_SS(name));
+
+  OutputGraphDotFile(versat,circuit,false,basePath,temp);
   decl.baseCircuit = CopyAccelerator(versat,circuit,nullptr);
-  OutputGraphDotFile(versat,decl.baseCircuit,false,"debug/%.*s/base2.dot",UNPACK_SS(name));
+  OutputGraphDotFile(versat,decl.baseCircuit,false,base2Path,temp);
   ReorganizeAccelerator(circuit,temp);
 
+  CalculateDelayResult delays = CalculateDelay(versat,circuit,temp);
+
+  decl.calculatedDelays = PushArray<int>(permanent,delays.nodeDelay->nodesUsed);
+  Memset(decl.calculatedDelays,0);
+  int index = 0;
+  for(Pair<InstanceNode*,int> p : delays.nodeDelay){
+    if(p.first->inst->declaration->configInfo.delayOffsets.max > 0){
+      decl.calculatedDelays[index] = p.second;
+      index += 1;
+    }
+  }
+  
   region(temp){
-    Hashmap<EdgeNode,int>* delays = CalculateDelay(versat,circuit,temp);
-    OutputGraphDotFile(versat,circuit,false,"debug/%.*s/beforeFixDelay.dot",UNPACK_SS(name));
-    FixDelays(versat,circuit,delays);
-    OutputGraphDotFile(versat,circuit,false,"debug/%.*s/fixDelay.dot",UNPACK_SS(name));
+    String beforePath = PushString(temp,"debug/%.*s/beforeFixDelay.dot",UNPACK_SS(name));
+    String afterPath = PushString(temp,"debug/%.*s/afterFixDelay.dot",UNPACK_SS(name));
+
+    OutputGraphDotFile(versat,circuit,false,beforePath,temp);
+    FixDelays(versat,circuit,delays.edgesDelay);
+    OutputGraphDotFile(versat,circuit,false,afterPath,temp);
   }
 
   ReorganizeAccelerator(circuit,temp);
@@ -1414,10 +766,10 @@ FUDeclaration* RegisterIterativeUnit(Versat* versat,Accelerator* accel,FUInstanc
 
   Assert(node);
 
-  Arena* arena = &versat->temp;
-  BLOCK_REGION(arena);
+  Arena* temp = &versat->temp;
+  BLOCK_REGION(temp);
 
-  Array<Array<PortNode>> inputs = GetAllInputs(node,arena);
+  Array<Array<PortNode>> inputs = GetAllInputs(node,temp);
 
   for(Array<PortNode>& arr : inputs){
     Assert(arr.size <= 2); // Do not know what to do if size bigger than 2.
@@ -1431,9 +783,10 @@ FUDeclaration* RegisterIterativeUnit(Versat* versat,Accelerator* accel,FUInstanc
 
   FUDeclaration* type = BasicDeclaration::timedMultiplexer;
 
-  OutputGraphDotFile(versat,accel,false,"debug/iterativeBefore.dot");
+  String beforePath = PushString(temp,"debug/%.*s/iterativeBefore.dot",UNPACK_SS(name));
+  OutputGraphDotFile(versat,accel,false,beforePath,temp);
 
-  Array<Connection> conn = PushArray<Connection>(arena,inputs.size);
+  Array<Connection> conn = PushArray<Connection>(temp,inputs.size);
   Memset(conn,{});
 
   int muxInserted = 0;
@@ -1499,7 +852,8 @@ FUDeclaration* RegisterIterativeUnit(Versat* versat,Accelerator* accel,FUInstanc
     InsertUnit(accel,(PortNode){conn[i].mux,0},conn[i].unit,(PortNode){bufferNode,0});
   }
 
-  OutputGraphDotFile(versat,accel,true,"debug/iterativeAfter.dot");
+  String afterPath = PushString(temp,"debug/%.*s/iterativeBefore.dot",UNPACK_SS(name));
+  OutputGraphDotFile(versat,accel,true,afterPath,temp);
 
   FUDeclaration declaration = {};
 
@@ -1524,27 +878,26 @@ FUDeclaration* RegisterIterativeUnit(Versat* versat,Accelerator* accel,FUInstanc
   }
 
   // Values from iterative declaration
-  ReorganizeIterative(accel,arena);
-  //ReorganizeAccelerator(accel,arena);
+  ReorganizeIterative(accel,temp);
   declaration.baseCircuit = accel;
   declaration.fixedDelayCircuit = accel;
 
 #if 0
   Accelerator* f = CopyAccelerator(versat,accel,nullptr);
-  ReorganizeIterative(f,arena);
+  ReorganizeIterative(f,temp);
 
   // TODO: HACK, for now
   FUDeclaration temp = {};
   temp.name = name;
   f->subtype = &temp;
 
-  auto delays = CalculateDelay(versat,f,arena);
+  auto delays = CalculateDelay(versat,f,temp);
   FixDelays(versat,f,delays);
 
   OutputGraphDotFile(versat,f,true,"debug/iterative2.dot");
 
   f->ordered = nullptr;
-  ReorganizeIterative(f,arena);
+  ReorganizeIterative(f,temp);
 
   declaration.fixedDelayCircuit = f;
 #endif
@@ -1569,7 +922,9 @@ FUDeclaration* RegisterIterativeUnit(Versat* versat,Accelerator* accel,FUInstanc
 
   FUDeclaration* registeredType = RegisterFU(versat,declaration);
   registeredType->lat = node->inst->declaration->outputLatencies[0];
-
+  registeredType->calculatedDelays = PushArray<int>(&versat->permanent,99);
+  Memset(registeredType->calculatedDelays,0);
+  
   // Add this units static instances (needs be done after Registering the declaration because the parent is a pointer to the declaration)
   FOREACH_LIST(InstanceNode*,ptr,accel->allocated){
     FUInstance* inst = ptr->inst;
@@ -1588,147 +943,8 @@ FUDeclaration* RegisterIterativeUnit(Versat* versat,Accelerator* accel,FUInstanc
     }
   }
 
-  {
-    VersatComputedValues val = ComputeVersatValues(versat,accel,false);
-	ComputedData computedData = CalculateVersatComputedData(accel->allocated,val,arena);
-
-    // MARK
-#if 0
-	TemplateSetCustom("staticUnits",registeredType->staticUnits,"Hashmap<StaticId,StaticData>");
-	TemplateSetCustom("accel",registeredType,"FUDeclaration");
-	TemplateSetCustom("versatData",&computedData.data,"Array<VersatComputedData>");
-	TemplateSetCustom("external",&computedData.external,"Array<ExternalMemoryInterface>");
-	TemplateSetCustom("instances",accel->allocated,"InstanceNode");
-	TemplateSetNumber("unitsMapped",val.unitsMapped);
-	TemplateSetCustom("inputDecl",BasicDeclaration::input,"FUDeclaration");
-	TemplateSetCustom("outputDecl",BasicDeclaration::output,"FUDeclaration");
-    
-    int lat = node->inst->declaration->outputLatencies[0];
-	TemplateSetNumber("special",lat);
-#endif
-  }
-
-#if 0
-  char buffer[256];
-  sprintf(buffer,"%.*s/modules/%.*s.v",UNPACK_SS(versat->outputLocation),UNPACK_SS(name));
-  FILE* sourceCode = OpenFileAndCreateDirectories(buffer,"w");
-  ProcessTemplate(sourceCode,BasicTemplates::iterativeTemplate,&versat->temp);
-#endif
-
   return registeredType;
 }
-
-void ClearConfigurations(Accelerator* accel){
-  for(int i = 0; i < accel->configAlloc.size; i++){
-    accel->configAlloc.ptr[i] = 0;
-  }
-}
-
-// TODO: Move to debug because it is debug code. Probably not needed to be gui because it's helpful to be able to copy everything in it as text
-#if 0
-void OutputMemoryMap(Versat* versat,Accelerator* accel){
-  UNHANDLED_ERROR; // Might need to create a view so that ComputeVersatValues works
-  VersatComputedValues val = ComputeVersatValues(versat,accel);
-
-  printf("\n");
-  printf("Total bytes mapped: %d\n",val.memoryMappedBytes);
-  printf("Maximum bytes mapped by a unit: %d\n",val.maxMemoryMapDWords * 4);
-  printf("Memory address bits: %d\n",val.memoryAddressBits);
-  printf("Units mapped: %d\n",val.unitsMapped);
-  printf("Memory mapping address bits: %d\n",val.memoryMappingAddressBits);
-  printf("\n");
-  printf("Config registers: %d\n",val.nConfigs);
-  printf("Config bits used: %d\n",val.configBits);
-  printf("\n");
-  printf("Static registers: %d\n",val.nStatics);
-  printf("Static bits used: %d\n",val.staticBits);
-  printf("\n");
-  printf("Delay registers: %d\n",val.nDelays);
-  printf("Delay bits used: %d\n",val.delayBits);
-  printf("\n");
-  printf("Configuration registers: %d (including versat reg, static and delays)\n",val.nConfigurations);
-  printf("Configuration address bits: %d\n",val.configurationAddressBits);
-  printf("Configuration bits used: %d\n",val.configurationBits);
-  printf("\n");
-  printf("State registers: %d (including versat reg)\n",val.nStates);
-  printf("State address bits: %d\n",val.stateAddressBits);
-  printf("State bits used: %d\n",val.stateBits);
-  printf("\n");
-  printf("IO connections: %d\n",val.nUnitsIO);
-
-  printf("\n");
-  printf("Number units: %d\n",Size(versat->accelerators.Get(0)->allocated));
-  printf("\n");
-
-#define ALIGN_FORMAT "%-14s"
-#define ALIGN_SIZE 14
-
-int bitsNeeded = val.lowerAddressSize;
-
-printf(ALIGN_FORMAT,"Address:");
-for(int i = bitsNeeded; i >= 10; i--)
-  printf("%d ",i/10);
-printf("\n");
-printf(ALIGN_FORMAT," ");
-for(int i = bitsNeeded; i >= 0; i--)
-  printf("%d ",i%10);
-printf("\n");
-for(int i = bitsNeeded + (ALIGN_SIZE / 2); i >= 0; i--)
-  printf("==");
-printf("\n");
-
-// Memory mapped
-printf(ALIGN_FORMAT,"MemoryMapped:");
-printf("1 ");
-for(int i = bitsNeeded - 1; i >= 0; i--)
-  if(i < val.memoryAddressBits)
-    printf("M ");
-  else
-         printf("0 ");
-printf("\n");
-for(int i = bitsNeeded + (ALIGN_SIZE / 2); i >= 0; i--)
-  printf("==");
-printf("\n");
-
-// Versat registers
-printf(ALIGN_FORMAT,"Versat Regs:");
-for(int i = bitsNeeded - 0; i >= 0; i--)
-  printf("0 ");
-printf("\n");
-for(int i = bitsNeeded + (ALIGN_SIZE / 2); i >= 0; i--)
-  printf("==");
-printf("\n");
-
-// Config/State
-printf(ALIGN_FORMAT,"Config/State:");
-printf("0 ");
-for(int i = bitsNeeded - 1; i >= 0; i--){
-  if(i < val.configurationAddressBits && i < val.stateAddressBits)
-    printf("B ");
-  else if(i < val.configurationAddressBits)
-    printf("C ");
-  else if(i < val.stateAddressBits)
-    printf("S ");
-  else
-         printf("0 ");
-}
-printf("\n");
-for(int i = bitsNeeded + (ALIGN_SIZE / 2); i >= 0; i--)
-  printf("==");
-printf("\n");
-
-printf("\n");
-printf("M - Memory mapped\n");
-printf("C - Used only by Config\n");
-printf("S - Used only by State\n");
-printf("B - Used by both Config and State\n");
-printf("\n");
-printf("Memory/Config bit: %d\n",val.memoryConfigDecisionBit);
-printf("Memory range: [%d:0]\n",val.memoryAddressBits - 1);
-printf("Config range: [%d:0]\n",val.configurationAddressBits - 1);
-printf("State range: [%d:0]\n",val.stateAddressBits - 1);
-}
-#endif
 
 //TODO: functions that should go to accelerator
 int GetNumberOfInputs(FUInstance* inst){
@@ -1788,51 +1004,6 @@ int GetInputPortNumber(FUInstance* inputInstance){
   return ((FUInstance*) inputInstance)->portIndex;
 }
 
-void SetDelayRecursive_(AcceleratorIterator iter,int delay){
-  FUInstance* inst = iter.Current()->inst;
-
-  if(inst->declaration == BasicDeclaration::buffer){
-    inst->config[0] = inst->bufferAmount;
-    return;
-  }
-
-  int totalDelay = inst->baseDelay + delay;
-
-  if(IsTypeHierarchical(inst->declaration)){
-    AcceleratorIterator it = iter.LevelBelowIterator();
-
-    for(InstanceNode* child = it.Current(); child; child = it.Skip()){
-      SetDelayRecursive_(it,totalDelay);
-    }
-  } else if(inst->declaration->configInfo.delayOffsets.max){
-    inst->delay[0] = totalDelay;
-  }
-}
-
-int CountNonSpecialChilds(InstanceNode* nodes){
-  int count = 0;
-  FOREACH_LIST(InstanceNode*,ptr,nodes){
-    FUInstance* inst = ptr->inst;
-    if(inst->declaration->type == FUDeclaration::SPECIAL){
-    } else if(IsTypeHierarchical(inst->declaration)){
-      count += CountNonSpecialChilds(inst->declaration->baseCircuit->allocated);
-    } else {
-      count += 1;
-    }
-  }
-
-  return count;
-}
-
-void SetDelayRecursive(Accelerator* accel,Arena* arena){
-  BLOCK_REGION(arena);
-
-  AcceleratorIterator iter = {};
-  for(InstanceNode* node = iter.Start(accel,arena,true); node; node = iter.Skip()){
-    SetDelayRecursive_(iter,0);
-  }
-}
-
 bool CheckValidName(String name){
   for(int i = 0; i < name.size; i++){
     char ch = name[i];
@@ -1874,23 +1045,28 @@ int CalculateMemoryUsage(Versat* versat){
   return totalSize;
 }
 
-void PrintDeclaration(FUDeclaration* decl){
-  printf("Declaration: %.*s\n",UNPACK_SS(decl->name));
-  printf("Inputs: %d\n",decl->inputDelays.size);
-  printf("  ");
+void PrintDeclaration(FILE* out,FUDeclaration* decl,Arena* temp,Arena* temp2){
+  BLOCK_REGION(temp);
+  BLOCK_REGION(temp2);
+
+  fprintf(out,"Declaration: %.*s\n",UNPACK_SS(decl->name));
+  fprintf(out,"Inputs: %d\n",decl->inputDelays.size);
+  fprintf(out,"  ");
   for(int i = 0; i < decl->inputDelays.size; i++){
-    if(i != 0) printf(",");
-    printf("%d",decl->inputDelays[i]);
+    if(i != 0) fprintf(out,",");
+    fprintf(out,"%d",decl->inputDelays[i]);
   }
-  printf("\n");
+  fprintf(out,"\n");
 
-  printf("Outputs: %d\n",decl->outputLatencies.size);
-  printf("  ");
+  fprintf(out,"Outputs: %d\n",decl->outputLatencies.size);
+  fprintf(out,"  ");
   for(int i = 0; i < decl->outputLatencies.size; i++){
-    if(i != 0) printf(",");
-    printf("%d",decl->outputLatencies[i]);
+    if(i != 0) fprintf(out,",");
+    fprintf(out,"%d",decl->outputLatencies[i]);
   }
-  printf("\n");
+  fprintf(out,"\n");
 
-  // TODO: Add more stuff here when needed.
+  Array<InstanceInfo> info = TransformGraphIntoArray(decl->fixedDelayCircuit,true,temp,temp2);
+
+  PrintAll(out,info,temp);
 }

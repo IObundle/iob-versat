@@ -12,6 +12,8 @@
 
 typedef intptr_t iptr;
 
+// Config
+
 #{for type nonMergedStructures}
 typedef struct {
 #{for entry type.entries}
@@ -29,6 +31,8 @@ union{
 #define VERSAT_DEFINED_@{type.name}
 #{end}
 
+// Address
+
 #{for type addressStructures}
 typedef struct {
 #{for entry type.entries}
@@ -39,13 +43,7 @@ typedef struct {
 #{end}
 
 typedef struct{
-#{for wire orderedConfigs.configs}
-  iptr @{wire.name};
-#{end}
-#{for wire orderedConfigs.statics}
-  iptr @{wire.name};
-#{end}
-#{for wire orderedConfigs.delays}
+#{for wire orderedConfigs}
   iptr @{wire.name};
 #{end}
 } AcceleratorConfig;
@@ -76,13 +74,12 @@ extern iptr versat_base;
  
 // Base address for each memory mapped unit
 #{for pair namedMem}
-#define @{pair.first} (versat_base + memMappedStart + @{pair.second.ptr})
+#define @{pair.first} (versat_base + memMappedStart + @{pair.second |> Hex})
 #{end}
 
 #define ACCELERATOR_TOP_ADDR_INIT {#{join "," pair namedMem} (void*) @{pair.first} #{end}}
 
 static unsigned int delayBuffer[] = {#{join "," d delay} @{d |> Hex} #{end}};
-static unsigned int staticBuffer[] = {#{join "," d staticBuffer} @{d |> Hex} #{end} };
 
 #ifdef __cplusplus
 extern "C" {
@@ -128,13 +125,7 @@ extern volatile AcceleratorState* accelState;
 #define SimpleOutputStart ((int*) accelState)
 #{end}
 
-#{for wire orderedConfigs.configs}
-#define ACCEL_@{wire.name} accelConfig->@{wire.name}
-#{end}
-#{for wire orderedConfigs.statics}
-#define ACCEL_@{wire.name} accelConfig->@{wire.name}
-#{end}
-#{for wire orderedConfigs.delays}
+#{for wire orderedConfigs}
 #define ACCEL_@{wire.name} accelConfig->@{wire.name}
 #{end}
 

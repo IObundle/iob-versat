@@ -1,23 +1,21 @@
 `timescale 1ns / 1ps
 
 module PipelineRegister #(
-         parameter DATA_W = 32
-      )
-      (
-         input run,
-         input running,
-                
-         input [DATA_W-1:0] in0,
+   parameter DATA_W = 32
+) (
+   input run,
+   input running,
 
-         (* versat_latency = 1 *) output reg [DATA_W-1:0] out0,
-      
-         input clk,
-         input rst
-      ); 
+   input [DATA_W-1:0] in0,
 
-always @(posedge clk)
-begin
-   out0 <= in0;
-end
+   (* versat_latency = 1 *) output reg [DATA_W-1:0] out0,
+
+   input clk,
+   input rst
+);
+
+   always @(posedge clk) begin
+      out0 <= in0;
+   end
 
 endmodule

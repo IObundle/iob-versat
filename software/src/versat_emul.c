@@ -60,15 +60,17 @@ void versat_init(int base){
 
   char* configView = (char*) accelConfig;
   iptr* delayPtr = (iptr*) (configView + (delayStart - configStart));
-  iptr* staticPtr = (iptr*) (configView + (staticStart - configStart));
 
   for(int i = 0; i < ARRAY_SIZE(delayBuffer); i++){
     delayPtr[i] = delayBuffer[i];
   }
 
+#if 0
+  iptr* staticPtr = (iptr*) (configView + (staticStart - configStart));
   for(int i = 0; i < ARRAY_SIZE(staticBuffer); i++){
     staticPtr[i] = staticBuffer[i];
   }
+#endif
 }
 
 void RunAccelerator(int times){

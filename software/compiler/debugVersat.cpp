@@ -6,6 +6,7 @@
 
 #include <algorithm>
 
+#include "memory.hpp"
 #include "type.hpp"
 #include "utilsCore.hpp"
 
@@ -92,30 +93,14 @@ bool CheckInputAndOutputNumber(FUDeclaration* type,int inputs,int outputs){
   return true;
 }
 
-// MARKED
-void PrintAcceleratorInstances(Accelerator* accel){
-  STACK_ARENA(tempInst,Kilobyte(64));
-  Arena* temp = &tempInst;
-
-  AcceleratorIterator iter = {};
-  for(InstanceNode* node = iter.Start(accel,temp,false); node; node = iter.Next()){
-    FUInstance* inst = node->inst;
-    for(int ii = 0; ii < iter.level; ii++){
-      printf("  ");
-    }
-    printf("%.*s\n",UNPACK_SS(inst->name));
-  }
-}
-
-static void OutputGraphDotFile_(Versat* versat,Accelerator* accel,bool collapseSameEdges,Set<FUInstance*>* highlighInstance,FILE* outputFile){
-  Arena* arena = &versat->temp;
-  BLOCK_REGION(arena);
+static void OutputGraphDotFile_(Versat* versat,Accelerator* accel,bool collapseSameEdges,Set<FUInstance*>* highlighInstance,FILE* outputFile,Arena* temp){
+  BLOCK_REGION(temp);
 
   fprintf(outputFile,"digraph accel {\n\tnode [fontcolor=white,style=filled,color=\"160,60,176\"];\n");
   FOREACH_LIST(InstanceNode*,ptr,accel->allocated){
     FUInstance* inst = ptr->inst;
-    String id = UniqueRepr(inst,arena);
-    String name = Repr(inst,versat->debug.dotFormat,arena);
+    String id = UniqueRepr(inst,temp);
+    String name = Repr(inst,versat->debug.dotFormat,temp);
 
     String color = STRING("darkblue");
     int delay = 0;
@@ -137,7 +122,7 @@ static void OutputGraphDotFile_(Versat* versat,Accelerator* accel,bool collapseS
   }
 
   int size = Size(accel->edges);
-  Hashmap<Pair<InstanceNode*,InstanceNode*>,int>* seen = PushHashmap<Pair<InstanceNode*,InstanceNode*>,int>(arena,size);
+  Hashmap<Pair<InstanceNode*,InstanceNode*>,int>* seen = PushHashmap<Pair<InstanceNode*,InstanceNode*>,int>(temp,size);
 
   // TODO: Consider adding a true same edge counter, that collects edges with equal delay and then represents them on the graph as a pair, using [portStart-portEnd]
   FOREACH_LIST(InstanceNode*,ptr,accel->allocated){
@@ -160,11 +145,11 @@ static void OutputGraphDotFile_(Versat* versat,Accelerator* accel,bool collapseS
       int inPort = con->instConnectedTo.port;
       int outPort = con->port;
 
-      String first = UniqueRepr(out,arena);
-      String second = UniqueRepr(in,arena);
+      String first = UniqueRepr(out,temp);
+      String second = UniqueRepr(in,temp);
       PortInstance start = {out,outPort};
       PortInstance end = {in,inPort};
-      String label = Repr(&start,&end,versat->debug.dotFormat,arena);
+      String label = Repr(&start,&end,versat->debug.dotFormat,temp);
       int calculatedDelay = con->delay ? *con->delay : 0;
 
       bool highlighStart = (highlighInstance ? highlighInstance->Exists(start.inst) : false);
@@ -185,71 +170,39 @@ static void OutputGraphDotFile_(Versat* versat,Accelerator* accel,bool collapseS
   fprintf(outputFile,"}\n");
 }
 
-void OutputGraphDotFile(Versat* versat,Accelerator* accel,bool collapseSameEdges,const char* filenameFormat,...){
-  char buffer[1024];
-
-#if 0
+void OutputGraphDotFile(Versat* versat,Accelerator* accel,bool collapseSameEdges,String filename,Arena* temp){
   if(!versat->debug.outputGraphs){
     return;
   }
-#endif
 
-  va_list args;
-  va_start(args,filenameFormat);
-
-  vsprintf(buffer,filenameFormat,args);
-
-  FILE* file = OpenFileAndCreateDirectories(buffer,"w");
-  OutputGraphDotFile_(versat,accel,collapseSameEdges,nullptr,file);
+  FILE* file = OpenFileAndCreateDirectories(StaticFormat("%.*s",UNPACK_SS(filename)),"w");
+  OutputGraphDotFile_(versat,accel,collapseSameEdges,nullptr,file,temp);
   fclose(file);
-
-  va_end(args);
 }
 
-void OutputGraphDotFile(Versat* versat,Accelerator* accel,bool collapseSameEdges,FUInstance* highlighInstance,const char* filenameFormat,...){
-  char buffer[1024];
-
-#if 0
+void OutputGraphDotFile(Versat* versat,Accelerator* accel,bool collapseSameEdges,FUInstance* highlighInstance,String filename,Arena* temp){
   if(!versat->debug.outputGraphs){
     return;
   }
-#endif
 
-  va_list args;
-  va_start(args,filenameFormat);
-
-  vsprintf(buffer,filenameFormat,args);
-
-  Arena* temp = &versat->temp;
   BLOCK_REGION(temp);
-
   Set<FUInstance*>* highlight = PushSet<FUInstance*>(temp,1);
   highlight->Insert(highlighInstance);
 
-  FILE* file = OpenFileAndCreateDirectories(buffer,"w");
-  OutputGraphDotFile_(versat,accel,collapseSameEdges,highlight,file);
+  FILE* file = OpenFileAndCreateDirectories(StaticFormat("%.*s",UNPACK_SS(filename)),"w");
+  OutputGraphDotFile_(versat,accel,collapseSameEdges,highlight,file,temp);
   fclose(file);
-
-  va_end(args);
 }
 
-void OutputGraphDotFile(Versat* versat,Accelerator* accel,bool collapseSameEdges,Set<FUInstance*>* highlight,const char* filenameFormat,...){
-  char buffer[1024];
-
+void OutputGraphDotFile(Versat* versat,Accelerator* accel,bool collapseSameEdges,Set<FUInstance*>* highlight,String filename,Arena* temp){
   if(!versat->debug.outputGraphs){
     return;
   }
 
-  va_list args;
-  va_start(args,filenameFormat);
-
-  vsprintf(buffer,filenameFormat,args);
-
-  FILE* file = OpenFileAndCreateDirectories(buffer,"w");
-  OutputGraphDotFile_(versat,accel,collapseSameEdges,highlight,file);
+  BLOCK_REGION(temp);
+  FILE* file = OpenFileAndCreateDirectories(StaticFormat("%.*s",UNPACK_SS(filename)),"w");
+  OutputGraphDotFile_(versat,accel,collapseSameEdges,highlight,file,temp);
   fclose(file);
-
-  va_end(args);
 }
 
 String PushMemoryHex(Arena* arena,void* memory,int size){

@@ -1,5 +1,4 @@
-#ifndef INCLUDED_VERSAT_ACCELERATOR
-#define INCLUDED_VERSAT_ACCELERATOR
+#pragma once
 
 #include <unordered_map>
 
@@ -33,66 +32,64 @@ struct Accelerator{ // Graph + data storage
   Pool<FUInstance> instances;
   Pool<FUInstance> subInstances; // TODO: Since do not care about user code anymore, can remove this. Essentially a "wrapper" so that user code does not have to deal with reallocations when adding units.
 
-  // TODO: I do not need any of this, but first need to retire the use of the Populate function.
-  Allocation<iptr> configAlloc;
-  Allocation<int> stateAlloc;
-  Allocation<Byte> extraDataAlloc;
-  Allocation<Byte> externalMemoryAlloc;
-  //Allocation<int> outputAlloc;
-  //Allocation<int> storedOutputAlloc;
-
-  DynamicArena* accelMemory;
+  DynamicArena* accelMemory; // TODO: We could remove all this because we can now build all the accelerators in place. (Add an API that functions like a Accelerator builder and at the end we lock everything into an immutable graph).
 
   std::unordered_map<StaticId,StaticData> staticUnits;
   Hashmap<StaticId,StaticData>* calculatedStaticPos;
   int startOfDelay;
   int startOfStatic;
-  int staticSize;
 
   String name; // For debugging purposes it's useful to give accelerators a name
 };
 
-// TODO: The reason we had ordered was because we wanted to simulate at runtime, but that is not needed anymore.
-//       I think ordered can just be replaced by a simple function that computes the ordered instanceNodes.
-class AcceleratorIterator{
-public:
-  union Type{
-    InstanceNode* node;
-    OrderedInstance* ordered;
-  };
+struct VersatComputedData{
+  int memoryMaskSize;
+  char memoryMaskBuffer[33];
+  char* memoryMask;
+};
 
-  Array<Type> stack;
-  Accelerator* topLevel;
-  int level;
-  int upperLevels;
-  bool calledStart;
-  bool populate;
-  bool ordered;
-  bool levelBelow;
+struct ComputedData{
+  Array<ExternalMemoryInterface> external; // Just a grouping of all external interfaces.
+  Array<VersatComputedData> data;          
+};
 
-  InstanceNode* GetInstance(int level);
+struct VersatComputedValues{
+  int nConfigs;
+  int configBits;
 
-  // Must call first
-  InstanceNode* Start(Accelerator* topLevel,FUInstance* compositeInst,Arena* temp,bool populate = false);
-  InstanceNode* Start(Accelerator* topLevel,Arena* temp,bool populate = false);
+  int versatConfigs;
+  int versatStates;
 
-  InstanceNode* StartOrdered(Accelerator* topLevel,Arena* temp,bool populate = false);
+  int nStatics;
+  int staticBits;
+  int staticBitsStart;
 
-  InstanceNode* ParentInstance();
-  String GetParentInstanceFullName(Arena* out);
+  int nDelays;
+  int delayBits;
+  int delayBitsStart;
 
-  InstanceNode* Descend(); // Current() must be a composite instance, otherwise this will fail
+  // Configurations = config + static + delays
+  int nConfigurations;
+  int configurationBits;
+  int configurationAddressBits;
 
-  InstanceNode* Next(); // Iterates over subunits
-  InstanceNode* Skip(); // Next unit on the same level
+  int nStates;
+  int stateBits;
+  int stateAddressBits;
 
-  InstanceNode* Current(); // Returns nullptr to indicate end of iteration
-  InstanceNode* CurrentAcceleratorInstance(); // Returns the accelerator instance for the Current() instance or nullptr if currently at top level
+  int unitsMapped;
+  int memoryMappedBytes;
 
-  String GetFullName(Arena* out,const char* sep);
-  int    GetFullLevel();
+  int nUnitsIO;
+  int numberConnections;
+  int externalMemoryInterfaces;
 
-  AcceleratorIterator LevelBelowIterator(); // Not taking an arena means that the returned iterator uses current iterator memory. Returned iterator must be iterated fully before the current iterator can be used, otherwise memory conflicts will arise as both iterators are sharing the same stack
+  int stateConfigurationAddressBits;
+  int memoryAddressBits;
+  int memoryMappingAddressBits;
+  int memoryConfigDecisionBit;
+
+  bool signalLoop;
 };
 
 // Accelerator
@@ -105,9 +102,13 @@ InstanceNode* CreateFlatFUInstance(Accelerator* accel,FUDeclaration* type,String
 void InitializeFUInstances(Accelerator* accel,bool force);
 int CountNonOperationChilds(Accelerator* accel);
 
+ComputedData CalculateVersatComputedData(Array<InstanceInfo> info,VersatComputedValues val,Arena* out);
+ComputedData CalculateVersatComputedData(InstanceNode* instances,VersatComputedValues val,Arena* out);
+
 bool IsCombinatorial(Accelerator* accel);
+
+Array<FUDeclaration*> ConfigSubTypes(Accelerator* accel,Arena* out,Arena* sub);
+Array<FUDeclaration*> MemSubTypes(Accelerator* accel,Arena* out,Arena* sub);
 
 void ReorganizeAccelerator(Accelerator* graph,Arena* temp);
 void ReorganizeIterative(Accelerator* accel,Arena* temp);
-
-#endif // INCLUDED_VERSAT_ACCELERATOR

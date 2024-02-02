@@ -148,7 +148,7 @@ begin
    #{set inst node.inst}
    #{if inst.declaration.memoryMapBits}
       #{if versatData[counter].memoryMaskSize}
-      if(addr[@{memoryAddressBits - 1}:@{memoryAddressBits - versatData[counter].memoryMaskSize}] == @{memoryAddressBits - inst.declaration.memoryMapBits}'b@{versatData[counter].memoryMask})
+      if(addr[@{memoryAddressBits - 1}-:@{versatData[counter].memoryMaskSize}] == @{versatData[counter].memoryMaskSize}'b@{versatData[counter].memoryMask})
          memoryMappedEnable[@{counter}] = 1'b1;
       #{else}
       memoryMappedEnable[0] = 1'b1;

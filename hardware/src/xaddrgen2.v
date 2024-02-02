@@ -29,7 +29,7 @@ module xaddrgen2 #(
 
    //connection wires
    wire [MEM_ADDR_W - 1:0] addr_oB;
-   wire                      mem_en_oB;
+   wire                    mem_en_oB;
    wire done_oA, done_oB;
    wire                             mem_en_o_reg_w;
 
@@ -47,7 +47,7 @@ module xaddrgen2 #(
    wire pause = mem_en_o_reg_w & ~done_oA;
 
    //after first_i run_i, addr_ogenA start_i comes from addr_ogenB addr_o
-   wire [MEM_ADDR_W - 1:0] start_iA = run_i ? start_i : addr_oB;
+   wire                                    [MEM_ADDR_W - 1:0] start_iA = run_i ? start_i : addr_oB;
 
    //instantiate addr_oess generators
    xaddrgen #(

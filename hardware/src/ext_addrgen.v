@@ -55,29 +55,29 @@ module ext_addrgen #(
    // addr_o gen wires
    wire                        [EXT_ADDR_W-1:0] addr_o_gen;
    wire ready = |iterations_i;
-   wire                                             mem_en;
+   wire                                         mem_en;
 
    // int mem regs
    reg [MEM_ADDR_W-1:0] counter_int, counter_int_nxt;
 
-   reg                    req_o_int;
-   reg                    req_o_int_reg;
-   reg                    rnw_o_int;
-   reg                    rnw_o_int_reg;
+   reg                  req_o_int;
+   reg                  req_o_int_reg;
+   reg                  rnw_o_int;
+   reg                  rnw_o_int_reg;
    reg [MEM_ADDR_W-1:0] addr_o_int;
    reg [MEM_ADDR_W-1:0] addr_o_int_reg;
 
    // link int mem and ext databus
-   assign data_out_o     = databus_rdata;
-   assign databus_wdata  = data_in_i;
-   /* verilator lint_off WIDTH */assign databus_addr = ext_addr_i + (addr_o_gen << 2);
-   assign addr_o         = int_addr_i + counter_int;
+   assign data_out_o    = databus_rdata;
+   assign databus_wdata = data_in_i;
+   /* verilator lint_off WIDTH */assign databus_addr  = ext_addr_i + (addr_o_gen << 2);
+   assign addr_o        = int_addr_i + counter_int;
 
    //assign req_o = (direction_i == 2'b01) ? req_o_int_reg : req_o_int;
    //assign rnw_o = (direction_i == 2'b01) ? rnw_o_int_reg : rnw_o_int;
 
-   assign req_o          = req_o_int;
-   assign rnw_o          = rnw_o_int;
+   assign req_o         = req_o_int;
+   assign rnw_o         = rnw_o_int;
 
    // instantiate addr_ogen for ext mem access
    xaddrgen #(

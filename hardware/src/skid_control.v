@@ -89,11 +89,13 @@ module skid_control (
    end
 
    always @* begin
-      out_valid_o     = 1'b0;
+      out_valid_o       = 1'b0;
       store_data_o      = 1'b0;
       use_stored_data_o = has_stored;
 
-      case ({!enable_transfer_i, has_stored, in_valid_i, out_ready_i})
+      case ({
+         !enable_transfer_i, has_stored, in_valid_i, out_ready_i
+      })
          4'b0000: begin
          end
          4'b0001: begin

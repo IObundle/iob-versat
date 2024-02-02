@@ -83,14 +83,7 @@ wire [31:0] unitRdataFinal;
 
 wire we = (|wstrb);
 
-// @{memoryMappedBytes}
-#{if memoryMappedBytes == 0}
-wire memoryMappedAddr = 1'b0;
-#{else}
-wire memoryMappedAddr = address[@{memoryConfigDecisionBit}];
-#{end}
-
-wire rst_int = (rst | soft_reset);
+wire memoryMappedAddr;
 
 // Versat registers and memory access
 reg versat_rvalid;
@@ -98,6 +91,7 @@ reg [31:0] versat_rdata;
 
 reg soft_reset,signal_loop; // Self resetting 
 
+wire rst_int = (rst | soft_reset);
 
 #{if useDMA}
 reg [1:0] dma_state;
@@ -324,6 +318,12 @@ wire [DATA_W-1:0] data_data = wdata;
 wire [(DATA_W/8)-1:0] data_wstrb = wstrb;
 #{end}
 
+#{if memoryMappedBytes == 0}
+assign memoryMappedAddr = 1'b0;
+#{else}
+assign memoryMappedAddr = address[@{memoryConfigDecisionBit}];
+#{end}
+
 reg [31:0] latency_counter;
 reg enableCounter;
 always @(posedge clk,posedge rst)
@@ -382,7 +382,7 @@ begin
    #{set inst node.inst}
    #{if inst.declaration.memoryMapBits}
       #{if versatData[counter].memoryMaskSize}
-      if(address[@{memoryAddressBits - 1}:@{memoryAddressBits - versatData[counter].memoryMaskSize}] == @{memoryAddressBits - inst.declaration.memoryMapBits}'b@{versatData[counter].memoryMask}) // @{versatBase + memoryMappedBase * 4 + inst.memMapped * 4 |> Hex}
+      if(address[@{memoryAddressBits - 1}:@{memoryAddressBits - versatData[counter].memoryMaskSize}] == @{memoryAddressBits - inst.declaration.memoryMapBits}'b@{versatData[counter].memoryMask}) // @{memoryMappedBase * 4 + inst.memMapped * 4 |> Hex}
          memoryMappedEnable[@{counter}] = 1'b1;
       #{else}
       memoryMappedEnable[0] = 1'b1;
@@ -416,7 +416,7 @@ begin
       #{set inst node.inst}
       #{set decl inst.declaration}
       #{for wire decl.configInfo.configs}
-      if(address[@{versatValues.configurationAddressBits + 1}:0] == @{addr * 4}) begin // @{versatBase + addr * 4 |> Hex} // @{wire.name} - @{decl.name}
+      if(address[@{versatValues.configurationAddressBits + 1}:0] == @{addr * 4}) begin // @{addr * 4 |> Hex} @{wire.name}
       #{set size wire.bitSize}
       #{set wstrb 0}
       #{set wstrbAmount 0}
@@ -436,7 +436,7 @@ begin
 
       // Static
       #{for unit staticUnits} #{for wire unit.data.configs}
-      if(address[@{versatValues.configurationAddressBits + 1}:0] == @{addr * 4}) // @{versatBase + addr * 4 |> Hex}
+      if(address[@{versatValues.configurationAddressBits + 1}:0] == @{addr * 4}) // @{addr * 4 |> Hex}
          // TODO: Need to also take into account strobes
          #{if unit.first.parent}
          @{configReg}[@{counter}+:@{wire.bitSize}] <= data_data[@{wire.bitSize - 1}:0]; //  @{unit.first.parent.name}_@{unit.first.name}_@{wire.name}
@@ -450,7 +450,7 @@ begin
       #{for node instances} #{set inst node.inst} #{set decl inst.declaration}
       #{for i decl.configInfo.delayOffsets.max}
       // TODO: Need to also take into account strobes
-      if(address[@{versatValues.configurationAddressBits + 1}:0] == @{addr * 4}) // @{versatBase + addr * 4 |> Hex}
+      if(address[@{versatValues.configurationAddressBits + 1}:0] == @{addr * 4}) // @{addr * 4 |> Hex}
          @{configReg}[@{counter}+:32] <= data_data[31:0]; // Delay
       #{inc addr} #{set counter counter + 32}
       #{end} #{end}
@@ -483,7 +483,7 @@ begin
       #{set inst node.inst}
       #{set decl inst.declaration}
       #{for wire decl.configInfo.states}
-      if(addr[@{versatValues.stateAddressBits + 1}:0] >= @{addr * 4} && addr[@{versatValues.stateAddressBits + 1}:0] < @{(addr + 1) * 4}) // @{versatBase + addr * 4 |> Hex}
+      if(addr[@{versatValues.stateAddressBits + 1}:0] >= @{addr * 4} && addr[@{versatValues.stateAddressBits + 1}:0] < @{(addr + 1) * 4}) // @{addr * 4 |> Hex}
          stateRead = statedata[@{counter}+:@{wire.bitSize}];
       #{inc addr}
       #{set counter counter + wire.bitSize}

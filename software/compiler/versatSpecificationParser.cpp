@@ -7,7 +7,6 @@
 #include "versat.hpp"
 #include "parser.hpp"
 #include "debug.hpp"
-#include "debugGUI.hpp"
 #include "graph.hpp"
 #include "merge.hpp"
 
@@ -127,15 +126,15 @@ Var ParseVar(Tokenizer* tok){
   return var;
 }
 
-Array<Var> ParseGroup(Tokenizer* tok,Arena* arena){
+Array<Var> ParseGroup(Tokenizer* tok,Arena* out){
   Token peek = tok->PeekToken();
 
   if(CompareString(peek,"{")){
     tok->AdvancePeek(peek);
 
-    Byte* mark = MarkArena(arena);
+    Byte* mark = MarkArena(out);
     while(!tok->Done()){
-      Var* var = PushStruct<Var>(arena);
+      Var* var = PushStruct<Var>(out);
       *var = ParseVar(tok);
 
       Token sepOrEnd = tok->NextToken();
@@ -149,49 +148,17 @@ Array<Var> ParseGroup(Tokenizer* tok,Arena* arena){
         Assert("Error\n");
       }
     }
-    Array<Var> res = PointArray<Var>(arena,mark);
+    Array<Var> res = PointArray<Var>(out,mark);
     return res;
   } else {
     Var var = ParseVar(tok);
-    Array<Var> res = PushArray<Var>(arena,1);
+    Array<Var> res = PushArray<Var>(out,1);
     res[0] = var;
     return res;
   }
 }
 
-#if 0
-PortInstance ParseTerm(Versat* versat,Accelerator* circuit,Tokenizer* tok,InstanceTable& table){
-  Token peek = tok->PeekToken();
-  int negate = 0;
-  if(CompareToken(peek,"~")){
-    tok->AdvancePeek(peek);
-    negate = 1;
-  }
-
-  Var var = ParseVar(tok);
-
-  FUInstance* inst = table.GetOrFail(var.name);
-  PortInstance res = {};
-
-  Assert(var.portStart == var.portEnd);
-
-  if(negate){
-    FUInstance* negation = CreateFUInstance(circuit,GetTypeByName(versat,STRING("NOT")),STRING("not"),true);
-
-    ConnectUnits(inst,var.portStart,negation,0);
-
-    res.inst = (FUInstance*) negation;
-    res.port = 0;
-  } else {
-    res.inst = (FUInstance*) inst;
-    res.port = var.portStart;
-  }
-
-  return res;
-}
-#endif
-
-Expression* ParseAtomS(Tokenizer* tok,Arena* arena){
+Expression* ParseAtomS(Tokenizer* tok,Arena* out){
   Token peek = tok->PeekToken();
 
   bool negate = false;
@@ -207,7 +174,7 @@ Expression* ParseAtomS(Tokenizer* tok,Arena* arena){
     tok->AdvancePeek(peek);
   }
 
-  Expression* expr = PushStruct<Expression>(arena);
+  Expression* expr = PushStruct<Expression>(out);
 
   peek = tok->PeekToken();
   if(peek[0] >= '0' && peek[0] <= '9'){
@@ -225,10 +192,10 @@ Expression* ParseAtomS(Tokenizer* tok,Arena* arena){
   }
 
   if(negate){
-    Expression* negateExpr = PushStruct<Expression>(arena);
+    Expression* negateExpr = PushStruct<Expression>(out);
     negateExpr->op = negateType;
     negateExpr->type = Expression::OPERATION;
-    negateExpr->expressions = PushArray<Expression*>(arena,1);
+    negateExpr->expressions = PushArray<Expression*>(out,1);
     negateExpr->expressions[0] = expr;
 
     expr = negateExpr;
@@ -237,24 +204,24 @@ Expression* ParseAtomS(Tokenizer* tok,Arena* arena){
   return expr;
 }
 
-Expression* SpecParseExpression(Tokenizer* tok,Arena* arena);
-Expression* ParseTerm(Tokenizer* tok,Arena* arena){
+Expression* SpecParseExpression(Tokenizer* tok,Arena* out);
+Expression* ParseTerm(Tokenizer* tok,Arena* out){
   Token peek = tok->PeekToken();
 
   Expression* expr = nullptr;
   if(CompareString(peek,"(")){
     tok->AdvancePeek(peek);
-    expr = SpecParseExpression(tok,arena);
+    expr = SpecParseExpression(tok,out);
     tok->AssertNextToken(")");
   } else {
-    expr = ParseAtomS(tok,arena);
+    expr = ParseAtomS(tok,out);
   }
 
   return expr;
 }
 
-Expression* SpecParseExpression(Tokenizer* tok,Arena* arena){
-  Expression* expr = ParseOperationType(tok,{{"+","-"},{"&","|","^"},{">><",">>","><<","<<"}},ParseTerm,arena);
+Expression* SpecParseExpression(Tokenizer* tok,Arena* out){
+  Expression* expr = ParseOperationType(tok,{{"+","-"},{"&","|","^"},{">><",">>","><<","<<"}},ParseTerm,out);
 
   return expr;
 }
@@ -335,13 +302,13 @@ void ConnectUnit(Array<PortExpression> outs, PortExpression in){
   }
 }
 
-String GetUniqueName(String name,Arena* arena,InstanceName* names){
+String GetUniqueName(String name,Arena* out,InstanceName* names){
   int counter = 0;
   String uniqueName = name;
-  Byte* mark = MarkArena(arena);
+  Byte* mark = MarkArena(out);
   while(names->Get(uniqueName) != nullptr){
-    PopMark(arena,mark);
-    uniqueName = PushString(arena,"%.*s_%d",UNPACK_SS(name),counter++);
+    PopMark(out,mark);
+    uniqueName = PushString(out,"%.*s_%d",UNPACK_SS(name),counter++);
   }
 
   names->Insert(uniqueName,0);
@@ -477,8 +444,8 @@ PortExpression InstantiateExpression(Versat* versat,Expression* root,Accelerator
 }
 
 FUInstance* ParseExpression(Versat* versat,Accelerator* circuit,Tokenizer* tok,InstanceTable* table,InstanceName* names){
-  Arena* arena = &versat->temp;
-  Expression* expr = SpecParseExpression(tok,arena);
+  Arena* temp = &versat->temp;
+  Expression* expr = SpecParseExpression(tok,temp);
   PortExpression inst = InstantiateExpression(versat,expr,circuit,table,names);
 
   return inst.inst;
@@ -505,74 +472,24 @@ FUInstance* ParseInstanceDeclaration(Versat* versat,Tokenizer* tok,Accelerator* 
 
   Token peek = tok->PeekToken();
 
-  if(CompareString(peek,"(")){
-    tok->AdvancePeek(peek);
-
-    Token list = tok->NextFindUntil(")");
-    int arguments = 1 + CountSubstring(list,STRING(","));
-    Assert(arguments <= FUType->configInfo.configs.size);
-
-    Tokenizer insideList(list,",",{});
-
-    for(int i = 0; i < arguments; i++){
-      Token arg = insideList.NextToken();
-
-      /* inst->config[i] = */ ParseInt(arg); // TODO
-
-      if(i != arguments - 1){
-        insideList.AssertNextToken(",");
-      }
-    }
-    SetDefaultConfiguration(inst);
-    Assert(insideList.Done());
-
-    tok->AssertNextToken(")");
-    peek = tok->PeekToken();
-  }
-
-  if(CompareString(peek,"{")){
-    tok->AdvancePeek(peek);
-
-    Token list = tok->NextFindUntil("}");
-    int arguments = 1 + CountSubstring(list,STRING(","));
-    //Assert(arguments <= (1 << FUType->memoryMapBits));
-
-    Tokenizer insideList(list,",",{});
-
-    //inst->memMapped = PushArray<int>(&versat->permanent,1 << FUType->memoryMapBits).data;
-    //inst->savedMemory = true;
-    for(int i = 0; i < arguments; i++){
-      Token arg =  insideList.NextToken();
-
-      inst->memMapped[i] = ParseInt(arg);
-
-      if(i != arguments - 1){
-        insideList.AssertNextToken(",");
-      }
-    }
-    Assert(insideList.Done());
-
-    tok->AssertNextToken("}");
-    peek = tok->PeekToken();
-  }
-
   return inst;
 }
 
 FUDeclaration* ParseModule(Versat* versat,Tokenizer* tok){
   tok->AssertNextToken("module");
 
-  Token moduleName = tok->NextToken();
-
+  Token moduleNameToken = tok->NextToken();
+  String moduleName = PushString(&versat->permanent,moduleNameToken);
+  
   tok->AssertNextToken("(");
 
-  Accelerator* circuit = CreateAccelerator(versat);
+  Accelerator* circuit = CreateAccelerator(versat,moduleName);
 
-  Arena* arena = &versat->temp;
-  ArenaMarker marker(arena);
+  Arena* temp = &versat->temp;
+  BLOCK_REGION(temp);
 
-  InstanceTable* table = PushHashmap<String,FUInstance*>(arena,1000);
-  InstanceName* names = PushHashmap<String,int>(arena,1000); // TODO: Can be replaced by Set
+  InstanceTable* table = PushHashmap<String,FUInstance*>(temp,1000);
+  InstanceName* names = PushHashmap<String,int>(temp,1000); // TODO: Can be replaced by Set
 
   int insertedInputs = 0;
   for(int i = 0; 1; i++){
@@ -663,9 +580,9 @@ FUDeclaration* ParseModule(Versat* versat,Tokenizer* tok){
         tok->AssertNextToken(";");
       }
     } else {
-      BLOCK_REGION(arena);
+      BLOCK_REGION(temp);
         
-      Array<Var> outPortion = ParseGroup(tok,arena);
+      Array<Var> outPortion = ParseGroup(tok,temp);
 
       Var outVar = {};
       if(outPortion.size == 1){
@@ -709,13 +626,13 @@ FUDeclaration* ParseModule(Versat* versat,Tokenizer* tok){
 
         tok->AssertNextToken(";");
       } else if(CompareToken(op,"->")){
-        BLOCK_REGION(arena);
+        BLOCK_REGION(temp);
 
         // For now only allow one var on the input side
         // Makes it easier to match
         Var inVar = ParseVar(tok);
 
-        Array<PortExpression> ports = PushArray<PortExpression>(arena,outPortion.size);
+        Array<PortExpression> ports = PushArray<PortExpression>(temp,outPortion.size);
         for(int i = 0; i < outPortion.size; i++){
           Var& var = outPortion[i];
           ports[i].inst = table->GetOrFail(var.name);
@@ -770,28 +687,22 @@ FUDeclaration* ParseModule(Versat* versat,Tokenizer* tok){
   FUInstance** outInTable = table->Get(STRING("out"));
   Assert(!outInTable);
 
-#if 0
-  printf("\n\n");
-  for(FUInstance* inst : circuit->instances){
-    printf("%.*s\n",UNPACK_SS(inst->name));
-  }
-#endif
-
   return RegisterSubUnit(versat,PushString(&versat->permanent,moduleName),circuit);
 }
 
 FUDeclaration* ParseIterative(Versat* versat,Tokenizer* tok){
   tok->AssertNextToken("iterative");
 
-  Arena* arena = &versat->temp;
-  BLOCK_REGION(arena);
+  Arena* temp = &versat->temp;
+  BLOCK_REGION(temp);
 
-  InstanceTable* table = PushHashmap<String,FUInstance*>(arena,1000);
-  Set<String>* names = PushSet<String>(arena,1000);
+  InstanceTable* table = PushHashmap<String,FUInstance*>(temp,1000);
+  Set<String>* names = PushSet<String>(temp,1000);
 
-  String name = tok->NextToken();
+  String moduleName = tok->NextToken();
+  String name = PushString(&versat->permanent,moduleName);
 
-  Accelerator* iterative = CreateAccelerator(versat);
+  Accelerator* iterative = CreateAccelerator(versat,name);
 
   tok->AssertNextToken("(");
   // Arguments
@@ -844,7 +755,7 @@ FUDeclaration* ParseIterative(Versat* versat,Tokenizer* tok){
 
   FUInstance* outputInstance = nullptr;
 
-  Hashmap<PortInstance,FUInstance*>* portInstanceToMux = PushHashmap<PortInstance,FUInstance*>(arena,10);
+  Hashmap<PortInstance,FUInstance*>* portInstanceToMux = PushHashmap<PortInstance,FUInstance*>(temp,10);
 
   FUDeclaration* type = BasicDeclaration::stridedMerge;
   int index = 0;
@@ -940,19 +851,13 @@ TypeAndInstance ParseTypeAndInstance(Tokenizer* tok){
   return res;
 }
 
-#if 0
-merge MergeTest = Merge0:a | Merge1:b {
-   a.m0 - b.m1;
-   a.m1 - b.m0;
-}
-#endif
-
 void ParseMerge(Versat* versat,Tokenizer* tok){
   Arena* temp = &versat->temp;
   BLOCK_REGION(temp);
   
   tok->AssertNextToken("merge");
-  String mergeName = tok->NextToken();
+  String mergeNameToken = tok->NextToken();
+  String mergeName = PushString(&versat->permanent,mergeNameToken);
   tok->AssertNextToken("=");
 
   ArenaList<TypeAndInstance>* list = PushArenaList<TypeAndInstance>(temp);
@@ -998,8 +903,6 @@ void ParseMerge(Versat* versat,Tokenizer* tok){
   }
 
   Merge(versat,declarations,mergeName);
-  //NOT_IMPLEMENTED;
-  //DebugValue(MakeValue(&list));
 }  
 
 void ParseVersatSpecification(Versat* versat,String content){

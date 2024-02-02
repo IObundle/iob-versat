@@ -1,5 +1,9 @@
-#include "configurations.hpp"
+#include <unordered_map>
+#include <sys/wait.h>
+#include <ftw.h>
+
 #include "debugVersat.hpp"
+#include "graph.hpp"
 #include "memory.hpp"
 #include "utilsCore.hpp"
 #include "versat.hpp"
@@ -7,7 +11,6 @@
 #include "verilogParsing.hpp"
 #include "type.hpp"
 #include "templateEngine.hpp"
-#include "debugGUI.hpp"
 #include "acceleratorStats.hpp"
 #include "textualRepresentation.hpp"
 #include "codeGeneration.hpp"
@@ -19,7 +22,7 @@
 #define DO_STRINGIFY(ARG) #ARG
 #define STRINGIFY(ARG) DO_STRINGIFY(ARG)
 
-Optional<String> GetFormat(String filename){
+Optional<String> GetFileFormatFromPath(String filename){
   int size = filename.size;
   for(int i = 0; i < filename.size; i++){
     char ch = filename[size - i - 1];
@@ -35,11 +38,6 @@ Optional<String> GetFormat(String filename){
   return Optional<String>();
 }
 
-// Before continuing, find a more generic approach, check getopt, argparse or any other related functions that you can find
-// Try to follow the gcc conventions.
-// What I want: Default values, must have values, generate help automatically, stuff like that.
-//
-// TODO: Change things so that we use a ArenaList to store everything while processing and then convert to Array when storing permanently in the permanent Arena
 Options* ParseCommandLineOptions(int argc,const char* argv[],Arena* out,Arena* temp){
   Options* opts = PushStruct<Options>(out);
   opts->dataSize = 32; // By default.
@@ -53,7 +51,7 @@ Options* ParseCommandLineOptions(int argc,const char* argv[],Arena* out,Arena* t
   for(int i = 1; i < argc; i++){
     String str = STRING(argv[i]);
 
-    Optional<String> formatOpt = GetFormat(str);
+    Optional<String> formatOpt = GetFileFormatFromPath(str);
 
     // TODO: Verilator does not actually need the source files, it only needs a include path to the folder that contains the sources. This could be removed.
     if(str.size >= 2 && str[0] == '-' && str[1] == 'S'){
@@ -213,32 +211,6 @@ Options* ParseCommandLineOptions(int argc,const char* argv[],Arena* out,Arena* t
   return opts;
 }
 
-//General TODO: There is a lot of code that makes sense for the old one phase versat, but that is just overhead for the two phase versat. We do not have to guarantee that the Accelerator is "valid" at all times, like the previous version did. We can use more immediate mode APIs and rely on correct function calling instead of pre doing work.
-
-#include <unordered_map>
-#include <unistd.h>
-#include <sys/wait.h>
-#include <sys/stat.h>
-#include <sys/types.h>
-#include <errno.h>
-#include <dlfcn.h>
-#include <ftw.h>
-
-int unlink_cb(const char *fpath, const struct stat *sb, int typeflag, struct FTW *ftwbuf)
-{
-    int rv = remove(fpath);
-
-    if (rv)
-        perror(fpath);
-
-    return rv;
-}
-
-int RemoveDirectory(const char *path)
-{
-    return nftw(path, unlink_cb, 64, FTW_DEPTH | FTW_PHYS);
-}
-
 // These Call* functions are a bit hardcoded in functionality. I do not expect to call other programs often so no need to abstract for now.
 void CallVerilator(const char* unitPath,const char* outputPath){
    pid_t pid = fork();
@@ -375,48 +347,42 @@ String GetVerilatorRoot(Arena* out,Arena* temp){
     }
   }
   
-  RemoveDirectory(tempDirC);
+  //RemoveDirectory(tempDirC);
   
   return root;
 }
 
 int main(int argc,const char* argv[]){
   // TODO: Need to actually parse and give an error, instead of just checking for less than 3
-  InitDebug();
-
-  Versat* versat = InitVersat();
-
   if(argc < 3){
     printf("Need specifications and a top level type\n");
     return -1;
   }
-
-  //versat->opts.noDelayPropagation = true;
   
-  // TODO: This is not a good idea, after changing versat to 2 phases
-  SetDebug(versat,VersatDebugFlags::OUTPUT_ACCELERATORS_CODE,1);
-  SetDebug(versat,VersatDebugFlags::OUTPUT_VERSAT_CODE,1);
-  SetDebug(versat,VersatDebugFlags::USE_FIXED_BUFFERS,0);
-  SetDebug(versat,VersatDebugFlags::OUTPUT_GRAPH_DOT,1);
+  InitDebug();
 
+  Versat* versat = InitVersat();
+  
   Arena permInst = InitArena(Megabyte(256));
   Arena* perm = &permInst;
-  Arena preprocessInst = InitArena(Megabyte(256));
-  Arena* preprocess = &preprocessInst;
   Arena tempInst = InitArena(Megabyte(256));
   Arena* temp = &tempInst;
 
+  InitializeTemplateEngine(perm);
+  InitializeSimpleDeclarations(versat);
+  
   Options* opts = ParseCommandLineOptions(argc,argv,perm,temp);
   versat->opts = opts;
   versat->opts->shadowRegister = true; 
-  
-#if 0
-  versat->outputLocation = opts->hardwareOutputFilepath;
-  versat->opts.addrSize = opts->bitSize;
-  versat->opts.architectureHasDatabus = opts->archHasDatabus;
-  versat->opts.dataSize = opts->dataSize;
-  versat->opts.useDMA = opts->useDMA;
-#endif
+  versat->opts->noDelayPropagation = true;
+
+  // TODO: Variable buffers are currently broken. Due to removing statics saved configurations.
+  //       When reimplementing this (if we eventually do) separate buffers configs from static buffers.
+  //       There was never any point in having both together.
+  versat->opts->useFixedBuffers = true;
+
+  versat->debug.outputGraphs = true;
+  versat->debug.outputAcceleratorInfo = true;
   
 #ifdef USE_FST_FORMAT
   versat->opts.generateFSTFormat = 1;
@@ -474,7 +440,7 @@ int main(int argc,const char* argv[]){
       exit(-1);
     }
 
-    String processed = PreprocessVerilogFile(preprocess,content,opts->includePaths,temp);
+    String processed = PreprocessVerilogFile(content,opts->includePaths,temp,perm);
     Array<Module> modules = ParseVerilogFile(processed,opts->includePaths,temp,perm);
 
     for(Module& mod : modules){
@@ -483,6 +449,7 @@ int main(int argc,const char* argv[]){
     }
   }
   
+// We need to do this afer parsing the modules because the majority of these come from verilog files.
   BasicDeclaration::buffer = GetTypeByName(versat,STRING("Buffer"));
   BasicDeclaration::fixedBuffer = GetTypeByName(versat,STRING("FixedBuffer"));
   BasicDeclaration::pipelineRegister = GetTypeByName(versat,STRING("PipelineRegister"));
@@ -502,7 +469,7 @@ int main(int argc,const char* argv[]){
   }
   
   FUDeclaration* type = GetTypeByName(versat,topLevelTypeStr);
-  Accelerator* accel = CreateAccelerator(versat);
+  Accelerator* accel = CreateAccelerator(versat,STRING("TOP"));
   FUInstance* TOP = nullptr;
 
   bool isSimple = false;
@@ -536,12 +503,13 @@ int main(int argc,const char* argv[]){
       ConnectUnits(TOP,i,outputs[i],0);
     }
 
+    InstanceNode* node = GetInstanceNode(accel,TOP);
+    node->type = InstanceNode::TAG_COMPUTE;
+    
     topLevelTypeStr = PushString(perm,"%.*s_Simple",UNPACK_SS(topLevelTypeStr));
     type = RegisterSubUnit(versat,topLevelTypeStr,accel);
 
-    InstanceNode* node = GetInstanceNode(accel,TOP);
-
-    accel = CreateAccelerator(versat);
+    accel = CreateAccelerator(versat,STRING("TOP"));
     TOP = CreateFUInstance(accel,type,STRING("TOP"));
   } else {
     bool isSimple = true;
@@ -559,46 +527,51 @@ int main(int argc,const char* argv[]){
   }
 
   TOP->parameters = STRING("#(.AXI_ADDR_W(AXI_ADDR_W),.LEN_W(LEN_W))");
-  InitializeAccelerator(versat,accel,&versat->temp);
-  OutputVersatSource(versat,accel,opts->hardwareOutputFilepath.data,opts->softwareOutputFilepath.data,topLevelTypeStr,opts->addInputAndOutputsToTop);
+  OutputVersatSource(versat,accel,opts->hardwareOutputFilepath.data,opts->softwareOutputFilepath.data,topLevelTypeStr,opts->addInputAndOutputsToTop,temp,perm);
 
   //TODO: Repeated code because we must use a modified accelerator to outputVersatSource but use a normal accelerator for simulation. We could just reorder, so that outputVersatSource is done afterwards, and the wrapper is done before.
   if(isSimple){
-    accel = CreateAccelerator(versat);
+    accel = CreateAccelerator(versat,STRING("TOP"));
     TOP = CreateFUInstance(accel,type,STRING("TOP"));
-    InitializeAccelerator(versat,accel,&versat->temp);
   }
   
-  OutputVerilatorWrapper(versat,type,accel,opts->softwareOutputFilepath);
+  OutputVerilatorWrapper(versat,type,accel,opts->softwareOutputFilepath,temp,perm);
 
   String versatDir = STRING(STRINGIFY(VERSAT_DIR));
-  OutputVerilatorMake(versat,topLevelTypeStr,versatDir,opts);
+  OutputVerilatorMake(versat,topLevelTypeStr,versatDir,opts,temp,perm);
 
-#if 1
   for(FUDeclaration* decl : versat->declarations){
+    BLOCK_REGION(temp);
     if(decl->type == FUDeclaration::COMPOSITE && decl->mergeInfo.size != 0){
       char buffer[256];
       sprintf(buffer,"%.*s/modules/%.*s.v",UNPACK_SS(versat->opts->hardwareOutputFilepath),UNPACK_SS(decl->name));
       FILE* sourceCode = OpenFileAndCreateDirectories(buffer,"w");
-      OutputCircuitSource(versat,decl,decl->fixedDelayCircuit,sourceCode);
+      OutputCircuitSource(versat,decl,decl->fixedDelayCircuit,sourceCode,temp,perm);
       fclose(sourceCode);
     }
     if(decl->type == FUDeclaration::COMPOSITE && decl->mergeInfo.size == 0){
       char buffer[256];
       sprintf(buffer,"%.*s/modules/%.*s.v",UNPACK_SS(versat->opts->hardwareOutputFilepath),UNPACK_SS(decl->name));
       FILE* sourceCode = OpenFileAndCreateDirectories(buffer,"w");
-      OutputCircuitSource(versat,decl,decl->fixedDelayCircuit,sourceCode);
+      OutputCircuitSource(versat,decl,decl->fixedDelayCircuit,sourceCode,temp,perm);
       fclose(sourceCode);
     }
     if(decl->type == FUDeclaration::ITERATIVE){
       char buffer[256];
       sprintf(buffer,"%.*s/modules/%.*s.v",UNPACK_SS(versat->opts->hardwareOutputFilepath),UNPACK_SS(decl->name));
       FILE* sourceCode = OpenFileAndCreateDirectories(buffer,"w");
-      OutputIterativeSource(versat,decl,decl->fixedDelayCircuit,sourceCode);
+      OutputIterativeSource(versat,decl,decl->fixedDelayCircuit,sourceCode,temp,perm);
       fclose(sourceCode);
     }
+
+    if(versat->debug.outputAcceleratorInfo && decl->fixedDelayCircuit){
+      char buffer[256];
+      sprintf(buffer,"debug/%.*s/stats.txt",UNPACK_SS(decl->name));
+      FILE* stats = OpenFileAndCreateDirectories(buffer,"w");
+ 
+      PrintDeclaration(stats,decl,perm,temp);
+    }
   }
-#endif
   
   return 0;
 }
@@ -621,8 +594,6 @@ Current plan:
 For now I'm currently simplifing the entire configuration process.
 Currently working on a function that extracts everything needed from the accelerator into an array.
   Tired of implementing different functions that scather the logic everywhere.
-  The function is implemented on top of AcceleratorIterator, but after finishing it, we no longer need the AcceleratorIterator, because the function will generate all the data that we need.
-    Meaning that any function that dependend on AcceleratorIterator will simply extract the info from the Array.
 
   Potentially could change from Array of Structs into a Struct of Arrays depending on how the other code turns out. No need to make functions to "extract" data if the extraction is simply copying the data from one place to the other. Might as well offer the Array directly.
 

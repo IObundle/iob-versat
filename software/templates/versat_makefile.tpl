@@ -27,8 +27,9 @@ createVerilatorObjects: V@{typename}.h wrapper.o
 #./obj_dir/V@{typename}_classes.mk: V@{typename}.h
 
 # TODO: src folder should be set to absolute. Versat compiler knows the location 
+# --unroll-c
 V@{typename}.h: $(HARDWARE_SRC)
-	verilator -GAXI_ADDR_W=@{arch.addrSize} -GAXI_DATA_W=@{arch.dataSize} -GLEN_W=16 -CFLAGS -O2 @{TRACE_TYPE} --cc $(HARDWARE_SRC) $(wildcard @{srcDir}/*.v) $(INCLUDE) --top-module $(TYPE_NAME)
+	verilator --unroll-count 100  -GAXI_ADDR_W=@{arch.addrSize} -GAXI_DATA_W=@{arch.dataSize} -GLEN_W=16 -CFLAGS -O2 @{TRACE_TYPE} --cc $(HARDWARE_SRC) $(wildcard @{srcDir}/*.v) $(INCLUDE) --top-module $(TYPE_NAME)
 	$(MAKE) -C ./obj_dir -f V@{typename}.mk
 	cp ./obj_dir/*.h ./
 

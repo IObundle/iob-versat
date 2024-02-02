@@ -1,5 +1,4 @@
-#ifndef INCLUDED_VERSAT_DECLARATION
-#define INCLUDED_VERSAT_DECLARATION
+#pragma once
 
 #include <cstdio>
 
@@ -90,7 +89,9 @@ struct ConfigurationInfo{
 
 // Maps the sub InstanceNodes into the corresponding index of the configuration array. 
 struct MergeInfo{
+  String name;
   ConfigurationInfo config;
+  Array<String> baseName;
   FUDeclaration* baseType;
 };
 
@@ -103,6 +104,8 @@ struct FUDeclaration{
   Array<int> inputDelays;
   Array<int> outputLatencies;
 
+  Array<int> calculatedDelays;
+  
   ConfigurationInfo configInfo;
   
   Optional<int> memoryMapBits; // 0 is a valid memory map size, so optional indicates that no memory map exists
@@ -134,6 +137,28 @@ struct FUDeclaration{
   bool signalLoop;
 };
 
+// Simple operations should also be stored here.
+namespace BasicDeclaration{
+  extern FUDeclaration* buffer;
+  extern FUDeclaration* fixedBuffer;
+  extern FUDeclaration* input;
+  extern FUDeclaration* output;
+  extern FUDeclaration* multiplexer;
+  extern FUDeclaration* combMultiplexer;
+  extern FUDeclaration* timedMultiplexer;
+  extern FUDeclaration* stridedMerge;
+  extern FUDeclaration* pipelineRegister;
+  extern FUDeclaration* data;
+}
+
+FUDeclaration* GetTypeByName(Versat* versat,String str);
+
+void InitializeSimpleDeclarations(Versat* versat);
+
+FUDeclaration* RegisterFU(Versat* versat,FUDeclaration declaration);
+FUDeclaration* RegisterIterativeUnit(Versat* versat,Accelerator* accel,FUInstance* inst,int latency,String name);
+FUDeclaration* RegisterSubUnit(Versat* versat,String name,Accelerator* accel);
+
 bool IsComposite(FUDeclaration* decl);
 
 bool IsCombinatorial(FUDeclaration* decl);
@@ -141,12 +166,3 @@ bool ContainsConfigs(FUDeclaration* decl);
 bool ContainsStatics(FUDeclaration* decl);
 
 int NumberOfSubunits(FUDeclaration* decl);
-
-// TODO: This functions could be abstracted, to receive a function pointer that receives a declaration and checks wether the unit is a config type or a mem type or etc.
-//       Check the functions that sort types by dependency to also use the same function pointer technique (in codeGeneration.cpp)
-Array<FUDeclaration*> ConfigSubTypes(FUDeclaration* decl,Arena* out,Arena* sub);
-Array<FUDeclaration*> MemSubTypes(FUDeclaration* decl,Arena* out,Arena* sub);
-
-void PrintDeclaration(FUDeclaration* decl);
-
-#endif // INCLUDED_VERSAT_DECLARATION

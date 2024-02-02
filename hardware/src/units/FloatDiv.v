@@ -1,65 +1,63 @@
 `timescale 1ns / 1ps
 
 module FloatDiv #(
-         parameter DATA_W = 32
-              )
-    (
-    //control
-    input                         clk,
-    input                         rst,
-    
-    input                         running,
-    input                         run,
-    
-    //input / output data
-    input [DATA_W-1:0]            in0,
-    input [DATA_W-1:0]            in1,
+   parameter DATA_W = 32
+) (
+   //control
+   input clk,
+   input rst,
 
-    input [31:0]                  delay0,
-    
-    (* versat_latency = 55 *) output [DATA_W-1:0]       out0
-    );
+   input running,
+   input run,
 
-reg start;
-reg [31:0] delay;
-wire done;
+   //input / output data
+   input [DATA_W-1:0] in0,
+   input [DATA_W-1:0] in1,
 
-always @(posedge clk,posedge rst)
-begin
-     if(rst) begin
-          start <= 1'b0;
-          delay <= 0;
-     end else if(run) begin
-          delay <= delay0;
-          start <= 1'b1;
-     end else begin
-          start <= 1'b0;
-          if(|delay == 0) begin
-               delay <= 0;
-          end else begin
-               delay <= delay - 1;
-               if(delay == 1) begin
-                    start <= 1'b1;
-               end
-          end
-     end
-end
+   input [31:0] delay0,
 
-iob_fp_div div(
-     .start_i(start),
-     .done_o(done),
+   (* versat_latency = 55 *) output [DATA_W-1:0] out0
+);
 
-     .op_a_i(in0),
-     .op_b_i(in1),
+   reg         start;
+   reg  [31:0] delay;
+   wire        done;
 
-     .res_o(out0),
+   always @(posedge clk, posedge rst) begin
+      if (rst) begin
+         start <= 1'b0;
+         delay <= 0;
+      end else if (run) begin
+         delay <= delay0;
+         start <= 1'b1;
+      end else begin
+         start <= 1'b0;
+         if (|delay == 0) begin
+            delay <= 0;
+         end else begin
+            delay <= delay - 1;
+            if (delay == 1) begin
+               start <= 1'b1;
+            end
+         end
+      end
+   end
 
-     .overflow_o(),
-     .underflow_o(),
-     .exception_o(),
+   iob_fp_div div (
+      .start_i(start),
+      .done_o (done),
 
-     .clk_i(clk),
-     .rst_i(rst)
-     );
+      .op_a_i(in0),
+      .op_b_i(in1),
+
+      .res_o(out0),
+
+      .overflow_o (),
+      .underflow_o(),
+      .exception_o(),
+
+      .clk_i(clk),
+      .rst_i(rst)
+   );
 
 endmodule

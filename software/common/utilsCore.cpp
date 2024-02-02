@@ -9,27 +9,30 @@
 #include <limits>
 #include <time.h>
 
+#include <filesystem>
 #include <cerrno>
 #include <cstdio>
 #include <cstring>
 #include <cstdarg>
 #include <cerrno>
 
+namespace fs = std::filesystem;
+
 char* StaticFormat(const char* format,...){
-   static const int BUFFER_SIZE = 1024*4;
-   static char buffer[BUFFER_SIZE];
+  static const int BUFFER_SIZE = 1024*4;
+  static char buffer[BUFFER_SIZE];
 
-   va_list args;
-   va_start(args,format);
+  va_list args;
+  va_start(args,format);
 
-   int written = vsprintf(buffer,format,args);
+  int written = vsprintf(buffer,format,args);
 
-   va_end(args);
+  va_end(args);
 
-   Assert(written < BUFFER_SIZE);
-   buffer[written] = '\0';
+  Assert(written < BUFFER_SIZE);
+  buffer[written] = '\0';
   
-   return buffer;
+  return buffer;
 }
 
 int CountNonZeros(Array<int> arr){
@@ -41,14 +44,14 @@ int CountNonZeros(Array<int> arr){
 }
 
 Time GetTime(){
-   timespec time;
-   clock_gettime(CLOCK_MONOTONIC, &time);
+  timespec time;
+  clock_gettime(CLOCK_MONOTONIC, &time);
 
-   Time t = {};
-   t.seconds = time.tv_sec;
-   t.microSeconds = time.tv_nsec * 1000;
+  Time t = {};
+  t.seconds = time.tv_sec;
+  t.microSeconds = time.tv_nsec * 1000;
 
-   return t;
+  return t;
 }
 
 // Misc
@@ -67,111 +70,115 @@ const char* GetFilename(const char* fullpath){
 }
 
 void FlushStdout(){
-   fflush(stdout);
+  fflush(stdout);
+}
+
+bool RemoveDirectory(const char* path){
+  return fs::remove_all(path) > 0;
 }
 
 long int GetFileSize(FILE* file){
-   long int mark = ftell(file);
+  long int mark = ftell(file);
 
-   fseek(file,0,SEEK_END);
-   long int size = ftell(file);
+  fseek(file,0,SEEK_END);
+  long int size = ftell(file);
 
-   fseek(file,mark,SEEK_SET);
+  fseek(file,mark,SEEK_SET);
 
-   return size;
+  return size;
 }
 
 String ExtractFilenameOnly(String filepath){
-   int i;
-   for(i = filepath.size - 1; i >= 0; i--){
-      if(filepath[i] == '/'){
-         break;
-      }
-   }
+  int i;
+  for(i = filepath.size - 1; i >= 0; i--){
+    if(filepath[i] == '/'){
+      break;
+    }
+  }
 
-   String res = {};
-   res.data = &filepath.data[i + 1];
-   res.size = filepath.size - (i + 1);
-   return res;
+  String res = {};
+  res.data = &filepath.data[i + 1];
+  res.size = filepath.size - (i + 1);
+  return res;
 }
 
 char* GetCurrentDirectory(){
   // TODO: Maybe receive arena and remove use of static buffer
   static char buffer[PATH_MAX];
-   buffer[0] = '\0';
-   char* res = getcwd(buffer,PATH_MAX);
+  buffer[0] = '\0';
+  char* res = getcwd(buffer,PATH_MAX);
 
-   return res;
+  return res;
 }
 
 void MakeDirectory(const char* path){
-   mkdir(path, S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
+  mkdir(path, S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
 }
 
 FILE* OpenFileAndCreateDirectories(const char* path,const char* format){
-   char buffer[PATH_MAX];
-   memset(buffer,0,PATH_MAX);
+  char buffer[PATH_MAX];
+  memset(buffer,0,PATH_MAX);
 
-   for(int i = 0; path[i]; i++){
-      buffer[i] = path[i];
+  for(int i = 0; path[i]; i++){
+    buffer[i] = path[i];
 
-      if(path[i] == '/'){
-         DIR* dir = opendir(buffer);
-         if(!dir && errno == ENOENT){
-            MakeDirectory(buffer);
-         }
-         if(dir){
-            closedir(dir);
-         }
+    if(path[i] == '/'){
+      DIR* dir = opendir(buffer);
+      if(!dir && errno == ENOENT){
+        MakeDirectory(buffer);
       }
-   }
+      if(dir){
+        closedir(dir);
+      }
+    }
+  }
 
-   FILE* file = fopen(buffer,format);
-   if(file == nullptr){
-     printf("Failed to open file: %s\n",path);
-     exit(-1);
-   }
+  FILE* file = fopen(buffer,format);
+  if(file == nullptr){
+    printf("Failed to open file: %s\n",path);
+    exit(-1);
+  }
 
-   return file;
+  return file;
 }
 
 void CreateDirectories(const char* path){
-   char buffer[PATH_MAX];
-   memset(buffer,0,PATH_MAX);
+  char buffer[PATH_MAX];
+  memset(buffer,0,PATH_MAX);
 
-   for(int i = 0; path[i]; i++){
-      buffer[i] = path[i];
+  for(int i = 0; path[i]; i++){
+    buffer[i] = path[i];
 
-      if(path[i] == '/'){
-         DIR* dir = opendir(buffer);
-         if(!dir && errno == ENOENT){
-            MakeDirectory(buffer);
-         }
-         if(dir){
-            closedir(dir);
-         }
+    if(path[i] == '/'){
+      DIR* dir = opendir(buffer);
+      if(!dir && errno == ENOENT){
+        MakeDirectory(buffer);
       }
-   }
+      if(dir){
+        closedir(dir);
+      }
+    }
+  }
 }
 
 String PathGoUp(char* pathBuffer){
-   String content = STRING(pathBuffer);
+  String content = STRING(pathBuffer);
 
-   int i = content.size - 1;
-   for(; i >= 0; i--){
-      if(content[i] == '/'){
-         break;
-      }
-   }
+  int i = content.size - 1;
+  for(; i >= 0; i--){
+    if(content[i] == '/'){
+      break;
+    }
+  }
 
-   if(content[i] != '/'){
-      return content;
-   }
+  if(content[i] != '/'){
+    return content;
+  }
 
-   pathBuffer[i] = '\0';
-   content.size = i;
+  pathBuffer[i] = '\0';
+  content.size = i;
 
-   return content;
+  return content;
 }
 
 static char* GetNumberRepr(uint64 number){
@@ -320,21 +327,21 @@ int Align(int val,int alignment){
 }
 
 unsigned int AlignBitBoundary(unsigned int val,int numberBits){ // Align value so the lower numberBits are all zeros
-   if(numberBits == 0){
-     return val;
-   }
+  if(numberBits == 0){
+    return val;
+  }
 
-   Assert(((size_t) numberBits) < sizeof(val) * 8);
+  Assert(((size_t) numberBits) < sizeof(val) * 8);
 
-   unsigned int lowerVal = MASK_VALUE(val,numberBits);
-   if(lowerVal == 0){
-     return val;
-   }
+  unsigned int lowerVal = MASK_VALUE(val,numberBits);
+  if(lowerVal == 0){
+    return val;
+  }
 
-   unsigned int lowerRemoved = val & ~FULL_MASK(numberBits);
-   unsigned int res = lowerRemoved + BIT_MASK(numberBits);
+  unsigned int lowerRemoved = val & ~FULL_MASK(numberBits);
+  unsigned int res = lowerRemoved + BIT_MASK(numberBits);
 
-   return res;
+  return res;
 }
 
 bool IsPowerOf2(int val){

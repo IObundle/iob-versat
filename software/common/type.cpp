@@ -459,7 +459,7 @@ void RegisterTypes(){
   }
   registered = true;
 
-  permanentArena = InitArena(Kilobyte(16));
+  permanentArena = InitArena(Kilobyte(32));
 
   ValueType::NUMBER = REGISTER(int);
   ValueType::SIZE_T = REGISTER(size_t);

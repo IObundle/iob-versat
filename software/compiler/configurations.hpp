@@ -1,5 +1,4 @@
-#ifndef INCLUDED_VERSAT_CONFIGURATIONS_HPP
-#define INCLUDED_VERSAT_CONFIGURATIONS_HPP
+#pragma once
 
 #include <unordered_map>
 
@@ -11,16 +10,12 @@ struct OrderedInstance;
 struct Accelerator;
 struct FUDeclaration;
 
+// Strange forward declare
 template<typename T> struct WireTemplate;
 typedef WireTemplate<int> Wire;
 
 struct FUInstance;
 struct Versat;
-
-struct SizedConfig{
-   iptr* ptr;
-//   int size;
-};
 
 struct StaticId{
    FUDeclaration* parent;
@@ -30,9 +25,7 @@ struct StaticId{
 template<> class std::hash<StaticId>{
    public:
    std::size_t operator()(StaticId const& s) const noexcept{
-      std::size_t res = std::hash<String>()(s.name);
-      res += (std::size_t) s.parent;
-
+      std::size_t res = std::hash<String>()(s.name) + (std::size_t) s.parent;
       return (std::size_t) res;
    }
 };
@@ -45,30 +38,6 @@ struct StaticData{
 struct StaticInfo{
    StaticId id;
    StaticData data;
-};
-
-struct UnitDebugData{
-   int debugBreak;
-};
-
-class FUInstanceInterfaces{
-public:
-   // Config delay and statics share the same configuration space. They are separated here to facilitate accelerator population
-   PushPtr<iptr> config;
-   PushPtr<iptr> delay;
-   PushPtr<iptr> statics;
-
-   PushPtr<int> state;
-   PushPtr<Byte> mem;
-   PushPtr<int> outputs;
-   PushPtr<int> storedOutputs;
-   PushPtr<Byte> extraData;
-   PushPtr<Byte> externalMemory;
-
-   void Init(Accelerator* accel);
-   void Init(Accelerator* topLevel,FUInstance* inst);
-
-   void AssertEmpty();
 };
 
 struct CalculatedOffsets{
@@ -85,7 +54,9 @@ enum MemType{
 };
 
 struct InstanceInfo{
+  FUDeclaration* parentDeclaration;
   FUDeclaration* decl;
+  String name;
   String fullName;
   Optional<int> configPos;
   int configSize;
@@ -93,7 +64,11 @@ struct InstanceInfo{
   int stateSize;
   Optional<iptr> memMapped;
   Optional<int> memMappedSize;
+  Optional<int> memMappedBitSize;
+  Optional<String> memMappedMask;
   Optional<int> delayPos;
+  Array<int> delay;
+  int baseDelay;
   int delaySize;
   int level;
   bool isComposite;
@@ -106,39 +81,23 @@ struct AcceleratorInfo{
   int configSize;
   int stateSize;
   int delaySize;
+  int delay;
   int memSize;
 };
 
-Array<InstanceInfo> TransformGraphIntoArray(Accelerator* accel,Arena* out,Arena* temp);
+Array<InstanceInfo> TransformGraphIntoArray(Accelerator* accel,bool recursive,Arena* out,Arena* temp);
 
 CalculatedOffsets CalculateConfigOffsetsIgnoringStatics(Accelerator* accel,Arena* out);
 CalculatedOffsets CalculateConfigurationOffset(Accelerator* accel,MemType type,Arena* out);
 CalculatedOffsets CalculateOutputsOffset(Accelerator* accel,int offset,Arena* out);
-void AddOffset(CalculatedOffsets* offsets,int amount);
 
 int GetConfigurationSize(FUDeclaration* decl,MemType type);
 
-// These functions extract directly from the configuration pointer. No change is made, not even a check to see if unit contains any configuration at all
-CalculatedOffsets ExtractConfig(Accelerator* accel,Arena* out); // Extracts offsets from a non FUDeclaration accelerator. Static configs are of the form >= N, where N is the size returned in CalculatedOffsets
-CalculatedOffsets ExtractState(Accelerator* accel,Arena* out);
-CalculatedOffsets ExtractDelay(Accelerator* accel,Arena* out);
-CalculatedOffsets ExtractMem(Accelerator* accel,Arena* out);
-CalculatedOffsets ExtractExtraData(Accelerator* accel,Arena* out);
-CalculatedOffsets ExtractDebugData(Accelerator* accel,Arena* out);
+// Array info related
+Array<Wire> ExtractAllConfigs(Array<InstanceInfo> info,Arena* out,Arena* temp);
+Array<String> ExtractStates(Array<InstanceInfo> info,Arena* out);
+Array<Pair<String,int>> ExtractMem(Array<InstanceInfo> info,Arena* out);
 
-Array<String> ExtractStates(Array<InstanceInfo> info,Arena* arena);
-Array<Pair<String,iptr>> ExtractMem(Array<InstanceInfo> info,Arena* out);
-
-Hashmap<String,SizedConfig>* ExtractNamedSingleConfigs(Accelerator* accel,Arena* out);
-Hashmap<String,SizedConfig>* ExtractNamedSingleStates(Accelerator* accel,Arena* out);
-Hashmap<String,SizedConfig>* ExtractNamedSingleMem(Accelerator* accel,Arena* arena);
-
-void PopulateAccelerator(Accelerator* topLevel,Accelerator* accel,FUDeclaration* topDeclaration,FUInstanceInterfaces& inter,std::unordered_map<StaticId,StaticData>* staticMap);
-void PopulateTopLevelAccelerator(Accelerator* accel);
-
-void InitializeAccelerator(Versat* versat,Accelerator* accel,Arena* temp);
-
-void SetDefaultConfiguration(FUInstance* instance);
 void ShareInstanceConfig(FUInstance* instance, int shareBlockIndex);
 void SetStatic(Accelerator* accel,FUInstance* instance);
 
@@ -151,9 +110,12 @@ struct OrderedConfigurations{
 };
 
 // Extract configurations named with the top level expected name (not module name)
-OrderedConfigurations ExtractOrderedConfigurationNames(Versat* versat,Accelerator* accel,Arena* out,Arena* temp);
-Array<Wire> OrderedConfigurationsAsArray(OrderedConfigurations configs,Arena* out);
+//OrderedConfigurations ExtractOrderedConfigurationNames(Versat* versat,Accelerator* accel,Arena* out,Arena* temp);
+//Array<Wire> OrderedConfigurationsAsArray(OrderedConfigurations configs,Arena* out);
+
+Array<InstanceInfo> ExtractFromInstanceInfoSameLevel(Array<InstanceInfo> instanceInfo,int level,Arena* out);
+Array<InstanceInfo> ExtractFromInstanceInfo(Array<InstanceInfo> instanceInfo,Arena* out);
+
+void CheckSanity(Array<InstanceInfo> instanceInfo,Arena* temp);
 
 void PrintConfigurations(FUDeclaration* type,Arena* temp);
-
-#endif // INCLUDED_VERSAT_CONFIGURATIONS_HPP

@@ -99,7 +99,7 @@ void RegisterPipeOperation(String name,PipeFunction func);
 
 void InitializeTemplateEngine(Arena* perm);
 
-void ProcessTemplate(FILE* outputFile,CompiledTemplate* compiledTemplate,Arena* arena);
+void ProcessTemplate(FILE* outputFile,CompiledTemplate* compiledTemplate,Arena* temp,Arena* temp2);
 CompiledTemplate* CompileTemplate(String content,const char* name,Arena* out,Arena* temp);
 
 String Repr(TemplateRecord record,Arena* arena);

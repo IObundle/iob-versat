@@ -1,62 +1,63 @@
 `timescale 1ns / 1ps
 
 module Q16Sqrt #(
-         parameter DATA_W = 32
-              )
-    (
-    //control
-    input                         clk,
-    input                         rst,
-    
-    input                         run,
-    input                         running,
+   parameter DATA_W = 32
+) (
+   //control
+   input clk,
+   input rst,
 
-    //input / output data
-    input [DATA_W-1:0]            in0,
+   input run,
+   input running,
 
-    input [31:0]                  delay0,
-    
-    (* versat_latency = 33 *) output [DATA_W-1:0]       out0
-    );
+   //input / output data
+   input [DATA_W-1:0] in0,
 
-reg start;
-reg [31:0] delay;
-wire done;
+   input [31:0] delay0,
 
-always @(posedge clk,posedge rst)
-begin
-     if(rst) begin
-          start <= 1'b0;
-          delay <= 0;
-     end else if(run) begin
-          delay <= delay0;
-          start <= 1'b1;
-     end else begin
-          start <= 1'b0;
-          if(|delay == 0) begin
-               delay <= 0;
-          end else begin
-               delay <= delay - 1;
-               if(delay == 1) begin
-                    start <= 1'b1;
-               end
-          end
-     end
-end
+   (* versat_latency = 33 *) output [DATA_W-1:0] out0
+);
 
-wire [23:0] out; 
-assign out0 = {8'h0,out};
+   reg         start;
+   reg  [31:0] delay;
+   wire        done;
 
-int_sqrt #(.DATA_W(32),.FRACTIONAL_W(16)) sqrt(
-     .start(start),
-     .done(done),
+   always @(posedge clk, posedge rst) begin
+      if (rst) begin
+         start <= 1'b0;
+         delay <= 0;
+      end else if (run) begin
+         delay <= delay0;
+         start <= 1'b1;
+      end else begin
+         start <= 1'b0;
+         if (|delay == 0) begin
+            delay <= 0;
+         end else begin
+            delay <= delay - 1;
+            if (delay == 1) begin
+               start <= 1'b1;
+            end
+         end
+      end
+   end
 
-     .op(in0),
+   wire [23:0] out;
+   assign out0 = {8'h0, out};
 
-     .res(out),
+   int_sqrt #(
+      .DATA_W      (32),
+      .FRACTIONAL_W(16)
+   ) sqrt (
+      .start(start),
+      .done (done),
 
-     .clk(clk),
-     .rst(rst)
-     );
+      .op(in0),
+
+      .res(out),
+
+      .clk(clk),
+      .rst(rst)
+   );
 
 endmodule

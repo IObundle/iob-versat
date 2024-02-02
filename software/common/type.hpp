@@ -1,5 +1,4 @@
-#ifndef INCLUDED_TYPE
-#define INCLUDED_TYPE
+#pragma once
 
 #include <vector>
 
@@ -205,5 +204,3 @@ Value MakeValue(T* t){
 
   return val;
 }
-
-#endif // INCLUDED_TYPE

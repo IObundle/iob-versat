@@ -185,7 +185,7 @@ struct ModuleInfoInstance{
 };
 */
 
-String PreprocessVerilogFile(Arena* output, String fileContent,Array<String> includeFilepaths,Arena* tempArena);
+String PreprocessVerilogFile(String fileContent,Array<String> includeFilepaths,Arena* out,Arena* temp);
 Array<Module> ParseVerilogFile(String fileContent,Array<String> includeFilepaths,Arena* out,Arena* temp); // Only handles preprocessed files
 ModuleInfo ExtractModuleInfo(Module& module,Arena* permanent,Arena* tempArena);
 

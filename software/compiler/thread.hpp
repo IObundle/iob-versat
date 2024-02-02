@@ -1,5 +1,4 @@
-#ifndef INCLUDED_THREADS
-#define INCLUDED_THREADS
+#pragma once
 
 #include "memory.hpp"
 
@@ -28,10 +27,8 @@ int NumberThreads();
 bool FullTasks();
 void AddTask(Task task);
 
-WorkGroup* PushWorkGroup(Arena* arena,int numberWork);
+WorkGroup* PushWorkGroup(Arena* out,int numberWork);
 
 void DoWork(WorkGroup* work);
 
 #define MemoryBarrier() __asm__ __volatile__("":::"memory"); __sync_synchronize() // Gcc specific
-
-#endif // INCLUDED_THREADS

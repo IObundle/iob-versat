@@ -276,6 +276,7 @@ void PrintStacktrace(){
   }
 
 #if 1
+  // Remove long repeated paths so it displays nicely on the terminal
   int maxSize = 0;
   for(String& str : canonical){
     if(str.size > rootPath.size){

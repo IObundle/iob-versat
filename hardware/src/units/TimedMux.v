@@ -1,30 +1,29 @@
 `timescale 1ns / 1ps
 
 module TimedMux #(
-         parameter DATA_W = 32
-      )
-    (
-    //control
-    input                         clk,
-    input                         rst,
-    
-    input                         running,
-    input                         run,
+   parameter DATA_W = 32
+) (
+   //control
+   input clk,
+   input rst,
 
-    //output reg                    done,
+   input running,
+   input run,
 
-    //input / output data
-    input [DATA_W-1:0]            in0,
-    input [DATA_W-1:0]            in1,
+   //output reg                    done,
 
-    (* versat_latency = 1 *) output reg [DATA_W-1:0]       out0,
-    
-    input [31:0]                  delay0
-    );
+   //input / output data
+   input [DATA_W-1:0] in0,
+   input [DATA_W-1:0] in1,
 
-reg [31:0] delay;
+   (* versat_latency = 1 *) output reg [DATA_W-1:0] out0,
 
-/*
+   input [31:0] delay0
+);
+
+   reg [31:0] delay;
+
+   /*
 always @*
 begin
    out0 = 0;
@@ -35,22 +34,21 @@ begin
 end
 */
 
-always @(posedge clk,posedge rst)
-begin
-   if(rst) begin
-      delay <= 0;
-      //done <= 0;
-   end else if(run) begin
-      delay <= delay0 + 1;
-      //done <= 0;
-   end else if(running && |delay) begin
-      delay <= delay - 1;
-      //done <= 0;
-      out0 <= in0;
-   end else if(running) begin
-      //done <= 1;
-      out0 <= in1;
+   always @(posedge clk, posedge rst) begin
+      if (rst) begin
+         delay <= 0;
+         //done <= 0;
+      end else if (run) begin
+         delay <= delay0 + 1;
+         //done <= 0;
+      end else if (running && |delay) begin
+         delay <= delay - 1;
+         //done <= 0;
+         out0  <= in0;
+      end else if (running) begin
+         //done <= 1;
+         out0 <= in1;
+      end
    end
-end
 
 endmodule

@@ -1,5 +1,4 @@
-#ifndef INCLUDED_INTRINSICS
-#define INCLUDED_INTRINSICS
+#pragma once
 
 #include "utils.hpp"
 
@@ -24,5 +23,3 @@ inline uint32 BitTestAndReset(uint32 val,uint32 index){
    asm ("btr %1,%0" : "=r"(wasSet) : "r"(index) : "cc");
    return wasSet;
 }
-
-#endif // INCLUDED_INTRINSICS

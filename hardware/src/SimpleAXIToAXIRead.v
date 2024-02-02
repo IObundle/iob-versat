@@ -16,7 +16,23 @@ module SimpleAXItoAXIRead #(
    input      [     LEN_W-1:0] m_rlen_i,
    output                      m_rlast_o,
 
-   `include "axi_m_read_port.vs"
+   output [  AXI_ID_W-1:0] axi_arid_o,
+   output [AXI_ADDR_W-1:0] axi_araddr_o,
+   output [ AXI_LEN_W-1:0] axi_arlen_o,
+   output [         3-1:0] axi_arsize_o,
+   output [         2-1:0] axi_arburst_o,
+   output [         2-1:0] axi_arlock_o,
+   output [         4-1:0] axi_arcache_o,
+   output [         3-1:0] axi_arprot_o,
+   output [         4-1:0] axi_arqos_o,
+   output [         1-1:0] axi_arvalid_o,
+   input  [         1-1:0] axi_arready_i,
+   input  [  AXI_ID_W-1:0] axi_rid_i,
+   input  [AXI_DATA_W-1:0] axi_rdata_i,
+   input  [         2-1:0] axi_rresp_i,
+   input  [         1-1:0] axi_rlast_i,
+   input  [         1-1:0] axi_rvalid_i,
+   output [         1-1:0] axi_rready_o,
 
    input clk_i,
    input rst_i
@@ -42,15 +58,14 @@ module SimpleAXItoAXIRead #(
    assign axi_arprot_o  = 'b010;
    assign axi_arqos_o   = 'h0;
 
+   reg [1:0] read_state;
+   reg arvalid, rready;
+
    assign axi_arvalid_o = arvalid;
    assign axi_rready_o  = (read_state == 2'h3);
 
-   reg arvalid, rready;
-
-   reg  [1:0] read_state;
-
-   wire       read_last_transfer;
-   wire       burst_i_align_empty;
+   wire read_last_transfer;
+   wire burst_i_align_empty;
    // Read
    burst_align #(
       .AXI_DATA_W(AXI_DATA_W)
@@ -89,7 +104,7 @@ module SimpleAXItoAXIRead #(
       .length_i (m_rlen_i),   // In bytes
 
       .transfer_start_i(read_state == 2'h0 && m_rvalid_i && burst_i_align_empty),
-      .burst_start_i (read_state == 2'h2 && axi_arready_i && axi_arvalid_o),
+      .burst_start_i   (read_state == 2'h2 && axi_arready_i && axi_arvalid_o),
 
       // Do not need them for read operation
       .initial_strb_o      (),

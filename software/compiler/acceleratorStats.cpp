@@ -1,4 +1,5 @@
 #include "acceleratorStats.hpp"
+#include "utilsCore.hpp"
 
 // Checks wether the external memory conforms to the expected interface or not (has valid values)
 bool VerifyExternalMemory(ExternalMemoryInterface* inter){
@@ -38,7 +39,7 @@ int DataWidthToByteOffset(int dataWidth){
 int ExternalMemoryByteSize(ExternalMemoryInterface* inter){
   Assert(VerifyExternalMemory(inter));
 
-  // TODO: The memories size and address is still error prone. We should just store the total size and the address width in the structures (and then we can derive the data width from the given address width and the total size). Storing data width and address size at the same time gives more degrees of freedom than need. The parser is responsible to ensuring that data is given in the correct format and this code should never have to worry about having to deal with values out of phase
+  // TODO: The memories size and address is still error prone. We should just store the total size and the address width in the structures (and then we can derive the data width from the given address width and the total size). Storing data width and address size at the same time gives more degrees of freedom than need. The parser is responsible in ensuring that the data is given in the correct format and this code should never have to worry about having to deal with values out of phase
   int addressBitSize = 0;
   int byteOffset = 0;
   switch(inter->type){
@@ -74,18 +75,6 @@ int ExternalMemoryByteSize(Array<ExternalMemoryInterface> interfaces){
   }
 
   return size;
-}
-
-// MARKED
-int NumberUnits(Accelerator* accel){
-  STACK_ARENA(temp,Kilobyte(1));
-
-  int count = 0;
-  AcceleratorIterator iter = {};
-  for(InstanceNode* node = iter.Start(accel,&temp,false); node; node = iter.Next()){
-    count += 1;
-  }
-  return count;
 }
 
 VersatComputedValues ComputeVersatValues(Versat* versat,Accelerator* accel,bool useDMA){

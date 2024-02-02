@@ -118,7 +118,6 @@ bool IterativeClique(IterativeState* state,BitArray* neighbors,int* table){
 
          //printf("%d %d %d %d\n",i,current->tempGraph.validNodes.GetNumberBitsSet(),current->inputGraph.validNodes.GetNumberBitsSet(),num);
 
-         printf("%d\n",i);
          IterativeCliqueFrame* newFrame = PushStruct<IterativeCliqueFrame>(arena);
 
          newFrame->frameMark = MarkArena(arena);

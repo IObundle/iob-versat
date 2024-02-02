@@ -1,5 +1,4 @@
-#ifndef INCLUDED_TEXTUAL_REPRESENTATION
-#define INCLUDED_TEXTUAL_REPRESENTATION
+#pragma once
 
 #include "utilsCore.hpp"
 #include "versat.hpp"
@@ -11,52 +10,72 @@
 
 // TODO: I would like to automatize these procedures. It would be useful to know exactly how many fields a given representation contains so that we could format array representation in a readable format. See for example the representation for an array of InstanceInfo.
 
-String UniqueRepr(FUInstance* inst,Arena* arena); // Returns a representation that uniquely identifies the instance. Not necessarily useful for outputing
-String Repr(FUInstance* inst,GraphDotFormat format,Arena* arena);
-String Repr(PortInstance* in,PortInstance* out,GraphDotFormat format,Arena* arena);
-String Repr(FUDeclaration* decl,Arena* arena);
-String Repr(FUDeclaration** decl,Arena* arena);
+String BinaryRepr(int number,Arena* out);
+
+String UniqueRepr(FUInstance* inst,Arena* out); // Returns a representation that uniquely identifies the instance. Not necessarily useful for outputing
+String Repr(FUInstance* inst,GraphDotFormat format,Arena* out);
+String Repr(PortInstance* inPort,PortInstance* outPort,GraphDotFormat format,Arena* out);
+String Repr(FUDeclaration* decl,Arena* out);
+String Repr(FUDeclaration** decl,Arena* out);
 String Repr(PortInstance* port,GraphDotFormat format,Arena* memory);
 String Repr(MergeEdge* node,GraphDotFormat format,Arena* memory);
 String Repr(PortEdge* node,GraphDotFormat format,Arena* memory);
 String Repr(MappingNode* node,Arena* memory);
-String Repr(StaticId* id,Arena* arena);
-String Repr(StaticData* data,Arena* arena);
-String Repr(PortNode* portNode,Arena* arena);
-String Repr(EdgeNode* node,Arena* arena);
-String Repr(Wire* wire,Arena* arena);
-String Repr(InstanceInfo* info,Arena* arena);
-String Repr(String* str,Arena* arena);
-String Repr(int* i,Arena* arena);
-String Repr(long int* i,Arena* arena);
-String Repr(bool* b,Arena* arena);
-String Repr(SizedConfig* config,Arena* arena);
-String Repr(TypeStructInfo* info,Arena* arena);
-String Repr(InstanceNode* node,Arena* arena);
+String Repr(StaticId* id,Arena* out);
+String Repr(StaticData* data,Arena* out);
+String Repr(PortNode* portNode,Arena* out);
+String Repr(EdgeNode* node,Arena* out);
+String Repr(Wire* wire,Arena* out);
+String Repr(InstanceInfo* info,Arena* out);
+String Repr(String* str,Arena* out);
+String Repr(int* i,Arena* out);
+String Repr(long int* i,Arena* out);
+String Repr(bool* b,Arena* out);
+String Repr(TypeStructInfo* info,Arena* out);
+String Repr(InstanceNode* node,Arena* out);
 
-String PushIntTableRepresentation(Arena* arena,Array<int> values,int digitSize = 0);
+String PushIntTableRepresentation(Arena* out,Array<int> values,int digitSize = 0);
 
 template<typename T>
-String Repr(Optional<T>* opt,Arena* arena){
+String Repr(Optional<T>* opt,Arena* out){
   if(opt->has_value()){
-    return Repr(&opt->value(),arena);
+    return Repr(&opt->value(),out);
   } else {
-    return PushString(arena,"-");
+    return PushString(out,"-");
   }
 }
 
-template<typename T,typename P>
-String Repr(Pair<T,P>* pair,Arena* arena){
-  Byte* mark = MarkArena(arena);
-  PushString(arena,"<");
-  Repr(&pair->first,arena);
-  PushString(arena,":");
-  Repr(&pair->second,arena);
-  PushString(arena,">");
-  return PointArena(arena,mark);
+template<typename T>
+String Repr(Array<T>* arr,Arena* out){
+  if(arr == nullptr){
+    return PushString(out,"()");
+  }
+
+  Byte* mark = MarkArena(out);
+  PushString(out,"(");
+  bool first = true;
+  for(T& t : *arr){
+    if(!first) PushString(out,",");
+    Repr(&t,out);
+    first = false;
+  }
+  PushString(out,")");
+
+  return PointArena(out,mark);
 }
 
-String Repr(Optional<int>* opt,Arena* arena);
+template<typename T,typename P>
+String Repr(Pair<T,P>* pair,Arena* out){
+  Byte* mark = MarkArena(out);
+  PushString(out,"<");
+  Repr(&pair->first,out);
+  PushString(out,":");
+  Repr(&pair->second,out);
+  PushString(out,">");
+  return PointArena(out,mark);
+}
+
+String Repr(Optional<int>* opt,Arena* out);
 
 // TODO: Rework these to get a array of fields and then format them accordingly. Check PrintAll(Array<InstanceInfo>...) impl.
 template<typename T>
@@ -78,6 +97,35 @@ void PrintAll(T* listLike,Arena* temp){
     String repr = Repr(*iter,temp);
     printf("  %.*s\n",UNPACK_SS(repr));
   }
+}
+
+template<typename T,typename P>
+Array<String> ReprAll(Hashmap<T,P>* map,Arena* out,Arena* temp){
+  BLOCK_REGION(temp);
+
+  int maxLeftSize = 0;
+  int maxRightSize = 0;
+
+  Array<Pair<String,String>> allReprs = PushArray<Pair<String,String>>(temp,map->nodesUsed);
+  int index = 0;
+  for(Pair<T,P>& elem : map){
+    String first = Repr(&elem.first,temp);
+    String second = Repr(&elem.second,temp);
+    allReprs[index] = {first,second};
+    index += 1;
+
+    maxLeftSize = std::max(maxLeftSize,first.size);
+    maxRightSize = std::max(maxRightSize,second.size);
+  }
+
+  Array<String> repr = PushArray<String>(out,allReprs.size);
+
+  int i = 0;
+  for(Pair<String,String> p : allReprs){
+    repr[i] = PushString(out,"%*.*s - %*.*s\n",maxLeftSize,UNPACK_SS(p.first),maxRightSize,UNPACK_SS(p.second));
+  }
+
+  return repr;
 }
 
 template<typename T,typename P>
@@ -104,14 +152,33 @@ void PrintAll(Hashmap<T,P>* map,Arena* temp){
   }
 }
 
+void PrintAll(FILE* file,Array<String> fields,Array<Array<String>> content,Arena* temp);
 void PrintAll(Array<String> fields,Array<Array<String>> content,Arena* temp);
 
-// Would like to make this PrintAll automatic, would be helpful in the future. 
-// TODO: Have two types of functions, Repr that returns a readable string and GetRepr that returns an array of strings for each field
-//Array<String> GetRepr(InstanceInfo info,Arena* arena);
-//void PrintAll(Array<InstanceInfo> arr,Arena* temp);
-
 #include "repr.hpp" // Implements the GetFields and GetRepr functions
+
+template<typename T>
+Array<Array<String>> ReprAll(Array<T> arr,Arena* out){
+  int size = arr.size;
+  
+  Array<Array<String>> strings = PushArray<Array<String>>(out,size);
+  for(int i = 0; i < arr.size; i++){
+    strings[i] = GetRepr(&arr[i],out);
+  }
+
+  return strings;
+}
+
+template<typename T>
+void PrintAll(FILE* file,Array<T> arr,Arena* temp){
+  BLOCK_REGION(temp);
+
+  int size = arr.size;
+  Array<String> fields = GetFields((T){},temp);
+  Array<Array<String>> strings = ReprAll(arr,temp);
+
+  PrintAll(file,fields,strings,temp);
+}
 
 template<typename T>
 void PrintAll(Array<T> arr,Arena* temp){
@@ -119,11 +186,7 @@ void PrintAll(Array<T> arr,Arena* temp){
 
   int size = arr.size;
   Array<String> fields = GetFields((T){},temp);
-  Array<Array<String>> strings = PushArray<Array<String>>(temp,size);
-
-  for(int i = 0; i < arr.size; i++){
-    strings[i] = GetRepr(&arr[i],temp);
-  }
+  Array<Array<String>> strings = ReprAll(arr,temp);
 
   PrintAll(fields,strings,temp);
 }
@@ -143,5 +206,3 @@ static inline void PrintAll(Array<int> arr,Arena* temp){
     printf("%*.*s\n",maxSize,UNPACK_SS(values[i]));
   }
 }
-
-#endif // INCLUDED_TEXTUAL_REPRESENTATION

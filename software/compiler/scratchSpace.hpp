@@ -1,5 +1,4 @@
-#ifndef INCLUDED_VERSAT_SCRATCH_SPACE
-#define INCLUDED_VERSAT_SCRATCH_SPACE
+#pragma once
 
 #include "versat.hpp"
 #include "merge.hpp"
@@ -7,6 +6,10 @@
 #include "textualRepresentation.hpp"
 #include "debug.hpp"
 #include "intrinsics.hpp"
+
+// Bunch of code written when exploring a way of doing hierarchical merging.
+// Didn't fully worked (couldn't generate the circuits and sim-run or pc-emul them) but the graph merging part did.
+// Probably best to rewrite if needing to implement. 
 
 #if 0
 
@@ -183,5 +186,3 @@ static bool operator==(const IndexMapping& m0,const IndexMapping& m1){
 bool CheckIfMappingIsPossible(FlatteningTemp* head1,FlatteningTemp* head2,Array<SubgraphMapping> mappings);
 
 #endif
-
-#endif // INCLUDED_VERSAT_SCRATCH_SPACE

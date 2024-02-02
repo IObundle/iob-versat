@@ -1,15 +1,14 @@
-#ifndef INCLUDED_UTILS_HPP
-#define INCLUDED_UTILS_HPP
+#pragma once
 
 // Utilities that depend on memory
 
 #include "utilsCore.hpp"
 #include "memory.hpp"
 
-Optional<Array<String>> GetAllFilesInsideDirectory(String dirPath,Arena* arena);
+Optional<Array<String>> GetAllFilesInsideDirectory(String dirPath,Arena* out);
 
 String EscapeString(String toEscape,char spaceSubstitute,Arena* out);
-String GetAbsolutePath(const char* path,Arena* arena);
+String GetAbsolutePath(const char* path,Arena* out);
 
 Array<int> GetNonZeroIndexes(Array<int> array,Arena* out);
 
@@ -191,8 +190,8 @@ int Size(T* start){
 }
 
 template<typename T>
-Array<IndexedStruct<T>> IndexArray(Array<T> array,Arena* arena){
-   Array<IndexedStruct<T>> res = PushArray<IndexedStruct<T>>(arena,array.size);
+Array<IndexedStruct<T>> IndexArray(Array<T> array,Arena* out){
+   Array<IndexedStruct<T>> res = PushArray<IndexedStruct<T>>(out,array.size);
 
    for(int i = 0; i < array.size; i++){
       CAST_AND_DEREF(res[i],T) = array[i];
@@ -203,8 +202,8 @@ Array<IndexedStruct<T>> IndexArray(Array<T> array,Arena* arena){
 }
 
 template<typename T>
-Array<T*> ListToArray(T* head,int size,Arena* arena){
-   Array<T*> arr = PushArray<T*>(arena,size);
+Array<T*> ListToArray(T* head,int size,Arena* out){
+   Array<T*> arr = PushArray<T*>(out,size);
 
    int i = 0;
    FOREACH_LIST_INDEXED(T*,ptr,head,i){
@@ -227,18 +226,18 @@ int Size(ArenaList<T>* list){
 }
 
 template<typename T>
-ArenaList<T>* PushArenaList(Arena* arena){
-  ArenaList<T>* res = PushStruct<ArenaList<T>>(arena);
+ArenaList<T>* PushArenaList(Arena* out){
+  ArenaList<T>* res = PushStruct<ArenaList<T>>(out);
   *res = {};
-  res->arena = arena;
+  res->arena = out;
   
   return res;
 }
 
 template<typename T>
 T* PushListElement(ArenaList<T>* list){
-  Arena* arena = list->arena;
-  ListedStruct<T>* s = PushStruct<ListedStruct<T>>(arena);
+  Arena* out = list->arena;
+  ListedStruct<T>* s = PushStruct<ListedStruct<T>>(out);
   *s = {};
   
   if(!list->head){
@@ -252,37 +251,11 @@ T* PushListElement(ArenaList<T>* list){
   return &s->elem;
 }
 
-template<typename T>
-Array<T> PushArrayFromList(Arena* arena,ArenaList<T>* list){
-  Byte* mark = MarkArena(arena);
-
-  FOREACH_LIST(ListedStruct<T>*,iter,list->head){
-    T* ptr = PushStruct<T>(arena);
-    *ptr = iter->elem;
-  }
-
-  Array<T> res = PointArray<T>(arena,mark);
-  return res;
-}
-
-template<typename T>
-Array<T> PushArrayFromSet(Arena* arena,Set<T>* set){
-  Byte* mark = MarkArena(arena);
-
-  for(auto& pair : set->map){
-    T* ptr = PushStruct<T>(arena);
-    *ptr = pair.first;
-  }
-
-  Array<T> res = PointArray<T>(arena,mark);
-  return res;
-}
-
 template<typename T,typename P>
-Hashmap<T,P>* PushHashmapFromList(Arena* arena,ArenaList<Pair<T,P>>* list){
+Hashmap<T,P>* PushHashmapFromList(Arena* out,ArenaList<Pair<T,P>>* list){
   int size = Size(list);
   
-  Hashmap<T,P>* map = PushHashmap<T,P>(arena,size);
+  Hashmap<T,P>* map = PushHashmap<T,P>(out,size);
   
   FOREACH_LIST(auto*,iter,list->head){ // auto = ListedStruct<Pair<T,P>> (auto used because the ',' in Pair<T,P> does not play well with the foreach macro
     map->Insert(iter->elem.first,iter->elem.second);
@@ -291,11 +264,24 @@ Hashmap<T,P>* PushHashmapFromList(Arena* arena,ArenaList<Pair<T,P>>* list){
   return map;
 }
 
+template<typename T>
+Array<T> PushArrayFromList(Arena* out,ArenaList<T>* list){
+  Byte* mark = MarkArena(out);
+
+  FOREACH_LIST(ListedStruct<T>*,iter,list->head){
+    T* ptr = PushStruct<T>(out);
+    *ptr = iter->elem;
+  }
+
+  Array<T> res = PointArray<T>(out,mark);
+  return res;
+}
+
 template<typename T,typename P>
-Array<Pair<T,P>> PushArrayFromList(Arena* arena,ArenaList<Pair<T,P>>* list){
+Array<Pair<T,P>> PushArrayFromList(Arena* out,ArenaList<Pair<T,P>>* list){
   int size = Size(list);
   
-  Array<Pair<T,P>> arr = PushArray<Pair<T,P>>(arena,size);
+  Array<Pair<T,P>> arr = PushArray<Pair<T,P>>(out,size);
 
   int i = 0;
   FOREACH_LIST_INDEXED(auto*,iter,list->head,i){
@@ -305,11 +291,52 @@ Array<Pair<T,P>> PushArrayFromList(Arena* arena,ArenaList<Pair<T,P>>* list){
   return arr;
 }
 
+template<typename T,typename P>
+Array<T> PushArrayFromHashmapKeys(Arena* out,Hashmap<T,P>* map){
+  int size = map->nodesUsed;
+  
+  Array<T> arr = PushArray<T>(out,size);
+
+  int index = 0;
+  for(Pair<T,P> p : map){
+    arr[index++] = p.first;
+  }
+
+  return arr;
+}
+
+template<typename T,typename P>
+Array<P> PushArrayFromHashmapData(Arena* out,Hashmap<T,P>* map){
+  int size = map->nodesUsed;
+  
+  Array<P> arr = PushArray<P>(out,size);
+
+  int index = 0;
+  for(Pair<T,P> p : map){
+    arr[index++] = p.second;
+  }
+
+  return arr;
+}
+
 template<typename T>
-Set<T>* PushSetFromList(Arena* arena,ArenaList<T>* list){
+Array<T> PushArrayFromSet(Arena* out,Set<T>* set){
+  Byte* mark = MarkArena(out);
+
+  for(auto& pair : set->map){
+    T* ptr = PushStruct<T>(out);
+    *ptr = pair.first;
+  }
+
+  Array<T> res = PointArray<T>(out,mark);
+  return res;
+}
+
+template<typename T>
+Set<T>* PushSetFromList(Arena* out,ArenaList<T>* list){
   int size = Size(list);
 
-  Set<T>* set = PushSet<T>(arena,size);
+  Set<T>* set = PushSet<T>(out,size);
 
   int i = 0;
   FOREACH_LIST_INDEXED(auto*,iter,list->head,i){
@@ -320,13 +347,11 @@ Set<T>* PushSetFromList(Arena* arena,ArenaList<T>* list){
 }
 
 template<typename T>
-Stack<T>* PushStack(Arena* arena,int size){
-  Stack<T>* stack = PushStruct<Stack<T>>(arena);
+Stack<T>* PushStack(Arena* out,int size){
+  Stack<T>* stack = PushStruct<Stack<T>>(out);
   *stack = {};
 
-  stack->mem = PushArray<T>(arena,size);
+  stack->mem = PushArray<T>(out,size);
 
   return stack;
 }
-
-#endif // INCLUDED_UTILS_HPP

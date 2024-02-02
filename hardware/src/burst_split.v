@@ -6,7 +6,11 @@
 
 // Given aligned data, splits the data in order to meet byte alignment in a burst transfer starting with offset byte
 module burst_split #(
-   parameter DATA_W = 32
+   parameter DATA_W = 32,
+
+   parameter OFFSET_W = calculate_AXI_OFFSET_W(
+       DATA_W
+   )  // Local parameter, needed by input definition
 ) (
    input [OFFSET_W-1:0] offset_i,
 
@@ -18,8 +22,6 @@ module burst_split #(
    input clk_i,
    input rst_i
 );
-
-   localparam OFFSET_W = calculate_AXI_OFFSET_W(DATA_W);
 
    reg [DATA_W-8-1:0] stored_data;
    always @(posedge clk_i, posedge rst_i) begin
