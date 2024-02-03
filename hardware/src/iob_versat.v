@@ -17,7 +17,7 @@ module iob_versat #(  //the below parameters are used in cpu if includes below
    parameter DATA_W     = 32,
    parameter WDATA_W    = 32
 ) (
-   input                   iob_avalid_i,
+   input                   iob_valid_i,
    input  [    ADDR_W-1:0] iob_addr_i,
    input  [    DATA_W-1:0] iob_wdata_i,
    input  [(DATA_W/8)-1:0] iob_wstrb_i,
@@ -147,7 +147,7 @@ module iob_versat #(  //the below parameters are used in cpu if includes below
       .AXI_DATA_W(AXI_DATA_W),
       .LEN_W     (LEN_W)
    ) xversat (
-      .valid (iob_avalid_i),
+      .valid (iob_valid_i),
       .wstrb (iob_wstrb_i),
       .addr  (iob_addr_i),
       .wdata (iob_wdata_i),

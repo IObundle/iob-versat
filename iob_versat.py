@@ -195,23 +195,13 @@ def CreateVersatClass(pc_emul,versat_spec,versat_top,versat_extra,build_dir):
                     "regs": [
                         {
                             "name": "MAX_CONFIG",
-                            "type": "W",
+                            "type": "RW",
                             "n_bits": ADDR_W,
                             "rst_val": 0,
                             "addr": (2**ADDR_W)-8, # -8 because -4 allocates 17 bits
                             "log2n_items": 0,
-                            "autoreg": False,
-                            "descr": "Force iob_soc to allocate 16 bits of address for versat",
-                        },
-                        {
-                            "name": "MAX_STATUS",
-                            "type": "R",
-                            "n_bits": ADDR_W,
-                            "rst_val": 0,
-                            "addr": (2**ADDR_W)-8, # -8 because -4 allocates 17 bits
-                            "log2n_items": 0,
-                            "autoreg": False,
-                            "descr": "Force iob_soc to allocate 16 bits of address for versat",
+                            "autoreg": True,
+                            "descr": "Force iob_soc to allocate address space for versat",
                         },
                     ],
                 }
