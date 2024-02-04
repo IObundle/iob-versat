@@ -113,6 +113,7 @@ def CreateVersatClass(pc_emul,versat_spec,versat_top,versat_extra,build_dir):
         version = "V0.10"
         flows = "pc-emul sim emb fpga"
         setup_dir=os.path.dirname(__file__)
+        USE_EXTMEM=HAS_AXI
 
         @classmethod
         def _init_attributes(cls):
@@ -128,7 +129,7 @@ def CreateVersatClass(pc_emul,versat_spec,versat_top,versat_extra,build_dir):
                     {
                         "name": "AXI_ID_W",
                         "type": "M",
-                        "val": "4",
+                        "val": "1",
                         "min": "?",
                         "max": "?",
                         "descr": "description",
@@ -144,11 +145,12 @@ def CreateVersatClass(pc_emul,versat_spec,versat_top,versat_extra,build_dir):
                     {
                         "name": "AXI_ID",
                         "type": "M",
-                        "val": "4",
+                        "val": "1",
                         "min": "?",
                         "max": "?",
                         "descr": "description",
                     },
+                    {"name":"AXI_ADDR_W","type": "P","val": "24","min": "1","max": "32","descr": "AXI address bus width"}
                 ]
 
         @classmethod
@@ -212,12 +214,13 @@ def CreateVersatClass(pc_emul,versat_spec,versat_top,versat_extra,build_dir):
             confs = [
                 {'name':'ADDR_W', 'type':'P', 'val':str(ADDR_W), 'min':'1', 'max':'?', 'descr':'description here'},
                 {'name':'DATA_W', 'type':'P', 'val':'32', 'min':'1', 'max':'?', 'descr':'description here'},
-                {'name':'AXI_ID_W', 'type':'P', 'val':'1', 'min':'1', 'max':'?', 'descr':'description here'},
-                {'name':'AXI_LEN_W', 'type':'P', 'val':'8', 'min':'1', 'max':'?', 'descr':'description here'},
             ]
 
             if(HAS_AXI):
-                confs.append({"name": "USE_EXTMEM","type": "M","val": True,"min": "0","max": "1","descr": "Versat AXI implies External memory"})
+                confs.append({"name":"USE_EXTMEM","type": "M","val": True,"min": "0","max": "1","descr": "Versat AXI implies External memory"})
+                confs.append({'name':'AXI_ID_W', 'type':'P', 'val':'1', 'min':'1', 'max':'1', 'descr':'description here'})
+                confs.append({'name':'AXI_LEN_W', 'type':'P', 'val':'8', 'min':'1', 'max':'8', 'descr':'description here'})
+                confs.append({"name":"AXI_ADDR_W","type": "P","val": "24","min": "1","max": "32","descr": "AXI address bus width"})
 
             super()._setup_confs(confs)
 
@@ -235,7 +238,7 @@ def CreateVersatClass(pc_emul,versat_spec,versat_top,versat_extra,build_dir):
                 cls.ios += [
                     {
                         "name": "axi_m_port",
-                        "descr": "AXI interface",
+                        "descr": "Versat AXI interface to connect directly to SDRAM",
                         "ports": [],
                     },
             ]

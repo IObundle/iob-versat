@@ -381,8 +381,8 @@ int main(int argc,const char* argv[]){
   //       There was never any point in having both together.
   versat->opts->useFixedBuffers = true;
 
-  versat->debug.outputGraphs = true;
-  versat->debug.outputAcceleratorInfo = true;
+  versat->debug.outputGraphs = false;
+  versat->debug.outputAcceleratorInfo = false;
   
 #ifdef USE_FST_FORMAT
   versat->opts.generateFSTFormat = 1;
