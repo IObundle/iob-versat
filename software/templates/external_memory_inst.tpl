@@ -23,7 +23,7 @@
       .weB_i(VERSAT0_ext_dp_write_@{i}_port_1_o),
       .doutB_o(VERSAT0_ext_dp_in_@{i}_port_1_i),
 
-      .clk_i(clk)
+      .clk_i(clk_i)
    );
 #{else}
 // 2P
@@ -44,7 +44,7 @@
      .r_addr_i(VERSAT0_ext_2p_addr_in_@{i}_o),
      .r_data_o(VERSAT0_ext_2p_data_in_@{i}_i),
 
-     .clk_i(clk)
+     .clk_i(clk_i)
    );
 
 #{end}
