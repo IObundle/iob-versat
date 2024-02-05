@@ -1,11 +1,5 @@
 `timescale 1ns / 1ps
 
-//`include "axi.vh"
-//`include "system.vh"
-//`include "iob_lib.vh"
-//`include "iob_intercon.vh"
-//`include "iob_versat.vh"
-
 `include "versat_defs.vh"
 
 module iob_versat #(  //the below parameters are used in cpu if includes below
@@ -145,6 +139,7 @@ module iob_versat #(  //the below parameters are used in cpu if includes below
       .ADDR_W    (ADDR_W),
       .DATA_W    (DATA_W),
       .AXI_DATA_W(AXI_DATA_W),
+      .AXI_ADDR_W(AXI_ADDR_W),
       .LEN_W     (LEN_W)
    ) xversat (
       .valid (iob_valid_i),
@@ -153,7 +148,6 @@ module iob_versat #(  //the below parameters are used in cpu if includes below
       .wdata (iob_wdata_i),
       .rdata (iob_rdata_o),
       .rvalid(iob_rvalid_o),
-      //.ready(iob_ready_o),
 
 `ifdef VERSAT_EXTERNAL_MEMORY
       `include "versat_external_memory_internal_portmap.vh"

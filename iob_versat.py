@@ -220,7 +220,7 @@ def CreateVersatClass(pc_emul,versat_spec,versat_top,versat_extra,build_dir):
                 confs.append({"name":"USE_EXTMEM","type": "M","val": True,"min": "0","max": "1","descr": "Versat AXI implies External memory"})
                 confs.append({'name':'AXI_ID_W', 'type':'P', 'val':'1', 'min':'1', 'max':'1', 'descr':'description here'})
                 confs.append({'name':'AXI_LEN_W', 'type':'P', 'val':'8', 'min':'1', 'max':'8', 'descr':'description here'})
-                confs.append({"name":"AXI_ADDR_W","type": "P","val": "24","min": "1","max": "32","descr": "AXI address bus width"})
+                confs.append({"name":"AXI_ADDR_W","type": "P","val": "30","min": "1","max": "32","descr": "AXI address bus width"}) # TODO: Changed 24 to 30. Realistically should receive from top the actual size.
 
             super()._setup_confs(confs)
 
