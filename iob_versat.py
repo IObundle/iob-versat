@@ -45,11 +45,13 @@ def RunVersat(pc_emul,versat_spec,versat_top,versat_extra,build_dir):
     if(pc_emul):
         versat_args = versat_args + ["-x64"]
 
-    print("\n",*versat_args,"\n",file=sys.stderr)
-    result = sp.run(versat_args,capture_output=True)
+    print(*versat_args,"\n",file=sys.stderr)
+    result = None
+    try:
+        result = sp.run(versat_args,capture_output=True)
+    except:
+        return []
 
-    print(result,file=sys.stderr)
-    
     returnCode = result.returncode
     output = codecs.getdecoder("unicode_escape")(result.stdout)[0]
 
@@ -75,7 +77,6 @@ def SaveSetupInfo(filepath,lines):
 
 def CreateVersatClass(pc_emul,versat_spec,versat_top,versat_extra,build_dir):
     versat_dir = os.path.dirname(__file__)
-    #build_dir = iob_module.build_dir
 
     versatSetupFilepath = os.path.realpath(build_dir + "/software/versatSetup.txt")
     alreadyRunned = os.path.isfile(versatSetupFilepath)
@@ -93,7 +94,7 @@ def CreateVersatClass(pc_emul,versat_spec,versat_top,versat_extra,build_dir):
         lines = RunVersat(pc_emul,versat_spec,versat_top,versat_extra,build_dir)
         SaveSetupInfo(versatSetupFilepath,lines)
 
-    print("Lines:",lines,file=sys.stderr)
+    #print("Lines:",lines,file=sys.stderr)
 
     # Info needed by class, ADDR_W, HAS_AXI, lines
     ADDR_W = 32
