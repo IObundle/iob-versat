@@ -1,3 +1,5 @@
+`include "versat_defs.vh"
+
 #{include "versat_common.tpl"}
 
 #{set nDones #{call CountDones instances}}
@@ -666,3 +668,5 @@ end
 #{end}
 
 endmodule
+
+`include "versat_undefs.vh"

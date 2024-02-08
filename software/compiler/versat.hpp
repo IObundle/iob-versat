@@ -148,6 +148,7 @@ struct Options{
   bool generateFSTFormat;
   bool noDelayPropagation;
   bool useDMA;
+  bool exportInternalMemories;
 };
 
 struct Versat{
@@ -208,6 +209,7 @@ namespace BasicTemplates{
   extern CompiledTemplate* externalInternalPortmapTemplate;
   extern CompiledTemplate* externalPortTemplate;
   extern CompiledTemplate* externalInstTemplate;
+  extern CompiledTemplate* internalWiresTemplate;
 }
 
 struct GraphMapping;

@@ -638,8 +638,9 @@ void OutputVersatSource(Versat* versat,Accelerator* accel,const char* hardwarePa
 
   // No need for templating, small file
   FILE* c = OpenFileAndCreateDirectories(StaticFormat("%s/versat_defs.vh",hardwarePath),"w");
+  FILE* f = OpenFileAndCreateDirectories(StaticFormat("%s/versat_undefs.vh",hardwarePath),"w");
 
-  if(!c){
+  if(!c || !f){
     printf("Error creating file, check if filepath is correct: %s\n",hardwarePath);
     return;
   }
@@ -653,30 +654,47 @@ void OutputVersatSource(Versat* versat,Accelerator* accel,const char* hardwarePa
   }
 
   fprintf(c,"`define NUMBER_UNITS %d\n",Size(accel->allocated));
+  fprintf(f,"`undef  NUMBER_UNITS\n");
   fprintf(c,"`define CONFIG_W %d\n",val.configurationBits);
+  fprintf(f,"`undef  CONFIG_W\n");
   fprintf(c,"`define STATE_W %d\n",val.stateBits);
+  fprintf(f,"`undef  STATE_W\n");
   fprintf(c,"`define MAPPED_UNITS %d\n",val.unitsMapped);
+  fprintf(f,"`undef  MAPPED_UNITS\n");
   fprintf(c,"`define MAPPED_BIT %d\n",val.memoryConfigDecisionBit);
+  fprintf(f,"`undef  MAPPED_BIT\n");
   fprintf(c,"`define nIO %d\n",val.nUnitsIO);
+  fprintf(f,"`undef  nIO\n");
   fprintf(c,"`define LEN_W %d\n",20);
+  fprintf(f,"`undef  LEN_W\n");
 
   if(versat->opts->architectureHasDatabus){
     fprintf(c,"`define VERSAT_ARCH_HAS_IO 1\n");
+    fprintf(f,"`undef  VERSAT_ARCH_HAS_IO\n");
   }
 
   if(unit.inputs || unit.outputs){
     fprintf(c,"`define EXTERNAL_PORTS\n");
+    fprintf(f,"`undef  EXTERNAL_PORTS\n");
   }
 
   if(val.nUnitsIO){
     fprintf(c,"`define VERSAT_IO\n");
+    fprintf(f,"`undef  VERSAT_IO\n");
   }
 
   if(val.externalMemoryInterfaces){
     fprintf(c,"`define VERSAT_EXTERNAL_MEMORY\n");
+    fprintf(f,"`undef  VERSAT_EXTERNAL_MEMORY\n");
   }
 
+  if(versat->opts->exportInternalMemories){
+    fprintf(c,"`define VERSAT_EXPORT_EXTERNAL_MEMORY\n");
+    fprintf(f,"`undef  VERSAT_EXPORT_EXTERNAL_MEMORY\n");
+  }
+  
   fclose(c);
+  fclose(f);
 
   // Output configuration file
   int size = Size(accel->allocated);
@@ -699,27 +717,29 @@ void OutputVersatSource(Versat* versat,Accelerator* accel,const char* hardwarePa
 
   ComputedData computedData = CalculateVersatComputedData(info,val,temp);
 
-  int index = 0;
-  for(ExternalMemoryInterface inter : computedData.external){
-    switch(inter.type){
-    case ExternalMemoryType::DP:{
-      printf("DP - %d",index++);
-      for(int i = 0; i < 2; i++){
-        printf(",%d",inter.dp[i].bitSize);
-        printf(",%d",inter.dp[i].dataSizeOut);
-        printf(",%d",inter.dp[i].dataSizeIn);
+  if(versat->opts->exportInternalMemories){
+    int index = 0;
+    for(ExternalMemoryInterface inter : computedData.external){
+      switch(inter.type){
+      case ExternalMemoryType::DP:{
+        printf("DP - %d",index++);
+        for(int i = 0; i < 2; i++){
+          printf(",%d",inter.dp[i].bitSize);
+          printf(",%d",inter.dp[i].dataSizeOut);
+          printf(",%d",inter.dp[i].dataSizeIn);
+        }
+        printf("\n");
+      }break;
+      case ExternalMemoryType::TWO_P:{
+        printf("2P - %d",index++);
+        printf(",%d",inter.tp.bitSizeOut);
+        printf(",%d",inter.tp.bitSizeIn);
+        printf(",%d",inter.tp.dataSizeOut);
+        printf(",%d",inter.tp.dataSizeIn);
+        printf("\n");
+      }break;
+      default: NOT_IMPLEMENTED;
       }
-      printf("\n");
-    }break;
-    case ExternalMemoryType::TWO_P:{
-      printf("2P - %d",index++);
-      printf(",%d",inter.tp.bitSizeOut);
-      printf(",%d",inter.tp.bitSizeIn);
-      printf(",%d",inter.tp.dataSizeOut);
-      printf(",%d",inter.tp.dataSizeIn);
-      printf("\n");
-    }break;
-    default: NOT_IMPLEMENTED;
     }
   }
 
@@ -736,6 +756,12 @@ void OutputVersatSource(Versat* versat,Accelerator* accel,const char* hardwarePa
   {
     FILE* f = OpenFileAndCreateDirectories(StaticFormat("%s/versat_external_memory_inst.vh",hardwarePath),"w");
     ProcessTemplate(f,BasicTemplates::externalInstTemplate,temp,temp2);
+    fclose(f);
+  }
+
+  {
+    FILE* f = OpenFileAndCreateDirectories(StaticFormat("%s/versat_internal_memory_wires.vh",hardwarePath),"w");
+    ProcessTemplate(f,BasicTemplates::internalWiresTemplate,temp,temp2);
     fclose(f);
   }
 

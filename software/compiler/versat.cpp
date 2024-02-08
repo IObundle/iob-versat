@@ -33,6 +33,7 @@ namespace BasicTemplates{
   CompiledTemplate* externalInternalPortmapTemplate;
   CompiledTemplate* externalPortTemplate;
   CompiledTemplate* externalInstTemplate;
+  CompiledTemplate* internalWiresTemplate;
   CompiledTemplate* iterativeTemplate;
 }
 
@@ -128,7 +129,7 @@ Versat* InitVersat(){
 
   CompiledTemplate* commonTpl = CompileTemplate(versat_common_template,"common",&versat->permanent,&versat->temp);
   SetIncludeHeader(commonTpl,STRING("common"));
-  
+
   // Technically, if more than 1 versat in the future, could move this outside
   BasicTemplates::acceleratorTemplate = CompileTemplate(versat_accelerator_template,"accel",&versat->permanent,&versat->temp);
   BasicTemplates::topAcceleratorTemplate = CompileTemplate(versat_top_instance_template,"top",&versat->permanent,&versat->temp);
@@ -137,7 +138,8 @@ Versat* InitVersat(){
   BasicTemplates::externalPortTemplate = CompileTemplate(external_memory_port_template,"ext_port",&versat->permanent,&versat->temp);
   BasicTemplates::externalInstTemplate = CompileTemplate(external_memory_inst_template,"ext_inst",&versat->permanent,&versat->temp);
   BasicTemplates::iterativeTemplate = CompileTemplate(versat_iterative_template,"iter",&versat->permanent,&versat->temp);
-
+  BasicTemplates::internalWiresTemplate = CompileTemplate(versat_internal_memory_wires_template,"internal wires",&versat->permanent,&versat->temp);
+  
   RegisterPipeOperation(STRING("MemorySize"),[](Value val,Arena* out){
     ExternalMemoryInterface* inter = (ExternalMemoryInterface*) val.custom;
     int byteSize = ExternalMemoryByteSize(inter);

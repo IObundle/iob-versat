@@ -20,7 +20,9 @@ module iob_versat #(  //the below parameters are used in cpu if includes below
    output                  iob_ready_o,
 
 `ifdef VERSAT_EXTERNAL_MEMORY
+`ifdef VERSAT_EXPORT_EXTERNAL_MEMORY
    `include "versat_external_memory_port.vh"
+`endif
 `endif
 
 `ifdef VERSAT_IO
@@ -134,6 +136,13 @@ module iob_versat #(  //the below parameters are used in cpu if includes below
 
 `endif
 
+`ifdef VERSAT_EXTERNAL_MEMORY
+`ifndef VERSAT_EXPORT_EXTERNAL_MEMORY
+   `include "versat_internal_memory_wires.vh"
+   `include "versat_external_memory_inst.vh"
+`endif
+`endif
+   
    // For now keep the versat_instance using old names (no _i or _o)
    versat_instance #(
       .ADDR_W    (ADDR_W),
@@ -175,3 +184,5 @@ module iob_versat #(  //the below parameters are used in cpu if includes below
    );
 
 endmodule  // iob_versat
+
+`include "versat_undefs.vh"
