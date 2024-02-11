@@ -504,7 +504,7 @@ int main(int argc,const char* argv[]){
     }
 
     InstanceNode* node = GetInstanceNode(accel,TOP);
-    node->type = InstanceNode::TAG_COMPUTE;
+    node->type = InstanceNode::TAG_COMPUTE; // MARK: Temporary handle source_and_delay problems for simple units.
     
     topLevelTypeStr = PushString(perm,"%.*s_Simple",UNPACK_SS(topLevelTypeStr));
     type = RegisterSubUnit(versat,topLevelTypeStr,accel);
@@ -584,20 +584,20 @@ Variety1 Problem:
 - The actual solution would be to completely change delays to actually track the input and output ports instead of the units themselves. Furthermore, if we can describe the relationship between input and output port (wether output X depends on input Y) then we can further improve the delay algorithm to produce lower values and decouple dependencies that exist from hierarchical graphs and from units that are 1 but behave like multiple (for example, memories, that contain 2 ports and the delay should act individually.).
   - Another thing. SOURCE_AND_DELAY should be used for delays that can be used for input or for output depending on how the unit is connected.
 
-Merge:
+How to handle merged subunits.
+- One problem current implementation has is that we are calculating delays for the worst accelerator case, while we could calculate for each case and store the information in versat_accel.h
+- How would this look like with a simple example (like SHA_AES_Simple)?.
+  - The thing about this is that the SHA_AES_Simple declaration would need to store delay information for each case.
+  - Meaning that the SHA_AES_Simple declaration would also need to be able to store different information depending on the type being used by the merged unit.
+  - This means that merging info propragates accross units, so that parent units must also contain N amount of data for each N accelerators that are merged.
+  - This also means that if we have two merged units of N and M accelerators merged, then the parent unit would need to store N * M data.
+  - This makes sense and techically not only works for delay but also for latencies.
+  - If parent unit contains a merged unit that merged 2 accelerators, one with a latency of 10 and another with a latency of 50, then the latency of the parent unit
+    will also depend on which accelerator is active at the moment, the one with a latency of 10 or the one with latency of 50.
+  - We could then think of the parent declaration has having multiple declarations depending on the merged accelerator active. Default declaration, declaration with 0 active, declaration with 1 active and so on.
+  - Each active accelerator would change the delays of the unit, which would then change the delays of the parent declaration and so on.
+  - Other than delays, I cannot think of anything that also behaves this way. Even though configs change between accelerators, this only matters when generating the structs, the parent declaration does not need special treatment 
+  - when generating structs because 
 
-After merging, we need to generate a configuration array in such a way that the configuration positions match correctly.
-We still need a configuration array that stores all the configurations. The "merged" act like subconfigurations.
-
-Current plan:
-
-For now I'm currently simplifing the entire configuration process.
-Currently working on a function that extracts everything needed from the accelerator into an array.
-  Tired of implementing different functions that scather the logic everywhere.
-
-  Potentially could change from Array of Structs into a Struct of Arrays depending on how the other code turns out. No need to make functions to "extract" data if the extraction is simply copying the data from one place to the other. Might as well offer the Array directly.
-
-Also, keep making more Representation functions. Tired of working "blind", it should be easy to print all the structs and all their data.
-
-*/
+ */
 

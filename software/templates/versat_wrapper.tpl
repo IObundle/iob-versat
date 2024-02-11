@@ -464,11 +464,19 @@ static void InternalEndAccelerator(){
    // TODO: We could put the copy of state variables here
 }
 
+static int cyclesDone = 0;
+
+extern "C" int VersatAcceleratorCyclesElapsed(){
+  return cyclesDone;
+}
+
 extern "C" void VersatAcceleratorSimulate(){
   InternalStartAccelerator();
 
   for(int i = 0; !IsDone() ; i++){
     InternalUpdateAccelerator();
+
+    cyclesDone += 1;
 
     if(i >= 10000){
       printf("Accelerator simulation has surpassed 10000 cycles for a single run\n");

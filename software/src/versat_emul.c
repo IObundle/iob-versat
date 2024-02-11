@@ -18,16 +18,18 @@ volatile AcceleratorState* accelState = nullptr;
 
 iptr versat_base;
 
-// Functions exported by wrapper that allow the accelerator to be simulated
-
 #ifdef __cplusplus
 extern "C"{
 #endif
 
+// Functions exported by wrapper that allow the accelerator to be simulated
+int VersatAcceleratorCyclesElapsed();
 void InitializeVerilator();
 void VersatAcceleratorCreate();
 void VersatAcceleratorSimulate();
 int MemoryAccess(int address,int value,int write);
+
+int GetAcceleratorCyclesElapsed();
 
 AcceleratorConfig* GetStartOfConfig();
 AcceleratorState* GetStartOfState();
@@ -38,6 +40,7 @@ AcceleratorState* GetStartOfState();
 
 bool CreateVCD;
 bool SimulateDatabus;
+bool versatInitialized;
 
 void ConfigCreateVCD(bool value){
   CreateVCD = value;
@@ -48,6 +51,7 @@ void ConfigSimulateDatabus(bool value){
 }
 
 void versat_init(int base){
+  versatInitialized = true;
   CreateVCD = true;
   SimulateDatabus = true;
   versat_base = base;
@@ -73,13 +77,39 @@ void versat_init(int base){
 #endif
 }
 
+static void CheckVersatInitialized(){
+  if(!versatInitialized){
+    printf("Versat has not been initialized\n");
+    fflush(stdout);
+    exit(-1);
+  }
+}
+
+int GetAcceleratorCyclesElapsed(){
+  return VersatAcceleratorCyclesElapsed();
+}
+
 void RunAccelerator(int times){
+  CheckVersatInitialized();
+
   for(int i = 0; i < times; i++){
     VersatAcceleratorSimulate();
   }
 }
 
+void StartAccelerator(){
+  CheckVersatInitialized();
+
+  VersatAcceleratorSimulate();
+}
+
+void EndAccelerator(){
+  // Do nothing. Start accelerator does everything, for now
+}
+
 void VersatMemoryCopy(void* dest,void* data,int size){
+  CheckVersatInitialized();
+
   char* byteViewDest = (char*) dest;
   char* configView = (char*) accelConfig;
   int* view = (int*) data;
@@ -102,20 +132,16 @@ void VersatMemoryCopy(void* dest,void* data,int size){
   }
 }
 
-void StartAccelerator(){
-  VersatAcceleratorSimulate();
-}
-
-void EndAccelerator(){
-  // Do nothing. Start accelerator does everything, for now
-}
-
 void VersatUnitWrite(int baseaddr,int index,int val){
+  CheckVersatInitialized();
+
   int addr = baseaddr + (index * sizeof(int)) - (versat_base + memMappedStart); // Convert back to zero based address
   MemoryAccess(addr,val,1);
 }
 
 int VersatUnitRead(int baseaddr,int index){
+  CheckVersatInitialized();
+
   int addr = baseaddr + (index * sizeof(int)) - (versat_base + memMappedStart); // Convert back to zero based byte space address
   int res = MemoryAccess(addr,0,0);
   return res;

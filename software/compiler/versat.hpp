@@ -238,7 +238,6 @@ bool EqualPortMapping(PortInstance p1,PortInstance p2);
 
 // General info
 UnitValues CalculateIndividualUnitValues(FUInstance* inst); // Values for individual unit, not taking into account sub units. For a composite, this pretty much returns empty except for total outputs, as the unit itself must allocate output memory
-UnitValues CalculateAcceleratorUnitValues(Versat* versat,FUInstance* inst); // Values taking into account sub units
 UnitValues CalculateAcceleratorValues(Versat* versat,Accelerator* accel);
 bool IsConfigStatic(Accelerator* topLevel,FUInstance* inst);
 bool IsUnitCombinatorial(FUInstance* inst);

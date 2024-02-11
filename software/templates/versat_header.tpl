@@ -87,7 +87,10 @@ extern "C" {
 
 void versat_init(int base);
 
-void Debug();
+// In pc-emul provides a low bound on performance.
+// In sim-run refines the lower bound but still likely to be smaller than reality due to memory delays that are only present in real circuits.
+int GetAcceleratorCyclesElapsed();
+
 void RunAccelerator(int times);
 void StartAccelerator();
 void EndAccelerator();
