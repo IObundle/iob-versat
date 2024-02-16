@@ -93,7 +93,7 @@ static Addr2LineConnection StartAddr2Line(){
   int size = readlink("/proc/self/exe",exePathBuffer,4096);
 
   if(size < 0){
-    printf("Error using readlink\n");
+    fprintf(stderr,"Error using readlink\n");
   } else {
     exePathBuffer[size] = '\0';
   }
@@ -103,7 +103,7 @@ static Addr2LineConnection StartAddr2Line(){
   pid_t pid = fork();
 
   if(pid < 0){
-    printf("Error calling fork errno: %d\n",errno);
+    fprintf(stderr,"Error calling fork errno: %d\n",errno);
     exit(-1);
   } else if(pid == 0){
     close(pipeWrite[1]);
@@ -137,7 +137,7 @@ static Addr2LineConnection StartAddr2Line(){
     return con;
   }
 
-  printf("Failed to initialize addr2line\n");
+  fprintf(stderr,"Failed to initialize addr2line\n");
   return (Addr2LineConnection){};
 }
 
@@ -153,10 +153,10 @@ static Array<Location> CollectStackTrace(Arena* out,Arena* temp){
   int lines = backtrace(addrBuffer, 100);
   char** strings = backtrace_symbols(addrBuffer, lines);
   if (strings == NULL) {
-    printf("Error getting stack trace\n");
+    fprintf(stderr,"Error getting stack trace\n");
   }
   defer{ free(strings); };
-
+  
   Array<size_t> fileAddresses = PushArray<size_t>(temp,lines);
   
   for(int i = 0; i < lines; i++){
@@ -172,19 +172,19 @@ static Array<Location> CollectStackTrace(Arena* out,Arena* temp){
     String line = STRING(strings[i]);
     Tokenizer tok(line,"()",{});
     String first = tok.NextFindUntil("(");
-    if(!CompareString(first,STRING("./versat"))){ // A bit hardcoded but appears to work fine
-      continue;
-    }
 #if 0
     printf("%.*s\n",UNPACK_SS(line));
 #endif
+    if(!(Contains(first,"versat") || Contains(first,"./versat"))){  // A bit hardcoded but appears to work fine
+      continue;
+    }
     
     region(temp){
       String toWrite = PushString(temp,"%lx\n",fileAddresses[i]);
       //printf("%.*s\n",UNPACK_SS(toWrite));
       int written = write(con->writePipe,toWrite.data,toWrite.size);
       if(written != toWrite.size){
-        printf("Failed to write: (%d/%d)\n",written,toWrite.size);
+        fprintf(stderr,"Failed to write: (%d/%d)\n",written,toWrite.size);
       }
     }
   }
@@ -192,7 +192,7 @@ static Array<Location> CollectStackTrace(Arena* out,Arena* temp){
   //printf("Gonna close write pipe\n");
   {
   int result = close(con->writePipe);
-  if(result != 0) printf("Error closing write pipe: %d\n",errno);
+  if(result != 0) fprintf(stderr,"Error closing write pipe: %d\n",errno);
   }
   
   int bufferSize = Kilobyte(64);
@@ -209,7 +209,7 @@ static Array<Location> CollectStackTrace(Arena* out,Arena* temp){
       break;
     } else{
       if(!(errno == EAGAIN || errno == EWOULDBLOCK)){
-        printf("Errno: %d\n",errno);
+        fprintf(stderr,"Errno: %d\n",errno);
       }
     }
 
@@ -294,14 +294,14 @@ void PrintStacktrace(){
 
   for(int i = 0; i < size; i++){
     String str = canonical[i];
-    printf("#%-2d %.*s",i,UNPACK_SS(str));
+    fprintf(stderr,"#%-2d %.*s",i,UNPACK_SS(str));
 
     for(int j = 0; j < maxSize - str.size; j++){
-      printf(" ");
+      fprintf(stderr," ");
     }
 
-    printf(" %.*s",UNPACK_SS(traces[i].functionName));
-    printf(":%d\n",traces[i].line);
+    fprintf(stderr," %.*s",UNPACK_SS(traces[i].functionName));
+    fprintf(stderr,":%d\n",traces[i].line);
   }
 }
 
@@ -319,10 +319,11 @@ static void SignalPrintStacktrace(int sign){
   }break;
   }
 
-  printf("\nProgram encountered an error. Stack trace:\n");
+  fprintf(stderr,"\nProgram encountered an error. Stack trace:\n");
   PrintStacktrace();
-  printf("\n");
+  fprintf(stderr,"\n");
   fflush(stdout);
+  fflush(stderr);
   
   raise(sign);
 }

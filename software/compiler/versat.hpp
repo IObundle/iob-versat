@@ -57,14 +57,11 @@ struct Parameter{
 };
 
 struct DAGOrderNodes{
-  InstanceNode** sinks;
-  int numberSinks;
-  InstanceNode** sources;
-  int numberSources;
-  InstanceNode** computeUnits;
-  int numberComputeUnits;
-  InstanceNode** instances;
-  int* order;
+  Array<InstanceNode*> sinks;
+  Array<InstanceNode*> sources;
+  Array<InstanceNode*> computeUnits;
+  Array<InstanceNode*> instances;
+  Array<int>           order;
   int size;
   int maxOrder;
 };
@@ -275,8 +272,6 @@ InstanceNode* GetInputNode(InstanceNode* nodes,int inputIndex);
 FUInstance* GetInputInstance(InstanceNode* nodes,int inputIndex);
 InstanceNode* GetOutputNode(InstanceNode* nodes);
 FUInstance* GetOutputInstance(InstanceNode* nodes);
-
-ComputedData CalculateVersatComputedData(InstanceNode* instances,VersatComputedValues val,Arena* out);
 
 // Temp
 struct ModuleInfo;

@@ -78,25 +78,6 @@ static Value EscapeString(Value val,Arena* out){
   return res;
 }
 
-int CountNonOperationChilds(Accelerator* accel){
-  if(accel == nullptr){
-    return 0;
-  }
-
-  int count = 0;
-  FOREACH_LIST(InstanceNode*,ptr,accel->allocated){
-    if(IsTypeHierarchical(ptr->inst->declaration)){
-      count += CountNonOperationChilds(ptr->inst->declaration->fixedDelayCircuit);
-    }
-
-    if(!ptr->inst->declaration->isOperation && ptr->inst->declaration->type != FUDeclaration::SPECIAL){
-      count += 1;
-    }
-  }
-
-  return count;
-}
-
 // MARK TODO: Small fix for common template. Works for now 
 void SetIncludeHeader(CompiledTemplate* tpl,String name);
 
@@ -152,13 +133,7 @@ Versat* InitVersat(){
 
     return MakeValue(type->name);
   });
-  RegisterPipeOperation(STRING("CountNonOperationChilds"),[](Value val,Arena* out){
-    Accelerator* accel = *((Accelerator**) val.custom);
-
-    val = MakeValue(CountNonOperationChilds(accel));
-    return val;
-  });
-
+  
   versat->declarations.Clear(false);
 
   return versat;

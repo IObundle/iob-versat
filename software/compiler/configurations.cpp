@@ -235,15 +235,8 @@ String ReprStaticConfig(StaticId id,Wire* wire,Arena* out){
   return identifier;
 }
 
-// TODO: There is probably a better of simplifying the logic used here. There is some things that are 
-
-// TODO: Maybe it would be easier if we extracted the configs as if it was a "Command" and we accumulated an entire array of these commands which in the end we would join together to make the final configuration array.
-//       It would change the code to make it such that each unit "makes an request to allocate space" in the configuration array and then we could create a function that would process these requests.
-//       Static could be handled by simply sorting the requests so that non static appear first and are processed first, and when we reach static we knew immediatly the start of the configuration address. (Or something like that, I'm still not sure what's the best way of handling statics and so on.
-
-// TODO: I think that if a unit is static then all the children should be marked static as well. Maybe add another flag that indicates that the unit inherits staticality.
-
-// NOTE: The logic for static and shared configs is hard to decouple and simplify. I found no other way of doing this, other than printing the result for a known set of circuits and make small changes at a time.
+// TODO: There is probably a better way of simplifying the logic used here.
+// NOTE: The logic for static and shared configs is hard to decouple and simplify. I found no other way of doing this, other than printing the result for a known set of circuits and make small changes at atime.
 struct InstanceConfigurationOffsets{
   Hashmap<StaticId,int>* staticInfo; 
   FUDeclaration* parent;
@@ -257,7 +250,31 @@ struct InstanceConfigurationOffsets{
   int* staticConfig; // This starts at 0x40000000 and at the end of the function we normalized it since we can only figure out the static position at the very end.
 };
 
-static InstanceInfo GetInstanceInfo(FUInstance* inst,FUDeclaration* parentDeclaration,InstanceConfigurationOffsets offsets,Arena* out){
+String NodeTypeToString(InstanceNode* node){
+  switch(node->type){
+  case InstanceNode::TAG_UNCONNECTED:{
+    return STRING("UNCONNECTED");
+  } break;
+  case InstanceNode::TAG_COMPUTE:{
+    return STRING("COMPUTE");
+  } break;
+  case InstanceNode::TAG_SOURCE:{
+    return STRING("SOURCE");
+  } break;
+  case InstanceNode::TAG_SINK:{
+    return STRING("SINK");
+  } break;
+  case InstanceNode::TAG_SOURCE_AND_SINK:{
+    return STRING("SOURCE_AND_SINK");
+  } break;
+  default: NOT_IMPLEMENTED;
+  }
+  NOT_POSSIBLE;
+  return {};
+}
+
+static InstanceInfo GetInstanceInfo(InstanceNode* node,FUDeclaration* parentDeclaration,InstanceConfigurationOffsets offsets,Arena* out){
+  FUInstance* inst = node->inst;
   String topName = inst->name;
   if(offsets.topName.size != 0){
     topName = PushString(out,"%.*s_%.*s",UNPACK_SS(offsets.topName),UNPACK_SS(inst->name));
@@ -276,7 +293,8 @@ static InstanceInfo GetInstanceInfo(FUInstance* inst,FUDeclaration* parentDeclar
   info.isComposite = IsTypeHierarchical(topDecl);
   info.parentDeclaration = parentDeclaration;
   info.baseDelay = offsets.delay;
-
+  info.type = NodeTypeToString(node);
+  
   if(topDecl->memoryMapBits.has_value()){
     info.memMappedSize = (1 << topDecl->memoryMapBits.value());
     info.memMappedBitSize = topDecl->memoryMapBits.value();
@@ -324,10 +342,12 @@ static InstanceInfo GetInstanceInfo(FUInstance* inst,FUDeclaration* parentDeclar
   return info;
 }
 
-AcceleratorInfo TransformGraphIntoArrayRecurse(FUInstance* inst,FUDeclaration* parentDecl,InstanceConfigurationOffsets offsets,Arena* out,Arena* temp){
+AcceleratorInfo TransformGraphIntoArrayRecurse(InstanceNode* node,FUDeclaration* parentDecl,InstanceConfigurationOffsets offsets,Arena* out,Arena* temp){
   // This prevents us from fully using arenas because we are pushing more data than the actual structures that we keep track of. If this was hierarchical, we would't have this problem.
   AcceleratorInfo res = {};
-  InstanceInfo top = GetInstanceInfo(inst,parentDecl,offsets,out);
+
+  FUInstance* inst = node->inst;
+  InstanceInfo top = GetInstanceInfo(node,parentDecl,offsets,out);
   
   FUDeclaration* topDecl = inst->declaration;
   if(!IsTypeHierarchical(topDecl)){
@@ -350,8 +370,8 @@ AcceleratorInfo TransformGraphIntoArrayRecurse(FUInstance* inst,FUDeclaration* p
   // Composite instance
   int delayIndex = 0;
   int index = 0;
-  FOREACH_LIST_INDEXED(InstanceNode*,node,inst->declaration->fixedDelayCircuit->allocated,index){
-    FUInstance* subInst = node->inst;
+  FOREACH_LIST_INDEXED(InstanceNode*,subNode,inst->declaration->fixedDelayCircuit->allocated,index){
+    FUInstance* subInst = subNode->inst;
     bool containsConfig = subInst->declaration->configInfo.configs.size;
     
     InstanceConfigurationOffsets subOffsets = offsets;
@@ -395,7 +415,7 @@ AcceleratorInfo TransformGraphIntoArrayRecurse(FUInstance* inst,FUDeclaration* p
 
     subOffsets.memOffset = offsets.memOffset + res.memSize;
 
-    AcceleratorInfo info = TransformGraphIntoArrayRecurse(subInst,inst->declaration,subOffsets,temp,out);
+    AcceleratorInfo info = TransformGraphIntoArrayRecurse(subNode,inst->declaration,subOffsets,temp,out);
     
     res.memSize += info.memSize;
     
@@ -451,7 +471,7 @@ Array<InstanceInfo> TransformGraphIntoArray(Accelerator* accel,bool recursive,Ar
     
     if(recursive){
       // TODO: The code should be able to be simplified such that  
-      AcceleratorInfo info = TransformGraphIntoArrayRecurse(subInst,nullptr,subOffsets,temp,out);
+      AcceleratorInfo info = TransformGraphIntoArrayRecurse(node,nullptr,subOffsets,temp,out);
 
       subOffsets.memOffset += info.memSize;
       subOffsets.memOffset = AlignBitBoundary(subOffsets.memOffset,log2i(info.memSize));
@@ -460,7 +480,7 @@ Array<InstanceInfo> TransformGraphIntoArray(Accelerator* accel,bool recursive,Ar
         *PushListElement(infoList) = f;
       }
     } else {
-      InstanceInfo top = GetInstanceInfo(subInst,nullptr,subOffsets,out);
+      InstanceInfo top = GetInstanceInfo(node,nullptr,subOffsets,out);
 
       subOffsets.memOffset += top.memMappedSize.value_or(0);
       subOffsets.memOffset = AlignBitBoundary(subOffsets.memOffset,log2i(top.memMappedSize.value_or(1)));

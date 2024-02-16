@@ -18,6 +18,7 @@
 
 #include "verilated.h"
 
+#{if trace}       
 #{if opts.generateFSTFormat}
 #include "verilated_fst_c.h"
 static VerilatedFstC* tfp = NULL;
@@ -27,6 +28,7 @@ static VerilatedVcdC* tfp = NULL;
 #{end}
 
 VerilatedContext* contextp = new VerilatedContext;
+#{end}
 
 #include "V@{type.name}.h"
 static V@{type.name}* dut = NULL;
@@ -38,8 +40,10 @@ extern bool SimulateDatabus;
 #define UPDATE(unit) \
    unit->clk = 0; \
    unit->eval(); \
+#{if trace}
    if(CreateVCD) tfp->dump(contextp->time()); \
    contextp->timeInc(2); \
+#{end}
    unit->clk = 1; \
    unit->eval();
 
@@ -74,7 +78,9 @@ static AcceleratorState stateBuffer = {};
 static DatabusAccess databusBuffer[@{type.nIOs}] = {}; 
 
 extern "C" void InitializeVerilator(){
-   Verilated::traceEverOn(true);
+#{if trace}       
+  Verilated::traceEverOn(true);
+#{end}
 }
 
 extern "C" AcceleratorConfig* GetStartOfConfig(){
@@ -86,12 +92,15 @@ extern "C" AcceleratorState* GetStartOfState(){
 }
 
 static void CloseWaveform(){
+#{if trace}
    if(CreateVCD && tfp){
       tfp->close();
    }
+#{end}
 }
 
 extern "C" void VersatAcceleratorCreate(){
+#{if trace}
    if(CreateVCD){
    #{if opts.generateFSTFormat}
       tfp = new VerilatedFstC;
@@ -99,6 +108,7 @@ extern "C" void VersatAcceleratorCreate(){
       tfp = new VerilatedVcdC;
    #{end}
    }
+#{end}
 
    V@{type.name}* self = new V@{type.name}();
 
@@ -109,6 +119,7 @@ extern "C" void VersatAcceleratorCreate(){
 
    dut = self;
 
+#{if trace}       
    if(CreateVCD){
       self->trace(tfp, 99);
       
@@ -119,7 +130,8 @@ extern "C" void VersatAcceleratorCreate(){
       #{end}
 
       atexit(CloseWaveform);
-   }
+}
+#{end}
 
    self->run = 0;
    self->clk = 0;
@@ -133,15 +145,20 @@ extern "C" void VersatAcceleratorCreate(){
    self->rst = 1;
    UPDATE(self);
    self->rst = 0;
+#{if trace}
    if(CreateVCD) tfp->dump(contextp->time());
    contextp->timeInc(1);
    if(CreateVCD) tfp->dump(contextp->time());
    contextp->timeInc(1);
-
+#{end}
 }
+
+static int cyclesDone = 0;
 
 static void InternalUpdateAccelerator(){
    int baseAddress = 0;
+
+   cyclesDone += 1;
 
    V@{type.name}* self = dut;
 
@@ -371,8 +388,10 @@ if(SimulateDatabus){
 #{end}
 }
 
+#{if trace}
    if(CreateVCD) tfp->dump(contextp->time());
    contextp->timeInc(2);
+#{end}
 
 // TODO: Technically only need to do this at the end of an accelerator run, do not need to do this every single update
 #{if type.configInfo.states}
@@ -436,10 +455,7 @@ AcceleratorConfig* config = (AcceleratorConfig*) &configBuffer;
 
 #{for i type.nIOs}
 {
-   DatabusAccess* memoryLatency = ((DatabusAccess*) &self[1]) + @{i};
-
-   memoryLatency->counter = 0;
-   memoryLatency->latencyCounter = INITIAL_MEMORY_LATENCY;
+    databusBuffer[@{i}].latencyCounter = INITIAL_MEMORY_LATENCY;
 }
 #{end}
 
@@ -447,10 +463,12 @@ AcceleratorConfig* config = (AcceleratorConfig*) &configBuffer;
    UPDATE(self);
    self->running = 1;
    self->run = 0;
+#{if trace}
    if(CreateVCD) tfp->dump(contextp->time());
    contextp->timeInc(1);
    if(CreateVCD) tfp->dump(contextp->time());
    contextp->timeInc(1);
+#{end}
 }
 
 static void InternalEndAccelerator(){
@@ -464,8 +482,6 @@ static void InternalEndAccelerator(){
    // TODO: We could put the copy of state variables here
 }
 
-static int cyclesDone = 0;
-
 extern "C" int VersatAcceleratorCyclesElapsed(){
   return cyclesDone;
 }
@@ -475,8 +491,6 @@ extern "C" void VersatAcceleratorSimulate(){
 
   for(int i = 0; !IsDone() ; i++){
     InternalUpdateAccelerator();
-
-    cyclesDone += 1;
 
     if(i >= 10000){
       printf("Accelerator simulation has surpassed 10000 cycles for a single run\n");

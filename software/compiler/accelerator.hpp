@@ -24,20 +24,16 @@ struct Accelerator{ // Graph + data storage
   Versat* versat;
   //FUDeclaration* subtype; // Set if subaccelerator (accelerator associated to a FUDeclaration). A "free" accelerator has this set to nullptr
 
-  Edge* edges; // TODO: Should be removed, edge info is all contained inside the instance nodes and desync leads to bugs since some code still uses this
+  Edge* edges; // TODO: Should be removed, edge info is all contained inside the instance nodes and desync leads to bugs since some code still uses this.
 
   OrderedInstance* ordered;
   InstanceNode* allocated;
   InstanceNode* lastAllocated;
   Pool<FUInstance> instances;
-  Pool<FUInstance> subInstances; // TODO: Since do not care about user code anymore, can remove this. Essentially a "wrapper" so that user code does not have to deal with reallocations when adding units.
 
   DynamicArena* accelMemory; // TODO: We could remove all this because we can now build all the accelerators in place. (Add an API that functions like a Accelerator builder and at the end we lock everything into an immutable graph).
 
   std::unordered_map<StaticId,StaticData> staticUnits;
-  Hashmap<StaticId,StaticData>* calculatedStaticPos;
-  int startOfDelay;
-  int startOfStatic;
 
   String name; // For debugging purposes it's useful to give accelerators a name
 };
@@ -93,17 +89,16 @@ struct VersatComputedValues{
 };
 
 // Accelerator
+
+// TODO: The concept of flat instance no longer exists. Remove them and check if any code dependend on the fact that copy flat did not copy static or shared 
 Accelerator* CopyAccelerator(Versat* versat,Accelerator* accel,InstanceMap* map);
 Accelerator* CopyFlatAccelerator(Versat* versat,Accelerator* accel,InstanceMap* map);
 FUInstance* CopyInstance(Accelerator* newAccel,FUInstance* oldInstance,String newName,InstanceNode* previous);
 FUInstance* CopyInstance(Accelerator* newAccel,FUInstance* oldInstance,String newName);
 InstanceNode* CopyInstance(Accelerator* newAccel,InstanceNode* oldInstance,String newName);
 InstanceNode* CreateFlatFUInstance(Accelerator* accel,FUDeclaration* type,String name);
-void InitializeFUInstances(Accelerator* accel,bool force);
-int CountNonOperationChilds(Accelerator* accel);
 
 ComputedData CalculateVersatComputedData(Array<InstanceInfo> info,VersatComputedValues val,Arena* out);
-ComputedData CalculateVersatComputedData(InstanceNode* instances,VersatComputedValues val,Arena* out);
 
 bool IsCombinatorial(Accelerator* accel);
 

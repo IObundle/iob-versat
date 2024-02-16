@@ -1,5 +1,8 @@
-#{set TRACE_TYPE "--trace"}
-#{if arch.generateFSTFormat} #{set TRACE_TYPE "--trace-fst"} #{end}
+#{let TRACE_TYPE ""}
+#{if traceEnabled} 
+  #{set TRACE_TYPE "--trace"}
+  #{if arch.generateFSTFormat} #{set TRACE_TYPE "--trace-fst"} #{end}
+#{end}
 
 TYPE_NAME := @{typename}
 
@@ -28,7 +31,7 @@ createVerilatorObjects: V@{typename}.h wrapper.o
 
 # TODO: src folder should be set to absolute. Versat compiler knows the location 
 V@{typename}.h: $(HARDWARE_SRC)
-	verilator -GAXI_ADDR_W=@{arch.addrSize} -GAXI_DATA_W=@{arch.dataSize} -GLEN_W=16 -CFLAGS -O2 @{TRACE_TYPE} --cc $(HARDWARE_SRC) $(wildcard @{srcDir}/*.v) $(INCLUDE) --top-module $(TYPE_NAME)
+	verilator -GAXI_ADDR_W=@{arch.addrSize} -GAXI_DATA_W=@{arch.dataSize} -GLEN_W=16 -CFLAGS "-O2 -march=native" @{TRACE_TYPE} --cc $(HARDWARE_SRC) $(wildcard @{srcDir}/*.v) $(INCLUDE) --top-module $(TYPE_NAME)
 	$(MAKE) -C ./obj_dir -f V@{typename}.mk
 	cp ./obj_dir/*.h ./
 
@@ -44,7 +47,7 @@ ALL_VERILATOR_O:=$(patsubst %,./obj_dir/%.o,$(ALL_VERILATOR_FILES))
 ALL_VERILATOR_CPPS:=$(patsubst %,$(VERILATOR_SOURCE_DIR)/%.cpp,$(ALL_VERILATOR_FILES))
 
 ./obj_dir/%.o: $(VERILATOR_SOURCE_DIR)/%.cpp
-	g++ -g -w -c -o $@ $< -I$(VERILATOR_ROOT)/include
+	g++ -w -O2 -c -o $@ $< -I$(VERILATOR_ROOT)/include
 
 verilatorObjects: $(ALL_VERILATOR_O)
 #	@echo $(ALL_VERILATOR_FILES)

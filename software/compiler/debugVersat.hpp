@@ -5,6 +5,8 @@
 #include "debug.hpp"
 #include "utils.hpp"
 
+#include "versat.hpp"
+
 struct Versat;
 struct Accelerator;
 struct Arena;
@@ -14,6 +16,8 @@ struct FUInstance;
 extern Arena* debugArena;
 
 String FuzzText(String formattedExample,Arena* out,int seed = COMPILE_TIME); // Pass a string of valid tokens separated by spaces
+
+void OutputGraphDotFile(Versat* versat,Accelerator* accel,bool collapseSameEdges,FUInstance* highlighInstance,CalculateDelayResult delays,String filename,Arena* temp);
 
 void OutputGraphDotFile(Versat* versat,Accelerator* accel,bool collapseSameEdges,String filename,Arena* temp);
 void OutputGraphDotFile(Versat* versat,Accelerator* accel,bool collapseSameEdges,FUInstance* highlighInstance,String filename,Arena* temp);

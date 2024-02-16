@@ -1,0 +1,6 @@
+Configurating units and debugging is still very error prone.
+   The entire process could be improved by adding a bunch of state outputs to units.
+      This extra set of connections and logic could be wrapped by some DEBUG preprocessor directive so that they would only work in pc-emul and sim-run.
+   Could also implement a good amount of software side checks for individual units.
+      Functions that output the current configuration as well as reporting and doing sanity check on the current values being used.
+

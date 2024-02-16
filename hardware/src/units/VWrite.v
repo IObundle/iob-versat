@@ -63,7 +63,9 @@ module VWrite #(
    input [  ADDR_W-1:0] iter2B,
    input [PERIOD_W-1:0] per2B,
    input [  ADDR_W-1:0] shift2B,
-   input [  ADDR_W-1:0] incr2B
+   input [  ADDR_W-1:0] incr2B,
+
+   input enableWrite
 );
 
    assign databus_addr_0  = ext_addr;
@@ -71,21 +73,21 @@ module VWrite #(
    assign databus_len_0   = length;
 
    wire gen_done;
-   reg  doneA;
-   reg  doneB;
-   wire doneB_int;
-   assign done = doneA & doneB;
+   reg  doneWrite; // Databus write part
+   reg  doneStore;
+   wire doneStore_int;
+   assign done = (doneWrite & doneStore);
 
    always @(posedge clk, posedge rst) begin
       if (rst) begin
-         doneA <= 1'b1;
-         doneB <= 1'b1;
+         doneWrite <= 1'b1;
+         doneStore <= 1'b1;
       end else if (run) begin
-         doneA <= 1'b0;
-         doneB <= 1'b0;
+         doneWrite <= !enableWrite;
+         doneStore <= 1'b0;
       end else if (running) begin
-         doneB <= doneB_int;
-         if (databus_valid_0 && databus_ready_0 && databus_last_0) doneA <= 1'b1;
+         doneStore <= doneStore_int;
+         if (databus_valid_0 && databus_ready_0 && databus_last_0) doneWrite <= 1'b1;
       end
    end
 
@@ -141,10 +143,10 @@ module VWrite #(
    SimpleAddressGen #(
       .ADDR_W(ADDR_W),
       .DATA_W(AXI_DATA_W)
-   ) addrgenA (
+   ) addrgenWrite (
       .clk_i(clk),
       .rst_i(rst),
-      .run_i(run),
+      .run_i(run && enableWrite),
 
       //configurations 
       .period_i(perA),
@@ -168,7 +170,7 @@ module VWrite #(
    SimpleAddressGen #(
       .ADDR_W(ADDR_W),
       .DATA_W(DATA_W)
-   ) addrgenB (
+   ) addrgenStore (
       .clk_i(clk),
       .rst_i(rst),
       .run_i(run),
@@ -189,7 +191,7 @@ module VWrite #(
       .valid_o(enB),
       .ready_i(1'b1),
       .addr_o (addrB_int),
-      .done_o (doneB_int)
+      .done_o (doneStore_int)
    );
 
    /*
@@ -210,7 +212,7 @@ module VWrite #(
                        .incr2(incr2B),
                        .addr(addrB_int),
                        .mem_en(enB),
-                       .done(doneB_int)
+                       .done(doneStore_int)
                        );
    */
 
@@ -271,9 +273,9 @@ module VWrite #(
    endgenerate
    */
 
-   assign databus_valid_0   = (m_valid & !doneA);
+   assign databus_valid_0   = (m_valid & !doneWrite);
 
-   assign ext_2p_write_0    = enB & wrB;
+   assign ext_2p_write_0    = wrB;
    assign ext_2p_addr_out_0 = addrB;
    assign ext_2p_data_out_0 = data_to_wrB;
 

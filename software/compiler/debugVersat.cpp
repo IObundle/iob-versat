@@ -237,3 +237,94 @@ void OutputMemoryHex(void* memory,int size){
 
   printf("\n");
 }
+
+
+void OutputGraphDotFile(Versat* versat,Accelerator* accel,bool collapseSameEdges,FUInstance* highlighInstance,CalculateDelayResult delays,String filename,Arena* temp){
+  if(!versat->debug.outputGraphs){
+    return;
+  }
+
+  FILE* outputFile = OpenFileAndCreateDirectories(StaticFormat("%.*s",UNPACK_SS(filename)),"w");
+  defer{ if(outputFile) fclose(outputFile);};
+  
+  BLOCK_REGION(temp);
+
+  fprintf(outputFile,"digraph accel {\n\tnode [fontcolor=white,style=filled,color=\"160,60,176\"];\n");
+  FOREACH_LIST(InstanceNode*,ptr,accel->allocated){
+    FUInstance* inst = ptr->inst;
+    String id = UniqueRepr(inst,temp);
+    String name = Repr(inst,versat->debug.dotFormat,temp);
+
+    String color = STRING("darkblue");
+    int delay = 0;
+    
+    if(ptr->type == InstanceNode::TAG_SOURCE || ptr->type == InstanceNode::TAG_SOURCE_AND_SINK){
+      color = STRING("darkgreen");
+      delay = inst->baseDelay;
+    } else if(ptr->type == InstanceNode::TAG_SINK){
+      color = STRING("dark");
+    }
+
+    bool doHighligh = highlighInstance ? highlighInstance == inst : false;
+
+    if(doHighligh){
+      fprintf(outputFile,"\t\"%.*s\" [color=darkred,label=\"%.*s-%d\"];\n",UNPACK_SS(id),UNPACK_SS(name),delay);
+    } else {
+      fprintf(outputFile,"\t\"%.*s\" [color=%.*s label=\"%.*s-%d\"];\n",UNPACK_SS(id),UNPACK_SS(color),UNPACK_SS(name),delay);
+    }
+  }
+
+  int size = Size(accel->edges);
+  Hashmap<Pair<InstanceNode*,InstanceNode*>,int>* seen = PushHashmap<Pair<InstanceNode*,InstanceNode*>,int>(temp,size);
+
+  // TODO: Consider adding a true same edge counter, that collects edges with equal delay and then represents them on the graph as a pair, using [portStart-portEnd]
+  FOREACH_LIST(InstanceNode*,ptr,accel->allocated){
+    FUInstance* out = ptr->inst;
+
+    FOREACH_LIST(ConnectionNode*,con,ptr->allOutputs){
+      FUInstance* in = con->instConnectedTo.node->inst;
+
+      if(collapseSameEdges){
+        Pair<InstanceNode*,InstanceNode*> nodeEdge = {};
+        nodeEdge.first = ptr;
+        nodeEdge.second = con->instConnectedTo.node;
+
+        GetOrAllocateResult<int> res = seen->GetOrAllocate(nodeEdge);
+        if(res.alreadyExisted){
+          continue;
+        }
+      }
+
+      int inPort = con->instConnectedTo.port;
+      int outPort = con->port;
+
+      String first = UniqueRepr(out,temp);
+      String second = UniqueRepr(in,temp);
+      PortInstance start = {out,outPort};
+      PortInstance end = {in,inPort};
+      String label = Repr(&start,&end,versat->debug.dotFormat,temp);
+      
+      PortNode nodeStart = {ptr,con->port};
+      PortNode nodeEnd = con->instConnectedTo;
+      
+      EdgeNode edge = {nodeStart,nodeEnd};
+      int calculatedDelay = delays.edgesDelay->GetOrFail(edge);
+
+      bool highlighStart = (highlighInstance ? start.inst == highlighInstance : false);
+      bool highlighEnd = (highlighInstance ? end.inst == highlighInstance : false);
+
+      bool highlight = highlighStart && highlighEnd;
+
+      fprintf(outputFile,"\t\"%.*s\" -> ",UNPACK_SS(first));
+      fprintf(outputFile,"\"%.*s\"",UNPACK_SS(second));
+
+      if(highlight){
+        fprintf(outputFile,"[color=darkred,label=\"%.*s\\n[%d:%d]\"];\n",UNPACK_SS(label),con->edgeDelay,calculatedDelay);
+      } else {
+        fprintf(outputFile,"[label=\"%.*s\\n[%d:%d]\"];\n",UNPACK_SS(label),con->edgeDelay,calculatedDelay);
+      }
+    }
+  }
+  fprintf(outputFile,"}\n");
+}
+

@@ -298,7 +298,7 @@ String GetVerilatorRoot(Arena* out,Arena* temp){
 
   String testFile = PushString(temp,"`timescale 1ns / 1ps\nmodule Test(); endmodule");
   PushNullByte(temp);
-
+ 
   FILE* f = fopen(StaticFormat("%.*s/Test.v",UNPACK_SS(tempDir)),"w");
   if(f == nullptr){
     printf("Error creating file\n");
@@ -367,22 +367,23 @@ int main(int argc,const char* argv[]){
   Arena* perm = &permInst;
   Arena tempInst = InitArena(Megabyte(256));
   Arena* temp = &tempInst;
-
+  
   InitializeTemplateEngine(perm);
   InitializeSimpleDeclarations(versat);
   
   Options* opts = ParseCommandLineOptions(argc,argv,perm,temp);
   versat->opts = opts;
-  versat->opts->shadowRegister = true; 
-  versat->opts->noDelayPropagation = true;
 
   // TODO: Variable buffers are currently broken. Due to removing statics saved configurations.
   //       When reimplementing this (if we eventually do) separate buffers configs from static buffers.
   //       There was never any point in having both together.
   versat->opts->useFixedBuffers = true;
-
-  versat->debug.outputGraphs = false;
-  versat->debug.outputAcceleratorInfo = false;
+  versat->opts->shadowRegister = true; 
+  versat->opts->noDelayPropagation = true;
+  
+  versat->debug.outputGraphs = true;
+  versat->debug.outputAcceleratorInfo = true;
+  versat->debug.outputVCD = false;
   
 #ifdef USE_FST_FORMAT
   versat->opts.generateFSTFormat = 1;
@@ -449,7 +450,7 @@ int main(int argc,const char* argv[]){
     }
   }
   
-// We need to do this afer parsing the modules because the majority of these come from verilog files.
+// We need to do this after parsing the modules because the majority of these come from verilog files.
   BasicDeclaration::buffer = GetTypeByName(versat,STRING("Buffer"));
   BasicDeclaration::fixedBuffer = GetTypeByName(versat,STRING("FixedBuffer"));
   BasicDeclaration::pipelineRegister = GetTypeByName(versat,STRING("PipelineRegister"));
@@ -526,7 +527,7 @@ int main(int argc,const char* argv[]){
     }
   }
 
-  TOP->parameters = STRING("#(.AXI_ADDR_W(AXI_ADDR_W),.LEN_W(LEN_W))");
+TOP->parameters = STRING("#(.AXI_ADDR_W(AXI_ADDR_W),.LEN_W(LEN_W))");
   OutputVersatSource(versat,accel,opts->hardwareOutputFilepath.data,opts->softwareOutputFilepath.data,topLevelTypeStr,opts->addInputAndOutputsToTop,temp,perm);
 
   //TODO: Repeated code because we must use a modified accelerator to outputVersatSource but use a normal accelerator for simulation. We could just reorder, so that outputVersatSource is done afterwards, and the wrapper is done before.

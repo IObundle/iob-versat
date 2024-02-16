@@ -501,7 +501,10 @@ static void SendLatencyUpwards(InstanceNode* node,Hashmap<EdgeNode,int>* delays,
   }
 }
 
+
 // A quick explanation: Starting from the inputs, we associate to edges a value that indicates how much cycles data needs to be delayed in order to arrive at the needed time. Starting from inputs in a breadth firsty manner makes this work fine but I think that it is not required. This value is given by the latency of the output + delay of the edge + input delay. Afterwards, we can always move delay around (Ex: If we fix a given unit, we can increase the delay of each output edge by one if we subtract the delay of each input edge by one. We can essentially move delay from input edges to output edges).
+// NOTE: Thinking things a bit more, the number associated to the edges is not something that we want. If a node as a edge with number 0 and another with number 3, we need to add a fixed buffer of latency 3 to the edge with number 0, not the other way around. This might mean that after doing all the passes that we want, we still might need to invert everything (in this case, the edge with 0 would get a 3 and the edge with a 3 would get a zero). That is, if we still want to preserve the idea that each number associated to the edge is equal to the latency that we need to add. 
+
 // Negative value edges are ok since at the end we can renormalize everything back into positive by adding the absolute value of the lowest negative to every edge (this also works because we use positive values in the input nodes to represent delay).
 // In fact, this code could be simplified if we made the process of pushing delay from one place to another more explicit. Also TODO: We technically can use the ability of pushing delay to produce accelerators that contain less buffers. Node with many outputs we want to move delay as much as possible to it's inputs. Node with many inputs we want to move delay as much as possible to it's outputs. Currently we only favor one side because we basically just try to move delays to the outside as much as possible.
 // TODO: Simplify the code. Check if removing the breadth first and just iterating by nodes and incrementing the edges values ends up producing the same result. Basically a loop where for each node we accumulate on the respective edges the values of the delays from the nodes respective ports plus the value of the edges themselves and finally we normalize everything to start at zero. I do not see any reason why this wouldn't work.
@@ -519,6 +522,10 @@ CalculateDelayResult CalculateDelay(Versat* versat,Accelerator* accel,Arena* out
   Hashmap<EdgeNode,int>* edgeToDelay = PushHashmap<EdgeNode,int>(out,edges);
   Hashmap<InstanceNode*,int>* nodeDelay = PushHashmap<InstanceNode*,int>(out,nodes);
   
+  CalculateDelayResult res = {};
+  res.edgesDelay = edgeToDelay;
+  res.nodeDelay = nodeDelay;
+
   FOREACH_LIST(InstanceNode*,ptr,accel->allocated){
     nodeDelay->Insert(ptr,0);
 
@@ -550,7 +557,7 @@ CalculateDelayResult CalculateDelay(Versat* versat,Accelerator* accel,Arena* out
     InstanceNode* node = ptr->node;
 
     if(node->type != InstanceNode::TAG_SOURCE && node->type != InstanceNode::TAG_SOURCE_AND_SINK){
-      break; // This break is important because further code relies on it. 
+      continue; // This break is important because further code relies on it. 
     }
 
     nodeDelay->Insert(node,0);
@@ -560,14 +567,16 @@ CalculateDelayResult CalculateDelay(Versat* versat,Accelerator* accel,Arena* out
 
     region(out){
       String filepath = PushString(out,"debug/%.*s/out1_%d.dot",UNPACK_SS(accel->name),graphs++);
-      OutputGraphDotFile(versat,accel,true,node->inst,filepath,out);
+      OutputGraphDotFile(versat,accel,true,node->inst,res,filepath,out);
     }
   }
 
+  ptr = accel->ordered;
   // Continue up the tree
   for(; ptr; ptr = ptr->next){
     InstanceNode* node = ptr->node;
-    if(node->type == InstanceNode::TAG_UNCONNECTED){
+    if(node->type == InstanceNode::TAG_UNCONNECTED
+       || node->type == InstanceNode::TAG_SOURCE){
       continue;
     }
 
@@ -593,7 +602,7 @@ CalculateDelayResult CalculateDelay(Versat* versat,Accelerator* accel,Arena* out
 
     region(out){
       String filepath = PushString(out,"debug/%.*s/out2_%d.dot",UNPACK_SS(accel->name),graphs++);
-      OutputGraphDotFile(versat,accel,true,node->inst,filepath,out);
+      OutputGraphDotFile(versat,accel,true,node->inst,res,filepath,out);
     }
   }
 
@@ -604,7 +613,7 @@ CalculateDelayResult CalculateDelay(Versat* versat,Accelerator* accel,Arena* out
       continue;
     }
 
-    // Source and sink units never have output delay. They can't
+    // Source_and_sink units never have output delay. They can't
     FOREACH_LIST(ConnectionNode*,con,node->allOutputs){
       *con->delay = 0;
     }
@@ -625,7 +634,7 @@ CalculateDelayResult CalculateDelay(Versat* versat,Accelerator* accel,Arena* out
   
   region(out){
     String filepath = PushString(out,"debug/%.*s/out3_%d.dot",UNPACK_SS(accel->name),graphs++);
-    OutputGraphDotFile(versat,accel,true,filepath,out);
+    OutputGraphDotFile(versat,accel,true,nullptr,res,filepath,out);
   }
 
   if(!versat->opts->noDelayPropagation){
@@ -658,7 +667,7 @@ CalculateDelayResult CalculateDelay(Versat* versat,Accelerator* accel,Arena* out
 
   region(out){
     String filepath = PushString(out,"debug/%.*s/out4_%d.dot",UNPACK_SS(accel->name),graphs++);
-    OutputGraphDotFile(versat,accel,true,filepath,out);
+    OutputGraphDotFile(versat,accel,true,nullptr,res,filepath,out);
   }
 
   FOREACH_LIST(OrderedInstance*,ptr,accel->ordered){
@@ -671,13 +680,10 @@ CalculateDelayResult CalculateDelay(Versat* versat,Accelerator* accel,Arena* out
     node->inst->baseDelay = nodeDelay->GetOrFail(node);
   }
   
-  CalculateDelayResult res = {};
-  res.edgesDelay = edgeToDelay;
-  res.nodeDelay = nodeDelay;
-  
   return res;
 }
 
+// TODO: This functions should have actual error handling and reporting. Instead of just Asserting.
 static int Visit(PushPtr<InstanceNode*>* ordering,InstanceNode* node,Hashmap<InstanceNode*,int>* tags){
   int* tag = tags->Get(node);
   Assert(tag);
@@ -720,15 +726,12 @@ DAGOrderNodes CalculateDAGOrder(InstanceNode* instances,Arena* out){
 
   DAGOrderNodes res = {};
 
-  res.numberComputeUnits = 0;
-  res.numberSinks = 0;
-  res.numberSources = 0;
   res.size = 0;
-  res.instances = PushArray<InstanceNode*>(out,size).data;
-  res.order = PushArray<int>(out,size).data;
+  res.instances = PushArray<InstanceNode*>(out,size);
+  res.order = PushArray<int>(out,size);
 
   PushPtr<InstanceNode*> pushPtr = {};
-  pushPtr.Init(res.instances,size);
+  pushPtr.Init(res.instances);
 
   BLOCK_REGION(out);
 
@@ -739,40 +742,39 @@ DAGOrderNodes CalculateDAGOrder(InstanceNode* instances,Arena* out){
     tags->Insert(ptr,0);
   }
 
-  res.sources = pushPtr.Push(0);
+  int mark = pushPtr.Mark();
   // Add source units, guaranteed to come first
   FOREACH_LIST(InstanceNode*,ptr,instances){
     FUInstance* inst = ptr->inst;
     if(ptr->type == InstanceNode::TAG_SOURCE || (ptr->type == InstanceNode::TAG_SOURCE_AND_SINK && CHECK_DELAY(inst,DelayType::DELAY_TYPE_SOURCE_DELAY))){
       *pushPtr.Push(1) = ptr;
-      res.numberSources += 1;
 
       tags->Insert(ptr,TAG_PERMANENT_MARK);
     }
   }
+  res.sources = pushPtr.PopMark(mark);
 
   // Add compute units
-  res.computeUnits = pushPtr.Push(0);
+  mark = pushPtr.Mark();
   FOREACH_LIST(InstanceNode*,ptr,instances){
     if(ptr->type == InstanceNode::TAG_UNCONNECTED){
       *pushPtr.Push(1) = ptr;
-      res.numberComputeUnits += 1;
       tags->Insert(ptr,TAG_PERMANENT_MARK);
     } else {
       int tag = tags->GetOrFail(ptr);
       if(tag == 0 && ptr->type == InstanceNode::TAG_COMPUTE){
-        res.numberComputeUnits += Visit(&pushPtr,ptr,tags);
+        Visit(&pushPtr,ptr,tags);
       }
     }
   }
-
+  res.computeUnits = pushPtr.PopMark(mark);
+  
   // Add sink units
-  res.sinks = pushPtr.Push(0);
+  mark = pushPtr.Mark();
   FOREACH_LIST(InstanceNode*,ptr,instances){
     FUInstance* inst = ptr->inst;
     if(ptr->type == InstanceNode::TAG_SINK || (ptr->type == InstanceNode::TAG_SOURCE_AND_SINK && CHECK_DELAY(inst,DelayType::DELAY_TYPE_SINK_DELAY))){
       *pushPtr.Push(1) = ptr;
-      res.numberSinks += 1;
 
       int* tag = tags->Get(ptr);
       Assert(*tag == 0);
@@ -780,13 +782,14 @@ DAGOrderNodes CalculateDAGOrder(InstanceNode* instances,Arena* out){
       *tag = TAG_PERMANENT_MARK;
     }
   }
+  res.sinks = pushPtr.PopMark(mark);
 
   FOREACH_LIST(InstanceNode*,ptr,instances){
     int tag = tags->GetOrFail(ptr);
     Assert(tag == TAG_PERMANENT_MARK);
   }
 
-  Assert(res.numberSources + res.numberComputeUnits + res.numberSinks == size);
+  Assert(res.sources.size + res.computeUnits.size + res.sinks.size == size);
 
   // Reuse tags hashmap
   Hashmap<InstanceNode*,int>* orderIndex = tags;
@@ -1100,12 +1103,6 @@ ComputedData CalculateVersatComputedData(Array<InstanceInfo> info,VersatComputed
   int externalIndex = 0;
   int memoryMapped = 0;
   for(InstanceInfo& in : info){
-#if 0
-    if(in.level != 0){
-      continue;
-    }
-#endif
-    
     if(!in.isComposite){
       for(ExternalMemoryInterface& inter : in.decl->externalMemory){
         external[externalIndex++] = inter;
@@ -1129,64 +1126,9 @@ ComputedData CalculateVersatComputedData(Array<InstanceInfo> info,VersatComputed
       FUDeclaration* decl = in.decl;
       iptr offset = (iptr) in.memMapped.value();
       iptr mask = offset >> decl->memoryMapBits.value();
-
-#if 0
-      FUDeclaration* parent = in.parentDeclaration;
-      iptr maskSize;
-      if(parent){
-        maskSize = parent->memoryMapBits.value() - decl->memoryMapBits.value();
-      } else {
-        maskSize = 32 - decl->memoryMapBits.value(); // TODO: The 32 is the ADDR_W. Need to receive as argument.
-      }
-#endif
       
       iptr maskSize = val.memoryAddressBits - log2i(in.memMappedSize.value());
         
-      data[index].memoryMask = data[index].memoryMaskBuffer;
-      memset(data[index].memoryMask,0,32);
-      data[index].memoryMaskSize = maskSize;
-
-      for(int i = 0; i < maskSize; i++){
-        Assert(maskSize - i - 1 >= 0);
-        data[index].memoryMask[i] = GET_BIT(mask,(maskSize - i - 1)) ? '1' : '0';
-      }
-      index += 1;
-    }
-  }
-
-  ComputedData res = {};
-  res.external = external;
-  res.data = data;
-
-  return res;
-}
-
-ComputedData CalculateVersatComputedData(InstanceNode* instances,VersatComputedValues val,Arena* out){
-  Array<ExternalMemoryInterface> external = PushArray<ExternalMemoryInterface>(out,val.externalMemoryInterfaces);
-  int index = 0;
-  int externalIndex = 0;
-  int memoryMapped = 0;
-  FOREACH_LIST(InstanceNode*,ptr,instances){
-    for(ExternalMemoryInterface& inter : ptr->inst->declaration->externalMemory){
-      external[externalIndex++] = inter;
-    }
-
-    if(ptr->inst->declaration->memoryMapBits.has_value()){
-      memoryMapped += 1;
-    }
-  }
-
-  Array<VersatComputedData> data = PushArray<VersatComputedData>(out,memoryMapped);
-
-  index = 0;
-  FOREACH_LIST(InstanceNode*,ptr,instances){
-    if(ptr->inst->declaration->memoryMapBits.has_value()){
-      FUDeclaration* decl = ptr->inst->declaration;
-      iptr offset = (iptr) ptr->inst->memMapped;
-      iptr mask = offset >> decl->memoryMapBits.value();
-
-      iptr maskSize = val.memoryAddressBits - decl->memoryMapBits.value();
-
       data[index].memoryMask = data[index].memoryMaskBuffer;
       memset(data[index].memoryMask,0,32);
       data[index].memoryMaskSize = maskSize;

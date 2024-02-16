@@ -589,7 +589,8 @@ void OutputVerilatorWrapper(Versat* versat,FUDeclaration* type,Accelerator* acce
   TemplateSetNumber("totalExternalMemory",totalExternalMemory);
   TemplateSetCustom("opts",MakeValue(&versat->opts));
   TemplateSetCustom("type",MakeValue(type));
-
+  TemplateSetBool("trace",versat->debug.outputVCD);
+  
   FILE* output = OpenFileAndCreateDirectories(StaticFormat("%.*s/wrapper.cpp",UNPACK_SS(outputPath)),"w");
   CompiledTemplate* templ = CompileTemplate(versat_wrapper_template,"wrapper",&versat->permanent,&versat->temp);
   ProcessTemplate(output,templ,temp,temp2);
@@ -605,7 +606,8 @@ void OutputVerilatorMake(Versat* versat,String topLevelName,String versatDir,Opt
   
   String outputPath = opts->softwareOutputFilepath;
   FILE* output = OpenFileAndCreateDirectories(StaticFormat("%.*s/VerilatorMake.mk",UNPACK_SS(outputPath)),"w");
-
+  
+  TemplateSetBool("traceEnabled",versat->debug.outputVCD);
   CompiledTemplate* comp = CompileTemplate(versat_makefile_template,"makefile",temp,temp2);
     
   fs::path outputFSPath = StaticFormat("%.*s",UNPACK_SS(outputPath));
@@ -700,8 +702,9 @@ void OutputVersatSource(Versat* versat,Accelerator* accel,const char* hardwarePa
   int size = Size(accel->allocated);
   Array<InstanceNode*> nodes = ListToArray(accel->allocated,size,temp2);
 
-  ReorganizeAccelerator(accel,temp2);
+  ReorganizeAccelerator(accel,temp2); // TODO: Reorganize accelerator needs to go. Just call CalculateOrder when needed. Need to check how iterative work for this case, though
   Array<InstanceNode*> ordered = PushArray<InstanceNode*>(temp2,size);
+  
   int i = 0;
   FOREACH_LIST_INDEXED(OrderedInstance*,ptr,accel->ordered,i){
     ordered[i] = ptr->node;

@@ -163,6 +163,20 @@ public:
     return res;
   }
 
+  int Mark(){
+    return timesPushed;
+  }
+
+  Array<T> PopMark(int mark){
+    int size = timesPushed - mark;
+
+    Array<T> arr = {};
+    arr.data = &ptr[timesPushed];
+    arr.size = size;
+
+    return arr;
+  }
+  
   void PushValue(T val){
     T* space = Push(1);
     *space = val;

@@ -36,9 +36,10 @@ module my_iob_dp_ram #(
       if (enA_i) begin
          if (weA_i) begin
             ram[addrA_i] <= dinA_i;
-         end else begin
-            doutA_o <= ram[addrA_i];
+         //end else begin
+         //   doutA_o <= ram[addrA_i];
          end
+         doutA_o <= ram[addrA_i];
       end
    end
 
@@ -46,9 +47,10 @@ module my_iob_dp_ram #(
       if (enB_i) begin
          if (weB_i) begin
             ram[addrB_i] <= dinB_i;
-         end else begin
-            doutB_o <= ram[addrB_i];
+         //end else begin
+         //   doutB_o <= ram[addrB_i];
          end
+         doutB_o <= ram[addrB_i];
       end
    end
 

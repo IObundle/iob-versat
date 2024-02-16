@@ -68,6 +68,7 @@ struct InstanceInfo{
   Optional<String> memMappedMask;
   Optional<int> delayPos;
   Array<int> delay;
+  String type;
   int baseDelay;
   int delaySize;
   int level;

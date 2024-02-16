@@ -64,7 +64,7 @@ module VRead #(
    input [  ADDR_W-1:0] shift2B,
    input [  ADDR_W-1:0] incr2B,
 
-   input disabled,
+   input enableRead,
 
    input [31:0] delay0
 );
@@ -77,22 +77,22 @@ module VRead #(
    wire [DATA_W-1:0] outB;
 
    wire              gen_done;
-   reg               doneA;
-   reg               doneB;
-   wire              doneB_int;
+   reg               doneRead;
+   reg               doneOutput;
+   wire              doneOutput_int;
    assign out0 = outB;
-   assign done = doneA & doneB;
+   assign done = (doneRead  & doneOutput);
 
    always @(posedge clk, posedge rst) begin
       if (rst) begin
-         doneA <= 1'b1;
-         doneB <= 1'b1;
-      end else if (run && !disabled) begin
-         doneA <= 1'b0;
-         doneB <= 1'b0;
+         doneRead <= 1'b1;
+         doneOutput <= 1'b1;
+      end else if (run) begin
+         doneRead <= !enableRead;
+         doneOutput <= 1'b0;
       end else begin
-         if (databus_valid_0 && databus_ready_0 && databus_last_0) doneA <= 1'b1;
-         if (doneB_int) doneB <= 1'b1;
+         if (databus_valid_0 && databus_ready_0 && databus_last_0) doneRead <= 1'b1;
+         if (doneOutput_int) doneOutput <= 1'b1;
       end
    end
 
@@ -133,7 +133,7 @@ module VRead #(
    // Ping pong 
    always @(posedge clk, posedge rst) begin
       if (rst) pingPongState <= 0;
-      else if (run && !disabled) pingPongState <= pingPong ? (!pingPongState) : 1'b0;
+      else if (run) pingPongState <= pingPong ? (!pingPongState) : 1'b0;
    end
 
    wire next;
@@ -142,16 +142,16 @@ module VRead #(
 
    always @(posedge clk, posedge rst) begin
       if (rst) databus_addr_0 <= 0;
-      else if (run && !disabled) databus_addr_0 <= ext_addr;
+      else if (run && enableRead) databus_addr_0 <= ext_addr;
    end
 
    SimpleAddressGen #(
       .ADDR_W(ADDR_W),
       .DATA_W(SIZE_W)
-   ) addrgenA (
+   ) addrgenRead (
       .clk_i(clk),
       .rst_i(rst),
-      .run_i(run && !disabled),
+      .run_i(run && enableRead),
 
       //configurations 
       .period_i(perA),
@@ -175,7 +175,7 @@ module VRead #(
    SimpleAddressGen #(
       .ADDR_W(ADDR_W),
       .DATA_W(DATA_W)
-   ) addrgenB (
+   ) addrgenOutput (
       .clk_i(clk),
       .rst_i(rst),
       .run_i(run),
@@ -196,7 +196,7 @@ module VRead #(
       .valid_o(enB),
       .ready_i(1'b1),
       .addr_o (addrB_int),
-      .done_o (doneB_int)
+      .done_o (doneOutput_int)
    );
 
    /*
@@ -217,7 +217,7 @@ module VRead #(
                        .incr2(incr2B),
                        .addr(addrB_int),
                        .mem_en(enB),
-                       .done(doneB_int)
+                       .done(doneOutput_int)
                        );
    */
 
@@ -252,7 +252,7 @@ module VRead #(
       .rst_i(rst)
    );
 
-   assign databus_valid_0 = (data_ready && !doneA);
+   assign databus_valid_0 = (data_ready && !doneRead);
 
    localparam DIFF = AXI_DATA_W / DATA_W;
    localparam DECISION_BIT_W = $clog2(DIFF);
