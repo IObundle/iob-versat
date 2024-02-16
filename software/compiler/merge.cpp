@@ -1884,12 +1884,13 @@ FUDeclaration* Merge(Versat* versat,Array<FUDeclaration*> types,String name,Merg
 
         // At this point, we know the edges that we need to remove and to replace with a multiplexer and the
         // port to which they should connect.
-        const char* format = "comb_mux%d";
+        const char* format = "versat_merge_mux";
 
         String str = PushString(&versat->permanent,format,multiplexersAdded++);
         PushNullByte(&versat->permanent);
         InstanceNode* multiplexer = CreateFlatFUInstance(result,muxType,str);
-
+        SetStatic(result,multiplexer->inst);
+        
         for(int i = 0; i < problematicEdgesInFinalGraph.size; i++){
           EdgeNode node = problematicEdgesInFinalGraph[i];
 

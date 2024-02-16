@@ -867,12 +867,6 @@ void OutputVersatSource(Versat* versat,Accelerator* accel,const char* hardwarePa
     Array<int> delays = PointArray<int>(temp,mark);
     TemplateSetCustom("delay",MakeValue(&delays));
 
-#if 0
-    printf("ALL");
-    NEWLINE();
-    PrintAll(onlySome,temp);
-#endif
-
     Array<Wire> orderedConfigs = ExtractAllConfigs(test,temp,temp2);
     Array<String> allStates = ExtractStates(test,temp2);
     Array<Pair<String,int>> allMem = ExtractMem(test,temp2);
@@ -881,16 +875,22 @@ void OutputVersatSource(Versat* versat,Accelerator* accel,const char* hardwarePa
     TemplateSetCustom("namedMem",MakeValue(&allMem));
     TemplateSetCustom("orderedConfigs",MakeValue(&orderedConfigs));
 
-    TemplateSetString("accelType",accelName);
+    TemplateSetString("accelName",accelName);
     TemplateSetBool("doingMerged",false);
-    Array<String> empty = {};
-    TemplateSetCustom("mergedConfigs0",MakeValue(&empty));
-    TemplateSetCustom("mergedConfigs1",MakeValue(&empty));
 
+    InstanceNode* topMerged = nullptr;
     FOREACH_LIST(InstanceNode*,node,accel->allocated){
       if(node->inst->declaration->mergeInfo.size){
-        printf("here\n");
+        topMerged = node;
+        break;
       }
+    }
+
+    if(topMerged){
+      TemplateSetBool("doingMerged",true);
+
+      Array<MergeInfo> mergeInfo = topMerged->inst->declaration->mergeInfo;
+      TemplateSetCustom("mergeInfo",MakeValue(&mergeInfo));
     }
 
     FILE* f = OpenFileAndCreateDirectories(StaticFormat("%s/versat_accel.h",softwarePath),"w");

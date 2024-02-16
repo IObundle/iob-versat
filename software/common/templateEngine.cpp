@@ -797,12 +797,20 @@ static String EvalBlockCommand(Block* block,Frame* previousFrame,Arena* temp){
     int index = 0;
     bool removeLastOutputSeperator = false;
     for(Iterator iter = Iterate(iterating); HasNext(iter); index += 1,Advance(&iter)){
-      //SetValue(frame,STRING("index"),MakeValue(index));
       CreateValue(frame,STRING("index"),MakeValue(index));
       
       Value val = GetValue(iter);
       SetValue(frame,id,val);
 
+      // TODO: the format of the text becomes hard to read and there's
+      //       little that can be done because we have little control
+      //       in regards to the output arena usage.  Output arena
+      //       should just be passed as a parameter and we should call
+      //       eval using temp as the outputArena and then do some
+      //       processing to format it better (detect if multiple
+      //       lines or not, try to preserve whitespace if multiline
+      //       and stuff like that) and only then push it into the
+      //       output arena.
       bool outputSeparator = false;
       for(Block* ptr : block->innerBlocks){
         String text = Eval(ptr,frame,temp);

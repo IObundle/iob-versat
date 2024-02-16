@@ -381,9 +381,9 @@ int main(int argc,const char* argv[]){
   versat->opts->shadowRegister = true; 
   versat->opts->noDelayPropagation = true;
   
-  versat->debug.outputGraphs = true;
+  versat->debug.outputGraphs = false;
   versat->debug.outputAcceleratorInfo = true;
-  versat->debug.outputVCD = false;
+  versat->debug.outputVCD = true;
   
 #ifdef USE_FST_FORMAT
   versat->opts.generateFSTFormat = 1;
@@ -527,8 +527,12 @@ int main(int argc,const char* argv[]){
     }
   }
 
-TOP->parameters = STRING("#(.AXI_ADDR_W(AXI_ADDR_W),.LEN_W(LEN_W))");
-  OutputVersatSource(versat,accel,opts->hardwareOutputFilepath.data,opts->softwareOutputFilepath.data,topLevelTypeStr,opts->addInputAndOutputsToTop,temp,perm);
+  TOP->parameters = STRING("#(.AXI_ADDR_W(AXI_ADDR_W),.LEN_W(LEN_W))");
+  OutputVersatSource(versat,accel,
+                     opts->hardwareOutputFilepath.data,
+                     opts->softwareOutputFilepath.data,
+                     topLevelTypeStr,
+                     opts->addInputAndOutputsToTop,temp,perm);
 
   //TODO: Repeated code because we must use a modified accelerator to outputVersatSource but use a normal accelerator for simulation. We could just reorder, so that outputVersatSource is done afterwards, and the wrapper is done before.
   if(isSimple){
@@ -543,14 +547,7 @@ TOP->parameters = STRING("#(.AXI_ADDR_W(AXI_ADDR_W),.LEN_W(LEN_W))");
 
   for(FUDeclaration* decl : versat->declarations){
     BLOCK_REGION(temp);
-    if(decl->type == FUDeclaration::COMPOSITE && decl->mergeInfo.size != 0){
-      char buffer[256];
-      sprintf(buffer,"%.*s/modules/%.*s.v",UNPACK_SS(versat->opts->hardwareOutputFilepath),UNPACK_SS(decl->name));
-      FILE* sourceCode = OpenFileAndCreateDirectories(buffer,"w");
-      OutputCircuitSource(versat,decl,decl->fixedDelayCircuit,sourceCode,temp,perm);
-      fclose(sourceCode);
-    }
-    if(decl->type == FUDeclaration::COMPOSITE && decl->mergeInfo.size == 0){
+    if(decl->type == FUDeclaration::COMPOSITE){
       char buffer[256];
       sprintf(buffer,"%.*s/modules/%.*s.v",UNPACK_SS(versat->opts->hardwareOutputFilepath),UNPACK_SS(decl->name));
       FILE* sourceCode = OpenFileAndCreateDirectories(buffer,"w");
@@ -569,7 +566,7 @@ TOP->parameters = STRING("#(.AXI_ADDR_W(AXI_ADDR_W),.LEN_W(LEN_W))");
       char buffer[256];
       sprintf(buffer,"debug/%.*s/stats.txt",UNPACK_SS(decl->name));
       FILE* stats = OpenFileAndCreateDirectories(buffer,"w");
- 
+
       PrintDeclaration(stats,decl,perm,temp);
     }
   }
