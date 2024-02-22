@@ -2,8 +2,8 @@
 
 // Generates an address for a 8 bit memory. Byte space
 module SimpleAddressGen #(
-   parameter ADDR_W = 10,
-   parameter PERIOD_W = 10,
+   parameter ADDR_W = 12,
+   parameter PERIOD_W = 12,
    parameter DELAY_W = 32,
    parameter DATA_W = 32 // Size of data. Addr is in byte space and the size of data tells how much to increment. A size of 32 with an incr of 1 leads to an increase of addr by 4.
 ) (

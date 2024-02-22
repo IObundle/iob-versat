@@ -14,7 +14,6 @@
 #include "debugVersat.hpp"
 #include "parser.hpp"
 #include "configurations.hpp"
-#include "debugGUI.hpp"
 #include "graph.hpp"
 #include "utils.hpp"
 #include "utilsCore.hpp"

@@ -3,8 +3,8 @@
 module VRead #(
    parameter SIZE_W     = 32,
    parameter DATA_W     = 32,
-   parameter ADDR_W     = 12,
-   parameter PERIOD_W   = 10,
+   parameter ADDR_W     = 14,
+   parameter PERIOD_W   = 12, // Must be 2 less than ADDR_W (boundary of 4) (for 32 bit DATA_W)
    parameter AXI_ADDR_W = 32,
    parameter AXI_DATA_W = 32,
    parameter LEN_W      = 8
@@ -147,7 +147,8 @@ module VRead #(
 
    SimpleAddressGen #(
       .ADDR_W(ADDR_W),
-      .DATA_W(SIZE_W)
+      .DATA_W(SIZE_W),
+      .PERIOD_W(PERIOD_W)
    ) addrgenRead (
       .clk_i(clk),
       .rst_i(rst),
@@ -174,7 +175,8 @@ module VRead #(
 
    SimpleAddressGen #(
       .ADDR_W(ADDR_W),
-      .DATA_W(DATA_W)
+      .DATA_W(DATA_W),
+      .PERIOD_W(PERIOD_W)
    ) addrgenOutput (
       .clk_i(clk),
       .rst_i(rst),

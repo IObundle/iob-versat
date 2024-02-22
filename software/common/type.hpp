@@ -88,7 +88,7 @@ struct Value{
   union{
     bool boolean;
     char ch;
-    int64 number;
+    i64 number;
     struct{
       String str;
       bool literal;
@@ -175,7 +175,7 @@ bool Equal(Type* t1,Type* t2);
 
 // Simple make value functions
 Value MakeValue();
-Value MakeValue(int64 integer);
+Value MakeValue(i64 integer);
 Value MakeValue(unsigned int integer);
 Value MakeValue(int integer);
 Value MakeValue(String str);

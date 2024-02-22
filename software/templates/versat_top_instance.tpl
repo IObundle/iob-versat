@@ -129,7 +129,7 @@ always @(posedge clk,posedge rst) // Care, rst because writing to soft reset reg
             end
          end
 #{if useDMA}
-         if(addr == 1) begin
+         if(addr == 4) begin
             if(wstrb == 0) versat_rvalid <= 1'b1;
             versat_rdata <= {31'h0,dma_state == 0};
          end
@@ -211,7 +211,7 @@ reg [(DATA_W/8)-1:0] dma_wstrb;
 reg [LEN_W-1:0] dma_len;
 
 wire dma_ready;
-wire [`DATAPATH_W-1:0] dma_rdata;
+wire [AXI_DATA_W-1:0] dma_rdata;
 wire dma_last;
 
 always @(posedge clk,posedge rst_int)
@@ -245,13 +245,13 @@ begin
       if(valid && we) begin
          if(addr == 0)
             runCounter <= runCounter + wdata[15:0];
-         if(addr == 1)
-            dma_addr_in <= wdata;
-         if(addr == 2)
-            dma_addr_read <= wdata;
-         if(addr == 3)
-            dma_length <= wdata[LEN_W-1:0];
          if(addr == 4)
+            dma_addr_in <= wdata;
+         if(addr == 8)
+            dma_addr_read <= wdata;
+         if(addr == 12)
+            dma_length <= wdata[LEN_W-1:0];
+         if(addr == 16)
             dma_state <= 2'b01;
       end
    end
@@ -308,7 +308,7 @@ end
 
 #{if useDMA}
 wire data_valid = (dma_ready || valid);
-wire data_write = (dma_ready || (valid && we)); // Dma ready is always a write, dma cannot be used to read, for now
+wire data_write = (dma_ready || (valid && we && addr >= 20)); // Dma ready is always a write, dma cannot be used to read, for now
 wire [ADDR_W-1:0] address = dma_ready ? dma_addr_in : addr;
 wire [DATA_W-1:0] data_data = dma_ready ? dma_rdata : wdata;
 wire [(DATA_W/8)-1:0] data_wstrb = dma_ready ? ~0 : wstrb;
@@ -425,7 +425,7 @@ begin
       #{while size > 0}
       #{set amount 8}
       #{if size < 8} #{set amount size} #{end}
-      if(wstrb[@{wstrb}]) @{configReg}[@{counter + wstrbAmount}+:@{amount}] <= data_data[@{wstrbAmount}+:@{amount}];
+      if(data_wstrb[@{wstrb}]) @{configReg}[@{counter + wstrbAmount}+:@{amount}] <= data_data[@{wstrbAmount}+:@{amount}];
       #{set size (size - 8)}
       #{inc wstrb}
       #{set wstrbAmount (wstrbAmount + amount)}

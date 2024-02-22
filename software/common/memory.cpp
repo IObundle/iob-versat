@@ -114,6 +114,10 @@ void PopMark(Arena* arena,Byte* mark){
 }
 
 Byte* PushBytes(Arena* arena, size_t size){
+#ifdef VERSAT_DEBUG
+  Assert(!arena->locked);
+#endif
+
   Byte* ptr = &arena->mem[arena->used];
 
   if(arena->used + size > arena->totalAllocated){
@@ -397,7 +401,7 @@ int BitArray::GetNumberBitsSet(){
   int count = 0;
 
 #if 1
-  int32* ptr = (int32*) this->memory;
+  i32* ptr = (i32*) this->memory;
   int i = 0;
   for(;i < this->bitSize; i += 32){
     count += PopCount(*ptr);
@@ -444,7 +448,7 @@ int BitArray::FirstBitSetIndex(){
   }
 #endif
    
-  uint32* ptr = (uint32*) this->memory;
+  u32* ptr = (u32*) this->memory;
   int i = 0;
   for(;i < this->bitSize; i += 32){
     if(*ptr != 0){
@@ -474,11 +478,11 @@ int BitArray::FirstBitSetIndex(int start){
 
   Assert(start < this->bitSize);
   int i = ALIGN_UP_32(start - 31);
-  uint32 startDWord = BitSizeToDWordSize(i);
-  uint32* ptr = (uint32*) this->memory;
+  u32 startDWord = BitSizeToDWordSize(i);
+  u32* ptr = (u32*) this->memory;
   ptr = &ptr[startDWord];
 
-  uint32 val = *ptr;
+  u32 val = *ptr;
 
   while(val != 0){
     int bitIndex = TrailingZerosCount(val);

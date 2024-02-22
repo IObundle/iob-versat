@@ -6,12 +6,17 @@
 
 #include "templateEngine.hpp"
 #include "utils.hpp"
+#include "utilsCore.hpp"
 
-void PerformDefineSubstitution(Arena* output,MacroMap& macros,String name){
-  String subs = macros[name];
+bool PerformDefineSubstitution(Arena* output,MacroMap& macros,String name){
+  auto iter = macros.find(name);
+  if(iter == macros.end()){
+    return false;
+  }
+
+  String subs = iter->second;
 
   Tokenizer inside(subs,"`",{});
-
   while(!inside.Done()){
     Token peek = inside.PeekFindUntil("`");
 
@@ -31,6 +36,8 @@ void PerformDefineSubstitution(Arena* output,MacroMap& macros,String name){
 
   Token finish = inside.Finish();
   PushString(output,finish);
+
+  return true;
 }
 
 void PreprocessVerilogFile_(String fileContent,MacroMap& macros,Array<String> includeFilepaths,Arena* out,Arena* temp);
@@ -40,9 +47,9 @@ static void DoIfStatement(Tokenizer* tok,MacroMap& macros,Array<String> includeF
   Token macroName = tok->NextToken();
 
   bool compareVal = false;
-  if(CompareString(first,"`ifdef") || CompareString(first,"`elsif")){
+  if(CompareString(first,"ifdef") || CompareString(first,"elsif")){
     compareVal = true;
-  } else if(CompareString(first,"`ifndef")){
+  } else if(CompareString(first,"ifndef")){
     compareVal = false;
   } else {
     UNHANDLED_ERROR;
@@ -51,47 +58,66 @@ static void DoIfStatement(Tokenizer* tok,MacroMap& macros,Array<String> includeF
   bool exists = (macros.find(macroName) != macros.end());
   bool doIf = (compareVal == exists);
 
+  // Try to find the edges of the if construct (else, endif or, if find another if recurse.)
   void* mark = tok->Mark();
   while(!tok->Done()){
-    Token peek = tok->PeekToken();
+    Token subContent = tok->Point(mark); // So that we never pass a string with a `endif to preprocess (or any other `directive except the ones that start a block)
 
-    if(CompareString(peek,"`endif")){
+    void* subMark = tok->Mark();
+    Token token = tok->NextToken();
+    if(!CompareString(token,"`")){
+      continue;
+    }
+
+    Token type = tok->NextToken();
+    
+    if(CompareString(type,"endif")){
       if(doIf){
-        Token content = tok->Point(mark);
-        PreprocessVerilogFile_(content,macros,includeFilepaths,out,temp);
+        PreprocessVerilogFile_(subContent,macros,includeFilepaths,out,temp);
       }
-      tok->AdvancePeek(peek);
       break;
     }
 
-    if(CompareString(peek,"`else")){
+    if(CompareString(type,"else")){
       if(doIf){
-        Token content = tok->Point(mark);
-        PreprocessVerilogFile_(content,macros,includeFilepaths,out,temp);
+        PreprocessVerilogFile_(subContent,macros,includeFilepaths,out,temp);
+        doIf = false;
       } else {
-        tok->AdvancePeek(peek);
         mark = tok->Mark();
         doIf = true;
       }
       continue;
     }
 
-    if(CompareString(peek,"`ifdef") || CompareString(peek,"`ifndef") || CompareString(first,"`elsif")){
-      DoIfStatement(tok,macros,includeFilepaths,out,temp);
-    } else {
-      tok->AdvancePeek(peek);
+    if(doIf) {
+      if(CompareString(type,"ifdef") || CompareString(type,"ifndef") || CompareString(type,"elsif")){
+        tok->Rollback(subMark); // TODO: Not good.
+        DoIfStatement(tok,macros,includeFilepaths,out,temp);
+      }
     }
+    // otherwise must be some other directive, will be handled automatically in the Preprocess call.
   }
 }
 
 void PreprocessVerilogFile_(String fileContent,MacroMap& macros,Array<String> includeFilepaths,Arena* out,Arena* temp){
-  Tokenizer tokenizer = Tokenizer(fileContent, "()`,+-/*\\\"",{"`include","`define","`timescale","`ifdef","`else","`elsif","`endif","`ifndef"});
+  Tokenizer tokenizer = Tokenizer(fileContent, "()`,+-/*\\\"",{});
   Tokenizer* tok = &tokenizer;
 
   while(!tok->Done()){
+    PushString(out,tok->PeekWhitespace());
     Token peek = tok->PeekToken();
-    if(CompareToken(peek,"`include")){ // Assuming includes only happen outside module (Not correct but follows common usage, never seen include between parameters or port definitions)
-         tok->AdvancePeek(peek);
+
+    if(!CompareString(peek,"`")){
+      tok->AdvancePeek(peek);
+      PushString(out,peek);
+      
+      continue;
+    }
+    tok->AdvancePeek(peek);
+    
+    Token identifier = tok->PeekToken();
+    if(CompareToken(identifier,"include")){
+         tok->AdvancePeek(identifier);
          tok->AssertNextToken("\"");
 
          Token fileName = tok->NextFindUntil("\"");
@@ -145,8 +171,8 @@ void PreprocessVerilogFile_(String fileContent,MacroMap& macros,Array<String> in
          PreprocessVerilogFile_(STRING((const char*) mem,fileSize),macros,includeFilepaths,out,temp);
 
          fclose(file);
-    } else if(CompareToken(peek,"`define")){ // Same for defines
-         tok->AdvancePeek(peek);
+    } else if(CompareToken(identifier,"define")){
+         tok->AdvancePeek(identifier);
          Token defineName = tok->NextToken();
       
          Token emptySpace = tok->PeekWhitespace();
@@ -196,30 +222,33 @@ void PreprocessVerilogFile_(String fileContent,MacroMap& macros,Array<String> in
          }
 
          macros[defineName] = body;
-    } else if(CompareToken(peek,"`timescale")){
+    } else if(CompareToken(identifier,"undef")){
+      tok->AdvancePeek(identifier);
+      Token defineName = tok->NextToken();
+
+      macros.erase(defineName);
+    } else if(CompareToken(identifier,"timescale")){
       Token line = tok->PeekFindIncluding("\n");
 
       tok->AdvancePeek(line);
-    } else if(CompareToken(peek,"`")){
-      tok->AdvancePeek(peek);
-      Token name = tok->NextToken();
-
-      PerformDefineSubstitution(out,macros,name);
-    } else if(CompareToken(peek,"`ifdef") || CompareToken(peek,"`ifndef")){
+    } else if(CompareToken(identifier,"ifdef") || CompareToken(identifier,"ifndef")){
       DoIfStatement(tok,macros,includeFilepaths,out,temp);
-    } else if(CompareToken(peek,"`else")){
+      
+    } else if(CompareToken(identifier,"else")){
       NOT_POSSIBLE;
-    } else if(CompareToken(peek,"`endif")){
+    } else if(CompareToken(identifier,"endif")){
       NOT_POSSIBLE;
-    } else if(CompareToken(peek,"`elsif")){
+    } else if(CompareToken(identifier,"elsif")){
       NOT_POSSIBLE;
     } else {
-      tok->AdvancePeek(peek);
+      tok->AdvancePeek(identifier);
 
-      PushString(out,peek);
+      // TODO: Better error handling. Report file position.
+      if(!PerformDefineSubstitution(out,macros,identifier)){
+        printf("Do not recognize directive: %.*s\n",UNPACK_SS(identifier));
+        DEBUG_BREAK();
+      }
     }
-
-    PushString(out,tok->PeekWhitespace());
   }
 }
 
@@ -228,19 +257,11 @@ String PreprocessVerilogFile(String fileContent,Array<String> includeFilepaths,A
 
   BLOCK_REGION(temp);
 
-#if 0
-  String res = {};
-  res.data = (const char*) &out->mem[out->used];
-#endif
-
   Byte* mark = MarkArena(out);
-
   PreprocessVerilogFile_(fileContent,macros,includeFilepaths,out,temp);
 
   PushString(out,STRING("\0"));
   String res = PointArena(out,mark);
-
-  //res.size = MarkArena(out) - mark;
 
   return res;
 }

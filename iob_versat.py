@@ -26,6 +26,7 @@ def RunVersat(pc_emul,versat_spec,versat_top,versat_extra,build_dir):
     versat_args = ["versat",os.path.realpath(versat_spec),
                             "-s",
                             "-b=32",
+                            "-d", # DMA
                             "-T",versat_top,
                             "-O",os.path.realpath(versat_dir + "/hardware/src/units"), # Location of versat units
                             #"-S",versat_dir + "/submodules/FPU/hardware/src/",

@@ -138,36 +138,19 @@ typedef Expression* (*ParsingFunction)(Tokenizer* tok,Arena* out);
 Expression* ParseOperationType(Tokenizer* tok,std::initializer_list<std::initializer_list<const char*>> operators,ParsingFunction finalFunction,Arena* out);
 
 /*
-  Possible
 
 struct Trie{
-int value;
+  u16 index;
 };
 
-Trie specialFoundTrie;
-
-struct TokTableEntry{
-Trie* trie; // if nullptr, no token. If trie == &specialFoundTrie, we found the token and there is nothing more, return the value.
-int value;
-}
-
-struct TokenizerTable{
-
+struct TokenizerTemplate{
+  u16 array[255];
+  Trie* trieBuffer;
 };
 
-struct TokenizerSpecialChars{
-String string;
-int tokenNumber;
-};
+TokenizerTemplate* CreateTokenizerTemplate(Arena* out,const char* singleChars,std::initializer_list<const char*> specialChars);
 
-static TokenizerTable* CompileTokenizer(Array<TokenizerSpecialChars> specialChars,Arena* perm,Arena* temp){
-// Make sure that the tries are constructed near each other in memory.
-}
-
-TokenizerSpecialChars[] = {{"-",TOKEN_MINUS,},
-                           {"+",TOKEN_ADD,}};
-
- */
+*/
 
 #endif // INCLUDED_PARSER
 

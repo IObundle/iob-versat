@@ -1378,10 +1378,10 @@ Value ConvertValue(Value in,Type* want,Arena* arena){
     if(in.type->type == Type::POINTER){
       void* pointerValue = (void*) DeferencePointer(in.custom,in.type->pointerType,0);
 
-      res.number = (int64) pointerValue;
+      res.number = (i64) pointerValue;
     } else if(CompareString(in.type->name,"iptr")) { // TODO: could be handled by the typedef and setting all values from cstdint as knows
          iptr* data = (iptr*) in.custom;
-         res.number = (int64) *data;
+         res.number = (i64) *data;
     } else if(CompareString(in.type->name,"Optional<int>")){
       Optional<int>* view = (Optional<int>*) in.custom;
       res.number = view->value_or(0);
@@ -1418,7 +1418,7 @@ Value MakeValue(){
   return val;
 }
 
-Value MakeValue(int64 integer){
+Value MakeValue(i64 integer){
   Value val = {};
   val.number = integer;
   val.type = ValueType::NUMBER;
@@ -1428,7 +1428,7 @@ Value MakeValue(int64 integer){
 
 Value MakeValue(unsigned int integer){
   Value val = {};
-  val.number = (uint64) integer; // Should probably maintain the unsigned information. TODO
+  val.number = (u64) integer; // Should probably maintain the unsigned information. TODO
   val.type = ValueType::NUMBER;
   val.isTemp = true;
   return val;
@@ -1436,7 +1436,7 @@ Value MakeValue(unsigned int integer){
 
 Value MakeValue(int integer){
   Value val = {};
-  val.number = (int64) integer;
+  val.number = (i64) integer;
   val.type = ValueType::NUMBER;
   val.isTemp = true;
   return val;

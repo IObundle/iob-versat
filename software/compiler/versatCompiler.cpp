@@ -38,6 +38,7 @@ Optional<String> GetFileFormatFromPath(String filename){
   return Optional<String>();
 }
 
+// TODO: There is no reason to use small arguments. -d should just be -DMA. -D should just be -Databus and so on.
 Options* ParseCommandLineOptions(int argc,const char* argv[],Arena* out,Arena* temp){
   Options* opts = PushStruct<Options>(out);
   opts->dataSize = 32; // By default.
@@ -53,7 +54,7 @@ Options* ParseCommandLineOptions(int argc,const char* argv[],Arena* out,Arena* t
 
     Optional<String> formatOpt = GetFileFormatFromPath(str);
 
-    // TODO: Verilator does not actually need the source files, it only needs a include path to the folder that contains the sources. This could be removed.
+    // TODO: Verilator does not actually need the source files for non top units. It only needs a include path to the folder that contains the sources and the verilog file of the top module. This could be removed. But also need to test further.
     if(str.size >= 2 && str[0] == '-' && str[1] == 'S'){
       if(str.size == 2){
         if(i + 1 >= argc){
@@ -352,6 +353,8 @@ String GetVerilatorRoot(Arena* out,Arena* temp){
   return root;
 }
 
+#include "parser.hpp"
+
 int main(int argc,const char* argv[]){
   // TODO: Need to actually parse and give an error, instead of just checking for less than 3
   if(argc < 3){
@@ -382,8 +385,8 @@ int main(int argc,const char* argv[]){
   versat->opts->noDelayPropagation = true;
   
   versat->debug.outputGraphs = false;
-  versat->debug.outputAcceleratorInfo = true;
-  versat->debug.outputVCD = true;
+  versat->debug.outputAcceleratorInfo = false;
+  versat->debug.outputVCD = false;
   
 #ifdef USE_FST_FORMAT
   versat->opts.generateFSTFormat = 1;

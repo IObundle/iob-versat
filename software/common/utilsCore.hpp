@@ -96,7 +96,7 @@ const char* GetFilename(const char* fullpath);
 #define NEWLINE() do{ printf("\n"); FlushStdout();} while(0)
 #define LOCATION() do{ printf("%s:%d\n",GetFilename(__FILE__),__LINE__); FlushStdout();} while(0)
 #define PRINTF_WITH_LOCATION(...) do{ printf("%s:%d-",__FILE__,__LINE__); printf(__VA_ARGS__); FlushStdout();} while(0)
-#define PRINT_STRING(STR) do{ printf("%.*s",UNPACK_SS((STR))); FlushStdout();} while(0)
+#define PRINT_STRING(STR) do{ printf("%.*s\n",UNPACK_SS((STR))); FlushStdout();} while(0)
 
 static void Terminate(){FlushStdout(); exit(-1);}
 //#if defined(VERSAT_DEBUG)
@@ -143,51 +143,24 @@ static void Terminate(){FlushStdout(); exit(-1);}
 
 #define TIME_FUNCTION clock
 
-#if 0
-#ifdef VERSAT
-//#include <cstdio>
-extern "C"{
-#include "iob-timer.h"
-}
-#define TIME_FUNCTION timer_get_count
-#else
-#define TIME_FUNCTION clock
-#endif
-#endif
-
-#ifndef SIM // #ifdef PC TODO: I do not think these will be needed anymore
+typedef uint8_t Byte;
+typedef uint8_t u8;
+typedef int8_t i8;
+typedef uint16_t u16;
+typedef int16_t i16;
+typedef uint32_t u32;
+typedef int32_t i32;
+typedef uint64_t u64;
+typedef int64_t i64;
 typedef intptr_t iptr;
 typedef uintptr_t uptr;
-typedef uint32_t uint;
-typedef int64_t int64;
-typedef uint64_t uint64;
-typedef int32_t int32;
-typedef uint32_t uint32;
-typedef int16_t int16;
-typedef uint16_t uint16;
-typedef int8_t int8;
-typedef uint8_t uint8;
-typedef uint8_t Byte;
-typedef uint8 u8;
-typedef int8 i8;
-typedef uint32 u32;
-typedef int32 i32;
-#else
-typedef unsigned char Byte;
-typedef unsigned int uint;
-typedef intptr_t iptr;
-typedef int64_t int64;
-typedef uint64_t uint64;
-//typedef long long int int64; // Long long is at least 64, so
-//typedef long long unsigned int uint64;
-#endif
 
 template<typename T>
 using Optional = std::optional<T>;
 
 struct Time{
-   uint64 microSeconds;
-   uint64 seconds;
+   u64 microSeconds;
+   u64 seconds;
 };
 
 Time GetTime();
@@ -196,7 +169,7 @@ Time operator-(const Time& s1,const Time& s2);
 bool operator>(const Time& s1,const Time& s2);
 bool operator==(const Time& s1,const Time& s2);
 
-static constexpr Time Seconds(uint64 seconds){Time t = {}; t.seconds = seconds; return t;};
+static constexpr Time Seconds(u64 seconds){Time t = {}; t.seconds = seconds; return t;};
 
 // Automatically times a block in number of counts
 class TimeIt{
@@ -392,9 +365,9 @@ int PackInt(float val);
 float PackFloat(int val);
 float PackFloat(Byte sign,Byte exponent,int mantissa);
 int SwapEndianess(int val);
-uint64 SwapEndianess(uint64 val);
+u64 SwapEndianess(u64 val);
 
-int NumberDigitsRepresentation(int64 number); // Number of digits if printed (negative includes - sign )
+int NumberDigitsRepresentation(i64 number); // Number of digits if printed (negative includes - sign )
 char GetHex(int value);
 Byte HexCharToNumber(char ch);
 

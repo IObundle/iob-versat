@@ -181,7 +181,7 @@ String PathGoUp(char* pathBuffer){
   return content;
 }
 
-static char* GetNumberRepr(uint64 number){
+static char* GetNumberRepr(u64 number){
   static char buffer[32];
 
   if(number == 0){
@@ -190,7 +190,7 @@ static char* GetNumberRepr(uint64 number){
     return buffer;
   }
 
-  uint64 val = number;
+  u64 val = number;
   buffer[31] = '\0';
   int index = 30;
   while(val){
@@ -530,29 +530,29 @@ int SwapEndianess(int val){
   return res;
 }
 
-uint64 SwapEndianess(uint64 val){
+u64 SwapEndianess(u64 val){
   unsigned char* view = (unsigned char*) &val;
 
-  uint64 res = ((uint64) view[0] << 56) |
-               ((uint64) view[1] << 48) |
-               ((uint64) view[2] << 40) |
-               ((uint64) view[3] << 32) |
-               ((uint64) view[4] << 24) |
-               ((uint64) view[5] << 16) |
-               ((uint64) view[6] << 8)  |
-               ((uint64) view[7]);
+  u64 res = ((u64) view[0] << 56) |
+             ((u64) view[1] << 48) |
+             ((u64) view[2] << 40) |
+             ((u64) view[3] << 32) |
+             ((u64) view[4] << 24) |
+             ((u64) view[5] << 16) |
+             ((u64) view[6] << 8)  |
+             ((u64) view[7]);
 
   return res;
 }
 
-int NumberDigitsRepresentation(int64 number){
+int NumberDigitsRepresentation(i64 number){
   int nDigits = 0;
 
   if(number == 0){
     return 1;
   }
 
-  int64 num = number;
+  i64 num = number;
   if(num < 0){
     nDigits += 1; // minus sign
     num *= -1;

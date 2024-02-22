@@ -926,3 +926,19 @@ void PrintExpression(Expression* exp){
   PrintExpression(exp,0);
 }
 
+#if 0
+#define END (u16) 0xffff
+
+TokenizerTemplate* CreateTokenizerTemplate(Arena* out,const char* singleChars,std::initializer_list<const char*> specialChars){
+  TokenizerTemplate* tmpl = PushStruct<TokenizerTemplate>(out);
+  *tmpl = {};
+
+  for(int i = 0; singleChars[i] != '\0'; i++){
+    i8 index = (i8) singleChars[i];
+    tmpl->array[index] = END;
+  }
+  
+  return tmpl;
+}
+#endif
+

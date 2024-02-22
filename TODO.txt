@@ -4,3 +4,9 @@ Configurating units and debugging is still very error prone.
    Could also implement a good amount of software side checks for individual units.
       Functions that output the current configuration as well as reporting and doing sanity check on the current values being used.
 
+The hardware is full of sloppy code.
+   Start standerdizing and pulling up modules that abstract common functionality.
+   Maybe look into generating a verilog testbench for individual units that perforns a number of tests depending on the interfaces that the unit provides.
+      Should be easy, just one more template.
+
+There are a dozens of TODOs scathered all over the codebase. Start by fixing some of them.

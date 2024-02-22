@@ -168,12 +168,13 @@
    //register mem inputs
    reg [DATA_W-1:0] data_a_reg;
    reg [ADDR_W-1:0] addr_a_reg, addr_b_reg;
-   reg en_a_reg, we_a_reg;
+   reg en_a_reg, en_b_reg, we_a_reg;
    always @(posedge clk) begin
       data_a_reg <= data_to_wrA;
       addr_a_reg <= addrA;
       addr_b_reg <= addrB;
       en_a_reg   <= enA;
+      en_b_reg   <= (valid && !we);
       we_a_reg   <= wrA;
    end
 
@@ -212,7 +213,7 @@
 
    assign ext_dp_addr_0_port_1   = addr_b_reg;
    assign ext_dp_out_0_port_1    = 0;
-   assign ext_dp_enable_0_port_1 = (valid && !we) || running;
+   assign ext_dp_enable_0_port_1 = en_b_reg || running;
    assign ext_dp_write_0_port_1  = 1'b0;
 
    //register mem outputs

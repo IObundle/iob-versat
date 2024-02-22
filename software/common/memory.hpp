@@ -8,6 +8,26 @@
 #include "utilsCore.hpp"
 #include "logger.hpp"
 
+/* 
+  TODO: Using fixed size for structures like hashmap and set is a bit
+        wasteful.  Would like to implement hashmap and set structures
+        that keep a pointer to an arena and can grow by allocating
+        more space (implement set using binary tree, for hashmap try
+        to find something).
+
+  TODO: Right now we allocate a lot of dynamic arrays using the Push +
+        PointArray form. This is error prone, a single allocation
+        inside can lead to incorrect results.  Would like to formalize
+        this pattern by defining a DynamicArray structure that acts
+        the same way as an ArenaList and such.  To make it less error
+        prone, add some debug info stored into the arena that records
+        whether the arena is currently being used to allocate dynamic
+        arrays and throw some error if we detect an allocation that
+        shouldn't happen.  Wrap this extra code inside a DEBUG
+        directive.
+
+*/
+
 inline size_t Kilobyte(int val){return val * 1024;};
 inline size_t Megabyte(int val){return Kilobyte(val) * 1024;};
 inline size_t Gigabyte(int val){return Megabyte(val) * 1024;};
@@ -36,6 +56,8 @@ template<typename T> bool Inside(Allocation<T>* alloc,T* ptr);
 template<typename T> void Free(Allocation<T>* alloc);
 template<typename T> T* Push(Allocation<T>* alloc, int amount); // Fails if not enough memory
 
+#undef VERSAT_DEBUG
+
 // Care, functions that push to an arena do not clear it to zero or to any value.
 // Need to initialize the values directly.
 struct Arena{
@@ -43,7 +65,13 @@ struct Arena{
   size_t used;
   size_t totalAllocated;
   size_t maximum;
+
+//#ifdef VERSAT_DEBUG
+  bool locked; // Certain constructs [like DynamicArray] "lock" arena preventing the arena from being used by other functions.
+//#endif
 };
+
+#define VERSAT_DEBUG
 
 Arena InitArena(size_t size); // Calls calloc
 Arena InitLargeArena(); //
@@ -70,6 +98,7 @@ class ArenaMarker{
 public:
   Arena* arena;
   Byte* mark;
+
   ArenaMarker(Arena* arena){this->arena = arena; this->mark = MarkArena(arena);};
   ~ArenaMarker(){PopMark(this->arena,this->mark);};
   void Pop(){PopMark(this->arena,this->mark);};
@@ -92,6 +121,7 @@ public:
 template<typename T>
 Array<T> PushArray(Arena* arena,int size){Array<T> res = {}; res.size = size; res.data = (T*) PushBytes(arena,sizeof(T) * size); return res;};
 
+// TODO: Remove this after code starts using DynamicArray.
 template<typename T>
 Array<T> PointArray(Arena* arena,Byte* mark){String data = PointArena(arena,mark); Array<T> res = {}; res.data = (T*) data.data; res.size = data.size / sizeof(T); return res;}
 
@@ -116,6 +146,20 @@ Array<T> PushArray(DynamicArena* arena,int size){Array<T> res = {}; res.size = s
 
 template<typename T>
 T* PushStruct(DynamicArena* arena){T* res = (T*) PushBytes(arena,sizeof(T)); return res;};
+
+template<typename T>
+struct DynamicArray{
+  Arena* arena;
+  Byte* mark;
+
+  T* PushElem();
+};
+
+template<typename T>
+DynamicArray<T> StartArray(Arena* arena);
+
+template<typename T>
+Array<T> EndArray(DynamicArray<T> arr);
 
 // A wrapper for a "push" type interface for a block of memory
 template<typename T>
@@ -293,18 +337,17 @@ struct Hashmap{
   Pair<Key,Data>*  data;
   Pair<Key,Data>** next; // Next is separated from data, to allow easy iteration of the data
 
-  // Remaining data is:
+  // Remaining data in the arena is:
   // Pair<Key,Data>* bucketsData[nodesAllocated];
   // Pair<Key,Data>* nextArray[nodesAllocated];
   // Pair<Key,Data> dataData[nodesAllocated];
 
   // Construct by calling PushHashmap
-public:
   
   Data* Insert(Key key,Data data);
   Data* InsertIfNotExist(Key key,Data data);
 
-  //void Remove(Key key); // TODO: For current implementation, It is difficult to remove keys and keep the same requirements (iterate by order of insertion). 
+  //void Remove(Key key); // TODO: For current implementation, it is difficult to remove keys and keep the same properties (being able to iterate by order of insertion). Probably need to change impl to keep a linked list 
   
   Data* Get(Key key); // TODO: Should return an optional
   Data* GetOrInsert(Key key,Data data);
@@ -458,4 +501,801 @@ public:
   int MemoryUsage();
 };
 
-#include "memory.inl"
+// Start of implementation
+
+template<typename T>
+bool ZeroOutAlloc(Allocation<T>* alloc,int newSize){
+   if(newSize <= 0){
+      return false;
+   }
+
+   bool didRealloc = false;
+   if(newSize > alloc->reserved){
+      T* tmp = (T*) realloc(alloc->ptr,newSize * sizeof(T));
+
+      Assert(tmp);
+
+      alloc->ptr = tmp;
+      alloc->reserved = newSize;
+      didRealloc = true;
+   }
+
+   alloc->size = newSize;
+   memset(alloc->ptr,0,alloc->reserved * sizeof(T));
+   return didRealloc;
+}
+
+template<typename T>
+bool ZeroOutRealloc(Allocation<T>* alloc,int newSize){
+   if(newSize <= 0){
+      return false;
+   }
+
+   bool didRealloc = false;
+   if(newSize > alloc->reserved){
+      T* tmp = (T*) realloc(alloc->ptr,newSize * sizeof(T));
+
+      Assert(tmp);
+
+      alloc->ptr = tmp;
+      alloc->reserved = newSize;
+      didRealloc = true;
+   }
+
+   // Clear out free (allocated now or before) space
+   if(didRealloc){
+      char* view = (char*) alloc->ptr;
+      memset(&view[alloc->size],0,(alloc->reserved - alloc->size) * sizeof(T));
+   }
+
+   alloc->size = newSize;
+   return didRealloc;
+}
+
+#if 1
+template<typename T>
+void Reserve(Allocation<T>* alloc,int reservedSize){
+   Assert(!alloc->ptr);
+   alloc->ptr = (T*) calloc(reservedSize,sizeof(T));
+   Assert(alloc->ptr);
+   alloc->reserved = reservedSize;
+}
+#endif
+
+template<typename T>
+void RemoveChunkAndCompress(Allocation<T>* alloc,T* ptr,int size){
+   Assert(Inside(alloc,ptr));
+
+   T* copyStart = ptr + size;
+   int copySize = alloc->size - (copyStart - alloc->ptr);
+
+   Memcpy(ptr,copyStart,copySize);
+   alloc->size -= size;
+}
+
+template<typename T>
+bool Inside(Allocation<T>* alloc,T* ptr){
+   bool res = (ptr >= alloc->ptr && ptr < (alloc->ptr + alloc->size));
+   return res;
+}
+
+template<typename T>
+void Free(Allocation<T>* alloc){
+   free(alloc->ptr);
+   alloc->ptr = nullptr;
+   alloc->reserved = 0;
+   alloc->size = 0;
+}
+
+template<typename T> T* Push(Allocation<T>* alloc, int amount){
+   if(alloc->size + amount > alloc->reserved){
+      Assert(false);
+      return nullptr;
+   }
+
+   T* res = &alloc->ptr[alloc->size];
+   alloc->size += amount;
+
+   return res;
+}
+
+template<typename T>
+int MemoryUsage(Allocation<T> alloc){
+   int memoryUsed = alloc.reserved * sizeof(T);
+   return memoryUsed;
+}
+
+
+template<typename T> bool Inside(PushPtr<T>* push,T* ptr){
+   bool res = (ptr >= push->ptr && ptr < (push->ptr + push->maximumTimes));
+   return res;
+}
+
+template<typename T> DynamicArray<T> StartArray(Arena* arena){
+  DynamicArray<T> arr = {};
+
+  arr.arena = arena;
+  arr.mark = MarkArena(arena);
+
+#ifdef VERSAT_DEBUG
+  arena->locked = true;
+#endif
+
+  return arr;
+}
+
+template<typename T> T* DynamicArray<T>::PushElem(){
+#ifdef VERSAT_DEBUG
+  Assert(arena->locked);
+  arena->locked = false;
+#endif
+
+  T* res = PushStruct<T>(this->arena);
+
+#ifdef VERSAT_DEBUG
+  arena->locked = true;
+#endif
+
+  return res;
+}
+  
+template<typename T> Array<T> EndArray(DynamicArray<T> arr){
+  Arena* arena = arr;
+
+#ifdef VERSAT_DEBUG
+  Assert(arena->locked);
+  arena->locked = false;
+#endif
+
+  Array<T> res = PointArray(arena,arr.mark);
+  return res;
+}
+
+template<typename Key,typename Data>
+bool HashmapIterator<Key,Data>::operator!=(HashmapIterator& iter){
+   bool res = (iter.index != this->index);
+   return res;
+}
+
+template<typename Key,typename Data>
+void HashmapIterator<Key,Data>::operator++(){
+   index += 1;
+}
+
+template<typename Key,typename Data>
+Pair<Key,Data>& HashmapIterator<Key,Data>::operator*(){
+   return pairs[index];
+}
+
+template<typename Key,typename Data>
+Hashmap<Key,Data>* PushHashmap(Arena* arena,int maxAmountOfElements){
+   Hashmap<Key,Data>* map = PushStruct<Hashmap<Key,Data>>(arena);
+   *map = {};
+
+   if(maxAmountOfElements > 0){
+      int size = AlignNextPower2(maxAmountOfElements) * 2;
+
+      map->nodesAllocated = size;
+      map->nodesUsed = 0;
+      map->buckets = PushArray<Pair<Key,Data>*>(arena,size).data;
+      map->next = PushArray<Pair<Key,Data>*>(arena,size).data;
+      map->data = PushArray<Pair<Key,Data>>(arena,size).data;
+
+      map->Clear();
+   }
+
+   return map;
+}
+
+template<typename Key,typename Data>
+Hashmap<Key,Data>* PushHashmap(DynamicArena* arena,int maxAmountOfElements){
+   //TODO: This is a copy of PushHashmap but with a DynamicArena. Should just refactor the init to a common function
+   Hashmap<Key,Data>* map = PushStruct<Hashmap<Key,Data>>(arena);
+   *map = {};
+
+   if(maxAmountOfElements > 0){
+      int size = AlignNextPower2(maxAmountOfElements) * 2;
+
+      map->nodesAllocated = size;
+      map->nodesUsed = 0;
+      map->buckets = PushArray<Pair<Key,Data>*>(arena,size).data;
+      map->next = PushArray<Pair<Key,Data>*>(arena,size).data;
+      map->data = PushArray<Pair<Key,Data>>(arena,size).data;
+
+      map->Clear();
+   }
+
+   return map;
+}
+
+template<typename Key,typename Data>
+Array<Key> HashmapKeyArray(Hashmap<Key,Data>* hashmap,Arena* out){
+   Array<Key> res = PushArray<Key>(out,hashmap->nodesUsed);
+
+   int index = 0;
+   for(Pair<Key,Data>& pair : *hashmap){
+      res[index++] = pair.first;
+   }
+   return res;
+}
+
+template<typename Key,typename Data>
+Array<Data> HashmapDataArray(Hashmap<Key,Data>* hashmap,Arena* out){
+   Array<Data> res = PushArray<Data>(out,hashmap->nodesUsed);
+
+   int index = 0;
+   for(Pair<Key,Data>& pair : *hashmap){
+      res[index++] = pair.second;
+   }
+   return res;
+}
+
+template<typename Key,typename Data>
+void Hashmap<Key,Data>::Clear(){
+   Memset<Pair<Key,Data>*>(this->buckets,nullptr,this->nodesAllocated);
+   Memset<Pair<Key,Data>*>(this->next,nullptr,this->nodesAllocated);
+   nodesUsed = 0;
+}
+
+template<typename Key,typename Data>
+Data* Hashmap<Key,Data>::Insert(Key key,Data data){
+   int mask = this->nodesAllocated - 1;
+   int index = std::hash<Key>()(key) & mask; // Size is power of 2
+
+   Pair<Key,Data>* ptr = this->buckets[index];
+
+   if(ptr == nullptr){
+      Assert(this->nodesUsed < this->nodesAllocated);
+      Pair<Key,Data>* node = &this->data[this->nodesUsed++];
+
+      node->key = key;
+      node->data = data;
+
+      this->buckets[index] = node;
+
+      return &node->data;
+   } else {
+      int previousNextIndex = 0;
+      for(; ptr;){
+         if(ptr->key == key){ // Same key
+            ptr->data = data; // No duplicated keys, overwrite data
+            return &ptr->data;
+         }
+
+         previousNextIndex = ptr - this->data;
+         ptr = this->next[previousNextIndex];
+      }
+
+      Assert(this->nodesUsed < this->nodesAllocated);
+
+      int newNodeIndex = this->nodesUsed++;
+      Pair<Key,Data>* newNode = &this->data[newNodeIndex];
+      newNode->key = key;
+      newNode->data = data;
+
+      this->next[previousNextIndex] = newNode;
+
+      return &newNode->data;
+   }
+
+   return nullptr;
+}
+
+template<typename Key,typename Data>
+Data* Hashmap<Key,Data>::InsertIfNotExist(Key key,Data data){
+   Data* ptr = Get(key);
+
+   if(ptr == nullptr){
+      return Insert(key,data);
+   }
+
+   return nullptr;
+}
+
+#if 0
+template<typename Key,typename Data>
+void Hashmap<Key,Data>::Remove(Key key){
+  Assert(Get(key) != nullptr);
+
+  int mask = this->nodesAllocated - 1;
+  int index = std::hash<Key>()(key) & mask; // Size is power of 2
+
+  Pair<Key,Data>* ptr = this->buckets[index];
+  Assert(ptr);
+
+  int previousNextIndex = -1;
+  int nextIndex = 0;
+  for(; ptr;){
+    if(ptr->key == key){ // Same key
+       nextIndex = ptr - this->data;
+       break;
+    }
+
+    previousNextIndex = ptr - this->data;
+    ptr = this->next[previousNextIndex];
+  }
+
+  if(previousNextIndex == -1){
+    this->next[nextIndex] = nullptr;
+  } else {
+    this->next[previousNextIndex] = this->next[nextIndex];
+  }
+
+  nodesUsed -= 1;
+}
+#endif
+
+template<typename Key,typename Data>
+bool Hashmap<Key,Data>::Exists(Key key){
+  Data* ptr = Get(key);
+
+  if(ptr == nullptr){
+    return false;
+  }
+  return true;
+}
+
+template<typename Key,typename Data>
+Data* Hashmap<Key,Data>::Get(Key key){
+   if(this->nodesUsed == 0){
+      return nullptr;
+   }
+
+   int mask = this->nodesAllocated - 1;
+   int index = std::hash<Key>()(key) & mask; // Size is power of 2
+
+   Pair<Key,Data>* ptr = this->buckets[index];
+   for(; ptr;){
+      if(ptr->key == key){ // Same key
+         return &ptr->data;
+      }
+
+      int index = ptr - this->data;
+      ptr = this->next[index];
+   }
+
+   return nullptr;
+}
+
+template<typename Key,typename Data>
+Data* Hashmap<Key,Data>::GetOrInsert(Key key,Data data){
+   Data* ptr = Get(key);
+
+   if(ptr == nullptr){
+      return Insert(key,data);
+   }
+
+   return ptr;
+}
+
+template<typename Key,typename Data>
+Data Hashmap<Key,Data>::GetOrFail(Key key){
+   Data* ptr = Get(key);
+   Assert(ptr);
+   return *ptr;
+}
+
+template<typename Key,typename Data>
+GetOrAllocateResult<Data> Hashmap<Key,Data>::GetOrAllocate(Key key){
+   //TODO: implement this more efficiently, instead of using separated calls
+   Data* ptr = Get(key);
+
+   GetOrAllocateResult<Data> res = {};
+
+   if(ptr){
+      res.alreadyExisted = true;
+   } else {
+      ptr = Insert(key,(Data){});
+   }
+
+   res.data = ptr;
+   return res;
+}
+
+#if 0
+template<typename Key,typename Data>
+HashmapIterator<Key,Data> Hashmap<Key,Data>::begin(){
+   HashmapIterator<Key,Data> iter = {};
+   iter.pairs = this->data;
+   return iter;
+}
+
+template<typename Key,typename Data>
+HashmapIterator<Key,Data> Hashmap<Key,Data>::end(){
+   HashmapIterator<Key,Data> iter = {};
+
+   iter.pairs = this->data;
+   iter.index = this->nodesUsed;
+
+   return iter;
+}
+#endif
+
+template<typename Key,typename Data>
+HashmapIterator<Key,Data> begin(Hashmap<Key,Data>* hashmap){
+   HashmapIterator<Key,Data> iter = {};
+
+   if(hashmap){
+      iter.pairs = hashmap->data;
+   }
+   return iter;
+}
+
+template<typename Key,typename Data>
+HashmapIterator<Key,Data> end(Hashmap<Key,Data>* hashmap){
+   HashmapIterator<Key,Data> iter = {};
+
+   if(hashmap){
+      iter.pairs = hashmap->data;
+      iter.index = hashmap->nodesUsed;
+   }
+
+   return iter;
+}
+
+template<typename Data>
+void Set<Data>::Insert(Data data){
+   map->Insert(data,0);
+}
+
+template<typename Data>
+bool Set<Data>::Exists(Data data){
+   int* possible = map->Get(data);
+   bool res = (possible != nullptr);
+   return res;
+}
+
+template<typename Data>
+Set<Data>* PushSet(Arena* arena,int maxAmountOfElements){
+   Set<Data>* set = PushStruct<Set<Data>>(arena);
+   set->map = PushHashmap<Data,int>(arena,maxAmountOfElements);
+
+   return set;
+}
+
+template<typename Data>
+bool SetIterator<Data>::operator!=(SetIterator<Data>& iter){
+   return (this->innerIter != iter.innerIter);
+}
+
+template<typename Data>
+void SetIterator<Data>::operator++(){
+  ++this->innerIter;  
+}
+
+template<typename Data>
+Data& SetIterator<Data>::operator*(){
+  return (*this->innerIter).first;
+}
+
+template<typename Data>
+SetIterator<Data> begin(Set<Data>* set){
+  SetIterator<Data> iter = {};
+  iter.innerIter = begin(set->map);
+  return iter;
+}
+
+template<typename Data>
+SetIterator<Data> end(Set<Data>* set){
+  SetIterator<Data> iter = {};
+  iter.innerIter = end(set->map);
+  return iter;
+}
+
+
+template<typename T>
+void PoolIterator<T>::Init(Pool<T>* pool,Byte* page){
+   *this = {};
+
+   this->pool = pool;
+   this->page = page;
+   this->bit = 7;
+
+   if(page){
+      pageInfo = GetPageInfo(pool->info,page);
+
+      if(!IsValid()){
+         ++(*this);
+      }
+   }
+}
+
+template<typename T>
+bool PoolIterator<T>::operator!=(PoolIterator<T>& iter){
+   bool res = this->page != iter.page; // We only care about for ranges, so no need to be specific
+
+   return res;
+}
+
+template<typename T>
+void PoolIterator<T>::Advance(){
+   PoolInfo& info = pool->info;
+
+   fullIndex += 1;
+   bit -= 1;
+   if(bit < 0){
+      index += 1;
+      bit = 7;
+   }
+
+   if(index * 8 + (7 - bit) >= info.unitsPerPage){
+      index = 0;
+      bit = 7;
+      page = pageInfo.header->nextPage;
+      if(page != nullptr){
+         pageInfo = GetPageInfo(info,page);
+      }
+   }
+}
+
+template<typename T>
+bool PoolIterator<T>::IsValid(){
+   bool res = pageInfo.bitmap[index] & (1 << bit);
+
+   return res;
+}
+
+template<typename T>
+void PoolIterator<T>::operator++(){
+   while(page){
+      Advance();
+
+      if(IsValid()){
+         break;
+      }
+   }
+}
+
+template<typename T>
+T* PoolIterator<T>::operator*(){
+   Assert(page != nullptr);
+
+   T* view = (T*) page;
+   T* val = &view[index * 8 + (7 - bit)];
+
+   return val;
+}
+
+#if 0
+template<typename T>
+Pool<T>::Pool()
+:mem(nullptr)
+,allocated(0)
+,endSize(0)
+{
+
+}
+
+template<typename T>
+Pool<T>::~Pool(){
+   Byte* ptr = mem;
+   while(ptr){
+      PageInfo page = GetPageInfo(info,ptr);
+
+      Byte* nextPage = page.header->nextPage;
+
+      DeallocatePages(ptr,1);
+
+      ptr = nextPage;
+   }
+}
+#endif
+
+template<typename T>
+T* Pool<T>::Alloc(){
+   static int bitmask[] = {0x80,0xc0,0xe0,0xf0,0xf8,0xfc,0xfe,0xff};
+
+   if(!mem){
+      mem = (Byte*) AllocatePages(1);
+      info = CalculatePoolInfo(sizeof(T));
+   }
+
+   int fullIndex = 0;
+   Byte* ptr = mem;
+   PageInfo page = GetPageInfo(info,ptr);
+   while(page.header->allocatedUnits == info.unitsPerPage){
+      if(!page.header->nextPage){
+         page.header->nextPage = (Byte*) AllocatePages(1);
+      }
+
+      ptr = page.header->nextPage;
+      page = GetPageInfo(info,ptr);
+      fullIndex += info.unitsPerPage;
+   }
+
+   T* view = (T*) ptr;
+   for(int index = 0; index * 8 < info.unitsPerPage; index += 1){
+      char val = page.bitmap[index];
+
+      if(info.unitsPerPage - index * 8 < 8){
+         if(val == bitmask[(info.unitsPerPage - 1) % 8]){
+            continue;
+         }
+      } else {
+         if(val == 0xff){
+            continue;
+         }
+      }
+
+      for(int i = 7; i >= 0; i--){
+         if(!(val & (1 << i))){ // empty location
+            page.bitmap[index] |= (1 << i);
+
+            page.header->allocatedUnits += 1;
+
+            fullIndex += index * 8 + (7 - i);
+
+            T* inst = new (&view[index * 8 + (7 - i)]) T(); // Needed for anything stl based
+
+            return inst;
+         }
+      }
+   }
+
+   Assert(0);
+   return nullptr;
+}
+
+template<typename T>
+T* Pool<T>::Alloc(int index){
+   if(!mem){
+      mem = (Byte*) AllocatePages(1);
+      info = CalculatePoolInfo(sizeof(T));
+   }
+
+   Byte* ptr = mem;
+   PageInfo page = GetPageInfo(info,ptr);
+   while(index >= info.unitsPerPage){
+      if(!page.header->nextPage){
+         page.header->nextPage = (Byte*) AllocatePages(1);
+      }
+
+      ptr = page.header->nextPage;
+      page = GetPageInfo(info,ptr);
+      index -= info.unitsPerPage;
+   }
+
+   int bitmapIndex = index / 8;
+   int bitIndex = (7 - index % 8);
+
+   if(page.bitmap[bitmapIndex] & (1 << bitIndex)){
+      return nullptr;
+   }
+
+   T* view = (T*) ptr;
+   page.bitmap[bitmapIndex] |= (1 << bitIndex);
+
+   return &view[bitmapIndex * 8 + (7 - bitIndex)];
+}
+
+template<typename T>
+T* Pool<T>::Get(int index){
+   if(!mem){
+      return nullptr;
+   }
+
+   Byte* ptr = mem;
+   PageInfo page = GetPageInfo(info,ptr);
+   while(index >= page.header->allocatedUnits){
+      if(!page.header->nextPage){
+         return nullptr;
+      }
+
+      ptr = page.header->nextPage;
+      page = GetPageInfo(info,ptr);
+      index -= info.unitsPerPage;
+   }
+
+   int bitmapIndex = index / 8;
+   int bitIndex = (7 - index % 8);
+
+   if(!(page.bitmap[bitmapIndex] & (1 << bitIndex))){
+      return nullptr;
+   }
+
+   T* view = (T*) ptr;
+
+   return &view[bitmapIndex * 8 + (7 - bitIndex)];
+}
+
+template<typename T>
+T& Pool<T>::GetOrFail(int index){
+   T* res = Get(index);
+
+   Assert(res);
+
+   return *res;
+}
+
+template<typename T>
+void Pool<T>::Remove(T* elem){
+   Byte* page = (Byte*) ((uintptr_t)elem & ~(GetPageSize() - 1));
+   PageInfo pageInfo = GetPageInfo(info,page);
+
+   int pageIndex = ((Byte*) elem - page) / sizeof(T);
+   int bitmapIndex = pageIndex / 8;
+   int bit = 7 - (pageIndex % 8);
+
+   pageInfo.bitmap[bitmapIndex] &= ~(1 << bit);
+   pageInfo.header->allocatedUnits -= 1;
+}
+
+template<typename T>
+Byte* Pool<T>::GetMemoryPtr(){
+   return mem;
+}
+
+template<typename T>
+Pool<T> Pool<T>::Copy(){
+   Pool<T> other = {};
+
+   for(T* ptr : *this){
+      T* inst = other.Alloc();
+      *inst = *ptr;
+   }
+
+   return other;
+}
+
+template<typename T>
+int Pool<T>::Size(){
+   int count = 0;
+
+   Byte* page = mem;
+   while(page){
+      PageInfo pageInfo = GetPageInfo(info,page);
+      count += pageInfo.header->allocatedUnits;
+      page = pageInfo.header->nextPage;
+   }
+
+   return count;
+}
+
+template<typename T>
+void Pool<T>::Clear(bool freeMemory){
+   if(freeMemory){
+      Byte* page = mem;
+      while(page){
+         PageInfo pageInfo = GetPageInfo(info,page);
+         Byte* next = pageInfo.header->nextPage;
+
+         DeallocatePages(page,1);
+         page = next;
+      }
+      mem = nullptr;
+   } else {
+      Byte* page = mem;
+      while(page){
+         PageInfo pageInfo = GetPageInfo(info,page);
+
+         memset(pageInfo.bitmap,0,info.bitmapSize);
+         pageInfo.header->allocatedUnits = 0;
+
+         page = pageInfo.header->nextPage;
+      }
+   }
+}
+
+template<typename T>
+PoolIterator<T> Pool<T>::begin(){
+   PoolIterator<T> iter = {};
+   iter.Init(this,mem);
+
+   return iter;
+}
+
+template<typename T>
+PoolIterator<T> Pool<T>::end(){
+   PoolIterator<T> iter = {};
+   iter.Init(this,nullptr);
+
+   return iter;
+}
+
+template<typename T>
+PoolIterator<T> Pool<T>::beginNonValid(){
+   PoolIterator<T> iter = {};
+   iter.Init(this,mem);
+
+   return iter;
+}
