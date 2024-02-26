@@ -56,7 +56,7 @@ module my_dp_asym_ram #(
    //instantiate N symmetric RAM blocks and connect them to the buses
    genvar i;
    generate
-      for (i = 0; i < N; i = i + 1) begin
+      for (i = 0; i < N; i = i + 1) begin  : ramInst
          my_iob_dp_ram #(
             .DATA_W(MINDATA_W),
             .ADDR_W(M_ADDR_W - SYMBOL_W)

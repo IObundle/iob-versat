@@ -43,7 +43,7 @@ module my_2p_asym_ram #(
    //instantiate N symmetric RAM blocks and connect them to the buses
    genvar i;
    generate
-      for (i = 0; i < N; i = i + 1) begin
+      for (i = 0; i < N; i = i + 1) begin : ramInst
          iob_ram_2p #(
             .DATA_W(MINDATA_W),
             .ADDR_W(ADDR_W - (N_W + SYMBOL_W))

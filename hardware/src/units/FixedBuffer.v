@@ -39,7 +39,7 @@ module FixedBuffer #(
             bufferNextData[AMOUNT-1] = in0;
          end
 
-         for(ii = 0; ii < AMOUNT; ii = ii + 1) begin
+         for(ii = 0; ii < AMOUNT; ii = ii + 1) begin : bufferAssigns
             always @(posedge clk,posedge rst) begin
                if (rst) begin
                   bufferData[ii] <= 0;

@@ -10,3 +10,6 @@ The hardware is full of sloppy code.
       Should be easy, just one more template.
 
 There are a dozens of TODOs scathered all over the codebase. Start by fixing some of them.
+
+Generated code does not take into account parameters when it should.
+   Some wires are given fixed sizes when they depend on verilog parameters. 

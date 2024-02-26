@@ -5,6 +5,7 @@
 #include <sys/stat.h>
 #include <sys/sysinfo.h>
 #include <fcntl.h>
+#include <errno.h>
 
 #include <cstdio>
 #include <cstdarg>
@@ -27,18 +28,11 @@ static int pagesAllocated = 0;
 static int pagesDeallocated = 0;
 
 void* AllocatePages(int pages){
-  static int fd = 0;
-
-  if(fd == 0){
-    fd = open("/dev/zero", O_RDWR);
-
-    Assert(fd != -1);
-  }
-
-  pagesAllocated += pages;
-  void* res = mmap(0, pages * GetPageSize(), PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, fd, 0);
+  void* res = mmap(0, pages * GetPageSize(), PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE, -1, 0);
+  printf("%d\n",errno);
   Assert(res != MAP_FAILED);
-
+ 
+  pagesAllocated += pages;
   return res;
 }
 
@@ -74,7 +68,7 @@ Arena InitLargeArena(){
   Arena arena = {};
 
   arena.used = 0;
-  arena.totalAllocated = Gigabyte(4);
+  arena.totalAllocated = Gigabyte(1);
   arena.mem = (Byte*) AllocatePages(arena.totalAllocated / GetPageSize());
   Assert(arena.mem);
 

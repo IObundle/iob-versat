@@ -44,7 +44,7 @@ module xmerge #(
 
    generate
       genvar g;
-      for (g = 0; g < N_SLAVES; g = g + 1) begin
+      for (g = 0; g < N_SLAVES; g = g + 1) begin : unpackSlave
          assign st_addr[g]  = s_addr_i[ADDR_W*g+:ADDR_W];
          assign st_wdata[g] = s_wdata_i[DATA_W*g+:DATA_W];
          assign st_wstrb[g] = s_wstrb_i[(DATA_W/8)*g+:(DATA_W/8)];
