@@ -1,7 +1,5 @@
 `timescale 1ns / 1ps
 
-//`include "AXIInfo.vh"
-
 module SimpleAXItoAXIRead #(
    parameter AXI_ADDR_W = 32,
    parameter AXI_DATA_W = 32,
@@ -22,6 +20,7 @@ module SimpleAXItoAXIRead #(
    input rst_i
 );
 
+   `include "AXIInfo.vh"
    localparam OFFSET_W = calculate_AXI_OFFSET_W(AXI_DATA_W);
 
    localparam [2:0] axi_size = (AXI_DATA_W == 16   ? 3'b001 : 
