@@ -20,8 +20,7 @@ module SimpleAXItoAXIRead #(
    input rst_i
 );
 
-   `include "AXIInfo.vh"
-   localparam OFFSET_W = calculate_AXI_OFFSET_W(AXI_DATA_W);
+   localparam OFFSET_W = $clog2(AXI_DATA_W / 8);
 
    localparam [2:0] axi_size = (AXI_DATA_W == 16   ? 3'b001 : 
                              AXI_DATA_W == 32   ? 3'b010 :

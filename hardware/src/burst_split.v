@@ -1,17 +1,13 @@
 `timescale 1ns / 1ps
 
-`include "AXIInfo.vh"
-
 // TODO: Replace code with generic instantiation for 128,256,512 and 1024
 
 // Given aligned data, splits the data in order to meet byte alignment in a burst transfer starting with offset byte
 module burst_split #(
    parameter DATA_W = 32,
 
-   parameter OFFSET_W = calculate_AXI_OFFSET_W(
-       DATA_W
-   )  // Local parameter, needed by input definition
-) (
+   parameter OFFSET_W = $clog2(DATA_W / 8)
+)(
    input [OFFSET_W-1:0] offset_i,
 
    input [DATA_W-1:0] data_in_i,
