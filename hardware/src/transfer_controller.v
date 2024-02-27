@@ -7,6 +7,7 @@
 module transfer_controller #(
    parameter AXI_ADDR_W = 32,
    parameter AXI_DATA_W = 32,
+   parameter AXI_LEN_W  = 8,
    parameter LEN_W      = 32
 ) (
    input [AXI_ADDR_W-1:0] address_i,  // Must remain constant during transfer
@@ -23,9 +24,9 @@ module transfer_controller #(
 
    output [31:0] symbolsToRead_o,  // How many symbols (data transfers) to expect from the source
 
-   output reg [7:0] true_axi_axlen_o,
-   output reg       last_transfer_o,
-   output           last_transfer_next_o,
+   output reg [AXI_LEN_W-1:0] true_axi_axlen_o,
+   output reg                 last_transfer_o,
+   output                     last_transfer_next_o,
 
    input clk_i,
    input rst_i
@@ -33,6 +34,7 @@ module transfer_controller #(
 
    localparam OFFSET_W = calculate_AXI_OFFSET_W(AXI_DATA_W);
    localparam STROBE_W = AXI_DATA_W / 8;
+   localparam MAX_LENGTH = (2 ** AXI_LEN_W);
 
    wire [AXI_DATA_W-1:0] OFFSET_MASK = (0 | {OFFSET_W{1'b1}});
 
@@ -67,15 +69,6 @@ module transfer_controller #(
       if (last_transfer_next_o) true_axi_axlen_o = last_transfer_o_len;
       else true_axi_axlen_o = (transfer_byte_size - 1) >> OFFSET_W;
    end
-
-   /*
-length_i => need 8 bits of strobe at 1.
-Need two F.
-
-length_i[4:0] => 16
-
-legnth[OFFSET_W:0] - initial_strb_o_count == final_strb_o_count.
-*/
 
    reg [$clog2(STROBE_W):0] final_strb_o_count;  // Values for 128, right?
    reg [$clog2(STROBE_W):0] initial_strb_o_count;
@@ -117,8 +110,8 @@ legnth[OFFSET_W:0] - initial_strb_o_count == final_strb_o_count.
    generate
       if (AXI_DATA_W == 32) begin
          assign symbolsToRead_o            = (|length_i[1:0]) ? (length_i >> 2) + 1 : length_i >> 2;
-         assign max_transfer_len           = 13'h0400;
-         assign max_transfer_len_minus_one = 13'h03FC;
+         assign max_transfer_len           = min(MAX_LENGTH * 4,13'h0400);
+         assign max_transfer_len_minus_one = min((MAX_LENGTH * 4) - 4,13'h03FC);
          always @* begin
             last_transfer_o_len = 0;
 
@@ -131,8 +124,8 @@ legnth[OFFSET_W:0] - initial_strb_o_count == final_strb_o_count.
       end  // if(AXI_DATA_W == 32)
       if (AXI_DATA_W == 64) begin
          assign symbolsToRead_o            = (|length_i[2:0]) ? (length_i >> 3) + 1 : length_i >> 3;
-         assign max_transfer_len           = 13'h0800;
-         assign max_transfer_len_minus_one = 13'h07F8;
+         assign max_transfer_len           = min(MAX_LENGTH * 8,13'h0800);
+         assign max_transfer_len_minus_one = min((MAX_LENGTH * 8) - 8,13'h07F8);
          wire [2:0] address_i_plus_len = address_i[2:0] + stored_len[2:0];
          always @* begin
             last_transfer_o_len = 0;
@@ -146,8 +139,8 @@ legnth[OFFSET_W:0] - initial_strb_o_count == final_strb_o_count.
       end  // if(AXI_DATA_W == 64)
       if (AXI_DATA_W == 128) begin
          assign symbolsToRead_o            = (|length_i[3:0]) ? (length_i >> 4) + 1 : length_i >> 4;
-         assign max_transfer_len           = 13'h1000;
-         assign max_transfer_len_minus_one = 13'h0FF0;
+         assign max_transfer_len           = min(MAX_LENGTH * 16,13'h1000);
+         assign max_transfer_len_minus_one = min((MAX_LENGTH * 16) - 16,13'h0FF0);
          wire [3:0] address_i_plus_len = address_i[3:0] + stored_len[3:0];
          always @* begin
             last_transfer_o_len = 0;
@@ -162,8 +155,8 @@ legnth[OFFSET_W:0] - initial_strb_o_count == final_strb_o_count.
       end  // if(AXI_DATA_W == 128)
       if (AXI_DATA_W == 256) begin
          assign symbolsToRead_o = (|length_i[4:0]) ? (length_i >> 5) + 1 : length_i >> 5;
-         assign max_transfer_len = 13'h1000;
-         assign max_transfer_len_minus_one = 13'h0FE0; // Because of boundary conditions, cannot go higher
+         assign max_transfer_len           = min(MAX_LENGTH * 32,13'h1000);
+         assign max_transfer_len_minus_one = min((MAX_LENGTH * 32) - 32,13'h0FE0); // Because of boundary conditions, cannot go higher
          wire [4:0] address_i_plus_len = address_i[4:0] + stored_len[4:0];
          always @* begin
             last_transfer_o_len = 0;
@@ -178,8 +171,8 @@ legnth[OFFSET_W:0] - initial_strb_o_count == final_strb_o_count.
       end  // if(AXI_DATA_W == 256)
       if (AXI_DATA_W == 512) begin
          assign symbolsToRead_o = (|length_i[5:0]) ? (length_i >> 6) + 1 : length_i >> 6;
-         assign max_transfer_len = 13'h1000;
-         assign max_transfer_len_minus_one = 13'h0FC0; // Because of boundary conditions, cannot go higher
+         assign max_transfer_len           = min(MAX_LENGTH * 64,13'h1000);
+         assign max_transfer_len_minus_one = min((MAX_LENGTH * 64) - 64,13'h0FC0); // Because of boundary conditions, cannot go higher
          wire [5:0] address_i_plus_len = address_i[5:0] + stored_len[5:0];
          always @* begin
             last_transfer_o_len = 0;

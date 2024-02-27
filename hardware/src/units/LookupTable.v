@@ -17,8 +17,8 @@ module LookupTable #(
    input [DATA_W-1:0] in0,
    input [DATA_W-1:0] in1,
 
-   (* versat_latency = 2 *) output reg [DATA_W-1:0] out0,
-   (* versat_latency = 2 *) output reg [DATA_W-1:0] out1,
+   (* versat_latency = 3 *) output reg [DATA_W-1:0] out0,
+   (* versat_latency = 3 *) output reg [DATA_W-1:0] out1,
 
    output [ADDR_W-1:0] ext_dp_addr_0_port_0,
    output [DATA_W-1:0] ext_dp_out_0_port_0,
@@ -40,14 +40,12 @@ module LookupTable #(
 
    assign rdata = 0;
 
-   reg [ADDR_W-1:0] addr_reg;
    reg [DATA_W-1:0] data;
    reg              write;
 
    always @(posedge clk, posedge rst) begin
       if (rst) begin
          data     <= 0;
-         addr_reg <= 0;
          write    <= 1'b0;
          rvalid   <= 1'b0;
       end else begin
@@ -60,7 +58,6 @@ module LookupTable #(
 
          if (valid && |wstrb) begin
             data     <= wdata;
-            addr_reg <= addr;
             write    <= 1'b1;
          end
       end
@@ -79,23 +76,44 @@ module LookupTable #(
    localparam DIFF = DATA_W / SIZE_W;
    localparam DECISION_BIT_W = $clog2(DIFF);
 
-   assign ext_dp_addr_0_port_0 = write ? addr_reg : in0[ADDR_W-1:0];
-   assign ext_dp_addr_0_port_1 = in1[ADDR_W-1:0];
+   reg [ADDR_W-1:0] addr_0_reg,addr_1_reg;
+
+   always @(posedge clk,posedge rst) begin
+      if(rst) begin
+         addr_0_reg <= 0;
+         addr_1_reg <= 0;
+      end else begin
+         if (valid && |wstrb) begin
+            addr_0_reg <= addr;
+         end else begin
+            addr_0_reg <= in0[ADDR_W-1:0];
+         end
+         addr_1_reg <= in1[ADDR_W-1:0];;
+      end
+   end
+
+   assign ext_dp_addr_0_port_0 = addr_0_reg;
+   assign ext_dp_addr_0_port_1 = addr_1_reg;
+
+   wire [DATA_W-1:0] outA_int,outB_int;
 
    generate
       if (SIZE_W == DATA_W) begin
-         assign outA = ext_dp_in_0_port_0;
-         assign outB = ext_dp_in_0_port_1;
+         assign outA_int = ext_dp_in_0_port_0;
+         assign outB_int = ext_dp_in_0_port_1;
       end else begin
          reg [DECISION_BIT_W-1:0] sel_A, sel_B;
+         reg [DECISION_BIT_W-1:0] sel_A_reg, sel_B_reg;
 
          always @(posedge clk, posedge rst) begin
             if (rst) begin
                sel_A <= 0;
                sel_B <= 0;
             end else begin
-               sel_A <= in0[DECISION_BIT_W-1:0];
-               sel_B <= in1[DECISION_BIT_W-1:0];
+               sel_A_reg <= in0[DECISION_BIT_W-1:0];
+               sel_B_reg <= in1[DECISION_BIT_W-1:0];
+               sel_A <= sel_A_reg;
+               sel_B <= sel_B_reg;
             end
          end
 
@@ -106,7 +124,7 @@ module LookupTable #(
          ) adapter_a (
             .sel_i(sel_A),
             .in_i (ext_dp_in_0_port_0),
-            .out_o(outA)
+            .out_o(outA_int)
          );
 
          WideAdapter #(
@@ -116,7 +134,7 @@ module LookupTable #(
          ) adapter_b (
             .sel_i(sel_B),
             .in_i (ext_dp_in_0_port_1),
-            .out_o(outB)
+            .out_o(outB_int)
          );
       end
    endgenerate
@@ -126,8 +144,8 @@ module LookupTable #(
          out0 <= 0;
          out1 <= 0;
       end else begin
-         out0 <= outA;
-         out1 <= outB;
+         out0 <= outA_int;
+         out1 <= outB_int;
       end
    end
 

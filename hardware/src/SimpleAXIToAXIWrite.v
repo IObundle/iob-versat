@@ -57,7 +57,10 @@ module SimpleAXItoAXIWrite #(
    wire        write_last_transfer;
    wire        write_last_transfer_next;
 
-   wire [ 7:0] true_axi_awlen;
+   wire [AXI_LEN_W-1:0] true_axi_awlen;
+   reg [AXI_LEN_W-1:0] write_axi_len;
+   assign axi_awlen_o = write_axi_len;
+
    wire [31:0] symbolsToRead_next;
    reg  [31:0] symbolsToRead;
 
@@ -66,6 +69,7 @@ module SimpleAXItoAXIWrite #(
    transfer_controller #(
       .AXI_ADDR_W(AXI_ADDR_W),
       .AXI_DATA_W(AXI_DATA_W),
+      .AXI_LEN_W(AXI_LEN_W),
       .LEN_W     (LEN_W)
    ) write_controller (
       .address_i(m_waddr_i),
@@ -112,12 +116,9 @@ module SimpleAXItoAXIWrite #(
    reg m_axi_last;
    assign axi_wlast_o = m_axi_last;
 
-   reg [7:0] write_axi_len;
-   assign axi_awlen_o = write_axi_len;
-
    reg        first_transfer;
 
-   reg [ 7:0] counter;
+   reg [AXI_LEN_W-1:0] counter;
    reg [31:0] full_counter;
    always @(posedge clk_i, posedge rst_i) begin
       if (rst_i) begin
@@ -155,7 +156,7 @@ module SimpleAXItoAXIWrite #(
                      wstrb          <= initial_strb;
                   end else begin
                      wstrb <= ~0;
-                     if (write_axi_len == 8'h0 && write_last_transfer_next) begin
+                     if (write_axi_len == 0 && write_last_transfer_next) begin
                         wstrb <= final_strb;
                      end
                   end
