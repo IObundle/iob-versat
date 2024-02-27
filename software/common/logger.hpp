@@ -1,5 +1,6 @@
-#ifndef INCLUDED_LOGGER
-#define INCLUDED_LOGGER
+#pragma once
+
+// TODO NOTE: Honestly do not know if this is any good. Since we already have a decent amount of functions that can print out the majority of data that we care about, we might just remove the few usages of logging. Running the program in a debugger while or checking the printouts manually seems a better approach to bug finding than putting a bunch of logs.
 
 //                          76543210
 #define ENABLE_LOG_MODULE 0b11111111
@@ -42,5 +43,3 @@ void Log_(LogModule module,LogLevel level,int line,const char* filename,const ch
          firstTimeLog_ = false; \
       } \
    } while(0)
-
-#endif // INCLUDED_LOGGER

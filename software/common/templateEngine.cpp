@@ -1,13 +1,30 @@
 #include "templateEngine.hpp"
 
+#include "memory.hpp"
+#include "parser.hpp"
 #include "stdlib.h"
 #include "stdio.h"
 
 #include <cstring>
+#include <printf.h>
 #include <unordered_map>
 
 #include "utils.hpp"
 #include "type.hpp"
+#include "utilsCore.hpp"
+
+
+/*
+
+What I should tackle first:
+
+  Fix the usage of SetValue and CreateValue and maybe add the Let command that always creates a new variable inside the frame
+  Only common.tpl including is working. For now there is no need for full includes
+  Command could just be an expression.
+  Maybe should check the seperation of expressions instead of reusing the parser one.
+  #{} should never print. @{} should always print. The logic should be unified and enforced, right now #{} gets parsed as commands and @{} gets parsed as expressions but realistically we could figure out if its a command or an expression by finding if the first id is a command id or not (but if so we cannot have identifiers with the same name as a command).
+
+ */
 
 //#define DEBUG_TEMPLATE_ENGINE
 
@@ -50,6 +67,10 @@ static Value* ValueExists(Frame* frame,String id){
   return nullptr;
 }
 
+static void CreateValue(Frame* frame,String id,Value val){
+  frame->table->Insert(id,val);
+}
+
 static void SetValue(Frame* frame,String id,Value val){
   Value* possible = ValueExists(frame,id);
   if(possible){
@@ -66,7 +87,6 @@ static Frame* CreateFrame(Frame* previous,Arena* arena){
   return frame;
 }
 
-static void ParseAndEvaluate(String content,Frame* frame,Arena* temp);
 static String Eval(Block* block,Frame* frame,Arena* temp);
 static ValueAndText EvalNonBlockCommand(Command* com,Frame* frame,Arena* temp);
 static Expression* ParseExpression(Tokenizer* tok,Arena* temp);
@@ -84,58 +104,61 @@ static void FatalError(const char* reason,int approximateLine){
   DEBUG_BREAK();
 }
 
-static bool IsCommandBlockType(Command* com){
-  static const char* notBlocks[] = {"set","end","inc","else","include","call","return","format","debugBreak"};
-
-  for(unsigned int i = 0; i < ARRAY_SIZE(notBlocks); i++){
-    if(CompareString(com->name,notBlocks[i])){
-      return false;
+static void SetExpressionLine(Expression* top,int line){
+  top->approximateLine = line;
+  if(top->type == Expression::COMMAND){
+    for(Expression* e : top->expressions){
+      SetExpressionLine(e,line);
     }
   }
 
-  return true;
+  for(Expression* expr : top->expressions){
+    SetExpressionLine(expr,line);
+  }
 }
 
+static CommandDefinition commandDefinitions[] = {{STRING("join"),3,CommandType_JOIN,true},
+                                                 {STRING("for"),2,CommandType_FOR,true},
+                                                 {STRING("if"),1,CommandType_IF,true},
+                                                 {STRING("end"),0,CommandType_END,false},
+                                                 {STRING("set"),2,CommandType_SET,false},
+                                                 {STRING("let"),2,CommandType_LET,false},
+                                                 {STRING("inc"),1,CommandType_INC,false},
+                                                 {STRING("else"),0,CommandType_ELSE,false},
+                                                 {STRING("debug"),1,CommandType_DEBUG,true},
+                                                 {STRING("include"),1,CommandType_INCLUDE,false},
+                                                 {STRING("define"),-1,CommandType_DEFINE,true},
+                                                 {STRING("call"),-1,CommandType_CALL,false},
+                                                 {STRING("while"),1,CommandType_WHILE,true},
+                                                 {STRING("return"),1,CommandType_RETURN,false},
+                                                 {STRING("format"),-1,CommandType_FORMAT,false},
+                                                 {STRING("debugMessage"),0,CommandType_DEBUG_MESSAGE,true},
+                                                 {STRING("debugBreak"),0,CommandType_DEBUG_BREAK,false}};
+
 static Command* ParseCommand(Tokenizer* tok,Arena* out){
+  Byte* mark = tok->Mark();
+  tok->AssertNextToken("#{");
+
   Command* com = PushStruct<Command>(out);
+  *com = {};
 
-  com->name = tok->NextToken();
+  String commandName = tok->NextToken();
+  for(unsigned int i = 0; i < ARRAY_SIZE(commandDefinitions); i++){
+    CommandDefinition* ptr = &commandDefinitions[i];
 
-  struct {const char* name;int nExpressions;} commands[] = {{"join",4},
-                                                            {"for",2},
-                                                            {"if",1},
-                                                            {"end",0},
-                                                            {"set",2},
-                                                            {"inc",1},
-                                                            {"else",0},
-                                                            {"debug",1},
-                                                            {"include",1},
-                                                            {"define",-1},
-                                                            {"call",-1},
-                                                            {"while",1},
-                                                            {"return",1},
-                                                            {"format",-1},
-                                                            {"debugMessage",0},
-                                                            {"debugBreak",0}};
-
-  bool found = false;
-  int commandSize = -1;
-  for(unsigned int i = 0; i < ARRAY_SIZE(commands); i++){
-    auto command = commands[i];
-
-    if(CompareString(com->name,command.name)){
-      commandSize = command.nExpressions;
-      found = true;
+    if(CompareString(commandName,ptr->name)){
+      com->definition = ptr;
       break;
     }
   }
-  Assert(found);
-
-  if(commandSize == -1){
+  Assert(com->definition);
+  
+  int actualExpressionSize = com->definition->numberExpressions;
+  if(actualExpressionSize == -1){
     Token peek = tok->PeekUntilDelimiterExpression({"{","@{","#{"},{"}"},1);
     Tokenizer arguments(peek,"}",{"@{","#{"});
 
-    commandSize = 0;
+    actualExpressionSize = 0;
     while(!arguments.Done()){
       Token token = arguments.NextToken();
 
@@ -147,20 +170,23 @@ static Command* ParseCommand(Tokenizer* tok,Arena* out){
         arguments.AdvancePeek(insidePeek);
       }
 
-      commandSize += 1;
+      actualExpressionSize += 1;
     }
   }
 
-  com->expressions = PushArray<Expression*>(out,commandSize);
+  com->expressions = PushArray<Expression*>(out,actualExpressionSize);
   for(int i = 0; i < com->expressions.size; i++){
     com->expressions[i] = ParseExpression(tok,out);
   }
 
+  tok->AssertNextToken("}");
+  com->fullText = tok->Point(mark);
+  
   return com;
 }
 
 // Crude parser for identifiers
-static Expression* ParseIdentifier(Expression* current,Tokenizer* tok,Arena* temp){
+static Expression* ParseIdentifier(Expression* current,Tokenizer* tok,Arena* out){
   void* start = tok->Mark();
   Token firstId = tok->NextToken();
 
@@ -172,14 +198,14 @@ static Expression* ParseIdentifier(Expression* current,Tokenizer* tok,Arena* tem
 
     if(CompareString(token,"[")){
       tok->AdvancePeek(token);
-      Expression* expr = PushStruct<Expression>(temp);
-      expr->expressions = PushArray<Expression*>(temp,2);
+      Expression* expr = PushStruct<Expression>(out);
+      *expr = {};
+      expr->expressions = PushArray<Expression*>(out,2);
 
       expr->type = Expression::ARRAY_ACCESS;
       expr->expressions[0] = current;
-      expr->expressions[1] = ParseExpression(tok,temp);
+      expr->expressions[1] = ParseExpression(tok,out);
       expr->text = tok->Point(start);
-      expr->approximateLine = tok->lines;
       
       tok->AssertNextToken("]");
 
@@ -188,14 +214,14 @@ static Expression* ParseIdentifier(Expression* current,Tokenizer* tok,Arena* tem
       tok->AdvancePeek(token);
       Token memberName = tok->NextToken();
 
-      Expression* expr = PushStruct<Expression>(temp);
-      expr->expressions = PushArray<Expression*>(temp,1);
+      Expression* expr = PushStruct<Expression>(out);
+      *expr = {};
+      expr->expressions = PushArray<Expression*>(out,1);
 
       expr->type = Expression::MEMBER_ACCESS;
       expr->id = memberName;
       expr->expressions[0] = current;
       expr->text = tok->Point(start);
-      expr->approximateLine = tok->lines;
 
       current = expr;
     } else {
@@ -207,10 +233,11 @@ static Expression* ParseIdentifier(Expression* current,Tokenizer* tok,Arena* tem
   return current;
 }
 
-static Expression* ParseAtom(Tokenizer* tok,Arena* arena){
+static Expression* ParseAtom(Tokenizer* tok,Arena* out){
   void* start = tok->Mark();
 
-  Expression* expr = PushStruct<Expression>(arena);
+  Expression* expr = PushStruct<Expression>(out);
+  *expr = {};
   expr->type = Expression::LITERAL;
 
   Token token = tok->PeekToken();
@@ -232,27 +259,23 @@ static Expression* ParseAtom(Tokenizer* tok,Arena* arena){
     expr->val = MakeValue(str);
   } else if(CompareString(token,"@{")){
     tok->AdvancePeek(token);
-    expr = ParseExpression(tok,arena);
+    expr = ParseExpression(tok,out);
     tok->AssertNextToken("}");
   } else if(CompareString(token,"#{")){
-    tok->AdvancePeek(token);
-
     expr->type = Expression::COMMAND;
-    expr->command = ParseCommand(tok,arena);
-
-    Assert(!IsCommandBlockType(expr->command));
-    tok->AssertNextToken("}");
+    expr->command = ParseCommand(tok,out);
+    
+    Assert(!expr->command->definition->isBlockType);
   } else {
     expr->type = Expression::IDENTIFIER;
-    expr = ParseIdentifier(expr,tok,arena);
+    expr = ParseIdentifier(expr,tok,out);
   }
 
   expr->text = tok->Point(start);
-  expr->approximateLine = tok->lines;
   return expr;
 }
 
-static Expression* ParseFactor(Tokenizer* tok,Arena* arena){
+static Expression* ParseFactor(Tokenizer* tok,Arena* out){
   void* start = tok->Mark();
 
   Token peek = tok->PeekToken();
@@ -260,111 +283,290 @@ static Expression* ParseFactor(Tokenizer* tok,Arena* arena){
   Expression* expr = nullptr;
   if(CompareString(peek,"(")){
     tok->AdvancePeek(peek);
-    expr = ParseExpression(tok,arena);
+    expr = ParseExpression(tok,out);
     tok->AssertNextToken(")");
   } else if(CompareString(peek,"!")){
     tok->AdvancePeek(peek);
 
-    Expression* child = ParseExpression(tok,arena);
+    Expression* child = ParseExpression(tok,out);
 
-    expr = PushStruct<Expression>(arena);
-    expr->expressions = PushArray<Expression*>(arena,1);
+    expr = PushStruct<Expression>(out);
+    *expr = {};
+    expr->expressions = PushArray<Expression*>(out,1);
 
     expr->type = Expression::OPERATION;
     expr->op = "!";
     expr->expressions[0] = child;
 
     expr->text = tok->Point(start);
-    expr->approximateLine = tok->lines;
   } else {
-    expr = ParseAtom(tok,arena);
+    expr = ParseAtom(tok,out);
   }
 
   expr->text = tok->Point(start);
-  expr->approximateLine = tok->lines;
   return expr;
 }
 
-static Expression* ParseExpression(Tokenizer* tok,Arena* temp){
+static Expression* ParseExpression(Tokenizer* tok,Arena* out){
   void* start = tok->Mark();
 
-  Expression* res = ParseOperationType(tok,{{"#"},{"|>"},{"and","or","xor"},{">","<",">=","<=","==","!="},{"+","-"},{"*","/","&","**"}},ParseFactor,temp);
+  Expression* res = ParseOperationType(tok,{{"#"},{"|>"},{"and","or","xor"},{">","<",">=","<=","==","!="},{"+","-"},{"*","/","&","**"}},ParseFactor,out);
 
   res->text = tok->Point(start);
   return res;
 }
 
-static Block* Parse(Tokenizer* tok,Arena* out){
-  Block* block = PushStruct<Block>(out);
-  *block = {};
+static Expression* ParseBlockExpression(Tokenizer* tok,int line,Arena* out){
+  Byte* mark = tok->Mark();
+  tok->AssertNextToken("@{");
 
-  void* start = tok->Mark();
+  Expression* expr = ParseExpression(tok,out);
+  SetExpressionLine(expr,line);
+  
+  tok->AssertNextToken("}");
+  expr->text = tok->Point(mark);
+  
+  return expr;
+}
 
-  Token token = tok->PeekToken();
-  if(CompareString(token,"#{")){
-    block->type = Block::COMMAND;
+struct IndividualBlock{
+  String content;
+  BlockType type;
+  int line;
+};
 
-    tok->AdvancePeek(token);
-    block->command = ParseCommand(tok,out);
-    tok->AssertNextToken("}");
-
-    if(!IsCommandBlockType(block->command)){
-      return block;
-    }
-
-    Block* ptr = block;
-    while(1){
-      Block* child = Parse(tok,out);
-      if(child->type == Block::COMMAND && CompareString(child->command->name,"end")){
-        break;
-      } else {
-        if(block->nextInner == nullptr){
-          block->nextInner = child;
-          ptr = child;
-        } else {
-          Assert(!child->next);
-
-          ptr->next = child;
-          ptr = child;
-        }
-      }
-    }
-  } else {
-    block->type = Block::TEXT;
-
-    block->textBlock = tok->PeekFindUntil("#{");
-
-    if(block->textBlock.size == -1){
-      block->textBlock = tok->Finish();
-    }
-
-    tok->AdvancePeek(block->textBlock);
+static Array<IndividualBlock> ParseIndividualLine(String line, int lineNumber,Arena* out,Arena* temp){
+  if(CompareString(line,"")){
+    Array<IndividualBlock> arr = PushArray<IndividualBlock>(out,1);
+    arr[0] = {line,BlockType_TEXT,lineNumber};
+    return arr;
   }
 
-  block->fullText = tok->Point(start);
+  Tokenizer tok(line,"}",{"@{","#{"});
+  tok.keepComments = true;
+  ArenaList<IndividualBlock>* strings = PushArenaList<IndividualBlock>(temp);
 
-  return block;
+  while(1){
+    Byte* start = tok.Mark();
+    FindFirstResult res = tok.FindFirst({"#{","@{"});
+    
+    if(res.foundNone){
+      String leftover = tok.Finish();
+      if(leftover.size > 0){
+        *PushListElement(strings) = (IndividualBlock){leftover,BlockType_TEXT,lineNumber};
+      }
+      break;
+    }
+
+    if(res.peekFindNotIncluded.size > 0){
+      *PushListElement(strings) = (IndividualBlock){res.peekFindNotIncluded,BlockType_TEXT,lineNumber};
+    }
+
+    tok.AdvancePeek(res.peekFindNotIncluded);
+    if(CompareString(res.foundFirst,"#{")){
+      Byte* mark = tok.Mark();
+      Token skip = tok.PeekUntilDelimiterExpression({"#{","@{"},{"}"},0);
+      tok.AdvancePeek(skip);
+      tok.AssertNextToken("}");
+      String command = tok.Point(mark);
+      *PushListElement(strings) = (IndividualBlock){command,BlockType_COMMAND,lineNumber};
+    } else if(CompareString(res.foundFirst,"@{")){
+      Byte* mark = tok.Mark();
+      Token skip = tok.PeekUntilDelimiterExpression({"#{","@{"},{"}"},0);
+      tok.AdvancePeek(skip);
+      tok.AssertNextToken("}");
+      String expression = tok.Point(mark);
+      *PushListElement(strings) = (IndividualBlock){expression,BlockType_EXPRESSION,lineNumber};
+    }
+  }
+
+  Array<IndividualBlock> fullySeparated = PushArrayFromList(out,strings);
+  return fullySeparated;
 }
 
 static void Print(Block* block, int level = 0){
-#define PRINT_LEVEL() \
-   for(int i = 0; i < level*2; i++){ \
-  printf(" "); \
+  STACK_ARENA(tempInst,Kilobyte(1));
+  Arena* temp = &tempInst; 
+  
+  if(block == nullptr){
+    return;
   }
 
-if(block == nullptr){
-  return;
+  for(int i = 0; i < level*2; i++){
+    printf(" ");
+  }
+
+  switch(block->type){
+  case BlockType_COMMAND:{
+    printf("Comm: %.*s:%d\n",UNPACK_SS(block->command->fullText),block->line);
+    for(Block* ptr : block->innerBlocks){
+      Print(ptr,level + 1);
+    }
+  } break;
+  case BlockType_EXPRESSION:{
+    printf("Expr: %.*s:%d\n",UNPACK_SS(block->expression->text),block->line);
+  } break;
+  case BlockType_TEXT:{
+    String escaped = EscapeString(block->textBlock,'_',temp);
+    printf("Text: %.*s:%d\n",UNPACK_SS(escaped),block->line);
+  } break;
+  }
 }
 
-PRINT_LEVEL();
-if(block->type == Block::COMMAND){
-  printf("Command  : %.*s\n",UNPACK_SS(block->command->name));
-  for(Block* ptr = block->nextInner; ptr != nullptr; ptr = ptr->next){
-    Print(ptr,level + 1);
-  }
-} else {
-  printf("Text Size: %d\n",block->textBlock.size);
+String GetCommandFromIndividualBlock(IndividualBlock* block){
+  Assert(block->type == BlockType_COMMAND);
+
+  Tokenizer tok(block->content,"",{"#{"});
+
+  tok.AssertNextToken("#{");
+  String command = tok.NextToken();
+
+  return command;
 }
+
+Array<Block*> ConvertIndividualBlocksIntoHierarchical_(Array<IndividualBlock> blocks,int& index,int level,Arena* out,Arena* temp){
+  BLOCK_REGION(temp);
+  ArenaList<Block*>* blockList = PushArenaList<Block*>(temp);
+
+  for(; index < blocks.size;){
+    IndividualBlock* individualBlock = &blocks[index];
+    index += 1;
+    
+    Block* block = nullptr;
+    switch(individualBlock->type){
+    case BlockType_TEXT:{
+      block = PushStruct<Block>(out);
+      *block = {};
+      block->textBlock = individualBlock->content;
+    }break;
+    case BlockType_COMMAND:{
+      String content = individualBlock->content;
+      Tokenizer tokenizer(content,"!()[]{}+-:;.,*~><\"",{"#{","@{","==","!=","**","|>",">=","<=","!="});
+
+      Byte* mark = MarkArena(out);
+      Command* command = ParseCommand(&tokenizer,out);
+
+      for(Expression* expr : command->expressions){
+        SetExpressionLine(expr,individualBlock->line);
+      }
+      
+      if(command->definition->type == CommandType_END){
+        if(level == 0){
+          printf("Error on template engine, found an extra #{end}\n");
+          printf("%.*s:%d",UNPACK_SS(globalTemplateName),individualBlock->line);
+          Assert(false);
+        }
+        PopMark(out,mark); // No need to keep parsed command in memory, we do not process #{end}
+        goto exit_loop;
+      }
+
+      block = PushStruct<Block>(out);
+      *block = {};
+      
+      block->command = command;
+      if(command->definition->isBlockType){ // Parse subchilds and add them to block.
+        block->innerBlocks = ConvertIndividualBlocksIntoHierarchical_(blocks,index,level + 1,out,temp);
+      }
+    }break;
+    case BlockType_EXPRESSION:{
+      block = PushStruct<Block>(out);
+      *block = {};
+
+      String content = individualBlock->content;
+      Tokenizer tokenizer(content,"!()[]{}+-:;.,*~><\"",{"#{","@{","==","!=","**","|>",">=","<=","!="});
+
+      block->expression = ParseBlockExpression(&tokenizer,individualBlock->line,out);
+    }break;
+    }
+
+    if(block){
+      block->type = individualBlock->type;
+      block->line = individualBlock->line;
+      *PushListElement(blockList) = block;
+    }
+  }
+
+ exit_loop:
+  Array<Block*> res = PushArrayFromList(out,blockList);
+  
+  return res;
+}
+
+Array<Block*> ConvertIndividualBlocksIntoHierarchical(Array<IndividualBlock> blocks,Arena* out,Arena* temp){
+  int index = 0;
+  Array<Block*> res = ConvertIndividualBlocksIntoHierarchical_(blocks,index,0,out,temp);
+
+  return res;
+}
+
+CompiledTemplate* CompileTemplate(String content,const char* name,Arena* out,Arena* temp){
+  BLOCK_REGION(temp);
+  Byte* mark = MarkArena(out);
+
+  String storedName = PushString(out,STRING(name));
+  globalTemplateName = storedName;
+
+  CompiledTemplate* res = PushStruct<CompiledTemplate>(out);
+  *res = {};
+  
+  Tokenizer tokenizer(content,"!()[]{}+-:;.,*~><\"",{"#{","@{","==","!=","**","|>",">=","<=","!="});
+  Tokenizer* tok = &tokenizer;
+  tok->keepComments = true;
+
+  ArenaList<IndividualBlock>* blockList = PushArenaList<IndividualBlock>(temp);
+  Array<String> lines = Split(content,'\n',temp);
+  
+  for(int i = 0; i < lines.size; i++){
+    String& line = lines[i];
+    int lineNumber = i + 1;
+    Array<IndividualBlock> sep = ParseIndividualLine(line,lineNumber,temp,out);
+    
+    bool containsText = false;
+    bool containsCommand = false;
+    bool containsExpression = false;
+    bool onlyWhitespace = true;
+    for(IndividualBlock& s : sep){
+      switch(s.type){
+      case BlockType_EXPRESSION: containsExpression = true; break;
+      case BlockType_COMMAND: containsCommand = true; break;
+      case BlockType_TEXT: {
+        containsText = true;
+        
+        if(onlyWhitespace && !IsOnlyWhitespace(s.content)){
+          onlyWhitespace = false;
+        }
+      } break;
+      }
+    }
+      
+    bool onlyNakedCommands = (containsCommand && onlyWhitespace && !containsExpression);
+
+    if(onlyNakedCommands){
+      for(IndividualBlock& block : sep){
+        if(block.type == BlockType_COMMAND){
+          *PushListElement(blockList) = block;
+        }
+        Assert(block.type != BlockType_EXPRESSION);
+      }
+    } else {
+      for(IndividualBlock& block : sep){
+        *PushListElement(blockList) = block;
+      }
+
+      *PushListElement(blockList) = {STRING("\n"),BlockType_TEXT,lineNumber};
+    }
+  }
+
+  Array<IndividualBlock> blocks = PushArrayFromList(out,blockList);
+  Array<Block*> results = ConvertIndividualBlocksIntoHierarchical(blocks,out,temp);
+
+  String totalMemory = PointArena(out,mark);
+  res->blocks = results;
+  res->totalMemoryUsed = totalMemory.size;
+  res->content = content;
+  res->name = storedName;
+
+  return res;
 }
 
 std::unordered_map<String,PipeFunction> pipeFunctions;
@@ -375,28 +577,34 @@ void RegisterPipeOperation(String name,PipeFunction func){
 
 static Value EvalExpression(Expression* expr,Frame* frame,Arena* temp);
 
-static Value EvalExpression(Expression* expr,Frame* frame,Arena* temp){
-#ifdef DEBUG_TEMPLATE_ENGINE
-  printf("%.*s:\n",UNPACK_SS(expr->text));
-#endif // DEBUG_TEMPLATE_ENGINE
+struct DebugValues{
+  Expression expr;
+  Value val;
+};
 
+#ifdef DEBUG_TEMPLATE_ENGINE
+static DebugValues savedDebug[64];
+static int savedIndex; 
+#endif
+
+static Value EvalExpression(Expression* expr,Frame* frame,Arena* temp){
   Value val = {};
   switch(expr->type){
   case Expression::OPERATION:{
     if(expr->op[0] == '|'){ // Pipe operation
-            val = EvalExpression(expr->expressions[0],frame,temp);
+      val = EvalExpression(expr->expressions[0],frame,temp);
+      
+      auto iter = pipeFunctions.find(expr->expressions[1]->id);
+      if(iter == pipeFunctions.end()){
+        printf("Did not find the following pipe function\n");
+        printf("%.*s\n",UNPACK_SS(expr->expressions[1]->id));
+        NOT_IMPLEMENTED;
+      }
 
-            auto iter = pipeFunctions.find(expr->expressions[1]->id);
-            if(iter == pipeFunctions.end()){
-              printf("Did not find the following pipe function\n");
-              printf("%.*s\n",UNPACK_SS(expr->expressions[1]->id));
-              NOT_IMPLEMENTED;
-            }
+      PipeFunction func = iter->second;
+      val = func(val,temp);
 
-            PipeFunction func = iter->second;
-            val = func(val,temp);
-
-            goto EvalExpressionEnd;
+      goto EvalExpressionEnd;
     }
 
     if(CompareString(expr->op,"!")){
@@ -516,7 +724,7 @@ static Value EvalExpression(Expression* expr,Frame* frame,Arena* temp){
   case Expression::COMMAND:{
     Command* com = expr->command;
 
-    Assert(!IsCommandBlockType(com));
+    Assert(!com->definition->isBlockType);
 
     val = EvalNonBlockCommand(com,frame,temp).val;
   } break;
@@ -560,7 +768,9 @@ static Value EvalExpression(Expression* expr,Frame* frame,Arena* temp){
  EvalExpressionEnd:
 
 #ifdef DEBUG_TEMPLATE_ENGINE
-  printf("%.*s\n",UNPACK_SS(val.type->name));
+  savedDebug[savedIndex].expr = *expr;
+  savedDebug[savedIndex].val = val;
+  savedIndex = (savedIndex + 1) % 64;
 #endif // DEBUG_TEMPLATE_ENGINE
 
   return val;
@@ -571,29 +781,43 @@ static String EvalBlockCommand(Block* block,Frame* previousFrame,Arena* temp){
   String res = {};
   res.data = (char*) MarkArena(outputArena);
 
-  if(CompareString(com->name,"join")){
+  Assert(com->definition->isBlockType);
+
+  switch(com->definition->type){
+  case CommandType_JOIN:{
     Frame* frame = CreateFrame(previousFrame,temp);
     Value separator = EvalExpression(com->expressions[0],frame,temp);
 
     Assert(separator.type == ValueType::STRING);
 
-    Assert(com->expressions[2]->type == Expression::IDENTIFIER);
-    String id = com->expressions[2]->id;
-
-    Value iterating = EvalExpression(com->expressions[3],frame,temp);
-    int counter = 0;
+    Assert(com->expressions[1]->type == Expression::IDENTIFIER);
+    String id = com->expressions[1]->id;
+    
+    Value iterating = EvalExpression(com->expressions[2],frame,temp);
     int index = 0;
+    bool removeLastOutputSeperator = false;
     for(Iterator iter = Iterate(iterating); HasNext(iter); index += 1,Advance(&iter)){
-      SetValue(frame,STRING("index"),MakeValue(index));
-
+      CreateValue(frame,STRING("index"),MakeValue(index));
+      
       Value val = GetValue(iter);
       SetValue(frame,id,val);
 
+      // TODO: the format of the text becomes hard to read and there's
+      //       little that can be done because we have little control
+      //       in regards to the output arena usage.  Output arena
+      //       should just be passed as a parameter and we should call
+      //       eval using temp as the outputArena and then do some
+      //       processing to format it better (detect if multiple
+      //       lines or not, try to preserve whitespace if multiline
+      //       and stuff like that) and only then push it into the
+      //       output arena.
       bool outputSeparator = false;
-      for(Block* ptr = block->nextInner; ptr != nullptr; ptr = ptr->next){
+      for(Block* ptr : block->innerBlocks){
         String text = Eval(ptr,frame,temp);
 
-        if(!CheckStringOnlyWhitespace(text)){
+        if(IsOnlyWhitespace(text)){
+          outputArena->used -= text.size;
+        } else {
           res.size += text.size; // Push on stack
           outputSeparator = true;
         }
@@ -601,17 +825,16 @@ static String EvalBlockCommand(Block* block,Frame* previousFrame,Arena* temp){
 
       if(outputSeparator){
         res.size += PushString(outputArena,"%.*s",separator.str.size,separator.str.data).size;
-        counter += 1;
+        removeLastOutputSeperator = true;
       }
     }
-    if(counter == 0){
-      return res;
-    }
 
-    outputArena->used -= separator.str.size;
-    res.size -= separator.str.size;
-    Assert(res.size >= 0);
-  } else if(CompareString(com->name,"for")){
+    if(removeLastOutputSeperator){
+      outputArena->used -= separator.str.size;
+      res.size -= separator.str.size;
+    }
+  } break;
+  case CommandType_FOR:{
     Frame* frame = CreateFrame(previousFrame,temp);
     Assert(com->expressions[0]->type == Expression::IDENTIFIER);
     String id = com->expressions[0]->id;
@@ -624,33 +847,38 @@ static String EvalBlockCommand(Block* block,Frame* previousFrame,Arena* temp){
       Value val = GetValue(iter);
       SetValue(frame,id,val);
 
-      for(Block* ptr = block->nextInner; ptr != nullptr; ptr = ptr->next){
+      for(Block* ptr : block->innerBlocks){
         res.size += Eval(ptr,frame,temp).size; // Push on stack
       }
     }
-  } else if (CompareString(com->name,"if")){
+  } break;
+  case CommandType_IF:{
     Value expr = EvalExpression(com->expressions[0],previousFrame,temp);
     Value val = ConvertValue(expr,ValueType::BOOLEAN,nullptr);
 
     Frame* frame = CreateFrame(previousFrame,temp);
     if(val.boolean){
-      for(Block* ptr = block->nextInner; ptr != nullptr; ptr = ptr->next){
-        if(ptr->type == Block::COMMAND && CompareString(ptr->command->name,"else")){
+      for(Block* ptr : block->innerBlocks){
+        if(ptr->type == BlockType_COMMAND && ptr->command->definition->type == CommandType_ELSE){
           break;
         }
         res.size += Eval(ptr,frame,temp).size; // Push on stack
       }
     } else {
-      for(Block* ptr = block->nextInner; ptr != nullptr; ptr = ptr->next){
-        if(ptr->type == Block::COMMAND && CompareString(ptr->command->name,"else")){
-          for(ptr = ptr->next; ptr != nullptr; ptr = ptr->next){
-            res.size += Eval(ptr,frame,temp).size; // Push on stack
-          }
-          break;
+      bool sawElse = false;
+      for(Block* ptr : block->innerBlocks){
+        if(sawElse){
+          res.size += Eval(ptr,frame,temp).size; // Push on stack
+        }
+
+        if(ptr->type == BlockType_COMMAND && ptr->command->definition->type == CommandType_ELSE){
+          Assert(!sawElse); // Cannot have more than one else per if block
+          sawElse = true;
         }
       }
     }
-  } else if(CompareString(com->name,"debug")){
+  } break;
+  case CommandType_DEBUG:{
     Frame* frame = CreateFrame(previousFrame,temp);
     Value val = EvalExpression(com->expressions[0],frame,temp);
 
@@ -659,26 +887,28 @@ static String EvalBlockCommand(Block* block,Frame* previousFrame,Arena* temp){
       debugging = true;
     }
 
-    for(Block* ptr = block->nextInner; ptr != nullptr; ptr = ptr->next){
+    for(Block* ptr : block->innerBlocks){
       res.size += Eval(ptr,frame,temp).size; // Push on stack
     }
 
     debugging = false;
-  } else if(CompareString(com->name,"while")){
+  } break;
+  case CommandType_WHILE:{
     Frame* frame = CreateFrame(previousFrame,temp);
     while(ConvertValue(EvalExpression(com->expressions[0],frame,temp),ValueType::BOOLEAN,nullptr).boolean){
-      for(Block* ptr = block->nextInner; ptr != nullptr; ptr = ptr->next){
+      for(Block* ptr : block->innerBlocks){
         res.size += Eval(ptr,frame,temp).size; // Push on stack
       }
     }
-  } else if(CompareString(com->name,"define")) {
+  } break;
+  case CommandType_DEFINE:{
     String id = com->expressions[0]->id;
 
-    TemplateFunction* func = PushStruct<TemplateFunction>(temp);
-
-    func->arguments = &com->expressions[1];
-    func->numberArguments = com->expressions.size - 1;
-    func->block = block->nextInner;
+    TemplateFunction* func = (TemplateFunction*) malloc(sizeof(TemplateFunction)); // TODO: Cannot Push to temp. This should be dealt with at Parse time, not eval time.
+    
+    func->arguments.data = &com->expressions[1];
+    func->arguments.size = com->expressions.size - 1;
+    func->blocks = block->innerBlocks;
 
     Value val = {};
     val.templateFunction = func;
@@ -686,16 +916,17 @@ static String EvalBlockCommand(Block* block,Frame* previousFrame,Arena* temp){
     val.isTemp = true;
 
     SetValue(previousFrame,id,val);
-  } else if(CompareString(com->name,"debugMessage")){
+  } break;
+  case CommandType_DEBUG_MESSAGE:{
     Frame* frame = CreateFrame(previousFrame,temp);
-    ArenaMarker marker(outputArena);
+    BLOCK_REGION(outputArena);
 
-    for(Block* ptr = block->nextInner; ptr != nullptr; ptr = ptr->next){
+    for(Block* ptr : block->innerBlocks){
       String res = Eval(ptr,frame,temp); // Push on stack
       printf("%.*s\n",UNPACK_SS(res));
     }
-  } else {
-    NOT_IMPLEMENTED;
+  } break;
+  default: NOT_IMPLEMENTED;
   }
 
   return res;
@@ -703,20 +934,33 @@ static String EvalBlockCommand(Block* block,Frame* previousFrame,Arena* temp){
 
 extern Array<Pair<String,String>> templateNameToContent; // TODO: Kinda of a quick hack to make this work. Need to revise the way templates are done
 
+// TODO: This is not the prefered way of doing this.
+// Maybe just compile the template in malloc'ed memory
+// And keep the memory around, it's not like user code would have a reason to free this memory
+static CompiledTemplate* savedTemplate = nullptr;
+void SetIncludeHeader(CompiledTemplate* tpl,String name){
+  savedTemplate = tpl;
+}
+
 static ValueAndText EvalNonBlockCommand(Command* com,Frame* previousFrame,Arena* temp){
   Value val = MakeValue();
   String text = {};
   text.data = (char*) MarkArena(outputArena);
 
-  if(CompareString(com->name,"set")){
-	// TODO: Maybe change set to act as a declaration and initializar + setter and separate them.
-	//       Something like, set fails if variable does not exist. Use "let" to create variable which fails if it exists. That way we stop having problems with variables declaration and initialization
+  Assert(!com->definition->isBlockType);
+  switch(com->definition->type){
+  case CommandType_SET:{
     val = EvalExpression(com->expressions[1],previousFrame,temp);
-
     Assert(com->expressions[0]->type == Expression::IDENTIFIER);
-
+    // TODO: Should give an error if id does not exist
     SetValue(previousFrame,com->expressions[0]->id,val);
-  } else if(CompareString(com->name,"inc")){
+  } break;
+  case CommandType_LET:{
+    val = EvalExpression(com->expressions[1],previousFrame,temp);
+    Assert(com->expressions[0]->type == Expression::IDENTIFIER);
+    CreateValue(previousFrame,com->expressions[0]->id,val);
+  } break;
+  case CommandType_INC:{
     val = EvalExpression(com->expressions[0],previousFrame,temp);
 
     Assert(val.type == ValueType::NUMBER);
@@ -724,7 +968,8 @@ static ValueAndText EvalNonBlockCommand(Command* com,Frame* previousFrame,Arena*
     val.number += 1;
 
     SetValue(previousFrame,com->expressions[0]->id,val);
-  } else if(CompareString(com->name,"include")){
+  } break;
+  case CommandType_INCLUDE:{
     Value filenameString = EvalExpression(com->expressions[0],previousFrame,temp);
     Assert(filenameString.type == ValueType::STRING);
 
@@ -738,8 +983,13 @@ static ValueAndText EvalNonBlockCommand(Command* com,Frame* previousFrame,Arena*
 
     Assert(content.size);
 
-    ParseAndEvaluate(content,previousFrame,temp); // Use previous frame. Include should techically be global
-  } else if(CompareString(com->name,"call")){
+    // Get compiled template and evaluate it.
+    CompiledTemplate* templ = savedTemplate;
+    for(Block* block : templ->blocks){
+      text.size += Eval(block,previousFrame,temp).size;
+    }
+  } break;
+  case CommandType_CALL:{
     Frame* frame = CreateFrame(previousFrame,temp);
     String id = com->expressions[0]->id;
 
@@ -750,18 +1000,17 @@ static ValueAndText EvalNonBlockCommand(Command* com,Frame* previousFrame,Arena*
     }
 
     TemplateFunction* func = optVal.value().templateFunction;
+    Assert(func->arguments.size == com->expressions.size - 1);
 
-    Assert(func->numberArguments == com->expressions.size - 1);
-
-    for(int i = 0; i < func->numberArguments; i++){
+    for(int i = 0; i < func->arguments.size; i++){
       String id = func->arguments[i]->id;
 
       Value val = EvalExpression(com->expressions[1+i],frame,temp);
 
-      SetValue(frame,id,val);
+      CreateValue(frame,id,val);
     }
 
-    for(Block* ptr = func->block; ptr != nullptr; ptr = ptr->next){
+    for(Block* ptr : func->blocks){
       text.size += Eval(ptr,frame,temp).size;
     }
 
@@ -769,11 +1018,13 @@ static ValueAndText EvalNonBlockCommand(Command* com,Frame* previousFrame,Arena*
     if(optVal){
       val = optVal.value();
     }
-  } else if(CompareString(com->name,"return")){
+  } break;
+  case CommandType_RETURN:{
     val = EvalExpression(com->expressions[0],previousFrame,temp);
 
     SetValue(previousFrame,STRING("return"),val);
-  } else if(CompareString(com->name,"format")){
+  } break;
+  case CommandType_FORMAT:{
     Frame* frame = CreateFrame(previousFrame,temp);
     Value formatExpr = EvalExpression(com->expressions[0],frame,temp);
 
@@ -812,13 +1063,15 @@ static ValueAndText EvalNonBlockCommand(Command* com,Frame* previousFrame,Arena*
 
       text.size += PushString(outputArena,val.str).size;
     }
-  } else if(CompareString(com->name,"debugBreak")){
+  } break;
+  case CommandType_DEBUG_BREAK:{
     DEBUG_BREAK();
-  } else if(CompareString(com->name,"end")){
+  } break;
+  case CommandType_END:{
     printf("Error: founded a strain end in the template\n");
     Assert(false);
-  } else {
-    NOT_IMPLEMENTED;
+  } break;
+  default: NOT_IMPLEMENTED;
   }
 
   ValueAndText res = {};
@@ -829,42 +1082,26 @@ static ValueAndText EvalNonBlockCommand(Command* com,Frame* previousFrame,Arena*
 }
 
 static String Eval(Block* block,Frame* frame,Arena* temp){
+  BLOCK_REGION(temp);
+
   String res = {};
   res.data = (char*) MarkArena(outputArena);
 
-  if(block->type == Block::COMMAND){
-    if(IsCommandBlockType(block->command)){
+  switch(block->type){
+  case BlockType_COMMAND:{
+    if(block->command->definition->isBlockType){
       res = EvalBlockCommand(block,frame,temp);
     } else {
       res = EvalNonBlockCommand(block->command,frame,temp).text;
     }
-  } else {
-    // Print text
-    Tokenizer tok(block->textBlock,"!()[]{}+-:;.,*~><\"",{"@{","#{","==","**","|>",">=","<=","!="});
-
-    tok.keepComments = true;
-    while(1){
-      Token text = tok.PeekFindUntil("@{");
-
-      if(text.size == -1){
-        text = tok.Finish();
-      }
-      tok.AdvancePeek(text);
-
-      res.size += PushString(outputArena,text).size;
-
-      if(tok.Done()){
-        break;
-      }
-
-      tok.AssertNextToken("@{");
-      Expression* expr = ParseExpression(&tok,temp);
-      tok.AssertNextToken("}");
-
-      Value val = EvalExpression(expr,frame,temp);
-
-      res.size += GetDefaultValueRepresentation(val,outputArena).size;
-    }
+  }break;
+  case BlockType_EXPRESSION:{
+    Value val = EvalExpression(block->expression,frame,temp);
+    res.size += GetDefaultValueRepresentation(val,outputArena).size;
+  } break;
+  case BlockType_TEXT:{
+    res.size += PushString(outputArena,block->textBlock).size;
+  } break;
   }
 
   Assert(res.size >= 0);
@@ -876,74 +1113,384 @@ void InitializeTemplateEngine(Arena* perm){
   globalFrame->previousFrame = nullptr;
 }
 
-void ParseAndEvaluate(String content,Frame* frame,Arena* temp){
-  Tokenizer tokenizer(content,"!()[]{}+-:;.,*~><\"",{"#{","@{","==","!=","**","|>",">=","<=","!="});
-  Tokenizer* tok = &tokenizer;
-
-  tok->keepComments = true;
-
-  while(!tok->Done()){
-    Block* block = Parse(tok,temp);
-
-    String text = Eval(block,frame,temp);
-    fprintf(output,"%.*s",text.size,text.data);
-    fflush(output);
-  }
-}
-
-CompiledTemplate* CompileTemplate(String content,const char* name,Arena* arena){
-  Byte* mark = MarkArena(arena);
-
-  String storedName = PushString(arena,STRING(name));
-  globalTemplateName = storedName;
-
-  CompiledTemplate* res = PushStruct<CompiledTemplate>(arena);
-
-  Tokenizer tokenizer(content,"!()[]{}+-:;.,*~><\"",{"#{","@{","==","!=","**","|>",">=","<=","!="});
-  Tokenizer* tok = &tokenizer;
-  tok->keepComments = true;
-
-  Block* initial = Parse(tok,arena);
-  Block* ptr = initial;
-  while(!tok->Done()){
-    Assert(ptr->next == nullptr);
-    ptr->next = Parse(tok,arena);
-    ptr = ptr->next;
-  }
-
-  String totalMemory = PointArena(arena,mark);
-  res->blocks = initial;
-  res->totalMemoryUsed = totalMemory.size;
-  res->content = content;
-  res->name = storedName;
-
-  return res;
-}
-
-void ProcessTemplate(FILE* outputFile,CompiledTemplate* compiledTemplate,Arena* arena){
+void ProcessTemplate(FILE* outputFile,CompiledTemplate* compiledTemplate,Arena* temp,Arena* temp2){
+  BLOCK_REGION(temp);
+  BLOCK_REGION(temp2);
   Assert(globalFrame && "Call InitializeTemplateEngine first!");
 
   globalTemplateName = compiledTemplate->name;
 
-  ArenaMarker marker(arena);
-  Arena outputArenaInst = SubArena(arena,Megabyte(64));
-  outputArena = &outputArenaInst;
+  outputArena = temp2;
   output = outputFile;
 
-  for(Block* block = compiledTemplate->blocks; block; block = block->next){
-    String text = Eval(block,globalFrame,arena);
+#if 0
+  Arena outputArenaInst = SubArena(temp,Megabyte(64));
+  outputArena = &outputArenaInst;
+  output = outputFile;
+#endif
+
+  Frame* top = CreateFrame(globalFrame,temp);
+  for(Block* block : compiledTemplate->blocks){
+    String text = Eval(block,top,temp);
     fprintf(output,"%.*s",text.size,text.data);
     fflush(output);
   }
+}
+
+String Repr(TemplateRecord r,Arena* arena){
+  switch(r.type){
+  case TemplateRecordType_FIELD:{
+    return PushString(arena,"%.*s::%.*s",UNPACK_SS(r.structType->name),UNPACK_SS(r.fieldName));
+  } break;
+  case TemplateRecordType_IDENTIFER:{
+    return PushString(arena,"[%.*s] %.*s",UNPACK_SS(r.identifierType->name),UNPACK_SS(r.identifierName));
+  } break;
+  default: NOT_IMPLEMENTED;
+  }
+
+  return {};
+}
+
+void PrintTemplate(CompiledTemplate* compiled,Arena* arena){
+  NOT_IMPLEMENTED;
+}
+
+template<> class std::hash<TemplateRecord>{
+public:
+   std::size_t operator()(TemplateRecord const& s) const noexcept{
+     std::size_t res = std::hash<Type*>()(s.structType) + std::hash<String>()(s.fieldName);
+     return res;
+   }
+};
+
+bool operator==(const TemplateRecord& r0,const TemplateRecord& r1){
+  if(r0.type != r1.type){
+    return false;
+  }
+
+  bool res = false;
+  switch(r0.type){
+  case TemplateRecordType_FIELD:{
+    res = (r0.structType == r1.structType) && CompareString(r0.fieldName,r1.fieldName);
+  } break;
+  case TemplateRecordType_IDENTIFER:{
+    res = (r0.identifierType == r1.identifierType) && CompareString(r0.identifierName,r1.identifierName);
+  } break;
+  default: NOT_IMPLEMENTED;
+  }
+  
+  return res;
+}
+
+void PrintFrames(Frame* frame){
+  Frame* ptr = frame;
+  int index = 0;
+  while(ptr){
+    for(Pair<String,Value>& p : ptr->table){
+      printf("%d %.*s\n",index,UNPACK_SS(p.first));
+    }
+    index += 1;
+    ptr = ptr->previousFrame;
+  }
+}
+
+static void RecordEval(Block* block,Frame* frame,ArenaList<TemplateRecord>* recordList,Arena* temp);
+static Type* RecordNonBlockCommand(Command* com,Frame* previousFrame,ArenaList<TemplateRecord>* recordList,Arena* temp);
+
+Type* RecordExpression(Expression* expr,Frame* frame,ArenaList<TemplateRecord>* recordList,Arena* temp){
+  switch(expr->type){
+  case Expression::UNDEFINED:{
+    // Nothing
+  } break;
+  case Expression::OPERATION:{
+    if(expr->op[0] == '|'){ // Pipe operation
+      return RecordExpression(expr->expressions[0],frame,recordList,temp);
+    } else {
+      Type* type = nullptr;
+      for(Expression* subExpr : expr->expressions){
+        type = RecordExpression(subExpr,frame,recordList,temp);
+      }
+      return type;
+    }
+  } break;
+  case Expression::LITERAL:{
+    return expr->val.type;
+  } break;
+  case Expression::COMMAND:{
+    Command* com = expr->command;
+
+    Assert(!com->definition->isBlockType);
+
+    return RecordNonBlockCommand(com,frame,recordList,temp);
+  } break;
+  case Expression::IDENTIFIER:{
+    Optional<Value> optVal = GetValue(frame,expr->id);
+
+    if(optVal.has_value()){
+      Value val = optVal.value();
+      Type* type = val.type;
+
+      // Only register top frame accesses
+      Optional<Value> globalOpt = GetValue(globalFrame,expr->id);
+      if(globalOpt.has_value()){
+        TemplateRecord* record = PushListElement(recordList);
+        record->type = TemplateRecordType_IDENTIFER;
+        record->identifierType = type;
+        record->identifierName = expr->id;
+      }
+      
+      return optVal.value().type;
+    } else {
+      PrintFrames(frame);
+      LogFatal(LogModule::TEMPLATE,"Did not find (%.*s) in template: %.*s:%d",UNPACK_SS(expr->id),UNPACK_SS(globalTemplateName),expr->approximateLine);
+      DEBUG_BREAK();
+    }
+  } break;
+  case Expression::ARRAY_ACCESS:{
+    Type* type = RecordExpression(expr->expressions[0],frame,recordList,temp);
+    RecordExpression(expr->expressions[1],frame,recordList,temp);
+    return GetBaseTypeOfIterating(type);
+  } break;
+  case Expression::MEMBER_ACCESS:{
+    Type* type = RecordExpression(expr->expressions[0],frame,recordList,temp);
+    Optional<Member*> member = GetMember(type,expr->id);
+
+    if(!member){
+	  PrintStructDefinition(type);
+      FatalError(StaticFormat("Tried to access member (%.*s) that does not exist for type (%.*s)",UNPACK_SS(expr->id),UNPACK_SS(type->name)),expr->approximateLine);
+    }
+
+    Type* fieldType = member.value()->type;
+    TemplateRecord* record = PushListElement(recordList);
+    record->type = TemplateRecordType_FIELD;
+    record->structType = type;
+    record->fieldName = expr->id;
+    
+    return fieldType;
+    // Get type of member
+  } break;
+  default: {
+    NOT_POSSIBLE;
+  } break;
+  }
+
+  return nullptr;
+}
+
+static void RecordBlockCommand(Block* block,Frame* previousFrame,ArenaList<TemplateRecord>* recordList,Arena* temp){
+  Command* com = block->command;
+  Assert(com->definition->isBlockType);
+
+  switch(com->definition->type){
+  case CommandType_JOIN:{
+    Frame* frame = CreateFrame(previousFrame,temp);
+    Type* separator = RecordExpression(com->expressions[0],frame,recordList,temp);
+    Type* iterating = RecordExpression(com->expressions[2],frame,recordList,temp);
+    Type* baseValue = GetBaseTypeOfIterating(iterating);
+    
+    String id = com->expressions[1]->id;
+    SetValue(frame,id,MakeValue(0x0,baseValue)); // Iterator base value type
+    SetValue(frame,STRING("index"),MakeValue(0));
+    
+    for(Block* ptr : block->innerBlocks){
+      RecordEval(ptr,frame,recordList,temp);
+    }
+  } break;
+  case CommandType_FOR:{
+    Frame* frame = CreateFrame(previousFrame,temp);
+
+    String id = com->expressions[0]->id;
+
+    Type* iterating = RecordExpression(com->expressions[1],frame,recordList,temp);
+    Type* baseValue = GetBaseTypeOfIterating(iterating);
+
+    SetValue(frame,id,MakeValue(nullptr,baseValue));
+    SetValue(frame,STRING("index"),MakeValue(0));
+      
+    for(Block* ptr : block->innerBlocks){
+      RecordEval(ptr,frame,recordList,temp);
+    }
+  } break;
+  case CommandType_IF:{
+    RecordExpression(com->expressions[0],previousFrame,recordList,temp);
+    Frame* frame = CreateFrame(previousFrame,temp);
+    for(Block* ptr : block->innerBlocks){
+      if(ptr->type == BlockType_COMMAND && ptr->command->definition->type == CommandType_ELSE){
+      } else {
+        RecordEval(ptr,frame,recordList,temp);
+      }
+    }
+  } break;
+  case CommandType_DEBUG:{
+    RecordExpression(com->expressions[0],previousFrame,recordList,temp);
+    Frame* frame = CreateFrame(previousFrame,temp);
+    for(Block* ptr : block->innerBlocks){
+      RecordEval(ptr,frame,recordList,temp);
+    }
+  } break;
+  case CommandType_WHILE:{
+    RecordExpression(com->expressions[0],previousFrame,recordList,temp);
+    Frame* frame = CreateFrame(previousFrame,temp);
+    for(Block* ptr : block->innerBlocks){
+      RecordEval(ptr,frame,recordList,temp);
+    }
+  } break;
+  case CommandType_DEFINE:{
+    String id = com->expressions[0]->id;
+
+    TemplateFunction* func = (TemplateFunction*) malloc(sizeof(TemplateFunction)); // TODO: Cannot Push to temp. This should be dealt with at Parse time, not eval time.
+    
+    func->arguments.data = &com->expressions[1];
+    func->arguments.size = com->expressions.size - 1;
+    func->blocks = block->innerBlocks;
+
+    Value val = {};
+    val.templateFunction = func;
+    val.type = ValueType::TEMPLATE_FUNCTION;
+    val.isTemp = true;
+
+    SetValue(previousFrame,id,val);
+  } break;
+  case CommandType_DEBUG_MESSAGE:{
+    Frame* frame = CreateFrame(previousFrame,temp);
+    for(Block* ptr : block->innerBlocks){
+      RecordEval(ptr,frame,recordList,temp);
+    }
+  } break;
+  default: NOT_IMPLEMENTED;
+  }
+}
+
+static Type* RecordNonBlockCommand(Command* com,Frame* previousFrame,ArenaList<TemplateRecord>* recordList,Arena* temp){
+  Assert(!com->definition->isBlockType);
+
+  switch(com->definition->type){
+  case CommandType_SET:{
+    Type* type = RecordExpression(com->expressions[1],previousFrame,recordList,temp);
+    Value val = MakeValue(nullptr,type);
+    SetValue(previousFrame,com->expressions[0]->id,val);
+  } break;
+  case CommandType_LET:{
+    Type* type = RecordExpression(com->expressions[1],previousFrame,recordList,temp);
+    Value val = MakeValue(nullptr,type);
+    CreateValue(previousFrame,com->expressions[0]->id,val);
+  } break;
+  case CommandType_INC:{
+  } break;
+  case CommandType_INCLUDE:{
+    Value filenameString = EvalExpression(com->expressions[0],previousFrame,temp);
+    Assert(filenameString.type == ValueType::STRING);
+
+    String content = {};
+    for(Pair<String,String>& nameToContent : templateNameToContent){
+      if(CompareString(nameToContent.first,filenameString.str)){
+        content = nameToContent.second;
+        break;
+      }
+    }
+
+    Assert(content.size);
+
+    // Get compiled template and evaluate it.
+    CompiledTemplate* templ = savedTemplate;
+    for(Block* block : templ->blocks){
+      RecordEval(block,previousFrame,recordList,temp);
+    }
+  } break;
+  case CommandType_CALL:{
+    Frame* frame = CreateFrame(previousFrame,temp);
+    String id = com->expressions[0]->id;
+
+    Optional<Value> optVal = GetValue(frame,id);
+    if(!optVal){
+      printf("Failed to find %.*s\n",UNPACK_SS(id));
+      DEBUG_BREAK();
+    }
+
+    TemplateFunction* func = optVal.value().templateFunction;
+    Assert(func->arguments.size == com->expressions.size - 1);
+
+    for(int i = 0; i < func->arguments.size; i++){
+      String id = func->arguments[i]->id;
+      Type* type = RecordExpression(com->expressions[1+i],frame,recordList,temp);
+      SetValue(frame,id,MakeValue(nullptr,type));
+    }
+
+    for(Block* block : func->blocks){
+      RecordEval(block,frame,recordList,temp);
+    }
+
+    Optional<Value> optReturn = GetValue(frame,STRING("return"));
+    if(optReturn){
+      return optReturn.value().type;
+    }
+  } break;
+  case CommandType_RETURN:{
+    Value val = EvalExpression(com->expressions[0],previousFrame,temp);
+
+    SetValue(previousFrame,STRING("return"),MakeValue(nullptr,val.type));
+  } break;
+  case CommandType_FORMAT:{
+    Frame* frame = CreateFrame(previousFrame,temp);
+    for(Expression* expr : com->expressions){
+      RecordExpression(expr,frame,recordList,temp);
+    }
+  } break;
+  case CommandType_DEBUG_BREAK:{
+    DEBUG_BREAK();
+  } break;
+  case CommandType_END:{
+    NOT_POSSIBLE;
+  } break;
+  default: NOT_IMPLEMENTED;
+  }
+
+  return nullptr;
+}
+
+static void RecordEval(Block* block,Frame* frame,ArenaList<TemplateRecord>* recordList,Arena* temp){
+  switch(block->type){
+  case BlockType_COMMAND:{
+    if(block->command->definition->isBlockType){
+      RecordBlockCommand(block,frame,recordList,temp);
+    } else {
+      RecordNonBlockCommand(block->command,frame,recordList,temp);
+    }
+  }break;
+  case BlockType_EXPRESSION:{
+    RecordExpression(block->expression,frame,recordList,temp);
+  } break;
+  case BlockType_TEXT:{
+  } break;
+  }
+}
+
+Array<TemplateRecord> RecordTypesAndFieldsUsed(CompiledTemplate* compiled,Arena* out,Arena* temp){
+  BLOCK_REGION(temp);
+  ArenaList<TemplateRecord>* recordList = PushArenaList<TemplateRecord>(temp);
+
+  globalTemplateName = compiled->name;
+
+  Frame* top = CreateFrame(globalFrame,temp);
+  for(Block* block : compiled->blocks){
+    RecordEval(block,top,recordList,temp);
+  }
+
+  Set<TemplateRecord>* set = PushSetFromList<TemplateRecord>(temp,recordList); // Remove duplicates
+  Array<TemplateRecord> arr = PushArrayFromSet<TemplateRecord>(out,set);
+
+  return arr;
+}
+
+Hashmap<String,Value>* GetAllTemplateValues(){
+  return globalFrame->table;
 }
 
 void ClearTemplateEngine(){
   globalFrame->table->Clear();
 }
 
-void TemplateSetCustom(const char* id,void* entity,const char* typeName){
-  Value val = MakeValue(entity,typeName);
-
+void TemplateSetCustom(const char* id,Value val){
   SetValue(globalFrame,STRING(id),val);
 }
 
@@ -970,7 +1517,7 @@ void TemplateSetBool(const char* id,bool boolean){
   SetValue(globalFrame,STRING(id),MakeValue(boolean));
 }
 
-void TemplateSetArray(const char* id,const char* baseType,void* array,int size){
+void TemplateSetArray(const char* id,const char* baseType,int size,void* array){
   Value val = {};
 
   val.type = GetArrayType(GetType(STRING(baseType)),size);

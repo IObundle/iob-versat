@@ -1,7 +1,6 @@
-#ifndef VERSAT_INCLUDED_UTILS_CORE
-#define VERSAT_INCLUDED_UTILS_CORE
+#pragma once
 
-// Utilities that do not depend on anything else (like memory.hpp)
+// Utilities that do not depend on anything else from versat (like memory.hpp, it's fine to depend on standard library)
 
 #include <cstdio>
 #include <iosfwd>
@@ -74,7 +73,7 @@ ALWAYS_INLINE Defer<F> operator+(_DeferTag,F&& f){
 
 #define TEMP__defer(LINE) TEMPdefer_ ## LINE
 #define TEMP_defer(LINE) TEMP__defer( LINE )
-#define defer auto TEMP_defer(__LINE__) = _DeferTag() + [&]()
+#define defer auto TEMP_defer(__LINE__) = _DeferTag() + [&]() // Only executes at the end of the code block
 
 struct Once{};
 struct _OnceTag{};
@@ -86,41 +85,44 @@ ALWAYS_INLINE Once operator+(_OnceTag,F&& f){
 
 #define TEMP__once(LINE) TEMPonce_ ## LINE
 #define TEMP_once(LINE) TEMP__once( LINE )
-#define once static Once TEMP_once(__LINE__) = _OnceTag() + [&]()
+#define once static Once TEMP_once(__LINE__) = _OnceTag() + [&]() // Executes once even if called multiple times
 
 void PrintStacktrace();
 void FlushStdout();
 
+const char* GetFilename(const char* fullpath);
+
+// Quick print functions used when doing "print" debugging
+#define NEWLINE() do{ printf("\n"); FlushStdout();} while(0)
+#define LOCATION() do{ printf("%s:%d\n",GetFilename(__FILE__),__LINE__); FlushStdout();} while(0)
+#define PRINTF_WITH_LOCATION(...) do{ printf("%s:%d-",__FILE__,__LINE__); printf(__VA_ARGS__); FlushStdout();} while(0)
+#define PRINT_STRING(STR) do{ printf("%.*s\n",UNPACK_SS((STR))); FlushStdout();} while(0)
+
+static void Terminate(){FlushStdout(); exit(-1);}
 //#if defined(VERSAT_DEBUG)
 #define Assert(EXPR) \
-   do { \
-   bool _ = !(EXPR);   \
-   if(_){ \
-      PrintStacktrace(); \
+  do { \
+    bool _ = !(EXPR);   \
+    if(_){ \
       FlushStdout(); \
-      assert(_ && (EXPR)); \
-   } \
-   } while(0)
+      __builtin_trap(); \
+    } \
+  } while(0)
 //#else
 //#define Assert(EXPR) do {} while(0)
 //#endif
 
 // Assert that gets replaced by the expression if debug is disabled (instead of simply disappearing like a normal assert)
-// Probably not a good idea now that I think about it. It's probably leads to more confusing code 
+// Probably not a good idea now that I think about it. It probably leads to more confusing code 
+// TODO: Remove this and change affected code 
 #if defined(VERSAT_DEBUG)
 #define AssertAndDo(EXPR) Assert(EXPR)
 #else
 #define AssertAndDo(EXPR) EXPR
 #endif
 
-#define DEBUG_BREAK() do{ FlushStdout(); raise(SIGTRAP); } while(0)
+#define DEBUG_BREAK() do{ PrintStacktrace(); FlushStdout(); raise(SIGTRAP); } while(0)
 #define DEBUG_BREAK_IF(COND) if(COND){FlushStdout(); raise(SIGTRAP);}
-
-#define DEBUG_BREAK_IF_DEBUGGING() DEBUG_BREAK_IF(CurrentlyDebugging())
-
-#define debugRegion if(CurrentlyDebugging())
-
-bool CurrentlyDebugging();
 
 #define NOT_IMPLEMENTED do{ printf("%s:%d:1: error: Not implemented: %s",__FILE__,__LINE__,__PRETTY_FUNCTION__); FlushStdout(); Assert(false); } while(0) // Doesn't mean that something is necessarily future planned
 #define NOT_POSSIBLE DEBUG_BREAK()
@@ -141,51 +143,24 @@ bool CurrentlyDebugging();
 
 #define TIME_FUNCTION clock
 
-#if 0
-#ifdef VERSAT
-//#include <cstdio>
-extern "C"{
-#include "iob-timer.h"
-}
-#define TIME_FUNCTION timer_get_count
-#else
-#define TIME_FUNCTION clock
-#endif
-#endif
-
-#ifndef SIM // #ifdef PC TODO: I do not think these will be needed anymore
+typedef uint8_t Byte;
+typedef uint8_t u8;
+typedef int8_t i8;
+typedef uint16_t u16;
+typedef int16_t i16;
+typedef uint32_t u32;
+typedef int32_t i32;
+typedef uint64_t u64;
+typedef int64_t i64;
 typedef intptr_t iptr;
 typedef uintptr_t uptr;
-typedef uint32_t uint;
-typedef int64_t int64;
-typedef uint64_t uint64;
-typedef int32_t int32;
-typedef uint32_t uint32;
-typedef int16_t int16;
-typedef uint16_t uint16;
-typedef int8_t int8;
-typedef uint8_t uint8;
-typedef uint8_t Byte;
-typedef uint8 u8;
-typedef int8 i8;
-typedef uint32 u32;
-typedef int32 i32;
-#else
-typedef unsigned char Byte;
-typedef unsigned int uint;
-typedef intptr_t iptr;
-typedef int64_t int64;
-typedef uint64_t uint64;
-//typedef long long int int64; // Long long is at least 64, so
-//typedef long long unsigned int uint64;
-#endif
 
 template<typename T>
 using Optional = std::optional<T>;
 
 struct Time{
-   uint64 microSeconds;
-   uint64 seconds;
+   u64 microSeconds;
+   u64 seconds;
 };
 
 Time GetTime();
@@ -194,7 +169,7 @@ Time operator-(const Time& s1,const Time& s2);
 bool operator>(const Time& s1,const Time& s2);
 bool operator==(const Time& s1,const Time& s2);
 
-static constexpr Time Seconds(uint64 seconds){Time t = {}; t.seconds = seconds; return t;};
+static constexpr Time Seconds(u64 seconds){Time t = {}; t.seconds = seconds; return t;};
 
 // Automatically times a block in number of counts
 class TimeIt{
@@ -345,7 +320,7 @@ static bool operator==(const Pair<F,S>& p1,const Pair<F,S>& p2){
    return res;
 }
 
-#define BIT_MASK(BIT) (1 << BIT)
+#define BIT_MASK(BIT) (1 << (BIT))
 #define GET_BIT(VAL,INDEX) (VAL & (BIT_MASK(INDEX)))
 #define SET_BIT(VAL,INDEX) (VAL | (BIT_MASK(INDEX)))
 #define CLEAR_BIT(VAL,INDEX) (VAL & ~(BIT_MASK(INDEX)))
@@ -356,6 +331,9 @@ static bool operator==(const Pair<F,S>& p1,const Pair<F,S>& p2){
 // Returns a statically allocated string, instead of implementing varg for everything
 // Returned string uses statically allocated memory. Intended to be used to create quick strings for other functions, instead of having to implement them as variadic. Can also be used to temporarely transform a String into a C-String
 char* StaticFormat(const char* format,...);
+
+// Array useful functions
+int CountNonZeros(Array<int> arr);
 
 // Misc
 int RoundUpDiv(int dividend,int divisor);
@@ -387,9 +365,9 @@ int PackInt(float val);
 float PackFloat(int val);
 float PackFloat(Byte sign,Byte exponent,int mantissa);
 int SwapEndianess(int val);
-uint64 SwapEndianess(uint64 val);
+u64 SwapEndianess(u64 val);
 
-int NumberDigitsRepresentation(int64 number); // Number of digits if printed (negative includes - sign )
+int NumberDigitsRepresentation(i64 number); // Number of digits if printed (negative includes - sign )
 char GetHex(int value);
 Byte HexCharToNumber(char ch);
 
@@ -399,7 +377,8 @@ void HexStringToHex(unsigned char* buffer,String str);
 void SeedRandomNumber(uint seed);
 uint GetRandomNumber();
 
-bool CheckIfFileExists(const char* file);
+bool RemoveDirectory(const char* path);
+//bool CheckIfFileExists(const char* file);
 long int GetFileSize(FILE* file);
 char* GetCurrentDirectory();
 void MakeDirectory(const char* path);
@@ -505,5 +484,3 @@ inline bool Contains(Array<String> array,String toCheck){
    }
    return false;
 }
-
-#endif // VERSAT_INCLUDED_UTILS_CORE

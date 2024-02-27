@@ -1,5 +1,4 @@
-#ifndef INCLUDED_GRAPH
-#define INCLUDED_GRAPH
+#pragma once
 
 //#include "versat.hpp"
 #include "utils.hpp"
@@ -148,5 +147,3 @@ void InsertUnit(Accelerator* accel,PortNode output,PortNode input,PortNode newUn
 void InsertUnit(Accelerator* accel, PortInstance before, PortInstance after, PortInstance newUnit);
 
 Edge* ConnectUnitsGetEdge(PortNode out,PortNode in,int delay);
-
-#endif // INCLUDED_GRAPH

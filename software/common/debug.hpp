@@ -5,8 +5,9 @@
 
 void InitDebug(); // Call before any other debug function
 
-// Set this during debugging (either in code or by using gdb set command) and check using the macros below for better control on debugging events
-extern bool debugFlag;
+extern bool debugFlag; // True if currently debugging
+
+#define DEBUG_BREAK_IF_DEBUGGING() DEBUG_BREAK_IF(debugFlag)
 
 #define DEBUG_CONTROLLED_BREAK() DEBUG_BREAK_IF(debugFlag)
 #define DEBUG_CONTROLLED_BREAK_IF(COND) DEBUG_BREAK_IF(debugFlag && (COND))
@@ -16,6 +17,7 @@ extern bool debugFlag;
 
 typedef void (*SignalHandler)(int sig);
 
+bool CurrentlyDebugging();
 void SetDebugSignalHandler(SignalHandler func);
 
 void PrintStacktrace();

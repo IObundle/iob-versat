@@ -31,6 +31,7 @@ typedef String Token;
 struct FindFirstResult{
   Token foundFirst;
   Token peekFindNotIncluded;
+  bool foundNone;
 };
 
 // TODO: Vast majority of extra functions could be removed if we allowed a quick change in
@@ -73,8 +74,8 @@ public:
   Token PeekFindIncludingLast(const char* str);
   Token NextFindUntil(const char* str);
   
-  String GetStartOfCurrentLine();
-
+  String PeekCurrentLine(); // Get full line. Not fully tested, GetCurrentLine
+  
   bool IfPeekToken(const char* str);
   bool IfNextToken(const char* str);
 
@@ -87,14 +88,14 @@ public:
 
   Token Finish();
 
-  void* Mark();
+  Byte* Mark();
   Token Point(void* mark);
   void Rollback(void* mark);
 
   void AdvancePeek(Token tok);
 
   void SetSingleChars(const char* singleChars);
-  bool Done();
+  bool Done(); // If more tokens, returns false. Can return true even if it contains more text (but no more tokens)
   Token Remaining();
   int Lines(){return lines;};
 
@@ -105,11 +106,13 @@ public:
   String PeekIncludingDelimiterExpression(std::initializer_list<const char*> open,std::initializer_list<const char*> close, int numberOpenSeen);
 };
 
-bool CheckStringOnlyWhitespace(Token tok);
+bool IsOnlyWhitespace(Token tok);
 bool Contains(String str,const char* toCheck);
 
 bool CheckFormat(const char* format,Token tok);
 Array<Value> ExtractValues(const char* format,Token tok,Arena* arena);
+
+Array<String> Split(String content,char sep,Arena* out); // For now only split over one char. 
 
 String TrimWhitespaces(String in);
 
@@ -123,46 +126,31 @@ int CountSubstring(String str,String substr);
 void StoreToken(Token token,char* buffer);
 #define CompareToken CompareString
 
+//void PrintEscapedToken(Token tok);
+
 // This functions should check for errors. Also these functions should return an error if they do not parse everything. Something like STRING("3 a") should flag an error for ParseInt, for example, instead of just returning 3. Either they consume everything or it's an error
 int ParseInt(String str);
 double ParseDouble(String str);
 float ParseFloat(String str);
 bool IsNum(char ch);
 
-typedef Expression* (*ParsingFunction)(Tokenizer* tok,Arena* arena);
-Expression* ParseOperationType(Tokenizer* tok,std::initializer_list<std::initializer_list<const char*>> operators,ParsingFunction finalFunction,Arena* tempArena);
+typedef Expression* (*ParsingFunction)(Tokenizer* tok,Arena* out);
+Expression* ParseOperationType(Tokenizer* tok,std::initializer_list<std::initializer_list<const char*>> operators,ParsingFunction finalFunction,Arena* out);
 
 /*
-  Possible
 
 struct Trie{
-int value;
+  u16 index;
 };
 
-Trie specialFoundTrie;
-
-struct TokTableEntry{
-Trie* trie; // if nullptr, no token. If trie == &specialFoundTrie, we found the token and there is nothing more, return the value.
-int value;
-}
-
-struct TokenizerTable{
-
+struct TokenizerTemplate{
+  u16 array[255];
+  Trie* trieBuffer;
 };
 
-struct TokenizerSpecialChars{
-String string;
-int tokenNumber;
-};
+TokenizerTemplate* CreateTokenizerTemplate(Arena* out,const char* singleChars,std::initializer_list<const char*> specialChars);
 
-static TokenizerTable* CompileTokenizer(Array<TokenizerSpecialChars> specialChars,Arena* perm,Arena* temp){
-// Make sure that the tries are constructed near each other in memory.
-}
-
-TokenizerSpecialChars[] = {{"-",TOKEN_MINUS,},
-                           {"+",TOKEN_ADD,}};
-
- */
+*/
 
 #endif // INCLUDED_PARSER
 

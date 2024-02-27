@@ -3,7 +3,6 @@
 
 #include "textualRepresentation.hpp"
 #include "debug.hpp"
-#include "debugGUI.hpp"
 
 #if 0
 bool ContainsNode(EdgeNode* edge,Node* node){
@@ -336,8 +335,6 @@ FlattenResult FlattenNode(Graph* graph,Node* node,Arena* arena){
    }
 
    RemoveNodeAndEdges(graph,node);
-
-   //SortEdgesByVertices(graph);
 
    FlattenResult res = {};
    res.flatUnitStart = flatUnitStart;
@@ -792,7 +789,7 @@ void CalculateNodeType(InstanceNode* node){
 
    // If the unit is both capable of acting as a sink or as a source of data
    if(hasInput && hasOutput){
-      if(CHECK_DELAY(node->inst,DELAY_TYPE_SINK_DELAY) || CHECK_DELAY(node->inst,DELAY_TYPE_SOURCE_DELAY)){
+     if(CHECK_DELAY(node->inst,DELAY_TYPE_SINK_DELAY) || CHECK_DELAY(node->inst,DELAY_TYPE_SOURCE_DELAY)){
          node->type = InstanceNode::TAG_SOURCE_AND_SINK;
       }  else {
          node->type = InstanceNode::TAG_COMPUTE;

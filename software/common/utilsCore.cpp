@@ -1,9 +1,187 @@
 #include "utils.hpp"
 
+#include <unistd.h>
+#include <limits.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <dirent.h>
 #include <cinttypes>
 #include <limits>
+#include <time.h>
 
-static char* GetNumberRepr(uint64 number){
+#include <filesystem>
+#include <cerrno>
+#include <cstdio>
+#include <cstring>
+#include <cstdarg>
+#include <cerrno>
+
+namespace fs = std::filesystem;
+
+char* StaticFormat(const char* format,...){
+  static const int BUFFER_SIZE = 1024*4;
+  static char buffer[BUFFER_SIZE];
+
+  va_list args;
+  va_start(args,format);
+
+  int written = vsprintf(buffer,format,args);
+
+  va_end(args);
+
+  Assert(written < BUFFER_SIZE);
+  buffer[written] = '\0';
+  
+  return buffer;
+}
+
+int CountNonZeros(Array<int> arr){
+  int count = 0;
+  for(int val : arr){
+    if(val) count++;
+  }
+  return count;
+}
+
+Time GetTime(){
+  timespec time;
+  clock_gettime(CLOCK_MONOTONIC, &time);
+
+  Time t = {};
+  t.seconds = time.tv_sec;
+  t.microSeconds = time.tv_nsec * 1000;
+
+  return t;
+}
+
+// Misc
+const char* GetFilename(const char* fullpath){
+  const char* lastGood = fullpath;
+  const char* ptr = fullpath;
+
+  while(*ptr != '\0'){
+    if(*ptr == '/'){
+      lastGood = ptr + 1;
+    }
+    ptr += 1;
+  }
+
+  return lastGood;
+}
+
+void FlushStdout(){
+  fflush(stdout);
+}
+
+bool RemoveDirectory(const char* path){
+  return fs::remove_all(path) > 0;
+}
+
+long int GetFileSize(FILE* file){
+  long int mark = ftell(file);
+
+  fseek(file,0,SEEK_END);
+  long int size = ftell(file);
+
+  fseek(file,mark,SEEK_SET);
+
+  return size;
+}
+
+String ExtractFilenameOnly(String filepath){
+  int i;
+  for(i = filepath.size - 1; i >= 0; i--){
+    if(filepath[i] == '/'){
+      break;
+    }
+  }
+
+  String res = {};
+  res.data = &filepath.data[i + 1];
+  res.size = filepath.size - (i + 1);
+  return res;
+}
+
+char* GetCurrentDirectory(){
+  // TODO: Maybe receive arena and remove use of static buffer
+  static char buffer[PATH_MAX];
+  buffer[0] = '\0';
+  char* res = getcwd(buffer,PATH_MAX);
+
+  return res;
+}
+
+void MakeDirectory(const char* path){
+  mkdir(path, S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
+}
+
+FILE* OpenFileAndCreateDirectories(const char* path,const char* format){
+  char buffer[PATH_MAX];
+  memset(buffer,0,PATH_MAX);
+
+  for(int i = 0; path[i]; i++){
+    buffer[i] = path[i];
+
+    if(path[i] == '/'){
+      DIR* dir = opendir(buffer);
+      if(!dir && errno == ENOENT){
+        MakeDirectory(buffer);
+      }
+      if(dir){
+        closedir(dir);
+      }
+    }
+  }
+
+  FILE* file = fopen(buffer,format);
+  if(file == nullptr){
+    printf("Failed to open file: %s\n",path);
+    exit(-1);
+  }
+
+  return file;
+}
+
+void CreateDirectories(const char* path){
+  char buffer[PATH_MAX];
+  memset(buffer,0,PATH_MAX);
+
+  for(int i = 0; path[i]; i++){
+    buffer[i] = path[i];
+
+    if(path[i] == '/'){
+      DIR* dir = opendir(buffer);
+      if(!dir && errno == ENOENT){
+        MakeDirectory(buffer);
+      }
+      if(dir){
+        closedir(dir);
+      }
+    }
+  }
+}
+
+String PathGoUp(char* pathBuffer){
+  String content = STRING(pathBuffer);
+
+  int i = content.size - 1;
+  for(; i >= 0; i--){
+    if(content[i] == '/'){
+      break;
+    }
+  }
+
+  if(content[i] != '/'){
+    return content;
+  }
+
+  pathBuffer[i] = '\0';
+  content.size = i;
+
+  return content;
+}
+
+static char* GetNumberRepr(u64 number){
   static char buffer[32];
 
   if(number == 0){
@@ -12,7 +190,7 @@ static char* GetNumberRepr(uint64 number){
     return buffer;
   }
 
-  uint64 val = number;
+  u64 val = number;
   buffer[31] = '\0';
   int index = 30;
   while(val){
@@ -149,21 +327,21 @@ int Align(int val,int alignment){
 }
 
 unsigned int AlignBitBoundary(unsigned int val,int numberBits){ // Align value so the lower numberBits are all zeros
-   if(numberBits == 0){
-     return val;
-   }
+  if(numberBits == 0){
+    return val;
+  }
 
-   Assert(((size_t) numberBits) < sizeof(val) * 8);
+  Assert(((size_t) numberBits) < sizeof(val) * 8);
 
-   unsigned int lowerVal = MASK_VALUE(val,numberBits);
-   if(lowerVal == 0){
-     return val;
-   }
+  unsigned int lowerVal = MASK_VALUE(val,numberBits);
+  if(lowerVal == 0){
+    return val;
+  }
 
-   unsigned int lowerRemoved = val & ~FULL_MASK(numberBits);
-   unsigned int res = lowerRemoved + BIT_MASK(numberBits);
+  unsigned int lowerRemoved = val & ~FULL_MASK(numberBits);
+  unsigned int res = lowerRemoved + BIT_MASK(numberBits);
 
-   return res;
+  return res;
 }
 
 bool IsPowerOf2(int val){
@@ -352,29 +530,29 @@ int SwapEndianess(int val){
   return res;
 }
 
-uint64 SwapEndianess(uint64 val){
+u64 SwapEndianess(u64 val){
   unsigned char* view = (unsigned char*) &val;
 
-  uint64 res = ((uint64) view[0] << 56) |
-               ((uint64) view[1] << 48) |
-               ((uint64) view[2] << 40) |
-               ((uint64) view[3] << 32) |
-               ((uint64) view[4] << 24) |
-               ((uint64) view[5] << 16) |
-               ((uint64) view[6] << 8)  |
-               ((uint64) view[7]);
+  u64 res = ((u64) view[0] << 56) |
+             ((u64) view[1] << 48) |
+             ((u64) view[2] << 40) |
+             ((u64) view[3] << 32) |
+             ((u64) view[4] << 24) |
+             ((u64) view[5] << 16) |
+             ((u64) view[6] << 8)  |
+             ((u64) view[7]);
 
   return res;
 }
 
-int NumberDigitsRepresentation(int64 number){
+int NumberDigitsRepresentation(i64 number){
   int nDigits = 0;
 
   if(number == 0){
     return 1;
   }
 
-  int64 num = number;
+  i64 num = number;
   if(num < 0){
     nDigits += 1; // minus sign
     num *= -1;
@@ -543,3 +721,4 @@ bool IsAlpha(char ch){
 
   return false;
 }
+

@@ -1,9 +1,11 @@
+
 #include "structParsing.hpp"
 
 #include <cstdio>
 #include <unordered_set>
 
 #include "parser.hpp"
+#include "utilsCore.hpp"
 
 #define UNNAMED_ENUM_TEMPLATE "unnamed_enum_%d"
 
@@ -632,8 +634,103 @@ String EscapeStringForPrintf(String input,Arena* arena){
   return res;
 }
 
-void OutputRepresentationFunction(FILE* hppFile,FILE* cppFile,Arena* arena){
+bool IsNameValid(String name){
+  for(char ch : name){
+    switch(ch){
+    case ':': return false;
+    case '<': return false;
+    case '>': return false;
+    }
+  }
 
+  return true;
+}
+
+void OutputPrintAll(FILE* hppFile,FILE* cppFile,Arena* arena){
+#if 0
+  Set<String>* ignoreList = PushSet<String>(arena,99);
+
+  ignoreList->Insert(STRING("Time"));
+  ignoreList->Insert(STRING("CheckRangeResult"));
+  ignoreList->Insert(STRING("Arena"));
+  ignoreList->Insert(STRING("CheckRangeResult"));
+  ignoreList->Insert(STRING("DynamicArena"));
+  ignoreList->Insert(STRING("PoolHeader"));
+  ignoreList->Insert(STRING("PoolInfo"));
+  ignoreList->Insert(STRING("PageInfo"));
+#endif
+  
+  // NOTE: For now only use InstanceInfo. It's basicaly the only struct that I really need right now.
+  Set<String>* structsToSee = PushSet<String>(arena,99);
+  structsToSee->Insert(STRING("InstanceInfo"));
+  structsToSee->Insert(STRING("VersatComputedValues"));
+  //structsToSee->Insert(STRING("CalculatedOffsets"));
+
+  Byte* mark = MarkArena(arena);
+  for(TypeDef* def : typeDefs){
+    if(def->type == TypeDef::STRUCT && structsToSee->Exists(def->structType.name)){
+      *PushStruct<TypeDef*>(arena) = def;
+    }
+  }
+  Array<TypeDef*> structTypes = PointArray<TypeDef*>(arena,mark);
+
+  // Collect struct types
+#if 0
+  Byte* mark = MarkArena(arena);
+  for(TypeDef* def : typeDefs){
+    if(def->type == TypeDef::STRUCT && IsNameValid(def->structType.name) && !def->structType.params){
+      if(!ignoreList->Exists(def->structType.name)){
+        *PushStruct<TypeDef*>(arena) = def;
+      }
+    }
+  }
+  Array<TypeDef*> structTypes = PointArray<TypeDef*>(arena,mark);
+#endif
+
+  for(TypeDef* def : structTypes){
+	fprintf(hppFile,"Array<String> GetFields(%.*s tag,Arena* out);\n",UNPACK_SS(def->structType.name));
+	fprintf(hppFile,"Array<String> GetRepr(%.*s* info,Arena* out);\n",UNPACK_SS(def->structType.name));
+  }
+  
+#if 0
+  for(TypeDef* def : structTypes){
+    fprintf(cppFile,"%.*s;\n",UNPACK_SS(def->structType.fullExpression));
+  }
+#endif
+    
+  for(TypeDef* def : structTypes){
+    int memberSize = Size(def->structType.members);
+    String name = def->structType.name;
+    fprintf(cppFile,"#define %.*s_FIELDS %d\n",UNPACK_SS(name),memberSize);
+    fprintf(cppFile,"Array<String> GetRepr(%.*s* s,Arena* out){\n",UNPACK_SS(name));
+    fprintf(cppFile,"  Array<String> res = PushArray<String>(out,%.*s_FIELDS);\n",UNPACK_SS(name));
+    fprintf(cppFile,"  int i = 0;\n");
+    
+    FOREACH_LIST(MemberDef*,iter,def->structType.members){
+      fprintf(cppFile,"  res[i++] = Repr(&s->%.*s,out);\n",UNPACK_SS(iter->name));
+    }
+    
+    fprintf(cppFile,"  return res;\n}\n\n");
+  }
+
+  for(TypeDef* def : structTypes){
+    int memberSize = Size(def->structType.members);
+    String name = def->structType.name;
+    fprintf(cppFile,"Array<String> GetFields(%.*s tag,Arena* out){\n",UNPACK_SS(name));
+
+    fprintf(cppFile,"  Array<String> res = PushArray<String>(out,%.*s_FIELDS);\n",UNPACK_SS(name));
+    fprintf(cppFile,"  int i = 0;\n");
+
+    FOREACH_LIST(MemberDef*,iter,def->structType.members){
+      fprintf(cppFile,"  res[i++] = STRING(\"%.*s\");\n",UNPACK_SS(iter->name));
+    }
+
+    fprintf(cppFile,"  return res;\n}\n\n");
+  }
+    
+}
+
+void OutputRepresentationFunction(FILE* hppFile,FILE* cppFile,Arena* arena){
   Byte* mark = MarkArena(arena);
   for(TypeDef* def : typeDefs){
     if(def->type != TypeDef::STRUCT){
@@ -647,20 +744,38 @@ void OutputRepresentationFunction(FILE* hppFile,FILE* cppFile,Arena* arena){
 	*(PushStruct<TypeDef*>(arena)) = def;
   }
   Array<TypeDef*> structs = PointArray<TypeDef*>(arena,mark);
-  
+
   fprintf(hppFile,"#include \"utils.hpp\"\n");
   fprintf(hppFile,"#include \"type.hpp\"\n");
+  fprintf(hppFile,"#include \"textualRepresentation.hpp\"\n");
   fprintf(hppFile,"struct Arena;\n");
 
-  for(TypeDef* def : structs){
-	fprintf(hppFile,"struct %.*s;\n",UNPACK_SS(def->structType.name));
-  }
+#if 1
+  //fprintf(hppFile,"struct Arena;\n");
 
+  //for(TypeDef* def : structs){
+//	fprintf(hppFile,"Array<String> GetFields(%.*s tag,Arena* out);\n",UNPACK_SS(def->structType.name));
+//	fprintf(hppFile,"Array<String> GetRepr(%.*s info,Arena* out);\n",UNPACK_SS(def->structType.name));
+//  }
+#endif
+  
+#if 1
   fprintf(cppFile,"#include \"repr.hpp\"\n\n");
   fprintf(cppFile,"#include \"memory.hpp\"\n\n");
-  fprintf(cppFile,"String Repr(String* str,Arena* arena){\n");
-  fprintf(cppFile,"\treturn *str;\n}\n");
+  //fprintf(cppFile,"String Repr(String* str,Arena* arena){\n");
+  //fprintf(cppFile,"\treturn *str;\n}\n");
+#endif
+
+  // MARK - Left here. Added a simple hack to make this work for InstanceInfo for the time being
+  //        Need to significantly improved the struct parser before progressing.
+  //          Need to sort types based on dependency
+  //          Would be useful to store the file from where the structure was parsed from.
+  //          Should perform general codebase improvements, like converting member list to array and stuff like that.
+#if 1
+  OutputPrintAll(hppFile,cppFile,arena);
+#endif
   
+#if 0
   for(TypeDef* def : structs){
 	String structName = def->structType.name;
     String reprFormat = def->structType.representationFormat;
@@ -774,7 +889,8 @@ void OutputRepresentationFunction(FILE* hppFile,FILE* cppFile,Arena* arena){
 	fprintf(cppFile,"\t\tres = Repr((%.*s*) val.custom,arena);\n",UNPACK_SS(structName));
 	fprintf(cppFile,"\t}\n");
   }
-  fprintf(cppFile,"\treturn res;\n}\n"); 
+  fprintf(cppFile,"\treturn res;\n}\n");
+#endif
 }
 
 int main(int argc,const char* argv[]){

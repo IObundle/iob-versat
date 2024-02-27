@@ -1,5 +1,4 @@
-#ifndef INCLUDED_TYPE_SPECIFICS_INCLUDE
-#define INCLUDED_TYPE_SPECIFICS_INCLUDE
+#pragma once
 
 template<typename T> class std::hash<Array<T>>{
 public:
@@ -16,36 +15,6 @@ public:
    return res;
    }
 };
-
-#if 0
-template<> class std::hash<String>{
-public:
-   std::size_t operator()(String const& s) const noexcept{
-   std::size_t res = 0;
-
-   std::size_t prime = 5;
-   for(int i = 0; i < s.size; i++){
-      res += (std::size_t) s[i] * prime;
-      res <<= 4;
-      prime += 6; // Some not prime, but will find most of them
-   }
-
-   return res;
-   }
-};
-#endif
-
-#if 0
-template<> class std::hash<StaticId>{
-   public:
-   std::size_t operator()(StaticId const& s) const noexcept{
-      std::size_t res = std::hash<String>()(s.name);
-      res += (std::size_t) s.parent;
-
-      return (std::size_t) res;
-   }
-};
-#endif
 
 template<> class std::hash<Edge>{
 public:
@@ -146,5 +115,3 @@ inline bool operator==(const StaticId& id1,const StaticId& id2){
    bool res = CompareString(id1.name,id2.name) && id1.parent == id2.parent;
    return res;
 }
-
-#endif // INCLUDED_TYPE_SPECIFICS_INCLUDE

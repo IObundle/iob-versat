@@ -16,6 +16,36 @@
 #{set val #{call retIterativeOutputName portInstance port}}
 @{val}#{end}
 
+#{define retOutputName2 instances portNode}
+#{let id 0}
+#{for node instances}
+  #{if node.inst == portNode.node.inst}
+    #{set id index}
+  #{end}
+#{end}
+#{let res ""}
+#{if portNode.node}
+#{let inst2 portNode.node.inst}
+#{let decl2 inst2.declaration}
+   #{if decl2.type == 2}
+      #{set res "in" # inst2.portIndex}
+   #{else}
+      #{if decl2.isOperation}
+         #{if decl2.outputLatencies[0] == 0}
+            #{set res "comb_" # inst2.name |> Identify}
+         #{else}
+            #{set res "seq_" # inst2.name |> Identify}
+         #{end} 
+      #{else}
+         #{set res "output_" # @{id} # "_" # portNode.port} 
+      #{end}
+   #{end}
+#{else}
+#{let res "0"}
+#{end}
+#{return res}
+#{end}
+
 #{define retOutputName portNode}
 #{set res ""}
 #{if portNode.node}

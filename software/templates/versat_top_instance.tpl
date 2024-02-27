@@ -1,3 +1,5 @@
+`include "versat_defs.vh"
+
 #{include "versat_common.tpl"}
 
 #{set nDones #{call CountDones instances}}
@@ -34,7 +36,7 @@ module versat_instance #(
    input [ADDR_W-1:0]              addr, // Use address in the code below, it uses byte addresses
    input [DATA_W/8-1:0]            wstrb,
    input [DATA_W-1:0]              wdata,
-   output                          ready,
+   output                          rvalid,
    output reg [DATA_W-1:0]         rdata,
 
    #{for ext external}
@@ -43,20 +45,20 @@ module versat_instance #(
    // DP
       #{for it 2}
 	  #{set dp ext.dp[it]}
-output [@{dp.bitSize}-1:0]  ext_dp_addr_@{i}_port_@{index},
-   output [@{dp.dataSizeOut}-1:0] ext_dp_out_@{i}_port_@{index},
-   input  [@{dp.dataSizeIn}-1:0] ext_dp_in_@{i}_port_@{index},
-   output                       ext_dp_enable_@{i}_port_@{index},
-   output                       ext_dp_write_@{i}_port_@{index},
+output [@{dp.bitSize}-1:0]  ext_dp_addr_@{i}_port_@{index}_o,
+   output [@{dp.dataSizeOut}-1:0] ext_dp_out_@{i}_port_@{index}_o,
+   input  [@{dp.dataSizeIn}-1:0] ext_dp_in_@{i}_port_@{index}_i,
+   output                       ext_dp_enable_@{i}_port_@{index}_o,
+   output                       ext_dp_write_@{i}_port_@{index}_o,
       #{end}
       #{else}
    // 2P
-   output [@{ext.tp.bitSizeOut}-1:0]  ext_2p_addr_out_@{i},
-   output [@{ext.tp.bitSizeIn}-1:0]  ext_2p_addr_in_@{i},
-   output                       ext_2p_write_@{i},
-   output                       ext_2p_read_@{i},
-   input  [@{ext.tp.dataSizeIn}-1:0] ext_2p_data_in_@{i},
-   output [@{ext.tp.dataSizeOut}-1:0] ext_2p_data_out_@{i},
+   output [@{ext.tp.bitSizeOut}-1:0]  ext_2p_addr_out_@{i}_o,
+   output [@{ext.tp.bitSizeIn}-1:0]  ext_2p_addr_in_@{i}_o,
+   output                       ext_2p_write_@{i}_o,
+   output                       ext_2p_read_@{i}_o,
+   input  [@{ext.tp.dataSizeIn}-1:0] ext_2p_data_in_@{i}_i,
+   output [@{ext.tp.dataSizeOut}-1:0] ext_2p_data_out_@{i}_o,
       #{end}
    #{end}
 
@@ -72,9 +74,7 @@ output [@{dp.bitSize}-1:0]  ext_dp_addr_@{i}_port_@{index},
    input                           rst
    );
 
-wire [ADDR_W-1:0] byteAddress = {address[ADDR_W-3:0],2'b00};
-
-wire wor_ready;
+wire wor_rvalid;
 
 wire done;
 reg [30:0] runCounter;
@@ -84,15 +84,16 @@ wire [31:0] unitRdataFinal;
 #{end}
 
 wire we = (|wstrb);
-wire memoryMappedAddr = byteAddress[@{memoryConfigDecisionBit}];
-wire rst_int = (rst | soft_reset);
+
+wire memoryMappedAddr;
 
 // Versat registers and memory access
-reg versat_ready;
+reg versat_rvalid;
 reg [31:0] versat_rdata;
 
 reg soft_reset,signal_loop; // Self resetting 
 
+wire rst_int = (rst | soft_reset);
 
 #{if useDMA}
 reg [1:0] dma_state;
@@ -102,24 +103,24 @@ reg [1:0] dma_state;
 always @(posedge clk,posedge rst) // Care, rst because writing to soft reset register
    if(rst) begin
       versat_rdata <= 32'h0;
-      versat_ready <= 1'b0;
+      versat_rvalid <= 1'b0;
       signal_loop <= 1'b0;
       soft_reset <= 0;
    end else begin
-      versat_ready <= 1'b0;
+      versat_rvalid <= 1'b0;
       soft_reset <= 1'b0;
       signal_loop <= 1'b0;
 
       if(valid) begin 
          // Config/State register access
          if(!memoryMappedAddr) begin
-            versat_ready <= 1'b1;
+            if(wstrb == 0) versat_rvalid <= 1'b1;
             versat_rdata <= stateRead;
          end
 
          // Versat specific registers
          if(addr == 0) begin
-            versat_ready <= 1'b1;
+            if(wstrb == 0) versat_rvalid <= 1'b1;
             if(we) begin
                soft_reset <= wdata[31];
                signal_loop <= wdata[30];    
@@ -128,8 +129,8 @@ always @(posedge clk,posedge rst) // Care, rst because writing to soft reset reg
             end
          end
 #{if useDMA}
-         if(addr == 1) begin
-            versat_ready <= 1'b1;
+         if(addr == 4) begin
+            if(wstrb == 0) versat_rvalid <= 1'b1;
             versat_rdata <= {31'h0,dma_state == 0};
          end
 #{end}
@@ -146,7 +147,11 @@ wire [AXI_DATA_W/8-1:0] databus_wstrb[@{nIO}];
 wire [LEN_W-1:0]        databus_len[@{nIO}];
 wire databus_last[@{nIO}];
 
-#{for i (nIO - 1)}
+#{set numberIOs nIO}
+#{if useDMA}
+#{set numberIOs (nIO - 1)}
+#{end}
+#{for i numberIOs}
 assign databus_ready[@{databusCounter}] = m_databus_ready[@{i}];
 assign m_databus_valid[@{databusCounter}] = databus_valid[@{i}];
 assign m_databus_addr[(@{(databusCounter)} * AXI_ADDR_W) +: AXI_ADDR_W] = databus_addr[@{i}];
@@ -206,7 +211,7 @@ reg [(DATA_W/8)-1:0] dma_wstrb;
 reg [LEN_W-1:0] dma_len;
 
 wire dma_ready;
-wire [`DATAPATH_W-1:0] dma_rdata;
+wire [AXI_DATA_W-1:0] dma_rdata;
 wire dma_last;
 
 always @(posedge clk,posedge rst_int)
@@ -240,13 +245,13 @@ begin
       if(valid && we) begin
          if(addr == 0)
             runCounter <= runCounter + wdata[15:0];
-         if(addr == 1)
-            dma_addr_in <= wdata;
-         if(addr == 2)
-            dma_addr_read <= wdata;
-         if(addr == 3)
-            dma_length <= wdata[LEN_W-1:0];
          if(addr == 4)
+            dma_addr_in <= wdata;
+         if(addr == 8)
+            dma_addr_read <= wdata;
+         if(addr == 12)
+            dma_length <= wdata[LEN_W-1:0];
+         if(addr == 16)
             dma_state <= 2'b01;
       end
    end
@@ -303,8 +308,8 @@ end
 
 #{if useDMA}
 wire data_valid = (dma_ready || valid);
-wire data_write = (dma_ready || (valid && we)); // Dma ready is always a write, dma cannot be used to read, for now
-wire [ADDR_W-1:0] address = dma_ready ? (dma_addr_in >> 2) : addr;
+wire data_write = (dma_ready || (valid && we && addr >= 20)); // Dma ready is always a write, dma cannot be used to read, for now
+wire [ADDR_W-1:0] address = dma_ready ? dma_addr_in : addr;
 wire [DATA_W-1:0] data_data = dma_ready ? dma_rdata : wdata;
 wire [(DATA_W/8)-1:0] data_wstrb = dma_ready ? ~0 : wstrb;
 #{else}
@@ -313,6 +318,12 @@ wire data_write = valid && we;
 wire [ADDR_W-1:0] address = addr;
 wire [DATA_W-1:0] data_data = wdata;
 wire [(DATA_W/8)-1:0] data_wstrb = wstrb;
+#{end}
+
+#{if memoryMappedBytes == 0}
+assign memoryMappedAddr = 1'b0;
+#{else}
+assign memoryMappedAddr = address[@{memoryConfigDecisionBit}];
 #{end}
 
 reg [31:0] latency_counter;
@@ -333,32 +344,32 @@ begin
 end
 
 #{if unitsMapped}
-assign rdata = (versat_ready ? versat_rdata : unitRdataFinal);
+assign rdata = (versat_rvalid ? versat_rdata : unitRdataFinal);
 #{else}
 assign rdata = versat_rdata;
 #{end}
 
 #{if unitsMapped}
-assign ready = versat_ready | wor_ready;
+assign rvalid = versat_rvalid | wor_rvalid;
 #{else}
-assign ready = versat_ready;
+assign rvalid = versat_rvalid;
 #{end}
 
 #{if unitsMapped}
 reg [@{unitsMapped - 1}:0] memoryMappedEnable;
-wire[@{unitsMapped - 1}:0] unitReady;
-assign wor_ready = (|unitReady);
+wire[@{unitsMapped - 1}:0] unitRValid;
+assign wor_rvalid = (|unitRValid);
 #{end}
 
 #{if versatValues.numberConnections}
-wire [31:0] #{join ", " for node instances}
-   #{join ", " for j node.outputs} #{if j} output_@{node.inst.id}_@{index} #{end} #{end}
+wire [31:0] #{join ", " node instances} #{set id index}
+   #{join ", "  j node.outputs} #{if j} output_@{id}_@{index} #{end} #{end}
 #{end};
 #{end}
 
 #{if unitsMapped}
 wire [31:0] unitRData[@{unitsMapped - 1}:0];
-assign unitRdataFinal = (#{join "|" for i unitsMapped} unitRData[@{i}] #{end});
+assign unitRdataFinal = (#{join "|" i unitsMapped} unitRData[@{i}] #{end});
 #{end}
 
 // Memory mapped
@@ -371,9 +382,9 @@ begin
    #{set counter 0}
    #{for node instances}
    #{set inst node.inst}
-   #{if inst.declaration.isMemoryMapped}
+   #{if inst.declaration.memoryMapBits}
       #{if versatData[counter].memoryMaskSize}
-      if(address[@{memoryAddressBits - 1}:@{memoryAddressBits - versatData[counter].memoryMaskSize}] == @{memoryAddressBits - inst.declaration.memoryMapBits}'b@{versatData[counter].memoryMask}) // @{versatBase + memoryMappedBase * 4 + inst.memMapped * 4 |> Hex}
+      if(address[@{memoryAddressBits - 1}:@{memoryAddressBits - versatData[counter].memoryMaskSize}] == @{memoryAddressBits - inst.declaration.memoryMapBits}'b@{versatData[counter].memoryMask}) // @{memoryMappedBase * 4 + inst.memMapped * 4 |> Hex}
          memoryMappedEnable[@{counter}] = 1'b1;
       #{else}
       memoryMappedEnable[0] = 1'b1;
@@ -407,38 +418,44 @@ begin
       #{set inst node.inst}
       #{set decl inst.declaration}
       #{for wire decl.configInfo.configs}
-      if(address[@{versatValues.configurationAddressBits - 1}:0] == @{addr}) // @{versatBase + addr * 4 |> Hex}
-         @{configReg}[@{counter}+:@{wire.bitSize}] <= data_data[@{wire.bitSize - 1}:0]; // @{wire.name} - @{decl.name}
+      if(address[@{versatValues.configurationAddressBits + 1}:0] == @{addr * 4}) begin // @{addr * 4 |> Hex} @{wire.name}
+      #{set size wire.bitSize}
+      #{set wstrb 0}
+      #{set wstrbAmount 0}
+      #{while size > 0}
+      #{set amount 8}
+      #{if size < 8} #{set amount size} #{end}
+      if(data_wstrb[@{wstrb}]) @{configReg}[@{counter + wstrbAmount}+:@{amount}] <= data_data[@{wstrbAmount}+:@{amount}];
+      #{set size (size - 8)}
+      #{inc wstrb}
+      #{set wstrbAmount (wstrbAmount + amount)}
+      #{end}
+      end
       #{inc addr}
       #{set counter counter + wire.bitSize}
       #{end}
       #{end}
 
       // Static
-      #{for unit staticUnits}
-      #{for wire unit.data.configs}
-      if(address[@{versatValues.configurationAddressBits - 1}:0] == @{addr}) // @{versatBase + addr * 4 |> Hex}
+      #{for unit staticUnits} #{for wire unit.data.configs}
+      if(address[@{versatValues.configurationAddressBits + 1}:0] == @{addr * 4}) // @{addr * 4 |> Hex}
+         // TODO: Need to also take into account strobes
          #{if unit.first.parent}
          @{configReg}[@{counter}+:@{wire.bitSize}] <= data_data[@{wire.bitSize - 1}:0]; //  @{unit.first.parent.name}_@{unit.first.name}_@{wire.name}
          #{else}
          configdata[@{counter}+:@{wire.bitSize}] <= data_data[@{wire.bitSize - 1}:0]; //  @{unit.first.name}_@{wire.name}
          #{end}
-      #{inc addr}
-      #{set counter counter + wire.bitSize}
-      #{end}
-      #{end}
+      #{inc addr} #{set counter counter + wire.bitSize}
+      #{end} #{end}
 
       // Delays
-      #{for node instances}
-      #{set inst node.inst}
-      #{set decl inst.declaration}
+      #{for node instances} #{set inst node.inst} #{set decl inst.declaration}
       #{for i decl.configInfo.delayOffsets.max}
-      if(address[@{versatValues.configurationAddressBits - 1}:0] == @{addr}) // @{versatBase + addr * 4 |> Hex}
+      // TODO: Need to also take into account strobes
+      if(address[@{versatValues.configurationAddressBits + 1}:0] == @{addr * 4}) // @{addr * 4 |> Hex}
          @{configReg}[@{counter}+:32] <= data_data[31:0]; // Delay
-      #{inc addr}
-      #{set counter counter + 32}
-      #{end}
-      #{end}
+      #{inc addr} #{set counter counter + 32}
+      #{end} #{end}
    end
 end
 #{end}
@@ -468,7 +485,7 @@ begin
       #{set inst node.inst}
       #{set decl inst.declaration}
       #{for wire decl.configInfo.states}
-      if(addr[@{versatValues.stateAddressBits - 1}:0] == @{addr}) // @{versatBase + addr * 4 |> Hex}
+      if(addr[@{versatValues.stateAddressBits + 1}:0] >= @{addr * 4} && addr[@{versatValues.stateAddressBits + 1}:0] < @{(addr + 1) * 4}) // @{addr * 4 |> Hex}
          stateRead = statedata[@{counter}+:@{wire.bitSize}];
       #{inc addr}
       #{set counter counter + wire.bitSize}
@@ -478,7 +495,7 @@ begin
 end
 
 #{if nCombOperations}
-reg [31:0] #{join "," for node instances} #{if node.inst.declaration.isOperation and node.inst.declaration.outputLatencies[0] == 0} comb_@{node.inst.name |> Identify} #{end}#{end}; 
+reg [31:0] #{join "," node instances} #{if node.inst.declaration.isOperation and node.inst.declaration.outputLatencies[0] == 0} comb_@{node.inst.name |> Identify} #{end}#{end}; 
 
 always @*
 begin
@@ -487,10 +504,10 @@ begin
    #{if decl.isOperation and decl.outputLatencies[0] == 0}
       #{set input1 node.inputs[0]}
       #{if decl.inputDelays.size == 1}
-         #{format decl.operation "comb" @{node.inst.name |> Identify} #{call retOutputName input1}};
+         #{format decl.operation "comb" @{node.inst.name |> Identify} #{call retOutputName2 instances input1}};
       #{else}
          #{set input2 node.inputs[1]}
-         #{format decl.operation "comb" @{node.inst.name |> Identify} #{call retOutputName input1} #{call retOutputName input2}};
+         #{format decl.operation "comb" @{node.inst.name |> Identify} #{call retOutputName2 instances input1} #{call retOutputName2 instances input2}};
       #{end}
    #{end}
 #{end}
@@ -498,7 +515,7 @@ end
 #{end}
 
 #{if nSeqOperations}
-reg [31:0] #{join "," for node instances} #{if node.inst.declaration.isOperation and node.inst.declaration.outputLatencies[0] != 0} seq_@{node.inst.name |> Identify} #{end}#{end}; 
+reg [31:0] #{join "," node instances} #{if node.inst.declaration.isOperation and node.inst.declaration.outputLatencies[0] != 0} seq_@{node.inst.name |> Identify} #{end}#{end}; 
 
 always @(posedge clk)
 begin
@@ -506,7 +523,7 @@ begin
    #{set decl node.inst.declaration}
    #{if decl.isOperation and decl.outputLatencies[0] != 0 }
       #{set input1 node.inputs[0]}
-      #{format decl.operation "seq" @{node.inst.name |> Identify} #{call retOutputName input1}};
+      #{format decl.operation "seq" @{node.inst.name |> Identify} #{call retOutputName2 instances input1}};
    #{end}
 #{end}   
 end
@@ -522,19 +539,24 @@ end
 #{set memoryMappedIndex 0}
 #{set doneCounter 0}
 #{for node instances}
+#{set id index}
 #{set inst node.inst}
 #{set decl inst.declaration}
    #{if (decl != inputDecl and decl != outputDecl and !decl.isOperation)}
       @{decl.name} @{inst.parameters} @{inst.name |> Identify}_@{counter} (
          #{for j node.outputs} #{if j}
-            .out@{index}(output_@{inst.id}_@{index}),
+            .out@{index}(output_@{id}_@{index}),
          #{else}
             .out@{index}(),
          #{end}
          #{end}
 
          #{for input node.inputs}
-            .in@{index}(#{call outputName input}),
+         #{if input.node}
+            .in@{index}(@{#{call retOutputName2 instances input}}),
+         #{else}
+            .in@{index}(0),
+         #{end}
          #{end}
 
          #{for wire decl.configInfo.configs}
@@ -564,20 +586,20 @@ end
             #{if external.type}
          // DP
             #{for port 2}
-         .ext_dp_addr_@{i}_port_@{port}(ext_dp_addr_@{externalCounter}_port_@{port}),
-         .ext_dp_out_@{i}_port_@{port}(ext_dp_out_@{externalCounter}_port_@{port}),
-         .ext_dp_in_@{i}_port_@{port}(ext_dp_in_@{externalCounter}_port_@{port}),
-         .ext_dp_enable_@{i}_port_@{port}(ext_dp_enable_@{externalCounter}_port_@{port}),
-         .ext_dp_write_@{i}_port_@{port}(ext_dp_write_@{externalCounter}_port_@{port}),
+         .ext_dp_addr_@{i}_port_@{port}(ext_dp_addr_@{externalCounter}_port_@{port}_o),
+         .ext_dp_out_@{i}_port_@{port}(ext_dp_out_@{externalCounter}_port_@{port}_o),
+         .ext_dp_in_@{i}_port_@{port}(ext_dp_in_@{externalCounter}_port_@{port}_i),
+         .ext_dp_enable_@{i}_port_@{port}(ext_dp_enable_@{externalCounter}_port_@{port}_o),
+         .ext_dp_write_@{i}_port_@{port}(ext_dp_write_@{externalCounter}_port_@{port}_o),
             #{end}
             #{else}
          // 2P
-         .ext_2p_addr_out_@{i}(ext_2p_addr_out_@{externalCounter}),
-         .ext_2p_addr_in_@{i}(ext_2p_addr_in_@{externalCounter}),
-         .ext_2p_write_@{i}(ext_2p_write_@{externalCounter}),
-         .ext_2p_read_@{i}(ext_2p_read_@{externalCounter}),
-         .ext_2p_data_in_@{i}(ext_2p_data_in_@{externalCounter}),
-         .ext_2p_data_out_@{i}(ext_2p_data_out_@{externalCounter}),
+         .ext_2p_addr_out_@{i}(ext_2p_addr_out_@{externalCounter}_o),
+         .ext_2p_addr_in_@{i}(ext_2p_addr_in_@{externalCounter}_o),
+         .ext_2p_write_@{i}(ext_2p_write_@{externalCounter}_o),
+         .ext_2p_read_@{i}(ext_2p_read_@{externalCounter}_o),
+         .ext_2p_data_in_@{i}(ext_2p_data_in_@{externalCounter}_i),
+         .ext_2p_data_out_@{i}(ext_2p_data_out_@{externalCounter}_o),
             #{end}
          #{inc externalCounter}
          #{end}
@@ -591,14 +613,14 @@ end
          #{set stateDataIndex stateDataIndex + wire.bitSize}
          #{end}      
 
-         #{if decl.isMemoryMapped}
+         #{if decl.memoryMapBits}
          .valid(memoryMappedEnable[@{memoryMappedIndex}]),
          .wstrb(data_wstrb),
          #{if decl.memoryMapBits}
-         .addr({address[@{decl.memoryMapBits - 1}:0],2'b00}),
+         .addr(address[@{decl.memoryMapBits - 1}:0]),
          #{end}
          .rdata(unitRData[@{memoryMappedIndex}]),
-         .ready(unitReady[@{memoryMappedIndex}]),
+         .rvalid(unitRValid[@{memoryMappedIndex}]),
          .wdata(data_data),
          #{inc memoryMappedIndex}
          #{end}
@@ -639,10 +661,12 @@ end
 #{if decl == outputDecl}
    #{for input node.inputs}
    #{if input.node}
-   assign out@{index} = #{call outputName input};
+   assign out@{index} = @{#{call retOutputName2 instances input}};
    #{end}
    #{end}
 #{end}
 #{end}
 
 endmodule
+
+`include "versat_undefs.vh"

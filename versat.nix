@@ -1,19 +1,33 @@
 { pkgs ? import (builtins.fetchTarball {
-  # Descriptive name to make the store path easier to identify
   name = "nixos-22.11";
-  # Commit hash for nixos-22.11
   url = "https://github.com/NixOS/nixpkgs/archive/refs/tags/22.11.tar.gz";
-  # Hash obtained using `nix-prefetch-url --unpack <url>`
   sha256 = "11w3wn2yjhaa5pv20gbfbirvjq6i3m7pqrq2msf0g7cv44vijwgw";
-}) {}}:
+}){} , 
+  tweag ? import (builtins.fetchTarball {
+  name = "lib-filesets";
+  url = "https://github.com/tweag/nixpkgs/tarball/file-sets";
+#  sha256 = "";
+}){} }:
+let
+fs = tweag.lib.fileset;
+sourceFiles = fs.union ./Makefile (fs.union ./sharedHardware.mk (fs.union ./config.mk ./software));
+in
+#fs.trace {} sourceFiles
 pkgs.stdenv.mkDerivation rec {
   pname = "versat";
   version = "0.1";
 
-  src = builtins.path {
-    name = pname;
-    path = ./.;
+  src = fs.toSource{
+    root = ./.;
+    fileset = sourceFiles;
   };
+
+  #src = ./.;
+
+  #srcs = builtins.path {
+  #  name = pname;
+  #  path = ./.;
+  #};
 
   #src = pkgs.fetchgit {
   #  url = "https://github.com/zettasticks/iob-versat.git";
@@ -28,8 +42,9 @@ pkgs.stdenv.mkDerivation rec {
     pkgs.verilator
   ];
 
+  enableParallelBuilding = true;
+
   buildPhase = ''
-    make clean
     make -j versat
   '';
 
@@ -40,4 +55,3 @@ pkgs.stdenv.mkDerivation rec {
 
   dontStrip = true;
 }
-

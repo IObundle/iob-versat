@@ -12,51 +12,45 @@
 
 typedef intptr_t iptr;
 
-#{for type structures}
+// Config
+
+#{for type nonMergedStructures}
 typedef struct {
 #{for entry type.entries}
-@{entry.type} @{entry.name};
+#{if entry.typeAndNames.size > 1}
+union{
+#{for typeAndName entry.typeAndNames}
+@{typeAndName.type} @{typeAndName.name};
+#{end}
+};
+#{else}
+@{entry.typeAndNames[0].type} @{entry.typeAndNames[0].name};
+#{end}
 #{end}
 } @{type.name}Config;
 #define VERSAT_DEFINED_@{type.name}
 #{end}
 
+// Address
+
 #{for type addressStructures}
 typedef struct {
 #{for entry type.entries}
-@{entry.type} @{entry.name};
+  @{entry.typeAndNames[0].type} @{entry.typeAndNames[0].name};
 #{end}
 } @{type.name}Addr;
 #define VERSAT_DEFINED_@{type.name}Addr
 #{end}
 
 typedef struct{
-#{for wire orderedConfigs.configs}
-   iptr @{wire.name};
-#{end}
-#{for wire orderedConfigs.statics}
-   iptr @{wire.name};
-#{end}
-#{for wire orderedConfigs.delays}
-   iptr @{wire.name};
+#{for wire orderedConfigs}
+  iptr @{wire.name};
 #{end}
 } AcceleratorConfig;
 
-#{if doingMerged}
-#{for arr mergedConfigs}
-#{set i index}
 typedef struct{
-#{for str arr}
-  iptr @{str};
-#{end}
-} Merged@{i};
-#{end}
-#{end}
-
-typedef struct{
-#{for pair namedStates}
-#{set name pair.first} #{set conf pair.second}
-int @{name};
+#{for name namedStates}
+  int @{name};
 #{end}
 } AcceleratorState;
 
@@ -65,32 +59,34 @@ static const int versatAddressSpace = 2 * @{memoryMappedBase |> Hex};
 
 extern iptr versat_base;
 
+// NOTE: The address for memory mapped units depends on the address of
+//       the accelerator.  Because of this, the full address can only
+//       be calculated after calling versat_init(iptr), which is the
+//       function that sets the versat_base variable.  It is for this
+//       reason that the address info for every unit is a define. Addr
+//       variables must be instantiated only after calling
+//       versat_base.
+
 // Base address for each memory mapped unit
 #{for pair namedMem}
-#define @{pair.first} (versat_base + memMappedStart + @{pair.second.ptr})
+#define @{pair.first} (versat_base + memMappedStart + @{pair.second |> Hex})
 #{end}
 
-#define ACCELERATOR_TOP_ADDR_INIT {#{join "," for pair namedMem} (void*) @{pair.first} #{end}}
+#define ACCELERATOR_TOP_ADDR_INIT {#{join "," pair namedMem} (void*) @{pair.first} #{end}}
 
-static unsigned int delayBuffer[] = {
-   #{join "," for d delay} 
-      @{d |> Hex}
-   #{end}
-};
-
-static unsigned int staticBuffer[] = {
-   #{join "," for d staticBuffer} 
-      @{d |> Hex}
-   #{end} 
-};
+static unsigned int delayBuffer[] = {#{join "," d delay} @{d |> Hex} #{end}};
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
+// Always call first before calling any other function.
 void versat_init(int base);
 
-void Debug();
+// In pc-emul provides a low bound on performance.
+// In sim-run refines the lower bound but still likely to be smaller than reality due to memory delays that are only present in real circuits.
+int GetAcceleratorCyclesElapsed();
+
 void RunAccelerator(int times);
 void StartAccelerator();
 void EndAccelerator();
@@ -110,7 +106,7 @@ void ConfigSimulateDatabus(bool value);
 #endif
 
 // Needed by PC-EMUL to correctly simulate the design, embedded compiler should remove these symbols from firmware because not used by them 
-static const char* acceleratorTypeName = "@{accelType}";
+static const char* acceleratorTypeName = "@{accelName}";
 static bool isSimpleAccelerator = @{isSimple};
 static bool acceleratorSupportsDMA = @{useDMA};
 
@@ -128,28 +124,33 @@ extern volatile AcceleratorState* accelState;
 #define SimpleOutputStart ((int*) accelState)
 #{end}
 
-#{for wire orderedConfigs.configs}
+#{for wire orderedConfigs}
 #define ACCEL_@{wire.name} accelConfig->@{wire.name}
 #{end}
-#{for wire orderedConfigs.statics}
-#define ACCEL_@{wire.name} accelConfig->@{wire.name}
-#{end}
-#{for wire orderedConfigs.delays}
-#define ACCEL_@{wire.name} accelConfig->@{wire.name}
+
+#{for name namedStates}
+#define ACCEL_@{name} accelState->@{name}
 #{end}
 
 #{if doingMerged}
-#{for arr mergedConfigs}
-#{set i index}
-#{for str arr}
-#define MERGED_@{i}_@{str} ((Merged@{i}*) accelConfig)->@{str}
-#{end}
-#{end}
-#{end}
+typedef enum{
+   #{join "," info mergeInfo}
+        @{info.name} = @{index}
+   #{end}  
+} MergeType;
 
-#{for pair namedStates}
-#{set name pair.first} #{set conf pair.second}
-#define ACCEL_@{name} accelState->@{name}
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+static inline void ActivateMergedAccelerator(MergeType type){
+   ACCEL_@{accelName}_versat_merge_mux_sel = (int) type;
+}
+
+#ifdef __cplusplus
+}
+#endif
+
 #{end}
 
 #endif // INCLUDED_VERSAT_ACCELERATOR_HEADER

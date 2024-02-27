@@ -1,62 +1,60 @@
 `timescale 1ns / 1ps
 
 module IntSqrt #(
-         parameter DATA_W = 32
-              )
-    (
-    //control
-    input                         clk,
-    input                         rst,
-    
-    input                         running,
-    input                         run,
-    
-    //input / output data
-    input [DATA_W-1:0]            in0,
+   parameter DATA_W = 32
+) (
+   //control
+   input clk,
+   input rst,
 
-    input [31:0]                  delay0,
-    
-    (* versat_latency = 17 *) output [DATA_W-1:0]       out0
-    );
+   input running,
+   input run,
 
-reg start;
-reg [31:0] delay;
-wire done;
+   //input / output data
+   input [DATA_W-1:0] in0,
 
-always @(posedge clk,posedge rst)
-begin
-     if(rst) begin
-          start <= 1'b0;
-          delay <= 0;
-     end else if(run) begin
-          delay <= delay0;
-          start <= 1'b1;
-     end else begin
-          start <= 1'b0;
-          if(|delay == 0) begin
-               delay <= 0;
-          end else begin
-               delay <= delay - 1;
-               if(delay == 1) begin
-                    start <= 1'b1;
-               end
-          end
-     end
-end
+   input [31:0] delay0,
 
-wire [15:0] out; 
-assign out0 = {16'h0,out};
+   (* versat_latency = 17 *) output [DATA_W-1:0] out0
+);
 
-int_sqrt sqrt(
-     .start(start),
-     .done(done),
+   reg         start;
+   reg  [31:0] delay;
+   wire        done;
 
-     .op(in0),
+   always @(posedge clk, posedge rst) begin
+      if (rst) begin
+         start <= 1'b0;
+         delay <= 0;
+      end else if (run) begin
+         delay <= delay0;
+         start <= 1'b1;
+      end else begin
+         start <= 1'b0;
+         if (|delay == 0) begin
+            delay <= 0;
+         end else begin
+            delay <= delay - 1;
+            if (delay == 1) begin
+               start <= 1'b1;
+            end
+         end
+      end
+   end
 
-     .res(out),
+   wire [15:0] out;
+   assign out0 = {16'h0, out};
 
-     .clk(clk),
-     .rst(rst)
-     );
+   int_sqrt sqrt (
+      .start(start),
+      .done (done),
+
+      .op(in0),
+
+      .res(out),
+
+      .clk(clk),
+      .rst(rst)
+   );
 
 endmodule

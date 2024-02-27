@@ -1,5 +1,4 @@
-#ifndef INCLUDED_MERGE
-#define INCLUDED_MERGE
+#pragma once
 
 #include "versat.hpp"
 #include "thread.hpp"
@@ -52,13 +51,6 @@ inline bool operator==(const MappingNode& node1,const MappingNode& node2){
 struct MappingEdge{ // Edge between mapping from edge to edge
    MappingNode* nodes[2];
 };
-
-#if 0
-struct Mapping{
-   FUInstance* source;
-   FUInstance* sink;
-};
-#endif
 
 struct ConsolidationGraphOptions{
    Array<SpecificMergeNodes> specifics;
@@ -179,7 +171,7 @@ MergeGraphResult MergeGraph(Versat* versat,Accelerator* flatten1,Accelerator* fl
 void AddCliqueToMapping(GraphMapping& res,ConsolidationGraph clique);
 
 void InsertMapping(GraphMapping& map,PortEdge& edge0,PortEdge& edge1);
-void Clique(CliqueState* state,ConsolidationGraph graphArg,int index,IndexRecord* record,int size,Arena* arena);
+//void Clique(CliqueState* state,ConsolidationGraph graphArg,int index,IndexRecord* record,int size,Arena* arena);
 
 bool NodeMappingConflict(PortEdge edge1,PortEdge edge2);
 bool MappingConflict(MappingNode map1,MappingNode map2);
@@ -194,7 +186,7 @@ MergeGraphResult HierarchicalHeuristic(Versat* versat,FUDeclaration* decl1,FUDec
 
 int ValidNodes(ConsolidationGraph graph);
 
-BitArray* CalculateNeighborsTable(ConsolidationGraph graph,Arena* arena);
+BitArray* CalculateNeighborsTable(ConsolidationGraph graph,Arena* out);
 
 IsCliqueResult IsClique(ConsolidationGraph graph);
 
@@ -205,7 +197,5 @@ MergeGraphResult HierarchicalMergeAccelerators(Versat* versat,Accelerator* accel
 MergeGraphResult HierarchicalMergeAcceleratorsFullClique(Versat* versat,Accelerator* accel1,Accelerator* accel2,String name);
 
 FUDeclaration* MergeAccelerators(Versat* versat,FUDeclaration* accel1,FUDeclaration* accel2,String name,int flatteningOrder = 99,MergingStrategy strategy = MergingStrategy::CONSOLIDATION_GRAPH,SpecificMerge* specifics = nullptr,int nSpecifics = 0);
-FUDeclaration* MergeThree(Versat* versat,FUDeclaration* typeA,FUDeclaration* typeB,FUDeclaration* typeC);
+//FUDeclaration* MergeThree(Versat* versat,FUDeclaration* typeA,FUDeclaration* typeB,FUDeclaration* typeC);
 FUDeclaration* Merge(Versat* versat,Array<FUDeclaration*> types,String name,MergingStrategy strat = MergingStrategy::CONSOLIDATION_GRAPH);
-
-#endif // INCLUDED_MERGE

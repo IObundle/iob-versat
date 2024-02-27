@@ -1,78 +1,76 @@
 `timescale 1ns / 1ps
 
 module FloatSub #(
-         parameter DELAY_W = 32,
-         parameter DATA_W = 32
-              )
-    (
-    //control
-    input                         clk,
-    input                         rst,
-    
-    input                         running,
-    input                         run,
+   parameter DELAY_W = 32,
+   parameter DATA_W  = 32
+) (
+   //control
+   input clk,
+   input rst,
 
-    //input / output data
-    input [DATA_W-1:0]            in0,
-    input [DATA_W-1:0]            in1,
+   input running,
+   input run,
 
-    input [31:0]                  delay0,
+   //input / output data
+   input [DATA_W-1:0] in0,
+   input [DATA_W-1:0] in1,
 
-    (* versat_latency = 5 *) output [DATA_W-1:0]       out0
-    );
+   input [31:0] delay0,
 
-reg [31:0] delay;
-always @(posedge clk,posedge rst) begin
-     if(rst) begin
-          delay <= 0;
-     end else if(run) begin
-          delay <= delay0 + 5;
-     end else if(|delay) begin
-          delay <= delay - 1;
-     end
-end
+   (* versat_latency = 5 *) output [DATA_W-1:0] out0
+);
 
-reg [4:0] equalReg;
+   reg [31:0] delay;
+   always @(posedge clk, posedge rst) begin
+      if (rst) begin
+         delay <= 0;
+      end else if (run) begin
+         delay <= delay0 + 5;
+      end else if (|delay) begin
+         delay <= delay - 1;
+      end
+   end
 
-wire equal = (in0 == in1);
+   reg                        [4:0] equalReg;
 
-always @(posedge clk,posedge rst) begin
-    if(rst) begin
-        equalReg[0] <= 0;
-        equalReg[1] <= 0;
-        equalReg[2] <= 0;
-        equalReg[3] <= 0;
-        equalReg[4] <= 0;
-    end else begin
-        equalReg[4] <= equal;
-        equalReg[3] <= equalReg[4];
-        equalReg[2] <= equalReg[3];
-        equalReg[1] <= equalReg[2];
-        equalReg[0] <= equalReg[1];
-    end
-end
+   wire equal = (in0 == in1);
 
-wire [DATA_W-1:0] negative = {~in1[31],in1[30:0]};
-wire [DATA_W-1:0] out;
+   always @(posedge clk, posedge rst) begin
+      if (rst) begin
+         equalReg[0] <= 0;
+         equalReg[1] <= 0;
+         equalReg[2] <= 0;
+         equalReg[3] <= 0;
+         equalReg[4] <= 0;
+      end else begin
+         equalReg[4] <= equal;
+         equalReg[3] <= equalReg[4];
+         equalReg[2] <= equalReg[3];
+         equalReg[1] <= equalReg[2];
+         equalReg[0] <= equalReg[1];
+      end
+   end
 
-iob_fp_add adder(
-    .clk_i(clk),
-    .rst_i(rst),
+   wire [DATA_W-1:0] negative = {~in1[31], in1[30:0]};
+   wire [DATA_W-1:0]                                   out;
 
-    .start_i(1'b1),
-    .done_o(),
+   iob_fp_add adder (
+      .clk_i(clk),
+      .rst_i(rst),
 
-    .op_a_i(in0),
-    .op_b_i(negative),
+      .start_i(1'b1),
+      .done_o (),
 
-    .overflow_o(),
-    .underflow_o(),
-    .exception_o(),
+      .op_a_i(in0),
+      .op_b_i(negative),
 
-    .res_o(out)
-     );
+      .overflow_o (),
+      .underflow_o(),
+      .exception_o(),
 
-assign out0 = (running & (|delay) == 0) ? (equalReg[0] ? 0 : out) 
-                                        : 0;
+      .res_o(out)
+   );
+
+   assign out0 = (running & (|delay) == 0) ? (equalReg[0] ? 0 : out) : 0;
 
 endmodule

@@ -10,9 +10,11 @@
 #include <cstdlib>
 #include <sys/types.h>
 #include <sys/ioctl.h>
+#include <sys/ptrace.h>
 #include <termios.h>
 #include <fcntl.h>
 #include <execinfo.h>
+#include <link.h>
 
 #include "parser.hpp"
 #include "memory.hpp"
@@ -33,6 +35,29 @@ struct Location{
 static Arena debugArenaInst = {};
 bool debugFlag = false;
 Arena* debugArena = &debugArenaInst;
+
+bool CurrentlyDebugging(){
+  static bool init = false;
+  static bool value;
+
+  NOT_IMPLEMENTED;
+  
+  return false;  
+
+  // TODO: This was giving an error when calling from makefile. Not using this for now.
+#if 0
+  if(!init){
+    init = true;
+    if(ptrace(PTRACE_TRACEME,0,1,0) < 0){
+      value = true;
+    } else {
+      ptrace(PTRACE_DETACH,0,1,0);
+    }
+  }
+
+  return value;
+#endif
+}
 
 static SignalHandler old_SIGUSR1 = nullptr;
 static SignalHandler old_SIGSEGV = nullptr;
@@ -68,7 +93,7 @@ static Addr2LineConnection StartAddr2Line(){
   int size = readlink("/proc/self/exe",exePathBuffer,4096);
 
   if(size < 0){
-    printf("Error using readlink\n");
+    fprintf(stderr,"Error using readlink\n");
   } else {
     exePathBuffer[size] = '\0';
   }
@@ -78,7 +103,7 @@ static Addr2LineConnection StartAddr2Line(){
   pid_t pid = fork();
 
   if(pid < 0){
-    printf("Error calling fork errno: %d\n",errno);
+    fprintf(stderr,"Error calling fork errno: %d\n",errno);
     exit(-1);
   } else if(pid == 0){
     close(pipeWrite[1]);
@@ -92,7 +117,6 @@ static Addr2LineConnection StartAddr2Line(){
                     (char*) "-C",
                     (char*) "-f",
                     (char*) "-i",
-                    //(char*) "-p",
                     (char*) "-e",
                     (char*) exePathBuffer,
                     nullptr};
@@ -113,45 +137,54 @@ static Addr2LineConnection StartAddr2Line(){
     return con;
   }
 
-  printf("Failed to initialize addr2line\n");
+  fprintf(stderr,"Failed to initialize addr2line\n");
   return (Addr2LineConnection){};
 }
 
 // Note: We cannot use Assert here otherwise we might enter a infinite loop. Only the C assert
 static Array<Location> CollectStackTrace(Arena* out,Arena* temp){
-  void* addrBuffer[100];
+  BLOCK_REGION(temp);
 
+  void* addrBuffer[100];
+  
   Addr2LineConnection connection = StartAddr2Line();
   Addr2LineConnection* con = &connection;
   
   int lines = backtrace(addrBuffer, 100);
   char** strings = backtrace_symbols(addrBuffer, lines);
   if (strings == NULL) {
-    printf("Error getting stack trace\n");
+    fprintf(stderr,"Error getting stack trace\n");
   }
-
   defer{ free(strings); };
-  //printf("Lines: %d\n",lines);
+  
+  Array<size_t> fileAddresses = PushArray<size_t>(temp,lines);
   
   for(int i = 0; i < lines; i++){
+    Dl_info info;
+    link_map* link_map;
+    if(dladdr1(addrBuffer[i],&info,(void**) &link_map,RTLD_DL_LINKMAP)){
+      fileAddresses[i] = ((size_t) addrBuffer[i]) - link_map->l_addr - 1; // - 1 to get the actual instruction, PC points to the next one
+    }
+  }
+  
+  //printf("Lines: %d\n",lines);
+  for(int i = 0; i < lines; i++){
     String line = STRING(strings[i]);
-
     Tokenizer tok(line,"()",{});
-
-    Token name = tok.NextToken();
-    assert(CompareString(tok.NextToken(),"("));
-    Token offset = tok.NextFindUntil(")");
-    assert(CompareString(tok.NextToken(),")"));
-
-    if(offset.size <= 0){
+    String first = tok.NextFindUntil("(");
+#if 0
+    printf("%.*s\n",UNPACK_SS(line));
+#endif
+    if(!(Contains(first,"versat") || Contains(first,"./versat"))){  // A bit hardcoded but appears to work fine
       continue;
     }
     
     region(temp){
-      String toWrite = PushString(temp,"%.*s\n",UNPACK_SS(offset));
+      String toWrite = PushString(temp,"%lx\n",fileAddresses[i]);
+      //printf("%.*s\n",UNPACK_SS(toWrite));
       int written = write(con->writePipe,toWrite.data,toWrite.size);
       if(written != toWrite.size){
-        printf("Failed to write: (%d/%d)\n",written,toWrite.size);
+        fprintf(stderr,"Failed to write: (%d/%d)\n",written,toWrite.size);
       }
     }
   }
@@ -159,11 +192,11 @@ static Array<Location> CollectStackTrace(Arena* out,Arena* temp){
   //printf("Gonna close write pipe\n");
   {
   int result = close(con->writePipe);
-  if(result != 0) printf("Error closing write pipe: %d\n",errno);
+  if(result != 0) fprintf(stderr,"Error closing write pipe: %d\n",errno);
   }
   
   int bufferSize = Kilobyte(64);
-  Byte* buffer = PushBytes(temp,bufferSize);
+  Byte* buffer = PushBytes(out,bufferSize);
   int amountRead = 0;
 
   while(1){
@@ -176,7 +209,7 @@ static Array<Location> CollectStackTrace(Arena* out,Arena* temp){
       break;
     } else{
       if(!(errno == EAGAIN || errno == EWOULDBLOCK)){
-        printf("Errno: %d\n",errno);
+        fprintf(stderr,"Errno: %d\n",errno);
       }
     }
 
@@ -193,7 +226,7 @@ static Array<Location> CollectStackTrace(Arena* out,Arena* temp){
   String content = {(char*) buffer,amountRead};
   Array<Location> result = PushArray<Location>(out,lineCount / 2);
 
-  //printf("%.*s\n",UNPACK_SS(content));
+  //printf("Content:\n%.*s\n",UNPACK_SS(content));
   
   Tokenizer tok(content,":",{"\n"});
   tok.keepWhitespaces = true;
@@ -208,6 +241,9 @@ static Array<Location> CollectStackTrace(Arena* out,Arena* temp){
     tok.NextFindUntil("\n");
     assert(CompareString(tok.NextToken(),"\n"));
 
+    //printf("FN: %.*s\n",UNPACK_SS(functionName));
+    //printf("fN: %.*s\n",UNPACK_SS(fileName));
+    //printf("ls: %.*s\n",UNPACK_SS(lineString));
     if(CompareString(functionName,"??") || CompareString(fileName,"??") || CompareString(lineString,"?")){
       continue;
     }
@@ -223,20 +259,9 @@ static Array<Location> CollectStackTrace(Arena* out,Arena* temp){
   return result;
 }
 
-#include <filesystem>
-namespace fs = std::filesystem;
-
-// TODO: Same function is being used in versatCompiler.cpp
-static String GetAbsolutePath(const char* path,Arena* arena){
-  fs::path canonical = fs::weakly_canonical(path);
-  String res = PushString(arena,"%s",canonical.c_str());
-  return res;
-}
-
 void PrintStacktrace(){
   const String rootPath = STRING(ROOT_PATH); // ROOT_PATH must have the pathname to the top of the source code folder (the largest subpath common to all code files)
 
-  printf("Here: %d\n",debugArena->used);
   BLOCK_REGION(debugArena);
 
   Arena tempInst = SubArena(debugArena,Kilobyte(128));
@@ -250,6 +275,8 @@ void PrintStacktrace(){
     canonical[i] = GetAbsolutePath(StaticFormat("%.*s",UNPACK_SS(traces[i].fileName)),temp);
   }
 
+#if 1
+  // Remove long repeated paths so it displays nicely on the terminal
   int maxSize = 0;
   for(String& str : canonical){
     if(str.size > rootPath.size){
@@ -263,38 +290,42 @@ void PrintStacktrace(){
 
     //printf("%.*s\n",UNPACK_SS(str));
   }
+#endif
 
   for(int i = 0; i < size; i++){
     String str = canonical[i];
-    printf("#%-2d %.*s",i,UNPACK_SS(str));
+    fprintf(stderr,"#%-2d %.*s",i,UNPACK_SS(str));
 
     for(int j = 0; j < maxSize - str.size; j++){
-      printf(" ");
+      fprintf(stderr," ");
     }
 
-    printf(" %.*s",UNPACK_SS(traces[i].functionName));
-    printf(":%d\n",traces[i].line);
+    fprintf(stderr," %.*s",UNPACK_SS(traces[i].functionName));
+    fprintf(stderr,":%d\n",traces[i].line);
   }
 }
 
 static void SignalPrintStacktrace(int sign){
-  // Install old handlers first so that any bug afterwards does not cause an infinite loop
+  // Need to Install old handlers first so that any bug afterwards does not cause an infinite loop
   switch(sign){
   case SIGUSR1:{
-    old_SIGUSR1(sign);
+    signal(SIGUSR1,old_SIGUSR1);
   }break;
   case SIGSEGV:{
-    old_SIGSEGV(sign);
+    signal(SIGSEGV,old_SIGSEGV);
   }break;
   case SIGABRT:{
-    old_SIGABRT(sign);
+    signal(SIGABRT,old_SIGABRT);
   }break;
-  default: NOT_IMPLEMENTED;
   }
 
-  printf("\nProgram encountered an error. Stack trace:\n");
+  fprintf(stderr,"\nProgram encountered an error. Stack trace:\n");
   PrintStacktrace();
-  printf("\n");
+  fprintf(stderr,"\n");
+  fflush(stdout);
+  fflush(stderr);
+  
+  raise(sign);
 }
 
 void InitDebug(){
@@ -302,8 +333,10 @@ void InitDebug(){
   if(init){
     return;
   }
-  init = true;
 
+  init = true;
+  //debugFlag = CurrentlyDebugging();
+  
   debugArenaInst = InitArena(Megabyte(1));
   SetDebugSignalHandler(SignalPrintStacktrace);
 }

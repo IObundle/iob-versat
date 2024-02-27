@@ -1,5 +1,4 @@
-#ifndef INCLUDED_VERSAT_DECLARATION
-#define INCLUDED_VERSAT_DECLARATION
+#pragma once
 
 #include <cstdio>
 
@@ -61,8 +60,8 @@ enum DelayType {
 inline DelayType operator|(DelayType a, DelayType b)
 {return static_cast<DelayType>(static_cast<int>(a) | static_cast<int>(b));}
 
-// TODO: Finish making a FUType. FUDeclaration should be the instance of a type and should contain a pointer to the type that contains all the non parameterizable values.
 /*
+// TODO: Finish making a FUType. FUDeclaration should be the instance of a type and should contain a pointer to the type that contains all the non parameterizable values.
   struct FUType{
   String name;
 
@@ -74,24 +73,25 @@ inline DelayType operator|(DelayType a, DelayType b)
 
   Array<ExternalMemoryInterfaceExpression> externalMemory;
   }
- */
+*/
 
+// I initially extracted this because of Merge, right?
 struct ConfigurationInfo{
   Array<Wire> configs;
   Array<Wire> states;
 
+  // Calculated offsets are an array that associate the given InstanceNode inside the fixedDelayCircuit allocated member into the corresponding index of the configuration array. For now, static units are given a value near 0x40000000 (their configuration comes from the staticUnits hashmap). Units without any config are given a value of -1.
   CalculatedOffsets configOffsets;
   CalculatedOffsets stateOffsets;
   CalculatedOffsets delayOffsets;
-  CalculatedOffsets outputOffsets;    // TODO: Do not need this for merged graphs
   CalculatedOffsets extraDataOffsets; // TODO: Do not need this for merged graphs
-
-  Array<iptr> defaultConfig;
-  Array<iptr> defaultStatic;
 };
 
+// Maps the sub InstanceNodes into the corresponding index of the configuration array. 
 struct MergeInfo{
+  String name;
   ConfigurationInfo config;
+  Array<String> baseName;
   FUDeclaration* baseType;
 };
 
@@ -104,10 +104,12 @@ struct FUDeclaration{
   Array<int> inputDelays;
   Array<int> outputLatencies;
 
+  Array<int> calculatedDelays;
+  
   ConfigurationInfo configInfo;
   
+  Optional<int> memoryMapBits; // 0 is a valid memory map size, so optional indicates that no memory map exists
   int nIOs;
-  int memoryMapBits;
   int nStaticConfigs;
 
   Array<ExternalMemoryInterface> externalMemory;
@@ -118,20 +120,13 @@ struct FUDeclaration{
 
   // Merged accelerator
   Array<MergeInfo> mergeInfo;
-
-  FUFunction initializeFunction;
-  FUFunction startFunction;
-  FUFunction endFunction;
-  FUUpdateFunction updateFunction;
-  FUFunction destroyFunction;
-  VCDFunction printVCD;
-  MemoryAccessFunction memAccessFunction;
-  SignalFunction signalFunction;
    
   const char* operation;
 
+  int lat; // TODO: For now this is only for iterative units. Would also useful to have a standardized way of computing this from the graph and then compute it when needed. 
+  
   // TODO: this is probably not needed, only used for verilog generation (which could be calculated inside the code generation functions)
-  //       the info is all contained inside the units themselves.
+  //       the info is all contained inside the units themselves and inside the calculated offsets
   Hashmap<StaticId,StaticData>* staticUnits;
 
   enum {SINGLE = 0x0,COMPOSITE = 0x1,SPECIAL = 0x2,MERGED = 0x3,ITERATIVE = 0x4} type;
@@ -139,9 +134,30 @@ struct FUDeclaration{
 
   bool isOperation;
   bool implementsDone;
-  bool isMemoryMapped;
   bool signalLoop;
 };
+
+// Simple operations should also be stored here.
+namespace BasicDeclaration{
+  extern FUDeclaration* buffer;
+  extern FUDeclaration* fixedBuffer;
+  extern FUDeclaration* input;
+  extern FUDeclaration* output;
+  extern FUDeclaration* multiplexer;
+  extern FUDeclaration* combMultiplexer;
+  extern FUDeclaration* timedMultiplexer;
+  extern FUDeclaration* stridedMerge;
+  extern FUDeclaration* pipelineRegister;
+  extern FUDeclaration* data;
+}
+
+FUDeclaration* GetTypeByName(Versat* versat,String str);
+
+void InitializeSimpleDeclarations(Versat* versat);
+
+FUDeclaration* RegisterFU(Versat* versat,FUDeclaration declaration);
+FUDeclaration* RegisterIterativeUnit(Versat* versat,Accelerator* accel,FUInstance* inst,int latency,String name);
+FUDeclaration* RegisterSubUnit(Versat* versat,String name,Accelerator* accel);
 
 bool IsComposite(FUDeclaration* decl);
 
@@ -150,10 +166,3 @@ bool ContainsConfigs(FUDeclaration* decl);
 bool ContainsStatics(FUDeclaration* decl);
 
 int NumberOfSubunits(FUDeclaration* decl);
-
-// TODO: This functions could be abstracted, to receive a function pointer that receives a declaration and checks wether the unit is a config type or a mem type or etc.
-//       Check the functions that sort types by dependency to also use the same function pointer technique (in codeGeneration.cpp)
-Array<FUDeclaration*> ConfigSubTypes(FUDeclaration* decl,Arena* out,Arena* sub);
-Array<FUDeclaration*> MemSubTypes(FUDeclaration* decl,Arena* out,Arena* sub);
-
-#endif // INCLUDED_VERSAT_DECLARATION
