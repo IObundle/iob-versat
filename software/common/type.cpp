@@ -26,6 +26,24 @@ namespace ValueType{
 static Arena permanentArena;
 static Pool<Type> types;
 
+TypeIterator IterateTypes(){
+  TypeIterator iter = {};
+  iter.iter = types.begin();
+  iter.end = types.end();
+  return iter;
+}
+
+bool HasNext(TypeIterator iter){
+  bool res = (iter.iter != iter.end);
+  return res;
+}
+
+Type* Next(TypeIterator& iter){
+  Type* type = *iter.iter;
+  ++iter.iter;
+  return type;
+}
+
 static Type* CollapseTypeUntilBase(Type* type){
   Type* res = type;
   while(true){
@@ -394,7 +412,7 @@ Type* GetType(String name){
       continue;
     }
 
-    NOT_POSSIBLE;
+    NOT_POSSIBLE("Should have found a type by now");
   }
 
   return res;
@@ -712,10 +730,10 @@ Optional<Value> AccessObjectIndex(Value object,int index){
       }
       value = optVal.value();
     } else {
-      NOT_IMPLEMENTED;
+      NOT_IMPLEMENTED("Implement as needed");
     }
   } else {
-    NOT_IMPLEMENTED;
+    NOT_IMPLEMENTED("Implement as needed");
   }
 
   value.isTemp = false;
@@ -855,7 +873,7 @@ int IndexableSize(Value object){
       Hashmap<Byte,Byte>* view = (Hashmap<Byte,Byte>*) object.custom;
       size = view->nodesUsed;
     } else {
-      NOT_IMPLEMENTED;
+      NOT_IMPLEMENTED("Implement as needed");
     }
   }
 
@@ -1037,14 +1055,14 @@ Iterator Iterate(Value iterating){
       }
       iter.hashmapType = exists;
     } else {
-      NOT_IMPLEMENTED;
+      NOT_IMPLEMENTED("Implement as needed");
     }
   } else if(IsEmbeddedListKind(type)){
     // Info stored in iterating
   } else if(type == ValueType::NIL){
     // Do nothing. HasNext will fail
   } else {
-    NOT_IMPLEMENTED;
+    NOT_IMPLEMENTED("Implement as needed");
   }
 
   return iter;
@@ -1084,7 +1102,7 @@ bool HasNext(Iterator iter){
       bool res = (iter.currentNumber < len);
       return res;
     } else {
-      NOT_IMPLEMENTED;
+      NOT_IMPLEMENTED("Implement as needed");
     }
   } else if(IsEmbeddedListKind(type)){
     bool res = (iter.iterating.custom != nullptr);
@@ -1093,7 +1111,7 @@ bool HasNext(Iterator iter){
   } else if(type == ValueType::NIL){
     return false;
   } else {
-    NOT_IMPLEMENTED;
+    NOT_IMPLEMENTED("Implement as needed");
   }
 
   return false;
@@ -1116,7 +1134,7 @@ void Advance(Iterator* iter){
     } else if(type->templateBase == ValueType::HASHMAP){
       iter->currentNumber += 1;
     } else {
-      NOT_IMPLEMENTED;
+      NOT_IMPLEMENTED("Implement as needed");
     }
   } else if(IsEmbeddedListKind(type)){
     Optional<Value> optVal = AccessStruct(iter->iterating,STRING("next"));
@@ -1127,7 +1145,7 @@ void Advance(Iterator* iter){
     Value collapsed = CollapsePtrIntoStruct(optVal.value());
     iter->iterating = collapsed;
   } else {
-    NOT_IMPLEMENTED;
+    NOT_IMPLEMENTED("Implement as needed");
   }
 }
 
@@ -1172,12 +1190,12 @@ Value GetValue(Iterator iter){
       val.custom = &data[iter.currentNumber * iter.hashmapType->size];
       val.type = iter.hashmapType;
     } else {
-      NOT_IMPLEMENTED;
+      NOT_IMPLEMENTED("Implement as needed");
     }
   } else if(IsEmbeddedListKind(type)){
     return iter.iterating;
   } else {
-    NOT_IMPLEMENTED;
+    NOT_IMPLEMENTED("Implement as needed");
   }
 
   return val;
@@ -1242,7 +1260,7 @@ static Value CollapsePtrUntilType(Value in, Type* typeWanted){
     } else if(res.type->type == Type::TYPEDEF){
 	  res.type = res.type->typedefType;
 	} else {
-      NOT_POSSIBLE;
+      NOT_POSSIBLE("No more possible type exists to collapse, I think");
     }
   }
 
@@ -1310,7 +1328,7 @@ bool Equal(Value v1,Value v2){
 
     res = (c1.custom == c2.custom);
   } else {
-    NOT_IMPLEMENTED;
+    NOT_IMPLEMENTED("Implement as needed");
   }
 
   return res;
@@ -1372,7 +1390,7 @@ Value ConvertValue(Value in,Type* want,Arena* arena){
     } else if(IsStruct(in.type)){
       res.boolean = (in.custom != nullptr);
     } else {
-      NOT_IMPLEMENTED;
+      NOT_IMPLEMENTED("Implement as needed");
     }
   } else if(want == ValueType::NUMBER){
     if(in.type->type == Type::POINTER){
@@ -1386,7 +1404,7 @@ Value ConvertValue(Value in,Type* want,Arena* arena){
       Optional<int>* view = (Optional<int>*) in.custom;
       res.number = view->value_or(0);
     } else {
-      NOT_IMPLEMENTED;
+      NOT_IMPLEMENTED("Implement as needed");
     }
   } else if(want == ValueType::SIZED_STRING){
     if(in.type == ValueType::STRING){
@@ -1395,17 +1413,17 @@ Value ConvertValue(Value in,Type* want,Arena* arena){
     } else if(arena){
       res.str = GetDefaultValueRepresentation(in,arena);
     } else {
-      NOT_IMPLEMENTED;
+      NOT_IMPLEMENTED("Implement as needed");
     }
   } else if(want->type == Type::ENUM){
     if(in.type == ValueType::NUMBER){
       res = in;
       res.type = want;
     } else {
-      NOT_IMPLEMENTED;
+      NOT_IMPLEMENTED("Implement as needed");
     }
   } else {
-    NOT_IMPLEMENTED;
+    NOT_IMPLEMENTED("Implement as needed");
   }
 
   return res;
@@ -1560,10 +1578,10 @@ Array<Value> ExtractValues(const char* format,Token tok,Arena* arena){
         val->isTemp = true;
       }break;
       case '\0':{
-        NOT_POSSIBLE;
+        NOT_POSSIBLE("Format char not finished"); // TODO: Probably should be a error that reports 
       }break;
       default:{
-        NOT_IMPLEMENTED;
+        NOT_IMPLEMENTED("Implement as needed");
       }break;
       }
     } else {

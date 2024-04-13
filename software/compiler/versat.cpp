@@ -14,11 +14,9 @@
 #include "debugVersat.hpp"
 #include "parser.hpp"
 #include "configurations.hpp"
-#include "graph.hpp"
 #include "utils.hpp"
 #include "utilsCore.hpp"
 #include "verilogParsing.hpp"
-#include "acceleratorStats.hpp"
 #include "templateEngine.hpp"
 #include "textualRepresentation.hpp"
 #include "templateData.hpp"
@@ -138,68 +136,6 @@ Versat* InitVersat(){
   return versat;
 }
 
-// TODO: Bunch of functions that could go to graph.hpp
-Edge* FindEdge(FUInstance* out,int outIndex,FUInstance* in,int inIndex,int delay){
-  FUDeclaration* inDecl = in->declaration;
-  FUDeclaration* outDecl = out->declaration;
-
-  Assert(out->accel == in->accel);
-  Assert(inIndex < inDecl->inputDelays.size);
-  Assert(outIndex < outDecl->outputLatencies.size);
-
-  Accelerator* accel = out->accel;
-
-  FOREACH_LIST(Edge*,edge,accel->edges){
-    if(edge->units[0].inst == (FUInstance*) out &&
-       edge->units[0].port == outIndex &&
-       edge->units[1].inst == (FUInstance*) in &&
-       edge->units[1].port == inIndex &&
-       edge->delay == delay) {
-      return edge;
-    }
-  }
-
-  return nullptr;
-}
-
-Edge* ConnectUnitsGetEdge(FUInstance* out,int outIndex,FUInstance* in,int inIndex,int delay){
-  Edge* edge = ConnectUnitsGetEdge(out,outIndex,in,inIndex,delay,nullptr);
-
-  return edge;
-}
-
-void ConnectUnits(FUInstance* out,int outIndex,FUInstance* in,int inIndex,int delay){
-  ConnectUnitsGetEdge(out,outIndex,in,inIndex,delay);
-}
-
-void ConnectUnitsIfNotConnected(FUInstance* out,int outIndex,FUInstance* in,int inIndex,int delay){
-  ConnectUnitsIfNotConnectedGetEdge(out,outIndex,in,inIndex,delay);
-}
-
-Edge* ConnectUnitsIfNotConnectedGetEdge(FUInstance* out,int outIndex,FUInstance* in,int inIndex,int delay){
-  Accelerator* accel = out->accel;
-
-  FOREACH_LIST(Edge*,edge,accel->edges){
-    if(edge->units[0].inst == out && edge->units[0].port == outIndex &&
-       edge->units[1].inst == in  && edge->units[1].port == inIndex &&
-       delay == edge->delay){
-      return edge;
-    }
-  }
-
-  return ConnectUnitsGetEdge(out,outIndex,in,inIndex,delay);
-}
-
-Edge* ConnectUnits(PortInstance out,PortInstance in,int delay){
-  return ConnectUnitsGetEdge(out.inst,out.port,in.inst,in.port,delay);
-}
-
-Edge* ConnectUnits(FUInstance* out,int outIndex,FUInstance* in,int inIndex,int delay,Edge* previousEdge){
-  Edge* edge = ConnectUnitsGetEdge(out,outIndex,in,inIndex,delay,previousEdge);
-
-  return edge;
-}
-
 int EvalRange(ExpressionRange range,Array<ParameterExpression> expressions){
   // TODO: Right now nullptr indicates that the wire does not exist. Do not know if it's worth to make it more explicit or not. Appears to be fine for now.
   if(range.top == nullptr || range.bottom == nullptr){
@@ -316,7 +252,7 @@ FUDeclaration* RegisterModuleInfo(Versat* versat,ModuleInfo* info){
           external[i].dp[ii].dataSizeOut = EvalRange(expr.dp[ii].dataSizeOut,instantiated);
         }
       }break;
-      default: NOT_IMPLEMENTED;
+      default: NOT_IMPLEMENTED("Implemented as needed");
       }
     }
 
@@ -591,7 +527,7 @@ void FillDeclarationWithAcceleratorValues(Versat* versat,FUDeclaration* decl,Acc
 // Might also be better for Flatten if we separated the process so that we do not have to deal with
 // share configs and static configs and stuff like that.
 
-FUDeclaration* RegisterSubUnit(Versat* versat,String name,Accelerator* circuit){
+FUDeclaration* RegisterSubUnit(Versat* versat,Accelerator* circuit){
   Arena* permanent = &versat->permanent;
   Arena* temp = &versat->temp;
   BLOCK_REGION(temp);
@@ -603,6 +539,8 @@ FUDeclaration* RegisterSubUnit(Versat* versat,String name,Accelerator* circuit){
   }
 #endif
 
+  String name = circuit->name;
+  
   FUDeclaration decl = {};
   decl.type = FUDeclaration::COMPOSITE;
   decl.name = name;
@@ -922,15 +860,6 @@ FUDeclaration* RegisterIterativeUnit(Versat* versat,Accelerator* accel,FUInstanc
   return registeredType;
 }
 
-//TODO: functions that should go to accelerator
-int GetNumberOfInputs(FUInstance* inst){
-  return inst->declaration->inputDelays.size;
-}
-
-int GetNumberOfOutputs(FUInstance* inst){
-  return inst->declaration->outputLatencies.size;
-}
-
 FUInstance* CreateOrGetInput(Accelerator* accel,String name,int portNumber){
   FOREACH_LIST(InstanceNode*,ptr,accel->allocated){
     FUInstance* inst = ptr->inst;
@@ -957,68 +886,10 @@ FUInstance* CreateOrGetOutput(Accelerator* accel){
   return inst;
 }
 
-int GetNumberOfInputs(Accelerator* accel){
-  int count = 0;
-  FOREACH_LIST(InstanceNode*,ptr,accel->allocated){
-    FUInstance* inst = ptr->inst;
-    if(inst->declaration == BasicDeclaration::input){
-      count += 1;
-    }
-  }
-
-  return count;
-}
-
-int GetNumberOfOutputs(Accelerator* accel){
-  NOT_IMPLEMENTED;
-  return 0;
-}
-
 int GetInputPortNumber(FUInstance* inputInstance){
   Assert(inputInstance->declaration == BasicDeclaration::input);
 
   return ((FUInstance*) inputInstance)->portIndex;
-}
-
-bool CheckValidName(String name){
-  for(int i = 0; i < name.size; i++){
-    char ch = name[i];
-
-    bool allowed = (ch >= 'a' && ch <= 'z')
-                   ||  (ch >= 'A' && ch <= 'Z')
-                   ||  (ch >= '0' && ch <= '9' && i != 0)
-                   ||  (ch == '_')
-                   ||  (ch == '.' && i != 0)  // For now allow it, despite the fact that it should only be used internally by Versat
-                   ||  (ch == '/' && i != 0); // For now allow it, despite the fact that it should only be used internally by Versat
-
-    if(!allowed){
-      return false;
-    }
-  }
-
-  return true;
-}
-
-int CalculateMemoryUsage(Versat* versat){
-  int totalSize = 0;
-#if 0
-  for(Accelerator* accel : versat->accelerators){
-    int accelSize = accel->instances.MemoryUsage() + accel->edges.MemoryUsage();
-    accelSize += MemoryUsage(accel->configAlloc);
-    accelSize += MemoryUsage(accel->stateAlloc);
-    accelSize += MemoryUsage(accel->delayAlloc);
-    accelSize += MemoryUsage(accel->staticAlloc);
-    accelSize += MemoryUsage(accel->outputAlloc);
-    accelSize += MemoryUsage(accel->storedOutputAlloc);
-    accelSize += MemoryUsage(accel->extraDataAlloc);
-
-    totalSize += accelSize;
-  }
-
-  totalSize += versat->permanent.used; // Not total allocated, because it would distort the actual data we care about
-#endif
-
-  return totalSize;
 }
 
 void PrintDeclaration(FILE* out,FUDeclaration* decl,Arena* temp,Arena* temp2){
@@ -1045,4 +916,28 @@ void PrintDeclaration(FILE* out,FUDeclaration* decl,Arena* temp,Arena* temp2){
   Array<InstanceInfo> info = TransformGraphIntoArray(decl->fixedDelayCircuit,true,temp,temp2);
 
   PrintAll(out,info,temp);
+}
+
+bool CheckValidName(String name){
+  for(int i = 0; i < name.size; i++){
+    char ch = name[i];
+
+    bool allowed = (ch >= 'a' && ch <= 'z')
+                   ||  (ch >= 'A' && ch <= 'Z')
+                   ||  (ch >= '0' && ch <= '9' && i != 0)
+                   ||  (ch == '_')
+                   ||  (ch == '.' && i != 0)  // For now allow it, despite the fact that it should only be used internally by Versat
+                   ||  (ch == '/' && i != 0); // For now allow it, despite the fact that it should only be used internally by Versat
+
+    if(!allowed){
+      return false;
+    }
+  }
+
+  return true;
+}
+
+bool IsTypeHierarchical(FUDeclaration* decl){
+   bool res = (decl->fixedDelayCircuit != nullptr);
+   return res;
 }

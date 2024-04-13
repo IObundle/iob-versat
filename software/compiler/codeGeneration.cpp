@@ -1,19 +1,6 @@
-#include "configurations.hpp"
-#include "debugVersat.hpp"
-#include "declaration.hpp"
-#include "memory.hpp"
-#include "type.hpp"
-#include "utils.hpp"
-#include "utilsCore.hpp"
-#include "verilogParsing.hpp"
 #include "versat.hpp"
-#include "textualRepresentation.hpp"
-#include "acceleratorStats.hpp"
 #include "templateData.hpp"
-
 #include "templateEngine.hpp"
-
-#include "debug.hpp"
 
 static Hashmap<Type*,Array<bool>>* fieldsPerTypeSeen = nullptr;
 static Arena testInst = {};
@@ -442,7 +429,7 @@ static Array<TypeStructInfo> GetMemMappedStructInfo(Accelerator* accel,Arena* ou
 void OutputCircuitSource(Versat* versat,FUDeclaration* decl,Accelerator* accel,FILE* file,Arena* temp,Arena* temp2){
   BLOCK_REGION(temp);
   BLOCK_REGION(temp2);
-
+  
   ClearTemplateEngine(); // Make sure that we do not reuse data
   
   Assert(versat->debug.outputAccelerator); // Because FILE is created outside, code should not call this function if flag is set
@@ -535,7 +522,6 @@ void OutputIterativeSource(Versat* versat,FUDeclaration* decl,Accelerator* accel
 
   Array<InstanceInfo> info = TransformGraphIntoArray(accel,true,temp,temp2); // TODO: Calculating info just for the computedData calculation is a bit wasteful.
   ComputedData computedData = CalculateVersatComputedData(info,val,temp);
-  //ComputedData computedData = CalculateVersatComputedData(accel->allocated,val,temp);
   TemplateSetCustom("staticUnits",MakeValue(decl->staticUnits));
   TemplateSetCustom("accel",MakeValue(decl));
   TemplateSetCustom("versatData",MakeValue(&computedData.data));
@@ -632,7 +618,7 @@ void OutputVerilatorMake(Versat* versat,String topLevelName,String versatDir,Opt
   ProcessTemplate(output,comp,temp,temp2);
 }
 
-void OutputVersatSource(Versat* versat,Accelerator* accel,const char* hardwarePath,const char* softwarePath,String accelName,bool isSimple,Arena* temp,Arena* temp2){
+void OutputVersatSource(Versat* versat,Accelerator* accel,const char* hardwarePath,const char* softwarePath,bool isSimple,Arena* temp,Arena* temp2){
   BLOCK_REGION(temp);
   BLOCK_REGION(temp2);
   
@@ -649,7 +635,7 @@ void OutputVersatSource(Versat* versat,Accelerator* accel,const char* hardwarePa
 
   VersatComputedValues val = ComputeVersatValues(versat,accel,versat->opts->useDMA);
   UnitValues unit = CalculateAcceleratorValues(versat,accel);
-
+  
   printf("ADDR_W - %d\n",val.memoryConfigDecisionBit + 1);
   if(val.nUnitsIO){
     printf("HAS_AXI - True\n");
@@ -741,7 +727,7 @@ void OutputVersatSource(Versat* versat,Accelerator* accel,const char* hardwarePa
         printf(",%d",inter.tp.dataSizeIn);
         printf("\n");
       }break;
-      default: NOT_IMPLEMENTED;
+      default: NOT_IMPLEMENTED("Implement as needed");
       }
     }
   }
@@ -843,6 +829,29 @@ void OutputVersatSource(Versat* versat,Accelerator* accel,const char* hardwarePa
   }
   
   TemplateSetBool("isSimple",isSimple);
+  if(isSimple){
+    FUInstance* inst = nullptr; // TODO: Should probably separate isSimple to a separate function, because otherwise we are recalculating stuff that we already know.
+    FOREACH_LIST(InstanceNode*,ptr,accel->allocated){
+      if(CompareString(ptr->inst->name,STRING("TOP"))){
+        inst = ptr->inst;
+        break;
+      }
+    }
+    Assert(inst);
+
+    Accelerator* accel = inst->declaration->fixedDelayCircuit;
+    FOREACH_LIST(InstanceNode*,ptr,accel->allocated){
+      if(CompareString(ptr->inst->name,STRING("simple"))){
+        inst = ptr->inst;
+        break;
+      }
+    }
+    Assert(inst);
+
+    TemplateSetNumber("simpleInputs",inst->declaration->NumberInputs());
+    TemplateSetNumber("simpleOutputs",inst->declaration->NumberOutputs());
+  }
+
   TemplateSetNumber("memoryMappedBase",1 << val.memoryConfigDecisionBit);
   TemplateSetNumber("nConfigs",val.nConfigs);
   TemplateSetNumber("nStatics",val.nStatics);
@@ -875,7 +884,7 @@ void OutputVersatSource(Versat* versat,Accelerator* accel,const char* hardwarePa
     TemplateSetCustom("namedMem",MakeValue(&allMem));
     TemplateSetCustom("orderedConfigs",MakeValue(&orderedConfigs));
 
-    TemplateSetString("accelName",accelName);
+    TemplateSetString("accelName",accel->name);
     TemplateSetBool("doingMerged",false);
 
     InstanceNode* topMerged = nullptr;

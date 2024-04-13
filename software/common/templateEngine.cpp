@@ -598,7 +598,7 @@ static Value EvalExpression(Expression* expr,Frame* frame,Arena* temp){
       if(iter == pipeFunctions.end()){
         printf("Did not find the following pipe function\n");
         printf("%.*s\n",UNPACK_SS(expr->expressions[1]->id));
-        NOT_IMPLEMENTED;
+        USER_ERROR("Program error, fix template or register pipe");
       }
 
       PipeFunction func = iter->second;
@@ -714,7 +714,7 @@ static Value EvalExpression(Expression* expr,Frame* frame,Arena* temp){
       }
     } break;
     default:{
-      NOT_IMPLEMENTED;
+      NOT_IMPLEMENTED("Implement as needed");
     }break;
     }
   } break;
@@ -761,7 +761,7 @@ static Value EvalExpression(Expression* expr,Frame* frame,Arena* temp){
     val = optVal.value();
   }break;
   default:{
-    NOT_IMPLEMENTED;
+    NOT_IMPLEMENTED("Implement as needed");
   } break;
   }
 
@@ -926,7 +926,7 @@ static String EvalBlockCommand(Block* block,Frame* previousFrame,Arena* temp){
       printf("%.*s\n",UNPACK_SS(res));
     }
   } break;
-  default: NOT_IMPLEMENTED;
+  default: NOT_IMPLEMENTED("Implemented as needed");
   }
 
   return res;
@@ -1071,7 +1071,7 @@ static ValueAndText EvalNonBlockCommand(Command* com,Frame* previousFrame,Arena*
     printf("Error: founded a strain end in the template\n");
     Assert(false);
   } break;
-  default: NOT_IMPLEMENTED;
+  default: NOT_IMPLEMENTED("Implemented as needed");
   }
 
   ValueAndText res = {};
@@ -1145,14 +1145,14 @@ String Repr(TemplateRecord r,Arena* arena){
   case TemplateRecordType_IDENTIFER:{
     return PushString(arena,"[%.*s] %.*s",UNPACK_SS(r.identifierType->name),UNPACK_SS(r.identifierName));
   } break;
-  default: NOT_IMPLEMENTED;
+  default: NOT_IMPLEMENTED("Implemented as needed");
   }
 
   return {};
 }
 
 void PrintTemplate(CompiledTemplate* compiled,Arena* arena){
-  NOT_IMPLEMENTED;
+  NOT_IMPLEMENTED("Maybe TODO, not needed for now");
 }
 
 template<> class std::hash<TemplateRecord>{
@@ -1176,7 +1176,7 @@ bool operator==(const TemplateRecord& r0,const TemplateRecord& r1){
   case TemplateRecordType_IDENTIFER:{
     res = (r0.identifierType == r1.identifierType) && CompareString(r0.identifierName,r1.identifierName);
   } break;
-  default: NOT_IMPLEMENTED;
+  default: NOT_IMPLEMENTED("Implemented as needed");
   }
   
   return res;
@@ -1270,7 +1270,7 @@ Type* RecordExpression(Expression* expr,Frame* frame,ArenaList<TemplateRecord>* 
     // Get type of member
   } break;
   default: {
-    NOT_POSSIBLE;
+    NOT_POSSIBLE("Implemented as needed");
   } break;
   }
 
@@ -1357,7 +1357,7 @@ static void RecordBlockCommand(Block* block,Frame* previousFrame,ArenaList<Templ
       RecordEval(ptr,frame,recordList,temp);
     }
   } break;
-  default: NOT_IMPLEMENTED;
+  default: NOT_IMPLEMENTED("Implemented as needed");
   }
 }
 
@@ -1440,9 +1440,9 @@ static Type* RecordNonBlockCommand(Command* com,Frame* previousFrame,ArenaList<T
     DEBUG_BREAK();
   } break;
   case CommandType_END:{
-    NOT_POSSIBLE;
+    NOT_POSSIBLE("Implemented as needed");
   } break;
-  default: NOT_IMPLEMENTED;
+  default: NOT_IMPLEMENTED("Implemented as needed");
   }
 
   return nullptr;

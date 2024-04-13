@@ -58,34 +58,34 @@
 #define PrintFileAndLine() printf("%s:%d\n",__FILE__,__LINE__)
 
 template<typename F>
-class Defer{
+class _Defer{
 public:
    F f;
-   Defer(F f) : f(f){};
-   ~Defer(){f();}
+   _Defer(F f) : f(f){};
+   ~_Defer(){f();}
 };
 
 struct _DeferTag{};
 template<typename F>
-ALWAYS_INLINE Defer<F> operator+(_DeferTag,F&& f){
-   return Defer<F>(f);
+ALWAYS_INLINE _Defer<F> operator+(_DeferTag,F&& f){
+   return _Defer<F>(f);
 }
 
 #define TEMP__defer(LINE) TEMPdefer_ ## LINE
 #define TEMP_defer(LINE) TEMP__defer( LINE )
 #define defer auto TEMP_defer(__LINE__) = _DeferTag() + [&]() // Only executes at the end of the code block
 
-struct Once{};
+struct _Once{};
 struct _OnceTag{};
 template<typename F>
-ALWAYS_INLINE Once operator+(_OnceTag,F&& f){
+ALWAYS_INLINE _Once operator+(_OnceTag,F&& f){
   f();
-  return Once{};
+  return _Once{};
 }
 
 #define TEMP__once(LINE) TEMPonce_ ## LINE
 #define TEMP_once(LINE) TEMP__once( LINE )
-#define once static Once TEMP_once(__LINE__) = _OnceTag() + [&]() // Executes once even if called multiple times
+#define once static _Once TEMP_once(__LINE__) = _OnceTag() + [&]() // Executes once even if called multiple times
 
 void PrintStacktrace();
 void FlushStdout();
@@ -121,14 +121,16 @@ static void Terminate(){FlushStdout(); exit(-1);}
 #define AssertAndDo(EXPR) EXPR
 #endif
 
-#define DEBUG_BREAK() do{ PrintStacktrace(); FlushStdout(); raise(SIGTRAP); } while(0)
+#define DEBUG_BREAK() do{ FlushStdout(); raise(SIGTRAP); } while(0)
 #define DEBUG_BREAK_IF(COND) if(COND){FlushStdout(); raise(SIGTRAP);}
 
-#define NOT_IMPLEMENTED do{ printf("%s:%d:1: error: Not implemented: %s",__FILE__,__LINE__,__PRETTY_FUNCTION__); FlushStdout(); Assert(false); } while(0) // Doesn't mean that something is necessarily future planned
-#define NOT_POSSIBLE DEBUG_BREAK()
-#define UNHANDLED_ERROR do{ FlushStdout(); Assert(false); } while(0) // Know it's an error, but only exit, for now
-#define USER_ERROR do{ FlushStdout(); exit(0); } while(0) // User error and program does not try to repair or keep going (report error before and exit)
-#define UNREACHABLE do{Assert(false); __builtin_unreachable();} while(0)
+// If possible use argument to put a simple string indicating the error that must likely occured
+// We do not print it for now but useful for long lasting code.
+#define NOT_IMPLEMENTED(...) do{ printf("%s:%d:1: error: Not implemented: %s",__FILE__,__LINE__,__PRETTY_FUNCTION__); FlushStdout(); Assert(false); } while(0) // Doesn't mean that something is necessarily future planned
+#define NOT_POSSIBLE(...) DEBUG_BREAK()
+#define UNHANDLED_ERROR(...) do{ FlushStdout(); Assert(false); } while(0) // Know it's an error, but only exit, for now
+#define USER_ERROR(...) do{ FlushStdout(); exit(0); } while(0) // User error and program does not try to repair or keep going (report error before and exit)
+#define UNREACHABLE(...) do{Assert(false); __builtin_unreachable();} while(0)
 
 #define FOREACH_LIST(TYPE,ITER,START) for(TYPE ITER = START; ITER; ITER = ITER->next)
 #define FOREACH_LIST_INDEXED(TYPE,ITER,START,INDEX) for(TYPE ITER = START; ITER; ITER = ITER->next,INDEX += 1)
@@ -157,6 +159,7 @@ typedef uintptr_t uptr;
 
 template<typename T>
 using Optional = std::optional<T>;
+#define PROPAGATE(OPTIONAL) if(!(OPTIONAL).has_value()){return {};}
 
 struct Time{
    u64 microSeconds;
@@ -221,7 +224,7 @@ struct Array{
   T* data;
   int size;
 
-  inline T& operator[](int index) const {Assert(index < size); return data[index];}
+  inline T& operator[](int index) const {Assert(index >= 0);Assert(index < size); return data[index];}
   ArrayIterator<T> begin(){return ArrayIterator<T>{data};};
   ArrayIterator<T> end(){return ArrayIterator<T>{data + size};};
 };

@@ -25,7 +25,6 @@
         arrays and throw some error if we detect an allocation that
         shouldn't happen.  Wrap this extra code inside a DEBUG
         directive.
-
 */
 
 inline size_t Kilobyte(int val){return val * 1024;};
@@ -84,6 +83,7 @@ Byte* PushBytes(Arena* arena, size_t size);
 size_t SpaceAvailable(Arena* arena);
 String PointArena(Arena* arena,Byte* mark);
 String PushChar(Arena* arena,const char);
+String PushString(Arena* arena,int size);
 String PushString(Arena* arena,String ss);
 String PushString(Arena* arena,const char* format,...) __attribute__ ((format (printf, 2, 3)));
 String vPushString(Arena* arena,const char* format,va_list args);
@@ -107,7 +107,7 @@ public:
 
 #define __marker(LINE) marker_ ## LINE
 #define _marker(LINE) __marker( LINE )
-#define BLOCK_REGION(ARENA) ArenaMarker _marker(__LINE__)(ARENA) // TODO: Probably would be better to rename this.
+#define BLOCK_REGION(ARENA) ArenaMarker _marker(__LINE__)(ARENA)
 
 #define region(ARENA) if(ArenaMarker _marker(__LINE__){ARENA})
 
@@ -140,6 +140,7 @@ DynamicArena* CreateDynamicArena(int numberPages = 1);
 Arena SubArena(DynamicArena* arena,size_t size);
 Byte* PushBytes(DynamicArena* arena, size_t size);
 void Clear(DynamicArena* arena);
+String PushString(DynamicArena* arena,String str);
 
 template<typename T>
 Array<T> PushArray(DynamicArena* arena,int size){Array<T> res = {}; res.size = size; res.data = (T*) PushBytes(arena,sizeof(T) * size); return res;};
@@ -152,6 +153,8 @@ struct DynamicArray{
   Arena* arena;
   Byte* mark;
 
+  ~DynamicArray();
+  
   T* PushElem();
 };
 
@@ -351,7 +354,7 @@ struct Hashmap{
   
   Data* Get(Key key); // TODO: Should return an optional
   Data* GetOrInsert(Key key,Data data);
-  Data GetOrFail(Key key);
+  Data& GetOrFail(Key key);
 
   void Clear();
 
@@ -624,6 +627,15 @@ template<typename T> DynamicArray<T> StartArray(Arena* arena){
   return arr;
 }
 
+template<typename T>
+DynamicArray<T>::~DynamicArray<T>(){
+  // Unlocking the arena must be done in the destructor as well otherwise
+  // a return of function would leave the arena locked for good.
+#ifdef VERSAT_DEBUG
+  arena->locked = false;
+#endif
+}
+
 template<typename T> T* DynamicArray<T>::PushElem(){
 #ifdef VERSAT_DEBUG
   Assert(arena->locked);
@@ -640,14 +652,11 @@ template<typename T> T* DynamicArray<T>::PushElem(){
 }
   
 template<typename T> Array<T> EndArray(DynamicArray<T> arr){
-  Arena* arena = arr;
+  Arena* arena = arr.arena;
 
-#ifdef VERSAT_DEBUG
-  Assert(arena->locked);
   arena->locked = false;
-#endif
 
-  Array<T> res = PointArray(arena,arr.mark);
+  Array<T> res = PointArray<T>(arena,arr.mark);
   return res;
 }
 
@@ -869,7 +878,7 @@ Data* Hashmap<Key,Data>::GetOrInsert(Key key,Data data){
 }
 
 template<typename Key,typename Data>
-Data Hashmap<Key,Data>::GetOrFail(Key key){
+Data& Hashmap<Key,Data>::GetOrFail(Key key){
    Data* ptr = Get(key);
    Assert(ptr);
    return *ptr;

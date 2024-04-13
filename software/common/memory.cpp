@@ -29,7 +29,6 @@ static int pagesDeallocated = 0;
 
 void* AllocatePages(int pages){
   void* res = mmap(0, pages * GetPageSize(), PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE, -1, 0);
-  printf("%d\n",errno);
   Assert(res != MAP_FAILED);
  
   pagesAllocated += pages;
@@ -132,8 +131,13 @@ size_t SpaceAvailable(Arena* arena){
 
 String PointArena(Arena* arena,Byte* mark){
   String res = {};
-  res.data = (char*) mark;
   res.size = &arena->mem[arena->used] - mark;
+  if(res.size == 0){ // Put data as NULL if size 0, probably less error prone. Not sure.
+    res.data = nullptr;
+  } else {
+    res.data = (char*) mark;
+  }
+
   return res;
 }
 
@@ -141,15 +145,13 @@ String PushFile(Arena* arena,FILE* file){
   String res;
   long int size = GetFileSize(file);
 
-  Byte* mem = PushBytes(arena,size + 1);
+  Byte* mem = PushBytes(arena,size);
   int amountRead = fread(mem,sizeof(Byte),size,file);
 
   if(amountRead != size){
     fprintf(stderr,"Memory PushFile failed to read entire file\n");
     exit(-1);
   }
-
-  mem[size] = '\0';
 
   res.size = size;
   res.data = (const char*) mem;
@@ -185,15 +187,19 @@ String PushChar(Arena* arena,const char ch){
   return res;
 }
 
-String PushString(Arena* arena,String ss){
-  Byte* mem = PushBytes(arena,ss.size);
-
-  memcpy(mem,ss.data,ss.size);
+String PushString(Arena* arena,int size){
+  Byte* mem = PushBytes(arena,size);
 
   String res = {};
   res.data = (const char*) mem;
-  res.size = ss.size;
+  res.size = size;
 
+  return res;
+}
+
+String PushString(Arena* arena,String ss){
+  String res = PushString(arena,ss.size);
+  memcpy((void*) res.data,ss.data,ss.size);
   return res;
 }
 
@@ -282,6 +288,13 @@ void Clear(DynamicArena* arena){
   FOREACH_LIST(DynamicArena*,ptr,arena){
     ptr->used = 0;
   }
+}
+
+String PushString(DynamicArena* arena,String str){
+  Byte* bytes = PushBytes(arena,str.size);
+  memcpy((void*) bytes,str.data,str.size);
+  String res = {.data = (char*) bytes,.size = str.size};
+  return res;
 }
 
 bool BitIterator::operator!=(BitIterator& iter){ // Returns false if passed over iter

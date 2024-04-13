@@ -120,6 +120,8 @@ extern volatile AcceleratorState* accelState;
 
 #{if isSimple}
 // Simple input and output connection for simple accelerators
+#define NumberSimpleInputs @{simpleInputs}
+#define NumberSimpleOutputs @{simpleOutputs}
 #define SimpleInputStart ((iptr*) accelConfig)
 #define SimpleOutputStart ((int*) accelState)
 #{end}

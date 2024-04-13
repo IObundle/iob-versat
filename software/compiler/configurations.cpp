@@ -5,7 +5,6 @@
 #include "utils.hpp"
 #include "utilsCore.hpp"
 #include "versat.hpp"
-#include "acceleratorStats.hpp"
 #include "textualRepresentation.hpp"
 #include <strings.h>
 
@@ -75,7 +74,7 @@ int GetConfigurationSize(FUDeclaration* decl,MemType type){
   }break;
   case MemType::STATIC:{
   }break;
-  default: NOT_IMPLEMENTED;
+  default: NOT_IMPLEMENTED("Implemented as needed");
   }
 
   return size;
@@ -267,9 +266,9 @@ String NodeTypeToString(InstanceNode* node){
   case InstanceNode::TAG_SOURCE_AND_SINK:{
     return STRING("SOURCE_AND_SINK");
   } break;
-  default: NOT_IMPLEMENTED;
+  default: NOT_IMPLEMENTED("Implemented as needed");
   }
-  NOT_POSSIBLE;
+  NOT_POSSIBLE("Implemented as needed");
   return {};
 }
 
@@ -436,7 +435,7 @@ AcceleratorInfo TransformGraphIntoArrayRecurse(InstanceNode* node,FUDeclaration*
 //       We are complication this more than needed. We already have all the logic needed to do this.
 //       The only thing that we actually need to do is to recurse, access data from configInfo (or calculate if at the top) and them put them all together.
 
-// TODO: Offer a recursive option and a non recursive option. Use the non recursive 
+// TODO: Offer a recursive option and a non recursive option. 
 
 // NOTE: I could: Have a function that recurses and counts how many nodes there are.
 //       Allocates the Array of instance info.
@@ -465,12 +464,9 @@ Array<InstanceInfo> TransformGraphIntoArray(Accelerator* accel,bool recursive,Ar
 
     subOffsets.configOffset = configOffsets.offsets[index];
     subOffsets.delayOffset = delayOffsets.offsets[index];
-    //if(subInst->declaration->configInfo.delayOffsets.max > 0){
-      subOffsets.delay = calculatedDelay.nodeDelay->GetOrFail(node);
-    //}
+    subOffsets.delay = calculatedDelay.nodeDelay->GetOrFail(node);
     
     if(recursive){
-      // TODO: The code should be able to be simplified such that  
       AcceleratorInfo info = TransformGraphIntoArrayRecurse(node,nullptr,subOffsets,temp,out);
 
       subOffsets.memOffset += info.memSize;

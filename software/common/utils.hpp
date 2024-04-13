@@ -12,6 +12,39 @@ String GetAbsolutePath(const char* path,Arena* out);
 
 Array<int> GetNonZeroIndexes(Array<int> array,Arena* out);
 
+template<typename Value,typename Error>
+struct Result{
+  union{
+    Value value;
+    Error error;
+  };
+  bool isError;
+  
+  Result() = default;
+  Result(Value val){value = val; isError = false;};
+  Result(Error err){error = err; isError = true;};
+  
+  //operator bool(){return !isError;}
+};
+#define CHECK(RESULT) if(!(RESULT).isError){return (RESULT).error;}
+
+// For cases where both Value and Error are the type
+template<typename T>
+struct Result<T,T>{
+  union{
+    T value;
+    T error;
+  };
+  bool isError;
+
+  Result() = default;
+};
+
+template<typename T>
+Result<T,T> MakeResultValue(T val){Result<T,T> res = {}; res.value = val; return res;};
+template<typename T>
+Result<T,T> MakeResultError(T val){Result<T,T> res = {}; res.error = val; res.isError = true; return res;};
+
 // A templated type for carrying the index in an array
 // A performant design would allocate a separate array because these functions copy data around.
 // Use these for prototyping, easing of debugging and stuff
@@ -162,7 +195,7 @@ T* ReverseList(T* head){
 
 template<typename T>
 T* ListInsertEnd(T* head,T* toAdd){
-   T* last = nullptr;
+   T* last = head;
    FOREACH_LIST(T*,ptr,head){
       last = ptr;
    }
@@ -354,4 +387,21 @@ Stack<T>* PushStack(Arena* out,int size){
   stack->mem = PushArray<T>(out,size);
 
   return stack;
+}
+
+template<typename T>
+Hashmap<T,int>* Count(Array<T> arr,Arena* out){
+  Hashmap<T,int>* count = PushHashmap<T,int>(out,arr.size);
+
+  for(T& t : arr){
+    GetOrAllocateResult<int> res = count->GetOrAllocate(t);
+    
+    if(res.alreadyExisted){
+      *res.data += 1;
+    } else {
+      *res.data = 1;
+    }
+  }
+
+  return count;
 }

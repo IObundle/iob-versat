@@ -135,6 +135,11 @@ struct FUDeclaration{
   bool isOperation;
   bool implementsDone;
   bool signalLoop;
+
+// Simple functions access functions
+  
+  int NumberInputs(){return inputDelays.size;};
+  int NumberOutputs(){return outputLatencies.size;};
 };
 
 // Simple operations should also be stored here.
@@ -158,11 +163,5 @@ void InitializeSimpleDeclarations(Versat* versat);
 FUDeclaration* RegisterFU(Versat* versat,FUDeclaration declaration);
 FUDeclaration* RegisterIterativeUnit(Versat* versat,Accelerator* accel,FUInstance* inst,int latency,String name);
 FUDeclaration* RegisterSubUnit(Versat* versat,String name,Accelerator* accel);
-
-bool IsComposite(FUDeclaration* decl);
-
-bool IsCombinatorial(FUDeclaration* decl);
-bool ContainsConfigs(FUDeclaration* decl);
-bool ContainsStatics(FUDeclaration* decl);
 
 int NumberOfSubunits(FUDeclaration* decl);

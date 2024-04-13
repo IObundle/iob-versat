@@ -3,15 +3,9 @@
 #include "declaration.hpp"
 #include "utilsCore.hpp"
 
-extern "C"{
-#include <time.h>
-}
-
 #include "debug.hpp"
 #include "debugVersat.hpp"
 #include "textualRepresentation.hpp"
-#include "graph.hpp"
-
 #include <ctime>
 #include <cstdio>
 #include <cstdarg>
@@ -160,9 +154,9 @@ IsCliqueResult IsClique(ConsolidationGraph graph){
     }
 
     if(count != cliqueSize - 1){ // Each node must have (cliqueSize - 1) connections otherwise not a clique
-         res.failedIndex = i;
-         res.result = false;
-         return res;
+      res.failedIndex = i;
+      res.result = false;
+      return res;
     }
   }
 
@@ -182,7 +176,6 @@ bool EqualPortMapping(PortInstance p1,PortInstance p2){
       }
   }
 
-  //bool res = ((d1 == d2) && (p1.port == p2.port));
   bool res = (d1 == d2);
 
   return res;
@@ -212,8 +205,8 @@ inline bool EdgeOrder(Edge* edge,ConsolidationGraphOptions options){
   return true;
 }
 
+#if 0
 int NodeDepth(MappingNode node){
-  UNHANDLED_ERROR;
 #if 0
   switch(node.type){
   case MappingNode::NODE:{
@@ -236,6 +229,7 @@ int NodeDepth(MappingNode node){
 
   return 0;
 }
+#endif
 
 ConsolidationResult GenerateConsolidationGraph(Versat* versat,Arena* out,Accelerator* accel1,Accelerator* accel2,ConsolidationGraphOptions options){
   ConsolidationGraph graph = {};
@@ -662,7 +656,7 @@ void RunMaxClique(CliqueState* state,Arena* arena,Time MAX_CLIQUE_TIME){
   ConsolidationGraph graph = Copy(state->clique,arena);
   graph.validNodes.Fill(0);
 
-  UNHANDLED_ERROR; // Get time changed, check this later
+  UNHANDLED_ERROR("Implement if gonna use functin again"); // Get time changed, check this later
 #if 0
   state->start = GetTime();
 #endif
@@ -693,7 +687,7 @@ void RunMaxClique(CliqueState* state,Arena* arena,Time MAX_CLIQUE_TIME){
       break;
     }
 
-    UNHANDLED_ERROR; // Get time changed, check this later
+    UNHANDLED_ERROR("Implement if needed"); // Get time changed, check this later
 #if 0
     auto end = GetTime();
     float elapsed = end - state->start;
@@ -956,7 +950,7 @@ static GraphMapping FirstFitGraphMapping(Versat* versat,Accelerator* accel1,Acce
 }
 #endif
 
-  NOT_IMPLEMENTED; // Not fully implemented. Missing edge mappings
+  NOT_IMPLEMENTED("Not fully implemented. Missing edge mappings");
   return res;
 }
 
@@ -977,7 +971,7 @@ struct {
 #endif
 
 void OrderedMatch(std::vector<FUInstance*>& order1,std::vector<FUInstance*>& order2,InstanceMap& map,int orderOffset){
-  UNHANDLED_ERROR;
+  UNHANDLED_ERROR("Implement if needed");
 #if 0
   auto iter1 = order1.begin();
   auto iter2 = order2.begin();
@@ -1074,7 +1068,7 @@ static GraphMapping OrderedFitGraphMapping(Versat* versat,Accelerator* accel0,Ac
   return res;
 #endif
 
-  NOT_IMPLEMENTED; // Missing edge mapping
+  NOT_IMPLEMENTED("Implement if needed");
   return {};
 }
 
@@ -1168,7 +1162,7 @@ struct OverheadCount{
 OverheadCount CountOverheadUnits(Versat* versat,Accelerator* accel){
   OverheadCount res = {};
 
-  UNHANDLED_ERROR;
+  UNHANDLED_ERROR("Implement if needed");
 #if 0
   FOREACH_LIST(inst,accel->instances){
   FUDeclaration* decl = inst->declaration;
@@ -1267,7 +1261,7 @@ void PrintSavedByMerge(Versat* versat,Accelerator* finalAccel,Accelerator* accel
 #endif
 
 void PrintMergePossibility(Versat* versat,Accelerator* accel1,Accelerator* accel2){
-  UNHANDLED_ERROR;
+  UNHANDLED_ERROR("Implement if needed");
 #if 0
   FOREACH_LIST(inst1,accel1->instances){
   inst1->tag = 0;
@@ -1602,7 +1596,7 @@ FUDeclaration* MergeAccelerators(Versat* versat,FUDeclaration* accel1,FUDeclarat
   MergeGraphResult result = ParallelHierarchicalHeuristic(versat,accel1,accel2,name);
 #endif
 
-  FUDeclaration* decl = RegisterSubUnit(versat,name,newGraph);
+  FUDeclaration* decl = RegisterSubUnit(versat,newGraph);
 
 #if 0
   {
@@ -1935,7 +1929,8 @@ FUDeclaration* Merge(Versat* versat,Array<FUDeclaration*> types,String name,Merg
   
   // I'm registing the entire sub unit so what I probably want is to simplify the entire registerSubUnit process and only then tackle this next step.
   String permanentName = PushString(&versat->permanent,name);
-  FUDeclaration* decl = RegisterSubUnit(versat,permanentName,result);
+  result->name = permanentName;
+  FUDeclaration* decl = RegisterSubUnit(versat,result);
 
   // RegisterSubUnit creates new accelerators and stuff.
   // Also adds buffers which do not add anything to the config array, right?

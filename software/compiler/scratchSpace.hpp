@@ -2,7 +2,6 @@
 
 #include "versat.hpp"
 #include "merge.hpp"
-#include "graph.hpp"
 #include "textualRepresentation.hpp"
 #include "debug.hpp"
 #include "intrinsics.hpp"

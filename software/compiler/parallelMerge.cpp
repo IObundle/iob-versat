@@ -357,7 +357,7 @@ void ParallelClique(ParallelCliqueState* state,ConsolidationGraph graphArg,Index
    if(state->counter >= 1000){ // Calling clock is kinda of expensive every iteration
       state->counter = 0;
 
-      UNHANDLED_ERROR; // Get time changed, check this later
+      UNHANDLED_ERROR("Fix if rest of code used again. Disabled for now"); // Get time changed, check this later
       #if 0
       auto end = GetTime();
       float elapsed = end - state->start;
@@ -499,7 +499,7 @@ void Init(RefParallelState* state,ConsolidationGraph graph,int upperBound,Arena*
       ar = InitArena(Megabyte(128)); // Allocate one per thread
    }
    state->i = graph.nodes.size - 1;
-   UNHANDLED_ERROR; // Get time changed, check this later
+   UNHANDLED_ERROR("Not sure if gonna use code, implement if needed"); // Get time changed, check this later
    #if 0
    state->start = GetTime();
    #endif
@@ -519,7 +519,7 @@ ConsolidationGraph AdvanceAll(RefParallelState* parallelState,Arena* arena,float
 
       task.args = (void*) state;
 
-      UNHANDLED_ERROR; // Get time changed, check this later
+      UNHANDLED_ERROR("Not sure if gonna use code, implement if needed"); // Get time changed, check this later
       #if 0
       auto end = GetTime();
       float elapsed = end - parallelState->start;

@@ -1,4 +1,3 @@
-#include "acceleratorStats.hpp"
 #include "versat.hpp"
 
 #include <unordered_map>
@@ -7,7 +6,6 @@
 #include "debug.hpp"
 #include "debugVersat.hpp"
 #include "configurations.hpp"
-#include "graph.hpp"
 
 #define TAG_TEMPORARY_MARK 1
 #define TAG_PERMANENT_MARK 2
@@ -17,24 +15,23 @@ typedef std::unordered_map<FUInstance*,FUInstance*> InstanceMap;
 Accelerator* CreateAccelerator(Versat* versat,String name){
   Accelerator* accel = versat->accelerators.Alloc();
   accel->versat = versat;
-  accel->name = name;
-
+  
   accel->accelMemory = CreateDynamicArena(1);
+
+  accel->name = PushString(accel->accelMemory,name);
 
   return accel;
 }
 
-void DestroyAccelerator(Versat* versat,Accelerator* accel){
-  versat->accelerators.Remove(accel);
-}
-
 InstanceNode* CreateFlatFUInstance(Accelerator* accel,FUDeclaration* type,String name){
-  Assert(CheckValidName(name));
+  String storedName = PushString(accel->accelMemory,name);
+
+  Assert(CheckValidName(storedName));
 
   accel->ordered = nullptr; // TODO: Will leak
 
   FOREACH_LIST(InstanceNode*,ptr,accel->allocated){
-    if(ptr->inst->name == name){
+    if(ptr->inst->name == storedName){
       //Assert(false);
       break;
     }
@@ -55,7 +52,7 @@ InstanceNode* CreateFlatFUInstance(Accelerator* accel,FUDeclaration* type,String
   }
   accel->lastAllocated = ptr;
 
-  inst->name = name;
+  inst->name = storedName;
   inst->accel = accel;
   inst->declaration = type;
 
@@ -115,6 +112,48 @@ Accelerator* CopyAccelerator(Versat* versat,Accelerator* accel,InstanceMap* map)
   return newAccel;
 }
 
+FUInstance* CopyFlatInstance(Accelerator* newAccel,FUInstance* oldInstance,String newName){
+  FUInstance* newInst = CreateFlatFUInstance(newAccel,oldInstance->declaration,newName)->inst;
+
+  newInst->parameters = oldInstance->parameters;
+  newInst->baseDelay = oldInstance->baseDelay;
+  newInst->portIndex = oldInstance->portIndex;
+
+  // Static and shared not handled for flat copy. Not sure if makes sense or not. See where it goes
+
+  return newInst;
+}
+
+Accelerator* CopyFlatAccelerator(Versat* versat,Accelerator* accel,InstanceMap* map){
+  Accelerator* newAccel = CreateAccelerator(versat,accel->name);
+  InstanceMap nullCaseMap;
+
+  if(map == nullptr){
+    map = &nullCaseMap;
+  }
+
+  // Copy of instances
+  FOREACH_LIST(InstanceNode*,ptr,accel->allocated){
+    FUInstance* inst = ptr->inst;
+    FUInstance* newInst = CopyFlatInstance(newAccel,inst,inst->name);
+    newInst->literal = inst->literal;
+
+    map->insert({inst,newInst});
+  }
+
+  // Flat copy of edges
+  FOREACH_LIST(Edge*,edge,accel->edges){
+    FUInstance* out = (FUInstance*) map->at(edge->units[0].inst);
+    int outPort = edge->units[0].port;
+    FUInstance* in = (FUInstance*) map->at(edge->units[1].inst);
+    int inPort = edge->units[1].port;
+
+    ConnectUnits(out,outPort,in,inPort,edge->delay);
+  }
+
+  return newAccel;
+}
+
 FUInstance* CopyInstance(Accelerator* newAccel,FUInstance* oldInstance,String newName){
   FUInstance* newInst = CreateFUInstance(newAccel,oldInstance->declaration,newName);
 
@@ -148,56 +187,6 @@ InstanceNode* CopyInstance(Accelerator* newAccel,InstanceNode* oldInstance,Strin
   }
 
   return newNode;
-}
-
-FUInstance* CopyFlatInstance(Accelerator* newAccel,FUInstance* oldInstance,String newName){
-  FUInstance* newInst = CreateFlatFUInstance(newAccel,oldInstance->declaration,newName)->inst;
-
-  newInst->parameters = oldInstance->parameters;
-  newInst->baseDelay = oldInstance->baseDelay;
-  newInst->portIndex = oldInstance->portIndex;
-
-  // Static and shared not handled for flat copy. Not sure if makes sense or not. See where it goes
-#if 0
-  if(oldInstance->isStatic){
-    SetStatic(newAccel,newInst);
-  }
-  if(oldInstance->sharedEnable){
-    ShareInstanceConfig(newInst,oldInstance->sharedIndex);
-  }
-#endif
-
-  return newInst;
-}
-
-Accelerator* CopyFlatAccelerator(Versat* versat,Accelerator* accel,InstanceMap* map){
-  Accelerator* newAccel = CreateAccelerator(versat,accel->name);
-  InstanceMap nullCaseMap;
-
-  if(map == nullptr){
-    map = &nullCaseMap;
-  }
-
-  // Copy of instances
-  FOREACH_LIST(InstanceNode*,ptr,accel->allocated){
-    FUInstance* inst = ptr->inst;
-    FUInstance* newInst = CopyFlatInstance(newAccel,inst,inst->name);
-    newInst->literal = inst->literal;
-
-    map->insert({inst,newInst});
-  }
-
-  // Flat copy of edges
-  FOREACH_LIST(Edge*,edge,accel->edges){
-    FUInstance* out = (FUInstance*) map->at(edge->units[0].inst);
-    int outPort = edge->units[0].port;
-    FUInstance* in = (FUInstance*) map->at(edge->units[1].inst);
-    int inPort = edge->units[1].port;
-
-    ConnectUnits(out,outPort,in,inPort,edge->delay);
-  }
-
-  return newAccel;
 }
 
 // This function works, but not for the flatten algorithm, as we hope that the configs match but they don't match for the outputs after removing a composite instance
@@ -437,21 +426,6 @@ Accelerator* Flatten(Versat* versat,Accelerator* accel,int times){
 
       map.clear();
     }
-
-#if 0
-    for(FUInstance** instPtr : toRemove){
-      FUInstance* inst = *instPtr;
-
-      FlattenRemoveFUInstance(newAccel,inst);
-    }
-#endif
-
-#if 0
-    for(InstanceNode** instPtr : toRemove){
-      RemoveFUInstance(newAccel,*instPtr);
-    }
-    AssertGraphValid(newAccel->allocated,temp);
-#endif
 
     toRemove.Clear();
     compositeInstances.Clear();
@@ -947,59 +921,6 @@ void ReorganizeIterative(Accelerator* accel,Arena* temp){
   accel->ordered = ReverseList(accel->ordered);
 }
 
-#if 0
-static int CalculateLatency_(PortInstance portInst, std::unordered_map<PortInstance,int>* memoization,bool seenSourceAndSink){
-  FUInstance* inst = portInst.inst;
-  int port = portInst.port;
-
-  if(inst->graphData->nodeType == InstanceNode::TAG_SOURCE_AND_SINK && seenSourceAndSink){
-    return inst->declaration->latencies[port];
-  } else if(inst->graphData->nodeType == InstanceNode::TAG_SOURCE){
-    return inst->declaration->latencies[port];
-  } else if(inst->graphData->nodeType == InstanceNode::TAG_UNCONNECTED){
-    Assert(false);
-  }
-
-  auto iter = memoization->find(portInst);
-
-  if(iter != memoization->end()){
-    return iter->second;
-  }
-
-  int latency = 0;
-  for(int i = 0; i < inst->graphData->numberInputs; i++){
-    ConnectionInfo* info = &inst->graphData->inputs[i];
-
-    int lat = CalculateLatency_(info->instConnectedTo,memoization,true);
-
-    Assert(inst->declaration->inputDelays[i] < 1000);
-
-    latency = std::max(latency,lat);
-  }
-
-  int finalLatency = latency + inst->declaration->latencies[port];
-  memoization->insert({portInst,finalLatency});
-
-  return finalLatency;
-}
-
-int CalculateLatency(FUInstance* inst){
-  std::unordered_map<PortInstance,int> map;
-
-  Assert(inst->graphData->nodeType == InstanceNode::TAG_SOURCE_AND_SINK || inst->graphData->nodeType == InstanceNode::TAG_SINK);
-
-  int maxLatency = 0;
-  for(int i = 0; i < inst->graphData->numberInputs; i++){
-    ConnectionInfo* info = &inst->graphData->inputs[i];
-    int latency = CalculateLatency_(info->instConnectedTo,&map,false);
-    maxLatency = std::max(maxLatency,latency);
-  }
-
-  return maxLatency;
-}
-#endif
-
-#if 1
 void FixDelays(Versat* versat,Accelerator* accel,Hashmap<EdgeNode,int>* edgeDelays){
   Arena* temp = &versat->temp;
   BLOCK_REGION(temp);
@@ -1038,12 +959,6 @@ void FixDelays(Versat* versat,Accelerator* accel,Hashmap<EdgeNode,int>* edgeDela
       buffer->bufferAmount = delay - BasicDeclaration::buffer->outputLatencies[0];
       Assert(buffer->bufferAmount >= 0);
       SetStatic(accel,buffer);
-      
-#if 0
-      if(buffer->config){
-        buffer->config[0] = buffer->bufferAmount;
-      }
-#endif
     }
 
     InsertUnit(accel,edge.node0,edge.node1,PortNode{GetInstanceNode(accel,buffer),0});
@@ -1053,7 +968,6 @@ void FixDelays(Versat* versat,Accelerator* accel,Hashmap<EdgeNode,int>* edgeDela
     buffersInserted += 1;
   }
 }
-#endif
 
 InstanceNode* GetInputNode(InstanceNode* nodes,int inputIndex){
   FOREACH_LIST(InstanceNode*,ptr,nodes){
@@ -1072,17 +986,6 @@ FUInstance* GetInputInstance(InstanceNode* nodes,int inputIndex){
       return inst;
     }
   }
-  return nullptr;
-}
-
-InstanceNode* GetOutputNode(InstanceNode* nodes){
-  FOREACH_LIST(InstanceNode*,ptr,nodes){
-    FUInstance* inst = ptr->inst;
-    if(inst->declaration == BasicDeclaration::output){
-      return ptr;
-    }
-  }
-
   return nullptr;
 }
 
@@ -1148,51 +1051,18 @@ ComputedData CalculateVersatComputedData(Array<InstanceInfo> info,VersatComputed
   return res;
 }
 
-bool IsComposite(FUDeclaration* decl){
-  bool res = (decl->baseCircuit != nullptr);
-  return res;
-}
-
-bool IsCombinatorial(FUDeclaration* decl){
-  bool res;
-  if(IsTypeHierarchical(decl)){
-    res = IsCombinatorial(decl->fixedDelayCircuit);
-  } else {
-    int maxLatency = 0;
-    for(int val : decl->outputLatencies){
-      maxLatency = std::max(maxLatency,val);
-    }
-
-    res = (decl->isOperation || (maxLatency != 0));
-  }
-  return res;
-}
-
 bool IsCombinatorial(Accelerator* accel){
   FOREACH_LIST(InstanceNode*,ptr,accel->allocated){
-    bool isComb = IsCombinatorial(ptr->inst->declaration);
+    if(ptr->inst->declaration->fixedDelayCircuit == nullptr){
+      continue;
+    }
+    
+    bool isComb = IsCombinatorial(ptr->inst->declaration->fixedDelayCircuit);
     if(!isComb){
       return false;
     }
   }
   return true;
-}
-
-bool ContainsConfigs(FUDeclaration* decl){
-  bool res = (decl->configInfo.configs.size);
-  return res;
-}
-
-bool ContainsStatics(FUDeclaration* decl){
-  bool res = false;
-  for(auto& pair : decl->staticUnits){
-    if(pair.data.configs.size){
-      res = true;
-      break;
-    }
-  }
-
-  return res;
 }
 
 Array<FUDeclaration*> ConfigSubTypes(Accelerator* accel,Arena* out,Arena* temp){
@@ -1235,4 +1105,547 @@ Array<FUDeclaration*> MemSubTypes(Accelerator* accel,Arena* out,Arena* temp){
   return subTypes;
 }
 
+
+// Checks wether the external memory conforms to the expected interface or not (has valid values)
+bool VerifyExternalMemory(ExternalMemoryInterface* inter){
+  bool res;
+
+  switch(inter->type){
+  case ExternalMemoryType::TWO_P:{
+    res = (inter->tp.bitSizeIn == inter->tp.bitSizeOut);
+  }break;
+  case ExternalMemoryType::DP:{
+    res = (inter->dp[0].bitSize == inter->dp[1].bitSize);
+  }break;
+  default: NOT_IMPLEMENTED("Implemented as needed");
+  }
+
+  return res;
+}
+
+// Function that calculates byte offset from size of data_w
+int DataWidthToByteOffset(int dataWidth){
+  // 0-8 : 0,
+  // 9-16 : 1
+  // 17 - 32 : 2,
+  // 33 - 64 : 3
+
+  // 0 : 0
+  // 8 : 0
+  if(dataWidth == 0){
+    return 0;
+  }
+
+  int res = log2i((dataWidth - 1) / 8);
+  return res;
+}
+
+int ExternalMemoryByteSize(ExternalMemoryInterface* inter){
+  Assert(VerifyExternalMemory(inter));
+
+  // TODO: The memories size and address is still error prone. We should just store the total size and the address width in the structures (and then we can derive the data width from the given address width and the total size). Storing data width and address size at the same time gives more degrees of freedom than need. The parser is responsible in ensuring that the data is given in the correct format and this code should never have to worry about having to deal with values out of phase
+  int addressBitSize = 0;
+  int byteOffset = 0;
+  switch(inter->type){
+  case ExternalMemoryType::TWO_P:{
+    addressBitSize = inter->tp.bitSizeIn;
+    byteOffset = std::min(DataWidthToByteOffset(inter->tp.dataSizeIn),DataWidthToByteOffset(inter->tp.dataSizeOut));
+  }break;
+  case ExternalMemoryType::DP:{
+    addressBitSize = inter->dp[0].bitSize;
+    byteOffset = std::min(DataWidthToByteOffset(inter->dp[0].dataSizeIn),DataWidthToByteOffset(inter->dp[1].dataSizeIn));
+  }break;
+  default: NOT_IMPLEMENTED("Implemented as needed");
+  }
+
+  int byteSize = (1 << (addressBitSize + byteOffset));
+
+  return byteSize;
+}
+
+int ExternalMemoryByteSize(Array<ExternalMemoryInterface> interfaces){
+  int size = 0;
+
+  // Not to sure about this logic. So far we do not allow different DATA_W values for the same port memories, but technically this should work
+  for(ExternalMemoryInterface& inter : interfaces){
+    int max = ExternalMemoryByteSize(&inter);
+
+    // Aligns
+    int nextPower2 = AlignNextPower2(max);
+    int boundary = log2i(nextPower2);
+
+    int aligned = AlignBitBoundary(size,boundary);
+    size = aligned + max;
+  }
+
+  return size;
+}
+
+VersatComputedValues ComputeVersatValues(Versat* versat,Accelerator* accel,bool useDMA){
+  VersatComputedValues res = {};
+
+  int memoryMappedDWords = 0;
+  FOREACH_LIST(InstanceNode*,ptr,accel->allocated){
+    FUInstance* inst = ptr->inst;
+    FUDeclaration* decl = inst->declaration;
+
+    res.numberConnections += Size(ptr->allOutputs);
+
+    if(decl->memoryMapBits.has_value()){
+      memoryMappedDWords = AlignBitBoundary(memoryMappedDWords,decl->memoryMapBits.value());
+      memoryMappedDWords += 1 << decl->memoryMapBits.value();
+
+      res.unitsMapped += 1;
+    }
+
+    res.nConfigs += decl->configInfo.configs.size;
+    for(Wire& wire : decl->configInfo.configs){
+      res.configBits += wire.bitSize;
+    }
+
+    res.nStates += decl->configInfo.states.size;
+    for(Wire& wire : decl->configInfo.states){
+      res.stateBits += wire.bitSize;
+    }
+
+    res.nDelays += decl->configInfo.delayOffsets.max;
+    res.delayBits += decl->configInfo.delayOffsets.max * 32;
+
+    res.nUnitsIO += decl->nIOs;
+
+    res.externalMemoryInterfaces += decl->externalMemory.size;
+    res.signalLoop |= decl->signalLoop;
+  }
+
+  for(auto pair : accel->staticUnits){
+    StaticData data = pair.second;
+    res.nStatics += data.configs.size;
+
+    for(Wire& wire : data.configs){
+      res.staticBits += wire.bitSize;
+    }
+  }
+
+  res.staticBitsStart = res.configBits;
+  res.delayBitsStart = res.staticBitsStart + res.staticBits;
+
+  // Versat specific registers are treated as a special maping (all 0's) of 1 configuration and 1 state register
+  res.versatConfigs = 1;
+  res.versatStates = 1;
+
+  if(useDMA){
+    res.versatConfigs += 4;
+    res.versatStates += 4;
+
+    res.nUnitsIO += 1; // For the DMA
+  }
+
+  res.nConfigs += res.versatConfigs;
+  res.nStates += res.versatStates;
+
+  res.nConfigurations = res.nConfigs + res.nStatics + res.nDelays;
+  res.configurationBits = res.configBits + res.staticBits + res.delayBits;
+
+  res.memoryMappedBytes = memoryMappedDWords * 4;
+  res.memoryAddressBits = log2i(memoryMappedDWords);
+
+  res.memoryMappingAddressBits = res.memoryAddressBits;
+  res.configurationAddressBits = log2i(res.nConfigurations);
+  res.stateAddressBits = log2i(res.nStates);
+  res.stateConfigurationAddressBits = std::max(res.configurationAddressBits,res.stateAddressBits);
+
+  //res.lowerAddressSize = std::max(res.stateConfigurationAddressBits,res.memoryMappingAddressBits);
+  //res.memoryConfigDecisionBit = res.lowerAddressSize;
+  res.memoryConfigDecisionBit = std::max(res.stateConfigurationAddressBits,res.memoryMappingAddressBits) + 2;
+  
+  return res;
+}
+
+InstanceNode* GetInstanceNode(Accelerator* accel,FUInstance* inst){
+   FOREACH_LIST(InstanceNode*,ptr,accel->allocated){
+      if(ptr->inst == inst){
+         return ptr;
+      }
+   }
+   Assert(false); // For now, this should not fail
+   return nullptr;
+}
+
+void CalculateNodeType(InstanceNode* node){
+   node->type = InstanceNode::TAG_UNCONNECTED;
+
+   bool hasInput = (node->allInputs != nullptr);
+   bool hasOutput = (node->allOutputs != nullptr);
+
+   // If the unit is both capable of acting as a sink or as a source of data
+   if(hasInput && hasOutput){
+     if(CHECK_DELAY(node->inst,DELAY_TYPE_SINK_DELAY) || CHECK_DELAY(node->inst,DELAY_TYPE_SOURCE_DELAY)){
+         node->type = InstanceNode::TAG_SOURCE_AND_SINK;
+      }  else {
+         node->type = InstanceNode::TAG_COMPUTE;
+      }
+   } else if(hasInput){
+      node->type = InstanceNode::TAG_SINK;
+   } else if(hasOutput){
+      node->type = InstanceNode::TAG_SOURCE;
+   } else {
+      // Unconnected
+   }
+}
+
+void FixInputs(InstanceNode* node){
+   Memset(node->inputs,{});
+   node->multipleSamePortInputs = false;
+
+   FOREACH_LIST(ConnectionNode*,ptr,node->allInputs){
+      int port = ptr->port;
+
+      if(node->inputs[port].node){
+         node->multipleSamePortInputs = true;
+      }
+
+      node->inputs[port] = ptr->instConnectedTo;
+   }
+}
+
+void FixOutputs(InstanceNode* node){
+   Memset(node->outputs,false);
+
+   FOREACH_LIST(ConnectionNode*,ptr,node->allOutputs){
+      int port = ptr->port;
+      node->outputs[port] = true;
+   }
+}
+
+
+// TODO: Bunch of functions that could go to graph.hpp
+Edge* FindEdge(FUInstance* out,int outIndex,FUInstance* in,int inIndex,int delay){
+  FUDeclaration* inDecl = in->declaration;
+  FUDeclaration* outDecl = out->declaration;
+
+  Assert(out->accel == in->accel);
+  Assert(inIndex < inDecl->inputDelays.size);
+  Assert(outIndex < outDecl->outputLatencies.size);
+
+  Accelerator* accel = out->accel;
+
+  FOREACH_LIST(Edge*,edge,accel->edges){
+    if(edge->units[0].inst == (FUInstance*) out &&
+       edge->units[0].port == outIndex &&
+       edge->units[1].inst == (FUInstance*) in &&
+       edge->units[1].port == inIndex &&
+       edge->delay == delay) {
+      return edge;
+    }
+  }
+
+  return nullptr;
+}
+
+Edge* ConnectUnitsGetEdge(FUInstance* out,int outIndex,FUInstance* in,int inIndex,int delay){
+  Edge* edge = ConnectUnitsGetEdge(out,outIndex,in,inIndex,delay,nullptr);
+
+  return edge;
+}
+
+void ConnectUnits(FUInstance* out,int outIndex,FUInstance* in,int inIndex,int delay){
+  ConnectUnitsGetEdge(out,outIndex,in,inIndex,delay);
+}
+
+void ConnectUnitsIfNotConnected(FUInstance* out,int outIndex,FUInstance* in,int inIndex,int delay){
+  ConnectUnitsIfNotConnectedGetEdge(out,outIndex,in,inIndex,delay);
+}
+
+Edge* ConnectUnitsIfNotConnectedGetEdge(FUInstance* out,int outIndex,FUInstance* in,int inIndex,int delay){
+  Accelerator* accel = out->accel;
+
+  FOREACH_LIST(Edge*,edge,accel->edges){
+    if(edge->units[0].inst == out && edge->units[0].port == outIndex &&
+       edge->units[1].inst == in  && edge->units[1].port == inIndex &&
+       delay == edge->delay){
+      return edge;
+    }
+  }
+
+  return ConnectUnitsGetEdge(out,outIndex,in,inIndex,delay);
+}
+
+Edge* ConnectUnits(PortInstance out,PortInstance in,int delay){
+  return ConnectUnitsGetEdge(out.inst,out.port,in.inst,in.port,delay);
+}
+
+Edge* ConnectUnitsGetEdge(PortNode out,PortNode in,int delay){
+   FUDeclaration* inDecl = in.node->inst->declaration;
+   FUDeclaration* outDecl = out.node->inst->declaration;
+
+   Assert(out.node->inst->accel == in.node->inst->accel);
+   Assert(in.port < inDecl->inputDelays.size);
+   Assert(out.port < outDecl->outputLatencies.size);
+
+   Accelerator* accel = out.node->inst->accel;
+
+   Edge* edge = PushStruct<Edge>(accel->accelMemory);
+   edge->next = accel->edges;
+   accel->edges = edge;
+
+   edge->units[0].inst = out.node->inst;
+   edge->units[0].port = out.port;
+   edge->units[1].inst = in.node->inst;
+   edge->units[1].port = in.port;
+   edge->delay = delay;
+
+   // Update graph data.
+   InstanceNode* inputNode = in.node;
+   InstanceNode* outputNode = out.node;
+
+   // Add info to outputNode
+   // Update all outputs
+   {
+   ConnectionNode* con = PushStruct<ConnectionNode>(accel->accelMemory);
+   con->edgeDelay = delay;
+   con->port = out.port;
+   con->instConnectedTo.node = inputNode;
+   con->instConnectedTo.port = in.port;
+
+   outputNode->allOutputs = ListInsert(outputNode->allOutputs,con);
+   outputNode->outputs[out.port] = true;
+   //outputNode->outputs += 1;
+   }
+
+   // Add info to inputNode
+   {
+   ConnectionNode* con = PushStruct<ConnectionNode>(accel->accelMemory);
+   con->edgeDelay = delay;
+   con->port = in.port;
+   con->instConnectedTo.node = outputNode;
+   con->instConnectedTo.port = out.port;
+
+   inputNode->allInputs = ListInsert(inputNode->allInputs,con);
+
+   if(inputNode->inputs[in.port].node){
+      inputNode->multipleSamePortInputs = true;
+   }
+
+   inputNode->inputs[in.port].node = outputNode;
+   inputNode->inputs[in.port].port = out.port;
+   }
+
+   CalculateNodeType(inputNode);
+   CalculateNodeType(outputNode);
+
+   return edge;
+}
+
+// Connects out -> in
+Edge* ConnectUnitsGetEdge(FUInstance* out,int outIndex,FUInstance* in,int inIndex,int delay,Edge* previous){
+   FUDeclaration* inDecl = in->declaration;
+   FUDeclaration* outDecl = out->declaration;
+
+   Assert(out->accel == in->accel);
+   Assert(inIndex < inDecl->inputDelays.size);
+   Assert(outIndex < outDecl->outputLatencies.size);
+
+   Accelerator* accel = out->accel;
+
+   Edge* edge = PushStruct<Edge>(accel->accelMemory);
+
+   if(previous){
+      edge->next = previous->next;
+      previous->next = edge;
+   } else {
+      edge->next = accel->edges;
+      accel->edges = edge;
+   }
+
+   edge->units[0].inst = (FUInstance*) out;
+   edge->units[0].port = outIndex;
+   edge->units[1].inst = (FUInstance*) in;
+   edge->units[1].port = inIndex;
+   edge->delay = delay;
+
+   // Update graph data.
+   InstanceNode* inputNode = GetInstanceNode(accel,(FUInstance*) in);
+   InstanceNode* outputNode = GetInstanceNode(accel,(FUInstance*) out);
+
+   // Add info to outputNode
+   // Update all outputs
+   {
+   ConnectionNode* con = PushStruct<ConnectionNode>(accel->accelMemory);
+   con->edgeDelay = delay;
+   con->port = outIndex;
+   con->instConnectedTo.node = inputNode;
+   con->instConnectedTo.port = inIndex;
+
+   outputNode->allOutputs = ListInsert(outputNode->allOutputs,con);
+   outputNode->outputs[outIndex] = true;
+   //outputNode->outputs += 1;
+   }
+
+   // Add info to inputNode
+   {
+   ConnectionNode* con = PushStruct<ConnectionNode>(accel->accelMemory);
+   con->edgeDelay = delay;
+   con->port = inIndex;
+   con->instConnectedTo.node = outputNode;
+   con->instConnectedTo.port = outIndex;
+
+   inputNode->allInputs = ListInsert(inputNode->allInputs,con);
+
+   if(inputNode->inputs[inIndex].node){
+      inputNode->multipleSamePortInputs = true;
+   }
+
+   inputNode->inputs[inIndex].node = outputNode;
+   inputNode->inputs[inIndex].port = outIndex;
+   }
+
+   CalculateNodeType(inputNode);
+   CalculateNodeType(outputNode);
+
+   return edge;
+}
+
+Array<int> GetNumberOfInputConnections(InstanceNode* node,Arena* out){
+   Array<int> res = PushArray<int>(out,node->inputs.size);
+   Memset(res,0);
+
+   FOREACH_LIST(ConnectionNode*,ptr,node->allInputs){
+      int port = ptr->port;
+      res[port] += 1;
+   }
+
+   return res;
+}
+
+Array<Array<PortNode>> GetAllInputs(InstanceNode* node,Arena* out){
+   Array<int> connections = GetNumberOfInputConnections(node,out); // Wastes a bit of memory because not deallocated after, its irrelevant
+
+   Array<Array<PortNode>> res = PushArray<Array<PortNode>>(out,node->inputs.size);
+   Memset(res,{});
+
+   for(int i = 0; i < res.size; i++){
+      res[i] = PushArray<PortNode>(out,connections[i]);
+   }
+
+   FOREACH_LIST(ConnectionNode*,ptr,node->allInputs){
+      int port = ptr->port;
+
+      Array<PortNode> array = res[port];
+      int index = connections[port] - 1;
+      connections[port] -= 1;
+      array[index] = ptr->instConnectedTo;
+   }
+
+   return res;
+}
+
+void RemoveConnection(Accelerator* accel,PortNode out,PortNode in){
+   RemoveConnection(accel,out.node,out.port,in.node,in.port);
+}
+
+void RemoveConnection(Accelerator* accel,InstanceNode* out,int outPort,InstanceNode* in,int inPort){
+   accel->edges = ListRemoveAll(accel->edges,[&](Edge* edge){
+      bool res = (edge->out.inst == out->inst && edge->out.port == outPort && edge->in.inst == in->inst && edge->in.port == inPort);
+      return res;
+   });
+
+   out->allOutputs = ListRemoveAll(out->allOutputs,[&](ConnectionNode* n){
+      bool res = (n->port == outPort && n->instConnectedTo.node == in && n->instConnectedTo.port == inPort);
+      return res;
+   });
+   //out->outputs = Size(out->allOutputs);
+   FixOutputs(out);
+
+   in->allInputs = ListRemoveAll(in->allInputs,[&](ConnectionNode* n){
+      bool res = (n->port == inPort && n->instConnectedTo.node == out && n->instConnectedTo.port == outPort);
+      return res;
+   });
+   FixInputs(in);
+}
+
+void RemoveAllDirectedConnections(InstanceNode* out,InstanceNode* in){
+   out->allOutputs = ListRemoveAll(out->allOutputs,[&](ConnectionNode* n){
+      return (n->instConnectedTo.node == in);
+   });
+   //out->outputs = Size(out->allOutputs);
+   FixOutputs(out);
+
+   in->allInputs = ListRemoveAll(in->allInputs,[&](ConnectionNode* n){
+      return (n->instConnectedTo.node == out);
+   });
+
+   FixInputs(in);
+}
+
+void RemoveAllConnections(InstanceNode* n1,InstanceNode* n2){
+   RemoveAllDirectedConnections(n1,n2);
+   RemoveAllDirectedConnections(n2,n1);
+}
+
+InstanceNode* RemoveUnit(InstanceNode* nodes,InstanceNode* unit){
+   STACK_ARENA(temp,Kilobyte(32));
+
+   Hashmap<InstanceNode*,int>* toRemove = PushHashmap<InstanceNode*,int>(&temp,100);
+
+   for(auto* ptr = unit->allInputs; ptr;){
+      auto* next = ptr->next;
+
+      toRemove->Insert(ptr->instConnectedTo.node,0);
+
+      ptr = next;
+   }
+
+   for(auto* ptr = unit->allOutputs; ptr;){
+      auto* next = ptr->next;
+
+      toRemove->Insert(ptr->instConnectedTo.node,0);
+
+      ptr = next;
+   }
+
+   for(auto& pair : toRemove){
+      RemoveAllConnections(unit,pair.first);
+   }
+
+   // Remove instance
+   int oldSize = Size(nodes);
+   auto* res = ListRemove(nodes,unit);
+   int newSize = Size(res);
+   Assert(oldSize == newSize + 1);
+
+   return res;
+}
+
+void InsertUnit(Accelerator* accel,PortNode before,PortNode after,PortNode newUnit){
+   RemoveConnection(accel,before.node,before.port,after.node,after.port);
+   ConnectUnitsGetEdge(newUnit,after,0);
+   ConnectUnitsGetEdge(before,newUnit,0);
+}
+
+void AssertGraphValid(InstanceNode* nodes,Arena* arena){
+   BLOCK_REGION(arena);
+
+   int size = Size(nodes);
+   Hashmap<InstanceNode*,int>* seen = PushHashmap<InstanceNode*,int>(arena,size);
+
+   FOREACH_LIST(InstanceNode*,ptr,nodes){
+      seen->Insert(ptr,0);
+   }
+
+   FOREACH_LIST(InstanceNode*,ptr,nodes){
+     FOREACH_LIST(ConnectionNode*,con,ptr->allInputs){
+         seen->GetOrFail(con->instConnectedTo.node);
+      }
+
+     FOREACH_LIST(ConnectionNode*,con,ptr->allOutputs){
+         seen->GetOrFail(con->instConnectedTo.node);
+      }
+
+      for(PortNode& n : ptr->inputs){
+         if(n.node){
+            seen->GetOrFail(n.node);
+         }
+      }
+   }
+}
 

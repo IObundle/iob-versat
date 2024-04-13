@@ -171,7 +171,7 @@ String Repr(MappingNode* node,Arena* out){
     Repr(&e1,format,out);
     name = PointArena(out,mark);
   } else {
-    NOT_IMPLEMENTED;
+    NOT_IMPLEMENTED("Implement as needed");
   }
 
   return name;
@@ -288,7 +288,7 @@ String Repr(String* str,Arena* out){
 }
 
 String Repr(TypeStructInfoElement* elem,Arena* out){
-  NOT_IMPLEMENTED;
+  NOT_IMPLEMENTED("Implement if needed");
   return {};
   //return PushString(out,"[%.*s]%.*s",UNPACK_SS(elem->type),UNPACK_SS(elem->name));
 }

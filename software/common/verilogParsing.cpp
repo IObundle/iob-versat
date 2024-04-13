@@ -52,7 +52,7 @@ static void DoIfStatement(Tokenizer* tok,MacroMap& macros,Array<String> includeF
   } else if(CompareString(first,"ifndef")){
     compareVal = false;
   } else {
-    UNHANDLED_ERROR;
+    UNHANDLED_ERROR("TODO: Make this a handled error");
   }
 
   bool exists = (macros.find(macroName) != macros.end());
@@ -235,11 +235,11 @@ void PreprocessVerilogFile_(String fileContent,MacroMap& macros,Array<String> in
       DoIfStatement(tok,macros,includeFilepaths,out,temp);
       
     } else if(CompareToken(identifier,"else")){
-      NOT_POSSIBLE;
+      NOT_POSSIBLE("All else and ends should have already been handled inside DoIf");
     } else if(CompareToken(identifier,"endif")){
-      NOT_POSSIBLE;
+      NOT_POSSIBLE("All else and ends should have already been handled inside DoIf");
     } else if(CompareToken(identifier,"elsif")){
-      NOT_POSSIBLE;
+      NOT_POSSIBLE("All else and ends should have already been handled inside DoIf");
     } else {
       tok->AdvancePeek(identifier);
 
@@ -340,7 +340,7 @@ static Value Eval(Expression* expr,ValueMap& map){
       return res;
     }break;
     default:{
-      NOT_IMPLEMENTED;
+      NOT_IMPLEMENTED("Implemented as needed");
     }break;
     }
   }break;
@@ -352,11 +352,11 @@ static Value Eval(Expression* expr,ValueMap& map){
     return expr->val;
   }break;
   default:{
-    NOT_POSSIBLE;
+    NOT_POSSIBLE("Implemented as needed");
   }break;
   }
 
-  NOT_POSSIBLE;
+  NOT_POSSIBLE("Implemented as needed");
   return MakeValue();
 }
 
@@ -520,7 +520,7 @@ static Module ParseModule(Tokenizer* tok,Arena* out,Arena* temp){
     } else if(CompareString(portType,"inout")){
       port.type = PortDeclaration::INOUT;
     } else {
-      UNHANDLED_ERROR;
+      UNHANDLED_ERROR("TODO: Should be a handled error");
     }
 
     // TODO: Add a new function to parser to "ignore" the following list of tokens (loop every time until it doesn't find one from the list), and replace this function here with reg and all the different types it can be
@@ -583,7 +583,7 @@ Array<Module> ParseVerilogFile(String fileContent,Array<String> includeFilepaths
 
   ArenaList<Module>* modules = PushArenaList<Module>(temp);
 
-  bool isSource = false;
+  bool isSource = true; // TODO: For some reason there was a bug where apperently isSource was getting set once and was true for the rest of the while loop. Despite this, everything worked correctly. Maybe everything should be Source since source units normally are and SOURCE_AND_SINK units should also behave as source.
   while(!tok->Done()){
     Token peek = tok->PeekToken();
 
@@ -594,7 +594,7 @@ Array<Module> ParseVerilogFile(String fileContent,Array<String> includeFilepaths
       if(CompareToken(attribute,"source")){
         isSource = true;
       } else {
-        NOT_IMPLEMENTED; // Unknown attribute, error for now
+        NOT_IMPLEMENTED("Should not give an error, TODO"); // Unknown attribute, error for now
       }
 
       tok->AssertNextToken("*)");
@@ -689,7 +689,7 @@ ModuleInfo ExtractModuleInfo(Module& module,Arena* permanent,Arena* tempArena){
         wire = values[0].str;
         id.interface = values[1].number;
       } else {
-        UNHANDLED_ERROR;
+        UNHANDLED_ERROR("TODO: Should be an handled error");
       }
 
       ExternalMemoryInfo* ext = external->GetOrInsert(id,{});
@@ -711,7 +711,7 @@ ModuleInfo ExtractModuleInfo(Module& module,Arena* permanent,Arena* tempArena){
       } else if(CompareString(wire,"read")){
         ext->tp.read = true;
       } else {
-        UNHANDLED_ERROR;
+        UNHANDLED_ERROR("Should be an handled error");
       }
     } else if(CheckFormat("in%d",decl.name)){
       port.AssertNextToken("in");
@@ -795,7 +795,7 @@ ModuleInfo ExtractModuleInfo(Module& module,Arena* permanent,Arena* tempArena){
          wire->bitSize = decl.range;
          wire->name = decl.name;
     } else {
-      NOT_IMPLEMENTED;
+      NOT_IMPLEMENTED("Implemented as needed, so far all if cases handles all cases so we should never reach here");
     }
   }
 
@@ -825,7 +825,7 @@ ModuleInfo ExtractModuleInfo(Module& module,Arena* permanent,Arena* tempArena){
 	  inter.dp[0] = pair.second.dp[0];
 	  inter.dp[1] = pair.second.dp[1];
 	}break;
-	default: NOT_IMPLEMENTED;
+	default: NOT_IMPLEMENTED("Implemented as needed");
 	}
   }
   info.externalInterfaces = interfaces;
@@ -887,7 +887,7 @@ Value Eval(Expression* expr,Array<ParameterExpression> parameters){
     } break;
     default: {
       printf("%s\n",expr->op);
-      NOT_IMPLEMENTED;
+      NOT_IMPLEMENTED("Implemented as needed");
     } break;
     }
   } break;
@@ -903,7 +903,7 @@ Value Eval(Expression* expr,Array<ParameterExpression> parameters){
   } break;
   default: {
     printf("%d\n",(int) expr->type);
-    NOT_IMPLEMENTED;
+    NOT_IMPLEMENTED("Implemented as needed");
   } break;
   }
 

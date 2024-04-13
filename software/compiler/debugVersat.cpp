@@ -83,16 +83,6 @@ CheckRangeResult CheckNoGaps(Array<Range<int>> ranges){
   return res;
 }
 
-bool CheckInputAndOutputNumber(FUDeclaration* type,int inputs,int outputs){
-  if(inputs > type->inputDelays.size){
-    return false;
-  } else if(outputs > type->outputLatencies.size){
-    return false;
-  }
-
-  return true;
-}
-
 static void OutputGraphDotFile_(Versat* versat,Accelerator* accel,bool collapseSameEdges,Set<FUInstance*>* highlighInstance,FILE* outputFile,Arena* temp){
   BLOCK_REGION(temp);
 

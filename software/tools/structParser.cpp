@@ -24,7 +24,7 @@ void ParseHeaderFile(Tokenizer* tok,Arena* arena){
       newType->enumType = def;
 
     } else if(CompareString(type,"struct")){
-      StructDef def = ParseStruct(tok,arena);
+      StructDef def = ParseStruct(tok,arena).value; // TODO: Actually handle error
       if(def.members){
         TypeDef* typeDef = typeDefs.Alloc();
         typeDef->type = TypeDef::STRUCT;
@@ -58,7 +58,7 @@ void ParseHeaderFile(Tokenizer* tok,Arena* arena){
 
       Token peek = tok->PeekToken();
       if(CompareString(peek,"struct")){
-        StructDef def = ParseStruct(tok,arena);
+        StructDef def = ParseStruct(tok,arena).value; // TODO: Actually handle error
 
         if(def.members){
           TypeDef* typeDef = typeDefs.Alloc();
@@ -113,7 +113,7 @@ String GetTypeName(TypeDef* type){
     name = type->structType.name;
   }break;
   case TypeDef::TEMPLATED:{
-	NOT_IMPLEMENTED; // TypeDef::TEMPLATED 
+	NOT_IMPLEMENTED("Implemented as needed"); // TypeDef::TEMPLATED 
 	//name = type->templatedType.baseType;
   }break;
   case TypeDef::TYPEDEF:{
@@ -289,13 +289,13 @@ bool DependsOnTemplatedParam(TypeDef* def,String memberTypeName,Arena* arena){
       tok.AdvancePeek(search.peekFindNotIncluded);
       tok.AssertNextToken(",");
       continue;
-    } else { // ">"
-         bool res = DependsOnTemplatedParam(def,search.peekFindNotIncluded,arena);
-         return res;
+    } else {
+      bool res = DependsOnTemplatedParam(def,search.peekFindNotIncluded,arena);
+      return res;
     }
   }
 
-  UNREACHABLE;
+  UNREACHABLE("while should never end without reaching a return, if reach here, maybe should be a handled error or maybe function was called in a context that does not validity the entirety of the string, check then");
 }
 
 void OutputRegisterTypesFunction(FILE* output,Arena* arena){
@@ -664,6 +664,7 @@ void OutputPrintAll(FILE* hppFile,FILE* cppFile,Arena* arena){
   Set<String>* structsToSee = PushSet<String>(arena,99);
   structsToSee->Insert(STRING("InstanceInfo"));
   structsToSee->Insert(STRING("VersatComputedValues"));
+  
   //structsToSee->Insert(STRING("CalculatedOffsets"));
 
   Byte* mark = MarkArena(arena);

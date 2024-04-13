@@ -2,7 +2,6 @@
 
 #include "versat.hpp"
 #include "thread.hpp"
-#include "graph.hpp"
 #include <unordered_map>
 
 //#define MAX_CLIQUE_TIME 10.0f

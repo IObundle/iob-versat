@@ -2,7 +2,6 @@
 
 #include <cstdio>
 
-//#include "versatPrivate.hpp"
 #include "parser.hpp"
 #include "utils.hpp"
 
@@ -177,13 +176,55 @@ EnumDef ParseEnum(Tokenizer* tok){
   return def;
 }
 
+void ConsumeUntilLineTerminator(Tokenizer* tok){
+  int insideBracket = 0;
+  while(!tok->Done()){
+    Token token = tok->NextToken();
+
+    if(CompareString(token,"{")){
+      insideBracket += 1;
+    }
+
+    if(CompareString(token,"}")){
+      insideBracket -= 1;
+    }
+    
+    if(CompareString(token,";") && insideBracket == 0){
+      break;
+    }
+  }
+}
+
+bool IsValidIdentifier(String str){
+  auto CheckSingle = [](char ch){
+    return ((ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || ch == '_');
+  };
+
+  if(str.size <= 0){
+    return false;
+  }
+
+  if(!CheckSingle(str.data[0])){
+    return false;
+  }
+
+  for(int i = 1; i < str.size; i++){
+    char ch = str.data[i];
+    if(!CheckSingle(ch) && !(ch >= '0' && ch <= '9')){
+      return false;
+    }
+  }
+
+  return true;
+}
+
 MemberDef* ParseMember(Tokenizer* tok,Arena* out){
   Token token = tok->PeekToken();
 
   MemberDef def = {};
 
   if(CompareString(token,"struct") || CompareString(token,"union")){
-    StructDef structDef = ParseStruct(tok,out);
+    StructDef structDef = ParseStruct(tok,out).value; // TODO: Actually handle error
 
     def.type.structType = structDef;
     def.type.type = TypeDef::STRUCT;
@@ -209,6 +250,12 @@ MemberDef* ParseMember(Tokenizer* tok,Arena* out){
     Token name = tok->NextToken();
     def.name = name;
 
+    // Probably inside a function
+    if(!IsValidIdentifier(name)){
+      ConsumeUntilLineTerminator(tok);
+      return nullptr;
+    }
+    
     Token peek = tok->PeekToken();
     void* arraysMark = tok->Mark();
     if(CompareToken(peek,"[")){
@@ -233,15 +280,8 @@ MemberDef* ParseMember(Tokenizer* tok,Arena* out){
     Token finalToken = tok->NextToken();
 
     if(CompareString(finalToken,"(")){
-      Token advanceList = tok->PeekIncludingDelimiterExpression({"("},{")"},1);
-      tok->AdvancePeek(advanceList);
-      if(!tok->IfNextToken(";")){
-        Token advanceFunctionBody = tok->PeekIncludingDelimiterExpression({"{"},{"}"},0);
-        tok->AdvancePeek(advanceFunctionBody);
-        tok->IfNextToken(";"); // Consume any extra ';'
-      }
-
       // We are inside a function declaration
+      ConsumeUntilLineTerminator(tok);
       return nullptr;
     } else {
       Assert(CompareString(finalToken,";"));
@@ -254,7 +294,7 @@ MemberDef* ParseMember(Tokenizer* tok,Arena* out){
   return mem;
 }
 
-StructDef ParseStruct(Tokenizer* tok,Arena* arena){
+Result<StructDef,String> ParseStruct(Tokenizer* tok,Arena* arena){
   void* mark = tok->Mark();
 
   Token token = tok->NextToken();
@@ -269,16 +309,16 @@ StructDef ParseStruct(Tokenizer* tok,Arena* arena){
   token = tok->PeekToken();
   if(CompareToken(token,"{")){ // Unnamed
   } else { // Named struct
-      name = tok->NextToken();
+    name = tok->NextToken();
 
-      token = tok->PeekToken();
-      if(CompareToken(token,":")){ // inheritance
-         tok->AssertNextToken(":");
+    token = tok->PeekToken();
+    if(CompareToken(token,":")){ // inheritance
+      tok->AssertNextToken(":");
 
-         tok->AssertNextToken("public"); // Forced to be a public inheritance
+      tok->AssertNextToken("public"); // Forced to be a public inheritance
 
-         def.inherit = ParseSimpleFullType(tok);
-      }
+      def.inherit = ParseSimpleFullType(tok);
+    }
   }
 
   def.name = name;
@@ -290,7 +330,10 @@ StructDef ParseStruct(Tokenizer* tok,Arena* arena){
     return def;
   }
 
-  tok->AssertNextToken("{");
+  if(!tok->IfNextToken("{")){
+    return STRING("Expected {");
+  }
+  //tok->AssertNextToken("{");
 
   defer{tok->keepComments = false;}; // TODO: A lit bit of a hack, part of the reason is that the tokenizer should be able to freely change types of special characters and such midway.
 
@@ -394,8 +437,13 @@ StructDef ParseTemplatedStructDefinition(Tokenizer* tok,Arena* arena){
     return def; // Only parse structs
   }
 
-  StructDef def = ParseStruct(tok,arena);
+  Result<StructDef,String> optDef = ParseStruct(tok,arena);
 
+  if(optDef.isError){
+    return {};
+  }
+
+  StructDef def = optDef.value;
   def.params = ReverseList(ptr);
 
   return def;

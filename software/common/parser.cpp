@@ -4,6 +4,11 @@
 #include <cctype>
 
 #include "utils.hpp"
+#include "utilsCore.hpp"
+
+#define EOT_INDEX 0
+#define TOKEN_GOOD (u16) 0xffff
+#define TOKEN_NONE (u16) 0x0
 
 void Tokenizer::ConsumeWhitespace(){
   if(keepWhitespaces){
@@ -54,6 +59,25 @@ Tokenizer::Tokenizer(String content,const char* singleChars,std::vector<std::str
 {
   keepWhitespaces = false;
   keepComments = false;
+  Arena leaky = InitArena(Kilobyte(16));
+  std::vector<const char*> specials;
+
+  for(std::string& s : specialCharsList){
+    specials.push_back(s.c_str());
+  }
+
+  this->tmpl = CreateTokenizerTemplate(&leaky,singleChars,specials);
+}
+
+Tokenizer::Tokenizer(String content,TokenizerTemplate* tmpl)
+:start(content.data)
+,ptr(content.data)
+,end(content.data + content.size)
+,lines(1)
+{
+  keepWhitespaces = false;
+  keepComments = false;
+  this->tmpl = tmpl;
 }
 
 int Tokenizer::SpecialChars(const char* ptr, size_t size){
@@ -80,6 +104,7 @@ int Tokenizer::SpecialChars(const char* ptr, size_t size){
 }
 
 Token Tokenizer::PeekToken(){
+#if 0
   Token token = {};
 
   if(ptr >= end){
@@ -108,6 +133,138 @@ Token Tokenizer::PeekToken(){
   }
 
   return token;
+#else
+  ConsumeWhitespace();
+  
+  auto GetSpecial = [this](const char* ptr){
+    u16 val = tmpl->subTries[0].array[*ptr];
+    if(val == TOKEN_GOOD){
+      String str{ptr,1};
+      return str;
+    } else if(val == TOKEN_NONE){
+      return String{};
+    } else {
+      Trie* currentTrie = &tmpl->subTries[val];
+
+      const char* start = ptr;
+      const char* bestFoundEnd = nullptr;
+      ptr++;
+      while(ptr < end){
+        u16 val = currentTrie->array[*ptr];
+        u16 possibleEnd = currentTrie->array[0];
+
+        if(possibleEnd){
+          bestFoundEnd = ptr;
+        }
+
+        if(val == TOKEN_GOOD){
+          String str = {start,(int) (ptr - start)};
+          ptr++;
+          return str;
+          break;
+        } else if(val == TOKEN_NONE){
+          if(bestFoundEnd){
+            String str = {start,(int) (bestFoundEnd - start)};
+            ptr =  bestFoundEnd;
+            return str;
+          } else {
+            return String{};
+          }
+          break;
+        } else {
+          currentTrie = &tmpl->subTries[val];
+          ptr++;
+        }
+      }
+
+      // Last possible change to find special.
+      u16 possibleEnd = currentTrie->array[0];
+      if(possibleEnd){
+        String str = {start,(int) (ptr - start)};
+        return str;
+      }
+    }
+
+    return String{};
+  };
+  
+  const char* peek = ptr;
+  while(peek < end){
+    if(*peek == '\0'){
+      NOT_POSSIBLE();
+      break;
+    }
+
+    u16 val = tmpl->subTries[0].array[*peek];
+    if(val == TOKEN_GOOD){
+      String str{peek,1};
+      peek++;
+      return str;
+    } else if(val == TOKEN_NONE){
+      const char* start = peek;
+      peek++;
+
+      Trie* currentTrie = &tmpl->subTries[0];
+      while(peek < end){
+        u16 val = tmpl->subTries[0].array[*peek];
+        if(val == TOKEN_GOOD){
+          break;
+        }
+
+        if(val != TOKEN_NONE){
+          String special = GetSpecial(peek);
+          if(special.size){
+            break;
+          }
+        }
+        peek++;
+      }
+
+      String str = {start,(int) (peek - start)};
+      return str;
+    } else {
+      Trie* currentTrie = &tmpl->subTries[val];
+
+      const char* start = peek;
+      const char* bestFoundEnd = nullptr;
+      peek++;
+      while(peek < end){
+        u16 val = currentTrie->array[*peek];
+        u16 possibleEnd = currentTrie->array[0];
+
+        if(possibleEnd){
+          bestFoundEnd = peek;
+        }
+
+        if(val == TOKEN_GOOD){
+          String str = {start,(int) (peek - start)};
+          peek++;
+          return str;
+          break;
+        } else if(val == TOKEN_NONE){
+          if(bestFoundEnd){
+            String str = {start,(int) (bestFoundEnd - start)};
+            peek =  bestFoundEnd;
+            return str;
+          } else {
+            String str = {start,(int) (peek - start)};
+            return str;
+          }
+          break;
+        } else {
+          currentTrie = &tmpl->subTries[val];
+          peek++;
+        }
+      }
+
+      // Either a special or a normal token.
+      String str = {start,(int) (peek - start)};
+      return str;
+    }
+  }
+  String str = {start,(int) (peek - start)};
+  return str;
+#endif
 }
 
 Token Tokenizer::NextToken(){
@@ -147,6 +304,48 @@ String Tokenizer::PeekCurrentLine(){
   return fullLine;
 }
 
+String Tokenizer::PeekRemainingLine(){
+  const char* lineStart = ptr;
+  if(lineStart[0] == '\n'){
+    String res = {ptr,1};
+    return res;
+  }
+
+  // Get end of the line
+  const char* lineEnd = ptr;
+  while(lineEnd < end){
+    lineEnd += 1;
+    if(lineEnd[0] == '\n'){
+      //lineEnd += 1; // To include \n
+      break;
+    }
+  }
+
+  String fullLine = STRING(lineStart,lineEnd - lineStart);
+
+  return fullLine;
+}
+
+String PushEscapedToken(Token tok,Arena* out){
+  // Not very good in terms of performance but should suffice
+  Byte* mark = MarkArena(out);
+  for(int i = 0; i < tok.size; i++){
+    switch(tok[i]){
+    case '\a': PushString(out,"\\a");
+    case '\b': PushString(out,"\\b");
+    case '\r': PushString(out,"\\r");
+    case '\f': PushString(out,"\\f");
+    case '\t': PushString(out,"\\t");
+    case '\n': PushString(out,"\\n");
+    case '\0': PushString(out,"\\0");
+    case '\v': PushString(out,"\\v");
+    default: PushString(out,"%c",tok[i]);
+    }
+  }
+
+  return PointArena(out,mark);
+}
+
 void PrintEscapedToken(Token tok){
   // Not very good in terms of performance but should suffice
   for(int i = 0; i < tok.size; i++){
@@ -164,15 +363,77 @@ void PrintEscapedToken(Token tok){
   }
 }
 
-Token Tokenizer::AssertNextToken(const char* format){
-  Token token = NextToken();
+String Tokenizer::GetFullLineForGivenToken(Token token){
+  const char* insideLine = token.data;
 
+  if(*insideLine == '\n'){
+    String res = {insideLine,1};
+    return res;
+  }
+  
+  const char* start = insideLine;
+  while(start >= this->start){
+    if(start == this->start){
+      break;
+    }
+
+    if(*start == '\n'){
+      start += 1;
+      break;
+    }
+
+    start -= 1;
+  }
+
+  const char* end = insideLine;
+  while(end <= this->end){
+    if(end == this->end){
+      end -= 1;
+      break;
+    }
+
+    if(*end == '\n'){
+      end -= 1;
+      break;
+    }
+
+    end += 1;
+  }
+
+  String res = {};
+  res.data = start;
+  res.size = end - start;
+  return res;
+}
+
+String Tokenizer::GetRichLocationError(Token got,Arena* out){
+  Byte* mark = MarkArena(out);
+
+  String fullLine = GetFullLineForGivenToken(got);
+  int lineStart = GetTokenPositionInside(fullLine,got);
+
+  PushString(out,"%6d | %.*s\n",lines,UNPACK_SS(fullLine));
+  PushString(out,"      "); // 6 spaces to match the 6 digits above
+  PushString(out," | ");
+
+  for(int i = 0; i < lineStart; i++){
+    PushString(out," ");
+  }
+  PushString(out,"^\n");
+
+  return PointArena(out,mark);
+}
+
+Token Tokenizer::AssertNextToken(const char* str){
+  Token token = NextToken();
+  String format = STRING(str);
+  
   if(!CompareToken(token,format)){
     String fullLine = PeekCurrentLine();
     int lineStart = GetTokenPositionInside(fullLine,token);
 
     printf("Parser Error.\n Expected to find:");
-    PrintEscapedToken(STRING(format));
+    PrintEscapedToken(format);
     printf("\n");
     printf("  Got:");
     PrintEscapedToken(token);
@@ -404,7 +665,7 @@ void Tokenizer::AdvancePeek(Token tok){
       lines += 1;
     }
   }
-  ptr += tok.size;
+  ptr = &tok.data[tok.size];
 }
 
 bool Tokenizer::Done(){
@@ -444,6 +705,12 @@ bool Tokenizer::IsSpecialOrSingle(String toTest){
   }
 
   return false;
+}
+
+TokenizerTemplate* Tokenizer::SetTemplate(TokenizerTemplate* tmpl){
+  TokenizerTemplate* old = this->tmpl;
+  this->tmpl = tmpl;
+  return old;
 }
 
 String Tokenizer::PeekUntilDelimiterExpression(std::initializer_list<const char*> open,std::initializer_list<const char*> close, int numberOpenSeen){
@@ -519,6 +786,7 @@ bool IsOnlyWhitespace(Token tok){
   return true;
 }
 
+// There is a almost copy in type.cpp. Should find a way of reusing same code
 bool CheckFormat(const char* format,Token tok){
   int tokenIndex = 0;
   for(int formatIndex = 0; 1;){
@@ -562,10 +830,10 @@ bool CheckFormat(const char* format,Token tok){
         }
       }break;
       case '\0':{
-        NOT_POSSIBLE;
+        NOT_POSSIBLE("Format char not finished"); // TODO: Probably should be a error that reports
       }break;
       default:{
-        NOT_IMPLEMENTED;
+        NOT_IMPLEMENTED("Implement as needed");
       }break;
       }
     } else if(formatChar != tok[tokenIndex]){
@@ -726,7 +994,7 @@ static int CharToInt(char ch){
   } else if(ch >= 'a' && ch <= 'f'){
     return 10 + (ch - 'a');
   } else {
-    NOT_IMPLEMENTED;
+    NOT_POSSIBLE("Assuming that function is only called in places where we know char must be hex");
   }
   return 0;
 }
@@ -903,7 +1171,7 @@ static void PrintExpression(Expression* exp,int level){
   case Expression::MEMBER_ACCESS:{
     printf("MEMBER_ACCESS\n");
   }break;
-  default: NOT_IMPLEMENTED;
+  default: NOT_IMPLEMENTED("Implement as needed");
   }
 
   if(exp->op){
@@ -926,19 +1194,69 @@ void PrintExpression(Expression* exp){
   PrintExpression(exp,0);
 }
 
-#if 0
-#define END (u16) 0xffff
+#if 1
 
-TokenizerTemplate* CreateTokenizerTemplate(Arena* out,const char* singleChars,std::initializer_list<const char*> specialChars){
+// Basically turns whitespace characters into Good so that we terminate when 
+// finding them while looking at special chars.
+void DefaultTrieGood(Trie* t){
+  for(u8 i = 0; i <= 32; i++){
+    t->array[i]  = TOKEN_GOOD;
+  }
+}
+
+TokenizerTemplate* CreateTokenizerTemplate(Arena* out,const char* singleChars,std::vector<const char*> specialChars){
   TokenizerTemplate* tmpl = PushStruct<TokenizerTemplate>(out);
   *tmpl = {};
 
+  Byte* mark = MarkArena(out);
+  Trie* topTrie = PushStruct<Trie>(out);
+  *topTrie = {};
   for(int i = 0; singleChars[i] != '\0'; i++){
     i8 index = (i8) singleChars[i];
-    tmpl->array[index] = END;
+    topTrie->array[index] = TOKEN_GOOD;
   }
+  DefaultTrieGood(topTrie); // TODO: Should the top trie have these defaults?
+  
+  int triesIndex = 1; // Zero is reserved for the top trie
+  for(const char* str : specialChars){
+    int size = strlen(str);
+    
+    Trie* ptr = topTrie;
+    for(int i = 0; i < size; i++){
+      bool last = (i == size - 1);
+      u8 ch = str[i];
+      Assert(ch < 128); // Only 7-bit ascii for now 
+      Assert(ch != EOT_INDEX);
+      u16 val = ptr->array[ch];
+      
+      if(val == TOKEN_NONE){
+        ptr->array[ch] += triesIndex++;
+        Trie* newTrie = PushStruct<Trie>(out);
+        *newTrie = {};
+
+        if(last){
+          DefaultTrieGood(newTrie);
+        }
+        ptr = newTrie;
+      } else if(val == TOKEN_GOOD){
+        if(!last){
+          ptr->array[ch] = triesIndex++;
+          Trie* newTrie = PushStruct<Trie>(out);
+          *newTrie = {};
+          DefaultTrieGood(newTrie);
+          ptr = newTrie;
+        }
+      } else {
+        ptr = &topTrie[val];
+        if(last){
+          DefaultTrieGood(ptr);
+        }
+      }
+    }
+  }
+
+  tmpl->subTries = PointArray<Trie>(out,mark);
   
   return tmpl;
 }
 #endif
-

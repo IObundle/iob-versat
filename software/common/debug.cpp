@@ -40,7 +40,7 @@ bool CurrentlyDebugging(){
   static bool init = false;
   static bool value;
 
-  NOT_IMPLEMENTED;
+  NOT_IMPLEMENTED("TODO");
   
   return false;  
 
@@ -62,12 +62,14 @@ bool CurrentlyDebugging(){
 static SignalHandler old_SIGUSR1 = nullptr;
 static SignalHandler old_SIGSEGV = nullptr;
 static SignalHandler old_SIGABRT = nullptr;
+static SignalHandler old_SIGILL = nullptr;
 
 // TODO: Currently we only allow one function to be registered. This is problematic because we already register the printstacktrace function and therefore other pieces of code should not use this (like testbench.hpp) otherwise we lose stack traces. We should keep a list of functions to call and just register a master function. Not doing it for now because do not know if I'll keep testbench or if we ever gonna use this more than these two times 
 void SetDebugSignalHandler(SignalHandler func){
-   old_SIGUSR1 = signal(SIGUSR1, func);
-   old_SIGSEGV = signal(SIGSEGV, func);
-   old_SIGABRT = signal(SIGABRT, func);
+  old_SIGUSR1 = signal(SIGUSR1, func);
+  old_SIGSEGV = signal(SIGSEGV, func);
+  old_SIGABRT = signal(SIGABRT, func);
+  old_SIGILL  = signal(SIGILL, func);
 }
 
 // TODO: There is zero error checking in these functions. User might not have the addr2line program
@@ -191,8 +193,8 @@ static Array<Location> CollectStackTrace(Arena* out,Arena* temp){
   
   //printf("Gonna close write pipe\n");
   {
-  int result = close(con->writePipe);
-  if(result != 0) fprintf(stderr,"Error closing write pipe: %d\n",errno);
+    int result = close(con->writePipe);
+    if(result != 0) fprintf(stderr,"Error closing write pipe: %d\n",errno);
   }
   
   int bufferSize = Kilobyte(64);
@@ -316,6 +318,9 @@ static void SignalPrintStacktrace(int sign){
   }break;
   case SIGABRT:{
     signal(SIGABRT,old_SIGABRT);
+  }break;
+  case SIGILL:{
+    signal(SIGILL,old_SIGILL);
   }break;
   }
 

@@ -3,7 +3,6 @@
 #include <ftw.h>
 
 #include "debugVersat.hpp"
-#include "graph.hpp"
 #include "memory.hpp"
 #include "utilsCore.hpp"
 #include "versat.hpp"
@@ -11,9 +10,9 @@
 #include "verilogParsing.hpp"
 #include "type.hpp"
 #include "templateEngine.hpp"
-#include "acceleratorStats.hpp"
 #include "textualRepresentation.hpp"
 #include "codeGeneration.hpp"
+#include "accelerator.hpp"
 
 #include "templateData.hpp"
 
@@ -473,11 +472,14 @@ int main(int argc,const char* argv[]){
   }
   
   FUDeclaration* type = GetTypeByName(versat,topLevelTypeStr);
-  Accelerator* accel = CreateAccelerator(versat,STRING("TOP"));
+  Accelerator* accel = nullptr;
   FUInstance* TOP = nullptr;
 
   bool isSimple = false;
   if(opts->addInputAndOutputsToTop && !(type->inputDelays.size == 0 && type->outputLatencies.size == 0)){
+    const char* name = StaticFormat("%.*s_Simple",UNPACK_SS(topLevelTypeStr));
+    accel = CreateAccelerator(versat,STRING(name));
+    
     int input = type->inputDelays.size;
     int output = type->outputLatencies.size;
 
@@ -510,22 +512,24 @@ int main(int argc,const char* argv[]){
     InstanceNode* node = GetInstanceNode(accel,TOP);
     node->type = InstanceNode::TAG_COMPUTE; // MARK: Temporary handle source_and_delay problems for simple units.
     
-    topLevelTypeStr = PushString(perm,"%.*s_Simple",UNPACK_SS(topLevelTypeStr));
-    type = RegisterSubUnit(versat,topLevelTypeStr,accel);
+    type = RegisterSubUnit(versat,accel);
 
-    accel = CreateAccelerator(versat,STRING("TOP"));
+    name = StaticFormat("%.*s_Simple",UNPACK_SS(topLevelTypeStr));
+    accel = CreateAccelerator(versat,STRING(name));
     TOP = CreateFUInstance(accel,type,STRING("TOP"));
   } else {
+    accel = CreateAccelerator(versat,topLevelTypeStr);
+
     bool isSimple = true;
     TOP = CreateFUInstance(accel,type,STRING("TOP"));
 
-    for(int i = 0; i < type->inputDelays.size; i++){
-      String name = PushString(&versat->permanent,"input%d",i);
+    for(int i = 0; i < type->NumberInputs(); i++){
+      String name = PushString(perm,"input%d",i);
       FUInstance* input = CreateOrGetInput(accel,name,i);
       ConnectUnits(input,0,TOP,i);
     }
     FUInstance* output = CreateOrGetOutput(accel);
-    for(int i = 0; i < type->outputLatencies.size; i++){
+    for(int i = 0; i < type->NumberOutputs(); i++){
       ConnectUnits(TOP,i,output,i);
     }
   }
@@ -534,41 +538,38 @@ int main(int argc,const char* argv[]){
   OutputVersatSource(versat,accel,
                      opts->hardwareOutputFilepath.data,
                      opts->softwareOutputFilepath.data,
-                     topLevelTypeStr,
                      opts->addInputAndOutputsToTop,temp,perm);
 
-  //TODO: Repeated code because we must use a modified accelerator to outputVersatSource but use a normal accelerator for simulation. We could just reorder, so that outputVersatSource is done afterwards, and the wrapper is done before.
-  if(isSimple){
-    accel = CreateAccelerator(versat,STRING("TOP"));
-    TOP = CreateFUInstance(accel,type,STRING("TOP"));
-  }
-  
   OutputVerilatorWrapper(versat,type,accel,opts->softwareOutputFilepath,temp,perm);
 
   String versatDir = STRING(STRINGIFY(VERSAT_DIR));
-  OutputVerilatorMake(versat,topLevelTypeStr,versatDir,opts,temp,perm);
+  OutputVerilatorMake(versat,accel->name,versatDir,opts,temp,perm);
 
   for(FUDeclaration* decl : versat->declarations){
     BLOCK_REGION(temp);
-    if(decl->type == FUDeclaration::COMPOSITE){
-      char buffer[256];
-      sprintf(buffer,"%.*s/modules/%.*s.v",UNPACK_SS(versat->opts->hardwareOutputFilepath),UNPACK_SS(decl->name));
-      FILE* sourceCode = OpenFileAndCreateDirectories(buffer,"w");
-      OutputCircuitSource(versat,decl,decl->fixedDelayCircuit,sourceCode,temp,perm);
-      fclose(sourceCode);
-    }
-    if(decl->type == FUDeclaration::ITERATIVE){
-      char buffer[256];
-      sprintf(buffer,"%.*s/modules/%.*s.v",UNPACK_SS(versat->opts->hardwareOutputFilepath),UNPACK_SS(decl->name));
-      FILE* sourceCode = OpenFileAndCreateDirectories(buffer,"w");
-      OutputIterativeSource(versat,decl,decl->fixedDelayCircuit,sourceCode,temp,perm);
+
+    if(decl->type == FUDeclaration::COMPOSITE ||
+       decl->type == FUDeclaration::ITERATIVE){
+
+      String path = PushString(temp,"%.*s/modules/%.*s.v",UNPACK_SS(versat->opts->hardwareOutputFilepath),UNPACK_SS(decl->name));
+      PushNullByte(temp);
+      
+      FILE* sourceCode = OpenFileAndCreateDirectories(path.data,"w");
+
+      if(decl->type == FUDeclaration::COMPOSITE){
+        OutputCircuitSource(versat,decl,decl->fixedDelayCircuit,sourceCode,temp,perm);
+      } else if(decl->type == FUDeclaration::ITERATIVE){
+        OutputIterativeSource(versat,decl,decl->fixedDelayCircuit,sourceCode,temp,perm);
+      }
+
       fclose(sourceCode);
     }
 
     if(versat->debug.outputAcceleratorInfo && decl->fixedDelayCircuit){
-      char buffer[256];
-      sprintf(buffer,"debug/%.*s/stats.txt",UNPACK_SS(decl->name));
-      FILE* stats = OpenFileAndCreateDirectories(buffer,"w");
+      String path = PushString(temp,"debug/%.*s/stats.txt",UNPACK_SS(decl->name));
+      PushNullByte(temp);
+
+      FILE* stats = OpenFileAndCreateDirectories(path.data,"w");
 
       PrintDeclaration(stats,decl,perm,temp);
     }
