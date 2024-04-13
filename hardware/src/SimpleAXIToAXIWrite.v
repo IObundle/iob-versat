@@ -197,10 +197,6 @@ module SimpleAXItoAXIWrite #(
       m_axi_last        = 1'b0;
       wvalid            = 1'b0;
 
-      if (axi_wvalid_o && axi_wready_i && axi_wlast_o && write_last_transfer) begin
-         m_wlast_o = 1'b1;
-      end
-
       if (full_counter == symbolsToRead) begin
          flush_burst_split = 1'b1;
       end
@@ -215,6 +211,10 @@ module SimpleAXItoAXIWrite #(
          wvalid     = m_wvalid_i || flush_burst_split;
 
          if (counter == axi_awlen_o) m_axi_last = 1'b1;
+      end
+
+      if (axi_wvalid_o && axi_wready_i && axi_wlast_o && write_last_transfer) begin
+         m_wlast_o = 1'b1;
       end
    end
 
