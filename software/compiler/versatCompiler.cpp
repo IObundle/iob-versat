@@ -384,8 +384,8 @@ int main(int argc,const char* argv[]){
   versat->opts->noDelayPropagation = true;
   
   versat->debug.outputGraphs = false;
-  versat->debug.outputAcceleratorInfo = false;
-  versat->debug.outputVCD = false;
+  versat->debug.outputAcceleratorInfo = true;
+  versat->debug.outputVCD = true;
   
 #ifdef USE_FST_FORMAT
   versat->opts.generateFSTFormat = 1;

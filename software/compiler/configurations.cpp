@@ -540,6 +540,8 @@ Array<InstanceInfo> ExtractFromInstanceInfo(Array<InstanceInfo> instanceInfo,Are
 }
 
 void CheckSanity(Array<InstanceInfo> instanceInfo,Arena* temp){
+  // TODO: Add more conditions here as bugs appear that break this
+
   BLOCK_REGION(temp);
   for(int i = 0; ; i++){
     Array<InstanceInfo> sameLevel = ExtractFromInstanceInfoSameLevel(instanceInfo,i,temp);

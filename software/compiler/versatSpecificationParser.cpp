@@ -1134,7 +1134,7 @@ FUDeclaration* InstantiateModule(Versat* versat,ModuleDef def,Arena* perm,Arena*
   InstanceName* names = PushSet<String>(temp,1000);
 
   // TODO: Need to handle and report errors.
-  //       Need to report errors that 
+  //       Need to report errors with rich location info
   int insertedInputs = 0;
   for(VarDeclaration& decl : def.inputs){
     if(decl.isArray){
@@ -1154,11 +1154,12 @@ FUDeclaration* InstantiateModule(Versat* versat,ModuleDef def,Arena* perm,Arena*
   int shareIndex = 0;
   for(InstanceDeclaration& decl : def.declarations){
     FUDeclaration* type = GetTypeByName(versat,decl.typeName);
-
+    
     switch(decl.modifier){
     case InstanceDeclaration::SHARE_CONFIG:{
       for(String& name : decl.declarationNames){
         FUInstance* inst = CreateFUInstance(circuit,type,name);
+        inst->parameters = PushString(perm,decl.parameters);
         table->Insert(name,inst);
         ShareInstanceConfig(inst,shareIndex);
       }
@@ -1172,6 +1173,7 @@ FUDeclaration* InstantiateModule(Versat* versat,ModuleDef def,Arena* perm,Arena*
 
       String name = decl.declarationNames[0];
       FUInstance* inst = CreateFUInstance(circuit,type,name);
+      inst->parameters = PushString(perm,decl.parameters);
       table->Insert(name,inst);
 
       if(decl.modifier == InstanceDeclaration::STATIC){
@@ -1235,8 +1237,8 @@ FUDeclaration* InstantiateModule(Versat* versat,ModuleDef def,Arena* perm,Arena*
 
       Assert(NumberOfConnections(decl.output) == NumberOfConnections(decl.input));
 
-      GroupIterator out= IterateGroup(decl.output);
-      GroupIterator in = IterateGroup(decl.input);
+      GroupIterator out = IterateGroup(decl.output);
+      GroupIterator in  = IterateGroup(decl.input);
 
       while(HasNext(out) && HasNext(in)){
         Var outVar = Next(out);
@@ -1261,36 +1263,6 @@ FUDeclaration* InstantiateModule(Versat* versat,ModuleDef def,Arena* perm,Arena*
       }
 
       Assert(HasNext(out) == HasNext(in));
-      
-#if 0
-      //Assert(decl.input.size == 1);
-
-      Var inVar = decl.input[0];
-      // Makes it easier to match
-      
-      VarGroup outPortion = decl.output;
-
-      Array<PortExpression> ports = PushArray<PortExpression>(temp,outPortion.size);
-      for(int i = 0; i < outPortion.size; i++){
-        Var& var = outPortion[i];
-        ports[i].inst = table->GetOrFail(var.name);
-        ports[i].extra = var.extra;
-      }
-
-      FUInstance* inst2 = nullptr;
-      if(CompareString(inVar.name,"out")){
-        if(!outputInstance){
-          outputInstance = (FUInstance*) CreateFUInstance(circuit,BasicDeclaration::output,STRING("out"));
-        }
-
-        inst2 = outputInstance;
-      } else {
-        inst2 = table->GetOrFail(inVar.name);
-      }
-
-      ConnectUnit(ports,(PortExpression){inst2,inVar.extra});
-#endif
-
     }
   }
   
