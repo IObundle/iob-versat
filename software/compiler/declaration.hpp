@@ -7,61 +7,40 @@
 
 struct FUInstance;
 
-static const int VCD_MAPPING_SIZE = 5;
-class VCDMapping{
-public:
-  char currentMapping[VCD_MAPPING_SIZE+1];
-  int increments;
-
-public:
-
-  VCDMapping(){Reset();};
-
-  void Increment(){
-    for(int i = VCD_MAPPING_SIZE - 1; i >= 0; i--){
-      increments += 1;
-      currentMapping[i] += 1;
-      if(currentMapping[i] == 'z' + 1){
-        currentMapping[i] = 'a';
-      } else {
-        return;
-      }
-    }
-    Assert(false && "Increase mapping space");
-  }
-
-  void Reset(){
-    currentMapping[VCD_MAPPING_SIZE] = '\0';
-    for(int i = 0; i < VCD_MAPPING_SIZE; i++){
-      currentMapping[i] = 'a';
-    }
-    increments = 0;
-  }
-
-  char* Get(){
-    return currentMapping;
-  }
-};
-
-typedef int* (*FUFunction)(FUInstance* inst);
-typedef int* (*FUUpdateFunction)(FUInstance* inst,Array<int> inputs);
-typedef int (*MemoryAccessFunction)(FUInstance* inst, int address, int value,int write);
-typedef void (*VCDFunction)(FUInstance*,FILE*,VCDMapping&,Array<int>,bool firstTime,bool printDefinitions);
-typedef void (*SignalFunction)(FUInstance* inst);
-
 enum DelayType {
-  DELAY_TYPE_BASE               = 0x0,
-  DELAY_TYPE_SINK_DELAY         = 0x1,
-  DELAY_TYPE_SOURCE_DELAY       = 0x2,
-  DELAY_TYPE_COMPUTE_DELAY      = 0x4
+  DelayType_BASE               = 0x0,
+  DelayType_SINK_DELAY         = 0x1,
+  DelayType_SOURCE_DELAY       = 0x2,
+  DelayType_COMPUTE_DELAY      = 0x4
 };
 #define CHECK_DELAY(inst,T) ((inst->declaration->delayType & T) == T)
+
+static String DelayTypeToString(DelayType type){
+  switch(type){
+  case DelayType_BASE:{
+    return STRING("DelayType_BASE");
+  } break;
+  case DelayType_SINK_DELAY:{
+    return STRING("DelayType_SINK_DELAY");
+  } break;
+  case DelayType_SOURCE_DELAY: {
+    return STRING("DelayType_SOURCE_DELAY");
+  } break;
+  case DelayType_COMPUTE_DELAY: {
+    return STRING("DelayType_COMPUTE_DELAY");
+  } break;
+  default: NOT_IMPLEMENTED("Implement as needed");
+  }
+
+  return {};
+}
 
 inline DelayType operator|(DelayType a, DelayType b)
 {return static_cast<DelayType>(static_cast<int>(a) | static_cast<int>(b));}
 
 /*
 // TODO: Finish making a FUType. FUDeclaration should be the instance of a type and should contain a pointer to the type that contains all the non parameterizable values.
+// NOTE: Inputs and outputs should also be parameterizable. Think multiplexers and stuff.
   struct FUType{
   String name;
 
@@ -75,7 +54,6 @@ inline DelayType operator|(DelayType a, DelayType b)
   }
 */
 
-// I initially extracted this because of Merge, right?
 struct ConfigurationInfo{
   Array<Wire> configs;
   Array<Wire> states;

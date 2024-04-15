@@ -583,7 +583,7 @@ Array<Module> ParseVerilogFile(String fileContent,Array<String> includeFilepaths
 
   ArenaList<Module>* modules = PushArenaList<Module>(temp);
 
-  bool isSource = true; // TODO: For some reason there was a bug where apperently isSource was getting set once and was true for the rest of the while loop. Despite this, everything worked correctly. Maybe everything should be Source since source units normally are and SOURCE_AND_SINK units should also behave as source.
+  bool isSource = false;
   while(!tok->Done()){
     Token peek = tok->PeekToken();
 

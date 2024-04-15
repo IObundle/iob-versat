@@ -574,6 +574,8 @@ int main(int argc,const char* argv[]){
       PrintDeclaration(stats,decl,perm,temp);
     }
   }
+
+  PrintDeclaration(stdout,GetTypeByName(versat,STRING("Mul")),perm,temp);
   
   return 0;
 }
@@ -583,7 +585,7 @@ int main(int argc,const char* argv[]){
 Variety1 Problem:
 
 - The source of the problem comes from the fact that the Variety1 unit is being tagged as a SOURCE_AND_SINK unit which prevents the delay values from propagating. This comes from the Reg connection.
-- The actual solution would be to completely change delays to actually track the input and output ports instead of the units themselves. Furthermore, if we can describe the relationship between input and output port (wether output X depends on input Y) then we can further improve the delay algorithm to produce lower values and decouple dependencies that exist from hierarchical graphs and from units that are 1 but behave like multiple (for example, memories, that contain 2 ports and the delay should act individually.).
+- The actual solution would be to completely change delays to actually track the input and output ports instead of the units themselves. Furthermore, if we can describe the relationship between input and output port (whether output X depends on input Y) then we can further improve the delay algorithm to produce lower values and decouple dependencies that exist from hierarchical graphs and from units that are 1 but behave like multiple (for example, memories, that contain 2 ports and the delay should act individually.).
   - Another thing. SOURCE_AND_DELAY should be used for delays that can be used for input or for output depending on how the unit is connected.
 
 How to handle merged subunits.
@@ -599,7 +601,30 @@ How to handle merged subunits.
   - We could then think of the parent declaration has having multiple declarations depending on the merged accelerator active. Default declaration, declaration with 0 active, declaration with 1 active and so on.
   - Each active accelerator would change the delays of the unit, which would then change the delays of the parent declaration and so on.
   - Other than delays, I cannot think of anything that also behaves this way. Even though configs change between accelerators, this only matters when generating the structs, the parent declaration does not need special treatment 
-  - when generating structs because 
+
+TODO: Need to check the isSource member of ModuleInfo and so on. 
+
+MARK: Left when trying to figure out the AES256WithIterative bug.
+      The units are different when compared to the last working version (which did not work correctly but was closer)
+      For some reason a lot of units accross various modules are now being marked as SINK_AND_SOURCE instead of COMPUTE. Check why, maybe even try to fix the usage of these TAGS for good.
 
  */
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 

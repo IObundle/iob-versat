@@ -672,7 +672,7 @@ static int Visit(PushPtr<InstanceNode*>* ordering,InstanceNode* node,Hashmap<Ins
   FUInstance* inst = node->inst;
 
   if(node->type == InstanceNode::TAG_SINK ||
-     (node->type == InstanceNode::TAG_SOURCE_AND_SINK && CHECK_DELAY(inst,DelayType::DELAY_TYPE_SINK_DELAY))){
+     (node->type == InstanceNode::TAG_SOURCE_AND_SINK && CHECK_DELAY(inst,DelayType::DelayType_SINK_DELAY))){
     return 0;
   }
 
@@ -720,7 +720,7 @@ DAGOrderNodes CalculateDAGOrder(InstanceNode* instances,Arena* out){
   // Add source units, guaranteed to come first
   FOREACH_LIST(InstanceNode*,ptr,instances){
     FUInstance* inst = ptr->inst;
-    if(ptr->type == InstanceNode::TAG_SOURCE || (ptr->type == InstanceNode::TAG_SOURCE_AND_SINK && CHECK_DELAY(inst,DelayType::DELAY_TYPE_SOURCE_DELAY))){
+    if(ptr->type == InstanceNode::TAG_SOURCE || (ptr->type == InstanceNode::TAG_SOURCE_AND_SINK && CHECK_DELAY(inst,DelayType::DelayType_SOURCE_DELAY))){
       *pushPtr.Push(1) = ptr;
 
       tags->Insert(ptr,TAG_PERMANENT_MARK);
@@ -747,7 +747,7 @@ DAGOrderNodes CalculateDAGOrder(InstanceNode* instances,Arena* out){
   mark = pushPtr.Mark();
   FOREACH_LIST(InstanceNode*,ptr,instances){
     FUInstance* inst = ptr->inst;
-    if(ptr->type == InstanceNode::TAG_SINK || (ptr->type == InstanceNode::TAG_SOURCE_AND_SINK && CHECK_DELAY(inst,DelayType::DELAY_TYPE_SINK_DELAY))){
+    if(ptr->type == InstanceNode::TAG_SINK || (ptr->type == InstanceNode::TAG_SOURCE_AND_SINK && CHECK_DELAY(inst,DelayType::DelayType_SINK_DELAY))){
       *pushPtr.Push(1) = ptr;
 
       int* tag = tags->Get(ptr);
@@ -1279,7 +1279,7 @@ void CalculateNodeType(InstanceNode* node){
 
    // If the unit is both capable of acting as a sink or as a source of data
    if(hasInput && hasOutput){
-     if(CHECK_DELAY(node->inst,DELAY_TYPE_SINK_DELAY) || CHECK_DELAY(node->inst,DELAY_TYPE_SOURCE_DELAY)){
+     if(CHECK_DELAY(node->inst,DelayType_SINK_DELAY) || CHECK_DELAY(node->inst,DelayType_SOURCE_DELAY)){
          node->type = InstanceNode::TAG_SOURCE_AND_SINK;
       }  else {
          node->type = InstanceNode::TAG_COMPUTE;

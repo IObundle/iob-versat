@@ -295,7 +295,7 @@ bool DependsOnTemplatedParam(TypeDef* def,String memberTypeName,Arena* arena){
     }
   }
 
-  UNREACHABLE("while should never end without reaching a return, if reach here, maybe should be a handled error or maybe function was called in a context that does not validity the entirety of the string, check then");
+  UNREACHABLE("while should never end without reaching a return, if reach here, maybe should be a handled error or maybe function was called in a context that does not validate the entirety of the string, check then");
 }
 
 void OutputRegisterTypesFunction(FILE* output,Arena* arena){

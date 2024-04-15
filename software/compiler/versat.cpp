@@ -275,13 +275,14 @@ FUDeclaration* RegisterModuleInfo(Versat* versat,ModuleInfo* info){
   decl.signalLoop = info->signalLoop;
 
   if(info->isSource){
-    decl.delayType = decl.delayType | DelayType::DELAY_TYPE_SINK_DELAY;
+    decl.delayType = decl.delayType | DelayType::DelayType_SINK_DELAY;
   }
 
   decl.configInfo.configOffsets.max = info->configs.size;
   decl.configInfo.stateOffsets.max = info->states.size;
 
   FUDeclaration* res = RegisterFU(versat,decl);
+
   return res;
 }
 
@@ -606,22 +607,22 @@ FUDeclaration* RegisterSubUnit(Versat* versat,Accelerator* circuit){
       implementsDone = true;
     }
     if(ptr->type == InstanceNode::TAG_SINK){
-      hasSinkDelay = CHECK_DELAY(inst,DELAY_TYPE_SINK_DELAY);
+      hasSinkDelay = CHECK_DELAY(inst,DelayType_SINK_DELAY);
     }
     if(ptr->type == InstanceNode::TAG_SOURCE){
-      hasSourceDelay = CHECK_DELAY(inst,DELAY_TYPE_SOURCE_DELAY);
+      hasSourceDelay = CHECK_DELAY(inst,DelayType_SOURCE_DELAY);
     }
     if(ptr->type == InstanceNode::TAG_SOURCE_AND_SINK){
-      hasSinkDelay = CHECK_DELAY(inst,DELAY_TYPE_SINK_DELAY);
-      hasSourceDelay = CHECK_DELAY(inst,DELAY_TYPE_SOURCE_DELAY);
+      hasSinkDelay = CHECK_DELAY(inst,DelayType_SINK_DELAY);
+      hasSourceDelay = CHECK_DELAY(inst,DelayType_SOURCE_DELAY);
     }
   }
 
-  if(hasSourceDelay){
-    decl.delayType = (DelayType) ((int)decl.delayType | (int) DelayType::DELAY_TYPE_SOURCE_DELAY);
+ if(hasSourceDelay){
+    decl.delayType = (DelayType) ((int)decl.delayType | (int) DelayType::DelayType_SOURCE_DELAY);
   }
   if (hasSinkDelay){
-    decl.delayType = (DelayType) ((int)decl.delayType | (int) DelayType::DELAY_TYPE_SINK_DELAY);
+    decl.delayType = (DelayType) ((int)decl.delayType | (int) DelayType::DelayType_SINK_DELAY);
   }
 
   decl.implementsDone = implementsDone;
@@ -887,7 +888,7 @@ FUInstance* CreateOrGetOutput(Accelerator* accel){
 }
 
 int GetInputPortNumber(FUInstance* inputInstance){
-  Assert(inputInstance->declaration == BasicDeclaration::input);
+    Assert(inputInstance->declaration == BasicDeclaration::input);
 
   return ((FUInstance*) inputInstance)->portIndex;
 }
@@ -913,9 +914,14 @@ void PrintDeclaration(FILE* out,FUDeclaration* decl,Arena* temp,Arena* temp2){
   }
   fprintf(out,"\n");
 
-  Array<InstanceInfo> info = TransformGraphIntoArray(decl->fixedDelayCircuit,true,temp,temp2);
+  if(decl->fixedDelayCircuit){
+    Array<InstanceInfo> info = TransformGraphIntoArray(decl->fixedDelayCircuit,true,temp,temp2);
 
-  PrintAll(out,info,temp);
+    PrintAll(out,info,temp);
+  } else {
+    String type = DelayTypeToString(decl->delayType);
+    fprintf(out,"Type: %.*s\n",UNPACK_SS(type));
+  }
 }
 
 bool CheckValidName(String name){
@@ -933,7 +939,6 @@ bool CheckValidName(String name){
       return false;
     }
   }
-
   return true;
 }
 
@@ -941,3 +946,4 @@ bool IsTypeHierarchical(FUDeclaration* decl){
    bool res = (decl->fixedDelayCircuit != nullptr);
    return res;
 }
+

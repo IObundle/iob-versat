@@ -28,7 +28,7 @@ static FUDeclaration* RegisterCircuitInput(Versat* versat){
   decl.name = STRING("CircuitInput");
   decl.inputDelays = Array<int>{zeros,0};
   decl.outputLatencies = Array<int>{zeros,1};
-  decl.delayType = DelayType::DELAY_TYPE_SOURCE_DELAY;
+  decl.delayType = DelayType::DelayType_SOURCE_DELAY;
   decl.type = FUDeclaration::SPECIAL;
 
   return RegisterFU(versat,decl);
@@ -39,7 +39,7 @@ static FUDeclaration* RegisterCircuitOutput(Versat* versat){
   decl.name = STRING("CircuitOutput");
   decl.inputDelays = Array<int>{zeros,50};
   decl.outputLatencies = Array<int>{zeros,0};
-  decl.delayType = DelayType::DELAY_TYPE_SINK_DELAY;
+  decl.delayType = DelayType::DelayType_SINK_DELAY;
   decl.type = FUDeclaration::SPECIAL;
 
   return RegisterFU(versat,decl);
@@ -51,7 +51,7 @@ static FUDeclaration* RegisterData(Versat* versat){
   decl.name = STRING("Data");
   decl.inputDelays = Array<int>{zeros,50};
   decl.outputLatencies = Array<int>{ones,50};
-  decl.delayType = DelayType::DELAY_TYPE_SINK_DELAY;
+  decl.delayType = DelayType::DelayType_SINK_DELAY;
 
   return RegisterFU(versat,decl);
 }

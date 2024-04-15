@@ -1145,7 +1145,7 @@ FUDeclaration* InstantiateModule(Versat* versat,ModuleDef def,Arena* perm,Arena*
         table->Insert(actualName,input);
       }
     } else {
-      FUInstance* input = CreateOrGetInput(circuit,def.name,insertedInputs++);
+      FUInstance* input = CreateOrGetInput(circuit,decl.name,insertedInputs++);
       names->Insert(decl.name);
       table->Insert(decl.name,input);
     }
@@ -1266,7 +1266,7 @@ FUDeclaration* InstantiateModule(Versat* versat,ModuleDef def,Arena* perm,Arena*
     }
   }
   
-  // Care to never put out inside the table
+  // Care to never put 'out' inside the table
   FUInstance** outInTable = table->Get(STRING("out"));
   Assert(!outInTable);
 
