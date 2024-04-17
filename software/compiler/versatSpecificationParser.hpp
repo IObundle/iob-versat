@@ -14,14 +14,14 @@ struct ConnectionExtra{
 };
 
 struct Var{
-  String name;
+  Token name;
   ConnectionExtra extra;
   Range<int> index;
   bool isArrayAccess;
 };
 
 struct VarDeclaration{
-  String name;
+  Token name;
   int arraySize;
   bool isArray;
 };
@@ -37,12 +37,14 @@ struct PortExpression{
 
 struct InstanceDeclaration{
   enum {NONE,STATIC,SHARE_CONFIG} modifier;
-  String typeName;
-  Array<String> declarationNames;
+  Token typeName;
+  Array<VarDeclaration> declarations;
   String parameters;
 };
 
 struct ConnectionDef{
+  Range<Cursor> loc;
+
   VarGroup output;
   enum {EQUALITY,CONNECTION} type;
 
@@ -53,7 +55,7 @@ struct ConnectionDef{
 };
 
 struct ModuleDef{
-  String name;
+  Token name;
   Array<VarDeclaration> inputs;
   Array<InstanceDeclaration> declarations;
   Array<ConnectionDef> connections;

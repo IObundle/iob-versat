@@ -286,6 +286,7 @@ String GetVerilatorRoot(Arena* out,Arena* temp){
 
   int res = 0;
 
+  // TODO: This way of getting a temporary folder is not the most portable. See "mkdtemp"
   String tempDir = PushString(temp,"/tmp/versatTmp_%d",getpid());
   PushNullByte(temp);
   const char* tempDirC = tempDir.data;
@@ -328,14 +329,14 @@ String GetVerilatorRoot(Arena* out,Arena* temp){
 
   String root = {};
   while(!tok.Done()){
-    Token possible = tok.PeekFindIncluding("VERILATOR_ROOT");
+    Optional<Token> possible = tok.PeekFindIncluding("VERILATOR_ROOT");
 
-    if(possible.size == 0){
+    if(!possible.has_value()){
       printf("Couldn't find the location of verilator root\n");
       exit(-1);
     }
 
-    tok.AdvancePeek(possible);
+    tok.AdvancePeek(possible.value());
 
     Token peek = tok.PeekToken();
     if(CompareString(peek,"=") || CompareString(peek,":=")){
@@ -347,7 +348,7 @@ String GetVerilatorRoot(Arena* out,Arena* temp){
     }
   }
   
-  //RemoveDirectory(tempDirC);
+  RemoveDirectory(tempDirC);
   
   return root;
 }
@@ -575,8 +576,6 @@ int main(int argc,const char* argv[]){
     }
   }
 
-  PrintDeclaration(stdout,GetTypeByName(versat,STRING("Mul")),perm,temp);
-  
   return 0;
 }
 

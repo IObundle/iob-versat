@@ -20,7 +20,7 @@
 // TODO: Start actually using and storing Tokens, which maintaing location info.
 //       That way we can report semantic errors with rich location info.
 
-void ReportError(Tokenizer* tok,String faultyToken,const char* error){
+void ReportError(Tokenizer* tok,Token faultyToken,const char* error){
   STACK_ARENA(temp,Kilobyte(1));
 
   String loc = tok->GetRichLocationError(faultyToken,&temp);
@@ -31,15 +31,15 @@ void ReportError(Tokenizer* tok,String faultyToken,const char* error){
 
 bool _ExpectError(Tokenizer* tok,const char* str){
   Token got = tok->NextToken();
-  Token expected = STRING(str);
+  String expected = STRING(str);
   if(!CompareString(got,expected)){
     STACK_ARENA(temp,Kilobyte(4));
     Byte* mark = MarkArena(&temp);
     PushString(&temp,"Parser Error.\n Expected to find:");
-    PushEscapedToken(expected,&temp);
+    PushEscapedString(&temp,expected,' ');
     PushString(&temp,"\n");
     PushString(&temp,"  Got:");
-    PushEscapedToken(got,&temp);
+    PushEscapedString(&temp,got,' ');
     PushString(&temp,"\n");
     String text = PointArena(&temp,mark);
     ReportError(tok,got,StaticFormat("%*s",UNPACK_SS(text))); \
@@ -58,7 +58,7 @@ bool _ExpectError(Tokenizer* tok,const char* str){
   
 Optional<int> ParseNumber(Tokenizer* tok){
   // TODO: We only handle integers, for now.
-  String number = tok->NextToken();
+  Token number = tok->NextToken();
 
   bool negate = false;
   if(CompareString(number,"-")){
@@ -83,6 +83,7 @@ Optional<int> ParseNumber(Tokenizer* tok){
   return res;
 }
 
+// TODO: Make a range with a smaller start than a end give a semantic error. Let it parse correctly and error later.
 Optional<Range<int>> ParseRange(Tokenizer* tok){
   Range<int> res = {};
 
@@ -100,6 +101,7 @@ Optional<Range<int>> ParseRange(Tokenizer* tok){
 
   res.start = n1.value();
   res.end = n2.value();
+  
   return res;
 }
 
@@ -109,7 +111,7 @@ Optional<Var> ParseVar(Tokenizer* tok){
   Token name = tok->NextToken();
 
   Token peek = tok->PeekToken();
-  if(CompareToken(peek,"[")){
+  if(CompareString(peek,"[")){
     tok->AdvancePeek(peek);
 
     Optional<Range<int>> range = ParseRange(tok);
@@ -123,7 +125,8 @@ Optional<Var> ParseVar(Tokenizer* tok){
   
   int delayStart = 0;
   int delayEnd = 0;
-  if(CompareToken(peek,"{")){
+  peek = tok->PeekToken();
+  if(CompareString(peek,"{")){
     tok->AdvancePeek(peek);
 
     Optional<Range<int>> rangeOpt = ParseRange(tok);
@@ -137,7 +140,8 @@ Optional<Var> ParseVar(Tokenizer* tok){
 
   int portStart = 0;
   int portEnd = 0;
-  if(CompareToken(peek,":")){
+  peek = tok->PeekToken();
+  if(CompareString(peek,":")){
     tok->AdvancePeek(peek);
 
     Optional<Range<int>> rangeOpt = ParseRange(tok);
@@ -145,11 +149,6 @@ Optional<Var> ParseVar(Tokenizer* tok){
     portStart = rangeOpt.value().start;
     portEnd = rangeOpt.value().end;
   }
-
-  // TODO: This should not be an assert.
-  //       Either a semantic error or we make it so that all the ranges should always go up.
-  Assert(delayEnd >= delayStart);
-  Assert(portEnd >= portStart);
 
   var.name = name;
   var.extra.delay.start = delayStart;
@@ -203,12 +202,12 @@ Expression* ParseAtomS(Tokenizer* tok,Arena* out){
 
   bool negate = false;
   const char* negateType = nullptr;
-  if(CompareToken(peek,"~")){
+  if(CompareString(peek,"~")){
     negate = true;
     negateType = "~";
     tok->AdvancePeek(peek);
   }
-  if(CompareToken(peek,"-")){
+  if(CompareString(peek,"-")){
     negate = true;
     negateType = "-";
     tok->AdvancePeek(peek);
@@ -226,7 +225,7 @@ Expression* ParseAtomS(Tokenizer* tok,Arena* out){
     expr->val = MakeValue(digit);
   } else {
     expr->type = Expression::IDENTIFIER;
-    void* mark = tok->Mark();
+    auto mark = tok->Mark();
     ParseVar(tok);
     expr->id = tok->Point(mark);
   }
@@ -394,6 +393,7 @@ PortExpression InstantiateExpression(Versat* versat,Expression* root,Accelerator
     }
   }break;
   case Expression::IDENTIFIER:{
+    // TODO: We are mixing parsing with evaluation. 
     Tokenizer tok(root->id,"[]{}:",{".."});
 
     // TODO: We are leaky parsing with evaluation.
@@ -457,23 +457,23 @@ PortExpression InstantiateExpression(Versat* versat,Expression* root,Accelerator
 
     String op = STRING(root->op);
     const char* typeName;
-    if(CompareToken(op,"&")){
+    if(CompareString(op,"&")){
       typeName = "AND";
-    } else if(CompareToken(op,"|")){
+    } else if(CompareString(op,"|")){
       typeName = "OR";
-    } else if(CompareToken(op,"^")){
+    } else if(CompareString(op,"^")){
       typeName = "XOR";
-    } else if(CompareToken(op,">><")){
+    } else if(CompareString(op,">><")){
       typeName = "RHR";
-    } else if(CompareToken(op,">>")){
+    } else if(CompareString(op,">>")){
       typeName = "SHR";
-    } else if(CompareToken(op,"><<")){
+    } else if(CompareString(op,"><<")){
       typeName = "RHL";
-    } else if(CompareToken(op,"<<")){
+    } else if(CompareString(op,"<<")){
       typeName = "SHL";
-    } else if(CompareToken(op,"+")){
+    } else if(CompareString(op,"+")){
       typeName = "ADD";
-    } else if(CompareToken(op,"-")){
+    } else if(CompareString(op,"-")){
       typeName = "SUB";
     } else {
       printf("%.*s\n",UNPACK_SS(op));
@@ -502,50 +502,17 @@ PortExpression InstantiateExpression(Versat* versat,Expression* root,Accelerator
   return res;
 }
 
-FUInstance* ParseExpression(Versat* versat,Accelerator* circuit,Tokenizer* tok,InstanceTable* table,InstanceName* names){
-  Arena* temp = &versat->temp;
-  Expression* expr = SpecParseExpression(tok,temp);
-  PortExpression inst = InstantiateExpression(versat,expr,circuit,table,names);
-
-  return inst.inst;
-}
-
-FUInstance* ParseInstanceDeclaration(Versat* versat,Tokenizer* tok,Accelerator* circuit,InstanceTable* table,InstanceName* names){
-  Token type = tok->NextToken();
-
-  Token possibleParameters = tok->PeekToken();
-  Token fullParameters = STRING("");
-  if(CompareString(possibleParameters,"#")){
-    fullParameters = ExtendToken(possibleParameters,tok->PeekIncludingDelimiterExpression({"("},{")"},0));
-    tok->AdvancePeek(fullParameters);
-  }
+Optional<VarDeclaration> ParseVarDeclaration(Tokenizer* tok){
+  VarDeclaration res = {};
+  Token token = tok->NextToken();
+  res.name = token;
   
-  String name = PushString(&versat->permanent,tok->NextToken());
-  String uniqueName = GetUniqueName(name,&versat->permanent,names);
-
-  FUDeclaration* FUType = GetTypeByName(versat,type);
-  FUInstance* inst = CreateFUInstance(circuit,FUType,uniqueName);
-
-  table->Insert(name,inst);
-  inst->parameters = PushString(&versat->permanent,fullParameters);
-
-  Token peek = tok->PeekToken();
-
-  return inst;
-}
-
-Optional<VarDeclaration> ParseDeclaration(Tokenizer* tok){
-  String name = tok->NextToken();
-  
-  if(!CheckValidName(name)){
-    ReportError(tok,name,StaticFormat("'%.*s' is not a valid name",UNPACK_SS(name)));
+  if(!CheckValidName(res.name)){
+    ReportError(tok,token,StaticFormat("'%.*s' is not a valid name",UNPACK_SS(res.name)));
     return {};
   }
 
-  VarDeclaration res = {};
-  res.name = name;
-
-  String peek = tok->PeekToken();
+  Token peek = tok->PeekToken();
   if(CompareString(peek,"[")){
     tok->AdvancePeek(peek);
 
@@ -553,7 +520,7 @@ Optional<VarDeclaration> ParseDeclaration(Tokenizer* tok){
     PROPAGATE(number);
     int arraySize = number.value();
 
-    EXPECT(tok,"}");
+    EXPECT(tok,"]");
 
     res.arraySize = arraySize;
     res.isArray = true;
@@ -574,7 +541,8 @@ Optional<ConnectionDef> ParseConnection(Tokenizer* tok,Arena* out){
   if(CompareString(type,"=")){
     def.type = ConnectionDef::EQUALITY;
   } else if(CompareString(type,"^=")){
-    // TODO
+    // TODO: Only added this to make it easier to port a piece of C code.
+    //       Do not know if needed or worth it to add.
   } else if(CompareString(type,"->")){
     def.type = ConnectionDef::CONNECTION;
   } else {
@@ -586,7 +554,7 @@ Optional<ConnectionDef> ParseConnection(Tokenizer* tok,Arena* out){
     def.expression = SpecParseExpression(tok,out);
   } else if(def.type == ConnectionDef::CONNECTION){
     Optional<VarGroup> optInPortion = ParseGroup(tok,out);
-    PROPAGATE(optOutPortion);
+    PROPAGATE(optInPortion);
 
     def.input = optInPortion.value();
   }
@@ -619,7 +587,7 @@ static bool IsValidIdentifier(String str){
   return true;
 }
 
-Optional<Array<VarDeclaration>> ParseVarDeclarationGroup(Tokenizer* tok,Arena* out){
+Optional<Array<VarDeclaration>> ParseModuleInputDeclaration(Tokenizer* tok,Arena* out){
   DynamicArray<VarDeclaration> array = StartArray<VarDeclaration>(out);
 
   EXPECT(tok,"(");
@@ -631,7 +599,7 @@ Optional<Array<VarDeclaration>> ParseVarDeclarationGroup(Tokenizer* tok,Arena* o
       break;
     }
 
-    Optional<VarDeclaration> var = ParseDeclaration(tok);
+    Optional<VarDeclaration> var = ParseVarDeclaration(tok);
     PROPAGATE(var);
 
     *array.PushElem() = var.value();
@@ -647,7 +615,7 @@ Optional<Array<VarDeclaration>> ParseVarDeclarationGroup(Tokenizer* tok,Arena* o
 Optional<InstanceDeclaration> ParseInstanceDeclaration(Tokenizer* tok,Arena* out){
   InstanceDeclaration res = {};
 
-  String potentialModifier = tok->PeekToken();
+  Token potentialModifier = tok->PeekToken();
 
   if(CompareString(potentialModifier,"static")){
     tok->AdvancePeek(potentialModifier);
@@ -666,7 +634,7 @@ Optional<InstanceDeclaration> ParseInstanceDeclaration(Tokenizer* tok,Arena* out
 
     EXPECT(tok,"{");
 
-    DynamicArray<String> array = StartArray<String>(out);
+    DynamicArray<VarDeclaration> array = StartArray<VarDeclaration>(out);
     
     while(!tok->Done()){
       String peek = tok->PeekToken();
@@ -675,17 +643,14 @@ Optional<InstanceDeclaration> ParseInstanceDeclaration(Tokenizer* tok,Arena* out
         break;
       }
 
-      String identifier = tok->NextToken();
-      if(!IsValidIdentifier(identifier)){
-        ReportError(tok,identifier,StaticFormat("name '%.*s' is not a valid name",UNPACK_SS(identifier)));
-        // Keep going
-      }
-
-      *array.PushElem() = identifier;
+      Optional<VarDeclaration> optVarDecl = ParseVarDeclaration(tok);
+      PROPAGATE(optVarDecl);
+      
+      *array.PushElem() = optVarDecl.value();
       
       EXPECT(tok,";");
     }
-    res.declarationNames = EndArray(array);
+    res.declarations = EndArray(array);
     
     EXPECT(tok,"}");
     return res;
@@ -697,21 +662,20 @@ Optional<InstanceDeclaration> ParseInstanceDeclaration(Tokenizer* tok,Arena* out
     return {};
   }
 
-  String possibleParameters = tok->PeekToken();
+  Token possibleParameters = tok->PeekToken();
   if(CompareString(possibleParameters,"#")){
-    String fullParameters = ExtendToken(possibleParameters,tok->PeekIncludingDelimiterExpression({"("},{")"},0));
+    // TODO: Actual parsing of parameters
+    Token fullParameters = tok->PeekIncludingDelimiterExpression({"("},{")"},0).value();
     tok->AdvancePeek(fullParameters);
     res.parameters = fullParameters;
   }
-  
-  String identifier = tok->NextToken();
-  if(!IsValidIdentifier(identifier)){
-    ReportError(tok,identifier,StaticFormat("'%.*s' is not a valid instance name",UNPACK_SS(identifier)));
-    return {};
-  }
-  
-  res.declarationNames = PushArray<String>(out,1);
-  res.declarationNames[0] = identifier;
+
+  // MARK  
+  Optional<VarDeclaration> optVarDecl = ParseVarDeclaration(tok);
+  PROPAGATE(optVarDecl);
+
+  res.declarations = PushArray<VarDeclaration>(out,1);
+  res.declarations[0] = optVarDecl.value();
 
   EXPECT(tok,";");
 
@@ -731,7 +695,7 @@ Optional<ModuleDef> ParseModuleDef(Tokenizer* tok,Arena* out,Arena* temp){
     return {}; // TODO: We could try to keep going and find more errors
   }
   
-  Optional<Array<VarDeclaration>> optVar = ParseVarDeclarationGroup(tok,out);
+  Optional<Array<VarDeclaration>> optVar = ParseModuleInputDeclaration(tok,out);
   PROPAGATE(optVar);
 
   def.inputs = optVar.value();  
@@ -942,8 +906,6 @@ void ParseMerge(Versat* versat,Tokenizer* tok){
   String mergeName = PushString(&versat->permanent,mergeNameToken);
   tok->AssertNextToken("=");
 
-  PRINT_STRING(mergeNameToken);
-
   ArenaList<TypeAndInstance>* list = PushArenaList<TypeAndInstance>(temp);
   *PushListElement(list) = ParseTypeAndInstance(tok);
   
@@ -1127,19 +1089,24 @@ Var Next(GroupIterator& iter){
   return res;
 }
 
-FUDeclaration* InstantiateModule(Versat* versat,ModuleDef def,Arena* perm,Arena* temp){
+FUDeclaration* InstantiateModule(Tokenizer* tok,Versat* versat,ModuleDef def,Arena* perm,Arena* temp){
   Accelerator* circuit = CreateAccelerator(versat,def.name);
 
   InstanceTable* table = PushHashmap<String,FUInstance*>(temp,1000);
   InstanceName* names = PushSet<String>(temp,1000);
+  bool error = false;
 
-  // TODO: Need to handle and report errors.
-  //       Need to report errors with rich location info
+  // TODO: Need to detect when multiple instances with same name
   int insertedInputs = 0;
   for(VarDeclaration& decl : def.inputs){
+    if(CompareString(decl.name,STRING("out"))){
+      ReportError(tok,decl.name,"Cannot use special out unit as module input");
+      error = true;
+    }
+
     if(decl.isArray){
       for(int i = 0; i < decl.arraySize; i++){
-        String actualName = GetActualArrayName(decl.name,i,perm);
+        String actualName = GetActualArrayName(decl.name,i,temp);
         FUInstance* input = CreateOrGetInput(circuit,actualName,insertedInputs++);
         names->Insert(actualName);
         table->Insert(actualName,input);
@@ -1153,15 +1120,39 @@ FUDeclaration* InstantiateModule(Versat* versat,ModuleDef def,Arena* perm,Arena*
 
   int shareIndex = 0;
   for(InstanceDeclaration& decl : def.declarations){
+    for(VarDeclaration& var : decl.declarations){
+      if(CompareString(var.name,STRING("out"))){
+        ReportError(tok,var.name,"Cannot use special out unit as module input");
+        error = true;
+        break;
+      }
+    }
+    
     FUDeclaration* type = GetTypeByName(versat,decl.typeName);
+    if(type == nullptr){
+      ReportError(tok,decl.typeName,"Given type was not found");
+      error = true;
+      // TODO: Keep running using a type that contains infinity inputs and outputs.
+      break; // For now skip over.
+    }
     
     switch(decl.modifier){
     case InstanceDeclaration::SHARE_CONFIG:{
-      for(String& name : decl.declarationNames){
-        FUInstance* inst = CreateFUInstance(circuit,type,name);
-        inst->parameters = PushString(perm,decl.parameters);
-        table->Insert(name,inst);
-        ShareInstanceConfig(inst,shareIndex);
+      for(VarDeclaration& varDecl : decl.declarations){
+        if(varDecl.isArray){
+          for(int i = 0; i < varDecl.arraySize; i++){
+            String actualName = GetActualArrayName(varDecl.name,i,temp);
+
+            FUInstance* inst = CreateFUInstance(circuit,type,actualName);
+            inst->parameters = PushString(perm,decl.parameters);
+            table->Insert(actualName,inst);
+            ShareInstanceConfig(inst,shareIndex);
+          }
+        } else {
+          FUInstance* input = CreateOrGetInput(circuit,varDecl.name,insertedInputs++);
+          names->Insert(varDecl.name);
+          table->Insert(varDecl.name,input);
+        }
       }
       shareIndex += 1;
     } break;
@@ -1169,15 +1160,29 @@ FUDeclaration* InstantiateModule(Versat* versat,ModuleDef def,Arena* perm,Arena*
     case InstanceDeclaration::NONE:
     case InstanceDeclaration::STATIC:
     {
-      Assert(decl.declarationNames.size == 1);
+      Assert(decl.declarations.size == 1);
+      
+      VarDeclaration varDecl = decl.declarations[0];
+      
+      if(varDecl.isArray){
+        for(int i = 0; i < varDecl.arraySize; i++){
+          String actualName = GetActualArrayName(varDecl.name,i,temp);
+          FUInstance* inst = CreateFUInstance(circuit,type,actualName);
+          inst->parameters = PushString(perm,decl.parameters);
+          table->Insert(actualName,inst);
 
-      String name = decl.declarationNames[0];
-      FUInstance* inst = CreateFUInstance(circuit,type,name);
-      inst->parameters = PushString(perm,decl.parameters);
-      table->Insert(name,inst);
+          if(decl.modifier == InstanceDeclaration::STATIC){
+            SetStatic(circuit,inst);
+          }
+        }
+      } else {
+        FUInstance* inst = CreateFUInstance(circuit,type,varDecl.name);
+        inst->parameters = PushString(perm,decl.parameters);
+        table->Insert(varDecl.name,inst);
 
-      if(decl.modifier == InstanceDeclaration::STATIC){
-        SetStatic(circuit,inst);
+        if(decl.modifier == InstanceDeclaration::STATIC){
+          SetStatic(circuit,inst);
+        }
       }
     } break;
     }
@@ -1188,12 +1193,20 @@ FUDeclaration* InstantiateModule(Versat* versat,ModuleDef def,Arena* perm,Arena*
     if(decl.type == ConnectionDef::EQUALITY){
       // Make sure that not a single equality value is named out.
 
-      // TODO: Need to match ranges.
-      Assert(decl.output.size == 1);
+      Assert(decl.output.size == 1); // Only allow one for equality, for now
       Var outVar = decl.output[0];
 
-      String name = PushString(&versat->permanent,outVar.name);
-
+      if(CompareString(outVar.name,STRING("out"))){
+        ReportError(tok,outVar.name,"Cannot use special out unit as input in an equality");
+        error = true;
+        break;
+      }
+      
+      String name = outVar.name;
+      if(outVar.isArrayAccess){
+        name = GetActualArrayName(name,outVar.index.low,temp);
+      }
+      
       PortExpression portExpression = InstantiateExpression(versat,decl.expression,circuit,table,names);
       FUInstance* inst = portExpression.inst;
       String uniqueName = GetUniqueName(name,&versat->permanent,names);
@@ -1201,64 +1214,63 @@ FUDeclaration* InstantiateModule(Versat* versat,ModuleDef def,Arena* perm,Arena*
 
       names->Insert(name);
       table->Insert(name,inst);
-/*
-      } else if(CompareToken(op,"^=")){
-        if(CompareString(outVar.name,"out")){
-          USER_ERROR("TODO: Should be a handled error");
-        }
-
-        String name = PushString(&versat->permanent,outVar.name);
-
-        FUInstance* existing = table->GetOrFail(name);
-        FUInstance* inst = ParseExpression(versat,circuit,tok,table,names);
-
-        String uniqueName = GetUniqueName(name,&versat->permanent,names);
-        FUInstance* op = CreateFUInstance(circuit,GetTypeByName(versat,STRING("XOR")),uniqueName);
-
-        ConnectUnits(inst,0,op,0,0);     // Care, we are not taking account port ranges and delays and stuff like that.
-        ConnectUnits(existing,0,op,1,0);
-        names->Insert(name);
-        table->Insert(name,op);
-
-        tok->AssertNextToken(";");
-*/
     } else if(decl.type == ConnectionDef::CONNECTION){
       // For now only allow one var on the input side
-      if(decl.input.size != 1){
-        GroupIterator iter = IterateGroup(decl.input);
-        while(HasNext(iter)){
-          Var var = Next(iter);
-
-          PRINT_STRING(var.name);
-
-          printf("%d\n",var.extra.port.start);
-        }
-      }
-
       Assert(NumberOfConnections(decl.output) == NumberOfConnections(decl.input));
 
       GroupIterator out = IterateGroup(decl.output);
       GroupIterator in  = IterateGroup(decl.input);
 
       while(HasNext(out) && HasNext(in)){
+        BLOCK_REGION(temp);
+
         Var outVar = Next(out);
         Var inVar = Next(in);
         
         Assert(inVar.extra.delay.high == 0); // For now, inputs cannot have delay.
 
-        FUInstance* outInstance = table->GetOrFail(outVar.name);
-        FUInstance* inInstance = nullptr;
+        String outName = outVar.name;
+        if(outVar.isArrayAccess){
+          outName = GetActualArrayName(outName,outVar.index.low,temp);
+        }
+        String inName = inVar.name;
+        if(inVar.isArrayAccess){
+          inName = GetActualArrayName(inName,inVar.index.low,temp);
+        }
 
-        if(CompareString(inVar.name,"out")){
+        if(CompareString(outName,STRING("out"))){
+          ReportError(tok,outVar.name,"Cannot use special out unit as an input");
+          error = true;
+          break;
+        }
+        
+        FUInstance** optOutInstance = table->Get(outName);
+        if(optOutInstance == nullptr){
+          ReportError(tok,outVar.name,"Did not find the following instance");
+          error = true;
+          break;
+        }
+        
+        FUInstance** optInInstance = nullptr;
+
+        if(CompareString(inName,"out")){
           if(!outputInstance){
             outputInstance = (FUInstance*) CreateFUInstance(circuit,BasicDeclaration::output,STRING("out"));
           }
 
-          inInstance = outputInstance;
+          optInInstance = &outputInstance;
         } else {
-          inInstance = table->GetOrFail(inVar.name);
+          optInInstance = table->Get(inName);
         }
 
+        if(optInInstance == nullptr){
+          ReportError(tok,outVar.name,"Did not find the following instance");
+          error = true;
+          break;
+        }
+        
+        FUInstance* outInstance = *optOutInstance;
+        FUInstance* inInstance = *optInInstance;
         ConnectUnits(outInstance,outVar.extra.port.low,inInstance,inVar.extra.port.low,outVar.extra.delay.low);
       }
 
@@ -1276,7 +1288,7 @@ FUDeclaration* InstantiateModule(Versat* versat,ModuleDef def,Arena* perm,Arena*
 void ParseVersatSpecification(Versat* versat,String content){
   Tokenizer tokenizer = Tokenizer(content,"%=#[](){}+:;,*~-",{"->=","->",">><","><<",">>","<<","..","^="});
   Tokenizer* tok = &tokenizer;
-
+  
   Arena* perm = &versat->permanent;
   Arena* temp = &versat->temp;
 
@@ -1298,7 +1310,7 @@ void ParseVersatSpecification(Versat* versat,String content){
 
       if(moduleDef.has_value()){
         ModuleDef def = moduleDef.value();
-        InstantiateModule(versat,def,perm,temp);
+        InstantiateModule(tok,versat,def,perm,temp);
       } else {
         anyError |= true;
       }
@@ -1323,7 +1335,7 @@ void ParseVersatSpecification(Versat* versat,const char* filepath){
   BLOCK_REGION(&versat->temp);
 
   String content = PushFile(&versat->temp,filepath);
-
+  
   if(content.size < 0){
     printf("Failed to open file, filepath: %s\n",filepath);
     DEBUG_BREAK();
@@ -1332,7 +1344,5 @@ void ParseVersatSpecification(Versat* versat,const char* filepath){
   ParseVersatSpecification(versat,content);
 }
 
-
-
-
-
+// TODO: Still missing a lot of error messages.
+//       Missing types, missing names, the vast majority of things that currently generate an Assert should just be an error.

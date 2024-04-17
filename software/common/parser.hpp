@@ -26,12 +26,25 @@ struct Expression{
 void PrintExpression(Expression* exp);
 
 typedef int (*CharFunction) (const char* ptr,int size);
-typedef String Token;
+
+struct Cursor{
+  int line;
+  int column;
+};
+
+struct Token : public String{
+  Range<Cursor> loc;
+
+  Token& operator=(String str){
+    this->data = str.data;
+    this->size = str.size;
+    return *this;
+  }
+};
 
 struct FindFirstResult{
-  Token foundFirst;
+  String foundFirst;
   Token peekFindNotIncluded;
-  bool foundNone;
 };
 
 struct Trie{
@@ -42,29 +55,29 @@ struct TokenizerTemplate{
   Array<Trie> subTries;
 };
 
-// TODO: Vast majority of extra functions could be removed if we allowed a quick change in
-//       the values for single char, special chars and other configurations (like parse words or something like that)
-//       Changing the tokenizer to allow this greater amount of freedom would simplify future changes. Things like
-//       FindFirst and stuff are just a product of not being able to change things on the fly. 
+struct TokenizerMark{
+  const char* ptr;
+  Cursor pos;
+};
+
 class Tokenizer{
+public:
   const char* start;
   const char* ptr;
   const char* end;
   TokenizerTemplate* tmpl;
   
-public:
-  std::string singleChars; // TODO: Why use string instead of sized string?
-  std::vector<std::string> specialChars; // TODO: Why use string instead of sized string?
-
 private:
 
-  int SpecialChars(const char* ptr,size_t size);
   void ConsumeWhitespace();
 
 public:
 
-  int lines; // For multiple reasons this is never correctly being used. 
-  // Can change mid way to alter manner in which the tokenizer handles special cases
+  // Line and column start at one. Subtract one to get zero based indexes
+  int line;
+  int column;
+
+  // TODO: This should technically be part of the Tokenizer template
   bool keepWhitespaces;
   bool keepComments;
 
@@ -76,78 +89,63 @@ public:
   
   // TODO: Make some asserts. Special chars should not contain empty chars
   Tokenizer(String content,const char* singleChars,std::vector<std::string> specialChars); // Content must remain valid through the entire parsing process
-  Tokenizer(String content,TokenizerTemplate* tmpl); // Content must remain vali  
+  Tokenizer(String content,TokenizerTemplate* tmpl); // Content must remain valid. Tokenizer makes no copies
   Token PeekToken();
   Token NextToken();
 
   String GetRichLocationError(Token got,Arena* out);
   Token AssertNextToken(const char* str);
 
-  String PeekCurrentLine(); // Get full line (goes backwards until start and peeks until newline).
-  String PeekRemainingLine(); // Does not go back. 
+  String PeekCurrentLine(); // Get full line (goes backwards until start of line and peeks until newline).
+  Token PeekRemainingLine(); // Does not go back. 
   
   bool IfPeekToken(const char* str);
   bool IfNextToken(const char* str);
 
-  bool IsSingleChar(char ch);
-  bool IsSingleChar(const char* chars);
+  Optional<Token> PeekFindUntil(const char* str);
+  Optional<Token> PeekFindIncluding(const char* str);
+  Optional<Token> PeekFindIncludingLast(const char* str);
+  Optional<Token> NextFindUntil(const char* str);
 
-  // The Find type of functions do not perform tokenization or care about tokens. Care with their usage 
-  Token PeekFindUntil(const char* str);
-  Token PeekFindIncluding(const char* str);
-  Token PeekFindIncludingLast(const char* str);
-  Token NextFindUntil(const char* str);
-
-  FindFirstResult FindFirst(std::initializer_list<const char*> strings);
+  Optional<FindFirstResult> FindFirst(std::initializer_list<const char*> strings);
 
   Token PeekWhitespace();
 
-  Token Finish();
+  Token Finish(); // Acts like a Next, puts Tokenizer at the end
 
-  Byte* Mark();
-  Token Point(void* mark);
-  void Rollback(void* mark);
+  TokenizerMark Mark();
+  Token Point(TokenizerMark mark);
+  void Rollback(TokenizerMark mark);
   
   void AdvancePeek(Token tok);
 
-  void SetSingleChars(const char* singleChars);
   bool Done(); // If more tokens, returns false. Can return true even if it contains more text (but no more tokens)
-  Token Remaining();
-  int Lines(){return lines;};
 
   bool IsSpecialOrSingle(String toTest);
 
   TokenizerTemplate* SetTemplate(TokenizerTemplate* tmpl); // Returns old template
 
   // For expressions where there is a open and a closing delimiter (think '{ { } }') and need to check where the matching close delimiter is.
-  String PeekUntilDelimiterExpression(std::initializer_list<const char*> open,std::initializer_list<const char*> close, int numberOpenSeen);
-  String PeekIncludingDelimiterExpression(std::initializer_list<const char*> open,std::initializer_list<const char*> close, int numberOpenSeen);
+  Optional<Token> PeekUntilDelimiterExpression(std::initializer_list<const char*> open,std::initializer_list<const char*> close, int numberOpenSeen);
+  Optional<Token> PeekIncludingDelimiterExpression(std::initializer_list<const char*> open,std::initializer_list<const char*> close, int numberOpenSeen);
 };
 
 bool IsOnlyWhitespace(String tok);
 bool Contains(String str,const char* toCheck);
 
-bool CheckFormat(const char* format,Token tok);
-Array<Value> ExtractValues(const char* format,Token tok,Arena* arena);
+bool CheckFormat(const char* format,String tok);
+Array<Value> ExtractValues(const char* format,String tok,Arena* arena);
 
 Array<String> Split(String content,char sep,Arena* out); // For now only split over one char. 
-
 String TrimWhitespaces(String in);
 
-String GeneratePointingString(int startPos,int size,Arena* arena);
+String PushPointingString(Arena* out,int startPos,int size);
 
-Token ExtendToken(Token t1,Token t2);
-int GetTokenPositionInside(String text,String token); // Does not compare strings, just uses pointer arithmetic
+int GetTokenPositionInside(String text,Token token); // Does not compare strings, just uses pointer arithmetic
 
 int CountSubstring(String str,String substr);
 
-void StoreToken(Token token,char* buffer);
-#define CompareToken CompareString
-
-void PrintEscapedToken(Token tok);
-String PushEscapedToken(Token tok,Arena* out);
-
-// This functions should check for errors. Also these functions should return an error if they do not parse everything. Something like STRING("3 a") should flag an error for ParseInt, for example, instead of just returning 3. Either they consume everything or it's an error
+// This functions should check for errors. Also these functions should return an error if they do not parse everything. Something like "3a" should flag an error for ParseInt, instead of just returning 3. Either they consume everything or it's an error
 int ParseInt(String str);
 double ParseDouble(String str);
 float ParseFloat(String str);

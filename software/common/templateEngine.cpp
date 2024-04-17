@@ -136,13 +136,13 @@ static CommandDefinition commandDefinitions[] = {{STRING("join"),3,CommandType_J
                                                  {STRING("debugBreak"),0,CommandType_DEBUG_BREAK,false}};
 
 static Command* ParseCommand(Tokenizer* tok,Arena* out){
-  Byte* mark = tok->Mark();
+  auto mark = tok->Mark();
   tok->AssertNextToken("#{");
 
   Command* com = PushStruct<Command>(out);
   *com = {};
 
-  String commandName = tok->NextToken();
+  Token commandName = tok->NextToken();
   for(unsigned int i = 0; i < ARRAY_SIZE(commandDefinitions); i++){
     CommandDefinition* ptr = &commandDefinitions[i];
 
@@ -155,7 +155,7 @@ static Command* ParseCommand(Tokenizer* tok,Arena* out){
   
   int actualExpressionSize = com->definition->numberExpressions;
   if(actualExpressionSize == -1){
-    Token peek = tok->PeekUntilDelimiterExpression({"{","@{","#{"},{"}"},1);
+    Token peek = tok->PeekUntilDelimiterExpression({"{","@{","#{"},{"}"},1).value();
     Tokenizer arguments(peek,"}",{"@{","#{"});
 
     actualExpressionSize = 0;
@@ -163,10 +163,10 @@ static Command* ParseCommand(Tokenizer* tok,Arena* out){
       Token token = arguments.NextToken();
 
       if(CompareString(token,"@{")){
-        Token insidePeek = arguments.PeekIncludingDelimiterExpression({"@{"},{"}"},1);
+        Token insidePeek = arguments.PeekIncludingDelimiterExpression({"@{"},{"}"},1).value();
         arguments.AdvancePeek(insidePeek);
       } else if(CompareString(token,"#{")){
-        Token insidePeek = arguments.PeekIncludingDelimiterExpression({"#{"},{"}"},1);
+        Token insidePeek = arguments.PeekIncludingDelimiterExpression({"#{"},{"}"},1).value();
         arguments.AdvancePeek(insidePeek);
       }
 
@@ -187,7 +187,7 @@ static Command* ParseCommand(Tokenizer* tok,Arena* out){
 
 // Crude parser for identifiers
 static Expression* ParseIdentifier(Expression* current,Tokenizer* tok,Arena* out){
-  void* start = tok->Mark();
+  auto start = tok->Mark();
   Token firstId = tok->NextToken();
 
   current->type = Expression::IDENTIFIER;
@@ -234,7 +234,7 @@ static Expression* ParseIdentifier(Expression* current,Tokenizer* tok,Arena* out
 }
 
 static Expression* ParseAtom(Tokenizer* tok,Arena* out){
-  void* start = tok->Mark();
+  auto start = tok->Mark();
 
   Expression* expr = PushStruct<Expression>(out);
   *expr = {};
@@ -253,7 +253,7 @@ static Expression* ParseAtom(Tokenizer* tok,Arena* out){
     expr->val = MakeValue(num);
   } else if(token[0] == '\"'){
     tok->AdvancePeek(token);
-    Token str = tok->NextFindUntil("\"");
+    Token str = tok->NextFindUntil("\"").value();
     tok->AssertNextToken("\"");
 
     expr->val = MakeValue(str);
@@ -276,7 +276,7 @@ static Expression* ParseAtom(Tokenizer* tok,Arena* out){
 }
 
 static Expression* ParseFactor(Tokenizer* tok,Arena* out){
-  void* start = tok->Mark();
+  auto start = tok->Mark();
 
   Token peek = tok->PeekToken();
 
@@ -308,7 +308,7 @@ static Expression* ParseFactor(Tokenizer* tok,Arena* out){
 }
 
 static Expression* ParseExpression(Tokenizer* tok,Arena* out){
-  void* start = tok->Mark();
+  auto start = tok->Mark();
 
   Expression* res = ParseOperationType(tok,{{"#"},{"|>"},{"and","or","xor"},{">","<",">=","<=","==","!="},{"+","-"},{"*","/","&","**"}},ParseFactor,out);
 
@@ -317,7 +317,7 @@ static Expression* ParseExpression(Tokenizer* tok,Arena* out){
 }
 
 static Expression* ParseBlockExpression(Tokenizer* tok,int line,Arena* out){
-  Byte* mark = tok->Mark();
+  auto mark = tok->Mark();
   tok->AssertNextToken("@{");
 
   Expression* expr = ParseExpression(tok,out);
@@ -347,32 +347,30 @@ static Array<IndividualBlock> ParseIndividualLine(String line, int lineNumber,Ar
   ArenaList<IndividualBlock>* strings = PushArenaList<IndividualBlock>(temp);
 
   while(1){
-    Byte* start = tok.Mark();
-    FindFirstResult res = tok.FindFirst({"#{","@{"});
+    Optional<FindFirstResult> res = tok.FindFirst({"#{","@{"});
     
-    if(res.foundNone){
+    if(!res.has_value()){
       String leftover = tok.Finish();
-      if(leftover.size > 0){
-        *PushListElement(strings) = (IndividualBlock){leftover,BlockType_TEXT,lineNumber};
-      }
+      *PushListElement(strings) = (IndividualBlock){leftover,BlockType_TEXT,lineNumber};
       break;
     }
 
-    if(res.peekFindNotIncluded.size > 0){
-      *PushListElement(strings) = (IndividualBlock){res.peekFindNotIncluded,BlockType_TEXT,lineNumber};
+    FindFirstResult result = res.value();
+    if(result.peekFindNotIncluded.size > 0){
+      *PushListElement(strings) = (IndividualBlock){result.peekFindNotIncluded,BlockType_TEXT,lineNumber};
     }
 
-    tok.AdvancePeek(res.peekFindNotIncluded);
-    if(CompareString(res.foundFirst,"#{")){
-      Byte* mark = tok.Mark();
-      Token skip = tok.PeekUntilDelimiterExpression({"#{","@{"},{"}"},0);
+    tok.AdvancePeek(result.peekFindNotIncluded);
+    if(CompareString(result.foundFirst,"#{")){
+      auto mark = tok.Mark();
+      Token skip = tok.PeekUntilDelimiterExpression({"#{","@{"},{"}"},0).value();
       tok.AdvancePeek(skip);
       tok.AssertNextToken("}");
       String command = tok.Point(mark);
       *PushListElement(strings) = (IndividualBlock){command,BlockType_COMMAND,lineNumber};
-    } else if(CompareString(res.foundFirst,"@{")){
-      Byte* mark = tok.Mark();
-      Token skip = tok.PeekUntilDelimiterExpression({"#{","@{"},{"}"},0);
+    } else if(CompareString(result.foundFirst,"@{")){
+      auto mark = tok.Mark();
+      Token skip = tok.PeekUntilDelimiterExpression({"#{","@{"},{"}"},0).value();
       tok.AdvancePeek(skip);
       tok.AssertNextToken("}");
       String expression = tok.Point(mark);
@@ -407,7 +405,7 @@ static void Print(Block* block, int level = 0){
     printf("Expr: %.*s:%d\n",UNPACK_SS(block->expression->text),block->line);
   } break;
   case BlockType_TEXT:{
-    String escaped = EscapeString(block->textBlock,'_',temp);
+    String escaped = PushEscapedString(temp,block->textBlock,'_');
     printf("Text: %.*s:%d\n",UNPACK_SS(escaped),block->line);
   } break;
   }
@@ -538,7 +536,7 @@ CompiledTemplate* CompileTemplate(String content,const char* name,Arena* out,Are
       } break;
       }
     }
-      
+
     bool onlyNakedCommands = (containsCommand && onlyWhitespace && !containsExpression);
 
     if(onlyNakedCommands){
@@ -1037,15 +1035,15 @@ static ValueAndText EvalNonBlockCommand(Command* com,Frame* previousFrame,Arena*
     text.data = (char*) mark;
 
     while(!tok.Done()){
-      Token simpleText = tok.PeekFindUntil("{");
+      Optional<Token> simpleText = tok.PeekFindUntil("{");
 
-      if(simpleText.size == -1){
+      if(!simpleText.has_value()){
         simpleText = tok.Finish();
       }
 
-      tok.AdvancePeek(simpleText);
+      tok.AdvancePeek(simpleText.value());
 
-      text.size += PushString(outputArena,simpleText).size;
+      text.size += PushString(outputArena,simpleText.value()).size;
 
       if(tok.Done()){
         break;

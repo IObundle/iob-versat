@@ -18,6 +18,7 @@
 
 #include "parser.hpp"
 #include "memory.hpp"
+#include "utils.hpp"
 #include "utilsCore.hpp"
 
 struct Addr2LineConnection{
@@ -173,10 +174,8 @@ static Array<Location> CollectStackTrace(Arena* out,Arena* temp){
   for(int i = 0; i < lines; i++){
     String line = STRING(strings[i]);
     Tokenizer tok(line,"()",{});
-    String first = tok.NextFindUntil("(");
-#if 0
-    printf("%.*s\n",UNPACK_SS(line));
-#endif
+    String first = tok.NextFindUntil("(").value();
+
     if(!(Contains(first,"versat") || Contains(first,"./versat"))){  // A bit hardcoded but appears to work fine
       continue;
     }
@@ -228,21 +227,26 @@ static Array<Location> CollectStackTrace(Arena* out,Arena* temp){
   String content = {(char*) buffer,amountRead};
   Array<Location> result = PushArray<Location>(out,lineCount / 2);
 
-  //printf("Content:\n%.*s\n",UNPACK_SS(content));
-  
-  Tokenizer tok(content,":",{"\n"});
+  Tokenizer tok(content,":",{});
   tok.keepWhitespaces = true;
 
   int index = 0;
   while(!tok.Done()){
-    String functionName = tok.NextFindUntil("\n");
-    assert(CompareString(tok.NextToken(),"\n"));
-    String fileName = tok.NextFindUntil(":");
-    assert(CompareString(tok.NextToken(),":"));
-    String lineString = tok.NextToken();
-    tok.NextFindUntil("\n");
-    assert(CompareString(tok.NextToken(),"\n"));
+    Token line = tok.PeekRemainingLine();
+    tok.AdvancePeek(line);
+    
+    String functionName = line;
 
+    Optional<Token> token = tok.NextFindUntil(":");
+
+    Assert(token.has_value());
+    
+    String fileName = token.value();
+    assert(CompareString(tok.NextToken(),":"));
+    Token lineString = tok.NextToken();
+
+    line = tok.PeekRemainingLine();
+    tok.AdvancePeek(line);
     //printf("FN: %.*s\n",UNPACK_SS(functionName));
     //printf("fN: %.*s\n",UNPACK_SS(fileName));
     //printf("ls: %.*s\n",UNPACK_SS(lineString));
@@ -250,8 +254,8 @@ static Array<Location> CollectStackTrace(Arena* out,Arena* temp){
       continue;
     }
 
-    result[index].functionName = functionName;
-    result[index].fileName = fileName;
+    result[index].functionName = TrimWhitespaces(functionName);
+    result[index].fileName = TrimWhitespaces(fileName);
     result[index].line = ParseInt(lineString);
     
     index += 1;

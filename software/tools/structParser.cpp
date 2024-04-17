@@ -41,7 +41,7 @@ void ParseHeaderFile(Tokenizer* tok,Arena* arena){
     } else if(CompareString(type,"typedef")){
       tok->AdvancePeek(type);
 
-      Token line = tok->PeekFindUntil(";");
+      Token line = tok->PeekFindUntil(";").value();
 
       // Skip typedef of functions by checking if a '(' or a ')' appears in the line
       bool cont = false;
@@ -54,7 +54,7 @@ void ParseHeaderFile(Tokenizer* tok,Arena* arena){
         continue;
       }
 
-      void* oldMark = tok->Mark();
+      auto oldMark = tok->Mark();
 
       Token peek = tok->PeekToken();
       if(CompareString(peek,"struct")){
@@ -233,15 +233,16 @@ String GetBaseType(String name){
   // TODO: This should call parsing simple type. Deal with unsigned and things like that
   SkipQualifiers(&tok);
 
+  auto mark = tok.Mark();
   Token base = tok.NextToken();
 
   SkipQualifiers(&tok);
 
   Token peek = tok.PeekToken();
   if(CompareString(peek,"<")){
-    Token templateInst = tok.PeekIncludingDelimiterExpression({"<"},{">"},0);
-    base = ExtendToken(base,templateInst);
+    Token templateInst = tok.PeekIncludingDelimiterExpression({"<"},{">"},0).value();
     tok.AdvancePeek(templateInst);
+    base = tok.Point(mark);
   }
 
   base = TrimWhitespaces(base);
@@ -278,8 +279,10 @@ bool DependsOnTemplatedParam(TypeDef* def,String memberTypeName,Arena* arena){
   tok.AssertNextToken("<");
 
   while(!tok.Done()){
-    FindFirstResult search = tok.FindFirst({",",">"});
-    Assert(search.foundFirst.size);
+    Optional<FindFirstResult> res = tok.FindFirst({",",">"});
+    Assert(res.has_value());
+
+    FindFirstResult search = res.value();
 
     if(CompareString(search.foundFirst,",")){
       bool res = DependsOnTemplatedParam(def,search.peekFindNotIncluded,arena);
@@ -409,13 +412,13 @@ void OutputRegisterTypesFunction(FILE* output,Arena* arena){
 
         fprintf(output,"\t\t{STRING(\"%.*s\"),(int) %.*s::%.*s}",UNPACK_SS(name),UNPACK_SS(def->enumType.name),UNPACK_SS(name));
 
-        String peek = tok.PeekFindUntil(",");
+        Optional<Token> peek = tok.PeekFindUntil(",");
 
-        if(peek.size == -1){
+        if(!peek.has_value()){
           break;
         }
 
-        tok.AdvancePeek(peek);
+        tok.AdvancePeek(peek.value());
         tok.AssertNextToken(",");
       }
       fprintf(output,"};\n\n");
@@ -425,7 +428,7 @@ void OutputRegisterTypesFunction(FILE* output,Arena* arena){
     }
   }
   fprintf(output,"\n");
-
+  
   fprintf(output,"   static String templateArgs[] = {\n");
   bool first = true;
   for(TypeDef* def : typeDefs){

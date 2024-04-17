@@ -88,23 +88,30 @@ ALWAYS_INLINE _Once operator+(_OnceTag,F&& f){
 #define once static _Once TEMP_once(__LINE__) = _OnceTag() + [&]() // Executes once even if called multiple times
 
 void PrintStacktrace();
-void FlushStdout();
 
 const char* GetFilename(const char* fullpath);
 
 // Quick print functions used when doing "print" debugging
-#define NEWLINE() do{ printf("\n"); FlushStdout();} while(0)
-#define LOCATION() do{ printf("%s:%d\n",GetFilename(__FILE__),__LINE__); FlushStdout();} while(0)
+#define NEWLINE() do{ printf("\n"); fflush(stdout);} while(0)
+#define LOCATION() do{ printf("%s:%d\n",GetFilename(__FILE__),__LINE__); fflush(stdout);} while(0)
 #define PRINTF_WITH_LOCATION(...) do{ printf("%s:%d-",__FILE__,__LINE__); printf(__VA_ARGS__); FlushStdout();} while(0)
-#define PRINT_STRING(STR) do{ printf("%.*s\n",UNPACK_SS((STR))); FlushStdout();} while(0)
+#define PRINT_STRING(STR) do{ printf("%.*s\n",UNPACK_SS((STR))); fflush(stdout);} while(0)
 
-static void Terminate(){FlushStdout(); exit(-1);}
+static void Terminate(){fflush(stdout); exit(-1);}
 //#if defined(VERSAT_DEBUG)
 #define Assert(EXPR) \
   do { \
     bool _ = !(EXPR);   \
-    if(_){ \
-      FlushStdout(); \
+if(_){ \
+      NEWLINE(); \
+      NEWLINE(); \
+      NEWLINE(); \
+      fprintf(stderr,"Assertion failed: %s\n",#EXPR); \
+      fprintf(stderr,"At: "); LOCATION(); \
+      fflush(stderr); \
+      NEWLINE(); \
+      NEWLINE(); \
+      NEWLINE(); \
       __builtin_trap(); \
     } \
   } while(0)
@@ -112,38 +119,25 @@ static void Terminate(){FlushStdout(); exit(-1);}
 //#define Assert(EXPR) do {} while(0)
 //#endif
 
-// Assert that gets replaced by the expression if debug is disabled (instead of simply disappearing like a normal assert)
-// Probably not a good idea now that I think about it. It probably leads to more confusing code 
-// TODO: Remove this and change affected code 
-#if defined(VERSAT_DEBUG)
-#define AssertAndDo(EXPR) Assert(EXPR)
-#else
-#define AssertAndDo(EXPR) EXPR
-#endif
-
-#define DEBUG_BREAK() do{ FlushStdout(); raise(SIGTRAP); } while(0)
-#define DEBUG_BREAK_IF(COND) if(COND){FlushStdout(); raise(SIGTRAP);}
+#define DEBUG_BREAK() do{ fflush(stdout); raise(SIGTRAP); } while(0)
+#define DEBUG_BREAK_IF(COND) if(COND){fflush(stdout); raise(SIGTRAP);}
 
 // If possible use argument to put a simple string indicating the error that must likely occured
 // We do not print it for now but useful for long lasting code.
-#define NOT_IMPLEMENTED(...) do{ printf("%s:%d:1: error: Not implemented: %s",__FILE__,__LINE__,__PRETTY_FUNCTION__); FlushStdout(); Assert(false); } while(0) // Doesn't mean that something is necessarily future planned
+#define NOT_IMPLEMENTED(...) do{ printf("%s:%d:1: error: Not implemented: %s",__FILE__,__LINE__,__PRETTY_FUNCTION__); fflush(stdout); Assert(false); } while(0) // Doesn't mean that something is necessarily future planned
 #define NOT_POSSIBLE(...) DEBUG_BREAK()
-#define UNHANDLED_ERROR(...) do{ FlushStdout(); Assert(false); } while(0) // Know it's an error, but only exit, for now
-#define USER_ERROR(...) do{ FlushStdout(); exit(0); } while(0) // User error and program does not try to repair or keep going (report error before and exit)
+#define UNHANDLED_ERROR(...) do{ fflush(stdout); Assert(false); } while(0) // Know it's an error, but only exit, for now
+#define USER_ERROR(...) do{ fflush(stdout); exit(0); } while(0) // User error and program does not try to repair or keep going (report error before and exit)
 #define UNREACHABLE(...) do{Assert(false); __builtin_unreachable();} while(0)
 
 #define FOREACH_LIST(TYPE,ITER,START) for(TYPE ITER = START; ITER; ITER = ITER->next)
 #define FOREACH_LIST_INDEXED(TYPE,ITER,START,INDEX) for(TYPE ITER = START; ITER; ITER = ITER->next,INDEX += 1)
-#define FOREACH_LIST_BOUNDED(TYPE,ITER,START,END) for(TYPE ITER = START; ITER != END; ITER = ITER->next)
-#define FOREACH_SUBLIST(TYPE,ITER,SUB) for(TYPE ITER = SUB.start; ITER != SUB.end; ITER = ITER->next)
 
 #define SWAP(A,B) do { \
    auto TEMP = A; \
    A = B; \
    B = TEMP; \
    } while(0)
-
-#define TIME_FUNCTION clock
 
 typedef uint8_t Byte;
 typedef uint8_t u8;
@@ -236,8 +230,6 @@ typedef Array<const char> String;
 #define UNPACK_SS(STR) (STR).size,(STR).data
 #define UNPACK_SS_REVERSE(STR) (STR).data,(STR).size
 
-// Assuming that compiler can optimize the strlen out when passing literal strings
-// Otherwise transform these into macros
 inline String STRING(const char* str){return (String){str,(int) strlen(str)};}
 inline String STRING(const char* str,int size){return (String){str,size};}
 inline String STRING(const unsigned char* str){return (String){(const char*)str,(int) strlen((const char*) str)};}

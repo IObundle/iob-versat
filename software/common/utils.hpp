@@ -7,7 +7,9 @@
 
 Optional<Array<String>> GetAllFilesInsideDirectory(String dirPath,Arena* out);
 
-String EscapeString(String toEscape,char spaceSubstitute,Arena* out);
+String PushEscapedString(Arena* out,String toEscape,char spaceSubstitute);
+void   PrintEscapedString(String toEscape,char spaceSubstitute);
+
 String GetAbsolutePath(const char* path,Arena* out);
 
 Array<int> GetNonZeroIndexes(Array<int> array,Arena* out);

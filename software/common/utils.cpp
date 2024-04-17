@@ -57,7 +57,7 @@ Optional<Array<String>> GetAllFilesInsideDirectory(String dirPath,Arena* out){
    return arr;
 }
 
-String EscapeString(String toEscape,char spaceSubstitute,Arena* out){
+String PushEscapedString(Arena* out,String toEscape,char spaceSubstitute){
   Byte* mark = MarkArena(out);
 
   for(int i = 0; i < toEscape.size; i++){
@@ -77,6 +77,23 @@ String EscapeString(String toEscape,char spaceSubstitute,Arena* out){
 
   String res = PointArena(out,mark);
   return res;
+}
+
+void PrintEscapedString(String toEscape,char spaceSubstitute){
+  for(int i = 0; i < toEscape.size; i++){
+    switch(toEscape[i]){
+    case '\a': puts("\\a"); break;
+    case '\b': puts("\\b"); break;
+    case '\r': puts("\\r"); break;
+    case '\f': puts("\\f"); break;
+    case '\t': puts("\\t"); break;
+    case '\n': puts("\\n"); break;
+    case '\0': puts("\\0"); break;
+    case '\v': puts("\\v"); break;
+    case ' ':  printf("%c",spaceSubstitute); break;
+    default:   printf("%c",toEscape[i]); break;
+    }
+  }
 }
 
 String GetAbsolutePath(const char* path,Arena* out){

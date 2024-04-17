@@ -163,7 +163,7 @@ Type* GetSpecificType(String name){
 String GetBaseTypeName(String name){
   Tokenizer tok(name,"*[]",{});
 
-  void* mark = tok.Mark();
+  auto mark = tok.Mark();
   while(!tok.Done()){
     Token t = tok.PeekToken();
 
@@ -343,7 +343,7 @@ Type* GetType(String name){
   Type* res = nullptr;
   Tokenizer tok(name,"*&[]<>,",{});
   if(Contains(name,'<')){
-    Token templatedName = ParseSimpleType(&tok);
+    String templatedName = ParseSimpleType(&tok);
 
     if(CompareString(name,templatedName)){ // Name equal to templated name means that no pointers or arrays, only templated arguments are not found
          Type* res = InstantiateTemplate(name,&permanentArena);
@@ -352,10 +352,7 @@ Type* GetType(String name){
       res = GetType(templatedName);
     }
   } else {
-    //Tokenizer tok(name,"*&[]",{});
-    tok.SetSingleChars("*&[]");
-
-    Token noPointers = ParseSimpleType(&tok);
+    String noPointers = ParseSimpleType(&tok);
     if(CompareString(noPointers,name)){
       return nullptr;
     }
@@ -387,7 +384,7 @@ Type* GetType(String name){
     }
 
     if(CompareString(next,"[")){
-      Token arrayExpression = tok.PeekFindUntil("]");
+      Token arrayExpression = tok.PeekFindUntil("]").value();
       tok.AdvancePeek(arrayExpression);
       tok.AssertNextToken("]");
 
@@ -1515,7 +1512,7 @@ Value MakeValue(void* entity,String typeName){
 }
 
 // This shouldn't be here, but cannot be on parser.cpp because otherwise struct parser would fail
-Array<Value> ExtractValues(const char* format,Token tok,Arena* arena){
+Array<Value> ExtractValues(const char* format,String tok,Arena* arena){
   // TODO: This is pretty much a copy of CheckFormat but with small modifications
   // There should be a way to refactor into a single function, and probably less error prone
   if(!CheckFormat(format,tok)){

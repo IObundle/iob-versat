@@ -1,1 +1,1 @@
-../LIB/scripts/default.nix
+/home/z/AA/Versat/iob-soc-versat/submodules/IOBSOC/submodules/LIB/scripts/default.nix
