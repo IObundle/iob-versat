@@ -286,44 +286,6 @@ FUDeclaration* RegisterModuleInfo(Versat* versat,ModuleInfo* info){
   return res;
 }
 
-// Bunch of functions that could go to accelerator stats
-// Returns the values when looking at a unit individually
-UnitValues CalculateIndividualUnitValues(FUInstance* inst){
-  UnitValues res = {};
-
-  FUDeclaration* type = inst->declaration;
-
-  res.outputs = type->outputLatencies.size; // Common all cases
-  if(IsTypeHierarchical(type)){
-    Assert(inst->declaration->fixedDelayCircuit);
-	//} else if(type->type == FUDeclaration::ITERATIVE){
-	//   Assert(inst->declaration->fixedDelayCircuit);
-	//   res.delays = 1;
-	//   res.extraData = sizeof(int);
-  } else {
-    res.configs = type->configInfo.configs.size;
-    res.states = type->configInfo.states.size;
-    res.delays = type->configInfo.delayOffsets.max;
-    res.extraData = type->configInfo.extraDataOffsets.max;
-  }
-
-  return res;
-}
-
-// Returns the values when looking at subunits as well. For simple units, same as individual unit values
-// For composite units, same as calculate accelerator values + calculate individual unit values
-UnitValues CalculateAcceleratorUnitValues(Versat* versat,FUInstance* inst){
-  UnitValues res = {};
-
-  FUDeclaration* type = inst->declaration;
-
-  if(!IsTypeHierarchical(type)){
-    res = CalculateIndividualUnitValues(inst);
-  }
-
-  return res;
-}
-
 UnitValues CalculateAcceleratorValues(Versat* versat,Accelerator* accel){
   ArenaMarker marker(&accel->versat->temp);
 
@@ -428,16 +390,13 @@ void FillDeclarationWithAcceleratorValues(Versat* versat,FUDeclaration* decl,Acc
 
   UnitValues val = CalculateAcceleratorValues(versat,accel);
 
-  bool anySavedConfiguration = false;
   FOREACH_LIST(InstanceNode*,ptr,accel->allocated){
     FUInstance* inst = ptr->inst;
-    anySavedConfiguration |= inst->savedConfiguration;
   }
 
   decl->configInfo.delayOffsets.max = val.delays;
   decl->nIOs = val.ios;
   decl->configInfo.extraDataOffsets.max = val.extraData;
-  decl->nStaticConfigs = val.statics;
   if(val.isMemoryMapped){
     decl->memoryMapBits = val.memoryMappedBits;
   }
@@ -570,6 +529,7 @@ FUDeclaration* RegisterSubUnit(Versat* versat,Accelerator* circuit){
     String beforePath = PushString(temp,"debug/%.*s/beforeFixDelay.dot",UNPACK_SS(name));
     String afterPath = PushString(temp,"debug/%.*s/afterFixDelay.dot",UNPACK_SS(name));
 
+    // TODO: Cannot collapse same edges because we do not actually calculate wether edges are the same in respect to delays and so on.
     OutputGraphDotFile(versat,circuit,false,beforePath,temp);
     FixDelays(versat,circuit,delays.edgesDelay);
     OutputGraphDotFile(versat,circuit,false,afterPath,temp);
@@ -758,10 +718,6 @@ FUDeclaration* RegisterIterativeUnit(Versat* versat,Accelerator* accel,FUInstanc
     Assert(buffer->bufferAmount >= 0);
     SetStatic(accel,buffer);
 
-    if(buffer->config){
-      buffer->config[0] = buffer->bufferAmount;
-    }
-
     InstanceNode* bufferNode = GetInstanceNode(accel,buffer);
 
     InsertUnit(accel,(PortNode){conn[i].mux,0},conn[i].unit,(PortNode){bufferNode,0});
@@ -893,11 +849,9 @@ int GetInputPortNumber(FUInstance* inputInstance){
   return ((FUInstance*) inputInstance)->portIndex;
 }
 
-void PrintDeclaration(FILE* out,FUDeclaration* decl,Arena* temp,Arena* temp2){
-  BLOCK_REGION(temp);
-  BLOCK_REGION(temp2);
-
+void PrintUniformInformation(FILE* out,FUDeclaration* decl){
   fprintf(out,"Declaration: %.*s\n",UNPACK_SS(decl->name));
+  fprintf(out,"\n");
   fprintf(out,"Inputs: %d\n",decl->inputDelays.size);
   fprintf(out,"  ");
   for(int i = 0; i < decl->inputDelays.size; i++){
@@ -906,6 +860,7 @@ void PrintDeclaration(FILE* out,FUDeclaration* decl,Arena* temp,Arena* temp2){
   }
   fprintf(out,"\n");
 
+  fprintf(out,"\n");
   fprintf(out,"Outputs: %d\n",decl->outputLatencies.size);
   fprintf(out,"  ");
   for(int i = 0; i < decl->outputLatencies.size; i++){
@@ -914,10 +869,50 @@ void PrintDeclaration(FILE* out,FUDeclaration* decl,Arena* temp,Arena* temp2){
   }
   fprintf(out,"\n");
 
+  fprintf(out,"\n");
+  fprintf(out,"Configs: %d\n",decl->configInfo.configOffsets.max);
+  for(Wire wire : decl->configInfo.configs){
+    fprintf(out,"  %.*s\n",UNPACK_SS(wire.name));
+  }
+  fprintf(out,"\n");
+  fprintf(out,"States: %d\n",decl->configInfo.stateOffsets.max);
+  for(Wire wire : decl->configInfo.states){
+    fprintf(out,"  %.*s\n",UNPACK_SS(wire.name));
+  }
+  fprintf(out,"\n");
+  fprintf(out,"Delay: %d\n",decl->configInfo.delayOffsets.max);
+  if(decl->staticUnits) {
+    fprintf(out,"\n");
+    fprintf(out,"StaticUnits: %d\n",decl->staticUnits->nodesUsed);
+    for(Pair<StaticId,StaticData> p : decl->staticUnits){
+      for(Wire wire : p.second.configs){
+        fprintf(out,"%.*s_%.*s_%.*s\n",UNPACK_SS(p.first.parent->name),UNPACK_SS(p.first.name),UNPACK_SS(wire.name));
+      }
+    }
+    fprintf(out,"\n");
+  }
+}
+
+void PrintDeclaration(FILE* out,FUDeclaration* decl,Arena* temp,Arena* temp2){
+  BLOCK_REGION(temp);
+  BLOCK_REGION(temp2);
+
+  PrintUniformInformation(out,decl);
+  fprintf(out,"\n");
+  
   if(decl->fixedDelayCircuit){
-    Array<InstanceInfo> info = TransformGraphIntoArray(decl->fixedDelayCircuit,true,temp,temp2);
+    Array<InstanceInfo> info = CalculateAcceleratorInfo(decl->fixedDelayCircuit,true,temp,temp2);
 
     PrintAll(out,info,temp);
+
+    fprintf(out,"\n======================================\n");
+    
+    Array<FUDeclaration*> allSubTypesUsed = AllNonSpecialSubTypes(decl->fixedDelayCircuit,temp,temp2);
+    for(FUDeclaration* subDecl : allSubTypesUsed){
+      fprintf(out,"\n");
+      PrintUniformInformation(out,subDecl);
+      fprintf(out,"\n");
+    }
   } else {
     String type = DelayTypeToString(decl->delayType);
     fprintf(out,"Type: %.*s\n",UNPACK_SS(type));

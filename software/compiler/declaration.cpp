@@ -2,7 +2,7 @@
 
 #include "versat.hpp"
 
-static Pool<FUDeclaration> declarations;
+// static Pool<FUDeclaration> declarations;
 
 namespace BasicDeclaration{
   FUDeclaration* buffer;

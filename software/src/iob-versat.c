@@ -31,8 +31,9 @@ typedef uint64_t uint64;
 
 iptr versat_base;
 
-volatile AcceleratorConfig* accelConfig = 0;
-volatile AcceleratorState*  accelState  = 0;
+volatile AcceleratorConfig*  accelConfig  = 0;
+volatile AcceleratorState*   accelState   = 0;
+volatile AcceleratorStatic*  accelStatics = 0;
 
 void versat_init(int base){
   versat_base = (iptr) base;
@@ -43,19 +44,13 @@ void versat_init(int base){
 
   accelConfig = (volatile AcceleratorConfig*) (versat_base + configStart);
   accelState  = (volatile AcceleratorState*)  (versat_base + stateStart);
-
+  accelStatics = (volatile AcceleratorStatic*)  (versat_base + staticStart);
+  
   volatile int* delayBase = (volatile int*) (versat_base + delayStart);
 
   for(int i = 0; i < ARRAY_SIZE(delayBuffer); i++){  // Hackish, for now
       delayBase[i] = delayBuffer[i];
   }
-
-#if 0
-  volatile int* staticBase = (volatile int*) (versat_base + staticStart);
-  for(int i = 0; i < ARRAY_SIZE(staticBuffer); i++){ // Hackish, for now
-      staticBase[i] = staticBuffer[i];
-  }
-#endif
 }
 
 void StartAccelerator(){
@@ -146,21 +141,21 @@ void VersatMemoryCopy(void* dest,void* data,int size){
   }
 }
 
-void VersatUnitWrite(int baseaddr,int index,int val){
+void VersatUnitWrite(void* baseaddr,int index,int val){
   //int* ptr = (int*) (baseaddr + index * sizeof(int));
   //*ptr = val;
-  MEMSET(baseaddr,index,val);
+  MEMSET((iptr*) baseaddr,index,val);
 }
 
-int VersatUnitRead(int base,int index){
-  return MEMGET(base,index);
+int VersatUnitRead(void* base,int index){
+  return MEMGET((iptr*) base,index);
   //int* ptr = (int*) (base + index * sizeof(int));
   //return *ptr;
 }
 
-float VersatUnitReadFloat(int base,int index){
+float VersatUnitReadFloat(void* base,int index){
   // float* ptr = (float*) (base + index * sizeof(float)
-  int val = MEMGET(base,index);
+  int val = MEMGET((iptr*) base,index);
   float* ptr = (float*) &val;
   return *ptr;
 }

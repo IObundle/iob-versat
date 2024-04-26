@@ -88,7 +88,6 @@ struct FUDeclaration{
   
   Optional<int> memoryMapBits; // 0 is a valid memory map size, so optional indicates that no memory map exists
   int nIOs;
-  int nStaticConfigs;
 
   Array<ExternalMemoryInterface> externalMemory;
 
@@ -114,8 +113,8 @@ struct FUDeclaration{
   bool implementsDone;
   bool signalLoop;
 
-// Simple functions access functions
-  
+// Simple access functions
+ 
   int NumberInputs(){return inputDelays.size;};
   int NumberOutputs(){return outputLatencies.size;};
 };

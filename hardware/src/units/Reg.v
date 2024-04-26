@@ -26,6 +26,7 @@
    output reg [DATA_W-1:0]       out0, /* technically should have versat_latency 1 but since it's not a computing unit, output is only used to start a datapath, we save 1 cycle */
 
    input [DELAY_W-1:0] delay0,
+   input disabled,
 
    output [DATA_W-1:0] currentValue
 );
@@ -58,7 +59,7 @@
             delay <= delay0;
          end else if (!done) begin
             if (delay == 0) begin
-               out0 <= in0;
+               if(!disabled) out0 <= in0;
                done <= 1;
             end else begin
                delay <= delay - 1;

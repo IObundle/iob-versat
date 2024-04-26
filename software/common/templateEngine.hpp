@@ -1,5 +1,4 @@
-#ifndef TEMPLATE_ENGINE_INCLUDED
-#define TEMPLATE_ENGINE_INCLUDED
+#pragma once
 
 #include "parser.hpp"
 
@@ -84,6 +83,30 @@ struct TemplateRecord{
   };
 };
 
+template<> class std::hash<TemplateRecord>{
+public:
+   std::size_t operator()(TemplateRecord const& s) const noexcept{
+     std::size_t res = std::hash<Type*>()(s.structType) + std::hash<String>()(s.fieldName);
+     return res;
+   }
+};
+
+struct ValueAndText{
+  Value val;
+  String text;
+};
+
+struct Frame{
+  Hashmap<String,Value>* table;
+  Frame* previousFrame;
+};
+
+struct IndividualBlock{
+  String content;
+  BlockType type;
+  int line;
+};
+
 struct CompiledTemplate{
   int totalMemoryUsed;
   String content;
@@ -102,8 +125,6 @@ void InitializeTemplateEngine(Arena* perm);
 void ProcessTemplate(FILE* outputFile,CompiledTemplate* compiledTemplate,Arena* temp,Arena* temp2);
 CompiledTemplate* CompileTemplate(String content,const char* name,Arena* out,Arena* temp);
 
-String Repr(TemplateRecord record,Arena* arena);
-void PrintTemplate(CompiledTemplate* compiled,Arena* arena);
 Array<TemplateRecord> RecordTypesAndFieldsUsed(CompiledTemplate* compiled,Arena* out,Arena* temp); // Quick way of checking useless values 
 
 Hashmap<String,Value>* GetAllTemplateValues();
@@ -117,5 +138,3 @@ void TemplateSetString(const char* id,const char* str);
 void TemplateSetString(const char* id,String str);
 void TemplateSetArray(const char* id,const char* baseType,int size,void* array);
 void TemplateSetBool(const char* id,bool boolean);
-
-#endif // TEMPLATE_ENGINE_INCLUDED

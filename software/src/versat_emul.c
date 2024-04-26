@@ -16,6 +16,7 @@
 
 volatile AcceleratorConfig* accelConfig = nullptr;
 volatile AcceleratorState* accelState = nullptr;
+volatile AcceleratorStatic* accelStatics = nullptr;
 
 iptr versat_base;
 
@@ -34,6 +35,7 @@ int GetAcceleratorCyclesElapsed();
 
 AcceleratorConfig* GetStartOfConfig();
 AcceleratorState* GetStartOfState();
+AcceleratorStatic* GetStartOfStatic();
 
 #ifdef __cplusplus
   }
@@ -62,20 +64,7 @@ void versat_init(int base){
 
   accelConfig = GetStartOfConfig();
   accelState = GetStartOfState();
-
-  char* configView = (char*) accelConfig;
-  iptr* delayPtr = (iptr*) (configView + (delayStart - configStart));
-
-  for(int i = 0; i < ARRAY_SIZE(delayBuffer); i++){
-    delayPtr[i] = delayBuffer[i];
-  }
-
-#if 0
-  iptr* staticPtr = (iptr*) (configView + (staticStart - configStart));
-  for(int i = 0; i < ARRAY_SIZE(staticBuffer); i++){
-    staticPtr[i] = staticBuffer[i];
-  }
-#endif
+  accelStatics = GetStartOfStatic();
 }
 
 static void CheckVersatInitialized(){
@@ -116,7 +105,7 @@ void VersatMemoryCopy(void* dest,void* data,int size){
   int* view = (int*) data;
 
   bool destInsideConfig = (byteViewDest >= configView && byteViewDest < configView + sizeof(AcceleratorConfig));
-  bool destEndOutsideConfig = destInsideConfig && (byteViewDest + size >= configView + sizeof(AcceleratorConfig));
+  bool destEndOutsideConfig = destInsideConfig && (byteViewDest + size > configView + sizeof(AcceleratorConfig));
 
   if(destEndOutsideConfig){
     printf("VersatMemoryCopy: Destination starts inside config and ends outside\n");
@@ -128,27 +117,27 @@ void VersatMemoryCopy(void* dest,void* data,int size){
     memcpy(dest,data,size);
   } else {
     for(int i = 0; i < (size / 4); i++){
-      VersatUnitWrite((iptr) dest,i,view[i]);
+      VersatUnitWrite(dest,i,view[i]);
     }
   }
 }
 
-void VersatUnitWrite(int baseaddr,int index,int val){
+void VersatUnitWrite(void* baseaddr,int index,int val){
   CheckVersatInitialized();
 
-  int addr = baseaddr + (index * sizeof(int)) - (versat_base + memMappedStart); // Convert back to zero based address
+  iptr addr = (iptr) baseaddr + (index * sizeof(int)) - (versat_base + memMappedStart); // Convert back to zero based address
   MemoryAccess(addr,val,1);
 }
 
-int VersatUnitRead(int baseaddr,int index){
+int VersatUnitRead(void* baseaddr,int index){
   CheckVersatInitialized();
 
-  int addr = baseaddr + (index * sizeof(int)) - (versat_base + memMappedStart); // Convert back to zero based byte space address
+  iptr addr = (iptr) baseaddr + (index * sizeof(int)) - (versat_base + memMappedStart); // Convert back to zero based byte space address
   int res = MemoryAccess(addr,0,0);
   return res;
 }
 
-float VersatUnitReadFloat(int base,int index){
+float VersatUnitReadFloat(void* base,int index){
   int res = VersatUnitRead(base,index);
   float* view = (float*) &res;
   return *view;

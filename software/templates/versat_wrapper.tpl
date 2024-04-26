@@ -75,6 +75,7 @@ static constexpr int totalExternalMemory = @{totalExternalMemory};
 static Byte externalMemory[totalExternalMemory]; 
 static AcceleratorConfig configBuffer = {};
 static AcceleratorState stateBuffer = {};
+static AcceleratorStatic staticBuffer = {};
 static DatabusAccess databusBuffer[@{type.nIOs}] = {}; 
 
 extern "C" void InitializeVerilator(){
@@ -89,6 +90,10 @@ extern "C" AcceleratorConfig* GetStartOfConfig(){
 
 extern "C" AcceleratorState* GetStartOfState(){
   return &stateBuffer;
+}
+
+extern "C" AcceleratorStatic* GetStartOfStatic(){
+  return &staticBuffer;
 }
 
 static void CloseWaveform(){
@@ -429,27 +434,34 @@ Once operator+(_OnceTag t,F&& f){
 static void InternalStartAccelerator(){
    V@{type.name}* self = dut;
 
-#{if allConfigsVerilatorSide.size}
+#{if structuredConfigs.size}
 AcceleratorConfig* config = (AcceleratorConfig*) &configBuffer;
+AcceleratorStatic* statics = (AcceleratorStatic*) &staticBuffer;
 
 #{for wire allConfigsVerilatorSide}
  #{if configsHeader[index].bitSize != 64}
- once{
-     if((long long int) config->@{configsHeader[index].name} >= ((long long int) 1 << @{configsHeader[index].bitSize})){
+
+#if 0
+  once{
+     if((long long int) config->TOP_@{wire.name} >= ((long long int) 1 << @{configsHeader[index].bitSize})){
       printf("[Once] Warning, configuration value contains more bits\n");
       printf("set than the hardware unit is capable of handling\n");
       printf("Name: %s, BitSize: %d, Value: 0x%lx\n","@{configsHeader[index].name}",@{configsHeader[index].bitSize},config->@{configsHeader[index].name});
     }
   };
- #{end}
-
-  self->@{wire.name} = config->@{configsHeader[index].name};
+#endif
 #{end}
+  self->@{wire.name} = config->TOP_@{wire.name};
+#{end}
+#{end}
+
+#{for wire allStaticsVerilatorSide}
+  self->@{wire.name} = statics->@{wire.name};
 #{end}
 
 #{if type.configInfo.delayOffsets.max}
 #{for i type.configInfo.delayOffsets.max}
-   self->delay@{i} = config->TOP_Delay@{i};
+   self->delay@{i} = accelDelay.TOP_Delay@{i};
 #{end}
 #{end}
 

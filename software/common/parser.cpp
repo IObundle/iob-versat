@@ -59,7 +59,7 @@ void Tokenizer::ConsumeWhitespace(){
   }
 }
 
-Tokenizer::Tokenizer(String content,const char* singleChars,std::vector<std::string> specialCharsList)
+Tokenizer::Tokenizer(String content,const char* singleChars,BracketList<const char*> specialCharsList)
 :start(content.data)
 ,ptr(content.data)
 ,end(content.data + content.size)
@@ -71,11 +71,7 @@ Tokenizer::Tokenizer(String content,const char* singleChars,std::vector<std::str
   Arena leaky = InitArena(Kilobyte(16));
   std::vector<const char*> specials;
 
-  for(std::string& s : specialCharsList){
-    specials.push_back(s.c_str());
-  }
-
-  this->tmpl = CreateTokenizerTemplate(&leaky,singleChars,specials);
+  this->tmpl = CreateTokenizerTemplate(&leaky,singleChars,specialCharsList);
 }
 
 Tokenizer::Tokenizer(String content,TokenizerTemplate* tmpl)
@@ -474,7 +470,7 @@ Optional<Token> Tokenizer::NextFindUntil(const char* str){
   return token;
 }
 
-Optional<FindFirstResult> Tokenizer::FindFirst(std::initializer_list<const char*> strings){
+Optional<FindFirstResult> Tokenizer::FindFirst(BracketList<const char*> strings){
   Token peekFind = {};
   peekFind.size = -1;
 
@@ -678,7 +674,7 @@ TokenizerTemplate* Tokenizer::SetTemplate(TokenizerTemplate* tmpl){
   return old;
 }
 
-Optional<Token> Tokenizer::PeekUntilDelimiterExpression(std::initializer_list<const char*> open,std::initializer_list<const char*> close, int numberOpenSeen){
+Optional<Token> Tokenizer::PeekUntilDelimiterExpression(BracketList<const char*> open,BracketList<const char*> close, int numberOpenSeen){
   for(const char* str : open){
     Assert(IsSpecialOrSingle(STRING(str)) && "Token based function needs template to define tokens as special");
   }
@@ -729,7 +725,7 @@ Optional<Token> Tokenizer::PeekUntilDelimiterExpression(std::initializer_list<co
   return {};
 }
 
-Optional<Token> Tokenizer::PeekIncludingDelimiterExpression(std::initializer_list<const char*> open,std::initializer_list<const char*> close, int numberOpenSeen){
+Optional<Token> Tokenizer::PeekIncludingDelimiterExpression(BracketList<const char*> open,BracketList<const char*> close, int numberOpenSeen){
   auto pos = Mark();
 
   Optional<Token> until = PeekUntilDelimiterExpression(open,close,numberOpenSeen);
@@ -1016,85 +1012,6 @@ bool IsNum(char ch){
   return res;
 }
 
-struct OperationList{
-  const char** op;
-  int nOperations;
-  OperationList* next;
-};
-
-Expression* ParseOperationType_(Tokenizer* tok,OperationList* operators,ParsingFunction finalFunction,Arena* out){
-  auto start = tok->Mark();
-
-  if(operators == nullptr){
-    Expression* expr = finalFunction(tok,out);
-
-    expr->text = tok->Point(start);
-    return expr;
-  }
-
-  OperationList* nextOperators = operators->next;
-  Expression* current = ParseOperationType_(tok,nextOperators,finalFunction,out);
-
-  while(1){
-    Token peek = tok->PeekToken();
-
-    bool foundOne = false;
-    for(int i = 0; i < operators->nOperations; i++){
-      const char* elem = operators->op[i];
-
-      if(CompareString(peek,elem)){
-        tok->AdvancePeek(peek);
-        Expression* expr = PushStruct<Expression>(out);
-        *expr = {};
-        expr->expressions = PushArray<Expression*>(out,2);
-
-        expr->type = Expression::OPERATION;
-        expr->op = elem;
-        expr->expressions[0] = current;
-        expr->expressions[1] = ParseOperationType_(tok,nextOperators,finalFunction,out);
-
-        current = expr;
-        foundOne = true;
-      }
-    }
-
-    if(!foundOne){
-      break;
-    }
-  }
-
-  current->text = tok->Point(start);
-  return current;
-}
-
-Expression* ParseOperationType(Tokenizer* tok,std::initializer_list<std::initializer_list<const char*>> operators,ParsingFunction finalFunction,Arena* out){
-  auto mark = tok->Mark();
-
-  OperationList head = {};
-  OperationList* ptr = nullptr;
-
-  for(std::initializer_list<const char*> outerList : operators){
-    if(ptr){
-      ptr->next = PushStruct<OperationList>(out);
-      ptr = ptr->next;
-      *ptr = {};
-    } else {
-      ptr = &head;
-    }
-
-    ptr->op = PushArray<const char*>(out,outerList.size()).data;
-
-    for(const char* str : outerList){
-      ptr->op[ptr->nOperations++] = str;
-    }
-  }
-
-  Expression* expr = ParseOperationType_(tok,&head,finalFunction,out);
-  expr->text = tok->Point(mark);
-
-  return expr;
-}
-
 static void PrintSpaces(int amount){
   for(int i = 0; i < amount; i++){
     printf(" ");
@@ -1149,8 +1066,6 @@ void PrintExpression(Expression* exp){
   PrintExpression(exp,0);
 }
 
-#if 1
-
 // Basically turns whitespace characters into Good so that we terminate when 
 // finding them while looking at special chars.
 void DefaultTrieGood(Trie* t){
@@ -1159,7 +1074,7 @@ void DefaultTrieGood(Trie* t){
   }
 }
 
-TokenizerTemplate* CreateTokenizerTemplate(Arena* out,const char* singleChars,std::vector<const char*> specialChars){
+TokenizerTemplate* CreateTokenizerTemplate(Arena* out,const char* singleChars,BracketList<const char*> specialChars){
   TokenizerTemplate* tmpl = PushStruct<TokenizerTemplate>(out);
   *tmpl = {};
 
@@ -1214,4 +1129,3 @@ TokenizerTemplate* CreateTokenizerTemplate(Arena* out,const char* singleChars,st
   
   return tmpl;
 }
-#endif

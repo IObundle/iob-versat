@@ -3,6 +3,7 @@
 #include "utilsCore.hpp"
 #include "versat.hpp"
 #include "merge.hpp"
+#include "codeGeneration.hpp"
 
 //#include "repr.hpp"
 

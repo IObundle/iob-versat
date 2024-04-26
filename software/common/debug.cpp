@@ -346,7 +346,7 @@ void InitDebug(){
   init = true;
   //debugFlag = CurrentlyDebugging();
   
-  debugArenaInst = InitArena(Megabyte(1));
+  debugArenaInst = InitArena(Megabyte(64));
   SetDebugSignalHandler(SignalPrintStacktrace);
 }
 

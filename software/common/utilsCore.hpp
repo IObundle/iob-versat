@@ -3,6 +3,7 @@
 // Utilities that do not depend on anything else from versat (like memory.hpp, it's fine to depend on standard library)
 
 #include <cstdio>
+#include <initializer_list>
 #include <iosfwd>
 #include <string.h>
 #include <new>
@@ -154,6 +155,9 @@ typedef uintptr_t uptr;
 template<typename T>
 using Optional = std::optional<T>;
 #define PROPAGATE(OPTIONAL) if(!(OPTIONAL).has_value()){return {};}
+
+template<typename T>
+using BracketList = std::initializer_list<T>;
 
 struct Time{
    u64 microSeconds;

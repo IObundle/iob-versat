@@ -56,7 +56,7 @@ InstanceNode* CreateFlatFUInstance(Accelerator* accel,FUDeclaration* type,String
   inst->accel = accel;
   inst->declaration = type;
 
-  for(Pair<StaticId,StaticData>& pair : type->staticUnits){
+  for(Pair<StaticId,StaticData> pair : type->staticUnits){
     StaticId first = pair.first;
     StaticData second = pair.second;
     accel->staticUnits.insert({first,second});
@@ -926,7 +926,7 @@ void FixDelays(Versat* versat,Accelerator* accel,Hashmap<EdgeNode,int>* edgeDela
   BLOCK_REGION(temp);
 
   int buffersInserted = 0;
-  for(auto& edgePair : edgeDelays){
+  for(auto edgePair : edgeDelays){
     EdgeNode edge = edgePair.first;
     int delay = edgePair.second;
 
@@ -1065,6 +1065,26 @@ bool IsCombinatorial(Accelerator* accel){
   return true;
 }
 
+Array<FUDeclaration*> AllNonSpecialSubTypes(Accelerator* accel,Arena* out,Arena* temp){
+  if(accel == nullptr){
+    return {};
+  }
+  
+  BLOCK_REGION(temp);
+  
+  Set<FUDeclaration*>* maps = PushSet<FUDeclaration*>(temp,99);
+  
+  Array<InstanceInfo> test = CalculateAcceleratorInfo(accel,true,temp,out);
+  for(InstanceInfo& info : test){
+    if(info.decl->type != FUDeclaration::SPECIAL){
+      maps->Insert(info.decl);
+    }
+  }
+  
+  Array<FUDeclaration*> subTypes = PushArrayFromSet(out,maps);
+  return subTypes;
+}
+
 Array<FUDeclaration*> ConfigSubTypes(Accelerator* accel,Arena* out,Arena* temp){
   if(accel == nullptr){
     return {};
@@ -1074,7 +1094,7 @@ Array<FUDeclaration*> ConfigSubTypes(Accelerator* accel,Arena* out,Arena* temp){
   
   Set<FUDeclaration*>* maps = PushSet<FUDeclaration*>(temp,99);
   
-  Array<InstanceInfo> test = TransformGraphIntoArray(accel,true,temp,out);
+  Array<InstanceInfo> test = CalculateAcceleratorInfo(accel,true,temp,out);
   for(InstanceInfo& info : test){
     if(info.configSize > 0){
       maps->Insert(info.decl);
@@ -1094,7 +1114,7 @@ Array<FUDeclaration*> MemSubTypes(Accelerator* accel,Arena* out,Arena* temp){
   
   Set<FUDeclaration*>* maps = PushSet<FUDeclaration*>(temp,99);
 
-  Array<InstanceInfo> test = TransformGraphIntoArray(accel,true,temp,out);
+  Array<InstanceInfo> test = CalculateAcceleratorInfo(accel,true,temp,out);
   for(InstanceInfo& info : test){
     if(info.memMappedSize.has_value()){
       maps->Insert(info.decl);
@@ -1603,7 +1623,7 @@ InstanceNode* RemoveUnit(InstanceNode* nodes,InstanceNode* unit){
       ptr = next;
    }
 
-   for(auto& pair : toRemove){
+   for(auto pair : toRemove){
       RemoveAllConnections(unit,pair.first);
    }
 

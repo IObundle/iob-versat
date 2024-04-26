@@ -358,7 +358,7 @@ template<typename T>
 Array<T> PushArrayFromSet(Arena* out,Set<T>* set){
   Byte* mark = MarkArena(out);
 
-  for(auto& pair : set->map){
+  for(auto pair : set->map){
     T* ptr = PushStruct<T>(out);
     *ptr = pair.first;
   }

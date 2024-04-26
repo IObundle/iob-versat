@@ -1,5 +1,4 @@
-#ifndef INCLUDED_PARSER
-#define INCLUDED_PARSER
+#pragma once
 
 #include <initializer_list>
 #include <vector>
@@ -88,7 +87,7 @@ public:
   // TODO: Need to make a function that returns a location for a given token, so that I can return a good error message for the token not being the expected on. The function accepts a token and either returns a string or returns some structure that contains all the info needed to output such text.
   
   // TODO: Make some asserts. Special chars should not contain empty chars
-  Tokenizer(String content,const char* singleChars,std::vector<std::string> specialChars); // Content must remain valid through the entire parsing process
+  Tokenizer(String content,const char* singleChars,BracketList<const char*> specialChars); // Content must remain valid through the entire parsing process
   Tokenizer(String content,TokenizerTemplate* tmpl); // Content must remain valid. Tokenizer makes no copies
   Token PeekToken();
   Token NextToken();
@@ -107,7 +106,7 @@ public:
   Optional<Token> PeekFindIncludingLast(const char* str);
   Optional<Token> NextFindUntil(const char* str);
 
-  Optional<FindFirstResult> FindFirst(std::initializer_list<const char*> strings);
+  Optional<FindFirstResult> FindFirst(BracketList<const char*> strings);
 
   Token PeekWhitespace();
 
@@ -126,8 +125,8 @@ public:
   TokenizerTemplate* SetTemplate(TokenizerTemplate* tmpl); // Returns old template
 
   // For expressions where there is a open and a closing delimiter (think '{ { } }') and need to check where the matching close delimiter is.
-  Optional<Token> PeekUntilDelimiterExpression(std::initializer_list<const char*> open,std::initializer_list<const char*> close, int numberOpenSeen);
-  Optional<Token> PeekIncludingDelimiterExpression(std::initializer_list<const char*> open,std::initializer_list<const char*> close, int numberOpenSeen);
+  Optional<Token> PeekUntilDelimiterExpression(BracketList<const char*> open,BracketList<const char*> close, int numberOpenSeen);
+  Optional<Token> PeekIncludingDelimiterExpression(BracketList<const char*> open,BracketList<const char*> close, int numberOpenSeen);
 };
 
 bool IsOnlyWhitespace(String tok);
@@ -151,12 +150,96 @@ double ParseDouble(String str);
 float ParseFloat(String str);
 bool IsNum(char ch);
 
-typedef Expression* (*ParsingFunction)(Tokenizer* tok,Arena* out);
-Expression* ParseOperationType(Tokenizer* tok,std::initializer_list<std::initializer_list<const char*>> operators,ParsingFunction finalFunction,Arena* out);
+TokenizerTemplate* CreateTokenizerTemplate(Arena* out,const char* singleChars,BracketList<const char*> specialChars);
 
-TokenizerTemplate* CreateTokenizerTemplate(Arena* out,const char* singleChars,std::vector<const char*> specialChars);
+/* Generic expression parser. The ExpressionType struct needs to have the following members with the following types:
+     Array<ExpressionType> expressions;
+     const char* op;
+     enum {OPERATION} type;
+     Token text;
+*/
 
-#endif // INCLUDED_PARSER
+template<typename Exp>
+using ParsingFunction = Exp* (*)(Tokenizer* tok,Arena* out);
 
+struct OperationList{
+  const char** op;
+  int nOperations;
+  OperationList* next;
+};
 
+template<typename ExpressionType>
+ExpressionType* ParseOperationType_(Tokenizer* tok,OperationList* operators,ParsingFunction<ExpressionType> finalFunction,Arena* out){
+  auto start = tok->Mark();
+
+  if(operators == nullptr){
+    ExpressionType* expr = finalFunction(tok,out);
+
+    expr->text = tok->Point(start);
+    return expr;
+  }
+
+  OperationList* nextOperators = operators->next;
+  ExpressionType* current = ParseOperationType_(tok,nextOperators,finalFunction,out);
+
+  while(1){
+    Token peek = tok->PeekToken();
+
+    bool foundOne = false;
+    for(int i = 0; i < operators->nOperations; i++){
+      const char* elem = operators->op[i];
+
+      if(CompareString(peek,elem)){
+        tok->AdvancePeek(peek);
+        ExpressionType* expr = PushStruct<ExpressionType>(out);
+        *expr = {};
+        expr->expressions = PushArray<ExpressionType*>(out,2);
+
+        expr->type = ExpressionType::OPERATION;
+        expr->op = elem;
+        expr->expressions[0] = current;
+        expr->expressions[1] = ParseOperationType_(tok,nextOperators,finalFunction,out);
+
+        current = expr;
+        foundOne = true;
+      }
+    }
+
+    if(!foundOne){
+      break;
+    }
+  }
+
+  current->text = tok->Point(start);
+  return current;
+}
+
+template<typename ExpressionType>
+ExpressionType* ParseOperationType(Tokenizer* tok,BracketList<BracketList<const char*>> operators,ParsingFunction<ExpressionType> finalFunction,Arena* out){
+  auto mark = tok->Mark();
+
+  OperationList head = {};
+  OperationList* ptr = nullptr;
+
+  for(BracketList<const char*> outerList : operators){
+    if(ptr){
+      ptr->next = PushStruct<OperationList>(out);
+      ptr = ptr->next;
+      *ptr = {};
+    } else {
+      ptr = &head;
+    }
+
+    ptr->op = PushArray<const char*>(out,outerList.size()).data;
+
+    for(const char* str : outerList){
+      ptr->op[ptr->nOperations++] = str;
+    }
+  }
+
+  ExpressionType* expr = ParseOperationType_<ExpressionType>(tok,&head,finalFunction,out);
+  expr->text = tok->Point(mark);
+
+  return expr;
+}
 

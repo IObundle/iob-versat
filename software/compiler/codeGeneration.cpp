@@ -1,88 +1,14 @@
+#include "codeGeneration.hpp"
+
+#include "memory.hpp"
+#include "utils.hpp"
+#include "utilsCore.hpp"
 #include "versat.hpp"
 #include "templateData.hpp"
 #include "templateEngine.hpp"
 
-static Hashmap<Type*,Array<bool>>* fieldsPerTypeSeen = nullptr;
-static Arena testInst = {};
-static Arena* testArena = &testInst;
-
-static void CheckUnusedFieldsOrTypes(CompiledTemplate* tpl,Arena* temp,Arena* temp2){
-  if(fieldsPerTypeSeen == nullptr){
-    testInst = InitArena(Megabyte(1));
-    fieldsPerTypeSeen = PushHashmap<Type*,Array<bool>>(testArena,99);
-  }
-  
-  BLOCK_REGION(temp);
-  BLOCK_REGION(temp2);
-  Array<TemplateRecord> records = RecordTypesAndFieldsUsed(tpl,temp,temp2);
-
-  for(TemplateRecord& r : records){
-    if(r.type == TemplateRecordType_FIELD){
-      Type* structType = r.structType;
-      GetOrAllocateResult res = fieldsPerTypeSeen->GetOrAllocate(structType);
-
-      Array<bool>* arr = res.data;
-      if(!res.alreadyExisted){
-        *arr = PushArray<bool>(testArena,structType->members.size);
-        Memset(*arr,false);
-      }
-
-      for(int i = 0; i < structType->members.size; i++){
-        Member m = structType->members[i];
-        if(CompareString(m.name,r.fieldName)){
-          (*arr)[i] = true;
-          break;
-        }
-      }
-    }
-  }
-
-  for(Pair<Type*,Array<bool>> p : fieldsPerTypeSeen){
-    Type* structType = p.first;
-    Array<bool>& arr = p.second;
-
-    printf("%.*s\n",UNPACK_SS(structType->name));
-    for(int i = 0; i < arr.size; i++){
-      Member m = structType->members[i];
-      if(arr[i]){
-        printf("  Used: %.*s\n",UNPACK_SS(m.name));
-      } else {
-        printf("  Not:  %.*s\n",UNPACK_SS(m.name));
-      }        
-    }
-  }
-}
-
-static void CheckIfTemplateUsesAllValues(CompiledTemplate* tpl,Arena* temp,Arena* temp2){
-  BLOCK_REGION(temp);
-  BLOCK_REGION(temp2);
-  Array<TemplateRecord> records = RecordTypesAndFieldsUsed(tpl,temp,temp2);
-
-  Hashmap<String,Value>* valuesUsed = GetAllTemplateValues();
-  Hashmap<String,bool>* seen = PushHashmap<String,bool>(temp2,valuesUsed->nodesUsed);
-
-  for(Pair<String,Value> p : valuesUsed){
-    seen->Insert(p.first,false);
-  }
-  
-  for(TemplateRecord r : records){
-    if(r.type == TemplateRecordType_IDENTIFER){
-      seen->Insert(r.identifierName,true);
-    }
-  }
-
-  for(Pair<String,bool> p : seen){
-    if(p.second){
-      printf("Seen: %.*s\n",UNPACK_SS(p.first));
-    }
-    if(!p.second){
-      printf("Not : %.*s\n",UNPACK_SS(p.first));
-    }
-  }
-}
-
 // TODO: Can reuse SortTypes functions by receiving the Array of Arrays as an argument. Useful for memory and probably state and so on.
-static Array<FUDeclaration*> SortTypesByConfigDependency(Array<FUDeclaration*> types,Arena* out,Arena* temp){
+Array<FUDeclaration*> SortTypesByConfigDependency(Array<FUDeclaration*> types,Arena* out,Arena* temp){
   BLOCK_REGION(temp);
 
   int size = types.size;
@@ -140,7 +66,7 @@ static Array<FUDeclaration*> SortTypesByConfigDependency(Array<FUDeclaration*> t
   return result;
 }
 
-static Array<FUDeclaration*> SortTypesByMemDependency(Array<FUDeclaration*> types,Arena* out,Arena* temp){
+Array<FUDeclaration*> SortTypesByMemDependency(Array<FUDeclaration*> types,Arena* out,Arena* temp){
   BLOCK_REGION(temp);
 
   int size = types.size;
@@ -198,7 +124,7 @@ static Array<FUDeclaration*> SortTypesByMemDependency(Array<FUDeclaration*> type
   return result;
 }
 
-static Array<TypeStructInfoElement> GenerateStructFromType(FUDeclaration* decl,Arena* out,Arena* temp){
+Array<TypeStructInfoElement> GenerateStructFromType(FUDeclaration* decl,Arena* out,Arena* temp){
   if(decl->type == FUDeclaration::SPECIAL){
     return {};
   }
@@ -458,28 +384,166 @@ void OutputCircuitSource(Versat* versat,FUDeclaration* decl,Accelerator* accel,F
 
       if(decl->memoryMapBits.has_value()) {
         memoryPos = AlignBitBoundary(memoryPos,decl->memoryMapBits.value());
-        inst->memMapped = (int*) memoryPos;
         memoryPos += 1 << decl->memoryMapBits.value();
       }
     }
   }
 
-  Array<InstanceInfo> info = TransformGraphIntoArray(accel,true,temp,temp2); // TODO: Calculating info just for the computedData calculation is a bit wasteful.
+  Array<InstanceInfo> info = CalculateAcceleratorInfo(accel,true,temp,temp2); // TODO: Calculating info just for the computedData calculation is a bit wasteful.
   ComputedData computedData = CalculateVersatComputedData(info,val,temp);
-
+  
   TemplateSetCustom("inputDecl",MakeValue(BasicDeclaration::input));
   TemplateSetCustom("outputDecl",MakeValue(BasicDeclaration::output));
   TemplateSetCustom("arch",MakeValue(&versat->opts));
   TemplateSetCustom("accel",MakeValue(decl));
   TemplateSetCustom("versatValues",MakeValue(&val));
   TemplateSetCustom("versatData",MakeValue(&computedData.data));
-  TemplateSetCustom("external",MakeValue(&computedData.external));
   TemplateSetCustom("instances",MakeValue(&nodes));
   TemplateSetCustom("ordered",MakeValue(&ordered));
   TemplateSetNumber("unitsMapped",val.unitsMapped);
   TemplateSetNumber("memoryAddressBits",val.memoryAddressBits);
 
   ProcessTemplate(file,BasicTemplates::acceleratorTemplate,temp,temp2);
+}
+
+#if 0
+Array<TypeStructInfoElement> ExtractStructuredStatics(Array<InstanceInfo> info,Arena* out,Arena* temp){
+  BLOCK_REGION(temp);
+
+  Hashmap<StaticId,int>* seenStatic = PushHashmap<StaticId,int>(temp,999);
+
+  int maxConfig = 0;
+  for(InstanceInfo& in : info){
+#if 0
+    if(in.isComposite){
+      StaticId id = {};
+      id.name = in.name;
+      id.parent = in.parentDeclaration;
+      if(seenStatic->ExistsOrInsert(id)){
+        for(int i = 0; i < in.configSize; i++){
+          int config = i + in.configPos.value();
+
+          maxConfig = std::max(maxConfig,config);
+          GetOrAllocateResult<ArenaList<String>*> res = map->GetOrAllocate(config);
+
+          if(!res.alreadyExisted){
+            *res.data = PushArenaList<String>(temp);
+          }
+
+          ArenaList<String>* list = *res.data;
+          String name = PushString(out,"TOP_%.*s_%.*s_%.*s",UNPACK_SS(in.parentDeclaration->name),UNPACK_SS(in.name),UNPACK_SS(in.decl->configInfo.configs[i].name));
+
+          *PushListElement(list) = name;
+        }
+        continue;
+      }
+    }
+#endif
+
+    if(in.isComposite || !in.configPos.has_value() || in.isConfigStatic){
+      continue;
+    }
+    
+    for(int i = 0; i < in.configSize; i++){
+      int config = i + in.configPos.value();
+
+      maxConfig = std::max(maxConfig,config);
+      GetOrAllocateResult<ArenaList<String>*> res = map->GetOrAllocate(config);
+
+      if(!res.alreadyExisted){
+        *res.data = PushArenaList<String>(temp);
+      }
+    
+      ArenaList<String>* list = *res.data;
+      String name = PushString(out,"%.*s_%.*s",UNPACK_SS(in.fullName),UNPACK_SS(in.decl->configInfo.configs[i].name));
+
+      *PushListElement(list) = name;
+    }
+  }
+
+  int configSize = maxConfig + 1;
+  ArenaList<TypeStructInfoElement>* elems = PushArenaList<TypeStructInfoElement>(temp);
+  for(int i = 0; i < configSize; i++){
+    ArenaList<String>** optList = map->Get(i);
+    if(!optList){
+      continue;
+    }
+
+    ArenaList<String>* list = *optList;
+    int size = Size(list);
+
+    Array<SingleTypeStructElement> arr = PushArray<SingleTypeStructElement>(out,size);
+    int index = 0;
+    for(ListedStruct<String>* ptr = list->head; ptr; ptr = ptr->next){
+      String elem = ptr->elem;
+      arr[index].type = STRING("iptr");
+      arr[index].name = elem;
+      
+      index += 1;
+    }
+
+    PushListElement(elems)->typeAndNames = arr;
+  }
+  
+  return PushArrayFromList(out,elems);
+}
+#endif
+
+// TODO: Move to a better place
+Array<TypeStructInfoElement> ExtractStructuredConfigs(Array<InstanceInfo> info,Arena* out,Arena* temp){
+  BLOCK_REGION(temp);
+
+  Hashmap<int,ArenaList<String>*>* map = PushHashmap<int,ArenaList<String>*>(temp,9999);
+
+  int maxConfig = 0;
+  for(InstanceInfo& in : info){
+
+    if(in.isComposite || !in.configPos.has_value() || in.isConfigStatic){
+      continue;
+    }
+    
+    for(int i = 0; i < in.configSize; i++){
+      int config = i + in.configPos.value();
+
+      maxConfig = std::max(maxConfig,config);
+      GetOrAllocateResult<ArenaList<String>*> res = map->GetOrAllocate(config);
+
+      if(!res.alreadyExisted){
+        *res.data = PushArenaList<String>(temp);
+      }
+    
+      ArenaList<String>* list = *res.data;
+      String name = PushString(out,"%.*s_%.*s",UNPACK_SS(in.fullName),UNPACK_SS(in.decl->configInfo.configs[i].name));
+
+      *PushListElement(list) = name;
+    }
+  }
+
+  int configSize = maxConfig + 1;
+  ArenaList<TypeStructInfoElement>* elems = PushArenaList<TypeStructInfoElement>(temp);
+  for(int i = 0; i < configSize; i++){
+    ArenaList<String>** optList = map->Get(i);
+    if(!optList){
+      continue;
+    }
+
+    ArenaList<String>* list = *optList;
+    int size = Size(list);
+
+    Array<SingleTypeStructElement> arr = PushArray<SingleTypeStructElement>(out,size);
+    int index = 0;
+    for(ListedStruct<String>* ptr = list->head; ptr; ptr = ptr->next){
+      String elem = ptr->elem;
+      arr[index].type = STRING("iptr");
+      arr[index].name = elem;
+      
+      index += 1;
+    }
+
+    PushListElement(elems)->typeAndNames = arr;
+  }
+  
+  return PushArrayFromList(out,elems);
 }
 
 void OutputIterativeSource(Versat* versat,FUDeclaration* decl,Accelerator* accel,FILE* file,Arena* temp,Arena* temp2){
@@ -490,37 +554,15 @@ void OutputIterativeSource(Versat* versat,FUDeclaration* decl,Accelerator* accel
 
   Assert(versat->debug.outputAccelerator); // Because FILE is created outside, code should not call this function if flag is set
 
-  VersatComputedValues val = ComputeVersatValues(versat,accel,false);
-
-  int size = Size(accel->allocated);
-  Array<InstanceNode*> nodes = ListToArray(accel->allocated,size,temp);
-
-  Array<InstanceNode*> ordered = PushArray<InstanceNode*>(temp,size);
-  int i = 0;
-  FOREACH_LIST_INDEXED(OrderedInstance*,ptr,accel->ordered,i){
-    ordered[i] = ptr->node;
-
-    FUInstance* inst = ptr->node->inst;
+  FOREACH_LIST(InstanceNode*,ptr,accel->allocated){
+    FUInstance* inst = ptr->inst;
     if(inst->declaration->nIOs){
       inst->parameters = STRING("#(.AXI_ADDR_W(AXI_ADDR_W),.AXI_DATA_W(AXI_DATA_W),.LEN_W(LEN_W))"); // TODO: placeholder hack.
     }
   }
-
-  {
-    iptr memoryPos = 0;
-    FOREACH_LIST(InstanceNode*,ptr,accel->allocated){
-      FUInstance* inst = ptr->inst;
-      FUDeclaration* decl = inst->declaration;
-
-      if(decl->memoryMapBits.has_value()) {
-        memoryPos = AlignBitBoundary(memoryPos,decl->memoryMapBits.value());
-        inst->memMapped = (int*) memoryPos;
-        memoryPos += 1 << decl->memoryMapBits.value();
-      }
-    }
-  }
-
-  Array<InstanceInfo> info = TransformGraphIntoArray(accel,true,temp,temp2); // TODO: Calculating info just for the computedData calculation is a bit wasteful.
+   
+  VersatComputedValues val = ComputeVersatValues(versat,accel,false);
+  Array<InstanceInfo> info = CalculateAcceleratorInfo(accel,true,temp,temp2); // TODO: Calculating info just for the computedData calculation is a bit wasteful.
   ComputedData computedData = CalculateVersatComputedData(info,val,temp);
   TemplateSetCustom("staticUnits",MakeValue(decl->staticUnits));
   TemplateSetCustom("accel",MakeValue(decl));
@@ -544,9 +586,10 @@ void OutputVerilatorWrapper(Versat* versat,FUDeclaration* type,Accelerator* acce
 
   ClearTemplateEngine(); // Make sure that we do not reuse data
 
-  Array<InstanceInfo> info = TransformGraphIntoArray(accel,true,temp,temp2);
+  Array<InstanceInfo> info = CalculateAcceleratorInfo(accel,true,temp,temp2);
   Array<Wire> allConfigsHeaderSide = ExtractAllConfigs(info,&versat->permanent,&versat->temp);
 
+#if 1
   // We need to bundle config + static (type->config) only contains config, but not static
   Array<Wire> allConfigsVerilatorSide = PushArray<Wire>(temp,999); // TODO: Correct size
   {
@@ -554,22 +597,37 @@ void OutputVerilatorWrapper(Versat* versat,FUDeclaration* type,Accelerator* acce
     for(Wire& config : type->configInfo.configs){
       allConfigsVerilatorSide[index++] = config;
     }
-    for(Pair<StaticId,StaticData> p : type->staticUnits){
-      for(Wire& config : p.second.configs){
-        allConfigsVerilatorSide[index] = config;
-        allConfigsVerilatorSide[index].name = ReprStaticConfig(p.first,&config,&versat->permanent);
-        index += 1;
-      }
-    }
     allConfigsVerilatorSide.size = index;
   }
+  TemplateSetCustom("allConfigsVerilatorSide",MakeValue(&allConfigsVerilatorSide));
 
+  int index = 0;
+  Array<Wire> allStaticsVerilatorSide = PushArray<Wire>(temp,999); // TODO: Correct size
+  for(Pair<StaticId,StaticData> p : type->staticUnits){
+    for(Wire& config : p.second.configs){
+      allStaticsVerilatorSide[index] = config;
+      allStaticsVerilatorSide[index].name = ReprStaticConfig(p.first,&config,&versat->permanent);
+      index += 1;
+    }
+  }
+  allStaticsVerilatorSide.size = index;
+  TemplateSetCustom("allStaticsVerilatorSide",MakeValue(&allStaticsVerilatorSide));
+  
+  //DEBUG_BREAK();
+#endif
+
+  UnitValues val = CalculateAcceleratorValues(versat,accel);
+  Array<TypeStructInfoElement> structuredConfigs = ExtractStructuredConfigs(info,temp,temp2);
+  //Array<TypeStructInfoElement> structuredStatics = ExtractStructuredStatics(info,temp,temp2);
+
+  TemplateSetNumber("delays",val.delays);
+  TemplateSetCustom("structuredConfigs",MakeValue(&structuredConfigs));
+  //TemplateSetCustom("allStaticsVerilatorSide",MakeValue(&structuredConfigs));
   // Extract states with the expected TOP level name (not module name)
   Array<String> statesHeaderSide = ExtractStates(info,temp);
   
   int totalExternalMemory = ExternalMemoryByteSize(type->externalMemory);
 
-  TemplateSetCustom("allConfigsVerilatorSide",MakeValue(&allConfigsVerilatorSide));
   TemplateSetCustom("configsHeader",MakeValue(&allConfigsHeaderSide));
   TemplateSetCustom("statesHeader",MakeValue(&statesHeaderSide));
   TemplateSetNumber("totalExternalMemory",totalExternalMemory);
@@ -701,7 +759,7 @@ void OutputVersatSource(Versat* versat,Accelerator* accel,const char* hardwarePa
     }
   }
 
-  Array<InstanceInfo> info = TransformGraphIntoArray(accel,true,temp,temp2);
+  Array<InstanceInfo> info = CalculateAcceleratorInfo(accel,true,temp,temp2);
   CheckSanity(info,temp);
 
   ComputedData computedData = CalculateVersatComputedData(info,val,temp);
@@ -765,15 +823,13 @@ void OutputVersatSource(Versat* versat,Accelerator* accel,const char* hardwarePa
     ProcessTemplate(f,BasicTemplates::externalInternalPortmapTemplate,temp,temp2);
     fclose(f);
   }
-
-  Array<InstanceInfo> test = info;
   
   Hashmap<StaticId,StaticData>* staticUnits = PushHashmap<StaticId,StaticData>(temp,val.nStatics);
   int staticIndex = 0; // staticStart; TODO: For now, test with static info beginning at zero
-  for(InstanceInfo& info : test){
+  for(InstanceInfo& info : info){
     FUDeclaration* decl = info.decl;
     if(info.isStatic){
-      FUDeclaration* parentDecl = info.parentDeclaration;
+      FUDeclaration* parentDecl = info.parent;
 
       StaticId id = {};
       id.name = info.name;
@@ -856,17 +912,15 @@ void OutputVersatSource(Versat* versat,Accelerator* accel,const char* hardwarePa
   TemplateSetNumber("nConfigs",val.nConfigs);
   TemplateSetNumber("nStatics",val.nStatics);
 
-  Array<TypeStructInfo> nonMergedStructures = GetConfigStructInfo(accel,temp2,temp); // MARKED
+  Array<TypeStructInfo> nonMergedStructures = GetConfigStructInfo(accel,temp2,temp);
   TemplateSetCustom("nonMergedStructures",MakeValue(&nonMergedStructures));
 
   Array<TypeStructInfo> addressStructures = GetMemMappedStructInfo(accel,temp2,temp);
   TemplateSetCustom("addressStructures",MakeValue(&addressStructures));
   
   {
-    Array<InstanceInfo> onlySome = ExtractFromInstanceInfo(test,temp);
-    
     Byte* mark = MarkArena(temp);
-    for(InstanceInfo& t : test){
+    for(InstanceInfo& t : info){
       if(!t.isComposite){
         for(int d : t.delay){
           *PushStruct<int>(temp) = d;
@@ -876,13 +930,32 @@ void OutputVersatSource(Versat* versat,Accelerator* accel,const char* hardwarePa
     Array<int> delays = PointArray<int>(temp,mark);
     TemplateSetCustom("delay",MakeValue(&delays));
 
-    Array<Wire> orderedConfigs = ExtractAllConfigs(test,temp,temp2);
-    Array<String> allStates = ExtractStates(test,temp2);
-    Array<Pair<String,int>> allMem = ExtractMem(test,temp2);
+#if 1
+  int index = 0;
+  Array<Wire> allStaticsVerilatorSide = PushArray<Wire>(temp,999); // TODO: Correct size
+  for(Pair<StaticId,StaticData> p : staticUnits){
+    for(Wire& config : p.second.configs){
+      allStaticsVerilatorSide[index] = config;
+      allStaticsVerilatorSide[index].name = ReprStaticConfig(p.first,&config,&versat->permanent);
+      index += 1;
+    }
+  }
+  allStaticsVerilatorSide.size = index;
+  TemplateSetCustom("allStatics",MakeValue(&allStaticsVerilatorSide));
+  //DEBUG_BREAK();
+#endif
     
+    Array<TypeStructInfoElement> structuredConfigs = ExtractStructuredConfigs(info,temp,temp2);
+    
+    Array<Wire> orderedConfigs = ExtractAllConfigs(info,temp,temp2); // Kinda does the same as structuredConfigs, but for now allow this repetition. Need to do a general cleanup of the code to simplify it a little bit.
+    Array<String> allStates = ExtractStates(info,temp2);
+    Array<Pair<String,int>> allMem = ExtractMem(info,temp2);
+    
+    TemplateSetNumber("delays",val.nDelays);
+    TemplateSetCustom("structuredConfigs",MakeValue(&structuredConfigs));
     TemplateSetCustom("namedStates",MakeValue(&allStates));
     TemplateSetCustom("namedMem",MakeValue(&allMem));
-    TemplateSetCustom("orderedConfigs",MakeValue(&orderedConfigs));
+    TemplateSetCustom("orderedConfigs",MakeValue(&orderedConfigs)); // MARK: NOT BEING USED. Eventually figure out what to remove or what to keep
 
     TemplateSetString("accelName",accel->name);
     TemplateSetBool("doingMerged",false);

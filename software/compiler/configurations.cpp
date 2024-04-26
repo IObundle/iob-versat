@@ -146,8 +146,8 @@ Array<Wire> ExtractAllConfigs(Array<InstanceInfo> info,Arena* out,Arena* temp){
       continue;
     }
       
-    if(t.parentDeclaration && t.isStatic){
-      FUDeclaration* parent = t.parentDeclaration;
+    if(t.parent && t.isStatic){
+      FUDeclaration* parent = t.parent;
       String parentName = parent->name;
 
       StaticId id = {};
@@ -290,7 +290,7 @@ static InstanceInfo GetInstanceInfo(InstanceNode* node,FUDeclaration* parentDecl
   info.isShared = inst->sharedEnable;
   info.level = offsets.level;
   info.isComposite = IsTypeHierarchical(topDecl);
-  info.parentDeclaration = parentDeclaration;
+  info.parent = parentDeclaration;
   info.baseDelay = offsets.delay;
   info.type = NodeTypeToString(node);
   
@@ -306,8 +306,10 @@ static InstanceInfo GetInstanceInfo(InstanceNode* node,FUDeclaration* parentDecl
   info.delaySize = topDecl->configInfo.delayOffsets.max;
   
   bool containsConfigs = info.configSize;
+  bool configIsStatic = false;
   if(containsConfigs){
     if(inst->isStatic){
+      configIsStatic = true;
       StaticId id = {offsets.parent,inst->name};
       if(offsets.staticInfo->Exists(id)){
         info.configPos = offsets.staticInfo->GetOrFail(id);
@@ -319,11 +321,16 @@ static InstanceInfo GetInstanceInfo(InstanceNode* node,FUDeclaration* parentDecl
 
         *offsets.staticConfig += info.configSize;
       }
+    } else if(offsets.configOffset >= 0x40000000){
+      configIsStatic = true;
+      info.configPos = offsets.configOffset;
     } else {
       info.configPos = offsets.configOffset;
-    }
+    } 
   }
     
+  info.isConfigStatic = configIsStatic;
+  
   if(topDecl->configInfo.states.size){
     info.statePos = offsets.stateOffset;
   }
@@ -369,6 +376,27 @@ AcceleratorInfo TransformGraphIntoArrayRecurse(InstanceNode* node,FUDeclaration*
   // Composite instance
   int delayIndex = 0;
   int index = 0;
+
+  bool changedConfigFromStatic = false;
+  int savedConfig = offsets.configOffset;
+  int subOffsetsConfig = offsets.configOffset;
+  if(inst->isStatic){
+    changedConfigFromStatic = true;
+    StaticId id = {offsets.parent,inst->name};
+    if(offsets.staticInfo->Exists(id)){
+      subOffsetsConfig = offsets.staticInfo->GetOrFail(id);
+    } else if(offsets.configOffset <= 0x40000000){
+      int config = *offsets.staticConfig;
+      *offsets.staticConfig += inst->declaration->configInfo.configOffsets.offsets[index];
+
+      offsets.staticInfo->Insert(id,config);
+
+      subOffsetsConfig = config;
+    } else {
+      changedConfigFromStatic = false; // Already inside a static, act as if it was in a non static context
+    }
+  }
+  
   FOREACH_LIST_INDEXED(InstanceNode*,subNode,inst->declaration->fixedDelayCircuit->allocated,index){
     FUInstance* subInst = subNode->inst;
     bool containsConfig = subInst->declaration->configInfo.configs.size;
@@ -377,31 +405,10 @@ AcceleratorInfo TransformGraphIntoArrayRecurse(InstanceNode* node,FUDeclaration*
     subOffsets.level += 1;
     subOffsets.topName = top.fullName;
     subOffsets.parent = topDecl;
+    subOffsets.configOffset = subOffsetsConfig;
     
-    bool changedConfigFromStatic = false;
-    int savedConfig = subOffsets.configOffset;
     // Bunch of static logic
-    if(containsConfig){
-      if(inst->isStatic){
-        changedConfigFromStatic = true;
-        StaticId id = {offsets.parent,inst->name};
-        if(offsets.staticInfo->Exists(id)){
-          subOffsets.configOffset = offsets.staticInfo->GetOrFail(id);
-        } else if(offsets.configOffset <= 0x40000000){
-          int config = *offsets.staticConfig;
-
-          offsets.staticInfo->Insert(id,config);
-
-          subOffsets.configOffset = config;
-          *offsets.staticConfig += inst->declaration->configInfo.configOffsets.offsets[index];
-        } else {
-          changedConfigFromStatic = false; // Already inside a static, act as if it was in a non static context
-          subOffsets.configOffset += inst->declaration->configInfo.configOffsets.offsets[index];
-        }
-      } else {
-        subOffsets.configOffset += inst->declaration->configInfo.configOffsets.offsets[index];
-      }
-    }
+    subOffsets.configOffset += inst->declaration->configInfo.configOffsets.offsets[index];
     subOffsets.stateOffset += inst->declaration->configInfo.stateOffsets.offsets[index];
     subOffsets.delayOffset += inst->declaration->configInfo.delayOffsets.offsets[index];
     if(subInst->declaration->configInfo.delayOffsets.max > 0){
@@ -442,7 +449,7 @@ AcceleratorInfo TransformGraphIntoArrayRecurse(InstanceNode* node,FUDeclaration*
 //       We can then fill everything by computing configInfo and stuff at the top and accessing fudeclaration configInfos as we go down.
 
 // TODO: Move this function to a better place
-Array<InstanceInfo> TransformGraphIntoArray(Accelerator* accel,bool recursive,Arena* out,Arena* temp){
+Array<InstanceInfo> CalculateAcceleratorInfo(Accelerator* accel,bool recursive,Arena* out,Arena* temp){
   // TODO: Have this function return everything that needs to be arraified  
   //       Printing a GraphArray struct should tell me everything I need to know about the accelerator
 
@@ -480,7 +487,7 @@ Array<InstanceInfo> TransformGraphIntoArray(Accelerator* accel,bool recursive,Ar
 
       subOffsets.memOffset += top.memMappedSize.value_or(0);
       subOffsets.memOffset = AlignBitBoundary(subOffsets.memOffset,log2i(top.memMappedSize.value_or(1)));
-
+      
       *PushListElement(infoList) = top;
     }
   }

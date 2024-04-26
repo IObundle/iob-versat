@@ -54,11 +54,12 @@ enum MemType{
 };
 
 struct InstanceInfo{
-  FUDeclaration* parentDeclaration;
+  FUDeclaration* parent;
   FUDeclaration* decl;
   String name;
   String fullName;
   Optional<int> configPos;
+  int isConfigStatic;
   int configSize;
   Optional<int> statePos;
   int stateSize;
@@ -86,7 +87,7 @@ struct AcceleratorInfo{
   int memSize;
 };
 
-Array<InstanceInfo> TransformGraphIntoArray(Accelerator* accel,bool recursive,Arena* out,Arena* temp);
+Array<InstanceInfo> CalculateAcceleratorInfo(Accelerator* accel,bool recursive,Arena* out,Arena* temp);
 
 CalculatedOffsets CalculateConfigOffsetsIgnoringStatics(Accelerator* accel,Arena* out);
 CalculatedOffsets CalculateConfigurationOffset(Accelerator* accel,MemType type,Arena* out);

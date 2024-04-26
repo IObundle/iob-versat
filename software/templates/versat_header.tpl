@@ -15,38 +15,65 @@ typedef intptr_t iptr;
 // Config
 
 #{for type nonMergedStructures}
+#define VERSAT_DEFINED_@{type.name}
 typedef struct {
 #{for entry type.entries}
 #{if entry.typeAndNames.size > 1}
-union{
+  union{
 #{for typeAndName entry.typeAndNames}
-@{typeAndName.type} @{typeAndName.name};
+    @{typeAndName.type} @{typeAndName.name};
 #{end}
-};
+  };
 #{else}
-@{entry.typeAndNames[0].type} @{entry.typeAndNames[0].name};
+  @{entry.typeAndNames[0].type} @{entry.typeAndNames[0].name};
 #{end}
 #{end}
 } @{type.name}Config;
-#define VERSAT_DEFINED_@{type.name}
+
 #{end}
 
 // Address
 
 #{for type addressStructures}
+#define VERSAT_DEFINED_@{type.name}Addr
 typedef struct {
 #{for entry type.entries}
   @{entry.typeAndNames[0].type} @{entry.typeAndNames[0].name};
 #{end}
 } @{type.name}Addr;
-#define VERSAT_DEFINED_@{type.name}Addr
+
 #{end}
 
 typedef struct{
-#{for wire orderedConfigs}
-  iptr @{wire.name};
+#{for elem structuredConfigs}
+#{if elem.typeAndNames.size > 1}
+  union{
+#{for typeAndName elem.typeAndNames}
+    @{typeAndName.type} @{typeAndName.name};
+#{end}
+  };
+#{else}
+  @{elem.typeAndNames[0].type} @{elem.typeAndNames[0].name};
+#{end}
 #{end}
 } AcceleratorConfig;
+
+typedef struct {
+#{for elem allStatics}
+  iptr @{elem.name};
+#{end}
+} AcceleratorStatic;
+
+typedef struct {
+  union{
+    struct{
+#{for i delays}
+      iptr TOP_Delay@{i};
+#{end}
+    };
+    iptr delays[@{delays}]; 
+  };
+} AcceleratorDelay;
 
 typedef struct{
 #{for name namedStates}
@@ -69,12 +96,13 @@ extern iptr versat_base;
 
 // Base address for each memory mapped unit
 #{for pair namedMem}
-#define @{pair.first} (versat_base + memMappedStart + @{pair.second |> Hex})
+#define @{pair.first} ((void*) (versat_base + memMappedStart + @{pair.second |> Hex}))
 #{end}
 
-#define ACCELERATOR_TOP_ADDR_INIT {#{join "," pair namedMem} (void*) @{pair.first} #{end}}
+#define ACCELERATOR_TOP_ADDR_INIT {#{join "," pair namedMem} @{pair.first} #{end}}
 
 static unsigned int delayBuffer[] = {#{join "," d delay} @{d |> Hex} #{end}};
+static AcceleratorDelay accelDelay = {#{join "," d delay} @{d |> Hex} #{end}};
 
 #ifdef __cplusplus
 extern "C" {
@@ -91,9 +119,9 @@ void RunAccelerator(int times);
 void StartAccelerator();
 void EndAccelerator();
 void VersatMemoryCopy(void* dest,void* data,int size);
-void VersatUnitWrite(int baseaddr,int index,int val);
-int VersatUnitRead(int baseaddr,int index);
-float VersatUnitReadFloat(int base,int index);
+void VersatUnitWrite(void* baseaddr,int index,int val);
+int VersatUnitRead(void* baseaddr,int index);
+float VersatUnitReadFloat(void* baseaddr,int index);
 void SignalLoop();
 
 // PC-Emul side functions that allow to enable or disable certain portions of the emulation
@@ -117,6 +145,7 @@ static const int stateStart = @{versatState |> Hex} * sizeof(int);
 
 extern volatile AcceleratorConfig* accelConfig;
 extern volatile AcceleratorState* accelState;
+extern volatile AcceleratorStatic* accelStatics;
 
 #{if isSimple}
 // Simple input and output connection for simple accelerators
@@ -126,8 +155,22 @@ extern volatile AcceleratorState* accelState;
 #define SimpleOutputStart ((int*) accelState)
 #{end}
 
-#{for wire orderedConfigs}
-#define ACCEL_@{wire.name} accelConfig->@{wire.name}
+#{for elem structuredConfigs}
+#{if elem.typeAndNames.size > 1}
+#{for typeAndName elem.typeAndNames}
+#define ACCEL_@{typeAndName.name} accelConfig->@{typeAndName.name}
+#{end}
+#{else}
+#define ACCEL_@{elem.typeAndNames[0].name} accelConfig->@{elem.typeAndNames[0].name}
+#{end}
+#{end}
+
+#{for elem allStatics}
+#define ACCEL_@{elem.name} accelStatics->@{elem.name}
+#{end}
+
+#{for i delays}
+#define ACCEL_TOP_Delay@{i} accelConfig->TOP_Delay@{i}
 #{end}
 
 #{for name namedStates}

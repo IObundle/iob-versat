@@ -204,8 +204,9 @@ InstanceNode* CreateFlatFUInstance(Accelerator* accel,FUDeclaration* type,String
 
 ComputedData CalculateVersatComputedData(Array<InstanceInfo> info,VersatComputedValues val,Arena* out);
 
-Array<FUDeclaration*> ConfigSubTypes(Accelerator* accel,Arena* out,Arena* sub);
-Array<FUDeclaration*> MemSubTypes(Accelerator* accel,Arena* out,Arena* sub);
+Array<FUDeclaration*> AllNonSpecialSubTypes(Accelerator* accel,Arena* out,Arena* temp);
+Array<FUDeclaration*> ConfigSubTypes(Accelerator* accel,Arena* out,Arena* temp);
+Array<FUDeclaration*> MemSubTypes(Accelerator* accel,Arena* out,Arena* temp);
 
 void ReorganizeAccelerator(Accelerator* graph,Arena* temp);
 void ReorganizeIterative(Accelerator* accel,Arena* temp);

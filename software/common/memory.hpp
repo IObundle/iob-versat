@@ -313,6 +313,10 @@ public:
   BitIterator end();
 };
 
+/*
+  Hashmap
+*/
+
 template<typename Key,typename Data>
 class HashmapIterator{
 public:
@@ -322,7 +326,7 @@ public:
 public:
   bool operator!=(HashmapIterator& iter);
   void operator++();
-  Pair<Key,Data>& operator*();
+  Pair<Key,Data> operator*();
 };
 
 template<typename Data>
@@ -348,10 +352,11 @@ struct Hashmap{
   
   Data* Insert(Key key,Data data);
   Data* InsertIfNotExist(Key key,Data data);
-
+  bool  CheckOrInsert(Key key,Data data); // Returns true if key already exists, otherwise inserts and returns false.
+  
   //void Remove(Key key); // TODO: For current implementation, it is difficult to remove keys and keep the same properties (being able to iterate by order of insertion). Probably need to change impl to keep a linked list 
   
-  Data* Get(Key key); // TODO: Should return an optional
+  Data* Get(Key key);
   Data* GetOrInsert(Key key,Data data);
   Data& GetOrFail(Key key);
   GetOrAllocateResult<Data> GetOrAllocate(Key key); // More efficient way for the Get, check if null, Insert pattern
@@ -379,6 +384,10 @@ Array<Key> PushHashmapKeyArray(Arena* out,Hashmap<Key,Data>* hashmap);
 template<typename Key,typename Data>
 Array<Data> PushHashmapDataArray(Arena* out,Hashmap<Key,Data>* hashmap);
 
+/*
+  Set
+*/
+
 // Set implementation for arenas
 template<typename Data>
 struct Set{
@@ -386,6 +395,8 @@ struct Set{
   Hashmap<Data,int>* map;
 
   void Insert(Data data);
+
+  bool ExistsOrInsert(Data data);
   bool Exists(Data data);
 };
 
@@ -410,37 +421,86 @@ template<typename Data>
 SetIterator<Data> end(Set<Data>* set);
 
 /*
+  TrieMap
+*/
+
 template<typename Key,typename Data>
-struct TrieHashmapNode{
-  TrieHashmapNode* childs[4];
-  Key key;
-  Data data;
+struct TrieMapNode{
+  TrieMapNode<Key,Data>* childs[4];
+  Pair<Key,Data> pair;
+  TrieMapNode<Key,Data>* next;
 };
 
 template<typename Key,typename Data>
-struct TrieHashmap{
-  TrieHashmapNode<Key,Data>* top;
+struct TrieMapIterator{
+  TrieMapNode<Key,Data>* ptr;
+
+  bool operator!=(TrieMapIterator& iter);
+  void operator++();
+  Pair<Key,Data> operator*();
+};
+
+template<typename Key,typename Data>
+struct TrieMap{
+  TrieMapNode<Key,Data>* childs[4];
+
   Arena* arena;
+  TrieMapNode<Key,Data>* head;
+  TrieMapNode<Key,Data>* tail;
   int inserted;
   
   Data* Insert(Key key,Data data);
   Data* InsertIfNotExist(Key key,Data data);
-
-  //void Remove(Key key); // TODO: For current implementation, it is difficult to remove keys and keep the same properties (being able to iterate by order of insertion). Probably need to change impl to keep a linked list 
   
-  Data* Get(Key key); // TODO: Should return an optional
+  Data* Get(Key key);
   Data* GetOrInsert(Key key,Data data);
   Data& GetOrFail(Key key);
   GetOrAllocateResult<Data> GetOrAllocate(Key key); // More efficient way for the Get, check if null, Insert pattern
-
-  void Clear();
 
   bool Exists(Key key);
 };
 
 template<typename Key,typename Data>
-TrieHashmap<Key,Data>* PushTrieHashmap(Arena* arena);
-*/
+TrieMap<Key,Data>* PushTrieMap(Arena* arena);
+
+template<typename Key,typename Data>
+TrieMapIterator<Key,Data> begin(TrieMap<Key,Data>* map);
+
+template<typename Key,typename Data>
+TrieMapIterator<Key,Data> end(TrieMap<Key,Data>* map);
+
+/*
+  TrieSet
+ */
+
+template<typename Data>
+struct TrieSetIterator{
+  TrieMapIterator<Data,int> innerIter;
+
+public:
+  bool operator!=(TrieSetIterator& iter);
+  void operator++();
+  Data& operator*();
+};
+  
+template<typename Data>
+struct TrieSet{
+  TrieMap<Data,int>* map;
+
+  void Insert(Data data);
+
+  bool ExistsOrInsert(Data data);
+  bool Exists(Data data);
+};
+
+template<typename Data>
+TrieSet<Data>* PushTrieSet(Arena* arena);
+
+template<typename Data>
+TrieSetIterator<Data> begin(TrieSet<Data>* set);
+
+template<typename Data>
+TrieSetIterator<Data> end(TrieSet<Data>* set);
 
 /*
   Pool
@@ -703,7 +763,7 @@ void HashmapIterator<Key,Data>::operator++(){
 }
 
 template<typename Key,typename Data>
-Pair<Key,Data>& HashmapIterator<Key,Data>::operator*(){
+Pair<Key,Data> HashmapIterator<Key,Data>::operator*(){
   return pairs[index];
 }
 
@@ -823,6 +883,7 @@ Data* Hashmap<Key,Data>::Insert(Key key,Data data){
 
 template<typename Key,typename Data>
 Data* Hashmap<Key,Data>::InsertIfNotExist(Key key,Data data){
+  // TODO: Could be optimized
   Data* ptr = Get(key);
 
   if(ptr == nullptr){
@@ -830,6 +891,19 @@ Data* Hashmap<Key,Data>::InsertIfNotExist(Key key,Data data){
   }
 
   return nullptr;
+}
+
+template<typename Key,typename Data>
+bool Hashmap<Key,Data>::CheckOrInsert(Key key,Data data){
+  // TODO: Could be optimized
+  Data* ptr = Get(key);
+
+  if(ptr == nullptr){
+    Insert(key,data);
+    return false;
+  }
+
+  return true;
 }
 
 #if 0
@@ -973,29 +1047,231 @@ HashmapIterator<Key,Data> end(Hashmap<Key,Data>* hashmap){
   return iter;
 }
 
- /*
-template<typename Key,typename Data>
-TrieHashmap<Key,Data>* PushTrieHashmap(Arena* arena){
-  TrieHashmap<Key,Data>* map = PushStruct<TrieHashmap<Key,Data>>(arena);
-  *map = {};
+/*
+  TrieMap
+*/
 
-  map->top = PushStruct<TrieHashmapNode<Key,Data>>(arena);
-  *map->top = {};
-  
+template<typename Key,typename Data>
+TrieMap<Key,Data>* PushTrieMap(Arena* arena){
+  TrieMap<Key,Data>* map = PushStruct<TrieMap<Key,Data>>(arena);
+  *map = {};
   map->arena = arena;
 
   return map;
 }
 
 template<typename Key,typename Data>
-Data* TrieHashmap<Key,Data>::Insert(Key key,Data data){
+Data* TrieMap<Key,Data>::Insert(Key key,Data data){
   int index = std::hash<Key>()(key);
+  int select = index & 3;
+  if(this->childs[select] == nullptr || this->childs[select]->pair.key == key){
+    TrieMapNode<Key,Data>* node = PushStruct<TrieMapNode<Key,Data>>(arena);
+    *node = {};
+    node->pair.first = key;
+    node->pair.second = data;
+    this->childs[select] = node;
+    
+    if(!this->head){
+      this->head = node;
+      this->tail = node;
+    } else {
+      this->tail->next = node;
+      this->tail = node;
+    }
+    return &node->pair.second;
+  }
+
+  index >>= 2;
+  
+  TrieMapNode<Key,Data>* current = (TrieMapNode<Key,Data>*) this->childs[select];
+  for(; 1; index >>= 2){
+    int select = index & 3;
+    if(current->childs[select] == nullptr || current->childs[select]->pair.first == key){
+      TrieMapNode<Key,Data>* node = PushStruct<TrieMapNode<Key,Data>>(arena);
+      *node = {};
+      node->pair.first = key;
+      node->pair.second = data;
+      this->tail->next = node;
+      this->tail = node;
+
+      current->childs[select] = node;
+      return &node->pair.second;
+    } else {
+      current = current->childs[select];
+    }
+  }
+
+  NOT_POSSIBLE("Should not reach here");
+  return nullptr;
 }
+
+template<typename Key,typename Data>
+Data* TrieMap<Key,Data>::InsertIfNotExist(Key key,Data data){
+  int index = std::hash<Key>()(key);
+  int select = index & 3;
+  if(this->childs[select] == nullptr){
+    TrieMapNode<Key,Data>* node = PushStruct<TrieMapNode<Key,Data>>(arena);
+    *node = {};
+    node->pair.first = key;
+    node->pair.second = data;
+    this->childs[select] = node;
+    
+    if(!this->head){
+      this->head = node;
+      this->tail = node;
+    } else {
+      this->tail->next = node;
+      this->tail = node;
+    }
+    return &node->pair.second;
+  } else if(this->childs[select]->pair.key == key){
+    return &this->childs[select]->pair.second;
+  }
+
+  index >>= 2;
+  
+  TrieMapNode<Key,Data>* current = (TrieMapNode<Key,Data>*) this->childs[select];
+  for(; 1; index >>= 2){
+    int select = index & 3;
+    if(current->childs[select] == nullptr){
+      TrieMapNode<Key,Data>* node = PushStruct<TrieMapNode<Key,Data>>(arena);
+      *node = {};
+      node->pair.first = key;
+      node->pair.second = data;
+      this->tail->next = node;
+      this->tail = node;
+
+      current->childs[select] = node;
+      return &node->pair.second;
+    } else if(current->childs[select]->pair.first == key) {
+      return &current->childs[select]->pair.second;
+    } else {
+      current = current->childs[select];
+    }
+  }
+
+  NOT_POSSIBLE("Should not reach here");
+  return nullptr;
+}
+  
+template<typename Key,typename Data>
+Data* TrieMap<Key,Data>::Get(Key key){
+  int index = std::hash<Key>()(key);
+  int select = index & 3;
+  if(this->childs[select] == nullptr){
+    return nullptr;
+  } else if(this->childs[select]->pair.key == key){
+    return &this->childs[select]->pair.second;
+  }
+
+  index >>= 2;
+  
+  TrieMapNode<Key,Data>* current = (TrieMapNode<Key,Data>*) this->childs[select];
+  for(; 1; index >>= 2){
+    int select = index & 3;
+    if(current->childs[select] == nullptr){
+      return nullptr;
+    } else if(current->childs[select]->pair.first == key) {
+      return &current->childs[select]->pair.second;
+    } else {
+      current = current->childs[select];
+    }
+  }
+
+  NOT_POSSIBLE("Should not reach here");
+  return nullptr;
+}
+
+template<typename Key,typename Data>
+Data* TrieMap<Key,Data>::GetOrInsert(Key key,Data data){
+  Data* got = Get(key);
+
+  if(got == nullptr){
+    got = Insert(key,data);
+  }
+
+  return got;
+}
+
+template<typename Key,typename Data>
+Data& TrieMap<Key,Data>::GetOrFail(Key key){
+  Data* got = Get(key);
+  Assert(got);
+  return *got;
+}
+
+template<typename Key,typename Data>
+GetOrAllocateResult<Data> TrieMap<Key,Data>::GetOrAllocate(Key key){
+  // TODO: Could improve performance
+  GetOrAllocateResult<Data> res = {};
+  
+  Data* got = Get(key);
+  if(got){
+    res.data = got;
+    res.alreadyExisted = true;
+  } else {
+    res.data = Insert(key,{});
+    res.alreadyExisted = false;
+  }
+  
+  return res;
+}
+
+template<typename Key,typename Data>
+bool TrieMap<Key,Data>::Exists(Key key){
+  Data* data = Get(key);
+  bool res = (data != nullptr);
+  return res;
+}
+
+template<typename Key,typename Data>
+TrieMapIterator<Key,Data> begin(TrieMap<Key,Data>* map){
+  TrieMapIterator<Key,Data> iter = {};
+
+  if(map) iter.ptr = map->head;
+
+  return iter;
+}
+
+template<typename Key,typename Data>
+TrieMapIterator<Key,Data> end(TrieMap<Key,Data>* map){
+  TrieMapIterator<Key,Data> iter = {};
+  
+  return iter;
+}
+
+template<typename Key,typename Data>
+bool TrieMapIterator<Key,Data>::operator!=(TrieMapIterator& iter){
+  return this->ptr != iter.ptr;
+}
+
+template<typename Key,typename Data>
+void TrieMapIterator<Key,Data>::operator++(){
+  if(this->ptr) this->ptr = this->ptr->next;
+}
+
+template<typename Key,typename Data>
+Pair<Key,Data> TrieMapIterator<Key,Data>::operator*(){
+  return this->ptr->pair;
+}
+
+/*
+  Set
 */
 
 template<typename Data>
 void Set<Data>::Insert(Data data){
   map->Insert(data,0);
+}
+
+template<typename Data>
+bool Set<Data>::ExistsOrInsert(Data data){
+  if(Exists(data)){
+    return true;
+  }
+
+  Insert(data);
+  return false;
 }
 
 template<typename Data>
@@ -1042,6 +1318,75 @@ SetIterator<Data> end(Set<Data>* set){
   return iter;
 }
 
+/*
+  TrieSet
+*/
+
+template<typename Data>
+bool TrieSetIterator<Data>::operator!=(TrieSetIterator<Data>& iter){
+  return this->map != iter.map;
+}
+
+template<typename Data>
+void TrieSetIterator<Data>::operator++(){
+  ++this->map;
+}
+
+template<typename Data>
+Data& TrieSetIterator<Data>::operator*(){
+  return this->map->first;
+}
+  
+template<typename Data>
+void TrieSet<Data>::Insert(Data data){
+  this->map->Insert(data,0);
+}
+
+template<typename Data>
+bool TrieSet<Data>::ExistsOrInsert(Data data){
+  bool res = map->Exists(data);
+
+  if(res){
+    return true;
+  } else {
+    map->Insert(data,0);
+  }
+
+  return false;
+}
+
+template<typename Data>
+bool TrieSet<Data>::Exists(Data data){
+  bool res = map->Exists(data);
+  return res;
+}
+
+template<typename Data>
+TrieSet<Data>* PushTrieSet(Arena* arena){
+  TrieSet<Data>* set = PushStruct<TrieSet<Data>>(arena);
+
+  set->map = PushTrieMap<Data,int>(arena);
+
+  return set;
+}
+
+template<typename Data>
+TrieSetIterator<Data> begin(TrieSet<Data>* set){
+  TrieSetIterator<Data> iter = {};
+  iter.innerIter = begin(set->map);
+  return iter;
+}
+
+template<typename Data>
+TrieSetIterator<Data> end(TrieSet<Data>* set){
+  TrieSetIterator<Data> iter = {};
+  iter.innerIter = end(set->map);
+  return iter;
+}
+
+/*
+  Pool
+*/
 
 template<typename T>
 void PoolIterator<T>::Init(Pool<T>* pool,Byte* page){

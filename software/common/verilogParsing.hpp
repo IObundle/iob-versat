@@ -1,5 +1,4 @@
-#ifndef INCLUDED_VERILOG_PARSER
-#define INCLUDED_VERILOG_PARSER
+#pragma once
 
 #include <vector>
 #include <unordered_map>
@@ -191,6 +190,3 @@ ModuleInfo ExtractModuleInfo(Module& module,Arena* permanent,Arena* tempArena);
 
 Array<String> GetAllIdentifiers(Expression* expr,Arena* arena);
 Value Eval(Expression* expr,Array<ParameterExpression> parameters);
-
-#endif // INCLUDED_VERILOG_PARSER
-

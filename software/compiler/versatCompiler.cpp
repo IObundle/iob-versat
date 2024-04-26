@@ -384,7 +384,7 @@ int main(int argc,const char* argv[]){
   versat->opts->shadowRegister = true; 
   versat->opts->noDelayPropagation = true;
   
-  versat->debug.outputGraphs = false;
+  versat->debug.outputGraphs = true;
   versat->debug.outputAcceleratorInfo = true;
   versat->debug.outputVCD = true;
   
@@ -603,9 +603,10 @@ How to handle merged subunits.
 
 TODO: Need to check the isSource member of ModuleInfo and so on. 
 
-MARK: Left when trying to figure out the AES256WithIterative bug.
-      The units are different when compared to the last working version (which did not work correctly but was closer)
-      For some reason a lot of units accross various modules are now being marked as SINK_AND_SOURCE instead of COMPUTE. Check why, maybe even try to fix the usage of these TAGS for good.
+TODO: Because of the delay implementation, there is a possibility of allowing inter-hierarchy optimizations:
+      Think a VRead connected a reg file that uses delays to store a value per reg.
+      The normal implementation would insert a bunch of delays with an incremental value which is wasteful because we could just change reg delays.
+      This requires to keep track for each module which one allows this to happen and then take that into account in the delay calculation functions. Note: Input delay does not work. We are talking about delay info propagating downards accross the hiearchy while input delay propagates upwards. We can still resolve this during the register FUDeclaration by calcuting the delays of lower units inside the register of the upper unit.
 
  */
 

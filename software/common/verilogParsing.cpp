@@ -364,6 +364,7 @@ static Value Eval(Expression* expr,ValueMap& map){
 }
 
 static Array<ParameterExpression> ParseParameters(Tokenizer* tok,ValueMap& map,Arena* arena){
+  //TODO: Add full parsing of verilog expressions, otherwise we can only handle simple "parameter name = value," expressions.
   //TODO: Add type and range to parsing
   /*
 	Range currentRange;

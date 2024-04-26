@@ -1,5 +1,4 @@
-#ifndef INCLUDED_VERSAT_HPP
-#define INCLUDED_VERSAT_HPP
+#pragma once
 
 #include <vector>
 #include <unordered_map>
@@ -48,23 +47,13 @@ struct DAGOrderNodes{
   int maxOrder;
 };
 
+// TODO: Remove memory from old versat if tests pass.
+
 struct FUInstance{
   String name;
 
-  // Embedded memory
-  int* memMapped;
-  iptr* config;
-  int* state;
-  iptr* delay;
-  Byte* externalMemory;
-
-  // This should be part of another hierarchy.
-  // Required for accel subunits but not required by embedded or should user code have access to them
-  unsigned char* extraData;
-  //FUInstance* declarationInstance; // Used because of AccessMemory and the fact that GetInput depends on instance pointer
-
   // This should be versat side only, but it's easier to have them here for now
-  String parameters;
+  String parameters; // TODO: Actual parameter structure
   Accelerator* accel;
   FUDeclaration* declaration;
   int id;
@@ -72,26 +61,14 @@ struct FUInstance{
   // PC only
   int baseDelay; // TODO: Delays should be pulled out from FUInstances and simply calculated and stored inside corresponding FUDeclarations if needed to be stored or just calculated at code generation time.
 
-  // Configuration + State variables that versat needs access to
-  int done; // Units that are sink or sources of data must implement done to ensure circuit does not end prematurely
-  bool isStatic;
-
-  bool namedAccess;
-
-  // Various uses
-  Accelerator* iterative;
-
   union{
     int literal;
     int bufferAmount;
     int portIndex;
   };
   int sharedIndex;
-  char tag;
-  bool savedConfiguration; // For subunits registered, indicate when we save configuration before hand
-  bool savedMemory; // Same for memory
+  bool isStatic;
   bool sharedEnable;
-  bool initialized;
 };
 
 struct DebugState{
@@ -139,8 +116,6 @@ struct Versat{
 
   DebugState debug;
 
-  //String outputLocation; - Used to be hardwareOutputFilepath
-  //Options opts;
   Options* opts;
 };
 
@@ -183,20 +158,6 @@ namespace BasicTemplates{
 
 struct GraphMapping;
 
-struct SingleTypeStructElement{
-  String type;
-  String name;
-};
-
-struct TypeStructInfoElement{
-  Array<SingleTypeStructElement> typeAndNames; // Because of config sharing, we can have multiple elements occupying the smae position.
-};
-
-struct TypeStructInfo{
-  String name;
-  Array<TypeStructInfoElement> entries;
-};
-
 struct CalculateDelayResult{
   Hashmap<EdgeNode,int>* edgesDelay;
   Hashmap<InstanceNode*,int>* nodeDelay;
@@ -206,7 +167,6 @@ struct CalculateDelayResult{
 bool EqualPortMapping(PortInstance p1,PortInstance p2);
 
 // General info
-UnitValues CalculateIndividualUnitValues(FUInstance* inst); // Values for individual unit, not taking into account sub units. For a composite, this pretty much returns empty except for total outputs, as the unit itself must allocate output memory
 UnitValues CalculateAcceleratorValues(Versat* versat,Accelerator* accel);
 bool IsUnitCombinatorial(FUInstance* inst);
 
@@ -268,5 +228,3 @@ int CalculateMemoryUsage(Versat* versat); // Not accurate, but returns the bigge
 void TestVersatSide(Versat* versat); // Calls tests from versat side
 
 #include "typeSpecifics.inl"
-
-#endif // INCLUDED_VERSAT_HPP
