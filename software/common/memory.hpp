@@ -65,29 +65,34 @@ struct Arena{
   size_t totalAllocated;
   size_t maximum;
 
-  //#ifdef VERSAT_DEBUG
+  // TODO: Locked could be an enum for all the cases, like dynamic array and string. That way we could actually check if we are doing anything bad (Check inside a PushString if we are inside a DynamicArray section, for example).
   bool locked; // Certain constructs [like DynamicArray] "lock" arena preventing the arena from being used by other functions.
-  //#endif
-};
+}; 
 
 #define VERSAT_DEBUG
 
+void AlignArena(Arena* arena,int alignment);
 Arena InitArena(size_t size); // Calls calloc
 Arena InitLargeArena(); //
 Arena SubArena(Arena* arena,size_t size);
 void PopToSubArena(Arena* top,Arena subArena);
 void Free(Arena* arena);
-Byte* MarkArena(Arena* arena);
-void PopMark(Arena* arena,Byte* mark);
 Byte* PushBytes(Arena* arena, size_t size);
 size_t SpaceAvailable(Arena* arena);
-String PointArena(Arena* arena,Byte* mark);
 String PushChar(Arena* arena,const char);
 String PushString(Arena* arena,int size);
 String PushString(Arena* arena,String ss);
 String PushString(Arena* arena,const char* format,...) __attribute__ ((format (printf, 2, 3)));
 String vPushString(Arena* arena,const char* format,va_list args);
 void PushNullByte(Arena* arena);
+
+struct ArenaMark{
+  Arena* arena;
+  Byte* mark;
+}; 
+
+ArenaMark MarkArena(Arena* arena);
+void PopMark(ArenaMark mark);
 
 // TODO: Maybe add Optional to indicate error opening file
 //       In general error handling is pretty lacking overall.
@@ -96,12 +101,11 @@ String PushFile(Arena* arena,const char* filepath);
 
 class ArenaMarker{
 public:
-  Arena* arena;
-  Byte* mark;
-
-  ArenaMarker(Arena* arena){this->arena = arena; this->mark = MarkArena(arena);};
-  ~ArenaMarker(){PopMark(this->arena,this->mark);};
-  void Pop(){PopMark(this->arena,this->mark);};
+  ArenaMark mark;
+  
+  ArenaMarker(Arena* arena){this->mark = MarkArena(arena);};
+  ~ArenaMarker(){PopMark(this->mark);};
+  void Pop(){PopMark(this->mark);};
   operator bool(){return true;}; // For the region trick
 };
 
@@ -119,14 +123,10 @@ NAME.mem = (Byte*) buffer_##NAME; \
 NAME.totalAllocated = SIZE;
 
 template<typename T>
-Array<T> PushArray(Arena* arena,int size){Array<T> res = {}; res.size = size; res.data = (T*) PushBytes(arena,sizeof(T) * size); return res;};
-
-// TODO: Remove this after code starts using DynamicArray.
-template<typename T>
-Array<T> PointArray(Arena* arena,Byte* mark){String data = PointArena(arena,mark); Array<T> res = {}; res.data = (T*) data.data; res.size = data.size / sizeof(T); return res;}
+Array<T> PushArray(Arena* arena,int size){AlignArena(arena,alignof(T)); Array<T> res = {}; res.size = size; res.data = (T*) PushBytes(arena,sizeof(T) * size); return res;};
 
 template<typename T>
-T* PushStruct(Arena* arena){T* res = (T*) PushBytes(arena,sizeof(T)); return res;};
+T* PushStruct(Arena* arena){AlignArena(arena,alignof(T)); T* res = (T*) PushBytes(arena,sizeof(T)); return res;};
 
 // Arena that allocates more blocks of memory like a list.
 struct DynamicArena{
@@ -136,6 +136,7 @@ struct DynamicArena{
   int pagesAllocated;
 };
 
+void AlignArena(DynamicArena* arena,int alignment);
 DynamicArena* CreateDynamicArena(int numberPages = 1);
 Arena SubArena(DynamicArena* arena,size_t size);
 Byte* PushBytes(DynamicArena* arena, size_t size);
@@ -143,16 +144,15 @@ void Clear(DynamicArena* arena);
 String PushString(DynamicArena* arena,String str);
 
 template<typename T>
-Array<T> PushArray(DynamicArena* arena,int size){Array<T> res = {}; res.size = size; res.data = (T*) PushBytes(arena,sizeof(T) * size); return res;};
+Array<T> PushArray(DynamicArena* arena,int size){AlignArena(arena,alignof(T)); Array<T> res = {}; res.size = size; res.data = (T*) PushBytes(arena,sizeof(T) * size); return res;};
 
 template<typename T>
-T* PushStruct(DynamicArena* arena){T* res = (T*) PushBytes(arena,sizeof(T)); return res;};
+T* PushStruct(DynamicArena* arena){AlignArena(arena,alignof(T)); T* res = (T*) PushBytes(arena,sizeof(T)); return res;};
 
 template<typename T>
 struct DynamicArray{
-  Arena* arena;
-  Byte* mark;
-
+  ArenaMark mark;
+  
   ~DynamicArray();
   
   T* PushElem();
@@ -164,7 +164,16 @@ DynamicArray<T> StartArray(Arena* arena);
 template<typename T>
 Array<T> EndArray(DynamicArray<T> arr);
 
+struct DynamicString{
+  Arena* arena;
+  Byte* mark;
+};
+
+DynamicString StartString(Arena *arena);
+String EndString(DynamicString mark);
+
 // A wrapper for a "push" type interface for a block of memory
+// TODO: This probably can be eleminated, very few areas of the code actually use this.
 template<typename T>
 class PushPtr{
 public:
@@ -261,12 +270,6 @@ public:
     return res;
   }
 };
-
-template<typename T>
-static void PopPushPtr(Arena* arena,PushPtr<T>& ptr){
-  Byte* lastPos = (Byte*) &ptr.ptr[ptr.timesPushed];
-  PopMark(arena,lastPos);
-}
 
 template<typename T> bool Inside(PushPtr<T>* push,T* ptr);
 
@@ -708,7 +711,8 @@ template<typename T> bool Inside(PushPtr<T>* push,T* ptr){
 template<typename T> DynamicArray<T> StartArray(Arena* arena){
   DynamicArray<T> arr = {};
 
-  arr.arena = arena;
+  AlignArena(arena,alignof(T));
+
   arr.mark = MarkArena(arena);
 
 #ifdef VERSAT_DEBUG
@@ -723,31 +727,40 @@ DynamicArray<T>::~DynamicArray<T>(){
   // Unlocking the arena must be done in the destructor as well otherwise
   // a return of function would leave the arena locked for good.
 #ifdef VERSAT_DEBUG
-  arena->locked = false;
+  mark.arena->locked = false;
 #endif
 }
 
 template<typename T> T* DynamicArray<T>::PushElem(){
 #ifdef VERSAT_DEBUG
-  Assert(arena->locked);
-  arena->locked = false;
+  Assert(mark.arena->locked);
+  mark.arena->locked = false;
 #endif
 
-  T* res = PushStruct<T>(this->arena);
+  T* res = PushStruct<T>(this->mark.arena);
 
 #ifdef VERSAT_DEBUG
-  arena->locked = true;
+  mark.arena->locked = true;
 #endif
 
   return res;
 }
   
 template<typename T> Array<T> EndArray(DynamicArray<T> arr){
-  Arena* arena = arr.arena;
+  Arena* arena = arr.mark.arena;
 
   arena->locked = false;
+  
+  Byte* data = arr.mark.mark;
+  int size = &arena->mem[arena->used] - data;
 
-  Array<T> res = PointArray<T>(arena,arr.mark);
+  Assert(size >= 0);
+  Assert(size % sizeof(T) == 0); // Ensures data is properly aligned
+  
+  Array<T> res = {};
+  res.data = (T*) data;
+  res.size = size / sizeof(T);
+
   return res;
 }
 

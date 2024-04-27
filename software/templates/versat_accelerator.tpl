@@ -91,10 +91,7 @@ module @{accel.name} #(
    #{if accel.memoryMapBits}
    // data/control interface
    input                           valid,
-   #{if accel.memoryMapBits}
    input [@{accel.memoryMapBits - 1}:0] addr,
-   #{end}
-
    input [DATA_W/8-1:0]            wstrb,
    input [DATA_W-1:0]              wdata,
    output                          rvalid,
@@ -147,8 +144,8 @@ begin
    #{for node instances}
    #{set inst node.inst}
    #{if inst.declaration.memoryMapBits}
-      #{if versatData[counter].memoryMaskSize}
-      if(addr[@{memoryAddressBits - 1}-:@{versatData[counter].memoryMaskSize}] == @{versatData[counter].memoryMaskSize}'b@{versatData[counter].memoryMask})
+      #{if memoryMasks[counter].memoryMaskSize}
+      if(addr[@{accel.memoryMapBits - 1}-:@{memoryMasks[counter].memoryMaskSize}] == @{memoryMasks[counter].memoryMaskSize}'b@{memoryMasks[counter].memoryMask})
          memoryMappedEnable[@{counter}] = 1'b1;
       #{else}
       memoryMappedEnable[0] = 1'b1;
@@ -165,7 +162,7 @@ reg [31:0] #{join "," node instances}#{if node.inst.declaration.isOperation and 
 
 always @*
 begin
-#{for node ordered}
+#{for node instances}
    #{set decl node.inst.declaration}
    #{if decl.isOperation and decl.outputLatencies[0] == 0}
       #{set input1 node.inputs[0]}

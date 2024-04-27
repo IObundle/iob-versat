@@ -44,14 +44,14 @@ bool _ExpectError(Tokenizer* tok,const char* str){
   String expected = STRING(str);
   if(!CompareString(got,expected)){
     STACK_ARENA(temp,Kilobyte(4));
-    Byte* mark = MarkArena(&temp);
+    auto mark = StartString(&temp);
     PushString(&temp,"Parser Error.\n Expected to find:");
     PushEscapedString(&temp,expected,' ');
     PushString(&temp,"\n");
     PushString(&temp,"  Got:");
     PushEscapedString(&temp,got,' ');
     PushString(&temp,"\n");
-    String text = PointArena(&temp,mark);
+    String text = EndString(mark);
     ReportError(tok,got,StaticFormat("%*s",UNPACK_SS(text))); \
     return true;
   }
@@ -178,9 +178,9 @@ Optional<VarGroup> ParseVarGroup(Tokenizer* tok,Arena* out){
   if(CompareString(peek,"{")){
     tok->AdvancePeek(peek);
 
-    Byte* mark = MarkArena(out);
+    DynamicArray<Var> arr = StartArray<Var>(out);
     while(!tok->Done()){
-      Var* var = PushStruct<Var>(out);
+      Var* var = arr.PushElem();
       Optional<Var> optVar = ParseVar(tok);
       PROPAGATE(optVar);
 
@@ -197,7 +197,7 @@ Optional<VarGroup> ParseVarGroup(Tokenizer* tok,Arena* out){
       }
     }
     VarGroup res = {};
-    res.vars = PointArray<Var>(out,mark);
+    res.vars = EndArray(arr);
     res.fullText = tok->Point(tokMark);
     return res;
   } else {
@@ -366,9 +366,9 @@ void ConnectUnit(Array<PortExpression> outs, PortExpression in){
 String GetUniqueName(String name,Arena* out,InstanceName* names){
   int counter = 0;
   String uniqueName = name;
-  Byte* mark = MarkArena(out);
+  auto mark = MarkArena(out);
   while(names->Exists(uniqueName)){
-    PopMark(out,mark);
+    PopMark(mark);
     uniqueName = PushString(out,"%.*s_%d",UNPACK_SS(name),counter++);
   }
 
@@ -538,7 +538,7 @@ Optional<VarDeclaration> ParseVarDeclaration(Tokenizer* tok){
 }
 
 Array<Token> CheckAndParseConnectionTransforms(Tokenizer* tok,Arena* out){
-  Byte* mark = MarkArena(out);
+  DynamicArray<Token> arr = StartArray<Token>(out);
   while(!tok->Done()){
     auto mark = tok->Mark();
     Token first = tok->NextToken();
@@ -549,9 +549,9 @@ Array<Token> CheckAndParseConnectionTransforms(Tokenizer* tok,Arena* out){
       break;
     }
 
-    *PushStruct<Token>(out) = first;
+    *arr.PushElem() = first;
   }
-  return PointArray<Token>(out,mark);
+  return EndArray(arr);
 }
 
 Optional<ConnectionDef> ParseConnection(Tokenizer* tok,Arena* out){

@@ -158,9 +158,7 @@ struct GraphMapping{
 enum MergingStrategy{
    SIMPLE_COMBINATION,
    CONSOLIDATION_GRAPH,
-   PIECEWISE_CONSOLIDATION_GRAPH,
-   FIRST_FIT,
-   ORDERED_FIT
+   FIRST_FIT
 };
 
 void OutputConsolidationGraph(ConsolidationGraph graph,Arena* memory,bool onlyOutputValid,const char* format,...);

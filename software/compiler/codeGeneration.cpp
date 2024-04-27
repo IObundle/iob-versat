@@ -1,11 +1,13 @@
 #include "codeGeneration.hpp"
 
+#include "logger.hpp"
 #include "memory.hpp"
 #include "utils.hpp"
 #include "utilsCore.hpp"
 #include "versat.hpp"
 #include "templateData.hpp"
 #include "templateEngine.hpp"
+#include "textualRepresentation.hpp"
 
 // TODO: Can reuse SortTypes functions by receiving the Array of Arrays as an argument. Useful for memory and probably state and so on.
 Array<FUDeclaration*> SortTypesByConfigDependency(Array<FUDeclaration*> types,Arena* out,Arena* temp){
@@ -352,59 +354,22 @@ static Array<TypeStructInfo> GetMemMappedStructInfo(Accelerator* accel,Arena* ou
   return structures;
 }
 
-void OutputCircuitSource(Versat* versat,FUDeclaration* decl,Accelerator* accel,FILE* file,Arena* temp,Arena* temp2){
-  BLOCK_REGION(temp);
-  BLOCK_REGION(temp2);
-  
-  ClearTemplateEngine(); // Make sure that we do not reuse data
-  
-  Assert(versat->debug.outputAccelerator); // Because FILE is created outside, code should not call this function if flag is set
+Array<MemoryAddressMask> CalculateAcceleratorMemoryMasks(AccelInfo info,Arena* out){
+  DynamicArray<MemoryAddressMask> arr = StartArray<MemoryAddressMask>(out);
+  for(InstanceInfo& in : info.info){
+    if(in.level == 0 && in.memMapped.has_value()){
+      MemoryAddressMask* data = arr.PushElem();
+      *data = {};
+      data->memoryMaskSize = info.memMappedBitsize - in.memMappedBitSize.value();
+      data->memoryMask = data->memoryMaskBuffer;
 
-  VersatComputedValues val = ComputeVersatValues(versat,accel,false);
-
-  int size = Size(accel->allocated);
-  Array<InstanceNode*> nodes = ListToArray(accel->allocated,size,temp);
-
-  Array<InstanceNode*> ordered = PushArray<InstanceNode*>(temp,size);
-  int i = 0;
-  FOREACH_LIST_INDEXED(OrderedInstance*,ptr,accel->ordered,i){
-    ordered[i] = ptr->node;
-
-    FUInstance* inst = ptr->node->inst;
-    if(inst->declaration->nIOs){
-      inst->parameters = STRING("#(.AXI_ADDR_W(AXI_ADDR_W),.AXI_DATA_W(AXI_DATA_W),.LEN_W(LEN_W))"); // TODO: placeholder hack.
-    }
-  }
-
-  {
-    iptr memoryPos = 0;
-    FOREACH_LIST(InstanceNode*,ptr,accel->allocated){
-      FUInstance* inst = ptr->inst;
-      FUDeclaration* decl = inst->declaration;
-
-      if(decl->memoryMapBits.has_value()) {
-        memoryPos = AlignBitBoundary(memoryPos,decl->memoryMapBits.value());
-        memoryPos += 1 << decl->memoryMapBits.value();
+      for(int i = 0; i < data->memoryMaskSize; i++){
+        data->memoryMaskBuffer[i] = in.memMappedMask.value()[i];
       }
     }
   }
-
-  Array<InstanceInfo> info = CalculateAcceleratorInfo(accel,true,temp,temp2); // TODO: Calculating info just for the computedData calculation is a bit wasteful.
-  ComputedData computedData = CalculateVersatComputedData(info,val,temp);
-  
-  TemplateSetCustom("inputDecl",MakeValue(BasicDeclaration::input));
-  TemplateSetCustom("outputDecl",MakeValue(BasicDeclaration::output));
-  TemplateSetCustom("arch",MakeValue(&versat->opts));
-  TemplateSetCustom("accel",MakeValue(decl));
-  TemplateSetCustom("versatValues",MakeValue(&val));
-  TemplateSetCustom("versatData",MakeValue(&computedData.data));
-  TemplateSetCustom("instances",MakeValue(&nodes));
-  TemplateSetCustom("ordered",MakeValue(&ordered));
-  TemplateSetNumber("unitsMapped",val.unitsMapped);
-  TemplateSetNumber("memoryAddressBits",val.memoryAddressBits);
-
-  ProcessTemplate(file,BasicTemplates::acceleratorTemplate,temp,temp2);
-}
+  return EndArray(arr);
+}  
 
 #if 0
 Array<TypeStructInfoElement> ExtractStructuredStatics(Array<InstanceInfo> info,Arena* out,Arena* temp){
@@ -546,6 +511,40 @@ Array<TypeStructInfoElement> ExtractStructuredConfigs(Array<InstanceInfo> info,A
   return PushArrayFromList(out,elems);
 }
 
+void OutputCircuitSource(Versat* versat,FUDeclaration* decl,Accelerator* accel,FILE* file,Arena* temp,Arena* temp2){
+  BLOCK_REGION(temp);
+  BLOCK_REGION(temp2);
+  
+  ClearTemplateEngine(); // Make sure that we do not reuse data
+  
+  Assert(versat->debug.outputAccelerator); // Because FILE is created outside, code should not call this function if flag is set
+
+  VersatComputedValues val = ComputeVersatValues(versat,accel,false);
+  
+  Array<InstanceNode*> nodes = ListToArray(accel->allocated,temp);
+  for(InstanceNode* node : nodes){
+    if(node->inst->declaration->nIOs){
+      node->inst->parameters = STRING("#(.AXI_ADDR_W(AXI_ADDR_W),.AXI_DATA_W(AXI_DATA_W),.LEN_W(LEN_W))"); // TODO: placeholder hack.
+    }
+  }
+  
+  AccelInfo info = CalculateAcceleratorInfo(accel,true,temp,temp2);
+  Array<MemoryAddressMask> memoryMasks = CalculateAcceleratorMemoryMasks(info,temp);
+  
+  TemplateSetCustom("versatValues",MakeValue(&val));
+  TemplateSetNumber("unitsMapped",val.unitsMapped);
+
+  TemplateSetCustom("inputDecl",MakeValue(BasicDeclaration::input));
+  TemplateSetCustom("outputDecl",MakeValue(BasicDeclaration::output));
+  TemplateSetCustom("arch",MakeValue(&versat->opts));
+  TemplateSetCustom("accel",MakeValue(decl));
+  TemplateSetCustom("memoryMasks",MakeValue(&memoryMasks));
+
+  TemplateSetCustom("instances",MakeValue(&nodes));
+
+  ProcessTemplate(file,BasicTemplates::acceleratorTemplate,temp,temp2);
+}
+
 void OutputIterativeSource(Versat* versat,FUDeclaration* decl,Accelerator* accel,FILE* file,Arena* temp,Arena* temp2){
   BLOCK_REGION(temp);
   BLOCK_REGION(temp2);
@@ -554,6 +553,7 @@ void OutputIterativeSource(Versat* versat,FUDeclaration* decl,Accelerator* accel
 
   Assert(versat->debug.outputAccelerator); // Because FILE is created outside, code should not call this function if flag is set
 
+  // MARKED
   FOREACH_LIST(InstanceNode*,ptr,accel->allocated){
     FUInstance* inst = ptr->inst;
     if(inst->declaration->nIOs){
@@ -562,11 +562,13 @@ void OutputIterativeSource(Versat* versat,FUDeclaration* decl,Accelerator* accel
   }
    
   VersatComputedValues val = ComputeVersatValues(versat,accel,false);
-  Array<InstanceInfo> info = CalculateAcceleratorInfo(accel,true,temp,temp2); // TODO: Calculating info just for the computedData calculation is a bit wasteful.
-  ComputedData computedData = CalculateVersatComputedData(info,val,temp);
+  AccelInfo info = CalculateAcceleratorInfo(accel,true,temp,temp2); // TODO: Calculating info just for the computedData calculation is a bit wasteful.
+  Array<MemoryAddressMask> memoryMasks = CalculateAcceleratorMemoryMasks(info,temp);
+
+  ComputedData computedData = CalculateVersatComputedData(info.info,val,temp);
   TemplateSetCustom("staticUnits",MakeValue(decl->staticUnits));
   TemplateSetCustom("accel",MakeValue(decl));
-  TemplateSetCustom("versatData",MakeValue(&computedData.data));
+  TemplateSetCustom("memoryMasks",MakeValue(&memoryMasks));
   TemplateSetCustom("external",MakeValue(&computedData.external));
   TemplateSetCustom("instances",MakeValue(accel->allocated));
   TemplateSetNumber("unitsMapped",val.unitsMapped);
@@ -586,8 +588,8 @@ void OutputVerilatorWrapper(Versat* versat,FUDeclaration* type,Accelerator* acce
 
   ClearTemplateEngine(); // Make sure that we do not reuse data
 
-  Array<InstanceInfo> info = CalculateAcceleratorInfo(accel,true,temp,temp2);
-  Array<Wire> allConfigsHeaderSide = ExtractAllConfigs(info,&versat->permanent,&versat->temp);
+  AccelInfo info = CalculateAcceleratorInfo(accel,true,temp,temp2);
+  Array<Wire> allConfigsHeaderSide = ExtractAllConfigs(info.info,&versat->permanent,&versat->temp);
 
 #if 1
   // We need to bundle config + static (type->config) only contains config, but not static
@@ -617,14 +619,14 @@ void OutputVerilatorWrapper(Versat* versat,FUDeclaration* type,Accelerator* acce
 #endif
 
   UnitValues val = CalculateAcceleratorValues(versat,accel);
-  Array<TypeStructInfoElement> structuredConfigs = ExtractStructuredConfigs(info,temp,temp2);
+  Array<TypeStructInfoElement> structuredConfigs = ExtractStructuredConfigs(info.info,temp,temp2);
   //Array<TypeStructInfoElement> structuredStatics = ExtractStructuredStatics(info,temp,temp2);
 
   TemplateSetNumber("delays",val.delays);
   TemplateSetCustom("structuredConfigs",MakeValue(&structuredConfigs));
   //TemplateSetCustom("allStaticsVerilatorSide",MakeValue(&structuredConfigs));
   // Extract states with the expected TOP level name (not module name)
-  Array<String> statesHeaderSide = ExtractStates(info,temp);
+  Array<String> statesHeaderSide = ExtractStates(info.info,temp);
   
   int totalExternalMemory = ExternalMemoryByteSize(type->externalMemory);
 
@@ -743,11 +745,10 @@ void OutputVersatSource(Versat* versat,Accelerator* accel,const char* hardwarePa
   fclose(f);
 
   // Output configuration file
-  int size = Size(accel->allocated);
-  Array<InstanceNode*> nodes = ListToArray(accel->allocated,size,temp2);
+  Array<InstanceNode*> nodes = ListToArray(accel->allocated,temp2);
 
   ReorganizeAccelerator(accel,temp2); // TODO: Reorganize accelerator needs to go. Just call CalculateOrder when needed. Need to check how iterative work for this case, though
-  Array<InstanceNode*> ordered = PushArray<InstanceNode*>(temp2,size);
+  Array<InstanceNode*> ordered = PushArray<InstanceNode*>(temp2,nodes.size);
   
   int i = 0;
   FOREACH_LIST_INDEXED(OrderedInstance*,ptr,accel->ordered,i){
@@ -759,10 +760,10 @@ void OutputVersatSource(Versat* versat,Accelerator* accel,const char* hardwarePa
     }
   }
 
-  Array<InstanceInfo> info = CalculateAcceleratorInfo(accel,true,temp,temp2);
-  CheckSanity(info,temp);
+  AccelInfo info = CalculateAcceleratorInfo(accel,true,temp,temp2);
+  CheckSanity(info.info,temp);
 
-  ComputedData computedData = CalculateVersatComputedData(info,val,temp);
+  ComputedData computedData = CalculateVersatComputedData(info.info,val,temp);
 
   if(versat->opts->exportInternalMemories){
     int index = 0;
@@ -826,7 +827,7 @@ void OutputVersatSource(Versat* versat,Accelerator* accel,const char* hardwarePa
   
   Hashmap<StaticId,StaticData>* staticUnits = PushHashmap<StaticId,StaticData>(temp,val.nStatics);
   int staticIndex = 0; // staticStart; TODO: For now, test with static info beginning at zero
-  for(InstanceInfo& info : info){
+  for(InstanceInfo& info : info.info){
     FUDeclaration* decl = info.decl;
     if(info.isStatic){
       FUDeclaration* parentDecl = info.parent;
@@ -851,6 +852,8 @@ void OutputVersatSource(Versat* versat,Accelerator* accel,const char* hardwarePa
 
   TemplateSetCustom("staticUnits",MakeValue(staticUnits));
   
+  Array<MemoryAddressMask> memoryMasks = CalculateAcceleratorMemoryMasks(info,temp);
+
   TemplateSetCustom("versatValues",MakeValue(&val));
   TemplateSetNumber("delayStart",val.delayBitsStart);
   TemplateSetNumber("nIO",val.nUnitsIO);
@@ -866,7 +869,7 @@ void OutputVersatSource(Versat* versat,Accelerator* accel,const char* hardwarePa
   TemplateSetNumber("nInputs",unit.inputs);
   TemplateSetNumber("nOutputs",unit.outputs);
   TemplateSetCustom("ordered",MakeValue(&ordered));
-  TemplateSetCustom("versatData",MakeValue(&computedData.data));
+  TemplateSetCustom("memoryMasks",MakeValue(&memoryMasks));
   TemplateSetCustom("instances",MakeValue(&nodes));
   TemplateSetNumber("staticStart",staticStart);
   TemplateSetBool("useDMA",versat->opts->useDMA);
@@ -919,15 +922,15 @@ void OutputVersatSource(Versat* versat,Accelerator* accel,const char* hardwarePa
   TemplateSetCustom("addressStructures",MakeValue(&addressStructures));
   
   {
-    Byte* mark = MarkArena(temp);
-    for(InstanceInfo& t : info){
+    DynamicArray<int> arr = StartArray<int>(temp);
+    for(InstanceInfo& t : info.info){
       if(!t.isComposite){
         for(int d : t.delay){
-          *PushStruct<int>(temp) = d;
+          *arr.PushElem() = d;
         }
       }
     }
-    Array<int> delays = PointArray<int>(temp,mark);
+    Array<int> delays = EndArray(arr);
     TemplateSetCustom("delay",MakeValue(&delays));
 
 #if 1
@@ -945,11 +948,11 @@ void OutputVersatSource(Versat* versat,Accelerator* accel,const char* hardwarePa
   //DEBUG_BREAK();
 #endif
     
-    Array<TypeStructInfoElement> structuredConfigs = ExtractStructuredConfigs(info,temp,temp2);
+    Array<TypeStructInfoElement> structuredConfigs = ExtractStructuredConfigs(info.info,temp,temp2);
     
-    Array<Wire> orderedConfigs = ExtractAllConfigs(info,temp,temp2); // Kinda does the same as structuredConfigs, but for now allow this repetition. Need to do a general cleanup of the code to simplify it a little bit.
-    Array<String> allStates = ExtractStates(info,temp2);
-    Array<Pair<String,int>> allMem = ExtractMem(info,temp2);
+    Array<Wire> orderedConfigs = ExtractAllConfigs(info.info,temp,temp2); // Kinda does the same as structuredConfigs, but for now allow this repetition. Need to do a general cleanup of the code to simplify it a little bit.
+    Array<String> allStates = ExtractStates(info.info,temp2);
+    Array<Pair<String,int>> allMem = ExtractMem(info.info,temp2);
     
     TemplateSetNumber("delays",val.nDelays);
     TemplateSetCustom("structuredConfigs",MakeValue(&structuredConfigs));

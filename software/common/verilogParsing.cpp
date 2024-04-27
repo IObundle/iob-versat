@@ -260,11 +260,11 @@ String PreprocessVerilogFile(String fileContent,Array<String> includeFilepaths,A
 
   BLOCK_REGION(temp);
 
-  Byte* mark = MarkArena(out);
+  auto mark = StartString(out);
   PreprocessVerilogFile_(fileContent,macros,includeFilepaths,out,temp);
 
   PushString(out,STRING("\0"));
-  String res = PointArena(out,mark);
+  String res = EndString(mark);
 
   return res;
 }
@@ -838,33 +838,6 @@ ModuleInfo ExtractModuleInfo(Module& module,Arena* permanent,Arena* tempArena){
   info.externalInterfaces = interfaces;
 
   return info;
-}
-
-void GetAllIdentifiers_(Expression* expr,PushPtr<String>& ptr){
-  if(expr->type == Expression::IDENTIFIER){
-    String id = expr->id;
-
-    Array<String> arr = ptr.AsArray();
-    if(Contains(arr,id)){
-      return;
-    } else {
-      ptr.PushValue(id);
-    }
-  }
-
-  for(Expression* child : expr->expressions){
-    GetAllIdentifiers_(child,ptr);
-  }
-}
-
-Array<String> GetAllIdentifiers(Expression* expr,Arena* arena){
-  PushPtr<String> ptr(arena,99);
-
-  GetAllIdentifiers_(expr,ptr);
-
-  PopPushPtr(arena,ptr);
-
-  return ptr.AsArray();
 }
 
 Value Eval(Expression* expr,Array<ParameterExpression> parameters){

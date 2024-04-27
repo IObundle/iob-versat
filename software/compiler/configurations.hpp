@@ -54,10 +54,9 @@ enum MemType{
 };
 
 struct InstanceInfo{
-  FUDeclaration* parent;
+  int level;
   FUDeclaration* decl;
   String name;
-  String fullName;
   Optional<int> configPos;
   int isConfigStatic;
   int configSize;
@@ -72,10 +71,11 @@ struct InstanceInfo{
   String type;
   int baseDelay;
   int delaySize;
-  int level;
   bool isComposite;
   bool isStatic;
   bool isShared;
+  FUDeclaration* parent;
+  String fullName;
 };
 
 struct AcceleratorInfo{
@@ -87,7 +87,12 @@ struct AcceleratorInfo{
   int memSize;
 };
 
-Array<InstanceInfo> CalculateAcceleratorInfo(Accelerator* accel,bool recursive,Arena* out,Arena* temp);
+struct AccelInfo{
+  Array<InstanceInfo> info;
+  int memMappedBitsize;
+};
+
+AccelInfo CalculateAcceleratorInfo(Accelerator* accel,bool recursive,Arena* out,Arena* temp);
 
 CalculatedOffsets CalculateConfigOffsetsIgnoringStatics(Accelerator* accel,Arena* out);
 CalculatedOffsets CalculateConfigurationOffset(Accelerator* accel,MemType type,Arena* out);

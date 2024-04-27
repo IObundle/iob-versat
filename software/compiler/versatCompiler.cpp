@@ -268,12 +268,12 @@ String CallMakefile(const char* makePath,const char* action,Arena* out){
     int status;
     wait(&status);
 
-    Byte* mark = MarkArena(out);
+    auto mark = StartString(out);
     size_t maximumAllowed = SpaceAvailable(out);
-    int res = read(pipeRead[0],mark,maximumAllowed);
+    int res = read(pipeRead[0],mark.mark,maximumAllowed);
 
     PushBytes(out,res);
-    String result = PointArena(out,mark);
+    String result = EndString(mark);
     return result;
   }
 
@@ -384,9 +384,11 @@ int main(int argc,const char* argv[]){
   versat->opts->shadowRegister = true; 
   versat->opts->noDelayPropagation = true;
   
+#if 0
   versat->debug.outputGraphs = true;
   versat->debug.outputAcceleratorInfo = true;
   versat->debug.outputVCD = true;
+#endif
   
 #ifdef USE_FST_FORMAT
   versat->opts.generateFSTFormat = 1;

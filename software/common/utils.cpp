@@ -58,7 +58,7 @@ Optional<Array<String>> GetAllFilesInsideDirectory(String dirPath,Arena* out){
 }
 
 String PushEscapedString(Arena* out,String toEscape,char spaceSubstitute){
-  Byte* mark = MarkArena(out);
+  auto mark = StartString(out);
 
   for(int i = 0; i < toEscape.size; i++){
     switch(toEscape[i]){
@@ -75,7 +75,7 @@ String PushEscapedString(Arena* out,String toEscape,char spaceSubstitute){
     }
   }
 
-  String res = PointArena(out,mark);
+  String res = EndString(mark);
   return res;
 }
 
@@ -103,11 +103,11 @@ String GetAbsolutePath(const char* path,Arena* out){
 }
 
 Array<int> GetNonZeroIndexes(Array<int> arr,Arena* out){
-  Byte* mark = MarkArena(out);
+  DynamicArray<int> array = StartArray<int>(out);
   for(int i = 0; i < arr.size; i++){
     if(arr[i])
-      *PushStruct<int>(out) = i;
+      *array.PushElem() = i;
   }
 
-  return PointArray<int>(out,mark);
+  return EndArray(array);
 }

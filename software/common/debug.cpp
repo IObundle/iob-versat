@@ -36,28 +36,48 @@ struct Location{
 static Arena debugArenaInst = {};
 bool debugFlag = false;
 Arena* debugArena = &debugArenaInst;
+bool currentlyDebugging = false;
 
 bool CurrentlyDebugging(){
   static bool init = false;
   static bool value;
-
-  NOT_IMPLEMENTED("TODO");
   
-  return false;  
-
-  // TODO: This was giving an error when calling from makefile. Not using this for now.
-#if 0
-  if(!init){
-    init = true;
-    if(ptrace(PTRACE_TRACEME,0,1,0) < 0){
-      value = true;
-    } else {
-      ptrace(PTRACE_DETACH,0,1,0);
-    }
+  if(init){
+    return value;
   }
 
+  init = true;
+  char buf[Kilobyte(16)];
+
+  int fd = open("/proc/self/status", O_RDONLY);
+  if (fd == -1)
+    return value;
+
+  int amount = read(fd,buf,sizeof(buf) - 1);
+  close(fd);
+
+  buf[amount] = '\0';
+
+  Tokenizer tok(STRING(buf,amount),":",{});
+  while(!tok.Done()){
+    Token val = tok.NextToken();
+
+    if(CompareString(val,"TracerPid")){
+      tok.AssertNextToken(":");
+
+      Token pidToken = tok.NextToken();
+
+      int number = ParseInt(pidToken);
+      if(number == 0){
+        value = false;
+      } else {
+        value = true;
+      }
+      break;
+    }
+  }
+  
   return value;
-#endif
 }
 
 static SignalHandler old_SIGUSR1 = nullptr;
@@ -344,7 +364,7 @@ void InitDebug(){
   }
 
   init = true;
-  //debugFlag = CurrentlyDebugging();
+  currentlyDebugging = CurrentlyDebugging();
   
   debugArenaInst = InitArena(Megabyte(64));
   SetDebugSignalHandler(SignalPrintStacktrace);

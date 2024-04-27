@@ -298,7 +298,7 @@ static InstanceInfo GetInstanceInfo(InstanceNode* node,FUDeclaration* parentDecl
     info.memMappedSize = (1 << topDecl->memoryMapBits.value());
     info.memMappedBitSize = topDecl->memoryMapBits.value();
     info.memMapped = AlignBitBoundary(offsets.memOffset,topDecl->memoryMapBits.value());
-    info.memMappedMask = BinaryRepr(info.memMapped.value(),out);
+    info.memMappedMask = BinaryRepr(info.memMapped.value(),32,out);
   }
 
   info.configSize = topDecl->configInfo.configs.size;
@@ -449,10 +449,11 @@ AcceleratorInfo TransformGraphIntoArrayRecurse(InstanceNode* node,FUDeclaration*
 //       We can then fill everything by computing configInfo and stuff at the top and accessing fudeclaration configInfos as we go down.
 
 // TODO: Move this function to a better place
-Array<InstanceInfo> CalculateAcceleratorInfo(Accelerator* accel,bool recursive,Arena* out,Arena* temp){
+AccelInfo CalculateAcceleratorInfo(Accelerator* accel,bool recursive,Arena* out,Arena* temp){
   // TODO: Have this function return everything that needs to be arraified  
   //       Printing a GraphArray struct should tell me everything I need to know about the accelerator
-
+  AccelInfo result = {};
+  
   ArenaList<InstanceInfo>* infoList = PushArenaList<InstanceInfo>(temp);
   Hashmap<StaticId,int>* staticInfo = PushHashmap<StaticId,int>(temp,99);
 
@@ -494,6 +495,18 @@ Array<InstanceInfo> CalculateAcceleratorInfo(Accelerator* accel,bool recursive,A
   
   Array<InstanceInfo> res = PushArrayFromList<InstanceInfo>(out,infoList);
 
+  int maxMemBitsize = log2i(subOffsets.memOffset);
+  if(maxMemBitsize > 0){
+    for(InstanceInfo& info : res){
+      if(info.memMapped.has_value()){
+        String& memMask = info.memMappedMask.value();
+
+        memMask.data += 32 - maxMemBitsize;
+        memMask.size = maxMemBitsize;
+      }
+    }
+  }
+  
   FUDeclaration* maxConfigDecl = nullptr;
   int maxConfig = 0;
   for(InstanceInfo& inst : res){
@@ -520,30 +533,33 @@ Array<InstanceInfo> CalculateAcceleratorInfo(Accelerator* accel,bool recursive,A
     }
   }
   
-  return res;
+  result.info = res;
+  result.memMappedBitsize = maxMemBitsize;
+  
+  return result;
 }
 
 Array<InstanceInfo> ExtractFromInstanceInfoSameLevel(Array<InstanceInfo> instanceInfo,int level,Arena* out){
-  Byte* mark = MarkArena(out);
+  DynamicArray<InstanceInfo> arr = StartArray<InstanceInfo>(out);
   for(InstanceInfo& info : instanceInfo){
     if(info.level == level){
-      *PushStruct<InstanceInfo>(out) = info;
+      *arr.PushElem() = info;
     }
   }
 
-  return PointArray<InstanceInfo>(out,mark);
+  return EndArray(arr);
 }
 
 Array<InstanceInfo> ExtractFromInstanceInfo(Array<InstanceInfo> instanceInfo,Arena* out){
-  Byte* mark = MarkArena(out);
+  DynamicArray<InstanceInfo> arr = StartArray<InstanceInfo>(out);
 
   for(InstanceInfo& info : instanceInfo){
     if(info.configSize > 0 || info.stateSize > 0 || info.memMappedSize.value_or(0) > 0 || info.delaySize){
-      *PushStruct<InstanceInfo>(out) = info;
+      *arr.PushElem() = info;
     }
   }
 
-  return PointArray<InstanceInfo>(out,mark);
+  return EndArray(arr);
 }
 
 void CheckSanity(Array<InstanceInfo> instanceInfo,Arena* temp){

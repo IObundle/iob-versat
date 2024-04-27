@@ -69,10 +69,7 @@ static Value EscapeString(Value val,Arena* out){
     }
   }
 
-  Value res = val;
-  res.str = escaped;
-
-  return res;
+  return MakeValue(escaped);
 }
 
 // MARK TODO: Small fix for common template. Works for now 
@@ -901,9 +898,9 @@ void PrintDeclaration(FILE* out,FUDeclaration* decl,Arena* temp,Arena* temp2){
   fprintf(out,"\n");
   
   if(decl->fixedDelayCircuit){
-    Array<InstanceInfo> info = CalculateAcceleratorInfo(decl->fixedDelayCircuit,true,temp,temp2);
+    AccelInfo info = CalculateAcceleratorInfo(decl->fixedDelayCircuit,true,temp,temp2);
 
-    PrintAll(out,info,temp);
+    PrintAll(out,info.info,temp);
 
     fprintf(out,"\n======================================\n");
     

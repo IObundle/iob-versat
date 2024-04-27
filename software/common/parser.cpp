@@ -347,7 +347,7 @@ String Tokenizer::GetFullLineForGivenToken(Token token){
 }
 
 String Tokenizer::GetRichLocationError(Token got,Arena* out){
-  Byte* mark = MarkArena(out);
+  auto mark = StartString(out);
 
   String fullLine = GetFullLineForGivenToken(got);
   int line = got.loc.start.line;
@@ -359,7 +359,7 @@ String Tokenizer::GetRichLocationError(Token got,Arena* out){
 
   PushPointingString(out,columnIndex,got.size);
 
-  return PointArena(out,mark);
+  return EndString(mark);
 }
 
 Token Tokenizer::AssertNextToken(const char* str){
@@ -824,7 +824,7 @@ Array<String> Split(String content,char sep,Arena* out){
   int index = 0;
   int size = content.size;
 
-  Byte* mark = MarkArena(out);
+  DynamicArray<String> arr = StartArray<String>(out);
   
   while(1){
     int start = index;
@@ -843,12 +843,12 @@ Array<String> Split(String content,char sep,Arena* out){
       //Assert(false);
     }
 
-    *PushStruct<String>(out) = line;
+    *arr.PushElem() = line;
 
     index += 1;
   }
   
-  Array<String> res = PointArray<String>(out,mark);
+  Array<String> res = EndArray(arr);
   return res;
 }
 
@@ -881,14 +881,14 @@ String TrimWhitespaces(String in){
 }
 
 String PushPointingString(Arena* out,int startPos,int size){
-  Byte* mark = MarkArena(out);
+  auto mark = StartString(out);
   for(int i = 0; i < startPos; i++){
     PushString(out," ");
   }
   for(int i = 0; i < size; i++){
     PushString(out,"^");
   }
-  String res = PointArena(out,mark);
+  String res = EndString(mark);
   return res;
 }
 
@@ -1078,8 +1078,9 @@ TokenizerTemplate* CreateTokenizerTemplate(Arena* out,const char* singleChars,Br
   TokenizerTemplate* tmpl = PushStruct<TokenizerTemplate>(out);
   *tmpl = {};
 
-  Byte* mark = MarkArena(out);
-  Trie* topTrie = PushStruct<Trie>(out);
+  DynamicArray<Trie> arr = StartArray<Trie>(out);
+
+  Trie* topTrie = arr.PushElem();
   *topTrie = {};
   for(int i = 0; singleChars[i] != '\0'; i++){
     i8 index = (i8) singleChars[i];
@@ -1101,7 +1102,7 @@ TokenizerTemplate* CreateTokenizerTemplate(Arena* out,const char* singleChars,Br
       
       if(val == TOKEN_NONE){
         ptr->array[ch] += triesIndex++;
-        Trie* newTrie = PushStruct<Trie>(out);
+        Trie* newTrie = arr.PushElem();
         *newTrie = {};
 
         if(last){
@@ -1111,7 +1112,7 @@ TokenizerTemplate* CreateTokenizerTemplate(Arena* out,const char* singleChars,Br
       } else if(val == TOKEN_GOOD){
         if(!last){
           ptr->array[ch] = triesIndex++;
-          Trie* newTrie = PushStruct<Trie>(out);
+          Trie* newTrie = arr.PushElem();
           *newTrie = {};
           DefaultTrieGood(newTrie);
           ptr = newTrie;
@@ -1125,7 +1126,7 @@ TokenizerTemplate* CreateTokenizerTemplate(Arena* out,const char* singleChars,Br
     }
   }
 
-  tmpl->subTries = PointArray<Trie>(out,mark);
+  tmpl->subTries = EndArray(arr);
   
   return tmpl;
 }

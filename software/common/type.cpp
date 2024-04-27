@@ -185,7 +185,7 @@ String GetBaseTypeName(String name){
 Type* InstantiateTemplate(String name,Arena* arena){
   STACK_ARENA(temp,Kilobyte(4));
   Tokenizer tok(name,"<>,",{});
-
+  
   // This check probably shouldn't be here.
   Type* alreadyExists = GetSpecificType(name);
   if(alreadyExists && alreadyExists->members.size > 0){
@@ -245,7 +245,7 @@ Type* InstantiateTemplate(String name,Arena* arena){
     Tokenizer tok(templateMember.typeName,"*&[],<>",{});
 
     BLOCK_REGION(&temp);
-    Byte* mark = MarkArena(&temp);
+    auto mark = StartString(&temp);
 
     while(!tok.Done()){
       Token token = tok.NextToken();
@@ -258,7 +258,7 @@ Type* InstantiateTemplate(String name,Arena* arena){
       }
     }
 
-    String trueType = PointArena(&temp,mark);
+    String trueType = EndString(mark);
     String baseType = GetBaseTypeName(trueType);
 
     // TODO: This feels a bit like a hack. But it does work. Maybe it's fine with a bit of a cleanup and comments
@@ -1519,7 +1519,7 @@ Array<Value> ExtractValues(const char* format,String tok,Arena* arena){
     return {};
   }
 
-  Byte* mark = MarkArena(arena);
+  DynamicArray<Value> arr = StartArray<Value>(arena);
 
   int tokenIndex = 0;
   for(int formatIndex = 0; 1;){
@@ -1549,7 +1549,7 @@ Array<Value> ExtractValues(const char* format,String tok,Arena* arena){
         numberStr.size = &tok.data[tokenIndex] - numberStr.data;
         int number = ParseInt(numberStr);
 
-        Value* val = PushStruct<Value>(arena);
+        Value* val = arr.PushElem();
         *val = {};
         val->type = ValueType::NUMBER;
         val->number = number;
@@ -1568,7 +1568,7 @@ Array<Value> ExtractValues(const char* format,String tok,Arena* arena){
 
         str.size = &tok.data[tokenIndex] - str.data;
 
-        Value* val = PushStruct<Value>(arena);
+        Value* val = arr.PushElem();
         *val = {};
         val->type = ValueType::STRING;
         val->str = str;
@@ -1588,7 +1588,7 @@ Array<Value> ExtractValues(const char* format,String tok,Arena* arena){
     }
   }
 
-  Array<Value> values = PointArray<Value>(arena,mark);
+  Array<Value> values = EndArray(arr);
 
   return values;
 }

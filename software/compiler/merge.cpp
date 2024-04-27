@@ -54,7 +54,6 @@ bool MappingConflict(MappingNode map1,MappingNode map2){
       return true;
     }
   } else if(map1.type == MappingNode::EDGE && map2.type == MappingNode::EDGE){
-#if 1
     PortEdge nodeMapping00 = {map1.edges[0].units[0],map1.edges[1].units[0]};
     PortEdge nodeMapping01 = {map1.edges[0].units[1],map1.edges[1].units[1]};
     PortEdge nodeMapping10 = {map2.edges[0].units[0],map2.edges[1].units[0]};
@@ -64,7 +63,6 @@ bool MappingConflict(MappingNode map1,MappingNode map2){
                NodeMappingConflict(nodeMapping01,nodeMapping10) ||
                NodeMappingConflict(nodeMapping00,nodeMapping11) ||
                NodeMappingConflict(nodeMapping01,nodeMapping11);
-#endif
 
     return res;
   } else {
@@ -314,7 +312,7 @@ ConsolidationResult GenerateConsolidationGraph(Versat* versat,Arena* out,Acceler
   }
 #endif
 
-  graph.nodes.data = (MappingNode*) MarkArena(out);
+  DynamicArray<MappingNode> nodes = StartArray<MappingNode>(out);
 #if 1
   // Check possible edge mapping
   FOREACH_LIST(Edge*,edge1,accel1->edges){
@@ -373,12 +371,13 @@ ConsolidationResult GenerateConsolidationGraph(Versat* versat,Arena* out,Acceler
       }
 #endif
 
-      MappingNode* space = PushStruct<MappingNode>(out);
+      MappingNode* space = nodes.PushElem();
 
       *space = node;
       graph.nodes.size += 1;
     }
   }
+  graph.nodes = EndArray(nodes);
 #endif
 
   // Check node mapping
@@ -631,7 +630,7 @@ void Clique(CliqueState* state,ConsolidationGraph graphArg,int index,IndexRecord
 
     graph.validNodes.Set(i,0);
 
-    Byte* mark = MarkArena(temp);
+    auto mark = MarkArena(temp);
     ConsolidationGraph tempGraph = Copy(graph,temp);
 
     tempGraph.validNodes &= graph.edges[i];
@@ -642,7 +641,7 @@ void Clique(CliqueState* state,ConsolidationGraph graphArg,int index,IndexRecord
 
     Clique(state,tempGraph,i,&newRecord,size + 1,temp,MAX_CLIQUE_TIME);
 
-    PopMark(temp,mark);
+    PopMark(mark);
 
     if(state->found == true){
       return;
@@ -664,7 +663,7 @@ void RunMaxClique(CliqueState* state,Arena* arena,Time MAX_CLIQUE_TIME){
   int startI = state->startI ? state->startI : graph.nodes.size - 1;
 
   for(int i = startI; i >= 0; i--){
-    Byte* mark = MarkArena(arena);
+    auto mark = MarkArena(arena);
 
     state->found = false;
     for(int j = i; j < graph.nodes.size; j++){
@@ -680,7 +679,7 @@ void RunMaxClique(CliqueState* state,Arena* arena,Time MAX_CLIQUE_TIME){
     Clique(state,graph,i,&record,1,arena,MAX_CLIQUE_TIME);
     state->table[i] = state->max;
 
-    PopMark(arena,mark);
+    PopMark(mark);
 
     if(state->max == state->upperBound){
       printf("Upperbound finish, index: %d (from %d)\n",i,graph.nodes.size);
@@ -714,7 +713,7 @@ CliqueState MaxClique(ConsolidationGraph graph,int upperBound,Arena* arena,Time 
 
   state.start = GetTime();
   for(int i = graph.nodes.size - 1; i >= 0; i--){
-    Byte* mark = MarkArena(arena);
+    auto mark = MarkArena(arena);
 
     state.found = false;
     for(int j = i; j < graph.nodes.size; j++){
@@ -729,7 +728,7 @@ CliqueState MaxClique(ConsolidationGraph graph,int upperBound,Arena* arena,Time 
     Clique(&state,graph,i,&record,1,arena,MAX_CLIQUE_TIME);
     state.table[i] = state.max;
 
-    PopMark(arena,mark);
+    PopMark(mark);
 
     if(state.max == upperBound){
       //printf("Upperbound finish, index: %d (from %d)\n",i,graph.nodes.size);
@@ -1010,150 +1009,6 @@ void OrderedMatch(std::vector<FUInstance*>& order1,std::vector<FUInstance*>& ord
 #endif
 }
 
-static GraphMapping OrderedFitGraphMapping(Versat* versat,Accelerator* accel0,Accelerator* accel1,Arena* arena){
-  Arena* temp = &versat->temp;
-  BLOCK_REGION(arena);
-  BLOCK_REGION(temp);
-  
-  DAGOrderNodes order0 = CalculateDAGOrder(accel0->allocated,temp);
-  DAGOrderNodes order1 = CalculateDAGOrder(accel1->allocated,temp);
-  
-#if 0
-  AcceleratorView view0 = CreateAcceleratorView(accel0,arena);
-  view0.CalculateDAGOrdering(arena);
-  AcceleratorView view1 = CreateAcceleratorView(accel1,arena);
-  view1.CalculateDAGOrdering(arena);
-
-  GraphMapping res = {};
-
-  FOREACH_LIST(inst,accel0->instances){
-  inst->tag = 0;
-}
-
-  FOREACH_LIST(inst,accel1->instances){
-  inst->tag = 0;
-}
-
-  int minIterations = std::min(accel0->numberInstances,accel1->numberInstances);
-
-  auto BinaryNext = [](int i){
-    if(i == 0){
-      return 1;
-    } else {
-      return (i * 2);
-    }
-  };
-
-  std::vector<FUInstance*> order1;
-  std::vector<FUInstance*> order2;
-  for(int i = 0; i < minIterations * 2; i = BinaryNext(i)){
-    order1.clear();
-    order2.clear();
-    FOREACH_LIST(inst,accel0->instances){
-    if(!inst->tag){
-      order1.push_back(inst);
-    }
-  }
-    FOREACH_LIST(inst,accel1->instances){
-    if(!inst->tag){
-      order2.push_back(inst);
-    }
-  }
-
-    std::sort(order1.begin(),order1.end(),compare);
-    std::sort(order2.begin(),order2.end(),compare);
-
-    OrderedMatch(order1,order2,res.instanceMap,i);
-  }
-  return res;
-#endif
-
-  NOT_IMPLEMENTED("Implement if needed");
-  return {};
-}
-
-GraphMapping TestingGraphMapping(Versat* versat,Accelerator* accel0,Accelerator* accel1,Arena* arena){
-#if 0
-  ArenaMarker marker(arena);
-
-  AcceleratorView view0 = CreateAcceleratorView(accel0,arena);
-  view0.CalculateDAGOrdering(arena);
-  AcceleratorView view1 = CreateAcceleratorView(accel1,arena);
-  view1.CalculateDAGOrdering(arena);
-
-  int maxOrder1 = 0;
-  for(FUInstance* inst : accel0->instances){
-    maxOrder1 = std::max(maxOrder1,inst->graphData->order);
-  }
-  int maxOrder2 = 0;
-  for(FUInstance* inst : accel1->instances){
-    maxOrder2 = std::max(maxOrder2,inst->graphData->order);
-  }
-
-  int maxOrder = std::min(maxOrder1,maxOrder2);
-
-  int difference = 2;
-
-  ConsolidationGraphOptions options = {};
-  options.type = ConsolidationGraphOptions::EXACT_ORDER;
-  options.difference = difference - 1;
-  options.mapNodes = true;
-
-  GraphMapping res;
-  for(int i = 0; i < maxOrder - 1; i += difference){
-    ArenaMarker marker(arena);
-
-    options.order = i;
-
-    ConsolidationGraph graph = GenerateConsolidationGraph(versat,arena,accel0,accel1,options);
-
-    if(graph.validNodes.bitSize == 0){
-      return res;
-    }
-
-    //BitArray* neighbors = CalculateNeighborsTable(graph,arena);
-    BitArray* neighbors = graph.edges.data;
-
-    printf("%d\n",ValidNodes(graph));
-
-    ConsolidationGraph clique = MaxClique(graph,arena);
-
-    Assert(IsClique(clique,neighbors,arena).result);
-
-    //printf("%d %d\n",i,NumberNodes(clique));
-
-    for(int ii = 0; ii < clique.nodes.size; ii++){
-      MappingNode node = clique.nodes[ii];
-
-      if(!clique.validNodes.Get(ii)){
-        continue;
-      }
-
-      if(node.type == MappingNode::NODE){
-        MergeEdge& nodes = node.nodes;
-
-        InsertMapping(res,nodes.instances[1],nodes.instances[0]);
-      } else { // Edge mapping
-            PortEdge& edge0 = node.edges[0]; // Edge in graph 1
-            PortEdge& edge1 = node.edges[1]; // Edge in graph 2
-
-            InsertMapping(res,edge1.units[0].inst,edge0.units[0].inst);
-            InsertMapping(res,edge1.units[1].inst,edge0.units[1].inst);
-
-            res.edgeMap.insert({edge1,edge0});
-      }
-    }
-
-#if 0
-    printf("%d %d %d\n",i,graph.numberNodes,graph.numberEdges);
-#endif
-  }
-
-  return res;
-#endif
-  return (GraphMapping){};
-}
-
 struct OverheadCount{
   int muxes;
   int buffers;
@@ -1316,14 +1171,8 @@ static GraphMapping MergeAccelerator(Versat* versat,Accelerator* accel1,Accelera
 
     graphMapping = ConsolidationGraphMapping(versat,accel1,accel2,options,temp,name);
   }break;
-  case MergingStrategy::PIECEWISE_CONSOLIDATION_GRAPH:{
-    graphMapping = TestingGraphMapping(versat,accel1,accel2,temp);
-  }break;
   case MergingStrategy::FIRST_FIT:{
     graphMapping = FirstFitGraphMapping(versat,accel1,accel2,temp);
-  }break;
-  case MergingStrategy::ORDERED_FIT:{
-    graphMapping = OrderedFitGraphMapping(versat,accel1,accel2,temp);
   }break;
   }
 
@@ -1354,7 +1203,6 @@ MergeGraphResult MergeGraph(Versat* versat,Accelerator* flatten1,Accelerator* fl
     map1->Insert(newNode,ptr);
   }
 
-#if 1
   // Create base instances from accel 2, unless they are mapped to nodes from accel1
   FOREACH_LIST(InstanceNode*,ptr,flatten2->allocated){
     FUInstance* inst = ptr->inst;
@@ -1364,14 +1212,6 @@ MergeGraphResult MergeGraph(Versat* versat,Accelerator* flatten1,Accelerator* fl
     FUInstance* mappedNode = nullptr;
     if(mapping != graphMapping.instanceMap.end()){
       mappedNode = map->GetOrFail(mapping->second);
-
-#if 0
-      for(int i = 0; i < mappedNode->name.size; i++){
-        if(mappedNode->name[i] == '/'){
-          Assert(false);
-        }
-      }
-#endif
 
       // For now, change name even if they have the same name
       //if(!CompareString(inst->name,mappedNode->name)){
@@ -1387,9 +1227,7 @@ MergeGraphResult MergeGraph(Versat* versat,Accelerator* flatten1,Accelerator* fl
     map->Insert(inst,mappedNode);
     map2->Insert(newNode,ptr);
   }
-#endif
 
-#if 1
   // Create base edges from accel 1
   FOREACH_LIST(Edge*,edge,flatten1->edges){
     FUInstance* mappedInst = map->GetOrFail(edge->units[0].inst);
@@ -1397,9 +1235,7 @@ MergeGraphResult MergeGraph(Versat* versat,Accelerator* flatten1,Accelerator* fl
 
     ConnectUnitsGetEdge(mappedInst,edge->units[0].port,mappedOther,edge->units[1].port,edge->delay);
   }
-#endif
 
-#if 1
   // Create base edges from accel 2, unless they are mapped to edges from accel 1
   FOREACH_LIST(Edge*,edge,flatten2->edges){
     PortEdge searchEdge = {};
@@ -1408,7 +1244,6 @@ MergeGraphResult MergeGraph(Versat* versat,Accelerator* flatten1,Accelerator* fl
 
     auto iter = graphMapping.edgeMap.find(searchEdge);
 
-#if 1
     if(iter != graphMapping.edgeMap.end()){
       FUInstance* mappedInst = map->GetOrFail(edge->units[0].inst);
       FUInstance* mappedOther = map->GetOrFail(edge->units[1].inst);
@@ -1419,13 +1254,11 @@ MergeGraphResult MergeGraph(Versat* versat,Accelerator* flatten1,Accelerator* fl
             continue;
       }
     }
-#endif
 
     FUInstance* mappedInst = map->GetOrFail(edge->units[0].inst);
     FUInstance* mappedOther = map->GetOrFail(edge->units[1].inst);
     ConnectUnitsIfNotConnectedGetEdge(mappedInst,edge->units[0].port,mappedOther,edge->units[1].port,edge->delay);
   }
-#endif
 
   MergeGraphResult res = {};
   res.newGraph = newGraph;
@@ -1452,7 +1285,6 @@ MergeGraphResultExisting MergeGraphToExisting(Versat* versat,Accelerator* existi
     map->Insert(ptr->inst,ptr->inst);
   }
 
-#if 1
   // Create base instances from accel 2, unless they are mapped to nodes from accel1
   FOREACH_LIST(InstanceNode*,ptr,flatten2->allocated){
     FUInstance* inst = ptr->inst;
@@ -1462,14 +1294,6 @@ MergeGraphResultExisting MergeGraphToExisting(Versat* versat,Accelerator* existi
     FUInstance* mappedNode = nullptr;
     if(mapping != graphMapping.instanceMap.end()){
       mappedNode = map->GetOrFail(mapping->second);
-
-#if 0
-      for(int i = 0; i < mappedNode->name.size; i++){
-        if(mappedNode->name[i] == '/'){
-          Assert(false);
-        }
-      }
-#endif
 
       // For now, change name even if they have the same name
       //if(!CompareString(inst->name,mappedNode->name)){
@@ -1485,9 +1309,7 @@ MergeGraphResultExisting MergeGraphToExisting(Versat* versat,Accelerator* existi
     map->Insert(inst,mappedNode);
     map2->Insert(ptr,newNode);
   }
-#endif
 
-#if 1
   // Create base edges from accel 2, unless they are mapped to edges from accel 1
   FOREACH_LIST(Edge*,edge,flatten2->edges){
     PortEdge searchEdge = {};
@@ -1496,7 +1318,6 @@ MergeGraphResultExisting MergeGraphToExisting(Versat* versat,Accelerator* existi
 
     auto iter = graphMapping.edgeMap.find(searchEdge);
 
-#if 1
     if(iter != graphMapping.edgeMap.end()){
       FUInstance* mappedInst = map->GetOrFail(edge->units[0].inst);
       FUInstance* mappedOther = map->GetOrFail(edge->units[1].inst);
@@ -1507,13 +1328,11 @@ MergeGraphResultExisting MergeGraphToExisting(Versat* versat,Accelerator* existi
             continue;
       }
     }
-#endif
 
     FUInstance* mappedInst = map->GetOrFail(edge->units[0].inst);
     FUInstance* mappedOther = map->GetOrFail(edge->units[1].inst);
     ConnectUnitsIfNotConnectedGetEdge(mappedInst,edge->units[0].port,mappedOther,edge->units[1].port,edge->delay);
   }
-#endif
 
   MergeGraphResultExisting res = {};
   res.result = existing;
@@ -1523,21 +1342,13 @@ MergeGraphResultExisting MergeGraphToExisting(Versat* versat,Accelerator* existi
   return res;
 }
 
-#include "scratchSpace.hpp"
-
 FUDeclaration* MergeAccelerators(Versat* versat,FUDeclaration* accel1,FUDeclaration* accel2,String name,
                                  int flatteningOrder,MergingStrategy strategy,SpecificMerge* specifics,int nSpecifics){
   Arena* arena = &versat->temp;
   ArenaMarker marker(arena);
 
-#if 1
-#if 0
-  Accelerator* flatten1 = Flatten(versat,accel1->baseCircuit,1);
-  Accelerator* flatten2 = Flatten(versat,accel2->baseCircuit,1);
-#else
   Accelerator* flatten1 = Flatten(versat,accel1->baseCircuit,99);
   Accelerator* flatten2 = Flatten(versat,accel2->baseCircuit,99);
-#endif
 
   Array<SpecificMergeNodes> specificNodes = PushArray<SpecificMergeNodes>(arena,nSpecifics);
 #if 0
@@ -1562,108 +1373,13 @@ FUDeclaration* MergeAccelerators(Versat* versat,FUDeclaration* accel1,FUDeclarat
   Accelerator* newGraph = result.newGraph;
 
   region(arena){
-    //AcceleratorView view = CreateAcceleratorView(newGraph,arena);
-#if 0
-    int size = result.accel1EdgeMap.size() + result.accel2EdgeMap.size();
-
-    Hashmap<FUInstance*,int>* instanceToInput = PushHashmap<FUInstance*,int>(arena,size);
-
-    for(Edge* edge1 : result.accel1EdgeMap){
-      instanceToInput->Insert(edge1->units[0].inst,0);
-    }
-
-    for(Edge* edge2 : result.accel2EdgeMap){
-      instanceToInput->Insert(edge2->units[0].inst,1);
-    }
-#endif
-
     newGraph->name = name;
-    //OutputGraphDotFile(versat,newGraph,true,"debug/beforeFixMult.dot",UNPACK_SS(name));
-    //FixMultipleInputs(versat,newGraph,instanceToInput);
-    //OutputGraphDotFile(versat,newGraph,true,"debug/afterFixMult.dot",UNPACK_SS(name));
   }
-#endif
-
-  //InitThreadPool(16);
-
-#if 0
-  MergeGraphResult result;
-  //MergeGraphResult result = HierarchicalHeuristic(versat,accel1,accel2,name);
-#elif 0
-  MergeGraphResult result = HierarchicalMergeAcceleratorsFullClique(versat,accel1->baseCircuit,accel2->baseCircuit,name);
-  //MergeGraphResult result = HierarchicalMergeAccelerators(versat,accel1->baseCircuit,accel2->baseCircuit,name);
-#elif 0
-  MergeGraphResult result = ParallelHierarchicalHeuristic(versat,accel1,accel2,name);
-#endif
 
   FUDeclaration* decl = RegisterSubUnit(versat,newGraph);
-
-#if 0
-  {
-    ArenaMarker marker(arena);
-    AcceleratorView view = CreateAcceleratorView(decl->fixedDelayCircuit,arena);
-    view.CalculateGraphData(arena);
-    OutputGraphDotFile(versat,view,true,"debug/%.*s/FixedDelay.dot",UNPACK_SS(name));
-  }
-  //CalculateDelay(versat,flatten1);
-  //CalculateDelay(versat,flatten2);
-
-  printf("\nFixed graphs\n");
-  PrintSavedByMerge(versat,decl->fixedDelayCircuit,flatten1,flatten2);
-  printf("\n");
-#endif
-
-#if 0
-  //decl->type = FUDeclaration::MERGED;
-  decl->mergedType = PushArray<FUDeclaration*>(&versat->permanent,2);
-  decl->mergedType[0] = accel1;
-  decl->mergedType[1] = accel2;
-#endif
   
   return decl;
 }
-
-#if 0
-FUDeclaration* MergeThree(Versat* versat,FUDeclaration* typeA,FUDeclaration* typeB,FUDeclaration* typeC){
-  Arena* temp = &versat->temp;
-  ArenaMarker marker(temp);
-
-  Accelerator* flatten1 = Flatten(versat,typeA->baseCircuit,99);
-  Accelerator* flatten2 = Flatten(versat,typeB->baseCircuit,99);
-  Accelerator* flatten3 = Flatten(versat,typeC->baseCircuit,99);
-
-  String name1 = STRING("Test12Merge");
-  String name2 = STRING("Test123Merge");
-
-  Array<SpecificMergeNodes> specificNodes = {};
-  GraphMapping graphMapping12 = MergeAccelerator(versat,flatten1,flatten2,specificNodes,MergingStrategy::CONSOLIDATION_GRAPH,name1);
-
-  MergeGraphResult result12 = MergeGraph(versat,flatten1,flatten2,graphMapping12,name1,temp);
-  Accelerator* graph12 = result12.newGraph;
-
-  OutputGraphDotFile(versat,result12.accel1,true,STRING("debug/view1.dot"),temp);
-  OutputGraphDotFile(versat,result12.accel2,true,STRING("debug/view2.dot"),temp);
-  OutputGraphDotFile(versat,graph12,true,STRING("debug/graph12.dot"),temp);
-
-  GraphMapping graphMapping123 = MergeAccelerator(versat,graph12,flatten3,specificNodes,MergingStrategy::CONSOLIDATION_GRAPH,name2);
-  MergeGraphResult result123 = MergeGraph(versat,graph12,flatten3,graphMapping123,name2,temp);
-  Accelerator* finalGraph = result123.newGraph;
-
-  OutputGraphDotFile(versat,result123.accel2,true,STRING("debug/view3.dot"),temp);
-  OutputGraphDotFile(versat,finalGraph,true,STRING("debug/graph123.dot"),temp);
-
-  FUDeclaration* decl = RegisterSubUnit(versat,name2,finalGraph);
-
-#if 0
-  decl->mergedType = PushArray<FUDeclaration*>(&versat->permanent,3);
-  decl->mergedType[0] = typeA;
-  decl->mergedType[1] = typeB;
-  decl->mergedType[2] = typeC;
-#endif
-
-  return decl;
-}
-#endif
 
 Array<int> GetPortConnections(InstanceNode* node,Arena* arena){
   int maxPorts = 0;
@@ -1681,15 +1397,8 @@ Array<int> GetPortConnections(InstanceNode* node,Arena* arena){
   return res;
 }
 
-#if 1
 Optional<int> GetConfigurationIndexFromInstanceNode(FUDeclaration* type,InstanceNode* node){
   // While configuration array is fully defined, no need to do this check beforehand.
-#if 0
-  if(node->inst->declaration->configInfo.configs.size == 0){
-    return (Optional<int>){};
-  }
-#endif
-  
   int index = 0;
   FOREACH_LIST_INDEXED(InstanceNode*,iter,type->fixedDelayCircuit->allocated,index){
     if(iter == node){
@@ -1700,7 +1409,6 @@ Optional<int> GetConfigurationIndexFromInstanceNode(FUDeclaration* type,Instance
   Assert(false);
   return Optional<int>{};
 }
-#endif
 
 FUDeclaration* Merge(Versat* versat,Array<FUDeclaration*> types,String name,MergingStrategy strat){
   Assert(types.size >= 2);
@@ -1722,28 +1430,12 @@ FUDeclaration* Merge(Versat* versat,Array<FUDeclaration*> types,String name,Merg
   for(int i = 0; i < size; i++){
     flatten[i] = Flatten(versat,types[i]->baseCircuit,99);
   }
-
-#if 0
-  for(Accelerator* ac : flatten){
-    Array<InstanceInfo> test = TransformGraphIntoArray(ac,true,perm,temp);
-    Array<InstanceInfo> onlySome = ExtractFromInstanceInfo(test,temp);
-
-    PrintAll(onlySome,temp);
-  }
-#endif
   
   for(int i = 0; i < size - 1; i++){
     new (&mappings[i].instanceMap) InstanceMap; // Maps from accel2 to accel1
     new (&mappings[i].reverseInstanceMap) InstanceMap; // Maps from accel1 to accel2
     new (&mappings[i].edgeMap) InstanceMap;
   }
-
-  // Basically we have all the accelerators flattened.
-  // We copy accel 1 to serve as the basis.
-  // We merge the accelerators by adding more instances and edges to this copy
-  // While keeping a mapping from accelerator N to the instances of the copy in the view array.
-
-  // What I want is to be able to map instance info -> 
   
   // We copy accel 1.
   Accelerator* result = CopyAccelerator(versat,flatten[0],nullptr);
@@ -1778,12 +1470,6 @@ FUDeclaration* Merge(Versat* versat,Array<FUDeclaration*> types,String name,Merg
     }
   }
   
-  // I have information about how each graph is related to the final graph
-  // I need to find out every node which has more connections than available
-  // I need to find out how each connection is related to each graph that produces it
-  // Then I need to insert a multiplexer so that each input matches the graph that produced it
-
-  // What I have: Final graph, each input graph as a separate graph and a mapping from each input graph to the final graph.
 
   // Need to map from final to each input graph
   int numberOfMultipleInputs = 0;
@@ -1817,11 +1503,6 @@ FUDeclaration* Merge(Versat* versat,Array<FUDeclaration*> types,String name,Merg
           continue;
         }
 
-#if 0
-        printf("\n");
-        printf("%.*s:%d\n",UNPACK_SS(ptr->inst->name),port);
-#endif
-
         int numberOfMultiple = portConnections[port];
 
         //printf("%d %d:",port,numberOfMultiple);
@@ -1836,12 +1517,6 @@ FUDeclaration* Merge(Versat* versat,Array<FUDeclaration*> types,String name,Merg
             node.node0 = con->instConnectedTo;
             node.node1 = {ptr,con->port};
             problematicEdgesInFinalGraph[index++] = node;
-
-#if 0
-            BLOCK_REGION(temp);
-            String repr = Repr(node,temp);
-            printf("%.*s\n",UNPACK_SS(repr));
-#endif
           }
         }
 
@@ -1896,12 +1571,6 @@ FUDeclaration* Merge(Versat* versat,Array<FUDeclaration*> types,String name,Merg
 
             int graphIndex = ii;
 
-#if 0
-            BLOCK_REGION(temp);
-            String repr = Repr(node,temp);
-            printf("%.*s %d\n",UNPACK_SS(repr),graphIndex);
-#endif
-
             RemoveConnection(result,node.node0.node,node.node0.port,node.node1.node,node.node1.port);
             ConnectUnitsGetEdge(node.node0,{multiplexer,graphIndex},0);
           }
@@ -1931,28 +1600,6 @@ FUDeclaration* Merge(Versat* versat,Array<FUDeclaration*> types,String name,Merg
   String permanentName = PushString(&versat->permanent,name);
   result->name = permanentName;
   FUDeclaration* decl = RegisterSubUnit(versat,result);
-
-  // RegisterSubUnit creates new accelerators and stuff.
-  // Also adds buffers which do not add anything to the config array, right?
-#if 0
-  {
-    Array<InstanceInfo> info = TransformGraphIntoArray(result,true,temp,perm);
-    Array<InstanceInfo> onlySome = ExtractFromInstanceInfo(info,temp);
-  
-    printf("Result");
-    NEWLINE();
-    PrintAll(onlySome,temp);
-  }
-  
-  {
-    Array<InstanceInfo> info = TransformGraphIntoArray(decl->fixedDelayCircuit,true,temp,perm);
-    Array<InstanceInfo> onlySome = ExtractFromInstanceInfo(info,temp);
-  
-    printf("Declaration");
-    NEWLINE();
-    PrintAll(onlySome,temp);
-  }
-#endif
   
   int mergedConfigSize = decl->configInfo.configOffsets.offsets.size;
   decl->mergeInfo = PushArray<MergeInfo>(&versat->permanent,size);
@@ -1979,32 +1626,6 @@ FUDeclaration* Merge(Versat* versat,Array<FUDeclaration*> types,String name,Merg
       }
     }
   }
- 
-#if 0
-  for(int i = 0; i < size; i++){
-    // For any given original graph unit, need to fetch the associated configuration index and associated to the corerect values.
-    decl->mergeInfo[i].config.configs = types[i]->configInfo.configs;
-    decl->mergeInfo[i].config.states = types[i]->configInfo.states;
-     
-    decl->mergeInfo[i].config.configOffsets.offsets = PushArray<int>(&versat->permanent,types[i]->configInfo.configOffsets.offsets.size + 9999);
-    decl->mergeInfo[i].config.configOffsets.max = types[i]->configInfo.configOffsets.max;
-     
-    int index = 0;
-    for(Pair<InstanceNode*,InstanceNode*> pair : view[i]){
-      Optional<int> res = GetConfigurationIndexFromInstanceNode(decl,pair.second);
-
-      //if(res.has_value()) printf("%.*s : %d\n",UNPACK_SS(pair.second->inst->name),res.value());
-      if(res.has_value()){
-        decl->mergeInfo[i].config.configOffsets.offsets[index] = res.value();
-      } else {
-        Assert(false); // Since configs are fully defined, should never happen, for now
-      }
-      index += 1;
-    }
-     
-    decl->mergeInfo[i].baseType = types[i];
-  }
-#endif
   
   return decl;
 }

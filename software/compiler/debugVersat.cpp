@@ -196,7 +196,7 @@ void OutputGraphDotFile(Versat* versat,Accelerator* accel,bool collapseSameEdges
 }
 
 String PushMemoryHex(Arena* arena,void* memory,int size){
-  Byte* mark = MarkArena(arena);
+  auto mark = StartString(arena);
 
   unsigned char* view = (unsigned char*) memory;
 
@@ -207,7 +207,7 @@ String PushMemoryHex(Arena* arena,void* memory,int size){
     PushString(arena,"%c%c ",GetHex(high),GetHex(low));
   }
 
-  return PointArena(arena,mark);
+  return EndString(mark);
 }
 
 void OutputMemoryHex(void* memory,int size){

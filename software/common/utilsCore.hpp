@@ -14,6 +14,8 @@
 #include "signal.h"
 #include "assert.h"
 
+#include "debug.hpp"
+
 #define ALWAYS_INLINE __attribute__((always_inline)) inline
 
 #define CI(x) (x - '0')
@@ -120,8 +122,21 @@ if(_){ \
 //#define Assert(EXPR) do {} while(0)
 //#endif
 
-#define DEBUG_BREAK() do{ fflush(stdout); raise(SIGTRAP); } while(0)
-#define DEBUG_BREAK_IF(COND) if(COND){fflush(stdout); raise(SIGTRAP);}
+#define DEBUG_BREAK_IF(COND) do{ \
+  if(currentlyDebugging) { \
+    if(COND){ \
+      fflush(stdout); \
+      __asm__("int3");} \
+  } else { \
+    once{ \
+      printf("Old debug break point still active:\n");  \
+      LOCATION(); \
+      printf("\n");  \
+    }; \
+  } \
+  } while(0)
+
+#define DEBUG_BREAK() DEBUG_BREAK_IF(true)
 
 // If possible use argument to put a simple string indicating the error that must likely occured
 // We do not print it for now but useful for long lasting code.

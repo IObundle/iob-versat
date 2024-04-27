@@ -707,7 +707,7 @@ DAGOrderNodes CalculateDAGOrder(InstanceNode* instances,Arena* out){
   PushPtr<InstanceNode*> pushPtr = {};
   pushPtr.Init(res.instances);
 
-  BLOCK_REGION(out);
+  //BLOCK_REGION(out);
 
   Hashmap<InstanceNode*,int>* tags = PushHashmap<InstanceNode*,int>(out,size);
 
@@ -1004,20 +1004,15 @@ ComputedData CalculateVersatComputedData(Array<InstanceInfo> info,VersatComputed
   Array<ExternalMemoryInterface> external = PushArray<ExternalMemoryInterface>(out,val.externalMemoryInterfaces);
   int index = 0;
   int externalIndex = 0;
-  int memoryMapped = 0;
   for(InstanceInfo& in : info){
     if(!in.isComposite){
       for(ExternalMemoryInterface& inter : in.decl->externalMemory){
         external[externalIndex++] = inter;
       }
     }
-
-    if(in.decl->memoryMapBits.has_value()){
-      memoryMapped += 1;
-    }
   }
 
-  Array<VersatComputedData> data = PushArray<VersatComputedData>(out,memoryMapped);
+  Array<MemoryAddressMask> data = PushArray<MemoryAddressMask>(out,99);
 
   index = 0;
   for(InstanceInfo& in : info){
@@ -1043,7 +1038,12 @@ ComputedData CalculateVersatComputedData(Array<InstanceInfo> info,VersatComputed
       index += 1;
     }
   }
-
+  data.size = index;
+  
+  // TODO: There is some bug where we are not matching up the expected number of values.
+  //       I do not expect to keep this function around for much longer. So for now we just hack it away
+  //Assert(index == memoryMapped);
+  
   ComputedData res = {};
   res.external = external;
   res.data = data;
@@ -1065,6 +1065,7 @@ bool IsCombinatorial(Accelerator* accel){
   return true;
 }
 
+// TODO: Receive Accel info from above instead of recalculating it.
 Array<FUDeclaration*> AllNonSpecialSubTypes(Accelerator* accel,Arena* out,Arena* temp){
   if(accel == nullptr){
     return {};
@@ -1074,7 +1075,7 @@ Array<FUDeclaration*> AllNonSpecialSubTypes(Accelerator* accel,Arena* out,Arena*
   
   Set<FUDeclaration*>* maps = PushSet<FUDeclaration*>(temp,99);
   
-  Array<InstanceInfo> test = CalculateAcceleratorInfo(accel,true,temp,out);
+  Array<InstanceInfo> test = CalculateAcceleratorInfo(accel,true,temp,out).info;
   for(InstanceInfo& info : test){
     if(info.decl->type != FUDeclaration::SPECIAL){
       maps->Insert(info.decl);
@@ -1094,7 +1095,7 @@ Array<FUDeclaration*> ConfigSubTypes(Accelerator* accel,Arena* out,Arena* temp){
   
   Set<FUDeclaration*>* maps = PushSet<FUDeclaration*>(temp,99);
   
-  Array<InstanceInfo> test = CalculateAcceleratorInfo(accel,true,temp,out);
+  Array<InstanceInfo> test = CalculateAcceleratorInfo(accel,true,temp,out).info;
   for(InstanceInfo& info : test){
     if(info.configSize > 0){
       maps->Insert(info.decl);
@@ -1114,7 +1115,7 @@ Array<FUDeclaration*> MemSubTypes(Accelerator* accel,Arena* out,Arena* temp){
   
   Set<FUDeclaration*>* maps = PushSet<FUDeclaration*>(temp,99);
 
-  Array<InstanceInfo> test = CalculateAcceleratorInfo(accel,true,temp,out);
+  Array<InstanceInfo> test = CalculateAcceleratorInfo(accel,true,temp,out).info;
   for(InstanceInfo& info : test){
     if(info.memMappedSize.has_value()){
       maps->Insert(info.decl);

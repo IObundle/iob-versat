@@ -237,15 +237,15 @@ Array<IndexedStruct<T>> IndexArray(Array<T> array,Arena* out){
 }
 
 template<typename T>
-Array<T*> ListToArray(T* head,int size,Arena* out){
-   Array<T*> arr = PushArray<T*>(out,size);
+Array<T*> ListToArray(T* head,Arena* out){
+  DynamicArray<T*> arr = StartArray<T*>(out);
 
-   int i = 0;
-   FOREACH_LIST_INDEXED(T*,ptr,head,i){
-      arr[i] = ptr;
-   }
+  int i = 0;
+  FOREACH_LIST_INDEXED(T*,ptr,head,i){
+    *arr.PushElem() = ptr;
+  }
 
-   return arr;
+  return EndArray(arr);
 }
 
 template<typename T>
@@ -301,14 +301,14 @@ Hashmap<T,P>* PushHashmapFromList(Arena* out,ArenaList<Pair<T,P>>* list){
 
 template<typename T>
 Array<T> PushArrayFromList(Arena* out,ArenaList<T>* list){
-  Byte* mark = MarkArena(out);
+  DynamicArray<T> arr = StartArray<T>(out);
 
   FOREACH_LIST(ListedStruct<T>*,iter,list->head){
-    T* ptr = PushStruct<T>(out);
+    T* ptr = arr.PushElem();
     *ptr = iter->elem;
   }
 
-  Array<T> res = PointArray<T>(out,mark);
+  Array<T> res = EndArray(arr);
   return res;
 }
 
@@ -356,14 +356,14 @@ Array<P> PushArrayFromHashmapData(Arena* out,Hashmap<T,P>* map){
 
 template<typename T>
 Array<T> PushArrayFromSet(Arena* out,Set<T>* set){
-  Byte* mark = MarkArena(out);
+  DynamicArray<T> arr = StartArray<T>(out);
 
   for(auto pair : set->map){
-    T* ptr = PushStruct<T>(out);
+    T* ptr = arr.PushElem();
     *ptr = pair.first;
   }
 
-  Array<T> res = PointArray<T>(out,mark);
+  Array<T> res = EndArray(arr);
   return res;
 }
 

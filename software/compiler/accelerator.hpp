@@ -142,15 +142,18 @@ struct Accelerator{ // Graph + data storage
   String name; // For debugging purposes it's useful to give accelerators a name
 };
 
-struct VersatComputedData{
+struct MemoryAddressMask{
+  // Repr: memoryMask ( memoryMaskSize )
+
   int memoryMaskSize;
   char memoryMaskBuffer[33];
   char* memoryMask;
 };
 
 struct ComputedData{
+  // Repr: data
   Array<ExternalMemoryInterface> external; // Just a grouping of all external interfaces.
-  Array<VersatComputedData> data;          
+  Array<MemoryAddressMask> data;
 };
 
 struct VersatComputedValues{
@@ -191,8 +194,6 @@ struct VersatComputedValues{
 
   bool signalLoop;
 };
-
-// Accelerator
 
 // TODO: The concept of flat instance no longer exists. Remove them and check if any code dependend on the fact that copy flat did not copy static or shared 
 Accelerator* CopyAccelerator(Versat* versat,Accelerator* accel,InstanceMap* map);

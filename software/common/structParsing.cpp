@@ -79,12 +79,19 @@ String ParseSimpleType(Tokenizer* tok){
 
   auto mark = tok->Mark();
   String name = ParseFundamentalType(tok);
-  
+
   if(name.size <= 0){
     tok->NextToken();
   }
   
+  // Namespaces
   Token peek = tok->PeekToken();
+  while(CompareString(peek,"::")){
+    tok->AdvancePeek(peek);
+    tok->NextToken();
+    peek = tok->PeekToken();
+  }
+
   if(CompareString(peek,"<")){ // Template
     tok->AdvancePeek(peek);
 
@@ -330,9 +337,17 @@ Result<StructDef,String> ParseStruct(Tokenizer* tok,Arena* arena){
   token = tok->PeekToken();
   if(CompareString(token,"{")){ // Unnamed
   } else { // Named struct
+    auto nameMark = tok->Mark();
     name = tok->NextToken();
 
     token = tok->PeekToken();
+    while(CompareString(token,"::")){
+      tok->AdvancePeek(token);
+      tok->NextToken();
+      token = tok->PeekToken();
+    }
+    name = tok->Point(nameMark);
+
     if(CompareString(token,":")){ // inheritance
       tok->AssertNextToken(":");
 
@@ -342,8 +357,12 @@ Result<StructDef,String> ParseStruct(Tokenizer* tok,Arena* arena){
     }
   }
 
-  def.name = name;
-
+  if(name.size > 0){
+    def.name = TrimWhitespaces(name);
+  } else {
+    //return STRING("Invalid name");
+  }
+    
   token = tok->PeekToken();
   if(CompareString(token,";")){
     def.fullExpression = tok->Point(mark);
@@ -384,26 +403,26 @@ Result<StructDef,String> ParseStruct(Tokenizer* tok,Arena* arena){
       tok->AdvancePeek(token);
 	  break;
     } else if(CompareString(token,STRING("//"))){ // The // symbol and the /* */ must be part of the special chars of the tokenizer
-		tok->AdvancePeek(token);
+	  tok->AdvancePeek(token);
 
-		Token specialType = tok->NextToken();
+	  Token specialType = tok->NextToken();
+      
+	  if(CompareString(specialType,"Repr")){
+        tok->AssertNextToken(":");
+        Token formatString = tok->PeekRemainingLine();
+        tok->AdvancePeek(formatString);
 
-		if(CompareString(specialType,"Repr")){
-		  tok->AssertNextToken(":");
-
-		  Token formatString = tok->NextFindUntil("\n").value();
-
-		  if(def.representationFormat.size){
-			LogWarn(LogModule::PARSER,"Struct already has a representation format: %.*s",UNPACK_SS(name));
-		  }
-		  def.representationFormat = TrimWhitespaces(formatString);
-		  continue;
-		} else {
-		  // We are in a normal comment
-          tok->AdvancePeek(tok->PeekRemainingLine());
-		  tok->NextFindUntil("\n");
-		  continue;
+		if(def.representationFormat.size){
+		  LogWarn(LogModule::PARSER,"Struct already has a representation format: %.*s",UNPACK_SS(name));
 		}
+		def.representationFormat = TrimWhitespaces(formatString);
+		continue;
+	  } else {
+		// We are in a normal comment
+        tok->AdvancePeek(tok->PeekRemainingLine());
+		tok->NextFindUntil("\n");
+		continue;
+	  }
 	} else if(CompareString(token,STRING("/*"))){
 	  tok->NextFindUntil("*/");
 	  continue;

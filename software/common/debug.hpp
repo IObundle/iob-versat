@@ -8,6 +8,7 @@ void InitDebug(); // Call before any other debug function
 
 extern Arena* debugArena;
 extern bool debugFlag; // True if currently debugging
+extern bool currentlyDebugging;
 
 #define DEBUG_BREAK_IF_DEBUGGING() DEBUG_BREAK_IF(debugFlag)
 

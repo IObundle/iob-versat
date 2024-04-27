@@ -51,6 +51,16 @@ void CheckMemoryStats(){
   }
 }
 
+void AlignArena(Arena* arena,int alignment){
+  int offset = arena->used % alignment; // TODO: Get alignment info as function parameter
+
+  if(offset == 0){
+    return;
+  } else {
+    PushBytes(arena,alignment - offset);
+  }
+}
+
 Arena InitArena(size_t size){
   Arena arena = {};
 
@@ -75,6 +85,7 @@ Arena InitLargeArena(){
 }
 
 Arena SubArena(Arena* arena,size_t size){
+  AlignArena(arena,alignof(void*));
   Byte* mem = PushBytes(arena,size);
 
   Arena res = {};
@@ -98,12 +109,16 @@ void Free(Arena* arena){
   arena->used = 0;
 }
 
-Byte* MarkArena(Arena* arena){
-  return &arena->mem[arena->used];
+ArenaMark MarkArena(Arena* arena){
+  ArenaMark mark = {};
+  mark.arena = arena;
+  mark.mark = &arena->mem[arena->used];
+  return mark;
 }
 
-void PopMark(Arena* arena,Byte* mark){
-  arena->used = mark - arena->mem;
+void PopMark(ArenaMark mark){
+  Arena* arena = mark.arena;
+  arena->used = mark.mark - arena->mem;
 }
 
 Byte* PushBytes(Arena* arena, size_t size){
@@ -129,13 +144,21 @@ size_t SpaceAvailable(Arena* arena){
   return remaining;
 }
 
-String PointArena(Arena* arena,Byte* mark){
+DynamicString StartString(Arena* arena){
+  DynamicString res = {};
+  res.arena = arena;
+  res.mark = &arena->mem[arena->used];
+  return res;
+}
+
+String EndString(DynamicString mark){
+  Arena* arena = mark.arena;
   String res = {};
-  res.size = &arena->mem[arena->used] - mark;
+  res.size = &arena->mem[arena->used] - mark.mark;
   if(res.size == 0){ // Put data as NULL if size 0, probably less error prone. Not sure.
     res.data = nullptr;
   } else {
-    res.data = (char*) mark;
+    res.data = (char*) mark.mark;
   }
 
   return res;
@@ -144,6 +167,8 @@ String PointArena(Arena* arena,Byte* mark){
 String PushFile(Arena* arena,FILE* file){
   String res;
   long int size = GetFileSize(file);
+
+  AlignArena(arena,alignof(void*));
 
   Byte* mem = PushBytes(arena,size);
   int amountRead = fread(mem,sizeof(Byte),size,file);
@@ -243,6 +268,16 @@ static inline DynamicArena* GetDynamicArenaHeader(void* memoryStart,int numberPa
   return view;
 }
 
+void AlignArena(DynamicArena* arena,int alignment){
+  int offset = arena->used % alignment;
+
+  if(offset == 0){
+    return;
+  } else {
+    PushBytes(arena,alignment - offset);
+  }
+}
+
 DynamicArena* CreateDynamicArena(int numberPages){
   void* mem = AllocatePages(numberPages);
 
@@ -257,6 +292,7 @@ DynamicArena* CreateDynamicArena(int numberPages){
 Arena SubArena(DynamicArena* arena,size_t size){
   Arena res = {};
 
+  AlignArena(arena,alignof(void*));
   res.totalAllocated = size;
   res.mem = PushBytes(arena,size);
 
@@ -360,7 +396,7 @@ void BitArray::Init(Byte* memory,int bitSize){
 }
 
 void BitArray::Init(Arena* arena,int bitSize){
-  this->memory = MarkArena(arena);
+  this->memory = MarkArena(arena).mark;
   this->bitSize = bitSize;
   this->byteSize = ALIGN_UP_32(BitSizeToByteSize(bitSize));
   PushBytes(arena,this->byteSize); // Makes it easier to use popcount
@@ -525,7 +561,7 @@ int BitArray::FirstBitSetIndex(int start){
 }
 
 String BitArray::PrintRepresentation(Arena* output){
-  Byte* mark = MarkArena(output);
+  auto mark = StartString(output);
   for(int i =  0; i < this->bitSize; i++){
     int val = Get(i);
 
@@ -535,7 +571,7 @@ String BitArray::PrintRepresentation(Arena* output){
       PushString(output,STRING("0"));
     }
   }
-  String res = PointArena(output,mark);
+  String res = EndString(mark);
   return res;
 }
 
