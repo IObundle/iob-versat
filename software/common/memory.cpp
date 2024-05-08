@@ -103,6 +103,10 @@ void PopToSubArena(Arena* arena,Arena subArena){
   Assert(old >= arena->used);
 }
 
+void Reset(Arena* arena){
+  arena->used = 0;
+}
+
 void Free(Arena* arena){
   free(arena->mem);
   arena->totalAllocated = 0;

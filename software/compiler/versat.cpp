@@ -49,7 +49,7 @@ static Value HexValue(Value in,Arena* out){
 }
 
 static Value EscapeString(Value val,Arena* out){
-  Assert(val.type == ValueType::SIZED_STRING || val.type == ValueType::STRING);
+  Assert(val.type == ValueType::SIZED_STRING || val.type == ValueType::STRING || val.type == ValueType::CONST_STRING);
   Assert(val.isTemp);
 
   String str = val.str;
@@ -75,7 +75,7 @@ static Value EscapeString(Value val,Arena* out){
 // MARK TODO: Small fix for common template. Works for now 
 void SetIncludeHeader(CompiledTemplate* tpl,String name);
 
-Versat* InitVersat(){
+Versat* InitVersat(Arena* perm,Arena* temp,Arena* temp2){
   static Versat versatInst = {};
   static bool doneOnce = false;
 
@@ -88,32 +88,29 @@ Versat* InitVersat(){
   //InitThreadPool(16);
   Versat* versat = &versatInst;
 
+  versat->permanent = perm;
+  versat->temp = temp;
+  versat->temp2 = temp2;
+
   versat->debug.outputAccelerator = true;
   versat->debug.outputVersat = true;
 
   versat->debug.dotFormat = GRAPH_DOT_FORMAT_NAME;
+  
+  InitializeTemplateEngine(versat->permanent);
 
-#ifdef x86
-  versat->temp = InitArena(Megabyte(256));
-#else
-  versat->temp = InitArena(Gigabyte(8));
-#endif // x86
-  versat->permanent = InitArena(Megabyte(256));
-
-  InitializeTemplateEngine(&versat->permanent);
-
-  CompiledTemplate* commonTpl = CompileTemplate(versat_common_template,"common",&versat->permanent,&versat->temp);
+  CompiledTemplate* commonTpl = CompileTemplate(versat_common_template,"common",versat->permanent,versat->temp);
   SetIncludeHeader(commonTpl,STRING("common"));
 
   // Technically, if more than 1 versat in the future, could move this outside
-  BasicTemplates::acceleratorTemplate = CompileTemplate(versat_accelerator_template,"accel",&versat->permanent,&versat->temp);
-  BasicTemplates::topAcceleratorTemplate = CompileTemplate(versat_top_instance_template,"top",&versat->permanent,&versat->temp);
-  BasicTemplates::acceleratorHeaderTemplate = CompileTemplate(versat_header_template,"header",&versat->permanent,&versat->temp);
-  BasicTemplates::externalInternalPortmapTemplate = CompileTemplate(external_memory_internal_portmap_template,"ext_internal_port",&versat->permanent,&versat->temp);
-  BasicTemplates::externalPortTemplate = CompileTemplate(external_memory_port_template,"ext_port",&versat->permanent,&versat->temp);
-  BasicTemplates::externalInstTemplate = CompileTemplate(external_memory_inst_template,"ext_inst",&versat->permanent,&versat->temp);
-  BasicTemplates::iterativeTemplate = CompileTemplate(versat_iterative_template,"iter",&versat->permanent,&versat->temp);
-  BasicTemplates::internalWiresTemplate = CompileTemplate(versat_internal_memory_wires_template,"internal wires",&versat->permanent,&versat->temp);
+  BasicTemplates::acceleratorTemplate = CompileTemplate(versat_accelerator_template,"accel",versat->permanent,versat->temp);
+  BasicTemplates::topAcceleratorTemplate = CompileTemplate(versat_top_instance_template,"top",versat->permanent,versat->temp);
+  BasicTemplates::acceleratorHeaderTemplate = CompileTemplate(versat_header_template,"header",versat->permanent,versat->temp);
+  BasicTemplates::externalInternalPortmapTemplate = CompileTemplate(external_memory_internal_portmap_template,"ext_internal_port",versat->permanent,versat->temp);
+  BasicTemplates::externalPortTemplate = CompileTemplate(external_memory_port_template,"ext_port",versat->permanent,versat->temp);
+  BasicTemplates::externalInstTemplate = CompileTemplate(external_memory_inst_template,"ext_inst",versat->permanent,versat->temp);
+  BasicTemplates::iterativeTemplate = CompileTemplate(versat_iterative_template,"iter",versat->permanent,versat->temp);
+  BasicTemplates::internalWiresTemplate = CompileTemplate(versat_internal_memory_wires_template,"internal wires",versat->permanent,versat->temp);
   
   RegisterPipeOperation(STRING("MemorySize"),[](Value val,Arena* out){
     ExternalMemoryInterface* inter = (ExternalMemoryInterface*) val.custom;
@@ -150,7 +147,7 @@ int EvalRange(ExpressionRange range,Array<ParameterExpression> expressions){
 
 // TODO: Need to remake this function and probably ModuleInfo has the versat compiler change is made
 FUDeclaration* RegisterModuleInfo(Versat* versat,ModuleInfo* info){
-  Arena* arena = &versat->permanent;
+  Arena* arena = versat->permanent;
 
   FUDeclaration decl = {};
   
@@ -257,13 +254,16 @@ FUDeclaration* RegisterModuleInfo(Versat* versat,ModuleInfo* info){
     //databusAddrSize = EvalRange(info->databusAddrSize,instantiated);
   }
 
+  decl.configInfo = PushArray<ConfigurationInfo>(arena,1);
+  Memset(decl.configInfo,{});
   decl.name = info->name;
   decl.inputDelays = info->inputDelays;
   decl.outputLatencies = info->outputLatencies;
-  decl.configInfo.configs = configs;
-  decl.configInfo.states = states;
+  decl.configInfo[0].configs = configs;
+  decl.configInfo[0].states = states;
   decl.externalMemory = external;
-  decl.configInfo.delayOffsets.max = info->nDelays;
+  decl.configInfo[0].delayOffsets.max = info->nDelays;
+  decl.configInfo[0].name = info->name;
   decl.nIOs = info->nIO;
   if(info->memoryMapped) decl.memoryMapBits = memoryMapBits;
   //decl.databusAddrSize = databusAddrSize; // TODO: How to handle different units with different databus address sizes??? For now do nothing. Do not even know if it's worth to bother with this, I think that all units should be force to use AXI_ADDR_W for databus addresses.
@@ -275,125 +275,34 @@ FUDeclaration* RegisterModuleInfo(Versat* versat,ModuleInfo* info){
     decl.delayType = decl.delayType | DelayType::DelayType_SINK_DELAY;
   }
 
-  decl.configInfo.configOffsets.max = info->configs.size;
-  decl.configInfo.stateOffsets.max = info->states.size;
+  decl.configInfo[0].configOffsets.max = info->configs.size;
+  decl.configInfo[0].stateOffsets.max = info->states.size;
 
   FUDeclaration* res = RegisterFU(versat,decl);
 
   return res;
 }
 
-UnitValues CalculateAcceleratorValues(Versat* versat,Accelerator* accel){
-  ArenaMarker marker(&accel->versat->temp);
-
-  UnitValues val = {};
-
-  std::vector<bool> seenShared;
-
-  Hashmap<StaticId,int>* staticSeen = PushHashmap<StaticId,int>(&accel->versat->temp,1000);
-
-  int memoryMappedDWords = 0;
-
-  // Handle non-static information
-  FOREACH_LIST(InstanceNode*,ptr,accel->allocated){
-    FUInstance* inst = ptr->inst;
-    FUDeclaration* type = inst->declaration;
-
-    // Check if shared
-    if(inst->sharedEnable){
-      if(inst->sharedIndex >= (int) seenShared.size()){
-        seenShared.resize(inst->sharedIndex + 1);
-      }
-
-      if(!seenShared[inst->sharedIndex]){
-        val.configs += type->configInfo.configs.size;
-        val.sharedUnits += 1;
-      }
-
-      seenShared[inst->sharedIndex] = true;
-    } else if(!inst->isStatic){ // Shared cannot be static
-         val.configs += type->configInfo.configs.size;
-    }
-
-    if(type->memoryMapBits.has_value()){
-      val.isMemoryMapped = true;
-
-      memoryMappedDWords = AlignBitBoundary(memoryMappedDWords,type->memoryMapBits.value());
-      memoryMappedDWords += (1 << type->memoryMapBits.value());
-    }
-
-    if(type == BasicDeclaration::input){
-      val.inputs += 1;
-    }
-
-    val.states += type->configInfo.states.size;
-    val.delays += type->configInfo.delayOffsets.max;
-    val.ios += type->nIOs;
-    val.extraData += type->configInfo.extraDataOffsets.max;
-
-    if(type->externalMemory.size){
-      val.externalMemoryInterfaces += type->externalMemory.size;
-	  val.externalMemoryByteSize = ExternalMemoryByteSize(type->externalMemory);
-    }
-
-    val.signalLoop |= type->signalLoop;
-  }
-
-  val.memoryMappedBits = log2i(memoryMappedDWords);
-
-  FUInstance* outputInstance = GetOutputInstance(accel->allocated);
-  if(outputInstance){
-    FOREACH_LIST(Edge*,edge,accel->edges){
-      if(edge->units[0].inst == outputInstance){
-        val.outputs = std::max(val.outputs - 1,edge->units[0].port) + 1;
-      }
-      if(edge->units[1].inst == outputInstance){
-        val.outputs = std::max(val.outputs - 1,edge->units[1].port) + 1;
-      }
-    }
-  }
-
-  // Handle static information
-  FOREACH_LIST(InstanceNode*,ptr,accel->allocated){
-    FUInstance* inst = ptr->inst;
-    if(inst->isStatic){
-      StaticId id = {};
-
-      id.name = inst->name;
-
-      staticSeen->Insert(id,1);
-      val.statics += inst->declaration->configInfo.configs.size;
-    }
-
-    if(IsTypeHierarchical(inst->declaration)){
-      for(Pair<StaticId,StaticData> pair : inst->declaration->staticUnits){
-        int* possibleFind = staticSeen->Get(pair.first);
-
-        if(!possibleFind){
-          staticSeen->Insert(pair.first,1);
-          val.statics += pair.second.configs.size;
-        }
-      }
-    }
-  }
-
-  return val;
-}
-
 void FillDeclarationWithAcceleratorValues(Versat* versat,FUDeclaration* decl,Accelerator* accel){
-  Arena* permanent = &versat->permanent;
-  Arena* temp = &versat->temp;
+  Arena* permanent = versat->permanent;
+  Arena* temp = versat->temp;
+  Arena* temp2 = versat->temp2;
   BLOCK_REGION(temp);
 
-  UnitValues val = CalculateAcceleratorValues(versat,accel);
+  AccelInfo val = CalculateAcceleratorInfo(accel,true,temp,temp2);
 
+  decl->configInfo = PushArray<ConfigurationInfo>(permanent,val.infos.size);
+  Memset(decl->configInfo,{});
+
+  DynamicArray<String> baseNames = StartArray<String>(permanent);
   FOREACH_LIST(InstanceNode*,ptr,accel->allocated){
     FUInstance* inst = ptr->inst;
+    *baseNames.PushElem() = inst->name;
   }
-
-  decl->configInfo.delayOffsets.max = val.delays;
+  decl->configInfo[0].baseName = EndArray(baseNames);
+  
+  decl->configInfo[0].delayOffsets.max = val.delays;
   decl->nIOs = val.ios;
-  decl->configInfo.extraDataOffsets.max = val.extraData;
   if(val.isMemoryMapped){
     decl->memoryMapBits = val.memoryMappedBits;
   }
@@ -429,14 +338,22 @@ void FillDeclarationWithAcceleratorValues(Versat* versat,FUDeclaration* decl,Acc
     }
   }
 
-  decl->configInfo.configs = PushArray<Wire>(permanent,val.configs);
-  decl->configInfo.states = PushArray<Wire>(permanent,val.states);
+  decl->configInfo[0].configs = PushArray<Wire>(permanent,val.configs);
+  decl->configInfo[0].states = PushArray<Wire>(permanent,val.states);
 
   Hashmap<int,int>* staticsSeen = PushHashmap<int,int>(temp,val.sharedUnits);
 
   int configIndex = 0;
   int stateIndex = 0;
 
+  int howManyMergedUnits = 0;
+  FOREACH_LIST(InstanceNode*,ptr,accel->allocated){
+    FUInstance* inst = ptr->inst;
+    FUDeclaration* d = inst->declaration;
+  }
+
+  //decl->mergeInfo = AccumulateMergeInfo(accel,permanent);
+  
   // TODO: This could be done based on the config offsets.
   //       Otherwise we are still basing code around static and shared logic when calculating offsets already does that for us.
   FOREACH_LIST(InstanceNode*,ptr,accel->allocated){
@@ -446,35 +363,78 @@ void FillDeclarationWithAcceleratorValues(Versat* versat,FUDeclaration* decl,Acc
     if(!inst->isStatic){
       if(inst->sharedEnable){
         if(staticsSeen->InsertIfNotExist(inst->sharedIndex,0)){
-          for(Wire& wire : d->configInfo.configs){
-            decl->configInfo.configs[configIndex].name = PushString(permanent,"%.*s_%.*s",UNPACK_SS(inst->name),UNPACK_SS(wire.name));
-            decl->configInfo.configs[configIndex++].bitSize = wire.bitSize;
+          for(Wire& wire : d->configInfo[0].configs){
+            decl->configInfo[0].configs[configIndex].name = PushString(permanent,"%.*s_%.*s",UNPACK_SS(inst->name),UNPACK_SS(wire.name));
+            decl->configInfo[0].configs[configIndex++].bitSize = wire.bitSize;
           }
         }
       } else {
-        for(Wire& wire : d->configInfo.configs){
-          decl->configInfo.configs[configIndex].name = PushString(permanent,"%.*s_%.*s",UNPACK_SS(inst->name),UNPACK_SS(wire.name));
-          decl->configInfo.configs[configIndex++].bitSize = wire.bitSize;
+        for(Wire& wire : d->configInfo[0].configs){
+          decl->configInfo[0].configs[configIndex].name = PushString(permanent,"%.*s_%.*s",UNPACK_SS(inst->name),UNPACK_SS(wire.name));
+          decl->configInfo[0].configs[configIndex++].bitSize = wire.bitSize;
         }
       }
     }
 
-    for(Wire& wire : d->configInfo.states){
-      decl->configInfo.states[stateIndex].name = PushString(permanent,"%.*s_%.2d",UNPACK_SS(wire.name),stateIndex);
-      decl->configInfo.states[stateIndex++].bitSize = wire.bitSize;
+    for(Wire& wire : d->configInfo[0].states){
+      decl->configInfo[0].states[stateIndex].name = PushString(permanent,"%.*s_%.2d",UNPACK_SS(wire.name),stateIndex);
+      decl->configInfo[0].states[stateIndex++].bitSize = wire.bitSize;
     }
   }
 
+  int size = Size(accel->allocated);
   decl->signalLoop = val.signalLoop;
-  decl->configInfo.configOffsets = CalculateConfigurationOffset(accel,MemType::CONFIG,permanent);
-  decl->configInfo.stateOffsets = CalculateConfigurationOffset(accel,MemType::STATE,permanent);
-  decl->configInfo.delayOffsets = CalculateConfigurationOffset(accel,MemType::DELAY,permanent);
-  Assert(decl->configInfo.configOffsets.max == val.configs);
-  Assert(decl->configInfo.stateOffsets.max == val.states);
-  Assert(decl->configInfo.delayOffsets.max == val.delays);
 
-  decl->configInfo.extraDataOffsets = CalculateConfigurationOffset(accel,MemType::EXTRA,permanent);
-  Assert(decl->configInfo.extraDataOffsets.max == val.extraData);
+  Array<bool> belongArray = PushArray<bool>(permanent,Size(accel->allocated));
+  Memset(belongArray,true);
+  
+  for(int i = 0; i < val.infos.size; i++){
+    Array<InstanceInfo> info = val.infos[i];
+
+    decl->configInfo[i].unitBelongs = belongArray;
+    
+    if(i != 0){
+      decl->configInfo[i].configs = decl->configInfo[0].configs;
+      decl->configInfo[i].states = decl->configInfo[0].states;
+    }
+    
+    decl->configInfo[i].name = accel->name;
+    {
+      decl->configInfo[i].configOffsets.offsets = PushArray<int>(permanent,size);
+      int index = 0;
+      for(InstanceInfo& info : info){
+        if(info.level != 0) continue;
+
+        decl->configInfo[i].configOffsets.offsets[index] = info.configPos.value_or(-1);
+        index += 1;
+      }
+      decl->configInfo[i].configOffsets.max = val.configs;
+    }
+    
+    {
+      decl->configInfo[i].delayOffsets.offsets = PushArray<int>(permanent,size);
+      int index = 0;
+      for(InstanceInfo& info : info){
+        if(info.level != 0) continue;
+
+        decl->configInfo[i].delayOffsets.offsets[index] = info.delayPos.value_or(-1);
+        index += 1;
+      }
+      decl->configInfo[i].delayOffsets.max = val.delays;
+    }
+
+    {
+      decl->configInfo[i].stateOffsets.offsets = PushArray<int>(permanent,size);
+      int index = 0;
+      for(InstanceInfo& info : info){
+        if(info.level != 0) continue;
+
+        decl->configInfo[i].stateOffsets.offsets[index] = info.statePos.value_or(-1);
+        index += 1;
+      }
+      decl->configInfo[i].stateOffsets.max = val.states;
+    }
+  }
 }
 
 // Problem: RegisterSubUnit is basically extracting all the information
@@ -485,8 +445,8 @@ void FillDeclarationWithAcceleratorValues(Versat* versat,FUDeclaration* decl,Acc
 // share configs and static configs and stuff like that.
 
 FUDeclaration* RegisterSubUnit(Versat* versat,Accelerator* circuit){
-  Arena* permanent = &versat->permanent;
-  Arena* temp = &versat->temp;
+  Arena* permanent = versat->permanent;
+  Arena* temp = versat->temp;
   BLOCK_REGION(temp);
 
   // Disabled for now.
@@ -499,7 +459,7 @@ FUDeclaration* RegisterSubUnit(Versat* versat,Accelerator* circuit){
   String name = circuit->name;
   
   FUDeclaration decl = {};
-  decl.type = FUDeclaration::COMPOSITE;
+  decl.type = FUDeclarationType_COMPOSITE;
   decl.name = name;
 
   String basePath = PushString(temp,"debug/%.*s/base.dot",UNPACK_SS(name));
@@ -516,7 +476,7 @@ FUDeclaration* RegisterSubUnit(Versat* versat,Accelerator* circuit){
   Memset(decl.calculatedDelays,0);
   int index = 0;
   for(Pair<InstanceNode*,int> p : delays.nodeDelay){
-    if(p.first->inst->declaration->configInfo.delayOffsets.max > 0){
+    if(p.first->inst->declaration->configInfo[0].delayOffsets.max > 0){
       decl.calculatedDelays[index] = p.second;
       index += 1;
     }
@@ -556,7 +516,7 @@ FUDeclaration* RegisterSubUnit(Versat* versat,Accelerator* circuit){
 
   FOREACH_LIST(InstanceNode*,ptr,circuit->allocated){
     FUInstance* inst = ptr->inst;
-    if(inst->declaration->type == FUDeclaration::SPECIAL){
+    if(inst->declaration->type == FUDeclarationType_SPECIAL){
       continue;
     }
 
@@ -606,7 +566,7 @@ FUDeclaration* RegisterSubUnit(Versat* versat,Accelerator* circuit){
   res->baseCircuit->name = name;
   res->fixedDelayCircuit->name = name;
 
-  // Add this units static instances (needs be done after Registering the declaration because the parent is a pointer to the declaration)
+  // Add this units static instances (needs to be done after Registering the declaration because the parent is a pointer to the declaration)
   FOREACH_LIST(InstanceNode*,ptr,circuit->allocated){
     FUInstance* inst = ptr->inst;
     if(inst->isStatic){
@@ -615,11 +575,11 @@ FUDeclaration* RegisterSubUnit(Versat* versat,Accelerator* circuit){
       id.parent = res;
 
       StaticData data = {};
-      data.configs = inst->declaration->configInfo.configs;
+      data.configs = inst->declaration->configInfo[0].configs;
       data.offset = staticOffset;
 
       if(res->staticUnits->InsertIfNotExist(id,data)){
-        staticOffset += inst->declaration->configInfo.configs.size;
+        staticOffset += inst->declaration->configInfo[0].configs.size;
       }
     }
   }
@@ -638,7 +598,7 @@ FUDeclaration* RegisterIterativeUnit(Versat* versat,Accelerator* accel,FUInstanc
 
   Assert(node);
 
-  Arena* temp = &versat->temp;
+  Arena* temp = versat->temp;
   BLOCK_REGION(temp);
 
   Array<Array<PortNode>> inputs = GetAllInputs(node,temp);
@@ -709,7 +669,7 @@ FUDeclaration* RegisterIterativeUnit(Versat* versat,Accelerator* accel,FUInstanc
       continue;
     }
 
-    FUInstance* buffer = (FUInstance*) CreateFUInstance(accel,bufferType,PushString(&versat->permanent,"Buffer%d",buffersAdded++));
+    FUInstance* buffer = (FUInstance*) CreateFUInstance(accel,bufferType,PushString(versat->permanent,"Buffer%d",buffersAdded++));
 
     buffer->bufferAmount = unit->inst->declaration->inputDelays[i] - BasicDeclaration::buffer->outputLatencies[0];
     Assert(buffer->bufferAmount >= 0);
@@ -726,8 +686,8 @@ FUDeclaration* RegisterIterativeUnit(Versat* versat,Accelerator* accel,FUInstanc
   FUDeclaration declaration = {};
 
   declaration = *inst->declaration; // By default, copy everything from unit
-  declaration.name = PushString(&versat->permanent,name);
-  declaration.type = FUDeclaration::ITERATIVE;
+  declaration.name = PushString(versat->permanent,name);
+  declaration.type = FUDeclarationType_ITERATIVE;
 
   FillDeclarationWithAcceleratorValues(versat,&declaration,accel);
 
@@ -770,7 +730,7 @@ FUDeclaration* RegisterIterativeUnit(Versat* versat,Accelerator* accel,FUInstanc
   declaration.fixedDelayCircuit = f;
 #endif
 
-  declaration.staticUnits = PushHashmap<StaticId,StaticData>(&versat->permanent,1000); // TODO: Set correct number of elements
+  declaration.staticUnits = PushHashmap<StaticId,StaticData>(versat->permanent,1000); // TODO: Set correct number of elements
   int staticOffset = 0;
   // Start by collecting all the existing static allocated units in subinstances
   FOREACH_LIST(InstanceNode*,ptr,accel->allocated){
@@ -790,7 +750,7 @@ FUDeclaration* RegisterIterativeUnit(Versat* versat,Accelerator* accel,FUInstanc
 
   FUDeclaration* registeredType = RegisterFU(versat,declaration);
   registeredType->lat = node->inst->declaration->outputLatencies[0];
-  registeredType->calculatedDelays = PushArray<int>(&versat->permanent,99);
+  registeredType->calculatedDelays = PushArray<int>(versat->permanent,99);
   Memset(registeredType->calculatedDelays,0);
   
   // Add this units static instances (needs be done after Registering the declaration because the parent is a pointer to the declaration)
@@ -802,11 +762,11 @@ FUDeclaration* RegisterIterativeUnit(Versat* versat,Accelerator* accel,FUInstanc
       id.parent = registeredType;
 
       StaticData data = {};
-      data.configs = inst->declaration->configInfo.configs;
+      data.configs = inst->declaration->configInfo[0].configs;
       data.offset = staticOffset;
 
       if(registeredType->staticUnits->InsertIfNotExist(id,data)){
-        staticOffset += inst->declaration->configInfo.configs.size;
+        staticOffset += inst->declaration->configInfo[0].configs.size;
       }
     }
   }
@@ -866,27 +826,46 @@ void PrintUniformInformation(FILE* out,FUDeclaration* decl){
   }
   fprintf(out,"\n");
 
-  fprintf(out,"\n");
-  fprintf(out,"Configs: %d\n",decl->configInfo.configOffsets.max);
-  for(Wire wire : decl->configInfo.configs){
-    fprintf(out,"  %.*s\n",UNPACK_SS(wire.name));
-  }
-  fprintf(out,"\n");
-  fprintf(out,"States: %d\n",decl->configInfo.stateOffsets.max);
-  for(Wire wire : decl->configInfo.states){
-    fprintf(out,"  %.*s\n",UNPACK_SS(wire.name));
-  }
-  fprintf(out,"\n");
-  fprintf(out,"Delay: %d\n",decl->configInfo.delayOffsets.max);
-  if(decl->staticUnits) {
+  for(ConfigurationInfo info : decl->configInfo){
+    fprintf(out,"Names:\n");
+    for(String name : info.baseName){
+      fprintf(out,"%.*s\n",UNPACK_SS(name));
+    }
+
     fprintf(out,"\n");
-    fprintf(out,"StaticUnits: %d\n",decl->staticUnits->nodesUsed);
-    for(Pair<StaticId,StaticData> p : decl->staticUnits){
-      for(Wire wire : p.second.configs){
-        fprintf(out,"%.*s_%.*s_%.*s\n",UNPACK_SS(p.first.parent->name),UNPACK_SS(p.first.name),UNPACK_SS(wire.name));
+    fprintf(out,"Configs: %d\n",info.configOffsets.max);
+    for(Wire wire : info.configs){
+      fprintf(out,"  %.*s\n",UNPACK_SS(wire.name));
+    }
+#if 0 // TODO: Some bug here, temporarely disabling it for now
+    for(int i = 0; i < info.configOffsets.offsets.size; i++){
+      fprintf(out,"%d ",info.configOffsets.offsets[i]);
+    }
+    if(decl->fixedDelayCircuit){
+      FOREACH_LIST(InstanceNode*,ptr,decl->fixedDelayCircuit->allocated){
+        fprintf(out,"%.*s ",UNPACK_SS(ptr->inst->name));
       }
+      fprintf(out,"\n");
+    }
+#endif
+    
+    fprintf(out,"\n");
+    fprintf(out,"States: %d\n",info.stateOffsets.max);
+    for(Wire wire : info.states){
+      fprintf(out,"  %.*s\n",UNPACK_SS(wire.name));
     }
     fprintf(out,"\n");
+    fprintf(out,"Delay: %d\n",info.delayOffsets.max);
+    if(decl->staticUnits) {
+      fprintf(out,"\n");
+      fprintf(out,"StaticUnits: %d\n",decl->staticUnits->nodesUsed);
+      for(Pair<StaticId,StaticData> p : decl->staticUnits){
+        for(Wire wire : p.second.configs){
+          fprintf(out,"%.*s_%.*s_%.*s\n",UNPACK_SS(p.first.parent->name),UNPACK_SS(p.first.name),UNPACK_SS(wire.name));
+        }
+      }
+      fprintf(out,"\n");
+    }
   }
 }
 
@@ -899,10 +878,14 @@ void PrintDeclaration(FILE* out,FUDeclaration* decl,Arena* temp,Arena* temp2){
   
   if(decl->fixedDelayCircuit){
     AccelInfo info = CalculateAcceleratorInfo(decl->fixedDelayCircuit,true,temp,temp2);
-
-    PrintAll(out,info.info,temp);
-
-    fprintf(out,"\n======================================\n");
+    
+    int index = 0;
+    for(Array<InstanceInfo> arr : info.infos){
+      fprintf(out,"\n======================================\n\n");
+      fprintf(out,"%.*s\n",UNPACK_SS(info.names[index]));
+      PrintAll(out,arr,temp);
+      index += 1;
+    }
     
     Array<FUDeclaration*> allSubTypesUsed = AllNonSpecialSubTypes(decl->fixedDelayCircuit,temp,temp2);
     for(FUDeclaration* subDecl : allSubTypesUsed){

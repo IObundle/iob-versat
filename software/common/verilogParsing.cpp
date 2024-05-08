@@ -18,7 +18,7 @@ bool PerformDefineSubstitution(Arena* output,MacroMap& macros,String name){
 
   Tokenizer inside(subs,"`",{});
   while(!inside.Done()){
-    Optional<Token> peek = inside.PeekFindUntil("`");
+    Opt<Token> peek = inside.PeekFindUntil("`");
 
     if(!peek.has_value()){
       break;

@@ -59,18 +59,11 @@ struct TokenizerMark{
   Cursor pos;
 };
 
-class Tokenizer{
-public:
+struct Tokenizer{
   const char* start;
   const char* ptr;
   const char* end;
   TokenizerTemplate* tmpl;
-  
-private:
-
-  void ConsumeWhitespace();
-
-public:
 
   // Line and column start at one. Subtract one to get zero based indexes
   int line;
@@ -79,6 +72,10 @@ public:
   // TODO: This should technically be part of the Tokenizer template
   bool keepWhitespaces;
   bool keepComments;
+  
+private:
+
+  void ConsumeWhitespace();
 
 public:
 
@@ -101,12 +98,12 @@ public:
   bool IfPeekToken(const char* str);
   bool IfNextToken(const char* str);
 
-  Optional<Token> PeekFindUntil(const char* str);
-  Optional<Token> PeekFindIncluding(const char* str);
-  Optional<Token> PeekFindIncludingLast(const char* str);
-  Optional<Token> NextFindUntil(const char* str);
+  Opt<Token> PeekFindUntil(const char* str);
+  Opt<Token> PeekFindIncluding(const char* str);
+  Opt<Token> PeekFindIncludingLast(const char* str);
+  Opt<Token> NextFindUntil(const char* str);
 
-  Optional<FindFirstResult> FindFirst(BracketList<const char*> strings);
+  Opt<FindFirstResult> FindFirst(BracketList<const char*> strings);
 
   Token PeekWhitespace();
 
@@ -125,8 +122,8 @@ public:
   TokenizerTemplate* SetTemplate(TokenizerTemplate* tmpl); // Returns old template
 
   // For expressions where there is a open and a closing delimiter (think '{ { } }') and need to check where the matching close delimiter is.
-  Optional<Token> PeekUntilDelimiterExpression(BracketList<const char*> open,BracketList<const char*> close, int numberOpenSeen);
-  Optional<Token> PeekIncludingDelimiterExpression(BracketList<const char*> open,BracketList<const char*> close, int numberOpenSeen);
+  Opt<Token> PeekUntilDelimiterExpression(BracketList<const char*> open,BracketList<const char*> close, int numberOpenSeen);
+  Opt<Token> PeekIncludingDelimiterExpression(BracketList<const char*> open,BracketList<const char*> close, int numberOpenSeen);
 };
 
 bool IsOnlyWhitespace(String tok);
@@ -136,6 +133,9 @@ bool CheckFormat(const char* format,String tok);
 Array<Value> ExtractValues(const char* format,String tok,Arena* arena);
 
 Array<String> Split(String content,char sep,Arena* out); // For now only split over one char. 
+
+String TrimLeftWhitespaces(String in);
+String TrimRightWhitespaces(String in);
 String TrimWhitespaces(String in);
 
 String PushPointingString(Arena* out,int startPos,int size);

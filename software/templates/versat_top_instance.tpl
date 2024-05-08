@@ -417,7 +417,7 @@ begin
       #{for node instances}
       #{set inst node.inst}
       #{set decl inst.declaration}
-      #{for wire decl.configInfo.configs}
+      #{for wire decl.configInfo[0].configs}
       if(address[@{versatValues.configurationAddressBits + 1}:0] == @{addr * 4}) begin // @{addr * 4 |> Hex} @{wire.name}
       #{set size wire.bitSize}
       #{set wstrb 0}
@@ -450,7 +450,7 @@ begin
 
       // Delays
       #{for node instances} #{set inst node.inst} #{set decl inst.declaration}
-      #{for i decl.configInfo.delayOffsets.max}
+      #{for i decl.configInfo[0].delayOffsets.max}
       // TODO: Need to also take into account strobes
       if(address[@{versatValues.configurationAddressBits + 1}:0] == @{addr * 4}) // @{addr * 4 |> Hex}
          @{configReg}[@{counter}+:32] <= data_data[31:0]; // Delay
@@ -484,7 +484,7 @@ begin
       #{for node instances}
       #{set inst node.inst}
       #{set decl inst.declaration}
-      #{for wire decl.configInfo.states}
+      #{for wire decl.configInfo[0].states}
       if(addr[@{versatValues.stateAddressBits + 1}:0] >= @{addr * 4} && addr[@{versatValues.stateAddressBits + 1}:0] < @{(addr + 1) * 4}) // @{addr * 4 |> Hex}
          stateRead = statedata[@{counter}+:@{wire.bitSize}];
       #{inc addr}
@@ -559,7 +559,7 @@ end
          #{end}
          #{end}
 
-         #{for wire decl.configInfo.configs}
+         #{for wire decl.configInfo[0].configs}
          #{if decl.type}
             .@{wire.name}(configdata[@{configDataIndex}+:@{wire.bitSize}]),
          #{else}
@@ -576,7 +576,7 @@ end
          #{end}
          #{end}
 
-         #{for i decl.configInfo.delayOffsets.max}
+         #{for i decl.configInfo[0].delayOffsets.max}
             .delay@{i}(configdata[@{delayStart + (delaySeen * 32)}+:32]),
          #{inc delaySeen}
          #{end}
@@ -604,7 +604,7 @@ end
          #{inc externalCounter}
          #{end}
 
-         #{for wire decl.configInfo.states}
+         #{for wire decl.configInfo[0].states}
          #{if decl.type}
             .@{wire.name}(statedata[@{stateDataIndex}+:@{wire.bitSize}]),
          #{else}

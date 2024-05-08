@@ -49,24 +49,23 @@ enum MemType{
    CONFIG,
    STATE,
    DELAY,
-   STATIC,
-   EXTRA
+   STATIC
 };
 
 struct InstanceInfo{
   int level;
   FUDeclaration* decl;
   String name;
-  Optional<int> configPos;
+  Opt<int> configPos;
   int isConfigStatic;
   int configSize;
-  Optional<int> statePos;
+  Opt<int> statePos;
   int stateSize;
-  Optional<iptr> memMapped;
-  Optional<int> memMappedSize;
-  Optional<int> memMappedBitSize;
-  Optional<String> memMappedMask;
-  Optional<int> delayPos;
+  Opt<iptr> memMapped;
+  Opt<int> memMappedSize;
+  Opt<int> memMappedBitSize;
+  Opt<String> memMappedMask;
+  Opt<int> delayPos;
   Array<int> delay;
   String type;
   int baseDelay;
@@ -76,6 +75,7 @@ struct InstanceInfo{
   bool isShared;
   FUDeclaration* parent;
   String fullName;
+  bool isMergeMultiplexer;
 };
 
 struct AcceleratorInfo{
@@ -85,11 +85,56 @@ struct AcceleratorInfo{
   int delaySize;
   int delay;
   int memSize;
+  Opt<String> name;
+};
+
+struct InstanceConfigurationOffsets{
+  Hashmap<StaticId,int>* staticInfo; 
+  FUDeclaration* parent;
+  String topName;
+  int configOffset;
+  int stateOffset;
+  int delayOffset;
+  int delay; // Actual delay value, not the delay offset.
+  int memOffset;
+  int level;
+  int* staticConfig; // This starts at 0x40000000 and at the end of the function we normalized it since we can only figure out the static position at the very end.
+};
+
+struct TestResult{
+  Array<InstanceInfo> info;
+  InstanceConfigurationOffsets subOffsets;
+  String name;
 };
 
 struct AccelInfo{
-  Array<InstanceInfo> info;
+  Array<Array<InstanceInfo>> infos; // Should join names with infos
+  Array<String> names;
   int memMappedBitsize;
+  int howManyMergedUnits;
+
+  int inputs;
+  int outputs;
+
+  int configs;
+  int states;
+  int delays;
+  int ios;
+  int statics;
+  int sharedUnits;
+  int externalMemoryInterfaces;
+  int externalMemoryByteSize;
+  int numberUnits;
+  int numberConnections;
+  
+  int memoryMappedBits;
+  bool isMemoryMapped;
+  bool signalLoop;
+};
+
+struct TypeAndNameOnly{
+  String type;
+  String name;
 };
 
 AccelInfo CalculateAcceleratorInfo(Accelerator* accel,bool recursive,Arena* out,Arena* temp);
@@ -126,3 +171,4 @@ Array<InstanceInfo> ExtractFromInstanceInfo(Array<InstanceInfo> instanceInfo,Are
 void CheckSanity(Array<InstanceInfo> instanceInfo,Arena* temp);
 
 void PrintConfigurations(FUDeclaration* type,Arena* temp);
+

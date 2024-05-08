@@ -116,8 +116,7 @@ struct ExternalMemoryInfo{
   ExternalMemoryType type;
 };
 
-template<> class std::hash<ExternalMemoryID>{
-public:
+template<> struct std::hash<ExternalMemoryID>{
   std::size_t operator()(ExternalMemoryID const& s) const noexcept{
     std::size_t hash = s.interface * 2 + (int) s.type;
     return hash;

@@ -107,3 +107,15 @@ struct Transformation{
   int outputs;
   Array<int> map;
 };
+
+struct HierarchicalName{
+  Token instanceName;
+  Var subInstance;
+};
+
+struct TypeAndInstance{
+  Token typeName;
+  Token instanceName;
+};
+
+typedef Pair<HierarchicalName,HierarchicalName> SpecNode;

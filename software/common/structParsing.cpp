@@ -54,6 +54,8 @@ String ParseFundamentalType(Tokenizer* tok){
   auto mark = tok->Mark();
 
   while(1){
+    SkipQualifiers(tok);
+
     Token name = tok->PeekToken();
 
     bool doContinue = false;
@@ -70,13 +72,13 @@ String ParseFundamentalType(Tokenizer* tok){
     break;
   }
 
+  SkipQualifiers(tok);
+
   String res = tok->Point(mark);
   return res;
 }
 
 String ParseSimpleType(Tokenizer* tok){
-  SkipQualifiers(tok);
-
   auto mark = tok->Mark();
   String name = ParseFundamentalType(tok);
 

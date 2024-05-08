@@ -83,8 +83,7 @@ struct TemplateRecord{
   };
 };
 
-template<> class std::hash<TemplateRecord>{
-public:
+template<> struct std::hash<TemplateRecord>{
    std::size_t operator()(TemplateRecord const& s) const noexcept{
      std::size_t res = std::hash<Type*>()(s.structType) + std::hash<String>()(s.fieldName);
      return res;

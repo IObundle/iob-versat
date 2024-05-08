@@ -40,21 +40,6 @@ void DeallocatePages(void* ptr,int pages);
 long PagesAvailable();
 void CheckMemoryStats();
 
-// Similar to std::vector but reallocations can only be done explicitly. No random reallocations or bugs from their random occurance
-template<typename T>
-struct Allocation{
-  T* ptr;
-  int size;
-  int reserved;
-};
-
-template<typename T> bool ZeroOutAlloc(Allocation<T>* alloc,int newSize); // Clears all memory, returns true if reallocation occurs
-template<typename T> bool ZeroOutRealloc(Allocation<T>* alloc,int newSize); // Only clears memory from buffer growth, returns true if reallocation occurs
-template<typename T> void RemoveChunkAndCompress(Allocation<T>* alloc,T* ptr,int size);
-template<typename T> bool Inside(Allocation<T>* alloc,T* ptr);
-template<typename T> void Free(Allocation<T>* alloc);
-template<typename T> T* Push(Allocation<T>* alloc, int amount); // Fails if not enough memory
-
 #undef VERSAT_DEBUG
 
 // Care, functions that push to an arena do not clear it to zero or to any value.
@@ -76,6 +61,7 @@ Arena InitArena(size_t size); // Calls calloc
 Arena InitLargeArena(); //
 Arena SubArena(Arena* arena,size_t size);
 void PopToSubArena(Arena* top,Arena subArena);
+void Reset(Arena* arena);
 void Free(Arena* arena);
 Byte* PushBytes(Arena* arena, size_t size);
 size_t SpaceAvailable(Arena* arena);
@@ -154,7 +140,8 @@ struct DynamicArray{
   ArenaMark mark;
   
   ~DynamicArray();
-  
+
+  Array<T> AsArray();
   T* PushElem();
 };
 
@@ -202,12 +189,6 @@ public:
   void Init(Array<T> arr){
     this->ptr = arr.data;
     this->maximumTimes = arr.size;
-    this->timesPushed = 0;
-  }
-
-  void Init(Allocation<T> alloc){
-    this->ptr = alloc.ptr;
-    this->maximumTimes = alloc.size;
     this->timesPushed = 0;
   }
 
@@ -287,7 +268,7 @@ public:
   int operator*(); // Returns index where it is set to one;
 };
 
-class BitArray{
+struct BitArray{
 public:
   Byte* memory;
   int bitSize;
@@ -440,7 +421,7 @@ struct TrieMapIterator{
 
   bool operator!=(TrieMapIterator& iter);
   void operator++();
-  Pair<Key,Data> operator*();
+  Pair<Key,Data>& operator*(); // Care when changing values of Key, can only change values that do not change Hash value or equality otherwise TrieMap stops working
 };
 
 template<typename Key,typename Data>
@@ -600,109 +581,6 @@ public:
 
 // Start of implementation
 
-template<typename T>
-bool ZeroOutAlloc(Allocation<T>* alloc,int newSize){
-  if(newSize <= 0){
-    return false;
-  }
-
-  bool didRealloc = false;
-  if(newSize > alloc->reserved){
-    T* tmp = (T*) realloc(alloc->ptr,newSize * sizeof(T));
-
-    Assert(tmp);
-
-    alloc->ptr = tmp;
-    alloc->reserved = newSize;
-    didRealloc = true;
-  }
-
-  alloc->size = newSize;
-  memset(alloc->ptr,0,alloc->reserved * sizeof(T));
-  return didRealloc;
-}
-
-template<typename T>
-bool ZeroOutRealloc(Allocation<T>* alloc,int newSize){
-  if(newSize <= 0){
-    return false;
-  }
-
-  bool didRealloc = false;
-  if(newSize > alloc->reserved){
-    T* tmp = (T*) realloc(alloc->ptr,newSize * sizeof(T));
-
-    Assert(tmp);
-
-    alloc->ptr = tmp;
-    alloc->reserved = newSize;
-    didRealloc = true;
-  }
-
-  // Clear out free (allocated now or before) space
-  if(didRealloc){
-    char* view = (char*) alloc->ptr;
-    memset(&view[alloc->size],0,(alloc->reserved - alloc->size) * sizeof(T));
-  }
-
-  alloc->size = newSize;
-  return didRealloc;
-}
-
-#if 1
-template<typename T>
-void Reserve(Allocation<T>* alloc,int reservedSize){
-  Assert(!alloc->ptr);
-  alloc->ptr = (T*) calloc(reservedSize,sizeof(T));
-  Assert(alloc->ptr);
-  alloc->reserved = reservedSize;
-}
-#endif
-
-template<typename T>
-void RemoveChunkAndCompress(Allocation<T>* alloc,T* ptr,int size){
-  Assert(Inside(alloc,ptr));
-
-  T* copyStart = ptr + size;
-  int copySize = alloc->size - (copyStart - alloc->ptr);
-
-  Memcpy(ptr,copyStart,copySize);
-  alloc->size -= size;
-}
-
-template<typename T>
-bool Inside(Allocation<T>* alloc,T* ptr){
-  bool res = (ptr >= alloc->ptr && ptr < (alloc->ptr + alloc->size));
-  return res;
-}
-
-template<typename T>
-void Free(Allocation<T>* alloc){
-  free(alloc->ptr);
-  alloc->ptr = nullptr;
-  alloc->reserved = 0;
-  alloc->size = 0;
-}
-
-template<typename T> T* Push(Allocation<T>* alloc, int amount){
-  if(alloc->size + amount > alloc->reserved){
-    Assert(false);
-    return nullptr;
-  }
-
-  T* res = &alloc->ptr[alloc->size];
-  alloc->size += amount;
-
-  return res;
-}
-
-template<typename T>
-int MemoryUsage(Allocation<T> alloc){
-  int memoryUsed = alloc.reserved * sizeof(T);
-  return memoryUsed;
-}
-
-
 template<typename T> bool Inside(PushPtr<T>* push,T* ptr){
   bool res = (ptr >= push->ptr && ptr < (push->ptr + push->maximumTimes));
   return res;
@@ -723,12 +601,26 @@ template<typename T> DynamicArray<T> StartArray(Arena* arena){
 }
 
 template<typename T>
-DynamicArray<T>::~DynamicArray<T>(){
+DynamicArray<T>::~DynamicArray(){
   // Unlocking the arena must be done in the destructor as well otherwise
   // a return of function would leave the arena locked for good.
 #ifdef VERSAT_DEBUG
   mark.arena->locked = false;
 #endif
+}
+
+template<typename T> Array<T> DynamicArray<T>::AsArray(){
+  Byte* data = mark.mark;
+  int size = &mark.arena->mem[mark.arena->used] - data;
+
+  Assert(size >= 0);
+  Assert(size % sizeof(T) == 0); // Ensures data is properly aligned
+  
+  Array<T> res = {};
+  res.data = (T*) data;
+  res.size = size / sizeof(T);
+
+  return res;
 }
 
 template<typename T> T* DynamicArray<T>::PushElem(){
@@ -747,21 +639,9 @@ template<typename T> T* DynamicArray<T>::PushElem(){
 }
   
 template<typename T> Array<T> EndArray(DynamicArray<T> arr){
-  Arena* arena = arr.mark.arena;
-
-  arena->locked = false;
+  arr.mark.arena->locked = false;
   
-  Byte* data = arr.mark.mark;
-  int size = &arena->mem[arena->used] - data;
-
-  Assert(size >= 0);
-  Assert(size % sizeof(T) == 0); // Ensures data is properly aligned
-  
-  Array<T> res = {};
-  res.data = (T*) data;
-  res.size = size / sizeof(T);
-
-  return res;
+  return arr.AsArray();
 }
 
 template<typename Key,typename Data>
@@ -1264,7 +1144,7 @@ void TrieMapIterator<Key,Data>::operator++(){
 }
 
 template<typename Key,typename Data>
-Pair<Key,Data> TrieMapIterator<Key,Data>::operator*(){
+Pair<Key,Data>& TrieMapIterator<Key,Data>::operator*(){
   return this->ptr->pair;
 }
 

@@ -27,6 +27,12 @@ struct SpecificMergeNodes{
    FUInstance* instB;
 };
 
+struct SpecificMergeNode{
+  int firstIndex;
+  String firstName;
+  int secondIndex;
+  String secondName;
+};
 
 struct MergeEdge{
    FUInstance* instances[2];
@@ -83,53 +89,15 @@ struct CliqueState{
    bool found;
 };
 
-// Represents the full algorithm
-struct RefParallelState{
-   ConsolidationGraph result;
-   ConsolidationGraph graphCopy;
-   Byte* arenaMark; // Stores everything expect result, allocated before hand
-   Arena* arena;
-   TaskFunction taskFunction;
-   clock_t start;
-   int nThreads;
-   int upperBound;
-   int i;
-
-   Array<Arena> threadArenas;
-   Array<int> table; // Shared by threads
-   int max;
-   bool timeout;
-};
-
-struct ParallelCliqueState{
-   volatile int* max;
-   volatile int thisMax;
-   Array<int> table;
-   Array<bool> tableLooked;
-   ConsolidationGraph* cliqueOut;
-   clock_t start;
-   int counter;
-   int index;
-   int upperbound;
-   bool timeout;
-   bool found;
-};
-
-// Allocated for each task
-struct RefParallelTask{
-   RefParallelState* state;
-   int index;
-   float MAX_CLIQUE_TIME;
-};
-
 struct IsCliqueResult{
    bool result;
    int failedIndex;
 };
 
-typedef std::unordered_map<FUInstance*,FUInstance*> InstanceMap;
-typedef std::unordered_map<PortEdge,PortEdge> PortEdgeMap;
-typedef std::unordered_map<Edge*,Edge*> EdgeMap;
+// TODO: For now everything is hashmap to help in debugging to be able to reuse previous code
+typedef Hashmap<FUInstance*,FUInstance*> InstanceMap;
+typedef Hashmap<PortEdge,PortEdge> PortEdgeMap;
+typedef Hashmap<Edge*,Edge*> EdgeMap;
 typedef Hashmap<InstanceNode*,InstanceNode*> InstanceNodeMap;
 
 struct MergeGraphResult{
@@ -138,8 +106,6 @@ struct MergeGraphResult{
 
    InstanceNodeMap* map1; // Maps node from accel1 to newGraph
    InstanceNodeMap* map2; // Maps node from accel2 to newGraph
-   //std::vector<Edge*> accel1EdgeMap;
-   //std::vector<Edge*> accel2EdgeMap;
    Accelerator* newGraph;
 };
 
@@ -150,9 +116,9 @@ struct MergeGraphResultExisting{
 };
 
 struct GraphMapping{
-   InstanceMap instanceMap;
-   InstanceMap reverseInstanceMap;
-   PortEdgeMap edgeMap;
+   InstanceMap* instanceMap;
+   InstanceMap* reverseInstanceMap;
+   PortEdgeMap* edgeMap;
 };
 
 enum MergingStrategy{
@@ -162,6 +128,8 @@ enum MergingStrategy{
 };
 
 void OutputConsolidationGraph(ConsolidationGraph graph,Arena* memory,bool onlyOutputValid,const char* format,...);
+
+int ValidNodes(ConsolidationGraph graph);
 
 ConsolidationResult GenerateConsolidationGraph(Versat* versat,Arena* arena,Accelerator* accel1,Accelerator* accel2,ConsolidationGraphOptions options);
 MergeGraphResult MergeGraph(Versat* versat,Accelerator* flatten1,Accelerator* flatten2,GraphMapping& graphMapping,String name);
@@ -194,5 +162,7 @@ MergeGraphResult HierarchicalMergeAccelerators(Versat* versat,Accelerator* accel
 MergeGraphResult HierarchicalMergeAcceleratorsFullClique(Versat* versat,Accelerator* accel1,Accelerator* accel2,String name);
 
 FUDeclaration* MergeAccelerators(Versat* versat,FUDeclaration* accel1,FUDeclaration* accel2,String name,int flatteningOrder = 99,MergingStrategy strategy = MergingStrategy::CONSOLIDATION_GRAPH,SpecificMerge* specifics = nullptr,int nSpecifics = 0);
-//FUDeclaration* MergeThree(Versat* versat,FUDeclaration* typeA,FUDeclaration* typeB,FUDeclaration* typeC);
-FUDeclaration* Merge(Versat* versat,Array<FUDeclaration*> types,String name,MergingStrategy strat = MergingStrategy::CONSOLIDATION_GRAPH);
+
+FUDeclaration* Merge(Versat* versat,Array<FUDeclaration*> types,
+                     String name,Array<SpecificMergeNode> specifics,
+                     MergingStrategy strat = MergingStrategy::CONSOLIDATION_GRAPH);

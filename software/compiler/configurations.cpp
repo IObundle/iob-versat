@@ -23,7 +23,7 @@ CalculatedOffsets CalculateConfigOffsetsIgnoringStatics(Accelerator* accel,Arena
     FUInstance* inst = ptr->inst;
     Assert(!(inst->sharedEnable && inst->isStatic));
 
-    int numberConfigs = inst->declaration->configInfo.configs.size;
+    int numberConfigs = inst->declaration->configInfo[0].configs.size;
     if(numberConfigs == 0){
       array[index] = -1;
       continue;
@@ -42,7 +42,8 @@ CalculatedOffsets CalculateConfigOffsetsIgnoringStatics(Accelerator* accel,Arena
     }
     
     if(inst->isStatic){
-      array[index] = 0x40000000;
+      array[index] = -1; // TODO: Changed this, make sure no bug occurs from this
+      //array[index] = 0x40000000;
     } else {
       array[index] = offset;
       offset += numberConfigs;
@@ -61,16 +62,13 @@ int GetConfigurationSize(FUDeclaration* decl,MemType type){
 
   switch(type){
   case MemType::CONFIG:{
-    size = decl->configInfo.configs.size;
+    size = decl->configInfo[0].configs.size;
   }break;
   case MemType::DELAY:{
-    size = decl->configInfo.delayOffsets.max;
-  }break;
-  case MemType::EXTRA:{
-    size = decl->configInfo.extraDataOffsets.max;
+    size = decl->configInfo[0].delayOffsets.max;
   }break;
   case MemType::STATE:{
-    size = decl->configInfo.states.size;
+    size = decl->configInfo[0].states.size;
   }break;
   case MemType::STATIC:{
   }break;
@@ -132,8 +130,8 @@ Array<Wire> ExtractAllConfigs(Array<InstanceInfo> info,Arena* out,Arena* temp){
       for(int i = 0; i < t.configSize; i++){
         Wire* wire = PushListElement(list);
 
-        *wire = t.decl->configInfo.configs[i];
-        wire->name = PushString(out,"%.*s_%.*s",UNPACK_SS(t.fullName),UNPACK_SS(t.decl->configInfo.configs[i].name));
+        *wire = t.decl->configInfo[0].configs[i];
+        wire->name = PushString(out,"%.*s_%.*s",UNPACK_SS(t.fullName),UNPACK_SS(t.decl->configInfo[0].configs[i].name));
       }
     }
   }
@@ -159,8 +157,8 @@ Array<Wire> ExtractAllConfigs(Array<InstanceInfo> info,Arena* out,Arena* temp){
         for(int i = 0; i < t.configSize; i++){
           Wire* wire = PushListElement(list);
 
-          *wire = t.decl->configInfo.configs[i];
-          wire->name = PushString(out,"%.*s_%.*s_%.*s",UNPACK_SS(parentName),UNPACK_SS(t.name),UNPACK_SS(t.decl->configInfo.configs[i].name));
+          *wire = t.decl->configInfo[0].configs[i];
+          wire->name = PushString(out,"%.*s_%.*s_%.*s",UNPACK_SS(parentName),UNPACK_SS(t.name),UNPACK_SS(t.decl->configInfo[0].configs[i].name));
         }
       }
     }
@@ -180,7 +178,7 @@ Array<String> ExtractStates(Array<InstanceInfo> info,Arena* out){
   int count = 0;
   for(InstanceInfo& in : info){
     if(!in.isComposite && in.statePos.has_value()){
-      count += in.decl->configInfo.states.size;
+      count += in.decl->configInfo[0].states.size;
     }
   }
 
@@ -189,7 +187,7 @@ Array<String> ExtractStates(Array<InstanceInfo> info,Arena* out){
   for(InstanceInfo& in : info){
     if(!in.isComposite && in.statePos.has_value()){
       FUDeclaration* decl = in.decl;
-      for(Wire& wire : decl->configInfo.states){
+      for(Wire& wire : decl->configInfo[0].states){
         res[index++] = PushString(out,"%.*s_%.*s",UNPACK_SS(in.fullName),UNPACK_SS(wire.name)); 
       }
     }
@@ -236,18 +234,6 @@ String ReprStaticConfig(StaticId id,Wire* wire,Arena* out){
 
 // TODO: There is probably a better way of simplifying the logic used here.
 // NOTE: The logic for static and shared configs is hard to decouple and simplify. I found no other way of doing this, other than printing the result for a known set of circuits and make small changes at atime.
-struct InstanceConfigurationOffsets{
-  Hashmap<StaticId,int>* staticInfo; 
-  FUDeclaration* parent;
-  String topName;
-  int configOffset;
-  int stateOffset;
-  int delayOffset;
-  int delay; // Actual delay value, not the delay offset.
-  int memOffset;
-  int level;
-  int* staticConfig; // This starts at 0x40000000 and at the end of the function we normalized it since we can only figure out the static position at the very end.
-};
 
 String NodeTypeToString(InstanceNode* node){
   switch(node->type){
@@ -266,10 +252,33 @@ String NodeTypeToString(InstanceNode* node){
   case InstanceNode::TAG_SOURCE_AND_SINK:{
     return STRING("SOURCE_AND_SINK");
   } break;
-  default: NOT_IMPLEMENTED("Implemented as needed");
+  default:;
   }
   NOT_POSSIBLE("Implemented as needed");
   return {};
+}
+
+struct Partition{
+  int value;
+  int max;
+};
+
+bool Next(Array<Partition> arr){
+  for(int i = 0; i < arr.size; i++){
+    Partition& par = arr[i];
+
+    if(par.value + 1 >= par.max){
+      continue;
+    } else {
+      arr[i].value = arr[i].value + 1;
+      for(int ii = 0; ii < i; ii++){
+        arr[ii].value = 0;
+      }
+      return true;
+    }
+  }
+
+  return false;
 }
 
 static InstanceInfo GetInstanceInfo(InstanceNode* node,FUDeclaration* parentDeclaration,InstanceConfigurationOffsets offsets,Arena* out){
@@ -293,6 +302,7 @@ static InstanceInfo GetInstanceInfo(InstanceNode* node,FUDeclaration* parentDecl
   info.parent = parentDeclaration;
   info.baseDelay = offsets.delay;
   info.type = NodeTypeToString(node);
+  info.isMergeMultiplexer = inst->isMergeMultiplexer;
   
   if(topDecl->memoryMapBits.has_value()){
     info.memMappedSize = (1 << topDecl->memoryMapBits.value());
@@ -301,9 +311,9 @@ static InstanceInfo GetInstanceInfo(InstanceNode* node,FUDeclaration* parentDecl
     info.memMappedMask = BinaryRepr(info.memMapped.value(),32,out);
   }
 
-  info.configSize = topDecl->configInfo.configs.size;
-  info.stateSize = topDecl->configInfo.states.size;
-  info.delaySize = topDecl->configInfo.delayOffsets.max;
+  info.configSize = topDecl->configInfo[0].configs.size;
+  info.stateSize = topDecl->configInfo[0].states.size;
+  info.delaySize = topDecl->configInfo[0].delayOffsets.max;
   
   bool containsConfigs = info.configSize;
   bool configIsStatic = false;
@@ -331,24 +341,24 @@ static InstanceInfo GetInstanceInfo(InstanceNode* node,FUDeclaration* parentDecl
     
   info.isConfigStatic = configIsStatic;
   
-  if(topDecl->configInfo.states.size){
+  if(topDecl->configInfo[0].states.size){
     info.statePos = offsets.stateOffset;
   }
  
-  int nDelays = topDecl->configInfo.delayOffsets.max;
+  int nDelays = topDecl->configInfo[0].delayOffsets.max;
   if(nDelays > 0 && !info.isComposite){
     info.delay = PushArray<int>(out,nDelays);
     Memset(info.delay,offsets.delay);
   }
 
-  if(topDecl->configInfo.delayOffsets.max){
+  if(topDecl->configInfo[0].delayOffsets.max){
     info.delayPos = offsets.delayOffset;
   }
   
   return info;
 }
 
-AcceleratorInfo TransformGraphIntoArrayRecurse(InstanceNode* node,FUDeclaration* parentDecl,InstanceConfigurationOffsets offsets,Arena* out,Arena* temp){
+AcceleratorInfo TransformGraphIntoArrayRecurse(InstanceNode* node,FUDeclaration* parentDecl,InstanceConfigurationOffsets offsets,Partition partition,Arena* out,Arena* temp){
   // This prevents us from fully using arenas because we are pushing more data than the actual structures that we keep track of. If this was hierarchical, we would't have this problem.
   AcceleratorInfo res = {};
 
@@ -377,6 +387,8 @@ AcceleratorInfo TransformGraphIntoArrayRecurse(InstanceNode* node,FUDeclaration*
   int delayIndex = 0;
   int index = 0;
 
+  int part = partition.value;
+  
   bool changedConfigFromStatic = false;
   int savedConfig = offsets.configOffset;
   int subOffsetsConfig = offsets.configOffset;
@@ -387,7 +399,7 @@ AcceleratorInfo TransformGraphIntoArrayRecurse(InstanceNode* node,FUDeclaration*
       subOffsetsConfig = offsets.staticInfo->GetOrFail(id);
     } else if(offsets.configOffset <= 0x40000000){
       int config = *offsets.staticConfig;
-      *offsets.staticConfig += inst->declaration->configInfo.configOffsets.offsets[index];
+      *offsets.staticConfig += inst->declaration->configInfo[part].configOffsets.offsets[index];
 
       offsets.staticInfo->Insert(id,config);
 
@@ -399,7 +411,7 @@ AcceleratorInfo TransformGraphIntoArrayRecurse(InstanceNode* node,FUDeclaration*
   
   FOREACH_LIST_INDEXED(InstanceNode*,subNode,inst->declaration->fixedDelayCircuit->allocated,index){
     FUInstance* subInst = subNode->inst;
-    bool containsConfig = subInst->declaration->configInfo.configs.size;
+    bool containsConfig = subInst->declaration->configInfo[0].configs.size; // TODO: When  doing partition might need to put index here instead of 0
     
     InstanceConfigurationOffsets subOffsets = offsets;
     subOffsets.level += 1;
@@ -408,10 +420,10 @@ AcceleratorInfo TransformGraphIntoArrayRecurse(InstanceNode* node,FUDeclaration*
     subOffsets.configOffset = subOffsetsConfig;
     
     // Bunch of static logic
-    subOffsets.configOffset += inst->declaration->configInfo.configOffsets.offsets[index];
-    subOffsets.stateOffset += inst->declaration->configInfo.stateOffsets.offsets[index];
-    subOffsets.delayOffset += inst->declaration->configInfo.delayOffsets.offsets[index];
-    if(subInst->declaration->configInfo.delayOffsets.max > 0){
+    subOffsets.configOffset += inst->declaration->configInfo[part].configOffsets.offsets[index];
+    subOffsets.stateOffset += inst->declaration->configInfo[part].stateOffsets.offsets[index];
+    subOffsets.delayOffset += inst->declaration->configInfo[part].delayOffsets.offsets[index];
+    if(subInst->declaration->configInfo[0].delayOffsets.max > 0){ // TODO: Same here
       subOffsets.delay = offsets.delay + inst->declaration->calculatedDelays[delayIndex++];
     }
 
@@ -421,7 +433,8 @@ AcceleratorInfo TransformGraphIntoArrayRecurse(InstanceNode* node,FUDeclaration*
 
     subOffsets.memOffset = offsets.memOffset + res.memSize;
 
-    AcceleratorInfo info = TransformGraphIntoArrayRecurse(subNode,inst->declaration,subOffsets,temp,out);
+    Partition zero = {}; // For now do not divide partition
+    AcceleratorInfo info = TransformGraphIntoArrayRecurse(subNode,inst->declaration,subOffsets,zero,temp,out);
     
     res.memSize += info.memSize;
     
@@ -432,6 +445,7 @@ AcceleratorInfo TransformGraphIntoArrayRecurse(InstanceNode* node,FUDeclaration*
 
   res.info = PushArrayFromList(out,instanceList);
   res.memSize = top.memMappedSize.value_or(0);
+  res.name = inst->declaration->configInfo[part].name;
   
   return res;
 }
@@ -448,35 +462,41 @@ AcceleratorInfo TransformGraphIntoArrayRecurse(InstanceNode* node,FUDeclaration*
 //       Allocates the Array of instance info.
 //       We can then fill everything by computing configInfo and stuff at the top and accessing fudeclaration configInfos as we go down.
 
-// TODO: Move this function to a better place
-AccelInfo CalculateAcceleratorInfo(Accelerator* accel,bool recursive,Arena* out,Arena* temp){
-  // TODO: Have this function return everything that needs to be arraified  
-  //       Printing a GraphArray struct should tell me everything I need to know about the accelerator
-  AccelInfo result = {};
-  
+TestResult CalculateOneInstance(Accelerator* accel,bool recursive,Array<Partition> partitions,Arena* temp,Arena* out){
   ArenaList<InstanceInfo>* infoList = PushArenaList<InstanceInfo>(temp);
   Hashmap<StaticId,int>* staticInfo = PushHashmap<StaticId,int>(temp,99);
 
   CalculatedOffsets configOffsets = CalculateConfigOffsetsIgnoringStatics(accel,out);
   CalculatedOffsets delayOffsets = CalculateConfigurationOffset(accel,MemType::DELAY,out);
   CalculateDelayResult calculatedDelay = CalculateDelay(accel->versat,accel,temp); // TODO: Would be better if calculate delay did not need to receive versat.
-  
+
+  int partitionIndex = 0;
   int staticConfig = 0x40000000; // TODO: Make this more explicit
   int index = 0;
   InstanceConfigurationOffsets subOffsets = {};
   subOffsets.topName = {};
   subOffsets.staticConfig = &staticConfig;
   subOffsets.staticInfo = staticInfo;
+  ArenaList<String>* names = PushArenaList<String>(temp);
   FOREACH_LIST_INDEXED(InstanceNode*,node,accel->allocated,index){
     FUInstance* subInst = node->inst;
 
+    Partition part = {};
+    if(subInst->declaration->configInfo.size > 1){
+      part = partitions[partitionIndex];
+    }
+    
     subOffsets.configOffset = configOffsets.offsets[index];
     subOffsets.delayOffset = delayOffsets.offsets[index];
     subOffsets.delay = calculatedDelay.nodeDelay->GetOrFail(node);
-    
-    if(recursive){
-      AcceleratorInfo info = TransformGraphIntoArrayRecurse(node,nullptr,subOffsets,temp,out);
 
+    if(recursive){
+      AcceleratorInfo info = TransformGraphIntoArrayRecurse(node,nullptr,subOffsets,part,temp,out);
+
+      if(info.name.has_value()){
+        *names->PushElem() = info.name.value();
+      }
+      
       subOffsets.memOffset += info.memSize;
       subOffsets.memOffset = AlignBitBoundary(subOffsets.memOffset,log2i(info.memSize));
       
@@ -491,50 +511,228 @@ AccelInfo CalculateAcceleratorInfo(Accelerator* accel,bool recursive,Arena* out,
       
       *PushListElement(infoList) = top;
     }
-  }
-  
-  Array<InstanceInfo> res = PushArrayFromList<InstanceInfo>(out,infoList);
 
-  int maxMemBitsize = log2i(subOffsets.memOffset);
-  if(maxMemBitsize > 0){
-    for(InstanceInfo& info : res){
-      if(info.memMapped.has_value()){
-        String& memMask = info.memMappedMask.value();
-
-        memMask.data += 32 - maxMemBitsize;
-        memMask.size = maxMemBitsize;
-      }
+    if(subInst->declaration->configInfo.size > 1){
+      partitionIndex += 1;
     }
   }
+  Array<InstanceInfo> res = PushArrayFromList<InstanceInfo>(out,infoList);
+  TestResult result = {};
+  result.info = res;
+  result.subOffsets = subOffsets;
+
+  Array<String> nameList = PushArrayFromList(temp,names);
   
-  FUDeclaration* maxConfigDecl = nullptr;
-  int maxConfig = 0;
-  for(InstanceInfo& inst : res){
-    if(inst.configPos.has_value()){
-      int val = inst.configPos.value();
-      if(val < 0x40000000){
-        if(val > maxConfig){
-          maxConfig = val;
-          maxConfigDecl = inst.decl;
+  auto mark = StartString(out);
+  bool first = true;
+  for(String name : nameList){
+    if(first){
+      first = false;
+    } else {
+      PushString(out,"_");
+    }
+    PushString(out,name);
+  }
+  result.name = EndString(mark);
+  
+  return result;
+}
+
+// TODO: Move this function to a better place
+// This function cannot return an array for merge units because we do not have the merged units info in this level.
+// This function only works for modules and for recursing the merged info to upper modules.
+// The info needed by merge must be stored by the merge function.
+AccelInfo CalculateAcceleratorInfo(Accelerator* accel,bool recursive,Arena* out,Arena* temp){
+  // TODO: Have this function return everything that needs to be arraified  
+  //       Printing a GraphArray struct should tell me everything I need to know about the accelerator
+  AccelInfo result = {};
+
+  // MARKED - Some bug occurs, probably because the function is a mess and we have no idea 
+  //BLOCK_REGION(temp);
+  
+  DynamicArray<Partition> partitionsArr = StartArray<Partition>(temp);
+  int mergedPossibility = 0;
+  FOREACH_LIST(InstanceNode*,node,accel->allocated){
+    FUInstance* subInst = node->inst;
+    FUDeclaration* decl = subInst->declaration;
+
+    mergedPossibility += log2i(decl->configInfo.size);
+    *partitionsArr.PushElem() = (Partition){.value = 0,.max = 1 << (log2i(decl->configInfo.size))};
+  }
+  Array<Partition> partitions = EndArray(partitionsArr);
+
+  int totalMaxBitsize = 0;
+  ArenaList<TestResult>* list = PushArenaList<TestResult>(temp);
+  Array<InstanceInfo> res = {};
+  InstanceConfigurationOffsets subOffsets = {};
+  bool first = true;
+  int index = 0;
+  while(1){
+#if 0
+    printf("%d\n",index++);
+    for(Partition par : partitions){
+      printf("%d %d ",par.value,par.max);
+    }
+    printf("\n");
+#endif
+    TestResult res2 = CalculateOneInstance(accel,recursive,partitions,temp,out);
+    *PushListElement(list) = res2;
+
+    if(first){
+      res = res2.info;
+      subOffsets = res2.subOffsets;
+    }
+  
+    int maxMemBitsize = log2i(subOffsets.memOffset);
+    if(maxMemBitsize > 0){
+      for(InstanceInfo& info : res2.info){
+        if(info.memMapped.has_value()){
+          String& memMask = info.memMappedMask.value();
+
+          memMask.data += 32 - maxMemBitsize;
+          memMask.size = maxMemBitsize;
         }
       }
     }
-  }
 
-  if(maxConfigDecl){
-    int totalConfigSize = maxConfig + maxConfigDecl->configInfo.configOffsets.max;
-    for(InstanceInfo& inst : res){
+    if(first){
+      totalMaxBitsize = maxMemBitsize;
+    }
+    
+    FUDeclaration* maxConfigDecl = nullptr;
+    int maxConfig = 0;
+    for(InstanceInfo& inst : res2.info){
       if(inst.configPos.has_value()){
         int val = inst.configPos.value();
-        if(val >= 0x40000000){
-          inst.configPos = val - 0x40000000 + totalConfigSize;
+        if(val < 0x40000000){
+          if(val > maxConfig){
+            maxConfig = val;
+            maxConfigDecl = inst.decl;
+          }
+        }
+      }
+    }
+
+    if(maxConfigDecl){
+      int totalConfigSize = maxConfig + maxConfigDecl->configInfo[0].configOffsets.max;
+      for(InstanceInfo& inst : res2.info){
+        if(inst.configPos.has_value()){
+          int val = inst.configPos.value();
+          if(val >= 0x40000000){
+            inst.configPos = val - 0x40000000 + totalConfigSize;
+          }
+        }
+      }
+    }
+
+    first = false;
+    if(!Next(partitions)){
+      break;
+    }
+  }
+  Array<TestResult> final = PushArrayFromList(out,list);
+  
+  result.infos = Map(final,out,[](TestResult t){
+    return t.info;
+  });
+  result.names = Map(final,out,[](TestResult t){
+    return t.name;
+  });
+
+  result.memMappedBitsize = totalMaxBitsize;
+
+  std::vector<bool> seenShared;
+
+  Hashmap<StaticId,int>* staticSeen = PushHashmap<StaticId,int>(temp,1000);
+
+  int memoryMappedDWords = 0;
+
+  // Handle non-static information
+  FOREACH_LIST(InstanceNode*,ptr,accel->allocated){
+    FUInstance* inst = ptr->inst;
+    FUDeclaration* type = inst->declaration;
+
+    // Check if shared
+    if(inst->sharedEnable){
+      if(inst->sharedIndex >= (int) seenShared.size()){
+        seenShared.resize(inst->sharedIndex + 1);
+      }
+
+      if(!seenShared[inst->sharedIndex]){
+        result.configs += type->configInfo[0].configs.size;
+        result.sharedUnits += 1;
+      }
+
+      seenShared[inst->sharedIndex] = true;
+    } else if(!inst->isStatic){ // Shared cannot be static
+         result.configs += type->configInfo[0].configs.size;
+    }
+
+    if(type->memoryMapBits.has_value()){
+      result.isMemoryMapped = true;
+
+      memoryMappedDWords = AlignBitBoundary(memoryMappedDWords,type->memoryMapBits.value());
+      memoryMappedDWords += (1 << type->memoryMapBits.value());
+    }
+
+    if(type == BasicDeclaration::input){
+      result.inputs += 1;
+    }
+
+    result.states += type->configInfo[0].states.size;
+    result.delays += type->configInfo[0].delayOffsets.max;
+    result.ios += type->nIOs;
+
+    if(type->externalMemory.size){
+      result.externalMemoryInterfaces += type->externalMemory.size;
+	  result.externalMemoryByteSize = ExternalMemoryByteSize(type->externalMemory);
+    }
+
+    result.signalLoop |= type->signalLoop;
+  }
+
+  result.memoryMappedBits = log2i(memoryMappedDWords);
+
+  FUInstance* outputInstance = GetOutputInstance(accel->allocated);
+  if(outputInstance){
+    FOREACH_LIST(Edge*,edge,accel->edges){
+      if(edge->units[0].inst == outputInstance){
+        result.outputs = std::max(result.outputs - 1,edge->units[0].port) + 1;
+      }
+      if(edge->units[1].inst == outputInstance){
+        result.outputs = std::max(result.outputs - 1,edge->units[1].port) + 1;
+      }
+    }
+  }
+
+  // Handle static information
+  FOREACH_LIST(InstanceNode*,ptr,accel->allocated){
+    FUInstance* inst = ptr->inst;
+    if(inst->isStatic){
+      StaticId id = {};
+
+      id.name = inst->name;
+
+      staticSeen->Insert(id,1);
+      result.statics += inst->declaration->configInfo[0].configs.size;
+    }
+
+    if(IsTypeHierarchical(inst->declaration)){
+      for(Pair<StaticId,StaticData> pair : inst->declaration->staticUnits){
+        int* possibleFind = staticSeen->Get(pair.first);
+
+        if(!possibleFind){
+          staticSeen->Insert(pair.first,1);
+          result.statics += pair.second.configs.size;
         }
       }
     }
   }
   
-  result.info = res;
-  result.memMappedBitsize = maxMemBitsize;
+  FOREACH_LIST(InstanceNode*,ptr,accel->allocated){
+    FUInstance* inst = ptr->inst;
+    result.numberConnections += Size(ptr->allOutputs);
+  }
   
   return result;
 }
@@ -586,7 +784,7 @@ void CheckSanity(Array<InstanceInfo> instanceInfo,Arena* temp){
 }
 
 void PrintConfigurations(FUDeclaration* type,Arena* temp){
-  ConfigurationInfo& info = type->configInfo;
+  ConfigurationInfo& info = type->configInfo[0];
 
   printf("Config:\n");
   for(Wire& wire : info.configs){

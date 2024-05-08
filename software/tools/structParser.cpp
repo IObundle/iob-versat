@@ -279,7 +279,7 @@ bool DependsOnTemplatedParam(TypeDef* def,String memberTypeName,Arena* arena){
   tok.AssertNextToken("<");
 
   while(!tok.Done()){
-    Optional<FindFirstResult> res = tok.FindFirst({",",">"});
+    Opt<FindFirstResult> res = tok.FindFirst({",",">"});
     Assert(res.has_value());
 
     FindFirstResult search = res.value();
@@ -412,7 +412,7 @@ void OutputRegisterTypesFunction(FILE* output,Arena* arena){
 
         fprintf(output,"\t\t{STRING(\"%.*s\"),(int) %.*s::%.*s}",UNPACK_SS(name),UNPACK_SS(def->enumType.name),UNPACK_SS(name));
 
-        Optional<Token> peek = tok.PeekFindUntil(",");
+        Opt<Token> peek = tok.PeekFindUntil(",");
 
         if(!peek.has_value()){
           break;
@@ -938,12 +938,13 @@ int main(int argc,const char* argv[]){
 	voidType->simpleType = STRING("void");
   }
 
-#if 1
+#if 0
   const char* test = "template<typename T> struct std::vector{T* mem; int size; int allocated;};";
   Tokenizer tok(STRING(test),":[]{}();*<>,=",{"::"});
   ParseHeaderFile(&tok,arena);
 #endif
   
+#if 0
   region(arena){
 	String typeInfoPath = PushString(arena,"%s/typeInfo.cpp",argv[1]);
 	PushNullByte(arena);
@@ -966,7 +967,8 @@ int main(int argc,const char* argv[]){
 
 	fclose(output);
   }
-
+#endif
+  
 #if 1
   region(arena){
 	String cppPath = PushString(arena,"%s/repr.cpp",argv[1]);

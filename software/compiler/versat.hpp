@@ -9,6 +9,7 @@
 
 #include "accelerator.hpp"
 #include "configurations.hpp"
+
 // Forward declarations
 struct Versat;
 struct Accelerator;
@@ -69,6 +70,7 @@ struct FUInstance{
   int sharedIndex;
   bool isStatic;
   bool sharedEnable;
+  bool isMergeMultiplexer; // TODO: Kinda of an hack for now
 };
 
 struct DebugState{
@@ -107,41 +109,18 @@ struct Options{
   bool exportInternalMemories;
 };
 
+// TODO: Make these globals. After changing Versat to act more like a compiler, there is no need for a Versat structure. 
 struct Versat{
   Pool<FUDeclaration> declarations;
   Pool<Accelerator> accelerators;
 
-  Arena permanent;
-  Arena temp;
+  Arena* permanent;
+  Arena* temp;
+  Arena* temp2;
 
   DebugState debug;
 
   Options* opts;
-};
-
-struct UnitValues{
-  int inputs;
-  int outputs;
-
-  int configs;
-  int states;
-  int delays;
-  int ios;
-  int extraData;
-  int statics;
-  int sharedUnits;
-  int externalMemoryInterfaces;
-  int externalMemoryByteSize;
-  int numberUnits;
-
-  int memoryMappedBits;
-  bool isMemoryMapped;
-  bool signalLoop;
-};
-
-struct TypeAndInstance{
-  String typeName;
-  String instanceName;
 };
 
 struct CompiledTemplate;
@@ -167,7 +146,6 @@ struct CalculateDelayResult{
 bool EqualPortMapping(PortInstance p1,PortInstance p2);
 
 // General info
-UnitValues CalculateAcceleratorValues(Versat* versat,Accelerator* accel);
 bool IsUnitCombinatorial(FUInstance* inst);
 
 // Delay
@@ -193,7 +171,7 @@ struct ModuleInfo;
 FUDeclaration* RegisterModuleInfo(Versat* versat,ModuleInfo* info);
 
 // Versat functions
-Versat* InitVersat();
+Versat* InitVersat(Arena* perm,Arena* temp,Arena* temp2);
 void Free(Versat* versat); // Usually not needed, as memory is freed on program termination and Versat is supposed to be "active" from start to finish, but usuful for debugging memory problems
 void ParseVersatSpecification(Versat* versat,String content);
 void ParseVersatSpecification(Versat* versat,const char* filepath);
@@ -212,6 +190,8 @@ FUDeclaration* RegisterFU(Versat* versat,FUDeclaration declaration);
 FUDeclaration* GetTypeByName(Versat* versat,String str);
 FUDeclaration* RegisterIterativeUnit(Versat* versat,Accelerator* accel,FUInstance* inst,int latency,String name);
 FUDeclaration* RegisterSubUnit(Versat* versat,Accelerator* accel);
+
+Array<MergeInfo> AccumulateMergeInfo(Accelerator* accel,Arena* out);
 
 void PrintDeclaration(FILE* out,FUDeclaration* decl,Arena* temp,Arena* temp2);
 

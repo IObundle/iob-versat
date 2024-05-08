@@ -257,7 +257,7 @@ static Array<Location> CollectStackTrace(Arena* out,Arena* temp){
     
     String functionName = line;
 
-    Optional<Token> token = tok.NextFindUntil(":");
+    Opt<Token> token = tok.NextFindUntil(":");
 
     Assert(token.has_value());
     

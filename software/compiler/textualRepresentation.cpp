@@ -348,7 +348,7 @@ String Repr(InstanceNode* node,Arena* out){
   return Repr(node->inst,GRAPH_DOT_FORMAT_NAME,out);
 }
 
-String Repr(Optional<int>* opt,Arena* out){
+String Repr(Opt<int>* opt,Arena* out){
   if(opt->has_value()){
     return Repr(&opt->value(),out);
   } else {

@@ -55,6 +55,12 @@ inline DelayType operator|(DelayType a, DelayType b)
 */
 
 struct ConfigurationInfo{
+  // Copy of MergeInfo
+  String name;
+  Array<String> baseName;
+  FUDeclaration* baseType;
+
+  // TODO: These should not be here, the wires will always be the same regardless of unit type 
   Array<Wire> configs;
   Array<Wire> states;
 
@@ -62,7 +68,8 @@ struct ConfigurationInfo{
   CalculatedOffsets configOffsets;
   CalculatedOffsets stateOffsets;
   CalculatedOffsets delayOffsets;
-  CalculatedOffsets extraDataOffsets; // TODO: Do not need this for merged graphs
+  Array<int>        calculatedDelays;
+  Array<bool>       unitBelongs;
 };
 
 // Maps the sub InstanceNodes into the corresponding index of the configuration array. 
@@ -71,6 +78,14 @@ struct MergeInfo{
   ConfigurationInfo config;
   Array<String> baseName;
   FUDeclaration* baseType;
+};
+
+enum FUDeclarationType{
+  FUDeclarationType_SINGLE,
+  FUDeclarationType_COMPOSITE,
+  FUDeclarationType_SPECIAL,
+  FUDeclarationType_MERGED,
+  FUDeclarationType_ITERATIVE
 };
 
 // TODO: There is a lot of crux between parsing and creating the FUDeclaration for composite accelerators 
@@ -83,12 +98,13 @@ struct FUDeclaration{
   Array<int> outputLatencies;
 
   Array<int> calculatedDelays;
-  
-  ConfigurationInfo configInfo;
-  
-  Optional<int> memoryMapBits; // 0 is a valid memory map size, so optional indicates that no memory map exists
-  int nIOs;
 
+  // TODO: There should exist a "default" configInfo, instead of doing what we are currently which is using the 0 as the default;
+  Array<ConfigurationInfo> configInfo;
+  
+  Opt<int> memoryMapBits; // 0 is a valid memory map size, so optional indicates that no memory map exists
+  int nIOs;
+  
   Array<ExternalMemoryInterface> externalMemory;
 
   // Stores different accelerators depending on properties we want
@@ -96,8 +112,8 @@ struct FUDeclaration{
   Accelerator* fixedDelayCircuit;
 
   // Merged accelerator
-  Array<MergeInfo> mergeInfo;
-   
+  //Array<MergeInfo> mergeInfo;
+  
   const char* operation;
 
   int lat; // TODO: For now this is only for iterative units. Would also useful to have a standardized way of computing this from the graph and then compute it when needed. 
@@ -106,7 +122,7 @@ struct FUDeclaration{
   //       the info is all contained inside the units themselves and inside the calculated offsets
   Hashmap<StaticId,StaticData>* staticUnits;
 
-  enum {SINGLE = 0x0,COMPOSITE = 0x1,SPECIAL = 0x2,MERGED = 0x3,ITERATIVE = 0x4} type;
+  FUDeclarationType type;
   DelayType delayType;
 
   bool isOperation;
@@ -114,7 +130,6 @@ struct FUDeclaration{
   bool signalLoop;
 
 // Simple access functions
- 
   int NumberInputs(){return inputDelays.size;};
   int NumberOutputs(){return outputLatencies.size;};
 };

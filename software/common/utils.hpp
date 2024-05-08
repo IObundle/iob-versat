@@ -5,7 +5,7 @@
 #include "utilsCore.hpp"
 #include "memory.hpp"
 
-Optional<Array<String>> GetAllFilesInsideDirectory(String dirPath,Arena* out);
+Opt<Array<String>> GetAllFilesInsideDirectory(String dirPath,Arena* out);
 
 String PushEscapedString(Arena* out,String toEscape,char spaceSubstitute);
 void   PrintEscapedString(String toEscape,char spaceSubstitute);
@@ -67,6 +67,8 @@ struct ArenaList{
   Arena* arena; // For now store arena inside structure. 
   ListedStruct<T>* head;
   ListedStruct<T>* tail;
+
+  T* PushElem();
 };
 
 template<typename T>
@@ -269,6 +271,7 @@ ArenaList<T>* PushArenaList(Arena* out){
   return res;
 }
 
+// TODO: Remove this and use PushElem member function
 template<typename T>
 T* PushListElement(ArenaList<T>* list){
   Arena* out = list->arena;
@@ -284,6 +287,11 @@ T* PushListElement(ArenaList<T>* list){
   }
 
   return &s->elem;
+}
+
+template<typename T>
+T* ArenaList<T>::PushElem(){
+  return PushListElement(this);
 }
 
 template<typename T,typename P>
@@ -406,4 +414,17 @@ Hashmap<T,int>* Count(Array<T> arr,Arena* out){
   }
 
   return count;
+}
+
+#include <type_traits>
+
+template<typename T,typename Func>
+Array<typename std::result_of<Func(T)>::type> Map(Array<T> array,Arena* out,Func f){
+  using ST = typename std::result_of<Func(T)>::type;
+  
+  DynamicArray<ST> arr = StartArray<ST>(out);
+  for(T& t : array){
+    *arr.PushElem() = f(t);
+  }
+  return EndArray(arr);
 }

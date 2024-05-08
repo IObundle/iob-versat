@@ -19,7 +19,7 @@ bool HasExtension(const char* filepath){
 
   Tokenizer tok(STRING(absolute.c_str()),".",{});
 
-  Optional<Token> str = tok.PeekFindIncluding(".");
+  Opt<Token> str = tok.PeekFindIncluding(".");
   if(str.has_value()){
     return true;
   }

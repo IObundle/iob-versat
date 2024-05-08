@@ -12,9 +12,9 @@ struct Edge;
 struct PortEdge;
 struct Versat;
 
-typedef std::unordered_map<FUInstance*,FUInstance*> InstanceMap;
-typedef std::unordered_map<PortEdge,PortEdge> PortEdgeMap;
-typedef std::unordered_map<Edge*,Edge*> EdgeMap;
+typedef Hashmap<FUInstance*,FUInstance*> InstanceMap;
+typedef Hashmap<PortEdge,PortEdge> PortEdgeMap;
+typedef Hashmap<Edge*,Edge*> EdgeMap;
 typedef Hashmap<InstanceNode*,InstanceNode*> InstanceNodeMap;
 
 struct PortInstance{
@@ -150,12 +150,6 @@ struct MemoryAddressMask{
   char* memoryMask;
 };
 
-struct ComputedData{
-  // Repr: data
-  Array<ExternalMemoryInterface> external; // Just a grouping of all external interfaces.
-  Array<MemoryAddressMask> data;
-};
-
 struct VersatComputedValues{
   int nConfigs;
   int configBits;
@@ -184,7 +178,7 @@ struct VersatComputedValues{
   int memoryMappedBytes;
 
   int nUnitsIO;
-  int numberConnections;
+  int numberConnections; // TODO: Same as accel
   int externalMemoryInterfaces;
 
   int stateConfigurationAddressBits;
@@ -202,8 +196,6 @@ FUInstance* CopyInstance(Accelerator* newAccel,FUInstance* oldInstance,String ne
 FUInstance* CopyInstance(Accelerator* newAccel,FUInstance* oldInstance,String newName);
 InstanceNode* CopyInstance(Accelerator* newAccel,InstanceNode* oldInstance,String newName);
 InstanceNode* CreateFlatFUInstance(Accelerator* accel,FUDeclaration* type,String name);
-
-ComputedData CalculateVersatComputedData(Array<InstanceInfo> info,VersatComputedValues val,Arena* out);
 
 Array<FUDeclaration*> AllNonSpecialSubTypes(Accelerator* accel,Arena* out,Arena* temp);
 Array<FUDeclaration*> ConfigSubTypes(Accelerator* accel,Arena* out,Arena* temp);

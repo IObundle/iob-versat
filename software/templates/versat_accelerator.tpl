@@ -31,7 +31,7 @@ module @{accel.name} #(
    output [DATA_W-1:0]             out@{index},
    #{end}
 
-   #{for wire accel.configInfo.configs}
+   #{for wire accel.configInfo[0].configs}
    input [@{wire.bitSize-1}:0]     @{wire.name},
    #{end}
 
@@ -42,11 +42,11 @@ module @{accel.name} #(
    #{end}
    #{end}
 
-   #{for wire accel.configInfo.states}
+   #{for wire accel.configInfo[0].states}
    output [@{wire.bitSize-1}:0]    @{wire.name},
    #{end}
 
-   #{for i accel.configInfo.delayOffsets.max}
+   #{for i accel.configInfo[0].delayOffsets.max}
    input  [31:0]                   delay@{i},
    #{end}
 
@@ -128,7 +128,7 @@ wire [@{nDones - 1}:0] unitDone;
 assign done = &unitDone;
 #{end}
 
-#{if versatValues.numberConnections}
+#{if numberConnections}
 wire [31:0] #{join ", " node instances} #{let id index} #{join ", " j node.outputs}#{if j} output_@{id}_@{index} #{end}#{end}
 #{end};
 #{end}
@@ -172,7 +172,7 @@ begin
          #{set input2 node.inputs[1]}
          #{format decl.operation "comb" @{node.inst.name |> Identify} #{call retOutputName2 instances input1} #{call retOutputName2 instances input2}};
       #{end}
-   #{end}
+  #{end}
 #{end}
 end
 #{end}
@@ -222,13 +222,15 @@ end
   #{end}
 
   #{if inst.isStatic}
-    #{for wire inst.declaration.configInfo.configs}
+    #{for wire inst.declaration.configInfo[0].configs}
          .@{wire.name}(@{accel.name}_@{inst.name |> Identify}_@{wire.name}),
     #{end}
   #{else}
-    #{set configStart accel.configInfo.configOffsets.offsets[id]}
-    #{for wire decl.configInfo.configs}
-         .@{wire.name}(@{accel.configInfo.configs[configStart + index].name}), // @{configStart + index}
+    #{set configStart accel.configInfo[0].configOffsets.offsets[id]}
+    #{if configStart >= 0}
+      #{for wire decl.configInfo[0].configs}
+         .@{wire.name}(@{accel.configInfo[0].configs[configStart + index].name}), // @{configStart + index}
+      #{end}
     #{end}
   #{end}
 
@@ -239,7 +241,7 @@ end
     #{end}
   #{end}
 
-  #{for i decl.configInfo.delayOffsets.max}
+  #{for i decl.configInfo[0].delayOffsets.max}
             .delay@{i}(delay@{delaySeen}),
     #{inc delaySeen}
   #{end}
@@ -267,8 +269,8 @@ end
     #{inc externalCounter}
   #{end}
 
-  #{for wire decl.configInfo.states}
-            .@{wire.name}(@{accel.configInfo.states[statesSeen].name}),
+  #{for wire decl.configInfo[0].states}
+            .@{wire.name}(@{accel.configInfo[0].states[statesSeen].name}),
     #{inc statesSeen}
   #{end}
 

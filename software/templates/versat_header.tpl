@@ -177,10 +177,10 @@ extern volatile AcceleratorStatic* accelStatics;
 #define ACCEL_@{name} accelState->@{name}
 #{end}
 
-#{if doingMerged}
+#{if mergeNames.size > 1}
 typedef enum{
-   #{join "," info mergeInfo}
-        @{info.name} = @{index}
+   #{join "," name mergeNames}
+        @{name} = @{index}
    #{end}  
 } MergeType;
 
@@ -189,7 +189,7 @@ extern "C" {
 #endif
 
 static inline void ActivateMergedAccelerator(MergeType type){
-   ACCEL_@{accelName}_versat_merge_mux_sel = (int) type;
+   @{mergeMuxName} = (int) type;
 }
 
 #ifdef __cplusplus

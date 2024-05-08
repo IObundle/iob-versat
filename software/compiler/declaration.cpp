@@ -23,44 +23,56 @@ static Array<int> zerosArray = {zeros,99};
 static int ones[64] = {1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1};
 
 static FUDeclaration* RegisterCircuitInput(Versat* versat){
+  Arena* permanent = versat->permanent;
   FUDeclaration decl = {};
 
   decl.name = STRING("CircuitInput");
   decl.inputDelays = Array<int>{zeros,0};
   decl.outputLatencies = Array<int>{zeros,1};
   decl.delayType = DelayType::DelayType_SOURCE_DELAY;
-  decl.type = FUDeclaration::SPECIAL;
-
+  decl.type = FUDeclarationType_SPECIAL;
+  decl.configInfo = PushArray<ConfigurationInfo>(permanent,1);
+  Memset(decl.configInfo,{});
+  
   return RegisterFU(versat,decl);
 }
 static FUDeclaration* RegisterCircuitOutput(Versat* versat){
+  Arena* permanent = versat->permanent;
   FUDeclaration decl = {};
 
   decl.name = STRING("CircuitOutput");
   decl.inputDelays = Array<int>{zeros,50};
   decl.outputLatencies = Array<int>{zeros,0};
   decl.delayType = DelayType::DelayType_SINK_DELAY;
-  decl.type = FUDeclaration::SPECIAL;
+  decl.type = FUDeclarationType_SPECIAL;
+  decl.configInfo = PushArray<ConfigurationInfo>(permanent,1);
+  Memset(decl.configInfo,{});
 
   return RegisterFU(versat,decl);
 }
 
 static FUDeclaration* RegisterData(Versat* versat){
+  Arena* permanent = versat->permanent;
   FUDeclaration decl = {};
 
   decl.name = STRING("Data");
   decl.inputDelays = Array<int>{zeros,50};
   decl.outputLatencies = Array<int>{ones,50};
   decl.delayType = DelayType::DelayType_SINK_DELAY;
+  decl.configInfo = PushArray<ConfigurationInfo>(permanent,1);
+  Memset(decl.configInfo,{});
 
   return RegisterFU(versat,decl);
 }
 
 static FUDeclaration* RegisterLiteral(Versat* versat){
+  Arena* permanent = versat->permanent;
   FUDeclaration decl = {};
 
   decl.name = STRING("Literal");
   decl.outputLatencies = Array<int>{zeros,1};
+  decl.configInfo = PushArray<ConfigurationInfo>(permanent,1);
+  Memset(decl.configInfo,{});
 
   return RegisterFU(versat,decl);
 }
@@ -69,6 +81,7 @@ static void RegisterOperators(Versat* versat){
     const char* name;
     const char* operation;
   };
+  Arena* permanent = versat->permanent;
 
   Operation unary[] =  {{"NOT","{0}_{1} = ~{2}"},
                         {"NEG","{0}_{1} = -{2}"}};
@@ -86,6 +99,8 @@ static void RegisterOperators(Versat* versat){
   decl.inputDelays = Array<int>{zeros,1};
   decl.outputLatencies = Array<int>{zeros,1};
   decl.isOperation = true;
+  decl.configInfo = PushArray<ConfigurationInfo>(permanent,1);
+  Memset(decl.configInfo,{});
 
   for(unsigned int i = 0; i < ARRAY_SIZE(unary); i++){
     decl.name = STRING(unary[i].name);

@@ -21,7 +21,7 @@
 #define DO_STRINGIFY(ARG) #ARG
 #define STRINGIFY(ARG) DO_STRINGIFY(ARG)
 
-Optional<String> GetFileFormatFromPath(String filename){
+Opt<String> GetFileFormatFromPath(String filename){
   int size = filename.size;
   for(int i = 0; i < filename.size; i++){
     char ch = filename[size - i - 1];
@@ -34,7 +34,7 @@ Optional<String> GetFileFormatFromPath(String filename){
     }
   }
 
-  return Optional<String>();
+  return Opt<String>();
 }
 
 // TODO: There is no reason to use small arguments. -d should just be -DMA. -D should just be -Databus and so on.
@@ -51,7 +51,7 @@ Options* ParseCommandLineOptions(int argc,const char* argv[],Arena* out,Arena* t
   for(int i = 1; i < argc; i++){
     String str = STRING(argv[i]);
 
-    Optional<String> formatOpt = GetFileFormatFromPath(str);
+    Opt<String> formatOpt = GetFileFormatFromPath(str);
 
     // TODO: Verilator does not actually need the source files for non top units. It only needs a include path to the folder that contains the sources and the verilog file of the top module. This could be removed. But also need to test further.
     if(str.size >= 2 && str[0] == '-' && str[1] == 'S'){
@@ -234,6 +234,11 @@ void CallVerilator(const char* unitPath,const char* outputPath){
    } else {
      int status;
      wait(&status);
+
+     if(status != 0){
+       printf("There was a problem calling verilator\n");
+       printf("Versat might not produce correct results\n");
+     }
    }  
 }
 
@@ -329,7 +334,7 @@ String GetVerilatorRoot(Arena* out,Arena* temp){
 
   String root = {};
   while(!tok.Done()){
-    Optional<Token> possible = tok.PeekFindIncluding("VERILATOR_ROOT");
+    Opt<Token> possible = tok.PeekFindIncluding("VERILATOR_ROOT");
 
     if(!possible.has_value()){
       printf("Couldn't find the location of verilator root\n");
@@ -363,13 +368,18 @@ int main(int argc,const char* argv[]){
   }
   
   InitDebug();
-
-  Versat* versat = InitVersat();
   
-  Arena permInst = InitArena(Megabyte(256));
+  Arena permInst = InitArena(Megabyte(128));
   Arena* perm = &permInst;
-  Arena tempInst = InitArena(Megabyte(256));
+  Arena tempInst = InitArena(Megabyte(512));
   Arena* temp = &tempInst;
+  Arena temp2Inst = InitArena(Megabyte(512));
+  Arena* temp2 = &tempInst;
+
+  Array<Versat> test = PushArray<Versat>(perm,10);
+  Memset(test,{});
+  
+  Versat* versat = InitVersat(perm,temp,temp2);
   
   InitializeTemplateEngine(perm);
   InitializeSimpleDeclarations(versat);
@@ -384,11 +394,11 @@ int main(int argc,const char* argv[]){
   versat->opts->shadowRegister = true; 
   versat->opts->noDelayPropagation = true;
   
-#if 0
+#if 1
   versat->debug.outputGraphs = true;
   versat->debug.outputAcceleratorInfo = true;
-  versat->debug.outputVCD = true;
 #endif
+  versat->debug.outputVCD = true;
   
 #ifdef USE_FST_FORMAT
   versat->opts.generateFSTFormat = 1;
@@ -400,7 +410,7 @@ int main(int argc,const char* argv[]){
     exit(-1);
   }
   
-  opts->verilatorRoot = GetVerilatorRoot(&versat->permanent,&versat->temp);
+  opts->verilatorRoot = GetVerilatorRoot(versat->permanent,versat->temp);
   if(opts->verilatorRoot.size == 0){
     fprintf(stderr,"Versat could not find verilator. Check that it is installed\n");
     return -1;
@@ -421,7 +431,7 @@ int main(int argc,const char* argv[]){
       while(!pathSplitter.Done()){
         Token path = pathSplitter.NextToken();
 
-        Optional<Array<String>> res = GetAllFilesInsideDirectory(path,temp);
+        Opt<Array<String>> res = GetAllFilesInsideDirectory(path,temp);
         if(!res){
           printf("\n\nCannot open dir: %.*s\n\n",UNPACK_SS(path));
         } else {
@@ -455,7 +465,7 @@ int main(int argc,const char* argv[]){
     }
   }
   
-// We need to do this after parsing the modules because the majority of these come from verilog files.
+  // We need to do this after parsing the modules because the majority of these special types come from verilog files.
   BasicDeclaration::buffer = GetTypeByName(versat,STRING("Buffer"));
   BasicDeclaration::fixedBuffer = GetTypeByName(versat,STRING("FixedBuffer"));
   BasicDeclaration::pipelineRegister = GetTypeByName(versat,STRING("PipelineRegister"));
@@ -537,6 +547,20 @@ int main(int argc,const char* argv[]){
     }
   }
 
+  for(FUDeclaration* decl : versat->declarations){
+    BLOCK_REGION(temp);
+
+    if(versat->debug.outputAcceleratorInfo && decl->fixedDelayCircuit){
+      String path = PushString(temp,"debug/%.*s/stats.txt",UNPACK_SS(decl->name));
+      PushNullByte(temp);
+
+      FILE* stats = OpenFileAndCreateDirectories(path.data,"w");
+
+      PrintDeclaration(stats,decl,perm,temp);
+    }
+  }
+    
+#if 1
   TOP->parameters = STRING("#(.AXI_ADDR_W(AXI_ADDR_W),.LEN_W(LEN_W))");
   OutputVersatSource(versat,accel,
                      opts->hardwareOutputFilepath.data,
@@ -547,35 +571,29 @@ int main(int argc,const char* argv[]){
 
   String versatDir = STRING(STRINGIFY(VERSAT_DIR));
   OutputVerilatorMake(versat,accel->name,versatDir,opts,temp,perm);
-
+#endif
+  
   for(FUDeclaration* decl : versat->declarations){
     BLOCK_REGION(temp);
 
-    if(decl->type == FUDeclaration::COMPOSITE ||
-       decl->type == FUDeclaration::ITERATIVE){
+#if 1
+    if(decl->type == FUDeclarationType_COMPOSITE ||
+       decl->type == FUDeclarationType_ITERATIVE){
 
       String path = PushString(temp,"%.*s/modules/%.*s.v",UNPACK_SS(versat->opts->hardwareOutputFilepath),UNPACK_SS(decl->name));
       PushNullByte(temp);
       
       FILE* sourceCode = OpenFileAndCreateDirectories(path.data,"w");
 
-      if(decl->type == FUDeclaration::COMPOSITE){
+      if(decl->type == FUDeclarationType_COMPOSITE){
         OutputCircuitSource(versat,decl,decl->fixedDelayCircuit,sourceCode,temp,perm);
-      } else if(decl->type == FUDeclaration::ITERATIVE){
+      } else if(decl->type == FUDeclarationType_ITERATIVE){
         OutputIterativeSource(versat,decl,decl->fixedDelayCircuit,sourceCode,temp,perm);
       }
 
       fclose(sourceCode);
     }
-
-    if(versat->debug.outputAcceleratorInfo && decl->fixedDelayCircuit){
-      String path = PushString(temp,"debug/%.*s/stats.txt",UNPACK_SS(decl->name));
-      PushNullByte(temp);
-
-      FILE* stats = OpenFileAndCreateDirectories(path.data,"w");
-
-      PrintDeclaration(stats,decl,perm,temp);
-    }
+#endif
   }
 
   return 0;

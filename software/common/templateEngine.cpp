@@ -62,7 +62,7 @@ bool operator==(const TemplateRecord& r0,const TemplateRecord& r1){
   return res;
 }
 
-static Optional<Value> GetValue(Frame* frame,String var){
+static Opt<Value> GetValue(Frame* frame,String var){
   Frame* ptr = frame;
 
   while(ptr){
@@ -363,7 +363,7 @@ static Array<IndividualBlock> ParseIndividualLine(String line, int lineNumber,Ar
   ArenaList<IndividualBlock>* strings = PushArenaList<IndividualBlock>(temp);
 
   while(1){
-    Optional<FindFirstResult> res = tok.FindFirst({"#{","@{"});
+    Opt<FindFirstResult> res = tok.FindFirst({"#{","@{"});
     
     if(!res.has_value()){
       String leftover = tok.Finish();
@@ -496,6 +496,7 @@ Array<Block*> ConvertIndividualBlocksIntoHierarchical_(Array<IndividualBlock> bl
     if(block){
       block->type = individualBlock->type;
       block->line = individualBlock->line;
+      block->fullText = individualBlock->content;
       *PushListElement(blockList) = block;
     }
   }
@@ -729,8 +730,8 @@ static Value EvalExpression(Expression* expr,Frame* frame,Arena* out){
     val = EvalNonBlockCommand(com,frame,out).val;
   } break;
   case Expression::IDENTIFIER:{
-    Optional<Value> iter = GetValue(frame,expr->id);
-
+    Opt<Value> iter = GetValue(frame,expr->id);
+    
     if(!iter){
       LogFatal(LogModule::TEMPLATE,"Did not find '%.*s' in template '%.*s'",UNPACK_SS(expr->id),UNPACK_SS(globalTemplateName));
       DEBUG_BREAK();
@@ -738,7 +739,7 @@ static Value EvalExpression(Expression* expr,Frame* frame,Arena* out){
 
     // Only register top frame accesses
     Type* type = iter.value().type;
-    Optional<Value> globalOpt = GetValue(globalFrame,expr->id);
+    Opt<Value> globalOpt = GetValue(globalFrame,expr->id);
     if(globalOpt.has_value()){
       TemplateRecord* record = PushListElement(recordList);
       record->type = TemplateRecordType_IDENTIFER;
@@ -754,7 +755,7 @@ static Value EvalExpression(Expression* expr,Frame* frame,Arena* out){
 
     Assert(index.type == ValueType::NUMBER);
 
-    Optional<Value> optVal = AccessObjectIndex(object,index.number);
+    Opt<Value> optVal = AccessObjectIndex(object,index.number);
     if(!optVal){
       FatalError(StaticFormat("Tried to access array at an index greater than size: %d/%d (%.*s)",index.number,IndexableSize(object),UNPACK_SS(object.type->name)),expr->approximateLine);
     }
@@ -763,13 +764,13 @@ static Value EvalExpression(Expression* expr,Frame* frame,Arena* out){
   case Expression::MEMBER_ACCESS:{
     Value object = EvalExpression(expr->expressions[0],frame,out);
 
-    Optional<Value> optVal = AccessStruct(object,expr->id);
+    Opt<Value> optVal = AccessStruct(object,expr->id);
     if(!optVal){
 	  PrintStructDefinition(object.type);
       FatalError(StaticFormat("Tried to access member (%.*s) that does not exist for type (%.*s)",UNPACK_SS(expr->text),UNPACK_SS(object.type->name)),expr->approximateLine);
     }
 
-    Optional<Member*> member = GetMember(object.type,expr->id);
+    Opt<Member*> member = GetMember(object.type,expr->id);
 
     Type* fieldType = member.value()->type;
     TemplateRecord* record = PushListElement(recordList);
@@ -800,7 +801,7 @@ static String EvalBlockCommand(Block* block,Frame* previousFrame,Arena* temp){
     Frame* frame = CreateFrame(previousFrame,temp);
     Value separator = EvalExpression(com->expressions[0],frame,temp);
 
-    Assert(separator.type == ValueType::STRING);
+    Assert(separator.type == ValueType::STRING || separator.type == ValueType::CONST_STRING);
 
     Assert(com->expressions[1]->type == Expression::IDENTIFIER);
     String id = com->expressions[1]->id;
@@ -971,7 +972,7 @@ static ValueAndText EvalNonBlockCommand(Command* com,Frame* previousFrame,Arena*
   } break;
   case CommandType_INCLUDE:{
     Value filenameString = EvalExpression(com->expressions[0],previousFrame,temp);
-    Assert(filenameString.type == ValueType::STRING);
+    Assert(filenameString.type == ValueType::STRING || filenameString.type == ValueType::CONST_STRING);
 
     String content = {};
     for(Pair<String,String>& nameToContent : templateNameToContent){
@@ -993,7 +994,7 @@ static ValueAndText EvalNonBlockCommand(Command* com,Frame* previousFrame,Arena*
     Frame* frame = CreateFrame(previousFrame,temp);
     String id = com->expressions[0]->id;
 
-    Optional<Value> optVal = GetValue(frame,id);
+    Opt<Value> optVal = GetValue(frame,id);
     if(!optVal){
       printf("Failed to find %.*s\n",UNPACK_SS(id));
       DEBUG_BREAK();
@@ -1028,7 +1029,7 @@ static ValueAndText EvalNonBlockCommand(Command* com,Frame* previousFrame,Arena*
     Frame* frame = CreateFrame(previousFrame,temp);
     Value formatExpr = EvalExpression(com->expressions[0],frame,temp);
 
-    Assert(formatExpr.type == ValueType::SIZED_STRING || formatExpr.type == ValueType::STRING);
+    Assert(formatExpr.type == ValueType::SIZED_STRING || formatExpr.type == ValueType::STRING || formatExpr.type == ValueType::CONST_STRING);
 
     String format = formatExpr.str;
 
@@ -1036,7 +1037,7 @@ static ValueAndText EvalNonBlockCommand(Command* com,Frame* previousFrame,Arena*
     auto mark = StartString(outputArena);
 
     while(!tok.Done()){
-      Optional<Token> simpleText = tok.PeekFindUntil("{");
+      Opt<Token> simpleText = tok.PeekFindUntil("{");
 
       if(!simpleText.has_value()){
         simpleText = tok.Finish();

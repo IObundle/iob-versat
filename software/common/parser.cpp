@@ -391,7 +391,7 @@ Token Tokenizer::AssertNextToken(const char* str){
   return token;
 }
 
-Optional<Token> Tokenizer::PeekFindUntil(const char* str){
+Opt<Token> Tokenizer::PeekFindUntil(const char* str){
   auto mark = Mark();
 
   String toFind = STRING(str);
@@ -414,7 +414,7 @@ Optional<Token> Tokenizer::PeekFindUntil(const char* str){
   return result;
 }
 
-Optional<Token> Tokenizer::PeekFindIncluding(const char* str){
+Opt<Token> Tokenizer::PeekFindIncluding(const char* str){
   auto mark = Mark();
 
   String toFind = STRING(str);
@@ -436,12 +436,12 @@ Optional<Token> Tokenizer::PeekFindIncluding(const char* str){
   return result;
 }
 
-Optional<Token> Tokenizer::PeekFindIncludingLast(const char* str){
+Opt<Token> Tokenizer::PeekFindIncludingLast(const char* str){
   auto mark = Mark();
 
   bool foundAtLeastOne = false;
   while(!Done()){
-    Optional<Token> peek = PeekFindIncluding(str);
+    Opt<Token> peek = PeekFindIncluding(str);
 
     if(!peek.has_value()){
       break;
@@ -461,8 +461,8 @@ Optional<Token> Tokenizer::PeekFindIncludingLast(const char* str){
   return result;
 }
 
-Optional<Token> Tokenizer::NextFindUntil(const char* str){
-  Optional<Token> token = PeekFindUntil(str);
+Opt<Token> Tokenizer::NextFindUntil(const char* str){
+  Opt<Token> token = PeekFindUntil(str);
   PROPAGATE(token);
   
   AdvancePeek(token.value());
@@ -470,15 +470,15 @@ Optional<Token> Tokenizer::NextFindUntil(const char* str){
   return token;
 }
 
-Optional<FindFirstResult> Tokenizer::FindFirst(BracketList<const char*> strings){
+Opt<FindFirstResult> Tokenizer::FindFirst(BracketList<const char*> strings){
   Token peekFind = {};
   peekFind.size = -1;
 
   const char* res = nullptr;
   bool foundOne = false;
   for(const char* str : strings){
-    Optional<Token> token = PeekFindIncluding(str);
-    Optional<Token> peekFindToken = PeekFindUntil(str);
+    Opt<Token> token = PeekFindIncluding(str);
+    Opt<Token> peekFindToken = PeekFindUntil(str);
     
     if(CompareString(STRING("\n"),str)){
       token = PeekRemainingLine();
@@ -674,7 +674,7 @@ TokenizerTemplate* Tokenizer::SetTemplate(TokenizerTemplate* tmpl){
   return old;
 }
 
-Optional<Token> Tokenizer::PeekUntilDelimiterExpression(BracketList<const char*> open,BracketList<const char*> close, int numberOpenSeen){
+Opt<Token> Tokenizer::PeekUntilDelimiterExpression(BracketList<const char*> open,BracketList<const char*> close, int numberOpenSeen){
   for(const char* str : open){
     Assert(IsSpecialOrSingle(STRING(str)) && "Token based function needs template to define tokens as special");
   }
@@ -725,10 +725,10 @@ Optional<Token> Tokenizer::PeekUntilDelimiterExpression(BracketList<const char*>
   return {};
 }
 
-Optional<Token> Tokenizer::PeekIncludingDelimiterExpression(BracketList<const char*> open,BracketList<const char*> close, int numberOpenSeen){
+Opt<Token> Tokenizer::PeekIncludingDelimiterExpression(BracketList<const char*> open,BracketList<const char*> close, int numberOpenSeen){
   auto pos = Mark();
 
-  Optional<Token> until = PeekUntilDelimiterExpression(open,close,numberOpenSeen);
+  Opt<Token> until = PeekUntilDelimiterExpression(open,close,numberOpenSeen);
 
   if(!until.has_value()){
     return until;
@@ -864,6 +864,32 @@ bool Contains(String str,const char* toCheck){
   }
 
   return false;
+}
+
+String TrimLeftWhitespaces(String in){
+  const char* start = in.data;
+  const char* end = &in.data[in.size-1];
+
+  while(std::isspace(*start) && start < end) ++start;
+
+  String res = {};
+  res.data = start;
+  res.size = end - start + 1;
+
+  return res;
+}
+
+String TrimRightWhitespaces(String in){
+  const char* start = in.data;
+  const char* end = &in.data[in.size-1];
+
+  while(std::isspace(*end) && end > start) --end;
+
+  String res = {};
+  res.data = start;
+  res.size = end - start + 1;
+
+  return res;
 }
 
 String TrimWhitespaces(String in){

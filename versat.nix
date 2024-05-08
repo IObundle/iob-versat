@@ -10,7 +10,7 @@
 }){} }:
 let
 fs = tweag.lib.fileset;
-sourceFiles = fs.union ./Makefile (fs.union ./sharedHardware.mk (fs.union ./config.mk ./software));
+sourceFiles = (fs.union ./typeInfo.cpp (fs.union ./Makefile (fs.union ./sharedHardware.mk (fs.union ./config.mk ./software))));
 in
 #fs.trace {} sourceFiles
 pkgs.stdenv.mkDerivation rec {
@@ -21,21 +21,6 @@ pkgs.stdenv.mkDerivation rec {
     root = ./.;
     fileset = sourceFiles;
   };
-
-  #src = ./.;
-
-  #srcs = builtins.path {
-  #  name = pname;
-  #  path = ./.;
-  #};
-
-  #src = pkgs.fetchgit {
-  #  url = "https://github.com/zettasticks/iob-versat.git";
-  #  rev = "4be8fe2f1a44ac77cf9bcb4c44f0734e928fec2d";
-  #  fetchSubmodules = true;
-  #  deepClone = true;
-  #  sha256 = "sha256-y5s5fwAQh5x2NNB2jUgN/MyoNdqtOQEuPcBd3v5AA6Q=";
-  #};
 
   buildInputs = [
     pkgs.gnumake

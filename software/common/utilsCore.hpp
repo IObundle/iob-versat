@@ -168,7 +168,7 @@ typedef intptr_t iptr;
 typedef uintptr_t uptr;
 
 template<typename T>
-using Optional = std::optional<T>;
+using Opt = std::optional<T>;
 #define PROPAGATE(OPTIONAL) if(!(OPTIONAL).has_value()){return {};}
 
 template<typename T>
@@ -419,7 +419,7 @@ bool IsAlpha(char ch);
 
 // Simulate c++23 feature
 template<typename T>
-Optional<T> OrElse(Optional<T> first,Optional<T> elseOpt){
+Opt<T> OrElse(Opt<T> first,Opt<T> elseOpt){
    if(first){
       return first;
    } else {

@@ -45,7 +45,7 @@ String Repr(char (*buffer)[N],Arena* out){
 String PushIntTableRepresentation(Arena* out,Array<int> values,int digitSize = 0);
 
 template<typename T>
-String Repr(Optional<T>* opt,Arena* out){
+String Repr(Opt<T>* opt,Arena* out){
   if(opt->has_value()){
     return Repr(&opt->value(),out);
   } else {
@@ -83,7 +83,7 @@ String Repr(Pair<T,P>* pair,Arena* out){
   return EndString(mark);
 }
 
-String Repr(Optional<int>* opt,Arena* out);
+String Repr(Opt<int>* opt,Arena* out);
 
 // TODO: Rework these to get a array of fields and then format them accordingly. Check PrintAll(Array<InstanceInfo>...) impl.
 template<typename T>

@@ -10,7 +10,7 @@
 #define TAG_TEMPORARY_MARK 1
 #define TAG_PERMANENT_MARK 2
 
-typedef std::unordered_map<FUInstance*,FUInstance*> InstanceMap;
+typedef Hashmap<FUInstance*,FUInstance*> InstanceMap;
 
 Accelerator* CreateAccelerator(Versat* versat,String name){
   Accelerator* accel = versat->accelerators.Alloc();
@@ -83,10 +83,9 @@ FUInstance* CreateFUInstance(Accelerator* accel,FUDeclaration* type,String name)
 
 Accelerator* CopyAccelerator(Versat* versat,Accelerator* accel,InstanceMap* map){
   Accelerator* newAccel = CreateAccelerator(versat,accel->name);
-  InstanceMap nullCaseMap;
 
   if(map == nullptr){
-    map = &nullCaseMap;
+    map = PushHashmap<FUInstance*,FUInstance*>(versat->temp,999);
   }
 
   // Copy of instances
@@ -96,19 +95,19 @@ Accelerator* CopyAccelerator(Versat* versat,Accelerator* accel,InstanceMap* map)
 
     newInst->literal = inst->literal;
 
-    map->insert({inst,newInst});
+    map->Insert(inst,newInst);
   }
 
   // Flat copy of edges
   FOREACH_LIST(Edge*,edge,accel->edges){
-    FUInstance* out = (FUInstance*) map->at(edge->units[0].inst);
+    FUInstance* out = (FUInstance*) map->GetOrFail(edge->units[0].inst);
     int outPort = edge->units[0].port;
-    FUInstance* in = (FUInstance*) map->at(edge->units[1].inst);
+    FUInstance* in = (FUInstance*) map->GetOrFail(edge->units[1].inst);
     int inPort = edge->units[1].port;
 
     ConnectUnits(out,outPort,in,inPort,edge->delay);
   }
-
+  
   return newAccel;
 }
 
@@ -138,14 +137,14 @@ Accelerator* CopyFlatAccelerator(Versat* versat,Accelerator* accel,InstanceMap* 
     FUInstance* newInst = CopyFlatInstance(newAccel,inst,inst->name);
     newInst->literal = inst->literal;
 
-    map->insert({inst,newInst});
+    map->Insert(inst,newInst);
   }
 
   // Flat copy of edges
   FOREACH_LIST(Edge*,edge,accel->edges){
-    FUInstance* out = (FUInstance*) map->at(edge->units[0].inst);
+    FUInstance* out = map->GetOrFail(edge->units[0].inst);
     int outPort = edge->units[0].port;
-    FUInstance* in = (FUInstance*) map->at(edge->units[1].inst);
+    FUInstance* in = map->GetOrFail(edge->units[1].inst);
     int inPort = edge->units[1].port;
 
     ConnectUnits(out,outPort,in,inPort,edge->delay);
@@ -205,12 +204,11 @@ void RemoveFUInstance(Accelerator* accel,InstanceNode* node){
 }
 
 Accelerator* Flatten(Versat* versat,Accelerator* accel,int times){
-  Arena* temp = &versat->temp;
+  Arena* temp = versat->temp;
   BLOCK_REGION(temp);
 
-  InstanceMap map;
-  Accelerator* newAccel = CopyFlatAccelerator(versat,accel,&map);
-  map.clear();
+  InstanceMap* map = PushHashmap<FUInstance*,FUInstance*>(temp,999);
+  Accelerator* newAccel = CopyFlatAccelerator(versat,accel,map);
 
   Pool<InstanceNode*> compositeInstances = {};
   Pool<InstanceNode*> toRemove = {};
@@ -223,7 +221,7 @@ Accelerator* Flatten(Versat* versat,Accelerator* accel,int times){
       bool containsStatic = inst->isStatic || inst->declaration->staticUnits != nullptr;
       // TODO: For now we do not flatten units that are static or contain statics. It messes merge configurations and still do not know how to procceed. Need to beef merge up a bit before handling more complex cases. The problem was that after flattening statics would become shared (unions) and as such would appear in places where they where not supposed to appear.
       // TODO: Maybe static and shared units configurations could be stored in a separated structure.
-      if(inst->declaration->type == FUDeclaration::COMPOSITE && !containsStatic){
+      if(inst->declaration->type == FUDeclarationType_COMPOSITE && !containsStatic){
         InstanceNode** ptr = compositeInstances.Alloc();
 
         *ptr = instPtr;
@@ -245,7 +243,7 @@ Accelerator* Flatten(Versat* versat,Accelerator* accel,int times){
     for(InstanceNode** instPtr : compositeInstances){
       FUInstance* inst = (*instPtr)->inst;
 
-      Assert(inst->declaration->type == FUDeclaration::COMPOSITE);
+      Assert(inst->declaration->type == FUDeclarationType_COMPOSITE);
 
       count += 1;
       Accelerator* circuit = inst->declaration->baseCircuit; // TODO: we replaced fixedDelay with base circuit. Future care
@@ -267,11 +265,11 @@ Accelerator* Flatten(Versat* versat,Accelerator* accel,int times){
       // Create new instance and map then
       FOREACH_LIST(InstanceNode*,ptr,circuit->allocated){
         FUInstance* circuitInst = ptr->inst;
-        if(circuitInst->declaration->type == FUDeclaration::SPECIAL){
+        if(circuitInst->declaration->type == FUDeclarationType_SPECIAL){
           continue;
         }
 
-        String newName = PushString(&versat->permanent,"%.*s_%.*s",UNPACK_SS(inst->name),UNPACK_SS(circuitInst->name));
+        String newName = PushString(versat->permanent,"%.*s_%.*s",UNPACK_SS(inst->name),UNPACK_SS(circuitInst->name));
         FUInstance* newInst = CopyFlatInstance(newAccel,circuitInst,newName);
 
         if(circuitInst->isStatic){
@@ -323,7 +321,7 @@ Accelerator* Flatten(Versat* versat,Accelerator* accel,int times){
           }
         }
 
-        map.insert({circuitInst,newInst});
+        map->Insert(circuitInst,newInst);
       }
 
       if(inst->sharedEnable && savedSharedIndex > freeSharedIndex){
@@ -335,13 +333,13 @@ Accelerator* Flatten(Versat* versat,Accelerator* accel,int times){
         if(edge->units[0].inst == inst){
           FOREACH_LIST(Edge*,circuitEdge,circuit->edges){
             if(circuitEdge->units[1].inst == outputInstance && circuitEdge->units[1].port == edge->units[0].port){
-              auto iter = map.find(circuitEdge->units[0].inst);
+              FUInstance** other = map->Get(circuitEdge->units[0].inst);
 
-              if(iter == map.end()){
+              if(other){
                 continue;
               }
 
-              FUInstance* out = iter->second;
+              FUInstance* out = *other;
               FUInstance* in = edge->units[1].inst;
               int outPort = circuitEdge->units[0].port;
               int inPort = edge->units[1].port;
@@ -360,14 +358,15 @@ Accelerator* Flatten(Versat* versat,Accelerator* accel,int times){
 
           FOREACH_LIST(Edge*,circuitEdge,circuit->edges){
             if(circuitEdge->units[0].inst == circuitInst){
-              auto iter = map.find(circuitEdge->units[1].inst);
+              FUInstance** other = map->Get(circuitEdge->units[0].inst);
 
-              if(iter == map.end()){
+              if(other){
                 continue;
               }
 
+
               FUInstance* out = edge->units[0].inst;
-              FUInstance* in = iter->second;
+              FUInstance* in = *other;
               int outPort = edge->units[0].port;
               int inPort = circuitEdge->units[1].port;
               int delay = edge->delay + circuitEdge->delay;
@@ -380,15 +379,15 @@ Accelerator* Flatten(Versat* versat,Accelerator* accel,int times){
 
       // Add circuit specific edges
       FOREACH_LIST(Edge*,circuitEdge,circuit->edges){
-        auto input = map.find(circuitEdge->units[0].inst);
-        auto output = map.find(circuitEdge->units[1].inst);
+        FUInstance** otherInput = map->Get(circuitEdge->units[0].inst);
+        FUInstance** otherOutput = map->Get(circuitEdge->units[1].inst);
 
-        if(input == map.end() || output == map.end()){
+        if(otherInput && otherOutput){
           continue;
         }
 
-        FUInstance* out = input->second;
-        FUInstance* in = output->second;
+        FUInstance* out = *otherInput;
+        FUInstance* in = *otherOutput;
         int outPort = circuitEdge->units[0].port;
         int inPort = circuitEdge->units[1].port;
         int delay = circuitEdge->delay;
@@ -424,7 +423,7 @@ Accelerator* Flatten(Versat* versat,Accelerator* accel,int times){
       RemoveFUInstance(newAccel,*instPtr);
       AssertGraphValid(newAccel->allocated,temp);
 
-      map.clear();
+      map->Clear();
     }
 
     toRemove.Clear();
@@ -794,14 +793,6 @@ DAGOrderNodes CalculateDAGOrder(InstanceNode* instances,Arena* out){
   return res;
 }
 
-struct HuffmanBlock{
-  int bits;
-  FUInstance* instance; // TODO: Maybe add the instance index (on the list) so we can push to the left instances that appear first and make it easier to see the mapping taking place
-  HuffmanBlock* left;
-  HuffmanBlock* right;
-  enum {LEAF,NODE} type;
-};
-
 bool IsUnitCombinatorial(FUInstance* instance){
   FUDeclaration* type = instance->declaration;
 
@@ -922,7 +913,7 @@ void ReorganizeIterative(Accelerator* accel,Arena* temp){
 }
 
 void FixDelays(Versat* versat,Accelerator* accel,Hashmap<EdgeNode,int>* edgeDelays){
-  Arena* temp = &versat->temp;
+  Arena* temp = versat->temp;
   BLOCK_REGION(temp);
 
   int buffersInserted = 0;
@@ -947,13 +938,13 @@ void FixDelays(Versat* versat,Accelerator* accel,Hashmap<EdgeNode,int>* edgeDela
 
     FUInstance* buffer = nullptr;
     if(versat->opts->useFixedBuffers){
-      String bufferName = PushString(&versat->permanent,"fixedBuffer%d",buffersInserted);
+      String bufferName = PushString(versat->permanent,"fixedBuffer%d",buffersInserted);
 
       buffer = (FUInstance*) CreateFUInstance(accel,BasicDeclaration::fixedBuffer,bufferName);
       buffer->bufferAmount = delay - BasicDeclaration::fixedBuffer->outputLatencies[0];
-      buffer->parameters = PushString(&versat->permanent,"#(.AMOUNT(%d))",buffer->bufferAmount);
+      buffer->parameters = PushString(versat->permanent,"#(.AMOUNT(%d))",buffer->bufferAmount);
     } else {
-      String bufferName = PushString(&versat->permanent,"buffer%d",buffersInserted);
+      String bufferName = PushString(versat->permanent,"buffer%d",buffersInserted);
 
       buffer = (FUInstance*) CreateFUInstance(accel,BasicDeclaration::buffer,bufferName);
       buffer->bufferAmount = delay - BasicDeclaration::buffer->outputLatencies[0];
@@ -1000,57 +991,6 @@ FUInstance* GetOutputInstance(InstanceNode* nodes){
   return nullptr;
 }
 
-ComputedData CalculateVersatComputedData(Array<InstanceInfo> info,VersatComputedValues val,Arena* out){
-  Array<ExternalMemoryInterface> external = PushArray<ExternalMemoryInterface>(out,val.externalMemoryInterfaces);
-  int index = 0;
-  int externalIndex = 0;
-  for(InstanceInfo& in : info){
-    if(!in.isComposite){
-      for(ExternalMemoryInterface& inter : in.decl->externalMemory){
-        external[externalIndex++] = inter;
-      }
-    }
-  }
-
-  Array<MemoryAddressMask> data = PushArray<MemoryAddressMask>(out,99);
-
-  index = 0;
-  for(InstanceInfo& in : info){
-    if(in.level != 0){
-      continue;
-    }
-
-    if(in.decl->memoryMapBits.has_value()){
-      FUDeclaration* decl = in.decl;
-      iptr offset = (iptr) in.memMapped.value();
-      iptr mask = offset >> decl->memoryMapBits.value();
-      
-      iptr maskSize = val.memoryAddressBits - log2i(in.memMappedSize.value());
-        
-      data[index].memoryMask = data[index].memoryMaskBuffer;
-      memset(data[index].memoryMask,0,32);
-      data[index].memoryMaskSize = maskSize;
-
-      for(int i = 0; i < maskSize; i++){
-        Assert(maskSize - i - 1 >= 0);
-        data[index].memoryMask[i] = GET_BIT(mask,(maskSize - i - 1)) ? '1' : '0';
-      }
-      index += 1;
-    }
-  }
-  data.size = index;
-  
-  // TODO: There is some bug where we are not matching up the expected number of values.
-  //       I do not expect to keep this function around for much longer. So for now we just hack it away
-  //Assert(index == memoryMapped);
-  
-  ComputedData res = {};
-  res.external = external;
-  res.data = data;
-
-  return res;
-}
-
 bool IsCombinatorial(Accelerator* accel){
   FOREACH_LIST(InstanceNode*,ptr,accel->allocated){
     if(ptr->inst->declaration->fixedDelayCircuit == nullptr){
@@ -1075,9 +1015,9 @@ Array<FUDeclaration*> AllNonSpecialSubTypes(Accelerator* accel,Arena* out,Arena*
   
   Set<FUDeclaration*>* maps = PushSet<FUDeclaration*>(temp,99);
   
-  Array<InstanceInfo> test = CalculateAcceleratorInfo(accel,true,temp,out).info;
+  Array<InstanceInfo> test = CalculateAcceleratorInfo(accel,true,temp,out).infos[0];
   for(InstanceInfo& info : test){
-    if(info.decl->type != FUDeclaration::SPECIAL){
+    if(info.decl->type != FUDeclarationType_SPECIAL){
       maps->Insert(info.decl);
     }
   }
@@ -1095,7 +1035,7 @@ Array<FUDeclaration*> ConfigSubTypes(Accelerator* accel,Arena* out,Arena* temp){
   
   Set<FUDeclaration*>* maps = PushSet<FUDeclaration*>(temp,99);
   
-  Array<InstanceInfo> test = CalculateAcceleratorInfo(accel,true,temp,out).info;
+  Array<InstanceInfo> test = CalculateAcceleratorInfo(accel,true,temp,out).infos[0];
   for(InstanceInfo& info : test){
     if(info.configSize > 0){
       maps->Insert(info.decl);
@@ -1115,7 +1055,7 @@ Array<FUDeclaration*> MemSubTypes(Accelerator* accel,Arena* out,Arena* temp){
   
   Set<FUDeclaration*>* maps = PushSet<FUDeclaration*>(temp,99);
 
-  Array<InstanceInfo> test = CalculateAcceleratorInfo(accel,true,temp,out).info;
+  Array<InstanceInfo> test = CalculateAcceleratorInfo(accel,true,temp,out).infos[0];
   for(InstanceInfo& info : test){
     if(info.memMappedSize.has_value()){
       maps->Insert(info.decl);
@@ -1219,18 +1159,18 @@ VersatComputedValues ComputeVersatValues(Versat* versat,Accelerator* accel,bool 
       res.unitsMapped += 1;
     }
 
-    res.nConfigs += decl->configInfo.configs.size;
-    for(Wire& wire : decl->configInfo.configs){
+    res.nConfigs += decl->configInfo[0].configs.size;
+    for(Wire& wire : decl->configInfo[0].configs){
       res.configBits += wire.bitSize;
     }
 
-    res.nStates += decl->configInfo.states.size;
-    for(Wire& wire : decl->configInfo.states){
+    res.nStates += decl->configInfo[0].states.size;
+    for(Wire& wire : decl->configInfo[0].states){
       res.stateBits += wire.bitSize;
     }
 
-    res.nDelays += decl->configInfo.delayOffsets.max;
-    res.delayBits += decl->configInfo.delayOffsets.max * 32;
+    res.nDelays += decl->configInfo[0].delayOffsets.max;
+    res.delayBits += decl->configInfo[0].delayOffsets.max * 32;
 
     res.nUnitsIO += decl->nIOs;
 
@@ -1275,8 +1215,6 @@ VersatComputedValues ComputeVersatValues(Versat* versat,Accelerator* accel,bool 
   res.stateAddressBits = log2i(res.nStates);
   res.stateConfigurationAddressBits = std::max(res.configurationAddressBits,res.stateAddressBits);
 
-  //res.lowerAddressSize = std::max(res.stateConfigurationAddressBits,res.memoryMappingAddressBits);
-  //res.memoryConfigDecisionBit = res.lowerAddressSize;
   res.memoryConfigDecisionBit = std::max(res.stateConfigurationAddressBits,res.memoryMappingAddressBits) + 2;
   
   return res;
