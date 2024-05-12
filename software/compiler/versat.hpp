@@ -7,17 +7,17 @@
 #include "../common/memory.hpp"
 #include "../common/logger.hpp"
 
+#include "globals.hpp"
 #include "accelerator.hpp"
 #include "configurations.hpp"
+#include "debugVersat.hpp"
 
 // Forward declarations
-struct Versat;
 struct Accelerator;
 struct FUDeclaration;
 struct IterativeUnitDeclaration;
 struct InstanceNode;
 struct FUInstance;
-struct Versat;
 
 enum VersatDebugFlags{
   OUTPUT_GRAPH_DOT,
@@ -36,16 +36,6 @@ enum GraphDotFormat_{
   GRAPH_DOT_FORMAT_EXPLICIT = 0x10, // indicates which field is which when outputting name
   GRAPH_DOT_FORMAT_PORT = 0x20, // Outputs port information for edges and port instance
   GRAPH_DOT_FORMAT_LATENCY = 0x40 // Outputs latency information for edges and port instances which know their latency information
-};
-
-struct DAGOrderNodes{
-  Array<InstanceNode*> sinks;
-  Array<InstanceNode*> sources;
-  Array<InstanceNode*> computeUnits;
-  Array<InstanceNode*> instances;
-  Array<int>           order;
-  int size;
-  int maxOrder;
 };
 
 // TODO: Remove memory from old versat if tests pass.
@@ -73,55 +63,15 @@ struct FUInstance{
   bool isMergeMultiplexer; // TODO: Kinda of an hack for now
 };
 
-struct DebugState{
-  uint dotFormat;
-  bool outputGraphs;
-  bool outputAccelerator;
-  bool outputVersat;
-  bool outputVCD;
-  bool outputAcceleratorInfo;
-  bool useFixedBuffers;
-};
-
-struct Options{
-  Array<String> verilogFiles;
-  Array<String> extraSources;
-  Array<String> includePaths;
-  Array<String> unitPaths;
-  
-  String hardwareOutputFilepath;
-  String softwareOutputFilepath;
-  String verilatorRoot;
-
-  const char* specificationFilepath;
-  const char* topName;
-  int addrSize; // AXI_ADDR_W - used to be bitSize
-  int dataSize; // AXI_DATA_W
-
-  bool addInputAndOutputsToTop;
-  bool debug;
-  bool shadowRegister;
-  bool architectureHasDatabus;
-  bool useFixedBuffers;
-  bool generateFSTFormat;
-  bool noDelayPropagation;
-  bool useDMA;
-  bool exportInternalMemories;
-};
-
 // TODO: Make these globals. After changing Versat to act more like a compiler, there is no need for a Versat structure. 
+#if 0
 struct Versat{
-  Pool<FUDeclaration> declarations;
-  Pool<Accelerator> accelerators;
 
   Arena* permanent;
   Arena* temp;
   Arena* temp2;
-
-  DebugState debug;
-
-  Options* opts;
 };
+#endif
 
 struct CompiledTemplate;
 namespace BasicTemplates{
@@ -135,12 +85,14 @@ namespace BasicTemplates{
   extern CompiledTemplate* internalWiresTemplate;
 }
 
-struct GraphMapping;
-
-struct CalculateDelayResult{
-  Hashmap<EdgeNode,int>* edgesDelay;
-  Hashmap<InstanceNode*,int>* nodeDelay;
+struct DelayToAdd{
+  EdgeNode edge;
+  String bufferName;
+  String bufferParameters;
+  int bufferAmount;
 };
+
+struct GraphMapping;
 
 // Temp
 bool EqualPortMapping(PortInstance p1,PortInstance p2);
@@ -148,11 +100,9 @@ bool EqualPortMapping(PortInstance p1,PortInstance p2);
 // General info
 bool IsUnitCombinatorial(FUInstance* inst);
 
-// Delay
-CalculateDelayResult CalculateDelay(Versat* versat,Accelerator* accel,Arena* out);
-
 // Graph fixes
-void FixDelays(Versat* versat,Accelerator* accel,Hashmap<EdgeNode,int>* edgeDelays);
+Array<DelayToAdd> GenerateFixDelays(Accelerator* accel,Hashmap<EdgeNode,int>* edgeDelays,Arena* out,Arena* temp);
+void FixDelays(Accelerator* accel,Hashmap<EdgeNode,int>* edgeDelays,Arena* temp);
 
 // Accelerator merging
 DAGOrderNodes CalculateDAGOrder(InstanceNode* instances,Arena* arena);
@@ -168,30 +118,31 @@ FUInstance* GetOutputInstance(InstanceNode* nodes);
 
 // Temp
 struct ModuleInfo;
-FUDeclaration* RegisterModuleInfo(Versat* versat,ModuleInfo* info);
+FUDeclaration* RegisterModuleInfo(ModuleInfo* info,Arena* temp);
 
 // Versat functions
-Versat* InitVersat(Arena* perm,Arena* temp,Arena* temp2);
-void Free(Versat* versat); // Usually not needed, as memory is freed on program termination and Versat is supposed to be "active" from start to finish, but usuful for debugging memory problems
-void ParseVersatSpecification(Versat* versat,String content);
-void ParseVersatSpecification(Versat* versat,const char* filepath);
+
+void ParseVersatSpecification(String content,Arena* temp,Arena* temp2);
+void ParseVersatSpecification(const char* filepath,Arena* temp,Arena* temp2);
 
 // Accelerator functions
-Accelerator* CreateAccelerator(Versat* versat,String name);
+Accelerator* CreateAccelerator(String name);
+InstanceNode* CreateFUInstanceNode(Accelerator* accel,FUDeclaration* type,String name);
 FUInstance* CreateFUInstance(Accelerator* accel,FUDeclaration* type,String entityName);
-Accelerator* Flatten(Versat* versat,Accelerator* accel,int times); // This should work on the passed accelerator. We should not create a new accelerator
+Accelerator* Flatten(Accelerator* accel,int times,Arena* temp);
+
+void FillDeclarationWithAcceleratorValues(FUDeclaration* decl,Accelerator* accel,Arena* temp,Arena* temp2);
+void FillDeclarationWithDelayType(FUDeclaration* decl);
 
 // Static and configuration sharing
 void ShareInstanceConfig(FUInstance* inst, int shareBlockIndex);
 void SetStatic(Accelerator* accel,FUInstance* inst);
 
 // Declaration functions
-FUDeclaration* RegisterFU(Versat* versat,FUDeclaration declaration);
-FUDeclaration* GetTypeByName(Versat* versat,String str);
-FUDeclaration* RegisterIterativeUnit(Versat* versat,Accelerator* accel,FUInstance* inst,int latency,String name);
-FUDeclaration* RegisterSubUnit(Versat* versat,Accelerator* accel);
-
-Array<MergeInfo> AccumulateMergeInfo(Accelerator* accel,Arena* out);
+FUDeclaration* RegisterFU(FUDeclaration declaration);
+FUDeclaration* GetTypeByName(String str);
+FUDeclaration* RegisterIterativeUnit(Accelerator* accel,FUInstance* inst,int latency,String name,Arena* temp,Arena* temp2);
+FUDeclaration* RegisterSubUnit(Accelerator* circuit,Arena* temp,Arena* temp2);
 
 void PrintDeclaration(FILE* out,FUDeclaration* decl,Arena* temp,Arena* temp2);
 
@@ -202,9 +153,6 @@ FUInstance* CreateOrGetOutput(Accelerator* accel);
 // Helper functions to create sub accelerators
 int GetInputPortNumber(FUInstance* inputInstance);
 
-// General hook function for debugging purposes
-int CalculateMemoryUsage(Versat* versat); // Not accurate, but returns the biggest amount of memory usage.
-
-void TestVersatSide(Versat* versat); // Calls tests from versat side
+void TestVersatSide(); // Calls tests from versat side
 
 #include "typeSpecifics.inl"

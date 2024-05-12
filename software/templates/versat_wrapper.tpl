@@ -399,10 +399,10 @@ if(SimulateDatabus){
 #{end}
 
 // TODO: Technically only need to do this at the end of an accelerator run, do not need to do this every single update
-#{if type.configInfo[0].states}
+#{if type.baseConfig.states}
 AcceleratorState* state = &stateBuffer;
-#{for i type.configInfo[0].states.size}
-#{set wire type.configInfo[0].states[i]}
+#{for i type.baseConfig.states.size}
+#{set wire type.baseConfig.states[i]}
    state->@{statesHeader[i]} = self->@{wire.name};
 #{end}
 #{end}
@@ -459,8 +459,8 @@ AcceleratorStatic* statics = (AcceleratorStatic*) &staticBuffer;
   self->@{wire.name} = statics->@{wire.name};
 #{end}
 
-#{if type.configInfo[0].delayOffsets.max}
-#{for i type.configInfo[0].delayOffsets.max}
+#{if type.baseConfig.delayOffsets.max}
+#{for i type.baseConfig.delayOffsets.max}
    self->delay@{i} = accelDelay.TOP_Delay@{i};
 #{end}
 #{end}

@@ -299,17 +299,6 @@ struct Range{
   };
 };
 
-struct CheckRangeResult{
-  bool result;
-  int problemIndex;
-};
-
-void SortRanges(Array<Range<int>> ranges);
-
-// These functions require sorted ranges
-CheckRangeResult CheckNoOverlap(Array<Range<int>> ranges);
-CheckRangeResult CheckNoGaps(Array<Range<int>> ranges);
-
 union Conversion{
    float f;
    int i;

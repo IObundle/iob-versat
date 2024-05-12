@@ -416,6 +416,17 @@ Hashmap<T,int>* Count(Array<T> arr,Arena* out){
   return count;
 }
 
+template<typename T>
+Hashmap<T,int>* MapElementToIndex(Array<T> arr,Arena* out){
+  Hashmap<T,int>* toIndex = PushHashmap<T,int>(out,arr.size);
+  int i = 0;
+  for(T& t : arr){
+    toIndex->Insert(t,i);
+    i+=1;
+  }
+  return toIndex;
+}
+
 #include <type_traits>
 
 template<typename T,typename Func>

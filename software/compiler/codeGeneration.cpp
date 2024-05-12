@@ -10,6 +10,7 @@
 #include "templateData.hpp"
 #include "templateEngine.hpp"
 #include "textualRepresentation.hpp"
+#include "globals.hpp"
 
 // TODO: Can reuse SortTypes functions by receiving the Array of Arrays as an argument. Useful for memory and probably state and so on.
 Array<FUDeclaration*> SortTypesByConfigDependency(Array<FUDeclaration*> types,Arena* out,Arena* temp){
@@ -134,20 +135,20 @@ Array<TypeStructInfoElement> GenerateStructFromType(FUDeclaration* decl,Arena* o
   }
 
   if(decl->type == FUDeclarationType_SINGLE){
-    int size = decl->configInfo[0].configs.size;
+    int size = decl->baseConfig.configs.size;
     Array<TypeStructInfoElement> entries = PushArray<TypeStructInfoElement>(out,size);
 
     for(int i = 0; i < size; i++){
       entries[i].typeAndNames = PushArray<SingleTypeStructElement>(out,1);
       entries[i].typeAndNames[0].type = STRING("iptr");
-      entries[i].typeAndNames[0].name = decl->configInfo[0].configs[i].name;
+      entries[i].typeAndNames[0].name = decl->baseConfig.configs[i].name;
     }
     return entries;
   }
 
   BLOCK_REGION(temp);
 
-  CalculatedOffsets& offsets = decl->configInfo[0].configOffsets;
+  CalculatedOffsets& offsets = decl->baseConfig.configOffsets;
   Accelerator* accel = decl->fixedDelayCircuit;
   int configSize = offsets.max;
 
@@ -162,7 +163,7 @@ Array<TypeStructInfoElement> GenerateStructFromType(FUDeclaration* decl,Arena* o
       continue;
     }
 
-    int numberConfigs = decl->configInfo[0].configs.size;
+    int numberConfigs = decl->baseConfig.configs.size;
     configAmount[configOffset] += 1; // Counts how many configs a given offset has.
   }
   
@@ -217,7 +218,7 @@ static Array<TypeStructInfoElement> GenerateAddressStructFromType(FUDeclaration*
   }
 
   int memoryMapped = 0;
-  FOREACH_LIST(InstanceNode*,node,decl->baseCircuit->allocated){
+  FOREACH_LIST(InstanceNode*,node,decl->fixedDelayCircuit->allocated){
     FUDeclaration* decl = node->inst->declaration;
 
     if(!(decl->memoryMapBits.has_value())){
@@ -231,7 +232,7 @@ static Array<TypeStructInfoElement> GenerateAddressStructFromType(FUDeclaration*
 
   int i = 0;
   int index = 0;
-  FOREACH_LIST_INDEXED(InstanceNode*,node,decl->baseCircuit->allocated,i){
+  FOREACH_LIST_INDEXED(InstanceNode*,node,decl->fixedDelayCircuit->allocated,i){
     FUDeclaration* decl = node->inst->declaration;
 
     if(!(decl->memoryMapBits.has_value())){
@@ -246,75 +247,137 @@ static Array<TypeStructInfoElement> GenerateAddressStructFromType(FUDeclaration*
   return entries;
 }
 
-Array<TypeStructInfo> GetConfigStructInfo(Accelerator* accel,Arena* out,Arena* temp){
-  BLOCK_REGION(temp);
+struct SubTypesInfo{
+  FUDeclaration* type;
+  FUDeclaration* mergeTop;
+  int configIndex;
+  bool isFromMerged;
+  bool containsMerged;
+};
 
+template<> struct std::hash<SubTypesInfo>{
+   std::size_t operator()(SubTypesInfo const& s) const noexcept{
+     std::size_t res = std::hash<void*>()(s.type) + std::hash<void*>()(s.mergeTop) + std::hash<bool>()(s.isFromMerged) + std::hash<int>()(s.configIndex) + std::hash<bool>()(s.containsMerged);
+     return res;
+   }
+};
+
+bool operator==(const SubTypesInfo i0,const SubTypesInfo i1){
+  bool res = Memcmp(&i0,&i1,1);
+  return res;
+}
+
+Array<SubTypesInfo> GetSubTypesInfo(Accelerator* accel,Arena* out,Arena* temp){
+  BLOCK_REGION(temp);
+  
   Array<FUDeclaration*> typesUsed = ConfigSubTypes(accel,out,temp);
   typesUsed = SortTypesByConfigDependency(typesUsed,temp,out);
 
-  Array<TypeStructInfo> structures = PushArray<TypeStructInfo>(out,typesUsed.size + 3); // TODO: Small hack to handle merge for now.
+  Set<SubTypesInfo>* info = PushSet<SubTypesInfo>(temp,99);
+
+  for(FUDeclaration* type : typesUsed){
+    if(type->configInfo.size >= 2){
+      for(int i = 0; i < type->configInfo.size; i++){
+        ConfigurationInfo in = type->configInfo[i];
+        SubTypesInfo res = {};
+        res.type = in.baseType;
+        res.mergeTop = type;
+        res.configIndex = i;
+        res.isFromMerged = true;
+ 
+        info->ExistsOrInsert(res);
+      }
+
+      SubTypesInfo res = {};
+      res.type = type;
+      res.containsMerged = true;
+      info->ExistsOrInsert(res);
+    } else {
+      SubTypesInfo in = {};
+      in.type = type;
+
+      info->ExistsOrInsert(in);
+    }
+  }
+
+  Array<SubTypesInfo> result = PushArrayFromSet(out,info);
+  
+  return result;
+}
+
+Array<TypeStructInfo> GetConfigStructInfo(Accelerator* accel,Arena* out,Arena* temp){
+  BLOCK_REGION(temp);
+
+  GetSubTypesInfo(accel,out,temp);
+  Array<FUDeclaration*> typesUsed = ConfigSubTypes(accel,out,temp);
+  typesUsed = SortTypesByConfigDependency(typesUsed,temp,out);
+
+  Array<SubTypesInfo> subTypesInfo =  GetSubTypesInfo(accel,out,temp);
+  
+  Array<TypeStructInfo> structures = PushArray<TypeStructInfo>(out,typesUsed.size + 99); // TODO: Small hack to handle merge for now.
   Memset(structures,{});
-#if 1 // MARKED
   int index = 0;
-  for(auto& decl : typesUsed){
-    if(decl->configInfo.size >= 2){
-      int maxOffset = decl->configInfo[0].configOffsets.max; // TODO: This should be equal for all merged types, no need to duplicate data
-      for(ConfigurationInfo& info : decl->configInfo){
-        CalculatedOffsets& offsets = info.configOffsets;
+  for(SubTypesInfo subType : subTypesInfo){
+    if(subType.isFromMerged){
+      FUDeclaration* decl = subType.mergeTop;
+      int maxOffset = decl->baseConfig.configOffsets.max; // TODO: This should be equal for all merged types, no need to duplicate data
+      ConfigurationInfo& info = decl->configInfo[subType.configIndex];
+      CalculatedOffsets& offsets = info.configOffsets;
         
-        Array<bool> seenIndex = PushArray<bool>(temp,offsets.max);
-        Memset(seenIndex,false);
+      Array<bool> seenIndex = PushArray<bool>(temp,offsets.max);
+      Memset(seenIndex,false);
         
+      int i = 0;
+      FOREACH_LIST_INDEXED(InstanceNode*,node,decl->fixedDelayCircuit->allocated,i){
+        int config = offsets.offsets[i];
+          
+        if(config >= 0 && info.unitBelongs[i]){
+          int nConfigs = node->inst->declaration->baseConfig.configs.size;
+          for(int ii = 0; ii < nConfigs; ii++){
+            seenIndex[config + ii] = true;
+          }
+        }
+      }
+        
+      ArenaList<TypeStructInfoElement>* list = PushArenaList<TypeStructInfoElement>(temp);
+        
+      int unused = 0;
+      int configNeedToSee = 0;
+      while(1){
+        while(configNeedToSee < maxOffset && seenIndex[configNeedToSee] == false){
+          TypeStructInfoElement* elem = PushListElement(list);
+          elem->typeAndNames = PushArray<SingleTypeStructElement>(out,1);
+          elem->typeAndNames[0].type = STRING("iptr");
+          elem->typeAndNames[0].name = PushString(out,"unused%d",unused++);
+          configNeedToSee += 1;
+        }
+
+        if(configNeedToSee >= maxOffset){
+          break;
+        }
+
         int i = 0;
         FOREACH_LIST_INDEXED(InstanceNode*,node,decl->fixedDelayCircuit->allocated,i){
           int config = offsets.offsets[i];
-          
-          if(config >= 0){
-            int nConfigs = node->inst->declaration->configInfo[0].configs.size;
-            for(int ii = 0; ii < nConfigs; ii++){
-              seenIndex[config + ii] = true;
-            }
-          }
-        }
-        
-        ArenaList<TypeStructInfoElement>* list = PushArenaList<TypeStructInfoElement>(temp);
-        
-        int unused = 0;
-        int configNeedToSee = 0;
-        while(1){
-          while(configNeedToSee < maxOffset && seenIndex[configNeedToSee] == false){
+          if(configNeedToSee == config){
+            int nConfigs = node->inst->declaration->baseConfig.configs.size;
+              
             TypeStructInfoElement* elem = PushListElement(list);
             elem->typeAndNames = PushArray<SingleTypeStructElement>(out,1);
-            elem->typeAndNames[0].type = STRING("iptr");
-            elem->typeAndNames[0].name = PushString(out,"unused%d",unused++);
-            configNeedToSee += 1;
-          }
-
-          if(configNeedToSee >= maxOffset){
-            break;
-          }
-
-          int i = 0;
-          FOREACH_LIST_INDEXED(InstanceNode*,node,decl->fixedDelayCircuit->allocated,i){
-            int config = offsets.offsets[i];
-            if(configNeedToSee == config){
-              int nConfigs = node->inst->declaration->configInfo[0].configs.size;
+            elem->typeAndNames[0].type = PushString(out,"%.*sConfig",UNPACK_SS(node->inst->declaration->name));
+            elem->typeAndNames[0].name = info.baseName[i]; //node->inst->name;
               
-              TypeStructInfoElement* elem = PushListElement(list);
-              elem->typeAndNames = PushArray<SingleTypeStructElement>(out,1);
-              elem->typeAndNames[0].type = PushString(out,"%.*sConfig",UNPACK_SS(node->inst->declaration->name));
-              elem->typeAndNames[0].name = info.baseName[i]; //node->inst->name;
-              
-              configNeedToSee += nConfigs;
-            }
+            configNeedToSee += nConfigs;
           }
         }
-
-        Array<TypeStructInfoElement> elem = PushArrayFromList(out,list);
-        structures[index].name = info.name;
-        structures[index].entries = elem;
-        index += 1;
       }
+
+      Array<TypeStructInfoElement> elem = PushArrayFromList(out,list);
+      structures[index].name = info.name;
+      structures[index].entries = elem;
+      index += 1;
+    } else if(subType.containsMerged){
+      FUDeclaration* decl = subType.type;
 
       Array<TypeStructInfoElement> merged = PushArray<TypeStructInfoElement>(out,1);
 
@@ -323,11 +386,11 @@ Array<TypeStructInfo> GetConfigStructInfo(Accelerator* accel,Arena* out,Arena* t
         merged[0].typeAndNames[i].type = PushString(out,"%.*sConfig",UNPACK_SS(decl->configInfo[i].name));
         merged[0].typeAndNames[i].name = decl->configInfo[i].name;
       }
-
       structures[index].name = PushString(out,"%.*s",UNPACK_SS(decl->name));
       structures[index].entries = merged;
       index += 1;
     } else {
+      FUDeclaration* decl = subType.type;
       Array<TypeStructInfoElement> val = GenerateStructFromType(decl,out,temp);
       structures[index].name = decl->name;
       structures[index].entries = val;
@@ -335,7 +398,6 @@ Array<TypeStructInfo> GetConfigStructInfo(Accelerator* accel,Arena* out,Arena* t
     }
   }
   structures.size = index;
-#endif
   
   return structures;
 }
@@ -458,15 +520,13 @@ Array<TypeStructInfoElement> ExtractStructuredStatics(Array<InstanceInfo> info,A
 }
 #endif
 
-// TODO: Move to a better place
 Array<TypeStructInfoElement> ExtractStructuredConfigs(Array<InstanceInfo> info,Arena* out,Arena* temp){
   BLOCK_REGION(temp);
 
   Hashmap<int,ArenaList<String>*>* map = PushHashmap<int,ArenaList<String>*>(temp,9999);
-
+  
   int maxConfig = 0;
   for(InstanceInfo& in : info){
-
     if(in.isComposite || !in.configPos.has_value() || in.isConfigStatic){
       continue;
     }
@@ -480,14 +540,26 @@ Array<TypeStructInfoElement> ExtractStructuredConfigs(Array<InstanceInfo> info,A
       if(!res.alreadyExisted){
         *res.data = PushArenaList<String>(temp);
       }
-    
-      ArenaList<String>* list = *res.data;
-      String name = PushString(out,"%.*s_%.*s",UNPACK_SS(in.fullName),UNPACK_SS(in.decl->configInfo[0].configs[i].name));
 
+      ArenaList<String>* list = *res.data;
+      String name = PushString(out,"%.*s_%.*s",UNPACK_SS(in.fullName),UNPACK_SS(in.decl->baseConfig.configs[i].name));
+
+      // Quick and dirty way of skipping same name
+      bool skip = false;
+      for(ListedStruct<String>* ptr = list->head; ptr; ptr = ptr->next){
+        if(CompareString(ptr->elem,name)){
+          skip = true;
+        }
+      }
+      // Cannot put same name since header file gives collision later on.
+      if(skip){
+        continue;
+      }
+      
       *PushListElement(list) = name;
     }
   }
-
+  
   int configSize = maxConfig + 1;
   ArenaList<TypeStructInfoElement>* elems = PushArenaList<TypeStructInfoElement>(temp);
   for(int i = 0; i < configSize; i++){
@@ -515,13 +587,13 @@ Array<TypeStructInfoElement> ExtractStructuredConfigs(Array<InstanceInfo> info,A
   return PushArrayFromList(out,elems);
 }
 
-void OutputCircuitSource(Versat* versat,FUDeclaration* decl,Accelerator* accel,FILE* file,Arena* temp,Arena* temp2){
+void OutputCircuitSource(FUDeclaration* decl,Accelerator* accel,FILE* file,Arena* temp,Arena* temp2){
   BLOCK_REGION(temp);
   BLOCK_REGION(temp2);
   
   ClearTemplateEngine(); // Make sure that we do not reuse data
   
-  Assert(versat->debug.outputAccelerator); // Because FILE is created outside, code should not call this function if flag is set
+  Assert(globalDebug.outputAccelerator); // Because FILE is created outside, code should not call this function if flag is set
   
   Array<InstanceNode*> nodes = ListToArray(accel->allocated,temp);
   for(InstanceNode* node : nodes){
@@ -530,7 +602,7 @@ void OutputCircuitSource(Versat* versat,FUDeclaration* decl,Accelerator* accel,F
     }
   }
 
-  VersatComputedValues val = ComputeVersatValues(versat,accel,false);
+  VersatComputedValues val = ComputeVersatValues(accel,false);
   AccelInfo info = CalculateAcceleratorInfo(accel,true,temp,temp2);
   Array<MemoryAddressMask> memoryMasks = CalculateAcceleratorMemoryMasks(info,temp);
   
@@ -539,7 +611,7 @@ void OutputCircuitSource(Versat* versat,FUDeclaration* decl,Accelerator* accel,F
 
   TemplateSetCustom("inputDecl",MakeValue(BasicDeclaration::input));
   TemplateSetCustom("outputDecl",MakeValue(BasicDeclaration::output));
-  TemplateSetCustom("arch",MakeValue(&versat->opts));
+  TemplateSetCustom("arch",MakeValue(&globalOptions));
   TemplateSetCustom("accel",MakeValue(decl));
   TemplateSetCustom("memoryMasks",MakeValue(&memoryMasks));
 
@@ -548,13 +620,13 @@ void OutputCircuitSource(Versat* versat,FUDeclaration* decl,Accelerator* accel,F
   ProcessTemplate(file,BasicTemplates::acceleratorTemplate,temp,temp2);
 }
 
-void OutputIterativeSource(Versat* versat,FUDeclaration* decl,Accelerator* accel,FILE* file,Arena* temp,Arena* temp2){
+void OutputIterativeSource(FUDeclaration* decl,Accelerator* accel,FILE* file,Arena* temp,Arena* temp2){
   BLOCK_REGION(temp);
   BLOCK_REGION(temp2);
 
   ClearTemplateEngine(); // Make sure that we do not reuse data
 
-  Assert(versat->debug.outputAccelerator); // Because FILE is created outside, code should not call this function if flag is set
+  Assert(globalDebug.outputAccelerator); // Because FILE is created outside, code should not call this function if flag is set
 
   // MARKED
   FOREACH_LIST(InstanceNode*,ptr,accel->allocated){
@@ -564,7 +636,7 @@ void OutputIterativeSource(Versat* versat,FUDeclaration* decl,Accelerator* accel
     }
   }
    
-  VersatComputedValues val = ComputeVersatValues(versat,accel,false);
+  VersatComputedValues val = ComputeVersatValues(accel,false);
   AccelInfo info = CalculateAcceleratorInfo(accel,true,temp,temp2); // TODO: Calculating info just for the computedData calculation is a bit wasteful.
   Array<MemoryAddressMask> memoryMasks = CalculateAcceleratorMemoryMasks(info,temp);
 
@@ -580,24 +652,24 @@ void OutputIterativeSource(Versat* versat,FUDeclaration* decl,Accelerator* accel
   int lat = decl->lat;
   TemplateSetNumber("special",lat);
 
-  ProcessTemplate(file,BasicTemplates::iterativeTemplate,versat->temp,versat->permanent);
+  ProcessTemplate(file,BasicTemplates::iterativeTemplate,temp,temp2);
 }
 
-void OutputVerilatorWrapper(Versat* versat,FUDeclaration* type,Accelerator* accel,String outputPath,Arena* temp,Arena* temp2){
+void OutputVerilatorWrapper(FUDeclaration* type,Accelerator* accel,String outputPath,Arena* temp,Arena* temp2){
   BLOCK_REGION(temp);
   BLOCK_REGION(temp2);
 
   ClearTemplateEngine(); // Make sure that we do not reuse data
 
   AccelInfo info = CalculateAcceleratorInfo(accel,true,temp,temp2);
-  Array<Wire> allConfigsHeaderSide = ExtractAllConfigs(info.infos[0],versat->permanent,versat->temp);
+  Array<Wire> allConfigsHeaderSide = ExtractAllConfigs(info.baseInfo,temp,temp2);
 
 #if 1
   // We need to bundle config + static (type->config) only contains config, but not static
   Array<Wire> allConfigsVerilatorSide = PushArray<Wire>(temp,999); // TODO: Correct size
   {
     int index = 0;
-    for(Wire& config : type->configInfo[0].configs){
+    for(Wire& config : type->baseConfig.configs){
       allConfigsVerilatorSide[index++] = config;
     }
     allConfigsVerilatorSide.size = index;
@@ -609,7 +681,7 @@ void OutputVerilatorWrapper(Versat* versat,FUDeclaration* type,Accelerator* acce
   for(Pair<StaticId,StaticData> p : type->staticUnits){
     for(Wire& config : p.second.configs){
       allStaticsVerilatorSide[index] = config;
-      allStaticsVerilatorSide[index].name = ReprStaticConfig(p.first,&config,versat->permanent);
+      allStaticsVerilatorSide[index].name = ReprStaticConfig(p.first,&config,temp);
       index += 1;
     }
   }
@@ -618,23 +690,23 @@ void OutputVerilatorWrapper(Versat* versat,FUDeclaration* type,Accelerator* acce
 #endif
 
   //UnitValues val = CalculateAcceleratorValues(versat,accel);
-  Array<TypeStructInfoElement> structuredConfigs = ExtractStructuredConfigs(info.infos[0],temp,temp2);
+  Array<TypeStructInfoElement> structuredConfigs = ExtractStructuredConfigs(info.baseInfo,temp,temp2);
 
   TemplateSetNumber("delays",info.delays);
   TemplateSetCustom("structuredConfigs",MakeValue(&structuredConfigs));
-  Array<String> statesHeaderSide = ExtractStates(info.infos[0],temp);
+  Array<String> statesHeaderSide = ExtractStates(info.baseInfo,temp);
   
   int totalExternalMemory = ExternalMemoryByteSize(type->externalMemory);
 
   TemplateSetCustom("configsHeader",MakeValue(&allConfigsHeaderSide));
   TemplateSetCustom("statesHeader",MakeValue(&statesHeaderSide));
   TemplateSetNumber("totalExternalMemory",totalExternalMemory);
-  TemplateSetCustom("opts",MakeValue(&versat->opts));
+  TemplateSetCustom("opts",MakeValue(&globalOptions));
   TemplateSetCustom("type",MakeValue(type));
-  TemplateSetBool("trace",versat->debug.outputVCD);
+  TemplateSetBool("trace",globalDebug.outputVCD);
   
   FILE* output = OpenFileAndCreateDirectories(StaticFormat("%.*s/wrapper.cpp",UNPACK_SS(outputPath)),"w");
-  CompiledTemplate* templ = CompileTemplate(versat_wrapper_template,"wrapper",versat->permanent,versat->temp);
+  CompiledTemplate* templ = CompileTemplate(versat_wrapper_template,"wrapper",temp,temp2);
   ProcessTemplate(output,templ,temp,temp2);
   fclose(output);
 }
@@ -642,14 +714,14 @@ void OutputVerilatorWrapper(Versat* versat,FUDeclaration* type,Accelerator* acce
 #include <filesystem>
 namespace fs = std::filesystem;
 
-void OutputVerilatorMake(Versat* versat,String topLevelName,String versatDir,Options* opts,Arena* temp,Arena* temp2){
+void OutputVerilatorMake(String topLevelName,String versatDir,Arena* temp,Arena* temp2){
   BLOCK_REGION(temp);
   BLOCK_REGION(temp2);
   
-  String outputPath = opts->softwareOutputFilepath;
+  String outputPath = globalOptions.softwareOutputFilepath;
   FILE* output = OpenFileAndCreateDirectories(StaticFormat("%.*s/VerilatorMake.mk",UNPACK_SS(outputPath)),"w");
   
-  TemplateSetBool("traceEnabled",versat->debug.outputVCD);
+  TemplateSetBool("traceEnabled",globalDebug.outputVCD);
   CompiledTemplate* comp = CompileTemplate(versat_makefile_template,"makefile",temp,temp2);
     
   fs::path outputFSPath = StaticFormat("%.*s",UNPACK_SS(outputPath));
@@ -658,21 +730,21 @@ void OutputVerilatorMake(Versat* versat,String topLevelName,String versatDir,Opt
 
   String srcDir = PushString(temp,"%.*s/src",UNPACK_SS(outputPath));
     
-  TemplateSetCustom("arch",MakeValue(&versat->opts));
+  TemplateSetCustom("arch",MakeValue(&globalOptions));
   TemplateSetString("srcDir",srcDir);
   TemplateSetString("versatDir",versatDir);
-  TemplateSetString("verilatorRoot",opts->verilatorRoot);
-  TemplateSetNumber("bitWidth",opts->addrSize);
-  TemplateSetString("generatedUnitsLocation",versat->opts->hardwareOutputFilepath);
-  TemplateSetArray("verilogFiles","String",UNPACK_SS(opts->verilogFiles));
-  TemplateSetArray("extraSources","String",UNPACK_SS(opts->extraSources));
-  TemplateSetArray("includePaths","String",UNPACK_SS(opts->includePaths));
+  TemplateSetString("verilatorRoot",globalOptions.verilatorRoot);
+  TemplateSetNumber("bitWidth",globalOptions.addrSize);
+  TemplateSetString("generatedUnitsLocation",globalOptions.hardwareOutputFilepath);
+  TemplateSetArray("verilogFiles","String",UNPACK_SS(globalOptions.verilogFiles));
+  TemplateSetArray("extraSources","String",UNPACK_SS(globalOptions.extraSources));
+  TemplateSetArray("includePaths","String",UNPACK_SS(globalOptions.includePaths));
   TemplateSetString("typename",topLevelName);
   TemplateSetString("rootPath",STRING(fixedPath.c_str()));
   ProcessTemplate(output,comp,temp,temp2);
 }
 
-void OutputVersatSource(Versat* versat,Accelerator* accel,const char* hardwarePath,const char* softwarePath,bool isSimple,Arena* temp,Arena* temp2){
+void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* softwarePath,bool isSimple,Arena* temp,Arena* temp2){
   BLOCK_REGION(temp);
   BLOCK_REGION(temp2);
   
@@ -687,10 +759,10 @@ void OutputVersatSource(Versat* versat,Accelerator* accel,const char* hardwarePa
     return;
   }
 
-  VersatComputedValues val = ComputeVersatValues(versat,accel,versat->opts->useDMA);
+  VersatComputedValues val = ComputeVersatValues(accel,globalOptions.useDMA);
   AccelInfo info = CalculateAcceleratorInfo(accel,true,temp,temp2);
-  CheckSanity(info.infos[0],temp);
-  
+  CheckSanity(info.baseInfo,temp);
+
   //UnitValues unit = CalculateAcceleratorValues(versat,accel);
   
   printf("ADDR_W - %d\n",val.memoryConfigDecisionBit + 1);
@@ -713,7 +785,7 @@ void OutputVersatSource(Versat* versat,Accelerator* accel,const char* hardwarePa
   fprintf(c,"`define LEN_W %d\n",20);
   fprintf(f,"`undef  LEN_W\n");
 
-  if(versat->opts->architectureHasDatabus){
+  if(globalOptions.architectureHasDatabus){
     fprintf(c,"`define VERSAT_ARCH_HAS_IO 1\n");
     fprintf(f,"`undef  VERSAT_ARCH_HAS_IO\n");
   }
@@ -733,7 +805,7 @@ void OutputVersatSource(Versat* versat,Accelerator* accel,const char* hardwarePa
     fprintf(f,"`undef  VERSAT_EXTERNAL_MEMORY\n");
   }
 
-  if(versat->opts->exportInternalMemories){
+  if(globalOptions.exportInternalMemories){
     fprintf(c,"`define VERSAT_EXPORT_EXTERNAL_MEMORY\n");
     fprintf(f,"`undef  VERSAT_EXPORT_EXTERNAL_MEMORY\n");
   }
@@ -744,23 +816,20 @@ void OutputVersatSource(Versat* versat,Accelerator* accel,const char* hardwarePa
   // Output configuration file
   Array<InstanceNode*> nodes = ListToArray(accel->allocated,temp2);
 
-  ReorganizeAccelerator(accel,temp2); // TODO: Reorganize accelerator needs to go. Just call CalculateOrder when needed. Need to check how iterative work for this case, though
-  Array<InstanceNode*> ordered = PushArray<InstanceNode*>(temp2,nodes.size);
+  //ReorganizeAccelerator(accel,temp2); // TODO: Reorganize accelerator needs to go. Just call CalculateOrder when needed. Need to check how iterative work for this case, though
+  DAGOrderNodes order = CalculateDAGOrder(accel->allocated,temp);
+  Array<InstanceNode*> ordered = order.instances;
   
-  int i = 0;
-  FOREACH_LIST_INDEXED(OrderedInstance*,ptr,accel->ordered,i){
-    ordered[i] = ptr->node;
-
-    FUInstance* inst = ptr->node->inst;
-    if(inst->declaration->nIOs){
-      inst->parameters = STRING("#(.AXI_ADDR_W(AXI_ADDR_W),.AXI_DATA_W(AXI_DATA_W),.LEN_W(LEN_W))"); // TODO: placeholder hack.
+  for(InstanceNode* node : order.instances){
+    if(node->inst->declaration->nIOs){
+      node->inst->parameters = STRING("#(.AXI_ADDR_W(AXI_ADDR_W),.AXI_DATA_W(AXI_DATA_W),.LEN_W(LEN_W))"); // TODO: placeholder hack.
     }
   }
 
   Array<ExternalMemoryInterface> external = PushArray<ExternalMemoryInterface>(temp,val.externalMemoryInterfaces);
   int index = 0;
   int externalIndex = 0;
-  for(InstanceInfo& in : info.infos[0]){
+  for(InstanceInfo& in : info.baseInfo){
     if(!in.isComposite){
       for(ExternalMemoryInterface& inter : in.decl->externalMemory){
         external[externalIndex++] = inter;
@@ -768,7 +837,7 @@ void OutputVersatSource(Versat* versat,Accelerator* accel,const char* hardwarePa
     }
   }
 
-  if(versat->opts->exportInternalMemories){
+  if(globalOptions.exportInternalMemories){
     int index = 0;
     for(ExternalMemoryInterface inter : external){
       switch(inter.type){
@@ -797,7 +866,7 @@ void OutputVersatSource(Versat* versat,Accelerator* accel,const char* hardwarePa
   int staticStart = 0;
   FOREACH_LIST(InstanceNode*,ptr,accel->allocated){
     FUDeclaration* decl = ptr->inst->declaration;
-    for(Wire& wire : decl->configInfo[0].configs){
+    for(Wire& wire : decl->baseConfig.configs){
       staticStart += wire.bitSize;
     }
   }
@@ -830,7 +899,7 @@ void OutputVersatSource(Versat* versat,Accelerator* accel,const char* hardwarePa
   
   Hashmap<StaticId,StaticData>* staticUnits = PushHashmap<StaticId,StaticData>(temp,val.nStatics);
   int staticIndex = 0; // staticStart; TODO: For now, test with static info beginning at zero
-  for(InstanceInfo& info : info.infos[0]){
+  for(InstanceInfo& info : info.baseInfo){
     FUDeclaration* decl = info.decl;
     if(info.isStatic){
       FUDeclaration* parentDecl = info.parent;
@@ -845,10 +914,10 @@ void OutputVersatSource(Versat* versat,Accelerator* accel,const char* hardwarePa
       } else {
         StaticData data = {};
         data.offset = staticIndex;
-        data.configs = decl->configInfo[0].configs;
+        data.configs = decl->baseConfig.configs;
 
         *res.data = data;
-        staticIndex += decl->configInfo[0].configs.size;
+        staticIndex += decl->baseConfig.configs.size;
       }
     }
   }
@@ -875,8 +944,8 @@ void OutputVersatSource(Versat* versat,Accelerator* accel,const char* hardwarePa
   TemplateSetCustom("memoryMasks",MakeValue(&memoryMasks));
   TemplateSetCustom("instances",MakeValue(&nodes));
   TemplateSetNumber("staticStart",staticStart);
-  TemplateSetBool("useDMA",versat->opts->useDMA);
-  TemplateSetCustom("opts",MakeValue(&versat->opts));
+  TemplateSetBool("useDMA",globalOptions.useDMA);
+  TemplateSetCustom("opts",MakeValue(&globalOptions));
   
   {
     FILE* s = OpenFileAndCreateDirectories(StaticFormat("%s/versat_instance.v",hardwarePath),"w");
@@ -920,13 +989,13 @@ void OutputVersatSource(Versat* versat,Accelerator* accel,const char* hardwarePa
 
   Array<TypeStructInfo> nonMergedStructures = GetConfigStructInfo(accel,temp2,temp);
   TemplateSetCustom("nonMergedStructures",MakeValue(&nonMergedStructures));
-
+  
   Array<TypeStructInfo> addressStructures = GetMemMappedStructInfo(accel,temp2,temp);
   TemplateSetCustom("addressStructures",MakeValue(&addressStructures));
   
   {
     DynamicArray<int> arr = StartArray<int>(temp);
-    for(InstanceInfo& t : info.infos[0]){
+    for(InstanceInfo& t : info.baseInfo){
       if(!t.isComposite){
         for(int d : t.delay){
           *arr.PushElem() = d;
@@ -942,7 +1011,7 @@ void OutputVersatSource(Versat* versat,Accelerator* accel,const char* hardwarePa
     for(Pair<StaticId,StaticData> p : staticUnits){
       for(Wire& config : p.second.configs){
         allStaticsVerilatorSide[index] = config;
-        allStaticsVerilatorSide[index].name = ReprStaticConfig(p.first,&config,versat->permanent);
+        allStaticsVerilatorSide[index].name = ReprStaticConfig(p.first,&config,temp);
         index += 1;
       }
     }
@@ -950,11 +1019,10 @@ void OutputVersatSource(Versat* versat,Accelerator* accel,const char* hardwarePa
     TemplateSetCustom("allStatics",MakeValue(&allStaticsVerilatorSide));
 #endif
 
-    Array<TypeStructInfoElement> structuredConfigs = ExtractStructuredConfigs(info.infos[0],temp,temp2);
+    Array<TypeStructInfoElement> structuredConfigs = ExtractStructuredConfigs(info.baseInfo,temp,temp2);
 
-    Array<Wire> orderedConfigs = ExtractAllConfigs(info.infos[0],temp,temp2); // Kinda does the same as structuredConfigs, but for now allow this repetition. Need to do a general cleanup of the code to simplify it a little bit.
-    Array<String> allStates = ExtractStates(info.infos[0],temp2);
-    Array<Pair<String,int>> allMem = ExtractMem(info.infos[0],temp2);
+    Array<String> allStates = ExtractStates(info.baseInfo,temp2);
+    Array<Pair<String,int>> allMem = ExtractMem(info.baseInfo,temp2);
 
     TemplateSetNumber("delays",val.nDelays);
     TemplateSetCustom("structuredConfigs",MakeValue(&structuredConfigs));
@@ -964,9 +1032,9 @@ void OutputVersatSource(Versat* versat,Accelerator* accel,const char* hardwarePa
     TemplateSetString("accelName",accel->name);
     TemplateSetString("mergeMuxName",STRING(""));
     
-    for(InstanceInfo in : info.infos[0]){
+    for(InstanceInfo in : info.baseInfo){
       if(in.isMergeMultiplexer){
-        String str = PushString(temp,"ACCEL_%.*s_%.*s",UNPACK_SS(in.fullName),UNPACK_SS(in.decl->configInfo[0].configs[0].name));
+        String str = PushString(temp,"ACCEL_%.*s_%.*s",UNPACK_SS(in.fullName),UNPACK_SS(in.decl->baseConfig.configs[0].name));
         TemplateSetString("mergeMuxName",str);
       }
     }

@@ -69,15 +69,8 @@ struct ConfigurationInfo{
   CalculatedOffsets stateOffsets;
   CalculatedOffsets delayOffsets;
   Array<int>        calculatedDelays;
+  Array<int>        order;
   Array<bool>       unitBelongs;
-};
-
-// Maps the sub InstanceNodes into the corresponding index of the configuration array. 
-struct MergeInfo{
-  String name;
-  ConfigurationInfo config;
-  Array<String> baseName;
-  FUDeclaration* baseType;
 };
 
 enum FUDeclarationType{
@@ -88,6 +81,8 @@ enum FUDeclarationType{
   FUDeclarationType_ITERATIVE
 };
 
+// TODO: A lot of duplicated data exists since the change to merge.
+
 // TODO: There is a lot of crux between parsing and creating the FUDeclaration for composite accelerators 
 //       the FUDeclaration should be composed of something that is in common to all of them.
 // A declaration is the instantiation of a type
@@ -97,9 +92,8 @@ struct FUDeclaration{
   Array<int> inputDelays;
   Array<int> outputLatencies;
 
-  Array<int> calculatedDelays;
-
   // TODO: There should exist a "default" configInfo, instead of doing what we are currently which is using the 0 as the default;
+  ConfigurationInfo baseConfig;
   Array<ConfigurationInfo> configInfo;
   
   Opt<int> memoryMapBits; // 0 is a valid memory map size, so optional indicates that no memory map exists
@@ -110,9 +104,6 @@ struct FUDeclaration{
   // Stores different accelerators depending on properties we want
   Accelerator* baseCircuit;
   Accelerator* fixedDelayCircuit;
-
-  // Merged accelerator
-  //Array<MergeInfo> mergeInfo;
   
   const char* operation;
 
@@ -148,12 +139,7 @@ namespace BasicDeclaration{
   extern FUDeclaration* data;
 }
 
-FUDeclaration* GetTypeByName(Versat* versat,String str);
+extern Pool<FUDeclaration> globalDeclarations;
 
-void InitializeSimpleDeclarations(Versat* versat);
-
-FUDeclaration* RegisterFU(Versat* versat,FUDeclaration declaration);
-FUDeclaration* RegisterIterativeUnit(Versat* versat,Accelerator* accel,FUInstance* inst,int latency,String name);
-FUDeclaration* RegisterSubUnit(Versat* versat,String name,Accelerator* accel);
-
-int NumberOfSubunits(FUDeclaration* decl);
+FUDeclaration* GetTypeByName(String str);
+void InitializeSimpleDeclarations();

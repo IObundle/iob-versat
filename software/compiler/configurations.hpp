@@ -6,7 +6,6 @@
 
 struct FUInstance;
 struct InstanceNode;
-struct OrderedInstance;
 struct Accelerator;
 struct FUDeclaration;
 
@@ -15,7 +14,6 @@ template<typename T> struct WireTemplate;
 typedef WireTemplate<int> Wire;
 
 struct FUInstance;
-struct Versat;
 
 struct StaticId{
    FUDeclaration* parent;
@@ -52,10 +50,19 @@ enum MemType{
    STATIC
 };
 
+enum NodeType{
+  NodeType_UNCONNECTED,
+  NodeType_SOURCE,
+  NodeType_COMPUTE,
+  NodeType_SINK,
+  NodeType_SOURCE_AND_SINK
+};
+
 struct InstanceInfo{
   int level;
   FUDeclaration* decl;
   String name;
+  String baseName;
   Opt<int> configPos;
   int isConfigStatic;
   int configSize;
@@ -67,7 +74,6 @@ struct InstanceInfo{
   Opt<String> memMappedMask;
   Opt<int> delayPos;
   Array<int> delay;
-  String type;
   int baseDelay;
   int delaySize;
   bool isComposite;
@@ -76,6 +82,10 @@ struct InstanceInfo{
   FUDeclaration* parent;
   String fullName;
   bool isMergeMultiplexer;
+  bool belongs;
+  int special;
+  int order;
+  NodeType connectionType;
 };
 
 struct AcceleratorInfo{
@@ -85,6 +95,7 @@ struct AcceleratorInfo{
   int delaySize;
   int delay;
   int memSize;
+  NodeType type;
   Opt<String> name;
 };
 
@@ -92,13 +103,16 @@ struct InstanceConfigurationOffsets{
   Hashmap<StaticId,int>* staticInfo; 
   FUDeclaration* parent;
   String topName;
+  String baseName;
   int configOffset;
   int stateOffset;
   int delayOffset;
   int delay; // Actual delay value, not the delay offset.
   int memOffset;
   int level;
+  int order;
   int* staticConfig; // This starts at 0x40000000 and at the end of the function we normalized it since we can only figure out the static position at the very end.
+  bool belongs;
 };
 
 struct TestResult{
@@ -109,6 +123,7 @@ struct TestResult{
 
 struct AccelInfo{
   Array<Array<InstanceInfo>> infos; // Should join names with infos
+  Array<InstanceInfo> baseInfo;
   Array<String> names;
   int memMappedBitsize;
   int howManyMergedUnits;
@@ -141,7 +156,6 @@ AccelInfo CalculateAcceleratorInfo(Accelerator* accel,bool recursive,Arena* out,
 
 CalculatedOffsets CalculateConfigOffsetsIgnoringStatics(Accelerator* accel,Arena* out);
 CalculatedOffsets CalculateConfigurationOffset(Accelerator* accel,MemType type,Arena* out);
-CalculatedOffsets CalculateOutputsOffset(Accelerator* accel,int offset,Arena* out);
 
 int GetConfigurationSize(FUDeclaration* decl,MemType type);
 
@@ -161,12 +175,7 @@ struct OrderedConfigurations{
    Array<Wire> delays;
 };
 
-// Extract configurations named with the top level expected name (not module name)
-//OrderedConfigurations ExtractOrderedConfigurationNames(Versat* versat,Accelerator* accel,Arena* out,Arena* temp);
-//Array<Wire> OrderedConfigurationsAsArray(OrderedConfigurations configs,Arena* out);
-
 Array<InstanceInfo> ExtractFromInstanceInfoSameLevel(Array<InstanceInfo> instanceInfo,int level,Arena* out);
-Array<InstanceInfo> ExtractFromInstanceInfo(Array<InstanceInfo> instanceInfo,Arena* out);
 
 void CheckSanity(Array<InstanceInfo> instanceInfo,Arena* temp);
 

@@ -2,7 +2,7 @@
 
 #include "versat.hpp"
 
-// static Pool<FUDeclaration> declarations;
+Pool<FUDeclaration> globalDeclarations;
 
 namespace BasicDeclaration{
   FUDeclaration* buffer;
@@ -22,8 +22,8 @@ static Array<int> zerosArray = {zeros,99};
 
 static int ones[64] = {1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1};
 
-static FUDeclaration* RegisterCircuitInput(Versat* versat){
-  Arena* permanent = versat->permanent;
+static FUDeclaration* RegisterCircuitInput(){
+  Arena* permanent = permanent;
   FUDeclaration decl = {};
 
   decl.name = STRING("CircuitInput");
@@ -31,13 +31,12 @@ static FUDeclaration* RegisterCircuitInput(Versat* versat){
   decl.outputLatencies = Array<int>{zeros,1};
   decl.delayType = DelayType::DelayType_SOURCE_DELAY;
   decl.type = FUDeclarationType_SPECIAL;
-  decl.configInfo = PushArray<ConfigurationInfo>(permanent,1);
-  Memset(decl.configInfo,{});
   
-  return RegisterFU(versat,decl);
+  return RegisterFU(decl);
 }
-static FUDeclaration* RegisterCircuitOutput(Versat* versat){
-  Arena* permanent = versat->permanent;
+
+static FUDeclaration* RegisterCircuitOutput(){
+  Arena* permanent = permanent;
   FUDeclaration decl = {};
 
   decl.name = STRING("CircuitOutput");
@@ -45,43 +44,37 @@ static FUDeclaration* RegisterCircuitOutput(Versat* versat){
   decl.outputLatencies = Array<int>{zeros,0};
   decl.delayType = DelayType::DelayType_SINK_DELAY;
   decl.type = FUDeclarationType_SPECIAL;
-  decl.configInfo = PushArray<ConfigurationInfo>(permanent,1);
-  Memset(decl.configInfo,{});
 
-  return RegisterFU(versat,decl);
+  return RegisterFU(decl);
 }
 
-static FUDeclaration* RegisterData(Versat* versat){
-  Arena* permanent = versat->permanent;
+static FUDeclaration* RegisterData(){
+  Arena* permanent = permanent;
   FUDeclaration decl = {};
 
   decl.name = STRING("Data");
   decl.inputDelays = Array<int>{zeros,50};
   decl.outputLatencies = Array<int>{ones,50};
   decl.delayType = DelayType::DelayType_SINK_DELAY;
-  decl.configInfo = PushArray<ConfigurationInfo>(permanent,1);
-  Memset(decl.configInfo,{});
 
-  return RegisterFU(versat,decl);
+  return RegisterFU(decl);
 }
 
-static FUDeclaration* RegisterLiteral(Versat* versat){
-  Arena* permanent = versat->permanent;
+static FUDeclaration* RegisterLiteral(){
+  Arena* permanent = permanent;
   FUDeclaration decl = {};
 
   decl.name = STRING("Literal");
   decl.outputLatencies = Array<int>{zeros,1};
-  decl.configInfo = PushArray<ConfigurationInfo>(permanent,1);
-  Memset(decl.configInfo,{});
 
-  return RegisterFU(versat,decl);
+  return RegisterFU(decl);
 }
-static void RegisterOperators(Versat* versat){
+
+static void RegisterOperators(){
   struct Operation{
     const char* name;
     const char* operation;
   };
-  Arena* permanent = versat->permanent;
 
   Operation unary[] =  {{"NOT","{0}_{1} = ~{2}"},
                         {"NEG","{0}_{1} = -{2}"}};
@@ -99,25 +92,23 @@ static void RegisterOperators(Versat* versat){
   decl.inputDelays = Array<int>{zeros,1};
   decl.outputLatencies = Array<int>{zeros,1};
   decl.isOperation = true;
-  decl.configInfo = PushArray<ConfigurationInfo>(permanent,1);
-  Memset(decl.configInfo,{});
 
   for(unsigned int i = 0; i < ARRAY_SIZE(unary); i++){
     decl.name = STRING(unary[i].name);
     decl.operation = unary[i].operation;
-    RegisterFU(versat,decl);
+    RegisterFU(decl);
   }
 
   decl.inputDelays = Array<int>{zeros,2};
   for(unsigned int i = 0; i < ARRAY_SIZE(binary); i++){
     decl.name = STRING(binary[i].name);
     decl.operation = binary[i].operation;
-    RegisterFU(versat,decl);
+    RegisterFU(decl);
   }
 }
 
-FUDeclaration* GetTypeByName(Versat* versat,String name){
-  for(FUDeclaration* decl : versat->declarations){
+FUDeclaration* GetTypeByName(String name){
+  for(FUDeclaration* decl : globalDeclarations){
     if(CompareString(decl->name,name)){
       return decl;
     }
@@ -128,19 +119,19 @@ FUDeclaration* GetTypeByName(Versat* versat,String name){
   return nullptr;
 }
 
-FUDeclaration* RegisterFU(Versat* versat,FUDeclaration decl){
-  FUDeclaration* type = versat->declarations.Alloc();
+FUDeclaration* RegisterFU(FUDeclaration decl){
+  FUDeclaration* type = globalDeclarations.Alloc();
   *type = decl;
 
   return type;
 }
 
-void InitializeSimpleDeclarations(Versat* versat){
-  RegisterOperators(versat);
-  RegisterCircuitInput(versat);
-  RegisterCircuitOutput(versat);
-  RegisterData(versat);
-  RegisterLiteral(versat);
+void InitializeSimpleDeclarations(){
+  RegisterOperators();
+  RegisterCircuitInput();
+  RegisterCircuitOutput();
+  RegisterData();
+  RegisterLiteral();
 }
 
 

@@ -30,7 +30,7 @@ module @{accel.name} #(
    output [DATA_W-1:0]             out@{index},
    #{end}
 
-   #{for wire accel.configInfo[0].configs}
+   #{for wire accel.baseConfig.configs}
    input [@{wire.bitSize-1}:0]     @{wire.name},
    #{end}
 
@@ -41,11 +41,11 @@ module @{accel.name} #(
    #{end}
    #{end}
 
-   #{for wire accel.configInfo[0].states}
+   #{for wire accel.baseConfig.states}
    output [@{wire.bitSize-1}:0]    @{wire.name},
    #{end}
 
-   #{for i accel.configInfo[0].delayOffsets.max}
+   #{for i accel.baseConfig.delayOffsets.max}
    input  [31:0]                   delay@{i},
    #{end}
 
@@ -223,14 +223,14 @@ end
          #{else}
          
          #{if inst.isStatic}
-         #{for wire decl.configInfo[0].configs}
+         #{for wire decl.baseConfig.configs}
          .@{wire.name}(@{accel.name}_@{inst.name |> Identify}_@{wire.name}),
          #{end}
 
          #{else}
-         #{set configStart accel.configInfo[0].configOffsets.offsets[id]}
-         #{for wire decl.configInfo[0].configs}
-         .@{wire.name}(@{accel.configInfo[0].configs[configStart + index].name}), // @{configStart + index}
+         #{set configStart accel.baseConfig.configOffsets.offsets[id]}
+         #{for wire decl.baseConfig.configs}
+         .@{wire.name}(@{accel.baseConfig.configs[configStart + index].name}), // @{configStart + index}
          #{end}
          #{for unit decl.staticUnits}         
          #{set id unit.first}
@@ -242,7 +242,7 @@ end
 
          #{end}
 
-         #{for i decl.configInfo[0].delayOffsets.max}
+         #{for i decl.baseConfig.delayOffsets.max}
             .delay@{i}(delay@{delaySeen}),
          #{inc delaySeen}
          #{end}
@@ -270,8 +270,8 @@ end
          #{inc externalCounter}
          #{end}
 
-         #{for wire decl.configInfo[0].states}
-            .@{wire.name}(@{accel.configInfo[0].states[statesSeen].name}),
+         #{for wire decl.baseConfig.states}
+            .@{wire.name}(@{accel.baseConfig.states[statesSeen].name}),
          #{inc statesSeen}
          #{end}
 

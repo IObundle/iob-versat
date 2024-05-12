@@ -7,6 +7,8 @@
 #include <cstdint>
 
 #include "configurations.hpp"
+#include "declaration.hpp"
+#include "globals.hpp"
 #include "memory.hpp"
 #include "type.hpp"
 #include "utils.hpp"
@@ -383,7 +385,8 @@ String GetActualArrayName(String baseName,int index,Arena* out){
 }
 
 // Right now, not using the full portion of PortExpression because technically we would need to instantiate multiple things. Not sure if there is a need, when a case occurs then make the change then
-PortExpression InstantiateSpecExpression(Versat* versat,SpecExpression* root,Accelerator* circuit,InstanceTable* table,InstanceName* names){
+PortExpression InstantiateSpecExpression(SpecExpression* root,Accelerator* circuit,InstanceTable* table,InstanceName* names,Arena* temp){
+  Arena* perm = globalPermanent;
   PortExpression res = {};
 
   switch(root->type){
@@ -392,15 +395,15 @@ PortExpression InstantiateSpecExpression(Versat* versat,SpecExpression* root,Acc
   case SpecExpression::LITERAL:{
     int number = root->val.number;
 
-    String toSearch = PushString(versat->temp,"N%d",number);
+    String toSearch = PushString(temp,"N%d",number);
 
     FUInstance** found = table->Get(toSearch);
 
     if(!found){
-      String permName = PushString(versat->permanent,"%.*s",UNPACK_SS(toSearch));
-      String uniqueName = GetUniqueName(permName,versat->permanent,names);
+      String permName = PushString(perm,"%.*s",UNPACK_SS(toSearch));
+      String uniqueName = GetUniqueName(permName,perm,names);
 
-      FUInstance* digitInst = (FUInstance*) CreateFUInstance(circuit,GetTypeByName(versat,STRING("Literal")),uniqueName);
+      FUInstance* digitInst = (FUInstance*) CreateFUInstance(circuit,GetTypeByName(STRING("Literal")),uniqueName);
       digitInst->literal = number;
       table->Insert(permName,digitInst);
       res.inst = digitInst;
@@ -424,7 +427,7 @@ PortExpression InstantiateSpecExpression(Versat* versat,SpecExpression* root,Acc
     res.extra = var.extra;
   } break;
   case SpecExpression::OPERATION:{
-    PortExpression expr0 = InstantiateSpecExpression(versat,root->expressions[0],circuit,table,names);
+    PortExpression expr0 = InstantiateSpecExpression(root->expressions[0],circuit,table,names,temp);
 
     // Assuming right now very simple cases, no port range and no delay range
     Assert(expr0.extra.port.start == expr0.extra.port.end);
@@ -444,8 +447,8 @@ PortExpression InstantiateSpecExpression(Versat* versat,SpecExpression* root,Acc
       }break;
       }
 
-      String permName = GetUniqueName(typeName,versat->permanent,names);
-      FUInstance* inst = CreateFUInstance(circuit,GetTypeByName(versat,typeName),permName);
+      String permName = GetUniqueName(typeName,perm,names);
+      FUInstance* inst = CreateFUInstance(circuit,GetTypeByName(typeName),permName);
 
       ConnectUnits(expr0.inst,expr0.extra.port.start,inst,0,expr0.extra.delay.start);
 
@@ -458,7 +461,7 @@ PortExpression InstantiateSpecExpression(Versat* versat,SpecExpression* root,Acc
       Assert(root->expressions.size == 2);
     }
 
-    PortExpression expr1 = InstantiateSpecExpression(versat,root->expressions[1],circuit,table,names);
+    PortExpression expr1 = InstantiateSpecExpression(root->expressions[1],circuit,table,names,temp);
 
     // Assuming right now very simple cases, no port range and no delay range
     Assert(expr1.extra.port.start == expr1.extra.port.end);
@@ -490,8 +493,8 @@ PortExpression InstantiateSpecExpression(Versat* versat,SpecExpression* root,Acc
     }
 
     String typeStr = STRING(typeName);
-    FUDeclaration* type = GetTypeByName(versat,typeStr);
-    String uniqueName = GetUniqueName(type->name,versat->permanent,names);
+    FUDeclaration* type = GetTypeByName(typeStr);
+    String uniqueName = GetUniqueName(type->name,perm,names);
 
     FUInstance* inst = CreateFUInstance(circuit,type,uniqueName);
 
@@ -813,19 +816,19 @@ Opt<TransformDef> ParseTransformDef(Tokenizer* tok,Arena* out,Arena* temp){
   return def;
 }
 
-FUDeclaration* ParseIterative(Versat* versat,Tokenizer* tok){
+FUDeclaration* ParseIterative(Tokenizer* tok,Arena* temp,Arena* temp2){
+  Arena* perm = globalPermanent;
   tok->AssertNextToken("iterative");
 
-  Arena* temp = versat->temp;
   BLOCK_REGION(temp);
 
   InstanceTable* table = PushHashmap<String,FUInstance*>(temp,1000);
   Set<String>* names = PushSet<String>(temp,1000);
 
   String moduleName = tok->NextToken();
-  String name = PushString(versat->permanent,moduleName);
+  String name = PushString(perm,moduleName);
 
-  Accelerator* iterative = CreateAccelerator(versat,name);
+  Accelerator* iterative = CreateAccelerator(name);
 
   tok->AssertNextToken("(");
   // Arguments
@@ -843,7 +846,7 @@ FUDeclaration* ParseIterative(Versat* versat,Tokenizer* tok){
       tok->AdvancePeek(peek);
     }
 
-    String name = PushString(versat->permanent,argument);
+    String name = PushString(perm,argument);
 
     table->Insert(name,CreateOrGetInput(iterative,name,insertedInputs++));
   }
@@ -861,8 +864,8 @@ FUDeclaration* ParseIterative(Versat* versat,Tokenizer* tok){
     Token instanceName = tok->NextToken();
     tok->AssertNextToken(";");
 
-    FUDeclaration* type = GetTypeByName(versat,instanceTypeName);
-    String name = PushString(versat->permanent,instanceName);
+    FUDeclaration* type = GetTypeByName(instanceTypeName);
+    String name = PushString(perm,instanceName);
 
     FUInstance* created = CreateFUInstance(iterative,type,name);
     table->Insert(name,created);
@@ -955,8 +958,8 @@ FUDeclaration* ParseIterative(Versat* versat,Tokenizer* tok){
     ConnectUnit((PortExpression){inst1,start.extra},(PortExpression){*res.data,end.extra});
   }
   tok->AssertNextToken("}");
-  
-  return RegisterIterativeUnit(versat,iterative,unit,latency,name);
+
+  return RegisterIterativeUnit(iterative,unit,latency,name,temp,temp2);
 }
 
 Opt<TypeAndInstance> ParseTypeAndInstance(Tokenizer* tok){
@@ -1006,8 +1009,8 @@ Opt<HierarchicalName> ParseHierarchicalName(Tokenizer* tok){
   return res;
 }
 
-bool ParseMerge(Versat* versat,Tokenizer* tok){
-  Arena* temp = versat->temp;
+bool ParseMerge(Tokenizer* tok,Arena* temp,Arena* temp2){
+  Arena* perm = globalPermanent;
   BLOCK_REGION(temp);
   
   tok->AssertNextToken("merge");
@@ -1018,7 +1021,7 @@ bool ParseMerge(Versat* versat,Tokenizer* tok){
     return false;
   }
 
-  String mergeName = PushString(versat->permanent,mergeNameToken);
+  String mergeName = PushString(perm,mergeNameToken);
   
   EXPECT(tok,"=");
 
@@ -1070,7 +1073,7 @@ bool ParseMerge(Versat* versat,Tokenizer* tok){
     
   DynamicArray<FUDeclaration*> declArr = StartArray<FUDeclaration*>(temp);
   for(TypeAndInstance tp : declarations){
-    FUDeclaration* decl = GetTypeByName(versat,tp.typeName);
+    FUDeclaration* decl = GetTypeByName(tp.typeName);
     if(!decl){
       ReportError(tok,tp.typeName,"Type not found");
     }
@@ -1105,7 +1108,7 @@ bool ParseMerge(Versat* versat,Tokenizer* tok){
   }
   Array<SpecificMergeNode> specifics = EndArray(specificsArr);
 
-  Merge(versat,decl,mergeName,specifics);
+  Merge(decl,mergeName,specifics,temp,temp2);
   return true;
 }  
 
@@ -1261,7 +1264,8 @@ Opt<int> ApplyTransforms(Tokenizer* tok,int outPortStart,Array<Token> transforms
   return outPort;
 }
 
-static bool InstantiateTransform(Tokenizer* tok,TransformDef def,Arena* perm,Arena* temp){
+static bool InstantiateTransform(Tokenizer* tok,TransformDef def,Arena* temp){
+  Arena* perm = globalPermanent;
   BLOCK_REGION(temp);
 
   if(transformations.find(def.name) != transformations.end()){
@@ -1381,8 +1385,9 @@ static bool InstantiateTransform(Tokenizer* tok,TransformDef def,Arena* perm,Are
   return error;
 }
 
-FUDeclaration* InstantiateModule(Tokenizer* tok,Versat* versat,ModuleDef def,Arena* perm,Arena* temp){
-  Accelerator* circuit = CreateAccelerator(versat,def.name);
+FUDeclaration* InstantiateModule(Tokenizer* tok,ModuleDef def,Arena* temp,Arena* temp2){
+  Arena* perm = globalPermanent;
+  Accelerator* circuit = CreateAccelerator(def.name);
 
   InstanceTable* table = PushHashmap<String,FUInstance*>(temp,1000);
   InstanceName* names = PushSet<String>(temp,1000);
@@ -1420,7 +1425,7 @@ FUDeclaration* InstantiateModule(Tokenizer* tok,Versat* versat,ModuleDef def,Are
       }
     }
     
-    FUDeclaration* type = GetTypeByName(versat,decl.typeName);
+    FUDeclaration* type = GetTypeByName(decl.typeName);
     if(type == nullptr){
       ReportError(tok,decl.typeName,"Given type was not found");
       error = true;
@@ -1499,10 +1504,10 @@ FUDeclaration* InstantiateModule(Tokenizer* tok,Versat* versat,ModuleDef def,Are
         name = GetActualArrayName(name,outVar.index.low,temp);
       }
       
-      PortExpression portSpecExpression = InstantiateSpecExpression(versat,decl.expression,circuit,table,names);
+      PortExpression portSpecExpression = InstantiateSpecExpression(decl.expression,circuit,table,names,temp);
       FUInstance* inst = portSpecExpression.inst;
-      String uniqueName = GetUniqueName(name,versat->permanent,names);
-      inst->name = PushString(versat->permanent,uniqueName);
+      String uniqueName = GetUniqueName(name,perm,names);
+      inst->name = PushString(perm,uniqueName);
 
       names->Insert(name);
       table->Insert(name,inst);
@@ -1594,7 +1599,7 @@ FUDeclaration* InstantiateModule(Tokenizer* tok,Versat* versat,ModuleDef def,Are
   FUInstance** outInTable = table->Get(STRING("out"));
   Assert(!outInTable);
 
-  return RegisterSubUnit(versat,circuit);
+  return RegisterSubUnit(circuit,temp,temp2);
 }
 
 void Synchronize(Tokenizer* tok,BracketList<const char*> syncPoints){
@@ -1611,14 +1616,12 @@ void Synchronize(Tokenizer* tok,BracketList<const char*> syncPoints){
   }
 }
 
-void ParseVersatSpecification(Versat* versat,String content){
+void ParseVersatSpecification(String content,Arena* temp,Arena* temp2){
   Tokenizer tokenizer = Tokenizer(content,".%=#[](){}+:;,*~-",{"->=","->",">><","><<",">>","<<","..","^="});
   Tokenizer* tok = &tokenizer;
   
-  Arena* perm = versat->permanent;
-  Arena* temp = versat->temp;
-
   BLOCK_REGION(temp);
+  BLOCK_REGION(temp2);
   
   bool anyError = false;
   while(!tok->Done()){
@@ -1631,31 +1634,31 @@ void ParseVersatSpecification(Versat* versat,String content){
       debugFlag = true;
     } else if(CompareString(peek,"module")){
       Opt<ModuleDef> moduleDef = {};
-      region(perm){
-        moduleDef = ParseModuleDef(tok,temp,perm);
+      region(temp2){
+        moduleDef = ParseModuleDef(tok,temp,temp2);
       }
 
       if(moduleDef.has_value()){
         ModuleDef def = moduleDef.value();
-        InstantiateModule(tok,versat,def,perm,temp);
+        InstantiateModule(tok,def,temp,temp2);
       } else {
         anyError = true;
       }
     } else if(CompareString(peek,"iterative")){
       // TODO: Change to separate parsing and instantiating
-      ParseIterative(versat,tok);
+      ParseIterative(tok,temp,temp2);
     } else if(CompareString(peek,"merge")){
       // TODO: Change to separate parsing and instantiating
-      ParseMerge(versat,tok);
+      ParseMerge(tok,temp,temp2);
     } else if(CompareString(peek,"transform")){
       Opt<TransformDef> optTransform = {};
-      region(perm){
-        optTransform = ParseTransformDef(tok,temp,perm);
+      region(temp2){
+        optTransform = ParseTransformDef(tok,temp,temp2);
       }
 
       if(optTransform.has_value()){
         TransformDef val = optTransform.value();
-        anyError |= InstantiateTransform(tok,val,perm,temp);
+        anyError |= InstantiateTransform(tok,val,temp);
       }
     } else {
       // TODO: Report error, 
@@ -1670,17 +1673,17 @@ void ParseVersatSpecification(Versat* versat,String content){
   }
 }
 
-void ParseVersatSpecification(Versat* versat,const char* filepath){
-  BLOCK_REGION(versat->temp);
+void ParseVersatSpecification(const char* filepath,Arena* temp,Arena* temp2){
+  BLOCK_REGION(temp);
 
-  String content = PushFile(versat->temp,filepath);
+  String content = PushFile(temp,filepath);
   
   if(content.size < 0){
     printf("Failed to open file, filepath: %s\n",filepath);
     DEBUG_BREAK();
   }
 
-  ParseVersatSpecification(versat,content);
+  ParseVersatSpecification(content,temp,temp2);
 }
 
 // TODO: Still missing a lot of error messages.

@@ -3,6 +3,7 @@
 #include <ftw.h>
 
 #include "debugVersat.hpp"
+#include "globals.hpp"
 #include "memory.hpp"
 #include "utilsCore.hpp"
 #include "versat.hpp"
@@ -358,7 +359,48 @@ String GetVerilatorRoot(Arena* out,Arena* temp){
   return root;
 }
 
+// MARK TODO: Small fix for common template. Works for now 
+void SetIncludeHeader(CompiledTemplate* tpl,String name);
+
 #include "parser.hpp"
+
+static Value HexValue(Value in,Arena* out){
+  static char buffer[128];
+
+  int number = ConvertValue(in,ValueType::NUMBER,nullptr).number;
+
+  int size = sprintf(buffer,"0x%x",number);
+
+  Value res = {};
+  res.type = ValueType::STRING;
+  res.str = PushString(out,String{buffer,size});
+
+  return res;
+}
+
+static Value EscapeString(Value val,Arena* out){
+  Assert(val.type == ValueType::SIZED_STRING || val.type == ValueType::STRING || val.type == ValueType::CONST_STRING);
+  Assert(val.isTemp);
+
+  String str = val.str;
+
+  String escaped = PushString(out,str);
+  char* view = (char*) escaped.data;
+
+  for(int i = 0; i < escaped.size; i++){
+    char ch = view[i];
+
+    if(   (ch >= 'a' && ch <= 'z')
+          || (ch >= 'A' && ch <= 'Z')
+          || (ch >= '0' && ch <= '9')){
+      continue;
+    } else {
+      view[i] = '_'; // Replace any foreign symbol with a underscore
+    }
+  }
+
+  return MakeValue(escaped);
+}
 
 int main(int argc,const char* argv[]){
   // TODO: Need to actually parse and give an error, instead of just checking for less than 3
@@ -368,50 +410,75 @@ int main(int argc,const char* argv[]){
   }
   
   InitDebug();
+  RegisterTypes();
   
-  Arena permInst = InitArena(Megabyte(128));
-  Arena* perm = &permInst;
+  *globalPermanent = InitArena(Megabyte(128));
+
+  Arena* perm = globalPermanent;
+  
   Arena tempInst = InitArena(Megabyte(512));
   Arena* temp = &tempInst;
   Arena temp2Inst = InitArena(Megabyte(512));
-  Arena* temp2 = &tempInst;
-
-  Array<Versat> test = PushArray<Versat>(perm,10);
-  Memset(test,{});
-  
-  Versat* versat = InitVersat(perm,temp,temp2);
+  Arena* temp2 = &temp2Inst;
   
   InitializeTemplateEngine(perm);
-  InitializeSimpleDeclarations(versat);
+  InitializeSimpleDeclarations();
+
+  CompiledTemplate* commonTpl = CompileTemplate(versat_common_template,"common",perm,temp);
+  SetIncludeHeader(commonTpl,STRING("common"));
+
+  BasicTemplates::acceleratorTemplate = CompileTemplate(versat_accelerator_template,"accel",perm,temp);
+  BasicTemplates::topAcceleratorTemplate = CompileTemplate(versat_top_instance_template,"top",perm,temp);
+  BasicTemplates::acceleratorHeaderTemplate = CompileTemplate(versat_header_template,"header",perm,temp);
+  BasicTemplates::externalInternalPortmapTemplate = CompileTemplate(external_memory_internal_portmap_template,"ext_internal_port",perm,temp);
+  BasicTemplates::externalPortTemplate = CompileTemplate(external_memory_port_template,"ext_port",perm,temp);
+  BasicTemplates::externalInstTemplate = CompileTemplate(external_memory_inst_template,"ext_inst",perm,temp);
+  BasicTemplates::iterativeTemplate = CompileTemplate(versat_iterative_template,"iter",perm,temp);
+  BasicTemplates::internalWiresTemplate = CompileTemplate(versat_internal_memory_wires_template,"internal wires",perm,temp);
+
+  RegisterPipeOperation(STRING("MemorySize"),[](Value val,Arena* out){
+    ExternalMemoryInterface* inter = (ExternalMemoryInterface*) val.custom;
+    int byteSize = ExternalMemoryByteSize(inter);
+    return MakeValue(byteSize);
+  });
+  RegisterPipeOperation(STRING("Hex"),HexValue);
+  RegisterPipeOperation(STRING("Identify"),EscapeString);
+  RegisterPipeOperation(STRING("Type"),[](Value val,Arena* out){
+    Type* type = val.type;
+
+    return MakeValue(type->name);
+  });
   
-  Options* opts = ParseCommandLineOptions(argc,argv,perm,temp);
-  versat->opts = opts;
+  globalOptions = *ParseCommandLineOptions(argc,argv,perm,temp);
 
   // TODO: Variable buffers are currently broken. Due to removing statics saved configurations.
   //       When reimplementing this (if we eventually do) separate buffers configs from static buffers.
   //       There was never any point in having both together.
-  versat->opts->useFixedBuffers = true;
-  versat->opts->shadowRegister = true; 
-  versat->opts->noDelayPropagation = true;
+  globalOptions.useFixedBuffers = true;
+  globalOptions.shadowRegister = true; 
+  globalOptions.noDelayPropagation = true;
   
+  globalDebug.outputAccelerator = true;
+  globalDebug.outputVersat = true;
+  globalDebug.dotFormat = GRAPH_DOT_FORMAT_NAME;
 #if 1
-  versat->debug.outputGraphs = true;
-  versat->debug.outputAcceleratorInfo = true;
+  globalDebug.outputGraphs = true;
+  globalDebug.outputAcceleratorInfo = true;
 #endif
-  versat->debug.outputVCD = true;
+  globalDebug.outputVCD = true;
   
 #ifdef USE_FST_FORMAT
-  versat->opts.generateFSTFormat = 1;
+  globalOptions.generateFSTFormat = 1;
 #endif
 
   // Check options
-  if(!opts->topName){
+  if(!globalOptions.topName){
     printf("Specify accelerator type using -T <type>\n");
     exit(-1);
   }
   
-  opts->verilatorRoot = GetVerilatorRoot(versat->permanent,versat->temp);
-  if(opts->verilatorRoot.size == 0){
+  globalOptions.verilatorRoot = GetVerilatorRoot(perm,temp);
+  if(globalOptions.verilatorRoot.size == 0){
     fprintf(stderr,"Versat could not find verilator. Check that it is installed\n");
     return -1;
   }
@@ -421,10 +488,10 @@ int main(int argc,const char* argv[]){
   region(temp){
     Set<String>* allVerilogFilesSet = PushSet<String>(temp,999);
 
-    for(String str : opts->verilogFiles){
+    for(String str : globalOptions.verilogFiles){
       allVerilogFilesSet->Insert(str);
     }
-    for(String& path : opts->unitPaths){
+    for(String& path : globalOptions.unitPaths){
       String dirPaths = path;
       Tokenizer pathSplitter(dirPaths,"",{});
 
@@ -445,10 +512,10 @@ int main(int argc,const char* argv[]){
 
     allVerilogFiles = PushArrayFromSet(perm,allVerilogFilesSet);
   }
-  opts->verilogFiles = allVerilogFiles; // TODO: Kind of an hack. We lose information about file origin
+  globalOptions.verilogFiles = allVerilogFiles; // TODO: Kind of an hack. We lose information about file origin
   
   // Parse verilog files and register as simple units
-  for(String file : opts->verilogFiles){
+  for(String file : globalOptions.verilogFiles){
     String content = PushFile(temp,StaticFormat("%.*s",UNPACK_SS(file)));
 
     if(content.size == 0){
@@ -456,42 +523,42 @@ int main(int argc,const char* argv[]){
       exit(-1);
     }
 
-    String processed = PreprocessVerilogFile(content,opts->includePaths,temp,perm);
-    Array<Module> modules = ParseVerilogFile(processed,opts->includePaths,temp,perm);
+    String processed = PreprocessVerilogFile(content,globalOptions.includePaths,temp,temp2);
+    Array<Module> modules = ParseVerilogFile(processed,globalOptions.includePaths,temp,temp2);
 
     for(Module& mod : modules){
       ModuleInfo info = ExtractModuleInfo(mod,perm,temp);
-      RegisterModuleInfo(versat,&info);
+      RegisterModuleInfo(&info,temp);
     }
   }
   
   // We need to do this after parsing the modules because the majority of these special types come from verilog files.
-  BasicDeclaration::buffer = GetTypeByName(versat,STRING("Buffer"));
-  BasicDeclaration::fixedBuffer = GetTypeByName(versat,STRING("FixedBuffer"));
-  BasicDeclaration::pipelineRegister = GetTypeByName(versat,STRING("PipelineRegister"));
-  BasicDeclaration::multiplexer = GetTypeByName(versat,STRING("Mux2"));
-  BasicDeclaration::combMultiplexer = GetTypeByName(versat,STRING("CombMux2"));
-  BasicDeclaration::stridedMerge = GetTypeByName(versat,STRING("StridedMerge"));
-  BasicDeclaration::timedMultiplexer = GetTypeByName(versat,STRING("TimedMux"));
-  BasicDeclaration::input = GetTypeByName(versat,STRING("CircuitInput"));
-  BasicDeclaration::output = GetTypeByName(versat,STRING("CircuitOutput"));
-  BasicDeclaration::data = GetTypeByName(versat,STRING("Data"));
+  BasicDeclaration::buffer = GetTypeByName(STRING("Buffer"));
+  BasicDeclaration::fixedBuffer = GetTypeByName(STRING("FixedBuffer"));
+  BasicDeclaration::pipelineRegister = GetTypeByName(STRING("PipelineRegister"));
+  BasicDeclaration::multiplexer = GetTypeByName(STRING("Mux2"));
+  BasicDeclaration::combMultiplexer = GetTypeByName(STRING("CombMux2"));
+  BasicDeclaration::stridedMerge = GetTypeByName(STRING("StridedMerge"));
+  BasicDeclaration::timedMultiplexer = GetTypeByName(STRING("TimedMux"));
+  BasicDeclaration::input = GetTypeByName(STRING("CircuitInput"));
+  BasicDeclaration::output = GetTypeByName(STRING("CircuitOutput"));
+  BasicDeclaration::data = GetTypeByName(STRING("Data"));
 
-  const char* specFilepath = opts->specificationFilepath;
-  String topLevelTypeStr = STRING(opts->topName);
+  const char* specFilepath = globalOptions.specificationFilepath;
+  String topLevelTypeStr = STRING(globalOptions.topName);
 
   if(specFilepath){
-    ParseVersatSpecification(versat,specFilepath);
+    ParseVersatSpecification(specFilepath,temp,temp2);
   }
   
-  FUDeclaration* type = GetTypeByName(versat,topLevelTypeStr);
+  FUDeclaration* type = GetTypeByName(topLevelTypeStr);
   Accelerator* accel = nullptr;
   FUInstance* TOP = nullptr;
 
   bool isSimple = false;
-  if(opts->addInputAndOutputsToTop && !(type->inputDelays.size == 0 && type->outputLatencies.size == 0)){
+  if(globalOptions.addInputAndOutputsToTop && !(type->inputDelays.size == 0 && type->outputLatencies.size == 0)){
     const char* name = StaticFormat("%.*s_Simple",UNPACK_SS(topLevelTypeStr));
-    accel = CreateAccelerator(versat,STRING(name));
+    accel = CreateAccelerator(STRING(name));
     
     int input = type->inputDelays.size;
     int output = type->outputLatencies.size;
@@ -499,8 +566,8 @@ int main(int argc,const char* argv[]){
     Array<FUInstance*> inputs = PushArray<FUInstance*>(perm,input);
     Array<FUInstance*> outputs = PushArray<FUInstance*>(perm,output);
 
-    FUDeclaration* constType = GetTypeByName(versat,STRING("TestConst"));
-    FUDeclaration* regType = GetTypeByName(versat,STRING("Reg"));
+    FUDeclaration* constType = GetTypeByName(STRING("TestConst"));
+    FUDeclaration* regType = GetTypeByName(STRING("Reg"));
 
     // We need to create input and outputs first before instance
     // to guarantee that the configs and states are at the beginning of the accelerator structs
@@ -523,15 +590,15 @@ int main(int argc,const char* argv[]){
     }
 
     InstanceNode* node = GetInstanceNode(accel,TOP);
-    node->type = InstanceNode::TAG_COMPUTE; // MARK: Temporary handle source_and_delay problems for simple units.
+    node->type = NodeType_COMPUTE; // MARK: Temporary handle source_and_delay problems for simple units.
     
-    type = RegisterSubUnit(versat,accel);
+    type = RegisterSubUnit(accel,temp,temp2);
 
     name = StaticFormat("%.*s_Simple",UNPACK_SS(topLevelTypeStr));
-    accel = CreateAccelerator(versat,STRING(name));
+    accel = CreateAccelerator(STRING(name));
     TOP = CreateFUInstance(accel,type,STRING("TOP"));
   } else {
-    accel = CreateAccelerator(versat,topLevelTypeStr);
+    accel = CreateAccelerator(topLevelTypeStr);
 
     bool isSimple = true;
     TOP = CreateFUInstance(accel,type,STRING("TOP"));
@@ -547,10 +614,10 @@ int main(int argc,const char* argv[]){
     }
   }
 
-  for(FUDeclaration* decl : versat->declarations){
+  for(FUDeclaration* decl : globalDeclarations){
     BLOCK_REGION(temp);
 
-    if(versat->debug.outputAcceleratorInfo && decl->fixedDelayCircuit){
+    if(globalDebug.outputAcceleratorInfo && decl->fixedDelayCircuit){
       String path = PushString(temp,"debug/%.*s/stats.txt",UNPACK_SS(decl->name));
       PushNullByte(temp);
 
@@ -560,35 +627,33 @@ int main(int argc,const char* argv[]){
     }
   }
     
-#if 1
   TOP->parameters = STRING("#(.AXI_ADDR_W(AXI_ADDR_W),.LEN_W(LEN_W))");
-  OutputVersatSource(versat,accel,
-                     opts->hardwareOutputFilepath.data,
-                     opts->softwareOutputFilepath.data,
-                     opts->addInputAndOutputsToTop,temp,perm);
+  OutputVersatSource(accel,
+                     globalOptions.hardwareOutputFilepath.data,
+                     globalOptions.softwareOutputFilepath.data,
+                     globalOptions.addInputAndOutputsToTop,temp,perm);
 
-  OutputVerilatorWrapper(versat,type,accel,opts->softwareOutputFilepath,temp,perm);
+  OutputVerilatorWrapper(type,accel,globalOptions.softwareOutputFilepath,temp,perm);
 
   String versatDir = STRING(STRINGIFY(VERSAT_DIR));
-  OutputVerilatorMake(versat,accel->name,versatDir,opts,temp,perm);
-#endif
+  OutputVerilatorMake(accel->name,versatDir,temp,temp2);
   
-  for(FUDeclaration* decl : versat->declarations){
+  for(FUDeclaration* decl : globalDeclarations){
     BLOCK_REGION(temp);
 
 #if 1
     if(decl->type == FUDeclarationType_COMPOSITE ||
        decl->type == FUDeclarationType_ITERATIVE){
 
-      String path = PushString(temp,"%.*s/modules/%.*s.v",UNPACK_SS(versat->opts->hardwareOutputFilepath),UNPACK_SS(decl->name));
+      String path = PushString(temp,"%.*s/modules/%.*s.v",UNPACK_SS(globalOptions.hardwareOutputFilepath),UNPACK_SS(decl->name));
       PushNullByte(temp);
       
       FILE* sourceCode = OpenFileAndCreateDirectories(path.data,"w");
 
       if(decl->type == FUDeclarationType_COMPOSITE){
-        OutputCircuitSource(versat,decl,decl->fixedDelayCircuit,sourceCode,temp,perm);
+        OutputCircuitSource(decl,decl->fixedDelayCircuit,sourceCode,temp,perm);
       } else if(decl->type == FUDeclarationType_ITERATIVE){
-        OutputIterativeSource(versat,decl,decl->fixedDelayCircuit,sourceCode,temp,perm);
+        OutputIterativeSource(decl,decl->fixedDelayCircuit,sourceCode,temp,perm);
       }
 
       fclose(sourceCode);

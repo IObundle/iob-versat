@@ -10,7 +10,6 @@ struct FUInstance;
 struct FUDeclaration;
 struct Edge;
 struct PortEdge;
-struct Versat;
 
 typedef Hashmap<FUInstance*,FUInstance*> InstanceMap;
 typedef Hashmap<PortEdge,PortEdge> PortEdgeMap;
@@ -111,26 +110,12 @@ struct InstanceNode{
    Array<bool> outputs;
    //int outputs;
    bool multipleSamePortInputs;
-   enum {TAG_UNCONNECTED,TAG_COMPUTE,TAG_SOURCE,TAG_SINK,TAG_SOURCE_AND_SINK} type;
-
-   // The following is only calculated by specific functions. Otherwise assume data is old if any change to the graph occurs
-   // In fact, maybe this should be removed and should just be a hashmap + array to save computed data.
-   // But need to care because top level accelerator still needs to be able to calculate this values and persist them somehow
-   int inputDelay;
-   //int order;
-};
-
-struct OrderedInstance{ // This is a more powerful and generic approach to subgraphing. Should not be named ordered, could be used for anything really, not just order iteration
-   InstanceNode* node;
-   OrderedInstance* next;
+   NodeType type;
 };
 
 struct Accelerator{ // Graph + data storage
-  Versat* versat;
-
   Edge* edges; // TODO: Should be removed, edge info is all contained inside the instance nodes and desync leads to bugs since some code still uses this.
 
-  OrderedInstance* ordered;
   InstanceNode* allocated;
   InstanceNode* lastAllocated;
   Pool<FUInstance> instances;
@@ -189,9 +174,28 @@ struct VersatComputedValues{
   bool signalLoop;
 };
 
+enum OrderType{
+  OrderType_SINK,
+};
+
+struct DAGOrderNodes{
+  Array<InstanceNode*> sinks;
+  Array<InstanceNode*> sources;
+  Array<InstanceNode*> computeUnits;
+  Array<InstanceNode*> instances;
+  Array<int>           order;
+  int size;
+  int maxOrder;
+};
+
+struct CalculateDelayResult{
+  Hashmap<EdgeNode,int>* edgesDelay;
+  Hashmap<InstanceNode*,int>* nodeDelay;
+};
+
 // TODO: The concept of flat instance no longer exists. Remove them and check if any code dependend on the fact that copy flat did not copy static or shared 
-Accelerator* CopyAccelerator(Versat* versat,Accelerator* accel,InstanceMap* map);
-Accelerator* CopyFlatAccelerator(Versat* versat,Accelerator* accel,InstanceMap* map);
+Accelerator* CopyAccelerator(Accelerator* accel,InstanceMap* map,Arena* out);
+Accelerator* CopyFlatAccelerator(Accelerator* accel,InstanceMap* map);
 FUInstance* CopyInstance(Accelerator* newAccel,FUInstance* oldInstance,String newName,InstanceNode* previous);
 FUInstance* CopyInstance(Accelerator* newAccel,FUInstance* oldInstance,String newName);
 InstanceNode* CopyInstance(Accelerator* newAccel,InstanceNode* oldInstance,String newName);
@@ -201,16 +205,15 @@ Array<FUDeclaration*> AllNonSpecialSubTypes(Accelerator* accel,Arena* out,Arena*
 Array<FUDeclaration*> ConfigSubTypes(Accelerator* accel,Arena* out,Arena* temp);
 Array<FUDeclaration*> MemSubTypes(Accelerator* accel,Arena* out,Arena* temp);
 
-void ReorganizeAccelerator(Accelerator* graph,Arena* temp);
-void ReorganizeIterative(Accelerator* accel,Arena* temp);
-
 int ExternalMemoryByteSize(ExternalMemoryInterface* inter);
 int ExternalMemoryByteSize(Array<ExternalMemoryInterface> interfaces); // Size of a simple memory mapping.
 
 // TODO: Instead of versatComputedValues, could return something like a FUDeclaration
 //       (or something that FUDeclaration would be composed off)
 //       
-VersatComputedValues ComputeVersatValues(Versat* versat,Accelerator* accel,bool useDMA);
+VersatComputedValues ComputeVersatValues(Accelerator* accel,bool useDMA);
+
+CalculateDelayResult CalculateDelay(Accelerator* accel,DAGOrderNodes order,Arena* out);
 
 // Unit connection
 Edge* FindEdge(FUInstance* out,int outIndex,FUInstance* in,int inIndex,int delay = 0);
@@ -219,7 +222,6 @@ Edge* ConnectUnitsGetEdge(FUInstance* out,int outIndex,FUInstance* in,int inInde
 Edge* ConnectUnitsIfNotConnectedGetEdge(FUInstance* out,int outIndex,FUInstance* in,int inIndex,int delay = 0);
 void  ConnectUnits(FUInstance* out,int outIndex,FUInstance* in,int inIndex,int delay = 0);
 Edge* ConnectUnits(PortInstance out,PortInstance in,int delay = 0);
-Edge* ConnectUnits(InstanceNode* out,int outPort,InstanceNode* in,int inPort,int delay = 0);
 
 InstanceNode* GetInstanceNode(Accelerator* accel,FUInstance* inst);
 void CalculateNodeType(InstanceNode* node);

@@ -163,6 +163,18 @@ void PrintAll(Hashmap<T,P>* map,Arena* temp){
 void PrintAll(FILE* file,Array<String> fields,Array<Array<String>> content,Arena* temp);
 void PrintAll(Array<String> fields,Array<Array<String>> content,Arena* temp);
 
+// TODO: Hack because no automatic printing of enums, yet
+static String Repr(NodeType* type,Arena* out){
+  switch(*type){
+  case NodeType_UNCONNECTED: return STRING("NodeType_UNCONNECTED");
+  case NodeType_SOURCE: return STRING("NodeType_SOURCE");
+  case NodeType_COMPUTE: return STRING("NodeType_COMPUTE");
+  case NodeType_SINK: return STRING("NodeType_SINK");
+  case NodeType_SOURCE_AND_SINK: return STRING("NodeType_SOURCE_AND_SINK");
+  }
+  return {};
+}
+
 #include "repr.hpp" // Implements the GetFields and GetRepr functions
 
 template<typename T>

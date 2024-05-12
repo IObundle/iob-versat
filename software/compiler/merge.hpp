@@ -8,7 +8,6 @@
 
 struct FUInstance;
 struct InstanceNode;
-struct OrderedInstance;
 struct Accelerator;
 struct FUDeclaration;
 
@@ -131,8 +130,8 @@ void OutputConsolidationGraph(ConsolidationGraph graph,Arena* memory,bool onlyOu
 
 int ValidNodes(ConsolidationGraph graph);
 
-ConsolidationResult GenerateConsolidationGraph(Versat* versat,Arena* arena,Accelerator* accel1,Accelerator* accel2,ConsolidationGraphOptions options);
-MergeGraphResult MergeGraph(Versat* versat,Accelerator* flatten1,Accelerator* flatten2,GraphMapping& graphMapping,String name);
+ConsolidationResult GenerateConsolidationGraph(Arena* arena,Accelerator* accel1,Accelerator* accel2,ConsolidationGraphOptions options);
+MergeGraphResult MergeGraph(Accelerator* flatten1,Accelerator* flatten2,GraphMapping& graphMapping,String name);
 void AddCliqueToMapping(GraphMapping& res,ConsolidationGraph clique);
 
 void InsertMapping(GraphMapping& map,PortEdge& edge0,PortEdge& edge1);
@@ -145,9 +144,9 @@ int NodeIndex(ConsolidationGraph graph,MappingNode* node);
 
 bool MappingConflict(MappingNode map1,MappingNode map2);
 CliqueState MaxClique(ConsolidationGraph graph,int upperBound,Arena* arena,float MAX_CLIQUE_TIME);
-ConsolidationGraph GenerateConsolidationGraph(Versat* versat,Arena* arena,Accelerator* accel1,Accelerator* accel2,ConsolidationGraphOptions options,MergingStrategy strategy);
+ConsolidationGraph GenerateConsolidationGraph(Arena* arena,Accelerator* accel1,Accelerator* accel2,ConsolidationGraphOptions options,MergingStrategy strategy);
 
-MergeGraphResult HierarchicalHeuristic(Versat* versat,FUDeclaration* decl1,FUDeclaration* decl2,String name);
+MergeGraphResult HierarchicalHeuristic(FUDeclaration* decl1,FUDeclaration* decl2,String name);
 
 int ValidNodes(ConsolidationGraph graph);
 
@@ -158,11 +157,11 @@ IsCliqueResult IsClique(ConsolidationGraph graph);
 ConsolidationGraph ParallelMaxClique(ConsolidationGraph graph,int upperBound,Arena* arena,float MAX_CLIQUE_TIME);
 
 String MappingNodeIdentifier(MappingNode* node,Arena* memory);
-MergeGraphResult HierarchicalMergeAccelerators(Versat* versat,Accelerator* accel1,Accelerator* accel2,String name);
-MergeGraphResult HierarchicalMergeAcceleratorsFullClique(Versat* versat,Accelerator* accel1,Accelerator* accel2,String name);
+MergeGraphResult HierarchicalMergeAccelerators(Accelerator* accel1,Accelerator* accel2,String name);
+MergeGraphResult HierarchicalMergeAcceleratorsFullClique(Accelerator* accel1,Accelerator* accel2,String name);
 
-FUDeclaration* MergeAccelerators(Versat* versat,FUDeclaration* accel1,FUDeclaration* accel2,String name,int flatteningOrder = 99,MergingStrategy strategy = MergingStrategy::CONSOLIDATION_GRAPH,SpecificMerge* specifics = nullptr,int nSpecifics = 0);
+FUDeclaration* MergeAccelerators(FUDeclaration* accel1,FUDeclaration* accel2,String name,int flatteningOrder = 99,MergingStrategy strategy = MergingStrategy::CONSOLIDATION_GRAPH,SpecificMerge* specifics = nullptr,int nSpecifics = 0);
 
-FUDeclaration* Merge(Versat* versat,Array<FUDeclaration*> types,
+FUDeclaration* Merge(Array<FUDeclaration*> types,
                      String name,Array<SpecificMergeNode> specifics,
-                     MergingStrategy strat = MergingStrategy::CONSOLIDATION_GRAPH);
+                     Arena* temp,Arena* temp2,MergingStrategy strat = MergingStrategy::CONSOLIDATION_GRAPH);

@@ -625,22 +625,22 @@ Array<Module> ParseVerilogFile(String fileContent,Array<String> includeFilepaths
   return PushArrayFromList(out,modules);
 }
 
-ModuleInfo ExtractModuleInfo(Module& module,Arena* permanent,Arena* tempArena){
-  BLOCK_REGION(tempArena);
+ModuleInfo ExtractModuleInfo(Module& module,Arena* out,Arena* temp){
+  BLOCK_REGION(temp);
 
   ModuleInfo info = {};
 
   info.defaultParameters = module.parameters;
 
-  PushPtr<int> inputDelay(permanent,100);
-  PushPtr<int> outputLatency(permanent,100);
-  PushPtr<WireExpression> configs(permanent,1000);
-  PushPtr<WireExpression> states(permanent,1000);
+  PushPtr<int> inputDelay(out,100);
+  PushPtr<int> outputLatency(out,100);
+  PushPtr<WireExpression> configs(out,1000);
+  PushPtr<WireExpression> states(out,1000);
 
   info.name = module.name;
   info.isSource = module.isSource;
 
-  Hashmap<ExternalMemoryID,ExternalMemoryInfo>* external = PushHashmap<ExternalMemoryID,ExternalMemoryInfo>(tempArena,100);
+  Hashmap<ExternalMemoryID,ExternalMemoryInfo>* external = PushHashmap<ExternalMemoryID,ExternalMemoryInfo>(temp,100);
 
   for(PortDeclaration decl : module.ports){
     Tokenizer port(decl.name,"",{"in","out","delay","done","rst","clk","run","running","databus"});
@@ -648,7 +648,7 @@ ModuleInfo ExtractModuleInfo(Module& module,Arena* permanent,Arena* tempArena){
     if(CompareString("signal_loop",decl.name)){
       info.signalLoop = true;
     } else if(CheckFormat("ext_dp_%s_%d_port_%d",decl.name)){
-      Array<Value> values = ExtractValues("ext_dp_%s_%d_port_%d",decl.name,tempArena);
+      Array<Value> values = ExtractValues("ext_dp_%s_%d_port_%d",decl.name,temp);
 
       ExternalMemoryID id = {};
       id.interface = values[1].number;
@@ -678,7 +678,7 @@ ModuleInfo ExtractModuleInfo(Module& module,Arena* permanent,Arena* tempArena){
       String wire = {};
 	  bool out = false;
       if(CheckFormat("ext_2p_%s_%s_%d",decl.name)){
-        Array<Value> values = ExtractValues("ext_2p_%s_%s_%d",decl.name,tempArena);
+        Array<Value> values = ExtractValues("ext_2p_%s_%s_%d",decl.name,temp);
 
         wire = values[0].str;
 		String outOrIn = values[1].str;
@@ -691,7 +691,7 @@ ModuleInfo ExtractModuleInfo(Module& module,Arena* permanent,Arena* tempArena){
 		}
         id.interface = values[2].number;
       } else if(CheckFormat("ext_2p_%s_%d",decl.name)){
-        Array<Value> values = ExtractValues("ext_2p_%s_%d",decl.name,tempArena);
+        Array<Value> values = ExtractValues("ext_2p_%s_%d",decl.name,temp);
 
         wire = values[0].str;
         id.interface = values[1].number;
@@ -751,7 +751,7 @@ ModuleInfo ExtractModuleInfo(Module& module,Arena* permanent,Arena* tempArena){
 				|| CheckFormat("databus_wstrb_%d",decl.name)
 				|| CheckFormat("databus_len_%d",decl.name)
 				|| CheckFormat("databus_last_%d",decl.name)){
-      Array<Value> val = ExtractValues("databus_%s_%d",decl.name,tempArena);
+      Array<Value> val = ExtractValues("databus_%s_%d",decl.name,temp);
 
       if(CheckFormat("databus_addr_%d",decl.name)){
         info.databusAddrSize = decl.range;
@@ -815,7 +815,7 @@ ModuleInfo ExtractModuleInfo(Module& module,Arena* permanent,Arena* tempArena){
     info.nIO += 1;
   }
 
-  Array<ExternalMemoryInterfaceExpression> interfaces = PushArray<ExternalMemoryInterfaceExpression>(permanent,external->nodesUsed);
+  Array<ExternalMemoryInterfaceExpression> interfaces = PushArray<ExternalMemoryInterfaceExpression>(out,external->nodesUsed);
   int index = 0;
   for(Pair<ExternalMemoryID,ExternalMemoryInfo> pair : external){
 	//printf("%.*s\n",UNPACK_SS(module.name));

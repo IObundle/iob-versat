@@ -1,3 +1,6 @@
+#include "globals.hpp"
+#include "memory.hpp"
+#include "utils.hpp"
 #include "versat.hpp"
 
 #include <unordered_map>
@@ -10,11 +13,12 @@
 #define TAG_TEMPORARY_MARK 1
 #define TAG_PERMANENT_MARK 2
 
+static Pool<Accelerator> accelerators;
+
 typedef Hashmap<FUInstance*,FUInstance*> InstanceMap;
 
-Accelerator* CreateAccelerator(Versat* versat,String name){
-  Accelerator* accel = versat->accelerators.Alloc();
-  accel->versat = versat;
+Accelerator* CreateAccelerator(String name){
+  Accelerator* accel = accelerators.Alloc();
   
   accel->accelMemory = CreateDynamicArena(1);
 
@@ -28,11 +32,9 @@ InstanceNode* CreateFlatFUInstance(Accelerator* accel,FUDeclaration* type,String
 
   Assert(CheckValidName(storedName));
 
-  accel->ordered = nullptr; // TODO: Will leak
-
   FOREACH_LIST(InstanceNode*,ptr,accel->allocated){
     if(ptr->inst->name == storedName){
-      //Assert(false);
+      Assert(false);
       break;
     }
   }
@@ -67,8 +69,6 @@ InstanceNode* CreateFlatFUInstance(Accelerator* accel,FUDeclaration* type,String
 
 // Used to be CreateAndConfigure. 
 InstanceNode* CreateFUInstanceNode(Accelerator* accel,FUDeclaration* type,String name){
-  accel->ordered = nullptr;
-
   InstanceNode* node = CreateFlatFUInstance(accel,type,name);
   FUInstance* inst = node->inst;
 
@@ -81,11 +81,13 @@ FUInstance* CreateFUInstance(Accelerator* accel,FUDeclaration* type,String name)
   return res;
 }
 
-Accelerator* CopyAccelerator(Versat* versat,Accelerator* accel,InstanceMap* map){
-  Accelerator* newAccel = CreateAccelerator(versat,accel->name);
+Accelerator* CopyAccelerator(Accelerator* accel,InstanceMap* map,Arena* out){
+  STACK_ARENA(temp,Kilobyte(128));
+
+  Accelerator* newAccel = CreateAccelerator(accel->name);
 
   if(map == nullptr){
-    map = PushHashmap<FUInstance*,FUInstance*>(versat->temp,999);
+    map = PushHashmap<FUInstance*,FUInstance*>(&temp,999);
   }
 
   // Copy of instances
@@ -123,8 +125,8 @@ FUInstance* CopyFlatInstance(Accelerator* newAccel,FUInstance* oldInstance,Strin
   return newInst;
 }
 
-Accelerator* CopyFlatAccelerator(Versat* versat,Accelerator* accel,InstanceMap* map){
-  Accelerator* newAccel = CreateAccelerator(versat,accel->name);
+Accelerator* CopyFlatAccelerator(Accelerator* accel,InstanceMap* map){
+  Accelerator* newAccel = CreateAccelerator(accel->name);
   InstanceMap nullCaseMap;
 
   if(map == nullptr){
@@ -188,7 +190,6 @@ InstanceNode* CopyInstance(Accelerator* newAccel,InstanceNode* oldInstance,Strin
   return newNode;
 }
 
-// This function works, but not for the flatten algorithm, as we hope that the configs match but they don't match for the outputs after removing a composite instance
 void RemoveFUInstance(Accelerator* accel,InstanceNode* node){
   FUInstance* inst = node->inst;
 
@@ -203,12 +204,12 @@ void RemoveFUInstance(Accelerator* accel,InstanceNode* node){
   accel->allocated = RemoveUnit(accel->allocated,node);
 }
 
-Accelerator* Flatten(Versat* versat,Accelerator* accel,int times){
-  Arena* temp = versat->temp;
+Accelerator* Flatten(Accelerator* accel,int times,Arena* temp){
+  Arena* perm = globalPermanent;
   BLOCK_REGION(temp);
 
   InstanceMap* map = PushHashmap<FUInstance*,FUInstance*>(temp,999);
-  Accelerator* newAccel = CopyFlatAccelerator(versat,accel,map);
+  Accelerator* newAccel = CopyFlatAccelerator(accel,map);
 
   Pool<InstanceNode*> compositeInstances = {};
   Pool<InstanceNode*> toRemove = {};
@@ -246,7 +247,7 @@ Accelerator* Flatten(Versat* versat,Accelerator* accel,int times){
       Assert(inst->declaration->type == FUDeclarationType_COMPOSITE);
 
       count += 1;
-      Accelerator* circuit = inst->declaration->baseCircuit; // TODO: we replaced fixedDelay with base circuit. Future care
+      Accelerator* circuit = inst->declaration->baseCircuit;
       FUInstance* outputInstance = GetOutputInstance(circuit->allocated);
 
       int savedSharedIndex = freeSharedIndex;
@@ -269,7 +270,7 @@ Accelerator* Flatten(Versat* versat,Accelerator* accel,int times){
           continue;
         }
 
-        String newName = PushString(versat->permanent,"%.*s_%.*s",UNPACK_SS(inst->name),UNPACK_SS(circuitInst->name));
+        String newName = PushString(perm,"%.*s_%.*s",UNPACK_SS(inst->name),UNPACK_SS(circuitInst->name));
         FUInstance* newInst = CopyFlatInstance(newAccel,circuitInst,newName);
 
         if(circuitInst->isStatic){
@@ -430,8 +431,8 @@ Accelerator* Flatten(Versat* versat,Accelerator* accel,int times){
     compositeInstances.Clear();
   }
 
-  String debugFilepath = PushString(temp,"debug/%.*s/flatten.dot",UNPACK_SS(accel->name));
-  OutputGraphDotFile(versat,newAccel,true,debugFilepath,temp);
+  String debugFilepath = PushDebugPath(temp,accel->name,"flatten.dot");
+  OutputGraphDotFile(newAccel,true,debugFilepath,temp);
 
   toRemove.Clear(true);
   compositeInstances.Clear(true);
@@ -440,9 +441,6 @@ Accelerator* Flatten(Versat* versat,Accelerator* accel,int times){
 
   FUDeclaration base = {};
   newAccel->name = accel->name;
-
-  newAccel->ordered = nullptr;
-  ReorganizeAccelerator(newAccel,temp);
 
   return newAccel;
 }
@@ -455,7 +453,7 @@ static void SendLatencyUpwards(InstanceNode* node,Hashmap<EdgeNode,int>* delays,
     InstanceNode* other = info->instConnectedTo.node;
 
     // Do not set delay for source and sink units. Source units cannot be found in this, otherwise they wouldn't be source
-    Assert(other->type != InstanceNode::TAG_SOURCE);
+    Assert(other->type != NodeType_SOURCE);
 
     int a = inst->declaration->outputLatencies[info->port];
     int e = info->edgeDelay;
@@ -487,7 +485,7 @@ static void SendLatencyUpwards(InstanceNode* node,Hashmap<EdgeNode,int>* delays,
 // Therefore abstracting from the accelerator completely and being able to be used for things like subgraphs.
 // Change later if needed.
 
-CalculateDelayResult CalculateDelay(Versat* versat,Accelerator* accel,Arena* out){
+CalculateDelayResult CalculateDelay(Accelerator* accel,DAGOrderNodes order,Arena* out){
   // TODO: We are currently using the delay pointer inside the ConnectionNode structure. When correct, eventually change to just use the hashmap
 
   int nodes = Size(accel->allocated);
@@ -525,11 +523,11 @@ CalculateDelayResult CalculateDelay(Versat* versat,Accelerator* accel,Arena* out
 
   // Start at sources
   int graphs = 0;
-  OrderedInstance* ptr = accel->ordered;
-  for(; ptr; ptr = ptr->next){
-    InstanceNode* node = ptr->node;
+  int index = 0;
+  for(; index < order.instances.size; index++){
+    InstanceNode* node = order.instances[index];
 
-    if(node->type != InstanceNode::TAG_SOURCE && node->type != InstanceNode::TAG_SOURCE_AND_SINK){
+    if(node->type != NodeType_SOURCE && node->type != NodeType_SOURCE_AND_SINK){
       continue; // This break is important because further code relies on it. 
     }
 
@@ -539,17 +537,17 @@ CalculateDelayResult CalculateDelay(Versat* versat,Accelerator* accel,Arena* out
     SendLatencyUpwards(node,edgeToDelay,nodeDelay);
 
     region(out){
-      String filepath = PushString(out,"debug/%.*s/out1_%d.dot",UNPACK_SS(accel->name),graphs++);
-      OutputGraphDotFile(versat,accel,true,node->inst,res,filepath,out);
+      String filepath = PushDebugPath(out,accel->name,StaticFormat("out1_%d.dot",graphs++));
+      OutputGraphDotFile(accel,true,node->inst,res,filepath,out);
     }
   }
 
-  ptr = accel->ordered;
+  index = 0;
   // Continue up the tree
-  for(; ptr; ptr = ptr->next){
-    InstanceNode* node = ptr->node;
-    if(node->type == InstanceNode::TAG_UNCONNECTED
-       || node->type == InstanceNode::TAG_SOURCE){
+  for(; index < order.instances.size; index++){
+    InstanceNode* node = order.instances[index];
+    if(node->type == NodeType_UNCONNECTED
+       || node->type == NodeType_SOURCE){
       continue;
     }
 
@@ -569,20 +567,20 @@ CalculateDelayResult CalculateDelay(Versat* versat,Accelerator* accel,Arena* out
     nodeDelay->Insert(node,maximum);
     node->inst->baseDelay = maximum;
 
-    if(node->type != InstanceNode::TAG_SOURCE_AND_SINK){
+    if(node->type != NodeType_SOURCE_AND_SINK){
       SendLatencyUpwards(node,edgeToDelay,nodeDelay);
     }
 
     region(out){
-      String filepath = PushString(out,"debug/%.*s/out2_%d.dot",UNPACK_SS(accel->name),graphs++);
-      OutputGraphDotFile(versat,accel,true,node->inst,res,filepath,out);
+      String filepath = PushDebugPath(out,accel->name,StaticFormat("out2_%d.dot",graphs++));
+      OutputGraphDotFile(accel,true,node->inst,res,filepath,out);
     }
   }
 
-  FOREACH_LIST(OrderedInstance*,ptr,accel->ordered){
-    InstanceNode* node = ptr->node;
-
-    if(node->type != InstanceNode::TAG_SOURCE_AND_SINK){
+  for(int i = 0; i < order.instances.size; i++){
+    InstanceNode* node = order.instances[i];
+  
+    if(node->type != NodeType_SOURCE_AND_SINK){
       continue;
     }
 
@@ -593,29 +591,29 @@ CalculateDelayResult CalculateDelay(Versat* versat,Accelerator* accel,Arena* out
   }
 
   int minimum = 0;
-  FOREACH_LIST(OrderedInstance*,ptr,accel->ordered){
-    InstanceNode* node = ptr->node;
+  for(int i = 0; i < order.instances.size; i++){
+    InstanceNode* node = order.instances[i];
     int delay = nodeDelay->GetOrFail(node);
 
     minimum = std::min(minimum,delay);
   }
-  FOREACH_LIST(OrderedInstance*,ptr,accel->ordered){
-    InstanceNode* node = ptr->node;
+  for(int i = 0; i < order.instances.size; i++){
+    InstanceNode* node = order.instances[i];
     int* delay = nodeDelay->Get(node);
     *delay -= minimum;
   }
   
   region(out){
-    String filepath = PushString(out,"debug/%.*s/out3_%d.dot",UNPACK_SS(accel->name),graphs++);
-    OutputGraphDotFile(versat,accel,true,nullptr,res,filepath,out);
+    String filepath = PushDebugPath(out,accel->name,StaticFormat("out3_%d.dot",graphs++));
+    OutputGraphDotFile(accel,true,nullptr,res,filepath,out);
   }
 
-  if(!versat->opts->noDelayPropagation){
+  if(!globalOptions.noDelayPropagation){
     // Normalizes everything to start on zero
-    FOREACH_LIST(OrderedInstance*,ptr,accel->ordered){
-      InstanceNode* node = ptr->node;
+    for(int i = 0; i < order.instances.size; i++){
+      InstanceNode* node = order.instances[i];
 
-      if(node->type != InstanceNode::TAG_SOURCE && node->type != InstanceNode::TAG_SOURCE_AND_SINK){
+      if(node->type != NodeType_SOURCE && node->type != NodeType_SOURCE_AND_SINK){
         break;
       }
 
@@ -639,16 +637,16 @@ CalculateDelayResult CalculateDelay(Versat* versat,Accelerator* accel,Arena* out
   }
 
   region(out){
-    String filepath = PushString(out,"debug/%.*s/out4_%d.dot",UNPACK_SS(accel->name),graphs++);
-    OutputGraphDotFile(versat,accel,true,nullptr,res,filepath,out);
+    String filepath = PushDebugPath(out,accel->name,StaticFormat("out4_%d.dot",graphs++));
+    OutputGraphDotFile(accel,true,nullptr,res,filepath,out);
   }
 
-  FOREACH_LIST(OrderedInstance*,ptr,accel->ordered){
-    InstanceNode* node = ptr->node;
+  for(int i = 0; i < order.instances.size; i++){
+    InstanceNode* node = order.instances[i];
 
-    if(node->type == InstanceNode::TAG_UNCONNECTED){
+    if(node->type == NodeType_UNCONNECTED){
       nodeDelay->Insert(node,0);
-    } else if(node->type == InstanceNode::TAG_SOURCE_AND_SINK){
+    } else if(node->type == NodeType_SOURCE_AND_SINK){
     }
     node->inst->baseDelay = nodeDelay->GetOrFail(node);
   }
@@ -670,15 +668,15 @@ static int Visit(PushPtr<InstanceNode*>* ordering,InstanceNode* node,Hashmap<Ins
 
   FUInstance* inst = node->inst;
 
-  if(node->type == InstanceNode::TAG_SINK ||
-     (node->type == InstanceNode::TAG_SOURCE_AND_SINK && CHECK_DELAY(inst,DelayType::DelayType_SINK_DELAY))){
+  if(node->type == NodeType_SINK ||
+     (node->type == NodeType_SOURCE_AND_SINK && CHECK_DELAY(inst,DelayType::DelayType_SINK_DELAY))){
     return 0;
   }
 
   *tag = TAG_TEMPORARY_MARK;
 
   int count = 0;
-  if(node->type == InstanceNode::TAG_COMPUTE){
+  if(node->type == NodeType_COMPUTE){
     FOREACH_LIST(ConnectionNode*,ptr,node->allInputs){
       count += Visit(ordering,ptr->instConnectedTo.node,tags);
     }
@@ -686,7 +684,7 @@ static int Visit(PushPtr<InstanceNode*>* ordering,InstanceNode* node,Hashmap<Ins
 
   *tag = TAG_PERMANENT_MARK;
 
-  if(node->type == InstanceNode::TAG_COMPUTE){
+  if(node->type == NodeType_COMPUTE){
     *ordering->Push(1) = node;
     count += 1;
   }
@@ -719,7 +717,7 @@ DAGOrderNodes CalculateDAGOrder(InstanceNode* instances,Arena* out){
   // Add source units, guaranteed to come first
   FOREACH_LIST(InstanceNode*,ptr,instances){
     FUInstance* inst = ptr->inst;
-    if(ptr->type == InstanceNode::TAG_SOURCE || (ptr->type == InstanceNode::TAG_SOURCE_AND_SINK && CHECK_DELAY(inst,DelayType::DelayType_SOURCE_DELAY))){
+    if(ptr->type == NodeType_SOURCE || (ptr->type == NodeType_SOURCE_AND_SINK && CHECK_DELAY(inst,DelayType::DelayType_SOURCE_DELAY))){
       *pushPtr.Push(1) = ptr;
 
       tags->Insert(ptr,TAG_PERMANENT_MARK);
@@ -730,12 +728,12 @@ DAGOrderNodes CalculateDAGOrder(InstanceNode* instances,Arena* out){
   // Add compute units
   mark = pushPtr.Mark();
   FOREACH_LIST(InstanceNode*,ptr,instances){
-    if(ptr->type == InstanceNode::TAG_UNCONNECTED){
+    if(ptr->type == NodeType_UNCONNECTED){
       *pushPtr.Push(1) = ptr;
       tags->Insert(ptr,TAG_PERMANENT_MARK);
     } else {
       int tag = tags->GetOrFail(ptr);
-      if(tag == 0 && ptr->type == InstanceNode::TAG_COMPUTE){
+      if(tag == 0 && ptr->type == NodeType_COMPUTE){
         Visit(&pushPtr,ptr,tags);
       }
     }
@@ -746,7 +744,7 @@ DAGOrderNodes CalculateDAGOrder(InstanceNode* instances,Arena* out){
   mark = pushPtr.Mark();
   FOREACH_LIST(InstanceNode*,ptr,instances){
     FUInstance* inst = ptr->inst;
-    if(ptr->type == InstanceNode::TAG_SINK || (ptr->type == InstanceNode::TAG_SOURCE_AND_SINK && CHECK_DELAY(inst,DelayType::DelayType_SINK_DELAY))){
+    if(ptr->type == NodeType_SINK || (ptr->type == NodeType_SOURCE_AND_SINK && CHECK_DELAY(inst,DelayType::DelayType_SINK_DELAY))){
       *pushPtr.Push(1) = ptr;
 
       int* tag = tags->Get(ptr);
@@ -776,7 +774,7 @@ DAGOrderNodes CalculateDAGOrder(InstanceNode* instances,Arena* out){
     FOREACH_LIST(ConnectionNode*,ptr,node->allInputs){
       InstanceNode* other = ptr->instConnectedTo.node;
 
-      if(other->type == InstanceNode::TAG_SOURCE_AND_SINK){
+      if(other->type == NodeType_SOURCE_AND_SINK){
         continue;
       }
 
@@ -803,6 +801,7 @@ bool IsUnitCombinatorial(FUInstance* instance){
   }
 }
 
+#if 0
 void ReorganizeAccelerator(Accelerator* accel,Arena* temp){
   if(accel->ordered){
     return;
@@ -911,9 +910,38 @@ void ReorganizeIterative(Accelerator* accel,Arena* temp){
 
   accel->ordered = ReverseList(accel->ordered);
 }
+#endif
 
-void FixDelays(Versat* versat,Accelerator* accel,Hashmap<EdgeNode,int>* edgeDelays){
-  Arena* temp = versat->temp;
+Array<DelayToAdd> GenerateFixDelays(Accelerator* accel,Hashmap<EdgeNode,int>* edgeDelays,Arena* out,Arena* temp){
+  BLOCK_REGION(temp);
+
+  ArenaList<DelayToAdd>* list = PushArenaList<DelayToAdd>(temp);
+  
+  int buffersInserted = 0;
+  for(auto edgePair : edgeDelays){
+    EdgeNode edge = edgePair.first;
+    int delay = edgePair.second;
+
+    if(delay == 0){
+      continue;
+    }
+
+    Assert(delay > 0); // Cannot deal with negative delays at this stage.
+
+    DelayToAdd var = {};
+    var.edge = edge;
+    var.bufferName = PushString(out,"fixedBuffer%d",buffersInserted);
+    var.bufferAmount = delay - BasicDeclaration::fixedBuffer->outputLatencies[0];
+    var.bufferParameters = PushString(out,"#(.AMOUNT(%d))",var.bufferAmount);
+
+    *list->PushElem() = var;
+  }
+
+  return PushArrayFromList(out,list);
+}
+
+void FixDelays(Accelerator* accel,Hashmap<EdgeNode,int>* edgeDelays,Arena* temp){
+  Arena* perm = globalPermanent;
   BLOCK_REGION(temp);
 
   int buffersInserted = 0;
@@ -937,14 +965,14 @@ void FixDelays(Versat* versat,Accelerator* accel,Hashmap<EdgeNode,int>* edgeDela
     Assert(delay > 0); // Cannot deal with negative delays at this stage.
 
     FUInstance* buffer = nullptr;
-    if(versat->opts->useFixedBuffers){
-      String bufferName = PushString(versat->permanent,"fixedBuffer%d",buffersInserted);
+    if(globalOptions.useFixedBuffers){
+      String bufferName = PushString(perm,"fixedBuffer%d",buffersInserted);
 
       buffer = (FUInstance*) CreateFUInstance(accel,BasicDeclaration::fixedBuffer,bufferName);
       buffer->bufferAmount = delay - BasicDeclaration::fixedBuffer->outputLatencies[0];
-      buffer->parameters = PushString(versat->permanent,"#(.AMOUNT(%d))",buffer->bufferAmount);
+      buffer->parameters = PushString(perm,"#(.AMOUNT(%d))",buffer->bufferAmount);
     } else {
-      String bufferName = PushString(versat->permanent,"buffer%d",buffersInserted);
+      String bufferName = PushString(perm,"buffer%d",buffersInserted);
 
       buffer = (FUInstance*) CreateFUInstance(accel,BasicDeclaration::buffer,bufferName);
       buffer->bufferAmount = delay - BasicDeclaration::buffer->outputLatencies[0];
@@ -954,8 +982,8 @@ void FixDelays(Versat* versat,Accelerator* accel,Hashmap<EdgeNode,int>* edgeDela
 
     InsertUnit(accel,edge.node0,edge.node1,PortNode{GetInstanceNode(accel,buffer),0});
 
-    String filePath = PushString(temp,"debug/%.*s/fixDelay_%d.dot",UNPACK_SS(accel->name),buffersInserted);
-    OutputGraphDotFile(versat,accel,true,buffer,filePath,temp);
+    String filePath = PushDebugPath(temp,accel->name,StaticFormat("fixDelay_%d.dot",buffersInserted));
+    OutputGraphDotFile(accel,true,buffer,filePath,temp);
     buffersInserted += 1;
   }
 }
@@ -1015,7 +1043,7 @@ Array<FUDeclaration*> AllNonSpecialSubTypes(Accelerator* accel,Arena* out,Arena*
   
   Set<FUDeclaration*>* maps = PushSet<FUDeclaration*>(temp,99);
   
-  Array<InstanceInfo> test = CalculateAcceleratorInfo(accel,true,temp,out).infos[0];
+  Array<InstanceInfo> test = CalculateAcceleratorInfo(accel,true,temp,out).baseInfo;
   for(InstanceInfo& info : test){
     if(info.decl->type != FUDeclarationType_SPECIAL){
       maps->Insert(info.decl);
@@ -1035,7 +1063,7 @@ Array<FUDeclaration*> ConfigSubTypes(Accelerator* accel,Arena* out,Arena* temp){
   
   Set<FUDeclaration*>* maps = PushSet<FUDeclaration*>(temp,99);
   
-  Array<InstanceInfo> test = CalculateAcceleratorInfo(accel,true,temp,out).infos[0];
+  Array<InstanceInfo> test = CalculateAcceleratorInfo(accel,true,temp,out).baseInfo;
   for(InstanceInfo& info : test){
     if(info.configSize > 0){
       maps->Insert(info.decl);
@@ -1055,7 +1083,7 @@ Array<FUDeclaration*> MemSubTypes(Accelerator* accel,Arena* out,Arena* temp){
   
   Set<FUDeclaration*>* maps = PushSet<FUDeclaration*>(temp,99);
 
-  Array<InstanceInfo> test = CalculateAcceleratorInfo(accel,true,temp,out).infos[0];
+  Array<InstanceInfo> test = CalculateAcceleratorInfo(accel,true,temp,out).baseInfo;
   for(InstanceInfo& info : test){
     if(info.memMappedSize.has_value()){
       maps->Insert(info.decl);
@@ -1065,7 +1093,6 @@ Array<FUDeclaration*> MemSubTypes(Accelerator* accel,Arena* out,Arena* temp){
   Array<FUDeclaration*> subTypes = PushArrayFromSet(out,maps);
   return subTypes;
 }
-
 
 // Checks wether the external memory conforms to the expected interface or not (has valid values)
 bool VerifyExternalMemory(ExternalMemoryInterface* inter){
@@ -1142,7 +1169,7 @@ int ExternalMemoryByteSize(Array<ExternalMemoryInterface> interfaces){
   return size;
 }
 
-VersatComputedValues ComputeVersatValues(Versat* versat,Accelerator* accel,bool useDMA){
+VersatComputedValues ComputeVersatValues(Accelerator* accel,bool useDMA){
   VersatComputedValues res = {};
 
   int memoryMappedDWords = 0;
@@ -1159,18 +1186,18 @@ VersatComputedValues ComputeVersatValues(Versat* versat,Accelerator* accel,bool 
       res.unitsMapped += 1;
     }
 
-    res.nConfigs += decl->configInfo[0].configs.size;
-    for(Wire& wire : decl->configInfo[0].configs){
+    res.nConfigs += decl->baseConfig.configs.size;
+    for(Wire& wire : decl->baseConfig.configs){
       res.configBits += wire.bitSize;
     }
 
-    res.nStates += decl->configInfo[0].states.size;
-    for(Wire& wire : decl->configInfo[0].states){
+    res.nStates += decl->baseConfig.states.size;
+    for(Wire& wire : decl->baseConfig.states){
       res.stateBits += wire.bitSize;
     }
 
-    res.nDelays += decl->configInfo[0].delayOffsets.max;
-    res.delayBits += decl->configInfo[0].delayOffsets.max * 32;
+    res.nDelays += decl->baseConfig.delayOffsets.max;
+    res.delayBits += decl->baseConfig.delayOffsets.max * 32;
 
     res.nUnitsIO += decl->nIOs;
 
@@ -1231,7 +1258,7 @@ InstanceNode* GetInstanceNode(Accelerator* accel,FUInstance* inst){
 }
 
 void CalculateNodeType(InstanceNode* node){
-   node->type = InstanceNode::TAG_UNCONNECTED;
+   node->type = NodeType_UNCONNECTED;
 
    bool hasInput = (node->allInputs != nullptr);
    bool hasOutput = (node->allOutputs != nullptr);
@@ -1239,14 +1266,14 @@ void CalculateNodeType(InstanceNode* node){
    // If the unit is both capable of acting as a sink or as a source of data
    if(hasInput && hasOutput){
      if(CHECK_DELAY(node->inst,DelayType_SINK_DELAY) || CHECK_DELAY(node->inst,DelayType_SOURCE_DELAY)){
-         node->type = InstanceNode::TAG_SOURCE_AND_SINK;
+         node->type = NodeType_SOURCE_AND_SINK;
       }  else {
-         node->type = InstanceNode::TAG_COMPUTE;
+         node->type = NodeType_COMPUTE;
       }
    } else if(hasInput){
-      node->type = InstanceNode::TAG_SINK;
+      node->type = NodeType_SINK;
    } else if(hasOutput){
-      node->type = InstanceNode::TAG_SOURCE;
+      node->type = NodeType_SOURCE;
    } else {
       // Unconnected
    }
