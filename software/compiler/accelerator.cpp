@@ -1,3 +1,4 @@
+#include "declaration.hpp"
 #include "globals.hpp"
 #include "memory.hpp"
 #include "utils.hpp"
@@ -445,6 +446,8 @@ Accelerator* Flatten(Accelerator* accel,int times,Arena* temp){
   return newAccel;
 }
 
+const int ANY_DELAY_MARK = 99999;
+
 static void SendLatencyUpwards(InstanceNode* node,Hashmap<EdgeNode,int>* delays,Hashmap<InstanceNode*,int>* nodeDelay){
   int b = nodeDelay->GetOrFail(node);
   FUInstance* inst = node->inst;
@@ -452,7 +455,7 @@ static void SendLatencyUpwards(InstanceNode* node,Hashmap<EdgeNode,int>* delays,
   FOREACH_LIST(ConnectionNode*,info,node->allOutputs){
     InstanceNode* other = info->instConnectedTo.node;
 
-    // Do not set delay for source and sink units. Source units cannot be found in this, otherwise they wouldn't be source
+    // Do not set delay for source units. Source units cannot be found in this, otherwise they wouldn't be source
     Assert(other->type != NodeType_SOURCE);
 
     int a = inst->declaration->outputLatencies[info->port];
@@ -463,10 +466,14 @@ static void SendLatencyUpwards(InstanceNode* node,Hashmap<EdgeNode,int>* delays,
 
       if(info->instConnectedTo.port == otherInfo->port &&
          otherInfo->instConnectedTo.node->inst == inst && otherInfo->instConnectedTo.port == info->port){
-
+        
         int delay = b + a + e - c;
 
-        *otherInfo->delay = delay;
+        if(b == ANY_DELAY_MARK || node->inst->declaration == BasicDeclaration::buffer){
+          *otherInfo->delay = ANY_DELAY_MARK;
+        } else {
+          *otherInfo->delay = delay;
+        }
       }
     }
   }
@@ -487,7 +494,8 @@ static void SendLatencyUpwards(InstanceNode* node,Hashmap<EdgeNode,int>* delays,
 
 CalculateDelayResult CalculateDelay(Accelerator* accel,DAGOrderNodes order,Arena* out){
   // TODO: We are currently using the delay pointer inside the ConnectionNode structure. When correct, eventually change to just use the hashmap
-
+  static int functionCalls = 0;
+  
   int nodes = Size(accel->allocated);
   int edges = Size(accel->edges);
   Hashmap<EdgeNode,int>* edgeToDelay = PushHashmap<EdgeNode,int>(out,edges);
@@ -537,7 +545,7 @@ CalculateDelayResult CalculateDelay(Accelerator* accel,DAGOrderNodes order,Arena
     SendLatencyUpwards(node,edgeToDelay,nodeDelay);
 
     region(out){
-      String filepath = PushDebugPath(out,accel->name,StaticFormat("out1_%d.dot",graphs++));
+      String filepath = PushDebugPath(out,accel->name,StaticFormat("%d_out1_%d.dot",functionCalls,graphs++));
       OutputGraphDotFile(accel,true,node->inst,res,filepath,out);
     }
   }
@@ -553,15 +561,21 @@ CalculateDelayResult CalculateDelay(Accelerator* accel,DAGOrderNodes order,Arena
 
     int maximum = -(1 << 30);
     FOREACH_LIST(ConnectionNode*,info,node->allInputs){
-      maximum = std::max(maximum,*info->delay);
+      if(*info->delay != ANY_DELAY_MARK){
+        maximum = std::max(maximum,*info->delay);
+      }
     }
-
+    
     if(maximum == -(1 << 30)){
       continue;
     }
     
     FOREACH_LIST(ConnectionNode*,info,node->allInputs){
-      *info->delay = maximum - *info->delay;
+      if(*info->delay == ANY_DELAY_MARK){
+        *info->delay = 0;
+      } else {
+        *info->delay = maximum - *info->delay;
+      }
     }
 
     nodeDelay->Insert(node,maximum);
@@ -572,7 +586,7 @@ CalculateDelayResult CalculateDelay(Accelerator* accel,DAGOrderNodes order,Arena
     }
 
     region(out){
-      String filepath = PushDebugPath(out,accel->name,StaticFormat("out2_%d.dot",graphs++));
+      String filepath = PushDebugPath(out,accel->name,StaticFormat("%d_out2_%d.dot",functionCalls,graphs++));
       OutputGraphDotFile(accel,true,node->inst,res,filepath,out);
     }
   }
@@ -604,7 +618,7 @@ CalculateDelayResult CalculateDelay(Accelerator* accel,DAGOrderNodes order,Arena
   }
   
   region(out){
-    String filepath = PushDebugPath(out,accel->name,StaticFormat("out3_%d.dot",graphs++));
+    String filepath = PushDebugPath(out,accel->name,StaticFormat("%d_out3_%d.dot",functionCalls,graphs++));
     OutputGraphDotFile(accel,true,nullptr,res,filepath,out);
   }
 
@@ -637,7 +651,7 @@ CalculateDelayResult CalculateDelay(Accelerator* accel,DAGOrderNodes order,Arena
   }
 
   region(out){
-    String filepath = PushDebugPath(out,accel->name,StaticFormat("out4_%d.dot",graphs++));
+    String filepath = PushDebugPath(out,accel->name,StaticFormat("%d_out4_%d.dot",functionCalls,graphs++));
     OutputGraphDotFile(accel,true,nullptr,res,filepath,out);
   }
 
@@ -650,6 +664,8 @@ CalculateDelayResult CalculateDelay(Accelerator* accel,DAGOrderNodes order,Arena
     }
     node->inst->baseDelay = nodeDelay->GetOrFail(node);
   }
+
+  functionCalls += 1;
   
   return res;
 }
@@ -930,7 +946,7 @@ Array<DelayToAdd> GenerateFixDelays(Accelerator* accel,Hashmap<EdgeNode,int>* ed
 
     DelayToAdd var = {};
     var.edge = edge;
-    var.bufferName = PushString(out,"fixedBuffer%d",buffersInserted);
+    var.bufferName = PushString(out,"buffer%d",buffersInserted++);
     var.bufferAmount = delay - BasicDeclaration::fixedBuffer->outputLatencies[0];
     var.bufferParameters = PushString(out,"#(.AMOUNT(%d))",var.bufferAmount);
 

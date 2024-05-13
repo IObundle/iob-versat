@@ -417,7 +417,7 @@ AcceleratorInfo TransformGraphIntoArrayRecurse(InstanceNode* node,FUDeclaration*
     subOffsets.order = inst->declaration->configInfo[part].order[index];
     
     if(subInst->declaration->baseConfig.delayOffsets.max > 0){ // TODO: Same here
-      subOffsets.delay = offsets.delay + inst->declaration->baseConfig.calculatedDelays[delayIndex++];
+      subOffsets.delay = offsets.delay + inst->declaration->configInfo[part].calculatedDelays[delayIndex++];
     }
 
     if(subInst->declaration->memoryMapBits.has_value()){
@@ -458,6 +458,8 @@ AcceleratorInfo TransformGraphIntoArrayRecurse(InstanceNode* node,FUDeclaration*
 //       Allocates the Array of instance info.
 //       We can then fill everything by computing configInfo and stuff at the top and accessing fudeclaration configInfos as we go down.
 
+bool globalDisableOrder = false; // TODO: HACK
+
 TestResult CalculateOneInstance(Accelerator* accel,bool recursive,Array<Partition> partitions,Arena* temp,Arena* out){
   ArenaList<InstanceInfo>* infoList = PushArenaList<InstanceInfo>(temp);
   Hashmap<StaticId,int>* staticInfo = PushHashmap<StaticId,int>(temp,99);
@@ -466,9 +468,27 @@ TestResult CalculateOneInstance(Accelerator* accel,bool recursive,Array<Partitio
   CalculatedOffsets configOffsets = CalculateConfigOffsetsIgnoringStatics(accel,out);
   CalculatedOffsets delayOffsets = CalculateConfigurationOffset(accel,MemType::DELAY,out);
 
-  DAGOrderNodes order = CalculateDAGOrder(accel->allocated,temp);
-  CalculateDelayResult calculatedDelay = CalculateDelay(accel,order,temp); // TODO: Would be better if calculate delay did not need to receive versat.
+  DAGOrderNodes order;
+  CalculateDelayResult calculatedDelay;
 
+  if(!globalDisableOrder){
+    order = CalculateDAGOrder(accel->allocated,temp);
+    calculatedDelay = CalculateDelay(accel,order,temp); // TODO: Would be better if calculate delay did not need to receive versat.
+  } else {
+    DynamicArray<InstanceNode*> arr = StartArray<InstanceNode*>(temp);
+
+    FOREACH_LIST(InstanceNode*,ptr,accel->allocated){
+      *arr.PushElem() = ptr;
+    }
+    order.instances = EndArray(arr);
+    int size = order.instances.size;
+
+    calculatedDelay.nodeDelay = PushHashmap<InstanceNode*,int>(temp,999);
+    FOREACH_LIST(InstanceNode*,ptr,accel->allocated){
+      calculatedDelay.nodeDelay->Insert(ptr,0);
+    }
+  }
+  
   Hashmap<InstanceNode*,int>* toOrder = MapElementToIndex(order.instances,temp);
   
   int partitionIndex = 0;

@@ -379,7 +379,7 @@ struct Set{
   Hashmap<Data,int>* map;
 
   void Insert(Data data);
-
+  
   bool ExistsOrInsert(Data data);
   bool Exists(Data data);
 };
@@ -798,39 +798,6 @@ bool Hashmap<Key,Data>::CheckOrInsert(Key key,Data data){
 
   return true;
 }
-
-#if 0
-template<typename Key,typename Data>
-void Hashmap<Key,Data>::Remove(Key key){
-  Assert(Get(key) != nullptr);
-
-  int mask = this->nodesAllocated - 1;
-  int index = std::hash<Key>()(key) & mask; // Size is power of 2
-
-  Pair<Key,Data>* ptr = this->buckets[index];
-  Assert(ptr);
-
-  int previousNextIndex = -1;
-  int nextIndex = 0;
-  for(; ptr;){
-    if(ptr->key == key){ // Same key
-       nextIndex = ptr - this->data;
-       break;
-    }
-
-    previousNextIndex = ptr - this->data;
-    ptr = this->next[previousNextIndex];
-  }
-
-  if(previousNextIndex == -1){
-    this->next[nextIndex] = nullptr;
-  } else {
-    this->next[previousNextIndex] = this->next[nextIndex];
-  }
-
-  nodesUsed -= 1;
-}
-#endif
 
 template<typename Key,typename Data>
 bool Hashmap<Key,Data>::Exists(Key key){

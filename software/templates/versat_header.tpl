@@ -14,7 +14,7 @@ typedef intptr_t iptr;
 
 // Config
 
-#{for type nonMergedStructures}
+#{for type configStructures}
 #define VERSAT_DEFINED_@{type.name}
 typedef struct {
 #{for entry type.entries}

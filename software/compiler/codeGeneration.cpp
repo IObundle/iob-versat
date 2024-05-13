@@ -250,14 +250,14 @@ static Array<TypeStructInfoElement> GenerateAddressStructFromType(FUDeclaration*
 struct SubTypesInfo{
   FUDeclaration* type;
   FUDeclaration* mergeTop;
-  int configIndex;
+  ConfigurationInfo* info;
   bool isFromMerged;
   bool containsMerged;
 };
 
 template<> struct std::hash<SubTypesInfo>{
    std::size_t operator()(SubTypesInfo const& s) const noexcept{
-     std::size_t res = std::hash<void*>()(s.type) + std::hash<void*>()(s.mergeTop) + std::hash<bool>()(s.isFromMerged) + std::hash<int>()(s.configIndex) + std::hash<bool>()(s.containsMerged);
+     std::size_t res = std::hash<void*>()(s.type) + std::hash<void*>()(s.mergeTop) + std::hash<bool>()(s.isFromMerged) + std::hash<void*>()(s.info) + std::hash<bool>()(s.containsMerged);
      return res;
    }
 };
@@ -274,29 +274,29 @@ Array<SubTypesInfo> GetSubTypesInfo(Accelerator* accel,Arena* out,Arena* temp){
   typesUsed = SortTypesByConfigDependency(typesUsed,temp,out);
 
   Set<SubTypesInfo>* info = PushSet<SubTypesInfo>(temp,99);
-
+  
   for(FUDeclaration* type : typesUsed){
-    if(type->configInfo.size >= 2){
+    if(type->type == FUDeclarationType_MERGED){
       for(int i = 0; i < type->configInfo.size; i++){
         ConfigurationInfo in = type->configInfo[i];
         SubTypesInfo res = {};
-        res.type = in.baseType;
+        res.type = nullptr; // in.baseType;
         res.mergeTop = type;
-        res.configIndex = i;
+        res.info = &type->configInfo[i];
         res.isFromMerged = true;
  
-        info->ExistsOrInsert(res);
+        info->Insert(res); // Takes precedence over non merged types
       }
 
       SubTypesInfo res = {};
       res.type = type;
       res.containsMerged = true;
-      info->ExistsOrInsert(res);
+      info->Insert(res);
     } else {
       SubTypesInfo in = {};
       in.type = type;
 
-      info->ExistsOrInsert(in);
+      info->Insert(in);
     }
   }
 
@@ -321,7 +321,7 @@ Array<TypeStructInfo> GetConfigStructInfo(Accelerator* accel,Arena* out,Arena* t
     if(subType.isFromMerged){
       FUDeclaration* decl = subType.mergeTop;
       int maxOffset = decl->baseConfig.configOffsets.max; // TODO: This should be equal for all merged types, no need to duplicate data
-      ConfigurationInfo& info = decl->configInfo[subType.configIndex];
+      ConfigurationInfo& info = *subType.info;
       CalculatedOffsets& offsets = info.configOffsets;
         
       Array<bool> seenIndex = PushArray<bool>(temp,offsets.max);
@@ -373,7 +373,7 @@ Array<TypeStructInfo> GetConfigStructInfo(Accelerator* accel,Arena* out,Arena* t
       }
 
       Array<TypeStructInfoElement> elem = PushArrayFromList(out,list);
-      structures[index].name = info.name;
+      structures[index].name = PushString(out,"%.*s",UNPACK_SS(info.name));
       structures[index].entries = elem;
       index += 1;
     } else if(subType.containsMerged){
@@ -987,8 +987,8 @@ void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* 
   TemplateSetNumber("nConfigs",val.nConfigs);
   TemplateSetNumber("nStatics",val.nStatics);
 
-  Array<TypeStructInfo> nonMergedStructures = GetConfigStructInfo(accel,temp2,temp);
-  TemplateSetCustom("nonMergedStructures",MakeValue(&nonMergedStructures));
+  Array<TypeStructInfo> configStructures = GetConfigStructInfo(accel,temp2,temp);
+  TemplateSetCustom("configStructures",MakeValue(&configStructures));
   
   Array<TypeStructInfo> addressStructures = GetMemMappedStructInfo(accel,temp2,temp);
   TemplateSetCustom("addressStructures",MakeValue(&addressStructures));

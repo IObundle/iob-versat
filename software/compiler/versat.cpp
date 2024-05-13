@@ -328,9 +328,13 @@ void FillDeclarationWithAcceleratorValues(FUDeclaration* decl,Accelerator* accel
       return in.order;
     });
 
-    
     {
       decl->configInfo[i].configOffsets.offsets = PushArray<int>(perm,size);
+      decl->configInfo[i].delayOffsets.offsets = PushArray<int>(perm,size);
+      decl->configInfo[i].stateOffsets.offsets = PushArray<int>(perm,size);
+      decl->configInfo[i].calculatedDelays = PushArray<int>(perm,size);
+
+      int delayIndex = 0;
       int index = 0;
       for(InstanceInfo& info : info){
         if(info.level != 0) continue;
@@ -340,32 +344,18 @@ void FillDeclarationWithAcceleratorValues(FUDeclaration* decl,Accelerator* accel
         } else {
           decl->configInfo[i].configOffsets.offsets[index] = info.configPos.value_or(-1);
         }
+        decl->configInfo[i].delayOffsets.offsets[index] = info.delayPos.value_or(-1);
+        decl->configInfo[i].stateOffsets.offsets[index] = info.statePos.value_or(-1);
+
+        if(info.delay.size){
+          decl->configInfo[i].calculatedDelays[index] = info.delay[0];
+        } else {
+          decl->configInfo[i].calculatedDelays[index] = -1;
+        }
         index += 1;
       }
       decl->configInfo[i].configOffsets.max = val.configs;
-    }
-    
-    {
-      decl->configInfo[i].delayOffsets.offsets = PushArray<int>(perm,size);
-      int index = 0;
-      for(InstanceInfo& info : info){
-        if(info.level != 0) continue;
-
-        decl->configInfo[i].delayOffsets.offsets[index] = info.delayPos.value_or(-1);
-        index += 1;
-      }
       decl->configInfo[i].delayOffsets.max = val.delays;
-    }
-
-    {
-      decl->configInfo[i].stateOffsets.offsets = PushArray<int>(perm,size);
-      int index = 0;
-      for(InstanceInfo& info : info){
-        if(info.level != 0) continue;
-
-        decl->configInfo[i].stateOffsets.offsets[index] = info.statePos.value_or(-1);
-        index += 1;
-      }
       decl->configInfo[i].stateOffsets.max = val.states;
     }
   }
@@ -485,7 +475,6 @@ FUDeclaration* RegisterSubUnit(Accelerator* circuit,Arena* temp,Arena* temp2){
   FOREACH_LIST(InstanceNode*,ptr,circuit->allocated){
     FUInstance* inst = ptr->inst;
     if(IsTypeHierarchical(inst->declaration)){
-
       for(auto pair : inst->declaration->staticUnits){
         StaticData newData = pair.second;
         newData.offset = staticOffset;

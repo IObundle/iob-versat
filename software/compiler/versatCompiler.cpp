@@ -614,6 +614,9 @@ int main(int argc,const char* argv[]){
     }
   }
 
+  extern bool globalDisableOrder; 
+  globalDisableOrder = true;
+
   for(FUDeclaration* decl : globalDeclarations){
     BLOCK_REGION(temp);
 
@@ -626,7 +629,7 @@ int main(int argc,const char* argv[]){
       PrintDeclaration(stats,decl,perm,temp);
     }
   }
-    
+  
   TOP->parameters = STRING("#(.AXI_ADDR_W(AXI_ADDR_W),.LEN_W(LEN_W))");
   OutputVersatSource(accel,
                      globalOptions.hardwareOutputFilepath.data,
@@ -643,14 +646,15 @@ int main(int argc,const char* argv[]){
 
 #if 1
     if(decl->type == FUDeclarationType_COMPOSITE ||
-       decl->type == FUDeclarationType_ITERATIVE){
+       decl->type == FUDeclarationType_ITERATIVE ||
+       decl->type == FUDeclarationType_MERGED){
 
       String path = PushString(temp,"%.*s/modules/%.*s.v",UNPACK_SS(globalOptions.hardwareOutputFilepath),UNPACK_SS(decl->name));
       PushNullByte(temp);
       
       FILE* sourceCode = OpenFileAndCreateDirectories(path.data,"w");
 
-      if(decl->type == FUDeclarationType_COMPOSITE){
+      if(decl->type == FUDeclarationType_COMPOSITE || decl->type == FUDeclarationType_MERGED){
         OutputCircuitSource(decl,decl->fixedDelayCircuit,sourceCode,temp,perm);
       } else if(decl->type == FUDeclarationType_ITERATIVE){
         OutputIterativeSource(decl,decl->fixedDelayCircuit,sourceCode,temp,perm);
