@@ -1504,14 +1504,14 @@ ReconstituteResult ReconstituteGraph(Accelerator* merged,Accelerator* originalFl
       GetOrAllocateResult<InstanceNode*> res1 = instancesAdded->GetOrAllocate(node1->inst->name);
       
       if(!res0.alreadyExisted){
-        *res0.data = CreateFUInstanceNode(accel,node0->inst->declaration,node0->inst->name);
+        *res0.data = CopyInstance(accel,node0,node0->inst->name);
         
         accelToRecon->Insert(node0,*res0.data);
         reconToAccel->Insert(*res0.data,node0);
       }
       
       if(!res1.alreadyExisted){
-        *res1.data = CreateFUInstanceNode(accel,node1->inst->declaration,node1->inst->name);
+        *res1.data = CopyInstance(accel,node1,node1->inst->name);
 
         accelToRecon->Insert(node1,*res1.data);
         reconToAccel->Insert(*res1.data,node1);
@@ -1814,32 +1814,15 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
       break;
     }
   }
-  
-#if 0
-  DAGOrderNodes order = CalculateDAGOrder(circuit->allocated,temp);
-  CalculateDelayResult delays = CalculateDelay(circuit,order,temp);
-
-  declInst.baseConfig.calculatedDelays = PushArray<int>(permanent,delays.nodeDelay->nodesUsed);
-  int index = 0;
-  for(Pair<InstanceNode*,int> p : delays.nodeDelay){
-    if(p.first->inst->declaration->baseConfig.delayOffsets.max > 0){
-      declInst.baseConfig.calculatedDelays[index] = p.second;
-      index += 1;
-    }
-  }
-#endif
-  
+ 
   declInst.fixedDelayCircuit = circuit;
 
-  // Need to calculate versat data here.
-  // Left here, this is calling DAGOrder so it's not working propertly.
-  extern bool globalDisableOrder; 
-
-  globalDisableOrder = true;
-  FillDeclarationWithAcceleratorValues(&declInst,circuit,temp,temp2);
-  globalDisableOrder = false;
-
+  FillDeclarationWithAcceleratorValuesNoDelay(&declInst,circuit,temp,temp2);
   FillDeclarationWithDelayType(&declInst);
+
+  // TODO: HACK. Because type inputs and outputs depend on size of baseConfig input/output, put first graph here. 
+  declInst.baseConfig.inputDelays = ExtractInputDelays(recon[0],reconDelay[0],perm,temp);
+  declInst.baseConfig.outputLatencies = ExtractOutputLatencies(recon[0],reconDelay[0],perm,temp);
   
   declInst.staticUnits = PushHashmap<StaticId,StaticData>(permanent,1000); // TODO: Set correct number of elements
   int staticOffset = 0;
@@ -1863,6 +1846,16 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
   decl->type = FUDeclarationType_MERGED;
   
   int mergedUnitsAmount = Size(result->allocated);
+  
+  Array<Hashmap<InstanceNode*,int>*> reconToOrder = PushArray<Hashmap<InstanceNode*,int>*>(temp,size);
+  for(int i = 0; i < reconToOrder.size; i++){
+    DAGOrderNodes order = reconOrder[i];
+    reconToOrder[i] = PushHashmap<InstanceNode*,int>(temp,order.instances.size);
+    
+    for(int ii = 0; ii < order.instances.size; ii++){
+      reconToOrder[i]->Insert(order.instances[ii],order.order[ii]);
+    }
+  }
   
   // Add this units static instances (needs to be done after Registering the declaration because the parent is a pointer to the declaration)
   FOREACH_LIST(InstanceNode*,ptr,circuit->allocated){
@@ -1903,13 +1896,15 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
     decl->configInfo[i].states = decl->baseConfig.states;
     decl->configInfo[i].stateOffsets = decl->baseConfig.stateOffsets;
     decl->configInfo[i].delayOffsets = decl->baseConfig.delayOffsets;
-    //decl->configInfo[i].calculatedDelays = decl->baseConfig.calculatedDelays;
-    decl->configInfo[i].order = decl->baseConfig.order;
 
-    decl->configInfo[i].calculatedDelays = PushArray<int>(perm,mergedUnitsAmount);
-    
     decl->configInfo[i].configOffsets.offsets = PushArray<int>(perm,mergedUnitsAmount);
     decl->configInfo[i].configOffsets.max = decl->baseConfig.configOffsets.max;
+
+    decl->configInfo[i].inputDelays = ExtractInputDelays(recon[i],reconDelay[i],perm,temp);
+    decl->configInfo[i].outputLatencies = ExtractOutputLatencies(recon[i],reconDelay[i],perm,temp);
+    
+    decl->configInfo[i].calculatedDelays = PushArray<int>(perm,mergedUnitsAmount);
+    decl->configInfo[i].order = PushArray<int>(perm,mergedUnitsAmount);
     
     int configIndex = 0;
     int orderIndex = 0;
@@ -1918,9 +1913,14 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
       bool mapExists = optReconNode != nullptr;
       
       if(optReconNode){
+        if((*optReconNode)->inst->declaration == BasicDeclaration::output){
+          printf("here: %d\n",reconDelay[i].nodeDelay->GetOrFail(*optReconNode));
+        }
         decl->configInfo[i].calculatedDelays[orderIndex] = reconDelay[i].nodeDelay->GetOrFail(*optReconNode);
+        decl->configInfo[i].order[orderIndex] = reconToOrder[i]->GetOrFail(*optReconNode);
       } else {
         decl->configInfo[i].calculatedDelays[orderIndex] = -1;
+        decl->configInfo[i].order[orderIndex] = -1;
       }
 
       if(ptr->inst->isMergeMultiplexer || ptr->inst->declaration == BasicDeclaration::fixedBuffer){

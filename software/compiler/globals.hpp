@@ -23,7 +23,7 @@ struct Options{
   bool architectureHasDatabus;
   bool useFixedBuffers;
   bool generateFSTFormat;
-  bool noDelayPropagation;
+  bool disableDelayPropagation;
   bool useDMA;
   bool exportInternalMemories;
 };

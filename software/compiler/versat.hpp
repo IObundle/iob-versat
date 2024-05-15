@@ -49,9 +49,6 @@ struct FUInstance{
   FUDeclaration* declaration;
   int id;
 
-  // PC only
-  int baseDelay; // TODO: Delays should be pulled out from FUInstances and simply calculated and stored inside corresponding FUDeclarations if needed to be stored or just calculated at code generation time.
-
   union{
     int literal;
     int bufferAmount;
@@ -62,16 +59,6 @@ struct FUInstance{
   bool sharedEnable;
   bool isMergeMultiplexer; // TODO: Kinda of an hack for now
 };
-
-// TODO: Make these globals. After changing Versat to act more like a compiler, there is no need for a Versat structure. 
-#if 0
-struct Versat{
-
-  Arena* permanent;
-  Arena* temp;
-  Arena* temp2;
-};
-#endif
 
 struct CompiledTemplate;
 namespace BasicTemplates{
@@ -132,6 +119,7 @@ FUInstance* CreateFUInstance(Accelerator* accel,FUDeclaration* type,String entit
 Accelerator* Flatten(Accelerator* accel,int times,Arena* temp);
 
 void FillDeclarationWithAcceleratorValues(FUDeclaration* decl,Accelerator* accel,Arena* temp,Arena* temp2);
+void FillDeclarationWithAcceleratorValuesNoDelay(FUDeclaration* decl,Accelerator* accel,Arena* temp,Arena* temp2); // HACK
 void FillDeclarationWithDelayType(FUDeclaration* decl);
 
 // Static and configuration sharing

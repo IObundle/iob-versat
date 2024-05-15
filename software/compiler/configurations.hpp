@@ -119,15 +119,20 @@ struct TestResult{
   Array<InstanceInfo> info;
   InstanceConfigurationOffsets subOffsets;
   String name;
+  Array<int> inputDelay;
+  Array<int> outputLatencies;
 };
 
 struct AccelInfo{
   Array<Array<InstanceInfo>> infos; // Should join names with infos
   Array<InstanceInfo> baseInfo;
   Array<String> names;
+  Array<Array<int>> inputDelays;
+  Array<Array<int>> outputDelays;
+  
   int memMappedBitsize;
   int howManyMergedUnits;
-
+  
   int inputs;
   int outputs;
 
@@ -152,10 +157,18 @@ struct TypeAndNameOnly{
   String name;
 };
 
+struct Partition{
+  int value;
+  int max;
+};
+
 AccelInfo CalculateAcceleratorInfo(Accelerator* accel,bool recursive,Arena* out,Arena* temp);
+AccelInfo CalculateAcceleratorInfoNoDelay(Accelerator* accel,bool recursive,Arena* out,Arena* temp);
 
 CalculatedOffsets CalculateConfigOffsetsIgnoringStatics(Accelerator* accel,Arena* out);
 CalculatedOffsets CalculateConfigurationOffset(Accelerator* accel,MemType type,Arena* out);
+
+Array<Partition> GenerateInitialPartitions(Accelerator* accel,Arena* out);
 
 int GetConfigurationSize(FUDeclaration* decl,MemType type);
 

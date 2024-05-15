@@ -31,7 +31,7 @@
       #{set res "in" # inst2.portIndex}
    #{else}
       #{if decl2.isOperation}
-         #{if decl2.outputLatencies[0] == 0}
+         #{if decl2.baseConfig.outputLatencies[0] == 0}
             #{set res "comb_" # inst2.name |> Identify}
          #{else}
             #{set res "seq_" # inst2.name |> Identify}
@@ -55,7 +55,7 @@
       #{set res "in" # inst2.portIndex}
    #{else}
       #{if decl2.isOperation}
-         #{if decl2.outputLatencies[0] == 0}
+         #{if decl2.baseConfig.outputLatencies[0] == 0}
             #{set res "comb_" # inst2.name |> Identify}
          #{else}
             #{set res "seq_" # inst2.name |> Identify}
@@ -97,7 +97,7 @@
    #{set nCombOperations 0}
    #{for node instances}
       #{if node.inst.declaration.isOperation}
-         #{if node.inst.declaration.outputLatencies[0] == 0}
+         #{if node.inst.declaration.baseConfig.outputLatencies[0] == 0}
             #{inc nCombOperations}
          #{end}
       #{end}
@@ -109,7 +109,7 @@
    #{set nSeqOperations 0}
    #{for node instances}
       #{if node.inst.declaration.isOperation}
-         #{if node.inst.declaration.outputLatencies[0] != 0}
+         #{if node.inst.declaration.baseConfig.outputLatencies[0] != 0}
             #{inc nSeqOperations}
          #{end}
       #{end}

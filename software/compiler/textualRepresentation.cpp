@@ -65,7 +65,8 @@ String Repr(FUInstance* inst,GraphDotFormat format,Arena* out){
     if(buffer){
       PushString(out,"%d",instance->bufferAmount);
     } else {
-      PushString(out,"%d",inst->baseDelay);
+      PushString(out,"0");
+      //PushString(out,"%d",inst->baseDelay); //TODO: Broken 
     }
   }
 
@@ -97,7 +98,7 @@ String Repr(PortInstance* inPort,PortInstance* outPort,GraphDotFormat format,Are
     PushString(out,"\\nLat:");
   }
   if(lat){
-    PushString(out,"%d",inPort->inst->declaration->outputLatencies[inPort->port]);
+    PushString(out,"%d",inPort->inst->declaration->baseConfig.outputLatencies[inPort->port]);
   }
 
   PushString(out,"\\n->\\n");
@@ -106,7 +107,7 @@ String Repr(PortInstance* inPort,PortInstance* outPort,GraphDotFormat format,Are
     PushString(out,"\\nLat:");
   }
   if(lat){
-    PushString(out,"%d",outPort->inst->declaration->inputDelays[outPort->port]);
+    PushString(out,"%d",outPort->inst->declaration->baseConfig.inputDelays[outPort->port]);
   }
 
   String res = EndString(mark);

@@ -556,7 +556,7 @@ String GetDefaultValueRepresentation(Value in,Arena* arena){
         LogFatal(LogModule::TYPE,"Not an Array");
       }
 
-      res = PushString(arena,"Size:%" PRId64,size.value().number);
+      res = PushString(arena,"Array of Size:%" PRId64,size.value().number);
     } else {
       res = PushString(arena,"%.*s",UNPACK_SS(type->name)); // Return type name
     }

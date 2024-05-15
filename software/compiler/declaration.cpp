@@ -27,8 +27,8 @@ static FUDeclaration* RegisterCircuitInput(){
   FUDeclaration decl = {};
 
   decl.name = STRING("CircuitInput");
-  decl.inputDelays = Array<int>{zeros,0};
-  decl.outputLatencies = Array<int>{zeros,1};
+  decl.baseConfig.inputDelays = Array<int>{zeros,0};
+  decl.baseConfig.outputLatencies = Array<int>{zeros,1};
   decl.delayType = DelayType::DelayType_SOURCE_DELAY;
   decl.type = FUDeclarationType_SPECIAL;
   
@@ -40,8 +40,8 @@ static FUDeclaration* RegisterCircuitOutput(){
   FUDeclaration decl = {};
 
   decl.name = STRING("CircuitOutput");
-  decl.inputDelays = Array<int>{zeros,50};
-  decl.outputLatencies = Array<int>{zeros,0};
+  decl.baseConfig.inputDelays = Array<int>{zeros,50};
+  decl.baseConfig.outputLatencies = Array<int>{zeros,0};
   decl.delayType = DelayType::DelayType_SINK_DELAY;
   decl.type = FUDeclarationType_SPECIAL;
 
@@ -53,8 +53,8 @@ static FUDeclaration* RegisterData(){
   FUDeclaration decl = {};
 
   decl.name = STRING("Data");
-  decl.inputDelays = Array<int>{zeros,50};
-  decl.outputLatencies = Array<int>{ones,50};
+  decl.baseConfig.inputDelays = Array<int>{zeros,50};
+  decl.baseConfig.outputLatencies = Array<int>{ones,50};
   decl.delayType = DelayType::DelayType_SINK_DELAY;
 
   return RegisterFU(decl);
@@ -65,7 +65,7 @@ static FUDeclaration* RegisterLiteral(){
   FUDeclaration decl = {};
 
   decl.name = STRING("Literal");
-  decl.outputLatencies = Array<int>{zeros,1};
+  decl.baseConfig.outputLatencies = Array<int>{zeros,1};
 
   return RegisterFU(decl);
 }
@@ -89,8 +89,8 @@ static void RegisterOperators(){
                          {"SHL","{0}_{1} = {2} << {3}"}};
 
   FUDeclaration decl = {};
-  decl.inputDelays = Array<int>{zeros,1};
-  decl.outputLatencies = Array<int>{zeros,1};
+  decl.baseConfig.inputDelays = Array<int>{zeros,1};
+  decl.baseConfig.outputLatencies = Array<int>{zeros,1};
   decl.isOperation = true;
 
   for(unsigned int i = 0; i < ARRAY_SIZE(unary); i++){
@@ -99,7 +99,7 @@ static void RegisterOperators(){
     RegisterFU(decl);
   }
 
-  decl.inputDelays = Array<int>{zeros,2};
+  decl.baseConfig.inputDelays = Array<int>{zeros,2};
   for(unsigned int i = 0; i < ARRAY_SIZE(binary); i++){
     decl.name = STRING(binary[i].name);
     decl.operation = binary[i].operation;
@@ -134,4 +134,7 @@ void InitializeSimpleDeclarations(){
   RegisterLiteral();
 }
 
-
+bool HasMultipleConfigs(FUDeclaration* decl){
+  bool res = (decl->configInfo.size >= 2);
+  return res;
+}

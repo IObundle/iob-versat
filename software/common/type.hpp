@@ -205,6 +205,7 @@ String GetTemplateTypeName(Arena* out){
   return typeName;
 }
 
+// NOTE: Since this function does not copy the input value, must make sure that we do not point to stack allocated data that can go out of scope. 
 template<typename T>
 Value MakeValue(T* t){
   STACK_ARENA(temp,Kilobyte(1));

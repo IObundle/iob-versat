@@ -456,7 +456,9 @@ int main(int argc,const char* argv[]){
   //       There was never any point in having both together.
   globalOptions.useFixedBuffers = true;
   globalOptions.shadowRegister = true; 
-  globalOptions.noDelayPropagation = true;
+
+  globalOptions.disableDelayPropagation = false;
+  //globalOptions.noDelayPropagation = true;
   
   globalDebug.outputAccelerator = true;
   globalDebug.outputVersat = true;
@@ -471,7 +473,7 @@ int main(int argc,const char* argv[]){
   globalOptions.generateFSTFormat = 1;
 #endif
 
-  // Check options
+  // Check options 
   if(!globalOptions.topName){
     printf("Specify accelerator type using -T <type>\n");
     exit(-1);
@@ -555,13 +557,12 @@ int main(int argc,const char* argv[]){
   Accelerator* accel = nullptr;
   FUInstance* TOP = nullptr;
 
-  bool isSimple = false;
-  if(globalOptions.addInputAndOutputsToTop && !(type->inputDelays.size == 0 && type->outputLatencies.size == 0)){
+  if(globalOptions.addInputAndOutputsToTop && !(type->NumberInputs() == 0 && type->NumberOutputs() == 0)){
     const char* name = StaticFormat("%.*s_Simple",UNPACK_SS(topLevelTypeStr));
     accel = CreateAccelerator(STRING(name));
     
-    int input = type->inputDelays.size;
-    int output = type->outputLatencies.size;
+    int input = type->NumberInputs();
+    int output = type->NumberOutputs();
 
     Array<FUInstance*> inputs = PushArray<FUInstance*>(perm,input);
     Array<FUInstance*> outputs = PushArray<FUInstance*>(perm,output);
@@ -600,7 +601,6 @@ int main(int argc,const char* argv[]){
   } else {
     accel = CreateAccelerator(topLevelTypeStr);
 
-    bool isSimple = true;
     TOP = CreateFUInstance(accel,type,STRING("TOP"));
 
     for(int i = 0; i < type->NumberInputs(); i++){
@@ -613,9 +613,6 @@ int main(int argc,const char* argv[]){
       ConnectUnits(TOP,i,output,i);
     }
   }
-
-  extern bool globalDisableOrder; 
-  globalDisableOrder = true;
 
   for(FUDeclaration* decl : globalDeclarations){
     BLOCK_REGION(temp);

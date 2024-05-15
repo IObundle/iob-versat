@@ -178,6 +178,11 @@ extern volatile AcceleratorStatic* accelStatics;
 #{end}
 
 #{if mergeNames.size > 1}
+
+#{for delayArray mergedDelays}
+static unsigned int delayBuffer_@{index}[] = {#{join "," d delayArray} @{d |> Hex} #{end}};
+#{end}
+
 typedef enum{
    #{join "," name mergeNames}
         @{name} = @{index}

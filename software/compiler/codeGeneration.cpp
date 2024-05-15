@@ -603,9 +603,9 @@ void OutputCircuitSource(FUDeclaration* decl,Accelerator* accel,FILE* file,Arena
   }
 
   VersatComputedValues val = ComputeVersatValues(accel,false);
-  AccelInfo info = CalculateAcceleratorInfo(accel,true,temp,temp2);
+  AccelInfo info = CalculateAcceleratorInfoNoDelay(accel,true,temp,temp2);
   Array<MemoryAddressMask> memoryMasks = CalculateAcceleratorMemoryMasks(info,temp);
-  
+
   TemplateSetNumber("unitsMapped",val.unitsMapped);
   TemplateSetNumber("numberConnections",info.numberConnections);
 
@@ -614,7 +614,7 @@ void OutputCircuitSource(FUDeclaration* decl,Accelerator* accel,FILE* file,Arena
   TemplateSetCustom("arch",MakeValue(&globalOptions));
   TemplateSetCustom("accel",MakeValue(decl));
   TemplateSetCustom("memoryMasks",MakeValue(&memoryMasks));
-
+ 
   TemplateSetCustom("instances",MakeValue(&nodes));
 
   ProcessTemplate(file,BasicTemplates::acceleratorTemplate,temp,temp2);
@@ -1005,6 +1005,25 @@ void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* 
     Array<int> delays = EndArray(arr);
     TemplateSetCustom("delay",MakeValue(&delays));
 
+    Array<Array<int>> allDelays = PushArray<Array<int>>(temp,info.infos.size);
+    DEBUG_BREAK();
+    if(info.infos.size >= 2){
+      int i = 0;
+      for(Array<InstanceInfo> allInfos : info.infos){
+        DynamicArray<int> arr = StartArray<int>(temp);
+        for(InstanceInfo& t : info.baseInfo){
+          if(!t.isComposite){
+            for(int d : t.delay){
+              *arr.PushElem() = d;
+            }
+          }
+        }
+        Array<int> delays = EndArray(arr);
+        allDelays[i++] = delays;
+      }
+    }
+    TemplateSetCustom("mergedDelays",MakeValue(&allDelays));
+
 #if 1
     int index = 0;
     Array<Wire> allStaticsVerilatorSide = PushArray<Wire>(temp,999); // TODO: Correct size
@@ -1038,7 +1057,7 @@ void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* 
         TemplateSetString("mergeMuxName",str);
       }
     }
-
+    
     TemplateSetCustom("mergeNames",MakeValue(&info.names));
 
     FILE* f = OpenFileAndCreateDirectories(StaticFormat("%s/versat_accel.h",softwarePath),"w");

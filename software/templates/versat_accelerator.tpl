@@ -23,11 +23,11 @@ module @{accel.name} #(
    output done,
    #{end}
 
-   #{for i accel.inputDelays}
+   #{for i accel.baseConfig.inputDelays}
    input [DATA_W-1:0]              in@{index},
    #{end}
 
-   #{for i accel.outputLatencies}
+   #{for i accel.baseConfig.outputLatencies}
    output [DATA_W-1:0]             out@{index},
    #{end}
 
@@ -158,15 +158,15 @@ end
 #{end}
 
 #{if nCombOperations}
-reg [31:0] #{join "," node instances}#{if node.inst.declaration.isOperation and node.inst.declaration.outputLatencies[0] == 0}comb_@{node.inst.name |> Identify}#{end}#{end}; 
+reg [31:0] #{join "," node instances}#{if node.inst.declaration.isOperation and node.inst.declaration.baseConfig.outputLatencies[0] == 0}comb_@{node.inst.name |> Identify}#{end}#{end}; 
 
 always @*
 begin
 #{for node instances}
    #{set decl node.inst.declaration}
-   #{if decl.isOperation and decl.outputLatencies[0] == 0}
+   #{if decl.isOperation and decl.baseConfig.outputLatencies[0] == 0}
       #{set input1 node.inputs[0]}
-      #{if decl.inputDelays.size == 1}
+      #{if decl.baseConfig.inputDelays.size == 1}
          #{format decl.operation "comb" @{node.inst.name |> Identify} #{call retOutputName2 instances input1}};
       #{else}
          #{set input2 node.inputs[1]}
@@ -178,13 +178,13 @@ end
 #{end}
 
 #{if nSeqOperations}
-reg [31:0] #{join "," node instances} #{if node.inst.declaration.isOperation and node.inst.declaration.outputLatencies[0] != 0} seq_@{node.inst.name |> Identify} #{end}#{end}; 
+reg [31:0] #{join "," node instances} #{if node.inst.declaration.isOperation and node.inst.declaration.baseConfig.outputLatencies[0] != 0} seq_@{node.inst.name |> Identify} #{end}#{end}; 
 
 always @(posedge clk)
 begin
 #{for node instances}
    #{set decl node.inst.declaration}
-   #{if decl.isOperation and decl.outputLatencies[0] != 0 }
+   #{if decl.isOperation and decl.baseConfig.outputLatencies[0] != 0 }
       #{set input1 node.inputs[0]}
       #{format decl.operation "seq" @{node.inst.name |> Identify} #{call retOutputName2 instances input1}};
    #{end}

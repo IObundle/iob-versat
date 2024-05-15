@@ -64,6 +64,9 @@ struct ConfigurationInfo{
   Array<Wire> configs;
   Array<Wire> states;
 
+  Array<int> inputDelays;
+  Array<int> outputLatencies;
+  
   // Calculated offsets are an array that associate the given InstanceNode inside the fixedDelayCircuit allocated member into the corresponding index of the configuration array. For now, static units are given a value near 0x40000000 (their configuration comes from the staticUnits hashmap). Units without any config are given a value of -1.
   CalculatedOffsets configOffsets;
   CalculatedOffsets stateOffsets;
@@ -89,8 +92,8 @@ enum FUDeclarationType{
 struct FUDeclaration{
   String name;
 
-  Array<int> inputDelays;
-  Array<int> outputLatencies;
+  //Array<int> inputDelays;
+  //Array<int> outputLatencies;
 
   // TODO: There should exist a "default" configInfo, instead of doing what we are currently which is using the 0 as the default;
   ConfigurationInfo baseConfig;
@@ -121,8 +124,8 @@ struct FUDeclaration{
   bool signalLoop;
 
 // Simple access functions
-  int NumberInputs(){return inputDelays.size;};
-  int NumberOutputs(){return outputLatencies.size;};
+  int NumberInputs(){return baseConfig.inputDelays.size;};
+  int NumberOutputs(){return baseConfig.outputLatencies.size;};
 };
 
 // Simple operations should also be stored here.
@@ -143,3 +146,4 @@ extern Pool<FUDeclaration> globalDeclarations;
 
 FUDeclaration* GetTypeByName(String str);
 void InitializeSimpleDeclarations();
+bool HasMultipleConfigs(FUDeclaration* decl);

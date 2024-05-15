@@ -28,7 +28,7 @@ static void OutputGraphDotFile_(Accelerator* accel,bool collapseSameEdges,Set<FU
     
     if(ptr->type == NodeType_SOURCE || ptr->type == NodeType_SOURCE_AND_SINK){
       color = STRING("darkgreen");
-      delay = inst->baseDelay;
+      delay = 0; //TODO: Broken //inst->baseDelay;
     } else if(ptr->type == NodeType_SINK){
       color = STRING("dark");
     }
@@ -159,7 +159,6 @@ void OutputMemoryHex(void* memory,int size){
   printf("\n");
 }
 
-
 void OutputGraphDotFile(Accelerator* accel,bool collapseSameEdges,FUInstance* highlighInstance,CalculateDelayResult delays,String filename,Arena* temp){
   if(!globalDebug.outputGraphs){
     return;
@@ -181,7 +180,7 @@ void OutputGraphDotFile(Accelerator* accel,bool collapseSameEdges,FUInstance* hi
     
     if(ptr->type == NodeType_SOURCE || ptr->type == NodeType_SOURCE_AND_SINK){
       color = STRING("darkgreen");
-      delay = inst->baseDelay;
+      delay = 0; //TODO: Broken inst->baseDelay;
     } else if(ptr->type == NodeType_SINK){
       color = STRING("dark");
     }
@@ -224,10 +223,10 @@ void OutputGraphDotFile(Accelerator* accel,bool collapseSameEdges,FUInstance* hi
       PortInstance start = {out,outPort};
       PortInstance end = {in,inPort};
       String label = Repr(&start,&end,globalDebug.dotFormat,temp);
-      
+
       PortNode nodeStart = {ptr,con->port};
       PortNode nodeEnd = con->instConnectedTo;
-      
+
       EdgeNode edge = {nodeStart,nodeEnd};
       int calculatedDelay = delays.edgesDelay->GetOrFail(edge);
 

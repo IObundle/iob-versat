@@ -2,6 +2,7 @@
 #include "globals.hpp"
 #include "memory.hpp"
 #include "utils.hpp"
+#include "utilsCore.hpp"
 #include "versat.hpp"
 
 #include <unordered_map>
@@ -44,8 +45,8 @@ InstanceNode* CreateFlatFUInstance(Accelerator* accel,FUDeclaration* type,String
   InstanceNode* ptr = PushStruct<InstanceNode>(accel->accelMemory);
   ptr->inst = inst;
 
-  ptr->inputs = PushArray<PortNode>(accel->accelMemory,type->inputDelays.size);
-  ptr->outputs = PushArray<bool>(accel->accelMemory,type->outputLatencies.size);
+  ptr->inputs = PushArray<PortNode>(accel->accelMemory,type->NumberInputs());
+  ptr->outputs = PushArray<bool>(accel->accelMemory,type->NumberOutputs());
 
   if(accel->lastAllocated){
     Assert(accel->lastAllocated->next == nullptr);
@@ -118,7 +119,6 @@ FUInstance* CopyFlatInstance(Accelerator* newAccel,FUInstance* oldInstance,Strin
   FUInstance* newInst = CreateFlatFUInstance(newAccel,oldInstance->declaration,newName)->inst;
 
   newInst->parameters = oldInstance->parameters;
-  newInst->baseDelay = oldInstance->baseDelay;
   newInst->portIndex = oldInstance->portIndex;
 
   // Static and shared not handled for flat copy. Not sure if makes sense or not. See where it goes
@@ -160,7 +160,6 @@ FUInstance* CopyInstance(Accelerator* newAccel,FUInstance* oldInstance,String ne
   FUInstance* newInst = CreateFUInstance(newAccel,oldInstance->declaration,newName);
 
   newInst->parameters = oldInstance->parameters;
-  newInst->baseDelay = oldInstance->baseDelay;
   newInst->portIndex = oldInstance->portIndex;
 
   if(oldInstance->isStatic){
@@ -178,7 +177,6 @@ InstanceNode* CopyInstance(Accelerator* newAccel,InstanceNode* oldInstance,Strin
   FUInstance* newInst = newNode->inst;
 
   newInst->parameters = oldInstance->inst->parameters;
-  newInst->baseDelay = oldInstance->inst->baseDelay;
   newInst->portIndex = oldInstance->inst->portIndex;
 
   if(oldInstance->inst->isStatic){
@@ -203,6 +201,65 @@ void RemoveFUInstance(Accelerator* accel,InstanceNode* node){
   }
 
   accel->allocated = RemoveUnit(accel->allocated,node);
+}
+
+Array<int> ExtractInputDelays(Accelerator* accel,CalculateDelayResult delays,Arena* out,Arena* temp){
+  Array<InstanceNode*> inputNodes = PushArray<InstanceNode*>(temp,99);
+
+  bool seenOneInput = false;
+  int maxInput = 0;
+  FOREACH_LIST(InstanceNode*,ptr,accel->allocated){
+    if(ptr->inst->declaration == BasicDeclaration::input){
+      maxInput = std::max(maxInput,ptr->inst->portIndex);
+      inputNodes[ptr->inst->portIndex] = ptr;
+      seenOneInput = true;
+    }
+  }
+  if(seenOneInput) maxInput += 1;
+  inputNodes.size = maxInput;
+  
+  Array<int> inputDelay = PushArray<int>(out,maxInput);
+
+  for(int i = 0; i < inputNodes.size; i++){
+    InstanceNode* node = inputNodes[i];
+    inputDelay[i] = delays.nodeDelay->GetOrFail(node);
+  }
+
+  return inputDelay;
+}
+
+Array<int> ExtractOutputLatencies(Accelerator* accel,CalculateDelayResult delays,Arena* out,Arena* temp){
+  InstanceNode* outputNode = nullptr;
+  int maxOutput = 0;
+  FOREACH_LIST(InstanceNode*,ptr,accel->allocated){
+    if(ptr->inst->declaration == BasicDeclaration::output){
+      Assert(outputNode == nullptr);
+      outputNode = ptr;
+    }
+  }
+
+  if(outputNode){
+    FOREACH_LIST(ConnectionNode*,ptr,outputNode->allInputs){
+      maxOutput = std::max(maxOutput,ptr->port);
+    }
+    maxOutput += 1;
+  } else {
+    return {};
+  }
+  
+  Array<int> outputLatencies = PushArray<int>(out,maxOutput);
+  Memset(outputLatencies,0);
+
+  if(outputNode){
+    FOREACH_LIST(ConnectionNode*,ptr,outputNode->allInputs){
+      int port = ptr->port;
+      PortNode end = {.node = outputNode,.port = port};
+
+      outputLatencies[port] = delays.portDelay->GetOrFail(end);
+    }
+  }
+
+  return outputLatencies;
 }
 
 Accelerator* Flatten(Accelerator* accel,int times,Arena* temp){
@@ -458,11 +515,11 @@ static void SendLatencyUpwards(InstanceNode* node,Hashmap<EdgeNode,int>* delays,
     // Do not set delay for source units. Source units cannot be found in this, otherwise they wouldn't be source
     Assert(other->type != NodeType_SOURCE);
 
-    int a = inst->declaration->outputLatencies[info->port];
+    int a = inst->declaration->baseConfig.outputLatencies[info->port];
     int e = info->edgeDelay;
 
     FOREACH_LIST(ConnectionNode*,otherInfo,other->allInputs){
-      int c = other->inst->declaration->inputDelays[info->instConnectedTo.port];
+      int c = other->inst->declaration->baseConfig.inputDelays[info->instConnectedTo.port];
 
       if(info->instConnectedTo.port == otherInfo->port &&
          otherInfo->instConnectedTo.node->inst == inst && otherInfo->instConnectedTo.port == info->port){
@@ -488,7 +545,7 @@ static void SendLatencyUpwards(InstanceNode* node,Hashmap<EdgeNode,int>* delays,
 // TODO: Simplify the code. Check if removing the breadth first and just iterating by nodes and incrementing the edges values ends up producing the same result. Basically a loop where for each node we accumulate on the respective edges the values of the delays from the nodes respective ports plus the value of the edges themselves and finally we normalize everything to start at zero. I do not see any reason why this wouldn't work.
 // TODO: Furthermode, encode the ability to push latency upwards or downwards and look into improving the circuits generated. Should also look into transforming the edge mapping from an Hashmap to an Array but still do not know if we need to map edges in this improved algorithm. (Techically we could make an auxiliary function that flattens everything and replaces edge lookups with indexes to the array.). 
 
-// Instead of an accelerator, it could take a ordered list of instances, and potently the max amount of edges for the hashmap instantiation.
+// Instead of an accelerator, it could take a ordered list of instances, and potentialy the max amount of edges for the hashmap instantiation.
 // Therefore abstracting from the accelerator completely and being able to be used for things like subgraphs.
 // Change later if needed.
 
@@ -500,11 +557,13 @@ CalculateDelayResult CalculateDelay(Accelerator* accel,DAGOrderNodes order,Arena
   int edges = Size(accel->edges);
   Hashmap<EdgeNode,int>* edgeToDelay = PushHashmap<EdgeNode,int>(out,edges);
   Hashmap<InstanceNode*,int>* nodeDelay = PushHashmap<InstanceNode*,int>(out,nodes);
+  Hashmap<PortNode,int>* portDelay = PushHashmap<PortNode,int>(out,edges);
   
   CalculateDelayResult res = {};
   res.edgesDelay = edgeToDelay;
   res.nodeDelay = nodeDelay;
-
+  res.portDelay = portDelay;
+  
   FOREACH_LIST(InstanceNode*,ptr,accel->allocated){
     nodeDelay->Insert(ptr,0);
 
@@ -540,7 +599,6 @@ CalculateDelayResult CalculateDelay(Accelerator* accel,DAGOrderNodes order,Arena
     }
 
     nodeDelay->Insert(node,0);
-    node->inst->baseDelay = 0;
 
     SendLatencyUpwards(node,edgeToDelay,nodeDelay);
 
@@ -579,7 +637,6 @@ CalculateDelayResult CalculateDelay(Accelerator* accel,DAGOrderNodes order,Arena
     }
 
     nodeDelay->Insert(node,maximum);
-    node->inst->baseDelay = maximum;
 
     if(node->type != NodeType_SOURCE_AND_SINK){
       SendLatencyUpwards(node,edgeToDelay,nodeDelay);
@@ -622,7 +679,7 @@ CalculateDelayResult CalculateDelay(Accelerator* accel,DAGOrderNodes order,Arena
     OutputGraphDotFile(accel,true,nullptr,res,filepath,out);
   }
 
-  if(!globalOptions.noDelayPropagation){
+  if(!globalOptions.disableDelayPropagation){
     // Normalizes everything to start on zero
     for(int i = 0; i < order.instances.size; i++){
       InstanceNode* node = order.instances[i];
@@ -642,7 +699,6 @@ CalculateDelayResult CalculateDelay(Accelerator* accel,DAGOrderNodes order,Arena
       
       // Does not take into account unit latency
       nodeDelay->Insert(node,minimum);
-      node->inst->baseDelay = minimum;
 
       FOREACH_LIST(ConnectionNode*,info,node->allOutputs){
         *info->delay -= minimum;
@@ -660,11 +716,44 @@ CalculateDelayResult CalculateDelay(Accelerator* accel,DAGOrderNodes order,Arena
 
     if(node->type == NodeType_UNCONNECTED){
       nodeDelay->Insert(node,0);
-    } else if(node->type == NodeType_SOURCE_AND_SINK){
     }
-    node->inst->baseDelay = nodeDelay->GetOrFail(node);
   }
 
+  for(auto p :res.nodeDelay){
+    Assert(p.second >= 0);
+  }
+  for(Pair<InstanceNode*,int> p : res.nodeDelay){
+    Assert(p.second >= 0);
+  }
+  
+  {
+    for(int i = 0; i < order.instances.size; i++){
+      InstanceNode* node = order.instances[i];
+      FUInstance* inst = node->inst;
+      int b = nodeDelay->GetOrFail(node);
+      
+      FOREACH_LIST(ConnectionNode*,info,node->allOutputs){
+        InstanceNode* other = info->instConnectedTo.node;
+
+        int a = inst->declaration->baseConfig.outputLatencies[info->port];
+        int e = info->edgeDelay;
+
+        FOREACH_LIST(ConnectionNode*,otherInfo,other->allInputs){
+          int c = other->inst->declaration->baseConfig.inputDelays[info->instConnectedTo.port];
+
+          if(info->instConnectedTo.port == otherInfo->port &&
+             otherInfo->instConnectedTo.node->inst == inst && otherInfo->instConnectedTo.port == info->port){
+        
+            int delay = b + a + e - c;
+
+            PortNode node = {.node = other,.port = info->instConnectedTo.port};
+            portDelay->Insert(node,delay);
+          }
+        }
+      }
+    }
+  }
+  
   functionCalls += 1;
   
   return res;
@@ -810,11 +899,14 @@ DAGOrderNodes CalculateDAGOrder(InstanceNode* instances,Arena* out){
 bool IsUnitCombinatorial(FUInstance* instance){
   FUDeclaration* type = instance->declaration;
 
-  if(type->outputLatencies.size && type->outputLatencies[0] == 0){
-    return true;
-  } else {
-    return false;
+  // TODO: Could check if it's a multiple type situation and check each one to make sure.
+  for(int i = 0; i < type->NumberOutputs(); i++){
+    if(type->baseConfig.outputLatencies[i] != 0){
+      return false;
+    }
   }
+
+  return true;
 }
 
 #if 0
@@ -947,7 +1039,7 @@ Array<DelayToAdd> GenerateFixDelays(Accelerator* accel,Hashmap<EdgeNode,int>* ed
     DelayToAdd var = {};
     var.edge = edge;
     var.bufferName = PushString(out,"buffer%d",buffersInserted++);
-    var.bufferAmount = delay - BasicDeclaration::fixedBuffer->outputLatencies[0];
+    var.bufferAmount = delay - BasicDeclaration::fixedBuffer->baseConfig.outputLatencies[0];
     var.bufferParameters = PushString(out,"#(.AMOUNT(%d))",var.bufferAmount);
 
     *list->PushElem() = var;
@@ -969,15 +1061,17 @@ void FixDelays(Accelerator* accel,Hashmap<EdgeNode,int>* edgeDelays,Arena* temp)
       continue;
     }
 
+    if(edge.node1.node->inst->declaration == BasicDeclaration::output){
+      continue;
+    }
+    
     InstanceNode* output = edge.node0.node;
 
     if(output->inst->declaration == BasicDeclaration::buffer){
-      output->inst->baseDelay = delay;
+      //output->inst->baseDelay = delay;
       edgePair.second = 0;
       continue;
     }
-    // TODO: Fixed buffer
-
     Assert(delay > 0); // Cannot deal with negative delays at this stage.
 
     FUInstance* buffer = nullptr;
@@ -985,13 +1079,13 @@ void FixDelays(Accelerator* accel,Hashmap<EdgeNode,int>* edgeDelays,Arena* temp)
       String bufferName = PushString(perm,"fixedBuffer%d",buffersInserted);
 
       buffer = (FUInstance*) CreateFUInstance(accel,BasicDeclaration::fixedBuffer,bufferName);
-      buffer->bufferAmount = delay - BasicDeclaration::fixedBuffer->outputLatencies[0];
+      buffer->bufferAmount = delay - BasicDeclaration::fixedBuffer->baseConfig.outputLatencies[0];
       buffer->parameters = PushString(perm,"#(.AMOUNT(%d))",buffer->bufferAmount);
     } else {
       String bufferName = PushString(perm,"buffer%d",buffersInserted);
 
       buffer = (FUInstance*) CreateFUInstance(accel,BasicDeclaration::buffer,bufferName);
-      buffer->bufferAmount = delay - BasicDeclaration::buffer->outputLatencies[0];
+      buffer->bufferAmount = delay - BasicDeclaration::buffer->baseConfig.outputLatencies[0];
       Assert(buffer->bufferAmount >= 0);
       SetStatic(accel,buffer);
     }
@@ -1059,7 +1153,7 @@ Array<FUDeclaration*> AllNonSpecialSubTypes(Accelerator* accel,Arena* out,Arena*
   
   Set<FUDeclaration*>* maps = PushSet<FUDeclaration*>(temp,99);
   
-  Array<InstanceInfo> test = CalculateAcceleratorInfo(accel,true,temp,out).baseInfo;
+  Array<InstanceInfo> test = CalculateAcceleratorInfoNoDelay(accel,true,temp,out).baseInfo;
   for(InstanceInfo& info : test){
     if(info.decl->type != FUDeclarationType_SPECIAL){
       maps->Insert(info.decl);
@@ -1079,7 +1173,7 @@ Array<FUDeclaration*> ConfigSubTypes(Accelerator* accel,Arena* out,Arena* temp){
   
   Set<FUDeclaration*>* maps = PushSet<FUDeclaration*>(temp,99);
   
-  Array<InstanceInfo> test = CalculateAcceleratorInfo(accel,true,temp,out).baseInfo;
+  Array<InstanceInfo> test = CalculateAcceleratorInfoNoDelay(accel,true,temp,out).baseInfo;
   for(InstanceInfo& info : test){
     if(info.configSize > 0){
       maps->Insert(info.decl);
@@ -1099,7 +1193,7 @@ Array<FUDeclaration*> MemSubTypes(Accelerator* accel,Arena* out,Arena* temp){
   
   Set<FUDeclaration*>* maps = PushSet<FUDeclaration*>(temp,99);
 
-  Array<InstanceInfo> test = CalculateAcceleratorInfo(accel,true,temp,out).baseInfo;
+  Array<InstanceInfo> test = CalculateAcceleratorInfoNoDelay(accel,true,temp,out).baseInfo;
   for(InstanceInfo& info : test){
     if(info.memMappedSize.has_value()){
       maps->Insert(info.decl);
@@ -1326,8 +1420,8 @@ Edge* FindEdge(FUInstance* out,int outIndex,FUInstance* in,int inIndex,int delay
   FUDeclaration* outDecl = out->declaration;
 
   Assert(out->accel == in->accel);
-  Assert(inIndex < inDecl->inputDelays.size);
-  Assert(outIndex < outDecl->outputLatencies.size);
+  Assert(inIndex < inDecl->NumberInputs());
+  Assert(outIndex < outDecl->NumberOutputs());
 
   Accelerator* accel = out->accel;
 
@@ -1381,8 +1475,8 @@ Edge* ConnectUnitsGetEdge(PortNode out,PortNode in,int delay){
    FUDeclaration* outDecl = out.node->inst->declaration;
 
    Assert(out.node->inst->accel == in.node->inst->accel);
-   Assert(in.port < inDecl->inputDelays.size);
-   Assert(out.port < outDecl->outputLatencies.size);
+   Assert(in.port < inDecl->NumberInputs());
+   Assert(out.port < outDecl->NumberOutputs());
 
    Accelerator* accel = out.node->inst->accel;
 
@@ -1444,8 +1538,8 @@ Edge* ConnectUnitsGetEdge(FUInstance* out,int outIndex,FUInstance* in,int inInde
    FUDeclaration* outDecl = out->declaration;
 
    Assert(out->accel == in->accel);
-   Assert(inIndex < inDecl->inputDelays.size);
-   Assert(outIndex < outDecl->outputLatencies.size);
+   Assert(inIndex < inDecl->NumberInputs());
+   Assert(outIndex < outDecl->NumberOutputs());
 
    Accelerator* accel = out->accel;
 
@@ -1651,3 +1745,312 @@ void AssertGraphValid(InstanceNode* nodes,Arena* arena){
    }
 }
 
+//
+
+//HACK
+#if 1
+static void SendLatencyUpwards(InstanceNode* node,Hashmap<EdgeNode,int>* delays,Hashmap<InstanceNode*,int>* nodeDelay,Hashmap<InstanceNode*,int>* nodeToPart){
+  int b = nodeDelay->GetOrFail(node);
+  FUInstance* inst = node->inst;
+  FUDeclaration* decl = inst->declaration;
+  bool multipleTypes = HasMultipleConfigs(decl);
+
+  int nodePart = nodeToPart->GetOrFail(node);
+
+  FOREACH_LIST(ConnectionNode*,info,node->allOutputs){
+    InstanceNode* other = info->instConnectedTo.node;
+
+    // Do not set delay for source units. Source units cannot be found in this, otherwise they wouldn't be source
+    Assert(other->type != NodeType_SOURCE);
+
+    int a = 0;
+
+    if(multipleTypes){
+      a = decl->configInfo[nodePart].outputLatencies[info->port];
+    } else {
+      a = inst->declaration->baseConfig.outputLatencies[info->port];
+    }
+    
+    int e = info->edgeDelay;
+
+    FOREACH_LIST(ConnectionNode*,otherInfo,other->allInputs){
+      int c = 0;
+      if(HasMultipleConfigs(other->inst->declaration)){
+        int otherPart = nodeToPart->GetOrFail(other);
+        
+        c = other->inst->declaration->configInfo[otherPart].inputDelays[info->instConnectedTo.port];
+      } else {
+        c = other->inst->declaration->baseConfig.inputDelays[info->instConnectedTo.port];
+      }
+
+      if(info->instConnectedTo.port == otherInfo->port &&
+         otherInfo->instConnectedTo.node->inst == inst && otherInfo->instConnectedTo.port == info->port){
+        
+        int delay = b + a + e - c;
+
+        if(b == ANY_DELAY_MARK || node->inst->declaration == BasicDeclaration::buffer){
+          *otherInfo->delay = ANY_DELAY_MARK;
+        } else {
+          *otherInfo->delay = delay;
+        }
+      }
+    }
+  }
+}
+
+CalculateDelayResult CalculateDelay(Accelerator* accel,DAGOrderNodes order,Array<Partition> partitions,Arena* out){
+  // TODO: We are currently using the delay pointer inside the ConnectionNode structure. When correct, eventually change to just use the hashmap
+  static int functionCalls = 0;
+  
+  int nodes = Size(accel->allocated);
+  int edges = Size(accel->edges);
+  Hashmap<EdgeNode,int>* edgeToDelay = PushHashmap<EdgeNode,int>(out,edges);
+  Hashmap<InstanceNode*,int>* nodeDelay = PushHashmap<InstanceNode*,int>(out,nodes);
+  Hashmap<PortNode,int>* portDelay = PushHashmap<PortNode,int>(out,edges);
+  
+  CalculateDelayResult res = {};
+  res.edgesDelay = edgeToDelay;
+  res.nodeDelay = nodeDelay;
+  res.portDelay = portDelay;
+  
+  FOREACH_LIST(InstanceNode*,ptr,accel->allocated){
+    nodeDelay->Insert(ptr,0);
+
+    FOREACH_LIST(ConnectionNode*,con,ptr->allInputs){
+      EdgeNode edge = {};
+
+      edge.node0 = con->instConnectedTo;
+      edge.node1.node = ptr;
+      edge.node1.port = con->port;
+
+      con->delay = edgeToDelay->Insert(edge,0);
+    }
+
+    FOREACH_LIST(ConnectionNode*,con,ptr->allOutputs){
+      EdgeNode edge = {};
+
+      edge.node0.node = ptr;
+      edge.node0.port = con->port;
+      edge.node1 = con->instConnectedTo;
+
+      con->delay = edgeToDelay->Insert(edge,0);
+    }
+  }
+
+  Hashmap<InstanceNode*,int>* nodeToPart = PushHashmap<InstanceNode*,int>(out,nodes); // TODO: Either temp or move out accross call stack
+  {
+  int partitionIndex = 0;
+  for(int index = 0; index < order.instances.size; index++){
+    InstanceNode* node = order.instances[index];
+    
+    int part = 0;
+    if(HasMultipleConfigs(node->inst->declaration)){
+      part = partitions[partitionIndex++].value;
+    }
+
+    nodeToPart->Insert(node,part);
+  }
+  }
+  
+  // Start at sources
+  int graphs = 0;
+  int index = 0;
+  int partitionIndex = 0;
+  for(; index < order.instances.size; index++){
+    InstanceNode* node = order.instances[index];
+
+    int part = 0;
+    if(HasMultipleConfigs(node->inst->declaration)){
+      part = partitions[partitionIndex++].value;
+    }
+
+    if(node->type != NodeType_SOURCE && node->type != NodeType_SOURCE_AND_SINK){
+      continue; // This break is important because further code relies on it. 
+    }
+
+    nodeDelay->Insert(node,0);
+    SendLatencyUpwards(node,edgeToDelay,nodeDelay,nodeToPart);
+
+    region(out){
+      String filepath = PushDebugPath(out,accel->name,StaticFormat("%d_out1_%d.dot",functionCalls,graphs++));
+      OutputGraphDotFile(accel,true,node->inst,res,filepath,out);
+    }
+  }
+
+  index = 0;
+  partitionIndex = 0;
+  // Continue up the tree
+  for(; index < order.instances.size; index++){
+    InstanceNode* node = order.instances[index];
+
+    int part = 0;
+    if(HasMultipleConfigs(node->inst->declaration)){
+      part = partitions[partitionIndex++].value;
+    }
+
+    if(node->type == NodeType_UNCONNECTED
+       || node->type == NodeType_SOURCE){
+      continue;
+    }
+
+    int maximum = -(1 << 30);
+    FOREACH_LIST(ConnectionNode*,info,node->allInputs){
+      if(*info->delay != ANY_DELAY_MARK){
+        maximum = std::max(maximum,*info->delay);
+      }
+    }
+    
+    if(maximum == -(1 << 30)){
+      continue;
+    }
+    
+    FOREACH_LIST(ConnectionNode*,info,node->allInputs){
+      if(*info->delay == ANY_DELAY_MARK){
+        *info->delay = 0;
+      } else {
+        *info->delay = maximum - *info->delay;
+      }
+    }
+
+    nodeDelay->Insert(node,maximum);
+
+    if(node->type != NodeType_SOURCE_AND_SINK){
+      SendLatencyUpwards(node,edgeToDelay,nodeDelay,nodeToPart);
+    }
+
+    region(out){
+      String filepath = PushDebugPath(out,accel->name,StaticFormat("%d_out2_%d.dot",functionCalls,graphs++));
+      OutputGraphDotFile(accel,true,node->inst,res,filepath,out);
+    }
+  }
+
+  for(int i = 0; i < order.instances.size; i++){
+    InstanceNode* node = order.instances[i];
+
+    if(node->type != NodeType_SOURCE_AND_SINK){
+      continue;
+    }
+
+    // Source_and_sink units never have output delay. They can't
+    FOREACH_LIST(ConnectionNode*,con,node->allOutputs){
+      *con->delay = 0;
+    }
+  }
+
+  int minimum = 0;
+  for(int i = 0; i < order.instances.size; i++){
+    InstanceNode* node = order.instances[i];
+    int delay = nodeDelay->GetOrFail(node);
+
+    minimum = std::min(minimum,delay);
+  }
+  for(int i = 0; i < order.instances.size; i++){
+    InstanceNode* node = order.instances[i];
+    int* delay = nodeDelay->Get(node);
+    *delay -= minimum;
+  }
+  
+  region(out){
+    String filepath = PushDebugPath(out,accel->name,StaticFormat("%d_out3_%d.dot",functionCalls,graphs++));
+    OutputGraphDotFile(accel,true,nullptr,res,filepath,out);
+  }
+
+  if(!globalOptions.disableDelayPropagation){
+    // Normalizes everything to start on zero
+    for(int i = 0; i < order.instances.size; i++){
+      InstanceNode* node = order.instances[i];
+
+      if(node->type != NodeType_SOURCE && node->type != NodeType_SOURCE_AND_SINK){
+        break;
+      }
+
+      int minimum = 1 << 30;
+      FOREACH_LIST(ConnectionNode*,info,node->allOutputs){
+        minimum = std::min(minimum,*info->delay);
+      }
+
+      if(minimum == 1 << 30){
+        continue;
+      }
+      
+      // Does not take into account unit latency
+      nodeDelay->Insert(node,minimum);
+
+      FOREACH_LIST(ConnectionNode*,info,node->allOutputs){
+        *info->delay -= minimum;
+      }
+    }
+  }
+
+  region(out){
+    String filepath = PushDebugPath(out,accel->name,StaticFormat("%d_out4_%d.dot",functionCalls,graphs++));
+    OutputGraphDotFile(accel,true,nullptr,res,filepath,out);
+  }
+
+  for(int i = 0; i < order.instances.size; i++){
+    InstanceNode* node = order.instances[i];
+
+    if(node->type == NodeType_UNCONNECTED){
+      nodeDelay->Insert(node,0);
+    }
+  }
+
+  for(auto p :res.nodeDelay){
+    Assert(p.second >= 0);
+  }
+  for(Pair<InstanceNode*,int> p : res.nodeDelay){
+    Assert(p.second >= 0);
+  }
+  
+  {
+    for(int i = 0; i < order.instances.size; i++){
+      InstanceNode* node = order.instances[i];
+      FUInstance* inst = node->inst;
+      int b = nodeDelay->GetOrFail(node);
+      FUDeclaration* decl = inst->declaration;
+      bool multipleTypes = HasMultipleConfigs(decl);
+
+      int nodePart = nodeToPart->GetOrFail(node);
+      
+      FOREACH_LIST(ConnectionNode*,info,node->allOutputs){
+        InstanceNode* other = info->instConnectedTo.node;
+
+        int a = 0;
+
+        if(multipleTypes){
+          a = decl->configInfo[nodePart].outputLatencies[info->port];
+        } else {
+          a = inst->declaration->baseConfig.outputLatencies[info->port];
+        }
+    
+        int e = info->edgeDelay;
+
+        FOREACH_LIST(ConnectionNode*,otherInfo,other->allInputs){
+          int c = 0;
+          if(HasMultipleConfigs(other->inst->declaration)){
+            int otherPart = nodeToPart->GetOrFail(other);
+        
+            c = other->inst->declaration->configInfo[otherPart].inputDelays[info->instConnectedTo.port];
+          } else {
+            c = other->inst->declaration->baseConfig.inputDelays[info->instConnectedTo.port];
+          }
+
+          if(info->instConnectedTo.port == otherInfo->port &&
+             otherInfo->instConnectedTo.node->inst == inst && otherInfo->instConnectedTo.port == info->port){
+        
+            int delay = b + a + e - c;
+
+            PortNode node = {.node = other,.port = info->instConnectedTo.port};
+            portDelay->Insert(node,delay);
+          }
+        }
+      }
+    }
+  }
+  
+  functionCalls += 1;
+  
+  return res;
+}
+
+#endif

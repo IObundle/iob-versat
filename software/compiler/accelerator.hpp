@@ -190,8 +190,12 @@ struct DAGOrderNodes{
 
 struct CalculateDelayResult{
   Hashmap<EdgeNode,int>* edgesDelay;
+  Hashmap<PortNode,int>* portDelay;
   Hashmap<InstanceNode*,int>* nodeDelay;
 };
+
+Array<int> ExtractInputDelays(Accelerator* accel,CalculateDelayResult delays,Arena* out,Arena* temp);
+Array<int> ExtractOutputLatencies(Accelerator* accel,CalculateDelayResult delays,Arena* out,Arena* temp);
 
 // TODO: The concept of flat instance no longer exists. Remove them and check if any code dependend on the fact that copy flat did not copy static or shared 
 Accelerator* CopyAccelerator(Accelerator* accel,InstanceMap* map,Arena* out);
@@ -205,6 +209,8 @@ Array<FUDeclaration*> AllNonSpecialSubTypes(Accelerator* accel,Arena* out,Arena*
 Array<FUDeclaration*> ConfigSubTypes(Accelerator* accel,Arena* out,Arena* temp);
 Array<FUDeclaration*> MemSubTypes(Accelerator* accel,Arena* out,Arena* temp);
 
+int CalculateNumberOutptus(Accelerator* accel);
+
 int ExternalMemoryByteSize(ExternalMemoryInterface* inter);
 int ExternalMemoryByteSize(Array<ExternalMemoryInterface> interfaces); // Size of a simple memory mapping.
 
@@ -214,6 +220,7 @@ int ExternalMemoryByteSize(Array<ExternalMemoryInterface> interfaces); // Size o
 VersatComputedValues ComputeVersatValues(Accelerator* accel,bool useDMA);
 
 CalculateDelayResult CalculateDelay(Accelerator* accel,DAGOrderNodes order,Arena* out);
+CalculateDelayResult CalculateDelay(Accelerator* accel,DAGOrderNodes order,Array<Partition> partitions,Arena* out);
 
 // Unit connection
 Edge* FindEdge(FUInstance* out,int outIndex,FUInstance* in,int inIndex,int delay = 0);
