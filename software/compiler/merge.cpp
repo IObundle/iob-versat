@@ -1435,7 +1435,7 @@ bool GetPathRecursive(PortNode searching,PortNode nodeToCheck,PortNode parentNod
 Array<EdgeNode> GetPath(Accelerator* accel,PortNode end,PortNode start,Arena* out){
   Assert(!(start == end));
 
-  muxTypeGlobal = GetTypeByName(STRING("CombMux4"));
+  muxTypeGlobal = GetTypeByName(STRING("CombMux8"));
 
   DynamicArray<EdgeNode> arr = StartArray<EdgeNode>(out);
 
@@ -1483,7 +1483,6 @@ ReconstituteResult ReconstituteGraph(Accelerator* merged,Accelerator* originalFl
   
   FOREACH_LIST(Edge*,edge,originalFlatten->edges){
     // Check if units exists on merged
-
     FUInstance* startInstance = flattenToMergeInstance->GetOrFail(edge->units[0].inst);
     FUInstance* endInstance = flattenToMergeInstance->GetOrFail(edge->units[1].inst);
 
@@ -1497,27 +1496,41 @@ ReconstituteResult ReconstituteGraph(Accelerator* merged,Accelerator* originalFl
     Assert(pathOnMerged.size > 0);
 
     // Replicate exact same path on new accelerator.
-    for(EdgeNode& edge : pathOnMerged){
-      InstanceNode* node0 = edge.node0.node;
-      InstanceNode* node1 = edge.node1.node;
+    for(EdgeNode& edgeOnMerged : pathOnMerged){
+      InstanceNode* node0 = edgeOnMerged.node0.node;
+      InstanceNode* node1 = edgeOnMerged.node1.node;
       GetOrAllocateResult<InstanceNode*> res0 = instancesAdded->GetOrAllocate(node0->inst->name);
       GetOrAllocateResult<InstanceNode*> res1 = instancesAdded->GetOrAllocate(node1->inst->name);
       
       if(!res0.alreadyExisted){
-        *res0.data = CopyInstance(accel,node0,node0->inst->name);
+        FUInstance** optOriginal = mergedToFlattenInstance->Get(node0->inst);
+
+        String name = node0->inst->name;
+        if(optOriginal){
+          name = (*optOriginal)->name;
+        }
+        
+        *res0.data = CopyInstance(accel,node0,name);
         
         accelToRecon->Insert(node0,*res0.data);
         reconToAccel->Insert(*res0.data,node0);
       }
       
       if(!res1.alreadyExisted){
-        *res1.data = CopyInstance(accel,node1,node1->inst->name);
+        FUInstance** optOriginal = mergedToFlattenInstance->Get(node1->inst);
+
+        String name = node1->inst->name;
+        if(optOriginal){
+          name = (*optOriginal)->name;
+        }
+
+        *res1.data = CopyInstance(accel,node1,name);
 
         accelToRecon->Insert(node1,*res1.data);
         reconToAccel->Insert(*res1.data,node1);
       }
 
-      ConnectUnitsGetEdge({*res0.data,edge.node0.port},{*res1.data,edge.node1.port},0);
+      ConnectUnitsGetEdge({*res0.data,edgeOnMerged.node0.port},{*res1.data,edgeOnMerged.node1.port},0);
     }
   }
 
@@ -1644,7 +1657,7 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
     }
   }
 
-  FUDeclaration* muxType = GetTypeByName(STRING("CombMux4"));
+  FUDeclaration* muxType = GetTypeByName(STRING("CombMux8"));
   int multiplexersAdded = 0;
   FOREACH_LIST(InstanceNode*,ptr,result->allocated){
     if(ptr->multipleSamePortInputs){
@@ -1820,17 +1833,24 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
   FillDeclarationWithAcceleratorValuesNoDelay(&declInst,circuit,temp,temp2);
   FillDeclarationWithDelayType(&declInst);
 
+  // TODO: Kinda ugly
+  int numberInputs = 0;
+  for(int i = 0; i < size; i++){
+    BLOCK_REGION(temp);
+    auto res = ExtractInputDelays(recon[i],reconDelay[i],0,temp,temp2);
+    numberInputs = std::max(res.size,numberInputs);
+  }
+
   // TODO: HACK. Because type inputs and outputs depend on size of baseConfig input/output, put first graph here. 
-  declInst.baseConfig.inputDelays = ExtractInputDelays(recon[0],reconDelay[0],perm,temp);
+  declInst.baseConfig.inputDelays = ExtractInputDelays(recon[0],reconDelay[0],numberInputs,perm,temp);
   declInst.baseConfig.outputLatencies = ExtractOutputLatencies(recon[0],reconDelay[0],perm,temp);
-  
+
   declInst.staticUnits = PushHashmap<StaticId,StaticData>(permanent,1000); // TODO: Set correct number of elements
   int staticOffset = 0;
   // Start by collecting all the existing static allocated units in subinstances
   FOREACH_LIST(InstanceNode*,ptr,circuit->allocated){
     FUInstance* inst = ptr->inst;
     if(IsTypeHierarchical(inst->declaration)){
-
       for(auto pair : inst->declaration->staticUnits){
         StaticData newData = pair.second;
         newData.offset = staticOffset;
@@ -1844,19 +1864,19 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
 
   FUDeclaration* decl = RegisterFU(declInst);
   decl->type = FUDeclarationType_MERGED;
-  
+
   int mergedUnitsAmount = Size(result->allocated);
-  
+
   Array<Hashmap<InstanceNode*,int>*> reconToOrder = PushArray<Hashmap<InstanceNode*,int>*>(temp,size);
   for(int i = 0; i < reconToOrder.size; i++){
     DAGOrderNodes order = reconOrder[i];
     reconToOrder[i] = PushHashmap<InstanceNode*,int>(temp,order.instances.size);
-    
+
     for(int ii = 0; ii < order.instances.size; ii++){
       reconToOrder[i]->Insert(order.instances[ii],order.order[ii]);
     }
   }
-  
+
   // Add this units static instances (needs to be done after Registering the declaration because the parent is a pointer to the declaration)
   FOREACH_LIST(InstanceNode*,ptr,circuit->allocated){
     FUInstance* inst = ptr->inst;
@@ -1874,7 +1894,7 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
       }
     }
   }
-  
+
   decl->configInfo = PushArray<ConfigurationInfo>(perm,size);
   Memset(decl->configInfo,{});
 
@@ -1884,7 +1904,7 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
 
     decl->configInfo[i].baseName = PushArray<String>(perm,mergedUnitsAmount);
     Memset(decl->configInfo[i].baseName,{});
-    
+
     decl->configInfo[i].unitBelongs = PushArray<bool>(perm,mergedUnitsAmount);
   }
 
@@ -1900,22 +1920,19 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
     decl->configInfo[i].configOffsets.offsets = PushArray<int>(perm,mergedUnitsAmount);
     decl->configInfo[i].configOffsets.max = decl->baseConfig.configOffsets.max;
 
-    decl->configInfo[i].inputDelays = ExtractInputDelays(recon[i],reconDelay[i],perm,temp);
+    decl->configInfo[i].inputDelays = ExtractInputDelays(recon[i],reconDelay[i],numberInputs,perm,temp);
     decl->configInfo[i].outputLatencies = ExtractOutputLatencies(recon[i],reconDelay[i],perm,temp);
-    
+
     decl->configInfo[i].calculatedDelays = PushArray<int>(perm,mergedUnitsAmount);
     decl->configInfo[i].order = PushArray<int>(perm,mergedUnitsAmount);
-    
+
     int configIndex = 0;
     int orderIndex = 0;
     FOREACH_LIST_INDEXED(InstanceNode*,ptr,result->allocated,configIndex){
       InstanceNode** optReconNode = map->Get(ptr);
       bool mapExists = optReconNode != nullptr;
-      
+
       if(optReconNode){
-        if((*optReconNode)->inst->declaration == BasicDeclaration::output){
-          printf("here: %d\n",reconDelay[i].nodeDelay->GetOrFail(*optReconNode));
-        }
         decl->configInfo[i].calculatedDelays[orderIndex] = reconDelay[i].nodeDelay->GetOrFail(*optReconNode);
         decl->configInfo[i].order[orderIndex] = reconToOrder[i]->GetOrFail(*optReconNode);
       } else {
@@ -1932,7 +1949,7 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
       } else if(mapExists){
         int val = decl->baseConfig.configOffsets.offsets[configIndex];
         decl->configInfo[i].configOffsets.offsets[configIndex] = val;
-        
+
         InstanceNode* originalNode = map->GetOrFail(ptr); // TODO: This is the way of getting the actual name that we want to put into the generated structures.
         decl->configInfo[i].baseName[configIndex] = originalNode->inst->name;
         decl->configInfo[i].unitBelongs[configIndex] = true;
@@ -1949,50 +1966,6 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
 
     Assert(orderIndex == reconDelay[i].nodeDelay->nodesUsed);
   }
-
-#if 0
-  // Join all the config infos into a single one.
-  // This makes sense for pretty much everything except calculatedDelays.
-  {
-    decl->baseConfig.configOffsets.offsets = PushArray<int>(perm,mergedUnitsAmount);
-    decl->baseConfig.stateOffsets.offsets = PushArray<int>(perm,mergedUnitsAmount);
-    decl->baseConfig.delayOffsets.offsets = PushArray<int>(perm,mergedUnitsAmount);
-    for(int i = 0; i < mergedUnitsAmount; i++){
-      for(int ii = 0; ii < size; ii++){
-        {
-          int config = decl->configInfo[ii].configOffsets.offsets[i];
-          if(config >= 0){
-            decl->baseConfig.configOffsets.offsets[i] = config;
-          }
-        }
-
-        {
-          int state = decl->configInfo[ii].stateOffsets.offsets[i];
-          if(state >= 0){
-            decl->baseConfig.stateOffsets.offsets[i] = state;
-          }
-        }
-        
-        {
-          int delay = decl->configInfo[ii].delayOffsets.offsets[i];
-          if(delay >= 0){
-            decl->baseConfig.delayOffsets.offsets[i] = delay;
-          }
-        }
-      }
-    }
-
-    // These do not make sense for merged but still need to allocate them and put some value so that code does not crash
-    // TODO: Would probably be best to make the usage of these more explicit in the situations where they are needed and remove them otherwise.
-    decl->baseConfig.calculatedDelays = PushArray<int>(perm,mergedUnitsAmount);
-    decl->baseConfig.order = PushArray<int>(perm,mergedUnitsAmount);
-    decl->baseConfig.unitBelongs = PushArray<bool>(perm,mergedUnitsAmount);
-    
-    Memset(decl->baseConfig.calculatedDelays,0);
-    Memset(decl->baseConfig.order,0);
-    Memset(decl->baseConfig.unitBelongs,true);
-  }
-#endif
   
   return decl;
 }

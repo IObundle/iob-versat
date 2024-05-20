@@ -345,19 +345,19 @@ void FillDeclarationWithAcceleratorValues(FUDeclaration* decl,Accelerator* accel
 
       int delayIndex = 0;
       int index = 0;
-      for(InstanceInfo& info : info){
-        if(info.level != 0) continue;
+      for(InstanceInfo& in : info){
+        if(in.level != 0) continue;
 
-        if(info.isConfigStatic){
+        if(in.isConfigStatic){
           decl->configInfo[i].configOffsets.offsets[index] = -1;
         } else {
-          decl->configInfo[i].configOffsets.offsets[index] = info.configPos.value_or(-1);
+          decl->configInfo[i].configOffsets.offsets[index] = in.configPos.value_or(-1);
         }
-        decl->configInfo[i].delayOffsets.offsets[index] = info.delayPos.value_or(-1);
-        decl->configInfo[i].stateOffsets.offsets[index] = info.statePos.value_or(-1);
+        decl->configInfo[i].delayOffsets.offsets[index] = in.delayPos.value_or(-1);
+        decl->configInfo[i].stateOffsets.offsets[index] = in.statePos.value_or(-1);
 
-        if(info.delay.size){
-          decl->configInfo[i].calculatedDelays[index] = info.delay[0];
+        if(in.delay.size){
+          decl->configInfo[i].calculatedDelays[index] = in.delay[0];
         } else {
           decl->configInfo[i].calculatedDelays[index] = 0;
         }

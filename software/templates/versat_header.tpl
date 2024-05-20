@@ -123,6 +123,7 @@ void VersatUnitWrite(void* baseaddr,int index,int val);
 int VersatUnitRead(void* baseaddr,int index);
 float VersatUnitReadFloat(void* baseaddr,int index);
 void SignalLoop();
+void VersatLoadDelay(unsigned int* delayBuffer);
 
 // PC-Emul side functions that allow to enable or disable certain portions of the emulation
 // Their embedded counterparts simply do nothing
@@ -183,10 +184,10 @@ extern volatile AcceleratorStatic* accelStatics;
 static unsigned int delayBuffer_@{index}[] = {#{join "," d delayArray} @{d |> Hex} #{end}};
 #{end}
 
+static unsigned int* delayBuffers[] = {#{join "," name mergeNames}delayBuffer_@{index}#{end}};
+
 typedef enum{
-   #{join "," name mergeNames}
-        @{name} = @{index}
-   #{end}  
+   #{join "," name mergeNames} MergeType_@{name} = @{index} #{end}  
 } MergeType;
 
 #ifdef __cplusplus
@@ -195,6 +196,7 @@ extern "C" {
 
 static inline void ActivateMergedAccelerator(MergeType type){
    @{mergeMuxName} = (int) type;
+   VersatLoadDelay(delayBuffers[(int) type]);
 }
 
 #ifdef __cplusplus

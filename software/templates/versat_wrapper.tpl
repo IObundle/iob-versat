@@ -461,37 +461,37 @@ AcceleratorStatic* statics = (AcceleratorStatic*) &staticBuffer;
 
 #{if type.baseConfig.delayOffsets.max}
 #{for i type.baseConfig.delayOffsets.max}
-   self->delay@{i} = accelDelay.TOP_Delay@{i};
+  //self->delay@{i} = accelDelay.TOP_Delay@{i};
 #{end}
 #{end}
 
 #{for i type.nIOs}
 {
-    databusBuffer[@{i}].latencyCounter = INITIAL_MEMORY_LATENCY;
+   databusBuffer[@{i}].latencyCounter = INITIAL_MEMORY_LATENCY;
 }
 #{end}
 
-   self->run = 1;
-   UPDATE(self);
-   self->running = 1;
-   self->run = 0;
+  self->run = 1;
+  UPDATE(self);
+  self->running = 1;
+  self->run = 0;
 #{if trace}
-   if(CreateVCD) tfp->dump(contextp->time());
-   contextp->timeInc(1);
-   if(CreateVCD) tfp->dump(contextp->time());
-   contextp->timeInc(1);
+  if(CreateVCD) tfp->dump(contextp->time());
+  contextp->timeInc(1);
+  if(CreateVCD) tfp->dump(contextp->time());
+  contextp->timeInc(1);
 #{end}
 }
 
 static void InternalEndAccelerator(){
-   V@{type.name}* self = dut;
+  V@{type.name}* self = dut;
 
-   self->running = 0;
+  self->running = 0;
 
-   // TODO: Is this update call needed?
-   InternalUpdateAccelerator();
+  // TODO: Is this update call needed?
+  InternalUpdateAccelerator();
 
-   // TODO: We could put the copy of state variables here
+  // TODO: We could put the copy of state variables here
 }
 
 extern "C" int VersatAcceleratorCyclesElapsed(){
@@ -586,5 +586,15 @@ extern "C" void VersatSignalLoop(){
    self->eval();
 #{end}
 }
-                                
+
+extern "C" void VersatLoadDelay(unsigned int* delayBuffer){
+  #{if type.baseConfig.delayOffsets.max}
+  V@{type.name}* self = dut;
+    #{for i type.baseConfig.delayOffsets.max}
+  self->delay@{i} = delayBuffer[@{i}];
+    #{end}
+   self->eval();
+  #{end}
+}
+
 #undef UPDATE

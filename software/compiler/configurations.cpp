@@ -3,6 +3,7 @@
 #include "debug.hpp"
 #include "declaration.hpp"
 #include "memory.hpp"
+#include "parser.hpp"
 #include "utils.hpp"
 #include "utilsCore.hpp"
 #include "versat.hpp"
@@ -254,6 +255,42 @@ bool Next(Array<Partition> arr){
   return false;
 }
 
+Array<Partition> GenerateInitialPartitions(Accelerator* accel,Arena* out){
+  DynamicArray<Partition> partitionsArr = StartArray<Partition>(out);
+  int mergedPossibility = 0;
+  FOREACH_LIST(InstanceNode*,node,accel->allocated){
+    FUInstance* subInst = node->inst;
+    FUDeclaration* decl = subInst->declaration;
+
+    if(subInst->declaration->configInfo.size > 1){
+      mergedPossibility += log2i(decl->configInfo.size);
+      *partitionsArr.PushElem() = (Partition){.value = 0,.max = decl->configInfo.size};
+    }
+  }
+  Array<Partition> partitions = EndArray(partitionsArr);
+  return partitions;
+}
+
+bool IncrementSinglePartition(Partition* part){
+  if(part->value + 1 < part->max){
+    part->value += 1;
+    return true;
+  } else {
+    part->value = 0;
+    return false;
+  }
+}
+
+void IncrementPartitions(Array<Partition> partitions,int amount){
+  for(int i = 0; i < amount; i++){
+    for(Partition& part : partitions){
+      if(IncrementSinglePartition(&part)){
+        break;
+      }
+    }
+  }
+}
+
 static InstanceInfo GetInstanceInfo(InstanceNode* node,FUDeclaration* parentDeclaration,InstanceConfigurationOffsets offsets,Arena* out){
   FUInstance* inst = node->inst;
   String topName = inst->name;
@@ -344,7 +381,7 @@ static InstanceInfo GetInstanceInfo(InstanceNode* node,FUDeclaration* parentDecl
   return info;
 }
 
-AcceleratorInfo TransformGraphIntoArrayRecurse(InstanceNode* node,FUDeclaration* parentDecl,InstanceConfigurationOffsets offsets,Partition partition,Arena* out,Arena* temp){
+AcceleratorInfo TransformGraphIntoArrayRecurse(InstanceNode* node,FUDeclaration* parentDecl,InstanceConfigurationOffsets offsets,Opt<Partition> partition,Arena* out,Arena* temp){
   // This prevents us from fully using arenas because we are pushing more data than the actual structures that we keep track of. If this was hierarchical, we would't have this problem.
   AcceleratorInfo res = {};
 
@@ -374,7 +411,13 @@ AcceleratorInfo TransformGraphIntoArrayRecurse(InstanceNode* node,FUDeclaration*
   int delayIndex = 0;
   int index = 0;
 
-  int part = partition.value;
+  int part = 0;
+  Array<Partition> subPartitions = {};
+  if(partition.has_value()){
+    part = partition.value().value;
+    subPartitions = GenerateInitialPartitions(inst->declaration->fixedDelayCircuit,temp);
+    IncrementPartitions(subPartitions,part);
+  }
   
   bool changedConfigFromStatic = false;
   int savedConfig = offsets.configOffset;
@@ -395,7 +438,8 @@ AcceleratorInfo TransformGraphIntoArrayRecurse(InstanceNode* node,FUDeclaration*
       changedConfigFromStatic = false; // Already inside a static, act as if it was in a non static context
     }
   }
-  
+
+  int partitionIndex = 0;
   FOREACH_LIST_INDEXED(InstanceNode*,subNode,inst->declaration->fixedDelayCircuit->allocated,index){
     FUInstance* subInst = subNode->inst;
     bool containsConfig = subInst->declaration->baseConfig.configs.size; // TODO: When  doing partition might need to put index here instead of 0
@@ -415,7 +459,6 @@ AcceleratorInfo TransformGraphIntoArrayRecurse(InstanceNode* node,FUDeclaration*
     subOffsets.order = inst->declaration->configInfo[part].order[index];
     
     if(subInst->declaration->baseConfig.delayOffsets.max > 0){ // TODO: Same here
-//      subOffsets.delay = offsets.delay + inst->declaration->configInfo[part].calculatedDelays[delayIndex++];
       subOffsets.delay = offsets.delay + inst->declaration->configInfo[part].calculatedDelays[index];
     }
 
@@ -425,8 +468,12 @@ AcceleratorInfo TransformGraphIntoArrayRecurse(InstanceNode* node,FUDeclaration*
 
     subOffsets.memOffset = offsets.memOffset + res.memSize;
 
-    Partition zero = {}; // For now do not divide partition
-    AcceleratorInfo info = TransformGraphIntoArrayRecurse(subNode,inst->declaration,subOffsets,zero,temp,out);
+    Opt<Partition> part = {};
+    if(subInst->declaration->configInfo.size > 1){
+      part = subPartitions[partitionIndex++];
+    }
+
+    AcceleratorInfo info = TransformGraphIntoArrayRecurse(subNode,inst->declaration,subOffsets,part,temp,out);
     
     res.memSize += info.memSize;
     
@@ -457,7 +504,7 @@ AcceleratorInfo TransformGraphIntoArrayRecurse(InstanceNode* node,FUDeclaration*
 //       Allocates the Array of instance info.
 //       We can then fill everything by computing configInfo and stuff at the top and accessing fudeclaration configInfos as we go down.
 
-TestResult CalculateOneInstance(Accelerator* accel,bool recursive,Array<Partition> partitions,Arena* temp,Arena* out){
+TestResult CalculateOneInstance(Accelerator* accel,bool recursive,Array<Partition> partitions,Arena* out,Arena* temp){
   ArenaList<InstanceInfo>* infoList = PushArenaList<InstanceInfo>(temp);
   Hashmap<StaticId,int>* staticInfo = PushHashmap<StaticId,int>(temp,99);
 
@@ -472,7 +519,7 @@ TestResult CalculateOneInstance(Accelerator* accel,bool recursive,Array<Partitio
 
   Array<InstanceNode*> inputNodes = PushArray<InstanceNode*>(temp,99);
 
-  Array<int> inputDelays = ExtractInputDelays(accel,calculatedDelay,out,temp);
+  Array<int> inputDelays = ExtractInputDelays(accel,calculatedDelay,0,out,temp);
   Array<int> outputLatencies = ExtractOutputLatencies(accel,calculatedDelay,out,temp);
   
   int partitionIndex = 0;
@@ -487,7 +534,7 @@ TestResult CalculateOneInstance(Accelerator* accel,bool recursive,Array<Partitio
   FOREACH_LIST_INDEXED(InstanceNode*,node,accel->allocated,index){
     FUInstance* subInst = node->inst;
 
-    Partition part = {};
+    Opt<Partition> part = {};
     if(subInst->declaration->configInfo.size > 1){
       part = partitions[partitionIndex];
     }
@@ -501,7 +548,11 @@ TestResult CalculateOneInstance(Accelerator* accel,bool recursive,Array<Partitio
       AcceleratorInfo info = TransformGraphIntoArrayRecurse(node,nullptr,subOffsets,part,temp,out);
 
       if(info.name.has_value()){
-        *names->PushElem() = info.name.value();
+        String elem = info.name.value();
+
+        if(!IsOnlyWhitespace(elem)){
+          *names->PushElem() = elem;
+        }
       }
 
       subOffsets.memOffset += info.memSize;
@@ -548,22 +599,6 @@ TestResult CalculateOneInstance(Accelerator* accel,bool recursive,Array<Partitio
   return result;
 }
 
-Array<Partition> GenerateInitialPartitions(Accelerator* accel,Arena* out){
-  DynamicArray<Partition> partitionsArr = StartArray<Partition>(out);
-  int mergedPossibility = 0;
-  FOREACH_LIST(InstanceNode*,node,accel->allocated){
-    FUInstance* subInst = node->inst;
-    FUDeclaration* decl = subInst->declaration;
-
-    if(subInst->declaration->configInfo.size > 1){
-      mergedPossibility += log2i(decl->configInfo.size);
-      *partitionsArr.PushElem() = (Partition){.value = 0,.max = decl->configInfo.size};
-    }
-  }
-  Array<Partition> partitions = EndArray(partitionsArr);
-  return partitions;
-}
-
 // TODO: Move this function to a better place
 // This function cannot return an array for merge units because we do not have the merged units info in this level.
 // This function only works for modules and for recursing the merged info to upper modules.
@@ -592,7 +627,7 @@ AccelInfo CalculateAcceleratorInfo(Accelerator* accel,bool recursive,Arena* out,
     }
     printf("\n");
 #endif
-    TestResult res2 = CalculateOneInstance(accel,recursive,partitions,temp,out);
+    TestResult res2 = CalculateOneInstance(accel,recursive,partitions,out,temp);
     *PushListElement(list) = res2;
 
     if(first){

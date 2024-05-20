@@ -1006,12 +1006,11 @@ void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* 
     TemplateSetCustom("delay",MakeValue(&delays));
 
     Array<Array<int>> allDelays = PushArray<Array<int>>(temp,info.infos.size);
-    DEBUG_BREAK();
     if(info.infos.size >= 2){
       int i = 0;
       for(Array<InstanceInfo> allInfos : info.infos){
         DynamicArray<int> arr = StartArray<int>(temp);
-        for(InstanceInfo& t : info.baseInfo){
+        for(InstanceInfo& t : allInfos){
           if(!t.isComposite){
             for(int d : t.delay){
               *arr.PushElem() = d;
@@ -1057,7 +1056,7 @@ void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* 
         TemplateSetString("mergeMuxName",str);
       }
     }
-    
+
     TemplateSetCustom("mergeNames",MakeValue(&info.names));
 
     FILE* f = OpenFileAndCreateDirectories(StaticFormat("%s/versat_accel.h",softwarePath),"w");

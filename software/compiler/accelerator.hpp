@@ -194,7 +194,7 @@ struct CalculateDelayResult{
   Hashmap<InstanceNode*,int>* nodeDelay;
 };
 
-Array<int> ExtractInputDelays(Accelerator* accel,CalculateDelayResult delays,Arena* out,Arena* temp);
+Array<int> ExtractInputDelays(Accelerator* accel,CalculateDelayResult delays,int mimimumAmount,Arena* out,Arena* temp);
 Array<int> ExtractOutputLatencies(Accelerator* accel,CalculateDelayResult delays,Arena* out,Arena* temp);
 
 // TODO: The concept of flat instance no longer exists. Remove them and check if any code dependend on the fact that copy flat did not copy static or shared 

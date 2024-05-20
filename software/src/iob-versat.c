@@ -144,18 +144,22 @@ void VersatMemoryCopy(void* dest,void* data,int size){
 void VersatUnitWrite(void* baseaddr,int index,int val){
   //int* ptr = (int*) (baseaddr + index * sizeof(int));
   //*ptr = val;
-  MEMSET((iptr*) baseaddr,index,val);
+  iptr base = (iptr) baseaddr;
+  
+  MEMSET(base,index,val);
 }
 
-int VersatUnitRead(void* base,int index){
-  return MEMGET((iptr*) base,index);
+int VersatUnitRead(void* baseaddr,int index){
+  iptr base = (iptr) baseaddr;
+  return MEMGET(base,index);
   //int* ptr = (int*) (base + index * sizeof(int));
   //return *ptr;
 }
 
-float VersatUnitReadFloat(void* base,int index){
+float VersatUnitReadFloat(void* baseaddr,int index){
   // float* ptr = (float*) (base + index * sizeof(float)
-  int val = MEMGET((iptr*) base,index);
+  iptr base = (iptr) baseaddr;
+  int val = MEMGET(base,index);
   float* ptr = (float*) &val;
   return *ptr;
 }
@@ -163,3 +167,9 @@ float VersatUnitReadFloat(void* base,int index){
 void ConfigCreateVCD(bool value){}
 void ConfigSimulateDatabus(bool value){}
 
+void VersatLoadDelay(unsigned int* buffer){
+  volatile int* delayBase = (volatile int*) (versat_base + delayStart);
+  for(int i = 0; i < ARRAY_SIZE(delayBuffer); i++){  // Hackish, for now
+      delayBase[i] = buffer[i];
+  }
+}

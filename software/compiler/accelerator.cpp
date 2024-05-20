@@ -203,9 +203,10 @@ void RemoveFUInstance(Accelerator* accel,InstanceNode* node){
   accel->allocated = RemoveUnit(accel->allocated,node);
 }
 
-Array<int> ExtractInputDelays(Accelerator* accel,CalculateDelayResult delays,Arena* out,Arena* temp){
+Array<int> ExtractInputDelays(Accelerator* accel,CalculateDelayResult delays,int mimimumAmount,Arena* out,Arena* temp){
   Array<InstanceNode*> inputNodes = PushArray<InstanceNode*>(temp,99);
-
+  Memset(inputNodes,{});
+  
   bool seenOneInput = false;
   int maxInput = 0;
   FOREACH_LIST(InstanceNode*,ptr,accel->allocated){
@@ -216,13 +217,18 @@ Array<int> ExtractInputDelays(Accelerator* accel,CalculateDelayResult delays,Are
     }
   }
   if(seenOneInput) maxInput += 1;
-  inputNodes.size = maxInput;
+  inputNodes.size = std::max(maxInput,mimimumAmount);
   
-  Array<int> inputDelay = PushArray<int>(out,maxInput);
+  Array<int> inputDelay = PushArray<int>(out,inputNodes.size);
 
-  for(int i = 0; i < inputNodes.size; i++){
+  for(int i = 0; i < inputDelay.size; i++){
     InstanceNode* node = inputNodes[i];
-    inputDelay[i] = delays.nodeDelay->GetOrFail(node);
+    
+    if(node){
+      inputDelay[i] = delays.nodeDelay->GetOrFail(node);
+    } else {
+      inputDelay[i] = 0;
+    }
   }
 
   return inputDelay;

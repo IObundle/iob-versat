@@ -557,6 +557,8 @@ int main(int argc,const char* argv[]){
   Accelerator* accel = nullptr;
   FUInstance* TOP = nullptr;
 
+  type->signalLoop = true; // MARK
+
   if(globalOptions.addInputAndOutputsToTop && !(type->NumberInputs() == 0 && type->NumberOutputs() == 0)){
     const char* name = StaticFormat("%.*s_Simple",UNPACK_SS(topLevelTypeStr));
     accel = CreateAccelerator(STRING(name));
@@ -594,7 +596,8 @@ int main(int argc,const char* argv[]){
     node->type = NodeType_COMPUTE; // MARK: Temporary handle source_and_delay problems for simple units.
     
     type = RegisterSubUnit(accel,temp,temp2);
-
+    type->signalLoop = true; // MARK
+    
     name = StaticFormat("%.*s_Simple",UNPACK_SS(topLevelTypeStr));
     accel = CreateAccelerator(STRING(name));
     TOP = CreateFUInstance(accel,type,STRING("TOP"));

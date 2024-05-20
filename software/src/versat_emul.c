@@ -29,6 +29,7 @@ int VersatAcceleratorCyclesElapsed();
 void InitializeVerilator();
 void VersatAcceleratorCreate();
 void VersatAcceleratorSimulate();
+void VersatSignalLoop();
 int MemoryAccess(int address,int value,int write);
 
 int GetAcceleratorCyclesElapsed();
@@ -62,6 +63,8 @@ void versat_init(int base){
   InitializeVerilator();
   VersatAcceleratorCreate();
 
+  VersatLoadDelay(delayBuffer);
+  
   accelConfig = GetStartOfConfig();
   accelState = GetStartOfState();
   accelStatics = GetStartOfStatic();
@@ -73,6 +76,10 @@ static void CheckVersatInitialized(){
     fflush(stdout);
     exit(-1);
   }
+}
+
+void SignalLoop(){
+  VersatSignalLoop();
 }
 
 int GetAcceleratorCyclesElapsed(){
