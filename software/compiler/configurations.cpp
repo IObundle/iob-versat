@@ -590,7 +590,6 @@ TestResult CalculateOneInstance(Accelerator* accel,bool recursive,Array<Partitio
   }
   result.name = EndString(mark);
   
-
   return result;
 }
 
@@ -616,7 +615,7 @@ AccelInfo CalculateAcceleratorInfo(Accelerator* accel,bool recursive,Arena* out,
   while(1){
     TestResult res2 = CalculateOneInstance(accel,recursive,partitions,out,temp);
     *PushListElement(list) = res2;
-
+    
     if(first){
       res = res2.info;
       subOffsets = res2.subOffsets;

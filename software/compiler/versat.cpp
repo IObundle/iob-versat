@@ -190,9 +190,8 @@ void FillDeclarationWithAcceleratorValues(FUDeclaration* decl,Accelerator* accel
   BLOCK_REGION(temp);
   BLOCK_REGION(temp2);
 
-  AccelInfo val = CalculateAcceleratorInfo(accel,false,perm,temp2);
-  DEBUG_BREAK_IF(CompareString(decl->name,"SHA"));
-
+  AccelInfo val = CalculateAcceleratorInfo(accel,true,perm,temp2);
+  
   DynamicArray<String> baseNames = StartArray<String>(perm);
   FOREACH_LIST(InstanceNode*,ptr,accel->allocated){
     FUInstance* inst = ptr->inst;
@@ -300,7 +299,6 @@ void FillDeclarationWithAcceleratorValues(FUDeclaration* decl,Accelerator* accel
     decl->configInfo = PushArray<ConfigurationInfo>(perm,1);
     decl->configInfo[0] = decl->baseConfig;
   } else {
- 
     decl->configInfo = PushArray<ConfigurationInfo>(perm,val.infos.size);
     Memset(decl->configInfo,{});
 
@@ -309,6 +307,7 @@ void FillDeclarationWithAcceleratorValues(FUDeclaration* decl,Accelerator* accel
 
       decl->configInfo[i].unitBelongs = belongArray;
       decl->configInfo[i].name = val.names[i];
+      Assert(val.names[i].data != nullptr);
       decl->configInfo[i].inputDelays = val.inputDelays[i];
       decl->configInfo[i].outputLatencies = val.outputDelays[i];
 

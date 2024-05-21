@@ -626,13 +626,10 @@ int main(int argc,const char* argv[]){
 
       FILE* stats = OpenFileAndCreateDirectories(path.data,"w");
       
-      DEBUG_BREAK_IF(CompareString(decl->name,"SHA"));
       PrintDeclaration(stats,decl,perm,temp);
     }
   }
 
-  DEBUG_BREAK();
-  
   TOP->parameters = STRING("#(.AXI_ADDR_W(AXI_ADDR_W),.LEN_W(LEN_W))");
   OutputVersatSource(accel,
                      globalOptions.hardwareOutputFilepath.data,
