@@ -190,10 +190,8 @@ void FillDeclarationWithAcceleratorValues(FUDeclaration* decl,Accelerator* accel
   BLOCK_REGION(temp);
   BLOCK_REGION(temp2);
 
-  AccelInfo val = CalculateAcceleratorInfo(accel,true,perm,temp2);
-
-  decl->configInfo = PushArray<ConfigurationInfo>(perm,val.infos.size);
-  Memset(decl->configInfo,{});
+  AccelInfo val = CalculateAcceleratorInfo(accel,false,perm,temp2);
+  DEBUG_BREAK_IF(CompareString(decl->name,"SHA"));
 
   DynamicArray<String> baseNames = StartArray<String>(perm);
   FOREACH_LIST(InstanceNode*,ptr,accel->allocated){
@@ -217,32 +215,6 @@ void FillDeclarationWithAcceleratorValues(FUDeclaration* decl,Accelerator* accel
       externalIndex += 1;
     }
   }
-
-  decl->baseConfig.inputDelays = val.inputDelays[0];
-  
-#if 0
-  decl->inputDelays = PushArray<int>(perm,val.inputs);
-  for(int i = 0; i < val.inputs; i++){
-    FUInstance* input = GetInputInstance(accel->allocated,i);
-
-    if(!input){
-      continue;
-    }
-
-    decl->inputDelays[i] = input->baseDelay;
-  }
-#endif
-
-  decl->baseConfig.outputLatencies = val.outputDelays[0];
-#if 0
-  decl->outputLatencies = PushArray<int>(perm,val.outputs);
-  FUInstance* outputInstance = GetOutputInstance(accel->allocated);
-  if(outputInstance){
-    for(int i = 0; i < decl->NumberOutputs(); i++){
-      decl->outputLatencies[i] = outputInstance->baseDelay;
-    }
-  }
-#endif
 
   decl->baseConfig.inputDelays = val.inputDelays[0];
   decl->baseConfig.outputLatencies = val.outputDelays[0];
@@ -291,6 +263,8 @@ void FillDeclarationWithAcceleratorValues(FUDeclaration* decl,Accelerator* accel
   Array<bool> belongArray = PushArray<bool>(perm,Size(accel->allocated));
   Memset(belongArray,true);
 
+  decl->baseConfig.unitBelongs = belongArray;
+
   {
     decl->baseConfig.calculatedDelays = PushArray<int>(perm,size);
     decl->baseConfig.configOffsets.offsets = PushArray<int>(perm,size);
@@ -315,57 +289,67 @@ void FillDeclarationWithAcceleratorValues(FUDeclaration* decl,Accelerator* accel
       if(info.delay.size) {
         decl->baseConfig.calculatedDelays[index] = info.delay[0];
       } else {
-        decl->baseConfig.calculatedDelays[index] = 0;
+        decl->baseConfig.calculatedDelays[index] = info.baseDelay;
       }
       index += 1;
     }
   }
-  
-  for(int i = 0; i < val.infos.size; i++){
-    Array<InstanceInfo> info = val.infos[i];
 
-    decl->configInfo[i].unitBelongs = belongArray;
-    decl->configInfo[i].name = val.names[i];
-    decl->configInfo[i].inputDelays = val.inputDelays[i];
-    decl->configInfo[i].outputLatencies = val.outputDelays[i];
+  // If only one config, set configInfo zero as equal to baseConfig in order to simplify code that uses configInfo
+  if(val.infos.size == 1){
+    decl->configInfo = PushArray<ConfigurationInfo>(perm,1);
+    decl->configInfo[0] = decl->baseConfig;
+  } else {
+ 
+    decl->configInfo = PushArray<ConfigurationInfo>(perm,val.infos.size);
+    Memset(decl->configInfo,{});
 
-    decl->configInfo[i].baseName = Map(val.infos[i],perm,[](InstanceInfo info){
-      return info.name;
-    });
+    for(int i = 0; i < val.infos.size; i++){
+      Array<InstanceInfo> info = val.infos[i];
 
-    decl->configInfo[i].order = Map(val.infos[i],perm,[](InstanceInfo in){
-      return in.order;
-    });
+      decl->configInfo[i].unitBelongs = belongArray;
+      decl->configInfo[i].name = val.names[i];
+      decl->configInfo[i].inputDelays = val.inputDelays[i];
+      decl->configInfo[i].outputLatencies = val.outputDelays[i];
 
-    {
-      decl->configInfo[i].configOffsets.offsets = PushArray<int>(perm,size);
-      decl->configInfo[i].delayOffsets.offsets = PushArray<int>(perm,size);
-      decl->configInfo[i].stateOffsets.offsets = PushArray<int>(perm,size);
-      decl->configInfo[i].calculatedDelays = PushArray<int>(perm,size);
+      decl->configInfo[i].baseName = Map(val.infos[i],perm,[](InstanceInfo info){
+        return info.name;
+      });
 
-      int delayIndex = 0;
-      int index = 0;
-      for(InstanceInfo& in : info){
-        if(in.level != 0) continue;
+      decl->configInfo[i].order = Map(val.infos[i],perm,[](InstanceInfo in){
+        return in.order;
+      });
 
-        if(in.isConfigStatic){
-          decl->configInfo[i].configOffsets.offsets[index] = -1;
-        } else {
-          decl->configInfo[i].configOffsets.offsets[index] = in.configPos.value_or(-1);
+      {
+        decl->configInfo[i].configOffsets.offsets = PushArray<int>(perm,size);
+        decl->configInfo[i].delayOffsets.offsets = PushArray<int>(perm,size);
+        decl->configInfo[i].stateOffsets.offsets = PushArray<int>(perm,size);
+        decl->configInfo[i].calculatedDelays = PushArray<int>(perm,size);
+
+        int delayIndex = 0;
+        int index = 0;
+        for(InstanceInfo& in : info){
+          if(in.level != 0) continue;
+
+          if(in.isConfigStatic){
+            decl->configInfo[i].configOffsets.offsets[index] = -1;
+          } else {
+            decl->configInfo[i].configOffsets.offsets[index] = in.configPos.value_or(-1);
+          }
+          decl->configInfo[i].delayOffsets.offsets[index] = in.delayPos.value_or(-1);
+          decl->configInfo[i].stateOffsets.offsets[index] = in.statePos.value_or(-1);
+
+          if(in.delay.size){
+            decl->configInfo[i].calculatedDelays[index] = in.delay[0];
+          } else {
+            decl->configInfo[i].calculatedDelays[index] = 0;
+          }
+          index += 1;
         }
-        decl->configInfo[i].delayOffsets.offsets[index] = in.delayPos.value_or(-1);
-        decl->configInfo[i].stateOffsets.offsets[index] = in.statePos.value_or(-1);
-
-        if(in.delay.size){
-          decl->configInfo[i].calculatedDelays[index] = in.delay[0];
-        } else {
-          decl->configInfo[i].calculatedDelays[index] = 0;
-        }
-        index += 1;
+        decl->configInfo[i].configOffsets.max = val.configs;
+        decl->configInfo[i].delayOffsets.max = val.delays;
+        decl->configInfo[i].stateOffsets.max = val.states;
       }
-      decl->configInfo[i].configOffsets.max = val.configs;
-      decl->configInfo[i].delayOffsets.max = val.delays;
-      decl->configInfo[i].stateOffsets.max = val.states;
     }
   }
 }

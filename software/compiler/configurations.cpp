@@ -393,11 +393,7 @@ AcceleratorInfo TransformGraphIntoArrayRecurse(InstanceNode* node,FUDeclaration*
     Array<InstanceInfo> arr = PushArray<InstanceInfo>(out,1);
     arr[0] = top;
     res.info = arr;
-    res.stateSize = top.stateSize;
-    res.delaySize = top.delaySize;
     res.memSize = top.memMappedSize.value_or(0);
-    res.delay = offsets.delay;
-    res.type = node->type;
     return res;
   }
 
@@ -458,7 +454,7 @@ AcceleratorInfo TransformGraphIntoArrayRecurse(InstanceNode* node,FUDeclaration*
     subOffsets.baseName = inst->declaration->configInfo[part].baseName[index];
     subOffsets.order = inst->declaration->configInfo[part].order[index];
     
-    if(subInst->declaration->baseConfig.delayOffsets.max > 0){ // TODO: Same here
+    if(subInst->declaration->baseConfig.delayOffsets.max > 0){
       subOffsets.delay = offsets.delay + inst->declaration->configInfo[part].calculatedDelays[index];
     }
 
@@ -487,7 +483,6 @@ AcceleratorInfo TransformGraphIntoArrayRecurse(InstanceNode* node,FUDeclaration*
 
   Assert(part <= inst->declaration->configInfo.size);
   res.name = inst->declaration->configInfo[part].name;
-  res.type = node->type;
   
   return res;
 }
@@ -513,8 +508,8 @@ TestResult CalculateOneInstance(Accelerator* accel,bool recursive,Array<Partitio
   CalculatedOffsets delayOffsets = CalculateConfigurationOffset(accel,MemType::DELAY,out);
 
   DAGOrderNodes order = CalculateDAGOrder(accel->allocated,temp);
-  CalculateDelayResult calculatedDelay = CalculateDelay(accel,order,partitions,temp); // TODO: Would be better if calculate delay did not need to receive versat.
-
+  CalculateDelayResult calculatedDelay = CalculateDelay(accel,order,partitions,temp);
+  
   Hashmap<InstanceNode*,int>* toOrder = MapElementToIndex(order.instances,temp);
 
   Array<InstanceNode*> inputNodes = PushArray<InstanceNode*>(temp,99);
@@ -609,8 +604,7 @@ AccelInfo CalculateAcceleratorInfo(Accelerator* accel,bool recursive,Arena* out,
   //       Printing a GraphArray struct should tell me everything I need to know about the accelerator
   AccelInfo result = {};
 
-  // MARKED - Some bug occurs, probably because the function is a mess and we have no idea 
-  //BLOCK_REGION(temp);
+  //BLOCK_REGION(temp); MARKED - Some bug occurs, probably because the function is a mess and we have no idea 
   Array<Partition> partitions = GenerateInitialPartitions(accel,temp);
 
   int totalMaxBitsize = 0;
@@ -620,13 +614,6 @@ AccelInfo CalculateAcceleratorInfo(Accelerator* accel,bool recursive,Arena* out,
   bool first = true;
   int index = 0;
   while(1){
-#if 0
-    printf("%d\n",index++);
-    for(Partition par : partitions){
-      printf("%d %d ",par.value,par.max);
-    }
-    printf("\n");
-#endif
     TestResult res2 = CalculateOneInstance(accel,recursive,partitions,out,temp);
     *PushListElement(list) = res2;
 
@@ -1027,11 +1014,7 @@ AcceleratorInfo TransformGraphIntoArrayRecurseNoDelay(InstanceNode* node,FUDecla
     Array<InstanceInfo> arr = PushArray<InstanceInfo>(out,1);
     arr[0] = top;
     res.info = arr;
-    res.stateSize = top.stateSize;
-    res.delaySize = top.delaySize;
     res.memSize = top.memMappedSize.value_or(0);
-    res.delay = offsets.delay;
-    res.type = node->type;
     return res;
   }
 
@@ -1105,7 +1088,6 @@ AcceleratorInfo TransformGraphIntoArrayRecurseNoDelay(InstanceNode* node,FUDecla
 
   Assert(part <= inst->declaration->configInfo.size);
   res.name = inst->declaration->configInfo[part].name;
-  res.type = node->type;
   
   return res;
 }

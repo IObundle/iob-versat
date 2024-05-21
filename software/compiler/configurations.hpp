@@ -90,12 +90,7 @@ struct InstanceInfo{
 
 struct AcceleratorInfo{
   Array<InstanceInfo> info;
-  int configSize;
-  int stateSize;
-  int delaySize;
-  int delay;
   int memSize;
-  NodeType type;
   Opt<String> name;
 };
 

@@ -193,12 +193,12 @@ Options* ParseCommandLineOptions(int argc,const char* argv[],Arena* out,Arena* t
         *PushListElement(verilogFiles) = GetAbsolutePath(argv[i],out);
         continue;
       } else { // Assume to be the specification file, for now
-            if(opts->specificationFilepath){
-              printf("Error, multiple specification files specified, not supported for now\n");
-              exit(-1);
-            }
+        if(opts->specificationFilepath){
+          printf("Error, multiple specification files specified, not supported for now\n");
+          exit(-1);
+        }
 
-            opts->specificationFilepath = argv[i];
+        opts->specificationFilepath = argv[i];
       }
       continue;
     }
@@ -625,10 +625,13 @@ int main(int argc,const char* argv[]){
       PushNullByte(temp);
 
       FILE* stats = OpenFileAndCreateDirectories(path.data,"w");
-
+      
+      DEBUG_BREAK_IF(CompareString(decl->name,"SHA"));
       PrintDeclaration(stats,decl,perm,temp);
     }
   }
+
+  DEBUG_BREAK();
   
   TOP->parameters = STRING("#(.AXI_ADDR_W(AXI_ADDR_W),.LEN_W(LEN_W))");
   OutputVersatSource(accel,
@@ -644,7 +647,6 @@ int main(int argc,const char* argv[]){
   for(FUDeclaration* decl : globalDeclarations){
     BLOCK_REGION(temp);
 
-#if 1
     if(decl->type == FUDeclarationType_COMPOSITE ||
        decl->type == FUDeclarationType_ITERATIVE ||
        decl->type == FUDeclarationType_MERGED){
@@ -662,7 +664,6 @@ int main(int argc,const char* argv[]){
 
       fclose(sourceCode);
     }
-#endif
   }
 
   return 0;
