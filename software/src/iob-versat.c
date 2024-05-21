@@ -45,12 +45,8 @@ void versat_init(int base){
   accelConfig = (volatile AcceleratorConfig*) (versat_base + configStart);
   accelState  = (volatile AcceleratorState*)  (versat_base + stateStart);
   accelStatics = (volatile AcceleratorStatic*)  (versat_base + staticStart);
-  
-  volatile int* delayBase = (volatile int*) (versat_base + delayStart);
 
-  for(int i = 0; i < ARRAY_SIZE(delayBuffer); i++){  // Hackish, for now
-      delayBase[i] = delayBuffer[i];
-  }
+  void VersatLoadDelay(delayBuffer);
 }
 
 void StartAccelerator(){
@@ -168,8 +164,6 @@ void ConfigCreateVCD(bool value){}
 void ConfigSimulateDatabus(bool value){}
 
 void VersatLoadDelay(unsigned int* buffer){
-  volatile int* delayBase = (volatile int*) (versat_base + delayStart);
-  for(int i = 0; i < ARRAY_SIZE(delayBuffer); i++){  // Hackish, for now
-      delayBase[i] = buffer[i];
-  }
+  void* delayBase = (void*) (versat_base + delayStart);
+  VersatMemoryCopy(delayBase,buffer,sizeof(int) * ARRAY_SIZE(delayBuffer));
 }

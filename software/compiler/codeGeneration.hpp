@@ -20,6 +20,18 @@ struct TypeStructInfo{
   Array<TypeStructInfoElement> entries;
 };
 
+struct Difference{
+  int index;
+  int newValue;
+};
+
+struct DifferenceArray{
+  int oldIndex;
+  int newIndex;
+
+  Array<Difference> differences;
+};
+
 Array<FUDeclaration*> SortTypesByConfigDependency(Array<FUDeclaration*> types,Arena* out,Arena* temp);
 Array<FUDeclaration*> SortTypesByMemDependency(Array<FUDeclaration*> types,Arena* out,Arena* temp);
 Array<TypeStructInfoElement> GenerateStructFromType(FUDeclaration* decl,Arena* out,Arena* temp);

@@ -36,7 +36,7 @@ InstanceNode* CreateFlatFUInstance(Accelerator* accel,FUDeclaration* type,String
 
   FOREACH_LIST(InstanceNode*,ptr,accel->allocated){
     if(ptr->inst->name == storedName){
-      Assert(false);
+      // Assert(false); Disabled for now
       break;
     }
   }

@@ -48,7 +48,6 @@ assign rdata = reg_rdata[validRead];
 assign done = &reg_done; 
 assign rvalid = reg_rvalid[validRead]; 
 
-assign inputs[selectedInput] = in0;
 assign out0 = outputs[selectedOutput0];
 assign out1 = outputs[selectedOutput1];
 
@@ -82,7 +81,7 @@ for(i = 0; i < NUMBER_REGS; i = i + 1) begin : genRegs
       .rdata(reg_rdata[i]),
 
       //input / output data
-      .in0(inputs[i]),
+      .in0(in0),
       .out0(outputs[i]),
 
       .delay0(delay0),

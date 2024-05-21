@@ -12,6 +12,28 @@
 #include "textualRepresentation.hpp"
 #include "globals.hpp"
 
+Array<Difference> CalculateSmallestDifference(Array<int> oldValues,Array<int> newValues,Arena* out){
+  Assert(oldValues.size == newValues.size); // For now
+
+  int size = oldValues.size;
+
+  DynamicArray<Difference> arr = StartArray<Difference>(out);
+  for(int i = 0; i < size; i++){
+    int oldVal = oldValues[i];
+    int newVal = newValues[i];
+
+    if(oldVal != newVal){
+      Difference* dif = arr.PushElem();
+
+      dif->index = i;
+      dif->newValue = newVal;
+    }
+  }
+
+  Array<Difference> result = EndArray(arr);
+  return result;
+}
+
 // TODO: Can reuse SortTypes functions by receiving the Array of Arrays as an argument. Useful for memory and probably state and so on.
 Array<FUDeclaration*> SortTypesByConfigDependency(Array<FUDeclaration*> types,Arena* out,Arena* temp){
   BLOCK_REGION(temp);
@@ -1022,7 +1044,26 @@ void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* 
       }
     }
     TemplateSetCustom("mergedDelays",MakeValue(&allDelays));
+    TemplateSetNumber("amountMerged",allDelays.size);
 
+    DynamicArray<DifferenceArray> diffArray = StartArray<DifferenceArray>(temp2);
+    for(int oldIndex = 0; oldIndex < allDelays.size; oldIndex++){
+      for(int newIndex = 0; newIndex < allDelays.size; newIndex++){
+        if(oldIndex == newIndex){
+          continue;
+        }
+        
+        Array<Difference> difference = CalculateSmallestDifference(allDelays[oldIndex],allDelays[newIndex],temp);
+
+        DifferenceArray* diff = diffArray.PushElem();
+        diff->oldIndex = oldIndex;
+        diff->newIndex = newIndex;
+        diff->differences = difference;
+      }
+    }
+    Array<DifferenceArray> differenceArray = EndArray(diffArray);
+    TemplateSetCustom("differences",MakeValue(&differenceArray));
+    
 #if 1
     int index = 0;
     Array<Wire> allStaticsVerilatorSide = PushArray<Wire>(temp,999); // TODO: Correct size

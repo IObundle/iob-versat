@@ -194,9 +194,55 @@ typedef enum{
 extern "C" {
 #endif
 
+static inline void ChangeDelay(int oldDelay,int newDelay){
+  if(oldDelay == newDelay){
+    return;
+  }
+
+  volatile int* delayBase = (volatile int*) (versat_base + delayStart);
+
+  switch(oldDelay){
+#{for amount amountMerged}
+    case @{amount}:{
+      switch(newDelay){
+  #{for diff differences}
+    #{if diff.oldIndex == amount}
+        case @{diff.newIndex}: {
+          #{for difference diff.differences}
+          delayBase[@{difference.index}] = @{difference.newValue |> Hex};
+          #{end}
+        } break;
+    #{end}
+  #{end}
+      }
+    } break;
+#{end}
+  }
+}
+
+static inline void OnlyActivateMergedAccelerator(MergeType type){
+   static int lastLoaded = -1;
+   int asInt = (int) type;
+   
+   if(lastLoaded == asInt){
+     return;
+   }
+   lastLoaded = asInt;
+   
+   @{mergeMuxName} = asInt;
+}
+
 static inline void ActivateMergedAccelerator(MergeType type){
-   @{mergeMuxName} = (int) type;
-   VersatLoadDelay(delayBuffers[(int) type]);
+   static int lastLoaded = -1;
+   int asInt = (int) type;
+   
+   if(lastLoaded == asInt){
+     return;
+   }
+   lastLoaded = asInt;
+   
+   @{mergeMuxName} = asInt;
+   VersatLoadDelay(delayBuffers[asInt]);
 }
 
 #ifdef __cplusplus

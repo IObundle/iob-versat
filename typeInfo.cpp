@@ -104,6 +104,8 @@ void RegisterParsedTypes(){
   RegisterOpaqueType(STRING("SingleTypeStructElement"),Type::STRUCT,sizeof(SingleTypeStructElement),alignof(SingleTypeStructElement));
   RegisterOpaqueType(STRING("TypeStructInfoElement"),Type::STRUCT,sizeof(TypeStructInfoElement),alignof(TypeStructInfoElement));
   RegisterOpaqueType(STRING("TypeStructInfo"),Type::STRUCT,sizeof(TypeStructInfo),alignof(TypeStructInfo));
+  RegisterOpaqueType(STRING("Difference"),Type::STRUCT,sizeof(Difference),alignof(Difference));
+  RegisterOpaqueType(STRING("DifferenceArray"),Type::STRUCT,sizeof(DifferenceArray),alignof(DifferenceArray));
   RegisterOpaqueType(STRING("Task"),Type::STRUCT,sizeof(Task),alignof(Task));
   RegisterOpaqueType(STRING("WorkGroup"),Type::STRUCT,sizeof(WorkGroup),alignof(WorkGroup));
   RegisterOpaqueType(STRING("SpecificMerge"),Type::STRUCT,sizeof(SpecificMerge),alignof(SpecificMerge));
@@ -931,105 +933,110 @@ RegisterEnum(STRING("ConnectionType"),C_ARRAY_TO_ARRAY(ConnectionTypeData));
     (Member){GetType(STRING("Array<SingleTypeStructElement>")),STRING("typeAndNames"),offsetof(TypeStructInfoElement,typeAndNames)} /* 404 */,
     (Member){GetType(STRING("String")),STRING("name"),offsetof(TypeStructInfo,name)} /* 405 */,
     (Member){GetType(STRING("Array<TypeStructInfoElement>")),STRING("entries"),offsetof(TypeStructInfo,entries)} /* 406 */,
-    (Member){GetType(STRING("TaskFunction")),STRING("function"),offsetof(Task,function)} /* 407 */,
-    (Member){GetType(STRING("int")),STRING("order"),offsetof(Task,order)} /* 408 */,
-    (Member){GetType(STRING("void *")),STRING("args"),offsetof(Task,args)} /* 409 */,
-    (Member){GetType(STRING("TaskFunction")),STRING("function"),offsetof(WorkGroup,function)} /* 410 */,
-    (Member){GetType(STRING("Array<Task>")),STRING("tasks"),offsetof(WorkGroup,tasks)} /* 411 */,
-    (Member){GetType(STRING("String")),STRING("instA"),offsetof(SpecificMerge,instA)} /* 412 */,
-    (Member){GetType(STRING("String")),STRING("instB"),offsetof(SpecificMerge,instB)} /* 413 */,
-    (Member){GetType(STRING("int")),STRING("index"),offsetof(IndexRecord,index)} /* 414 */,
-    (Member){GetType(STRING("IndexRecord *")),STRING("next"),offsetof(IndexRecord,next)} /* 415 */,
-    (Member){GetType(STRING("FUInstance *")),STRING("instA"),offsetof(SpecificMergeNodes,instA)} /* 416 */,
-    (Member){GetType(STRING("FUInstance *")),STRING("instB"),offsetof(SpecificMergeNodes,instB)} /* 417 */,
-    (Member){GetType(STRING("int")),STRING("firstIndex"),offsetof(SpecificMergeNode,firstIndex)} /* 418 */,
-    (Member){GetType(STRING("String")),STRING("firstName"),offsetof(SpecificMergeNode,firstName)} /* 419 */,
-    (Member){GetType(STRING("int")),STRING("secondIndex"),offsetof(SpecificMergeNode,secondIndex)} /* 420 */,
-    (Member){GetType(STRING("String")),STRING("secondName"),offsetof(SpecificMergeNode,secondName)} /* 421 */,
-    (Member){GetType(STRING("FUInstance *[2]")),STRING("instances"),offsetof(MergeEdge,instances)} /* 422 */,
-    (Member){GetType(STRING("MergeEdge")),STRING("nodes"),offsetof(MappingNode,nodes)} /* 423 */,
-    (Member){GetType(STRING("PortEdge[2]")),STRING("edges"),offsetof(MappingNode,edges)} /* 424 */,
-    (Member){GetType(STRING("enum (unnamed enum at ../../software/compiler/merge.hpp:46:4)")),STRING("type"),offsetof(MappingNode,type)} /* 425 */,
-    (Member){GetType(STRING("MappingNode *[2]")),STRING("nodes"),offsetof(MappingEdge,nodes)} /* 426 */,
-    (Member){GetType(STRING("Array<SpecificMergeNodes>")),STRING("specifics"),offsetof(ConsolidationGraphOptions,specifics)} /* 427 */,
-    (Member){GetType(STRING("int")),STRING("order"),offsetof(ConsolidationGraphOptions,order)} /* 428 */,
-    (Member){GetType(STRING("int")),STRING("difference"),offsetof(ConsolidationGraphOptions,difference)} /* 429 */,
-    (Member){GetType(STRING("bool")),STRING("mapNodes"),offsetof(ConsolidationGraphOptions,mapNodes)} /* 430 */,
-    (Member){GetType(STRING("enum (unnamed enum at ../../software/compiler/merge.hpp:64:4)")),STRING("type"),offsetof(ConsolidationGraphOptions,type)} /* 431 */,
-    (Member){GetType(STRING("Array<MappingNode>")),STRING("nodes"),offsetof(ConsolidationGraph,nodes)} /* 432 */,
-    (Member){GetType(STRING("Array<BitArray>")),STRING("edges"),offsetof(ConsolidationGraph,edges)} /* 433 */,
-    (Member){GetType(STRING("BitArray")),STRING("validNodes"),offsetof(ConsolidationGraph,validNodes)} /* 434 */,
-    (Member){GetType(STRING("ConsolidationGraph")),STRING("graph"),offsetof(ConsolidationResult,graph)} /* 435 */,
-    (Member){GetType(STRING("Pool<MappingNode>")),STRING("specificsAdded"),offsetof(ConsolidationResult,specificsAdded)} /* 436 */,
-    (Member){GetType(STRING("int")),STRING("upperBound"),offsetof(ConsolidationResult,upperBound)} /* 437 */,
-    (Member){GetType(STRING("int")),STRING("max"),offsetof(CliqueState,max)} /* 438 */,
-    (Member){GetType(STRING("int")),STRING("upperBound"),offsetof(CliqueState,upperBound)} /* 439 */,
-    (Member){GetType(STRING("int")),STRING("startI"),offsetof(CliqueState,startI)} /* 440 */,
-    (Member){GetType(STRING("int")),STRING("iterations"),offsetof(CliqueState,iterations)} /* 441 */,
-    (Member){GetType(STRING("Array<int>")),STRING("table"),offsetof(CliqueState,table)} /* 442 */,
-    (Member){GetType(STRING("ConsolidationGraph")),STRING("clique"),offsetof(CliqueState,clique)} /* 443 */,
-    (Member){GetType(STRING("Time")),STRING("start"),offsetof(CliqueState,start)} /* 444 */,
-    (Member){GetType(STRING("bool")),STRING("found"),offsetof(CliqueState,found)} /* 445 */,
-    (Member){GetType(STRING("bool")),STRING("result"),offsetof(IsCliqueResult,result)} /* 446 */,
-    (Member){GetType(STRING("int")),STRING("failedIndex"),offsetof(IsCliqueResult,failedIndex)} /* 447 */,
-    (Member){GetType(STRING("Accelerator *")),STRING("accel1"),offsetof(MergeGraphResult,accel1)} /* 448 */,
-    (Member){GetType(STRING("Accelerator *")),STRING("accel2"),offsetof(MergeGraphResult,accel2)} /* 449 */,
-    (Member){GetType(STRING("InstanceNodeMap *")),STRING("map1"),offsetof(MergeGraphResult,map1)} /* 450 */,
-    (Member){GetType(STRING("InstanceNodeMap *")),STRING("map2"),offsetof(MergeGraphResult,map2)} /* 451 */,
-    (Member){GetType(STRING("Accelerator *")),STRING("newGraph"),offsetof(MergeGraphResult,newGraph)} /* 452 */,
-    (Member){GetType(STRING("Accelerator *")),STRING("result"),offsetof(MergeGraphResultExisting,result)} /* 453 */,
-    (Member){GetType(STRING("Accelerator *")),STRING("accel2"),offsetof(MergeGraphResultExisting,accel2)} /* 454 */,
-    (Member){GetType(STRING("InstanceNodeMap *")),STRING("map2"),offsetof(MergeGraphResultExisting,map2)} /* 455 */,
-    (Member){GetType(STRING("InstanceMap *")),STRING("instanceMap"),offsetof(GraphMapping,instanceMap)} /* 456 */,
-    (Member){GetType(STRING("InstanceMap *")),STRING("reverseInstanceMap"),offsetof(GraphMapping,reverseInstanceMap)} /* 457 */,
-    (Member){GetType(STRING("PortEdgeMap *")),STRING("edgeMap"),offsetof(GraphMapping,edgeMap)} /* 458 */,
-    (Member){GetType(STRING("Range<int>")),STRING("port"),offsetof(ConnectionExtra,port)} /* 459 */,
-    (Member){GetType(STRING("Range<int>")),STRING("delay"),offsetof(ConnectionExtra,delay)} /* 460 */,
-    (Member){GetType(STRING("Token")),STRING("name"),offsetof(Var,name)} /* 461 */,
-    (Member){GetType(STRING("ConnectionExtra")),STRING("extra"),offsetof(Var,extra)} /* 462 */,
-    (Member){GetType(STRING("Range<int>")),STRING("index"),offsetof(Var,index)} /* 463 */,
-    (Member){GetType(STRING("bool")),STRING("isArrayAccess"),offsetof(Var,isArrayAccess)} /* 464 */,
-    (Member){GetType(STRING("Array<Var>")),STRING("vars"),offsetof(VarGroup,vars)} /* 465 */,
-    (Member){GetType(STRING("Token")),STRING("fullText"),offsetof(VarGroup,fullText)} /* 466 */,
-    (Member){GetType(STRING("Array<SpecExpression *>")),STRING("expressions"),offsetof(SpecExpression,expressions)} /* 467 */,
-    (Member){GetType(STRING("char *")),STRING("op"),offsetof(SpecExpression,op)} /* 468 */,
-    (Member){GetType(STRING("Var")),STRING("var"),offsetof(SpecExpression,var)} /* 469 */,
-    (Member){GetType(STRING("Value")),STRING("val"),offsetof(SpecExpression,val)} /* 470 */,
-    (Member){GetType(STRING("Token")),STRING("text"),offsetof(SpecExpression,text)} /* 471 */,
-    (Member){GetType(STRING("enum (unnamed enum at ../../software/compiler/versatSpecificationParser.hpp:50:3)")),STRING("type"),offsetof(SpecExpression,type)} /* 472 */,
-    (Member){GetType(STRING("Token")),STRING("name"),offsetof(VarDeclaration,name)} /* 473 */,
-    (Member){GetType(STRING("int")),STRING("arraySize"),offsetof(VarDeclaration,arraySize)} /* 474 */,
-    (Member){GetType(STRING("bool")),STRING("isArray"),offsetof(VarDeclaration,isArray)} /* 475 */,
-    (Member){GetType(STRING("VarGroup")),STRING("group"),offsetof(GroupIterator,group)} /* 476 */,
-    (Member){GetType(STRING("int")),STRING("groupIndex"),offsetof(GroupIterator,groupIndex)} /* 477 */,
-    (Member){GetType(STRING("int")),STRING("varIndex"),offsetof(GroupIterator,varIndex)} /* 478 */,
-    (Member){GetType(STRING("FUInstance *")),STRING("inst"),offsetof(PortExpression,inst)} /* 479 */,
-    (Member){GetType(STRING("ConnectionExtra")),STRING("extra"),offsetof(PortExpression,extra)} /* 480 */,
-    (Member){GetType(STRING("enum (unnamed enum at ../../software/compiler/versatSpecificationParser.hpp:71:3)")),STRING("modifier"),offsetof(InstanceDeclaration,modifier)} /* 481 */,
-    (Member){GetType(STRING("Token")),STRING("typeName"),offsetof(InstanceDeclaration,typeName)} /* 482 */,
-    (Member){GetType(STRING("Array<VarDeclaration>")),STRING("declarations"),offsetof(InstanceDeclaration,declarations)} /* 483 */,
-    (Member){GetType(STRING("String")),STRING("parameters"),offsetof(InstanceDeclaration,parameters)} /* 484 */,
-    (Member){GetType(STRING("Range<Cursor>")),STRING("loc"),offsetof(ConnectionDef,loc)} /* 485 */,
-    (Member){GetType(STRING("VarGroup")),STRING("output"),offsetof(ConnectionDef,output)} /* 486 */,
-    (Member){GetType(STRING("enum (unnamed enum at ../../software/compiler/versatSpecificationParser.hpp:81:3)")),STRING("type"),offsetof(ConnectionDef,type)} /* 487 */,
-    (Member){GetType(STRING("Array<Token>")),STRING("transforms"),offsetof(ConnectionDef,transforms)} /* 488 */,
-    (Member){GetType(STRING("VarGroup")),STRING("input"),offsetof(ConnectionDef,input)} /* 489 */,
-    (Member){GetType(STRING("SpecExpression *")),STRING("expression"),offsetof(ConnectionDef,expression)} /* 490 */,
-    (Member){GetType(STRING("Token")),STRING("name"),offsetof(ModuleDef,name)} /* 491 */,
-    (Member){GetType(STRING("Token")),STRING("numberOutputs"),offsetof(ModuleDef,numberOutputs)} /* 492 */,
-    (Member){GetType(STRING("Array<VarDeclaration>")),STRING("inputs"),offsetof(ModuleDef,inputs)} /* 493 */,
-    (Member){GetType(STRING("Array<InstanceDeclaration>")),STRING("declarations"),offsetof(ModuleDef,declarations)} /* 494 */,
-    (Member){GetType(STRING("Array<ConnectionDef>")),STRING("connections"),offsetof(ModuleDef,connections)} /* 495 */,
-    (Member){GetType(STRING("Token")),STRING("name"),offsetof(TransformDef,name)} /* 496 */,
-    (Member){GetType(STRING("Array<VarDeclaration>")),STRING("inputs"),offsetof(TransformDef,inputs)} /* 497 */,
-    (Member){GetType(STRING("Array<ConnectionDef>")),STRING("connections"),offsetof(TransformDef,connections)} /* 498 */,
-    (Member){GetType(STRING("int")),STRING("inputs"),offsetof(Transformation,inputs)} /* 499 */,
-    (Member){GetType(STRING("int")),STRING("outputs"),offsetof(Transformation,outputs)} /* 500 */,
-    (Member){GetType(STRING("Array<int>")),STRING("map"),offsetof(Transformation,map)} /* 501 */,
-    (Member){GetType(STRING("Token")),STRING("instanceName"),offsetof(HierarchicalName,instanceName)} /* 502 */,
-    (Member){GetType(STRING("Var")),STRING("subInstance"),offsetof(HierarchicalName,subInstance)} /* 503 */,
-    (Member){GetType(STRING("Token")),STRING("typeName"),offsetof(TypeAndInstance,typeName)} /* 504 */,
-    (Member){GetType(STRING("Token")),STRING("instanceName"),offsetof(TypeAndInstance,instanceName)} /* 505 */
+    (Member){GetType(STRING("int")),STRING("index"),offsetof(Difference,index)} /* 407 */,
+    (Member){GetType(STRING("int")),STRING("newValue"),offsetof(Difference,newValue)} /* 408 */,
+    (Member){GetType(STRING("int")),STRING("oldIndex"),offsetof(DifferenceArray,oldIndex)} /* 409 */,
+    (Member){GetType(STRING("int")),STRING("newIndex"),offsetof(DifferenceArray,newIndex)} /* 410 */,
+    (Member){GetType(STRING("Array<Difference>")),STRING("differences"),offsetof(DifferenceArray,differences)} /* 411 */,
+    (Member){GetType(STRING("TaskFunction")),STRING("function"),offsetof(Task,function)} /* 412 */,
+    (Member){GetType(STRING("int")),STRING("order"),offsetof(Task,order)} /* 413 */,
+    (Member){GetType(STRING("void *")),STRING("args"),offsetof(Task,args)} /* 414 */,
+    (Member){GetType(STRING("TaskFunction")),STRING("function"),offsetof(WorkGroup,function)} /* 415 */,
+    (Member){GetType(STRING("Array<Task>")),STRING("tasks"),offsetof(WorkGroup,tasks)} /* 416 */,
+    (Member){GetType(STRING("String")),STRING("instA"),offsetof(SpecificMerge,instA)} /* 417 */,
+    (Member){GetType(STRING("String")),STRING("instB"),offsetof(SpecificMerge,instB)} /* 418 */,
+    (Member){GetType(STRING("int")),STRING("index"),offsetof(IndexRecord,index)} /* 419 */,
+    (Member){GetType(STRING("IndexRecord *")),STRING("next"),offsetof(IndexRecord,next)} /* 420 */,
+    (Member){GetType(STRING("FUInstance *")),STRING("instA"),offsetof(SpecificMergeNodes,instA)} /* 421 */,
+    (Member){GetType(STRING("FUInstance *")),STRING("instB"),offsetof(SpecificMergeNodes,instB)} /* 422 */,
+    (Member){GetType(STRING("int")),STRING("firstIndex"),offsetof(SpecificMergeNode,firstIndex)} /* 423 */,
+    (Member){GetType(STRING("String")),STRING("firstName"),offsetof(SpecificMergeNode,firstName)} /* 424 */,
+    (Member){GetType(STRING("int")),STRING("secondIndex"),offsetof(SpecificMergeNode,secondIndex)} /* 425 */,
+    (Member){GetType(STRING("String")),STRING("secondName"),offsetof(SpecificMergeNode,secondName)} /* 426 */,
+    (Member){GetType(STRING("FUInstance *[2]")),STRING("instances"),offsetof(MergeEdge,instances)} /* 427 */,
+    (Member){GetType(STRING("MergeEdge")),STRING("nodes"),offsetof(MappingNode,nodes)} /* 428 */,
+    (Member){GetType(STRING("PortEdge[2]")),STRING("edges"),offsetof(MappingNode,edges)} /* 429 */,
+    (Member){GetType(STRING("enum (unnamed enum at ../../software/compiler/merge.hpp:46:4)")),STRING("type"),offsetof(MappingNode,type)} /* 430 */,
+    (Member){GetType(STRING("MappingNode *[2]")),STRING("nodes"),offsetof(MappingEdge,nodes)} /* 431 */,
+    (Member){GetType(STRING("Array<SpecificMergeNodes>")),STRING("specifics"),offsetof(ConsolidationGraphOptions,specifics)} /* 432 */,
+    (Member){GetType(STRING("int")),STRING("order"),offsetof(ConsolidationGraphOptions,order)} /* 433 */,
+    (Member){GetType(STRING("int")),STRING("difference"),offsetof(ConsolidationGraphOptions,difference)} /* 434 */,
+    (Member){GetType(STRING("bool")),STRING("mapNodes"),offsetof(ConsolidationGraphOptions,mapNodes)} /* 435 */,
+    (Member){GetType(STRING("enum (unnamed enum at ../../software/compiler/merge.hpp:64:4)")),STRING("type"),offsetof(ConsolidationGraphOptions,type)} /* 436 */,
+    (Member){GetType(STRING("Array<MappingNode>")),STRING("nodes"),offsetof(ConsolidationGraph,nodes)} /* 437 */,
+    (Member){GetType(STRING("Array<BitArray>")),STRING("edges"),offsetof(ConsolidationGraph,edges)} /* 438 */,
+    (Member){GetType(STRING("BitArray")),STRING("validNodes"),offsetof(ConsolidationGraph,validNodes)} /* 439 */,
+    (Member){GetType(STRING("ConsolidationGraph")),STRING("graph"),offsetof(ConsolidationResult,graph)} /* 440 */,
+    (Member){GetType(STRING("Pool<MappingNode>")),STRING("specificsAdded"),offsetof(ConsolidationResult,specificsAdded)} /* 441 */,
+    (Member){GetType(STRING("int")),STRING("upperBound"),offsetof(ConsolidationResult,upperBound)} /* 442 */,
+    (Member){GetType(STRING("int")),STRING("max"),offsetof(CliqueState,max)} /* 443 */,
+    (Member){GetType(STRING("int")),STRING("upperBound"),offsetof(CliqueState,upperBound)} /* 444 */,
+    (Member){GetType(STRING("int")),STRING("startI"),offsetof(CliqueState,startI)} /* 445 */,
+    (Member){GetType(STRING("int")),STRING("iterations"),offsetof(CliqueState,iterations)} /* 446 */,
+    (Member){GetType(STRING("Array<int>")),STRING("table"),offsetof(CliqueState,table)} /* 447 */,
+    (Member){GetType(STRING("ConsolidationGraph")),STRING("clique"),offsetof(CliqueState,clique)} /* 448 */,
+    (Member){GetType(STRING("Time")),STRING("start"),offsetof(CliqueState,start)} /* 449 */,
+    (Member){GetType(STRING("bool")),STRING("found"),offsetof(CliqueState,found)} /* 450 */,
+    (Member){GetType(STRING("bool")),STRING("result"),offsetof(IsCliqueResult,result)} /* 451 */,
+    (Member){GetType(STRING("int")),STRING("failedIndex"),offsetof(IsCliqueResult,failedIndex)} /* 452 */,
+    (Member){GetType(STRING("Accelerator *")),STRING("accel1"),offsetof(MergeGraphResult,accel1)} /* 453 */,
+    (Member){GetType(STRING("Accelerator *")),STRING("accel2"),offsetof(MergeGraphResult,accel2)} /* 454 */,
+    (Member){GetType(STRING("InstanceNodeMap *")),STRING("map1"),offsetof(MergeGraphResult,map1)} /* 455 */,
+    (Member){GetType(STRING("InstanceNodeMap *")),STRING("map2"),offsetof(MergeGraphResult,map2)} /* 456 */,
+    (Member){GetType(STRING("Accelerator *")),STRING("newGraph"),offsetof(MergeGraphResult,newGraph)} /* 457 */,
+    (Member){GetType(STRING("Accelerator *")),STRING("result"),offsetof(MergeGraphResultExisting,result)} /* 458 */,
+    (Member){GetType(STRING("Accelerator *")),STRING("accel2"),offsetof(MergeGraphResultExisting,accel2)} /* 459 */,
+    (Member){GetType(STRING("InstanceNodeMap *")),STRING("map2"),offsetof(MergeGraphResultExisting,map2)} /* 460 */,
+    (Member){GetType(STRING("InstanceMap *")),STRING("instanceMap"),offsetof(GraphMapping,instanceMap)} /* 461 */,
+    (Member){GetType(STRING("InstanceMap *")),STRING("reverseInstanceMap"),offsetof(GraphMapping,reverseInstanceMap)} /* 462 */,
+    (Member){GetType(STRING("PortEdgeMap *")),STRING("edgeMap"),offsetof(GraphMapping,edgeMap)} /* 463 */,
+    (Member){GetType(STRING("Range<int>")),STRING("port"),offsetof(ConnectionExtra,port)} /* 464 */,
+    (Member){GetType(STRING("Range<int>")),STRING("delay"),offsetof(ConnectionExtra,delay)} /* 465 */,
+    (Member){GetType(STRING("Token")),STRING("name"),offsetof(Var,name)} /* 466 */,
+    (Member){GetType(STRING("ConnectionExtra")),STRING("extra"),offsetof(Var,extra)} /* 467 */,
+    (Member){GetType(STRING("Range<int>")),STRING("index"),offsetof(Var,index)} /* 468 */,
+    (Member){GetType(STRING("bool")),STRING("isArrayAccess"),offsetof(Var,isArrayAccess)} /* 469 */,
+    (Member){GetType(STRING("Array<Var>")),STRING("vars"),offsetof(VarGroup,vars)} /* 470 */,
+    (Member){GetType(STRING("Token")),STRING("fullText"),offsetof(VarGroup,fullText)} /* 471 */,
+    (Member){GetType(STRING("Array<SpecExpression *>")),STRING("expressions"),offsetof(SpecExpression,expressions)} /* 472 */,
+    (Member){GetType(STRING("char *")),STRING("op"),offsetof(SpecExpression,op)} /* 473 */,
+    (Member){GetType(STRING("Var")),STRING("var"),offsetof(SpecExpression,var)} /* 474 */,
+    (Member){GetType(STRING("Value")),STRING("val"),offsetof(SpecExpression,val)} /* 475 */,
+    (Member){GetType(STRING("Token")),STRING("text"),offsetof(SpecExpression,text)} /* 476 */,
+    (Member){GetType(STRING("enum (unnamed enum at ../../software/compiler/versatSpecificationParser.hpp:50:3)")),STRING("type"),offsetof(SpecExpression,type)} /* 477 */,
+    (Member){GetType(STRING("Token")),STRING("name"),offsetof(VarDeclaration,name)} /* 478 */,
+    (Member){GetType(STRING("int")),STRING("arraySize"),offsetof(VarDeclaration,arraySize)} /* 479 */,
+    (Member){GetType(STRING("bool")),STRING("isArray"),offsetof(VarDeclaration,isArray)} /* 480 */,
+    (Member){GetType(STRING("VarGroup")),STRING("group"),offsetof(GroupIterator,group)} /* 481 */,
+    (Member){GetType(STRING("int")),STRING("groupIndex"),offsetof(GroupIterator,groupIndex)} /* 482 */,
+    (Member){GetType(STRING("int")),STRING("varIndex"),offsetof(GroupIterator,varIndex)} /* 483 */,
+    (Member){GetType(STRING("FUInstance *")),STRING("inst"),offsetof(PortExpression,inst)} /* 484 */,
+    (Member){GetType(STRING("ConnectionExtra")),STRING("extra"),offsetof(PortExpression,extra)} /* 485 */,
+    (Member){GetType(STRING("enum (unnamed enum at ../../software/compiler/versatSpecificationParser.hpp:71:3)")),STRING("modifier"),offsetof(InstanceDeclaration,modifier)} /* 486 */,
+    (Member){GetType(STRING("Token")),STRING("typeName"),offsetof(InstanceDeclaration,typeName)} /* 487 */,
+    (Member){GetType(STRING("Array<VarDeclaration>")),STRING("declarations"),offsetof(InstanceDeclaration,declarations)} /* 488 */,
+    (Member){GetType(STRING("String")),STRING("parameters"),offsetof(InstanceDeclaration,parameters)} /* 489 */,
+    (Member){GetType(STRING("Range<Cursor>")),STRING("loc"),offsetof(ConnectionDef,loc)} /* 490 */,
+    (Member){GetType(STRING("VarGroup")),STRING("output"),offsetof(ConnectionDef,output)} /* 491 */,
+    (Member){GetType(STRING("enum (unnamed enum at ../../software/compiler/versatSpecificationParser.hpp:81:3)")),STRING("type"),offsetof(ConnectionDef,type)} /* 492 */,
+    (Member){GetType(STRING("Array<Token>")),STRING("transforms"),offsetof(ConnectionDef,transforms)} /* 493 */,
+    (Member){GetType(STRING("VarGroup")),STRING("input"),offsetof(ConnectionDef,input)} /* 494 */,
+    (Member){GetType(STRING("SpecExpression *")),STRING("expression"),offsetof(ConnectionDef,expression)} /* 495 */,
+    (Member){GetType(STRING("Token")),STRING("name"),offsetof(ModuleDef,name)} /* 496 */,
+    (Member){GetType(STRING("Token")),STRING("numberOutputs"),offsetof(ModuleDef,numberOutputs)} /* 497 */,
+    (Member){GetType(STRING("Array<VarDeclaration>")),STRING("inputs"),offsetof(ModuleDef,inputs)} /* 498 */,
+    (Member){GetType(STRING("Array<InstanceDeclaration>")),STRING("declarations"),offsetof(ModuleDef,declarations)} /* 499 */,
+    (Member){GetType(STRING("Array<ConnectionDef>")),STRING("connections"),offsetof(ModuleDef,connections)} /* 500 */,
+    (Member){GetType(STRING("Token")),STRING("name"),offsetof(TransformDef,name)} /* 501 */,
+    (Member){GetType(STRING("Array<VarDeclaration>")),STRING("inputs"),offsetof(TransformDef,inputs)} /* 502 */,
+    (Member){GetType(STRING("Array<ConnectionDef>")),STRING("connections"),offsetof(TransformDef,connections)} /* 503 */,
+    (Member){GetType(STRING("int")),STRING("inputs"),offsetof(Transformation,inputs)} /* 504 */,
+    (Member){GetType(STRING("int")),STRING("outputs"),offsetof(Transformation,outputs)} /* 505 */,
+    (Member){GetType(STRING("Array<int>")),STRING("map"),offsetof(Transformation,map)} /* 506 */,
+    (Member){GetType(STRING("Token")),STRING("instanceName"),offsetof(HierarchicalName,instanceName)} /* 507 */,
+    (Member){GetType(STRING("Var")),STRING("subInstance"),offsetof(HierarchicalName,subInstance)} /* 508 */,
+    (Member){GetType(STRING("Token")),STRING("typeName"),offsetof(TypeAndInstance,typeName)} /* 509 */,
+    (Member){GetType(STRING("Token")),STRING("instanceName"),offsetof(TypeAndInstance,instanceName)} /* 510 */
   };
 
   RegisterStructMembers(STRING("Time"),(Array<Member>){&members[0],2});
@@ -1110,37 +1117,39 @@ RegisterEnum(STRING("ConnectionType"),C_ARRAY_TO_ARRAY(ConnectionTypeData));
   RegisterStructMembers(STRING("SingleTypeStructElement"),(Array<Member>){&members[402],2});
   RegisterStructMembers(STRING("TypeStructInfoElement"),(Array<Member>){&members[404],1});
   RegisterStructMembers(STRING("TypeStructInfo"),(Array<Member>){&members[405],2});
-  RegisterStructMembers(STRING("Task"),(Array<Member>){&members[407],3});
-  RegisterStructMembers(STRING("WorkGroup"),(Array<Member>){&members[410],2});
-  RegisterStructMembers(STRING("SpecificMerge"),(Array<Member>){&members[412],2});
-  RegisterStructMembers(STRING("IndexRecord"),(Array<Member>){&members[414],2});
-  RegisterStructMembers(STRING("SpecificMergeNodes"),(Array<Member>){&members[416],2});
-  RegisterStructMembers(STRING("SpecificMergeNode"),(Array<Member>){&members[418],4});
-  RegisterStructMembers(STRING("MergeEdge"),(Array<Member>){&members[422],1});
-  RegisterStructMembers(STRING("MappingNode"),(Array<Member>){&members[423],3});
-  RegisterStructMembers(STRING("MappingEdge"),(Array<Member>){&members[426],1});
-  RegisterStructMembers(STRING("ConsolidationGraphOptions"),(Array<Member>){&members[427],5});
-  RegisterStructMembers(STRING("ConsolidationGraph"),(Array<Member>){&members[432],3});
-  RegisterStructMembers(STRING("ConsolidationResult"),(Array<Member>){&members[435],3});
-  RegisterStructMembers(STRING("CliqueState"),(Array<Member>){&members[438],8});
-  RegisterStructMembers(STRING("IsCliqueResult"),(Array<Member>){&members[446],2});
-  RegisterStructMembers(STRING("MergeGraphResult"),(Array<Member>){&members[448],5});
-  RegisterStructMembers(STRING("MergeGraphResultExisting"),(Array<Member>){&members[453],3});
-  RegisterStructMembers(STRING("GraphMapping"),(Array<Member>){&members[456],3});
-  RegisterStructMembers(STRING("ConnectionExtra"),(Array<Member>){&members[459],2});
-  RegisterStructMembers(STRING("Var"),(Array<Member>){&members[461],4});
-  RegisterStructMembers(STRING("VarGroup"),(Array<Member>){&members[465],2});
-  RegisterStructMembers(STRING("SpecExpression"),(Array<Member>){&members[467],6});
-  RegisterStructMembers(STRING("VarDeclaration"),(Array<Member>){&members[473],3});
-  RegisterStructMembers(STRING("GroupIterator"),(Array<Member>){&members[476],3});
-  RegisterStructMembers(STRING("PortExpression"),(Array<Member>){&members[479],2});
-  RegisterStructMembers(STRING("InstanceDeclaration"),(Array<Member>){&members[481],4});
-  RegisterStructMembers(STRING("ConnectionDef"),(Array<Member>){&members[485],6});
-  RegisterStructMembers(STRING("ModuleDef"),(Array<Member>){&members[491],5});
-  RegisterStructMembers(STRING("TransformDef"),(Array<Member>){&members[496],3});
-  RegisterStructMembers(STRING("Transformation"),(Array<Member>){&members[499],3});
-  RegisterStructMembers(STRING("HierarchicalName"),(Array<Member>){&members[502],2});
-  RegisterStructMembers(STRING("TypeAndInstance"),(Array<Member>){&members[504],2});
+  RegisterStructMembers(STRING("Difference"),(Array<Member>){&members[407],2});
+  RegisterStructMembers(STRING("DifferenceArray"),(Array<Member>){&members[409],3});
+  RegisterStructMembers(STRING("Task"),(Array<Member>){&members[412],3});
+  RegisterStructMembers(STRING("WorkGroup"),(Array<Member>){&members[415],2});
+  RegisterStructMembers(STRING("SpecificMerge"),(Array<Member>){&members[417],2});
+  RegisterStructMembers(STRING("IndexRecord"),(Array<Member>){&members[419],2});
+  RegisterStructMembers(STRING("SpecificMergeNodes"),(Array<Member>){&members[421],2});
+  RegisterStructMembers(STRING("SpecificMergeNode"),(Array<Member>){&members[423],4});
+  RegisterStructMembers(STRING("MergeEdge"),(Array<Member>){&members[427],1});
+  RegisterStructMembers(STRING("MappingNode"),(Array<Member>){&members[428],3});
+  RegisterStructMembers(STRING("MappingEdge"),(Array<Member>){&members[431],1});
+  RegisterStructMembers(STRING("ConsolidationGraphOptions"),(Array<Member>){&members[432],5});
+  RegisterStructMembers(STRING("ConsolidationGraph"),(Array<Member>){&members[437],3});
+  RegisterStructMembers(STRING("ConsolidationResult"),(Array<Member>){&members[440],3});
+  RegisterStructMembers(STRING("CliqueState"),(Array<Member>){&members[443],8});
+  RegisterStructMembers(STRING("IsCliqueResult"),(Array<Member>){&members[451],2});
+  RegisterStructMembers(STRING("MergeGraphResult"),(Array<Member>){&members[453],5});
+  RegisterStructMembers(STRING("MergeGraphResultExisting"),(Array<Member>){&members[458],3});
+  RegisterStructMembers(STRING("GraphMapping"),(Array<Member>){&members[461],3});
+  RegisterStructMembers(STRING("ConnectionExtra"),(Array<Member>){&members[464],2});
+  RegisterStructMembers(STRING("Var"),(Array<Member>){&members[466],4});
+  RegisterStructMembers(STRING("VarGroup"),(Array<Member>){&members[470],2});
+  RegisterStructMembers(STRING("SpecExpression"),(Array<Member>){&members[472],6});
+  RegisterStructMembers(STRING("VarDeclaration"),(Array<Member>){&members[478],3});
+  RegisterStructMembers(STRING("GroupIterator"),(Array<Member>){&members[481],3});
+  RegisterStructMembers(STRING("PortExpression"),(Array<Member>){&members[484],2});
+  RegisterStructMembers(STRING("InstanceDeclaration"),(Array<Member>){&members[486],4});
+  RegisterStructMembers(STRING("ConnectionDef"),(Array<Member>){&members[490],6});
+  RegisterStructMembers(STRING("ModuleDef"),(Array<Member>){&members[496],5});
+  RegisterStructMembers(STRING("TransformDef"),(Array<Member>){&members[501],3});
+  RegisterStructMembers(STRING("Transformation"),(Array<Member>){&members[504],3});
+  RegisterStructMembers(STRING("HierarchicalName"),(Array<Member>){&members[507],2});
+  RegisterStructMembers(STRING("TypeAndInstance"),(Array<Member>){&members[509],2});
 
   InstantiateTemplate(STRING("Array<const char>"));
   InstantiateTemplate(STRING("Range<Expression *>"));

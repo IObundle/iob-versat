@@ -557,6 +557,8 @@ TestResult CalculateOneInstance(Accelerator* accel,bool recursive,Array<Partitio
         *PushListElement(infoList) = f;
       }
     } else {
+      // TODO: Recursive does not work well because we do not have name info.
+      //       Without name info other parts of the code base cannot use the non recursive option.
       InstanceInfo top = GetInstanceInfo(node,nullptr,subOffsets,out);
 
       subOffsets.memOffset += top.memMappedSize.value_or(0);
