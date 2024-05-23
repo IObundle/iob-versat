@@ -116,7 +116,7 @@ module VRead #(
       startA[ADDR_W-1] = !pingPongState;
    end
 
-   wire [31:0] delayA = 0;
+   wire [DELAY_W-1:0] delayA = 0;
 
    // port addresses and enables
    wire [ADDR_W-1:0] addrB, addrB_int, addrB_int2;

@@ -3,7 +3,7 @@
 module MyAddressGen #(
    parameter ADDR_W   = 10,
    parameter PERIOD_W = 10,
-   parameter DELAY_W  = 32,
+   parameter DELAY_W  = 7,
    parameter DATA_W   = 32
 ) (
    input clk_i,
