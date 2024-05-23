@@ -1,7 +1,7 @@
 `timescale 1ns / 1ps
 
 (* source *) module Reg #(
-   parameter DELAY_W = 32,
+   parameter DELAY_W = 7,
    parameter ADDR_W  = 2,
    parameter DATA_W  = 32
 ) (
@@ -9,9 +9,9 @@
    input clk,
    input rst,
 
-   input      running,
-   input      run,
-   output reg done,
+   input  running,
+   input  run,
+   output done,
 
    // native interface 
    input      [  ADDR_W-1:0] addr,
@@ -31,40 +31,45 @@
    output [DATA_W-1:0] currentValue
 );
 
-   reg [DELAY_W-1:0] delay;
+   wire lastCycle;
+
+   DelayCalc delay(
+   .clk(clk),
+   .rst(rst),
+
+   .running(running),
+   .run(run),
+   .done(done),
+
+   .lastCycle(lastCycle),
+
+   .delay0(delay0)
+   );
 
    assign rdata        = (rvalid ? out0 : 0);
    assign currentValue = out0;
 
+   //wire [DATA_W-1:0] toWrite = (running ? in0 : wdata);
+
    always @(posedge clk, posedge rst) begin
       if (rst) begin
          out0   <= 0;
-         delay  <= 0;
          rvalid <= 1'b0;
-         done   <= 1;
       end else begin
          // Native interface
          rvalid <= 1'b0;
 
-         if (valid & |wstrb) begin
+         if (valid & (|wstrb)) begin
             out0 <= wdata;
          end
+         if (lastCycle && !disabled) begin
+            out0 <= in0;
+         end
 
-         if (valid & wstrb == 0) begin
+         if (valid & (wstrb == 0)) begin
             rvalid <= 1'b1;
          end
 
-         if (run) begin
-            done  <= 0;
-            delay <= delay0;
-         end else if (!done) begin
-            if (delay == 0) begin
-               if(!disabled) out0 <= in0;
-               done <= 1;
-            end else begin
-               delay <= delay - 1;
-            end
-         end
       end
    end
 

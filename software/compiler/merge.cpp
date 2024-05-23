@@ -1775,11 +1775,19 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
   Accelerator* circuit = result;
   declInst.baseCircuit = CopyAccelerator(circuit,nullptr,nullptr);
 
+  int buffersInserted = 0;
   Array<Accelerator*> recon = PushArray<Accelerator*>(temp,size);
   Array<InstanceNodeMap*> reconToAccel = PushArray<InstanceNodeMap*>(temp,size);
   Array<InstanceNodeMap*> accelToRecon = PushArray<InstanceNodeMap*>(temp,size);
   Array<DAGOrderNodes> reconOrder = PushArray<DAGOrderNodes>(temp,size);
   Array<CalculateDelayResult> reconDelay = PushArray<CalculateDelayResult>(temp,size);
+
+  Array<Array<int>> bufferValues = PushArray<Array<int>>(perm,size);
+  for(Array<int>& b : bufferValues){
+    b = PushArray<int>(perm,999);
+    Memset(b,0);
+  }
+  
   int outerIndex = 0;
   while(true){
     for(int i = 0; i < size; i++){
@@ -1802,7 +1810,7 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
       reconDelay[i] = CalculateDelay(accel,reconOrder[i],temp);
 
       Array<DelayToAdd> delaysToAdd = GenerateFixDelays(accel,reconDelay[i].edgesDelay,perm,temp);
-
+      
       for(DelayToAdd toAdd : delaysToAdd){
         EdgeNode reconEdge = toAdd.edge;
 
@@ -1812,6 +1820,8 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
         String uniqueName = PushString(perm,"%.*s_%d_%d",UNPACK_SS(toAdd.bufferName),i,outerIndex);
         InstanceNode* buffer = CreateFUInstanceNode(circuit,BasicDeclaration::buffer,uniqueName);
         SetStatic(circuit,buffer->inst);
+        buffersInserted += 1;
+
         //buffer->inst->parameters = toAdd.bufferParameters;
         
         InsertUnit(circuit,PortNode{n0,reconEdge.node0.port},PortNode{n1,reconEdge.node1.port},PortNode{buffer,0});
@@ -1827,7 +1837,31 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
       break;
     }
   }
- 
+
+  Array<int> val = PushArray<int>(perm,buffersInserted);
+  for(CalculateDelayResult delay : reconDelay){
+    for(auto edgePair : delay.edgesDelay){
+      EdgeNode edge = edgePair.first;
+      int delay = edgePair.second;
+
+      if(delay == 0){
+        continue;
+      }
+
+      if(edge.node1.node->inst->declaration == BasicDeclaration::output){
+        continue;
+      }
+    
+      InstanceNode* output = edge.node0.node;
+
+      if(output->inst->declaration == BasicDeclaration::buffer){
+        //output->inst->baseDelay = delay;
+        edgePair.second = 0;
+        DEBUG_BREAK();
+      }
+    }
+  }
+  
   declInst.fixedDelayCircuit = circuit;
 
   FillDeclarationWithAcceleratorValuesNoDelay(&declInst,circuit,temp,temp2);

@@ -1,6 +1,7 @@
 `timescale 1ns / 1ps
 
 module FloatAddAccum #(
+   parameter DELAY_W = 7,
    parameter DATA_W = 32
 ) (
    //control
@@ -14,12 +15,12 @@ module FloatAddAccum #(
    input [DATA_W-1:0] in0,
    input [DATA_W-1:0] in1,  // Signal
 
-   input [31:0] delay0,
+   input [DELAY_W-1:0] delay0,
 
    (* versat_latency = 5 *) output reg [DATA_W-1:0] out0
 );
 
-   reg  [31:0] delay;
+   reg  [DELAY_W-1:0] delay;
    reg  [ 2:0] counter;
    reg         started;
 

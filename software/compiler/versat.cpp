@@ -869,6 +869,19 @@ void PrintUniformInformation(FILE* out,FUDeclaration* decl){
   }
   fprintf(out,"\n");
 
+  {
+    int index = 0;
+    for(auto info : decl->configInfo){
+      fprintf(out,"%d: ",index++);
+      for(int i = 0; i < decl->NumberInputs(); i++){
+        if(i != 0) fprintf(out,",");
+        fprintf(out,"%d",info.inputDelays[i]);
+      }
+    fprintf(out,"\n");
+    }
+    fprintf(out,"\n");
+  }
+  
   fprintf(out,"\n");
   fprintf(out,"Outputs: %d\n",decl->NumberOutputs());
   fprintf(out,"  ");
@@ -878,6 +891,19 @@ void PrintUniformInformation(FILE* out,FUDeclaration* decl){
   }
   fprintf(out,"\n");
 
+  {
+    int index = 0;
+    for(auto info : decl->configInfo){
+      fprintf(out,"%d: ",index++);
+      for(int i = 0; i < decl->NumberOutputs(); i++){
+        if(i != 0) fprintf(out,",");
+        fprintf(out,"%d",info.outputLatencies[i]);
+      }
+    fprintf(out,"\n");
+    }
+    fprintf(out,"\n");
+  }
+  
   for(ConfigurationInfo info : decl->configInfo){
     fprintf(out,"Names:\n");
     for(String name : info.baseName){

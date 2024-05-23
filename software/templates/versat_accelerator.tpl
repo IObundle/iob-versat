@@ -10,6 +10,7 @@
 module @{accel.name} #(
       parameter ADDR_W = 32,
       parameter DATA_W = 32,
+      parameter DELAY_W = @{delaySize},
       parameter AXI_ADDR_W = @{arch.addrSize},
       parameter AXI_DATA_W = @{arch.dataSize},
       parameter LEN_W = 20
@@ -47,7 +48,7 @@ module @{accel.name} #(
    #{end}
 
    #{for i accel.baseConfig.delayOffsets.max}
-   input  [31:0]                   delay@{i},
+   input  [DELAY_W-1:0]            delay@{i},
    #{end}
 
    #{for i accel.nIOs}

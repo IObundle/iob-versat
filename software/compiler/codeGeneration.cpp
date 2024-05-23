@@ -12,6 +12,8 @@
 #include "textualRepresentation.hpp"
 #include "globals.hpp"
 
+static const int DELAY_SIZE = 7;
+
 Array<Difference> CalculateSmallestDifference(Array<int> oldValues,Array<int> newValues,Arena* out){
   Assert(oldValues.size == newValues.size); // For now
 
@@ -636,6 +638,7 @@ void OutputCircuitSource(FUDeclaration* decl,Accelerator* accel,FILE* file,Arena
   TemplateSetCustom("arch",MakeValue(&globalOptions));
   TemplateSetCustom("accel",MakeValue(decl));
   TemplateSetCustom("memoryMasks",MakeValue(&memoryMasks));
+  TemplateSetNumber("delaySize",DELAY_SIZE);
  
   TemplateSetCustom("instances",MakeValue(&nodes));
 
@@ -966,6 +969,7 @@ void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* 
   TemplateSetCustom("memoryMasks",MakeValue(&memoryMasks));
   TemplateSetCustom("instances",MakeValue(&nodes));
   TemplateSetNumber("staticStart",staticStart);
+  TemplateSetNumber("delaySize",DELAY_SIZE);
   TemplateSetBool("useDMA",globalOptions.useDMA);
   TemplateSetCustom("opts",MakeValue(&globalOptions));
   

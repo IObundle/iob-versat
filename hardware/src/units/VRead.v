@@ -7,6 +7,7 @@ module VRead #(
    parameter PERIOD_W   = 12, // Must be 2 less than ADDR_W (boundary of 4) (for 32 bit DATA_W)
    parameter AXI_ADDR_W = 32,
    parameter AXI_DATA_W = 32,
+   parameter DELAY_W    = 7,
    parameter LEN_W      = 8
 ) (
    input clk,
@@ -66,7 +67,7 @@ module VRead #(
 
    input enableRead,
 
-   input [31:0] delay0
+   input [DELAY_W-1:0] delay0
 );
 
    assign databus_wdata_0 = 0;

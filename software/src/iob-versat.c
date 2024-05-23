@@ -46,7 +46,7 @@ void versat_init(int base){
   accelState  = (volatile AcceleratorState*)  (versat_base + stateStart);
   accelStatics = (volatile AcceleratorStatic*)  (versat_base + staticStart);
 
-  void VersatLoadDelay(delayBuffer);
+  VersatLoadDelay(delayBuffer);
 }
 
 void StartAccelerator(){

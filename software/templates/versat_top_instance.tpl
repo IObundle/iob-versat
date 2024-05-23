@@ -453,8 +453,8 @@ begin
       #{for i decl.baseConfig.delayOffsets.max}
       // TODO: Need to also take into account strobes
       if(address[@{versatValues.configurationAddressBits + 1}:0] == @{addr * 4}) // @{addr * 4 |> Hex}
-         @{configReg}[@{counter}+:32] <= data_data[31:0]; // Delay
-      #{inc addr} #{set counter counter + 32}
+         @{configReg}[@{counter}+:@{delaySize}] <= data_data[31:0]; // Delay
+      #{inc addr} #{set counter counter + delaySize}
       #{end} #{end}
    end
 end
@@ -577,7 +577,7 @@ end
          #{end}
 
          #{for i decl.baseConfig.delayOffsets.max}
-            .delay@{i}(configdata[@{delayStart + (delaySeen * 32)}+:32]),
+            .delay@{i}(configdata[@{delayStart + (delaySeen * delaySize)}+:@{delaySize}]),
          #{inc delaySeen}
          #{end}
 

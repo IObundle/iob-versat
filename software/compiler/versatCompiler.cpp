@@ -457,8 +457,7 @@ int main(int argc,const char* argv[]){
   globalOptions.useFixedBuffers = true;
   globalOptions.shadowRegister = true; 
 
-  globalOptions.disableDelayPropagation = false;
-  //globalOptions.noDelayPropagation = true;
+  globalOptions.disableDelayPropagation = true;
   
   globalDebug.outputAccelerator = true;
   globalDebug.outputVersat = true;

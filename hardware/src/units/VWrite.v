@@ -6,6 +6,7 @@ module VWrite #(
    parameter PERIOD_W   = 12, // Must be 2 less than ADDR_W (boundary of 4) (for 32 bit DATA_W)
    parameter AXI_ADDR_W = 32,
    parameter AXI_DATA_W = 32,
+   parameter DELAY_W    = 7,
    parameter LEN_W      = 8
 ) (
    input clk,
@@ -57,7 +58,7 @@ module VWrite #(
    input [  ADDR_W-1:0] startB,
    input [  ADDR_W-1:0] shiftB,
    input [  ADDR_W-1:0] incrB,
-   input [        31:0] delay0,    // delayB
+   input [ DELAY_W-1:0] delay0,    // delayB
    input                reverseB,
    input                extB,
    input [  ADDR_W-1:0] iter2B,
@@ -171,6 +172,7 @@ module VWrite #(
    SimpleAddressGen #(
       .ADDR_W(ADDR_W),
       .DATA_W(DATA_W),
+      .DELAY_W(DELAY_W),
       .PERIOD_W(PERIOD_W)
    ) addrgenStore (
       .clk_i(clk),

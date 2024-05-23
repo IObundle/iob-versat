@@ -1,7 +1,7 @@
 `timescale 1ns / 1ps
 
 module Merge #(
-   parameter DELAY_W = 32,
+   parameter DELAY_W = 7,
    parameter DATA_W  = 32
 ) (
    //control
