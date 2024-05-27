@@ -84,7 +84,7 @@ void SignalLoop(){
   MEMSET(versat_base,0x0,0x40000000);
 }
 
-void VersatMemoryCopy(void* dest,void* data,int size){
+void VersatMemoryCopy(void* dest,const void* data,int size){
   if(size <= 0){
     return;
   }
@@ -96,7 +96,7 @@ void VersatMemoryCopy(void* dest,void* data,int size){
 
   bool destInsideVersat = false;
   bool dataInsideVersat = false;
-  
+
   if(destInt >= versat_base && (destInt < versat_base + versatAddressSpace)){
     destInsideVersat = true;
   }
@@ -104,7 +104,7 @@ void VersatMemoryCopy(void* dest,void* data,int size){
   if(dataInt >= versat_base && (dataInt < versat_base + versatAddressSpace)){
     dataInsideVersat = true;
   }
-  
+
   if(dataInsideVersat == destInsideVersat){
     if(dataInsideVersat){
       //printf("Warning, Versat currently cannot DMA between two memory regions inside itself\n");
@@ -140,22 +140,22 @@ void VersatMemoryCopy(void* dest,void* data,int size){
   }
 }
 
-void VersatUnitWrite(void* baseaddr,int index,int val){
+void VersatUnitWrite(const void* baseaddr,int index,int val){
   //int* ptr = (int*) (baseaddr + index * sizeof(int));
   //*ptr = val;
   iptr base = (iptr) baseaddr;
-  
+
   MEMSET(base,index,val);
 }
 
-int VersatUnitRead(void* baseaddr,int index){
+int VersatUnitRead(const void* baseaddr,int index){
   iptr base = (iptr) baseaddr;
   return MEMGET(base,index);
   //int* ptr = (int*) (base + index * sizeof(int));
   //return *ptr;
 }
 
-float VersatUnitReadFloat(void* baseaddr,int index){
+float VersatUnitReadFloat(const void* baseaddr,int index){
   // float* ptr = (float*) (base + index * sizeof(float)
   iptr base = (iptr) baseaddr;
   int val = MEMGET(base,index);
@@ -170,7 +170,7 @@ void ConfigEnableDMA(bool value){
 void ConfigCreateVCD(bool value){}
 void ConfigSimulateDatabus(bool value){}
 
-void VersatLoadDelay(unsigned int* buffer){
+void VersatLoadDelay(const unsigned int* buffer){
   void* delayBase = (void*) (versat_base + delayStart);
   VersatMemoryCopy(delayBase,buffer,sizeof(int) * ARRAY_SIZE(delayBuffer));
 }
