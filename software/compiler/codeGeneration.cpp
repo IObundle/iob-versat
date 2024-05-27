@@ -1092,6 +1092,7 @@ void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* 
     TemplateSetCustom("namedStates",MakeValue(&allStates));
     TemplateSetCustom("namedMem",MakeValue(&allMem));
 
+    TemplateSetBool("outputChangeDelay",false);
     TemplateSetString("accelName",accel->name);
     TemplateSetString("mergeMuxName",STRING(""));
     

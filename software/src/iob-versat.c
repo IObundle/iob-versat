@@ -10,8 +10,8 @@
 extern "C"{
 #endif
 
-#include "iob-uart.h"
-#include "printf.h"
+//#include "iob-uart.h"
+//#include "printf.h"
 
 #ifdef __cplusplus
   }
@@ -30,6 +30,7 @@ typedef uint64_t uint64;
 // It does not work as well and keeps giving compile and linker errors. It's not worth it.
 
 iptr versat_base;
+static bool enableDMA;
 
 volatile AcceleratorConfig*  accelConfig  = 0;
 volatile AcceleratorState*   accelState   = 0;
@@ -37,7 +38,9 @@ volatile AcceleratorStatic*  accelStatics = 0;
 
 void versat_init(int base){
   versat_base = (iptr) base;
-
+  //enableDMA = acceleratorSupportsDMA;
+  enableDMA = false;
+  
   //printf("Embedded Versat\n");
 
   MEMSET(versat_base,0x0,0x80000000); // Soft reset
@@ -86,7 +89,7 @@ void VersatMemoryCopy(void* dest,void* data,int size){
     return;
   }
 
-  TIME_IT("Memory copy");
+  //TIME_IT("Memory copy");
 
   iptr destInt = (iptr) dest;
   iptr dataInt = (iptr) data;
@@ -104,11 +107,11 @@ void VersatMemoryCopy(void* dest,void* data,int size){
   
   if(dataInsideVersat == destInsideVersat){
     if(dataInsideVersat){
-      printf("Warning, Versat currently cannot DMA between two memory regions inside itself\n");
+      //printf("Warning, Versat currently cannot DMA between two memory regions inside itself\n");
     } else {
-      printf("Warning, Versat cannot use its DMA when both regions are outside its address space\n");
+      //printf("Warning, Versat cannot use its DMA when both regions are outside its address space\n");
     }
-    printf("Using a simple copy loop for now\n");
+    //printf("Using a simple copy loop for now\n");
   }
 
   if(acceleratorSupportsDMA && (dataInsideVersat != destInsideVersat)){
@@ -158,6 +161,10 @@ float VersatUnitReadFloat(void* baseaddr,int index){
   int val = MEMGET(base,index);
   float* ptr = (float*) &val;
   return *ptr;
+}
+
+void ConfigEnableDMA(bool value){
+  enableDMA = value;
 }
 
 void ConfigCreateVCD(bool value){}

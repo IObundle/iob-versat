@@ -118,15 +118,16 @@ int GetAcceleratorCyclesElapsed();
 void RunAccelerator(int times);
 void StartAccelerator();
 void EndAccelerator();
-void VersatMemoryCopy(void* dest,void* data,int size);
-void VersatUnitWrite(void* baseaddr,int index,int val);
-int VersatUnitRead(void* baseaddr,int index);
-float VersatUnitReadFloat(void* baseaddr,int index);
+void VersatMemoryCopy(void* dest,const void* data,int size);
+void VersatUnitWrite(const void* baseaddr,int index,int val);
+int VersatUnitRead(const void* baseaddr,int index);
+float VersatUnitReadFloat(const void* baseaddr,int index);
 void SignalLoop();
-void VersatLoadDelay(unsigned int* delayBuffer);
+void VersatLoadDelay(const unsigned int* delayBuffer);
 
 // PC-Emul side functions that allow to enable or disable certain portions of the emulation
 // Their embedded counterparts simply do nothing
+void ConfigEnableDMA(bool value);
 void ConfigCreateVCD(bool value);
 void ConfigSimulateDatabus(bool value); 
 
@@ -194,6 +195,7 @@ typedef enum{
 extern "C" {
 #endif
 
+#{if outputChangeDelay}
 static inline void ChangeDelay(int oldDelay,int newDelay){
   if(oldDelay == newDelay){
     return;
@@ -219,6 +221,7 @@ static inline void ChangeDelay(int oldDelay,int newDelay){
 #{end}
   }
 }
+#{end}
 
 static inline void OnlyActivateMergedAccelerator(MergeType type){
    static int lastLoaded = -1;

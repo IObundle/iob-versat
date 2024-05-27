@@ -1984,7 +1984,7 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
         int val = decl->baseConfig.configOffsets.offsets[configIndex];
         decl->configInfo[i].configOffsets.offsets[configIndex] = val;
 
-        InstanceNode* originalNode = map->GetOrFail(ptr); // TODO: This is the way of getting the actual name that we want to put into the generated structures.
+        InstanceNode* originalNode = map->GetOrFail(ptr);
         decl->configInfo[i].baseName[configIndex] = originalNode->inst->name;
         decl->configInfo[i].unitBelongs[configIndex] = true;
       } else {

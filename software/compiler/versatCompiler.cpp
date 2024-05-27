@@ -402,13 +402,13 @@ static Value EscapeString(Value val,Arena* out){
   return MakeValue(escaped);
 }
 
-int main(int argc,const char* argv[]){
+int main(int argc,const char** argv){
   // TODO: Need to actually parse and give an error, instead of just checking for less than 3
   if(argc < 3){
     printf("Need specifications and a top level type\n");
     return -1;
   }
-  
+
   InitDebug();
   RegisterTypes();
   
@@ -457,8 +457,9 @@ int main(int argc,const char* argv[]){
   globalOptions.useFixedBuffers = true;
   globalOptions.shadowRegister = true; 
 
-  globalOptions.disableDelayPropagation = true;
-  
+  //globalOptions.disableDelayPropagation = true;
+
+#if 0
   globalDebug.outputAccelerator = true;
   globalDebug.outputVersat = true;
   globalDebug.dotFormat = GRAPH_DOT_FORMAT_NAME;
@@ -467,6 +468,7 @@ int main(int argc,const char* argv[]){
   globalDebug.outputAcceleratorInfo = true;
 #endif
   globalDebug.outputVCD = true;
+#endif
   
 #ifdef USE_FST_FORMAT
   globalOptions.generateFSTFormat = 1;
