@@ -459,9 +459,9 @@ int main(int argc,const char** argv){
 
   //globalOptions.disableDelayPropagation = true;
 
-#if 0
   globalDebug.outputAccelerator = true;
   globalDebug.outputVersat = true;
+#if 0
   globalDebug.dotFormat = GRAPH_DOT_FORMAT_NAME;
 #if 1
   globalDebug.outputGraphs = true;
