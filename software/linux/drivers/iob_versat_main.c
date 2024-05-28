@@ -11,6 +11,9 @@
 #include <asm/uaccess.h>
 #include <asm/io.h>
 
+#include "iob_class/iob_class_utils.h"
+#include "iob_versat.h"
+
 // Disable all prints
 #undef printk
 #define printk(...) ((void)0)
@@ -24,10 +27,10 @@ static void* last_physical;
 
 static int major; 
 
-#include "iob_versat_sysfs.h"
+static struct iob_data iob_versat_data = {0};
+DEFINE_MUTEX(iob_versat_mutex);
 
-#define DEVICE_NAME "phys"
-#define CLASS_NAME  "phys_class"
+#include "iob_versat_sysfs.h"
 
 static int module_release(struct inode* inodep, struct file* filp){
    printk(KERN_INFO "Device closed\n");
@@ -152,21 +155,21 @@ static const struct file_operations fops = {
 int phys_init(void){
    int ret = -1;
 
-   major = register_chrdev(0, DEVICE_NAME, &fops);
+   major = register_chrdev(0, IOB_VERSAT_DRIVER_NAME, &fops);
    if (major < 0){
       printk(KERN_INFO "Failed to register major\n");
       ret = major;
       goto failed_major_register;
    }
 
-   class = class_create(THIS_MODULE, CLASS_NAME);
+   class = class_create(THIS_MODULE, IOB_VERSAT_DRIVER_CLASS);
    if (IS_ERR(class)){ 
       printk(KERN_INFO "Failed to register class\n");
       ret = PTR_ERR(class);
       goto failed_class_create;
    }
 
-   device = device_create(class, NULL, MKDEV(major, 0), NULL, DEVICE_NAME);
+   device = device_create(class, NULL, MKDEV(major, 0), NULL, IOB_VERSAT_DRIVER_NAME);
    if (IS_ERR(device)) {
       printk(KERN_INFO "Failed to create device\n");
       ret = PTR_ERR(device);
@@ -183,7 +186,7 @@ failed_device_create:
    class_unregister(class);
    class_destroy(class); 
 failed_class_create:
-   unregister_chrdev(major, DEVICE_NAME);
+   unregister_chrdev(major, IOB_VERSAT_DRIVER_NAME);
 failed_major_register:
    return ret;
 }
@@ -194,7 +197,7 @@ void phys_exit(void)
    device_destroy(class, MKDEV(major, 0));
    class_unregister(class);
    class_destroy(class);
-   unregister_chrdev(major, DEVICE_NAME);
+   unregister_chrdev(major, IOB_VERSAT_DRIVER_NAME);
 
    printk(KERN_INFO "phys unregistered!\n");
 }
