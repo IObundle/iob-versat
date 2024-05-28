@@ -114,7 +114,7 @@ void VersatMemoryCopy(void* dest,const void* data,int size){
     //printf("Using a simple copy loop for now\n");
   }
 
-  if(acceleratorSupportsDMA && (dataInsideVersat != destInsideVersat)){
+  if(enableDMA && acceleratorSupportsDMA && (dataInsideVersat != destInsideVersat)){
     if(destInsideVersat){
       destInt = destInt - versat_base;
     }

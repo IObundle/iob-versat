@@ -587,7 +587,7 @@ extern "C" void VersatSignalLoop(){
 #{end}
 }
 
-extern "C" void VersatLoadDelay(unsigned int* delayBuffer){
+extern "C" void VersatLoadDelay(const unsigned int* delayBuffer){
   #{if type.baseConfig.delayOffsets.max}
   V@{type.name}* self = dut;
     #{for i type.baseConfig.delayOffsets.max}

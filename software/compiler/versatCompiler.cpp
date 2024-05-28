@@ -457,10 +457,11 @@ int main(int argc,const char** argv){
   globalOptions.useFixedBuffers = true;
   globalOptions.shadowRegister = true; 
 
-  //globalOptions.disableDelayPropagation = true;
+  globalOptions.disableDelayPropagation = true;
 
   globalDebug.outputAccelerator = true;
   globalDebug.outputVersat = true;
+
 #if 0
   globalDebug.dotFormat = GRAPH_DOT_FORMAT_NAME;
 #if 1

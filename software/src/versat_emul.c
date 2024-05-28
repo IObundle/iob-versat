@@ -46,6 +46,9 @@ bool CreateVCD;
 bool SimulateDatabus;
 bool versatInitialized;
 
+void ConfigEnableDMA(bool value){
+}
+
 void ConfigCreateVCD(bool value){
   CreateVCD = value;
 }
@@ -104,7 +107,7 @@ void EndAccelerator(){
   // Do nothing. Start accelerator does everything, for now
 }
 
-void VersatMemoryCopy(void* dest,void* data,int size){
+void VersatMemoryCopy(void* dest,const void* data,int size){
   CheckVersatInitialized();
 
   char* byteViewDest = (char*) dest;
@@ -129,14 +132,14 @@ void VersatMemoryCopy(void* dest,void* data,int size){
   }
 }
 
-void VersatUnitWrite(void* baseaddr,int index,int val){
+void VersatUnitWrite(const void* baseaddr,int index,int val){
   CheckVersatInitialized();
 
   iptr addr = (iptr) baseaddr + (index * sizeof(int)) - (versat_base + memMappedStart); // Convert back to zero based address
   MemoryAccess(addr,val,1);
 }
 
-int VersatUnitRead(void* baseaddr,int index){
+int VersatUnitRead(const void* baseaddr,int index){
   CheckVersatInitialized();
 
   iptr addr = (iptr) baseaddr + (index * sizeof(int)) - (versat_base + memMappedStart); // Convert back to zero based byte space address
@@ -144,7 +147,7 @@ int VersatUnitRead(void* baseaddr,int index){
   return res;
 }
 
-float VersatUnitReadFloat(void* base,int index){
+float VersatUnitReadFloat(const void* base,int index){
   int res = VersatUnitRead(base,index);
   float* view = (float*) &res;
   return *view;
