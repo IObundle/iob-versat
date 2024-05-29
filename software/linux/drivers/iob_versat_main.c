@@ -152,7 +152,7 @@ static const struct file_operations fops = {
    .owner = THIS_MODULE,
 };
 
-int phys_init(void){
+int versat_init(void){
    int ret = -1;
 
    major = register_chrdev(0, IOB_VERSAT_DRIVER_NAME, &fops);
@@ -176,7 +176,7 @@ int phys_init(void){
       goto failed_device_create;
    }
 
-   printk(KERN_INFO "Successfully loaded phys\n");
+   printk(KERN_INFO "Successfully loaded versat\n");
 
    return 0;
 
@@ -191,7 +191,7 @@ failed_major_register:
    return ret;
 }
 
-void phys_exit(void)
+void versat_exit(void)
 {
    // This portion should reflect the error handling of this_module_init
    device_destroy(class, MKDEV(major, 0));
@@ -199,9 +199,9 @@ void phys_exit(void)
    class_destroy(class);
    unregister_chrdev(major, IOB_VERSAT_DRIVER_NAME);
 
-   printk(KERN_INFO "phys unregistered!\n");
+   printk(KERN_INFO "versat unregistered!\n");
 }
 
-module_init(phys_init);
-module_exit(phys_exit);
+module_init(versat_init);
+module_exit(versat_exit);
 MODULE_LICENSE("GPL");
