@@ -22,7 +22,7 @@
         // Add this Node to device tree
         VERSAT0: versat@/*VERSAT0_ADDR_MACRO*/ {
             compatible = "iobundle,versat0";
-            reg = <0x/*VERSAT0_ADDR_MACRO*/ 0x100>;
+            reg = <0x/*VERSAT0_ADDR_MACRO*/ 0x40000>;
         };
 
     };
