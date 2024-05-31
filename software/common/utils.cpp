@@ -5,7 +5,7 @@
 #include <filesystem>
 namespace fs = std::filesystem;
 
-Optional<Array<String>> GetAllFilesInsideDirectory(String dirPath,Arena* out){
+Opt<Array<String>> GetAllFilesInsideDirectory(String dirPath,Arena* out){
    DIR* dir = opendir(StaticFormat("%.*s",UNPACK_SS(dirPath))); // Make sure it's zero terminated
 
    if(dir == nullptr){
@@ -57,8 +57,8 @@ Optional<Array<String>> GetAllFilesInsideDirectory(String dirPath,Arena* out){
    return arr;
 }
 
-String EscapeString(String toEscape,char spaceSubstitute,Arena* out){
-  Byte* mark = MarkArena(out);
+String PushEscapedString(Arena* out,String toEscape,char spaceSubstitute){
+  auto mark = StartString(out);
 
   for(int i = 0; i < toEscape.size; i++){
     switch(toEscape[i]){
@@ -75,8 +75,25 @@ String EscapeString(String toEscape,char spaceSubstitute,Arena* out){
     }
   }
 
-  String res = PointArena(out,mark);
+  String res = EndString(mark);
   return res;
+}
+
+void PrintEscapedString(String toEscape,char spaceSubstitute){
+  for(int i = 0; i < toEscape.size; i++){
+    switch(toEscape[i]){
+    case '\a': puts("\\a"); break;
+    case '\b': puts("\\b"); break;
+    case '\r': puts("\\r"); break;
+    case '\f': puts("\\f"); break;
+    case '\t': puts("\\t"); break;
+    case '\n': puts("\\n"); break;
+    case '\0': puts("\\0"); break;
+    case '\v': puts("\\v"); break;
+    case ' ':  printf("%c",spaceSubstitute); break;
+    default:   printf("%c",toEscape[i]); break;
+    }
+  }
 }
 
 String GetAbsolutePath(const char* path,Arena* out){
@@ -86,11 +103,11 @@ String GetAbsolutePath(const char* path,Arena* out){
 }
 
 Array<int> GetNonZeroIndexes(Array<int> arr,Arena* out){
-  Byte* mark = MarkArena(out);
+  DynamicArray<int> array = StartArray<int>(out);
   for(int i = 0; i < arr.size; i++){
     if(arr[i])
-      *PushStruct<int>(out) = i;
+      *array.PushElem() = i;
   }
 
-  return PointArray<int>(out,mark);
+  return EndArray(array);
 }

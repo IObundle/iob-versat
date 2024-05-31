@@ -6,6 +6,7 @@
 (* source *) module ReadWriteMem #(
    parameter MEM_INIT_FILE = "none",
    parameter DATA_W        = 32,
+   parameter DELAY_W       = 7,
    parameter SIZE_W        = 32,
    parameter ADDR_W        = 12
 ) (
@@ -43,7 +44,7 @@
    output              ext_dp_enable_0_port_1,
    output              ext_dp_write_0_port_1,
 
-   input [    32-1:0] delay0,
+   input [DELAY_W-1:0] delay0,
 
    // Configuration
    // Input config

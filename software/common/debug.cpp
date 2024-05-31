@@ -18,6 +18,7 @@
 
 #include "parser.hpp"
 #include "memory.hpp"
+#include "utils.hpp"
 #include "utilsCore.hpp"
 
 struct Addr2LineConnection{
@@ -35,39 +36,61 @@ struct Location{
 static Arena debugArenaInst = {};
 bool debugFlag = false;
 Arena* debugArena = &debugArenaInst;
+bool currentlyDebugging = false;
 
 bool CurrentlyDebugging(){
   static bool init = false;
   static bool value;
-
-  NOT_IMPLEMENTED;
   
-  return false;  
-
-  // TODO: This was giving an error when calling from makefile. Not using this for now.
-#if 0
-  if(!init){
-    init = true;
-    if(ptrace(PTRACE_TRACEME,0,1,0) < 0){
-      value = true;
-    } else {
-      ptrace(PTRACE_DETACH,0,1,0);
-    }
+  if(init){
+    return value;
   }
 
+  init = true;
+  char buf[Kilobyte(16)];
+
+  int fd = open("/proc/self/status", O_RDONLY);
+  if (fd == -1)
+    return value;
+
+  int amount = read(fd,buf,sizeof(buf) - 1);
+  close(fd);
+
+  buf[amount] = '\0';
+
+  Tokenizer tok(STRING(buf,amount),":",{});
+  while(!tok.Done()){
+    Token val = tok.NextToken();
+
+    if(CompareString(val,"TracerPid")){
+      tok.AssertNextToken(":");
+
+      Token pidToken = tok.NextToken();
+
+      int number = ParseInt(pidToken);
+      if(number == 0){
+        value = false;
+      } else {
+        value = true;
+      }
+      break;
+    }
+  }
+  
   return value;
-#endif
 }
 
 static SignalHandler old_SIGUSR1 = nullptr;
 static SignalHandler old_SIGSEGV = nullptr;
 static SignalHandler old_SIGABRT = nullptr;
+static SignalHandler old_SIGILL = nullptr;
 
 // TODO: Currently we only allow one function to be registered. This is problematic because we already register the printstacktrace function and therefore other pieces of code should not use this (like testbench.hpp) otherwise we lose stack traces. We should keep a list of functions to call and just register a master function. Not doing it for now because do not know if I'll keep testbench or if we ever gonna use this more than these two times 
 void SetDebugSignalHandler(SignalHandler func){
-   old_SIGUSR1 = signal(SIGUSR1, func);
-   old_SIGSEGV = signal(SIGSEGV, func);
-   old_SIGABRT = signal(SIGABRT, func);
+  old_SIGUSR1 = signal(SIGUSR1, func);
+  old_SIGSEGV = signal(SIGSEGV, func);
+  old_SIGABRT = signal(SIGABRT, func);
+  old_SIGILL  = signal(SIGILL, func);
 }
 
 // TODO: There is zero error checking in these functions. User might not have the addr2line program
@@ -171,10 +194,8 @@ static Array<Location> CollectStackTrace(Arena* out,Arena* temp){
   for(int i = 0; i < lines; i++){
     String line = STRING(strings[i]);
     Tokenizer tok(line,"()",{});
-    String first = tok.NextFindUntil("(");
-#if 0
-    printf("%.*s\n",UNPACK_SS(line));
-#endif
+    String first = tok.NextFindUntil("(").value();
+
     if(!(Contains(first,"versat") || Contains(first,"./versat"))){  // A bit hardcoded but appears to work fine
       continue;
     }
@@ -191,8 +212,8 @@ static Array<Location> CollectStackTrace(Arena* out,Arena* temp){
   
   //printf("Gonna close write pipe\n");
   {
-  int result = close(con->writePipe);
-  if(result != 0) fprintf(stderr,"Error closing write pipe: %d\n",errno);
+    int result = close(con->writePipe);
+    if(result != 0) fprintf(stderr,"Error closing write pipe: %d\n",errno);
   }
   
   int bufferSize = Kilobyte(64);
@@ -226,21 +247,26 @@ static Array<Location> CollectStackTrace(Arena* out,Arena* temp){
   String content = {(char*) buffer,amountRead};
   Array<Location> result = PushArray<Location>(out,lineCount / 2);
 
-  //printf("Content:\n%.*s\n",UNPACK_SS(content));
-  
-  Tokenizer tok(content,":",{"\n"});
+  Tokenizer tok(content,":",{});
   tok.keepWhitespaces = true;
 
   int index = 0;
   while(!tok.Done()){
-    String functionName = tok.NextFindUntil("\n");
-    assert(CompareString(tok.NextToken(),"\n"));
-    String fileName = tok.NextFindUntil(":");
-    assert(CompareString(tok.NextToken(),":"));
-    String lineString = tok.NextToken();
-    tok.NextFindUntil("\n");
-    assert(CompareString(tok.NextToken(),"\n"));
+    Token line = tok.PeekRemainingLine();
+    tok.AdvancePeek(line);
+    
+    String functionName = line;
 
+    Opt<Token> token = tok.NextFindUntil(":");
+
+    Assert(token.has_value());
+    
+    String fileName = token.value();
+    assert(CompareString(tok.NextToken(),":"));
+    Token lineString = tok.NextToken();
+
+    line = tok.PeekRemainingLine();
+    tok.AdvancePeek(line);
     //printf("FN: %.*s\n",UNPACK_SS(functionName));
     //printf("fN: %.*s\n",UNPACK_SS(fileName));
     //printf("ls: %.*s\n",UNPACK_SS(lineString));
@@ -248,8 +274,8 @@ static Array<Location> CollectStackTrace(Arena* out,Arena* temp){
       continue;
     }
 
-    result[index].functionName = functionName;
-    result[index].fileName = fileName;
+    result[index].functionName = TrimWhitespaces(functionName);
+    result[index].fileName = TrimWhitespaces(fileName);
     result[index].line = ParseInt(lineString);
     
     index += 1;
@@ -317,6 +343,9 @@ static void SignalPrintStacktrace(int sign){
   case SIGABRT:{
     signal(SIGABRT,old_SIGABRT);
   }break;
+  case SIGILL:{
+    signal(SIGILL,old_SIGILL);
+  }break;
   }
 
   fprintf(stderr,"\nProgram encountered an error. Stack trace:\n");
@@ -335,9 +364,9 @@ void InitDebug(){
   }
 
   init = true;
-  //debugFlag = CurrentlyDebugging();
+  currentlyDebugging = CurrentlyDebugging();
   
-  debugArenaInst = InitArena(Megabyte(1));
+  debugArenaInst = InitArena(Megabyte(64));
   SetDebugSignalHandler(SignalPrintStacktrace);
 }
 

@@ -9,6 +9,7 @@
  */
 
 module Muladd #(
+   parameter DELAY_W = 7,
    parameter DATA_W = 32
 ) (
    input      rst,
@@ -27,10 +28,10 @@ module Muladd #(
    input [9:0] period,
    input [5:0] shift,
 
-   input [31:0] delay0
+   input [DELAY_W-1:0] delay0
 );
 
-   reg [31:0] delay;
+   reg [DELAY_W-1:0] delay;
    reg [ 9:0] currentIteration;
    reg [ 9:0] currentPeriod;
 

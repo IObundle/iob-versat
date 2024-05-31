@@ -75,6 +75,7 @@ static constexpr int totalExternalMemory = @{totalExternalMemory};
 static Byte externalMemory[totalExternalMemory]; 
 static AcceleratorConfig configBuffer = {};
 static AcceleratorState stateBuffer = {};
+static AcceleratorStatic staticBuffer = {};
 static DatabusAccess databusBuffer[@{type.nIOs}] = {}; 
 
 extern "C" void InitializeVerilator(){
@@ -89,6 +90,10 @@ extern "C" AcceleratorConfig* GetStartOfConfig(){
 
 extern "C" AcceleratorState* GetStartOfState(){
   return &stateBuffer;
+}
+
+extern "C" AcceleratorStatic* GetStartOfStatic(){
+  return &staticBuffer;
 }
 
 static void CloseWaveform(){
@@ -138,7 +143,7 @@ extern "C" void VersatAcceleratorCreate(){
    self->rst = 0;
    self->running = 0;
 
-#{for i type.inputDelays.size}
+#{for i type.baseConfig.inputDelays.size}
    self->in@{i} = 0;
 #{end}
 
@@ -394,10 +399,10 @@ if(SimulateDatabus){
 #{end}
 
 // TODO: Technically only need to do this at the end of an accelerator run, do not need to do this every single update
-#{if type.configInfo.states}
+#{if type.baseConfig.states}
 AcceleratorState* state = &stateBuffer;
-#{for i type.configInfo.states.size}
-#{set wire type.configInfo.states[i]}
+#{for i type.baseConfig.states.size}
+#{set wire type.baseConfig.states[i]}
    state->@{statesHeader[i]} = self->@{wire.name};
 #{end}
 #{end}
@@ -429,57 +434,64 @@ Once operator+(_OnceTag t,F&& f){
 static void InternalStartAccelerator(){
    V@{type.name}* self = dut;
 
-#{if allConfigsVerilatorSide.size}
+#{if structuredConfigs.size}
 AcceleratorConfig* config = (AcceleratorConfig*) &configBuffer;
+AcceleratorStatic* statics = (AcceleratorStatic*) &staticBuffer;
 
 #{for wire allConfigsVerilatorSide}
  #{if configsHeader[index].bitSize != 64}
- once{
-     if((long long int) config->@{configsHeader[index].name} >= ((long long int) 1 << @{configsHeader[index].bitSize})){
+
+#if 0
+  once{
+     if((long long int) config->TOP_@{wire.name} >= ((long long int) 1 << @{configsHeader[index].bitSize})){
       printf("[Once] Warning, configuration value contains more bits\n");
       printf("set than the hardware unit is capable of handling\n");
       printf("Name: %s, BitSize: %d, Value: 0x%lx\n","@{configsHeader[index].name}",@{configsHeader[index].bitSize},config->@{configsHeader[index].name});
     }
   };
- #{end}
-
-  self->@{wire.name} = config->@{configsHeader[index].name};
+#endif
+#{end}
+  self->@{wire.name} = config->TOP_@{wire.name};
 #{end}
 #{end}
 
-#{if type.configInfo.delayOffsets.max}
-#{for i type.configInfo.delayOffsets.max}
-   self->delay@{i} = config->TOP_Delay@{i};
+#{for wire allStaticsVerilatorSide}
+  self->@{wire.name} = statics->@{wire.name};
+#{end}
+
+#{if type.baseConfig.delayOffsets.max}
+#{for i type.baseConfig.delayOffsets.max}
+  //self->delay@{i} = accelDelay.TOP_Delay@{i};
 #{end}
 #{end}
 
 #{for i type.nIOs}
 {
-    databusBuffer[@{i}].latencyCounter = INITIAL_MEMORY_LATENCY;
+   databusBuffer[@{i}].latencyCounter = INITIAL_MEMORY_LATENCY;
 }
 #{end}
 
-   self->run = 1;
-   UPDATE(self);
-   self->running = 1;
-   self->run = 0;
+  self->run = 1;
+  UPDATE(self);
+  self->running = 1;
+  self->run = 0;
 #{if trace}
-   if(CreateVCD) tfp->dump(contextp->time());
-   contextp->timeInc(1);
-   if(CreateVCD) tfp->dump(contextp->time());
-   contextp->timeInc(1);
+  if(CreateVCD) tfp->dump(contextp->time());
+  contextp->timeInc(1);
+  if(CreateVCD) tfp->dump(contextp->time());
+  contextp->timeInc(1);
 #{end}
 }
 
 static void InternalEndAccelerator(){
-   V@{type.name}* self = dut;
+  V@{type.name}* self = dut;
 
-   self->running = 0;
+  self->running = 0;
 
-   // TODO: Is this update call needed?
-   InternalUpdateAccelerator();
+  // TODO: Is this update call needed?
+  InternalUpdateAccelerator();
 
-   // TODO: We could put the copy of state variables here
+  // TODO: We could put the copy of state variables here
 }
 
 extern "C" int VersatAcceleratorCyclesElapsed(){
@@ -574,5 +586,15 @@ extern "C" void VersatSignalLoop(){
    self->eval();
 #{end}
 }
-                                
+
+extern "C" void VersatLoadDelay(const unsigned int* delayBuffer){
+  #{if type.baseConfig.delayOffsets.max}
+  V@{type.name}* self = dut;
+    #{for i type.baseConfig.delayOffsets.max}
+  self->delay@{i} = delayBuffer[@{i}];
+    #{end}
+   self->eval();
+  #{end}
+}
+
 #undef UPDATE

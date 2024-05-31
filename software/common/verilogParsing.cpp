@@ -18,13 +18,13 @@ bool PerformDefineSubstitution(Arena* output,MacroMap& macros,String name){
 
   Tokenizer inside(subs,"`",{});
   while(!inside.Done()){
-    Token peek = inside.PeekFindUntil("`");
+    Opt<Token> peek = inside.PeekFindUntil("`");
 
-    if(peek.size < 0){
+    if(!peek.has_value()){
       break;
     } else {
-      inside.AdvancePeek(peek);
-      PushString(output,peek);
+      inside.AdvancePeek(peek.value());
+      PushString(output,peek.value());
 
       inside.AssertNextToken("`");
 
@@ -52,18 +52,18 @@ static void DoIfStatement(Tokenizer* tok,MacroMap& macros,Array<String> includeF
   } else if(CompareString(first,"ifndef")){
     compareVal = false;
   } else {
-    UNHANDLED_ERROR;
+    UNHANDLED_ERROR("TODO: Make this a handled error");
   }
 
   bool exists = (macros.find(macroName) != macros.end());
   bool doIf = (compareVal == exists);
 
   // Try to find the edges of the if construct (else, endif or, if find another if recurse.)
-  void* mark = tok->Mark();
+  auto mark = tok->Mark();
   while(!tok->Done()){
     Token subContent = tok->Point(mark); // So that we never pass a string with a `endif to preprocess (or any other `directive except the ones that start a block)
 
-    void* subMark = tok->Mark();
+    auto subMark = tok->Mark();
     Token token = tok->NextToken();
     if(!CompareString(token,"`")){
       continue;
@@ -116,130 +116,133 @@ void PreprocessVerilogFile_(String fileContent,MacroMap& macros,Array<String> in
     tok->AdvancePeek(peek);
     
     Token identifier = tok->PeekToken();
-    if(CompareToken(identifier,"include")){
-         tok->AdvancePeek(identifier);
-         tok->AssertNextToken("\"");
+    if(CompareString(identifier,"include")){
+      tok->AdvancePeek(identifier);
+      tok->AssertNextToken("\"");
 
-         Token fileName = tok->NextFindUntil("\"");
-         tok->AssertNextToken("\"");
+      Token fileName = tok->NextFindUntil("\"").value();
+      tok->AssertNextToken("\"");
 
-         // Open include file
-         std::string filename(UNPACK_SS_REVERSE(fileName));
-         FILE* file = nullptr;
-         for(String str : includeFilepaths){
-           std::string string(str.data,str.size);
+      // Open include file
+      std::string filename(UNPACK_SS_REVERSE(fileName));
+      FILE* file = nullptr;
+      for(String str : includeFilepaths){
+        std::string string(str.data,str.size);
 
-           std::string filepath;
-           if(string.back() == '/'){
-             filepath = string + filename;
-           } else {
-             filepath = string + '/' + filename;
-           }
+        std::string filepath;
+        if(string.back() == '/'){
+          filepath = string + filename;
+        } else {
+          filepath = string + '/' + filename;
+        }
 
-           file = fopen(filepath.c_str(),"r");
+        file = fopen(filepath.c_str(),"r");
 
-           if(file){
-             break;
-           }
-         }
+        if(file){
+          break;
+        }
+      }
 
-         if(!file){
-           printf("Couldn't find file: %.*s\n",UNPACK_SS(fileName));
-           printf("Looked on the following folders:\n");
+      if(!file){
+        printf("Couldn't find file: %.*s\n",UNPACK_SS(fileName));
+        printf("Looked on the following folders:\n");
 
-           printf("  %s\n",GetCurrentDirectory());
-           for(String str : includeFilepaths){
-             printf("  %.*s\n",UNPACK_SS(str));
-           }
+        printf("  %s\n",GetCurrentDirectory());
+        for(String str : includeFilepaths){
+          printf("  %.*s\n",UNPACK_SS(str));
+        }
 
-           DEBUG_BREAK();
-           exit(0);
-         }
+        DEBUG_BREAK();
+        exit(0);
+      }
 
-         size_t fileSize = GetFileSize(file);
+      size_t fileSize = GetFileSize(file);
 
-         Byte* mem = PushBytes(temp,fileSize + 1);
-         int amountRead = fread(mem,sizeof(char),fileSize,file);
+      Byte* mem = PushBytes(temp,fileSize + 1);
+      int amountRead = fread(mem,sizeof(char),fileSize,file);
       
-         if(amountRead != fileSize){
-           fprintf(stderr,"Verilog Parsing, error reading the full contents of a file\n");
-           exit(-1);
-         }
+      if(amountRead != fileSize){
+        fprintf(stderr,"Verilog Parsing, error reading the full contents of a file\n");
+        exit(-1);
+      }
 
-         mem[amountRead] = '\0';
+      mem[amountRead] = '\0';
 
-         PreprocessVerilogFile_(STRING((const char*) mem,fileSize),macros,includeFilepaths,out,temp);
+      PreprocessVerilogFile_(STRING((const char*) mem,fileSize),macros,includeFilepaths,out,temp);
 
-         fclose(file);
-    } else if(CompareToken(identifier,"define")){
-         tok->AdvancePeek(identifier);
-         Token defineName = tok->NextToken();
+      fclose(file);
+    } else if(CompareString(identifier,"define")){
+      tok->AdvancePeek(identifier);
       
-         Token emptySpace = tok->PeekWhitespace();
-         if(emptySpace.size == 0){ // Function macro
-            Token arguments = tok->PeekFindIncluding(")");
-            defineName = ExtendToken(defineName,arguments);
-            tok->AdvancePeek(arguments);
-         }
+      auto mark = tok->Mark();
+      Token defineName = tok->NextToken();
+      
+      Token emptySpace = tok->PeekWhitespace();
+      if(emptySpace.size == 0){ // Function macro
+        Token arguments = tok->PeekFindIncluding(")").value();
+        tok->AdvancePeek(arguments);
+        defineName = tok->Point(mark);
+      }
 
-         FindFirstResult search = tok->FindFirst({"\n","//","\\"});
-         Token first = search.foundFirst;
-         Token body = {};
+      FindFirstResult search = tok->FindFirst({"\n","//","\\"}).value();
+      String first = search.foundFirst;
+      Token body = {};
 
-         if(CompareString(first,"//")){ // If single comment newline or slash, the macro does not contain the comment
-            body = tok->PeekFindUntil("//");
-         } else {
-           Token line = tok->PeekFindUntil("\n");
-           body = line;
-           while(!tok->Done()){
-             if(line.size == -1){
-               line = tok->Finish();
-               body = ExtendToken(body,line);
-               break;
-             }
+      if(CompareString(first,"//")){ // If single comment newline or slash, the macro does not contain the comment
+        body = tok->PeekFindUntil("//").value();
+      } else {
+        auto mark = tok->Mark();
+        Token line = tok->PeekRemainingLine();
+        body = line;
+        while(!tok->Done()){
+          if(line.size == -1){
+            line = tok->Finish();
+            body = tok->Point(mark);
+            break;
+          }
 
-             Tokenizer inside(line,"\\",{}); // Handles slices inside comments
+          Tokenizer inside(line,"\\",{}); // Handles slices inside comments
 
-             bool hasSlice = false;
-             while(!inside.Done()){
-               Token t = inside.NextToken();
-               if(CompareString(t,"\\")){
-                 hasSlice = true;
-                 break;
-               }
-             }
+          bool hasSlice = false;
+          while(!inside.Done()){
+            Token t = inside.NextToken();
+            if(CompareString(t,"\\")){
+              hasSlice = true;
+              break;
+            }
+          }
 
-             if(hasSlice){
-               tok->AdvancePeek(line);
-               body = ExtendToken(body,line);
-               line = tok->PeekFindUntil("\n");
-             } else {
-               tok->AdvancePeek(line);
-               body = ExtendToken(body,line);
-               break;
-             }
-           }
-         }
+          if(hasSlice){
+            tok->AdvancePeek(line);
+            body = tok->Point(mark);
+            line = tok->PeekRemainingLine();
+          } else {
+            tok->AdvancePeek(line);
+            body = tok->Point(mark);
+            break;
+          }
+        }
+      }
 
-         macros[defineName] = body;
-    } else if(CompareToken(identifier,"undef")){
+      macros[defineName] = body;
+    } else if(CompareString(identifier,"undef")){
       tok->AdvancePeek(identifier);
       Token defineName = tok->NextToken();
 
       macros.erase(defineName);
-    } else if(CompareToken(identifier,"timescale")){
-      Token line = tok->PeekFindIncluding("\n");
+    } else if(CompareString(identifier,"timescale")){
+      Token line = tok->PeekRemainingLine();
 
       tok->AdvancePeek(line);
-    } else if(CompareToken(identifier,"ifdef") || CompareToken(identifier,"ifndef")){
+    } else if(CompareString(identifier,"ifdef") || CompareString(identifier,"ifndef")){
       DoIfStatement(tok,macros,includeFilepaths,out,temp);
       
-    } else if(CompareToken(identifier,"else")){
-      NOT_POSSIBLE;
-    } else if(CompareToken(identifier,"endif")){
-      NOT_POSSIBLE;
-    } else if(CompareToken(identifier,"elsif")){
-      NOT_POSSIBLE;
+    } else if(CompareString(identifier,"else")){
+      NOT_POSSIBLE("All else and ends should have already been handled inside DoIf");
+    } else if(CompareString(identifier,"endif")){
+      NOT_POSSIBLE("All else and ends should have already been handled inside DoIf");
+    } else if(CompareString(identifier,"elsif")){
+      NOT_POSSIBLE("All else and ends should have already been handled inside DoIf");
     } else {
       tok->AdvancePeek(identifier);
 
@@ -257,11 +260,11 @@ String PreprocessVerilogFile(String fileContent,Array<String> includeFilepaths,A
 
   BLOCK_REGION(temp);
 
-  Byte* mark = MarkArena(out);
+  auto mark = StartString(out);
   PreprocessVerilogFile_(fileContent,macros,includeFilepaths,out,temp);
 
   PushString(out,STRING("\0"));
-  String res = PointArena(out,mark);
+  String res = EndString(mark);
 
   return res;
 }
@@ -282,7 +285,7 @@ static Expression* VerilogParseAtom(Tokenizer* tok,Arena* out){
     return expr;
   } else if(peek[0] == '"'){
     tok->AdvancePeek(peek);
-    Token str = tok->PeekFindUntil("\"");
+    Token str = tok->PeekFindUntil("\"").value();
     tok->AdvancePeek(str);
     tok->AssertNextToken("\"");
 
@@ -340,7 +343,7 @@ static Value Eval(Expression* expr,ValueMap& map){
       return res;
     }break;
     default:{
-      NOT_IMPLEMENTED;
+      NOT_IMPLEMENTED("Implemented as needed");
     }break;
     }
   }break;
@@ -352,15 +355,16 @@ static Value Eval(Expression* expr,ValueMap& map){
     return expr->val;
   }break;
   default:{
-    NOT_POSSIBLE;
+    NOT_POSSIBLE("Implemented as needed");
   }break;
   }
 
-  NOT_POSSIBLE;
+  NOT_POSSIBLE("Implemented as needed");
   return MakeValue();
 }
 
 static Array<ParameterExpression> ParseParameters(Tokenizer* tok,ValueMap& map,Arena* arena){
+  //TODO: Add full parsing of verilog expressions, otherwise we can only handle simple "parameter name = value," expressions.
   //TODO: Add type and range to parsing
   /*
 	Range currentRange;
@@ -375,16 +379,16 @@ static Array<ParameterExpression> ParseParameters(Tokenizer* tok,ValueMap& map,A
   while(1){
     Token peek = tok->PeekToken();
 
-    if(CompareToken(peek,"parameter")){
+    if(CompareString(peek,"parameter")){
       tok->AdvancePeek(peek);
       // Parse optional type info and range
       continue;
-    } else if(CompareToken(peek,")")){
+    } else if(CompareString(peek,")")){
       break;
-    } else if(CompareToken(peek,";")){ // To parse inside module parameters, technically wrong but harmless
+    } else if(CompareString(peek,";")){ // To parse inside module parameters, technically wrong but harmless
          tok->AdvancePeek(peek);
          break;
-    } else if(CompareToken(peek,",")){
+    } else if(CompareString(peek,",")){
       tok->AdvancePeek(peek);
       continue;
     } else { // Must be a parameter assignment
@@ -446,7 +450,10 @@ static ExpressionRange ParseRange(Tokenizer* tok,ValueMap& map,Arena* out){
 #define VERSAT_LATENCY STRING("versat_latency")
 #define VERSAT_STATIC  STRING("versat_static")
 
-static String possibleAttributesData[] = {VERSAT_LATENCY,VERSAT_STATIC};
+static String possibleAttributesData[] = {
+  VERSAT_LATENCY,
+  VERSAT_STATIC
+};
 static Array<String> possibleAttributes = C_ARRAY_TO_ARRAY(possibleAttributesData);
 
 static Module ParseModule(Tokenizer* tok,Arena* out,Arena* temp){
@@ -458,7 +465,7 @@ static Module ParseModule(Tokenizer* tok,Arena* out,Arena* temp){
   module.name = tok->NextToken();
 
   Token peek = tok->PeekToken();
-  if(CompareToken(peek,"#(")){
+  if(CompareString(peek,"#(")){
     tok->AdvancePeek(peek);
     module.parameters = ParseParameters(tok,values,out);
     tok->AssertNextToken(")");
@@ -475,12 +482,12 @@ static Module ParseModule(Tokenizer* tok,Arena* out,Arena* temp){
     ArenaList<Pair<String,Value>>* attributeList = PushArenaList<Pair<String,Value>>(temp);
     //Hashmap<String,Value>* attributes = 
     
-    if(CompareToken(peek,"(*")){
+    if(CompareString(peek,"(*")){
       tok->AdvancePeek(peek);
       while(1){
         Token attributeName = tok->NextToken();
 
-        if(!Contains(possibleAttributes,attributeName)){
+        if(!Contains(possibleAttributes,(String) attributeName)){
           printf("ERROR: Do not know attribute named: %.*s\n",UNPACK_SS(attributeName));
           exit(-1);
         }
@@ -520,7 +527,7 @@ static Module ParseModule(Tokenizer* tok,Arena* out,Arena* temp){
     } else if(CompareString(portType,"inout")){
       port.type = PortDeclaration::INOUT;
     } else {
-      UNHANDLED_ERROR;
+      UNHANDLED_ERROR("TODO: Should be a handled error");
     }
 
     // TODO: Add a new function to parser to "ignore" the following list of tokens (loop every time until it doesn't find one from the list), and replace this function here with reg and all the different types it can be
@@ -544,7 +551,7 @@ static Module ParseModule(Tokenizer* tok,Arena* out,Arena* temp){
     *PushListElement(portList) = port;
 
     peek = tok->PeekToken();
-    if(CompareToken(peek,")")){
+    if(CompareString(peek,")")){
       tok->AdvancePeek(peek);
       break;
     }
@@ -558,9 +565,9 @@ static Module ParseModule(Tokenizer* tok,Arena* out,Arena* temp){
   while(1){
     Token peek = tok->PeekToken();
 
-    if(CompareToken(peek,"parameter")){
+    if(CompareString(peek,"parameter")){
       ParseParameters(tok,values);
-    } else if(CompareToken(peek,"endmodule")){
+    } else if(CompareString(peek,"endmodule")){
       tok->AdvancePeek(peek);
       break;
     } else {
@@ -569,7 +576,7 @@ static Module ParseModule(Tokenizer* tok,Arena* out,Arena* temp){
   }
 #endif
 
-  Token skip = tok->PeekFindIncluding("endmodule");
+  Token skip = tok->PeekFindIncluding("endmodule").value();
   tok->AdvancePeek(skip);
 
   return module;
@@ -578,7 +585,7 @@ static Module ParseModule(Tokenizer* tok,Arena* out,Arena* temp){
 Array<Module> ParseVerilogFile(String fileContent,Array<String> includeFilepaths,Arena* out,Arena* temp){
   BLOCK_REGION(temp);
 
-  Tokenizer tokenizer = Tokenizer(fileContent,":,()[]{}\"+-/*=",{"#(","+:","-:","(*","*)"});
+  Tokenizer tokenizer = Tokenizer(fileContent,"\n:,()[]{}\"+-/*=",{"#(","+:","-:","(*","*)"});
   Tokenizer* tok = &tokenizer;
 
   ArenaList<Module>* modules = PushArenaList<Module>(temp);
@@ -587,14 +594,14 @@ Array<Module> ParseVerilogFile(String fileContent,Array<String> includeFilepaths
   while(!tok->Done()){
     Token peek = tok->PeekToken();
 
-    if(CompareToken(peek,"(*")){
+    if(CompareString(peek,"(*")){
       tok->AdvancePeek(peek);
 
       Token attribute = tok->NextToken();
-      if(CompareToken(attribute,"source")){
+      if(CompareString(attribute,"source")){
         isSource = true;
       } else {
-        NOT_IMPLEMENTED; // Unknown attribute, error for now
+        NOT_IMPLEMENTED("Should not give an error, TODO"); // Unknown attribute, error for now
       }
 
       tok->AssertNextToken("*)");
@@ -602,7 +609,7 @@ Array<Module> ParseVerilogFile(String fileContent,Array<String> includeFilepaths
       continue;
     }
 
-    if(CompareToken(peek,"module")){
+    if(CompareString(peek,"module")){
       Module module = ParseModule(tok,out,temp);
 
       module.isSource = isSource;
@@ -618,22 +625,22 @@ Array<Module> ParseVerilogFile(String fileContent,Array<String> includeFilepaths
   return PushArrayFromList(out,modules);
 }
 
-ModuleInfo ExtractModuleInfo(Module& module,Arena* permanent,Arena* tempArena){
-  BLOCK_REGION(tempArena);
+ModuleInfo ExtractModuleInfo(Module& module,Arena* out,Arena* temp){
+  BLOCK_REGION(temp);
 
   ModuleInfo info = {};
 
   info.defaultParameters = module.parameters;
 
-  PushPtr<int> inputDelay(permanent,100);
-  PushPtr<int> outputLatency(permanent,100);
-  PushPtr<WireExpression> configs(permanent,1000);
-  PushPtr<WireExpression> states(permanent,1000);
+  PushPtr<int> inputDelay(out,100);
+  PushPtr<int> outputLatency(out,100);
+  PushPtr<WireExpression> configs(out,1000);
+  PushPtr<WireExpression> states(out,1000);
 
   info.name = module.name;
   info.isSource = module.isSource;
 
-  Hashmap<ExternalMemoryID,ExternalMemoryInfo>* external = PushHashmap<ExternalMemoryID,ExternalMemoryInfo>(tempArena,100);
+  Hashmap<ExternalMemoryID,ExternalMemoryInfo>* external = PushHashmap<ExternalMemoryID,ExternalMemoryInfo>(temp,100);
 
   for(PortDeclaration decl : module.ports){
     Tokenizer port(decl.name,"",{"in","out","delay","done","rst","clk","run","running","databus"});
@@ -641,7 +648,7 @@ ModuleInfo ExtractModuleInfo(Module& module,Arena* permanent,Arena* tempArena){
     if(CompareString("signal_loop",decl.name)){
       info.signalLoop = true;
     } else if(CheckFormat("ext_dp_%s_%d_port_%d",decl.name)){
-      Array<Value> values = ExtractValues("ext_dp_%s_%d_port_%d",decl.name,tempArena);
+      Array<Value> values = ExtractValues("ext_dp_%s_%d_port_%d",decl.name,temp);
 
       ExternalMemoryID id = {};
       id.interface = values[1].number;
@@ -671,7 +678,7 @@ ModuleInfo ExtractModuleInfo(Module& module,Arena* permanent,Arena* tempArena){
       String wire = {};
 	  bool out = false;
       if(CheckFormat("ext_2p_%s_%s_%d",decl.name)){
-        Array<Value> values = ExtractValues("ext_2p_%s_%s_%d",decl.name,tempArena);
+        Array<Value> values = ExtractValues("ext_2p_%s_%s_%d",decl.name,temp);
 
         wire = values[0].str;
 		String outOrIn = values[1].str;
@@ -684,12 +691,12 @@ ModuleInfo ExtractModuleInfo(Module& module,Arena* permanent,Arena* tempArena){
 		}
         id.interface = values[2].number;
       } else if(CheckFormat("ext_2p_%s_%d",decl.name)){
-        Array<Value> values = ExtractValues("ext_2p_%s_%d",decl.name,tempArena);
+        Array<Value> values = ExtractValues("ext_2p_%s_%d",decl.name,temp);
 
         wire = values[0].str;
         id.interface = values[1].number;
       } else {
-        UNHANDLED_ERROR;
+        UNHANDLED_ERROR("TODO: Should be an handled error");
       }
 
       ExternalMemoryInfo* ext = external->GetOrInsert(id,{});
@@ -711,7 +718,7 @@ ModuleInfo ExtractModuleInfo(Module& module,Arena* permanent,Arena* tempArena){
       } else if(CompareString(wire,"read")){
         ext->tp.read = true;
       } else {
-        UNHANDLED_ERROR;
+        UNHANDLED_ERROR("Should be an handled error");
       }
     } else if(CheckFormat("in%d",decl.name)){
       port.AssertNextToken("in");
@@ -744,7 +751,7 @@ ModuleInfo ExtractModuleInfo(Module& module,Arena* permanent,Arena* tempArena){
 				|| CheckFormat("databus_wstrb_%d",decl.name)
 				|| CheckFormat("databus_len_%d",decl.name)
 				|| CheckFormat("databus_last_%d",decl.name)){
-      Array<Value> val = ExtractValues("databus_%s_%d",decl.name,tempArena);
+      Array<Value> val = ExtractValues("databus_%s_%d",decl.name,temp);
 
       if(CheckFormat("databus_addr_%d",decl.name)){
         info.databusAddrSize = decl.range;
@@ -795,7 +802,7 @@ ModuleInfo ExtractModuleInfo(Module& module,Arena* permanent,Arena* tempArena){
          wire->bitSize = decl.range;
          wire->name = decl.name;
     } else {
-      NOT_IMPLEMENTED;
+      NOT_IMPLEMENTED("Implemented as needed, so far all if cases handles all cases so we should never reach here");
     }
   }
 
@@ -808,7 +815,7 @@ ModuleInfo ExtractModuleInfo(Module& module,Arena* permanent,Arena* tempArena){
     info.nIO += 1;
   }
 
-  Array<ExternalMemoryInterfaceExpression> interfaces = PushArray<ExternalMemoryInterfaceExpression>(permanent,external->nodesUsed);
+  Array<ExternalMemoryInterfaceExpression> interfaces = PushArray<ExternalMemoryInterfaceExpression>(out,external->nodesUsed);
   int index = 0;
   for(Pair<ExternalMemoryID,ExternalMemoryInfo> pair : external){
 	//printf("%.*s\n",UNPACK_SS(module.name));
@@ -825,39 +832,12 @@ ModuleInfo ExtractModuleInfo(Module& module,Arena* permanent,Arena* tempArena){
 	  inter.dp[0] = pair.second.dp[0];
 	  inter.dp[1] = pair.second.dp[1];
 	}break;
-	default: NOT_IMPLEMENTED;
+	default: NOT_IMPLEMENTED("Implemented as needed");
 	}
   }
   info.externalInterfaces = interfaces;
 
   return info;
-}
-
-void GetAllIdentifiers_(Expression* expr,PushPtr<String>& ptr){
-  if(expr->type == Expression::IDENTIFIER){
-    String id = expr->id;
-
-    Array<String> arr = ptr.AsArray();
-    if(Contains(arr,id)){
-      return;
-    } else {
-      ptr.PushValue(id);
-    }
-  }
-
-  for(Expression* child : expr->expressions){
-    GetAllIdentifiers_(child,ptr);
-  }
-}
-
-Array<String> GetAllIdentifiers(Expression* expr,Arena* arena){
-  PushPtr<String> ptr(arena,99);
-
-  GetAllIdentifiers_(expr,ptr);
-
-  PopPushPtr(arena,ptr);
-
-  return ptr.AsArray();
 }
 
 Value Eval(Expression* expr,Array<ParameterExpression> parameters){
@@ -887,7 +867,7 @@ Value Eval(Expression* expr,Array<ParameterExpression> parameters){
     } break;
     default: {
       printf("%s\n",expr->op);
-      NOT_IMPLEMENTED;
+      NOT_IMPLEMENTED("Implemented as needed");
     } break;
     }
   } break;
@@ -903,7 +883,7 @@ Value Eval(Expression* expr,Array<ParameterExpression> parameters){
   } break;
   default: {
     printf("%d\n",(int) expr->type);
-    NOT_IMPLEMENTED;
+    NOT_IMPLEMENTED("Implemented as needed");
   } break;
   }
 

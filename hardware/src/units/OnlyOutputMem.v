@@ -5,6 +5,7 @@
 module OnlyOutputMem #(
    parameter DATA_W        = 32,
    parameter SIZE_W        = 32,
+   parameter DELAY_W       = 7,
    parameter ADDR_W        = 12
 ) (
    //control
@@ -42,7 +43,7 @@ module OnlyOutputMem #(
    input [ADDR_W-1:0] startA,
    input [ADDR_W-1:0] shiftA,
    input [ADDR_W-1:0] incrA,
-   input [    32-1:0] delay0,
+   input [DELAY_W-1:0] delay0,
    input              reverseA,
    input              extA,
    input [ADDR_W-1:0] iter2A,

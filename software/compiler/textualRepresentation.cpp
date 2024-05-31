@@ -1,18 +1,19 @@
 #include "textualRepresentation.hpp"
 #include "memory.hpp"
+#include "utils.hpp"
 #include "utilsCore.hpp"
 
 // For now hardcoded for 32 bits.
-String BinaryRepr(int number,Arena* out){
-  Byte* buffer = PushBytes(out,32);
+String BinaryRepr(int number,int bitsize,Arena* out){
+  Byte* buffer = PushBytes(out,bitsize);
 
-  for(int i = 0; i < 32; i++){
+  for(int i = 0; i < bitsize; i++){
     buffer[i] = GET_BIT(number,31 - i) ? '1' : '0';
   }
   
   String res = {};
   res.data = (char*) buffer;
-  res.size = 32;
+  res.size = bitsize;
   return res;
 }
 
@@ -23,7 +24,7 @@ String UniqueRepr(FUInstance* inst,Arena* out){
 }
 
 String Repr(FUInstance* inst,GraphDotFormat format,Arena* out){
-  Byte* mark = MarkArena(out);
+  auto mark = StartString(out);
 
   FUInstance* instance = (FUInstance*) inst;
 
@@ -64,11 +65,12 @@ String Repr(FUInstance* inst,GraphDotFormat format,Arena* out){
     if(buffer){
       PushString(out,"%d",instance->bufferAmount);
     } else {
-      PushString(out,"%d",inst->baseDelay);
+      PushString(out,"0");
+      //PushString(out,"%d",inst->baseDelay); //TODO: Broken 
     }
   }
 
-  String res = PointArena(out,mark);
+  String res = EndString(mark);
   return res;
 }
 
@@ -85,7 +87,7 @@ String Repr(FUDeclaration** decl,Arena* out){
 }
 
 String Repr(PortInstance* inPort,PortInstance* outPort,GraphDotFormat format,Arena* out){
-  Byte* mark = MarkArena(out);
+  auto mark = StartString(out);
 
   bool expl = format & GRAPH_DOT_FORMAT_EXPLICIT;
   bool lat  = format & GRAPH_DOT_FORMAT_LATENCY;
@@ -96,7 +98,7 @@ String Repr(PortInstance* inPort,PortInstance* outPort,GraphDotFormat format,Are
     PushString(out,"\\nLat:");
   }
   if(lat){
-    PushString(out,"%d",inPort->inst->declaration->outputLatencies[inPort->port]);
+    PushString(out,"%d",inPort->inst->declaration->baseConfig.outputLatencies[inPort->port]);
   }
 
   PushString(out,"\\n->\\n");
@@ -105,15 +107,15 @@ String Repr(PortInstance* inPort,PortInstance* outPort,GraphDotFormat format,Are
     PushString(out,"\\nLat:");
   }
   if(lat){
-    PushString(out,"%d",outPort->inst->declaration->inputDelays[outPort->port]);
+    PushString(out,"%d",outPort->inst->declaration->baseConfig.inputDelays[outPort->port]);
   }
 
-  String res = PointArena(out,mark);
+  String res = EndString(mark);
   return res;
 }
 
 String Repr(PortInstance* port,GraphDotFormat format,Arena* out){
-  Byte* mark = MarkArena(out);
+  auto mark = StartString(out);
 
   Repr(port->inst,GRAPH_DOT_FORMAT_NAME,out);
 
@@ -124,12 +126,12 @@ String Repr(PortInstance* port,GraphDotFormat format,Arena* out){
   }
   PushString(out,":%d",port->port);
 
-  String res = PointArena(out,mark);
+  String res = EndString(mark);
   return res;
 }
 
 String Repr(PortEdge* edge,GraphDotFormat format,Arena* out){
-  Byte* mark = MarkArena(out);
+  auto mark = StartString(out);
 
   format |= GRAPH_DOT_FORMAT_NAME;
 
@@ -137,12 +139,12 @@ String Repr(PortEdge* edge,GraphDotFormat format,Arena* out){
   PushString(out," -- ");
   Repr(&edge->units[1],format,out);
 
-  String res = PointArena(out,mark);
+  String res = EndString(mark);
   return res;
 }
 
 String Repr(MergeEdge* node,GraphDotFormat format,Arena* out){
-  Byte* mark = MarkArena(out);
+  auto mark = StartString(out);
 
   format |= GRAPH_DOT_FORMAT_NAME;
 
@@ -150,7 +152,7 @@ String Repr(MergeEdge* node,GraphDotFormat format,Arena* out){
   PushString(out," -- ");
   Repr(node->instances[1],format,out);
 
-  String name = PointArena(out,mark);
+  String name = EndString(mark);
 
   return name;
 }
@@ -165,13 +167,13 @@ String Repr(MappingNode* node,Arena* out){
     PortEdge e0 = node->edges[0];
     PortEdge e1 = node->edges[1];
 
-    Byte* mark = MarkArena(out);
+    auto mark = StartString(out);
     Repr(&e0,format,out);
     PushString(out," // ");
     Repr(&e1,format,out);
-    name = PointArena(out,mark);
+    name = EndString(mark);
   } else {
-    NOT_IMPLEMENTED;
+    NOT_IMPLEMENTED("Implement as needed");
   }
 
   return name;
@@ -189,7 +191,7 @@ String PushIntTableRepresentation(Arena* out,Array<int> values,int digitSize){
   }
 
   int valPerLine = 80 / (maxDigitSize + 1); // +1 for spaces
-  Byte* mark = MarkArena(out);
+  auto mark = StartString(out);
   for(int i = 0; i < values.size; i++){
     if((i % valPerLine == 0) && i != 0){
       PushString(out,"\n");
@@ -198,62 +200,116 @@ String PushIntTableRepresentation(Arena* out,Array<int> values,int digitSize){
     PushString(out,"%.*d ",maxDigitSize,values[i]);
   }
 
-  String res = PointArena(out,mark);
+  String res = EndString(mark);
   return res;
 }
 
 String Repr(StaticId* id,Arena* out){
-  Byte* mark = MarkArena(out);
+  auto mark = StartString(out);
 
   Repr(id->parent,out);
   PushString(out," %.*s",UNPACK_SS(id->name));
 
-  String res = PointArena(out,mark);
+  String res = EndString(mark);
   return res;
 }
 
 String Repr(StaticData* data,Arena* out){
-  Byte* mark = MarkArena(out);
+  auto mark = StartString(out);
 
   PushString(out," (%d)",data->offset);
 
-  String res = PointArena(out,mark);
+  String res = EndString(mark);
   return res;
 }
 
 String Repr(PortNode* portNode,Arena* out){
-  Byte* mark = MarkArena(out);
+  auto mark = StartString(out);
 
   PushString(out,"%.*s",UNPACK_SS(portNode->node->inst->name));
   PushString(out,":%d",portNode->port);
 
-  String res = PointArena(out,mark);
+  String res = EndString(mark);
   return res;
 }
 
 String Repr(EdgeNode* node,Arena* out){
-  Byte* mark = MarkArena(out);
+  auto mark = StartString(out);
 
   Repr(&node->node0,out);
   PushString(out," -> ");
   Repr(&node->node1,out);
 
-  String res = PointArena(out,mark);
+  String res = EndString(mark);
   return res;
 }
 
 String Repr(Wire* wire,Arena* out){
-  Byte* mark = MarkArena(out);
+  auto mark = StartString(out);
 
   PushString(out,wire->name);
   PushString(out,":%d",wire->bitSize);
 
-  String res = PointArena(out,mark);
+  String res = EndString(mark);
   return res;
 }
 
+String Repr(int* i,Arena* out){
+  if(i == nullptr){
+    return PushString(out,STRING("(null)"));
+  }
+
+  return PushString(out,"%d",*i);
+}
+
+String Repr(long int* i,Arena* out){
+  if(i == nullptr){
+    return PushString(out,STRING("(null)"));
+  }
+  return PushString(out,"%ld",*i);
+}
+
+String Repr(bool* b,Arena* out){
+  if(b == nullptr){
+    return PushString(out,STRING("(null)"));
+  }
+
+  return PushString(out,"%c",*b ? '1' : '0');
+}
+
+String Repr(char** ch,Arena* out){
+  if(*ch == nullptr){
+    return PushString(out,STRING("(null)"));
+  }
+  return PushEscapedString(out,STRING(*ch),' ');
+}
+
+String Repr(String* str,Arena* out){
+  return PushString(out,*str);
+}
+
+String Repr(ExternalMemoryInterfaceTemplate<int>* ext, Arena* out){
+  if(ext == nullptr){
+    return PushString(out,STRING("(null)"));
+  }
+
+  switch(ext->type){
+  case TWO_P:{
+    return PushString(out,STRING("TWO_P"));
+  } break;
+  case DP:{
+    return PushString(out,STRING("TWO_P"));
+  } break;
+  default: NOT_IMPLEMENTED("Implement as needed");
+  }
+
+  NOT_POSSIBLE("Unreachable");
+  return {};
+}
+
+#if 0
 String Repr(InstanceInfo* info,Arena* out){
-  Byte* mark = MarkArena(out);
+  auto mark = StartString(out);
 
   PushString(out,"[");
   Repr(info->decl,out);
@@ -270,45 +326,30 @@ String Repr(InstanceInfo* info,Arena* out){
   String res = PointArena(out,mark);
   return res;
 }
-
-String Repr(int* i,Arena* out){
-  return PushString(out,"%d",*i);
-}
-
-String Repr(long int* i,Arena* out){
-  return PushString(out,"%ld",*i);
-}
-
-String Repr(bool* b,Arena* out){
-  return PushString(out,"%c",*b ? '1' : '0');
-}
-
-String Repr(String* str,Arena* out){
-  return PushString(out,*str);
-}
+#endif
 
 String Repr(TypeStructInfoElement* elem,Arena* out){
-  NOT_IMPLEMENTED;
+  NOT_IMPLEMENTED("Implement if needed");
   return {};
   //return PushString(out,"[%.*s]%.*s",UNPACK_SS(elem->type),UNPACK_SS(elem->name));
 }
 
 String Repr(TypeStructInfo* info,Arena* out){
-  Byte* mark = MarkArena(out);
+  auto mark = StartString(out);
   Repr(&info->name,out);
   PushString(out,"\n");
   for(TypeStructInfoElement& elem : info->entries){
     Repr(&elem,out);
     PushString(out,"\n");
   }
-  return PointArena(out,mark);
+  return EndString(mark);
 }
 
 String Repr(InstanceNode* node,Arena* out){
   return Repr(node->inst,GRAPH_DOT_FORMAT_NAME,out);
 }
 
-String Repr(Optional<int>* opt,Arena* out){
+String Repr(Opt<int>* opt,Arena* out){
   if(opt->has_value()){
     return Repr(&opt->value(),out);
   } else {

@@ -12,13 +12,12 @@
 #include "utils.hpp"
 #include "type.hpp"
 #include "utilsCore.hpp"
-
+#include "debug.hpp"
 
 /*
 
 What I should tackle first:
 
-  Fix the usage of SetValue and CreateValue and maybe add the Let command that always creates a new variable inside the frame
   Only common.tpl including is working. For now there is no need for full includes
   Command could just be an expression.
   Maybe should check the seperation of expressions instead of reusing the parser one.
@@ -28,19 +27,42 @@ What I should tackle first:
 
 //#define DEBUG_TEMPLATE_ENGINE
 
+static ArenaList<TemplateRecord>* recordList;
 static String globalTemplateName = {}; // The current name that is being parsed / evaluated. For error reporting reasons. TODO: Do not like it, not a big deal for now. Only change if needed
+extern Array<Pair<String,String>> templateNameToContent; // TODO: Kinda of a quick hack to make this work. Need to revise the way templates are done
 
-struct ValueAndText{
-  Value val;
-  String text;
-};
+static std::unordered_map<String,PipeFunction> pipeFunctions;
 
-struct Frame{
-  Hashmap<String,Value>* table;
-  Frame* previousFrame;
-};
+static Value EvalExpression(Expression* expr,Frame* frame,Arena* out);
 
-static Optional<Value> GetValue(Frame* frame,String var){
+// TODO: This is not the prefered way of doing this.
+// Maybe just compile the template in malloc'ed memory
+// And keep the memory around, it's not like user code would have a reason to free this memory
+static CompiledTemplate* savedTemplate = nullptr;
+void SetIncludeHeader(CompiledTemplate* tpl,String name){
+  savedTemplate = tpl;
+}
+
+bool operator==(const TemplateRecord& r0,const TemplateRecord& r1){
+  if(r0.type != r1.type){
+    return false;
+  }
+
+  bool res = false;
+  switch(r0.type){
+  case TemplateRecordType_FIELD:{
+    res = (r0.structType == r1.structType) && CompareString(r0.fieldName,r1.fieldName);
+  } break;
+  case TemplateRecordType_IDENTIFER:{
+    res = (r0.identifierType == r1.identifierType) && CompareString(r0.identifierName,r1.identifierName);
+  } break;
+  default: NOT_IMPLEMENTED("Implemented as needed");
+  }
+  
+  return res;
+}
+
+static Opt<Value> GetValue(Frame* frame,String var){
   Frame* ptr = frame;
 
   while(ptr){
@@ -136,13 +158,13 @@ static CommandDefinition commandDefinitions[] = {{STRING("join"),3,CommandType_J
                                                  {STRING("debugBreak"),0,CommandType_DEBUG_BREAK,false}};
 
 static Command* ParseCommand(Tokenizer* tok,Arena* out){
-  Byte* mark = tok->Mark();
+  auto mark = tok->Mark();
   tok->AssertNextToken("#{");
 
   Command* com = PushStruct<Command>(out);
   *com = {};
 
-  String commandName = tok->NextToken();
+  Token commandName = tok->NextToken();
   for(unsigned int i = 0; i < ARRAY_SIZE(commandDefinitions); i++){
     CommandDefinition* ptr = &commandDefinitions[i];
 
@@ -155,7 +177,7 @@ static Command* ParseCommand(Tokenizer* tok,Arena* out){
   
   int actualExpressionSize = com->definition->numberExpressions;
   if(actualExpressionSize == -1){
-    Token peek = tok->PeekUntilDelimiterExpression({"{","@{","#{"},{"}"},1);
+    Token peek = tok->PeekUntilDelimiterExpression({"{","@{","#{"},{"}"},1).value();
     Tokenizer arguments(peek,"}",{"@{","#{"});
 
     actualExpressionSize = 0;
@@ -163,10 +185,10 @@ static Command* ParseCommand(Tokenizer* tok,Arena* out){
       Token token = arguments.NextToken();
 
       if(CompareString(token,"@{")){
-        Token insidePeek = arguments.PeekIncludingDelimiterExpression({"@{"},{"}"},1);
+        Token insidePeek = arguments.PeekIncludingDelimiterExpression({"@{"},{"}"},1).value();
         arguments.AdvancePeek(insidePeek);
       } else if(CompareString(token,"#{")){
-        Token insidePeek = arguments.PeekIncludingDelimiterExpression({"#{"},{"}"},1);
+        Token insidePeek = arguments.PeekIncludingDelimiterExpression({"#{"},{"}"},1).value();
         arguments.AdvancePeek(insidePeek);
       }
 
@@ -187,7 +209,7 @@ static Command* ParseCommand(Tokenizer* tok,Arena* out){
 
 // Crude parser for identifiers
 static Expression* ParseIdentifier(Expression* current,Tokenizer* tok,Arena* out){
-  void* start = tok->Mark();
+  auto start = tok->Mark();
   Token firstId = tok->NextToken();
 
   current->type = Expression::IDENTIFIER;
@@ -234,7 +256,7 @@ static Expression* ParseIdentifier(Expression* current,Tokenizer* tok,Arena* out
 }
 
 static Expression* ParseAtom(Tokenizer* tok,Arena* out){
-  void* start = tok->Mark();
+  auto start = tok->Mark();
 
   Expression* expr = PushStruct<Expression>(out);
   *expr = {};
@@ -253,7 +275,7 @@ static Expression* ParseAtom(Tokenizer* tok,Arena* out){
     expr->val = MakeValue(num);
   } else if(token[0] == '\"'){
     tok->AdvancePeek(token);
-    Token str = tok->NextFindUntil("\"");
+    Token str = tok->NextFindUntil("\"").value();
     tok->AssertNextToken("\"");
 
     expr->val = MakeValue(str);
@@ -276,7 +298,7 @@ static Expression* ParseAtom(Tokenizer* tok,Arena* out){
 }
 
 static Expression* ParseFactor(Tokenizer* tok,Arena* out){
-  void* start = tok->Mark();
+  auto start = tok->Mark();
 
   Token peek = tok->PeekToken();
 
@@ -308,7 +330,7 @@ static Expression* ParseFactor(Tokenizer* tok,Arena* out){
 }
 
 static Expression* ParseExpression(Tokenizer* tok,Arena* out){
-  void* start = tok->Mark();
+  auto start = tok->Mark();
 
   Expression* res = ParseOperationType(tok,{{"#"},{"|>"},{"and","or","xor"},{">","<",">=","<=","==","!="},{"+","-"},{"*","/","&","**"}},ParseFactor,out);
 
@@ -317,7 +339,7 @@ static Expression* ParseExpression(Tokenizer* tok,Arena* out){
 }
 
 static Expression* ParseBlockExpression(Tokenizer* tok,int line,Arena* out){
-  Byte* mark = tok->Mark();
+  auto mark = tok->Mark();
   tok->AssertNextToken("@{");
 
   Expression* expr = ParseExpression(tok,out);
@@ -328,12 +350,6 @@ static Expression* ParseBlockExpression(Tokenizer* tok,int line,Arena* out){
   
   return expr;
 }
-
-struct IndividualBlock{
-  String content;
-  BlockType type;
-  int line;
-};
 
 static Array<IndividualBlock> ParseIndividualLine(String line, int lineNumber,Arena* out,Arena* temp){
   if(CompareString(line,"")){
@@ -347,32 +363,30 @@ static Array<IndividualBlock> ParseIndividualLine(String line, int lineNumber,Ar
   ArenaList<IndividualBlock>* strings = PushArenaList<IndividualBlock>(temp);
 
   while(1){
-    Byte* start = tok.Mark();
-    FindFirstResult res = tok.FindFirst({"#{","@{"});
+    Opt<FindFirstResult> res = tok.FindFirst({"#{","@{"});
     
-    if(res.foundNone){
+    if(!res.has_value()){
       String leftover = tok.Finish();
-      if(leftover.size > 0){
-        *PushListElement(strings) = (IndividualBlock){leftover,BlockType_TEXT,lineNumber};
-      }
+      *PushListElement(strings) = (IndividualBlock){leftover,BlockType_TEXT,lineNumber};
       break;
     }
 
-    if(res.peekFindNotIncluded.size > 0){
-      *PushListElement(strings) = (IndividualBlock){res.peekFindNotIncluded,BlockType_TEXT,lineNumber};
+    FindFirstResult result = res.value();
+    if(result.peekFindNotIncluded.size > 0){
+      *PushListElement(strings) = (IndividualBlock){result.peekFindNotIncluded,BlockType_TEXT,lineNumber};
     }
 
-    tok.AdvancePeek(res.peekFindNotIncluded);
-    if(CompareString(res.foundFirst,"#{")){
-      Byte* mark = tok.Mark();
-      Token skip = tok.PeekUntilDelimiterExpression({"#{","@{"},{"}"},0);
+    tok.AdvancePeek(result.peekFindNotIncluded);
+    if(CompareString(result.foundFirst,"#{")){
+      auto mark = tok.Mark();
+      Token skip = tok.PeekUntilDelimiterExpression({"#{","@{"},{"}"},0).value();
       tok.AdvancePeek(skip);
       tok.AssertNextToken("}");
       String command = tok.Point(mark);
       *PushListElement(strings) = (IndividualBlock){command,BlockType_COMMAND,lineNumber};
-    } else if(CompareString(res.foundFirst,"@{")){
-      Byte* mark = tok.Mark();
-      Token skip = tok.PeekUntilDelimiterExpression({"#{","@{"},{"}"},0);
+    } else if(CompareString(result.foundFirst,"@{")){
+      auto mark = tok.Mark();
+      Token skip = tok.PeekUntilDelimiterExpression({"#{","@{"},{"}"},0).value();
       tok.AdvancePeek(skip);
       tok.AssertNextToken("}");
       String expression = tok.Point(mark);
@@ -407,7 +421,7 @@ static void Print(Block* block, int level = 0){
     printf("Expr: %.*s:%d\n",UNPACK_SS(block->expression->text),block->line);
   } break;
   case BlockType_TEXT:{
-    String escaped = EscapeString(block->textBlock,'_',temp);
+    String escaped = PushEscapedString(temp,block->textBlock,'_');
     printf("Text: %.*s:%d\n",UNPACK_SS(escaped),block->line);
   } break;
   }
@@ -443,7 +457,7 @@ Array<Block*> ConvertIndividualBlocksIntoHierarchical_(Array<IndividualBlock> bl
       String content = individualBlock->content;
       Tokenizer tokenizer(content,"!()[]{}+-:;.,*~><\"",{"#{","@{","==","!=","**","|>",">=","<=","!="});
 
-      Byte* mark = MarkArena(out);
+      auto mark = MarkArena(out);
       Command* command = ParseCommand(&tokenizer,out);
 
       for(Expression* expr : command->expressions){
@@ -456,7 +470,7 @@ Array<Block*> ConvertIndividualBlocksIntoHierarchical_(Array<IndividualBlock> bl
           printf("%.*s:%d",UNPACK_SS(globalTemplateName),individualBlock->line);
           Assert(false);
         }
-        PopMark(out,mark); // No need to keep parsed command in memory, we do not process #{end}
+        PopMark(mark); // No need to keep parsed command in memory, we do not process #{end}
         goto exit_loop;
       }
 
@@ -482,6 +496,7 @@ Array<Block*> ConvertIndividualBlocksIntoHierarchical_(Array<IndividualBlock> bl
     if(block){
       block->type = individualBlock->type;
       block->line = individualBlock->line;
+      block->fullText = individualBlock->content;
       *PushListElement(blockList) = block;
     }
   }
@@ -501,7 +516,7 @@ Array<Block*> ConvertIndividualBlocksIntoHierarchical(Array<IndividualBlock> blo
 
 CompiledTemplate* CompileTemplate(String content,const char* name,Arena* out,Arena* temp){
   BLOCK_REGION(temp);
-  Byte* mark = MarkArena(out);
+  auto mark = StartString(out);
 
   String storedName = PushString(out,STRING(name));
   globalTemplateName = storedName;
@@ -538,7 +553,7 @@ CompiledTemplate* CompileTemplate(String content,const char* name,Arena* out,Are
       } break;
       }
     }
-      
+
     bool onlyNakedCommands = (containsCommand && onlyWhitespace && !containsExpression);
 
     if(onlyNakedCommands){
@@ -560,7 +575,7 @@ CompiledTemplate* CompileTemplate(String content,const char* name,Arena* out,Are
   Array<IndividualBlock> blocks = PushArrayFromList(out,blockList);
   Array<Block*> results = ConvertIndividualBlocksIntoHierarchical(blocks,out,temp);
 
-  String totalMemory = PointArena(out,mark);
+  String totalMemory = EndString(mark);
   res->blocks = results;
   res->totalMemoryUsed = totalMemory.size;
   res->content = content;
@@ -569,46 +584,32 @@ CompiledTemplate* CompileTemplate(String content,const char* name,Arena* out,Are
   return res;
 }
 
-std::unordered_map<String,PipeFunction> pipeFunctions;
-
 void RegisterPipeOperation(String name,PipeFunction func){
   pipeFunctions.insert({name,func});
 }
 
-static Value EvalExpression(Expression* expr,Frame* frame,Arena* temp);
-
-struct DebugValues{
-  Expression expr;
-  Value val;
-};
-
-#ifdef DEBUG_TEMPLATE_ENGINE
-static DebugValues savedDebug[64];
-static int savedIndex; 
-#endif
-
-static Value EvalExpression(Expression* expr,Frame* frame,Arena* temp){
+static Value EvalExpression(Expression* expr,Frame* frame,Arena* out){
   Value val = {};
   switch(expr->type){
   case Expression::OPERATION:{
     if(expr->op[0] == '|'){ // Pipe operation
-      val = EvalExpression(expr->expressions[0],frame,temp);
+      val = EvalExpression(expr->expressions[0],frame,out);
       
       auto iter = pipeFunctions.find(expr->expressions[1]->id);
       if(iter == pipeFunctions.end()){
         printf("Did not find the following pipe function\n");
         printf("%.*s\n",UNPACK_SS(expr->expressions[1]->id));
-        NOT_IMPLEMENTED;
+        USER_ERROR("Program error, fix template or register pipe");
       }
 
       PipeFunction func = iter->second;
-      val = func(val,temp);
+      val = func(val,out);
 
       goto EvalExpressionEnd;
     }
 
     if(CompareString(expr->op,"!")){
-      Value op = EvalExpression(expr->expressions[0],frame,temp);
+      Value op = EvalExpression(expr->expressions[0],frame,out);
       bool boolean = ConvertValue(op,ValueType::BOOLEAN,nullptr).boolean;
 
       val = MakeValue(!boolean);
@@ -616,7 +617,7 @@ static Value EvalExpression(Expression* expr,Frame* frame,Arena* temp){
     }
 
     // Two or more op operations
-    Value op1 = EvalExpression(expr->expressions[0],frame,temp);
+    Value op1 = EvalExpression(expr->expressions[0],frame,out);
 
     // Short circuit
     if(CompareString(expr->op,"and")){
@@ -635,7 +636,7 @@ static Value EvalExpression(Expression* expr,Frame* frame,Arena* temp){
       }
     }
 
-    Value op2 = EvalExpression(expr->expressions[1],frame,temp);
+    Value op2 = EvalExpression(expr->expressions[1],frame,out);
 
     if(CompareString(expr->op,"==")){
       val = MakeValue(Equal(op1,op2));
@@ -662,12 +663,12 @@ static Value EvalExpression(Expression* expr,Frame* frame,Arena* temp){
       val = MakeValue((bool1 && !bool2) || (!bool1 && bool2));
       goto EvalExpressionEnd;
     } else if(CompareString(expr->op,"#")){
-      String first = ConvertValue(op1,ValueType::SIZED_STRING,temp).str;
-      String second = ConvertValue(op2,ValueType::SIZED_STRING,temp).str;
+      String first = ConvertValue(op1,ValueType::SIZED_STRING,out).str;
+      String second = ConvertValue(op2,ValueType::SIZED_STRING,out).str;
 
-      String res = PushString(temp,"%.*s%.*s",UNPACK_SS(first),UNPACK_SS(second));
+      String res = PushString(out,"%.*s%.*s",UNPACK_SS(first),UNPACK_SS(second));
 
-      val =  MakeValue(res);
+      val = MakeValue(res);
       goto EvalExpressionEnd;
     }
 
@@ -714,7 +715,7 @@ static Value EvalExpression(Expression* expr,Frame* frame,Arena* temp){
       }
     } break;
     default:{
-      NOT_IMPLEMENTED;
+      NOT_IMPLEMENTED("Implement as needed");
     }break;
     }
   } break;
@@ -726,60 +727,72 @@ static Value EvalExpression(Expression* expr,Frame* frame,Arena* temp){
 
     Assert(!com->definition->isBlockType);
 
-    val = EvalNonBlockCommand(com,frame,temp).val;
+    val = EvalNonBlockCommand(com,frame,out).val;
   } break;
   case Expression::IDENTIFIER:{
-    Optional<Value> iter = GetValue(frame,expr->id);
-
+    Opt<Value> iter = GetValue(frame,expr->id);
+    
     if(!iter){
-      LogFatal(LogModule::TEMPLATE,"Did not find %.*s in template: %.*s",UNPACK_SS(expr->id),UNPACK_SS(globalTemplateName));
+      LogFatal(LogModule::TEMPLATE,"Did not find '%.*s' in template '%.*s'",UNPACK_SS(expr->id),UNPACK_SS(globalTemplateName));
       DEBUG_BREAK();
     }
 
+    // Only register top frame accesses
+    Type* type = iter.value().type;
+    Opt<Value> globalOpt = GetValue(globalFrame,expr->id);
+    if(globalOpt.has_value()){
+      TemplateRecord* record = PushListElement(recordList);
+      record->type = TemplateRecordType_IDENTIFER;
+      record->identifierType = type;
+      record->identifierName = expr->id;
+    }
+    
     val = iter.value();
   } break;
   case Expression::ARRAY_ACCESS:{
-    Value object = EvalExpression(expr->expressions[0],frame,temp);
-    Value index  = EvalExpression(expr->expressions[1],frame,temp);
+    Value object = EvalExpression(expr->expressions[0],frame,out);
+    Value index  = EvalExpression(expr->expressions[1],frame,out);
 
     Assert(index.type == ValueType::NUMBER);
 
-    Optional<Value> optVal = AccessObjectIndex(object,index.number);
+    Opt<Value> optVal = AccessObjectIndex(object,index.number);
     if(!optVal){
       FatalError(StaticFormat("Tried to access array at an index greater than size: %d/%d (%.*s)",index.number,IndexableSize(object),UNPACK_SS(object.type->name)),expr->approximateLine);
     }
     val = optVal.value();
   } break;
   case Expression::MEMBER_ACCESS:{
-    Value object = EvalExpression(expr->expressions[0],frame,temp);
+    Value object = EvalExpression(expr->expressions[0],frame,out);
 
-    Optional<Value> optVal = AccessStruct(object,expr->id);
+    Opt<Value> optVal = AccessStruct(object,expr->id);
     if(!optVal){
 	  PrintStructDefinition(object.type);
       FatalError(StaticFormat("Tried to access member (%.*s) that does not exist for type (%.*s)",UNPACK_SS(expr->text),UNPACK_SS(object.type->name)),expr->approximateLine);
     }
+
+    Opt<Member*> member = GetMember(object.type,expr->id);
+
+    Type* fieldType = member.value()->type;
+    TemplateRecord* record = PushListElement(recordList);
+    record->type = TemplateRecordType_FIELD;
+    record->structType = object.type;
+    record->fieldName = expr->id;
+
     val = optVal.value();
   }break;
   default:{
-    NOT_IMPLEMENTED;
+    NOT_IMPLEMENTED("Implement as needed");
   } break;
   }
 
  EvalExpressionEnd:
-
-#ifdef DEBUG_TEMPLATE_ENGINE
-  savedDebug[savedIndex].expr = *expr;
-  savedDebug[savedIndex].val = val;
-  savedIndex = (savedIndex + 1) % 64;
-#endif // DEBUG_TEMPLATE_ENGINE
 
   return val;
 }
 
 static String EvalBlockCommand(Block* block,Frame* previousFrame,Arena* temp){
   Command* com = block->command;
-  String res = {};
-  res.data = (char*) MarkArena(outputArena);
+  auto mark = StartString(outputArena);
 
   Assert(com->definition->isBlockType);
 
@@ -788,7 +801,7 @@ static String EvalBlockCommand(Block* block,Frame* previousFrame,Arena* temp){
     Frame* frame = CreateFrame(previousFrame,temp);
     Value separator = EvalExpression(com->expressions[0],frame,temp);
 
-    Assert(separator.type == ValueType::STRING);
+    Assert(separator.type == ValueType::STRING || separator.type == ValueType::CONST_STRING);
 
     Assert(com->expressions[1]->type == Expression::IDENTIFIER);
     String id = com->expressions[1]->id;
@@ -818,20 +831,18 @@ static String EvalBlockCommand(Block* block,Frame* previousFrame,Arena* temp){
         if(IsOnlyWhitespace(text)){
           outputArena->used -= text.size;
         } else {
-          res.size += text.size; // Push on stack
           outputSeparator = true;
         }
       }
 
       if(outputSeparator){
-        res.size += PushString(outputArena,"%.*s",separator.str.size,separator.str.data).size;
+        PushString(outputArena,"%.*s",separator.str.size,separator.str.data);
         removeLastOutputSeperator = true;
       }
     }
 
     if(removeLastOutputSeperator){
       outputArena->used -= separator.str.size;
-      res.size -= separator.str.size;
     }
   } break;
   case CommandType_FOR:{
@@ -848,7 +859,7 @@ static String EvalBlockCommand(Block* block,Frame* previousFrame,Arena* temp){
       SetValue(frame,id,val);
 
       for(Block* ptr : block->innerBlocks){
-        res.size += Eval(ptr,frame,temp).size; // Push on stack
+        Eval(ptr,frame,temp); // Push on stack
       }
     }
   } break;
@@ -862,13 +873,13 @@ static String EvalBlockCommand(Block* block,Frame* previousFrame,Arena* temp){
         if(ptr->type == BlockType_COMMAND && ptr->command->definition->type == CommandType_ELSE){
           break;
         }
-        res.size += Eval(ptr,frame,temp).size; // Push on stack
+        Eval(ptr,frame,temp); // Push on stack
       }
     } else {
       bool sawElse = false;
       for(Block* ptr : block->innerBlocks){
         if(sawElse){
-          res.size += Eval(ptr,frame,temp).size; // Push on stack
+          Eval(ptr,frame,temp); // Push on stack
         }
 
         if(ptr->type == BlockType_COMMAND && ptr->command->definition->type == CommandType_ELSE){
@@ -888,7 +899,7 @@ static String EvalBlockCommand(Block* block,Frame* previousFrame,Arena* temp){
     }
 
     for(Block* ptr : block->innerBlocks){
-      res.size += Eval(ptr,frame,temp).size; // Push on stack
+      Eval(ptr,frame,temp); // Push on stack
     }
 
     debugging = false;
@@ -897,7 +908,7 @@ static String EvalBlockCommand(Block* block,Frame* previousFrame,Arena* temp){
     Frame* frame = CreateFrame(previousFrame,temp);
     while(ConvertValue(EvalExpression(com->expressions[0],frame,temp),ValueType::BOOLEAN,nullptr).boolean){
       for(Block* ptr : block->innerBlocks){
-        res.size += Eval(ptr,frame,temp).size; // Push on stack
+        Eval(ptr,frame,temp); // Push on stack
       }
     }
   } break;
@@ -922,30 +933,20 @@ static String EvalBlockCommand(Block* block,Frame* previousFrame,Arena* temp){
     BLOCK_REGION(outputArena);
 
     for(Block* ptr : block->innerBlocks){
-      String res = Eval(ptr,frame,temp); // Push on stack
-      printf("%.*s\n",UNPACK_SS(res));
+      String result = Eval(ptr,frame,temp); // Push on stack
+      printf("%.*s\n",UNPACK_SS(result));
     }
   } break;
-  default: NOT_IMPLEMENTED;
+  default: NOT_IMPLEMENTED("Implemented as needed");
   }
 
+  String res = EndString(mark);
   return res;
-}
-
-extern Array<Pair<String,String>> templateNameToContent; // TODO: Kinda of a quick hack to make this work. Need to revise the way templates are done
-
-// TODO: This is not the prefered way of doing this.
-// Maybe just compile the template in malloc'ed memory
-// And keep the memory around, it's not like user code would have a reason to free this memory
-static CompiledTemplate* savedTemplate = nullptr;
-void SetIncludeHeader(CompiledTemplate* tpl,String name){
-  savedTemplate = tpl;
 }
 
 static ValueAndText EvalNonBlockCommand(Command* com,Frame* previousFrame,Arena* temp){
   Value val = MakeValue();
-  String text = {};
-  text.data = (char*) MarkArena(outputArena);
+  auto mark = StartString(outputArena);
 
   Assert(!com->definition->isBlockType);
   switch(com->definition->type){
@@ -971,7 +972,7 @@ static ValueAndText EvalNonBlockCommand(Command* com,Frame* previousFrame,Arena*
   } break;
   case CommandType_INCLUDE:{
     Value filenameString = EvalExpression(com->expressions[0],previousFrame,temp);
-    Assert(filenameString.type == ValueType::STRING);
+    Assert(filenameString.type == ValueType::STRING || filenameString.type == ValueType::CONST_STRING);
 
     String content = {};
     for(Pair<String,String>& nameToContent : templateNameToContent){
@@ -986,14 +987,14 @@ static ValueAndText EvalNonBlockCommand(Command* com,Frame* previousFrame,Arena*
     // Get compiled template and evaluate it.
     CompiledTemplate* templ = savedTemplate;
     for(Block* block : templ->blocks){
-      text.size += Eval(block,previousFrame,temp).size;
+      Eval(block,previousFrame,temp);
     }
   } break;
   case CommandType_CALL:{
     Frame* frame = CreateFrame(previousFrame,temp);
     String id = com->expressions[0]->id;
 
-    Optional<Value> optVal = GetValue(frame,id);
+    Opt<Value> optVal = GetValue(frame,id);
     if(!optVal){
       printf("Failed to find %.*s\n",UNPACK_SS(id));
       DEBUG_BREAK();
@@ -1011,7 +1012,7 @@ static ValueAndText EvalNonBlockCommand(Command* com,Frame* previousFrame,Arena*
     }
 
     for(Block* ptr : func->blocks){
-      text.size += Eval(ptr,frame,temp).size;
+      Eval(ptr,frame,temp);
     }
 
     optVal = GetValue(frame,STRING("return"));
@@ -1028,24 +1029,23 @@ static ValueAndText EvalNonBlockCommand(Command* com,Frame* previousFrame,Arena*
     Frame* frame = CreateFrame(previousFrame,temp);
     Value formatExpr = EvalExpression(com->expressions[0],frame,temp);
 
-    Assert(formatExpr.type == ValueType::SIZED_STRING || formatExpr.type == ValueType::STRING);
+    Assert(formatExpr.type == ValueType::SIZED_STRING || formatExpr.type == ValueType::STRING || formatExpr.type == ValueType::CONST_STRING);
 
     String format = formatExpr.str;
 
     Tokenizer tok(format,"{}",{});
-    Byte* mark = MarkArena(outputArena);
-    text.data = (char*) mark;
+    auto mark = StartString(outputArena);
 
     while(!tok.Done()){
-      Token simpleText = tok.PeekFindUntil("{");
+      Opt<Token> simpleText = tok.PeekFindUntil("{");
 
-      if(simpleText.size == -1){
+      if(!simpleText.has_value()){
         simpleText = tok.Finish();
       }
 
-      tok.AdvancePeek(simpleText);
+      tok.AdvancePeek(simpleText.value());
 
-      text.size += PushString(outputArena,simpleText).size;
+      PushString(outputArena,simpleText.value());
 
       if(tok.Done()){
         break;
@@ -1061,7 +1061,7 @@ static ValueAndText EvalNonBlockCommand(Command* com,Frame* previousFrame,Arena*
 
       Value val = ConvertValue(EvalExpression(com->expressions[index + 1],frame,temp),ValueType::SIZED_STRING,temp);
 
-      text.size += PushString(outputArena,val.str).size;
+      PushString(outputArena,val.str);
     }
   } break;
   case CommandType_DEBUG_BREAK:{
@@ -1071,12 +1071,12 @@ static ValueAndText EvalNonBlockCommand(Command* com,Frame* previousFrame,Arena*
     printf("Error: founded a strain end in the template\n");
     Assert(false);
   } break;
-  default: NOT_IMPLEMENTED;
+  default: NOT_IMPLEMENTED("Implemented as needed");
   }
 
   ValueAndText res = {};
   res.val = val;
-  res.text = text;
+  res.text = EndString(mark);
 
   return res;
 }
@@ -1084,26 +1084,26 @@ static ValueAndText EvalNonBlockCommand(Command* com,Frame* previousFrame,Arena*
 static String Eval(Block* block,Frame* frame,Arena* temp){
   BLOCK_REGION(temp);
 
-  String res = {};
-  res.data = (char*) MarkArena(outputArena);
+  auto mark = StartString(outputArena);
 
   switch(block->type){
   case BlockType_COMMAND:{
     if(block->command->definition->isBlockType){
-      res = EvalBlockCommand(block,frame,temp);
+      EvalBlockCommand(block,frame,temp);
     } else {
-      res = EvalNonBlockCommand(block->command,frame,temp).text;
+      EvalNonBlockCommand(block->command,frame,temp);
     }
   }break;
   case BlockType_EXPRESSION:{
     Value val = EvalExpression(block->expression,frame,temp);
-    res.size += GetDefaultValueRepresentation(val,outputArena).size;
+    GetDefaultValueRepresentation(val,outputArena);
   } break;
   case BlockType_TEXT:{
-    res.size += PushString(outputArena,block->textBlock).size;
+    PushString(outputArena,block->textBlock);
   } break;
   }
 
+  String res = EndString(mark);
   Assert(res.size >= 0);
   return res;
 }
@@ -1113,6 +1113,40 @@ void InitializeTemplateEngine(Arena* perm){
   globalFrame->previousFrame = nullptr;
 }
 
+String RemoveRepeatedNewlines(String text,Arena* out){
+  auto mark = StartString(out);
+  int state = 0;
+  for(int i = 0; i < text.size; i++){
+    switch(state){
+    case 0: {
+      if(text[i] == '\n'){
+        state = 1;
+      }
+      PushString(out,"%c",text[i]);
+    } break;
+    case 1: {
+      if(text[i] == '\n'){
+        state = 2;
+      } else {
+        state = 0;
+      }
+      PushString(out,"%c",text[i]);
+    } break;
+    case 2:{
+      if(text[i] == '\n'){
+      } else {
+        PushString(out,"%c",text[i]);
+        if(!std::isspace(text[i])){
+          state = 0;
+        }
+      }
+    } break;
+    }
+  }
+
+  return EndString(mark);
+}
+
 void ProcessTemplate(FILE* outputFile,CompiledTemplate* compiledTemplate,Arena* temp,Arena* temp2){
   BLOCK_REGION(temp);
   BLOCK_REGION(temp2);
@@ -1120,366 +1154,78 @@ void ProcessTemplate(FILE* outputFile,CompiledTemplate* compiledTemplate,Arena* 
 
   globalTemplateName = compiledTemplate->name;
 
+  Arena recordSpaceInst = SubArena(temp,Megabyte(1));
+  Arena* recordSpace = &recordSpaceInst;
+
+  TrieMap<Type*,Array<bool>>* records = PushTrieMap<Type*,Array<bool>>(recordSpace);
+  
   outputArena = temp2;
   output = outputFile;
 
-#if 0
-  Arena outputArenaInst = SubArena(temp,Megabyte(64));
-  outputArena = &outputArenaInst;
-  output = outputFile;
-#endif
-
+  auto markOutput = StartString(outputArena);
+  
   Frame* top = CreateFrame(globalFrame,temp);
   for(Block* block : compiledTemplate->blocks){
-    String text = Eval(block,top,temp);
-    fprintf(output,"%.*s",text.size,text.data);
-    fflush(output);
-  }
-}
+    BLOCK_REGION(debugArena);
+    recordList = PushArenaList<TemplateRecord>(debugArena);
 
-String Repr(TemplateRecord r,Arena* arena){
-  switch(r.type){
-  case TemplateRecordType_FIELD:{
-    return PushString(arena,"%.*s::%.*s",UNPACK_SS(r.structType->name),UNPACK_SS(r.fieldName));
-  } break;
-  case TemplateRecordType_IDENTIFER:{
-    return PushString(arena,"[%.*s] %.*s",UNPACK_SS(r.identifierType->name),UNPACK_SS(r.identifierName));
-  } break;
-  default: NOT_IMPLEMENTED;
-  }
+    Eval(block,top,temp);
 
-  return {};
-}
+#ifdef DEBUG_TEMPLATE_ENGINE
+    for(ListedStruct<TemplateRecord>* ptr = recordList->head; ptr; ptr = ptr->next){
+      TemplateRecord record = ptr->elem;
+      GetOrAllocateResult<Array<bool>> res = records->GetOrAllocate(record.structType);
 
-void PrintTemplate(CompiledTemplate* compiled,Arena* arena){
-  NOT_IMPLEMENTED;
-}
+      if(!res.alreadyExisted){
+        *res.data = PushArray<bool>(recordSpace,record.structType->members.size);
+        Memset(*res.data,false);
+      }
 
-template<> class std::hash<TemplateRecord>{
-public:
-   std::size_t operator()(TemplateRecord const& s) const noexcept{
-     std::size_t res = std::hash<Type*>()(s.structType) + std::hash<String>()(s.fieldName);
-     return res;
-   }
-};
-
-bool operator==(const TemplateRecord& r0,const TemplateRecord& r1){
-  if(r0.type != r1.type){
-    return false;
+      for(int i = 0; i < record.structType->members.size; i++){
+        Member m = record.structType->members[i];
+        if(CompareString(m.name,record.fieldName)){
+          (*res.data)[i] = true;
+          break;
+        }
+      }
+    }
+#endif
   }
 
-  bool res = false;
-  switch(r0.type){
-  case TemplateRecordType_FIELD:{
-    res = (r0.structType == r1.structType) && CompareString(r0.fieldName,r1.fieldName);
-  } break;
-  case TemplateRecordType_IDENTIFER:{
-    res = (r0.identifierType == r1.identifierType) && CompareString(r0.identifierName,r1.identifierName);
-  } break;
-  default: NOT_IMPLEMENTED;
-  }
+  String fullText = EndString(markOutput);
+  String treated = RemoveRepeatedNewlines(fullText,temp);
+  fprintf(output,"%.*s",UNPACK_SS(treated));
+  fflush(output);
   
-  return res;
+#ifdef DEBUG_TEMPLATE_ENGINE
+  for(auto p : records){
+    Type* t = p.first;
+    Array<bool> arr = p.second;
+    Array<Member> members = t->members;
+
+    printf("%.*s\n",UNPACK_SS(t->name));
+    for(int i = 0; i < arr.size; i++){
+      printf("  %.*s: ",UNPACK_SS(members[i].name));
+      if(arr[i]){
+        printf("Used\n");
+      } else {
+        printf("Not used\n");
+      }
+    }
+  }
+#endif
 }
 
 void PrintFrames(Frame* frame){
   Frame* ptr = frame;
   int index = 0;
   while(ptr){
-    for(Pair<String,Value>& p : ptr->table){
+    for(Pair<String,Value> p : ptr->table){
       printf("%d %.*s\n",index,UNPACK_SS(p.first));
     }
     index += 1;
     ptr = ptr->previousFrame;
   }
-}
-
-static void RecordEval(Block* block,Frame* frame,ArenaList<TemplateRecord>* recordList,Arena* temp);
-static Type* RecordNonBlockCommand(Command* com,Frame* previousFrame,ArenaList<TemplateRecord>* recordList,Arena* temp);
-
-Type* RecordExpression(Expression* expr,Frame* frame,ArenaList<TemplateRecord>* recordList,Arena* temp){
-  switch(expr->type){
-  case Expression::UNDEFINED:{
-    // Nothing
-  } break;
-  case Expression::OPERATION:{
-    if(expr->op[0] == '|'){ // Pipe operation
-      return RecordExpression(expr->expressions[0],frame,recordList,temp);
-    } else {
-      Type* type = nullptr;
-      for(Expression* subExpr : expr->expressions){
-        type = RecordExpression(subExpr,frame,recordList,temp);
-      }
-      return type;
-    }
-  } break;
-  case Expression::LITERAL:{
-    return expr->val.type;
-  } break;
-  case Expression::COMMAND:{
-    Command* com = expr->command;
-
-    Assert(!com->definition->isBlockType);
-
-    return RecordNonBlockCommand(com,frame,recordList,temp);
-  } break;
-  case Expression::IDENTIFIER:{
-    Optional<Value> optVal = GetValue(frame,expr->id);
-
-    if(optVal.has_value()){
-      Value val = optVal.value();
-      Type* type = val.type;
-
-      // Only register top frame accesses
-      Optional<Value> globalOpt = GetValue(globalFrame,expr->id);
-      if(globalOpt.has_value()){
-        TemplateRecord* record = PushListElement(recordList);
-        record->type = TemplateRecordType_IDENTIFER;
-        record->identifierType = type;
-        record->identifierName = expr->id;
-      }
-      
-      return optVal.value().type;
-    } else {
-      PrintFrames(frame);
-      LogFatal(LogModule::TEMPLATE,"Did not find (%.*s) in template: %.*s:%d",UNPACK_SS(expr->id),UNPACK_SS(globalTemplateName),expr->approximateLine);
-      DEBUG_BREAK();
-    }
-  } break;
-  case Expression::ARRAY_ACCESS:{
-    Type* type = RecordExpression(expr->expressions[0],frame,recordList,temp);
-    RecordExpression(expr->expressions[1],frame,recordList,temp);
-    return GetBaseTypeOfIterating(type);
-  } break;
-  case Expression::MEMBER_ACCESS:{
-    Type* type = RecordExpression(expr->expressions[0],frame,recordList,temp);
-    Optional<Member*> member = GetMember(type,expr->id);
-
-    if(!member){
-	  PrintStructDefinition(type);
-      FatalError(StaticFormat("Tried to access member (%.*s) that does not exist for type (%.*s)",UNPACK_SS(expr->id),UNPACK_SS(type->name)),expr->approximateLine);
-    }
-
-    Type* fieldType = member.value()->type;
-    TemplateRecord* record = PushListElement(recordList);
-    record->type = TemplateRecordType_FIELD;
-    record->structType = type;
-    record->fieldName = expr->id;
-    
-    return fieldType;
-    // Get type of member
-  } break;
-  default: {
-    NOT_POSSIBLE;
-  } break;
-  }
-
-  return nullptr;
-}
-
-static void RecordBlockCommand(Block* block,Frame* previousFrame,ArenaList<TemplateRecord>* recordList,Arena* temp){
-  Command* com = block->command;
-  Assert(com->definition->isBlockType);
-
-  switch(com->definition->type){
-  case CommandType_JOIN:{
-    Frame* frame = CreateFrame(previousFrame,temp);
-    Type* separator = RecordExpression(com->expressions[0],frame,recordList,temp);
-    Type* iterating = RecordExpression(com->expressions[2],frame,recordList,temp);
-    Type* baseValue = GetBaseTypeOfIterating(iterating);
-    
-    String id = com->expressions[1]->id;
-    SetValue(frame,id,MakeValue(0x0,baseValue)); // Iterator base value type
-    SetValue(frame,STRING("index"),MakeValue(0));
-    
-    for(Block* ptr : block->innerBlocks){
-      RecordEval(ptr,frame,recordList,temp);
-    }
-  } break;
-  case CommandType_FOR:{
-    Frame* frame = CreateFrame(previousFrame,temp);
-
-    String id = com->expressions[0]->id;
-
-    Type* iterating = RecordExpression(com->expressions[1],frame,recordList,temp);
-    Type* baseValue = GetBaseTypeOfIterating(iterating);
-
-    SetValue(frame,id,MakeValue(nullptr,baseValue));
-    SetValue(frame,STRING("index"),MakeValue(0));
-      
-    for(Block* ptr : block->innerBlocks){
-      RecordEval(ptr,frame,recordList,temp);
-    }
-  } break;
-  case CommandType_IF:{
-    RecordExpression(com->expressions[0],previousFrame,recordList,temp);
-    Frame* frame = CreateFrame(previousFrame,temp);
-    for(Block* ptr : block->innerBlocks){
-      if(ptr->type == BlockType_COMMAND && ptr->command->definition->type == CommandType_ELSE){
-      } else {
-        RecordEval(ptr,frame,recordList,temp);
-      }
-    }
-  } break;
-  case CommandType_DEBUG:{
-    RecordExpression(com->expressions[0],previousFrame,recordList,temp);
-    Frame* frame = CreateFrame(previousFrame,temp);
-    for(Block* ptr : block->innerBlocks){
-      RecordEval(ptr,frame,recordList,temp);
-    }
-  } break;
-  case CommandType_WHILE:{
-    RecordExpression(com->expressions[0],previousFrame,recordList,temp);
-    Frame* frame = CreateFrame(previousFrame,temp);
-    for(Block* ptr : block->innerBlocks){
-      RecordEval(ptr,frame,recordList,temp);
-    }
-  } break;
-  case CommandType_DEFINE:{
-    String id = com->expressions[0]->id;
-
-    TemplateFunction* func = (TemplateFunction*) malloc(sizeof(TemplateFunction)); // TODO: Cannot Push to temp. This should be dealt with at Parse time, not eval time.
-    
-    func->arguments.data = &com->expressions[1];
-    func->arguments.size = com->expressions.size - 1;
-    func->blocks = block->innerBlocks;
-
-    Value val = {};
-    val.templateFunction = func;
-    val.type = ValueType::TEMPLATE_FUNCTION;
-    val.isTemp = true;
-
-    SetValue(previousFrame,id,val);
-  } break;
-  case CommandType_DEBUG_MESSAGE:{
-    Frame* frame = CreateFrame(previousFrame,temp);
-    for(Block* ptr : block->innerBlocks){
-      RecordEval(ptr,frame,recordList,temp);
-    }
-  } break;
-  default: NOT_IMPLEMENTED;
-  }
-}
-
-static Type* RecordNonBlockCommand(Command* com,Frame* previousFrame,ArenaList<TemplateRecord>* recordList,Arena* temp){
-  Assert(!com->definition->isBlockType);
-
-  switch(com->definition->type){
-  case CommandType_SET:{
-    Type* type = RecordExpression(com->expressions[1],previousFrame,recordList,temp);
-    Value val = MakeValue(nullptr,type);
-    SetValue(previousFrame,com->expressions[0]->id,val);
-  } break;
-  case CommandType_LET:{
-    Type* type = RecordExpression(com->expressions[1],previousFrame,recordList,temp);
-    Value val = MakeValue(nullptr,type);
-    CreateValue(previousFrame,com->expressions[0]->id,val);
-  } break;
-  case CommandType_INC:{
-  } break;
-  case CommandType_INCLUDE:{
-    Value filenameString = EvalExpression(com->expressions[0],previousFrame,temp);
-    Assert(filenameString.type == ValueType::STRING);
-
-    String content = {};
-    for(Pair<String,String>& nameToContent : templateNameToContent){
-      if(CompareString(nameToContent.first,filenameString.str)){
-        content = nameToContent.second;
-        break;
-      }
-    }
-
-    Assert(content.size);
-
-    // Get compiled template and evaluate it.
-    CompiledTemplate* templ = savedTemplate;
-    for(Block* block : templ->blocks){
-      RecordEval(block,previousFrame,recordList,temp);
-    }
-  } break;
-  case CommandType_CALL:{
-    Frame* frame = CreateFrame(previousFrame,temp);
-    String id = com->expressions[0]->id;
-
-    Optional<Value> optVal = GetValue(frame,id);
-    if(!optVal){
-      printf("Failed to find %.*s\n",UNPACK_SS(id));
-      DEBUG_BREAK();
-    }
-
-    TemplateFunction* func = optVal.value().templateFunction;
-    Assert(func->arguments.size == com->expressions.size - 1);
-
-    for(int i = 0; i < func->arguments.size; i++){
-      String id = func->arguments[i]->id;
-      Type* type = RecordExpression(com->expressions[1+i],frame,recordList,temp);
-      SetValue(frame,id,MakeValue(nullptr,type));
-    }
-
-    for(Block* block : func->blocks){
-      RecordEval(block,frame,recordList,temp);
-    }
-
-    Optional<Value> optReturn = GetValue(frame,STRING("return"));
-    if(optReturn){
-      return optReturn.value().type;
-    }
-  } break;
-  case CommandType_RETURN:{
-    Value val = EvalExpression(com->expressions[0],previousFrame,temp);
-
-    SetValue(previousFrame,STRING("return"),MakeValue(nullptr,val.type));
-  } break;
-  case CommandType_FORMAT:{
-    Frame* frame = CreateFrame(previousFrame,temp);
-    for(Expression* expr : com->expressions){
-      RecordExpression(expr,frame,recordList,temp);
-    }
-  } break;
-  case CommandType_DEBUG_BREAK:{
-    DEBUG_BREAK();
-  } break;
-  case CommandType_END:{
-    NOT_POSSIBLE;
-  } break;
-  default: NOT_IMPLEMENTED;
-  }
-
-  return nullptr;
-}
-
-static void RecordEval(Block* block,Frame* frame,ArenaList<TemplateRecord>* recordList,Arena* temp){
-  switch(block->type){
-  case BlockType_COMMAND:{
-    if(block->command->definition->isBlockType){
-      RecordBlockCommand(block,frame,recordList,temp);
-    } else {
-      RecordNonBlockCommand(block->command,frame,recordList,temp);
-    }
-  }break;
-  case BlockType_EXPRESSION:{
-    RecordExpression(block->expression,frame,recordList,temp);
-  } break;
-  case BlockType_TEXT:{
-  } break;
-  }
-}
-
-Array<TemplateRecord> RecordTypesAndFieldsUsed(CompiledTemplate* compiled,Arena* out,Arena* temp){
-  BLOCK_REGION(temp);
-  ArenaList<TemplateRecord>* recordList = PushArenaList<TemplateRecord>(temp);
-
-  globalTemplateName = compiled->name;
-
-  Frame* top = CreateFrame(globalFrame,temp);
-  for(Block* block : compiled->blocks){
-    RecordEval(block,top,recordList,temp);
-  }
-
-  Set<TemplateRecord>* set = PushSetFromList<TemplateRecord>(temp,recordList); // Remove duplicates
-  Array<TemplateRecord> arr = PushArrayFromSet<TemplateRecord>(out,set);
-
-  return arr;
 }
 
 Hashmap<String,Value>* GetAllTemplateValues(){
@@ -1525,3 +1271,84 @@ void TemplateSetArray(const char* id,const char* baseType,int size,void* array){
 
   SetValue(globalFrame,STRING(id),val);
 }
+
+// TODO: Change so that we integrate this fully with the normal process template function.
+#if 0
+static Arena testInst = {};
+static Arena* testArena = &testInst;
+static Hashmap<Type*,Array<bool>>* fieldsPerTypeSeen = nullptr;
+static void CheckUnusedFieldsOrTypes(CompiledTemplate* tpl,Arena* temp,Arena* temp2){
+  if(fieldsPerTypeSeen == nullptr){
+    testInst = InitArena(Megabyte(1));
+    fieldsPerTypeSeen = PushHashmap<Type*,Array<bool>>(testArena,99);
+  }
+  
+  BLOCK_REGION(temp);
+  BLOCK_REGION(temp2);
+  Array<TemplateRecord> records = RecordTypesAndFieldsUsed(tpl,temp,temp2);
+
+  for(TemplateRecord& r : records){
+    if(r.type == TemplateRecordType_FIELD){
+      Type* structType = r.structType;
+      GetOrAllocateResult res = fieldsPerTypeSeen->GetOrAllocate(structType);
+
+      Array<bool>* arr = res.data;
+      if(!res.alreadyExisted){
+        *arr = PushArray<bool>(testArena,structType->members.size);
+        Memset(*arr,false);
+      }
+
+      for(int i = 0; i < structType->members.size; i++){
+        Member m = structType->members[i];
+        if(CompareString(m.name,r.fieldName)){
+          (*arr)[i] = true;
+          break;
+        }
+      }
+    }
+  }
+
+  for(Pair<Type*,Array<bool>> p : fieldsPerTypeSeen){
+    Type* structType = p.first;
+    Array<bool>& arr = p.second;
+
+    printf("%.*s\n",UNPACK_SS(structType->name));
+    for(int i = 0; i < arr.size; i++){
+      Member m = structType->members[i];
+      if(arr[i]){
+        printf("  Used: %.*s\n",UNPACK_SS(m.name));
+      } else {
+        printf("  Not:  %.*s\n",UNPACK_SS(m.name));
+      }        
+    }
+  }
+}
+
+static void CheckIfTemplateUsesAllValues(CompiledTemplate* tpl,Arena* temp,Arena* temp2){
+  BLOCK_REGION(temp);
+  BLOCK_REGION(temp2);
+  Array<TemplateRecord> records = RecordTypesAndFieldsUsed(tpl,temp,temp2);
+
+  Hashmap<String,Value>* valuesUsed = GetAllTemplateValues();
+  Hashmap<String,bool>* seen = PushHashmap<String,bool>(temp2,valuesUsed->nodesUsed);
+
+  for(Pair<String,Value> p : valuesUsed){
+    seen->Insert(p.first,false);
+  }
+  
+  for(TemplateRecord r : records){
+    if(r.type == TemplateRecordType_IDENTIFER){
+      seen->Insert(r.identifierName,true);
+    }
+  }
+
+  for(Pair<String,bool> p : seen){
+    if(p.second){
+      printf("Seen: %.*s\n",UNPACK_SS(p.first));
+    }
+    if(!p.second){
+      printf("Not : %.*s\n",UNPACK_SS(p.first));
+    }
+  }
+}
+#endif

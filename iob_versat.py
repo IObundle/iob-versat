@@ -20,6 +20,108 @@ from iob_reg_re import iob_reg_re
 from iob_ram_sp_be import iob_ram_sp_be
 from iob_fp_fpu import iob_fp_fpu # Will also import all the other fp files
 
+class iob_versat(iob_module):
+    name = "iob_versat"
+    version = "V0.10"
+    flows = "sim emb"
+    setup_dir = os.path.dirname(__file__)
+
+    @classmethod
+    def _create_submodules_list(cls):
+        ''' Create submodules list with dependencies of this module
+        '''
+
+        submodules = [iob_fifo_sync,iob_ram_sp,iob_ram_2p]
+
+        if(True): # HAS_AXI
+            submodules += [
+                {"interface": "axi_m_port"},
+                {"interface": "axi_m_m_portmap"},
+                {"interface": "axi_m_write_port"},
+                {"interface": "axi_m_m_write_portmap"},
+                {"interface": "axi_m_read_port"},
+                {"interface": "axi_m_m_read_portmap"},
+                #iob_fp_fpu # Imports all the FPU related files
+            ]
+
+        super()._create_submodules_list(submodules)
+
+    @classmethod
+    def _setup_confs(cls):
+        super()._setup_confs(
+            [
+                # Macros
+                # Parameters
+                {
+                    "name": "DATA_W",
+                    "type": "P",
+                    "val": "32",
+                    "min": "NA",
+                    "max": "NA",
+                    "descr": "Data bus width",
+                },
+                {
+                    "name": "ADDR_W",
+                    "type": "P",
+                    "val": "`IOB_TIMER_SWREG_ADDR_W",
+                    "min": "NA",
+                    "max": "NA",
+                    "descr": "Address bus width",
+                },
+                {
+                    "name": "WDATA_W",
+                    "type": "P",
+                    "val": "1",
+                    "min": "NA",
+                    "max": "8",
+                    "descr": "",
+                },
+            ]
+        )
+
+    @classmethod
+    def _setup_ios(cls):
+        cls.ios += [
+            {"name": "iob_s_port", "descr": "CPU native interface", "ports": []},
+            {
+                "name": "general",
+                "descr": "General interface signals",
+                "ports": [
+                    {
+                        "name": "clk_i",
+                        "type": "I",
+                        "n_bits": "1",
+                        "descr": "System clock input",
+                    },
+                ],
+            },
+        ]
+
+    @classmethod
+    def _setup_regs(cls):
+        cls.regs += [
+            {
+                "name": "timer",
+                "descr": "TIMER software accessible registers.",
+                "regs": [
+                    {
+                        "name": "RESET",
+                        "type": "W",
+                        "n_bits": 1,
+                        "rst_val": 0,
+                        "log2n_items": 0,
+                        "autoreg": True,
+                        "descr": "Timer soft reset",
+                    },
+                ],
+            }
+        ]
+
+    @classmethod
+    def _setup_block_groups(cls):
+        cls.block_groups += []
+
+
 def RunVersat(pc_emul,versat_spec,versat_top,versat_extra,build_dir):
     versat_dir = os.path.dirname(__file__)
 
@@ -32,9 +134,9 @@ def RunVersat(pc_emul,versat_spec,versat_top,versat_extra,build_dir):
                             #"-S",versat_dir + "/submodules/FPU/hardware/src/",
                             "-I",os.path.realpath(versat_dir + "/hardware/include/"),
                             "-I",os.path.realpath(versat_dir + "/hardware/src/"),
-                            "-I",os.path.realpath(versat_dir + "/submodules/FPU/hardware/src/"),
-                            "-I",os.path.realpath(versat_dir + "/submodules/FPU/hardware/include/"),
-                            "-I",os.path.realpath(versat_dir + "/submodules/FPU/submodules/DIV/hardware/src/"),
+                            #"-I",os.path.realpath(versat_dir + "/submodules/FPU/hardware/src/"),
+                            #"-I",os.path.realpath(versat_dir + "/submodules/FPU/hardware/include/"),
+                            #"-I",os.path.realpath(versat_dir + "/submodules/FPU/submodules/DIV/hardware/src/"),
                             "-I",os.path.realpath(build_dir  + "/hardware/src/"), # TODO: If this works then all the other "versat_dir + ..." could be removed
                             "-H",os.path.realpath(build_dir + "/software"), # Output software files
                             "-o",os.path.realpath(build_dir + "/hardware/src") # Output hardware files

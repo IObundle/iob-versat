@@ -7,61 +7,40 @@
 
 struct FUInstance;
 
-static const int VCD_MAPPING_SIZE = 5;
-class VCDMapping{
-public:
-  char currentMapping[VCD_MAPPING_SIZE+1];
-  int increments;
-
-public:
-
-  VCDMapping(){Reset();};
-
-  void Increment(){
-    for(int i = VCD_MAPPING_SIZE - 1; i >= 0; i--){
-      increments += 1;
-      currentMapping[i] += 1;
-      if(currentMapping[i] == 'z' + 1){
-        currentMapping[i] = 'a';
-      } else {
-        return;
-      }
-    }
-    Assert(false && "Increase mapping space");
-  }
-
-  void Reset(){
-    currentMapping[VCD_MAPPING_SIZE] = '\0';
-    for(int i = 0; i < VCD_MAPPING_SIZE; i++){
-      currentMapping[i] = 'a';
-    }
-    increments = 0;
-  }
-
-  char* Get(){
-    return currentMapping;
-  }
-};
-
-typedef int* (*FUFunction)(FUInstance* inst);
-typedef int* (*FUUpdateFunction)(FUInstance* inst,Array<int> inputs);
-typedef int (*MemoryAccessFunction)(FUInstance* inst, int address, int value,int write);
-typedef void (*VCDFunction)(FUInstance*,FILE*,VCDMapping&,Array<int>,bool firstTime,bool printDefinitions);
-typedef void (*SignalFunction)(FUInstance* inst);
-
 enum DelayType {
-  DELAY_TYPE_BASE               = 0x0,
-  DELAY_TYPE_SINK_DELAY         = 0x1,
-  DELAY_TYPE_SOURCE_DELAY       = 0x2,
-  DELAY_TYPE_COMPUTE_DELAY      = 0x4
+  DelayType_BASE               = 0x0,
+  DelayType_SINK_DELAY         = 0x1,
+  DelayType_SOURCE_DELAY       = 0x2,
+  DelayType_COMPUTE_DELAY      = 0x4
 };
 #define CHECK_DELAY(inst,T) ((inst->declaration->delayType & T) == T)
+
+static String DelayTypeToString(DelayType type){
+  switch(type){
+  case DelayType_BASE:{
+    return STRING("DelayType_BASE");
+  } break;
+  case DelayType_SINK_DELAY:{
+    return STRING("DelayType_SINK_DELAY");
+  } break;
+  case DelayType_SOURCE_DELAY: {
+    return STRING("DelayType_SOURCE_DELAY");
+  } break;
+  case DelayType_COMPUTE_DELAY: {
+    return STRING("DelayType_COMPUTE_DELAY");
+  } break;
+  default: NOT_IMPLEMENTED("Implement as needed");
+  }
+
+  return {};
+}
 
 inline DelayType operator|(DelayType a, DelayType b)
 {return static_cast<DelayType>(static_cast<int>(a) | static_cast<int>(b));}
 
 /*
 // TODO: Finish making a FUType. FUDeclaration should be the instance of a type and should contain a pointer to the type that contains all the non parameterizable values.
+// NOTE: Inputs and outputs should also be parameterizable. Think multiplexers and stuff.
   struct FUType{
   String name;
 
@@ -75,25 +54,37 @@ inline DelayType operator|(DelayType a, DelayType b)
   }
 */
 
-// I initially extracted this because of Merge, right?
 struct ConfigurationInfo{
+  // Copy of MergeInfo
+  String name;
+  Array<String> baseName;
+  FUDeclaration* baseType;
+
+  // TODO: These should not be here, the wires will always be the same regardless of unit type 
   Array<Wire> configs;
   Array<Wire> states;
 
+  Array<int> inputDelays;
+  Array<int> outputLatencies;
+  
   // Calculated offsets are an array that associate the given InstanceNode inside the fixedDelayCircuit allocated member into the corresponding index of the configuration array. For now, static units are given a value near 0x40000000 (their configuration comes from the staticUnits hashmap). Units without any config are given a value of -1.
   CalculatedOffsets configOffsets;
   CalculatedOffsets stateOffsets;
   CalculatedOffsets delayOffsets;
-  CalculatedOffsets extraDataOffsets; // TODO: Do not need this for merged graphs
+  Array<int>        calculatedDelays;
+  Array<int>        order;
+  Array<bool>       unitBelongs;
 };
 
-// Maps the sub InstanceNodes into the corresponding index of the configuration array. 
-struct MergeInfo{
-  String name;
-  ConfigurationInfo config;
-  Array<String> baseName;
-  FUDeclaration* baseType;
+enum FUDeclarationType{
+  FUDeclarationType_SINGLE,
+  FUDeclarationType_COMPOSITE,
+  FUDeclarationType_SPECIAL,
+  FUDeclarationType_MERGED,
+  FUDeclarationType_ITERATIVE
 };
+
+// TODO: A lot of duplicated data exists since the change to merge.
 
 // TODO: There is a lot of crux between parsing and creating the FUDeclaration for composite accelerators 
 //       the FUDeclaration should be composed of something that is in common to all of them.
@@ -101,26 +92,22 @@ struct MergeInfo{
 struct FUDeclaration{
   String name;
 
-  Array<int> inputDelays;
-  Array<int> outputLatencies;
+  //Array<int> inputDelays;
+  //Array<int> outputLatencies;
 
-  Array<int> calculatedDelays;
+  // TODO: There should exist a "default" configInfo, instead of doing what we are currently which is using the 0 as the default;
+  ConfigurationInfo baseConfig;
+  Array<ConfigurationInfo> configInfo;
   
-  ConfigurationInfo configInfo;
-  
-  Optional<int> memoryMapBits; // 0 is a valid memory map size, so optional indicates that no memory map exists
+  Opt<int> memoryMapBits; // 0 is a valid memory map size, so optional indicates that no memory map exists
   int nIOs;
-  int nStaticConfigs;
-
+  
   Array<ExternalMemoryInterface> externalMemory;
 
   // Stores different accelerators depending on properties we want
   Accelerator* baseCircuit;
   Accelerator* fixedDelayCircuit;
-
-  // Merged accelerator
-  Array<MergeInfo> mergeInfo;
-   
+  
   const char* operation;
 
   int lat; // TODO: For now this is only for iterative units. Would also useful to have a standardized way of computing this from the graph and then compute it when needed. 
@@ -129,12 +116,16 @@ struct FUDeclaration{
   //       the info is all contained inside the units themselves and inside the calculated offsets
   Hashmap<StaticId,StaticData>* staticUnits;
 
-  enum {SINGLE = 0x0,COMPOSITE = 0x1,SPECIAL = 0x2,MERGED = 0x3,ITERATIVE = 0x4} type;
+  FUDeclarationType type;
   DelayType delayType;
 
   bool isOperation;
   bool implementsDone;
   bool signalLoop;
+
+// Simple access functions
+  int NumberInputs(){return baseConfig.inputDelays.size;};
+  int NumberOutputs(){return baseConfig.outputLatencies.size;};
 };
 
 // Simple operations should also be stored here.
@@ -151,18 +142,8 @@ namespace BasicDeclaration{
   extern FUDeclaration* data;
 }
 
-FUDeclaration* GetTypeByName(Versat* versat,String str);
+extern Pool<FUDeclaration> globalDeclarations;
 
-void InitializeSimpleDeclarations(Versat* versat);
-
-FUDeclaration* RegisterFU(Versat* versat,FUDeclaration declaration);
-FUDeclaration* RegisterIterativeUnit(Versat* versat,Accelerator* accel,FUInstance* inst,int latency,String name);
-FUDeclaration* RegisterSubUnit(Versat* versat,String name,Accelerator* accel);
-
-bool IsComposite(FUDeclaration* decl);
-
-bool IsCombinatorial(FUDeclaration* decl);
-bool ContainsConfigs(FUDeclaration* decl);
-bool ContainsStatics(FUDeclaration* decl);
-
-int NumberOfSubunits(FUDeclaration* decl);
+FUDeclaration* GetTypeByName(String str);
+void InitializeSimpleDeclarations();
+bool HasMultipleConfigs(FUDeclaration* decl);

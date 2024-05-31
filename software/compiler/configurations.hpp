@@ -6,7 +6,6 @@
 
 struct FUInstance;
 struct InstanceNode;
-struct OrderedInstance;
 struct Accelerator;
 struct FUDeclaration;
 
@@ -15,7 +14,6 @@ template<typename T> struct WireTemplate;
 typedef WireTemplate<int> Wire;
 
 struct FUInstance;
-struct Versat;
 
 struct StaticId{
    FUDeclaration* parent;
@@ -49,48 +47,123 @@ enum MemType{
    CONFIG,
    STATE,
    DELAY,
-   STATIC,
-   EXTRA
+   STATIC
+};
+
+enum NodeType{
+  NodeType_UNCONNECTED,
+  NodeType_SOURCE,
+  NodeType_COMPUTE,
+  NodeType_SINK,
+  NodeType_SOURCE_AND_SINK
 };
 
 struct InstanceInfo{
-  FUDeclaration* parentDeclaration;
+  int level;
   FUDeclaration* decl;
   String name;
-  String fullName;
-  Optional<int> configPos;
+  String baseName;
+  Opt<int> configPos;
+  int isConfigStatic;
   int configSize;
-  Optional<int> statePos;
+  Opt<int> statePos;
   int stateSize;
-  Optional<iptr> memMapped;
-  Optional<int> memMappedSize;
-  Optional<int> memMappedBitSize;
-  Optional<String> memMappedMask;
-  Optional<int> delayPos;
+  Opt<iptr> memMapped;
+  Opt<int> memMappedSize;
+  Opt<int> memMappedBitSize;
+  Opt<String> memMappedMask;
+  Opt<int> delayPos;
   Array<int> delay;
-  String type;
   int baseDelay;
   int delaySize;
-  int level;
   bool isComposite;
   bool isStatic;
   bool isShared;
+  FUDeclaration* parent;
+  String fullName;
+  bool isMergeMultiplexer;
+  bool belongs;
+  int special;
+  int order;
+  NodeType connectionType;
 };
 
 struct AcceleratorInfo{
   Array<InstanceInfo> info;
-  int configSize;
-  int stateSize;
-  int delaySize;
-  int delay;
   int memSize;
+  Opt<String> name;
 };
 
-Array<InstanceInfo> TransformGraphIntoArray(Accelerator* accel,bool recursive,Arena* out,Arena* temp);
+struct InstanceConfigurationOffsets{
+  Hashmap<StaticId,int>* staticInfo; 
+  FUDeclaration* parent;
+  String topName;
+  String baseName;
+  int configOffset;
+  int stateOffset;
+  int delayOffset;
+  int delay; // Actual delay value, not the delay offset.
+  int memOffset;
+  int level;
+  int order;
+  int* staticConfig; // This starts at 0x40000000 and at the end of the function we normalized it since we can only figure out the static position at the very end.
+  bool belongs;
+};
+
+struct TestResult{
+  Array<InstanceInfo> info;
+  InstanceConfigurationOffsets subOffsets;
+  String name;
+  Array<int> inputDelay;
+  Array<int> outputLatencies;
+};
+
+struct AccelInfo{
+  Array<Array<InstanceInfo>> infos; // Should join names with infos
+  Array<InstanceInfo> baseInfo;
+  Array<String> names;
+  Array<Array<int>> inputDelays;
+  Array<Array<int>> outputDelays;
+  
+  int memMappedBitsize;
+  int howManyMergedUnits;
+  
+  int inputs;
+  int outputs;
+
+  int configs;
+  int states;
+  int delays;
+  int ios;
+  int statics;
+  int sharedUnits;
+  int externalMemoryInterfaces;
+  int externalMemoryByteSize;
+  int numberUnits;
+  int numberConnections;
+  
+  int memoryMappedBits;
+  bool isMemoryMapped;
+  bool signalLoop;
+};
+
+struct TypeAndNameOnly{
+  String type;
+  String name;
+};
+
+struct Partition{
+  int value;
+  int max;
+};
+
+AccelInfo CalculateAcceleratorInfo(Accelerator* accel,bool recursive,Arena* out,Arena* temp);
+AccelInfo CalculateAcceleratorInfoNoDelay(Accelerator* accel,bool recursive,Arena* out,Arena* temp);
 
 CalculatedOffsets CalculateConfigOffsetsIgnoringStatics(Accelerator* accel,Arena* out);
 CalculatedOffsets CalculateConfigurationOffset(Accelerator* accel,MemType type,Arena* out);
-CalculatedOffsets CalculateOutputsOffset(Accelerator* accel,int offset,Arena* out);
+
+Array<Partition> GenerateInitialPartitions(Accelerator* accel,Arena* out);
 
 int GetConfigurationSize(FUDeclaration* decl,MemType type);
 
@@ -110,13 +183,9 @@ struct OrderedConfigurations{
    Array<Wire> delays;
 };
 
-// Extract configurations named with the top level expected name (not module name)
-//OrderedConfigurations ExtractOrderedConfigurationNames(Versat* versat,Accelerator* accel,Arena* out,Arena* temp);
-//Array<Wire> OrderedConfigurationsAsArray(OrderedConfigurations configs,Arena* out);
-
 Array<InstanceInfo> ExtractFromInstanceInfoSameLevel(Array<InstanceInfo> instanceInfo,int level,Arena* out);
-Array<InstanceInfo> ExtractFromInstanceInfo(Array<InstanceInfo> instanceInfo,Arena* out);
 
 void CheckSanity(Array<InstanceInfo> instanceInfo,Arena* temp);
 
 void PrintConfigurations(FUDeclaration* type,Arena* temp);
+

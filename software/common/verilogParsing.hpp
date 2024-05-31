@@ -1,13 +1,10 @@
-#ifndef INCLUDED_VERILOG_PARSER
-#define INCLUDED_VERILOG_PARSER
+#pragma once
 
 #include <vector>
 #include <unordered_map>
 
-//#include "versatPrivate.hpp"
 #include "utils.hpp"
 #include "parser.hpp"
-//#include "configurations.hpp"
 
 typedef std::unordered_map<String,Value> ValueMap;
 typedef std::unordered_map<String,String> MacroMap;
@@ -19,8 +16,6 @@ typedef Range<Expression*> ExpressionRange;
 
 struct PortDeclaration{
   Hashmap<String,Value>* attributes;
-  //ValueMap attributes;
-  //Range range; // Cannot be a range, otherwise we cannot deal with parameters
   ExpressionRange range;
   String name;
   enum {INPUT,OUTPUT,INOUT} type;
@@ -33,8 +28,6 @@ struct ParameterExpression{
 
 struct Module{
   Array<ParameterExpression> parameters;
-  //ValueMap parameters;
-  //std::vector<PortDeclaration> ports;
   Array<PortDeclaration> ports;
   String name;
   bool isSource;
@@ -89,8 +82,10 @@ typedef ExternalMemoryTemplate<ExpressionRange> ExternalMemoryExpression;
 // TODO: Do not know if it was better if this was a union. There are some differences that we currently ignore because we can always fill the interface with the information that we need. It's just that the code must take those into account, while the union approach would "simplify" somewhat the type system.
 template<typename T>
 struct ExternalMemoryInterfaceTemplate : public ExternalMemoryTemplate<T>{
-  // tp
-  // dp[2]
+  // union{
+    // tp;
+    // dp[2];
+  // };
   ExternalMemoryType type;
   int interface;
 };
@@ -101,14 +96,6 @@ typedef ExternalMemoryInterfaceTemplate<ExpressionRange> ExternalMemoryInterface
 struct ExternalMemoryID{
   int interface;
   ExternalMemoryType type;
-};
-
-template<> class std::hash<ExternalMemoryID>{
-public:
-  std::size_t operator()(ExternalMemoryID const& s) const noexcept{
-    std::size_t hash = s.interface * 2 + (int) s.type;
-    return hash;
-  }
 };
 
 struct ExternalInfoTwoPorts : public ExternalMemoryTwoPortsExpression{
@@ -129,9 +116,12 @@ struct ExternalMemoryInfo{
   ExternalMemoryType type;
 };
 
-// Contain info parsed directly by verilog.
-// This probably should be a union of all the memory types
-// The code in the verilog parser almost demands it
+template<> struct std::hash<ExternalMemoryID>{
+  std::size_t operator()(ExternalMemoryID const& s) const noexcept{
+    std::size_t hash = s.interface * 2 + (int) s.type;
+    return hash;
+  }
+};
 
 inline bool operator==(const ExternalMemoryID& lhs,const ExternalMemoryID& rhs){
   bool res = (memcmp(&lhs,&rhs,sizeof(ExternalMemoryID)) == 0);
@@ -161,36 +151,8 @@ struct ModuleInfo{
   bool signalLoop;
 };
 
-/*
-struct ModuleInfoInstance{
-  String name;
-  Array<ParameterExpression> parameters;
-  Array<int> inputDelays;
-  Array<int> outputLatencies;
-  Array<Wire> configs;
-  Array<Wire> states;
-  Array<ExternalMemoryInterface> externalInterfaces;
-  int nDelays;
-  int nIO;
-  Optional<int> memoryMappedBits;
-  int databusAddrSize;
-  bool doesIO;
-  bool hasDone;
-  bool hasClk;
-  bool hasReset;
-  bool hasRun;
-  bool hasRunning;
-  bool isSource;
-  bool signalLoop;
-};
-*/
-
 String PreprocessVerilogFile(String fileContent,Array<String> includeFilepaths,Arena* out,Arena* temp);
 Array<Module> ParseVerilogFile(String fileContent,Array<String> includeFilepaths,Arena* out,Arena* temp); // Only handles preprocessed files
 ModuleInfo ExtractModuleInfo(Module& module,Arena* permanent,Arena* tempArena);
 
-Array<String> GetAllIdentifiers(Expression* expr,Arena* arena);
 Value Eval(Expression* expr,Array<ParameterExpression> parameters);
-
-#endif // INCLUDED_VERILOG_PARSER
-

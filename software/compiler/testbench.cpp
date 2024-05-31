@@ -13,6 +13,8 @@ void HandleError(int sig){
    fflush(stdout);
 }
 
+#if 0
+
 void FuzzVersatSpecification(Versat* versat){
    Arena* temp = &versat->temp;
    BLOCK_REGION(temp);
@@ -39,7 +41,6 @@ void TestVersatSide(Versat* versat){
   //       Change the parsing so that we can divide the parsing from the units registration.
   //       In such a way that we can fuzz and check that it does not crash, without registering bad units.
   
-#if 0
   FuzzVersatSpecification(versat);
-#endif
 }
+#endif

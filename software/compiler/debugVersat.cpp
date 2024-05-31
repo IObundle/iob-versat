@@ -14,101 +14,22 @@
 #include "versat.hpp"
 #include "accelerator.hpp"
 
-struct MemoryRange{
-  int start;
-  int delta;
-  FUDeclaration* decl;
-  String name;
-  int level;
-  bool isComposite;
-};
-
-void SortRanges(Array<Range<int>> ranges){
-  qsort(ranges.data,ranges.size,sizeof(Range<int>),[](const void* v1,const void* v2){
-    Range<int>* r1 = (Range<int>*) v1;
-    Range<int>* r2 = (Range<int>*) v2;
-    return r1->start - r2->start;
-  });
-}
-
-static bool IsSorted(Array<Range<int>> ranges){
-  for(int i = 0; i < ranges.size - 1; i++){
-    if(ranges[i + 1].start < ranges[i].start){
-      DEBUG_BREAK_IF_DEBUGGING();
-      return false;
-    }
-  }
-  return true;
-}
-
-CheckRangeResult CheckNoOverlap(Array<Range<int>> ranges){
-  CheckRangeResult res = {};
-
-  Assert(IsSorted(ranges));
-
-  for(int i = 0; i < ranges.size - 1; i++){
-    Range cur = ranges[i];
-    Range next = ranges[i+1];
-
-    if(cur.end > next.start){
-      res.result = false;
-      res.problemIndex = i;
-
-      return res;
-    }
-  }
-
-  res.result = true;
-  return res;
-}
-
-CheckRangeResult CheckNoGaps(Array<Range<int>> ranges){
-  CheckRangeResult res = {};
-
-  Assert(IsSorted(ranges));
-
-  for(int i = 0; i < ranges.size - 1; i++){
-    Range cur = ranges[i];
-    Range next = ranges[i+1];
-
-    if(cur.end != next.start){
-      res.result = false;
-      res.problemIndex = i;
-
-      return res;
-    }
-  }
-
-  res.result = true;
-  return res;
-}
-
-bool CheckInputAndOutputNumber(FUDeclaration* type,int inputs,int outputs){
-  if(inputs > type->inputDelays.size){
-    return false;
-  } else if(outputs > type->outputLatencies.size){
-    return false;
-  }
-
-  return true;
-}
-
-static void OutputGraphDotFile_(Versat* versat,Accelerator* accel,bool collapseSameEdges,Set<FUInstance*>* highlighInstance,FILE* outputFile,Arena* temp){
+static void OutputGraphDotFile_(Accelerator* accel,bool collapseSameEdges,Set<FUInstance*>* highlighInstance,FILE* outputFile,Arena* temp){
   BLOCK_REGION(temp);
 
   fprintf(outputFile,"digraph accel {\n\tnode [fontcolor=white,style=filled,color=\"160,60,176\"];\n");
   FOREACH_LIST(InstanceNode*,ptr,accel->allocated){
     FUInstance* inst = ptr->inst;
     String id = UniqueRepr(inst,temp);
-    String name = Repr(inst,versat->debug.dotFormat,temp);
+    String name = Repr(inst,globalDebug.dotFormat,temp);
 
     String color = STRING("darkblue");
     int delay = 0;
     
-    if(ptr->type == InstanceNode::TAG_SOURCE || ptr->type == InstanceNode::TAG_SOURCE_AND_SINK){
+    if(ptr->type == NodeType_SOURCE || ptr->type == NodeType_SOURCE_AND_SINK){
       color = STRING("darkgreen");
-      delay = inst->baseDelay;
-    } else if(ptr->type == InstanceNode::TAG_SINK){
+      delay = 0; //TODO: Broken //inst->baseDelay;
+    } else if(ptr->type == NodeType_SINK){
       color = STRING("dark");
     }
 
@@ -149,7 +70,7 @@ static void OutputGraphDotFile_(Versat* versat,Accelerator* accel,bool collapseS
       String second = UniqueRepr(in,temp);
       PortInstance start = {out,outPort};
       PortInstance end = {in,inPort};
-      String label = Repr(&start,&end,versat->debug.dotFormat,temp);
+      String label = Repr(&start,&end,globalDebug.dotFormat,temp);
       int calculatedDelay = con->delay ? *con->delay : 0;
 
       bool highlighStart = (highlighInstance ? highlighInstance->Exists(start.inst) : false);
@@ -170,18 +91,18 @@ static void OutputGraphDotFile_(Versat* versat,Accelerator* accel,bool collapseS
   fprintf(outputFile,"}\n");
 }
 
-void OutputGraphDotFile(Versat* versat,Accelerator* accel,bool collapseSameEdges,String filename,Arena* temp){
-  if(!versat->debug.outputGraphs){
+void OutputGraphDotFile(Accelerator* accel,bool collapseSameEdges,String filename,Arena* temp){
+  if(!globalDebug.outputGraphs){
     return;
   }
 
   FILE* file = OpenFileAndCreateDirectories(StaticFormat("%.*s",UNPACK_SS(filename)),"w");
-  OutputGraphDotFile_(versat,accel,collapseSameEdges,nullptr,file,temp);
+  OutputGraphDotFile_(accel,collapseSameEdges,nullptr,file,temp);
   fclose(file);
 }
 
-void OutputGraphDotFile(Versat* versat,Accelerator* accel,bool collapseSameEdges,FUInstance* highlighInstance,String filename,Arena* temp){
-  if(!versat->debug.outputGraphs){
+void OutputGraphDotFile(Accelerator* accel,bool collapseSameEdges,FUInstance* highlighInstance,String filename,Arena* temp){
+  if(!globalDebug.outputGraphs){
     return;
   }
 
@@ -190,23 +111,23 @@ void OutputGraphDotFile(Versat* versat,Accelerator* accel,bool collapseSameEdges
   highlight->Insert(highlighInstance);
 
   FILE* file = OpenFileAndCreateDirectories(StaticFormat("%.*s",UNPACK_SS(filename)),"w");
-  OutputGraphDotFile_(versat,accel,collapseSameEdges,highlight,file,temp);
+  OutputGraphDotFile_(accel,collapseSameEdges,highlight,file,temp);
   fclose(file);
 }
 
-void OutputGraphDotFile(Versat* versat,Accelerator* accel,bool collapseSameEdges,Set<FUInstance*>* highlight,String filename,Arena* temp){
-  if(!versat->debug.outputGraphs){
+void OutputGraphDotFile(Accelerator* accel,bool collapseSameEdges,Set<FUInstance*>* highlight,String filename,Arena* temp){
+  if(!globalDebug.outputGraphs){
     return;
   }
 
   BLOCK_REGION(temp);
   FILE* file = OpenFileAndCreateDirectories(StaticFormat("%.*s",UNPACK_SS(filename)),"w");
-  OutputGraphDotFile_(versat,accel,collapseSameEdges,highlight,file,temp);
+  OutputGraphDotFile_(accel,collapseSameEdges,highlight,file,temp);
   fclose(file);
 }
 
 String PushMemoryHex(Arena* arena,void* memory,int size){
-  Byte* mark = MarkArena(arena);
+  auto mark = StartString(arena);
 
   unsigned char* view = (unsigned char*) memory;
 
@@ -217,7 +138,7 @@ String PushMemoryHex(Arena* arena,void* memory,int size){
     PushString(arena,"%c%c ",GetHex(high),GetHex(low));
   }
 
-  return PointArena(arena,mark);
+  return EndString(mark);
 }
 
 void OutputMemoryHex(void* memory,int size){
@@ -238,9 +159,8 @@ void OutputMemoryHex(void* memory,int size){
   printf("\n");
 }
 
-
-void OutputGraphDotFile(Versat* versat,Accelerator* accel,bool collapseSameEdges,FUInstance* highlighInstance,CalculateDelayResult delays,String filename,Arena* temp){
-  if(!versat->debug.outputGraphs){
+void OutputGraphDotFile(Accelerator* accel,bool collapseSameEdges,FUInstance* highlighInstance,CalculateDelayResult delays,String filename,Arena* temp){
+  if(!globalDebug.outputGraphs){
     return;
   }
 
@@ -253,15 +173,15 @@ void OutputGraphDotFile(Versat* versat,Accelerator* accel,bool collapseSameEdges
   FOREACH_LIST(InstanceNode*,ptr,accel->allocated){
     FUInstance* inst = ptr->inst;
     String id = UniqueRepr(inst,temp);
-    String name = Repr(inst,versat->debug.dotFormat,temp);
+    String name = Repr(inst,globalDebug.dotFormat,temp);
 
     String color = STRING("darkblue");
     int delay = 0;
     
-    if(ptr->type == InstanceNode::TAG_SOURCE || ptr->type == InstanceNode::TAG_SOURCE_AND_SINK){
+    if(ptr->type == NodeType_SOURCE || ptr->type == NodeType_SOURCE_AND_SINK){
       color = STRING("darkgreen");
-      delay = inst->baseDelay;
-    } else if(ptr->type == InstanceNode::TAG_SINK){
+      delay = 0; //TODO: Broken inst->baseDelay;
+    } else if(ptr->type == NodeType_SINK){
       color = STRING("dark");
     }
 
@@ -302,11 +222,11 @@ void OutputGraphDotFile(Versat* versat,Accelerator* accel,bool collapseSameEdges
       String second = UniqueRepr(in,temp);
       PortInstance start = {out,outPort};
       PortInstance end = {in,inPort};
-      String label = Repr(&start,&end,versat->debug.dotFormat,temp);
-      
+      String label = Repr(&start,&end,globalDebug.dotFormat,temp);
+
       PortNode nodeStart = {ptr,con->port};
       PortNode nodeEnd = con->instConnectedTo;
-      
+
       EdgeNode edge = {nodeStart,nodeEnd};
       int calculatedDelay = delays.edgesDelay->GetOrFail(edge);
 
@@ -328,3 +248,7 @@ void OutputGraphDotFile(Versat* versat,Accelerator* accel,bool collapseSameEdges
   fprintf(outputFile,"}\n");
 }
 
+String PushDebugPath(Arena* out,String name,const char* fileName){
+  String path = PushString(out,"debug/%.*s/%s",UNPACK_SS(name),fileName);
+  return path;
+}

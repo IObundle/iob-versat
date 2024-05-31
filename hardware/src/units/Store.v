@@ -1,7 +1,7 @@
 `timescale 1ns / 1ps
 
 module Store #(
-   parameter DELAY_W = 32,
+   parameter DELAY_W = 7,
    parameter ADDR_W  = 1,
    parameter DATA_W  = 32
 ) (

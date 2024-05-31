@@ -72,6 +72,7 @@ namespace ValueType{
   extern Type* BOOLEAN;
   extern Type* CHAR;
   extern Type* STRING;
+  extern Type* CONST_STRING;
   extern Type* NIL;
   extern Type* HASHMAP;
   extern Type* SIZED_STRING;
@@ -83,6 +84,15 @@ namespace ValueType{
 };
 
 struct TemplateFunction;
+
+struct TypeIterator{
+  PoolIterator<Type> iter;
+  PoolIterator<Type> end;
+};
+
+TypeIterator IterateTypes();
+bool HasNext(TypeIterator iter);
+Type* Next(TypeIterator& iter);
 
 struct Value{
   union{
@@ -145,11 +155,11 @@ Type* GetTypeOrFail(String typeName);
 Type* GetPointerType(Type* baseType);
 Type* GetArrayType(Type* baseType, int arrayLength);
 
-Optional<Value> AccessObjectIndex(Value object,int index);
-Optional<Value> AccessStruct(Value object,Member* member);
-Optional<Value> AccessStruct(Value val,int index);
-Optional<Value> AccessStruct(Value object,String memberName);
-Optional<Member*> GetMember(Type* structType,String memberName);
+Opt<Value> AccessObjectIndex(Value object,int index);
+Opt<Value> AccessStruct(Value object,Member* member);
+Opt<Value> AccessStruct(Value val,int index);
+Opt<Value> AccessStruct(Value object,String memberName);
+Opt<Member*> GetMember(Type* structType,String memberName);
 
 void PrintStructDefinition(Type* type); // Mainly for debug purposes
 
@@ -195,6 +205,7 @@ String GetTemplateTypeName(Arena* out){
   return typeName;
 }
 
+// NOTE: Since this function does not copy the input value, must make sure that we do not point to stack allocated data that can go out of scope. 
 template<typename T>
 Value MakeValue(T* t){
   STACK_ARENA(temp,Kilobyte(1));

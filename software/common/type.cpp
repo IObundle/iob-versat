@@ -12,6 +12,7 @@ namespace ValueType{
   Type* BOOLEAN;
   Type* CHAR;
   Type* STRING;
+  Type* CONST_STRING;
   Type* NIL;
   Type* HASHMAP;
   Type* SIZED_STRING;
@@ -25,6 +26,24 @@ namespace ValueType{
 
 static Arena permanentArena;
 static Pool<Type> types;
+
+TypeIterator IterateTypes(){
+  TypeIterator iter = {};
+  iter.iter = types.begin();
+  iter.end = types.end();
+  return iter;
+}
+
+bool HasNext(TypeIterator iter){
+  bool res = (iter.iter != iter.end);
+  return res;
+}
+
+Type* Next(TypeIterator& iter){
+  Type* type = *iter.iter;
+  ++iter.iter;
+  return type;
+}
 
 static Type* CollapseTypeUntilBase(Type* type){
   Type* res = type;
@@ -145,7 +164,7 @@ Type* GetSpecificType(String name){
 String GetBaseTypeName(String name){
   Tokenizer tok(name,"*[]",{});
 
-  void* mark = tok.Mark();
+  auto mark = tok.Mark();
   while(!tok.Done()){
     Token t = tok.PeekToken();
 
@@ -167,7 +186,7 @@ String GetBaseTypeName(String name){
 Type* InstantiateTemplate(String name,Arena* arena){
   STACK_ARENA(temp,Kilobyte(4));
   Tokenizer tok(name,"<>,",{});
-
+  
   // This check probably shouldn't be here.
   Type* alreadyExists = GetSpecificType(name);
   if(alreadyExists && alreadyExists->members.size > 0){
@@ -197,7 +216,7 @@ Type* InstantiateTemplate(String name,Arena* arena){
         break;
       }
 
-      String simpleType = ParseSimpleType(&tok);
+      String simpleType = ParseSimpleFullType(&tok);
       String templateArg = templateBase->templateArgs[index];
 
       templateArgTypes[index] = GetTypeOrFail(simpleType);
@@ -227,7 +246,7 @@ Type* InstantiateTemplate(String name,Arena* arena){
     Tokenizer tok(templateMember.typeName,"*&[],<>",{});
 
     BLOCK_REGION(&temp);
-    Byte* mark = MarkArena(&temp);
+    auto mark = StartString(&temp);
 
     while(!tok.Done()){
       Token token = tok.NextToken();
@@ -240,7 +259,7 @@ Type* InstantiateTemplate(String name,Arena* arena){
       }
     }
 
-    String trueType = PointArena(&temp,mark);
+    String trueType = EndString(mark);
     String baseType = GetBaseTypeName(trueType);
 
     // TODO: This feels a bit like a hack. But it does work. Maybe it's fine with a bit of a cleanup and comments
@@ -325,7 +344,7 @@ Type* GetType(String name){
   Type* res = nullptr;
   Tokenizer tok(name,"*&[]<>,",{});
   if(Contains(name,'<')){
-    Token templatedName = ParseSimpleType(&tok);
+    String templatedName = ParseSimpleType(&tok);
 
     if(CompareString(name,templatedName)){ // Name equal to templated name means that no pointers or arrays, only templated arguments are not found
          Type* res = InstantiateTemplate(name,&permanentArena);
@@ -334,10 +353,7 @@ Type* GetType(String name){
       res = GetType(templatedName);
     }
   } else {
-    //Tokenizer tok(name,"*&[]",{});
-    tok.SetSingleChars("*&[]");
-
-    Token noPointers = ParseSimpleType(&tok);
+    String noPointers = ParseSimpleType(&tok);
     if(CompareString(noPointers,name)){
       return nullptr;
     }
@@ -369,7 +385,7 @@ Type* GetType(String name){
     }
 
     if(CompareString(next,"[")){
-      Token arrayExpression = tok.PeekFindUntil("]");
+      Token arrayExpression = tok.PeekFindUntil("]").value();
       tok.AdvancePeek(arrayExpression);
       tok.AssertNextToken("]");
 
@@ -394,7 +410,7 @@ Type* GetType(String name){
       continue;
     }
 
-    NOT_POSSIBLE;
+    NOT_POSSIBLE("Should have found a type by now");
   }
 
   return res;
@@ -445,12 +461,9 @@ Type* GetArrayType(Type* baseType, int arrayLength){
   return ret;
 }
 
-#define A(STRUCT) #STRUCT,sizeof(STRUCT)
-#define B(STRUCT,FULLTYPE,TYPE,NAME,PTR,HAS_ARRAY,ARRAY_ELEMENTS)  ((Member){#TYPE,#NAME,sizeof(FULLTYPE),sizeof(TYPE),offsetof(STRUCT,NAME),PTR,ARRAY_ELEMENTS,HAS_ARRAY})
-
 void RegisterParsedTypes();
 
-#define REGISTER(TYPE) RegisterSimpleType(STRING(#TYPE),sizeof(TYPE),alignof(TYPE));
+#define REGISTER(TYPE) RegisterSimpleType(STRING(#TYPE),sizeof(TYPE),alignof(TYPE))
 
 void RegisterTypes(){
   static bool registered = false;
@@ -467,6 +480,8 @@ void RegisterTypes(){
   ValueType::CHAR = REGISTER(char);
   ValueType::STRING = GetPointerType(ValueType::CHAR);
   ValueType::NIL = RegisterSimpleType(STRING("void"),sizeof(char),alignof(char));
+
+  ValueType::CONST_STRING = GetPointerType(REGISTER(const char));
 
   REGISTER(long int);
   REGISTER(unsigned int);
@@ -508,7 +523,7 @@ String GetDefaultValueRepresentation(Value in,Arena* arena){
     return res;
   } else if(type == ValueType::NUMBER){
     res = PushString(arena,"%" PRId64,val.number);
-  } else if(type == ValueType::STRING){
+  } else if(type == ValueType::STRING || type == ValueType::CONST_STRING){
     if(val.literal){
       res = PushString(arena,"\"%.*s\"",UNPACK_SS(val.str));
     } else {
@@ -536,12 +551,12 @@ String GetDefaultValueRepresentation(Value in,Arena* arena){
     }
   } else if(type->type == Type::TEMPLATED_INSTANCE){
     if(type->templateBase == ValueType::ARRAY){
-      Optional<Value> size = AccessStruct(val,STRING("size"));
+      Opt<Value> size = AccessStruct(val,STRING("size"));
       if(!size){
         LogFatal(LogModule::TYPE,"Not an Array");
       }
 
-      res = PushString(arena,"Size:%" PRId64,size.value().number);
+      res = PushString(arena,"Array of Size:%" PRId64,size.value().number);
     } else {
       res = PushString(arena,"%.*s",UNPACK_SS(type->name)); // Return type name
     }
@@ -620,9 +635,11 @@ Value CollapseValue(Value val){
     val.boolean = boolean;
   } else if(val.type == ValueType::CHAR){
     val.ch = *((char*) val.custom);
+  } else if(CompareString(val.type->name,STRING("const char*"))){
+    val.ch = *((char*) val.custom);
   } else if(val.type == ValueType::NIL){
     val.number = 0;
-  } else if(val.type == ValueType::STRING){
+  } else if(val.type == ValueType::STRING || val.type == ValueType::CONST_STRING){
     char* str = *(char**) val.custom;
 
     if(str == nullptr){
@@ -652,7 +669,7 @@ static void* DeferencePointer(void* object,Type* info,int index){
   return objectPtr;
 }
 
-Optional<Value> AccessObjectIndex(Value object,int index){
+Opt<Value> AccessObjectIndex(Value object,int index){
   Value value = {};
 
   if(object.type->type == Type::ARRAY){
@@ -681,7 +698,7 @@ Optional<Value> AccessObjectIndex(Value object,int index){
       int arrayLength = byteArray->size;
       if(index >= arrayLength){
         LogError(LogModule::TYPE,"Try to access member past array size");
-        return (Optional<Value>{});
+        return (Opt<Value>{});
       }
 
       int size = object.type->templateArgTypes[0]->size;
@@ -700,7 +717,7 @@ Optional<Value> AccessObjectIndex(Value object,int index){
       for(int i = 0; HasNext(iter) && i < unpacked.index; Advance(&iter),i += 1);
       Value pair = GetValue(iter);
 
-      Optional<Value> optVal;
+      Opt<Value> optVal;
       if(unpacked.data){
         optVal = AccessStruct(pair,STRING("data"));
       } else {
@@ -712,10 +729,10 @@ Optional<Value> AccessObjectIndex(Value object,int index){
       }
       value = optVal.value();
     } else {
-      NOT_IMPLEMENTED;
+      NOT_IMPLEMENTED("Implement as needed");
     }
   } else {
-    NOT_IMPLEMENTED;
+    NOT_IMPLEMENTED("Implement as needed");
   }
 
   value.isTemp = false;
@@ -724,7 +741,7 @@ Optional<Value> AccessObjectIndex(Value object,int index){
   return value;
 }
 
-Optional<Value> AccessStruct(Value structure,Member* member){
+Opt<Value> AccessStruct(Value structure,Member* member){
   Assert(IsStruct(structure.type));
   Assert(!structure.isTemp);
 
@@ -741,16 +758,16 @@ Optional<Value> AccessStruct(Value structure,Member* member){
   return newValue;
 }
 
-Optional<Value> AccessStruct(Value val,int index){
+Opt<Value> AccessStruct(Value val,int index){
   Assert(IsStruct(val.type));
 
   Member* member = &val.type->members[index];
-  Optional<Value> res = AccessStruct(val,member);
+  Opt<Value> res = AccessStruct(val,member);
 
   return res;
 }
 
-Optional<Value> AccessStruct(Value object,String memberName){
+Opt<Value> AccessStruct(Value object,String memberName){
   Value structure = CollapsePtrIntoStruct(object);
   Type* type = structure.type;
 
@@ -766,10 +783,10 @@ Optional<Value> AccessStruct(Value object,String memberName){
 
   if(member == nullptr){
     LogError(LogModule::TYPE,"Failure to find member named: %.*s on structure: %.*s",UNPACK_SS(memberName),UNPACK_SS(structure.type->name));
-    return Optional<Value>();
+    return Opt<Value>();
   }
 
-  Optional<Value> res = AccessStruct(structure,member);
+  Opt<Value> res = AccessStruct(structure,member);
 
   return res;
 }
@@ -793,7 +810,7 @@ static Type* GetBaseType(Type* type){
   return type;
 }
 
-Optional<Member*> GetMember(Type* structType,String memberName){
+Opt<Member*> GetMember(Type* structType,String memberName){
   Type* type = GetBaseType(structType);
 
   Assert(type->type == Type::STRUCT || type->type == Type::TEMPLATED_INSTANCE);
@@ -855,7 +872,7 @@ int IndexableSize(Value object){
       Hashmap<Byte,Byte>* view = (Hashmap<Byte,Byte>*) object.custom;
       size = view->nodesUsed;
     } else {
-      NOT_IMPLEMENTED;
+      NOT_IMPLEMENTED("Implement as needed");
     }
   }
 
@@ -890,6 +907,7 @@ bool IsBasicType(Type* type){
               type == ValueType::BOOLEAN ||
               type == ValueType::CHAR ||
               type == ValueType::STRING ||
+              type == ValueType::CONST_STRING ||
               type == ValueType::SIZED_STRING ||
               type == ValueType::SIZED_STRING_BASE);
 
@@ -1037,14 +1055,14 @@ Iterator Iterate(Value iterating){
       }
       iter.hashmapType = exists;
     } else {
-      NOT_IMPLEMENTED;
+      NOT_IMPLEMENTED("Implement as needed");
     }
   } else if(IsEmbeddedListKind(type)){
     // Info stored in iterating
   } else if(type == ValueType::NIL){
     // Do nothing. HasNext will fail
   } else {
-    NOT_IMPLEMENTED;
+    NOT_IMPLEMENTED("Implement as needed");
   }
 
   return iter;
@@ -1084,7 +1102,7 @@ bool HasNext(Iterator iter){
       bool res = (iter.currentNumber < len);
       return res;
     } else {
-      NOT_IMPLEMENTED;
+      NOT_IMPLEMENTED("Implement as needed");
     }
   } else if(IsEmbeddedListKind(type)){
     bool res = (iter.iterating.custom != nullptr);
@@ -1093,7 +1111,7 @@ bool HasNext(Iterator iter){
   } else if(type == ValueType::NIL){
     return false;
   } else {
-    NOT_IMPLEMENTED;
+    NOT_IMPLEMENTED("Implement as needed");
   }
 
   return false;
@@ -1116,10 +1134,10 @@ void Advance(Iterator* iter){
     } else if(type->templateBase == ValueType::HASHMAP){
       iter->currentNumber += 1;
     } else {
-      NOT_IMPLEMENTED;
+      NOT_IMPLEMENTED("Implement as needed");
     }
   } else if(IsEmbeddedListKind(type)){
-    Optional<Value> optVal = AccessStruct(iter->iterating,STRING("next"));
+    Opt<Value> optVal = AccessStruct(iter->iterating,STRING("next"));
     if(!optVal){
       LogFatal(LogModule::TYPE,"No next member. Somehow returned a different type");
     }
@@ -1127,7 +1145,7 @@ void Advance(Iterator* iter){
     Value collapsed = CollapsePtrIntoStruct(optVal.value());
     iter->iterating = collapsed;
   } else {
-    NOT_IMPLEMENTED;
+    NOT_IMPLEMENTED("Implement as needed");
   }
 }
 
@@ -1139,7 +1157,7 @@ Value GetValue(Iterator iter){
   if(type == ValueType::NUMBER){
     val = MakeValue(iter.currentNumber);
   } else if(type->type == Type::ARRAY){
-    Optional<Value> optVal = AccessObjectIndex(iter.iterating,iter.currentNumber);
+    Opt<Value> optVal = AccessObjectIndex(iter.iterating,iter.currentNumber);
     if(!optVal){
       LogFatal(LogModule::TYPE,"Somehow went past the end? Should not be possible");
     }
@@ -1159,7 +1177,7 @@ Value GetValue(Iterator iter){
       val.custom = &view[index * size];
       val.type = type->templateArgTypes[0];
     } else if(type->templateBase == ValueType::ARRAY){
-      Optional<Value> optVal = AccessObjectIndex(iter.iterating,iter.currentNumber);
+      Opt<Value> optVal = AccessObjectIndex(iter.iterating,iter.currentNumber);
       if(!optVal){
         LogFatal(LogModule::TYPE,"Somehow went past the end? Should not be possible");
       }
@@ -1172,12 +1190,12 @@ Value GetValue(Iterator iter){
       val.custom = &data[iter.currentNumber * iter.hashmapType->size];
       val.type = iter.hashmapType;
     } else {
-      NOT_IMPLEMENTED;
+      NOT_IMPLEMENTED("Implement as needed");
     }
   } else if(IsEmbeddedListKind(type)){
     return iter.iterating;
   } else {
-    NOT_IMPLEMENTED;
+    NOT_IMPLEMENTED("Implement as needed");
   }
 
   return val;
@@ -1242,7 +1260,7 @@ static Value CollapsePtrUntilType(Value in, Type* typeWanted){
     } else if(res.type->type == Type::TYPEDEF){
 	  res.type = res.type->typedefType;
 	} else {
-      NOT_POSSIBLE;
+      NOT_POSSIBLE("No more possible type exists to collapse, I think");
     }
   }
 
@@ -1255,13 +1273,13 @@ bool Equal(Value v1,Value v2){
   Value c1 = CollapseArrayIntoPtr(v1);
   Value c2 = CollapseArrayIntoPtr(v2);
 
-  if(c1.type == ValueType::STRING && c2.type == ValueType::SIZED_STRING){
+  if((c1.type == ValueType::STRING || c1.type == ValueType::CONST_STRING) && c2.type == ValueType::SIZED_STRING){
     String str = c1.str;
     String ss = c2.str;
     Assert(c1.isTemp == true && c2.isTemp == true);
 
     return CompareString(ss,str);
-  } else if(c1.type == ValueType::SIZED_STRING && c2.type == ValueType::STRING){
+  } else if(c1.type == ValueType::SIZED_STRING && (c2.type == ValueType::STRING || c2.type == ValueType::CONST_STRING)){
     String str = c2.str;
     String ss = c1.str;
     Assert(c2.isTemp == true && c1.isTemp == true);
@@ -1287,7 +1305,7 @@ bool Equal(Value v1,Value v2){
 
   if(c1.type == ValueType::NUMBER){
     res = (c1.number == c2.number);
-  } else if(c1.type == ValueType::STRING){
+  } else if(c1.type == ValueType::STRING || c1.type == ValueType::CONST_STRING){
     res = (CompareString(c1.str,c2.str));
   } else if(c1.type == ValueType::SIZED_STRING){
     res = CompareString(c1.str,c2.str);
@@ -1310,7 +1328,7 @@ bool Equal(Value v1,Value v2){
 
     res = (c1.custom == c2.custom);
   } else {
-    NOT_IMPLEMENTED;
+    NOT_IMPLEMENTED("Implement as needed");
   }
 
   return res;
@@ -1356,8 +1374,8 @@ Value ConvertValue(Value in,Type* want,Arena* arena){
   res.type = want;
 
   if(want == ValueType::BOOLEAN){
-    if(CompareString(in.type->name,"Optional<int>")){
-      Optional<int>* view = (Optional<int>*) in.custom;
+    if(CompareString(in.type->name,"Opt<int>")){
+      Opt<int>* view = (Opt<int>*) in.custom;
       res.boolean = view->has_value();
     } else if(in.type == ValueType::NUMBER || in.type->type == Type::ENUM){
       res.boolean = (in.number != 0);
@@ -1372,7 +1390,7 @@ Value ConvertValue(Value in,Type* want,Arena* arena){
     } else if(IsStruct(in.type)){
       res.boolean = (in.custom != nullptr);
     } else {
-      NOT_IMPLEMENTED;
+      NOT_IMPLEMENTED("Implement as needed");
     }
   } else if(want == ValueType::NUMBER){
     if(in.type->type == Type::POINTER){
@@ -1382,30 +1400,32 @@ Value ConvertValue(Value in,Type* want,Arena* arena){
     } else if(CompareString(in.type->name,"iptr")) { // TODO: could be handled by the typedef and setting all values from cstdint as knows
          iptr* data = (iptr*) in.custom;
          res.number = (i64) *data;
-    } else if(CompareString(in.type->name,"Optional<int>")){
-      Optional<int>* view = (Optional<int>*) in.custom;
+    } else if(CompareString(in.type->name,"Opt<int>")){
+      Opt<int>* view = (Opt<int>*) in.custom;
       res.number = view->value_or(0);
+    } else if(in.type->type == Type::ENUM){
+      res.number = in.number;
     } else {
-      NOT_IMPLEMENTED;
+      NOT_IMPLEMENTED("Implement as needed");
     }
   } else if(want == ValueType::SIZED_STRING){
-    if(in.type == ValueType::STRING){
+    if(in.type == ValueType::STRING || in.type == ValueType::CONST_STRING){
       res = in;
       res.type = want;
     } else if(arena){
       res.str = GetDefaultValueRepresentation(in,arena);
     } else {
-      NOT_IMPLEMENTED;
+      NOT_IMPLEMENTED("Implement as needed");
     }
   } else if(want->type == Type::ENUM){
     if(in.type == ValueType::NUMBER){
       res = in;
       res.type = want;
     } else {
-      NOT_IMPLEMENTED;
+      NOT_IMPLEMENTED("Implement as needed");
     }
   } else {
-    NOT_IMPLEMENTED;
+    NOT_IMPLEMENTED("Implement as needed");
   }
 
   return res;
@@ -1497,14 +1517,14 @@ Value MakeValue(void* entity,String typeName){
 }
 
 // This shouldn't be here, but cannot be on parser.cpp because otherwise struct parser would fail
-Array<Value> ExtractValues(const char* format,Token tok,Arena* arena){
+Array<Value> ExtractValues(const char* format,String tok,Arena* arena){
   // TODO: This is pretty much a copy of CheckFormat but with small modifications
   // There should be a way to refactor into a single function, and probably less error prone
   if(!CheckFormat(format,tok)){
     return {};
   }
 
-  Byte* mark = MarkArena(arena);
+  DynamicArray<Value> arr = StartArray<Value>(arena);
 
   int tokenIndex = 0;
   for(int formatIndex = 0; 1;){
@@ -1534,7 +1554,7 @@ Array<Value> ExtractValues(const char* format,Token tok,Arena* arena){
         numberStr.size = &tok.data[tokenIndex] - numberStr.data;
         int number = ParseInt(numberStr);
 
-        Value* val = PushStruct<Value>(arena);
+        Value* val = arr.PushElem();
         *val = {};
         val->type = ValueType::NUMBER;
         val->number = number;
@@ -1553,17 +1573,17 @@ Array<Value> ExtractValues(const char* format,Token tok,Arena* arena){
 
         str.size = &tok.data[tokenIndex] - str.data;
 
-        Value* val = PushStruct<Value>(arena);
+        Value* val = arr.PushElem();
         *val = {};
         val->type = ValueType::STRING;
         val->str = str;
         val->isTemp = true;
       }break;
       case '\0':{
-        NOT_POSSIBLE;
+        NOT_POSSIBLE("Format char not finished"); // TODO: Probably should be a error that reports 
       }break;
       default:{
-        NOT_IMPLEMENTED;
+        NOT_IMPLEMENTED("Implement as needed");
       }break;
       }
     } else {
@@ -1573,7 +1593,7 @@ Array<Value> ExtractValues(const char* format,Token tok,Arena* arena){
     }
   }
 
-  Array<Value> values = PointArray<Value>(arena,mark);
+  Array<Value> values = EndArray(arr);
 
   return values;
 }

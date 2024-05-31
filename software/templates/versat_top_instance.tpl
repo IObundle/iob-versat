@@ -383,8 +383,8 @@ begin
    #{for node instances}
    #{set inst node.inst}
    #{if inst.declaration.memoryMapBits}
-      #{if versatData[counter].memoryMaskSize}
-      if(address[@{memoryAddressBits - 1}:@{memoryAddressBits - versatData[counter].memoryMaskSize}] == @{memoryAddressBits - inst.declaration.memoryMapBits}'b@{versatData[counter].memoryMask}) // @{memoryMappedBase * 4 + inst.memMapped * 4 |> Hex}
+      #{if memoryMasks[counter].memoryMaskSize}
+      if(address[@{memoryAddressBits - 1}:@{memoryAddressBits - memoryMasks[counter].memoryMaskSize}] == @{memoryAddressBits - inst.declaration.memoryMapBits}'b@{memoryMasks[counter].memoryMask}) // @{memoryMappedBase * 4 + inst.memMapped * 4 |> Hex}
          memoryMappedEnable[@{counter}] = 1'b1;
       #{else}
       memoryMappedEnable[0] = 1'b1;
@@ -417,7 +417,7 @@ begin
       #{for node instances}
       #{set inst node.inst}
       #{set decl inst.declaration}
-      #{for wire decl.configInfo.configs}
+      #{for wire decl.baseConfig.configs}
       if(address[@{versatValues.configurationAddressBits + 1}:0] == @{addr * 4}) begin // @{addr * 4 |> Hex} @{wire.name}
       #{set size wire.bitSize}
       #{set wstrb 0}
@@ -450,11 +450,11 @@ begin
 
       // Delays
       #{for node instances} #{set inst node.inst} #{set decl inst.declaration}
-      #{for i decl.configInfo.delayOffsets.max}
+      #{for i decl.baseConfig.delayOffsets.max}
       // TODO: Need to also take into account strobes
       if(address[@{versatValues.configurationAddressBits + 1}:0] == @{addr * 4}) // @{addr * 4 |> Hex}
-         @{configReg}[@{counter}+:32] <= data_data[31:0]; // Delay
-      #{inc addr} #{set counter counter + 32}
+         @{configReg}[@{counter}+:@{delaySize}] <= data_data[@{delaySize-1}:0]; // Delay
+      #{inc addr} #{set counter counter + delaySize}
       #{end} #{end}
    end
 end
@@ -484,7 +484,7 @@ begin
       #{for node instances}
       #{set inst node.inst}
       #{set decl inst.declaration}
-      #{for wire decl.configInfo.states}
+      #{for wire decl.baseConfig.states}
       if(addr[@{versatValues.stateAddressBits + 1}:0] >= @{addr * 4} && addr[@{versatValues.stateAddressBits + 1}:0] < @{(addr + 1) * 4}) // @{addr * 4 |> Hex}
          stateRead = statedata[@{counter}+:@{wire.bitSize}];
       #{inc addr}
@@ -495,15 +495,15 @@ begin
 end
 
 #{if nCombOperations}
-reg [31:0] #{join "," node instances} #{if node.inst.declaration.isOperation and node.inst.declaration.outputLatencies[0] == 0} comb_@{node.inst.name |> Identify} #{end}#{end}; 
+reg [31:0] #{join "," node instances} #{if node.inst.declaration.isOperation and node.inst.declaration.baseConfig.outputLatencies[0] == 0} comb_@{node.inst.name |> Identify} #{end}#{end}; 
 
 always @*
 begin
 #{for node ordered}
    #{set decl node.inst.declaration}
-   #{if decl.isOperation and decl.outputLatencies[0] == 0}
+   #{if decl.isOperation and decl.baseConfig.outputLatencies[0] == 0}
       #{set input1 node.inputs[0]}
-      #{if decl.inputDelays.size == 1}
+      #{if decl.baseConfig.inputDelays.size == 1}
          #{format decl.operation "comb" @{node.inst.name |> Identify} #{call retOutputName2 instances input1}};
       #{else}
          #{set input2 node.inputs[1]}
@@ -515,13 +515,13 @@ end
 #{end}
 
 #{if nSeqOperations}
-reg [31:0] #{join "," node instances} #{if node.inst.declaration.isOperation and node.inst.declaration.outputLatencies[0] != 0} seq_@{node.inst.name |> Identify} #{end}#{end}; 
+reg [31:0] #{join "," node instances} #{if node.inst.declaration.isOperation and node.inst.declaration.baseConfig.outputLatencies[0] != 0} seq_@{node.inst.name |> Identify} #{end}#{end}; 
 
 always @(posedge clk)
 begin
 #{for node instances}
    #{set decl node.inst.declaration}
-   #{if decl.isOperation and decl.outputLatencies[0] != 0 }
+   #{if decl.isOperation and decl.baseConfig.outputLatencies[0] != 0 }
       #{set input1 node.inputs[0]}
       #{format decl.operation "seq" @{node.inst.name |> Identify} #{call retOutputName2 instances input1}};
    #{end}
@@ -559,7 +559,7 @@ end
          #{end}
          #{end}
 
-         #{for wire decl.configInfo.configs}
+         #{for wire decl.baseConfig.configs}
          #{if decl.type}
             .@{wire.name}(configdata[@{configDataIndex}+:@{wire.bitSize}]),
          #{else}
@@ -576,8 +576,8 @@ end
          #{end}
          #{end}
 
-         #{for i decl.configInfo.delayOffsets.max}
-            .delay@{i}(configdata[@{delayStart + (delaySeen * 32)}+:32]),
+         #{for i decl.baseConfig.delayOffsets.max}
+            .delay@{i}(configdata[@{delayStart + (delaySeen * delaySize)}+:@{delaySize}]),
          #{inc delaySeen}
          #{end}
 
@@ -604,7 +604,7 @@ end
          #{inc externalCounter}
          #{end}
 
-         #{for wire decl.configInfo.states}
+         #{for wire decl.baseConfig.states}
          #{if decl.type}
             .@{wire.name}(statedata[@{stateDataIndex}+:@{wire.bitSize}]),
          #{else}

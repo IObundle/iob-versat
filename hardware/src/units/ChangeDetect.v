@@ -2,6 +2,7 @@
 
 module ChangeDetect #(
    parameter DATA_W = 32,
+   parameter DELAY_W = 7,
    parameter AMOUNT = 0
 ) (
    //control
@@ -15,12 +16,12 @@ module ChangeDetect #(
                             input [DATA_W-1:0] in0,
    (* versat_latency = 1 *) input [DATA_W-1:0] in1,
 
-   input [31:0] delay0,
+   input [DELAY_W-1:0] delay0,
 
    output [DATA_W-1:0] out0
 );
 
-   reg [31:0] delay;
+   reg [DELAY_W-1:0] delay;
    reg        valid;
 
    always @(posedge clk, posedge rst) begin

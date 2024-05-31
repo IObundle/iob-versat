@@ -7,6 +7,7 @@
 #else
 #define nullptr 0
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <stdbool.h>
 #endif
@@ -15,6 +16,7 @@
 
 volatile AcceleratorConfig* accelConfig = nullptr;
 volatile AcceleratorState* accelState = nullptr;
+volatile AcceleratorStatic* accelStatics = nullptr;
 
 iptr versat_base;
 
@@ -27,12 +29,14 @@ int VersatAcceleratorCyclesElapsed();
 void InitializeVerilator();
 void VersatAcceleratorCreate();
 void VersatAcceleratorSimulate();
+void VersatSignalLoop();
 int MemoryAccess(int address,int value,int write);
 
 int GetAcceleratorCyclesElapsed();
 
 AcceleratorConfig* GetStartOfConfig();
 AcceleratorState* GetStartOfState();
+AcceleratorStatic* GetStartOfStatic();
 
 #ifdef __cplusplus
   }
@@ -41,6 +45,9 @@ AcceleratorState* GetStartOfState();
 bool CreateVCD;
 bool SimulateDatabus;
 bool versatInitialized;
+
+void ConfigEnableDMA(bool value){
+}
 
 void ConfigCreateVCD(bool value){
   CreateVCD = value;
@@ -59,22 +66,11 @@ void versat_init(int base){
   InitializeVerilator();
   VersatAcceleratorCreate();
 
+  VersatLoadDelay(delayBuffer);
+  
   accelConfig = GetStartOfConfig();
   accelState = GetStartOfState();
-
-  char* configView = (char*) accelConfig;
-  iptr* delayPtr = (iptr*) (configView + (delayStart - configStart));
-
-  for(int i = 0; i < ARRAY_SIZE(delayBuffer); i++){
-    delayPtr[i] = delayBuffer[i];
-  }
-
-#if 0
-  iptr* staticPtr = (iptr*) (configView + (staticStart - configStart));
-  for(int i = 0; i < ARRAY_SIZE(staticBuffer); i++){
-    staticPtr[i] = staticBuffer[i];
-  }
-#endif
+  accelStatics = GetStartOfStatic();
 }
 
 static void CheckVersatInitialized(){
@@ -83,6 +79,10 @@ static void CheckVersatInitialized(){
     fflush(stdout);
     exit(-1);
   }
+}
+
+void SignalLoop(){
+  VersatSignalLoop();
 }
 
 int GetAcceleratorCyclesElapsed(){
@@ -107,7 +107,7 @@ void EndAccelerator(){
   // Do nothing. Start accelerator does everything, for now
 }
 
-void VersatMemoryCopy(void* dest,void* data,int size){
+void VersatMemoryCopy(void* dest,const void* data,int size){
   CheckVersatInitialized();
 
   char* byteViewDest = (char*) dest;
@@ -115,7 +115,7 @@ void VersatMemoryCopy(void* dest,void* data,int size){
   int* view = (int*) data;
 
   bool destInsideConfig = (byteViewDest >= configView && byteViewDest < configView + sizeof(AcceleratorConfig));
-  bool destEndOutsideConfig = destInsideConfig && (byteViewDest + size >= configView + sizeof(AcceleratorConfig));
+  bool destEndOutsideConfig = destInsideConfig && (byteViewDest + size > configView + sizeof(AcceleratorConfig));
 
   if(destEndOutsideConfig){
     printf("VersatMemoryCopy: Destination starts inside config and ends outside\n");
@@ -127,27 +127,27 @@ void VersatMemoryCopy(void* dest,void* data,int size){
     memcpy(dest,data,size);
   } else {
     for(int i = 0; i < (size / 4); i++){
-      VersatUnitWrite((iptr) dest,i,view[i]);
+      VersatUnitWrite(dest,i,view[i]);
     }
   }
 }
 
-void VersatUnitWrite(int baseaddr,int index,int val){
+void VersatUnitWrite(const void* baseaddr,int index,int val){
   CheckVersatInitialized();
 
-  int addr = baseaddr + (index * sizeof(int)) - (versat_base + memMappedStart); // Convert back to zero based address
+  iptr addr = (iptr) baseaddr + (index * sizeof(int)) - (versat_base + memMappedStart); // Convert back to zero based address
   MemoryAccess(addr,val,1);
 }
 
-int VersatUnitRead(int baseaddr,int index){
+int VersatUnitRead(const void* baseaddr,int index){
   CheckVersatInitialized();
 
-  int addr = baseaddr + (index * sizeof(int)) - (versat_base + memMappedStart); // Convert back to zero based byte space address
+  iptr addr = (iptr) baseaddr + (index * sizeof(int)) - (versat_base + memMappedStart); // Convert back to zero based byte space address
   int res = MemoryAccess(addr,0,0);
   return res;
 }
 
-float VersatUnitReadFloat(int base,int index){
+float VersatUnitReadFloat(const void* base,int index){
   int res = VersatUnitRead(base,index);
   float* view = (float*) &res;
   return *view;

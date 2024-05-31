@@ -1,16 +1,17 @@
 #pragma once
 
+#include "accelerator.hpp"
+#include "utils.hpp"
 #include "utilsCore.hpp"
 #include "versat.hpp"
 #include "merge.hpp"
+#include "codeGeneration.hpp"
 
 //#include "repr.hpp"
 
 // TODO: Maybe it would be best if all these functions received function pointers and forward declared everything. Otherwise any small change requires a full recompilation
 
-// TODO: I would like to automatize these procedures. It would be useful to know exactly how many fields a given representation contains so that we could format array representation in a readable format. See for example the representation for an array of InstanceInfo.
-
-String BinaryRepr(int number,Arena* out);
+String BinaryRepr(int number,int bitsize,Arena* out);
 
 String UniqueRepr(FUInstance* inst,Arena* out); // Returns a representation that uniquely identifies the instance. Not necessarily useful for outputing
 String Repr(FUInstance* inst,GraphDotFormat format,Arena* out);
@@ -33,11 +34,18 @@ String Repr(long int* i,Arena* out);
 String Repr(bool* b,Arena* out);
 String Repr(TypeStructInfo* info,Arena* out);
 String Repr(InstanceNode* node,Arena* out);
+String Repr(char** ch,Arena* out);
+String Repr(ExternalMemoryInterfaceTemplate<int>* ext, Arena* out);
+
+template<int N>
+String Repr(char (*buffer)[N],Arena* out){
+  return PushEscapedString(out,STRING(*buffer,N),' ');
+}
 
 String PushIntTableRepresentation(Arena* out,Array<int> values,int digitSize = 0);
 
 template<typename T>
-String Repr(Optional<T>* opt,Arena* out){
+String Repr(Opt<T>* opt,Arena* out){
   if(opt->has_value()){
     return Repr(&opt->value(),out);
   } else {
@@ -51,7 +59,7 @@ String Repr(Array<T>* arr,Arena* out){
     return PushString(out,"()");
   }
 
-  Byte* mark = MarkArena(out);
+  auto mark = StartString(out);
   PushString(out,"(");
   bool first = true;
   for(T& t : *arr){
@@ -61,21 +69,21 @@ String Repr(Array<T>* arr,Arena* out){
   }
   PushString(out,")");
 
-  return PointArena(out,mark);
+  return EndString(mark);
 }
 
 template<typename T,typename P>
 String Repr(Pair<T,P>* pair,Arena* out){
-  Byte* mark = MarkArena(out);
+  auto mark = StartString(out);
   PushString(out,"<");
   Repr(&pair->first,out);
   PushString(out,":");
   Repr(&pair->second,out);
   PushString(out,">");
-  return PointArena(out,mark);
+  return EndString(mark);
 }
 
-String Repr(Optional<int>* opt,Arena* out);
+String Repr(Opt<int>* opt,Arena* out);
 
 // TODO: Rework these to get a array of fields and then format them accordingly. Check PrintAll(Array<InstanceInfo>...) impl.
 template<typename T>
@@ -154,6 +162,18 @@ void PrintAll(Hashmap<T,P>* map,Arena* temp){
 
 void PrintAll(FILE* file,Array<String> fields,Array<Array<String>> content,Arena* temp);
 void PrintAll(Array<String> fields,Array<Array<String>> content,Arena* temp);
+
+// TODO: Hack because no automatic printing of enums, yet
+static String Repr(NodeType* type,Arena* out){
+  switch(*type){
+  case NodeType_UNCONNECTED: return STRING("NodeType_UNCONNECTED");
+  case NodeType_SOURCE: return STRING("NodeType_SOURCE");
+  case NodeType_COMPUTE: return STRING("NodeType_COMPUTE");
+  case NodeType_SINK: return STRING("NodeType_SINK");
+  case NodeType_SOURCE_AND_SINK: return STRING("NodeType_SOURCE_AND_SINK");
+  }
+  return {};
+}
 
 #include "repr.hpp" // Implements the GetFields and GetRepr functions
 

@@ -27,9 +27,9 @@ module Buffer #(
    input [ADDR_W-1:0] amount
 );
 
-   wire                                           [  ADDR_W:0] occupancy;
+   wire [  ADDR_W:0] occupancy;
 
-   reg                                            [  ADDR_W:0] trueAmount = {1'b0, amount};
+   wire [  ADDR_W:0] trueAmount = {1'b0, amount};
 
    wire aboveOrEqual = (occupancy >= trueAmount);
    wire belowOrEqual = (occupancy <= trueAmount);

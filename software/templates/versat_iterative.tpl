@@ -30,7 +30,7 @@ module @{accel.name} #(
    output [DATA_W-1:0]             out@{index},
    #{end}
 
-   #{for wire accel.configInfo.configs}
+   #{for wire accel.baseConfig.configs}
    input [@{wire.bitSize-1}:0]     @{wire.name},
    #{end}
 
@@ -41,11 +41,11 @@ module @{accel.name} #(
    #{end}
    #{end}
 
-   #{for wire accel.configInfo.states}
+   #{for wire accel.baseConfig.states}
    output [@{wire.bitSize-1}:0]    @{wire.name},
    #{end}
 
-   #{for i accel.configInfo.delayOffsets.max}
+   #{for i accel.baseConfig.delayOffsets.max}
    input  [31:0]                   delay@{i},
    #{end}
 
@@ -141,8 +141,8 @@ begin
    #{for node instances}
    #{set inst node.inst}
    #{if inst.declaration.memoryMapBits}
-      #{if versatData[counter].memoryMaskSize}
-      if(addr[@{memoryAddressBits - 1}:@{memoryAddressBits - versatData[counter].memoryMaskSize}] == @{memoryAddressBits - inst.declaration.memoryMapBits}'b@{versatData[counter].memoryMask})
+      #{if memoryMasks[counter].memoryMaskSize}
+      if(addr[@{memoryAddressBits - 1}:@{memoryAddressBits - memoryMasks[counter].memoryMaskSize}] == @{memoryAddressBits - inst.declaration.memoryMapBits}'b@{memoryMasks[counter].memoryMask})
          memoryMappedEnable[@{counter}] = 1'b1;
       #{else}
       memoryMappedEnable[0] = 1'b1;
@@ -223,14 +223,14 @@ end
          #{else}
          
          #{if inst.isStatic}
-         #{for wire decl.configInfo.configs}
+         #{for wire decl.baseConfig.configs}
          .@{wire.name}(@{accel.name}_@{inst.name |> Identify}_@{wire.name}),
          #{end}
 
          #{else}
-         #{set configStart accel.configInfo.configOffsets.offsets[id]}
-         #{for wire decl.configInfo.configs}
-         .@{wire.name}(@{accel.configInfo.configs[configStart + index].name}), // @{configStart + index}
+         #{set configStart accel.baseConfig.configOffsets.offsets[id]}
+         #{for wire decl.baseConfig.configs}
+         .@{wire.name}(@{accel.baseConfig.configs[configStart + index].name}), // @{configStart + index}
          #{end}
          #{for unit decl.staticUnits}         
          #{set id unit.first}
@@ -242,7 +242,7 @@ end
 
          #{end}
 
-         #{for i decl.configInfo.delayOffsets.max}
+         #{for i decl.baseConfig.delayOffsets.max}
             .delay@{i}(delay@{delaySeen}),
          #{inc delaySeen}
          #{end}
@@ -270,8 +270,8 @@ end
          #{inc externalCounter}
          #{end}
 
-         #{for wire decl.configInfo.states}
-            .@{wire.name}(@{accel.configInfo.states[statesSeen].name}),
+         #{for wire decl.baseConfig.states}
+            .@{wire.name}(@{accel.baseConfig.states[statesSeen].name}),
          #{inc statesSeen}
          #{end}
 

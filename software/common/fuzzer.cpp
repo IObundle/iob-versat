@@ -1,16 +1,18 @@
 #include "parser.hpp"
 
+// TODO: Let's first finalize the biggest problems with the Tokenizer before finishing implementing the Fuzzing facility.
+#if 0
 typedef void (*FuzzingFunction)(Token,Arena*);
 #define FUZZING_FUNCTION(NAME) \
 static void NAME(Token token,Arena* out)
 
 FUZZING_FUNCTION(NoRightSpace){
-   PushString(out,"%.*s",UNPACK_SS(token));
+   PushString(out,"%.*s",UNPACK_SS(token.text));
 }
 
 FUZZING_FUNCTION(DeleteOneChar){
-   token.size -= 1;
-   PushString(out,"%.*s ",UNPACK_SS(token));
+   token..text.size -= 1;
+   PushString(out,"%.*s ",UNPACK_SS(token.text));
 }
 
 static FuzzingFunction functionTable[] = {
@@ -41,3 +43,4 @@ String FuzzText(String formattedExample,Arena* out,int seed){
 
    return res;
 }
+#endif

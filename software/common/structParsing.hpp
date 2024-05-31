@@ -1,5 +1,4 @@
-#ifndef INCLUDED_STRUCT_PARSER
-#define INCLUDED_STRUCT_PARSER
+#pragma once
 
 #include "utils.hpp"
 
@@ -72,7 +71,5 @@ String ParseSimpleType(Tokenizer* tok);
 String ParseSimpleFullType(Tokenizer* tok);
 EnumDef ParseEnum(Tokenizer* tok);
 MemberDef* ParseMember(Tokenizer* tok,Arena* out);
-StructDef ParseStruct(Tokenizer* tok,Arena* out);
+Result<StructDef,String> ParseStruct(Tokenizer* tok,Arena* out);
 StructDef ParseTemplatedStructDefinition(Tokenizer* tok,Arena* out);
-
-#endif // INCLUDED_STRUCT_PARSER
