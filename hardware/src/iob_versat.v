@@ -9,7 +9,8 @@ module iob_versat #(  //the below parameters are used in cpu if includes below
    parameter AXI_ID_W   = 1,
    parameter ADDR_W     = 26,
    parameter DATA_W     = 32,
-   parameter WDATA_W    = 32
+   parameter WDATA_W    = 32,
+   parameter MEM_ADDR_OFFSET = 0
 ) (
    input                   iob_valid_i,
    input  [    ADDR_W-1:0] iob_addr_i,
@@ -114,7 +115,7 @@ module iob_versat #(  //the below parameters are used in cpu if includes below
    ) simpleToAxi (
       .m_wvalid_i(w_valid),
       .m_wready_o(w_ready),
-      .m_waddr_i (w_addr),
+      .m_waddr_i (w_addr + MEM_ADDR_OFFSET),
       .m_wdata_i (w_data),
       .m_wstrb_i (w_strb),
       .m_wlen_i  (w_len),
@@ -122,7 +123,7 @@ module iob_versat #(  //the below parameters are used in cpu if includes below
 
       .m_rvalid_i(r_valid),
       .m_rready_o(r_ready),
-      .m_raddr_i (r_addr),
+      .m_raddr_i (r_addr + MEM_ADDR_OFFSET),
       .m_rdata_o (r_data),
       .m_rlen_i  (r_len),
       .m_rlast_o (r_last),
