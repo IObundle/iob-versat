@@ -76,6 +76,14 @@ class iob_versat(iob_module):
                     "max": "8",
                     "descr": "",
                 },
+                {
+                    "name": "MEM_ADDR_OFFSET",
+                    "type": "P",
+                    "val": "0",
+                    "min": "0",
+                    "max": "NA",
+                    "descr": "Offset of memory address",
+                },
             ]
         )
 
@@ -318,6 +326,14 @@ def CreateVersatClass(pc_emul,versat_spec,versat_top,versat_extra,build_dir):
             confs = [
                 {'name':'ADDR_W', 'type':'P', 'val':str(ADDR_W), 'min':'1', 'max':'?', 'descr':'description here'},
                 {'name':'DATA_W', 'type':'P', 'val':'32', 'min':'1', 'max':'?', 'descr':'description here'},
+                {
+                    "name": "MEM_ADDR_OFFSET",
+                    "type": "P",
+                    "val": "0",
+                    "min": "0",
+                    "max": "NA",
+                    "descr": "Offset of memory address",
+                },
             ]
 
             if(HAS_AXI):
