@@ -78,6 +78,14 @@ ALWAYS_INLINE _Defer<F> operator+(_DeferTag,F&& f){
 #define TEMP_defer(LINE) TEMP__defer( LINE )
 #define defer auto TEMP_defer(__LINE__) = _DeferTag() + [&]() // Only executes at the end of the code block
 
+#define DEFER_CLOSE_FILE(NAME) defer{ \
+  if(NAME){  \
+    int res = fclose(NAME); \
+    if(res){ \
+      printf("Error closing file: %d\n",errno); \
+  }};\
+}
+
 struct _Once{};
 struct _OnceTag{};
 template<typename F>
@@ -166,6 +174,7 @@ typedef uint64_t u64;
 typedef int64_t i64;
 typedef intptr_t iptr;
 typedef uintptr_t uptr;
+typedef unsigned int uint;
 
 template<typename T>
 using Opt = std::optional<T>;
@@ -333,6 +342,7 @@ static bool operator==(const Pair<F,S>& p1,const Pair<F,S>& p2){
 
 // Returns a statically allocated string, instead of implementing varg for everything
 // Returned string uses statically allocated memory. Intended to be used to create quick strings for other functions, instead of having to implement them as variadic. Can also be used to temporarely transform a String into a C-String
+// NOTE: Extra care when using this function. Use it mainly to interface with C code style strings otherwise real risk of overwriting contents with other data
 char* StaticFormat(const char* format,...);
 
 // Array useful functions

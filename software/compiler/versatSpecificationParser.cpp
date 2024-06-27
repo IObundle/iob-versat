@@ -505,9 +505,6 @@ PortExpression InstantiateSpecExpression(SpecExpression* root,Accelerator* circu
     res.extra.port.end  = res.extra.port.start  = 0;
     res.extra.delay.end = res.extra.delay.start = 0;
   } break;
-  default: {
-    Assert(false);
-  } break;
   }
 
   Assert(res.inst);
@@ -1223,7 +1220,6 @@ Var Next(GroupIterator& iter){
       res.index.start = indexBase + iter.varIndex; 
       res.index.end = indexBase + iter.varIndex; 
     } break;
-    default: NOT_IMPLEMENTED("IMPLEMENT AS NEEDED");
     }
 
     iter.varIndex += 1;
@@ -1368,10 +1364,10 @@ static bool InstantiateTransform(Tokenizer* tok,TransformDef def,Arena* temp){
   Array<int> transform = PushArray<int>(perm,transformation->nodesUsed);
   int inputs = 0;
   int outputs = 0;
-  for(Pair<int,int> p : transformation){
-    transform[p.first] = p.second;
+  for(Pair<int,int*> p : transformation){
+    transform[p.first] = *p.second;
     inputs = std::max(inputs,p.first);
-    outputs = std::max(outputs,p.second);
+    outputs = std::max(outputs,*p.second);
   }
   
   String storedString = PushString(perm,def.name);

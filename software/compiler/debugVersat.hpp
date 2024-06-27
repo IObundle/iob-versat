@@ -5,6 +5,7 @@
 #include "debug.hpp"
 #include "utils.hpp"
 
+#include "delayCalculation.hpp"
 #include "versat.hpp"
 
 struct Accelerator;
@@ -22,8 +23,11 @@ void OutputGraphDotFile(Accelerator* accel,bool collapseSameEdges,String filenam
 void OutputGraphDotFile(Accelerator* accel,bool collapseSameEdges,FUInstance* highlighInstance,String filename,Arena* temp);
 void OutputGraphDotFile(Accelerator* accel,bool collapseSameEdges,Set<FUInstance*>* highlight,String filename,Arena* temp);
 
+void OutputContentToFile(String filepath,String content);
+
 String PushMemoryHex(Arena* out,void* memory,int size);
 void OutputMemoryHex(void* memory,int size);
- 
-String PushDebugPath(Arena* out,String name,const char* fileName);
+
+// folderName can be empty string, file is created inside debug folder directly. 
+String PushDebugPath(Arena* out,String folderName,String fileName);
 

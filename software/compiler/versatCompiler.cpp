@@ -14,6 +14,7 @@
 #include "textualRepresentation.hpp"
 #include "codeGeneration.hpp"
 #include "accelerator.hpp"
+#include "dotGraphPrinting.hpp"
 
 #include "templateData.hpp"
 
@@ -39,11 +40,15 @@ Opt<String> GetFileFormatFromPath(String filename){
 }
 
 // TODO: There is no reason to use small arguments. -d should just be -DMA. -D should just be -Databus and so on.
+// TODO: Rewrite to either use argparse or some lib parsing, or just parse ourselves but simplify adding more options and report errors.
 Options* ParseCommandLineOptions(int argc,const char* argv[],Arena* out,Arena* temp){
   Options* opts = PushStruct<Options>(out);
   opts->dataSize = 32; // By default.
   opts->addrSize = 32;
 
+  opts->debugPath = PushString(out,"%s/debug",GetCurrentDirectory()); // By default
+  PushNullByte(out);
+  
   ArenaList<String>* verilogFiles = PushArenaList<String>(temp);
   ArenaList<String>* extraSources = PushArenaList<String>(temp);
   ArenaList<String>* includePaths = PushArenaList<String>(temp);
@@ -161,6 +166,22 @@ Options* ParseCommandLineOptions(int argc,const char* argv[],Arena* out,Arena* t
       PushNullByte(out);
 
       *PushListElement(unitPaths) = unitPath;
+      i += 1;
+      continue;
+    }
+
+    if(str.size >= 2 && str[0] == '-' && str[1] == 'A'){
+      if(i + 1 >= argc){
+        printf("Missing argument\n");
+        exit(-1);
+      }
+
+      String debugPath = GetAbsolutePath(argv[i+1],out);
+      PushNullByte(out);
+      
+      opts->debugPath = debugPath;
+      PushNullByte(out);
+
       i += 1;
       continue;
     }
@@ -321,7 +342,7 @@ String GetVerilatorRoot(Arena* out,Arena* temp){
 
   fflush(f);
   fclose(f);
-
+  
   CallVerilator(StaticFormat("%.*s/Test.v",UNPACK_SS(tempDir)),tempDirC);
 
   String fileContent = PushFile(temp,StaticFormat("%.*s/VTest.mk",UNPACK_SS(tempDir)));
@@ -451,6 +472,8 @@ int main(int argc,const char** argv){
   
   globalOptions = *ParseCommandLineOptions(argc,argv,perm,temp);
 
+  MakeDirectory(globalOptions.debugPath.data);
+  
   // TODO: Variable buffers are currently broken. Due to removing statics saved configurations.
   //       When reimplementing this (if we eventually do) separate buffers configs from static buffers.
   //       There was never any point in having both together.
@@ -461,8 +484,8 @@ int main(int argc,const char** argv){
 
   globalDebug.outputAccelerator = true;
   globalDebug.outputVersat = true;
-
-#if 0
+  
+#if 1
   globalDebug.dotFormat = GRAPH_DOT_FORMAT_NAME;
 #if 1
   globalDebug.outputGraphs = true;
@@ -474,7 +497,6 @@ int main(int argc,const char** argv){
 #ifdef USE_FST_FORMAT
   globalOptions.generateFSTFormat = 1;
 #endif
-
   // Check options 
   if(!globalOptions.topName){
     printf("Specify accelerator type using -T <type>\n");
@@ -546,7 +568,6 @@ int main(int argc,const char** argv){
   BasicDeclaration::timedMultiplexer = GetTypeByName(STRING("TimedMux"));
   BasicDeclaration::input = GetTypeByName(STRING("CircuitInput"));
   BasicDeclaration::output = GetTypeByName(STRING("CircuitOutput"));
-  BasicDeclaration::data = GetTypeByName(STRING("Data"));
 
   const char* specFilepath = globalOptions.specificationFilepath;
   String topLevelTypeStr = STRING(globalOptions.topName);
@@ -619,16 +640,24 @@ int main(int argc,const char** argv){
     }
   }
 
-  for(FUDeclaration* decl : globalDeclarations){
-    BLOCK_REGION(temp);
+  {
+    String path = PushDebugPath(temp,{},STRING("allDeclarations.txt"));
+    FILE* allDeclarations = fopen(StaticFormat("%.*s",UNPACK_SS(path)),"w");
+    DEFER_CLOSE_FILE(allDeclarations);
+    for(FUDeclaration* decl : globalDeclarations){
+      BLOCK_REGION(temp);
 
-    if(globalDebug.outputAcceleratorInfo && decl->fixedDelayCircuit){
-      String path = PushString(temp,"debug/%.*s/stats.txt",UNPACK_SS(decl->name));
-      PushNullByte(temp);
+      String repr = GetFullRepr(decl,temp);
+      fprintf(allDeclarations,"%.*s\n",UNPACK_SS(repr));
+    
+      if(globalDebug.outputAcceleratorInfo && decl->fixedDelayCircuit){
+        String path = PushDebugPath(temp,decl->name,STRING("stats.txt"));
 
-      FILE* stats = OpenFileAndCreateDirectories(path.data,"w");
-      
-      PrintDeclaration(stats,decl,perm,temp);
+        FILE* stats = OpenFileAndCreateDirectories(StaticFormat("%.*s",UNPACK_SS(path)),"w");
+        DEFER_CLOSE_FILE(stats);
+    
+        PrintDeclaration(stats,decl,perm,temp);
+      }
     }
   }
 
@@ -642,26 +671,37 @@ int main(int argc,const char** argv){
 
   String versatDir = STRING(STRINGIFY(VERSAT_DIR));
   OutputVerilatorMake(accel->name,versatDir,temp,temp2);
-  
+
   for(FUDeclaration* decl : globalDeclarations){
     BLOCK_REGION(temp);
 
     if(decl->type == FUDeclarationType_COMPOSITE ||
        decl->type == FUDeclarationType_ITERATIVE ||
        decl->type == FUDeclarationType_MERGED){
+      
+      GraphPrintingContent content = GenerateDefaultPrintingContent(decl->fixedDelayCircuit,temp,temp2);
+      String repr = GenerateDotGraph(decl->fixedDelayCircuit,content,temp,temp2);
+      String debugPath = PushDebugPath(temp,decl->name,STRING("NormalGraph.dot"));
 
+      FILE* file = fopen(StaticFormat("%.*s",UNPACK_SS(debugPath)),"w");
+      DEFER_CLOSE_FILE(file);
+      if(!file){
+        printf("Error opening file for debug outputting: %.*s\n",UNPACK_SS(debugPath));
+      } else {
+        fwrite(repr.data,sizeof(char),repr.size,file);
+      }
+      
       String path = PushString(temp,"%.*s/modules/%.*s.v",UNPACK_SS(globalOptions.hardwareOutputFilepath),UNPACK_SS(decl->name));
       PushNullByte(temp);
       
-      FILE* sourceCode = OpenFileAndCreateDirectories(path.data,"w");
+      FILE* sourceCode = OpenFileAndCreateDirectories(StaticFormat("%.*s",UNPACK_SS(path)),"w");
+      DEFER_CLOSE_FILE(sourceCode);
 
       if(decl->type == FUDeclarationType_COMPOSITE || decl->type == FUDeclarationType_MERGED){
         OutputCircuitSource(decl,decl->fixedDelayCircuit,sourceCode,temp,perm);
       } else if(decl->type == FUDeclarationType_ITERATIVE){
         OutputIterativeSource(decl,decl->fixedDelayCircuit,sourceCode,temp,perm);
       }
-
-      fclose(sourceCode);
     }
   }
 
@@ -669,26 +709,6 @@ int main(int argc,const char** argv){
 }
 
 /*
-
-Variety1 Problem:
-
-- The source of the problem comes from the fact that the Variety1 unit is being tagged as a SOURCE_AND_SINK unit which prevents the delay values from propagating. This comes from the Reg connection.
-- The actual solution would be to completely change delays to actually track the input and output ports instead of the units themselves. Furthermore, if we can describe the relationship between input and output port (whether output X depends on input Y) then we can further improve the delay algorithm to produce lower values and decouple dependencies that exist from hierarchical graphs and from units that are 1 but behave like multiple (for example, memories, that contain 2 ports and the delay should act individually.).
-  - Another thing. SOURCE_AND_DELAY should be used for delays that can be used for input or for output depending on how the unit is connected.
-
-How to handle merged subunits.
-- One problem current implementation has is that we are calculating delays for the worst accelerator case, while we could calculate for each case and store the information in versat_accel.h
-- How would this look like with a simple example (like SHA_AES_Simple)?.
-  - The thing about this is that the SHA_AES_Simple declaration would need to store delay information for each case.
-  - Meaning that the SHA_AES_Simple declaration would also need to be able to store different information depending on the type being used by the merged unit.
-  - This means that merging info propragates accross units, so that parent units must also contain N amount of data for each N accelerators that are merged.
-  - This also means that if we have two merged units of N and M accelerators merged, then the parent unit would need to store N * M data.
-  - This makes sense and techically not only works for delay but also for latencies.
-  - If parent unit contains a merged unit that merged 2 accelerators, one with a latency of 10 and another with a latency of 50, then the latency of the parent unit
-    will also depend on which accelerator is active at the moment, the one with a latency of 10 or the one with latency of 50.
-  - We could then think of the parent declaration has having multiple declarations depending on the merged accelerator active. Default declaration, declaration with 0 active, declaration with 1 active and so on.
-  - Each active accelerator would change the delays of the unit, which would then change the delays of the parent declaration and so on.
-  - Other than delays, I cannot think of anything that also behaves this way. Even though configs change between accelerators, this only matters when generating the structs, the parent declaration does not need special treatment 
 
 TODO: Need to check the isSource member of ModuleInfo and so on. 
 

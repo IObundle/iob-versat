@@ -97,8 +97,8 @@ void OutputGraphDotFile(Accelerator* accel,bool collapseSameEdges,String filenam
   }
 
   FILE* file = OpenFileAndCreateDirectories(StaticFormat("%.*s",UNPACK_SS(filename)),"w");
+  DEFER_CLOSE_FILE(file);
   OutputGraphDotFile_(accel,collapseSameEdges,nullptr,file,temp);
-  fclose(file);
 }
 
 void OutputGraphDotFile(Accelerator* accel,bool collapseSameEdges,FUInstance* highlighInstance,String filename,Arena* temp){
@@ -111,8 +111,8 @@ void OutputGraphDotFile(Accelerator* accel,bool collapseSameEdges,FUInstance* hi
   highlight->Insert(highlighInstance);
 
   FILE* file = OpenFileAndCreateDirectories(StaticFormat("%.*s",UNPACK_SS(filename)),"w");
+  DEFER_CLOSE_FILE(file);
   OutputGraphDotFile_(accel,collapseSameEdges,highlight,file,temp);
-  fclose(file);
 }
 
 void OutputGraphDotFile(Accelerator* accel,bool collapseSameEdges,Set<FUInstance*>* highlight,String filename,Arena* temp){
@@ -122,8 +122,21 @@ void OutputGraphDotFile(Accelerator* accel,bool collapseSameEdges,Set<FUInstance
 
   BLOCK_REGION(temp);
   FILE* file = OpenFileAndCreateDirectories(StaticFormat("%.*s",UNPACK_SS(filename)),"w");
+  DEFER_CLOSE_FILE(file);
   OutputGraphDotFile_(accel,collapseSameEdges,highlight,file,temp);
-  fclose(file);
+}
+
+void OutputContentToFile(String filepath,String content){
+  FILE* file = fopen(StaticFormat("%.*s",UNPACK_SS(filepath)),"w");
+  DEFER_CLOSE_FILE(file);
+  
+  if(!file){
+    printf("[OutputContentToFile] Error opening file: %.*s\n",UNPACK_SS(filepath));
+    DEBUG_BREAK();
+  }
+
+  int res = fwrite(content.data,sizeof(char),content.size,file);
+  Assert(res == content.size);
 }
 
 String PushMemoryHex(Arena* arena,void* memory,int size){
@@ -165,7 +178,7 @@ void OutputGraphDotFile(Accelerator* accel,bool collapseSameEdges,FUInstance* hi
   }
 
   FILE* outputFile = OpenFileAndCreateDirectories(StaticFormat("%.*s",UNPACK_SS(filename)),"w");
-  defer{ if(outputFile) fclose(outputFile);};
+  DEFER_CLOSE_FILE(outputFile);
   
   BLOCK_REGION(temp);
 
@@ -248,7 +261,15 @@ void OutputGraphDotFile(Accelerator* accel,bool collapseSameEdges,FUInstance* hi
   fprintf(outputFile,"}\n");
 }
 
-String PushDebugPath(Arena* out,String name,const char* fileName){
-  String path = PushString(out,"debug/%.*s/%s",UNPACK_SS(name),fileName);
+String PushDebugPath(Arena* out,String folderName,String fileName){
+  String path = {};
+  if(folderName.size == 0){
+    CreateDirectories(StaticFormat("%.*s",UNPACK_SS(globalOptions.debugPath)));
+    path = PushString(out,"%.*s/%.*s",UNPACK_SS(globalOptions.debugPath),UNPACK_SS(fileName));
+  } else {
+    CreateDirectories(StaticFormat("%.*s/%.*s",UNPACK_SS(globalOptions.debugPath),UNPACK_SS(folderName)));
+    path = PushString(out,"%.*s/%.*s/%.*s",UNPACK_SS(globalOptions.debugPath),UNPACK_SS(folderName),UNPACK_SS(fileName));
+  }
+
   return path;
 }

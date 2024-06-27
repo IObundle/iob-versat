@@ -2,6 +2,7 @@
 
 #include "parser.hpp"
 #include "utils.hpp"
+#include "utilsCore.hpp"
 
 #include <filesystem>
 namespace fs = std::filesystem;
@@ -50,19 +51,16 @@ int main(int argc,const char* argv[]){
 
   permInst = InitArena(Megabyte(64));
 
-  String headerName = PushString(temp,"%s.hpp",outputPath);
-  PushNullByte(temp);
-  String sourceName = PushString(temp,"%s.cpp",outputPath);
-  PushNullByte(temp);
-
-  FILE* headerFile = OpenFileAndCreateDirectories(headerName.data,"w");
-  FILE* sourceFile = OpenFileAndCreateDirectories(sourceName.data,"w");
-
+  FILE* headerFile = OpenFileAndCreateDirectories(StaticFormat("%s.hpp",outputPath),"w");
+  FILE* sourceFile = OpenFileAndCreateDirectories(StaticFormat("%s.cpp",outputPath),"w");
+  DEFER_CLOSE_FILE(headerFile);
+  DEFER_CLOSE_FILE(sourceFile);
+  
   if(!headerFile || !sourceFile){
     printf("Failed to open output file!\n");
     return -1;
   }
-
+  
   fprintf(headerFile,"#ifndef " INCLUDE_GUARD,outName);
   fprintf(headerFile,"#define " INCLUDE_GUARD,outName);
   fprintf(headerFile,"#include \"utils.hpp\"\n");
@@ -117,14 +115,13 @@ int main(int argc,const char* argv[]){
         lastWasNewline = true;
       }break;
       case EOF:{
-        printf("UUAHIDHAIHD\n");
+        printf("Unexpected EOF\n");
         exit(0);
         fprintf(sourceFile,"\\n\"\n");
         break;
       }break;
       default:{
         fprintf(sourceFile,"%c",ch);
-
       }break;
       }
     }
@@ -149,12 +146,9 @@ int main(int argc,const char* argv[]){
 
   fprintf(sourceFile,"Array<Pair<String,String>> templateNameToContent = {templateNameToContentData,%d};\n\n",templatesFound);
 
-  fclose(sourceFile);
-
   fprintf(headerFile,"extern Array<Pair<String,String>> templateNameToContent;\n\n");
 
   fprintf(headerFile,"#endif //" INCLUDE_GUARD,outName);
-  fclose(headerFile);
 
   return 0;
 }

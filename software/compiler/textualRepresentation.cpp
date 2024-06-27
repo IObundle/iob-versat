@@ -300,7 +300,6 @@ String Repr(ExternalMemoryInterfaceTemplate<int>* ext, Arena* out){
   case DP:{
     return PushString(out,STRING("TWO_P"));
   } break;
-  default: NOT_IMPLEMENTED("Implement as needed");
   }
 
   NOT_POSSIBLE("Unreachable");

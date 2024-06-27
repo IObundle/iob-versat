@@ -56,7 +56,6 @@ bool operator==(const TemplateRecord& r0,const TemplateRecord& r1){
   case TemplateRecordType_IDENTIFER:{
     res = (r0.identifierType == r1.identifierType) && CompareString(r0.identifierName,r1.identifierName);
   } break;
-  default: NOT_IMPLEMENTED("Implemented as needed");
   }
   
   return res;
@@ -714,9 +713,6 @@ static Value EvalExpression(Expression* expr,Frame* frame,Arena* out){
         val.number *= val1;
       }
     } break;
-    default:{
-      NOT_IMPLEMENTED("Implement as needed");
-    }break;
     }
   } break;
   case Expression::LITERAL:{
@@ -780,9 +776,7 @@ static Value EvalExpression(Expression* expr,Frame* frame,Arena* out){
 
     val = optVal.value();
   }break;
-  default:{
-    NOT_IMPLEMENTED("Implement as needed");
-  } break;
+  case Expression::UNDEFINED: NOT_POSSIBLE();
   }
 
  EvalExpressionEnd:
@@ -937,7 +931,17 @@ static String EvalBlockCommand(Block* block,Frame* previousFrame,Arena* temp){
       printf("%.*s\n",UNPACK_SS(result));
     }
   } break;
-  default: NOT_IMPLEMENTED("Implemented as needed");
+  case CommandType_END:; 
+  case CommandType_SET:; 
+  case CommandType_LET:; 
+  case CommandType_INC:; 
+  case CommandType_ELSE:; 
+  case CommandType_INCLUDE:; 
+  case CommandType_CALL:; 
+  case CommandType_RETURN:;
+  case CommandType_FORMAT:;
+  case CommandType_DEBUG_BREAK:;
+    NOT_POSSIBLE("NonBlock command"); // TODO: Maybe join eval non block with block together.
   }
 
   String res = EndString(mark);
@@ -1071,7 +1075,15 @@ static ValueAndText EvalNonBlockCommand(Command* com,Frame* previousFrame,Arena*
     printf("Error: founded a strain end in the template\n");
     Assert(false);
   } break;
-  default: NOT_IMPLEMENTED("Implemented as needed");
+  case CommandType_JOIN:
+  case CommandType_FOR:
+  case CommandType_IF:
+  case CommandType_ELSE:
+  case CommandType_DEBUG:
+  case CommandType_DEFINE:
+  case CommandType_WHILE:
+  case CommandType_DEBUG_MESSAGE:
+    NOT_POSSIBLE("Block command"); // TODO: Maybe join eval non block with block together.
   }
 
   ValueAndText res = {};
@@ -1220,7 +1232,7 @@ void PrintFrames(Frame* frame){
   Frame* ptr = frame;
   int index = 0;
   while(ptr){
-    for(Pair<String,Value> p : ptr->table){
+    for(Pair<String,Value*> p : ptr->table){
       printf("%d %.*s\n",index,UNPACK_SS(p.first));
     }
     index += 1;

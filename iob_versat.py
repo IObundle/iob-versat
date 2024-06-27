@@ -122,7 +122,7 @@ class iob_versat(iob_module):
         cls.block_groups += []
 
 
-def RunVersat(pc_emul,versat_spec,versat_top,versat_extra,build_dir):
+def RunVersat(pc_emul,versat_spec,versat_top,versat_extra,build_dir,debug_path):
     versat_dir = os.path.dirname(__file__)
 
     versat_args = ["versat",os.path.realpath(versat_spec),
@@ -141,6 +141,9 @@ def RunVersat(pc_emul,versat_spec,versat_top,versat_extra,build_dir):
                             "-H",os.path.realpath(build_dir + "/software"), # Output software files
                             "-o",os.path.realpath(build_dir + "/hardware/src") # Output hardware files
                             ]
+
+    if(debug_path):
+        versat_args = versat_args + ["-A",debug_path]
 
     if(versat_extra):
         versat_args = versat_args + ["-O",versat_extra]
@@ -178,7 +181,7 @@ def SaveSetupInfo(filepath,lines):
         print(f"Failed to open versat setup file: {filepath}",file=sys.stderr)
         print("This might cause versat to run multiple times even if not needed",file=sys.stderr)
 
-def CreateVersatClass(pc_emul,versat_spec,versat_top,versat_extra,build_dir):
+def CreateVersatClass(pc_emul,versat_spec,versat_top,versat_extra,build_dir,debug_path=None):
     versat_dir = os.path.dirname(__file__)
 
     versatSetupFilepath = os.path.realpath(build_dir + "/software/versatSetup.txt")
@@ -191,10 +194,10 @@ def CreateVersatClass(pc_emul,versat_spec,versat_top,versat_extra,build_dir):
             with open(versatSetupFilepath,"r") as file:
                lines = [x.strip() for x in file.readlines()]
         except:
-            lines = RunVersat(pc_emul,versat_spec,versat_top,versat_extra,build_dir)
+            lines = RunVersat(pc_emul,versat_spec,versat_top,versat_extra,build_dir,debug_path)
             SaveSetupInfo(versatSetupFilepath,lines)
     else:
-        lines = RunVersat(pc_emul,versat_spec,versat_top,versat_extra,build_dir)
+        lines = RunVersat(pc_emul,versat_spec,versat_top,versat_extra,build_dir,debug_path)
         SaveSetupInfo(versatSetupFilepath,lines)
 
     #print("Lines:",lines,file=sys.stderr)

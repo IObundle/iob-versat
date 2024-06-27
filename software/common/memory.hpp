@@ -310,7 +310,7 @@ public:
 public:
   bool operator!=(HashmapIterator& iter);
   void operator++();
-  Pair<Key,Data> operator*();
+  Pair<Key,Data*> operator*();
 };
 
 template<typename Data>
@@ -656,8 +656,9 @@ void HashmapIterator<Key,Data>::operator++(){
 }
 
 template<typename Key,typename Data>
-Pair<Key,Data> HashmapIterator<Key,Data>::operator*(){
-  return pairs[index];
+Pair<Key,Data*> HashmapIterator<Key,Data>::operator*(){
+  Pair<Key,Data*> p = {pairs[index].first,&pairs[index].second};
+  return p;
 }
 
 template<typename Key,typename Data>

@@ -1,6 +1,6 @@
 include $(VERSAT_DIR)/config.mk
 
-VERSAT_REQUIRE_TYPE:= type verilogParsing templateEngine
+VERSAT_REQUIRE_TYPE:=type verilogParsing templateEngine
 
 VERSAT_COMMON_SRC_NO_TYPE := $(filter-out $(patsubst %,$(VERSAT_COMMON_DIR)/%.cpp,$(VERSAT_REQUIRE_TYPE)),$(wildcard $(VERSAT_COMMON_DIR)/*.cpp))
 VERSAT_COMMON_HDR_NO_TYPE := $(filter-out $(patsubst %,$(VERSAT_COMMON_DIR)/%.hpp,$(VERSAT_REQUIRE_TYPE)),$(wildcard $(VERSAT_COMMON_DIR)/*.hpp))
@@ -12,8 +12,6 @@ VERSAT_COMMON_HDR:=$(VERSAT_COMMON_HDR_NO_TYPE) $(patsubst %,$(VERSAT_COMMON_DIR
 VERSAT_COMMON_SRC+=$(BUILD_DIR)/repr.hpp
 VERSAT_COMMON_OBJ:=$(VERSAT_COMMON_OBJ_NO_TYPE) $(patsubst %,$(BUILD_DIR)/%.o,$(VERSAT_REQUIRE_TYPE))
 VERSAT_COMMON_SRC+=$(BUILD_DIR)/repr.o
-
-#VERSAT_COMMON_SRC:=$(abspath $(VERSAT_COMMON_SRC))
 
 VERSAT_COMMON_INCLUDE := -I$(VERSAT_COMMON_DIR) -I$(VERSAT_SW_DIR)
 

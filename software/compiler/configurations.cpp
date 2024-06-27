@@ -74,7 +74,6 @@ int GetConfigurationSize(FUDeclaration* decl,MemType type){
   }break;
   case MemType::STATIC:{
   }break;
-  default: NOT_IMPLEMENTED("Implemented as needed");
   }
 
   return size;
@@ -817,12 +816,12 @@ AccelInfo CalculateAcceleratorInfo(Accelerator* accel,bool recursive,Arena* out,
     }
 
     if(IsTypeHierarchical(inst->declaration)){
-      for(Pair<StaticId,StaticData> pair : inst->declaration->staticUnits){
+      for(Pair<StaticId,StaticData*> pair : inst->declaration->staticUnits){
         int* possibleFind = staticSeen->Get(pair.first);
 
         if(!possibleFind){
           staticSeen->Insert(pair.first,1);
-          result.statics += pair.second.configs.size;
+          result.statics += pair.second->configs.size;
         }
       }
     }
@@ -1411,12 +1410,12 @@ AccelInfo CalculateAcceleratorInfoNoDelay(Accelerator* accel,bool recursive,Aren
     }
 
     if(IsTypeHierarchical(inst->declaration)){
-      for(Pair<StaticId,StaticData> pair : inst->declaration->staticUnits){
+      for(Pair<StaticId,StaticData*> pair : inst->declaration->staticUnits){
         int* possibleFind = staticSeen->Get(pair.first);
 
         if(!possibleFind){
           staticSeen->Insert(pair.first,1);
-          result.statics += pair.second.configs.size;
+          result.statics += pair.second->configs.size;
         }
       }
     }

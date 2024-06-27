@@ -241,6 +241,7 @@ Type* InstantiateTemplate(String name,Arena* arena){
   Array<int> align = PushArray<int>(&temp,numberPositions);
   Memset(sizes,0);
   Memset(align,0);
+
   for(int i = 0; i < templateBase->templateMembers.size; i++){
     TemplatedMember templateMember = templateBase->templateMembers[i];
     Tokenizer tok(templateMember.typeName,"*&[],<>",{});
@@ -317,6 +318,7 @@ Type* InstantiateTemplate(String name,Arena* arena){
   for(int val : align){
     maxAlign = std::max(val,maxAlign);
   }
+  newType->align = maxAlign;
 
   if(structDefined){
     newType->size = Align(offsets[sizes.size],maxAlign);
@@ -483,6 +485,17 @@ void RegisterTypes(){
 
   ValueType::CONST_STRING = GetPointerType(REGISTER(const char));
 
+  REGISTER(uint8_t);
+  REGISTER(int8_t);
+  REGISTER(uint16_t);
+  REGISTER(int16_t);
+  REGISTER(uint32_t);
+  REGISTER(int32_t);
+  REGISTER(uint64_t);
+  REGISTER(int64_t);
+  REGISTER(intptr_t);
+  REGISTER(uintptr_t);
+  
   REGISTER(long int);
   REGISTER(unsigned int);
   REGISTER(unsigned char);
@@ -502,6 +515,13 @@ void RegisterTypes(){
   Type* normalTemplateFunction = GetTypeOrFail(STRING("TemplateFunction"));
   if(normalTemplateFunction){
     ValueType::TEMPLATE_FUNCTION = GetPointerType(normalTemplateFunction);
+  }
+#endif
+
+#if 0
+  for(Type* type : types){
+    Assert(type->align > 0);
+    Assert(type->size > 0);
   }
 #endif
 }
@@ -804,7 +824,12 @@ static Type* GetBaseType(Type* type){
   case Type::TYPEDEF:{
     return GetBaseType(type->typedefType);
   } break;
-  default: break;
+  case Type::UNKNOWN:;
+  case Type::BASE:;
+  case Type::STRUCT:;
+  case Type::TEMPLATED_STRUCT_DEF:;
+  case Type::TEMPLATED_INSTANCE:;
+  case Type::ENUM:;
   }
   
   return type;
@@ -979,7 +1004,7 @@ HashmapUnpackedIndex UnpackHashmapIndex(int index){
 }
 
 Type* GetBaseTypeOfIterating(Type* iterating){
-  if(iterating->type == Type::BASE){
+  if(iterating->type == Type::BASE){ // TODO: Superfluous being a if based on the code below (not changed because can't test change currently);
     return iterating;
   }
 
@@ -1009,7 +1034,15 @@ Type* GetBaseTypeOfIterating(Type* iterating){
       return GetBaseType(exists);
     }
   } break;
-  default: break;
+  case Type::UNKNOWN:;
+  case Type::BASE:;
+  case Type::STRUCT:;
+  case Type::TEMPLATED_STRUCT_DEF:;
+  case Type::ENUM:;
+  case Type::POINTER:;
+  case Type::ARRAY:;
+  case Type::TYPEDEF:;
+    NOT_IMPLEMENTED("Some of these could be but do not currently needing it");
   }
   return type;
 }

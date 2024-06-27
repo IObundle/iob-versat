@@ -11,7 +11,8 @@ struct Options{
   String hardwareOutputFilepath;
   String softwareOutputFilepath;
   String verilatorRoot;
-
+  String debugPath;
+  
   const char* specificationFilepath;
   const char* topName;
   int addrSize; // AXI_ADDR_W - used to be bitSize

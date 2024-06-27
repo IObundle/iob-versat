@@ -88,8 +88,8 @@ Array<FUDeclaration*> SortTypesByConfigDependency(Array<FUDeclaration*> types,Ar
     }
   }
 
-  for(Pair<FUDeclaration*,bool> p : seen){
-    Assert(p.second);
+  for(Pair<FUDeclaration*,bool*> p : seen){
+    Assert(*p.second);
   }
 
   return result;
@@ -146,8 +146,8 @@ Array<FUDeclaration*> SortTypesByMemDependency(Array<FUDeclaration*> types,Arena
     }
   }
 
-  for(Pair<FUDeclaration*,bool> p : seen){
-    Assert(p.second);
+  for(Pair<FUDeclaration*,bool*> p : seen){
+    Assert(*p.second);
   }
 
   return result;
@@ -703,8 +703,8 @@ void OutputVerilatorWrapper(FUDeclaration* type,Accelerator* accel,String output
 
   int index = 0;
   Array<Wire> allStaticsVerilatorSide = PushArray<Wire>(temp,999); // TODO: Correct size
-  for(Pair<StaticId,StaticData> p : type->staticUnits){
-    for(Wire& config : p.second.configs){
+  for(Pair<StaticId,StaticData*> p : type->staticUnits){
+    for(Wire& config : p.second->configs){
       allStaticsVerilatorSide[index] = config;
       allStaticsVerilatorSide[index].name = ReprStaticConfig(p.first,&config,temp);
       index += 1;
@@ -731,9 +731,10 @@ void OutputVerilatorWrapper(FUDeclaration* type,Accelerator* accel,String output
   TemplateSetBool("trace",globalDebug.outputVCD);
   
   FILE* output = OpenFileAndCreateDirectories(StaticFormat("%.*s/wrapper.cpp",UNPACK_SS(outputPath)),"w");
+  DEFER_CLOSE_FILE(output);
+
   CompiledTemplate* templ = CompileTemplate(versat_wrapper_template,"wrapper",temp,temp2);
   ProcessTemplate(output,templ,temp,temp2);
-  fclose(output);
 }
 
 #include <filesystem>
@@ -745,6 +746,7 @@ void OutputVerilatorMake(String topLevelName,String versatDir,Arena* temp,Arena*
   
   String outputPath = globalOptions.softwareOutputFilepath;
   FILE* output = OpenFileAndCreateDirectories(StaticFormat("%.*s/VerilatorMake.mk",UNPACK_SS(outputPath)),"w");
+  DEFER_CLOSE_FILE(output);
   
   TemplateSetBool("traceEnabled",globalDebug.outputVCD);
   CompiledTemplate* comp = CompileTemplate(versat_makefile_template,"makefile",temp,temp2);
@@ -778,7 +780,9 @@ void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* 
   // No need for templating, small file
   FILE* c = OpenFileAndCreateDirectories(StaticFormat("%s/versat_defs.vh",hardwarePath),"w");
   FILE* f = OpenFileAndCreateDirectories(StaticFormat("%s/versat_undefs.vh",hardwarePath),"w");
-
+  DEFER_CLOSE_FILE(c);
+  DEFER_CLOSE_FILE(f);
+  
   if(!c || !f){
     printf("Error creating file, check if filepath is correct: %s\n",hardwarePath);
     return;
@@ -835,9 +839,6 @@ void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* 
     fprintf(f,"`undef  VERSAT_EXPORT_EXTERNAL_MEMORY\n");
   }
   
-  fclose(c);
-  fclose(f);
-
   // Output configuration file
   Array<InstanceNode*> nodes = ListToArray(accel->allocated,temp2);
 
@@ -883,7 +884,6 @@ void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* 
         printf(",%d",inter.tp.dataSizeIn);
         printf("\n");
       }break;
-      default: NOT_IMPLEMENTED("Implement as needed");
       }
     }
   }
@@ -900,27 +900,27 @@ void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* 
   TemplateSetCustom("external",MakeValue(&external));
   {
     FILE* f = OpenFileAndCreateDirectories(StaticFormat("%s/versat_external_memory_inst.vh",hardwarePath),"w");
+    DEFER_CLOSE_FILE(f);
     ProcessTemplate(f,BasicTemplates::externalInstTemplate,temp,temp2);
-    fclose(f);
   }
 
   {
     FILE* f = OpenFileAndCreateDirectories(StaticFormat("%s/versat_internal_memory_wires.vh",hardwarePath),"w");
+    DEFER_CLOSE_FILE(f);
     ProcessTemplate(f,BasicTemplates::internalWiresTemplate,temp,temp2);
-    fclose(f);
   }
 
   {
     FILE* f = OpenFileAndCreateDirectories(StaticFormat("%s/versat_external_memory_port.vh",hardwarePath),"w");
+    DEFER_CLOSE_FILE(f);
     ProcessTemplate(f,BasicTemplates::externalPortTemplate,temp,temp2);
-    fclose(f);
   }
 
   {
     FILE* f = OpenFileAndCreateDirectories(StaticFormat("%s/versat_external_memory_internal_portmap.vh",hardwarePath),"w");
+    DEFER_CLOSE_FILE(f);
     ProcessTemplate(f,BasicTemplates::externalInternalPortmapTemplate,temp,temp2);
-    fclose(f);
-  }
+ }
   
   Hashmap<StaticId,StaticData>* staticUnits = PushHashmap<StaticId,StaticData>(temp,val.nStatics);
   int staticIndex = 0; // staticStart; TODO: For now, test with static info beginning at zero
@@ -950,7 +950,7 @@ void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* 
   TemplateSetCustom("staticUnits",MakeValue(staticUnits));
   
   Array<MemoryAddressMask> memoryMasks = CalculateAcceleratorMemoryMasks(info,temp);
-
+ 
   TemplateSetCustom("versatValues",MakeValue(&val));
   TemplateSetNumber("delayStart",val.delayBitsStart);
   TemplateSetNumber("nIO",val.nUnitsIO);
@@ -975,6 +975,7 @@ void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* 
   
   {
     FILE* s = OpenFileAndCreateDirectories(StaticFormat("%s/versat_instance.v",hardwarePath),"w");
+    DEFER_CLOSE_FILE(s);
 
     if(!s){
       printf("Error creating file, check if filepath is correct: %s\n",hardwarePath);
@@ -982,7 +983,6 @@ void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* 
     }
 
     ProcessTemplate(s,BasicTemplates::topAcceleratorTemplate,temp,temp2);
-    fclose(s);
   }
   
   TemplateSetBool("isSimple",isSimple);
@@ -997,16 +997,21 @@ void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* 
     Assert(inst);
 
     Accelerator* accel = inst->declaration->fixedDelayCircuit;
-    FOREACH_LIST(InstanceNode*,ptr,accel->allocated){
-      if(CompareString(ptr->inst->name,STRING("simple"))){
-        inst = ptr->inst;
-        break;
+    if(accel){
+      FOREACH_LIST(InstanceNode*,ptr,accel->allocated){
+        if(CompareString(ptr->inst->name,STRING("simple"))){
+          inst = ptr->inst;
+          break;
+        }
       }
-    }
-    Assert(inst);
+      Assert(inst);
 
-    TemplateSetNumber("simpleInputs",inst->declaration->NumberInputs());
-    TemplateSetNumber("simpleOutputs",inst->declaration->NumberOutputs());
+      TemplateSetNumber("simpleInputs",inst->declaration->NumberInputs());
+      TemplateSetNumber("simpleOutputs",inst->declaration->NumberOutputs());
+    } else {
+      TemplateSetNumber("simpleInputs",0);
+      TemplateSetNumber("simpleOutputs",0);
+    }
   }
 
   TemplateSetNumber("memoryMappedBase",1 << val.memoryConfigDecisionBit);
@@ -1071,8 +1076,8 @@ void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* 
 #if 1
     int index = 0;
     Array<Wire> allStaticsVerilatorSide = PushArray<Wire>(temp,999); // TODO: Correct size
-    for(Pair<StaticId,StaticData> p : staticUnits){
-      for(Wire& config : p.second.configs){
+    for(Pair<StaticId,StaticData*> p : staticUnits){
+      for(Wire& config : p.second->configs){
         allStaticsVerilatorSide[index] = config;
         allStaticsVerilatorSide[index].name = ReprStaticConfig(p.first,&config,temp);
         index += 1;
@@ -1106,7 +1111,7 @@ void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* 
     TemplateSetCustom("mergeNames",MakeValue(&info.names));
 
     FILE* f = OpenFileAndCreateDirectories(StaticFormat("%s/versat_accel.h",softwarePath),"w");
+    DEFER_CLOSE_FILE(f);
     ProcessTemplate(f,BasicTemplates::acceleratorHeaderTemplate,temp,temp2);
-    fclose(f);
   }
 }

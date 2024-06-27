@@ -10,7 +10,7 @@
 }){} }:
 let
 fs = tweag.lib.fileset;
-sourceFiles = (fs.union ./typeInfo.cpp (fs.union ./Makefile (fs.union ./sharedHardware.mk (fs.union ./config.mk ./software))));
+sourceFiles = (fs.union ./autoRepr.hpp (fs.union ./autoRepr.cpp (fs.union ./typeInfo.cpp (fs.union ./Makefile (fs.union ./sharedHardware.mk (fs.union ./config.mk ./software))))));
 in
 #fs.trace {} sourceFiles
 pkgs.stdenv.mkDerivation rec {

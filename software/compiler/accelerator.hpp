@@ -17,108 +17,110 @@ typedef Hashmap<Edge*,Edge*> EdgeMap;
 typedef Hashmap<InstanceNode*,InstanceNode*> InstanceNodeMap;
 
 struct PortInstance{
-   FUInstance* inst;
-   int port;
+  FUInstance* inst;
+  int port;
 };
 
 inline bool operator==(const PortInstance& p1,const PortInstance& p2){
-   bool res = (p1.inst == p2.inst && p1.port == p2.port);
-   return res;
+  bool res = (p1.inst == p2.inst && p1.port == p2.port);
+  return res;
 }
 
 inline bool operator!=(const PortInstance& p1,const PortInstance& p2){
-   bool res = !(p1 == p2);
-   return res;
+  bool res = !(p1 == p2);
+  return res;
 }
 
 template<> class std::hash<PortInstance>{
-   public:
-   std::size_t operator()(PortInstance const& s) const noexcept{
-      std::size_t res = std::hash<FUInstance*>()(s.inst);
-      res += s.port;
+public:
+  std::size_t operator()(PortInstance const& s) const noexcept{
+    std::size_t res = std::hash<FUInstance*>()(s.inst);
+    res += s.port;
 
-      return res;
-   }
+    return res;
+  }
 };
 
 struct PortEdge{
-   PortInstance units[2];
+  PortInstance units[2];
 };
 
 inline bool operator==(const PortEdge& e1,const PortEdge& e2){
-   bool res = (e1.units[0] == e2.units[0] && e1.units[1] == e2.units[1]);
-   return res;
+  bool res = (e1.units[0] == e2.units[0] && e1.units[1] == e2.units[1]);
+  return res;
 }
 
 inline bool operator!=(const PortEdge& e1,const PortEdge& e2){
-   bool res = !(e1 == e2);
-   return res;
+  bool res = !(e1 == e2);
+  return res;
 }
 
 template<> class std::hash<PortEdge>{
-   public:
-   std::size_t operator()(PortEdge const& s) const noexcept{
-      std::size_t res = std::hash<PortInstance>()(s.units[0]);
-      res += std::hash<PortInstance>()(s.units[1]);
-      return res;
-   }
+public:
+  std::size_t operator()(PortEdge const& s) const noexcept{
+    std::size_t res = std::hash<PortInstance>()(s.units[0]);
+    res += std::hash<PortInstance>()(s.units[1]);
+    return res;
+  }
 };
 
 struct Edge{ // A edge in a graph
-   union{
-      struct{
-         PortInstance out;
-         PortInstance in;
-      };
-      PortEdge edge;
-      PortInstance units[2];
-   };
+  union{
+    struct{
+      PortInstance out;
+      PortInstance in;
+    };
+    PortEdge edge;
+    PortInstance units[2];
+  };
 
-   int delay;
-   Edge* next;
+  int delay;
+  Edge* next;
 };
 
 struct FUInstance;
 struct InstanceNode;
 
 struct PortNode{
-   InstanceNode* node;
-   int port;
+  InstanceNode* node;
+  int port;
 };
 
 struct EdgeNode{
-   PortNode node0;
-   PortNode node1;
+  PortNode node0;
+  PortNode node1;
+  int delay;
 };
 
 struct ConnectionNode{
-   PortNode instConnectedTo;
-   int port;
-   int edgeDelay;
-   int* delay; // Maybe not the best approach to calculate delay. TODO: check later
-   ConnectionNode* next;
+  PortNode instConnectedTo;
+  int port;
+  int edgeDelay;
+  int* delay; // Maybe not the best approach to calculate delay. TODO: check later
+  ConnectionNode* next;
 };
 
 struct InstanceNode{
-   FUInstance* inst;
-   InstanceNode* next;
+  FUInstance* inst;
+  InstanceNode* next;
 
-   // Calculated and updated every time a connection is added or removed
-   ConnectionNode* allInputs;
-   ConnectionNode* allOutputs;
-   Array<PortNode> inputs;
-   Array<bool> outputs;
-   //int outputs;
-   bool multipleSamePortInputs;
-   NodeType type;
+  // Calculated and updated every time a connection is added or removed
+  ConnectionNode* allInputs;
+  ConnectionNode* allOutputs;
+  Array<PortNode> inputs;
+  Array<bool> outputs;
+  //int outputs;
+  bool multipleSamePortInputs;
+  NodeType type;
 };
 
+// TODO: Memory leaks can be fixed by having a global InstanceNode and FUInstance Pool and a global dynamic arena for everything else.
 struct Accelerator{ // Graph + data storage
   Edge* edges; // TODO: Should be removed, edge info is all contained inside the instance nodes and desync leads to bugs since some code still uses this.
 
   InstanceNode* allocated;
   InstanceNode* lastAllocated;
-  Pool<FUInstance> instances;
+  Pool<FUInstance> instances; // TODO: Does anyone care about this or can we just use the allocated list?
 
   DynamicArena* accelMemory; // TODO: We could remove all this because we can now build all the accelerators in place. (Add an API that functions like a Accelerator builder and at the end we lock everything into an immutable graph).
 
@@ -174,10 +176,6 @@ struct VersatComputedValues{
   bool signalLoop;
 };
 
-enum OrderType{
-  OrderType_SINK,
-};
-
 struct DAGOrderNodes{
   Array<InstanceNode*> sinks;
   Array<InstanceNode*> sources;
@@ -188,22 +186,10 @@ struct DAGOrderNodes{
   int maxOrder;
 };
 
-struct CalculateDelayResult{
-  Hashmap<EdgeNode,int>* edgesDelay;
-  Hashmap<PortNode,int>* portDelay;
-  Hashmap<InstanceNode*,int>* nodeDelay;
-};
-
-Array<int> ExtractInputDelays(Accelerator* accel,CalculateDelayResult delays,int mimimumAmount,Arena* out,Arena* temp);
-Array<int> ExtractOutputLatencies(Accelerator* accel,CalculateDelayResult delays,Arena* out,Arena* temp);
-
 // TODO: The concept of flat instance no longer exists. Remove them and check if any code dependend on the fact that copy flat did not copy static or shared 
-Accelerator* CopyAccelerator(Accelerator* accel,InstanceMap* map,Arena* out);
-Accelerator* CopyFlatAccelerator(Accelerator* accel,InstanceMap* map);
-FUInstance* CopyInstance(Accelerator* newAccel,FUInstance* oldInstance,String newName,InstanceNode* previous);
-FUInstance* CopyInstance(Accelerator* newAccel,FUInstance* oldInstance,String newName);
+Accelerator*  CopyAccelerator(Accelerator* accel,InstanceMap* map);
+FUInstance*   CopyInstance(Accelerator* newAccel,FUInstance*   oldInstance,String newName);
 InstanceNode* CopyInstance(Accelerator* newAccel,InstanceNode* oldInstance,String newName);
-InstanceNode* CreateFlatFUInstance(Accelerator* accel,FUDeclaration* type,String name);
 
 Array<FUDeclaration*> AllNonSpecialSubTypes(Accelerator* accel,Arena* out,Arena* temp);
 Array<FUDeclaration*> ConfigSubTypes(Accelerator* accel,Arena* out,Arena* temp);
@@ -219,11 +205,11 @@ int ExternalMemoryByteSize(Array<ExternalMemoryInterface> interfaces); // Size o
 //       
 VersatComputedValues ComputeVersatValues(Accelerator* accel,bool useDMA);
 
-CalculateDelayResult CalculateDelay(Accelerator* accel,DAGOrderNodes order,Arena* out);
-CalculateDelayResult CalculateDelay(Accelerator* accel,DAGOrderNodes order,Array<Partition> partitions,Arena* out);
+Array<Edge> GetAllEdges(Accelerator* accel,Arena* out);
 
 // Unit connection
-Edge* FindEdge(FUInstance* out,int outIndex,FUInstance* in,int inIndex,int delay = 0);
+Edge* FindEdge(FUInstance* out,int outIndex,FUInstance* in,int inIndex);
+Edge* FindEdge(FUInstance* out,int outIndex,FUInstance* in,int inIndex,int delay);
 Edge* ConnectUnitsGetEdge(FUInstance* out,int outIndex,FUInstance* in,int inIndex,int delay = 0);
 Edge* ConnectUnitsGetEdge(FUInstance* out,int outIndex,FUInstance* in,int inIndex,int delay,Edge* previous);
 Edge* ConnectUnitsIfNotConnectedGetEdge(FUInstance* out,int outIndex,FUInstance* in,int inIndex,int delay = 0);
@@ -247,3 +233,4 @@ void InsertUnit(Accelerator* accel, PortInstance before, PortInstance after, Por
 bool IsCombinatorial(Accelerator* accel);
 
 Edge* ConnectUnitsGetEdge(PortNode out,PortNode in,int delay);
+

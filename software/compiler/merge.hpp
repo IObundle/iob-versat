@@ -126,7 +126,7 @@ enum MergingStrategy{
    FIRST_FIT
 };
 
-void OutputConsolidationGraph(ConsolidationGraph graph,Arena* memory,bool onlyOutputValid,const char* format,...);
+void OutputConsolidationGraph(ConsolidationGraph graph,bool onlyOutputValid,String moduleName,String fileName,Arena* temp);
 
 int ValidNodes(ConsolidationGraph graph);
 

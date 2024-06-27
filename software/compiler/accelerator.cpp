@@ -29,7 +29,7 @@ Accelerator* CreateAccelerator(String name){
   return accel;
 }
 
-InstanceNode* CreateFlatFUInstance(Accelerator* accel,FUDeclaration* type,String name){
+InstanceNode* CreateFUInstanceNode(Accelerator* accel,FUDeclaration* type,String name){
   String storedName = PushString(accel->accelMemory,name);
 
   Assert(CheckValidName(storedName));
@@ -60,21 +60,13 @@ InstanceNode* CreateFlatFUInstance(Accelerator* accel,FUDeclaration* type,String
   inst->accel = accel;
   inst->declaration = type;
 
-  for(Pair<StaticId,StaticData> pair : type->staticUnits){
+  for(Pair<StaticId,StaticData*> pair : type->staticUnits){
     StaticId first = pair.first;
-    StaticData second = pair.second;
+    StaticData second = *pair.second;
     accel->staticUnits.insert({first,second});
   }
 
   return ptr;
-}
-
-// Used to be CreateAndConfigure. 
-InstanceNode* CreateFUInstanceNode(Accelerator* accel,FUDeclaration* type,String name){
-  InstanceNode* node = CreateFlatFUInstance(accel,type,name);
-  FUInstance* inst = node->inst;
-
-  return node;
 }
 
 FUInstance* CreateFUInstance(Accelerator* accel,FUDeclaration* type,String name){
@@ -83,7 +75,7 @@ FUInstance* CreateFUInstance(Accelerator* accel,FUDeclaration* type,String name)
   return res;
 }
 
-Accelerator* CopyAccelerator(Accelerator* accel,InstanceMap* map,Arena* out){
+Accelerator* CopyAccelerator(Accelerator* accel,InstanceMap* map){
   STACK_ARENA(temp,Kilobyte(128));
 
   Accelerator* newAccel = CreateAccelerator(accel->name);
@@ -112,47 +104,6 @@ Accelerator* CopyAccelerator(Accelerator* accel,InstanceMap* map,Arena* out){
     ConnectUnits(out,outPort,in,inPort,edge->delay);
   }
   
-  return newAccel;
-}
-
-FUInstance* CopyFlatInstance(Accelerator* newAccel,FUInstance* oldInstance,String newName){
-  FUInstance* newInst = CreateFlatFUInstance(newAccel,oldInstance->declaration,newName)->inst;
-
-  newInst->parameters = oldInstance->parameters;
-  newInst->portIndex = oldInstance->portIndex;
-
-  // Static and shared not handled for flat copy. Not sure if makes sense or not. See where it goes
-
-  return newInst;
-}
-
-Accelerator* CopyFlatAccelerator(Accelerator* accel,InstanceMap* map){
-  Accelerator* newAccel = CreateAccelerator(accel->name);
-  InstanceMap nullCaseMap;
-
-  if(map == nullptr){
-    map = &nullCaseMap;
-  }
-
-  // Copy of instances
-  FOREACH_LIST(InstanceNode*,ptr,accel->allocated){
-    FUInstance* inst = ptr->inst;
-    FUInstance* newInst = CopyFlatInstance(newAccel,inst,inst->name);
-    newInst->literal = inst->literal;
-
-    map->Insert(inst,newInst);
-  }
-
-  // Flat copy of edges
-  FOREACH_LIST(Edge*,edge,accel->edges){
-    FUInstance* out = map->GetOrFail(edge->units[0].inst);
-    int outPort = edge->units[0].port;
-    FUInstance* in = map->GetOrFail(edge->units[1].inst);
-    int inPort = edge->units[1].port;
-
-    ConnectUnits(out,outPort,in,inPort,edge->delay);
-  }
-
   return newAccel;
 }
 
@@ -273,7 +224,7 @@ Accelerator* Flatten(Accelerator* accel,int times,Arena* temp){
   BLOCK_REGION(temp);
 
   InstanceMap* map = PushHashmap<FUInstance*,FUInstance*>(temp,999);
-  Accelerator* newAccel = CopyFlatAccelerator(accel,map);
+  Accelerator* newAccel = CopyAccelerator(accel,map);
 
   Pool<InstanceNode*> compositeInstances = {};
   Pool<InstanceNode*> toRemove = {};
@@ -335,7 +286,7 @@ Accelerator* Flatten(Accelerator* accel,int times,Arena* temp){
         }
 
         String newName = PushString(perm,"%.*s_%.*s",UNPACK_SS(inst->name),UNPACK_SS(circuitInst->name));
-        FUInstance* newInst = CopyFlatInstance(newAccel,circuitInst,newName);
+        FUInstance* newInst = CopyInstance(newAccel,circuitInst,newName);
 
         if(circuitInst->isStatic){
           bool found = false;
@@ -495,7 +446,7 @@ Accelerator* Flatten(Accelerator* accel,int times,Arena* temp){
     compositeInstances.Clear();
   }
 
-  String debugFilepath = PushDebugPath(temp,accel->name,"flatten.dot");
+  String debugFilepath = PushDebugPath(temp,accel->name,STRING("flatten.dot"));
   OutputGraphDotFile(newAccel,true,debugFilepath,temp);
 
   toRemove.Clear(true);
@@ -507,262 +458,6 @@ Accelerator* Flatten(Accelerator* accel,int times,Arena* temp){
   newAccel->name = accel->name;
 
   return newAccel;
-}
-
-const int ANY_DELAY_MARK = 99999;
-
-static void SendLatencyUpwards(InstanceNode* node,Hashmap<EdgeNode,int>* delays,Hashmap<InstanceNode*,int>* nodeDelay){
-  int b = nodeDelay->GetOrFail(node);
-  FUInstance* inst = node->inst;
-
-  FOREACH_LIST(ConnectionNode*,info,node->allOutputs){
-    InstanceNode* other = info->instConnectedTo.node;
-
-    // Do not set delay for source units. Source units cannot be found in this, otherwise they wouldn't be source
-    Assert(other->type != NodeType_SOURCE);
-
-    int a = inst->declaration->baseConfig.outputLatencies[info->port];
-    int e = info->edgeDelay;
-
-    FOREACH_LIST(ConnectionNode*,otherInfo,other->allInputs){
-      int c = other->inst->declaration->baseConfig.inputDelays[info->instConnectedTo.port];
-
-      if(info->instConnectedTo.port == otherInfo->port &&
-         otherInfo->instConnectedTo.node->inst == inst && otherInfo->instConnectedTo.port == info->port){
-        
-        int delay = b + a + e - c;
-
-        if(b == ANY_DELAY_MARK || node->inst->declaration == BasicDeclaration::buffer){
-          *otherInfo->delay = ANY_DELAY_MARK;
-        } else {
-          *otherInfo->delay = delay;
-        }
-      }
-    }
-  }
-}
-
-
-// A quick explanation: Starting from the inputs, we associate to edges a value that indicates how much cycles data needs to be delayed in order to arrive at the needed time. Starting from inputs in a breadth firsty manner makes this work fine but I think that it is not required. This value is given by the latency of the output + delay of the edge + input delay. Afterwards, we can always move delay around (Ex: If we fix a given unit, we can increase the delay of each output edge by one if we subtract the delay of each input edge by one. We can essentially move delay from input edges to output edges).
-// NOTE: Thinking things a bit more, the number associated to the edges is not something that we want. If a node as a edge with number 0 and another with number 3, we need to add a fixed buffer of latency 3 to the edge with number 0, not the other way around. This might mean that after doing all the passes that we want, we still might need to invert everything (in this case, the edge with 0 would get a 3 and the edge with a 3 would get a zero). That is, if we still want to preserve the idea that each number associated to the edge is equal to the latency that we need to add. 
-
-// Negative value edges are ok since at the end we can renormalize everything back into positive by adding the absolute value of the lowest negative to every edge (this also works because we use positive values in the input nodes to represent delay).
-// In fact, this code could be simplified if we made the process of pushing delay from one place to another more explicit. Also TODO: We technically can use the ability of pushing delay to produce accelerators that contain less buffers. Node with many outputs we want to move delay as much as possible to it's inputs. Node with many inputs we want to move delay as much as possible to it's outputs. Currently we only favor one side because we basically just try to move delays to the outside as much as possible.
-// TODO: Simplify the code. Check if removing the breadth first and just iterating by nodes and incrementing the edges values ends up producing the same result. Basically a loop where for each node we accumulate on the respective edges the values of the delays from the nodes respective ports plus the value of the edges themselves and finally we normalize everything to start at zero. I do not see any reason why this wouldn't work.
-// TODO: Furthermode, encode the ability to push latency upwards or downwards and look into improving the circuits generated. Should also look into transforming the edge mapping from an Hashmap to an Array but still do not know if we need to map edges in this improved algorithm. (Techically we could make an auxiliary function that flattens everything and replaces edge lookups with indexes to the array.). 
-
-// Instead of an accelerator, it could take a ordered list of instances, and potentialy the max amount of edges for the hashmap instantiation.
-// Therefore abstracting from the accelerator completely and being able to be used for things like subgraphs.
-// Change later if needed.
-
-CalculateDelayResult CalculateDelay(Accelerator* accel,DAGOrderNodes order,Arena* out){
-  // TODO: We are currently using the delay pointer inside the ConnectionNode structure. When correct, eventually change to just use the hashmap
-  static int functionCalls = 0;
-  
-  int nodes = Size(accel->allocated);
-  int edges = Size(accel->edges);
-  Hashmap<EdgeNode,int>* edgeToDelay = PushHashmap<EdgeNode,int>(out,edges);
-  Hashmap<InstanceNode*,int>* nodeDelay = PushHashmap<InstanceNode*,int>(out,nodes);
-  Hashmap<PortNode,int>* portDelay = PushHashmap<PortNode,int>(out,edges);
-  
-  CalculateDelayResult res = {};
-  res.edgesDelay = edgeToDelay;
-  res.nodeDelay = nodeDelay;
-  res.portDelay = portDelay;
-  
-  FOREACH_LIST(InstanceNode*,ptr,accel->allocated){
-    nodeDelay->Insert(ptr,0);
-
-    FOREACH_LIST(ConnectionNode*,con,ptr->allInputs){
-      EdgeNode edge = {};
-
-      edge.node0 = con->instConnectedTo;
-      edge.node1.node = ptr;
-      edge.node1.port = con->port;
-
-      con->delay = edgeToDelay->Insert(edge,0);
-    }
-
-    FOREACH_LIST(ConnectionNode*,con,ptr->allOutputs){
-      EdgeNode edge = {};
-
-      edge.node0.node = ptr;
-      edge.node0.port = con->port;
-      edge.node1 = con->instConnectedTo;
-
-      con->delay = edgeToDelay->Insert(edge,0);
-    }
-  }
-
-  // Start at sources
-  int graphs = 0;
-  int index = 0;
-  for(; index < order.instances.size; index++){
-    InstanceNode* node = order.instances[index];
-
-    if(node->type != NodeType_SOURCE && node->type != NodeType_SOURCE_AND_SINK){
-      continue; // This break is important because further code relies on it. 
-    }
-
-    nodeDelay->Insert(node,0);
-
-    SendLatencyUpwards(node,edgeToDelay,nodeDelay);
-
-    region(out){
-      String filepath = PushDebugPath(out,accel->name,StaticFormat("%d_out1_%d.dot",functionCalls,graphs++));
-      OutputGraphDotFile(accel,true,node->inst,res,filepath,out);
-    }
-  }
-
-  index = 0;
-  // Continue up the tree
-  for(; index < order.instances.size; index++){
-    InstanceNode* node = order.instances[index];
-    if(node->type == NodeType_UNCONNECTED
-       || node->type == NodeType_SOURCE){
-      continue;
-    }
-
-    int maximum = -(1 << 30);
-    FOREACH_LIST(ConnectionNode*,info,node->allInputs){
-      if(*info->delay != ANY_DELAY_MARK){
-        maximum = std::max(maximum,*info->delay);
-      }
-    }
-    
-    if(maximum == -(1 << 30)){
-      continue;
-    }
-    
-    FOREACH_LIST(ConnectionNode*,info,node->allInputs){
-      if(*info->delay == ANY_DELAY_MARK){
-        *info->delay = 0;
-      } else {
-        *info->delay = maximum - *info->delay;
-      }
-    }
-
-    nodeDelay->Insert(node,maximum);
-
-    if(node->type != NodeType_SOURCE_AND_SINK){
-      SendLatencyUpwards(node,edgeToDelay,nodeDelay);
-    }
-
-    region(out){
-      String filepath = PushDebugPath(out,accel->name,StaticFormat("%d_out2_%d.dot",functionCalls,graphs++));
-      OutputGraphDotFile(accel,true,node->inst,res,filepath,out);
-    }
-  }
-
-  for(int i = 0; i < order.instances.size; i++){
-    InstanceNode* node = order.instances[i];
-  
-    if(node->type != NodeType_SOURCE_AND_SINK){
-      continue;
-    }
-
-    // Source_and_sink units never have output delay. They can't
-    FOREACH_LIST(ConnectionNode*,con,node->allOutputs){
-      *con->delay = 0;
-    }
-  }
-
-  int minimum = 0;
-  for(int i = 0; i < order.instances.size; i++){
-    InstanceNode* node = order.instances[i];
-    int delay = nodeDelay->GetOrFail(node);
-
-    minimum = std::min(minimum,delay);
-  }
-  for(int i = 0; i < order.instances.size; i++){
-    InstanceNode* node = order.instances[i];
-    int* delay = nodeDelay->Get(node);
-    *delay -= minimum;
-  }
-  
-  region(out){
-    String filepath = PushDebugPath(out,accel->name,StaticFormat("%d_out3_%d.dot",functionCalls,graphs++));
-    OutputGraphDotFile(accel,true,nullptr,res,filepath,out);
-  }
-
-  if(!globalOptions.disableDelayPropagation){
-    // Normalizes everything to start on zero
-    for(int i = 0; i < order.instances.size; i++){
-      InstanceNode* node = order.instances[i];
-
-      if(node->type != NodeType_SOURCE && node->type != NodeType_SOURCE_AND_SINK){
-        break;
-      }
-
-      int minimum = 1 << 30;
-      FOREACH_LIST(ConnectionNode*,info,node->allOutputs){
-        minimum = std::min(minimum,*info->delay);
-      }
-
-      if(minimum == 1 << 30){
-        continue;
-      }
-      
-      // Does not take into account unit latency
-      nodeDelay->Insert(node,minimum);
-
-      FOREACH_LIST(ConnectionNode*,info,node->allOutputs){
-        *info->delay -= minimum;
-      }
-    }
-  }
-
-  region(out){
-    String filepath = PushDebugPath(out,accel->name,StaticFormat("%d_out4_%d.dot",functionCalls,graphs++));
-    OutputGraphDotFile(accel,true,nullptr,res,filepath,out);
-  }
-
-  for(int i = 0; i < order.instances.size; i++){
-    InstanceNode* node = order.instances[i];
-
-    if(node->type == NodeType_UNCONNECTED){
-      nodeDelay->Insert(node,0);
-    }
-  }
-
-  for(auto p :res.nodeDelay){
-    Assert(p.second >= 0);
-  }
-  for(Pair<InstanceNode*,int> p : res.nodeDelay){
-    Assert(p.second >= 0);
-  }
-  
-  {
-    for(int i = 0; i < order.instances.size; i++){
-      InstanceNode* node = order.instances[i];
-      FUInstance* inst = node->inst;
-      int b = nodeDelay->GetOrFail(node);
-      
-      FOREACH_LIST(ConnectionNode*,info,node->allOutputs){
-        InstanceNode* other = info->instConnectedTo.node;
-
-        int a = inst->declaration->baseConfig.outputLatencies[info->port];
-        int e = info->edgeDelay;
-
-        FOREACH_LIST(ConnectionNode*,otherInfo,other->allInputs){
-          int c = other->inst->declaration->baseConfig.inputDelays[info->instConnectedTo.port];
-
-          if(info->instConnectedTo.port == otherInfo->port &&
-             otherInfo->instConnectedTo.node->inst == inst && otherInfo->instConnectedTo.port == info->port){
-        
-            int delay = b + a + e - c;
-
-            PortNode node = {.node = other,.port = info->instConnectedTo.port};
-            portDelay->Insert(node,delay);
-          }
-        }
-      }
-    }
-  }
-  
-  functionCalls += 1;
-  
-  return res;
 }
 
 // TODO: This functions should have actual error handling and reporting. Instead of just Asserting.
@@ -1034,7 +729,7 @@ Array<DelayToAdd> GenerateFixDelays(Accelerator* accel,Hashmap<EdgeNode,int>* ed
   int buffersInserted = 0;
   for(auto edgePair : edgeDelays){
     EdgeNode edge = edgePair.first;
-    int delay = edgePair.second;
+    int delay = *edgePair.second;
 
     if(delay == 0){
       continue;
@@ -1061,7 +756,7 @@ void FixDelays(Accelerator* accel,Hashmap<EdgeNode,int>* edgeDelays,Arena* temp)
   int buffersInserted = 0;
   for(auto edgePair : edgeDelays){
     EdgeNode edge = edgePair.first;
-    int delay = edgePair.second;
+    int delay = *edgePair.second;
 
     if(delay == 0){
       continue;
@@ -1098,7 +793,8 @@ void FixDelays(Accelerator* accel,Hashmap<EdgeNode,int>* edgeDelays,Arena* temp)
 
     InsertUnit(accel,edge.node0,edge.node1,PortNode{GetInstanceNode(accel,buffer),0});
 
-    String filePath = PushDebugPath(temp,accel->name,StaticFormat("fixDelay_%d.dot",buffersInserted));
+    String fileName = PushString(temp,"fixDelay_%d.dot",buffersInserted);
+    String filePath = PushDebugPath(temp,accel->name,fileName);
     OutputGraphDotFile(accel,true,buffer,filePath,temp);
     buffersInserted += 1;
   }
@@ -1221,7 +917,6 @@ bool VerifyExternalMemory(ExternalMemoryInterface* inter){
   case ExternalMemoryType::DP:{
     res = (inter->dp[0].bitSize == inter->dp[1].bitSize);
   }break;
-  default: NOT_IMPLEMENTED("Implemented as needed");
   }
 
   return res;
@@ -1259,7 +954,6 @@ int ExternalMemoryByteSize(ExternalMemoryInterface* inter){
     addressBitSize = inter->dp[0].bitSize;
     byteOffset = std::min(DataWidthToByteOffset(inter->dp[0].dataSizeIn),DataWidthToByteOffset(inter->dp[1].dataSizeIn));
   }break;
-  default: NOT_IMPLEMENTED("Implemented as needed");
   }
 
   int byteSize = (1 << (addressBitSize + byteOffset));
@@ -1419,8 +1113,49 @@ void FixOutputs(InstanceNode* node){
    }
 }
 
+Array<Edge> GetAllEdges(Accelerator* accel,Arena* out){
+  DynamicArray<Edge> arr = StartArray<Edge>(out);
+  FOREACH_LIST(InstanceNode*,ptr,accel->allocated){
+    FOREACH_LIST(ConnectionNode*,con,ptr->allOutputs){
+      Edge edge = {};
+      edge.out.inst = ptr->inst;
+      edge.out.port = con->port;
+      edge.in.inst = con->instConnectedTo.node->inst;
+      edge.in.port = con->instConnectedTo.port;
+      edge.delay = con->edgeDelay;
+      *arr.PushElem() = edge;
+    }
+  }
 
-// TODO: Bunch of functions that could go to graph.hpp
+  Array<Edge> result = EndArray(arr);
+  
+  Assert(result.size == Size(accel->edges));
+  
+  return result;
+}
+
+Edge* FindEdge(FUInstance* out,int outIndex,FUInstance* in,int inIndex){
+  FUDeclaration* inDecl = in->declaration;
+  FUDeclaration* outDecl = out->declaration;
+
+  Assert(out->accel == in->accel);
+  Assert(inIndex < inDecl->NumberInputs());
+  Assert(outIndex < outDecl->NumberOutputs());
+
+  Accelerator* accel = out->accel;
+
+  FOREACH_LIST(Edge*,edge,accel->edges){
+    if(edge->units[0].inst == (FUInstance*) out &&
+       edge->units[0].port == outIndex &&
+       edge->units[1].inst == (FUInstance*) in &&
+       edge->units[1].port == inIndex) {
+      return edge;
+    }
+  }
+
+  return nullptr;
+}
+
 Edge* FindEdge(FUInstance* out,int outIndex,FUInstance* in,int inIndex,int delay){
   FUDeclaration* inDecl = in->declaration;
   FUDeclaration* outDecl = out->declaration;
@@ -1753,6 +1488,8 @@ void AssertGraphValid(InstanceNode* nodes,Arena* arena){
 
 //
 
+const int ANY_DELAY_MARK = 99999;
+
 //HACK
 #if 1
 static void SendLatencyUpwards(InstanceNode* node,Hashmap<EdgeNode,int>* delays,Hashmap<InstanceNode*,int>* nodeDelay,Hashmap<InstanceNode*,int>* nodeToPart){
@@ -1878,7 +1615,8 @@ CalculateDelayResult CalculateDelay(Accelerator* accel,DAGOrderNodes order,Array
     SendLatencyUpwards(node,edgeToDelay,nodeDelay,nodeToPart);
 
     region(out){
-      String filepath = PushDebugPath(out,accel->name,StaticFormat("%d_out1_%d.dot",functionCalls,graphs++));
+      String fileName = PushString(out,"%d_out1_%d.dot",functionCalls,graphs++);
+      String filepath = PushDebugPath(out,accel->name,fileName);
       OutputGraphDotFile(accel,true,node->inst,res,filepath,out);
     }
   }
@@ -1925,7 +1663,8 @@ CalculateDelayResult CalculateDelay(Accelerator* accel,DAGOrderNodes order,Array
     }
 
     region(out){
-      String filepath = PushDebugPath(out,accel->name,StaticFormat("%d_out2_%d.dot",functionCalls,graphs++));
+      String fileName = PushString(out,"%d_out2_%d.dot",functionCalls,graphs++);
+      String filepath = PushDebugPath(out,accel->name,fileName);
       OutputGraphDotFile(accel,true,node->inst,res,filepath,out);
     }
   }
@@ -1957,7 +1696,8 @@ CalculateDelayResult CalculateDelay(Accelerator* accel,DAGOrderNodes order,Array
   }
   
   region(out){
-    String filepath = PushDebugPath(out,accel->name,StaticFormat("%d_out3_%d.dot",functionCalls,graphs++));
+    String fileName = PushString(out,"%d_out3_%d.dot",functionCalls,graphs++);
+    String filepath = PushDebugPath(out,accel->name,fileName);
     OutputGraphDotFile(accel,true,nullptr,res,filepath,out);
   }
 
@@ -1989,7 +1729,8 @@ CalculateDelayResult CalculateDelay(Accelerator* accel,DAGOrderNodes order,Array
   }
 
   region(out){
-    String filepath = PushDebugPath(out,accel->name,StaticFormat("%d_out4_%d.dot",functionCalls,graphs++));
+    String fileName = PushString(out,"%d_out4_%d.dot",functionCalls,graphs++);
+    String filepath = PushDebugPath(out,accel->name,fileName);
     OutputGraphDotFile(accel,true,nullptr,res,filepath,out);
   }
 
@@ -2002,10 +1743,10 @@ CalculateDelayResult CalculateDelay(Accelerator* accel,DAGOrderNodes order,Array
   }
 
   for(auto p :res.nodeDelay){
-    Assert(p.second >= 0);
+    Assert(*p.second >= 0);
   }
-  for(Pair<InstanceNode*,int> p : res.nodeDelay){
-    Assert(p.second >= 0);
+  for(Pair<InstanceNode*,int*> p : res.nodeDelay){
+    Assert(*p.second >= 0);
   }
   
   {

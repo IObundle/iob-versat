@@ -18,10 +18,10 @@ String Repr(FUInstance* inst,GraphDotFormat format,Arena* out);
 String Repr(PortInstance* inPort,PortInstance* outPort,GraphDotFormat format,Arena* out);
 String Repr(FUDeclaration* decl,Arena* out);
 String Repr(FUDeclaration** decl,Arena* out);
-String Repr(PortInstance* port,GraphDotFormat format,Arena* memory);
-String Repr(MergeEdge* node,GraphDotFormat format,Arena* memory);
-String Repr(PortEdge* node,GraphDotFormat format,Arena* memory);
-String Repr(MappingNode* node,Arena* memory);
+String Repr(PortInstance* port,GraphDotFormat format,Arena* out);
+String Repr(MergeEdge* node,GraphDotFormat format,Arena* out);
+String Repr(PortEdge* node,GraphDotFormat format,Arena* out);
+String Repr(MappingNode* node,Arena* out);
 String Repr(StaticId* id,Arena* out);
 String Repr(StaticData* data,Arena* out);
 String Repr(PortNode* portNode,Arena* out);
@@ -163,6 +163,7 @@ void PrintAll(Hashmap<T,P>* map,Arena* temp){
 void PrintAll(FILE* file,Array<String> fields,Array<Array<String>> content,Arena* temp);
 void PrintAll(Array<String> fields,Array<Array<String>> content,Arena* temp);
 
+#if 0
 // TODO: Hack because no automatic printing of enums, yet
 static String Repr(NodeType* type,Arena* out){
   switch(*type){
@@ -174,8 +175,36 @@ static String Repr(NodeType* type,Arena* out){
   }
   return {};
 }
+#endif
 
-#include "repr.hpp" // Implements the GetFields and GetRepr functions
+template<typename T>
+String GetRepr(Array<T>* arr,Arena* out){
+  auto mark = StartString(out);
+  PushString(out,"(");
+  bool first = true;
+  for(T& t : *arr){
+    if(first){
+      first = false;
+    } else {
+      PushString(out,",");
+    }
+    GetRepr(&t,out);
+  }
+  PushString(out,")");
+  return EndString(mark);
+}
+
+#include "autoRepr.hpp"
+
+template<typename T>
+void Print(T* toPrint,Arena* temp){
+  BLOCK_REGION(temp);
+
+  String repr = GetRepr(toPrint,temp);
+  printf("%.*s",UNPACK_SS(repr));
+
+  return;
+}
 
 template<typename T>
 Array<Array<String>> ReprAll(Array<T> arr,Arena* out){
@@ -183,7 +212,7 @@ Array<Array<String>> ReprAll(Array<T> arr,Arena* out){
   
   Array<Array<String>> strings = PushArray<Array<String>>(out,size);
   for(int i = 0; i < arr.size; i++){
-    strings[i] = GetRepr(&arr[i],out);
+    strings[i] = GetAllRepr(&arr[i],out);
   }
 
   return strings;
@@ -194,7 +223,7 @@ void PrintAll(FILE* file,Array<T> arr,Arena* temp){
   BLOCK_REGION(temp);
 
   int size = arr.size;
-  Array<String> fields = GetFields((T){},temp);
+  Array<String> fields = GetFields((T*)nullptr,temp);
   Array<Array<String>> strings = ReprAll(arr,temp);
 
   PrintAll(file,fields,strings,temp);

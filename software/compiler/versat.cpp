@@ -151,7 +151,6 @@ FUDeclaration* RegisterModuleInfo(ModuleInfo* info,Arena* temp){
         external[i].dp[ii].dataSizeOut = EvalRange(expr.dp[ii].dataSizeOut,instantiated);
       }
     }break;
-    default: NOT_IMPLEMENTED("Implemented as needed");
     }
   }
 
@@ -546,16 +545,18 @@ FUDeclaration* RegisterSubUnit(Accelerator* circuit,Arena* temp,Arena* temp2){
 #endif
 
   String name = circuit->name;
+
+  OutputDelayDebugInfo(circuit,temp);
   
   FUDeclaration decl = {};
   decl.name = name;
 
   decl.type = FUDeclarationType_COMPOSITE;
 
-  String basePath = PushDebugPath(temp,name,"base.dot");
-  String base2Path = PushDebugPath(temp,name,"base2.dot");
+  String basePath = PushDebugPath(temp,name,STRING("base.dot"));
+  String base2Path = PushDebugPath(temp,name,STRING("base2.dot"));
   OutputGraphDotFile(circuit,false,basePath,temp);
-  decl.baseCircuit = CopyAccelerator(circuit,nullptr,nullptr);
+  decl.baseCircuit = CopyAccelerator(circuit,nullptr);
   OutputGraphDotFile(decl.baseCircuit,false,base2Path,temp);
 
   DAGOrderNodes order = CalculateDAGOrder(circuit->allocated,temp);
@@ -564,16 +565,16 @@ FUDeclaration* RegisterSubUnit(Accelerator* circuit,Arena* temp,Arena* temp2){
   decl.baseConfig.calculatedDelays = PushArray<int>(permanent,delays.nodeDelay->nodesUsed);
   Memset(decl.baseConfig.calculatedDelays,0);
   int index = 0;
-  for(Pair<InstanceNode*,int> p : delays.nodeDelay){
+  for(Pair<InstanceNode*,int*> p : delays.nodeDelay){
     if(p.first->inst->declaration->baseConfig.delayOffsets.max > 0){
-      decl.baseConfig.calculatedDelays[index] = p.second;
+      decl.baseConfig.calculatedDelays[index] = *p.second;
       index += 1;
     }
   }
   
   region(temp){
-    String beforePath = PushDebugPath(temp,name,"beforeFixDelay.dot");
-    String afterPath = PushDebugPath(temp,name,"afterFixDelay.dot");
+    String beforePath = PushDebugPath(temp,name,STRING("beforeFixDelay.dot"));
+    String afterPath = PushDebugPath(temp,name,STRING("afterFixDelay.dot"));
 
     // TODO: Cannot collapse same edges because we do not actually calculate wether edges are the same in respect to delays and so on.
     OutputGraphDotFile(circuit,false,beforePath,temp);
@@ -604,7 +605,7 @@ FUDeclaration* RegisterSubUnit(Accelerator* circuit,Arena* temp,Arena* temp2){
     FUInstance* inst = ptr->inst;
     if(IsTypeHierarchical(inst->declaration)){
       for(auto pair : inst->declaration->staticUnits){
-        StaticData newData = pair.second;
+        StaticData newData = *pair.second;
         newData.offset = staticOffset;
 
         if(decl.staticUnits->InsertIfNotExist(pair.first,newData)){
@@ -667,7 +668,7 @@ FUDeclaration* RegisterIterativeUnit(Accelerator* accel,FUInstance* inst,int lat
 
   FUDeclaration* type = BasicDeclaration::timedMultiplexer;
 
-  String beforePath = PushDebugPath(temp,name,"iterativeBefore.dot");
+  String beforePath = PushDebugPath(temp,name,STRING("iterativeBefore.dot"));
   OutputGraphDotFile(accel,false,beforePath,temp);
 
   Array<Connection> conn = PushArray<Connection>(temp,inputs.size);
@@ -732,7 +733,7 @@ FUDeclaration* RegisterIterativeUnit(Accelerator* accel,FUInstance* inst,int lat
     InsertUnit(accel,(PortNode){conn[i].mux,0},conn[i].unit,(PortNode){bufferNode,0});
   }
 
-  String afterPath = PushDebugPath(temp,name,"iterativeBefore.dot");
+  String afterPath = PushDebugPath(temp,name,STRING("iterativeBefore.dot"));
   OutputGraphDotFile(accel,true,afterPath,temp);
 
   FUDeclaration declaration = {};
@@ -790,7 +791,7 @@ FUDeclaration* RegisterIterativeUnit(Accelerator* accel,FUInstance* inst,int lat
     if(IsTypeHierarchical(inst->declaration)){
 
       for(auto pair : inst->declaration->staticUnits){
-        StaticData newData = pair.second;
+        StaticData newData = *pair.second;
         newData.offset = staticOffset;
 
         if(declaration.staticUnits->InsertIfNotExist(pair.first,newData)){
@@ -937,8 +938,8 @@ void PrintUniformInformation(FILE* out,FUDeclaration* decl){
     if(decl->staticUnits) {
       fprintf(out,"\n");
       fprintf(out,"StaticUnits: %d\n",decl->staticUnits->nodesUsed);
-      for(Pair<StaticId,StaticData> p : decl->staticUnits){
-        for(Wire wire : p.second.configs){
+      for(Pair<StaticId,StaticData*> p : decl->staticUnits){
+        for(Wire wire : p.second->configs){
           fprintf(out,"%.*s_%.*s_%.*s\n",UNPACK_SS(p.first.parent->name),UNPACK_SS(p.first.name),UNPACK_SS(wire.name));
         }
       }

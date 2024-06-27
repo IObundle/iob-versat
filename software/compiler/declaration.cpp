@@ -14,7 +14,6 @@ namespace BasicDeclaration{
   FUDeclaration* stridedMerge;
   FUDeclaration* timedMultiplexer;
   FUDeclaration* pipelineRegister;
-  FUDeclaration* data;
 }
 
 static int zeros[99] = {};
@@ -29,7 +28,7 @@ static FUDeclaration* RegisterCircuitInput(){
   decl.name = STRING("CircuitInput");
   decl.baseConfig.inputDelays = Array<int>{zeros,0};
   decl.baseConfig.outputLatencies = Array<int>{zeros,1};
-  decl.delayType = DelayType::DelayType_SOURCE_DELAY;
+  //decl.delayType = DelayType::DelayType_SOURCE_DELAY;
   decl.type = FUDeclarationType_SPECIAL;
   
   return RegisterFU(decl);
@@ -42,20 +41,8 @@ static FUDeclaration* RegisterCircuitOutput(){
   decl.name = STRING("CircuitOutput");
   decl.baseConfig.inputDelays = Array<int>{zeros,50};
   decl.baseConfig.outputLatencies = Array<int>{zeros,0};
-  decl.delayType = DelayType::DelayType_SINK_DELAY;
+  //decl.delayType = DelayType::DelayType_SINK_DELAY;
   decl.type = FUDeclarationType_SPECIAL;
-
-  return RegisterFU(decl);
-}
-
-static FUDeclaration* RegisterData(){
-  Arena* permanent = permanent;
-  FUDeclaration decl = {};
-
-  decl.name = STRING("Data");
-  decl.baseConfig.inputDelays = Array<int>{zeros,50};
-  decl.baseConfig.outputLatencies = Array<int>{ones,50};
-  decl.delayType = DelayType::DelayType_SINK_DELAY;
 
   return RegisterFU(decl);
 }
@@ -130,7 +117,6 @@ void InitializeSimpleDeclarations(){
   RegisterOperators();
   RegisterCircuitInput();
   RegisterCircuitOutput();
-  RegisterData();
   RegisterLiteral();
 }
 
