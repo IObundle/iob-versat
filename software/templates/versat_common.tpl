@@ -1,9 +1,9 @@
 #{define retIterativeOutputName portInstance port}
 #{set res ""}
-#{if portInstance.inst.declaration == versat.data}
+#{if portInstance.declaration == versat.data}
    #{set res "data[" # port # "]"}
 #{else}
-#{if portInstance.inst.declaration.type == 2}
+#{if portInstance.declaration.type == 2}
    #{set res "in" # port}
 #{else}
    #{set res "unitOut[" # port # "]"}
@@ -19,13 +19,13 @@
 #{define retOutputName2 instances portNode}
 #{let id 0}
 #{for node instances}
-  #{if node.inst == portNode.node.inst}
+  #{if node == portNode.inst}
     #{set id index}
   #{end}
 #{end}
 #{let res ""}
-#{if portNode.node}
-#{let inst2 portNode.node.inst}
+#{if portNode.inst}
+#{let inst2 portNode.inst}
 #{let decl2 inst2.declaration}
    #{if decl2.type == 2}
       #{set res "in" # inst2.portIndex}
@@ -48,8 +48,8 @@
 
 #{define retOutputName portNode}
 #{set res ""}
-#{if portNode.node}
-#{set inst2 portNode.node.inst}
+#{if portNode.inst}
+#{set inst2 portNode.inst}
 #{set decl2 inst2.declaration}
    #{if decl2.type == 2}
       #{set res "in" # inst2.portIndex}
@@ -76,7 +76,7 @@
 #{define CountDones instances}
    #{set nDones 0}
    #{for node instances}
-   #{if node.inst.declaration.implementsDone}
+   #{if node.declaration.implementsDone}
    #{inc nDones}
    #{end}
    #{end}
@@ -86,7 +86,7 @@
 #{define CountOperations instances}
    #{set nOperations 0}
    #{for node instances}
-      #{if node.inst.declaration.isOperation}
+      #{if node.declaration.isOperation}
          #{inc nOperations}
       #{end}
    #{end}
@@ -96,8 +96,8 @@
 #{define CountCombOperations instances}
    #{set nCombOperations 0}
    #{for node instances}
-      #{if node.inst.declaration.isOperation}
-         #{if node.inst.declaration.baseConfig.outputLatencies[0] == 0}
+      #{if node.declaration.isOperation}
+         #{if node.declaration.baseConfig.outputLatencies[0] == 0}
             #{inc nCombOperations}
          #{end}
       #{end}
@@ -108,8 +108,8 @@
 #{define CountSeqOperations instances}
    #{set nSeqOperations 0}
    #{for node instances}
-      #{if node.inst.declaration.isOperation}
-         #{if node.inst.declaration.baseConfig.outputLatencies[0] != 0}
+      #{if node.declaration.isOperation}
+         #{if node.declaration.baseConfig.outputLatencies[0] != 0}
             #{inc nSeqOperations}
          #{end}
       #{end}

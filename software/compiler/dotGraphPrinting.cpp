@@ -15,7 +15,7 @@ static String graphPrintingColorTable[] = {
   STRING("darkyellow")
 };
 
-GraphPrintingColor DefaultNodeColor(InstanceNode* node){
+GraphPrintingColor DefaultNodeColor(FUInstance* node){
   GraphPrintingColor color = GraphPrintingColor_BLUE;
     
   if(node->type == NodeType_SOURCE || node->type == NodeType_SOURCE_AND_SINK){
@@ -27,8 +27,8 @@ GraphPrintingColor DefaultNodeColor(InstanceNode* node){
   return color;
 }
 
-Pair<String,GraphPrintingColor> DefaultNodeContent(InstanceNode* node,Arena* out){
-  return {node->inst->name,DefaultNodeColor(node)};
+Pair<String,GraphPrintingColor> DefaultNodeContent(FUInstance* node,Arena* out){
+  return {node->name,DefaultNodeColor(node)};
 }
 
 Pair<String,GraphPrintingColor> DefaultEdgeContent(Edge* edge,Arena* out){
@@ -55,8 +55,8 @@ GraphPrintingContent GeneratePrintingContent(Accelerator* accel,NodeContent node
   Array<Edge> edges = GetAllEdges(accel,temp);
 
   ArenaList<GraphPrintingNodeInfo>* nodeInfo = PushArenaList<GraphPrintingNodeInfo>(temp);
-  FOREACH_LIST(InstanceNode*,ptr,accel->allocated){
-    FUInstance* inst = ptr->inst;
+  FOREACH_LIST(FUInstance*,ptr,accel->allocated){
+    FUInstance* inst = ptr;
     Pair<String,GraphPrintingColor> content = nodeFunction(ptr,out);
     String name = UniqueInstanceName(inst,out);
 

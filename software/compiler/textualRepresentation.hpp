@@ -23,8 +23,6 @@ String Repr(MergeEdge* node,GraphDotFormat format,Arena* out);
 String Repr(PortEdge* node,GraphDotFormat format,Arena* out);
 String Repr(MappingNode* node,Arena* out);
 String Repr(StaticId* id,Arena* out);
-String Repr(PortNode* portNode,Arena* out);
-String Repr(EdgeNode* node,Arena* out);
 String Repr(Wire* wire,Arena* out);
 String Repr(InstanceInfo* info,Arena* out);
 String Repr(String* str,Arena* out);
@@ -32,7 +30,7 @@ String Repr(int* i,Arena* out);
 String Repr(long int* i,Arena* out);
 String Repr(bool* b,Arena* out);
 String Repr(TypeStructInfo* info,Arena* out);
-String Repr(InstanceNode* node,Arena* out);
+String Repr(FUInstance* node,Arena* out);
 String Repr(char** ch,Arena* out);
 String Repr(ExternalMemoryInterfaceTemplate<int>* ext, Arena* out);
 

@@ -16,8 +16,8 @@
 struct Accelerator;
 struct FUDeclaration;
 struct IterativeUnitDeclaration;
-struct InstanceNode;
 struct FUInstance;
+//struct FUInstance;
 
 enum VersatDebugFlags{
   OUTPUT_GRAPH_DOT,
@@ -40,6 +40,7 @@ enum GraphDotFormat_{
 
 // TODO: Remove memory from old versat if tests pass.
 
+#if 0
 struct FUInstance{
   String name;
 
@@ -60,6 +61,7 @@ struct FUInstance{
   bool isMergeMultiplexer; // TODO: Kinda of an hack for now
   bool disabledMergeMultiplexer; // TODO: Kinda of an hack for now
 };
+#endif
 
 struct CompiledTemplate;
 namespace BasicTemplates{
@@ -74,7 +76,7 @@ namespace BasicTemplates{
 }
 
 struct DelayToAdd{
-  EdgeNode edge;
+  Edge edge;
   String bufferName;
   String bufferParameters;
   int bufferAmount;
@@ -89,20 +91,20 @@ bool EqualPortMapping(PortInstance p1,PortInstance p2);
 bool IsUnitCombinatorial(FUInstance* inst);
 
 // Graph fixes
-Array<DelayToAdd> GenerateFixDelays(Accelerator* accel,Hashmap<EdgeNode,int>* edgeDelays,Arena* out,Arena* temp);
-void FixDelays(Accelerator* accel,Hashmap<EdgeNode,int>* edgeDelays,Arena* temp);
+Array<DelayToAdd> GenerateFixDelays(Accelerator* accel,Hashmap<Edge,int>* edgeDelays,Arena* out,Arena* temp);
+void FixDelays(Accelerator* accel,Hashmap<Edge,int>* edgeDelays,Arena* temp);
 
 // Accelerator merging
-DAGOrderNodes CalculateDAGOrder(InstanceNode* instances,Arena* arena);
+DAGOrderNodes CalculateDAGOrder(FUInstance* instances,Arena* arena);
 
 // Debug
-void AssertGraphValid(InstanceNode* nodes,Arena* arena);
+void AssertGraphValid(FUInstance* nodes,Arena* arena);
 
 // Misc
 bool CheckValidName(String name); // Check if name can be used as identifier in verilog
 bool IsTypeHierarchical(FUDeclaration* decl);
-FUInstance* GetInputInstance(InstanceNode* nodes,int inputIndex);
-FUInstance* GetOutputInstance(InstanceNode* nodes);
+FUInstance* GetInputInstance(FUInstance* nodes,int inputIndex);
+FUInstance* GetOutputInstance(FUInstance* nodes);
 
 // Temp
 struct ModuleInfo;
@@ -115,7 +117,6 @@ void ParseVersatSpecification(const char* filepath,Arena* temp,Arena* temp2);
 
 // Accelerator functions
 Accelerator* CreateAccelerator(String name);
-InstanceNode* CreateFUInstanceNode(Accelerator* accel,FUDeclaration* type,String name);
 FUInstance* CreateFUInstance(Accelerator* accel,FUDeclaration* type,String entityName);
 Accelerator* Flatten(Accelerator* accel,int times,Arena* temp);
 

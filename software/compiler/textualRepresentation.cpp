@@ -214,27 +214,6 @@ String Repr(StaticId* id,Arena* out){
   return res;
 }
 
-String Repr(PortNode* portNode,Arena* out){
-  auto mark = StartString(out);
-
-  PushString(out,"%.*s",UNPACK_SS(portNode->node->inst->name));
-  PushString(out,":%d",portNode->port);
-
-  String res = EndString(mark);
-  return res;
-}
-
-String Repr(EdgeNode* node,Arena* out){
-  auto mark = StartString(out);
-
-  Repr(&node->node0,out);
-  PushString(out," -> ");
-  Repr(&node->node1,out);
-
-  String res = EndString(mark);
-  return res;
-}
-
 String Repr(Wire* wire,Arena* out){
   auto mark = StartString(out);
 
@@ -335,8 +314,8 @@ String Repr(TypeStructInfo* info,Arena* out){
   return EndString(mark);
 }
 
-String Repr(InstanceNode* node,Arena* out){
-  return Repr(node->inst,GRAPH_DOT_FORMAT_NAME,out);
+String Repr(FUInstance* node,Arena* out){
+  return Repr(node,GRAPH_DOT_FORMAT_NAME,out);
 }
 
 String Repr(Opt<int>* opt,Arena* out){

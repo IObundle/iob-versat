@@ -615,7 +615,7 @@ int main(int argc,const char** argv){
       ConnectUnits(TOP,i,outputs[i],0);
     }
 
-    InstanceNode* node = GetInstanceNode(accel,TOP);
+    FUInstance* node = TOP;
     node->type = NodeType_COMPUTE; // MARK: Temporary handle source_and_delay problems for simple units.
     
     type = RegisterSubUnit(accel,temp,temp2);
@@ -678,7 +678,7 @@ int main(int argc,const char** argv){
     if(decl->type == FUDeclarationType_COMPOSITE ||
        decl->type == FUDeclarationType_ITERATIVE ||
        decl->type == FUDeclarationType_MERGED){
-      
+
       GraphPrintingContent content = GenerateDefaultPrintingContent(decl->fixedDelayCircuit,temp,temp2);
       String repr = GenerateDotGraph(decl->fixedDelayCircuit,content,temp,temp2);
       String debugPath = PushDebugPath(temp,decl->name,STRING("NormalGraph.dot"));
@@ -690,10 +690,10 @@ int main(int argc,const char** argv){
       } else {
         fwrite(repr.data,sizeof(char),repr.size,file);
       }
-      
+
       String path = PushString(temp,"%.*s/modules/%.*s.v",UNPACK_SS(globalOptions.hardwareOutputFilepath),UNPACK_SS(decl->name));
       PushNullByte(temp);
-      
+
       FILE* sourceCode = OpenFileAndCreateDirectories(StaticFormat("%.*s",UNPACK_SS(path)),"w");
       DEFER_CLOSE_FILE(sourceCode);
 

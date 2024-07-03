@@ -5,9 +5,9 @@
 #include "accelerator.hpp"
 
 struct CalculateDelayResult{
-  Hashmap<EdgeNode,int>* edgesDelay;
-  Hashmap<PortNode,int>* portDelay;
-  Hashmap<InstanceNode*,int>* nodeDelay;
+  Hashmap<Edge,int>* edgesDelay;
+  Hashmap<PortInstance,int>* portDelay;
+  Hashmap<FUInstance*,int>* nodeDelay;
 };
 
 Array<int> ExtractInputDelays(Accelerator* accel,CalculateDelayResult delays,int mimimumAmount,Arena* out,Arena* temp);
@@ -17,7 +17,7 @@ CalculateDelayResult CalculateDelay(Accelerator* accel,DAGOrderNodes order,Arena
 CalculateDelayResult CalculateDelay(Accelerator* accel,DAGOrderNodes order,Array<Partition> partitions,Arena* out);
 
 // Nodes that can change the time where they start outputting data
-Array<InstanceNode*> GetNodesWithOutputDelay(Accelerator* accel,Arena* out);
+Array<FUInstance*> GetNodesWithOutputDelay(Accelerator* accel,Arena* out);
 
 CalculateDelayResult CalculateGlobalInitialLatency(Accelerator* accel);
 

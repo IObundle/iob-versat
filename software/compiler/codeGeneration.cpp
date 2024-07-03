@@ -179,8 +179,8 @@ Array<TypeStructInfoElement> GenerateStructFromType(FUDeclaration* decl,Arena* o
   Array<int> configAmount = PushArray<int>(temp,configSize);
   Memset(configAmount,0);
   int i = 0;
-  FOREACH_LIST_INDEXED(InstanceNode*,node,accel->allocated,i){
-    FUDeclaration* decl = node->inst->declaration;
+  FOREACH_LIST_INDEXED(FUInstance*,node,accel->allocated,i){
+    FUDeclaration* decl = node->declaration;
     
     int configOffset = offsets.offsets[i];
     if(configOffset < 0 || configOffset >= 0x40000000){
@@ -209,8 +209,8 @@ Array<TypeStructInfoElement> GenerateStructFromType(FUDeclaration* decl,Arena* o
   Memset(configSeen,0);
   i = 0;
   int index = 0;
-  FOREACH_LIST_INDEXED(InstanceNode*,node,accel->allocated,i){
-    FUDeclaration* decl = node->inst->declaration;
+  FOREACH_LIST_INDEXED(FUInstance*,node,accel->allocated,i){
+    FUDeclaration* decl = node->declaration;
 
     int configOffset = offsets.offsets[i];
     if(configOffset < 0 || configOffset >= 0x40000000){
@@ -221,7 +221,7 @@ Array<TypeStructInfoElement> GenerateStructFromType(FUDeclaration* decl,Arena* o
 
     int index = mapOffsetToIndex->GetOrFail(configOffset);
     entries[index].typeAndNames[configSeen[index]].type = PushString(out,"%.*sConfig",UNPACK_SS(decl->name));
-    entries[index].typeAndNames[configSeen[index]].name = node->inst->name;
+    entries[index].typeAndNames[configSeen[index]].name = node->name;
     configSeen[index] += 1;
   }
 
@@ -242,8 +242,8 @@ static Array<TypeStructInfoElement> GenerateAddressStructFromType(FUDeclaration*
   }
 
   int memoryMapped = 0;
-  FOREACH_LIST(InstanceNode*,node,decl->fixedDelayCircuit->allocated){
-    FUDeclaration* decl = node->inst->declaration;
+  FOREACH_LIST(FUInstance*,node,decl->fixedDelayCircuit->allocated){
+    FUDeclaration* decl = node->declaration;
 
     if(!(decl->memoryMapBits.has_value())){
       continue;
@@ -256,8 +256,8 @@ static Array<TypeStructInfoElement> GenerateAddressStructFromType(FUDeclaration*
 
   int i = 0;
   int index = 0;
-  FOREACH_LIST_INDEXED(InstanceNode*,node,decl->fixedDelayCircuit->allocated,i){
-    FUDeclaration* decl = node->inst->declaration;
+  FOREACH_LIST_INDEXED(FUInstance*,node,decl->fixedDelayCircuit->allocated,i){
+    FUDeclaration* decl = node->declaration;
 
     if(!(decl->memoryMapBits.has_value())){
       continue;
@@ -265,7 +265,7 @@ static Array<TypeStructInfoElement> GenerateAddressStructFromType(FUDeclaration*
 
     entries[index].typeAndNames = PushArray<SingleTypeStructElement>(out,1);
     entries[index].typeAndNames[0].type = PushString(out,"%.*sAddr",UNPACK_SS(decl->name));
-    entries[index].typeAndNames[0].name = node->inst->name;
+    entries[index].typeAndNames[0].name = node->name;
     index += 1;
   }
   return entries;
@@ -352,11 +352,11 @@ Array<TypeStructInfo> GetConfigStructInfo(Accelerator* accel,Arena* out,Arena* t
       Memset(seenIndex,false);
         
       int i = 0;
-      FOREACH_LIST_INDEXED(InstanceNode*,node,decl->fixedDelayCircuit->allocated,i){
+      FOREACH_LIST_INDEXED(FUInstance*,node,decl->fixedDelayCircuit->allocated,i){
         int config = offsets.offsets[i];
           
         if(config >= 0 && info.unitBelongs[i]){
-          int nConfigs = node->inst->declaration->baseConfig.configs.size;
+          int nConfigs = node->declaration->baseConfig.configs.size;
           for(int ii = 0; ii < nConfigs; ii++){
             seenIndex[config + ii] = true;
           }
@@ -381,14 +381,14 @@ Array<TypeStructInfo> GetConfigStructInfo(Accelerator* accel,Arena* out,Arena* t
         }
 
         int i = 0;
-        FOREACH_LIST_INDEXED(InstanceNode*,node,decl->fixedDelayCircuit->allocated,i){
+        FOREACH_LIST_INDEXED(FUInstance*,node,decl->fixedDelayCircuit->allocated,i){
           int config = offsets.offsets[i];
           if(configNeedToSee == config){
-            int nConfigs = node->inst->declaration->baseConfig.configs.size;
+            int nConfigs = node->declaration->baseConfig.configs.size;
               
             TypeStructInfoElement* elem = PushListElement(list);
             elem->typeAndNames = PushArray<SingleTypeStructElement>(out,1);
-            elem->typeAndNames[0].type = PushString(out,"%.*sConfig",UNPACK_SS(node->inst->declaration->name));
+            elem->typeAndNames[0].type = PushString(out,"%.*sConfig",UNPACK_SS(node->declaration->name));
             elem->typeAndNames[0].name = info.baseName[i]; //node->inst->name;
               
             configNeedToSee += nConfigs;
@@ -621,10 +621,10 @@ void OutputCircuitSource(FUDeclaration* decl,FILE* file,Arena* temp,Arena* temp2
   
   Assert(globalDebug.outputAccelerator); // Because FILE is created outside, code should not call this function if flag is set
   
-  Array<InstanceNode*> nodes = ListToArray(accel->allocated,temp);
-  for(InstanceNode* node : nodes){
-    if(node->inst->declaration->nIOs){
-      node->inst->parameters = STRING("#(.AXI_ADDR_W(AXI_ADDR_W),.AXI_DATA_W(AXI_DATA_W),.LEN_W(LEN_W))"); // TODO: placeholder hack.
+  Array<FUInstance*> nodes = ListToArray(accel->allocated,temp);
+  for(FUInstance* node : nodes){
+    if(node->declaration->nIOs){
+      node->parameters = STRING("#(.AXI_ADDR_W(AXI_ADDR_W),.AXI_DATA_W(AXI_DATA_W),.LEN_W(LEN_W))"); // TODO: placeholder hack.
     }
   }
 
@@ -658,8 +658,8 @@ void OutputIterativeSource(FUDeclaration* decl,FILE* file,Arena* temp,Arena* tem
   Assert(globalDebug.outputAccelerator); // Because FILE is created outside, code should not call this function if flag is set
 
   // MARKED
-  FOREACH_LIST(InstanceNode*,ptr,accel->allocated){
-    FUInstance* inst = ptr->inst;
+  FOREACH_LIST(FUInstance*,ptr,accel->allocated){
+    FUInstance* inst = ptr;
     if(inst->declaration->nIOs){
       inst->parameters = STRING("#(.AXI_ADDR_W(AXI_ADDR_W),.AXI_DATA_W(AXI_DATA_W),.LEN_W(LEN_W))"); // TODO: placeholder hack.
     }
@@ -845,15 +845,15 @@ void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* 
   }
   
   // Output configuration file
-  Array<InstanceNode*> nodes = ListToArray(accel->allocated,temp2);
+  Array<FUInstance*> nodes = ListToArray(accel->allocated,temp2);
 
   //ReorganizeAccelerator(accel,temp2); // TODO: Reorganize accelerator needs to go. Just call CalculateOrder when needed. Need to check how iterative work for this case, though
   DAGOrderNodes order = CalculateDAGOrder(accel->allocated,temp);
-  Array<InstanceNode*> ordered = order.instances;
+  Array<FUInstance*> ordered = order.instances;
   
-  for(InstanceNode* node : order.instances){
-    if(node->inst->declaration->nIOs){
-      node->inst->parameters = STRING("#(.AXI_ADDR_W(AXI_ADDR_W),.AXI_DATA_W(AXI_DATA_W),.LEN_W(LEN_W))"); // TODO: placeholder hack.
+  for(FUInstance* node : order.instances){
+    if(node->declaration->nIOs){
+      node->parameters = STRING("#(.AXI_ADDR_W(AXI_ADDR_W),.AXI_DATA_W(AXI_DATA_W),.LEN_W(LEN_W))"); // TODO: placeholder hack.
     }
   }
 
@@ -894,8 +894,8 @@ void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* 
   }
 
   int staticStart = 0;
-  FOREACH_LIST(InstanceNode*,ptr,accel->allocated){
-    FUDeclaration* decl = ptr->inst->declaration;
+  FOREACH_LIST(FUInstance*,ptr,accel->allocated){
+    FUDeclaration* decl = ptr->declaration;
     for(Wire& wire : decl->baseConfig.configs){
       staticStart += wire.bitSize;
     }
@@ -969,9 +969,9 @@ void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* 
   TemplateSetBool("isSimple",isSimple);
   if(isSimple){
     FUInstance* inst = nullptr; // TODO: Should probably separate isSimple to a separate function, because otherwise we are recalculating stuff that we already know.
-    FOREACH_LIST(InstanceNode*,ptr,accel->allocated){
-      if(CompareString(ptr->inst->name,STRING("TOP"))){
-        inst = ptr->inst;
+    FOREACH_LIST(FUInstance*,ptr,accel->allocated){
+      if(CompareString(ptr->name,STRING("TOP"))){
+        inst = ptr;
         break;
       }
     }
@@ -979,9 +979,9 @@ void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* 
 
     Accelerator* accel = inst->declaration->fixedDelayCircuit;
     if(accel){
-      FOREACH_LIST(InstanceNode*,ptr,accel->allocated){
-        if(CompareString(ptr->inst->name,STRING("simple"))){
-          inst = ptr->inst;
+      FOREACH_LIST(FUInstance*,ptr,accel->allocated){
+        if(CompareString(ptr->name,STRING("simple"))){
+          inst = ptr;
           break;
         }
       }

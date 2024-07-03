@@ -13,7 +13,6 @@ struct PortEdge;
 
 typedef Hashmap<FUInstance*,FUInstance*> InstanceMap;
 typedef Hashmap<PortEdge,PortEdge> PortEdgeMap;
-typedef Hashmap<InstanceNode*,InstanceNode*> InstanceNodeMap;
 
 struct PortInstance{
   FUInstance* inst;
@@ -77,8 +76,13 @@ struct Edge{ // A edge in a graph
   Edge* next;
 };
 
+bool EdgeEqualNoDelay(const Edge& e0,const Edge& e1);
+
+inline bool operator==(const Edge& e0,const Edge& e1){
+  return (EdgeEqualNoDelay(e0,e1) && e0.delay == e1.delay);
+}
+
 struct FUInstance;
-struct InstanceNode;
 
 typedef Array<Edge> Path;
 typedef Hashmap<Edge,Path> PathMap;
@@ -88,33 +92,40 @@ struct GenericGraphMapping{
   PathMap* edgeMap;
 };
 
-struct PortNode{
-  InstanceNode* node;
-  int port;
-};
-
-struct EdgeNode{
-  PortNode node0;
-  PortNode node1;
-  int delay;
-};
-
 struct ConnectionNode{
-  PortNode instConnectedTo;
+  PortInstance instConnectedTo;
   int port;
   int edgeDelay;
   int* delay; // Maybe not the best approach to calculate delay. TODO: check later
   ConnectionNode* next;
 };
 
-struct InstanceNode{
-  FUInstance* inst;
-  InstanceNode* next;
+struct FUInstance{
+  String name;
+
+  // This should be versat side only, but it's easier to have them here for now
+  String parameters; // TODO: Actual parameter structure
+  Accelerator* accel;
+  FUDeclaration* declaration;
+  int id;
+
+  union{
+    int literal;
+    int bufferAmount;
+    int portIndex;
+  };
+  int sharedIndex;
+  bool isStatic;
+  bool sharedEnable;
+  bool isMergeMultiplexer; // TODO: Kinda of an hack for now
+  bool disabledMergeMultiplexer; // TODO: Kinda of an hack for now
+
+  FUInstance* next;
 
   // Calculated and updated every time a connection is added or removed
   ConnectionNode* allInputs;
   ConnectionNode* allOutputs;
-  Array<PortNode> inputs;
+  Array<PortInstance> inputs;
   Array<bool> outputs;
   //int outputs;
   bool multipleSamePortInputs;
@@ -123,8 +134,8 @@ struct InstanceNode{
 
 // TODO: Memory leaks can be fixed by having a global InstanceNode and FUInstance Pool and a global dynamic arena for everything else.
 struct Accelerator{ // Graph + data storage
-  InstanceNode* allocated;
-  InstanceNode* lastAllocated;
+  FUInstance* allocated;
+  FUInstance* lastAllocated;
   Pool<FUInstance> instances; // TODO: Does anyone care about this or can we just use the allocated list?
 
   DynamicArena* accelMemory; // TODO: We could remove all this because we can now build all the accelerators in place. (Add an API that functions like a Accelerator builder and at the end we lock everything into an immutable graph).
@@ -180,17 +191,17 @@ struct VersatComputedValues{
 };
 
 struct DAGOrderNodes{
-  Array<InstanceNode*> sinks;
-  Array<InstanceNode*> sources;
-  Array<InstanceNode*> computeUnits;
-  Array<InstanceNode*> instances;
+  Array<FUInstance*> sinks;
+  Array<FUInstance*> sources;
+  Array<FUInstance*> computeUnits;
+  Array<FUInstance*> instances;
   Array<int>           order;
   int size;
   int maxOrder;
 };
 
 struct EdgeIterator{
-  InstanceNode* currentNode;
+  FUInstance* currentNode;
   ConnectionNode* currentPort;
   
   bool HasNext();
@@ -199,7 +210,7 @@ struct EdgeIterator{
 
 Accelerator*  CopyAccelerator(Accelerator* accel,InstanceMap* map);
 FUInstance*   CopyInstance(Accelerator* newAccel,FUInstance*   oldInstance,String newName);
-InstanceNode* CopyInstance(Accelerator* newAccel,InstanceNode* oldInstance,String newName);
+FUInstance* CopyInstance(Accelerator* newAccel,FUInstance* oldInstance,String newName);
 
 bool NameExists(Accelerator* accel,String name);
 
@@ -221,7 +232,9 @@ Array<Edge> GetAllEdges(Accelerator* accel,Arena* out);
 EdgeIterator IterateEdges(Accelerator* accel);
 
 // Unit connection
-Opt<Edge> FindEdge(FUInstance* out,int outIndex,FUInstance* in,int inIndex);
+
+Opt<Edge> FindEdge(PortInstance out,PortInstance in);
+//Opt<Edge> FindEdge(FUInstance* out,int outIndex,FUInstance* in,int inIndex);
 Opt<Edge> FindEdge(FUInstance* out,int outIndex,FUInstance* in,int inIndex,int delay);
 void ConnectUnitsGetEdge(FUInstance* out,int outIndex,FUInstance* in,int inIndex,int delay = 0);
 void ConnectUnitsGetEdge(FUInstance* out,int outIndex,FUInstance* in,int inIndex,int delay,Edge* previous);
@@ -229,21 +242,20 @@ void ConnectUnitsIfNotConnected(FUInstance* out,int outIndex,FUInstance* in,int 
 void  ConnectUnits(FUInstance* out,int outIndex,FUInstance* in,int inIndex,int delay = 0);
 void ConnectUnits(PortInstance out,PortInstance in,int delay = 0);
 
-InstanceNode* GetInstanceNode(Accelerator* accel,FUInstance* inst);
-void CalculateNodeType(InstanceNode* node);
-void FixInputs(InstanceNode* node);
+//FUInstance* GetInstanceNode(Accelerator* accel,FUInstance* inst); TODO: Remove this
+void CalculateNodeType(FUInstance* node);
+void FixInputs(FUInstance* node);
 
-Array<int> GetNumberOfInputConnections(InstanceNode* node,Arena* out);
-Array<Array<PortNode>> GetAllInputs(InstanceNode* node,Arena* out);
+Array<int> GetNumberOfInputConnections(FUInstance* node,Arena* out);
+Array<Array<PortInstance>> GetAllInputs(FUInstance* node,Arena* out);
 
-void RemoveConnection(Accelerator* accel,InstanceNode* out,int outPort,InstanceNode* in,int inPort);
-InstanceNode* RemoveUnit(InstanceNode* nodes,InstanceNode* unit);
+void RemoveConnection(Accelerator* accel,FUInstance* out,int outPort,FUInstance* in,int inPort);
+FUInstance* RemoveUnit(FUInstance* nodes,FUInstance* unit);
 
 // Fixes edges such that unit before connected to after, are reconnected to new unit
-void InsertUnit(Accelerator* accel,PortNode output,PortNode input,PortNode newUnit);
-void InsertUnit(Accelerator* accel, PortInstance before, PortInstance after, PortInstance newUnit);
+void InsertUnit(Accelerator* accel,PortInstance before, PortInstance after, PortInstance newUnit);
 
 bool IsCombinatorial(Accelerator* accel);
 
-void ConnectUnits(PortNode out,PortNode in,int delay);
+void ConnectUnits(PortInstance out,PortInstance in,int delay);
 

@@ -7,7 +7,6 @@
 //#define MAX_CLIQUE_TIME 10.0f
 
 struct FUInstance;
-struct InstanceNode;
 struct Accelerator;
 struct FUDeclaration;
 
@@ -96,7 +95,7 @@ struct IsCliqueResult{
 // TODO: For now everything is hashmap to help in debugging to be able to reuse previous code
 typedef Hashmap<FUInstance*,FUInstance*> InstanceMap;
 typedef Hashmap<PortEdge,PortEdge> PortEdgeMap;
-typedef Hashmap<InstanceNode*,InstanceNode*> InstanceNodeMap;
+typedef Hashmap<FUInstance*,FUInstance*> InstanceNodeMap;
 
 struct MergeGraphResult{
    Accelerator* accel1; // Should pull out the graph stuff instead of using an Accelerator for this

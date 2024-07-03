@@ -143,7 +143,7 @@ begin
    begin
    #{set counter 0}
    #{for node instances}
-   #{set inst node.inst}
+   #{set inst node}
    #{if inst.declaration.memoryMapBits}
       #{if memoryMasks[counter].memoryMaskSize}
       if(addr[@{accel.memoryMapBits - 1}-:@{memoryMasks[counter].memoryMaskSize}] == @{memoryMasks[counter].memoryMaskSize}'b@{memoryMasks[counter].memoryMask})
@@ -159,19 +159,19 @@ end
 #{end}
 
 #{if nCombOperations}
-reg [31:0] #{join "," node instances}#{if node.inst.declaration.isOperation and node.inst.declaration.baseConfig.outputLatencies[0] == 0}comb_@{node.inst.name |> Identify}#{end}#{end}; 
+reg [31:0] #{join "," node instances}#{if node.declaration.isOperation and node.declaration.baseConfig.outputLatencies[0] == 0}comb_@{node.name |> Identify}#{end}#{end}; 
 
 always @*
 begin
 #{for node instances}
-   #{set decl node.inst.declaration}
+   #{set decl node.declaration}
    #{if decl.isOperation and decl.baseConfig.outputLatencies[0] == 0}
       #{set input1 node.inputs[0]}
       #{if decl.baseConfig.inputDelays.size == 1}
-         #{format decl.operation "comb" @{node.inst.name |> Identify} #{call retOutputName2 instances input1}};
+         #{format decl.operation "comb" @{node.name |> Identify} #{call retOutputName2 instances input1}};
       #{else}
          #{set input2 node.inputs[1]}
-         #{format decl.operation "comb" @{node.inst.name |> Identify} #{call retOutputName2 instances input1} #{call retOutputName2 instances input2}};
+         #{format decl.operation "comb" @{node.name |> Identify} #{call retOutputName2 instances input1} #{call retOutputName2 instances input2}};
       #{end}
   #{end}
 #{end}
@@ -179,15 +179,15 @@ end
 #{end}
 
 #{if nSeqOperations}
-reg [31:0] #{join "," node instances} #{if node.inst.declaration.isOperation and node.inst.declaration.baseConfig.outputLatencies[0] != 0} seq_@{node.inst.name |> Identify} #{end}#{end}; 
+reg [31:0] #{join "," node instances} #{if node.declaration.isOperation and node.declaration.baseConfig.outputLatencies[0] != 0} seq_@{node.name |> Identify} #{end}#{end}; 
 
 always @(posedge clk)
 begin
 #{for node instances}
-   #{set decl node.inst.declaration}
+   #{set decl node.declaration}
    #{if decl.isOperation and decl.baseConfig.outputLatencies[0] != 0 }
       #{set input1 node.inputs[0]}
-      #{format decl.operation "seq" @{node.inst.name |> Identify} #{call retOutputName2 instances input1}};
+      #{format decl.operation "seq" @{node.name |> Identify} #{call retOutputName2 instances input1}};
    #{end}
 #{end}   
 end
@@ -202,7 +202,7 @@ end
 #{let doneCounter 0}
 #{for node instances}
 #{let id index}
-#{let inst node.inst}
+#{let inst node}
 #{let decl inst.declaration}
 #{if (decl != inputDecl and decl != outputDecl and !decl.isOperation)}
       @{decl.name} @{inst.parameters} @{inst.name |> Identify}_@{counter} (
@@ -215,7 +215,7 @@ end
   #{end}
 
   #{for input node.inputs}
-    #{if input.node}
+    #{if input.inst}
             .in@{index}(@{#{call retOutputName2 instances input}}),
     #{else}
             .in@{index}(0),
@@ -319,11 +319,11 @@ end
 #{end}
 
 #{for node instances}
-#{set inst node.inst}
+#{set inst node}
 #{set decl inst.declaration}
 #{if decl == outputDecl}
    #{for input node.inputs}
-   #{if input.node}
+   #{if input.inst}
    assign out@{index} = @{#{call retOutputName2 instances input}};
    #{end}
    #{end}

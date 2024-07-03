@@ -68,7 +68,7 @@ struct ConfigurationInfo{
   Array<int> inputDelays;
   Array<int> outputLatencies;
   
-  // Calculated offsets are an array that associate the given InstanceNode inside the fixedDelayCircuit allocated member into the corresponding index of the configuration array. For now, static units are given a value near 0x40000000 (their configuration comes from the staticUnits hashmap). Units without any config are given a value of -1.
+  // Calculated offsets are an array that associate the given FUInstance inside the fixedDelayCircuit allocated member into the corresponding index of the configuration array. For now, static units are given a value near 0x40000000 (their configuration comes from the staticUnits hashmap). Units without any config are given a value of -1.
   CalculatedOffsets configOffsets;
   CalculatedOffsets stateOffsets;
   CalculatedOffsets delayOffsets;

@@ -192,8 +192,8 @@ void FillDeclarationWithAcceleratorValues(FUDeclaration* decl,Accelerator* accel
   AccelInfo val = CalculateAcceleratorInfo(accel,true,perm,temp2);
   
   DynamicArray<String> baseNames = StartArray<String>(perm);
-  FOREACH_LIST(InstanceNode*,ptr,accel->allocated){
-    FUInstance* inst = ptr->inst;
+  FOREACH_LIST(FUInstance*,ptr,accel->allocated){
+    FUInstance* inst = ptr;
     *baseNames.PushElem() = inst->name;
   }
   decl->baseConfig.baseName = EndArray(baseNames);
@@ -205,8 +205,8 @@ void FillDeclarationWithAcceleratorValues(FUDeclaration* decl,Accelerator* accel
 
   decl->externalMemory = PushArray<ExternalMemoryInterface>(perm,val.externalMemoryInterfaces);
   int externalIndex = 0;
-  FOREACH_LIST(InstanceNode*,ptr,accel->allocated){
-    Array<ExternalMemoryInterface> arr = ptr->inst->declaration->externalMemory;
+  FOREACH_LIST(FUInstance*,ptr,accel->allocated){
+    Array<ExternalMemoryInterface> arr = ptr->declaration->externalMemory;
     for(int i = 0; i < arr.size; i++){
       decl->externalMemory[externalIndex] = arr[i];
       decl->externalMemory[externalIndex].interface = externalIndex;
@@ -229,8 +229,8 @@ void FillDeclarationWithAcceleratorValues(FUDeclaration* decl,Accelerator* accel
   
   // TODO: This could be done based on the config offsets.
   //       Otherwise we are still basing code around static and shared logic when calculating offsets already does that for us.
-  FOREACH_LIST(InstanceNode*,ptr,accel->allocated){
-    FUInstance* inst = ptr->inst;
+  FOREACH_LIST(FUInstance*,ptr,accel->allocated){
+    FUInstance* inst = ptr;
     FUDeclaration* d = inst->declaration;
 
     if(!inst->isStatic){
@@ -363,8 +363,8 @@ void FillDeclarationWithAcceleratorValuesNoDelay(FUDeclaration* decl,Accelerator
   Memset(decl->configInfo,{});
 
   DynamicArray<String> baseNames = StartArray<String>(perm);
-  FOREACH_LIST(InstanceNode*,ptr,accel->allocated){
-    FUInstance* inst = ptr->inst;
+  FOREACH_LIST(FUInstance*,ptr,accel->allocated){
+    FUInstance* inst = ptr;
     *baseNames.PushElem() = inst->name;
   }
   decl->baseConfig.baseName = EndArray(baseNames);
@@ -376,8 +376,8 @@ void FillDeclarationWithAcceleratorValuesNoDelay(FUDeclaration* decl,Accelerator
 
   decl->externalMemory = PushArray<ExternalMemoryInterface>(perm,val.externalMemoryInterfaces);
   int externalIndex = 0;
-  FOREACH_LIST(InstanceNode*,ptr,accel->allocated){
-    Array<ExternalMemoryInterface> arr = ptr->inst->declaration->externalMemory;
+  FOREACH_LIST(FUInstance*,ptr,accel->allocated){
+    Array<ExternalMemoryInterface> arr = ptr->declaration->externalMemory;
     for(int i = 0; i < arr.size; i++){
       decl->externalMemory[externalIndex] = arr[i];
       decl->externalMemory[externalIndex].interface = externalIndex;
@@ -396,8 +396,8 @@ void FillDeclarationWithAcceleratorValuesNoDelay(FUDeclaration* decl,Accelerator
   
   // TODO: This could be done based on the config offsets.
   //       Otherwise we are still basing code around static and shared logic when calculating offsets already does that for us.
-  FOREACH_LIST(InstanceNode*,ptr,accel->allocated){
-    FUInstance* inst = ptr->inst;
+  FOREACH_LIST(FUInstance*,ptr,accel->allocated){
+    FUInstance* inst = ptr;
     FUDeclaration* d = inst->declaration;
 
     if(!inst->isStatic){
@@ -495,8 +495,8 @@ void FillDeclarationWithDelayType(FUDeclaration* decl){
   bool hasSinkDelay = false;
   bool implementsDone = false;
 
-  FOREACH_LIST(InstanceNode*,ptr,decl->fixedDelayCircuit->allocated){
-    FUInstance* inst = ptr->inst;
+  FOREACH_LIST(FUInstance*,ptr,decl->fixedDelayCircuit->allocated){
+    FUInstance* inst = ptr;
     if(inst->declaration->type == FUDeclarationType_SPECIAL){
       continue;
     }
@@ -565,8 +565,8 @@ FUDeclaration* RegisterSubUnit(Accelerator* circuit,Arena* temp,Arena* temp2){
   decl.baseConfig.calculatedDelays = PushArray<int>(permanent,delays.nodeDelay->nodesUsed);
   Memset(decl.baseConfig.calculatedDelays,0);
   int index = 0;
-  for(Pair<InstanceNode*,int*> p : delays.nodeDelay){
-    if(p.first->inst->declaration->baseConfig.delayOffsets.max > 0){
+  for(Pair<FUInstance*,int*> p : delays.nodeDelay){
+    if(p.first->declaration->baseConfig.delayOffsets.max > 0){
       decl.baseConfig.calculatedDelays[index] = *p.second;
       index += 1;
     }
@@ -586,7 +586,7 @@ FUDeclaration* RegisterSubUnit(Accelerator* circuit,Arena* temp,Arena* temp2){
 
 #if 1
   // Maybe this check should be done elsewhere
-  FOREACH_LIST(InstanceNode*,ptr,circuit->allocated){
+  FOREACH_LIST(FUInstance*,ptr,circuit->allocated){
     if(ptr->multipleSamePortInputs){
       printf("Multiple inputs: %.*s\n",UNPACK_SS(name));
       break;
@@ -601,8 +601,8 @@ FUDeclaration* RegisterSubUnit(Accelerator* circuit,Arena* temp,Arena* temp2){
   decl.staticUnits = PushHashmap<StaticId,StaticData>(permanent,1000); // TODO: Set correct number of elements
   int staticOffset = 0;
   // Start by collecting all the existing static allocated units in subinstances
-  FOREACH_LIST(InstanceNode*,ptr,circuit->allocated){
-    FUInstance* inst = ptr->inst;
+  FOREACH_LIST(FUInstance*,ptr,circuit->allocated){
+    FUInstance* inst = ptr;
     if(IsTypeHierarchical(inst->declaration)){
       for(auto pair : inst->declaration->staticUnits){
         StaticData newData = *pair.second;
@@ -616,8 +616,8 @@ FUDeclaration* RegisterSubUnit(Accelerator* circuit,Arena* temp,Arena* temp2){
   res->fixedDelayCircuit->name = name;
 
   // Add this units static instances (needs to be done after Registering the declaration because the parent is a pointer to the declaration)
-  FOREACH_LIST(InstanceNode*,ptr,circuit->allocated){
-    FUInstance* inst = ptr->inst;
+  FOREACH_LIST(FUInstance*,ptr,circuit->allocated){
+    FUInstance* inst = ptr;
     if(inst->isStatic){
       StaticId id = {};
       id.name = inst->name;
@@ -633,22 +633,22 @@ FUDeclaration* RegisterSubUnit(Accelerator* circuit,Arena* temp,Arena* temp2){
 }
 
 struct Connection{
-  InstanceNode* input;
-  InstanceNode* mux;
-  PortNode unit;
+  FUInstance* input;
+  FUInstance* mux;
+  PortInstance unit;
 };
 
 FUDeclaration* RegisterIterativeUnit(Accelerator* accel,FUInstance* inst,int latency,String name,Arena* temp,Arena* temp2){
   Arena* perm = globalPermanent;
   BLOCK_REGION(temp);
   BLOCK_REGION(temp2);
-  InstanceNode* node = GetInstanceNode(accel,(FUInstance*) inst);
+  FUInstance* node = inst;
 
   Assert(node);
 
-  Array<Array<PortNode>> inputs = GetAllInputs(node,temp);
+  Array<Array<PortInstance>> inputs = GetAllInputs(node,temp);
 
-  for(Array<PortNode>& arr : inputs){
+  for(Array<PortInstance>& arr : inputs){
     Assert(arr.size <= 2); // Do not know what to do if size bigger than 2.
   }
 
@@ -668,33 +668,32 @@ FUDeclaration* RegisterIterativeUnit(Accelerator* accel,FUInstance* inst,int lat
 
   int muxInserted = 0;
   for(int i = 0; i < inputs.size; i++){
-    Array<PortNode>& arr = inputs[i];
+    Array<PortInstance>& arr = inputs[i];
     if(arr.size != 2){
       continue;
     }
 
-    PortNode first = arr[0];
+    PortInstance first = arr[0];
 
-    if(first.node->inst->declaration != BasicDeclaration::input){
+    if(first.inst->declaration != BasicDeclaration::input){
       SWAP(arr[0],arr[1]);
     }
 
-    Assert(arr[0].node->inst->declaration == BasicDeclaration::input);
+    Assert(arr[0].inst->declaration == BasicDeclaration::input);
 
     Assert(i < ARRAY_SIZE(muxNames));
-    InstanceNode* mux = CreateFUInstanceNode(accel,type,muxNames[i]);
-    //InstanceNode* muxNode = GetInstanceNode(accel,(FUInstance*) mux);
+    FUInstance* mux = CreateFUInstance(accel,type,muxNames[i]);
 
-    RemoveConnection(accel,arr[0].node,arr[0].port,node,i);
-    RemoveConnection(accel,arr[1].node,arr[1].port,node,i);
+    RemoveConnection(accel,arr[0].inst,arr[0].port,node,i);
+    RemoveConnection(accel,arr[1].inst,arr[1].port,node,i);
 
-    ConnectUnits(arr[0],(PortNode){mux,0},0);
-    ConnectUnits(arr[1],(PortNode){mux,1},0);
+    ConnectUnits(arr[0],(PortInstance){mux,0},0);
+    ConnectUnits(arr[1],(PortInstance){mux,1},0);
 
-    ConnectUnits((PortNode){mux,0},(PortNode){node,i},0);
+    ConnectUnits((PortInstance){mux,0},(PortInstance){node,i},0);
 
-    conn[i].input = arr[0].node;
-    conn[i].unit = PortNode{arr[1].node,arr[1].port};
+    conn[i].input = arr[0].inst;
+    conn[i].unit = PortInstance{arr[1].inst,arr[1].port};
     conn[i].mux = mux;
 
     muxInserted += 1;
@@ -707,20 +706,20 @@ FUDeclaration* RegisterIterativeUnit(Accelerator* accel,FUInstance* inst,int lat
       continue;
     }
 
-    InstanceNode* unit = conn[i].unit.node;
-    Assert(i < unit->inst->declaration->NumberInputs());
+    FUInstance* unit = conn[i].unit.inst;
+    Assert(i < unit->declaration->NumberInputs());
 
-    if(unit->inst->declaration->baseConfig.inputDelays[i] == 0){
+    if(unit->declaration->baseConfig.inputDelays[i] == 0){
       continue;
     }
 
-    InstanceNode* buffer = CreateFUInstanceNode(accel,bufferType,PushString(perm,"Buffer%d",buffersAdded++));
+    FUInstance* buffer = CreateFUInstance(accel,bufferType,PushString(perm,"Buffer%d",buffersAdded++));
 
-    buffer->inst->bufferAmount = unit->inst->declaration->baseConfig.inputDelays[i] - BasicDeclaration::buffer->baseConfig.outputLatencies[0];
-    Assert(buffer->inst->bufferAmount >= 0);
-    SetStatic(accel,buffer->inst);
+    buffer->bufferAmount = unit->declaration->baseConfig.inputDelays[i] - BasicDeclaration::buffer->baseConfig.outputLatencies[0];
+    Assert(buffer->bufferAmount >= 0);
+    SetStatic(accel,buffer);
 
-    InsertUnit(accel,(PortNode){conn[i].mux,0},conn[i].unit,(PortNode){buffer,0});
+    InsertUnit(accel,(PortInstance){conn[i].mux,0},conn[i].unit,(PortInstance){buffer,0});
   }
 
   String afterPath = PushDebugPath(temp,name,STRING("iterativeBefore.dot"));
@@ -745,7 +744,7 @@ FUDeclaration* RegisterIterativeUnit(Accelerator* accel,FUInstance* inst,int lat
   // TODO: We are not checking connections here, we are just assuming that unit is directly connected to out.
   //       Probably a bad idea but still do not have an example which would make it not ideal
   for(int i = 0; i < declaration.NumberOutputs(); i++){
-    declaration.baseConfig.outputLatencies[i] = latency * (node->inst->declaration->baseConfig.outputLatencies[i] + 1);
+    declaration.baseConfig.outputLatencies[i] = latency * (node->declaration->baseConfig.outputLatencies[i] + 1);
   }
 
   // Values from iterative declaration
@@ -755,8 +754,8 @@ FUDeclaration* RegisterIterativeUnit(Accelerator* accel,FUInstance* inst,int lat
   declaration.staticUnits = PushHashmap<StaticId,StaticData>(perm,1000); // TODO: Set correct number of elements
   int staticOffset = 0;
   // Start by collecting all the existing static allocated units in subinstances
-  FOREACH_LIST(InstanceNode*,ptr,accel->allocated){
-    FUInstance* inst = ptr->inst;
+  FOREACH_LIST(FUInstance*,ptr,accel->allocated){
+    FUInstance* inst = ptr;
     if(IsTypeHierarchical(inst->declaration)){
 
       for(auto pair : inst->declaration->staticUnits){
@@ -767,13 +766,13 @@ FUDeclaration* RegisterIterativeUnit(Accelerator* accel,FUInstance* inst,int lat
   }
 
   FUDeclaration* registeredType = RegisterFU(declaration);
-  registeredType->lat = node->inst->declaration->baseConfig.outputLatencies[0];
+  registeredType->lat = node->declaration->baseConfig.outputLatencies[0];
   registeredType->baseConfig.calculatedDelays = PushArray<int>(perm,99);
   Memset(registeredType->baseConfig.calculatedDelays,0);
   
   // Add this units static instances (needs be done after Registering the declaration because the parent is a pointer to the declaration)
-  FOREACH_LIST(InstanceNode*,ptr,accel->allocated){
-    FUInstance* inst = ptr->inst;
+  FOREACH_LIST(FUInstance*,ptr,accel->allocated){
+    FUInstance* inst = ptr;
     if(inst->isStatic){
       StaticId id = {};
       id.name = inst->name;
@@ -789,8 +788,8 @@ FUDeclaration* RegisterIterativeUnit(Accelerator* accel,FUInstance* inst,int lat
 }
 
 FUInstance* CreateOrGetInput(Accelerator* accel,String name,int portNumber){
-  FOREACH_LIST(InstanceNode*,ptr,accel->allocated){
-    FUInstance* inst = ptr->inst;
+  FOREACH_LIST(FUInstance*,ptr,accel->allocated){
+    FUInstance* inst = ptr;
     if(inst->declaration == BasicDeclaration::input && inst->portIndex == portNumber){
       return inst;
     }
@@ -803,8 +802,8 @@ FUInstance* CreateOrGetInput(Accelerator* accel,String name,int portNumber){
 }
 
 FUInstance* CreateOrGetOutput(Accelerator* accel){
-  FOREACH_LIST(InstanceNode*,ptr,accel->allocated){
-    FUInstance* inst = ptr->inst;
+  FOREACH_LIST(FUInstance*,ptr,accel->allocated){
+    FUInstance* inst = ptr;
     if(inst->declaration == BasicDeclaration::output){
       return inst;
     }
@@ -882,7 +881,7 @@ void PrintUniformInformation(FILE* out,FUDeclaration* decl){
       fprintf(out,"%d ",info.configOffsets.offsets[i]);
     }
     if(decl->fixedDelayCircuit){
-      FOREACH_LIST(InstanceNode*,ptr,decl->fixedDelayCircuit->allocated){
+      FOREACH_LIST(FUInstance*,ptr,decl->fixedDelayCircuit->allocated){
         fprintf(out,"%.*s ",UNPACK_SS(ptr->inst->name));
       }
       fprintf(out,"\n");

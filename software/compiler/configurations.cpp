@@ -21,8 +21,8 @@ CalculatedOffsets CalculateConfigOffsetsIgnoringStatics(Accelerator* accel,Arena
 
   int index = 0;
   int offset = 0;
-  FOREACH_LIST_INDEXED(InstanceNode*,ptr,accel->allocated,index){
-    FUInstance* inst = ptr->inst;
+  FOREACH_LIST_INDEXED(FUInstance*,ptr,accel->allocated,index){
+    FUInstance* inst = ptr;
     Assert(!(inst->sharedEnable && inst->isStatic));
 
     int numberConfigs = inst->declaration->baseConfig.configs.size;
@@ -90,8 +90,8 @@ CalculatedOffsets CalculateConfigurationOffset(Accelerator* accel,MemType type,A
 
   int index = 0;
   int offset = 0;
-  FOREACH_LIST(InstanceNode*,ptr,accel->allocated){
-    FUInstance* inst = ptr->inst;
+  FOREACH_LIST(FUInstance*,ptr,accel->allocated){
+    FUInstance* inst = ptr;
     array[index] = offset;
 
     int size = GetConfigurationSize(inst->declaration,type);
@@ -257,8 +257,8 @@ bool Next(Array<Partition> arr){
 Array<Partition> GenerateInitialPartitions(Accelerator* accel,Arena* out){
   DynamicArray<Partition> partitionsArr = StartArray<Partition>(out);
   int mergedPossibility = 0;
-  FOREACH_LIST(InstanceNode*,node,accel->allocated){
-    FUInstance* subInst = node->inst;
+  FOREACH_LIST(FUInstance*,node,accel->allocated){
+    FUInstance* subInst = node;
     FUDeclaration* decl = subInst->declaration;
 
     if(subInst->declaration->configInfo.size > 1){
@@ -290,8 +290,8 @@ void IncrementPartitions(Array<Partition> partitions,int amount){
   }
 }
 
-static InstanceInfo GetInstanceInfo(InstanceNode* node,FUDeclaration* parentDeclaration,InstanceConfigurationOffsets offsets,Arena* out){
-  FUInstance* inst = node->inst;
+static InstanceInfo GetInstanceInfo(FUInstance* node,FUDeclaration* parentDeclaration,InstanceConfigurationOffsets offsets,Arena* out){
+  FUInstance* inst = node;
   String topName = inst->name;
   if(offsets.topName.size != 0){
     topName = PushString(out,"%.*s_%.*s",UNPACK_SS(offsets.topName),UNPACK_SS(inst->name));
@@ -380,11 +380,11 @@ static InstanceInfo GetInstanceInfo(InstanceNode* node,FUDeclaration* parentDecl
   return info;
 }
 
-AcceleratorInfo TransformGraphIntoArrayRecurse(InstanceNode* node,FUDeclaration* parentDecl,InstanceConfigurationOffsets offsets,Opt<Partition> partition,Arena* out,Arena* temp){
+AcceleratorInfo TransformGraphIntoArrayRecurse(FUInstance* node,FUDeclaration* parentDecl,InstanceConfigurationOffsets offsets,Opt<Partition> partition,Arena* out,Arena* temp){
   // This prevents us from fully using arenas because we are pushing more data than the actual structures that we keep track of. If this was hierarchical, we would't have this problem.
   AcceleratorInfo res = {};
 
-  FUInstance* inst = node->inst;
+  FUInstance* inst = node;
   InstanceInfo top = GetInstanceInfo(node,parentDecl,offsets,out);
   
   FUDeclaration* topDecl = inst->declaration;
@@ -435,8 +435,8 @@ AcceleratorInfo TransformGraphIntoArrayRecurse(InstanceNode* node,FUDeclaration*
   }
 
   int partitionIndex = 0;
-  FOREACH_LIST_INDEXED(InstanceNode*,subNode,inst->declaration->fixedDelayCircuit->allocated,index){
-    FUInstance* subInst = subNode->inst;
+  FOREACH_LIST_INDEXED(FUInstance*,subNode,inst->declaration->fixedDelayCircuit->allocated,index){
+    FUInstance* subInst = subNode;
     bool containsConfig = subInst->declaration->baseConfig.configs.size; // TODO: When  doing partition might need to put index here instead of 0
     
     InstanceConfigurationOffsets subOffsets = offsets;
@@ -509,9 +509,9 @@ TestResult CalculateOneInstance(Accelerator* accel,bool recursive,Array<Partitio
   DAGOrderNodes order = CalculateDAGOrder(accel->allocated,temp);
   CalculateDelayResult calculatedDelay = CalculateDelay(accel,order,partitions,temp);
   
-  Hashmap<InstanceNode*,int>* toOrder = MapElementToIndex(order.instances,temp);
+  Hashmap<FUInstance*,int>* toOrder = MapElementToIndex(order.instances,temp);
 
-  Array<InstanceNode*> inputNodes = PushArray<InstanceNode*>(temp,99);
+  Array<FUInstance*> inputNodes = PushArray<FUInstance*>(temp,99);
 
   Array<int> inputDelays = ExtractInputDelays(accel,calculatedDelay,0,out,temp);
   Array<int> outputLatencies = ExtractOutputLatencies(accel,calculatedDelay,out,temp);
@@ -525,8 +525,8 @@ TestResult CalculateOneInstance(Accelerator* accel,bool recursive,Array<Partitio
   subOffsets.staticInfo = staticInfo;
   subOffsets.belongs = true;
   ArenaList<String>* names = PushArenaList<String>(temp);
-  FOREACH_LIST_INDEXED(InstanceNode*,node,accel->allocated,index){
-    FUInstance* subInst = node->inst;
+  FOREACH_LIST_INDEXED(FUInstance*,node,accel->allocated,index){
+    FUInstance* subInst = node;
 
     Opt<Partition> part = {};
     if(subInst->declaration->configInfo.size > 1){
@@ -746,8 +746,8 @@ AccelInfo CalculateAcceleratorInfo(Accelerator* accel,bool recursive,Arena* out,
   int memoryMappedDWords = 0;
 
   // Handle non-static information
-  FOREACH_LIST(InstanceNode*,ptr,accel->allocated){
-    FUInstance* inst = ptr->inst;
+  FOREACH_LIST(FUInstance*,ptr,accel->allocated){
+    FUInstance* inst = ptr;
     FUDeclaration* type = inst->declaration;
 
     // Check if shared
@@ -809,8 +809,8 @@ AccelInfo CalculateAcceleratorInfo(Accelerator* accel,bool recursive,Arena* out,
   }
 
   // Handle static information
-  FOREACH_LIST(InstanceNode*,ptr,accel->allocated){
-    FUInstance* inst = ptr->inst;
+  FOREACH_LIST(FUInstance*,ptr,accel->allocated){
+    FUInstance* inst = ptr;
     if(inst->isStatic){
       StaticId id = {};
 
@@ -840,8 +840,8 @@ AccelInfo CalculateAcceleratorInfo(Accelerator* accel,bool recursive,Arena* out,
     }
   }
   
-  FOREACH_LIST(InstanceNode*,ptr,accel->allocated){
-    FUInstance* inst = ptr->inst;
+  FOREACH_LIST(FUInstance*,ptr,accel->allocated){
+    FUInstance* inst = ptr;
     result.numberConnections += Size(ptr->allOutputs);
   }
   
@@ -933,8 +933,8 @@ void PrintConfigurations(FUDeclaration* type,Arena* temp){
 // HACK
 
 
-static InstanceInfo GetInstanceInfoNoDelay(InstanceNode* node,FUDeclaration* parentDeclaration,InstanceConfigurationOffsets offsets,Arena* out){
-  FUInstance* inst = node->inst;
+static InstanceInfo GetInstanceInfoNoDelay(FUInstance* node,FUDeclaration* parentDeclaration,InstanceConfigurationOffsets offsets,Arena* out){
+  FUInstance* inst = node;
   String topName = inst->name;
   if(offsets.topName.size != 0){
     topName = PushString(out,"%.*s_%.*s",UNPACK_SS(offsets.topName),UNPACK_SS(inst->name));
@@ -1015,11 +1015,11 @@ static InstanceInfo GetInstanceInfoNoDelay(InstanceNode* node,FUDeclaration* par
   return info;
 }
 
-AcceleratorInfo TransformGraphIntoArrayRecurseNoDelay(InstanceNode* node,FUDeclaration* parentDecl,InstanceConfigurationOffsets offsets,Partition partition,Arena* out,Arena* temp){
+AcceleratorInfo TransformGraphIntoArrayRecurseNoDelay(FUInstance* node,FUDeclaration* parentDecl,InstanceConfigurationOffsets offsets,Partition partition,Arena* out,Arena* temp){
   // This prevents us from fully using arenas because we are pushing more data than the actual structures that we keep track of. If this was hierarchical, we would't have this problem.
   AcceleratorInfo res = {};
 
-  FUInstance* inst = node->inst;
+  FUInstance* inst = node;
   InstanceInfo top = GetInstanceInfoNoDelay(node,parentDecl,offsets,out);
   
   FUDeclaration* topDecl = inst->declaration;
@@ -1063,8 +1063,8 @@ AcceleratorInfo TransformGraphIntoArrayRecurseNoDelay(InstanceNode* node,FUDecla
     }
   }
   
-  FOREACH_LIST_INDEXED(InstanceNode*,subNode,inst->declaration->fixedDelayCircuit->allocated,index){
-    FUInstance* subInst = subNode->inst;
+  FOREACH_LIST_INDEXED(FUInstance*,subNode,inst->declaration->fixedDelayCircuit->allocated,index){
+    FUInstance* subInst = subNode;
     bool containsConfig = subInst->declaration->baseConfig.configs.size; // TODO: When  doing partition might need to put index here instead of 0
     
     InstanceConfigurationOffsets subOffsets = offsets;
@@ -1135,8 +1135,8 @@ TestResult CalculateOneInstanceNoDelay(Accelerator* accel,bool recursive,Array<P
   subOffsets.staticInfo = staticInfo;
   subOffsets.belongs = true;
   ArenaList<String>* names = PushArenaList<String>(temp);
-  FOREACH_LIST_INDEXED(InstanceNode*,node,accel->allocated,index){
-    FUInstance* subInst = node->inst;
+  FOREACH_LIST_INDEXED(FUInstance*,node,accel->allocated,index){
+    FUInstance* subInst = node;
 
     Partition part = {};
     if(subInst->declaration->configInfo.size > 1){
@@ -1209,8 +1209,8 @@ AccelInfo CalculateAcceleratorInfoNoDelay(Accelerator* accel,bool recursive,Aren
   
   DynamicArray<Partition> partitionsArr = StartArray<Partition>(temp);
   int mergedPossibility = 0;
-  FOREACH_LIST(InstanceNode*,node,accel->allocated){
-    FUInstance* subInst = node->inst;
+  FOREACH_LIST(FUInstance*,node,accel->allocated){
+    FUInstance* subInst = node;
     FUDeclaration* decl = subInst->declaration;
 
     if(subInst->declaration->configInfo.size > 1){
@@ -1353,8 +1353,8 @@ AccelInfo CalculateAcceleratorInfoNoDelay(Accelerator* accel,bool recursive,Aren
   int memoryMappedDWords = 0;
 
   // Handle non-static information
-  FOREACH_LIST(InstanceNode*,ptr,accel->allocated){
-    FUInstance* inst = ptr->inst;
+  FOREACH_LIST(FUInstance*,ptr,accel->allocated){
+    FUInstance* inst = ptr;
     FUDeclaration* type = inst->declaration;
 
     // Check if shared
@@ -1416,8 +1416,8 @@ AccelInfo CalculateAcceleratorInfoNoDelay(Accelerator* accel,bool recursive,Aren
   }
 
   // Handle static information
-  FOREACH_LIST(InstanceNode*,ptr,accel->allocated){
-    FUInstance* inst = ptr->inst;
+  FOREACH_LIST(FUInstance*,ptr,accel->allocated){
+    FUInstance* inst = ptr;
     if(inst->isStatic){
       StaticId id = {};
 
@@ -1447,8 +1447,8 @@ AccelInfo CalculateAcceleratorInfoNoDelay(Accelerator* accel,bool recursive,Aren
     }
   }
   
-  FOREACH_LIST(InstanceNode*,ptr,accel->allocated){
-    FUInstance* inst = ptr->inst;
+  FOREACH_LIST(FUInstance*,ptr,accel->allocated){
+    FUInstance* inst = ptr;
     result.numberConnections += Size(ptr->allOutputs);
   }
   

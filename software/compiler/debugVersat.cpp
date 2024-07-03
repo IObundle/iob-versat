@@ -18,8 +18,8 @@ static void OutputGraphDotFile_(Accelerator* accel,bool collapseSameEdges,Set<FU
   BLOCK_REGION(temp);
 
   fprintf(outputFile,"digraph accel {\n\tnode [fontcolor=white,style=filled,color=\"160,60,176\"];\n");
-  FOREACH_LIST(InstanceNode*,ptr,accel->allocated){
-    FUInstance* inst = ptr->inst;
+  FOREACH_LIST(FUInstance*,ptr,accel->allocated){
+    FUInstance* inst = ptr;
     String id = UniqueRepr(inst,temp);
     String name = Repr(inst,globalDebug.dotFormat,temp);
 
@@ -43,19 +43,19 @@ static void OutputGraphDotFile_(Accelerator* accel,bool collapseSameEdges,Set<FU
   }
 
   int size = 9999; // Size(accel->edges);
-  Hashmap<Pair<InstanceNode*,InstanceNode*>,int>* seen = PushHashmap<Pair<InstanceNode*,InstanceNode*>,int>(temp,size);
+  Hashmap<Pair<FUInstance*,FUInstance*>,int>* seen = PushHashmap<Pair<FUInstance*,FUInstance*>,int>(temp,size);
 
   // TODO: Consider adding a true same edge counter, that collects edges with equal delay and then represents them on the graph as a pair, using [portStart-portEnd]
-  FOREACH_LIST(InstanceNode*,ptr,accel->allocated){
-    FUInstance* out = ptr->inst;
+  FOREACH_LIST(FUInstance*,ptr,accel->allocated){
+    FUInstance* out = ptr;
 
     FOREACH_LIST(ConnectionNode*,con,ptr->allOutputs){
-      FUInstance* in = con->instConnectedTo.node->inst;
+      FUInstance* in = con->instConnectedTo.inst;
 
       if(collapseSameEdges){
-        Pair<InstanceNode*,InstanceNode*> nodeEdge = {};
+        Pair<FUInstance*,FUInstance*> nodeEdge = {};
         nodeEdge.first = ptr;
-        nodeEdge.second = con->instConnectedTo.node;
+        nodeEdge.second = con->instConnectedTo.inst;
 
         GetOrAllocateResult<int> res = seen->GetOrAllocate(nodeEdge);
         if(res.alreadyExisted){
@@ -183,8 +183,8 @@ void OutputGraphDotFile(Accelerator* accel,bool collapseSameEdges,FUInstance* hi
   BLOCK_REGION(temp);
 
   fprintf(outputFile,"digraph accel {\n\tnode [fontcolor=white,style=filled,color=\"160,60,176\"];\n");
-  FOREACH_LIST(InstanceNode*,ptr,accel->allocated){
-    FUInstance* inst = ptr->inst;
+  FOREACH_LIST(FUInstance*,ptr,accel->allocated){
+    FUInstance* inst = ptr;
     String id = UniqueRepr(inst,temp);
     String name = Repr(inst,globalDebug.dotFormat,temp);
 
@@ -208,19 +208,19 @@ void OutputGraphDotFile(Accelerator* accel,bool collapseSameEdges,FUInstance* hi
   }
 
   int size = 9999; // Size(accel->edges);
-  Hashmap<Pair<InstanceNode*,InstanceNode*>,int>* seen = PushHashmap<Pair<InstanceNode*,InstanceNode*>,int>(temp,size);
+  Hashmap<Pair<FUInstance*,FUInstance*>,int>* seen = PushHashmap<Pair<FUInstance*,FUInstance*>,int>(temp,size);
   // TODO: Consider adding a true same edge counter, that collects edges with equal delay and then represents them on the graph as a pair, using [portStart-portEnd]
   // TODO: Change to use Array<Edge> 
-  FOREACH_LIST(InstanceNode*,ptr,accel->allocated){
-    FUInstance* out = ptr->inst;
+  FOREACH_LIST(FUInstance*,ptr,accel->allocated){
+    FUInstance* out = ptr;
 
     FOREACH_LIST(ConnectionNode*,con,ptr->allOutputs){
-      FUInstance* in = con->instConnectedTo.node->inst;
+      FUInstance* in = con->instConnectedTo.inst;
 
       if(collapseSameEdges){
-        Pair<InstanceNode*,InstanceNode*> nodeEdge = {};
+        Pair<FUInstance*,FUInstance*> nodeEdge = {};
         nodeEdge.first = ptr;
-        nodeEdge.second = con->instConnectedTo.node;
+        nodeEdge.second = con->instConnectedTo.inst;
 
         GetOrAllocateResult<int> res = seen->GetOrAllocate(nodeEdge);
         if(res.alreadyExisted){
@@ -237,10 +237,10 @@ void OutputGraphDotFile(Accelerator* accel,bool collapseSameEdges,FUInstance* hi
       PortInstance end = {in,inPort};
       String label = Repr(&start,&end,globalDebug.dotFormat,temp);
 
-      PortNode nodeStart = {ptr,con->port};
-      PortNode nodeEnd = con->instConnectedTo;
+      PortInstance nodeStart = {ptr,con->port};
+      PortInstance nodeEnd = con->instConnectedTo;
 
-      EdgeNode edge = {nodeStart,nodeEnd};
+      Edge edge = {nodeStart,nodeEnd};
       int calculatedDelay = delays.edgesDelay->GetOrFail(edge);
 
       bool highlighStart = (highlighInstance ? start.inst == highlighInstance : false);

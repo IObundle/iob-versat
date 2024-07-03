@@ -5,15 +5,12 @@
 #include "memory.hpp"
 
 struct FUInstance;
-struct InstanceNode;
 struct Accelerator;
 struct FUDeclaration;
 
 // Strange forward declare
 template<typename T> struct WireTemplate;
 typedef WireTemplate<int> Wire;
-
-struct FUInstance;
 
 struct StaticId{
    FUDeclaration* parent;

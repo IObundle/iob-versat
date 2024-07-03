@@ -751,8 +751,7 @@ String GetRepr(Pool<T>* pool,Arena* out){
                        "TypeIterator","Iterator","Expression",
                        "Trie","CommandDefinition","Block","TemplateRecord",
                        "IndividualBlock","PortDeclaration","ExternalMemoryID","ExternalMemoryInfo",
-                       "PortEdge","MappingEdge","Accelerator","InstanceNode", #"FUDeclaration"
-                       "Edge"]
+                       "PortEdge","MappingEdge","Accelerator","InstanceNode","DelayToAdd","Edge"]
 
     def CheckIfPrinting(struct):
         if(struct.name in notPrintingList):

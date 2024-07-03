@@ -5,7 +5,6 @@
 #include "utils.hpp"
 
 struct Accelerator;
-struct InstanceNode;
 struct FUInstance;
 struct Edge;
 
@@ -38,18 +37,15 @@ struct GraphPrintingContent{
   Array<GraphPrintingEdgeInfo> edges;
 };
 
-typedef std::function<Pair<String,GraphPrintingColor>(InstanceNode*,Arena* out)> NodeContent;
+typedef std::function<Pair<String,GraphPrintingColor>(FUInstance*,Arena* out)> NodeContent;
 typedef std::function<Pair<String,GraphPrintingColor>(Edge*,Arena* out)> EdgeContent;
-
-//typedef Pair<String,GraphPrintingColor> (*NodeContent)(InstanceNode*,Arena* out);
-//typedef Pair<String,GraphPrintingColor> (*EdgeContent)(Edge*,Arena* out);
 
 extern NodeContent defaultNodeContent;
 extern EdgeContent defaultEdgeContent;
 
 GraphPrintingContent GeneratePrintingContent(Accelerator* accel,NodeContent nodeFunction,EdgeContent edgeFunction,Arena* out,Arena* temp);
 
-GraphPrintingColor DefaultNodeColor(InstanceNode* node);
+GraphPrintingColor DefaultNodeColor(FUInstance* node);
 GraphPrintingContent GenerateDefaultPrintingContent(Accelerator* accel,Arena* out,Arena* temp);
 
 String GenerateDotGraph(Accelerator* accel,GraphPrintingContent content,Arena* out,Arena* temp);
