@@ -793,7 +793,12 @@ AccelInfo CalculateAcceleratorInfo(Accelerator* accel,bool recursive,Arena* out,
 
   FUInstance* outputInstance = GetOutputInstance(accel->allocated);
   if(outputInstance){
-    FOREACH_LIST(Edge*,edge,accel->edges){
+    EdgeIterator iter = IterateEdges(accel);
+    while(iter.HasNext()){
+      Edge edgeInst = iter.Next();
+      Edge* edge = &edgeInst;
+
+    //FOREACH_LIST(Edge*,edge,accel->edges){
       if(edge->units[0].inst == outputInstance){
         result.outputs = std::max(result.outputs - 1,edge->units[0].port) + 1;
       }
@@ -813,6 +818,10 @@ AccelInfo CalculateAcceleratorInfo(Accelerator* accel,bool recursive,Arena* out,
 
       staticSeen->Insert(id,1);
       result.statics += inst->declaration->baseConfig.configs.size;
+
+      for(Wire& wire : inst->declaration->baseConfig.configs){
+        result.staticBits += wire.bitSize;
+      }
     }
 
     if(IsTypeHierarchical(inst->declaration)){
@@ -822,6 +831,10 @@ AccelInfo CalculateAcceleratorInfo(Accelerator* accel,bool recursive,Arena* out,
         if(!possibleFind){
           staticSeen->Insert(pair.first,1);
           result.statics += pair.second->configs.size;
+
+          for(Wire& wire : pair.second->configs){
+            result.staticBits += wire.bitSize;
+          }
         }
       }
     }
@@ -1387,7 +1400,12 @@ AccelInfo CalculateAcceleratorInfoNoDelay(Accelerator* accel,bool recursive,Aren
 
   FUInstance* outputInstance = GetOutputInstance(accel->allocated);
   if(outputInstance){
-    FOREACH_LIST(Edge*,edge,accel->edges){
+    //FOREACH_LIST(Edge*,edge,accel->edges){
+    EdgeIterator iter = IterateEdges(accel);
+    while(iter.HasNext()){
+      Edge edgeInst = iter.Next();
+      Edge* edge = &edgeInst;
+
       if(edge->units[0].inst == outputInstance){
         result.outputs = std::max(result.outputs - 1,edge->units[0].port) + 1;
       }
@@ -1407,6 +1425,10 @@ AccelInfo CalculateAcceleratorInfoNoDelay(Accelerator* accel,bool recursive,Aren
 
       staticSeen->Insert(id,1);
       result.statics += inst->declaration->baseConfig.configs.size;
+
+      for(Wire& wire : inst->declaration->baseConfig.configs){
+        result.staticBits += wire.bitSize;
+      }
     }
 
     if(IsTypeHierarchical(inst->declaration)){
@@ -1416,6 +1438,10 @@ AccelInfo CalculateAcceleratorInfoNoDelay(Accelerator* accel,bool recursive,Aren
         if(!possibleFind){
           staticSeen->Insert(pair.first,1);
           result.statics += pair.second->configs.size;
+
+          for(Wire& wire : pair.second->configs){
+            result.staticBits += wire.bitSize;
+          }
         }
       }
     }

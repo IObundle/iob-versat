@@ -96,7 +96,6 @@ struct IsCliqueResult{
 // TODO: For now everything is hashmap to help in debugging to be able to reuse previous code
 typedef Hashmap<FUInstance*,FUInstance*> InstanceMap;
 typedef Hashmap<PortEdge,PortEdge> PortEdgeMap;
-typedef Hashmap<Edge*,Edge*> EdgeMap;
 typedef Hashmap<InstanceNode*,InstanceNode*> InstanceNodeMap;
 
 struct MergeGraphResult{
@@ -130,7 +129,7 @@ void OutputConsolidationGraph(ConsolidationGraph graph,bool onlyOutputValid,Stri
 
 int ValidNodes(ConsolidationGraph graph);
 
-ConsolidationResult GenerateConsolidationGraph(Arena* arena,Accelerator* accel1,Accelerator* accel2,ConsolidationGraphOptions options);
+ConsolidationResult GenerateConsolidationGraph(Accelerator* accel1,Accelerator* accel2,ConsolidationGraphOptions options,Arena* out,Arena* temp);
 MergeGraphResult MergeGraph(Accelerator* flatten1,Accelerator* flatten2,GraphMapping& graphMapping,String name);
 void AddCliqueToMapping(GraphMapping& res,ConsolidationGraph clique);
 

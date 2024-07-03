@@ -216,7 +216,7 @@ Opt<VarGroup> ParseVarGroup(Tokenizer* tok,Arena* out){
   }
 }
 
-SpecExpression* ParseAtomS(Tokenizer* tok,Arena* out){
+SpecExpression* ParseAtom(Tokenizer* tok,Arena* out){
   Token peek = tok->PeekToken();
 
   bool negate = false;
@@ -274,7 +274,7 @@ SpecExpression* ParseTerm(Tokenizer* tok,Arena* out){
     expr = ParseSpecExpression(tok,out);
     tok->AssertNextToken(")");
   } else {
-    expr = ParseAtomS(tok,out);
+    expr = ParseAtom(tok,out);
   }
 
   return expr;

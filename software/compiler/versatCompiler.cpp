@@ -698,9 +698,9 @@ int main(int argc,const char** argv){
       DEFER_CLOSE_FILE(sourceCode);
 
       if(decl->type == FUDeclarationType_COMPOSITE || decl->type == FUDeclarationType_MERGED){
-        OutputCircuitSource(decl,decl->fixedDelayCircuit,sourceCode,temp,perm);
+        OutputCircuitSource(decl,sourceCode,temp,perm);
       } else if(decl->type == FUDeclarationType_ITERATIVE){
-        OutputIterativeSource(decl,decl->fixedDelayCircuit,sourceCode,temp,perm);
+        OutputIterativeSource(decl,sourceCode,temp,perm);
       }
     }
   }

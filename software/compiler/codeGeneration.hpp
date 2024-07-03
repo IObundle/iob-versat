@@ -36,8 +36,8 @@ Array<FUDeclaration*> SortTypesByConfigDependency(Array<FUDeclaration*> types,Ar
 Array<FUDeclaration*> SortTypesByMemDependency(Array<FUDeclaration*> types,Arena* out,Arena* temp);
 Array<TypeStructInfoElement> GenerateStructFromType(FUDeclaration* decl,Arena* out,Arena* temp);
 
-void OutputCircuitSource(FUDeclaration* decl,Accelerator* accel,FILE* file,Arena* temp,Arena* temp2);
-void OutputIterativeSource(FUDeclaration* decl,Accelerator* accel,FILE* file,Arena* temp,Arena* temp2);
+void OutputCircuitSource(FUDeclaration* decl,FILE* file,Arena* temp,Arena* temp2);
+void OutputIterativeSource(FUDeclaration* decl,FILE* file,Arena* temp,Arena* temp2);
 void OutputVerilatorWrapper(FUDeclaration* type,Accelerator* accel,String outputPath,Arena* temp,Arena* temp2);
 void OutputVerilatorMake(String topLevelName,String versatDir,Arena* temp,Arena* temp2);
 void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* softwarePath,bool isSimple,Arena* temp,Arena* temp2);

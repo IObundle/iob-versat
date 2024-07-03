@@ -1,3 +1,4 @@
+#include "accelerator.hpp"
 #include "declaration.hpp"
 #include "globals.hpp"
 #include "memory.hpp"
@@ -29,17 +30,20 @@ Accelerator* CreateAccelerator(String name){
   return accel;
 }
 
+bool NameExists(Accelerator* accel,String name){
+  FOREACH_LIST(InstanceNode*,ptr,accel->allocated){
+    if(ptr->inst->name == name){
+      return true;
+    }
+  }
+
+  return false;
+}
+
 InstanceNode* CreateFUInstanceNode(Accelerator* accel,FUDeclaration* type,String name){
   String storedName = PushString(accel->accelMemory,name);
 
   Assert(CheckValidName(storedName));
-
-  FOREACH_LIST(InstanceNode*,ptr,accel->allocated){
-    if(ptr->inst->name == storedName){
-      // Assert(false); Disabled for now
-      break;
-    }
-  }
 
   FUInstance* inst = accel->instances.Alloc();
   InstanceNode* ptr = PushStruct<InstanceNode>(accel->accelMemory);
@@ -59,12 +63,6 @@ InstanceNode* CreateFUInstanceNode(Accelerator* accel,FUDeclaration* type,String
   inst->name = storedName;
   inst->accel = accel;
   inst->declaration = type;
-
-  for(Pair<StaticId,StaticData*> pair : type->staticUnits){
-    StaticId first = pair.first;
-    StaticData second = *pair.second;
-    accel->staticUnits.insert({first,second});
-  }
 
   return ptr;
 }
@@ -94,14 +92,17 @@ Accelerator* CopyAccelerator(Accelerator* accel,InstanceMap* map){
     map->Insert(inst,newInst);
   }
 
-  // Flat copy of edges
-  FOREACH_LIST(Edge*,edge,accel->edges){
-    FUInstance* out = (FUInstance*) map->GetOrFail(edge->units[0].inst);
-    int outPort = edge->units[0].port;
-    FUInstance* in = (FUInstance*) map->GetOrFail(edge->units[1].inst);
-    int inPort = edge->units[1].port;
+  EdgeIterator iter = IterateEdges(accel);
 
-    ConnectUnits(out,outPort,in,inPort,edge->delay);
+  // Flat copy of edges
+  while(iter.HasNext()){
+    Edge edge = iter.Next();
+    FUInstance* out = map->GetOrFail(edge.units[0].inst);
+    int outPort = edge.units[0].port;
+    FUInstance* in = map->GetOrFail(edge.units[1].inst);
+    int inPort = edge.units[1].port;
+    
+    ConnectUnits(out,outPort,in,inPort,edge.delay);
   }
   
   return newAccel;
@@ -142,15 +143,7 @@ InstanceNode* CopyInstance(Accelerator* newAccel,InstanceNode* oldInstance,Strin
 
 void RemoveFUInstance(Accelerator* accel,InstanceNode* node){
   FUInstance* inst = node->inst;
-
-  FOREACH_LIST(Edge*,edge,accel->edges){
-    if(edge->units[0].inst == inst){
-      accel->edges = ListRemove(accel->edges,edge);
-    } else if(edge->units[1].inst == inst){
-      accel->edges = ListRemove(accel->edges,edge);
-    }
-  }
-
+  
   accel->allocated = RemoveUnit(accel->allocated,node);
 }
 
@@ -344,10 +337,20 @@ Accelerator* Flatten(Accelerator* accel,int times,Arena* temp){
         freeSharedIndex = savedSharedIndex;
       }
 
+      EdgeIterator iter = IterateEdges(newAccel);
       // Add accel edges to output instances
-      FOREACH_LIST(Edge*,edge,newAccel->edges){
+      //FOREACH_LIST(Edge*,edge,newAccel->edges){
+      while(iter.HasNext()){
+        Edge edgeInst = iter.Next();
+        Edge* edge = &edgeInst;
         if(edge->units[0].inst == inst){
-          FOREACH_LIST(Edge*,circuitEdge,circuit->edges){
+
+          EdgeIterator iter2 = IterateEdges(circuit);
+          while(iter2.HasNext()){
+            Edge edge2Inst = iter2.Next();
+            Edge* circuitEdge = &edge2Inst;
+
+          //FOREACH_LIST(Edge*,circuitEdge,circuit->edges){
             if(circuitEdge->units[1].inst == outputInstance && circuitEdge->units[1].port == edge->units[0].port){
               FUInstance** other = map->Get(circuitEdge->units[0].inst);
 
@@ -368,11 +371,19 @@ Accelerator* Flatten(Accelerator* accel,int times,Arena* temp){
       }
 
       // Add accel edges to input instances
-      FOREACH_LIST(Edge*,edge,newAccel->edges){
+      iter = IterateEdges(newAccel);
+      while(iter.HasNext()){
+        Edge edgeInst = iter.Next();
+        Edge* edge = &edgeInst;
         if(edge->units[1].inst == inst){
           FUInstance* circuitInst = GetInputInstance(circuit->allocated,edge->units[1].port);
 
-          FOREACH_LIST(Edge*,circuitEdge,circuit->edges){
+          EdgeIterator iter2 = IterateEdges(circuit);
+          while(iter2.HasNext()){
+            Edge edge2Inst = iter2.Next();
+            Edge* circuitEdge = &edge2Inst;
+          
+          //FOREACH_LIST(Edge*,circuitEdge,circuit->edges){
             if(circuitEdge->units[0].inst == circuitInst){
               FUInstance** other = map->Get(circuitEdge->units[0].inst);
 
@@ -394,7 +405,11 @@ Accelerator* Flatten(Accelerator* accel,int times,Arena* temp){
       }
 
       // Add circuit specific edges
-      FOREACH_LIST(Edge*,circuitEdge,circuit->edges){
+      iter = IterateEdges(circuit);
+      while(iter.HasNext()){
+        Edge edgeInst = iter.Next();
+        Edge* circuitEdge = &edgeInst;
+
         FUInstance** otherInput = map->Get(circuitEdge->units[0].inst);
         FUInstance** otherOutput = map->Get(circuitEdge->units[1].inst);
 
@@ -412,17 +427,27 @@ Accelerator* Flatten(Accelerator* accel,int times,Arena* temp){
       }
 
       // Add input to output specific edges
-      FOREACH_LIST(Edge*,edge1,newAccel->edges){
+      iter = IterateEdges(newAccel);
+      while(iter.HasNext()){
+        Edge edge1Inst = iter.Next();
+        Edge* edge1 = &edge1Inst;
         if(edge1->units[1].inst == inst){
           PortInstance input = edge1->units[0];
           FUInstance* circuitInput = GetInputInstance(circuit->allocated,edge1->units[1].port);
 
-          FOREACH_LIST(Edge*,edge2,newAccel->edges){
+          EdgeIterator iter2 = IterateEdges(newAccel);
+          while(iter2.HasNext()){
+            Edge edge2Inst = iter2.Next();
+            Edge* edge2 = &edge2Inst;
             if(edge2->units[0].inst == inst){
               PortInstance output = edge2->units[1];
               int outputPort = edge2->units[0].port;
 
-              FOREACH_LIST(Edge*,circuitEdge,circuit->edges){
+              EdgeIterator iter3 = IterateEdges(circuit);
+              while(iter3.HasNext()){
+                Edge edge3Inst = iter3.Next();
+                Edge* circuitEdge = &edge3Inst;
+
                 if(circuitEdge->units[0].inst == circuitInput
                    && circuitEdge->units[1].inst == outputInstance
                    && circuitEdge->units[1].port == outputPort){
@@ -451,8 +476,6 @@ Accelerator* Flatten(Accelerator* accel,int times,Arena* temp){
 
   toRemove.Clear(true);
   compositeInstances.Clear(true);
-
-  newAccel->staticUnits.clear();
 
   FUDeclaration base = {};
   newAccel->name = accel->name;
@@ -775,27 +798,27 @@ void FixDelays(Accelerator* accel,Hashmap<EdgeNode,int>* edgeDelays,Arena* temp)
     }
     Assert(delay > 0); // Cannot deal with negative delays at this stage.
 
-    FUInstance* buffer = nullptr;
+    InstanceNode* buffer = nullptr;
     if(globalOptions.useFixedBuffers){
       String bufferName = PushString(perm,"fixedBuffer%d",buffersInserted);
 
-      buffer = (FUInstance*) CreateFUInstance(accel,BasicDeclaration::fixedBuffer,bufferName);
-      buffer->bufferAmount = delay - BasicDeclaration::fixedBuffer->baseConfig.outputLatencies[0];
-      buffer->parameters = PushString(perm,"#(.AMOUNT(%d))",buffer->bufferAmount);
+      buffer = CreateFUInstanceNode(accel,BasicDeclaration::fixedBuffer,bufferName);
+      buffer->inst->bufferAmount = delay - BasicDeclaration::fixedBuffer->baseConfig.outputLatencies[0];
+      buffer->inst->parameters = PushString(perm,"#(.AMOUNT(%d))",buffer->inst->bufferAmount);
     } else {
       String bufferName = PushString(perm,"buffer%d",buffersInserted);
 
-      buffer = (FUInstance*) CreateFUInstance(accel,BasicDeclaration::buffer,bufferName);
-      buffer->bufferAmount = delay - BasicDeclaration::buffer->baseConfig.outputLatencies[0];
-      Assert(buffer->bufferAmount >= 0);
-      SetStatic(accel,buffer);
+      buffer = CreateFUInstanceNode(accel,BasicDeclaration::buffer,bufferName);
+      buffer->inst->bufferAmount = delay - BasicDeclaration::buffer->baseConfig.outputLatencies[0];
+      Assert(buffer->inst->bufferAmount >= 0);
+      SetStatic(accel,buffer->inst);
     }
 
-    InsertUnit(accel,edge.node0,edge.node1,PortNode{GetInstanceNode(accel,buffer),0});
+    InsertUnit(accel,edge.node0,edge.node1,PortNode{buffer,0});
 
     String fileName = PushString(temp,"fixDelay_%d.dot",buffersInserted);
     String filePath = PushDebugPath(temp,accel->name,fileName);
-    OutputGraphDotFile(accel,true,buffer,filePath,temp);
+    OutputGraphDotFile(accel,true,buffer->inst,filePath,temp);
     buffersInserted += 1;
   }
 }
@@ -906,6 +929,31 @@ Array<FUDeclaration*> MemSubTypes(Accelerator* accel,Arena* out,Arena* temp){
   return subTypes;
 }
 
+Hashmap<StaticId,StaticData>* CollectStaticUnits(Accelerator* accel,FUDeclaration* topDecl,Arena* out){
+  Hashmap<StaticId,StaticData>* staticUnits = PushHashmap<StaticId,StaticData>(out,999);
+
+  FOREACH_LIST(InstanceNode*,ptr,accel->allocated){
+    FUInstance* inst = ptr->inst;
+    if(IsTypeHierarchical(inst->declaration)){
+      for(auto pair : inst->declaration->staticUnits){
+        StaticData newData = *pair.second;
+        staticUnits->InsertIfNotExist(pair.first,newData);
+     }
+    }
+    if(inst->isStatic){
+      StaticId id = {};
+      id.name = inst->name;
+      id.parent = topDecl;
+
+      StaticData data = {};
+      data.configs = inst->declaration->baseConfig.configs;
+      staticUnits->InsertIfNotExist(id,data);
+    }
+  }
+
+  return staticUnits;
+}
+
 // Checks wether the external memory conforms to the expected interface or not (has valid values)
 bool VerifyExternalMemory(ExternalMemoryInterface* inter){
   bool res;
@@ -1014,16 +1062,15 @@ VersatComputedValues ComputeVersatValues(Accelerator* accel,bool useDMA){
     res.externalMemoryInterfaces += decl->externalMemory.size;
     res.signalLoop |= decl->signalLoop;
   }
-
-  for(auto pair : accel->staticUnits){
-    StaticData data = pair.second;
-    res.nStatics += data.configs.size;
-
-    for(Wire& wire : data.configs){
-      res.staticBits += wire.bitSize;
-    }
+  
+  region(debugArena){
+    Arena temp = SubArena(debugArena,debugArena->totalAllocated / 2);
+    AccelInfo info = CalculateAcceleratorInfo(accel,true,debugArena,&temp);
+    
+    res.nStatics = info.statics;
+    res.staticBits = info.staticBits;
   }
-
+  
   res.staticBitsStart = res.configBits;
   res.delayBitsStart = res.staticBitsStart + res.staticBits;
 
@@ -1129,12 +1176,79 @@ Array<Edge> GetAllEdges(Accelerator* accel,Arena* out){
 
   Array<Edge> result = EndArray(arr);
   
-  Assert(result.size == Size(accel->edges));
-  
   return result;
 }
 
-Edge* FindEdge(FUInstance* out,int outIndex,FUInstance* in,int inIndex){
+static void AdvanceUntilValid(EdgeIterator* iter){
+  if(iter->currentNode && iter->currentPort){
+    return;
+  }
+
+  if(iter->currentNode == nullptr){
+    Assert(iter->currentPort == nullptr);
+    return;
+  }
+  
+  while(iter->currentNode){
+    if(iter->currentPort == nullptr){
+      iter->currentNode = iter->currentNode->next;
+
+      if(iter->currentNode){
+        iter->currentPort = iter->currentNode->allOutputs;
+        if(iter->currentPort){
+          break;
+        }
+      }
+    }
+  }
+}
+
+bool Valid(Edge edge){
+  return (edge.in.inst != nullptr);
+}
+
+bool EdgeIterator::HasNext(){
+  if(currentNode == nullptr){
+    Assert(currentPort == nullptr);
+    return false;
+  } else {
+    return true;
+  }
+}
+
+Edge EdgeIterator::Next(){
+  if(!HasNext()){
+    return {};
+  }
+
+  Edge edge = {};
+  edge.out.inst = currentNode->inst;
+  edge.out.port = currentPort->port;
+  edge.in.inst = currentPort->instConnectedTo.node->inst;
+  edge.in.port = currentPort->instConnectedTo.port;
+  edge.delay = currentPort->edgeDelay;
+
+  currentPort = currentPort->next;
+  AdvanceUntilValid(this);
+  
+  return edge;
+}
+
+EdgeIterator IterateEdges(Accelerator* accel){
+  EdgeIterator iter = {};
+
+  if(!accel->allocated){
+    return iter;
+  }
+
+  iter.currentNode = accel->allocated;
+  iter.currentPort = iter.currentNode->allOutputs;
+  AdvanceUntilValid(&iter);
+  
+  return iter;
+}
+
+Opt<Edge> FindEdge(FUInstance* out,int outIndex,FUInstance* in,int inIndex){
   FUDeclaration* inDecl = in->declaration;
   FUDeclaration* outDecl = out->declaration;
 
@@ -1144,19 +1258,23 @@ Edge* FindEdge(FUInstance* out,int outIndex,FUInstance* in,int inIndex){
 
   Accelerator* accel = out->accel;
 
-  FOREACH_LIST(Edge*,edge,accel->edges){
+  EdgeIterator iter = IterateEdges(accel);
+  while(iter.HasNext()){
+    Edge edgeInst = iter.Next();
+    Edge* edge = &edgeInst;
+  //FOREACH_LIST(Edge*,edge,accel->edges){
     if(edge->units[0].inst == (FUInstance*) out &&
        edge->units[0].port == outIndex &&
        edge->units[1].inst == (FUInstance*) in &&
        edge->units[1].port == inIndex) {
-      return edge;
+      return *edge;
     }
   }
 
-  return nullptr;
+  return {};
 }
 
-Edge* FindEdge(FUInstance* out,int outIndex,FUInstance* in,int inIndex,int delay){
+Opt<Edge> FindEdge(FUInstance* out,int outIndex,FUInstance* in,int inIndex,int delay){
   FUDeclaration* inDecl = in->declaration;
   FUDeclaration* outDecl = out->declaration;
 
@@ -1166,23 +1284,26 @@ Edge* FindEdge(FUInstance* out,int outIndex,FUInstance* in,int inIndex,int delay
 
   Accelerator* accel = out->accel;
 
-  FOREACH_LIST(Edge*,edge,accel->edges){
+  EdgeIterator iter = IterateEdges(accel);
+  while(iter.HasNext()){
+    Edge edgeInst = iter.Next();
+    Edge* edge = &edgeInst;
+
+//  FOREACH_LIST(Edge*,edge,accel->edges){
     if(edge->units[0].inst == (FUInstance*) out &&
        edge->units[0].port == outIndex &&
        edge->units[1].inst == (FUInstance*) in &&
        edge->units[1].port == inIndex &&
        edge->delay == delay) {
-      return edge;
+      return *edge;
     }
   }
 
-  return nullptr;
+  return {};
 }
 
-Edge* ConnectUnitsGetEdge(FUInstance* out,int outIndex,FUInstance* in,int inIndex,int delay){
-  Edge* edge = ConnectUnitsGetEdge(out,outIndex,in,inIndex,delay,nullptr);
-
-  return edge;
+void ConnectUnitsGetEdge(FUInstance* out,int outIndex,FUInstance* in,int inIndex,int delay){
+  ConnectUnitsGetEdge(out,outIndex,in,inIndex,delay,nullptr);
 }
 
 void ConnectUnits(FUInstance* out,int outIndex,FUInstance* in,int inIndex,int delay){
@@ -1190,28 +1311,29 @@ void ConnectUnits(FUInstance* out,int outIndex,FUInstance* in,int inIndex,int de
 }
 
 void ConnectUnitsIfNotConnected(FUInstance* out,int outIndex,FUInstance* in,int inIndex,int delay){
-  ConnectUnitsIfNotConnectedGetEdge(out,outIndex,in,inIndex,delay);
-}
-
-Edge* ConnectUnitsIfNotConnectedGetEdge(FUInstance* out,int outIndex,FUInstance* in,int inIndex,int delay){
   Accelerator* accel = out->accel;
 
-  FOREACH_LIST(Edge*,edge,accel->edges){
+  EdgeIterator iter = IterateEdges(accel);
+  while(iter.HasNext()){
+    Edge edgeInst = iter.Next();
+    Edge* edge = &edgeInst;
+
+  //FOREACH_LIST(Edge*,edge,accel->edges){
     if(edge->units[0].inst == out && edge->units[0].port == outIndex &&
        edge->units[1].inst == in  && edge->units[1].port == inIndex &&
        delay == edge->delay){
-      return edge;
+      return;
     }
   }
 
-  return ConnectUnitsGetEdge(out,outIndex,in,inIndex,delay);
+  ConnectUnitsGetEdge(out,outIndex,in,inIndex,delay);
 }
 
-Edge* ConnectUnits(PortInstance out,PortInstance in,int delay){
-  return ConnectUnitsGetEdge(out.inst,out.port,in.inst,in.port,delay);
+void ConnectUnits(PortInstance out,PortInstance in,int delay){
+  ConnectUnitsGetEdge(out.inst,out.port,in.inst,in.port,delay);
 }
 
-Edge* ConnectUnitsGetEdge(PortNode out,PortNode in,int delay){
+void ConnectUnits(PortNode out,PortNode in,int delay){
    FUDeclaration* inDecl = in.node->inst->declaration;
    FUDeclaration* outDecl = out.node->inst->declaration;
 
@@ -1220,16 +1342,6 @@ Edge* ConnectUnitsGetEdge(PortNode out,PortNode in,int delay){
    Assert(out.port < outDecl->NumberOutputs());
 
    Accelerator* accel = out.node->inst->accel;
-
-   Edge* edge = PushStruct<Edge>(accel->accelMemory);
-   edge->next = accel->edges;
-   accel->edges = edge;
-
-   edge->units[0].inst = out.node->inst;
-   edge->units[0].port = out.port;
-   edge->units[1].inst = in.node->inst;
-   edge->units[1].port = in.port;
-   edge->delay = delay;
 
    // Update graph data.
    InstanceNode* inputNode = in.node;
@@ -1269,12 +1381,10 @@ Edge* ConnectUnitsGetEdge(PortNode out,PortNode in,int delay){
 
    CalculateNodeType(inputNode);
    CalculateNodeType(outputNode);
-
-   return edge;
 }
 
 // Connects out -> in
-Edge* ConnectUnitsGetEdge(FUInstance* out,int outIndex,FUInstance* in,int inIndex,int delay,Edge* previous){
+void ConnectUnitsGetEdge(FUInstance* out,int outIndex,FUInstance* in,int inIndex,int delay,Edge* previous){
    FUDeclaration* inDecl = in->declaration;
    FUDeclaration* outDecl = out->declaration;
 
@@ -1283,22 +1393,6 @@ Edge* ConnectUnitsGetEdge(FUInstance* out,int outIndex,FUInstance* in,int inInde
    Assert(outIndex < outDecl->NumberOutputs());
 
    Accelerator* accel = out->accel;
-
-   Edge* edge = PushStruct<Edge>(accel->accelMemory);
-
-   if(previous){
-      edge->next = previous->next;
-      previous->next = edge;
-   } else {
-      edge->next = accel->edges;
-      accel->edges = edge;
-   }
-
-   edge->units[0].inst = (FUInstance*) out;
-   edge->units[0].port = outIndex;
-   edge->units[1].inst = (FUInstance*) in;
-   edge->units[1].port = inIndex;
-   edge->delay = delay;
 
    // Update graph data.
    InstanceNode* inputNode = GetInstanceNode(accel,(FUInstance*) in);
@@ -1338,8 +1432,6 @@ Edge* ConnectUnitsGetEdge(FUInstance* out,int outIndex,FUInstance* in,int inInde
 
    CalculateNodeType(inputNode);
    CalculateNodeType(outputNode);
-
-   return edge;
 }
 
 Array<int> GetNumberOfInputConnections(InstanceNode* node,Arena* out){
@@ -1381,11 +1473,6 @@ void RemoveConnection(Accelerator* accel,PortNode out,PortNode in){
 }
 
 void RemoveConnection(Accelerator* accel,InstanceNode* out,int outPort,InstanceNode* in,int inPort){
-   accel->edges = ListRemoveAll(accel->edges,[&](Edge* edge){
-      bool res = (edge->out.inst == out->inst && edge->out.port == outPort && edge->in.inst == in->inst && edge->in.port == inPort);
-      return res;
-   });
-
    out->allOutputs = ListRemoveAll(out->allOutputs,[&](ConnectionNode* n){
       bool res = (n->port == outPort && n->instConnectedTo.node == in && n->instConnectedTo.port == inPort);
       return res;
@@ -1455,8 +1542,8 @@ InstanceNode* RemoveUnit(InstanceNode* nodes,InstanceNode* unit){
 
 void InsertUnit(Accelerator* accel,PortNode before,PortNode after,PortNode newUnit){
    RemoveConnection(accel,before.node,before.port,after.node,after.port);
-   ConnectUnitsGetEdge(newUnit,after,0);
-   ConnectUnitsGetEdge(before,newUnit,0);
+   ConnectUnits(newUnit,after,0);
+   ConnectUnits(before,newUnit,0);
 }
 
 void AssertGraphValid(InstanceNode* nodes,Arena* arena){
@@ -1546,7 +1633,7 @@ CalculateDelayResult CalculateDelay(Accelerator* accel,DAGOrderNodes order,Array
   static int functionCalls = 0;
   
   int nodes = Size(accel->allocated);
-  int edges = Size(accel->edges);
+  int edges = 9999; // Size(accel->edges);
   Hashmap<EdgeNode,int>* edgeToDelay = PushHashmap<EdgeNode,int>(out,edges);
   Hashmap<InstanceNode*,int>* nodeDelay = PushHashmap<InstanceNode*,int>(out,nodes);
   Hashmap<PortNode,int>* portDelay = PushHashmap<PortNode,int>(out,edges);

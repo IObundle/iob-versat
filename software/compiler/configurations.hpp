@@ -30,7 +30,6 @@ template<> class std::hash<StaticId>{
 
 struct StaticData{
    Array<Wire> configs;
-   int offset;
 };
 
 struct StaticInfo{
@@ -136,6 +135,7 @@ struct AccelInfo{
   int delays;
   int ios;
   int statics;
+  int staticBits;
   int sharedUnits;
   int externalMemoryInterfaces;
   int externalMemoryByteSize;

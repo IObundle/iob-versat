@@ -606,11 +606,7 @@ FUDeclaration* RegisterSubUnit(Accelerator* circuit,Arena* temp,Arena* temp2){
     if(IsTypeHierarchical(inst->declaration)){
       for(auto pair : inst->declaration->staticUnits){
         StaticData newData = *pair.second;
-        newData.offset = staticOffset;
-
-        if(decl.staticUnits->InsertIfNotExist(pair.first,newData)){
-          staticOffset += newData.configs.size;
-        }
+        decl.staticUnits->InsertIfNotExist(pair.first,newData);
       }
     }
   }
@@ -629,11 +625,7 @@ FUDeclaration* RegisterSubUnit(Accelerator* circuit,Arena* temp,Arena* temp2){
 
       StaticData data = {};
       data.configs = inst->declaration->baseConfig.configs;
-      data.offset = staticOffset;
-
-      if(res->staticUnits->InsertIfNotExist(id,data)){
-        staticOffset += inst->declaration->baseConfig.configs.size;
-      }
+      res->staticUnits->InsertIfNotExist(id,data);
     }
   }
 
@@ -690,20 +682,20 @@ FUDeclaration* RegisterIterativeUnit(Accelerator* accel,FUInstance* inst,int lat
     Assert(arr[0].node->inst->declaration == BasicDeclaration::input);
 
     Assert(i < ARRAY_SIZE(muxNames));
-    FUInstance* mux = CreateFUInstance(accel,type,muxNames[i]);
-    InstanceNode* muxNode = GetInstanceNode(accel,(FUInstance*) mux);
+    InstanceNode* mux = CreateFUInstanceNode(accel,type,muxNames[i]);
+    //InstanceNode* muxNode = GetInstanceNode(accel,(FUInstance*) mux);
 
     RemoveConnection(accel,arr[0].node,arr[0].port,node,i);
     RemoveConnection(accel,arr[1].node,arr[1].port,node,i);
 
-    ConnectUnitsGetEdge(arr[0],(PortNode){muxNode,0},0);
-    ConnectUnitsGetEdge(arr[1],(PortNode){muxNode,1},0);
+    ConnectUnits(arr[0],(PortNode){mux,0},0);
+    ConnectUnits(arr[1],(PortNode){mux,1},0);
 
-    ConnectUnitsGetEdge((PortNode){muxNode,0},(PortNode){node,i},0);
+    ConnectUnits((PortNode){mux,0},(PortNode){node,i},0);
 
     conn[i].input = arr[0].node;
     conn[i].unit = PortNode{arr[1].node,arr[1].port};
-    conn[i].mux = muxNode;
+    conn[i].mux = mux;
 
     muxInserted += 1;
   }
@@ -722,15 +714,13 @@ FUDeclaration* RegisterIterativeUnit(Accelerator* accel,FUInstance* inst,int lat
       continue;
     }
 
-    FUInstance* buffer = (FUInstance*) CreateFUInstance(accel,bufferType,PushString(perm,"Buffer%d",buffersAdded++));
+    InstanceNode* buffer = CreateFUInstanceNode(accel,bufferType,PushString(perm,"Buffer%d",buffersAdded++));
 
-    buffer->bufferAmount = unit->inst->declaration->baseConfig.inputDelays[i] - BasicDeclaration::buffer->baseConfig.outputLatencies[0];
-    Assert(buffer->bufferAmount >= 0);
-    SetStatic(accel,buffer);
+    buffer->inst->bufferAmount = unit->inst->declaration->baseConfig.inputDelays[i] - BasicDeclaration::buffer->baseConfig.outputLatencies[0];
+    Assert(buffer->inst->bufferAmount >= 0);
+    SetStatic(accel,buffer->inst);
 
-    InstanceNode* bufferNode = GetInstanceNode(accel,buffer);
-
-    InsertUnit(accel,(PortNode){conn[i].mux,0},conn[i].unit,(PortNode){bufferNode,0});
+    InsertUnit(accel,(PortNode){conn[i].mux,0},conn[i].unit,(PortNode){buffer,0});
   }
 
   String afterPath = PushDebugPath(temp,name,STRING("iterativeBefore.dot"));
@@ -753,7 +743,7 @@ FUDeclaration* RegisterIterativeUnit(Accelerator* accel,FUInstance* inst,int lat
 #endif
 
   // TODO: We are not checking connections here, we are just assuming that unit is directly connected to out.
-  //       Probably a bad ideia but still do not have an example which would make it not ideal
+  //       Probably a bad idea but still do not have an example which would make it not ideal
   for(int i = 0; i < declaration.NumberOutputs(); i++){
     declaration.baseConfig.outputLatencies[i] = latency * (node->inst->declaration->baseConfig.outputLatencies[i] + 1);
   }
@@ -761,27 +751,6 @@ FUDeclaration* RegisterIterativeUnit(Accelerator* accel,FUInstance* inst,int lat
   // Values from iterative declaration
   declaration.baseCircuit = accel;
   declaration.fixedDelayCircuit = accel;
-
-#if 0
-  Accelerator* f = CopyAccelerator(versat,accel,nullptr);
-  ReorganizeIterative(f,temp);
-
-  // TODO: HACK, for now
-  FUDeclaration temp = {};
-  temp.name = name;
-  f->subtype = &temp;
-
-  auto delays = CalculateDelay(versat,f,temp);
-  FixDelays(versat,f,delays);
-
-  String path = PushDebugPath(temp,name,"iterative2.dot");
-  OutputGraphDotFile(versat,f,true,path);
-
-  f->ordered = nullptr;
-  ReorganizeIterative(f,temp);
-
-  declaration.fixedDelayCircuit = f;
-#endif
 
   declaration.staticUnits = PushHashmap<StaticId,StaticData>(perm,1000); // TODO: Set correct number of elements
   int staticOffset = 0;
@@ -792,11 +761,7 @@ FUDeclaration* RegisterIterativeUnit(Accelerator* accel,FUInstance* inst,int lat
 
       for(auto pair : inst->declaration->staticUnits){
         StaticData newData = *pair.second;
-        newData.offset = staticOffset;
-
-        if(declaration.staticUnits->InsertIfNotExist(pair.first,newData)){
-          staticOffset += newData.configs.size;
-        }
+        declaration.staticUnits->InsertIfNotExist(pair.first,newData);
       }
     }
   }
@@ -816,11 +781,7 @@ FUDeclaration* RegisterIterativeUnit(Accelerator* accel,FUInstance* inst,int lat
 
       StaticData data = {};
       data.configs = inst->declaration->baseConfig.configs;
-      data.offset = staticOffset;
-
-      if(registeredType->staticUnits->InsertIfNotExist(id,data)){
-        staticOffset += inst->declaration->baseConfig.configs.size;
-      }
+      registeredType->staticUnits->InsertIfNotExist(id,data);
     }
   }
 

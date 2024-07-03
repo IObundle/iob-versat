@@ -214,15 +214,6 @@ String Repr(StaticId* id,Arena* out){
   return res;
 }
 
-String Repr(StaticData* data,Arena* out){
-  auto mark = StartString(out);
-
-  PushString(out," (%d)",data->offset);
-
-  String res = EndString(mark);
-  return res;
-}
-
 String Repr(PortNode* portNode,Arena* out){
   auto mark = StartString(out);
 

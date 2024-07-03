@@ -13,7 +13,6 @@ struct PortEdge;
 
 typedef Hashmap<FUInstance*,FUInstance*> InstanceMap;
 typedef Hashmap<PortEdge,PortEdge> PortEdgeMap;
-typedef Hashmap<Edge*,Edge*> EdgeMap;
 typedef Hashmap<InstanceNode*,InstanceNode*> InstanceNodeMap;
 
 struct PortInstance{
@@ -81,6 +80,14 @@ struct Edge{ // A edge in a graph
 struct FUInstance;
 struct InstanceNode;
 
+typedef Array<Edge> Path;
+typedef Hashmap<Edge,Path> PathMap;
+
+struct GenericGraphMapping{
+  InstanceMap* nodeMap;
+  PathMap* edgeMap;
+};
+
 struct PortNode{
   InstanceNode* node;
   int port;
@@ -116,15 +123,11 @@ struct InstanceNode{
 
 // TODO: Memory leaks can be fixed by having a global InstanceNode and FUInstance Pool and a global dynamic arena for everything else.
 struct Accelerator{ // Graph + data storage
-  Edge* edges; // TODO: Should be removed, edge info is all contained inside the instance nodes and desync leads to bugs since some code still uses this.
-
   InstanceNode* allocated;
   InstanceNode* lastAllocated;
   Pool<FUInstance> instances; // TODO: Does anyone care about this or can we just use the allocated list?
 
   DynamicArena* accelMemory; // TODO: We could remove all this because we can now build all the accelerators in place. (Add an API that functions like a Accelerator builder and at the end we lock everything into an immutable graph).
-
-  std::unordered_map<StaticId,StaticData> staticUnits;
 
   String name; // For debugging purposes it's useful to give accelerators a name
 };
@@ -186,16 +189,25 @@ struct DAGOrderNodes{
   int maxOrder;
 };
 
-// TODO: The concept of flat instance no longer exists. Remove them and check if any code dependend on the fact that copy flat did not copy static or shared 
+struct EdgeIterator{
+  InstanceNode* currentNode;
+  ConnectionNode* currentPort;
+  
+  bool HasNext();
+  Edge Next();
+};
+
 Accelerator*  CopyAccelerator(Accelerator* accel,InstanceMap* map);
 FUInstance*   CopyInstance(Accelerator* newAccel,FUInstance*   oldInstance,String newName);
 InstanceNode* CopyInstance(Accelerator* newAccel,InstanceNode* oldInstance,String newName);
+
+bool NameExists(Accelerator* accel,String name);
 
 Array<FUDeclaration*> AllNonSpecialSubTypes(Accelerator* accel,Arena* out,Arena* temp);
 Array<FUDeclaration*> ConfigSubTypes(Accelerator* accel,Arena* out,Arena* temp);
 Array<FUDeclaration*> MemSubTypes(Accelerator* accel,Arena* out,Arena* temp);
 
-int CalculateNumberOutptus(Accelerator* accel);
+Hashmap<StaticId,StaticData>* CollectStaticUnits(Accelerator* accel,FUDeclaration* topDecl,Arena* out);
 
 int ExternalMemoryByteSize(ExternalMemoryInterface* inter);
 int ExternalMemoryByteSize(Array<ExternalMemoryInterface> interfaces); // Size of a simple memory mapping.
@@ -206,15 +218,16 @@ int ExternalMemoryByteSize(Array<ExternalMemoryInterface> interfaces); // Size o
 VersatComputedValues ComputeVersatValues(Accelerator* accel,bool useDMA);
 
 Array<Edge> GetAllEdges(Accelerator* accel,Arena* out);
+EdgeIterator IterateEdges(Accelerator* accel);
 
 // Unit connection
-Edge* FindEdge(FUInstance* out,int outIndex,FUInstance* in,int inIndex);
-Edge* FindEdge(FUInstance* out,int outIndex,FUInstance* in,int inIndex,int delay);
-Edge* ConnectUnitsGetEdge(FUInstance* out,int outIndex,FUInstance* in,int inIndex,int delay = 0);
-Edge* ConnectUnitsGetEdge(FUInstance* out,int outIndex,FUInstance* in,int inIndex,int delay,Edge* previous);
-Edge* ConnectUnitsIfNotConnectedGetEdge(FUInstance* out,int outIndex,FUInstance* in,int inIndex,int delay = 0);
+Opt<Edge> FindEdge(FUInstance* out,int outIndex,FUInstance* in,int inIndex);
+Opt<Edge> FindEdge(FUInstance* out,int outIndex,FUInstance* in,int inIndex,int delay);
+void ConnectUnitsGetEdge(FUInstance* out,int outIndex,FUInstance* in,int inIndex,int delay = 0);
+void ConnectUnitsGetEdge(FUInstance* out,int outIndex,FUInstance* in,int inIndex,int delay,Edge* previous);
+void ConnectUnitsIfNotConnected(FUInstance* out,int outIndex,FUInstance* in,int inIndex,int delay = 0);
 void  ConnectUnits(FUInstance* out,int outIndex,FUInstance* in,int inIndex,int delay = 0);
-Edge* ConnectUnits(PortInstance out,PortInstance in,int delay = 0);
+void ConnectUnits(PortInstance out,PortInstance in,int delay = 0);
 
 InstanceNode* GetInstanceNode(Accelerator* accel,FUInstance* inst);
 void CalculateNodeType(InstanceNode* node);
@@ -232,5 +245,5 @@ void InsertUnit(Accelerator* accel, PortInstance before, PortInstance after, Por
 
 bool IsCombinatorial(Accelerator* accel);
 
-Edge* ConnectUnitsGetEdge(PortNode out,PortNode in,int delay);
+void ConnectUnits(PortNode out,PortNode in,int delay);
 

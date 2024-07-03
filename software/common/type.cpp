@@ -27,6 +27,7 @@ namespace ValueType{
 static Arena permanentArena;
 static Pool<Type> types;
 
+#if 0
 TypeIterator IterateTypes(){
   TypeIterator iter = {};
   iter.iter = types.begin();
@@ -44,6 +45,7 @@ Type* Next(TypeIterator& iter){
   ++iter.iter;
   return type;
 }
+#endif
 
 static Type* CollapseTypeUntilBase(Type* type){
   Type* res = type;

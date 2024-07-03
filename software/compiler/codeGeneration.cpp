@@ -611,7 +611,9 @@ Array<TypeStructInfoElement> ExtractStructuredConfigs(Array<InstanceInfo> info,A
   return PushArrayFromList(out,elems);
 }
 
-void OutputCircuitSource(FUDeclaration* decl,Accelerator* accel,FILE* file,Arena* temp,Arena* temp2){
+void OutputCircuitSource(FUDeclaration* decl,FILE* file,Arena* temp,Arena* temp2){
+  Accelerator* accel = decl->fixedDelayCircuit;
+
   BLOCK_REGION(temp);
   BLOCK_REGION(temp2);
   
@@ -645,7 +647,9 @@ void OutputCircuitSource(FUDeclaration* decl,Accelerator* accel,FILE* file,Arena
   ProcessTemplate(file,BasicTemplates::acceleratorTemplate,temp,temp2);
 }
 
-void OutputIterativeSource(FUDeclaration* decl,Accelerator* accel,FILE* file,Arena* temp,Arena* temp2){
+void OutputIterativeSource(FUDeclaration* decl,FILE* file,Arena* temp,Arena* temp2){
+  Accelerator* accel = decl->fixedDelayCircuit;
+
   BLOCK_REGION(temp);
   BLOCK_REGION(temp2);
 
@@ -665,7 +669,9 @@ void OutputIterativeSource(FUDeclaration* decl,Accelerator* accel,FILE* file,Are
   AccelInfo info = CalculateAcceleratorInfo(accel,true,temp,temp2); // TODO: Calculating info just for the computedData calculation is a bit wasteful.
   Array<MemoryAddressMask> memoryMasks = CalculateAcceleratorMemoryMasks(info,temp);
 
-  TemplateSetCustom("staticUnits",MakeValue(decl->staticUnits));
+  Hashmap<StaticId,StaticData>* staticUnits = CollectStaticUnits(accel,decl,temp);
+  
+  TemplateSetCustom("staticUnits",MakeValue(staticUnits));
   TemplateSetCustom("accel",MakeValue(decl));
   TemplateSetCustom("memoryMasks",MakeValue(&memoryMasks));
   TemplateSetCustom("instances",MakeValue(accel->allocated));
@@ -689,7 +695,6 @@ void OutputVerilatorWrapper(FUDeclaration* type,Accelerator* accel,String output
   AccelInfo info = CalculateAcceleratorInfo(accel,true,temp,temp2);
   Array<Wire> allConfigsHeaderSide = ExtractAllConfigs(info.baseInfo,temp,temp2);
 
-#if 1
   // We need to bundle config + static (type->config) only contains config, but not static
   Array<Wire> allConfigsVerilatorSide = PushArray<Wire>(temp,999); // TODO: Correct size
   {
@@ -703,7 +708,9 @@ void OutputVerilatorWrapper(FUDeclaration* type,Accelerator* accel,String output
 
   int index = 0;
   Array<Wire> allStaticsVerilatorSide = PushArray<Wire>(temp,999); // TODO: Correct size
-  for(Pair<StaticId,StaticData*> p : type->staticUnits){
+  
+  Hashmap<StaticId,StaticData>* staticUnits = CollectStaticUnits(accel,type,temp);  
+  for(Pair<StaticId,StaticData*> p : staticUnits){
     for(Wire& config : p.second->configs){
       allStaticsVerilatorSide[index] = config;
       allStaticsVerilatorSide[index].name = ReprStaticConfig(p.first,&config,temp);
@@ -712,9 +719,7 @@ void OutputVerilatorWrapper(FUDeclaration* type,Accelerator* accel,String output
   }
   allStaticsVerilatorSide.size = index;
   TemplateSetCustom("allStaticsVerilatorSide",MakeValue(&allStaticsVerilatorSide));
-#endif
 
-  //UnitValues val = CalculateAcceleratorValues(versat,accel);
   Array<TypeStructInfoElement> structuredConfigs = ExtractStructuredConfigs(info.baseInfo,temp,temp2);
 
   TemplateSetNumber("delays",info.delays);
@@ -921,32 +926,8 @@ void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* 
     DEFER_CLOSE_FILE(f);
     ProcessTemplate(f,BasicTemplates::externalInternalPortmapTemplate,temp,temp2);
  }
-  
-  Hashmap<StaticId,StaticData>* staticUnits = PushHashmap<StaticId,StaticData>(temp,val.nStatics);
-  int staticIndex = 0; // staticStart; TODO: For now, test with static info beginning at zero
-  for(InstanceInfo& info : info.baseInfo){
-    FUDeclaration* decl = info.decl;
-    if(info.isStatic){
-      FUDeclaration* parentDecl = info.parent;
 
-      StaticId id = {};
-      id.name = info.name;
-      id.parent = parentDecl;
-
-      GetOrAllocateResult res = staticUnits->GetOrAllocate(id);
-
-      if(res.alreadyExisted){
-      } else {
-        StaticData data = {};
-        data.offset = staticIndex;
-        data.configs = decl->baseConfig.configs;
-
-        *res.data = data;
-        staticIndex += decl->baseConfig.configs.size;
-      }
-    }
-  }
-
+  Hashmap<StaticId,StaticData>* staticUnits = CollectStaticUnits(accel,nullptr,temp);
   TemplateSetCustom("staticUnits",MakeValue(staticUnits));
   
   Array<MemoryAddressMask> memoryMasks = CalculateAcceleratorMemoryMasks(info,temp);

@@ -12,6 +12,7 @@ static String graphPrintingColorTable[] = {
   STRING("darkblue"),
   STRING("darkred"),
   STRING("darkgreen"),
+  STRING("darkyellow")
 };
 
 GraphPrintingColor DefaultNodeColor(InstanceNode* node){
@@ -26,34 +27,52 @@ GraphPrintingColor DefaultNodeColor(InstanceNode* node){
   return color;
 }
 
-GraphPrintingContent GenerateDefaultPrintingContent(Accelerator* accel,Arena* out,Arena* temp){
+Pair<String,GraphPrintingColor> DefaultNodeContent(InstanceNode* node,Arena* out){
+  return {node->inst->name,DefaultNodeColor(node)};
+}
+
+Pair<String,GraphPrintingColor> DefaultEdgeContent(Edge* edge,Arena* out){
+  int inPort = edge->in.port;
+  int outPort = edge->out.port;
+
+  String content = PushString(out,"%d -> %d",outPort,inPort);
+
+  return {content,GraphPrintingColor_BLACK};
+}
+
+NodeContent defaultNodeContent = DefaultNodeContent;
+EdgeContent defaultEdgeContent = DefaultEdgeContent;
+
+String UniqueInstanceName(FUInstance* inst,Arena* out){
+ String name = PushString(out,"%p",inst);
+  
+  return name;
+}
+
+GraphPrintingContent GeneratePrintingContent(Accelerator* accel,NodeContent nodeFunction,EdgeContent edgeFunction,Arena* out,Arena* temp){
   BLOCK_REGION(temp);
 
   Array<Edge> edges = GetAllEdges(accel,temp);
 
-  DynamicArray<GraphPrintingNodeInfo> nodeInfo = StartArray<GraphPrintingNodeInfo>(out);
+  ArenaList<GraphPrintingNodeInfo>* nodeInfo = PushArenaList<GraphPrintingNodeInfo>(temp);
   FOREACH_LIST(InstanceNode*,ptr,accel->allocated){
     FUInstance* inst = ptr->inst;
-    String name = inst->name;
+    Pair<String,GraphPrintingColor> content = nodeFunction(ptr,out);
+    String name = UniqueInstanceName(inst,out);
 
-    GraphPrintingColor color = DefaultNodeColor(ptr);
-
-    *nodeInfo.PushElem() = {.name = name,.content = name,.color = color};
+    *nodeInfo->PushElem() = {.name = name,.content = content.first,.color = content.second};
   }
-  Array<GraphPrintingNodeInfo> nodes = EndArray(nodeInfo);
+  Array<GraphPrintingNodeInfo> nodes = PushArrayFromList(out,nodeInfo);
 
   ArenaList<GraphPrintingEdgeInfo>* edgeInfo = PushArenaList<GraphPrintingEdgeInfo>(temp);
   for(Edge edge : edges){
-    int inPort = edge.in.port;
-    int outPort = edge.out.port;
-
-    String content = PushString(out,"%d -> %d",outPort,inPort);
-    String first = edge.out.inst->name;
-    String second = edge.in.inst->name; 
+    Pair<String,GraphPrintingColor> content = edgeFunction(&edge,out);
+    String first = UniqueInstanceName(edge.out.inst,out);
+    String second = UniqueInstanceName(edge.in.inst,out); 
 
     *edgeInfo->PushElem() = {
-      .content = content,
-      .color = GraphPrintingColor_BLACK,
+      .content = content.first,
+      .color = content.second,
       .first = first,
       .second = second
     };
@@ -65,6 +84,10 @@ GraphPrintingContent GenerateDefaultPrintingContent(Accelerator* accel,Arena* ou
   content.edges = edgeResult;
 
   return content;
+}
+
+GraphPrintingContent GenerateDefaultPrintingContent(Accelerator* accel,Arena* out,Arena* temp){
+  return GeneratePrintingContent(accel,defaultNodeContent,defaultEdgeContent,out,temp);
 }
 
 String GenerateDotGraph(Accelerator* accel,GraphPrintingContent content,Arena* out,Arena* temp){

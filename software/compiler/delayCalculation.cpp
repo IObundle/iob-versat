@@ -63,7 +63,8 @@ CalculateDelayResult CalculateDelay(Accelerator* accel,DAGOrderNodes order,Arena
   static int functionCalls = 0;
   
   int nodes = Size(accel->allocated);
-  int edges = Size(accel->edges);
+  int edges = 9999;
+  //int edges = Size(accel->edges);
   Hashmap<EdgeNode,int>* edgeToDelay = PushHashmap<EdgeNode,int>(out,edges);
   Hashmap<InstanceNode*,int>* nodeDelay = PushHashmap<InstanceNode*,int>(out,nodes);
   Hashmap<PortNode,int>* portDelay = PushHashmap<PortNode,int>(out,edges);
@@ -350,6 +351,7 @@ void OutputDelayDebugInfo(Accelerator* accel,Arena* temp){
 }
 
 CalculateDelayResult CalculateGlobalInitialLatency(Accelerator* accel,DAGOrderNodes order,Arena* out,Arena* temp){
+#if 0
   CalculateDelayResult result = {};
 
   int nodes = Size(accel->allocated);
@@ -359,11 +361,54 @@ CalculateDelayResult CalculateGlobalInitialLatency(Accelerator* accel,DAGOrderNo
   Hashmap<PortNode,int>* portDelay = PushHashmap<PortNode,int>(out,edges);
 
   return {};
+#endif
 }
 
 GraphPrintingContent GenerateDelayDotGraph(Accelerator* accel,CalculateDelayResult delayInfo,Arena* out,Arena* temp){
   BLOCK_REGION(temp);
 
+  auto NodeWithDelayContent = [&](InstanceNode* node,Arena* out) -> Pair<String,GraphPrintingColor>{
+    int delay = delayInfo.nodeDelay->GetOrFail(node);
+    String content = PushString(out,"%.*s:%d",UNPACK_SS(node->inst->name),delay);
+
+    return {content,DefaultNodeColor(node)};
+  };
+
+  auto EdgeWithDelayContent = [&](Edge* edge,Arena* out) -> Pair<String,GraphPrintingColor>{
+    int inPort = edge->in.port;
+    int outPort = edge->out.port;
+
+    PortNode node = {};
+    node.node = GetInstanceNode(accel,edge->in.inst); // TODO: HACK, Edges should be instanceNodes, not fuInstances
+    node.port = edge->in.port;
+    
+    int delay = delayInfo.portDelay->GetOrFail(node);
+    
+    EdgeNode edgeNode = {};
+    edgeNode.node0.node = GetInstanceNode(accel,edge->out.inst);
+    edgeNode.node1.node = GetInstanceNode(accel,edge->in.inst);
+    edgeNode.node0.port = edge->out.port;
+    edgeNode.node1.port = edge->in.port;
+
+    int edgeBaseDelay = edge->delay;
+    int edgeDelay = delayInfo.edgesDelay->GetOrFail(edgeNode);
+    
+    int edgeOutput = edge->out.inst->declaration->baseConfig.outputLatencies[edge->out.port];
+    int edgeInput = edge->in.inst->declaration->baseConfig.inputDelays[edge->in.port];
+    
+    String content = PushString(out,"(%d/%d/%d) %d [%d]",edgeOutput,edgeBaseDelay,edgeInput,delay,edgeDelay);
+    String first = edge->out.inst->name;
+    String second = edge->in.inst->name; 
+
+    GraphPrintingColor color = GraphPrintingColor_BLACK;
+    if(edgeDelay == ANY_DELAY_MARK){
+     color = GraphPrintingColor_RED;
+    }
+
+    return {content,color};
+  };
+
+#if 0
   Array<Edge> edges = GetAllEdges(accel,temp);
 
   ArenaList<GraphPrintingNodeInfo>* nodeInfo = PushArenaList<GraphPrintingNodeInfo>(temp);
@@ -371,7 +416,7 @@ GraphPrintingContent GenerateDelayDotGraph(Accelerator* accel,CalculateDelayResu
     FUInstance* inst = ptr->inst;
 
     int delay = delayInfo.nodeDelay->GetOrFail(ptr);
-    String content = PushString(out,"%.*s_%d",UNPACK_SS(inst->name),delay);
+    String content = PushString(out,"%.*s:%d",UNPACK_SS(inst->name),delay);
 
     GraphPrintingColor color = DefaultNodeColor(ptr);
     *nodeInfo->PushElem() = {.name = inst->name,.content = content,.color = color};
@@ -418,11 +463,12 @@ GraphPrintingContent GenerateDelayDotGraph(Accelerator* accel,CalculateDelayResu
     };
   }
   Array<GraphPrintingEdgeInfo> edgeResult = PushArrayFromList(out,edgeInfo);
-  
-  GraphPrintingContent result = {};
-  result.graphLabel = STRING("Nodes contain their global latency after the underscore\nEdge Format: (<Output Latency>/<Edge delay>/<Input Delay>) <Without buffer, node lantency + edge value>  [<Buffer value, difference between without buffer and input node latency>]\nImagine reading from the output node into the input node: Node latency + edge values equals latency which we must fix by inserting buffer of value N");
-  result.nodes = nodes;
-  result.edges = edgeResult;
+#endif
+
+  GraphPrintingContent result = GeneratePrintingContent(accel,NodeWithDelayContent,EdgeWithDelayContent,out,temp);
+  result.graphLabel = STRING("Nodes contain their global latency after the \':\'\nEdge Format: (<Output Latency>/<Edge delay>/<Input Delay>) <Without buffer, node lantency + edge value>  [<Buffer value, difference between without buffer and input node latency>]\nImagine reading from the output node into the input node: Node latency + edge values equals latency which we must fix by inserting buffer of value N");
+//  result.nodes = nodes;
+//  result.edges = edgeResult;
   
   return result;
 }

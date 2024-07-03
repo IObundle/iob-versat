@@ -42,7 +42,7 @@ static void OutputGraphDotFile_(Accelerator* accel,bool collapseSameEdges,Set<FU
     }
   }
 
-  int size = Size(accel->edges);
+  int size = 9999; // Size(accel->edges);
   Hashmap<Pair<InstanceNode*,InstanceNode*>,int>* seen = PushHashmap<Pair<InstanceNode*,InstanceNode*>,int>(temp,size);
 
   // TODO: Consider adding a true same edge counter, that collects edges with equal delay and then represents them on the graph as a pair, using [portStart-portEnd]
@@ -207,10 +207,10 @@ void OutputGraphDotFile(Accelerator* accel,bool collapseSameEdges,FUInstance* hi
     }
   }
 
-  int size = Size(accel->edges);
+  int size = 9999; // Size(accel->edges);
   Hashmap<Pair<InstanceNode*,InstanceNode*>,int>* seen = PushHashmap<Pair<InstanceNode*,InstanceNode*>,int>(temp,size);
-
   // TODO: Consider adding a true same edge counter, that collects edges with equal delay and then represents them on the graph as a pair, using [portStart-portEnd]
+  // TODO: Change to use Array<Edge> 
   FOREACH_LIST(InstanceNode*,ptr,accel->allocated){
     FUInstance* out = ptr->inst;
 

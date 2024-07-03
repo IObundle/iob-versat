@@ -85,6 +85,7 @@ namespace ValueType{
 
 struct TemplateFunction;
 
+#if 0
 struct TypeIterator{
   PoolIterator<Type> iter;
   PoolIterator<Type> end;
@@ -93,6 +94,7 @@ struct TypeIterator{
 TypeIterator IterateTypes();
 bool HasNext(TypeIterator iter);
 Type* Next(TypeIterator& iter);
+#endif
 
 struct Value{
   union{
