@@ -20,7 +20,7 @@ String Repr(FUDeclaration* decl,Arena* out);
 String Repr(FUDeclaration** decl,Arena* out);
 String Repr(PortInstance* port,GraphDotFormat format,Arena* out);
 String Repr(MergeEdge* node,GraphDotFormat format,Arena* out);
-String Repr(PortEdge* node,GraphDotFormat format,Arena* out);
+String Repr(Edge* node,GraphDotFormat format,Arena* out);
 String Repr(MappingNode* node,Arena* out);
 String Repr(StaticId* id,Arena* out);
 String Repr(Wire* wire,Arena* out);

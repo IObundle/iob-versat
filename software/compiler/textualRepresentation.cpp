@@ -130,7 +130,7 @@ String Repr(PortInstance* port,GraphDotFormat format,Arena* out){
   return res;
 }
 
-String Repr(PortEdge* edge,GraphDotFormat format,Arena* out){
+String Repr(Edge* edge,GraphDotFormat format,Arena* out){
   auto mark = StartString(out);
 
   format |= GRAPH_DOT_FORMAT_NAME;
@@ -164,8 +164,8 @@ String Repr(MappingNode* node,Arena* out){
   if(node->type == MappingNode::NODE){
     name = Repr(&node->nodes,format,out);
   } else if(node->type == MappingNode::EDGE){
-    PortEdge e0 = node->edges[0];
-    PortEdge e1 = node->edges[1];
+    Edge e0 = node->edges[0];
+    Edge e1 = node->edges[1];
 
     auto mark = StartString(out);
     Repr(&e0,format,out);

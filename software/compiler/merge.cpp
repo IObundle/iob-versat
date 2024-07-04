@@ -16,12 +16,12 @@
 #include <cstdarg>
 #include <unordered_map>
 
-bool NodeMappingConflict(PortEdge edge1,PortEdge edge2){
+bool NodeMappingConflict(Edge edge1,Edge edge2){
   PortInstance p00 = edge1.units[0];
   PortInstance p01 = edge1.units[1];
   PortInstance p10 = edge2.units[0];
   PortInstance p11 = edge2.units[1];
-
+  
   /*
     if(!(edge1.units[0].port == edge2.units[0].port && edge1.units[1].port == edge2.units[1].port)){
     return false;
@@ -59,10 +59,10 @@ bool MappingConflict(MappingNode map1,MappingNode map2){
       return true;
     }
   } else if(map1.type == MappingNode::EDGE && map2.type == MappingNode::EDGE){
-    PortEdge nodeMapping00 = {map1.edges[0].units[0],map1.edges[1].units[0]};
-    PortEdge nodeMapping01 = {map1.edges[0].units[1],map1.edges[1].units[1]};
-    PortEdge nodeMapping10 = {map2.edges[0].units[0],map2.edges[1].units[0]};
-    PortEdge nodeMapping11 = {map2.edges[0].units[1],map2.edges[1].units[1]};
+    Edge nodeMapping00 = {map1.edges[0].units[0],map1.edges[1].units[0]};
+    Edge nodeMapping01 = {map1.edges[0].units[1],map1.edges[1].units[1]};
+    Edge nodeMapping10 = {map2.edges[0].units[0],map2.edges[1].units[0]};
+    Edge nodeMapping11 = {map2.edges[0].units[1],map2.edges[1].units[1]};
     
     bool res = NodeMappingConflict(nodeMapping00,nodeMapping10) ||
                NodeMappingConflict(nodeMapping01,nodeMapping10) ||
@@ -101,8 +101,8 @@ if(XOR(p0,e01,p1,e11)){
   return false;
 }
 
-int EdgeEqual(PortEdge edge1,PortEdge edge2){
-  int res = (memcmp(&edge1,&edge2,sizeof(PortEdge)) == 0);
+int EdgeEqual(Edge edge1,Edge edge2){
+  int res = (memcmp(&edge1,&edge2,sizeof(Edge)) == 0);
 
   return res;
 }
@@ -754,7 +754,7 @@ void InsertMapping(GraphMapping& map,FUInstance* inst1,FUInstance* inst0){
   DoInsertMapping(map.reverseInstanceMap,inst0,inst1);
 }
 
-void InsertMapping(GraphMapping& map,PortEdge& edge0,PortEdge& edge1){
+void InsertMapping(GraphMapping& map,Edge& edge0,Edge& edge1){
   map.edgeMap->Insert(edge1,edge0);
 
   InsertMapping(map,edge1.units[0].inst,edge0.units[0].inst);
@@ -770,8 +770,8 @@ void AddCliqueToMapping(GraphMapping& res,ConsolidationGraph clique){
 
       InsertMapping(res,nodes.instances[1],nodes.instances[0]);
     } else { // Edge mapping
-      PortEdge& edge0 = node.edges[0]; // Edge in graph 1
-      PortEdge& edge1 = node.edges[1]; // Edge in graph 2
+      Edge& edge0 = node.edges[0]; // Edge in graph 1
+      Edge& edge1 = node.edges[1]; // Edge in graph 2
 
       InsertMapping(res,edge1.units[0].inst,edge0.units[0].inst);
       InsertMapping(res,edge1.units[1].inst,edge0.units[1].inst);
@@ -785,7 +785,7 @@ GraphMapping InitGraphMapping(Arena* out){
   GraphMapping mapping = {};
   mapping.instanceMap = PushHashmap<FUInstance*,FUInstance*>(out,999);
   mapping.reverseInstanceMap = PushHashmap<FUInstance*,FUInstance*>(out,999);
-  mapping.edgeMap = PushHashmap<PortEdge,PortEdge>(out,999);
+  mapping.edgeMap = PushHashmap<Edge,Edge>(out,999);
   
   return mapping;
 }
@@ -821,8 +821,8 @@ GraphMapping ConsolidationGraphMapping(Accelerator* accel1,Accelerator* accel2,C
 
       InsertMapping(res,nodes.instances[1],nodes.instances[0]);
     } else { // Edge mapping
-         PortEdge& edge0 = node.edges[0]; // Edge in graph 1
-         PortEdge& edge1 = node.edges[1]; // Edge in graph 2
+         Edge& edge0 = node.edges[0]; // Edge in graph 1
+         Edge& edge1 = node.edges[1]; // Edge in graph 2
 
          InsertMapping(res,edge1.units[0].inst,edge0.units[0].inst);
          InsertMapping(res,edge1.units[1].inst,edge0.units[1].inst);
@@ -1217,7 +1217,7 @@ MergeGraphResult MergeGraph(Accelerator* flatten1,Accelerator* flatten2,GraphMap
     Edge edgeInst = iter.Next();
     Edge* edge = &edgeInst;
 
-    PortEdge searchEdge = {};
+    Edge searchEdge = {};
     searchEdge.units[0] = edge->units[0];
     searchEdge.units[1] = edge->units[1];
 
@@ -1294,7 +1294,7 @@ MergeGraphResultExisting MergeGraphToExisting(Accelerator* existing,Accelerator*
   while(iter.HasNext()){
     Edge edgeInst = iter.Next();
     Edge* edge = &edgeInst;
-    PortEdge searchEdge = {};
+    Edge searchEdge = {};
     searchEdge.units[0] = edge->units[0];
     searchEdge.units[1] = edge->units[1];
 
@@ -1963,7 +1963,8 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
         decl->configInfo[i].calculatedDelays[orderIndex] = reconDelay[i].nodeDelay->GetOrFail(*optReconNode);
         decl->configInfo[i].order[orderIndex] = reconToOrder[i]->GetOrFail(*optReconNode);
       } else {
-        decl->configInfo[i].calculatedDelays[orderIndex] = -1;
+        decl->configInfo[i].calculatedDelays[orderIndex] = 0;
+        //decl->configInfo[i].calculatedDelays[orderIndex] = -1;
         decl->configInfo[i].order[orderIndex] = -1;
       }
 

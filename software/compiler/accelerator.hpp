@@ -8,11 +8,11 @@
 
 struct FUInstance;
 struct FUDeclaration;
+
 struct Edge;
-struct PortEdge;
 
 typedef Hashmap<FUInstance*,FUInstance*> InstanceMap;
-typedef Hashmap<PortEdge,PortEdge> PortEdgeMap;
+typedef Hashmap<Edge,Edge> EdgeMap;
 
 struct PortInstance{
   FUInstance* inst;
@@ -39,36 +39,12 @@ public:
   }
 };
 
-struct PortEdge{
-  PortInstance units[2];
-};
-
-inline bool operator==(const PortEdge& e1,const PortEdge& e2){
-  bool res = (e1.units[0] == e2.units[0] && e1.units[1] == e2.units[1]);
-  return res;
-}
-
-inline bool operator!=(const PortEdge& e1,const PortEdge& e2){
-  bool res = !(e1 == e2);
-  return res;
-}
-
-template<> class std::hash<PortEdge>{
-public:
-  std::size_t operator()(PortEdge const& s) const noexcept{
-    std::size_t res = std::hash<PortInstance>()(s.units[0]);
-    res += std::hash<PortInstance>()(s.units[1]);
-    return res;
-  }
-};
-
 struct Edge{ // A edge in a graph
   union{
     struct{
       PortInstance out;
       PortInstance in;
     };
-    PortEdge edge;
     PortInstance units[2];
   };
 
@@ -127,6 +103,7 @@ struct FUInstance{
   ConnectionNode* allOutputs;
   Array<PortInstance> inputs;
   Array<bool> outputs;
+
   //int outputs;
   bool multipleSamePortInputs;
   NodeType type;

@@ -316,7 +316,8 @@ static InstanceInfo GetInstanceInfo(FUInstance* node,FUDeclaration* parentDeclar
   info.special = inst->literal;
   info.order = offsets.order;
   info.connectionType = node->type;
-
+  info.id = node->id;
+  
   Assert(info.baseDelay >= 0);
   
   if(topDecl->memoryMapBits.has_value()){

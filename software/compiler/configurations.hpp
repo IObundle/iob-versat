@@ -82,6 +82,7 @@ struct InstanceInfo{
   int special;
   int order;
   NodeType connectionType;
+  int id;
 };
 
 struct AcceleratorInfo{

@@ -26,7 +26,8 @@ Accelerator* CreateAccelerator(String name){
   accel->accelMemory = CreateDynamicArena(1);
 
   accel->name = PushString(accel->accelMemory,name);
-
+  PushString(accel->accelMemory,{"",1});
+  
   return accel;
 }
 
@@ -41,6 +42,7 @@ bool NameExists(Accelerator* accel,String name){
 }
 
 FUInstance* CreateFUInstance(Accelerator* accel,FUDeclaration* type,String name){
+  static int globalID = 0;
   String storedName = PushString(accel->accelMemory,name);
 
   Assert(CheckValidName(storedName));
@@ -61,7 +63,8 @@ FUInstance* CreateFUInstance(Accelerator* accel,FUDeclaration* type,String name)
   inst->name = storedName;
   inst->accel = accel;
   inst->declaration = type;
-
+  inst->id = globalID++;
+  
   return inst;
 }
 
@@ -99,24 +102,6 @@ Accelerator* CopyAccelerator(Accelerator* accel,InstanceMap* map){
   
   return newAccel;
 }
-
-#if 0
-FUInstance* CopyInstance(Accelerator* newAccel,FUInstance* oldInstance,String newName){
-  FUInstance* newInst = CreateFUInstance(newAccel,oldInstance->declaration,newName);
-
-  newInst->parameters = oldInstance->parameters;
-  newInst->portIndex = oldInstance->portIndex;
-
-  if(oldInstance->isStatic){
-    SetStatic(newAccel,newInst);
-  }
-  if(oldInstance->sharedEnable){
-    ShareInstanceConfig(newInst,oldInstance->sharedIndex);
-  }
-
-  return newInst;
-}
-#endif
 
 FUInstance* CopyInstance(Accelerator* newAccel,FUInstance* oldInstance,String newName){
   FUInstance* newNode = CreateFUInstance(newAccel,oldInstance->declaration,newName);
