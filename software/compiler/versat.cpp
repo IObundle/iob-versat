@@ -553,12 +553,14 @@ FUDeclaration* RegisterSubUnit(Accelerator* circuit,Arena* temp,Arena* temp2){
 
   decl.type = FUDeclarationType_COMPOSITE;
 
-  String basePath = PushDebugPath(temp,name,STRING("base.dot"));
-  String base2Path = PushDebugPath(temp,name,STRING("base2.dot"));
-  OutputGraphDotFile(circuit,false,basePath,temp);
-  decl.baseCircuit = CopyAccelerator(circuit,nullptr);
-  OutputGraphDotFile(decl.baseCircuit,false,base2Path,temp);
+  OutputDebugDotGraph(circuit,STRING("DefaultCircuit.dot"),temp);
 
+  decl.baseCircuit = CopyAccelerator(circuit,nullptr);
+  OutputDebugDotGraph(decl.baseCircuit,STRING("DefaultCopy.dot"),temp);
+
+  decl.flattenedBaseCircuit = Flatten(decl.baseCircuit,99,temp);
+  OutputDebugDotGraph(decl.flattenedBaseCircuit,STRING("DefaultFlattened.dot"),temp);
+  
   DAGOrderNodes order = CalculateDAGOrder(circuit->allocated,temp);
   CalculateDelayResult delays = CalculateDelay(circuit,order,temp);
 
@@ -571,15 +573,12 @@ FUDeclaration* RegisterSubUnit(Accelerator* circuit,Arena* temp,Arena* temp2){
       index += 1;
     }
   }
-  
-  region(temp){
-    String beforePath = PushDebugPath(temp,name,STRING("beforeFixDelay.dot"));
-    String afterPath = PushDebugPath(temp,name,STRING("afterFixDelay.dot"));
 
+  region(temp){
     // TODO: Cannot collapse same edges because we do not actually calculate wether edges are the same in respect to delays and so on.
-    OutputGraphDotFile(circuit,false,beforePath,temp);
+    OutputDebugDotGraph(circuit,STRING("BeforeFixDelay.dot"),temp);
     FixDelays(circuit,delays.edgesDelay,temp);
-    OutputGraphDotFile(circuit,false,afterPath,temp);
+    OutputDebugDotGraph(circuit,STRING("AfterFixDelay.dot"),temp);
   }
 
   decl.fixedDelayCircuit = circuit;
@@ -660,9 +659,11 @@ FUDeclaration* RegisterIterativeUnit(Accelerator* accel,FUInstance* inst,int lat
 
   FUDeclaration* type = BasicDeclaration::timedMultiplexer;
 
+#if 0
   String beforePath = PushDebugPath(temp,name,STRING("iterativeBefore.dot"));
   OutputGraphDotFile(accel,false,beforePath,temp);
-
+#endif
+  
   Array<Connection> conn = PushArray<Connection>(temp,inputs.size);
   Memset(conn,{});
 
@@ -722,9 +723,11 @@ FUDeclaration* RegisterIterativeUnit(Accelerator* accel,FUInstance* inst,int lat
     InsertUnit(accel,(PortInstance){conn[i].mux,0},conn[i].unit,(PortInstance){buffer,0});
   }
 
+#if 0
   String afterPath = PushDebugPath(temp,name,STRING("iterativeBefore.dot"));
   OutputGraphDotFile(accel,true,afterPath,temp);
-
+#endif
+  
   FUDeclaration declaration = {};
 
   declaration = *inst->declaration; // By default, copy everything from unit

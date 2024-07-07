@@ -19,9 +19,11 @@ String FuzzText(String formattedExample,Arena* out,int seed = COMPILE_TIME); // 
 
 void OutputGraphDotFile(Accelerator* accel,bool collapseSameEdges,FUInstance* highlighInstance,CalculateDelayResult delays,String filename,Arena* temp);
 
+#if 0
 void OutputGraphDotFile(Accelerator* accel,bool collapseSameEdges,String filename,Arena* temp);
 void OutputGraphDotFile(Accelerator* accel,bool collapseSameEdges,FUInstance* highlighInstance,String filename,Arena* temp);
 void OutputGraphDotFile(Accelerator* accel,bool collapseSameEdges,Set<FUInstance*>* highlight,String filename,Arena* temp);
+#endif
 
 void OutputContentToFile(String filepath,String content);
 
@@ -30,4 +32,6 @@ void OutputMemoryHex(void* memory,int size);
 
 // folderName can be empty string, file is created inside debug folder directly. 
 String PushDebugPath(Arena* out,String folderName,String fileName);
+
+
 

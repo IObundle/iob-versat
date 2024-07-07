@@ -32,7 +32,7 @@ String Repr(bool* b,Arena* out);
 String Repr(TypeStructInfo* info,Arena* out);
 String Repr(FUInstance* node,Arena* out);
 String Repr(char** ch,Arena* out);
-String Repr(ExternalMemoryInterfaceTemplate<int>* ext, Arena* out);
+//String Repr(ExternalMemoryInterfaceTemplate<int>* ext, Arena* out);
 
 template<int N>
 String Repr(char (*buffer)[N],Arena* out){

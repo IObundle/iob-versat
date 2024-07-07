@@ -4,15 +4,19 @@
 
 #include "utils.hpp"
 #include "memory.hpp"
-#include "declaration.hpp"
+#include "configurations.hpp"
+#include "verilogParsing.hpp"
 
 struct FUInstance;
 struct FUDeclaration;
-
+struct Accelerator;
 struct Edge;
 
 typedef Hashmap<FUInstance*,FUInstance*> InstanceMap;
 typedef Hashmap<Edge,Edge> EdgeMap;
+
+#define PushInstanceMap(...) PushHashmap<FUInstance*,FUInstance*>(__VA_ARGS__)
+#define PushEdgeMap(...) PushHashmap<Edge,Edge>(__VA_ARGS__)
 
 struct PortInstance{
   FUInstance* inst;
@@ -57,8 +61,6 @@ bool EdgeEqualNoDelay(const Edge& e0,const Edge& e1);
 inline bool operator==(const Edge& e0,const Edge& e1){
   return (EdgeEqualNoDelay(e0,e1) && e0.delay == e1.delay);
 }
-
-struct FUInstance;
 
 typedef Array<Edge> Path;
 typedef Hashmap<Edge,Path> PathMap;
@@ -114,10 +116,11 @@ struct Accelerator{ // Graph + data storage
   FUInstance* allocated;
   FUInstance* lastAllocated;
   Pool<FUInstance> instances; // TODO: Does anyone care about this or can we just use the allocated list?
-
+  
   DynamicArena* accelMemory; // TODO: We could remove all this because we can now build all the accelerators in place. (Add an API that functions like a Accelerator builder and at the end we lock everything into an immutable graph).
 
   String name; // For debugging purposes it's useful to give accelerators a name
+  int id;
 };
 
 struct MemoryAddressMask{
@@ -185,9 +188,8 @@ struct EdgeIterator{
   Edge Next();
 };
 
-Accelerator*  CopyAccelerator(Accelerator* accel,InstanceMap* map);
-FUInstance*   CopyInstance(Accelerator* newAccel,FUInstance*   oldInstance,String newName);
-FUInstance* CopyInstance(Accelerator* newAccel,FUInstance* oldInstance,String newName);
+Accelerator* CopyAccelerator(Accelerator* accel,InstanceMap* map); // Maps instances from accel to the copy
+FUInstance*  CopyInstance(Accelerator* newAccel,FUInstance* oldInstance,String newName);
 
 bool NameExists(Accelerator* accel,String name);
 

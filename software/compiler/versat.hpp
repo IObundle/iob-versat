@@ -17,7 +17,6 @@ struct Accelerator;
 struct FUDeclaration;
 struct IterativeUnitDeclaration;
 struct FUInstance;
-//struct FUInstance;
 
 enum VersatDebugFlags{
   OUTPUT_GRAPH_DOT,

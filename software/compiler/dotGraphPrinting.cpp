@@ -15,29 +15,30 @@ static String graphPrintingColorTable[] = {
   STRING("darkyellow")
 };
 
-GraphPrintingColor DefaultNodeColor(FUInstance* node){
-  GraphPrintingColor color = GraphPrintingColor_BLUE;
+Color DefaultNodeColor(FUInstance* inst){
+  Color color = Color_BLUE;
     
-  if(node->type == NodeType_SOURCE || node->type == NodeType_SOURCE_AND_SINK){
-    color = GraphPrintingColor_GREEN;
-  } else if(node->type == NodeType_SINK){
-    color = GraphPrintingColor_BLACK;
+  if(inst->type == NodeType_SOURCE || inst->type == NodeType_SOURCE_AND_SINK){
+    color = Color_GREEN;
+  } else if(inst->type == NodeType_SINK){
+    color = Color_BLACK;
   }
 
   return color;
 }
 
-Pair<String,GraphPrintingColor> DefaultNodeContent(FUInstance* node,Arena* out){
-  return {node->name,DefaultNodeColor(node)};
+GraphInfo DefaultNodeContent(FUInstance* inst,Arena* out){
+  String str = PushString(out,"%.*s_%d",UNPACK_SS(inst->name),inst->id);
+  return {str,DefaultNodeColor(inst)};
 }
 
-Pair<String,GraphPrintingColor> DefaultEdgeContent(Edge* edge,Arena* out){
+GraphInfo DefaultEdgeContent(Edge* edge,Arena* out){
   int inPort = edge->in.port;
   int outPort = edge->out.port;
 
   String content = PushString(out,"%d -> %d",outPort,inPort);
 
-  return {content,GraphPrintingColor_BLACK};
+  return {content,Color_BLACK};
 }
 
 NodeContent defaultNodeContent = DefaultNodeContent;
@@ -55,24 +56,23 @@ GraphPrintingContent GeneratePrintingContent(Accelerator* accel,NodeContent node
   Array<Edge> edges = GetAllEdges(accel,temp);
 
   ArenaList<GraphPrintingNodeInfo>* nodeInfo = PushArenaList<GraphPrintingNodeInfo>(temp);
-  FOREACH_LIST(FUInstance*,ptr,accel->allocated){
-    FUInstance* inst = ptr;
-    Pair<String,GraphPrintingColor> content = nodeFunction(ptr,out);
+  FOREACH_LIST(FUInstance*,inst,accel->allocated){
+    GraphInfo content = nodeFunction(inst,out);
     String name = UniqueInstanceName(inst,out);
 
-    *nodeInfo->PushElem() = {.name = name,.content = content.first,.color = content.second};
+    *nodeInfo->PushElem() = {.name = name,.content = content.content,.color = content.color};
   }
   Array<GraphPrintingNodeInfo> nodes = PushArrayFromList(out,nodeInfo);
 
   ArenaList<GraphPrintingEdgeInfo>* edgeInfo = PushArenaList<GraphPrintingEdgeInfo>(temp);
   for(Edge edge : edges){
-    Pair<String,GraphPrintingColor> content = edgeFunction(&edge,out);
+    GraphInfo content = edgeFunction(&edge,out);
     String first = UniqueInstanceName(edge.out.inst,out);
     String second = UniqueInstanceName(edge.in.inst,out); 
 
     *edgeInfo->PushElem() = {
-      .content = content.first,
-      .color = content.second,
+      .content = content.content,
+      .color = content.color,
       .first = first,
       .second = second
     };
@@ -87,7 +87,11 @@ GraphPrintingContent GeneratePrintingContent(Accelerator* accel,NodeContent node
 }
 
 GraphPrintingContent GenerateDefaultPrintingContent(Accelerator* accel,Arena* out,Arena* temp){
-  return GeneratePrintingContent(accel,defaultNodeContent,defaultEdgeContent,out,temp);
+  GraphPrintingContent content = GeneratePrintingContent(accel,defaultNodeContent,defaultEdgeContent,out,temp);
+
+  content.graphLabel = PushString(out,"%d",accel->id);
+  
+  return content;
 }
 
 String GenerateDotGraph(Accelerator* accel,GraphPrintingContent content,Arena* out,Arena* temp){
@@ -120,3 +124,73 @@ String GenerateDotGraph(Accelerator* accel,GraphPrintingContent content,Arena* o
     
   return EndString(result);
 }
+
+void OutputDebugDotGraph(Accelerator* accel,String fileName,Arena* temp){
+  Arena* temp2 = debugArena;
+
+  BLOCK_REGION(temp);
+  BLOCK_REGION(temp2);
+
+  String trueFileName = PushString(temp,fileName); // Make it safe to use StaticFormat outside this function
+  
+  String filePath = PushDebugPath(temp,accel->name,trueFileName);
+      
+  GraphPrintingContent content = GenerateDefaultPrintingContent(accel,temp,temp2);
+  String result = GenerateDotGraph(accel,content,temp,debugArena);
+  OutputContentToFile(filePath,result);
+}
+
+void OutputDebugDotGraph(Accelerator* accel,String fileName,FUInstance* highlight,Arena* temp){
+  Arena* temp2 = debugArena;
+
+  BLOCK_REGION(temp);
+  BLOCK_REGION(temp2);
+
+  String trueFileName = PushString(temp,fileName); // Make it safe to use StaticFormat outside this function
+  
+  String filePath = PushDebugPath(temp,accel->name,trueFileName);
+
+  auto nodeFunction = [highlight](FUInstance* inst,Arena* out) -> GraphInfo {
+    GraphInfo def = DefaultNodeContent(inst,out);
+    if(inst == highlight){
+      Assert(def.color != Color_GREEN);
+      return {def.content,Color_GREEN};
+    } else {
+      return def;
+    }
+  };
+  
+  GraphPrintingContent content = GeneratePrintingContent(accel,nodeFunction,defaultEdgeContent,temp,temp2);
+  String result = GenerateDotGraph(accel,content,temp,debugArena);
+  OutputContentToFile(filePath,result);
+}
+
+void OutputDebugDotGraph(Accelerator* accel,String fileName,Set<FUInstance*>* highlight,Arena* temp){
+  Arena* temp2 = debugArena;
+
+  BLOCK_REGION(temp);
+  BLOCK_REGION(temp2);
+
+  String trueFileName = PushString(temp,fileName); // Make it safe to use StaticFormat outside this function
+  
+  String filePath = PushDebugPath(temp,accel->name,trueFileName);
+
+  auto nodeFunction = [highlight](FUInstance* inst,Arena* out) -> GraphInfo {
+    GraphInfo def = DefaultNodeContent(inst,out);
+    if(highlight->Exists(inst)){
+      Assert(def.color != Color_RED);
+      return {def.content,Color_RED};
+    } else {
+      return def;
+    }
+  };
+  
+  GraphPrintingContent content = GeneratePrintingContent(accel,nodeFunction,defaultEdgeContent,temp,temp2);
+  String result = GenerateDotGraph(accel,content,temp,debugArena);
+  OutputContentToFile(filePath,result);
+}
+
+
+
+
+

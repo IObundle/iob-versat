@@ -21,15 +21,36 @@ static Pool<Accelerator> accelerators;
 typedef Hashmap<FUInstance*,FUInstance*> InstanceMap;
 
 Accelerator* CreateAccelerator(String name){
+  static int globalID = 0;
   Accelerator* accel = accelerators.Alloc();
   
   accel->accelMemory = CreateDynamicArena(1);
-
+  accel->id = globalID++;
+  
   accel->name = PushString(accel->accelMemory,name);
   PushString(accel->accelMemory,{"",1});
   
   return accel;
 }
+
+#if 0
+// For now hack it away.
+// Deal with the falout later
+void LockAccelerator(Accelerator* accel){
+  if(accel->locked.size > 0){
+    return;
+  }
+
+  int size = Size(accel->allocated);
+  
+  accel->locked = PushArray<FUInstance*>(accel->accelMemory,size);
+
+  int index = 0;
+  FOREACH_LIST_INDEXED(FUInstance*,inst,accel->allocated,index){
+    accel->locked[index] = inst;
+  }
+}
+#endif
 
 bool NameExists(Accelerator* accel,String name){
   FOREACH_LIST(FUInstance*,ptr,accel->allocated){
@@ -116,14 +137,14 @@ FUInstance* CopyInstance(Accelerator* newAccel,FUInstance* oldInstance,String ne
   if(oldInstance->sharedEnable){
     ShareInstanceConfig(newInst,oldInstance->sharedIndex);
   }
-
+  newInst->id = oldInstance->id;
+  
   return newNode;
 }
 
-void RemoveFUInstance(Accelerator* accel,FUInstance* node){
-  FUInstance* inst = node;
-  
-  accel->allocated = RemoveUnit(accel->allocated,node);
+void RemoveFUInstance(Accelerator* accel,FUInstance* inst){
+  accel->allocated = RemoveUnit(accel->allocated,inst);
+  accel->instances.Remove(inst);
 }
 
 Array<int> ExtractInputDelays(Accelerator* accel,CalculateDelayResult delays,int mimimumAmount,Arena* out,Arena* temp){
@@ -450,9 +471,13 @@ Accelerator* Flatten(Accelerator* accel,int times,Arena* temp){
     compositeInstances.Clear();
   }
 
+#if 0
   String debugFilepath = PushDebugPath(temp,accel->name,STRING("flatten.dot"));
   OutputGraphDotFile(newAccel,true,debugFilepath,temp);
-
+#endif
+  
+  OutputDebugDotGraph(newAccel,STRING("flatten.dot"),temp);
+  
   toRemove.Clear(true);
   compositeInstances.Clear(true);
 
@@ -795,9 +820,8 @@ void FixDelays(Accelerator* accel,Hashmap<Edge,int>* edgeDelays,Arena* temp){
 
     InsertUnit(accel,edge.units[0],edge.units[1],PortInstance{buffer,0});
 
-    String fileName = PushString(temp,"fixDelay_%d.dot",buffersInserted);
-    String filePath = PushDebugPath(temp,accel->name,fileName);
-    OutputGraphDotFile(accel,true,buffer,filePath,temp);
+    OutputDebugDotGraph(accel,STRING(StaticFormat("fixDelay_%d.dot",buffersInserted)),buffer,temp);
+
     buffersInserted += 1;
   }
 }

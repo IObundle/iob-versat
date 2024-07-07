@@ -369,14 +369,14 @@ CalculateDelayResult CalculateGlobalInitialLatency(Accelerator* accel,DAGOrderNo
 GraphPrintingContent GenerateDelayDotGraph(Accelerator* accel,CalculateDelayResult delayInfo,Arena* out,Arena* temp){
   BLOCK_REGION(temp);
 
-  auto NodeWithDelayContent = [&](FUInstance* node,Arena* out) -> Pair<String,GraphPrintingColor>{
+  auto NodeWithDelayContent = [&](FUInstance* node,Arena* out) -> GraphInfo{
     int delay = delayInfo.nodeDelay->GetOrFail(node);
     String content = PushString(out,"%.*s:%d",UNPACK_SS(node->name),delay);
 
     return {content,DefaultNodeColor(node)};
   };
 
-  auto EdgeWithDelayContent = [&](Edge* edge,Arena* out) -> Pair<String,GraphPrintingColor>{
+  auto EdgeWithDelayContent = [&](Edge* edge,Arena* out) -> GraphInfo{
     int inPort = edge->in.port;
     int outPort = edge->out.port;
 
@@ -394,9 +394,9 @@ GraphPrintingContent GenerateDelayDotGraph(Accelerator* accel,CalculateDelayResu
     String first = edge->out.inst->name;
     String second = edge->in.inst->name; 
 
-    GraphPrintingColor color = GraphPrintingColor_BLACK;
+    Color color = Color_BLACK;
     if(edgeDelay == ANY_DELAY_MARK){
-     color = GraphPrintingColor_RED;
+     color = Color_RED;
     }
 
     return {content,color};

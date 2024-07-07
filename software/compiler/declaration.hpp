@@ -2,10 +2,15 @@
 
 #include <cstdio>
 
-#include "configurations.hpp"
+#include "accelerator.hpp"
 #include "verilogParsing.hpp"
 
-struct FUInstance;
+//struct FUInstance;
+struct FUDeclaration;
+struct Edge;
+
+typedef Hashmap<FUInstance*,FUInstance*> InstanceMap;
+typedef Hashmap<Edge,Edge> EdgeMap;
 
 // NOTE: Delay type is not really needed anymore because we can figure out the delay of a unit by: wether it contains inputs and outputs, the position on the graph and if we eventually add (input and output delay) whether it contains those as well.
 //       After implementing input and output delay, retire DelayType
@@ -74,6 +79,8 @@ struct ConfigurationInfo{
   CalculatedOffsets delayOffsets;
   Array<int>        calculatedDelays;
   Array<int>        order;
+  InstanceMap*      mapping; // Maps from base type flattened to merged type baseCircuit
+  Set<PortInstance>* mergeMultiplexers; // On merged fixedDelayCircuit. "baseCircuit"
   Array<bool>       unitBelongs;
 };
 
@@ -90,7 +97,6 @@ enum FUDeclarationType{
 // TODO: There is a lot of crux between parsing and creating the FUDeclaration for composite accelerators 
 //       the FUDeclaration should be composed of something that is in common to all of them.
 // A declaration is the instantiation of a type
-// Derive: Short={name}
 struct FUDeclaration{
   String name;
 
@@ -105,6 +111,7 @@ struct FUDeclaration{
   // Stores different accelerators depending on properties we want
   Accelerator* baseCircuit;
   Accelerator* fixedDelayCircuit;
+  Accelerator* flattenedBaseCircuit;
   
   const char* operation;
 

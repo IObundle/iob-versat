@@ -392,7 +392,7 @@ public:
 public:
   bool operator!=(SetIterator& iter);
   void operator++();
-  Data& operator*();
+  Data operator*();
 };
 
 template<typename Data>
@@ -1161,7 +1161,7 @@ void SetIterator<Data>::operator++(){
 }
 
 template<typename Data>
-Data& SetIterator<Data>::operator*(){
+Data SetIterator<Data>::operator*(){
   return (*this->innerIter).first;
 }
 

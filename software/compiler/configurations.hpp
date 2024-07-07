@@ -8,6 +8,14 @@ struct FUInstance;
 struct Accelerator;
 struct FUDeclaration;
 
+enum NodeType{
+  NodeType_UNCONNECTED,
+  NodeType_SOURCE,
+  NodeType_COMPUTE,
+  NodeType_SINK,
+  NodeType_SOURCE_AND_SINK
+};
+
 // Strange forward declare
 template<typename T> struct WireTemplate;
 typedef WireTemplate<int> Wire;
@@ -44,14 +52,6 @@ enum MemType{
    STATE,
    DELAY,
    STATIC
-};
-
-enum NodeType{
-  NodeType_UNCONNECTED,
-  NodeType_SOURCE,
-  NodeType_COMPUTE,
-  NodeType_SINK,
-  NodeType_SOURCE_AND_SINK
 };
 
 struct InstanceInfo{
