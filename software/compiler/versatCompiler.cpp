@@ -399,28 +399,15 @@ static Value HexValue(Value in,Arena* out){
   return res;
 }
 
-static Value EscapeString(Value val,Arena* out){
-  Assert(val.type == ValueType::SIZED_STRING || val.type == ValueType::STRING || val.type == ValueType::CONST_STRING);
-  Assert(val.isTemp);
+static Value Identify(Value val,Arena* out){
+  Assert(val.type == GetType(STRING("FUInstance*")));
+  
+  FUInstance** instPtr = (FUInstance**) val.custom;
+  FUInstance* inst = *instPtr;
 
-  String str = val.str;
-
-  String escaped = PushString(out,str);
-  char* view = (char*) escaped.data;
-
-  for(int i = 0; i < escaped.size; i++){
-    char ch = view[i];
-
-    if(   (ch >= 'a' && ch <= 'z')
-          || (ch >= 'A' && ch <= 'Z')
-          || (ch >= '0' && ch <= '9')){
-      continue;
-    } else {
-      view[i] = '_'; // Replace any foreign symbol with a underscore
-    }
-  }
-
-  return MakeValue(escaped);
+  String ret = PushString(out,"%.*s_%d",UNPACK_SS(inst->name),inst->id);
+  
+  return MakeValue(ret);
 }
 
 int main(int argc,const char** argv){
@@ -463,7 +450,7 @@ int main(int argc,const char** argv){
     return MakeValue(byteSize);
   });
   RegisterPipeOperation(STRING("Hex"),HexValue);
-  RegisterPipeOperation(STRING("Identify"),EscapeString);
+  RegisterPipeOperation(STRING("Identify"),Identify);
   RegisterPipeOperation(STRING("Type"),[](Value val,Arena* out){
     Type* type = val.type;
 

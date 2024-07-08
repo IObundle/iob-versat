@@ -32,9 +32,9 @@
    #{else}
       #{if decl2.isOperation}
          #{if decl2.baseConfig.outputLatencies[0] == 0}
-            #{set res "comb_" # inst2.name |> Identify}
+            #{set res "comb_" # inst2 |> Identify}
          #{else}
-            #{set res "seq_" # inst2.name |> Identify}
+            #{set res "seq_" # inst2 |> Identify}
          #{end} 
       #{else}
          #{set res "output_" # @{id} # "_" # portNode.port} 
@@ -56,9 +56,9 @@
    #{else}
       #{if decl2.isOperation}
          #{if decl2.baseConfig.outputLatencies[0] == 0}
-            #{set res "comb_" # inst2.name |> Identify}
+            #{set res "comb_" # inst2 |> Identify}
          #{else}
-            #{set res "seq_" # inst2.name |> Identify}
+            #{set res "seq_" # inst2 |> Identify}
          #{end} 
       #{else}
          #{set res "output_" # inst2.id # "_" # portNode.port} 

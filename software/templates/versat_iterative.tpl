@@ -155,7 +155,7 @@ end
 #{end}
 
 #{if nCombOperations}
-reg [31:0] #{join "," node instances} #{if node.declaration.isOperation and node.declaration.outputLatencies[0] == 0} comb_@{node.name |> Identify} #{end}#{end}; 
+reg [31:0] #{join "," node instances} #{if node.declaration.isOperation and node.declaration.outputLatencies[0] == 0} comb_@{node |> Identify} #{end}#{end}; 
 
 always @*
 begin
@@ -164,10 +164,10 @@ begin
    #{if decl.isOperation and decl.outputLatencies[0] == 0}
       #{set input1 node.inputs[0]}
       #{if decl.inputDelays.size == 1}
-         #{format decl.operation "comb" @{node.name |> Identify} #{call retOutputName2 instances input1}};
+         #{format decl.operation "comb" @{node |> Identify} #{call retOutputName2 instances input1}};
       #{else}
          #{set input2 node.inputs[1]}
-         #{format decl.operation "comb" @{node.name |> Identify} #{call retOutputName2 instances input1} #{call retOutputName2 instances input2}};
+         #{format decl.operation "comb" @{node |> Identify} #{call retOutputName2 instances input1} #{call retOutputName2 instances input2}};
       #{end}
    #{end}
 #{end}
@@ -175,7 +175,7 @@ end
 #{end}
 
 #{if nSeqOperations}
-reg [31:0] #{join "," node instances} #{if node.declaration.isOperation and node.declaration.outputLatencies[0] != 0} seq_@{node.name |> Identify} #{end}#{end}; 
+reg [31:0] #{join "," node instances} #{if node.declaration.isOperation and node.declaration.outputLatencies[0] != 0} seq_@{node |> Identify} #{end}#{end}; 
 
 always @(posedge clk)
 begin
@@ -183,7 +183,7 @@ begin
    #{set decl node.declaration}
    #{if decl.isOperation and decl.outputLatencies[0] != 0 }
       #{set input1 node.inputs[0]}
-      #{format decl.operation "seq" @{node.name |> Identify} #{call retOutputName2 instances input1}};
+      #{format decl.operation "seq" @{node |> Identify} #{call retOutputName2 instances input1}};
    #{end}
 #{end}   
 end
@@ -201,7 +201,7 @@ end
 #{let inst node}
 #{let decl inst.declaration}
    #{if (decl != inputDecl and decl != outputDecl and !decl.isOperation)}
-      @{decl.name} @{inst.parameters} @{inst.name |> Identify}_@{counter} (
+      @{decl.name} @{inst.parameters} @{inst |> Identify}_@{counter} (
          #{for j node.outputs} #{if j}
             .out@{index}(output_@{id}_@{index}),
          #{else}
@@ -224,7 +224,7 @@ end
          
          #{if inst.isStatic}
          #{for wire decl.baseConfig.configs}
-         .@{wire.name}(@{accel.name}_@{inst.name |> Identify}_@{wire.name}),
+         .@{wire.name}(@{accel.name}_@{inst |> Identify}_@{wire.name}),
          #{end}
 
          #{else}

@@ -96,7 +96,6 @@ struct FUInstance{
   bool isStatic;
   bool sharedEnable;
   bool isMergeMultiplexer; // TODO: Kinda of an hack for now
-  bool disabledMergeMultiplexer; // TODO: Kinda of an hack for now
 
   FUInstance* next;
 
