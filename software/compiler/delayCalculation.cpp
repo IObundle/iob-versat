@@ -138,7 +138,7 @@ CalculateDelayResult CalculateDelay(Accelerator* accel,DAGOrderNodes order,Arena
 
     region(out){
       String fileName = PushString(out,"%d_out1_%d.dot",functionCalls,graphs++);
-      String filePath = PushDebugPath(out,accel->name,fileName);
+      String filePath = PushDebugPath(out,accel->name,STRING("delays"),fileName);
       
       GraphPrintingContent content = GenerateDelayDotGraph(accel,res,out,debugArena);
       String result = GenerateDotGraph(accel,content,out,debugArena);
@@ -182,7 +182,7 @@ CalculateDelayResult CalculateDelay(Accelerator* accel,DAGOrderNodes order,Arena
 
     region(out){
       String fileName = PushString(out,"%d_out2_%d.dot",functionCalls,graphs++);
-      String filePath = PushDebugPath(out,accel->name,fileName);
+      String filePath = PushDebugPath(out,accel->name,STRING("delays"),fileName);
       
       GraphPrintingContent content = GenerateDelayDotGraph(accel,res,out,debugArena);
       String result = GenerateDotGraph(accel,content,out,debugArena);
@@ -218,7 +218,7 @@ CalculateDelayResult CalculateDelay(Accelerator* accel,DAGOrderNodes order,Arena
   
   region(out){
     String fileName = PushString(out,"%d_out3_%d.dot",functionCalls,graphs++);
-    String filePath = PushDebugPath(out,accel->name,fileName);
+    String filePath = PushDebugPath(out,accel->name,STRING("delays"),fileName);
       
     GraphPrintingContent content = GenerateDelayDotGraph(accel,res,out,debugArena);
     String result = GenerateDotGraph(accel,content,out,debugArena);
@@ -254,7 +254,7 @@ CalculateDelayResult CalculateDelay(Accelerator* accel,DAGOrderNodes order,Arena
 
   region(out){
     String fileName = PushString(out,"%d_out4_%d.dot",functionCalls,graphs++);
-    String filePath = PushDebugPath(out,accel->name,fileName);
+    String filePath = PushDebugPath(out,accel->name,STRING("delays"),fileName);
       
     GraphPrintingContent content = GenerateDelayDotGraph(accel,res,out,debugArena);
     String result = GenerateDotGraph(accel,content,out,debugArena);
@@ -306,7 +306,7 @@ CalculateDelayResult CalculateDelay(Accelerator* accel,DAGOrderNodes order,Arena
   
   region(out){
     String fileName = PushString(out,"%d_out_final.dot",functionCalls);
-    String filepath = PushDebugPath(out,accel->name,fileName);
+    String filepath = PushDebugPath(out,accel->name,STRING("delays"),fileName);
 
     GraphPrintingContent content = GenerateDelayDotGraph(accel,res,out,debugArena);
     String result = GenerateDotGraph(accel,content,out,debugArena);

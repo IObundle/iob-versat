@@ -825,7 +825,7 @@ FUDeclaration* ParseIterative(Tokenizer* tok,Arena* temp,Arena* temp2){
   String moduleName = tok->NextToken();
   String name = PushString(perm,moduleName);
 
-  Accelerator* iterative = CreateAccelerator(name);
+  Accelerator* iterative = CreateAccelerator(name,AcceleratorPurpose_MODULE);
 
   tok->AssertNextToken("(");
   // Arguments
@@ -1383,7 +1383,7 @@ static bool InstantiateTransform(Tokenizer* tok,TransformDef def,Arena* temp){
 
 FUDeclaration* InstantiateModule(Tokenizer* tok,ModuleDef def,Arena* temp,Arena* temp2){
   Arena* perm = globalPermanent;
-  Accelerator* circuit = CreateAccelerator(def.name);
+  Accelerator* circuit = CreateAccelerator(def.name,AcceleratorPurpose_MODULE);
 
   InstanceTable* table = PushHashmap<String,FUInstance*>(temp,1000);
   InstanceName* names = PushSet<String>(temp,1000);

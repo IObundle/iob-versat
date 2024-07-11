@@ -179,6 +179,10 @@ String Repr(MappingNode* node,Arena* out){
   return name;
 }
 
+String Repr(Accelerator* accel,Arena* out){
+  return PushString(out,"%d",accel->id);
+}
+
 String PushIntTableRepresentation(Arena* out,Array<int> values,int digitSize){
   int maxDigitSize = 0;
 

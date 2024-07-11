@@ -224,7 +224,7 @@ end
 
   #{if inst.isStatic}
     #{for wire inst.declaration.baseConfig.configs}
-         .@{wire.name}(@{accel.name}_@{inst |> Identify}_@{wire.name}),
+         .@{wire.name}(@{accel.name}_@{inst.name}_@{wire.name}),
     #{end}
   #{else}
     #{set configStart accel.baseConfig.configOffsets.offsets[id]}

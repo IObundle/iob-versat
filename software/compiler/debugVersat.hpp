@@ -33,5 +33,5 @@ void OutputMemoryHex(void* memory,int size);
 // folderName can be empty string, file is created inside debug folder directly. 
 String PushDebugPath(Arena* out,String folderName,String fileName);
 
-
-
+// For this overload, no string can be empty, otherwise error
+String PushDebugPath(Arena* out,String folderName,String subFolder,String fileName);

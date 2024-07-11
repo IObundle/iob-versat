@@ -22,6 +22,7 @@ String Repr(PortInstance* port,GraphDotFormat format,Arena* out);
 String Repr(MergeEdge* node,GraphDotFormat format,Arena* out);
 String Repr(Edge* node,GraphDotFormat format,Arena* out);
 String Repr(MappingNode* node,Arena* out);
+String Repr(Accelerator* accel,Arena* out);
 String Repr(StaticId* id,Arena* out);
 String Repr(Wire* wire,Arena* out);
 String Repr(InstanceInfo* info,Arena* out);

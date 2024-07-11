@@ -472,6 +472,8 @@ int main(int argc,const char** argv){
   globalDebug.outputAccelerator = true;
   globalDebug.outputVersat = true;
   
+  globalDebug.outputConsolidationGraphs = false;
+
 #if 1
   globalDebug.dotFormat = GRAPH_DOT_FORMAT_NAME;
 #if 1
@@ -571,7 +573,7 @@ int main(int argc,const char** argv){
 
   if(globalOptions.addInputAndOutputsToTop && !(type->NumberInputs() == 0 && type->NumberOutputs() == 0)){
     const char* name = StaticFormat("%.*s_Simple",UNPACK_SS(topLevelTypeStr));
-    accel = CreateAccelerator(STRING(name));
+    accel = CreateAccelerator(STRING(name),AcceleratorPurpose_MODULE);
     
     int input = type->NumberInputs();
     int output = type->NumberOutputs();
@@ -609,10 +611,10 @@ int main(int argc,const char** argv){
     type->signalLoop = true; // MARK
     
     name = StaticFormat("%.*s_Simple",UNPACK_SS(topLevelTypeStr));
-    accel = CreateAccelerator(STRING(name));
+    accel = CreateAccelerator(STRING(name),AcceleratorPurpose_MODULE);
     TOP = CreateFUInstance(accel,type,STRING("TOP"));
   } else {
-    accel = CreateAccelerator(topLevelTypeStr);
+    accel = CreateAccelerator(topLevelTypeStr,AcceleratorPurpose_MODULE);
 
     TOP = CreateFUInstance(accel,type,STRING("TOP"));
 

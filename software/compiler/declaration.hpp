@@ -74,14 +74,14 @@ struct ConfigurationInfo{
   Array<int> outputLatencies;
   
   // Calculated offsets are an array that associate the given FUInstance inside the fixedDelayCircuit allocated member into the corresponding index of the configuration array. For now, static units are given a value near 0x40000000 (their configuration comes from the staticUnits hashmap). Units without any config are given a value of -1.
-  CalculatedOffsets configOffsets;
-  CalculatedOffsets stateOffsets;
-  CalculatedOffsets delayOffsets;
-  Array<int>        calculatedDelays;
-  Array<int>        order;
-  InstanceMap*      mapping; // Maps from base type flattened to merged type baseCircuit
-  Set<PortInstance>* mergeMultiplexers; // On merged fixedDelayCircuit. "baseCircuit"
-  Array<bool>       unitBelongs;
+  CalculatedOffsets   configOffsets;
+  CalculatedOffsets   stateOffsets;
+  CalculatedOffsets   delayOffsets;
+  Array<int>          calculatedDelays;
+  Array<int>          order;
+  AcceleratorMapping* mapping; // Maps from base type flattened to merged type baseCircuit
+  Set<PortInstance>*  mergeMultiplexers; // On merged fixedDelayCircuit. "baseCircuit"
+  Array<bool>         unitBelongs;
 };
 
 enum FUDeclarationType{

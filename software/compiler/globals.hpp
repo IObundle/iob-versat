@@ -32,6 +32,7 @@ struct Options{
 struct DebugState{
   uint dotFormat;
   bool outputGraphs;
+  bool outputConsolidationGraphs;
   bool outputAccelerator;
   bool outputVersat;
   bool outputVCD;

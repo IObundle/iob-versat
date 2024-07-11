@@ -20,7 +20,17 @@ static Pool<Accelerator> accelerators;
 
 typedef Hashmap<FUInstance*,FUInstance*> InstanceMap;
 
-Accelerator* CreateAccelerator(String name){
+Accelerator* GetAcceleratorById(int id){
+  for(Accelerator* accel : accelerators){
+    if(accel->id == id){
+      return accel;
+    }
+  }
+
+  return nullptr;
+}
+
+Accelerator* CreateAccelerator(String name,AcceleratorPurpose purpose){
   static int globalID = 0;
   Accelerator* accel = accelerators.Alloc();
   
@@ -28,6 +38,7 @@ Accelerator* CreateAccelerator(String name){
   accel->id = globalID++;
   
   accel->name = PushString(accel->accelMemory,name);
+  accel->purpose = purpose;
   PushString(accel->accelMemory,{"",1});
   
   return accel;
@@ -89,10 +100,40 @@ FUInstance* CreateFUInstance(Accelerator* accel,FUDeclaration* type,String name)
   return inst;
 }
 
-Accelerator* CopyAccelerator(Accelerator* accel,InstanceMap* map){
+Pair<Accelerator*,AcceleratorMapping*> CopyAcceleratorWithMapping(Accelerator* accel,AcceleratorPurpose purpose,bool preserveIds,Arena* out){
+  Accelerator* newAccel = CreateAccelerator(accel->name,purpose);
+
+  AcceleratorMapping* map = MappingSimple(accel,newAccel,out);
+  
+  // Copy of instances
+  FOREACH_LIST(FUInstance*,inst,accel->allocated){
+    FUInstance* newInst = CopyInstance(newAccel,inst,preserveIds,inst->name);
+
+    newInst->literal = inst->literal;
+
+    MappingInsert(map,inst,newInst);
+  }
+
+  EdgeIterator iter = IterateEdges(accel);
+
+  // Flat copy of edges
+  while(iter.HasNext()){
+    Edge edge = iter.Next();
+    FUInstance* out = MappingMap(map,edge.units[0].inst);
+    int outPort = edge.units[0].port;
+    FUInstance* in = MappingMap(map,edge.units[1].inst);
+    int inPort = edge.units[1].port;
+    
+    ConnectUnits(out,outPort,in,inPort,edge.delay);
+  }
+  
+  return {newAccel,map};
+}
+
+Accelerator* CopyAccelerator(Accelerator* accel,AcceleratorPurpose purpose,bool preserveIds,InstanceMap* map){
   STACK_ARENA(temp,Kilobyte(128));
 
-  Accelerator* newAccel = CreateAccelerator(accel->name);
+  Accelerator* newAccel = CreateAccelerator(accel->name,purpose);
 
   if(map == nullptr){
     map = PushHashmap<FUInstance*,FUInstance*>(&temp,999);
@@ -101,7 +142,7 @@ Accelerator* CopyAccelerator(Accelerator* accel,InstanceMap* map){
   // Copy of instances
   FOREACH_LIST(FUInstance*,ptr,accel->allocated){
     FUInstance* inst = ptr;
-    FUInstance* newInst = CopyInstance(newAccel,inst,inst->name);
+    FUInstance* newInst = CopyInstance(newAccel,inst,preserveIds,inst->name);
 
     newInst->literal = inst->literal;
 
@@ -124,9 +165,8 @@ Accelerator* CopyAccelerator(Accelerator* accel,InstanceMap* map){
   return newAccel;
 }
 
-FUInstance* CopyInstance(Accelerator* newAccel,FUInstance* oldInstance,String newName){
-  FUInstance* newNode = CreateFUInstance(newAccel,oldInstance->declaration,newName);
-  FUInstance* newInst = newNode;
+FUInstance* CopyInstance(Accelerator* newAccel,FUInstance* oldInstance,bool preserveIds,String newName){
+  FUInstance* newInst = CreateFUInstance(newAccel,oldInstance->declaration,newName);
 
   newInst->parameters = oldInstance->parameters;
   newInst->portIndex = oldInstance->portIndex;
@@ -137,14 +177,15 @@ FUInstance* CopyInstance(Accelerator* newAccel,FUInstance* oldInstance,String ne
   if(oldInstance->sharedEnable){
     ShareInstanceConfig(newInst,oldInstance->sharedIndex);
   }
-  newInst->id = oldInstance->id;
-  
-  return newNode;
+  if(preserveIds){
+    newInst->id = oldInstance->id;
+  }
+    
+  return newInst;
 }
 
 void RemoveFUInstance(Accelerator* accel,FUInstance* inst){
   accel->allocated = RemoveUnit(accel->allocated,inst);
-  accel->instances.Remove(inst);
 }
 
 Array<int> ExtractInputDelays(Accelerator* accel,CalculateDelayResult delays,int mimimumAmount,Arena* out,Arena* temp){
@@ -216,21 +257,30 @@ Accelerator* Flatten(Accelerator* accel,int times,Arena* temp){
   Arena* perm = globalPermanent;
   BLOCK_REGION(temp);
 
+#if 0
   InstanceMap* map = PushHashmap<FUInstance*,FUInstance*>(temp,999);
-  Accelerator* newAccel = CopyAccelerator(accel,map);
+  Accelerator* newAccel = CopyAccelerator(accel,AcceleratorPurpose_FLATTEN,map);
+#endif
 
+  Pair<Accelerator*,AcceleratorMapping*> pair = CopyAcceleratorWithMapping(accel,AcceleratorPurpose_FLATTEN,true,temp);
+  Accelerator* newAccel = pair.first;
+  
   Pool<FUInstance*> compositeInstances = {};
   Pool<FUInstance*> toRemove = {};
   std::unordered_map<StaticId,int> staticToIndex;
 
+  //DEBUG_BREAK_IF(CompareString(accel->name,"FullAES"));
   for(int i = 0; i < times; i++){
     int maxSharedIndex = -1;
     FOREACH_LIST(FUInstance*,instPtr,newAccel->allocated){
       FUInstance* inst = instPtr;
-      bool containsStatic = inst->isStatic || inst->declaration->staticUnits != nullptr;
+
+      bool containsStatic = false;
+      //bool containsStatic = inst->isStatic || inst->declaration->staticUnits != nullptr;
       // TODO: For now we do not flatten units that are static or contain statics. It messes merge configurations and still do not know how to procceed. Need to beef merge up a bit before handling more complex cases. The problem was that after flattening statics would become shared (unions) and as such would appear in places where they where not supposed to appear.
+
       // TODO: Maybe static and shared units configurations could be stored in a separated structure.
-      if(inst->declaration->type == FUDeclarationType_COMPOSITE && !containsStatic){
+      if(inst->declaration->baseCircuit && !containsStatic){
         FUInstance** ptr = compositeInstances.Alloc();
 
         *ptr = instPtr;
@@ -252,7 +302,7 @@ Accelerator* Flatten(Accelerator* accel,int times,Arena* temp){
     for(FUInstance** instPtr : compositeInstances){
       FUInstance* inst = (*instPtr);
 
-      Assert(inst->declaration->type == FUDeclarationType_COMPOSITE);
+      Assert(inst->declaration->baseCircuit);
 
       count += 1;
       Accelerator* circuit = inst->declaration->baseCircuit;
@@ -272,6 +322,8 @@ Accelerator* Flatten(Accelerator* accel,int times,Arena* temp){
 
       std::unordered_map<int,int> sharedToShared;
       // Create new instance and map then
+      AcceleratorMapping* map = MappingSimple(circuit,newAccel,temp); // TODO: Leaking
+      
       FOREACH_LIST(FUInstance*,ptr,circuit->allocated){
         FUInstance* circuitInst = ptr;
         if(circuitInst->declaration->type == FUDeclarationType_SPECIAL){
@@ -279,7 +331,8 @@ Accelerator* Flatten(Accelerator* accel,int times,Arena* temp){
         }
 
         String newName = PushString(perm,"%.*s_%.*s",UNPACK_SS(inst->name),UNPACK_SS(circuitInst->name));
-        FUInstance* newInst = CopyInstance(newAccel,circuitInst,newName);
+        FUInstance* newInst = CopyInstance(newAccel,circuitInst,true,newName);
+        MappingInsert(map,circuitInst,newInst);
 
         if(circuitInst->isStatic){
           bool found = false;
@@ -329,36 +382,33 @@ Accelerator* Flatten(Accelerator* accel,int times,Arena* temp){
             ShareInstanceConfig(newInst,newIndex);
           }
         }
-
-        map->Insert(circuitInst,newInst);
       }
 
       if(inst->sharedEnable && savedSharedIndex > freeSharedIndex){
         freeSharedIndex = savedSharedIndex;
       }
 
+      // TODO: All these iterations could be converted to a single loop where inside we check if its input,output or inernal edge
+
       EdgeIterator iter = IterateEdges(newAccel);
       // Add accel edges to output instances
-      //FOREACH_LIST(Edge*,edge,newAccel->edges){
       while(iter.HasNext()){
         Edge edgeInst = iter.Next();
         Edge* edge = &edgeInst;
         if(edge->units[0].inst == inst){
-
           EdgeIterator iter2 = IterateEdges(circuit);
           while(iter2.HasNext()){
             Edge edge2Inst = iter2.Next();
             Edge* circuitEdge = &edge2Inst;
 
-          //FOREACH_LIST(Edge*,circuitEdge,circuit->edges){
             if(circuitEdge->units[1].inst == outputInstance && circuitEdge->units[1].port == edge->units[0].port){
-              FUInstance** other = map->Get(circuitEdge->units[0].inst);
+              FUInstance* other = MappingMap(map,circuitEdge->units[0].inst);
 
-              if(other){
+              if(other == nullptr){
                 continue;
               }
 
-              FUInstance* out = *other;
+              FUInstance* out = other;
               FUInstance* in = edge->units[1].inst;
               int outPort = circuitEdge->units[0].port;
               int inPort = edge->units[1].port;
@@ -371,6 +421,7 @@ Accelerator* Flatten(Accelerator* accel,int times,Arena* temp){
       }
 
       // Add accel edges to input instances
+      //DEBUG_BREAK_IF(CompareString(accel->name,"ShaState"));
       iter = IterateEdges(newAccel);
       while(iter.HasNext()){
         Edge edgeInst = iter.Next();
@@ -383,17 +434,15 @@ Accelerator* Flatten(Accelerator* accel,int times,Arena* temp){
             Edge edge2Inst = iter2.Next();
             Edge* circuitEdge = &edge2Inst;
           
-          //FOREACH_LIST(Edge*,circuitEdge,circuit->edges){
             if(circuitEdge->units[0].inst == circuitInst){
-              FUInstance** other = map->Get(circuitEdge->units[0].inst);
+              FUInstance* other = MappingMap(map,circuitEdge->units[1].inst);
 
-              if(other){
+              if(other == nullptr){
                 continue;
               }
 
-
               FUInstance* out = edge->units[0].inst;
-              FUInstance* in = *other;
+              FUInstance* in = other;
               int outPort = edge->units[0].port;
               int inPort = circuitEdge->units[1].port;
               int delay = edge->delay + circuitEdge->delay;
@@ -410,15 +459,15 @@ Accelerator* Flatten(Accelerator* accel,int times,Arena* temp){
         Edge edgeInst = iter.Next();
         Edge* circuitEdge = &edgeInst;
 
-        FUInstance** otherInput = map->Get(circuitEdge->units[0].inst);
-        FUInstance** otherOutput = map->Get(circuitEdge->units[1].inst);
+        FUInstance* otherInput = MappingMap(map,circuitEdge->units[0].inst);
+        FUInstance* otherOutput = MappingMap(map,circuitEdge->units[1].inst);
 
-        if(otherInput && otherOutput){
+        if(otherInput == nullptr || otherOutput == nullptr){
           continue;
         }
 
-        FUInstance* out = *otherInput;
-        FUInstance* in = *otherOutput;
+        FUInstance* out = otherInput;
+        FUInstance* in = otherOutput;
         int outPort = circuitEdge->units[0].port;
         int inPort = circuitEdge->units[1].port;
         int delay = circuitEdge->delay;
@@ -463,19 +512,12 @@ Accelerator* Flatten(Accelerator* accel,int times,Arena* temp){
 
       RemoveFUInstance(newAccel,*instPtr);
       AssertGraphValid(newAccel->allocated,temp);
-
-      map->Clear();
     }
 
     toRemove.Clear();
     compositeInstances.Clear();
   }
 
-#if 0
-  String debugFilepath = PushDebugPath(temp,accel->name,STRING("flatten.dot"));
-  OutputGraphDotFile(newAccel,true,debugFilepath,temp);
-#endif
-  
   OutputDebugDotGraph(newAccel,STRING("flatten.dot"),temp);
   
   toRemove.Clear(true);
@@ -931,7 +973,7 @@ Hashmap<StaticId,StaticData>* CollectStaticUnits(Accelerator* accel,FUDeclaratio
       for(auto pair : inst->declaration->staticUnits){
         StaticData newData = *pair.second;
         staticUnits->InsertIfNotExist(pair.first,newData);
-     }
+      }
     }
     if(inst->isStatic){
       StaticId id = {};
@@ -1099,60 +1141,60 @@ VersatComputedValues ComputeVersatValues(Accelerator* accel,bool useDMA){
 
 #if 0
 FUInstance* GetFUInstance(Accelerator* accel,FUInstance* inst){
-   FOREACH_LIST(FUInstance*,ptr,accel->allocated){
-      if(ptr == inst){
-         return ptr;
-      }
-   }
-   Assert(false); // For now, this should not fail
-   return nullptr;
+  FOREACH_LIST(FUInstance*,ptr,accel->allocated){
+    if(ptr == inst){
+      return ptr;
+    }
+  }
+  Assert(false); // For now, this should not fail
+  return nullptr;
 }
 #endif
 
 void CalculateNodeType(FUInstance* node){
-   node->type = NodeType_UNCONNECTED;
+  node->type = NodeType_UNCONNECTED;
 
-   bool hasInput = (node->allInputs != nullptr);
-   bool hasOutput = (node->allOutputs != nullptr);
+  bool hasInput = (node->allInputs != nullptr);
+  bool hasOutput = (node->allOutputs != nullptr);
 
-   // If the unit is both capable of acting as a sink or as a source of data
-   if(hasInput && hasOutput){
-     if(CHECK_DELAY(node,DelayType_SINK_DELAY) || CHECK_DELAY(node,DelayType_SOURCE_DELAY)){
-         node->type = NodeType_SOURCE_AND_SINK;
-      }  else {
-         node->type = NodeType_COMPUTE;
-      }
-   } else if(hasInput){
-      node->type = NodeType_SINK;
-   } else if(hasOutput){
-      node->type = NodeType_SOURCE;
-   } else {
-      // Unconnected
-   }
+  // If the unit is both capable of acting as a sink or as a source of data
+  if(hasInput && hasOutput){
+    if(CHECK_DELAY(node,DelayType_SINK_DELAY) || CHECK_DELAY(node,DelayType_SOURCE_DELAY)){
+      node->type = NodeType_SOURCE_AND_SINK;
+    }  else {
+      node->type = NodeType_COMPUTE;
+    }
+  } else if(hasInput){
+    node->type = NodeType_SINK;
+  } else if(hasOutput){
+    node->type = NodeType_SOURCE;
+  } else {
+    // Unconnected
+  }
 }
 
 void FixInputs(FUInstance* node){
-   Memset(node->inputs,{});
-   node->multipleSamePortInputs = false;
+  Memset(node->inputs,{});
+  node->multipleSamePortInputs = false;
 
-   FOREACH_LIST(ConnectionNode*,ptr,node->allInputs){
-      int port = ptr->port;
+  FOREACH_LIST(ConnectionNode*,ptr,node->allInputs){
+    int port = ptr->port;
 
-      if(node->inputs[port].inst){
-         node->multipleSamePortInputs = true;
-      }
+    if(node->inputs[port].inst){
+      node->multipleSamePortInputs = true;
+    }
 
-      node->inputs[port] = ptr->instConnectedTo;
-   }
+    node->inputs[port] = ptr->instConnectedTo;
+  }
 }
 
 void FixOutputs(FUInstance* node){
-   Memset(node->outputs,false);
+  Memset(node->outputs,false);
 
-   FOREACH_LIST(ConnectionNode*,ptr,node->allOutputs){
-      int port = ptr->port;
-      node->outputs[port] = true;
-   }
+  FOREACH_LIST(ConnectionNode*,ptr,node->allOutputs){
+    int port = ptr->port;
+    node->outputs[port] = true;
+  }
 }
 
 Array<Edge> GetAllEdges(Accelerator* accel,Arena* out){
@@ -1295,7 +1337,7 @@ Opt<Edge> FindEdge(FUInstance* out,int outIndex,FUInstance* in,int inIndex,int d
     Edge edgeInst = iter.Next();
     Edge* edge = &edgeInst;
 
-//  FOREACH_LIST(Edge*,edge,accel->edges){
+    //  FOREACH_LIST(Edge*,edge,accel->edges){
     if(edge->units[0].inst == out &&
        edge->units[0].port == outIndex &&
        edge->units[1].inst == in &&
@@ -1324,7 +1366,6 @@ void ConnectUnitsIfNotConnected(FUInstance* out,int outIndex,FUInstance* in,int 
     Edge edgeInst = iter.Next();
     Edge* edge = &edgeInst;
 
-  //FOREACH_LIST(Edge*,edge,accel->edges){
     if(edge->units[0].inst == out && edge->units[0].port == outIndex &&
        edge->units[1].inst == in  && edge->units[1].port == inIndex &&
        delay == edge->delay){
@@ -1336,243 +1377,245 @@ void ConnectUnitsIfNotConnected(FUInstance* out,int outIndex,FUInstance* in,int 
 }
 
 void ConnectUnits(PortInstance out,PortInstance in,int delay){
-   FUDeclaration* inDecl = in.inst->declaration;
-   FUDeclaration* outDecl = out.inst->declaration;
+  FUDeclaration* inDecl = in.inst->declaration;
+  FUDeclaration* outDecl = out.inst->declaration;
 
-   Assert(out.inst->accel == in.inst->accel);
-   Assert(in.port < inDecl->NumberInputs());
-   Assert(out.port < outDecl->NumberOutputs());
+  Assert(out.inst->accel == in.inst->accel);
+  Assert(in.port < inDecl->NumberInputs());
+  Assert(out.port < outDecl->NumberOutputs());
 
-   Accelerator* accel = out.inst->accel;
+  Accelerator* accel = out.inst->accel;
 
-   // Update graph data.
-   FUInstance* inputNode = in.inst;
-   FUInstance* outputNode = out.inst;
+  // Update graph data.
+  FUInstance* inputNode = in.inst;
+  FUInstance* outputNode = out.inst;
 
-   // Add info to outputNode
-   // Update all outputs
-   {
-   ConnectionNode* con = PushStruct<ConnectionNode>(accel->accelMemory);
-   con->edgeDelay = delay;
-   con->port = out.port;
-   con->instConnectedTo.inst = inputNode;
-   con->instConnectedTo.port = in.port;
+  // Add info to outputNode
+  // Update all outputs
+  {
+    ConnectionNode* con = PushStruct<ConnectionNode>(accel->accelMemory);
+    con->edgeDelay = delay;
+    con->port = out.port;
+    con->instConnectedTo.inst = inputNode;
+    con->instConnectedTo.port = in.port;
 
-   outputNode->allOutputs = ListInsert(outputNode->allOutputs,con);
-   outputNode->outputs[out.port] = true;
-   //outputNode->outputs += 1;
-   }
+    outputNode->allOutputs = ListInsert(outputNode->allOutputs,con);
+    outputNode->outputs[out.port] = true;
+  }
 
-   // Add info to inputNode
-   {
-   ConnectionNode* con = PushStruct<ConnectionNode>(accel->accelMemory);
-   con->edgeDelay = delay;
-   con->port = in.port;
-   con->instConnectedTo.inst = outputNode;
-   con->instConnectedTo.port = out.port;
+  // Add info to inputNode
+  {
+    ConnectionNode* con = PushStruct<ConnectionNode>(accel->accelMemory);
+    con->edgeDelay = delay;
+    con->port = in.port;
+    con->instConnectedTo.inst = outputNode;
+    con->instConnectedTo.port = out.port;
 
-   inputNode->allInputs = ListInsert(inputNode->allInputs,con);
+    inputNode->allInputs = ListInsert(inputNode->allInputs,con);
 
-   if(inputNode->inputs[in.port].inst){
+    if(inputNode->inputs[in.port].inst){
       inputNode->multipleSamePortInputs = true;
-   }
+    }
 
-   inputNode->inputs[in.port].inst = outputNode;
-   inputNode->inputs[in.port].port = out.port;
-   }
+    inputNode->inputs[in.port].inst = outputNode;
+    inputNode->inputs[in.port].port = out.port;
+  }
 
-   CalculateNodeType(inputNode);
-   CalculateNodeType(outputNode);
+  CalculateNodeType(inputNode);
+  CalculateNodeType(outputNode);
 }
 
 // Connects out -> in
 void ConnectUnitsGetEdge(FUInstance* out,int outIndex,FUInstance* in,int inIndex,int delay,Edge* previous){
-   FUDeclaration* inDecl = in->declaration;
-   FUDeclaration* outDecl = out->declaration;
+  FUDeclaration* inDecl = in->declaration;
+  FUDeclaration* outDecl = out->declaration;
 
-   Assert(out->accel == in->accel);
-   Assert(inIndex < inDecl->NumberInputs());
-   Assert(outIndex < outDecl->NumberOutputs());
+  Assert(out->accel == in->accel);
+  Assert(inIndex < inDecl->NumberInputs());
+  Assert(outIndex < outDecl->NumberOutputs());
 
-   Accelerator* accel = out->accel;
+  Accelerator* accel = out->accel;
 
-   // Update graph data.
-   FUInstance* inputNode = in;
-   FUInstance* outputNode = out;
+  // Update graph data.
+  FUInstance* inputNode = in;
+  FUInstance* outputNode = out;
 
-   // Add info to outputNode
-   // Update all outputs
-   {
-   ConnectionNode* con = PushStruct<ConnectionNode>(accel->accelMemory);
-   con->edgeDelay = delay;
-   con->port = outIndex;
-   con->instConnectedTo.inst = inputNode;
-   con->instConnectedTo.port = inIndex;
+  // Add info to outputNode
+  // Update all outputs
+  {
+    ConnectionNode* con = PushStruct<ConnectionNode>(accel->accelMemory);
+    con->edgeDelay = delay;
+    con->port = outIndex;
+    con->instConnectedTo.inst = inputNode;
+    con->instConnectedTo.port = inIndex;
 
-   outputNode->allOutputs = ListInsert(outputNode->allOutputs,con);
-   outputNode->outputs[outIndex] = true;
-   //outputNode->outputs += 1;
-   }
+    outputNode->allOutputs = ListInsert(outputNode->allOutputs,con);
+    outputNode->outputs[outIndex] = true;
+    //outputNode->outputs += 1;
+  }
 
-   // Add info to inputNode
-   {
-   ConnectionNode* con = PushStruct<ConnectionNode>(accel->accelMemory);
-   con->edgeDelay = delay;
-   con->port = inIndex;
-   con->instConnectedTo.inst = outputNode;
-   con->instConnectedTo.port = outIndex;
+  // Add info to inputNode
+  {
+    ConnectionNode* con = PushStruct<ConnectionNode>(accel->accelMemory);
+    con->edgeDelay = delay;
+    con->port = inIndex;
+    con->instConnectedTo.inst = outputNode;
+    con->instConnectedTo.port = outIndex;
 
-   inputNode->allInputs = ListInsert(inputNode->allInputs,con);
+    inputNode->allInputs = ListInsert(inputNode->allInputs,con);
 
-   if(inputNode->inputs[inIndex].inst){
+    if(inputNode->inputs[inIndex].inst){
       inputNode->multipleSamePortInputs = true;
-   }
+    }
 
-   inputNode->inputs[inIndex].inst = outputNode;
-   inputNode->inputs[inIndex].port = outIndex;
-   }
+    inputNode->inputs[inIndex].inst = outputNode;
+    inputNode->inputs[inIndex].port = outIndex;
+  }
 
-   CalculateNodeType(inputNode);
-   CalculateNodeType(outputNode);
+  CalculateNodeType(inputNode);
+  CalculateNodeType(outputNode);
 }
 
 Array<int> GetNumberOfInputConnections(FUInstance* node,Arena* out){
-   Array<int> res = PushArray<int>(out,node->inputs.size);
-   Memset(res,0);
+  Array<int> res = PushArray<int>(out,node->inputs.size);
+  Memset(res,0);
 
-   FOREACH_LIST(ConnectionNode*,ptr,node->allInputs){
-      int port = ptr->port;
-      res[port] += 1;
-   }
+  FOREACH_LIST(ConnectionNode*,ptr,node->allInputs){
+    int port = ptr->port;
+    res[port] += 1;
+  }
 
-   return res;
+  return res;
 }
 
 Array<Array<PortInstance>> GetAllInputs(FUInstance* node,Arena* out){
-   Array<int> connections = GetNumberOfInputConnections(node,out); // Wastes a bit of memory because not deallocated after, its irrelevant
+  Array<int> connections = GetNumberOfInputConnections(node,out); // Wastes a bit of memory because not deallocated after, its irrelevant
 
-   Array<Array<PortInstance>> res = PushArray<Array<PortInstance>>(out,node->inputs.size);
-   Memset(res,{});
+  Array<Array<PortInstance>> res = PushArray<Array<PortInstance>>(out,node->inputs.size);
+  Memset(res,{});
 
-   for(int i = 0; i < res.size; i++){
-      res[i] = PushArray<PortInstance>(out,connections[i]);
-   }
+  for(int i = 0; i < res.size; i++){
+    res[i] = PushArray<PortInstance>(out,connections[i]);
+  }
 
-   FOREACH_LIST(ConnectionNode*,ptr,node->allInputs){
-      int port = ptr->port;
+  FOREACH_LIST(ConnectionNode*,ptr,node->allInputs){
+    int port = ptr->port;
 
-      Array<PortInstance> array = res[port];
-      int index = connections[port] - 1;
-      connections[port] -= 1;
-      array[index] = ptr->instConnectedTo;
-   }
+    Array<PortInstance> array = res[port];
+    int index = connections[port] - 1;
+    connections[port] -= 1;
+    array[index] = ptr->instConnectedTo;
+  }
 
-   return res;
+  return res;
 }
 
 void RemoveConnection(Accelerator* accel,PortInstance out,PortInstance in){
-   RemoveConnection(accel,out.inst,out.port,in.inst,in.port);
+  RemoveConnection(accel,out.inst,out.port,in.inst,in.port);
 }
 
 void RemoveConnection(Accelerator* accel,FUInstance* out,int outPort,FUInstance* in,int inPort){
-   out->allOutputs = ListRemoveAll(out->allOutputs,[&](ConnectionNode* n){
-      bool res = (n->port == outPort && n->instConnectedTo.inst == in && n->instConnectedTo.port == inPort);
-      return res;
-   });
-   //out->outputs = Size(out->allOutputs);
-   FixOutputs(out);
+  out->allOutputs = ListRemoveAll(out->allOutputs,[&](ConnectionNode* n){
+    bool res = (n->port == outPort && n->instConnectedTo.inst == in && n->instConnectedTo.port == inPort);
+    return res;
+  });
+  //out->outputs = Size(out->allOutputs);
+  FixOutputs(out);
 
-   in->allInputs = ListRemoveAll(in->allInputs,[&](ConnectionNode* n){
-      bool res = (n->port == inPort && n->instConnectedTo.inst == out && n->instConnectedTo.port == outPort);
-      return res;
-   });
-   FixInputs(in);
+  in->allInputs = ListRemoveAll(in->allInputs,[&](ConnectionNode* n){
+    bool res = (n->port == inPort && n->instConnectedTo.inst == out && n->instConnectedTo.port == outPort);
+    return res;
+  });
+  FixInputs(in);
 }
 
 void RemoveAllDirectedConnections(FUInstance* out,FUInstance* in){
-   out->allOutputs = ListRemoveAll(out->allOutputs,[&](ConnectionNode* n){
-      return (n->instConnectedTo.inst == in);
-   });
-   //out->outputs = Size(out->allOutputs);
-   FixOutputs(out);
+  out->allOutputs = ListRemoveAll(out->allOutputs,[&](ConnectionNode* n){
+    return (n->instConnectedTo.inst == in);
+  });
+  //out->outputs = Size(out->allOutputs);
+  FixOutputs(out);
 
-   in->allInputs = ListRemoveAll(in->allInputs,[&](ConnectionNode* n){
-      return (n->instConnectedTo.inst == out);
-   });
+  in->allInputs = ListRemoveAll(in->allInputs,[&](ConnectionNode* n){
+    return (n->instConnectedTo.inst == out);
+  });
 
-   FixInputs(in);
+  FixInputs(in);
 }
 
 void RemoveAllConnections(FUInstance* n1,FUInstance* n2){
-   RemoveAllDirectedConnections(n1,n2);
-   RemoveAllDirectedConnections(n2,n1);
+  RemoveAllDirectedConnections(n1,n2);
+  RemoveAllDirectedConnections(n2,n1);
 }
 
 FUInstance* RemoveUnit(FUInstance* nodes,FUInstance* unit){
-   STACK_ARENA(temp,Kilobyte(32));
+  STACK_ARENA(temp,Kilobyte(32));
 
-   Hashmap<FUInstance*,int>* toRemove = PushHashmap<FUInstance*,int>(&temp,100);
+  Hashmap<FUInstance*,int>* toRemove = PushHashmap<FUInstance*,int>(&temp,100);
 
-   for(auto* ptr = unit->allInputs; ptr;){
-      auto* next = ptr->next;
+  for(auto* ptr = unit->allInputs; ptr;){
+    auto* next = ptr->next;
 
-      toRemove->Insert(ptr->instConnectedTo.inst,0);
+    toRemove->Insert(ptr->instConnectedTo.inst,0);
 
-      ptr = next;
-   }
+    ptr = next;
+  }
 
-   for(auto* ptr = unit->allOutputs; ptr;){
-      auto* next = ptr->next;
+  for(auto* ptr = unit->allOutputs; ptr;){
+    auto* next = ptr->next;
 
-      toRemove->Insert(ptr->instConnectedTo.inst,0);
+    toRemove->Insert(ptr->instConnectedTo.inst,0);
 
-      ptr = next;
-   }
+    ptr = next;
+  }
 
-   for(auto pair : toRemove){
-      RemoveAllConnections(unit,pair.first);
-   }
+  for(auto pair : toRemove){
+    RemoveAllConnections(unit,pair.first);
+  }
 
-   // Remove instance
-   int oldSize = Size(nodes);
-   auto* res = ListRemove(nodes,unit);
-   int newSize = Size(res);
-   Assert(oldSize == newSize + 1);
+  // Remove instance
+  int oldSize = Size(nodes);
+  auto* res = ListRemove(nodes,unit);
+  int newSize = Size(res);
+  Assert(oldSize == newSize + 1);
 
-   return res;
+  return res;
 }
 
 void InsertUnit(Accelerator* accel,PortInstance before,PortInstance after,PortInstance newUnit){
-   RemoveConnection(accel,before.inst,before.port,after.inst,after.port);
-   ConnectUnits(newUnit,after,0);
-   ConnectUnits(before,newUnit,0);
+  RemoveConnection(accel,before.inst,before.port,after.inst,after.port);
+  ConnectUnits(newUnit,after,0);
+  ConnectUnits(before,newUnit,0);
 }
 
 void AssertGraphValid(FUInstance* nodes,Arena* arena){
-   BLOCK_REGION(arena);
+  BLOCK_REGION(arena);
 
-   int size = Size(nodes);
-   Hashmap<FUInstance*,int>* seen = PushHashmap<FUInstance*,int>(arena,size);
+  int size = Size(nodes);
+  Hashmap<FUInstance*,int>* seen = PushHashmap<FUInstance*,int>(arena,size);
+  Set<Pair<String,int>>* nameIdSeen = PushSet<Pair<String,int>>(arena,size);
+  
+  FOREACH_LIST(FUInstance*,ptr,nodes){
+    seen->Insert(ptr,0);
 
-   FOREACH_LIST(FUInstance*,ptr,nodes){
-      seen->Insert(ptr,0);
-   }
+    Assert(!nameIdSeen->ExistsOrInsert({ptr->name,ptr->id}));
+  }
 
-   FOREACH_LIST(FUInstance*,ptr,nodes){
-     FOREACH_LIST(ConnectionNode*,con,ptr->allInputs){
-         seen->GetOrFail(con->instConnectedTo.inst);
+  FOREACH_LIST(FUInstance*,ptr,nodes){
+    FOREACH_LIST(ConnectionNode*,con,ptr->allInputs){
+      seen->GetOrFail(con->instConnectedTo.inst);
+    }
+
+    FOREACH_LIST(ConnectionNode*,con,ptr->allOutputs){
+      seen->GetOrFail(con->instConnectedTo.inst);
+    }
+
+    for(PortInstance& n : ptr->inputs){
+      if(n.inst){
+        seen->GetOrFail(n.inst);
       }
-
-     FOREACH_LIST(ConnectionNode*,con,ptr->allOutputs){
-         seen->GetOrFail(con->instConnectedTo.inst);
-      }
-
-      for(PortInstance& n : ptr->inputs){
-         if(n.inst){
-            seen->GetOrFail(n.inst);
-         }
-      }
-   }
+    }
+  }
 }
 
 //
@@ -1671,17 +1714,17 @@ CalculateDelayResult CalculateDelay(Accelerator* accel,DAGOrderNodes order,Array
 
   Hashmap<FUInstance*,int>* nodeToPart = PushHashmap<FUInstance*,int>(out,nodes); // TODO: Either temp or move out accross call stack
   {
-  int partitionIndex = 0;
-  for(int index = 0; index < order.instances.size; index++){
-    FUInstance* node = order.instances[index];
+    int partitionIndex = 0;
+    for(int index = 0; index < order.instances.size; index++){
+      FUInstance* node = order.instances[index];
     
-    int part = 0;
-    if(HasMultipleConfigs(node->declaration)){
-      part = partitions[partitionIndex++].value;
-    }
+      int part = 0;
+      if(HasMultipleConfigs(node->declaration)){
+        part = partitions[partitionIndex++].value;
+      }
 
-    nodeToPart->Insert(node,part);
-  }
+      nodeToPart->Insert(node,part);
+    }
   }
   
   // Start at sources
@@ -1705,7 +1748,7 @@ CalculateDelayResult CalculateDelay(Accelerator* accel,DAGOrderNodes order,Array
 
     region(out){
       String fileName = PushString(out,"%d_out1_%d.dot",functionCalls,graphs++);
-      String filepath = PushDebugPath(out,accel->name,fileName);
+      String filepath = PushDebugPath(out,accel->name,STRING("delays"),fileName);
       OutputGraphDotFile(accel,true,node,res,filepath,out);
     }
   }
@@ -1753,7 +1796,7 @@ CalculateDelayResult CalculateDelay(Accelerator* accel,DAGOrderNodes order,Array
 
     region(out){
       String fileName = PushString(out,"%d_out2_%d.dot",functionCalls,graphs++);
-      String filepath = PushDebugPath(out,accel->name,fileName);
+      String filepath = PushDebugPath(out,accel->name,STRING("delays"),fileName);
       OutputGraphDotFile(accel,true,node,res,filepath,out);
     }
   }
@@ -1786,7 +1829,7 @@ CalculateDelayResult CalculateDelay(Accelerator* accel,DAGOrderNodes order,Array
   
   region(out){
     String fileName = PushString(out,"%d_out3_%d.dot",functionCalls,graphs++);
-    String filepath = PushDebugPath(out,accel->name,fileName);
+    String filepath = PushDebugPath(out,accel->name,STRING("delays"),fileName);
     OutputGraphDotFile(accel,true,nullptr,res,filepath,out);
   }
 
@@ -1819,7 +1862,7 @@ CalculateDelayResult CalculateDelay(Accelerator* accel,DAGOrderNodes order,Array
 
   region(out){
     String fileName = PushString(out,"%d_out4_%d.dot",functionCalls,graphs++);
-    String filepath = PushDebugPath(out,accel->name,fileName);
+    String filepath = PushDebugPath(out,accel->name,STRING("delays"),fileName);
     OutputGraphDotFile(accel,true,nullptr,res,filepath,out);
   }
 
@@ -1890,3 +1933,135 @@ CalculateDelayResult CalculateDelay(Accelerator* accel,DAGOrderNodes order,Array
 }
 
 #endif
+
+void MappingCheck(AcceleratorMapping* map){
+  int idToCheckFirst = map->firstId;
+  int idToCheckSecond = map->secondId;
+  for(auto p : map->map){
+    FUInstance* f = p.first;
+    FUInstance* s = p.second;
+
+    Assert(idToCheckFirst == f->accel->id);
+    Assert(idToCheckSecond == s->accel->id);
+  }
+}
+
+void MappingCheck(AcceleratorMapping* map,Accelerator* first,Accelerator* second){
+  int firstId = first->id;
+  int secondId = second->id;
+
+  Assert(map->firstId == firstId);
+  Assert(map->secondId == secondId);
+}
+
+// TODO: Not a good approach
+static Arena mappingArenaInst = {};
+static Arena* mappingArena = nullptr;
+
+AcceleratorMapping* MappingSimple(Accelerator* first,Accelerator* second,int size,Arena* out){
+  if(!mappingArena){
+    mappingArenaInst = InitArena(Megabyte(16));
+    mappingArena = &mappingArenaInst; 
+  }
+  
+  Assert(size > 0);
+  
+  AcceleratorMapping* mapping = PushStruct<AcceleratorMapping>(out);
+  mapping->map = PushTrieMap<FUInstance*,FUInstance*>(mappingArena);
+  mapping->firstId = first->id;   
+  mapping->secondId = second->id;
+
+  return mapping;
+}
+
+AcceleratorMapping* MappingSimple(Accelerator* first,Accelerator* second,Arena* out){
+  int size = Size(first->allocated);
+
+  return MappingSimple(first,second,size,out);
+}
+
+AcceleratorMapping* MappingInvert(AcceleratorMapping* toReverse,Arena* out){
+  MappingCheck(toReverse);
+
+  AcceleratorMapping* result = PushStruct<AcceleratorMapping>(out);
+  result->map = PushTrieMap<FUInstance*,FUInstance*>(mappingArena);
+
+  for(auto p : toReverse->map){
+    result->map->Insert(p.second,p.first);
+  }
+
+  result->firstId = toReverse->secondId;
+  result->secondId = toReverse->firstId;
+
+  MappingCheck(result);
+  
+  return result;
+}
+
+AcceleratorMapping* MappingCombine(AcceleratorMapping* first,AcceleratorMapping* second,Arena* out){
+  MappingCheck(first);
+  MappingCheck(second);
+
+  Assert(first->secondId == second->firstId);
+  
+  AcceleratorMapping* result = PushStruct<AcceleratorMapping>(out);
+  result->map = PushTrieMap<FUInstance*,FUInstance*>(mappingArena);
+
+  for(auto p : first->map){
+    FUInstance* start = p.first;
+    FUInstance** end = second->map->Get(p.second);
+
+    if(end){
+      result->map->Insert(start,*end);
+    }
+  }
+
+  result->firstId = first->firstId;
+  result->secondId = second->secondId;
+  
+  return result;
+}
+
+FUInstance* MappingMap(AcceleratorMapping* mapping,FUInstance* toMap){
+  int id = toMap->accel->id;
+
+  Assert(mapping->firstId == id);
+
+  FUInstance** ptr = mapping->map->Get(toMap);
+  if(!ptr){
+    return nullptr;
+  }
+  
+  return *ptr;
+}
+
+void MappingInsert(AcceleratorMapping* mapping,FUInstance* first,FUInstance* second){
+  Assert(mapping->firstId == first->accel->id);
+  Assert(mapping->secondId == second->accel->id);
+
+  mapping->map->Insert(first,second);
+}
+
+void MappingPrintInfo(AcceleratorMapping* map){
+  printf("%d -> %d",map->firstId,map->secondId);
+}
+
+void MappingPrintAll(AcceleratorMapping* map){
+  MappingPrintInfo(map);
+  printf("\n");
+  
+  for(Pair<FUInstance*,FUInstance*> p : map->map){
+    printf("%.*s:%d -> %.*s:%d\n",UNPACK_SS(p.first->name),p.first->id,UNPACK_SS(p.second->name),p.second->id);
+  }
+}
+
+Set<PortInstance>* MappingMap(AcceleratorMapping* map,Set<PortInstance>* set,Arena* out){
+  Set<PortInstance>* result = PushSet<PortInstance>(out,set->map->nodesUsed);
+
+  for(PortInstance portInst : set){
+    result->Insert({MappingMap(map,portInst.inst),portInst.port});
+  }
+
+  return result;
+}
+

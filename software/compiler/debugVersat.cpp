@@ -262,14 +262,32 @@ void OutputGraphDotFile(Accelerator* accel,bool collapseSameEdges,FUInstance* hi
 }
 
 String PushDebugPath(Arena* out,String folderName,String fileName){
-  String path = {};
+  Assert(!Contains(fileName,"/"));
+  Assert(fileName.size != 0);
+
+  const char* fullFolderPath = nullptr;
   if(folderName.size == 0){
-    CreateDirectories(StaticFormat("%.*s",UNPACK_SS(globalOptions.debugPath)));
-    path = PushString(out,"%.*s/%.*s",UNPACK_SS(globalOptions.debugPath),UNPACK_SS(fileName));
+    fullFolderPath = StaticFormat("%.*s",UNPACK_SS(globalOptions.debugPath));
   } else {
-    CreateDirectories(StaticFormat("%.*s/%.*s",UNPACK_SS(globalOptions.debugPath),UNPACK_SS(folderName)));
-    path = PushString(out,"%.*s/%.*s/%.*s",UNPACK_SS(globalOptions.debugPath),UNPACK_SS(folderName),UNPACK_SS(fileName));
+    fullFolderPath = StaticFormat("%.*s/%.*s",UNPACK_SS(globalOptions.debugPath),UNPACK_SS(folderName));
   }
 
+  CreateDirectories(fullFolderPath);
+  String path = PushString(out,"%s/%.*s",fullFolderPath,UNPACK_SS(fileName));
+  
+  return path;
+}
+
+String PushDebugPath(Arena* out,String folderName,String subFolder,String fileName){
+  Assert(!Contains(fileName,"/"));
+  Assert(folderName.size != 0);
+  Assert(subFolder.size != 0);
+  Assert(fileName.size != 0);
+
+  const char* fullFolderPath = StaticFormat("%.*s/%.*s/%.*s",UNPACK_SS(globalOptions.debugPath),UNPACK_SS(folderName),UNPACK_SS(subFolder));
+
+  CreateDirectories(fullFolderPath);
+  String path = PushString(out,"%s/%.*s",fullFolderPath,UNPACK_SS(fileName));
+  
   return path;
 }

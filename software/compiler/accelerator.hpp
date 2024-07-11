@@ -33,6 +33,15 @@ inline bool operator!=(const PortInstance& p1,const PortInstance& p2){
   return res;
 }
 
+template<> class std::hash<FUInstance*>{
+public:
+   std::size_t operator()(FUInstance* t) const noexcept{
+     int offset = sizeof(void*) == 8 ? 3 : 2;
+     std::size_t res = ((std::size_t) t) >> offset;
+     return res;
+   }
+};
+
 template<> class std::hash<PortInstance>{
 public:
   std::size_t operator()(PortInstance const& s) const noexcept{
@@ -110,16 +119,26 @@ struct FUInstance{
   NodeType type;
 };
 
+enum AcceleratorPurpose{
+  AcceleratorPurpose_TEMP,
+  AcceleratorPurpose_BASE,
+  AcceleratorPurpose_FLATTEN,
+  AcceleratorPurpose_MODULE,
+  AcceleratorPurpose_RECON,
+  AcceleratorPurpose_MERGE
+};
+
 // TODO: Memory leaks can be fixed by having a global InstanceNode and FUInstance Pool and a global dynamic arena for everything else.
 struct Accelerator{ // Graph + data storage
   FUInstance* allocated;
   FUInstance* lastAllocated;
-  Pool<FUInstance> instances; // TODO: Does anyone care about this or can we just use the allocated list?
   
   DynamicArena* accelMemory; // TODO: We could remove all this because we can now build all the accelerators in place. (Add an API that functions like a Accelerator builder and at the end we lock everything into an immutable graph).
 
+   // Mainly for debugging
   String name; // For debugging purposes it's useful to give accelerators a name
   int id;
+  AcceleratorPurpose purpose;
 };
 
 struct MemoryAddressMask{
@@ -187,8 +206,20 @@ struct EdgeIterator{
   Edge Next();
 };
 
-Accelerator* CopyAccelerator(Accelerator* accel,InstanceMap* map); // Maps instances from accel to the copy
-FUInstance*  CopyInstance(Accelerator* newAccel,FUInstance* oldInstance,String newName);
+struct AcceleratorMapping{
+  int firstId;
+  int secondId;
+
+  TrieMap<FUInstance*,FUInstance*>* map;
+};
+
+Accelerator* GetAcceleratorById(int id);
+
+Accelerator* CreateAccelerator(String name,AcceleratorPurpose purpose);
+
+Pair<Accelerator*,AcceleratorMapping*> CopyAcceleratorWithMapping(Accelerator* accel,AcceleratorPurpose purpose,bool preserveIds,Arena* out);
+Accelerator* CopyAccelerator(Accelerator* accel,AcceleratorPurpose purpose,bool preserveIds,InstanceMap* map); // Maps instances from accel to the copy
+FUInstance*  CopyInstance(Accelerator* newAccel,FUInstance* oldInstance,bool preserveIds,String newName);
 
 bool NameExists(Accelerator* accel,String name);
 
@@ -210,9 +241,7 @@ Array<Edge> GetAllEdges(Accelerator* accel,Arena* out);
 EdgeIterator IterateEdges(Accelerator* accel);
 
 // Unit connection
-
 Opt<Edge> FindEdge(PortInstance out,PortInstance in);
-//Opt<Edge> FindEdge(FUInstance* out,int outIndex,FUInstance* in,int inIndex);
 Opt<Edge> FindEdge(FUInstance* out,int outIndex,FUInstance* in,int inIndex,int delay);
 void ConnectUnitsGetEdge(FUInstance* out,int outIndex,FUInstance* in,int inIndex,int delay = 0);
 void ConnectUnitsGetEdge(FUInstance* out,int outIndex,FUInstance* in,int inIndex,int delay,Edge* previous);
@@ -237,3 +266,15 @@ bool IsCombinatorial(Accelerator* accel);
 
 void ConnectUnits(PortInstance out,PortInstance in,int delay);
 
+void MappingCheck(AcceleratorMapping* map);
+void MappingCheck(AcceleratorMapping* map,Accelerator* first,Accelerator* second);
+AcceleratorMapping* MappingSimple(Accelerator* first,Accelerator* second,Arena* out);
+AcceleratorMapping* MappingSimple(Accelerator* first,Accelerator* second,int size,Arena* out);
+AcceleratorMapping* MappingInvert(AcceleratorMapping* toReverse,Arena* out);
+AcceleratorMapping* MappingCombine(AcceleratorMapping* first,AcceleratorMapping* second,Arena* out);
+FUInstance* MappingMap(AcceleratorMapping* mapping,FUInstance* toMap);
+void MappingInsert(AcceleratorMapping* mapping,FUInstance* first,FUInstance* second);
+void MappingPrintInfo(AcceleratorMapping* map);
+void MappingPrintAll(AcceleratorMapping* map);
+
+Set<PortInstance>* MappingMap(AcceleratorMapping* map,Set<PortInstance>* set,Arena* out);

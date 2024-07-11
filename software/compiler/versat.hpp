@@ -115,7 +115,6 @@ void ParseVersatSpecification(String content,Arena* temp,Arena* temp2);
 void ParseVersatSpecification(const char* filepath,Arena* temp,Arena* temp2);
 
 // Accelerator functions
-Accelerator* CreateAccelerator(String name);
 FUInstance* CreateFUInstance(Accelerator* accel,FUDeclaration* type,String entityName);
 Accelerator* Flatten(Accelerator* accel,int times,Arena* temp);
 

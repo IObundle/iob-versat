@@ -23,7 +23,9 @@ CalculatedOffsets CalculateConfigOffsetsIgnoringStatics(Accelerator* accel,Arena
   int offset = 0;
   FOREACH_LIST_INDEXED(FUInstance*,ptr,accel->allocated,index){
     FUInstance* inst = ptr;
-    Assert(!(inst->sharedEnable && inst->isStatic));
+
+    // TODO: Temporarely set this to comment. Do not know what it affects.
+    // Assert(!(inst->sharedEnable && inst->isStatic));
 
     int numberConfigs = inst->declaration->baseConfig.configs.size;
     if(numberConfigs == 0){

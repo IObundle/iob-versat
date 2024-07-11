@@ -416,50 +416,6 @@ if __name__ == "__main__":
 
     allTypes["std::vector"] = Struct("std::vector",[Member("mem",pointerT,0),Member("size",intType,1),Member("allocated",intType,2)],["T"],None,None,"",False,False)
 
-    '''
-    print("")
-    for name,t in allTypes.items():
-        if(t.Type() == STRUCT and t.isPOD):
-            print(t)
-    '''
-
-    '''
-    for name,t in allTypes.items():
-        if("<" in name and t == UNKNOWN):
-            allTypes[name] = TEMPLATED_INSTANCE
-
-    toDelete = []
-    for name,t in allTypes.items():
-        if(len(name) <= 0 or '(' in name):
-            toDelete.append(name)
-    for name in toDelete:
-        del allTypes[name]
-    '''
-
-    # TODO: Hack because the typedef was inserted before template info was inserted
-    #       Basically need to output following the order in which the types are declared
-    '''
-    for name,t in structures.items():
-        if(t.Type() == TYPEDEF and t.name == "String"):
-            del structures[name]
-            break
-    '''
-
-    '''
-    toDelete = []
-    for name,t in structures.items():
-        if(t.Type() == TYPEDEF):
-            if(len(t.oldType.name) <= 0 or '(' in t.oldName):
-                toDelete.append(name)
-            if(len(t.newName) <= 0 or '(' in t.newName):
-                toDelete.append(name)
-
-        if(len(name) <= 0 or '(' in name):
-            toDelete.append(name)
-    for name in toDelete:
-        del structures[name]
-    '''
-
     unknownStructures = []
 
     for name,data in allTypes.items():
@@ -478,15 +434,12 @@ if __name__ == "__main__":
 
             s.members = elem.members + s.members
 
-    '''
-    for name,data in structures.items():
-        if(data.Type() == STRUCT):
-            data.name = data.name
-            for m in data.members:
-                m.typeName = m.typeName
-        if(data.Type() == TYPEDEF):
-            data.oldType.name = data.oldType.name
-    '''
+    del allTypes["AcceleratorMapping"]
+    del allTypes["TrieMap"]
+    del allTypes["TrieMapNode"]
+    del allTypes["TrieMapIterator"]
+    del allTypes["TrieSet"]
+    del allTypes["TrieSetIterator"]
 
     enumStructures = {}
     structStructures = {}
@@ -751,7 +704,7 @@ String GetRepr(Pool<T>* pool,Arena* out){
                        "TypeIterator","Iterator","Expression",
                        "Trie","CommandDefinition","Block","TemplateRecord",
                        "IndividualBlock","PortDeclaration","ExternalMemoryID","ExternalMemoryInfo",
-                       "PortEdge","MappingEdge","Accelerator","InstanceNode","DelayToAdd","Edge"]
+                       "PortEdge","MappingEdge","Accelerator","InstanceNode","DelayToAdd","Edge","AcceleratorMapping"]
 
     def CheckIfPrinting(struct):
         if(struct.name in notPrintingList):

@@ -363,6 +363,9 @@ template<typename Key,typename Data>
 Hashmap<Key,Data>* PushHashmap(DynamicArena* arena,int maxAmountOfElements);
 
 template<typename Key,typename Data>
+Array<Pair<Key,Data>> PushHashmapArray(Arena* out,Hashmap<Key,Data>* hashmap);
+
+template<typename Key,typename Data>
 Array<Key> PushHashmapKeyArray(Arena* out,Hashmap<Key,Data>* hashmap);
 
 template<typename Key,typename Data>
@@ -380,7 +383,7 @@ struct Set{
 
   void Insert(Data data);
   
-  bool ExistsOrInsert(Data data);
+  bool ExistsOrInsert(Data data); // Returns true if exists otherwise false and inserts
   bool Exists(Data data);
 };
 
@@ -442,6 +445,8 @@ struct TrieMap{
   GetOrAllocateResult<Data> GetOrAllocate(Key key); // More efficient way for the Get, check if null, Insert pattern
 
   bool Exists(Key key);
+
+  __attribute__((noinline)) Array<Pair<Key,Data>> AsArray(Arena* out);
 };
 
 template<typename Key,typename Data>
@@ -553,7 +558,7 @@ public:
 PoolInfo CalculatePoolInfo(int elemSize);
 PageInfo GetPageInfo(PoolInfo poolInfo,Byte* page);
 
-// A vector like class except no reallocations. Useful for storing entities that cannot be reallocated.
+// A vector like class except no reallocations. Useful for storing entities that cannot be reallocated (so we can store pointers to them directly).
 template<typename T>
 struct Pool{
   Byte* mem; // TODO: replace with PoolHeader instead of using Byte and casting
@@ -703,11 +708,23 @@ Hashmap<Key,Data>* PushHashmap(DynamicArena* arena,int maxAmountOfElements){
 }
 
 template<typename Key,typename Data>
+Array<Pair<Key,Data>> PushHashmapArray(Arena* out,Hashmap<Key,Data>* hashmap){
+  Array<Pair<Key,Data>> res = PushArray<Pair<Key,Data>>(out,hashmap->nodesUsed);
+
+  int index = 0;
+  for(Pair<Key,Data*>& pair : *hashmap){
+    res[index++] = {pair.first,*pair.second};
+  }
+  return res;
+
+}
+
+template<typename Key,typename Data>
 Array<Key> PushHashmapKeyArray(Arena* out,Hashmap<Key,Data>* hashmap){
   Array<Key> res = PushArray<Key>(out,hashmap->nodesUsed);
 
   int index = 0;
-  for(Pair<Key,Data>& pair : *hashmap){
+  for(Pair<Key,Data*>& pair : *hashmap){
     res[index++] = pair.first;
   }
   return res;
@@ -718,8 +735,8 @@ Array<Data> PushHashmapDataArray(Arena* out,Hashmap<Key,Data>* hashmap){
   Array<Data> res = PushArray<Data>(out,hashmap->nodesUsed);
 
   int index = 0;
-  for(Pair<Key,Data>& pair : *hashmap){
-    res[index++] = pair.second;
+  for(Pair<Key,Data*>& pair : *hashmap){
+    res[index++] = *pair.second;
   }
   return res;
 }
@@ -939,11 +956,12 @@ Data* TrieMap<Key,Data>::Insert(Key key,Data data){
       this->tail->next = node;
       this->tail = node;
     }
+    inserted += 1;
     return &node->pair.second;
   }
 
   index >>= 2;
-  
+
   TrieMapNode<Key,Data>* current = (TrieMapNode<Key,Data>*) this->childs[select];
   for(; 1; index >>= 2){
     int select = index & 3;
@@ -956,12 +974,13 @@ Data* TrieMap<Key,Data>::Insert(Key key,Data data){
       this->tail = node;
 
       current->childs[select] = node;
+      inserted += 1;
       return &node->pair.second;
     } else {
       current = current->childs[select];
     }
   }
-
+  
   NOT_POSSIBLE("Should not reach here");
   return nullptr;
 }
@@ -984,8 +1003,10 @@ Data* TrieMap<Key,Data>::InsertIfNotExist(Key key,Data data){
       this->tail->next = node;
       this->tail = node;
     }
+    inserted += 1;
     return &node->pair.second;
   } else if(this->childs[select]->pair.key == key){
+    inserted += 1;
     return &this->childs[select]->pair.second;
   }
 
@@ -1003,8 +1024,10 @@ Data* TrieMap<Key,Data>::InsertIfNotExist(Key key,Data data){
       this->tail = node;
 
       current->childs[select] = node;
+      inserted += 1;
       return &node->pair.second;
     } else if(current->childs[select]->pair.first == key) {
+      inserted += 1;
       return &current->childs[select]->pair.second;
     } else {
       current = current->childs[select];
@@ -1057,6 +1080,7 @@ Data* TrieMap<Key,Data>::GetOrInsert(Key key,Data data){
 template<typename Key,typename Data>
 Data& TrieMap<Key,Data>::GetOrFail(Key key){
   Data* got = Get(key);
+
   Assert(got);
   return *got;
 }
@@ -1083,6 +1107,18 @@ bool TrieMap<Key,Data>::Exists(Key key){
   Data* data = Get(key);
   bool res = (data != nullptr);
   return res;
+}
+
+template<typename Key,typename Data>
+Array<Pair<Key,Data>> TrieMap<Key,Data>::AsArray(Arena* out){
+  Array<Pair<Key,Data>> result = PushArray<Pair<Key,Data>>(out,this->inserted);
+
+  int index = 0;
+  for(auto pair : this){
+    result[index++] = (Pair<Key,Data>){pair.first,pair.second};
+  }
+  
+  return result;
 }
 
 template<typename Key,typename Data>

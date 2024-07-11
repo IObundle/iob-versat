@@ -555,7 +555,7 @@ FUDeclaration* RegisterSubUnit(Accelerator* circuit,Arena* temp,Arena* temp2){
 
   OutputDebugDotGraph(circuit,STRING("DefaultCircuit.dot"),temp);
 
-  decl.baseCircuit = CopyAccelerator(circuit,nullptr);
+  decl.baseCircuit = CopyAccelerator(circuit,AcceleratorPurpose_BASE,true,nullptr);
   OutputDebugDotGraph(decl.baseCircuit,STRING("DefaultCopy.dot"),temp);
 
   decl.flattenedBaseCircuit = Flatten(decl.baseCircuit,99,temp);
@@ -918,7 +918,7 @@ void PrintDeclaration(FILE* out,FUDeclaration* decl,Arena* temp,Arena* temp2){
   PrintUniformInformation(out,decl);
   fprintf(out,"\n");
 
-  Accelerator* test = CreateAccelerator(STRING("TEST"));
+  Accelerator* test = CreateAccelerator(STRING("TEST"),AcceleratorPurpose_TEMP);
   CreateFUInstance(test,decl,STRING("TOP"));
   AccelInfo info = CalculateAcceleratorInfo(test,true,temp,temp2);
 
