@@ -161,7 +161,7 @@ Array<TypeStructInfoElement> GenerateStructFromType(FUDeclaration* decl,Arena* o
   if(decl->type == FUDeclarationType_SINGLE){
     int size = decl->baseConfig.configs.size;
     Array<TypeStructInfoElement> entries = PushArray<TypeStructInfoElement>(out,size);
-
+    
     for(int i = 0; i < size; i++){
       entries[i].typeAndNames = PushArray<SingleTypeStructElement>(out,1);
       entries[i].typeAndNames[0].type = STRING("iptr");
@@ -177,7 +177,6 @@ Array<TypeStructInfoElement> GenerateStructFromType(FUDeclaration* decl,Arena* o
   int configSize = offsets.max;
 
   Array<int> configAmount = PushArray<int>(temp,configSize);
-  Memset(configAmount,0);
   int i = 0;
   FOREACH_LIST_INDEXED(FUInstance*,node,accel->allocated,i){
     FUDeclaration* decl = node->declaration;
@@ -206,7 +205,6 @@ Array<TypeStructInfoElement> GenerateStructFromType(FUDeclaration* decl,Arena* o
   }
   
   Array<int> configSeen = PushArray<int>(temp,numberEntries);
-  Memset(configSeen,0);
   i = 0;
   int index = 0;
   FOREACH_LIST_INDEXED(FUInstance*,node,accel->allocated,i){
@@ -339,7 +337,6 @@ Array<TypeStructInfo> GetConfigStructInfo(Accelerator* accel,Arena* out,Arena* t
   Array<SubTypesInfo> subTypesInfo =  GetSubTypesInfo(accel,out,temp);
   
   Array<TypeStructInfo> structures = PushArray<TypeStructInfo>(out,typesUsed.size + 99); // TODO: Small hack to handle merge for now.
-  Memset(structures,{});
   int index = 0;
   for(SubTypesInfo subType : subTypesInfo){
     if(subType.isFromMerged){
@@ -349,7 +346,6 @@ Array<TypeStructInfo> GetConfigStructInfo(Accelerator* accel,Arena* out,Arena* t
       CalculatedOffsets& offsets = info.configOffsets;
         
       Array<bool> seenIndex = PushArray<bool>(temp,offsets.max);
-      Memset(seenIndex,false);
         
       int i = 0;
       FOREACH_LIST_INDEXED(FUInstance*,node,decl->fixedDelayCircuit->allocated,i){
@@ -368,14 +364,22 @@ Array<TypeStructInfo> GetConfigStructInfo(Accelerator* accel,Arena* out,Arena* t
       int unused = 0;
       int configNeedToSee = 0;
       while(1){
+        int unusedToPut = 0;
         while(configNeedToSee < maxOffset && seenIndex[configNeedToSee] == false){
+          unusedToPut += 1;
+          configNeedToSee += 1;
+          }
+
+        if(unusedToPut){
           TypeStructInfoElement* elem = PushListElement(list);
+          *elem = {};
           elem->typeAndNames = PushArray<SingleTypeStructElement>(out,1);
+          elem->typeAndNames[0] = {};
           elem->typeAndNames[0].type = STRING("iptr");
           elem->typeAndNames[0].name = PushString(out,"unused%d",unused++);
-          configNeedToSee += 1;
+          elem->typeAndNames[0].arraySize = unusedToPut;
         }
-
+          
         if(configNeedToSee >= maxOffset){
           break;
         }
@@ -388,8 +392,9 @@ Array<TypeStructInfo> GetConfigStructInfo(Accelerator* accel,Arena* out,Arena* t
               
             TypeStructInfoElement* elem = PushListElement(list);
             elem->typeAndNames = PushArray<SingleTypeStructElement>(out,1);
+            elem->typeAndNames[0] = {};
             elem->typeAndNames[0].type = PushString(out,"%.*sConfig",UNPACK_SS(node->declaration->name));
-            elem->typeAndNames[0].name = info.baseName[i]; //node->inst->name;
+            elem->typeAndNames[0].name = info.baseName[i];
               
             configNeedToSee += nConfigs;
           }
@@ -407,6 +412,7 @@ Array<TypeStructInfo> GetConfigStructInfo(Accelerator* accel,Arena* out,Arena* t
 
       merged[0].typeAndNames = PushArray<SingleTypeStructElement>(out,decl->configInfo.size);
       for(int i = 0; i < decl->configInfo.size; i++){
+        merged[0].typeAndNames[i] = {};
         merged[0].typeAndNames[i].type = PushString(out,"%.*sConfig",UNPACK_SS(decl->configInfo[i].name));
         merged[0].typeAndNames[i].name = decl->configInfo[i].name;
       }
@@ -776,6 +782,66 @@ void OutputVerilatorMake(String topLevelName,String versatDir,Arena* temp,Arena*
   ProcessTemplate(output,comp,temp,temp2);
 }
 
+struct SameMuxEntities{
+  int configPos;
+  InstanceInfo* info;
+};
+
+template<> struct std::hash<SameMuxEntities>{
+   std::size_t operator()(SameMuxEntities const& s) const noexcept{
+     std::size_t res = s.configPos;
+     return res;
+   }
+};
+
+bool operator==(const SameMuxEntities i0,const SameMuxEntities i1){
+  bool res = (i0.configPos == i1.configPos);
+  return res;
+}
+
+// TODO: A little bit hardforced. Multiplexer info needs to be revised.
+Array<Array<MuxInfo>> GetAllMuxInfo(AccelInfo* info,Arena* out,Arena* temp){
+  Set<SameMuxEntities>* knownSharedIndexes = PushSet<SameMuxEntities>(temp,99);
+  
+  for(InstanceInfo& f : info->baseInfo){
+    if(f.isMergeMultiplexer){
+      knownSharedIndexes->Insert({f.configPos.value(),&f});
+    }
+  }
+
+  Array<SameMuxEntities> listOfSharedIndexes = PushArrayFromSet(temp,knownSharedIndexes);
+  
+#if 0
+  Hashmap<Pair<int,int>,Pair<InstanceInfo*,int>>* sharedIndexesToIndex = PushHashmap<Pair<int,int>,Pair<InstanceInfo*,int>>(temp,listOfSharedIndexes.size);
+  for(int i = 0; i < listOfSharedIndexes.size; i++){
+    sharedIndexesToIndex->Insert(listOfSharedIndexes[i],GetConfigPosFromSharedIndex(info->baseInfo,i));
+  }
+#endif
+  
+  Array<Array<MuxInfo>> result = PushArray<Array<MuxInfo>>(out,info->muxConfigs.size);
+
+  for(int i = 0; i < result.size; i++){
+    result[i] = PushArray<MuxInfo>(out,info->muxConfigs[i].size);
+
+    Assert(listOfSharedIndexes.size == info->muxConfigs[i].size);
+
+    for(int ii = 0; ii < info->muxConfigs[i].size; ii++){
+      MuxInfo r = {};
+
+      SameMuxEntities ent = listOfSharedIndexes[ii];
+      
+      r.val = info->muxConfigs[i][ii];
+      r.configIndex = ent.configPos;  //associatedInfo.first->configPos.value();
+      r.info = ent.info;
+      r.name = r.info->fullName;
+      
+      result[i][ii] = r;
+    }
+  }
+  
+  return result;
+}
+
 void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* softwarePath,bool isSimple,Arena* temp,Arena* temp2){
   BLOCK_REGION(temp);
   BLOCK_REGION(temp2);
@@ -794,10 +860,22 @@ void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* 
   }
 
   VersatComputedValues val = ComputeVersatValues(accel,globalOptions.useDMA);
-  AccelInfo info = CalculateAcceleratorInfo(accel,true,temp,temp2);
-  CheckSanity(info.baseInfo,temp);
 
-  //UnitValues unit = CalculateAcceleratorValues(versat,accel);
+  // MARK
+#if 0
+  Array<VersatComputedValues> arr = PushArray<VersatComputedValues>(temp,1);
+  val.arena = temp;
+  arr[0] = val;
+  
+  PrintRepr(MakeValue(&arr),temp,temp2);
+  DEBUG_BREAK();
+#endif
+  
+  AccelInfo info = CalculateAcceleratorInfo(accel,true,temp,temp2);
+
+  //PrintRepr(stdout,MakeValue(&info),temp,temp2);
+  
+  CheckSanity(info.baseInfo,temp);
   
   printf("ADDR_W - %d\n",val.memoryConfigDecisionBit + 1);
   if(val.nUnitsIO){
@@ -1054,7 +1132,6 @@ void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* 
     Array<DifferenceArray> differenceArray = EndArray(diffArray);
     TemplateSetCustom("differences",MakeValue(&differenceArray));
     
-#if 1
     int index = 0;
     Array<Wire> allStaticsVerilatorSide = PushArray<Wire>(temp,999); // TODO: Correct size
     for(Pair<StaticId,StaticData*> p : staticUnits){
@@ -1066,10 +1143,9 @@ void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* 
     }
     allStaticsVerilatorSide.size = index;
     TemplateSetCustom("allStatics",MakeValue(&allStaticsVerilatorSide));
-#endif
-
+    
     Array<TypeStructInfoElement> structuredConfigs = ExtractStructuredConfigs(info.baseInfo,temp,temp2);
-
+    
     Array<String> allStates = ExtractStates(info.baseInfo,temp2);
     Array<Pair<String,int>> allMem = ExtractMem(info.baseInfo,temp2);
 
@@ -1080,6 +1156,8 @@ void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* 
 
     TemplateSetBool("outputChangeDelay",false);
     TemplateSetString("accelName",accel->name);
+
+#if 0    
     TemplateSetString("mergeMuxName",STRING(""));
     
     for(InstanceInfo in : info.baseInfo){
@@ -1088,9 +1166,15 @@ void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* 
         TemplateSetString("mergeMuxName",str);
       }
     }
-
+#endif
+    
     TemplateSetCustom("mergeNames",MakeValue(&info.names));
 
+    Array<Array<MuxInfo>> result = GetAllMuxInfo(&info,temp,temp2);
+
+    DEBUG_BREAK();
+    TemplateSetCustom("mergeMux",MakeValue(&result));
+    
     FILE* f = OpenFileAndCreateDirectories(StaticFormat("%s/versat_accel.h",softwarePath),"w");
     DEFER_CLOSE_FILE(f);
     ProcessTemplate(f,BasicTemplates::acceleratorHeaderTemplate,temp,temp2);

@@ -33,7 +33,6 @@ String Repr(bool* b,Arena* out);
 String Repr(TypeStructInfo* info,Arena* out);
 String Repr(FUInstance* node,Arena* out);
 String Repr(char** ch,Arena* out);
-//String Repr(ExternalMemoryInterfaceTemplate<int>* ext, Arena* out);
 
 template<int N>
 String Repr(char (*buffer)[N],Arena* out){
@@ -161,61 +160,9 @@ void PrintAll(Hashmap<T,P>* map,Arena* temp){
 void PrintAll(FILE* file,Array<String> fields,Array<Array<String>> content,Arena* temp);
 void PrintAll(Array<String> fields,Array<Array<String>> content,Arena* temp);
 
-#if 0
-// TODO: Hack because no automatic printing of enums, yet
-static String Repr(NodeType* type,Arena* out){
-  switch(*type){
-  case NodeType_UNCONNECTED: return STRING("NodeType_UNCONNECTED");
-  case NodeType_SOURCE: return STRING("NodeType_SOURCE");
-  case NodeType_COMPUTE: return STRING("NodeType_COMPUTE");
-  case NodeType_SINK: return STRING("NodeType_SINK");
-  case NodeType_SOURCE_AND_SINK: return STRING("NodeType_SOURCE_AND_SINK");
-  }
-  return {};
-}
-#endif
-
-template<typename T>
-String GetRepr(Array<T>* arr,Arena* out){
-  auto mark = StartString(out);
-  PushString(out,"(");
-  bool first = true;
-  for(T& t : *arr){
-    if(first){
-      first = false;
-    } else {
-      PushString(out,",");
-    }
-    GetRepr(&t,out);
-  }
-  PushString(out,")");
-  return EndString(mark);
-}
-
 #include "autoRepr.hpp"
 
-template<typename T>
-void Print(T* toPrint,Arena* temp){
-  BLOCK_REGION(temp);
-
-  String repr = GetRepr(toPrint,temp);
-  printf("%.*s",UNPACK_SS(repr));
-
-  return;
-}
-
-template<typename T>
-Array<Array<String>> ReprAll(Array<T> arr,Arena* out){
-  int size = arr.size;
-  
-  Array<Array<String>> strings = PushArray<Array<String>>(out,size);
-  for(int i = 0; i < arr.size; i++){
-    strings[i] = GetAllRepr(&arr[i],out);
-  }
-
-  return strings;
-}
-
+#if 0
 template<typename T>
 void PrintAll(FILE* file,Array<T> arr,Arena* temp){
   BLOCK_REGION(temp);
@@ -226,30 +173,6 @@ void PrintAll(FILE* file,Array<T> arr,Arena* temp){
 
   PrintAll(file,fields,strings,temp);
 }
+#endif
 
-template<typename T>
-void PrintAll(Array<T> arr,Arena* temp){
-  BLOCK_REGION(temp);
-
-  int size = arr.size;
-  Array<String> fields = GetFields((T){},temp);
-  Array<Array<String>> strings = ReprAll(arr,temp);
-
-  PrintAll(fields,strings,temp);
-}
-
-static inline void PrintAll(Array<int> arr,Arena* temp){
-  BLOCK_REGION(temp);
-  int size = arr.size;
-  Array<String> values = PushArray<String>(temp,size);
-
-  int maxSize = 0;
-  for(int i = 0; i < values.size; i++){
-    values[i] = PushString(temp,"%d",arr[i]);
-    maxSize = std::max(maxSize,values[i].size);
-  }
-
-  for(int i = 0; i < values.size; i++){
-    printf("%*.*s\n",maxSize,UNPACK_SS(values[i]));
-  }
-}
+void PrintRepr(FILE* file,Value val,Arena* temp,Arena* temp2);

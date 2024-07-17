@@ -4,7 +4,7 @@
 
 #include "utils.hpp"
 #include "memory.hpp"
-#include "configurations.hpp"
+//#include "configurations.hpp"
 #include "verilogParsing.hpp"
 
 struct FUInstance;
@@ -79,12 +79,25 @@ struct GenericGraphMapping{
   PathMap* edgeMap;
 };
 
+struct EdgeDelayInfo{
+  int* value;
+  bool isAny;
+};
+
 struct ConnectionNode{
   PortInstance instConnectedTo;
   int port;
   int edgeDelay;
-  int* delay; // Maybe not the best approach to calculate delay. TODO: check later
+  EdgeDelayInfo delay; // Maybe not the best approach to calculate delay. TODO: check later
   ConnectionNode* next;
+};
+
+enum NodeType{
+  NodeType_UNCONNECTED,
+  NodeType_SOURCE,
+  NodeType_COMPUTE,
+  NodeType_SINK,
+  NodeType_SOURCE_AND_SINK
 };
 
 struct FUInstance{
@@ -105,7 +118,8 @@ struct FUInstance{
   bool isStatic;
   bool sharedEnable;
   bool isMergeMultiplexer; // TODO: Kinda of an hack for now
-
+  int mergeMultiplexerId;
+  
   FUInstance* next;
 
   // Calculated and updated every time a connection is added or removed
@@ -198,6 +212,13 @@ struct DAGOrderNodes{
   int maxOrder;
 };
 
+struct AcceleratorMapping{
+  int firstId;
+  int secondId;
+
+  TrieMap<FUInstance*,FUInstance*>* map;
+};
+
 struct EdgeIterator{
   FUInstance* currentNode;
   ConnectionNode* currentPort;
@@ -206,11 +227,42 @@ struct EdgeIterator{
   Edge Next();
 };
 
-struct AcceleratorMapping{
-  int firstId;
-  int secondId;
+// Strange forward declare
+template<typename T> struct WireTemplate;
+typedef WireTemplate<int> Wire;
 
-  TrieMap<FUInstance*,FUInstance*>* map;
+struct StaticId{
+   FUDeclaration* parent;
+   String name;
+};
+
+template<> class std::hash<StaticId>{
+   public:
+   std::size_t operator()(StaticId const& s) const noexcept{
+      std::size_t res = std::hash<String>()(s.name) + (std::size_t) s.parent;
+      return (std::size_t) res;
+   }
+};
+
+struct StaticData{
+   Array<Wire> configs;
+};
+
+struct StaticInfo{
+   StaticId id;
+   StaticData data;
+};
+
+struct CalculatedOffsets{
+   Array<int> offsets;
+   int max;
+};
+
+enum MemType{
+   CONFIG,
+   STATE,
+   DELAY,
+   STATIC
 };
 
 Accelerator* GetAcceleratorById(int id);
@@ -222,6 +274,8 @@ Accelerator* CopyAccelerator(Accelerator* accel,AcceleratorPurpose purpose,bool 
 FUInstance*  CopyInstance(Accelerator* newAccel,FUInstance* oldInstance,bool preserveIds,String newName);
 
 bool NameExists(Accelerator* accel,String name);
+
+int GetFreeShareIndex(Accelerator* accel); // TODO: Slow 
 
 Array<FUDeclaration*> AllNonSpecialSubTypes(Accelerator* accel,Arena* out,Arena* temp);
 Array<FUDeclaration*> ConfigSubTypes(Accelerator* accel,Arena* out,Arena* temp);

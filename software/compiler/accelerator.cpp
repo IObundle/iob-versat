@@ -12,6 +12,7 @@
 #include "debug.hpp"
 #include "debugVersat.hpp"
 #include "configurations.hpp"
+#include "textualRepresentation.hpp"
 
 #define TAG_TEMPORARY_MARK 1
 #define TAG_PERMANENT_MARK 2
@@ -73,6 +74,24 @@ bool NameExists(Accelerator* accel,String name){
   return false;
 }
 
+int GetFreeShareIndex(Accelerator* accel){  // TODO: Slow 
+  int attempt = 0; 
+  while(1){
+    bool found = true;
+    FOREACH_LIST(FUInstance*,inst,accel->allocated){
+      if(inst->sharedEnable && inst->sharedIndex == attempt){
+        attempt += 1;
+        found = false;
+        break;
+      }
+    }
+
+    if(found){
+      return attempt;
+    }
+  }
+}
+
 FUInstance* CreateFUInstance(Accelerator* accel,FUDeclaration* type,String name){
   static int globalID = 0;
   String storedName = PushString(accel->accelMemory,name);
@@ -111,6 +130,15 @@ Pair<Accelerator*,AcceleratorMapping*> CopyAcceleratorWithMapping(Accelerator* a
 
     newInst->literal = inst->literal;
 
+    if(inst->sharedEnable){
+      ShareInstanceConfig(newInst,inst->sharedIndex);
+    }
+    if(inst->isStatic){
+      newInst->isStatic = inst->isStatic;
+    }
+    newInst->isMergeMultiplexer = inst->isMergeMultiplexer;
+    newInst->mergeMultiplexerId = inst->mergeMultiplexerId;
+    
     MappingInsert(map,inst,newInst);
   }
 
@@ -145,7 +173,15 @@ Accelerator* CopyAccelerator(Accelerator* accel,AcceleratorPurpose purpose,bool 
     FUInstance* newInst = CopyInstance(newAccel,inst,preserveIds,inst->name);
 
     newInst->literal = inst->literal;
-
+    if(inst->sharedEnable){
+      ShareInstanceConfig(newInst,inst->sharedIndex);
+    }
+    if(inst->isStatic){
+      newInst->isStatic = inst->isStatic;
+    }
+    newInst->isMergeMultiplexer = inst->isMergeMultiplexer;
+    newInst->mergeMultiplexerId = inst->mergeMultiplexerId;
+    
     map->Insert(inst,newInst);
   }
 
@@ -170,17 +206,13 @@ FUInstance* CopyInstance(Accelerator* newAccel,FUInstance* oldInstance,bool pres
 
   newInst->parameters = oldInstance->parameters;
   newInst->portIndex = oldInstance->portIndex;
-
-  if(oldInstance->isStatic){
-    SetStatic(newAccel,newInst);
-  }
-  if(oldInstance->sharedEnable){
-    ShareInstanceConfig(newInst,oldInstance->sharedIndex);
-  }
+  
   if(preserveIds){
     newInst->id = oldInstance->id;
   }
-    
+  newInst->isMergeMultiplexer = oldInstance->isMergeMultiplexer;
+  newInst->mergeMultiplexerId = oldInstance->mergeMultiplexerId;
+  
   return newInst;
 }
 
@@ -257,11 +289,6 @@ Accelerator* Flatten(Accelerator* accel,int times,Arena* temp){
   Arena* perm = globalPermanent;
   BLOCK_REGION(temp);
 
-#if 0
-  InstanceMap* map = PushHashmap<FUInstance*,FUInstance*>(temp,999);
-  Accelerator* newAccel = CopyAccelerator(accel,AcceleratorPurpose_FLATTEN,map);
-#endif
-
   Pair<Accelerator*,AcceleratorMapping*> pair = CopyAcceleratorWithMapping(accel,AcceleratorPurpose_FLATTEN,true,temp);
   Accelerator* newAccel = pair.first;
   
@@ -269,9 +296,7 @@ Accelerator* Flatten(Accelerator* accel,int times,Arena* temp){
   Pool<FUInstance*> toRemove = {};
   std::unordered_map<StaticId,int> staticToIndex;
 
-  //DEBUG_BREAK_IF(CompareString(accel->name,"FullAES"));
   for(int i = 0; i < times; i++){
-    int maxSharedIndex = -1;
     FOREACH_LIST(FUInstance*,instPtr,newAccel->allocated){
       FUInstance* inst = instPtr;
 
@@ -285,10 +310,6 @@ Accelerator* Flatten(Accelerator* accel,int times,Arena* temp){
 
         *ptr = instPtr;
       }
-
-      if(inst->sharedEnable){
-        maxSharedIndex = std::max(maxSharedIndex,inst->sharedIndex);
-      }
     }
 
     if(compositeInstances.Size() == 0){
@@ -297,7 +318,7 @@ Accelerator* Flatten(Accelerator* accel,int times,Arena* temp){
 
     std::unordered_map<int,int> sharedToFirstChildIndex;
 
-    int freeSharedIndex = (maxSharedIndex != -1 ? maxSharedIndex + 1 : 0);
+    int freeSharedIndex = GetFreeShareIndex(newAccel); //(maxSharedIndex != -1 ? maxSharedIndex + 1 : 0);
     int count = 0;
     for(FUInstance** instPtr : compositeInstances){
       FUInstance* inst = (*instPtr);
@@ -309,6 +330,7 @@ Accelerator* Flatten(Accelerator* accel,int times,Arena* temp){
       FUInstance* outputInstance = GetOutputInstance(circuit->allocated);
 
       int savedSharedIndex = freeSharedIndex;
+      int instSharedIndex = freeSharedIndex;
       if(inst->sharedEnable){
         // Flattening a shared unit
         auto iter = sharedToFirstChildIndex.find(inst->sharedIndex);
@@ -323,7 +345,8 @@ Accelerator* Flatten(Accelerator* accel,int times,Arena* temp){
       std::unordered_map<int,int> sharedToShared;
       // Create new instance and map then
       AcceleratorMapping* map = MappingSimple(circuit,newAccel,temp); // TODO: Leaking
-      
+
+      DEBUG_BREAK_IF(CompareString(accel->name,"TestDoubleMerge1"));
       FOREACH_LIST(FUInstance*,ptr,circuit->allocated){
         FUInstance* circuitInst = ptr;
         if(circuitInst->declaration->type == FUDeclarationType_SPECIAL){
@@ -346,7 +369,7 @@ Accelerator* Flatten(Accelerator* accel,int times,Arena* temp){
           }
 
           if(!found){
-            shareIndex = freeSharedIndex++;
+            shareIndex = GetFreeShareIndex(newAccel);
 
             StaticId id = {};
             id.name = circuitInst->name;
@@ -361,25 +384,27 @@ Accelerator* Flatten(Accelerator* accel,int times,Arena* temp){
           if(ptr != sharedToShared.end()){
             ShareInstanceConfig(newInst,ptr->second);
           } else {
-            int newIndex = freeSharedIndex++;
+            int newIndex = GetFreeShareIndex(newAccel);
 
             sharedToShared.insert({circuitInst->sharedIndex,newIndex});
 
             ShareInstanceConfig(newInst,newIndex);
           }
         } else if(inst->sharedEnable){ // Currently flattening instance is shared
-               ShareInstanceConfig(newInst,freeSharedIndex++);
+          ShareInstanceConfig(newInst,instSharedIndex); // Always use the same inst index
+          //freeSharedIndex = GetFreeShareIndex(newAccel);
         } else if(circuitInst->sharedEnable){
           auto ptr = sharedToShared.find(circuitInst->sharedIndex);
 
           if(ptr != sharedToShared.end()){
             ShareInstanceConfig(newInst,ptr->second);
           } else {
-            int newIndex = freeSharedIndex++;
-
+            int newIndex = freeSharedIndex;
+            
             sharedToShared.insert({circuitInst->sharedIndex,newIndex});
 
             ShareInstanceConfig(newInst,newIndex);
+            freeSharedIndex = GetFreeShareIndex(newAccel);
           }
         }
       }
@@ -1618,11 +1643,6 @@ void AssertGraphValid(FUInstance* nodes,Arena* arena){
   }
 }
 
-//
-
-const int ANY_DELAY_MARK = 99999;
-
-//HACK
 #if 1
 static void SendLatencyUpwards(FUInstance* node,Hashmap<Edge,int>* delays,Hashmap<FUInstance*,int>* nodeDelay,Hashmap<FUInstance*,int>* nodeToPart){
   int b = nodeDelay->GetOrFail(node);
@@ -1663,18 +1683,32 @@ static void SendLatencyUpwards(FUInstance* node,Hashmap<Edge,int>* delays,Hashma
         
         int delay = b + a + e - c;
 
-        if(b == ANY_DELAY_MARK || node->declaration == BasicDeclaration::buffer){
-          *otherInfo->delay = ANY_DELAY_MARK;
+        if(node->declaration == BasicDeclaration::buffer){
+          *otherInfo->delay.value = delay;
+          otherInfo->delay.isAny = true;
         } else {
-          *otherInfo->delay = delay;
+          *otherInfo->delay.value = delay;
         }
       }
     }
   }
 }
 
+ConnectionNode* GetConnectionNode(ConnectionNode* head,int port,PortInstance other){
+  FOREACH_LIST(ConnectionNode*,con,head){
+    if(con->port != port){
+      continue;
+    }
+    if(con->instConnectedTo == other){
+      return con;
+    }
+  }
+
+  return nullptr;
+}
+
 CalculateDelayResult CalculateDelay(Accelerator* accel,DAGOrderNodes order,Array<Partition> partitions,Arena* out){
-  // TODO: We are currently using the delay pointer inside the ConnectionNode structure. When correct, eventually change to just use the hashmap
+  // TODO: We are currently using the delay pointer inside the ConnectionNode structure. When correct, eventually change to just use the hashmap or an array.
   static int functionCalls = 0;
   
   int nodes = Size(accel->allocated);
@@ -1690,28 +1724,21 @@ CalculateDelayResult CalculateDelay(Accelerator* accel,DAGOrderNodes order,Array
   
   FOREACH_LIST(FUInstance*,ptr,accel->allocated){
     nodeDelay->Insert(ptr,0);
-
-    FOREACH_LIST(ConnectionNode*,con,ptr->allInputs){
-      Edge edge = {};
-
-      edge.units[0] = con->instConnectedTo;
-      edge.units[1].inst = ptr;
-      edge.units[1].port = con->port;
-
-      con->delay = edgeToDelay->Insert(edge,0);
-    }
-
-    FOREACH_LIST(ConnectionNode*,con,ptr->allOutputs){
-      Edge edge = {};
-
-      edge.units[0].inst = ptr;
-      edge.units[0].port = con->port;
-      edge.units[1] = con->instConnectedTo;
-
-      con->delay = edgeToDelay->Insert(edge,0);
-    }
   }
+  
+  EdgeIterator iter = IterateEdges(accel);
+  while(iter.HasNext()){
+    Edge edge = iter.Next();
 
+    ConnectionNode* fromOut = GetConnectionNode(edge.out.inst->allOutputs,edge.out.port,edge.in);
+    ConnectionNode* fromIn = GetConnectionNode(edge.in.inst->allInputs,edge.in.port,edge.out);
+
+    int* delayPtr = edgeToDelay->Insert(edge,0);
+    
+    fromOut->delay.value = delayPtr;
+    fromIn->delay.value = delayPtr;
+  }
+  
   Hashmap<FUInstance*,int>* nodeToPart = PushHashmap<FUInstance*,int>(out,nodes); // TODO: Either temp or move out accross call stack
   {
     int partitionIndex = 0;
@@ -1740,7 +1767,7 @@ CalculateDelayResult CalculateDelay(Accelerator* accel,DAGOrderNodes order,Array
     }
 
     if(node->type != NodeType_SOURCE && node->type != NodeType_SOURCE_AND_SINK){
-      continue; // This break is important because further code relies on it. 
+      continue;
     }
 
     nodeDelay->Insert(node,0);
@@ -1771,9 +1798,9 @@ CalculateDelayResult CalculateDelay(Accelerator* accel,DAGOrderNodes order,Array
 
     int maximum = -(1 << 30);
     FOREACH_LIST(ConnectionNode*,info,node->allInputs){
-      if(*info->delay != ANY_DELAY_MARK){
-        maximum = std::max(maximum,*info->delay);
-      }
+      //if(!info->delay.isAny){
+        maximum = std::max(maximum,*info->delay.value);
+      //}
     }
     
     if(maximum == -(1 << 30)){
@@ -1781,10 +1808,11 @@ CalculateDelayResult CalculateDelay(Accelerator* accel,DAGOrderNodes order,Array
     }
     
     FOREACH_LIST(ConnectionNode*,info,node->allInputs){
-      if(*info->delay == ANY_DELAY_MARK){
-        *info->delay = 0;
+      if(info->delay.isAny){
+        *info->delay.value = maximum - *info->delay.value;
+        //*info->delay.value = 0;
       } else {
-        *info->delay = maximum - *info->delay;
+        *info->delay.value = maximum - *info->delay.value;
       }
     }
 
@@ -1810,7 +1838,7 @@ CalculateDelayResult CalculateDelay(Accelerator* accel,DAGOrderNodes order,Array
 
     // Source_and_sink units never have output delay. They can't
     FOREACH_LIST(ConnectionNode*,con,node->allOutputs){
-      *con->delay = 0;
+      *con->delay.value = 0;
     }
   }
 
@@ -1844,7 +1872,7 @@ CalculateDelayResult CalculateDelay(Accelerator* accel,DAGOrderNodes order,Array
 
       int minimum = 1 << 30;
       FOREACH_LIST(ConnectionNode*,info,node->allOutputs){
-        minimum = std::min(minimum,*info->delay);
+        minimum = std::min(minimum,*info->delay.value);
       }
 
       if(minimum == 1 << 30){
@@ -1855,7 +1883,7 @@ CalculateDelayResult CalculateDelay(Accelerator* accel,DAGOrderNodes order,Array
       nodeDelay->Insert(node,minimum);
 
       FOREACH_LIST(ConnectionNode*,info,node->allOutputs){
-        *info->delay -= minimum;
+        *info->delay.value -= minimum;
       }
     }
   }

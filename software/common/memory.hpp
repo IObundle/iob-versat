@@ -107,9 +107,10 @@ public:
 char buffer_##NAME[SIZE]; \
 NAME.mem = (Byte*) buffer_##NAME; \
 NAME.totalAllocated = SIZE;
-
+ 
+// For now let PushArray also zero out
 template<typename T>
-Array<T> PushArray(Arena* arena,int size){AlignArena(arena,alignof(T)); Array<T> res = {}; res.size = size; res.data = (T*) PushBytes(arena,sizeof(T) * size); return res;};
+Array<T> PushArray(Arena* arena,int size){AlignArena(arena,alignof(T)); Array<T> res = {}; res.size = size; res.data = (T*) PushBytes(arena,sizeof(T) * size); Memset(res,{}); return res;};
 
 template<typename T>
 T* PushStruct(Arena* arena){AlignArena(arena,alignof(T)); T* res = (T*) PushBytes(arena,sizeof(T)); return res;};
@@ -512,7 +513,7 @@ struct PageInfo{
   Byte* bitmap;
 };
 
-class GenericPoolIterator{
+struct GenericPoolIterator{
   PoolInfo poolInfo;
   PageInfo pageInfo;
   int fullIndex;
@@ -520,8 +521,6 @@ class GenericPoolIterator{
   int index;
   int elemSize;
   Byte* page;
-
-public:
 
   void Init(Byte* page,int elemSize);
 
@@ -1204,6 +1203,10 @@ Data SetIterator<Data>::operator*(){
 template<typename Data>
 SetIterator<Data> begin(Set<Data>* set){
   SetIterator<Data> iter = {};
+  if(set == nullptr){
+    return iter;
+  }
+
   iter.innerIter = begin(set->map);
   return iter;
 }
@@ -1211,6 +1214,10 @@ SetIterator<Data> begin(Set<Data>* set){
 template<typename Data>
 SetIterator<Data> end(Set<Data>* set){
   SetIterator<Data> iter = {};
+  if(set == nullptr){
+    return iter;
+  }
+
   iter.innerIter = end(set->map);
   return iter;
 }

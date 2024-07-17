@@ -82,6 +82,8 @@ struct ConfigurationInfo{
   AcceleratorMapping* mapping; // Maps from base type flattened to merged type baseCircuit
   Set<PortInstance>*  mergeMultiplexers; // On merged fixedDelayCircuit. "baseCircuit"
   Array<bool>         unitBelongs;
+  
+  Array<int>          mergeMultiplexerConfigs;
 };
 
 enum FUDeclarationType{
@@ -101,7 +103,7 @@ struct FUDeclaration{
   String name;
 
   ConfigurationInfo baseConfig;
-  Array<ConfigurationInfo> configInfo;
+  Array<ConfigurationInfo> configInfo; // Info for each merged view for all fixedDelayCircuit instances, even if they do not belong to the merged view (unitBelongs indicates such cases)
   
   Opt<int> memoryMapBits; // 0 is a valid memory map size, so optional indicates that no memory map exists
   int nIOs;

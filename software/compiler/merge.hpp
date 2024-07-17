@@ -123,7 +123,6 @@ struct MergeGraphResultExisting{
   Accelerator* accel2;
 
   AcceleratorMapping* map2;
-  //InstanceMap* map2;
 };
 
 struct GraphMapping{

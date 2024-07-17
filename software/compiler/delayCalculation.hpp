@@ -3,6 +3,7 @@
 #include "dotGraphPrinting.hpp"
 #include "utils.hpp"
 #include "accelerator.hpp"
+#include "configurations.hpp"
 
 struct CalculateDelayResult{
   Hashmap<Edge,int>* edgesDelay;

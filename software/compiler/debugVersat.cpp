@@ -71,7 +71,7 @@ static void OutputGraphDotFile_(Accelerator* accel,bool collapseSameEdges,Set<FU
       PortInstance start = {out,outPort};
       PortInstance end = {in,inPort};
       String label = Repr(&start,&end,globalDebug.dotFormat,temp);
-      int calculatedDelay = con->delay ? *con->delay : 0;
+      int calculatedDelay = con->delay.value ? *con->delay.value : 0;
 
       bool highlighStart = (highlighInstance ? highlighInstance->Exists(start.inst) : false);
       bool highlighEnd = (highlighInstance ? highlighInstance->Exists(end.inst) : false);
@@ -211,51 +211,47 @@ void OutputGraphDotFile(Accelerator* accel,bool collapseSameEdges,FUInstance* hi
   Hashmap<Pair<FUInstance*,FUInstance*>,int>* seen = PushHashmap<Pair<FUInstance*,FUInstance*>,int>(temp,size);
   // TODO: Consider adding a true same edge counter, that collects edges with equal delay and then represents them on the graph as a pair, using [portStart-portEnd]
   // TODO: Change to use Array<Edge> 
-  FOREACH_LIST(FUInstance*,ptr,accel->allocated){
-    FUInstance* out = ptr;
 
-    FOREACH_LIST(ConnectionNode*,con,ptr->allOutputs){
-      FUInstance* in = con->instConnectedTo.inst;
+  EdgeIterator iter = IterateEdges(accel);
+  while(iter.HasNext()){
+    Edge edge = iter.Next();
+    FUInstance* out = edge.out.inst;
 
-      if(collapseSameEdges){
-        Pair<FUInstance*,FUInstance*> nodeEdge = {};
-        nodeEdge.first = ptr;
-        nodeEdge.second = con->instConnectedTo.inst;
+    FUInstance* in = edge.in.inst;
+    int inPort = edge.in.port;
+    int outPort = edge.out.port;
 
-        GetOrAllocateResult<int> res = seen->GetOrAllocate(nodeEdge);
-        if(res.alreadyExisted){
-          continue;
-        }
+    if(collapseSameEdges){
+      Pair<FUInstance*,FUInstance*> nodeEdge = {};
+      nodeEdge.first = out;
+      nodeEdge.second = in;
+
+      GetOrAllocateResult<int> res = seen->GetOrAllocate(nodeEdge);
+      if(res.alreadyExisted){
+        continue;
       }
+    }
 
-      int inPort = con->instConnectedTo.port;
-      int outPort = con->port;
+    String first = UniqueRepr(out,temp);
+    String second = UniqueRepr(in,temp);
+    PortInstance start = {out,outPort};
+    PortInstance end = {in,inPort};
+    String label = Repr(&start,&end,globalDebug.dotFormat,temp);
 
-      String first = UniqueRepr(out,temp);
-      String second = UniqueRepr(in,temp);
-      PortInstance start = {out,outPort};
-      PortInstance end = {in,inPort};
-      String label = Repr(&start,&end,globalDebug.dotFormat,temp);
+    int calculatedDelay = delays.edgesDelay->GetOrFail(edge);
 
-      PortInstance nodeStart = {ptr,con->port};
-      PortInstance nodeEnd = con->instConnectedTo;
+    bool highlighStart = (highlighInstance ? start.inst == highlighInstance : false);
+    bool highlighEnd = (highlighInstance ? end.inst == highlighInstance : false);
 
-      Edge edge = {nodeStart,nodeEnd};
-      int calculatedDelay = delays.edgesDelay->GetOrFail(edge);
+    bool highlight = highlighStart && highlighEnd;
 
-      bool highlighStart = (highlighInstance ? start.inst == highlighInstance : false);
-      bool highlighEnd = (highlighInstance ? end.inst == highlighInstance : false);
+    fprintf(outputFile,"\t\"%.*s\" -> ",UNPACK_SS(first));
+    fprintf(outputFile,"\"%.*s\"",UNPACK_SS(second));
 
-      bool highlight = highlighStart && highlighEnd;
-
-      fprintf(outputFile,"\t\"%.*s\" -> ",UNPACK_SS(first));
-      fprintf(outputFile,"\"%.*s\"",UNPACK_SS(second));
-
-      if(highlight){
-        fprintf(outputFile,"[color=darkred,label=\"%.*s\\n[%d:%d]\"];\n",UNPACK_SS(label),con->edgeDelay,calculatedDelay);
-      } else {
-        fprintf(outputFile,"[label=\"%.*s\\n[%d:%d]\"];\n",UNPACK_SS(label),con->edgeDelay,calculatedDelay);
-      }
+    if(highlight){
+      fprintf(outputFile,"[color=darkred,label=\"%.*s\\n[%d]\"];\n",UNPACK_SS(label),calculatedDelay);
+    } else {
+      fprintf(outputFile,"[label=\"%.*s\\n[:%d]\"];\n",UNPACK_SS(label),calculatedDelay);
     }
   }
   fprintf(outputFile,"}\n");

@@ -27,6 +27,18 @@ struct TemplatedMember{
   int memberOffset;
 };
 
+enum Subtype{
+  Subtype_UNKNOWN,
+  Subtype_BASE,
+  Subtype_STRUCT,
+  Subtype_POINTER,
+  Subtype_ARRAY,
+  Subtype_TEMPLATED_STRUCT_DEF,
+  Subtype_TEMPLATED_INSTANCE,
+  Subtype_ENUM,
+  Subtype_TYPEDEF
+};
+
 struct Type{
   String name;
   Type* baseType; // For struct inheritance
@@ -50,7 +62,7 @@ struct Type{
 
   int size; // Size of type (total size in case of arrays)
   int align;
-  enum Subtype {UNKNOWN = 0,BASE,STRUCT,POINTER,ARRAY,TEMPLATED_STRUCT_DEF,TEMPLATED_INSTANCE,ENUM,TYPEDEF} type;
+  Subtype type;
 };
 
 struct Member{
@@ -84,17 +96,6 @@ namespace ValueType{
 };
 
 struct TemplateFunction;
-
-#if 0
-struct TypeIterator{
-  PoolIterator<Type> iter;
-  PoolIterator<Type> end;
-};
-
-TypeIterator IterateTypes();
-bool HasNext(TypeIterator iter);
-Type* Next(TypeIterator& iter);
-#endif
 
 struct Value{
   union{
@@ -131,7 +132,7 @@ struct HashmapUnpackedIndex{
 };
 
 Type* RegisterSimpleType(String name,int size,int align);
-Type* RegisterOpaqueType(String name,Type::Subtype subtype,int size,int align);
+Type* RegisterOpaqueType(String name,Subtype subtype,int size,int align);
 Type* RegisterEnum(String name,Array<Pair<String,int>> enumValues);
 Type* RegisterTypedef(String oldName,String newName);
 Type* RegisterTemplate(String baseName,Array<String> templateArgNames);
@@ -145,7 +146,9 @@ void FreeTypes();
 String GetDefaultValueRepresentation(Value val,Arena* arena);
 
 Value RemoveOnePointerIndirection(Value in);
+Value RemoveTypedefIndirection(Value in);
 
+Value CollapsePtrIntoBaseType(Value in);
 Value CollapsePtrIntoStruct(Value in);
 Value CollapseArrayIntoPtr(Value in);
 Value CollapseValue(Value val);
@@ -162,8 +165,11 @@ Opt<Value> AccessStruct(Value object,Member* member);
 Opt<Value> AccessStruct(Value val,int index);
 Opt<Value> AccessStruct(Value object,String memberName);
 Opt<Member*> GetMember(Type* structType,String memberName);
+Array<String> GetStructMembersName(Type* structType,Arena* out);
 
 void PrintStructDefinition(Type* type); // Mainly for debug purposes
+
+void* GetValueAddress(Value val);
 
 int ArrayLength(Type* type);
 int IndexableSize(Value object); // If type is indexable, return the maximum size
@@ -172,11 +178,13 @@ bool IsBasicType(Type* type);
 bool IsIndexableOfBasicType(Type* type);
 bool IsEmbeddedListKind(Type* type); // Any structure with a next pointer to itself is considered an embedded list
 bool IsStruct(Type* type);
+bool IsStringLike(Type* type);
 Type* GetBaseTypeOfIterating(Type* iterating);
 
 int HashmapIndex(int fullIndex,bool data); 
 HashmapUnpackedIndex UnpackHashmapIndex(int index);
 
+bool IsIterable(Type* type);
 Iterator Iterate(Value iterating);
 bool HasNext(Iterator iter);
 void Advance(Iterator* iter);
@@ -217,3 +225,23 @@ Value MakeValue(T* t){
 
   return val;
 }
+
+/*
+
+How to beef up the type system?
+
+  Need to be able to find type recursions.
+    If type A points to type B and type B points to type A, need to know when to stop.
+    At that point, either only represent the pointer, or let the user indicate how many degrees of hierarchy we are supposed to print.
+
+  Basically develop a "complexity" function that indicates how much trouble printing a struct would be, and organize accordinly.
+
+  I want a type system powerful enough so I can print any struct that I want to a file.
+    I want to be able to see everything. Containers must be able to be iterated and output all their contents.
+    Large structures must be broken down into content that gets printed afterwards.
+      Instead of printing large structures inside a table or similar, we just put a "link" and print the structure further down instead.
+      But simple containers, like an Array of integers with only 4 or 5 members should be printed on the spot.
+
+  Do everything in C++ using the type system. Later move it to python or make pretty printers
+
+*/

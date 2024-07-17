@@ -605,7 +605,7 @@ int main(int argc,const char** argv){
     }
 
     FUInstance* node = TOP;
-    node->type = NodeType_COMPUTE; // MARK: Temporary handle source_and_delay problems for simple units.
+    //node->type = NodeType_COMPUTE; // MARK: Temporary handle source_and_delay problems for simple units.
     
     type = RegisterSubUnit(accel,temp,temp2);
     type->signalLoop = true; // MARK
@@ -629,6 +629,7 @@ int main(int argc,const char** argv){
     }
   }
 
+#if 0
   {
     String path = PushDebugPath(temp,{},STRING("allDeclarations.txt"));
     FILE* allDeclarations = fopen(StaticFormat("%.*s",UNPACK_SS(path)),"w");
@@ -636,20 +637,28 @@ int main(int argc,const char** argv){
     for(FUDeclaration* decl : globalDeclarations){
       BLOCK_REGION(temp);
 
-      String repr = GetFullRepr(decl,temp);
-      fprintf(allDeclarations,"%.*s\n",UNPACK_SS(repr));
-    
+      PrintRepr(allDeclarations,MakeValue(decl),temp,temp2);
+      
+#if 1
       if(globalDebug.outputAcceleratorInfo && decl->fixedDelayCircuit){
+        BLOCK_REGION(temp2);
+        
         String path = PushDebugPath(temp,decl->name,STRING("stats.txt"));
 
         FILE* stats = OpenFileAndCreateDirectories(StaticFormat("%.*s",UNPACK_SS(path)),"w");
         DEFER_CLOSE_FILE(stats);
-    
-        PrintDeclaration(stats,decl,perm,temp);
+
+        Accelerator* test = CreateAccelerator(STRING("TEST"),AcceleratorPurpose_TEMP);
+        CreateFUInstance(test,decl,STRING("TOP"));
+        AccelInfo info = CalculateAcceleratorInfo(test,true,temp,temp2);
+        
+        PrintRepr(stats,MakeValue(&info),temp,temp2);
       }
+#endif
     }
   }
-
+#endif
+  
   TOP->parameters = STRING("#(.AXI_ADDR_W(AXI_ADDR_W),.LEN_W(LEN_W))");
   OutputVersatSource(accel,
                      globalOptions.hardwareOutputFilepath.data,

@@ -1,5 +1,6 @@
 #include "configurations.hpp"
 
+#include "accelerator.hpp"
 #include "debug.hpp"
 #include "declaration.hpp"
 #include "memory.hpp"
@@ -309,18 +310,26 @@ static InstanceInfo GetInstanceInfo(FUInstance* node,FUDeclaration* parentDeclar
   info.decl = topDecl;
   info.isStatic = inst->isStatic; 
   info.isShared = inst->sharedEnable;
+  info.sharedIndex = inst->sharedIndex;
   info.level = offsets.level;
   info.isComposite = IsTypeHierarchical(topDecl);
   info.parent = parentDeclaration;
   info.baseDelay = offsets.delay;
   info.isMergeMultiplexer = inst->isMergeMultiplexer;
+  info.mergeMultiplexerId = inst->mergeMultiplexerId;
   info.belongs = offsets.belongs;
   info.special = inst->literal;
   info.order = offsets.order;
   info.connectionType = node->type;
   info.id = node->id;
+
+#if 0
+  if(info.isMergeMultiplexer){
+    DEBUG_BREAK();
+  }
+#endif
   
-  Assert(info.baseDelay >= 0);
+  //Assert(info.baseDelay >= 0); // TODO: TEMP
   
   if(topDecl->memoryMapBits.has_value()){
     info.memMappedSize = (1 << topDecl->memoryMapBits.value());
@@ -376,7 +385,7 @@ static InstanceInfo GetInstanceInfo(FUInstance* node,FUDeclaration* parentDeclar
   int nDelays = topDecl->baseConfig.delayOffsets.max;
   if(nDelays > 0 && !info.isComposite){
     info.delay = PushArray<int>(out,nDelays);
-    Assert(offsets.delay >= 0);
+    // Assert(offsets.delay >= 0); // TODO: Temp
     Memset(info.delay,offsets.delay);
   }
   
@@ -436,10 +445,9 @@ AcceleratorInfo TransformGraphIntoArrayRecurse(FUInstance* node,FUDeclaration* p
       changedConfigFromStatic = false; // Already inside a static, act as if it was in a non static context
     }
   }
-
+  
   int partitionIndex = 0;
-  FOREACH_LIST_INDEXED(FUInstance*,subNode,inst->declaration->fixedDelayCircuit->allocated,index){
-    FUInstance* subInst = subNode;
+  FOREACH_LIST_INDEXED(FUInstance*,subInst,inst->declaration->fixedDelayCircuit->allocated,index){
     bool containsConfig = subInst->declaration->baseConfig.configs.size; // TODO: When  doing partition might need to put index here instead of 0
     
     InstanceConfigurationOffsets subOffsets = offsets;
@@ -466,12 +474,12 @@ AcceleratorInfo TransformGraphIntoArrayRecurse(FUInstance* node,FUDeclaration* p
 
     subOffsets.memOffset = offsets.memOffset + res.memSize;
 
-    Opt<Partition> part = {};
+    Opt<Partition> subPart = {};
     if(subInst->declaration->configInfo.size > 1){
-      part = subPartitions[partitionIndex++];
+      subPart = subPartitions[partitionIndex++];
     }
 
-    AcceleratorInfo info = TransformGraphIntoArrayRecurse(subNode,inst->declaration,subOffsets,part,temp,out);
+    AcceleratorInfo info = TransformGraphIntoArrayRecurse(subInst,inst->declaration,subOffsets,subPart,temp,out);
     
     res.memSize += info.memSize;
     
@@ -485,6 +493,7 @@ AcceleratorInfo TransformGraphIntoArrayRecurse(FUInstance* node,FUDeclaration* p
 
   Assert(part <= inst->declaration->configInfo.size);
   res.name = inst->declaration->configInfo[part].name;
+  res.mergeMux = inst->declaration->configInfo[part].mergeMultiplexerConfigs;
   
   return res;
 }
@@ -511,6 +520,26 @@ TestResult CalculateOneInstance(Accelerator* accel,bool recursive,Array<Partitio
 
   DAGOrderNodes order = CalculateDAGOrder(accel->allocated,temp);
   CalculateDelayResult calculatedDelay = CalculateDelay(accel,order,partitions,temp);
+
+  region(out){
+    auto builder = StartString(out); 
+    PushString(out,"CalculateOneInstance_");
+    bool first = true;
+    for(Partition p : partitions){
+      if(!first){
+        PushString(out,"_");
+      }
+      PushString(out,"%d",p.value);
+    }
+    PushString(out,".dot");
+    
+    String fileName = EndString(builder);
+    String filePath = PushDebugPath(temp,accel->name,fileName);
+
+    GraphPrintingContent content = GenerateDelayDotGraph(accel,calculatedDelay,out,temp);
+    String result = GenerateDotGraph(accel,content,out,temp);
+    OutputContentToFile(filePath,result);
+  }
   
   Hashmap<FUInstance*,int>* toOrder = MapElementToIndex(order.instances,temp);
 
@@ -528,6 +557,8 @@ TestResult CalculateOneInstance(Accelerator* accel,bool recursive,Array<Partitio
   subOffsets.staticInfo = staticInfo;
   subOffsets.belongs = true;
   ArenaList<String>* names = PushArenaList<String>(temp);
+  ArenaList<Array<int>>* muxValues = PushArenaList<Array<int>>(temp);
+  ArenaList<PortInstance>* mergeMultiplexers = PushArenaList<PortInstance>(temp);
   FOREACH_LIST_INDEXED(FUInstance*,node,accel->allocated,index){
     FUInstance* subInst = node;
 
@@ -552,6 +583,12 @@ TestResult CalculateOneInstance(Accelerator* accel,bool recursive,Array<Partitio
         }
       }
 
+      if(info.mergeMux.size > 0){
+        *muxValues->PushElem() = info.mergeMux;
+      }
+      
+      //if(info.
+      
       subOffsets.memOffset += info.memSize;
       subOffsets.memOffset = AlignBitBoundary(subOffsets.memOffset,log2i(info.memSize));
       
@@ -593,6 +630,14 @@ TestResult CalculateOneInstance(Accelerator* accel,bool recursive,Array<Partitio
     PushString(out,name);
   }
   result.name = EndString(mark);
+
+  auto b = StartArray<int>(out);
+  FOREACH_LIST(ListedStruct<Array<int>>*,ptr,muxValues->head){
+    for(int i : ptr->elem){
+      *b.PushElem() = i;
+    }
+  }
+  result.muxConfigs = EndArray(b);
   
   return result;
 }
@@ -607,7 +652,7 @@ AccelInfo CalculateAcceleratorInfo(Accelerator* accel,bool recursive,Arena* out,
   //       Printing a GraphArray struct should tell me everything I need to know about the accelerator
   AccelInfo result = {};
 
-  //BLOCK_REGION(temp); MARKED - Some bug occurs, probably because the function is a mess and we have no idea 
+  //BLOCK_REGION(temp); MARKED - Some bug occurs, probably because the function is a mess and we have no idea how memory is actually being used.
   Array<Partition> partitions = GenerateInitialPartitions(accel,temp);
 
   int totalMaxBitsize = 0;
@@ -619,6 +664,8 @@ AccelInfo CalculateAcceleratorInfo(Accelerator* accel,bool recursive,Arena* out,
   while(1){
     TestResult res2 = CalculateOneInstance(accel,recursive,partitions,out,temp);
     *PushListElement(list) = res2;
+
+    //DEBUG_BREAK_IF(CompareString(accel->name,"TestDoubleMerge_Simple"));
     
     if(first){
       res = res2.info;
@@ -686,7 +733,10 @@ AccelInfo CalculateAcceleratorInfo(Accelerator* accel,bool recursive,Arena* out,
   result.outputDelays = Map(final,out,[](TestResult t){
     return t.outputLatencies;
   });
-
+  result.muxConfigs = Map(final,out,[](TestResult t){
+    return t.muxConfigs;
+  });
+  
   // Merge everything back into a single unique view.
   Array<InstanceInfo> unique = result.infos[0];
   result.baseInfo = PushArray<InstanceInfo>(out,unique.size);
@@ -801,7 +851,6 @@ AccelInfo CalculateAcceleratorInfo(Accelerator* accel,bool recursive,Arena* out,
       Edge edgeInst = iter.Next();
       Edge* edge = &edgeInst;
 
-    //FOREACH_LIST(Edge*,edge,accel->edges){
       if(edge->units[0].inst == outputInstance){
         result.outputs = std::max(result.outputs - 1,edge->units[0].port) + 1;
       }
@@ -953,11 +1002,14 @@ static InstanceInfo GetInstanceInfoNoDelay(FUInstance* node,FUDeclaration* paren
   info.decl = topDecl;
   info.isStatic = inst->isStatic; 
   info.isShared = inst->sharedEnable;
+  info.sharedIndex = inst->sharedIndex;
   info.level = offsets.level;
   info.isComposite = IsTypeHierarchical(topDecl);
   info.parent = parentDeclaration;
   info.baseDelay = offsets.delay;
+  DEBUG_BREAK_IF(info.baseDelay == 3);
   info.isMergeMultiplexer = inst->isMergeMultiplexer;
+  info.mergeMultiplexerId = inst->mergeMultiplexerId;
   info.belongs = offsets.belongs;
   info.special = inst->literal;
   info.connectionType = node->type;
@@ -1104,6 +1156,7 @@ AcceleratorInfo TransformGraphIntoArrayRecurseNoDelay(FUInstance* node,FUDeclara
 
   Assert(part <= inst->declaration->configInfo.size);
   res.name = inst->declaration->configInfo[part].name;
+  res.mergeMux = inst->declaration->configInfo[part].mergeMultiplexerConfigs;
   
   return res;
 }
@@ -1111,7 +1164,7 @@ AcceleratorInfo TransformGraphIntoArrayRecurseNoDelay(FUInstance* node,FUDeclara
 // For now I'm going to make this function return everything
 
 // TODO: This should call all the Calculate* functions and then put everything together.
-//       We are complication this more than needed. We already have all the logic needed to do this.
+//       We are complicating this more than needed. We already have all the logic needed to do this.
 //       The only thing that we actually need to do is to recurse, access data from configInfo (or calculate if at the top) and them put them all together.
 
 // TODO: Offer a recursive option and a non recursive option. 
@@ -1128,7 +1181,6 @@ TestResult CalculateOneInstanceNoDelay(Accelerator* accel,bool recursive,Array<P
   CalculatedOffsets configOffsets = CalculateConfigOffsetsIgnoringStatics(accel,out);
   CalculatedOffsets delayOffsets = CalculateConfigurationOffset(accel,MemType::DELAY,out);
 
-
   int partitionIndex = 0;
   int staticConfig = 0x40000000; // TODO: Make this more explicit
   int index = 0;
@@ -1138,6 +1190,7 @@ TestResult CalculateOneInstanceNoDelay(Accelerator* accel,bool recursive,Array<P
   subOffsets.staticInfo = staticInfo;
   subOffsets.belongs = true;
   ArenaList<String>* names = PushArenaList<String>(temp);
+  ArenaList<Array<int>>* muxValues = PushArenaList<Array<int>>(temp);
   FOREACH_LIST_INDEXED(FUInstance*,node,accel->allocated,index){
     FUInstance* subInst = node;
 
@@ -1148,12 +1201,20 @@ TestResult CalculateOneInstanceNoDelay(Accelerator* accel,bool recursive,Array<P
     
     subOffsets.configOffset = configOffsets.offsets[index];
     subOffsets.delayOffset = delayOffsets.offsets[index];
-    
+
     if(recursive){
       AcceleratorInfo info = TransformGraphIntoArrayRecurseNoDelay(node,nullptr,subOffsets,part,temp,out);
 
       if(info.name.has_value()){
-        *names->PushElem() = info.name.value();
+        String elem = info.name.value();
+
+        if(!IsOnlyWhitespace(elem)){
+          *names->PushElem() = elem;
+        }
+      }
+
+      if(info.mergeMux.size > 0){
+        *muxValues->PushElem() = info.mergeMux;
       }
       
       subOffsets.memOffset += info.memSize;
@@ -1193,6 +1254,14 @@ TestResult CalculateOneInstanceNoDelay(Accelerator* accel,bool recursive,Array<P
     PushString(out,name);
   }
   result.name = EndString(mark);
+
+  auto b = StartArray<int>(out);
+  FOREACH_LIST(ListedStruct<Array<int>>*,ptr,muxValues->head){
+    for(int i : ptr->elem){
+      *b.PushElem() = i;
+    }
+  }
+  result.muxConfigs = EndArray(b);
   
   return result;
 }
@@ -1293,7 +1362,16 @@ AccelInfo CalculateAcceleratorInfoNoDelay(Accelerator* accel,bool recursive,Aren
   result.names = Map(final,out,[](TestResult t){
     return t.name;
   });
-
+  result.inputDelays = Map(final,out,[](TestResult t){
+    return t.inputDelay;
+  });
+  result.outputDelays = Map(final,out,[](TestResult t){
+    return t.outputLatencies;
+  });
+  result.muxConfigs = Map(final,out,[](TestResult t){
+    return t.muxConfigs;
+  });
+  
   // Merge everything back into a single unique view.
   Array<InstanceInfo> unique = result.infos[0];
   result.baseInfo = PushArray<InstanceInfo>(out,unique.size);

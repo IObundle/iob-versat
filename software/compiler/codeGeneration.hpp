@@ -3,12 +3,14 @@
 #include "utils.hpp"
 
 struct Accelerator;
+struct InstanceInfo;
 struct FUDeclaration;
 
 // Type can differ because of Merge.
 struct SingleTypeStructElement{
   String type;
   String name;
+  int arraySize; // Zero or one represent same thing: no array.
 };
 
 struct TypeStructInfoElement{
@@ -30,6 +32,13 @@ struct DifferenceArray{
   int newIndex;
 
   Array<Difference> differences;
+};
+
+struct MuxInfo{
+  int configIndex;
+  int val;
+  String name;
+  InstanceInfo* info;
 };
 
 Array<FUDeclaration*> SortTypesByConfigDependency(Array<FUDeclaration*> types,Arena* out,Arena* temp);

@@ -21,11 +21,19 @@ typedef struct {
 #{if entry.typeAndNames.size > 1}
   union{
 #{for typeAndName entry.typeAndNames}
-    @{typeAndName.type} @{typeAndName.name};
+#{if typeAndName.arraySize > 1}
+  @{typeAndName.type} @{typeAndName.name}[@{typeAndName.arraySize}];
+#{else}
+  @{typeAndName.type} @{typeAndName.name};
 #{end}
-  };
+#{end}
+};
+#{else}
+#{if entry.typeAndNames[0].arraySize > 1}
+  @{entry.typeAndNames[0].type} @{entry.typeAndNames[0].name}[@{entry.typeAndNames[0].arraySize}];
 #{else}
   @{entry.typeAndNames[0].type} @{entry.typeAndNames[0].name};
+#{end}
 #{end}
 #{end}
 } @{type.name}Config;
@@ -223,18 +231,6 @@ static inline void ChangeDelay(int oldDelay,int newDelay){
 }
 #{end}
 
-static inline void OnlyActivateMergedAccelerator(MergeType type){
-   static int lastLoaded = -1;
-   int asInt = (int) type;
-   
-   if(lastLoaded == asInt){
-     return;
-   }
-   lastLoaded = asInt;
-   
-   @{mergeMuxName} = asInt;
-}
-
 static inline void ActivateMergedAccelerator(MergeType type){
    static int lastLoaded = -1;
    int asInt = (int) type;
@@ -243,8 +239,19 @@ static inline void ActivateMergedAccelerator(MergeType type){
      return;
    }
    lastLoaded = asInt;
-   
-   @{mergeMuxName} = asInt;
+
+   switch(type){
+#{for i mergeNames.size}
+   case MergeType_@{mergeNames[i]}: {
+#{set mergeInfo mergeMux[i]}
+#{for muxInfo mergeInfo}
+      ACCEL_@{muxInfo.name}_sel = @{muxInfo.val};
+#{end}
+   } break;
+#{end}
+   }
+
+
    VersatLoadDelay(delayBuffers[asInt]);
 }
 

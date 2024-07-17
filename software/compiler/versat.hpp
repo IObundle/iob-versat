@@ -39,29 +39,6 @@ enum GraphDotFormat_{
 
 // TODO: Remove memory from old versat if tests pass.
 
-#if 0
-struct FUInstance{
-  String name;
-
-  // This should be versat side only, but it's easier to have them here for now
-  String parameters; // TODO: Actual parameter structure
-  Accelerator* accel;
-  FUDeclaration* declaration;
-  int id;
-
-  union{
-    int literal;
-    int bufferAmount;
-    int portIndex;
-  };
-  int sharedIndex;
-  bool isStatic;
-  bool sharedEnable;
-  bool isMergeMultiplexer; // TODO: Kinda of an hack for now
-  bool disabledMergeMultiplexer; // TODO: Kinda of an hack for now
-};
-#endif
-
 struct CompiledTemplate;
 namespace BasicTemplates{
   extern CompiledTemplate* acceleratorTemplate;

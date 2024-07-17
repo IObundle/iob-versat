@@ -9,27 +9,37 @@
 #include "utils.hpp"
 #include "utilsCore.hpp"
 
-#include "debug.hpp"
-#include "debugVersat.hpp"
 #include "textualRepresentation.hpp"
-#include "versat.hpp"
-#include <ctime>
-#include <cstdio>
-#include <cstdarg>
 #include <unordered_map>
+
+bool NodeConflict(FUInstance* inst){
+  // For now, do not even try to map nodes that contain any config modifiers.
+  if(inst->isStatic){
+    return true;
+  }
+
+  if(inst->sharedEnable){
+    return true;
+  }
+
+  if(inst->isMergeMultiplexer){
+    return true;
+  }
+  
+  return false;
+}
 
 bool NodeMappingConflict(Edge edge1,Edge edge2){
   PortInstance p00 = edge1.units[0];
   PortInstance p01 = edge1.units[1];
   PortInstance p10 = edge2.units[0];
   PortInstance p11 = edge2.units[1];
-  
-  /*
-    if(!(edge1.units[0].port == edge2.units[0].port && edge1.units[1].port == edge2.units[1].port)){
-    return false;
-    }
-   */
 
+  if(NodeConflict(p00.inst) || NodeConflict(p01.inst) || 
+     NodeConflict(p10.inst) || NodeConflict(p11.inst)){
+    return true;
+  }
+     
   if(p00.inst == p10.inst && p01.inst != p11.inst){
     return true;
   }
@@ -53,6 +63,11 @@ bool MappingConflict(MappingNode map1,MappingNode map2){
     FUInstance* p10 = map2.nodes.instances[0];
     FUInstance* p11 = map2.nodes.instances[1];
 
+    if(NodeConflict(p00) || NodeConflict(p01) || 
+       NodeConflict(p10) || NodeConflict(p11)){
+      return true;
+    }
+    
     if(p00 == p10 && p01 != p11){
       return true;
     }
@@ -90,14 +105,22 @@ bool MappingConflict(MappingNode map1,MappingNode map2){
     FUInstance* e01 = map2.edges[0].units[1].inst; // Maps node e10 to e11
     FUInstance* e11 = map2.edges[1].units[1].inst;
 
+    if(NodeConflict( p0) ||  NodeConflict(p1) || 
+       NodeConflict(e00) || NodeConflict(e01) || 
+       NodeConflict(e10) || NodeConflict(e11)){
+      return true;
+    }
+
 #define XOR(A,B,C,D) ((A == B && !(C == D)) || (!(A == B) && C == D))
 
-if(XOR(p0,e00,p1,e10)){
-  return true;
-}
-if(XOR(p0,e01,p1,e11)){
-  return true;
-}
+    if(XOR(p0,e00,p1,e10)){
+      return true;
+    }
+    if(XOR(p0,e01,p1,e11)){
+      return true;
+    }
+#undef XOR
+    
   }
 
   return false;
@@ -185,31 +208,6 @@ bool EqualPortMapping(PortInstance p1,PortInstance p2){
 
   return res;
 }
-
-#if 0
-int NodeDepth(MappingNode node){
-#if 0
-  switch(node.type){
-  case MappingNode::NODE:{
-    FUInstance* inst0 = node.nodes.instances[0];
-    FUInstance* inst1 = node.nodes.instances[1];
-
-    return Abs(inst1->graphData->order - inst0->graphData->order);
-  }break;
-  case MappingNode::EDGE:{
-    FUInstance* inst00 = node.edges[0].units[0].inst;
-    FUInstance* inst01 = node.edges[0].units[1].inst;
-    FUInstance* inst10 = node.edges[1].units[0].inst;
-    FUInstance* inst11 = node.edges[1].units[1].inst;
-
-    return Abs(Abs(inst01->graphData->order - inst00->graphData->order) - Abs(inst11->graphData->order - inst10->graphData->order));
-  }break;
-  }
-#endif
-
-  return 0;
-}
-#endif
 
 ConsolidationResult GenerateConsolidationGraph(Accelerator* accel0,Accelerator* accel1,ConsolidationGraphOptions options,Arena* out,Arena* temp){
   ConsolidationGraph graph = {};
@@ -320,6 +318,11 @@ ConsolidationResult GenerateConsolidationGraph(Accelerator* accel0,Accelerator* 
       node.edges[0].units[1] = edge0.units[1];
       node.edges[1].units[0] = edge1.units[0];
       node.edges[1].units[1] = edge1.units[1];
+
+      if(NodeConflict(edge0.units[0].inst) || NodeConflict(edge0.units[1].inst) || 
+         NodeConflict(edge1.units[0].inst) || NodeConflict(edge1.units[1].inst)){
+        continue;
+      }
       
       // Checks to see if we are in conflict with any specific node.
       MergeEdge* possibleSpecificConflict = specificsMapping->Get(node.edges[0].units[0].inst);
@@ -1092,16 +1095,11 @@ void PrintMergePossibility(Accelerator* accel1,Accelerator* accel2){
 #endif
 }
 
-static GraphMapping MergeAccelerator(Accelerator* accel1,Accelerator* accel2,Array<SpecificMergeNodes> specificNodes,MergingStrategy strategy,String name,Arena* temp,Arena* out){
+static GraphMapping CalculateMergeMapping(Accelerator* accel1,Accelerator* accel2,Array<SpecificMergeNodes> specificNodes,MergingStrategy strategy,String name,Arena* temp,Arena* out){
   BLOCK_REGION(temp);
   
   GraphMapping graphMapping = InitGraphMapping(out);
 
-#if 0
-  OutputDebugDotGraph(accel1,STRING("accel1.dot"),temp);
-  OutputDebugDotGraph(accel2,STRING("accel2.dot"),temp);
-#endif
-   
   switch(strategy){
   case MergingStrategy::SIMPLE_COMBINATION:{
     // Only map inputs and outputs
@@ -1148,6 +1146,24 @@ static GraphMapping MergeAccelerator(Accelerator* accel1,Accelerator* accel2,Arr
   return graphMapping;
 }
 
+String GetFreeMergeMultiplexerName(Accelerator* accel,Arena* out){
+  auto mark = MarkArena(out);
+
+  for(int i = 0; true; i++){
+    String possibleName = PushString(out,"versat_merge_mux_%d",i);
+
+    if(NameExists(accel,possibleName)){
+      PopMark(mark);
+      continue;
+    }
+
+    return possibleName;
+  }
+
+  NOT_POSSIBLE();
+  //return {};
+}
+
 MergeGraphResultExisting MergeGraphToExisting(Accelerator* existing,Accelerator* flatten2,GraphMapping& graphMapping,String name,Arena* out,Arena* temp){
   BLOCK_REGION(temp);
 
@@ -1160,19 +1176,20 @@ MergeGraphResultExisting MergeGraphToExisting(Accelerator* existing,Accelerator*
   AcceleratorMapping* map2 = MappingSimple(flatten2,existing,out);
   
   Hashmap<FUInstance*,FUInstance*>* map = PushHashmap<FUInstance*,FUInstance*>(out,size1 + size2);
-
+  TrieMap<int,int>* sharedIndexMap = PushTrieMap<int,int>(temp);
+  
   FOREACH_LIST(FUInstance*,ptr,existing->allocated){
     map->Insert(ptr,ptr);
   }
 
   // Create base instances from accel 2, unless they are mapped to nodes from accel1
-  FOREACH_LIST(FUInstance*,ptr,flatten2->allocated){
-    FUInstance* inst = ptr;
-
+  FOREACH_LIST(FUInstance*,inst,flatten2->allocated){
     FUInstance** mapping = graphMapping.instanceMap->Get(inst); // Returns mapping from accel2 to accel1
 
+    bool forceSkip = (inst->sharedEnable || inst->isStatic);
+    
     FUInstance* mappedNode = nullptr;
-    if(mapping){
+    if(mapping && !forceSkip){
       mappedNode = map->GetOrFail(*mapping);
 
       // For now, change name even if they have the same name
@@ -1182,11 +1199,28 @@ MergeGraphResultExisting MergeGraphToExisting(Accelerator* existing,Accelerator*
       mappedNode->name = newName;
       //}
     } else {
-      mappedNode = CopyInstance(existing,inst,false,inst->name);
+      String newName = inst->name;
+      if(inst->isMergeMultiplexer){
+        newName = GetFreeMergeMultiplexerName(existing,perm);
+      }
+      
+      mappedNode = CopyInstance(existing,inst,false,newName);
+
+      Assert(!inst->isStatic);
+      if(inst->sharedEnable){
+        GetOrAllocateResult result = sharedIndexMap->GetOrAllocate(inst->sharedIndex);
+
+        if(!result.alreadyExisted){
+          *result.data = GetFreeShareIndex(existing);
+        }
+        
+        int id = *result.data;
+        ShareInstanceConfig(mappedNode,id);
+      }
     }
     FUInstance* newNode = mappedNode;
     map->Insert(inst,mappedNode);
-    MappingInsert(map2,ptr,newNode);
+    MappingInsert(map2,inst,newNode);
   }
 
   EdgeIterator iter = IterateEdges(flatten2);
@@ -1607,7 +1641,7 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
   // We copy accel 1.
   Pair<Accelerator*,AcceleratorMapping*> re = CopyAcceleratorWithMapping(flatten[0],AcceleratorPurpose_MERGE,false,perm);
 
-  Accelerator* result = re.first; //CopyAccelerator(flatten[0],nullptr);
+  Accelerator* result = re.first;
   AcceleratorMapping* initialMap = re.second;
   flattenToMerge[0] = initialMap; // Maps from flattened 0 into copied accelerator. 
   
@@ -1639,7 +1673,7 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
   for(int i = 1; i < size; i++){
     String folderName = PushString(temp,"%.*s/Merge_%d",UNPACK_SS(name),i);
 
-    mappings[i-1] = MergeAccelerator(result,flatten[i],specificNodes,strat,folderName,temp,temp2);
+    mappings[i-1] = CalculateMergeMapping(result,flatten[i],specificNodes,strat,folderName,temp,temp2);
     MergeGraphResultExisting res = MergeGraphToExisting(result,flatten[i],mappings[i-1],folderName,temp,temp2);
 
     OutputDebugDotGraph(res.result,STRING(StaticFormat("result%d.dot",i)),temp);
@@ -1691,8 +1725,8 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
       }
     }
   }
-  
-  int multiplexersAdded = 0;
+
+  int freeShareIndex = GetFreeShareIndex(result);
   FOREACH_LIST(FUInstance*,ptr,result->allocated){
     if(ptr->multipleSamePortInputs){
       // Need to figure out which port, (which might be multiple), has the same inputs
@@ -1753,12 +1787,14 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
         // At this point, we know the edges that we need to remove and to replace with a multiplexer and the
         // port to which they should connect.
         // Create multiplexer instance
-        const char* format = "versat_merge_mux_%d";
-        String str = PushString(perm,format,multiplexersAdded++);
+        //const char* format = "versat_merge_mux_%d";
+        //String str = PushString(perm,format,multiplexersAdded++);
+        String str = GetFreeMergeMultiplexerName(result,perm);
         PushNullByte(perm);
         FUInstance* multiplexer = CreateFUInstance(result,muxType,str);
         multiplexer->isMergeMultiplexer = true;
-        ShareInstanceConfig(multiplexer,99); // TODO: Realistic share index. Maybe add a function that allocates a free share index and we keep the next free shared index inside the accelerator.
+        multiplexer->mergeMultiplexerId = result->id;
+        ShareInstanceConfig(multiplexer,freeShareIndex); // TODO: Realistic share index. Maybe add a function that allocates a free share index and we keep the next free shared index inside the accelerator.
 
         for(int i = 0; i < problematicEdgesInFinalGraph.size; i++){
           Edge node = problematicEdgesInFinalGraph[i];
@@ -2134,11 +2170,11 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
         decl->configInfo[i].calculatedDelays[orderIndex] = reconDelay[i].nodeDelay->GetOrFail(reconNode);
         decl->configInfo[i].order[orderIndex] = reconToOrder[i]->GetOrFail(reconNode);
       } else {
-        decl->configInfo[i].calculatedDelays[orderIndex] = 0;
-        //decl->configInfo[i].calculatedDelays[orderIndex] = -1;
+        decl->configInfo[i].calculatedDelays[orderIndex] = 0; // NOTE: Even if they do not belong, this delay is directly inserted into the header file, meaning that for now it's better if we keep everything at zero.
         decl->configInfo[i].order[orderIndex] = -1;
       }
-
+ 
+      // TODO: Unused members are being filled when in theory the code should work with them being negative or invalid. Code should not really on th
       if(ptr->isMergeMultiplexer || ptr->declaration == BasicDeclaration::fixedBuffer){
         int val = decl->baseConfig.configOffsets.offsets[index];
         decl->configInfo[i].configOffsets.offsets[index] = val;
@@ -2159,24 +2195,56 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
         decl->configInfo[i].unitBelongs[index] = false;
       }
       
-      if(mapExists){
+      //if(mapExists){
         orderIndex += 1; // TODO: Why does this exist? Is the problem caused by the commented line above because we are trying to iterate differently?
-      }
+      //}
     }
 
-    Assert(orderIndex == reconDelay[i].nodeDelay->nodesUsed);
+    //Assert(orderIndex == reconDelay[i].nodeDelay->nodesUsed);
   }
 
+  Array<int> muxConfigSizePerType = PushArray<int>(temp,types.size);
   for(int i = 0; i < types.size; i++){
+    if(types[i]->configInfo.size > 0){
+      muxConfigSizePerType[i] = types[i]->configInfo[0].mergeMultiplexerConfigs.size;
+    }
+  }
+
+  int amountOfMuxConfigs = 0;
+  for(int i = 0; i < types.size; i++){
+    if(types[i]->configInfo.size > 0){
+      amountOfMuxConfigs += types[i]->configInfo[0].mergeMultiplexerConfigs.size;
+    }
+  }
+  
+  for(int i = 0; i < size; i++){
     BLOCK_REGION(temp);
 
     auto firstMapping = MappingInvert(circuitToCopy,temp);
 
-    AcceleratorMapping* copyToFlatten = MappingCombine(firstMapping,mergeToFlatten[i],temp);
+    int typeConfigIndex = i;
+    int typeIndex = 0;
+    while(typeConfigIndex >= types[typeIndex]->configInfo.size){
+      typeConfigIndex -= types[typeIndex]->configInfo.size;
+      typeIndex += 1;
+    }
+    
+    AcceleratorMapping* copyToFlatten = MappingCombine(firstMapping,mergeToFlatten[typeIndex],temp);
 
     // Need to map from flattened base type to copy of merged circuit (decl.flattenedBaseCircuit).
     decl->configInfo[i].mapping = MappingInvert(copyToFlatten,perm);
-    decl->configInfo[i].mergeMultiplexers = mergeMultiplexers[i];
+    decl->configInfo[i].mergeMultiplexers = mergeMultiplexers[typeIndex];
+
+    Array<int> typeMuxConfigs = types[typeIndex]->configInfo[typeConfigIndex].mergeMultiplexerConfigs;
+    
+    decl->configInfo[i].mergeMultiplexerConfigs = PushArray<int>(perm,amountOfMuxConfigs + 1);
+    decl->configInfo[i].mergeMultiplexerConfigs[amountOfMuxConfigs] = (i / (size / 2));
+
+    // TODO: This is a little bit forced for merges of 2 and binary hierarchies.
+    //       Will probably break with other amounts. Maybe.
+    if(typeMuxConfigs.size > 0){
+      decl->configInfo[i].mergeMultiplexerConfigs[typeIndex] = typeMuxConfigs[0];
+    }
   }
   
   return decl;

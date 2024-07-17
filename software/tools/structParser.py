@@ -127,7 +127,7 @@ def GetBaseTypeOfType(cIndexType: clang.cindex.Type):
         return UNKNOWN
 
 def GetBaseTypeFromCursor(c: Cursor):
-    if(c.kind == CursorKind.STRUCT_DECL):
+    if(c.kind == CursorKind.STRUCT_DECL or c.kind == CursorKind.CLASS_DECL):
         return STRUCT
     elif(c.kind == CursorKind.UNION_DECL):
         return UNION
@@ -374,7 +374,7 @@ def Recurse(c: Cursor, indent=0):
     if ENABLE_PRINT_AST:
         print("Top",' ' * indent, c.spelling, c.kind,c.type.kind)
     if(GoodLocation(c)):
-        if(c.kind in [CursorKind.STRUCT_DECL,CursorKind.CLASS_TEMPLATE]):
+        if(c.kind in [CursorKind.STRUCT_DECL,CursorKind.CLASS_DECL,CursorKind.CLASS_TEMPLATE]):
             MakeTypeFromCursor(c)
         if(c.kind == CursorKind.ENUM_DECL):
             MakeTypeFromCursor(c)
@@ -434,12 +434,12 @@ if __name__ == "__main__":
 
             s.members = elem.members + s.members
 
-    del allTypes["AcceleratorMapping"]
-    del allTypes["TrieMap"]
-    del allTypes["TrieMapNode"]
-    del allTypes["TrieMapIterator"]
-    del allTypes["TrieSet"]
-    del allTypes["TrieSetIterator"]
+    #del allTypes["AcceleratorMapping"]
+    #del allTypes["TrieMap"]
+    #del allTypes["TrieMapNode"]
+    #del allTypes["TrieMapIterator"]
+    #del allTypes["TrieSet"]
+    #del allTypes["TrieSetIterator"]
 
     enumStructures = {}
     structStructures = {}
@@ -469,16 +469,16 @@ if __name__ == "__main__":
 
     typeInfoFile.write("void RegisterParsedTypes(){\n")
     for name in unknownStructures:
-        typeInfoFile.write(f"  RegisterOpaqueType(STRING(\"{name}\"),Type::UNKNOWN,sizeof({name}),alignof({name}));\n")
+        typeInfoFile.write(f"  RegisterOpaqueType(STRING(\"{name}\"),Subtype_UNKNOWN,sizeof({name}),alignof({name}));\n")
     for name,t in structStructures.items():
-        typeInfoFile.write(f"  RegisterOpaqueType(STRING(\"{name}\"),Type::STRUCT,sizeof({name}),alignof({name}));\n")
+        typeInfoFile.write(f"  RegisterOpaqueType(STRING(\"{name}\"),Subtype_STRUCT,sizeof({name}),alignof({name}));\n")
     for name,t in typedefStructures.items():
-        typeInfoFile.write(f"  RegisterOpaqueType(STRING(\"{name}\"),Type::TYPEDEF,sizeof({name}),alignof({name}));\n")
-    typeInfoFile.write(f"  RegisterOpaqueType(STRING(\"String\"),Type::TYPEDEF,sizeof(String),alignof(String));\n") #HACK
+        typeInfoFile.write(f"  RegisterOpaqueType(STRING(\"{name}\"),Subtype_TYPEDEF,sizeof({name}),alignof({name}));\n")
+    typeInfoFile.write(f"  RegisterOpaqueType(STRING(\"String\"),Subtype_TYPEDEF,sizeof(String),alignof(String));\n") #HACK
 
     for name,t in allTypes.items():
         if(allTypes[name] == TEMPLATED_INSTANCE):
-            typeInfoFile.write(f"  RegisterOpaqueType(STRING(\"{name}\"),Type::TEMPLATED_INSTANCE,sizeof({name}),alignof({name}));\n")
+            typeInfoFile.write(f"  RegisterOpaqueType(STRING(\"{name}\"),Subtype_TEMPLATED_INSTANCE,sizeof({name}),alignof({name}));\n")
     typeInfoFile.write("\n")
 
     for name,enum in enumStructures.items():
@@ -541,8 +541,14 @@ if __name__ == "__main__":
     for name,data in structStructures.items():
         allMembers += [(data.name,y.type.name,y.name) for y in data.members]
 
+    def CleanEnum(x):
+        if("unnamed" in x):
+            return "int"
+        else:
+            return x
+
     counter = Counter()
-    memb = ",\n    ".join(["(Member)" + "{" f"GetType(STRING(\"{x[1]}\")),STRING(\"{x[2]}\"),offsetof({x[0]},{x[2]})" + "}" + f" /* {counter.Next()} */" for x in allMembers])
+    memb = ",\n    ".join(["(Member)" + "{" f"GetTypeOrFail(STRING(\"{CleanEnum(x[1])}\")),STRING(\"{x[2]}\"),offsetof({x[0]},{x[2]})" + "}" + f" /* {counter.Next()} */" for x in allMembers])
     typeInfoFile.write("  static Member members[] = {" + memb + "\n  };")
     typeInfoFile.write("\n")
     typeInfoFile.write("\n")
@@ -598,6 +604,7 @@ if __name__ == "__main__":
     reprSource.write("#include \"autoRepr.hpp\"\n")
     reprSource.write("\n")
 
+    '''
     def CheckDeriveFormat(struct):
         comment = struct.comments
         if not comment:
@@ -723,6 +730,7 @@ String GetRepr(Pool<T>* pool,Arena* out){
             typesToSee.add(member.type)
 
     reprHeader.write("\n")
+    '''
 
     for name,s in enumStructures.items():
         if(s.IsUnnamed()):
@@ -739,6 +747,7 @@ String GetRepr(Pool<T>* pool,Arena* out){
         reprSource.write("  return STRING(\"NOT POSSIBLE ENUM VALUE\");\n")
         reprSource.write("}\n")
 
+    '''
     def NormalRepr(structure,header,source):
         header.write(f"String GetRepr({name}* s,Arena* out);\n")
 
@@ -822,6 +831,7 @@ String GetRepr(Pool<T>* pool,Arena* out){
     for name,x in allTypes.items():
         if(x.Type() == STRUCT and not x.isPOD):
             print(x.name)
+    '''
     #print(allTypes)
 
 # TODO() - Removing the printing of unnamed enums is not needed (we could have code that prints it) and it messes the allocated array

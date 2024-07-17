@@ -83,7 +83,9 @@ ALWAYS_INLINE _Defer<F> operator+(_DeferTag,F&& f){
     int res = fclose(NAME); \
     if(res){ \
       printf("Error closing file: %d\n",errno); \
-  }};\
+    }\
+    NAME = nullptr; \
+  };\
 }
 
 struct _Once{};

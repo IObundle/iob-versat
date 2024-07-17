@@ -50,9 +50,9 @@ Type* Next(TypeIterator& iter){
 static Type* CollapseTypeUntilBase(Type* type){
   Type* res = type;
   while(true){
-	if(res->type == Type::POINTER){
+	if(res->type == Subtype_POINTER){
 	  res = res->pointerType;
-	} else if(res->type == Type::TYPEDEF){
+	} else if(res->type == Subtype_TYPEDEF){
 	  res = res->typedefType;
 	} else {
 	  break;
@@ -64,7 +64,7 @@ static Type* CollapseTypeUntilBase(Type* type){
 Type* RegisterSimpleType(String name,int size,int align){
   Type* type = types.Alloc();
 
-  type->type = Type::BASE;
+  type->type = Subtype_BASE;
   type->size = size;
   type->name = name;
   type->align = align;
@@ -72,7 +72,7 @@ Type* RegisterSimpleType(String name,int size,int align){
   return type;
 }
 
-Type* RegisterOpaqueType(String name,Type::Subtype subtype,int size,int align){
+Type* RegisterOpaqueType(String name,Subtype subtype,int size,int align){
   for(Type* type : types){
     if(CompareString(type->name,name)){
       Assert(type->size == size);
@@ -93,7 +93,7 @@ Type* RegisterOpaqueType(String name,Type::Subtype subtype,int size,int align){
 Type* RegisterEnum(String name,Array<Pair<String,int>> enumValues){
   for(Type* type : types){
     if(CompareString(type->name,name)){
-      type->type = Type::ENUM;
+      type->type = Subtype_ENUM;
       type->enumMembers = enumValues;
       return type;
     }
@@ -102,7 +102,7 @@ Type* RegisterEnum(String name,Array<Pair<String,int>> enumValues){
   Type* type = types.Alloc();
 
   type->name = name;
-  type->type = Type::ENUM;
+  type->type = Subtype_ENUM;
   type->size = sizeof(int);
   type->align = sizeof(int);
 
@@ -113,7 +113,7 @@ Type* RegisterTypedef(String oldName,String newName){
   Type* type = GetType(newName);
   Type* typedefType = GetType(oldName);
 
-  Assert(type->type == Type::TYPEDEF);
+  Assert(type->type == Subtype_TYPEDEF);
 
   type->name = newName;
   type->typedefType = typedefType;
@@ -127,7 +127,7 @@ Type* RegisterTemplate(String baseName,Array<String> templateArgNames){
   Type* type = types.Alloc();
 
   type->name = baseName;
-  type->type = Type::TEMPLATED_STRUCT_DEF;
+  type->type = Subtype_TEMPLATED_STRUCT_DEF;
   type->templateArgs = templateArgNames;
 
   return type;
@@ -136,7 +136,7 @@ Type* RegisterTemplate(String baseName,Array<String> templateArgNames){
 Type* RegisterStructMembers(String name,Array<Member> members){
   Type* type = GetType(name);
 
-  Assert(type->type == Type::STRUCT);
+  Assert(type->type == Subtype_STRUCT);
 
   type->members = members;
 
@@ -146,7 +146,7 @@ Type* RegisterStructMembers(String name,Array<Member> members){
 Type* RegisterTemplateMembers(String name,Array<TemplatedMember> members){
   Type* type = GetType(name);
 
-  Assert(type->type == Type::TEMPLATED_STRUCT_DEF);
+  Assert(type->type == Subtype_TEMPLATED_STRUCT_DEF);
 
   type->templateMembers = members;
 
@@ -195,6 +195,14 @@ Type* InstantiateTemplate(String name,Arena* arena){
     return alreadyExists;
   }
 
+  // Allocates first so that pointers to itself resolve correctly.
+  if(arena){
+    name = PushString(arena,"%.*s",UNPACK_SS(name));
+  }
+
+  Type* newTypeAlloc = types.Alloc();
+  newTypeAlloc->name = name;
+  
   Hashmap<String,String>* templateToType = PushHashmap<String,String>(&temp,16);
 
   Token baseName = tok.NextToken();
@@ -303,14 +311,10 @@ Type* InstantiateTemplate(String name,Arena* arena){
   if(alreadyExists){
     newType = alreadyExists;
   } else {
-    newType = types.Alloc();
+    newType = newTypeAlloc;
   }
 
-  if(arena){
-    name = PushString(arena,"%.*s",UNPACK_SS(name));
-  }
-
-  newType->type = Type::TEMPLATED_INSTANCE;
+  newType->type = Subtype_TEMPLATED_INSTANCE;
   newType->name = name;
   newType->members = members;
   newType->templateBase = templateBase;
@@ -374,7 +378,7 @@ Type* GetType(String name){
     if(CompareString(next,"*")){
       bool found = false;
       for(Type* type : types){
-        if(type->type == Type::POINTER && type->pointerType == res){
+        if(type->type == Subtype_POINTER && type->pointerType == res){
           found = true;
           res = type;
           break;
@@ -400,7 +404,7 @@ Type* GetType(String name){
       int arraySize = ParseInt(arrayExpression);
       bool found = false;
       for(Type* type : types){
-        if(type->type == Type::ARRAY && type->arrayType == res && type->size == (arraySize * res->size)){
+        if(type->type == Subtype_ARRAY && type->arrayType == res && type->size == (arraySize * res->size)){
           res = type;
           found = true;
           break;
@@ -433,14 +437,14 @@ Type* GetTypeOrFail(String name){
 
 Type* GetPointerType(Type* baseType){
   for(Type* type : types){
-    if(type->type == Type::POINTER && type->pointerType == baseType){
+    if(type->type == Subtype_POINTER && type->pointerType == baseType){
       return type;
     }
   }
 
   Type* ret = types.Alloc();
   ret->name = PushString(&permanentArena,"%.*s*",UNPACK_SS(baseType->name));
-  ret->type = Type::POINTER;
+  ret->type = Subtype_POINTER;
   ret->pointerType = baseType;
   ret->size = sizeof(void*);
   ret->align = alignof(void*);
@@ -450,14 +454,14 @@ Type* GetPointerType(Type* baseType){
 
 Type* GetArrayType(Type* baseType, int arrayLength){
   for(Type* type : types){
-    if(type->type == Type::ARRAY && type->arrayType == baseType && ArrayLength(type) == arrayLength){
+    if(type->type == Subtype_ARRAY && type->arrayType == baseType && ArrayLength(type) == arrayLength){
       return type;
     }
   }
 
   Type* ret = types.Alloc();
   ret->name = PushString(&permanentArena,"%.*s[%d]",UNPACK_SS(baseType->name),arrayLength);
-  ret->type = Type::ARRAY;
+  ret->type = Subtype_ARRAY;
   ret->pointerType = baseType;
   ret->size = arrayLength * baseType->size;
   ret->align = baseType->align;
@@ -483,7 +487,7 @@ void RegisterTypes(){
   ValueType::BOOLEAN = REGISTER(bool);
   ValueType::CHAR = REGISTER(char);
   ValueType::STRING = GetPointerType(ValueType::CHAR);
-  ValueType::NIL = RegisterSimpleType(STRING("void"),sizeof(char),alignof(char));
+  ValueType::NIL = RegisterSimpleType(STRING("void"),sizeof(char),alignof(char)); // TODO: Change size to void
 
   ValueType::CONST_STRING = GetPointerType(REGISTER(const char));
 
@@ -561,7 +565,7 @@ String GetDefaultValueRepresentation(Value in,Arena* arena){
     res = PushString(arena,"%d",*(int*)val.custom);
   } else if(type == ValueType::NIL){
     res = STRING("Nullptr");
-  } else if(type->type == Type::POINTER){
+  } else if(type->type == Subtype_POINTER){
     Assert(!val.isTemp);
 
     void* ptr = *(void**) val.custom;
@@ -571,7 +575,7 @@ String GetDefaultValueRepresentation(Value in,Arena* arena){
     } else {
       res = PushString(arena,"%p",ptr);
     }
-  } else if(type->type == Type::TEMPLATED_INSTANCE){
+  } else if(type->type == Subtype_TEMPLATED_INSTANCE){
     if(type->templateBase == ValueType::ARRAY){
       Opt<Value> size = AccessStruct(val,STRING("size"));
       if(!size){
@@ -582,7 +586,7 @@ String GetDefaultValueRepresentation(Value in,Arena* arena){
     } else {
       res = PushString(arena,"%.*s",UNPACK_SS(type->name)); // Return type name
     }
-  } else if(type->type == Type::ENUM){
+  } else if(type->type == Subtype_ENUM){
     int enumValue = in.number;
     Pair<String,int>* pairFound = nullptr;
     for(auto pair : type->enumMembers){
@@ -606,24 +610,33 @@ String GetDefaultValueRepresentation(Value in,Arena* arena){
 Value CollapsePtrIntoStruct(Value object){
   Type* type = object.type;
 
-  while(type->type == Type::TYPEDEF){
+  while(type->type == Subtype_TYPEDEF){
 	type = type->typedefType;
   }
 
-  if(type->type != Type::POINTER){
+  if(type->type != Subtype_POINTER){
     object.type = type;
     return object;
   }
 
-  Assert(!object.isTemp);
-
+  // TODO: Temporary removed this and replaced with the if
+  //Assert(!object.isTemp);
+  if(object.isTemp){
+    return object;
+  }
+  
   char* deference = (char*) object.custom;
 
-  while(type->type == Type::POINTER || type->type == Type::TYPEDEF){
-	if(type->type == Type::TYPEDEF){
+  while(type->type == Subtype_POINTER || type->type == Subtype_TYPEDEF){
+    if(type->type == Subtype_TYPEDEF){
 	  type = type->typedefType;
 	  continue;
 	}
+
+    if(type->pointerType == ValueType::NIL){
+      DEBUG_BREAK();
+      break;
+    }
 
     if(deference != nullptr){
       deference = *((char**) deference);
@@ -673,7 +686,7 @@ Value CollapseValue(Value val){
     val.str = *((String*) val.custom);
   } else if(val.type == ValueType::TEMPLATE_FUNCTION){
     val.templateFunction = *((TemplateFunction**) val.custom);
-  } else if(val.type->type == Type::ENUM){
+  } else if(val.type->type == Subtype_ENUM){
     val.number = *(int*) val.custom;
   } else {
     val.isTemp = false; // No collapse, same type
@@ -694,7 +707,7 @@ static void* DeferencePointer(void* object,Type* info,int index){
 Opt<Value> AccessObjectIndex(Value object,int index){
   Value value = {};
 
-  if(object.type->type == Type::ARRAY){
+  if(object.type->type == Subtype_ARRAY){
     Type* arrayType = object.type;
     Byte* array = (Byte*) object.custom;
 
@@ -706,14 +719,14 @@ Opt<Value> AccessObjectIndex(Value object,int index){
 
     value.type = object.type->arrayType;
     value.custom = objectPtr;
-  } else if(object.type->type == Type::POINTER) { // Ptr
+  } else if(object.type->type == Subtype_POINTER) { // Ptr
       Assert(!object.isTemp);
 
       void* objectPtr = DeferencePointer(object.custom,object.type->pointerType,index);
 
       value.type = object.type->pointerType;
       value.custom = objectPtr;
-  } else if(object.type->type == Type::TEMPLATED_INSTANCE){
+  } else if(object.type->type == Subtype_TEMPLATED_INSTANCE){
     if(object.type->templateBase == ValueType::ARRAY){
       Array<Byte>* byteArray = (Array<Byte>*) object.custom;
 
@@ -813,25 +826,50 @@ Opt<Value> AccessStruct(Value object,String memberName){
   return res;
 }
 
+static Type* GetBaseTypeOnce(Type* type){
+  // For now only recurse on arrays and pointers
+  switch(type->type){
+  case Subtype_ARRAY:{
+    Type* base = type->arrayType;
+    return base;
+  } break;
+  case Subtype_POINTER:{
+    return type->pointerType;
+  } break;
+  case Subtype_TYPEDEF:{
+    return type->typedefType;
+  } break;
+  case Subtype_UNKNOWN:;
+  case Subtype_BASE:;
+  case Subtype_STRUCT:;
+  case Subtype_TEMPLATED_STRUCT_DEF:;
+  case Subtype_TEMPLATED_INSTANCE:;
+  case Subtype_ENUM:;
+  }
+  
+  return type;
+}
+
+
 static Type* GetBaseType(Type* type){
   // For now only recurse on arrays and pointers
   switch(type->type){
-  case Type::ARRAY:{
+  case Subtype_ARRAY:{
     Type* base = GetBaseType(type->arrayType);
     return base;
   } break;
-  case Type::POINTER:{
+  case Subtype_POINTER:{
     return GetBaseType(type->pointerType);
   } break;
-  case Type::TYPEDEF:{
+  case Subtype_TYPEDEF:{
     return GetBaseType(type->typedefType);
   } break;
-  case Type::UNKNOWN:;
-  case Type::BASE:;
-  case Type::STRUCT:;
-  case Type::TEMPLATED_STRUCT_DEF:;
-  case Type::TEMPLATED_INSTANCE:;
-  case Type::ENUM:;
+  case Subtype_UNKNOWN:;
+  case Subtype_BASE:;
+  case Subtype_STRUCT:;
+  case Subtype_TEMPLATED_STRUCT_DEF:;
+  case Subtype_TEMPLATED_INSTANCE:;
+  case Subtype_ENUM:;
   }
   
   return type;
@@ -840,7 +878,7 @@ static Type* GetBaseType(Type* type){
 Opt<Member*> GetMember(Type* structType,String memberName){
   Type* type = GetBaseType(structType);
 
-  Assert(type->type == Type::STRUCT || type->type == Type::TEMPLATED_INSTANCE);
+  Assert(type->type == Subtype_STRUCT || type->type == Subtype_TEMPLATED_INSTANCE);
   
   for(Member& m : type->members){
     if(CompareString(m.name,memberName)){
@@ -849,6 +887,18 @@ Opt<Member*> GetMember(Type* structType,String memberName){
   }
 
   return {};
+}
+
+Array<String> GetStructMembersName(Type* structType,Arena* out){
+  Assert(structType->type == Subtype_STRUCT || structType->type == Subtype_TEMPLATED_INSTANCE);
+  
+  Array<String> names = PushArray<String>(out,structType->members.size);
+  int index = 0;
+  for(Member& m : structType->members){
+    names[index++] = m.name;
+  }
+
+  return names;
 }
 
 void PrintStructDefinition(Type* type){
@@ -862,8 +912,17 @@ void PrintStructDefinition(Type* type){
   }
 }
 
+void* GetValueAddress(Value val){
+  if(val.isTemp){
+    return val.custom; // Only works for pointers, I think. The isTemp should be reworked
+  } else {
+    void* address = *(void**) val.custom;
+    return address;
+  }
+}
+
 int ArrayLength(Type* type){
-  Assert(type->type == Type::ARRAY);
+  Assert(type->type == Subtype_ARRAY);
 
   int arraySize = type->size;
   int baseTypeSize = type->arrayType->size;
@@ -880,9 +939,9 @@ int IndexableSize(Value object){
 
   int size = 0;
 
-  if(type->type == Type::ARRAY){
+  if(type->type == Subtype_ARRAY){
     size = ArrayLength(type);
-  } else if(type->type == Type::TEMPLATED_INSTANCE){
+  } else if(type->type == Subtype_TEMPLATED_INSTANCE){
     if(type->templateBase == ValueType::POOL){
       for(Iterator iter = Iterate(object); HasNext(iter); Advance(&iter)){
         size += 1;
@@ -909,15 +968,17 @@ int IndexableSize(Value object){
 bool IsIndexable(Type* type){
   bool res = false;
 
-  if(type->type == Type::POINTER){
+  if(type->type == Subtype_POINTER){
     res = true;
-  }if(type->type == Type::ARRAY){
+  }if(type->type == Subtype_ARRAY){
     res = true;
-  } else if(type->type == Type::TEMPLATED_INSTANCE){
-    if(type->templateBase == ValueType::POOL){
+  } else if(type->type == Subtype_TEMPLATED_INSTANCE){
+    if(IsStringLike(type)){
+      res = false;
+    } else if(type->templateBase == ValueType::POOL){
       res = true;
     } else if(type->templateBase == ValueType::STD_VECTOR){ // TODO: A lot of assumptions are being made for std::vector so this works. Probably not safe (change later)
-         res = true;
+      res = true;
     } else if(type->templateBase == ValueType::ARRAY){
       res = true;
     } else if(type->templateBase == ValueType::HASHMAP){
@@ -945,9 +1006,9 @@ bool IsIndexableOfBasicType(Type* type){
   Assert(IsIndexable(type));
 
   bool res = false;
-  if(type->type == Type::ARRAY){
+  if(type->type == Subtype_ARRAY){
     res = IsBasicType(type->arrayType);
-  } else if(type->type == Type::TEMPLATED_INSTANCE){
+  } else if(type->type == Subtype_TEMPLATED_INSTANCE){
     if(type->templateBase == ValueType::POOL){
       res = IsBasicType(type->templateArgTypes[0]);
     } else if(type->templateBase == ValueType::STD_VECTOR){ // TODO: A lot of assumptions are being made for std::vector so this works. Probably not safe (change later)
@@ -972,7 +1033,7 @@ bool IsEmbeddedListKind(Type* type){
     if(CompareString(member.name,"next")){
       Type* memberType = member.type;
 
-      if(memberType->type == Type::POINTER && memberType->pointerType == type){
+      if(memberType->type == Subtype_POINTER && memberType->pointerType == type){
         res = true;
       }
 
@@ -984,7 +1045,16 @@ bool IsEmbeddedListKind(Type* type){
 }
 
 bool IsStruct(Type* type){
-  bool res = type->type == Type::STRUCT || type->type == Type::TEMPLATED_INSTANCE;
+  bool res = type->type == Subtype_STRUCT || type->type == Subtype_TEMPLATED_INSTANCE;
+  return res;
+}
+
+bool IsStringLike(Type* type){
+  bool res = (type == ValueType::STRING ||
+              type == ValueType::CONST_STRING ||
+              type == ValueType::SIZED_STRING ||
+              type == ValueType::SIZED_STRING_BASE);
+
   return res;
 }
 
@@ -1006,15 +1076,15 @@ HashmapUnpackedIndex UnpackHashmapIndex(int index){
 }
 
 Type* GetBaseTypeOfIterating(Type* iterating){
-  if(iterating->type == Type::BASE){ // TODO: Superfluous being a if based on the code below (not changed because can't test change currently);
+  if(iterating->type == Subtype_BASE){ // TODO: Superfluous being a if based on the code below (not changed because can't test change currently);
     return iterating;
   }
 
   Assert(IsIndexable(iterating)); // should suffice as a check
-  Type* type = GetBaseType(iterating);
+  Type* type = GetBaseTypeOnce(iterating);
   
   switch(type->type){
-  case Type::TEMPLATED_INSTANCE:{
+  case Subtype_TEMPLATED_INSTANCE:{
     // TODO: Technically should check if the types are iterating and recurse
     //       on GetBaseTypeOfIterating instead of calling GetBaseType. Do now yet know if need to.
     if(type->templateBase == ValueType::ARRAY){
@@ -1036,21 +1106,45 @@ Type* GetBaseTypeOfIterating(Type* iterating){
       return GetBaseType(exists);
     }
   } break;
-  case Type::UNKNOWN:;
-  case Type::BASE:;
-  case Type::STRUCT:;
-  case Type::TEMPLATED_STRUCT_DEF:;
-  case Type::ENUM:;
-  case Type::POINTER:;
-  case Type::ARRAY:;
-  case Type::TYPEDEF:;
+  case Subtype_POINTER: break;
+  case Subtype_UNKNOWN:;
+  case Subtype_BASE:;
+  case Subtype_STRUCT:;
+  case Subtype_TEMPLATED_STRUCT_DEF:;
+  case Subtype_ENUM:;
+  case Subtype_ARRAY:;
+  case Subtype_TYPEDEF:;
     NOT_IMPLEMENTED("Some of these could be but do not currently needing it");
   }
   return type;
 }
 
+bool IsIterable(Type* type){
+  bool res = false;
+
+  if(type->type == Subtype_POINTER){
+    res = false;
+  } else if(type->type == Subtype_ARRAY){
+    res = true;
+  } else if(type->type == Subtype_TEMPLATED_INSTANCE){
+    if(IsStringLike(type)){
+      res = false;
+    } else if(type->templateBase == ValueType::POOL){
+      res = true;
+    } else if(type->templateBase == ValueType::STD_VECTOR){ // TODO: A lot of assumptions are being made for std::vector so this works. Probably not safe (change later)
+      res = true;
+    } else if(type->templateBase == ValueType::ARRAY){
+      res = true;
+    } else if(type->templateBase == ValueType::HASHMAP){
+      res = true;
+    }
+  }
+
+  return res;
+}
+
 Iterator Iterate(Value iterating){
-  iterating = CollapsePtrIntoStruct(iterating);
+  iterating = RemoveTypedefIndirection(CollapsePtrIntoStruct(iterating));
 
   Type* type = iterating.type;
 
@@ -1059,9 +1153,9 @@ Iterator Iterate(Value iterating){
 
   if(type == ValueType::NUMBER){
     iter.currentNumber = 0;
-  } else if(type->type == Type::ARRAY){
+  } else if(type->type == Subtype_ARRAY){
     iter.currentNumber = 0;
-  } else if(type->type == Type::TEMPLATED_INSTANCE){
+  } else if(type->type == Subtype_TEMPLATED_INSTANCE){
     Assert(iterating.isTemp == false);
 
     if(type->templateBase == ValueType::POOL){
@@ -1111,12 +1205,12 @@ bool HasNext(Iterator iter){
 
     bool res = (iter.currentNumber < len);
     return res;
-  } else if(type->type == Type::ARRAY){
+  } else if(type->type == Subtype_ARRAY){
     int len = ArrayLength(type);
 
     bool res = (iter.currentNumber < len);
     return res;
-  } else if(type->type == Type::TEMPLATED_INSTANCE){
+  } else if(type->type == Subtype_TEMPLATED_INSTANCE){
     if(type->templateBase == ValueType::POOL){
       bool res = iter.poolIterator.HasNext();
 
@@ -1157,9 +1251,9 @@ void Advance(Iterator* iter){
 
   if(type == ValueType::NUMBER){
     iter->currentNumber += 1;
-  } else if(type->type == Type::ARRAY){
+  } else if(type->type == Subtype_ARRAY){
     iter->currentNumber += 1;
-  } else if(type->type == Type::TEMPLATED_INSTANCE){
+  } else if(type->type == Subtype_TEMPLATED_INSTANCE){
     if(type->templateBase == ValueType::POOL){
       ++iter->poolIterator;
     } else if(type->templateBase == ValueType::STD_VECTOR){
@@ -1191,13 +1285,13 @@ Value GetValue(Iterator iter){
 
   if(type == ValueType::NUMBER){
     val = MakeValue(iter.currentNumber);
-  } else if(type->type == Type::ARRAY){
+  } else if(type->type == Subtype_ARRAY){
     Opt<Value> optVal = AccessObjectIndex(iter.iterating,iter.currentNumber);
     if(!optVal){
       LogFatal(LogModule::TYPE,"Somehow went past the end? Should not be possible");
     }
     val = optVal.value();
-  } else if(type->type == Type::TEMPLATED_INSTANCE){
+  } else if(type->type == Subtype_TEMPLATED_INSTANCE){
     if(type->templateBase == ValueType::POOL){
       val.custom = *iter.poolIterator;
       val.type = type->templateArgTypes[0];
@@ -1233,11 +1327,11 @@ Value GetValue(Iterator iter){
     NOT_IMPLEMENTED("Implement as needed");
   }
 
-  return val;
+  return RemoveTypedefIndirection(val);
 }
 
 static bool IsPointerLike(Type* type){
-  bool res = type->type == Type::POINTER || type->type == Type::ARRAY;
+  bool res = type->type == Subtype_POINTER || type->type == Subtype_ARRAY;
   return res;
 }
 
@@ -1246,12 +1340,12 @@ Value RemoveOnePointerIndirection(Value in){
 
   Value res = in;
 
-  if(in.type->type == Type::ARRAY){
+  if(in.type->type == Subtype_ARRAY){
     res = CollapseArrayIntoPtr(in);
   }
 
   // Remove one level of indirection
-  Assert(in.type->type == Type::POINTER);
+  Assert(in.type->type == Subtype_POINTER);
   Type* type = res.type;
 
   char* deference = (char*) res.custom;
@@ -1266,14 +1360,23 @@ Value RemoveOnePointerIndirection(Value in){
   return res;
 }
 
+Value RemoveTypedefIndirection(Value in){
+  if(in.type->type != Subtype_TYPEDEF){
+    return in;
+  }
+  
+  in.type = in.type->typedefType;
+  return in;
+}
+
 static bool IsTypeBaseTypeOfPointer(Type* baseToCheck,Type* pointerLikeType){
   Type* checker = pointerLikeType;
   while(IsPointerLike(checker)){
     if(baseToCheck == checker){
       return true;
-    } else if(checker->type == Type::ARRAY){
+    } else if(checker->type == Subtype_ARRAY){
       checker = GetPointerType(checker->arrayType);
-    } else if(checker->type == Type::POINTER){
+    } else if(checker->type == Subtype_POINTER){
       checker = checker->pointerType;
     } else {
       break;
@@ -1288,11 +1391,11 @@ static Value CollapsePtrUntilType(Value in, Type* typeWanted){
   Value res = in;
 
   while(res.type != typeWanted){
-    if(res.type->type == Type::ARRAY){
+    if(res.type->type == Subtype_ARRAY){
       res = CollapseArrayIntoPtr(res);
-    } else if(res.type->type == Type::POINTER){
+    } else if(res.type->type == Subtype_POINTER){
       res = RemoveOnePointerIndirection(res);
-    } else if(res.type->type == Type::TYPEDEF){
+    } else if(res.type->type == Subtype_TYPEDEF){
 	  res.type = res.type->typedefType;
 	} else {
       NOT_POSSIBLE("No more possible type exists to collapse, I think");
@@ -1344,13 +1447,13 @@ bool Equal(Value v1,Value v2){
     res = (CompareString(c1.str,c2.str));
   } else if(c1.type == ValueType::SIZED_STRING){
     res = CompareString(c1.str,c2.str);
-  } else if(c1.type->type == Type::ENUM){
+  } else if(c1.type->type == Subtype_ENUM){
     if(c1.type != c2.type){
       res = false;
     } else {
       res = (c1.number == c2.number);
     }
-  } else if(c1.type->type == Type::POINTER){
+  } else if(c1.type->type == Subtype_POINTER){
     Assert(!c1.isTemp && !c2.isTemp); // TODO: The concept of temp variables should be better handled. For now, just check that we are dealing with the must common case and proceed
 
     c1 = RemoveOnePointerIndirection(c1);
@@ -1386,7 +1489,7 @@ bool Equal(Type* t1,Type* t2){
 }
 
 Value CollapseArrayIntoPtr(Value in){
-  if(in.type->type != Type::ARRAY){
+  if(in.type->type != Subtype_ARRAY){
     return in;
   }
 
@@ -1412,13 +1515,13 @@ Value ConvertValue(Value in,Type* want,Arena* arena){
     if(CompareString(in.type->name,"Opt<int>")){
       Opt<int>* view = (Opt<int>*) in.custom;
       res.boolean = view->has_value();
-    } else if(in.type == ValueType::NUMBER || in.type->type == Type::ENUM){
+    } else if(in.type == ValueType::NUMBER || in.type->type == Subtype_ENUM){
       res.boolean = (in.number != 0);
-    } else if(in.type->type == Type::POINTER){
+    } else if(in.type->type == Subtype_POINTER){
       int* pointerValue = (int*) DeferencePointer(in.custom,in.type->pointerType,0);
 
       res.boolean = (pointerValue != nullptr);
-    } else if(in.type->type == Type::TEMPLATED_INSTANCE && in.type->templateBase == ValueType::ARRAY){
+    } else if(in.type->type == Subtype_TEMPLATED_INSTANCE && in.type->templateBase == ValueType::ARRAY){
       int size = IndexableSize(in);
 
       res.boolean = (size != 0);
@@ -1428,7 +1531,7 @@ Value ConvertValue(Value in,Type* want,Arena* arena){
       NOT_IMPLEMENTED("Implement as needed");
     }
   } else if(want == ValueType::NUMBER){
-    if(in.type->type == Type::POINTER){
+    if(in.type->type == Subtype_POINTER){
       void* pointerValue = (void*) DeferencePointer(in.custom,in.type->pointerType,0);
 
       res.number = (i64) pointerValue;
@@ -1438,7 +1541,7 @@ Value ConvertValue(Value in,Type* want,Arena* arena){
     } else if(CompareString(in.type->name,"Opt<int>")){
       Opt<int>* view = (Opt<int>*) in.custom;
       res.number = view->value_or(0);
-    } else if(in.type->type == Type::ENUM){
+    } else if(in.type->type == Subtype_ENUM){
       res.number = in.number;
     } else {
       NOT_IMPLEMENTED("Implement as needed");
@@ -1452,7 +1555,7 @@ Value ConvertValue(Value in,Type* want,Arena* arena){
     } else {
       NOT_IMPLEMENTED("Implement as needed");
     }
-  } else if(want->type == Type::ENUM){
+  } else if(want->type == Subtype_ENUM){
     if(in.type == ValueType::NUMBER){
       res = in;
       res.type = want;

@@ -68,7 +68,6 @@ FUDeclaration* RegisterModuleInfo(ModuleInfo* info,Arena* temp){
   Array<Wire> states = PushArray<Wire>(perm,info->states.size);
   Array<ExternalMemoryInterface> external = PushArray<ExternalMemoryInterface>(perm,info->externalInterfaces.size);
   int memoryMapBits = 0;
-  //int databusAddrSize = 0;
 
   Array<ParameterExpression> instantiated = PushArray<ParameterExpression>(perm,info->defaultParameters.size);
 
@@ -166,9 +165,9 @@ FUDeclaration* RegisterModuleInfo(ModuleInfo* info,Arena* temp){
   decl.baseConfig.delayOffsets.max = info->nDelays;
   decl.baseConfig.name = info->name;
   decl.nIOs = info->nIO;
+
   if(info->memoryMapped) decl.memoryMapBits = memoryMapBits;
-  //decl.databusAddrSize = databusAddrSize; // TODO: How to handle different units with different databus address sizes??? For now do nothing. Do not even know if it's worth to bother with this, I think that all units should be force to use AXI_ADDR_W for databus addresses.
-  //decl.memoryMapBits = info->memoryMapped;
+
   decl.implementsDone = info->hasDone;
   decl.signalLoop = info->signalLoop;
 
@@ -190,6 +189,13 @@ void FillDeclarationWithAcceleratorValues(FUDeclaration* decl,Accelerator* accel
   BLOCK_REGION(temp2);
 
   AccelInfo val = CalculateAcceleratorInfo(accel,true,perm,temp2);
+
+  String path = PushDebugPath(temp,decl->name,STRING("composite_stats.txt"));
+
+  FILE* stats = OpenFileAndCreateDirectories(StaticFormat("%.*s",UNPACK_SS(path)),"w");
+  DEFER_CLOSE_FILE(stats);
+
+  PrintRepr(stats,MakeValue(&val),temp,temp2);
   
   DynamicArray<String> baseNames = StartArray<String>(perm);
   FOREACH_LIST(FUInstance*,ptr,accel->allocated){
@@ -309,7 +315,8 @@ void FillDeclarationWithAcceleratorValues(FUDeclaration* decl,Accelerator* accel
       Assert(val.names[i].data != nullptr);
       decl->configInfo[i].inputDelays = val.inputDelays[i];
       decl->configInfo[i].outputLatencies = val.outputDelays[i];
-
+      decl->configInfo[i].mergeMultiplexerConfigs = val.muxConfigs[i];
+      
       decl->configInfo[i].baseName = Map(val.infos[i],perm,[](InstanceInfo info){
         return info.name;
       });
@@ -912,6 +919,7 @@ void PrintUniformInformation(FILE* out,FUDeclaration* decl){
 }
 
 void PrintDeclaration(FILE* out,FUDeclaration* decl,Arena* temp,Arena* temp2){
+#if 0
   BLOCK_REGION(temp);
   BLOCK_REGION(temp2);
 
@@ -940,34 +948,6 @@ void PrintDeclaration(FILE* out,FUDeclaration* decl,Arena* temp,Arena* temp2){
     fprintf(out,"\n");
     PrintUniformInformation(out,subDecl);
     fprintf(out,"\n");
-  }
-  
-#if 0
-  if(decl->fixedDelayCircuit){
-    AccelInfo info = CalculateAcceleratorInfo(decl->fixedDelayCircuit,true,temp,temp2);
-    
-    fprintf(out,"\n======================================\n\n");
-    fprintf(out,"Base info\n");
-    PrintAll(out,info.baseInfo,temp);
-    fprintf(out,"\n======================================\n\n");
-
-    int index = 0;
-    for(Array<InstanceInfo> arr : info.infos){
-      fprintf(out,"\n======================================\n\n");
-      fprintf(out,"%.*s\n",UNPACK_SS(info.names[index]));
-      PrintAll(out,arr,temp);
-      index += 1;
-    }
-    
-    Array<FUDeclaration*> allSubTypesUsed = AllNonSpecialSubTypes(decl->fixedDelayCircuit,temp,temp2);
-    for(FUDeclaration* subDecl : allSubTypesUsed){
-      fprintf(out,"\n");
-      PrintUniformInformation(out,subDecl);
-      fprintf(out,"\n");
-    }
-  } else {
-    String type = DelayTypeToString(decl->delayType);
-    fprintf(out,"Type: %.*s\n",UNPACK_SS(type));
   }
 #endif
 }

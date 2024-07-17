@@ -1623,8 +1623,9 @@ void ParseVersatSpecification(String content,Arena* temp,Arena* temp2){
   while(!tok->Done()){
     Token peek = tok->PeekToken();
 
-    
-    if(CompareString(peek,"debug")){
+    if(CompareString(peek,"stop")){
+      break;
+    } else if(CompareString(peek,"debug")){
       tok->AdvancePeek(peek);
       tok->AssertNextToken(";");
       debugFlag = true;

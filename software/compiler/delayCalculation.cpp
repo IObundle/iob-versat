@@ -33,9 +33,9 @@ static void SendLatencyUpwards(FUInstance* node,Hashmap<Edge,int>* delays,Hashma
         int delay = b + a + e - c;
 
         if(b == ANY_DELAY_MARK || node->declaration == BasicDeclaration::buffer){
-          *otherInfo->delay = ANY_DELAY_MARK;
+          *otherInfo->delay.value = ANY_DELAY_MARK;
         } else {
-          *otherInfo->delay = delay;
+          *otherInfo->delay.value = delay;
         }
       }
     }
@@ -85,7 +85,7 @@ CalculateDelayResult CalculateDelay(Accelerator* accel,DAGOrderNodes order,Arena
       edge.units[1].port = con->port;
       edge.delay = con->edgeDelay;
       
-      con->delay = edgeToDelay->Insert(edge,0);
+      con->delay.value = edgeToDelay->Insert(edge,0);
     }
 
     FOREACH_LIST(ConnectionNode*,con,ptr->allOutputs){
@@ -96,7 +96,7 @@ CalculateDelayResult CalculateDelay(Accelerator* accel,DAGOrderNodes order,Arena
       edge.units[1] = con->instConnectedTo;
       edge.delay = con->edgeDelay;
 
-      con->delay = edgeToDelay->Insert(edge,0);
+      con->delay.value = edgeToDelay->Insert(edge,0);
     }
   }
 
@@ -157,8 +157,8 @@ CalculateDelayResult CalculateDelay(Accelerator* accel,DAGOrderNodes order,Arena
 
     int maximum = -(1 << 30);
     FOREACH_LIST(ConnectionNode*,info,node->allInputs){
-      if(*info->delay != ANY_DELAY_MARK){
-        maximum = std::max(maximum,*info->delay);
+      if(*info->delay.value != ANY_DELAY_MARK){
+        maximum = std::max(maximum,*info->delay.value);
       }
     }
     
@@ -167,10 +167,10 @@ CalculateDelayResult CalculateDelay(Accelerator* accel,DAGOrderNodes order,Arena
     }
 
     FOREACH_LIST(ConnectionNode*,info,node->allInputs){
-      if(*info->delay == ANY_DELAY_MARK){
-        *info->delay = 0;
+      if(*info->delay.value == ANY_DELAY_MARK){
+        *info->delay.value = 0;
       } else {
-        *info->delay = maximum - *info->delay;
+        *info->delay.value = maximum - *info->delay.value;
       }
     }
 
@@ -199,7 +199,7 @@ CalculateDelayResult CalculateDelay(Accelerator* accel,DAGOrderNodes order,Arena
 
     // Source_and_sink units never have output delay. They can't
     FOREACH_LIST(ConnectionNode*,con,node->allOutputs){
-      *con->delay = 0;
+      *con->delay.value = 0;
     }
   }
 
@@ -236,7 +236,7 @@ CalculateDelayResult CalculateDelay(Accelerator* accel,DAGOrderNodes order,Arena
 
       int minimum = 1 << 30;
       FOREACH_LIST(ConnectionNode*,info,node->allOutputs){
-        minimum = std::min(minimum,*info->delay);
+        minimum = std::min(minimum,*info->delay.value);
       }
 
       if(minimum == 1 << 30){
@@ -247,7 +247,7 @@ CalculateDelayResult CalculateDelay(Accelerator* accel,DAGOrderNodes order,Arena
       nodeDelay->Insert(node,minimum);
 
       FOREACH_LIST(ConnectionNode*,info,node->allOutputs){
-        *info->delay -= minimum;
+        *info->delay.value -= minimum;
       }
     }
   }
@@ -380,9 +380,7 @@ GraphPrintingContent GenerateDelayDotGraph(Accelerator* accel,CalculateDelayResu
     int inPort = edge->in.port;
     int outPort = edge->out.port;
 
-    PortInstance node = edge->in; // TODO: HACK, Edges should be instanceNodes, not fuInstances
-    
-    int delay = delayInfo.portDelay->GetOrFail(node);
+    int delay = delayInfo.portDelay->GetOrFail(edge->in);
     
     int edgeBaseDelay = edge->delay;
     int edgeDelay = delayInfo.edgesDelay->GetOrFail(*edge);
