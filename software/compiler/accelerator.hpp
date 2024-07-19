@@ -84,6 +84,11 @@ struct EdgeDelayInfo{
   bool isAny;
 };
 
+struct DelayInfo{
+  int value;
+  bool isAny;
+};
+
 struct ConnectionNode{
   PortInstance instConnectedTo;
   int port;
@@ -216,7 +221,8 @@ struct AcceleratorMapping{
   int firstId;
   int secondId;
 
-  TrieMap<FUInstance*,FUInstance*>* map;
+  TrieMap<PortInstance,PortInstance>* inputMap;
+  TrieMap<PortInstance,PortInstance>* outputMap;
 };
 
 struct EdgeIterator{
@@ -303,7 +309,6 @@ void ConnectUnitsIfNotConnected(FUInstance* out,int outIndex,FUInstance* in,int 
 void  ConnectUnits(FUInstance* out,int outIndex,FUInstance* in,int inIndex,int delay = 0);
 void ConnectUnits(PortInstance out,PortInstance in,int delay = 0);
 
-//FUInstance* GetInstanceNode(Accelerator* accel,FUInstance* inst); TODO: Remove this
 void CalculateNodeType(FUInstance* node);
 void FixInputs(FUInstance* node);
 
@@ -320,15 +325,59 @@ bool IsCombinatorial(Accelerator* accel);
 
 void ConnectUnits(PortInstance out,PortInstance in,int delay);
 
+void PrintAllInstances(Accelerator* accel);
+
 void MappingCheck(AcceleratorMapping* map);
 void MappingCheck(AcceleratorMapping* map,Accelerator* first,Accelerator* second);
 AcceleratorMapping* MappingSimple(Accelerator* first,Accelerator* second,Arena* out);
 AcceleratorMapping* MappingSimple(Accelerator* first,Accelerator* second,int size,Arena* out);
 AcceleratorMapping* MappingInvert(AcceleratorMapping* toReverse,Arena* out);
 AcceleratorMapping* MappingCombine(AcceleratorMapping* first,AcceleratorMapping* second,Arena* out);
-FUInstance* MappingMap(AcceleratorMapping* mapping,FUInstance* toMap);
-void MappingInsert(AcceleratorMapping* mapping,FUInstance* first,FUInstance* second);
+PortInstance MappingMapInput(AcceleratorMapping* mapping,PortInstance toMap);
+PortInstance MappingMapOutput(AcceleratorMapping* mapping,PortInstance toMap);
+void MappingInsertEqualNode(AcceleratorMapping* mapping,FUInstance* first,FUInstance* second);
+void MappingInsertInput(AcceleratorMapping* mapping,PortInstance first,PortInstance second);
+void MappingInsertOutput(AcceleratorMapping* mapping,PortInstance first,PortInstance second);
 void MappingPrintInfo(AcceleratorMapping* map);
 void MappingPrintAll(AcceleratorMapping* map);
 
-Set<PortInstance>* MappingMap(AcceleratorMapping* map,Set<PortInstance>* set,Arena* out);
+FUInstance* MappingMapNode(AcceleratorMapping* mapping,FUInstance* inst);
+
+Set<PortInstance>* MappingMapInput(AcceleratorMapping* map,Set<PortInstance>* set,Arena* out);
+Set<PortInstance>* MappingMapOutput(AcceleratorMapping* map,Set<PortInstance>* set,Arena* out);
+
+struct SubMappingInfo{
+  FUDeclaration* subDeclaration;
+  String higherName;
+  bool isInput;
+  int subPort;
+};
+
+typedef TrieMap<SubMappingInfo,PortInstance> SubMap;
+
+inline bool operator==(const SubMappingInfo& p1,const SubMappingInfo& p2){
+  bool res = (p1.subDeclaration == p2.subDeclaration &&
+              CompareString(p1.higherName,p2.higherName) &&
+              p1.subPort == p2.subPort &&
+              p1.isInput == p2.isInput);
+  return res;
+}
+
+template<> class std::hash<SubMappingInfo>{
+public:
+   std::size_t operator()(const SubMappingInfo& t) const noexcept{
+     std::size_t res = std::hash<FUDeclaration*>()(t.subDeclaration) +
+                       std::hash<String>()(t.higherName) +
+                       std::hash<bool>()(t.isInput) +
+                       std::hash<int>()(t.subPort);
+
+     return res;
+   }
+};
+
+Pair<Accelerator*,SubMap*> Flatten2(Accelerator* accel,int times,Arena* temp);
+
+void PrintSubMappingInfo(SubMap* info);
+
+
+

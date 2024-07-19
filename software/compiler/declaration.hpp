@@ -117,6 +117,8 @@ struct FUDeclaration{
   
   const char* operation;
 
+  SubMap* flattenMapping;
+  
   int lat; // TODO: For now this is only for iterative units. Would also useful to have a standardized way of computing this from the graph and then compute it when needed. 
   
   // TODO: this is probably not needed, only used for verilog generation (which could be calculated inside the code generation functions)
@@ -153,3 +155,4 @@ extern Pool<FUDeclaration> globalDeclarations;
 FUDeclaration* GetTypeByName(String str);
 void InitializeSimpleDeclarations();
 bool HasMultipleConfigs(FUDeclaration* decl);
+

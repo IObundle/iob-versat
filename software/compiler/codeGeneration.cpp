@@ -1172,7 +1172,6 @@ void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* 
 
     Array<Array<MuxInfo>> result = GetAllMuxInfo(&info,temp,temp2);
 
-    DEBUG_BREAK();
     TemplateSetCustom("mergeMux",MakeValue(&result));
     
     FILE* f = OpenFileAndCreateDirectories(StaticFormat("%s/versat_accel.h",softwarePath),"w");

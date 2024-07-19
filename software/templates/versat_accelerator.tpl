@@ -159,7 +159,7 @@ end
 #{end}
 
 #{if nCombOperations}
-reg [31:0] #{join "," node instances}#{if node.declaration.isOperation and node.declaration.baseConfig.outputLatencies[0] == 0}comb_@{node |> Identify}#{end}#{end}; 
+reg [31:0] #{join "," node instances}#{if node.declaration.isOperation and node.declaration.baseConfig.outputLatencies[0] == 0}comb_@{node |> Identify} /* verilator isolate_assignments*/ #{end}#{end}; 
 
 always @*
 begin

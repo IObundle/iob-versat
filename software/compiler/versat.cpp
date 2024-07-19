@@ -188,14 +188,17 @@ void FillDeclarationWithAcceleratorValues(FUDeclaration* decl,Accelerator* accel
   BLOCK_REGION(temp);
   BLOCK_REGION(temp2);
 
+  DEBUG_BREAK_IF(CompareString(decl->name,"SHA"));
   AccelInfo val = CalculateAcceleratorInfo(accel,true,perm,temp2);
 
   String path = PushDebugPath(temp,decl->name,STRING("composite_stats.txt"));
 
+#if 0
   FILE* stats = OpenFileAndCreateDirectories(StaticFormat("%.*s",UNPACK_SS(path)),"w");
   DEFER_CLOSE_FILE(stats);
 
   PrintRepr(stats,MakeValue(&val),temp,temp2);
+#endif
   
   DynamicArray<String> baseNames = StartArray<String>(perm);
   FOREACH_LIST(FUInstance*,ptr,accel->allocated){
@@ -565,7 +568,11 @@ FUDeclaration* RegisterSubUnit(Accelerator* circuit,Arena* temp,Arena* temp2){
   decl.baseCircuit = CopyAccelerator(circuit,AcceleratorPurpose_BASE,true,nullptr);
   OutputDebugDotGraph(decl.baseCircuit,STRING("DefaultCopy.dot"),temp);
 
-  decl.flattenedBaseCircuit = Flatten(decl.baseCircuit,99,temp);
+  Pair<Accelerator*,SubMap*> p = Flatten2(decl.baseCircuit,99,temp);
+  
+  decl.flattenedBaseCircuit = p.first;
+  decl.flattenMapping = p.second;
+  
   OutputDebugDotGraph(decl.flattenedBaseCircuit,STRING("DefaultFlattened.dot"),temp);
   
   DAGOrderNodes order = CalculateDAGOrder(circuit->allocated,temp);
@@ -574,9 +581,9 @@ FUDeclaration* RegisterSubUnit(Accelerator* circuit,Arena* temp,Arena* temp2){
   decl.baseConfig.calculatedDelays = PushArray<int>(permanent,delays.nodeDelay->nodesUsed);
   Memset(decl.baseConfig.calculatedDelays,0);
   int index = 0;
-  for(Pair<FUInstance*,int*> p : delays.nodeDelay){
+  for(Pair<FUInstance*,DelayInfo*> p : delays.nodeDelay){
     if(p.first->declaration->baseConfig.delayOffsets.max > 0){
-      decl.baseConfig.calculatedDelays[index] = *p.second;
+      decl.baseConfig.calculatedDelays[index] = p.second->value;
       index += 1;
     }
   }

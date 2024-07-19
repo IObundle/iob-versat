@@ -3,6 +3,7 @@
 #include <ftw.h>
 
 #include "debugVersat.hpp"
+#include "declaration.hpp"
 #include "globals.hpp"
 #include "memory.hpp"
 #include "utilsCore.hpp"
@@ -424,9 +425,9 @@ int main(int argc,const char** argv){
 
   Arena* perm = globalPermanent;
   
-  Arena tempInst = InitArena(Megabyte(512));
+  Arena tempInst = InitArena(Megabyte(1024));
   Arena* temp = &tempInst;
-  Arena temp2Inst = InitArena(Megabyte(512));
+  Arena temp2Inst = InitArena(Megabyte(1024));
   Arena* temp2 = &temp2Inst;
   
   InitializeTemplateEngine(perm);
@@ -540,7 +541,7 @@ int main(int argc,const char** argv){
 
     String processed = PreprocessVerilogFile(content,globalOptions.includePaths,temp,temp2);
     Array<Module> modules = ParseVerilogFile(processed,globalOptions.includePaths,temp,temp2);
-
+    
     for(Module& mod : modules){
       ModuleInfo info = ExtractModuleInfo(mod,perm,temp);
       RegisterModuleInfo(&info,temp);
@@ -564,7 +565,7 @@ int main(int argc,const char** argv){
   if(specFilepath){
     ParseVersatSpecification(specFilepath,temp,temp2);
   }
-  
+
   FUDeclaration* type = GetTypeByName(topLevelTypeStr);
   Accelerator* accel = nullptr;
   FUInstance* TOP = nullptr;
@@ -628,8 +629,8 @@ int main(int argc,const char** argv){
       ConnectUnits(TOP,i,output,i);
     }
   }
-
-#if 0
+  
+#if 1
   {
     String path = PushDebugPath(temp,{},STRING("allDeclarations.txt"));
     FILE* allDeclarations = fopen(StaticFormat("%.*s",UNPACK_SS(path)),"w");
@@ -637,7 +638,7 @@ int main(int argc,const char** argv){
     for(FUDeclaration* decl : globalDeclarations){
       BLOCK_REGION(temp);
 
-      PrintRepr(allDeclarations,MakeValue(decl),temp,temp2);
+      //PrintRepr(allDeclarations,MakeValue(decl),temp,temp2);
       
 #if 1
       if(globalDebug.outputAcceleratorInfo && decl->fixedDelayCircuit){

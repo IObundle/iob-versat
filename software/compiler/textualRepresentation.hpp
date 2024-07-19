@@ -175,4 +175,4 @@ void PrintAll(FILE* file,Array<T> arr,Arena* temp){
 }
 #endif
 
-void PrintRepr(FILE* file,Value val,Arena* temp,Arena* temp2);
+void PrintRepr(FILE* file,Value val,Arena* temp,Arena* temp2,int depth = 4);

@@ -512,7 +512,7 @@ AcceleratorInfo TransformGraphIntoArrayRecurse(FUInstance* node,FUDeclaration* p
 
 TestResult CalculateOneInstance(Accelerator* accel,bool recursive,Array<Partition> partitions,Arena* out,Arena* temp){
   ArenaList<InstanceInfo>* infoList = PushArenaList<InstanceInfo>(temp);
-  Hashmap<StaticId,int>* staticInfo = PushHashmap<StaticId,int>(temp,99);
+  Hashmap<StaticId,int>* staticInfo = PushHashmap<StaticId,int>(temp,500);
 
   // TODO: This is being recalculated multiple times if we have various partitions. Move out when this function starts stabilizing.
   CalculatedOffsets configOffsets = CalculateConfigOffsetsIgnoringStatics(accel,out);
@@ -569,7 +569,7 @@ TestResult CalculateOneInstance(Accelerator* accel,bool recursive,Array<Partitio
     
     subOffsets.configOffset = configOffsets.offsets[index];
     subOffsets.delayOffset = delayOffsets.offsets[index];
-    subOffsets.delay = calculatedDelay.nodeDelay->GetOrFail(node);
+    subOffsets.delay = calculatedDelay.nodeDelay->GetOrFail(node).value;
     subOffsets.order = toOrder->GetOrFail(node);
     
     if(recursive){
@@ -1175,7 +1175,7 @@ AcceleratorInfo TransformGraphIntoArrayRecurseNoDelay(FUInstance* node,FUDeclara
 
 TestResult CalculateOneInstanceNoDelay(Accelerator* accel,bool recursive,Array<Partition> partitions,Arena* temp,Arena* out){
   ArenaList<InstanceInfo>* infoList = PushArenaList<InstanceInfo>(temp);
-  Hashmap<StaticId,int>* staticInfo = PushHashmap<StaticId,int>(temp,99);
+  Hashmap<StaticId,int>* staticInfo = PushHashmap<StaticId,int>(temp,500);
 
   // TODO: This is being recalculated multiple times if we have various partitions. Move out when this function starts stabilizing.
   CalculatedOffsets configOffsets = CalculateConfigOffsetsIgnoringStatics(accel,out);

@@ -689,7 +689,7 @@ void Print(ReprInfo info,TrieSet<PrintedEntity>* seen,Arena* temp,ArenaList<Repr
   fprintf(globalTest,"\n");
 }
 
-void PrintRepr(FILE* file,Value val,Arena* temp,Arena* temp2){
+void PrintRepr(FILE* file,Value val,Arena* temp,Arena* temp2,int depth){
   BLOCK_REGION(temp);
   BLOCK_REGION(temp2);
   BLOCK_REGION(debugArena);
@@ -714,7 +714,7 @@ void PrintRepr(FILE* file,Value val,Arena* temp,Arena* temp2){
       Print(info,alreadyPrinted,temp,notPrinted);
     }
     
-    if(iterations > 4){
+    if(iterations > depth){
       break;
     }
 

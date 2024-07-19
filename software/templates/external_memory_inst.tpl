@@ -46,6 +46,5 @@
 
      .clk_i(clk_i)
    );
-
 #{end}
 #{end}

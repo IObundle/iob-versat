@@ -5,10 +5,14 @@
 #include "accelerator.hpp"
 #include "configurations.hpp"
 
+typedef Hashmap<Edge,DelayInfo> EdgeDelay;
+typedef Hashmap<PortInstance,DelayInfo> PortDelay;
+typedef Hashmap<FUInstance*,DelayInfo> NodeDelay;
+
 struct CalculateDelayResult{
-  Hashmap<Edge,int>* edgesDelay;
-  Hashmap<PortInstance,int>* portDelay;
-  Hashmap<FUInstance*,int>* nodeDelay;
+  EdgeDelay* edgesDelay;
+  PortDelay* portDelay;
+  NodeDelay* nodeDelay;
 };
 
 Array<int> ExtractInputDelays(Accelerator* accel,CalculateDelayResult delays,int mimimumAmount,Arena* out,Arena* temp);

@@ -238,7 +238,7 @@ void OutputGraphDotFile(Accelerator* accel,bool collapseSameEdges,FUInstance* hi
     PortInstance end = {in,inPort};
     String label = Repr(&start,&end,globalDebug.dotFormat,temp);
 
-    int calculatedDelay = delays.edgesDelay->GetOrFail(edge);
+    int calculatedDelay = delays.edgesDelay->GetOrFail(edge).value;
 
     bool highlighStart = (highlighInstance ? start.inst == highlighInstance : false);
     bool highlighEnd = (highlighInstance ? end.inst == highlighInstance : false);

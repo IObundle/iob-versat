@@ -67,8 +67,8 @@ bool EqualPortMapping(PortInstance p1,PortInstance p2);
 bool IsUnitCombinatorial(FUInstance* inst);
 
 // Graph fixes
-Array<DelayToAdd> GenerateFixDelays(Accelerator* accel,Hashmap<Edge,int>* edgeDelays,Arena* out,Arena* temp);
-void FixDelays(Accelerator* accel,Hashmap<Edge,int>* edgeDelays,Arena* temp);
+Array<DelayToAdd> GenerateFixDelays(Accelerator* accel,EdgeDelay* edgeDelays,Arena* out,Arena* temp);
+void FixDelays(Accelerator* accel,Hashmap<Edge,DelayInfo>* edgeDelays,Arena* temp);
 
 // Accelerator merging
 DAGOrderNodes CalculateDAGOrder(FUInstance* instances,Arena* arena);

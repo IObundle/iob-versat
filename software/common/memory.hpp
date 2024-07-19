@@ -470,7 +470,7 @@ struct TrieSetIterator{
 public:
   bool operator!=(TrieSetIterator& iter);
   void operator++();
-  Data& operator*();
+  Data operator*();
 };
   
 template<typename Data>
@@ -940,8 +940,9 @@ TrieMap<Key,Data>* PushTrieMap(Arena* arena){
 template<typename Key,typename Data>
 Data* TrieMap<Key,Data>::Insert(Key key,Data data){
   int index = std::hash<Key>()(key);
+  int startIndex = index;
   int select = index & 3;
-  if(this->childs[select] == nullptr || this->childs[select]->pair.key == key){
+  if(this->childs[select] == nullptr){
     TrieMapNode<Key,Data>* node = PushStruct<TrieMapNode<Key,Data>>(arena);
     *node = {};
     node->pair.first = key;
@@ -957,6 +958,9 @@ Data* TrieMap<Key,Data>::Insert(Key key,Data data){
     }
     inserted += 1;
     return &node->pair.second;
+  } else if(this->childs[select]->pair.key == key){
+    this->childs[select]->pair.data = data;
+    return &this->childs[select]->pair.data;
   }
 
   index >>= 2;
@@ -964,17 +968,20 @@ Data* TrieMap<Key,Data>::Insert(Key key,Data data){
   TrieMapNode<Key,Data>* current = (TrieMapNode<Key,Data>*) this->childs[select];
   for(; 1; index >>= 2){
     int select = index & 3;
-    if(current->childs[select] == nullptr || current->childs[select]->pair.first == key){
-      TrieMapNode<Key,Data>* node = PushStruct<TrieMapNode<Key,Data>>(arena);
-      *node = {};
-      node->pair.first = key;
-      node->pair.second = data;
-      this->tail->next = node;
-      this->tail = node;
+    if(current->childs[select] == nullptr){
+        TrieMapNode<Key,Data>* node = PushStruct<TrieMapNode<Key,Data>>(arena);
+        *node = {};
+        node->pair.first = key;
+        node->pair.second = data;
+        this->tail->next = node;
+        this->tail = node;
 
-      current->childs[select] = node;
-      inserted += 1;
-      return &node->pair.second;
+        current->childs[select] = node;
+        inserted += 1;
+        return &node->pair.second;
+    } else if(current->childs[select]->pair.first == key){
+      current->childs[select]->pair.second = data;
+      return &current->childs[select]->pair.second;
     } else {
       current = current->childs[select];
     }
@@ -1228,17 +1235,17 @@ SetIterator<Data> end(Set<Data>* set){
 
 template<typename Data>
 bool TrieSetIterator<Data>::operator!=(TrieSetIterator<Data>& iter){
-  return this->map != iter.map;
+  return this->innerIter != iter.innerIter;
 }
 
 template<typename Data>
 void TrieSetIterator<Data>::operator++(){
-  ++this->map;
+  ++this->innerIter;
 }
 
 template<typename Data>
-Data& TrieSetIterator<Data>::operator*(){
-  return this->map->first;
+Data TrieSetIterator<Data>::operator*(){
+  return (*this->innerIter).first;
 }
   
 template<typename Data>

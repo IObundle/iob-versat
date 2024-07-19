@@ -185,6 +185,7 @@ using Opt = std::optional<T>;
 template<typename T>
 using BracketList = std::initializer_list<T>;
 
+// TODO: Time needs to be rewritted because we no longer need to support firmware code
 struct Time{
    u64 microSeconds;
    u64 seconds;
@@ -197,6 +198,7 @@ bool operator>(const Time& s1,const Time& s2);
 bool operator==(const Time& s1,const Time& s2);
 
 static constexpr Time Seconds(u64 seconds){Time t = {}; t.seconds = seconds; return t;};
+static constexpr Time MilliSeconds(u64 milli){Time t = {}; t.microSeconds = milli * 1000; return t;};
 
 // Automatically times a block in number of counts
 class TimeIt{
