@@ -188,7 +188,6 @@ void FillDeclarationWithAcceleratorValues(FUDeclaration* decl,Accelerator* accel
   BLOCK_REGION(temp);
   BLOCK_REGION(temp2);
 
-  DEBUG_BREAK_IF(CompareString(decl->name,"SHA"));
   AccelInfo val = CalculateAcceleratorInfo(accel,true,perm,temp2);
 
   String path = PushDebugPath(temp,decl->name,STRING("composite_stats.txt"));
@@ -589,7 +588,6 @@ FUDeclaration* RegisterSubUnit(Accelerator* circuit,Arena* temp,Arena* temp2){
   }
 
   region(temp){
-    // TODO: Cannot collapse same edges because we do not actually calculate wether edges are the same in respect to delays and so on.
     OutputDebugDotGraph(circuit,STRING("BeforeFixDelay.dot"),temp);
     FixDelays(circuit,delays.edgesDelay,temp);
     OutputDebugDotGraph(circuit,STRING("AfterFixDelay.dot"),temp);

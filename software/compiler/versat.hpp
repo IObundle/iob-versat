@@ -37,9 +37,13 @@ enum GraphDotFormat_{
   GRAPH_DOT_FORMAT_LATENCY = 0x40 // Outputs latency information for edges and port instances which know their latency information
 };
 
-// TODO: Remove memory from old versat if tests pass.
+struct DelayToAdd{
+  Edge edge;
+  String bufferName;
+  String bufferParameters;
+  int bufferAmount;
+};
 
-struct CompiledTemplate;
 namespace BasicTemplates{
   extern CompiledTemplate* acceleratorTemplate;
   extern CompiledTemplate* iterativeTemplate;
@@ -50,13 +54,6 @@ namespace BasicTemplates{
   extern CompiledTemplate* externalInstTemplate;
   extern CompiledTemplate* internalWiresTemplate;
 }
-
-struct DelayToAdd{
-  Edge edge;
-  String bufferName;
-  String bufferParameters;
-  int bufferAmount;
-};
 
 struct GraphMapping;
 

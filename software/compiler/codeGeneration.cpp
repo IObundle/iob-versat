@@ -810,14 +810,6 @@ Array<Array<MuxInfo>> GetAllMuxInfo(AccelInfo* info,Arena* out,Arena* temp){
   }
 
   Array<SameMuxEntities> listOfSharedIndexes = PushArrayFromSet(temp,knownSharedIndexes);
-  
-#if 0
-  Hashmap<Pair<int,int>,Pair<InstanceInfo*,int>>* sharedIndexesToIndex = PushHashmap<Pair<int,int>,Pair<InstanceInfo*,int>>(temp,listOfSharedIndexes.size);
-  for(int i = 0; i < listOfSharedIndexes.size; i++){
-    sharedIndexesToIndex->Insert(listOfSharedIndexes[i],GetConfigPosFromSharedIndex(info->baseInfo,i));
-  }
-#endif
-  
   Array<Array<MuxInfo>> result = PushArray<Array<MuxInfo>>(out,info->muxConfigs.size);
 
   for(int i = 0; i < result.size; i++){
@@ -925,7 +917,6 @@ void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* 
   // Output configuration file
   Array<FUInstance*> nodes = ListToArray(accel->allocated,temp2);
 
-  //ReorganizeAccelerator(accel,temp2); // TODO: Reorganize accelerator needs to go. Just call CalculateOrder when needed. Need to check how iterative work for this case, though
   DAGOrderNodes order = CalculateDAGOrder(accel->allocated,temp);
   Array<FUInstance*> ordered = order.instances;
   

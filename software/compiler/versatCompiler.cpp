@@ -17,8 +17,6 @@
 #include "accelerator.hpp"
 #include "dotGraphPrinting.hpp"
 
-#include "templateData.hpp"
-
 // TODO: For some reason, in the makefile we cannot stringify the arguments that we want to
 //       Do not actually want to do these preprocessor things. Fix the makefile so that it passes as a string
 #define DO_STRINGIFY(ARG) #ARG
@@ -381,7 +379,7 @@ String GetVerilatorRoot(Arena* out,Arena* temp){
   return root;
 }
 
-// MARK TODO: Small fix for common template. Works for now 
+// TODO: Small fix for common template. Works for now 
 void SetIncludeHeader(CompiledTemplate* tpl,String name);
 
 #include "parser.hpp"
@@ -411,28 +409,9 @@ static Value Identify(Value val,Arena* out){
   return MakeValue(ret);
 }
 
-int main(int argc,const char** argv){
-  // TODO: Need to actually parse and give an error, instead of just checking for less than 3
-  if(argc < 3){
-    printf("Need specifications and a top level type\n");
-    return -1;
-  }
+#include "templateData.hpp"
 
-  InitDebug();
-  RegisterTypes();
-  
-  *globalPermanent = InitArena(Megabyte(128));
-
-  Arena* perm = globalPermanent;
-  
-  Arena tempInst = InitArena(Megabyte(1024));
-  Arena* temp = &tempInst;
-  Arena temp2Inst = InitArena(Megabyte(1024));
-  Arena* temp2 = &temp2Inst;
-  
-  InitializeTemplateEngine(perm);
-  InitializeSimpleDeclarations();
-
+void LoadTemplates(Arena* perm,Arena* temp){
   CompiledTemplate* commonTpl = CompileTemplate(versat_common_template,"common",perm,temp);
   SetIncludeHeader(commonTpl,STRING("common"));
 
@@ -457,6 +436,30 @@ int main(int argc,const char** argv){
 
     return MakeValue(type->name);
   });
+}
+
+int main(int argc,const char** argv){
+  // TODO: Need to actually parse and give an error, instead of just checking for less than 3
+  if(argc < 3){
+    printf("Need specifications and a top level type\n");
+    return -1;
+  }
+
+  InitDebug();
+  RegisterTypes();
+  
+  *globalPermanent = InitArena(Megabyte(128));
+
+  Arena* perm = globalPermanent;
+  
+  Arena tempInst = InitArena(Megabyte(128));
+  Arena* temp = &tempInst;
+  Arena temp2Inst = InitArena(Megabyte(128));
+  Arena* temp2 = &temp2Inst;
+  
+  InitializeTemplateEngine(perm);
+  LoadTemplates(perm,temp);
+  InitializeSimpleDeclarations();
   
   globalOptions = *ParseCommandLineOptions(argc,argv,perm,temp);
 
@@ -704,6 +707,8 @@ int main(int argc,const char** argv){
     }
   }
 
+  DEBUG_BREAK();
+  
   return 0;
 }
 

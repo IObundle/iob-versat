@@ -457,7 +457,7 @@ ReprInfo GetSimplestForm(Value val,Arena* out){
   case Subtype_TEMPLATED_INSTANCE:
   case Subtype_ARRAY:
   case Subtype_POINTER:
-  case Subtype_STRUCT:{ // TODO: We should flatten structs instead of using references.
+  case Subtype_STRUCT:{
     if(addr == nullptr){
       toReturn.repr = STRING("null");
       toReturn.type = ReprInfoType_STRING;

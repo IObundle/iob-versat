@@ -601,7 +601,9 @@ Array<Module> ParseVerilogFile(String fileContent,Array<String> includeFilepaths
       if(CompareString(attribute,"source")){
         isSource = true;
       } else {
-        NOT_IMPLEMENTED("Should not give an error, TODO"); // Unknown attribute, error for now
+        // Maybe log it as a potential error ?
+        
+        //NOT_IMPLEMENTED("Should not give an error"); // Unknown attribute, error for now
       }
 
       tok->AssertNextToken("*)");
@@ -792,7 +794,6 @@ ModuleInfo ExtractModuleInfo(Module& module,Arena* out,Arena* temp){
     } else if(decl.type == PortDeclaration::INPUT){ // Config
          WireExpression* wire = configs.Push(1);
 
-         //wire->bitsize = decl.range.high - decl.range.low + 1;
          wire->bitSize = decl.range;
          wire->name = decl.name;
          wire->isStatic = decl.attributes->Exists(VERSAT_STATIC);
@@ -818,7 +819,6 @@ ModuleInfo ExtractModuleInfo(Module& module,Arena* out,Arena* temp){
   Array<ExternalMemoryInterfaceExpression> interfaces = PushArray<ExternalMemoryInterfaceExpression>(out,external->nodesUsed);
   int index = 0;
   for(Pair<ExternalMemoryID,ExternalMemoryInfo*> pair : external){
-	//printf("%.*s\n",UNPACK_SS(module.name));
     ExternalMemoryInterfaceExpression& inter = interfaces[index++];
 
     inter.interface = pair.first.interface;

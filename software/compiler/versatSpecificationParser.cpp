@@ -96,7 +96,7 @@ Opt<int> ParseNumber(Tokenizer* tok){
   return res;
 }
 
-// TODO: Make a range with a smaller start than a end give a semantic error. Let it parse correctly and error later.
+// TODO: Make a range with a smaller start than an end give a semantic error. Let it parse correctly and error later.
 Opt<Range<int>> ParseRange(Tokenizer* tok){
   Range<int> res = {};
 
