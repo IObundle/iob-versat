@@ -13,6 +13,7 @@
 
 #include "logger.hpp"
 #include "intrinsics.hpp"
+#include "utilsCore.hpp"
 
 int GetPageSize(){
   static int pageSize = 0;
@@ -188,19 +189,20 @@ String PushFile(Arena* arena,FILE* file){
   return res;
 }
 
+//TODO: Replace return with Optional. Handle errors
 String PushFile(Arena* arena,const char* filepath){
   FILE* file = fopen(filepath,"r");
-
+  DEFER_CLOSE_FILE(file);
+  
   if(!file){
     String res = {};
     printf("Failed to open file: %s\n",filepath);
+    DEBUG_BREAK();
     res.size = -1;
     return res;
   }
 
   String res = PushFile(arena,file);
-
-  fclose(file);
 
   return res;
 }

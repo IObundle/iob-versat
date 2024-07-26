@@ -2,11 +2,18 @@
 
 #include <cstdio>
 
-#include "configurations.hpp"
+#include "accelerator.hpp"
 #include "verilogParsing.hpp"
 
-struct FUInstance;
+//struct FUInstance;
+struct FUDeclaration;
+struct Edge;
 
+typedef Hashmap<FUInstance*,FUInstance*> InstanceMap;
+typedef Hashmap<Edge,Edge> EdgeMap;
+
+// NOTE: Delay type is not really needed anymore because we can figure out the delay of a unit by: wether it contains inputs and outputs, the position on the graph and if we eventually add (input and output delay) whether it contains those as well.
+//       After implementing input and output delay, retire DelayType
 enum DelayType {
   DelayType_BASE               = 0x0,
   DelayType_SINK_DELAY         = 0x1,
@@ -29,7 +36,6 @@ static String DelayTypeToString(DelayType type){
   case DelayType_COMPUTE_DELAY: {
     return STRING("DelayType_COMPUTE_DELAY");
   } break;
-  default: NOT_IMPLEMENTED("Implement as needed");
   }
 
   return {};
@@ -67,13 +73,17 @@ struct ConfigurationInfo{
   Array<int> inputDelays;
   Array<int> outputLatencies;
   
-  // Calculated offsets are an array that associate the given InstanceNode inside the fixedDelayCircuit allocated member into the corresponding index of the configuration array. For now, static units are given a value near 0x40000000 (their configuration comes from the staticUnits hashmap). Units without any config are given a value of -1.
-  CalculatedOffsets configOffsets;
-  CalculatedOffsets stateOffsets;
-  CalculatedOffsets delayOffsets;
-  Array<int>        calculatedDelays;
-  Array<int>        order;
-  Array<bool>       unitBelongs;
+  // Calculated offsets are an array that associate the given FUInstance inside the fixedDelayCircuit allocated member into the corresponding index of the configuration array. For now, static units are given a value near 0x40000000 (their configuration comes from the staticUnits hashmap). Units without any config are given a value of -1.
+  CalculatedOffsets   configOffsets;
+  CalculatedOffsets   stateOffsets;
+  CalculatedOffsets   delayOffsets;
+  Array<int>          calculatedDelays;
+  Array<int>          order;
+  AcceleratorMapping* mapping; // Maps from base type flattened to merged type baseCircuit
+  Set<PortInstance>*  mergeMultiplexers; // On merged fixedDelayCircuit. "baseCircuit"
+  Array<bool>         unitBelongs;
+  
+  Array<int>          mergeMultiplexerConfigs;
 };
 
 enum FUDeclarationType{
@@ -92,12 +102,8 @@ enum FUDeclarationType{
 struct FUDeclaration{
   String name;
 
-  //Array<int> inputDelays;
-  //Array<int> outputLatencies;
-
-  // TODO: There should exist a "default" configInfo, instead of doing what we are currently which is using the 0 as the default;
   ConfigurationInfo baseConfig;
-  Array<ConfigurationInfo> configInfo;
+  Array<ConfigurationInfo> configInfo; // Info for each merged view for all fixedDelayCircuit instances, even if they do not belong to the merged view (unitBelongs indicates such cases)
   
   Opt<int> memoryMapBits; // 0 is a valid memory map size, so optional indicates that no memory map exists
   int nIOs;
@@ -107,9 +113,12 @@ struct FUDeclaration{
   // Stores different accelerators depending on properties we want
   Accelerator* baseCircuit;
   Accelerator* fixedDelayCircuit;
+  Accelerator* flattenedBaseCircuit;
   
   const char* operation;
 
+  SubMap* flattenMapping;
+  
   int lat; // TODO: For now this is only for iterative units. Would also useful to have a standardized way of computing this from the graph and then compute it when needed. 
   
   // TODO: this is probably not needed, only used for verilog generation (which could be calculated inside the code generation functions)
@@ -139,7 +148,6 @@ namespace BasicDeclaration{
   extern FUDeclaration* timedMultiplexer;
   extern FUDeclaration* stridedMerge;
   extern FUDeclaration* pipelineRegister;
-  extern FUDeclaration* data;
 }
 
 extern Pool<FUDeclaration> globalDeclarations;
@@ -147,3 +155,4 @@ extern Pool<FUDeclaration> globalDeclarations;
 FUDeclaration* GetTypeByName(String str);
 void InitializeSimpleDeclarations();
 bool HasMultipleConfigs(FUDeclaration* decl);
+

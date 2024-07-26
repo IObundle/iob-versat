@@ -26,9 +26,9 @@ struct Result{
   Result(Value val){value = val; isError = false;};
   Result(Error err){error = err; isError = true;};
   
-  //operator bool(){return !isError;}
+  //operator bool(){return !isError;} // This was previously commented out. Do not know if this can cause any error 
 };
-#define CHECK(RESULT) if(!(RESULT).isError){return (RESULT).error;}
+#define CHECK(RESULT) if((RESULT).isError){return (RESULT).error;}
 
 // For cases where both Value and Error are the type
 template<typename T>

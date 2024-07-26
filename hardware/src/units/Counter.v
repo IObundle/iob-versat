@@ -12,8 +12,6 @@ module Counter #(
    //configurations 
    input [          31:0] start,
 
-   input [31:0] delay0,
-
    //outputs 
    (* versat_latency = 0 *) output reg [31:0] out0
 );

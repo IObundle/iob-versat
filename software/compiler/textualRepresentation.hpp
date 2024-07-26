@@ -18,14 +18,12 @@ String Repr(FUInstance* inst,GraphDotFormat format,Arena* out);
 String Repr(PortInstance* inPort,PortInstance* outPort,GraphDotFormat format,Arena* out);
 String Repr(FUDeclaration* decl,Arena* out);
 String Repr(FUDeclaration** decl,Arena* out);
-String Repr(PortInstance* port,GraphDotFormat format,Arena* memory);
-String Repr(MergeEdge* node,GraphDotFormat format,Arena* memory);
-String Repr(PortEdge* node,GraphDotFormat format,Arena* memory);
-String Repr(MappingNode* node,Arena* memory);
+String Repr(PortInstance* port,GraphDotFormat format,Arena* out);
+String Repr(MergeEdge* node,GraphDotFormat format,Arena* out);
+String Repr(Edge* node,GraphDotFormat format,Arena* out);
+String Repr(MappingNode* node,Arena* out);
+String Repr(Accelerator* accel,Arena* out);
 String Repr(StaticId* id,Arena* out);
-String Repr(StaticData* data,Arena* out);
-String Repr(PortNode* portNode,Arena* out);
-String Repr(EdgeNode* node,Arena* out);
 String Repr(Wire* wire,Arena* out);
 String Repr(InstanceInfo* info,Arena* out);
 String Repr(String* str,Arena* out);
@@ -33,9 +31,8 @@ String Repr(int* i,Arena* out);
 String Repr(long int* i,Arena* out);
 String Repr(bool* b,Arena* out);
 String Repr(TypeStructInfo* info,Arena* out);
-String Repr(InstanceNode* node,Arena* out);
+String Repr(FUInstance* node,Arena* out);
 String Repr(char** ch,Arena* out);
-String Repr(ExternalMemoryInterfaceTemplate<int>* ext, Arena* out);
 
 template<int N>
 String Repr(char (*buffer)[N],Arena* out){
@@ -163,66 +160,19 @@ void PrintAll(Hashmap<T,P>* map,Arena* temp){
 void PrintAll(FILE* file,Array<String> fields,Array<Array<String>> content,Arena* temp);
 void PrintAll(Array<String> fields,Array<Array<String>> content,Arena* temp);
 
-// TODO: Hack because no automatic printing of enums, yet
-static String Repr(NodeType* type,Arena* out){
-  switch(*type){
-  case NodeType_UNCONNECTED: return STRING("NodeType_UNCONNECTED");
-  case NodeType_SOURCE: return STRING("NodeType_SOURCE");
-  case NodeType_COMPUTE: return STRING("NodeType_COMPUTE");
-  case NodeType_SINK: return STRING("NodeType_SINK");
-  case NodeType_SOURCE_AND_SINK: return STRING("NodeType_SOURCE_AND_SINK");
-  }
-  return {};
-}
+#include "autoRepr.hpp"
 
-#include "repr.hpp" // Implements the GetFields and GetRepr functions
-
-template<typename T>
-Array<Array<String>> ReprAll(Array<T> arr,Arena* out){
-  int size = arr.size;
-  
-  Array<Array<String>> strings = PushArray<Array<String>>(out,size);
-  for(int i = 0; i < arr.size; i++){
-    strings[i] = GetRepr(&arr[i],out);
-  }
-
-  return strings;
-}
-
+#if 0
 template<typename T>
 void PrintAll(FILE* file,Array<T> arr,Arena* temp){
   BLOCK_REGION(temp);
 
   int size = arr.size;
-  Array<String> fields = GetFields((T){},temp);
+  Array<String> fields = GetFields((T*)nullptr,temp);
   Array<Array<String>> strings = ReprAll(arr,temp);
 
   PrintAll(file,fields,strings,temp);
 }
+#endif
 
-template<typename T>
-void PrintAll(Array<T> arr,Arena* temp){
-  BLOCK_REGION(temp);
-
-  int size = arr.size;
-  Array<String> fields = GetFields((T){},temp);
-  Array<Array<String>> strings = ReprAll(arr,temp);
-
-  PrintAll(fields,strings,temp);
-}
-
-static inline void PrintAll(Array<int> arr,Arena* temp){
-  BLOCK_REGION(temp);
-  int size = arr.size;
-  Array<String> values = PushArray<String>(temp,size);
-
-  int maxSize = 0;
-  for(int i = 0; i < values.size; i++){
-    values[i] = PushString(temp,"%d",arr[i]);
-    maxSize = std::max(maxSize,values[i].size);
-  }
-
-  for(int i = 0; i < values.size; i++){
-    printf("%*.*s\n",maxSize,UNPACK_SS(values[i]));
-  }
-}
+void PrintRepr(FILE* file,Value val,Arena* temp,Arena* temp2,int depth = 4);

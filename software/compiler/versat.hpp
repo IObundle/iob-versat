@@ -16,7 +16,6 @@
 struct Accelerator;
 struct FUDeclaration;
 struct IterativeUnitDeclaration;
-struct InstanceNode;
 struct FUInstance;
 
 enum VersatDebugFlags{
@@ -38,29 +37,13 @@ enum GraphDotFormat_{
   GRAPH_DOT_FORMAT_LATENCY = 0x40 // Outputs latency information for edges and port instances which know their latency information
 };
 
-// TODO: Remove memory from old versat if tests pass.
-
-struct FUInstance{
-  String name;
-
-  // This should be versat side only, but it's easier to have them here for now
-  String parameters; // TODO: Actual parameter structure
-  Accelerator* accel;
-  FUDeclaration* declaration;
-  int id;
-
-  union{
-    int literal;
-    int bufferAmount;
-    int portIndex;
-  };
-  int sharedIndex;
-  bool isStatic;
-  bool sharedEnable;
-  bool isMergeMultiplexer; // TODO: Kinda of an hack for now
+struct DelayToAdd{
+  Edge edge;
+  String bufferName;
+  String bufferParameters;
+  int bufferAmount;
 };
 
-struct CompiledTemplate;
 namespace BasicTemplates{
   extern CompiledTemplate* acceleratorTemplate;
   extern CompiledTemplate* iterativeTemplate;
@@ -72,13 +55,6 @@ namespace BasicTemplates{
   extern CompiledTemplate* internalWiresTemplate;
 }
 
-struct DelayToAdd{
-  EdgeNode edge;
-  String bufferName;
-  String bufferParameters;
-  int bufferAmount;
-};
-
 struct GraphMapping;
 
 // Temp
@@ -88,20 +64,20 @@ bool EqualPortMapping(PortInstance p1,PortInstance p2);
 bool IsUnitCombinatorial(FUInstance* inst);
 
 // Graph fixes
-Array<DelayToAdd> GenerateFixDelays(Accelerator* accel,Hashmap<EdgeNode,int>* edgeDelays,Arena* out,Arena* temp);
-void FixDelays(Accelerator* accel,Hashmap<EdgeNode,int>* edgeDelays,Arena* temp);
+Array<DelayToAdd> GenerateFixDelays(Accelerator* accel,EdgeDelay* edgeDelays,Arena* out,Arena* temp);
+void FixDelays(Accelerator* accel,Hashmap<Edge,DelayInfo>* edgeDelays,Arena* temp);
 
 // Accelerator merging
-DAGOrderNodes CalculateDAGOrder(InstanceNode* instances,Arena* arena);
+DAGOrderNodes CalculateDAGOrder(FUInstance* instances,Arena* arena);
 
 // Debug
-void AssertGraphValid(InstanceNode* nodes,Arena* arena);
+void AssertGraphValid(FUInstance* nodes,Arena* arena);
 
 // Misc
 bool CheckValidName(String name); // Check if name can be used as identifier in verilog
 bool IsTypeHierarchical(FUDeclaration* decl);
-FUInstance* GetInputInstance(InstanceNode* nodes,int inputIndex);
-FUInstance* GetOutputInstance(InstanceNode* nodes);
+FUInstance* GetInputInstance(FUInstance* nodes,int inputIndex);
+FUInstance* GetOutputInstance(FUInstance* nodes);
 
 // Temp
 struct ModuleInfo;
@@ -113,8 +89,6 @@ void ParseVersatSpecification(String content,Arena* temp,Arena* temp2);
 void ParseVersatSpecification(const char* filepath,Arena* temp,Arena* temp2);
 
 // Accelerator functions
-Accelerator* CreateAccelerator(String name);
-InstanceNode* CreateFUInstanceNode(Accelerator* accel,FUDeclaration* type,String name);
 FUInstance* CreateFUInstance(Accelerator* accel,FUDeclaration* type,String entityName);
 Accelerator* Flatten(Accelerator* accel,int times,Arena* temp);
 

@@ -1,4 +1,5 @@
 #include "utils.hpp"
+#include "utilsCore.hpp"
 
 #include <unistd.h>
 #include <limits.h>
@@ -135,10 +136,11 @@ FILE* OpenFileAndCreateDirectories(const char* path,const char* format){
 
   FILE* file = fopen(buffer,format);
   if(file == nullptr){
-    printf("Failed to open file: %s\n",path);
+    printf("Failed to open file (%d): %s\n",errno,path);
+    DEBUG_BREAK();
     exit(-1);
   }
-
+  
   return file;
 }
 
@@ -146,7 +148,7 @@ void CreateDirectories(const char* path){
   char buffer[PATH_MAX];
   memset(buffer,0,PATH_MAX);
 
-  for(int i = 0; path[i]; i++){
+ for(int i = 0; path[i]; i++){
     buffer[i] = path[i];
 
     if(path[i] == '/'){
@@ -158,6 +160,14 @@ void CreateDirectories(const char* path){
         closedir(dir);
       }
     }
+  }
+
+  DIR* dir = opendir(buffer);
+  if(!dir && errno == ENOENT){
+    MakeDirectory(buffer);
+  }
+  if(dir){
+    closedir(dir);
   }
 }
 
@@ -235,7 +245,6 @@ void PrintTime(Time time,const char* id){
   printf(" %s ",hexVal);
 
   printf("\n");
-
 }
 
 void TimeIt::Output(){

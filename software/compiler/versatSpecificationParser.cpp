@@ -96,7 +96,7 @@ Opt<int> ParseNumber(Tokenizer* tok){
   return res;
 }
 
-// TODO: Make a range with a smaller start than a end give a semantic error. Let it parse correctly and error later.
+// TODO: Make a range with a smaller start than an end give a semantic error. Let it parse correctly and error later.
 Opt<Range<int>> ParseRange(Tokenizer* tok){
   Range<int> res = {};
 
@@ -216,7 +216,7 @@ Opt<VarGroup> ParseVarGroup(Tokenizer* tok,Arena* out){
   }
 }
 
-SpecExpression* ParseAtomS(Tokenizer* tok,Arena* out){
+SpecExpression* ParseAtom(Tokenizer* tok,Arena* out){
   Token peek = tok->PeekToken();
 
   bool negate = false;
@@ -274,7 +274,7 @@ SpecExpression* ParseTerm(Tokenizer* tok,Arena* out){
     expr = ParseSpecExpression(tok,out);
     tok->AssertNextToken(")");
   } else {
-    expr = ParseAtomS(tok,out);
+    expr = ParseAtom(tok,out);
   }
 
   return expr;
@@ -504,9 +504,6 @@ PortExpression InstantiateSpecExpression(SpecExpression* root,Accelerator* circu
     res.inst = inst;
     res.extra.port.end  = res.extra.port.start  = 0;
     res.extra.delay.end = res.extra.delay.start = 0;
-  } break;
-  default: {
-    Assert(false);
   } break;
   }
 
@@ -828,7 +825,7 @@ FUDeclaration* ParseIterative(Tokenizer* tok,Arena* temp,Arena* temp2){
   String moduleName = tok->NextToken();
   String name = PushString(perm,moduleName);
 
-  Accelerator* iterative = CreateAccelerator(name);
+  Accelerator* iterative = CreateAccelerator(name,AcceleratorPurpose_MODULE);
 
   tok->AssertNextToken("(");
   // Arguments
@@ -1223,7 +1220,6 @@ Var Next(GroupIterator& iter){
       res.index.start = indexBase + iter.varIndex; 
       res.index.end = indexBase + iter.varIndex; 
     } break;
-    default: NOT_IMPLEMENTED("IMPLEMENT AS NEEDED");
     }
 
     iter.varIndex += 1;
@@ -1368,10 +1364,10 @@ static bool InstantiateTransform(Tokenizer* tok,TransformDef def,Arena* temp){
   Array<int> transform = PushArray<int>(perm,transformation->nodesUsed);
   int inputs = 0;
   int outputs = 0;
-  for(Pair<int,int> p : transformation){
-    transform[p.first] = p.second;
+  for(Pair<int,int*> p : transformation){
+    transform[p.first] = *p.second;
     inputs = std::max(inputs,p.first);
-    outputs = std::max(outputs,p.second);
+    outputs = std::max(outputs,*p.second);
   }
   
   String storedString = PushString(perm,def.name);
@@ -1387,7 +1383,7 @@ static bool InstantiateTransform(Tokenizer* tok,TransformDef def,Arena* temp){
 
 FUDeclaration* InstantiateModule(Tokenizer* tok,ModuleDef def,Arena* temp,Arena* temp2){
   Arena* perm = globalPermanent;
-  Accelerator* circuit = CreateAccelerator(def.name);
+  Accelerator* circuit = CreateAccelerator(def.name,AcceleratorPurpose_MODULE);
 
   InstanceTable* table = PushHashmap<String,FUInstance*>(temp,1000);
   InstanceName* names = PushSet<String>(temp,1000);
@@ -1627,8 +1623,9 @@ void ParseVersatSpecification(String content,Arena* temp,Arena* temp2){
   while(!tok->Done()){
     Token peek = tok->PeekToken();
 
-    
-    if(CompareString(peek,"debug")){
+    if(CompareString(peek,"stop")){
+      break;
+    } else if(CompareString(peek,"debug")){
       tok->AdvancePeek(peek);
       tok->AssertNextToken(";");
       debugFlag = true;

@@ -34,7 +34,7 @@
    )
    ext_2p_@{i} 
    (
-     // Writting port
+     // Writing port
      .w_en_i(VERSAT0_ext_2p_write_@{i}_o),
      .w_addr_i(VERSAT0_ext_2p_addr_out_@{i}_o),
      .w_data_i(VERSAT0_ext_2p_data_out_@{i}_o),
@@ -46,6 +46,5 @@
 
      .clk_i(clk_i)
    );
-
 #{end}
 #{end}

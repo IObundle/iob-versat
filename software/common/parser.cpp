@@ -1069,7 +1069,6 @@ static void PrintExpression(Expression* exp,int level){
   case Expression::MEMBER_ACCESS:{
     printf("MEMBER_ACCESS\n");
   }break;
-  default: NOT_IMPLEMENTED("Implement as needed");
   }
 
   if(exp->op){

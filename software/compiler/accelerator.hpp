@@ -4,127 +4,160 @@
 
 #include "utils.hpp"
 #include "memory.hpp"
-#include "declaration.hpp"
+//#include "configurations.hpp"
+#include "verilogParsing.hpp"
 
 struct FUInstance;
 struct FUDeclaration;
+struct Accelerator;
 struct Edge;
-struct PortEdge;
 
 typedef Hashmap<FUInstance*,FUInstance*> InstanceMap;
-typedef Hashmap<PortEdge,PortEdge> PortEdgeMap;
-typedef Hashmap<Edge*,Edge*> EdgeMap;
-typedef Hashmap<InstanceNode*,InstanceNode*> InstanceNodeMap;
+typedef Hashmap<Edge,Edge> EdgeMap;
+
+#define PushInstanceMap(...) PushHashmap<FUInstance*,FUInstance*>(__VA_ARGS__)
+#define PushEdgeMap(...) PushHashmap<Edge,Edge>(__VA_ARGS__)
 
 struct PortInstance{
-   FUInstance* inst;
-   int port;
+  FUInstance* inst;
+  int port;
 };
 
 inline bool operator==(const PortInstance& p1,const PortInstance& p2){
-   bool res = (p1.inst == p2.inst && p1.port == p2.port);
-   return res;
+  bool res = (p1.inst == p2.inst && p1.port == p2.port);
+  return res;
 }
 
 inline bool operator!=(const PortInstance& p1,const PortInstance& p2){
-   bool res = !(p1 == p2);
-   return res;
+  bool res = !(p1 == p2);
+  return res;
 }
+
+template<> class std::hash<FUInstance*>{
+public:
+   std::size_t operator()(FUInstance* t) const noexcept{
+     int offset = sizeof(void*) == 8 ? 3 : 2;
+     std::size_t res = ((std::size_t) t) >> offset;
+     return res;
+   }
+};
 
 template<> class std::hash<PortInstance>{
-   public:
-   std::size_t operator()(PortInstance const& s) const noexcept{
-      std::size_t res = std::hash<FUInstance*>()(s.inst);
-      res += s.port;
+public:
+  std::size_t operator()(PortInstance const& s) const noexcept{
+    std::size_t res = std::hash<FUInstance*>()(s.inst);
+    res += s.port;
 
-      return res;
-   }
-};
-
-struct PortEdge{
-   PortInstance units[2];
-};
-
-inline bool operator==(const PortEdge& e1,const PortEdge& e2){
-   bool res = (e1.units[0] == e2.units[0] && e1.units[1] == e2.units[1]);
-   return res;
-}
-
-inline bool operator!=(const PortEdge& e1,const PortEdge& e2){
-   bool res = !(e1 == e2);
-   return res;
-}
-
-template<> class std::hash<PortEdge>{
-   public:
-   std::size_t operator()(PortEdge const& s) const noexcept{
-      std::size_t res = std::hash<PortInstance>()(s.units[0]);
-      res += std::hash<PortInstance>()(s.units[1]);
-      return res;
-   }
+    return res;
+  }
 };
 
 struct Edge{ // A edge in a graph
-   union{
-      struct{
-         PortInstance out;
-         PortInstance in;
-      };
-      PortEdge edge;
-      PortInstance units[2];
-   };
+  union{
+    struct{
+      PortInstance out;
+      PortInstance in;
+    };
+    PortInstance units[2];
+  };
 
-   int delay;
-   Edge* next;
+  int delay;
+  Edge* next;
 };
 
-struct FUInstance;
-struct InstanceNode;
+bool EdgeEqualNoDelay(const Edge& e0,const Edge& e1);
 
-struct PortNode{
-   InstanceNode* node;
-   int port;
+inline bool operator==(const Edge& e0,const Edge& e1){
+  return (EdgeEqualNoDelay(e0,e1) && e0.delay == e1.delay);
+}
+
+typedef Array<Edge> Path;
+typedef Hashmap<Edge,Path> PathMap;
+
+struct GenericGraphMapping{
+  InstanceMap* nodeMap;
+  PathMap* edgeMap;
 };
 
-struct EdgeNode{
-   PortNode node0;
-   PortNode node1;
+struct EdgeDelayInfo{
+  int* value;
+  bool isAny;
+};
+
+struct DelayInfo{
+  int value;
+  bool isAny;
 };
 
 struct ConnectionNode{
-   PortNode instConnectedTo;
-   int port;
-   int edgeDelay;
-   int* delay; // Maybe not the best approach to calculate delay. TODO: check later
-   ConnectionNode* next;
+  PortInstance instConnectedTo;
+  int port;
+  int edgeDelay;
+  EdgeDelayInfo delay; // Maybe not the best approach to calculate delay. TODO: check later
+  ConnectionNode* next;
 };
 
-struct InstanceNode{
-   FUInstance* inst;
-   InstanceNode* next;
-
-   // Calculated and updated every time a connection is added or removed
-   ConnectionNode* allInputs;
-   ConnectionNode* allOutputs;
-   Array<PortNode> inputs;
-   Array<bool> outputs;
-   //int outputs;
-   bool multipleSamePortInputs;
-   NodeType type;
+enum NodeType{
+  NodeType_UNCONNECTED,
+  NodeType_SOURCE,
+  NodeType_COMPUTE,
+  NodeType_SINK,
+  NodeType_SOURCE_AND_SINK
 };
 
+struct FUInstance{
+  String name;
+
+  // This should be versat side only, but it's easier to have them here for now
+  String parameters; // TODO: Actual parameter structure
+  Accelerator* accel;
+  FUDeclaration* declaration;
+  int id;
+
+  union{
+    int literal;
+    int bufferAmount;
+    int portIndex;
+  };
+  int sharedIndex;
+  bool isStatic;
+  bool sharedEnable;
+  bool isMergeMultiplexer; // TODO: Kinda of an hack for now
+  int mergeMultiplexerId;
+  
+  FUInstance* next;
+
+  // Calculated and updated every time a connection is added or removed
+  ConnectionNode* allInputs;
+  ConnectionNode* allOutputs;
+  Array<PortInstance> inputs;
+  Array<bool> outputs;
+
+  //int outputs;
+  bool multipleSamePortInputs;
+  NodeType type;
+};
+
+enum AcceleratorPurpose{
+  AcceleratorPurpose_TEMP,
+  AcceleratorPurpose_BASE,
+  AcceleratorPurpose_FLATTEN,
+  AcceleratorPurpose_MODULE,
+  AcceleratorPurpose_RECON,
+  AcceleratorPurpose_MERGE
+};
+
+// TODO: Memory leaks can be fixed by having a global InstanceNode and FUInstance Pool and a global dynamic arena for everything else.
 struct Accelerator{ // Graph + data storage
-  Edge* edges; // TODO: Should be removed, edge info is all contained inside the instance nodes and desync leads to bugs since some code still uses this.
-
-  InstanceNode* allocated;
-  InstanceNode* lastAllocated;
-  Pool<FUInstance> instances;
-
+  FUInstance* allocated;
+  FUInstance* lastAllocated;
+  
   DynamicArena* accelMemory; // TODO: We could remove all this because we can now build all the accelerators in place. (Add an API that functions like a Accelerator builder and at the end we lock everything into an immutable graph).
 
-  std::unordered_map<StaticId,StaticData> staticUnits;
-
+   // Mainly for debugging
   String name; // For debugging purposes it's useful to give accelerators a name
+  int id;
+  AcceleratorPurpose purpose;
 };
 
 struct MemoryAddressMask{
@@ -174,42 +207,87 @@ struct VersatComputedValues{
   bool signalLoop;
 };
 
-enum OrderType{
-  OrderType_SINK,
-};
-
 struct DAGOrderNodes{
-  Array<InstanceNode*> sinks;
-  Array<InstanceNode*> sources;
-  Array<InstanceNode*> computeUnits;
-  Array<InstanceNode*> instances;
+  Array<FUInstance*> sinks;
+  Array<FUInstance*> sources;
+  Array<FUInstance*> computeUnits;
+  Array<FUInstance*> instances;
   Array<int>           order;
   int size;
   int maxOrder;
 };
 
-struct CalculateDelayResult{
-  Hashmap<EdgeNode,int>* edgesDelay;
-  Hashmap<PortNode,int>* portDelay;
-  Hashmap<InstanceNode*,int>* nodeDelay;
+struct AcceleratorMapping{
+  int firstId;
+  int secondId;
+
+  TrieMap<PortInstance,PortInstance>* inputMap;
+  TrieMap<PortInstance,PortInstance>* outputMap;
 };
 
-Array<int> ExtractInputDelays(Accelerator* accel,CalculateDelayResult delays,int mimimumAmount,Arena* out,Arena* temp);
-Array<int> ExtractOutputLatencies(Accelerator* accel,CalculateDelayResult delays,Arena* out,Arena* temp);
+struct EdgeIterator{
+  FUInstance* currentNode;
+  ConnectionNode* currentPort;
+  
+  bool HasNext();
+  Edge Next();
+};
 
-// TODO: The concept of flat instance no longer exists. Remove them and check if any code dependend on the fact that copy flat did not copy static or shared 
-Accelerator* CopyAccelerator(Accelerator* accel,InstanceMap* map,Arena* out);
-Accelerator* CopyFlatAccelerator(Accelerator* accel,InstanceMap* map);
-FUInstance* CopyInstance(Accelerator* newAccel,FUInstance* oldInstance,String newName,InstanceNode* previous);
-FUInstance* CopyInstance(Accelerator* newAccel,FUInstance* oldInstance,String newName);
-InstanceNode* CopyInstance(Accelerator* newAccel,InstanceNode* oldInstance,String newName);
-InstanceNode* CreateFlatFUInstance(Accelerator* accel,FUDeclaration* type,String name);
+// Strange forward declare
+template<typename T> struct WireTemplate;
+typedef WireTemplate<int> Wire;
+
+struct StaticId{
+   FUDeclaration* parent;
+   String name;
+};
+
+template<> class std::hash<StaticId>{
+   public:
+   std::size_t operator()(StaticId const& s) const noexcept{
+      std::size_t res = std::hash<String>()(s.name) + (std::size_t) s.parent;
+      return (std::size_t) res;
+   }
+};
+
+struct StaticData{
+   Array<Wire> configs;
+};
+
+struct StaticInfo{
+   StaticId id;
+   StaticData data;
+};
+
+struct CalculatedOffsets{
+   Array<int> offsets;
+   int max;
+};
+
+enum MemType{
+   CONFIG,
+   STATE,
+   DELAY,
+   STATIC
+};
+
+Accelerator* GetAcceleratorById(int id);
+
+Accelerator* CreateAccelerator(String name,AcceleratorPurpose purpose);
+
+Pair<Accelerator*,AcceleratorMapping*> CopyAcceleratorWithMapping(Accelerator* accel,AcceleratorPurpose purpose,bool preserveIds,Arena* out);
+Accelerator* CopyAccelerator(Accelerator* accel,AcceleratorPurpose purpose,bool preserveIds,InstanceMap* map); // Maps instances from accel to the copy
+FUInstance*  CopyInstance(Accelerator* newAccel,FUInstance* oldInstance,bool preserveIds,String newName);
+
+bool NameExists(Accelerator* accel,String name);
+
+int GetFreeShareIndex(Accelerator* accel); // TODO: Slow 
 
 Array<FUDeclaration*> AllNonSpecialSubTypes(Accelerator* accel,Arena* out,Arena* temp);
 Array<FUDeclaration*> ConfigSubTypes(Accelerator* accel,Arena* out,Arena* temp);
 Array<FUDeclaration*> MemSubTypes(Accelerator* accel,Arena* out,Arena* temp);
 
-int CalculateNumberOutptus(Accelerator* accel);
+Hashmap<StaticId,StaticData>* CollectStaticUnits(Accelerator* accel,FUDeclaration* topDecl,Arena* out);
 
 int ExternalMemoryByteSize(ExternalMemoryInterface* inter);
 int ExternalMemoryByteSize(Array<ExternalMemoryInterface> interfaces); // Size of a simple memory mapping.
@@ -219,31 +297,87 @@ int ExternalMemoryByteSize(Array<ExternalMemoryInterface> interfaces); // Size o
 //       
 VersatComputedValues ComputeVersatValues(Accelerator* accel,bool useDMA);
 
-CalculateDelayResult CalculateDelay(Accelerator* accel,DAGOrderNodes order,Arena* out);
-CalculateDelayResult CalculateDelay(Accelerator* accel,DAGOrderNodes order,Array<Partition> partitions,Arena* out);
+Array<Edge> GetAllEdges(Accelerator* accel,Arena* out);
+EdgeIterator IterateEdges(Accelerator* accel);
 
 // Unit connection
-Edge* FindEdge(FUInstance* out,int outIndex,FUInstance* in,int inIndex,int delay = 0);
-Edge* ConnectUnitsGetEdge(FUInstance* out,int outIndex,FUInstance* in,int inIndex,int delay = 0);
-Edge* ConnectUnitsGetEdge(FUInstance* out,int outIndex,FUInstance* in,int inIndex,int delay,Edge* previous);
-Edge* ConnectUnitsIfNotConnectedGetEdge(FUInstance* out,int outIndex,FUInstance* in,int inIndex,int delay = 0);
+Opt<Edge> FindEdge(PortInstance out,PortInstance in);
+Opt<Edge> FindEdge(FUInstance* out,int outIndex,FUInstance* in,int inIndex,int delay);
+void ConnectUnitsGetEdge(FUInstance* out,int outIndex,FUInstance* in,int inIndex,int delay = 0);
+void ConnectUnitsGetEdge(FUInstance* out,int outIndex,FUInstance* in,int inIndex,int delay,Edge* previous);
+void ConnectUnitsIfNotConnected(FUInstance* out,int outIndex,FUInstance* in,int inIndex,int delay = 0);
 void  ConnectUnits(FUInstance* out,int outIndex,FUInstance* in,int inIndex,int delay = 0);
-Edge* ConnectUnits(PortInstance out,PortInstance in,int delay = 0);
+void ConnectUnits(PortInstance out,PortInstance in,int delay = 0);
 
-InstanceNode* GetInstanceNode(Accelerator* accel,FUInstance* inst);
-void CalculateNodeType(InstanceNode* node);
-void FixInputs(InstanceNode* node);
+void CalculateNodeType(FUInstance* node);
+void FixInputs(FUInstance* node);
 
-Array<int> GetNumberOfInputConnections(InstanceNode* node,Arena* out);
-Array<Array<PortNode>> GetAllInputs(InstanceNode* node,Arena* out);
+Array<int> GetNumberOfInputConnections(FUInstance* node,Arena* out);
+Array<Array<PortInstance>> GetAllInputs(FUInstance* node,Arena* out);
 
-void RemoveConnection(Accelerator* accel,InstanceNode* out,int outPort,InstanceNode* in,int inPort);
-InstanceNode* RemoveUnit(InstanceNode* nodes,InstanceNode* unit);
+void RemoveConnection(Accelerator* accel,FUInstance* out,int outPort,FUInstance* in,int inPort);
+FUInstance* RemoveUnit(FUInstance* nodes,FUInstance* unit);
 
 // Fixes edges such that unit before connected to after, are reconnected to new unit
-void InsertUnit(Accelerator* accel,PortNode output,PortNode input,PortNode newUnit);
-void InsertUnit(Accelerator* accel, PortInstance before, PortInstance after, PortInstance newUnit);
+void InsertUnit(Accelerator* accel,PortInstance before, PortInstance after, PortInstance newUnit);
 
 bool IsCombinatorial(Accelerator* accel);
 
-Edge* ConnectUnitsGetEdge(PortNode out,PortNode in,int delay);
+void ConnectUnits(PortInstance out,PortInstance in,int delay);
+
+void PrintAllInstances(Accelerator* accel);
+
+void MappingCheck(AcceleratorMapping* map);
+void MappingCheck(AcceleratorMapping* map,Accelerator* first,Accelerator* second);
+AcceleratorMapping* MappingSimple(Accelerator* first,Accelerator* second,Arena* out);
+AcceleratorMapping* MappingSimple(Accelerator* first,Accelerator* second,int size,Arena* out);
+AcceleratorMapping* MappingInvert(AcceleratorMapping* toReverse,Arena* out);
+AcceleratorMapping* MappingCombine(AcceleratorMapping* first,AcceleratorMapping* second,Arena* out);
+PortInstance MappingMapInput(AcceleratorMapping* mapping,PortInstance toMap);
+PortInstance MappingMapOutput(AcceleratorMapping* mapping,PortInstance toMap);
+void MappingInsertEqualNode(AcceleratorMapping* mapping,FUInstance* first,FUInstance* second);
+void MappingInsertInput(AcceleratorMapping* mapping,PortInstance first,PortInstance second);
+void MappingInsertOutput(AcceleratorMapping* mapping,PortInstance first,PortInstance second);
+void MappingPrintInfo(AcceleratorMapping* map);
+void MappingPrintAll(AcceleratorMapping* map);
+
+FUInstance* MappingMapNode(AcceleratorMapping* mapping,FUInstance* inst);
+
+Set<PortInstance>* MappingMapInput(AcceleratorMapping* map,Set<PortInstance>* set,Arena* out);
+Set<PortInstance>* MappingMapOutput(AcceleratorMapping* map,Set<PortInstance>* set,Arena* out);
+
+struct SubMappingInfo{
+  FUDeclaration* subDeclaration;
+  String higherName;
+  bool isInput;
+  int subPort;
+};
+
+typedef TrieMap<SubMappingInfo,PortInstance> SubMap;
+
+inline bool operator==(const SubMappingInfo& p1,const SubMappingInfo& p2){
+  bool res = (p1.subDeclaration == p2.subDeclaration &&
+              CompareString(p1.higherName,p2.higherName) &&
+              p1.subPort == p2.subPort &&
+              p1.isInput == p2.isInput);
+  return res;
+}
+
+template<> class std::hash<SubMappingInfo>{
+public:
+   std::size_t operator()(const SubMappingInfo& t) const noexcept{
+     std::size_t res = std::hash<FUDeclaration*>()(t.subDeclaration) +
+                       std::hash<String>()(t.higherName) +
+                       std::hash<bool>()(t.isInput) +
+                       std::hash<int>()(t.subPort);
+
+     return res;
+   }
+};
+
+Pair<Accelerator*,SubMap*> Flatten2(Accelerator* accel,int times,Arena* temp);
+
+void PrintSubMappingInfo(SubMap* info);
+
+
+

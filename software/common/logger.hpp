@@ -11,7 +11,6 @@ enum LogModule{
    TOP_SYS     = 0x2,
    ACCELERATOR = 0x4,
    PARSER      = 0x8,
-   DEBUG_SYS   = 0x10,
    TYPE        = 0x20,
    TEMPLATE    = 0x40,
    UTILS       = 0x80

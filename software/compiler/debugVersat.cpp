@@ -18,8 +18,8 @@ static void OutputGraphDotFile_(Accelerator* accel,bool collapseSameEdges,Set<FU
   BLOCK_REGION(temp);
 
   fprintf(outputFile,"digraph accel {\n\tnode [fontcolor=white,style=filled,color=\"160,60,176\"];\n");
-  FOREACH_LIST(InstanceNode*,ptr,accel->allocated){
-    FUInstance* inst = ptr->inst;
+  FOREACH_LIST(FUInstance*,ptr,accel->allocated){
+    FUInstance* inst = ptr;
     String id = UniqueRepr(inst,temp);
     String name = Repr(inst,globalDebug.dotFormat,temp);
 
@@ -42,20 +42,20 @@ static void OutputGraphDotFile_(Accelerator* accel,bool collapseSameEdges,Set<FU
     }
   }
 
-  int size = Size(accel->edges);
-  Hashmap<Pair<InstanceNode*,InstanceNode*>,int>* seen = PushHashmap<Pair<InstanceNode*,InstanceNode*>,int>(temp,size);
+  int size = 9999; // Size(accel->edges);
+  Hashmap<Pair<FUInstance*,FUInstance*>,int>* seen = PushHashmap<Pair<FUInstance*,FUInstance*>,int>(temp,size);
 
   // TODO: Consider adding a true same edge counter, that collects edges with equal delay and then represents them on the graph as a pair, using [portStart-portEnd]
-  FOREACH_LIST(InstanceNode*,ptr,accel->allocated){
-    FUInstance* out = ptr->inst;
+  FOREACH_LIST(FUInstance*,ptr,accel->allocated){
+    FUInstance* out = ptr;
 
     FOREACH_LIST(ConnectionNode*,con,ptr->allOutputs){
-      FUInstance* in = con->instConnectedTo.node->inst;
+      FUInstance* in = con->instConnectedTo.inst;
 
       if(collapseSameEdges){
-        Pair<InstanceNode*,InstanceNode*> nodeEdge = {};
+        Pair<FUInstance*,FUInstance*> nodeEdge = {};
         nodeEdge.first = ptr;
-        nodeEdge.second = con->instConnectedTo.node;
+        nodeEdge.second = con->instConnectedTo.inst;
 
         GetOrAllocateResult<int> res = seen->GetOrAllocate(nodeEdge);
         if(res.alreadyExisted){
@@ -71,7 +71,7 @@ static void OutputGraphDotFile_(Accelerator* accel,bool collapseSameEdges,Set<FU
       PortInstance start = {out,outPort};
       PortInstance end = {in,inPort};
       String label = Repr(&start,&end,globalDebug.dotFormat,temp);
-      int calculatedDelay = con->delay ? *con->delay : 0;
+      int calculatedDelay = con->delay.value ? *con->delay.value : 0;
 
       bool highlighStart = (highlighInstance ? highlighInstance->Exists(start.inst) : false);
       bool highlighEnd = (highlighInstance ? highlighInstance->Exists(end.inst) : false);
@@ -97,8 +97,8 @@ void OutputGraphDotFile(Accelerator* accel,bool collapseSameEdges,String filenam
   }
 
   FILE* file = OpenFileAndCreateDirectories(StaticFormat("%.*s",UNPACK_SS(filename)),"w");
+  DEFER_CLOSE_FILE(file);
   OutputGraphDotFile_(accel,collapseSameEdges,nullptr,file,temp);
-  fclose(file);
 }
 
 void OutputGraphDotFile(Accelerator* accel,bool collapseSameEdges,FUInstance* highlighInstance,String filename,Arena* temp){
@@ -111,8 +111,8 @@ void OutputGraphDotFile(Accelerator* accel,bool collapseSameEdges,FUInstance* hi
   highlight->Insert(highlighInstance);
 
   FILE* file = OpenFileAndCreateDirectories(StaticFormat("%.*s",UNPACK_SS(filename)),"w");
+  DEFER_CLOSE_FILE(file);
   OutputGraphDotFile_(accel,collapseSameEdges,highlight,file,temp);
-  fclose(file);
 }
 
 void OutputGraphDotFile(Accelerator* accel,bool collapseSameEdges,Set<FUInstance*>* highlight,String filename,Arena* temp){
@@ -122,8 +122,21 @@ void OutputGraphDotFile(Accelerator* accel,bool collapseSameEdges,Set<FUInstance
 
   BLOCK_REGION(temp);
   FILE* file = OpenFileAndCreateDirectories(StaticFormat("%.*s",UNPACK_SS(filename)),"w");
+  DEFER_CLOSE_FILE(file);
   OutputGraphDotFile_(accel,collapseSameEdges,highlight,file,temp);
-  fclose(file);
+}
+
+void OutputContentToFile(String filepath,String content){
+  FILE* file = fopen(StaticFormat("%.*s",UNPACK_SS(filepath)),"w");
+  DEFER_CLOSE_FILE(file);
+  
+  if(!file){
+    printf("[OutputContentToFile] Error opening file: %.*s\n",UNPACK_SS(filepath));
+    DEBUG_BREAK();
+  }
+
+  int res = fwrite(content.data,sizeof(char),content.size,file);
+  Assert(res == content.size);
 }
 
 String PushMemoryHex(Arena* arena,void* memory,int size){
@@ -165,13 +178,13 @@ void OutputGraphDotFile(Accelerator* accel,bool collapseSameEdges,FUInstance* hi
   }
 
   FILE* outputFile = OpenFileAndCreateDirectories(StaticFormat("%.*s",UNPACK_SS(filename)),"w");
-  defer{ if(outputFile) fclose(outputFile);};
+  DEFER_CLOSE_FILE(outputFile);
   
   BLOCK_REGION(temp);
 
   fprintf(outputFile,"digraph accel {\n\tnode [fontcolor=white,style=filled,color=\"160,60,176\"];\n");
-  FOREACH_LIST(InstanceNode*,ptr,accel->allocated){
-    FUInstance* inst = ptr->inst;
+  FOREACH_LIST(FUInstance*,ptr,accel->allocated){
+    FUInstance* inst = ptr;
     String id = UniqueRepr(inst,temp);
     String name = Repr(inst,globalDebug.dotFormat,temp);
 
@@ -194,61 +207,83 @@ void OutputGraphDotFile(Accelerator* accel,bool collapseSameEdges,FUInstance* hi
     }
   }
 
-  int size = Size(accel->edges);
-  Hashmap<Pair<InstanceNode*,InstanceNode*>,int>* seen = PushHashmap<Pair<InstanceNode*,InstanceNode*>,int>(temp,size);
-
+  int size = 9999; // Size(accel->edges);
+  Hashmap<Pair<FUInstance*,FUInstance*>,int>* seen = PushHashmap<Pair<FUInstance*,FUInstance*>,int>(temp,size);
   // TODO: Consider adding a true same edge counter, that collects edges with equal delay and then represents them on the graph as a pair, using [portStart-portEnd]
-  FOREACH_LIST(InstanceNode*,ptr,accel->allocated){
-    FUInstance* out = ptr->inst;
+  // TODO: Change to use Array<Edge> 
 
-    FOREACH_LIST(ConnectionNode*,con,ptr->allOutputs){
-      FUInstance* in = con->instConnectedTo.node->inst;
+  EdgeIterator iter = IterateEdges(accel);
+  while(iter.HasNext()){
+    Edge edge = iter.Next();
+    FUInstance* out = edge.out.inst;
 
-      if(collapseSameEdges){
-        Pair<InstanceNode*,InstanceNode*> nodeEdge = {};
-        nodeEdge.first = ptr;
-        nodeEdge.second = con->instConnectedTo.node;
+    FUInstance* in = edge.in.inst;
+    int inPort = edge.in.port;
+    int outPort = edge.out.port;
 
-        GetOrAllocateResult<int> res = seen->GetOrAllocate(nodeEdge);
-        if(res.alreadyExisted){
-          continue;
-        }
+    if(collapseSameEdges){
+      Pair<FUInstance*,FUInstance*> nodeEdge = {};
+      nodeEdge.first = out;
+      nodeEdge.second = in;
+
+      GetOrAllocateResult<int> res = seen->GetOrAllocate(nodeEdge);
+      if(res.alreadyExisted){
+        continue;
       }
+    }
 
-      int inPort = con->instConnectedTo.port;
-      int outPort = con->port;
+    String first = UniqueRepr(out,temp);
+    String second = UniqueRepr(in,temp);
+    PortInstance start = {out,outPort};
+    PortInstance end = {in,inPort};
+    String label = Repr(&start,&end,globalDebug.dotFormat,temp);
 
-      String first = UniqueRepr(out,temp);
-      String second = UniqueRepr(in,temp);
-      PortInstance start = {out,outPort};
-      PortInstance end = {in,inPort};
-      String label = Repr(&start,&end,globalDebug.dotFormat,temp);
+    int calculatedDelay = delays.edgesDelay->GetOrFail(edge).value;
 
-      PortNode nodeStart = {ptr,con->port};
-      PortNode nodeEnd = con->instConnectedTo;
+    bool highlighStart = (highlighInstance ? start.inst == highlighInstance : false);
+    bool highlighEnd = (highlighInstance ? end.inst == highlighInstance : false);
 
-      EdgeNode edge = {nodeStart,nodeEnd};
-      int calculatedDelay = delays.edgesDelay->GetOrFail(edge);
+    bool highlight = highlighStart && highlighEnd;
 
-      bool highlighStart = (highlighInstance ? start.inst == highlighInstance : false);
-      bool highlighEnd = (highlighInstance ? end.inst == highlighInstance : false);
+    fprintf(outputFile,"\t\"%.*s\" -> ",UNPACK_SS(first));
+    fprintf(outputFile,"\"%.*s\"",UNPACK_SS(second));
 
-      bool highlight = highlighStart && highlighEnd;
-
-      fprintf(outputFile,"\t\"%.*s\" -> ",UNPACK_SS(first));
-      fprintf(outputFile,"\"%.*s\"",UNPACK_SS(second));
-
-      if(highlight){
-        fprintf(outputFile,"[color=darkred,label=\"%.*s\\n[%d:%d]\"];\n",UNPACK_SS(label),con->edgeDelay,calculatedDelay);
-      } else {
-        fprintf(outputFile,"[label=\"%.*s\\n[%d:%d]\"];\n",UNPACK_SS(label),con->edgeDelay,calculatedDelay);
-      }
+    if(highlight){
+      fprintf(outputFile,"[color=darkred,label=\"%.*s\\n[%d]\"];\n",UNPACK_SS(label),calculatedDelay);
+    } else {
+      fprintf(outputFile,"[label=\"%.*s\\n[:%d]\"];\n",UNPACK_SS(label),calculatedDelay);
     }
   }
   fprintf(outputFile,"}\n");
 }
 
-String PushDebugPath(Arena* out,String name,const char* fileName){
-  String path = PushString(out,"debug/%.*s/%s",UNPACK_SS(name),fileName);
+String PushDebugPath(Arena* out,String folderName,String fileName){
+  Assert(!Contains(fileName,"/"));
+  Assert(fileName.size != 0);
+
+  const char* fullFolderPath = nullptr;
+  if(folderName.size == 0){
+    fullFolderPath = StaticFormat("%.*s",UNPACK_SS(globalOptions.debugPath));
+  } else {
+    fullFolderPath = StaticFormat("%.*s/%.*s",UNPACK_SS(globalOptions.debugPath),UNPACK_SS(folderName));
+  }
+
+  CreateDirectories(fullFolderPath);
+  String path = PushString(out,"%s/%.*s",fullFolderPath,UNPACK_SS(fileName));
+  
+  return path;
+}
+
+String PushDebugPath(Arena* out,String folderName,String subFolder,String fileName){
+  Assert(!Contains(fileName,"/"));
+  Assert(folderName.size != 0);
+  Assert(subFolder.size != 0);
+  Assert(fileName.size != 0);
+
+  const char* fullFolderPath = StaticFormat("%.*s/%.*s/%.*s",UNPACK_SS(globalOptions.debugPath),UNPACK_SS(folderName),UNPACK_SS(subFolder));
+
+  CreateDirectories(fullFolderPath);
+  String path = PushString(out,"%s/%.*s",fullFolderPath,UNPACK_SS(fileName));
+  
   return path;
 }

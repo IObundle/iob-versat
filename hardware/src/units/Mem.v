@@ -66,7 +66,7 @@
    input [ADDR_W-1:0] startB,
    input [ADDR_W-1:0] shiftB,
    input [ADDR_W-1:0] incrB,
-   input [    32-1:0] delay1,
+   input [DELAY_W-1:0] delay1,
    input              reverseB,
    input              extB,
    input              in1_wr,
@@ -84,7 +84,7 @@
    wire [DATA_W-1:0] outA, outB;
    reg [DATA_W-1:0] outA_reg, outB_reg;
 
-   reg [31:0] testDelay0;
+   reg [DELAY_W-1:0] testDelay0;
    always @(posedge clk, posedge rst) begin
       if (rst) begin
          testDelay0 <= 0;
@@ -95,7 +95,7 @@
       end
    end
 
-   reg [31:0] testDelay1;
+   reg [DELAY_W-1:0] testDelay1;
    always @(posedge clk, posedge rst) begin
       if (rst) begin
          testDelay1 <= 0;

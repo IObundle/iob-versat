@@ -142,7 +142,8 @@ void PreprocessVerilogFile_(String fileContent,MacroMap& macros,Array<String> in
           break;
         }
       }
-
+      DEFER_CLOSE_FILE(file);
+      
       if(!file){
         printf("Couldn't find file: %.*s\n",UNPACK_SS(fileName));
         printf("Looked on the following folders:\n");
@@ -169,8 +170,6 @@ void PreprocessVerilogFile_(String fileContent,MacroMap& macros,Array<String> in
       mem[amountRead] = '\0';
 
       PreprocessVerilogFile_(STRING((const char*) mem,fileSize),macros,includeFilepaths,out,temp);
-
-      fclose(file);
     } else if(CompareString(identifier,"define")){
       tok->AdvancePeek(identifier);
       
@@ -344,19 +343,20 @@ static Value Eval(Expression* expr,ValueMap& map){
     }break;
     default:{
       NOT_IMPLEMENTED("Implemented as needed");
-    }break;
+    } break;
     }
   }break;
-
   case Expression::IDENTIFIER:{
     return map[expr->id];
   }break;
   case Expression::LITERAL:{
     return expr->val;
   }break;
-  default:{
-    NOT_POSSIBLE("Implemented as needed");
-  }break;
+  case Expression::COMMAND:
+  case Expression::ARRAY_ACCESS:
+  case Expression::MEMBER_ACCESS:
+  case Expression::UNDEFINED:
+    NOT_POSSIBLE("None of these should appear in parameters");
   }
 
   NOT_POSSIBLE("Implemented as needed");
@@ -601,7 +601,9 @@ Array<Module> ParseVerilogFile(String fileContent,Array<String> includeFilepaths
       if(CompareString(attribute,"source")){
         isSource = true;
       } else {
-        NOT_IMPLEMENTED("Should not give an error, TODO"); // Unknown attribute, error for now
+        // Maybe log it as a potential error ?
+        
+        //NOT_IMPLEMENTED("Should not give an error"); // Unknown attribute, error for now
       }
 
       tok->AssertNextToken("*)");
@@ -792,7 +794,6 @@ ModuleInfo ExtractModuleInfo(Module& module,Arena* out,Arena* temp){
     } else if(decl.type == PortDeclaration::INPUT){ // Config
          WireExpression* wire = configs.Push(1);
 
-         //wire->bitsize = decl.range.high - decl.range.low + 1;
          wire->bitSize = decl.range;
          wire->name = decl.name;
          wire->isStatic = decl.attributes->Exists(VERSAT_STATIC);
@@ -817,8 +818,7 @@ ModuleInfo ExtractModuleInfo(Module& module,Arena* out,Arena* temp){
 
   Array<ExternalMemoryInterfaceExpression> interfaces = PushArray<ExternalMemoryInterfaceExpression>(out,external->nodesUsed);
   int index = 0;
-  for(Pair<ExternalMemoryID,ExternalMemoryInfo> pair : external){
-	//printf("%.*s\n",UNPACK_SS(module.name));
+  for(Pair<ExternalMemoryID,ExternalMemoryInfo*> pair : external){
     ExternalMemoryInterfaceExpression& inter = interfaces[index++];
 
     inter.interface = pair.first.interface;
@@ -826,13 +826,12 @@ ModuleInfo ExtractModuleInfo(Module& module,Arena* out,Arena* temp){
 
 	switch(inter.type){
 	case ExternalMemoryType::TWO_P:{
-	  inter.tp = pair.second.tp;
+	  inter.tp = pair.second->tp;
 	} break;
 	case ExternalMemoryType::DP:{
-	  inter.dp[0] = pair.second.dp[0];
-	  inter.dp[1] = pair.second.dp[1];
+	  inter.dp[0] = pair.second->dp[0];
+	  inter.dp[1] = pair.second->dp[1];
 	}break;
-	default: NOT_IMPLEMENTED("Implemented as needed");
 	}
   }
   info.externalInterfaces = interfaces;
@@ -865,7 +864,7 @@ Value Eval(Expression* expr,Array<ParameterExpression> parameters){
       ret = MakeValue(Eval(expr->expressions[0],parameters).number
                       / Eval(expr->expressions[1],parameters).number);
     } break;
-    default: {
+    default:{
       printf("%s\n",expr->op);
       NOT_IMPLEMENTED("Implemented as needed");
     } break;
@@ -881,10 +880,10 @@ Value Eval(Expression* expr,Array<ParameterExpression> parameters){
       }
     }
   } break;
-  default: {
-    printf("%d\n",(int) expr->type);
-    NOT_IMPLEMENTED("Implemented as needed");
-  } break;
+  case Expression::COMMAND:; 
+  case Expression::ARRAY_ACCESS:; 
+  case Expression::MEMBER_ACCESS:; 
+  case Expression::UNDEFINED:; 
   }
 
   return ret;

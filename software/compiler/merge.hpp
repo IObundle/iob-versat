@@ -4,26 +4,28 @@
 #include "thread.hpp"
 #include <unordered_map>
 
+#include "accelerator.hpp"
+
 //#define MAX_CLIQUE_TIME 10.0f
 
 struct FUInstance;
-struct InstanceNode;
 struct Accelerator;
+struct AcceleratorMapping;
 struct FUDeclaration;
 
 struct SpecificMerge{
-   String instA;
-   String instB;
+  String instA;
+  String instB;
 };
 
 struct IndexRecord{
-   int index;
-   IndexRecord* next;
+  int index;
+  IndexRecord* next;
 };
 
 struct SpecificMergeNodes{
-   FUInstance* instA;
-   FUInstance* instB;
+  FUInstance* instA;
+  FUInstance* instB;
 };
 
 struct SpecificMergeNode{
@@ -34,110 +36,119 @@ struct SpecificMergeNode{
 };
 
 struct MergeEdge{
-   FUInstance* instances[2];
+  FUInstance* instances[2];
 };
 
 struct MappingNode{ // Mapping (edge to edge or node to node)
-   union{
-      MergeEdge nodes;
-      PortEdge edges[2];
-   };
+  union{
+    MergeEdge nodes;
+    Edge edges[2];
+  };
 
-   enum {NODE,EDGE} type;
+  enum {NODE,EDGE} type;
 };
 
-inline bool operator==(const MappingNode& node1,const MappingNode& node2){
-   bool res = (node1.edges[0] == node2.edges[0] &&
-               node1.edges[1] == node2.edges[1]);
-   return res;
+inline bool operator==(const MappingNode& node0,const MappingNode& node1){
+  if(node0.type != node1.type){
+    return false;
+  }
+
+  switch(node0.type){
+  case MappingNode::NODE:{
+    bool res = node0.nodes.instances[0] == node1.nodes.instances[0] &&
+               node0.nodes.instances[1] == node1.nodes.instances[1];
+    return res;
+  } break;
+  case MappingNode::EDGE:{
+    bool res = (node0.edges[0] == node1.edges[0] &&
+                node0.edges[1] == node1.edges[1]);
+
+    return res;
+  } break;
+  }
 }
 
-struct MappingEdge{ // Edge between mapping from edge to edge
-   MappingNode* nodes[2];
-};
-
 struct ConsolidationGraphOptions{
-   Array<SpecificMergeNodes> specifics;
-   int order;
-   int difference;
-   bool mapNodes;
-   enum {NOTHING,SAME_ORDER,EXACT_ORDER} type;
+  Array<SpecificMergeNodes> specifics;
+  int order;
+  int difference;
+  bool mapNodes;
+  enum {NOTHING,SAME_ORDER,EXACT_ORDER} type;
 };
 
 struct ConsolidationGraph{
-   Array<MappingNode> nodes;
-   Array<BitArray> edges;
+  Array<MappingNode> nodes;
+  Array<BitArray> edges;
 
-   BitArray validNodes;
+  BitArray validNodes;
 };
 
 struct ConsolidationResult{
-   ConsolidationGraph graph;
-   Pool<MappingNode> specificsAdded;
-   int upperBound;
+  ConsolidationGraph graph;
+  Pool<MappingNode> specificsAdded;
+  int upperBound;
 };
 
 struct CliqueState{
-   int max;
-   int upperBound;
-   int startI;
-   int iterations;
-   Array<int> table;
-   ConsolidationGraph clique;
-   Time start;
-   bool found;
+  int max;
+  int upperBound;
+  int startI;
+  int iterations;
+  Array<int> table;
+  ConsolidationGraph clique;
+  Time start;
+  bool found;
 };
 
 struct IsCliqueResult{
-   bool result;
-   int failedIndex;
+  bool result;
+  int failedIndex;
 };
 
 // TODO: For now everything is hashmap to help in debugging to be able to reuse previous code
 typedef Hashmap<FUInstance*,FUInstance*> InstanceMap;
-typedef Hashmap<PortEdge,PortEdge> PortEdgeMap;
-typedef Hashmap<Edge*,Edge*> EdgeMap;
-typedef Hashmap<InstanceNode*,InstanceNode*> InstanceNodeMap;
+typedef Hashmap<Edge,Edge> EdgeMap;
 
 struct MergeGraphResult{
-   Accelerator* accel1; // Should pull out the graph stuff instead of using an Accelerator for this
-   Accelerator* accel2;
+  Accelerator* accel1; // Should pull out the graph stuff instead of using an Accelerator for this
+  Accelerator* accel2;
 
-   InstanceNodeMap* map1; // Maps node from accel1 to newGraph
-   InstanceNodeMap* map2; // Maps node from accel2 to newGraph
-   Accelerator* newGraph;
+  InstanceMap* map1; // Maps node from accel1 to newGraph
+  InstanceMap* map2; // Maps node from accel2 to newGraph
+  Accelerator* newGraph;
 };
 
 struct MergeGraphResultExisting{
-   Accelerator* result;
-   Accelerator* accel2;
-   InstanceNodeMap* map2;
+  Accelerator* result;
+  Accelerator* accel2;
+
+  AcceleratorMapping* map2;
 };
 
 struct GraphMapping{
-   InstanceMap* instanceMap;
-   InstanceMap* reverseInstanceMap;
-   PortEdgeMap* edgeMap;
+  InstanceMap* instanceMap;
+  InstanceMap* reverseInstanceMap;
+  EdgeMap* edgeMap;
 };
 
 enum MergingStrategy{
-   SIMPLE_COMBINATION,
-   CONSOLIDATION_GRAPH,
-   FIRST_FIT
+  SIMPLE_COMBINATION,
+  CONSOLIDATION_GRAPH,
+  FIRST_FIT
 };
 
-void OutputConsolidationGraph(ConsolidationGraph graph,Arena* memory,bool onlyOutputValid,const char* format,...);
+void OutputConsolidationGraph(ConsolidationGraph graph,bool onlyOutputValid,String moduleName,String fileName,Arena* temp);
 
 int ValidNodes(ConsolidationGraph graph);
 
-ConsolidationResult GenerateConsolidationGraph(Arena* arena,Accelerator* accel1,Accelerator* accel2,ConsolidationGraphOptions options);
+ConsolidationResult GenerateConsolidationGraph(Accelerator* accel1,Accelerator* accel2,ConsolidationGraphOptions options,Arena* out,Arena* temp);
 MergeGraphResult MergeGraph(Accelerator* flatten1,Accelerator* flatten2,GraphMapping& graphMapping,String name);
 void AddCliqueToMapping(GraphMapping& res,ConsolidationGraph clique);
 
-void InsertMapping(GraphMapping& map,PortEdge& edge0,PortEdge& edge1);
+void InsertMapping(GraphMapping& map,Edge& edge0,Edge& edge1);
 //void Clique(CliqueState* state,ConsolidationGraph graphArg,int index,IndexRecord* record,int size,Arena* arena);
 
-bool NodeMappingConflict(PortEdge edge1,PortEdge edge2);
+bool NodeMappingConflict(Edge edge1,Edge edge2);
 bool MappingConflict(MappingNode map1,MappingNode map2);
 ConsolidationGraph Copy(ConsolidationGraph graph,Arena* arena);
 int NodeIndex(ConsolidationGraph graph,MappingNode* node);
@@ -165,3 +176,4 @@ FUDeclaration* MergeAccelerators(FUDeclaration* accel1,FUDeclaration* accel2,Str
 FUDeclaration* Merge(Array<FUDeclaration*> types,
                      String name,Array<SpecificMergeNode> specifics,
                      Arena* temp,Arena* temp2,MergingStrategy strat = MergingStrategy::CONSOLIDATION_GRAPH);
+

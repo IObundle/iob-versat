@@ -3,60 +3,7 @@
 #include <unordered_map>
 
 #include "memory.hpp"
-
-struct FUInstance;
-struct InstanceNode;
-struct Accelerator;
-struct FUDeclaration;
-
-// Strange forward declare
-template<typename T> struct WireTemplate;
-typedef WireTemplate<int> Wire;
-
-struct FUInstance;
-
-struct StaticId{
-   FUDeclaration* parent;
-   String name;
-};
-
-template<> class std::hash<StaticId>{
-   public:
-   std::size_t operator()(StaticId const& s) const noexcept{
-      std::size_t res = std::hash<String>()(s.name) + (std::size_t) s.parent;
-      return (std::size_t) res;
-   }
-};
-
-struct StaticData{
-   Array<Wire> configs;
-   int offset;
-};
-
-struct StaticInfo{
-   StaticId id;
-   StaticData data;
-};
-
-struct CalculatedOffsets{
-   Array<int> offsets;
-   int max;
-};
-
-enum MemType{
-   CONFIG,
-   STATE,
-   DELAY,
-   STATIC
-};
-
-enum NodeType{
-  NodeType_UNCONNECTED,
-  NodeType_SOURCE,
-  NodeType_COMPUTE,
-  NodeType_SINK,
-  NodeType_SOURCE_AND_SINK
-};
+#include "accelerator.hpp"
 
 struct InstanceInfo{
   int level;
@@ -79,19 +26,23 @@ struct InstanceInfo{
   bool isComposite;
   bool isStatic;
   bool isShared;
+  int sharedIndex;
   FUDeclaration* parent;
   String fullName;
   bool isMergeMultiplexer;
+  int mergeMultiplexerId;
   bool belongs;
   int special;
   int order;
   NodeType connectionType;
+  int id;
 };
 
 struct AcceleratorInfo{
   Array<InstanceInfo> info;
   int memSize;
   Opt<String> name;
+  Array<int> mergeMux;
 };
 
 struct InstanceConfigurationOffsets{
@@ -113,7 +64,9 @@ struct InstanceConfigurationOffsets{
 struct TestResult{
   Array<InstanceInfo> info;
   InstanceConfigurationOffsets subOffsets;
+  Array<PortInstance> multiplexersPorts;
   String name;
+  Array<int> muxConfigs;
   Array<int> inputDelay;
   Array<int> outputLatencies;
 };
@@ -124,6 +77,7 @@ struct AccelInfo{
   Array<String> names;
   Array<Array<int>> inputDelays;
   Array<Array<int>> outputDelays;
+  Array<Array<int>> muxConfigs;
   
   int memMappedBitsize;
   int howManyMergedUnits;
@@ -136,6 +90,7 @@ struct AccelInfo{
   int delays;
   int ios;
   int statics;
+  int staticBits;
   int sharedUnits;
   int externalMemoryInterfaces;
   int externalMemoryByteSize;
@@ -156,6 +111,8 @@ struct Partition{
   int value;
   int max;
 };
+
+int GetConfigIndexFromInstance(Accelerator* accel,FUInstance* inst);
 
 AccelInfo CalculateAcceleratorInfo(Accelerator* accel,bool recursive,Arena* out,Arena* temp);
 AccelInfo CalculateAcceleratorInfoNoDelay(Accelerator* accel,bool recursive,Arena* out,Arena* temp);

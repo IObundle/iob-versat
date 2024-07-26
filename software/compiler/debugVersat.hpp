@@ -5,6 +5,7 @@
 #include "debug.hpp"
 #include "utils.hpp"
 
+#include "delayCalculation.hpp"
 #include "versat.hpp"
 
 struct Accelerator;
@@ -18,12 +19,20 @@ String FuzzText(String formattedExample,Arena* out,int seed = COMPILE_TIME); // 
 
 void OutputGraphDotFile(Accelerator* accel,bool collapseSameEdges,FUInstance* highlighInstance,CalculateDelayResult delays,String filename,Arena* temp);
 
+#if 0
 void OutputGraphDotFile(Accelerator* accel,bool collapseSameEdges,String filename,Arena* temp);
 void OutputGraphDotFile(Accelerator* accel,bool collapseSameEdges,FUInstance* highlighInstance,String filename,Arena* temp);
 void OutputGraphDotFile(Accelerator* accel,bool collapseSameEdges,Set<FUInstance*>* highlight,String filename,Arena* temp);
+#endif
+
+void OutputContentToFile(String filepath,String content);
 
 String PushMemoryHex(Arena* out,void* memory,int size);
 void OutputMemoryHex(void* memory,int size);
- 
-String PushDebugPath(Arena* out,String name,const char* fileName);
+
+// folderName can be empty string, file is created inside debug folder directly. 
+String PushDebugPath(Arena* out,String folderName,String fileName);
+
+// For this overload, no string can be empty, otherwise error
+String PushDebugPath(Arena* out,String folderName,String subFolder,String fileName);
 
