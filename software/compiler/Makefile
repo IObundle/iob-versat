@@ -5,7 +5,6 @@ VERSAT_DIR:=$(abspath $(shell pwd)/../..)
 #versat common parameters
 include $(VERSAT_DIR)/config.mk
 include $(VERSAT_TOOLS_DIR)/tools.mk
-include $(VERSAT_DIR)/sharedHardware.mk
 
 VERSAT_DEBUG:=1
 
@@ -17,9 +16,7 @@ VERSAT_LIBS:=-lstdc++ -lm -lgcc -lc -pthread -ldl
 VERSAT_HDR+=$(wildcard $(VERSAT_PC_DIR)/*.hpp)
 VERSAT_HDR+=$(wildcard $(VERSAT_COMPILER_DIR)/*.hpp)
 
-#VERILATE_FLAGS := -g -fPIC
-
-VERSAT_INCLUDE += -I$(VERSAT_PC_DIR) -I$(VERSAT_COMPILER_DIR) -I$(BUILD_DIR)/ -I$(VERSAT_COMMON_DIR) -I$(VERSAT_DIR)
+VERSAT_INCLUDE += -I$(VERSAT_PC_DIR) -I$(VERSAT_COMPILER_DIR) -I$(BUILD_DIR)/ -I$(VERSAT_COMMON_DIR) -I$(VERSAT_SW_DIR)
 VERSAT_DEFINE += -DPC
 
 CPP_FILES := $(wildcard $(VERSAT_COMPILER_DIR)/*.cpp)
