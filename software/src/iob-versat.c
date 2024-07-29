@@ -32,9 +32,15 @@ typedef uint64_t uint64;
 iptr versat_base;
 static bool enableDMA;
 
+typeof(accelConfig) accelConfig  = 0;
+typeof(accelState)  accelState   = 0;
+volatile AcceleratorStatic*  accelStatics = 0;
+
+#if 0
 volatile AcceleratorConfig*  accelConfig  = 0;
 volatile AcceleratorState*   accelState   = 0;
 volatile AcceleratorStatic*  accelStatics = 0;
+#endif
 
 void versat_init(int base){
   versat_base = (iptr) base;

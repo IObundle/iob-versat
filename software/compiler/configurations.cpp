@@ -322,14 +322,6 @@ static InstanceInfo GetInstanceInfo(FUInstance* node,FUDeclaration* parentDeclar
   info.order = offsets.order;
   info.connectionType = node->type;
   info.id = node->id;
-
-#if 0
-  if(info.isMergeMultiplexer){
-    DEBUG_BREAK();
-  }
-#endif
-  
-  //Assert(info.baseDelay >= 0); // TODO: TEMP
   
   if(topDecl->memoryMapBits.has_value()){
     info.memMappedSize = (1 << topDecl->memoryMapBits.value());
@@ -664,8 +656,6 @@ AccelInfo CalculateAcceleratorInfo(Accelerator* accel,bool recursive,Arena* out,
   while(1){
     TestResult res2 = CalculateOneInstance(accel,recursive,partitions,out,temp);
     *PushListElement(list) = res2;
-
-    //DEBUG_BREAK_IF(CompareString(accel->name,"TestDoubleMerge_Simple"));
     
     if(first){
       res = res2.info;
@@ -1007,7 +997,6 @@ static InstanceInfo GetInstanceInfoNoDelay(FUInstance* node,FUDeclaration* paren
   info.isComposite = IsTypeHierarchical(topDecl);
   info.parent = parentDeclaration;
   info.baseDelay = offsets.delay;
-  DEBUG_BREAK_IF(info.baseDelay == 3);
   info.isMergeMultiplexer = inst->isMergeMultiplexer;
   info.mergeMultiplexerId = inst->mergeMultiplexerId;
   info.belongs = offsets.belongs;
