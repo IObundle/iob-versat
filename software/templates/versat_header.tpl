@@ -37,8 +37,14 @@ typedef struct {
 #{end}
 #{end}
 } @{type.name}Config;
-
 #{end}
+
+
+typedef struct{
+#{for name namedStates}
+  int @{name};
+#{end}
+} @{accelName}State;
 
 // Address
 
@@ -153,8 +159,14 @@ static const int delayStart = @{(nConfigs + nStatics) |> Hex} * sizeof(iptr);
 static const int configStart = @{versatConfig |> Hex} * sizeof(iptr);
 static const int stateStart = @{versatState |> Hex} * sizeof(int);
 
-extern volatile AcceleratorConfig* accelConfig;
-extern volatile AcceleratorState* accelState;
+#{if nConfigs > 0}
+extern volatile @{accelName}Config* accelConfig; // @{nConfigs}
+#{end}
+
+#{if nStates > 0}
+extern volatile @{accelName}State* accelState; // @{nStates}
+#{end}
+
 extern volatile AcceleratorStatic* accelStatics;
 
 #{if isSimple}
@@ -168,10 +180,10 @@ extern volatile AcceleratorStatic* accelStatics;
 #{for elem structuredConfigs}
 #{if elem.typeAndNames.size > 1}
 #{for typeAndName elem.typeAndNames}
-#define ACCEL_@{typeAndName.name} accelConfig->@{typeAndName.name}
+#define ACCEL_@{typeAndName.name} ((AcceleratorConfig*) accelConfig)->@{typeAndName.name}
 #{end}
 #{else}
-#define ACCEL_@{elem.typeAndNames[0].name} accelConfig->@{elem.typeAndNames[0].name}
+#define ACCEL_@{elem.typeAndNames[0].name} ((AcceleratorConfig*) accelConfig)->@{elem.typeAndNames[0].name}
 #{end}
 #{end}
 
@@ -180,11 +192,11 @@ extern volatile AcceleratorStatic* accelStatics;
 #{end}
 
 #{for i delays}
-#define ACCEL_TOP_Delay@{i} accelConfig->TOP_Delay@{i}
+#define ACCEL_TOP_Delay@{i} ((AcceleratorConfig*) accelConfig)->TOP_Delay@{i}
 #{end}
 
 #{for name namedStates}
-#define ACCEL_@{name} accelState->@{name}
+#define ACCEL_@{name} ((AcceleratorState*) accelState)->@{name}
 #{end}
 
 #{if mergeNames.size > 1}

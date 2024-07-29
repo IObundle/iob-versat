@@ -20,6 +20,10 @@ from iob_reg_re import iob_reg_re
 from iob_ram_sp_be import iob_ram_sp_be
 from iob_fp_fpu import iob_fp_fpu # Will also import all the other fp files
 
+# This class is not intended to be used.
+# It exists because some tools/scripts only expect to find a class 
+# here. Any SoC system that wants to integrate Versat needs to call the
+# CreateVersatClass to create the actual class.
 class iob_versat(iob_module):
     name = "iob_versat"
     version = "V0.10"
@@ -139,12 +143,8 @@ def RunVersat(pc_emul,versat_spec,versat_top,versat_extra,build_dir,debug_path):
                             "-d", # DMA
                             "-T",versat_top,
                             "-O",os.path.realpath(versat_dir + "/hardware/src/units"), # Location of versat units
-                            #"-S",versat_dir + "/submodules/FPU/hardware/src/",
                             "-I",os.path.realpath(versat_dir + "/hardware/include/"),
                             "-I",os.path.realpath(versat_dir + "/hardware/src/"),
-                            #"-I",os.path.realpath(versat_dir + "/submodules/FPU/hardware/src/"),
-                            #"-I",os.path.realpath(versat_dir + "/submodules/FPU/hardware/include/"),
-                            #"-I",os.path.realpath(versat_dir + "/submodules/FPU/submodules/DIV/hardware/src/"),
                             "-I",os.path.realpath(build_dir  + "/hardware/src/"), # TODO: If this works then all the other "versat_dir + ..." could be removed
                             "-H",os.path.realpath(build_dir + "/software"), # Output software files
                             "-o",os.path.realpath(build_dir + "/hardware/src") # Output hardware files

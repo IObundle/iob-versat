@@ -345,7 +345,6 @@ Accelerator* Flatten(Accelerator* accel,int times,Arena* temp){
       // Create new instance and map then
       AcceleratorMapping* map = MappingSimple(circuit,newAccel,temp); // TODO: Leaking
 
-      DEBUG_BREAK_IF(CompareString(accel->name,"TestDoubleMerge1"));
       FOREACH_LIST(FUInstance*,ptr,circuit->allocated){
         FUInstance* circuitInst = ptr;
         if(circuitInst->declaration->type == FUDeclarationType_SPECIAL){
@@ -445,7 +444,6 @@ Accelerator* Flatten(Accelerator* accel,int times,Arena* temp){
       }
 
       // Add accel edges to input instances
-      //DEBUG_BREAK_IF(CompareString(accel->name,"ShaState"));
       iter = IterateEdges(newAccel);
       while(iter.HasNext()){
         Edge edgeInst = iter.Next();
@@ -2022,7 +2020,6 @@ Pair<Accelerator*,SubMap*> Flatten2(Accelerator* accel,int times,Arena* temp){
       // Create new instance and map then
       AcceleratorMapping* map = MappingSimple(circuit,newAccel,temp); // TODO: Leaking
 
-      //DEBUG_BREAK_IF(CompareString(accel->name,"TestDoubleMerge1"));
       FOREACH_LIST(FUInstance*,ptr,circuit->allocated){
         FUInstance* circuitInst = ptr;
         if(circuitInst->declaration->type == FUDeclarationType_SPECIAL){
@@ -2122,7 +2119,6 @@ Pair<Accelerator*,SubMap*> Flatten2(Accelerator* accel,int times,Arena* temp){
               t.isInput = false;
               t.subPort = circuitEdge->units[1].port;
 
-              //DEBUG_BREAK_IF(CompareString(accel->name,"FullAES"));
               subMappingDone->Insert(t,{in,inPort});
               
               ConnectUnits(out,outPort,in,inPort,delay);
@@ -2164,7 +2160,6 @@ Pair<Accelerator*,SubMap*> Flatten2(Accelerator* accel,int times,Arena* temp){
               t.isInput = true;
               t.subPort = edge->units[1].port;
               
-              //DEBUG_BREAK_IF(CompareString(accel->name,"FullAES"));
               subMappingDone->Insert(t,{out,outPort});
               
               ConnectUnits(out,outPort,in,inPort,delay);

@@ -846,7 +846,7 @@ GraphMapping ConsolidationGraphMapping(Accelerator* accel1,Accelerator* accel2,C
   upperBound = 9999999; // TODO: Upperbound not working correctly.
   ConsolidationGraph clique = MaxClique(graph,upperBound,temp,Seconds(10)).clique;
 
-#if 1
+#if 0
   printf("Clique: %d\n",ValidNodes(clique));
 #endif
 
@@ -1490,7 +1490,6 @@ AcceleratorMapping* MapFlattenedGraphs(Accelerator* start,FUDeclaration* endDecl
           String fullName = PushString(out,"%.*s_%.*s",UNPACK_SS(inst->name),UNPACK_SS(subName)); // A bit hardcoded
           int mappedToPort = 0;
           for(PortInstance portInst : sub->inputs){
-            //DEBUG_BREAK();
             int port = portInst.port;
 
             SubMappingInfo in = {};
@@ -1596,7 +1595,6 @@ Array<GraphAndMapping> GetAllBaseMergeTypes(FUDeclaration* decl,Arena* out,Arena
           // Need to generate 471 -> 489 map.
           // Map subDecl->flattenedBaseCircuit to decl->flattenedBaseCircuit
 
-          //DEBUG_BREAK_IF(CompareString(info.name,"AESRound"));
           AcceleratorMapping* map = MapFlattenedGraphs(subDecl->flattenedBaseCircuit,decl,decl->flattenedBaseCircuit,out);
           AcceleratorMapping* fullMapping = MappingCombine(info.mapping,map,globalPermanent);
           
@@ -1609,7 +1607,6 @@ Array<GraphAndMapping> GetAllBaseMergeTypes(FUDeclaration* decl,Arena* out,Arena
                 subDecl->type == FUDeclarationType_ITERATIVE){
         Array<GraphAndMapping> subTypes = GetAllBaseMergeTypes(subDecl,temp,out);
 
-        //DEBUG_BREAK();
         for(GraphAndMapping result : subTypes){
           seen->Insert(result);
         }
@@ -1983,16 +1980,10 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
     int toProcess = size;
     int toWrite = size;
 
-    //DEBUG_BREAK_IF(CompareString(name,"GoodCryptoAlgos"));
-    
     ReconstituteResult ReconstituteGraphFromStruct(Accelerator* merged,Set<PortInstance>* mergedMultiplexers,Accelerator* base,String name,AcceleratorMapping* baseToMerged,FUDeclaration* parentType,Arena* out,Arena* temp);
     
     while(start != toProcess){
       for(int i = start; i < toProcess; i++){
-        //DEBUG_BREAK_IF(CompareString(name,"GoodCryptoAlgos") && i == 2);
-
-        //Assert(!isFromStruct[i]);
-
         ReconstituteResult result = {};
 
         if(isFromStruct[i]){
@@ -2005,8 +1996,7 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
         Assert(Size(result.accel->allocated) > 0);
         
         Array<GraphAndMapping> subMerged = GetAllBaseMergeTypes(baseCircuitType[i],temp,temp2);
-        //DEBUG_BREAK_IF(CompareString(name,"TestMergeAfterStruct") && i == 0);
-        
+       
         if(subMerged.size == 0){
           lowestLevel[i] = true;
         }
@@ -2375,9 +2365,7 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
 ReconstituteResult ReconstituteGraphFromStruct(Accelerator* merged,Set<PortInstance>* mergedMultiplexers,Accelerator* base,String name,AcceleratorMapping* baseToMerged,FUDeclaration* parentType,Arena* out,Arena* temp){
   BLOCK_REGION(temp);
   Accelerator* recon = CreateAccelerator(name,AcceleratorPurpose_RECON);
-  
-  //DEBUG_BREAK();
-  
+ 
   MappingCheck(baseToMerged);
   AcceleratorMapping* mergedToBase = MappingInvert(baseToMerged,temp);
   MappingCheck(mergedToBase,merged,base);
@@ -2439,8 +2427,6 @@ ReconstituteResult ReconstituteGraphFromStruct(Accelerator* merged,Set<PortInsta
         continue;
       }
       
-      //DEBUG_BREAK();
-
       GetOrAllocateResult<FUInstance*> res0 = instancesAdded->GetOrAllocate(node0.inst);
       GetOrAllocateResult<FUInstance*> res1 = instancesAdded->GetOrAllocate(node1.inst);
       
@@ -2484,7 +2470,6 @@ ReconstituteResult ReconstituteGraphFromStruct(Accelerator* merged,Set<PortInsta
         MappingInsertEqualNode(accelToRecon,node1.inst,*res1.data);
       }
       
-      //DEBUG_BREAK();
       ConnectUnitsIfNotConnected(*res0.data,edge.units[0].port,*res1.data,edge.units[1].port,edge.delay);
     }
   }

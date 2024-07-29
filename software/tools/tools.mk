@@ -21,13 +21,13 @@ $(BUILD_DIR)/embedFile: $(VERSAT_TOOLS_DIR)/embedFile.cpp $(VERSAT_COMMON_OBJ_NO
 	-g++ -DPC -std=c++17 -MMD -MP -DVERSAT_DEBUG -DSTANDALONE -o $@ $(VERSAT_COMMON_FLAGS) $(VERSAT_COMMON_INCLUDE) $< $(VERSAT_COMMON_OBJ_NO_TYPE)
 
 type-info: $(TYPE_INFO_HDR)
-	python3 $(VERSAT_TOOLS_DIR)/structParser.py $(VERSAT_DIR) $(TYPE_INFO_HDR) || true
+	python3 $(VERSAT_TOOLS_DIR)/structParser.py $(VERSAT_DIR)/software $(TYPE_INFO_HDR) || true
 
-$(VERSAT_DIR)/autoRepr.cpp $(VERSAT_DIR)/typeInfo.cpp: $(TYPE_INFO_HDR)
-	python3 $(VERSAT_TOOLS_DIR)/structParser.py $(VERSAT_DIR) $(TYPE_INFO_HDR) || true
+$(VERSAT_DIR)/software/autoRepr.cpp $(VERSAT_DIR)/software/typeInfo.cpp: $(TYPE_INFO_HDR)
+	python3 $(VERSAT_TOOLS_DIR)/structParser.py $(VERSAT_DIR)/software $(TYPE_INFO_HDR) || true
 
-$(BUILD_DIR)/typeInfo.o: $(VERSAT_DIR)/typeInfo.cpp
+$(BUILD_DIR)/typeInfo.o: $(VERSAT_DIR)/software/typeInfo.cpp
 	-g++ -DPC -MMD -MP -std=c++17 $(VERSAT_COMMON_FLAGS) -c -o $@ $(GLOBAL_CFLAGS) $< $(VERSAT_INCLUDE)
 
-$(BUILD_DIR)/autoRepr.o: $(VERSAT_DIR)/autoRepr.cpp
+$(BUILD_DIR)/autoRepr.o: $(VERSAT_DIR)/software/autoRepr.cpp
 	-g++ -DPC -MMD -MP -std=c++17 $(VERSAT_COMMON_FLAGS) -c -o $@ $(GLOBAL_CFLAGS) $< $(VERSAT_INCLUDE)

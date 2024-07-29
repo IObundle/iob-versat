@@ -33,6 +33,5 @@ void Log_(LogModule module,LogLevel level,int line,const char* filename,const ch
 
    if(level == LogLevel::FATAL){
      Assert(false);
-     //DEBUG_BREAK();
    }
 }

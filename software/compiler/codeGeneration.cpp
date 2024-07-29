@@ -852,20 +852,8 @@ void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* 
   }
 
   VersatComputedValues val = ComputeVersatValues(accel,globalOptions.useDMA);
-
-  // MARK
-#if 0
-  Array<VersatComputedValues> arr = PushArray<VersatComputedValues>(temp,1);
-  val.arena = temp;
-  arr[0] = val;
-  
-  PrintRepr(MakeValue(&arr),temp,temp2);
-  DEBUG_BREAK();
-#endif
   
   AccelInfo info = CalculateAcceleratorInfo(accel,true,temp,temp2);
-
-  //PrintRepr(stdout,MakeValue(&info),temp,temp2);
   
   CheckSanity(info.baseInfo,temp);
   
@@ -1066,6 +1054,7 @@ void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* 
 
   TemplateSetNumber("memoryMappedBase",1 << val.memoryConfigDecisionBit);
   TemplateSetNumber("nConfigs",val.nConfigs);
+  TemplateSetNumber("nStates",val.nStates);
   TemplateSetNumber("nStatics",val.nStatics);
 
   Array<TypeStructInfo> configStructures = GetConfigStructInfo(accel,temp2,temp);

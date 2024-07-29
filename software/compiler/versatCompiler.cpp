@@ -470,15 +470,13 @@ int main(int argc,const char** argv){
   //       There was never any point in having both together.
   globalOptions.useFixedBuffers = true;
   globalOptions.shadowRegister = true; 
-
   globalOptions.disableDelayPropagation = true;
 
   globalDebug.outputAccelerator = true;
   globalDebug.outputVersat = true;
-  
   globalDebug.outputConsolidationGraphs = false;
 
-#if 1
+#if 0
   globalDebug.dotFormat = GRAPH_DOT_FORMAT_NAME;
 #if 1
   globalDebug.outputGraphs = true;
@@ -707,8 +705,6 @@ int main(int argc,const char** argv){
     }
   }
 
-  DEBUG_BREAK();
-  
   return 0;
 }
 

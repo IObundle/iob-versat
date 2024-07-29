@@ -14,8 +14,8 @@
 
 #define ARRAY_SIZE(arr) (sizeof(arr) / sizeof(arr[0]))
 
-volatile AcceleratorConfig* accelConfig = nullptr;
-volatile AcceleratorState* accelState = nullptr;
+typeof(accelConfig) accelConfig = nullptr;
+typeof(accelState) accelState = nullptr;
 volatile AcceleratorStatic* accelStatics = nullptr;
 
 iptr versat_base;
@@ -34,8 +34,8 @@ int MemoryAccess(int address,int value,int write);
 
 int GetAcceleratorCyclesElapsed();
 
-AcceleratorConfig* GetStartOfConfig();
-AcceleratorState* GetStartOfState();
+typeof(accelConfig) GetStartOfConfig();
+typeof(accelState) GetStartOfState();
 AcceleratorStatic* GetStartOfStatic();
 
 #ifdef __cplusplus
