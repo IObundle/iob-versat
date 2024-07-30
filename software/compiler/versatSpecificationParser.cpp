@@ -1670,13 +1670,13 @@ void ParseVersatSpecification(String content,Arena* temp,Arena* temp2){
   }
 }
 
-void ParseVersatSpecification(const char* filepath,Arena* temp,Arena* temp2){
+void ParseVersatSpecificationFromFilepath(String filepath,Arena* temp,Arena* temp2){
   BLOCK_REGION(temp);
 
-  String content = PushFile(temp,filepath);
+  String content = PushFile(temp,StaticFormat("%.*s",UNPACK_SS(filepath)));
   
   if(content.size < 0){
-    printf("Failed to open file, filepath: %s\n",filepath);
+    printf("Failed to open file, filepath: %.*s\n",UNPACK_SS(filepath));
     DEBUG_BREAK();
   }
 
