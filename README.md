@@ -129,7 +129,7 @@ To make the configuration process as simple and efficient as possible, we minimi
 
 Writing to members of the accelConfig pointer and reading from members of the accelState pointer will write and read from the accelerator memory-mapped interface.
 
-Versat tries to maintain the hierarchy defined in the specification file in generating these structures. The software can build abstractions over the generated API by making functions that take pointers to these structures. For an example of this, look at the file [unitConfiguration.h]()https://github.com/IObundle/iob-soc-versat/blob/main/software/src/Tests/unitConfiguration.hpp) in the iob-soc-versat repository.
+Versat tries to maintain the hierarchy defined in the specification file in generating these structures. The software can build abstractions over the generated API by making functions that take pointers to these structures. For an example of this, look at the file [unitConfiguration.h](https://github.com/IObundle/iob-soc-versat/blob/main/software/src/Tests/unitConfiguration.hpp) in the iob-soc-versat repository.
 
 ```cpp
 int main(){
