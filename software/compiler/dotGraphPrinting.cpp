@@ -126,6 +126,10 @@ String GenerateDotGraph(Accelerator* accel,GraphPrintingContent content,Arena* o
 }
 
 void OutputDebugDotGraph(Accelerator* accel,String fileName,Arena* temp){
+  if(!globalOptions.debug){
+    return;
+  }
+
   Arena* temp2 = debugArena;
 
   BLOCK_REGION(temp);
@@ -141,6 +145,10 @@ void OutputDebugDotGraph(Accelerator* accel,String fileName,Arena* temp){
 }
 
 void OutputDebugDotGraph(Accelerator* accel,String fileName,FUInstance* highlight,Arena* temp){
+  if(!globalOptions.debug){
+    return;
+  }
+
   Arena* temp2 = debugArena;
 
   BLOCK_REGION(temp);
@@ -166,6 +174,10 @@ void OutputDebugDotGraph(Accelerator* accel,String fileName,FUInstance* highligh
 }
 
 void OutputDebugDotGraph(Accelerator* accel,String fileName,Set<FUInstance*>* highlight,Arena* temp){
+  if(!globalOptions.debug){
+    return;
+  }
+
   Arena* temp2 = debugArena;
 
   BLOCK_REGION(temp);

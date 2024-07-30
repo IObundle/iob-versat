@@ -513,7 +513,8 @@ TestResult CalculateOneInstance(Accelerator* accel,bool recursive,Array<Partitio
   DAGOrderNodes order = CalculateDAGOrder(accel->allocated,temp);
   CalculateDelayResult calculatedDelay = CalculateDelay(accel,order,partitions,temp);
 
-  region(out){
+  if(globalOptions.debug){
+    BLOCK_REGION(out);
     auto builder = StartString(out); 
     PushString(out,"CalculateOneInstance_");
     bool first = true;

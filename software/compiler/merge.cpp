@@ -702,6 +702,10 @@ CliqueState MaxClique(ConsolidationGraph graph,int upperBound,Arena* arena,Time 
 }
 
 void OutputConsolidationGraph(ConsolidationGraph graph,bool onlyOutputValid,String moduleName,String fileName,Arena* temp){
+  if(!globalOptions.debug){
+    return;
+  }
+
   BLOCK_REGION(temp);
   String filePath = PushDebugPath(temp,moduleName,fileName);
   
