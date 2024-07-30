@@ -143,7 +143,6 @@ def RunVersat(pc_emul,versat_spec,versat_top,versat_extra,build_dir,debug_path):
                             "-d", # DMA
                             "-t",versat_top,
                             "-u",os.path.realpath(versat_dir + "/hardware/src/units"), # Location of versat units
-                            #"-I",os.path.realpath(versat_dir + "/hardware/src/"),
                             "-I",os.path.realpath(build_dir  + "/hardware/src/"),
                             "-o",os.path.realpath(build_dir + "/hardware/src"), # Output hardware files
                             "-O",os.path.realpath(build_dir + "/software") # Output software files

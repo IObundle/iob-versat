@@ -523,6 +523,13 @@ int main(int argc,char* argv[]){
   gather.extraSources = PushArenaList<String>(temp);
   gather.includePaths = PushArenaList<String>(temp);
   gather.unitPaths = PushArenaList<String>(temp);
+
+  globalOptions.dataSize = 32;
+  globalOptions.addrSize = 32;
+
+  globalOptions.debugPath = PushString(perm,"%s/debug",GetCurrentDirectory()); // By default
+  PushNullByte(perm);
+
   gather.options = &globalOptions;
 
   if(argp_parse(&argp, argc, argv, 0, 0, &gather) != 0){
