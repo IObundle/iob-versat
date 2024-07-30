@@ -520,3 +520,84 @@ module ModuleUsage(){
 }
 ```
 
+# Publications
+
+Although the current status of the project has evolved, this project originated several publications as listed below. If you use this repository, please consider citing our publications on the Versat project.
+
+@inproceedings{lopes2016versat,
+  title={Versat, a Minimal Coarse-Grain Reconfigurable Array},
+  author={Lopes, Joao D and de Sousa, Jos{\'e} T},
+  booktitle={12th International Meeting on High-Performance Computing for Computational Science (VECPAR 2016)},
+  year={2016}
+}
+
+@inproceedings{lopes2016versat,
+  title={Versat, a Runtime Partially Reconfigurable Coarse-Grain Reconfigurable Array using a Programmable Controller},
+  author={Lopes, Jo{\~a}o D. and Santiago, Rui and Sousa, Jos{\'e} T.},
+  booktitle={Jornadas Sarteco},
+  pages={561--569},
+  year={2016},
+  organization={Ediciones Universidad Salamanca}
+}
+
+@inproceedings{santiago2017compiler,
+  title={Compiler for the Versat Reconfigurable Architecture},
+  author={Santiago, Rui and Lopes, Jo{\~a}o D. and de Sousa, Jos{\'e} T.},
+  booktitle={Jornadas sobre Sistemas Reconfigur{\'a}veis (REC 2017)},
+  pages={41--48},
+  year={2017}
+}
+
+@inproceedings{d2017fast,
+  title={Fast Fourier Transform on the Versat CGRA},
+  author={D. Lopes, Joao and T. de Sousa, Jose},
+  booktitle={Jornadas Sarteco},
+  year={2017}
+}
+
+@inproceedings{lopes2017k,
+  title={K-means clustering on CGRA},
+  author={Lopes, Joao D and de Sousa, Jos{\'e} T and Neto, Hor{\'a}cio and V{\'e}stias, M{\'a}rio},
+  booktitle={27th Int. Conference on Field Programmable Logic and Applications},
+  year={2017}
+}
+
+@inproceedings{fiolhais2019low,
+  title={Low energy heterogeneous computing with multiple RISC-V and CGRA cores},
+  author={Fiolhais, Lu{\'\i}s and Gon{\c{c}}alves, Fernando and Duarte, Rui P and V{\'e}stias, M{\'a}rio and de Sousa, Jos{\'e} T},
+  booktitle={2019 IEEE International Symposium on Circuits and Systems (ISCAS)},
+  pages={1--5},
+  year={2019},
+  organization={IEEE}
+}
+
+@inproceedings{mario2020implementing,
+  title={Implementing cnns using a linear array of full mesh cgras},
+  author={M{\'a}rio, Valter and Lopes, Jo{\~a}o D and V{\'e}stias, M{\'a}rio and de Sousa, Jos{\'e} T},
+  booktitle={Applied Reconfigurable Computing. Architectures, Tools, and Applications: 16th International Symposium, ARC 2020, Toledo, Spain, April 1--3, 2020, Proceedings 16},
+  pages={288--297},
+  year={2020},
+  organization={Springer International Publishing}
+}
+
+@article{lopes2021coarse,
+  title={Coarse-Grained Reconfigurable Computing with the Versat Architecture},
+  author={Lopes, Jo{\~a}o D. and V{\'e}stias, M{\'a}rio P. and Duarte, Rui Policarpo and C. Neto, Hor{\'a}cio and de Sousa, Jos{\'e} T.},
+  journal={Electronics},
+  volume={10},
+  number={6},
+  year={2021},
+  publisher={MDPI}
+}
+
+
+# Acknowledgement
+The [OpenCryptoLinux](https://nlnet.nl/project/OpenCryptoLinux/) project was funded through the NGI Assure Fund, a fund established by NLnet with financial support from the European Commission's Next Generation Internet programme, under the aegis of DG Communications Networks, Content and Technology under grant agreement No 957073.
+
+<table>
+    <tr>
+        <td align="center" width="50%"><img src="https://nlnet.nl/logo/banner.svg" alt="NLnet foundation logo" style="width:90%"></td>
+        <td align="center"><img src="https://nlnet.nl/image/logos/NGIAssure_tag.svg" alt="NGI Assure logo" style="width:90%"></td>
+    </tr>
+</table>
+
