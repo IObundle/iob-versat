@@ -2,6 +2,14 @@
 
 At its core, Versat is a compiler that transforms a high-level specification into a custom Coarse-Grained Reconfigurable Array (CGRA) hardware accelerator. Versat is written in the C++ language.
 
+## Cite this project
+
+If you use this project please cite the following publication:
+
+Lopes, J.D.; Véstias, M.P.; Duarte , R.P.; Neto, H.C.; de Sousa , J.T. 
+Coarse-Grained Reconfigurable Computing with the Versat Architecture. 
+Electronics 2021, 10, 669. https://doi.org/10.3390/electronics10060669 
+
 # Dependencies
 
 - GNU Bash >=5.1.16
