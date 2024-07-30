@@ -39,7 +39,6 @@ typedef struct {
 } @{type.name}Config;
 #{end}
 
-
 typedef struct{
 #{for name namedStates}
   int @{name};

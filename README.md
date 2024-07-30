@@ -176,9 +176,9 @@ While Versat, the program, is capable of working standalone, it is also integrat
 The simple example mentioned previously can be tested by cloning the [iob-soc-versat](https://github.com/IObundle/iob-soc-versat) and performing these steps inside the repository:
 
 ```bash
-make clean pc-emul-run TEST=SimpleTest
-make clean sim-run TEST=SimpleTest
-make clean fpga-run TEST=SimpleTest
+make clean pc-emul-run TEST=SimpleExample
+make clean sim-run TEST=SimpleExample
+make clean fpga-run TEST=SimpleExample
 ```
 
 Check the README inside the iob-soc-versat repository beforehand to learn how to properly clone it and which dependencies are required to install.

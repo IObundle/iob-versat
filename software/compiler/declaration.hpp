@@ -153,6 +153,7 @@ namespace BasicDeclaration{
 extern Pool<FUDeclaration> globalDeclarations;
 
 FUDeclaration* GetTypeByName(String str);
+FUDeclaration* GetTypeByNameOrFail(String name);
 void InitializeSimpleDeclarations();
 bool HasMultipleConfigs(FUDeclaration* decl);
 

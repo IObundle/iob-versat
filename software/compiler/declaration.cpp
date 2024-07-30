@@ -101,9 +101,16 @@ FUDeclaration* GetTypeByName(String name){
     }
   }
   
-  LogFatal(LogModule::TOP_SYS,"Didn't find the following type: %.*s",UNPACK_SS(name));
-
   return nullptr;
+}
+
+FUDeclaration* GetTypeByNameOrFail(String name){
+  FUDeclaration* decl = GetTypeByName(name);
+
+  if(!decl){
+    LogFatal(LogModule::TOP_SYS,"Didn't find the following type: %.*s",UNPACK_SS(name));
+  }
+  return decl;
 }
 
 FUDeclaration* RegisterFU(FUDeclaration decl){

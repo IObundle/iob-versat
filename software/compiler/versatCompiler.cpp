@@ -38,9 +38,10 @@ Opt<String> GetFileFormatFromPath(String filename){
   return Opt<String>();
 }
 
+#if 0
 // TODO: There is no reason to use small arguments. -d should just be -DMA. -D should just be -Databus and so on.
 // TODO: Rewrite to either use argparse or some lib parsing, or just parse ourselves but simplify adding more options and report errors.
-Options* ParseCommandLineOptions(int argc,const char* argv[],Arena* out,Arena* temp){
+Options* ParseCommandLineOptions(int argc,char* argv[],Arena* out,Arena* temp){
   Options* opts = PushStruct<Options>(out);
   opts->dataSize = 32; // By default.
   opts->addrSize = 32;
@@ -140,7 +141,7 @@ Options* ParseCommandLineOptions(int argc,const char* argv[],Arena* out,Arena* t
         printf("Missing argument\n");
         exit(-1);
       }
-      opts->topName = argv[i + 1];
+      opts->topName = STRING(argv[i + 1]);
       i += 1;
       continue;
     }
@@ -150,11 +151,13 @@ Options* ParseCommandLineOptions(int argc,const char* argv[],Arena* out,Arena* t
       continue;
     }
 
+#if 0
     if(str.size >= 2 && str[0] == '-' && str[1] == 'g'){
       opts->debug = true;
       continue;
     }
-
+#endif
+    
     if(str.size >= 2 && str[0] == '-' && str[1] == 'O'){
       if(i + 1 >= argc){
         printf("Missing argument\n");
@@ -175,9 +178,11 @@ Options* ParseCommandLineOptions(int argc,const char* argv[],Arena* out,Arena* t
         exit(-1);
       }
 
+      opts->debug = true;
+
       String debugPath = GetAbsolutePath(argv[i+1],out);
       PushNullByte(out);
-      
+     
       opts->debugPath = debugPath;
       PushNullByte(out);
 
@@ -213,12 +218,12 @@ Options* ParseCommandLineOptions(int argc,const char* argv[],Arena* out,Arena* t
         *PushListElement(verilogFiles) = GetAbsolutePath(argv[i],out);
         continue;
       } else { // Assume to be the specification file, for now
-        if(opts->specificationFilepath){
+        if(opts->specificationFilepath.size){
           printf("Error, multiple specification files specified, not supported for now\n");
           exit(-1);
         }
 
-        opts->specificationFilepath = argv[i];
+        opts->specificationFilepath = STRING(argv[i]);
       }
       continue;
     }
@@ -231,6 +236,7 @@ Options* ParseCommandLineOptions(int argc,const char* argv[],Arena* out,Arena* t
   
   return opts;
 }
+#endif
 
 // These Call* functions are a bit hardcoded in functionality. I do not expect to call other programs often so no need to abstract for now.
 void CallVerilator(const char* unitPath,const char* outputPath){
@@ -438,16 +444,51 @@ void LoadTemplates(Arena* perm,Arena* temp){
   });
 }
 
-int main(int argc,const char** argv){
-  // TODO: Need to actually parse and give an error, instead of just checking for less than 3
-  if(argc < 3){
-    printf("Need specifications and a top level type\n");
-    return -1;
-  }
+#include <argp.h>
 
+
+struct OptionsGather{
+  ArenaList<String>* verilogFiles;
+  ArenaList<String>* extraSources;
+  ArenaList<String>* includePaths;
+  ArenaList<String>* unitPaths;
+
+  Options* options;
+};
+
+static int
+parse_opt (int key, char *arg,
+           argp_state *state)
+{
+  OptionsGather* opts = (OptionsGather*) state->input;
+
+  switch (key)
+    {
+    case 'S': *PushListElement(opts->extraSources) = STRING(arg); break;
+    case 'I': *PushListElement(opts->includePaths) = STRING(arg); break;
+    case 'u': *PushListElement(opts->unitPaths) = STRING(arg); break;
+
+    case 'b': opts->options->dataSize = ParseInt(STRING(arg)); break;
+    case 'x': opts->options->addrSize = ParseInt(STRING(arg)); break;
+
+    case 'd': opts->options->useDMA = true; break;
+    case 'D': opts->options->architectureHasDatabus = true; break;
+    case 's': opts->options->addInputAndOutputsToTop = true; break;
+
+    case 'g': opts->options->debugPath = STRING(arg); break;
+    case 't': opts->options->topName = STRING(arg); break;
+    case 'o': opts->options->hardwareOutputFilepath = STRING(arg); break;
+    case 'O': opts->options->softwareOutputFilepath = STRING(arg); break;
+      
+    case ARGP_KEY_ARG: opts->options->specificationFilepath = STRING(arg); break;
+    case ARGP_KEY_END: break;
+    }
+  return 0;
+}
+
+int main(int argc,char* argv[]){
   InitDebug();
-  RegisterTypes();
-  
+
   *globalPermanent = InitArena(Megabyte(128));
 
   Arena* perm = globalPermanent;
@@ -456,13 +497,56 @@ int main(int argc,const char** argv){
   Arena* temp = &tempInst;
   Arena temp2Inst = InitArena(Megabyte(128));
   Arena* temp2 = &temp2Inst;
+
+  // Better error handling
+  struct argp_option options[] =
+    {
+      { 0, 'S',"File", 0, "Extra sources"},
+      { 0, 'b',"Size", 0, "Databus size (8,16,default:32,64)"},
+      { 0, 'x',"Size", 0, "Address size (default:32,64)"},
+      { 0, 'd', 0,     0, "Use DMA"},
+      { 0, 'D', 0,     0, "Architecture has databus"},
+      { 0, 'I',"Path", 0, "Include paths"},
+      { 0, 't',"Name", 0, "Top unit name"},
+      { 0, 's', 0,     0, "Insert consts and regs if Top unit contains inputs and outputs"},
+      { 0, 'u',"Path", 0, "Units path"},
+      { 0, 'g',"Path", OPTION_HIDDEN, "Debug path"},
+      { 0, 'o',"Path", 0, "Hardware output path"},
+      { 0, 'O',"Path", 0, "Software output path"},
+      { 0 }
+    };
+  argp argp = { options, parse_opt, "SpecFile", "Dataflow to accelerator compiler. Check tutorial in https://github.com/IObundle/iob-versat to learn how to write a specification file"};
+
+  OptionsGather gather = {};
+
+  gather.verilogFiles = PushArenaList<String>(temp);
+  gather.extraSources = PushArenaList<String>(temp);
+  gather.includePaths = PushArenaList<String>(temp);
+  gather.unitPaths = PushArenaList<String>(temp);
+  gather.options = &globalOptions;
+
+  if(argp_parse(&argp, argc, argv, 0, 0, &gather) != 0){
+    printf("Error parsing arguments. Call -h help to print usage and argument help\n");
+    return -1;
+  }
+
+  globalOptions.verilogFiles = PushArrayFromList(perm,gather.verilogFiles);
+  globalOptions.extraSources = PushArrayFromList(perm,gather.extraSources);
+  globalOptions.includePaths = PushArrayFromList(perm,gather.includePaths);
+  globalOptions.unitPaths = PushArrayFromList(perm,gather.unitPaths);
+
+  // Check options 
+  if(globalOptions.topName.size == 0){
+    printf("Need to specific top unit with -t\n");
+    exit(-1);
+  }
+  
+  RegisterTypes();
   
   InitializeTemplateEngine(perm);
   LoadTemplates(perm,temp);
   InitializeSimpleDeclarations();
   
-  globalOptions = *ParseCommandLineOptions(argc,argv,perm,temp);
-
   MakeDirectory(globalOptions.debugPath.data);
   
   // TODO: Variable buffers are currently broken. Due to removing statics saved configurations.
@@ -474,6 +558,7 @@ int main(int argc,const char** argv){
 
   globalDebug.outputAccelerator = true;
   globalDebug.outputVersat = true;
+
   globalDebug.outputConsolidationGraphs = false;
 
 #if 0
@@ -488,12 +573,7 @@ int main(int argc,const char** argv){
 #ifdef USE_FST_FORMAT
   globalOptions.generateFSTFormat = 1;
 #endif
-  // Check options 
-  if(!globalOptions.topName){
-    printf("Specify accelerator type using -T <type>\n");
-    exit(-1);
-  }
-  
+
   globalOptions.verilatorRoot = GetVerilatorRoot(perm,temp);
   if(globalOptions.verilatorRoot.size == 0){
     fprintf(stderr,"Versat could not find verilator. Check that it is installed\n");
@@ -560,18 +640,23 @@ int main(int argc,const char** argv){
   BasicDeclaration::input = GetTypeByName(STRING("CircuitInput"));
   BasicDeclaration::output = GetTypeByName(STRING("CircuitOutput"));
 
-  const char* specFilepath = globalOptions.specificationFilepath;
-  String topLevelTypeStr = STRING(globalOptions.topName);
+  String specFilepath = globalOptions.specificationFilepath;
+  String topLevelTypeStr = globalOptions.topName;
 
-  if(specFilepath){
-    ParseVersatSpecification(specFilepath,temp,temp2);
+  if(specFilepath.size){
+    ParseVersatSpecificationFromFilepath(specFilepath,temp,temp2);
   }
 
   FUDeclaration* type = GetTypeByName(topLevelTypeStr);
+  if(!type){
+    printf("Did not find the top level type: %.*s\n",UNPACK_SS(topLevelTypeStr));
+    return -1;
+  }
+
   Accelerator* accel = nullptr;
   FUInstance* TOP = nullptr;
 
-  type->signalLoop = true; // MARK
+  type->signalLoop = true;
 
   if(globalOptions.addInputAndOutputsToTop && !(type->NumberInputs() == 0 && type->NumberOutputs() == 0)){
     const char* name = StaticFormat("%.*s_Simple",UNPACK_SS(topLevelTypeStr));
@@ -607,10 +692,9 @@ int main(int argc,const char** argv){
     }
 
     FUInstance* node = TOP;
-    //node->type = NodeType_COMPUTE; // MARK: Temporary handle source_and_delay problems for simple units.
     
     type = RegisterSubUnit(accel,temp,temp2);
-    type->signalLoop = true; // MARK
+    type->signalLoop = true;
     
     name = StaticFormat("%.*s_Simple",UNPACK_SS(topLevelTypeStr));
     accel = CreateAccelerator(STRING(name),AcceleratorPurpose_MODULE);
@@ -630,18 +714,15 @@ int main(int argc,const char** argv){
       ConnectUnits(TOP,i,output,i);
     }
   }
-  
-#if 1
-  {
+
+  // Disable debug for now
+  if(globalOptions.debug){
     String path = PushDebugPath(temp,{},STRING("allDeclarations.txt"));
     FILE* allDeclarations = fopen(StaticFormat("%.*s",UNPACK_SS(path)),"w");
     DEFER_CLOSE_FILE(allDeclarations);
     for(FUDeclaration* decl : globalDeclarations){
       BLOCK_REGION(temp);
-
-      //PrintRepr(allDeclarations,MakeValue(decl),temp,temp2);
       
-#if 1
       if(globalDebug.outputAcceleratorInfo && decl->fixedDelayCircuit){
         BLOCK_REGION(temp2);
         
@@ -656,10 +737,8 @@ int main(int argc,const char** argv){
         
         PrintRepr(stats,MakeValue(&info),temp,temp2);
       }
-#endif
     }
   }
-#endif
   
   TOP->parameters = STRING("#(.AXI_ADDR_W(AXI_ADDR_W),.LEN_W(LEN_W))");
   OutputVersatSource(accel,
@@ -679,18 +758,20 @@ int main(int argc,const char** argv){
        decl->type == FUDeclarationType_ITERATIVE ||
        decl->type == FUDeclarationType_MERGED){
 
-      GraphPrintingContent content = GenerateDefaultPrintingContent(decl->fixedDelayCircuit,temp,temp2);
-      String repr = GenerateDotGraph(decl->fixedDelayCircuit,content,temp,temp2);
-      String debugPath = PushDebugPath(temp,decl->name,STRING("NormalGraph.dot"));
+      if(globalOptions.debug){
+        GraphPrintingContent content = GenerateDefaultPrintingContent(decl->fixedDelayCircuit,temp,temp2);
+        String repr = GenerateDotGraph(decl->fixedDelayCircuit,content,temp,temp2);
+        String debugPath = PushDebugPath(temp,decl->name,STRING("NormalGraph.dot"));
 
-      FILE* file = fopen(StaticFormat("%.*s",UNPACK_SS(debugPath)),"w");
-      DEFER_CLOSE_FILE(file);
-      if(!file){
-        printf("Error opening file for debug outputting: %.*s\n",UNPACK_SS(debugPath));
-      } else {
-        fwrite(repr.data,sizeof(char),repr.size,file);
+        FILE* file = fopen(StaticFormat("%.*s",UNPACK_SS(debugPath)),"w");
+        DEFER_CLOSE_FILE(file);
+        if(!file){
+          printf("Error opening file for debug outputting: %.*s\n",UNPACK_SS(debugPath));
+        } else {
+          fwrite(repr.data,sizeof(char),repr.size,file);
+        }
       }
-
+      
       String path = PushString(temp,"%.*s/modules/%.*s.v",UNPACK_SS(globalOptions.hardwareOutputFilepath),UNPACK_SS(decl->name));
       PushNullByte(temp);
 
