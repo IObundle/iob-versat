@@ -13,8 +13,8 @@ struct Options{
   String verilatorRoot;
   String debugPath;
   
-  const char* specificationFilepath;
-  const char* topName;
+  String specificationFilepath;
+  String topName;
   int addrSize; // AXI_ADDR_W - used to be bitSize
   int dataSize; // AXI_DATA_W
 
