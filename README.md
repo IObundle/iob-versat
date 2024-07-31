@@ -24,7 +24,7 @@ At its core, Versat is a compiler that transforms a high-level specification int
   - [Advanced Specification Syntax](#advanced-specification-syntax)
 - [Publications](#publications)
 - [License](#license)
-- [Acknowledgements](#acknowledgements)
+- [Acknowledgement](#acknowledgement)
     
     
 
@@ -624,6 +624,7 @@ IOb-SoC-Versat is licensed under the MIT License - see the [LICENSE](LICENSE) fi
 
 
 # Acknowledgement
+
 The [OpenCryptoLinux](https://nlnet.nl/project/OpenCryptoLinux/) project was funded through the NGI Assure Fund, a fund established by NLnet with financial support from the European Commission's Next Generation Internet programme, under the aegis of DG Communications Networks, Content and Technology under grant agreement No 957073.
 
 <table>
