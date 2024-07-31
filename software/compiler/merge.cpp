@@ -2131,18 +2131,20 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
   }
 
   size = recon.size;
-  
-  for(int i = 0; i < size; i++){
-    BLOCK_REGION(temp);
-    String fileName = PushString(temp,"finalRecon_%d.dot",i);
-    String filePath = PushDebugPath(temp,permanentName,fileName);
 
-    GraphPrintingContent content = GenerateDelayDotGraph(recon[i],reconDelay[i],temp,debugArena);
-    String result = GenerateDotGraph(recon[i],content,temp,debugArena);
-    OutputContentToFile(filePath,result);
+  if(globalOptions.debug){
+    for(int i = 0; i < size; i++){
+      BLOCK_REGION(temp);
+      String fileName = PushString(temp,"finalRecon_%d.dot",i);
+      String filePath = PushDebugPath(temp,permanentName,fileName);
+
+      GraphPrintingContent content = GenerateDelayDotGraph(recon[i],reconDelay[i],temp,debugArena);
+      String result = GenerateDotGraph(recon[i],content,temp,debugArena);
+      OutputContentToFile(filePath,result);
+    }
+
+    OutputDebugDotGraph(circuit,STRING("FullCircuitFinal.dot"),temp);
   }
-
-  OutputDebugDotGraph(circuit,STRING("FullCircuitFinal.dot"),temp);
   
   declInst.fixedDelayCircuit = circuit;
 
