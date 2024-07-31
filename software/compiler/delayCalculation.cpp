@@ -143,7 +143,8 @@ CalculateDelayResult CalculateDelay(Accelerator* accel,DAGOrderNodes order,Arena
 
     SendLatencyUpwards(node,edgeDelay,nodeDelay);
 
-    region(out){
+    if(globalOptions.debug){
+      BLOCK_REGION(out);
       String fileName = PushString(out,"0_%d_out1_%d.dot",functionCalls,graphs++);
       String filePath = PushDebugPath(out,accel->name,STRING("delays"),fileName);
       
@@ -188,7 +189,8 @@ CalculateDelayResult CalculateDelay(Accelerator* accel,DAGOrderNodes order,Arena
       SendLatencyUpwards(node,edgeDelay,nodeDelay);
     }
 
-    region(out){
+    if(globalOptions.debug){
+      BLOCK_REGION(out);
       String fileName = PushString(out,"0_%d_out2_%d.dot",functionCalls,graphs++);
       String filePath = PushDebugPath(out,accel->name,STRING("delays"),fileName);
       
@@ -224,7 +226,8 @@ CalculateDelayResult CalculateDelay(Accelerator* accel,DAGOrderNodes order,Arena
     *delay -= minimum;
   }
   
-  region(out){
+  if(globalOptions.debug){
+    BLOCK_REGION(out);
     String fileName = PushString(out,"0_%d_out3_%d.dot",functionCalls,graphs++);
     String filePath = PushDebugPath(out,accel->name,STRING("delays"),fileName);
       
@@ -260,7 +263,8 @@ CalculateDelayResult CalculateDelay(Accelerator* accel,DAGOrderNodes order,Arena
     }
   }
 
-  region(out){
+  if(globalOptions.debug){
+    BLOCK_REGION(out);
     String fileName = PushString(out,"0_%d_out4_%d.dot",functionCalls,graphs++);
     String filePath = PushDebugPath(out,accel->name,STRING("delays"),fileName);
       
@@ -329,7 +333,8 @@ CalculateDelayResult CalculateDelay(Accelerator* accel,DAGOrderNodes order,Arena
     }
   }
 
-  region(out){
+  if(globalOptions.debug){
+    BLOCK_REGION(out);
     String fileName = PushString(out,"0_%d_out5_%d.dot",functionCalls,graphs++);
     String filePath = PushDebugPath(out,accel->name,STRING("delays"),fileName);
       
@@ -367,7 +372,8 @@ CalculateDelayResult CalculateDelay(Accelerator* accel,DAGOrderNodes order,Arena
     }
   }
   
-  region(out){
+  if(globalOptions.debug){
+    BLOCK_REGION(out);
     String fileName = PushString(out,"0_%d_out_final.dot",functionCalls);
     String filepath = PushDebugPath(out,accel->name,STRING("delays"),fileName);
 

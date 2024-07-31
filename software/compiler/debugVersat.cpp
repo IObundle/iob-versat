@@ -6,6 +6,7 @@
 
 #include <algorithm>
 
+#include "globals.hpp"
 #include "memory.hpp"
 #include "type.hpp"
 #include "utilsCore.hpp"
@@ -92,7 +93,7 @@ static void OutputGraphDotFile_(Accelerator* accel,bool collapseSameEdges,Set<FU
 }
 
 void OutputGraphDotFile(Accelerator* accel,bool collapseSameEdges,String filename,Arena* temp){
-  if(!globalDebug.outputGraphs){
+  if(!globalOptions.debug){
     return;
   }
 
@@ -102,7 +103,7 @@ void OutputGraphDotFile(Accelerator* accel,bool collapseSameEdges,String filenam
 }
 
 void OutputGraphDotFile(Accelerator* accel,bool collapseSameEdges,FUInstance* highlighInstance,String filename,Arena* temp){
-  if(!globalDebug.outputGraphs){
+  if(!globalOptions.debug){
     return;
   }
 
@@ -116,7 +117,7 @@ void OutputGraphDotFile(Accelerator* accel,bool collapseSameEdges,FUInstance* hi
 }
 
 void OutputGraphDotFile(Accelerator* accel,bool collapseSameEdges,Set<FUInstance*>* highlight,String filename,Arena* temp){
-  if(!globalDebug.outputGraphs){
+  if(!globalOptions.debug){
     return;
   }
 
@@ -173,7 +174,7 @@ void OutputMemoryHex(void* memory,int size){
 }
 
 void OutputGraphDotFile(Accelerator* accel,bool collapseSameEdges,FUInstance* highlighInstance,CalculateDelayResult delays,String filename,Arena* temp){
-  if(!globalDebug.outputGraphs){
+  if(!globalOptions.debug){
     return;
   }
 
@@ -258,9 +259,10 @@ void OutputGraphDotFile(Accelerator* accel,bool collapseSameEdges,FUInstance* hi
 }
 
 String PushDebugPath(Arena* out,String folderName,String fileName){
+  Assert(globalOptions.debug);
   Assert(!Contains(fileName,"/"));
   Assert(fileName.size != 0);
-
+  
   const char* fullFolderPath = nullptr;
   if(folderName.size == 0){
     fullFolderPath = StaticFormat("%.*s",UNPACK_SS(globalOptions.debugPath));
@@ -275,6 +277,7 @@ String PushDebugPath(Arena* out,String folderName,String fileName){
 }
 
 String PushDebugPath(Arena* out,String folderName,String subFolder,String fileName){
+  Assert(globalOptions.debug);
   Assert(!Contains(fileName,"/"));
   Assert(folderName.size != 0);
   Assert(subFolder.size != 0);

@@ -190,9 +190,8 @@ void FillDeclarationWithAcceleratorValues(FUDeclaration* decl,Accelerator* accel
 
   AccelInfo val = CalculateAcceleratorInfo(accel,true,perm,temp2);
 
-  String path = PushDebugPath(temp,decl->name,STRING("composite_stats.txt"));
-
 #if 0
+  String path = PushDebugPath(temp,decl->name,STRING("composite_stats.txt"));
   FILE* stats = OpenFileAndCreateDirectories(StaticFormat("%.*s",UNPACK_SS(path)),"w");
   DEFER_CLOSE_FILE(stats);
 
@@ -555,7 +554,7 @@ FUDeclaration* RegisterSubUnit(Accelerator* circuit,Arena* temp,Arena* temp2){
 
   String name = circuit->name;
 
-  OutputDelayDebugInfo(circuit,temp);
+  //OutputDelayDebugInfo(circuit,temp); // Disabled for now
   
   FUDeclaration decl = {};
   decl.name = name;

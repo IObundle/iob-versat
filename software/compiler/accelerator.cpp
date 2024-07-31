@@ -2240,9 +2240,6 @@ Pair<Accelerator*,SubMap*> Flatten2(Accelerator* accel,int times,Arena* temp){
 
   FUDeclaration base = {};
   newAccel->name = accel->name;
-
-  String path = PushDebugPath(temp,{},STRING("test.txt"));
-  FILE* allDeclarations = fopen(StaticFormat("%.*s",UNPACK_SS(path)),"w");
   
   return {newAccel,subMappingDone};
 }
@@ -2335,7 +2332,8 @@ CalculateDelayResult CalculateDelay(Accelerator* accel,DAGOrderNodes order,Array
     nodeDelay->Insert(node,{0,false});
     SendLatencyUpwards(node,edgeToDelay,nodeDelay,nodeToPart);
 
-    region(out){
+    if(globalOptions.debug){
+      BLOCK_REGION(out);
       String fileName = PushString(out,"1_%d_out1_%d.dot",functionCalls,graphs++);
       String filePath = PushDebugPath(out,accel->name,STRING("delays"),fileName);
       
@@ -2387,7 +2385,8 @@ CalculateDelayResult CalculateDelay(Accelerator* accel,DAGOrderNodes order,Array
       SendLatencyUpwards(node,edgeToDelay,nodeDelay,nodeToPart);
     }
 
-    region(out){
+    if(globalOptions.debug){
+      BLOCK_REGION(out);
       String fileName = PushString(out,"1_%d_out2_%d.dot",functionCalls,graphs++);
       String filePath = PushDebugPath(out,accel->name,STRING("delays"),fileName);
       
@@ -2423,7 +2422,8 @@ CalculateDelayResult CalculateDelay(Accelerator* accel,DAGOrderNodes order,Array
     *delay -= minimum;
   }
   
-  region(out){
+  if(globalOptions.debug){
+    BLOCK_REGION(out);
     String fileName = PushString(out,"1_%d_out3_%d.dot",functionCalls,graphs++);
     String filePath = PushDebugPath(out,accel->name,STRING("delays"),fileName);
       
@@ -2459,7 +2459,8 @@ CalculateDelayResult CalculateDelay(Accelerator* accel,DAGOrderNodes order,Array
     }
   }
 
-  region(out){
+  if(globalOptions.debug){
+    BLOCK_REGION(out);
     String fileName = PushString(out,"1_%d_out4_%d.dot",functionCalls,graphs++);
     String filePath = PushDebugPath(out,accel->name,STRING("delays"),fileName);
       
@@ -2529,7 +2530,8 @@ CalculateDelayResult CalculateDelay(Accelerator* accel,DAGOrderNodes order,Array
     }
   }
 
-  region(out){
+  if(globalOptions.debug){
+    BLOCK_REGION(out);
     String fileName = PushString(out,"1_%d_out5_%d.dot",functionCalls,graphs++);
     String filePath = PushDebugPath(out,accel->name,STRING("delays"),fileName);
       
@@ -2585,7 +2587,8 @@ CalculateDelayResult CalculateDelay(Accelerator* accel,DAGOrderNodes order,Array
     }
   }
 
-  region(out){
+  if(globalOptions.debug){
+    BLOCK_REGION(out);
     String fileName = PushString(out,"1_%d_out_final.dot",functionCalls);
     String filepath = PushDebugPath(out,accel->name,STRING("delays"),fileName);
 
