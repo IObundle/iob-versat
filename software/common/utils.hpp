@@ -14,6 +14,8 @@ String GetAbsolutePath(const char* path,Arena* out);
 
 Array<int> GetNonZeroIndexes(Array<int> array,Arena* out);
 
+String JoinStrings(Array<String> strings,String separator,Arena* out);
+
 template<typename Value,typename Error>
 struct Result{
   union{
@@ -364,6 +366,19 @@ Array<P> PushArrayFromHashmapData(Arena* out,Hashmap<T,P>* map){
 
 template<typename T>
 Array<T> PushArrayFromSet(Arena* out,Set<T>* set){
+  DynamicArray<T> arr = StartArray<T>(out);
+
+  for(auto pair : set->map){
+    T* ptr = arr.PushElem();
+    *ptr = pair.first;
+  }
+
+  Array<T> res = EndArray(arr);
+  return res;
+}
+
+template<typename T>
+Array<T> PushArrayFromSet(Arena* out,TrieSet<T>* set){
   DynamicArray<T> arr = StartArray<T>(out);
 
   for(auto pair : set->map){

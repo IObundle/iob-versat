@@ -96,13 +96,13 @@ public:
   Token PeekRemainingLine(); // Does not go back. 
   
   bool IfPeekToken(const char* str);
-  bool IfNextToken(const char* str);
+  bool IfNextToken(const char* str); // Only does "next" if token matches str
 
   Opt<Token> PeekFindUntil(const char* str);
   Opt<Token> PeekFindIncluding(const char* str);
   Opt<Token> PeekFindIncludingLast(const char* str);
   Opt<Token> NextFindUntil(const char* str);
-
+  
   Opt<FindFirstResult> FindFirst(BracketList<const char*> strings);
 
   Token PeekWhitespace();

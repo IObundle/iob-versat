@@ -67,7 +67,7 @@ class iob_versat(iob_module):
                 {
                     "name": "ADDR_W",
                     "type": "P",
-                    "val": "`IOB_TIMER_SWREG_ADDR_W",
+                    "val": "`IOB_VERSAT_SWREG_ADDR_W",
                     "min": "NA",
                     "max": "NA",
                     "descr": "Address bus width",

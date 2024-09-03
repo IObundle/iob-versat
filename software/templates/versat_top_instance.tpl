@@ -15,7 +15,7 @@ module versat_instance #(
       parameter ADDR_W = 32,
       parameter DATA_W = 32,
       parameter AXI_ADDR_W = 32,
-      parameter AXI_DATA_W = 32,
+      parameter AXI_DATA_W = @{arch.databusDataSize},
       parameter LEN_W = 20
    )
    (

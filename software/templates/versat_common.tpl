@@ -118,21 +118,15 @@
 #{end}
 
 #{define IntName count}
-#{set name "int"}
+#{set name "int32_t"}
 #{if count == 8}
-#{set name "int8"}
+#{set name "int8_t"}
 #{end}
 #{if count == 16}
-#{set name "int16"}
+#{set name "int16_t"}
 #{end}
 #{if count == 64}
-#{set name "int64"}
-#{end}
-#{if count == 128}
-#{set name "Int128"}
-#{end}
-#{if count == 256}
-#{set name "Int256"}
+#{set name "int64_t"}
 #{end}
 #{return name}
 #{end}

@@ -68,7 +68,13 @@ Arena InitArena(size_t size){
   arena.used = 0;
   arena.totalAllocated = size;
   arena.mem = (Byte*) calloc(size,sizeof(Byte));
-  Assert(arena.mem);
+  
+  if(arena.mem == nullptr){
+    fprintf(stderr,"Error allocating memory. Make sure enough memory is available\n");
+    exit(1);
+  }
+
+  //Assert(arena.mem);
   Assert(IS_ALIGNED_64(arena.mem));
 
   return arena;

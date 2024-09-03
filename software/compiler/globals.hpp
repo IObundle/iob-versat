@@ -15,8 +15,8 @@ struct Options{
   
   String specificationFilepath;
   String topName;
-  int addrSize; // AXI_ADDR_W - used to be bitSize
-  int dataSize; // AXI_DATA_W
+  int databusAddrSize; // AXI_ADDR_W - used to be bitSize
+  int databusDataSize; // AXI_DATA_W
 
   bool addInputAndOutputsToTop;
   bool debug;

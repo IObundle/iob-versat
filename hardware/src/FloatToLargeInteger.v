@@ -1,7 +1,6 @@
 `timescale 1ns / 1ps
 
 module FloatToLargeInteger (
-   //input / output data
    input [31:0] in_i,
 
    output reg [278:0] out_o  // Much higher order

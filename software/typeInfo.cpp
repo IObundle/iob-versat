@@ -31,11 +31,14 @@ void RegisterParsedTypes(){
   RegisterOpaqueType(STRING("EnumMember"),Subtype_STRUCT,sizeof(EnumMember),alignof(EnumMember));
   RegisterOpaqueType(STRING("TemplateArg"),Subtype_STRUCT,sizeof(TemplateArg),alignof(TemplateArg));
   RegisterOpaqueType(STRING("TemplatedMember"),Subtype_STRUCT,sizeof(TemplatedMember),alignof(TemplatedMember));
+  RegisterOpaqueType(STRING("NameAndTemplateArguments"),Subtype_STRUCT,sizeof(NameAndTemplateArguments),alignof(NameAndTemplateArguments));
+  RegisterOpaqueType(STRING("ParsedType"),Subtype_STRUCT,sizeof(ParsedType),alignof(ParsedType));
   RegisterOpaqueType(STRING("Type"),Subtype_STRUCT,sizeof(Type),alignof(Type));
   RegisterOpaqueType(STRING("Member"),Subtype_STRUCT,sizeof(Member),alignof(Member));
   RegisterOpaqueType(STRING("Value"),Subtype_STRUCT,sizeof(Value),alignof(Value));
   RegisterOpaqueType(STRING("Iterator"),Subtype_STRUCT,sizeof(Iterator),alignof(Iterator));
   RegisterOpaqueType(STRING("HashmapUnpackedIndex"),Subtype_STRUCT,sizeof(HashmapUnpackedIndex),alignof(HashmapUnpackedIndex));
+  RegisterOpaqueType(STRING("TypeIterator"),Subtype_STRUCT,sizeof(TypeIterator),alignof(TypeIterator));
   RegisterOpaqueType(STRING("Expression"),Subtype_STRUCT,sizeof(Expression),alignof(Expression));
   RegisterOpaqueType(STRING("Cursor"),Subtype_STRUCT,sizeof(Cursor),alignof(Cursor));
   RegisterOpaqueType(STRING("Token"),Subtype_STRUCT,sizeof(Token),alignof(Token));
@@ -329,31 +332,31 @@ RegisterEnum(STRING("ConnectionType"),C_ARRAY_TO_ARRAY(ConnectionTypeData));
     STRING("T") /* 1 */,
     STRING("T") /* 2 */,
     STRING("T") /* 3 */,
-    STRING("First") /* 4 */,
-    STRING("Second") /* 5 */,
-    STRING("T") /* 6 */,
-    STRING("T") /* 7 */,
-    STRING("Key") /* 8 */,
-    STRING("Data") /* 9 */,
-    STRING("Data") /* 10 */,
-    STRING("Key") /* 11 */,
+    STRING("T") /* 4 */,
+    STRING("T") /* 5 */,
+    STRING("First") /* 6 */,
+    STRING("Second") /* 7 */,
+    STRING("T") /* 8 */,
+    STRING("T") /* 9 */,
+    STRING("Key") /* 10 */,
+    STRING("Data") /* 11 */,
     STRING("Data") /* 12 */,
-    STRING("Data") /* 13 */,
+    STRING("Key") /* 13 */,
     STRING("Data") /* 14 */,
-    STRING("Key") /* 15 */,
+    STRING("Data") /* 15 */,
     STRING("Data") /* 16 */,
     STRING("Key") /* 17 */,
     STRING("Data") /* 18 */,
     STRING("Key") /* 19 */,
     STRING("Data") /* 20 */,
-    STRING("Data") /* 21 */,
+    STRING("Key") /* 21 */,
     STRING("Data") /* 22 */,
-    STRING("T") /* 23 */,
-    STRING("T") /* 24 */,
-    STRING("Value") /* 25 */,
-    STRING("Error") /* 26 */,
-    STRING("T") /* 27 */,
-    STRING("T") /* 28 */,
+    STRING("Data") /* 23 */,
+    STRING("Data") /* 24 */,
+    STRING("T") /* 25 */,
+    STRING("T") /* 26 */,
+    STRING("Value") /* 27 */,
+    STRING("Error") /* 28 */,
     STRING("T") /* 29 */,
     STRING("T") /* 30 */,
     STRING("T") /* 31 */,
@@ -361,39 +364,43 @@ RegisterEnum(STRING("ConnectionType"),C_ARRAY_TO_ARRAY(ConnectionTypeData));
     STRING("T") /* 33 */,
     STRING("T") /* 34 */,
     STRING("T") /* 35 */,
-    STRING("T") /* 36 */
+    STRING("T") /* 36 */,
+    STRING("T") /* 37 */,
+    STRING("T") /* 38 */
   };
 
   RegisterTemplate(STRING("_Defer"),(Array<String>){&templateArgs[0],1});
-  RegisterTemplate(STRING("ArrayIterator"),(Array<String>){&templateArgs[1],1});
-  RegisterTemplate(STRING("Array"),(Array<String>){&templateArgs[2],1});
-  RegisterTemplate(STRING("Range"),(Array<String>){&templateArgs[3],1});
-  RegisterTemplate(STRING("Pair"),(Array<String>){&templateArgs[4],2});
-  RegisterTemplate(STRING("DynamicArray"),(Array<String>){&templateArgs[6],1});
-  RegisterTemplate(STRING("PushPtr"),(Array<String>){&templateArgs[7],1});
-  RegisterTemplate(STRING("HashmapIterator"),(Array<String>){&templateArgs[8],2});
-  RegisterTemplate(STRING("GetOrAllocateResult"),(Array<String>){&templateArgs[10],1});
-  RegisterTemplate(STRING("Hashmap"),(Array<String>){&templateArgs[11],2});
-  RegisterTemplate(STRING("Set"),(Array<String>){&templateArgs[13],1});
-  RegisterTemplate(STRING("SetIterator"),(Array<String>){&templateArgs[14],1});
-  RegisterTemplate(STRING("TrieMapNode"),(Array<String>){&templateArgs[15],2});
-  RegisterTemplate(STRING("TrieMapIterator"),(Array<String>){&templateArgs[17],2});
-  RegisterTemplate(STRING("TrieMap"),(Array<String>){&templateArgs[19],2});
-  RegisterTemplate(STRING("TrieSetIterator"),(Array<String>){&templateArgs[21],1});
-  RegisterTemplate(STRING("TrieSet"),(Array<String>){&templateArgs[22],1});
-  RegisterTemplate(STRING("PoolIterator"),(Array<String>){&templateArgs[23],1});
-  RegisterTemplate(STRING("Pool"),(Array<String>){&templateArgs[24],1});
-  RegisterTemplate(STRING("Result"),(Array<String>){&templateArgs[25],2});
-  RegisterTemplate(STRING("IndexedStruct"),(Array<String>){&templateArgs[27],1});
-  RegisterTemplate(STRING("ListedStruct"),(Array<String>){&templateArgs[28],1});
-  RegisterTemplate(STRING("ArenaList"),(Array<String>){&templateArgs[29],1});
-  RegisterTemplate(STRING("Stack"),(Array<String>){&templateArgs[30],1});
-  RegisterTemplate(STRING("WireTemplate"),(Array<String>){&templateArgs[31],1});
-  RegisterTemplate(STRING("ExternalMemoryTwoPortsTemplate"),(Array<String>){&templateArgs[32],1});
-  RegisterTemplate(STRING("ExternalMemoryDualPortTemplate"),(Array<String>){&templateArgs[33],1});
-  RegisterTemplate(STRING("ExternalMemoryTemplate"),(Array<String>){&templateArgs[34],1});
-  RegisterTemplate(STRING("ExternalMemoryInterfaceTemplate"),(Array<String>){&templateArgs[35],1});
-  RegisterTemplate(STRING("std::vector"),(Array<String>){&templateArgs[36],1});
+  RegisterTemplate(STRING("Opt"),(Array<String>){&templateArgs[1],1});
+  RegisterTemplate(STRING("ArrayIterator"),(Array<String>){&templateArgs[2],1});
+  RegisterTemplate(STRING("Array"),(Array<String>){&templateArgs[3],1});
+  RegisterTemplate(STRING("MyArrayIterator"),(Array<String>){&templateArgs[4],1});
+  RegisterTemplate(STRING("Range"),(Array<String>){&templateArgs[5],1});
+  RegisterTemplate(STRING("Pair"),(Array<String>){&templateArgs[6],2});
+  RegisterTemplate(STRING("DynamicArray"),(Array<String>){&templateArgs[8],1});
+  RegisterTemplate(STRING("PushPtr"),(Array<String>){&templateArgs[9],1});
+  RegisterTemplate(STRING("HashmapIterator"),(Array<String>){&templateArgs[10],2});
+  RegisterTemplate(STRING("GetOrAllocateResult"),(Array<String>){&templateArgs[12],1});
+  RegisterTemplate(STRING("Hashmap"),(Array<String>){&templateArgs[13],2});
+  RegisterTemplate(STRING("Set"),(Array<String>){&templateArgs[15],1});
+  RegisterTemplate(STRING("SetIterator"),(Array<String>){&templateArgs[16],1});
+  RegisterTemplate(STRING("TrieMapNode"),(Array<String>){&templateArgs[17],2});
+  RegisterTemplate(STRING("TrieMapIterator"),(Array<String>){&templateArgs[19],2});
+  RegisterTemplate(STRING("TrieMap"),(Array<String>){&templateArgs[21],2});
+  RegisterTemplate(STRING("TrieSetIterator"),(Array<String>){&templateArgs[23],1});
+  RegisterTemplate(STRING("TrieSet"),(Array<String>){&templateArgs[24],1});
+  RegisterTemplate(STRING("PoolIterator"),(Array<String>){&templateArgs[25],1});
+  RegisterTemplate(STRING("Pool"),(Array<String>){&templateArgs[26],1});
+  RegisterTemplate(STRING("Result"),(Array<String>){&templateArgs[27],2});
+  RegisterTemplate(STRING("IndexedStruct"),(Array<String>){&templateArgs[29],1});
+  RegisterTemplate(STRING("ListedStruct"),(Array<String>){&templateArgs[30],1});
+  RegisterTemplate(STRING("ArenaList"),(Array<String>){&templateArgs[31],1});
+  RegisterTemplate(STRING("Stack"),(Array<String>){&templateArgs[32],1});
+  RegisterTemplate(STRING("WireTemplate"),(Array<String>){&templateArgs[33],1});
+  RegisterTemplate(STRING("ExternalMemoryTwoPortsTemplate"),(Array<String>){&templateArgs[34],1});
+  RegisterTemplate(STRING("ExternalMemoryDualPortTemplate"),(Array<String>){&templateArgs[35],1});
+  RegisterTemplate(STRING("ExternalMemoryTemplate"),(Array<String>){&templateArgs[36],1});
+  RegisterTemplate(STRING("ExternalMemoryInterfaceTemplate"),(Array<String>){&templateArgs[37],1});
+  RegisterTemplate(STRING("std::vector"),(Array<String>){&templateArgs[38],1});
 
   RegisterTypedef(STRING("uint8_t"),STRING("Byte"));
   RegisterTypedef(STRING("uint8_t"),STRING("u8"));
@@ -412,116 +419,122 @@ RegisterEnum(STRING("ConnectionType"),C_ARRAY_TO_ARRAY(ConnectionTypeData));
   RegisterTypedef(STRING("uint"),STRING("GraphDotFormat"));
 
   static TemplatedMember templateMembers[] = { (TemplatedMember){STRING("F"),STRING("f"),0} /* 0 */,
-    (TemplatedMember){STRING("T *"),STRING("ptr"),0} /* 1 */,
-    (TemplatedMember){STRING("T *"),STRING("data"),0} /* 2 */,
-    (TemplatedMember){STRING("int"),STRING("size"),1} /* 3 */,
-    (TemplatedMember){STRING("T"),STRING("high"),0} /* 4 */,
-    (TemplatedMember){STRING("T"),STRING("start"),0} /* 5 */,
-    (TemplatedMember){STRING("T"),STRING("top"),0} /* 6 */,
-    (TemplatedMember){STRING("T"),STRING("low"),1} /* 7 */,
-    (TemplatedMember){STRING("T"),STRING("end"),1} /* 8 */,
-    (TemplatedMember){STRING("T"),STRING("bottom"),1} /* 9 */,
-    (TemplatedMember){STRING("First"),STRING("key"),0} /* 10 */,
-    (TemplatedMember){STRING("First"),STRING("first"),0} /* 11 */,
-    (TemplatedMember){STRING("Second"),STRING("data"),1} /* 12 */,
-    (TemplatedMember){STRING("Second"),STRING("second"),1} /* 13 */,
-    (TemplatedMember){STRING("ArenaMark"),STRING("mark"),0} /* 14 */,
-    (TemplatedMember){STRING("T *"),STRING("ptr"),0} /* 15 */,
-    (TemplatedMember){STRING("int"),STRING("maximumTimes"),1} /* 16 */,
-    (TemplatedMember){STRING("int"),STRING("timesPushed"),2} /* 17 */,
-    (TemplatedMember){STRING("Pair<Key, Data> *"),STRING("pairs"),0} /* 18 */,
-    (TemplatedMember){STRING("int"),STRING("index"),1} /* 19 */,
-    (TemplatedMember){STRING("Data *"),STRING("data"),0} /* 20 */,
-    (TemplatedMember){STRING("bool"),STRING("alreadyExisted"),1} /* 21 */,
-    (TemplatedMember){STRING("int"),STRING("nodesAllocated"),0} /* 22 */,
-    (TemplatedMember){STRING("int"),STRING("nodesUsed"),1} /* 23 */,
-    (TemplatedMember){STRING("Pair<Key, Data> **"),STRING("buckets"),2} /* 24 */,
-    (TemplatedMember){STRING("Pair<Key, Data> *"),STRING("data"),3} /* 25 */,
-    (TemplatedMember){STRING("Pair<Key, Data> **"),STRING("next"),4} /* 26 */,
-    (TemplatedMember){STRING("Hashmap<Data, int> *"),STRING("map"),0} /* 27 */,
-    (TemplatedMember){STRING("HashmapIterator<Data, int>"),STRING("innerIter"),0} /* 28 */,
-    (TemplatedMember){STRING("TrieMapNode<Key, Data> *[4]"),STRING("childs"),0} /* 29 */,
-    (TemplatedMember){STRING("Pair<Key, Data>"),STRING("pair"),1} /* 30 */,
-    (TemplatedMember){STRING("TrieMapNode<Key, Data> *"),STRING("next"),2} /* 31 */,
-    (TemplatedMember){STRING("TrieMapNode<Key, Data> *"),STRING("ptr"),0} /* 32 */,
+    (TemplatedMember){STRING("T"),STRING("val"),0} /* 1 */,
+    (TemplatedMember){STRING("bool"),STRING("hasVal"),1} /* 2 */,
+    (TemplatedMember){STRING("T *"),STRING("ptr"),0} /* 3 */,
+    (TemplatedMember){STRING("T *"),STRING("data"),0} /* 4 */,
+    (TemplatedMember){STRING("int"),STRING("size"),1} /* 5 */,
+    (TemplatedMember){STRING("int"),STRING("current"),0} /* 6 */,
+    (TemplatedMember){STRING("Array<T>"),STRING("array"),1} /* 7 */,
+    (TemplatedMember){STRING("T"),STRING("high"),0} /* 8 */,
+    (TemplatedMember){STRING("T"),STRING("start"),0} /* 9 */,
+    (TemplatedMember){STRING("T"),STRING("top"),0} /* 10 */,
+    (TemplatedMember){STRING("T"),STRING("low"),1} /* 11 */,
+    (TemplatedMember){STRING("T"),STRING("end"),1} /* 12 */,
+    (TemplatedMember){STRING("T"),STRING("bottom"),1} /* 13 */,
+    (TemplatedMember){STRING("First"),STRING("key"),0} /* 14 */,
+    (TemplatedMember){STRING("First"),STRING("first"),0} /* 15 */,
+    (TemplatedMember){STRING("Second"),STRING("data"),1} /* 16 */,
+    (TemplatedMember){STRING("Second"),STRING("second"),1} /* 17 */,
+    (TemplatedMember){STRING("ArenaMark"),STRING("mark"),0} /* 18 */,
+    (TemplatedMember){STRING("T *"),STRING("ptr"),0} /* 19 */,
+    (TemplatedMember){STRING("int"),STRING("maximumTimes"),1} /* 20 */,
+    (TemplatedMember){STRING("int"),STRING("timesPushed"),2} /* 21 */,
+    (TemplatedMember){STRING("Pair<Key, Data> *"),STRING("pairs"),0} /* 22 */,
+    (TemplatedMember){STRING("int"),STRING("index"),1} /* 23 */,
+    (TemplatedMember){STRING("Data *"),STRING("data"),0} /* 24 */,
+    (TemplatedMember){STRING("bool"),STRING("alreadyExisted"),1} /* 25 */,
+    (TemplatedMember){STRING("int"),STRING("nodesAllocated"),0} /* 26 */,
+    (TemplatedMember){STRING("int"),STRING("nodesUsed"),1} /* 27 */,
+    (TemplatedMember){STRING("Pair<Key, Data> **"),STRING("buckets"),2} /* 28 */,
+    (TemplatedMember){STRING("Pair<Key, Data> *"),STRING("data"),3} /* 29 */,
+    (TemplatedMember){STRING("Pair<Key, Data> **"),STRING("next"),4} /* 30 */,
+    (TemplatedMember){STRING("Hashmap<Data, int> *"),STRING("map"),0} /* 31 */,
+    (TemplatedMember){STRING("HashmapIterator<Data, int>"),STRING("innerIter"),0} /* 32 */,
     (TemplatedMember){STRING("TrieMapNode<Key, Data> *[4]"),STRING("childs"),0} /* 33 */,
-    (TemplatedMember){STRING("Arena *"),STRING("arena"),1} /* 34 */,
-    (TemplatedMember){STRING("TrieMapNode<Key, Data> *"),STRING("head"),2} /* 35 */,
-    (TemplatedMember){STRING("TrieMapNode<Key, Data> *"),STRING("tail"),3} /* 36 */,
-    (TemplatedMember){STRING("int"),STRING("inserted"),4} /* 37 */,
-    (TemplatedMember){STRING("TrieMapIterator<Data, int>"),STRING("innerIter"),0} /* 38 */,
-    (TemplatedMember){STRING("TrieMap<Data, int> *"),STRING("map"),0} /* 39 */,
-    (TemplatedMember){STRING("Pool<T> *"),STRING("pool"),0} /* 40 */,
-    (TemplatedMember){STRING("PageInfo"),STRING("pageInfo"),1} /* 41 */,
-    (TemplatedMember){STRING("int"),STRING("fullIndex"),2} /* 42 */,
-    (TemplatedMember){STRING("int"),STRING("bit"),3} /* 43 */,
-    (TemplatedMember){STRING("int"),STRING("index"),4} /* 44 */,
-    (TemplatedMember){STRING("Byte *"),STRING("page"),5} /* 45 */,
-    (TemplatedMember){STRING("T *"),STRING("lastVal"),6} /* 46 */,
-    (TemplatedMember){STRING("Byte *"),STRING("mem"),0} /* 47 */,
-    (TemplatedMember){STRING("PoolInfo"),STRING("info"),1} /* 48 */,
-    (TemplatedMember){STRING("Value"),STRING("value"),0} /* 49 */,
-    (TemplatedMember){STRING("Error"),STRING("error"),0} /* 50 */,
-    (TemplatedMember){STRING("bool"),STRING("isError"),1} /* 51 */,
-    (TemplatedMember){STRING("int"),STRING("index"),0} /* 52 */,
-    (TemplatedMember){STRING("T"),STRING("elem"),0} /* 53 */,
-    (TemplatedMember){STRING("ListedStruct<T> *"),STRING("next"),1} /* 54 */,
-    (TemplatedMember){STRING("Arena *"),STRING("arena"),0} /* 55 */,
-    (TemplatedMember){STRING("ListedStruct<T> *"),STRING("head"),1} /* 56 */,
-    (TemplatedMember){STRING("ListedStruct<T> *"),STRING("tail"),2} /* 57 */,
-    (TemplatedMember){STRING("Array<T>"),STRING("mem"),0} /* 58 */,
-    (TemplatedMember){STRING("int"),STRING("index"),1} /* 59 */,
-    (TemplatedMember){STRING("String"),STRING("name"),0} /* 60 */,
-    (TemplatedMember){STRING("T"),STRING("bitSize"),1} /* 61 */,
-    (TemplatedMember){STRING("bool"),STRING("isStatic"),2} /* 62 */,
-    (TemplatedMember){STRING("T"),STRING("bitSizeIn"),0} /* 63 */,
-    (TemplatedMember){STRING("T"),STRING("bitSizeOut"),1} /* 64 */,
-    (TemplatedMember){STRING("T"),STRING("dataSizeIn"),2} /* 65 */,
-    (TemplatedMember){STRING("T"),STRING("dataSizeOut"),3} /* 66 */,
-    (TemplatedMember){STRING("T"),STRING("bitSize"),0} /* 67 */,
-    (TemplatedMember){STRING("T"),STRING("dataSizeIn"),1} /* 68 */,
-    (TemplatedMember){STRING("T"),STRING("dataSizeOut"),2} /* 69 */,
-    (TemplatedMember){STRING("ExternalMemoryTwoPortsTemplate<T>"),STRING("tp"),0} /* 70 */,
-    (TemplatedMember){STRING("ExternalMemoryDualPortTemplate<T>[2]"),STRING("dp"),0} /* 71 */,
-    (TemplatedMember){STRING("ExternalMemoryTwoPortsTemplate<T>"),STRING("tp"),0} /* 72 */,
-    (TemplatedMember){STRING("ExternalMemoryDualPortTemplate<T>[2]"),STRING("dp"),0} /* 73 */,
-    (TemplatedMember){STRING("ExternalMemoryType"),STRING("type"),1} /* 74 */,
-    (TemplatedMember){STRING("int"),STRING("interface"),2} /* 75 */,
-    (TemplatedMember){STRING("T*"),STRING("mem"),0} /* 76 */,
-    (TemplatedMember){STRING("int"),STRING("size"),1} /* 77 */,
-    (TemplatedMember){STRING("int"),STRING("allocated"),2} /* 78 */
+    (TemplatedMember){STRING("Pair<Key, Data>"),STRING("pair"),1} /* 34 */,
+    (TemplatedMember){STRING("TrieMapNode<Key, Data> *"),STRING("next"),2} /* 35 */,
+    (TemplatedMember){STRING("TrieMapNode<Key, Data> *"),STRING("ptr"),0} /* 36 */,
+    (TemplatedMember){STRING("TrieMapNode<Key, Data> *[4]"),STRING("childs"),0} /* 37 */,
+    (TemplatedMember){STRING("Arena *"),STRING("arena"),1} /* 38 */,
+    (TemplatedMember){STRING("TrieMapNode<Key, Data> *"),STRING("head"),2} /* 39 */,
+    (TemplatedMember){STRING("TrieMapNode<Key, Data> *"),STRING("tail"),3} /* 40 */,
+    (TemplatedMember){STRING("int"),STRING("inserted"),4} /* 41 */,
+    (TemplatedMember){STRING("TrieMapIterator<Data, int>"),STRING("innerIter"),0} /* 42 */,
+    (TemplatedMember){STRING("TrieMap<Data, int> *"),STRING("map"),0} /* 43 */,
+    (TemplatedMember){STRING("Pool<T> *"),STRING("pool"),0} /* 44 */,
+    (TemplatedMember){STRING("PageInfo"),STRING("pageInfo"),1} /* 45 */,
+    (TemplatedMember){STRING("int"),STRING("fullIndex"),2} /* 46 */,
+    (TemplatedMember){STRING("int"),STRING("bit"),3} /* 47 */,
+    (TemplatedMember){STRING("int"),STRING("index"),4} /* 48 */,
+    (TemplatedMember){STRING("Byte *"),STRING("page"),5} /* 49 */,
+    (TemplatedMember){STRING("T *"),STRING("lastVal"),6} /* 50 */,
+    (TemplatedMember){STRING("Byte *"),STRING("mem"),0} /* 51 */,
+    (TemplatedMember){STRING("PoolInfo"),STRING("info"),1} /* 52 */,
+    (TemplatedMember){STRING("Value"),STRING("value"),0} /* 53 */,
+    (TemplatedMember){STRING("Error"),STRING("error"),0} /* 54 */,
+    (TemplatedMember){STRING("bool"),STRING("isError"),1} /* 55 */,
+    (TemplatedMember){STRING("int"),STRING("index"),0} /* 56 */,
+    (TemplatedMember){STRING("T"),STRING("elem"),0} /* 57 */,
+    (TemplatedMember){STRING("ListedStruct<T> *"),STRING("next"),1} /* 58 */,
+    (TemplatedMember){STRING("Arena *"),STRING("arena"),0} /* 59 */,
+    (TemplatedMember){STRING("ListedStruct<T> *"),STRING("head"),1} /* 60 */,
+    (TemplatedMember){STRING("ListedStruct<T> *"),STRING("tail"),2} /* 61 */,
+    (TemplatedMember){STRING("Array<T>"),STRING("mem"),0} /* 62 */,
+    (TemplatedMember){STRING("int"),STRING("index"),1} /* 63 */,
+    (TemplatedMember){STRING("String"),STRING("name"),0} /* 64 */,
+    (TemplatedMember){STRING("T"),STRING("bitSize"),1} /* 65 */,
+    (TemplatedMember){STRING("bool"),STRING("isStatic"),2} /* 66 */,
+    (TemplatedMember){STRING("T"),STRING("bitSizeIn"),0} /* 67 */,
+    (TemplatedMember){STRING("T"),STRING("bitSizeOut"),1} /* 68 */,
+    (TemplatedMember){STRING("T"),STRING("dataSizeIn"),2} /* 69 */,
+    (TemplatedMember){STRING("T"),STRING("dataSizeOut"),3} /* 70 */,
+    (TemplatedMember){STRING("T"),STRING("bitSize"),0} /* 71 */,
+    (TemplatedMember){STRING("T"),STRING("dataSizeIn"),1} /* 72 */,
+    (TemplatedMember){STRING("T"),STRING("dataSizeOut"),2} /* 73 */,
+    (TemplatedMember){STRING("ExternalMemoryTwoPortsTemplate<T>"),STRING("tp"),0} /* 74 */,
+    (TemplatedMember){STRING("ExternalMemoryDualPortTemplate<T>[2]"),STRING("dp"),0} /* 75 */,
+    (TemplatedMember){STRING("ExternalMemoryTwoPortsTemplate<T>"),STRING("tp"),0} /* 76 */,
+    (TemplatedMember){STRING("ExternalMemoryDualPortTemplate<T>[2]"),STRING("dp"),0} /* 77 */,
+    (TemplatedMember){STRING("ExternalMemoryType"),STRING("type"),1} /* 78 */,
+    (TemplatedMember){STRING("int"),STRING("interface"),2} /* 79 */,
+    (TemplatedMember){STRING("T*"),STRING("mem"),0} /* 80 */,
+    (TemplatedMember){STRING("int"),STRING("size"),1} /* 81 */,
+    (TemplatedMember){STRING("int"),STRING("allocated"),2} /* 82 */
   };
 
   RegisterTemplateMembers(STRING("_Defer"),(Array<TemplatedMember>){&templateMembers[0],1});
-  RegisterTemplateMembers(STRING("ArrayIterator"),(Array<TemplatedMember>){&templateMembers[1],1});
-  RegisterTemplateMembers(STRING("Array"),(Array<TemplatedMember>){&templateMembers[2],2});
-  RegisterTemplateMembers(STRING("Range"),(Array<TemplatedMember>){&templateMembers[4],6});
-  RegisterTemplateMembers(STRING("Pair"),(Array<TemplatedMember>){&templateMembers[10],4});
-  RegisterTemplateMembers(STRING("DynamicArray"),(Array<TemplatedMember>){&templateMembers[14],1});
-  RegisterTemplateMembers(STRING("PushPtr"),(Array<TemplatedMember>){&templateMembers[15],3});
-  RegisterTemplateMembers(STRING("HashmapIterator"),(Array<TemplatedMember>){&templateMembers[18],2});
-  RegisterTemplateMembers(STRING("GetOrAllocateResult"),(Array<TemplatedMember>){&templateMembers[20],2});
-  RegisterTemplateMembers(STRING("Hashmap"),(Array<TemplatedMember>){&templateMembers[22],5});
-  RegisterTemplateMembers(STRING("Set"),(Array<TemplatedMember>){&templateMembers[27],1});
-  RegisterTemplateMembers(STRING("SetIterator"),(Array<TemplatedMember>){&templateMembers[28],1});
-  RegisterTemplateMembers(STRING("TrieMapNode"),(Array<TemplatedMember>){&templateMembers[29],3});
-  RegisterTemplateMembers(STRING("TrieMapIterator"),(Array<TemplatedMember>){&templateMembers[32],1});
-  RegisterTemplateMembers(STRING("TrieMap"),(Array<TemplatedMember>){&templateMembers[33],5});
-  RegisterTemplateMembers(STRING("TrieSetIterator"),(Array<TemplatedMember>){&templateMembers[38],1});
-  RegisterTemplateMembers(STRING("TrieSet"),(Array<TemplatedMember>){&templateMembers[39],1});
-  RegisterTemplateMembers(STRING("PoolIterator"),(Array<TemplatedMember>){&templateMembers[40],7});
-  RegisterTemplateMembers(STRING("Pool"),(Array<TemplatedMember>){&templateMembers[47],2});
-  RegisterTemplateMembers(STRING("Result"),(Array<TemplatedMember>){&templateMembers[49],3});
-  RegisterTemplateMembers(STRING("IndexedStruct"),(Array<TemplatedMember>){&templateMembers[52],1});
-  RegisterTemplateMembers(STRING("ListedStruct"),(Array<TemplatedMember>){&templateMembers[53],2});
-  RegisterTemplateMembers(STRING("ArenaList"),(Array<TemplatedMember>){&templateMembers[55],3});
-  RegisterTemplateMembers(STRING("Stack"),(Array<TemplatedMember>){&templateMembers[58],2});
-  RegisterTemplateMembers(STRING("WireTemplate"),(Array<TemplatedMember>){&templateMembers[60],3});
-  RegisterTemplateMembers(STRING("ExternalMemoryTwoPortsTemplate"),(Array<TemplatedMember>){&templateMembers[63],4});
-  RegisterTemplateMembers(STRING("ExternalMemoryDualPortTemplate"),(Array<TemplatedMember>){&templateMembers[67],3});
-  RegisterTemplateMembers(STRING("ExternalMemoryTemplate"),(Array<TemplatedMember>){&templateMembers[70],2});
-  RegisterTemplateMembers(STRING("ExternalMemoryInterfaceTemplate"),(Array<TemplatedMember>){&templateMembers[72],4});
-  RegisterTemplateMembers(STRING("std::vector"),(Array<TemplatedMember>){&templateMembers[76],3});
+  RegisterTemplateMembers(STRING("Opt"),(Array<TemplatedMember>){&templateMembers[1],2});
+  RegisterTemplateMembers(STRING("ArrayIterator"),(Array<TemplatedMember>){&templateMembers[3],1});
+  RegisterTemplateMembers(STRING("Array"),(Array<TemplatedMember>){&templateMembers[4],2});
+  RegisterTemplateMembers(STRING("MyArrayIterator"),(Array<TemplatedMember>){&templateMembers[6],2});
+  RegisterTemplateMembers(STRING("Range"),(Array<TemplatedMember>){&templateMembers[8],6});
+  RegisterTemplateMembers(STRING("Pair"),(Array<TemplatedMember>){&templateMembers[14],4});
+  RegisterTemplateMembers(STRING("DynamicArray"),(Array<TemplatedMember>){&templateMembers[18],1});
+  RegisterTemplateMembers(STRING("PushPtr"),(Array<TemplatedMember>){&templateMembers[19],3});
+  RegisterTemplateMembers(STRING("HashmapIterator"),(Array<TemplatedMember>){&templateMembers[22],2});
+  RegisterTemplateMembers(STRING("GetOrAllocateResult"),(Array<TemplatedMember>){&templateMembers[24],2});
+  RegisterTemplateMembers(STRING("Hashmap"),(Array<TemplatedMember>){&templateMembers[26],5});
+  RegisterTemplateMembers(STRING("Set"),(Array<TemplatedMember>){&templateMembers[31],1});
+  RegisterTemplateMembers(STRING("SetIterator"),(Array<TemplatedMember>){&templateMembers[32],1});
+  RegisterTemplateMembers(STRING("TrieMapNode"),(Array<TemplatedMember>){&templateMembers[33],3});
+  RegisterTemplateMembers(STRING("TrieMapIterator"),(Array<TemplatedMember>){&templateMembers[36],1});
+  RegisterTemplateMembers(STRING("TrieMap"),(Array<TemplatedMember>){&templateMembers[37],5});
+  RegisterTemplateMembers(STRING("TrieSetIterator"),(Array<TemplatedMember>){&templateMembers[42],1});
+  RegisterTemplateMembers(STRING("TrieSet"),(Array<TemplatedMember>){&templateMembers[43],1});
+  RegisterTemplateMembers(STRING("PoolIterator"),(Array<TemplatedMember>){&templateMembers[44],7});
+  RegisterTemplateMembers(STRING("Pool"),(Array<TemplatedMember>){&templateMembers[51],2});
+  RegisterTemplateMembers(STRING("Result"),(Array<TemplatedMember>){&templateMembers[53],3});
+  RegisterTemplateMembers(STRING("IndexedStruct"),(Array<TemplatedMember>){&templateMembers[56],1});
+  RegisterTemplateMembers(STRING("ListedStruct"),(Array<TemplatedMember>){&templateMembers[57],2});
+  RegisterTemplateMembers(STRING("ArenaList"),(Array<TemplatedMember>){&templateMembers[59],3});
+  RegisterTemplateMembers(STRING("Stack"),(Array<TemplatedMember>){&templateMembers[62],2});
+  RegisterTemplateMembers(STRING("WireTemplate"),(Array<TemplatedMember>){&templateMembers[64],3});
+  RegisterTemplateMembers(STRING("ExternalMemoryTwoPortsTemplate"),(Array<TemplatedMember>){&templateMembers[67],4});
+  RegisterTemplateMembers(STRING("ExternalMemoryDualPortTemplate"),(Array<TemplatedMember>){&templateMembers[71],3});
+  RegisterTemplateMembers(STRING("ExternalMemoryTemplate"),(Array<TemplatedMember>){&templateMembers[74],2});
+  RegisterTemplateMembers(STRING("ExternalMemoryInterfaceTemplate"),(Array<TemplatedMember>){&templateMembers[76],4});
+  RegisterTemplateMembers(STRING("std::vector"),(Array<TemplatedMember>){&templateMembers[80],3});
 
   static Member members[] = {(Member){GetTypeOrFail(STRING("u64")),STRING("microSeconds"),offsetof(Time,microSeconds)} /* 0 */,
     (Member){GetTypeOrFail(STRING("u64")),STRING("seconds"),offsetof(Time,seconds)} /* 1 */,
@@ -574,517 +587,525 @@ RegisterEnum(STRING("ConnectionType"),C_ARRAY_TO_ARRAY(ConnectionTypeData));
     (Member){GetTypeOrFail(STRING("String")),STRING("typeName"),offsetof(TemplatedMember,typeName)} /* 48 */,
     (Member){GetTypeOrFail(STRING("String")),STRING("name"),offsetof(TemplatedMember,name)} /* 49 */,
     (Member){GetTypeOrFail(STRING("int")),STRING("memberOffset"),offsetof(TemplatedMember,memberOffset)} /* 50 */,
-    (Member){GetTypeOrFail(STRING("String")),STRING("name"),offsetof(Type,name)} /* 51 */,
-    (Member){GetTypeOrFail(STRING("Type *")),STRING("baseType"),offsetof(Type,baseType)} /* 52 */,
-    (Member){GetTypeOrFail(STRING("Type *")),STRING("pointerType"),offsetof(Type,pointerType)} /* 53 */,
-    (Member){GetTypeOrFail(STRING("Type *")),STRING("arrayType"),offsetof(Type,arrayType)} /* 54 */,
-    (Member){GetTypeOrFail(STRING("Type *")),STRING("typedefType"),offsetof(Type,typedefType)} /* 55 */,
-    (Member){GetTypeOrFail(STRING("Array<Pair<String, int>>")),STRING("enumMembers"),offsetof(Type,enumMembers)} /* 56 */,
-    (Member){GetTypeOrFail(STRING("Array<TemplatedMember>")),STRING("templateMembers"),offsetof(Type,templateMembers)} /* 57 */,
-    (Member){GetTypeOrFail(STRING("Array<String>")),STRING("templateArgs"),offsetof(Type,templateArgs)} /* 58 */,
-    (Member){GetTypeOrFail(STRING("Array<Member>")),STRING("members"),offsetof(Type,members)} /* 59 */,
-    (Member){GetTypeOrFail(STRING("Type *")),STRING("templateBase"),offsetof(Type,templateBase)} /* 60 */,
-    (Member){GetTypeOrFail(STRING("Array<Type *>")),STRING("templateArgTypes"),offsetof(Type,templateArgTypes)} /* 61 */,
-    (Member){GetTypeOrFail(STRING("int")),STRING("size"),offsetof(Type,size)} /* 62 */,
-    (Member){GetTypeOrFail(STRING("int")),STRING("align"),offsetof(Type,align)} /* 63 */,
-    (Member){GetTypeOrFail(STRING("Subtype")),STRING("type"),offsetof(Type,type)} /* 64 */,
-    (Member){GetTypeOrFail(STRING("Type *")),STRING("type"),offsetof(Member,type)} /* 65 */,
-    (Member){GetTypeOrFail(STRING("String")),STRING("name"),offsetof(Member,name)} /* 66 */,
-    (Member){GetTypeOrFail(STRING("int")),STRING("offset"),offsetof(Member,offset)} /* 67 */,
-    (Member){GetTypeOrFail(STRING("Type *")),STRING("structType"),offsetof(Member,structType)} /* 68 */,
-    (Member){GetTypeOrFail(STRING("String")),STRING("arrayExpression"),offsetof(Member,arrayExpression)} /* 69 */,
-    (Member){GetTypeOrFail(STRING("int")),STRING("index"),offsetof(Member,index)} /* 70 */,
-    (Member){GetTypeOrFail(STRING("bool")),STRING("boolean"),offsetof(Value,boolean)} /* 71 */,
-    (Member){GetTypeOrFail(STRING("char")),STRING("ch"),offsetof(Value,ch)} /* 72 */,
-    (Member){GetTypeOrFail(STRING("i64")),STRING("number"),offsetof(Value,number)} /* 73 */,
-    (Member){GetTypeOrFail(STRING("String")),STRING("str"),offsetof(Value,str)} /* 74 */,
-    (Member){GetTypeOrFail(STRING("bool")),STRING("literal"),offsetof(Value,literal)} /* 75 */,
-    (Member){GetTypeOrFail(STRING("TemplateFunction *")),STRING("templateFunction"),offsetof(Value,templateFunction)} /* 76 */,
-    (Member){GetTypeOrFail(STRING("void *")),STRING("custom"),offsetof(Value,custom)} /* 77 */,
-    (Member){GetTypeOrFail(STRING("Type *")),STRING("type"),offsetof(Value,type)} /* 78 */,
-    (Member){GetTypeOrFail(STRING("bool")),STRING("isTemp"),offsetof(Value,isTemp)} /* 79 */,
-    (Member){GetTypeOrFail(STRING("int")),STRING("currentNumber"),offsetof(Iterator,currentNumber)} /* 80 */,
-    (Member){GetTypeOrFail(STRING("GenericPoolIterator")),STRING("poolIterator"),offsetof(Iterator,poolIterator)} /* 81 */,
-    (Member){GetTypeOrFail(STRING("Type *")),STRING("hashmapType"),offsetof(Iterator,hashmapType)} /* 82 */,
-    (Member){GetTypeOrFail(STRING("Value")),STRING("iterating"),offsetof(Iterator,iterating)} /* 83 */,
-    (Member){GetTypeOrFail(STRING("int")),STRING("index"),offsetof(HashmapUnpackedIndex,index)} /* 84 */,
-    (Member){GetTypeOrFail(STRING("bool")),STRING("data"),offsetof(HashmapUnpackedIndex,data)} /* 85 */,
-    (Member){GetTypeOrFail(STRING("char *")),STRING("op"),offsetof(Expression,op)} /* 86 */,
-    (Member){GetTypeOrFail(STRING("String")),STRING("id"),offsetof(Expression,id)} /* 87 */,
-    (Member){GetTypeOrFail(STRING("Array<Expression *>")),STRING("expressions"),offsetof(Expression,expressions)} /* 88 */,
-    (Member){GetTypeOrFail(STRING("Command *")),STRING("command"),offsetof(Expression,command)} /* 89 */,
-    (Member){GetTypeOrFail(STRING("Value")),STRING("val"),offsetof(Expression,val)} /* 90 */,
-    (Member){GetTypeOrFail(STRING("String")),STRING("text"),offsetof(Expression,text)} /* 91 */,
-    (Member){GetTypeOrFail(STRING("int")),STRING("approximateLine"),offsetof(Expression,approximateLine)} /* 92 */,
-    (Member){GetTypeOrFail(STRING("int")),STRING("type"),offsetof(Expression,type)} /* 93 */,
-    (Member){GetTypeOrFail(STRING("int")),STRING("line"),offsetof(Cursor,line)} /* 94 */,
-    (Member){GetTypeOrFail(STRING("int")),STRING("column"),offsetof(Cursor,column)} /* 95 */,
-    (Member){GetTypeOrFail(STRING("Range<Cursor>")),STRING("loc"),offsetof(Token,loc)} /* 96 */,
-    (Member){GetTypeOrFail(STRING("String")),STRING("foundFirst"),offsetof(FindFirstResult,foundFirst)} /* 97 */,
-    (Member){GetTypeOrFail(STRING("Token")),STRING("peekFindNotIncluded"),offsetof(FindFirstResult,peekFindNotIncluded)} /* 98 */,
-    (Member){GetTypeOrFail(STRING("u16[128]")),STRING("array"),offsetof(Trie,array)} /* 99 */,
-    (Member){GetTypeOrFail(STRING("Array<Trie>")),STRING("subTries"),offsetof(TokenizerTemplate,subTries)} /* 100 */,
-    (Member){GetTypeOrFail(STRING("char *")),STRING("ptr"),offsetof(TokenizerMark,ptr)} /* 101 */,
-    (Member){GetTypeOrFail(STRING("Cursor")),STRING("pos"),offsetof(TokenizerMark,pos)} /* 102 */,
-    (Member){GetTypeOrFail(STRING("char *")),STRING("start"),offsetof(Tokenizer,start)} /* 103 */,
-    (Member){GetTypeOrFail(STRING("char *")),STRING("ptr"),offsetof(Tokenizer,ptr)} /* 104 */,
-    (Member){GetTypeOrFail(STRING("char *")),STRING("end"),offsetof(Tokenizer,end)} /* 105 */,
-    (Member){GetTypeOrFail(STRING("TokenizerTemplate *")),STRING("tmpl"),offsetof(Tokenizer,tmpl)} /* 106 */,
-    (Member){GetTypeOrFail(STRING("int")),STRING("line"),offsetof(Tokenizer,line)} /* 107 */,
-    (Member){GetTypeOrFail(STRING("int")),STRING("column"),offsetof(Tokenizer,column)} /* 108 */,
-    (Member){GetTypeOrFail(STRING("bool")),STRING("keepWhitespaces"),offsetof(Tokenizer,keepWhitespaces)} /* 109 */,
-    (Member){GetTypeOrFail(STRING("bool")),STRING("keepComments"),offsetof(Tokenizer,keepComments)} /* 110 */,
-    (Member){GetTypeOrFail(STRING("char **")),STRING("op"),offsetof(OperationList,op)} /* 111 */,
-    (Member){GetTypeOrFail(STRING("int")),STRING("nOperations"),offsetof(OperationList,nOperations)} /* 112 */,
-    (Member){GetTypeOrFail(STRING("OperationList *")),STRING("next"),offsetof(OperationList,next)} /* 113 */,
-    (Member){GetTypeOrFail(STRING("String")),STRING("name"),offsetof(CommandDefinition,name)} /* 114 */,
-    (Member){GetTypeOrFail(STRING("int")),STRING("numberExpressions"),offsetof(CommandDefinition,numberExpressions)} /* 115 */,
-    (Member){GetTypeOrFail(STRING("CommandType")),STRING("type"),offsetof(CommandDefinition,type)} /* 116 */,
-    (Member){GetTypeOrFail(STRING("bool")),STRING("isBlockType"),offsetof(CommandDefinition,isBlockType)} /* 117 */,
-    (Member){GetTypeOrFail(STRING("CommandDefinition *")),STRING("definition"),offsetof(Command,definition)} /* 118 */,
-    (Member){GetTypeOrFail(STRING("Array<Expression *>")),STRING("expressions"),offsetof(Command,expressions)} /* 119 */,
-    (Member){GetTypeOrFail(STRING("String")),STRING("fullText"),offsetof(Command,fullText)} /* 120 */,
-    (Member){GetTypeOrFail(STRING("Token")),STRING("fullText"),offsetof(Block,fullText)} /* 121 */,
-    (Member){GetTypeOrFail(STRING("String")),STRING("textBlock"),offsetof(Block,textBlock)} /* 122 */,
-    (Member){GetTypeOrFail(STRING("Command *")),STRING("command"),offsetof(Block,command)} /* 123 */,
-    (Member){GetTypeOrFail(STRING("Expression *")),STRING("expression"),offsetof(Block,expression)} /* 124 */,
-    (Member){GetTypeOrFail(STRING("Array<Block *>")),STRING("innerBlocks"),offsetof(Block,innerBlocks)} /* 125 */,
-    (Member){GetTypeOrFail(STRING("BlockType")),STRING("type"),offsetof(Block,type)} /* 126 */,
-    (Member){GetTypeOrFail(STRING("int")),STRING("line"),offsetof(Block,line)} /* 127 */,
-    (Member){GetTypeOrFail(STRING("Array<Expression *>")),STRING("arguments"),offsetof(TemplateFunction,arguments)} /* 128 */,
-    (Member){GetTypeOrFail(STRING("Array<Block *>")),STRING("blocks"),offsetof(TemplateFunction,blocks)} /* 129 */,
-    (Member){GetTypeOrFail(STRING("TemplateRecordType")),STRING("type"),offsetof(TemplateRecord,type)} /* 130 */,
-    (Member){GetTypeOrFail(STRING("Type *")),STRING("identifierType"),offsetof(TemplateRecord,identifierType)} /* 131 */,
-    (Member){GetTypeOrFail(STRING("String")),STRING("identifierName"),offsetof(TemplateRecord,identifierName)} /* 132 */,
-    (Member){GetTypeOrFail(STRING("Type *")),STRING("structType"),offsetof(TemplateRecord,structType)} /* 133 */,
-    (Member){GetTypeOrFail(STRING("String")),STRING("fieldName"),offsetof(TemplateRecord,fieldName)} /* 134 */,
-    (Member){GetTypeOrFail(STRING("Value")),STRING("val"),offsetof(ValueAndText,val)} /* 135 */,
-    (Member){GetTypeOrFail(STRING("String")),STRING("text"),offsetof(ValueAndText,text)} /* 136 */,
-    (Member){GetTypeOrFail(STRING("Hashmap<String, Value> *")),STRING("table"),offsetof(Frame,table)} /* 137 */,
-    (Member){GetTypeOrFail(STRING("Frame *")),STRING("previousFrame"),offsetof(Frame,previousFrame)} /* 138 */,
-    (Member){GetTypeOrFail(STRING("String")),STRING("content"),offsetof(IndividualBlock,content)} /* 139 */,
-    (Member){GetTypeOrFail(STRING("BlockType")),STRING("type"),offsetof(IndividualBlock,type)} /* 140 */,
-    (Member){GetTypeOrFail(STRING("int")),STRING("line"),offsetof(IndividualBlock,line)} /* 141 */,
-    (Member){GetTypeOrFail(STRING("int")),STRING("totalMemoryUsed"),offsetof(CompiledTemplate,totalMemoryUsed)} /* 142 */,
-    (Member){GetTypeOrFail(STRING("String")),STRING("content"),offsetof(CompiledTemplate,content)} /* 143 */,
-    (Member){GetTypeOrFail(STRING("Array<Block *>")),STRING("blocks"),offsetof(CompiledTemplate,blocks)} /* 144 */,
-    (Member){GetTypeOrFail(STRING("String")),STRING("name"),offsetof(CompiledTemplate,name)} /* 145 */,
-    (Member){GetTypeOrFail(STRING("Hashmap<String, Value> *")),STRING("attributes"),offsetof(PortDeclaration,attributes)} /* 146 */,
-    (Member){GetTypeOrFail(STRING("ExpressionRange")),STRING("range"),offsetof(PortDeclaration,range)} /* 147 */,
-    (Member){GetTypeOrFail(STRING("String")),STRING("name"),offsetof(PortDeclaration,name)} /* 148 */,
-    (Member){GetTypeOrFail(STRING("int")),STRING("type"),offsetof(PortDeclaration,type)} /* 149 */,
-    (Member){GetTypeOrFail(STRING("String")),STRING("name"),offsetof(ParameterExpression,name)} /* 150 */,
-    (Member){GetTypeOrFail(STRING("Expression *")),STRING("expr"),offsetof(ParameterExpression,expr)} /* 151 */,
-    (Member){GetTypeOrFail(STRING("Array<ParameterExpression>")),STRING("parameters"),offsetof(Module,parameters)} /* 152 */,
-    (Member){GetTypeOrFail(STRING("Array<PortDeclaration>")),STRING("ports"),offsetof(Module,ports)} /* 153 */,
-    (Member){GetTypeOrFail(STRING("String")),STRING("name"),offsetof(Module,name)} /* 154 */,
-    (Member){GetTypeOrFail(STRING("bool")),STRING("isSource"),offsetof(Module,isSource)} /* 155 */,
-    (Member){GetTypeOrFail(STRING("int")),STRING("interface"),offsetof(ExternalMemoryID,interface)} /* 156 */,
-    (Member){GetTypeOrFail(STRING("ExternalMemoryType")),STRING("type"),offsetof(ExternalMemoryID,type)} /* 157 */,
-    (Member){GetTypeOrFail(STRING("bool")),STRING("write"),offsetof(ExternalInfoTwoPorts,write)} /* 158 */,
-    (Member){GetTypeOrFail(STRING("bool")),STRING("read"),offsetof(ExternalInfoTwoPorts,read)} /* 159 */,
-    (Member){GetTypeOrFail(STRING("bool")),STRING("enable"),offsetof(ExternalInfoDualPort,enable)} /* 160 */,
-    (Member){GetTypeOrFail(STRING("bool")),STRING("write"),offsetof(ExternalInfoDualPort,write)} /* 161 */,
-    (Member){GetTypeOrFail(STRING("ExternalInfoTwoPorts")),STRING("tp"),offsetof(ExternalMemoryInfo,tp)} /* 162 */,
-    (Member){GetTypeOrFail(STRING("ExternalInfoDualPort[2]")),STRING("dp"),offsetof(ExternalMemoryInfo,dp)} /* 163 */,
-    (Member){GetTypeOrFail(STRING("ExternalMemoryType")),STRING("type"),offsetof(ExternalMemoryInfo,type)} /* 164 */,
-    (Member){GetTypeOrFail(STRING("String")),STRING("name"),offsetof(ModuleInfo,name)} /* 165 */,
-    (Member){GetTypeOrFail(STRING("Array<ParameterExpression>")),STRING("defaultParameters"),offsetof(ModuleInfo,defaultParameters)} /* 166 */,
-    (Member){GetTypeOrFail(STRING("Array<int>")),STRING("inputDelays"),offsetof(ModuleInfo,inputDelays)} /* 167 */,
-    (Member){GetTypeOrFail(STRING("Array<int>")),STRING("outputLatencies"),offsetof(ModuleInfo,outputLatencies)} /* 168 */,
-    (Member){GetTypeOrFail(STRING("Array<WireExpression>")),STRING("configs"),offsetof(ModuleInfo,configs)} /* 169 */,
-    (Member){GetTypeOrFail(STRING("Array<WireExpression>")),STRING("states"),offsetof(ModuleInfo,states)} /* 170 */,
-    (Member){GetTypeOrFail(STRING("Array<ExternalMemoryInterfaceExpression>")),STRING("externalInterfaces"),offsetof(ModuleInfo,externalInterfaces)} /* 171 */,
-    (Member){GetTypeOrFail(STRING("int")),STRING("nDelays"),offsetof(ModuleInfo,nDelays)} /* 172 */,
-    (Member){GetTypeOrFail(STRING("int")),STRING("nIO"),offsetof(ModuleInfo,nIO)} /* 173 */,
-    (Member){GetTypeOrFail(STRING("ExpressionRange")),STRING("memoryMappedBits"),offsetof(ModuleInfo,memoryMappedBits)} /* 174 */,
-    (Member){GetTypeOrFail(STRING("ExpressionRange")),STRING("databusAddrSize"),offsetof(ModuleInfo,databusAddrSize)} /* 175 */,
-    (Member){GetTypeOrFail(STRING("bool")),STRING("doesIO"),offsetof(ModuleInfo,doesIO)} /* 176 */,
-    (Member){GetTypeOrFail(STRING("bool")),STRING("memoryMapped"),offsetof(ModuleInfo,memoryMapped)} /* 177 */,
-    (Member){GetTypeOrFail(STRING("bool")),STRING("hasDone"),offsetof(ModuleInfo,hasDone)} /* 178 */,
-    (Member){GetTypeOrFail(STRING("bool")),STRING("hasClk"),offsetof(ModuleInfo,hasClk)} /* 179 */,
-    (Member){GetTypeOrFail(STRING("bool")),STRING("hasReset"),offsetof(ModuleInfo,hasReset)} /* 180 */,
-    (Member){GetTypeOrFail(STRING("bool")),STRING("hasRun"),offsetof(ModuleInfo,hasRun)} /* 181 */,
-    (Member){GetTypeOrFail(STRING("bool")),STRING("hasRunning"),offsetof(ModuleInfo,hasRunning)} /* 182 */,
-    (Member){GetTypeOrFail(STRING("bool")),STRING("isSource"),offsetof(ModuleInfo,isSource)} /* 183 */,
-    (Member){GetTypeOrFail(STRING("bool")),STRING("signalLoop"),offsetof(ModuleInfo,signalLoop)} /* 184 */,
-    (Member){GetTypeOrFail(STRING("Array<String>")),STRING("verilogFiles"),offsetof(Options,verilogFiles)} /* 185 */,
-    (Member){GetTypeOrFail(STRING("Array<String>")),STRING("extraSources"),offsetof(Options,extraSources)} /* 186 */,
-    (Member){GetTypeOrFail(STRING("Array<String>")),STRING("includePaths"),offsetof(Options,includePaths)} /* 187 */,
-    (Member){GetTypeOrFail(STRING("Array<String>")),STRING("unitPaths"),offsetof(Options,unitPaths)} /* 188 */,
-    (Member){GetTypeOrFail(STRING("String")),STRING("hardwareOutputFilepath"),offsetof(Options,hardwareOutputFilepath)} /* 189 */,
-    (Member){GetTypeOrFail(STRING("String")),STRING("softwareOutputFilepath"),offsetof(Options,softwareOutputFilepath)} /* 190 */,
-    (Member){GetTypeOrFail(STRING("String")),STRING("verilatorRoot"),offsetof(Options,verilatorRoot)} /* 191 */,
-    (Member){GetTypeOrFail(STRING("String")),STRING("debugPath"),offsetof(Options,debugPath)} /* 192 */,
-    (Member){GetTypeOrFail(STRING("String")),STRING("specificationFilepath"),offsetof(Options,specificationFilepath)} /* 193 */,
-    (Member){GetTypeOrFail(STRING("String")),STRING("topName"),offsetof(Options,topName)} /* 194 */,
-    (Member){GetTypeOrFail(STRING("int")),STRING("addrSize"),offsetof(Options,addrSize)} /* 195 */,
-    (Member){GetTypeOrFail(STRING("int")),STRING("dataSize"),offsetof(Options,dataSize)} /* 196 */,
-    (Member){GetTypeOrFail(STRING("bool")),STRING("addInputAndOutputsToTop"),offsetof(Options,addInputAndOutputsToTop)} /* 197 */,
-    (Member){GetTypeOrFail(STRING("bool")),STRING("debug"),offsetof(Options,debug)} /* 198 */,
-    (Member){GetTypeOrFail(STRING("bool")),STRING("shadowRegister"),offsetof(Options,shadowRegister)} /* 199 */,
-    (Member){GetTypeOrFail(STRING("bool")),STRING("architectureHasDatabus"),offsetof(Options,architectureHasDatabus)} /* 200 */,
-    (Member){GetTypeOrFail(STRING("bool")),STRING("useFixedBuffers"),offsetof(Options,useFixedBuffers)} /* 201 */,
-    (Member){GetTypeOrFail(STRING("bool")),STRING("generateFSTFormat"),offsetof(Options,generateFSTFormat)} /* 202 */,
-    (Member){GetTypeOrFail(STRING("bool")),STRING("disableDelayPropagation"),offsetof(Options,disableDelayPropagation)} /* 203 */,
-    (Member){GetTypeOrFail(STRING("bool")),STRING("useDMA"),offsetof(Options,useDMA)} /* 204 */,
-    (Member){GetTypeOrFail(STRING("bool")),STRING("exportInternalMemories"),offsetof(Options,exportInternalMemories)} /* 205 */,
-    (Member){GetTypeOrFail(STRING("uint")),STRING("dotFormat"),offsetof(DebugState,dotFormat)} /* 206 */,
-    (Member){GetTypeOrFail(STRING("bool")),STRING("outputGraphs"),offsetof(DebugState,outputGraphs)} /* 207 */,
-    (Member){GetTypeOrFail(STRING("bool")),STRING("outputConsolidationGraphs"),offsetof(DebugState,outputConsolidationGraphs)} /* 208 */,
-    (Member){GetTypeOrFail(STRING("bool")),STRING("outputAccelerator"),offsetof(DebugState,outputAccelerator)} /* 209 */,
-    (Member){GetTypeOrFail(STRING("bool")),STRING("outputVersat"),offsetof(DebugState,outputVersat)} /* 210 */,
-    (Member){GetTypeOrFail(STRING("bool")),STRING("outputVCD"),offsetof(DebugState,outputVCD)} /* 211 */,
-    (Member){GetTypeOrFail(STRING("bool")),STRING("outputAcceleratorInfo"),offsetof(DebugState,outputAcceleratorInfo)} /* 212 */,
-    (Member){GetTypeOrFail(STRING("bool")),STRING("useFixedBuffers"),offsetof(DebugState,useFixedBuffers)} /* 213 */,
-    (Member){GetTypeOrFail(STRING("FUInstance *")),STRING("inst"),offsetof(PortInstance,inst)} /* 214 */,
-    (Member){GetTypeOrFail(STRING("int")),STRING("port"),offsetof(PortInstance,port)} /* 215 */,
-    (Member){GetTypeOrFail(STRING("PortInstance")),STRING("out"),offsetof(Edge,out)} /* 216 */,
-    (Member){GetTypeOrFail(STRING("PortInstance")),STRING("in"),offsetof(Edge,in)} /* 217 */,
-    (Member){GetTypeOrFail(STRING("PortInstance[2]")),STRING("units"),offsetof(Edge,units)} /* 218 */,
-    (Member){GetTypeOrFail(STRING("int")),STRING("delay"),offsetof(Edge,delay)} /* 219 */,
-    (Member){GetTypeOrFail(STRING("Edge *")),STRING("next"),offsetof(Edge,next)} /* 220 */,
-    (Member){GetTypeOrFail(STRING("InstanceMap *")),STRING("nodeMap"),offsetof(GenericGraphMapping,nodeMap)} /* 221 */,
-    (Member){GetTypeOrFail(STRING("PathMap *")),STRING("edgeMap"),offsetof(GenericGraphMapping,edgeMap)} /* 222 */,
-    (Member){GetTypeOrFail(STRING("int *")),STRING("value"),offsetof(EdgeDelayInfo,value)} /* 223 */,
-    (Member){GetTypeOrFail(STRING("bool")),STRING("isAny"),offsetof(EdgeDelayInfo,isAny)} /* 224 */,
-    (Member){GetTypeOrFail(STRING("int")),STRING("value"),offsetof(DelayInfo,value)} /* 225 */,
-    (Member){GetTypeOrFail(STRING("bool")),STRING("isAny"),offsetof(DelayInfo,isAny)} /* 226 */,
-    (Member){GetTypeOrFail(STRING("PortInstance")),STRING("instConnectedTo"),offsetof(ConnectionNode,instConnectedTo)} /* 227 */,
-    (Member){GetTypeOrFail(STRING("int")),STRING("port"),offsetof(ConnectionNode,port)} /* 228 */,
-    (Member){GetTypeOrFail(STRING("int")),STRING("edgeDelay"),offsetof(ConnectionNode,edgeDelay)} /* 229 */,
-    (Member){GetTypeOrFail(STRING("EdgeDelayInfo")),STRING("delay"),offsetof(ConnectionNode,delay)} /* 230 */,
-    (Member){GetTypeOrFail(STRING("ConnectionNode *")),STRING("next"),offsetof(ConnectionNode,next)} /* 231 */,
-    (Member){GetTypeOrFail(STRING("String")),STRING("name"),offsetof(FUInstance,name)} /* 232 */,
-    (Member){GetTypeOrFail(STRING("String")),STRING("parameters"),offsetof(FUInstance,parameters)} /* 233 */,
-    (Member){GetTypeOrFail(STRING("Accelerator *")),STRING("accel"),offsetof(FUInstance,accel)} /* 234 */,
-    (Member){GetTypeOrFail(STRING("FUDeclaration *")),STRING("declaration"),offsetof(FUInstance,declaration)} /* 235 */,
-    (Member){GetTypeOrFail(STRING("int")),STRING("id"),offsetof(FUInstance,id)} /* 236 */,
-    (Member){GetTypeOrFail(STRING("int")),STRING("literal"),offsetof(FUInstance,literal)} /* 237 */,
-    (Member){GetTypeOrFail(STRING("int")),STRING("bufferAmount"),offsetof(FUInstance,bufferAmount)} /* 238 */,
-    (Member){GetTypeOrFail(STRING("int")),STRING("portIndex"),offsetof(FUInstance,portIndex)} /* 239 */,
-    (Member){GetTypeOrFail(STRING("int")),STRING("sharedIndex"),offsetof(FUInstance,sharedIndex)} /* 240 */,
-    (Member){GetTypeOrFail(STRING("bool")),STRING("isStatic"),offsetof(FUInstance,isStatic)} /* 241 */,
-    (Member){GetTypeOrFail(STRING("bool")),STRING("sharedEnable"),offsetof(FUInstance,sharedEnable)} /* 242 */,
-    (Member){GetTypeOrFail(STRING("bool")),STRING("isMergeMultiplexer"),offsetof(FUInstance,isMergeMultiplexer)} /* 243 */,
-    (Member){GetTypeOrFail(STRING("int")),STRING("mergeMultiplexerId"),offsetof(FUInstance,mergeMultiplexerId)} /* 244 */,
-    (Member){GetTypeOrFail(STRING("FUInstance *")),STRING("next"),offsetof(FUInstance,next)} /* 245 */,
-    (Member){GetTypeOrFail(STRING("ConnectionNode *")),STRING("allInputs"),offsetof(FUInstance,allInputs)} /* 246 */,
-    (Member){GetTypeOrFail(STRING("ConnectionNode *")),STRING("allOutputs"),offsetof(FUInstance,allOutputs)} /* 247 */,
-    (Member){GetTypeOrFail(STRING("Array<PortInstance>")),STRING("inputs"),offsetof(FUInstance,inputs)} /* 248 */,
-    (Member){GetTypeOrFail(STRING("Array<bool>")),STRING("outputs"),offsetof(FUInstance,outputs)} /* 249 */,
-    (Member){GetTypeOrFail(STRING("bool")),STRING("multipleSamePortInputs"),offsetof(FUInstance,multipleSamePortInputs)} /* 250 */,
-    (Member){GetTypeOrFail(STRING("NodeType")),STRING("type"),offsetof(FUInstance,type)} /* 251 */,
-    (Member){GetTypeOrFail(STRING("FUInstance *")),STRING("allocated"),offsetof(Accelerator,allocated)} /* 252 */,
-    (Member){GetTypeOrFail(STRING("FUInstance *")),STRING("lastAllocated"),offsetof(Accelerator,lastAllocated)} /* 253 */,
-    (Member){GetTypeOrFail(STRING("DynamicArena *")),STRING("accelMemory"),offsetof(Accelerator,accelMemory)} /* 254 */,
-    (Member){GetTypeOrFail(STRING("String")),STRING("name"),offsetof(Accelerator,name)} /* 255 */,
-    (Member){GetTypeOrFail(STRING("int")),STRING("id"),offsetof(Accelerator,id)} /* 256 */,
-    (Member){GetTypeOrFail(STRING("AcceleratorPurpose")),STRING("purpose"),offsetof(Accelerator,purpose)} /* 257 */,
-    (Member){GetTypeOrFail(STRING("int")),STRING("memoryMaskSize"),offsetof(MemoryAddressMask,memoryMaskSize)} /* 258 */,
-    (Member){GetTypeOrFail(STRING("char[33]")),STRING("memoryMaskBuffer"),offsetof(MemoryAddressMask,memoryMaskBuffer)} /* 259 */,
-    (Member){GetTypeOrFail(STRING("char *")),STRING("memoryMask"),offsetof(MemoryAddressMask,memoryMask)} /* 260 */,
-    (Member){GetTypeOrFail(STRING("int")),STRING("nConfigs"),offsetof(VersatComputedValues,nConfigs)} /* 261 */,
-    (Member){GetTypeOrFail(STRING("int")),STRING("configBits"),offsetof(VersatComputedValues,configBits)} /* 262 */,
-    (Member){GetTypeOrFail(STRING("int")),STRING("versatConfigs"),offsetof(VersatComputedValues,versatConfigs)} /* 263 */,
-    (Member){GetTypeOrFail(STRING("int")),STRING("versatStates"),offsetof(VersatComputedValues,versatStates)} /* 264 */,
-    (Member){GetTypeOrFail(STRING("int")),STRING("nStatics"),offsetof(VersatComputedValues,nStatics)} /* 265 */,
-    (Member){GetTypeOrFail(STRING("int")),STRING("staticBits"),offsetof(VersatComputedValues,staticBits)} /* 266 */,
-    (Member){GetTypeOrFail(STRING("int")),STRING("staticBitsStart"),offsetof(VersatComputedValues,staticBitsStart)} /* 267 */,
-    (Member){GetTypeOrFail(STRING("int")),STRING("nDelays"),offsetof(VersatComputedValues,nDelays)} /* 268 */,
-    (Member){GetTypeOrFail(STRING("int")),STRING("delayBits"),offsetof(VersatComputedValues,delayBits)} /* 269 */,
-    (Member){GetTypeOrFail(STRING("int")),STRING("delayBitsStart"),offsetof(VersatComputedValues,delayBitsStart)} /* 270 */,
-    (Member){GetTypeOrFail(STRING("int")),STRING("nConfigurations"),offsetof(VersatComputedValues,nConfigurations)} /* 271 */,
-    (Member){GetTypeOrFail(STRING("int")),STRING("configurationBits"),offsetof(VersatComputedValues,configurationBits)} /* 272 */,
-    (Member){GetTypeOrFail(STRING("int")),STRING("configurationAddressBits"),offsetof(VersatComputedValues,configurationAddressBits)} /* 273 */,
-    (Member){GetTypeOrFail(STRING("int")),STRING("nStates"),offsetof(VersatComputedValues,nStates)} /* 274 */,
-    (Member){GetTypeOrFail(STRING("int")),STRING("stateBits"),offsetof(VersatComputedValues,stateBits)} /* 275 */,
-    (Member){GetTypeOrFail(STRING("int")),STRING("stateAddressBits"),offsetof(VersatComputedValues,stateAddressBits)} /* 276 */,
-    (Member){GetTypeOrFail(STRING("int")),STRING("unitsMapped"),offsetof(VersatComputedValues,unitsMapped)} /* 277 */,
-    (Member){GetTypeOrFail(STRING("int")),STRING("memoryMappedBytes"),offsetof(VersatComputedValues,memoryMappedBytes)} /* 278 */,
-    (Member){GetTypeOrFail(STRING("int")),STRING("nUnitsIO"),offsetof(VersatComputedValues,nUnitsIO)} /* 279 */,
-    (Member){GetTypeOrFail(STRING("int")),STRING("numberConnections"),offsetof(VersatComputedValues,numberConnections)} /* 280 */,
-    (Member){GetTypeOrFail(STRING("int")),STRING("externalMemoryInterfaces"),offsetof(VersatComputedValues,externalMemoryInterfaces)} /* 281 */,
-    (Member){GetTypeOrFail(STRING("int")),STRING("stateConfigurationAddressBits"),offsetof(VersatComputedValues,stateConfigurationAddressBits)} /* 282 */,
-    (Member){GetTypeOrFail(STRING("int")),STRING("memoryAddressBits"),offsetof(VersatComputedValues,memoryAddressBits)} /* 283 */,
-    (Member){GetTypeOrFail(STRING("int")),STRING("memoryMappingAddressBits"),offsetof(VersatComputedValues,memoryMappingAddressBits)} /* 284 */,
-    (Member){GetTypeOrFail(STRING("int")),STRING("memoryConfigDecisionBit"),offsetof(VersatComputedValues,memoryConfigDecisionBit)} /* 285 */,
-    (Member){GetTypeOrFail(STRING("bool")),STRING("signalLoop"),offsetof(VersatComputedValues,signalLoop)} /* 286 */,
-    (Member){GetTypeOrFail(STRING("Array<FUInstance *>")),STRING("sinks"),offsetof(DAGOrderNodes,sinks)} /* 287 */,
-    (Member){GetTypeOrFail(STRING("Array<FUInstance *>")),STRING("sources"),offsetof(DAGOrderNodes,sources)} /* 288 */,
-    (Member){GetTypeOrFail(STRING("Array<FUInstance *>")),STRING("computeUnits"),offsetof(DAGOrderNodes,computeUnits)} /* 289 */,
-    (Member){GetTypeOrFail(STRING("Array<FUInstance *>")),STRING("instances"),offsetof(DAGOrderNodes,instances)} /* 290 */,
-    (Member){GetTypeOrFail(STRING("Array<int>")),STRING("order"),offsetof(DAGOrderNodes,order)} /* 291 */,
-    (Member){GetTypeOrFail(STRING("int")),STRING("size"),offsetof(DAGOrderNodes,size)} /* 292 */,
-    (Member){GetTypeOrFail(STRING("int")),STRING("maxOrder"),offsetof(DAGOrderNodes,maxOrder)} /* 293 */,
-    (Member){GetTypeOrFail(STRING("int")),STRING("firstId"),offsetof(AcceleratorMapping,firstId)} /* 294 */,
-    (Member){GetTypeOrFail(STRING("int")),STRING("secondId"),offsetof(AcceleratorMapping,secondId)} /* 295 */,
-    (Member){GetTypeOrFail(STRING("TrieMap<PortInstance, PortInstance> *")),STRING("inputMap"),offsetof(AcceleratorMapping,inputMap)} /* 296 */,
-    (Member){GetTypeOrFail(STRING("TrieMap<PortInstance, PortInstance> *")),STRING("outputMap"),offsetof(AcceleratorMapping,outputMap)} /* 297 */,
-    (Member){GetTypeOrFail(STRING("FUInstance *")),STRING("currentNode"),offsetof(EdgeIterator,currentNode)} /* 298 */,
-    (Member){GetTypeOrFail(STRING("ConnectionNode *")),STRING("currentPort"),offsetof(EdgeIterator,currentPort)} /* 299 */,
-    (Member){GetTypeOrFail(STRING("FUDeclaration *")),STRING("parent"),offsetof(StaticId,parent)} /* 300 */,
-    (Member){GetTypeOrFail(STRING("String")),STRING("name"),offsetof(StaticId,name)} /* 301 */,
-    (Member){GetTypeOrFail(STRING("Array<Wire>")),STRING("configs"),offsetof(StaticData,configs)} /* 302 */,
-    (Member){GetTypeOrFail(STRING("StaticId")),STRING("id"),offsetof(StaticInfo,id)} /* 303 */,
-    (Member){GetTypeOrFail(STRING("StaticData")),STRING("data"),offsetof(StaticInfo,data)} /* 304 */,
-    (Member){GetTypeOrFail(STRING("Array<int>")),STRING("offsets"),offsetof(CalculatedOffsets,offsets)} /* 305 */,
-    (Member){GetTypeOrFail(STRING("int")),STRING("max"),offsetof(CalculatedOffsets,max)} /* 306 */,
-    (Member){GetTypeOrFail(STRING("FUDeclaration *")),STRING("subDeclaration"),offsetof(SubMappingInfo,subDeclaration)} /* 307 */,
-    (Member){GetTypeOrFail(STRING("String")),STRING("higherName"),offsetof(SubMappingInfo,higherName)} /* 308 */,
-    (Member){GetTypeOrFail(STRING("bool")),STRING("isInput"),offsetof(SubMappingInfo,isInput)} /* 309 */,
-    (Member){GetTypeOrFail(STRING("int")),STRING("subPort"),offsetof(SubMappingInfo,subPort)} /* 310 */,
-    (Member){GetTypeOrFail(STRING("int")),STRING("level"),offsetof(InstanceInfo,level)} /* 311 */,
-    (Member){GetTypeOrFail(STRING("FUDeclaration *")),STRING("decl"),offsetof(InstanceInfo,decl)} /* 312 */,
-    (Member){GetTypeOrFail(STRING("String")),STRING("name"),offsetof(InstanceInfo,name)} /* 313 */,
-    (Member){GetTypeOrFail(STRING("String")),STRING("baseName"),offsetof(InstanceInfo,baseName)} /* 314 */,
-    (Member){GetTypeOrFail(STRING("int")),STRING("configPos"),offsetof(InstanceInfo,configPos)} /* 315 */,
-    (Member){GetTypeOrFail(STRING("int")),STRING("isConfigStatic"),offsetof(InstanceInfo,isConfigStatic)} /* 316 */,
-    (Member){GetTypeOrFail(STRING("int")),STRING("configSize"),offsetof(InstanceInfo,configSize)} /* 317 */,
-    (Member){GetTypeOrFail(STRING("int")),STRING("statePos"),offsetof(InstanceInfo,statePos)} /* 318 */,
-    (Member){GetTypeOrFail(STRING("int")),STRING("stateSize"),offsetof(InstanceInfo,stateSize)} /* 319 */,
-    (Member){GetTypeOrFail(STRING("int")),STRING("memMapped"),offsetof(InstanceInfo,memMapped)} /* 320 */,
-    (Member){GetTypeOrFail(STRING("int")),STRING("memMappedSize"),offsetof(InstanceInfo,memMappedSize)} /* 321 */,
-    (Member){GetTypeOrFail(STRING("int")),STRING("memMappedBitSize"),offsetof(InstanceInfo,memMappedBitSize)} /* 322 */,
-    (Member){GetTypeOrFail(STRING("int")),STRING("memMappedMask"),offsetof(InstanceInfo,memMappedMask)} /* 323 */,
-    (Member){GetTypeOrFail(STRING("int")),STRING("delayPos"),offsetof(InstanceInfo,delayPos)} /* 324 */,
-    (Member){GetTypeOrFail(STRING("Array<int>")),STRING("delay"),offsetof(InstanceInfo,delay)} /* 325 */,
-    (Member){GetTypeOrFail(STRING("int")),STRING("baseDelay"),offsetof(InstanceInfo,baseDelay)} /* 326 */,
-    (Member){GetTypeOrFail(STRING("int")),STRING("delaySize"),offsetof(InstanceInfo,delaySize)} /* 327 */,
-    (Member){GetTypeOrFail(STRING("bool")),STRING("isComposite"),offsetof(InstanceInfo,isComposite)} /* 328 */,
-    (Member){GetTypeOrFail(STRING("bool")),STRING("isStatic"),offsetof(InstanceInfo,isStatic)} /* 329 */,
-    (Member){GetTypeOrFail(STRING("bool")),STRING("isShared"),offsetof(InstanceInfo,isShared)} /* 330 */,
-    (Member){GetTypeOrFail(STRING("int")),STRING("sharedIndex"),offsetof(InstanceInfo,sharedIndex)} /* 331 */,
-    (Member){GetTypeOrFail(STRING("FUDeclaration *")),STRING("parent"),offsetof(InstanceInfo,parent)} /* 332 */,
-    (Member){GetTypeOrFail(STRING("String")),STRING("fullName"),offsetof(InstanceInfo,fullName)} /* 333 */,
-    (Member){GetTypeOrFail(STRING("bool")),STRING("isMergeMultiplexer"),offsetof(InstanceInfo,isMergeMultiplexer)} /* 334 */,
-    (Member){GetTypeOrFail(STRING("int")),STRING("mergeMultiplexerId"),offsetof(InstanceInfo,mergeMultiplexerId)} /* 335 */,
-    (Member){GetTypeOrFail(STRING("bool")),STRING("belongs"),offsetof(InstanceInfo,belongs)} /* 336 */,
-    (Member){GetTypeOrFail(STRING("int")),STRING("special"),offsetof(InstanceInfo,special)} /* 337 */,
-    (Member){GetTypeOrFail(STRING("int")),STRING("order"),offsetof(InstanceInfo,order)} /* 338 */,
-    (Member){GetTypeOrFail(STRING("NodeType")),STRING("connectionType"),offsetof(InstanceInfo,connectionType)} /* 339 */,
-    (Member){GetTypeOrFail(STRING("int")),STRING("id"),offsetof(InstanceInfo,id)} /* 340 */,
-    (Member){GetTypeOrFail(STRING("Array<InstanceInfo>")),STRING("info"),offsetof(AcceleratorInfo,info)} /* 341 */,
-    (Member){GetTypeOrFail(STRING("int")),STRING("memSize"),offsetof(AcceleratorInfo,memSize)} /* 342 */,
-    (Member){GetTypeOrFail(STRING("int")),STRING("name"),offsetof(AcceleratorInfo,name)} /* 343 */,
-    (Member){GetTypeOrFail(STRING("Array<int>")),STRING("mergeMux"),offsetof(AcceleratorInfo,mergeMux)} /* 344 */,
-    (Member){GetTypeOrFail(STRING("Hashmap<StaticId, int> *")),STRING("staticInfo"),offsetof(InstanceConfigurationOffsets,staticInfo)} /* 345 */,
-    (Member){GetTypeOrFail(STRING("FUDeclaration *")),STRING("parent"),offsetof(InstanceConfigurationOffsets,parent)} /* 346 */,
-    (Member){GetTypeOrFail(STRING("String")),STRING("topName"),offsetof(InstanceConfigurationOffsets,topName)} /* 347 */,
-    (Member){GetTypeOrFail(STRING("String")),STRING("baseName"),offsetof(InstanceConfigurationOffsets,baseName)} /* 348 */,
-    (Member){GetTypeOrFail(STRING("int")),STRING("configOffset"),offsetof(InstanceConfigurationOffsets,configOffset)} /* 349 */,
-    (Member){GetTypeOrFail(STRING("int")),STRING("stateOffset"),offsetof(InstanceConfigurationOffsets,stateOffset)} /* 350 */,
-    (Member){GetTypeOrFail(STRING("int")),STRING("delayOffset"),offsetof(InstanceConfigurationOffsets,delayOffset)} /* 351 */,
-    (Member){GetTypeOrFail(STRING("int")),STRING("delay"),offsetof(InstanceConfigurationOffsets,delay)} /* 352 */,
-    (Member){GetTypeOrFail(STRING("int")),STRING("memOffset"),offsetof(InstanceConfigurationOffsets,memOffset)} /* 353 */,
-    (Member){GetTypeOrFail(STRING("int")),STRING("level"),offsetof(InstanceConfigurationOffsets,level)} /* 354 */,
-    (Member){GetTypeOrFail(STRING("int")),STRING("order"),offsetof(InstanceConfigurationOffsets,order)} /* 355 */,
-    (Member){GetTypeOrFail(STRING("int *")),STRING("staticConfig"),offsetof(InstanceConfigurationOffsets,staticConfig)} /* 356 */,
-    (Member){GetTypeOrFail(STRING("bool")),STRING("belongs"),offsetof(InstanceConfigurationOffsets,belongs)} /* 357 */,
-    (Member){GetTypeOrFail(STRING("Array<InstanceInfo>")),STRING("info"),offsetof(TestResult,info)} /* 358 */,
-    (Member){GetTypeOrFail(STRING("InstanceConfigurationOffsets")),STRING("subOffsets"),offsetof(TestResult,subOffsets)} /* 359 */,
-    (Member){GetTypeOrFail(STRING("Array<PortInstance>")),STRING("multiplexersPorts"),offsetof(TestResult,multiplexersPorts)} /* 360 */,
-    (Member){GetTypeOrFail(STRING("String")),STRING("name"),offsetof(TestResult,name)} /* 361 */,
-    (Member){GetTypeOrFail(STRING("Array<int>")),STRING("muxConfigs"),offsetof(TestResult,muxConfigs)} /* 362 */,
-    (Member){GetTypeOrFail(STRING("Array<int>")),STRING("inputDelay"),offsetof(TestResult,inputDelay)} /* 363 */,
-    (Member){GetTypeOrFail(STRING("Array<int>")),STRING("outputLatencies"),offsetof(TestResult,outputLatencies)} /* 364 */,
-    (Member){GetTypeOrFail(STRING("Array<Array<InstanceInfo>>")),STRING("infos"),offsetof(AccelInfo,infos)} /* 365 */,
-    (Member){GetTypeOrFail(STRING("Array<InstanceInfo>")),STRING("baseInfo"),offsetof(AccelInfo,baseInfo)} /* 366 */,
-    (Member){GetTypeOrFail(STRING("Array<String>")),STRING("names"),offsetof(AccelInfo,names)} /* 367 */,
-    (Member){GetTypeOrFail(STRING("Array<Array<int>>")),STRING("inputDelays"),offsetof(AccelInfo,inputDelays)} /* 368 */,
-    (Member){GetTypeOrFail(STRING("Array<Array<int>>")),STRING("outputDelays"),offsetof(AccelInfo,outputDelays)} /* 369 */,
-    (Member){GetTypeOrFail(STRING("Array<Array<int>>")),STRING("muxConfigs"),offsetof(AccelInfo,muxConfigs)} /* 370 */,
-    (Member){GetTypeOrFail(STRING("int")),STRING("memMappedBitsize"),offsetof(AccelInfo,memMappedBitsize)} /* 371 */,
-    (Member){GetTypeOrFail(STRING("int")),STRING("howManyMergedUnits"),offsetof(AccelInfo,howManyMergedUnits)} /* 372 */,
-    (Member){GetTypeOrFail(STRING("int")),STRING("inputs"),offsetof(AccelInfo,inputs)} /* 373 */,
-    (Member){GetTypeOrFail(STRING("int")),STRING("outputs"),offsetof(AccelInfo,outputs)} /* 374 */,
-    (Member){GetTypeOrFail(STRING("int")),STRING("configs"),offsetof(AccelInfo,configs)} /* 375 */,
-    (Member){GetTypeOrFail(STRING("int")),STRING("states"),offsetof(AccelInfo,states)} /* 376 */,
-    (Member){GetTypeOrFail(STRING("int")),STRING("delays"),offsetof(AccelInfo,delays)} /* 377 */,
-    (Member){GetTypeOrFail(STRING("int")),STRING("ios"),offsetof(AccelInfo,ios)} /* 378 */,
-    (Member){GetTypeOrFail(STRING("int")),STRING("statics"),offsetof(AccelInfo,statics)} /* 379 */,
-    (Member){GetTypeOrFail(STRING("int")),STRING("staticBits"),offsetof(AccelInfo,staticBits)} /* 380 */,
-    (Member){GetTypeOrFail(STRING("int")),STRING("sharedUnits"),offsetof(AccelInfo,sharedUnits)} /* 381 */,
-    (Member){GetTypeOrFail(STRING("int")),STRING("externalMemoryInterfaces"),offsetof(AccelInfo,externalMemoryInterfaces)} /* 382 */,
-    (Member){GetTypeOrFail(STRING("int")),STRING("externalMemoryByteSize"),offsetof(AccelInfo,externalMemoryByteSize)} /* 383 */,
-    (Member){GetTypeOrFail(STRING("int")),STRING("numberUnits"),offsetof(AccelInfo,numberUnits)} /* 384 */,
-    (Member){GetTypeOrFail(STRING("int")),STRING("numberConnections"),offsetof(AccelInfo,numberConnections)} /* 385 */,
-    (Member){GetTypeOrFail(STRING("int")),STRING("memoryMappedBits"),offsetof(AccelInfo,memoryMappedBits)} /* 386 */,
-    (Member){GetTypeOrFail(STRING("bool")),STRING("isMemoryMapped"),offsetof(AccelInfo,isMemoryMapped)} /* 387 */,
-    (Member){GetTypeOrFail(STRING("bool")),STRING("signalLoop"),offsetof(AccelInfo,signalLoop)} /* 388 */,
-    (Member){GetTypeOrFail(STRING("String")),STRING("type"),offsetof(TypeAndNameOnly,type)} /* 389 */,
-    (Member){GetTypeOrFail(STRING("String")),STRING("name"),offsetof(TypeAndNameOnly,name)} /* 390 */,
-    (Member){GetTypeOrFail(STRING("int")),STRING("value"),offsetof(Partition,value)} /* 391 */,
-    (Member){GetTypeOrFail(STRING("int")),STRING("max"),offsetof(Partition,max)} /* 392 */,
-    (Member){GetTypeOrFail(STRING("Array<Wire>")),STRING("configs"),offsetof(OrderedConfigurations,configs)} /* 393 */,
-    (Member){GetTypeOrFail(STRING("Array<Wire>")),STRING("statics"),offsetof(OrderedConfigurations,statics)} /* 394 */,
-    (Member){GetTypeOrFail(STRING("Array<Wire>")),STRING("delays"),offsetof(OrderedConfigurations,delays)} /* 395 */,
-    (Member){GetTypeOrFail(STRING("String")),STRING("name"),offsetof(GraphPrintingNodeInfo,name)} /* 396 */,
-    (Member){GetTypeOrFail(STRING("String")),STRING("content"),offsetof(GraphPrintingNodeInfo,content)} /* 397 */,
-    (Member){GetTypeOrFail(STRING("Color")),STRING("color"),offsetof(GraphPrintingNodeInfo,color)} /* 398 */,
-    (Member){GetTypeOrFail(STRING("String")),STRING("content"),offsetof(GraphPrintingEdgeInfo,content)} /* 399 */,
-    (Member){GetTypeOrFail(STRING("Color")),STRING("color"),offsetof(GraphPrintingEdgeInfo,color)} /* 400 */,
-    (Member){GetTypeOrFail(STRING("String")),STRING("first"),offsetof(GraphPrintingEdgeInfo,first)} /* 401 */,
-    (Member){GetTypeOrFail(STRING("String")),STRING("second"),offsetof(GraphPrintingEdgeInfo,second)} /* 402 */,
-    (Member){GetTypeOrFail(STRING("String")),STRING("graphLabel"),offsetof(GraphPrintingContent,graphLabel)} /* 403 */,
-    (Member){GetTypeOrFail(STRING("Array<GraphPrintingNodeInfo>")),STRING("nodes"),offsetof(GraphPrintingContent,nodes)} /* 404 */,
-    (Member){GetTypeOrFail(STRING("Array<GraphPrintingEdgeInfo>")),STRING("edges"),offsetof(GraphPrintingContent,edges)} /* 405 */,
-    (Member){GetTypeOrFail(STRING("String")),STRING("content"),offsetof(GraphInfo,content)} /* 406 */,
-    (Member){GetTypeOrFail(STRING("Color")),STRING("color"),offsetof(GraphInfo,color)} /* 407 */,
-    (Member){GetTypeOrFail(STRING("EdgeDelay *")),STRING("edgesDelay"),offsetof(CalculateDelayResult,edgesDelay)} /* 408 */,
-    (Member){GetTypeOrFail(STRING("PortDelay *")),STRING("portDelay"),offsetof(CalculateDelayResult,portDelay)} /* 409 */,
-    (Member){GetTypeOrFail(STRING("NodeDelay *")),STRING("nodeDelay"),offsetof(CalculateDelayResult,nodeDelay)} /* 410 */,
-    (Member){GetTypeOrFail(STRING("Edge")),STRING("edge"),offsetof(DelayToAdd,edge)} /* 411 */,
-    (Member){GetTypeOrFail(STRING("String")),STRING("bufferName"),offsetof(DelayToAdd,bufferName)} /* 412 */,
-    (Member){GetTypeOrFail(STRING("String")),STRING("bufferParameters"),offsetof(DelayToAdd,bufferParameters)} /* 413 */,
-    (Member){GetTypeOrFail(STRING("int")),STRING("bufferAmount"),offsetof(DelayToAdd,bufferAmount)} /* 414 */,
-    (Member){GetTypeOrFail(STRING("String")),STRING("name"),offsetof(ConfigurationInfo,name)} /* 415 */,
-    (Member){GetTypeOrFail(STRING("Array<String>")),STRING("baseName"),offsetof(ConfigurationInfo,baseName)} /* 416 */,
-    (Member){GetTypeOrFail(STRING("FUDeclaration *")),STRING("baseType"),offsetof(ConfigurationInfo,baseType)} /* 417 */,
-    (Member){GetTypeOrFail(STRING("Array<Wire>")),STRING("configs"),offsetof(ConfigurationInfo,configs)} /* 418 */,
-    (Member){GetTypeOrFail(STRING("Array<Wire>")),STRING("states"),offsetof(ConfigurationInfo,states)} /* 419 */,
-    (Member){GetTypeOrFail(STRING("Array<int>")),STRING("inputDelays"),offsetof(ConfigurationInfo,inputDelays)} /* 420 */,
-    (Member){GetTypeOrFail(STRING("Array<int>")),STRING("outputLatencies"),offsetof(ConfigurationInfo,outputLatencies)} /* 421 */,
-    (Member){GetTypeOrFail(STRING("CalculatedOffsets")),STRING("configOffsets"),offsetof(ConfigurationInfo,configOffsets)} /* 422 */,
-    (Member){GetTypeOrFail(STRING("CalculatedOffsets")),STRING("stateOffsets"),offsetof(ConfigurationInfo,stateOffsets)} /* 423 */,
-    (Member){GetTypeOrFail(STRING("CalculatedOffsets")),STRING("delayOffsets"),offsetof(ConfigurationInfo,delayOffsets)} /* 424 */,
-    (Member){GetTypeOrFail(STRING("Array<int>")),STRING("calculatedDelays"),offsetof(ConfigurationInfo,calculatedDelays)} /* 425 */,
-    (Member){GetTypeOrFail(STRING("Array<int>")),STRING("order"),offsetof(ConfigurationInfo,order)} /* 426 */,
-    (Member){GetTypeOrFail(STRING("AcceleratorMapping *")),STRING("mapping"),offsetof(ConfigurationInfo,mapping)} /* 427 */,
-    (Member){GetTypeOrFail(STRING("Set<PortInstance> *")),STRING("mergeMultiplexers"),offsetof(ConfigurationInfo,mergeMultiplexers)} /* 428 */,
-    (Member){GetTypeOrFail(STRING("Array<bool>")),STRING("unitBelongs"),offsetof(ConfigurationInfo,unitBelongs)} /* 429 */,
-    (Member){GetTypeOrFail(STRING("Array<int>")),STRING("mergeMultiplexerConfigs"),offsetof(ConfigurationInfo,mergeMultiplexerConfigs)} /* 430 */,
-    (Member){GetTypeOrFail(STRING("String")),STRING("name"),offsetof(FUDeclaration,name)} /* 431 */,
-    (Member){GetTypeOrFail(STRING("ConfigurationInfo")),STRING("baseConfig"),offsetof(FUDeclaration,baseConfig)} /* 432 */,
-    (Member){GetTypeOrFail(STRING("Array<ConfigurationInfo>")),STRING("configInfo"),offsetof(FUDeclaration,configInfo)} /* 433 */,
-    (Member){GetTypeOrFail(STRING("int")),STRING("memoryMapBits"),offsetof(FUDeclaration,memoryMapBits)} /* 434 */,
-    (Member){GetTypeOrFail(STRING("int")),STRING("nIOs"),offsetof(FUDeclaration,nIOs)} /* 435 */,
-    (Member){GetTypeOrFail(STRING("Array<ExternalMemoryInterface>")),STRING("externalMemory"),offsetof(FUDeclaration,externalMemory)} /* 436 */,
-    (Member){GetTypeOrFail(STRING("Accelerator *")),STRING("baseCircuit"),offsetof(FUDeclaration,baseCircuit)} /* 437 */,
-    (Member){GetTypeOrFail(STRING("Accelerator *")),STRING("fixedDelayCircuit"),offsetof(FUDeclaration,fixedDelayCircuit)} /* 438 */,
-    (Member){GetTypeOrFail(STRING("Accelerator *")),STRING("flattenedBaseCircuit"),offsetof(FUDeclaration,flattenedBaseCircuit)} /* 439 */,
-    (Member){GetTypeOrFail(STRING("char *")),STRING("operation"),offsetof(FUDeclaration,operation)} /* 440 */,
-    (Member){GetTypeOrFail(STRING("SubMap *")),STRING("flattenMapping"),offsetof(FUDeclaration,flattenMapping)} /* 441 */,
-    (Member){GetTypeOrFail(STRING("int")),STRING("lat"),offsetof(FUDeclaration,lat)} /* 442 */,
-    (Member){GetTypeOrFail(STRING("Hashmap<StaticId, StaticData> *")),STRING("staticUnits"),offsetof(FUDeclaration,staticUnits)} /* 443 */,
-    (Member){GetTypeOrFail(STRING("FUDeclarationType")),STRING("type"),offsetof(FUDeclaration,type)} /* 444 */,
-    (Member){GetTypeOrFail(STRING("DelayType")),STRING("delayType"),offsetof(FUDeclaration,delayType)} /* 445 */,
-    (Member){GetTypeOrFail(STRING("bool")),STRING("isOperation"),offsetof(FUDeclaration,isOperation)} /* 446 */,
-    (Member){GetTypeOrFail(STRING("bool")),STRING("implementsDone"),offsetof(FUDeclaration,implementsDone)} /* 447 */,
-    (Member){GetTypeOrFail(STRING("bool")),STRING("signalLoop"),offsetof(FUDeclaration,signalLoop)} /* 448 */,
-    (Member){GetTypeOrFail(STRING("String")),STRING("type"),offsetof(SingleTypeStructElement,type)} /* 449 */,
-    (Member){GetTypeOrFail(STRING("String")),STRING("name"),offsetof(SingleTypeStructElement,name)} /* 450 */,
-    (Member){GetTypeOrFail(STRING("int")),STRING("arraySize"),offsetof(SingleTypeStructElement,arraySize)} /* 451 */,
-    (Member){GetTypeOrFail(STRING("Array<SingleTypeStructElement>")),STRING("typeAndNames"),offsetof(TypeStructInfoElement,typeAndNames)} /* 452 */,
-    (Member){GetTypeOrFail(STRING("String")),STRING("name"),offsetof(TypeStructInfo,name)} /* 453 */,
-    (Member){GetTypeOrFail(STRING("Array<TypeStructInfoElement>")),STRING("entries"),offsetof(TypeStructInfo,entries)} /* 454 */,
-    (Member){GetTypeOrFail(STRING("int")),STRING("index"),offsetof(Difference,index)} /* 455 */,
-    (Member){GetTypeOrFail(STRING("int")),STRING("newValue"),offsetof(Difference,newValue)} /* 456 */,
-    (Member){GetTypeOrFail(STRING("int")),STRING("oldIndex"),offsetof(DifferenceArray,oldIndex)} /* 457 */,
-    (Member){GetTypeOrFail(STRING("int")),STRING("newIndex"),offsetof(DifferenceArray,newIndex)} /* 458 */,
-    (Member){GetTypeOrFail(STRING("Array<Difference>")),STRING("differences"),offsetof(DifferenceArray,differences)} /* 459 */,
-    (Member){GetTypeOrFail(STRING("int")),STRING("configIndex"),offsetof(MuxInfo,configIndex)} /* 460 */,
-    (Member){GetTypeOrFail(STRING("int")),STRING("val"),offsetof(MuxInfo,val)} /* 461 */,
-    (Member){GetTypeOrFail(STRING("String")),STRING("name"),offsetof(MuxInfo,name)} /* 462 */,
-    (Member){GetTypeOrFail(STRING("InstanceInfo *")),STRING("info"),offsetof(MuxInfo,info)} /* 463 */,
-    (Member){GetTypeOrFail(STRING("TaskFunction")),STRING("function"),offsetof(Task,function)} /* 464 */,
-    (Member){GetTypeOrFail(STRING("int")),STRING("order"),offsetof(Task,order)} /* 465 */,
-    (Member){GetTypeOrFail(STRING("void *")),STRING("args"),offsetof(Task,args)} /* 466 */,
-    (Member){GetTypeOrFail(STRING("TaskFunction")),STRING("function"),offsetof(WorkGroup,function)} /* 467 */,
-    (Member){GetTypeOrFail(STRING("Array<Task>")),STRING("tasks"),offsetof(WorkGroup,tasks)} /* 468 */,
-    (Member){GetTypeOrFail(STRING("String")),STRING("instA"),offsetof(SpecificMerge,instA)} /* 469 */,
-    (Member){GetTypeOrFail(STRING("String")),STRING("instB"),offsetof(SpecificMerge,instB)} /* 470 */,
-    (Member){GetTypeOrFail(STRING("int")),STRING("index"),offsetof(IndexRecord,index)} /* 471 */,
-    (Member){GetTypeOrFail(STRING("IndexRecord *")),STRING("next"),offsetof(IndexRecord,next)} /* 472 */,
-    (Member){GetTypeOrFail(STRING("FUInstance *")),STRING("instA"),offsetof(SpecificMergeNodes,instA)} /* 473 */,
-    (Member){GetTypeOrFail(STRING("FUInstance *")),STRING("instB"),offsetof(SpecificMergeNodes,instB)} /* 474 */,
-    (Member){GetTypeOrFail(STRING("int")),STRING("firstIndex"),offsetof(SpecificMergeNode,firstIndex)} /* 475 */,
-    (Member){GetTypeOrFail(STRING("String")),STRING("firstName"),offsetof(SpecificMergeNode,firstName)} /* 476 */,
-    (Member){GetTypeOrFail(STRING("int")),STRING("secondIndex"),offsetof(SpecificMergeNode,secondIndex)} /* 477 */,
-    (Member){GetTypeOrFail(STRING("String")),STRING("secondName"),offsetof(SpecificMergeNode,secondName)} /* 478 */,
-    (Member){GetTypeOrFail(STRING("FUInstance *[2]")),STRING("instances"),offsetof(MergeEdge,instances)} /* 479 */,
-    (Member){GetTypeOrFail(STRING("MergeEdge")),STRING("nodes"),offsetof(MappingNode,nodes)} /* 480 */,
-    (Member){GetTypeOrFail(STRING("Edge[2]")),STRING("edges"),offsetof(MappingNode,edges)} /* 481 */,
-    (Member){GetTypeOrFail(STRING("int")),STRING("type"),offsetof(MappingNode,type)} /* 482 */,
-    (Member){GetTypeOrFail(STRING("Array<SpecificMergeNodes>")),STRING("specifics"),offsetof(ConsolidationGraphOptions,specifics)} /* 483 */,
-    (Member){GetTypeOrFail(STRING("int")),STRING("order"),offsetof(ConsolidationGraphOptions,order)} /* 484 */,
-    (Member){GetTypeOrFail(STRING("int")),STRING("difference"),offsetof(ConsolidationGraphOptions,difference)} /* 485 */,
-    (Member){GetTypeOrFail(STRING("bool")),STRING("mapNodes"),offsetof(ConsolidationGraphOptions,mapNodes)} /* 486 */,
-    (Member){GetTypeOrFail(STRING("int")),STRING("type"),offsetof(ConsolidationGraphOptions,type)} /* 487 */,
-    (Member){GetTypeOrFail(STRING("Array<MappingNode>")),STRING("nodes"),offsetof(ConsolidationGraph,nodes)} /* 488 */,
-    (Member){GetTypeOrFail(STRING("Array<BitArray>")),STRING("edges"),offsetof(ConsolidationGraph,edges)} /* 489 */,
-    (Member){GetTypeOrFail(STRING("BitArray")),STRING("validNodes"),offsetof(ConsolidationGraph,validNodes)} /* 490 */,
-    (Member){GetTypeOrFail(STRING("ConsolidationGraph")),STRING("graph"),offsetof(ConsolidationResult,graph)} /* 491 */,
-    (Member){GetTypeOrFail(STRING("Pool<MappingNode>")),STRING("specificsAdded"),offsetof(ConsolidationResult,specificsAdded)} /* 492 */,
-    (Member){GetTypeOrFail(STRING("int")),STRING("upperBound"),offsetof(ConsolidationResult,upperBound)} /* 493 */,
-    (Member){GetTypeOrFail(STRING("int")),STRING("max"),offsetof(CliqueState,max)} /* 494 */,
-    (Member){GetTypeOrFail(STRING("int")),STRING("upperBound"),offsetof(CliqueState,upperBound)} /* 495 */,
-    (Member){GetTypeOrFail(STRING("int")),STRING("startI"),offsetof(CliqueState,startI)} /* 496 */,
-    (Member){GetTypeOrFail(STRING("int")),STRING("iterations"),offsetof(CliqueState,iterations)} /* 497 */,
-    (Member){GetTypeOrFail(STRING("Array<int>")),STRING("table"),offsetof(CliqueState,table)} /* 498 */,
-    (Member){GetTypeOrFail(STRING("ConsolidationGraph")),STRING("clique"),offsetof(CliqueState,clique)} /* 499 */,
-    (Member){GetTypeOrFail(STRING("Time")),STRING("start"),offsetof(CliqueState,start)} /* 500 */,
-    (Member){GetTypeOrFail(STRING("bool")),STRING("found"),offsetof(CliqueState,found)} /* 501 */,
-    (Member){GetTypeOrFail(STRING("bool")),STRING("result"),offsetof(IsCliqueResult,result)} /* 502 */,
-    (Member){GetTypeOrFail(STRING("int")),STRING("failedIndex"),offsetof(IsCliqueResult,failedIndex)} /* 503 */,
-    (Member){GetTypeOrFail(STRING("Accelerator *")),STRING("accel1"),offsetof(MergeGraphResult,accel1)} /* 504 */,
-    (Member){GetTypeOrFail(STRING("Accelerator *")),STRING("accel2"),offsetof(MergeGraphResult,accel2)} /* 505 */,
-    (Member){GetTypeOrFail(STRING("InstanceMap *")),STRING("map1"),offsetof(MergeGraphResult,map1)} /* 506 */,
-    (Member){GetTypeOrFail(STRING("InstanceMap *")),STRING("map2"),offsetof(MergeGraphResult,map2)} /* 507 */,
-    (Member){GetTypeOrFail(STRING("Accelerator *")),STRING("newGraph"),offsetof(MergeGraphResult,newGraph)} /* 508 */,
-    (Member){GetTypeOrFail(STRING("Accelerator *")),STRING("result"),offsetof(MergeGraphResultExisting,result)} /* 509 */,
-    (Member){GetTypeOrFail(STRING("Accelerator *")),STRING("accel2"),offsetof(MergeGraphResultExisting,accel2)} /* 510 */,
-    (Member){GetTypeOrFail(STRING("AcceleratorMapping *")),STRING("map2"),offsetof(MergeGraphResultExisting,map2)} /* 511 */,
-    (Member){GetTypeOrFail(STRING("InstanceMap *")),STRING("instanceMap"),offsetof(GraphMapping,instanceMap)} /* 512 */,
-    (Member){GetTypeOrFail(STRING("InstanceMap *")),STRING("reverseInstanceMap"),offsetof(GraphMapping,reverseInstanceMap)} /* 513 */,
-    (Member){GetTypeOrFail(STRING("EdgeMap *")),STRING("edgeMap"),offsetof(GraphMapping,edgeMap)} /* 514 */,
-    (Member){GetTypeOrFail(STRING("Range<int>")),STRING("port"),offsetof(ConnectionExtra,port)} /* 515 */,
-    (Member){GetTypeOrFail(STRING("Range<int>")),STRING("delay"),offsetof(ConnectionExtra,delay)} /* 516 */,
-    (Member){GetTypeOrFail(STRING("Token")),STRING("name"),offsetof(Var,name)} /* 517 */,
-    (Member){GetTypeOrFail(STRING("ConnectionExtra")),STRING("extra"),offsetof(Var,extra)} /* 518 */,
-    (Member){GetTypeOrFail(STRING("Range<int>")),STRING("index"),offsetof(Var,index)} /* 519 */,
-    (Member){GetTypeOrFail(STRING("bool")),STRING("isArrayAccess"),offsetof(Var,isArrayAccess)} /* 520 */,
-    (Member){GetTypeOrFail(STRING("Array<Var>")),STRING("vars"),offsetof(VarGroup,vars)} /* 521 */,
-    (Member){GetTypeOrFail(STRING("Token")),STRING("fullText"),offsetof(VarGroup,fullText)} /* 522 */,
-    (Member){GetTypeOrFail(STRING("Array<SpecExpression *>")),STRING("expressions"),offsetof(SpecExpression,expressions)} /* 523 */,
-    (Member){GetTypeOrFail(STRING("char *")),STRING("op"),offsetof(SpecExpression,op)} /* 524 */,
-    (Member){GetTypeOrFail(STRING("Var")),STRING("var"),offsetof(SpecExpression,var)} /* 525 */,
-    (Member){GetTypeOrFail(STRING("Value")),STRING("val"),offsetof(SpecExpression,val)} /* 526 */,
-    (Member){GetTypeOrFail(STRING("Token")),STRING("text"),offsetof(SpecExpression,text)} /* 527 */,
-    (Member){GetTypeOrFail(STRING("int")),STRING("type"),offsetof(SpecExpression,type)} /* 528 */,
-    (Member){GetTypeOrFail(STRING("Token")),STRING("name"),offsetof(VarDeclaration,name)} /* 529 */,
-    (Member){GetTypeOrFail(STRING("int")),STRING("arraySize"),offsetof(VarDeclaration,arraySize)} /* 530 */,
-    (Member){GetTypeOrFail(STRING("bool")),STRING("isArray"),offsetof(VarDeclaration,isArray)} /* 531 */,
-    (Member){GetTypeOrFail(STRING("VarGroup")),STRING("group"),offsetof(GroupIterator,group)} /* 532 */,
-    (Member){GetTypeOrFail(STRING("int")),STRING("groupIndex"),offsetof(GroupIterator,groupIndex)} /* 533 */,
-    (Member){GetTypeOrFail(STRING("int")),STRING("varIndex"),offsetof(GroupIterator,varIndex)} /* 534 */,
-    (Member){GetTypeOrFail(STRING("FUInstance *")),STRING("inst"),offsetof(PortExpression,inst)} /* 535 */,
-    (Member){GetTypeOrFail(STRING("ConnectionExtra")),STRING("extra"),offsetof(PortExpression,extra)} /* 536 */,
-    (Member){GetTypeOrFail(STRING("int")),STRING("modifier"),offsetof(InstanceDeclaration,modifier)} /* 537 */,
-    (Member){GetTypeOrFail(STRING("Token")),STRING("typeName"),offsetof(InstanceDeclaration,typeName)} /* 538 */,
-    (Member){GetTypeOrFail(STRING("Array<VarDeclaration>")),STRING("declarations"),offsetof(InstanceDeclaration,declarations)} /* 539 */,
-    (Member){GetTypeOrFail(STRING("String")),STRING("parameters"),offsetof(InstanceDeclaration,parameters)} /* 540 */,
-    (Member){GetTypeOrFail(STRING("Range<Cursor>")),STRING("loc"),offsetof(ConnectionDef,loc)} /* 541 */,
-    (Member){GetTypeOrFail(STRING("VarGroup")),STRING("output"),offsetof(ConnectionDef,output)} /* 542 */,
-    (Member){GetTypeOrFail(STRING("int")),STRING("type"),offsetof(ConnectionDef,type)} /* 543 */,
-    (Member){GetTypeOrFail(STRING("Array<Token>")),STRING("transforms"),offsetof(ConnectionDef,transforms)} /* 544 */,
-    (Member){GetTypeOrFail(STRING("VarGroup")),STRING("input"),offsetof(ConnectionDef,input)} /* 545 */,
-    (Member){GetTypeOrFail(STRING("SpecExpression *")),STRING("expression"),offsetof(ConnectionDef,expression)} /* 546 */,
-    (Member){GetTypeOrFail(STRING("Token")),STRING("name"),offsetof(ModuleDef,name)} /* 547 */,
-    (Member){GetTypeOrFail(STRING("Token")),STRING("numberOutputs"),offsetof(ModuleDef,numberOutputs)} /* 548 */,
-    (Member){GetTypeOrFail(STRING("Array<VarDeclaration>")),STRING("inputs"),offsetof(ModuleDef,inputs)} /* 549 */,
-    (Member){GetTypeOrFail(STRING("Array<InstanceDeclaration>")),STRING("declarations"),offsetof(ModuleDef,declarations)} /* 550 */,
-    (Member){GetTypeOrFail(STRING("Array<ConnectionDef>")),STRING("connections"),offsetof(ModuleDef,connections)} /* 551 */,
-    (Member){GetTypeOrFail(STRING("Token")),STRING("name"),offsetof(TransformDef,name)} /* 552 */,
-    (Member){GetTypeOrFail(STRING("Array<VarDeclaration>")),STRING("inputs"),offsetof(TransformDef,inputs)} /* 553 */,
-    (Member){GetTypeOrFail(STRING("Array<ConnectionDef>")),STRING("connections"),offsetof(TransformDef,connections)} /* 554 */,
-    (Member){GetTypeOrFail(STRING("int")),STRING("inputs"),offsetof(Transformation,inputs)} /* 555 */,
-    (Member){GetTypeOrFail(STRING("int")),STRING("outputs"),offsetof(Transformation,outputs)} /* 556 */,
-    (Member){GetTypeOrFail(STRING("Array<int>")),STRING("map"),offsetof(Transformation,map)} /* 557 */,
-    (Member){GetTypeOrFail(STRING("Token")),STRING("instanceName"),offsetof(HierarchicalName,instanceName)} /* 558 */,
-    (Member){GetTypeOrFail(STRING("Var")),STRING("subInstance"),offsetof(HierarchicalName,subInstance)} /* 559 */,
-    (Member){GetTypeOrFail(STRING("Token")),STRING("typeName"),offsetof(TypeAndInstance,typeName)} /* 560 */,
-    (Member){GetTypeOrFail(STRING("Token")),STRING("instanceName"),offsetof(TypeAndInstance,instanceName)} /* 561 */
+    (Member){GetTypeOrFail(STRING("String")),STRING("baseName"),offsetof(NameAndTemplateArguments,baseName)} /* 51 */,
+    (Member){GetTypeOrFail(STRING("Array<ParsedType>")),STRING("templateMembers"),offsetof(NameAndTemplateArguments,templateMembers)} /* 52 */,
+    (Member){GetTypeOrFail(STRING("String")),STRING("baseName"),offsetof(ParsedType,baseName)} /* 53 */,
+    (Member){GetTypeOrFail(STRING("Array<ParsedType>")),STRING("templateMembers"),offsetof(ParsedType,templateMembers)} /* 54 */,
+    (Member){GetTypeOrFail(STRING("int")),STRING("amountOfPointers"),offsetof(ParsedType,amountOfPointers)} /* 55 */,
+    (Member){GetTypeOrFail(STRING("Array<String>")),STRING("arrayExpressions"),offsetof(ParsedType,arrayExpressions)} /* 56 */,
+    (Member){GetTypeOrFail(STRING("String")),STRING("name"),offsetof(Type,name)} /* 57 */,
+    (Member){GetTypeOrFail(STRING("Type *")),STRING("baseType"),offsetof(Type,baseType)} /* 58 */,
+    (Member){GetTypeOrFail(STRING("Type *")),STRING("pointerType"),offsetof(Type,pointerType)} /* 59 */,
+    (Member){GetTypeOrFail(STRING("Type *")),STRING("arrayType"),offsetof(Type,arrayType)} /* 60 */,
+    (Member){GetTypeOrFail(STRING("Type *")),STRING("typedefType"),offsetof(Type,typedefType)} /* 61 */,
+    (Member){GetTypeOrFail(STRING("Array<Pair<String, int>>")),STRING("enumMembers"),offsetof(Type,enumMembers)} /* 62 */,
+    (Member){GetTypeOrFail(STRING("Array<TemplatedMember>")),STRING("templateMembers"),offsetof(Type,templateMembers)} /* 63 */,
+    (Member){GetTypeOrFail(STRING("Array<String>")),STRING("templateArgs"),offsetof(Type,templateArgs)} /* 64 */,
+    (Member){GetTypeOrFail(STRING("Array<Member>")),STRING("members"),offsetof(Type,members)} /* 65 */,
+    (Member){GetTypeOrFail(STRING("Type *")),STRING("templateBase"),offsetof(Type,templateBase)} /* 66 */,
+    (Member){GetTypeOrFail(STRING("Array<Type *>")),STRING("templateArgTypes"),offsetof(Type,templateArgTypes)} /* 67 */,
+    (Member){GetTypeOrFail(STRING("int")),STRING("size"),offsetof(Type,size)} /* 68 */,
+    (Member){GetTypeOrFail(STRING("int")),STRING("align"),offsetof(Type,align)} /* 69 */,
+    (Member){GetTypeOrFail(STRING("Subtype")),STRING("type"),offsetof(Type,type)} /* 70 */,
+    (Member){GetTypeOrFail(STRING("Type *")),STRING("type"),offsetof(Member,type)} /* 71 */,
+    (Member){GetTypeOrFail(STRING("String")),STRING("name"),offsetof(Member,name)} /* 72 */,
+    (Member){GetTypeOrFail(STRING("int")),STRING("offset"),offsetof(Member,offset)} /* 73 */,
+    (Member){GetTypeOrFail(STRING("Type *")),STRING("structType"),offsetof(Member,structType)} /* 74 */,
+    (Member){GetTypeOrFail(STRING("String")),STRING("arrayExpression"),offsetof(Member,arrayExpression)} /* 75 */,
+    (Member){GetTypeOrFail(STRING("int")),STRING("index"),offsetof(Member,index)} /* 76 */,
+    (Member){GetTypeOrFail(STRING("bool")),STRING("boolean"),offsetof(Value,boolean)} /* 77 */,
+    (Member){GetTypeOrFail(STRING("char")),STRING("ch"),offsetof(Value,ch)} /* 78 */,
+    (Member){GetTypeOrFail(STRING("i64")),STRING("number"),offsetof(Value,number)} /* 79 */,
+    (Member){GetTypeOrFail(STRING("String")),STRING("str"),offsetof(Value,str)} /* 80 */,
+    (Member){GetTypeOrFail(STRING("bool")),STRING("literal"),offsetof(Value,literal)} /* 81 */,
+    (Member){GetTypeOrFail(STRING("TemplateFunction *")),STRING("templateFunction"),offsetof(Value,templateFunction)} /* 82 */,
+    (Member){GetTypeOrFail(STRING("void *")),STRING("custom"),offsetof(Value,custom)} /* 83 */,
+    (Member){GetTypeOrFail(STRING("Type *")),STRING("type"),offsetof(Value,type)} /* 84 */,
+    (Member){GetTypeOrFail(STRING("bool")),STRING("isTemp"),offsetof(Value,isTemp)} /* 85 */,
+    (Member){GetTypeOrFail(STRING("int")),STRING("currentNumber"),offsetof(Iterator,currentNumber)} /* 86 */,
+    (Member){GetTypeOrFail(STRING("GenericPoolIterator")),STRING("poolIterator"),offsetof(Iterator,poolIterator)} /* 87 */,
+    (Member){GetTypeOrFail(STRING("Type *")),STRING("hashmapType"),offsetof(Iterator,hashmapType)} /* 88 */,
+    (Member){GetTypeOrFail(STRING("Value")),STRING("iterating"),offsetof(Iterator,iterating)} /* 89 */,
+    (Member){GetTypeOrFail(STRING("int")),STRING("index"),offsetof(HashmapUnpackedIndex,index)} /* 90 */,
+    (Member){GetTypeOrFail(STRING("bool")),STRING("data"),offsetof(HashmapUnpackedIndex,data)} /* 91 */,
+    (Member){GetTypeOrFail(STRING("PoolIterator<Type>")),STRING("iter"),offsetof(TypeIterator,iter)} /* 92 */,
+    (Member){GetTypeOrFail(STRING("PoolIterator<Type>")),STRING("end"),offsetof(TypeIterator,end)} /* 93 */,
+    (Member){GetTypeOrFail(STRING("char *")),STRING("op"),offsetof(Expression,op)} /* 94 */,
+    (Member){GetTypeOrFail(STRING("String")),STRING("id"),offsetof(Expression,id)} /* 95 */,
+    (Member){GetTypeOrFail(STRING("Array<Expression *>")),STRING("expressions"),offsetof(Expression,expressions)} /* 96 */,
+    (Member){GetTypeOrFail(STRING("Command *")),STRING("command"),offsetof(Expression,command)} /* 97 */,
+    (Member){GetTypeOrFail(STRING("Value")),STRING("val"),offsetof(Expression,val)} /* 98 */,
+    (Member){GetTypeOrFail(STRING("String")),STRING("text"),offsetof(Expression,text)} /* 99 */,
+    (Member){GetTypeOrFail(STRING("int")),STRING("approximateLine"),offsetof(Expression,approximateLine)} /* 100 */,
+    (Member){GetTypeOrFail(STRING("int")),STRING("type"),offsetof(Expression,type)} /* 101 */,
+    (Member){GetTypeOrFail(STRING("int")),STRING("line"),offsetof(Cursor,line)} /* 102 */,
+    (Member){GetTypeOrFail(STRING("int")),STRING("column"),offsetof(Cursor,column)} /* 103 */,
+    (Member){GetTypeOrFail(STRING("Range<Cursor>")),STRING("loc"),offsetof(Token,loc)} /* 104 */,
+    (Member){GetTypeOrFail(STRING("String")),STRING("foundFirst"),offsetof(FindFirstResult,foundFirst)} /* 105 */,
+    (Member){GetTypeOrFail(STRING("Token")),STRING("peekFindNotIncluded"),offsetof(FindFirstResult,peekFindNotIncluded)} /* 106 */,
+    (Member){GetTypeOrFail(STRING("u16[128]")),STRING("array"),offsetof(Trie,array)} /* 107 */,
+    (Member){GetTypeOrFail(STRING("Array<Trie>")),STRING("subTries"),offsetof(TokenizerTemplate,subTries)} /* 108 */,
+    (Member){GetTypeOrFail(STRING("char *")),STRING("ptr"),offsetof(TokenizerMark,ptr)} /* 109 */,
+    (Member){GetTypeOrFail(STRING("Cursor")),STRING("pos"),offsetof(TokenizerMark,pos)} /* 110 */,
+    (Member){GetTypeOrFail(STRING("char *")),STRING("start"),offsetof(Tokenizer,start)} /* 111 */,
+    (Member){GetTypeOrFail(STRING("char *")),STRING("ptr"),offsetof(Tokenizer,ptr)} /* 112 */,
+    (Member){GetTypeOrFail(STRING("char *")),STRING("end"),offsetof(Tokenizer,end)} /* 113 */,
+    (Member){GetTypeOrFail(STRING("TokenizerTemplate *")),STRING("tmpl"),offsetof(Tokenizer,tmpl)} /* 114 */,
+    (Member){GetTypeOrFail(STRING("int")),STRING("line"),offsetof(Tokenizer,line)} /* 115 */,
+    (Member){GetTypeOrFail(STRING("int")),STRING("column"),offsetof(Tokenizer,column)} /* 116 */,
+    (Member){GetTypeOrFail(STRING("bool")),STRING("keepWhitespaces"),offsetof(Tokenizer,keepWhitespaces)} /* 117 */,
+    (Member){GetTypeOrFail(STRING("bool")),STRING("keepComments"),offsetof(Tokenizer,keepComments)} /* 118 */,
+    (Member){GetTypeOrFail(STRING("char **")),STRING("op"),offsetof(OperationList,op)} /* 119 */,
+    (Member){GetTypeOrFail(STRING("int")),STRING("nOperations"),offsetof(OperationList,nOperations)} /* 120 */,
+    (Member){GetTypeOrFail(STRING("OperationList *")),STRING("next"),offsetof(OperationList,next)} /* 121 */,
+    (Member){GetTypeOrFail(STRING("String")),STRING("name"),offsetof(CommandDefinition,name)} /* 122 */,
+    (Member){GetTypeOrFail(STRING("int")),STRING("numberExpressions"),offsetof(CommandDefinition,numberExpressions)} /* 123 */,
+    (Member){GetTypeOrFail(STRING("CommandType")),STRING("type"),offsetof(CommandDefinition,type)} /* 124 */,
+    (Member){GetTypeOrFail(STRING("bool")),STRING("isBlockType"),offsetof(CommandDefinition,isBlockType)} /* 125 */,
+    (Member){GetTypeOrFail(STRING("CommandDefinition *")),STRING("definition"),offsetof(Command,definition)} /* 126 */,
+    (Member){GetTypeOrFail(STRING("Array<Expression *>")),STRING("expressions"),offsetof(Command,expressions)} /* 127 */,
+    (Member){GetTypeOrFail(STRING("String")),STRING("fullText"),offsetof(Command,fullText)} /* 128 */,
+    (Member){GetTypeOrFail(STRING("Token")),STRING("fullText"),offsetof(Block,fullText)} /* 129 */,
+    (Member){GetTypeOrFail(STRING("String")),STRING("textBlock"),offsetof(Block,textBlock)} /* 130 */,
+    (Member){GetTypeOrFail(STRING("Command *")),STRING("command"),offsetof(Block,command)} /* 131 */,
+    (Member){GetTypeOrFail(STRING("Expression *")),STRING("expression"),offsetof(Block,expression)} /* 132 */,
+    (Member){GetTypeOrFail(STRING("Array<Block *>")),STRING("innerBlocks"),offsetof(Block,innerBlocks)} /* 133 */,
+    (Member){GetTypeOrFail(STRING("BlockType")),STRING("type"),offsetof(Block,type)} /* 134 */,
+    (Member){GetTypeOrFail(STRING("int")),STRING("line"),offsetof(Block,line)} /* 135 */,
+    (Member){GetTypeOrFail(STRING("Array<Expression *>")),STRING("arguments"),offsetof(TemplateFunction,arguments)} /* 136 */,
+    (Member){GetTypeOrFail(STRING("Array<Block *>")),STRING("blocks"),offsetof(TemplateFunction,blocks)} /* 137 */,
+    (Member){GetTypeOrFail(STRING("TemplateRecordType")),STRING("type"),offsetof(TemplateRecord,type)} /* 138 */,
+    (Member){GetTypeOrFail(STRING("Type *")),STRING("identifierType"),offsetof(TemplateRecord,identifierType)} /* 139 */,
+    (Member){GetTypeOrFail(STRING("String")),STRING("identifierName"),offsetof(TemplateRecord,identifierName)} /* 140 */,
+    (Member){GetTypeOrFail(STRING("Type *")),STRING("structType"),offsetof(TemplateRecord,structType)} /* 141 */,
+    (Member){GetTypeOrFail(STRING("String")),STRING("fieldName"),offsetof(TemplateRecord,fieldName)} /* 142 */,
+    (Member){GetTypeOrFail(STRING("Value")),STRING("val"),offsetof(ValueAndText,val)} /* 143 */,
+    (Member){GetTypeOrFail(STRING("String")),STRING("text"),offsetof(ValueAndText,text)} /* 144 */,
+    (Member){GetTypeOrFail(STRING("Hashmap<String, Value> *")),STRING("table"),offsetof(Frame,table)} /* 145 */,
+    (Member){GetTypeOrFail(STRING("Frame *")),STRING("previousFrame"),offsetof(Frame,previousFrame)} /* 146 */,
+    (Member){GetTypeOrFail(STRING("String")),STRING("content"),offsetof(IndividualBlock,content)} /* 147 */,
+    (Member){GetTypeOrFail(STRING("BlockType")),STRING("type"),offsetof(IndividualBlock,type)} /* 148 */,
+    (Member){GetTypeOrFail(STRING("int")),STRING("line"),offsetof(IndividualBlock,line)} /* 149 */,
+    (Member){GetTypeOrFail(STRING("int")),STRING("totalMemoryUsed"),offsetof(CompiledTemplate,totalMemoryUsed)} /* 150 */,
+    (Member){GetTypeOrFail(STRING("String")),STRING("content"),offsetof(CompiledTemplate,content)} /* 151 */,
+    (Member){GetTypeOrFail(STRING("Array<Block *>")),STRING("blocks"),offsetof(CompiledTemplate,blocks)} /* 152 */,
+    (Member){GetTypeOrFail(STRING("String")),STRING("name"),offsetof(CompiledTemplate,name)} /* 153 */,
+    (Member){GetTypeOrFail(STRING("Hashmap<String, Value> *")),STRING("attributes"),offsetof(PortDeclaration,attributes)} /* 154 */,
+    (Member){GetTypeOrFail(STRING("ExpressionRange")),STRING("range"),offsetof(PortDeclaration,range)} /* 155 */,
+    (Member){GetTypeOrFail(STRING("String")),STRING("name"),offsetof(PortDeclaration,name)} /* 156 */,
+    (Member){GetTypeOrFail(STRING("int")),STRING("type"),offsetof(PortDeclaration,type)} /* 157 */,
+    (Member){GetTypeOrFail(STRING("String")),STRING("name"),offsetof(ParameterExpression,name)} /* 158 */,
+    (Member){GetTypeOrFail(STRING("Expression *")),STRING("expr"),offsetof(ParameterExpression,expr)} /* 159 */,
+    (Member){GetTypeOrFail(STRING("Array<ParameterExpression>")),STRING("parameters"),offsetof(Module,parameters)} /* 160 */,
+    (Member){GetTypeOrFail(STRING("Array<PortDeclaration>")),STRING("ports"),offsetof(Module,ports)} /* 161 */,
+    (Member){GetTypeOrFail(STRING("String")),STRING("name"),offsetof(Module,name)} /* 162 */,
+    (Member){GetTypeOrFail(STRING("bool")),STRING("isSource"),offsetof(Module,isSource)} /* 163 */,
+    (Member){GetTypeOrFail(STRING("int")),STRING("interface"),offsetof(ExternalMemoryID,interface)} /* 164 */,
+    (Member){GetTypeOrFail(STRING("ExternalMemoryType")),STRING("type"),offsetof(ExternalMemoryID,type)} /* 165 */,
+    (Member){GetTypeOrFail(STRING("bool")),STRING("write"),offsetof(ExternalInfoTwoPorts,write)} /* 166 */,
+    (Member){GetTypeOrFail(STRING("bool")),STRING("read"),offsetof(ExternalInfoTwoPorts,read)} /* 167 */,
+    (Member){GetTypeOrFail(STRING("bool")),STRING("enable"),offsetof(ExternalInfoDualPort,enable)} /* 168 */,
+    (Member){GetTypeOrFail(STRING("bool")),STRING("write"),offsetof(ExternalInfoDualPort,write)} /* 169 */,
+    (Member){GetTypeOrFail(STRING("ExternalInfoTwoPorts")),STRING("tp"),offsetof(ExternalMemoryInfo,tp)} /* 170 */,
+    (Member){GetTypeOrFail(STRING("ExternalInfoDualPort[2]")),STRING("dp"),offsetof(ExternalMemoryInfo,dp)} /* 171 */,
+    (Member){GetTypeOrFail(STRING("ExternalMemoryType")),STRING("type"),offsetof(ExternalMemoryInfo,type)} /* 172 */,
+    (Member){GetTypeOrFail(STRING("String")),STRING("name"),offsetof(ModuleInfo,name)} /* 173 */,
+    (Member){GetTypeOrFail(STRING("Array<ParameterExpression>")),STRING("defaultParameters"),offsetof(ModuleInfo,defaultParameters)} /* 174 */,
+    (Member){GetTypeOrFail(STRING("Array<int>")),STRING("inputDelays"),offsetof(ModuleInfo,inputDelays)} /* 175 */,
+    (Member){GetTypeOrFail(STRING("Array<int>")),STRING("outputLatencies"),offsetof(ModuleInfo,outputLatencies)} /* 176 */,
+    (Member){GetTypeOrFail(STRING("Array<WireExpression>")),STRING("configs"),offsetof(ModuleInfo,configs)} /* 177 */,
+    (Member){GetTypeOrFail(STRING("Array<WireExpression>")),STRING("states"),offsetof(ModuleInfo,states)} /* 178 */,
+    (Member){GetTypeOrFail(STRING("Array<ExternalMemoryInterfaceExpression>")),STRING("externalInterfaces"),offsetof(ModuleInfo,externalInterfaces)} /* 179 */,
+    (Member){GetTypeOrFail(STRING("int")),STRING("nDelays"),offsetof(ModuleInfo,nDelays)} /* 180 */,
+    (Member){GetTypeOrFail(STRING("int")),STRING("nIO"),offsetof(ModuleInfo,nIO)} /* 181 */,
+    (Member){GetTypeOrFail(STRING("ExpressionRange")),STRING("memoryMappedBits"),offsetof(ModuleInfo,memoryMappedBits)} /* 182 */,
+    (Member){GetTypeOrFail(STRING("ExpressionRange")),STRING("databusAddrSize"),offsetof(ModuleInfo,databusAddrSize)} /* 183 */,
+    (Member){GetTypeOrFail(STRING("bool")),STRING("doesIO"),offsetof(ModuleInfo,doesIO)} /* 184 */,
+    (Member){GetTypeOrFail(STRING("bool")),STRING("memoryMapped"),offsetof(ModuleInfo,memoryMapped)} /* 185 */,
+    (Member){GetTypeOrFail(STRING("bool")),STRING("hasDone"),offsetof(ModuleInfo,hasDone)} /* 186 */,
+    (Member){GetTypeOrFail(STRING("bool")),STRING("hasClk"),offsetof(ModuleInfo,hasClk)} /* 187 */,
+    (Member){GetTypeOrFail(STRING("bool")),STRING("hasReset"),offsetof(ModuleInfo,hasReset)} /* 188 */,
+    (Member){GetTypeOrFail(STRING("bool")),STRING("hasRun"),offsetof(ModuleInfo,hasRun)} /* 189 */,
+    (Member){GetTypeOrFail(STRING("bool")),STRING("hasRunning"),offsetof(ModuleInfo,hasRunning)} /* 190 */,
+    (Member){GetTypeOrFail(STRING("bool")),STRING("isSource"),offsetof(ModuleInfo,isSource)} /* 191 */,
+    (Member){GetTypeOrFail(STRING("bool")),STRING("signalLoop"),offsetof(ModuleInfo,signalLoop)} /* 192 */,
+    (Member){GetTypeOrFail(STRING("Array<String>")),STRING("verilogFiles"),offsetof(Options,verilogFiles)} /* 193 */,
+    (Member){GetTypeOrFail(STRING("Array<String>")),STRING("extraSources"),offsetof(Options,extraSources)} /* 194 */,
+    (Member){GetTypeOrFail(STRING("Array<String>")),STRING("includePaths"),offsetof(Options,includePaths)} /* 195 */,
+    (Member){GetTypeOrFail(STRING("Array<String>")),STRING("unitPaths"),offsetof(Options,unitPaths)} /* 196 */,
+    (Member){GetTypeOrFail(STRING("String")),STRING("hardwareOutputFilepath"),offsetof(Options,hardwareOutputFilepath)} /* 197 */,
+    (Member){GetTypeOrFail(STRING("String")),STRING("softwareOutputFilepath"),offsetof(Options,softwareOutputFilepath)} /* 198 */,
+    (Member){GetTypeOrFail(STRING("String")),STRING("verilatorRoot"),offsetof(Options,verilatorRoot)} /* 199 */,
+    (Member){GetTypeOrFail(STRING("String")),STRING("debugPath"),offsetof(Options,debugPath)} /* 200 */,
+    (Member){GetTypeOrFail(STRING("String")),STRING("specificationFilepath"),offsetof(Options,specificationFilepath)} /* 201 */,
+    (Member){GetTypeOrFail(STRING("String")),STRING("topName"),offsetof(Options,topName)} /* 202 */,
+    (Member){GetTypeOrFail(STRING("int")),STRING("databusAddrSize"),offsetof(Options,databusAddrSize)} /* 203 */,
+    (Member){GetTypeOrFail(STRING("int")),STRING("databusDataSize"),offsetof(Options,databusDataSize)} /* 204 */,
+    (Member){GetTypeOrFail(STRING("bool")),STRING("addInputAndOutputsToTop"),offsetof(Options,addInputAndOutputsToTop)} /* 205 */,
+    (Member){GetTypeOrFail(STRING("bool")),STRING("debug"),offsetof(Options,debug)} /* 206 */,
+    (Member){GetTypeOrFail(STRING("bool")),STRING("shadowRegister"),offsetof(Options,shadowRegister)} /* 207 */,
+    (Member){GetTypeOrFail(STRING("bool")),STRING("architectureHasDatabus"),offsetof(Options,architectureHasDatabus)} /* 208 */,
+    (Member){GetTypeOrFail(STRING("bool")),STRING("useFixedBuffers"),offsetof(Options,useFixedBuffers)} /* 209 */,
+    (Member){GetTypeOrFail(STRING("bool")),STRING("generateFSTFormat"),offsetof(Options,generateFSTFormat)} /* 210 */,
+    (Member){GetTypeOrFail(STRING("bool")),STRING("disableDelayPropagation"),offsetof(Options,disableDelayPropagation)} /* 211 */,
+    (Member){GetTypeOrFail(STRING("bool")),STRING("useDMA"),offsetof(Options,useDMA)} /* 212 */,
+    (Member){GetTypeOrFail(STRING("bool")),STRING("exportInternalMemories"),offsetof(Options,exportInternalMemories)} /* 213 */,
+    (Member){GetTypeOrFail(STRING("uint")),STRING("dotFormat"),offsetof(DebugState,dotFormat)} /* 214 */,
+    (Member){GetTypeOrFail(STRING("bool")),STRING("outputGraphs"),offsetof(DebugState,outputGraphs)} /* 215 */,
+    (Member){GetTypeOrFail(STRING("bool")),STRING("outputConsolidationGraphs"),offsetof(DebugState,outputConsolidationGraphs)} /* 216 */,
+    (Member){GetTypeOrFail(STRING("bool")),STRING("outputAccelerator"),offsetof(DebugState,outputAccelerator)} /* 217 */,
+    (Member){GetTypeOrFail(STRING("bool")),STRING("outputVersat"),offsetof(DebugState,outputVersat)} /* 218 */,
+    (Member){GetTypeOrFail(STRING("bool")),STRING("outputVCD"),offsetof(DebugState,outputVCD)} /* 219 */,
+    (Member){GetTypeOrFail(STRING("bool")),STRING("outputAcceleratorInfo"),offsetof(DebugState,outputAcceleratorInfo)} /* 220 */,
+    (Member){GetTypeOrFail(STRING("bool")),STRING("useFixedBuffers"),offsetof(DebugState,useFixedBuffers)} /* 221 */,
+    (Member){GetTypeOrFail(STRING("FUInstance *")),STRING("inst"),offsetof(PortInstance,inst)} /* 222 */,
+    (Member){GetTypeOrFail(STRING("int")),STRING("port"),offsetof(PortInstance,port)} /* 223 */,
+    (Member){GetTypeOrFail(STRING("PortInstance")),STRING("out"),offsetof(Edge,out)} /* 224 */,
+    (Member){GetTypeOrFail(STRING("PortInstance")),STRING("in"),offsetof(Edge,in)} /* 225 */,
+    (Member){GetTypeOrFail(STRING("PortInstance[2]")),STRING("units"),offsetof(Edge,units)} /* 226 */,
+    (Member){GetTypeOrFail(STRING("int")),STRING("delay"),offsetof(Edge,delay)} /* 227 */,
+    (Member){GetTypeOrFail(STRING("Edge *")),STRING("next"),offsetof(Edge,next)} /* 228 */,
+    (Member){GetTypeOrFail(STRING("InstanceMap *")),STRING("nodeMap"),offsetof(GenericGraphMapping,nodeMap)} /* 229 */,
+    (Member){GetTypeOrFail(STRING("PathMap *")),STRING("edgeMap"),offsetof(GenericGraphMapping,edgeMap)} /* 230 */,
+    (Member){GetTypeOrFail(STRING("int *")),STRING("value"),offsetof(EdgeDelayInfo,value)} /* 231 */,
+    (Member){GetTypeOrFail(STRING("bool")),STRING("isAny"),offsetof(EdgeDelayInfo,isAny)} /* 232 */,
+    (Member){GetTypeOrFail(STRING("int")),STRING("value"),offsetof(DelayInfo,value)} /* 233 */,
+    (Member){GetTypeOrFail(STRING("bool")),STRING("isAny"),offsetof(DelayInfo,isAny)} /* 234 */,
+    (Member){GetTypeOrFail(STRING("PortInstance")),STRING("instConnectedTo"),offsetof(ConnectionNode,instConnectedTo)} /* 235 */,
+    (Member){GetTypeOrFail(STRING("int")),STRING("port"),offsetof(ConnectionNode,port)} /* 236 */,
+    (Member){GetTypeOrFail(STRING("int")),STRING("edgeDelay"),offsetof(ConnectionNode,edgeDelay)} /* 237 */,
+    (Member){GetTypeOrFail(STRING("EdgeDelayInfo")),STRING("delay"),offsetof(ConnectionNode,delay)} /* 238 */,
+    (Member){GetTypeOrFail(STRING("ConnectionNode *")),STRING("next"),offsetof(ConnectionNode,next)} /* 239 */,
+    (Member){GetTypeOrFail(STRING("String")),STRING("name"),offsetof(FUInstance,name)} /* 240 */,
+    (Member){GetTypeOrFail(STRING("String")),STRING("parameters"),offsetof(FUInstance,parameters)} /* 241 */,
+    (Member){GetTypeOrFail(STRING("Accelerator *")),STRING("accel"),offsetof(FUInstance,accel)} /* 242 */,
+    (Member){GetTypeOrFail(STRING("FUDeclaration *")),STRING("declaration"),offsetof(FUInstance,declaration)} /* 243 */,
+    (Member){GetTypeOrFail(STRING("int")),STRING("id"),offsetof(FUInstance,id)} /* 244 */,
+    (Member){GetTypeOrFail(STRING("int")),STRING("literal"),offsetof(FUInstance,literal)} /* 245 */,
+    (Member){GetTypeOrFail(STRING("int")),STRING("bufferAmount"),offsetof(FUInstance,bufferAmount)} /* 246 */,
+    (Member){GetTypeOrFail(STRING("int")),STRING("portIndex"),offsetof(FUInstance,portIndex)} /* 247 */,
+    (Member){GetTypeOrFail(STRING("int")),STRING("sharedIndex"),offsetof(FUInstance,sharedIndex)} /* 248 */,
+    (Member){GetTypeOrFail(STRING("bool")),STRING("isStatic"),offsetof(FUInstance,isStatic)} /* 249 */,
+    (Member){GetTypeOrFail(STRING("bool")),STRING("sharedEnable"),offsetof(FUInstance,sharedEnable)} /* 250 */,
+    (Member){GetTypeOrFail(STRING("bool")),STRING("isMergeMultiplexer"),offsetof(FUInstance,isMergeMultiplexer)} /* 251 */,
+    (Member){GetTypeOrFail(STRING("int")),STRING("mergeMultiplexerId"),offsetof(FUInstance,mergeMultiplexerId)} /* 252 */,
+    (Member){GetTypeOrFail(STRING("FUInstance *")),STRING("next"),offsetof(FUInstance,next)} /* 253 */,
+    (Member){GetTypeOrFail(STRING("ConnectionNode *")),STRING("allInputs"),offsetof(FUInstance,allInputs)} /* 254 */,
+    (Member){GetTypeOrFail(STRING("ConnectionNode *")),STRING("allOutputs"),offsetof(FUInstance,allOutputs)} /* 255 */,
+    (Member){GetTypeOrFail(STRING("Array<PortInstance>")),STRING("inputs"),offsetof(FUInstance,inputs)} /* 256 */,
+    (Member){GetTypeOrFail(STRING("Array<bool>")),STRING("outputs"),offsetof(FUInstance,outputs)} /* 257 */,
+    (Member){GetTypeOrFail(STRING("bool")),STRING("multipleSamePortInputs"),offsetof(FUInstance,multipleSamePortInputs)} /* 258 */,
+    (Member){GetTypeOrFail(STRING("NodeType")),STRING("type"),offsetof(FUInstance,type)} /* 259 */,
+    (Member){GetTypeOrFail(STRING("FUInstance *")),STRING("allocated"),offsetof(Accelerator,allocated)} /* 260 */,
+    (Member){GetTypeOrFail(STRING("FUInstance *")),STRING("lastAllocated"),offsetof(Accelerator,lastAllocated)} /* 261 */,
+    (Member){GetTypeOrFail(STRING("DynamicArena *")),STRING("accelMemory"),offsetof(Accelerator,accelMemory)} /* 262 */,
+    (Member){GetTypeOrFail(STRING("String")),STRING("name"),offsetof(Accelerator,name)} /* 263 */,
+    (Member){GetTypeOrFail(STRING("int")),STRING("id"),offsetof(Accelerator,id)} /* 264 */,
+    (Member){GetTypeOrFail(STRING("AcceleratorPurpose")),STRING("purpose"),offsetof(Accelerator,purpose)} /* 265 */,
+    (Member){GetTypeOrFail(STRING("int")),STRING("memoryMaskSize"),offsetof(MemoryAddressMask,memoryMaskSize)} /* 266 */,
+    (Member){GetTypeOrFail(STRING("char[33]")),STRING("memoryMaskBuffer"),offsetof(MemoryAddressMask,memoryMaskBuffer)} /* 267 */,
+    (Member){GetTypeOrFail(STRING("char *")),STRING("memoryMask"),offsetof(MemoryAddressMask,memoryMask)} /* 268 */,
+    (Member){GetTypeOrFail(STRING("int")),STRING("nConfigs"),offsetof(VersatComputedValues,nConfigs)} /* 269 */,
+    (Member){GetTypeOrFail(STRING("int")),STRING("configBits"),offsetof(VersatComputedValues,configBits)} /* 270 */,
+    (Member){GetTypeOrFail(STRING("int")),STRING("versatConfigs"),offsetof(VersatComputedValues,versatConfigs)} /* 271 */,
+    (Member){GetTypeOrFail(STRING("int")),STRING("versatStates"),offsetof(VersatComputedValues,versatStates)} /* 272 */,
+    (Member){GetTypeOrFail(STRING("int")),STRING("nStatics"),offsetof(VersatComputedValues,nStatics)} /* 273 */,
+    (Member){GetTypeOrFail(STRING("int")),STRING("staticBits"),offsetof(VersatComputedValues,staticBits)} /* 274 */,
+    (Member){GetTypeOrFail(STRING("int")),STRING("staticBitsStart"),offsetof(VersatComputedValues,staticBitsStart)} /* 275 */,
+    (Member){GetTypeOrFail(STRING("int")),STRING("nDelays"),offsetof(VersatComputedValues,nDelays)} /* 276 */,
+    (Member){GetTypeOrFail(STRING("int")),STRING("delayBits"),offsetof(VersatComputedValues,delayBits)} /* 277 */,
+    (Member){GetTypeOrFail(STRING("int")),STRING("delayBitsStart"),offsetof(VersatComputedValues,delayBitsStart)} /* 278 */,
+    (Member){GetTypeOrFail(STRING("int")),STRING("nConfigurations"),offsetof(VersatComputedValues,nConfigurations)} /* 279 */,
+    (Member){GetTypeOrFail(STRING("int")),STRING("configurationBits"),offsetof(VersatComputedValues,configurationBits)} /* 280 */,
+    (Member){GetTypeOrFail(STRING("int")),STRING("configurationAddressBits"),offsetof(VersatComputedValues,configurationAddressBits)} /* 281 */,
+    (Member){GetTypeOrFail(STRING("int")),STRING("nStates"),offsetof(VersatComputedValues,nStates)} /* 282 */,
+    (Member){GetTypeOrFail(STRING("int")),STRING("stateBits"),offsetof(VersatComputedValues,stateBits)} /* 283 */,
+    (Member){GetTypeOrFail(STRING("int")),STRING("stateAddressBits"),offsetof(VersatComputedValues,stateAddressBits)} /* 284 */,
+    (Member){GetTypeOrFail(STRING("int")),STRING("unitsMapped"),offsetof(VersatComputedValues,unitsMapped)} /* 285 */,
+    (Member){GetTypeOrFail(STRING("int")),STRING("memoryMappedBytes"),offsetof(VersatComputedValues,memoryMappedBytes)} /* 286 */,
+    (Member){GetTypeOrFail(STRING("int")),STRING("nUnitsIO"),offsetof(VersatComputedValues,nUnitsIO)} /* 287 */,
+    (Member){GetTypeOrFail(STRING("int")),STRING("numberConnections"),offsetof(VersatComputedValues,numberConnections)} /* 288 */,
+    (Member){GetTypeOrFail(STRING("int")),STRING("externalMemoryInterfaces"),offsetof(VersatComputedValues,externalMemoryInterfaces)} /* 289 */,
+    (Member){GetTypeOrFail(STRING("int")),STRING("stateConfigurationAddressBits"),offsetof(VersatComputedValues,stateConfigurationAddressBits)} /* 290 */,
+    (Member){GetTypeOrFail(STRING("int")),STRING("memoryAddressBits"),offsetof(VersatComputedValues,memoryAddressBits)} /* 291 */,
+    (Member){GetTypeOrFail(STRING("int")),STRING("memoryMappingAddressBits"),offsetof(VersatComputedValues,memoryMappingAddressBits)} /* 292 */,
+    (Member){GetTypeOrFail(STRING("int")),STRING("memoryConfigDecisionBit"),offsetof(VersatComputedValues,memoryConfigDecisionBit)} /* 293 */,
+    (Member){GetTypeOrFail(STRING("bool")),STRING("signalLoop"),offsetof(VersatComputedValues,signalLoop)} /* 294 */,
+    (Member){GetTypeOrFail(STRING("Array<FUInstance *>")),STRING("sinks"),offsetof(DAGOrderNodes,sinks)} /* 295 */,
+    (Member){GetTypeOrFail(STRING("Array<FUInstance *>")),STRING("sources"),offsetof(DAGOrderNodes,sources)} /* 296 */,
+    (Member){GetTypeOrFail(STRING("Array<FUInstance *>")),STRING("computeUnits"),offsetof(DAGOrderNodes,computeUnits)} /* 297 */,
+    (Member){GetTypeOrFail(STRING("Array<FUInstance *>")),STRING("instances"),offsetof(DAGOrderNodes,instances)} /* 298 */,
+    (Member){GetTypeOrFail(STRING("Array<int>")),STRING("order"),offsetof(DAGOrderNodes,order)} /* 299 */,
+    (Member){GetTypeOrFail(STRING("int")),STRING("size"),offsetof(DAGOrderNodes,size)} /* 300 */,
+    (Member){GetTypeOrFail(STRING("int")),STRING("maxOrder"),offsetof(DAGOrderNodes,maxOrder)} /* 301 */,
+    (Member){GetTypeOrFail(STRING("int")),STRING("firstId"),offsetof(AcceleratorMapping,firstId)} /* 302 */,
+    (Member){GetTypeOrFail(STRING("int")),STRING("secondId"),offsetof(AcceleratorMapping,secondId)} /* 303 */,
+    (Member){GetTypeOrFail(STRING("TrieMap<PortInstance, PortInstance> *")),STRING("inputMap"),offsetof(AcceleratorMapping,inputMap)} /* 304 */,
+    (Member){GetTypeOrFail(STRING("TrieMap<PortInstance, PortInstance> *")),STRING("outputMap"),offsetof(AcceleratorMapping,outputMap)} /* 305 */,
+    (Member){GetTypeOrFail(STRING("FUInstance *")),STRING("currentNode"),offsetof(EdgeIterator,currentNode)} /* 306 */,
+    (Member){GetTypeOrFail(STRING("ConnectionNode *")),STRING("currentPort"),offsetof(EdgeIterator,currentPort)} /* 307 */,
+    (Member){GetTypeOrFail(STRING("FUDeclaration *")),STRING("parent"),offsetof(StaticId,parent)} /* 308 */,
+    (Member){GetTypeOrFail(STRING("String")),STRING("name"),offsetof(StaticId,name)} /* 309 */,
+    (Member){GetTypeOrFail(STRING("Array<Wire>")),STRING("configs"),offsetof(StaticData,configs)} /* 310 */,
+    (Member){GetTypeOrFail(STRING("StaticId")),STRING("id"),offsetof(StaticInfo,id)} /* 311 */,
+    (Member){GetTypeOrFail(STRING("StaticData")),STRING("data"),offsetof(StaticInfo,data)} /* 312 */,
+    (Member){GetTypeOrFail(STRING("Array<int>")),STRING("offsets"),offsetof(CalculatedOffsets,offsets)} /* 313 */,
+    (Member){GetTypeOrFail(STRING("int")),STRING("max"),offsetof(CalculatedOffsets,max)} /* 314 */,
+    (Member){GetTypeOrFail(STRING("FUDeclaration *")),STRING("subDeclaration"),offsetof(SubMappingInfo,subDeclaration)} /* 315 */,
+    (Member){GetTypeOrFail(STRING("String")),STRING("higherName"),offsetof(SubMappingInfo,higherName)} /* 316 */,
+    (Member){GetTypeOrFail(STRING("bool")),STRING("isInput"),offsetof(SubMappingInfo,isInput)} /* 317 */,
+    (Member){GetTypeOrFail(STRING("int")),STRING("subPort"),offsetof(SubMappingInfo,subPort)} /* 318 */,
+    (Member){GetTypeOrFail(STRING("int")),STRING("level"),offsetof(InstanceInfo,level)} /* 319 */,
+    (Member){GetTypeOrFail(STRING("FUDeclaration *")),STRING("decl"),offsetof(InstanceInfo,decl)} /* 320 */,
+    (Member){GetTypeOrFail(STRING("String")),STRING("name"),offsetof(InstanceInfo,name)} /* 321 */,
+    (Member){GetTypeOrFail(STRING("String")),STRING("baseName"),offsetof(InstanceInfo,baseName)} /* 322 */,
+    (Member){GetTypeOrFail(STRING("Opt<int>")),STRING("configPos"),offsetof(InstanceInfo,configPos)} /* 323 */,
+    (Member){GetTypeOrFail(STRING("int")),STRING("isConfigStatic"),offsetof(InstanceInfo,isConfigStatic)} /* 324 */,
+    (Member){GetTypeOrFail(STRING("int")),STRING("configSize"),offsetof(InstanceInfo,configSize)} /* 325 */,
+    (Member){GetTypeOrFail(STRING("Opt<int>")),STRING("statePos"),offsetof(InstanceInfo,statePos)} /* 326 */,
+    (Member){GetTypeOrFail(STRING("int")),STRING("stateSize"),offsetof(InstanceInfo,stateSize)} /* 327 */,
+    (Member){GetTypeOrFail(STRING("Opt<iptr>")),STRING("memMapped"),offsetof(InstanceInfo,memMapped)} /* 328 */,
+    (Member){GetTypeOrFail(STRING("Opt<int>")),STRING("memMappedSize"),offsetof(InstanceInfo,memMappedSize)} /* 329 */,
+    (Member){GetTypeOrFail(STRING("Opt<int>")),STRING("memMappedBitSize"),offsetof(InstanceInfo,memMappedBitSize)} /* 330 */,
+    (Member){GetTypeOrFail(STRING("Opt<String>")),STRING("memMappedMask"),offsetof(InstanceInfo,memMappedMask)} /* 331 */,
+    (Member){GetTypeOrFail(STRING("Opt<int>")),STRING("delayPos"),offsetof(InstanceInfo,delayPos)} /* 332 */,
+    (Member){GetTypeOrFail(STRING("Array<int>")),STRING("delay"),offsetof(InstanceInfo,delay)} /* 333 */,
+    (Member){GetTypeOrFail(STRING("int")),STRING("baseDelay"),offsetof(InstanceInfo,baseDelay)} /* 334 */,
+    (Member){GetTypeOrFail(STRING("int")),STRING("delaySize"),offsetof(InstanceInfo,delaySize)} /* 335 */,
+    (Member){GetTypeOrFail(STRING("bool")),STRING("isComposite"),offsetof(InstanceInfo,isComposite)} /* 336 */,
+    (Member){GetTypeOrFail(STRING("bool")),STRING("isStatic"),offsetof(InstanceInfo,isStatic)} /* 337 */,
+    (Member){GetTypeOrFail(STRING("bool")),STRING("isShared"),offsetof(InstanceInfo,isShared)} /* 338 */,
+    (Member){GetTypeOrFail(STRING("int")),STRING("sharedIndex"),offsetof(InstanceInfo,sharedIndex)} /* 339 */,
+    (Member){GetTypeOrFail(STRING("FUDeclaration *")),STRING("parent"),offsetof(InstanceInfo,parent)} /* 340 */,
+    (Member){GetTypeOrFail(STRING("String")),STRING("fullName"),offsetof(InstanceInfo,fullName)} /* 341 */,
+    (Member){GetTypeOrFail(STRING("bool")),STRING("isMergeMultiplexer"),offsetof(InstanceInfo,isMergeMultiplexer)} /* 342 */,
+    (Member){GetTypeOrFail(STRING("int")),STRING("mergeMultiplexerId"),offsetof(InstanceInfo,mergeMultiplexerId)} /* 343 */,
+    (Member){GetTypeOrFail(STRING("bool")),STRING("belongs"),offsetof(InstanceInfo,belongs)} /* 344 */,
+    (Member){GetTypeOrFail(STRING("int")),STRING("special"),offsetof(InstanceInfo,special)} /* 345 */,
+    (Member){GetTypeOrFail(STRING("int")),STRING("order"),offsetof(InstanceInfo,order)} /* 346 */,
+    (Member){GetTypeOrFail(STRING("NodeType")),STRING("connectionType"),offsetof(InstanceInfo,connectionType)} /* 347 */,
+    (Member){GetTypeOrFail(STRING("int")),STRING("id"),offsetof(InstanceInfo,id)} /* 348 */,
+    (Member){GetTypeOrFail(STRING("Array<InstanceInfo>")),STRING("info"),offsetof(AcceleratorInfo,info)} /* 349 */,
+    (Member){GetTypeOrFail(STRING("int")),STRING("memSize"),offsetof(AcceleratorInfo,memSize)} /* 350 */,
+    (Member){GetTypeOrFail(STRING("Opt<String>")),STRING("name"),offsetof(AcceleratorInfo,name)} /* 351 */,
+    (Member){GetTypeOrFail(STRING("Array<int>")),STRING("mergeMux"),offsetof(AcceleratorInfo,mergeMux)} /* 352 */,
+    (Member){GetTypeOrFail(STRING("Hashmap<StaticId, int> *")),STRING("staticInfo"),offsetof(InstanceConfigurationOffsets,staticInfo)} /* 353 */,
+    (Member){GetTypeOrFail(STRING("FUDeclaration *")),STRING("parent"),offsetof(InstanceConfigurationOffsets,parent)} /* 354 */,
+    (Member){GetTypeOrFail(STRING("String")),STRING("topName"),offsetof(InstanceConfigurationOffsets,topName)} /* 355 */,
+    (Member){GetTypeOrFail(STRING("String")),STRING("baseName"),offsetof(InstanceConfigurationOffsets,baseName)} /* 356 */,
+    (Member){GetTypeOrFail(STRING("int")),STRING("configOffset"),offsetof(InstanceConfigurationOffsets,configOffset)} /* 357 */,
+    (Member){GetTypeOrFail(STRING("int")),STRING("stateOffset"),offsetof(InstanceConfigurationOffsets,stateOffset)} /* 358 */,
+    (Member){GetTypeOrFail(STRING("int")),STRING("delayOffset"),offsetof(InstanceConfigurationOffsets,delayOffset)} /* 359 */,
+    (Member){GetTypeOrFail(STRING("int")),STRING("delay"),offsetof(InstanceConfigurationOffsets,delay)} /* 360 */,
+    (Member){GetTypeOrFail(STRING("int")),STRING("memOffset"),offsetof(InstanceConfigurationOffsets,memOffset)} /* 361 */,
+    (Member){GetTypeOrFail(STRING("int")),STRING("level"),offsetof(InstanceConfigurationOffsets,level)} /* 362 */,
+    (Member){GetTypeOrFail(STRING("int")),STRING("order"),offsetof(InstanceConfigurationOffsets,order)} /* 363 */,
+    (Member){GetTypeOrFail(STRING("int *")),STRING("staticConfig"),offsetof(InstanceConfigurationOffsets,staticConfig)} /* 364 */,
+    (Member){GetTypeOrFail(STRING("bool")),STRING("belongs"),offsetof(InstanceConfigurationOffsets,belongs)} /* 365 */,
+    (Member){GetTypeOrFail(STRING("Array<InstanceInfo>")),STRING("info"),offsetof(TestResult,info)} /* 366 */,
+    (Member){GetTypeOrFail(STRING("InstanceConfigurationOffsets")),STRING("subOffsets"),offsetof(TestResult,subOffsets)} /* 367 */,
+    (Member){GetTypeOrFail(STRING("Array<PortInstance>")),STRING("multiplexersPorts"),offsetof(TestResult,multiplexersPorts)} /* 368 */,
+    (Member){GetTypeOrFail(STRING("String")),STRING("name"),offsetof(TestResult,name)} /* 369 */,
+    (Member){GetTypeOrFail(STRING("Array<int>")),STRING("muxConfigs"),offsetof(TestResult,muxConfigs)} /* 370 */,
+    (Member){GetTypeOrFail(STRING("Array<int>")),STRING("inputDelay"),offsetof(TestResult,inputDelay)} /* 371 */,
+    (Member){GetTypeOrFail(STRING("Array<int>")),STRING("outputLatencies"),offsetof(TestResult,outputLatencies)} /* 372 */,
+    (Member){GetTypeOrFail(STRING("Array<Array<InstanceInfo>>")),STRING("infos"),offsetof(AccelInfo,infos)} /* 373 */,
+    (Member){GetTypeOrFail(STRING("Array<InstanceInfo>")),STRING("baseInfo"),offsetof(AccelInfo,baseInfo)} /* 374 */,
+    (Member){GetTypeOrFail(STRING("Array<String>")),STRING("names"),offsetof(AccelInfo,names)} /* 375 */,
+    (Member){GetTypeOrFail(STRING("Array<Array<int>>")),STRING("inputDelays"),offsetof(AccelInfo,inputDelays)} /* 376 */,
+    (Member){GetTypeOrFail(STRING("Array<Array<int>>")),STRING("outputDelays"),offsetof(AccelInfo,outputDelays)} /* 377 */,
+    (Member){GetTypeOrFail(STRING("Array<Array<int>>")),STRING("muxConfigs"),offsetof(AccelInfo,muxConfigs)} /* 378 */,
+    (Member){GetTypeOrFail(STRING("int")),STRING("memMappedBitsize"),offsetof(AccelInfo,memMappedBitsize)} /* 379 */,
+    (Member){GetTypeOrFail(STRING("int")),STRING("howManyMergedUnits"),offsetof(AccelInfo,howManyMergedUnits)} /* 380 */,
+    (Member){GetTypeOrFail(STRING("int")),STRING("inputs"),offsetof(AccelInfo,inputs)} /* 381 */,
+    (Member){GetTypeOrFail(STRING("int")),STRING("outputs"),offsetof(AccelInfo,outputs)} /* 382 */,
+    (Member){GetTypeOrFail(STRING("int")),STRING("configs"),offsetof(AccelInfo,configs)} /* 383 */,
+    (Member){GetTypeOrFail(STRING("int")),STRING("states"),offsetof(AccelInfo,states)} /* 384 */,
+    (Member){GetTypeOrFail(STRING("int")),STRING("delays"),offsetof(AccelInfo,delays)} /* 385 */,
+    (Member){GetTypeOrFail(STRING("int")),STRING("ios"),offsetof(AccelInfo,ios)} /* 386 */,
+    (Member){GetTypeOrFail(STRING("int")),STRING("statics"),offsetof(AccelInfo,statics)} /* 387 */,
+    (Member){GetTypeOrFail(STRING("int")),STRING("staticBits"),offsetof(AccelInfo,staticBits)} /* 388 */,
+    (Member){GetTypeOrFail(STRING("int")),STRING("sharedUnits"),offsetof(AccelInfo,sharedUnits)} /* 389 */,
+    (Member){GetTypeOrFail(STRING("int")),STRING("externalMemoryInterfaces"),offsetof(AccelInfo,externalMemoryInterfaces)} /* 390 */,
+    (Member){GetTypeOrFail(STRING("int")),STRING("externalMemoryByteSize"),offsetof(AccelInfo,externalMemoryByteSize)} /* 391 */,
+    (Member){GetTypeOrFail(STRING("int")),STRING("numberUnits"),offsetof(AccelInfo,numberUnits)} /* 392 */,
+    (Member){GetTypeOrFail(STRING("int")),STRING("numberConnections"),offsetof(AccelInfo,numberConnections)} /* 393 */,
+    (Member){GetTypeOrFail(STRING("int")),STRING("memoryMappedBits"),offsetof(AccelInfo,memoryMappedBits)} /* 394 */,
+    (Member){GetTypeOrFail(STRING("bool")),STRING("isMemoryMapped"),offsetof(AccelInfo,isMemoryMapped)} /* 395 */,
+    (Member){GetTypeOrFail(STRING("bool")),STRING("signalLoop"),offsetof(AccelInfo,signalLoop)} /* 396 */,
+    (Member){GetTypeOrFail(STRING("String")),STRING("type"),offsetof(TypeAndNameOnly,type)} /* 397 */,
+    (Member){GetTypeOrFail(STRING("String")),STRING("name"),offsetof(TypeAndNameOnly,name)} /* 398 */,
+    (Member){GetTypeOrFail(STRING("int")),STRING("value"),offsetof(Partition,value)} /* 399 */,
+    (Member){GetTypeOrFail(STRING("int")),STRING("max"),offsetof(Partition,max)} /* 400 */,
+    (Member){GetTypeOrFail(STRING("Array<Wire>")),STRING("configs"),offsetof(OrderedConfigurations,configs)} /* 401 */,
+    (Member){GetTypeOrFail(STRING("Array<Wire>")),STRING("statics"),offsetof(OrderedConfigurations,statics)} /* 402 */,
+    (Member){GetTypeOrFail(STRING("Array<Wire>")),STRING("delays"),offsetof(OrderedConfigurations,delays)} /* 403 */,
+    (Member){GetTypeOrFail(STRING("String")),STRING("name"),offsetof(GraphPrintingNodeInfo,name)} /* 404 */,
+    (Member){GetTypeOrFail(STRING("String")),STRING("content"),offsetof(GraphPrintingNodeInfo,content)} /* 405 */,
+    (Member){GetTypeOrFail(STRING("Color")),STRING("color"),offsetof(GraphPrintingNodeInfo,color)} /* 406 */,
+    (Member){GetTypeOrFail(STRING("String")),STRING("content"),offsetof(GraphPrintingEdgeInfo,content)} /* 407 */,
+    (Member){GetTypeOrFail(STRING("Color")),STRING("color"),offsetof(GraphPrintingEdgeInfo,color)} /* 408 */,
+    (Member){GetTypeOrFail(STRING("String")),STRING("first"),offsetof(GraphPrintingEdgeInfo,first)} /* 409 */,
+    (Member){GetTypeOrFail(STRING("String")),STRING("second"),offsetof(GraphPrintingEdgeInfo,second)} /* 410 */,
+    (Member){GetTypeOrFail(STRING("String")),STRING("graphLabel"),offsetof(GraphPrintingContent,graphLabel)} /* 411 */,
+    (Member){GetTypeOrFail(STRING("Array<GraphPrintingNodeInfo>")),STRING("nodes"),offsetof(GraphPrintingContent,nodes)} /* 412 */,
+    (Member){GetTypeOrFail(STRING("Array<GraphPrintingEdgeInfo>")),STRING("edges"),offsetof(GraphPrintingContent,edges)} /* 413 */,
+    (Member){GetTypeOrFail(STRING("String")),STRING("content"),offsetof(GraphInfo,content)} /* 414 */,
+    (Member){GetTypeOrFail(STRING("Color")),STRING("color"),offsetof(GraphInfo,color)} /* 415 */,
+    (Member){GetTypeOrFail(STRING("EdgeDelay *")),STRING("edgesDelay"),offsetof(CalculateDelayResult,edgesDelay)} /* 416 */,
+    (Member){GetTypeOrFail(STRING("PortDelay *")),STRING("portDelay"),offsetof(CalculateDelayResult,portDelay)} /* 417 */,
+    (Member){GetTypeOrFail(STRING("NodeDelay *")),STRING("nodeDelay"),offsetof(CalculateDelayResult,nodeDelay)} /* 418 */,
+    (Member){GetTypeOrFail(STRING("Edge")),STRING("edge"),offsetof(DelayToAdd,edge)} /* 419 */,
+    (Member){GetTypeOrFail(STRING("String")),STRING("bufferName"),offsetof(DelayToAdd,bufferName)} /* 420 */,
+    (Member){GetTypeOrFail(STRING("String")),STRING("bufferParameters"),offsetof(DelayToAdd,bufferParameters)} /* 421 */,
+    (Member){GetTypeOrFail(STRING("int")),STRING("bufferAmount"),offsetof(DelayToAdd,bufferAmount)} /* 422 */,
+    (Member){GetTypeOrFail(STRING("String")),STRING("name"),offsetof(ConfigurationInfo,name)} /* 423 */,
+    (Member){GetTypeOrFail(STRING("Array<String>")),STRING("baseName"),offsetof(ConfigurationInfo,baseName)} /* 424 */,
+    (Member){GetTypeOrFail(STRING("FUDeclaration *")),STRING("baseType"),offsetof(ConfigurationInfo,baseType)} /* 425 */,
+    (Member){GetTypeOrFail(STRING("Array<Wire>")),STRING("configs"),offsetof(ConfigurationInfo,configs)} /* 426 */,
+    (Member){GetTypeOrFail(STRING("Array<Wire>")),STRING("states"),offsetof(ConfigurationInfo,states)} /* 427 */,
+    (Member){GetTypeOrFail(STRING("Array<int>")),STRING("inputDelays"),offsetof(ConfigurationInfo,inputDelays)} /* 428 */,
+    (Member){GetTypeOrFail(STRING("Array<int>")),STRING("outputLatencies"),offsetof(ConfigurationInfo,outputLatencies)} /* 429 */,
+    (Member){GetTypeOrFail(STRING("CalculatedOffsets")),STRING("configOffsets"),offsetof(ConfigurationInfo,configOffsets)} /* 430 */,
+    (Member){GetTypeOrFail(STRING("CalculatedOffsets")),STRING("stateOffsets"),offsetof(ConfigurationInfo,stateOffsets)} /* 431 */,
+    (Member){GetTypeOrFail(STRING("CalculatedOffsets")),STRING("delayOffsets"),offsetof(ConfigurationInfo,delayOffsets)} /* 432 */,
+    (Member){GetTypeOrFail(STRING("Array<int>")),STRING("calculatedDelays"),offsetof(ConfigurationInfo,calculatedDelays)} /* 433 */,
+    (Member){GetTypeOrFail(STRING("Array<int>")),STRING("order"),offsetof(ConfigurationInfo,order)} /* 434 */,
+    (Member){GetTypeOrFail(STRING("AcceleratorMapping *")),STRING("mapping"),offsetof(ConfigurationInfo,mapping)} /* 435 */,
+    (Member){GetTypeOrFail(STRING("Set<PortInstance> *")),STRING("mergeMultiplexers"),offsetof(ConfigurationInfo,mergeMultiplexers)} /* 436 */,
+    (Member){GetTypeOrFail(STRING("Array<bool>")),STRING("unitBelongs"),offsetof(ConfigurationInfo,unitBelongs)} /* 437 */,
+    (Member){GetTypeOrFail(STRING("Array<int>")),STRING("mergeMultiplexerConfigs"),offsetof(ConfigurationInfo,mergeMultiplexerConfigs)} /* 438 */,
+    (Member){GetTypeOrFail(STRING("String")),STRING("name"),offsetof(FUDeclaration,name)} /* 439 */,
+    (Member){GetTypeOrFail(STRING("ConfigurationInfo")),STRING("baseConfig"),offsetof(FUDeclaration,baseConfig)} /* 440 */,
+    (Member){GetTypeOrFail(STRING("Array<ConfigurationInfo>")),STRING("configInfo"),offsetof(FUDeclaration,configInfo)} /* 441 */,
+    (Member){GetTypeOrFail(STRING("Opt<int>")),STRING("memoryMapBits"),offsetof(FUDeclaration,memoryMapBits)} /* 442 */,
+    (Member){GetTypeOrFail(STRING("int")),STRING("nIOs"),offsetof(FUDeclaration,nIOs)} /* 443 */,
+    (Member){GetTypeOrFail(STRING("Array<ExternalMemoryInterface>")),STRING("externalMemory"),offsetof(FUDeclaration,externalMemory)} /* 444 */,
+    (Member){GetTypeOrFail(STRING("Accelerator *")),STRING("baseCircuit"),offsetof(FUDeclaration,baseCircuit)} /* 445 */,
+    (Member){GetTypeOrFail(STRING("Accelerator *")),STRING("fixedDelayCircuit"),offsetof(FUDeclaration,fixedDelayCircuit)} /* 446 */,
+    (Member){GetTypeOrFail(STRING("Accelerator *")),STRING("flattenedBaseCircuit"),offsetof(FUDeclaration,flattenedBaseCircuit)} /* 447 */,
+    (Member){GetTypeOrFail(STRING("char *")),STRING("operation"),offsetof(FUDeclaration,operation)} /* 448 */,
+    (Member){GetTypeOrFail(STRING("SubMap *")),STRING("flattenMapping"),offsetof(FUDeclaration,flattenMapping)} /* 449 */,
+    (Member){GetTypeOrFail(STRING("int")),STRING("lat"),offsetof(FUDeclaration,lat)} /* 450 */,
+    (Member){GetTypeOrFail(STRING("Hashmap<StaticId, StaticData> *")),STRING("staticUnits"),offsetof(FUDeclaration,staticUnits)} /* 451 */,
+    (Member){GetTypeOrFail(STRING("FUDeclarationType")),STRING("type"),offsetof(FUDeclaration,type)} /* 452 */,
+    (Member){GetTypeOrFail(STRING("DelayType")),STRING("delayType"),offsetof(FUDeclaration,delayType)} /* 453 */,
+    (Member){GetTypeOrFail(STRING("bool")),STRING("isOperation"),offsetof(FUDeclaration,isOperation)} /* 454 */,
+    (Member){GetTypeOrFail(STRING("bool")),STRING("implementsDone"),offsetof(FUDeclaration,implementsDone)} /* 455 */,
+    (Member){GetTypeOrFail(STRING("bool")),STRING("signalLoop"),offsetof(FUDeclaration,signalLoop)} /* 456 */,
+    (Member){GetTypeOrFail(STRING("String")),STRING("type"),offsetof(SingleTypeStructElement,type)} /* 457 */,
+    (Member){GetTypeOrFail(STRING("String")),STRING("name"),offsetof(SingleTypeStructElement,name)} /* 458 */,
+    (Member){GetTypeOrFail(STRING("int")),STRING("arraySize"),offsetof(SingleTypeStructElement,arraySize)} /* 459 */,
+    (Member){GetTypeOrFail(STRING("Array<SingleTypeStructElement>")),STRING("typeAndNames"),offsetof(TypeStructInfoElement,typeAndNames)} /* 460 */,
+    (Member){GetTypeOrFail(STRING("String")),STRING("name"),offsetof(TypeStructInfo,name)} /* 461 */,
+    (Member){GetTypeOrFail(STRING("Array<TypeStructInfoElement>")),STRING("entries"),offsetof(TypeStructInfo,entries)} /* 462 */,
+    (Member){GetTypeOrFail(STRING("int")),STRING("index"),offsetof(Difference,index)} /* 463 */,
+    (Member){GetTypeOrFail(STRING("int")),STRING("newValue"),offsetof(Difference,newValue)} /* 464 */,
+    (Member){GetTypeOrFail(STRING("int")),STRING("oldIndex"),offsetof(DifferenceArray,oldIndex)} /* 465 */,
+    (Member){GetTypeOrFail(STRING("int")),STRING("newIndex"),offsetof(DifferenceArray,newIndex)} /* 466 */,
+    (Member){GetTypeOrFail(STRING("Array<Difference>")),STRING("differences"),offsetof(DifferenceArray,differences)} /* 467 */,
+    (Member){GetTypeOrFail(STRING("int")),STRING("configIndex"),offsetof(MuxInfo,configIndex)} /* 468 */,
+    (Member){GetTypeOrFail(STRING("int")),STRING("val"),offsetof(MuxInfo,val)} /* 469 */,
+    (Member){GetTypeOrFail(STRING("String")),STRING("name"),offsetof(MuxInfo,name)} /* 470 */,
+    (Member){GetTypeOrFail(STRING("InstanceInfo *")),STRING("info"),offsetof(MuxInfo,info)} /* 471 */,
+    (Member){GetTypeOrFail(STRING("TaskFunction")),STRING("function"),offsetof(Task,function)} /* 472 */,
+    (Member){GetTypeOrFail(STRING("int")),STRING("order"),offsetof(Task,order)} /* 473 */,
+    (Member){GetTypeOrFail(STRING("void *")),STRING("args"),offsetof(Task,args)} /* 474 */,
+    (Member){GetTypeOrFail(STRING("TaskFunction")),STRING("function"),offsetof(WorkGroup,function)} /* 475 */,
+    (Member){GetTypeOrFail(STRING("Array<Task>")),STRING("tasks"),offsetof(WorkGroup,tasks)} /* 476 */,
+    (Member){GetTypeOrFail(STRING("String")),STRING("instA"),offsetof(SpecificMerge,instA)} /* 477 */,
+    (Member){GetTypeOrFail(STRING("String")),STRING("instB"),offsetof(SpecificMerge,instB)} /* 478 */,
+    (Member){GetTypeOrFail(STRING("int")),STRING("index"),offsetof(IndexRecord,index)} /* 479 */,
+    (Member){GetTypeOrFail(STRING("IndexRecord *")),STRING("next"),offsetof(IndexRecord,next)} /* 480 */,
+    (Member){GetTypeOrFail(STRING("FUInstance *")),STRING("instA"),offsetof(SpecificMergeNodes,instA)} /* 481 */,
+    (Member){GetTypeOrFail(STRING("FUInstance *")),STRING("instB"),offsetof(SpecificMergeNodes,instB)} /* 482 */,
+    (Member){GetTypeOrFail(STRING("int")),STRING("firstIndex"),offsetof(SpecificMergeNode,firstIndex)} /* 483 */,
+    (Member){GetTypeOrFail(STRING("String")),STRING("firstName"),offsetof(SpecificMergeNode,firstName)} /* 484 */,
+    (Member){GetTypeOrFail(STRING("int")),STRING("secondIndex"),offsetof(SpecificMergeNode,secondIndex)} /* 485 */,
+    (Member){GetTypeOrFail(STRING("String")),STRING("secondName"),offsetof(SpecificMergeNode,secondName)} /* 486 */,
+    (Member){GetTypeOrFail(STRING("FUInstance *[2]")),STRING("instances"),offsetof(MergeEdge,instances)} /* 487 */,
+    (Member){GetTypeOrFail(STRING("MergeEdge")),STRING("nodes"),offsetof(MappingNode,nodes)} /* 488 */,
+    (Member){GetTypeOrFail(STRING("Edge[2]")),STRING("edges"),offsetof(MappingNode,edges)} /* 489 */,
+    (Member){GetTypeOrFail(STRING("int")),STRING("type"),offsetof(MappingNode,type)} /* 490 */,
+    (Member){GetTypeOrFail(STRING("Array<SpecificMergeNodes>")),STRING("specifics"),offsetof(ConsolidationGraphOptions,specifics)} /* 491 */,
+    (Member){GetTypeOrFail(STRING("int")),STRING("order"),offsetof(ConsolidationGraphOptions,order)} /* 492 */,
+    (Member){GetTypeOrFail(STRING("int")),STRING("difference"),offsetof(ConsolidationGraphOptions,difference)} /* 493 */,
+    (Member){GetTypeOrFail(STRING("bool")),STRING("mapNodes"),offsetof(ConsolidationGraphOptions,mapNodes)} /* 494 */,
+    (Member){GetTypeOrFail(STRING("int")),STRING("type"),offsetof(ConsolidationGraphOptions,type)} /* 495 */,
+    (Member){GetTypeOrFail(STRING("Array<MappingNode>")),STRING("nodes"),offsetof(ConsolidationGraph,nodes)} /* 496 */,
+    (Member){GetTypeOrFail(STRING("Array<BitArray>")),STRING("edges"),offsetof(ConsolidationGraph,edges)} /* 497 */,
+    (Member){GetTypeOrFail(STRING("BitArray")),STRING("validNodes"),offsetof(ConsolidationGraph,validNodes)} /* 498 */,
+    (Member){GetTypeOrFail(STRING("ConsolidationGraph")),STRING("graph"),offsetof(ConsolidationResult,graph)} /* 499 */,
+    (Member){GetTypeOrFail(STRING("Pool<MappingNode>")),STRING("specificsAdded"),offsetof(ConsolidationResult,specificsAdded)} /* 500 */,
+    (Member){GetTypeOrFail(STRING("int")),STRING("upperBound"),offsetof(ConsolidationResult,upperBound)} /* 501 */,
+    (Member){GetTypeOrFail(STRING("int")),STRING("max"),offsetof(CliqueState,max)} /* 502 */,
+    (Member){GetTypeOrFail(STRING("int")),STRING("upperBound"),offsetof(CliqueState,upperBound)} /* 503 */,
+    (Member){GetTypeOrFail(STRING("int")),STRING("startI"),offsetof(CliqueState,startI)} /* 504 */,
+    (Member){GetTypeOrFail(STRING("int")),STRING("iterations"),offsetof(CliqueState,iterations)} /* 505 */,
+    (Member){GetTypeOrFail(STRING("Array<int>")),STRING("table"),offsetof(CliqueState,table)} /* 506 */,
+    (Member){GetTypeOrFail(STRING("ConsolidationGraph")),STRING("clique"),offsetof(CliqueState,clique)} /* 507 */,
+    (Member){GetTypeOrFail(STRING("Time")),STRING("start"),offsetof(CliqueState,start)} /* 508 */,
+    (Member){GetTypeOrFail(STRING("bool")),STRING("found"),offsetof(CliqueState,found)} /* 509 */,
+    (Member){GetTypeOrFail(STRING("bool")),STRING("result"),offsetof(IsCliqueResult,result)} /* 510 */,
+    (Member){GetTypeOrFail(STRING("int")),STRING("failedIndex"),offsetof(IsCliqueResult,failedIndex)} /* 511 */,
+    (Member){GetTypeOrFail(STRING("Accelerator *")),STRING("accel1"),offsetof(MergeGraphResult,accel1)} /* 512 */,
+    (Member){GetTypeOrFail(STRING("Accelerator *")),STRING("accel2"),offsetof(MergeGraphResult,accel2)} /* 513 */,
+    (Member){GetTypeOrFail(STRING("InstanceMap *")),STRING("map1"),offsetof(MergeGraphResult,map1)} /* 514 */,
+    (Member){GetTypeOrFail(STRING("InstanceMap *")),STRING("map2"),offsetof(MergeGraphResult,map2)} /* 515 */,
+    (Member){GetTypeOrFail(STRING("Accelerator *")),STRING("newGraph"),offsetof(MergeGraphResult,newGraph)} /* 516 */,
+    (Member){GetTypeOrFail(STRING("Accelerator *")),STRING("result"),offsetof(MergeGraphResultExisting,result)} /* 517 */,
+    (Member){GetTypeOrFail(STRING("Accelerator *")),STRING("accel2"),offsetof(MergeGraphResultExisting,accel2)} /* 518 */,
+    (Member){GetTypeOrFail(STRING("AcceleratorMapping *")),STRING("map2"),offsetof(MergeGraphResultExisting,map2)} /* 519 */,
+    (Member){GetTypeOrFail(STRING("InstanceMap *")),STRING("instanceMap"),offsetof(GraphMapping,instanceMap)} /* 520 */,
+    (Member){GetTypeOrFail(STRING("InstanceMap *")),STRING("reverseInstanceMap"),offsetof(GraphMapping,reverseInstanceMap)} /* 521 */,
+    (Member){GetTypeOrFail(STRING("EdgeMap *")),STRING("edgeMap"),offsetof(GraphMapping,edgeMap)} /* 522 */,
+    (Member){GetTypeOrFail(STRING("Range<int>")),STRING("port"),offsetof(ConnectionExtra,port)} /* 523 */,
+    (Member){GetTypeOrFail(STRING("Range<int>")),STRING("delay"),offsetof(ConnectionExtra,delay)} /* 524 */,
+    (Member){GetTypeOrFail(STRING("Token")),STRING("name"),offsetof(Var,name)} /* 525 */,
+    (Member){GetTypeOrFail(STRING("ConnectionExtra")),STRING("extra"),offsetof(Var,extra)} /* 526 */,
+    (Member){GetTypeOrFail(STRING("Range<int>")),STRING("index"),offsetof(Var,index)} /* 527 */,
+    (Member){GetTypeOrFail(STRING("bool")),STRING("isArrayAccess"),offsetof(Var,isArrayAccess)} /* 528 */,
+    (Member){GetTypeOrFail(STRING("Array<Var>")),STRING("vars"),offsetof(VarGroup,vars)} /* 529 */,
+    (Member){GetTypeOrFail(STRING("Token")),STRING("fullText"),offsetof(VarGroup,fullText)} /* 530 */,
+    (Member){GetTypeOrFail(STRING("Array<SpecExpression *>")),STRING("expressions"),offsetof(SpecExpression,expressions)} /* 531 */,
+    (Member){GetTypeOrFail(STRING("char *")),STRING("op"),offsetof(SpecExpression,op)} /* 532 */,
+    (Member){GetTypeOrFail(STRING("Var")),STRING("var"),offsetof(SpecExpression,var)} /* 533 */,
+    (Member){GetTypeOrFail(STRING("Value")),STRING("val"),offsetof(SpecExpression,val)} /* 534 */,
+    (Member){GetTypeOrFail(STRING("Token")),STRING("text"),offsetof(SpecExpression,text)} /* 535 */,
+    (Member){GetTypeOrFail(STRING("int")),STRING("type"),offsetof(SpecExpression,type)} /* 536 */,
+    (Member){GetTypeOrFail(STRING("Token")),STRING("name"),offsetof(VarDeclaration,name)} /* 537 */,
+    (Member){GetTypeOrFail(STRING("int")),STRING("arraySize"),offsetof(VarDeclaration,arraySize)} /* 538 */,
+    (Member){GetTypeOrFail(STRING("bool")),STRING("isArray"),offsetof(VarDeclaration,isArray)} /* 539 */,
+    (Member){GetTypeOrFail(STRING("VarGroup")),STRING("group"),offsetof(GroupIterator,group)} /* 540 */,
+    (Member){GetTypeOrFail(STRING("int")),STRING("groupIndex"),offsetof(GroupIterator,groupIndex)} /* 541 */,
+    (Member){GetTypeOrFail(STRING("int")),STRING("varIndex"),offsetof(GroupIterator,varIndex)} /* 542 */,
+    (Member){GetTypeOrFail(STRING("FUInstance *")),STRING("inst"),offsetof(PortExpression,inst)} /* 543 */,
+    (Member){GetTypeOrFail(STRING("ConnectionExtra")),STRING("extra"),offsetof(PortExpression,extra)} /* 544 */,
+    (Member){GetTypeOrFail(STRING("int")),STRING("modifier"),offsetof(InstanceDeclaration,modifier)} /* 545 */,
+    (Member){GetTypeOrFail(STRING("Token")),STRING("typeName"),offsetof(InstanceDeclaration,typeName)} /* 546 */,
+    (Member){GetTypeOrFail(STRING("Array<VarDeclaration>")),STRING("declarations"),offsetof(InstanceDeclaration,declarations)} /* 547 */,
+    (Member){GetTypeOrFail(STRING("String")),STRING("parameters"),offsetof(InstanceDeclaration,parameters)} /* 548 */,
+    (Member){GetTypeOrFail(STRING("Range<Cursor>")),STRING("loc"),offsetof(ConnectionDef,loc)} /* 549 */,
+    (Member){GetTypeOrFail(STRING("VarGroup")),STRING("output"),offsetof(ConnectionDef,output)} /* 550 */,
+    (Member){GetTypeOrFail(STRING("int")),STRING("type"),offsetof(ConnectionDef,type)} /* 551 */,
+    (Member){GetTypeOrFail(STRING("Array<Token>")),STRING("transforms"),offsetof(ConnectionDef,transforms)} /* 552 */,
+    (Member){GetTypeOrFail(STRING("VarGroup")),STRING("input"),offsetof(ConnectionDef,input)} /* 553 */,
+    (Member){GetTypeOrFail(STRING("SpecExpression *")),STRING("expression"),offsetof(ConnectionDef,expression)} /* 554 */,
+    (Member){GetTypeOrFail(STRING("Token")),STRING("name"),offsetof(ModuleDef,name)} /* 555 */,
+    (Member){GetTypeOrFail(STRING("Token")),STRING("numberOutputs"),offsetof(ModuleDef,numberOutputs)} /* 556 */,
+    (Member){GetTypeOrFail(STRING("Array<VarDeclaration>")),STRING("inputs"),offsetof(ModuleDef,inputs)} /* 557 */,
+    (Member){GetTypeOrFail(STRING("Array<InstanceDeclaration>")),STRING("declarations"),offsetof(ModuleDef,declarations)} /* 558 */,
+    (Member){GetTypeOrFail(STRING("Array<ConnectionDef>")),STRING("connections"),offsetof(ModuleDef,connections)} /* 559 */,
+    (Member){GetTypeOrFail(STRING("Token")),STRING("name"),offsetof(TransformDef,name)} /* 560 */,
+    (Member){GetTypeOrFail(STRING("Array<VarDeclaration>")),STRING("inputs"),offsetof(TransformDef,inputs)} /* 561 */,
+    (Member){GetTypeOrFail(STRING("Array<ConnectionDef>")),STRING("connections"),offsetof(TransformDef,connections)} /* 562 */,
+    (Member){GetTypeOrFail(STRING("int")),STRING("inputs"),offsetof(Transformation,inputs)} /* 563 */,
+    (Member){GetTypeOrFail(STRING("int")),STRING("outputs"),offsetof(Transformation,outputs)} /* 564 */,
+    (Member){GetTypeOrFail(STRING("Array<int>")),STRING("map"),offsetof(Transformation,map)} /* 565 */,
+    (Member){GetTypeOrFail(STRING("Token")),STRING("instanceName"),offsetof(HierarchicalName,instanceName)} /* 566 */,
+    (Member){GetTypeOrFail(STRING("Var")),STRING("subInstance"),offsetof(HierarchicalName,subInstance)} /* 567 */,
+    (Member){GetTypeOrFail(STRING("Token")),STRING("typeName"),offsetof(TypeAndInstance,typeName)} /* 568 */,
+    (Member){GetTypeOrFail(STRING("Token")),STRING("instanceName"),offsetof(TypeAndInstance,instanceName)} /* 569 */
   };
 
   RegisterStructMembers(STRING("Time"),(Array<Member>){&members[0],2});
@@ -1104,109 +1125,112 @@ RegisterEnum(STRING("ConnectionType"),C_ARRAY_TO_ARRAY(ConnectionTypeData));
   RegisterStructMembers(STRING("EnumMember"),(Array<Member>){&members[43],3});
   RegisterStructMembers(STRING("TemplateArg"),(Array<Member>){&members[46],2});
   RegisterStructMembers(STRING("TemplatedMember"),(Array<Member>){&members[48],3});
-  RegisterStructMembers(STRING("Type"),(Array<Member>){&members[51],14});
-  RegisterStructMembers(STRING("Member"),(Array<Member>){&members[65],6});
-  RegisterStructMembers(STRING("Value"),(Array<Member>){&members[71],9});
-  RegisterStructMembers(STRING("Iterator"),(Array<Member>){&members[80],4});
-  RegisterStructMembers(STRING("HashmapUnpackedIndex"),(Array<Member>){&members[84],2});
-  RegisterStructMembers(STRING("Expression"),(Array<Member>){&members[86],8});
-  RegisterStructMembers(STRING("Cursor"),(Array<Member>){&members[94],2});
-  RegisterStructMembers(STRING("Token"),(Array<Member>){&members[96],1});
-  RegisterStructMembers(STRING("FindFirstResult"),(Array<Member>){&members[97],2});
-  RegisterStructMembers(STRING("Trie"),(Array<Member>){&members[99],1});
-  RegisterStructMembers(STRING("TokenizerTemplate"),(Array<Member>){&members[100],1});
-  RegisterStructMembers(STRING("TokenizerMark"),(Array<Member>){&members[101],2});
-  RegisterStructMembers(STRING("Tokenizer"),(Array<Member>){&members[103],8});
-  RegisterStructMembers(STRING("OperationList"),(Array<Member>){&members[111],3});
-  RegisterStructMembers(STRING("CommandDefinition"),(Array<Member>){&members[114],4});
-  RegisterStructMembers(STRING("Command"),(Array<Member>){&members[118],3});
-  RegisterStructMembers(STRING("Block"),(Array<Member>){&members[121],7});
-  RegisterStructMembers(STRING("TemplateFunction"),(Array<Member>){&members[128],2});
-  RegisterStructMembers(STRING("TemplateRecord"),(Array<Member>){&members[130],5});
-  RegisterStructMembers(STRING("ValueAndText"),(Array<Member>){&members[135],2});
-  RegisterStructMembers(STRING("Frame"),(Array<Member>){&members[137],2});
-  RegisterStructMembers(STRING("IndividualBlock"),(Array<Member>){&members[139],3});
-  RegisterStructMembers(STRING("CompiledTemplate"),(Array<Member>){&members[142],4});
-  RegisterStructMembers(STRING("PortDeclaration"),(Array<Member>){&members[146],4});
-  RegisterStructMembers(STRING("ParameterExpression"),(Array<Member>){&members[150],2});
-  RegisterStructMembers(STRING("Module"),(Array<Member>){&members[152],4});
-  RegisterStructMembers(STRING("ExternalMemoryID"),(Array<Member>){&members[156],2});
-  RegisterStructMembers(STRING("ExternalInfoTwoPorts"),(Array<Member>){&members[158],2});
-  RegisterStructMembers(STRING("ExternalInfoDualPort"),(Array<Member>){&members[160],2});
-  RegisterStructMembers(STRING("ExternalMemoryInfo"),(Array<Member>){&members[162],3});
-  RegisterStructMembers(STRING("ModuleInfo"),(Array<Member>){&members[165],20});
-  RegisterStructMembers(STRING("Options"),(Array<Member>){&members[185],21});
-  RegisterStructMembers(STRING("DebugState"),(Array<Member>){&members[206],8});
-  RegisterStructMembers(STRING("PortInstance"),(Array<Member>){&members[214],2});
-  RegisterStructMembers(STRING("Edge"),(Array<Member>){&members[216],5});
-  RegisterStructMembers(STRING("GenericGraphMapping"),(Array<Member>){&members[221],2});
-  RegisterStructMembers(STRING("EdgeDelayInfo"),(Array<Member>){&members[223],2});
-  RegisterStructMembers(STRING("DelayInfo"),(Array<Member>){&members[225],2});
-  RegisterStructMembers(STRING("ConnectionNode"),(Array<Member>){&members[227],5});
-  RegisterStructMembers(STRING("FUInstance"),(Array<Member>){&members[232],20});
-  RegisterStructMembers(STRING("Accelerator"),(Array<Member>){&members[252],6});
-  RegisterStructMembers(STRING("MemoryAddressMask"),(Array<Member>){&members[258],3});
-  RegisterStructMembers(STRING("VersatComputedValues"),(Array<Member>){&members[261],26});
-  RegisterStructMembers(STRING("DAGOrderNodes"),(Array<Member>){&members[287],7});
-  RegisterStructMembers(STRING("AcceleratorMapping"),(Array<Member>){&members[294],4});
-  RegisterStructMembers(STRING("EdgeIterator"),(Array<Member>){&members[298],2});
-  RegisterStructMembers(STRING("StaticId"),(Array<Member>){&members[300],2});
-  RegisterStructMembers(STRING("StaticData"),(Array<Member>){&members[302],1});
-  RegisterStructMembers(STRING("StaticInfo"),(Array<Member>){&members[303],2});
-  RegisterStructMembers(STRING("CalculatedOffsets"),(Array<Member>){&members[305],2});
-  RegisterStructMembers(STRING("SubMappingInfo"),(Array<Member>){&members[307],4});
-  RegisterStructMembers(STRING("InstanceInfo"),(Array<Member>){&members[311],30});
-  RegisterStructMembers(STRING("AcceleratorInfo"),(Array<Member>){&members[341],4});
-  RegisterStructMembers(STRING("InstanceConfigurationOffsets"),(Array<Member>){&members[345],13});
-  RegisterStructMembers(STRING("TestResult"),(Array<Member>){&members[358],7});
-  RegisterStructMembers(STRING("AccelInfo"),(Array<Member>){&members[365],24});
-  RegisterStructMembers(STRING("TypeAndNameOnly"),(Array<Member>){&members[389],2});
-  RegisterStructMembers(STRING("Partition"),(Array<Member>){&members[391],2});
-  RegisterStructMembers(STRING("OrderedConfigurations"),(Array<Member>){&members[393],3});
-  RegisterStructMembers(STRING("GraphPrintingNodeInfo"),(Array<Member>){&members[396],3});
-  RegisterStructMembers(STRING("GraphPrintingEdgeInfo"),(Array<Member>){&members[399],4});
-  RegisterStructMembers(STRING("GraphPrintingContent"),(Array<Member>){&members[403],3});
-  RegisterStructMembers(STRING("GraphInfo"),(Array<Member>){&members[406],2});
-  RegisterStructMembers(STRING("CalculateDelayResult"),(Array<Member>){&members[408],3});
-  RegisterStructMembers(STRING("DelayToAdd"),(Array<Member>){&members[411],4});
-  RegisterStructMembers(STRING("ConfigurationInfo"),(Array<Member>){&members[415],16});
-  RegisterStructMembers(STRING("FUDeclaration"),(Array<Member>){&members[431],18});
-  RegisterStructMembers(STRING("SingleTypeStructElement"),(Array<Member>){&members[449],3});
-  RegisterStructMembers(STRING("TypeStructInfoElement"),(Array<Member>){&members[452],1});
-  RegisterStructMembers(STRING("TypeStructInfo"),(Array<Member>){&members[453],2});
-  RegisterStructMembers(STRING("Difference"),(Array<Member>){&members[455],2});
-  RegisterStructMembers(STRING("DifferenceArray"),(Array<Member>){&members[457],3});
-  RegisterStructMembers(STRING("MuxInfo"),(Array<Member>){&members[460],4});
-  RegisterStructMembers(STRING("Task"),(Array<Member>){&members[464],3});
-  RegisterStructMembers(STRING("WorkGroup"),(Array<Member>){&members[467],2});
-  RegisterStructMembers(STRING("SpecificMerge"),(Array<Member>){&members[469],2});
-  RegisterStructMembers(STRING("IndexRecord"),(Array<Member>){&members[471],2});
-  RegisterStructMembers(STRING("SpecificMergeNodes"),(Array<Member>){&members[473],2});
-  RegisterStructMembers(STRING("SpecificMergeNode"),(Array<Member>){&members[475],4});
-  RegisterStructMembers(STRING("MergeEdge"),(Array<Member>){&members[479],1});
-  RegisterStructMembers(STRING("MappingNode"),(Array<Member>){&members[480],3});
-  RegisterStructMembers(STRING("ConsolidationGraphOptions"),(Array<Member>){&members[483],5});
-  RegisterStructMembers(STRING("ConsolidationGraph"),(Array<Member>){&members[488],3});
-  RegisterStructMembers(STRING("ConsolidationResult"),(Array<Member>){&members[491],3});
-  RegisterStructMembers(STRING("CliqueState"),(Array<Member>){&members[494],8});
-  RegisterStructMembers(STRING("IsCliqueResult"),(Array<Member>){&members[502],2});
-  RegisterStructMembers(STRING("MergeGraphResult"),(Array<Member>){&members[504],5});
-  RegisterStructMembers(STRING("MergeGraphResultExisting"),(Array<Member>){&members[509],3});
-  RegisterStructMembers(STRING("GraphMapping"),(Array<Member>){&members[512],3});
-  RegisterStructMembers(STRING("ConnectionExtra"),(Array<Member>){&members[515],2});
-  RegisterStructMembers(STRING("Var"),(Array<Member>){&members[517],4});
-  RegisterStructMembers(STRING("VarGroup"),(Array<Member>){&members[521],2});
-  RegisterStructMembers(STRING("SpecExpression"),(Array<Member>){&members[523],6});
-  RegisterStructMembers(STRING("VarDeclaration"),(Array<Member>){&members[529],3});
-  RegisterStructMembers(STRING("GroupIterator"),(Array<Member>){&members[532],3});
-  RegisterStructMembers(STRING("PortExpression"),(Array<Member>){&members[535],2});
-  RegisterStructMembers(STRING("InstanceDeclaration"),(Array<Member>){&members[537],4});
-  RegisterStructMembers(STRING("ConnectionDef"),(Array<Member>){&members[541],6});
-  RegisterStructMembers(STRING("ModuleDef"),(Array<Member>){&members[547],5});
-  RegisterStructMembers(STRING("TransformDef"),(Array<Member>){&members[552],3});
-  RegisterStructMembers(STRING("Transformation"),(Array<Member>){&members[555],3});
-  RegisterStructMembers(STRING("HierarchicalName"),(Array<Member>){&members[558],2});
-  RegisterStructMembers(STRING("TypeAndInstance"),(Array<Member>){&members[560],2});
+  RegisterStructMembers(STRING("NameAndTemplateArguments"),(Array<Member>){&members[51],2});
+  RegisterStructMembers(STRING("ParsedType"),(Array<Member>){&members[53],4});
+  RegisterStructMembers(STRING("Type"),(Array<Member>){&members[57],14});
+  RegisterStructMembers(STRING("Member"),(Array<Member>){&members[71],6});
+  RegisterStructMembers(STRING("Value"),(Array<Member>){&members[77],9});
+  RegisterStructMembers(STRING("Iterator"),(Array<Member>){&members[86],4});
+  RegisterStructMembers(STRING("HashmapUnpackedIndex"),(Array<Member>){&members[90],2});
+  RegisterStructMembers(STRING("TypeIterator"),(Array<Member>){&members[92],2});
+  RegisterStructMembers(STRING("Expression"),(Array<Member>){&members[94],8});
+  RegisterStructMembers(STRING("Cursor"),(Array<Member>){&members[102],2});
+  RegisterStructMembers(STRING("Token"),(Array<Member>){&members[104],1});
+  RegisterStructMembers(STRING("FindFirstResult"),(Array<Member>){&members[105],2});
+  RegisterStructMembers(STRING("Trie"),(Array<Member>){&members[107],1});
+  RegisterStructMembers(STRING("TokenizerTemplate"),(Array<Member>){&members[108],1});
+  RegisterStructMembers(STRING("TokenizerMark"),(Array<Member>){&members[109],2});
+  RegisterStructMembers(STRING("Tokenizer"),(Array<Member>){&members[111],8});
+  RegisterStructMembers(STRING("OperationList"),(Array<Member>){&members[119],3});
+  RegisterStructMembers(STRING("CommandDefinition"),(Array<Member>){&members[122],4});
+  RegisterStructMembers(STRING("Command"),(Array<Member>){&members[126],3});
+  RegisterStructMembers(STRING("Block"),(Array<Member>){&members[129],7});
+  RegisterStructMembers(STRING("TemplateFunction"),(Array<Member>){&members[136],2});
+  RegisterStructMembers(STRING("TemplateRecord"),(Array<Member>){&members[138],5});
+  RegisterStructMembers(STRING("ValueAndText"),(Array<Member>){&members[143],2});
+  RegisterStructMembers(STRING("Frame"),(Array<Member>){&members[145],2});
+  RegisterStructMembers(STRING("IndividualBlock"),(Array<Member>){&members[147],3});
+  RegisterStructMembers(STRING("CompiledTemplate"),(Array<Member>){&members[150],4});
+  RegisterStructMembers(STRING("PortDeclaration"),(Array<Member>){&members[154],4});
+  RegisterStructMembers(STRING("ParameterExpression"),(Array<Member>){&members[158],2});
+  RegisterStructMembers(STRING("Module"),(Array<Member>){&members[160],4});
+  RegisterStructMembers(STRING("ExternalMemoryID"),(Array<Member>){&members[164],2});
+  RegisterStructMembers(STRING("ExternalInfoTwoPorts"),(Array<Member>){&members[166],2});
+  RegisterStructMembers(STRING("ExternalInfoDualPort"),(Array<Member>){&members[168],2});
+  RegisterStructMembers(STRING("ExternalMemoryInfo"),(Array<Member>){&members[170],3});
+  RegisterStructMembers(STRING("ModuleInfo"),(Array<Member>){&members[173],20});
+  RegisterStructMembers(STRING("Options"),(Array<Member>){&members[193],21});
+  RegisterStructMembers(STRING("DebugState"),(Array<Member>){&members[214],8});
+  RegisterStructMembers(STRING("PortInstance"),(Array<Member>){&members[222],2});
+  RegisterStructMembers(STRING("Edge"),(Array<Member>){&members[224],5});
+  RegisterStructMembers(STRING("GenericGraphMapping"),(Array<Member>){&members[229],2});
+  RegisterStructMembers(STRING("EdgeDelayInfo"),(Array<Member>){&members[231],2});
+  RegisterStructMembers(STRING("DelayInfo"),(Array<Member>){&members[233],2});
+  RegisterStructMembers(STRING("ConnectionNode"),(Array<Member>){&members[235],5});
+  RegisterStructMembers(STRING("FUInstance"),(Array<Member>){&members[240],20});
+  RegisterStructMembers(STRING("Accelerator"),(Array<Member>){&members[260],6});
+  RegisterStructMembers(STRING("MemoryAddressMask"),(Array<Member>){&members[266],3});
+  RegisterStructMembers(STRING("VersatComputedValues"),(Array<Member>){&members[269],26});
+  RegisterStructMembers(STRING("DAGOrderNodes"),(Array<Member>){&members[295],7});
+  RegisterStructMembers(STRING("AcceleratorMapping"),(Array<Member>){&members[302],4});
+  RegisterStructMembers(STRING("EdgeIterator"),(Array<Member>){&members[306],2});
+  RegisterStructMembers(STRING("StaticId"),(Array<Member>){&members[308],2});
+  RegisterStructMembers(STRING("StaticData"),(Array<Member>){&members[310],1});
+  RegisterStructMembers(STRING("StaticInfo"),(Array<Member>){&members[311],2});
+  RegisterStructMembers(STRING("CalculatedOffsets"),(Array<Member>){&members[313],2});
+  RegisterStructMembers(STRING("SubMappingInfo"),(Array<Member>){&members[315],4});
+  RegisterStructMembers(STRING("InstanceInfo"),(Array<Member>){&members[319],30});
+  RegisterStructMembers(STRING("AcceleratorInfo"),(Array<Member>){&members[349],4});
+  RegisterStructMembers(STRING("InstanceConfigurationOffsets"),(Array<Member>){&members[353],13});
+  RegisterStructMembers(STRING("TestResult"),(Array<Member>){&members[366],7});
+  RegisterStructMembers(STRING("AccelInfo"),(Array<Member>){&members[373],24});
+  RegisterStructMembers(STRING("TypeAndNameOnly"),(Array<Member>){&members[397],2});
+  RegisterStructMembers(STRING("Partition"),(Array<Member>){&members[399],2});
+  RegisterStructMembers(STRING("OrderedConfigurations"),(Array<Member>){&members[401],3});
+  RegisterStructMembers(STRING("GraphPrintingNodeInfo"),(Array<Member>){&members[404],3});
+  RegisterStructMembers(STRING("GraphPrintingEdgeInfo"),(Array<Member>){&members[407],4});
+  RegisterStructMembers(STRING("GraphPrintingContent"),(Array<Member>){&members[411],3});
+  RegisterStructMembers(STRING("GraphInfo"),(Array<Member>){&members[414],2});
+  RegisterStructMembers(STRING("CalculateDelayResult"),(Array<Member>){&members[416],3});
+  RegisterStructMembers(STRING("DelayToAdd"),(Array<Member>){&members[419],4});
+  RegisterStructMembers(STRING("ConfigurationInfo"),(Array<Member>){&members[423],16});
+  RegisterStructMembers(STRING("FUDeclaration"),(Array<Member>){&members[439],18});
+  RegisterStructMembers(STRING("SingleTypeStructElement"),(Array<Member>){&members[457],3});
+  RegisterStructMembers(STRING("TypeStructInfoElement"),(Array<Member>){&members[460],1});
+  RegisterStructMembers(STRING("TypeStructInfo"),(Array<Member>){&members[461],2});
+  RegisterStructMembers(STRING("Difference"),(Array<Member>){&members[463],2});
+  RegisterStructMembers(STRING("DifferenceArray"),(Array<Member>){&members[465],3});
+  RegisterStructMembers(STRING("MuxInfo"),(Array<Member>){&members[468],4});
+  RegisterStructMembers(STRING("Task"),(Array<Member>){&members[472],3});
+  RegisterStructMembers(STRING("WorkGroup"),(Array<Member>){&members[475],2});
+  RegisterStructMembers(STRING("SpecificMerge"),(Array<Member>){&members[477],2});
+  RegisterStructMembers(STRING("IndexRecord"),(Array<Member>){&members[479],2});
+  RegisterStructMembers(STRING("SpecificMergeNodes"),(Array<Member>){&members[481],2});
+  RegisterStructMembers(STRING("SpecificMergeNode"),(Array<Member>){&members[483],4});
+  RegisterStructMembers(STRING("MergeEdge"),(Array<Member>){&members[487],1});
+  RegisterStructMembers(STRING("MappingNode"),(Array<Member>){&members[488],3});
+  RegisterStructMembers(STRING("ConsolidationGraphOptions"),(Array<Member>){&members[491],5});
+  RegisterStructMembers(STRING("ConsolidationGraph"),(Array<Member>){&members[496],3});
+  RegisterStructMembers(STRING("ConsolidationResult"),(Array<Member>){&members[499],3});
+  RegisterStructMembers(STRING("CliqueState"),(Array<Member>){&members[502],8});
+  RegisterStructMembers(STRING("IsCliqueResult"),(Array<Member>){&members[510],2});
+  RegisterStructMembers(STRING("MergeGraphResult"),(Array<Member>){&members[512],5});
+  RegisterStructMembers(STRING("MergeGraphResultExisting"),(Array<Member>){&members[517],3});
+  RegisterStructMembers(STRING("GraphMapping"),(Array<Member>){&members[520],3});
+  RegisterStructMembers(STRING("ConnectionExtra"),(Array<Member>){&members[523],2});
+  RegisterStructMembers(STRING("Var"),(Array<Member>){&members[525],4});
+  RegisterStructMembers(STRING("VarGroup"),(Array<Member>){&members[529],2});
+  RegisterStructMembers(STRING("SpecExpression"),(Array<Member>){&members[531],6});
+  RegisterStructMembers(STRING("VarDeclaration"),(Array<Member>){&members[537],3});
+  RegisterStructMembers(STRING("GroupIterator"),(Array<Member>){&members[540],3});
+  RegisterStructMembers(STRING("PortExpression"),(Array<Member>){&members[543],2});
+  RegisterStructMembers(STRING("InstanceDeclaration"),(Array<Member>){&members[545],4});
+  RegisterStructMembers(STRING("ConnectionDef"),(Array<Member>){&members[549],6});
+  RegisterStructMembers(STRING("ModuleDef"),(Array<Member>){&members[555],5});
+  RegisterStructMembers(STRING("TransformDef"),(Array<Member>){&members[560],3});
+  RegisterStructMembers(STRING("Transformation"),(Array<Member>){&members[563],3});
+  RegisterStructMembers(STRING("HierarchicalName"),(Array<Member>){&members[566],2});
+  RegisterStructMembers(STRING("TypeAndInstance"),(Array<Member>){&members[568],2});
 
 
   RegisterTypedef(STRING("Array<const char>"),STRING("String"));

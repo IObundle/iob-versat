@@ -81,7 +81,7 @@ FUDeclaration* RegisterModuleInfo(ModuleInfo* info,Arena* temp){
 
       expr->type = Expression::LITERAL;
       expr->id = def.name;
-      expr->val = MakeValue(globalOptions.addrSize);
+      expr->val = MakeValue(globalOptions.databusAddrSize);
 
       def.expr = expr;
     }
@@ -91,7 +91,7 @@ FUDeclaration* RegisterModuleInfo(ModuleInfo* info,Arena* temp){
 
       expr->type = Expression::LITERAL;
       expr->id = def.name;
-      expr->val = MakeValue(globalOptions.dataSize);
+      expr->val = MakeValue(globalOptions.databusDataSize);
 
       def.expr = expr;
     }

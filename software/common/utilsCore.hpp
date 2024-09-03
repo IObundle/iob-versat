@@ -98,7 +98,7 @@ ALWAYS_INLINE _Once operator+(_OnceTag,F&& f){
 
 #define TEMP__once(LINE) TEMPonce_ ## LINE
 #define TEMP_once(LINE) TEMP__once( LINE )
-#define once static _Once TEMP_once(__LINE__) = _OnceTag() + [&]() // Executes once even if called multiple times
+#define once static _Once TEMP_once(__LINE__) = _OnceTag() + [&] // Executes once even if called multiple times
 
 void PrintStacktrace();
 
@@ -178,8 +178,38 @@ typedef intptr_t iptr;
 typedef uintptr_t uptr;
 typedef unsigned int uint;
 
+// Using std::optional is a pain when debugging 
+// This simple class basically does the same and much easier to debug
 template<typename T>
-using Opt = std::optional<T>;
+struct Opt{
+  T val;
+  bool hasVal;
+
+  Opt():hasVal(false){};
+  Opt(std::nullopt_t):hasVal(false){};
+  Opt(T t):val(t),hasVal(true){};
+
+  Opt<T>& operator=(T& t){
+    hasVal = true;
+    val = t;
+    return *this;
+  };
+
+  Opt<T>& operator=(std::nullopt_t){
+    hasVal = false;
+    return *this;
+  };
+      
+  bool operator!(){return !hasVal;};
+    
+  bool has_value(){return hasVal;};
+  T& value() & {assert(hasVal);return val;};
+  T&& value() && {assert(hasVal);return std::move(val);};
+  T value_or(T other){return hasVal ? val : other;};
+}; 
+
+//template<typename T>
+//using Opt = std::optional<T>;
 #define PROPAGATE(OPTIONAL) if(!(OPTIONAL).has_value()){return {};}
 
 template<typename T>
@@ -244,16 +274,56 @@ public:
    inline T& operator*(){return *ptr;};
 };
 
-// This struct is associated to a gdb pretty printer.
+template<typename T>
+struct MyArrayIterator;
+
+template<typename T> struct Array;
+
+template<typename T>
+void MakeSureArrayIteratorExists(Array<T> t);
+
 template<typename T>
 struct Array{
   T* data;
   int size;
-
-  inline T& operator[](int index) const {Assert(index >= 0);Assert(index < size); return data[index];}
+  
+  inline T& operator[](int index) const {MakeSureArrayIteratorExists(*this); Assert(index >= 0);Assert(index < size); return data[index];}
   ArrayIterator<T> begin(){return ArrayIterator<T>{data};};
   ArrayIterator<T> end(){return ArrayIterator<T>{data + size};};
 };
+
+template<typename T>
+struct MyArrayIterator{
+  int current = 0;
+  Array<T> array;
+
+  bool HasNext(){return (current < array.size);};
+  T Next(){return array[current++];};
+};
+
+template<typename T>
+MyArrayIterator<T> Iterate(Array<T> arr){
+  MyArrayIterator<T> iter = {};
+  iter = {};
+  iter.array = arr;
+  return iter;
+}
+
+template<typename T>
+void MakeSureArrayIteratorExists(Array<T> t){
+  MyArrayIterator<T> iter = Iterate(t);
+
+  if(!iter.HasNext()){
+    // This if will never be called,
+    // So we can put whatever code we want with no problem.
+    // As long as the compiler 
+    NOT_POSSIBLE();
+    T t = iter.Next();
+    printf("test");
+  }
+
+  return;
+}
 
 typedef Array<const char> String;
 
@@ -419,16 +489,6 @@ char GetHexadecimalChar(int value);
 unsigned char* GetHexadecimal(const unsigned char* text, int str_size); // Helper function to display result
 
 bool IsAlpha(char ch);
-
-// Simulate c++23 feature
-template<typename T>
-Opt<T> OrElse(Opt<T> first,Opt<T> elseOpt){
-   if(first){
-      return first;
-   } else {
-      return elseOpt;
-   }
-}
 
 template<typename T>
 inline void Memset(T* buffer,T elem,int bufferSize){

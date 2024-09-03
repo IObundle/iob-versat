@@ -641,7 +641,7 @@ template<typename T> T* DynamicArray<T>::PushElem(){
 
   return res;
 }
-  
+
 template<typename T> Array<T> EndArray(DynamicArray<T> arr){
   arr.mark.arena->locked = false;
   

@@ -11,8 +11,8 @@ module @{accel.name} #(
       parameter ADDR_W = 32,
       parameter DATA_W = 32,
       parameter DELAY_W = @{delaySize},
-      parameter AXI_ADDR_W = @{arch.addrSize},
-      parameter AXI_DATA_W = @{arch.dataSize},
+      parameter AXI_ADDR_W = @{arch.databusAddrSize},
+      parameter AXI_DATA_W = @{arch.databusDataSize},
       parameter LEN_W = 20
    )
    (
