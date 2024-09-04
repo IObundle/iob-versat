@@ -180,3 +180,11 @@ String GetRepr(ConnectionType* e,Arena* out){
   }
   return STRING("NOT POSSIBLE ENUM VALUE");
 }
+String GetRepr(DefinitionType* e,Arena* out){
+  switch(*e){
+  case DefinitionType::DefinitionType_MODULE: return PushString(out,STRING("DefinitionType_MODULE"));
+  case DefinitionType::DefinitionType_MERGE: return PushString(out,STRING("DefinitionType_MERGE"));
+  case DefinitionType::DefinitionType_ITERATIVE: return PushString(out,STRING("DefinitionType_ITERATIVE"));
+  }
+  return STRING("NOT POSSIBLE ENUM VALUE");
+}

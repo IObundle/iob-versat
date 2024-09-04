@@ -111,3 +111,23 @@ Array<int> GetNonZeroIndexes(Array<int> arr,Arena* out){
 
   return EndArray(array);
 }
+
+String JoinStrings(Array<String> strings,String separator,Arena* out){
+  if(strings.size == 1){
+    return PushString(out,strings[0]);
+  }
+
+  bool first = true;
+  auto builder = StartString(out);
+  for(String str : strings){
+    if(first){
+      first = false;
+    } else {
+      PushString(out,separator);
+    }
+
+    PushString(out,str);
+  }
+
+  return EndString(builder);
+}

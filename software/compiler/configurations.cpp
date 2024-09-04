@@ -662,7 +662,7 @@ AccelInfo CalculateAcceleratorInfo(Accelerator* accel,bool recursive,Arena* out,
       res = res2.info;
       subOffsets = res2.subOffsets;
     }
-  
+
     int maxMemBitsize = log2i(subOffsets.memOffset);
     if(maxMemBitsize > 0){
       for(InstanceInfo& info : res2.info){

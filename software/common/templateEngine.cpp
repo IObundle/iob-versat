@@ -1020,7 +1020,7 @@ static ValueAndText EvalNonBlockCommand(Command* com,Frame* previousFrame,Arena*
     }
 
     optVal = GetValue(frame,STRING("return"));
-    if(optVal){
+    if(optVal.has_value()){
       val = optVal.value();
     }
   } break;

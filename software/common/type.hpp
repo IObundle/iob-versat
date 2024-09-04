@@ -27,6 +27,21 @@ struct TemplatedMember{
   int memberOffset;
 };
 
+struct ParsedType;
+
+struct NameAndTemplateArguments{
+  String baseName;
+  Array<ParsedType> templateMembers;
+};
+
+struct ParsedType{
+  String baseName; // Because of things like signed, unsigned and such modifiers, the name might be more than 1 token. In order to simplify code, we parse the various modifiers but we then collapse them into a single string again.
+
+  Array<ParsedType> templateMembers; 
+  int amountOfPointers;
+  Array<String> arrayExpressions;
+};
+
 enum Subtype{
   Subtype_UNKNOWN,
   Subtype_BASE,
@@ -131,6 +146,15 @@ struct HashmapUnpackedIndex{
   bool data;
 };
 
+struct TypeIterator{
+  PoolIterator<Type> iter;
+  PoolIterator<Type> end;
+};
+
+TypeIterator IterateTypes();
+bool HasNext(TypeIterator iter);
+Type* Next(TypeIterator& iter);
+
 Type* RegisterSimpleType(String name,int size,int align);
 Type* RegisterOpaqueType(String name,Subtype subtype,int size,int align);
 Type* RegisterEnum(String name,Array<Pair<String,int>> enumValues);
@@ -138,15 +162,18 @@ Type* RegisterTypedef(String oldName,String newName);
 Type* RegisterTemplate(String baseName,Array<String> templateArgNames);
 Type* RegisterStructMembers(String name,Array<Member> members);
 Type* RegisterTemplateMembers(String name,Array<TemplatedMember> members);
+
 Type* InstantiateTemplate(String name,Arena* arena = nullptr);
 
 void RegisterTypes();
 void FreeTypes();
 
-String GetDefaultValueRepresentation(Value val,Arena* arena);
+String GetDefaultValueRepresentation(Value val,Arena* out);
+String PushUniqueRepresentation(Arena* out,ParsedType type);
 
 Value RemoveOnePointerIndirection(Value in);
 Value RemoveTypedefIndirection(Value in);
+Type* RemoveTypedefIndirection(Type* in);
 
 Value CollapsePtrIntoBaseType(Value in);
 Value CollapsePtrIntoStruct(Value in);
@@ -154,6 +181,8 @@ Value CollapseArrayIntoPtr(Value in);
 Value CollapseValue(Value val);
 
 Value ConvertValue(Value in,Type* want,Arena* arena);
+
+Opt<ParsedType> ParseType(String typeStr,Arena* out);
 
 Type* GetType(String typeName); // Parsable C like name (ex: "int*" for pointer to int) [Type name optionally followed by template argument then pointers then array]
 Type* GetTypeOrFail(String typeName);
@@ -225,23 +254,3 @@ Value MakeValue(T* t){
 
   return val;
 }
-
-/*
-
-How to beef up the type system?
-
-  Need to be able to find type recursions.
-    If type A points to type B and type B points to type A, need to know when to stop.
-    At that point, either only represent the pointer, or let the user indicate how many degrees of hierarchy we are supposed to print.
-
-  Basically develop a "complexity" function that indicates how much trouble printing a struct would be, and organize accordinly.
-
-  I want a type system powerful enough so I can print any struct that I want to a file.
-    I want to be able to see everything. Containers must be able to be iterated and output all their contents.
-    Large structures must be broken down into content that gets printed afterwards.
-      Instead of printing large structures inside a table or similar, we just put a "link" and print the structure further down instead.
-      But simple containers, like an Array of integers with only 4 or 5 members should be printed on the spot.
-
-  Do everything in C++ using the type system. Later move it to python or make pretty printers
-
-*/

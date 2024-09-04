@@ -30,3 +30,4 @@ String GetRepr(DelayType* e,Arena* out);
 String GetRepr(FUDeclarationType* e,Arena* out);
 String GetRepr(MergingStrategy* e,Arena* out);
 String GetRepr(ConnectionType* e,Arena* out);
+String GetRepr(DefinitionType* e,Arena* out);

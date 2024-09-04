@@ -1006,28 +1006,26 @@ Opt<HierarchicalName> ParseHierarchicalName(Tokenizer* tok){
   return res;
 }
 
-bool ParseMerge(Tokenizer* tok,Arena* temp,Arena* temp2){
+Opt<MergeDef> ParseMerge(Tokenizer* tok,Arena* out,Arena* temp){
   Arena* perm = globalPermanent;
   BLOCK_REGION(temp);
   
   tok->AssertNextToken("merge");
 
-  Token mergeNameToken = tok->NextToken();
-  if(!CheckValidName(mergeNameToken)){
-    ReportError(tok,mergeNameToken,"Not a valid type name");
-    return false;
+  Token mergeName = tok->NextToken();
+  if(!CheckValidName(mergeName)){
+    ReportError(tok,mergeName,"Not a valid type name");
+    return {};
   }
-
-  String mergeName = PushString(perm,mergeNameToken);
   
   EXPECT(tok,"=");
 
-  DynamicArray<TypeAndInstance> declarationsArr = StartArray<TypeAndInstance>(temp);
+  ArenaList<TypeAndInstance>* declarationList = PushArenaList<TypeAndInstance>(temp);
   while(!tok->Done()){
     Opt<TypeAndInstance> optType = ParseTypeAndInstance(tok);
-    PROPAGATE(optType); // TODO: Synchronize
+    PROPAGATE(optType); // TODO: Maybe Synchronize? At this point it is a bit of a problem trying to keep the parser working
 
-    *declarationsArr.PushElem() = optType.value();
+    *PushListElement(declarationList) = optType.value();
 
     Token peek = tok->PeekToken();
     if(CompareString(peek,"|")){
@@ -1040,11 +1038,11 @@ bool ParseMerge(Tokenizer* tok,Arena* temp,Arena* temp2){
       break;
     }
   }
-  Array<TypeAndInstance> declarations = EndArray(declarationsArr);
+  Array<TypeAndInstance> declarations = PushArrayFromList(out,declarationList);
 
   Array<SpecNode> specNodes = {};
   if(tok->IfNextToken("{")){
-    DynamicArray<SpecNode> spec = StartArray<SpecNode>(temp);
+    ArenaList<SpecNode>* specList = PushArenaList<SpecNode>(temp);
     while(!tok->Done()){
       Token peek = tok->PeekToken();
       if(CompareString(peek,"}")){
@@ -1061,23 +1059,13 @@ bool ParseMerge(Tokenizer* tok,Arena* temp,Arena* temp2){
 
       EXPECT(tok,";");
 
-      *spec.PushElem() = {leftSide.value(),rightSide.value()};
+      *PushListElement(specList) = {leftSide.value(),rightSide.value()};
     }
-    specNodes = EndArray(spec);
+    specNodes = PushArrayFromList(out,specList);
 
     EXPECT(tok,"}");
   }
-    
-  DynamicArray<FUDeclaration*> declArr = StartArray<FUDeclaration*>(temp);
-  for(TypeAndInstance tp : declarations){
-    FUDeclaration* decl = GetTypeByName(tp.typeName);
-    if(!decl){
-      ReportError(tok,tp.typeName,"Type not found");
-    }
-    *declArr.PushElem() = decl;
-  }
-  Array<FUDeclaration*> decl = EndArray(declArr);
- 
+  
   DynamicArray<SpecificMergeNode> specificsArr = StartArray<SpecificMergeNode>(temp);
   for(SpecNode node : specNodes){
     int firstIndex = -1;
@@ -1105,9 +1093,26 @@ bool ParseMerge(Tokenizer* tok,Arena* temp,Arena* temp2){
   }
   Array<SpecificMergeNode> specifics = EndArray(specificsArr);
 
-  Merge(decl,mergeName,specifics,temp,temp2);
-  return true;
-}  
+  MergeDef result = {};
+  result.name = mergeName;
+  result.declarations = declarations;
+  result.specifics = specifics;
+  
+  return result;
+}
+
+void InstantiateMerge(MergeDef def,Arena* temp,Arena* temp2){
+  DynamicArray<FUDeclaration*> declArr = StartArray<FUDeclaration*>(temp);
+  for(TypeAndInstance tp : def.declarations){
+    FUDeclaration* decl = GetTypeByNameOrFail(tp.typeName); // TODO: Rewrite stuff so that at this point we know that the type must exist
+    *declArr.PushElem() = decl;
+  }
+  Array<FUDeclaration*> decl = EndArray(declArr);
+
+  String name = PushString(globalPermanent,def.name);
+  
+  Merge(decl,name,def.specifics,temp,temp2);
+}
 
 int GetRangeCount(Range<int> range){
   Assert(range.end >= range.start);
@@ -1612,6 +1617,57 @@ void Synchronize(Tokenizer* tok,BracketList<const char*> syncPoints){
   }
 }
 
+Array<TypeDefinition> ParseVersatSpecification2(String content,Arena* out,Arena* temp){
+  Tokenizer tokenizer = Tokenizer(content,".%=#[](){}+:;,*~-",{"->=","->",">><","><<",">>","<<","..","^="});
+  Tokenizer* tok = &tokenizer;
+  
+  BLOCK_REGION(temp);
+
+  ArenaList<TypeDefinition>* typeList = PushArenaList<TypeDefinition>(temp);
+  
+  bool anyError = false;
+  while(!tok->Done()){
+    Token peek = tok->PeekToken();
+
+    if(CompareString(peek,"module")){
+      Opt<ModuleDef> moduleDef = ParseModuleDef(tok,out,temp);
+
+      if(moduleDef.has_value()){
+        TypeDefinition def = {};
+        def.type = DefinitionType_MODULE;
+        def.module = moduleDef.value();
+
+        *PushListElement(typeList) = def;
+      } else {
+        anyError = true;
+      }
+    } else if(CompareString(peek,"merge")){
+      Opt<MergeDef> mergeDef = ParseMerge(tok,out,temp);
+      
+      if(mergeDef.has_value()){
+        TypeDefinition def = {};
+        def.type = DefinitionType_MERGE;
+        def.merge = mergeDef.value();
+
+        *PushListElement(typeList) = def;
+      } else {
+        anyError = true;
+      }
+    } else {
+      // TODO: Report error, 
+      ReportError(tok,peek,"Unexpected token in global scope");
+      tok->AdvancePeek(peek);
+      Synchronize(tok,{"debug","module","iterative","merge","transform"});
+    }
+  }
+
+  if(anyError){
+    printf("Error occurred\n");
+  }
+
+  return PushArrayFromList(out,typeList);
+}
+
 void ParseVersatSpecification(String content,Arena* temp,Arena* temp2){
   Tokenizer tokenizer = Tokenizer(content,".%=#[](){}+:;,*~-",{"->=","->",">><","><<",">>","<<","..","^="});
   Tokenizer* tok = &tokenizer;
@@ -1646,7 +1702,17 @@ void ParseVersatSpecification(String content,Arena* temp,Arena* temp2){
       ParseIterative(tok,temp,temp2);
     } else if(CompareString(peek,"merge")){
       // TODO: Change to separate parsing and instantiating
-      ParseMerge(tok,temp,temp2);
+      Opt<MergeDef> mergeDef;
+      region(temp2){
+        mergeDef = ParseMerge(tok,temp,temp2);
+      }
+      
+      if(mergeDef.has_value()){
+        DEBUG_BREAK();
+        InstantiateMerge(mergeDef.value(),temp,temp2);
+      } else {
+        anyError = true;
+      }
     } else if(CompareString(peek,"transform")){
       Opt<TransformDef> optTransform = {};
       region(temp2){
@@ -1685,3 +1751,42 @@ void ParseVersatSpecificationFromFilepath(String filepath,Arena* temp,Arena* tem
 
 // TODO: Still missing a lot of error messages.
 //       Missing types, missing names, the vast majority of things that currently generate an Assert should just be an error.
+String TypeName(TypeDefinition def){
+  switch(def.type){
+  case DefinitionType_MERGE: {
+    return def.merge.name;
+  } break;
+  case DefinitionType_MODULE: {
+    return def.module.name;
+  } break;
+  default: Assert(false);
+  }
+  return {};
+}
+
+Array<Token> TypesUsed(TypeDefinition def,Arena* out,Arena* temp){
+  BLOCK_REGION(temp);
+
+  switch(def.type){
+  case DefinitionType_MERGE: {
+    // TODO: How do we deal with same types being used?
+    //       Do we just ignore it?
+    Array<Token> result = Map(def.merge.declarations,out,[](TypeAndInstance def){
+      return def.typeName;
+    });
+    
+    return result;
+  } break;
+  case DefinitionType_MODULE: {
+    Array<Token> result = Map(def.module.declarations,temp,[](InstanceDeclaration decl){
+      return decl.typeName;
+    });
+
+    return Unique(result,out,temp);
+  } break;
+  default: Assert(false);
+  }
+
+  return {};
+}
+

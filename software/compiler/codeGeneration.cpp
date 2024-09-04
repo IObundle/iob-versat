@@ -772,7 +772,7 @@ void OutputVerilatorMake(String topLevelName,String versatDir,Arena* temp,Arena*
   TemplateSetString("srcDir",srcDir);
   TemplateSetString("versatDir",versatDir);
   TemplateSetString("verilatorRoot",globalOptions.verilatorRoot);
-  TemplateSetNumber("bitWidth",globalOptions.addrSize);
+  TemplateSetNumber("bitWidth",globalOptions.databusAddrSize);
   TemplateSetString("generatedUnitsLocation",globalOptions.hardwareOutputFilepath);
   TemplateSetArray("verilogFiles","String",UNPACK_SS(globalOptions.verilogFiles));
   TemplateSetArray("extraSources","String",UNPACK_SS(globalOptions.extraSources));
@@ -854,7 +854,9 @@ void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* 
   VersatComputedValues val = ComputeVersatValues(accel,globalOptions.useDMA);
   
   AccelInfo info = CalculateAcceleratorInfo(accel,true,temp,temp2);
-  
+
+  DEBUG_BREAK();
+
   CheckSanity(info.baseInfo,temp);
   
   printf("ADDR_W - %d\n",val.memoryConfigDecisionBit + 1);
@@ -989,6 +991,7 @@ void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* 
   
   Array<MemoryAddressMask> memoryMasks = CalculateAcceleratorMemoryMasks(info,temp);
  
+  TemplateSetCustom("arch",MakeValue(&globalOptions));
   TemplateSetCustom("versatValues",MakeValue(&val));
   TemplateSetNumber("delayStart",val.delayBitsStart);
   TemplateSetNumber("nIO",val.nUnitsIO);

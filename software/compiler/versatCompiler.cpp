@@ -22,222 +22,6 @@
 #define DO_STRINGIFY(ARG) #ARG
 #define STRINGIFY(ARG) DO_STRINGIFY(ARG)
 
-Opt<String> GetFileFormatFromPath(String filename){
-  int size = filename.size;
-  for(int i = 0; i < filename.size; i++){
-    char ch = filename[size - i - 1];
-    if(ch == '.'){
-      String res = (String){&filename[size - i],i};
-      return res;
-    }
-    if(ch == '/'){
-      break;
-    }
-  }
-
-  return Opt<String>();
-}
-
-#if 0
-// TODO: There is no reason to use small arguments. -d should just be -DMA. -D should just be -Databus and so on.
-// TODO: Rewrite to either use argparse or some lib parsing, or just parse ourselves but simplify adding more options and report errors.
-Options* ParseCommandLineOptions(int argc,char* argv[],Arena* out,Arena* temp){
-  Options* opts = PushStruct<Options>(out);
-  opts->dataSize = 32; // By default.
-  opts->addrSize = 32;
-
-  opts->debugPath = PushString(out,"%s/debug",GetCurrentDirectory()); // By default
-  PushNullByte(out);
-  
-  ArenaList<String>* verilogFiles = PushArenaList<String>(temp);
-  ArenaList<String>* extraSources = PushArenaList<String>(temp);
-  ArenaList<String>* includePaths = PushArenaList<String>(temp);
-  ArenaList<String>* unitPaths = PushArenaList<String>(temp);
-  
-  for(int i = 1; i < argc; i++){
-    String str = STRING(argv[i]);
-
-    Opt<String> formatOpt = GetFileFormatFromPath(str);
-
-    // TODO: Verilator does not actually need the source files for non top units. It only needs a include path to the folder that contains the sources and the verilog file of the top module. This could be removed. But also need to test further.
-    if(str.size >= 2 && str[0] == '-' && str[1] == 'S'){
-      if(str.size == 2){
-        if(i + 1 >= argc){
-          printf("Missing argument\n");
-          exit(-1);
-        }
-        *PushListElement(extraSources) = GetAbsolutePath(argv[i + 1],out);
-        i += 1;
-      } else {
-        *PushListElement(extraSources) = GetAbsolutePath(&str.data[2],out);
-      }
-
-      continue;
-    }
-
-	if(str.size > 3 && str[0] == '-' && str[1] == 'b' && str[2] == '='){
-	  Tokenizer tok(str,"=",{});
-
-	  tok.AssertNextToken("-b");
-	  tok.AssertNextToken("=");
-	  Token dataSize = tok.NextToken();
-	  Assert(tok.Done());
-
-	  int size = ParseInt(dataSize); // TODO: Should check for errors, probably have ParseInt return an optional
-	  opts->dataSize = size;
-	}
-
-    // TODO: This code indicates that we need an "arquitecture" generic portion of code
-    //       Things should be parameterizable
-    if(str.size >= 4 && str[0] == '-' && str[1] == 'x' && str[2] == '3' && str[3] == '2'){
-      Assert(str.size == 4);
-
-      opts->addrSize = 32;
-      continue;
-    }
-
-    if(str.size >= 4 && str[0] == '-' && str[1] == 'x' && str[2] == '6' && str[3] == '4'){
-      Assert(str.size == 4);
-
-      opts->addrSize = 64;
-      continue;
-    }
-
-    if(str.size >= 4 && str[0] == '-' && str[1] == '-' && str[2] == 'V' && str[3] == 'R'){
-      Assert(str.size == 4);
-
-      opts->verilatorRoot = STRING(argv[i+1]);
-      i += 1;
-      continue;
-    }
-
-    if(str.size >= 2 && str[0] == '-' && str[1] == 'd'){
-      Assert(str.size == 2);
-      opts->useDMA = true;
-    }
-
-    if(str.size >= 2 && str[0] == '-' && str[1] == 'D'){
-      Assert(str.size == 2);
-      opts->architectureHasDatabus = true;
-    }
-
-    if(str.size >= 2 && str[0] == '-' && str[1] == 'I'){
-      if(str.size == 2){
-        if(i + 1 >= argc){
-          printf("Missing argument\n");
-          exit(-1);
-        }
-        *PushListElement(includePaths) = GetAbsolutePath(argv[i + 1],out);
-        i += 1;
-      } else {
-        *PushListElement(includePaths) = GetAbsolutePath(&str.data[2],out);
-      }
-
-      continue;
-    }
-
-    if(str.size >= 2 && str[0] == '-' && str[1] == 'T'){
-      if(i + 1 >= argc){
-        printf("Missing argument\n");
-        exit(-1);
-      }
-      opts->topName = STRING(argv[i + 1]);
-      i += 1;
-      continue;
-    }
-
-    if(str.size >= 2 && str[0] == '-' && str[1] == 's'){
-      opts->addInputAndOutputsToTop = true;
-      continue;
-    }
-
-#if 0
-    if(str.size >= 2 && str[0] == '-' && str[1] == 'g'){
-      opts->debug = true;
-      continue;
-    }
-#endif
-    
-    if(str.size >= 2 && str[0] == '-' && str[1] == 'O'){
-      if(i + 1 >= argc){
-        printf("Missing argument\n");
-        exit(-1);
-      }
-
-      String unitPath = GetAbsolutePath(argv[i+1],out);
-      PushNullByte(out);
-
-      *PushListElement(unitPaths) = unitPath;
-      i += 1;
-      continue;
-    }
-
-    if(str.size >= 2 && str[0] == '-' && str[1] == 'A'){
-      if(i + 1 >= argc){
-        printf("Missing argument\n");
-        exit(-1);
-      }
-
-      opts->debug = true;
-
-      String debugPath = GetAbsolutePath(argv[i+1],out);
-      PushNullByte(out);
-     
-      opts->debugPath = debugPath;
-      PushNullByte(out);
-
-      i += 1;
-      continue;
-    }
-
-    if(str.size >= 2 && str[0] == '-' && str[1] == 'o'){
-      if(i + 1 >= argc){
-        printf("Missing argument\n");
-        exit(-1);
-      }
-      opts->hardwareOutputFilepath = GetAbsolutePath(argv[i+1],out);
-      PushNullByte(out);
-      i += 1;
-      continue;
-    }
-
-    if(str.size >= 2 && str[0] == '-' && str[1] == 'H'){
-      if(i + 1 >= argc){
-        printf("Missing argument\n");
-        exit(-1);
-      }
-      opts->softwareOutputFilepath = GetAbsolutePath(argv[i+1],out);
-      PushNullByte(out);
-      i += 1;
-      continue;
-    }
-    
-    if(formatOpt){
-      String format = formatOpt.value();
-      if(CompareString(format,"v")){
-        *PushListElement(verilogFiles) = GetAbsolutePath(argv[i],out);
-        continue;
-      } else { // Assume to be the specification file, for now
-        if(opts->specificationFilepath.size){
-          printf("Error, multiple specification files specified, not supported for now\n");
-          exit(-1);
-        }
-
-        opts->specificationFilepath = STRING(argv[i]);
-      }
-      continue;
-    }
-  }
-
-  opts->verilogFiles = PushArrayFromList(out,verilogFiles);
-  opts->extraSources = PushArrayFromList(out,extraSources);
-  opts->includePaths = PushArrayFromList(out,includePaths);
-  opts->unitPaths = PushArrayFromList(out,unitPaths);
-  
-  return opts;
-}
-#endif
-
 // These Call* functions are a bit hardcoded in functionality. I do not expect to call other programs often so no need to abstract for now.
 void CallVerilator(const char* unitPath,const char* outputPath){
    pid_t pid = fork();
@@ -267,49 +51,6 @@ void CallVerilator(const char* unitPath,const char* outputPath){
        printf("Versat might not produce correct results\n");
      }
    }  
-}
-
-String CallMakefile(const char* makePath,const char* action,Arena* out){
-  int pipeRead[2];
-  int res = pipe(pipeRead);
-
-  if(res == -1){
-    fprintf(stderr,"Problem creating pipe\n");
-    exit(-1);
-  }
-  
-  pid_t pid = fork();
-  
-  char* const makeArgs[] = {
-    (char*) "make",
-    (char*) "--no-print-directory",
-    (char*) "-C",
-    (char*) makePath,
-    (char*) action,
-    nullptr
-  };
-
-  if(pid < 0){
-    printf("Error calling fork\n");
-  } else if(pid == 0){
-    dup2(pipeRead[1],STDOUT_FILENO);
-
-    execvp("make",makeArgs);
-    printf("Error calling execvp for verilator: %s\n",strerror(errno));
-  } else {
-    int status;
-    wait(&status);
-
-    auto mark = StartString(out);
-    size_t maximumAllowed = SpaceAvailable(out);
-    int res = read(pipeRead[0],mark.mark,maximumAllowed);
-
-    PushBytes(out,res);
-    String result = EndString(mark);
-    return result;
-  }
-
-  return {};
 }
 
 String GetVerilatorRoot(Arena* out,Arena* temp){
@@ -462,14 +203,15 @@ parse_opt (int key, char *arg,
 {
   OptionsGather* opts = (OptionsGather*) state->input;
 
+  // TODO: Better error handling
   switch (key)
     {
     case 'S': *PushListElement(opts->extraSources) = STRING(arg); break;
     case 'I': *PushListElement(opts->includePaths) = STRING(arg); break;
     case 'u': *PushListElement(opts->unitPaths) = STRING(arg); break;
 
-    case 'b': opts->options->dataSize = ParseInt(STRING(arg)); break;
-    case 'x': opts->options->addrSize = ParseInt(STRING(arg)); break;
+    case 'b': opts->options->databusDataSize = ParseInt(STRING(arg)); break;
+    case 'x': opts->options->databusAddrSize = ParseInt(STRING(arg)); break;
 
     case 'd': opts->options->useDMA = true; break;
     case 'D': opts->options->architectureHasDatabus = true; break;
@@ -486,11 +228,147 @@ parse_opt (int key, char *arg,
   return 0;
 }
 
+struct Test2{
+  int c;
+  int d;
+};
+
+struct Test{
+  int a;
+  int b;
+  Test2 t;
+};
+
+typedef Test MyType;
+
+#if 0
+template struct MyArrayIterator<MyType>;
+template MyArrayIterator<MyType>* MyIterate(Array<MyType> arr);
+
+template MyArrayIterator<MyType> MyNonPointerIterate(Array<MyType> arr);
+
+template struct MyArrayIterator<int>;
+template MyArrayIterator<int>* MyIterate(Array<int> arr);
+
+template MyArrayIterator<int> MyNonPointerIterate(Array<int> arr);
+#endif
+
+template<typename Key,typename Data>
+struct MyHashmapIterator{
+  HashmapIterator<Key,Data> iter;
+  HashmapIterator<Key,Data> end;
+
+  bool HasNext(){
+    return (iter != end);
+  };
+
+  Pair<Key,Data*> Next(){
+    auto res = *iter;
+    ++iter;
+    return res;
+  };
+};
+
+template<typename Key,typename Data>
+MyHashmapIterator<Key,Data> Iterate(Hashmap<Key,Data>* hashmap){
+  MyHashmapIterator<Key,Data> res = {};
+
+  res.iter = begin(hashmap);
+  res.end  = end(hashmap);
+  return res;
+}
+
+template<typename Key,typename Data>
+MyHashmapIterator<Key,Data> Iterate(Hashmap<Key,Data>& hashmap){
+  MyHashmapIterator<Key,Data> res = {};
+
+  res.iter = begin(&hashmap);
+  res.end  = end(&hashmap);
+  return res;
+}
+
+template struct MyHashmapIterator<int,int>;
+template MyHashmapIterator<int,int> Iterate(Hashmap<int,int>* hashmap);
+template MyHashmapIterator<int,int> Iterate(Hashmap<int,int>& hashmap);
+
+template struct MyHashmapIterator<String,Array<Token>>;
+template MyHashmapIterator<String,Array<Token>> Iterate(Hashmap<String,Array<Token>>* hashmap);
+template MyHashmapIterator<String,Array<Token>> Iterate(Hashmap<String,Array<Token>>& hashmap);
+
+struct GenericArrayIterator{
+  void* array;
+  int sizeOfType;
+  int alignmentOfType;
+  int index;
+
+  bool HasNext(){
+    void** arrayData = (void**) array;
+    int* size = (int*) (arrayData + 1);
+
+    return index < *size;
+  }
+
+  void* Next(){
+    void** arrayData = (void**) array;
+    void* arrayStart = (void*) arrayData[0]; 
+
+    char* view = (char*) arrayStart;
+    void* data = (void*) &view[index * sizeOfType];
+    index += 1;
+  
+    return data;
+  }
+};
+
+GenericArrayIterator IterateArray(void* array,int sizeOfType,int alignmentOfType){
+  GenericArrayIterator res = {};
+  res.array = array;
+  res.sizeOfType = sizeOfType;
+  res.alignmentOfType = alignmentOfType;
+
+  return res;
+}
+
 int main(int argc,char* argv[]){
   InitDebug();
 
   *globalPermanent = InitArena(Megabyte(128));
 
+  Array<Test> array = PushArray<Test>(globalPermanent,2);
+  array[0] = {1,2};
+  array[1] = {2,3};
+ 
+  Array<int> array2 = PushArray<int>(globalPermanent,5);
+
+  array2[0] = 12;
+  array2[1] = 23;
+  array2[2] = 34;
+  array2[3] = 45;
+  array2[4] = 56;
+
+  auto generic = IterateArray(&array2,sizeof(int),alignof(int));
+  while(generic.HasNext()){
+    int* data = (int*) generic.Next();
+    printf("%d\n",*data);
+  }
+  //return 0;
+  
+  Hashmap<int,int>* map = PushHashmap<int,int>(globalPermanent,10);
+  map->Insert(1,2);
+  map->Insert(2,3);
+  map->Insert(3,4);
+  map->Insert(4,5);
+
+  for(auto p : map){
+    printf("%d %d",p.first,*p.second);
+  }
+
+  std::optional<int> test = 10;
+  Opt<int> test2 = 2;
+  Pair<int,int> t = {1,2};
+
+  DEBUG_BREAK();
+  
   Arena* perm = globalPermanent;
   
   Arena tempInst = InitArena(Megabyte(128));
@@ -502,7 +380,7 @@ int main(int argc,char* argv[]){
   struct argp_option options[] =
     {
       { 0, 'S',"File", 0, "Extra sources"},
-      { 0, 'b',"Size", 0, "Databus size (8,16,default:32,64)"},
+      { 0, 'b',"Size", 0, "Databus size connected to external memory (8,16,default:32,64,128,256)"},
       { 0, 'x',"Size", 0, "Address size (default:32,64)"},
       { 0, 'd', 0,     0, "Use DMA"},
       { 0, 'D', 0,     0, "Architecture has databus"},
@@ -524,8 +402,8 @@ int main(int argc,char* argv[]){
   gather.includePaths = PushArenaList<String>(temp);
   gather.unitPaths = PushArenaList<String>(temp);
 
-  globalOptions.dataSize = 32;
-  globalOptions.addrSize = 32;
+  globalOptions.databusDataSize = 32;
+  globalOptions.databusAddrSize = 32;
 
   globalOptions.debugPath = PushString(perm,"%s/debug",GetCurrentDirectory()); // By default
   PushNullByte(perm);
@@ -542,7 +420,6 @@ int main(int argc,char* argv[]){
   globalOptions.includePaths = PushArrayFromList(perm,gather.includePaths);
   globalOptions.unitPaths = PushArrayFromList(perm,gather.unitPaths);
 
-  // Check options 
   if(globalOptions.topName.size == 0){
     printf("Need to specific top unit with -t\n");
     exit(-1);
@@ -567,14 +444,14 @@ int main(int argc,char* argv[]){
   globalDebug.outputVersat = true;
 
   globalDebug.outputConsolidationGraphs = false;
-
+  globalDebug.outputVCD = true;
+  
 #if 0
   globalDebug.dotFormat = GRAPH_DOT_FORMAT_NAME;
 #if 1
   globalDebug.outputGraphs = true;
   globalDebug.outputAcceleratorInfo = true;
 #endif
-  globalDebug.outputVCD = true;
 #endif
   
 #ifdef USE_FST_FORMAT
@@ -651,6 +528,26 @@ int main(int argc,char* argv[]){
   String topLevelTypeStr = globalOptions.topName;
 
   if(specFilepath.size){
+#if 0
+    String content = PushFile(temp,StaticFormat("%.*s",UNPACK_SS(specFilepath)));
+
+    Array<TypeDefinition> types = ParseVersatSpecification2(content,temp,temp2);
+
+    Hashmap<String,Array<Token>>* nameToRequired = PushHashmap<String,Array<Token>>(temp,types.size);
+    for(TypeDefinition t : types){
+      String name = TypeName(t);
+      Array<Token> used = TypesUsed(t,temp,temp2);
+
+      nameToRequired->Insert(name,used);
+    }
+
+    if(!nameToRequired->Exists(topLevelTypeStr)){
+      printf("Did not find the top level type: %.*s\n",UNPACK_SS(topLevelTypeStr));
+      return -1;
+    }
+    
+    DEBUG_BREAK();
+#endif
     ParseVersatSpecificationFromFilepath(specFilepath,temp,temp2);
   }
 

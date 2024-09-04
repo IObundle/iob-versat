@@ -4,6 +4,8 @@
 #{include "versat_common.tpl"}
 #include <new>
 
+#include <cstdint>
+
 #include <cassert>
 #define Assert(x) assert(x)
 
@@ -179,22 +181,22 @@ if(SimulateDatabus){
       if(access->latencyCounter > 0){
          access->latencyCounter -= 1;
       } else {
-         #{set dataType #{call IntName opts.dataSize}}
+         #{set dataType #{call IntName opts.databusDataSize}}
          @{dataType}* ptr = (@{dataType}*) (self->databus_addr_@{i});
 
          if(self->databus_wstrb_@{i} == 0){
             if(ptr == nullptr){
-            #{if opts.dataSize > 64}
-            for(int i = 0; i < (@{opts.dataSize} / sizeof(int)); i++){
+            #{if opts.databusDataSize > 64}
+            for(int i = 0; i < (@{opts.databusDataSize} / sizeof(int32_t)); i++){
                self->databus_rdata_@{i}[i] = 0xfeeffeef;
             }
             #{else}
                self->databus_rdata_@{i} = 0xfeeffeef; // Feed bad data if not set (in pc-emul is needed otherwise segfault)
             #{end}
             } else {
-            #{if opts.dataSize > 64}
-               for(int i = 0; i < (@{opts.dataSize} / sizeof(int)); i++){
-                   self->databus_rdata_@{i}[i] = ptr[access->counter].i[i];
+            #{if opts.databusDataSize > 64}
+               for(int i = 0; i < (@{opts.databusDataSize} / sizeof(int)); i++){
+                   self->databus_rdata_@{i}[i] = ptr[access->counter + i];
                }
             #{else}
                self->databus_rdata_@{i} = ptr[access->counter];
@@ -202,9 +204,9 @@ if(SimulateDatabus){
             }
          } else { // self->databus_wstrb_@{i} != 0
             if(ptr != nullptr){
-            #{if opts.dataSize > 64}
-               for(int i = 0; i < (@{opts.dataSize} / sizeof(int)); i++){
-                  ptr[access->counter].i[i] = self->databus_wdata_@{i}[i];
+            #{if opts.databusDataSize > 64}
+               for(int i = 0; i < (@{opts.databusDataSize} / sizeof(int)); i++){
+                  ptr[access->counter + i] = self->databus_wdata_@{i}[i];
                }
             #{else}
                ptr[access->counter] = self->databus_wdata_@{i};
@@ -221,7 +223,11 @@ if(SimulateDatabus){
             access->counter = 0;
             self->databus_last_@{i} = 1;
          } else {
-            access->counter += 1;
+         #{if opts.databusDataSize > 64}
+             access->counter += (@{opts.databusDataSize} / sizeof(int));
+         #{else}
+             access->counter += 1;
+         #{end}
          }
 
          access->latencyCounter = MEMORY_LATENCY;
