@@ -454,3 +454,15 @@ Array<typename std::result_of<Func(T)>::type> Map(Array<T> array,Arena* out,Func
   }
   return EndArray(arr);
 }
+
+template<typename T>
+Array<T> Unique(Array<T> arr,Arena* out,Arena* temp){
+  BLOCK_REGION(temp);
+
+  Set<T>* set = PushSet<T>(temp,arr.size);
+  
+  for(T t : arr){
+    set->Insert(t);
+  }
+  return PushArrayFromSet(out,set);
+}

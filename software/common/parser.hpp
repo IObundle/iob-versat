@@ -41,6 +41,13 @@ struct Token : public String{
   }
 };
 
+template<> class std::hash<Token>{
+public:
+   std::size_t operator()(Token const& s) const noexcept{
+     return std::hash<String>()(s);
+   }
+};
+
 struct FindFirstResult{
   String foundFirst;
   Token peekFindNotIncluded;

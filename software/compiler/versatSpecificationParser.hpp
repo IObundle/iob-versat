@@ -139,3 +139,8 @@ struct HierarchicalName{
 };
 
 typedef Pair<HierarchicalName,HierarchicalName> SpecNode;
+
+String TypeName(TypeDefinition def);
+Array<Token> TypesUsed(TypeDefinition def,Arena* out,Arena* temp);
+Array<TypeDefinition> ParseVersatSpecification2(String content,Arena* temp,Arena* temp2);
+

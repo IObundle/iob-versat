@@ -291,11 +291,68 @@ template struct MyHashmapIterator<int,int>;
 template MyHashmapIterator<int,int> Iterate(Hashmap<int,int>* hashmap);
 template MyHashmapIterator<int,int> Iterate(Hashmap<int,int>& hashmap);
 
+template struct MyHashmapIterator<String,Array<Token>>;
+template MyHashmapIterator<String,Array<Token>> Iterate(Hashmap<String,Array<Token>>* hashmap);
+template MyHashmapIterator<String,Array<Token>> Iterate(Hashmap<String,Array<Token>>& hashmap);
+
+struct GenericArrayIterator{
+  void* array;
+  int sizeOfType;
+  int alignmentOfType;
+  int index;
+
+  bool HasNext(){
+    void** arrayData = (void**) array;
+    int* size = (int*) (arrayData + 1);
+
+    return index < *size;
+  }
+
+  void* Next(){
+    void** arrayData = (void**) array;
+    void* arrayStart = (void*) arrayData[0]; 
+
+    char* view = (char*) arrayStart;
+    void* data = (void*) &view[index * sizeOfType];
+    index += 1;
+  
+    return data;
+  }
+};
+
+GenericArrayIterator IterateArray(void* array,int sizeOfType,int alignmentOfType){
+  GenericArrayIterator res = {};
+  res.array = array;
+  res.sizeOfType = sizeOfType;
+  res.alignmentOfType = alignmentOfType;
+
+  return res;
+}
+
 int main(int argc,char* argv[]){
   InitDebug();
 
   *globalPermanent = InitArena(Megabyte(128));
 
+  Array<Test> array = PushArray<Test>(globalPermanent,2);
+  array[0] = {1,2};
+  array[1] = {2,3};
+ 
+  Array<int> array2 = PushArray<int>(globalPermanent,5);
+
+  array2[0] = 12;
+  array2[1] = 23;
+  array2[2] = 34;
+  array2[3] = 45;
+  array2[4] = 56;
+
+  auto generic = IterateArray(&array2,sizeof(int),alignof(int));
+  while(generic.HasNext()){
+    int* data = (int*) generic.Next();
+    printf("%d\n",*data);
+  }
+  //return 0;
+  
   Hashmap<int,int>* map = PushHashmap<int,int>(globalPermanent,10);
   map->Insert(1,2);
   map->Insert(2,3);
@@ -309,18 +366,6 @@ int main(int argc,char* argv[]){
   std::optional<int> test = 10;
   Opt<int> test2 = 2;
   Pair<int,int> t = {1,2};
-
-  Array<Test> array = PushArray<Test>(globalPermanent,2);
-  array[0] = {1,2};
-  array[1] = {2,3};
-
-  Array<int> array2 = PushArray<int>(globalPermanent,5);
-
-  array2[0] = 12;
-  array2[1] = 23;
-  array2[2] = 34;
-  array2[3] = 45;
-  array2[4] = 56;
 
   DEBUG_BREAK();
   
@@ -483,6 +528,26 @@ int main(int argc,char* argv[]){
   String topLevelTypeStr = globalOptions.topName;
 
   if(specFilepath.size){
+#if 0
+    String content = PushFile(temp,StaticFormat("%.*s",UNPACK_SS(specFilepath)));
+
+    Array<TypeDefinition> types = ParseVersatSpecification2(content,temp,temp2);
+
+    Hashmap<String,Array<Token>>* nameToRequired = PushHashmap<String,Array<Token>>(temp,types.size);
+    for(TypeDefinition t : types){
+      String name = TypeName(t);
+      Array<Token> used = TypesUsed(t,temp,temp2);
+
+      nameToRequired->Insert(name,used);
+    }
+
+    if(!nameToRequired->Exists(topLevelTypeStr)){
+      printf("Did not find the top level type: %.*s\n",UNPACK_SS(topLevelTypeStr));
+      return -1;
+    }
+    
+    DEBUG_BREAK();
+#endif
     ParseVersatSpecificationFromFilepath(specFilepath,temp,temp2);
   }
 

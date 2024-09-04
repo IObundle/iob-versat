@@ -132,11 +132,13 @@ void RegisterParsedTypes(){
   RegisterOpaqueType(STRING("PortExpression"),Subtype_STRUCT,sizeof(PortExpression),alignof(PortExpression));
   RegisterOpaqueType(STRING("InstanceDeclaration"),Subtype_STRUCT,sizeof(InstanceDeclaration),alignof(InstanceDeclaration));
   RegisterOpaqueType(STRING("ConnectionDef"),Subtype_STRUCT,sizeof(ConnectionDef),alignof(ConnectionDef));
+  RegisterOpaqueType(STRING("TypeAndInstance"),Subtype_STRUCT,sizeof(TypeAndInstance),alignof(TypeAndInstance));
   RegisterOpaqueType(STRING("ModuleDef"),Subtype_STRUCT,sizeof(ModuleDef),alignof(ModuleDef));
   RegisterOpaqueType(STRING("TransformDef"),Subtype_STRUCT,sizeof(TransformDef),alignof(TransformDef));
+  RegisterOpaqueType(STRING("MergeDef"),Subtype_STRUCT,sizeof(MergeDef),alignof(MergeDef));
+  RegisterOpaqueType(STRING("TypeDefinition"),Subtype_STRUCT,sizeof(TypeDefinition),alignof(TypeDefinition));
   RegisterOpaqueType(STRING("Transformation"),Subtype_STRUCT,sizeof(Transformation),alignof(Transformation));
   RegisterOpaqueType(STRING("HierarchicalName"),Subtype_STRUCT,sizeof(HierarchicalName),alignof(HierarchicalName));
-  RegisterOpaqueType(STRING("TypeAndInstance"),Subtype_STRUCT,sizeof(TypeAndInstance),alignof(TypeAndInstance));
   RegisterOpaqueType(STRING("SignalHandler"),Subtype_TYPEDEF,sizeof(SignalHandler),alignof(SignalHandler));
   RegisterOpaqueType(STRING("Byte"),Subtype_TYPEDEF,sizeof(Byte),alignof(Byte));
   RegisterOpaqueType(STRING("u8"),Subtype_TYPEDEF,sizeof(u8),alignof(u8));
@@ -328,35 +330,41 @@ static Pair<String,int> ConnectionTypeData[] = {{STRING("ConnectionType_SINGLE")
 
 RegisterEnum(STRING("ConnectionType"),C_ARRAY_TO_ARRAY(ConnectionTypeData));
 
+static Pair<String,int> DefinitionTypeData[] = {{STRING("DefinitionType_MODULE"),(int) DefinitionType::DefinitionType_MODULE},
+    {STRING("DefinitionType_MERGE"),(int) DefinitionType::DefinitionType_MERGE},
+    {STRING("DefinitionType_ITERATIVE"),(int) DefinitionType::DefinitionType_ITERATIVE}};
+
+RegisterEnum(STRING("DefinitionType"),C_ARRAY_TO_ARRAY(DefinitionTypeData));
+
   static String templateArgs[] = { STRING("F") /* 0 */,
     STRING("T") /* 1 */,
     STRING("T") /* 2 */,
     STRING("T") /* 3 */,
     STRING("T") /* 4 */,
-    STRING("T") /* 5 */,
-    STRING("First") /* 6 */,
-    STRING("Second") /* 7 */,
+    STRING("First") /* 5 */,
+    STRING("Second") /* 6 */,
+    STRING("T") /* 7 */,
     STRING("T") /* 8 */,
-    STRING("T") /* 9 */,
-    STRING("Key") /* 10 */,
+    STRING("Key") /* 9 */,
+    STRING("Data") /* 10 */,
     STRING("Data") /* 11 */,
-    STRING("Data") /* 12 */,
-    STRING("Key") /* 13 */,
+    STRING("Key") /* 12 */,
+    STRING("Data") /* 13 */,
     STRING("Data") /* 14 */,
     STRING("Data") /* 15 */,
-    STRING("Data") /* 16 */,
-    STRING("Key") /* 17 */,
-    STRING("Data") /* 18 */,
-    STRING("Key") /* 19 */,
-    STRING("Data") /* 20 */,
-    STRING("Key") /* 21 */,
+    STRING("Key") /* 16 */,
+    STRING("Data") /* 17 */,
+    STRING("Key") /* 18 */,
+    STRING("Data") /* 19 */,
+    STRING("Key") /* 20 */,
+    STRING("Data") /* 21 */,
     STRING("Data") /* 22 */,
     STRING("Data") /* 23 */,
-    STRING("Data") /* 24 */,
+    STRING("T") /* 24 */,
     STRING("T") /* 25 */,
-    STRING("T") /* 26 */,
-    STRING("Value") /* 27 */,
-    STRING("Error") /* 28 */,
+    STRING("Value") /* 26 */,
+    STRING("Error") /* 27 */,
+    STRING("T") /* 28 */,
     STRING("T") /* 29 */,
     STRING("T") /* 30 */,
     STRING("T") /* 31 */,
@@ -365,42 +373,40 @@ RegisterEnum(STRING("ConnectionType"),C_ARRAY_TO_ARRAY(ConnectionTypeData));
     STRING("T") /* 34 */,
     STRING("T") /* 35 */,
     STRING("T") /* 36 */,
-    STRING("T") /* 37 */,
-    STRING("T") /* 38 */
+    STRING("T") /* 37 */
   };
 
   RegisterTemplate(STRING("_Defer"),(Array<String>){&templateArgs[0],1});
   RegisterTemplate(STRING("Opt"),(Array<String>){&templateArgs[1],1});
   RegisterTemplate(STRING("ArrayIterator"),(Array<String>){&templateArgs[2],1});
   RegisterTemplate(STRING("Array"),(Array<String>){&templateArgs[3],1});
-  RegisterTemplate(STRING("MyArrayIterator"),(Array<String>){&templateArgs[4],1});
-  RegisterTemplate(STRING("Range"),(Array<String>){&templateArgs[5],1});
-  RegisterTemplate(STRING("Pair"),(Array<String>){&templateArgs[6],2});
-  RegisterTemplate(STRING("DynamicArray"),(Array<String>){&templateArgs[8],1});
-  RegisterTemplate(STRING("PushPtr"),(Array<String>){&templateArgs[9],1});
-  RegisterTemplate(STRING("HashmapIterator"),(Array<String>){&templateArgs[10],2});
-  RegisterTemplate(STRING("GetOrAllocateResult"),(Array<String>){&templateArgs[12],1});
-  RegisterTemplate(STRING("Hashmap"),(Array<String>){&templateArgs[13],2});
-  RegisterTemplate(STRING("Set"),(Array<String>){&templateArgs[15],1});
-  RegisterTemplate(STRING("SetIterator"),(Array<String>){&templateArgs[16],1});
-  RegisterTemplate(STRING("TrieMapNode"),(Array<String>){&templateArgs[17],2});
-  RegisterTemplate(STRING("TrieMapIterator"),(Array<String>){&templateArgs[19],2});
-  RegisterTemplate(STRING("TrieMap"),(Array<String>){&templateArgs[21],2});
-  RegisterTemplate(STRING("TrieSetIterator"),(Array<String>){&templateArgs[23],1});
-  RegisterTemplate(STRING("TrieSet"),(Array<String>){&templateArgs[24],1});
-  RegisterTemplate(STRING("PoolIterator"),(Array<String>){&templateArgs[25],1});
-  RegisterTemplate(STRING("Pool"),(Array<String>){&templateArgs[26],1});
-  RegisterTemplate(STRING("Result"),(Array<String>){&templateArgs[27],2});
-  RegisterTemplate(STRING("IndexedStruct"),(Array<String>){&templateArgs[29],1});
-  RegisterTemplate(STRING("ListedStruct"),(Array<String>){&templateArgs[30],1});
-  RegisterTemplate(STRING("ArenaList"),(Array<String>){&templateArgs[31],1});
-  RegisterTemplate(STRING("Stack"),(Array<String>){&templateArgs[32],1});
-  RegisterTemplate(STRING("WireTemplate"),(Array<String>){&templateArgs[33],1});
-  RegisterTemplate(STRING("ExternalMemoryTwoPortsTemplate"),(Array<String>){&templateArgs[34],1});
-  RegisterTemplate(STRING("ExternalMemoryDualPortTemplate"),(Array<String>){&templateArgs[35],1});
-  RegisterTemplate(STRING("ExternalMemoryTemplate"),(Array<String>){&templateArgs[36],1});
-  RegisterTemplate(STRING("ExternalMemoryInterfaceTemplate"),(Array<String>){&templateArgs[37],1});
-  RegisterTemplate(STRING("std::vector"),(Array<String>){&templateArgs[38],1});
+  RegisterTemplate(STRING("Range"),(Array<String>){&templateArgs[4],1});
+  RegisterTemplate(STRING("Pair"),(Array<String>){&templateArgs[5],2});
+  RegisterTemplate(STRING("DynamicArray"),(Array<String>){&templateArgs[7],1});
+  RegisterTemplate(STRING("PushPtr"),(Array<String>){&templateArgs[8],1});
+  RegisterTemplate(STRING("HashmapIterator"),(Array<String>){&templateArgs[9],2});
+  RegisterTemplate(STRING("GetOrAllocateResult"),(Array<String>){&templateArgs[11],1});
+  RegisterTemplate(STRING("Hashmap"),(Array<String>){&templateArgs[12],2});
+  RegisterTemplate(STRING("Set"),(Array<String>){&templateArgs[14],1});
+  RegisterTemplate(STRING("SetIterator"),(Array<String>){&templateArgs[15],1});
+  RegisterTemplate(STRING("TrieMapNode"),(Array<String>){&templateArgs[16],2});
+  RegisterTemplate(STRING("TrieMapIterator"),(Array<String>){&templateArgs[18],2});
+  RegisterTemplate(STRING("TrieMap"),(Array<String>){&templateArgs[20],2});
+  RegisterTemplate(STRING("TrieSetIterator"),(Array<String>){&templateArgs[22],1});
+  RegisterTemplate(STRING("TrieSet"),(Array<String>){&templateArgs[23],1});
+  RegisterTemplate(STRING("PoolIterator"),(Array<String>){&templateArgs[24],1});
+  RegisterTemplate(STRING("Pool"),(Array<String>){&templateArgs[25],1});
+  RegisterTemplate(STRING("Result"),(Array<String>){&templateArgs[26],2});
+  RegisterTemplate(STRING("IndexedStruct"),(Array<String>){&templateArgs[28],1});
+  RegisterTemplate(STRING("ListedStruct"),(Array<String>){&templateArgs[29],1});
+  RegisterTemplate(STRING("ArenaList"),(Array<String>){&templateArgs[30],1});
+  RegisterTemplate(STRING("Stack"),(Array<String>){&templateArgs[31],1});
+  RegisterTemplate(STRING("WireTemplate"),(Array<String>){&templateArgs[32],1});
+  RegisterTemplate(STRING("ExternalMemoryTwoPortsTemplate"),(Array<String>){&templateArgs[33],1});
+  RegisterTemplate(STRING("ExternalMemoryDualPortTemplate"),(Array<String>){&templateArgs[34],1});
+  RegisterTemplate(STRING("ExternalMemoryTemplate"),(Array<String>){&templateArgs[35],1});
+  RegisterTemplate(STRING("ExternalMemoryInterfaceTemplate"),(Array<String>){&templateArgs[36],1});
+  RegisterTemplate(STRING("std::vector"),(Array<String>){&templateArgs[37],1});
 
   RegisterTypedef(STRING("uint8_t"),STRING("Byte"));
   RegisterTypedef(STRING("uint8_t"),STRING("u8"));
@@ -424,117 +430,114 @@ RegisterEnum(STRING("ConnectionType"),C_ARRAY_TO_ARRAY(ConnectionTypeData));
     (TemplatedMember){STRING("T *"),STRING("ptr"),0} /* 3 */,
     (TemplatedMember){STRING("T *"),STRING("data"),0} /* 4 */,
     (TemplatedMember){STRING("int"),STRING("size"),1} /* 5 */,
-    (TemplatedMember){STRING("int"),STRING("current"),0} /* 6 */,
-    (TemplatedMember){STRING("Array<T>"),STRING("array"),1} /* 7 */,
-    (TemplatedMember){STRING("T"),STRING("high"),0} /* 8 */,
-    (TemplatedMember){STRING("T"),STRING("start"),0} /* 9 */,
-    (TemplatedMember){STRING("T"),STRING("top"),0} /* 10 */,
-    (TemplatedMember){STRING("T"),STRING("low"),1} /* 11 */,
-    (TemplatedMember){STRING("T"),STRING("end"),1} /* 12 */,
-    (TemplatedMember){STRING("T"),STRING("bottom"),1} /* 13 */,
-    (TemplatedMember){STRING("First"),STRING("key"),0} /* 14 */,
-    (TemplatedMember){STRING("First"),STRING("first"),0} /* 15 */,
-    (TemplatedMember){STRING("Second"),STRING("data"),1} /* 16 */,
-    (TemplatedMember){STRING("Second"),STRING("second"),1} /* 17 */,
-    (TemplatedMember){STRING("ArenaMark"),STRING("mark"),0} /* 18 */,
-    (TemplatedMember){STRING("T *"),STRING("ptr"),0} /* 19 */,
-    (TemplatedMember){STRING("int"),STRING("maximumTimes"),1} /* 20 */,
-    (TemplatedMember){STRING("int"),STRING("timesPushed"),2} /* 21 */,
-    (TemplatedMember){STRING("Pair<Key, Data> *"),STRING("pairs"),0} /* 22 */,
-    (TemplatedMember){STRING("int"),STRING("index"),1} /* 23 */,
-    (TemplatedMember){STRING("Data *"),STRING("data"),0} /* 24 */,
-    (TemplatedMember){STRING("bool"),STRING("alreadyExisted"),1} /* 25 */,
-    (TemplatedMember){STRING("int"),STRING("nodesAllocated"),0} /* 26 */,
-    (TemplatedMember){STRING("int"),STRING("nodesUsed"),1} /* 27 */,
-    (TemplatedMember){STRING("Pair<Key, Data> **"),STRING("buckets"),2} /* 28 */,
-    (TemplatedMember){STRING("Pair<Key, Data> *"),STRING("data"),3} /* 29 */,
-    (TemplatedMember){STRING("Pair<Key, Data> **"),STRING("next"),4} /* 30 */,
-    (TemplatedMember){STRING("Hashmap<Data, int> *"),STRING("map"),0} /* 31 */,
-    (TemplatedMember){STRING("HashmapIterator<Data, int>"),STRING("innerIter"),0} /* 32 */,
-    (TemplatedMember){STRING("TrieMapNode<Key, Data> *[4]"),STRING("childs"),0} /* 33 */,
-    (TemplatedMember){STRING("Pair<Key, Data>"),STRING("pair"),1} /* 34 */,
-    (TemplatedMember){STRING("TrieMapNode<Key, Data> *"),STRING("next"),2} /* 35 */,
-    (TemplatedMember){STRING("TrieMapNode<Key, Data> *"),STRING("ptr"),0} /* 36 */,
-    (TemplatedMember){STRING("TrieMapNode<Key, Data> *[4]"),STRING("childs"),0} /* 37 */,
-    (TemplatedMember){STRING("Arena *"),STRING("arena"),1} /* 38 */,
-    (TemplatedMember){STRING("TrieMapNode<Key, Data> *"),STRING("head"),2} /* 39 */,
-    (TemplatedMember){STRING("TrieMapNode<Key, Data> *"),STRING("tail"),3} /* 40 */,
-    (TemplatedMember){STRING("int"),STRING("inserted"),4} /* 41 */,
-    (TemplatedMember){STRING("TrieMapIterator<Data, int>"),STRING("innerIter"),0} /* 42 */,
-    (TemplatedMember){STRING("TrieMap<Data, int> *"),STRING("map"),0} /* 43 */,
-    (TemplatedMember){STRING("Pool<T> *"),STRING("pool"),0} /* 44 */,
-    (TemplatedMember){STRING("PageInfo"),STRING("pageInfo"),1} /* 45 */,
-    (TemplatedMember){STRING("int"),STRING("fullIndex"),2} /* 46 */,
-    (TemplatedMember){STRING("int"),STRING("bit"),3} /* 47 */,
-    (TemplatedMember){STRING("int"),STRING("index"),4} /* 48 */,
-    (TemplatedMember){STRING("Byte *"),STRING("page"),5} /* 49 */,
-    (TemplatedMember){STRING("T *"),STRING("lastVal"),6} /* 50 */,
-    (TemplatedMember){STRING("Byte *"),STRING("mem"),0} /* 51 */,
-    (TemplatedMember){STRING("PoolInfo"),STRING("info"),1} /* 52 */,
-    (TemplatedMember){STRING("Value"),STRING("value"),0} /* 53 */,
-    (TemplatedMember){STRING("Error"),STRING("error"),0} /* 54 */,
-    (TemplatedMember){STRING("bool"),STRING("isError"),1} /* 55 */,
-    (TemplatedMember){STRING("int"),STRING("index"),0} /* 56 */,
-    (TemplatedMember){STRING("T"),STRING("elem"),0} /* 57 */,
-    (TemplatedMember){STRING("ListedStruct<T> *"),STRING("next"),1} /* 58 */,
-    (TemplatedMember){STRING("Arena *"),STRING("arena"),0} /* 59 */,
-    (TemplatedMember){STRING("ListedStruct<T> *"),STRING("head"),1} /* 60 */,
-    (TemplatedMember){STRING("ListedStruct<T> *"),STRING("tail"),2} /* 61 */,
-    (TemplatedMember){STRING("Array<T>"),STRING("mem"),0} /* 62 */,
-    (TemplatedMember){STRING("int"),STRING("index"),1} /* 63 */,
-    (TemplatedMember){STRING("String"),STRING("name"),0} /* 64 */,
-    (TemplatedMember){STRING("T"),STRING("bitSize"),1} /* 65 */,
-    (TemplatedMember){STRING("bool"),STRING("isStatic"),2} /* 66 */,
-    (TemplatedMember){STRING("T"),STRING("bitSizeIn"),0} /* 67 */,
-    (TemplatedMember){STRING("T"),STRING("bitSizeOut"),1} /* 68 */,
-    (TemplatedMember){STRING("T"),STRING("dataSizeIn"),2} /* 69 */,
-    (TemplatedMember){STRING("T"),STRING("dataSizeOut"),3} /* 70 */,
-    (TemplatedMember){STRING("T"),STRING("bitSize"),0} /* 71 */,
-    (TemplatedMember){STRING("T"),STRING("dataSizeIn"),1} /* 72 */,
-    (TemplatedMember){STRING("T"),STRING("dataSizeOut"),2} /* 73 */,
+    (TemplatedMember){STRING("T"),STRING("high"),0} /* 6 */,
+    (TemplatedMember){STRING("T"),STRING("start"),0} /* 7 */,
+    (TemplatedMember){STRING("T"),STRING("top"),0} /* 8 */,
+    (TemplatedMember){STRING("T"),STRING("low"),1} /* 9 */,
+    (TemplatedMember){STRING("T"),STRING("end"),1} /* 10 */,
+    (TemplatedMember){STRING("T"),STRING("bottom"),1} /* 11 */,
+    (TemplatedMember){STRING("First"),STRING("key"),0} /* 12 */,
+    (TemplatedMember){STRING("First"),STRING("first"),0} /* 13 */,
+    (TemplatedMember){STRING("Second"),STRING("data"),1} /* 14 */,
+    (TemplatedMember){STRING("Second"),STRING("second"),1} /* 15 */,
+    (TemplatedMember){STRING("ArenaMark"),STRING("mark"),0} /* 16 */,
+    (TemplatedMember){STRING("T *"),STRING("ptr"),0} /* 17 */,
+    (TemplatedMember){STRING("int"),STRING("maximumTimes"),1} /* 18 */,
+    (TemplatedMember){STRING("int"),STRING("timesPushed"),2} /* 19 */,
+    (TemplatedMember){STRING("Pair<Key, Data> *"),STRING("pairs"),0} /* 20 */,
+    (TemplatedMember){STRING("int"),STRING("index"),1} /* 21 */,
+    (TemplatedMember){STRING("Data *"),STRING("data"),0} /* 22 */,
+    (TemplatedMember){STRING("bool"),STRING("alreadyExisted"),1} /* 23 */,
+    (TemplatedMember){STRING("int"),STRING("nodesAllocated"),0} /* 24 */,
+    (TemplatedMember){STRING("int"),STRING("nodesUsed"),1} /* 25 */,
+    (TemplatedMember){STRING("Pair<Key, Data> **"),STRING("buckets"),2} /* 26 */,
+    (TemplatedMember){STRING("Pair<Key, Data> *"),STRING("data"),3} /* 27 */,
+    (TemplatedMember){STRING("Pair<Key, Data> **"),STRING("next"),4} /* 28 */,
+    (TemplatedMember){STRING("Hashmap<Data, int> *"),STRING("map"),0} /* 29 */,
+    (TemplatedMember){STRING("HashmapIterator<Data, int>"),STRING("innerIter"),0} /* 30 */,
+    (TemplatedMember){STRING("TrieMapNode<Key, Data> *[4]"),STRING("childs"),0} /* 31 */,
+    (TemplatedMember){STRING("Pair<Key, Data>"),STRING("pair"),1} /* 32 */,
+    (TemplatedMember){STRING("TrieMapNode<Key, Data> *"),STRING("next"),2} /* 33 */,
+    (TemplatedMember){STRING("TrieMapNode<Key, Data> *"),STRING("ptr"),0} /* 34 */,
+    (TemplatedMember){STRING("TrieMapNode<Key, Data> *[4]"),STRING("childs"),0} /* 35 */,
+    (TemplatedMember){STRING("Arena *"),STRING("arena"),1} /* 36 */,
+    (TemplatedMember){STRING("TrieMapNode<Key, Data> *"),STRING("head"),2} /* 37 */,
+    (TemplatedMember){STRING("TrieMapNode<Key, Data> *"),STRING("tail"),3} /* 38 */,
+    (TemplatedMember){STRING("int"),STRING("inserted"),4} /* 39 */,
+    (TemplatedMember){STRING("TrieMapIterator<Data, int>"),STRING("innerIter"),0} /* 40 */,
+    (TemplatedMember){STRING("TrieMap<Data, int> *"),STRING("map"),0} /* 41 */,
+    (TemplatedMember){STRING("Pool<T> *"),STRING("pool"),0} /* 42 */,
+    (TemplatedMember){STRING("PageInfo"),STRING("pageInfo"),1} /* 43 */,
+    (TemplatedMember){STRING("int"),STRING("fullIndex"),2} /* 44 */,
+    (TemplatedMember){STRING("int"),STRING("bit"),3} /* 45 */,
+    (TemplatedMember){STRING("int"),STRING("index"),4} /* 46 */,
+    (TemplatedMember){STRING("Byte *"),STRING("page"),5} /* 47 */,
+    (TemplatedMember){STRING("T *"),STRING("lastVal"),6} /* 48 */,
+    (TemplatedMember){STRING("Byte *"),STRING("mem"),0} /* 49 */,
+    (TemplatedMember){STRING("PoolInfo"),STRING("info"),1} /* 50 */,
+    (TemplatedMember){STRING("Value"),STRING("value"),0} /* 51 */,
+    (TemplatedMember){STRING("Error"),STRING("error"),0} /* 52 */,
+    (TemplatedMember){STRING("bool"),STRING("isError"),1} /* 53 */,
+    (TemplatedMember){STRING("int"),STRING("index"),0} /* 54 */,
+    (TemplatedMember){STRING("T"),STRING("elem"),0} /* 55 */,
+    (TemplatedMember){STRING("ListedStruct<T> *"),STRING("next"),1} /* 56 */,
+    (TemplatedMember){STRING("Arena *"),STRING("arena"),0} /* 57 */,
+    (TemplatedMember){STRING("ListedStruct<T> *"),STRING("head"),1} /* 58 */,
+    (TemplatedMember){STRING("ListedStruct<T> *"),STRING("tail"),2} /* 59 */,
+    (TemplatedMember){STRING("Array<T>"),STRING("mem"),0} /* 60 */,
+    (TemplatedMember){STRING("int"),STRING("index"),1} /* 61 */,
+    (TemplatedMember){STRING("String"),STRING("name"),0} /* 62 */,
+    (TemplatedMember){STRING("T"),STRING("bitSize"),1} /* 63 */,
+    (TemplatedMember){STRING("bool"),STRING("isStatic"),2} /* 64 */,
+    (TemplatedMember){STRING("T"),STRING("bitSizeIn"),0} /* 65 */,
+    (TemplatedMember){STRING("T"),STRING("bitSizeOut"),1} /* 66 */,
+    (TemplatedMember){STRING("T"),STRING("dataSizeIn"),2} /* 67 */,
+    (TemplatedMember){STRING("T"),STRING("dataSizeOut"),3} /* 68 */,
+    (TemplatedMember){STRING("T"),STRING("bitSize"),0} /* 69 */,
+    (TemplatedMember){STRING("T"),STRING("dataSizeIn"),1} /* 70 */,
+    (TemplatedMember){STRING("T"),STRING("dataSizeOut"),2} /* 71 */,
+    (TemplatedMember){STRING("ExternalMemoryTwoPortsTemplate<T>"),STRING("tp"),0} /* 72 */,
+    (TemplatedMember){STRING("ExternalMemoryDualPortTemplate<T>[2]"),STRING("dp"),0} /* 73 */,
     (TemplatedMember){STRING("ExternalMemoryTwoPortsTemplate<T>"),STRING("tp"),0} /* 74 */,
     (TemplatedMember){STRING("ExternalMemoryDualPortTemplate<T>[2]"),STRING("dp"),0} /* 75 */,
-    (TemplatedMember){STRING("ExternalMemoryTwoPortsTemplate<T>"),STRING("tp"),0} /* 76 */,
-    (TemplatedMember){STRING("ExternalMemoryDualPortTemplate<T>[2]"),STRING("dp"),0} /* 77 */,
-    (TemplatedMember){STRING("ExternalMemoryType"),STRING("type"),1} /* 78 */,
-    (TemplatedMember){STRING("int"),STRING("interface"),2} /* 79 */,
-    (TemplatedMember){STRING("T*"),STRING("mem"),0} /* 80 */,
-    (TemplatedMember){STRING("int"),STRING("size"),1} /* 81 */,
-    (TemplatedMember){STRING("int"),STRING("allocated"),2} /* 82 */
+    (TemplatedMember){STRING("ExternalMemoryType"),STRING("type"),1} /* 76 */,
+    (TemplatedMember){STRING("int"),STRING("interface"),2} /* 77 */,
+    (TemplatedMember){STRING("T*"),STRING("mem"),0} /* 78 */,
+    (TemplatedMember){STRING("int"),STRING("size"),1} /* 79 */,
+    (TemplatedMember){STRING("int"),STRING("allocated"),2} /* 80 */
   };
 
   RegisterTemplateMembers(STRING("_Defer"),(Array<TemplatedMember>){&templateMembers[0],1});
   RegisterTemplateMembers(STRING("Opt"),(Array<TemplatedMember>){&templateMembers[1],2});
   RegisterTemplateMembers(STRING("ArrayIterator"),(Array<TemplatedMember>){&templateMembers[3],1});
   RegisterTemplateMembers(STRING("Array"),(Array<TemplatedMember>){&templateMembers[4],2});
-  RegisterTemplateMembers(STRING("MyArrayIterator"),(Array<TemplatedMember>){&templateMembers[6],2});
-  RegisterTemplateMembers(STRING("Range"),(Array<TemplatedMember>){&templateMembers[8],6});
-  RegisterTemplateMembers(STRING("Pair"),(Array<TemplatedMember>){&templateMembers[14],4});
-  RegisterTemplateMembers(STRING("DynamicArray"),(Array<TemplatedMember>){&templateMembers[18],1});
-  RegisterTemplateMembers(STRING("PushPtr"),(Array<TemplatedMember>){&templateMembers[19],3});
-  RegisterTemplateMembers(STRING("HashmapIterator"),(Array<TemplatedMember>){&templateMembers[22],2});
-  RegisterTemplateMembers(STRING("GetOrAllocateResult"),(Array<TemplatedMember>){&templateMembers[24],2});
-  RegisterTemplateMembers(STRING("Hashmap"),(Array<TemplatedMember>){&templateMembers[26],5});
-  RegisterTemplateMembers(STRING("Set"),(Array<TemplatedMember>){&templateMembers[31],1});
-  RegisterTemplateMembers(STRING("SetIterator"),(Array<TemplatedMember>){&templateMembers[32],1});
-  RegisterTemplateMembers(STRING("TrieMapNode"),(Array<TemplatedMember>){&templateMembers[33],3});
-  RegisterTemplateMembers(STRING("TrieMapIterator"),(Array<TemplatedMember>){&templateMembers[36],1});
-  RegisterTemplateMembers(STRING("TrieMap"),(Array<TemplatedMember>){&templateMembers[37],5});
-  RegisterTemplateMembers(STRING("TrieSetIterator"),(Array<TemplatedMember>){&templateMembers[42],1});
-  RegisterTemplateMembers(STRING("TrieSet"),(Array<TemplatedMember>){&templateMembers[43],1});
-  RegisterTemplateMembers(STRING("PoolIterator"),(Array<TemplatedMember>){&templateMembers[44],7});
-  RegisterTemplateMembers(STRING("Pool"),(Array<TemplatedMember>){&templateMembers[51],2});
-  RegisterTemplateMembers(STRING("Result"),(Array<TemplatedMember>){&templateMembers[53],3});
-  RegisterTemplateMembers(STRING("IndexedStruct"),(Array<TemplatedMember>){&templateMembers[56],1});
-  RegisterTemplateMembers(STRING("ListedStruct"),(Array<TemplatedMember>){&templateMembers[57],2});
-  RegisterTemplateMembers(STRING("ArenaList"),(Array<TemplatedMember>){&templateMembers[59],3});
-  RegisterTemplateMembers(STRING("Stack"),(Array<TemplatedMember>){&templateMembers[62],2});
-  RegisterTemplateMembers(STRING("WireTemplate"),(Array<TemplatedMember>){&templateMembers[64],3});
-  RegisterTemplateMembers(STRING("ExternalMemoryTwoPortsTemplate"),(Array<TemplatedMember>){&templateMembers[67],4});
-  RegisterTemplateMembers(STRING("ExternalMemoryDualPortTemplate"),(Array<TemplatedMember>){&templateMembers[71],3});
-  RegisterTemplateMembers(STRING("ExternalMemoryTemplate"),(Array<TemplatedMember>){&templateMembers[74],2});
-  RegisterTemplateMembers(STRING("ExternalMemoryInterfaceTemplate"),(Array<TemplatedMember>){&templateMembers[76],4});
-  RegisterTemplateMembers(STRING("std::vector"),(Array<TemplatedMember>){&templateMembers[80],3});
+  RegisterTemplateMembers(STRING("Range"),(Array<TemplatedMember>){&templateMembers[6],6});
+  RegisterTemplateMembers(STRING("Pair"),(Array<TemplatedMember>){&templateMembers[12],4});
+  RegisterTemplateMembers(STRING("DynamicArray"),(Array<TemplatedMember>){&templateMembers[16],1});
+  RegisterTemplateMembers(STRING("PushPtr"),(Array<TemplatedMember>){&templateMembers[17],3});
+  RegisterTemplateMembers(STRING("HashmapIterator"),(Array<TemplatedMember>){&templateMembers[20],2});
+  RegisterTemplateMembers(STRING("GetOrAllocateResult"),(Array<TemplatedMember>){&templateMembers[22],2});
+  RegisterTemplateMembers(STRING("Hashmap"),(Array<TemplatedMember>){&templateMembers[24],5});
+  RegisterTemplateMembers(STRING("Set"),(Array<TemplatedMember>){&templateMembers[29],1});
+  RegisterTemplateMembers(STRING("SetIterator"),(Array<TemplatedMember>){&templateMembers[30],1});
+  RegisterTemplateMembers(STRING("TrieMapNode"),(Array<TemplatedMember>){&templateMembers[31],3});
+  RegisterTemplateMembers(STRING("TrieMapIterator"),(Array<TemplatedMember>){&templateMembers[34],1});
+  RegisterTemplateMembers(STRING("TrieMap"),(Array<TemplatedMember>){&templateMembers[35],5});
+  RegisterTemplateMembers(STRING("TrieSetIterator"),(Array<TemplatedMember>){&templateMembers[40],1});
+  RegisterTemplateMembers(STRING("TrieSet"),(Array<TemplatedMember>){&templateMembers[41],1});
+  RegisterTemplateMembers(STRING("PoolIterator"),(Array<TemplatedMember>){&templateMembers[42],7});
+  RegisterTemplateMembers(STRING("Pool"),(Array<TemplatedMember>){&templateMembers[49],2});
+  RegisterTemplateMembers(STRING("Result"),(Array<TemplatedMember>){&templateMembers[51],3});
+  RegisterTemplateMembers(STRING("IndexedStruct"),(Array<TemplatedMember>){&templateMembers[54],1});
+  RegisterTemplateMembers(STRING("ListedStruct"),(Array<TemplatedMember>){&templateMembers[55],2});
+  RegisterTemplateMembers(STRING("ArenaList"),(Array<TemplatedMember>){&templateMembers[57],3});
+  RegisterTemplateMembers(STRING("Stack"),(Array<TemplatedMember>){&templateMembers[60],2});
+  RegisterTemplateMembers(STRING("WireTemplate"),(Array<TemplatedMember>){&templateMembers[62],3});
+  RegisterTemplateMembers(STRING("ExternalMemoryTwoPortsTemplate"),(Array<TemplatedMember>){&templateMembers[65],4});
+  RegisterTemplateMembers(STRING("ExternalMemoryDualPortTemplate"),(Array<TemplatedMember>){&templateMembers[69],3});
+  RegisterTemplateMembers(STRING("ExternalMemoryTemplate"),(Array<TemplatedMember>){&templateMembers[72],2});
+  RegisterTemplateMembers(STRING("ExternalMemoryInterfaceTemplate"),(Array<TemplatedMember>){&templateMembers[74],4});
+  RegisterTemplateMembers(STRING("std::vector"),(Array<TemplatedMember>){&templateMembers[78],3});
 
   static Member members[] = {(Member){GetTypeOrFail(STRING("u64")),STRING("microSeconds"),offsetof(Time,microSeconds)} /* 0 */,
     (Member){GetTypeOrFail(STRING("u64")),STRING("seconds"),offsetof(Time,seconds)} /* 1 */,
@@ -1091,21 +1094,27 @@ RegisterEnum(STRING("ConnectionType"),C_ARRAY_TO_ARRAY(ConnectionTypeData));
     (Member){GetTypeOrFail(STRING("Array<Token>")),STRING("transforms"),offsetof(ConnectionDef,transforms)} /* 552 */,
     (Member){GetTypeOrFail(STRING("VarGroup")),STRING("input"),offsetof(ConnectionDef,input)} /* 553 */,
     (Member){GetTypeOrFail(STRING("SpecExpression *")),STRING("expression"),offsetof(ConnectionDef,expression)} /* 554 */,
-    (Member){GetTypeOrFail(STRING("Token")),STRING("name"),offsetof(ModuleDef,name)} /* 555 */,
-    (Member){GetTypeOrFail(STRING("Token")),STRING("numberOutputs"),offsetof(ModuleDef,numberOutputs)} /* 556 */,
-    (Member){GetTypeOrFail(STRING("Array<VarDeclaration>")),STRING("inputs"),offsetof(ModuleDef,inputs)} /* 557 */,
-    (Member){GetTypeOrFail(STRING("Array<InstanceDeclaration>")),STRING("declarations"),offsetof(ModuleDef,declarations)} /* 558 */,
-    (Member){GetTypeOrFail(STRING("Array<ConnectionDef>")),STRING("connections"),offsetof(ModuleDef,connections)} /* 559 */,
-    (Member){GetTypeOrFail(STRING("Token")),STRING("name"),offsetof(TransformDef,name)} /* 560 */,
-    (Member){GetTypeOrFail(STRING("Array<VarDeclaration>")),STRING("inputs"),offsetof(TransformDef,inputs)} /* 561 */,
-    (Member){GetTypeOrFail(STRING("Array<ConnectionDef>")),STRING("connections"),offsetof(TransformDef,connections)} /* 562 */,
-    (Member){GetTypeOrFail(STRING("int")),STRING("inputs"),offsetof(Transformation,inputs)} /* 563 */,
-    (Member){GetTypeOrFail(STRING("int")),STRING("outputs"),offsetof(Transformation,outputs)} /* 564 */,
-    (Member){GetTypeOrFail(STRING("Array<int>")),STRING("map"),offsetof(Transformation,map)} /* 565 */,
-    (Member){GetTypeOrFail(STRING("Token")),STRING("instanceName"),offsetof(HierarchicalName,instanceName)} /* 566 */,
-    (Member){GetTypeOrFail(STRING("Var")),STRING("subInstance"),offsetof(HierarchicalName,subInstance)} /* 567 */,
-    (Member){GetTypeOrFail(STRING("Token")),STRING("typeName"),offsetof(TypeAndInstance,typeName)} /* 568 */,
-    (Member){GetTypeOrFail(STRING("Token")),STRING("instanceName"),offsetof(TypeAndInstance,instanceName)} /* 569 */
+    (Member){GetTypeOrFail(STRING("Token")),STRING("typeName"),offsetof(TypeAndInstance,typeName)} /* 555 */,
+    (Member){GetTypeOrFail(STRING("Token")),STRING("instanceName"),offsetof(TypeAndInstance,instanceName)} /* 556 */,
+    (Member){GetTypeOrFail(STRING("Token")),STRING("name"),offsetof(ModuleDef,name)} /* 557 */,
+    (Member){GetTypeOrFail(STRING("Token")),STRING("numberOutputs"),offsetof(ModuleDef,numberOutputs)} /* 558 */,
+    (Member){GetTypeOrFail(STRING("Array<VarDeclaration>")),STRING("inputs"),offsetof(ModuleDef,inputs)} /* 559 */,
+    (Member){GetTypeOrFail(STRING("Array<InstanceDeclaration>")),STRING("declarations"),offsetof(ModuleDef,declarations)} /* 560 */,
+    (Member){GetTypeOrFail(STRING("Array<ConnectionDef>")),STRING("connections"),offsetof(ModuleDef,connections)} /* 561 */,
+    (Member){GetTypeOrFail(STRING("Token")),STRING("name"),offsetof(TransformDef,name)} /* 562 */,
+    (Member){GetTypeOrFail(STRING("Array<VarDeclaration>")),STRING("inputs"),offsetof(TransformDef,inputs)} /* 563 */,
+    (Member){GetTypeOrFail(STRING("Array<ConnectionDef>")),STRING("connections"),offsetof(TransformDef,connections)} /* 564 */,
+    (Member){GetTypeOrFail(STRING("Token")),STRING("name"),offsetof(MergeDef,name)} /* 565 */,
+    (Member){GetTypeOrFail(STRING("Array<TypeAndInstance>")),STRING("declarations"),offsetof(MergeDef,declarations)} /* 566 */,
+    (Member){GetTypeOrFail(STRING("Array<SpecificMergeNode>")),STRING("specifics"),offsetof(MergeDef,specifics)} /* 567 */,
+    (Member){GetTypeOrFail(STRING("DefinitionType")),STRING("type"),offsetof(TypeDefinition,type)} /* 568 */,
+    (Member){GetTypeOrFail(STRING("ModuleDef")),STRING("module"),offsetof(TypeDefinition,module)} /* 569 */,
+    (Member){GetTypeOrFail(STRING("MergeDef")),STRING("merge"),offsetof(TypeDefinition,merge)} /* 570 */,
+    (Member){GetTypeOrFail(STRING("int")),STRING("inputs"),offsetof(Transformation,inputs)} /* 571 */,
+    (Member){GetTypeOrFail(STRING("int")),STRING("outputs"),offsetof(Transformation,outputs)} /* 572 */,
+    (Member){GetTypeOrFail(STRING("Array<int>")),STRING("map"),offsetof(Transformation,map)} /* 573 */,
+    (Member){GetTypeOrFail(STRING("Token")),STRING("instanceName"),offsetof(HierarchicalName,instanceName)} /* 574 */,
+    (Member){GetTypeOrFail(STRING("Var")),STRING("subInstance"),offsetof(HierarchicalName,subInstance)} /* 575 */
   };
 
   RegisterStructMembers(STRING("Time"),(Array<Member>){&members[0],2});
@@ -1226,11 +1235,13 @@ RegisterEnum(STRING("ConnectionType"),C_ARRAY_TO_ARRAY(ConnectionTypeData));
   RegisterStructMembers(STRING("PortExpression"),(Array<Member>){&members[543],2});
   RegisterStructMembers(STRING("InstanceDeclaration"),(Array<Member>){&members[545],4});
   RegisterStructMembers(STRING("ConnectionDef"),(Array<Member>){&members[549],6});
-  RegisterStructMembers(STRING("ModuleDef"),(Array<Member>){&members[555],5});
-  RegisterStructMembers(STRING("TransformDef"),(Array<Member>){&members[560],3});
-  RegisterStructMembers(STRING("Transformation"),(Array<Member>){&members[563],3});
-  RegisterStructMembers(STRING("HierarchicalName"),(Array<Member>){&members[566],2});
-  RegisterStructMembers(STRING("TypeAndInstance"),(Array<Member>){&members[568],2});
+  RegisterStructMembers(STRING("TypeAndInstance"),(Array<Member>){&members[555],2});
+  RegisterStructMembers(STRING("ModuleDef"),(Array<Member>){&members[557],5});
+  RegisterStructMembers(STRING("TransformDef"),(Array<Member>){&members[562],3});
+  RegisterStructMembers(STRING("MergeDef"),(Array<Member>){&members[565],3});
+  RegisterStructMembers(STRING("TypeDefinition"),(Array<Member>){&members[568],3});
+  RegisterStructMembers(STRING("Transformation"),(Array<Member>){&members[571],3});
+  RegisterStructMembers(STRING("HierarchicalName"),(Array<Member>){&members[574],2});
 
 
   RegisterTypedef(STRING("Array<const char>"),STRING("String"));

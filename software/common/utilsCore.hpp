@@ -274,56 +274,17 @@ public:
    inline T& operator*(){return *ptr;};
 };
 
-template<typename T>
-struct MyArrayIterator;
-
 template<typename T> struct Array;
-
-template<typename T>
-void MakeSureArrayIteratorExists(Array<T> t);
 
 template<typename T>
 struct Array{
   T* data;
   int size;
   
-  inline T& operator[](int index) const {MakeSureArrayIteratorExists(*this); Assert(index >= 0);Assert(index < size); return data[index];}
+  inline T& operator[](int index) const {Assert(index >= 0);Assert(index < size); return data[index];}
   ArrayIterator<T> begin(){return ArrayIterator<T>{data};};
   ArrayIterator<T> end(){return ArrayIterator<T>{data + size};};
 };
-
-template<typename T>
-struct MyArrayIterator{
-  int current = 0;
-  Array<T> array;
-
-  bool HasNext(){return (current < array.size);};
-  T Next(){return array[current++];};
-};
-
-template<typename T>
-MyArrayIterator<T> Iterate(Array<T> arr){
-  MyArrayIterator<T> iter = {};
-  iter = {};
-  iter.array = arr;
-  return iter;
-}
-
-template<typename T>
-void MakeSureArrayIteratorExists(Array<T> t){
-  MyArrayIterator<T> iter = Iterate(t);
-
-  if(!iter.HasNext()){
-    // This if will never be called,
-    // So we can put whatever code we want with no problem.
-    // As long as the compiler 
-    NOT_POSSIBLE();
-    T t = iter.Next();
-    printf("test");
-  }
-
-  return;
-}
 
 typedef Array<const char> String;
 
