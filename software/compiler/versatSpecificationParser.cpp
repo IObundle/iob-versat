@@ -1006,6 +1006,113 @@ Opt<HierarchicalName> ParseHierarchicalName(Tokenizer* tok){
   return res;
 }
 
+Opt<MergeDef> ParseMerge(Tokenizer* tok,Arena* out,Arena* temp){
+  Arena* perm = globalPermanent;
+  BLOCK_REGION(temp);
+  
+  tok->AssertNextToken("merge");
+
+  Token mergeName = tok->NextToken();
+  if(!CheckValidName(mergeName)){
+    ReportError(tok,mergeName,"Not a valid type name");
+    return {};
+  }
+  
+  EXPECT(tok,"=");
+
+  ArenaList<TypeAndInstance>* declarationList = PushArenaList<TypeAndInstance>(temp);
+  while(!tok->Done()){
+    Opt<TypeAndInstance> optType = ParseTypeAndInstance(tok);
+    PROPAGATE(optType); // TODO: Maybe Synchronize? At this point it is a bit of a problem trying to keep the parser working
+
+    *PushListElement(declarationList) = optType.value();
+
+    Token peek = tok->PeekToken();
+    if(CompareString(peek,"|")){
+      tok->AdvancePeek(peek);
+      continue;
+    } else if(CompareString(peek,"{")){
+      break;
+    } else if(CompareString(peek,";")){
+      tok->AdvancePeek(peek);
+      break;
+    }
+  }
+  Array<TypeAndInstance> declarations = PushArrayFromList(out,declarationList);
+
+  Array<SpecNode> specNodes = {};
+  if(tok->IfNextToken("{")){
+    ArenaList<SpecNode>* specList = PushArenaList<SpecNode>(temp);
+    while(!tok->Done()){
+      Token peek = tok->PeekToken();
+      if(CompareString(peek,"}")){
+        break;
+      }
+
+      Opt<HierarchicalName> leftSide = ParseHierarchicalName(tok);
+      PROPAGATE(leftSide);
+
+      EXPECT(tok,"-");
+
+      Opt<HierarchicalName> rightSide = ParseHierarchicalName(tok);
+      PROPAGATE(rightSide);
+
+      EXPECT(tok,";");
+
+      *PushListElement(specList) = {leftSide.value(),rightSide.value()};
+    }
+    specNodes = PushArrayFromList(out,specList);
+
+    EXPECT(tok,"}");
+  }
+  
+  DynamicArray<SpecificMergeNode> specificsArr = StartArray<SpecificMergeNode>(temp);
+  for(SpecNode node : specNodes){
+    int firstIndex = -1;
+    int secondIndex = -1;
+    for(int i = 0; i < declarations.size; i++){
+      TypeAndInstance& decl = declarations[i];
+      if(CompareString(node.first.instanceName,decl.instanceName)){
+        firstIndex = i;
+      } 
+      if(CompareString(node.second.instanceName,decl.instanceName)){
+        secondIndex = i;
+      } 
+    }
+
+    if(firstIndex == -1){
+      Assert(false);
+      // ReportError
+    }
+    if(secondIndex == -1){
+      Assert(false);
+      // ReportError
+    }
+
+    *specificsArr.PushElem() = {firstIndex,node.first.subInstance.name,secondIndex,node.second.subInstance.name};
+  }
+  Array<SpecificMergeNode> specifics = EndArray(specificsArr);
+
+  MergeDef result = {};
+  result.name = mergeName;
+  result.declarations = declarations;
+  result.specifics = specifics;
+  
+  return result;
+}
+
+void InstantiateMerge(MergeDef def,Arena* temp,Arena* temp2){
+  DynamicArray<FUDeclaration*> declArr = StartArray<FUDeclaration*>(temp);
+  for(TypeAndInstance tp : def.declarations){
+    FUDeclaration* decl = GetTypeByNameOrFail(tp.typeName); // TODO: Rewrite stuff so that at this point we know that the type must exist
+    *declArr.PushElem() = decl;
+  }
+  Array<FUDeclaration*> decl = EndArray(declArr);
+  
+  Merge(decl,def.name,def.specifics,temp,temp2);
+}
+
+  /*
 bool ParseMerge(Tokenizer* tok,Arena* temp,Arena* temp2){
   Arena* perm = globalPermanent;
   BLOCK_REGION(temp);
@@ -1108,6 +1215,7 @@ bool ParseMerge(Tokenizer* tok,Arena* temp,Arena* temp2){
   Merge(decl,mergeName,specifics,temp,temp2);
   return true;
 }  
+*/
 
 int GetRangeCount(Range<int> range){
   Assert(range.end >= range.start);
@@ -1646,7 +1754,17 @@ void ParseVersatSpecification(String content,Arena* temp,Arena* temp2){
       ParseIterative(tok,temp,temp2);
     } else if(CompareString(peek,"merge")){
       // TODO: Change to separate parsing and instantiating
-      ParseMerge(tok,temp,temp2);
+      Opt<MergeDef> mergeDef;
+      region(temp2){
+        mergeDef = ParseMerge(tok,temp,temp2);
+      }
+      
+      if(mergeDef.has_value()){
+        DEBUG_BREAK();
+        InstantiateMerge(mergeDef.value(),temp,temp2);
+      } else {
+        anyError = true;
+      }
     } else if(CompareString(peek,"transform")){
       Opt<TransformDef> optTransform = {};
       region(temp2){

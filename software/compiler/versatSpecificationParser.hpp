@@ -88,6 +88,11 @@ struct ConnectionDef{
   };
 };
 
+struct TypeAndInstance{
+  Token typeName;
+  Token instanceName;
+};
+
 struct ModuleDef{
   Token name;
   Token numberOutputs; // TODO: Not being used. Not sure if we gonna actually add this or not.
@@ -102,6 +107,26 @@ struct TransformDef{
   Array<ConnectionDef> connections;
 };
 
+struct MergeDef{
+  Token name;
+  Array<TypeAndInstance> declarations;
+  Array<SpecificMergeNode> specifics;
+};
+
+enum DefinitionType{
+  DefinitionType_MODULE,
+  DefinitionType_MERGE,
+  DefinitionType_ITERATIVE
+};
+
+struct TypeDefinition{
+  DefinitionType type;
+  union {
+    ModuleDef module;
+    MergeDef merge;
+  };
+};
+
 struct Transformation{
   int inputs;
   int outputs;
@@ -111,11 +136,6 @@ struct Transformation{
 struct HierarchicalName{
   Token instanceName;
   Var subInstance;
-};
-
-struct TypeAndInstance{
-  Token typeName;
-  Token instanceName;
 };
 
 typedef Pair<HierarchicalName,HierarchicalName> SpecNode;
