@@ -1,10 +1,14 @@
 `timescale 1ns / 1ps
 
 `include "AXIInfo.vh"
-// A transfer is equal to a N amount of AXI bursts intended to transfer a variable amount of bytes.
-// 
 
-module transfer_controller #(
+// Module that implements AXI transfer logic. Handles multiple transfers, initial and final strobes and 4k boundary. 
+// Does not contain any logic to drive a transfer. It just computes values that are necessary according to the AXI specification
+// A transfer is equal to a N amount of AXI bursts intended to transfer a variable amount of bytes.
+// TODO: The interface logic is a bit clubersome to use by outside modules. Would be nice to give another look.
+// TODO: Also take a look at the BurstAlign and BurstSplit interfaces. These three modules are usually used together but the interface is a bit clubersome when doing so.
+//       It should be easy to instantiate a TransferController and the necessary Align or Split interfaces without much hassle
+module AXITransferController #(
    parameter AXI_ADDR_W = 32,
    parameter AXI_DATA_W = 32,
    parameter AXI_LEN_W  = 8,

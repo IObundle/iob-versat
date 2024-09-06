@@ -60,7 +60,7 @@ module VWrite #(
    input [  ADDR_W-1:0] incrB,
    input [ DELAY_W-1:0] delay0,    // delayB
    input                reverseB,
-   input                extB,
+
    input [  ADDR_W-1:0] iter2B,
    input [PERIOD_W-1:0] per2B,
    input [  ADDR_W-1:0] shift2B,
@@ -73,7 +73,6 @@ module VWrite #(
    assign databus_wstrb_0 = ~0;
    assign databus_len_0   = length;
 
-   wire gen_done;
    reg  doneWrite; // Databus write part
    reg  doneStore;
    wire doneStore_int;
@@ -92,34 +91,14 @@ module VWrite #(
       end
    end
 
-   function [ADDR_W-1:0] reverseBits;
-      input [ADDR_W-1:0] word;
-      integer i;
+   // Ping pong and related logic for the initial address
+   reg pingPongState;
 
-      begin
-         for (i = 0; i < ADDR_W; i = i + 1) reverseBits[i] = word[ADDR_W-1-i];
-      end
-   endfunction
-
-   reg              pingPongState;
-
-   reg [ADDR_W-1:0] startA;
-   always @* begin
-      startA           = 0;
-      startA[ADDR_W-1] = pingPong ? !pingPongState : 0;
-   end
-
-   wire [ 1:0] direction = 2'b10;
-   wire [DELAY_W-1:0] delayA = 0;
+   wire [ADDR_W-1:0] startA = {pingPong && !pingPongState , {(ADDR_W-1){1'b0}}};
 
    // port addresses and enables
-   wire [ADDR_W-1:0] addrB, addrB_int, addrB_int2;
-
-   wire [ADDR_W-1:0] startB_inst = pingPong ? {pingPongState, startB[ADDR_W-2:0]} : startB;
-
-   // data inputs
-   wire rnw;
-   wire [DATA_W-1:0] data_out;
+   wire [ADDR_W-1:0] addrB;
+   wire [ADDR_W-1:0] startB_inst = {pingPong && pingPongState, startB[ADDR_W-2:0]};
 
    // Ping pong 
    always @(posedge clk, posedge rst) begin
@@ -130,16 +109,10 @@ module VWrite #(
    // mem enables output by addr gen
    wire enB;
 
-   // write enables
-   wire wrB = (enB & ~extB);  //addrgen on & input on & input isn't address
-
    wire [DATA_W-1:0] data_to_wrB = in0;
 
    wire gen_valid, gen_ready;
    wire [ADDR_W-1:0] gen_addr;
-
-   localparam DIFF = AXI_DATA_W / DATA_W;
-   localparam DIFF_BIT_W = $clog2(DIFF);
 
    SimpleAddressGen #(
       .ADDR_W(ADDR_W),
@@ -152,7 +125,7 @@ module VWrite #(
 
       //configurations 
       .period_i(perA),
-      .delay_i (delayA),
+      .delay_i (0),
       .start_i (startA),
       .incr_i  (incrA),
 
@@ -166,7 +139,7 @@ module VWrite #(
       .valid_o(gen_valid),
       .ready_i(gen_ready),
       .addr_o (gen_addr),
-      .done_o (gen_done)
+      .done_o ()
    );
 
    SimpleAddressGen #(
@@ -194,34 +167,9 @@ module VWrite #(
       //outputs 
       .valid_o(enB),
       .ready_i(1'b1),
-      .addr_o (addrB_int),
+      .addr_o (addrB),
       .done_o (doneStore_int)
    );
-
-   /*
-    xaddrgen2 #(.MEM_ADDR_W(ADDR_W)) addrgen2B (
-                       .clk(clk),
-                       .rst(rst),
-                       .run(run),
-                       .iterations(iterB),
-                       .period(perB),
-                       .duty(dutyB),
-                       .start(startB_inst),
-                       .shift(shiftB),
-                       .incr(incrB),
-                       .delay(delay0[9:0]),
-                       .iterations2(iter2B),
-                       .period2(per2B),
-                       .shift2(shift2B),
-                       .incr2(incr2B),
-                       .addr(addrB_int),
-                       .mem_en(enB),
-                       .done(doneStore_int)
-                       );
-   */
-
-   assign addrB_int2 = addrB_int;  //(reverseB ? reverseBits(addrB_int) : addrB_int) << OFFSET_W;
-   assign addrB      = addrB_int2;
 
    wire                  read_en;
    wire [    ADDR_W-1:0] read_addr;
@@ -254,32 +202,9 @@ module VWrite #(
       .rst_i(rst)
    );
 
-   /*
-   wire [ADDR_W-1:0] true_read_addr;
-   generate
-   if(AXI_DATA_W == 32) begin
-   assign true_read_addr = read_addr;
-   end   
-   else if(AXI_DATA_W == 64) begin
-   assign true_read_addr = (read_addr >> 1);      
-   end
-   else if(AXI_DATA_W == 128) begin
-   assign true_read_addr = (read_addr >> 2);      
-   end
-   else if(AXI_DATA_W == 256) begin
-   assign true_read_addr = (read_addr >> 3);      
-   end
-   else if(AXI_DATA_W == 512) begin
-   assign true_read_addr = (read_addr >> 4);      
-   end else begin
-      initial begin $display("NOT IMPLEMENTED\n"); $finish(); end
-   end
-   endgenerate
-   */
-
    assign databus_valid_0   = (m_valid & !doneWrite);
 
-   assign ext_2p_write_0    = wrB;
+   assign ext_2p_write_0    = enB;
    assign ext_2p_addr_out_0 = addrB;
    assign ext_2p_data_out_0 = data_to_wrB;
 

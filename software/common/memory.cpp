@@ -133,10 +133,6 @@ void PopMark(ArenaMark mark){
 }
 
 Byte* PushBytes(Arena* arena, size_t size){
-#ifdef VERSAT_DEBUG
-  Assert(!arena->locked);
-#endif
-
   Byte* ptr = &arena->mem[arena->used];
 
   if(arena->used + size > arena->totalAllocated){

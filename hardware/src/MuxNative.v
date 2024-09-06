@@ -1,6 +1,12 @@
 `timescale 1ns / 1ps
 
-module xmerge #(
+/*
+
+Muxes native N masters into a write and read master.
+
+*/
+
+module MuxNative #(
    parameter ADDR_W   = 0,
    parameter DATA_W   = 32,
    parameter N_SLAVES = 2,

@@ -3,7 +3,7 @@
 // TODO: Replace code with generic instantiation for 128,256,512 and 1024
 
 // Given aligned data, splits the data in order to meet byte alignment in a burst transfer starting with offset byte
-module burst_split #(
+module BurstSplit #(
    parameter DATA_W = 32,
 
    parameter OFFSET_W = $clog2(DATA_W / 8)

@@ -1662,7 +1662,7 @@ Array<TypeDefinition> ParseVersatSpecification2(String content,Arena* out,Arena*
   }
 
   if(anyError){
-    printf("Error occurred\n");
+    exit(-1);
   }
 
   return PushArrayFromList(out,typeList);

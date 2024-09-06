@@ -12,26 +12,26 @@ module MyAddressGen #(
    input run_i,
 
    //configurations 
-   input        [  ADDR_W - 1:0] iterations_i,
    input        [PERIOD_W - 1:0] period_i,
    input        [PERIOD_W - 1:0] duty_i,
-   input        [ DELAY_W - 1:0] delay_i,
+   input        [  ADDR_W - 1:0] iterations_i,
    input        [  ADDR_W - 1:0] start_i,
    input signed [  ADDR_W - 1:0] shift_i,
    input signed [  ADDR_W - 1:0] incr_i,
+
+   input        [ DELAY_W - 1:0] delay_i,
 
    //outputs 
    output reg                valid_o,
    input                     ready_i,
    output reg [ADDR_W - 1:0] addr_o,
 
-   //output reg                  mem_en_o,
    output reg done_o
 );
 
    localparam OFFSET_W = $clog2(DATA_W / 8);
 
-   reg                                           [   DELAY_W-1:0] delay_iCounter;
+   reg                                           [   DELAY_W-1:0] delay_counter;
 
    reg                                           [  ADDR_W - 1:0] iter;
    reg                                           [PERIOD_W - 1:0] per;
@@ -41,25 +41,25 @@ module MyAddressGen #(
 
    always @(posedge clk_i, posedge rst_i) begin
       if (rst_i) begin
-         delay_iCounter <= 0;
-         addr_o         <= 0;
-         iter           <= 0;
-         per            <= 0;
-         valid_o        <= 0;
-         done_o         <= 1'b1;
+         delay_counter <= 0;
+         addr_o        <= 0;
+         iter          <= 0;
+         per           <= 0;
+         valid_o       <= 0;
+         done_o        <= 1'b1;
       end else if (run_i) begin
-         delay_iCounter <= delay_i;
-         addr_o         <= start_i;
-         iter           <= 0;
-         per            <= 0;
-         valid_o        <= 0;
-         done_o         <= 1'b0;
+         delay_counter <= delay_i;
+         addr_o        <= start_i;
+         iter          <= 0;
+         per           <= 0;
+         valid_o       <= 0;
+         done_o        <= 1'b0;
          if (delay_i == 0) begin
             valid_o <= 1'b1;
          end
-      end else if (|delay_iCounter) begin
-         delay_iCounter <= delay_iCounter - 1;
-         valid_o        <= 1'b1;
+      end else if (|delay_counter) begin
+         delay_counter <= delay_counter - 1;
+         valid_o       <= (delay_counter == 1);
       end else if (valid_o && ready_i) begin
          if (perCond && iterCond) begin
             per     <= 0;

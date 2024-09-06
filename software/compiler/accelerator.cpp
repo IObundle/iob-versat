@@ -601,8 +601,6 @@ DAGOrderNodes CalculateDAGOrder(FUInstance* instances,Arena* out){
   PushPtr<FUInstance*> pushPtr = {};
   pushPtr.Init(res.instances);
 
-  //BLOCK_REGION(out);
-
   Hashmap<FUInstance*,int>* tags = PushHashmap<FUInstance*,int>(out,size);
 
   FOREACH_LIST(FUInstance*,ptr,instances){

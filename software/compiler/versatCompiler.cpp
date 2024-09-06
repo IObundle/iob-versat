@@ -6,6 +6,7 @@
 #include "declaration.hpp"
 #include "globals.hpp"
 #include "memory.hpp"
+#include "structParsing.hpp"
 #include "utilsCore.hpp"
 #include "versat.hpp"
 #include "utils.hpp"
@@ -16,6 +17,7 @@
 #include "codeGeneration.hpp"
 #include "accelerator.hpp"
 #include "dotGraphPrinting.hpp"
+#include "versatSpecificationParser.hpp"
 
 // TODO: For some reason, in the makefile we cannot stringify the arguments that we want to
 //       Do not actually want to do these preprocessor things. Fix the makefile so that it passes as a string
@@ -329,11 +331,67 @@ GenericArrayIterator IterateArray(void* array,int sizeOfType,int alignmentOfType
   return res;
 }
 
+
+// Only for graphs that we know for sure are DAG
+Array<int> CalculateDAG(int maxNode,Array<Pair<int,int>> edges,int start,Arena* out,Arena* temp){
+  BLOCK_REGION(temp);
+
+  int size = maxNode;
+  Stack<int>* toSee = PushQueue<int>(temp,size * 2);
+  Array<int> marked = PushArray<int>(temp,size);
+  Memset(marked,0);
+  
+  toSee->Push(start);
+
+  int NOT_SEEN = 0;
+  int WAIT_CHILDREN = 1;
+  int PERMANENT = 2;
+    
+  DynamicArray<int> arr = StartArray<int>(out);
+  while(toSee->Size()){
+    int head = toSee->Pop();
+
+    if(marked[head] == WAIT_CHILDREN){
+      marked[head] = PERMANENT;
+      *arr.PushElem() = head;
+      continue;
+    }
+    
+    if(marked[head]){
+      continue;
+    }
+
+    bool firstSon = true;
+    for(auto p : edges){
+      if(p.first == head){
+        if(!marked[p.second]){
+          if(firstSon){
+            firstSon = false;
+            marked[head] = WAIT_CHILDREN;
+            // Basically using the stack to accomplish two things. Store the children and to store another visit to the parent node, which is now marked with WAIT_CHILDREN and we only arrive at this after we have seen all the children.
+            // The parent node can only be visit after all the children have been visited, since we are working on graphs that we know are DAG. 
+            toSee->Push(head); // So we are sure to reach the WAIT_CHILDREN check
+          }
+          toSee->Push(p.second);
+        }
+      }
+    }
+
+    // No sons
+    if(firstSon == true){
+      marked[head] = PERMANENT;
+      *arr.PushElem() = head;
+    }
+  }
+  return EndArray(arr);
+}
+
 int main(int argc,char* argv[]){
   InitDebug();
 
   *globalPermanent = InitArena(Megabyte(128));
 
+#if 0
   Array<Test> array = PushArray<Test>(globalPermanent,2);
   array[0] = {1,2};
   array[1] = {2,3};
@@ -367,7 +425,8 @@ int main(int argc,char* argv[]){
   Opt<int> test2 = 2;
   Pair<int,int> t = {1,2};
 
-  DEBUG_BREAK();
+  //DEBUG_BREAK();
+#endif
   
   Arena* perm = globalPermanent;
   
@@ -533,22 +592,42 @@ int main(int argc,char* argv[]){
 
     Array<TypeDefinition> types = ParseVersatSpecification2(content,temp,temp2);
 
-    Hashmap<String,Array<Token>>* nameToRequired = PushHashmap<String,Array<Token>>(temp,types.size);
-    for(TypeDefinition t : types){
-      String name = TypeName(t);
-      Array<Token> used = TypesUsed(t,temp,temp2);
+    int size = types.size;
 
-      nameToRequired->Insert(name,used);
+    Hashmap<String,int>* typeToId = PushHashmap<String,int>(temp,size);
+    for(int i = 0; i < size; i++){
+      typeToId->Insert(types[i].base.name,i);
     }
 
-    if(!nameToRequired->Exists(topLevelTypeStr)){
+    if(!typeToId->Exists(topLevelTypeStr)){
       printf("Did not find the top level type: %.*s\n",UNPACK_SS(topLevelTypeStr));
       return -1;
     }
     
+    DynamicArray<Pair<int,int>> arr = StartArray<Pair<int,int>>(temp2);
+    for(int i = 0; i < size; i++){
+      Array<Token> subTypesUsed = TypesUsed(types[i],temp,temp2);
+
+      for(String str : subTypesUsed){
+        int* index = typeToId->Get(str);
+        if(index){
+          *arr.PushElem() = {i,*index};
+        }
+      }
+    }
+    Array<Pair<int,int>> edges = EndArray(arr);
+
+    Array<int> order = CalculateDAG(size,edges,typeToId->GetOrFail(topLevelTypeStr),temp,temp2);
+
+    for(int i : order){
+      PRINT_STRING(types[i].base.name);
+    }
+    
     DEBUG_BREAK();
+    return 0;
 #endif
-    ParseVersatSpecificationFromFilepath(specFilepath,temp,temp2);
+    
+    //ParseVersatSpecificationFromFilepath(specFilepath,temp,temp2);
   }
 
   FUDeclaration* type = GetTypeByName(topLevelTypeStr);

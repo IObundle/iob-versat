@@ -1,6 +1,6 @@
 `timescale 1ns / 1ps
 
-// Generates an address for a 8 bit memory. Byte space
+// Generates an address for memory. Simple (only two loops ) Byte space
 module SimpleAddressGen #(
    parameter ADDR_W = 12,
    parameter PERIOD_W = 12,
@@ -30,7 +30,6 @@ module SimpleAddressGen #(
    localparam OFFSET_W = $clog2(DATA_W / 8);
 
    reg [DELAY_W-1:0] delay_Counter;
-
    reg [PERIOD_W - 1:0] per;
 
    wire perCond = (per + 1) >= period_i;  /* Do not know why there was a "period_i >> OFFSET_W" */
@@ -53,7 +52,7 @@ module SimpleAddressGen #(
          end
       end else if (|delay_Counter) begin
          delay_Counter <= delay_Counter - 1;
-         valid_o       <= 1'b1;
+         valid_o       <= (delay_Counter == 1);
       end else if (valid_o && ready_i) begin
          if (perCond) begin
             per     <= 0;
