@@ -62,7 +62,7 @@ static Type* CollapseTypeUntilBase(Type* type){
 }
 
 String GetUniqueRepresentationOrFail(String name,Arena* out){
-  STACK_ARENA(temp,Kilobyte(1));
+  STACK_ARENA(temp,Kilobyte(4));
   Opt<ParsedType> parsed = ParseType(name,&temp);
   Assert(parsed.has_value());
   
@@ -83,7 +83,7 @@ Type* RegisterSimpleType(String name,int size,int align){
 }
 
 Type* RegisterOpaqueType(String name,Subtype subtype,int size,int align){
-  STACK_ARENA(temp,Kilobyte(1));
+  STACK_ARENA(temp,Kilobyte(4));
   String tempName = GetUniqueRepresentationOrFail(name,&temp);
 
   for(Type* type : types){
@@ -104,7 +104,7 @@ Type* RegisterOpaqueType(String name,Subtype subtype,int size,int align){
 }
 
 Type* RegisterEnum(String name,Array<Pair<String,int>> enumValues){
-  STACK_ARENA(temp,Kilobyte(1));
+  STACK_ARENA(temp,Kilobyte(4));
   String tempName = GetUniqueRepresentationOrFail(name,&temp);
 
   for(Type* type : types){
@@ -150,7 +150,7 @@ Type* RegisterTemplate(String baseName,Array<String> templateArgNames){
 }
 
 Type* RegisterStructMembers(String name,Array<Member> members){
-  STACK_ARENA(temp,Kilobyte(1));
+  STACK_ARENA(temp,Kilobyte(4));
   String tempName = GetUniqueRepresentationOrFail(name,&temp);
 
   Type* type = GetType(tempName);
@@ -163,7 +163,7 @@ Type* RegisterStructMembers(String name,Array<Member> members){
 }
 
 Type* RegisterTemplateMembers(String name,Array<TemplatedMember> members){
-  STACK_ARENA(temp,Kilobyte(1));
+  STACK_ARENA(temp,Kilobyte(4));
   String tempName = GetUniqueRepresentationOrFail(name,&temp);
 
   Type* type = GetType(tempName);
@@ -366,7 +366,7 @@ Type* InstantiateTemplate(String name,Arena* arena){
 }
 
 Type* GetType(String name){
-  STACK_ARENA(temp,Kilobyte(1));
+  STACK_ARENA(temp,Kilobyte(4));
 
   Opt<ParsedType> parsed = ParseType(name,&temp);
   if(!parsed.has_value()){
@@ -1973,7 +1973,7 @@ Opt<ParsedType> ParseType(Tokenizer* tok,Arena* out);
 Opt<NameAndTemplateArguments> ParseNameAndTemplateArguments(Tokenizer* tok,Arena* out){
   // TODO - Parse the arguments and templates. Use this function to then later take into account namespaces (add :: to the special characters and just replace the ParseType name and template with a loop that takes into account namespaces, if they exist.
   // NOTE - Like modifiers, do not let this info propagate out, just create the unique representation and save the string.
-  STACK_ARENA(temp,Kilobyte(1));
+  STACK_ARENA(temp,Kilobyte(4));
   
   NameAndTemplateArguments result = {};
   
@@ -2042,7 +2042,7 @@ String PushUniqueRepresentation(Arena* out,NameAndTemplateArguments named){
 }
 
 Opt<ParsedType> ParseType(Tokenizer* tok,Arena* out){
-  STACK_ARENA(temp,Kilobyte(1));
+  STACK_ARENA(temp,Kilobyte(4));
   
   ParsedType result = {};
   

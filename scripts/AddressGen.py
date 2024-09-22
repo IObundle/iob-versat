@@ -5,21 +5,27 @@ identity = lambda x : x
 
 # Approach taken
 
-# Since we are dealing with linear loops contained into loops, we can identify the loops layers by calculating a derivative and 
-# shaving off loops based on the most common element (because the increments are always constant, the first loop will run the most,
-# then the second loop and so on)
+# We can divide loops individually based on the amount of common values found in the first derivative of the addresses (because the first loop is executed
+# the most and because the increment is constant we can identify the first loop. Afterwards we can remove the first loop elements from consideration and 
+# follow the same logic to find the other loops in order)
 
-# We do this and identify all the periods and so on. Afterwards we remove all the extra data (since we only need one outermost
-# loop iteration to compute the rest and because the full length of the loop is at this point only given by the outermost loop value)
-# At this point we have one outermost loop amount of data and can calculate all the data that we need.
+# With each loop identified, finding the period is easy and finding the increment is also easy (it is just the value of the most common element)
 
-# To calculate the values for the higher loops, we basically obtain the perspective of the initial values from the point of view of the third loop
-# Basically removing the first two loops as they are already fully calculated and then looking at the other loops individually
+# We can do this approach to find the parameters of loop 0 and 1 but not higher loops, since the higher loops have their own iteration value. (The address of 
+# each loop set is independent of eachother)
+# However, we can use the period that we obtained to remove all the lower loops addresses and obtain a list of elements as seen by the higher loops
+# At this point, we can just use that list as the basis to repeat the previous process and to obtain the data for two more loops
+# Repeat this process until all the list of values becomes empty
 
-# How do we handle missing values?
-# We can identify problematic values by looking at the amount of common values that we have.
-# We expect to see a proportional amount of common values inside the first derivative, meaning that we can identify probematic values 
-# here by looking at any value that is vastly different from 
+# TODO: Duty is currently not implemented. Still have not found a use case, when needed look into it.
+#       But probably easy to spot, since derivative will be zero 
+
+# TODO: While this works for polynomials with one variable, we could technically have unlimited variables.
+#       x,y,z and so on. For now one variable is enough for now
+
+# TODO: Better error and missing data handling. For now the algorithm is resistant to "extra" bad data but bad data in the beginning of the address list
+#       breaks stuff up. Also no error detecting or something like "we detected too many loops, check if this value is correct because it appears to not be good"
+#       This detection can be accomplished by inspecting the derivative values and checking which value slightly differentiates between the remaining
 
 DO_SHIFT_AND_INCREMENT_TOGETHER = False
 
@@ -110,6 +116,7 @@ def RemoveElement(listOfValues : list[ValueAndIndex], elem):
         if x.value != elem:
             newList.append(x)
 
+    assert(len(newList) < len(listOfValues))
     return newList
 
 def RemoveElementsAfterIndex(l,cutoff):
@@ -239,7 +246,10 @@ def GenerateParameters(listOfAddresses):
     loops = GenerateLoops(listOfAddresses)
 
     while(len(loops) > 2):
+        print(*loops,sep="\n")
         accumulatedLoops += loops[:2]
+        assert(loops[2].loopPeriod > 1)
+
         perspective = GeneratePerspective(listOfAddresses,loops[2].loopPeriod)
 
         loops = GenerateLoops(perspective)
@@ -264,6 +274,8 @@ def TestList(listOfAddresses):
 
     print("Parameters:  ")
     PrintParameters(parameters)
+    print()
+    print("Loop size:",LoopSize(parameters))
     print()
     print("Generic:     ",generic)
     print("Correct List:",listOfAddresses)
@@ -502,6 +514,16 @@ def EvaluateString(content):
 def Pre(l):
     return [SinglePolynomial(x,0) for x in l]
 
+def LoopSize(parameterList):
+    withoutStart = parameterList[1:]
+    allLoopSizes = withoutStart[1::2]
+
+    accum = 1
+    for x in allLoopSizes:
+        accum *= x
+
+    return accum
+
 def PrintParameters(parameterList):
     base = ["incr","period","shift","iterations"]
     start = parameterList[0]
@@ -513,12 +535,8 @@ def PrintParameters(parameterList):
         else:
             print(f"{base[index%4]}{(index // 4) + 1}: {param}")
 
-# TODO: While this works for polynomials with one variable, we could technically have unlimited variables.
-#       x,y,z and so on.
-
-#       One variable is enough for now
-
 if __name__ == "__main__":
+    # If python version is too low, just take each 
     match 3:
         case 1: listOfAddresses = Pre([0, 1, 2])
         case 2: listOfAddresses = Pre([0,1,2,10,11,12,20,21,22])
@@ -526,13 +544,12 @@ if __name__ == "__main__":
         case 4: listOfAddresses = EvaluateString("[x,x+1,x+2]")
         case 5: listOfAddresses = EvaluateString("[0,1,2,x,1+x,2+x,2x,1+2x,2+2x]")
     
-    if(True): 
+    if(False): 
         parameters = GenerateParameters(listOfAddresses)
         print("Parameters:")
         PrintParameters(parameters)
         print()
-        #print(EvaluatePolynomialList(listOfAddresses,10))
-        #print(EvaluatePolynomialList(parameters,10))
+        print("Loop size:",LoopSize(parameters))
     else:
         TestList(listOfAddresses)
 

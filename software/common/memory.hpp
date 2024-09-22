@@ -146,6 +146,68 @@ DynamicArray<T> StartArray(Arena* arena);
 template<typename T>
 Array<T> EndArray(DynamicArray<T> arr);
 
+template<typename T>
+struct GrowableArray{
+  Arena* arena;
+  T* data;
+  int size;
+  int capacity;
+
+  Array<T> AsArray();
+  T* PushElem();
+};
+
+template<typename T>
+GrowableArray<T> StartGrowableArray(Arena* arena,int startCapacity = 1){
+  GrowableArray<T> res = {};
+
+  res.arena = arena;
+  res.data = PushArray<T>(arena,startCapacity).data;
+  res.size = 0;
+  res.capacity = startCapacity;
+
+  return res;
+}
+
+template<typename T>
+T* GrowableArray<T>::PushElem(){
+  // TODO: Still need to handle alignment problems, if they appear
+  
+  if(size < capacity){
+    return &data[size++];
+  }
+
+  // Simply extend array
+  if(data + capacity == (T*) PushBytes(arena,0)){
+    //printf("Extended\n");
+    size += 1;
+    capacity += 1;
+    return PushStruct<T>(arena); // NOTE: It is possible that there exists an alignment bug hidden here, but still have not found any example that would trigger it. 
+  }
+
+  // Need to copy it
+  //printf("Copied\n");
+  Array<T> newArray = PushArray<T>(arena,capacity * 2);
+  capacity = newArray.size;
+  
+  memcpy(newArray.data,data,sizeof(T) * size);
+  data = newArray.data;
+  return &data[size++];
+}
+
+template<typename T>
+Array<T> GrowableArray<T>::AsArray(){
+  Array<T> res = {};
+  res.data = data;
+  res.size = size;
+  return res;
+}
+
+template<typename T>
+Array<T> EndArray(GrowableArray<T> arr){
+  return arr.AsArray();
+}
+
 struct DynamicString{
   Arena* arena;
   Byte* mark;

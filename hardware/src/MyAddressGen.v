@@ -12,12 +12,15 @@ module MyAddressGen #(
    input run_i,
 
    //configurations 
-   input        [PERIOD_W - 1:0] period_i,
-   input        [PERIOD_W - 1:0] duty_i,
-   input        [  ADDR_W - 1:0] iterations_i,
    input        [  ADDR_W - 1:0] start_i,
-   input signed [  ADDR_W - 1:0] shift_i,
+   input        [PERIOD_W - 1:0] duty_i,
+
+   input        [PERIOD_W - 1:0] period_i,
    input signed [  ADDR_W - 1:0] incr_i,
+
+   input        [  ADDR_W - 1:0] iterations_i,
+   input signed [  ADDR_W - 1:0] shift_i,
+
 
    input        [ DELAY_W - 1:0] delay_i,
 
@@ -36,8 +39,8 @@ module MyAddressGen #(
    reg                                           [  ADDR_W - 1:0] iter;
    reg                                           [PERIOD_W - 1:0] per;
 
-   wire perCond = ((per + 1) >= period_i);
-   wire iterCond = ((iter + 1) >= iterations_i);
+   wire iterCond = ((iter + 1) == iterations_i || iterations_i == 0);
+   wire perCond = ((per + 1) == period_i || period_i == 0);
 
    always @(posedge clk_i, posedge rst_i) begin
       if (rst_i) begin

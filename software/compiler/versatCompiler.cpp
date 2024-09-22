@@ -302,24 +302,6 @@ struct GenericArrayIterator{
   int sizeOfType;
   int alignmentOfType;
   int index;
-
-  bool HasNext(){
-    void** arrayData = (void**) array;
-    int* size = (int*) (arrayData + 1);
-
-    return index < *size;
-  }
-
-  void* Next(){
-    void** arrayData = (void**) array;
-    void* arrayStart = (void*) arrayData[0]; 
-
-    char* view = (char*) arrayStart;
-    void* data = (void*) &view[index * sizeOfType];
-    index += 1;
-  
-    return data;
-  }
 };
 
 GenericArrayIterator IterateArray(void* array,int sizeOfType,int alignmentOfType){
@@ -331,6 +313,23 @@ GenericArrayIterator IterateArray(void* array,int sizeOfType,int alignmentOfType
   return res;
 }
 
+bool HasNext(GenericArrayIterator iter){
+  void** arrayData = (void**) iter.array;
+  int* size = (int*) (arrayData + 1);
+
+  return iter.index < *size;
+}
+
+void* Next(GenericArrayIterator& iter){
+  void** arrayData = (void**) iter.array;
+  void* arrayStart = (void*) arrayData[0]; 
+
+  char* view = (char*) arrayStart;
+  void* data = (void*) &view[iter.index * iter.sizeOfType];
+  iter.index += 1;
+  
+  return data;
+}
 
 // Only for graphs that we know for sure are DAG
 Array<int> CalculateDAG(int maxNode,Array<Pair<int,int>> edges,int start,Arena* out,Arena* temp){
@@ -490,11 +489,6 @@ int main(int argc,char* argv[]){
   LoadTemplates(perm,temp);
   InitializeSimpleDeclarations();
   
-  MakeDirectory(globalOptions.debugPath.data);
-  
-  // TODO: Variable buffers are currently broken. Due to removing statics saved configurations.
-  //       When reimplementing this (if we eventually do) separate buffers configs from static buffers.
-  //       There was never any point in having both together.
   globalOptions.useFixedBuffers = true;
   globalOptions.shadowRegister = true; 
   globalOptions.disableDelayPropagation = true;
@@ -587,13 +581,12 @@ int main(int argc,char* argv[]){
   String topLevelTypeStr = globalOptions.topName;
 
   if(specFilepath.size){
-#if 0
     String content = PushFile(temp,StaticFormat("%.*s",UNPACK_SS(specFilepath)));
 
-    Array<TypeDefinition> types = ParseVersatSpecification2(content,temp,temp2);
-
+    Array<TypeDefinition> types = ParseVersatSpecification(content,temp,temp2);
     int size = types.size;
 
+    // Basically using a simple DAG approach to detect the modules that we only care about. We do not process modules that are not needed
     Hashmap<String,int>* typeToId = PushHashmap<String,int>(temp,size);
     for(int i = 0; i < size; i++){
       typeToId->Insert(types[i].base.name,i);
@@ -621,13 +614,8 @@ int main(int argc,char* argv[]){
 
     for(int i : order){
       PRINT_STRING(types[i].base.name);
+      InstantiateSpecifications(content,types[i],temp,temp2);
     }
-    
-    DEBUG_BREAK();
-    return 0;
-#endif
-    
-    //ParseVersatSpecificationFromFilepath(specFilepath,temp,temp2);
   }
 
   FUDeclaration* type = GetTypeByName(topLevelTypeStr);

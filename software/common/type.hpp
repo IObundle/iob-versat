@@ -85,8 +85,6 @@ struct Member{
   String name;
   int offset;
 
-  //Member* next; // TODO: Appears to not be used. If no compile error, remove later
-
   // STRUCT_PARSER
   Type* structType;
   String arrayExpression;

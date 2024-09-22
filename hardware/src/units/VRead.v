@@ -47,7 +47,6 @@ module VRead #(
    // configurations
 `ifdef COMPLEX_INTERFACE
    input [PERIOD_W-1:0] dutyA,
-   input [  ADDR_W-1:0] int_addr,
    input [  ADDR_W-1:0] iterA,
    input [  ADDR_W-1:0] shiftA,
 `endif

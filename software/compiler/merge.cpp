@@ -1658,6 +1658,9 @@ MergeTypesIterator IterateTypes(Array<FUDeclaration*> types){
   return result;
 }
 
+
+ReconstituteResult ReconstituteGraphFromStruct(Accelerator* merged,Set<PortInstance>* mergedMultiplexers,Accelerator* base,String name,AcceleratorMapping* baseToMerged,FUDeclaration* parentType,Arena* out,Arena* temp);
+
 FUDeclaration* Merge(Array<FUDeclaration*> types,
                      String name,Array<SpecificMergeNode> specifics,
                      Arena* temp,Arena* temp2,MergingStrategy strat){
@@ -1760,7 +1763,7 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
   Array<Set<PortInstance>*> mergeMultiplexers = PushArray<Set<PortInstance>*>(perm,size);
 
   for(Set<PortInstance>*& s : mergeMultiplexers){
-    s = PushSet<PortInstance>(temp,999); // TODO: Correct size or change to TrieSet. NOTE: Temp because later on the function we replace this maps from fixedCircuit to flattened circuit
+    s = PushSet<PortInstance>(perm,999); // TODO: Correct size or change to TrieSet. NOTE: Temp because later on the function we replace this maps from fixedCircuit to flattened circuit
   }
 
   FUDeclaration* muxType = GetTypeByName(STRING("CombMux8"));
@@ -1874,25 +1877,6 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
       }
     }
   }
-
-#if 0
-  // TODO: Not sure about the changes to mapping. Disabled for now
-  if(globalDebug.outputGraphs){
-    for(int i = 0; i < size; i++){
-      BLOCK_REGION(temp);
-      Set<FUInstance*>* firstGraph = PushSet<FUInstance*>(temp,Size(flatten[i]->allocated));
-      FOREACH_LIST(FUInstance*,ptr,flatten[i]->allocated){
-        PortInstance finalPort = MappingMapInput(flattenToMerge[i],{ptr,i});
-        //FUInstance* finalNode = MappingMap(flattenToMerge[i],ptr);
-        FUInstance* finalNode = finalPort.inst;
-        
-        firstGraph->Insert(finalNode);
-      }
-
-      OutputDebugDotGraph(result,STRING(StaticFormat("finalMerged_%d.dot",i)),firstGraph,temp);
-    }
-  }
-#endif
   
   String permanentName = PushString(perm,name);
   result->name = permanentName;
@@ -1983,8 +1967,6 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
     int start = 0;
     int toProcess = size;
     int toWrite = size;
-
-    ReconstituteResult ReconstituteGraphFromStruct(Accelerator* merged,Set<PortInstance>* mergedMultiplexers,Accelerator* base,String name,AcceleratorMapping* baseToMerged,FUDeclaration* parentType,Arena* out,Arena* temp);
     
     while(start != toProcess){
       for(int i = start; i < toProcess; i++){
@@ -2162,6 +2144,8 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
   // TODO: HACK. Because type inputs and outputs depend on size of baseConfig input/output, put first graph here. 
   declInst.baseConfig.inputDelays = ExtractInputDelays(recon[0],reconDelay[0],numberInputs,perm,temp);
   declInst.baseConfig.outputLatencies = ExtractOutputLatencies(recon[0],reconDelay[0],perm,temp);
+
+  //DEBUG_BREAK();
 
   FUDeclaration* decl = RegisterFU(declInst);
   decl->type = FUDeclarationType_MERGED;
@@ -2342,6 +2326,7 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
     }
   }
 
+  DEBUG_BREAK();
   // Propagates merge multiplexers accross hierarchies
   for(int i = 0; i < size; i++){
     BLOCK_REGION(temp);
@@ -2364,9 +2349,6 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
   
   return decl;
 }
-
-
-
 
 ReconstituteResult ReconstituteGraphFromStruct(Accelerator* merged,Set<PortInstance>* mergedMultiplexers,Accelerator* base,String name,AcceleratorMapping* baseToMerged,FUDeclaration* parentType,Arena* out,Arena* temp){
   BLOCK_REGION(temp);

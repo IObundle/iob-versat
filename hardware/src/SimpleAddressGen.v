@@ -1,6 +1,6 @@
 `timescale 1ns / 1ps
 
-// Generates an address for memory. Simple (only two loops ) Byte space
+// Generates an address for memory. Simple (only two loops) Byte space
 module SimpleAddressGen #(
    parameter ADDR_W = 12,
    parameter PERIOD_W = 12,

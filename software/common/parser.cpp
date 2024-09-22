@@ -68,7 +68,7 @@ Tokenizer::Tokenizer(String content,const char* singleChars,BracketList<const ch
 {
   keepWhitespaces = false;
   keepComments = false;
-  Arena leaky = InitArena(Kilobyte(16));
+  leaky = InitArena(Kilobyte(16));
   std::vector<const char*> specials;
 
   this->tmpl = CreateTokenizerTemplate(&leaky,singleChars,specialCharsList);
@@ -83,7 +83,14 @@ Tokenizer::Tokenizer(String content,TokenizerTemplate* tmpl)
 {
   keepWhitespaces = false;
   keepComments = false;
+  leaky = {};
   this->tmpl = tmpl;
+}
+
+Tokenizer::~Tokenizer(){
+  if(leaky.mem){
+    Free(&leaky);
+  }
 }
 
 Token Tokenizer::PeekToken(){
@@ -305,61 +312,6 @@ Token Tokenizer::PeekRemainingLine(){
   //tok.loc.end.column = this->column + fullLine.size;
   
   return tok;
-}
-
-String Tokenizer::GetFullLineForGivenToken(Token token){
-  // TODO: Use location info to simplify this function.
-  const char* insideLine = token.data;
-  
-  const char* start = insideLine;
-  while(start >= this->start){
-    if(start == this->start){
-      break;
-    }
-
-    if(*start == '\n'){
-      start += 1;
-      break;
-    }
-
-    start -= 1;
-  }
-
-  const char* end = insideLine;
-  while(end <= this->end){
-    if(end == this->end){
-      end -= 1;
-      break;
-    }
-
-    if(*end == '\n'){
-      end -= 1;
-      break;
-    }
-
-    end += 1;
-  }
-
-  String res = {};
-  res.data = start;
-  res.size = end - start + 1;
-  return res;
-}
-
-String Tokenizer::GetRichLocationError(Token got,Arena* out){
-  auto mark = StartString(out);
-
-  String fullLine = GetFullLineForGivenToken(got);
-  int line = got.loc.start.line;
-  int columnIndex = got.loc.start.column - 1;
-
-  PushString(out,"%6d | %.*s\n",got.loc.start.line,UNPACK_SS(fullLine));
-  PushString(out,"      "); // 6 spaces to match the 6 digits above
-  PushString(out," | ");
-
-  PushPointingString(out,columnIndex,got.size);
-
-  return EndString(mark);
 }
 
 Token Tokenizer::AssertNextToken(const char* str){
@@ -604,6 +556,10 @@ void Tokenizer::Rollback(TokenizerMark mark){
   this->ptr = mark.ptr;
   this->line = mark.pos.line;
   this->column = mark.pos.column;
+}
+
+String Tokenizer::GetContent(){
+  return (String){.data = this->start,.size = (int) (this->end - this->start)};
 }
 
 void Tokenizer::AdvancePeek(Token tok){
@@ -1155,3 +1111,62 @@ TokenizerTemplate* CreateTokenizerTemplate(Arena* out,const char* singleChars,Br
   
   return tmpl;
 }
+
+String GetFullLineForGivenToken(String content,Token token){
+  // TODO: Use location info to simplify this function.
+  const char* insideLine = token.data;
+
+  const char* contentStart = content.data;
+  const char* contentEnd = content.data + content.size;
+  
+  const char* start = insideLine;
+  while(start >= contentStart){
+    if(start == contentStart){
+      break;
+    }
+
+    if(*start == '\n'){
+      start += 1;
+      break;
+    }
+
+    start -= 1;
+  }
+
+  const char* end = insideLine;
+  while(end <= contentEnd){
+    if(end == contentEnd){
+      end -= 1;
+      break;
+    }
+
+    if(*end == '\n'){
+      end -= 1;
+      break;
+    }
+
+    end += 1;
+  }
+
+  String res = {};
+  res.data = start;
+  res.size = end - start + 1;
+  return res;
+}
+
+String GetRichLocationError(String content,Token got,Arena* out){
+  auto mark = StartString(out);
+
+  String fullLine = GetFullLineForGivenToken(content,got);
+  int line = got.loc.start.line;
+  int columnIndex = got.loc.start.column - 1;
+
+  PushString(out,"%6d | %.*s\n",got.loc.start.line,UNPACK_SS(fullLine));
+  PushString(out,"      "); // 6 spaces to match the 6 digits above
+  PushString(out," | ");
+
+  PushPointingString(out,columnIndex,got.size);
+
+  return EndString(mark);
+}
+

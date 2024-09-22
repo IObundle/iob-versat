@@ -356,8 +356,6 @@ def ParseMembers(c,startPosition,isUnion):
         if(n.kind == CursorKind.TEMPLATE_TYPE_PARAMETER):
             templateParameters.append(n.spelling)
         if(n.kind == CursorKind.CXX_BASE_SPECIFIER):
-            #inheritBase = n.spelling
-            #print(inheritBase)
             inheritBase = GetIndex(n.get_children(),0).spelling
         if(n.kind == CursorKind.FIELD_DECL):
             if ENABLE_PRINT:
@@ -425,7 +423,10 @@ if __name__ == "__main__":
     for name,s in allTypes.items():
         if(s.Type() == STRUCT and s.inheritBase):
             if(s.inheritBase == "T"): continue
-            elem = allTypes[s.inheritBase]
+            name = s.inheritBase
+            if("struct" in s.inheritBase):
+                name = s.inheritBase.replace("struct","").strip()
+            elem = allTypes[name]
 
             maxSize = max(x.position for x in elem.members)
 
@@ -433,13 +434,6 @@ if __name__ == "__main__":
                 member.position += maxSize + 1
 
             s.members = elem.members + s.members
-
-    #del allTypes["AcceleratorMapping"]
-    #del allTypes["TrieMap"]
-    #del allTypes["TrieMapNode"]
-    #del allTypes["TrieMapIterator"]
-    #del allTypes["TrieSet"]
-    #del allTypes["TrieSetIterator"]
 
     enumStructures = {}
     structStructures = {}
@@ -454,7 +448,7 @@ if __name__ == "__main__":
             typedefStructures[name] = data
         elif((data.Type() == STRUCT or data.Type() == UNION) and len(data.templateParameters) == 0 and len(data.members) > 0):
             structStructures[name] = data
-        elif(data.Type() in [BASE,POINTER]):
+        elif(data.Type() in [BASE,POINTER,ARRAY]):
             pass
         else:
             print(f"Missing a type: {name}:{data.Type()}\n")
