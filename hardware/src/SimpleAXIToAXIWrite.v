@@ -39,7 +39,7 @@ module SimpleAXItoAXIWrite #(
 
    reg                                         [OFFSET_W-1:0] stored_offset;
 
-   burst_split #(
+   BurstSplit #(
       .DATA_W(AXI_DATA_W)
    ) split (
       .offset_i(stored_offset),
@@ -66,7 +66,7 @@ module SimpleAXItoAXIWrite #(
 
    reg [(AXI_DATA_W/8)-1:0] initial_strb, final_strb;
 
-   transfer_controller #(
+   AXITransferController #(
       .AXI_ADDR_W(AXI_ADDR_W),
       .AXI_DATA_W(AXI_DATA_W),
       .AXI_LEN_W(AXI_LEN_W),

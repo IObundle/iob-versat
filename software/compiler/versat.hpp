@@ -83,11 +83,6 @@ FUInstance* GetOutputInstance(FUInstance* nodes);
 struct ModuleInfo;
 FUDeclaration* RegisterModuleInfo(ModuleInfo* info,Arena* temp);
 
-// Versat functions
-
-void ParseVersatSpecification(String content,Arena* temp,Arena* temp2);
-void ParseVersatSpecificationFromFilepath(String filepath,Arena* temp,Arena* temp2);
-
 // Accelerator functions
 FUInstance* CreateFUInstance(Accelerator* accel,FUDeclaration* type,String entityName);
 Accelerator* Flatten(Accelerator* accel,int times,Arena* temp);

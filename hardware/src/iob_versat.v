@@ -72,7 +72,7 @@ module iob_versat #(  //the below parameters are used in cpu if includes below
 
    // TODO: To improve performance in later stages, it would be helpful to further separate into current master being served and next master to be served.
    //       That way, the SimpleAXItoAXI module could be changed to pipeline the transfer calculations for the next master while servicing the current master.
-   xmerge #(
+   MuxNative #(
       .N_SLAVES(IO),
       .ADDR_W  (AXI_ADDR_W),
       .DATA_W  (AXI_DATA_W),

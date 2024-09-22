@@ -2,7 +2,7 @@
 
 // Given the initial byte offset, this module aligns incoming data
 // Start must be asserted once before the first valid data in a new burst transfer
-module burst_align #(
+module BurstAlign #(
    parameter AXI_DATA_W = 32,
 
    parameter OFFSET_W = $clog2(AXI_DATA_W / 8)

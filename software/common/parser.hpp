@@ -71,7 +71,8 @@ struct Tokenizer{
   const char* ptr;
   const char* end;
   TokenizerTemplate* tmpl;
-
+  Arena leaky;
+  
   // Line and column start at one. Subtract one to get zero based indexes
   int line;
   int column;
@@ -85,18 +86,17 @@ private:
   void ConsumeWhitespace();
 
 public:
-
-  String GetFullLineForGivenToken(Token token);
   
   // TODO: Need to make a function that returns a location for a given token, so that I can return a good error message for the token not being the expected on. The function accepts a token and either returns a string or returns some structure that contains all the info needed to output such text.
   
   // TODO: Make some asserts. Special chars should not contain empty chars
   Tokenizer(String content,const char* singleChars,BracketList<const char*> specialChars); // Content must remain valid through the entire parsing process
   Tokenizer(String content,TokenizerTemplate* tmpl); // Content must remain valid. Tokenizer makes no copies
+  ~Tokenizer();
+
   Token PeekToken();
   Token NextToken();
 
-  String GetRichLocationError(Token got,Arena* out);
   Token AssertNextToken(const char* str);
 
   String PeekCurrentLine(); // Get full line (goes backwards until start of line and peeks until newline).
@@ -119,6 +119,7 @@ public:
   TokenizerMark Mark();
   Token Point(TokenizerMark mark);
   void Rollback(TokenizerMark mark);
+  String GetContent();
   
   void AdvancePeek(Token tok);
 
@@ -150,6 +151,9 @@ String PushPointingString(Arena* out,int startPos,int size);
 int GetTokenPositionInside(String text,Token token); // Does not compare strings, just uses pointer arithmetic
 
 int CountSubstring(String str,String substr);
+
+String GetFullLineForGivenToken(String content,Token token);
+String GetRichLocationError(String content,Token got,Arena* out);
 
 // This functions should check for errors. Also these functions should return an error if they do not parse everything. Something like "3a" should flag an error for ParseInt, instead of just returning 3. Either they consume everything or it's an error
 int ParseInt(String str);

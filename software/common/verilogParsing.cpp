@@ -100,7 +100,7 @@ static void DoIfStatement(Tokenizer* tok,MacroMap& macros,Array<String> includeF
 }
 
 void PreprocessVerilogFile_(String fileContent,MacroMap& macros,Array<String> includeFilepaths,Arena* out,Arena* temp){
-  Tokenizer tokenizer = Tokenizer(fileContent, "()`,+-/*\\\"",{});
+  Tokenizer tokenizer = Tokenizer(fileContent, "():;[]{}`,+-/*\\\"",{});
   Tokenizer* tok = &tokenizer;
 
   while(!tok->Done()){
@@ -274,10 +274,20 @@ static Expression* VerilogParseAtom(Tokenizer* tok,Arena* out){
 
   Token peek = tok->PeekToken();
 
+  // MARKED
   if(IsNum(peek[0])){
     int res = ParseInt(peek);
     tok->AdvancePeek(peek);
 
+    peek = tok->PeekToken();
+    if(CompareString(peek,"'")){
+      tok->AdvancePeek(peek);
+      Token actualValue = tok->NextToken();
+      actualValue.data += 1;
+      actualValue.size -= 1;
+      res = ParseInt(actualValue);
+    }
+    
     expr->val = MakeValue(res);
     expr->type = Expression::LITERAL;
 
@@ -585,7 +595,7 @@ static Module ParseModule(Tokenizer* tok,Arena* out,Arena* temp){
 Array<Module> ParseVerilogFile(String fileContent,Array<String> includeFilepaths,Arena* out,Arena* temp){
   BLOCK_REGION(temp);
 
-  Tokenizer tokenizer = Tokenizer(fileContent,"\n:,()[]{}\"+-/*=",{"#(","+:","-:","(*","*)"});
+  Tokenizer tokenizer = Tokenizer(fileContent,"\n:',()[]{}\"+-/*=",{"#(","+:","-:","(*","*)"});
   Tokenizer* tok = &tokenizer;
 
   ArenaList<Module>* modules = PushArenaList<Module>(temp);

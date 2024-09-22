@@ -47,7 +47,6 @@ module VRead #(
    // configurations
 `ifdef COMPLEX_INTERFACE
    input [PERIOD_W-1:0] dutyA,
-   input [  ADDR_W-1:0] int_addr,
    input [  ADDR_W-1:0] iterA,
    input [  ADDR_W-1:0] shiftA,
 `endif
@@ -58,8 +57,6 @@ module VRead #(
    input [  ADDR_W-1:0] startB,
    input [  ADDR_W-1:0] shiftB,
    input [  ADDR_W-1:0] incrB,
-   input                reverseB,
-   input                extB,
    input [  ADDR_W-1:0] iter2B,
    input [PERIOD_W-1:0] per2B,
    input [  ADDR_W-1:0] shift2B,
@@ -75,13 +72,11 @@ module VRead #(
    assign databus_len_0   = length;
 
    // output databus
-   wire [DATA_W-1:0] outB;
 
-   wire              gen_done;
    reg               doneRead;
    reg               doneOutput;
    wire              doneOutput_int;
-   assign out0 = outB;
+
    assign done = (doneRead  & doneOutput);
 
    always @(posedge clk, posedge rst) begin
@@ -97,39 +92,14 @@ module VRead #(
       end
    end
 
-   function [ADDR_W-1:0] reverseBits;
-      input [ADDR_W-1:0] word;
-      integer i;
+   // Ping pong and related logic for the initial address
+   reg pingPongState;
 
-      begin
-         for (i = 0; i < ADDR_W; i = i + 1) reverseBits[i] = word[ADDR_W-1-i];
-      end
-   endfunction
-
-   wire [       1:0] direction = 2'b01;
-   reg  [ADDR_W-1:0]                    startA;
-
-   reg                                  pingPongState;
-
-   always @* begin
-      startA           = 0;
-      startA[ADDR_W-1] = !pingPongState;
-   end
-
-   wire [DELAY_W-1:0] delayA = 0;
+   wire [ADDR_W-1:0] startA = {pingPong && !pingPongState , {(ADDR_W-1){1'b0}}};
 
    // port addresses and enables
-   wire [ADDR_W-1:0] addrB, addrB_int, addrB_int2;
-
-   // data inputs
-   wire                                                                                     rnw;
-
-   wire [ADDR_W-1:0] startB_inst = pingPong ? {pingPongState, startB[ADDR_W-2:0]} : startB;
-
-   // mem enables output by addr gen
-   wire                                                                                     enB;
-
-   // write enables
+   wire [ADDR_W-1:0] addrB;
+   wire [ADDR_W-1:0] startB_inst = {pingPong && pingPongState, startB[ADDR_W-2:0]};
 
    // Ping pong 
    always @(posedge clk, posedge rst) begin
@@ -137,7 +107,6 @@ module VRead #(
       else if (run) pingPongState <= pingPong ? (!pingPongState) : 1'b0;
    end
 
-   wire next;
    wire gen_valid, gen_ready;
    wire [ADDR_W-1:0] gen_addr;
 
@@ -157,7 +126,7 @@ module VRead #(
 
       //configurations 
       .period_i(perA),
-      .delay_i (delayA),
+      .delay_i (0),
       .start_i (startA),
       .incr_i  (incrA),
 
@@ -171,8 +140,11 @@ module VRead #(
       .valid_o(gen_valid),
       .ready_i(gen_ready),
       .addr_o (gen_addr),
-      .done_o (gen_done)
+      .done_o ()
    );
+
+   // mem enables output by addr gen
+   wire enB;
 
    SimpleAddressGen #(
       .ADDR_W(ADDR_W),
@@ -198,34 +170,9 @@ module VRead #(
       //outputs 
       .valid_o(enB),
       .ready_i(1'b1),
-      .addr_o (addrB_int),
+      .addr_o (addrB),
       .done_o (doneOutput_int)
    );
-
-   /*
-    xaddrgen2 #(.MEM_ADDR_W(ADDR_W)) addrgen2B (
-                       .clk(clk),
-                       .rst(rst),
-                       .run(run && !disabled),
-                       .iterations(iterB),
-                       .period(perB),
-                       .duty(dutyB),
-                       .start(startB_inst),
-                       .shift(shiftB),
-                       .incr(incrB),
-                       .delay(delay0[9:0]),
-                       .iterations2(iter2B),
-                       .period2(per2B),
-                       .shift2(shift2B),
-                       .incr2(incr2B),
-                       .addr(addrB_int),
-                       .mem_en(enB),
-                       .done(doneOutput_int)
-                       );
-   */
-
-   assign addrB      = addrB_int2;
-   assign addrB_int2 = reverseB ? reverseBits(addrB_int) : addrB_int;
 
    wire                  write_en;
    wire [    ADDR_W-1:0] write_addr;
@@ -273,8 +220,6 @@ module VRead #(
 
    reg [ADDR_W-1:0] addr_out;
 
-   localparam OFFSET_W = $clog2(DATA_W / 8);
-
    generate
       if (AXI_DATA_W > DATA_W) begin
          always @* begin
@@ -284,14 +229,11 @@ module VRead #(
          end
 
          reg [DECISION_BIT_W-1:0] sel_0;  // Matches addr_0_port_0
-         //reg[DECISION_BIT_W-1:0] sel_1; // Matches rdata_0_port_0
          always @(posedge clk, posedge rst) begin
             if (rst) begin
                sel_0 <= 0;
-               //sel_1 <= 0;
             end else begin
                sel_0 <= addrB[DECISION_BIT_W-1:0];
-               //sel_1 <= sel_0;
             end
          end
 
@@ -302,13 +244,13 @@ module VRead #(
          ) adapter (
             .sel_i(sel_0),
             .in_i (ext_2p_data_in_0),
-            .out_o(outB)
+            .out_o(out0)
          );
       end else begin
          always @* begin
             addr_out = addrB;
          end
-         assign outB = ext_2p_data_in_0;
+         assign out0 = ext_2p_data_in_0;
       end  // if(AXI_DATA_W > DATA_W)
    endgenerate
 

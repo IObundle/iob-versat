@@ -31,15 +31,20 @@
 //           Then we can implement transformations as functions that take arrays and output arrays.
 //       Error reporting is very generic. Implement more specific forms.
 
-void ReportError(Tokenizer* tok,Token faultyToken,const char* error){
+void ReportError(String content,Token faultyToken,const char* error){
   STACK_ARENA(temp,Kilobyte(1));
 
-  String loc = tok->GetRichLocationError(faultyToken,&temp);
+  String loc = GetRichLocationError(content,faultyToken,&temp);
 
   printf("\n");
   printf("%s\n",error);
   printf("%.*s\n",UNPACK_SS(loc));
   printf("\n");
+}
+
+void ReportError(Tokenizer* tok,Token faultyToken,const char* error){
+  String content = tok->GetContent();
+  ReportError(content,faultyToken,error);
 }
 
 bool _ExpectError(Tokenizer* tok,const char* str){
@@ -1110,7 +1115,7 @@ void InstantiateMerge(MergeDef def,Arena* temp,Arena* temp2){
   Array<FUDeclaration*> decl = EndArray(declArr);
 
   String name = PushString(globalPermanent,def.name);
-  
+
   Merge(decl,name,def.specifics,temp,temp2);
 }
 
@@ -1239,14 +1244,14 @@ Var Next(GroupIterator& iter){
 
 static std::unordered_map<String,Transformation> transformations = {};
 
-Opt<int> ApplyTransforms(Tokenizer* tok,int outPortStart,Array<Token> transforms){
+Opt<int> ApplyTransforms(String content,int outPortStart,Array<Token> transforms){
   // TODO(Performance): Trying to find transforms all the time is wasteful.
   int outPort = outPortStart;
   for(Token& transformToken : transforms){
     auto iter = transformations.find(transformToken);
 
     if(iter == transformations.end()){
-      ReportError(tok,transformToken,"Following transformation does not exist");
+      ReportError(content,transformToken,"Following transformation does not exist");
       return {};
     }
 
@@ -1255,7 +1260,7 @@ Opt<int> ApplyTransforms(Tokenizer* tok,int outPortStart,Array<Token> transforms
     Array<int> map = transform.map;
     if(outPort >= transform.inputs){
       const char* str = StaticFormat("Port connection (%d) outside transformation range (%d)",outPort,map.size);
-      ReportError(tok,transformToken,str);
+      ReportError(content,transformToken,str);
       return {};
     }
           
@@ -1345,7 +1350,7 @@ static bool InstantiateTransform(Tokenizer* tok,TransformDef def,Arena* temp){
         
       int outPort = table->GetOrFail(outName);
 
-      Opt<int> optOutPort = ApplyTransforms(tok,outPort,decl.transforms);
+      Opt<int> optOutPort = ApplyTransforms(tok->GetContent(),outPort,decl.transforms);
       if(!optOutPort.has_value()){
         error = true;
         break;
@@ -1386,7 +1391,7 @@ static bool InstantiateTransform(Tokenizer* tok,TransformDef def,Arena* temp){
   return error;
 }
 
-FUDeclaration* InstantiateModule(Tokenizer* tok,ModuleDef def,Arena* temp,Arena* temp2){
+FUDeclaration* InstantiateModule(String content,ModuleDef def,Arena* temp,Arena* temp2){
   Arena* perm = globalPermanent;
   Accelerator* circuit = CreateAccelerator(def.name,AcceleratorPurpose_MODULE);
 
@@ -1398,7 +1403,7 @@ FUDeclaration* InstantiateModule(Tokenizer* tok,ModuleDef def,Arena* temp,Arena*
   int insertedInputs = 0;
   for(VarDeclaration& decl : def.inputs){
     if(CompareString(decl.name,STRING("out"))){
-      ReportError(tok,decl.name,"Cannot use special out unit as module input");
+      ReportError(content,decl.name,"Cannot use special out unit as module input");
       error = true;
     }
 
@@ -1420,7 +1425,7 @@ FUDeclaration* InstantiateModule(Tokenizer* tok,ModuleDef def,Arena* temp,Arena*
   for(InstanceDeclaration& decl : def.declarations){
     for(VarDeclaration& var : decl.declarations){
       if(CompareString(var.name,STRING("out"))){
-        ReportError(tok,var.name,"Cannot use special out unit as module input");
+        ReportError(content,var.name,"Cannot use special out unit as module input");
         error = true;
         break;
       }
@@ -1428,7 +1433,7 @@ FUDeclaration* InstantiateModule(Tokenizer* tok,ModuleDef def,Arena* temp,Arena*
     
     FUDeclaration* type = GetTypeByName(decl.typeName);
     if(type == nullptr){
-      ReportError(tok,decl.typeName,"Given type was not found");
+      ReportError(content,decl.typeName,"Given type was not found");
       error = true;
       // TODO: Keep running using a type that contains infinity inputs and outputs.
       break; // For now skip over.
@@ -1495,7 +1500,7 @@ FUDeclaration* InstantiateModule(Tokenizer* tok,ModuleDef def,Arena* temp,Arena*
       Var outVar = decl.output.vars[0];
 
       if(CompareString(outVar.name,STRING("out"))){
-        ReportError(tok,outVar.name,"Cannot use special out unit as input in an equality");
+        ReportError(content,outVar.name,"Cannot use special out unit as input in an equality");
         error = true;
         break;
       }
@@ -1521,7 +1526,7 @@ FUDeclaration* InstantiateModule(Tokenizer* tok,ModuleDef def,Arena* temp,Arena*
       // TODO: Proper error report by making VarGroup a proper struct that stores a token for the entire parsed text.
       if(nOutConnections != nInConnections){
         const char* text = StaticFormat("Number of connections missmatch %d to %d\n",nOutConnections,nInConnections);
-        ReportError(tok,decl.output.fullText,text);
+        ReportError(content,decl.output.fullText,text);
         Assert(false);
       }
 
@@ -1546,14 +1551,14 @@ FUDeclaration* InstantiateModule(Tokenizer* tok,ModuleDef def,Arena* temp,Arena*
         }
 
         if(CompareString(outName,STRING("out"))){
-          ReportError(tok,outVar.name,"Cannot use special out unit as an input");
+          ReportError(content,outVar.name,"Cannot use special out unit as an input");
           error = true;
           break;
         }
         
         FUInstance** optOutInstance = table->Get(outName);
         if(optOutInstance == nullptr){
-          ReportError(tok,outVar.name,"Did not find the following instance");
+          ReportError(content,outVar.name,"Did not find the following instance");
           error = true;
           break;
         }
@@ -1571,7 +1576,7 @@ FUDeclaration* InstantiateModule(Tokenizer* tok,ModuleDef def,Arena* temp,Arena*
         }
 
         if(optInInstance == nullptr){
-          ReportError(tok,outVar.name,"Did not find the following instance");
+          ReportError(content,outVar.name,"Did not find the following instance");
           error = true;
           break;
         }
@@ -1581,7 +1586,7 @@ FUDeclaration* InstantiateModule(Tokenizer* tok,ModuleDef def,Arena* temp,Arena*
 
         int outPort = outVar.extra.port.low;
 
-        Opt<int> optOutPort = ApplyTransforms(tok,outPort,decl.transforms);
+        Opt<int> optOutPort = ApplyTransforms(content,outPort,decl.transforms);
         if(!optOutPort.has_value()){
           error = true;
           break;
@@ -1617,7 +1622,7 @@ void Synchronize(Tokenizer* tok,BracketList<const char*> syncPoints){
   }
 }
 
-Array<TypeDefinition> ParseVersatSpecification2(String content,Arena* out,Arena* temp){
+Array<TypeDefinition> ParseVersatSpecification(String content,Arena* out,Arena* temp){
   Tokenizer tokenizer = Tokenizer(content,".%=#[](){}+:;,*~-",{"->=","->",">><","><<",">>","<<","..","^="});
   Tokenizer* tok = &tokenizer;
   
@@ -1662,106 +1667,10 @@ Array<TypeDefinition> ParseVersatSpecification2(String content,Arena* out,Arena*
   }
 
   if(anyError){
-    printf("Error occurred\n");
+    exit(-1);
   }
 
   return PushArrayFromList(out,typeList);
-}
-
-void ParseVersatSpecification(String content,Arena* temp,Arena* temp2){
-  Tokenizer tokenizer = Tokenizer(content,".%=#[](){}+:;,*~-",{"->=","->",">><","><<",">>","<<","..","^="});
-  Tokenizer* tok = &tokenizer;
-  
-  BLOCK_REGION(temp);
-  BLOCK_REGION(temp2);
-  
-  bool anyError = false;
-  while(!tok->Done()){
-    Token peek = tok->PeekToken();
-
-    if(CompareString(peek,"stop")){
-      break;
-    } else if(CompareString(peek,"debug")){
-      tok->AdvancePeek(peek);
-      tok->AssertNextToken(";");
-      debugFlag = true;
-    } else if(CompareString(peek,"module")){
-      Opt<ModuleDef> moduleDef = {};
-      region(temp2){
-        moduleDef = ParseModuleDef(tok,temp,temp2);
-      }
-
-      if(moduleDef.has_value()){
-        ModuleDef def = moduleDef.value();
-        InstantiateModule(tok,def,temp,temp2);
-      } else {
-        anyError = true;
-      }
-    } else if(CompareString(peek,"iterative")){
-      // TODO: Change to separate parsing and instantiating
-      ParseIterative(tok,temp,temp2);
-    } else if(CompareString(peek,"merge")){
-      // TODO: Change to separate parsing and instantiating
-      Opt<MergeDef> mergeDef;
-      region(temp2){
-        mergeDef = ParseMerge(tok,temp,temp2);
-      }
-      
-      if(mergeDef.has_value()){
-        DEBUG_BREAK();
-        InstantiateMerge(mergeDef.value(),temp,temp2);
-      } else {
-        anyError = true;
-      }
-    } else if(CompareString(peek,"transform")){
-      Opt<TransformDef> optTransform = {};
-      region(temp2){
-        optTransform = ParseTransformDef(tok,temp,temp2);
-      }
-
-      if(optTransform.has_value()){
-        TransformDef val = optTransform.value();
-        anyError |= InstantiateTransform(tok,val,temp);
-      }
-    } else {
-      // TODO: Report error, 
-      ReportError(tok,peek,"Unexpected token in global scope");
-      tok->AdvancePeek(peek);
-      Synchronize(tok,{"debug","module","iterative","merge","transform"});
-    }
-  }
-
-  if(anyError){
-    printf("Error occurred\n");
-  }
-}
-
-void ParseVersatSpecificationFromFilepath(String filepath,Arena* temp,Arena* temp2){
-  BLOCK_REGION(temp);
-
-  String content = PushFile(temp,StaticFormat("%.*s",UNPACK_SS(filepath)));
-  
-  if(content.size < 0){
-    printf("Failed to open file, filepath: %.*s\n",UNPACK_SS(filepath));
-    DEBUG_BREAK();
-  }
-
-  ParseVersatSpecification(content,temp,temp2);
-}
-
-// TODO: Still missing a lot of error messages.
-//       Missing types, missing names, the vast majority of things that currently generate an Assert should just be an error.
-String TypeName(TypeDefinition def){
-  switch(def.type){
-  case DefinitionType_MERGE: {
-    return def.merge.name;
-  } break;
-  case DefinitionType_MODULE: {
-    return def.module.name;
-  } break;
-  default: Assert(false);
-  }
-  return {};
 }
 
 Array<Token> TypesUsed(TypeDefinition def,Arena* out,Arena* temp){
@@ -1788,5 +1697,19 @@ Array<Token> TypesUsed(TypeDefinition def,Arena* out,Arena* temp){
   }
 
   return {};
+}
+
+void InstantiateSpecifications(String content,TypeDefinition def,Arena* temp,Arena* temp2){
+  BLOCK_REGION(temp);
+
+  switch(def.type){
+  case DefinitionType_MERGE: {
+    InstantiateMerge(def.merge,temp,temp2);
+  } break;
+  case DefinitionType_MODULE: {
+    InstantiateModule(content,def.module,temp,temp2);
+  } break;
+  default: Assert(false);
+  }
 }
 

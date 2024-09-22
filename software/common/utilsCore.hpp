@@ -107,7 +107,7 @@ const char* GetFilename(const char* fullpath);
 // Quick print functions used when doing "print" debugging
 #define NEWLINE() do{ printf("\n"); fflush(stdout);} while(0)
 #define LOCATION() do{ printf("%s:%d\n",GetFilename(__FILE__),__LINE__); fflush(stdout);} while(0)
-#define PRINTF_WITH_LOCATION(...) do{ printf("%s:%d-",__FILE__,__LINE__); printf(__VA_ARGS__); FlushStdout();} while(0)
+#define PRINTF_WITH_LOCATION(...) do{ printf("%s:%d-",__FILE__,__LINE__); printf(__VA_ARGS__); fflush(stdout);} while(0)
 #define PRINT_STRING(STR) do{ printf("%.*s\n",UNPACK_SS((STR))); fflush(stdout);} while(0)
 
 static void Terminate(){fflush(stdout); exit(-1);}

@@ -73,12 +73,6 @@ struct ArenaList{
   T* PushElem();
 };
 
-template<typename T>
-struct Stack{
-  Array<T> mem;
-  int index;
-};
-
 // Generic list manipulation, as long as the structure has a next pointer of equal type
 template<typename T>
 T* ListGet(T* start,int index){
@@ -405,16 +399,6 @@ Set<T>* PushSetFromList(Arena* out,ArenaList<T>* list){
 }
 
 template<typename T>
-Stack<T>* PushStack(Arena* out,int size){
-  Stack<T>* stack = PushStruct<Stack<T>>(out);
-  *stack = {};
-
-  stack->mem = PushArray<T>(out,size);
-
-  return stack;
-}
-
-template<typename T>
 Hashmap<T,int>* Count(Array<T> arr,Arena* out){
   Hashmap<T,int>* count = PushHashmap<T,int>(out,arr.size);
 
@@ -442,6 +426,7 @@ Hashmap<T,int>* MapElementToIndex(Array<T> arr,Arena* out){
   return toIndex;
 }
 
+
 #include <type_traits>
 
 template<typename T,typename Func>
@@ -453,6 +438,19 @@ Array<typename std::result_of<Func(T)>::type> Map(Array<T> array,Arena* out,Func
     *arr.PushElem() = f(t);
   }
   return EndArray(arr);
+}
+
+template<typename T,typename Func>
+Hashmap<typename std::result_of<Func(T)>::type,T>* ExtractMap(Array<T> array,Arena* out,Func f){
+  using ST = typename std::result_of<Func(T)>::type;
+
+  Hashmap<ST,T>* res = PushHashmap<ST,T>(out,array.size);
+  
+  for(T t : array){
+    res->Insert(f(t),t);
+  }
+  
+  return res;
 }
 
 template<typename T>

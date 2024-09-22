@@ -49,12 +49,7 @@ struct Arena{
   size_t used;
   size_t totalAllocated;
   size_t maximum;
-
-  // TODO: Locked could be an enum for all the cases, like dynamic array and string. That way we could actually check if we are doing anything bad (Check inside a PushString if we are inside a DynamicArray section, for example).
-  bool locked; // Certain constructs [like DynamicArray] "lock" arena preventing the arena from being used by other functions.
 }; 
-
-#define VERSAT_DEBUG
 
 void AlignArena(Arena* arena,int alignment);
 Arena InitArena(size_t size); // Calls calloc
@@ -139,9 +134,8 @@ T* PushStruct(DynamicArena* arena){AlignArena(arena,alignof(T)); T* res = (T*) P
 template<typename T>
 struct DynamicArray{
   ArenaMark mark;
+  Byte* nextExpectedAddress; // Simple detection if somehow the arena is used while building an array
   
-  ~DynamicArray();
-
   Array<T> AsArray();
   T* PushElem();
 };
@@ -151,6 +145,68 @@ DynamicArray<T> StartArray(Arena* arena);
 
 template<typename T>
 Array<T> EndArray(DynamicArray<T> arr);
+
+template<typename T>
+struct GrowableArray{
+  Arena* arena;
+  T* data;
+  int size;
+  int capacity;
+
+  Array<T> AsArray();
+  T* PushElem();
+};
+
+template<typename T>
+GrowableArray<T> StartGrowableArray(Arena* arena,int startCapacity = 1){
+  GrowableArray<T> res = {};
+
+  res.arena = arena;
+  res.data = PushArray<T>(arena,startCapacity).data;
+  res.size = 0;
+  res.capacity = startCapacity;
+
+  return res;
+}
+
+template<typename T>
+T* GrowableArray<T>::PushElem(){
+  // TODO: Still need to handle alignment problems, if they appear
+  
+  if(size < capacity){
+    return &data[size++];
+  }
+
+  // Simply extend array
+  if(data + capacity == (T*) PushBytes(arena,0)){
+    //printf("Extended\n");
+    size += 1;
+    capacity += 1;
+    return PushStruct<T>(arena); // NOTE: It is possible that there exists an alignment bug hidden here, but still have not found any example that would trigger it. 
+  }
+
+  // Need to copy it
+  //printf("Copied\n");
+  Array<T> newArray = PushArray<T>(arena,capacity * 2);
+  capacity = newArray.size;
+  
+  memcpy(newArray.data,data,sizeof(T) * size);
+  data = newArray.data;
+  return &data[size++];
+}
+
+template<typename T>
+Array<T> GrowableArray<T>::AsArray(){
+  Array<T> res = {};
+  res.data = data;
+  res.size = size;
+  return res;
+}
+
+template<typename T>
+Array<T> EndArray(GrowableArray<T> arr){
+  return arr.AsArray();
+}
 
 struct DynamicString{
   Arena* arena;
@@ -254,6 +310,27 @@ public:
 };
 
 template<typename T> bool Inside(PushPtr<T>* push,T* ptr);
+
+template<typename T>
+class Stack{
+public:
+  Array<T> array;
+  int used;
+
+  int Size(){return used;};
+  void Push(T t){array[used++] = t;};
+  T Pop(){Assert(used > 0); return array[--used];};
+};
+
+template<typename T>
+Stack<T>* PushQueue(Arena* out,int maxSize){
+  Stack<T>* res = PushStruct<Stack<T>>(out);
+  *res = {};
+  
+  res->array = PushArray<T>(out,maxSize);
+
+  return res;
+}
 
 class BitArray;
 
@@ -596,21 +673,9 @@ template<typename T> DynamicArray<T> StartArray(Arena* arena){
   AlignArena(arena,alignof(T));
 
   arr.mark = MarkArena(arena);
-
-#ifdef VERSAT_DEBUG
-  arena->locked = true;
-#endif
-
+  arr.nextExpectedAddress = PushBytes(arena,0);
+  
   return arr;
-}
-
-template<typename T>
-DynamicArray<T>::~DynamicArray(){
-  // Unlocking the arena must be done in the destructor as well otherwise
-  // a return of function would leave the arena locked for good.
-#ifdef VERSAT_DEBUG
-  mark.arena->locked = false;
-#endif
 }
 
 template<typename T> Array<T> DynamicArray<T>::AsArray(){
@@ -628,23 +693,16 @@ template<typename T> Array<T> DynamicArray<T>::AsArray(){
 }
 
 template<typename T> T* DynamicArray<T>::PushElem(){
-#ifdef VERSAT_DEBUG
-  Assert(mark.arena->locked);
-  mark.arena->locked = false;
-#endif
-
+  Assert(nextExpectedAddress == PushBytes(this->mark.arena,0));
+  
   T* res = PushStruct<T>(this->mark.arena);
 
-#ifdef VERSAT_DEBUG
-  mark.arena->locked = true;
-#endif
-
+  nextExpectedAddress = PushBytes(this->mark.arena,0);
+  
   return res;
 }
 
 template<typename T> Array<T> EndArray(DynamicArray<T> arr){
-  arr.mark.arena->locked = false;
-  
   return arr.AsArray();
 }
 

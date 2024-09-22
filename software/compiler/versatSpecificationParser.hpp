@@ -93,22 +93,23 @@ struct TypeAndInstance{
   Token instanceName;
 };
 
-struct ModuleDef{
+struct DefBase{
   Token name;
+};
+
+struct ModuleDef : public DefBase{
   Token numberOutputs; // TODO: Not being used. Not sure if we gonna actually add this or not.
   Array<VarDeclaration> inputs;
   Array<InstanceDeclaration> declarations;
   Array<ConnectionDef> connections;
 };
 
-struct TransformDef{
-  Token name;
+struct TransformDef : public DefBase{
   Array<VarDeclaration> inputs;
   Array<ConnectionDef> connections;
 };
 
-struct MergeDef{
-  Token name;
+struct MergeDef : public DefBase{
   Array<TypeAndInstance> declarations;
   Array<SpecificMergeNode> specifics;
 };
@@ -122,6 +123,7 @@ enum DefinitionType{
 struct TypeDefinition{
   DefinitionType type;
   union {
+    DefBase base;
     ModuleDef module;
     MergeDef merge;
   };
@@ -140,7 +142,6 @@ struct HierarchicalName{
 
 typedef Pair<HierarchicalName,HierarchicalName> SpecNode;
 
-String TypeName(TypeDefinition def);
 Array<Token> TypesUsed(TypeDefinition def,Arena* out,Arena* temp);
-Array<TypeDefinition> ParseVersatSpecification2(String content,Arena* temp,Arena* temp2);
-
+Array<TypeDefinition> ParseVersatSpecification(String content,Arena* out,Arena* temp);
+void InstantiateSpecifications(String content,TypeDefinition def,Arena* temp,Arena* temp2);

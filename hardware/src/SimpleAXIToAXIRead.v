@@ -49,7 +49,7 @@ module SimpleAXItoAXIRead #(
    wire read_last_transfer;
    wire burst_i_align_empty;
    // Read
-   burst_align #(
+   BurstAlign #(
       .AXI_DATA_W(AXI_DATA_W)
    ) aligner (
       .offset_i(m_raddr_i[OFFSET_W-1:0]),
@@ -79,7 +79,7 @@ module SimpleAXItoAXIRead #(
    reg [AXI_LEN_W-1:0] read_axi_len;
    assign axi_arlen_o = read_axi_len;
 
-   transfer_controller #(
+   AXITransferController #(
       .AXI_ADDR_W(AXI_ADDR_W),
       .AXI_DATA_W(AXI_DATA_W),
       .AXI_LEN_W (AXI_LEN_W),
