@@ -295,6 +295,8 @@ ConsolidationResult GenerateConsolidationGraph(Accelerator* accel0,Accelerator* 
 #endif
 
   DynamicArray<MappingNode> nodes = StartArray<MappingNode>(out);
+
+  DEBUG_BREAK();
 #if 1
   // Check possible edge mapping
 
@@ -352,9 +354,9 @@ ConsolidationResult GenerateConsolidationGraph(Accelerator* accel0,Accelerator* 
 #endif
 
   // Check node mapping
-#if 0
+#if 1
   if(1 /*options.mapNodes */){
-    for(FUInstance* instA : accel0->instances){
+    FOREACH_LIST(FUInstance*,instA,accel0->allocated){
       PortInstance portA = {};
       portA.inst = instA;
 
@@ -362,7 +364,7 @@ ConsolidationResult GenerateConsolidationGraph(Accelerator* accel0,Accelerator* 
         continue;
       }
 
-      for(FUInstance* instB : accel1->instances){
+      FOREACH_LIST(FUInstance*,instB,accel1->allocated){
         PortInstance portB = {};
         portB.inst = instB;
 

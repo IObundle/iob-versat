@@ -27,7 +27,7 @@ identity = lambda x : x
 #       breaks stuff up. Also no error detecting or something like "we detected too many loops, check if this value is correct because it appears to not be good"
 #       This detection can be accomplished by inspecting the derivative values and checking which value slightly differentiates between the remaining
 
-DO_SHIFT_AND_INCREMENT_TOGETHER = False
+DO_SHIFT_AND_INCREMENT_TOGETHER = True
 
 @dataclass
 class SinglePolynomial:
@@ -128,18 +128,20 @@ def RemoveElementsAfterIndex(l,cutoff):
     return res
 
 
-def GenerateRecursive(l,start = ZERO,incr = ONE,period = 1,shift = ONE,iterations = 1):
+def GenerateOneLoopSet(l,start,incr = ONE,period = 1,shift = ONE,iterations = 1):
     addr = start
     for y in range(iterations):
         for x in range(period):
             l.append(addr)
             addr += incr
+
         if not DO_SHIFT_AND_INCREMENT_TOGETHER:
             addr -= incr
+
         addr += shift
 
 def GenerateGenericRecursive(l,start,values):
-    if(len(values) > 4):
+    if(len(values) >= 8): # At least 2 sets of loops
         incr = values[-4]
         period = values[-3]
         shift = values[-2]
@@ -154,8 +156,19 @@ def GenerateGenericRecursive(l,start,values):
                 addr -= incr
 
             addr += shift
+    elif(len(values) >= 6): # One loop set and half of another
+        incr = values[-2]
+        period = values[-1]
+
+        addr = start
+        for x in range(period):
+            GenerateGenericRecursive(l,addr,values[:-2])
+            addr += incr
+    
+        if not DO_SHIFT_AND_INCREMENT_TOGETHER:
+            addr -= incr
     else:
-        GenerateRecursive(l,start,*values)
+        GenerateOneLoopSet(l,start,*values)
 
 def GenerateGeneric(values):
     l = []
@@ -536,14 +549,16 @@ def PrintParameters(parameterList):
             print(f"{base[index%4]}{(index // 4) + 1}: {param}")
 
 if __name__ == "__main__":
-    # If python version is too low, just take each 
-    match 3:
-        case 1: listOfAddresses = Pre([0, 1, 2])
-        case 2: listOfAddresses = Pre([0,1,2,10,11,12,20,21,22])
-        case 3: listOfAddresses = Pre([0,1,2,10,11,12,20,21,22,1,2,3,11,12,13,21,22,23,10,11,12,20,21,22,30,31,32,11,12,13,21,22,23,31,32,33])
-        case 4: listOfAddresses = EvaluateString("[x,x+1,x+2]")
-        case 5: listOfAddresses = EvaluateString("[0,1,2,x,1+x,2+x,2x,1+2x,2+2x]")
-    
+    match 5:
+        case 0: listOfAddresses = Pre([0, 1, 2])
+        case 1: listOfAddresses = Pre([0,1,2,10,11,12,20,21,22])
+        case 2: listOfAddresses = Pre([0,1,2,10,11,12,20,21,22,1,2,3,11,12,13,21,22,23,10,11,12,20,21,22,30,31,32,11,12,13,21,22,23,31,32,33])
+        case 3: listOfAddresses = EvaluateString("[x,x+1,x+2]")
+        case 4: listOfAddresses = EvaluateString("[0,1,2,x,1+x,2+x,2x,1+2x,2+2x]")
+        case 5: listOfAddresses = Pre([0,1,416,417,173056,173057,173472,173473,346112,346113,346528,346529])
+        case 6: listOfAddresses = Pre([0,1,2,418,419,420,836,837,838,174724,174725,174726,175142,175143,175144,175560,175561,175562])
+        case 7: listOfAddresses = Pre([0,3,6,1254,1257,1260,2508,2511,2514])
+
     if(False): 
         parameters = GenerateParameters(listOfAddresses)
         print("Parameters:")

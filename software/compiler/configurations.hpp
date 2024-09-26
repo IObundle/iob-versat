@@ -66,18 +66,21 @@ struct TestResult{
   InstanceConfigurationOffsets subOffsets;
   Array<PortInstance> multiplexersPorts;
   String name;
-  Array<int> muxConfigs;
+  Array<int> muxConfigs; //
   Array<int> inputDelay;
   Array<int> outputLatencies;
 };
 
 struct AccelInfo{
-  Array<Array<InstanceInfo>> infos; // Should join names with infos
+  // An array that abstracts all the common values of any merge type into a single one. Code that does not care about dealing with merge types can access this data
   Array<InstanceInfo> baseInfo;
-  Array<String> names;
+
+  // Each array contains one value for each merge type.
+  Array<Array<InstanceInfo>> infos; // Should join names with infos
+  Array<String> names; // Merge type names
   Array<Array<int>> inputDelays;
   Array<Array<int>> outputDelays;
-  Array<Array<int>> muxConfigs;
+  Array<Array<int>> muxConfigs; // The values that the multiplexer instances must be configured to in order to enable the datapath associated to the type 
   
   int memMappedBitsize;
   int howManyMergedUnits;
