@@ -510,8 +510,8 @@ extern "C" void VersatAcceleratorSimulate(){
   for(int i = 0; !IsDone() ; i++){
     InternalUpdateAccelerator();
 
-    if(i >= 10000){
-      printf("Accelerator simulation has surpassed 10000 cycles for a single run\n");
+    if(i >= 10000000){
+      printf("Accelerator simulation has surpassed 10000000 cycles for a single run\n");
       printf("Assuming that the accelerator is stuck in a never ending loop\n");
       printf("Terminating simulation\n");
       fflush(stdout);

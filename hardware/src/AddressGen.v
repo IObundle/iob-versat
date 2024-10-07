@@ -25,7 +25,7 @@ module MyAddressGen #(
    input        [ DELAY_W - 1:0] delay_i,
 
    //outputs 
-   output reg                valid_o,
+   output                    valid_o,
    input                     ready_i,
    output reg [ADDR_W - 1:0] addr_o,
 
@@ -41,6 +41,9 @@ module MyAddressGen #(
 
    wire iterCond = ((iter + 1) == iterations_i || iterations_i == 0);
    wire perCond = ((per + 1) == period_i || period_i == 0);
+   reg valid;
+
+   assign valid_o = valid && per < duty_i;
 
    always @(posedge clk_i, posedge rst_i) begin
       if (rst_i) begin
@@ -48,27 +51,27 @@ module MyAddressGen #(
          addr_o        <= 0;
          iter          <= 0;
          per           <= 0;
-         valid_o       <= 0;
+         valid       <= 0;
          done_o        <= 1'b1;
       end else if (run_i) begin
          delay_counter <= delay_i;
          addr_o        <= start_i;
          iter          <= 0;
          per           <= 0;
-         valid_o       <= 0;
+         valid       <= 0;
          done_o        <= 1'b0;
          if (delay_i == 0) begin
-            valid_o <= 1'b1;
+            valid <= 1'b1;
          end
       end else if (|delay_counter) begin
          delay_counter <= delay_counter - 1;
-         valid_o       <= (delay_counter == 1);
-      end else if (valid_o && ready_i) begin
+         valid       <= (delay_counter == 1);
+      end else if (valid && ready_i) begin
          if (perCond && iterCond) begin
             per     <= 0;
             iter    <= 0;
             done_o  <= 1'b1;
-            valid_o <= 0;
+            valid <= 0;
          end
          if (perCond && !iterCond) begin
             addr_o <= addr_o + (shift_i << OFFSET_W);

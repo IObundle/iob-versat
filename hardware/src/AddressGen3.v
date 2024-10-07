@@ -1,6 +1,6 @@
 `timescale 1ns / 1ps
 
-module MyAddressGen3 #(
+module AddressGen3 #(
    parameter ADDR_W   = 10,
    parameter PERIOD_W = 10,
    parameter DELAY_W  = 7,
@@ -39,6 +39,7 @@ module MyAddressGen3 #(
    output reg                valid_o,
    input                     ready_i,
    output reg [ADDR_W - 1:0] addr_o,
+   output                    store_o,
 
    output reg done_o
 );
@@ -72,6 +73,8 @@ wire [5:0] cases = {iter3Cond,per3Cond,iter2Cond,per2Cond,iterCond,perCond};
    Basically need a module that implements per and iter logic only.
 
 */
+
+assign store_o = (per < duty_i);
 
 always @(posedge clk_i, posedge rst_i) begin
    if (rst_i) begin

@@ -1,5 +1,7 @@
 `timescale 1ns / 1ps
 
+`define COMPLEX_INTERFACE
+
 module VWrite #(
    parameter DATA_W     = 32,
    parameter ADDR_W     = 14,
@@ -39,39 +41,35 @@ module VWrite #(
 
    // configurations
    input [AXI_ADDR_W-1:0] ext_addr,
-   input [  PERIOD_W-1:0] perA,
-   input [    ADDR_W-1:0] incrA,
-   input [     LEN_W-1:0] length,
+   input [  PERIOD_W-1:0] write_per,
+   input [    ADDR_W-1:0] write_incr,
+   input [PERIOD_W-1:0]   write_duty,
+
+   input [  ADDR_W-1:0]   write_iter,
+   input [  ADDR_W-1:0]   write_shift,
+
+   input [     LEN_W-1:0] write_length,
    input                  pingPong,
+   input                  write_enabled,
 
-   // configurations
-`ifdef COMPLEX_INTERFACE
-   input [PERIOD_W-1:0] dutyA,
-   input [  ADDR_W-1:0] int_addr,
-   input [  ADDR_W-1:0] iterA,
-   input [  ADDR_W-1:0] shiftA,
-`endif
+   input [  ADDR_W-1:0] input_iter,
+   input [PERIOD_W-1:0] input_per,
+   input [PERIOD_W-1:0] input_duty,
+   input [  ADDR_W-1:0] input_start,
+   input [  ADDR_W-1:0] input_shift,
+   input [  ADDR_W-1:0] input_incr,
 
-   input [  ADDR_W-1:0] iterB,
-   input [PERIOD_W-1:0] perB,
-   input [PERIOD_W-1:0] dutyB,
-   input [  ADDR_W-1:0] startB,
-   input [  ADDR_W-1:0] shiftB,
-   input [  ADDR_W-1:0] incrB,
-   input [ DELAY_W-1:0] delay0,    // delayB
-   input                reverseB,
+   input [  ADDR_W-1:0] input_iter2,
+   input [PERIOD_W-1:0] input_per2,
+   input [  ADDR_W-1:0] input_shift2,
+   input [  ADDR_W-1:0] input_incr2,
 
-   input [  ADDR_W-1:0] iter2B,
-   input [PERIOD_W-1:0] per2B,
-   input [  ADDR_W-1:0] shift2B,
-   input [  ADDR_W-1:0] incr2B,
-
-   input enableWrite
+   input [ DELAY_W-1:0] delay0
 );
 
    assign databus_addr_0  = ext_addr;
    assign databus_wstrb_0 = ~0;
-   assign databus_len_0   = length;
+   assign databus_len_0   = write_length;
 
    reg  doneWrite; // Databus write part
    reg  doneStore;
@@ -83,7 +81,7 @@ module VWrite #(
          doneWrite <= 1'b1;
          doneStore <= 1'b1;
       end else if (run) begin
-         doneWrite <= !enableWrite;
+         doneWrite <= !write_enabled;
          doneStore <= 1'b0;
       end else if (running) begin
          doneStore <= doneStore_int;
@@ -94,11 +92,11 @@ module VWrite #(
    // Ping pong and related logic for the initial address
    reg pingPongState;
 
-   wire [ADDR_W-1:0] startA = {pingPong && !pingPongState , {(ADDR_W-1){1'b0}}};
+   wire [ADDR_W-1:0] write_start = {pingPong && !pingPongState , {(ADDR_W-1){1'b0}}};
 
    // port addresses and enables
-   wire [ADDR_W-1:0] addrB;
-   wire [ADDR_W-1:0] startB_inst = {pingPong && pingPongState, startB[ADDR_W-2:0]};
+   wire [ADDR_W-1:0] store_addr;
+   wire [ADDR_W-1:0] input_start_inst = {pingPong && pingPongState, input_start[ADDR_W-2:0]};
 
    // Ping pong 
    always @(posedge clk, posedge rst) begin
@@ -107,42 +105,53 @@ module VWrite #(
    end
 
    // mem enables output by addr gen
-   wire enB;
+   wire store_en,do_store;
 
-   wire [DATA_W-1:0] data_to_wrB = in0;
+   wire [DATA_W-1:0] store_data = in0;
 
    wire gen_valid, gen_ready;
    wire [ADDR_W-1:0] gen_addr;
 
-   SimpleAddressGen #(
+   AddressGen3 #(
       .ADDR_W(ADDR_W),
       .DATA_W(AXI_DATA_W),
       .PERIOD_W(PERIOD_W)
    ) addrgenWrite (
       .clk_i(clk),
       .rst_i(rst),
-      .run_i(run && enableWrite),
+      .run_i(run && write_enabled),
 
       //configurations 
-      .period_i(perA),
+      .period_i(write_per),
       .delay_i (0),
-      .start_i (startA),
-      .incr_i  (incrA),
+      .start_i (write_start),
+      .incr_i  (write_incr),
 
 `ifdef COMPLEX_INTERFACE
-      .iterations_i(iterA),
-      .duty_i      (dutyA),
-      .shift_i     (shiftA),
+      .iterations_i(write_iter),
+      .duty_i      (write_duty),
+      .shift_i     (write_shift),
 `endif
+
+      .period2_i(0),
+      .incr2_i(0),
+      .iterations2_i(0),
+      .shift2_i(0),
+
+      .period3_i(0),
+      .incr3_i(0),
+      .iterations3_i(0),
+      .shift3_i(0),
 
       //outputs 
       .valid_o(gen_valid),
       .ready_i(gen_ready),
       .addr_o (gen_addr),
+      .store_o(),
       .done_o ()
    );
 
-   SimpleAddressGen #(
+   AddressGen3 #(
       .ADDR_W(ADDR_W),
       .DATA_W(DATA_W),
       .DELAY_W(DELAY_W),
@@ -153,21 +162,30 @@ module VWrite #(
       .run_i(run),
 
       //configurations 
-      .period_i(perB),
+      .period_i(input_per),
       .delay_i (delay0),
-      .start_i (startB_inst),
-      .incr_i  (incrB),
+      .start_i (input_start_inst),
+      .incr_i  (input_incr),
 
-`ifdef COMPLEX_INTERFACE
-      .iterations_i(iterB),
-      .duty_i      (dutyB),
-      .shift_i     (shiftB),
-`endif
+      .iterations_i(input_iter),
+      .duty_i      (input_duty),
+      .shift_i     (input_shift),
+
+      .period2_i(input_per2),
+      .incr2_i(input_incr2),
+      .iterations2_i(input_iter2),
+      .shift2_i(input_shift2),
+
+      .period3_i(0),
+      .incr3_i(0),
+      .iterations3_i(0),
+      .shift3_i(0),
 
       //outputs 
-      .valid_o(enB),
+      .valid_o(store_en),
       .ready_i(1'b1),
-      .addr_o (addrB),
+      .addr_o (store_addr),
+      .store_o(do_store),
       .done_o (doneStore_int)
    );
 
@@ -204,9 +222,9 @@ module VWrite #(
 
    assign databus_valid_0   = (m_valid & !doneWrite);
 
-   assign ext_2p_write_0    = enB;
-   assign ext_2p_addr_out_0 = addrB;
-   assign ext_2p_data_out_0 = data_to_wrB;
+   assign ext_2p_write_0    = store_en && do_store;
+   assign ext_2p_addr_out_0 = store_addr;
+   assign ext_2p_data_out_0 = store_data;
 
    assign ext_2p_read_0     = read_en;
    assign ext_2p_addr_in_0  = read_addr;
