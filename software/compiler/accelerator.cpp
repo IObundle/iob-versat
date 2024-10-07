@@ -100,6 +100,10 @@ FUInstance* CreateFUInstance(Accelerator* accel,FUDeclaration* type,String name)
 
   FUInstance* inst = PushStruct<FUInstance>(accel->accelMemory);
 
+  int parameterSize = type->parameters.size;
+  inst->parameterValues = PushArray<ParameterValue>(accel->accelMemory,parameterSize); 
+  Memset(inst->parameterValues,{});
+  
   inst->inputs = PushArray<PortInstance>(accel->accelMemory,type->NumberInputs());
   inst->outputs = PushArray<bool>(accel->accelMemory,type->NumberOutputs());
 
@@ -200,10 +204,14 @@ Accelerator* CopyAccelerator(Accelerator* accel,AcceleratorPurpose purpose,bool 
   return newAccel;
 }
 
-FUInstance* CopyInstance(Accelerator* newAccel,FUInstance* oldInstance,bool preserveIds,String newName){
-  FUInstance* newInst = CreateFUInstance(newAccel,oldInstance->declaration,newName);
+FUInstance* CopyInstance(Accelerator* accel,FUInstance* oldInstance,bool preserveIds,String newName){
+  FUInstance* newInst = CreateFUInstance(accel,oldInstance->declaration,newName);
 
-  newInst->parameters = oldInstance->parameters;
+  newInst->parameterValues = PushArray<ParameterValue>(accel->accelMemory,oldInstance->parameterValues.size);
+  for(int i = 0; i < newInst->parameterValues.size; i++){
+    newInst->parameterValues[i] = oldInstance->parameterValues[i];
+  }
+
   newInst->portIndex = oldInstance->portIndex;
   
   if(preserveIds){
@@ -870,7 +878,10 @@ void FixDelays(Accelerator* accel,Hashmap<Edge,DelayInfo>* edgeDelays,Arena* tem
 
       buffer = CreateFUInstance(accel,BasicDeclaration::fixedBuffer,bufferName);
       buffer->bufferAmount = delay - BasicDeclaration::fixedBuffer->baseConfig.outputLatencies[0];
-      buffer->parameters = PushString(perm,"#(.AMOUNT(%d))",buffer->bufferAmount);
+      String bufferAmountString = PushString(perm,"%d",buffer->bufferAmount);
+      SetParameter(buffer,STRING("AMOUNT"),bufferAmountString);
+
+      //buffer->parameters = PushString(perm,"#(.AMOUNT(%d))",buffer->bufferAmount);
     } else {
       String bufferName = PushString(perm,"buffer%d",buffersInserted);
 
@@ -1159,17 +1170,19 @@ VersatComputedValues ComputeVersatValues(Accelerator* accel,bool useDMA){
   return res;
 }
 
-#if 0
-FUInstance* GetFUInstance(Accelerator* accel,FUInstance* inst){
-  FOREACH_LIST(FUInstance*,ptr,accel->allocated){
-    if(ptr == inst){
-      return ptr;
+bool SetParameter(FUInstance* inst,String parameterName,String parameterValue){
+  FUDeclaration* decl = inst->declaration;
+  int paramSize = decl->parameters.size;
+  
+  for(int i = 0; i < paramSize; i++){
+    if(CompareString(decl->parameters[i],parameterName)){
+      inst->parameterValues[i].val = parameterValue;
+      return true;
     }
   }
-  Assert(false); // For now, this should not fail
-  return nullptr;
+
+  return false;
 }
-#endif
 
 void CalculateNodeType(FUInstance* node){
   node->type = NodeType_UNCONNECTED;

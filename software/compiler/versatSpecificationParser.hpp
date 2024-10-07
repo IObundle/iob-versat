@@ -71,7 +71,8 @@ struct InstanceDeclaration{
   enum {NONE,STATIC,SHARE_CONFIG} modifier;
   Token typeName;
   Array<VarDeclaration> declarations;
-  String parameters;
+  Array<Pair<String,String>> parameters;
+  //String parameters;
 };
 
 struct ConnectionDef{

@@ -71,6 +71,10 @@ FUDeclaration* RegisterModuleInfo(ModuleInfo* info,Arena* temp){
 
   Array<ParameterExpression> instantiated = PushArray<ParameterExpression>(perm,info->defaultParameters.size);
 
+  decl.parameters = Map(info->defaultParameters,perm,[](ParameterExpression p) -> String{
+    return p.name;
+  });
+  
   for(int i = 0; i < instantiated.size; i++){
     ParameterExpression def = info->defaultParameters[i];
 
@@ -553,14 +557,22 @@ FUDeclaration* RegisterSubUnit(Accelerator* circuit,Arena* temp,Arena* temp2){
 #endif
 
   String name = circuit->name;
-
-  //OutputDelayDebugInfo(circuit,temp); // Disabled for now
   
   FUDeclaration decl = {};
   decl.name = name;
 
+  // NOTE: These values must match what is expected from the accelerator template.
+  //       Maybe a bit clubersome, eventually might rework this so the parameters are the set of values from
+  decl.parameters = PushArray<String>(permanent,6);
+  decl.parameters[0] = STRING("ADDR_W");
+  decl.parameters[1] = STRING("DATA_W");
+  decl.parameters[2] = STRING("DELAY_W");
+  decl.parameters[3] = STRING("AXI_ADDR_W");
+  decl.parameters[4] = STRING("AXI_DATA_W");
+  decl.parameters[5] = STRING("LEN_W");
+  
   decl.type = FUDeclarationType_COMPOSITE;
-
+  
   OutputDebugDotGraph(circuit,STRING("DefaultCircuit.dot"),temp);
 
   decl.baseCircuit = CopyAccelerator(circuit,AcceleratorPurpose_BASE,true,nullptr);

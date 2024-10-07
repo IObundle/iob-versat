@@ -127,7 +127,6 @@ def RemoveElementsAfterIndex(l,cutoff):
 
     return res
 
-
 def GenerateOneLoopSet(l,start,incr = ONE,period = 1,shift = ONE,iterations = 1):
     addr = start
     for y in range(iterations):

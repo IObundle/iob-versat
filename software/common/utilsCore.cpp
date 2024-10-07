@@ -19,6 +19,14 @@
 
 namespace fs = std::filesystem;
 
+String Offset(String base,int amount){
+  String res = base;
+  res.data += amount;
+  res.size -= amount;
+
+  return res;
+}
+
 char* StaticFormat(const char* format,...){
   static const int BUFFER_SIZE = 1024*4;
   static char buffer[BUFFER_SIZE];

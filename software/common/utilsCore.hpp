@@ -298,6 +298,8 @@ inline String STRING(const char* str,int size){return (String){str,size};}
 inline String STRING(const unsigned char* str){return (String){(const char*)str,(int) strlen((const char*) str)};}
 inline String STRING(const unsigned char* str,int size){return (String){(const char*)str,size};}
 
+String Offset(String base,int amount);
+
 template<> class std::hash<String>{
 public:
    std::size_t operator()(String const& s) const noexcept{

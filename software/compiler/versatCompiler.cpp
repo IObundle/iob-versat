@@ -394,6 +394,11 @@ int main(int argc,char* argv[]){
   *globalPermanent = InitArena(Megabyte(128));
 
 #if 0
+  Pool<int> test = {};
+  *test.Alloc() = 5;
+  *test.Alloc() = 10;
+  *test.Alloc() = 15;
+  
   Array<Test> array = PushArray<Test>(globalPermanent,2);
   array[0] = {1,2};
   array[1] = {2,3};
@@ -570,7 +575,7 @@ int main(int argc,char* argv[]){
     }
   }
   
-  // We need to do this after parsing the modules because the majority of these special types come from verilog files.
+  // We need to do this after parsing the modules because the majority of these special types come from verilog files
   BasicDeclaration::buffer = GetTypeByName(STRING("Buffer"));
   BasicDeclaration::fixedBuffer = GetTypeByName(STRING("FixedBuffer"));
   BasicDeclaration::pipelineRegister = GetTypeByName(STRING("PipelineRegister"));
@@ -714,8 +719,12 @@ int main(int argc,char* argv[]){
       }
     }
   }
-  
-  TOP->parameters = STRING("#(.AXI_ADDR_W(AXI_ADDR_W),.LEN_W(LEN_W))");
+ 
+  if(!SetParameter(TOP,STRING("AXI_ADDR_W"),STRING("AXI_ADDR_W"))){
+    printf("Error\n");
+  }
+  SetParameter(TOP,STRING("LEN_W"),STRING("LEN_W"));
+
   OutputVersatSource(accel,
                      globalOptions.hardwareOutputFilepath.data,
                      globalOptions.softwareOutputFilepath.data,

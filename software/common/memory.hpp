@@ -606,6 +606,10 @@ struct GenericPoolIterator{
   Byte* operator*();
 };
 
+GenericPoolIterator IteratePool(void* pool,int sizeOfType,int alignmentOfType);
+bool HasNext(GenericPoolIterator iter);
+void* Next(GenericPoolIterator& iter);
+
 template<typename T> class Pool;
 
 template<typename T>

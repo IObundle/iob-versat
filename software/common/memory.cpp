@@ -615,6 +615,28 @@ BitIterator BitArray::end(){
   return iter;
 }
 
+GenericPoolIterator IteratePool(void* pool,int sizeOfType,int alignmentOfType){
+  GenericPoolIterator iter = {};
+  if(pool == nullptr){
+    return iter;
+  }
+  
+  Byte* mem = *(Byte**) pool;
+  iter.Init(mem,sizeOfType);
+
+  return iter;
+}
+
+bool HasNext(GenericPoolIterator iter){
+  return iter.HasNext();
+}
+
+void* Next(GenericPoolIterator& iter){
+  void* res = *iter;
+  ++iter;
+  return res;
+}
+
 PoolInfo CalculatePoolInfo(int elemSize){
   PoolInfo info = {};
 

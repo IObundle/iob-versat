@@ -645,7 +645,7 @@ AccelInfo CalculateAcceleratorInfo(Accelerator* accel,bool recursive,Arena* out,
   //       Printing a GraphArray struct should tell me everything I need to know about the accelerator
   AccelInfo result = {};
 
-  //BLOCK_REGION(temp); MARKED - Some bug occurs, probably because the function is a mess and we have no idea how memory is actually being used.
+  //BLOCK_REGION(temp); NOTE: - Some bug occurs, probably because the function is a mess and we have no idea how memory is actually being used.
   Array<Partition> partitions = GenerateInitialPartitions(accel,temp);
 
   int totalMaxBitsize = 0;
@@ -1266,7 +1266,7 @@ AccelInfo CalculateAcceleratorInfoNoDelay(Accelerator* accel,bool recursive,Aren
   //       Printing a GraphArray struct should tell me everything I need to know about the accelerator
   AccelInfo result = {};
 
-  // MARKED - Some bug occurs, probably because the function is a mess and we have no idea 
+  // NOTE - Some bug occurs, probably because the function is a mess and we have no idea how the memory is being used
   //BLOCK_REGION(temp);
   
   DynamicArray<Partition> partitionsArr = StartArray<Partition>(temp);

@@ -105,9 +105,14 @@ struct FUDeclaration{
   ConfigurationInfo baseConfig;
   Array<ConfigurationInfo> configInfo; // Info for each merged view for all fixedDelayCircuit instances, even if they do not belong to the merged view (unitBelongs indicates such cases)
   
+  Array<String> parameters; // For now, only the parameters extracted from verilog files
+  
   Opt<int> memoryMapBits; // 0 is a valid memory map size, so optional indicates that no memory map exists
   int nIOs;
-  
+
+  // Either we have the FUDeclaration be a instantiation of a FUType
+  // Or we have the memory keep the values in a expression format.
+  Array<ExternalMemoryInterfaceExpression> externalExpressionMemory;
   Array<ExternalMemoryInterface> externalMemory;
 
   // Stores different accelerators depending on properties we want

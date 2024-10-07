@@ -105,12 +105,18 @@ enum NodeType{
   NodeType_SOURCE_AND_SINK
 };
 
+struct ParameterValue{
+  String val; // Mostly a placeholder for now. Eventually want a better way of handling parameters and expression of parameters
+};
+
 struct FUInstance{
   String name;
 
-  // This should be versat side only, but it's easier to have them here for now
-  String parameters; // TODO: Actual parameter structure
+  Array<ParameterValue> parameterValues; // Associates a value to the corresponding parameter on the associated FUDeclaration
+
+  //String parameters; // TODO: Actual parameter structure
   Accelerator* accel;
+
   FUDeclaration* declaration;
   int id;
 
@@ -296,6 +302,9 @@ int ExternalMemoryByteSize(Array<ExternalMemoryInterface> interfaces); // Size o
 //       (or something that FUDeclaration would be composed off)
 //       
 VersatComputedValues ComputeVersatValues(Accelerator* accel,bool useDMA);
+
+// Returns false if parameter does not exist 
+bool SetParameter(FUInstance* inst,String parameterName,String parameterValue);
 
 Array<Edge> GetAllEdges(Accelerator* accel,Arena* out);
 EdgeIterator IterateEdges(Accelerator* accel);

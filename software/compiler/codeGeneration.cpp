@@ -617,6 +617,44 @@ Array<TypeStructInfoElement> ExtractStructuredConfigs(Array<InstanceInfo> info,A
   return PushArrayFromList(out,elems);
 }
 
+String GenerateVerilogParameterization(FUInstance* inst,Arena* out){
+  FUDeclaration* decl = inst->declaration;
+  Array<String> parameters = decl->parameters;
+  int size = parameters.size;
+
+  if(size == 0){
+    return {};
+  }
+  
+  auto mark = MarkArena(out);
+  
+  auto builder = StartString(out);
+  PushString(out,"#(");
+  bool insertedOnce = false;
+  for(int i = 0; i < size; i++){
+    ParameterValue v = inst->parameterValues[i];
+    String parameter = parameters[i];
+    
+    if(!v.val.size){
+      continue;
+    }
+
+    if(insertedOnce){
+      PushString(out,",");
+    }
+    PushString(out,".%.*s(%.*s)",UNPACK_SS(parameter),UNPACK_SS(v.val));
+    insertedOnce = true;
+  }
+  PushString(out,")");
+
+  if(!insertedOnce){
+    PopMark(mark);
+    return {};
+  }
+
+  return EndString(builder);
+}
+
 void OutputCircuitSource(FUDeclaration* decl,FILE* file,Arena* temp,Arena* temp2){
   Accelerator* accel = decl->fixedDelayCircuit;
 
@@ -630,7 +668,9 @@ void OutputCircuitSource(FUDeclaration* decl,FILE* file,Arena* temp,Arena* temp2
   Array<FUInstance*> nodes = ListToArray(accel->allocated,temp);
   for(FUInstance* node : nodes){
     if(node->declaration->nIOs){
-      node->parameters = STRING("#(.AXI_ADDR_W(AXI_ADDR_W),.AXI_DATA_W(AXI_DATA_W),.LEN_W(LEN_W))"); // TODO: placeholder hack.
+      SetParameter(node,STRING("AXI_ADDR_W"),STRING("AXI_ADDR_W"));
+      SetParameter(node,STRING("AXI_DATA_W"),STRING("AXI_DATA_W"));
+      SetParameter(node,STRING("LEN_W"),STRING("LEN_W"));
     }
   }
 
@@ -638,6 +678,12 @@ void OutputCircuitSource(FUDeclaration* decl,FILE* file,Arena* temp,Arena* temp2
   AccelInfo info = CalculateAcceleratorInfoNoDelay(accel,true,temp,temp2);
   Array<MemoryAddressMask> memoryMasks = CalculateAcceleratorMemoryMasks(info,temp);
 
+  Array<String> parameters = PushArray<String>(temp,nodes.size);
+  for(int i = 0; i < nodes.size; i++){
+    parameters[i] = GenerateVerilogParameterization(nodes[i],temp);
+  }
+  
+  TemplateSetCustom("parameters",MakeValue(&parameters));
   TemplateSetNumber("unitsMapped",val.unitsMapped);
   TemplateSetNumber("numberConnections",info.numberConnections);
 
@@ -662,12 +708,13 @@ void OutputIterativeSource(FUDeclaration* decl,FILE* file,Arena* temp,Arena* tem
   ClearTemplateEngine(); // Make sure that we do not reuse data
 
   Assert(globalDebug.outputAccelerator); // Because FILE is created outside, code should not call this function if flag is set
-
-  // MARKED
+\
   FOREACH_LIST(FUInstance*,ptr,accel->allocated){
     FUInstance* inst = ptr;
     if(inst->declaration->nIOs){
-      inst->parameters = STRING("#(.AXI_ADDR_W(AXI_ADDR_W),.AXI_DATA_W(AXI_DATA_W),.LEN_W(LEN_W))"); // TODO: placeholder hack.
+      SetParameter(inst,STRING("AXI_ADDR_W"),STRING("AXI_ADDR_W"));
+      SetParameter(inst,STRING("AXI_DATA_W"),STRING("AXI_DATA_W"));
+      SetParameter(inst,STRING("LEN_W"),STRING("LEN_W"));
     }
   }
    
@@ -677,10 +724,17 @@ void OutputIterativeSource(FUDeclaration* decl,FILE* file,Arena* temp,Arena* tem
 
   Hashmap<StaticId,StaticData>* staticUnits = CollectStaticUnits(accel,decl,temp);
   
+  Array<FUInstance*> nodes = ListToArray(accel->allocated,temp);
+  Array<String> parameters = PushArray<String>(temp,nodes.size);
+  for(int i = 0; i < nodes.size; i++){
+    parameters[i] = GenerateVerilogParameterization(nodes[i],temp);
+  }
+  
+  TemplateSetCustom("parameters",MakeValue(&parameters));
   TemplateSetCustom("staticUnits",MakeValue(staticUnits));
   TemplateSetCustom("accel",MakeValue(decl));
   TemplateSetCustom("memoryMasks",MakeValue(&memoryMasks));
-  TemplateSetCustom("instances",MakeValue(accel->allocated));
+  TemplateSetCustom("instances",MakeValue(&nodes));
   TemplateSetNumber("unitsMapped",val.unitsMapped);
   TemplateSetCustom("inputDecl",MakeValue(BasicDeclaration::input));
   TemplateSetCustom("outputDecl",MakeValue(BasicDeclaration::output));
@@ -912,7 +966,9 @@ void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* 
   
   for(FUInstance* node : order.instances){
     if(node->declaration->nIOs){
-      node->parameters = STRING("#(.AXI_ADDR_W(AXI_ADDR_W),.AXI_DATA_W(AXI_DATA_W),.LEN_W(LEN_W))"); // TODO: placeholder hack.
+      SetParameter(node,STRING("AXI_ADDR_W"),STRING("AXI_ADDR_W"));
+      SetParameter(node,STRING("AXI_DATA_W"),STRING("AXI_DATA_W"));
+      SetParameter(node,STRING("LEN_W"),STRING("LEN_W"));
     }
   }
 
@@ -990,7 +1046,13 @@ void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* 
   TemplateSetCustom("staticUnits",MakeValue(staticUnits));
   
   Array<MemoryAddressMask> memoryMasks = CalculateAcceleratorMemoryMasks(info,temp);
- 
+
+  Array<String> parameters = PushArray<String>(temp,nodes.size);
+  for(int i = 0; i < nodes.size; i++){
+    parameters[i] = GenerateVerilogParameterization(nodes[i],temp);
+  }
+  
+  TemplateSetCustom("parameters",MakeValue(&parameters));
   TemplateSetCustom("arch",MakeValue(&globalOptions));
   TemplateSetCustom("versatValues",MakeValue(&val));
   TemplateSetNumber("delayStart",val.delayBitsStart);

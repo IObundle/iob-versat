@@ -543,7 +543,7 @@ end
 #{set inst node}
 #{set decl inst.declaration}
    #{if (decl != inputDecl and decl != outputDecl and !decl.isOperation)}
-      @{decl.name} @{inst.parameters} @{inst |> Identify}_@{counter} (
+      @{decl.name} @{parameters[index]} @{inst |> Identify}_@{counter} (
          #{for j node.outputs} #{if j}
             .out@{index}(output_@{id}_@{index}),
          #{else}

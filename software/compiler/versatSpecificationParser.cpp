@@ -644,7 +644,7 @@ Opt<Array<VarDeclaration>> ParseModuleInputDeclaration(Tokenizer* tok,Arena* out
   return EndArray(array);
 }
 
-Opt<InstanceDeclaration> ParseInstanceDeclaration(Tokenizer* tok,Arena* out){
+Opt<InstanceDeclaration> ParseInstanceDeclaration(Tokenizer* tok,Arena* out,Arena* temp){
   InstanceDeclaration res = {};
 
   Token potentialModifier = tok->PeekToken();
@@ -695,11 +695,42 @@ Opt<InstanceDeclaration> ParseInstanceDeclaration(Tokenizer* tok,Arena* out){
   }
 
   Token possibleParameters = tok->PeekToken();
+  auto list = PushArenaList<Pair<String,String>>(temp);
   if(CompareString(possibleParameters,"#")){
+    tok->AdvancePeek(possibleParameters);
+    EXPECT(tok,"(");
+
+    while(!tok->Done()){
+      EXPECT(tok,".");
+      String parameterName = tok->NextToken();
+
+      EXPECT(tok,"(");
+
+      // TODO: Actual Parse Expression
+      String content = {};
+
+      Opt<Token> remaining = tok->NextFindUntil(")");
+      PROPAGATE(remaining);
+      content = remaining.value();
+      
+      EXPECT(tok,")");
+      
+      String savedParameter = PushString(out,parameterName);
+      String savedString = PushString(out,content);
+      *list->PushElem() = {savedParameter,savedString}; 
+
+      if(tok->IfNextToken(",")){
+        continue;
+      }
+
+      break;
+    }
+    EXPECT(tok,")");
+
     // TODO: Actual parsing of parameters
-    Token fullParameters = tok->PeekIncludingDelimiterExpression({"("},{")"},0).value();
-    tok->AdvancePeek(fullParameters);
-    res.parameters = fullParameters;
+    //Token fullParameters = tok->PeekIncludingDelimiterExpression({"("},{")"},0).value();
+    //tok->AdvancePeek(fullParameters);
+    res.parameters = PushArrayFromList(out,list);//fullParameters;
   }
 
   // MARK  
@@ -753,7 +784,7 @@ Opt<ModuleDef> ParseModuleDef(Tokenizer* tok,Arena* out,Arena* temp){
       break;
     }
     
-    Opt<InstanceDeclaration> optDecl = ParseInstanceDeclaration(tok,out);
+    Opt<InstanceDeclaration> optDecl = ParseInstanceDeclaration(tok,out,temp);
     PROPAGATE(optDecl); // TODO: We could try to keep going and find more errors
 
     *PushListElement(decls) = optDecl.value();
@@ -1391,6 +1422,20 @@ static bool InstantiateTransform(Tokenizer* tok,TransformDef def,Arena* temp){
   return error;
 }
 
+FUInstance* CreateFUInstanceWithParameters(Accelerator* accel,FUDeclaration* type,String name,InstanceDeclaration decl){
+  FUInstance* inst = CreateFUInstance(accel,type,name);
+
+  for(auto pair : decl.parameters){
+    bool result = SetParameter(inst,pair.first,pair.second);
+
+    if(!result){
+      printf("Warning: Parameter %.*s for instance %.*s in module %.*s does not exist\n",UNPACK_SS(pair.first),UNPACK_SS(inst->name),UNPACK_SS(accel->name));
+    }
+  }
+
+  return inst;
+}
+
 FUDeclaration* InstantiateModule(String content,ModuleDef def,Arena* temp,Arena* temp2){
   Arena* perm = globalPermanent;
   Accelerator* circuit = CreateAccelerator(def.name,AcceleratorPurpose_MODULE);
@@ -1445,9 +1490,8 @@ FUDeclaration* InstantiateModule(String content,ModuleDef def,Arena* temp,Arena*
         if(varDecl.isArray){
           for(int i = 0; i < varDecl.arraySize; i++){
             String actualName = GetActualArrayName(varDecl.name,i,temp);
+            FUInstance* inst = CreateFUInstanceWithParameters(circuit,type,actualName,decl);
 
-            FUInstance* inst = CreateFUInstance(circuit,type,actualName);
-            inst->parameters = PushString(perm,decl.parameters);
             table->Insert(actualName,inst);
             ShareInstanceConfig(inst,shareIndex);
           }
@@ -1470,8 +1514,8 @@ FUDeclaration* InstantiateModule(String content,ModuleDef def,Arena* temp,Arena*
       if(varDecl.isArray){
         for(int i = 0; i < varDecl.arraySize; i++){
           String actualName = GetActualArrayName(varDecl.name,i,temp);
-          FUInstance* inst = CreateFUInstance(circuit,type,actualName);
-          inst->parameters = PushString(perm,decl.parameters);
+
+          FUInstance* inst = CreateFUInstanceWithParameters(circuit,type,actualName,decl);
           table->Insert(actualName,inst);
 
           if(decl.modifier == InstanceDeclaration::STATIC){
@@ -1479,8 +1523,8 @@ FUDeclaration* InstantiateModule(String content,ModuleDef def,Arena* temp,Arena*
           }
         }
       } else {
-        FUInstance* inst = CreateFUInstance(circuit,type,varDecl.name);
-        inst->parameters = PushString(perm,decl.parameters);
+        FUInstance* inst = CreateFUInstanceWithParameters(circuit,type,varDecl.name,decl);
+
         table->Insert(varDecl.name,inst);
 
         if(decl.modifier == InstanceDeclaration::STATIC){
