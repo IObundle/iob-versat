@@ -27,7 +27,7 @@ identity = lambda x : x
 #       breaks stuff up. Also no error detecting or something like "we detected too many loops, check if this value is correct because it appears to not be good"
 #       This detection can be accomplished by inspecting the derivative values and checking which value slightly differentiates between the remaining
 
-DO_SHIFT_AND_INCREMENT_TOGETHER = False
+DO_SHIFT_AND_INCREMENT_TOGETHER = True
 
 @dataclass
 class SinglePolynomial:
@@ -547,7 +547,7 @@ def PrintParameters(parameterList):
             print(f"{base[index%4]}{(index // 4) + 1}: {param}")
 
 if __name__ == "__main__":
-    # If python version is too low, just take each 
+    # If python version is too low, just remove mathc and comment out stuff when needed 
     match 6:
         case 1: listOfAddresses = Pre([0, 1, 2])
         case 2: listOfAddresses = Pre([0,1,2,10,11,12,20,21,22])
@@ -555,6 +555,8 @@ if __name__ == "__main__":
         case 4: listOfAddresses = EvaluateString("[x,x+1,x+2]")
         case 5: listOfAddresses = EvaluateString("[0,1,2,x,1+x,2+x,2x,1+2x,2+2x]")
         case 6: listOfAddresses = Pre([0,3,6,1254,1257,1260,2508,2511,2514,1,4,7,1255,1258,1261,2509,2512,2515])
+        case 7: listOfAddresses = Pre([0,1,416,417,173056,173057,173472,173473,346112,346113,346528,346529])
+        case 8: listOfAddresses = Pre([0,1,2,418,419,420,836,837,838,174724,174725,174726,175142,175143,175144,175560,175561,175562])
 
     if(False): 
         parameters = GenerateParameters(listOfAddresses)

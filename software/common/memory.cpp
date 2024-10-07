@@ -516,7 +516,8 @@ int BitArray::FirstBitSetIndex(){
 }
 
 int BitArray::FirstBitSetIndex(int start){
-#ifdef VERSAT_DEBUG
+  // TODO: For now I want correctness, find the bug to trailing zero.
+  //#ifdef VERSAT_DEBUG
   int correct = 0;
   for(int i = start; i < this->bitSize; i++){
     if(Get(i)){
@@ -524,8 +525,8 @@ int BitArray::FirstBitSetIndex(int start){
       break;
     }
   }
-  return correct; // TODO: For now I want correctness, find the bug to trailing zero.
-#endif
+  return correct;
+//#endif
 
   Assert(start < this->bitSize);
   int i = ALIGN_UP_32(start - 31);
