@@ -106,7 +106,7 @@
 
    //address generators
 
-   MyAddressGen #(
+   AddressGen #(
       .ADDR_W(ADDR_W),
       .DATA_W(SIZE_W)
    ) addrgenA (
@@ -130,10 +130,12 @@
       .valid_o(enA_int),
       .ready_i(1'b1),
       .addr_o (addrA_int),
+      .store_o(), // TODO: Handle duty
+
       .done_o (doneA)
    );
 
-   MyAddressGen #(
+   AddressGen #(
       .ADDR_W(ADDR_W),
       .DATA_W(SIZE_W)
    ) addrgenB (
@@ -157,6 +159,8 @@
       .valid_o(enB),
       .ready_i(1'b1),
       .addr_o (addrB_int),
+      .store_o(), // TODO: Handle duty
+
       .done_o (doneB)
    );
 

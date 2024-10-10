@@ -1,6 +1,6 @@
 `timescale 1ns / 1ps
 
-module MyAddressGen #(
+module AddressGen #(
    parameter ADDR_W   = 10,
    parameter PERIOD_W = 10,
    parameter DELAY_W  = 7,
@@ -28,6 +28,7 @@ module MyAddressGen #(
    output                    valid_o,
    input                     ready_i,
    output reg [ADDR_W - 1:0] addr_o,
+   output                    store_o,
 
    output reg done_o
 );
@@ -43,6 +44,7 @@ module MyAddressGen #(
    wire perCond = ((per + 1) == period_i || period_i == 0);
    reg valid;
 
+   assign store_o = (per < duty_i);
    assign valid_o = valid && per < duty_i;
 
    always @(posedge clk_i, posedge rst_i) begin

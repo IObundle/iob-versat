@@ -155,7 +155,7 @@ module LookupTableRead2 #(
    wire [ADDR_W-1:0] gen_addr;
    wire              gen_done;
 
-   MyAddressGen #(
+   AddressGen #(
       .ADDR_W  (ADDR_W),
       .DATA_W  (AXI_DATA_W),
       .PERIOD_W(ADDR_W)
@@ -177,6 +177,8 @@ module LookupTableRead2 #(
       .valid_o(),
       .ready_i(gen_ready),
       .addr_o (gen_addr),
+      .store_o(),
+
       .done_o (gen_done)
    );
 

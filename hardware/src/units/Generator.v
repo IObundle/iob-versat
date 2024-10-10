@@ -30,7 +30,7 @@ module Generator #(
 
    assign out0 = genOut;  //done ? off_value : genOut;
 
-   MyAddressGen #(
+   AddressGen #(
       .ADDR_W  (32),
       .DATA_W  (8),
       .DELAY_W (DELAY_W),
@@ -54,6 +54,7 @@ module Generator #(
       .valid_o(),
       .ready_i(1'b1),
       .addr_o (genOut),
+      .store_o(),
 
       .done_o(done)
    );
