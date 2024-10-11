@@ -428,7 +428,7 @@ void FillDeclarationWithAcceleratorValuesNoDelay(FUDeclaration* decl,Accelerator
       } else {
         for(Wire& wire : d->baseConfig.configs){
           decl->baseConfig.configs[configIndex] = wire;
-          decl->baseConfig.configs[configIndex].name = PushString(perm,"%.*s_%.*s",UNPACK_SS(inst->name),UNPACK_SS(wire.name));
+          decl->baseConfig.configs[configIndex++].name = PushString(perm,"%.*s_%.*s",UNPACK_SS(inst->name),UNPACK_SS(wire.name));
         }
       }
     }
