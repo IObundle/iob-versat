@@ -61,19 +61,13 @@ assign config_data_o = configdata;
      #{set configReg "shadow_configdata"}
 #{end}
 
-#{for node instances}
-  #{set inst node}
-  #{set decl inst.declaration}
-  #{for wire decl.baseConfig.configs}
-    #{if wire.stage == 1}
-    #{end}
+#{for info wireInfo} #{set wire info.wire}
     #{if wire.stage == 0 or wire.stage == 2}
 reg [@{wire.bitSize-1}:0] Compute_@{wire.name};
     #{end}
     #{if wire.stage == 2}
 reg [@{wire.bitSize-1}:0] Write_@{wire.name};
     #{end}
-  #{end}
 #{end}
 
 #{if versatValues.configurationBits}
@@ -83,7 +77,7 @@ begin
    if(rst_i) begin
       shadow_configdata <= {@{configurationBits}{1'b0}};
    end else if(data_write & !memoryMappedAddr) begin
-      #{for info test}
+      #{for info wireInfo}
       if(address[@{versatValues.configurationAddressBits + 1}:0] == @{info.addr}) begin // @{info.addr|> Hex} @{info.wire.name}
       #{call handleStrobe "data_wstrb" "shadow_configdata" info.wire.bitSize info.configBitStart "data_data"}
       end
@@ -97,13 +91,13 @@ begin
       configdata <= {@{configurationBits}{1'b0}};
    end else if(canRun) begin
       // Shadow directly to Config (Read stage)
-#{for info test}
+#{for info wireInfo}
   #{if info.wire.stage == 1}
-      configdata[@{info.configBitStart}+:@{info.wire.bitSize}] <= shadow_data[@{info.configBitStart}+:@{info.wire.bitSize}];
+      configdata[@{info.configBitStart}+:@{info.wire.bitSize}] <= shadow_configdata[@{info.configBitStart}+:@{info.wire.bitSize}];
   #{end}
 #{end}
       // Compute to Config (Compute stage)
-#{for info test}
+#{for info wireInfo}
   #{if info.wire.stage == 0 or info.wire.stage == 2}
       configdata[@{info.configBitStart}+:@{info.wire.bitSize}] <= Compute_@{info.wire.name};
   #{end}
@@ -115,20 +109,20 @@ end
 always @(posedge clk_i,posedge rst_i)
 begin
    if(rst_i) begin
-#{for info test}
+#{for info wireInfo}
   #{if info.wire.stage == 0 or info.wire.stage == 2}
       Compute_@{info.wire.name} <= {@{info.wire.bitSize}{1'b0}};
   #{end}
 #{end}
    end else if(canRun) begin
       // Shadow to Compute (Compute stage)
-#{for info test}
+#{for info wireInfo}
   #{if info.wire.stage == 0}
-      Compute_@{info.wire.name} <= shadow_data[@{info.configBitStart}+:@{info.wire.bitSize}];
+      Compute_@{info.wire.name} <= shadow_configdata[@{info.configBitStart}+:@{info.wire.bitSize}];
   #{end}
 #{end}
       // Write to Compute (Write stage)
-#{for info test}
+#{for info wireInfo}
   #{if info.wire.stage == 2}
       Compute_@{info.wire.name} <= Write_@{info.wire.name};
   #{end}
@@ -139,16 +133,16 @@ end
 always @(posedge clk_i,posedge rst_i)
 begin
    if(rst_i) begin
-#{for info test}
+#{for info wireInfo}
   #{if info.wire.stage == 2}
       Write_@{info.wire.name} <= {@{info.wire.bitSize}{1'b0}};
   #{end}
 #{end}
    end else if(canRun) begin
       // Stores Shadow data into Write
-#{for info test}
+#{for info wireInfo}
   #{if info.wire.stage == 2}
-      Write_@{info.wire.name} <= shadow_data[@{info.configBitStart}+:@{info.wire.bitSize}];
+      Write_@{info.wire.name} <= shadow_configdata[@{info.configBitStart}+:@{info.wire.bitSize}];
   #{end}
 #{end}
    end

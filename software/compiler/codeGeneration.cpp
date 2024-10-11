@@ -1100,11 +1100,12 @@ void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* 
       *arr.PushElem() = info;
     }
   }
+  int delaysInserted = 0;
   for(auto n : nodes){
     for(int i = 0; i < n->declaration->baseConfig.delayOffsets.max; i++){
       Wire wire = {};
       wire.bitSize = DELAY_SIZE;
-      wire.name = STRING("Delay");
+      wire.name = PushString(temp2,"Delay%d",delaysInserted++);
       wire.stage = VersatStage_COMPUTE;
 
       WireInformation info = {};
@@ -1117,7 +1118,7 @@ void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* 
   }
   
   auto test = EndArray(arr);
-  TemplateSetCustom("test",MakeValue(&test));
+  TemplateSetCustom("wireInfo",MakeValue(&test));
 #endif
 
   {
