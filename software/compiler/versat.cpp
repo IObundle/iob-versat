@@ -566,8 +566,9 @@ FUDeclaration* RegisterSubUnit(Accelerator* circuit,Arena* temp,Arena* temp2){
   FUDeclaration decl = {};
   decl.name = name;
 
+  // TODO: Join the Merge and the Subunit register function common functionality into one
   // NOTE: These values must match what is expected from the accelerator template.
-  //       Maybe a bit clubersome, eventually might rework this so the parameters are the set of values from
+  //       Maybe a bit clubersome, eventually might rework this so the parameters are the set of values from the subunits
   decl.parameters = PushArray<String>(permanent,6);
   decl.parameters[0] = STRING("ADDR_W");
   decl.parameters[1] = STRING("DATA_W");
