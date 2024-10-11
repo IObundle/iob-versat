@@ -348,6 +348,8 @@ static Expression* VerilogParseAtom(Tokenizer* tok,Arena* out){
     expr->type = Expression::LITERAL;
 
     return expr;
+  } else {
+    //DEBUG_BREAK();
   }
 
   Token name = tok->NextToken();
@@ -547,10 +549,12 @@ static ExpressionRange ParseRange(Tokenizer* tok,ValueMap& map,Arena* out){
 
 #define VERSAT_LATENCY STRING("versat_latency")
 #define VERSAT_STATIC  STRING("versat_static")
+#define VERSAT_STAGE  STRING("versat_stage")
 
 static String possibleAttributesData[] = {
   VERSAT_LATENCY,
-  VERSAT_STATIC
+  VERSAT_STATIC,
+  VERSAT_STAGE
 };
 static Array<String> possibleAttributes = C_ARRAY_TO_ARRAY(possibleAttributesData);
 
@@ -597,13 +601,11 @@ static Module ParseModule(Tokenizer* tok,Arena* out,Arena* temp){
             Expression* expr = VerilogParseExpression(tok,out);
             Value value = Eval(expr,values);
 
-            peek = tok->PeekToken();
-
             *PushListElement(attributeList) = {attributeName,value};
-            //port.attributes[attributeName] = value;
+
+            peek = tok->PeekToken();
           } else {
             *PushListElement(attributeList) = {attributeName,MakeValue()};
-            //port.attributes[attributeName] = MakeValue();
           }
 
           if(CompareString(peek,",")){
@@ -892,16 +894,29 @@ ModuleInfo ExtractModuleInfo(Module& module,Arena* out,Arena* temp){
     } else if(CheckFormat("done",decl.name)){
       info.hasDone = true;
     } else if(decl.type == PortDeclaration::INPUT){ // Config
-         WireExpression* wire = configs.Push(1);
+      WireExpression* wire = configs.Push(1);
 
-         wire->bitSize = decl.range;
-         wire->name = decl.name;
-         wire->isStatic = decl.attributes->Exists(VERSAT_STATIC);
+      Value* stageValue = decl.attributes->Get(VERSAT_STAGE);
+
+      VersatStage stage = VersatStage_COMPUTE;
+      
+      if(stageValue && stageValue->type == ValueType::STRING){
+        if(CompareString(stageValue->str,"Write")){
+          stage = VersatStage_WRITE;
+        } else if(CompareString(stageValue->str,"Read")){
+          stage = VersatStage_READ;
+        } 
+      }
+      
+      wire->bitSize = decl.range;
+      wire->name = decl.name;
+      wire->isStatic = decl.attributes->Exists(VERSAT_STATIC);
+      wire->stage = stage;
     } else if(decl.type == PortDeclaration::OUTPUT){ // State
-         WireExpression* wire = states.Push(1);
+      WireExpression* wire = states.Push(1);
 
-         wire->bitSize = decl.range;
-         wire->name = decl.name;
+      wire->bitSize = decl.range;
+      wire->name = decl.name;
     } else {
       NOT_IMPLEMENTED("Implemented as needed, so far all if cases handles all cases so we should never reach here");
     }

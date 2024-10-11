@@ -40,17 +40,17 @@ module VWrite #(
    output [    DATA_W-1:0] ext_2p_data_out_0,
 
    // configurations
-   input [AXI_ADDR_W-1:0] ext_addr,
-   input [  PERIOD_W-1:0] write_per,
-   input [    ADDR_W-1:0] write_incr,
-   input [PERIOD_W-1:0]   write_duty,
+   (* versat_stage="Write" *) input [AXI_ADDR_W-1:0] ext_addr,
+   (* versat_stage="Write" *) input [  PERIOD_W-1:0] write_per,
+   (* versat_stage="Write" *) input [    ADDR_W-1:0] write_incr,
+   (* versat_stage="Write" *) input [PERIOD_W-1:0]   write_duty,
 
-   input [  ADDR_W-1:0]   write_iter,
-   input [  ADDR_W-1:0]   write_shift,
+   (* versat_stage="Write" *) input [  ADDR_W-1:0]   write_iter,
+   (* versat_stage="Write" *) input [  ADDR_W-1:0]   write_shift,
 
-   input [     LEN_W-1:0] write_length,
-   input                  pingPong,
-   input                  write_enabled,
+   (* versat_stage="Write" *) input [     LEN_W-1:0] write_length,
+   (* versat_stage="Write" *) input                  pingPong,
+   (* versat_stage="Write" *) input                  write_enabled,
 
    input [  ADDR_W-1:0] input_iter,
    input [PERIOD_W-1:0] input_per,

@@ -1,4 +1,4 @@
-`include "versat_defs.vh"
+`timescale 1ns / 1ps
 
 #{include "versat_common.tpl"}
 
@@ -9,7 +9,7 @@
 
 #{set databusCounter 0}
 
-`timescale 1ns / 1ps
+`include "versat_defs.vh"
 
 module versat_instance #(
       parameter ADDR_W = 32,
@@ -396,80 +396,24 @@ begin
 end
 #{end}
 
-#{if versatValues.configurationBits} reg [@{versatValues.configurationBits-1}:0] configdata; #{end}
-#{if opts.shadowRegister} reg [@{versatValues.configurationBits-1}:0] shadow_configdata; #{end}
-
-#{set configReg "configdata"}
-#{if opts.shadowRegister}
-     #{set configReg "shadow_configdata"}
-#{end}
-
 #{if versatValues.configurationBits}
-// Config writing
-always @(posedge clk,posedge rst_int)
-begin
-   if(rst_int) begin
-      @{configReg} <= {@{configurationBits}{1'b0}};
-   end else if(data_write & !memoryMappedAddr) begin
-      // Config
-      #{set counter 0}
-      #{set addr versatConfig}
-      #{for node instances}
-      #{set inst node}
-      #{set decl inst.declaration}
-      #{for wire decl.baseConfig.configs}
-      if(address[@{versatValues.configurationAddressBits + 1}:0] == @{addr * 4}) begin // @{addr * 4 |> Hex} @{wire.name}
-      #{set size wire.bitSize}
-      #{set wstrb 0}
-      #{set wstrbAmount 0}
-      #{while size > 0}
-      #{set amount 8}
-      #{if size < 8} #{set amount size} #{end}
-      if(data_wstrb[@{wstrb}]) @{configReg}[@{counter + wstrbAmount}+:@{amount}] <= data_data[@{wstrbAmount}+:@{amount}];
-      #{set size (size - 8)}
-      #{inc wstrb}
-      #{set wstrbAmount (wstrbAmount + amount)}
-      #{end}
-      end
-      #{inc addr}
-      #{set counter counter + wire.bitSize}
-      #{end}
-      #{end}
+wire [@{versatValues.configurationBits-1}:0] configdata;
 
-      // Static
-      #{for unit staticUnits} #{for wire unit.data.configs}
-      if(address[@{versatValues.configurationAddressBits + 1}:0] == @{addr * 4}) // @{addr * 4 |> Hex}
-         // TODO: Need to also take into account strobes
-         #{if unit.first.parent}
-         @{configReg}[@{counter}+:@{wire.bitSize}] <= data_data[@{wire.bitSize - 1}:0]; //  @{unit.first.parent.name}_@{unit.first.name}_@{wire.name}
-         #{else}
-         configdata[@{counter}+:@{wire.bitSize}] <= data_data[@{wire.bitSize - 1}:0]; //  @{unit.first.name}_@{wire.name}
-         #{end}
-      #{inc addr} #{set counter counter + wire.bitSize}
-      #{end} #{end}
+versat_configurations configs(
+   .config_data_o(configdata),                 
 
-      // Delays
-      #{for node instances} #{set inst node} #{set decl inst.declaration}
-      #{for i decl.baseConfig.delayOffsets.max}
-      // TODO: Need to also take into account strobes
-      if(address[@{versatValues.configurationAddressBits + 1}:0] == @{addr * 4}) // @{addr * 4 |> Hex}
-         @{configReg}[@{counter}+:@{delaySize}] <= data_data[@{delaySize-1}:0]; // Delay
-      #{inc addr} #{set counter counter + delaySize}
-      #{end} #{end}
-   end
-end
-#{end}
+   .memoryMappedAddr(memoryMappedAddr),
+   .data_write(data_write),
 
-#{if opts.shadowRegister}
-always @(posedge clk,posedge rst_int)
-begin
-   if(rst_int) begin
-      configdata <= 0;
-   end else if(canRun) begin
-      configdata <= shadow_configdata;
-   end
-end
+   .address(address),
+   .data_wstrb(data_wstrb),
+   .data_data(data_data),
 
+   .canRun(canRun),
+
+   .clk_i(clk),
+   .rst_i(rst_int)
+);
 #{end}
 
 #{if versatValues.stateBits} wire [@{versatValues.stateBits - 1}:0] statedata; #{end}

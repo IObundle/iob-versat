@@ -483,7 +483,7 @@ if __name__ == "__main__":
         typeInfoFile.write(f"static Pair<String,int> {name}Data[] = " + "{" + enumString + "};\n")
         typeInfoFile.write("\n")
 
-        typeInfoFile.write(f"RegisterEnum(STRING(\"{name}\"),C_ARRAY_TO_ARRAY({name}Data));\n")
+        typeInfoFile.write(f"RegisterEnum(STRING(\"{name}\"),sizeof({name}),alignof({name}),C_ARRAY_TO_ARRAY({name}Data));\n")
         typeInfoFile.write("\n")
 
     counter = Counter()

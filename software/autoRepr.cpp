@@ -74,6 +74,14 @@ String GetRepr(TemplateRecordType* e,Arena* out){
   }
   return STRING("NOT POSSIBLE ENUM VALUE");
 }
+String GetRepr(VersatStage* e,Arena* out){
+  switch(*e){
+  case VersatStage::VersatStage_COMPUTE: return PushString(out,STRING("VersatStage_COMPUTE"));
+  case VersatStage::VersatStage_READ: return PushString(out,STRING("VersatStage_READ"));
+  case VersatStage::VersatStage_WRITE: return PushString(out,STRING("VersatStage_WRITE"));
+  }
+  return STRING("NOT POSSIBLE ENUM VALUE");
+}
 String GetRepr(ExternalMemoryType* e,Arena* out){
   switch(*e){
   case ExternalMemoryType::TWO_P: return PushString(out,STRING("TWO_P"));

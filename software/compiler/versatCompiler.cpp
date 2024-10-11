@@ -169,13 +169,14 @@ void LoadTemplates(Arena* perm,Arena* temp){
 
   BasicTemplates::acceleratorTemplate = CompileTemplate(versat_accelerator_template,"accel",perm,temp);
   BasicTemplates::topAcceleratorTemplate = CompileTemplate(versat_top_instance_template,"top",perm,temp);
+  BasicTemplates::topConfigurationsTemplate = CompileTemplate(versat_configurations_template,"top_configurations",perm,temp);
   BasicTemplates::acceleratorHeaderTemplate = CompileTemplate(versat_header_template,"header",perm,temp);
   BasicTemplates::externalInternalPortmapTemplate = CompileTemplate(external_memory_internal_portmap_template,"ext_internal_port",perm,temp);
   BasicTemplates::externalPortTemplate = CompileTemplate(external_memory_port_template,"ext_port",perm,temp);
   BasicTemplates::externalInstTemplate = CompileTemplate(external_memory_inst_template,"ext_inst",perm,temp);
   BasicTemplates::iterativeTemplate = CompileTemplate(versat_iterative_template,"iter",perm,temp);
   BasicTemplates::internalWiresTemplate = CompileTemplate(versat_internal_memory_wires_template,"internal wires",perm,temp);
-
+  
   RegisterPipeOperation(STRING("MemorySize"),[](Value val,Arena* out){
     ExternalMemoryInterface* inter = (ExternalMemoryInterface*) val.custom;
     int byteSize = ExternalMemoryByteSize(inter);
@@ -434,7 +435,8 @@ int main(int argc,char* argv[]){
 
   //DEBUG_BREAK();
 #endif
-  
+
+
   Arena* perm = globalPermanent;
   
   Arena tempInst = InitArena(Megabyte(128));
@@ -632,6 +634,8 @@ int main(int argc,char* argv[]){
     printf("Did not find the top level type: %.*s\n",UNPACK_SS(topLevelTypeStr));
     return -1;
   }
+
+  DEBUG_BREAK();
 
   Accelerator* accel = nullptr;
   FUInstance* TOP = nullptr;

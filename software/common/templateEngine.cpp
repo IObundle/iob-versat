@@ -172,7 +172,10 @@ static Command* ParseCommand(Tokenizer* tok,Arena* out){
       break;
     }
   }
-  Assert(com->definition);
+  if(!com->definition){
+    printf("Internal template engine error, did not find command: %.*s\n",UNPACK_SS(commandName));
+    exit(-1);
+  }
   
   int actualExpressionSize = com->definition->numberExpressions;
   if(actualExpressionSize == -1){
@@ -665,7 +668,8 @@ static Value EvalExpression(Expression* expr,Frame* frame,Arena* out){
       String first = ConvertValue(op1,ValueType::SIZED_STRING,out).str;
       String second = ConvertValue(op2,ValueType::SIZED_STRING,out).str;
 
-      String res = PushString(out,"%.*s%.*s",UNPACK_SS(first),UNPACK_SS(second));
+      Arena leaky = InitArena(first.size + second.size + 1); // TODO: Leaky
+      String res = PushString(&leaky,"%.*s%.*s",UNPACK_SS(first),UNPACK_SS(second));
 
       val = MakeValue(res);
       goto EvalExpressionEnd;

@@ -6,6 +6,7 @@
 #include "memory.hpp"
 #include "utils.hpp"
 #include "utilsCore.hpp"
+#include "verilogParsing.hpp"
 #include "versat.hpp"
 #include "templateData.hpp"
 #include "templateEngine.hpp"
@@ -909,8 +910,6 @@ void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* 
   
   AccelInfo info = CalculateAcceleratorInfo(accel,true,temp,temp2);
 
-  DEBUG_BREAK();
-
   CheckSanity(info.baseInfo,temp);
   
   printf("ADDR_W - %d\n",val.memoryConfigDecisionBit + 1);
@@ -1076,6 +1075,51 @@ void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* 
   TemplateSetBool("useDMA",globalOptions.useDMA);
   TemplateSetCustom("opts",MakeValue(&globalOptions));
   
+#if 1
+  int configBit = 0;
+  int addr = val.versatConfigs;
+  
+  auto arr = StartArray<WireInformation>(temp);
+  for(auto n : nodes){
+    for(Wire w : n->declaration->baseConfig.configs){
+      WireInformation info = {};
+      info.wire = w;
+      info.configBitStart = configBit;
+      configBit += w.bitSize;
+      info.addr = 4 * addr++;
+      *arr.PushElem() = info;
+    }
+  }
+  for(auto n : staticUnits){
+    for(Wire w : n.data->configs){
+      WireInformation info = {};
+      info.wire = w;
+      info.configBitStart = configBit;
+      configBit += w.bitSize;
+      info.addr = 4 * addr++;
+      *arr.PushElem() = info;
+    }
+  }
+  for(auto n : nodes){
+    for(int i = 0; i < n->declaration->baseConfig.delayOffsets.max; i++){
+      Wire wire = {};
+      wire.bitSize = DELAY_SIZE;
+      wire.name = STRING("Delay");
+      wire.stage = VersatStage_COMPUTE;
+
+      WireInformation info = {};
+      info.wire = wire;
+      info.configBitStart = configBit;
+      configBit += DELAY_SIZE;
+      info.addr = 4 * addr++;
+      *arr.PushElem() = info;
+    }
+  }
+  
+  auto test = EndArray(arr);
+  TemplateSetCustom("test",MakeValue(&test));
+#endif
+
   {
     FILE* s = OpenFileAndCreateDirectories(StaticFormat("%s/versat_instance.v",hardwarePath),"w");
     DEFER_CLOSE_FILE(s);
@@ -1087,6 +1131,19 @@ void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* 
 
     ProcessTemplate(s,BasicTemplates::topAcceleratorTemplate,temp,temp2);
   }
+  
+  {
+    FILE* s = OpenFileAndCreateDirectories(StaticFormat("%s/versat_configurations.v",hardwarePath),"w");
+    DEFER_CLOSE_FILE(s);
+
+    if(!s){
+      printf("Error creating file, check if filepath is correct: %s\n",hardwarePath);
+      return;
+    }
+
+    ProcessTemplate(s,BasicTemplates::topConfigurationsTemplate,temp,temp2);
+  }
+
   
   TemplateSetBool("isSimple",isSimple);
   if(isSimple){

@@ -103,13 +103,15 @@ Type* RegisterOpaqueType(String name,Subtype subtype,int size,int align){
   return type;
 }
 
-Type* RegisterEnum(String name,Array<Pair<String,int>> enumValues){
+Type* RegisterEnum(String name,int size,int align,Array<Pair<String,int>> enumValues){
   STACK_ARENA(temp,Kilobyte(4));
   String tempName = GetUniqueRepresentationOrFail(name,&temp);
 
   for(Type* type : types){
     if(CompareString(type->name,tempName)){
       type->type = Subtype_ENUM;
+      type->size = size;
+      type->align = align;
       type->enumMembers = enumValues;
       return type;
     }
@@ -119,8 +121,9 @@ Type* RegisterEnum(String name,Array<Pair<String,int>> enumValues){
 
   type->name = GetUniqueRepresentationOrFail(name,&permanentArena);
   type->type = Subtype_ENUM;
-  type->size = sizeof(int);
-  type->align = sizeof(int);
+  type->size = size;
+  type->align = align;
+  type->enumMembers = enumValues;
 
   return type;
 }
@@ -653,7 +656,8 @@ String GetDefaultValueRepresentation(Value in,Arena* arena){
     if(pairFound){
       res = PushString(arena,"%.*s::%.*s",UNPACK_SS(type->name),UNPACK_SS(pairFound->first));
     } else {
-      res = PushString(arena,"(%.*s) %d",UNPACK_SS(type->name),enumValue);
+      DEBUG_BREAK();
+      res = PushString(arena,"(enum %.*s:%d)",UNPACK_SS(type->name),enumValue);
     }
   } else {
     res = PushString(arena,"\"[GetDefaultValueRepresentation Type:%.*s]\"",UNPACK_SS(type->name)); // Return type name

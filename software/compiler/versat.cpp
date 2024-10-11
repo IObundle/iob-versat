@@ -25,6 +25,7 @@
 namespace BasicTemplates{
   CompiledTemplate* acceleratorTemplate;
   CompiledTemplate* topAcceleratorTemplate;
+  CompiledTemplate* topConfigurationsTemplate;
   CompiledTemplate* dataTemplate;
   CompiledTemplate* wrapperTemplate;
   CompiledTemplate* acceleratorHeaderTemplate;
@@ -122,6 +123,7 @@ FUDeclaration* RegisterModuleInfo(ModuleInfo* info,Arena* temp){
     configs[i].name = info->configs[i].name;
     configs[i].bitSize = size;
     configs[i].isStatic = false;
+    configs[i].stage = info->configs[i].stage;
   }
 
   for(int i = 0; i < info->states.size; i++){
@@ -132,6 +134,7 @@ FUDeclaration* RegisterModuleInfo(ModuleInfo* info,Arena* temp){
     states[i].name = info->states[i].name;
     states[i].bitSize = size;
     states[i].isStatic = false;
+    states[i].stage = info->states[i].stage;
   }
 
   for(int i = 0; i < info->externalInterfaces.size; i++){
@@ -248,21 +251,23 @@ void FillDeclarationWithAcceleratorValues(FUDeclaration* decl,Accelerator* accel
       if(inst->sharedEnable){
         if(staticsSeen->InsertIfNotExist(inst->sharedIndex,0)){
           for(Wire& wire : d->baseConfig.configs){
-            decl->baseConfig.configs[configIndex].name = PushString(perm,"%.*s_%.*s",UNPACK_SS(inst->name),UNPACK_SS(wire.name));
-            decl->baseConfig.configs[configIndex++].bitSize = wire.bitSize;
+            decl->baseConfig.configs[configIndex] = wire;
+            decl->baseConfig.configs[configIndex++].name = PushString(perm,"%.*s_%.*s",UNPACK_SS(inst->name),UNPACK_SS(wire.name));
           }
         }
       } else {
         for(Wire& wire : d->baseConfig.configs){
-          decl->baseConfig.configs[configIndex].name = PushString(perm,"%.*s_%.*s",UNPACK_SS(inst->name),UNPACK_SS(wire.name));
-          decl->baseConfig.configs[configIndex++].bitSize = wire.bitSize;
+          decl->baseConfig.configs[configIndex] = wire;
+
+          decl->baseConfig.configs[configIndex++].name = PushString(perm,"%.*s_%.*s",UNPACK_SS(inst->name),UNPACK_SS(wire.name));
         }
       }
     }
 
     for(Wire& wire : d->baseConfig.states){
-      decl->baseConfig.states[stateIndex].name = PushString(perm,"%.*s_%.2d",UNPACK_SS(wire.name),stateIndex);
-      decl->baseConfig.states[stateIndex++].bitSize = wire.bitSize;
+      decl->baseConfig.states[stateIndex] = wire;
+
+      decl->baseConfig.states[stateIndex++].name = PushString(perm,"%.*s_%.2d",UNPACK_SS(wire.name),stateIndex);
     }
   }
 
@@ -416,21 +421,21 @@ void FillDeclarationWithAcceleratorValuesNoDelay(FUDeclaration* decl,Accelerator
       if(inst->sharedEnable){
         if(staticsSeen->InsertIfNotExist(inst->sharedIndex,0)){
           for(Wire& wire : d->baseConfig.configs){
-            decl->baseConfig.configs[configIndex].name = PushString(perm,"%.*s_%.*s",UNPACK_SS(inst->name),UNPACK_SS(wire.name));
-            decl->baseConfig.configs[configIndex++].bitSize = wire.bitSize;
+            decl->baseConfig.configs[configIndex] = wire;
+            decl->baseConfig.configs[configIndex++].name = PushString(perm,"%.*s_%.*s",UNPACK_SS(inst->name),UNPACK_SS(wire.name));
           }
         }
       } else {
         for(Wire& wire : d->baseConfig.configs){
+          decl->baseConfig.configs[configIndex] = wire;
           decl->baseConfig.configs[configIndex].name = PushString(perm,"%.*s_%.*s",UNPACK_SS(inst->name),UNPACK_SS(wire.name));
-          decl->baseConfig.configs[configIndex++].bitSize = wire.bitSize;
         }
       }
     }
 
     for(Wire& wire : d->baseConfig.states){
-      decl->baseConfig.states[stateIndex].name = PushString(perm,"%.*s_%.2d",UNPACK_SS(wire.name),stateIndex);
-      decl->baseConfig.states[stateIndex++].bitSize = wire.bitSize;
+      decl->baseConfig.states[stateIndex] = wire;
+      decl->baseConfig.states[stateIndex++].name = PushString(perm,"%.*s_%.2d",UNPACK_SS(wire.name),stateIndex);
     }
   }
 

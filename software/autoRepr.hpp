@@ -19,6 +19,7 @@ String GetRepr(Subtype* e,Arena* out);
 String GetRepr(CommandType* e,Arena* out);
 String GetRepr(BlockType* e,Arena* out);
 String GetRepr(TemplateRecordType* e,Arena* out);
+String GetRepr(VersatStage* e,Arena* out);
 String GetRepr(ExternalMemoryType* e,Arena* out);
 String GetRepr(NodeType* e,Arena* out);
 String GetRepr(AcceleratorPurpose* e,Arena* out);

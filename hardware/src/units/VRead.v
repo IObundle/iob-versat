@@ -40,17 +40,19 @@ module VRead #(
    input  [AXI_DATA_W-1:0] ext_2p_data_in_0,
    output [AXI_DATA_W-1:0] ext_2p_data_out_0,
 
-   input [AXI_ADDR_W-1:0] ext_addr,
-   input                  pingPong,
+   (* versat_stage="Read" *) input [AXI_ADDR_W-1:0] ext_addr,
+   (* versat_stage="Read" *) input                  pingPong,
 
-   input [  PERIOD_W-1:0] read_per,
-   input [    ADDR_W-1:0] read_incr,
-   input [PERIOD_W-1:0]   read_duty,
+   (* versat_stage="Read" *) input [  PERIOD_W-1:0] read_per,
+   (* versat_stage="Read" *) input [    ADDR_W-1:0] read_incr,
+   (* versat_stage="Read" *) input [PERIOD_W-1:0]   read_duty,
 
-   input [  ADDR_W-1:0] read_iter,
-   input [  ADDR_W-1:0] read_shift,
+   (* versat_stage="Read" *) input [  ADDR_W-1:0] read_iter,
+   (* versat_stage="Read" *) input [  ADDR_W-1:0] read_shift,
 
-   input [     LEN_W-1:0] read_length,
+   (* versat_stage="Read" *) input [     LEN_W-1:0] read_length,
+
+   (* versat_stage="Read" *) input read_enabled,
 
    input [  ADDR_W-1:0] output_iter,
    input [PERIOD_W-1:0] output_per,
@@ -62,8 +64,6 @@ module VRead #(
    input [PERIOD_W-1:0] output_per2,
    input [  ADDR_W-1:0] output_shift2,
    input [  ADDR_W-1:0] output_incr2,
-
-   input read_enabled,
 
    input [DELAY_W-1:0] delay0
 );

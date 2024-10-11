@@ -1,5 +1,6 @@
 #pragma once
 
+#include "verilogParsing.hpp"
 #include "utils.hpp"
 
 struct Accelerator;
@@ -39,6 +40,12 @@ struct MuxInfo{
   int val;
   String name;
   InstanceInfo* info;
+};
+
+struct WireInformation{
+  Wire wire;
+  int addr;
+  int configBitStart;
 };
 
 Array<FUDeclaration*> SortTypesByConfigDependency(Array<FUDeclaration*> types,Arena* out,Arena* temp);

@@ -296,7 +296,6 @@ ConsolidationResult GenerateConsolidationGraph(Accelerator* accel0,Accelerator* 
 
   DynamicArray<MappingNode> nodes = StartArray<MappingNode>(out);
 
-  DEBUG_BREAK();
 #if 1
   // Check possible edge mapping
 
@@ -2147,8 +2146,6 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
   declInst.baseConfig.inputDelays = ExtractInputDelays(recon[0],reconDelay[0],numberInputs,perm,temp);
   declInst.baseConfig.outputLatencies = ExtractOutputLatencies(recon[0],reconDelay[0],perm,temp);
 
-  //DEBUG_BREAK();
-
   FUDeclaration* decl = RegisterFU(declInst);
   decl->type = FUDeclarationType_MERGED;
 
@@ -2328,7 +2325,6 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
     }
   }
 
-  DEBUG_BREAK();
   // Propagates merge multiplexers accross hierarchies
   for(int i = 0; i < size; i++){
     BLOCK_REGION(temp);

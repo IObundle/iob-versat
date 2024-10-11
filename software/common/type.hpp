@@ -155,12 +155,14 @@ Type* Next(TypeIterator& iter);
 
 Type* RegisterSimpleType(String name,int size,int align);
 Type* RegisterOpaqueType(String name,Subtype subtype,int size,int align);
-Type* RegisterEnum(String name,Array<Pair<String,int>> enumValues);
+Type* RegisterEnum(String name,int size,int align,Array<Pair<String,int>> enumValues);
 Type* RegisterTypedef(String oldName,String newName);
 Type* RegisterTemplate(String baseName,Array<String> templateArgNames);
 Type* RegisterStructMembers(String name,Array<Member> members);
 Type* RegisterTemplateMembers(String name,Array<TemplatedMember> members);
 
+// Not properly tested, probably some bugs lurking in here
+// Since majority of the type info is used by our side, not a major problem
 Type* InstantiateTemplate(String name,Arena* arena = nullptr);
 
 void RegisterTypes();
