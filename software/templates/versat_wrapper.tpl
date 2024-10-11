@@ -445,7 +445,7 @@ AcceleratorConfig* config = (AcceleratorConfig*) &configBuffer;
 AcceleratorStatic* statics = (AcceleratorStatic*) &staticBuffer;
 
 #{for wire allConfigsVerilatorSide}
- #{if configsHeader[index].bitSize != 64}
+  #{if configsHeader[index].bitSize != 64}
 
 #if 0
   once{
@@ -456,8 +456,27 @@ AcceleratorStatic* statics = (AcceleratorStatic*) &staticBuffer;
     }
   };
 #endif
-#{end}
+  #{end}
+
+  #{if wire.stage == 1} //READ
   self->@{wire.name} = config->TOP_@{wire.name};
+  #{end}
+
+  #{if wire.stage == 0} // COMPUTED
+  static iptr COMPUTED_@{wire.name} = 0;
+  self->@{wire.name} = COMPUTED_@{wire.name};
+  COMPUTED_@{wire.name} = config->TOP_@{wire.name};
+  #{end}
+
+
+  #{if wire.stage == 2} //WRITE
+  static iptr COMPUTED_@{wire.name} = 0;
+  static iptr WRITE_@{wire.name} = 0;
+
+  self->@{wire.name} = COMPUTED_@{wire.name};
+  COMPUTED_@{wire.name} = WRITE_@{wire.name};
+  WRITE_@{wire.name} = config->TOP_@{wire.name};
+  #{end}
 #{end}
 #{end}
 

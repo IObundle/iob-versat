@@ -49,8 +49,9 @@ module VWrite #(
    (* versat_stage="Write" *) input [  ADDR_W-1:0]   write_shift,
 
    (* versat_stage="Write" *) input [     LEN_W-1:0] write_length,
-   (* versat_stage="Write" *) input                  pingPong,
    (* versat_stage="Write" *) input                  write_enabled,
+
+   input                  pingPong,
 
    input [  ADDR_W-1:0] input_iter,
    input [PERIOD_W-1:0] input_per,

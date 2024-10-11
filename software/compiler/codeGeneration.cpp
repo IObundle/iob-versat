@@ -757,14 +757,11 @@ void OutputVerilatorWrapper(FUDeclaration* type,Accelerator* accel,String output
   Array<Wire> allConfigsHeaderSide = ExtractAllConfigs(info.baseInfo,temp,temp2);
 
   // We need to bundle config + static (type->config) only contains config, but not static
-  Array<Wire> allConfigsVerilatorSide = PushArray<Wire>(temp,999); // TODO: Correct size
-  {
-    int index = 0;
-    for(Wire& config : type->baseConfig.configs){
-      allConfigsVerilatorSide[index++] = config;
-    }
-    allConfigsVerilatorSide.size = index;
+  auto arr = StartArray<Wire>(temp);
+  for(Wire& config : type->baseConfig.configs){
+    *arr.PushElem() = config;
   }
+  Array<Wire> allConfigsVerilatorSide = EndArray(arr);
   TemplateSetCustom("allConfigsVerilatorSide",MakeValue(&allConfigsVerilatorSide));
 
   int index = 0;
@@ -1075,7 +1072,6 @@ void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* 
   TemplateSetBool("useDMA",globalOptions.useDMA);
   TemplateSetCustom("opts",MakeValue(&globalOptions));
   
-#if 1
   int configBit = 0;
   int addr = val.versatConfigs;
   
@@ -1119,7 +1115,6 @@ void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* 
   
   auto test = EndArray(arr);
   TemplateSetCustom("wireInfo",MakeValue(&test));
-#endif
 
   {
     FILE* s = OpenFileAndCreateDirectories(StaticFormat("%s/versat_instance.v",hardwarePath),"w");
