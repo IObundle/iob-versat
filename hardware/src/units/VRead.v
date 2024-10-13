@@ -5,7 +5,7 @@
 module VRead #(
    parameter SIZE_W     = 32,
    parameter DATA_W     = 32,
-   parameter ADDR_W     = 20,
+   parameter ADDR_W     = 18,
    parameter PERIOD_W   = 18, // Must be 2 less than ADDR_W (boundary of 4) (for 32 bit DATA_W)
    parameter AXI_ADDR_W = 32,
    parameter AXI_DATA_W = 32,
@@ -60,10 +60,16 @@ module VRead #(
    input [  ADDR_W-1:0] output_start,
    input [  ADDR_W-1:0] output_shift,
    input [  ADDR_W-1:0] output_incr,
+
    input [  ADDR_W-1:0] output_iter2,
    input [PERIOD_W-1:0] output_per2,
    input [  ADDR_W-1:0] output_shift2,
    input [  ADDR_W-1:0] output_incr2,
+
+   input [  ADDR_W-1:0] output_iter3,
+   input [PERIOD_W-1:0] output_per3,
+   input [  ADDR_W-1:0] output_shift3,
+   input [  ADDR_W-1:0] output_incr3,
 
    input [DELAY_W-1:0] delay0
 );
@@ -180,10 +186,10 @@ module VRead #(
       .iterations2_i(output_iter2),
       .shift2_i(output_shift2),
 
-      .period3_i(0),
-      .incr3_i(0),
-      .iterations3_i(0),
-      .shift3_i(0),
+      .period3_i(output_per3),
+      .incr3_i(output_incr3),
+      .iterations3_i(output_iter3),
+      .shift3_i(output_shift3),
 
       //outputs 
       .valid_o(output_enabled),
