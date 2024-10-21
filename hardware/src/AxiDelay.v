@@ -18,7 +18,7 @@ module AxiDelay #(
       if (rst_i) begin
          counter <= 0;
       end else begin
-         if (counter == 0 && m_valid_o && m_ready_i) begin
+         if ((counter == 0) && m_valid_o && m_ready_i) begin
             counter <= ($urandom % MAX_DELAY);
          end
 

@@ -103,6 +103,7 @@ String GetRepr(AcceleratorPurpose* e,Arena* out){
   switch(*e){
   case AcceleratorPurpose::AcceleratorPurpose_TEMP: return PushString(out,STRING("AcceleratorPurpose_TEMP"));
   case AcceleratorPurpose::AcceleratorPurpose_BASE: return PushString(out,STRING("AcceleratorPurpose_BASE"));
+  case AcceleratorPurpose::AcceleratorPurpose_FIXED_DELAY: return PushString(out,STRING("AcceleratorPurpose_FIXED_DELAY"));
   case AcceleratorPurpose::AcceleratorPurpose_FLATTEN: return PushString(out,STRING("AcceleratorPurpose_FLATTEN"));
   case AcceleratorPurpose::AcceleratorPurpose_MODULE: return PushString(out,STRING("AcceleratorPurpose_MODULE"));
   case AcceleratorPurpose::AcceleratorPurpose_RECON: return PushString(out,STRING("AcceleratorPurpose_RECON"));

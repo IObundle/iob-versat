@@ -1137,7 +1137,7 @@ Opt<MergeDef> ParseMerge(Tokenizer* tok,Arena* out,Arena* temp){
   return result;
 }
 
-void InstantiateMerge(MergeDef def,Arena* temp,Arena* temp2){
+FUDeclaration* InstantiateMerge(MergeDef def,Arena* temp,Arena* temp2){
   DynamicArray<FUDeclaration*> declArr = StartArray<FUDeclaration*>(temp);
   for(TypeAndInstance tp : def.declarations){
     FUDeclaration* decl = GetTypeByNameOrFail(tp.typeName); // TODO: Rewrite stuff so that at this point we know that the type must exist
@@ -1147,7 +1147,7 @@ void InstantiateMerge(MergeDef def,Arena* temp,Arena* temp2){
 
   String name = PushString(globalPermanent,def.name);
 
-  Merge(decl,name,def.specifics,temp,temp2);
+  return Merge(decl,name,def.specifics,temp,temp2);
 }
 
 int GetRangeCount(Range<int> range){
@@ -1649,7 +1649,7 @@ FUDeclaration* InstantiateModule(String content,ModuleDef def,Arena* temp,Arena*
   FUInstance** outInTable = table->Get(STRING("out"));
   Assert(!outInTable);
 
-  return RegisterSubUnit(circuit,temp,temp2);
+  return RegisterSubUnitBarebones(circuit,temp,temp2);
 }
 
 void Synchronize(Tokenizer* tok,BracketList<const char*> syncPoints){
@@ -1743,17 +1743,35 @@ Array<Token> TypesUsed(TypeDefinition def,Arena* out,Arena* temp){
   return {};
 }
 
-void InstantiateSpecifications(String content,TypeDefinition def,Arena* temp,Arena* temp2){
+FUDeclaration* InstantiateBarebonesSpecifications(String content,TypeDefinition def,Arena* temp,Arena* temp2){
   BLOCK_REGION(temp);
 
   switch(def.type){
   case DefinitionType_MERGE: {
-    InstantiateMerge(def.merge,temp,temp2);
+    return InstantiateMerge(def.merge,temp,temp2);
   } break;
   case DefinitionType_MODULE: {
-    InstantiateModule(content,def.module,temp,temp2);
+    return InstantiateModule(content,def.module,temp,temp2);
   } break;
   default: Assert(false);
   }
+
+  return nullptr;
+}
+  
+FUDeclaration* InstantiateSpecifications(String content,TypeDefinition def,Arena* temp,Arena* temp2){
+  BLOCK_REGION(temp);
+
+  switch(def.type){
+  case DefinitionType_MERGE: {
+    return InstantiateMerge(def.merge,temp,temp2);
+  } break;
+  case DefinitionType_MODULE: {
+    return InstantiateModule(content,def.module,temp,temp2);
+  } break;
+  default: Assert(false);
+  }
+
+  return nullptr;
 }
 

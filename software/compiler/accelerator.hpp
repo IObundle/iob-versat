@@ -147,16 +147,15 @@ struct FUInstance{
 enum AcceleratorPurpose{
   AcceleratorPurpose_TEMP,
   AcceleratorPurpose_BASE,
+  AcceleratorPurpose_FIXED_DELAY,
   AcceleratorPurpose_FLATTEN,
   AcceleratorPurpose_MODULE,
   AcceleratorPurpose_RECON,
   AcceleratorPurpose_MERGE
 };
 
-// TODO: Memory leaks can be fixed by having a global InstanceNode and FUInstance Pool and a global dynamic arena for everything else.
 struct Accelerator{ // Graph + data storage
-  FUInstance* allocated;
-  FUInstance* lastAllocated;
+  Pool<FUInstance> allocated;
   
   DynamicArena* accelMemory; // TODO: We could remove all this because we can now build all the accelerators in place. (Add an API that functions like a Accelerator builder and at the end we lock everything into an immutable graph).
 
@@ -232,7 +231,9 @@ struct AcceleratorMapping{
 };
 
 struct EdgeIterator{
-  FUInstance* currentNode;
+  //FUInstance* currentNode;
+  PoolIterator<FUInstance> currentNode;
+  PoolIterator<FUInstance> end;
   ConnectionNode* currentPort;
   
   bool HasNext();

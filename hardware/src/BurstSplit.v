@@ -19,7 +19,7 @@ module BurstSplit #(
    input rst_i
 );
 
-   reg [DATA_W-8-1:0] stored_data;
+   reg [(DATA_W-8)-1:0] stored_data;
    always @(posedge clk_i, posedge rst_i) begin
       if (rst_i) begin
          stored_data <= 0;

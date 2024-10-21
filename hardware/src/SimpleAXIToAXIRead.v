@@ -22,13 +22,13 @@ module SimpleAXItoAXIRead #(
 
    localparam OFFSET_W = $clog2(AXI_DATA_W / 8);
 
-   localparam [2:0] axi_size = (AXI_DATA_W == 16   ? 3'b001 : 
-                             AXI_DATA_W == 32   ? 3'b010 :
-                             AXI_DATA_W == 64   ? 3'b011 :
-                             AXI_DATA_W == 128  ? 3'b100 :
-                             AXI_DATA_W == 256  ? 3'b101 :
-                             AXI_DATA_W == 512  ? 3'b110 : 
-                             AXI_DATA_W == 1024 ? 3'b111 : 3'b000);
+   localparam [2:0] axi_size = ((AXI_DATA_W == 16)   ? 3'b001 : 
+                                (AXI_DATA_W == 32)   ? 3'b010 :
+                                (AXI_DATA_W == 64)   ? 3'b011 :
+                                (AXI_DATA_W == 128)  ? 3'b100 :
+                                (AXI_DATA_W == 256)  ? 3'b101 :
+                                (AXI_DATA_W == 512)  ? 3'b110 : 
+                                (AXI_DATA_W == 1024) ? 3'b111 : 3'b000);
 
    // Read
 
@@ -48,6 +48,7 @@ module SimpleAXItoAXIRead #(
 
    wire read_last_transfer;
    wire burst_i_align_empty;
+
    // Read
    BurstAlign #(
       .AXI_DATA_W(AXI_DATA_W)
@@ -88,8 +89,8 @@ module SimpleAXItoAXIRead #(
       .address_i(m_raddr_i),
       .length_i (m_rlen_i),   // In bytes
 
-      .transfer_start_i(read_state == 2'h0 && m_rvalid_i && burst_i_align_empty),
-      .burst_start_i   (read_state == 2'h2 && axi_arready_i && axi_arvalid_o),
+      .transfer_start_i((read_state == 2'h0) && m_rvalid_i && burst_i_align_empty),
+      .burst_start_i   ((read_state == 2'h2) && axi_arready_i && axi_arvalid_o),
 
       // Do not need them for read operation
       .initial_strb_o      (),

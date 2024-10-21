@@ -179,7 +179,7 @@ Array<TypeStructInfoElement> GenerateStructFromType(FUDeclaration* decl,Arena* o
 
   Array<int> configAmount = PushArray<int>(temp,configSize);
   int i = 0;
-  FOREACH_LIST_INDEXED(FUInstance*,node,accel->allocated,i){
+  for(FUInstance* node : accel->allocated){
     FUDeclaration* decl = node->declaration;
     
     int configOffset = offsets.offsets[i];
@@ -208,7 +208,7 @@ Array<TypeStructInfoElement> GenerateStructFromType(FUDeclaration* decl,Arena* o
   Array<int> configSeen = PushArray<int>(temp,numberEntries);
   i = 0;
   int index = 0;
-  FOREACH_LIST_INDEXED(FUInstance*,node,accel->allocated,i){
+  for(FUInstance* node : accel->allocated){
     FUDeclaration* decl = node->declaration;
 
     int configOffset = offsets.offsets[i];
@@ -241,7 +241,7 @@ static Array<TypeStructInfoElement> GenerateAddressStructFromType(FUDeclaration*
   }
 
   int memoryMapped = 0;
-  FOREACH_LIST(FUInstance*,node,decl->fixedDelayCircuit->allocated){
+  for(FUInstance* node : decl->fixedDelayCircuit->allocated){
     FUDeclaration* decl = node->declaration;
 
     if(!(decl->memoryMapBits.has_value())){
@@ -255,7 +255,7 @@ static Array<TypeStructInfoElement> GenerateAddressStructFromType(FUDeclaration*
 
   int i = 0;
   int index = 0;
-  FOREACH_LIST_INDEXED(FUInstance*,node,decl->fixedDelayCircuit->allocated,i){
+  for(FUInstance* node : decl->fixedDelayCircuit->allocated){
     FUDeclaration* decl = node->declaration;
 
     if(!(decl->memoryMapBits.has_value())){
@@ -349,7 +349,7 @@ Array<TypeStructInfo> GetConfigStructInfo(Accelerator* accel,Arena* out,Arena* t
       Array<bool> seenIndex = PushArray<bool>(temp,offsets.max);
         
       int i = 0;
-      FOREACH_LIST_INDEXED(FUInstance*,node,decl->fixedDelayCircuit->allocated,i){
+      for(FUInstance* node : decl->fixedDelayCircuit->allocated){
         int config = offsets.offsets[i];
           
         if(config >= 0 && info.unitBelongs[i]){
@@ -386,7 +386,7 @@ Array<TypeStructInfo> GetConfigStructInfo(Accelerator* accel,Arena* out,Arena* t
         }
 
         int i = 0;
-        FOREACH_LIST_INDEXED(FUInstance*,node,decl->fixedDelayCircuit->allocated,i){
+        for(FUInstance* node : decl->fixedDelayCircuit->allocated){
           int config = offsets.offsets[i];
           if(configNeedToSee == config){
             int nConfigs = node->declaration->baseConfig.configs.size;
@@ -666,7 +666,7 @@ void OutputCircuitSource(FUDeclaration* decl,FILE* file,Arena* temp,Arena* temp2
   
   Assert(globalDebug.outputAccelerator); // Because FILE is created outside, code should not call this function if flag is set
   
-  Array<FUInstance*> nodes = ListToArray(accel->allocated,temp);
+  Pool<FUInstance> nodes = accel->allocated;
   for(FUInstance* node : nodes){
     if(node->declaration->nIOs){
       SetParameter(node,STRING("AXI_ADDR_W"),STRING("AXI_ADDR_W"));
@@ -675,13 +675,15 @@ void OutputCircuitSource(FUDeclaration* decl,FILE* file,Arena* temp,Arena* temp2
     }
   }
 
+  // All these should be moved off
+  // There is no reason why OutputCircuitSource should ever need to take 2 arenas
   VersatComputedValues val = ComputeVersatValues(accel,false);
   AccelInfo info = CalculateAcceleratorInfoNoDelay(accel,true,temp,temp2);
   Array<MemoryAddressMask> memoryMasks = CalculateAcceleratorMemoryMasks(info,temp);
 
-  Array<String> parameters = PushArray<String>(temp,nodes.size);
-  for(int i = 0; i < nodes.size; i++){
-    parameters[i] = GenerateVerilogParameterization(nodes[i],temp);
+  Array<String> parameters = PushArray<String>(temp,nodes.Size());
+  for(int i = 0; i < nodes.Size(); i++){
+    parameters[i] = GenerateVerilogParameterization(nodes.Get(i),temp);
   }
   
   TemplateSetCustom("parameters",MakeValue(&parameters));
@@ -709,8 +711,8 @@ void OutputIterativeSource(FUDeclaration* decl,FILE* file,Arena* temp,Arena* tem
   ClearTemplateEngine(); // Make sure that we do not reuse data
 
   Assert(globalDebug.outputAccelerator); // Because FILE is created outside, code should not call this function if flag is set
-\
-  FOREACH_LIST(FUInstance*,ptr,accel->allocated){
+  
+  for(FUInstance* ptr : accel->allocated){
     FUInstance* inst = ptr;
     if(inst->declaration->nIOs){
       SetParameter(inst,STRING("AXI_ADDR_W"),STRING("AXI_ADDR_W"));
@@ -725,10 +727,11 @@ void OutputIterativeSource(FUDeclaration* decl,FILE* file,Arena* temp,Arena* tem
 
   Hashmap<StaticId,StaticData>* staticUnits = CollectStaticUnits(accel,decl,temp);
   
-  Array<FUInstance*> nodes = ListToArray(accel->allocated,temp);
-  Array<String> parameters = PushArray<String>(temp,nodes.size);
-  for(int i = 0; i < nodes.size; i++){
-    parameters[i] = GenerateVerilogParameterization(nodes[i],temp);
+  Pool<FUInstance> nodes = accel->allocated;
+  //Array<FUInstance*> nodes = ListToArray(accel->allocated,temp);
+  Array<String> parameters = PushArray<String>(temp,nodes.Size());
+  for(int i = 0; i < nodes.Size(); i++){
+    parameters[i] = GenerateVerilogParameterization(nodes.Get(i),temp);
   }
   
   TemplateSetCustom("parameters",MakeValue(&parameters));
@@ -902,11 +905,9 @@ void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* 
     printf("Error creating file, check if filepath is correct: %s\n",hardwarePath);
     return;
   }
-
-  VersatComputedValues val = ComputeVersatValues(accel,globalOptions.useDMA);
   
   AccelInfo info = CalculateAcceleratorInfo(accel,true,temp,temp2);
-
+  VersatComputedValues val = ComputeVersatValues(accel,globalOptions.useDMA);
   CheckSanity(info.baseInfo,temp);
   
   printf("ADDR_W - %d\n",val.memoryConfigDecisionBit + 1);
@@ -914,7 +915,7 @@ void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* 
     printf("HAS_AXI - True\n");
   }
 
-  fprintf(c,"`define NUMBER_UNITS %d\n",Size(accel->allocated));
+  fprintf(c,"`define NUMBER_UNITS %d\n",accel->allocated.Size());
   fprintf(f,"`undef  NUMBER_UNITS\n");
   fprintf(c,"`define CONFIG_W %d\n",val.configurationBits);
   fprintf(f,"`undef  CONFIG_W\n");
@@ -955,9 +956,10 @@ void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* 
   }
   
   // Output configuration file
-  Array<FUInstance*> nodes = ListToArray(accel->allocated,temp2);
-
-  DAGOrderNodes order = CalculateDAGOrder(accel->allocated,temp);
+  //Array<FUInstance*> nodes = ListToArray(accel->allocated,temp2);
+  Pool<FUInstance> nodes = accel->allocated;
+  
+  DAGOrderNodes order = CalculateDAGOrder(&accel->allocated,temp);
   Array<FUInstance*> ordered = order.instances;
   
   for(FUInstance* node : order.instances){
@@ -1005,7 +1007,7 @@ void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* 
   }
 
   int staticStart = 0;
-  FOREACH_LIST(FUInstance*,ptr,accel->allocated){
+  for(FUInstance* ptr : accel->allocated){
     FUDeclaration* decl = ptr->declaration;
     for(Wire& wire : decl->baseConfig.configs){
       staticStart += wire.bitSize;
@@ -1043,9 +1045,9 @@ void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* 
   
   Array<MemoryAddressMask> memoryMasks = CalculateAcceleratorMemoryMasks(info,temp);
 
-  Array<String> parameters = PushArray<String>(temp,nodes.size);
-  for(int i = 0; i < nodes.size; i++){
-    parameters[i] = GenerateVerilogParameterization(nodes[i],temp);
+  Array<String> parameters = PushArray<String>(temp,nodes.Size());
+  for(int i = 0; i < nodes.Size(); i++){
+    parameters[i] = GenerateVerilogParameterization(nodes.Get(i),temp);
   }
   
   TemplateSetCustom("parameters",MakeValue(&parameters));
@@ -1144,7 +1146,7 @@ void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* 
   TemplateSetBool("isSimple",isSimple);
   if(isSimple){
     FUInstance* inst = nullptr; // TODO: Should probably separate isSimple to a separate function, because otherwise we are recalculating stuff that we already know.
-    FOREACH_LIST(FUInstance*,ptr,accel->allocated){
+    for(FUInstance* ptr : accel->allocated){
       if(CompareString(ptr->name,STRING("TOP"))){
         inst = ptr;
         break;
@@ -1154,7 +1156,7 @@ void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* 
 
     Accelerator* accel = inst->declaration->fixedDelayCircuit;
     if(accel){
-      FOREACH_LIST(FUInstance*,ptr,accel->allocated){
+      for(FUInstance* ptr : accel->allocated){
         if(CompareString(ptr->name,STRING("simple"))){
           inst = ptr;
           break;

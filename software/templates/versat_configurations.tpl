@@ -148,5 +148,4 @@ begin
    end
 end
 
-endmodule;
-
+endmodule

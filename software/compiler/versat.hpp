@@ -69,7 +69,8 @@ Array<DelayToAdd> GenerateFixDelays(Accelerator* accel,EdgeDelay* edgeDelays,Are
 void FixDelays(Accelerator* accel,Hashmap<Edge,DelayInfo>* edgeDelays,Arena* temp);
 
 // Accelerator merging
-DAGOrderNodes CalculateDAGOrder(FUInstance* instances,Arena* arena);
+//DAGOrderNodes CalculateDAGOrder(FUInstance* instances,Arena* arena);
+DAGOrderNodes CalculateDAGOrder(Pool<FUInstance>* instances,Arena* arena);
 
 // Debug
 void AssertGraphValid(FUInstance* nodes,Arena* arena);
@@ -77,8 +78,8 @@ void AssertGraphValid(FUInstance* nodes,Arena* arena);
 // Misc
 bool CheckValidName(String name); // Check if name can be used as identifier in verilog
 bool IsTypeHierarchical(FUDeclaration* decl);
-FUInstance* GetInputInstance(FUInstance* nodes,int inputIndex);
-FUInstance* GetOutputInstance(FUInstance* nodes);
+FUInstance* GetInputInstance(Pool<FUInstance>* nodes,int inputIndex);
+FUInstance* GetOutputInstance(Pool<FUInstance>* nodes);
 
 // Temp
 struct ModuleInfo;
@@ -100,6 +101,7 @@ void SetStatic(Accelerator* accel,FUInstance* inst);
 FUDeclaration* RegisterFU(FUDeclaration declaration);
 FUDeclaration* GetTypeByName(String str);
 FUDeclaration* RegisterIterativeUnit(Accelerator* accel,FUInstance* inst,int latency,String name,Arena* temp,Arena* temp2);
+FUDeclaration* RegisterSubUnitBarebones(Accelerator* circuit,Arena* temp,Arena* temp2);
 FUDeclaration* RegisterSubUnit(Accelerator* circuit,Arena* temp,Arena* temp2);
 
 void PrintDeclaration(FILE* out,FUDeclaration* decl,Arena* temp,Arena* temp2);

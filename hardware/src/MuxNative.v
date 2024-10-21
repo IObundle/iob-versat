@@ -13,14 +13,14 @@ module MuxNative #(
    parameter LEN_W    = 8
 ) (
    // Slaves
-   input  [               N_SLAVES-1:0] s_valid_i,
-   output [               N_SLAVES-1:0] s_ready_o,
-   output [               N_SLAVES-1:0] s_last_o,
-   input  [      ADDR_W * N_SLAVES-1:0] s_addr_i,
-   input  [      DATA_W * N_SLAVES-1:0] s_wdata_i,
-   input  [(DATA_W / 8) * N_SLAVES-1:0] s_wstrb_i,
-   output [                 DATA_W-1:0] s_rdata_o,
-   input  [     LEN_W * N_SLAVES - 1:0] s_len_i,
+   input  [                 N_SLAVES-1:0] s_valid_i,
+   output [                 N_SLAVES-1:0] s_ready_o,
+   output [                 N_SLAVES-1:0] s_last_o,
+   input  [      (ADDR_W * N_SLAVES)-1:0] s_addr_i,
+   input  [      (DATA_W * N_SLAVES)-1:0] s_wdata_i,
+   input  [((DATA_W / 8) * N_SLAVES)-1:0] s_wstrb_i,
+   output [                   DATA_W-1:0] s_rdata_o,
+   input  [     (LEN_W * N_SLAVES) - 1:0] s_len_i,
 
    // Write interface
    output reg                    m_wvalid_o,
@@ -102,7 +102,7 @@ module MuxNative #(
          r_running <= 0;
          r_slave   <= 0;
       end else begin
-         if (!w_running && w_req_valid) begin
+         if ((!w_running) && w_req_valid) begin
             w_running <= 1'b1;
             w_slave   <= w_req;
          end
@@ -110,7 +110,7 @@ module MuxNative #(
             w_running <= 1'b0;
          end
 
-         if (!r_running && r_req_valid) begin
+         if ((!r_running) && r_req_valid) begin
             r_running <= 1'b1;
             r_slave   <= r_req;
          end
@@ -120,8 +120,8 @@ module MuxNative #(
       end
    end
 
-   assign s_ready_o = ((w_running && m_wready_i ? 1 : 0) << w_slave) | ((r_running && m_rready_i ? 1 : 0) << r_slave);
-   assign s_last_o = ((w_running && m_wlast_i ? 1 : 0 ) << w_slave) | ((r_running && m_rlast_i ? 1 : 0 ) << r_slave);
+   assign s_ready_o = (((w_running && m_wready_i) ? 1 : 0) << w_slave) | ((r_running && m_rready_i ? 1 : 0) << r_slave);
+   assign s_last_o = (((w_running && m_wlast_i) ? 1 : 0 ) << w_slave) | ((r_running && m_rlast_i ? 1 : 0 ) << r_slave);
 
    always @* begin
       m_rvalid_o = 0;

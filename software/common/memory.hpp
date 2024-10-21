@@ -631,6 +631,7 @@ public:
 
   bool HasNext(){return (page != nullptr);};
   bool operator!=(PoolIterator& iter);
+  bool operator==(PoolIterator& iter);
   void operator++();
   T* operator*();
 };
@@ -1381,6 +1382,13 @@ void PoolIterator<T>::Init(Pool<T>* pool,Byte* page){
 template<typename T>
 bool PoolIterator<T>::operator!=(PoolIterator<T>& iter){
   bool res = this->page != iter.page; // We only care about for ranges, so no need to be specific
+
+  return res;
+}
+
+template<typename T>
+bool PoolIterator<T>::operator==(PoolIterator<T>& iter){
+  bool res = this->page == iter.page; // We only care about for ranges, so no need to be specific
 
   return res;
 }

@@ -56,7 +56,7 @@ GraphPrintingContent GeneratePrintingContent(Accelerator* accel,NodeContent node
   Array<Edge> edges = GetAllEdges(accel,temp);
 
   ArenaList<GraphPrintingNodeInfo>* nodeInfo = PushArenaList<GraphPrintingNodeInfo>(temp);
-  FOREACH_LIST(FUInstance*,inst,accel->allocated){
+  for(FUInstance* inst : accel->allocated){
     GraphInfo content = nodeFunction(inst,out);
     String name = UniqueInstanceName(inst,out);
 

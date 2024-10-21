@@ -40,12 +40,12 @@ module AddressGen #(
    reg                                           [  ADDR_W - 1:0] iter;
    reg                                           [PERIOD_W - 1:0] per;
 
-   wire iterCond = ((iter + 1) == iterations_i || iterations_i == 0);
-   wire perCond = ((per + 1) == period_i || period_i == 0);
+   wire iterCond = (((iter + 1) == iterations_i) || (iterations_i == 0));
+   wire perCond = (((per + 1) == period_i) || (period_i == 0));
    reg valid;
 
    assign store_o = (per < duty_i);
-   assign valid_o = valid && per < duty_i;
+   assign valid_o = valid && (per < duty_i);
 
    always @(posedge clk_i, posedge rst_i) begin
       if (rst_i) begin

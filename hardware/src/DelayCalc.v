@@ -11,7 +11,7 @@
    input      run,
    output reg done,
 
-   output reg lastCycle,
+   output     lastCycle,
 
    input [DELAY_W-1:0] delay0
 );

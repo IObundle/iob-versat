@@ -1,7 +1,5 @@
 `timescale 1ns / 1ps
 
-`include "AXIInfo.vh"
-
 // Module that implements AXI transfer logic. Handles multiple transfers, initial and final strobes and 4k boundary. 
 // Does not contain any logic to drive a transfer. It just computes values that are necessary according to the AXI specification
 // A transfer is equal to a N amount of AXI bursts intended to transfer a variable amount of bytes.
@@ -23,8 +21,8 @@ module AXITransferController #(
    output reg [AXI_ADDR_W-1:0] true_axi_axaddr_o,  /* registered */
 
    // All these signals are combinatorial. Register them outside this module if needed
-   output reg [AXI_DATA_W/8-1:0] initial_strb_o, // First strobe of the transfer. The rest is always full 1
-   output reg [AXI_DATA_W/8-1:0] final_strb_o, // Last strobe of the transfer. Only valid if last_transfer is asserted
+   output reg [(AXI_DATA_W/8)-1:0] initial_strb_o, // First strobe of the transfer. The rest is always full 1
+   output reg [(AXI_DATA_W/8)-1:0] final_strb_o, // Last strobe of the transfer. Only valid if last_transfer is asserted
 
    output [31:0] symbolsToRead_o,  // How many symbols (data transfers) to expect from the source
 
@@ -35,6 +33,26 @@ module AXITransferController #(
    input clk_i,
    input rst_i
 );
+
+   function integer calculate_AXI_OFFSET_W(input integer axi_data_w);
+      begin
+         calculate_AXI_OFFSET_W = $clog2((axi_data_w / 8));
+      end
+   endfunction
+
+   function [2:0] calculate_AXI_AXSIZE(input integer axi_data_w);
+      begin
+         calculate_AXI_AXSIZE = 0;
+         if (axi_data_w >= 8) calculate_AXI_AXSIZE = 3'b000;
+         if (axi_data_w >= 16) calculate_AXI_AXSIZE = 3'b001;
+         if (axi_data_w >= 32) calculate_AXI_AXSIZE = 3'b010;
+         if (axi_data_w >= 64) calculate_AXI_AXSIZE = 3'b011;
+         if (axi_data_w >= 128) calculate_AXI_AXSIZE = 3'b100;
+         if (axi_data_w >= 256) calculate_AXI_AXSIZE = 3'b101;
+         if (axi_data_w >= 512) calculate_AXI_AXSIZE = 3'b110;
+         if (axi_data_w >= 1024) calculate_AXI_AXSIZE = 3'b111;
+      end
+   endfunction
 
    localparam OFFSET_W = calculate_AXI_OFFSET_W(AXI_DATA_W);
    localparam STROBE_W = AXI_DATA_W / 8;
@@ -119,7 +137,7 @@ module AXITransferController #(
          always @* begin
             last_transfer_o_len = 0;
 
-            if (address_i[1:0] == 2'b00 & stored_len[1:0] == 2'b00)
+            if ((address_i[1:0] == 2'b00) & (stored_len[1:0] == 2'b00))
                last_transfer_o_len = stored_len[9:2] - 8'h1;
             else if((address_i[1:0] == 2'b10 && stored_len[1:0] == 2'b11) || (address_i[1:0] == 2'b11 && stored_len[1:0] >= 2'b10))
                last_transfer_o_len = stored_len[9:2] + 8'h1;
@@ -134,7 +152,7 @@ module AXITransferController #(
          always @* begin
             last_transfer_o_len = 0;
 
-            if (address_i[2:0] == 3'b000 && stored_len[2:0] == 3'b000)
+            if ((address_i[2:0] == 3'b000) && (stored_len[2:0] == 3'b000))
                last_transfer_o_len = stored_len[10:3] - 8'h1;
             else if (!(address_i_plus_len >= address_i[2:0] || address_i_plus_len == 0))
                last_transfer_o_len = stored_len[10:3] + 8'h1;
@@ -149,7 +167,7 @@ module AXITransferController #(
          always @* begin
             last_transfer_o_len = 0;
 
-            if (address_i[3:0] == 4'b0000 && stored_len[3:0] == 4'b0000)
+            if ((address_i[3:0] == 4'b0000) && (stored_len[3:0] == 4'b0000))
                last_transfer_o_len = stored_len[11:4] - 8'h1;
             else if (!(address_i_plus_len >= address_i[3:0] || address_i_plus_len == 0))
                last_transfer_o_len = stored_len[11:4] + 8'h1;
@@ -165,7 +183,7 @@ module AXITransferController #(
          always @* begin
             last_transfer_o_len = 0;
 
-            if (address_i[4:0] == 5'h00 && stored_len[4:0] == 5'h00)
+            if ((address_i[4:0] == 5'h00) && (stored_len[4:0] == 5'h00))
                last_transfer_o_len = stored_len[12:5] - 8'h1;
             else if (!(address_i_plus_len >= address_i[4:0] || address_i_plus_len == 0))
                last_transfer_o_len = stored_len[12:5] + 8'h1;
@@ -181,7 +199,7 @@ module AXITransferController #(
          always @* begin
             last_transfer_o_len = 0;
 
-            if (address_i[5:0] == 6'h00 && stored_len[5:0] == 6'h00)
+            if ((address_i[5:0] == 6'h00) && (stored_len[5:0] == 6'h00))
                last_transfer_o_len = stored_len[13:6] - 8'h1;
             else if (!(address_i_plus_len >= address_i[5:0] || address_i_plus_len == 0))
                last_transfer_o_len = stored_len[13:6] + 8'h1;
@@ -207,7 +225,7 @@ module AXITransferController #(
          if (burst_start_i) begin
             first_i_transfer  <= 1'b0;
             last_transfer_o   <= last_transfer_next_o;
-            true_axi_axaddr_o <= true_axi_axaddr_o + (true_axi_axlen_o + 1) * (AXI_DATA_W / 8);
+            true_axi_axaddr_o <= true_axi_axaddr_o + ((true_axi_axlen_o + 1) * (AXI_DATA_W / 8));
             stored_len        <= stored_len - transfer_byte_size;
          end
       end

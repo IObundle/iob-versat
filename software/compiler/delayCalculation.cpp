@@ -78,7 +78,7 @@ CalculateDelayResult CalculateDelay(Accelerator* accel,DAGOrderNodes order,Arena
   // TODO: We are currently using the delay pointer inside the ConnectionNode structure. When correct, eventually change to just use the hashmap
   static int functionCalls = 0;
   
-  int nodes = Size(accel->allocated);
+  int nodes = accel->allocated.Size();
   int edges = 9999;
   //int edges = Size(accel->edges);
   EdgeDelay* edgeDelay = PushHashmap<Edge,DelayInfo>(out,edges);
@@ -90,7 +90,7 @@ CalculateDelayResult CalculateDelay(Accelerator* accel,DAGOrderNodes order,Arena
   res.nodeDelay = nodeDelay;
   res.portDelay = portDelay;
   
-  FOREACH_LIST(FUInstance*,ptr,accel->allocated){
+  for(FUInstance* ptr : accel->allocated){
     nodeDelay->Insert(ptr,{0,false});
   }
 
@@ -392,7 +392,7 @@ CalculateDelayResult CalculateDelay(Accelerator* accel,DAGOrderNodes order,Arena
 Array<FUInstance*> GetNodesWithOutputDelay(Accelerator* accel,Arena* out){
   DynamicArray<FUInstance*> arr = StartArray<FUInstance*>(out); 
 
-  FOREACH_LIST(FUInstance*,node,accel->allocated){
+  for(FUInstance* node : accel->allocated){
     if(node->type == NodeType_SOURCE || node->type == NodeType_SOURCE_AND_SINK){
       *arr.PushElem() = node;
     }

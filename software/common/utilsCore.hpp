@@ -445,6 +445,8 @@ bool CompareString(const char* str1,String str2);
 bool CompareString(String str1,const char* str2);
 bool CompareString(const char* str1,const char* str2);
 
+bool Empty(String str);
+
 // If strings are equal up until a given size, returns a order so that smallest comes first
 int CompareStringOrdered(String str1,String str2);
 

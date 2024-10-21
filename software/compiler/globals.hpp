@@ -12,12 +12,15 @@ struct Options{
   String softwareOutputFilepath;
   String verilatorRoot;
   String debugPath;
+
+  String generetaSourceListName; // TODO: Not yet implemented
   
   String specificationFilepath;
   String topName;
   int databusAddrSize; // AXI_ADDR_W - used to be bitSize
   int databusDataSize; // AXI_DATA_W
 
+  bool copyUnitsConvenience; // TODO: Not yet implemented
   bool addInputAndOutputsToTop;
   bool debug;
   bool shadowRegister;

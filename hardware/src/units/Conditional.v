@@ -16,12 +16,16 @@ module Conditional #(
    (* versat_latency = 1 *) output reg [31:0] out0
 );
 
-   always @(posedge clk, posedge rst) begin
+always @(posedge clk, posedge rst) begin
+   if(rst) begin
+      out0[31:0] <= 0;
+   end else begin
       if (|in0) begin
-         out0 <= in1;
+         out0[31:0] <= in1[31:0];
       end else begin
-         out0 <= in2;
-      end
+         out0[31:0] <= in2[31:0];
+         end
    end
+end
 
 endmodule

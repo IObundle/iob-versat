@@ -53,14 +53,14 @@ reg                                           [PERIOD_W - 1:0] per,per2,per3;
 
 reg [ADDR_W-1:0] addr2,addr3;
 
-wire iter3Cond = ((iter3 + 1) == iterations3_i || iterations3_i == 0);
-wire per3Cond = ((per3 + 1) == period3_i || period3_i == 0);
+wire iter3Cond = (((iter3 + 1) == iterations3_i) || (iterations3_i == 0));
+wire per3Cond = (((per3 + 1) == period3_i) || (period3_i == 0));
 
-wire iter2Cond = ((iter2 + 1) == iterations2_i || iterations2_i == 0);
-wire per2Cond = ((per2 + 1) == period2_i || period2_i == 0);
+wire iter2Cond = (((iter2 + 1) == iterations2_i) || (iterations2_i == 0));
+wire per2Cond = (((per2 + 1) == period2_i) || (period2_i == 0));
 
-wire iterCond = ((iter + 1) == iterations_i || iterations_i == 0);
-wire perCond = ((per + 1) == period_i || period_i == 0);
+wire iterCond = (((iter + 1) == iterations_i) || (iterations_i == 0));
+wire perCond = (((per + 1) == period_i) || (period_i == 0));
 
 wire [5:0] cases = {iter3Cond,per3Cond,iter2Cond,per2Cond,iterCond,perCond};
 
@@ -123,23 +123,24 @@ always @(posedge clk_i, posedge rst_i) begin
          iter   <= iter + 1;
       end
       6'b???011: begin
-         addr2  <= addr2 + (incr2_i << OFFSET_W);
          addr_o <= addr2 + (incr2_i << OFFSET_W);
+         addr2  <= addr2 + (incr2_i << OFFSET_W);
          per    <= 0;
          iter   <= 0;
          per2   <= per2 + 1;
       end
       6'b??0111: begin
-         addr2  <= addr2 + (shift2_i << OFFSET_W);
          addr_o <= addr2 + (shift2_i << OFFSET_W);
+         addr2  <= addr2 + (shift2_i << OFFSET_W);
          per    <= 0;
          iter   <= 0;
          per2   <= 0;
          iter2  <= iter2 + 1;
       end
       6'b?01111: begin
-         addr3  <= addr3 + (incr3_i << OFFSET_W);
          addr_o <= addr3 + (incr3_i << OFFSET_W);
+         addr2  <= addr3 + (incr3_i << OFFSET_W);
+         addr3  <= addr3 + (incr3_i << OFFSET_W);
          per    <= 0;
          iter   <= 0;
          per2   <= 0;
@@ -147,8 +148,9 @@ always @(posedge clk_i, posedge rst_i) begin
          per3   <= per3 + 1;
       end
       6'b011111: begin
-         addr3  <= addr3 + (shift3_i << OFFSET_W);
          addr_o <= addr3 + (shift3_i << OFFSET_W);
+         addr2  <= addr3 + (shift3_i << OFFSET_W);
+         addr3  <= addr3 + (shift3_i << OFFSET_W);
          per    <= 0;
          iter   <= 0;
          per2   <= 0;

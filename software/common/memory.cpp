@@ -162,7 +162,7 @@ String EndString(DynamicString mark){
   Arena* arena = mark.arena;
   String res = {};
   res.size = &arena->mem[arena->used] - mark.mark;
-  if(res.size == 0){ // Put data as NULL if size 0, probably less error prone. Not sure.
+  if(Empty(res)){ // Put data as NULL if size 0, probably less error prone. Not sure.
     res.data = nullptr;
   } else {
     res.data = (char*) mark.mark;

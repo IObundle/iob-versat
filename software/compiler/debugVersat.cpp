@@ -19,7 +19,7 @@ static void OutputGraphDotFile_(Accelerator* accel,bool collapseSameEdges,Set<FU
   BLOCK_REGION(temp);
 
   fprintf(outputFile,"digraph accel {\n\tnode [fontcolor=white,style=filled,color=\"160,60,176\"];\n");
-  FOREACH_LIST(FUInstance*,ptr,accel->allocated){
+  for(FUInstance* ptr : accel->allocated){
     FUInstance* inst = ptr;
     String id = UniqueRepr(inst,temp);
     String name = Repr(inst,globalDebug.dotFormat,temp);
@@ -47,7 +47,7 @@ static void OutputGraphDotFile_(Accelerator* accel,bool collapseSameEdges,Set<FU
   Hashmap<Pair<FUInstance*,FUInstance*>,int>* seen = PushHashmap<Pair<FUInstance*,FUInstance*>,int>(temp,size);
 
   // TODO: Consider adding a true same edge counter, that collects edges with equal delay and then represents them on the graph as a pair, using [portStart-portEnd]
-  FOREACH_LIST(FUInstance*,ptr,accel->allocated){
+  for(FUInstance* ptr : accel->allocated){
     FUInstance* out = ptr;
 
     FOREACH_LIST(ConnectionNode*,con,ptr->allOutputs){
@@ -184,7 +184,7 @@ void OutputGraphDotFile(Accelerator* accel,bool collapseSameEdges,FUInstance* hi
   BLOCK_REGION(temp);
 
   fprintf(outputFile,"digraph accel {\n\tnode [fontcolor=white,style=filled,color=\"160,60,176\"];\n");
-  FOREACH_LIST(FUInstance*,ptr,accel->allocated){
+  for(FUInstance* ptr : accel->allocated){
     FUInstance* inst = ptr;
     String id = UniqueRepr(inst,temp);
     String name = Repr(inst,globalDebug.dotFormat,temp);

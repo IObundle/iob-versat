@@ -12,7 +12,7 @@
 #include <strings.h>
 
 CalculatedOffsets CalculateConfigOffsetsIgnoringStatics(Accelerator* accel,Arena* out){
-  int size = Size(accel->allocated);
+  int size = accel->allocated.Size();
 
   Array<int> array = PushArray<int>(out,size);
 
@@ -22,7 +22,7 @@ CalculatedOffsets CalculateConfigOffsetsIgnoringStatics(Accelerator* accel,Arena
 
   int index = 0;
   int offset = 0;
-  FOREACH_LIST_INDEXED(FUInstance*,ptr,accel->allocated,index){
+  for(FUInstance* ptr : accel->allocated){
     FUInstance* inst = ptr;
 
     // TODO: Temporarely set this to comment. Do not know what it affects.
@@ -87,13 +87,13 @@ CalculatedOffsets CalculateConfigurationOffset(Accelerator* accel,MemType type,A
     return CalculateConfigOffsetsIgnoringStatics(accel,out);
   }
 
-  Array<int> array = PushArray<int>(out,Size(accel->allocated));
+  Array<int> array = PushArray<int>(out,accel->allocated.Size());
 
   BLOCK_REGION(out);
 
   int index = 0;
   int offset = 0;
-  FOREACH_LIST(FUInstance*,ptr,accel->allocated){
+  for(FUInstance* ptr : accel->allocated){
     FUInstance* inst = ptr;
     array[index] = offset;
 
@@ -260,7 +260,7 @@ bool Next(Array<Partition> arr){
 Array<Partition> GenerateInitialPartitions(Accelerator* accel,Arena* out){
   DynamicArray<Partition> partitionsArr = StartArray<Partition>(out);
   int mergedPossibility = 0;
-  FOREACH_LIST(FUInstance*,node,accel->allocated){
+  for(FUInstance* node : accel->allocated){
     FUInstance* subInst = node;
     FUDeclaration* decl = subInst->declaration;
 
@@ -439,7 +439,7 @@ AcceleratorInfo TransformGraphIntoArrayRecurse(FUInstance* node,FUDeclaration* p
   }
   
   int partitionIndex = 0;
-  FOREACH_LIST_INDEXED(FUInstance*,subInst,inst->declaration->fixedDelayCircuit->allocated,index){
+  for(FUInstance* subInst : inst->declaration->fixedDelayCircuit->allocated){
     bool containsConfig = subInst->declaration->baseConfig.configs.size; // TODO: When  doing partition might need to put index here instead of 0
     
     InstanceConfigurationOffsets subOffsets = offsets;
@@ -510,7 +510,7 @@ TestResult CalculateOneInstance(Accelerator* accel,bool recursive,Array<Partitio
   CalculatedOffsets configOffsets = CalculateConfigOffsetsIgnoringStatics(accel,out);
   CalculatedOffsets delayOffsets = CalculateConfigurationOffset(accel,MemType::DELAY,out);
 
-  DAGOrderNodes order = CalculateDAGOrder(accel->allocated,temp);
+  DAGOrderNodes order = CalculateDAGOrder(&accel->allocated,temp);
   CalculateDelayResult calculatedDelay = CalculateDelay(accel,order,partitions,temp);
 
   if(globalOptions.debug){
@@ -552,7 +552,7 @@ TestResult CalculateOneInstance(Accelerator* accel,bool recursive,Array<Partitio
   ArenaList<String>* names = PushArenaList<String>(temp);
   ArenaList<Array<int>>* muxValues = PushArenaList<Array<int>>(temp);
   ArenaList<PortInstance>* mergeMultiplexers = PushArenaList<PortInstance>(temp);
-  FOREACH_LIST_INDEXED(FUInstance*,node,accel->allocated,index){
+  for(FUInstance* node : accel->allocated){
     FUInstance* subInst = node;
 
     Opt<Partition> part = {};
@@ -790,7 +790,7 @@ AccelInfo CalculateAcceleratorInfo(Accelerator* accel,bool recursive,Arena* out,
   int memoryMappedDWords = 0;
 
   // Handle non-static information
-  FOREACH_LIST(FUInstance*,ptr,accel->allocated){
+  for(FUInstance* ptr : accel->allocated){
     FUInstance* inst = ptr;
     FUDeclaration* type = inst->declaration;
 
@@ -835,7 +835,7 @@ AccelInfo CalculateAcceleratorInfo(Accelerator* accel,bool recursive,Arena* out,
 
   result.memoryMappedBits = log2i(memoryMappedDWords);
 
-  FUInstance* outputInstance = GetOutputInstance(accel->allocated);
+  FUInstance* outputInstance = GetOutputInstance(&accel->allocated);
   if(outputInstance){
     EdgeIterator iter = IterateEdges(accel);
     while(iter.HasNext()){
@@ -852,7 +852,7 @@ AccelInfo CalculateAcceleratorInfo(Accelerator* accel,bool recursive,Arena* out,
   }
 
   // Handle static information
-  FOREACH_LIST(FUInstance*,ptr,accel->allocated){
+  for(FUInstance* ptr : accel->allocated){
     FUInstance* inst = ptr;
     if(inst->isStatic){
       StaticId id = {};
@@ -883,7 +883,7 @@ AccelInfo CalculateAcceleratorInfo(Accelerator* accel,bool recursive,Arena* out,
     }
   }
   
-  FOREACH_LIST(FUInstance*,ptr,accel->allocated){
+  for(FUInstance* ptr : accel->allocated){
     FUInstance* inst = ptr;
     result.numberConnections += Size(ptr->allOutputs);
   }
@@ -1108,7 +1108,7 @@ AcceleratorInfo TransformGraphIntoArrayRecurseNoDelay(FUInstance* node,FUDeclara
     }
   }
   
-  FOREACH_LIST_INDEXED(FUInstance*,subNode,inst->declaration->fixedDelayCircuit->allocated,index){
+  for(FUInstance* subNode : inst->declaration->fixedDelayCircuit->allocated){
     FUInstance* subInst = subNode;
     bool containsConfig = subInst->declaration->baseConfig.configs.size; // TODO: When  doing partition might need to put index here instead of 0
     
@@ -1181,7 +1181,7 @@ TestResult CalculateOneInstanceNoDelay(Accelerator* accel,bool recursive,Array<P
   subOffsets.belongs = true;
   ArenaList<String>* names = PushArenaList<String>(temp);
   ArenaList<Array<int>>* muxValues = PushArenaList<Array<int>>(temp);
-  FOREACH_LIST_INDEXED(FUInstance*,node,accel->allocated,index){
+  for(FUInstance* node : accel->allocated){
     FUInstance* subInst = node;
 
     Partition part = {};
@@ -1271,7 +1271,7 @@ AccelInfo CalculateAcceleratorInfoNoDelay(Accelerator* accel,bool recursive,Aren
   
   DynamicArray<Partition> partitionsArr = StartArray<Partition>(temp);
   int mergedPossibility = 0;
-  FOREACH_LIST(FUInstance*,node,accel->allocated){
+  for(FUInstance* node : accel->allocated){
     FUInstance* subInst = node;
     FUDeclaration* decl = subInst->declaration;
 
@@ -1424,7 +1424,7 @@ AccelInfo CalculateAcceleratorInfoNoDelay(Accelerator* accel,bool recursive,Aren
   int memoryMappedDWords = 0;
 
   // Handle non-static information
-  FOREACH_LIST(FUInstance*,ptr,accel->allocated){
+  for(FUInstance* ptr : accel->allocated){
     FUInstance* inst = ptr;
     FUDeclaration* type = inst->declaration;
 
@@ -1469,7 +1469,7 @@ AccelInfo CalculateAcceleratorInfoNoDelay(Accelerator* accel,bool recursive,Aren
 
   result.memoryMappedBits = log2i(memoryMappedDWords);
 
-  FUInstance* outputInstance = GetOutputInstance(accel->allocated);
+  FUInstance* outputInstance = GetOutputInstance(&accel->allocated);
   if(outputInstance){
     //FOREACH_LIST(Edge*,edge,accel->edges){
     EdgeIterator iter = IterateEdges(accel);
@@ -1487,7 +1487,7 @@ AccelInfo CalculateAcceleratorInfoNoDelay(Accelerator* accel,bool recursive,Aren
   }
 
   // Handle static information
-  FOREACH_LIST(FUInstance*,ptr,accel->allocated){
+  for(FUInstance* ptr : accel->allocated){
     FUInstance* inst = ptr;
     if(inst->isStatic){
       StaticId id = {};
@@ -1518,7 +1518,7 @@ AccelInfo CalculateAcceleratorInfoNoDelay(Accelerator* accel,bool recursive,Aren
     }
   }
   
-  FOREACH_LIST(FUInstance*,ptr,accel->allocated){
+  for(FUInstance* ptr : accel->allocated){
     FUInstance* inst = ptr;
     result.numberConnections += Size(ptr->allOutputs);
   }

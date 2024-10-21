@@ -683,6 +683,10 @@ bool CompareString(const char* str1,const char* str2){
   return res;
 }
 
+bool Empty(String str){
+  return (str.size == 0);
+}
+
 int CompareStringOrdered(String str1,String str2){
   int minSize = std::min(str1.size,str2.size);
   for(int i = 0; i < minSize; i++){

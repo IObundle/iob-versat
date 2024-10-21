@@ -52,6 +52,8 @@ Array<FUDeclaration*> SortTypesByConfigDependency(Array<FUDeclaration*> types,Ar
 Array<FUDeclaration*> SortTypesByMemDependency(Array<FUDeclaration*> types,Arena* out,Arena* temp);
 Array<TypeStructInfoElement> GenerateStructFromType(FUDeclaration* decl,Arena* out,Arena* temp);
 
+// TODO: Each function should take an out arena and it should output a list of Strings with the filepath of each 
+//       file it outputted relative to the output location
 void OutputCircuitSource(FUDeclaration* decl,FILE* file,Arena* temp,Arena* temp2);
 void OutputIterativeSource(FUDeclaration* decl,FILE* file,Arena* temp,Arena* temp2);
 void OutputVerilatorWrapper(FUDeclaration* type,Accelerator* accel,String outputPath,Arena* temp,Arena* temp2);
