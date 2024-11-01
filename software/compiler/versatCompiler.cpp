@@ -449,9 +449,15 @@ struct argp_option options[] =
     { 0 }
   };
 
+void test(Array<int> t){
+  printf("%d\n",t[0]);
+  printf("%d\n",t[1]);
+  printf("%d\n",t[2]);
+}
+
 int main(int argc,char* argv[]){
   InitDebug();
-
+  
   *globalPermanent = InitArena(Megabyte(128));
   Arena* perm = globalPermanent;
   Arena tempInst = InitArena(Megabyte(128));
@@ -459,6 +465,13 @@ int main(int argc,char* argv[]){
   Arena temp2Inst = InitArena(Megabyte(128));
   Arena* temp2 = &temp2Inst;
 
+  Array<int> t = PushArray<int>(temp,3);
+  t[0] = 5;
+  t[1] = 10;
+  t[2] = 15;
+
+  test(t);
+  
   argp argp = { options, parse_opt, "SpecFile", "Dataflow to accelerator compiler. Check tutorial in https://github.com/IObundle/iob-versat to learn how to write a specification file"};
 
   OptionsGather gather = {};
@@ -828,6 +841,7 @@ int main(int argc,char* argv[]){
   }
   SetParameter(TOP,STRING("LEN_W"),STRING("LEN_W"));
 
+  
   OutputVersatSource(accel,
                      globalOptions.hardwareOutputFilepath.data,
                      globalOptions.softwareOutputFilepath.data,

@@ -1,3 +1,4 @@
+
 #include "versat.hpp"
 
 #include <new>
@@ -195,6 +196,7 @@ void FillDeclarationWithAcceleratorValues(FUDeclaration* decl,Accelerator* accel
   BLOCK_REGION(temp);
   BLOCK_REGION(temp2);
 
+  //DEBUG_BREAK();
   AccelInfo val = CalculateAcceleratorInfo(accel,true,perm,temp2);
 
 #if 0

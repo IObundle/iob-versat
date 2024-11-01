@@ -20,10 +20,9 @@ CalculatedOffsets CalculateConfigOffsetsIgnoringStatics(Accelerator* accel,Arena
 
   Hashmap<int,int>* sharedConfigs = PushHashmap<int,int>(out,size);
 
-  int index = 0;
   int offset = 0;
-  for(FUInstance* ptr : accel->allocated){
-    FUInstance* inst = ptr;
+  for(int index = 0; index < accel->allocated.Size(); index++){
+    FUInstance* inst = accel->allocated.Get(index);
 
     // TODO: Temporarely set this to comment. Do not know what it affects.
     // Assert(!(inst->sharedEnable && inst->isStatic));
@@ -91,16 +90,14 @@ CalculatedOffsets CalculateConfigurationOffset(Accelerator* accel,MemType type,A
 
   BLOCK_REGION(out);
 
-  int index = 0;
   int offset = 0;
-  for(FUInstance* ptr : accel->allocated){
-    FUInstance* inst = ptr;
+  for(int index = 0; index < accel->allocated.Size(); index++){
+    FUInstance* inst = accel->allocated.Get(index);
     array[index] = offset;
 
     int size = GetConfigurationSize(inst->declaration,type);
 
     offset += size;
-    index += 1;
   }
 
   CalculatedOffsets res = {};
@@ -408,7 +405,6 @@ AcceleratorInfo TransformGraphIntoArrayRecurse(FUInstance* node,FUDeclaration* p
   }
   // Composite instance
   int delayIndex = 0;
-  int index = 0;
 
   int part = 0;
   Array<Partition> subPartitions = {};
@@ -427,8 +423,10 @@ AcceleratorInfo TransformGraphIntoArrayRecurse(FUInstance* node,FUDeclaration* p
     if(offsets.staticInfo->Exists(id)){
       subOffsetsConfig = offsets.staticInfo->GetOrFail(id);
     } else if(offsets.configOffset <= 0x40000000){
+      // NOTE: Is this part even being used?
+      
       int config = *offsets.staticConfig;
-      *offsets.staticConfig += inst->declaration->configInfo[part].configOffsets.offsets[index];
+      *offsets.staticConfig += inst->declaration->configInfo[part].configOffsets.offsets[0];
 
       offsets.staticInfo->Insert(id,config);
 
@@ -439,7 +437,9 @@ AcceleratorInfo TransformGraphIntoArrayRecurse(FUInstance* node,FUDeclaration* p
   }
   
   int partitionIndex = 0;
-  for(FUInstance* subInst : inst->declaration->fixedDelayCircuit->allocated){
+  for(int index = 0; index < inst->declaration->fixedDelayCircuit->allocated.Size(); index++){
+    FUInstance* subInst = inst->declaration->fixedDelayCircuit->allocated.Get(index);
+
     bool containsConfig = subInst->declaration->baseConfig.configs.size; // TODO: When  doing partition might need to put index here instead of 0
     
     InstanceConfigurationOffsets subOffsets = offsets;
@@ -507,6 +507,7 @@ TestResult CalculateOneInstance(Accelerator* accel,bool recursive,Array<Partitio
   Hashmap<StaticId,int>* staticInfo = PushHashmap<StaticId,int>(temp,500);
 
   // TODO: This is being recalculated multiple times if we have various partitions. Move out when this function starts stabilizing.
+  DEBUG_BREAK();
   CalculatedOffsets configOffsets = CalculateConfigOffsetsIgnoringStatics(accel,out);
   CalculatedOffsets delayOffsets = CalculateConfigurationOffset(accel,MemType::DELAY,out);
 
@@ -543,7 +544,6 @@ TestResult CalculateOneInstance(Accelerator* accel,bool recursive,Array<Partitio
   
   int partitionIndex = 0;
   int staticConfig = 0x40000000; // TODO: Make this more explicit
-  int index = 0;
   InstanceConfigurationOffsets subOffsets = {};
   subOffsets.topName = {};
   subOffsets.staticConfig = &staticConfig;
@@ -552,7 +552,9 @@ TestResult CalculateOneInstance(Accelerator* accel,bool recursive,Array<Partitio
   ArenaList<String>* names = PushArenaList<String>(temp);
   ArenaList<Array<int>>* muxValues = PushArenaList<Array<int>>(temp);
   ArenaList<PortInstance>* mergeMultiplexers = PushArenaList<PortInstance>(temp);
-  for(FUInstance* node : accel->allocated){
+
+  for(int index = 0; index < accel->allocated.Size(); index++){
+    FUInstance* node = accel->allocated.Get(index);
     FUInstance* subInst = node;
 
     Opt<Partition> part = {};
@@ -579,9 +581,7 @@ TestResult CalculateOneInstance(Accelerator* accel,bool recursive,Array<Partitio
       if(info.mergeMux.size > 0){
         *muxValues->PushElem() = info.mergeMux;
       }
-      
-      //if(info.
-      
+            
       subOffsets.memOffset += info.memSize;
       subOffsets.memOffset = AlignBitBoundary(subOffsets.memOffset,log2i(info.memSize));
       
@@ -693,6 +693,7 @@ AccelInfo CalculateAcceleratorInfo(Accelerator* accel,bool recursive,Arena* out,
       }
     }
 
+    //DEBUG_BREAK();
     if(maxConfigDecl){
       int totalConfigSize = maxConfig + maxConfigDecl->baseConfig.configOffsets.max;
       for(InstanceInfo& inst : res2.info){
@@ -1084,7 +1085,6 @@ AcceleratorInfo TransformGraphIntoArrayRecurseNoDelay(FUInstance* node,FUDeclara
   }
   // Composite instance
   int delayIndex = 0;
-  int index = 0;
 
   int part = partition.value;
   
@@ -1098,7 +1098,7 @@ AcceleratorInfo TransformGraphIntoArrayRecurseNoDelay(FUInstance* node,FUDeclara
       subOffsetsConfig = offsets.staticInfo->GetOrFail(id);
     } else if(offsets.configOffset <= 0x40000000){
       int config = *offsets.staticConfig;
-      *offsets.staticConfig += inst->declaration->configInfo[part].configOffsets.offsets[index];
+      *offsets.staticConfig += inst->declaration->configInfo[part].configOffsets.offsets[0];
 
       offsets.staticInfo->Insert(id,config);
 
@@ -1108,8 +1108,9 @@ AcceleratorInfo TransformGraphIntoArrayRecurseNoDelay(FUInstance* node,FUDeclara
     }
   }
   
-  for(FUInstance* subNode : inst->declaration->fixedDelayCircuit->allocated){
-    FUInstance* subInst = subNode;
+  for(int index = 0; index < inst->declaration->fixedDelayCircuit->allocated.Size(); index++){
+    FUInstance* subInst = inst->declaration->fixedDelayCircuit->allocated.Get(index);
+    FUInstance* subNode = subInst;
     bool containsConfig = subInst->declaration->baseConfig.configs.size; // TODO: When  doing partition might need to put index here instead of 0
     
     InstanceConfigurationOffsets subOffsets = offsets;
@@ -1173,7 +1174,6 @@ TestResult CalculateOneInstanceNoDelay(Accelerator* accel,bool recursive,Array<P
 
   int partitionIndex = 0;
   int staticConfig = 0x40000000; // TODO: Make this more explicit
-  int index = 0;
   InstanceConfigurationOffsets subOffsets = {};
   subOffsets.topName = {};
   subOffsets.staticConfig = &staticConfig;
@@ -1181,7 +1181,8 @@ TestResult CalculateOneInstanceNoDelay(Accelerator* accel,bool recursive,Array<P
   subOffsets.belongs = true;
   ArenaList<String>* names = PushArenaList<String>(temp);
   ArenaList<Array<int>>* muxValues = PushArenaList<Array<int>>(temp);
-  for(FUInstance* node : accel->allocated){
+  for(int index = 0; index < accel->allocated.Size(); index++){
+    FUInstance* node = accel->allocated.Get(index);
     FUInstance* subInst = node;
 
     Partition part = {};

@@ -1256,7 +1256,8 @@ Array<int> GetPortConnections(FUInstance* node,Arena* arena){
 Opt<int> GetConfigurationIndexFromInstanceNode(FUDeclaration* type,FUInstance* node){
   // While configuration array is fully defined, no need to do this check beforehand.
   int index = 0;
-  for(FUInstance* iter : type->fixedDelayCircuit->allocated){
+  for(int index = 0; index < type->fixedDelayCircuit->allocated.Size(); index++){
+    FUInstance* iter = type->fixedDelayCircuit->allocated.Get(index);
     if(iter == node){
       return type->baseConfig.configOffsets.offsets[index];
     }
@@ -2230,9 +2231,9 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
     decl->configInfo[i].calculatedDelays = PushArray<int>(perm,mergedUnitsAmount);
     decl->configInfo[i].order = PushArray<int>(perm,mergedUnitsAmount);
  
-    int index = 0;
     int orderIndex = 0;
-    for(FUInstance* ptr : result->allocated){
+    for(int index = 0; index < result->allocated.Size(); i++){
+      FUInstance* ptr = result->allocated.Get(index);
       FUInstance* reconNode = MappingMapNode(map,ptr);
       bool mapExists = reconNode != nullptr;
       

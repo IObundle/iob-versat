@@ -178,8 +178,8 @@ Array<TypeStructInfoElement> GenerateStructFromType(FUDeclaration* decl,Arena* o
   int configSize = offsets.max;
 
   Array<int> configAmount = PushArray<int>(temp,configSize);
-  int i = 0;
-  for(FUInstance* node : accel->allocated){
+  for(int i = 0; i < accel->allocated.Size(); i++){
+    FUInstance* node = accel->allocated.Get(i);
     FUDeclaration* decl = node->declaration;
     
     int configOffset = offsets.offsets[i];
@@ -206,9 +206,8 @@ Array<TypeStructInfoElement> GenerateStructFromType(FUDeclaration* decl,Arena* o
   }
   
   Array<int> configSeen = PushArray<int>(temp,numberEntries);
-  i = 0;
-  int index = 0;
-  for(FUInstance* node : accel->allocated){
+  for(int i = 0; i < accel->allocated.Size(); i++){
+    FUInstance* node = accel->allocated.Get(i);
     FUDeclaration* decl = node->declaration;
 
     int configOffset = offsets.offsets[i];
@@ -253,7 +252,6 @@ static Array<TypeStructInfoElement> GenerateAddressStructFromType(FUDeclaration*
 
   Array<TypeStructInfoElement> entries = PushArray<TypeStructInfoElement>(out,memoryMapped);
 
-  int i = 0;
   int index = 0;
   for(FUInstance* node : decl->fixedDelayCircuit->allocated){
     FUDeclaration* decl = node->declaration;
@@ -348,8 +346,8 @@ Array<TypeStructInfo> GetConfigStructInfo(Accelerator* accel,Arena* out,Arena* t
         
       Array<bool> seenIndex = PushArray<bool>(temp,offsets.max);
         
-      int i = 0;
-      for(FUInstance* node : decl->fixedDelayCircuit->allocated){
+      for(int i = 0; i < decl->fixedDelayCircuit->allocated.Size(); i++){
+        FUInstance* node = decl->fixedDelayCircuit->allocated.Get(i);
         int config = offsets.offsets[i];
           
         if(config >= 0 && info.unitBelongs[i]){
@@ -385,8 +383,8 @@ Array<TypeStructInfo> GetConfigStructInfo(Accelerator* accel,Arena* out,Arena* t
           break;
         }
 
-        int i = 0;
-        for(FUInstance* node : decl->fixedDelayCircuit->allocated){
+        for(int i = 0; i < decl->fixedDelayCircuit->allocated.Size(); i++){
+          FUInstance* node = decl->fixedDelayCircuit->allocated.Get(i);
           int config = offsets.offsets[i];
           if(configNeedToSee == config){
             int nConfigs = node->declaration->baseConfig.configs.size;
@@ -905,7 +903,8 @@ void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* 
     printf("Error creating file, check if filepath is correct: %s\n",hardwarePath);
     return;
   }
-  
+
+  DEBUG_BREAK();
   AccelInfo info = CalculateAcceleratorInfo(accel,true,temp,temp2);
   VersatComputedValues val = ComputeVersatValues(accel,globalOptions.useDMA);
   CheckSanity(info.baseInfo,temp);
@@ -1244,6 +1243,7 @@ void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* 
     allStaticsVerilatorSide.size = index;
     TemplateSetCustom("allStatics",MakeValue(&allStaticsVerilatorSide));
     
+    DEBUG_BREAK();
     Array<TypeStructInfoElement> structuredConfigs = ExtractStructuredConfigs(info.baseInfo,temp,temp2);
     
     Array<String> allStates = ExtractStates(info.baseInfo,temp2);
