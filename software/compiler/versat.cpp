@@ -573,8 +573,32 @@ FUDeclaration* RegisterSubUnitBarebones(Accelerator* circuit,Arena* temp,Arena* 
 
   decl.baseCircuit = circuit;
 
-  FillDeclarationWithAcceleratorValues(&decl,circuit,temp,temp2);
-  //FillDeclarationWithDelayType(&decl);
+  Accelerator* copy = CopyAccelerator(decl.baseCircuit,AcceleratorPurpose_FIXED_DELAY,true,nullptr);
+
+  DAGOrderNodes order = CalculateDAGOrder(&copy->allocated,temp);
+  CalculateDelayResult delays = CalculateDelay(copy,order,temp);
+
+  decl.baseConfig.calculatedDelays = PushArray<int>(permanent,delays.nodeDelay->nodesUsed);
+  Memset(decl.baseConfig.calculatedDelays,0);
+  int index = 0;
+  for(Pair<FUInstance*,DelayInfo*> p : delays.nodeDelay){
+    if(p.first->declaration->baseConfig.delayOffsets.max > 0){
+      decl.baseConfig.calculatedDelays[index] = p.second->value;
+      index += 1;
+    }
+  }
+
+  region(temp){
+    FixDelays(copy,delays.edgesDelay,temp);
+  }
+
+  decl.fixedDelayCircuit = copy;
+  decl.fixedDelayCircuit->name = decl.name;
+
+  //FillDeclarationWithDelayType(decl);
+  
+  FillDeclarationWithAcceleratorValues(&decl,decl.fixedDelayCircuit,temp,temp2);
+  FillDeclarationWithDelayType(&decl);
 
   decl.staticUnits = PushHashmap<StaticId,StaticData>(permanent,1000); // TODO: Set correct number of elements
   int staticOffset = 0;

@@ -2232,7 +2232,7 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
     decl->configInfo[i].order = PushArray<int>(perm,mergedUnitsAmount);
  
     int orderIndex = 0;
-    for(int index = 0; index < result->allocated.Size(); i++){
+    for(int index = 0; index < result->allocated.Size(); index++){
       FUInstance* ptr = result->allocated.Get(index);
       FUInstance* reconNode = MappingMapNode(map,ptr);
       bool mapExists = reconNode != nullptr;

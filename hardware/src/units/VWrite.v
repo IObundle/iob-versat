@@ -93,17 +93,17 @@ module VWrite #(
    // Ping pong and related logic for the initial address
    reg pingPongState;
 
-   wire [ADDR_W-1:0] write_start = {pingPong && !pingPongState , {(ADDR_W-1){1'b0}}};
-
-   // port addresses and enables
-   wire [ADDR_W-1:0] store_addr;
-   wire [ADDR_W-1:0] input_start_inst = {pingPong && pingPongState, input_start[ADDR_W-2:0]};
-
    // Ping pong 
    always @(posedge clk, posedge rst) begin
       if (rst) pingPongState <= 0;
       else if (run) pingPongState <= pingPong ? (!pingPongState) : 1'b0;
    end
+
+   //wire [ADDR_W-1:0] write_start = {pingPong && !pingPongState , {(ADDR_W-1){1'b0}}};
+
+   // port addresses and enables
+   wire [ADDR_W-1:0] store_addr_temp;
+   wire [ADDR_W-1:0] input_start_inst = {pingPong && pingPongState, input_start[ADDR_W-2:0]};
 
    // mem enables output by addr gen
    wire store_en,do_store;
@@ -111,7 +111,7 @@ module VWrite #(
    wire [DATA_W-1:0] store_data = in0;
 
    wire gen_valid, gen_ready;
-   wire [ADDR_W-1:0] gen_addr;
+   wire [ADDR_W-1:0] gen_addr_temp;
 
    AddressGen3 #(
       .ADDR_W(ADDR_W),
@@ -125,7 +125,8 @@ module VWrite #(
       //configurations 
       .period_i(write_per),
       .delay_i (0),
-      .start_i (write_start),
+      .start_i (0),
+      //.start_i (write_start),
       .incr_i  (write_incr),
 
 `ifdef COMPLEX_INTERFACE
@@ -147,10 +148,12 @@ module VWrite #(
       //outputs 
       .valid_o(gen_valid),
       .ready_i(gen_ready),
-      .addr_o (gen_addr),
+      .addr_o (gen_addr_temp),
       .store_o(),
       .done_o ()
    );
+
+   wire [ADDR_W-1:0] gen_addr = {pingPong ? !pingPongState : gen_addr_temp[ADDR_W-1],gen_addr_temp[ADDR_W-2:0]};
 
    AddressGen3 #(
       .ADDR_W(ADDR_W),
@@ -165,7 +168,8 @@ module VWrite #(
       //configurations 
       .period_i(input_per),
       .delay_i (delay0),
-      .start_i (input_start_inst),
+      .start_i ({1'b0,input_start[ADDR_W-2:0]}),
+      //.start_i (input_start_inst),
       .incr_i  (input_incr),
 
       .iterations_i(input_iter),
@@ -185,10 +189,12 @@ module VWrite #(
       //outputs 
       .valid_o(store_en),
       .ready_i(1'b1),
-      .addr_o (store_addr),
+      .addr_o (store_addr_temp),
       .store_o(do_store),
       .done_o (doneStore_int)
    );
+
+   wire [ADDR_W-1:0] store_addr = {pingPong ? pingPongState : store_addr_temp[ADDR_W-1],store_addr_temp[ADDR_W-2:0]};
 
    wire                  read_en;
    wire [    ADDR_W-1:0] read_addr;
@@ -231,5 +237,17 @@ module VWrite #(
    assign ext_2p_addr_in_0  = read_addr;
    assign read_data         = ext_2p_data_in_0;
 
-endmodule  // VWrite
+   // Reports most common errors
+   always @* begin
+      if(pingPong && gen_addr_temp[ADDR_W-1]) begin
+         $display("%m: Overflow of memory when using PingPong for reading");
+      end
+      if(pingPong && store_addr_temp[ADDR_W-1]) begin
+         $display("%m: Overflow of write memory when using PingPong for outputting");
+      end
+      if(pingPong && input_start[ADDR_W-1]) begin
+         $display("%m: Last bit of output start ignored when using PingPong");
+      end
+   end
 
+endmodule  // VWrite

@@ -668,7 +668,7 @@ int main(int argc,char* argv[]){
       }
       decl->signalLoop = true;
       
-#if 1
+#if 0
       if(work.calculateDelayFixedGraph){
         Accelerator* copy = CopyAccelerator(decl->baseCircuit,AcceleratorPurpose_FIXED_DELAY,true,nullptr);
 

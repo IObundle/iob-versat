@@ -67,10 +67,10 @@ wire [5:0] cases = {iter3Cond,per3Cond,iter2Cond,per2Cond,iterCond,perCond};
 /* TODO:
    
    The address generation can be decoupled, but it is better if we separate it into individual modules.
-   Because we must take into account future iter and per conditations.
+   Because we must take into account future iter and per conditions.
    The idea of "runnning one ahead" does not work if we only take into account per. 
 
-   Basically need a module that implements per and iter logic only.
+   Basically need a module that implements per and iter logic only. We can then implement three of them if needed
 
 */
 

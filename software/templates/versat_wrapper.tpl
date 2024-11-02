@@ -447,7 +447,7 @@ AcceleratorStatic* statics = (AcceleratorStatic*) &staticBuffer;
 #{for wire allConfigsVerilatorSide}
   #{if configsHeader[index].bitSize != 64}
 
-#if 0
+#if 1
   once{
      if((long long int) config->TOP_@{wire.name} >= ((long long int) 1 << @{configsHeader[index].bitSize})){
       printf("[Once] Warning, configuration value contains more bits\n");
