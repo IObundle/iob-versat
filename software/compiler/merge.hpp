@@ -48,6 +48,26 @@ struct MappingNode{ // Mapping (edge to edge or node to node)
   enum {NODE,EDGE} type;
 };
 
+
+struct GraphAndMapping{
+  FUDeclaration* decl;
+  AcceleratorMapping* map;
+  Set<PortInstance>* mergeMultiplexers;
+  bool fromStruct;
+};
+
+template<> class std::hash<GraphAndMapping>{
+public:
+   std::size_t operator()(GraphAndMapping const& s) const noexcept{
+     std::size_t res = (std::size_t) s.decl;
+     return res;
+   }
+};
+
+static bool operator==(const GraphAndMapping& g0,const GraphAndMapping& g1){
+  return (g0.decl == g1.decl);
+}
+
 inline bool operator==(const MappingNode& node0,const MappingNode& node1){
   if(node0.type != node1.type){
     return false;
@@ -98,6 +118,16 @@ struct CliqueState{
   ConsolidationGraph clique;
   Time start;
   bool found;
+};
+
+struct OverheadCount{
+  int muxes;
+  int buffers;
+};
+
+struct ReconstituteResult{
+  Accelerator* accel;
+  AcceleratorMapping* accelToRecon;
 };
 
 struct IsCliqueResult{

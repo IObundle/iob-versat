@@ -904,7 +904,6 @@ void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* 
     return;
   }
 
-  DEBUG_BREAK();
   AccelInfo info = CalculateAcceleratorInfo(accel,true,temp,temp2);
   VersatComputedValues val = ComputeVersatValues(accel,globalOptions.useDMA);
   CheckSanity(info.baseInfo,temp);
@@ -1087,10 +1086,11 @@ void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* 
       *arr.PushElem() = info;
     }
   }
-  for(auto n : staticUnits){
+  for(Pair<StaticId,StaticData*> n : staticUnits){
     for(Wire w : n.data->configs){
       WireInformation info = {};
       info.wire = w;
+      info.wire.name = ReprStaticConfig(n.first,&w,temp2);
       info.configBitStart = configBit;
       configBit += w.bitSize;
       info.addr = 4 * addr++;
@@ -1116,7 +1116,8 @@ void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* 
   
   auto test = EndArray(arr);
   TemplateSetCustom("wireInfo",MakeValue(&test));
-
+  //DEBUG_BREAK();
+  
   {
     FILE* s = OpenFileAndCreateDirectories(StaticFormat("%s/versat_instance.v",hardwarePath),"w");
     DEFER_CLOSE_FILE(s);
@@ -1243,7 +1244,6 @@ void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* 
     allStaticsVerilatorSide.size = index;
     TemplateSetCustom("allStatics",MakeValue(&allStaticsVerilatorSide));
     
-    DEBUG_BREAK();
     Array<TypeStructInfoElement> structuredConfigs = ExtractStructuredConfigs(info.baseInfo,temp,temp2);
     
     Array<String> allStates = ExtractStates(info.baseInfo,temp2);

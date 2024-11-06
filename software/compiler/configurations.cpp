@@ -507,7 +507,6 @@ TestResult CalculateOneInstance(Accelerator* accel,bool recursive,Array<Partitio
   Hashmap<StaticId,int>* staticInfo = PushHashmap<StaticId,int>(temp,500);
 
   // TODO: This is being recalculated multiple times if we have various partitions. Move out when this function starts stabilizing.
-  DEBUG_BREAK();
   CalculatedOffsets configOffsets = CalculateConfigOffsetsIgnoringStatics(accel,out);
   CalculatedOffsets delayOffsets = CalculateConfigurationOffset(accel,MemType::DELAY,out);
 

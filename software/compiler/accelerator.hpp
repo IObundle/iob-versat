@@ -4,7 +4,6 @@
 
 #include "utils.hpp"
 #include "memory.hpp"
-//#include "configurations.hpp"
 #include "verilogParsing.hpp"
 
 struct FUInstance;
@@ -71,14 +70,6 @@ inline bool operator==(const Edge& e0,const Edge& e1){
   return (EdgeEqualNoDelay(e0,e1) && e0.delay == e1.delay);
 }
 
-typedef Array<Edge> Path;
-typedef Hashmap<Edge,Path> PathMap;
-
-struct GenericGraphMapping{
-  InstanceMap* nodeMap;
-  PathMap* edgeMap;
-};
-
 struct EdgeDelayInfo{
   int* value;
   bool isAny;
@@ -114,7 +105,6 @@ struct FUInstance{
 
   Array<ParameterValue> parameterValues; // Associates a value to the corresponding parameter on the associated FUDeclaration
 
-  //String parameters; // TODO: Actual parameter structure
   Accelerator* accel;
 
   FUDeclaration* declaration;
@@ -139,7 +129,6 @@ struct FUInstance{
   Array<PortInstance> inputs;
   Array<bool> outputs;
 
-  //int outputs;
   bool multipleSamePortInputs;
   NodeType type;
 };
@@ -231,7 +220,6 @@ struct AcceleratorMapping{
 };
 
 struct EdgeIterator{
-  //FUInstance* currentNode;
   PoolIterator<FUInstance> currentNode;
   PoolIterator<FUInstance> end;
   ConnectionNode* currentPort;
@@ -278,8 +266,6 @@ enum MemType{
    STATIC
 };
 
-Accelerator* GetAcceleratorById(int id);
-
 Accelerator* CreateAccelerator(String name,AcceleratorPurpose purpose);
 
 Pair<Accelerator*,AcceleratorMapping*> CopyAcceleratorWithMapping(Accelerator* accel,AcceleratorPurpose purpose,bool preserveIds,Arena* out);
@@ -290,7 +276,6 @@ bool NameExists(Accelerator* accel,String name);
 
 int GetFreeShareIndex(Accelerator* accel); // TODO: Slow 
 
-Array<FUDeclaration*> AllNonSpecialSubTypes(Accelerator* accel,Arena* out,Arena* temp);
 Array<FUDeclaration*> ConfigSubTypes(Accelerator* accel,Arena* out,Arena* temp);
 Array<FUDeclaration*> MemSubTypes(Accelerator* accel,Arena* out,Arena* temp);
 
@@ -316,7 +301,7 @@ Opt<Edge> FindEdge(FUInstance* out,int outIndex,FUInstance* in,int inIndex,int d
 void ConnectUnitsGetEdge(FUInstance* out,int outIndex,FUInstance* in,int inIndex,int delay = 0);
 void ConnectUnitsGetEdge(FUInstance* out,int outIndex,FUInstance* in,int inIndex,int delay,Edge* previous);
 void ConnectUnitsIfNotConnected(FUInstance* out,int outIndex,FUInstance* in,int inIndex,int delay = 0);
-void  ConnectUnits(FUInstance* out,int outIndex,FUInstance* in,int inIndex,int delay = 0);
+void ConnectUnits(FUInstance* out,int outIndex,FUInstance* in,int inIndex,int delay = 0);
 void ConnectUnits(PortInstance out,PortInstance in,int delay = 0);
 
 void CalculateNodeType(FUInstance* node);
@@ -326,7 +311,8 @@ Array<int> GetNumberOfInputConnections(FUInstance* node,Arena* out);
 Array<Array<PortInstance>> GetAllInputs(FUInstance* node,Arena* out);
 
 void RemoveConnection(Accelerator* accel,FUInstance* out,int outPort,FUInstance* in,int inPort);
-FUInstance* RemoveUnit(FUInstance* nodes,FUInstance* unit);
+
+//FUInstance* RemoveUnit(FUInstance* nodes,FUInstance* unit);
 
 // Fixes edges such that unit before connected to after, are reconnected to new unit
 void InsertUnit(Accelerator* accel,PortInstance before, PortInstance after, PortInstance newUnit);
@@ -334,8 +320,6 @@ void InsertUnit(Accelerator* accel,PortInstance before, PortInstance after, Port
 bool IsCombinatorial(Accelerator* accel);
 
 void ConnectUnits(PortInstance out,PortInstance in,int delay);
-
-void PrintAllInstances(Accelerator* accel);
 
 void MappingCheck(AcceleratorMapping* map);
 void MappingCheck(AcceleratorMapping* map,Accelerator* first,Accelerator* second);
@@ -354,7 +338,6 @@ void MappingPrintAll(AcceleratorMapping* map);
 FUInstance* MappingMapNode(AcceleratorMapping* mapping,FUInstance* inst);
 
 Set<PortInstance>* MappingMapInput(AcceleratorMapping* map,Set<PortInstance>* set,Arena* out);
-Set<PortInstance>* MappingMapOutput(AcceleratorMapping* map,Set<PortInstance>* set,Arena* out);
 
 struct SubMappingInfo{
   FUDeclaration* subDeclaration;
@@ -388,6 +371,3 @@ public:
 Pair<Accelerator*,SubMap*> Flatten2(Accelerator* accel,int times,Arena* temp);
 
 void PrintSubMappingInfo(SubMap* info);
-
-
-

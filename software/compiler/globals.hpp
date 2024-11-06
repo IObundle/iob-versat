@@ -46,3 +46,5 @@ struct DebugState{
 extern Options globalOptions;
 extern DebugState globalDebug;
 extern Arena* globalPermanent;
+
+Options DefaultOptions(Arena* arena);

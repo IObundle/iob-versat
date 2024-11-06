@@ -191,6 +191,10 @@ String PushFile(Arena* arena,FILE* file){
   return res;
 }
 
+String PushFile(Arena* arena,String filepath){
+  return PushFile(arena,StaticFormat("%.*s",UNPACK_SS(filepath)));
+}
+
 //TODO: Replace return with Optional. Handle errors
 String PushFile(Arena* arena,const char* filepath){
   FILE* file = fopen(filepath,"r");

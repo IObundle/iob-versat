@@ -595,8 +595,6 @@ FUDeclaration* RegisterSubUnitBarebones(Accelerator* circuit,Arena* temp,Arena* 
   decl.fixedDelayCircuit = copy;
   decl.fixedDelayCircuit->name = decl.name;
 
-  //FillDeclarationWithDelayType(decl);
-  
   FillDeclarationWithAcceleratorValues(&decl,decl.fixedDelayCircuit,temp,temp2);
   FillDeclarationWithDelayType(&decl);
 
@@ -1021,40 +1019,6 @@ void PrintUniformInformation(FILE* out,FUDeclaration* decl){
       fprintf(out,"\n");
     }
   }
-}
-
-void PrintDeclaration(FILE* out,FUDeclaration* decl,Arena* temp,Arena* temp2){
-#if 0
-  BLOCK_REGION(temp);
-  BLOCK_REGION(temp2);
-
-  PrintUniformInformation(out,decl);
-  fprintf(out,"\n");
-
-  Accelerator* test = CreateAccelerator(STRING("TEST"),AcceleratorPurpose_TEMP);
-  CreateFUInstance(test,decl,STRING("TOP"));
-  AccelInfo info = CalculateAcceleratorInfo(test,true,temp,temp2);
-
-  fprintf(out,"\n======================================\n\n");
-  fprintf(out,"Base info\n");
-  PrintAll(out,info.baseInfo,temp);
-  fprintf(out,"\n======================================\n\n");
-
-  int index = 0;
-  for(Array<InstanceInfo> arr : info.infos){
-    fprintf(out,"\n======================================\n\n");
-    fprintf(out,"%.*s\n",UNPACK_SS(info.names[index]));
-    PrintAll(out,arr,temp);
-    index += 1;
-  }
-    
-  Array<FUDeclaration*> allSubTypesUsed = AllNonSpecialSubTypes(decl->fixedDelayCircuit,temp,temp2);
-  for(FUDeclaration* subDecl : allSubTypesUsed){
-    fprintf(out,"\n");
-    PrintUniformInformation(out,subDecl);
-    fprintf(out,"\n");
-  }
-#endif
 }
 
 bool CheckValidName(String name){

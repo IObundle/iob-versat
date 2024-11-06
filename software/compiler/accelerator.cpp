@@ -19,18 +19,6 @@
 
 static Pool<Accelerator> accelerators;
 
-typedef Hashmap<FUInstance*,FUInstance*> InstanceMap;
-
-Accelerator* GetAcceleratorById(int id){
-  for(Accelerator* accel : accelerators){
-    if(accel->id == id){
-      return accel;
-    }
-  }
-
-  return nullptr;
-}
-
 Accelerator* CreateAccelerator(String name,AcceleratorPurpose purpose){
   static int globalID = 0;
   Accelerator* accel = accelerators.Alloc();
@@ -44,25 +32,6 @@ Accelerator* CreateAccelerator(String name,AcceleratorPurpose purpose){
   
   return accel;
 }
-
-#if 0
-// For now hack it away.
-// Deal with the falout later
-void LockAccelerator(Accelerator* accel){
-  if(accel->locked.size > 0){
-    return;
-  }
-
-  int size = Size(accel->allocated);
-  
-  accel->locked = PushArray<FUInstance*>(accel->accelMemory,size);
-
-  int index = 0;
-  FOREACH_LIST_INDEXED(FUInstance*,inst,accel->allocated,index){
-    accel->locked[index] = inst;
-  }
-}
-#endif
 
 bool NameExists(Accelerator* accel,String name){
   for(FUInstance* ptr : accel->allocated){
@@ -98,8 +67,6 @@ FUInstance* CreateFUInstance(Accelerator* accel,FUDeclaration* type,String name)
 
   Assert(CheckValidName(storedName));
 
-  //FUInstance* inst = PushStruct<FUInstance>(accel->accelMemory);
-
   FUInstance* inst = accel->allocated.Alloc();
 
   int parameterSize = type->parameters.size;
@@ -108,17 +75,6 @@ FUInstance* CreateFUInstance(Accelerator* accel,FUDeclaration* type,String name)
   
   inst->inputs = PushArray<PortInstance>(accel->accelMemory,type->NumberInputs());
   inst->outputs = PushArray<bool>(accel->accelMemory,type->NumberOutputs());
-
-  //accel->allocated
-#if 0
-  if(accel->lastAllocated){
-    Assert(accel->lastAllocated->next == nullptr);
-    accel->lastAllocated->next = inst;
-  } else {
-    accel->allocated = inst;
-  }
-  accel->lastAllocated = inst;
-#endif
   
   inst->name = storedName;
   inst->accel = accel;
@@ -712,117 +668,6 @@ bool IsUnitCombinatorial(FUInstance* instance){
   return true;
 }
 
-#if 0
-void ReorganizeAccelerator(Accelerator* accel,Arena* temp){
-  if(accel->ordered){
-    return;
-  }
-
-  DAGOrderNodes order = CalculateDAGOrder(accel->allocated,temp);
-  // Reorganize nodes based on DAG order
-  int size = Size(accel->allocated);
-
-  accel->ordered = nullptr; // TODO: We could technically reuse the entirety of nodes just by putting them at the top of the free list when we implement a free list. Otherwise we are just leaky memory
-  OrderedInstance* ordered = nullptr;
-  for(int i = 0; i < size; i++){
-    FUInstance* ptr = order.instances[i];
-
-    OrderedInstance* newOrdered = PushStruct<OrderedInstance>(accel->accelMemory);
-    newOrdered->node = ptr;
-
-    if(!accel->ordered){
-      accel->ordered = newOrdered;
-      ordered = newOrdered;
-    } else {
-      ordered->next = newOrdered;
-      ordered = newOrdered;
-    }
-  }
-}
-
-void ReorganizeIterative(Accelerator* accel,Arena* temp){
-  if(accel->ordered){
-    return;
-  }
-
-  int size = Size(accel->allocated);
-  Hashmap<FUInstance*,int>* order = PushHashmap<FUInstance*,int>(temp,size);
-  Hashmap<FUInstance*,bool>* seen = PushHashmap<FUInstance*,bool>(temp,size);
-
-  FOREACH_LIST(FUInstance*,ptr,accel->allocated){
-    seen->Insert(ptr,false);
-    order->Insert(ptr,size - 1);
-  }
-
-  // Start by seeing all inputs
-  FOREACH_LIST(FUInstance*,ptr,accel->allocated){
-    if(ptr->allInputs == nullptr){
-      seen->Insert(ptr,true);
-      order->Insert(ptr,0);
-    }
-  }
-
-  FOREACH_LIST(FUInstance*,outerPtr,accel->allocated){
-    FOREACH_LIST(FUInstance*,ptr,accel->allocated){
-      bool allInputsSeen = true;
-      FOREACH_LIST(ConnectionNode*,input,ptr->allInputs){
-        FUInstance* node = input->instConnectedTo.node;
-        if(node == ptr){
-          continue;
-        }
-
-        bool inputSeen = seen->GetOrFail(node);
-        if(!inputSeen){
-          allInputsSeen = false;
-          break;
-        }
-      }
-
-      if(!allInputsSeen){
-        continue;
-      }
-
-      int maxOrder = 0;
-      FOREACH_LIST(ConnectionNode*,input,ptr->allInputs){
-        FUInstance* node = input->instConnectedTo.node;
-        maxOrder = std::max(maxOrder,order->GetOrFail(node));
-      }
-
-      order->Insert(ptr,maxOrder + 1);
-    }
-  }
-
-  Array<FUInstance*> nodes = PushArray<FUInstance*>(temp,size);
-  int index = 0;
-  for(int i = 0; i < size; i++){
-    FOREACH_LIST(FUInstance*,ptr,accel->allocated){
-      int ord = order->GetOrFail(ptr);
-      if(ord == i){
-        nodes[index++] = ptr;
-      }
-    }
-  }
-
-  OrderedInstance* ordered = nullptr;
-  for(int i = 0; i < size; i++){
-    FUInstance* ptr = nodes[i];
-
-    OrderedInstance* newOrdered = PushStruct<OrderedInstance>(accel->accelMemory);
-    newOrdered->node = ptr;
-
-    if(!accel->ordered){
-      accel->ordered = newOrdered;
-      ordered = newOrdered;
-    } else {
-      ordered->next = newOrdered;
-      ordered = newOrdered;
-    }
-  }
-
-  accel->ordered = ReverseList(accel->ordered);
-}
-#endif
-
 Array<DelayToAdd> GenerateFixDelays(Accelerator* accel,EdgeDelay* edgeDelays,Arena* out,Arena* temp){
   BLOCK_REGION(temp);
 
@@ -939,27 +784,6 @@ bool IsCombinatorial(Accelerator* accel){
     }
   }
   return true;
-}
-
-// TODO: Receive Accel info from above instead of recalculating it.
-Array<FUDeclaration*> AllNonSpecialSubTypes(Accelerator* accel,Arena* out,Arena* temp){
-  if(accel == nullptr){
-    return {};
-  }
-  
-  BLOCK_REGION(temp);
-  
-  Set<FUDeclaration*>* maps = PushSet<FUDeclaration*>(temp,99);
-  
-  Array<InstanceInfo> test = CalculateAcceleratorInfoNoDelay(accel,true,temp,out).baseInfo;
-  for(InstanceInfo& info : test){
-    if(info.decl->type != FUDeclarationType_SPECIAL){
-      maps->Insert(info.decl);
-    }
-  }
-  
-  Array<FUDeclaration*> subTypes = PushArrayFromSet(out,maps);
-  return subTypes;
 }
 
 Array<FUDeclaration*> ConfigSubTypes(Accelerator* accel,Arena* out,Arena* temp){
@@ -1462,12 +1286,6 @@ void ConnectUnits(PortInstance out,PortInstance in,int delay){
   CalculateNodeType(outputNode);
 }
 
-void PrintAllInstances(Accelerator* accel){
-  for(FUInstance* ptr : accel->allocated){
-    printf("%.*s:%d\n",UNPACK_SS(ptr->name),ptr->id);
-  }
-}
-
 // Connects out -> in
 void ConnectUnitsGetEdge(FUInstance* out,int outIndex,FUInstance* in,int inIndex,int delay,Edge* previous){
   FUDeclaration* inDecl = in->declaration;
@@ -1592,6 +1410,7 @@ void RemoveAllConnections(FUInstance* n1,FUInstance* n2){
   RemoveAllDirectedConnections(n2,n1);
 }
 
+#if 0
 FUInstance* RemoveUnit(FUInstance* nodes,FUInstance* unit){
   STACK_ARENA(temp,Kilobyte(32));
 
@@ -1625,6 +1444,7 @@ FUInstance* RemoveUnit(FUInstance* nodes,FUInstance* unit){
 
   return res;
 }
+#endif
 
 void InsertUnit(Accelerator* accel,PortInstance before,PortInstance after,PortInstance newUnit){
   RemoveConnection(accel,before.inst,before.port,after.inst,after.port);
@@ -1964,16 +1784,6 @@ Set<PortInstance>* MappingMapInput(AcceleratorMapping* map,Set<PortInstance>* se
 
   for(PortInstance portInst : set){
     result->Insert(MappingMapInput(map,portInst));
-  }
-
-  return result;
-}
-
-Set<PortInstance>* MappingMapOutput(AcceleratorMapping* map,Set<PortInstance>* set,Arena* out){
-  Set<PortInstance>* result = PushSet<PortInstance>(out,set->map->nodesUsed);
-
-  for(PortInstance portInst : set){
-    result->Insert(MappingMapOutput(map,portInst));
   }
 
   return result;

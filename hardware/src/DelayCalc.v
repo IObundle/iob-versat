@@ -23,17 +23,15 @@
       if (rst) begin
          delay  <= 0;
          done <= 1'b1;
-      end else begin
-         if (run) begin
-            delay <= delay0;
-            done <= 1'b0;
-         end else if(running) begin
-            if (delay == 0) begin
-               done <= 1'b1;
-            end 
-            if(!done) begin
-               delay <= delay - 1;
-            end
+      end else if(run) begin
+         delay <= delay0;
+         done <= 1'b0;
+      end else if(running) begin
+         if (delay == 0) begin
+            done <= 1'b1;
+         end 
+         if(!done) begin
+            delay <= delay - 1;
          end
       end
    end

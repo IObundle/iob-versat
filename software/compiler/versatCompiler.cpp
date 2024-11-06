@@ -449,12 +449,6 @@ struct argp_option options[] =
     { 0 }
   };
 
-void test(Array<int> t){
-  printf("%d\n",t[0]);
-  printf("%d\n",t[1]);
-  printf("%d\n",t[2]);
-}
-
 int main(int argc,char* argv[]){
   InitDebug();
   
@@ -464,29 +458,16 @@ int main(int argc,char* argv[]){
   Arena* temp = &tempInst;
   Arena temp2Inst = InitArena(Megabyte(128));
   Arena* temp2 = &temp2Inst;
-
-  Array<int> t = PushArray<int>(temp,3);
-  t[0] = 5;
-  t[1] = 10;
-  t[2] = 15;
-
-  test(t);
   
   argp argp = { options, parse_opt, "SpecFile", "Dataflow to accelerator compiler. Check tutorial in https://github.com/IObundle/iob-versat to learn how to write a specification file"};
 
   OptionsGather gather = {};
-
   gather.verilogFiles = PushArenaList<String>(temp);
   gather.extraSources = PushArenaList<String>(temp);
   gather.includePaths = PushArenaList<String>(temp);
   gather.unitPaths = PushArenaList<String>(temp);
 
-  globalOptions.databusDataSize = 32;
-  globalOptions.databusAddrSize = 32;
-
-  globalOptions.debugPath = PushString(perm,"%s/debug",GetCurrentDirectory()); // By default
-  PushNullByte(perm);
-
+  globalOptions = DefaultOptions(perm);
   gather.options = &globalOptions;
 
   if(argp_parse(&argp, argc, argv, 0, 0, &gather) != 0){
@@ -509,21 +490,11 @@ int main(int argc,char* argv[]){
   InitializeTemplateEngine(perm);
   LoadTemplates(perm,temp);
   InitializeSimpleDeclarations();
-  
-  globalOptions.useFixedBuffers = true;
-  globalOptions.shadowRegister = true; 
-  globalOptions.disableDelayPropagation = true;
-
-#ifdef USE_FST_FORMAT
-  globalOptions.generateFSTFormat = 1;
-#endif
 
   globalDebug.outputAccelerator = true;
   globalDebug.outputVersat = true;
-
   globalDebug.outputGraphs = true;
   globalDebug.outputConsolidationGraphs = true;
-  //globalDebug.outputAcceleratorInfo = true;
   globalDebug.outputVCD = true;
 
   // TODO: This is bad. We are basically locking Versat to only work on the setup side
@@ -566,11 +537,11 @@ int main(int argc,char* argv[]){
   globalOptions.verilogFiles = allVerilogFiles; // TODO: Kind of an hack. We lose information about file origin (from user vs from us)
   
   // Parse verilog files and register all the simple units.
-  for(String file : globalOptions.verilogFiles){
-    String content = PushFile(temp,StaticFormat("%.*s",UNPACK_SS(file)));
+  for(String filepath : globalOptions.verilogFiles){
+    String content = PushFile(temp,filepath);
 
     if(Empty(content)){
-      printf("Failed to open file %.*s\n. Exiting\n",UNPACK_SS(file));
+      printf("Failed to open file %.*s\n. Exiting\n",UNPACK_SS(filepath));
       exit(-1);
     }
 
@@ -597,15 +568,12 @@ int main(int argc,char* argv[]){
   String specFilepath = globalOptions.specificationFilepath;
   String topLevelTypeStr = globalOptions.topName;
 
-  PRINT_STRING(topLevelTypeStr);
-  if(specFilepath.size && !CompareString(topLevelTypeStr,"VERSAT_RESERVED_ALL_UNITS")){ // TODO
+  // Basically using a simple DAG approach to detect the modules that we only care about. We do not process modules that are not needed
+  if(specFilepath.size && !CompareString(topLevelTypeStr,"VERSAT_RESERVED_ALL_UNITS")){
     String content = PushFile(temp,StaticFormat("%.*s",UNPACK_SS(specFilepath)));
 
     Array<TypeDefinition> types = ParseVersatSpecification(content,temp,temp2);
     int size = types.size;
-
-    // Basically using a simple DAG approach to detect the modules that we only care about. We do not process modules that are not needed
-
     
     Hashmap<String,int>* typeToId = PushHashmap<String,int>(temp,size);
     for(int i = 0; i < size; i++){

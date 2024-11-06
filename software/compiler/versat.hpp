@@ -104,15 +104,11 @@ FUDeclaration* RegisterIterativeUnit(Accelerator* accel,FUInstance* inst,int lat
 FUDeclaration* RegisterSubUnitBarebones(Accelerator* circuit,Arena* temp,Arena* temp2);
 FUDeclaration* RegisterSubUnit(Accelerator* circuit,Arena* temp,Arena* temp2);
 
-void PrintDeclaration(FILE* out,FUDeclaration* decl,Arena* temp,Arena* temp2);
-
 // Helper functions, useful to implement custom units
 FUInstance* CreateOrGetInput(Accelerator* accel,String name,int portNumber);
 FUInstance* CreateOrGetOutput(Accelerator* accel);
 
 // Helper functions to create sub accelerators
 int GetInputPortNumber(FUInstance* inputInstance);
-
-void TestVersatSide(); // Calls tests from versat side
 
 #include "typeSpecifics.inl"

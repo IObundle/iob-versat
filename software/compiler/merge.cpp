@@ -940,11 +940,6 @@ void OrderedMatch(std::vector<FUInstance*>& order1,std::vector<FUInstance*>& ord
 #endif
 }
 
-struct OverheadCount{
-  int muxes;
-  int buffers;
-};
-
 OverheadCount CountOverheadUnits(Accelerator* accel){
   OverheadCount res = {};
 
@@ -1322,11 +1317,6 @@ Array<Edge*> GetAllPaths(Accelerator* accel,PortInstance start,PortInstance end,
   return result;
 }
 
-struct ReconstituteResult{
-  Accelerator* accel;
-  AcceleratorMapping* accelToRecon;
-};
-
 void PrintPath(Edge* head){
   FOREACH_LIST(Edge*,e,head){
     printf("%.*s:%d -> %.*s:%d\n",UNPACK_SS(e->units[0].inst->name),e->units[0].port,UNPACK_SS(e->units[1].inst->name),e->units[1].port);
@@ -1451,25 +1441,6 @@ FUInstance* GetInstanceByName(Accelerator* accel,String name){
   }
 
   return nullptr;
-}
-
-struct GraphAndMapping{
-  FUDeclaration* decl;
-  AcceleratorMapping* map;
-  Set<PortInstance>* mergeMultiplexers;
-  bool fromStruct;
-};
-
-template<> class std::hash<GraphAndMapping>{
-public:
-   std::size_t operator()(GraphAndMapping const& s) const noexcept{
-     std::size_t res = (std::size_t) s.decl;
-     return res;
-   }
-};
-
-bool operator==(const GraphAndMapping& g0,const GraphAndMapping& g1){
-  return (g0.decl == g1.decl);
 }
 
 AcceleratorMapping* MapFlattenedGraphs(Accelerator* start,FUDeclaration* endDecl,Accelerator* end,Arena* out){
@@ -1659,7 +1630,6 @@ MergeTypesIterator IterateTypes(Array<FUDeclaration*> types){
   result.types = types;
   return result;
 }
-
 
 ReconstituteResult ReconstituteGraphFromStruct(Accelerator* merged,Set<PortInstance>* mergedMultiplexers,Accelerator* base,String name,AcceleratorMapping* baseToMerged,FUDeclaration* parentType,Arena* out,Arena* temp);
 
@@ -2231,18 +2201,17 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
     decl->configInfo[i].calculatedDelays = PushArray<int>(perm,mergedUnitsAmount);
     decl->configInfo[i].order = PushArray<int>(perm,mergedUnitsAmount);
  
-    int orderIndex = 0;
     for(int index = 0; index < result->allocated.Size(); index++){
       FUInstance* ptr = result->allocated.Get(index);
       FUInstance* reconNode = MappingMapNode(map,ptr);
       bool mapExists = reconNode != nullptr;
       
       if(reconNode){
-        decl->configInfo[i].calculatedDelays[orderIndex] = reconDelay[i].nodeDelay->GetOrFail(reconNode).value;
-        decl->configInfo[i].order[orderIndex] = reconToOrder[i]->GetOrFail(reconNode);
+        decl->configInfo[i].calculatedDelays[index] = reconDelay[i].nodeDelay->GetOrFail(reconNode).value;
+        decl->configInfo[i].order[index] = reconToOrder[i]->GetOrFail(reconNode);
       } else {
-        decl->configInfo[i].calculatedDelays[orderIndex] = 0; // NOTE: Even if they do not belong, this delay is directly inserted into the header file, meaning that for now it's better if we keep everything at zero.
-        decl->configInfo[i].order[orderIndex] = -1;
+        decl->configInfo[i].calculatedDelays[index] = 0; // NOTE: Even if they do not belong, this delay is directly inserted into the header file, meaning that for now it's better if we keep everything at zero.
+        decl->configInfo[i].order[index] = -1;
       }
  
       // TODO: Unused members are being filled when in theory the code should work with them being negative or invalid. Code should not really on th
@@ -2265,11 +2234,7 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
         decl->configInfo[i].configOffsets.offsets[index] = -1;
         decl->configInfo[i].unitBelongs[index] = false;
       }
-      
-      orderIndex += 1; // TODO: Why does this exist? Is the problem caused by the commented line above because we are trying to iterate differently?
     }
-
-    //Assert(orderIndex == reconDelay[i].nodeDelay->nodesUsed);
   }
 
   Array<int> muxConfigSizePerType = PushArray<int>(temp,types.size);
