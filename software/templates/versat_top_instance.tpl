@@ -183,8 +183,16 @@ begin
 end
 
 wire run = (canRun && canRun1);
+wire pre_run_pulse = (canRun && !canRun1); // One cycle before run is asserted
 
 assign done = (!(|runCounter) && (&unitDone));
+
+reg lastCycleDone;
+
+always @(posedge clk)
+begin
+    lastCycleDone <= done;
+end
 
 reg running;
 
@@ -409,7 +417,7 @@ versat_configurations configs(
    .data_wstrb(data_wstrb),
    .data_data(data_data),
 
-   .canRun(canRun),
+   .change_config_pulse(pre_run_pulse),
 
    .clk_i(clk),
    .rst_i(rst_int)

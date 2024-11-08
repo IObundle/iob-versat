@@ -36,7 +36,7 @@ module versat_configurations #(
    input [(DATA_W/8)-1:0] data_wstrb,
    input [DATA_W-1:0] data_data,
 
-   input canRun,
+   input change_config_pulse,
 
    input clk_i,
    input rst_i
@@ -89,7 +89,7 @@ always @(posedge clk_i,posedge rst_i)
 begin
    if(rst_i) begin
       configdata <= {@{configurationBits}{1'b0}};
-   end else if(canRun) begin
+   end else if(change_config_pulse) begin
       // Shadow directly to Config (Read stage)
 #{for info wireInfo}
   #{if info.wire.stage == 1}
@@ -114,7 +114,7 @@ begin
       Compute_@{info.wire.name} <= {@{info.wire.bitSize}{1'b0}};
   #{end}
 #{end}
-   end else if(canRun) begin
+   end else if(change_config_pulse) begin
       // Shadow to Compute (Compute stage)
 #{for info wireInfo}
   #{if info.wire.stage == 0}
@@ -138,7 +138,7 @@ begin
       Write_@{info.wire.name} <= {@{info.wire.bitSize}{1'b0}};
   #{end}
 #{end}
-   end else if(canRun) begin
+   end else if(change_config_pulse) begin
       // Stores Shadow data into Write
 #{for info wireInfo}
   #{if info.wire.stage == 2}

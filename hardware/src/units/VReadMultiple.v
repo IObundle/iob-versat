@@ -1,6 +1,6 @@
 `timescale 1ns / 1ps
 
-module VRead #(
+module VReadMultiple #(
    parameter SIZE_W     = 32,
    parameter DATA_W     = 32,
    parameter ADDR_W     = 20,
@@ -43,12 +43,14 @@ module VRead #(
 
    (* versat_stage="Read" *) input [  PERIOD_W-1:0] read_per,
    (* versat_stage="Read" *) input [    ADDR_W-1:0] read_incr,
-   (* versat_stage="Read" *) input [  PERIOD_W-1:0] read_duty,
+   (* versat_stage="Read" *) input [PERIOD_W-1:0]   read_duty,
 
-   (* versat_stage="Read" *) input [    ADDR_W-1:0] read_iter,
-   (* versat_stage="Read" *) input [    ADDR_W-1:0] read_shift,
+   (* versat_stage="Read" *) input [  ADDR_W-1:0] read_iter,
+   (* versat_stage="Read" *) input [  ADDR_W-1:0] read_shift,
 
+   (* versat_stage="Read" *) input [    ADDR_W-1:0] read_amount,
    (* versat_stage="Read" *) input [     LEN_W-1:0] read_length,
+   (* versat_stage="Read" *) input [AXI_ADDR_W-1:0] read_addr_shift,
 
    (* versat_stage="Read" *) input read_enabled,
 
@@ -66,26 +68,59 @@ module VRead #(
    input [DELAY_W-1:0] delay0
 );
 
-   assign databus_wdata_0 = 0;
-   assign databus_wstrb_0 = 0;
-   assign databus_len_0   = read_length;
+   //assign databus_wdata_0 = 0;
+   //assign databus_wstrb_0 = 0;
+   //assign databus_len_0   = read_length;
 
    // output databus
-   reg               doneRead;
+   wire              transferDone;
    reg               doneOutput;
    wire              doneOutput_int;
 
-   assign done = (doneRead  & doneOutput);
+   assign done = (transferDone  & doneOutput);
+
+   wire data_valid,data_ready;
+   wire [AXI_DATA_W-1:0] data_data;
+
+PerformNReads #(
+   .AXI_ADDR_W(AXI_ADDR_W),
+   .AXI_DATA_W(AXI_DATA_W),
+   .LEN_W(LEN_W),
+   .COUNT_W(ADDR_W)
+) nReader (
+   // Connect directly to databus interface
+   .databus_ready(databus_ready_0),
+   .databus_valid(databus_valid_0),
+   .databus_addr(databus_addr_0),
+   .databus_rdata(databus_rdata_0),
+   .databus_wdata(databus_wdata_0),
+   .databus_wstrb(databus_wstrb_0),
+   .databus_len(databus_len_0),
+   .databus_last(databus_last_0),
+
+   // Data interface
+   .data_valid_o(data_valid),
+   .data_ready_i(data_ready),
+   .data_data_o(data_data),
+
+   .count_i(read_amount),
+   .start_address_i(ext_addr),
+   .address_shift_i(read_addr_shift),
+   .read_length(read_length),
+
+   .run_i(run),
+   .done_o(transferDone),
+
+   .clk_i(clk),
+   .rst_i(rst)
+);   
 
    always @(posedge clk, posedge rst) begin
       if (rst) begin
-         doneRead <= 1'b1;
          doneOutput <= 1'b1;
       end else if (run) begin
-         doneRead <= !read_enabled;
          doneOutput <= 1'b0;
       end else begin
-         if (databus_valid_0 && databus_ready_0 && databus_last_0) doneRead <= 1'b1;
          if (doneOutput_int) doneOutput <= 1'b1;
       end
    end
@@ -105,10 +140,11 @@ module VRead #(
    wire [ADDR_W-1:0] gen_addr_temp;
    wire gen_valid, gen_ready;
 
-   always @(posedge clk, posedge rst) begin
-      if (rst) databus_addr_0 <= 0;
-      else if (run && read_enabled) databus_addr_0 <= ext_addr;
-   end
+//   always @(posedge clk, posedge rst) begin
+//      if (rst) databus_addr_0 <= 0;
+//      else if (run && read_enabled) databus_addr_0 <= ext_addr;
+//   end
+
 
    AddressGen3 #(
       .ADDR_W(ADDR_W),
@@ -195,8 +231,6 @@ module VRead #(
    wire [    ADDR_W-1:0] write_addr;
    wire [AXI_DATA_W-1:0] write_data;
 
-   wire                  data_ready;
-
    JoinTwoHandshakes #(
       .FIRST_DATA_W(ADDR_W),
       .SECOND_DATA_W(AXI_DATA_W)
@@ -205,9 +239,9 @@ module VRead #(
       .first_ready_o(gen_ready),
       .first_data_i(gen_addr),
 
-      .second_valid_i(databus_ready_0),
+      .second_valid_i(data_valid),
       .second_ready_o(data_ready),
-      .second_data_i(databus_rdata_0),
+      .second_data_i(data_data),
 
       .result_valid_o(write_en),
       .result_ready_i(1'b1),
@@ -217,8 +251,6 @@ module VRead #(
       .clk_i(clk),
       .rst_i(rst)
    );
-
-   assign databus_valid_0 = (data_ready && !doneRead);
 
    localparam DIFF = AXI_DATA_W / DATA_W;
    localparam DECISION_BIT_W = $clog2(DIFF);
