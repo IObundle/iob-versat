@@ -61,7 +61,9 @@ assign config_data_o = configdata;
      #{set configReg "shadow_configdata"}
 #{end}
 
+#{debugMessage} @{wireInfo} #{end}
 #{for info wireInfo} #{set wire info.wire}
+    #{debugMessage} @{info} @{info.wire} #{end}
     #{if wire.stage == 0 or wire.stage == 2}
 reg [@{wire.bitSize-1}:0] Compute_@{wire.name};
     #{end}

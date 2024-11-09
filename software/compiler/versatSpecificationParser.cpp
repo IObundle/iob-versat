@@ -130,7 +130,7 @@ Opt<Var> ParseVar(Tokenizer* tok){
 
   Token peek = tok->PeekToken();
   if(CompareString(peek,"[")){
-    tok->AdvancePeek(peek);
+    tok->AdvancePeek();
 
     Opt<Range<int>> range = ParseRange(tok);
     PROPAGATE(range);
@@ -145,7 +145,7 @@ Opt<Var> ParseVar(Tokenizer* tok){
   int delayEnd = 0;
   peek = tok->PeekToken();
   if(CompareString(peek,"{")){
-    tok->AdvancePeek(peek);
+    tok->AdvancePeek();
 
     Opt<Range<int>> rangeOpt = ParseRange(tok);
     PROPAGATE(rangeOpt);
@@ -160,7 +160,7 @@ Opt<Var> ParseVar(Tokenizer* tok){
   int portEnd = 0;
   peek = tok->PeekToken();
   if(CompareString(peek,":")){
-    tok->AdvancePeek(peek);
+    tok->AdvancePeek();
 
     Opt<Range<int>> rangeOpt = ParseRange(tok);
     PROPAGATE(rangeOpt);
@@ -184,7 +184,7 @@ Opt<VarGroup> ParseVarGroup(Tokenizer* tok,Arena* out){
   Token peek = tok->PeekToken();
   
   if(CompareString(peek,"{")){
-    tok->AdvancePeek(peek);
+    tok->AdvancePeek();
 
     DynamicArray<Var> arr = StartArray<Var>(out);
     while(!tok->Done()){
@@ -229,19 +229,19 @@ SpecExpression* ParseAtom(Tokenizer* tok,Arena* out){
   if(CompareString(peek,"~")){
     negate = true;
     negateType = "~";
-    tok->AdvancePeek(peek);
+    tok->AdvancePeek();
   }
   if(CompareString(peek,"-")){
     negate = true;
     negateType = "-";
-    tok->AdvancePeek(peek);
+    tok->AdvancePeek();
   }
 
   SpecExpression* expr = PushStruct<SpecExpression>(out);
 
   peek = tok->PeekToken();
   if(peek[0] >= '0' && peek[0] <= '9'){  // TODO: Need to call ParseNumber
-    tok->AdvancePeek(peek);
+    tok->AdvancePeek();
 
     int digit = ParseInt(peek);
 
@@ -275,7 +275,7 @@ SpecExpression* ParseTerm(Tokenizer* tok,Arena* out){
 
   SpecExpression* expr = nullptr;
   if(CompareString(peek,"(")){
-    tok->AdvancePeek(peek);
+    tok->AdvancePeek();
     expr = ParseSpecExpression(tok,out);
     tok->AssertNextToken(")");
   } else {
@@ -528,7 +528,7 @@ Opt<VarDeclaration> ParseVarDeclaration(Tokenizer* tok){
 
   Token peek = tok->PeekToken();
   if(CompareString(peek,"[")){
-    tok->AdvancePeek(peek);
+    tok->AdvancePeek();
 
     Opt<int> number = ParseNumber(tok);
     PROPAGATE(number);
@@ -650,10 +650,10 @@ Opt<InstanceDeclaration> ParseInstanceDeclaration(Tokenizer* tok,Arena* out,Aren
   Token potentialModifier = tok->PeekToken();
 
   if(CompareString(potentialModifier,"static")){
-    tok->AdvancePeek(potentialModifier);
+    tok->AdvancePeek();
     res.modifier = InstanceDeclaration::STATIC;
   } else if(CompareString(potentialModifier,"share")){
-    tok->AdvancePeek(potentialModifier);
+    tok->AdvancePeek();
     res.modifier = InstanceDeclaration::SHARE_CONFIG;
     
     EXPECT(tok,"config"); // Only choice that is enabled, for now
@@ -697,7 +697,7 @@ Opt<InstanceDeclaration> ParseInstanceDeclaration(Tokenizer* tok,Arena* out,Aren
   Token possibleParameters = tok->PeekToken();
   auto list = PushArenaList<Pair<String,String>>(temp);
   if(CompareString(possibleParameters,"#")){
-    tok->AdvancePeek(possibleParameters);
+    tok->AdvancePeek();
     EXPECT(tok,"(");
 
     while(!tok->Done()){
@@ -765,7 +765,7 @@ Opt<ModuleDef> ParseModuleDef(Tokenizer* tok,Arena* out,Arena* temp){
 
   Token peek = tok->PeekToken();
   if(CompareString(peek,"->")){
-    tok->AdvancePeek(peek);
+    tok->AdvancePeek();
     def.numberOutputs = tok->NextToken();
     // TODO : Need to check that numberOutputs is actually a number.
   }
@@ -776,7 +776,7 @@ Opt<ModuleDef> ParseModuleDef(Tokenizer* tok,Arena* out,Arena* temp){
     Token peek = tok->PeekToken();
 
     if(CompareString(peek,";")){
-      tok->AdvancePeek(peek);
+      tok->AdvancePeek();
       continue;
     }
 
@@ -798,7 +798,7 @@ Opt<ModuleDef> ParseModuleDef(Tokenizer* tok,Arena* out,Arena* temp){
     Token peek = tok->PeekToken();
 
     if(CompareString(peek,";")){
-      tok->AdvancePeek(peek);
+      tok->AdvancePeek();
       continue;
     }
 
@@ -872,11 +872,11 @@ FUDeclaration* ParseIterative(Tokenizer* tok,Arena* temp,Arena* temp2){
     if(CompareString(argument,")")){
       break;
     }
-    tok->AdvancePeek(argument);
+    tok->AdvancePeek();
 
     Token peek = tok->PeekToken();
     if(CompareString(peek,",")){
-      tok->AdvancePeek(peek);
+      tok->AdvancePeek();
     }
 
     String name = PushString(perm,argument);
@@ -928,7 +928,7 @@ FUDeclaration* ParseIterative(Tokenizer* tok,Arena* temp,Arena* temp2){
 
     int num = -1;
     if(CompareString(peek,"%")){
-      tok->AdvancePeek(peek);
+      tok->AdvancePeek();
       String number = tok->NextToken();
       num = ParseInt(number); // TODO: Need to have actual error handling
     }
@@ -1065,12 +1065,12 @@ Opt<MergeDef> ParseMerge(Tokenizer* tok,Arena* out,Arena* temp){
 
     Token peek = tok->PeekToken();
     if(CompareString(peek,"|")){
-      tok->AdvancePeek(peek);
+      tok->AdvancePeek();
       continue;
     } else if(CompareString(peek,"{")){
       break;
     } else if(CompareString(peek,";")){
-      tok->AdvancePeek(peek);
+      tok->AdvancePeek();
       break;
     }
   }
@@ -1662,7 +1662,7 @@ void Synchronize(Tokenizer* tok,BracketList<const char*> syncPoints){
       }
     }
 
-    tok->AdvancePeek(peek);
+    tok->AdvancePeek();
   }
 }
 
@@ -1705,7 +1705,7 @@ Array<TypeDefinition> ParseVersatSpecification(String content,Arena* out,Arena* 
     } else {
       // TODO: Report error, 
       ReportError(tok,peek,"Unexpected token in global scope");
-      tok->AdvancePeek(peek);
+      tok->AdvancePeek();
       Synchronize(tok,{"debug","module","iterative","merge","transform"});
     }
   }

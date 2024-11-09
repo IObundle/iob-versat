@@ -114,11 +114,11 @@ String GetVerilatorRoot(Arena* out,Arena* temp){
       exit(-1);
     }
 
-    tok.AdvancePeek(possible.value());
+    tok.AdvancePeekBad(possible.value());
 
     Token peek = tok.PeekToken();
     if(CompareString(peek,"=") || CompareString(peek,":=")){
-      tok.AdvancePeek(peek);
+      tok.AdvancePeek();
       String token = tok.NextToken();
 
       root = PushString(out,"%.*s",UNPACK_SS(token));

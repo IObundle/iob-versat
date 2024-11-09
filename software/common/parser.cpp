@@ -65,6 +65,7 @@ Tokenizer::Tokenizer(String content,const char* singleChars,BracketList<const ch
 ,end(content.data + content.size)
 ,line(1)
 ,column(1)
+,amountStoredTokens(0)
 {
   keepWhitespaces = false;
   keepComments = false;
@@ -80,6 +81,7 @@ Tokenizer::Tokenizer(String content,TokenizerTemplate* tmpl)
 ,end(content.data + content.size)
 ,line(1)
 ,column(1)
+,amountStoredTokens(0)
 {
   keepWhitespaces = false;
   keepComments = false;
@@ -93,7 +95,7 @@ Tokenizer::~Tokenizer(){
   }
 }
 
-Token Tokenizer::PeekToken(){
+Token Tokenizer::ParseToken(){
   ConsumeWhitespace();
 
   // Only returns strings that are fully specified in the tokenizer template.
@@ -233,21 +235,63 @@ Token Tokenizer::PeekToken(){
     }
   }
 
-  tok = STRING(start,(int) (peek - start)); 
+  tok = STRING(ptr,(int) (peek - ptr)); 
   tok.loc.end = {.line = this->line,.column = this->column + tok.size};
   return tok;
 }
 
-Token Tokenizer::NextToken(){
-  Token res = PeekToken();
+void Tokenizer::AdvanceOneToken(){
+  Assert(amountStoredTokens < MAX_STORED_TOKENS);
 
-  if(res.size > 0){
-    AdvancePeek(res);
+  Token tok = ParseToken();
+  if(tok.size == 0){
+    return;
   }
+
+  ptr = tok.data + tok.size;
+  storedTokens[amountStoredTokens++] = tok;
+}
+
+Token Tokenizer::PeekToken(int index){
+  if(Done()){ // TODO: SLOW
+    return {};
+  }
+
+  while(index >= amountStoredTokens){
+    AdvanceOneToken();
+  }
+
+  return storedTokens[index];
+}
+
+Token Tokenizer::PopOneToken(){
+  Assert(amountStoredTokens > 0);
+
+  Token res = storedTokens[amountStoredTokens - 1];
+
+  for(int i = 0; i < amountStoredTokens - 1; i++){
+    storedTokens[i] = storedTokens[i+1];
+  }
+
+  amountStoredTokens -= 1;
+  
   return res;
+}
+
+Token Tokenizer::NextToken(){
+  if(amountStoredTokens == 0){
+    AdvanceOneToken();
+  }
+
+  Token tok = PeekToken();
+  AdvancePeek();
+  Assert(tok.size > 0);
+  return tok;
 };
 
 String Tokenizer::PeekCurrentLine(){
+  const char* ptr = GetCurrentPtr();
+
   // Get start of the line
   const char* lineStart = ptr;
   if(lineStart[0] == '\n'){
@@ -277,7 +321,24 @@ String Tokenizer::PeekCurrentLine(){
   return fullLine;
 }
 
+void Tokenizer::AdvanceRemainingLine(){
+  const char* ptr = GetCurrentPtr();
+  
+  const char* lineEnd = ptr;
+  while(lineEnd < this->end){
+    if(*lineEnd == '\n'){
+      break;
+    }
+    lineEnd += 1;
+  }
+
+  this->ptr = lineEnd;
+  this->amountStoredTokens = 0;
+}
+
 Token Tokenizer::PeekRemainingLine(){
+  const char* ptr = GetCurrentPtr();
+
   const char* lineStart = ptr;
   if(*lineStart == '\n'){
     String res = {ptr,1};
@@ -357,7 +418,7 @@ Opt<Token> Tokenizer::PeekFindUntil(const char* str){
     if(CompareString(peek,toFind)){
       break;
     }
-    AdvancePeek(peek);
+    AdvancePeek();
   }
 
   Token result = Point(mark);
@@ -369,6 +430,8 @@ Opt<Token> Tokenizer::PeekFindUntil(const char* str){
 Opt<Token> Tokenizer::PeekFindIncluding(const char* str){
   auto mark = Mark();
 
+  //__asm__("int3");
+  
   String toFind = STRING(str);
   while(1){
     if(Done()){
@@ -376,8 +439,8 @@ Opt<Token> Tokenizer::PeekFindIncluding(const char* str){
       return {};
     }
     
-    Token peek = NextToken();
-    if(CompareString(peek,toFind)){
+    Token token = NextToken();
+    if(CompareString(token,toFind)){
       break;
     }
   }
@@ -400,7 +463,7 @@ Opt<Token> Tokenizer::PeekFindIncludingLast(const char* str){
     }
 
     foundAtLeastOne = true;
-    AdvancePeek(peek.value());
+    AdvancePeekBad(peek.value());
   }
 
   if(!foundAtLeastOne){
@@ -417,7 +480,7 @@ Opt<Token> Tokenizer::NextFindUntil(const char* str){
   Opt<Token> token = PeekFindUntil(str);
   PROPAGATE(token);
   
-  AdvancePeek(token.value());
+  AdvancePeekBad(token.value());
 
   return token;
 }
@@ -474,7 +537,7 @@ bool Tokenizer::IfNextToken(const char* str){
   Token peek = PeekToken();
 
   if(CompareString(peek,str)){
-    AdvancePeek(peek);
+    AdvancePeek();
     return true;
   }
 
@@ -508,7 +571,17 @@ Token Tokenizer::PeekWhitespace(){
   return token;
 }
 
+const char* Tokenizer::GetCurrentPtr(){
+  if(amountStoredTokens > 0){
+    return storedTokens[0].data;
+  } else {
+    return ptr;
+  }
+}
+
 Token Tokenizer::Finish(){
+  const char* ptr = GetCurrentPtr();
+  
   Token token = {};
   token.data = ptr;
   token.size = end - ptr;
@@ -532,6 +605,8 @@ Token Tokenizer::Finish(){
 }
 
 TokenizerMark Tokenizer::Mark(){
+  const char* ptr = GetCurrentPtr();
+
   TokenizerMark mark = {};
   mark.ptr = ptr;
   mark.pos.line = line;
@@ -540,29 +615,58 @@ TokenizerMark Tokenizer::Mark(){
 }
 
 Token Tokenizer::Point(TokenizerMark mark){
-  Assert(this->ptr >= mark.ptr);
+  const char* ptr = GetCurrentPtr();
+
+  Assert(ptr >= mark.ptr);
 
   Token token = {};
   token.loc.start = mark.pos;
   token.loc.end.line = this->line;
   token.loc.end.column = this->column;
   token.data = mark.ptr;
-  token.size = this->ptr - mark.ptr;
+  token.size = ptr - mark.ptr;
 
   return token;
 }
 
 void Tokenizer::Rollback(TokenizerMark mark){
-  this->ptr = mark.ptr;
   this->line = mark.pos.line;
   this->column = mark.pos.column;
+  this->ptr = mark.ptr;
+  this->amountStoredTokens = 0;
 }
 
 String Tokenizer::GetContent(){
   return (String){.data = this->start,.size = (int) (this->end - this->start)};
 }
 
-void Tokenizer::AdvancePeek(Token tok){
+void Tokenizer::AdvancePeek(int amount){
+  Assert(amount > 0);
+  Token tok = {};
+  for(int i = 0; i < amount; i++){
+    if(amountStoredTokens == 0){
+      AdvanceOneToken();
+    }
+    tok = PopOneToken();
+  }
+  
+  // Some sanity checks, especially because we still have not locked in wether zero tokens should be returned or if we should return optionals and so on.
+  if(tok.loc.end.line == 0){
+    Assert(tok.loc.end.column == 0);
+  }
+  if(tok.loc.end.column == 0){
+    Assert(tok.loc.end.line == 0);
+  }
+  if(tok.data == nullptr){
+    Assert(tok.size == 0);
+  }
+  
+  if(tok.loc.end.line > 0) this->line = tok.loc.end.line;
+  if(tok.loc.end.column > 0) this->column = tok.loc.end.column;
+  //if(tok.size > 0 && tok.data != nullptr) ptr = &tok.data[tok.size];
+}
+
+void Tokenizer::AdvancePeekBad(Token tok){
   // Some sanity checks, especially because we still have not locked in wether zero tokens should be returned or if we should return optionals and so on.
   if(tok.loc.end.line == 0){
     Assert(tok.loc.end.column == 0);
@@ -577,9 +681,15 @@ void Tokenizer::AdvancePeek(Token tok){
   if(tok.loc.end.line > 0) this->line = tok.loc.end.line;
   if(tok.loc.end.column > 0) this->column = tok.loc.end.column;
   if(tok.size > 0 && tok.data != nullptr) ptr = &tok.data[tok.size];
+
+  amountStoredTokens = 0;
 }
 
 bool Tokenizer::Done(){
+  if(amountStoredTokens){
+    return false;
+  }
+
   auto mark = Mark();
 
   ConsumeWhitespace();
@@ -673,7 +783,7 @@ Opt<Token> Tokenizer::PeekUntilDelimiterExpression(BracketList<const char*> open
       }
     }
 
-    AdvancePeek(tok);
+    AdvancePeek();
   }
 
   // Did not find the closing expression.
@@ -681,24 +791,32 @@ Opt<Token> Tokenizer::PeekUntilDelimiterExpression(BracketList<const char*> open
   return {};
 }
 
-Opt<Token> Tokenizer::PeekIncludingDelimiterExpression(BracketList<const char*> open,BracketList<const char*> close, int numberOpenSeen){
-  auto pos = Mark();
+bool Tokenizer::AdvanceDelimiterExpression(BracketList<const char*> open,BracketList<const char*> close, int numberOpenSeen){
+  int count = numberOpenSeen;
 
-  Opt<Token> until = PeekUntilDelimiterExpression(open,close,numberOpenSeen);
+  bool end = false;
+  while(!(end || Done())){
+    Token token = NextToken();
 
-  if(!until.has_value()){
-    return until;
+    for(const char* str : open){
+      if(CompareString(token,str)){
+        count += 1;
+        break;
+      }
+    }
+
+    for(const char* str : close){
+      if(CompareString(token,str)){
+        count -= 1;
+        if(count == 0){
+          end = true;
+        }
+        break;
+      }
+    }
   }
   
-  AdvancePeek(until.value());
-  NextToken();
-
-  // TODO: Assert that NextToken belongs to close
-  
-  Token res = Point(pos);
-  Rollback(pos);
-
-  return res;  
+  return true;
 }
 
 String PushString(Arena* out,Token token){

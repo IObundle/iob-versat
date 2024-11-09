@@ -179,28 +179,25 @@ static Command* ParseCommand(Tokenizer* tok,Arena* out){
   
   int actualExpressionSize = com->definition->numberExpressions;
   if(actualExpressionSize == -1){
-    Token peek = tok->PeekUntilDelimiterExpression({"{","@{","#{"},{"}"},1).value();
-    Tokenizer arguments(peek,"}",{"@{","#{"});
+    STACK_ARENA(tempInst,Kilobyte(4));
+    Arena* temp = &tempInst;
 
-    actualExpressionSize = 0;
-    while(!arguments.Done()){
-      Token token = arguments.NextToken();
-
-      if(CompareString(token,"@{")){
-        Token insidePeek = arguments.PeekIncludingDelimiterExpression({"@{"},{"}"},1).value();
-        arguments.AdvancePeek(insidePeek);
-      } else if(CompareString(token,"#{")){
-        Token insidePeek = arguments.PeekIncludingDelimiterExpression({"#{"},{"}"},1).value();
-        arguments.AdvancePeek(insidePeek);
+    ArenaList<Expression*>* list = PushArenaList<Expression*>(temp);
+    while(!tok->Done()){
+      Token peek = tok->PeekToken();
+      if(CompareString(peek,"}")){
+        break;
       }
 
-      actualExpressionSize += 1;
+      *list->PushElem() = ParseExpression(tok,out);
     }
-  }
 
-  com->expressions = PushArray<Expression*>(out,actualExpressionSize);
-  for(int i = 0; i < com->expressions.size; i++){
-    com->expressions[i] = ParseExpression(tok,out);
+    com->expressions = PushArrayFromList(out,list);
+  } else {
+    com->expressions = PushArray<Expression*>(out,actualExpressionSize);
+    for(int i = 0; i < com->expressions.size; i++){
+      com->expressions[i] = ParseExpression(tok,out);
+    }
   }
 
   tok->AssertNextToken("}");
@@ -221,7 +218,7 @@ static Expression* ParseIdentifier(Expression* current,Tokenizer* tok,Arena* out
     Token token = tok->PeekToken();
 
     if(CompareString(token,"[")){
-      tok->AdvancePeek(token);
+      tok->AdvancePeek();
       Expression* expr = PushStruct<Expression>(out);
       *expr = {};
       expr->expressions = PushArray<Expression*>(out,2);
@@ -235,7 +232,7 @@ static Expression* ParseIdentifier(Expression* current,Tokenizer* tok,Arena* out
 
       current = expr;
     } else if(CompareString(token,".")){
-      tok->AdvancePeek(token);
+      tok->AdvancePeek();
       Token memberName = tok->NextToken();
 
       Expression* expr = PushStruct<Expression>(out);
@@ -266,7 +263,7 @@ static Expression* ParseAtom(Tokenizer* tok,Arena* out){
 
   Token token = tok->PeekToken();
   if(token[0] >= '0' && token[0] <= '9'){
-    tok->AdvancePeek(token);
+    tok->AdvancePeek();
     int num = 0;
 
     for(int i = 0; i < token.size; i++){
@@ -276,13 +273,13 @@ static Expression* ParseAtom(Tokenizer* tok,Arena* out){
 
     expr->val = MakeValue(num);
   } else if(token[0] == '\"'){
-    tok->AdvancePeek(token);
+    tok->AdvancePeek();
     Token str = tok->NextFindUntil("\"").value();
     tok->AssertNextToken("\"");
 
     expr->val = MakeValue(str);
   } else if(CompareString(token,"@{")){
-    tok->AdvancePeek(token);
+    tok->AdvancePeek();
     expr = ParseExpression(tok,out);
     tok->AssertNextToken("}");
   } else if(CompareString(token,"#{")){
@@ -306,11 +303,11 @@ static Expression* ParseFactor(Tokenizer* tok,Arena* out){
 
   Expression* expr = nullptr;
   if(CompareString(peek,"(")){
-    tok->AdvancePeek(peek);
+    tok->AdvancePeek();
     expr = ParseExpression(tok,out);
     tok->AssertNextToken(")");
   } else if(CompareString(peek,"!")){
-    tok->AdvancePeek(peek);
+    tok->AdvancePeek();
 
     Expression* child = ParseExpression(tok,out);
 
@@ -369,34 +366,36 @@ static Array<IndividualBlock> ParseIndividualLine(String line, int lineNumber,Ar
     
     if(!res.has_value()){
       String leftover = tok.Finish();
-      *PushListElement(strings) = (IndividualBlock){leftover,BlockType_TEXT,lineNumber};
+      if(leftover.size > 0){
+        *strings->PushElem() = (IndividualBlock){leftover,BlockType_TEXT,lineNumber};
+      }
       break;
     }
 
     FindFirstResult result = res.value();
     if(result.peekFindNotIncluded.size > 0){
-      *PushListElement(strings) = (IndividualBlock){result.peekFindNotIncluded,BlockType_TEXT,lineNumber};
+      *strings->PushElem() = (IndividualBlock){result.peekFindNotIncluded,BlockType_TEXT,lineNumber};
     }
 
-    tok.AdvancePeek(result.peekFindNotIncluded);
+    tok.AdvancePeekBad(result.peekFindNotIncluded);
     if(CompareString(result.foundFirst,"#{")){
       auto mark = tok.Mark();
-      Token skip = tok.PeekUntilDelimiterExpression({"#{","@{"},{"}"},0).value();
-      tok.AdvancePeek(skip);
-      tok.AssertNextToken("}");
+      tok.AdvanceDelimiterExpression({"#{","@{"},{"}"},0);
       String command = tok.Point(mark);
-      *PushListElement(strings) = (IndividualBlock){command,BlockType_COMMAND,lineNumber};
+      *strings->PushElem() = (IndividualBlock){command,BlockType_COMMAND,lineNumber};
     } else if(CompareString(result.foundFirst,"@{")){
       auto mark = tok.Mark();
-      Token skip = tok.PeekUntilDelimiterExpression({"#{","@{"},{"}"},0).value();
-      tok.AdvancePeek(skip);
-      tok.AssertNextToken("}");
+      tok.AdvanceDelimiterExpression({"#{","@{"},{"}"},0);
       String expression = tok.Point(mark);
-      *PushListElement(strings) = (IndividualBlock){expression,BlockType_EXPRESSION,lineNumber};
+      *strings->PushElem() = (IndividualBlock){expression,BlockType_EXPRESSION,lineNumber};
     }
   }
 
   Array<IndividualBlock> fullySeparated = PushArrayFromList(out,strings);
+  for(IndividualBlock d : fullySeparated){
+    Assert(d.content.size > 0);
+  }
+
   return fullySeparated;
 }
 
@@ -1051,7 +1050,7 @@ static ValueAndText EvalNonBlockCommand(Command* com,Frame* previousFrame,Arena*
         simpleText = tok.Finish();
       }
 
-      tok.AdvancePeek(simpleText.value());
+      tok.AdvancePeekBad(simpleText.value());
 
       PushString(outputArena,simpleText.value());
 

@@ -66,6 +66,8 @@ struct TokenizerMark{
   Cursor pos;
 };
 
+#define MAX_STORED_TOKENS 4
+
 struct Tokenizer{
   const char* start;
   const char* ptr;
@@ -73,10 +75,13 @@ struct Tokenizer{
   TokenizerTemplate* tmpl;
   Arena leaky;
   
+  Token storedTokens[MAX_STORED_TOKENS];
+
   // Line and column start at one. Subtract one to get zero based indexes
   int line;
   int column;
-
+  char amountStoredTokens;
+  
   // TODO: This should technically be part of the Tokenizer template
   bool keepWhitespaces;
   bool keepComments;
@@ -84,7 +89,11 @@ struct Tokenizer{
 private:
 
   void ConsumeWhitespace();
-
+  Token ParseToken();
+  void AdvanceOneToken();
+  Token PopOneToken();
+  const char* GetCurrentPtr();
+  
 public:
   
   // TODO: Need to make a function that returns a location for a given token, so that I can return a good error message for the token not being the expected on. The function accepts a token and either returns a string or returns some structure that contains all the info needed to output such text.
@@ -94,7 +103,7 @@ public:
   Tokenizer(String content,TokenizerTemplate* tmpl); // Content must remain valid. Tokenizer makes no copies
   ~Tokenizer();
 
-  Token PeekToken();
+  Token PeekToken(int index = 0);
   Token NextToken();
 
   Token AssertNextToken(const char* str);
@@ -105,6 +114,7 @@ public:
   bool IfPeekToken(const char* str);
   bool IfNextToken(const char* str); // Only does "next" if token matches str
 
+  // All these calls are not very good. No point having a tokenizer if we just skip the tokenization process
   Opt<Token> PeekFindUntil(const char* str);
   Opt<Token> PeekFindIncluding(const char* str);
   Opt<Token> PeekFindIncludingLast(const char* str);
@@ -121,8 +131,11 @@ public:
   void Rollback(TokenizerMark mark);
   String GetContent();
   
-  void AdvancePeek(Token tok);
+  void AdvancePeek(int amount = 1);
+  void AdvancePeekBad(Token token);
 
+  void AdvanceRemainingLine();
+  
   bool Done(); // If more tokens, returns false. Can return true even if it contains more text (but no more tokens)
 
   bool IsSpecialOrSingle(String toTest);
@@ -131,7 +144,9 @@ public:
 
   // For expressions where there is a open and a closing delimiter (think '{ { } }') and need to check where the matching close delimiter is.
   Opt<Token> PeekUntilDelimiterExpression(BracketList<const char*> open,BracketList<const char*> close, int numberOpenSeen);
-  Opt<Token> PeekIncludingDelimiterExpression(BracketList<const char*> open,BracketList<const char*> close, int numberOpenSeen);
+
+  // For expressions where there is a open and a closing delimiter (think '{ { } }') and need to advance such expressions (mostly to skip some checkions while parsing is still not fully complete)
+  bool AdvanceDelimiterExpression(BracketList<const char*> open,BracketList<const char*> close, int numberOpenSeen);
 };
 
 bool IsOnlyWhitespace(String tok);
@@ -201,7 +216,7 @@ ExpressionType* ParseOperationType_(Tokenizer* tok,OperationList* operators,Pars
       const char* elem = operators->op[i];
 
       if(CompareString(peek,elem)){
-        tok->AdvancePeek(peek);
+        tok->AdvancePeek();
         ExpressionType* expr = PushStruct<ExpressionType>(out);
         *expr = {};
         expr->expressions = PushArray<ExpressionType*>(out,2);

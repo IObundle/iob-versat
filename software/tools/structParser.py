@@ -1,6 +1,7 @@
 import clang
 from clang.cindex import Cursor, Index, Config, CursorKind, TranslationUnit, TypeKind
 import sys
+import copy
 
 import traceback
 from inspect import currentframe
@@ -265,8 +266,9 @@ def MakeTypeFromCursor(c: Cursor):
             return
 
         name = c.spelling
+        if(name == "WireInformation"):
+            print("here")
         members,templateParameters,inheritBase = ParseMembers(c,0,isUnion)
-        #print(name,amountOfFields)
 
         parsedStruct = Struct(name,members,templateParameters,inheritBase,c.brief_comment,GetEntireSourceText(c),c.type.is_pod(),isUnion)
         allTypes[name] = parsedStruct
@@ -312,23 +314,6 @@ def PrintRecurse(c: Cursor,indent = 0):
 
     for n in c.get_children():
         PrintRecurse(n, indent + 2)
-
-'''
-def InsertIfNotExists(key,data):
-    global allTypes
-    try:
-        val = allTypes[key]
-        if val == None or val == UNKNOWN:
-            if val != UNKNOWN and data == UNKNOWN:
-                print(f"[{LineNumber()}] Trying to insert unknown type that already exists {key}:{val}")
-                sys.exit(1)
-            allTypes[key] = data
-    except:
-        allTypes[key] = data
-'''
-
-#def GetSimplestType(t):
-#    return t.get_canonical().get_class_type()
 
 def GetIndex(iter,index):
     i = 0
@@ -384,6 +369,14 @@ def Recurse(c: Cursor, indent=0):
             for n in c.get_children():
                 PrintRecurse(n, indent + 2)
 
+def Recurse2(c: Cursor, indent=0):
+    goodCursors = []
+    if(GoodLocation(c)):
+        if(c.kind in [CursorKind.STRUCT_DECL,CursorKind.CLASS_DECL,CursorKind.CLASS_TEMPLATE,CursorKind.ENUM_DECL,CursorKind.UNION_DECL,CursorKind.TYPEDEF_DECL]):
+            goodCursors.append(c)
+
+    return goodCursors
+
 class Counter:
     def __init__(self):
         self.counter = 0
@@ -392,6 +385,21 @@ class Counter:
         val = self.counter
         self.counter += 1
         return val
+
+def Unique(l,comp):
+    toRemoveIndex = []
+    for i,x in enumerate(l):
+        for j,y in enumerate(l[i+1:]):
+            if(comp(x,y)):
+                #print(x.spelling,y.spelling,i+j,l[i].spelling,l[i+1+j].spelling)
+                toRemoveIndex.append(i+j+1)
+
+    copied = copy.copy(l)
+    for i in list(sorted(list(set(toRemoveIndex))))[::-1]:
+        #print(i)
+        del copied[i]
+
+    return copied
 
 if __name__ == "__main__":
     output_path = sys.argv[1]
@@ -402,12 +410,29 @@ if __name__ == "__main__":
     # TODO: Need to receive args from above
     args = ['-x', 'c++', '-std=c++17', '-fparse-all-comments', '-I../../software/common', '-I../../software']
 
+    allCursors = []
     for file in files:
         tu = TranslationUnit.from_source(file, args,options=TranslationUnit.PARSE_INCLUDE_BRIEF_COMMENTS_IN_CODE_COMPLETION)
 
         for n in tu.cursor.get_children():
-            Recurse(n)
-        #break
+            allCursors += Recurse2(n)
+
+    allCursors = Unique(allCursors,lambda x,y: (x.spelling == y.spelling and x.kind == y.kind))
+
+    #for c in allCursors:
+    #    print(c.spelling,c.kind)
+    #sys.exit()
+
+    for c in allCursors:
+        MakeTypeFromCursor(c)
+
+    if False:
+        for file in files:
+            tu = TranslationUnit.from_source(file, args,options=TranslationUnit.PARSE_INCLUDE_BRIEF_COMMENTS_IN_CODE_COMPLETION)
+
+            for n in tu.cursor.get_children():
+                Recurse(n)
+            #break
 
     intType = allTypes["int"]
     pointerT = Pointer("T*",TemplateArgument("T"))
@@ -453,6 +478,12 @@ if __name__ == "__main__":
         else:
             print(f"Missing a type: {name}:{data.Type()}\n")
             #sys.exit(-1)
+
+    #print(structStructures["MuxInfo"])
+    #print()
+    #print()
+    print(structStructures["WireInformation"])
+    sys.exit()
 
     typeInfoFile = open(output_path + "/typeInfo.cpp","w")
 

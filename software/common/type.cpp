@@ -95,7 +95,7 @@ Type* RegisterOpaqueType(String name,Subtype subtype,int size,int align){
 
   Type* type = types.Alloc();
 
-  type->name = GetUniqueRepresentationOrFail(name,&permanentArena);
+  type->name = PushString(&permanentArena,tempName);
   type->type = subtype;
   type->size = size;
   type->align = align;
@@ -119,7 +119,7 @@ Type* RegisterEnum(String name,int size,int align,Array<Pair<String,int>> enumVa
 
   Type* type = types.Alloc();
 
-  type->name = GetUniqueRepresentationOrFail(name,&permanentArena);
+  type->name = PushString(&permanentArena,tempName);
   type->type = Subtype_ENUM;
   type->size = size;
   type->align = align;
@@ -203,7 +203,7 @@ String GetBaseTypeName(String name){
       break;
     }
 
-    tok.AdvancePeek(t);
+    tok.AdvancePeek();
   }
 
   String res = tok.Point(mark);
@@ -384,6 +384,7 @@ Type* GetType(String name){
     return typeExists;
   }
 
+  //DEBUG_BREAK_IF(CompareString(uniqueName,"Byte*"));
   // TODO: Replace this part with fetching data from ParsedType
   Type* res = nullptr;
   Tokenizer tok(uniqueName,"*&[]<>,",{});
@@ -448,7 +449,7 @@ Type* GetType(String name){
 
     if(CompareString(next,"[")){
       Token arrayExpression = tok.PeekFindUntil("]").value();
-      tok.AdvancePeek(arrayExpression);
+      tok.AdvancePeekBad(arrayExpression);
       tok.AssertNextToken("]");
 
       if(!CheckFormat("%d",arrayExpression)){
@@ -545,7 +546,8 @@ void RegisterTypes(){
   ValueType::STRING = GetPointerType(ValueType::CHAR);
   ValueType::NIL = RegisterSimpleType(STRING("void"),sizeof(char),alignof(char)); // TODO: Change size to void
 
-  ValueType::CONST_STRING = GetPointerType(REGISTER(const char));
+  ValueType::CONST_STRING = ValueType::STRING;
+  //ValueType::CONST_STRING = GetPointerType(REGISTER(const char));
 
   REGISTER(unsigned char);
   REGISTER(short);
@@ -1953,7 +1955,7 @@ Opt<String> ParseBaseName(Tokenizer* tok,Arena* out){
     } else {
       // Assuming that it is a typeName. Would be better to make sure by having a function that checks that it contains only the characters that we expect.
 
-      tok->AdvancePeek(peek);
+      tok->AdvancePeek();
 
       if(containsModifier){
         return GetUniqueRepresentation(peek,count);
@@ -1962,7 +1964,7 @@ Opt<String> ParseBaseName(Tokenizer* tok,Arena* out){
       }
     }
     
-    tok->AdvancePeek(peek);
+    tok->AdvancePeek();
   }
 
   if(containsModifier){
@@ -1990,7 +1992,7 @@ Opt<NameAndTemplateArguments> ParseNameAndTemplateArguments(Tokenizer* tok,Arena
   if(CompareString(peek,"<")){
     BLOCK_REGION(&temp);
 
-    tok->AdvancePeek(peek);
+    tok->AdvancePeek();
 
     ArenaList<ParsedType>* l = PushArenaList<ParsedType>(&temp);
     while(1){
@@ -2058,7 +2060,7 @@ Opt<ParsedType> ParseType(Tokenizer* tok,Arena* out){
   if(CompareString(peek,"::")){
     ArenaList<NameAndTemplateArguments>* list = PushArenaList<NameAndTemplateArguments>(&temp);
     while(CompareString(peek,"::")){
-      tok->AdvancePeek(peek);
+      tok->AdvancePeek();
       Opt<NameAndTemplateArguments> more = ParseNameAndTemplateArguments(tok,out);
       PROPAGATE(more);
 
@@ -2081,7 +2083,7 @@ Opt<ParsedType> ParseType(Tokenizer* tok,Arena* out){
   }
   Token possibleConst = tok->PeekToken();
   if(CompareString(possibleConst,"const")){
-    tok->AdvancePeek(possibleConst);
+    tok->AdvancePeek();
   }
   
   // NOTE: This is not very good, mixing pointers and arrays in a weird way will probably cause this code to not work. Fix it when we get some examples of the ways in which this breaks
@@ -2091,7 +2093,7 @@ Opt<ParsedType> ParseType(Tokenizer* tok,Arena* out){
 
     if(CompareString(peek,"*")){
       pointerCount += 1;
-      tok->AdvancePeek(peek);
+      tok->AdvancePeek();
       continue;
     }
 
@@ -2106,7 +2108,7 @@ Opt<ParsedType> ParseType(Tokenizer* tok,Arena* out){
 
     if(CompareString(peek,"[")){
       arrayCount += 1;
-      tok->AdvancePeek(peek);
+      tok->AdvancePeek();
       Opt<Token> content = tok->NextFindUntil("]");
       if(content.has_value()){
         *builder->PushElem() = content.value();
@@ -2126,6 +2128,8 @@ Opt<ParsedType> ParseType(Tokenizer* tok,Arena* out){
 }
 
 Opt<ParsedType> ParseType(String typeStr,Arena* out){
+  //DEBUG_BREAK_IF(CompareString(typeStr,"int"));
+  //DEBUG_BREAK_IF(CompareString(typeStr,"char *"));
   Tokenizer tok(typeStr,specialCharacters,{"::"});
   auto res = ParseType(&tok,out);
   Assert(tok.Done());

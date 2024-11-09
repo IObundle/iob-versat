@@ -75,8 +75,15 @@ int main(int argc,const char* argv[]){
 
     Tokenizer tok(filename,"./",{});
 
+#if 0
+    while(!tok.Done()){
+      Token token = tok.NextToken();
+      printf("%.*s\n",UNPACK_SS(token));
+    }
+#endif
+
     Token path = tok.PeekFindIncludingLast("/").value();
-    tok.AdvancePeek(path);
+    tok.AdvancePeekBad(path);
 
     String variable = tok.NextToken();
 
