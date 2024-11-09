@@ -611,13 +611,11 @@ int main(int argc,char* argv[]){
       typeToWork->Insert(name,work);
     }
     
-    PRINTF_WITH_LOCATION("\n\n");
     for(int i : order){
       TypeDefinition type = types[i];
       String name = type.base.name;
       GetSubWorkRequirement(typeToWork,type,temp,temp2);
     }
-    PRINTF_WITH_LOCATION("\n\n");
 
     // For the TOP unit, currently we do everything:
     Work* topWork = &typeToWork->GetOrFail(topLevelTypeStr);

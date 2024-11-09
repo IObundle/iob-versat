@@ -6,13 +6,22 @@
   tweag ? import (builtins.fetchTarball {
   name = "lib-filesets";
   url = "https://github.com/tweag/nixpkgs/tarball/file-sets";
-#  sha256 = "";
-}){} }:
+}){} 
+}:
+let pkgs2 = import (fetchTarball "https://github.com/NixOS/nixpkgs/archive/cf8cc1201be8bc71b7cbbbdaf349b22f4f99c7ae.tar.gz") {};
+in
 let
 fs = tweag.lib.fileset;
 sourceFiles = (fs.union ./Makefile (fs.union ./config.mk ./software));
+#myPython = pkgs2.mkShell {   
+#  packages = [
+#    (pkgs2.python3.withPackages (python-pkgs: with python-pkgs; [
+#      # select Python packages here
+#      libclang
+#    ]))
+#  ];
+#};
 in
-#fs.trace {} sourceFiles
 pkgs.stdenv.mkDerivation rec {
   pname = "versat";
   version = "0.1";
@@ -25,6 +34,10 @@ pkgs.stdenv.mkDerivation rec {
   buildInputs = [
     pkgs.gnumake
     pkgs.verilator
+    (pkgs2.python3.withPackages (python-pkgs: with python-pkgs; [
+      # select Python packages here
+      libclang
+    ]))  
   ];
 
   enableParallelBuilding = true;

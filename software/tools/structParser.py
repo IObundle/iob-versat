@@ -266,8 +266,6 @@ def MakeTypeFromCursor(c: Cursor):
             return
 
         name = c.spelling
-        if(name == "WireInformation"):
-            print("here")
         members,templateParameters,inheritBase = ParseMembers(c,0,isUnion)
 
         parsedStruct = Struct(name,members,templateParameters,inheritBase,c.brief_comment,GetEntireSourceText(c),c.type.is_pod(),isUnion)
@@ -408,25 +406,25 @@ if __name__ == "__main__":
     headers = [x.split("/")[-1] for x in files]
     index = Index.create()
     # TODO: Need to receive args from above
-    args = ['-x', 'c++', '-std=c++17', '-fparse-all-comments', '-I../../software/common', '-I../../software']
+    args = ['-x', 'c++', '-std=c++17', '-fparse-all-comments', '-Isoftware/common', '-Isoftware']
 
-    allCursors = []
-    for file in files:
-        tu = TranslationUnit.from_source(file, args,options=TranslationUnit.PARSE_INCLUDE_BRIEF_COMMENTS_IN_CODE_COMPLETION)
+    #allCursors = []
+    #for file in files:
+    #    tu = TranslationUnit.from_source(file, args,options=TranslationUnit.PARSE_INCLUDE_BRIEF_COMMENTS_IN_CODE_COMPLETION)
 
-        for n in tu.cursor.get_children():
-            allCursors += Recurse2(n)
+    #    for n in tu.cursor.get_children():
+    #        allCursors += Recurse2(n)
 
-    allCursors = Unique(allCursors,lambda x,y: (x.spelling == y.spelling and x.kind == y.kind))
+    #allCursors = Unique(allCursors,lambda x,y: (x.spelling == y.spelling and x.kind == y.kind))
 
     #for c in allCursors:
     #    print(c.spelling,c.kind)
     #sys.exit()
 
-    for c in allCursors:
-        MakeTypeFromCursor(c)
+    #for c in allCursors:
+    #    MakeTypeFromCursor(c)
 
-    if False:
+    if True:
         for file in files:
             tu = TranslationUnit.from_source(file, args,options=TranslationUnit.PARSE_INCLUDE_BRIEF_COMMENTS_IN_CODE_COMPLETION)
 
@@ -482,8 +480,8 @@ if __name__ == "__main__":
     #print(structStructures["MuxInfo"])
     #print()
     #print()
-    print(structStructures["WireInformation"])
-    sys.exit()
+    #print(structStructures["WireInformation"])
+    #sys.exit()
 
     typeInfoFile = open(output_path + "/typeInfo.cpp","w")
 
