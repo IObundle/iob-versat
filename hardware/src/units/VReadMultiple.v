@@ -48,7 +48,7 @@ module VReadMultiple #(
    (* versat_stage="Read" *) input [  ADDR_W-1:0] read_iter,
    (* versat_stage="Read" *) input [  ADDR_W-1:0] read_shift,
 
-   (* versat_stage="Read" *) input [    ADDR_W-1:0] read_amount,
+   (* versat_stage="Read" *) input [    ADDR_W-1:0] read_amount_minus_one,
    (* versat_stage="Read" *) input [     LEN_W-1:0] read_length,
    (* versat_stage="Read" *) input [AXI_ADDR_W-1:0] read_addr_shift,
 
@@ -64,6 +64,10 @@ module VReadMultiple #(
    input [PERIOD_W-1:0] output_per2,
    input [  ADDR_W-1:0] output_shift2,
    input [  ADDR_W-1:0] output_incr2,
+   input [  ADDR_W-1:0] output_iter3,
+   input [PERIOD_W-1:0] output_per3,
+   input [  ADDR_W-1:0] output_shift3,
+   input [  ADDR_W-1:0] output_incr3,
 
    input [DELAY_W-1:0] delay0
 );
@@ -103,12 +107,12 @@ PerformNReads #(
    .data_ready_i(data_ready),
    .data_data_o(data_data),
 
-   .count_i(read_amount),
+   .count_i(read_amount_minus_one + 1),
    .start_address_i(ext_addr),
    .address_shift_i(read_addr_shift),
    .read_length(read_length),
 
-   .run_i(run),
+   .run_i(run && read_enabled),
    .done_o(transferDone),
 
    .clk_i(clk),
@@ -212,10 +216,10 @@ PerformNReads #(
       .iterations2_i(output_iter2),
       .shift2_i(output_shift2),
 
-      .period3_i(0),
-      .incr3_i(0),
-      .iterations3_i(0),
-      .shift3_i(0),
+      .period3_i(output_per3),
+      .incr3_i(output_incr3),
+      .iterations3_i(output_iter3),
+      .shift3_i(output_shift3),
 
       //outputs 
       .valid_o(output_enabled),

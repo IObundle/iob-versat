@@ -3,6 +3,7 @@
 #include <cstring>
 #include <cctype>
 
+#include "memory.hpp"
 #include "utils.hpp"
 #include "utilsCore.hpp"
 
@@ -1287,4 +1288,15 @@ String GetRichLocationError(String content,Token got,Arena* out){
 
   return EndString(mark);
 }
+
+Array<Token> DivideContentIntoTokens(Tokenizer* tok,Arena* out){
+  auto res = StartGrowableArray<Token>(out);
+
+  while(!tok->Done()){
+    *res.PushElem() = tok->NextToken();
+  }
+
+  return EndArray(res);
+}
+
 

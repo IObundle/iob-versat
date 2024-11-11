@@ -1,11 +1,10 @@
 `timescale 1ns / 1ps
 
-`define COMPLEX_INTERFACE
-
 module VWrite #(
+   parameter SIZE_W     = 32,
    parameter DATA_W     = 32,
-   parameter ADDR_W     = 14,
-   parameter PERIOD_W   = 12, // Must be 2 less than ADDR_W (boundary of 4) (for 32 bit DATA_W)
+   parameter ADDR_W     = 20,
+   parameter PERIOD_W   = 18, // Must be 2 less than ADDR_W (boundary of 4) (for 32 bit DATA_W)
    parameter AXI_ADDR_W = 32,
    parameter AXI_DATA_W = 32,
    parameter DELAY_W    = 7,
@@ -128,12 +127,9 @@ module VWrite #(
       .start_i (0),
       //.start_i (write_start),
       .incr_i  (write_incr),
-
-`ifdef COMPLEX_INTERFACE
       .iterations_i(write_iter),
       .duty_i      (write_duty),
       .shift_i     (write_shift),
-`endif
 
       .period2_i(0),
       .incr2_i(0),

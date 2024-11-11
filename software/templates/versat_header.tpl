@@ -105,7 +105,7 @@ extern iptr versat_base;
 //       function that sets the versat_base variable.  It is for this
 //       reason that the address info for every unit is a define. Addr
 //       variables must be instantiated only after calling
-//       versat_base.
+//       versat_init.
 
 // Base address for each memory mapped unit
 #{for pair namedMem}

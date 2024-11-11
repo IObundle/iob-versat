@@ -170,6 +170,8 @@ int CountSubstring(String str,String substr);
 String GetFullLineForGivenToken(String content,Token token);
 String GetRichLocationError(String content,Token got,Arena* out);
 
+Array<Token> DivideContentIntoTokens(Tokenizer* tok,Arena* out);
+
 // This functions should check for errors. Also these functions should return an error if they do not parse everything. Something like "3a" should flag an error for ParseInt, instead of just returning 3. Either they consume everything or it's an error
 int ParseInt(String str);
 double ParseDouble(String str);

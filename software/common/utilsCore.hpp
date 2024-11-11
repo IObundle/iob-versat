@@ -199,7 +199,7 @@ struct Opt{
     hasVal = false;
     return *this;
   };
-      
+
   bool operator!(){return !hasVal;};
     
   bool has_value(){return hasVal;};
@@ -211,6 +211,7 @@ struct Opt{
 //template<typename T>
 //using Opt = std::optional<T>;
 #define PROPAGATE(OPTIONAL) if(!(OPTIONAL).has_value()){return {};}
+#define PROPAGATE_POINTER(PTR) if((PTR) == nullptr){return (PTR);}
 
 template<typename T>
 using BracketList = std::initializer_list<T>;

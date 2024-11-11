@@ -1,11 +1,10 @@
 `timescale 1ns / 1ps
 
-`define COMPLEX_INTERFACE
-
 module VWriteMultiple #(
+   parameter SIZE_W     = 32,
    parameter DATA_W     = 32,
-   parameter ADDR_W     = 14,
-   parameter PERIOD_W   = 12, // Must be 2 less than ADDR_W (boundary of 4) (for 32 bit DATA_W)
+   parameter ADDR_W     = 20,
+   parameter PERIOD_W   = 18, // Must be 2 less than ADDR_W (boundary of 4) (for 32 bit DATA_W)
    parameter AXI_ADDR_W = 32,
    parameter AXI_DATA_W = 32,
    parameter DELAY_W    = 7,
@@ -48,7 +47,7 @@ module VWriteMultiple #(
    (* versat_stage="Write" *) input [  ADDR_W-1:0]   write_iter,
    (* versat_stage="Write" *) input [  ADDR_W-1:0]   write_shift,
 
-   (* versat_stage="Write" *) input [    ADDR_W-1:0] write_amount,
+   (* versat_stage="Write" *) input [    ADDR_W-1:0] write_amount_minus_one,
    (* versat_stage="Write" *) input [     LEN_W-1:0] write_length,
    (* versat_stage="Write" *) input                  write_enabled,
    (* versat_stage="Write" *) input [AXI_ADDR_W-1:0] write_addr_shift,
@@ -105,12 +104,12 @@ PerformNWrites #(
    .data_data_i(data_data),
    .data_last_o(data_last),
 
-   .count_i(write_amount),
+   .count_i(write_amount_minus_one + 1),
    .start_address_i(ext_addr),
    .address_shift_i(write_addr_shift),
    .write_length(write_length),
 
-   .run_i(run),
+   .run_i(run && write_enabled),
    .done_o(transferDone),
 
    .clk_i(clk),
@@ -168,12 +167,9 @@ PerformNWrites #(
       .start_i (0),
       //.start_i (write_start),
       .incr_i  (write_incr),
-
-`ifdef COMPLEX_INTERFACE
       .iterations_i(write_iter),
       .duty_i      (write_duty),
       .shift_i     (write_shift),
-`endif
 
       .period2_i(0),
       .incr2_i(0),

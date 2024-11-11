@@ -13,14 +13,6 @@ in
 let
 fs = tweag.lib.fileset;
 sourceFiles = (fs.union ./Makefile (fs.union ./config.mk ./software));
-#myPython = pkgs2.mkShell {   
-#  packages = [
-#    (pkgs2.python3.withPackages (python-pkgs: with python-pkgs; [
-#      # select Python packages here
-#      libclang
-#    ]))
-#  ];
-#};
 in
 pkgs.stdenv.mkDerivation rec {
   pname = "versat";
