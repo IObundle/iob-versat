@@ -4,6 +4,7 @@
 #include "debug.hpp"
 #include "declaration.hpp"
 #include "dotGraphPrinting.hpp"
+#include "filesystem.hpp"
 #include "memory.hpp"
 #include "utilsCore.hpp"
 #include "versat.hpp"
@@ -405,7 +406,7 @@ void OutputDelayDebugInfo(Accelerator* accel,Arena* temp){
   BLOCK_REGION(temp);
 
   String path = PushDebugPath(temp,accel->name,STRING("delayDebugInfo.txt"));
-  FILE* file = fopen(StaticFormat("%.*s",UNPACK_SS(path)),"w");
+  FILE* file = OpenFile(path,"w",FilePurpose_DEBUG_INFO);
   DEFER_CLOSE_FILE(file);
 
   if(!file){

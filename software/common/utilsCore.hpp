@@ -201,7 +201,8 @@ struct Opt{
   };
 
   bool operator!(){return !hasVal;};
-    
+
+  // Match the std interface to make it easier to replace if needed
   bool has_value(){return hasVal;};
   T& value() & {assert(hasVal);return val;};
   T&& value() && {assert(hasVal);return std::move(val);};
@@ -211,7 +212,7 @@ struct Opt{
 //template<typename T>
 //using Opt = std::optional<T>;
 #define PROPAGATE(OPTIONAL) if(!(OPTIONAL).has_value()){return {};}
-#define PROPAGATE_POINTER(PTR) if((PTR) == nullptr){return (PTR);}
+#define PROPAGATE_POINTER(PTR) if((PTR) == nullptr){return (nullptr);}
 
 template<typename T>
 using BracketList = std::initializer_list<T>;
@@ -433,7 +434,6 @@ bool RemoveDirectory(const char* path);
 long int GetFileSize(FILE* file);
 char* GetCurrentDirectory();
 void MakeDirectory(const char* path);
-FILE* OpenFileAndCreateDirectories(const char* path,const char* format);
 void CreateDirectories(const char* path);
 String ExtractFilenameOnly(String filepath);
 String PathGoUp(char* pathBuffer);

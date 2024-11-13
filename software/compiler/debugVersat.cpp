@@ -6,6 +6,7 @@
 
 #include <algorithm>
 
+#include "filesystem.hpp"
 #include "globals.hpp"
 #include "memory.hpp"
 #include "type.hpp"
@@ -97,7 +98,7 @@ void OutputGraphDotFile(Accelerator* accel,bool collapseSameEdges,String filenam
     return;
   }
 
-  FILE* file = OpenFileAndCreateDirectories(StaticFormat("%.*s",UNPACK_SS(filename)),"w");
+  FILE* file = OpenFileAndCreateDirectories(filename,"w",FilePurpose_DEBUG_INFO);
   DEFER_CLOSE_FILE(file);
   OutputGraphDotFile_(accel,collapseSameEdges,nullptr,file,temp);
 }
@@ -111,7 +112,7 @@ void OutputGraphDotFile(Accelerator* accel,bool collapseSameEdges,FUInstance* hi
   Set<FUInstance*>* highlight = PushSet<FUInstance*>(temp,1);
   highlight->Insert(highlighInstance);
 
-  FILE* file = OpenFileAndCreateDirectories(StaticFormat("%.*s",UNPACK_SS(filename)),"w");
+  FILE* file = OpenFileAndCreateDirectories(filename,"w",FilePurpose_DEBUG_INFO);
   DEFER_CLOSE_FILE(file);
   OutputGraphDotFile_(accel,collapseSameEdges,highlight,file,temp);
 }
@@ -122,13 +123,13 @@ void OutputGraphDotFile(Accelerator* accel,bool collapseSameEdges,Set<FUInstance
   }
 
   BLOCK_REGION(temp);
-  FILE* file = OpenFileAndCreateDirectories(StaticFormat("%.*s",UNPACK_SS(filename)),"w");
+  FILE* file = OpenFileAndCreateDirectories(filename,"w",FilePurpose_DEBUG_INFO);
   DEFER_CLOSE_FILE(file);
   OutputGraphDotFile_(accel,collapseSameEdges,highlight,file,temp);
 }
 
 void OutputContentToFile(String filepath,String content){
-  FILE* file = fopen(StaticFormat("%.*s",UNPACK_SS(filepath)),"w");
+  FILE* file = OpenFile(filepath,"w",FilePurpose_DEBUG_INFO);
   DEFER_CLOSE_FILE(file);
   
   if(!file){
@@ -178,7 +179,7 @@ void OutputGraphDotFile(Accelerator* accel,bool collapseSameEdges,FUInstance* hi
     return;
   }
 
-  FILE* outputFile = OpenFileAndCreateDirectories(StaticFormat("%.*s",UNPACK_SS(filename)),"w");
+  FILE* outputFile = OpenFileAndCreateDirectories(filename,"w",FilePurpose_DEBUG_INFO);
   DEFER_CLOSE_FILE(outputFile);
   
   BLOCK_REGION(temp);

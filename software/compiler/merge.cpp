@@ -3,6 +3,7 @@
 #include "configurations.hpp"
 #include "declaration.hpp"
 #include "dotGraphPrinting.hpp"
+#include "filesystem.hpp"
 #include "globals.hpp"
 #include "logger.hpp"
 #include "memory.hpp"
@@ -710,7 +711,7 @@ void OutputConsolidationGraph(ConsolidationGraph graph,bool onlyOutputValid,Stri
   BLOCK_REGION(temp);
   String filePath = PushDebugPath(temp,moduleName,fileName);
   
-  FILE* outputFile = OpenFileAndCreateDirectories(StaticFormat("%.*s",UNPACK_SS(filePath)),"w");
+  FILE* outputFile = OpenFileAndCreateDirectories(filePath,"w",FilePurpose_DEBUG_INFO);
   DEFER_CLOSE_FILE(outputFile);
 
   fprintf(outputFile,"graph GraphName {\n\tnode [fontcolor=white,style=filled,color=\"160,60,176\"];\n");

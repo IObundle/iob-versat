@@ -898,7 +898,7 @@ Data* Hashmap<Key,Data>::Get(Key key){
 
   int mask = this->nodesAllocated - 1;
   int index = std::hash<Key>()(key) & mask; // Size is power of 2
-
+  
   Pair<Key,Data>* ptr = this->buckets[index];
   for(; ptr;){
     if(ptr->key == key){ // Same key

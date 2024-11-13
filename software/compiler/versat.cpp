@@ -561,6 +561,8 @@ FUDeclaration* RegisterSubUnitBarebones(Accelerator* circuit,Arena* temp,Arena* 
   FUDeclaration decl = {};
   decl.name = name;
 
+  // TODO: This function could use some cleanup
+  
   decl.parameters = PushArray<String>(permanent,6);
   decl.parameters[0] = STRING("ADDR_W");
   decl.parameters[1] = STRING("DATA_W");

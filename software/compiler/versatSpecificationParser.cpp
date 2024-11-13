@@ -1480,7 +1480,7 @@ FUDeclaration* InstantiateModule(String content,ModuleDef def,Arena* temp,Arena*
     if(type == nullptr){
       ReportError(content,decl.typeName,"Given type was not found");
       error = true;
-      // TODO: Keep running using a type that contains infinity inputs and outputs.
+      // TODO: In order to collect more errors, we could keep running using a type that contains infinite inputs and outputs. 
       break; // For now skip over.
     }
     

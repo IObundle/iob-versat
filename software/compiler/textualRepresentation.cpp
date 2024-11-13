@@ -695,8 +695,6 @@ void PrintRepr(FILE* file,Value val,Arena* temp,Arena* temp2,int depth){
   BLOCK_REGION(debugArena);
 
   globalTest = file;
-  //globalTest = fopen("/home/z/test.txt","w");
-  //DEFER_CLOSE_FILE(globalTest);
   
   auto mark = MarkArena(temp);
 

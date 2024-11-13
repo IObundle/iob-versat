@@ -171,7 +171,7 @@ void PreprocessVerilogFile_(String fileContent,MacroMap& macros,Array<String> in
       FILE* file = nullptr;
       for(String str : includeFilepaths){
         std::string string(str.data,str.size);
-
+        
         std::string filepath;
         if(string.back() == '/'){
           filepath = string + filename;
@@ -179,7 +179,7 @@ void PreprocessVerilogFile_(String fileContent,MacroMap& macros,Array<String> in
           filepath = string + '/' + filename;
         }
 
-        file = fopen(filepath.c_str(),"r");
+        file = fopen(filepath.c_str(),"r"); // For now, do not change to OpenFile. This code needs to be partially rewritten anyway.
 
         if(file){
           break;

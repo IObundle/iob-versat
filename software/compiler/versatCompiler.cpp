@@ -4,6 +4,7 @@
 
 #include "debugVersat.hpp"
 #include "declaration.hpp"
+#include "filesystem.hpp"
 #include "globals.hpp"
 #include "memory.hpp"
 #include "structParsing.hpp"
@@ -93,7 +94,8 @@ String GetVerilatorRoot(Arena* out,Arena* temp){
 
   fflush(f);
   fclose(f);
-  
+
+  // TODO: Not good, we do not want to bind the generated files to the setup env. We must either output a script or a simple C program that does this at build time.
   CallVerilator(StaticFormat("%.*s/Test.v",UNPACK_SS(tempDir)),tempDirC);
 
   String fileContent = PushFile(temp,StaticFormat("%.*s/VTest.mk",UNPACK_SS(tempDir)));
@@ -243,31 +245,6 @@ parse_opt (int key, char *arg,
     }
   return 0;
 }
-
-struct Test2{
-  int c;
-  int d;
-};
-
-struct Test{
-  int a;
-  int b;
-  Test2 t;
-};
-
-typedef Test MyType;
-
-#if 0
-template struct MyArrayIterator<MyType>;
-template MyArrayIterator<MyType>* MyIterate(Array<MyType> arr);
-
-template MyArrayIterator<MyType> MyNonPointerIterate(Array<MyType> arr);
-
-template struct MyArrayIterator<int>;
-template MyArrayIterator<int>* MyIterate(Array<int> arr);
-
-template MyArrayIterator<int> MyNonPointerIterate(Array<int> arr);
-#endif
 
 template<typename Key,typename Data>
 struct MyHashmapIterator{
@@ -777,10 +754,9 @@ int main(int argc,char* argv[]){
     }
   }
 
-  // Disable debug for now
   if(globalOptions.debug){
     String path = PushDebugPath(temp,{},STRING("allDeclarations.txt"));
-    FILE* allDeclarations = fopen(StaticFormat("%.*s",UNPACK_SS(path)),"w");
+    FILE* allDeclarations = OpenFile(path,"w",FilePurpose_DEBUG_INFO);
     DEFER_CLOSE_FILE(allDeclarations);
     for(FUDeclaration* decl : globalDeclarations){
       BLOCK_REGION(temp);
@@ -790,7 +766,7 @@ int main(int argc,char* argv[]){
         
         String path = PushDebugPath(temp,decl->name,STRING("stats.txt"));
 
-        FILE* stats = OpenFileAndCreateDirectories(StaticFormat("%.*s",UNPACK_SS(path)),"w");
+        FILE* stats = OpenFileAndCreateDirectories(path,"w",FilePurpose_DEBUG_INFO);
         DEFER_CLOSE_FILE(stats);
 
         Accelerator* test = CreateAccelerator(STRING("TEST"),AcceleratorPurpose_TEMP);
@@ -806,7 +782,6 @@ int main(int argc,char* argv[]){
     printf("Error\n");
   }
   SetParameter(TOP,STRING("LEN_W"),STRING("LEN_W"));
-
   
   OutputVersatSource(accel,
                      globalOptions.hardwareOutputFilepath.data,
@@ -832,7 +807,7 @@ int main(int argc,char* argv[]){
         String repr = GenerateDotGraph(decl->fixedDelayCircuit,content,temp,temp2);
         String debugPath = PushDebugPath(temp,decl->name,STRING("NormalGraph.dot"));
 
-        FILE* file = fopen(StaticFormat("%.*s",UNPACK_SS(debugPath)),"w");
+        FILE* file = OpenFile(debugPath,"w",FilePurpose_DEBUG_INFO);
         DEFER_CLOSE_FILE(file);
         if(!file){
           printf("Error opening file for debug outputting: %.*s\n",UNPACK_SS(debugPath));
@@ -842,11 +817,10 @@ int main(int argc,char* argv[]){
       }
 
       String path = PushString(temp,"%.*s/modules/%.*s.v",UNPACK_SS(globalOptions.hardwareOutputFilepath),UNPACK_SS(decl->name));
-      PushNullByte(temp);
 
       *allFilesOutputted->PushElem() = PushString(perm,"./modules/%.*s.v",UNPACK_SS(decl->name));
       
-      FILE* sourceCode = OpenFileAndCreateDirectories(StaticFormat("%.*s",UNPACK_SS(path)),"w");
+      FILE* sourceCode = OpenFileAndCreateDirectories(path,"w",FilePurpose_VERILOG_CODE);
       DEFER_CLOSE_FILE(sourceCode);
 
       if(decl->type == FUDeclarationType_COMPOSITE || decl->type == FUDeclarationType_MERGED){
@@ -860,8 +834,10 @@ int main(int argc,char* argv[]){
   // This should be the last thing that we do, no further file creation can occur after this point
   Array<String> allOutputLocations = PushArrayFromList(perm,allFilesOutputted);
 
-  for(String str : allOutputLocations){
-    PRINT_STRING(str);
+  for(FileInfo f : CollectAllFilesInfo(temp)){
+    if(f.purpose == FilePurpose_VERILOG_CODE && f.mode == FileOpenMode_WRITE){
+      PRINT_STRING(f.filepath);
+    }
   }
   
   return 0;

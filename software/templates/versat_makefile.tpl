@@ -6,6 +6,8 @@
 
 TYPE_NAME := @{typename}
 
+// TODO: Everything here should be relative. Otherwise we are binding the setup with the build process, when in reality they should be separated.
+
 HARDWARE_SRC := #{join " " file verilogFiles}@{file}#{end}
 #HARDWARE_SRC := $(wildcard @{generatedUnitsLocation}/*.v)
 HARDWARE_SRC += $(wildcard @{generatedUnitsLocation}/modules/*.v)
@@ -29,7 +31,6 @@ createVerilatorObjects: V@{typename}.h wrapper.o
 
 #./obj_dir/V@{typename}_classes.mk: V@{typename}.h
 
-# TODO: src folder should be set to absolute. Versat compiler knows the location 
 V@{typename}.h: $(HARDWARE_SRC)
 	verilator --report-unoptflat -GAXI_ADDR_W=@{arch.databusAddrSize} -GAXI_DATA_W=@{arch.databusDataSize} -GLEN_W=16 -CFLAGS "-O2 -march=native" @{TRACE_TYPE} --cc $(HARDWARE_SRC) $(wildcard @{srcDir}/*.v) $(INCLUDE) --top-module $(TYPE_NAME)
 	$(MAKE) -C ./obj_dir -f V@{typename}.mk

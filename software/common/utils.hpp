@@ -1,9 +1,12 @@
 #pragma once
 
-// Utilities that depend on memory
+// Utilities that depend on memory or on other utilities
 
 #include "utilsCore.hpp"
+#include "filesystem.hpp"
 #include "memory.hpp"
+
+FILE* OpenFileAndCreateDirectories(String path,const char* format,FilePurpose purpose);
 
 Opt<Array<String>> GetAllFilesInsideDirectory(String dirPath,Arena* out);
 

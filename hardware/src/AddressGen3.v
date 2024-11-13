@@ -76,7 +76,7 @@ wire [5:0] cases = {iter3Cond,per3Cond,iter2Cond,per2Cond,iterCond,perCond};
 
 assign store_o = (per < duty_i);
 
-always @(posedge clk_i, posedge rst_i) begin
+always @(posedge clk_i,posedge rst_i) begin
    if (rst_i) begin
       delay_counter <= 0;
       addr_o        <= 0;

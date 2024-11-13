@@ -2,6 +2,7 @@
 
 #include "accelerator.hpp"
 #include "declaration.hpp"
+#include "filesystem.hpp"
 #include "logger.hpp"
 #include "memory.hpp"
 #include "utils.hpp"
@@ -673,8 +674,11 @@ void OutputCircuitSource(FUDeclaration* decl,FILE* file,Arena* temp,Arena* temp2
     }
   }
 
+  // TODO:
   // All these should be moved off
   // There is no reason why OutputCircuitSource should ever need to take 2 arenas
+  // AccelInfo being recalculated again is not good. We are recalculating stuff too much
+  // program is still fast, but its a sign of poor architecture
   VersatComputedValues val = ComputeVersatValues(accel,false);
   AccelInfo info = CalculateAcceleratorInfoNoDelay(accel,true,temp,temp2);
   Array<MemoryAddressMask> memoryMasks = CalculateAcceleratorMemoryMasks(info,temp);
@@ -793,8 +797,9 @@ void OutputVerilatorWrapper(FUDeclaration* type,Accelerator* accel,String output
   TemplateSetCustom("opts",MakeValue(&globalOptions));
   TemplateSetCustom("type",MakeValue(type));
   TemplateSetBool("trace",globalDebug.outputVCD);
-  
-  FILE* output = OpenFileAndCreateDirectories(StaticFormat("%.*s/wrapper.cpp",UNPACK_SS(outputPath)),"w");
+
+  String wrapperPath = PushString(temp,"%.*s/wrapper.cpp",UNPACK_SS(outputPath));
+  FILE* output = OpenFileAndCreateDirectories(wrapperPath,"w",FilePurpose_SOFTWARE);
   DEFER_CLOSE_FILE(output);
 
   CompiledTemplate* templ = CompileTemplate(versat_wrapper_template,"wrapper",temp,temp2);
@@ -809,7 +814,8 @@ void OutputVerilatorMake(String topLevelName,String versatDir,Arena* temp,Arena*
   BLOCK_REGION(temp2);
   
   String outputPath = globalOptions.softwareOutputFilepath;
-  FILE* output = OpenFileAndCreateDirectories(StaticFormat("%.*s/VerilatorMake.mk",UNPACK_SS(outputPath)),"w");
+  String verilatorMakePath = PushString(temp,"%.*s/VerilatorMake.mk",UNPACK_SS(outputPath));
+  FILE* output = OpenFileAndCreateDirectories(verilatorMakePath,"w",FilePurpose_MAKEFILE);
   DEFER_CLOSE_FILE(output);
   
   TemplateSetBool("traceEnabled",globalDebug.outputVCD);
@@ -894,8 +900,8 @@ void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* 
   ClearTemplateEngine(); // Make sure that we do not reuse data
 
   // No need for templating, small file
-  FILE* c = OpenFileAndCreateDirectories(StaticFormat("%s/versat_defs.vh",hardwarePath),"w");
-  FILE* f = OpenFileAndCreateDirectories(StaticFormat("%s/versat_undefs.vh",hardwarePath),"w");
+  FILE* c = OpenFileAndCreateDirectories(PushString(temp,"%s/versat_defs.vh",hardwarePath),"w",FilePurpose_VERILOG_INCLUDE);
+  FILE* f = OpenFileAndCreateDirectories(PushString(temp,"%s/versat_undefs.vh",hardwarePath),"w",FilePurpose_VERILOG_INCLUDE);
   DEFER_CLOSE_FILE(c);
   DEFER_CLOSE_FILE(f);
   
@@ -1015,25 +1021,25 @@ void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* 
   // All dependent on external
   TemplateSetCustom("external",MakeValue(&external));
   {
-    FILE* f = OpenFileAndCreateDirectories(StaticFormat("%s/versat_external_memory_inst.vh",hardwarePath),"w");
+    FILE* f = OpenFileAndCreateDirectories(PushString(temp,"%s/versat_external_memory_inst.vh",hardwarePath),"w",FilePurpose_VERILOG_INCLUDE);
     DEFER_CLOSE_FILE(f);
     ProcessTemplate(f,BasicTemplates::externalInstTemplate,temp,temp2);
   }
 
   {
-    FILE* f = OpenFileAndCreateDirectories(StaticFormat("%s/versat_internal_memory_wires.vh",hardwarePath),"w");
+    FILE* f = OpenFileAndCreateDirectories(PushString(temp,"%s/versat_internal_memory_wires.vh",hardwarePath),"w",FilePurpose_VERILOG_INCLUDE);
     DEFER_CLOSE_FILE(f);
     ProcessTemplate(f,BasicTemplates::internalWiresTemplate,temp,temp2);
   }
 
   {
-    FILE* f = OpenFileAndCreateDirectories(StaticFormat("%s/versat_external_memory_port.vh",hardwarePath),"w");
+    FILE* f = OpenFileAndCreateDirectories(PushString(temp,"%s/versat_external_memory_port.vh",hardwarePath),"w",FilePurpose_VERILOG_INCLUDE);
     DEFER_CLOSE_FILE(f);
     ProcessTemplate(f,BasicTemplates::externalPortTemplate,temp,temp2);
   }
 
   {
-    FILE* f = OpenFileAndCreateDirectories(StaticFormat("%s/versat_external_memory_internal_portmap.vh",hardwarePath),"w");
+    FILE* f = OpenFileAndCreateDirectories(PushString(temp,"%s/versat_external_memory_internal_portmap.vh",hardwarePath),"w",FilePurpose_VERILOG_INCLUDE);
     DEFER_CLOSE_FILE(f);
     ProcessTemplate(f,BasicTemplates::externalInternalPortmapTemplate,temp,temp2);
  }
@@ -1119,7 +1125,7 @@ void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* 
   //DEBUG_BREAK();
   
   {
-    FILE* s = OpenFileAndCreateDirectories(StaticFormat("%s/versat_instance.v",hardwarePath),"w");
+    FILE* s = OpenFileAndCreateDirectories(PushString(temp,"%s/versat_instance.v",hardwarePath),"w",FilePurpose_VERILOG_CODE);
     DEFER_CLOSE_FILE(s);
 
     if(!s){
@@ -1131,7 +1137,7 @@ void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* 
   }
   
   {
-    FILE* s = OpenFileAndCreateDirectories(StaticFormat("%s/versat_configurations.v",hardwarePath),"w");
+    FILE* s = OpenFileAndCreateDirectories(PushString(temp,"%s/versat_configurations.v",hardwarePath),"w",FilePurpose_VERILOG_CODE);
     DEFER_CLOSE_FILE(s);
 
     if(!s){
@@ -1274,7 +1280,7 @@ void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* 
 
     TemplateSetCustom("mergeMux",MakeValue(&result));
     
-    FILE* f = OpenFileAndCreateDirectories(StaticFormat("%s/versat_accel.h",softwarePath),"w");
+    FILE* f = OpenFileAndCreateDirectories(PushString(temp,"%s/versat_accel.h",softwarePath),"w",FilePurpose_SOFTWARE);
     DEFER_CLOSE_FILE(f);
     ProcessTemplate(f,BasicTemplates::acceleratorHeaderTemplate,temp,temp2);
   }

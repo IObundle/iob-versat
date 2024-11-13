@@ -74,7 +74,6 @@ Arena InitArena(size_t size){
     exit(1);
   }
 
-  //Assert(arena.mem);
   Assert(IS_ALIGNED_64(arena.mem));
 
   return arena;

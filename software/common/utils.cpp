@@ -5,6 +5,34 @@
 #include <filesystem>
 namespace fs = std::filesystem;
 
+FILE* OpenFileAndCreateDirectories(String path,const char* format,FilePurpose purpose){
+  char buffer[PATH_MAX];
+  memset(buffer,0,PATH_MAX);
+
+  for(int i = 0; i < path.size; i++){
+    buffer[i] = path[i];
+
+    if(path[i] == '/'){
+      DIR* dir = opendir(buffer);
+      if(!dir && errno == ENOENT){
+        MakeDirectory(buffer);
+      }
+      if(dir){
+        closedir(dir);
+      }
+    }
+  }
+
+  FILE* file = OpenFile(path,format,purpose);
+  if(file == nullptr){
+    printf("Failed to open file (%d): %.*s\n",errno,UNPACK_SS(path));
+    DEBUG_BREAK();
+    exit(-1);
+  }
+  
+  return file;
+}
+
 Opt<Array<String>> GetAllFilesInsideDirectory(String dirPath,Arena* out){
    DIR* dir = opendir(StaticFormat("%.*s",UNPACK_SS(dirPath))); // Make sure it's zero terminated
 

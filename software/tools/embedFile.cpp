@@ -1,5 +1,6 @@
 #include <cstdio>
 
+#include "filesystem.hpp"
 #include "parser.hpp"
 #include "utils.hpp"
 #include "utilsCore.hpp"
@@ -51,8 +52,11 @@ int main(int argc,const char* argv[]){
 
   permInst = InitArena(Megabyte(64));
 
-  FILE* headerFile = OpenFileAndCreateDirectories(StaticFormat("%s.hpp",outputPath),"w");
-  FILE* sourceFile = OpenFileAndCreateDirectories(StaticFormat("%s.cpp",outputPath),"w");
+  String headerPath = PushString(temp,"%s.hpp",outputPath);
+  String sourcePath = PushString(temp,"%s.cpp",outputPath);
+  
+  FILE* headerFile = OpenFileAndCreateDirectories(headerPath,"w",FilePurpose_MISC);
+  FILE* sourceFile = OpenFileAndCreateDirectories(sourcePath,"w",FilePurpose_MISC);
   DEFER_CLOSE_FILE(headerFile);
   DEFER_CLOSE_FILE(sourceFile);
   
