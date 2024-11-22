@@ -130,7 +130,6 @@ Hashmap<String,Value>* GetAllTemplateValues();
 void ClearTemplateEngine();
 
 void TemplateSetCustom(const char* id,Value val);
-//void TemplateSetCustom(const char* id,void* entity,const char* typeName);
 void TemplateSetNumber(const char* id,int number);
 void TemplateSet(const char* id,void* ptr);
 void TemplateSetString(const char* id,const char* str);

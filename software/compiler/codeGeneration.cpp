@@ -14,7 +14,12 @@
 #include "textualRepresentation.hpp"
 #include "globals.hpp"
 
+#include "versatSpecificationParser.hpp"
+
 static const int DELAY_SIZE = 7;
+
+// TODO:
+Pool<AddressGenDef> savedAddressGen; // REMOVE: Remove after proper implementation of AddressGenerators
 
 Array<Difference> CalculateSmallestDifference(Array<int> oldValues,Array<int> newValues,Arena* out){
   Assert(oldValues.size == newValues.size); // For now
@@ -163,7 +168,7 @@ Array<TypeStructInfoElement> GenerateStructFromType(FUDeclaration* decl,Arena* o
   if(decl->type == FUDeclarationType_SINGLE){
     int size = decl->baseConfig.configs.size;
     Array<TypeStructInfoElement> entries = PushArray<TypeStructInfoElement>(out,size);
-    
+
     for(int i = 0; i < size; i++){
       entries[i].typeAndNames = PushArray<SingleTypeStructElement>(out,1);
       entries[i].typeAndNames[0].type = STRING("iptr");
@@ -269,26 +274,6 @@ static Array<TypeStructInfoElement> GenerateAddressStructFromType(FUDeclaration*
   return entries;
 }
 
-struct SubTypesInfo{
-  FUDeclaration* type;
-  FUDeclaration* mergeTop;
-  ConfigurationInfo* info;
-  bool isFromMerged;
-  bool containsMerged;
-};
-
-template<> struct std::hash<SubTypesInfo>{
-   std::size_t operator()(SubTypesInfo const& s) const noexcept{
-     std::size_t res = std::hash<void*>()(s.type) + std::hash<void*>()(s.mergeTop) + std::hash<bool>()(s.isFromMerged) + std::hash<void*>()(s.info) + std::hash<bool>()(s.containsMerged);
-     return res;
-   }
-};
-
-bool operator==(const SubTypesInfo i0,const SubTypesInfo i1){
-  bool res = Memcmp(&i0,&i1,1);
-  return res;
-}
-
 Array<SubTypesInfo> GetSubTypesInfo(Accelerator* accel,Arena* out,Arena* temp){
   BLOCK_REGION(temp);
   
@@ -327,10 +312,11 @@ Array<SubTypesInfo> GetSubTypesInfo(Accelerator* accel,Arena* out,Arena* temp){
   return result;
 }
 
+// NOTE: The biggest source of complexity comes from merging, since merging affects the lower structures,
+//       causing the addition of padded members
 Array<TypeStructInfo> GetConfigStructInfo(Accelerator* accel,Arena* out,Arena* temp){
   BLOCK_REGION(temp);
 
-  GetSubTypesInfo(accel,out,temp);
   Array<FUDeclaration*> typesUsed = ConfigSubTypes(accel,out,temp);
   typesUsed = SortTypesByConfigDependency(typesUsed,temp,out);
 
@@ -784,7 +770,7 @@ void OutputVerilatorWrapper(FUDeclaration* type,Accelerator* accel,String output
   TemplateSetCustom("allStaticsVerilatorSide",MakeValue(&allStaticsVerilatorSide));
 
   Array<TypeStructInfoElement> structuredConfigs = ExtractStructuredConfigs(info.baseInfo,temp,temp2);
-
+  
   TemplateSetNumber("delays",info.delays);
   TemplateSetCustom("structuredConfigs",MakeValue(&structuredConfigs));
   Array<String> statesHeaderSide = ExtractStates(info.baseInfo,temp);
@@ -793,6 +779,7 @@ void OutputVerilatorWrapper(FUDeclaration* type,Accelerator* accel,String output
 
   TemplateSetCustom("configsHeader",MakeValue(&allConfigsHeaderSide));
   TemplateSetCustom("statesHeader",MakeValue(&statesHeaderSide));
+  TemplateSetCustom("namedStates",MakeValue(&statesHeaderSide));
   TemplateSetNumber("totalExternalMemory",totalExternalMemory);
   TemplateSetCustom("opts",MakeValue(&globalOptions));
   TemplateSetCustom("type",MakeValue(type));
@@ -839,23 +826,6 @@ void OutputVerilatorMake(String topLevelName,String versatDir,Arena* temp,Arena*
   TemplateSetString("typename",topLevelName);
   TemplateSetString("rootPath",STRING(fixedPath.c_str()));
   ProcessTemplate(output,comp,temp,temp2);
-}
-
-struct SameMuxEntities{
-  int configPos;
-  InstanceInfo* info;
-};
-
-template<> struct std::hash<SameMuxEntities>{
-   std::size_t operator()(SameMuxEntities const& s) const noexcept{
-     std::size_t res = s.configPos;
-     return res;
-   }
-};
-
-bool operator==(const SameMuxEntities i0,const SameMuxEntities i1){
-  bool res = (i0.configPos == i1.configPos);
-  return res;
 }
 
 // TODO: A little bit hardforced. Multiplexer info needs to be revised.
@@ -1279,6 +1249,17 @@ void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* 
     Array<Array<MuxInfo>> result = GetAllMuxInfo(&info,temp,temp2);
 
     TemplateSetCustom("mergeMux",MakeValue(&result));
+
+    //String InstantiateAddressGen(AddressGenDef def,Arena* out,Arena* temp);
+    GrowableArray<String> builder = StartGrowableArray<String>(temp2);
+    for(AddressGenDef* def : savedAddressGen){
+      String res = InstantiateAddressGen(*def,temp,temp2);
+      *builder.PushElem() = res;
+    }
+    Array<String> content = EndArray(builder);
+    DEBUG_BREAK();
+
+    TemplateSetCustom("addrGen",MakeValue(&content));
     
     FILE* f = OpenFileAndCreateDirectories(PushString(temp,"%s/versat_accel.h",softwarePath),"w",FilePurpose_SOFTWARE);
     DEFER_CLOSE_FILE(f);

@@ -548,7 +548,7 @@ def PrintParameters(parameterList):
 
 if __name__ == "__main__":
     # If python version is too low, just remove mathc and comment out stuff when needed 
-    match 6:
+    match 1:
         case 1: listOfAddresses = Pre([0, 1, 2])
         case 2: listOfAddresses = Pre([0,1,2,10,11,12,20,21,22])
         case 3: listOfAddresses = Pre([0,1,2,10,11,12,20,21,22,1,2,3,11,12,13,21,22,23,10,11,12,20,21,22,30,31,32,11,12,13,21,22,23,31,32,33])
@@ -567,3 +567,83 @@ if __name__ == "__main__":
     else:
         TestList(listOfAddresses)
 
+'''
+Configure weights:
+
+We basically read all the weights, which means that we just have a loop of 0..KernelSize
+The only problem is dealing with the different VReadMultiple interface, otherwise it is all good.
+
+for x in range(0,KernelSize):
+   addr = memory[ext_addr + x];
+
+The output is simply a loop that goes 0..9 for the first unit, 10..18 for the second, and so one.
+Then, in the next channel, the loop goes 27..36,36..45 and so on.
+
+for id between {0..3}
+for y in range(0..trueY)
+for x in range(0..trueX)
+for c in range(0..outputChannel)
+   for x in range(0,9):
+      addr = c * 9 * 3 + 9 * id + x;
+
+this gives:
+per == 9,incr == 1
+iter = outputChannels,shift == 19 == (27 - 8) == (inputChannels * 9 - 8) 
+per2 == trueX,incr2 == 0
+iter2 == trueY,shift2 == 0
+
+
+Notes:
+When the variable does not appear in the expression, the value for the incr/shift associated is zero.
+   However, because addr, addr2 and addr3 are different, it is possible that this does not always hold true.
+
+If we did not have different ids, (if it was just one unit), the iter shift would not be needed.
+
+Maybe it is easier to think about each loop individually.
+
+The first loop increments by 1 every cycle. It runs for 9 iterations. After the loop, address must end at 27.
+
+Second loop:
+   The first loop is run outputChannel times. After the loop, address must be 0.
+
+Third loop:
+   The second loop is run trueX times. After the loop, address must be 0.
+
+Fourth loop:
+   The third loop is run trueY times. After the loop, address must be 0. 
+
+The best way to deal with things, that I think of, is to allow loops to be described individually with the data that the user kinda wants.
+
+Address at the start.
+How many iterations
+The increment used
+Address at the end.
+
+The user should be able to either not answer some of these, or give them a "variable", which the program is then responsible for outputting the code that uses that variable in the calculations
+
+Features:
+
+The first loop starts at 0. It runs for 3 iterations using an increment of inputChannels. At the end, address must be X.
+
+Second loop:
+
+The second loop runs for 3 iterations. At the end, address must be 0.
+
+Third loop:
+
+The third loop runs for outputChannel iterations. At the end, address must be inputChannels.
+
+Fourth loop:
+
+The fourth loop runs for trueX iterations. This loop does not define any addr change.
+
+Fifth loop:
+
+The fifth loop must start at address 1254. It runs for trueY iterations.
+
+Either this or we implement code that can transform expressions into loops.
+   I think the problem is that I'm not currently sold on how to do this, and the previous part could be a good stepping stone. It at least seems more reasonable right now. 
+
+I think that the best thing that we can do is to give the tool all the values that we
+know are good, and then maybe change them as we go along and replace them with the constants that we care about. That means giving the correct address and stuff like that.
+'''

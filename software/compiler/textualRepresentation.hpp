@@ -160,19 +160,6 @@ void PrintAll(Hashmap<T,P>* map,Arena* temp){
 void PrintAll(FILE* file,Array<String> fields,Array<Array<String>> content,Arena* temp);
 void PrintAll(Array<String> fields,Array<Array<String>> content,Arena* temp);
 
-#include "autoRepr.hpp"
-
-#if 0
-template<typename T>
-void PrintAll(FILE* file,Array<T> arr,Arena* temp){
-  BLOCK_REGION(temp);
-
-  int size = arr.size;
-  Array<String> fields = GetFields((T*)nullptr,temp);
-  Array<Array<String>> strings = ReprAll(arr,temp);
-
-  PrintAll(file,fields,strings,temp);
-}
-#endif
+//#include "autoRepr.hpp"
 
 void PrintRepr(FILE* file,Value val,Arena* temp,Arena* temp2,int depth = 4);

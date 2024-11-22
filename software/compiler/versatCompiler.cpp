@@ -469,6 +469,7 @@ int main(int argc,char* argv[]){
   InitializeSimpleDeclarations();
 
   globalDebug.outputAccelerator = true;
+  globalDebug.outputAcceleratorInfo = true;
   globalDebug.outputVersat = true;
   globalDebug.outputGraphs = true;
   globalDebug.outputConsolidationGraphs = true;
@@ -645,7 +646,7 @@ int main(int argc,char* argv[]){
         decl->flattenedBaseCircuit = p.first;
         decl->flattenMapping = p.second;
       }
-      
+
       Print(p.second);
     }
   }
@@ -698,6 +699,9 @@ int main(int argc,char* argv[]){
     accel = CreateAccelerator(topLevelTypeStr,AcceleratorPurpose_MODULE);
     TOP = CreateFUInstance(accel,type,STRING("TOP"));
   } else if(globalOptions.addInputAndOutputsToTop && !(type->NumberInputs() == 0 && type->NumberOutputs() == 0)){
+    // TODO: This process needs to be simplified and more integrated with the approach used by versat spec.
+    //       Instead of doing everything manually.
+
     const char* name = StaticFormat("%.*s_Simple",UNPACK_SS(topLevelTypeStr));
     accel = CreateAccelerator(STRING(name),AcceleratorPurpose_MODULE);
     
@@ -709,7 +713,7 @@ int main(int argc,char* argv[]){
 
     FUDeclaration* constType = GetTypeByName(STRING("TestConst"));
     FUDeclaration* regType = GetTypeByName(STRING("Reg"));
-
+    
     // We need to create input and outputs first before instance
     // to guarantee that the configs and states are at the beginning of the accelerator structs
     for(int i = 0; i < input; i++){
@@ -733,6 +737,10 @@ int main(int argc,char* argv[]){
     FUInstance* node = TOP;
     
     type = RegisterSubUnit(accel,temp,temp2);
+    type->definitionArrays = PushArray<Pair<String,int>>(perm,2);
+    type->definitionArrays[0] = (Pair<String,int>){STRING("input"),input};
+    type->definitionArrays[1] = (Pair<String,int>){STRING("output"),output};
+
     type->signalLoop = true;
     
     name = StaticFormat("%.*s_Simple",UNPACK_SS(topLevelTypeStr));
@@ -754,6 +762,7 @@ int main(int argc,char* argv[]){
     }
   }
 
+  // TODO: This should be slowly phased out, since we have better tools in the debugger than actually printing stuff inside the application
   if(globalOptions.debug){
     String path = PushDebugPath(temp,{},STRING("allDeclarations.txt"));
     FILE* allDeclarations = OpenFile(path,"w",FilePurpose_DEBUG_INFO);
@@ -772,7 +781,8 @@ int main(int argc,char* argv[]){
         Accelerator* test = CreateAccelerator(STRING("TEST"),AcceleratorPurpose_TEMP);
         CreateFUInstance(test,decl,STRING("TOP"));
         AccelInfo info = CalculateAcceleratorInfo(test,true,temp,temp2);
-        
+
+        //DEBUG_BREAK();
         PrintRepr(stats,MakeValue(&info),temp,temp2);
       }
     }

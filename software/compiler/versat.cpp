@@ -1,4 +1,3 @@
-
 #include "versat.hpp"
 
 #include <new>
@@ -22,6 +21,7 @@
 #include "templateEngine.hpp"
 #include "textualRepresentation.hpp"
 #include "templateData.hpp"
+#include "declaration.hpp"
 
 namespace BasicTemplates{
   CompiledTemplate* acceleratorTemplate;

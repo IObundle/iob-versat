@@ -93,7 +93,7 @@ public:
 
 #define __marker(LINE) marker_ ## LINE
 #define _marker(LINE) __marker( LINE )
-#define BLOCK_REGION(ARENA) ArenaMarker _marker(__LINE__)(ARENA)
+#define BLOCK_REGION(ARENA) ArenaMarker _marker(__LINE__)(ARENA);
 
 #define region(ARENA) if(ArenaMarker _marker(__LINE__){ARENA})
 

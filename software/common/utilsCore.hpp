@@ -213,6 +213,7 @@ struct Opt{
 //using Opt = std::optional<T>;
 #define PROPAGATE(OPTIONAL) if(!(OPTIONAL).has_value()){return {};}
 #define PROPAGATE_POINTER(PTR) if((PTR) == nullptr){return (nullptr);}
+#define PROPAGATE_POINTER_OPT(PTR) if((PTR) == nullptr){return {};}
 
 template<typename T>
 using BracketList = std::initializer_list<T>;
@@ -499,6 +500,17 @@ inline unsigned char SelectByte(int val,int index){
    return conv.asChar;
 }
 
+template<typename T>
+Array<T> Offset(Array<T> in,int amount){
+  Array<T> res = in;
+  if(amount < in.size){
+    in.data += amount;
+    in.size -= amount;
+  } else {
+    return {};
+  }
+}
+
 static inline bool Contains(String str,char ch){
    for(int i = 0; i < str.size; i++){
       if(str.data[i] == ch){
@@ -506,6 +518,14 @@ static inline bool Contains(String str,char ch){
       }
    }
    return false;
+}
+
+
+template<typename T>
+inline void Reverse(Array<T>& arr){
+  for(int i = 0; i < arr.size / 2; i++){
+    SWAP(arr[i],arr[arr.size - 1 - i]);
+  }
 }
 
 template<typename T>

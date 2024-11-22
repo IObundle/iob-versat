@@ -6,6 +6,7 @@
 struct Accelerator;
 struct InstanceInfo;
 struct FUDeclaration;
+struct ConfigurationInfo;
 
 // Type can differ because of Merge.
 struct SingleTypeStructElement{
@@ -47,6 +48,46 @@ struct WireInformation{
   int addr;
   int configBitStart;
 };
+
+struct SubTypesInfo{
+  FUDeclaration* type;
+  FUDeclaration* mergeTop;
+  ConfigurationInfo* info;
+  bool isFromMerged;
+  bool containsMerged;
+};
+
+struct SameMuxEntities{
+  int configPos;
+  InstanceInfo* info;
+};
+
+template<> struct std::hash<SameMuxEntities>{
+   std::size_t operator()(SameMuxEntities const& s) const noexcept{
+     std::size_t res = s.configPos;
+     return res;
+   }
+};
+
+static bool operator==(const SameMuxEntities i0,const SameMuxEntities i1){
+  bool res = (i0.configPos == i1.configPos);
+  return res;
+}
+
+template<> struct std::hash<SubTypesInfo>{
+   std::size_t operator()(SubTypesInfo const& s) const noexcept{
+     std::size_t res = std::hash<void*>()(s.type) + std::hash<void*>()(s.mergeTop) + std::hash<bool>()(s.isFromMerged) + std::hash<void*>()(s.info) + std::hash<bool>()(s.containsMerged);
+     return res;
+   }
+};
+
+static bool operator==(const SubTypesInfo i0,const SubTypesInfo i1){
+  bool res = Memcmp(&i0,&i1,1);
+  return res;
+}
+
+struct AddressGenDef;
+extern Pool<AddressGenDef> savedAddressGen;
 
 Array<FUDeclaration*> SortTypesByConfigDependency(Array<FUDeclaration*> types,Arena* out,Arena* temp);
 Array<FUDeclaration*> SortTypesByMemDependency(Array<FUDeclaration*> types,Arena* out,Arena* temp);

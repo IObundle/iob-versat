@@ -5,6 +5,10 @@
 #include "utilsCore.hpp"
 #include <dirent.h>
 
+#include "declaration.hpp"
+
+#if 1
+
 // For now hardcoded for 32 bits.
 String BinaryRepr(int number,int bitsize,Arena* out){
   Byte* buffer = PushBytes(out,bitsize);
@@ -735,3 +739,5 @@ void PrintRepr(FILE* file,Value val,Arena* temp,Arena* temp2,int depth){
     iterations += 1;
   }
 }
+
+#endif

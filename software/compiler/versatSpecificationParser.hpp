@@ -72,6 +72,8 @@ struct InstanceDeclaration{
   Token typeName;
   Array<VarDeclaration> declarations;
   Array<Pair<String,String>> parameters;
+  Array<Token> shareNames;
+  bool negateShareNames;
   //String parameters;
 };
 
@@ -140,6 +142,68 @@ struct HierarchicalName{
   Token instanceName;
   Var subInstance;
 };
+
+struct AddressGenForDef{
+  Token loopVariable;
+  Token start; // Can be a number or an input
+  Token end;
+};
+
+struct IdOrNumber{
+  union {
+    Token identifier;
+    int number;
+  };
+  bool isId;
+};
+
+struct AddressGenFor{
+  Token loopVariable;
+  IdOrNumber start;
+  IdOrNumber end;
+};
+
+// A bit hardcoded for the moment but I just want something that works for now, still need more uses until we see how to progress the AddressGen code
+enum AddressGenType{
+  AddressGenType_MEM,
+  AddressGenType_VREAD_LOAD,
+  AddressGenType_VREAD_OUTPUT,
+  AddressGenType_VWRITE_INPUT,
+  AddressGenType_VWRITE_STORE
+};
+
+struct AddressGenDef{
+  Array<Token> inputs;
+  Array<AddressGenForDef> loops;
+  Array<Array<Token>> sumOfMultiplications;
+  Array<Array<Token>> internalExpression;
+  Array<Array<Token>> externalExpression;
+  Token externalName;
+  AddressGenType type;
+  String name;
+};
+
+struct AddressGenTerm{
+  Opt<Token> loopVariable;
+  Array<Token> constants;
+};
+
+struct AddressGen{
+  
+};
+
+struct AddressGenLoopSpecificaton{
+  String iterationExpression;
+  String incrementExpression;
+  String dutyExpression;
+  String nonPeriodIncrement;
+  String nonPeriodEnd;
+  String nonPeriodVal;
+  bool isPeriodType;
+};
+
+Opt<AddressGenDef> ParseAddressGen(Tokenizer* tok,Arena* out,Arena* temp);
+String InstantiateAddressGen(AddressGenDef def,Arena* out,Arena* temp);
 
 typedef Pair<HierarchicalName,HierarchicalName> SpecNode;
 

@@ -602,6 +602,8 @@ Token Tokenizer::Finish(){
 
   ptr = end;
 
+  amountStoredTokens = 0;
+  
   return token;
 }
 

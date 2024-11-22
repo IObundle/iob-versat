@@ -87,7 +87,7 @@ VERSAT_FLAGS := -rdynamic -DROOT_PATH=\"$(abspath ../)\"
 CPP_OBJ += $(VERSAT_COMMON_OBJ)
 CPP_OBJ += $(VERSAT_TEMPLATES_OBJ)
 CPP_OBJ += $(BUILD_DIR)/typeInfo.o
-CPP_OBJ += $(BUILD_DIR)/autoRepr.o
+#CPP_OBJ += $(BUILD_DIR)/autoRepr.o
 
 CPP_OBJ_WITHOUT_COMPILER:=$(filter-out $(BUILD_DIR)/versatCompiler.o,$(CPP_OBJ))
 
@@ -111,8 +111,8 @@ $(BUILD_DIR)/autoRepr.cpp $(BUILD_DIR)/autoRepr.hpp $(BUILD_DIR)/typeInfo.cpp: $
 $(BUILD_DIR)/typeInfo.o: $(BUILD_DIR)/typeInfo.cpp
 	-g++ -DPC -MMD -MP -std=c++17 $(VERSAT_COMMON_FLAGS) -c -o $@ $(GLOBAL_CFLAGS) $< $(VERSAT_INCLUDE)
 
-$(BUILD_DIR)/autoRepr.o: $(BUILD_DIR)/autoRepr.cpp
-	-g++ -DPC -MMD -MP -std=c++17 $(VERSAT_COMMON_FLAGS) -c -o $@ $(GLOBAL_CFLAGS) $< $(VERSAT_INCLUDE)
+#$(BUILD_DIR)/autoRepr.o: $(BUILD_DIR)/autoRepr.cpp
+#	-g++ -DPC -MMD -MP -std=c++17 $(VERSAT_COMMON_FLAGS) -c -o $@ $(GLOBAL_CFLAGS) $< $(VERSAT_INCLUDE)
 
 $(BUILD_DIR)/%.o : $(VERSAT_COMPILER_DIR)/%.cpp $(BUILD_DIR)/templateData.hpp $(BUILD_DIR)/autoRepr.hpp
 	-g++ -MMD -MP -std=c++17 $(VERSAT_FLAGS) $(FL) $(VERSAT_COMMON_FLAGS) -c -o $@ $(GLOBAL_CFLAGS) $< $(VERSAT_INCLUDE) #-DDEFAULT_UNIT_PATHS="$(SHARED_UNITS_PATH)" 

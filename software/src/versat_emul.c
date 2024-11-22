@@ -16,7 +16,7 @@
 
 typeof(accelConfig) accelConfig = nullptr;
 typeof(accelState) accelState = nullptr;
-volatile AcceleratorStatic* accelStatics = nullptr;
+volatile AcceleratorStatic* accelStatic = nullptr;
 
 iptr versat_base;
 
@@ -70,7 +70,7 @@ void versat_init(int base){
   
   accelConfig = GetStartOfConfig();
   accelState = GetStartOfState();
-  accelStatics = GetStartOfStatic();
+  accelStatic = GetStartOfStatic();
 }
 
 static void CheckVersatInitialized(){
@@ -114,8 +114,8 @@ void VersatMemoryCopy(void* dest,const void* data,int size){
   char* configView = (char*) accelConfig;
   int* view = (int*) data;
 
-  bool destInsideConfig = (byteViewDest >= configView && byteViewDest < configView + sizeof(AcceleratorConfig));
-  bool destEndOutsideConfig = destInsideConfig && (byteViewDest + size > configView + sizeof(AcceleratorConfig));
+  bool destInsideConfig = (byteViewDest >= configView && byteViewDest < configView + AcceleratorConfigSize);
+  bool destEndOutsideConfig = destInsideConfig && (byteViewDest + size > configView + AcceleratorConfigSize);
 
   if(destEndOutsideConfig){
     printf("VersatMemoryCopy: Destination starts inside config and ends outside\n");

@@ -13,7 +13,7 @@ Options DefaultOptions(Arena* perm){
   res.useFixedBuffers = true;
   res.shadowRegister = true; 
   res.disableDelayPropagation = true;
-
+  
 #ifdef USE_FST_FORMAT
   res.generateFSTFormat = 1;
 #endif

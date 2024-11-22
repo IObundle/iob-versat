@@ -130,6 +130,8 @@ struct FUDeclaration{
   //       the info is all contained inside the units themselves and inside the calculated offsets
   Hashmap<StaticId,StaticData>* staticUnits;
 
+  Array<Pair<String,int>> definitionArrays;
+  
   FUDeclarationType type;
   DelayType delayType;
 

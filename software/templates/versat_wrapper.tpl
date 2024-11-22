@@ -72,6 +72,26 @@ static const int MEMORY_LATENCY = 0;
 
 typedef char Byte;
 
+typedef struct{
+#{for elem structuredConfigs}
+#{if elem.typeAndNames.size > 1}
+  union{
+#{for typeAndName elem.typeAndNames}
+    @{typeAndName.type} @{typeAndName.name};
+#{end}
+  };
+#{else}
+  @{elem.typeAndNames[0].type} @{elem.typeAndNames[0].name};
+#{end}
+#{end}
+} AcceleratorConfig;
+
+typedef struct{
+#{for name namedStates}
+  int @{name};
+#{end}
+} AcceleratorState;
+
 // Everything is statically allocated
 static constexpr int totalExternalMemory = @{totalExternalMemory};
 static Byte externalMemory[totalExternalMemory]; 

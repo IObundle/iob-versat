@@ -30,6 +30,9 @@
 //         It's probably better to swap the Iterator approach with a function that generates an array.
 //           Then we can implement transformations as functions that take arrays and output arrays.
 //       Error reporting is very generic. Implement more specific forms.
+//       This parser is still not production ready. At the very least all the Asserts should be removed and replaced
+//         by actual error reporting. Not a single Assert is programmer error detector, all the current ones are
+//         user error that most be reported.
 
 void ReportError(String content,Token faultyToken,const char* error){
   STACK_ARENA(temp,Kilobyte(1));
@@ -53,9 +56,9 @@ bool _ExpectError(Tokenizer* tok,const char* str){
   if(!CompareString(got,expected)){
     STACK_ARENA(temp,Kilobyte(4));
     auto mark = StartString(&temp);
-    PushString(&temp,"Parser Error.\n Expected to find:");
+    PushString(&temp,"Parser Error.\n Expected to find:  '");
     PushEscapedString(&temp,expected,' ');
-    PushString(&temp,"\n");
+    PushString(&temp,"'\n");
     PushString(&temp,"  Got:");
     PushEscapedString(&temp,got,' ');
     PushString(&temp,"\n");
@@ -66,6 +69,35 @@ bool _ExpectError(Tokenizer* tok,const char* str){
   return false;
 }
 
+void _UnexpectError(Token token){
+  STACK_ARENA(temp,Kilobyte(4));
+  auto mark = StartString(&temp);
+  String content = PushString(&temp,"At pos: %d:%d, did not expect to get: \"%.*s\"",token.loc.start.line,token.loc.start.column,UNPACK_SS(token));  
+}
+
+static bool IsValidIdentifier(String str){
+  auto CheckSingle = [](char ch){
+    return ((ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || ch == '_');
+  };
+
+  if(str.size <= 0){
+    return false;
+  }
+
+  if(!CheckSingle(str.data[0])){
+    return false;
+  }
+
+  for(int i = 1; i < str.size; i++){
+    char ch = str.data[i];
+    if(!CheckSingle(ch) && !(ch >= '0' && ch <= '9')){
+      return false;
+    }
+  }
+
+  return true;
+}
+
 // Macro because we want to return as well
 #define EXPECT(TOKENIZER,STR) \
   do{ \
@@ -73,7 +105,20 @@ bool _ExpectError(Tokenizer* tok,const char* str){
       return {}; \
     } \
   } while(0)
-  
+
+
+#define UNEXPECTED(TOK) \
+  do{ \
+    _UnexpectError(TOK); \
+    return {}; \
+  } while(0)
+
+#define CHECK_IDENTIFIER(ID) \
+  if(!IsValidIdentifier(ID)){ \
+    ReportError(tok,ID,StaticFormat("type name '%.*s' is not a valid name",UNPACK_SS(ID))); \
+    return {}; \
+  }
+
 Opt<int> ParseNumber(Tokenizer* tok){
   // TODO: We only handle integers, for now.
   Token number = tok->NextToken();
@@ -101,7 +146,6 @@ Opt<int> ParseNumber(Tokenizer* tok){
   return res;
 }
 
-// TODO: Make a range with a smaller start than an end give a semantic error. Let it parse correctly and error later.
 Opt<Range<int>> ParseRange(Tokenizer* tok){
   Range<int> res = {};
 
@@ -200,8 +244,7 @@ Opt<VarGroup> ParseVarGroup(Tokenizer* tok,Arena* out){
       } else if(CompareString(sepOrEnd,"}")){
         break;
       } else {
-        ReportError(tok,sepOrEnd,"Unexpected token"); // TODO: Implement a Expect for multiple expected tokens.
-        return {};
+        UNEXPECTED(sepOrEnd);
       }
     }
     VarGroup res = {};
@@ -238,7 +281,7 @@ SpecExpression* ParseAtom(Tokenizer* tok,Arena* out){
   }
 
   SpecExpression* expr = PushStruct<SpecExpression>(out);
-
+  
   peek = tok->PeekToken();
   if(peek[0] >= '0' && peek[0] <= '9'){  // TODO: Need to call ParseNumber
     tok->AdvancePeek();
@@ -251,7 +294,7 @@ SpecExpression* ParseAtom(Tokenizer* tok,Arena* out){
     expr->type = SpecExpression::VAR;
     auto mark = tok->Mark();
     Opt<Var> optVar = ParseVar(tok);
-    PROPAGATE(optVar); // TODO: Error reporting for expressions.
+    PROPAGATE(optVar);
 
     expr->var = optVar.value();
   }
@@ -493,6 +536,7 @@ PortExpression InstantiateSpecExpression(SpecExpression* root,Accelerator* circu
     } else if(CompareString(op,"-")){
       typeName = "SUB";
     } else {
+      // TODO: Proper error reporting
       printf("%.*s\n",UNPACK_SS(op));
       Assert(false);
     }
@@ -518,13 +562,9 @@ PortExpression InstantiateSpecExpression(SpecExpression* root,Accelerator* circu
 
 Opt<VarDeclaration> ParseVarDeclaration(Tokenizer* tok){
   VarDeclaration res = {};
-  Token token = tok->NextToken();
-  res.name = token;
-  
-  if(!CheckValidName(res.name)){
-    ReportError(tok,token,StaticFormat("'%.*s' is not a valid name",UNPACK_SS(res.name)));
-    return {};
-  }
+
+  res.name = tok->NextToken();
+  CHECK_IDENTIFIER(res.name);
 
   Token peek = tok->PeekToken();
   if(CompareString(peek,"[")){
@@ -578,8 +618,7 @@ Opt<ConnectionDef> ParseConnection(Tokenizer* tok,Arena* out){
     def.transforms = CheckAndParseConnectionTransforms(tok,out);
     def.type = ConnectionDef::CONNECTION;
   } else {
-    ReportError(tok,type,StaticFormat("Did not expect %.*s",UNPACK_SS(type)));
-    return {};
+    UNEXPECTED(type);
   }
   
   if(def.type == ConnectionDef::EQUALITY){
@@ -596,49 +635,28 @@ Opt<ConnectionDef> ParseConnection(Tokenizer* tok,Arena* out){
   return def;
 }
 
-static bool IsValidIdentifier(String str){
-  auto CheckSingle = [](char ch){
-    return ((ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || ch == '_');
-  };
-
-  if(str.size <= 0){
-    return false;
-  }
-
-  if(!CheckSingle(str.data[0])){
-    return false;
-  }
-
-  for(int i = 1; i < str.size; i++){
-    char ch = str.data[i];
-    if(!CheckSingle(ch) && !(ch >= '0' && ch <= '9')){
-      return false;
-    }
-  }
-
-  return true;
-}
-
 Opt<Array<VarDeclaration>> ParseModuleInputDeclaration(Tokenizer* tok,Arena* out){
   DynamicArray<VarDeclaration> array = StartArray<VarDeclaration>(out);
 
   EXPECT(tok,"(");
 
+  if(tok->IfNextToken(")")){
+    return EndArray(array);
+  }
+  
   while(!tok->Done()){
-    String peek = tok->PeekToken();
-
-    if(CompareString(peek,")")){
-      break;
-    }
-
     Opt<VarDeclaration> var = ParseVarDeclaration(tok);
     PROPAGATE(var);
 
     *array.PushElem() = var.value();
     
-    tok->IfNextToken(",");
+    if(tok->IfNextToken(",")){
+      continue;
+    } else {
+      break;
+    }
   }
-  
+
   EXPECT(tok,")");
 
   return EndArray(array);
@@ -657,11 +675,33 @@ Opt<InstanceDeclaration> ParseInstanceDeclaration(Tokenizer* tok,Arena* out,Aren
     res.modifier = InstanceDeclaration::SHARE_CONFIG;
     
     EXPECT(tok,"config"); // Only choice that is enabled, for now
-
+    
     res.typeName = tok->NextToken();
-    if(!IsValidIdentifier(res.typeName)){ // NOTE: Not sure if types should share same restrictions on names
-      ReportError(tok,res.typeName,StaticFormat("type name '%.*s' is not a valid name",UNPACK_SS(res.typeName)));
-      return {};
+    CHECK_IDENTIFIER(res.typeName);
+
+    if(tok->IfNextToken("(")){
+      res.negateShareNames = false;
+      if(tok->IfNextToken("~")){
+        res.negateShareNames = true;
+      }
+
+      auto toShare = StartGrowableArray<Token>(out);
+      while(!tok->Done()){
+        Token name = tok->NextToken();
+        CHECK_IDENTIFIER(name);
+
+        *toShare.PushElem() = name;
+
+        if(tok->IfNextToken(",")){
+          continue;
+        } else {
+          break;
+        }
+      }
+      
+      EXPECT(tok,")");
+
+      res.shareNames = EndArray(toShare);
     }
 
     EXPECT(tok,"{");
@@ -689,10 +729,7 @@ Opt<InstanceDeclaration> ParseInstanceDeclaration(Tokenizer* tok,Arena* out,Aren
   }
 
   res.typeName = tok->NextToken();
-  if(!IsValidIdentifier(res.typeName)){ // NOTE: Not sure if types should share same restrictions on names
-    ReportError(tok,res.typeName,StaticFormat("'%.*s' is not a valid type name",UNPACK_SS(res.typeName)));
-    return {};
-  }
+  CHECK_IDENTIFIER(res.typeName);
 
   Token possibleParameters = tok->PeekToken();
   auto list = PushArenaList<Pair<String,String>>(temp);
@@ -706,7 +743,6 @@ Opt<InstanceDeclaration> ParseInstanceDeclaration(Tokenizer* tok,Arena* out,Aren
 
       EXPECT(tok,"(");
 
-      // TODO: Actual Parse Expression
       String content = {};
 
       Opt<Token> remaining = tok->NextFindUntil(")");
@@ -727,13 +763,9 @@ Opt<InstanceDeclaration> ParseInstanceDeclaration(Tokenizer* tok,Arena* out,Aren
     }
     EXPECT(tok,")");
 
-    // TODO: Actual parsing of parameters
-    //Token fullParameters = tok->PeekIncludingDelimiterExpression({"("},{")"},0).value();
-    //tok->AdvancePeek(fullParameters);
-    res.parameters = PushArrayFromList(out,list);//fullParameters;
+    res.parameters = PushArrayFromList(out,list);
   }
 
-  // MARK  
   Opt<VarDeclaration> optVarDecl = ParseVarDeclaration(tok);
   PROPAGATE(optVarDecl);
 
@@ -753,10 +785,7 @@ Opt<ModuleDef> ParseModuleDef(Tokenizer* tok,Arena* out,Arena* temp){
   tok->AssertNextToken("module");
 
   def.name = tok->NextToken();
-  if(!IsValidIdentifier(def.name)){
-    ReportError(tok,def.name,StaticFormat("module name '%.*s' is not a valid name",UNPACK_SS(def.name)));
-    return {}; // TODO: We could try to keep going and find more errors
-  }
+  CHECK_IDENTIFIER(def.name);
   
   Opt<Array<VarDeclaration>> optVar = ParseModuleInputDeclaration(tok,out);
   PROPAGATE(optVar);
@@ -823,10 +852,7 @@ Opt<TransformDef> ParseTransformDef(Tokenizer* tok,Arena* out,Arena* temp){
   tok->AssertNextToken("transform");
 
   def.name = tok->NextToken();
-  if(!IsValidIdentifier(def.name)){
-    ReportError(tok,def.name,StaticFormat("transform name '%.*s' is not a valid name",UNPACK_SS(def.name)));
-    return {}; // TODO: We could try to keep going and find more errors
-  }
+  CHECK_IDENTIFIER(def.name);
   
   EXPECT(tok,"{");
 
@@ -998,21 +1024,15 @@ FUDeclaration* ParseIterative(Tokenizer* tok,Arena* temp,Arena* temp2){
 Opt<TypeAndInstance> ParseTypeAndInstance(Tokenizer* tok){
   Token typeName = tok->NextToken();
 
-  if(!CheckValidName(typeName)){
-    ReportError(tok,typeName,"Not a valid type name");
-    return {};
-  }
+  CHECK_IDENTIFIER(typeName);
 
   Token peek = tok->PeekToken();
 
-  String instanceName = {};
+  Token instanceName = {};
   if(tok->IfNextToken(":")){
     instanceName = tok->NextToken();
 
-    if(!CheckValidName(instanceName)){
-      ReportError(tok,typeName,"Not a valid instance name");
-      return {};
-    }
+    CHECK_IDENTIFIER(instanceName);
   }
 
   TypeAndInstance res = {};
@@ -1025,10 +1045,7 @@ Opt<TypeAndInstance> ParseTypeAndInstance(Tokenizer* tok){
 Opt<HierarchicalName> ParseHierarchicalName(Tokenizer* tok){
   Token topInstance = tok->NextToken();
 
-  if(!CheckValidName(topInstance)){
-    ReportError(tok,topInstance,"Not a valid instance name");
-    return {};
-  }
+  CHECK_IDENTIFIER(topInstance);
 
   EXPECT(tok,".");
 
@@ -1049,10 +1066,7 @@ Opt<MergeDef> ParseMerge(Tokenizer* tok,Arena* out,Arena* temp){
   tok->AssertNextToken("merge");
 
   Token mergeName = tok->NextToken();
-  if(!CheckValidName(mergeName)){
-    ReportError(tok,mergeName,"Not a valid type name");
-    return {};
-  }
+  CHECK_IDENTIFIER(mergeName);
   
   EXPECT(tok,"=");
 
@@ -1444,6 +1458,7 @@ FUDeclaration* InstantiateModule(String content,ModuleDef def,Arena* temp,Arena*
   InstanceName* names = PushSet<String>(temp,1000);
   bool error = false;
 
+  ArenaList<Pair<String,int>>* allArrayDefinitons = PushArenaList<Pair<String,int>>(temp);
   // TODO: Need to detect when multiple instances with same name
   int insertedInputs = 0;
   for(VarDeclaration& decl : def.inputs){
@@ -1451,8 +1466,9 @@ FUDeclaration* InstantiateModule(String content,ModuleDef def,Arena* temp,Arena*
       ReportError(content,decl.name,"Cannot use special out unit as module input");
       error = true;
     }
-
+    
     if(decl.isArray){
+      *allArrayDefinitons->PushElem() = {PushString(perm,decl.name),decl.arraySize};
       for(int i = 0; i < decl.arraySize; i++){
         String actualName = GetActualArrayName(decl.name,i,temp);
         FUInstance* input = CreateOrGetInput(circuit,actualName,insertedInputs++);
@@ -1488,6 +1504,8 @@ FUDeclaration* InstantiateModule(String content,ModuleDef def,Arena* temp,Arena*
     case InstanceDeclaration::SHARE_CONFIG:{
       for(VarDeclaration& varDecl : decl.declarations){
         if(varDecl.isArray){
+          *allArrayDefinitons->PushElem() = {PushString(perm,varDecl.name),varDecl.arraySize};
+
           for(int i = 0; i < varDecl.arraySize; i++){
             String actualName = GetActualArrayName(varDecl.name,i,temp);
             FUInstance* inst = CreateFUInstanceWithParameters(circuit,type,actualName,decl);
@@ -1512,6 +1530,7 @@ FUDeclaration* InstantiateModule(String content,ModuleDef def,Arena* temp,Arena*
       VarDeclaration varDecl = decl.declarations[0];
       
       if(varDecl.isArray){
+        *allArrayDefinitons->PushElem() = {PushString(perm,varDecl.name),varDecl.arraySize};
         for(int i = 0; i < varDecl.arraySize; i++){
           String actualName = GetActualArrayName(varDecl.name,i,temp);
 
@@ -1649,7 +1668,9 @@ FUDeclaration* InstantiateModule(String content,ModuleDef def,Arena* temp,Arena*
   FUInstance** outInTable = table->Get(STRING("out"));
   Assert(!outInTable);
 
-  return RegisterSubUnitBarebones(circuit,temp,temp2);
+  FUDeclaration* res = RegisterSubUnitBarebones(circuit,temp,temp2);
+  res->definitionArrays = PushArrayFromList(perm,allArrayDefinitons);
+  return res;
 }
 
 void Synchronize(Tokenizer* tok,BracketList<const char*> syncPoints){
@@ -1665,6 +1686,8 @@ void Synchronize(Tokenizer* tok,BracketList<const char*> syncPoints){
     tok->AdvancePeek();
   }
 }
+
+extern Pool<AddressGenDef> savedAddressGen; // REMOVE: Remove after proper implementation of AddressGen
 
 Array<TypeDefinition> ParseVersatSpecification(String content,Arena* out,Arena* temp){
   Tokenizer tokenizer = Tokenizer(content,".%=#[](){}+:;,*~-",{"->=","->",">><","><<",">>","<<","..","^="});
@@ -1699,6 +1722,15 @@ Array<TypeDefinition> ParseVersatSpecification(String content,Arena* out,Arena* 
         def.merge = mergeDef.value();
 
         *PushListElement(typeList) = def;
+      } else {
+        anyError = true;
+      }
+    } else if(CompareString(peek,"AddressGen")){
+      Opt<AddressGenDef> def = ParseAddressGen(tok,globalPermanent,temp);
+      
+      if(def.has_value()){
+        AddressGenDef* buffer = savedAddressGen.Alloc();
+        *buffer = def.value();
       } else {
         anyError = true;
       }
@@ -1773,5 +1805,635 @@ FUDeclaration* InstantiateSpecifications(String content,TypeDefinition def,Arena
   }
 
   return nullptr;
+}
+
+Opt<Array<Token>> ParseMultiplicationTerm(Tokenizer* tok,Arena* out,Arena* temp){
+  BLOCK_REGION(temp);
+
+  Token firstIdentifier = tok->NextToken();
+
+  // TODO: Can be identifier or a number.
+  //       Should have a CHECK_TERM function or a parse term function that parses identifier or numbers
+  //       Basically move the code in the instantiate function that checks if number or identifier to here
+  //       Or for now just keep things are they are
+  //CHECK_IDENTIFIER(firstIdentifier);
+
+  ArenaList<Token>* identifiers = PushArenaList<Token>(temp);
+  *identifiers->PushElem() = firstIdentifier;
+  while(!tok->Done()){
+    Token peek = tok->PeekToken();
+
+    if(CompareString(peek,"*")){
+      tok->AdvancePeek();
+      Token followingIdentifier = tok->NextToken();
+      
+      *identifiers->PushElem() = followingIdentifier;
+    } else {
+      break;
+    }
+  }
+
+  Array<Token> res = PushArrayFromList(out,identifiers);
+  return res;
+}
+
+Opt<Array<Array<Token>>> ParseAddressGenExpression(Tokenizer* tok,Arena* out,Arena* temp){
+  BLOCK_REGION(temp);
+  Opt<Array<Token>> firstTerm = ParseMultiplicationTerm(tok,out,temp);
+  PROPAGATE(firstTerm);
+
+  ArenaList<Array<Token>>* terms = PushArenaList<Array<Token>>(temp);
+  *terms->PushElem() = firstTerm.value();
+  while(!tok->Done()){
+    Token peek = tok->PeekToken();
+
+    if(CompareString(peek,"+")){
+      tok->AdvancePeek();
+
+      Opt<Array<Token>> followingTerms = ParseMultiplicationTerm(tok,out,temp);
+      PROPAGATE(followingTerms);
+
+      *terms->PushElem() = followingTerms.value();
+    } else {
+      break;
+    }
+  }
+
+  return PushArrayFromList(out,terms);
+}
+
+Opt<AddressGenDef> ParseAddressGen(Tokenizer* tok,Arena* out,Arena* temp){
+  EXPECT(tok,"AddressGen");
+
+  Token typeStr = tok->NextToken();
+
+  AddressGenType type;
+  if(CompareString(typeStr,"Mem")){
+    type = AddressGenType_MEM;
+  } else if(CompareString(typeStr,"VReadLoad")){
+    type = AddressGenType_VREAD_LOAD;
+  } else if(CompareString(typeStr,"VReadOutput")){
+    type = AddressGenType_VREAD_OUTPUT;
+  } else if(CompareString(typeStr,"VWriteInput")){
+    type = AddressGenType_VWRITE_INPUT;
+  } else if(CompareString(typeStr,"VWriteStore")){
+    type = AddressGenType_VWRITE_STORE;
+  }
+
+  Token name = tok->NextToken();
+  CHECK_IDENTIFIER(name);
+
+  Array<Token> inputsArr = {};
+  if(tok->IfNextToken("(")){
+    ArenaList<Token>* inputs = PushArenaList<Token>(temp);
+
+    while(!tok->Done()){
+      Token name = tok->NextToken();
+      CHECK_IDENTIFIER(name);
+      *inputs->PushElem() = name;
+      
+      if(tok->IfNextToken(",")){
+        continue;
+      } else {
+        break;
+      }
+    }
+
+    inputsArr = PushArrayFromList(out,inputs);
+    EXPECT(tok,")");
+  }
+
+  ArenaList<AddressGenForDef>* loops = PushArenaList<AddressGenForDef>(temp);
+  Array<Array<Token>> expression = {};
+  Array<Array<Token>> internalExpression = {};
+  Array<Array<Token>> externalExpression = {};
+  Token externalName = {};
+  while(!tok->Done()){
+    Token construct = tok->NextToken();
+    if(CompareString(construct,"for")){
+
+      Token loopVariable = tok->NextToken();
+      CHECK_IDENTIFIER(loopVariable);
+
+      Token start = tok->NextToken();
+      EXPECT(tok,"..");
+      Token end = tok->NextToken();
+
+      *loops->PushElem() = (AddressGenForDef){.loopVariable = loopVariable,.start = start,.end = end};
+    } else if(CompareString(construct,"addr")){
+      EXPECT(tok,"=");
+
+      auto expressionOpt = ParseAddressGenExpression(tok,out,temp);
+      PROPAGATE(expressionOpt);
+      expression = expressionOpt.value();
+        
+      EXPECT(tok,";");
+      break;
+    } else {
+      PRINT_STRING(construct);
+        
+      EXPECT(tok,"[");
+      auto expressionOpt = ParseAddressGenExpression(tok,out,temp);
+      EXPECT(tok,"]");
+
+      EXPECT(tok,"=");
+      Token other = tok->NextToken();
+
+      EXPECT(tok,"[");
+      auto expressionOpt2 = ParseAddressGenExpression(tok,out,temp);
+      EXPECT(tok,"]");
+
+      EXPECT(tok,";");
+
+      if(CompareString(construct,"mem")){
+        internalExpression = expressionOpt.value();
+        externalExpression = expressionOpt2.value();
+        externalName = PushString(out,other);
+      } else {
+        internalExpression = expressionOpt2.value();
+        externalExpression = expressionOpt.value();
+        externalName = PushString(out,construct);
+      }
+      
+      break;
+    }
+  }
+
+  // TODO: The whole thing is a bit hackish.
+  AddressGenDef def = {};
+  def.inputs = inputsArr;
+  def.loops = PushArrayFromList(out,loops);
+  def.sumOfMultiplications = expression;
+  def.type = type;
+  def.name = name;
+  def.internalExpression = internalExpression;
+  def.externalExpression = externalExpression;
+  def.externalName = externalName;
+  
+  return def;
+}
+
+String InstantiateAddressGen(AddressGenDef def,Arena* out,Arena* temp){
+  STACK_ARENA(temp2Inst,Kilobyte(4));
+  Arena* temp2 = &temp2Inst;
+
+  TrieSet<Token>* constants = PushTrieSet<Token>(temp);
+  TrieSet<Token>* loopVariables = PushTrieSet<Token>(temp);
+  
+  for(Token t : def.inputs){
+    constants->Insert(t);
+  }
+  
+  for(AddressGenForDef d : def.loops){
+    loopVariables->Insert(d.loopVariable);
+  }
+
+  Array<AddressGenFor> loops = PushArray<AddressGenFor>(temp,def.loops.size); 
+  for(int i = 0; i < def.loops.size; i++){
+    AddressGenForDef d = def.loops[i];
+
+    AddressGenFor result = {};
+    result.loopVariable = d.loopVariable;
+    if(d.start.size > 0 && IsNum(d.start[0])){
+      result.start.isId = false;
+      result.start.number = ParseInt(d.start);
+    } else {
+      result.start.isId = true;
+      result.start.identifier = d.start;
+    }
+
+    if(d.end.size > 0 && IsNum(d.end[0])){
+      result.end.isId = false;
+      result.end.number = ParseInt(d.end);
+    } else {
+      result.end.isId = true;
+      result.end.identifier = d.end;
+    }
+
+    loops[i] = result;
+  }
+
+  auto ProcessTerms = [](Array<Array<Token>> tokenTerms,TrieSet<Token>* loopVariables,TrieSet<Token>* constants,Arena* out,Arena* temp) -> Array<AddressGenTerm> {
+    if(tokenTerms.size == 0){
+      return {};
+    }
+    
+    Array<AddressGenTerm> terms = PushArray<AddressGenTerm>(temp,tokenTerms.size); 
+    for(int i = 0; i < tokenTerms.size; i++){
+      Array<Token> termDef = tokenTerms[i];
+      GrowableArray<Token> consts = StartGrowableArray<Token>(out);
+
+      Opt<Token> loopVariable = {};
+      for(Token t : termDef){
+        bool isLoopVariable = loopVariables->Exists(t);
+        bool isConstant = constants->Exists(t);
+      
+        if(isLoopVariable){
+          Assert(!isConstant); // TODO: Proper error handling
+          Assert(!loopVariable.has_value()); // TODO: Proper error handling, cannot handle polynomials of higher order than 1
+
+          loopVariable = t;
+        } else if(isConstant){
+          *consts.PushElem() = t;
+        } else {
+          Assert(t.size > 0 && IsNum(t[0]));
+          *consts.PushElem() = t;
+        
+          //Assert(false); // TODO
+        }
+
+        //Assert(loopVariable.has_value()); // TODO: Technically we do not need a loop variable in every term. But we probably do need to group every single term that does not depend on a loop variable. Kinda. Still do not know enough to be sure of what we need right now.
+      }
+
+      if(loopVariable.has_value()){
+        terms[i] = (AddressGenTerm){.loopVariable=loopVariable.value(),.constants = EndArray(consts)};
+      } else {
+        // TODO: Proper handling of free terms. Should collapse them into a single member or something
+        terms[i] = (AddressGenTerm){.loopVariable={},.constants = EndArray(consts)};
+      }
+    }
+
+    return terms;
+  };
+  
+  Array<AddressGenTerm> terms = ProcessTerms(def.sumOfMultiplications,loopVariables,constants,out,temp);
+  Array<AddressGenTerm> internalTerms = ProcessTerms(def.internalExpression,loopVariables,constants,temp,temp2);
+  Array<AddressGenTerm> externalTerms = ProcessTerms(def.externalExpression,loopVariables,constants,temp,temp2);
+    
+  // First, how do we deal with values that do not begin at zero?.
+  //   If loop variables do not begin at zero, we must update start to reflect that.
+  // Simple for now, assume that every loop variable starts at zero.
+  // How do we handle terms without loop variables?
+  //   Collect them all and let the start be their expression.
+  // Simple for now, do not have non loop variable terms.
+  // Start with one loop and progress from there. Do not care about loop1/loop2/loop3 differences for now.
+
+  // Probably should have started with handling division and stuff like that. Now it is a bit harder to progress.
+
+  // I always do this. Instead of looking at the things that I want and start small, I just start by ignoring the
+  // stuff that I want and start "small" by ignoring that stuff.
+  // The first thing that I should have done is to have a way of representing the expressions that I want to represent , including negation, division, parenthesis and then have a good way of handling expressions.
+  // Now we are stuck with the fact that all the terms are just multiplications between themshelves, that parenthesis are not implemented and that we do not have an actual proper handling of expressions at the symbol level. ASUIDHOFIBAEby
+  // We can still get some compromise. Constants with divisions can be passed directly to the code
+  
+  //printf("\n\n\n\n");
+
+  auto GetRepr = [](IdOrNumber n,Arena* out){
+    if(n.isId){
+      return PushString(out,"%.*s",UNPACK_SS(n.identifier));
+    } else {
+      return PushString(out,"%d",n.number);
+    }
+  }; 
+  
+  auto Print = [](IdOrNumber n){
+    if(n.isId){
+      printf("%.*s",UNPACK_SS(n.identifier));
+    } else {
+      printf("%d",n.number);
+    }
+  };
+  
+  auto GetConstantValue = [](AddressGenTerm term,Arena* out) -> String{
+    if(!term.loopVariable.has_value()){
+      if(term.constants.size == 1){
+        return term.constants[0];
+      } else {
+        Assert(false); // TODO: What situation is this?
+      }
+    } else {
+      if(term.constants.size == 0){
+        return STRING("1");
+      } else {
+        auto builder = StartString(out);
+
+        bool first = true;
+        for(Token t : term.constants){
+          if(first){
+            PushString(out,"%.*s",UNPACK_SS(t));
+          } else {
+            PushString(out," * %.*s",UNPACK_SS(t));
+          }
+          first = false;
+        }
+
+        String res = EndString(builder);
+        return res;
+      }
+    }
+
+    return STRING("Not possible");
+  };
+
+  auto GetTermAssociatedToVariable = [](Array<AddressGenTerm> sumOfMultiplications,String loopVariable) -> AddressGenTerm*{
+    for(AddressGenTerm& t : sumOfMultiplications){
+      if(t.loopVariable.has_value() && CompareString(t.loopVariable.value(),loopVariable)){
+        return &t;
+      }
+    }
+
+    return nullptr;
+  };
+
+  auto GetLoopSizeRepr = [GetRepr](AddressGenFor f,Arena* out){
+    auto builder = StartString(out);
+
+    PushString(out,"(");
+    GetRepr(f.end,out);
+    PushString(out," - ");
+    GetRepr(f.start,out);
+    PushString(out,")");
+
+    return EndString(builder);
+  };
+
+  auto PrintLoopSizeRepr = [GetLoopSizeRepr](AddressGenFor f,Arena* temp){
+    BLOCK_REGION(temp);
+    String repr = GetLoopSizeRepr(f,temp);
+    printf("%.*s",UNPACK_SS(repr));
+  };
+
+  Reverse(loops);
+
+  // Inner most loop means that it is loop zero of the entire address gen.
+  // Only one loop can have that flag set and in consequence, have a duty value.
+  auto GenerateLoopExpressionPair = [GetRepr,GetTermAssociatedToVariable,GetLoopSizeRepr,GetConstantValue]
+    (Array<AddressGenFor> loops,Array<AddressGenTerm> terms,Arena* out,Arena* temp) -> Array<AddressGenLoopSpecificaton>{
+    Array<AddressGenLoopSpecificaton> result = PushArray<AddressGenLoopSpecificaton>(out,loops.size);
+
+    for(int i = 0; i < loops.size; i += 2){
+      if(i == 0){
+        result[0].dutyExpression = PushString(out,GetRepr(loops[0].end,temp));
+      }
+    
+      String firstEnd = {};
+      String firstIncrement = {};
+      if(i < loops.size){
+        AddressGenFor f = loops[i];
+        AddressGenLoopSpecificaton& res = result[i];
+        
+        AddressGenTerm* term = GetTermAssociatedToVariable(terms,f.loopVariable);
+        
+        res.isPeriodType = true;
+        res.iterationExpression = GetLoopSizeRepr(f,out);
+
+        if(term){
+          res.incrementExpression = GetConstantValue(*term,out);
+        } else {
+          res.incrementExpression = STRING("0");
+        }
+
+        firstEnd = GetRepr(f.end,out);
+        firstIncrement = res.incrementExpression;
+      };
+
+      if(i + 1 < loops.size){
+        AddressGenFor f = loops[i+1];
+        AddressGenLoopSpecificaton& res = result[i+1];
+
+        res.isPeriodType = false;
+        res.iterationExpression = GetLoopSizeRepr(f,out);
+        res.nonPeriodIncrement = firstIncrement;
+        res.nonPeriodEnd = firstEnd;
+        
+        AddressGenTerm* term = GetTermAssociatedToVariable(terms,f.loopVariable);
+        
+        if(term){
+          Assert(term);
+          String val = GetConstantValue(*term,out);
+
+          res.nonPeriodVal = val;
+          
+          res.incrementExpression = PushString(out,"-(%.*s*%.*s) + %.*s + %.*s",UNPACK_SS(firstIncrement),UNPACK_SS(firstEnd),UNPACK_SS(firstIncrement),UNPACK_SS(val));
+        } else {
+          res.incrementExpression = PushString(out,"-(%.*s*%.*s) + %.*s",UNPACK_SS(firstIncrement),UNPACK_SS(firstEnd),UNPACK_SS(firstIncrement)); // Instead of +1 it should be +increment of last loop
+        }
+      }
+    }
+
+    return result;
+  };
+
+  AddressGenTerm* constantTerm = nullptr;
+  for(AddressGenTerm& t : terms){
+    if(!t.loopVariable.has_value()){
+      constantTerm = &t;
+    }
+  }
+  
+  Array<AddressGenLoopSpecificaton> loopSpec = GenerateLoopExpressionPair(loops,terms,out,temp);
+  Array<AddressGenLoopSpecificaton> internalSpec = GenerateLoopExpressionPair(loops,internalTerms,out,temp);
+  Array<AddressGenLoopSpecificaton> externalSpec = GenerateLoopExpressionPair(loops,externalTerms,out,temp);
+  
+  auto builder = StartString(out);
+  
+  PushString(out,"#ifdef ADDRESS_GEN_%.*s\n",UNPACK_SS(def.name));
+  PushString(out,"static int LoopSize_%.*s(int temp",UNPACK_SS(def.name));
+  for(Token t : constants){
+    PushString(out,",int %.*s",UNPACK_SS(t));
+  }
+  PushString(out,"){\n");
+
+  PushString(out,"   return 1");
+  for(AddressGenFor f : loops){
+    String repr = GetLoopSizeRepr(f,temp);
+    PushString(out," * %.*s",UNPACK_SS(repr));
+    
+  }
+  PushString(out,";\n");
+  PushString(out,"}\n\n\n");
+
+  switch(def.type){
+  case AddressGenType_MEM:{
+    PushString(out,"static void Configure_%.*s(volatile Generator3Config* config",UNPACK_SS(def.name));
+    for(Token t : constants){
+      PushString(out,",int %.*s",UNPACK_SS(t));
+    }
+    PushString(out,"){\n");
+    
+    if(constantTerm){
+      PushString(out,"   config->start = %.*s",UNPACK_SS(constantTerm->constants[0]));
+    }
+    
+    for(int i = 0; i < loopSpec.size; i++){
+      AddressGenLoopSpecificaton l = loopSpec[i]; 
+
+      char loopIndex = (i / 2) == 0 ? ' ' : '1' + (i / 2);
+      
+      if(loopSpec[i].isPeriodType){
+        PushString(out,"   config->period%c = %.*s;\n",loopIndex,UNPACK_SS(l.iterationExpression));
+        PushString(out,"   config->incr%c = %.*s;\n",loopIndex,UNPACK_SS(l.incrementExpression));
+
+        if(!Empty(l.dutyExpression)){
+          PushString(out,"   config->duty = %.*s;\n",UNPACK_SS(l.dutyExpression));
+        }
+      } else {
+        PushString(out,"   config->iterations%c = %.*s;\n",loopIndex,UNPACK_SS(l.iterationExpression));
+        PushString(out,"   config->shift%c = %.*s;\n",loopIndex,UNPACK_SS(l.incrementExpression));
+
+        Assert(Empty(l.dutyExpression));
+      }
+    }
+  } break;
+  case AddressGenType_VREAD_LOAD:{
+    Assert(loopSpec.size < 3);
+    PushString(out,"static void Configure_%.*s(volatile VReadMultipleConfig* config",UNPACK_SS(def.name));
+
+    for(Token t : constants){
+      if(CompareString(t,"ext")){
+        PushString(out,",iptr %.*s",UNPACK_SS(t));
+      } else {
+        PushString(out,",int %.*s",UNPACK_SS(t));
+      }
+    }
+    PushString(out,"){\n");
+
+    Assert(!Empty(def.externalName)); // TODO: Probably a parser error or something. Weird to see it here
+    PushString(out,"   config->ext_addr = %.*s;\n",UNPACK_SS(def.externalName));
+    
+    for(int i = 0; i < internalSpec.size; i++){
+      AddressGenLoopSpecificaton in = internalSpec[i]; 
+
+      if(loopSpec[i].isPeriodType){
+        PushString(out,"   config->read_per = %.*s;\n",UNPACK_SS(in.iterationExpression));
+        PushString(out,"   config->read_incr = %.*s;\n",UNPACK_SS(in.incrementExpression));
+
+        if(i == 0){
+          PushString(out,"   config->read_duty = %.*s;\n",UNPACK_SS(in.iterationExpression));
+        }
+      } else {
+        PushString(out,"   config->read_iter = %.*s;\n",UNPACK_SS(in.iterationExpression));
+        PushString(out,"   config->read_shift = %.*s;\n",UNPACK_SS(in.incrementExpression));
+      }
+    }
+
+    //for(int i = 0; i < externalSpec.size; i++){
+    AddressGenLoopSpecificaton ext0 = externalSpec[0];
+    AddressGenLoopSpecificaton ext = externalSpec[1];
+      
+    PushString(out,"   config->read_amount_minus_one = (%.*s) - 1;\n",UNPACK_SS(ext.iterationExpression));
+    PushString(out,"   config->read_addr_shift = %.*s;\n",UNPACK_SS(ext.nonPeriodVal));
+    PushString(out,"   config->read_length = %.*s * sizeof(float);\n",UNPACK_SS(ext0.iterationExpression));
+    
+    //Assert(Empty(ext.dutyExpression));
+    //}
+  } break;
+
+  case AddressGenType_VREAD_OUTPUT:{
+    // TODO: Basically a copy of MEM but with the different named signals, since MEM has slight differences in naming conventions.
+    PushString(out,"static void Configure_%.*s(volatile VReadMultipleConfig* config",UNPACK_SS(def.name));
+    for(Token t : constants){
+      PushString(out,",int %.*s",UNPACK_SS(t));
+    }
+    PushString(out,"){\n");
+    
+    if(constantTerm){
+      PushString(out,"   config->output_start = %.*s",UNPACK_SS(constantTerm->constants[0]));
+    }
+    
+    for(int i = 0; i < loopSpec.size; i++){
+      AddressGenLoopSpecificaton l = loopSpec[i]; 
+
+      char loopIndex = (i / 2) == 0 ? ' ' : '1' + (i / 2);
+      
+      if(loopSpec[i].isPeriodType){
+        PushString(out,"   config->output_per%c = %.*s;\n",loopIndex,UNPACK_SS(l.iterationExpression));
+        PushString(out,"   config->output_incr%c = %.*s;\n",loopIndex,UNPACK_SS(l.incrementExpression));
+
+        if(!Empty(l.dutyExpression)){
+          PushString(out,"   config->output_duty = %.*s;\n",UNPACK_SS(l.dutyExpression));
+        }
+      } else {
+        PushString(out,"   config->output_iter%c = %.*s;\n",loopIndex,UNPACK_SS(l.iterationExpression));
+        PushString(out,"   config->output_shift%c = %.*s;\n",loopIndex,UNPACK_SS(l.incrementExpression));
+
+        Assert(Empty(l.dutyExpression));
+      }
+    }
+  } break;
+
+  case AddressGenType_VWRITE_INPUT:{
+    // TODO: Basically a copy of VREAD_OUTPUT and MEM but with the different named signals, since MEM has slight differences in naming conventions.
+    PushString(out,"static void Configure_%.*s(volatile VWriteMultipleConfig* config",UNPACK_SS(def.name));
+    for(Token t : constants){
+      PushString(out,",int %.*s",UNPACK_SS(t));
+    }
+    PushString(out,"){\n");
+    
+    if(constantTerm){
+      PushString(out,"   config->input_start = %.*s",UNPACK_SS(constantTerm->constants[0]));
+    }
+    
+    for(int i = 0; i < loopSpec.size; i++){
+      AddressGenLoopSpecificaton l = loopSpec[i]; 
+
+      char loopIndex = (i / 2) == 0 ? ' ' : '1' + (i / 2);
+      
+      if(loopSpec[i].isPeriodType){
+        PushString(out,"   config->input_per%c = %.*s;\n",loopIndex,UNPACK_SS(l.iterationExpression));
+        PushString(out,"   config->input_incr%c = %.*s;\n",loopIndex,UNPACK_SS(l.incrementExpression));
+
+        if(!Empty(l.dutyExpression)){
+          PushString(out,"   config->input_duty = %.*s;\n",UNPACK_SS(l.dutyExpression));
+        }
+      } else {
+        PushString(out,"   config->input_iter%c = %.*s;\n",loopIndex,UNPACK_SS(l.iterationExpression));
+        PushString(out,"   config->input_shift%c = %.*s;\n",loopIndex,UNPACK_SS(l.incrementExpression));
+
+        Assert(Empty(l.dutyExpression));
+      }
+    }
+  } break;
+
+  case AddressGenType_VWRITE_STORE:{
+    Assert(loopSpec.size < 3);
+    PushString(out,"static void Configure_%.*s(volatile VWriteMultipleConfig* config",UNPACK_SS(def.name));
+
+    for(Token t : constants){
+      if(CompareString(t,"ext")){
+        PushString(out,",iptr %.*s",UNPACK_SS(t));
+      } else {
+        PushString(out,",int %.*s",UNPACK_SS(t));
+      }
+    }
+    PushString(out,"){\n");
+
+    Assert(!Empty(def.externalName)); // TODO: Probably a parser error or something. Weird to see it here
+    PushString(out,"   config->ext_addr = %.*s;\n",UNPACK_SS(def.externalName));
+    
+    for(int i = 0; i < internalSpec.size; i++){
+      AddressGenLoopSpecificaton in = internalSpec[i]; 
+
+      if(loopSpec[i].isPeriodType){
+        PushString(out,"   config->write_per = %.*s;\n",UNPACK_SS(in.iterationExpression));
+        PushString(out,"   config->write_incr = %.*s;\n",UNPACK_SS(in.incrementExpression));
+
+        if(i == 0){
+          PushString(out,"   config->write_duty = %.*s;\n",UNPACK_SS(in.iterationExpression));
+        }
+      } else {
+        PushString(out,"   config->write_iter = %.*s;\n",UNPACK_SS(in.iterationExpression));
+        PushString(out,"   config->write_shift = %.*s;\n",UNPACK_SS(in.incrementExpression));
+      }
+    }
+
+    //for(int i = 0; i < externalSpec.size; i++){
+    AddressGenLoopSpecificaton ext0 = externalSpec[0];
+    AddressGenLoopSpecificaton ext = externalSpec[1];
+      
+    PushString(out,"   config->write_amount_minus_one = (%.*s) - 1;\n",UNPACK_SS(ext.iterationExpression));
+    PushString(out,"   config->write_addr_shift = %.*s;\n",UNPACK_SS(ext.nonPeriodVal));
+    PushString(out,"   config->write_length = %.*s * sizeof(float);\n",UNPACK_SS(ext0.iterationExpression));
+    
+    //Assert(Empty(ext.dutyExpression));
+    //}
+  } break;
+
+  }
+  PushString(out,"}\n");
+  
+  PushString(out,"#endif // ADDRESS_GEN_%.*s\n\n",UNPACK_SS(def.name));
+  
+  return EndString(builder);
 }
 

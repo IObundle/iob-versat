@@ -57,20 +57,6 @@ typedef struct {
 
 #{end}
 
-typedef struct{
-#{for elem structuredConfigs}
-#{if elem.typeAndNames.size > 1}
-  union{
-#{for typeAndName elem.typeAndNames}
-    @{typeAndName.type} @{typeAndName.name};
-#{end}
-  };
-#{else}
-  @{elem.typeAndNames[0].type} @{elem.typeAndNames[0].name};
-#{end}
-#{end}
-} AcceleratorConfig;
-
 typedef struct {
 #{for elem allStatics}
   iptr @{elem.name};
@@ -87,12 +73,6 @@ typedef struct {
     iptr delays[@{delays}]; 
   };
 } AcceleratorDelay;
-
-typedef struct{
-#{for name namedStates}
-  int @{name};
-#{end}
-} AcceleratorState;
 
 static const int memMappedStart = @{memoryMappedBase |> Hex};
 static const int versatAddressSpace = 2 * @{memoryMappedBase |> Hex};
@@ -158,6 +138,8 @@ static const int delayStart = @{(nConfigs + nStatics) |> Hex} * sizeof(iptr);
 static const int configStart = @{versatConfig |> Hex} * sizeof(iptr);
 static const int stateStart = @{versatState |> Hex} * sizeof(int);
 
+static const unsigned int AcceleratorConfigSize = sizeof(@{accelName}Config);
+
 #{if nConfigs > 0}
 extern volatile @{accelName}Config* accelConfig; // @{nConfigs}
 #{end}
@@ -166,7 +148,7 @@ extern volatile @{accelName}Config* accelConfig; // @{nConfigs}
 extern volatile @{accelName}State* accelState; // @{nStates}
 #{end}
 
-extern volatile AcceleratorStatic* accelStatics;
+extern volatile AcceleratorStatic* accelStatic;
 
 #{if isSimple}
 // Simple input and output connection for simple accelerators
@@ -174,28 +156,6 @@ extern volatile AcceleratorStatic* accelStatics;
 #define NumberSimpleOutputs @{simpleOutputs}
 #define SimpleInputStart ((iptr*) accelConfig)
 #define SimpleOutputStart ((int*) accelState)
-#{end}
-
-#{for elem structuredConfigs}
-#{if elem.typeAndNames.size > 1}
-#{for typeAndName elem.typeAndNames}
-#define ACCEL_@{typeAndName.name} ((AcceleratorConfig*) accelConfig)->@{typeAndName.name}
-#{end}
-#{else}
-#define ACCEL_@{elem.typeAndNames[0].name} ((AcceleratorConfig*) accelConfig)->@{elem.typeAndNames[0].name}
-#{end}
-#{end}
-
-#{for elem allStatics}
-#define ACCEL_@{elem.name} accelStatics->@{elem.name}
-#{end}
-
-#{for i delays}
-#define ACCEL_TOP_Delay@{i} ((AcceleratorConfig*) accelConfig)->TOP_Delay@{i}
-#{end}
-
-#{for name namedStates}
-#define ACCEL_@{name} ((AcceleratorState*) accelState)->@{name}
 #{end}
 
 #{if mergeNames.size > 1}
@@ -270,6 +230,10 @@ static inline void ActivateMergedAccelerator(MergeType type){
 }
 #endif
 
+#{end}
+
+#{for a addrGen}
+@{a}
 #{end}
 
 #endif // INCLUDED_VERSAT_ACCELERATOR_HEADER
