@@ -9,8 +9,8 @@ enum SymbolicExpressionType{
   SymbolicExpressionType_LITERAL,
   SymbolicExpressionType_VARIABLE,
   SymbolicExpressionType_OP,
-  SymbolicExpressionType_ARRAY
-}; 
+  SymbolicExpressionType_ARRAY // Arrays are mostly 1-to-1 parenthesis in an equation. Not true but its easier to think this way
+};
 
 struct SymbolicExpression{
   SymbolicExpressionType type;
@@ -20,17 +20,23 @@ struct SymbolicExpression{
   String variable;
   SymbolicExpression* left;
   SymbolicExpression* right;
+  bool negative;
   char op; // Used by both OP and ARRAY
   Array<SymbolicExpression*> sum;
 };
 
-void Print(SymbolicExpression* expr);
-SymbolicExpression* ParseSymbolicExpression(Tokenizer* tok,Arena* out,Arena* temp);
-SymbolicExpression* ApplyIdentity(SymbolicExpression* expr,Arena* out,Arena* temp);
+void Print(SymbolicExpression* expr,bool top = true);
 
+SymbolicExpression* ParseSymbolicExpression(Tokenizer* tok,Arena* out,Arena* temp);
+SymbolicExpression* NormalizeLiterals(SymbolicExpression* expr,Arena* out,Arena* temp);
+SymbolicExpression* RemoveParenthesis(SymbolicExpression* expr,Arena* out,Arena* temp);
 // This function does not allocate new nodes unless it has to.
 // Meaning that memory associated to expr must be kept valid as well as the memory for the return of this function
+SymbolicExpression* CollectTerms(SymbolicExpression* expr,Arena* out,Arena* temp);
 SymbolicExpression* ApplyDistributivity(SymbolicExpression* expr,Arena* out,Arena* temp);
+SymbolicExpression* ApplySimilarTermsAddition(SymbolicExpression* expr,Arena* out,Arena* temp);
+
+SymbolicExpression* Normalize(SymbolicExpression* expr,Arena* out,Arena* temp);
 
 /*
   For now, we store additions in a array and everything else in a AST like format.

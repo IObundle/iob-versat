@@ -307,6 +307,18 @@ Hashmap<T,P>* PushHashmapFromList(Arena* out,ArenaList<Pair<T,P>>* list){
 }
 
 template<typename T>
+bool Empty(ArenaList<T>* list){
+  bool empty = (list->head == nullptr);
+  return empty;
+}
+
+template<typename T>
+bool OnlyOneElement(ArenaList<T>* list){
+  bool onlyOne = (list->head != nullptr && list->head == list->tail);
+  return onlyOne;
+}
+
+template<typename T>
 Array<T> PushArrayFromList(Arena* out,ArenaList<T>* list){
   DynamicArray<T> arr = StartArray<T>(out);
 

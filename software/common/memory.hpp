@@ -708,6 +708,7 @@ template<typename T> T* DynamicArray<T>::PushElem(){
 }
 
 template<typename T> Array<T> EndArray(DynamicArray<T> arr){
+  // TODO: Put a check here that memory inside arena is as expected
   return arr.AsArray();
 }
 
