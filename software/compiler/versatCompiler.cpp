@@ -426,6 +426,8 @@ struct argp_option options[] =
     { 0 }
   };
 
+#include "symbolic.hpp"
+
 int main(int argc,char* argv[]){
   InitDebug();
   
@@ -435,6 +437,39 @@ int main(int argc,char* argv[]){
   Arena* temp = &tempInst;
   Arena temp2Inst = InitArena(Megabyte(128));
   Arena* temp2 = &temp2Inst;
+
+  //String content = STRING("a+b");
+  //String content = STRING("a+b+c+d");
+  //String content = STRING("a * (x + y)");
+  //String content = STRING("(x-y) * a");
+  //String content = STRING("a*b*c");
+  String content = STRING("2 * a * (x + y) * (a + b) + 2 * x / 10 + (x + y) / (x - y) + 4 * x * y + 1 + 2 + 3 + 4");
+
+  Tokenizer tok(content,"",{});
+  
+  //Tokenizer tok(STRING("(a-b) * (x-y)"),"",{});
+  //Tokenizer tok(STRING("2 * a * (x + y) + 2 * x / 10 + (x + y) / (x - y) + 4 * x * y + 1 + 2 + 3 + 4"),"",{});
+  SymbolicExpression* res = ParseSymbolicExpression(&tok,temp,temp2);
+
+  auto Check = [](SymbolicExpression* r){
+    if(r){
+      Print(r);
+      printf("\n");
+    } else {
+      printf("Error, res is nullptr\n\n\n");
+    }
+  };
+
+  Check(res);
+ 
+#if 1
+  DEBUG_BREAK();
+  SymbolicExpression* res2 = ApplyDistributivity(res,temp,temp2);
+  Check(res2);
+#endif
+  
+  return 0;
+
   
   argp argp = { options, parse_opt, "SpecFile", "Dataflow to accelerator compiler. Check tutorial in https://github.com/IObundle/iob-versat to learn how to write a specification file"};
 

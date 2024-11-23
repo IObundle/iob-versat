@@ -81,8 +81,7 @@ String PushFile(Arena* arena,FILE* file);
 String PushFile(Arena* arena,String filepath);
 String PushFile(Arena* arena,const char* filepath);
 
-class ArenaMarker{
-public:
+struct ArenaMarker{
   ArenaMark mark;
   
   ArenaMarker(Arena* arena){this->mark = MarkArena(arena);};
@@ -93,7 +92,7 @@ public:
 
 #define __marker(LINE) marker_ ## LINE
 #define _marker(LINE) __marker( LINE )
-#define BLOCK_REGION(ARENA) ArenaMarker _marker(__LINE__)(ARENA);
+#define BLOCK_REGION(ARENA) ArenaMarker _marker(__LINE__)(ARENA)
 
 #define region(ARENA) if(ArenaMarker _marker(__LINE__){ARENA})
 

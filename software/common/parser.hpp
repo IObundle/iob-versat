@@ -8,6 +8,7 @@
 #include "type.hpp"
 
 struct Command;
+struct Tokenizer;
 
 // TODO: The entire code base reuses "Expression" in a lot of different situations while in reality every single Expression should be unique for the given file/module. 
 struct Expression{
@@ -179,6 +180,16 @@ float ParseFloat(String str);
 bool IsNum(char ch);
 
 TokenizerTemplate* CreateTokenizerTemplate(Arena* out,const char* singleChars,BracketList<const char*> specialChars);
+
+struct TemplateMarker{
+  TokenizerTemplate* previousTemplate;
+  Tokenizer* tok;
+
+  TemplateMarker(Tokenizer* tok,TokenizerTemplate* newTemplate){this->tok = tok; previousTemplate = tok->SetTemplate(newTemplate);};
+  ~TemplateMarker(){tok->SetTemplate(previousTemplate);};
+}; 
+
+#define TOKENIZER_REGION(TOK,TMPL) TemplateMarker _marker(__LINE__)(TOK,TMPL)
 
 /* Generic expression parser. The ExpressionType struct needs to have the following members with the following types:
      Array<ExpressionType> expressions;

@@ -2328,7 +2328,7 @@ String InstantiateAddressGen(AddressGenDef def,Arena* out,Arena* temp){
     PushString(out,"){\n");
     
     if(constantTerm){
-      PushString(out,"   config->output_start = %.*s",UNPACK_SS(constantTerm->constants[0]));
+      PushString(out,"   config->output_start = %.*s;\n",UNPACK_SS(constantTerm->constants[0]));
     }
     
     for(int i = 0; i < loopSpec.size; i++){
