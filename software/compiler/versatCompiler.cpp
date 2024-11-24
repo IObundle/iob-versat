@@ -438,6 +438,15 @@ int main(int argc,char* argv[]){
   Arena temp2Inst = InitArena(Megabyte(128));
   Arena* temp2 = &temp2Inst;
 
+#if 0
+  // TODO: Symbolic expressions are robust enough to allow us to start using them in the AddressGen code.
+  //       The biggest source of problems is division which I do not expect to need to use for the majority of the
+  //       AddressGen code. If needed, get an actual real world example and start from there implementing the things
+  //       that we want.
+  //
+  //       Regardless, move some of this code to an internal testing area of Versat. It is nice to have some examples
+  //       with some expected outputs working or close to working if we find ourselves back at this code again.
+  
   //String content = STRING("a-a-b-b-2*c - c");
   //String content = STRING("a+a+b+b+2*c + c");
   //String content = STRING("-a-b-(a-b)-(-a+b)-(-(a-b)-(-a+b)+(a-b) + (-a+b))");
@@ -494,7 +503,7 @@ int main(int argc,char* argv[]){
 #endif
   
   return 0;
-
+#endif
   
   argp argp = { options, parse_opt, "SpecFile", "Dataflow to accelerator compiler. Check tutorial in https://github.com/IObundle/iob-versat to learn how to write a specification file"};
 
