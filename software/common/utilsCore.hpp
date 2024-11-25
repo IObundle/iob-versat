@@ -209,6 +209,37 @@ struct Opt{
   T value_or(T other){return hasVal ? val : other;};
 }; 
 
+#if 0
+// Optimized Opt for pointers, but not tested yet and test benchs not currently working.
+// 
+template<typename T>
+struct Opt<T*>{
+  T* val;
+
+  Opt():val(nullptr){};
+  Opt(std::nullopt_t):val(nullptr){};
+  Opt(T* t):val(t){};
+
+  Opt<T>& operator=(T& t){
+    val = t;
+    return *this;
+  };
+
+  Opt<T>& operator=(std::nullopt_t){
+    val = nullptr;
+    return *this;
+  };
+
+  bool operator!(){return !val;};
+
+  // Match the std interface to make it easier to replace if needed
+  bool has_value(){return (val != nullptr);};
+  T& value() & {assert(val);return val;};
+  T&& value() && {assert(val);return std::move(val);};
+  T value_or(T other){return this->has_value() ? val : other;};
+};
+#endif
+
 //template<typename T>
 //using Opt = std::optional<T>;
 #define PROPAGATE(OPTIONAL) if(!(OPTIONAL).has_value()){return {};}

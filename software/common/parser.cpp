@@ -333,7 +333,7 @@ void Tokenizer::AdvanceRemainingLine(){
     lineEnd += 1;
   }
 
-  this->ptr = lineEnd;
+  this->ptr = lineEnd + 1;
   this->amountStoredTokens = 0;
 }
 

@@ -455,22 +455,23 @@ int main(int argc,char* argv[]){
   //String content = STRING("a*b + a*b + 2*a*b"); //-> 4 * a * b
 
   //String content = STRING("1+2+3+1*20*30");
-  
+
+  //String content = STRING("1 * 2");
   //String content = STRING("a+b+a-b");
   //String content = STRING("a+b+c+d");
   //String content = STRING("a * (x + y)");
   //String content = STRING("(x-y) * a");
   //String content = STRING("a*b*c");
-
+  //String content = STRING("(x-y)");
+  
   String content = STRING("2 * a * (x + y) * (a + b) + 2 * x / 10 + (x + y) / (x - y) + 4 * x * y + 1 + 2 + 3 + 4");
-
+  
   Tokenizer tok(content,"",{});
   SymbolicExpression* res = ParseSymbolicExpression(&tok,temp,temp2);
 
   auto Check = [](SymbolicExpression* r){
     if(r){
       Print(r);
-      printf("\n");
     } else {
       printf("Error, res is nullptr\n\n\n");
     }
@@ -493,10 +494,20 @@ int main(int argc,char* argv[]){
 #if 0
   DEBUG_BREAK();
   SymbolicExpression* res2 = ApplySimilarTermsAddition(res,temp,temp2);
+  SymbolicExpression* normalized = Normalize(res2,temp,temp2);
   Check(res2);
 #endif
+
+#if 0
+  DEBUG_BREAK();
+  //SymbolicExpression* res2 = Normalize(res,temp,temp2);
+  SymbolicExpression* res3 = Derivate(res,STRING("a"),temp,temp2);
+  SymbolicExpression* normalized = Normalize(res3,temp,temp2);
+  Check(res3);
+  Check(normalized);
+#endif
   
-#if 1
+#if 0
   DEBUG_BREAK();
   SymbolicExpression* res2 = Normalize(res,temp,temp2);
   Check(res2);

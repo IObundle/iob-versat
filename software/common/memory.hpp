@@ -138,6 +138,8 @@ struct DynamicArray{
   
   Array<T> AsArray();
   T* PushElem();
+  void PushArray(Array<T> arr);
+  
 };
 
 template<typename T>
@@ -698,7 +700,10 @@ template<typename T> Array<T> DynamicArray<T>::AsArray(){
 }
 
 template<typename T> T* DynamicArray<T>::PushElem(){
-  Assert(nextExpectedAddress == PushBytes(this->mark.arena,0));
+  if(nextExpectedAddress != PushBytes(this->mark.arena,0)){
+    printf("Error, Arena associated to dynamic array was changed before Array was finished\n");
+    Assert(nextExpectedAddress == PushBytes(this->mark.arena,0));
+  };
   
   T* res = PushStruct<T>(this->mark.arena);
 
@@ -707,8 +712,18 @@ template<typename T> T* DynamicArray<T>::PushElem(){
   return res;
 }
 
+template<typename T> void DynamicArray<T>::PushArray(Array<T> arr){
+  for(int i = 0; i < arr.size; i++){
+    *PushElem() = arr[i];
+  }
+}
+
 template<typename T> Array<T> EndArray(DynamicArray<T> arr){
-  // TODO: Put a check here that memory inside arena is as expected
+  if(arr.nextExpectedAddress != PushBytes(arr.mark.arena,0)){
+    printf("Error, Arena associated to dynamic array was changed before Array was finished\n");
+    Assert(arr.nextExpectedAddress == PushBytes(arr.mark.arena,0));
+  };
+
   return arr.AsArray();
 }
 

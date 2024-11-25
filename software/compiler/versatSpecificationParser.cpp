@@ -10,6 +10,7 @@
 #include "declaration.hpp"
 #include "globals.hpp"
 #include "memory.hpp"
+#include "symbolic.hpp"
 #include "type.hpp"
 #include "utils.hpp"
 #include "utilsCore.hpp"
@@ -1904,6 +1905,7 @@ Opt<AddressGenDef> ParseAddressGen(Tokenizer* tok,Arena* out,Arena* temp){
   }
 
   ArenaList<AddressGenForDef>* loops = PushArenaList<AddressGenForDef>(temp);
+  SymbolicExpression* symbolic = nullptr;
   Array<Array<Token>> expression = {};
   Array<Array<Token>> internalExpression = {};
   Array<Array<Token>> externalExpression = {};
@@ -1923,10 +1925,20 @@ Opt<AddressGenDef> ParseAddressGen(Tokenizer* tok,Arena* out,Arena* temp){
     } else if(CompareString(construct,"addr")){
       EXPECT(tok,"=");
 
+      auto mark = tok->Mark();
       auto expressionOpt = ParseAddressGenExpression(tok,out,temp);
+      tok->Rollback(mark);
+      auto symbolicExpression = ParseSymbolicExpression(tok,out,temp);
+      
       PROPAGATE(expressionOpt);
+      PROPAGATE_POINTER_OPT(symbolicExpression);
+
+      Print(symbolicExpression);
+      printf("\n");
+      
       expression = expressionOpt.value();
-        
+      symbolic = symbolicExpression;
+      
       EXPECT(tok,";");
       break;
     } else {
@@ -1969,6 +1981,7 @@ Opt<AddressGenDef> ParseAddressGen(Tokenizer* tok,Arena* out,Arena* temp){
   def.internalExpression = internalExpression;
   def.externalExpression = externalExpression;
   def.externalName = externalName;
+  def.symbolic = symbolic;
   
   return def;
 }

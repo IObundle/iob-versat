@@ -256,7 +256,7 @@ static Array<Location> CollectStackTrace(Arena* out,Arena* temp){
     tok.AdvancePeekBad(line);
     
     String functionName = line;
-
+    
     Opt<Token> token = tok.NextFindUntil(":");
 
     Assert(token.has_value());
@@ -266,11 +266,6 @@ static Array<Location> CollectStackTrace(Arena* out,Arena* temp){
     Token lineString = tok.NextToken();
 
     tok.AdvanceRemainingLine();
-    //line = tok.PeekRemainingLine();
-    //tok.AdvancePeekBad(line);
-    //printf("FN: %.*s\n",UNPACK_SS(functionName));
-    //printf("fN: %.*s\n",UNPACK_SS(fileName));
-    //printf("ls: %.*s\n",UNPACK_SS(lineString));
     if(CompareString(functionName,"??") || CompareString(fileName,"??") || CompareString(lineString,"?")){
       continue;
     }

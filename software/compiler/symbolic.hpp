@@ -8,8 +8,8 @@ struct Arena;
 enum SymbolicExpressionType{
   SymbolicExpressionType_LITERAL,
   SymbolicExpressionType_VARIABLE,
-  SymbolicExpressionType_OP,
-  SymbolicExpressionType_ARRAY // Arrays are mostly 1-to-1 parenthesis in an equation. Not true but its easier to think this way
+  SymbolicExpressionType_OP, // For now this is only div. addition and multiply use ARRAY and sub does not exist.
+  SymbolicExpressionType_ARRAY // Arrays are for + and *. Since they are commutative, easier to handle them in an array setting. 
 };
 
 struct SymbolicExpression{
@@ -25,6 +25,20 @@ struct SymbolicExpression{
   Array<SymbolicExpression*> sum;
 };
 
+// TODO: It might be better to replace all the multiplications with something based on this approach.
+//       It is nice to only have a place to store negation (inside the literal).
+//       The only problem is the interaction with DIV.
+//       There is maybe some opportunity of representing negation as just the multiplication by a negative literal. Instead of having a negative flag, we just make it so negation is basically putting a mul by -1. Would this make things simpler? Idk, adding one more layer of AST seems to do the opposite. Maybe it would be easier if we did not add any more layer. Make it so that literals are numbers, variables are a number and a string, additions are an array, and multiplication are a number and an array.
+
+//       Anyway, need to handle division properly. Only when division is working and we can simplify the majority of equations into a nice form should we even start wondering about simplifying the code. Division might break a lot of our assumptions right now, no point in rushing, because the code is still malleable.
+
+struct TermsWithLiteralMultiplier{
+  // Negative is removed from mulTerms and pushed to literal
+  SymbolicExpression* mulTerms; 
+  SymbolicExpression* literal;
+  //bool isDiv;
+};
+
 void Print(SymbolicExpression* expr,bool top = true);
 
 SymbolicExpression* ParseSymbolicExpression(Tokenizer* tok,Arena* out,Arena* temp);
@@ -37,6 +51,7 @@ SymbolicExpression* ApplyDistributivity(SymbolicExpression* expr,Arena* out,Aren
 SymbolicExpression* ApplySimilarTermsAddition(SymbolicExpression* expr,Arena* out,Arena* temp);
 
 SymbolicExpression* Normalize(SymbolicExpression* expr,Arena* out,Arena* temp);
+SymbolicExpression* Derivate(SymbolicExpression* expr,String base,Arena* out,Arena* temp);
 
 /*
   For now, we store additions in a array and everything else in a AST like format.

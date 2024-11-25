@@ -262,6 +262,15 @@ int Size(ArenaList<T>* list){
 }
 
 template<typename T>
+Array<T> CopyArray(Array<T> arr,Arena* out){
+  Array<T> res = PushArray<T>(out,arr.size);
+  for(int i = 0; i < arr.size; i++){
+    res[i] = arr[i];
+  }
+  return res;
+}
+
+template<typename T>
 ArenaList<T>* PushArenaList(Arena* out){
   ArenaList<T>* res = PushStruct<ArenaList<T>>(out);
   *res = {};
@@ -317,7 +326,7 @@ bool OnlyOneElement(ArenaList<T>* list){
   bool onlyOne = (list->head != nullptr && list->head == list->tail);
   return onlyOne;
 }
-
+  
 template<typename T>
 Array<T> PushArrayFromList(Arena* out,ArenaList<T>* list){
   DynamicArray<T> arr = StartArray<T>(out);
@@ -478,4 +487,29 @@ Array<T> Unique(Array<T> arr,Arena* out,Arena* temp){
     set->Insert(t);
   }
   return PushArrayFromSet(out,set);
+}
+
+// Given [A,B,C], returns [(A,[B,C]),(B,[A,C]),(C,[A,B])] and so on
+template<typename T>
+Array<Pair<T,Array<T>>> AssociateOneToOthers(Array<T> arr,Arena* out){
+  int size = arr.size;
+  if(size == 0){
+    return {};
+  }
+
+  Array<Pair<T,Array<T>>> res = PushArray<Pair<T,Array<T>>>(out,size);
+
+  for(int i = 0; i < size; i++){
+    res[i].first = arr[i];
+    res[i].second = PushArray<T>(out,size - 1);
+    int count = 0;
+    for(int ii = 0; ii < size; ii++){
+      if(i == ii){
+        continue;
+      }
+      res[i].second[count++] = arr[ii];
+    }
+  }
+
+  return res;
 }
