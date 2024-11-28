@@ -1933,8 +1933,8 @@ Opt<AddressGenDef> ParseAddressGen(Tokenizer* tok,Arena* out,Arena* temp){
       PROPAGATE(expressionOpt);
       PROPAGATE_POINTER_OPT(symbolicExpression);
 
-      Print(symbolicExpression);
-      printf("\n");
+      //Print(symbolicExpression);
+      //printf("\n");
       
       expression = expressionOpt.value();
       symbolic = symbolicExpression;
@@ -2137,7 +2137,7 @@ String InstantiateAddressGen(AddressGenDef def,Arena* out,Arena* temp){
 
     return STRING("Not possible");
   };
-
+  
   auto GetTermAssociatedToVariable = [](Array<AddressGenTerm> sumOfMultiplications,String loopVariable) -> AddressGenTerm*{
     for(AddressGenTerm& t : sumOfMultiplications){
       if(t.loopVariable.has_value() && CompareString(t.loopVariable.value(),loopVariable)){

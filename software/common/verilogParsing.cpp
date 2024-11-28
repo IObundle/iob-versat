@@ -717,7 +717,7 @@ Array<Module> ParseVerilogFile(String fileContent,Array<String> includeFilepaths
       module.isSource = isSource;
       *PushListElement(modules) = module;
 
-      isSource = false;
+      //isSource = false; 
       break; // For now, only parse the first module found
     }
 

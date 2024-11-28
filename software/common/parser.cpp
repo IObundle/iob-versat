@@ -172,7 +172,6 @@ Token Tokenizer::ParseToken(){
       const char* start = peek;
       peek++;
 
-      Trie* currentTrie = &tmpl->subTries[0];
       while(peek < end){
         u16 val = tmpl->subTries[0].array[*peek];
         if(val == TOKEN_GOOD){
@@ -600,9 +599,8 @@ Token Tokenizer::Finish(){
   token.loc.end.line = this->line;
   token.loc.end.column = this->column;
 
-  ptr = end;
-
-  amountStoredTokens = 0;
+  this->ptr = end;
+  this->amountStoredTokens = 0;
   
   return token;
 }
@@ -1282,7 +1280,7 @@ String GetRichLocationError(String content,Token got,Arena* out){
   int line = got.loc.start.line;
   int columnIndex = got.loc.start.column - 1;
 
-  PushString(out,"%6d | %.*s\n",got.loc.start.line,UNPACK_SS(fullLine));
+  PushString(out,"%6d | %.*s\n",line,UNPACK_SS(fullLine));
   PushString(out,"      "); // 6 spaces to match the 6 digits above
   PushString(out," | ");
 

@@ -25,6 +25,11 @@ struct SymbolicExpression{
   Array<SymbolicExpression*> sum;
 };
 
+struct MultPartition{
+  SymbolicExpression* base;
+  Array<SymbolicExpression*> leftovers;
+}; 
+
 // TODO: It might be better to replace all the multiplications with something based on this approach.
 //       It is nice to only have a place to store negation (inside the literal).
 //       The only problem is the interaction with DIV.
@@ -36,10 +41,9 @@ struct TermsWithLiteralMultiplier{
   // Negative is removed from mulTerms and pushed to literal
   SymbolicExpression* mulTerms; 
   SymbolicExpression* literal;
-  //bool isDiv;
 };
 
-void Print(SymbolicExpression* expr,bool top = true);
+void Print(SymbolicExpression* expr,bool top = true,int parentBindingStrength = 0);
 
 SymbolicExpression* ParseSymbolicExpression(Tokenizer* tok,Arena* out,Arena* temp);
 SymbolicExpression* NormalizeLiterals(SymbolicExpression* expr,Arena* out,Arena* temp);
@@ -50,8 +54,12 @@ SymbolicExpression* CollectTerms(SymbolicExpression* expr,Arena* out,Arena* temp
 SymbolicExpression* ApplyDistributivity(SymbolicExpression* expr,Arena* out,Arena* temp);
 SymbolicExpression* ApplySimilarTermsAddition(SymbolicExpression* expr,Arena* out,Arena* temp);
 
+SymbolicExpression* NormalizeLiterals(SymbolicExpression* expr,Arena* out,Arena* temp);
+
 SymbolicExpression* Normalize(SymbolicExpression* expr,Arena* out,Arena* temp);
 SymbolicExpression* Derivate(SymbolicExpression* expr,String base,Arena* out,Arena* temp);
+
+void TestSymbolic(Arena* temp,Arena* temp2);
 
 /*
   For now, we store additions in a array and everything else in a AST like format.

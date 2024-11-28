@@ -438,6 +438,8 @@ int main(int argc,char* argv[]){
   Arena temp2Inst = InitArena(Megabyte(128));
   Arena* temp2 = &temp2Inst;
 
+  //TestSymbolic(temp,temp2);
+  
 #if 0
   // TODO: Symbolic expressions are robust enough to allow us to start using them in the AddressGen code.
   //       The biggest source of problems is division which I do not expect to need to use for the majority of the
@@ -463,10 +465,15 @@ int main(int argc,char* argv[]){
   //String content = STRING("(x-y) * a");
   //String content = STRING("a*b*c");
   //String content = STRING("(x-y)");
+
+  //String content = STRING("1 + 2 + 3 + 4");
+  //String content = STRING("a+b+a-b");
+  //String content = STRING("(a - b) * (x + y)");
   
-  String content = STRING("2 * a * (x + y) * (a + b) + 2 * x / 10 + (x + y) / (x - y) + 4 * x * y + 1 + 2 + 3 + 4");
+  //String content = STRING("2 * a * (x + y) * (a + b) + 2 * x / 10 + (x + y) / (x - y) + 4 * x * y + 1 + 2 + 3 + 4");
   
-  Tokenizer tok(content,"",{});
+#if 0
+  //Tokenizer tok(content,"",{});
   SymbolicExpression* res = ParseSymbolicExpression(&tok,temp,temp2);
 
   auto Check = [](SymbolicExpression* r){
@@ -479,7 +486,6 @@ int main(int argc,char* argv[]){
 
   Check(res);
  
-#if 0
   DEBUG_BREAK();
   SymbolicExpression* res2 = ApplyDistributivity(res,temp,temp2);
   Check(res2);
@@ -508,7 +514,7 @@ int main(int argc,char* argv[]){
 #endif
   
 #if 0
-  DEBUG_BREAK();
+  //DEBUG_BREAK();
   SymbolicExpression* res2 = Normalize(res,temp,temp2);
   Check(res2);
 #endif
