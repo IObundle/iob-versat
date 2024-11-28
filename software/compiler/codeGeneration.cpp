@@ -1257,7 +1257,6 @@ void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* 
       *builder.PushElem() = res;
     }
     Array<String> content = EndArray(builder);
-    DEBUG_BREAK();
 
     TemplateSetCustom("addrGen",MakeValue(&content));
     

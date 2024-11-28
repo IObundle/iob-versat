@@ -2322,14 +2322,16 @@ String InstantiateAddressGen(AddressGenDef def,Arena* out,Arena* temp){
 
     //for(int i = 0; i < externalSpec.size; i++){
     AddressGenLoopSpecificaton ext0 = externalSpec[0];
-    AddressGenLoopSpecificaton ext = externalSpec[1];
-      
-    PushString(out,"   config->read_amount_minus_one = (%.*s) - 1;\n",UNPACK_SS(ext.iterationExpression));
-    PushString(out,"   config->read_addr_shift = %.*s;\n",UNPACK_SS(ext.nonPeriodVal));
     PushString(out,"   config->read_length = %.*s * sizeof(float);\n",UNPACK_SS(ext0.iterationExpression));
-    
-    //Assert(Empty(ext.dutyExpression));
-    //}
+
+    if(externalSpec.size > 1){
+      AddressGenLoopSpecificaton ext = externalSpec[1];
+      
+      PushString(out,"   config->read_amount_minus_one = (%.*s) - 1;\n",UNPACK_SS(ext.iterationExpression));
+      PushString(out,"   config->read_addr_shift = %.*s;\n",UNPACK_SS(ext.nonPeriodVal));
+    } else {
+      PushString(out,"   config->read_amount_minus_one = 0;\n");
+    }
   } break;
 
   case AddressGenType_VREAD_OUTPUT:{

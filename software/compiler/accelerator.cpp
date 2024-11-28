@@ -1589,7 +1589,7 @@ AcceleratorMapping* MappingSimple(Accelerator* first,Accelerator* second,int siz
     mappingArena = &mappingArenaInst; 
   }
   
-  Assert(size > 0);
+  //Assert(size > 0);
   
   AcceleratorMapping* mapping = PushStruct<AcceleratorMapping>(out);
   mapping->inputMap = PushTrieMap<PortInstance,PortInstance>(mappingArena);
