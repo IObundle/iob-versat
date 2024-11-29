@@ -1940,9 +1940,7 @@ Opt<AddressGenDef> ParseAddressGen(Tokenizer* tok,Arena* out,Arena* temp){
       
       EXPECT(tok,";");
       break;
-    } else {
-      PRINT_STRING(construct);
-        
+    } else {      
       EXPECT(tok,"[");
       auto mark = tok->Mark();
       auto expressionOpt = ParseAddressGenExpression(tok,out,temp);
@@ -2043,71 +2041,6 @@ String InstantiateAddressGen(AddressGenDef def,Arena* out,Arena* temp){
     loops[i] = result;
   }
 
-  auto ProcessTerms = [](Array<Array<Token>> tokenTerms,TrieSet<Token>* loopVariables,TrieSet<Token>* constants,Arena* out,Arena* temp) -> Array<AddressGenTerm> {
-    if(tokenTerms.size == 0){
-      return {};
-    }
-    
-    Array<AddressGenTerm> terms = PushArray<AddressGenTerm>(temp,tokenTerms.size); 
-    for(int i = 0; i < tokenTerms.size; i++){
-      Array<Token> termDef = tokenTerms[i];
-      GrowableArray<Token> consts = StartGrowableArray<Token>(out);
-
-      Opt<Token> loopVariable = {};
-      for(Token t : termDef){
-        bool isLoopVariable = loopVariables->Exists(t);
-        bool isConstant = constants->Exists(t);
-      
-        if(isLoopVariable){
-          Assert(!isConstant); // TODO: Proper error handling
-          Assert(!loopVariable.has_value()); // TODO: Proper error handling, cannot handle polynomials of higher order than 1
-
-          loopVariable = t;
-        } else if(isConstant){
-          *consts.PushElem() = t;
-        } else {
-          Assert(t.size > 0 && IsNum(t[0]));
-          *consts.PushElem() = t;
-        
-          //Assert(false); // TODO
-        }
-
-        //Assert(loopVariable.has_value()); // TODO: Technically we do not need a loop variable in every term. But we probably do need to group every single term that does not depend on a loop variable. Kinda. Still do not know enough to be sure of what we need right now.
-      }
-
-      if(loopVariable.has_value()){
-        terms[i] = (AddressGenTerm){.loopVariable=loopVariable.value(),.constants = EndArray(consts)};
-      } else {
-        // TODO: Proper handling of free terms. Should collapse them into a single member or something
-        terms[i] = (AddressGenTerm){.loopVariable={},.constants = EndArray(consts)};
-      }
-    }
-
-    return terms;
-  };
-  
-  Array<AddressGenTerm> terms = ProcessTerms(def.sumOfMultiplications,loopVariables,constants,out,temp);
-  Array<AddressGenTerm> internalTerms = ProcessTerms(def.internalExpression,loopVariables,constants,temp,temp2);
-  Array<AddressGenTerm> externalTerms = ProcessTerms(def.externalExpression,loopVariables,constants,temp,temp2);
-    
-  // First, how do we deal with values that do not begin at zero?.
-  //   If loop variables do not begin at zero, we must update start to reflect that.
-  // Simple for now, assume that every loop variable starts at zero.
-  // How do we handle terms without loop variables?
-  //   Collect them all and let the start be their expression.
-  // Simple for now, do not have non loop variable terms.
-  // Start with one loop and progress from there. Do not care about loop1/loop2/loop3 differences for now.
-
-  // Probably should have started with handling division and stuff like that. Now it is a bit harder to progress.
-
-  // I always do this. Instead of looking at the things that I want and start small, I just start by ignoring the
-  // stuff that I want and start "small" by ignoring that stuff.
-  // The first thing that I should have done is to have a way of representing the expressions that I want to represent , including negation, division, parenthesis and then have a good way of handling expressions.
-  // Now we are stuck with the fact that all the terms are just multiplications between themshelves, that parenthesis are not implemented and that we do not have an actual proper handling of expressions at the symbol level. ASUIDHOFIBAEby
-  // We can still get some compromise. Constants with divisions can be passed directly to the code
-  
-  //printf("\n\n\n\n");
-
   auto GetRepr = [](IdOrNumber n,Arena* out){
     if(n.isId){
       return PushString(out,"%.*s",UNPACK_SS(n.identifier));
@@ -2115,48 +2048,7 @@ String InstantiateAddressGen(AddressGenDef def,Arena* out,Arena* temp){
       return PushString(out,"%d",n.number);
     }
   }; 
-
-  auto GetConstantValue = [](AddressGenTerm term,Arena* out) -> String{
-    if(!term.loopVariable.has_value()){
-      if(term.constants.size == 1){
-        return term.constants[0];
-      } else {
-        Assert(false); // TODO: What situation is this?
-      }
-    } else {
-      if(term.constants.size == 0){
-        return STRING("1");
-      } else {
-        auto builder = StartString(out);
-
-        bool first = true;
-        for(Token t : term.constants){
-          if(first){
-            PushString(out,"%.*s",UNPACK_SS(t));
-          } else {
-            PushString(out," * %.*s",UNPACK_SS(t));
-          }
-          first = false;
-        }
-
-        String res = EndString(builder);
-        return res;
-      }
-    }
-
-    return STRING("Not possible");
-  };
   
-  auto GetTermAssociatedToVariable = [](Array<AddressGenTerm> sumOfMultiplications,String loopVariable) -> AddressGenTerm*{
-    for(AddressGenTerm& t : sumOfMultiplications){
-      if(t.loopVariable.has_value() && CompareString(t.loopVariable.value(),loopVariable)){
-        return &t;
-      }
-    }
-
-    return nullptr;
-  };
-
   auto GetLoopSizeRepr = [GetRepr](AddressGenFor f,Arena* out){
     auto builder = StartString(out);
 
@@ -2169,92 +2061,51 @@ String InstantiateAddressGen(AddressGenDef def,Arena* out,Arena* temp){
     return EndString(builder);
   };
 
-  auto PrintLoopSizeRepr = [GetLoopSizeRepr](AddressGenFor f,Arena* temp){
-    BLOCK_REGION(temp);
-    String repr = GetLoopSizeRepr(f,temp);
-    printf("%.*s",UNPACK_SS(repr));
-  };
-
   Reverse(loops);
 
-  // Inner most loop means that it is loop zero of the entire address gen.
-  // Only one loop can have that flag set and in consequence, have a duty value.
-  auto GenerateLoopExpressionPair = [GetRepr,GetTermAssociatedToVariable,GetLoopSizeRepr,GetConstantValue]
-    (AddressGenDef def,Array<AddressGenFor> loops,Array<AddressGenTerm> terms,Arena* out,Arena* temp) -> Array<AddressGenLoopSpecificaton>{
-    Array<AddressGenLoopSpecificaton> result = PushArray<AddressGenLoopSpecificaton>(out,loops.size);
-
-    for(int i = 0; i < loops.size; i += 2){
-      if(i == 0){
-        result[0].dutyExpression = PushString(out,GetRepr(loops[0].end,temp));
-      }
-    
-      String firstEnd = {};
-      String firstIncrement = {};
-      if(i < loops.size){
-        AddressGenFor f = loops[i];
-        AddressGenLoopSpecificaton& res = result[i];
-        
-        AddressGenTerm* term = GetTermAssociatedToVariable(terms,f.loopVariable);
-        
-        res.isPeriodType = true;
-        res.iterationExpression = GetLoopSizeRepr(f,out);
-
-        if(term){
-          res.incrementExpression = GetConstantValue(*term,out);
-        } else {
-          res.incrementExpression = STRING("0");
-        }
-
-        firstEnd = GetRepr(f.end,out);
-        firstIncrement = res.incrementExpression;
-      };
-
-      if(i + 1 < loops.size){
-        AddressGenFor f = loops[i+1];
-        AddressGenLoopSpecificaton& res = result[i+1];
-
-        res.isPeriodType = false;
-        res.iterationExpression = GetLoopSizeRepr(f,out);
-        res.nonPeriodIncrement = firstIncrement;
-        res.nonPeriodEnd = firstEnd;
-        
-        AddressGenTerm* term = GetTermAssociatedToVariable(terms,f.loopVariable);
-        
-        if(term){
-          Assert(term);
-          String val = GetConstantValue(*term,out);
-
-          res.nonPeriodVal = val;
-          
-          res.incrementExpression = PushString(out,"-(%.*s*%.*s) + %.*s + %.*s",UNPACK_SS(firstIncrement),UNPACK_SS(firstEnd),UNPACK_SS(firstIncrement),UNPACK_SS(val));
-        } else {
-          res.incrementExpression = PushString(out,"-(%.*s*%.*s) + %.*s",UNPACK_SS(firstIncrement),UNPACK_SS(firstEnd),UNPACK_SS(firstIncrement)); // Instead of +1 it should be +increment of last loop
-        }
-      }
-    }
-
-    return result;
-  };
-
-  auto GenerateLoopExpressionPairSymbolic = [GetRepr,GetTermAssociatedToVariable,GetLoopSizeRepr,GetConstantValue]
-    (AddressGenDef def,Array<AddressGenFor> loops,SymbolicExpression* expr,Arena* out,Arena* temp) -> Array<AddressGenLoopSpecificatonSym>{
+  auto GenerateLoopExpressionPairSymbolic = [GetRepr,GetLoopSizeRepr]
+    (AddressGenDef def,Array<AddressGenFor> loops,SymbolicExpression* expr,bool ext,Arena* out,Arena* temp) -> Array<AddressGenLoopSpecificatonSym>{
     int loopSize = (loops.size + 1) / 2;
     Array<AddressGenLoopSpecificatonSym> result = PushArray<AddressGenLoopSpecificatonSym>(out,loopSize);
+
+    // TODO: Need to normalize and push the entire expression into a division.
+    //       So we can then always extract a duty
+    SymbolicExpression* duty = nullptr;
+    if(expr->type == SymbolicExpressionType_OP){
+      duty = expr->right;
+      expr = expr->left;
+    }
     
     for(int i = 0; i < loopSize; i++){
       AddressGenFor l0 = loops[i*2];
 
       AddressGenLoopSpecificatonSym& res = result[i];
       res = {};
+
+      String loopSizeRepr = GetLoopSizeRepr(l0,out);
       
       SymbolicExpression* derived = Derivate(expr,l0.loopVariable,temp,out);
       SymbolicExpression* firstDerived = Normalize(derived,temp,out);
+      SymbolicExpression* periodSym = ParseSymbolicExpression(loopSizeRepr,temp,out);
         
-      res.periodExpression = GetLoopSizeRepr(l0,out);
+      res.periodExpression = loopSizeRepr;
       res.incrementExpression = PushRepresentation(firstDerived,out);
 
       if(i == 0){
-        result[0].dutyExpression = PushString(out,GetRepr(loops[0].end,temp)); // For now, do not care too much about duty. Use a full duty
+        if(duty){
+          // For an expression where increment is something like 1/4.
+          // That means that we want 4 * period with a duty of 1.
+          // Basically have to reverse the division.
+
+          SymbolicExpression* templateSym = ParseSymbolicExpression(STRING("(period) / duty"),temp,out);
+          SymbolicExpression* dutyExpression = SymbolicReplace(templateSym,STRING("period"),periodSym,temp,out);
+
+          dutyExpression = SymbolicReplace(dutyExpression,STRING("duty"),duty,temp,out);
+          
+          result[0].dutyExpression = PushRepresentation(dutyExpression,out);
+        } else {
+          result[0].dutyExpression = PushString(out,GetRepr(loops[0].end,temp)); // For now, do not care too much about duty. Use a full duty
+        }
       }
       
       String firstEnd = GetRepr(l0.end,out);
@@ -2275,35 +2126,41 @@ String InstantiateAddressGen(AddressGenDef def,Arena* out,Arena* temp){
         
         res.shiftExpression = PushRepresentation(replaced,out);
       } else {
-        res.iterationExpression = STRING("0");
+        if(ext){
+          res.iterationExpression = STRING("1");
+        } else {
+          res.iterationExpression = STRING("0");
+        }
         res.shiftExpression = STRING("0");
       }
     }
 
     return result;
   };
-
   
-  AddressGenTerm* constantTerm = nullptr;
-  for(AddressGenTerm& t : terms){
-    if(!t.loopVariable.has_value()){
-      constantTerm = &t;
-    }
-  }
-
   Array<AddressGenLoopSpecificatonSym> loopSpecSymbolic;
+  Array<AddressGenLoopSpecificatonSym> internalSpecSym;
+  Array<AddressGenLoopSpecificatonSym> externalSpecSym;
+
   if(def.symbolic){
-    loopSpecSymbolic = GenerateLoopExpressionPairSymbolic(def,loops,def.symbolic,out,temp);
+    loopSpecSymbolic = GenerateLoopExpressionPairSymbolic(def,loops,def.symbolic,false,out,temp);
   }
-  
-  Array<AddressGenLoopSpecificaton> loopSpec = GenerateLoopExpressionPair(def,loops,terms,out,temp);
-  Array<AddressGenLoopSpecificaton> internalSpec = GenerateLoopExpressionPair(def,loops,internalTerms,out,temp);
-  Array<AddressGenLoopSpecificaton> externalSpec = GenerateLoopExpressionPair(def,loops,externalTerms,out,temp);
+  if(def.symbolicInternal){
+    internalSpecSym = GenerateLoopExpressionPairSymbolic(def,loops,def.symbolicInternal,true,out,temp);
+  }
+  if(def.symbolicExternal){
+    externalSpecSym = GenerateLoopExpressionPairSymbolic(def,loops,def.symbolicExternal,true,out,temp);
+  }
 
   // Calculate start by replacing every loop variable with their initial value.
   String constantExpr = {};
   if(def.symbolic){
     SymbolicExpression* current = def.symbolic;
+    if(current->type == SymbolicExpressionType_OP){
+      current = current->left;
+    }
+    // TODO: Should be the start value, but since we only using zero, for now simplify.
+    //       A lot of code needs to be moved first and we probably need more tests before we start tackling this issues anyway. Not a priority for now.
     SymbolicExpression* toReplaceWith = ParseSymbolicExpression(STRING("0"),temp,temp2);
     for(AddressGenFor loop : loops){
       current = SymbolicReplace(current,loop.loopVariable,toReplaceWith,temp,temp2);
@@ -2326,7 +2183,6 @@ String InstantiateAddressGen(AddressGenDef def,Arena* out,Arena* temp){
   for(AddressGenFor f : loops){
     String repr = GetLoopSizeRepr(f,temp);
     PushString(out," * %.*s",UNPACK_SS(repr));
-    
   }
   PushString(out,";\n");
   PushString(out,"}\n\n\n");
@@ -2340,7 +2196,7 @@ String InstantiateAddressGen(AddressGenDef def,Arena* out,Arena* temp){
     PushString(out,"){\n");
 
     if(!Empty(constantExpr)){
-      PushString(out,"   config->start = %.*s",UNPACK_SS(constantExpr));
+      PushString(out,"   config->start = %.*s;\n",UNPACK_SS(constantExpr));
     }
     
     for(int i = 0; i < loopSpecSymbolic.size; i++){
@@ -2373,34 +2229,20 @@ String InstantiateAddressGen(AddressGenDef def,Arena* out,Arena* temp){
     Assert(!Empty(def.externalName)); // TODO: Probably a parser error or something. Weird to see it here
     PushString(out,"   config->ext_addr = %.*s;\n",UNPACK_SS(def.externalName));
     
-    for(int i = 0; i < internalSpec.size; i++){
-      AddressGenLoopSpecificaton in = internalSpec[i]; 
+    AddressGenLoopSpecificatonSym in = internalSpecSym[0];
 
-      if(in.isPeriodType){
-        PushString(out,"   config->read_per = %.*s;\n",UNPACK_SS(in.iterationExpression));
-        PushString(out,"   config->read_incr = %.*s;\n",UNPACK_SS(in.incrementExpression));
+    PushString(out,"   config->read_per = %.*s;\n",UNPACK_SS(in.periodExpression));
+    PushString(out,"   config->read_incr = %.*s;\n",UNPACK_SS(in.incrementExpression));
 
-        if(i == 0){
-          PushString(out,"   config->read_duty = %.*s;\n",UNPACK_SS(in.iterationExpression));
-        }
-      } else {
-        PushString(out,"   config->read_iter = %.*s;\n",UNPACK_SS(in.iterationExpression));
-        PushString(out,"   config->read_shift = %.*s;\n",UNPACK_SS(in.incrementExpression));
-      }
-    }
+    PushString(out,"   config->read_duty = %.*s;\n",UNPACK_SS(in.dutyExpression));
+    PushString(out,"   config->read_iter = %.*s;\n",UNPACK_SS(in.iterationExpression));
+    PushString(out,"   config->read_shift = %.*s;\n",UNPACK_SS(in.shiftExpression));
 
     //for(int i = 0; i < externalSpec.size; i++){
-    AddressGenLoopSpecificaton ext0 = externalSpec[0];
-    PushString(out,"   config->read_length = %.*s * sizeof(float);\n",UNPACK_SS(ext0.iterationExpression));
-
-    if(externalSpec.size > 1){
-      AddressGenLoopSpecificaton ext = externalSpec[1];
-      
-      PushString(out,"   config->read_amount_minus_one = (%.*s) - 1;\n",UNPACK_SS(ext.iterationExpression));
-      PushString(out,"   config->read_addr_shift = %.*s;\n",UNPACK_SS(ext.nonPeriodVal));
-    } else {
-      PushString(out,"   config->read_amount_minus_one = 0;\n");
-    }
+    AddressGenLoopSpecificatonSym ext = externalSpecSym[0];
+    PushString(out,"   config->read_length = %.*s * sizeof(float);\n",UNPACK_SS(ext.periodExpression));
+    PushString(out,"   config->read_amount_minus_one = (%.*s) - 1;\n",UNPACK_SS(ext.iterationExpression));
+    PushString(out,"   config->read_addr_shift = %.*s;\n",UNPACK_SS(ext.shiftExpression));
   } break;
 
   case AddressGenType_VREAD_OUTPUT:{
@@ -2474,32 +2316,18 @@ String InstantiateAddressGen(AddressGenDef def,Arena* out,Arena* temp){
     Assert(!Empty(def.externalName)); // TODO: Probably a parser error or something. Weird to see it here
     PushString(out,"   config->ext_addr = %.*s;\n",UNPACK_SS(def.externalName));
     
-    for(int i = 0; i < internalSpec.size; i++){
-      AddressGenLoopSpecificaton in = internalSpec[i]; 
+    AddressGenLoopSpecificatonSym in = internalSpecSym[0]; 
+    PushString(out,"   config->write_per = %.*s;\n",UNPACK_SS(in.periodExpression));
+    PushString(out,"   config->write_incr = %.*s;\n",UNPACK_SS(in.incrementExpression));
+    PushString(out,"   config->write_duty = %.*s;\n",UNPACK_SS(in.dutyExpression));
+    PushString(out,"   config->write_iter = %.*s;\n",UNPACK_SS(in.iterationExpression));
+    PushString(out,"   config->write_shift = %.*s;\n",UNPACK_SS(in.shiftExpression));
 
-      if(in.isPeriodType){
-        PushString(out,"   config->write_per = %.*s;\n",UNPACK_SS(in.iterationExpression));
-        PushString(out,"   config->write_incr = %.*s;\n",UNPACK_SS(in.incrementExpression));
-
-        if(i == 0){
-          PushString(out,"   config->write_duty = %.*s;\n",UNPACK_SS(in.iterationExpression));
-        }
-      } else {
-        PushString(out,"   config->write_iter = %.*s;\n",UNPACK_SS(in.iterationExpression));
-        PushString(out,"   config->write_shift = %.*s;\n",UNPACK_SS(in.incrementExpression));
-      }
-    }
-
-    //for(int i = 0; i < externalSpec.size; i++){
-    AddressGenLoopSpecificaton ext0 = externalSpec[0];
-    AddressGenLoopSpecificaton ext = externalSpec[1];
+    AddressGenLoopSpecificatonSym ext = externalSpecSym[0];
       
-    PushString(out,"   config->write_amount_minus_one = (%.*s) - 1;\n",UNPACK_SS(ext.iterationExpression));
-    PushString(out,"   config->write_addr_shift = %.*s;\n",UNPACK_SS(ext.nonPeriodVal));
-    PushString(out,"   config->write_length = %.*s * sizeof(float);\n",UNPACK_SS(ext0.iterationExpression));
-    
-    //Assert(Empty(ext.dutyExpression));
-    //}
+    PushString(out,"   config->write_amount_minus_one = (%.*s) - 1;\n",UNPACK_SS(ext.periodExpression));
+    PushString(out,"   config->write_length = %.*s * sizeof(float);\n",UNPACK_SS(ext.iterationExpression));
+    PushString(out,"   config->write_addr_shift = %.*s;\n",UNPACK_SS(ext.shiftExpression));
   } break;
 
   }

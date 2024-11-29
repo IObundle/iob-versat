@@ -11,16 +11,16 @@ int TypeToBingingStrength(SymbolicExpression* expr){
   switch(expr->type){
   case SymbolicExpressionType_VARIABLE:
   case SymbolicExpressionType_LITERAL:
-    return 4;
+    return 1;
   case SymbolicExpressionType_ARRAY:{
-    if(expr->op == '*'){
-      return 3;
-    } else {
+    if(expr->op == '+'){
       return 2;
+    } else {
+      return 3;
     }
   } break;
   case SymbolicExpressionType_OP:{
-    return 1;
+    return 4;
   } break;
   }
 }
@@ -1212,6 +1212,10 @@ void TestPrint(Arena* temp,Arena* temp2){
   BLOCK_REGION(temp2);
   
   String examples[] = {
+    STRING("1 + (2 * 3)"),
+    STRING("1 * (2 + 3)"),
+    STRING("1 + 2 * 3"),
+    STRING("1 * 2 + 3"),
     STRING("1 + 2 + (3 + 4) + 5"),
     STRING("(a + (b + (c * d)))"),
     STRING("(a + ((b + c) + d) + a)"),
@@ -1331,10 +1335,10 @@ void TestSymbolic(Arena* temp,Arena* temp2){
 #endif
   };
   
-  TestRemoveParenthesis(temp,temp2);
+  TestPrint(temp,temp2);
 
 #if 0
-  TestPrint(temp,temp2);
+  TestRemoveParenthesis(temp,temp2);
   TestDerivative(temp,temp2);
 #endif
 

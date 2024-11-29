@@ -512,7 +512,7 @@ struct TrieMapIterator{
 
   bool operator!=(TrieMapIterator& iter);
   void operator++();
-  Pair<Key,Data>& operator*(); // Care when changing values of Key, can only change values that do not change Hash value or equality otherwise TrieMap stops working
+  Pair<Key,Data> operator*(); // TODO: Put data as a pointer, to allow code to change it if needed
 };
 
 template<typename Key,typename Data>
@@ -1241,7 +1241,7 @@ void TrieMapIterator<Key,Data>::operator++(){
 }
 
 template<typename Key,typename Data>
-Pair<Key,Data>& TrieMapIterator<Key,Data>::operator*(){
+Pair<Key,Data> TrieMapIterator<Key,Data>::operator*(){
   return this->ptr->pair;
 }
 
