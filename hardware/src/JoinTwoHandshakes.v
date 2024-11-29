@@ -2,7 +2,6 @@
 
 // Modules that forces the fastest side to slow down.
 // Basically converts two simple handshakes into one handshake
-// No pipeline, yet. Could pipeline it easily if we added SkidBuffers instead of HandShakeBuffers
 module JoinTwoHandshakes #(
    parameter FIRST_DATA_W = 0,
    parameter SECOND_DATA_W = 0

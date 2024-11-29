@@ -1906,6 +1906,8 @@ Opt<AddressGenDef> ParseAddressGen(Tokenizer* tok,Arena* out,Arena* temp){
 
   ArenaList<AddressGenForDef>* loops = PushArenaList<AddressGenForDef>(temp);
   SymbolicExpression* symbolic = nullptr;
+  SymbolicExpression* internalSymbolic = nullptr;
+  SymbolicExpression* externalSymbolic = nullptr;
   Array<Array<Token>> expression = {};
   Array<Array<Token>> internalExpression = {};
   Array<Array<Token>> externalExpression = {};
@@ -1932,9 +1934,6 @@ Opt<AddressGenDef> ParseAddressGen(Tokenizer* tok,Arena* out,Arena* temp){
       
       PROPAGATE(expressionOpt);
       PROPAGATE_POINTER_OPT(symbolicExpression);
-
-      //Print(symbolicExpression);
-      //printf("\n");
       
       expression = expressionOpt.value();
       symbolic = symbolicExpression;
@@ -1945,32 +1944,48 @@ Opt<AddressGenDef> ParseAddressGen(Tokenizer* tok,Arena* out,Arena* temp){
       PRINT_STRING(construct);
         
       EXPECT(tok,"[");
+      auto mark = tok->Mark();
       auto expressionOpt = ParseAddressGenExpression(tok,out,temp);
+      tok->Rollback(mark);
+      auto symbolicExpression = ParseSymbolicExpression(tok,out,temp);
       EXPECT(tok,"]");
-
+      
+      PROPAGATE(expressionOpt);
+      PROPAGATE_POINTER_OPT(symbolicExpression);
+      
       EXPECT(tok,"=");
       Token other = tok->NextToken();
 
       EXPECT(tok,"[");
+      mark = tok->Mark();
       auto expressionOpt2 = ParseAddressGenExpression(tok,out,temp);
+      tok->Rollback(mark);
+      auto symbolicExpression2 = ParseSymbolicExpression(tok,out,temp);
       EXPECT(tok,"]");
 
       EXPECT(tok,";");
 
+      PROPAGATE(expressionOpt2);
+      PROPAGATE_POINTER_OPT(symbolicExpression2);
+      
       if(CompareString(construct,"mem")){
         internalExpression = expressionOpt.value();
+        internalSymbolic = symbolicExpression;
         externalExpression = expressionOpt2.value();
+        externalSymbolic = symbolicExpression2;
         externalName = PushString(out,other);
       } else {
         internalExpression = expressionOpt2.value();
+        internalSymbolic = symbolicExpression2;
         externalExpression = expressionOpt.value();
+        externalSymbolic = symbolicExpression;
         externalName = PushString(out,construct);
       }
       
       break;
     }
   }
-
+ 
   // TODO: The whole thing is a bit hackish.
   AddressGenDef def = {};
   def.inputs = inputsArr;
@@ -1982,6 +1997,8 @@ Opt<AddressGenDef> ParseAddressGen(Tokenizer* tok,Arena* out,Arena* temp){
   def.externalExpression = externalExpression;
   def.externalName = externalName;
   def.symbolic = symbolic;
+  def.symbolicInternal = internalSymbolic;
+  def.symbolicExternal = externalSymbolic;
   
   return def;
 }
@@ -2098,15 +2115,7 @@ String InstantiateAddressGen(AddressGenDef def,Arena* out,Arena* temp){
       return PushString(out,"%d",n.number);
     }
   }; 
-  
-  auto Print = [](IdOrNumber n){
-    if(n.isId){
-      printf("%.*s",UNPACK_SS(n.identifier));
-    } else {
-      printf("%d",n.number);
-    }
-  };
-  
+
   auto GetConstantValue = [](AddressGenTerm term,Arena* out) -> String{
     if(!term.loopVariable.has_value()){
       if(term.constants.size == 1){
@@ -2171,7 +2180,7 @@ String InstantiateAddressGen(AddressGenDef def,Arena* out,Arena* temp){
   // Inner most loop means that it is loop zero of the entire address gen.
   // Only one loop can have that flag set and in consequence, have a duty value.
   auto GenerateLoopExpressionPair = [GetRepr,GetTermAssociatedToVariable,GetLoopSizeRepr,GetConstantValue]
-    (Array<AddressGenFor> loops,Array<AddressGenTerm> terms,Arena* out,Arena* temp) -> Array<AddressGenLoopSpecificaton>{
+    (AddressGenDef def,Array<AddressGenFor> loops,Array<AddressGenTerm> terms,Arena* out,Arena* temp) -> Array<AddressGenLoopSpecificaton>{
     Array<AddressGenLoopSpecificaton> result = PushArray<AddressGenLoopSpecificaton>(out,loops.size);
 
     for(int i = 0; i < loops.size; i += 2){
@@ -2227,17 +2236,83 @@ String InstantiateAddressGen(AddressGenDef def,Arena* out,Arena* temp){
     return result;
   };
 
+  auto GenerateLoopExpressionPairSymbolic = [GetRepr,GetTermAssociatedToVariable,GetLoopSizeRepr,GetConstantValue]
+    (AddressGenDef def,Array<AddressGenFor> loops,SymbolicExpression* expr,Arena* out,Arena* temp) -> Array<AddressGenLoopSpecificatonSym>{
+    int loopSize = (loops.size + 1) / 2;
+    Array<AddressGenLoopSpecificatonSym> result = PushArray<AddressGenLoopSpecificatonSym>(out,loopSize);
+    
+    for(int i = 0; i < loopSize; i++){
+      AddressGenFor l0 = loops[i*2];
+
+      AddressGenLoopSpecificatonSym& res = result[i];
+      res = {};
+      
+      SymbolicExpression* derived = Derivate(expr,l0.loopVariable,temp,out);
+      SymbolicExpression* firstDerived = Normalize(derived,temp,out);
+        
+      res.periodExpression = GetLoopSizeRepr(l0,out);
+      res.incrementExpression = PushRepresentation(firstDerived,out);
+
+      if(i == 0){
+        result[0].dutyExpression = PushString(out,GetRepr(loops[0].end,temp)); // For now, do not care too much about duty. Use a full duty
+      }
+      
+      String firstEnd = GetRepr(l0.end,out);
+      SymbolicExpression* firstEndSym = ParseSymbolicExpression(firstEnd,temp,out);
+
+      if(i + 1 < loops.size){
+        AddressGenFor l1 = loops[i*2 + 1];
+
+        res.iterationExpression = GetLoopSizeRepr(l1,out);
+        SymbolicExpression* derived = Normalize(Derivate(expr,l1.loopVariable,temp,out),temp,out);
+
+        SymbolicExpression* templateSym = ParseSymbolicExpression(STRING("-(firstIncrement * firstEnd) + term"),temp,out);
+        
+        SymbolicExpression* replaced = SymbolicReplace(templateSym,STRING("firstIncrement"),firstDerived,temp,out);
+        replaced = SymbolicReplace(replaced,STRING("firstEnd"),firstEndSym,temp,out);
+        replaced = SymbolicReplace(replaced,STRING("term"),derived,temp,out);
+        replaced = Normalize(replaced,temp,out);
+        
+        res.shiftExpression = PushRepresentation(replaced,out);
+      } else {
+        res.iterationExpression = STRING("0");
+        res.shiftExpression = STRING("0");
+      }
+    }
+
+    return result;
+  };
+
+  
   AddressGenTerm* constantTerm = nullptr;
   for(AddressGenTerm& t : terms){
     if(!t.loopVariable.has_value()){
       constantTerm = &t;
     }
   }
+
+  Array<AddressGenLoopSpecificatonSym> loopSpecSymbolic;
+  if(def.symbolic){
+    loopSpecSymbolic = GenerateLoopExpressionPairSymbolic(def,loops,def.symbolic,out,temp);
+  }
   
-  Array<AddressGenLoopSpecificaton> loopSpec = GenerateLoopExpressionPair(loops,terms,out,temp);
-  Array<AddressGenLoopSpecificaton> internalSpec = GenerateLoopExpressionPair(loops,internalTerms,out,temp);
-  Array<AddressGenLoopSpecificaton> externalSpec = GenerateLoopExpressionPair(loops,externalTerms,out,temp);
-  
+  Array<AddressGenLoopSpecificaton> loopSpec = GenerateLoopExpressionPair(def,loops,terms,out,temp);
+  Array<AddressGenLoopSpecificaton> internalSpec = GenerateLoopExpressionPair(def,loops,internalTerms,out,temp);
+  Array<AddressGenLoopSpecificaton> externalSpec = GenerateLoopExpressionPair(def,loops,externalTerms,out,temp);
+
+  // Calculate start by replacing every loop variable with their initial value.
+  String constantExpr = {};
+  if(def.symbolic){
+    SymbolicExpression* current = def.symbolic;
+    SymbolicExpression* toReplaceWith = ParseSymbolicExpression(STRING("0"),temp,temp2);
+    for(AddressGenFor loop : loops){
+      current = SymbolicReplace(current,loop.loopVariable,toReplaceWith,temp,temp2);
+    }
+
+    current = Normalize(current,temp,temp2);
+    constantExpr = PushRepresentation(current,temp);
+  }
+    
   auto builder = StartString(out);
   
   PushString(out,"#ifdef ADDRESS_GEN_%.*s\n",UNPACK_SS(def.name));
@@ -2263,33 +2338,27 @@ String InstantiateAddressGen(AddressGenDef def,Arena* out,Arena* temp){
       PushString(out,",int %.*s",UNPACK_SS(t));
     }
     PushString(out,"){\n");
-    
-    if(constantTerm){
-      PushString(out,"   config->start = %.*s",UNPACK_SS(constantTerm->constants[0]));
+
+    if(!Empty(constantExpr)){
+      PushString(out,"   config->start = %.*s",UNPACK_SS(constantExpr));
     }
     
-    for(int i = 0; i < loopSpec.size; i++){
-      AddressGenLoopSpecificaton l = loopSpec[i]; 
+    for(int i = 0; i < loopSpecSymbolic.size; i++){
+      AddressGenLoopSpecificatonSym l = loopSpecSymbolic[i]; 
 
       char loopIndex = (i / 2) == 0 ? ' ' : '1' + (i / 2);
       
-      if(loopSpec[i].isPeriodType){
-        PushString(out,"   config->period%c = %.*s;\n",loopIndex,UNPACK_SS(l.iterationExpression));
-        PushString(out,"   config->incr%c = %.*s;\n",loopIndex,UNPACK_SS(l.incrementExpression));
+      PushString(out,"   config->period%c = %.*s;\n",loopIndex,UNPACK_SS(l.periodExpression));
+      PushString(out,"   config->incr%c = %.*s;\n",loopIndex,UNPACK_SS(l.incrementExpression));
 
-        if(!Empty(l.dutyExpression)){
-          PushString(out,"   config->duty = %.*s;\n",UNPACK_SS(l.dutyExpression));
-        }
-      } else {
-        PushString(out,"   config->iterations%c = %.*s;\n",loopIndex,UNPACK_SS(l.iterationExpression));
-        PushString(out,"   config->shift%c = %.*s;\n",loopIndex,UNPACK_SS(l.incrementExpression));
-
-        Assert(Empty(l.dutyExpression));
+      if(!Empty(l.dutyExpression)){
+        PushString(out,"   config->duty = %.*s;\n",UNPACK_SS(l.dutyExpression));
       }
+      PushString(out,"   config->iterations%c = %.*s;\n",loopIndex,UNPACK_SS(l.iterationExpression));
+      PushString(out,"   config->shift%c = %.*s;\n",loopIndex,UNPACK_SS(l.shiftExpression));
     }
   } break;
   case AddressGenType_VREAD_LOAD:{
-    Assert(loopSpec.size < 3);
     PushString(out,"static void Configure_%.*s(volatile VReadMultipleConfig* config",UNPACK_SS(def.name));
 
     for(Token t : constants){
@@ -2307,7 +2376,7 @@ String InstantiateAddressGen(AddressGenDef def,Arena* out,Arena* temp){
     for(int i = 0; i < internalSpec.size; i++){
       AddressGenLoopSpecificaton in = internalSpec[i]; 
 
-      if(loopSpec[i].isPeriodType){
+      if(in.isPeriodType){
         PushString(out,"   config->read_per = %.*s;\n",UNPACK_SS(in.iterationExpression));
         PushString(out,"   config->read_incr = %.*s;\n",UNPACK_SS(in.incrementExpression));
 
@@ -2342,28 +2411,23 @@ String InstantiateAddressGen(AddressGenDef def,Arena* out,Arena* temp){
     }
     PushString(out,"){\n");
     
-    if(constantTerm){
-      PushString(out,"   config->output_start = %.*s;\n",UNPACK_SS(constantTerm->constants[0]));
+    if(!Empty(constantExpr)){
+      PushString(out,"   config->output_start = %.*s;\n",UNPACK_SS(constantExpr));
     }
-    
-    for(int i = 0; i < loopSpec.size; i++){
-      AddressGenLoopSpecificaton l = loopSpec[i]; 
+
+    for(int i = 0; i < loopSpecSymbolic.size; i++){
+      AddressGenLoopSpecificatonSym l = loopSpecSymbolic[i]; 
 
       char loopIndex = (i / 2) == 0 ? ' ' : '1' + (i / 2);
       
-      if(loopSpec[i].isPeriodType){
-        PushString(out,"   config->output_per%c = %.*s;\n",loopIndex,UNPACK_SS(l.iterationExpression));
-        PushString(out,"   config->output_incr%c = %.*s;\n",loopIndex,UNPACK_SS(l.incrementExpression));
+      PushString(out,"   config->output_per%c = %.*s;\n",loopIndex,UNPACK_SS(l.periodExpression));
+      PushString(out,"   config->output_incr%c = %.*s;\n",loopIndex,UNPACK_SS(l.incrementExpression));
 
-        if(!Empty(l.dutyExpression)){
-          PushString(out,"   config->output_duty = %.*s;\n",UNPACK_SS(l.dutyExpression));
-        }
-      } else {
-        PushString(out,"   config->output_iter%c = %.*s;\n",loopIndex,UNPACK_SS(l.iterationExpression));
-        PushString(out,"   config->output_shift%c = %.*s;\n",loopIndex,UNPACK_SS(l.incrementExpression));
-
-        Assert(Empty(l.dutyExpression));
+      if(!Empty(l.dutyExpression)){
+        PushString(out,"   config->output_duty = %.*s;\n",UNPACK_SS(l.dutyExpression));
       }
+      PushString(out,"   config->output_iter%c = %.*s;\n",loopIndex,UNPACK_SS(l.iterationExpression));
+      PushString(out,"   config->output_shift%c = %.*s;\n",loopIndex,UNPACK_SS(l.shiftExpression));
     }
   } break;
 
@@ -2374,34 +2438,28 @@ String InstantiateAddressGen(AddressGenDef def,Arena* out,Arena* temp){
       PushString(out,",int %.*s",UNPACK_SS(t));
     }
     PushString(out,"){\n");
-    
-    if(constantTerm){
-      PushString(out,"   config->input_start = %.*s",UNPACK_SS(constantTerm->constants[0]));
+
+    if(!Empty(constantExpr)){
+      PushString(out,"   config->input_start = %.*s;\n",UNPACK_SS(constantExpr));
     }
     
-    for(int i = 0; i < loopSpec.size; i++){
-      AddressGenLoopSpecificaton l = loopSpec[i]; 
+    for(int i = 0; i < loopSpecSymbolic.size; i++){
+      AddressGenLoopSpecificatonSym l = loopSpecSymbolic[i]; 
 
       char loopIndex = (i / 2) == 0 ? ' ' : '1' + (i / 2);
       
-      if(loopSpec[i].isPeriodType){
-        PushString(out,"   config->input_per%c = %.*s;\n",loopIndex,UNPACK_SS(l.iterationExpression));
-        PushString(out,"   config->input_incr%c = %.*s;\n",loopIndex,UNPACK_SS(l.incrementExpression));
+      PushString(out,"   config->input_per%c = %.*s;\n",loopIndex,UNPACK_SS(l.periodExpression));
+      PushString(out,"   config->input_incr%c = %.*s;\n",loopIndex,UNPACK_SS(l.incrementExpression));
 
-        if(!Empty(l.dutyExpression)){
-          PushString(out,"   config->input_duty = %.*s;\n",UNPACK_SS(l.dutyExpression));
-        }
-      } else {
-        PushString(out,"   config->input_iter%c = %.*s;\n",loopIndex,UNPACK_SS(l.iterationExpression));
-        PushString(out,"   config->input_shift%c = %.*s;\n",loopIndex,UNPACK_SS(l.incrementExpression));
-
-        Assert(Empty(l.dutyExpression));
+      if(!Empty(l.dutyExpression)){
+        PushString(out,"   config->input_duty = %.*s;\n",UNPACK_SS(l.dutyExpression));
       }
+      PushString(out,"   config->input_iter%c = %.*s;\n",loopIndex,UNPACK_SS(l.iterationExpression));
+      PushString(out,"   config->input_shift%c = %.*s;\n",loopIndex,UNPACK_SS(l.shiftExpression));
     }
   } break;
 
   case AddressGenType_VWRITE_STORE:{
-    Assert(loopSpec.size < 3);
     PushString(out,"static void Configure_%.*s(volatile VWriteMultipleConfig* config",UNPACK_SS(def.name));
 
     for(Token t : constants){
@@ -2419,7 +2477,7 @@ String InstantiateAddressGen(AddressGenDef def,Arena* out,Arena* temp){
     for(int i = 0; i < internalSpec.size; i++){
       AddressGenLoopSpecificaton in = internalSpec[i]; 
 
-      if(loopSpec[i].isPeriodType){
+      if(in.isPeriodType){
         PushString(out,"   config->write_per = %.*s;\n",UNPACK_SS(in.iterationExpression));
         PushString(out,"   config->write_incr = %.*s;\n",UNPACK_SS(in.incrementExpression));
 

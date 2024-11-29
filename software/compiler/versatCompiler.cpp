@@ -439,6 +439,7 @@ int main(int argc,char* argv[]){
   Arena* temp2 = &temp2Inst;
 
   //TestSymbolic(temp,temp2);
+  //return 0;
   
 #if 0
   // TODO: Symbolic expressions are robust enough to allow us to start using them in the AddressGen code.

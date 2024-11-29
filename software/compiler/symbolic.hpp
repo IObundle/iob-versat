@@ -44,8 +44,12 @@ struct TermsWithLiteralMultiplier{
 };
 
 void Print(SymbolicExpression* expr,bool top = true,int parentBindingStrength = 0);
+String PushRepresentation(SymbolicExpression* expr,Arena* out);
 
 SymbolicExpression* ParseSymbolicExpression(Tokenizer* tok,Arena* out,Arena* temp);
+SymbolicExpression* ParseSymbolicExpression(String content,Arena* out,Arena* temp);
+
+
 SymbolicExpression* NormalizeLiterals(SymbolicExpression* expr,Arena* out,Arena* temp);
 SymbolicExpression* RemoveParenthesis(SymbolicExpression* expr,Arena* out,Arena* temp);
 // This function does not allocate new nodes unless it has to.
@@ -55,6 +59,8 @@ SymbolicExpression* ApplyDistributivity(SymbolicExpression* expr,Arena* out,Aren
 SymbolicExpression* ApplySimilarTermsAddition(SymbolicExpression* expr,Arena* out,Arena* temp);
 
 SymbolicExpression* NormalizeLiterals(SymbolicExpression* expr,Arena* out,Arena* temp);
+
+SymbolicExpression* SymbolicReplace(SymbolicExpression* base,String varToReplace,SymbolicExpression* replacingExpr,Arena* out,Arena* temp);
 
 SymbolicExpression* Normalize(SymbolicExpression* expr,Arena* out,Arena* temp);
 SymbolicExpression* Derivate(SymbolicExpression* expr,String base,Arena* out,Arena* temp);

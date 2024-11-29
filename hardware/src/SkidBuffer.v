@@ -31,8 +31,7 @@ reg [DATA_W-1:0] data_stored,extra_data_stored;
 wire in_transfer = (in_valid_i & in_ready_o);
 wire out_transfer = (out_valid_o & out_ready_i);
 
-// Technically combinatorial but of a register on our side. Compiler could be smart enough to detect this, but probably
-// need to add more info so that the compiler figures out the correct code.
+// Technically combinatorial but of a register on our side. Compiler could be smart enough to detect this, but can always rewrite if needed.
 assign in_ready_o = (state == EMPTY || state == DATA);
 assign out_valid_o = (state == DATA || state == EXTRA);
 assign out_data_o = data_stored;

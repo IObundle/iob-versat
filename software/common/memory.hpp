@@ -213,13 +213,21 @@ Array<T> EndArray(GrowableArray<T> arr){
 struct DynamicString{
   Arena* arena;
   Byte* mark;
+
+  // TODO: Add checks similar to DynamicArray
+  void PushChar(const char);
+  void PushString(int size);
+  void PushString(String ss);
+  void PushString(const char* format,...) __attribute__ ((format (printf, 2, 3)));
+  void vPushString(const char* format,va_list args);
+  void PushNullByte();
 };
 
 DynamicString StartString(Arena *arena);
 String EndString(DynamicString mark);
 
 // A wrapper for a "push" type interface for a block of memory
-// TODO: This probably can be eleminated, very few areas of the code actually use this.
+// TODO: This probably can be eliminated, very few areas of the code actually use this and we have better things to build arrays as it is.
 template<typename T>
 class PushPtr{
 public:

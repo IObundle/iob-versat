@@ -181,6 +181,8 @@ struct AddressGenDef{
   Array<Array<Token>> internalExpression;
   Array<Array<Token>> externalExpression;
   SymbolicExpression* symbolic;
+  SymbolicExpression* symbolicInternal;
+  SymbolicExpression* symbolicExternal;
   Token externalName;
   AddressGenType type;
   String name;
@@ -198,15 +200,27 @@ struct AddressGen{
 struct AddressGenLoopSpecificaton{
   String iterationExpression;
   String incrementExpression;
-  String dutyExpression;
+  String dutyExpression; // Non empty if it exists
   String nonPeriodIncrement;
   String nonPeriodEnd;
   String nonPeriodVal;
   bool isPeriodType;
 };
 
-Opt<AddressGenDef> ParseAddressGen(Tokenizer* tok,Arena* out,Arena* temp);
-String InstantiateAddressGen(AddressGenDef def,Arena* out,Arena* temp);
+struct AddressGenLoopSpecificatonSym{
+  String periodExpression;
+  String incrementExpression;
+
+  String iterationExpression;
+  String shiftExpression;
+
+  String dutyExpression; // Non empty if it exists
+  
+  //String nonPeriodIncrement;
+  //String nonPeriodEnd;
+  //String nonPeriodVal;
+  //bool isPeriodType;
+};
 
 typedef Pair<HierarchicalName,HierarchicalName> SpecNode;
 
@@ -215,3 +229,6 @@ Array<TypeDefinition> ParseVersatSpecification(String content,Arena* out,Arena* 
 
 FUDeclaration* InstantiateBarebonesSpecifications(String content,TypeDefinition def,Arena* temp,Arena* temp2);
 FUDeclaration* InstantiateSpecifications(String content,TypeDefinition def,Arena* temp,Arena* temp2);
+
+Opt<AddressGenDef> ParseAddressGen(Tokenizer* tok,Arena* out,Arena* temp);
+String InstantiateAddressGen(AddressGenDef def,Arena* out,Arena* temp);

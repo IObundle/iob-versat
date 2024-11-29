@@ -98,6 +98,84 @@ void Print(SymbolicExpression* expr,bool top,int parentBindingStrength){
   }
 }
 
+void BuildRepresentation(DynamicString& builder,SymbolicExpression* expr,bool top,int parentBindingStrength){
+  if(expr->negative){
+    builder.PushString("-");
+  }
+
+  int bindingStrength = TypeToBingingStrength(expr);
+  bool bind = (parentBindingStrength >= bindingStrength);
+  //bind = true;
+  switch(expr->type){
+  case SymbolicExpressionType_VARIABLE: {
+    if(expr->negative && top){
+      //builder.PushString("-");
+    }
+    builder.PushString("%.*s",UNPACK_SS(expr->variable));
+  } break;
+  case SymbolicExpressionType_LITERAL: {
+    if(expr->negative && top){
+      //builder.PushString("-");
+    }
+    builder.PushString("%d",expr->literal);
+  } break;
+  case SymbolicExpressionType_OP: {
+    bool hasNonOpSon = (expr->left->type != SymbolicExpressionType_OP && expr->right->type != SymbolicExpressionType_OP);
+    //hasNonOpSon = true;
+    
+    if(expr->negative && top){
+      //builder.PushString("-");
+    }
+    
+    if(hasNonOpSon && !top && bind){
+      builder.PushString("(");
+    }
+
+    BuildRepresentation(builder,expr->left,false,bindingStrength);
+
+    builder.PushString("%c",expr->op);
+    
+    BuildRepresentation(builder,expr->right,false,bindingStrength);
+    if(hasNonOpSon && !top && bind){
+      builder.PushString(")");
+    }
+  } break;
+  case SymbolicExpressionType_ARRAY: {
+    if(expr->negative){
+      bind = true;
+      //builder.PushString("-");
+    }
+
+    if(!top && bind) builder.PushString("(");
+    bool first = true;
+    for(SymbolicExpression* s : expr->sum){
+      if(!first){
+        if(s->negative && expr->op == '+'){
+          //builder.PushString("-"); // Do not print anything  because we already printed the '-'
+        } else {
+          builder.PushString("%c",expr->op);
+        }
+      } else {
+        //if(s->negative && expr->op == '+'){
+        //  builder.PushString("-");
+        //}
+      }
+      BuildRepresentation(builder,s,false,bindingStrength);
+      first = false;
+    }
+    if(!top && bind) builder.PushString(")");
+  } break;
+  }
+}
+
+String PushRepresentation(SymbolicExpression* expr,Arena* out){
+  auto builder = StartString(out);
+
+  BuildRepresentation(builder,expr,true,0);
+
+  return EndString(builder);
+}
+
 #define EXPECT(TOKENIZER,STR) \
   TOKENIZER->AssertNextToken(STR)
 
@@ -309,7 +387,7 @@ static SymbolicExpression* ParseExpression(Tokenizer* tok,Arena* out,Arena* temp
 SymbolicExpression* ParseSymbolicExpression(Tokenizer* tok,Arena* out,Arena* temp){
   // TODO: For now, only handle the simplest expressions and parenthesis
   if(!tmpl){
-    tmpl = CreateTokenizerTemplate(globalPermanent,"+-*/();",{}); 
+    tmpl = CreateTokenizerTemplate(globalPermanent,"+-*/();[]",{}); // TODO: It is impossible to fully abstract the tokenizer as long as we have the template not being correctly constructed. We need a way of describing the things that we want (including digits), instead of just describing what symbols are or not allowed
   }
 
   TOKENIZER_REGION(tok,tmpl);
@@ -317,6 +395,12 @@ SymbolicExpression* ParseSymbolicExpression(Tokenizer* tok,Arena* out,Arena* tem
   SymbolicExpression* expr = ParseExpression(tok,out,temp);
 
   return expr;
+}
+
+SymbolicExpression* ParseSymbolicExpression(String content,Arena* out,Arena* temp){
+  Tokenizer tok(content,"",{});
+
+  return ParseSymbolicExpression(&tok,out,temp);
 }
 
 Array<SymbolicExpression*> GetAllExpressions(SymbolicExpression* top,Arena* out){
@@ -492,50 +576,37 @@ SymbolicExpression* RemoveParenthesis(SymbolicExpression* expr,Arena* out,Arena*
     return res;
   } break;
   case SymbolicExpressionType_ARRAY:{
-    bool containsChange = false;
-
-    Array<SymbolicExpression*> children = ApplyFunctionToArray(RemoveParenthesis,expr->sum,temp,out);
+    if(expr->sum.size == 1){
+      SymbolicExpression* onlyOne = RemoveParenthesis(expr->sum[0],out,temp);
+      onlyOne->negative = expr->negative;
+      return onlyOne;
+    }
     
-    auto UpliftChildCond = [](char op,SymbolicExpression* child){
-      bool res = (child->type == SymbolicExpressionType_ARRAY && (child->op == op || child->sum.size == 1));
-      return res;
-    };
+    Array<SymbolicExpression*> children = ApplyFunctionToArray(RemoveParenthesis,expr->sum,out,temp);
+    ArenaList<SymbolicExpression*>* list = PushArenaList<SymbolicExpression*>(temp);
     
     for(SymbolicExpression* child : children){
-      //Print(child);
-      if(UpliftChildCond(expr->op,child)){
-        containsChange = true;
-        break;
-      }
-    }
+      bool uplift = (child->type == SymbolicExpressionType_ARRAY && child->op == expr->op);
+      if(uplift){
+        for(SymbolicExpression* subChild : child->sum){
+          if(child->negative){
+            SymbolicExpression* negated = CopyExpression(subChild,out);
+            negated->negative = !negated->negative;
 
-    if(containsChange){
-      ArenaList<SymbolicExpression*>* list = PushArenaList<SymbolicExpression*>(temp);
-
-      for(SymbolicExpression* child : children){
-        if(UpliftChildCond(expr->op,child)){
-          for(SymbolicExpression* subChild : child->sum){
-            if(child->negative){
-              SymbolicExpression* negated = CopyExpression(subChild,out);
-              negated->negative = !negated->negative;
-
-              *list->PushElem() = negated;
-            } else {
-              *list->PushElem() = subChild;
-            }
+            *list->PushElem() = negated;
+          } else {
+            *list->PushElem() = subChild;
           }
-        } else {
-          *list->PushElem() = child;
         }
+      } else {
+        *list->PushElem() = child;
       }
-
-      SymbolicExpression* res = CopyExpression(expr,out);
-      res->sum = PushArrayFromList(out,list);
-
-      return res;
     }
 
-    return Default(expr,out,temp);
+    SymbolicExpression* res = CopyExpression(expr,out);
+    res->sum = PushArrayFromList(out,list);
+    
+    return res;
   } break;
   }
 }
@@ -561,7 +632,13 @@ SymbolicExpression* NormalizeLiterals(SymbolicExpression* expr,Arena* out,Arena*
     }
     
     if(Empty(literals)){
-      return Default(expr,out,temp);
+      if(Empty(childs)){
+        return Default(expr,out,temp);
+      }
+      
+      SymbolicExpression* copy = CopyExpression(expr,out);
+      copy->sum = PushArrayFromList(out,childs);
+      return copy;
     }
     
     Array<SymbolicExpression*> allLiterals = PushArrayFromList(temp,literals);
@@ -573,11 +650,9 @@ SymbolicExpression* NormalizeLiterals(SymbolicExpression* expr,Arena* out,Arena*
         if(Empty(childs)){
           return Default(expr,out,temp);
         }
-#if 1
         if(expr->op == '*'){ // Anything multiplied by zero is zero. The question is whether this logic makes sense here
           return allLiterals[0];
         }
-#endif
         
         SymbolicExpression* withoutLiteral= CopyExpression(expr,out);
         withoutLiteral->sum = PushArrayFromList(out,childs);
@@ -788,6 +863,10 @@ SymbolicExpression* ApplySimilarTermsAddition(SymbolicExpression* expr,Arena* ou
 
     SymbolicExpression* normalized = NormalizeLiterals(expr,out,temp);
 
+    if(normalized->type != SymbolicExpressionType_ARRAY){
+      return normalized;
+    }
+    
     Array<TermsWithLiteralMultiplier> terms = PushArray<TermsWithLiteralMultiplier>(temp,normalized->sum.size);
     for(int i = 0; i <  normalized->sum.size; i++){
       SymbolicExpression* s = normalized->sum[i];
@@ -843,10 +922,16 @@ SymbolicExpression* ApplySimilarTermsAddition(SymbolicExpression* expr,Arena* ou
       return finalExpressions->head->elem;
     }
     
+    if(Empty(finalExpressions)){
+      return PushLiteral(out,0);
+    }
+
     SymbolicExpression* sum = PushStruct<SymbolicExpression>(out);
     sum->type = SymbolicExpressionType_ARRAY;
     sum->op = '+';
     sum->sum = PushArrayFromList(out,finalExpressions);
+
+    Assert(sum->sum.size > 0);
     
     return sum;
   } break;
@@ -1006,7 +1091,6 @@ SymbolicExpression* Derivate(SymbolicExpression* expr,String base,Arena* out,Are
       // Derivative of mul is sum of derivative of one term with the remaining terms intact
       int size = expr->sum.size;
       Array<Pair<SymbolicExpression*,Array<SymbolicExpression*>>> mulTerms = AssociateOneToOthers(expr->sum,temp);
-      DEBUG_BREAK();
       
       Array<SymbolicExpression*> addTerms = PushArray<SymbolicExpression*>(out,size);
       for(int i = 0; i <  mulTerms.size; i++){
@@ -1040,11 +1124,43 @@ SymbolicExpression* Derivate(SymbolicExpression* expr,String base,Arena* out,Are
   return nullptr;
 }
 
+SymbolicExpression* SymbolicReplace(SymbolicExpression* base,String varToReplace,SymbolicExpression* replacingExpr,Arena* out,Arena* temp){
+  switch(base->type){
+  case SymbolicExpressionType_LITERAL:
+    return Default(base,out,temp);
+  case SymbolicExpressionType_VARIABLE: {
+    if(CompareString(base->variable,varToReplace)){
+      return Default(replacingExpr,out,temp);
+    } else {
+      return Default(base,out,temp);
+    }
+  } break;
+  case SymbolicExpressionType_ARRAY:{
+    Array<SymbolicExpression*> children = PushArray<SymbolicExpression*>(out,base->sum.size);
+    for(int i = 0; i < children.size; i++){
+      children[i] = SymbolicReplace(base->sum[i],varToReplace,replacingExpr,out,temp);
+    }
+
+    SymbolicExpression* copy = CopyExpression(base,out);
+    copy->sum = children;
+
+    return copy;
+  }
+  case SymbolicExpressionType_OP:{
+    SymbolicExpression* res = CopyExpression(base,out);
+    res->left = SymbolicReplace(base->left,varToReplace,replacingExpr,out,temp);
+    res->right = SymbolicReplace(base->right,varToReplace,replacingExpr,out,temp); 
+
+    return res;
+  } break;
+  }
+}
+
 SymbolicExpression* Normalize(SymbolicExpression* expr,Arena* out,Arena* temp){
   SymbolicExpression* current = expr;
   SymbolicExpression* next = nullptr;
 
-  bool print = true;
+  bool print = false;
   
   // Better way of detecting end
   for(int i = 0; i < 2; i++){
@@ -1065,8 +1181,9 @@ SymbolicExpression* Normalize(SymbolicExpression* expr,Arena* out,Arena* temp){
     if(print) Print(current);
 
 #if 1
+    //DEBUG_BREAK();
     next = RemoveParenthesis(current,out,temp);
-    //CheckIfSymbolicExpressionsShareNodes(current,next,temp); // RemoveParenthesis does not recurse, so obviously this will fail
+    CheckIfSymbolicExpressionsShareNodes(current,next,temp); // RemoveParenthesis does not recurse, so obviously this will fail
     current = next;
     if(print) printf("C:");
     if(print) Print(current);
@@ -1085,8 +1202,6 @@ SymbolicExpression* Normalize(SymbolicExpression* expr,Arena* out,Arena* temp){
     if(print) printf("E:");
     if(print) Print(current);
 #endif
-
-    
   }
 
   return current;
@@ -1162,8 +1277,39 @@ void TestDerivative(Arena* temp,Arena* temp2){
   }
 }
 
+void TestReplace(Arena* temp,Arena* temp2){
+  BLOCK_REGION(temp);
+  BLOCK_REGION(temp2);
+
+  String examples[] = {
+    STRING("1 + a + b + a * b")
+  };
+
+  String replacingString = STRING("c");
+
+  for(String s : examples){
+    Tokenizer tok(s,"",{});
+    SymbolicExpression* sym = ParseSymbolicExpression(&tok,temp,temp2);
+    
+    Tokenizer tok2(replacingString,"",{});
+    SymbolicExpression* toReplaceWith = ParseSymbolicExpression(&tok2,temp,temp2);
+                                                                
+    //DEBUG_BREAK();
+    SymbolicExpression* replaced1 = SymbolicReplace(sym,STRING("a"),toReplaceWith,temp,temp2);
+    SymbolicExpression* replaced2 = SymbolicReplace(sym,STRING("b"),toReplaceWith,temp,temp2);
+
+    replaced1 = RemoveParenthesis(NormalizeLiterals(replaced1,temp,temp2),temp,temp2);
+    replaced2 = RemoveParenthesis(NormalizeLiterals(replaced2,temp,temp2),temp,temp2);
+    
+    Print(replaced1);
+    Print(replaced2);
+  }
+}
+
 void TestSymbolic(Arena* temp,Arena* temp2){
   String examples[] = {
+    STRING("0+(0*9*nMacs+0*id*nMacs+0*id*9)+(0*9*nMacs+0*outC*nMacs+0*outC*9)+0")
+#if 0
     //STRING("a+b+a-b"),
     STRING("a+b+c+d"),
     STRING("a-a-b-b-2*c - c"),
@@ -1181,16 +1327,18 @@ void TestSymbolic(Arena* temp,Arena* temp2){
     STRING("1 + 2 + 3 + 4"),
     STRING("a+b+a-b"),
     STRING("(a - b) * (x + y)"),
-    STRING("2 * a * (x + y) * (a + b) + 2 * x / 10 + (x + y) / (x - y) + 4 * x * y + 1 + 2 + 3 + 4")
+    STRING("2 * a * (x + y) * (a + b) + 2 * x / 10 + (x + y) / (x - y) + 4 * x * y + 1 + 2 + 3 + 4") 
+#endif
   };
+  
+  TestRemoveParenthesis(temp,temp2);
 
 #if 0
   TestPrint(temp,temp2);
-#endif
-#if 0
-  TestRemoveParenthesis(temp,temp2);
-#endif
   TestDerivative(temp,temp2);
+#endif
+
+  //TestReplace(temp,temp2);
   
 #if 0
   for(String s : examples){
@@ -1204,6 +1352,7 @@ void TestSymbolic(Arena* temp,Arena* temp2){
     //SymbolicExpression* normalized = ApplySimilarTermsAddition(sym,temp,temp2);
     //SymbolicExpression* normalized = NormalizeLiterals(sym,temp,temp2);
     SymbolicExpression* normalized = Normalize(sym,temp,temp2);
+    DEBUG_BREAK();
     Print(sym);
     Print(normalized);
     printf("\n");

@@ -718,3 +718,46 @@ Byte* GenericPoolIterator::operator*(){
 
   return val;
 }
+
+// Dynamic String
+
+void DynamicString::PushChar(const char ch){
+  Byte* mem = PushBytes(arena,1);
+
+  *mem = ch;
+  String res = {};
+  res.data = (const char*) mem;
+  res.size = 1;
+}
+
+void DynamicString::PushString(String ss){
+  String res = ::PushString(this->arena,ss.size);
+  memcpy((void*) res.data,ss.data,ss.size);
+}
+
+void DynamicString::vPushString(const char* format,va_list args){
+  char* buffer = (char*) &arena->mem[arena->used];
+  size_t maximum = arena->totalAllocated - arena->used;
+  int size = vsnprintf(buffer,maximum,format,args);
+
+  Assert(size >= 0);
+  Assert(((size_t) size) < maximum);
+
+  arena->used += (size_t) (size);
+
+  String res = STRING(buffer,size);
+}
+
+void DynamicString::PushString(const char* format,...){
+  va_list args;
+  va_start(args,format);
+
+  vPushString(format,args);
+
+  va_end(args);
+}
+
+void DynamicString::PushNullByte(){
+  Byte* res = PushBytes(arena,1);
+  *res = '\0';
+}
