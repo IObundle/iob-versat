@@ -20,6 +20,9 @@
 #include "dotGraphPrinting.hpp"
 #include "versatSpecificationParser.hpp"
 
+#include <filesystem>
+namespace fs = std::filesystem;
+
 // TODO: For some reason, in the makefile we cannot stringify the arguments that we want to
 //       Do not actually want to do these preprocessor things. Fix the makefile so that it passes as a string
 #define DO_STRINGIFY(ARG) #ARG
@@ -968,6 +971,15 @@ int main(int argc,char* argv[]){
     }
   }
 
+  // TODO: We probably need to move this to a better place since we also need to copy include files in order to separate build from setup. We need a lot of file copying and it's probably best to put all in one place.
+  fs::path hardwareDestinationPath(StaticFormat("%.*s",UNPACK_SS(globalOptions.hardwareOutputFilepath)));
+  auto options = fs::copy_options::update_existing;
+  for(String filepath : globalOptions.verilogFiles){
+    fs::path path(StaticFormat("%.*s",UNPACK_SS(filepath)));
+    
+    fs::copy(path,hardwareDestinationPath,options);
+  }
+  
   // This should be the last thing that we do, no further file creation can occur after this point
   Array<String> allOutputLocations = PushArrayFromList(perm,allFilesOutputted);
 

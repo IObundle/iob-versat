@@ -825,8 +825,16 @@ void OutputVerilatorMake(String topLevelName,String versatDir,Arena* temp,Arena*
   String srcDir = PushString(temp,"%.*s/src",UNPACK_SS(outputPath));
 
   String relativePath = GetRelativePathThatGoesFromSourceToTarget(globalOptions.softwareOutputFilepath,globalOptions.hardwareOutputFilepath,temp,temp2);
-  //DEBUG_BREAK();
 
+  Array<String> allFilenames = PushArray<String>(temp,globalOptions.verilogFiles.size);
+  for(int i = 0; i <  globalOptions.verilogFiles.size; i++){
+    String filepath  =  globalOptions.verilogFiles[i];
+    fs::path path(StaticFormat("%.*s",UNPACK_SS(filepath)));
+    allFilenames[i] = PushString(temp,"%s",path.filename().c_str());
+  }
+
+  TemplateSetArray("allFilenames","String",UNPACK_SS(allFilenames));
+  
   // MARKED: LEFT HERE. Trying to make the generated makefile not depend on the setup environment. Must be generic. Paths must be relative and VERILATOR ROOT must be found at build time, not setup time.
   TemplateSetCustom("arch",MakeValue(&globalOptions));
   TemplateSetString("srcDir",srcDir);

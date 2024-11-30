@@ -8,9 +8,10 @@ TYPE_NAME := @{typename}
 
 # TODO: Everything here should be relative. Otherwise we are binding the setup with the build process, when in reality they should be separated.
 
-#HARDWARE_SRC := #{join " " file verilogFiles}@{file}#{end}
-HARDWARE_SRC := $(wildcard @{generatedUnitsLocation}/*.v)
-HARDWARE_SRC += $(wildcard @{generatedUnitsLocation}/modules/*.v)
+HARDWARE_FOLDER := @{generatedUnitsLocation}
+
+HARDWARE_SRC := #{for name allFilenames}$(HARDWARE_FOLDER)/@{name} #{end} 
+HARDWARE_SRC += $(wildcard $(HARDWARE_FOLDER)/modules/*.v) # This can also be changed from wildcard to the relative path for each module. No point using wildcard when we have the entire information needed.
 
 #{for source extraSources}
 HARDWARE_SRC += $(wildcard @{source}/*.v)
