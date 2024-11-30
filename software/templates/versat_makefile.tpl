@@ -6,10 +6,10 @@
 
 TYPE_NAME := @{typename}
 
-// TODO: Everything here should be relative. Otherwise we are binding the setup with the build process, when in reality they should be separated.
+# TODO: Everything here should be relative. Otherwise we are binding the setup with the build process, when in reality they should be separated.
 
-HARDWARE_SRC := #{join " " file verilogFiles}@{file}#{end}
-#HARDWARE_SRC := $(wildcard @{generatedUnitsLocation}/*.v)
+#HARDWARE_SRC := #{join " " file verilogFiles}@{file}#{end}
+HARDWARE_SRC := $(wildcard @{generatedUnitsLocation}/*.v)
 HARDWARE_SRC += $(wildcard @{generatedUnitsLocation}/modules/*.v)
 
 #{for source extraSources}

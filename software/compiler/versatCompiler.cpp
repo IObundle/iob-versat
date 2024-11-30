@@ -428,6 +428,37 @@ struct argp_option options[] =
 
 #include "symbolic.hpp"
 
+enum SimpleNodeType{
+  SimpleNodeType_NODE,
+  SimpleNodeType_LEAF
+};
+
+struct SimpleNode{
+  SimpleNodeType type;
+  union{
+    struct{
+      SimpleNode* left;
+      SimpleNode* right;
+    };
+    int value;
+  };
+}; 
+
+SimpleNode* Node(SimpleNode* left,SimpleNode* right){
+  SimpleNode* res = PushStruct<SimpleNode>(globalPermanent);
+  res->type = SimpleNodeType_NODE;
+  res->left = left;
+  res->right = right;
+  return res;
+}
+
+SimpleNode* Leaf(int val){
+  SimpleNode* res = PushStruct<SimpleNode>(globalPermanent);
+  res->type = SimpleNodeType_LEAF;
+  res->value = val;
+  return res;
+}
+
 int main(int argc,char* argv[]){
   InitDebug();
   
@@ -438,8 +469,17 @@ int main(int argc,char* argv[]){
   Arena temp2Inst = InitArena(Megabyte(128));
   Arena* temp2 = &temp2Inst;
 
-  //TestSymbolic(temp,temp2);
-  //return 0;
+#if 0
+  DelayToAdd testing = {};
+  SimpleNode* test = Node(Node(Leaf(1),Leaf(2)),Node(Node(Leaf(3),Leaf(4)),Leaf(5)));
+  DEBUG_BREAK();
+  return 0;
+#endif
+  
+#if 0
+  TestSymbolic(temp,temp2);
+  return 0;
+#endif
   
 #if 0
   // TODO: Symbolic expressions are robust enough to allow us to start using them in the AddressGen code.

@@ -2111,18 +2111,23 @@ String InstantiateAddressGen(AddressGenDef def,Arena* out,Arena* temp){
       String firstEnd = GetRepr(l0.end,out);
       SymbolicExpression* firstEndSym = ParseSymbolicExpression(firstEnd,temp,out);
 
-      if(i + 1 < loops.size){
+      if(i * 2 + 1 < loops.size){
         AddressGenFor l1 = loops[i*2 + 1];
 
         res.iterationExpression = GetLoopSizeRepr(l1,out);
         SymbolicExpression* derived = Normalize(Derivate(expr,l1.loopVariable,temp,out),temp,out);
 
-        SymbolicExpression* templateSym = ParseSymbolicExpression(STRING("-(firstIncrement * firstEnd) + term"),temp,out);
+        // We handle shifts very easily. We just remove the effects of all the previous period increments and then apply the shift.
+        // That way we just have to calculate the derivative in relation to the shift, instead of calculating the change from a period term to a iteration term.
+        // We need to subtract 1 because the period increment is only applied (period - 1) times.
+        SymbolicExpression* templateSym = ParseSymbolicExpression(STRING("-(firstIncrement * (firstEnd - 1)) + term"),temp,out);
         
         SymbolicExpression* replaced = SymbolicReplace(templateSym,STRING("firstIncrement"),firstDerived,temp,out);
         replaced = SymbolicReplace(replaced,STRING("firstEnd"),firstEndSym,temp,out);
         replaced = SymbolicReplace(replaced,STRING("term"),derived,temp,out);
+        //Print(replaced);
         replaced = Normalize(replaced,temp,out);
+        //Print(replaced);
         
         res.shiftExpression = PushRepresentation(replaced,out);
       } else {
@@ -2202,7 +2207,7 @@ String InstantiateAddressGen(AddressGenDef def,Arena* out,Arena* temp){
     for(int i = 0; i < loopSpecSymbolic.size; i++){
       AddressGenLoopSpecificatonSym l = loopSpecSymbolic[i]; 
 
-      char loopIndex = (i / 2) == 0 ? ' ' : '1' + (i / 2);
+      char loopIndex = (i == 0) ? ' ' : '1' + i;
       
       PushString(out,"   config->period%c = %.*s;\n",loopIndex,UNPACK_SS(l.periodExpression));
       PushString(out,"   config->incr%c = %.*s;\n",loopIndex,UNPACK_SS(l.incrementExpression));
@@ -2240,9 +2245,9 @@ String InstantiateAddressGen(AddressGenDef def,Arena* out,Arena* temp){
 
     //for(int i = 0; i < externalSpec.size; i++){
     AddressGenLoopSpecificatonSym ext = externalSpecSym[0];
-    PushString(out,"   config->read_length = %.*s * sizeof(float);\n",UNPACK_SS(ext.periodExpression));
+    PushString(out,"   config->read_length = (%.*s) * sizeof(float);\n",UNPACK_SS(ext.periodExpression));
     PushString(out,"   config->read_amount_minus_one = (%.*s) - 1;\n",UNPACK_SS(ext.iterationExpression));
-    PushString(out,"   config->read_addr_shift = %.*s;\n",UNPACK_SS(ext.shiftExpression));
+    PushString(out,"   config->read_addr_shift = (%.*s) * sizeof(float);\n",UNPACK_SS(ext.shiftExpression));
   } break;
 
   case AddressGenType_VREAD_OUTPUT:{
@@ -2260,7 +2265,7 @@ String InstantiateAddressGen(AddressGenDef def,Arena* out,Arena* temp){
     for(int i = 0; i < loopSpecSymbolic.size; i++){
       AddressGenLoopSpecificatonSym l = loopSpecSymbolic[i]; 
 
-      char loopIndex = (i / 2) == 0 ? ' ' : '1' + (i / 2);
+      char loopIndex = (i == 0) ? ' ' : '1' + i;
       
       PushString(out,"   config->output_per%c = %.*s;\n",loopIndex,UNPACK_SS(l.periodExpression));
       PushString(out,"   config->output_incr%c = %.*s;\n",loopIndex,UNPACK_SS(l.incrementExpression));
@@ -2288,7 +2293,7 @@ String InstantiateAddressGen(AddressGenDef def,Arena* out,Arena* temp){
     for(int i = 0; i < loopSpecSymbolic.size; i++){
       AddressGenLoopSpecificatonSym l = loopSpecSymbolic[i]; 
 
-      char loopIndex = (i / 2) == 0 ? ' ' : '1' + (i / 2);
+      char loopIndex = (i == 0) ? ' ' : '1' + i;
       
       PushString(out,"   config->input_per%c = %.*s;\n",loopIndex,UNPACK_SS(l.periodExpression));
       PushString(out,"   config->input_incr%c = %.*s;\n",loopIndex,UNPACK_SS(l.incrementExpression));
@@ -2326,8 +2331,8 @@ String InstantiateAddressGen(AddressGenDef def,Arena* out,Arena* temp){
     AddressGenLoopSpecificatonSym ext = externalSpecSym[0];
       
     PushString(out,"   config->write_amount_minus_one = (%.*s) - 1;\n",UNPACK_SS(ext.periodExpression));
-    PushString(out,"   config->write_length = %.*s * sizeof(float);\n",UNPACK_SS(ext.iterationExpression));
-    PushString(out,"   config->write_addr_shift = %.*s;\n",UNPACK_SS(ext.shiftExpression));
+    PushString(out,"   config->write_length = (%.*s) * sizeof(float);\n",UNPACK_SS(ext.iterationExpression));
+    PushString(out,"   config->write_addr_shift = (%.*s) * sizeof(float);\n",UNPACK_SS(ext.shiftExpression));
   } break;
 
   }

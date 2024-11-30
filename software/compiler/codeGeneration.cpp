@@ -793,8 +793,18 @@ void OutputVerilatorWrapper(FUDeclaration* type,Accelerator* accel,String output
   ProcessTemplate(output,templ,temp,temp2);
 }
 
+// TODO: Move all this stuff to a better place
 #include <filesystem>
 namespace fs = std::filesystem;
+
+String GetRelativePathThatGoesFromSourceToTarget(String sourcePath,String targetPath,Arena* out,Arena* temp){
+  fs::path source(StaticFormat("%.*s",UNPACK_SS(sourcePath)));
+  fs::path target(StaticFormat("%.*s",UNPACK_SS(targetPath)));
+
+  fs::path res = fs::relative(target,source);
+
+  return PushString(out,"%s",res.c_str());
+}
 
 void OutputVerilatorMake(String topLevelName,String versatDir,Arena* temp,Arena* temp2){
   BLOCK_REGION(temp);
@@ -813,13 +823,17 @@ void OutputVerilatorMake(String topLevelName,String versatDir,Arena* temp,Arena*
   fs::path fixedPath = fs::weakly_canonical(outputFSPath / srcLocation);
 
   String srcDir = PushString(temp,"%.*s/src",UNPACK_SS(outputPath));
-    
+
+  String relativePath = GetRelativePathThatGoesFromSourceToTarget(globalOptions.softwareOutputFilepath,globalOptions.hardwareOutputFilepath,temp,temp2);
+  //DEBUG_BREAK();
+
+  // MARKED: LEFT HERE. Trying to make the generated makefile not depend on the setup environment. Must be generic. Paths must be relative and VERILATOR ROOT must be found at build time, not setup time.
   TemplateSetCustom("arch",MakeValue(&globalOptions));
   TemplateSetString("srcDir",srcDir);
   TemplateSetString("versatDir",versatDir);
   TemplateSetString("verilatorRoot",globalOptions.verilatorRoot);
   TemplateSetNumber("bitWidth",globalOptions.databusAddrSize);
-  TemplateSetString("generatedUnitsLocation",globalOptions.hardwareOutputFilepath);
+  TemplateSetString("generatedUnitsLocation",relativePath);
   TemplateSetArray("verilogFiles","String",UNPACK_SS(globalOptions.verilogFiles));
   TemplateSetArray("extraSources","String",UNPACK_SS(globalOptions.extraSources));
   TemplateSetArray("includePaths","String",UNPACK_SS(globalOptions.includePaths));

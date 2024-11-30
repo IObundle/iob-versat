@@ -87,17 +87,6 @@ bool RemoveDirectory(const char* path){
   return fs::remove_all(path) > 0;
 }
 
-long int GetFileSize(FILE* file){
-  long int mark = ftell(file);
-
-  fseek(file,0,SEEK_END);
-  long int size = ftell(file);
-
-  fseek(file,mark,SEEK_SET);
-
-  return size;
-}
-
 String ExtractFilenameOnly(String filepath){
   int i;
   for(i = filepath.size - 1; i >= 0; i--){
@@ -110,6 +99,17 @@ String ExtractFilenameOnly(String filepath){
   res.data = &filepath.data[i + 1];
   res.size = filepath.size - (i + 1);
   return res;
+}
+
+long int GetFileSize(FILE* file){
+  long int mark = ftell(file);
+
+  fseek(file,0,SEEK_END);
+  long int size = ftell(file);
+
+  fseek(file,mark,SEEK_SET);
+
+  return size;
 }
 
 char* GetCurrentDirectory(){

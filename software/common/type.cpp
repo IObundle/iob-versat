@@ -373,7 +373,6 @@ Type* GetType(String name){
 
   Opt<ParsedType> parsed = ParseType(name,&temp);
   if(!parsed.has_value()){
-    DEBUG_BREAK();
     return nullptr;
   }
   

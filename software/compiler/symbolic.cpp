@@ -242,7 +242,7 @@ static int GetLiteralValue(SymbolicExpression* expr){
 
 static SymbolicExpression* ParseTerm(Tokenizer* tok,Arena* out,Arena* temp){
   Token token = tok->NextToken();
-
+  
   bool negative = false;
   if(CompareString(token,"-")){
     negative = true;
@@ -254,7 +254,7 @@ static SymbolicExpression* ParseTerm(Tokenizer* tok,Arena* out,Arena* temp){
 
     EXPECT(tok,")");
 
-    exprInside->negative = negative;
+    exprInside->negative = (exprInside->negative != negative);
     return exprInside;
   } else {
     if(token.size > 0 && IsNum(token[0])){
@@ -364,7 +364,7 @@ static SymbolicExpression* ParseSum(Tokenizer* tok,Arena* out,Arena* temp){
     tok->AdvancePeek();
       
     SymbolicExpression* expr = ParseDiv(tok,out,temp);
-    expr->negative = negative;
+    expr->negative = (expr->negative != negative);
     *expressions->PushElem() = expr;
   }
 
@@ -578,7 +578,7 @@ SymbolicExpression* RemoveParenthesis(SymbolicExpression* expr,Arena* out,Arena*
   case SymbolicExpressionType_ARRAY:{
     if(expr->sum.size == 1){
       SymbolicExpression* onlyOne = RemoveParenthesis(expr->sum[0],out,temp);
-      onlyOne->negative = expr->negative;
+      onlyOne->negative = (onlyOne->negative != expr->negative);
       return onlyOne;
     }
     
@@ -1181,7 +1181,7 @@ SymbolicExpression* Normalize(SymbolicExpression* expr,Arena* out,Arena* temp){
     if(print) Print(current);
 
 #if 1
-    //DEBUG_BREAK();
+    DEBUG_BREAK();
     next = RemoveParenthesis(current,out,temp);
     CheckIfSymbolicExpressionsShareNodes(current,next,temp); // RemoveParenthesis does not recurse, so obviously this will fail
     current = next;
@@ -1212,6 +1212,7 @@ void TestPrint(Arena* temp,Arena* temp2){
   BLOCK_REGION(temp2);
   
   String examples[] = {
+    STRING("(-(2*(1*inputChannels)))+1*tileWidthWithInputChannels"),
     STRING("1 + (2 * 3)"),
     STRING("1 * (2 + 3)"),
     STRING("1 + 2 * 3"),
@@ -1227,6 +1228,7 @@ void TestPrint(Arena* temp,Arena* temp2){
   for(String s : examples){
     Tokenizer tok(s,"",{});
     SymbolicExpression* sym = ParseSymbolicExpression(&tok,temp,temp2);
+    DEBUG_BREAK();
     Print(sym);
   }
 }
@@ -1236,8 +1238,9 @@ void TestRemoveParenthesis(Arena* temp,Arena* temp2){
   BLOCK_REGION(temp2);
 
   String examples[] = {
-    STRING("a - (((b - c) - e) - f)"),
-    STRING("a - (b - (c - (d - e)))")
+    STRING("(-(2*(1*inputChannels)))+1*tileWidthWithInputChannels")
+    //STRING("a - (((b - c) - e) - f)"),
+    //STRING("a - (b - (c - (d - e)))")
     //STRING("(a + (((((a) + b) + c) + d) + e) + f)")
     //STRING("1 + 2 + (3 + 4) + 5"),
     //STRING("(a + (b + (c * d)))"),
@@ -1312,7 +1315,8 @@ void TestReplace(Arena* temp,Arena* temp2){
 
 void TestSymbolic(Arena* temp,Arena* temp2){
   String examples[] = {
-    STRING("0+(0*9*nMacs+0*id*nMacs+0*id*9)+(0*9*nMacs+0*outC*nMacs+0*outC*9)+0")
+    STRING("-((1*inputChannels)*(3-1))+1*tileWidthWithInputChannels")
+//STRING("0+(0*9*nMacs+0*id*nMacs+0*id*9)+(0*9*nMacs+0*outC*nMacs+0*outC*9)+0")
 #if 0
     //STRING("a+b+a-b"),
     STRING("a+b+c+d"),
@@ -1335,16 +1339,15 @@ void TestSymbolic(Arena* temp,Arena* temp2){
 #endif
   };
   
-  TestPrint(temp,temp2);
-
 #if 0
   TestRemoveParenthesis(temp,temp2);
+  TestPrint(temp,temp2);
   TestDerivative(temp,temp2);
 #endif
 
   //TestReplace(temp,temp2);
   
-#if 0
+#if 1
   for(String s : examples){
     BLOCK_REGION(temp);
     BLOCK_REGION(temp2);
