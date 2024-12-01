@@ -25,79 +25,6 @@ int TypeToBingingStrength(SymbolicExpression* expr){
   }
 }
 
-void Print(SymbolicExpression* expr,bool top,int parentBindingStrength){
-  if(expr->negative){
-    printf("-");
-  }
-
-  int bindingStrength = TypeToBingingStrength(expr);
-  bool bind = (parentBindingStrength >= bindingStrength);
-  //bind = true;
-  switch(expr->type){
-  case SymbolicExpressionType_VARIABLE: {
-    if(expr->negative && top){
-      //printf("-");
-    }
-    printf("%.*s",UNPACK_SS(expr->variable));
-  } break;
-  case SymbolicExpressionType_LITERAL: {
-    if(expr->negative && top){
-      //printf("-");
-    }
-    printf("%d",expr->literal);
-  } break;
-  case SymbolicExpressionType_OP: {
-    bool hasNonOpSon = (expr->left->type != SymbolicExpressionType_OP && expr->right->type != SymbolicExpressionType_OP);
-    //hasNonOpSon = true;
-    
-    if(expr->negative && top){
-      //printf("-");
-    }
-    
-    if(hasNonOpSon && !top && bind){
-      printf("(");
-    }
-
-    Print(expr->left,false,bindingStrength);
-
-    printf("%c",expr->op);
-    
-    Print(expr->right,false,bindingStrength);
-    if(hasNonOpSon && !top && bind){
-      printf(")");
-    }
-  } break;
-  case SymbolicExpressionType_ARRAY: {
-    if(expr->negative){
-      bind = true;
-      //printf("-");
-    }
-
-    if(!top && bind) printf("(");
-    bool first = true;
-    for(SymbolicExpression* s : expr->sum){
-      if(!first){
-        if(s->negative && expr->op == '+'){
-          //printf("-"); // Do not print anything  because we already printed the '-'
-        } else {
-          printf("%c",expr->op);
-        }
-      } else {
-        //if(s->negative && expr->op == '+'){
-        //  printf("-");
-        //}
-      }
-      Print(s,false,bindingStrength);
-      first = false;
-    }
-    if(!top && bind) printf(")");
-  } break;
-  }
-  if(top){
-    printf("\n");
-  }
-}
-
 void BuildRepresentation(DynamicString& builder,SymbolicExpression* expr,bool top,int parentBindingStrength){
   if(expr->negative){
     builder.PushString("-");
@@ -108,25 +35,13 @@ void BuildRepresentation(DynamicString& builder,SymbolicExpression* expr,bool to
   //bind = true;
   switch(expr->type){
   case SymbolicExpressionType_VARIABLE: {
-    if(expr->negative && top){
-      //builder.PushString("-");
-    }
     builder.PushString("%.*s",UNPACK_SS(expr->variable));
   } break;
   case SymbolicExpressionType_LITERAL: {
-    if(expr->negative && top){
-      //builder.PushString("-");
-    }
     builder.PushString("%d",expr->literal);
   } break;
   case SymbolicExpressionType_OP: {
     bool hasNonOpSon = (expr->left->type != SymbolicExpressionType_OP && expr->right->type != SymbolicExpressionType_OP);
-    //hasNonOpSon = true;
-    
-    if(expr->negative && top){
-      //builder.PushString("-");
-    }
-    
     if(hasNonOpSon && !top && bind){
       builder.PushString("(");
     }
@@ -141,12 +56,8 @@ void BuildRepresentation(DynamicString& builder,SymbolicExpression* expr,bool to
     }
   } break;
   case SymbolicExpressionType_ARRAY: {
-    if(expr->negative){
-      bind = true;
-      //builder.PushString("-");
-    }
+    builder.PushString("(");
 
-    if(!top && bind) builder.PushString("(");
     bool first = true;
     for(SymbolicExpression* s : expr->sum){
       if(!first){
@@ -163,7 +74,7 @@ void BuildRepresentation(DynamicString& builder,SymbolicExpression* expr,bool to
       BuildRepresentation(builder,s,false,bindingStrength);
       first = false;
     }
-    if(!top && bind) builder.PushString(")");
+    builder.PushString(")");
   } break;
   }
 }
@@ -174,6 +85,14 @@ String PushRepresentation(SymbolicExpression* expr,Arena* out){
   BuildRepresentation(builder,expr,true,0);
 
   return EndString(builder);
+}
+
+void Print(SymbolicExpression* expr){
+  STACK_ARENA(tempInst,Kilobyte(4));
+  Arena* temp = &tempInst;
+
+  String res = PushRepresentation(expr,temp);
+  printf("%.*s\n",UNPACK_SS(res));
 }
 
 #define EXPECT(TOKENIZER,STR) \
@@ -947,19 +866,16 @@ SymbolicExpression* ApplyDistributivity(SymbolicExpression* expr,Arena* out,Aren
   } break;
 
   case SymbolicExpressionType_ARRAY:{
-    if(expr->op == '+'){
-      // Nothing to do expect apply distributivity to childs
-      ArenaList<SymbolicExpression*>* expressions = PushArenaList<SymbolicExpression*>(temp);
-      for(SymbolicExpression* spec : expr->sum){
-        *expressions->PushElem() = ApplyDistributivity(spec,out,temp);
-      }
-      
-      SymbolicExpression* res = PushStruct<SymbolicExpression>(out);
-      res->type = SymbolicExpressionType_ARRAY;
-      res->op = '+';
-      res->negative = expr->negative;
-      res->sum = PushArrayFromList(out,expressions);
+    Array<SymbolicExpression*> children = PushArray<SymbolicExpression*>(out,expr->sum.size);
+    for(int i = 0; i < children.size; i++){
+      children[i] = ApplyDistributivity(expr->sum[i],out,temp);
+    }
 
+    if(expr->op == '+'){
+      // Nothing to do except apply distributivity to childs
+      SymbolicExpression* res = CopyExpression(expr,out);
+      res->sum = children;
+      
       return res;
     } else if(expr->op == '*'){
       bool containsAddition = false;
@@ -975,11 +891,8 @@ SymbolicExpression* ApplyDistributivity(SymbolicExpression* expr,Arena* out,Aren
           *muls->PushElem() = ApplyDistributivity(spec,out,temp);
         }
 
-        SymbolicExpression* res = PushStruct<SymbolicExpression>(out);
-        res->type = SymbolicExpressionType_ARRAY;
-        res->op = '*';
-        res->negative = expr->negative;
-        res->sum = PushArrayFromList(out,muls);
+        SymbolicExpression* res = CopyExpression(expr,out);
+        res->sum = children;
         return res;
       }
       
@@ -991,7 +904,12 @@ SymbolicExpression* ApplyDistributivity(SymbolicExpression* expr,Arena* out,Aren
       // There is probably a better solution, but I currently only need something that works fine for implementing the Address Gen.
       for(SymbolicExpression* spec : expr->sum){
         if(spec->type == SymbolicExpressionType_ARRAY && spec->op == '+'){
+          // Spec is the array of additions. (Ex: (a + b) in the (a + b) * (x + y) example
+
+          // For a and b.
           for(SymbolicExpression* subTerm : spec->sum){
+            // For each member in the additions array
+            
             ArenaList<SymbolicExpression*>* mulTerms = PushArenaList<SymbolicExpression*>(temp);
             *mulTerms->PushElem() = subTerm;
             for(SymbolicExpression* other : expr->sum){
@@ -1005,7 +923,6 @@ SymbolicExpression* ApplyDistributivity(SymbolicExpression* expr,Arena* out,Aren
             SymbolicExpression* res = PushStruct<SymbolicExpression>(out);
             res->type = SymbolicExpressionType_ARRAY;
             res->op = '*';
-            res->negative = (subTerm->negative != expr->negative);
             res->sum = PushArrayFromList(out,mulTerms);
             
             *sums->PushElem() = res;
@@ -1017,14 +934,13 @@ SymbolicExpression* ApplyDistributivity(SymbolicExpression* expr,Arena* out,Aren
       SymbolicExpression* res = PushStruct<SymbolicExpression>(out);
       res->type = SymbolicExpressionType_ARRAY;
       res->op = '+';
+      res->negative = expr->negative;
       res->sum = PushArrayFromList(out,sums);
 
-      //Print(res);
-      //printf("\n");
-      
-      //return res;
+      DEBUG_BREAK();
+      return res;
       //return ApplyDistributivity(res,out,temp);
-      return ApplyDistributivity(res,out,temp);
+      //return ApplyDistributivity(res,out,temp);
     } else {
       DEBUG_BREAK(); // Unexpected expr->op
       Assert(false);
@@ -1174,12 +1090,14 @@ SymbolicExpression* Normalize(SymbolicExpression* expr,Arena* out,Arena* temp){
     if(print) printf("A:");
     if(print) Print(current);
 
+#if 0
     next = ApplyDistributivity(current,out,temp);
     CheckIfSymbolicExpressionsShareNodes(current,next,temp);
     current = next;
     if(print) printf("B:");
     if(print) Print(current);
-
+#endif
+    
 #if 1
     DEBUG_BREAK();
     next = RemoveParenthesis(current,out,temp);
@@ -1207,29 +1125,61 @@ SymbolicExpression* Normalize(SymbolicExpression* expr,Arena* out,Arena* temp){
   return current;
 }
 
+struct InputAndExpected{
+  String in;
+  String expected;
+}; 
+
 void TestPrint(Arena* temp,Arena* temp2){
   BLOCK_REGION(temp);
   BLOCK_REGION(temp2);
   
   String examples[] = {
-    STRING("(-(2*(1*inputChannels)))+1*tileWidthWithInputChannels"),
-    STRING("1 + (2 * 3)"),
-    STRING("1 * (2 + 3)"),
-    STRING("1 + 2 * 3"),
-    STRING("1 * 2 + 3"),
-    STRING("1 + 2 + (3 + 4) + 5"),
-    STRING("(a + (b + (c * d)))"),
-    STRING("(a + ((b + c) + d) + a)"),
-    STRING("(a + (((((a) + b) + c) + d) + e) + f)"),
-    STRING("(1*2*3) + (a*b*c)"),
-    STRING("(1*-2*-3) - (-a*b*c)")
+    STRING("-(2*(1*inputChannels))+1*tileWidthWithInputChannels"),
+    STRING("1+2*3"),
+    STRING("1*(2+3)"),
+    STRING("1+2*3"),
+    STRING("1*2+3"),
+    STRING("1+2+(3+4)+5"),
+    STRING("a+(b+c*d)"),
+    STRING("a+((b+c)+d)+a"),
+    STRING("a+((((a+b)+c)+d)+e)+f"),
+    STRING("1*2*3+a*b*c"),
+    STRING("1*-2*-3-(-a*b*c)")
   };
 
-  for(String s : examples){
+  for(int i = 0; i <  ARRAY_SIZE(examples); i++){
+    String s  =  examples[i];
     Tokenizer tok(s,"",{});
     SymbolicExpression* sym = ParseSymbolicExpression(&tok,temp,temp2);
+    //DEBUG_BREAK();
+    String repr = PushRepresentation(sym,temp);
+    if(!CompareString(repr,s)){
+      printf("TestPrint %d failed\n Is: %.*s\n Got:%.*s\n",i,UNPACK_SS(s),UNPACK_SS(repr));
+    }
+  }
+}
+
+void TestDestributive(Arena* temp,Arena* temp2){
+  BLOCK_REGION(temp);
+  BLOCK_REGION(temp2);
+
+  InputAndExpected examples[] = {
+    {STRING("-(a*(1-1))"),STRING("-((1*a)+(-1*a))")}
+  };
+
+  for(int i = 0; i <  ARRAY_SIZE(examples); i++){
+    InputAndExpected s  =  examples[i];
+    Tokenizer tok(s.in,"",{});
+    SymbolicExpression* sym = ParseSymbolicExpression(&tok,temp,temp2);
+
     DEBUG_BREAK();
-    Print(sym);
+    SymbolicExpression* result = ApplyDistributivity(sym,temp,temp2);
+    //Print(result);
+    String repr = PushRepresentation(result,temp);
+    if(!CompareString(repr,s.expected)){
+      printf("TestDestributive %d failed\n Input:%.*s\n Good: %.*s\n Got:  %.*s\n",i,UNPACK_SS(s.in),UNPACK_SS(s.expected),UNPACK_SS(repr));
+    }
   }
 }
 
@@ -1339,15 +1289,18 @@ void TestSymbolic(Arena* temp,Arena* temp2){
 #endif
   };
   
+  //TestPrint(temp,temp2);
+  TestDestributive(temp,temp2);
+
 #if 0
   TestRemoveParenthesis(temp,temp2);
   TestPrint(temp,temp2);
   TestDerivative(temp,temp2);
-#endif
 
   //TestReplace(temp,temp2);
+#endif
   
-#if 1
+#if 0
   for(String s : examples){
     BLOCK_REGION(temp);
     BLOCK_REGION(temp2);

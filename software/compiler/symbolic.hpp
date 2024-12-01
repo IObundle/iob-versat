@@ -43,7 +43,7 @@ struct TermsWithLiteralMultiplier{
   SymbolicExpression* literal;
 };
 
-void Print(SymbolicExpression* expr,bool top = true,int parentBindingStrength = 0);
+void Print(SymbolicExpression* expr);
 String PushRepresentation(SymbolicExpression* expr,Arena* out);
 
 SymbolicExpression* ParseSymbolicExpression(Tokenizer* tok,Arena* out,Arena* temp);

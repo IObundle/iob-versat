@@ -474,12 +474,17 @@ int main(int argc,char* argv[]){
 
 #if 0
   DelayToAdd testing = {};
-  SimpleNode* test = Node(Node(Leaf(1),Leaf(2)),Node(Node(Leaf(3),Leaf(4)),Leaf(5)));
+  SimpleNode* test = Node(nullptr,Node(Node(Leaf(3),Leaf(4)),Leaf(5)));
+  //SimpleNode* test = Node(Node(Leaf(1),Leaf(2)),Node(Node(Leaf(3),Leaf(4)),Leaf(5)));
   DEBUG_BREAK();
   return 0;
 #endif
   
 #if 0
+  // TODO: Gonna need to beef up every symbolic expression test case, otherwise we are gonna spend a lot of time looking for negation bugs and the likes
+  //       Making testcases is not hard. Just need to check the function and look at all the different flows.
+  //       Also, It is probably better to start calling Normalize inside of other functions mid processing. For example, no point dealing with negatives inside multiplications when we could just normalize the multiplication to push the negative to the expression. In this case, it is probably better to have a bunch of normalizes for the different things that we care about.
+  
   TestSymbolic(temp,temp2);
   return 0;
 #endif
