@@ -215,6 +215,8 @@ struct AddressGenLoopSpecificatonSym{
   String shiftExpression;
 
   String dutyExpression; // Non empty if it exists
+
+  String shiftWithoutRemovingIncrement; // Shift as if period did not change addr. Useful for current implementation of VRead/VWrites
   
   //String nonPeriodIncrement;
   //String nonPeriodEnd;
