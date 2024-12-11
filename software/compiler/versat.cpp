@@ -163,7 +163,7 @@ FUDeclaration* RegisterModuleInfo(ModuleInfo* info,Arena* temp){
 
   memoryMapBits = EvalRange(info->memoryMappedBits,instantiated);
   //databusAddrSize = EvalRange(info->databusAddrSize,instantiated);
-
+  
   decl.name = info->name;
   decl.baseConfig.inputDelays = info->inputDelays;
   decl.baseConfig.outputLatencies = info->outputLatencies;
@@ -630,9 +630,11 @@ FUDeclaration* RegisterSubUnitBarebones(Accelerator* circuit,Arena* temp,Arena* 
     }
   }
   
+  res->instanceInfo = CalculateInstanceInfoTest(res->fixedDelayCircuit,permanent,temp);
+
   return res;
 }
-  
+
 FUDeclaration* RegisterSubUnit(Accelerator* circuit,Arena* temp,Arena* temp2){
   Arena* permanent = globalPermanent;
   BLOCK_REGION(temp);
@@ -740,6 +742,8 @@ FUDeclaration* RegisterSubUnit(Accelerator* circuit,Arena* temp,Arena* temp2){
     }
   }
 
+  res->instanceInfo = CalculateInstanceInfoTest(res->fixedDelayCircuit,permanent,temp);
+  
   return res;
 }
 

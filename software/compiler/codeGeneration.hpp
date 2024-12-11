@@ -90,6 +90,27 @@ static bool operator==(const SubTypesInfo i0,const SubTypesInfo i1){
 struct AddressGenDef;
 extern Pool<AddressGenDef> savedAddressGen;
 
+
+// In order to get the names, I need to associate a given member to a merge index.
+// Since multiplexers can be shared accross multiple merge indexes, I need some map of some sorts.
+// One multiplexer can be used by dozens of merge indexes.
+enum StructInfoType{
+  StructInfoType_UNION_WITH_MERGE_MULTIPLEXERS
+};
+
+struct StructElement{
+  String name;
+  String type;
+  int pos;
+  int size;
+}; 
+
+struct StructInfo{
+  StructInfoType type;
+  
+  Array<StructElement> elements;
+};
+
 Array<FUDeclaration*> SortTypesByConfigDependency(Array<FUDeclaration*> types,Arena* out,Arena* temp);
 Array<FUDeclaration*> SortTypesByMemDependency(Array<FUDeclaration*> types,Arena* out,Arena* temp);
 Array<TypeStructInfoElement> GenerateStructFromType(FUDeclaration* decl,Arena* out,Arena* temp);

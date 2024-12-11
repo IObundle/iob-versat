@@ -13,13 +13,14 @@
 #include "templateEngine.hpp"
 #include "textualRepresentation.hpp"
 #include "globals.hpp"
+#include "configurations.hpp"
 
 #include "versatSpecificationParser.hpp"
 
 static const int DELAY_SIZE = 7;
 
-// TODO:
-Pool<AddressGenDef> savedAddressGen; // REMOVE: Remove after proper implementation of AddressGenerators
+// TODO: REMOVE: Remove after proper implementation of AddressGenerators
+Pool<AddressGenDef> savedAddressGen;
 
 Array<Difference> CalculateSmallestDifference(Array<int> oldValues,Array<int> newValues,Arena* out){
   Assert(oldValues.size == newValues.size); // For now
@@ -51,7 +52,7 @@ Array<FUDeclaration*> SortTypesByConfigDependency(Array<FUDeclaration*> types,Ar
 
   int stored = 0;
   Array<FUDeclaration*> result = PushArray<FUDeclaration*>(out,size);
-
+  
   Hashmap<FUDeclaration*,bool>* seen = PushHashmap<FUDeclaration*,bool>(temp,size);
   Array<Array<FUDeclaration*>> subTypes = PushArray<Array<FUDeclaration*>>(temp,size);
   Memset(subTypes,{});
@@ -312,6 +313,13 @@ Array<SubTypesInfo> GetSubTypesInfo(Accelerator* accel,Arena* out,Arena* temp){
   return result;
 }
 
+// How to simplify this?
+// A unit can either be merged or contain a merged unit.
+// Containing a merged unit is problematic because we might end up with multiple units of the same type but with different configuration structs.
+//
+
+// First, why are we not building on top of accel info?
+
 // NOTE: The biggest source of complexity comes from merging, since merging affects the lower structures,
 //       causing the addition of padded members
 Array<TypeStructInfo> GetConfigStructInfo(Accelerator* accel,Arena* out,Arena* temp){
@@ -320,11 +328,14 @@ Array<TypeStructInfo> GetConfigStructInfo(Accelerator* accel,Arena* out,Arena* t
   Array<FUDeclaration*> typesUsed = ConfigSubTypes(accel,out,temp);
   typesUsed = SortTypesByConfigDependency(typesUsed,temp,out);
 
+  // Get all the subtypes used (type and wether it was inside a merge or not).
+  // Inside a merge we need to create a merged view of the structure
   Array<SubTypesInfo> subTypesInfo =  GetSubTypesInfo(accel,out,temp);
   
   Array<TypeStructInfo> structures = PushArray<TypeStructInfo>(out,typesUsed.size + 99); // TODO: Small hack to handle merge for now.
   int index = 0;
   for(SubTypesInfo subType : subTypesInfo){
+    // 
     if(subType.isFromMerged){
       FUDeclaration* decl = subType.mergeTop;
       int maxOffset = decl->baseConfig.configOffsets.max; // TODO: This should be equal for all merged types, no need to duplicate data
@@ -392,6 +403,7 @@ Array<TypeStructInfo> GetConfigStructInfo(Accelerator* accel,Arena* out,Arena* t
       structures[index].entries = elem;
       index += 1;
     } else if(subType.containsMerged){
+      // Contains a merged unit. 
       FUDeclaration* decl = subType.type;
 
       Array<TypeStructInfoElement> merged = PushArray<TypeStructInfoElement>(out,1);
@@ -416,6 +428,25 @@ Array<TypeStructInfo> GetConfigStructInfo(Accelerator* accel,Arena* out,Arena* t
   structures.size = index;
   
   return structures;
+}
+
+// What do I want???
+
+// From the generated struct, I need to be able to query the name of the multiplexers associated to a given merge configuration.
+//
+
+// So I basically want something like:
+// Returns the list of names of multiplexers inside struct info. The names are the full hierarchical names necessary to access the correct value.
+
+
+// Array<String> GetNamedOfMergeMultiplexers(StructInfo* info,int mergeIndex,Arena* out);
+
+
+// We will start simple. Start with the instantiation of a top unit that is a merged instance.
+
+// 
+Array<String> GetNameOfMergeMultiplexers(StructInfo* info,int mergeIndex,Arena* out){
+  return {};
 }
 
 static Array<TypeStructInfo> GetMemMappedStructInfo(Accelerator* accel,Arena* out,Arena* temp){
@@ -768,7 +799,7 @@ void OutputVerilatorWrapper(FUDeclaration* type,Accelerator* accel,String output
   }
   allStaticsVerilatorSide.size = index;
   TemplateSetCustom("allStaticsVerilatorSide",MakeValue(&allStaticsVerilatorSide));
-
+  
   Array<TypeStructInfoElement> structuredConfigs = ExtractStructuredConfigs(info.baseInfo,temp,temp2);
   
   TemplateSetNumber("delays",info.delays);
@@ -835,7 +866,6 @@ void OutputVerilatorMake(String topLevelName,String versatDir,Arena* temp,Arena*
 
   TemplateSetArray("allFilenames","String",UNPACK_SS(allFilenames));
   
-  // MARKED: LEFT HERE. Trying to make the generated makefile not depend on the setup environment. Must be generic. Paths must be relative and VERILATOR ROOT must be found at build time, not setup time.
   TemplateSetCustom("arch",MakeValue(&globalOptions));
   TemplateSetString("srcDir",srcDir);
   TemplateSetString("versatDir",versatDir);
@@ -855,8 +885,8 @@ Array<Array<MuxInfo>> GetAllMuxInfo(AccelInfo* info,Arena* out,Arena* temp){
   Set<SameMuxEntities>* knownSharedIndexes = PushSet<SameMuxEntities>(temp,99);
   
   for(InstanceInfo& f : info->baseInfo){
-    if(f.isMergeMultiplexer){
-      knownSharedIndexes->Insert({f.configPos.value(),&f});
+  if(f.isMergeMultiplexer){
+    knownSharedIndexes->Insert({f.configPos.value(),&f});
     }
   }
 
@@ -885,6 +915,41 @@ Array<Array<MuxInfo>> GetAllMuxInfo(AccelInfo* info,Arena* out,Arena* temp){
   return result;
 }
 
+// NOTE: The one thing that we can be sure of, is that the arrangement of the structs is always the same.
+//       The difference is wether the unit contains certain members (or padding)
+//       and wether the members are union or not.
+
+// NOTE: How do we handle merge? We will find out when we need to.
+StructInfo* GenerateConfigStruct(AccelInfo info,Arena* out,Arena* temp){
+  ArenaList<StructElement>* elements = PushArenaList<StructElement>(temp);
+  for(AccelInfoIterator iter = StartIteration(&info); iter.IsValid(); iter = iter.Next()){
+    InstanceInfo* info = iter.CurrentUnit();
+    if(info->belongs){
+      StructElement elem = {};
+
+      elem.name = {};
+      elem.type = {};
+      if(info->isComposite){
+        elem.type = PushString(out,"%.*sConfig",UNPACK_SS(info->decl->name));
+        elem.name = STRING("test");
+      } else {
+        elem.type = STRING("iptr");
+        elem.name = STRING("test");
+      }
+      
+      elem.pos = info->configPos.value();
+      elem.size = info->configSize;
+      *elements->PushElem() = elem;
+    }
+  }
+
+  StructInfo* result = PushStruct<StructInfo>(out);
+  result->type = StructInfoType_UNION_WITH_MERGE_MULTIPLEXERS;
+  result->elements = PushArrayFromList(out,elements);
+
+  return result;
+}
+
 void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* softwarePath,bool isSimple,Arena* temp,Arena* temp2){
   BLOCK_REGION(temp);
   BLOCK_REGION(temp2);
@@ -902,10 +967,17 @@ void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* 
     return;
   }
 
+  DEBUG_BREAK();
   AccelInfo info = CalculateAcceleratorInfo(accel,true,temp,temp2);
   VersatComputedValues val = ComputeVersatValues(accel,globalOptions.useDMA);
   CheckSanity(info.baseInfo,temp);
-  
+
+  // Need to calculate StructInfo.
+  // Will calculate it from AccelInfo.
+
+  // TODO: Finish this
+  //StructInfo* structInfo = GenerateConfigStruct(info,temp,temp2);
+
   printf("ADDR_W - %d\n",val.memoryConfigDecisionBit + 1);
   if(val.nUnitsIO){
     printf("HAS_AXI - True\n");
@@ -1272,7 +1344,6 @@ void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* 
 
     TemplateSetCustom("mergeMux",MakeValue(&result));
 
-    //String InstantiateAddressGen(AddressGenDef def,Arena* out,Arena* temp);
     GrowableArray<String> builder = StartGrowableArray<String>(temp2);
     for(AddressGenDef* def : savedAddressGen){
       String res = InstantiateAddressGen(*def,temp,temp2);

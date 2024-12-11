@@ -19,6 +19,7 @@
 #include "accelerator.hpp"
 #include "dotGraphPrinting.hpp"
 #include "versatSpecificationParser.hpp"
+#include "symbolic.hpp"
 
 #include <filesystem>
 namespace fs = std::filesystem;
@@ -429,39 +430,6 @@ struct argp_option options[] =
     { 0 }
   };
 
-#include "symbolic.hpp"
-
-enum SimpleNodeType{
-  SimpleNodeType_NODE,
-  SimpleNodeType_LEAF
-};
-
-struct SimpleNode{
-  SimpleNodeType type;
-  union{
-    struct{
-      SimpleNode* left;
-      SimpleNode* right;
-    };
-    int value;
-  };
-}; 
-
-SimpleNode* Node(SimpleNode* left,SimpleNode* right){
-  SimpleNode* res = PushStruct<SimpleNode>(globalPermanent);
-  res->type = SimpleNodeType_NODE;
-  res->left = left;
-  res->right = right;
-  return res;
-}
-
-SimpleNode* Leaf(int val){
-  SimpleNode* res = PushStruct<SimpleNode>(globalPermanent);
-  res->type = SimpleNodeType_LEAF;
-  res->value = val;
-  return res;
-}
-
 int main(int argc,char* argv[]){
   InitDebug();
   
@@ -471,105 +439,6 @@ int main(int argc,char* argv[]){
   Arena* temp = &tempInst;
   Arena temp2Inst = InitArena(Megabyte(128));
   Arena* temp2 = &temp2Inst;
-
-#if 0
-  DelayToAdd testing = {};
-  SimpleNode* test = Node(nullptr,Node(Node(Leaf(3),Leaf(4)),Leaf(5)));
-  //SimpleNode* test = Node(Node(Leaf(1),Leaf(2)),Node(Node(Leaf(3),Leaf(4)),Leaf(5)));
-  DEBUG_BREAK();
-  return 0;
-#endif
-  
-#if 0
-  // TODO: Gonna need to beef up every symbolic expression test case, otherwise we are gonna spend a lot of time looking for negation bugs and the likes
-  //       Making testcases is not hard. Just need to check the function and look at all the different flows.
-  //       Also, It is probably better to start calling Normalize inside of other functions mid processing. For example, no point dealing with negatives inside multiplications when we could just normalize the multiplication to push the negative to the expression. In this case, it is probably better to have a bunch of normalizes for the different things that we care about.
-  
-  TestSymbolic(temp,temp2);
-  return 0;
-#endif
-  
-#if 0
-  // TODO: Symbolic expressions are robust enough to allow us to start using them in the AddressGen code.
-  //       The biggest source of problems is division which I do not expect to need to use for the majority of the
-  //       AddressGen code. If needed, get an actual real world example and start from there implementing the things
-  //       that we want.
-  //
-  //       Regardless, move some of this code to an internal testing area of Versat. It is nice to have some examples
-  //       with some expected outputs working or close to working if we find ourselves back at this code again.
-  
-  //String content = STRING("a-a-b-b-2*c - c");
-  //String content = STRING("a+a+b+b+2*c + c");
-  //String content = STRING("-a-b-(a-b)-(-a+b)-(-(a-b)-(-a+b)+(a-b) + (-a+b))");
-  //String content = STRING("(a-b)*(a-b)");
-  //String content = STRING("a+b+a-b+a*b+a/b+a-(a-b)+a*(a+b)+a/(a+b)+(a+b) * (a-b)+(a-b)/(a+b)");
-  //String content = STRING("a*b + a*b + 2*a*b"); //-> 4 * a * b
-
-  //String content = STRING("1+2+3+1*20*30");
-
-  //String content = STRING("1 * 2");
-  //String content = STRING("a+b+a-b");
-  //String content = STRING("a+b+c+d");
-  //String content = STRING("a * (x + y)");
-  //String content = STRING("(x-y) * a");
-  //String content = STRING("a*b*c");
-  //String content = STRING("(x-y)");
-
-  //String content = STRING("1 + 2 + 3 + 4");
-  //String content = STRING("a+b+a-b");
-  //String content = STRING("(a - b) * (x + y)");
-  
-  //String content = STRING("2 * a * (x + y) * (a + b) + 2 * x / 10 + (x + y) / (x - y) + 4 * x * y + 1 + 2 + 3 + 4");
-  
-#if 0
-  //Tokenizer tok(content,"",{});
-  SymbolicExpression* res = ParseSymbolicExpression(&tok,temp,temp2);
-
-  auto Check = [](SymbolicExpression* r){
-    if(r){
-      Print(r);
-    } else {
-      printf("Error, res is nullptr\n\n\n");
-    }
-  };
-
-  Check(res);
- 
-  DEBUG_BREAK();
-  SymbolicExpression* res2 = ApplyDistributivity(res,temp,temp2);
-  Check(res2);
-#endif
-
-#if 0
-  DEBUG_BREAK();
-  SymbolicExpression* res2 = NormalizeLiterals(RemoveParenthesis(NormalizeLiterals(res,temp,temp2),temp,temp2),temp,temp2);
-  Check(res2);
-#endif
-
-#if 0
-  DEBUG_BREAK();
-  SymbolicExpression* res2 = ApplySimilarTermsAddition(res,temp,temp2);
-  SymbolicExpression* normalized = Normalize(res2,temp,temp2);
-  Check(res2);
-#endif
-
-#if 0
-  DEBUG_BREAK();
-  //SymbolicExpression* res2 = Normalize(res,temp,temp2);
-  SymbolicExpression* res3 = Derivate(res,STRING("a"),temp,temp2);
-  SymbolicExpression* normalized = Normalize(res3,temp,temp2);
-  Check(res3);
-  Check(normalized);
-#endif
-  
-#if 0
-  //DEBUG_BREAK();
-  SymbolicExpression* res2 = Normalize(res,temp,temp2);
-  Check(res2);
-#endif
-  
-  return 0;
-#endif
   
   argp argp = { options, parse_opt, "SpecFile", "Dataflow to accelerator compiler. Check tutorial in https://github.com/IObundle/iob-versat to learn how to write a specification file"};
 
@@ -917,7 +786,6 @@ int main(int argc,char* argv[]){
         CreateFUInstance(test,decl,STRING("TOP"));
         AccelInfo info = CalculateAcceleratorInfo(test,true,temp,temp2);
 
-        //DEBUG_BREAK();
         PrintRepr(stats,MakeValue(&info),temp,temp2);
       }
     }
@@ -1005,6 +873,17 @@ TODO: Because of the delay implementation, there is a possibility of allowing in
       Think a VRead connected a reg file that uses delays to store a value per reg.
       The normal implementation would insert a bunch of delays with an incremental value which is wasteful because we could just change reg delays.
       This requires to keep track for each module which one allows this to happen and then take that into account in the delay calculation functions. Note: Input delay does not work. We are talking about delay info propagating downards accross the hiearchy while input delay propagates upwards. We can still resolve this during the register FUDeclaration by calcuting the delays of lower units inside the register of the upper unit.
+
+Problem. We are genereting the structs with the multiplexer configs inside.
+I do not like that. I want all the merge multiplexers to be at the top of accelConfig and none inside the units themselves.
+
+What I currently imagine.
+
+If we have all the information that we need inside an array of tables (where each table is associated to a merge possibility) then everything becomes so much easier to do/debug.
+
+For example, for each multiplexer, we could have a member that indicates the input port that is associated to that merge datapath.
+
+We could also store graph data inside that representation. The way in which we handle graphs is soo clubersome. 
 
  */
 

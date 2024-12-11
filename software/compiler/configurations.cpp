@@ -11,6 +11,107 @@
 #include "textualRepresentation.hpp"
 #include <strings.h>
 
+bool AccelInfoIterator::IsValid(){
+  bool res = (info && index >= 0 && index < info->baseInfo.size);
+  return res;
+}
+
+int AccelInfoIterator::GetIndex(InstanceInfo* instance){
+  int i = (instance - &info->baseInfo[0]);
+  Assert(i < info->baseInfo.size);
+  return i;
+}
+
+InstanceInfo* AccelInfoIterator::GetParentUnit(){
+  if(!IsValid() || this->index == 0){
+    return nullptr;
+  }
+
+  int currentLevel = info->baseInfo[this->index].level;
+  if(currentLevel == 0){
+    return nullptr;
+  }
+
+  for(int i = this->index - 1; i >= 0; i--){
+    if(info->baseInfo[i].level < currentLevel){
+      Assert(info->baseInfo[i].level == currentLevel - 1);
+      return &info->baseInfo[i];
+    }
+  }
+
+  NOT_POSSIBLE("Any valid AccelInfo should never reach this point");
+  return nullptr;
+}
+
+InstanceInfo* AccelInfoIterator::CurrentUnit(){
+  return &info->baseInfo[index];
+}
+
+#if 0
+Array<InstanceInfo*> GetAllSubUnits(Arena* out){
+  
+}
+#endif
+
+AccelInfoIterator AccelInfoIterator::Next(){
+  if(!IsValid()){
+    return {};
+  }
+
+  int currentLevel = info->baseInfo[index].level;
+  for(int i = index + 1; i < info->baseInfo.size; i++){
+    int level = info->baseInfo[i].level; 
+    if(level == currentLevel){
+      AccelInfoIterator toReturn = {};
+      toReturn.info = info;
+      toReturn.index = i;
+      return toReturn;
+    }
+    if(level < currentLevel){
+      return {};
+    }
+  }
+
+  return {};
+}
+
+AccelInfoIterator AccelInfoIterator::Step(){
+  if(!IsValid()){
+    return {};
+  }
+
+  if(this->index + 1 >= info->baseInfo.size){
+    return {};
+  }
+  
+  AccelInfoIterator toReturn = {};
+  toReturn.info = info;
+  toReturn.index = this->index + 1;
+  return toReturn;
+}
+
+AccelInfoIterator AccelInfoIterator::StepInsideOnly(){
+  if(!IsValid()){
+    return {};
+  }
+
+  int currentLevel = info->baseInfo[index].level;
+  if(index + 1 < info->baseInfo.size && info->baseInfo[index + 1].level > currentLevel){
+    AccelInfoIterator toReturn = {};
+    toReturn.info = info;
+    toReturn.index = index + 1;
+    return toReturn;
+  }
+
+  return {};
+}
+
+AccelInfoIterator StartIteration(AccelInfo* info){
+  AccelInfoIterator iter = {};
+  iter.info = info;
+  return iter;
+}
+
 CalculatedOffsets CalculateConfigOffsetsIgnoringStatics(Accelerator* accel,Arena* out){
   int size = accel->allocated.Size();
 
@@ -262,8 +363,8 @@ Array<Partition> GenerateInitialPartitions(Accelerator* accel,Arena* out){
     FUDeclaration* decl = subInst->declaration;
 
     if(subInst->declaration->configInfo.size > 1){
+      *partitionsArr.PushElem() = (Partition){.value = 0,.max = decl->configInfo.size,.mergeIndexStart = mergedPossibility};
       mergedPossibility += log2i(decl->configInfo.size);
-      *partitionsArr.PushElem() = (Partition){.value = 0,.max = decl->configInfo.size};
     }
   }
   Array<Partition> partitions = EndArray(partitionsArr);
@@ -290,7 +391,7 @@ void IncrementPartitions(Array<Partition> partitions,int amount){
   }
 }
 
-static InstanceInfo GetInstanceInfo(FUInstance* node,FUDeclaration* parentDeclaration,InstanceConfigurationOffsets offsets,Arena* out){
+static InstanceInfo GetInstanceInfo(FUInstance* node,FUDeclaration* parentDeclaration,InstanceConfigurationOffsets offsets,Partition part,Arena* out){
   FUInstance* inst = node;
   String topName = inst->name;
   if(offsets.topName.size != 0){
@@ -302,23 +403,24 @@ static InstanceInfo GetInstanceInfo(FUInstance* node,FUDeclaration* parentDeclar
   info = {};
 
   info.name = inst->name;
-  info.baseName = offsets.baseName;
-  info.fullName = topName;
-  info.decl = topDecl;
   info.isStatic = inst->isStatic; 
   info.isShared = inst->sharedEnable;
   info.sharedIndex = inst->sharedIndex;
+  info.isMergeMultiplexer = inst->isMergeMultiplexer;
+  info.mergeMultiplexerId = inst->mergeMultiplexerId;
+  info.special = inst->literal;
+  info.baseName = offsets.baseName;
+  info.fullName = topName;
+  info.decl = topDecl;
   info.level = offsets.level;
   info.isComposite = IsTypeHierarchical(topDecl);
   info.parent = parentDeclaration;
   info.baseDelay = offsets.delay;
-  info.isMergeMultiplexer = inst->isMergeMultiplexer;
-  info.mergeMultiplexerId = inst->mergeMultiplexerId;
   info.belongs = offsets.belongs;
-  info.special = inst->literal;
   info.order = offsets.order;
   info.connectionType = node->type;
   info.id = node->id;
+  info.mergeIndexStart = part.mergeIndexStart;
   
   if(topDecl->memoryMapBits.has_value()){
     info.memMappedSize = (1 << topDecl->memoryMapBits.value());
@@ -384,9 +486,9 @@ static InstanceInfo GetInstanceInfo(FUInstance* node,FUDeclaration* parentDeclar
 AcceleratorInfo TransformGraphIntoArrayRecurse(FUInstance* node,FUDeclaration* parentDecl,InstanceConfigurationOffsets offsets,Opt<Partition> partition,Arena* out,Arena* temp){
   // This prevents us from fully using arenas because we are pushing more data than the actual structures that we keep track of. If this was hierarchical, we would't have this problem.
   AcceleratorInfo res = {};
-
+  
   FUInstance* inst = node;
-  InstanceInfo top = GetInstanceInfo(node,parentDecl,offsets,out);
+  InstanceInfo top = GetInstanceInfo(node,parentDecl,offsets,partition.value_or({}),out);
   
   FUDeclaration* topDecl = inst->declaration;
   if(!IsTypeHierarchical(topDecl)){
@@ -590,7 +692,7 @@ TestResult CalculateOneInstance(Accelerator* accel,bool recursive,Array<Partitio
     } else {
       // TODO: Recursive does not work well because we do not have name info.
       //       Without name info other parts of the code base cannot use the non recursive option.
-      InstanceInfo top = GetInstanceInfo(node,nullptr,subOffsets,out);
+      InstanceInfo top = GetInstanceInfo(node,nullptr,subOffsets,part.value_or({}),out);
 
       subOffsets.memOffset += top.memMappedSize.value_or(0);
       subOffsets.memOffset = AlignBitBoundary(subOffsets.memOffset,log2i(top.memMappedSize.value_or(1)));
@@ -638,12 +740,418 @@ TestResult CalculateOneInstance(Accelerator* accel,bool recursive,Array<Partitio
 // This function cannot return an array for merge units because we do not have the merged units info in this level.
 // This function only works for modules and for recursing the merged info to upper modules.
 // The info needed by merge must be stored by the merge function.
+Array<InstanceInfo> GenerateInitialInstanceInfo(Accelerator* accel,Arena* out,Arena* temp){
+  auto SetBaseInfo = [](InstanceInfo* elem,FUInstance* inst,int level){
+    *elem = {};
+    elem->inst = inst;
+    elem->name = inst->name;
+    elem->decl = inst->declaration;
+    elem->level = level;
+    elem->isComposite = IsTypeHierarchical(inst->declaration);
+    elem->isStatic = inst->isStatic; 
+    elem->isShared = inst->sharedEnable;
+    elem->sharedIndex = inst->sharedIndex;
+    elem->isMergeMultiplexer = inst->isMergeMultiplexer;
+    elem->mergeMultiplexerId = inst->mergeMultiplexerId;
+    elem->special = inst->literal;
+    elem->id = inst->id;
+    elem->mergeIndexStart = 0;
+  };
+  
+  auto Function = [SetBaseInfo](auto Recurse,DynamicArray<InstanceInfo>& array,Accelerator* accel,int level) -> void{
+    for(FUInstance* inst : accel->allocated){
+      InstanceInfo* elem = array.PushElem();
+      SetBaseInfo(elem,inst,level);
+      
+      if(inst->declaration->fixedDelayCircuit){
+        Recurse(Recurse,array,inst->declaration->fixedDelayCircuit,level + 1);
+      }
+    }
+  };
+  
+  auto build = StartArray<InstanceInfo>(out);
+
+  Function(Function,build,accel,0);
+  
+  // TODO: For now keep the standard order so it is easier to compare to the current code.
+#if 0
+  DAGOrderNodes order = CalculateDAGOrder(&accel->allocated,temp);
+  for(FUInstance* inst : order.instances){
+    InstanceInfo* elem = build.PushElem();
+    elem->connectionType = inst->type;
+    SetBaseInfo(elem,inst,0);
+    if(inst->declaration->fixedDelayCircuit){
+      Function(Function,build,inst->declaration->fixedDelayCircuit,1);
+    }
+  }
+#endif
+
+  Array<InstanceInfo> res = EndArray(build);
+
+  return res;
+}
+
+struct Node{
+  InstanceInfo* unit;
+  int value;
+  // Leafs have both of these at nullptr
+  Node* left;
+  Node* right;
+}; 
+
+Array<InstanceInfo> CalculateInstanceInfoTest(Accelerator* accel,Arena* out,Arena* temp){
+  Array<InstanceInfo> test2 = GenerateInitialInstanceInfo(accel,out,temp);
+
+  AccelInfo test = {};
+  test.baseInfo = test2;
+  
+  // Calculate full name
+  for(AccelInfoIterator iter = StartIteration(&test); iter.IsValid(); iter = iter.Step()){
+    InstanceInfo* unit = iter.CurrentUnit();
+    InstanceInfo* parent = iter.GetParentUnit();
+
+    unit->parent = parent ? parent->decl : nullptr;
+
+    // All these are basically to simplify debugging by having everything in one place.
+    // They can be moved to GenerateInitialInstanceInfo.
+    unit->configSize = unit->decl->baseConfig.configs.size;
+    unit->stateSize = unit->decl->baseConfig.states.size;
+    unit->delaySize = unit->decl->baseConfig.delayOffsets.max;
+    unit->memMappedBitSize = unit->decl->memoryMapBits;
+
+    if(unit->decl->memoryMapBits.has_value()){
+      unit->memMappedSize = (1 << unit->decl->memoryMapBits.value());
+    }
+    
+    // Merge stuff but for now use the default value. (Since not dealing with merged for now)
+    unit->baseName = unit->name;
+    unit->belongs = true;
+    
+    if(!parent){
+      unit->fullName = unit->name;
+      continue;
+    }
+
+    unit->fullName = PushString(out,"%.*s_%.*s",UNPACK_SS(parent->fullName),UNPACK_SS(unit->name));
+
+    printf("%.*s\n",UNPACK_SS(unit->name));
+  }
+
+  // Config info stuff
+  auto CalculateConfig = [](auto Recurse,AccelInfoIterator& iter,int startIndex,Arena* temp) -> void{
+    BLOCK_REGION(temp);
+
+    InstanceInfo* parent = iter.GetParentUnit();
+    if(parent){
+      Array<int> offsets = parent->decl->baseConfig.configOffsets.offsets;
+      
+      int index = 0;
+      for(AccelInfoIterator it = iter; it.IsValid(); it = it.Next()){
+        InstanceInfo* unit = it.CurrentUnit();
+
+        int configPos = startIndex + offsets[index];
+        
+        if(unit->configSize){
+          unit->configPos = configPos;
+        }
+          
+        index += 1;
+        AccelInfoIterator inside = it.StepInsideOnly();
+        if(inside.IsValid()){
+          Recurse(Recurse,inside,configPos,temp);
+        }
+      }
+    } else {
+      TrieMap<int,int>* sharedIndexToConfig = PushTrieMap<int,int>(temp);
+      
+      int configIndex = startIndex;
+      for(AccelInfoIterator it = iter; it.IsValid(); it = it.Next()){
+        InstanceInfo* unit = it.CurrentUnit();
+
+        bool isNewlyShared = false;
+        int indexForCurrentUnit = configIndex;
+        if(unit->isShared){
+          int sharedIndex = unit->sharedIndex;
+          GetOrAllocateResult<int> data = sharedIndexToConfig->GetOrAllocate(sharedIndex);
+          if(data.alreadyExisted){
+            indexForCurrentUnit = *data.data;
+          } else {
+            *data.data = configIndex;
+            isNewlyShared = true;
+          }
+        }
+        
+        if(unit->configSize && !unit->isStatic){
+          unit->configPos = indexForCurrentUnit;
+        }
+        
+        AccelInfoIterator inside = it.StepInsideOnly();
+        if(inside.IsValid() && !unit->isStatic){
+          Recurse(Recurse,inside,indexForCurrentUnit,temp);
+        }
+
+        if(!isNewlyShared && !unit->isStatic){
+          configIndex += unit->decl->baseConfig.configs.size;
+        }
+      }
+    }
+  };
+
+  AccelInfoIterator iter = StartIteration(&test);
+
+  CalculateConfig(CalculateConfig,iter,0,temp);
+
+  // Calculate state stuff
+  auto CalculateState = [](auto Recurse,AccelInfoIterator& iter,int startIndex,Arena* temp) -> void{
+    BLOCK_REGION(temp);
+
+    InstanceInfo* parent = iter.GetParentUnit();
+    if(parent){
+      Array<int> offsets = parent->decl->baseConfig.stateOffsets.offsets;
+      
+      int index = 0;
+      for(AccelInfoIterator it = iter; it.IsValid(); it = it.Next()){
+        InstanceInfo* unit = it.CurrentUnit();
+
+        int statePos = startIndex + offsets[index];
+        
+        if(unit->stateSize){
+          unit->statePos = statePos;
+        }
+          
+        index += 1;
+        AccelInfoIterator inside = it.StepInsideOnly();
+        if(inside.IsValid()){
+          Recurse(Recurse,inside,statePos,temp);
+        }
+      }
+    } else {
+      int stateIndex = startIndex;
+      for(AccelInfoIterator it = iter; it.IsValid(); it = it.Next()){
+        InstanceInfo* unit = it.CurrentUnit();
+
+        if(unit->stateSize){
+          unit->statePos = stateIndex;
+        }
+        
+        AccelInfoIterator inside = it.StepInsideOnly();
+        if(inside.IsValid()){
+          Recurse(Recurse,inside,stateIndex,temp);
+        }
+
+        stateIndex += unit->stateSize;
+      }
+    }
+  };
+
+  iter = StartIteration(&test);
+  CalculateState(CalculateState,iter,0,temp);
+
+  // Handle memory mapping
+  auto CalculateMemory = [](auto Recurse,AccelInfoIterator& iter,int startIndex,Arena* out,Arena* temp) -> void{
+    BLOCK_REGION(temp);
+    
+    // Let the inside units calculate their memory mapped first
+    int amountOfMemories = 0;
+    for(AccelInfoIterator it = iter; it.IsValid(); it = it.Next()){
+      AccelInfoIterator inside = it.StepInsideOnly();
+      if(inside.IsValid()){
+        Recurse(Recurse,inside,startIndex,out,temp);
+      }
+    }
+
+    auto builder = StartGrowableArray<Node*>(temp);
+    for(AccelInfoIterator it = iter; it.IsValid(); it = it.Next()){
+      InstanceInfo* unit = it.CurrentUnit();
+
+      if(unit->memMappedBitSize.has_value()){
+        Node* n = PushStruct<Node>(temp);
+        *n = (Node){unit,unit->memMappedBitSize.value()};
+        *builder.PushElem() = n;
+      }
+    }
+    Array<Node*> baseNodes = EndArray(builder);
+    
+    auto Sort = [](Array<Node*>& toSort){
+      for(int i = 0; i < toSort.size; i++){
+        for(int j = i + 1; j < toSort.size; j++){
+          if(toSort[i]->value < toSort[j]->value){
+            SWAP(toSort[i],toSort[j]);
+          }
+        }
+      }
+    };
+
+    Sort(baseNodes);
+
+    while(baseNodes.size > 1){
+      Node* left = baseNodes[baseNodes.size - 2];
+      Node* right = baseNodes[baseNodes.size - 1];
+      
+      Node* n = PushStruct<Node>(temp);
+      n->value = std::max(left->value,right->value) + 1;
+      n->left = left;
+      n->right = right;
+      baseNodes[baseNodes.size - 2] = n;
+      baseNodes.size -= 1;
+
+      Sort(baseNodes);
+    }
+
+    Node* top = baseNodes[0];
+    
+    auto NodeRecurse = [](auto Recurse,Node* top,int bitAccum,int index,Arena* out) -> void{
+      if(top->left == nullptr){
+        Assert(top->right == nullptr);
+
+        InstanceInfo* info = top->unit;
+
+        auto builder = StartString(out);
+        for(int i = 0; i < index; i++){
+          builder.PushChar(GET_BIT(bitAccum,i) ? '1' : '0');
+        }
+        String decisionMask = EndString(builder);
+        PushNullByte(out);
+        info->memDecisionMask = decisionMask;
+      } else {
+        Recurse(Recurse,top->left,SET_BIT(bitAccum,index),index + 1,out);
+        Recurse(Recurse,top->right,bitAccum,index + 1,out);
+      }
+    };
+
+    NodeRecurse(NodeRecurse,top,0,0,out);
+  };
+
+  iter = StartIteration(&test);
+  CalculateMemory(CalculateMemory,iter,0,out,temp);
+  
+  for(AccelInfoIterator iter = StartIteration(&test); iter.IsValid(); iter = iter.Step()){
+    InstanceInfo* unit = iter.CurrentUnit();
+
+    if(unit->memDecisionMask.has_value() && unit->memMappedBitSize.has_value()){
+      auto builder = StartString(out);
+      builder.PushString(unit->memDecisionMask.value());
+      for(int i = 0; i < unit->memMappedBitSize.value(); i++){
+        builder.PushChar('0');
+      }
+      unit->memMappedMask = EndString(builder);
+      PushNullByte(out);
+    }
+  }
+
+  // Delay pos is just basically State position without anything different, right?
+  auto CalculateDelayPos = [](auto Recurse,AccelInfoIterator& iter,int startIndex,Arena* temp) -> void{
+    BLOCK_REGION(temp);
+
+    InstanceInfo* parent = iter.GetParentUnit();
+    if(parent){
+      Array<int> offsets = parent->decl->baseConfig.delayOffsets.offsets;
+      
+      int index = 0;
+      for(AccelInfoIterator it = iter; it.IsValid(); it = it.Next()){
+        InstanceInfo* unit = it.CurrentUnit();
+
+        int delayPos = startIndex + offsets[index];
+        
+        if(unit->delaySize){
+          unit->delayPos = delayPos;
+        }
+          
+        index += 1;
+        AccelInfoIterator inside = it.StepInsideOnly();
+        if(inside.IsValid()){
+          Recurse(Recurse,inside,delayPos,temp);
+        }
+      }
+    } else {
+      int delayIndex = startIndex;
+      for(AccelInfoIterator it = iter; it.IsValid(); it = it.Next()){
+        InstanceInfo* unit = it.CurrentUnit();
+
+        if(unit->delaySize){
+          unit->delayPos = delayIndex;
+        }
+        
+        AccelInfoIterator inside = it.StepInsideOnly();
+        if(inside.IsValid()){
+          Recurse(Recurse,inside,delayIndex,temp);
+        }
+
+        delayIndex += unit->delaySize;
+      }
+    }
+  };
+  
+  // LEFT HERE.
+  // ONLY A FEW MORE MEMBERS.
+  iter = StartIteration(&test);
+  CalculateDelayPos(CalculateDelayPos,iter,0,temp);
+
+  DAGOrderNodes order = CalculateDAGOrder(&accel->allocated,temp);
+  CalculateDelayResult calculatedDelay = CalculateDelay(accel,order,temp);
+
+  auto CalculateDelay = [out,calculatedDelay](auto Recurse,AccelInfoIterator& iter,int startIndex,Arena* temp) -> void{
+    BLOCK_REGION(temp);
+
+    InstanceInfo* parent = iter.GetParentUnit();
+    if(parent){
+      Array<int> delays = parent->decl->baseConfig.calculatedDelays;
+      
+      int index = 0;
+      for(AccelInfoIterator it = iter; it.IsValid(); it = it.Next()){
+        InstanceInfo* unit = it.CurrentUnit();
+
+        int delayPos = startIndex + delays[index];
+        unit->baseDelay = delayPos;
+
+        if(unit->delaySize > 0 && !unit->isComposite){
+          unit->delay = PushArray<int>(out,unit->delaySize);
+          Memset(unit->delay,unit->baseDelay);
+        }
+        
+        index += 1;
+        AccelInfoIterator inside = it.StepInsideOnly();
+        if(inside.IsValid()){
+          Recurse(Recurse,inside,delayPos,temp);
+        }
+      }
+    } else {
+      for(AccelInfoIterator it = iter; it.IsValid(); it = it.Next()){
+        InstanceInfo* unit = it.CurrentUnit();
+        
+        unit->baseDelay = calculatedDelay.nodeDelay->GetOrFail(unit->inst).value;
+
+        if(unit->delaySize > 0 && !unit->isComposite){
+          unit->delay = PushArray<int>(out,unit->delaySize);
+          Memset(unit->delay,unit->baseDelay);
+        }
+
+        AccelInfoIterator inside = it.StepInsideOnly();
+        if(inside.IsValid()){
+          Recurse(Recurse,inside,unit->baseDelay,temp);
+        }
+      }
+    }
+  };
+
+  iter = StartIteration(&test);
+  CalculateDelay(CalculateDelay,iter,0,temp);
+
+  // TODO: This seems to be everything. The only thing that is left is to test this and to expand this to handle merge.
+  DEBUG_BREAK();
+  
+  return test2;
+}
 
 AccelInfo CalculateAcceleratorInfo(Accelerator* accel,bool recursive,Arena* out,Arena* temp){
   // TODO: Have this function return everything that needs to be arraified  
   //       Printing a GraphArray struct should tell me everything I need to know about the accelerator
   AccelInfo result = {};
 
+  // MARKED: LEFT HERE. We are currently trying to simplify this area of the code. The approach is to fill AccelInfo with the default data that is only dependent on the unit itself and then use the AccelInfoIterator to fill the other parts individually.
+  //         Do not know how to handle merge yet in the interface of the iterator.
+  //         Kinda also doing a change in FUDeclaration so that we store AccelInfo directly inside the declaration and we can stop having multiple different structs to represent the same thing. Also useful for debugging because looking at the AccelInfo data is much easier.
+  
   //BLOCK_REGION(temp); NOTE: - Some bug occurs, probably because the function is a mess and we have no idea how memory is actually being used.
   Array<Partition> partitions = GenerateInitialPartitions(accel,temp);
 
@@ -692,7 +1200,6 @@ AccelInfo CalculateAcceleratorInfo(Accelerator* accel,bool recursive,Arena* out,
       }
     }
 
-    //DEBUG_BREAK();
     if(maxConfigDecl){
       int totalConfigSize = maxConfig + maxConfigDecl->baseConfig.configOffsets.max;
       for(InstanceInfo& inst : res2.info){
@@ -780,6 +1287,12 @@ AccelInfo CalculateAcceleratorInfo(Accelerator* accel,bool recursive,Arena* out,
       }
     }
   }
+
+  Array<InstanceInfo> test2 = CalculateInstanceInfoTest(accel,temp,out);
+  AccelInfo test = {};
+  test.baseInfo = test2;
+
+  DEBUG_BREAK();
   
   result.memMappedBitsize = totalMaxBitsize;
 
@@ -967,16 +1480,8 @@ void PrintConfigurations(FUDeclaration* type,Arena* temp){
   printf("\n");
 }
 
-
 // HACK
-// HACK
-// HACK
-// HACK
-// HACK
-// HACK
-
-
-static InstanceInfo GetInstanceInfoNoDelay(FUInstance* node,FUDeclaration* parentDeclaration,InstanceConfigurationOffsets offsets,Arena* out){
+static InstanceInfo GetInstanceInfoNoDelay(FUInstance* node,FUDeclaration* parentDeclaration,InstanceConfigurationOffsets offsets,Partition part,Arena* out){
   FUInstance* inst = node;
   String topName = inst->name;
   if(offsets.topName.size != 0){
@@ -1003,7 +1508,8 @@ static InstanceInfo GetInstanceInfoNoDelay(FUInstance* node,FUDeclaration* paren
   info.belongs = offsets.belongs;
   info.special = inst->literal;
   info.connectionType = node->type;
-
+  info.mergeIndexStart = part.mergeIndexStart;
+  
   Assert(info.baseDelay >= 0);
   
   if(topDecl->memoryMapBits.has_value()){
@@ -1065,7 +1571,7 @@ AcceleratorInfo TransformGraphIntoArrayRecurseNoDelay(FUInstance* node,FUDeclara
   AcceleratorInfo res = {};
 
   FUInstance* inst = node;
-  InstanceInfo top = GetInstanceInfoNoDelay(node,parentDecl,offsets,out);
+  InstanceInfo top = GetInstanceInfoNoDelay(node,parentDecl,offsets,partition,out);
   
   FUDeclaration* topDecl = inst->declaration;
   if(!IsTypeHierarchical(topDecl)){
@@ -1214,7 +1720,7 @@ TestResult CalculateOneInstanceNoDelay(Accelerator* accel,bool recursive,Array<P
         *PushListElement(infoList) = f;
       }
     } else {
-      InstanceInfo top = GetInstanceInfoNoDelay(node,nullptr,subOffsets,out);
+      InstanceInfo top = GetInstanceInfoNoDelay(node,nullptr,subOffsets,part,out);
 
       subOffsets.memOffset += top.memMappedSize.value_or(0);
       subOffsets.memOffset = AlignBitBoundary(subOffsets.memOffset,log2i(top.memMappedSize.value_or(1)));
@@ -1230,7 +1736,7 @@ TestResult CalculateOneInstanceNoDelay(Accelerator* accel,bool recursive,Array<P
   TestResult result = {};
   result.info = res;
   result.subOffsets = subOffsets;
-
+  
   Array<String> nameList = PushArrayFromList(temp,names);
   
   auto mark = StartString(out);
@@ -1268,19 +1774,7 @@ AccelInfo CalculateAcceleratorInfoNoDelay(Accelerator* accel,bool recursive,Aren
 
   // NOTE - Some bug occurs, probably because the function is a mess and we have no idea how the memory is being used
   //BLOCK_REGION(temp);
-  
-  DynamicArray<Partition> partitionsArr = StartArray<Partition>(temp);
-  int mergedPossibility = 0;
-  for(FUInstance* node : accel->allocated){
-    FUInstance* subInst = node;
-    FUDeclaration* decl = subInst->declaration;
-
-    if(subInst->declaration->configInfo.size > 1){
-      mergedPossibility += log2i(decl->configInfo.size);
-      *partitionsArr.PushElem() = (Partition){.value = 0,.max = decl->configInfo.size};
-    }
-  }
-  Array<Partition> partitions = EndArray(partitionsArr);
+  Array<Partition> partitions = GenerateInitialPartitions(accel,temp);
 
   int totalMaxBitsize = 0;
   ArenaList<TestResult>* list = PushArenaList<TestResult>(temp);
@@ -1367,7 +1861,7 @@ AccelInfo CalculateAcceleratorInfoNoDelay(Accelerator* accel,bool recursive,Aren
   result.baseInfo = PushArray<InstanceInfo>(out,unique.size);
   for(int i = 0; i < result.baseInfo.size; i++){
     result.baseInfo[i] = unique[i]; // Copy default values
-
+    
     result.baseInfo[i].belongs = true; // All units belong to baseInfo
     result.baseInfo[i].baseName = result.baseInfo[i].name;
     

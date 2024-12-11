@@ -1099,7 +1099,7 @@ SymbolicExpression* Normalize(SymbolicExpression* expr,Arena* out,Arena* temp){
 #endif
     
 #if 1
-    DEBUG_BREAK();
+    //DEBUG_BREAK();
     next = RemoveParenthesis(current,out,temp);
     CheckIfSymbolicExpressionsShareNodes(current,next,temp); // RemoveParenthesis does not recurse, so obviously this will fail
     current = next;

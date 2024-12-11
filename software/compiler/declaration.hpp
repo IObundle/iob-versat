@@ -8,6 +8,7 @@
 //struct FUInstance;
 struct FUDeclaration;
 struct Edge;
+struct InstanceInfo;
 
 typedef Hashmap<FUInstance*,FUInstance*> InstanceMap;
 typedef Hashmap<Edge,Edge> EdgeMap;
@@ -98,12 +99,20 @@ enum FUDeclarationType{
 
 // TODO: There is a lot of crux between parsing and creating the FUDeclaration for composite accelerators 
 //       the FUDeclaration should be composed of something that is in common to all of them.
-// A declaration is the instantiation of a type
 struct FUDeclaration{
   String name;
 
   ConfigurationInfo baseConfig;
   Array<ConfigurationInfo> configInfo; // Info for each merged view for all fixedDelayCircuit instances, even if they do not belong to the merged view (unitBelongs indicates such cases)
+
+  // TODO:  The idea is to phase out baseConfig and configInfo and replace them with the InstanceInfo approach
+  //        The InstanceInfo approach is then used inside the FUDeclaration
+
+  // TODO2: Because merge permeates the entire logic, there is no point having a different member to store data.
+  //        baseConfig and configInfo should have been always just configInfo, with a size of 1 if no merge and non 1 if merge.
+  //        We carried the same problem for AccelInfo, where we have a baseInfo and the merged infos, but in reality we should have only one member.
+  
+  Array<InstanceInfo> instanceInfo;
   
   Array<String> parameters; // For now, only the parameters extracted from verilog files
   
@@ -139,7 +148,7 @@ struct FUDeclaration{
   bool implementsDone;
   bool signalLoop;
 
-// Simple access functions
+  // Simple access functions
   int NumberInputs(){return baseConfig.inputDelays.size;};
   int NumberOutputs(){return baseConfig.outputLatencies.size;};
 };

@@ -177,9 +177,6 @@ struct SymbolicExpression;
 struct AddressGenDef{
   Array<Token> inputs;
   Array<AddressGenForDef> loops;
-  Array<Array<Token>> sumOfMultiplications;
-  Array<Array<Token>> internalExpression;
-  Array<Array<Token>> externalExpression;
   SymbolicExpression* symbolic;
   SymbolicExpression* symbolicInternal;
   SymbolicExpression* symbolicExternal;

@@ -1808,61 +1808,6 @@ FUDeclaration* InstantiateSpecifications(String content,TypeDefinition def,Arena
   return nullptr;
 }
 
-Opt<Array<Token>> ParseMultiplicationTerm(Tokenizer* tok,Arena* out,Arena* temp){
-  BLOCK_REGION(temp);
-
-  Token firstIdentifier = tok->NextToken();
-
-  // TODO: Can be identifier or a number.
-  //       Should have a CHECK_TERM function or a parse term function that parses identifier or numbers
-  //       Basically move the code in the instantiate function that checks if number or identifier to here
-  //       Or for now just keep things are they are
-  //CHECK_IDENTIFIER(firstIdentifier);
-
-  ArenaList<Token>* identifiers = PushArenaList<Token>(temp);
-  *identifiers->PushElem() = firstIdentifier;
-  while(!tok->Done()){
-    Token peek = tok->PeekToken();
-
-    if(CompareString(peek,"*")){
-      tok->AdvancePeek();
-      Token followingIdentifier = tok->NextToken();
-      
-      *identifiers->PushElem() = followingIdentifier;
-    } else {
-      break;
-    }
-  }
-
-  Array<Token> res = PushArrayFromList(out,identifiers);
-  return res;
-}
-
-Opt<Array<Array<Token>>> ParseAddressGenExpression(Tokenizer* tok,Arena* out,Arena* temp){
-  BLOCK_REGION(temp);
-  Opt<Array<Token>> firstTerm = ParseMultiplicationTerm(tok,out,temp);
-  PROPAGATE(firstTerm);
-
-  ArenaList<Array<Token>>* terms = PushArenaList<Array<Token>>(temp);
-  *terms->PushElem() = firstTerm.value();
-  while(!tok->Done()){
-    Token peek = tok->PeekToken();
-
-    if(CompareString(peek,"+")){
-      tok->AdvancePeek();
-
-      Opt<Array<Token>> followingTerms = ParseMultiplicationTerm(tok,out,temp);
-      PROPAGATE(followingTerms);
-
-      *terms->PushElem() = followingTerms.value();
-    } else {
-      break;
-    }
-  }
-
-  return PushArrayFromList(out,terms);
-}
-
 Opt<AddressGenDef> ParseAddressGen(Tokenizer* tok,Arena* out,Arena* temp){
   EXPECT(tok,"AddressGen");
 
@@ -1908,9 +1853,6 @@ Opt<AddressGenDef> ParseAddressGen(Tokenizer* tok,Arena* out,Arena* temp){
   SymbolicExpression* symbolic = nullptr;
   SymbolicExpression* internalSymbolic = nullptr;
   SymbolicExpression* externalSymbolic = nullptr;
-  Array<Array<Token>> expression = {};
-  Array<Array<Token>> internalExpression = {};
-  Array<Array<Token>> externalExpression = {};
   Token externalName = {};
   while(!tok->Done()){
     Token construct = tok->NextToken();
@@ -1927,55 +1869,36 @@ Opt<AddressGenDef> ParseAddressGen(Tokenizer* tok,Arena* out,Arena* temp){
     } else if(CompareString(construct,"addr")){
       EXPECT(tok,"=");
 
-      auto mark = tok->Mark();
-      auto expressionOpt = ParseAddressGenExpression(tok,out,temp);
-      tok->Rollback(mark);
       auto symbolicExpression = ParseSymbolicExpression(tok,out,temp);
-      
-      PROPAGATE(expressionOpt);
       PROPAGATE_POINTER_OPT(symbolicExpression);
-      
-      expression = expressionOpt.value();
       symbolic = symbolicExpression;
       
       EXPECT(tok,";");
       break;
     } else {      
       EXPECT(tok,"[");
-      auto mark = tok->Mark();
-      auto expressionOpt = ParseAddressGenExpression(tok,out,temp);
-      tok->Rollback(mark);
       auto symbolicExpression = ParseSymbolicExpression(tok,out,temp);
       EXPECT(tok,"]");
       
-      PROPAGATE(expressionOpt);
       PROPAGATE_POINTER_OPT(symbolicExpression);
       
       EXPECT(tok,"=");
       Token other = tok->NextToken();
 
       EXPECT(tok,"[");
-      mark = tok->Mark();
-      auto expressionOpt2 = ParseAddressGenExpression(tok,out,temp);
-      tok->Rollback(mark);
       auto symbolicExpression2 = ParseSymbolicExpression(tok,out,temp);
       EXPECT(tok,"]");
 
       EXPECT(tok,";");
 
-      PROPAGATE(expressionOpt2);
       PROPAGATE_POINTER_OPT(symbolicExpression2);
       
       if(CompareString(construct,"mem")){
-        internalExpression = expressionOpt.value();
         internalSymbolic = symbolicExpression;
-        externalExpression = expressionOpt2.value();
         externalSymbolic = symbolicExpression2;
         externalName = PushString(out,other);
       } else {
-        internalExpression = expressionOpt2.value();
         internalSymbolic = symbolicExpression2;
-        externalExpression = expressionOpt.value();
         externalSymbolic = symbolicExpression;
         externalName = PushString(out,construct);
       }
@@ -1984,15 +1907,11 @@ Opt<AddressGenDef> ParseAddressGen(Tokenizer* tok,Arena* out,Arena* temp){
     }
   }
  
-  // TODO: The whole thing is a bit hackish.
   AddressGenDef def = {};
+  def.name = name;
+  def.type = type;
   def.inputs = inputsArr;
   def.loops = PushArrayFromList(out,loops);
-  def.sumOfMultiplications = expression;
-  def.type = type;
-  def.name = name;
-  def.internalExpression = internalExpression;
-  def.externalExpression = externalExpression;
   def.externalName = externalName;
   def.symbolic = symbolic;
   def.symbolicInternal = internalSymbolic;
@@ -2165,6 +2084,7 @@ String InstantiateAddressGen(AddressGenDef def,Arena* out,Arena* temp){
     if(current->type == SymbolicExpressionType_OP){
       current = current->left;
     }
+    
     // TODO: Should be the start value, but since we only using zero, for now simplify.
     //       A lot of code needs to be moved first and we probably need more tests before we start tackling this issues anyway. Not a priority for now.
     SymbolicExpression* toReplaceWith = ParseSymbolicExpression(STRING("0"),temp,temp2);
@@ -2193,6 +2113,7 @@ String InstantiateAddressGen(AddressGenDef def,Arena* out,Arena* temp){
   PushString(out,";\n");
   PushString(out,"}\n\n\n");
 
+  // TODO: All these different types should be removed and a generic approach used. The only difference is the logic for VRead/VWrite different usages (output vs access memory) and the fact that the units have differences in the name of the signals, which is not a reason to have multiple different types. Need to map loop to name
   switch(def.type){
   case AddressGenType_MEM:{
     PushString(out,"static void Configure_%.*s(volatile Generator3Config* config",UNPACK_SS(def.name));
