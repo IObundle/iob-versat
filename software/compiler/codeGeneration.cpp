@@ -467,22 +467,38 @@ static Array<TypeStructInfo> GetMemMappedStructInfo(Accelerator* accel,Arena* ou
   return structures;
 }
 
+Array<String> ExtractMemoryMasks(AccelInfo info,Arena* out){
+  auto builder = StartArray<String>(out);
+  for(AccelInfoIterator iter = StartIteration(&info); iter.IsValid(); iter = iter.Next()){
+    InstanceInfo* unit = iter.CurrentUnit();
+
+    if(unit->memDecisionMask.has_value()){
+      *builder.PushElem() = unit->memDecisionMask.value();
+    }
+  }
+
+  return EndArray(builder);
+}
+
+#if 0
 Array<MemoryAddressMask> CalculateAcceleratorMemoryMasks(AccelInfo info,Arena* out){
+  DEBUG_BREAK();
   DynamicArray<MemoryAddressMask> arr = StartArray<MemoryAddressMask>(out);
   for(InstanceInfo& in : info.infos[0]){
     if(in.level == 0 && in.memMapped.has_value()){
       MemoryAddressMask* data = arr.PushElem();
       *data = {};
-      data->memoryMaskSize = info.memMappedBitsize - in.memMappedBitSize.value();
+      data->memoryMaskSize = in.memDecisionMask.value().size;
       data->memoryMask = data->memoryMaskBuffer;
 
       for(int i = 0; i < data->memoryMaskSize; i++){
-        data->memoryMaskBuffer[i] = in.memMappedMask.value()[i];
+        data->memoryMaskBuffer[i] = in.memDecisionMask.value()[i];
       }
     }
   }
   return EndArray(arr);
 }  
+#endif
 
 #if 0
 Array<TypeStructInfoElement> ExtractStructuredStatics(Array<InstanceInfo> info,Arena* out,Arena* temp){
@@ -698,8 +714,8 @@ void OutputCircuitSource(FUDeclaration* decl,FILE* file,Arena* temp,Arena* temp2
   // program is still fast, but its a sign of poor architecture
   VersatComputedValues val = ComputeVersatValues(accel,false);
   AccelInfo info = CalculateAcceleratorInfoNoDelay(accel,true,temp,temp2);
-  Array<MemoryAddressMask> memoryMasks = CalculateAcceleratorMemoryMasks(info,temp);
-
+  Array<String> memoryMasks = ExtractMemoryMasks(info,temp);
+  //DEBUG_BREAK();
   Array<String> parameters = PushArray<String>(temp,nodes.Size());
   for(int i = 0; i < nodes.Size(); i++){
     parameters[i] = GenerateVerilogParameterization(nodes.Get(i),temp);
@@ -742,7 +758,7 @@ void OutputIterativeSource(FUDeclaration* decl,FILE* file,Arena* temp,Arena* tem
    
   VersatComputedValues val = ComputeVersatValues(accel,false);
   AccelInfo info = CalculateAcceleratorInfo(accel,true,temp,temp2); // TODO: Calculating info just for the computedData calculation is a bit wasteful.
-  Array<MemoryAddressMask> memoryMasks = CalculateAcceleratorMemoryMasks(info,temp);
+  Array<String> memoryMasks = ExtractMemoryMasks(info,temp);
 
   Hashmap<StaticId,StaticData>* staticUnits = CollectStaticUnits(accel,decl,temp);
   
@@ -920,34 +936,70 @@ Array<Array<MuxInfo>> GetAllMuxInfo(AccelInfo* info,Arena* out,Arena* temp){
 //       and wether the members are union or not.
 
 // NOTE: How do we handle merge? We will find out when we need to.
-StructInfo* GenerateConfigStruct(AccelInfo info,Arena* out,Arena* temp){
-  ArenaList<StructElement>* elements = PushArenaList<StructElement>(temp);
-  for(AccelInfoIterator iter = StartIteration(&info); iter.IsValid(); iter = iter.Next()){
-    InstanceInfo* info = iter.CurrentUnit();
-    if(info->belongs){
-      StructElement elem = {};
+//StructInfo* 
 
-      elem.name = {};
-      elem.type = {};
-      if(info->isComposite){
-        elem.type = PushString(out,"%.*sConfig",UNPACK_SS(info->decl->name));
-        elem.name = STRING("test");
-      } else {
-        elem.type = STRING("iptr");
-        elem.name = STRING("test");
-      }
-      
-      elem.pos = info->configPos.value();
-      elem.size = info->configSize;
-      *elements->PushElem() = elem;
+// What is the format that we want?
+// Because of merge, we can have structures that are different even though they represent the same module.
+// That means that a structure might point to two different but same "type" strucutures.
+// The difference in type is given by the 
+
+// We set the iter to merge N.
+// We calculate the members for merge N.
+// We set iter to merge N + 1.
+// We calculate members for merge N + 1.
+// If they are the same, we can collapse them into a single one.
+// Otherwise, need to create a union.
+
+// Let's start simple. Let's generate the view for merge 0, then generate the view for merge 1 and go from there.
+
+StructInfo* GenerateConfigStruct(AccelInfoIterator iter,Arena* out,Arena* temp,TrieMap<StructInfo,StructInfo*>* allSimilarStructInfos){
+  TrieSet<StructElement>* elements = PushTrieSet<StructElement>(temp);
+  for(AccelInfoIterator it = iter; it.IsValid(); it = it.Next()){
+    InstanceInfo* unit = it.CurrentUnit();
+    StructElement elem = {};
+    
+    if(!unit->configPos.has_value()){
+      continue;
     }
+
+    elem.name = unit->baseName;
+    if(unit->isComposite){
+      AccelInfoIterator inside = it.StepInsideOnly();
+      StructInfo* subInfo = GenerateConfigStruct(inside,out,temp,allSimilarStructInfos);
+      elem.childStruct = subInfo;
+    } else {
+      elem.typeName = unit->decl->name;
+      elem.childStruct = nullptr;
+    }
+      
+    elem.pos = unit->configPos.value();
+    elem.size = unit->configSize;
+    elem.isMergeMultiplexer = unit->isMergeMultiplexer;
+
+    elements->Insert(elem);
+  }
+  
+  StructInfo result = {};
+  result.elements = PushArrayFromSet(out,elements);
+
+  result.name = {};
+  InstanceInfo* parent = iter.GetParentUnit();
+  if(parent){
+    result.name = parent->decl->name;
   }
 
-  StructInfo* result = PushStruct<StructInfo>(out);
-  result->type = StructInfoType_UNION_WITH_MERGE_MULTIPLEXERS;
-  result->elements = PushArrayFromList(out,elements);
+  GetOrAllocateResult<StructInfo*> info = allSimilarStructInfos->GetOrAllocate(result);
 
-  return result;
+  if(!info.alreadyExisted){
+    *info.data = PushStruct<StructInfo>(out);
+    *(*info.data) = result;
+  }  
+
+  return *info.data;
+}
+
+Array<TypeStructInfo> GeneratedStructs(StructInfo* info,Arena* out){
+  
 }
 
 void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* softwarePath,bool isSimple,Arena* temp,Arena* temp2){
@@ -967,7 +1019,7 @@ void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* 
     return;
   }
 
-  DEBUG_BREAK();
+  //DEBUG_BREAK();
   AccelInfo info = CalculateAcceleratorInfo(accel,true,temp,temp2);
   VersatComputedValues val = ComputeVersatValues(accel,globalOptions.useDMA);
   CheckSanity(info.baseInfo,temp);
@@ -975,9 +1027,20 @@ void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* 
   // Need to calculate StructInfo.
   // Will calculate it from AccelInfo.
 
-  // TODO: Finish this
-  //StructInfo* structInfo = GenerateConfigStruct(info,temp,temp2);
+  TrieMap<StructInfo,StructInfo*>* allSimilarStructInfos = PushTrieMap<StructInfo,StructInfo*>(temp2);
+  DEBUG_BREAK();
+  AccelInfoIterator iter = StartIteration(&info);
+  for(int i = 0; i < iter.MergeSize(); i++){
+    iter.mergeIndex = i;
+    StructInfo* structInfo = GenerateConfigStruct(iter,temp,temp2,allSimilarStructInfos);
 
+    
+
+    
+    DEBUG_BREAK();
+  }
+  DEBUG_BREAK();
+  
   printf("ADDR_W - %d\n",val.memoryConfigDecisionBit + 1);
   if(val.nUnitsIO){
     printf("HAS_AXI - True\n");
@@ -1111,7 +1174,7 @@ void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* 
   Hashmap<StaticId,StaticData>* staticUnits = CollectStaticUnits(accel,nullptr,temp);
   TemplateSetCustom("staticUnits",MakeValue(staticUnits));
   
-  Array<MemoryAddressMask> memoryMasks = CalculateAcceleratorMemoryMasks(info,temp);
+  Array<String> memoryMasks = ExtractMemoryMasks(info,temp);
 
   Array<String> parameters = PushArray<String>(temp,nodes.Size());
   for(int i = 0; i < nodes.Size(); i++){
@@ -1318,7 +1381,8 @@ void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* 
     
     Array<String> allStates = ExtractStates(info.baseInfo,temp2);
     Array<Pair<String,int>> allMem = ExtractMem(info.baseInfo,temp2);
-
+    //DEBUG_BREAK();
+    
     TemplateSetNumber("delays",val.nDelays);
     TemplateSetCustom("structuredConfigs",MakeValue(&structuredConfigs));
     TemplateSetCustom("namedStates",MakeValue(&allStates));

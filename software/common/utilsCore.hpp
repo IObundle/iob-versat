@@ -110,6 +110,9 @@ const char* GetFilename(const char* fullpath);
 #define PRINTF_WITH_LOCATION(...) do{ printf("%s:%d-",__FILE__,__LINE__); printf(__VA_ARGS__); fflush(stdout);} while(0)
 #define PRINT_STRING(STR) do{ printf("%.*s\n",UNPACK_SS((STR))); fflush(stdout);} while(0)
 
+// Use when debugging, easier to search due to the 'd' at the beginning, less confusion with non-debugging printfs
+int dprintf(const char *format, ...) __attribute__ ((format (printf, 1, 2)));
+
 static void Terminate(){fflush(stdout); exit(-1);}
 //#if defined(VERSAT_DEBUG)
 #define Assert(EXPR) \
@@ -185,10 +188,10 @@ struct Opt{
   T val;
   bool hasVal;
 
-  Opt():hasVal(false){};
-  Opt(std::nullopt_t):hasVal(false){};
+  Opt():val{},hasVal(false){};
+  Opt(std::nullopt_t):val{},hasVal(false){};
   Opt(T t):val(t),hasVal(true){};
-
+  
   Opt<T>& operator=(T& t){
     hasVal = true;
     val = t;
@@ -316,8 +319,8 @@ struct Array{
   int size;
   
   inline T& operator[](int index) const {Assert(index >= 0);Assert(index < size); return data[index];}
-  ArrayIterator<T> begin(){return ArrayIterator<T>{data};};
-  ArrayIterator<T> end(){return ArrayIterator<T>{data + size};};
+  ArrayIterator<T> begin() const{return ArrayIterator<T>{data};};
+  ArrayIterator<T> end() const{return ArrayIterator<T>{data + size};};
 };
 
 typedef Array<const char> String;

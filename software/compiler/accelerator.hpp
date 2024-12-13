@@ -119,7 +119,7 @@ struct FUInstance{
   bool isStatic;
   bool sharedEnable;
   bool isMergeMultiplexer; // TODO: Kinda of an hack for now
-  int mergeMultiplexerId;
+  //int mergeMultiplexerId;
   
   FUInstance* next;
 
@@ -154,13 +154,16 @@ struct Accelerator{ // Graph + data storage
   AcceleratorPurpose purpose;
 };
 
+#if 0
 struct MemoryAddressMask{
   // Repr: memoryMask ( memoryMaskSize )
 
-  int memoryMaskSize;
-  char memoryMaskBuffer[33];
-  char* memoryMask;
+  
+  //int memoryMaskSize;
+  //char memoryMaskBuffer[33];
+  //char* memoryMask;
 };
+#endif
 
 struct VersatComputedValues{
   int nConfigs;

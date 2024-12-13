@@ -387,19 +387,12 @@ begin
    memoryMappedEnable = {@{unitsMapped}{1'b0}};
    if(data_valid & memoryMappedAddr)
    begin
-   #{set counter 0}
-   #{for node instances}
-   #{set inst node}
-   #{if inst.declaration.memoryMapBits}
-      #{if memoryMasks[counter].memoryMaskSize}
-      if(address[@{memoryAddressBits - 1}:@{memoryAddressBits - memoryMasks[counter].memoryMaskSize}] == @{memoryAddressBits - inst.declaration.memoryMapBits}'b@{memoryMasks[counter].memoryMask}) // @{memoryMappedBase * 4 + inst.memMapped * 4 |> Hex}
-         memoryMappedEnable[@{counter}] = 1'b1;
-      #{else}
-      memoryMappedEnable[0] = 1'b1;
-      #{end}
-   #{inc counter}
-   #{end}
-   #{end}
+   #{for memoryDecisionMask memoryMasks}
+     #{if memoryDecisionMask.size}
+   if(address[@{memoryAddressBits - 1}-:@{memoryDecisionMask.size}] == @{memoryDecisionMask.size}'b@{memoryDecisionMask})
+     #{end}
+     memoryMappedEnable[@{index}] = 1'b1;
+   #{end}      
    end
 end
 #{end}

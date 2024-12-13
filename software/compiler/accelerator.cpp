@@ -102,7 +102,6 @@ Pair<Accelerator*,AcceleratorMapping*> CopyAcceleratorWithMapping(Accelerator* a
       newInst->isStatic = inst->isStatic;
     }
     newInst->isMergeMultiplexer = inst->isMergeMultiplexer;
-    newInst->mergeMultiplexerId = inst->mergeMultiplexerId;
     
     MappingInsertEqualNode(map,inst,newInst);
   }
@@ -144,7 +143,7 @@ Accelerator* CopyAccelerator(Accelerator* accel,AcceleratorPurpose purpose,bool 
       newInst->isStatic = inst->isStatic;
     }
     newInst->isMergeMultiplexer = inst->isMergeMultiplexer;
-    newInst->mergeMultiplexerId = inst->mergeMultiplexerId;
+    //newInst->mergeMultiplexerId = inst->mergeMultiplexerId;
     
     map->Insert(inst,newInst);
   }
@@ -179,7 +178,7 @@ FUInstance* CopyInstance(Accelerator* accel,FUInstance* oldInstance,bool preserv
     newInst->id = oldInstance->id;
   }
   newInst->isMergeMultiplexer = oldInstance->isMergeMultiplexer;
-  newInst->mergeMultiplexerId = oldInstance->mergeMultiplexerId;
+  //newInst->mergeMultiplexerId = oldInstance->mergeMultiplexerId;
   
   return newInst;
 }
@@ -254,7 +253,6 @@ Array<int> ExtractOutputLatencies(Accelerator* accel,CalculateDelayResult delays
 }
 
 Accelerator* Flatten(Accelerator* accel,int times,Arena* temp){
-  Arena* perm = globalPermanent;
   BLOCK_REGION(temp);
 
   Pair<Accelerator*,AcceleratorMapping*> pair = CopyAcceleratorWithMapping(accel,AcceleratorPurpose_FLATTEN,true,temp);
@@ -320,7 +318,7 @@ Accelerator* Flatten(Accelerator* accel,int times,Arena* temp){
           continue;
         }
 
-        String newName = PushString(perm,"%.*s_%.*s",UNPACK_SS(inst->name),UNPACK_SS(circuitInst->name));
+        String newName = PushString(globalPermanent,"%.*s_%.*s",UNPACK_SS(inst->name),UNPACK_SS(circuitInst->name));
         FUInstance* newInst = CopyInstance(newAccel,circuitInst,true,newName);
         MappingInsertEqualNode(map,circuitInst,newInst);
 
@@ -697,7 +695,6 @@ Array<DelayToAdd> GenerateFixDelays(Accelerator* accel,EdgeDelay* edgeDelays,Are
 }
 
 void FixDelays(Accelerator* accel,Hashmap<Edge,DelayInfo>* edgeDelays,Arena* temp){
-  Arena* perm = globalPermanent;
   BLOCK_REGION(temp);
 
   int buffersInserted = 0;
@@ -724,16 +721,14 @@ void FixDelays(Accelerator* accel,Hashmap<Edge,DelayInfo>* edgeDelays,Arena* tem
 
     FUInstance* buffer = nullptr;
     if(globalOptions.useFixedBuffers){
-      String bufferName = PushString(perm,"fixedBuffer%d",buffersInserted);
+      String bufferName = PushString(globalPermanent,"fixedBuffer%d",buffersInserted);
 
       buffer = CreateFUInstance(accel,BasicDeclaration::fixedBuffer,bufferName);
       buffer->bufferAmount = delay - BasicDeclaration::fixedBuffer->baseConfig.outputLatencies[0];
-      String bufferAmountString = PushString(perm,"%d",buffer->bufferAmount);
+      String bufferAmountString = PushString(globalPermanent,"%d",buffer->bufferAmount);
       SetParameter(buffer,STRING("AMOUNT"),bufferAmountString);
-
-      //buffer->parameters = PushString(perm,"#(.AMOUNT(%d))",buffer->bufferAmount);
     } else {
-      String bufferName = PushString(perm,"buffer%d",buffersInserted);
+      String bufferName = PushString(globalPermanent,"buffer%d",buffersInserted);
 
       buffer = CreateFUInstance(accel,BasicDeclaration::buffer,bufferName);
       buffer->bufferAmount = delay - BasicDeclaration::buffer->baseConfig.outputLatencies[0];
@@ -1790,7 +1785,6 @@ Set<PortInstance>* MappingMapInput(AcceleratorMapping* map,Set<PortInstance>* se
 }
 
 Pair<Accelerator*,SubMap*> Flatten2(Accelerator* accel,int times,Arena* temp){
-  Arena* perm = globalPermanent;
   BLOCK_REGION(temp);
 
   Pair<Accelerator*,AcceleratorMapping*> pair = CopyAcceleratorWithMapping(accel,AcceleratorPurpose_FLATTEN,true,temp);
@@ -1857,7 +1851,7 @@ Pair<Accelerator*,SubMap*> Flatten2(Accelerator* accel,int times,Arena* temp){
           continue;
         }
 
-        String newName = PushString(perm,"%.*s_%.*s",UNPACK_SS(inst->name),UNPACK_SS(circuitInst->name));
+        String newName = PushString(globalPermanent,"%.*s_%.*s",UNPACK_SS(inst->name),UNPACK_SS(circuitInst->name));
         FUInstance* newInst = CopyInstance(newAccel,circuitInst,true,newName);
         MappingInsertEqualNode(map,circuitInst,newInst);
 

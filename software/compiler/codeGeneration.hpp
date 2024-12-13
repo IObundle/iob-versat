@@ -98,18 +98,76 @@ enum StructInfoType{
   StructInfoType_UNION_WITH_MERGE_MULTIPLEXERS
 };
 
+struct StructInfo;
+
 struct StructElement{
+  StructInfo* childStruct; // If nullptr, then iptr, for now (TODO: Better support of different sizes)
   String name;
-  String type;
+  String typeName;
   int pos;
   int size;
-}; 
+  bool isMergeMultiplexer;
+};
+
+template<> struct std::hash<StructElement>{
+   std::size_t operator()(StructElement const& s) const noexcept{
+     std::size_t res = std::hash<void*>()(s.childStruct) + std::hash<String>()(s.name) + std::hash<String>()(s.typeName) + s.pos + s.size + (s.isMergeMultiplexer ? 1 : 0);
+     return res;
+   }
+};
+
+static bool operator==(StructElement& l,StructElement& r){
+  bool res = (l.childStruct == r.childStruct &&
+              l.name == r.name &&
+              l.typeName == r.typeName &&
+              l.pos == r.pos &&
+              l.size == r.size &&
+              l.isMergeMultiplexer == r.isMergeMultiplexer);
+  return res;
+}
 
 struct StructInfo{
-  StructInfoType type;
+  String name;
   
   Array<StructElement> elements;
 };
+
+static bool operator==(StructInfo& l,StructInfo& r){
+  if(l.elements.size != r.elements.size){
+    return false;
+  }
+  for(int i = 0; i < l.elements.size; i++){
+    if(!(l.elements[i] == r.elements[i])){
+      return false;
+    }
+  }
+
+  return (l.name == r.name);
+}
+
+template<> struct std::hash<StructInfo>{
+   std::size_t operator()(StructInfo const& s) const noexcept{
+     std::size_t res = 0;//std::hash<String>()(s.name) + ;
+     for(StructElement elem : s.elements){
+       res += std::hash<StructElement>()(elem);
+     }
+     res += std::hash<String>()(s.name);
+     return res;
+   }
+};
+
+// Because of merge, we can potentially have different "views" of the modules structures.
+// Although they have to line up in regards to the config pos of every unit.
+// We cannot have one view have base x type in config pos 0 and another have base y type in config pos 0 as well.
+// Although we can have the config of modules shared.
+// We can have Test1MergeConfig in pos 0 and Test2MergeConfig in pos 0 at the same time (union).
+
+// The biggest problem is when the base unit of one module belongs to a merge type but not to the other base type.
+// In that case, we end up with 2 different types occupying the same position.
+
+// For now, I do not care about position difference. We could just have multiple StructElements with the same pos and then we could extract the union semantics from detecting this.
+
+// The most important part is to generate the StructElements that contain the differences. Worry about padding and union later.
 
 Array<FUDeclaration*> SortTypesByConfigDependency(Array<FUDeclaration*> types,Arena* out,Arena* temp);
 Array<FUDeclaration*> SortTypesByMemDependency(Array<FUDeclaration*> types,Arena* out,Arena* temp);

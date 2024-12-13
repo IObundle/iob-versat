@@ -838,9 +838,14 @@ Opt<Value> AccessObjectIndex(Value object,int index){
 
 Opt<Value> AccessStruct(Value structure,Member* member){
   Assert(IsStruct(structure.type));
-  Assert(!structure.isTemp);
-
+  //Assert(!structure.isTemp);
+  
   char* view = (char*) structure.custom;
+
+  if(structure.isTemp){
+    view = (char*) &structure.str;
+  }
+
   void* newObject = &view[member->offset];
 
   Value newValue = {};

@@ -15,14 +15,14 @@ struct InstanceInfo{
   int configSize; // D 
   Opt<int> statePos; // D
   int stateSize; // D
-  Opt<iptr> memMapped; // Not doing this, not used a lot and maybe not needed
+  Opt<iptr> memMapped; // Used on Code Gen, to create the addresses for the memories.
   Opt<int> memMappedSize; // D
   Opt<int> memMappedBitSize; // D
   Opt<String> memMappedMask; // D
   Opt<String> memDecisionMask; // D
   Opt<int> delayPos; // D 
-  Array<int> delay; // TODO // This is the value that the unit delay wire must be set to. How much delay must the unit wait.
-  int baseDelay; // D? This is the amount of time it takes for the data to arrive at the unit.
+  Array<int> delay; // 
+  int baseDelay; // D
   int delaySize; // D 
   bool isComposite; // D
   bool isStatic; // D
@@ -31,10 +31,10 @@ struct InstanceInfo{
   FUDeclaration* parent; // D
   String fullName; // D
   bool isMergeMultiplexer; // D
-  int mergeMultiplexerId; // D
+  //int mergeMultiplexerId; // D
   bool belongs; // D
   int special; // D
-  int order; // Not needed if we sort the units beforehand.
+  int order; // Missing for now
   NodeType connectionType; // D
   int id; // D
   int mergeIndexStart; // D
@@ -81,6 +81,9 @@ struct AccelInfo{
 
   // Each array contains one value for each merge type.
   Array<Array<InstanceInfo>> infos; // Should join names with infos
+
+  // Data of the accelerator "circuit" for each merge configuration.
+  // Depending on the type of the merge, the accelerator can have different latencies.
   Array<String> names; // Merge type names
   Array<Array<int>> inputDelays;
   Array<Array<int>> outputDelays;
@@ -114,10 +117,16 @@ struct AccelInfo{
 struct AccelInfoIterator{
   AccelInfo* info;
   int index;
+  int mergeIndex;
 
+  Array<InstanceInfo>& GetCurrentMerge();
+  int MergeSize();
+  
   bool IsValid();
-
+  
   int GetIndex(InstanceInfo* instance);
+  
+  AccelInfoIterator GetParent();
   InstanceInfo* GetParentUnit();
   InstanceInfo* CurrentUnit();
   Array<InstanceInfo*> GetAllSubUnits(Arena* out);

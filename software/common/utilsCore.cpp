@@ -20,6 +20,14 @@
 
 namespace fs = std::filesystem;
 
+int dprintf(const char *format, ...){
+  va_list args;
+  va_start (args, format);
+  int result = vprintf (format, args);
+  va_end (args);  
+  return result;
+}
+
 String Offset(String base,int amount){
   String res = base;
   res.data += amount;

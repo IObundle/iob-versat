@@ -439,6 +439,8 @@ int main(int argc,char* argv[]){
   Arena* temp = &tempInst;
   Arena temp2Inst = InitArena(Megabyte(128));
   Arena* temp2 = &temp2Inst;
+
+  //LEFT HERE // The problem is that the order of memory calculations is different for accelerator and top unit. Probably because unit is still taking old code path, or the Delay/NoDelay differences. Need to see.
   
   argp argp = { options, parse_opt, "SpecFile", "Dataflow to accelerator compiler. Check tutorial in https://github.com/IObundle/iob-versat to learn how to write a specification file"};
 
@@ -766,6 +768,7 @@ int main(int argc,char* argv[]){
     }
   }
 
+#if 0
   // TODO: This should be slowly phased out, since we have better tools in the debugger than actually printing stuff inside the application
   if(globalOptions.debug){
     String path = PushDebugPath(temp,{},STRING("allDeclarations.txt"));
@@ -786,11 +789,12 @@ int main(int argc,char* argv[]){
         CreateFUInstance(test,decl,STRING("TOP"));
         AccelInfo info = CalculateAcceleratorInfo(test,true,temp,temp2);
 
-        PrintRepr(stats,MakeValue(&info),temp,temp2);
+        //PrintRepr(stats,MakeValue(&info),temp,temp2);
       }
     }
   }
-
+#endif
+  
   if(!SetParameter(TOP,STRING("AXI_ADDR_W"),STRING("AXI_ADDR_W"))){
     printf("Error\n");
   }
@@ -799,14 +803,14 @@ int main(int argc,char* argv[]){
   OutputVersatSource(accel,
                      globalOptions.hardwareOutputFilepath.data,
                      globalOptions.softwareOutputFilepath.data,
-                     globalOptions.addInputAndOutputsToTop,temp,perm);
+                     globalOptions.addInputAndOutputsToTop,temp,temp2);
 
-  OutputVerilatorWrapper(type,accel,globalOptions.softwareOutputFilepath,temp,perm);
+  OutputVerilatorWrapper(type,accel,globalOptions.softwareOutputFilepath,temp,temp2);
 
   String versatDir = STRING(STRINGIFY(VERSAT_DIR));
   OutputVerilatorMake(accel->name,versatDir,temp,temp2);
 
-  ArenaList<String>* allFilesOutputted = PushArenaList<String>(perm);
+  ArenaList<String>* allFilesOutputted = PushArenaList<String>(temp2);
   
   for(FUDeclaration* decl : globalDeclarations){
     BLOCK_REGION(temp);
@@ -831,15 +835,15 @@ int main(int argc,char* argv[]){
 
       String path = PushString(temp,"%.*s/modules/%.*s.v",UNPACK_SS(globalOptions.hardwareOutputFilepath),UNPACK_SS(decl->name));
 
-      *allFilesOutputted->PushElem() = PushString(perm,"./modules/%.*s.v",UNPACK_SS(decl->name));
+      *allFilesOutputted->PushElem() = PushString(temp2,"./modules/%.*s.v",UNPACK_SS(decl->name));
       
       FILE* sourceCode = OpenFileAndCreateDirectories(path,"w",FilePurpose_VERILOG_CODE);
       DEFER_CLOSE_FILE(sourceCode);
 
       if(decl->type == FUDeclarationType_COMPOSITE || decl->type == FUDeclarationType_MERGED){
-        OutputCircuitSource(decl,sourceCode,temp,perm);
+        OutputCircuitSource(decl,sourceCode,temp,temp2);
       } else if(decl->type == FUDeclarationType_ITERATIVE){
-        OutputIterativeSource(decl,sourceCode,temp,perm);
+        OutputIterativeSource(decl,sourceCode,temp,temp2);
       }
     }
   }
@@ -854,7 +858,7 @@ int main(int argc,char* argv[]){
   }
   
   // This should be the last thing that we do, no further file creation can occur after this point
-  Array<String> allOutputLocations = PushArrayFromList(perm,allFilesOutputted);
+  Array<String> allOutputLocations = PushArrayFromList(temp,allFilesOutputted);
 
   for(FileInfo f : CollectAllFilesInfo(temp)){
     if(f.purpose == FilePurpose_VERILOG_CODE && f.mode == FileOpenMode_WRITE){
@@ -866,6 +870,18 @@ int main(int argc,char* argv[]){
 }
 
 /*
+
+How to handle merge with the new accelInfoIterator.
+
+We have a member that indicates whether a unit belongs or not to a given merge instance. The belong member.
+If we change all the calculation functions to check for the belong member and then act based on it, then we do not need to make anything special for the majority of calculation functions.
+
+The flow then becomes:
+
+Subunit register or merge register creates the starting Array<InstanceInfo>.
+We then call functions on these that look at certain members to decide what to do.
+If the functions depend on the corresponding data correctly, then as long as the starting data is correct, we should be able to successfully abstract the differences.
+
 
 TODO: Need to check the isSource member of ModuleInfo and so on. 
 
