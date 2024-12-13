@@ -128,8 +128,10 @@ static bool operator==(StructElement& l,StructElement& r){
 
 struct StructInfo{
   String name;
-  
-  Array<StructElement> elements;
+
+  // First array is for the members.
+  // Second array is for different merges.
+  Array<Array<StructElement>> elements;
 };
 
 static bool operator==(StructInfo& l,StructInfo& r){
@@ -145,6 +147,7 @@ static bool operator==(StructInfo& l,StructInfo& r){
   return (l.name == r.name);
 }
 
+#if 0
 template<> struct std::hash<StructInfo>{
    std::size_t operator()(StructInfo const& s) const noexcept{
      std::size_t res = 0;//std::hash<String>()(s.name) + ;
@@ -155,7 +158,7 @@ template<> struct std::hash<StructInfo>{
      return res;
    }
 };
-
+#endif
 // Because of merge, we can potentially have different "views" of the modules structures.
 // Although they have to line up in regards to the config pos of every unit.
 // We cannot have one view have base x type in config pos 0 and another have base y type in config pos 0 as well.

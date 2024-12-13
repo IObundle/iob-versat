@@ -28,6 +28,14 @@ int AccelInfoIterator::MergeSize(){
   }
 }
 
+String AccelInfoIterator::GetMergeName(){
+  if(info->infos.size <= 1){
+    return {};
+  } else {
+    return info->names[mergeIndex];
+  }
+}
+
 bool AccelInfoIterator::IsValid(){
   bool res = (info && index >= 0 && index < GetCurrentMerge().size);
   return res;
@@ -434,6 +442,7 @@ static InstanceInfo GetInstanceInfo(FUInstance* node,FUDeclaration* parentDeclar
   info.decl = topDecl;
   info.level = offsets.level;
   info.isComposite = IsTypeHierarchical(topDecl);
+  info.isMerge = inst->declaration->type == FUDeclarationType_MERGED;
   info.parent = parentDeclaration;
   info.baseDelay = offsets.delay;
   info.belongs = offsets.belongs;
@@ -768,6 +777,7 @@ Array<InstanceInfo> GenerateInitialInstanceInfo(Accelerator* accel,Arena* out,Ar
     elem->decl = inst->declaration;
     elem->level = level;
     elem->isComposite = IsTypeHierarchical(inst->declaration);
+    elem->isMerge = inst->declaration->type == FUDeclarationType_MERGED;
     elem->isStatic = inst->isStatic; 
     elem->isShared = inst->sharedEnable;
     elem->sharedIndex = inst->sharedIndex;
@@ -1557,6 +1567,7 @@ static InstanceInfo GetInstanceInfoNoDelay(FUInstance* node,FUDeclaration* paren
   info.sharedIndex = inst->sharedIndex;
   info.level = offsets.level;
   info.isComposite = IsTypeHierarchical(topDecl);
+  info.isMerge = inst->declaration->type == FUDeclarationType_MERGED;
   info.parent = parentDeclaration;
   info.baseDelay = offsets.delay;
   info.isMergeMultiplexer = inst->isMergeMultiplexer;

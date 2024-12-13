@@ -935,9 +935,6 @@ Array<Array<MuxInfo>> GetAllMuxInfo(AccelInfo* info,Arena* out,Arena* temp){
 //       The difference is wether the unit contains certain members (or padding)
 //       and wether the members are union or not.
 
-// NOTE: How do we handle merge? We will find out when we need to.
-//StructInfo* 
-
 // What is the format that we want?
 // Because of merge, we can have structures that are different even though they represent the same module.
 // That means that a structure might point to two different but same "type" strucutures.
@@ -951,56 +948,141 @@ Array<Array<MuxInfo>> GetAllMuxInfo(AccelInfo* info,Arena* out,Arena* temp){
 // Otherwise, need to create a union.
 
 // Let's start simple. Let's generate the view for merge 0, then generate the view for merge 1 and go from there.
+// The problem of individual merges is that we then need to join them back together in order to resolve the union part.
+//
 
-StructInfo* GenerateConfigStruct(AccelInfoIterator iter,Arena* out,Arena* temp,TrieMap<StructInfo,StructInfo*>* allSimilarStructInfos){
-  TrieSet<StructElement>* elements = PushTrieSet<StructElement>(temp);
-  for(AccelInfoIterator it = iter; it.IsValid(); it = it.Next()){
-    InstanceInfo* unit = it.CurrentUnit();
-    StructElement elem = {};
-    
-    if(!unit->configPos.has_value()){
-      continue;
-    }
+// What do I want?
+// I want to make the generated structs more data oriented, so I can then make functions to extract stuff, like the expression to access a member.
+// I also want to make the structures as simple as possible.
+// Structs are arrays of elements which are multiple or one member.
 
-    elem.name = unit->baseName;
-    if(unit->isComposite){
-      AccelInfoIterator inside = it.StepInsideOnly();
-      StructInfo* subInfo = GenerateConfigStruct(inside,out,temp,allSimilarStructInfos);
-      elem.childStruct = subInfo;
-    } else {
-      elem.typeName = unit->decl->name;
-      elem.childStruct = nullptr;
-    }
-      
-    elem.pos = unit->configPos.value();
-    elem.size = unit->configSize;
-    elem.isMergeMultiplexer = unit->isMergeMultiplexer;
+// Because of this, I think that I need to change StructInfo to contain the multiple types associated to the merges.
+// Therefore, a StructInfo must have an array for each merge index.
+// We are going to make duplicates, but it is fine for now. We handle those later.
 
-    elements->Insert(elem);
-  }
-  
+StructInfo* GenerateConfigStruct(AccelInfoIterator iter,Arena* out,Arena* temp){
   StructInfo result = {};
-  result.elements = PushArrayFromSet(out,elements);
-
-  result.name = {};
   InstanceInfo* parent = iter.GetParentUnit();
-  if(parent){
-    result.name = parent->decl->name;
+
+  if(parent && parent->isMerge){
+    result.name = iter.GetMergeName();
+
+    auto array = PushArenaList<Array<StructElement>>(temp);
+    for(int i = 0; i < iter.MergeSize(); i++){
+      auto list = PushArenaList<StructElement>(temp);
+      for(AccelInfoIterator it = iter; it.IsValid(); it = it.Next()){
+        it.mergeIndex = i;
+      
+        InstanceInfo* unit = it.CurrentUnit();
+        StructElement elem = {};
+    
+        if(!unit->configPos.has_value()){
+          continue;
+        }
+
+        elem.name = unit->baseName;
+        if(unit->isComposite){
+          AccelInfoIterator inside = it.StepInsideOnly();
+          StructInfo* subInfo = GenerateConfigStruct(inside,out,temp);
+          elem.childStruct = subInfo;
+        } else {
+          elem.typeName = unit->decl->name;
+          elem.childStruct = nullptr;
+        }
+      
+        elem.pos = unit->configPos.value();
+        elem.size = unit->configSize;
+        elem.isMergeMultiplexer = unit->isMergeMultiplexer;
+
+        *list->PushElem() = elem;
+      }
+      
+      *array->PushElem() = PushArrayFromList(out,list);
+    }
+    result.elements = PushArrayFromList(out,array);
+  } else {
+    auto array = PushArenaList<Array<StructElement>>(temp);
+    for(AccelInfoIterator it = iter; it.IsValid(); it = it.Next()){
+      InstanceInfo* unit = it.CurrentUnit();
+      StructElement elem = {};
+    
+      if(!unit->configPos.has_value()){
+        continue;
+      }
+
+      elem.name = unit->baseName;
+      if(unit->isComposite){
+        AccelInfoIterator inside = it.StepInsideOnly();
+        StructInfo* subInfo = GenerateConfigStruct(inside,out,temp);
+        elem.childStruct = subInfo;
+      } else {
+        elem.typeName = unit->decl->name;
+        elem.childStruct = nullptr;
+      }
+      
+      elem.pos = unit->configPos.value();
+      elem.size = unit->configSize;
+      elem.isMergeMultiplexer = unit->isMergeMultiplexer;
+
+      auto singleArray = PushArray<StructElement>(out,1);
+      singleArray[0] = elem;
+
+      *array->PushElem() = singleArray;
+    }
+    result.elements = PushArrayFromList(out,array);
   }
 
-  GetOrAllocateResult<StructInfo*> info = allSimilarStructInfos->GetOrAllocate(result);
-
-  if(!info.alreadyExisted){
-    *info.data = PushStruct<StructInfo>(out);
-    *(*info.data) = result;
-  }  
-
-  return *info.data;
-}
-
-Array<TypeStructInfo> GeneratedStructs(StructInfo* info,Arena* out){
+  StructInfo* res = PushStruct<StructInfo>(out);
+  *res = result;
   
+  return res;
 }
+
+#if 0
+Array<TypeStructInfo> GenerateStructs(StructInfo* info,Arena* out,Arena* temp){
+  ArenaList<TypeStructInfo>* list = PushArenaList<TypeStructInfo>(temp);
+
+  auto GenerateStructRecurse = [](auto Recurse,StructInfo* top,ArenaList<TypeStructInfo>* list,Arena* out,Arena* temp) -> void {
+    if(!top){
+      return;
+    }
+
+    for(StructElement elem : top->elements){
+      Recurse(Recurse,elem.childStruct,list,out,temp);
+    }
+
+    auto builder = StartGrowableArray<TypeStructInfoElement>(out);
+    for(StructElement elem : top->elements){
+      TypeStructInfoElement m = {};
+      m.typeAndNames = PushArray<SingleTypeStructElement>(out,1);
+      m.typeAndNames[0].name = elem.name;
+
+      if(!Empty(elem.typeName)){
+        m.typeAndNames[0].type = elem.typeName;
+      } else {
+        m.typeAndNames[0].type = elem.childStruct->name;
+      }
+      m.typeAndNames[0].arraySize = 0;
+
+      *builder.PushElem() = m;
+    }
+
+    TypeStructInfo* res = list->PushElem();
+    res->entries = EndArray(builder);
+
+    if(Empty(top->name)){
+      res->name = STRING("TOP");
+    } else {
+      res->name = top->name;
+    }
+  };
+
+  GenerateStructRecurse(GenerateStructRecurse,info,list,out,temp);
+  
+  Array<TypeStructInfo> res = PushArrayFromList(out,list);
+  return res;
+}
+#endif
 
 void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* softwarePath,bool isSimple,Arena* temp,Arena* temp2){
   BLOCK_REGION(temp);
@@ -1026,20 +1108,17 @@ void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* 
 
   // Need to calculate StructInfo.
   // Will calculate it from AccelInfo.
-
-  TrieMap<StructInfo,StructInfo*>* allSimilarStructInfos = PushTrieMap<StructInfo,StructInfo*>(temp2);
+  
   DEBUG_BREAK();
   AccelInfoIterator iter = StartIteration(&info);
-  for(int i = 0; i < iter.MergeSize(); i++){
-    iter.mergeIndex = i;
-    StructInfo* structInfo = GenerateConfigStruct(iter,temp,temp2,allSimilarStructInfos);
-
-    
-
-    
-    DEBUG_BREAK();
-  }
+  StructInfo* structInfo = GenerateConfigStruct(iter,temp,temp2);
+  //Array<TypeStructInfo> structs = GenerateStructs(structInfo,temp,temp2);
   DEBUG_BREAK();
+
+  // What is the best way of looking at the data?
+  // For each struct, I need to see, for a given configPos, all the types and names used.
+  // If only one, then direct type.
+  // If multiple, then union.
   
   printf("ADDR_W - %d\n",val.memoryConfigDecisionBit + 1);
   if(val.nUnitsIO){

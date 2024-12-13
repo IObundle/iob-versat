@@ -25,6 +25,7 @@ struct InstanceInfo{
   int baseDelay; // D
   int delaySize; // D 
   bool isComposite; // D
+  bool isMerge;
   bool isStatic; // D
   bool isShared; // D
   int sharedIndex; // D
@@ -121,6 +122,8 @@ struct AccelInfoIterator{
 
   Array<InstanceInfo>& GetCurrentMerge();
   int MergeSize();
+
+  String GetMergeName();
   
   bool IsValid();
   
