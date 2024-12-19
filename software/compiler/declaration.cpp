@@ -1,5 +1,7 @@
 #include "declaration.hpp"
 
+#include "configurations.hpp"
+#include "globals.hpp"
 #include "versat.hpp"
 
 Pool<FUDeclaration> globalDeclarations;
@@ -26,9 +28,18 @@ static FUDeclaration* RegisterCircuitInput(){
   FUDeclaration decl = {};
 
   decl.name = STRING("CircuitInput");
+  
+  // Eventually remove theses.
   decl.baseConfig.inputDelays = Array<int>{zeros,0};
   decl.baseConfig.outputLatencies = Array<int>{zeros,1};
-  //decl.delayType = DelayType::DelayType_SOURCE_DELAY;
+
+  decl.configInfo = PushArray<ConfigurationInfo>(globalPermanent,1);
+  decl.info.infos = PushArray<MergePartition>(globalPermanent,1);
+  decl.configInfo[0].inputDelays = decl.baseConfig.inputDelays;
+  decl.configInfo[0].outputLatencies = decl.baseConfig.outputLatencies;
+  decl.info.infos[0].inputDelays = decl.configInfo[0].inputDelays;
+  decl.info.infos[0].outputLatencies = decl.configInfo[0].outputLatencies;
+  
   decl.type = FUDeclarationType_SPECIAL;
   
   return RegisterFU(decl);
@@ -41,7 +52,14 @@ static FUDeclaration* RegisterCircuitOutput(){
   decl.name = STRING("CircuitOutput");
   decl.baseConfig.inputDelays = Array<int>{zeros,50};
   decl.baseConfig.outputLatencies = Array<int>{zeros,0};
-  //decl.delayType = DelayType::DelayType_SINK_DELAY;
+
+  decl.configInfo = PushArray<ConfigurationInfo>(globalPermanent,1);
+  decl.info.infos = PushArray<MergePartition>(globalPermanent,1);
+  decl.configInfo[0].inputDelays = decl.baseConfig.inputDelays;
+  decl.configInfo[0].outputLatencies = decl.baseConfig.outputLatencies;
+  decl.info.infos[0].inputDelays = decl.configInfo[0].inputDelays;
+  decl.info.infos[0].outputLatencies = decl.configInfo[0].outputLatencies;
+
   decl.type = FUDeclarationType_SPECIAL;
 
   return RegisterFU(decl);
@@ -81,6 +99,13 @@ static void RegisterOperators(){
   decl.isOperation = true;
 
   for(unsigned int i = 0; i < ARRAY_SIZE(unary); i++){
+    decl.configInfo = PushArray<ConfigurationInfo>(globalPermanent,1);
+    decl.info.infos = PushArray<MergePartition>(globalPermanent,1);
+    decl.configInfo[0].inputDelays = decl.baseConfig.inputDelays;
+    decl.configInfo[0].outputLatencies = decl.baseConfig.outputLatencies;
+    decl.info.infos[0].inputDelays = decl.configInfo[0].inputDelays;
+    decl.info.infos[0].outputLatencies = decl.configInfo[0].outputLatencies;
+
     decl.name = STRING(unary[i].name);
     decl.operation = unary[i].operation;
     RegisterFU(decl);
@@ -88,6 +113,13 @@ static void RegisterOperators(){
 
   decl.baseConfig.inputDelays = Array<int>{zeros,2};
   for(unsigned int i = 0; i < ARRAY_SIZE(binary); i++){
+    decl.configInfo = PushArray<ConfigurationInfo>(globalPermanent,1);
+    decl.info.infos = PushArray<MergePartition>(globalPermanent,1);
+    decl.configInfo[0].inputDelays = decl.baseConfig.inputDelays;
+    decl.configInfo[0].outputLatencies = decl.baseConfig.outputLatencies;
+    decl.info.infos[0].inputDelays = decl.configInfo[0].inputDelays;
+    decl.info.infos[0].outputLatencies = decl.configInfo[0].outputLatencies;
+
     decl.name = STRING(binary[i].name);
     decl.operation = binary[i].operation;
     RegisterFU(decl);

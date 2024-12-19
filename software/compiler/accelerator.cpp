@@ -689,7 +689,7 @@ Array<DelayToAdd> GenerateFixDelays(Accelerator* accel,EdgeDelay* edgeDelays,Are
     DelayToAdd var = {};
     var.edge = edge;
     var.bufferName = PushString(out,"buffer%d",buffersInserted++);
-    var.bufferAmount = delay - BasicDeclaration::fixedBuffer->baseConfig.outputLatencies[0];
+    var.bufferAmount = delay - BasicDeclaration::fixedBuffer->info.infos[0].outputLatencies[0];
     var.bufferParameters = PushString(out,"#(.AMOUNT(%d))",var.bufferAmount);
 
     *list->PushElem() = var;
@@ -728,14 +728,14 @@ void FixDelays(Accelerator* accel,Hashmap<Edge,DelayInfo>* edgeDelays,Arena* tem
       String bufferName = PushString(globalPermanent,"fixedBuffer%d",buffersInserted);
 
       buffer = CreateFUInstance(accel,BasicDeclaration::fixedBuffer,bufferName);
-      buffer->bufferAmount = delay - BasicDeclaration::fixedBuffer->baseConfig.outputLatencies[0];
+      buffer->bufferAmount = delay - BasicDeclaration::fixedBuffer->info.infos[0].outputLatencies[0];
       String bufferAmountString = PushString(globalPermanent,"%d",buffer->bufferAmount);
       SetParameter(buffer,STRING("AMOUNT"),bufferAmountString);
     } else {
       String bufferName = PushString(globalPermanent,"buffer%d",buffersInserted);
 
       buffer = CreateFUInstance(accel,BasicDeclaration::buffer,bufferName);
-      buffer->bufferAmount = delay - BasicDeclaration::buffer->baseConfig.outputLatencies[0];
+      buffer->bufferAmount = delay - BasicDeclaration::buffer->info.infos[0].outputLatencies[0];
       Assert(buffer->bufferAmount >= 0);
       SetStatic(accel,buffer);
     }
@@ -750,7 +750,6 @@ void FixDelays(Accelerator* accel,Hashmap<Edge,DelayInfo>* edgeDelays,Arena* tem
 
 FUInstance* GetInputInstance(Pool<FUInstance>* nodes,int inputIndex){
   for(FUInstance* ptr : *nodes){
-  //FOREACH_LIST(FUInstance*,ptr,nodes){
     FUInstance* inst = ptr;
     if(inst->declaration == BasicDeclaration::input && inst->portIndex == inputIndex){
       return inst;
@@ -761,7 +760,6 @@ FUInstance* GetInputInstance(Pool<FUInstance>* nodes,int inputIndex){
 
 FUInstance* GetOutputInstance(Pool<FUInstance>* nodes){
   for(FUInstance* ptr : *nodes){
-  //FOREACH_LIST(FUInstance*,ptr,nodes){
     FUInstance* inst = ptr;
     if(inst->declaration == BasicDeclaration::output){
       return inst;
@@ -842,7 +840,7 @@ Hashmap<StaticId,StaticData>* CollectStaticUnits(Accelerator* accel,FUDeclaratio
       id.parent = topDecl;
 
       StaticData data = {};
-      data.configs = inst->declaration->baseConfig.configs;
+      data.configs = inst->declaration->configs;
       staticUnits->InsertIfNotExist(id,data);
     }
   }
@@ -932,7 +930,8 @@ VersatComputedValues ComputeVersatValues(AccelInfo* info,bool useDMA){
 
   // TODO: Check if we can remove the for loop over units and check if we can calculate from data stored in AccelInfo
   for(AccelInfoIterator iter = StartIteration(info); iter.IsValid(); iter = iter.Next()){
-    FUInstance* inst = iter.CurrentUnit()->inst;
+    InstanceInfo* unit = iter.CurrentUnit();
+    FUInstance* inst = unit->inst;
     FUDeclaration* decl = inst->declaration;
 
     res.numberConnections += Size(inst->allOutputs);
@@ -944,23 +943,21 @@ VersatComputedValues ComputeVersatValues(AccelInfo* info,bool useDMA){
       res.unitsMapped += 1;
     }
 
-    res.nConfigs += decl->baseConfig.configs.size;
-    for(Wire& wire : decl->baseConfig.configs){
+    res.nConfigs += decl->configs.size;
+    for(Wire& wire : decl->configs){
       configBits += wire.bitSize;
     }
 
-    res.nStates += decl->baseConfig.states.size;
-    for(Wire& wire : decl->baseConfig.states){
+    res.nStates += decl->states.size;
+    for(Wire& wire : decl->states){
       res.stateBits += wire.bitSize;
     }
 
-    res.nDelays += decl->baseConfig.delayOffsets.max;
-    delayBits += decl->baseConfig.delayOffsets.max * 32;
+    res.nDelays += unit->delaySize;
+    delayBits += unit->delaySize * DELAY_SIZE;
 
     res.nUnitsIO += decl->nIOs;
-
     res.externalMemoryInterfaces += decl->externalMemory.size;
-    //res.signalLoop |= decl->signalLoop;
   }
 
   int staticBits = 0;
@@ -1477,62 +1474,6 @@ void AssertGraphValid(FUInstance* nodes,Arena* arena){
     for(PortInstance& n : ptr->inputs){
       if(n.inst){
         seen->GetOrFail(n.inst);
-      }
-    }
-  }
-}
-
-static void SendLatencyUpwards(FUInstance* node,Hashmap<Edge,DelayInfo>* delays,Hashmap<FUInstance*,DelayInfo>* nodeDelay,Hashmap<FUInstance*,int>* nodeToPart){
-  int b = nodeDelay->GetOrFail(node).value;
-  FUInstance* inst = node;
-  FUDeclaration* decl = inst->declaration;
-  bool multipleTypes = HasMultipleConfigs(decl);
-
-  int nodePart = nodeToPart->GetOrFail(node);
-
-  FOREACH_LIST(ConnectionNode*,info,node->allOutputs){
-    FUInstance* other = info->instConnectedTo.inst;
-
-    // Do not set delay for source units. Source units cannot be found in this, otherwise they wouldn't be source
-    Assert(other->type != NodeType_SOURCE);
-
-    int a = 0;
-
-    if(multipleTypes){
-      a = decl->configInfo[nodePart].outputLatencies[info->port];
-    } else {
-      a = inst->declaration->baseConfig.outputLatencies[info->port];
-    }
-    
-    int e = info->edgeDelay;
-
-    FOREACH_LIST(ConnectionNode*,otherInfo,other->allInputs){
-      int c = 0;
-      if(HasMultipleConfigs(other->declaration)){
-        int otherPart = nodeToPart->GetOrFail(other);
-        
-        c = other->declaration->configInfo[otherPart].inputDelays[info->instConnectedTo.port];
-      } else {
-        c = other->declaration->baseConfig.inputDelays[info->instConnectedTo.port];
-      }
-
-      if(info->instConnectedTo.port == otherInfo->port &&
-         otherInfo->instConnectedTo.inst == inst && otherInfo->instConnectedTo.port == info->port){
-        
-        int delay = b + a + e - c;
-
-        Edge edge = {};
-        edge.out = {node,info->port};
-        edge.in = {other,info->instConnectedTo.port};
-
-        if(node->declaration == BasicDeclaration::buffer){
-          *otherInfo->delay.value = delay;
-          otherInfo->delay.isAny = true;
-
-          delays->GetOrFail(edge).isAny = true;
-        } else {
-          *otherInfo->delay.value = delay;
-        }
       }
     }
   }
@@ -2072,364 +2013,6 @@ Pair<Accelerator*,SubMap*> Flatten2(Accelerator* accel,int times,Arena* temp){
   newAccel->name = accel->name;
   
   return {newAccel,subMappingDone};
-}
-
-CalculateDelayResult CalculateDelay(Accelerator* accel,DAGOrderNodes order,Array<Partition> partitions,Arena* out){
-  // TODO: We are currently using the delay pointer inside the ConnectionNode structure. When correct, eventually change to just use the hashmap or an array.
-  static int functionCalls = 0;
-  
-  int nodes = accel->allocated.Size();
-  int edges = 9999; // Size(accel->edges);
-  EdgeDelay* edgeToDelay = PushHashmap<Edge,DelayInfo>(out,edges);
-  NodeDelay* nodeDelay = PushHashmap<FUInstance*,DelayInfo>(out,nodes);
-  PortDelay* portDelay = PushHashmap<PortInstance,DelayInfo>(out,edges);
-  
-  CalculateDelayResult res = {};
-  res.edgesDelay = edgeToDelay;
-  res.nodeDelay = nodeDelay;
-  res.portDelay = portDelay;
-  
-  for(FUInstance* ptr : accel->allocated){
-    nodeDelay->Insert(ptr,{0,false});
-  }
-  
-  EdgeIterator iter = IterateEdges(accel);
-  while(iter.HasNext()){
-    Edge edge = iter.Next();
-
-    ConnectionNode* fromOut = GetConnectionNode(edge.out.inst->allOutputs,edge.out.port,edge.in);
-    ConnectionNode* fromIn = GetConnectionNode(edge.in.inst->allInputs,edge.in.port,edge.out);
-
-    int* delayPtr = &edgeToDelay->Insert(edge,{0,false})->value;
-    
-    fromOut->delay.value = delayPtr;
-    fromIn->delay.value = delayPtr;
-  }
-  
-  Hashmap<FUInstance*,int>* nodeToPart = PushHashmap<FUInstance*,int>(out,nodes); // TODO: Either temp or move out accross call stack
-  {
-    int partitionIndex = 0;
-    for(int index = 0; index < order.instances.size; index++){
-      FUInstance* node = order.instances[index];
-    
-      int part = 0;
-      if(HasMultipleConfigs(node->declaration)){
-        part = partitions[partitionIndex++].value;
-      }
-
-      nodeToPart->Insert(node,part);
-    }
-  }
-
-  // TODO: Much of this code could be simplified
-  {
-    for(int i = 0; i < order.instances.size; i++){
-      FUInstance* node = order.instances[i];
-      FUInstance* inst = node;
-      
-      FOREACH_LIST(ConnectionNode*,info,node->allOutputs){
-        FUInstance* other = info->instConnectedTo.inst;
-
-        FOREACH_LIST(ConnectionNode*,otherInfo,other->allInputs){
-
-          if(info->instConnectedTo.port == otherInfo->port &&
-             otherInfo->instConnectedTo.inst == inst && otherInfo->instConnectedTo.port == info->port){
-
-            PortInstance node = {.inst = other,.port = info->instConnectedTo.port};
-            portDelay->Insert(node,{0,false});
-          }
-        }
-      }
-    }
-  }
- 
-  // Start at sources
-  int graphs = 0;
-  int index = 0;
-  int partitionIndex = 0;
-  for(; index < order.instances.size; index++){
-    FUInstance* node = order.instances[index];
-
-    int part = 0;
-    if(HasMultipleConfigs(node->declaration)){
-      part = partitions[partitionIndex++].value;
-    }
-
-    if(node->type != NodeType_SOURCE && node->type != NodeType_SOURCE_AND_SINK){
-      continue;
-    }
-
-    nodeDelay->Insert(node,{0,false});
-    SendLatencyUpwards(node,edgeToDelay,nodeDelay,nodeToPart);
-
-    if(globalOptions.debug){
-      BLOCK_REGION(out);
-      String fileName = PushString(out,"1_%d_out1_%d.dot",functionCalls,graphs++);
-      String filePath = PushDebugPath(out,accel->name,STRING("delays"),fileName);
-      
-      GraphPrintingContent content = GenerateDelayDotGraph(accel,res,out,debugArena);
-      String result = GenerateDotGraph(accel,content,out,debugArena);
-      OutputContentToFile(filePath,result);
-    }
-  }
-
-  index = 0;
-  partitionIndex = 0;
-  // Continue up the tree
-  for(; index < order.instances.size; index++){
-    FUInstance* node = order.instances[index];
-
-    int part = 0;
-    if(HasMultipleConfigs(node->declaration)){
-      part = partitions[partitionIndex++].value;
-    }
-
-    if(node->type == NodeType_UNCONNECTED
-       || node->type == NodeType_SOURCE){
-      continue;
-    }
-
-    int maximum = -(1 << 30);
-    FOREACH_LIST(ConnectionNode*,info,node->allInputs){
-      //if(!info->delay.isAny){
-        maximum = std::max(maximum,*info->delay.value);
-      //}
-    }
-    
-    if(maximum == -(1 << 30)){
-      continue;
-    }
-    
-    FOREACH_LIST(ConnectionNode*,info,node->allInputs){
-      if(info->delay.isAny){
-        //*info->delay.value = maximum - *info->delay.value;
-        *info->delay.value = 0;
-      } else {
-        *info->delay.value = maximum - *info->delay.value;
-      }
-    }
-
-    nodeDelay->Insert(node,{maximum,false});
-
-    if(node->type != NodeType_SOURCE_AND_SINK){
-      SendLatencyUpwards(node,edgeToDelay,nodeDelay,nodeToPart);
-    }
-
-    if(globalOptions.debug){
-      BLOCK_REGION(out);
-      String fileName = PushString(out,"1_%d_out2_%d.dot",functionCalls,graphs++);
-      String filePath = PushDebugPath(out,accel->name,STRING("delays"),fileName);
-      
-      GraphPrintingContent content = GenerateDelayDotGraph(accel,res,out,debugArena);
-      String result = GenerateDotGraph(accel,content,out,debugArena);
-      OutputContentToFile(filePath,result);
-    }
-  }
-
-  for(int i = 0; i < order.instances.size; i++){
-    FUInstance* node = order.instances[i];
-
-    if(node->type != NodeType_SOURCE_AND_SINK){
-      continue;
-    }
-
-    // Source_and_sink units never have output delay. They can't
-    FOREACH_LIST(ConnectionNode*,con,node->allOutputs){
-      *con->delay.value = 0;
-    }
-  }
-
-  int minimum = 0;
-  for(int i = 0; i < order.instances.size; i++){
-    FUInstance* node = order.instances[i];
-    int delay = nodeDelay->GetOrFail(node).value;
-
-    minimum = std::min(minimum,delay);
-  }
-  for(int i = 0; i < order.instances.size; i++){
-    FUInstance* node = order.instances[i];
-    int* delay = &(nodeDelay->Get(node)->value);
-    *delay -= minimum;
-  }
-  
-  if(globalOptions.debug){
-    BLOCK_REGION(out);
-    String fileName = PushString(out,"1_%d_out3_%d.dot",functionCalls,graphs++);
-    String filePath = PushDebugPath(out,accel->name,STRING("delays"),fileName);
-      
-    GraphPrintingContent content = GenerateDelayDotGraph(accel,res,out,debugArena);
-    String result = GenerateDotGraph(accel,content,out,debugArena);
-    OutputContentToFile(filePath,result);
-  }
-
-  if(!globalOptions.disableDelayPropagation){
-    // Normalizes everything to start on zero
-    for(int i = 0; i < order.instances.size; i++){
-      FUInstance* node = order.instances[i];
-
-      if(node->type != NodeType_SOURCE && node->type != NodeType_SOURCE_AND_SINK){
-        break;
-      }
-
-      int minimum = 1 << 30;
-      FOREACH_LIST(ConnectionNode*,info,node->allOutputs){
-        minimum = std::min(minimum,*info->delay.value);
-      }
-
-      if(minimum == 1 << 30){
-        continue;
-      }
-      
-      // Does not take into account unit latency
-      nodeDelay->Insert(node,{minimum,false});
-
-      FOREACH_LIST(ConnectionNode*,info,node->allOutputs){
-        *info->delay.value -= minimum;
-      }
-    }
-  }
-
-  if(globalOptions.debug){
-    BLOCK_REGION(out);
-    String fileName = PushString(out,"1_%d_out4_%d.dot",functionCalls,graphs++);
-    String filePath = PushDebugPath(out,accel->name,STRING("delays"),fileName);
-      
-    GraphPrintingContent content = GenerateDelayDotGraph(accel,res,out,debugArena);
-    String result = GenerateDotGraph(accel,content,out,debugArena);
-    OutputContentToFile(filePath,result);
-  }
-
-  for(int i = 0; i < order.instances.size; i++){
-    FUInstance* node = order.instances[i];
-
-    if(node->type == NodeType_UNCONNECTED){
-      nodeDelay->Insert(node,{0,false});
-    }
-  }
-
-  for(auto p :res.nodeDelay){
-    Assert(p.second->value >= 0);
-  }
-
-  for(int i = 0; i < order.instances.size; i++){
-    FUInstance* node = order.instances[i];
-
-    if(node->type != NodeType_SOURCE && node->type != NodeType_SOURCE_AND_SINK){
-      continue;
-    }
-
-    int minDelay = 9999999;
-    FOREACH_LIST(ConnectionNode*,info,node->allOutputs){
-      minDelay = std::min(minDelay,*info->delay.value);
-    }
-
-    FOREACH_LIST(ConnectionNode*,info,node->allOutputs){
-      *info->delay.value -= minDelay;
-    }
-
-    nodeDelay->Get(node)->value += minDelay;    
-  }
-
-#if 0
-  for(int i = order.instances.size - 1; i >= 0; i--){
-    FUInstance* inst = order.instances[i];
-
-    int outputMin = 9999;
-    int outputMax = 0;
-    bool containsAny = false;
-    
-    FOREACH_LIST(ConnectionNode*,info,inst->allOutputs){
-      containsAny |= info->delay.isAny;
-      outputMin = std::min(outputMin,*info->delay.value);
-      outputMax = std::max(outputMax,*info->delay.value);
-    }
-
-    if(containsAny){
-      continue;
-    }
-   
-    if(outputMin == outputMax){
-      FOREACH_LIST(ConnectionNode*,info,inst->allOutputs){
-        *info->delay.value -= outputMin;
-      }
-      FOREACH_LIST(ConnectionNode*,info,inst->allInputs){
-        *info->delay.value += outputMax;
-      }
-
-      nodeDelay->Get(inst)->value += outputMin;
-    }
-  }
-
-  if(globalOptions.debug){
-    BLOCK_REGION(out);
-    String fileName = PushString(out,"1_%d_out5_%d.dot",functionCalls,graphs++);
-    String filePath = PushDebugPath(out,accel->name,STRING("delays"),fileName);
-      
-    GraphPrintingContent content = GenerateDelayDotGraph(accel,res,out,debugArena);
-    String result = GenerateDotGraph(accel,content,out,debugArena);
-    OutputContentToFile(filePath,result);
-  }
-#endif
-  
-  {
-    for(int i = 0; i < order.instances.size; i++){
-      FUInstance* node = order.instances[i];
-      FUInstance* inst = node;
-      int b = nodeDelay->GetOrFail(node).value;
-      FUDeclaration* decl = inst->declaration;
-      bool multipleTypes = HasMultipleConfigs(decl);
-
-      int nodePart = nodeToPart->GetOrFail(node);
-      
-      FOREACH_LIST(ConnectionNode*,info,node->allOutputs){
-        FUInstance* other = info->instConnectedTo.inst;
-
-        int a = 0;
-
-        if(multipleTypes){
-          a = decl->configInfo[nodePart].outputLatencies[info->port];
-        } else {
-          a = inst->declaration->baseConfig.outputLatencies[info->port];
-        }
-    
-        int e = info->edgeDelay;
-
-        FOREACH_LIST(ConnectionNode*,otherInfo,other->allInputs){
-          int c = 0;
-          if(HasMultipleConfigs(other->declaration)){
-            int otherPart = nodeToPart->GetOrFail(other);
-        
-            c = other->declaration->configInfo[otherPart].inputDelays[info->instConnectedTo.port];
-          } else {
-            c = other->declaration->baseConfig.inputDelays[info->instConnectedTo.port];
-          }
-
-          if(info->instConnectedTo.port == otherInfo->port &&
-             otherInfo->instConnectedTo.inst == inst && otherInfo->instConnectedTo.port == info->port){
-        
-            int delay = b + a + e - c;
-
-            PortInstance node = {.inst = other,.port = info->instConnectedTo.port};
-            portDelay->Insert(node,{delay,false});
-          }
-        }
-      }
-    }
-  }
-
-  if(globalOptions.debug){
-    BLOCK_REGION(out);
-    String fileName = PushString(out,"1_%d_out_final.dot",functionCalls);
-    String filepath = PushDebugPath(out,accel->name,STRING("delays"),fileName);
-
-    GraphPrintingContent content = GenerateDelayDotGraph(accel,res,out,debugArena);
-    String result = GenerateDotGraph(accel,content,out,debugArena);
-    OutputContentToFile(filepath,result);
-  }
-  
-  functionCalls += 1;
-  
-  return res;
 }
 
 void PrintSubMappingInfo(SubMap* info){

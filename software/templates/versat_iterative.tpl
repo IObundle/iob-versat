@@ -30,7 +30,7 @@ module @{accel.name} #(
    output [DATA_W-1:0]             out@{index},
    #{end}
 
-   #{for wire accel.baseConfig.configs}
+   #{for wire accel.configs}
    input [@{wire.bitSize-1}:0]     @{wire.name},
    #{end}
 
@@ -41,7 +41,7 @@ module @{accel.name} #(
    #{end}
    #{end}
 
-   #{for wire accel.baseConfig.states}
+   #{for wire accel.states}
    output [@{wire.bitSize-1}:0]    @{wire.name},
    #{end}
 
@@ -223,14 +223,14 @@ end
          #{else}
          
          #{if inst.isStatic}
-         #{for wire decl.baseConfig.configs}
+         #{for wire decl.configs}
          .@{wire.name}(@{accel.name}_@{inst |> Identify}_@{wire.name}),
          #{end}
 
          #{else}
          #{set configStart accel.baseConfig.configOffsets.offsets[id]}
-         #{for wire decl.baseConfig.configs}
-         .@{wire.name}(@{accel.baseConfig.configs[configStart + index].name}), // @{configStart + index}
+         #{for wire decl.configs}
+         .@{wire.name}(@{accel.configs[configStart + index].name}), // @{configStart + index}
          #{end}
          #{for unit decl.staticUnits}         
          #{set id unit.first}
@@ -270,8 +270,8 @@ end
          #{inc externalCounter}
          #{end}
 
-         #{for wire decl.baseConfig.states}
-            .@{wire.name}(@{accel.baseConfig.states[statesSeen].name}),
+         #{for wire decl.states}
+            .@{wire.name}(@{accel.states[statesSeen].name}),
          #{inc statesSeen}
          #{end}
 

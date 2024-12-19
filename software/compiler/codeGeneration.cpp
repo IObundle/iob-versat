@@ -17,8 +17,6 @@
 
 #include "versatSpecificationParser.hpp"
 
-static const int DELAY_SIZE = 7;
-
 // TODO: REMOVE: Remove after proper implementation of AddressGenerators
 Pool<AddressGenDef> savedAddressGen;
 
@@ -167,13 +165,13 @@ Array<TypeStructInfoElement> GenerateStructFromType(FUDeclaration* decl,Arena* o
   }
 
   if(decl->type == FUDeclarationType_SINGLE){
-    int size = decl->baseConfig.configs.size;
+    int size = decl->configs.size;
     Array<TypeStructInfoElement> entries = PushArray<TypeStructInfoElement>(out,size);
 
     for(int i = 0; i < size; i++){
       entries[i].typeAndNames = PushArray<SingleTypeStructElement>(out,1);
       entries[i].typeAndNames[0].type = STRING("iptr");
-      entries[i].typeAndNames[0].name = decl->baseConfig.configs[i].name;
+      entries[i].typeAndNames[0].name = decl->configs[i].name;
     }
     return entries;
   }
@@ -195,7 +193,7 @@ Array<TypeStructInfoElement> GenerateStructFromType(FUDeclaration* decl,Arena* o
       continue;
     }
 
-    int numberConfigs = decl->baseConfig.configs.size;
+    int numberConfigs = decl->configs.size;
     configAmount[configOffset] += 1; // Counts how many configs a given offset has.
   }
   
@@ -350,7 +348,7 @@ Array<TypeStructInfo> GetConfigStructInfo(Accelerator* accel,Arena* out,Arena* t
         int config = offsets.offsets[i];
           
         if(config >= 0 && info.unitBelongs[i]){
-          int nConfigs = node->declaration->baseConfig.configs.size;
+          int nConfigs = node->declaration->configs.size;
           for(int ii = 0; ii < nConfigs; ii++){
             seenIndex[config + ii] = true;
           }
@@ -386,7 +384,7 @@ Array<TypeStructInfo> GetConfigStructInfo(Accelerator* accel,Arena* out,Arena* t
           FUInstance* node = decl->fixedDelayCircuit->allocated.Get(i);
           int config = offsets.offsets[i];
           if(configNeedToSee == config){
-            int nConfigs = node->declaration->baseConfig.configs.size;
+            int nConfigs = node->declaration->configs.size;
               
             TypeStructInfoElement* elem = PushListElement(list);
             elem->typeAndNames = PushArray<SingleTypeStructElement>(out,1);
@@ -588,7 +586,7 @@ Array<TypeStructInfoElement> ExtractStructuredConfigs(Array<InstanceInfo> info,A
       }
 
       ArenaList<String>* list = *res.data;
-      String name = PushString(out,"%.*s_%.*s",UNPACK_SS(in.fullName),UNPACK_SS(in.decl->baseConfig.configs[i].name));
+      String name = PushString(out,"%.*s_%.*s",UNPACK_SS(in.fullName),UNPACK_SS(in.decl->configs[i].name));
 
       // Quick and dirty way of skipping same name
       bool skip = false;
@@ -785,7 +783,7 @@ void OutputVerilatorWrapper(FUDeclaration* type,Accelerator* accel,String output
 
   // We need to bundle config + static (type->config) only contains config, but not static
   auto arr = StartArray<Wire>(temp);
-  for(Wire& config : type->baseConfig.configs){
+  for(Wire& config : type->configs){
     *arr.PushElem() = config;
   }
   Array<Wire> allConfigsVerilatorSide = EndArray(arr);
@@ -1190,7 +1188,7 @@ void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* 
   int staticStart = 0;
   for(FUInstance* ptr : accel->allocated){
     FUDeclaration* decl = ptr->declaration;
-    for(Wire& wire : decl->baseConfig.configs){
+    for(Wire& wire : decl->configs){
       staticStart += wire.bitSize;
     }
   }
@@ -1264,7 +1262,7 @@ void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* 
   
   auto arr = StartArray<WireInformation>(temp);
   for(auto n : nodes){
-    for(Wire w : n->declaration->baseConfig.configs){
+    for(Wire w : n->declaration->configs){
       WireInformation info = {};
       info.wire = w;
       info.configBitStart = configBit;
@@ -1286,7 +1284,7 @@ void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* 
   }
   int delaysInserted = 0;
   for(auto n : nodes){
-    for(int i = 0; i < n->declaration->baseConfig.delayOffsets.max; i++){
+    for(int i = 0; i < n->declaration->NumberDelays(); i++){
       Wire wire = {};
       wire.bitSize = DELAY_SIZE;
       wire.name = PushString(temp2,"Delay%d",delaysInserted++);

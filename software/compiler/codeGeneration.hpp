@@ -4,6 +4,8 @@
 #include "verilogParsing.hpp"
 #include "utils.hpp"
 
+static const int DELAY_SIZE = 7;
+
 struct Accelerator;
 struct InstanceInfo;
 struct FUDeclaration;

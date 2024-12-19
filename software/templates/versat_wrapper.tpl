@@ -427,10 +427,10 @@ if(SimulateDatabus){
 #{end}
 
 // TODO: Technically only need to do this at the end of an accelerator run, do not need to do this every single update
-#{if type.baseConfig.states}
+#{if type.states}
 AcceleratorState* state = &stateBuffer;
-#{for i type.baseConfig.states.size}
-#{set wire type.baseConfig.states[i]}
+#{for i type.states.size}
+#{set wire type.states[i]}
    state->@{statesHeader[i]} = self->@{wire.name};
 #{end}
 #{end}

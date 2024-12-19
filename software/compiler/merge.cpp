@@ -2206,8 +2206,8 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
     AcceleratorMapping* map = MappingInvert(reconToAccel[i],globalPermanent); //accelToRecon[i];
     
     // Copy everything else for now. Only config and names are being handled for now
-    decl->configInfo[i].configs = decl->baseConfig.configs;
-    decl->configInfo[i].states = decl->baseConfig.states;
+    //decl->configInfo[i].configs = decl->configs;
+    //decl->configInfo[i].states = decl->states;
     decl->configInfo[i].stateOffsets = decl->baseConfig.stateOffsets;
     decl->configInfo[i].delayOffsets = decl->baseConfig.delayOffsets;
 

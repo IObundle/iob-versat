@@ -67,10 +67,6 @@ struct ConfigurationInfo{
   String name;
   Array<String> baseName;
 
-  // TODO: These should not be here, the wires will always be the same regardless of unit type 
-  Array<Wire> configs;
-  Array<Wire> states;
-
   Array<int> inputDelays;
   Array<int> outputLatencies;
   
@@ -117,6 +113,8 @@ struct FUDeclaration{
   AccelInfo info;
   
   //Array<InstanceInfo> instanceInfo;
+
+  int numberDelays;
   
   Array<String> parameters; // For now, only the parameters extracted from verilog files
   
@@ -153,11 +151,13 @@ struct FUDeclaration{
   bool signalLoop;
 
   // Simple access functions
-  int NumberInputs(){return baseConfig.inputDelays.size;};
-  int NumberOutputs(){return baseConfig.outputLatencies.size;};
-  int NumberConfigs(){return baseConfig.configs.size;}
-  int NumberStates(){return baseConfig.states.size;}
-  int NumberDelays(){return baseConfig.delayOffsets.max;};
+  //int NumberInputs(){return baseConfig.inputDelays.size;};
+  int NumberInputs(){return info.infos[0].inputDelays.size;};
+  //int NumberOutputs(){return baseConfig.outputLatencies.size;};
+  int NumberOutputs(){return info.infos[0].outputLatencies.size;};
+  int NumberConfigs(){return configs.size;}
+  int NumberStates(){return states.size;}
+  int NumberDelays(){return numberDelays;}; //baseConfig.delayOffsets.max;
 };
 
 // Simple operations should also be stored here.

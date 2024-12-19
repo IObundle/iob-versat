@@ -156,7 +156,7 @@ CalculatedOffsets CalculateConfigOffsetsIgnoringStatics(Accelerator* accel,Arena
     // TODO: Temporarely set this to comment. Do not know what it affects.
     // Assert(!(inst->sharedEnable && inst->isStatic));
 
-    int numberConfigs = inst->declaration->baseConfig.configs.size;
+    int numberConfigs = inst->declaration->configs.size;
     if(numberConfigs == 0){
       array[index] = -1;
       continue;
@@ -195,13 +195,13 @@ int GetConfigurationSize(FUDeclaration* decl,MemType type){
 
   switch(type){
   case MemType::CONFIG:{
-    size = decl->baseConfig.configs.size;
+    size = decl->configs.size;
   }break;
   case MemType::DELAY:{
-    size = decl->baseConfig.delayOffsets.max;
+    size = decl->NumberDelays();
   }break;
   case MemType::STATE:{
-    size = decl->baseConfig.states.size;
+    size = decl->states.size;
   }break;
   case MemType::STATIC:{
   }break;
@@ -260,8 +260,8 @@ Array<Wire> ExtractAllConfigs(Array<InstanceInfo> info,Arena* out,Arena* temp){
       for(int i = 0; i < t.configSize; i++){
         Wire* wire = PushListElement(list);
 
-        *wire = t.decl->baseConfig.configs[i];
-        wire->name = PushString(out,"%.*s_%.*s",UNPACK_SS(t.fullName),UNPACK_SS(t.decl->baseConfig.configs[i].name));
+        *wire = t.decl->configs[i];
+        wire->name = PushString(out,"%.*s_%.*s",UNPACK_SS(t.fullName),UNPACK_SS(t.decl->configs[i].name));
       }
     }
   }
@@ -287,8 +287,8 @@ Array<Wire> ExtractAllConfigs(Array<InstanceInfo> info,Arena* out,Arena* temp){
         for(int i = 0; i < t.configSize; i++){
           Wire* wire = PushListElement(list);
 
-          *wire = t.decl->baseConfig.configs[i];
-          wire->name = PushString(out,"%.*s_%.*s_%.*s",UNPACK_SS(parentName),UNPACK_SS(t.name),UNPACK_SS(t.decl->baseConfig.configs[i].name));
+          *wire = t.decl->configs[i];
+          wire->name = PushString(out,"%.*s_%.*s_%.*s",UNPACK_SS(parentName),UNPACK_SS(t.name),UNPACK_SS(t.decl->configs[i].name));
         }
       }
     }
@@ -308,7 +308,7 @@ Array<String> ExtractStates(Array<InstanceInfo> info,Arena* out){
   int count = 0;
   for(InstanceInfo& in : info){
     if(!in.isComposite && in.statePos.has_value()){
-      count += in.decl->baseConfig.states.size;
+      count += in.decl->states.size;
     }
   }
 
@@ -317,7 +317,7 @@ Array<String> ExtractStates(Array<InstanceInfo> info,Arena* out){
   for(InstanceInfo& in : info){
     if(!in.isComposite && in.statePos.has_value()){
       FUDeclaration* decl = in.decl;
-      for(Wire& wire : decl->baseConfig.states){
+      for(Wire& wire : decl->states){
         res[index++] = PushString(out,"%.*s_%.*s",UNPACK_SS(in.fullName),UNPACK_SS(wire.name)); 
       }
     }
@@ -458,9 +458,9 @@ static InstanceInfo GetInstanceInfo(FUInstance* node,FUDeclaration* parentDeclar
     info.memMappedMask = BinaryRepr(info.memMapped.value(),32,out);
   }
 
-  info.configSize = topDecl->baseConfig.configs.size;
-  info.stateSize = topDecl->baseConfig.states.size;
-  info.delaySize = topDecl->baseConfig.delayOffsets.max;
+  info.configSize = topDecl->configs.size;
+  info.stateSize = topDecl->states.size;
+  info.delaySize = topDecl->NumberDelays();
 
   bool containsConfigs = info.configSize;
   bool configIsStatic = false;
@@ -486,11 +486,11 @@ static InstanceInfo GetInstanceInfo(FUInstance* node,FUDeclaration* parentDeclar
     } 
   }
 
-  if(topDecl->baseConfig.states.size){
+  if(topDecl->states.size){
     info.statePos = offsets.stateOffset;
   }
 
-  if(topDecl->baseConfig.delayOffsets.max){
+  if(topDecl->NumberDelays()){
     info.delayPos = offsets.delayOffset;
   }
 
@@ -502,7 +502,7 @@ static InstanceInfo GetInstanceInfo(FUInstance* node,FUDeclaration* parentDeclar
     
   info.isConfigStatic = configIsStatic;
   
-  int nDelays = topDecl->baseConfig.delayOffsets.max;
+  int nDelays = topDecl->NumberDelays();
   if(nDelays > 0 && !info.isComposite){
     info.delay = PushArray<int>(out,nDelays);
     // Assert(offsets.delay >= 0); // TODO: Temp
@@ -571,7 +571,7 @@ AcceleratorInfo TransformGraphIntoArrayRecurse(FUInstance* node,FUDeclaration* p
   for(int index = 0; index < inst->declaration->fixedDelayCircuit->allocated.Size(); index++){
     FUInstance* subInst = inst->declaration->fixedDelayCircuit->allocated.Get(index);
 
-    bool containsConfig = subInst->declaration->baseConfig.configs.size; // TODO: When  doing partition might need to put index here instead of 0
+    bool containsConfig = subInst->declaration->configs.size; // TODO: When  doing partition might need to put index here instead of 0
     
     InstanceConfigurationOffsets subOffsets = offsets;
     subOffsets.level += 1;
@@ -587,7 +587,7 @@ AcceleratorInfo TransformGraphIntoArrayRecurse(FUInstance* node,FUDeclaration* p
     subOffsets.baseName = inst->declaration->configInfo[part].baseName[index];
     subOffsets.order = inst->declaration->configInfo[part].order[index];
     
-    if(subInst->declaration->baseConfig.delayOffsets.max > 0){
+    if(subInst->declaration->NumberDelays() > 0){
       subOffsets.delay = offsets.delay + inst->declaration->configInfo[part].calculatedDelays[index];
     }
 
@@ -1755,13 +1755,13 @@ AccelInfo CalculateAcceleratorInfo(Accelerator* accel,bool recursive,Arena* out,
       }
 
       if(!seenShared[inst->sharedIndex]){
-        result.configs += type->baseConfig.configs.size;
+        result.configs += type->configs.size;
         result.sharedUnits += 1;
       }
 
       seenShared[inst->sharedIndex] = true;
     } else if(!inst->isStatic){ // Shared cannot be static
-         result.configs += type->baseConfig.configs.size;
+         result.configs += type->configs.size;
     }
 
     if(type->memoryMapBits.has_value()){
@@ -1775,8 +1775,8 @@ AccelInfo CalculateAcceleratorInfo(Accelerator* accel,bool recursive,Arena* out,
       result.inputs += 1;
     }
 
-    result.states += type->baseConfig.states.size;
-    result.delays += type->baseConfig.delayOffsets.max;
+    result.states += type->states.size;
+    result.delays += type->NumberDelays();
     result.ios += type->nIOs;
 
     if(type->externalMemory.size){
@@ -1814,9 +1814,9 @@ AccelInfo CalculateAcceleratorInfo(Accelerator* accel,bool recursive,Arena* out,
       id.name = inst->name;
 
       staticSeen->Insert(id,1);
-      result.statics += inst->declaration->baseConfig.configs.size;
+      result.statics += inst->declaration->configs.size;
 
-      for(Wire& wire : inst->declaration->baseConfig.configs){
+      for(Wire& wire : inst->declaration->configs){
         result.staticBits += wire.bitSize;
       }
     }
@@ -1941,9 +1941,9 @@ static InstanceInfo GetInstanceInfoNoDelay(FUInstance* node,FUDeclaration* paren
     info.memMappedMask = BinaryRepr(info.memMapped.value(),32,out);
   }
 
-  info.configSize = topDecl->baseConfig.configs.size;
-  info.stateSize = topDecl->baseConfig.states.size;
-  info.delaySize = topDecl->baseConfig.delayOffsets.max;
+  info.configSize = topDecl->configs.size;
+  info.stateSize = topDecl->states.size;
+  info.delaySize = topDecl->NumberDelays();
 
   bool containsConfigs = info.configSize;
   bool configIsStatic = false;
@@ -1969,11 +1969,11 @@ static InstanceInfo GetInstanceInfoNoDelay(FUInstance* node,FUDeclaration* paren
     } 
   }
 
-  if(topDecl->baseConfig.states.size){
+  if(topDecl->states.size){
     info.statePos = offsets.stateOffset;
   }
 
-  if(topDecl->baseConfig.delayOffsets.max){
+  if(topDecl->NumberDelays()){
     info.delayPos = offsets.delayOffset;
   }
 
@@ -2038,7 +2038,7 @@ AcceleratorInfo TransformGraphIntoArrayRecurseNoDelay(FUInstance* node,FUDeclara
   for(int index = 0; index < inst->declaration->fixedDelayCircuit->allocated.Size(); index++){
     FUInstance* subInst = inst->declaration->fixedDelayCircuit->allocated.Get(index);
     FUInstance* subNode = subInst;
-    bool containsConfig = subInst->declaration->baseConfig.configs.size; // TODO: When  doing partition might need to put index here instead of 0
+    bool containsConfig = subInst->declaration->configs.size; // TODO: When  doing partition might need to put index here instead of 0
     
     InstanceConfigurationOffsets subOffsets = offsets;
     subOffsets.level += 1;
@@ -2324,13 +2324,13 @@ AccelInfo CalculateAcceleratorInfoNoDelay(Accelerator* accel,bool recursive,Aren
       }
 
       if(!seenShared[inst->sharedIndex]){
-        result.configs += type->baseConfig.configs.size;
+        result.configs += type->configs.size;
         result.sharedUnits += 1;
       }
 
       seenShared[inst->sharedIndex] = true;
     } else if(!inst->isStatic){ // Shared cannot be static
-         result.configs += type->baseConfig.configs.size;
+         result.configs += type->configs.size;
     }
 
     if(type->memoryMapBits.has_value()){
@@ -2344,8 +2344,8 @@ AccelInfo CalculateAcceleratorInfoNoDelay(Accelerator* accel,bool recursive,Aren
       result.inputs += 1;
     }
 
-    result.states += type->baseConfig.states.size;
-    result.delays += type->baseConfig.delayOffsets.max;
+    result.states += type->states.size;
+    result.delays += type->NumberDelays();
     result.ios += type->nIOs;
 
     if(type->externalMemory.size){
@@ -2382,9 +2382,9 @@ AccelInfo CalculateAcceleratorInfoNoDelay(Accelerator* accel,bool recursive,Aren
       id.name = inst->name;
 
       staticSeen->Insert(id,1);
-      result.statics += inst->declaration->baseConfig.configs.size;
+      result.statics += inst->declaration->configs.size;
 
-      for(Wire& wire : inst->declaration->baseConfig.configs){
+      for(Wire& wire : inst->declaration->configs){
         result.staticBits += wire.bitSize;
       }
     }

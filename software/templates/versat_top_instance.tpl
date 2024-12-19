@@ -429,7 +429,7 @@ begin
       #{for node instances}
       #{set inst node}
       #{set decl inst.declaration}
-      #{for wire decl.baseConfig.states}
+      #{for wire decl.states}
       if(addr[@{stateAddressBits + 1}:0] >= @{addr * 4} && addr[@{stateAddressBits + 1}:0] < @{(addr + 1) * 4}) // @{addr * 4 |> Hex}
          stateRead = statedata[@{counter}+:@{wire.bitSize}];
       #{inc addr}
@@ -504,7 +504,7 @@ end
          #{end}
          #{end}
 
-         #{for wire decl.baseConfig.configs}
+         #{for wire decl.configs}
          #{if decl.type}
             .@{wire.name}(configdata[@{configDataIndex}+:@{wire.bitSize}]),
          #{else}
@@ -549,7 +549,7 @@ end
          #{inc externalCounter}
          #{end}
 
-         #{for wire decl.baseConfig.states}
+         #{for wire decl.states}
          #{if decl.type}
             .@{wire.name}(statedata[@{stateDataIndex}+:@{wire.bitSize}]),
          #{else}

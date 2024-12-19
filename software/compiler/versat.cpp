@@ -167,10 +167,19 @@ FUDeclaration* RegisterModuleInfo(ModuleInfo* info,Arena* temp){
   decl.name = info->name;
   decl.baseConfig.inputDelays = info->inputDelays;
   decl.baseConfig.outputLatencies = info->outputLatencies;
-  decl.baseConfig.configs = configs;
-  decl.baseConfig.states = states;
+
+  decl.configInfo = PushArray<ConfigurationInfo>(globalPermanent,1);
+  decl.info.infos = PushArray<MergePartition>(globalPermanent,1);
+  decl.configInfo[0].inputDelays = decl.baseConfig.inputDelays;
+  decl.configInfo[0].outputLatencies = decl.baseConfig.outputLatencies;
+  decl.info.infos[0].inputDelays = decl.configInfo[0].inputDelays;
+  decl.info.infos[0].outputLatencies = decl.configInfo[0].outputLatencies;
+
+  decl.configs = configs;
+  decl.states = states;
   decl.externalMemory = external;
   decl.baseConfig.delayOffsets.max = info->nDelays;
+  decl.numberDelays = info->nDelays;
   decl.baseConfig.name = info->name;
   decl.nIOs = info->nIO;
 
@@ -232,8 +241,22 @@ void FillDeclarationWithAcceleratorValues(FUDeclaration* decl,Accelerator* accel
 
   decl->baseConfig.inputDelays = val.infos[0].inputDelays;
   decl->baseConfig.outputLatencies = val.infos[0].outputLatencies;
-  decl->baseConfig.configs = PushArray<Wire>(perm,val.configs);
-  decl->baseConfig.states = PushArray<Wire>(perm,val.states);
+
+  if(decl->configInfo.size == 0){
+    decl->configInfo = PushArray<ConfigurationInfo>(globalPermanent,val.infos.size);
+  }
+
+  if(decl->info.infos.size == 0){
+    decl->info.infos = PushArray<MergePartition>(globalPermanent,val.infos.size);
+  }
+  
+  decl->configInfo[0].inputDelays = decl->baseConfig.inputDelays;
+  decl->configInfo[0].outputLatencies = decl->baseConfig.outputLatencies;
+  decl->info.infos[0].inputDelays = decl->configInfo[0].inputDelays;
+  decl->info.infos[0].outputLatencies = decl->configInfo[0].outputLatencies;
+
+  decl->configs = PushArray<Wire>(perm,val.configs);
+  decl->states = PushArray<Wire>(perm,val.states);
   decl->baseConfig.order = Map(val.baseInfo,perm,[](InstanceInfo in){
     return in.order;
   });
@@ -252,24 +275,24 @@ void FillDeclarationWithAcceleratorValues(FUDeclaration* decl,Accelerator* accel
     if(!inst->isStatic){
       if(inst->sharedEnable){
         if(staticsSeen->InsertIfNotExist(inst->sharedIndex,0)){
-          for(Wire& wire : d->baseConfig.configs){
-            decl->baseConfig.configs[configIndex] = wire;
-            decl->baseConfig.configs[configIndex++].name = PushString(perm,"%.*s_%.*s",UNPACK_SS(inst->name),UNPACK_SS(wire.name));
+          for(Wire& wire : d->configs){
+            decl->configs[configIndex] = wire;
+            decl->configs[configIndex++].name = PushString(perm,"%.*s_%.*s",UNPACK_SS(inst->name),UNPACK_SS(wire.name));
           }
         }
       } else {
-        for(Wire& wire : d->baseConfig.configs){
-          decl->baseConfig.configs[configIndex] = wire;
+        for(Wire& wire : d->configs){
+          decl->configs[configIndex] = wire;
 
-          decl->baseConfig.configs[configIndex++].name = PushString(perm,"%.*s_%.*s",UNPACK_SS(inst->name),UNPACK_SS(wire.name));
+          decl->configs[configIndex++].name = PushString(perm,"%.*s_%.*s",UNPACK_SS(inst->name),UNPACK_SS(wire.name));
         }
       }
     }
 
-    for(Wire& wire : d->baseConfig.states){
-      decl->baseConfig.states[stateIndex] = wire;
+    for(Wire& wire : d->states){
+      decl->states[stateIndex] = wire;
 
-      decl->baseConfig.states[stateIndex++].name = PushString(perm,"%.*s_%.2d",UNPACK_SS(wire.name),stateIndex);
+      decl->states[stateIndex++].name = PushString(perm,"%.*s_%.2d",UNPACK_SS(wire.name),stateIndex);
     }
   }
 
@@ -289,6 +312,7 @@ void FillDeclarationWithAcceleratorValues(FUDeclaration* decl,Accelerator* accel
     decl->baseConfig.configOffsets.max = val.configs;
     decl->baseConfig.stateOffsets.max = val.states;
     decl->baseConfig.delayOffsets.max = val.delays;
+    decl->numberDelays = val.delays;
     int index = 0;
     for(InstanceInfo& info : val.infos[0].info){
       if(info.level != 0) continue;
@@ -311,6 +335,10 @@ void FillDeclarationWithAcceleratorValues(FUDeclaration* decl,Accelerator* accel
     }
   }
 
+  if(decl->info.infos.size == 0){
+    decl->info.infos = PushArray<MergePartition>(globalPermanent,1);
+  }
+  
   // If only one config, set configInfo zero as equal to baseConfig in order to simplify code that uses configInfo
   if(val.infos.size == 1){
     decl->configInfo = PushArray<ConfigurationInfo>(perm,1);
@@ -327,6 +355,11 @@ void FillDeclarationWithAcceleratorValues(FUDeclaration* decl,Accelerator* accel
       Assert(!Empty(decl->configInfo[i].name));
       decl->configInfo[i].inputDelays = val.infos[i].inputDelays;
       decl->configInfo[i].outputLatencies = val.infos[i].outputLatencies;
+
+      decl->info.infos[i].info = val.infos[i].info;
+      decl->info.infos[i].inputDelays = val.infos[i].inputDelays;
+      decl->info.infos[i].outputLatencies = val.infos[i].outputLatencies;
+
       decl->configInfo[i].mergeMultiplexerConfigs = val.infos[i].muxConfigs;
       
       decl->configInfo[i].baseName = Map(val.infos[i].info,perm,[](InstanceInfo info){
@@ -404,8 +437,8 @@ void FillDeclarationWithAcceleratorValuesNoDelay(FUDeclaration* decl,Accelerator
     }
   }
 
-  decl->baseConfig.configs = PushArray<Wire>(perm,val.configs);
-  decl->baseConfig.states = PushArray<Wire>(perm,val.states);
+  decl->configs = PushArray<Wire>(perm,val.configs);
+  decl->states = PushArray<Wire>(perm,val.states);
   Hashmap<int,int>* staticsSeen = PushHashmap<int,int>(temp,val.sharedUnits);
 
   int configIndex = 0;
@@ -422,22 +455,22 @@ void FillDeclarationWithAcceleratorValuesNoDelay(FUDeclaration* decl,Accelerator
     if(!inst->isStatic){
       if(inst->sharedEnable){
         if(staticsSeen->InsertIfNotExist(inst->sharedIndex,0)){
-          for(Wire& wire : d->baseConfig.configs){
-            decl->baseConfig.configs[configIndex] = wire;
-            decl->baseConfig.configs[configIndex++].name = PushString(perm,"%.*s_%.*s",UNPACK_SS(inst->name),UNPACK_SS(wire.name));
+          for(Wire& wire : d->configs){
+            decl->configs[configIndex] = wire;
+            decl->configs[configIndex++].name = PushString(perm,"%.*s_%.*s",UNPACK_SS(inst->name),UNPACK_SS(wire.name));
           }
         }
       } else {
-        for(Wire& wire : d->baseConfig.configs){
-          decl->baseConfig.configs[configIndex] = wire;
-          decl->baseConfig.configs[configIndex++].name = PushString(perm,"%.*s_%.*s",UNPACK_SS(inst->name),UNPACK_SS(wire.name));
+        for(Wire& wire : d->configs){
+          decl->configs[configIndex] = wire;
+          decl->configs[configIndex++].name = PushString(perm,"%.*s_%.*s",UNPACK_SS(inst->name),UNPACK_SS(wire.name));
         }
       }
     }
 
-    for(Wire& wire : d->baseConfig.states){
-      decl->baseConfig.states[stateIndex] = wire;
-      decl->baseConfig.states[stateIndex++].name = PushString(perm,"%.*s_%.2d",UNPACK_SS(wire.name),stateIndex);
+    for(Wire& wire : d->states){
+      decl->states[stateIndex] = wire;
+      decl->states[stateIndex++].name = PushString(perm,"%.*s_%.2d",UNPACK_SS(wire.name),stateIndex);
     }
   }
 
@@ -454,6 +487,7 @@ void FillDeclarationWithAcceleratorValuesNoDelay(FUDeclaration* decl,Accelerator
     decl->baseConfig.configOffsets.max = val.configs;
     decl->baseConfig.stateOffsets.max = val.states;
     decl->baseConfig.delayOffsets.max = val.delays;
+    decl->numberDelays = val.delays;
     int index = 0;
     for(InstanceInfo& info : val.infos[0].info){
       if(info.level != 0) continue;
@@ -584,7 +618,7 @@ FUDeclaration* RegisterSubUnitBarebones(Accelerator* circuit,Arena* temp,Arena* 
   Memset(decl.baseConfig.calculatedDelays,0);
   int index = 0;
   for(Pair<FUInstance*,DelayInfo*> p : delays.nodeDelay){
-    if(p.first->declaration->baseConfig.delayOffsets.max > 0){
+    if(p.first->declaration->NumberDelays() > 0){
       decl.baseConfig.calculatedDelays[index] = p.second->value;
       index += 1;
     }
@@ -625,7 +659,7 @@ FUDeclaration* RegisterSubUnitBarebones(Accelerator* circuit,Arena* temp,Arena* 
       id.parent = res;
 
       StaticData data = {};
-      data.configs = inst->declaration->baseConfig.configs;
+      data.configs = inst->declaration->configs;
       res->staticUnits->InsertIfNotExist(id,data);
     }
   }
@@ -683,7 +717,7 @@ FUDeclaration* RegisterSubUnit(Accelerator* circuit,Arena* temp,Arena* temp2){
   Memset(decl.baseConfig.calculatedDelays,0);
   int index = 0;
   for(Pair<FUInstance*,DelayInfo*> p : delays.nodeDelay){
-    if(p.first->declaration->baseConfig.delayOffsets.max > 0){
+    if(p.first->declaration->NumberDelays() > 0){
       decl.baseConfig.calculatedDelays[index] = p.second->value;
       index += 1;
     }
@@ -737,7 +771,7 @@ FUDeclaration* RegisterSubUnit(Accelerator* circuit,Arena* temp,Arena* temp2){
       id.parent = res;
 
       StaticData data = {};
-      data.configs = inst->declaration->baseConfig.configs;
+      data.configs = inst->declaration->configs;
       res->staticUnits->InsertIfNotExist(id,data);
     }
   }
@@ -826,13 +860,13 @@ FUDeclaration* RegisterIterativeUnit(Accelerator* accel,FUInstance* inst,int lat
     FUInstance* unit = conn[i].unit.inst;
     Assert(i < unit->declaration->NumberInputs());
 
-    if(unit->declaration->baseConfig.inputDelays[i] == 0){
+    if(unit->declaration->info.infos[0].inputDelays[i] == 0){
       continue;
     }
 
     FUInstance* buffer = CreateFUInstance(accel,bufferType,PushString(perm,"Buffer%d",buffersAdded++));
 
-    buffer->bufferAmount = unit->declaration->baseConfig.inputDelays[i] - BasicDeclaration::buffer->baseConfig.outputLatencies[0];
+    buffer->bufferAmount = unit->declaration->info.infos[0].inputDelays[i] - BasicDeclaration::buffer->info.infos[0].outputLatencies[0];
     Assert(buffer->bufferAmount >= 0);
     SetStatic(accel,buffer);
 
@@ -898,7 +932,7 @@ FUDeclaration* RegisterIterativeUnit(Accelerator* accel,FUInstance* inst,int lat
       id.parent = registeredType;
 
       StaticData data = {};
-      data.configs = inst->declaration->baseConfig.configs;
+      data.configs = inst->declaration->configs;
       registeredType->staticUnits->InsertIfNotExist(id,data);
     }
   }
