@@ -100,6 +100,8 @@ ALWAYS_INLINE _Once operator+(_OnceTag,F&& f){
 #define TEMP_once(LINE) TEMP__once( LINE )
 #define once static _Once TEMP_once(__LINE__) = _OnceTag() + [&] // Executes once even if called multiple times
 
+#define WARN_UNUSED __attribute__((warn_unused_result))
+
 void PrintStacktrace();
 
 const char* GetFilename(const char* fullpath);

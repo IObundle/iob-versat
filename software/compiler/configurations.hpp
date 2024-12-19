@@ -31,6 +31,7 @@ struct InstanceInfo{
   int sharedIndex; // D
   FUDeclaration* parent; // D
   String fullName; // D
+  int mergePort;
   bool isMergeMultiplexer; // D
   bool belongs; // D
   int special; // D
@@ -142,10 +143,10 @@ struct AccelInfoIterator{
   InstanceInfo* CurrentUnit();
   Array<InstanceInfo*> GetAllSubUnits(Arena* out);
 
-  // Next and step mimick gdb like commands
-  AccelInfoIterator Next(); // Next unit in current level only.
-  AccelInfoIterator Step(); // Next unit in the array. Goes down and up the levels as it progresses.
-  AccelInfoIterator StepInsideOnly(); // Returns NonValid if non composite unit
+  // Next and step mimick gdb like commands. Does not update current, instead returning the advanced iterator
+  AccelInfoIterator Next() WARN_UNUSED; // Next unit in current level only.
+  AccelInfoIterator Step() WARN_UNUSED; // Next unit in the array. Goes down and up the levels as it progresses.
+  AccelInfoIterator StepInsideOnly() WARN_UNUSED; // Returns NonValid if non composite unit
 };
 
 AccelInfoIterator StartIteration(AccelInfo* info);

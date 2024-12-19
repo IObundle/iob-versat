@@ -382,6 +382,34 @@ Array<P> PushArrayFromHashmapData(Arena* out,Hashmap<T,P>* map){
   return arr;
 }
 
+template<typename T,typename P>
+Array<T> PushArrayFromTrieMapKeys(Arena* out,TrieMap<T,P>* map){
+  int size = map->nodesUsed;
+  
+  Array<T> arr = PushArray<T>(out,size);
+
+  int index = 0;
+  for(Pair<T,P> p : map){
+    arr[index++] = p.first;
+  }
+
+  return arr;
+}
+
+template<typename T,typename P>
+Array<P> PushArrayFromTrieMapData(Arena* out,TrieMap<T,P>* map){
+  int size = map->inserted;
+  
+  Array<P> arr = PushArray<P>(out,size);
+
+  int index = 0;
+  for(Pair<T,P> p : map){
+    arr[index++] = p.second;
+  }
+
+  return arr;
+}
+
 template<typename T>
 Array<T> PushArrayFromSet(Arena* out,Set<T>* set){
   DynamicArray<T> arr = StartArray<T>(out);

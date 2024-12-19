@@ -178,7 +178,6 @@ FUDeclaration* RegisterModuleInfo(ModuleInfo* info,Arena* temp){
   decl.configs = configs;
   decl.states = states;
   decl.externalMemory = external;
-  decl.baseConfig.delayOffsets.max = info->nDelays;
   decl.numberDelays = info->nDelays;
   decl.baseConfig.name = info->name;
   decl.nIOs = info->nIO;
@@ -193,7 +192,6 @@ FUDeclaration* RegisterModuleInfo(ModuleInfo* info,Arena* temp){
   }
 
   decl.baseConfig.configOffsets.max = info->configs.size;
-  decl.baseConfig.stateOffsets.max = info->states.size;
 
   FUDeclaration* res = RegisterFU(decl);
 
@@ -257,9 +255,6 @@ void FillDeclarationWithAcceleratorValues(FUDeclaration* decl,Accelerator* accel
 
   decl->configs = PushArray<Wire>(perm,val.configs);
   decl->states = PushArray<Wire>(perm,val.states);
-  decl->baseConfig.order = Map(val.baseInfo,perm,[](InstanceInfo in){
-    return in.order;
-  });
   
   Hashmap<int,int>* staticsSeen = PushHashmap<int,int>(temp,val.sharedUnits);
 
@@ -302,16 +297,9 @@ void FillDeclarationWithAcceleratorValues(FUDeclaration* decl,Accelerator* accel
   Array<bool> belongArray = PushArray<bool>(perm,accel->allocated.Size());
   Memset(belongArray,true);
 
-  decl->baseConfig.unitBelongs = belongArray;
-
   {
-    decl->baseConfig.calculatedDelays = PushArray<int>(perm,size);
     decl->baseConfig.configOffsets.offsets = PushArray<int>(perm,size);
-    decl->baseConfig.stateOffsets.offsets = PushArray<int>(perm,size);
-    decl->baseConfig.delayOffsets.offsets = PushArray<int>(perm,size);
     decl->baseConfig.configOffsets.max = val.configs;
-    decl->baseConfig.stateOffsets.max = val.states;
-    decl->baseConfig.delayOffsets.max = val.delays;
     decl->numberDelays = val.delays;
     int index = 0;
     for(InstanceInfo& info : val.infos[0].info){
@@ -323,14 +311,6 @@ void FillDeclarationWithAcceleratorValues(FUDeclaration* decl,Accelerator* accel
         decl->baseConfig.configOffsets.offsets[index] = info.configPos.value_or(-1);
       }
       
-      decl->baseConfig.stateOffsets.offsets[index] = info.statePos.value_or(-1);
-      decl->baseConfig.delayOffsets.offsets[index] = info.delayPos.value_or(-1);
-
-      if(info.delay.size) {
-        decl->baseConfig.calculatedDelays[index] = info.delay[0];
-      } else {
-        decl->baseConfig.calculatedDelays[index] = info.baseDelay;
-      }
       index += 1;
     }
   }
@@ -350,7 +330,6 @@ void FillDeclarationWithAcceleratorValues(FUDeclaration* decl,Accelerator* accel
     for(int i = 0; i < val.infos.size; i++){
       Array<InstanceInfo> info = val.infos[i].info;
 
-      decl->configInfo[i].unitBelongs = belongArray;
       decl->configInfo[i].name = val.infos[i].name;
       Assert(!Empty(decl->configInfo[i].name));
       decl->configInfo[i].inputDelays = val.infos[i].inputDelays;
@@ -366,15 +345,8 @@ void FillDeclarationWithAcceleratorValues(FUDeclaration* decl,Accelerator* accel
         return info.name;
       });
 
-      decl->configInfo[i].order = Map(val.infos[i].info,perm,[](InstanceInfo in){
-        return in.order;
-      });
-
       {
         decl->configInfo[i].configOffsets.offsets = PushArray<int>(perm,size);
-        decl->configInfo[i].delayOffsets.offsets = PushArray<int>(perm,size);
-        decl->configInfo[i].stateOffsets.offsets = PushArray<int>(perm,size);
-        decl->configInfo[i].calculatedDelays = PushArray<int>(perm,size);
 
         int delayIndex = 0;
         int index = 0;
@@ -386,19 +358,10 @@ void FillDeclarationWithAcceleratorValues(FUDeclaration* decl,Accelerator* accel
           } else {
             decl->configInfo[i].configOffsets.offsets[index] = in.configPos.value_or(-1);
           }
-          decl->configInfo[i].delayOffsets.offsets[index] = in.delayPos.value_or(-1);
-          decl->configInfo[i].stateOffsets.offsets[index] = in.statePos.value_or(-1);
 
-          if(in.delay.size){
-            decl->configInfo[i].calculatedDelays[index] = in.delay[0];
-          } else {
-            decl->configInfo[i].calculatedDelays[index] = 0;
-          }
           index += 1;
         }
         decl->configInfo[i].configOffsets.max = val.configs;
-        decl->configInfo[i].delayOffsets.max = val.delays;
-        decl->configInfo[i].stateOffsets.max = val.states;
       }
     }
   }
@@ -443,8 +406,6 @@ void FillDeclarationWithAcceleratorValuesNoDelay(FUDeclaration* decl,Accelerator
 
   int configIndex = 0;
   int stateIndex = 0;
-
-  //decl->mergeInfo = AccumulateMergeInfo(accel,out);
   
   // TODO: This could be done based on the config offsets.
   //       Otherwise we are still basing code around static and shared logic when calculating offsets already does that for us.
@@ -482,11 +443,7 @@ void FillDeclarationWithAcceleratorValuesNoDelay(FUDeclaration* decl,Accelerator
 
   {
     decl->baseConfig.configOffsets.offsets = PushArray<int>(perm,size);
-    decl->baseConfig.stateOffsets.offsets = PushArray<int>(perm,size);
-    decl->baseConfig.delayOffsets.offsets = PushArray<int>(perm,size);
     decl->baseConfig.configOffsets.max = val.configs;
-    decl->baseConfig.stateOffsets.max = val.states;
-    decl->baseConfig.delayOffsets.max = val.delays;
     decl->numberDelays = val.delays;
     int index = 0;
     for(InstanceInfo& info : val.infos[0].info){
@@ -497,9 +454,6 @@ void FillDeclarationWithAcceleratorValuesNoDelay(FUDeclaration* decl,Accelerator
       } else {
         decl->baseConfig.configOffsets.offsets[index] = info.configPos.value_or(-1);
       }
-      
-      decl->baseConfig.stateOffsets.offsets[index] = info.statePos.value_or(-1);
-      decl->baseConfig.delayOffsets.offsets[index] = info.delayPos.value_or(-1);
       index += 1;
     }
   }
@@ -507,7 +461,6 @@ void FillDeclarationWithAcceleratorValuesNoDelay(FUDeclaration* decl,Accelerator
   for(int i = 0; i < val.infos.size; i++){
     Array<InstanceInfo> info = val.infos[i].info;
 
-    decl->configInfo[i].unitBelongs = belongArray;
     decl->configInfo[i].name = val.infos[i].name;
 
     decl->configInfo[i].baseName = Map(val.infos[i].info,perm,[](InstanceInfo info){
@@ -516,8 +469,6 @@ void FillDeclarationWithAcceleratorValuesNoDelay(FUDeclaration* decl,Accelerator
 
     {
       decl->configInfo[i].configOffsets.offsets = PushArray<int>(perm,size);
-      decl->configInfo[i].stateOffsets.offsets = PushArray<int>(perm,size);
-      decl->configInfo[i].delayOffsets.offsets = PushArray<int>(perm,size);
 
       int delayIndex = 0;
       int index = 0;
@@ -529,14 +480,10 @@ void FillDeclarationWithAcceleratorValuesNoDelay(FUDeclaration* decl,Accelerator
         } else {
           decl->configInfo[i].configOffsets.offsets[index] = info.configPos.value_or(-1);
         }
-        decl->configInfo[i].delayOffsets.offsets[index] = info.delayPos.value_or(-1);
-        decl->configInfo[i].stateOffsets.offsets[index] = info.statePos.value_or(-1);
 
         index += 1;
       }
       decl->configInfo[i].configOffsets.max = val.configs;
-      decl->configInfo[i].delayOffsets.max = val.delays;
-      decl->configInfo[i].stateOffsets.max = val.states;
     }
   }
 }
@@ -614,12 +561,9 @@ FUDeclaration* RegisterSubUnitBarebones(Accelerator* circuit,Arena* temp,Arena* 
   DAGOrderNodes order = CalculateDAGOrder(&copy->allocated,temp);
   CalculateDelayResult delays = CalculateDelay(copy,order,temp);
 
-  decl.baseConfig.calculatedDelays = PushArray<int>(permanent,delays.nodeDelay->nodesUsed);
-  Memset(decl.baseConfig.calculatedDelays,0);
   int index = 0;
   for(Pair<FUInstance*,DelayInfo*> p : delays.nodeDelay){
     if(p.first->declaration->NumberDelays() > 0){
-      decl.baseConfig.calculatedDelays[index] = p.second->value;
       index += 1;
     }
   }
@@ -713,12 +657,9 @@ FUDeclaration* RegisterSubUnit(Accelerator* circuit,Arena* temp,Arena* temp2){
   DAGOrderNodes order = CalculateDAGOrder(&circuit->allocated,temp);
   CalculateDelayResult delays = CalculateDelay(circuit,order,temp);
 
-  decl.baseConfig.calculatedDelays = PushArray<int>(permanent,delays.nodeDelay->nodesUsed);
-  Memset(decl.baseConfig.calculatedDelays,0);
   int index = 0;
   for(Pair<FUInstance*,DelayInfo*> p : delays.nodeDelay){
     if(p.first->declaration->NumberDelays() > 0){
-      decl.baseConfig.calculatedDelays[index] = p.second->value;
       index += 1;
     }
   }
@@ -920,8 +861,6 @@ FUDeclaration* RegisterIterativeUnit(Accelerator* accel,FUInstance* inst,int lat
 
   FUDeclaration* registeredType = RegisterFU(declaration);
   registeredType->lat = node->declaration->baseConfig.outputLatencies[0];
-  registeredType->baseConfig.calculatedDelays = PushArray<int>(perm,99);
-  Memset(registeredType->baseConfig.calculatedDelays,0);
   
   // Add this units static instances (needs be done after Registering the declaration because the parent is a pointer to the declaration)
   for(FUInstance* ptr : accel->allocated){

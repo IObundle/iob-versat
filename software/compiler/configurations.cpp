@@ -557,7 +557,6 @@ AcceleratorInfo TransformGraphIntoArrayRecurse(FUInstance* node,FUDeclaration* p
       // NOTE: Is this part even being used?
       
       int config = *offsets.staticConfig;
-      *offsets.staticConfig += inst->declaration->configInfo[part].configOffsets.offsets[0];
 
       offsets.staticInfo->Insert(id,config);
 
@@ -580,16 +579,7 @@ AcceleratorInfo TransformGraphIntoArrayRecurse(FUInstance* node,FUDeclaration* p
     subOffsets.configOffset = subOffsetsConfig;
     
     // Bunch of static logic
-    subOffsets.configOffset += inst->declaration->configInfo[part].configOffsets.offsets[index];
-    subOffsets.stateOffset += inst->declaration->configInfo[part].stateOffsets.offsets[index];
-    subOffsets.delayOffset += inst->declaration->configInfo[part].delayOffsets.offsets[index];
-    subOffsets.belongs = inst->declaration->configInfo[part].unitBelongs[index];
     subOffsets.baseName = inst->declaration->configInfo[part].baseName[index];
-    subOffsets.order = inst->declaration->configInfo[part].order[index];
-    
-    if(subInst->declaration->NumberDelays() > 0){
-      subOffsets.delay = offsets.delay + inst->declaration->configInfo[part].calculatedDelays[index];
-    }
 
     if(subInst->declaration->memoryMapBits.has_value()){
       res.memSize = AlignBitBoundary(res.memSize,subInst->declaration->memoryMapBits.value());
@@ -769,7 +759,7 @@ TestResult CalculateOneInstance(Accelerator* accel,bool recursive,Array<Partitio
 // This function cannot return an array for merge units because we do not have the merged units info in this level.
 // This function only works for modules and for recursing the merged info to upper modules.
 // The info needed by merge must be stored by the merge function.
-Array<InstanceInfo> GenerateInitialInstanceInfo(Accelerator* accel,Arena* out,Arena* temp){
+Array<InstanceInfo> GenerateInitialInstanceInfo(Accelerator* accel,Arena* out,Arena* temp,int mergeIndex = 0){
   auto SetBaseInfo = [](InstanceInfo* elem,FUInstance* inst,int level){
     *elem = {};
     elem->inst = inst;
@@ -782,19 +772,24 @@ Array<InstanceInfo> GenerateInitialInstanceInfo(Accelerator* accel,Arena* out,Ar
     elem->isShared = inst->sharedEnable;
     elem->sharedIndex = inst->sharedIndex;
     elem->isMergeMultiplexer = inst->isMergeMultiplexer;
-    //elem->mergeMultiplexerId = inst->mergeMultiplexerId;
     elem->special = inst->literal;
     elem->id = inst->id;
     elem->mergeIndexStart = 0;
   };
   
-  auto Function = [SetBaseInfo](auto Recurse,DynamicArray<InstanceInfo>& array,Accelerator* accel,int level) -> void{
+  auto Function = [SetBaseInfo,mergeIndex](auto Recurse,DynamicArray<InstanceInfo>& array,Accelerator* accel,int level) -> void{
     for(FUInstance* inst : accel->allocated){
       InstanceInfo* elem = array.PushElem();
       SetBaseInfo(elem,inst,level);
-      
-      if(inst->declaration->fixedDelayCircuit){
-        Recurse(Recurse,array,inst->declaration->fixedDelayCircuit,level + 1);
+
+      AccelInfoIterator iter = StartIteration(&inst->declaration->info);
+      iter.mergeIndex = mergeIndex;
+      for(; iter.IsValid(); iter = iter.Step()){
+        InstanceInfo* subUnit = iter.CurrentUnit();
+        InstanceInfo* elem = array.PushElem();
+
+        *elem = *subUnit;
+        elem->level += 1;
       }
     }
   };
@@ -802,20 +797,6 @@ Array<InstanceInfo> GenerateInitialInstanceInfo(Accelerator* accel,Arena* out,Ar
   auto build = StartArray<InstanceInfo>(out);
 
   Function(Function,build,accel,0);
-  
-  // TODO: For now keep the standard order so it is easier to compare to the current code.
-#if 0
-  DAGOrderNodes order = CalculateDAGOrder(&accel->allocated,temp);
-  for(FUInstance* inst : order.instances){
-    InstanceInfo* elem = build.PushElem();
-    elem->connectionType = inst->type;
-    SetBaseInfo(elem,inst,0);
-    if(inst->declaration->fixedDelayCircuit){
-      Function(Function,build,inst->declaration->fixedDelayCircuit,1);
-    }
-  }
-#endif
-
   Array<InstanceInfo> res = EndArray(build);
 
   return res;
@@ -857,7 +838,6 @@ void GenerateInitialInstanceInfo(AcceleratorInfoIterator iter,Arena* out,Arena* 
     elem->isShared = inst->sharedEnable;
     elem->sharedIndex = inst->sharedIndex;
     elem->isMergeMultiplexer = inst->isMergeMultiplexer;
-    //elem->mergeMultiplexerId = inst->mergeMultiplexerId;
     elem->special = inst->literal;
     elem->id = inst->id;
     elem->mergeIndexStart = 0;
@@ -867,7 +847,7 @@ void GenerateInitialInstanceInfo(AcceleratorInfoIterator iter,Arena* out,Arena* 
     for(FUInstance* inst : accel->allocated){
       InstanceInfo* elem = array.PushElem();
       SetBaseInfo(elem,inst,level);
-      
+
       if(inst->declaration->fixedDelayCircuit){
         Recurse(Recurse,array,inst->declaration->fixedDelayCircuit,level + 1);
       }
@@ -1667,18 +1647,6 @@ AccelInfo CalculateAcceleratorInfo(Accelerator* accel,bool recursive,Arena* out,
       }
     }
 
-    if(maxConfigDecl){
-      int totalConfigSize = maxConfig + maxConfigDecl->baseConfig.configOffsets.max;
-      for(InstanceInfo& inst : res2.info){
-        if(inst.configPos.has_value()){
-          int val = inst.configPos.value();
-          if(val >= 0x40000000){
-            inst.configPos = val - 0x40000000 + totalConfigSize;
-          }
-        }
-      }
-    }
-
     first = false;
     if(!Next(partitions)){
       break;
@@ -1708,7 +1676,7 @@ AccelInfo CalculateAcceleratorInfo(Accelerator* accel,bool recursive,Arena* out,
   if(iter.MergeSize() > 1){
     for(int i = 0; i < iter.MergeSize(); i++){
       temp2.infos[i] = result.infos[i];
-      temp2.infos[i].info = GenerateInitialInstanceInfo(accel,globalPermanent,temp);
+      temp2.infos[i].info = GenerateInitialInstanceInfo(accel,globalPermanent,temp,i);
       
       iter.mergeIndex = i;
     
@@ -2047,10 +2015,7 @@ AcceleratorInfo TransformGraphIntoArrayRecurseNoDelay(FUInstance* node,FUDeclara
     subOffsets.configOffset = subOffsetsConfig;
     
     // Bunch of static logic
-    subOffsets.configOffset += inst->declaration->configInfo[part].configOffsets.offsets[index];
-    subOffsets.stateOffset += inst->declaration->configInfo[part].stateOffsets.offsets[index];
-    subOffsets.delayOffset += inst->declaration->configInfo[part].delayOffsets.offsets[index];
-    subOffsets.belongs = inst->declaration->configInfo[part].unitBelongs[index];
+//    subOffsets.configOffset += inst->declaration->configInfo[part].configOffsets.offsets[index];
     subOffsets.baseName = inst->declaration->configInfo[part].baseName[index];
 
     if(subInst->declaration->memoryMapBits.has_value()){
@@ -2241,6 +2206,7 @@ AccelInfo CalculateAcceleratorInfoNoDelay(Accelerator* accel,bool recursive,Aren
       }
     }
 
+#if 0
     if(maxConfigDecl){
       int totalConfigSize = maxConfig + maxConfigDecl->baseConfig.configOffsets.max;
       for(InstanceInfo& inst : res2.info){
@@ -2252,7 +2218,8 @@ AccelInfo CalculateAcceleratorInfoNoDelay(Accelerator* accel,bool recursive,Aren
         }
       }
     }
-
+#endif
+    
     first = false;
     if(!Next(partitions)){
       break;
@@ -2282,7 +2249,11 @@ AccelInfo CalculateAcceleratorInfoNoDelay(Accelerator* accel,bool recursive,Aren
   if(iter.MergeSize() > 1){
     for(int i = 0; i < iter.MergeSize(); i++){
       temp2.infos[i] = result.infos[i];
-      temp2.infos[i].info = GenerateInitialInstanceInfo(accel,globalPermanent,temp);
+
+      // We probably gonna need to implement partition in someplace here.
+      // TestMergeHasInputs has merge size of 4, because it instantiates 2 merge units.
+      // TODO:
+      temp2.infos[i].info = GenerateInitialInstanceInfo(accel,globalPermanent,temp,i);
     
       iter.mergeIndex = i;
     

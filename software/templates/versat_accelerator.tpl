@@ -47,7 +47,7 @@ module @{accel.name} #(
    output [@{wire.bitSize-1}:0]    @{wire.name},
    #{end}
 
-   #{for i accel.baseConfig.delayOffsets.max}
+   #{for i accel.numberDelays}
    input  [DELAY_W-1:0]            delay@{i},
    #{end}
 
@@ -235,7 +235,7 @@ end
     #{end}
   #{end}
 
-  #{for i decl.baseConfig.delayOffsets.max}
+  #{for i decl.numberDelays}
       .delay@{i}(delay@{delaySeen}),
     #{inc delaySeen}
   #{end}

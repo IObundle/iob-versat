@@ -1247,20 +1247,6 @@ Array<int> GetPortConnections(FUInstance* node,Arena* arena){
   return res;
 }
 
-Opt<int> GetConfigurationIndexFromInstanceNode(FUDeclaration* type,FUInstance* node){
-  // While configuration array is fully defined, no need to do this check beforehand.
-  int index = 0;
-  for(int index = 0; index < type->fixedDelayCircuit->allocated.Size(); index++){
-    FUInstance* iter = type->fixedDelayCircuit->allocated.Get(index);
-    if(iter == node){
-      return type->baseConfig.configOffsets.offsets[index];
-    }
-  }
-
-  Assert(false);
-  return Opt<int>{};
-}
-
 Array<Edge*> GetAllPaths(Accelerator* accel,PortInstance start,PortInstance end,Arena* out,Arena* temp){
   BLOCK_REGION(temp);
 
@@ -1918,13 +1904,6 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
     return info;
   };
 
-  // "Merged circuit"
-  // Multiplexers set on the merged circuit base
-  // Base circuit
-  // Name
-  // Base to merged circuit map.
-  // Arenas.
-
   actualMergedAmount = 99;
   Array<FUDeclaration*> topType = PushArray<FUDeclaration*>(temp,actualMergedAmount);
 
@@ -2102,6 +2081,7 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
   }
   
   // Corrects mapping to start on the flattened circuit instead of fixed 
+  DEBUG_BREAK();
   for(Set<PortInstance>*& s : mergeMultiplexers){
     Set<PortInstance>* flattenedSet = PushSet<PortInstance>(globalPermanent,s->map->nodesUsed);
 
@@ -2197,41 +2177,22 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
 
     decl->configInfo[i].baseName = PushArray<String>(globalPermanent,mergedUnitsAmount);
     Memset(decl->configInfo[i].baseName,{});
-
-    decl->configInfo[i].unitBelongs = PushArray<bool>(globalPermanent,mergedUnitsAmount);
   }
 
 #if 1
   for(int i = 0; i < size; i++){
     AcceleratorMapping* map = MappingInvert(reconToAccel[i],globalPermanent); //accelToRecon[i];
     
-    // Copy everything else for now. Only config and names are being handled for now
-    //decl->configInfo[i].configs = decl->configs;
-    //decl->configInfo[i].states = decl->states;
-    decl->configInfo[i].stateOffsets = decl->baseConfig.stateOffsets;
-    decl->configInfo[i].delayOffsets = decl->baseConfig.delayOffsets;
-
     decl->configInfo[i].configOffsets.offsets = PushArray<int>(globalPermanent,mergedUnitsAmount);
     decl->configInfo[i].configOffsets.max = decl->baseConfig.configOffsets.max;
 
     decl->configInfo[i].inputDelays = ExtractInputDelays(recon[i],reconDelay[i],numberInputs,globalPermanent,temp);
     decl->configInfo[i].outputLatencies = ExtractOutputLatencies(recon[i],reconDelay[i],globalPermanent,temp);
-
-    decl->configInfo[i].calculatedDelays = PushArray<int>(globalPermanent,mergedUnitsAmount);
-    decl->configInfo[i].order = PushArray<int>(globalPermanent,mergedUnitsAmount);
  
     for(int index = 0; index < result->allocated.Size(); index++){
       FUInstance* ptr = result->allocated.Get(index);
       FUInstance* reconNode = MappingMapNode(map,ptr);
       bool mapExists = reconNode != nullptr;
-      
-      if(reconNode){
-        decl->configInfo[i].calculatedDelays[index] = reconDelay[i].nodeDelay->GetOrFail(reconNode).value;
-        decl->configInfo[i].order[index] = reconToOrder[i]->GetOrFail(reconNode);
-      } else {
-        decl->configInfo[i].calculatedDelays[index] = 0; // NOTE: Even if they do not belong, this delay is directly inserted into the header file, meaning that for now it's better if we keep everything at zero.
-        decl->configInfo[i].order[index] = -1;
-      }
  
       // TODO: Unused members are being filled when in theory the code should work with them being negative or invalid. Code should not really on th
       if(ptr->isMergeMultiplexer || ptr->declaration == BasicDeclaration::fixedBuffer){
@@ -2239,7 +2200,6 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
         decl->configInfo[i].configOffsets.offsets[index] = val;
 
         decl->configInfo[i].baseName[index] = ptr->name;
-        decl->configInfo[i].unitBelongs[index] = true;
       } else if(mapExists){
         int val = decl->baseConfig.configOffsets.offsets[index];
         decl->configInfo[i].configOffsets.offsets[index] = val;
@@ -2247,22 +2207,13 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
         FUInstance* originalNode = MappingMapNode(map,ptr);
         Assert(originalNode);
         decl->configInfo[i].baseName[index] = originalNode->name;
-        decl->configInfo[i].unitBelongs[index] = true;
       } else {
         decl->configInfo[i].baseName[index] = ptr->name;
         decl->configInfo[i].configOffsets.offsets[index] = -1;
-        decl->configInfo[i].unitBelongs[index] = false;
       }
     }
   }
 #endif
-
-  Array<int> muxConfigSizePerType = PushArray<int>(temp,types.size);
-  for(int i = 0; i < types.size; i++){
-    if(types[i]->configInfo.size > 0){
-      muxConfigSizePerType[i] = types[i]->configInfo[0].mergeMultiplexerConfigs.size;
-    }
-  }
 
   int amountOfMuxConfigs = 0;
   for(int i = 0; i < types.size; i++){
@@ -2423,6 +2374,15 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
     decl->info.infos[i].mergeMultiplexers = mergeMultiplexers[typeIndex];
   }
 
+  // TODO: Quick and dirty. Will not work for complex merges, but handle them when the time comes.
+  for(int i = 0; i < size; i++){
+    for(InstanceInfo& info : decl->info.infos[i].info){
+      if(info.isMergeMultiplexer){
+        info.mergePort = i;
+      }
+    }
+  }
+  
   DEBUG_BREAK();
   
   return decl;

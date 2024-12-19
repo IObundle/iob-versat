@@ -137,6 +137,7 @@ Byte* PushBytes(Arena* arena, size_t size){
   if(arena->used + size > arena->totalAllocated){
     printf("[%s] Used: %zd, Size: %zd, Total: %zd\n",__PRETTY_FUNCTION__,arena->used,size,arena->totalAllocated);
     DEBUG_BREAK();
+    exit(0);
   }
   
   arena->used += size;

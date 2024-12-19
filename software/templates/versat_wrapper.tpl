@@ -506,8 +506,8 @@ AcceleratorStatic* statics = (AcceleratorStatic*) &staticBuffer;
   self->@{wire.name} = statics->@{wire.name};
 #{end}
 
-#{if type.baseConfig.delayOffsets.max}
-#{for i type.baseConfig.delayOffsets.max}
+#{if type.numberDelays}
+#{for i type.numberDelays}
   //self->delay@{i} = accelDelay.TOP_Delay@{i};
 #{end}
 #{end}
@@ -635,9 +635,9 @@ extern "C" void VersatSignalLoop(){
 }
 
 extern "C" void VersatLoadDelay(const unsigned int* delayBuffer){
-  #{if type.baseConfig.delayOffsets.max}
+  #{if type.numberDelays}
   V@{type.name}* self = dut;
-    #{for i type.baseConfig.delayOffsets.max}
+    #{for i type.numberDelays}
   self->delay@{i} = delayBuffer[@{i}];
     #{end}
    self->eval();

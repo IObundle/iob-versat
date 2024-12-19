@@ -521,7 +521,7 @@ end
          #{end}
          #{end}
 
-         #{for i decl.baseConfig.delayOffsets.max}
+         #{for i decl.numberDelays}
             .delay@{i}(configdata[@{delayStart + (delaySeen * delaySize)}+:@{delaySize}]),
          #{inc delaySeen}
          #{end}

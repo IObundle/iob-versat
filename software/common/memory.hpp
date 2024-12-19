@@ -108,7 +108,7 @@ template<typename T>
 Array<T> PushArray(Arena* arena,int size){AlignArena(arena,alignof(T)); Array<T> res = {}; res.size = size; res.data = (T*) PushBytes(arena,sizeof(T) * size); Memset(res,(T){}); return res;};
 
 template<typename T>
-T* PushStruct(Arena* arena){AlignArena(arena,alignof(T)); T* res = (T*) PushBytes(arena,sizeof(T)); return res;};
+T* PushStruct(Arena* arena){AlignArena(arena,alignof(T)); T* res = (T*) PushBytes(arena,sizeof(T)); *res = (T){};return res;};
 
 // Arena that allocates more blocks of memory like a list.
 struct DynamicArena{
@@ -1099,7 +1099,6 @@ Data* TrieMap<Key,Data>::InsertIfNotExist(Key key,Data data){
     inserted += 1;
     return &node->pair.second;
   } else if(this->childs[select]->pair.key == key){
-    inserted += 1;
     return &this->childs[select]->pair.second;
   }
 
@@ -1120,7 +1119,6 @@ Data* TrieMap<Key,Data>::InsertIfNotExist(Key key,Data data){
       inserted += 1;
       return &node->pair.second;
     } else if(current->childs[select]->pair.first == key) {
-      inserted += 1;
       return &current->childs[select]->pair.second;
     } else {
       current = current->childs[select];

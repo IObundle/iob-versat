@@ -337,7 +337,7 @@ Array<TypeStructInfo> GetConfigStructInfo(Accelerator* accel,Arena* out,Arena* t
     // 
     if(subType.isFromMerged){
       FUDeclaration* decl = subType.mergeTop;
-      int maxOffset = decl->baseConfig.configOffsets.max; // TODO: This should be equal for all merged types, no need to duplicate data
+      int maxOffset = decl->MaxConfigs(); // TODO: This should be equal for all merged types, no need to duplicate data
       ConfigurationInfo& info = *subType.info;
       CalculatedOffsets& offsets = info.configOffsets;
         
@@ -347,7 +347,7 @@ Array<TypeStructInfo> GetConfigStructInfo(Accelerator* accel,Arena* out,Arena* t
         FUInstance* node = decl->fixedDelayCircuit->allocated.Get(i);
         int config = offsets.offsets[i];
           
-        if(config >= 0 && info.unitBelongs[i]){
+        if(config >= 0){
           int nConfigs = node->declaration->configs.size;
           for(int ii = 0; ii < nConfigs; ii++){
             seenIndex[config + ii] = true;
@@ -959,6 +959,8 @@ StructInfo* GenerateConfigStruct(AccelInfoIterator iter,Array<Partition> partiti
   //if(parent && parent->isMerge){
   if(parent && parent->isMerge){
     result.name = iter.GetMergeName();
+  } else if(parent){
+    result.name = parent->decl->name;
   } else {
     result.name = STRING("Top");
   }
@@ -987,8 +989,10 @@ StructInfo* GenerateConfigStruct(AccelInfoIterator iter,Array<Partition> partiti
         StructInfo* subInfo = GenerateConfigStruct(inside,partitions,out,temp);
         elem.childStruct = subInfo;
       } else {
-        elem.typeName = unit->decl->name;
-        elem.childStruct = nullptr;
+        StructInfo* simpleSubInfo = PushStruct<StructInfo>(out);
+        simpleSubInfo->type = unit->decl;
+        simpleSubInfo->name = unit->decl->name;
+        elem.childStruct = simpleSubInfo;
       }
       
       elem.pos = unit->configPos.value();
@@ -1004,6 +1008,35 @@ StructInfo* GenerateConfigStruct(AccelInfoIterator iter,Array<Partition> partiti
 
   StructInfo* res = PushStruct<StructInfo>(out);
   *res = result;
+  
+  return res;
+}
+
+size_t HashStructInfo(StructInfo* info){
+  return std::hash<StructInfo>()(*info);
+}
+
+Array<StructInfo*> ExtractStructs(StructInfo* structInfo,Arena* out,Arena* temp){
+  BLOCK_REGION(temp);
+
+  TrieMap<StructInfo,StructInfo*>* info = PushTrieMap<StructInfo,StructInfo*>(temp);
+
+  auto Recurse = [](auto Recurse,StructInfo* top,TrieMap<StructInfo,StructInfo*>* map) -> void {
+    if(!top){
+      return;
+    }
+
+    for(Array<StructElement> elements : top->elements){
+      for(StructElement elem : elements){
+        Recurse(Recurse,elem.childStruct,map);
+      }
+    }
+    map->InsertIfNotExist(*top,top);
+  };
+  
+  Recurse(Recurse,structInfo,info);
+
+  Array<StructInfo*> res = PushArrayFromTrieMapData(out,info);
   
   return res;
 }
@@ -1054,6 +1087,7 @@ Array<TypeStructInfo> GenerateStructs(StructInfo* info,Arena* out,Arena* temp){
 }
 #endif
 
+
 void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* softwarePath,bool isSimple,Arena* temp,Arena* temp2){
   BLOCK_REGION(temp);
   BLOCK_REGION(temp2);
@@ -1075,13 +1109,15 @@ void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* 
   VersatComputedValues val = ComputeVersatValues(&info,false);
   CheckSanity(info.baseInfo,temp);
   
-  DEBUG_BREAK();
-  
   Array<Partition> partitions = GenerateInitialPartitions(accel,temp);
 
   AccelInfoIterator iter = StartIteration(&info);
   StructInfo* structInfo = GenerateConfigStruct(iter,partitions,temp,temp2);
+
+  Array<StructInfo*> allStructs = ExtractStructs(structInfo,temp,temp2);
   //Array<TypeStructInfo> structs = GenerateStructs(structInfo,temp,temp2);
+
+  
   DEBUG_BREAK();
 
   // What is the best way of looking at the data?

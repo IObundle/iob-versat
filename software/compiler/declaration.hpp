@@ -69,14 +69,9 @@ struct ConfigurationInfo{
 
   Array<int> inputDelays;
   Array<int> outputLatencies;
-  
-  // Calculated offsets are an array that associate the given FUInstance inside the fixedDelayCircuit allocated member into the corresponding index of the configuration array. For now, static units are given a value near 0x40000000 (their configuration comes from the staticUnits hashmap). Units without any config are given a value of -1.
+
+  // Cannot remove this until we have code generating the config structs using AccelInfo.
   CalculatedOffsets   configOffsets;
-  CalculatedOffsets   stateOffsets;
-  CalculatedOffsets   delayOffsets;
-  Array<int>          calculatedDelays;
-  Array<int>          order;
-  Array<bool>         unitBelongs;
   
   Array<int>          mergeMultiplexerConfigs;
 };
@@ -158,6 +153,17 @@ struct FUDeclaration{
   int NumberConfigs(){return configs.size;}
   int NumberStates(){return states.size;}
   int NumberDelays(){return numberDelays;}; //baseConfig.delayOffsets.max;
+
+  int MaxConfigs(){
+    int max = 0;
+    for(AccelInfoIterator iter = StartIteration(&this->info); iter.IsValid(); iter = iter.Next()){
+      InstanceInfo* unit = iter.CurrentUnit();
+      if(unit->configPos.has_value()){
+        max = std::max(max,unit->configPos.value());
+      }
+    }
+    return max + 1;
+  }
 };
 
 // Simple operations should also be stored here.
