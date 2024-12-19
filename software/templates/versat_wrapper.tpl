@@ -72,6 +72,7 @@ static const int MEMORY_LATENCY = 0;
 
 typedef char Byte;
 
+#if 0
 typedef struct{
 #{for elem structuredConfigs}
 #{if elem.typeAndNames.size > 1}
@@ -85,6 +86,7 @@ typedef struct{
 #{end}
 #{end}
 } AcceleratorConfig;
+#endif
 
 typedef struct{
 #{for name namedStates}

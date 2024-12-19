@@ -184,6 +184,7 @@ Array<TypeStructInfoElement> GenerateStructFromType(FUDeclaration* decl,Arena* o
   Accelerator* accel = decl->fixedDelayCircuit;
   int configSize = offsets.max;
 
+  DEBUG_BREAK();
   Array<int> configAmount = PushArray<int>(temp,configSize);
   for(int i = 0; i < accel->allocated.Size(); i++){
     FUInstance* node = accel->allocated.Get(i);
@@ -474,31 +475,13 @@ Array<String> ExtractMemoryMasks(AccelInfo info,Arena* out){
 
     if(unit->memDecisionMask.has_value()){
       *builder.PushElem() = unit->memDecisionMask.value();
+    } else if(unit->memMappedMask.has_value()){
+      *builder.PushElem() = {}; // Empty mask (happens when only one unit with mem exists, bit weird but no need to change for now);
     }
   }
 
   return EndArray(builder);
 }
-
-#if 0
-Array<MemoryAddressMask> CalculateAcceleratorMemoryMasks(AccelInfo info,Arena* out){
-  DEBUG_BREAK();
-  DynamicArray<MemoryAddressMask> arr = StartArray<MemoryAddressMask>(out);
-  for(InstanceInfo& in : info.infos[0]){
-    if(in.level == 0 && in.memMapped.has_value()){
-      MemoryAddressMask* data = arr.PushElem();
-      *data = {};
-      data->memoryMaskSize = in.memDecisionMask.value().size;
-      data->memoryMask = data->memoryMaskBuffer;
-
-      for(int i = 0; i < data->memoryMaskSize; i++){
-        data->memoryMaskBuffer[i] = in.memDecisionMask.value()[i];
-      }
-    }
-  }
-  return EndArray(arr);
-}  
-#endif
 
 #if 0
 Array<TypeStructInfoElement> ExtractStructuredStatics(Array<InstanceInfo> info,Arena* out,Arena* temp){
@@ -712,10 +695,13 @@ void OutputCircuitSource(FUDeclaration* decl,FILE* file,Arena* temp,Arena* temp2
   // There is no reason why OutputCircuitSource should ever need to take 2 arenas
   // AccelInfo being recalculated again is not good. We are recalculating stuff too much
   // program is still fast, but its a sign of poor architecture
-  VersatComputedValues val = ComputeVersatValues(accel,false);
   AccelInfo info = CalculateAcceleratorInfoNoDelay(accel,true,temp,temp2);
+  //VersatComputedValues val = ComputeVersatValues(accel,false);
+  VersatComputedValues val = ComputeVersatValues(&info,false);
   Array<String> memoryMasks = ExtractMemoryMasks(info,temp);
-  //DEBUG_BREAK();
+
+  DEBUG_BREAK();
+
   Array<String> parameters = PushArray<String>(temp,nodes.Size());
   for(int i = 0; i < nodes.Size(); i++){
     parameters[i] = GenerateVerilogParameterization(nodes.Get(i),temp);
@@ -756,8 +742,11 @@ void OutputIterativeSource(FUDeclaration* decl,FILE* file,Arena* temp,Arena* tem
     }
   }
    
-  VersatComputedValues val = ComputeVersatValues(accel,false);
+  //VersatComputedValues val = ComputeVersatValues(accel,false);
   AccelInfo info = CalculateAcceleratorInfo(accel,true,temp,temp2); // TODO: Calculating info just for the computedData calculation is a bit wasteful.
+
+  VersatComputedValues val = ComputeVersatValues(&info,false);
+
   Array<String> memoryMasks = ExtractMemoryMasks(info,temp);
 
   Hashmap<StaticId,StaticData>* staticUnits = CollectStaticUnits(accel,decl,temp);
@@ -907,19 +896,19 @@ Array<Array<MuxInfo>> GetAllMuxInfo(AccelInfo* info,Arena* out,Arena* temp){
   }
 
   Array<SameMuxEntities> listOfSharedIndexes = PushArrayFromSet(temp,knownSharedIndexes);
-  Array<Array<MuxInfo>> result = PushArray<Array<MuxInfo>>(out,info->muxConfigs.size);
+  Array<Array<MuxInfo>> result = PushArray<Array<MuxInfo>>(out,info->infos.size);
 
   for(int i = 0; i < result.size; i++){
-    result[i] = PushArray<MuxInfo>(out,info->muxConfigs[i].size);
+    result[i] = PushArray<MuxInfo>(out,info->infos[i].muxConfigs.size);
 
-    Assert(listOfSharedIndexes.size == info->muxConfigs[i].size);
+    Assert(listOfSharedIndexes.size == info->infos[i].muxConfigs.size);
 
-    for(int ii = 0; ii < info->muxConfigs[i].size; ii++){
+    for(int ii = 0; ii < info->infos[i].muxConfigs.size; ii++){
       MuxInfo r = {};
 
       SameMuxEntities ent = listOfSharedIndexes[ii];
       
-      r.val = info->muxConfigs[i][ii];
+      r.val = info->infos[i].muxConfigs[ii];
       r.configIndex = ent.configPos;  //associatedInfo.first->configPos.value();
       r.info = ent.info;
       r.name = r.info->fullName;
@@ -960,60 +949,44 @@ Array<Array<MuxInfo>> GetAllMuxInfo(AccelInfo* info,Arena* out,Arena* temp){
 // Therefore, a StructInfo must have an array for each merge index.
 // We are going to make duplicates, but it is fine for now. We handle those later.
 
-StructInfo* GenerateConfigStruct(AccelInfoIterator iter,Arena* out,Arena* temp){
+// For an accelerator that contains multiple units, the top level should just be a 
+
+// We can solve the generation by using partitions.
+// But partitions is weird as fuck.
+
+StructInfo* GenerateConfigStruct(AccelInfoIterator iter,Array<Partition> partitions,Arena* out,Arena* temp){
   StructInfo result = {};
   InstanceInfo* parent = iter.GetParentUnit();
 
+  //if(parent && parent->isMerge){
   if(parent && parent->isMerge){
     result.name = iter.GetMergeName();
-
-    auto array = PushArenaList<Array<StructElement>>(temp);
-    for(int i = 0; i < iter.MergeSize(); i++){
-      auto list = PushArenaList<StructElement>(temp);
-      for(AccelInfoIterator it = iter; it.IsValid(); it = it.Next()){
-        it.mergeIndex = i;
-      
-        InstanceInfo* unit = it.CurrentUnit();
-        StructElement elem = {};
-    
-        if(!unit->configPos.has_value()){
-          continue;
-        }
-
-        elem.name = unit->baseName;
-        if(unit->isComposite){
-          AccelInfoIterator inside = it.StepInsideOnly();
-          StructInfo* subInfo = GenerateConfigStruct(inside,out,temp);
-          elem.childStruct = subInfo;
-        } else {
-          elem.typeName = unit->decl->name;
-          elem.childStruct = nullptr;
-        }
-      
-        elem.pos = unit->configPos.value();
-        elem.size = unit->configSize;
-        elem.isMergeMultiplexer = unit->isMergeMultiplexer;
-
-        *list->PushElem() = elem;
-      }
-      
-      *array->PushElem() = PushArrayFromList(out,list);
-    }
-    result.elements = PushArrayFromList(out,array);
   } else {
-    auto array = PushArenaList<Array<StructElement>>(temp);
+    result.name = STRING("Top");
+  }
+  
+  auto array = PushArenaList<Array<StructElement>>(temp);
+
+  if(parent && parent->isMerge){
+    //iter.GetIndexes();
+  }
+  
+  for(int i = 0; i < iter.MergeSize(); i++){
+    auto list = PushArenaList<StructElement>(temp);
     for(AccelInfoIterator it = iter; it.IsValid(); it = it.Next()){
+      it.mergeIndex = i;
+      
       InstanceInfo* unit = it.CurrentUnit();
       StructElement elem = {};
-    
+      
       if(!unit->configPos.has_value()){
         continue;
       }
-
+      
       elem.name = unit->baseName;
       if(unit->isComposite){
         AccelInfoIterator inside = it.StepInsideOnly();
-        StructInfo* subInfo = GenerateConfigStruct(inside,out,temp);
+        StructInfo* subInfo = GenerateConfigStruct(inside,partitions,out,temp);
         elem.childStruct = subInfo;
       } else {
         elem.typeName = unit->decl->name;
@@ -1023,14 +996,13 @@ StructInfo* GenerateConfigStruct(AccelInfoIterator iter,Arena* out,Arena* temp){
       elem.pos = unit->configPos.value();
       elem.size = unit->configSize;
       elem.isMergeMultiplexer = unit->isMergeMultiplexer;
-
-      auto singleArray = PushArray<StructElement>(out,1);
-      singleArray[0] = elem;
-
-      *array->PushElem() = singleArray;
+      
+      *list->PushElem() = elem;
     }
-    result.elements = PushArrayFromList(out,array);
+      
+    *array->PushElem() = PushArrayFromList(out,list);
   }
+  result.elements = PushArrayFromList(out,array);
 
   StructInfo* res = PushStruct<StructInfo>(out);
   *res = result;
@@ -1101,17 +1073,16 @@ void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* 
     return;
   }
 
-  //DEBUG_BREAK();
   AccelInfo info = CalculateAcceleratorInfo(accel,true,temp,temp2);
-  VersatComputedValues val = ComputeVersatValues(accel,globalOptions.useDMA);
+  VersatComputedValues val = ComputeVersatValues(&info,false);
   CheckSanity(info.baseInfo,temp);
-
-  // Need to calculate StructInfo.
-  // Will calculate it from AccelInfo.
   
   DEBUG_BREAK();
+  
+  Array<Partition> partitions = GenerateInitialPartitions(accel,temp);
+
   AccelInfoIterator iter = StartIteration(&info);
-  StructInfo* structInfo = GenerateConfigStruct(iter,temp,temp2);
+  StructInfo* structInfo = GenerateConfigStruct(iter,partitions,temp,temp2);
   //Array<TypeStructInfo> structs = GenerateStructs(structInfo,temp,temp2);
   DEBUG_BREAK();
 
@@ -1262,7 +1233,11 @@ void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* 
   
   TemplateSetCustom("parameters",MakeValue(&parameters));
   TemplateSetCustom("arch",MakeValue(&globalOptions));
-  TemplateSetCustom("versatValues",MakeValue(&val));
+  TemplateSetNumber("configurationBits",val.configurationBits);
+  TemplateSetNumber("stateBits",val.stateBits);
+  TemplateSetNumber("stateAddressBits",val.stateAddressBits);
+  TemplateSetNumber("configurationAddressBits",val.configurationAddressBits);
+  TemplateSetNumber("numberConnections",val.numberConnections);
   TemplateSetNumber("delayStart",val.delayBitsStart);
   TemplateSetNumber("nIO",val.nUnitsIO);
   TemplateSetNumber("unitsMapped",val.unitsMapped);
@@ -1389,6 +1364,7 @@ void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* 
   TemplateSetNumber("nStates",val.nStates);
   TemplateSetNumber("nStatics",val.nStatics);
 
+  //DEBUG_BREAK();
   Array<TypeStructInfo> configStructures = GetConfigStructInfo(accel,temp2,temp);
   TemplateSetCustom("configStructures",MakeValue(&configStructures));
   
@@ -1410,7 +1386,8 @@ void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* 
     Array<Array<int>> allDelays = PushArray<Array<int>>(temp,info.infos.size);
     if(info.infos.size >= 2){
       int i = 0;
-      for(Array<InstanceInfo> allInfos : info.infos){
+      for(int ii = 0; ii <  info.infos.size; ii++){
+        Array<InstanceInfo> allInfos = info.infos[ii].info;
         DynamicArray<int> arr = StartArray<int>(temp);
         for(InstanceInfo& t : allInfos){
           if(!t.isComposite){
@@ -1481,7 +1458,8 @@ void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* 
     }
 #endif
     
-    TemplateSetCustom("mergeNames",MakeValue(&info.names));
+    Array<String> names = Map(info.infos,temp,[](MergePartition p){return p.name;});
+    TemplateSetCustom("mergeNames",MakeValue(&names));
 
     Array<Array<MuxInfo>> result = GetAllMuxInfo(&info,temp,temp2);
 

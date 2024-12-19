@@ -407,7 +407,7 @@ struct GetOrAllocateResult{
   bool alreadyExisted;
 };
 
-// An hashmap implementation for arenas. Does not allocate any memory after construction and also iterates by order of insertion. Construct with PushHashmap function
+// An hashmap implementation for arenas. Does not allocate any memory after construction (fixed max size) and also iterates by order of insertion. Construct with PushHashmap function
 template<typename Key,typename Data>
 struct Hashmap{
   int nodesAllocated;
@@ -419,7 +419,7 @@ struct Hashmap{
   // Pair<Key,Data>* bucketsData[nodesAllocated];
   // Pair<Key,Data>* nextArray[nodesAllocated];
   // Pair<Key,Data> dataData[nodesAllocated];
-
+  
   // Construct by calling PushHashmap
   
   Data* Insert(Key key,Data data);

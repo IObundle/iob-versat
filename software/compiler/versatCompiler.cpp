@@ -6,6 +6,7 @@
 #include "declaration.hpp"
 #include "filesystem.hpp"
 #include "globals.hpp"
+#include "logger.hpp"
 #include "memory.hpp"
 #include "structParsing.hpp"
 #include "utilsCore.hpp"
@@ -206,7 +207,6 @@ void LoadTemplates(Arena* perm,Arena* temp){
 
 #include <argp.h>
 
-
 struct OptionsGather{
   ArenaList<String>* verilogFiles;
   ArenaList<String>* extraSources;
@@ -309,6 +309,7 @@ GenericArrayIterator IterateArray(void* array,int sizeOfType,int alignmentOfType
 }
 
 bool HasNext(GenericArrayIterator iter){
+  //Array<int>* view = (*(Array<int>**) iter.array);
   void** arrayData = (void**) iter.array;
   int* size = (int*) (arrayData + 1);
 
@@ -316,6 +317,9 @@ bool HasNext(GenericArrayIterator iter){
 }
 
 void* Next(GenericArrayIterator& iter){
+  //Array<int>* view = (*(Array<int>**) iter.array);
+  //void* arrayStart = (void*) view->data; 
+
   void** arrayData = (void**) iter.array;
   void* arrayStart = (void*) arrayData[0]; 
 
@@ -323,6 +327,37 @@ void* Next(GenericArrayIterator& iter){
   void* data = (void*) &view[iter.index * iter.sizeOfType];
   iter.index += 1;
   
+  return data;
+}
+
+struct GenericHashmapIterator{
+  void* hashmap;
+  int sizeOfType;
+  int alignmentOfType;
+  int index;
+};
+
+GenericHashmapIterator IterateHashmap(void* hashmap,int sizeOfType,int alignmentOfType){
+  GenericHashmapIterator res = {};
+  res.hashmap = hashmap;
+  res.sizeOfType = sizeOfType;
+  res.alignmentOfType = alignmentOfType;
+
+  return res;
+}
+
+bool HasNext(GenericHashmapIterator iter){
+  Hashmap<int,int>* view = ((Hashmap<int,int>*) iter.hashmap);
+
+  return iter.index < view->nodesUsed;
+}
+
+void* Next(GenericHashmapIterator& iter){
+  Hashmap<int,int>* view = ((Hashmap<int,int>*) iter.hashmap);
+
+  char* arrayView = (char*) view->data;
+  void* data = (void*) &arrayView[iter.index * iter.sizeOfType];
+  iter.index += 1;
   return data;
 }
 
@@ -440,6 +475,22 @@ int main(int argc,char* argv[]){
   Arena temp2Inst = InitArena(Megabyte(128));
   Arena* temp2 = &temp2Inst;
 
+  auto test = PushHashmap<char,char>(perm,5);
+
+  test->Insert(0,2);
+  test->Insert(4,8);
+  test->Insert(10,20);
+
+  DEBUG_BREAK();
+
+  GenericHashmapIterator iter = IterateHashmap(test,sizeof(Pair<char,char>),alignof(Pair<char,char>));
+  while(HasNext(iter)){
+    auto pair = *(Pair<char,char>*) Next(iter);
+
+    printf("%d:%d\n",pair.first,pair.second);
+  }
+
+  //return 0;
   //LEFT HERE // The problem is that the order of memory calculations is different for accelerator and top unit. Probably because unit is still taking old code path, or the Delay/NoDelay differences. Need to see.
   
   argp argp = { options, parse_opt, "SpecFile", "Dataflow to accelerator compiler. Check tutorial in https://github.com/IObundle/iob-versat to learn how to write a specification file"};
@@ -900,6 +951,25 @@ If we have all the information that we need inside an array of tables (where eac
 For example, for each multiplexer, we could have a member that indicates the input port that is associated to that merge datapath.
 
 We could also store graph data inside that representation. The way in which we handle graphs is soo clubersome. 
+
+
+// Current state.
+
+We have a couple of old functions in configurations that are responsible for calculation the AccelInfo.
+The calculation of the instances for base accelerators as already been taken care of, but nothing has been done for merge instances.
+
+FUDeclaration still contains ConfigurationInfo and instanceInfo members. We still have not put AccelInfo values inside FUDeclaration and no code relies on accessing this info, with some exceptions because instanceInfo is being used somewhat.
+
+Functions that register modules and merge do not interact in any shape or form with InstanceInfo.
+
+Overall, we only have a small part of the work done. Merge is really clubersome and we can't even test things out currently because the headers are broken. Maybe the best is to restore headers and go from there.
+
+We want to remove ConfigurationInfo from FUDeclaration.
+We need to replace it with AccelInfo.
+We need merge to generate correct accel info beforehand.
+
+Rembember: Calculating delays on the merge unit does not make sense.
+           Delays can only be calculated on modules and in the recon of merge graphs.
 
  */
 

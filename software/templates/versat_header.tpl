@@ -57,6 +57,20 @@ typedef struct {
 
 #{end}
 
+typedef struct{
+#{for elem structuredConfigs}
+#{if elem.typeAndNames.size > 1}
+  union{
+#{for typeAndName elem.typeAndNames}
+    @{typeAndName.type} @{typeAndName.name};
+#{end}
+  };
+#{else}
+  @{elem.typeAndNames[0].type} @{elem.typeAndNames[0].name};
+#{end}
+#{end}
+} AcceleratorConfig;
+
 typedef struct {
 #{for elem allStatics}
   iptr @{elem.name};
@@ -149,6 +163,20 @@ extern volatile @{accelName}State* accelState; // @{nStates}
 #{end}
 
 extern volatile AcceleratorStatic* accelStatic;
+
+#{for elem structuredConfigs}
+#{if elem.typeAndNames.size > 1}
+#{for typeAndName elem.typeAndNames}
+#define ACCEL_@{typeAndName.name} ((AcceleratorConfig*) accelConfig)->@{typeAndName.name}
+#{end}
+#{else}
+#define ACCEL_@{elem.typeAndNames[0].name} ((AcceleratorConfig*) accelConfig)->@{elem.typeAndNames[0].name}
+#{end}
+#{end}
+
+#{for elem allStatics}
+#define ACCEL_@{elem.name} accelStatics->@{elem.name}
+#{end}
 
 #{if isSimple}
 // Simple input and output connection for simple accelerators

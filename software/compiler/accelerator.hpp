@@ -10,6 +10,7 @@ struct FUInstance;
 struct FUDeclaration;
 struct Accelerator;
 struct Edge;
+struct AccelInfo;
 
 typedef Hashmap<FUInstance*,FUInstance*> InstanceMap;
 typedef Hashmap<Edge,Edge> EdgeMap;
@@ -167,21 +168,16 @@ struct MemoryAddressMask{
 
 struct VersatComputedValues{
   int nConfigs;
-  int configBits;
 
   int versatConfigs;
   int versatStates;
 
   int nStatics;
-  int staticBits;
-  int staticBitsStart;
 
   int nDelays;
-  int delayBits;
   int delayBitsStart;
 
   // Configurations = config + static + delays
-  int nConfigurations;
   int configurationBits;
   int configurationAddressBits;
 
@@ -196,12 +192,10 @@ struct VersatComputedValues{
   int numberConnections; // TODO: Same as accel
   int externalMemoryInterfaces;
 
-  int stateConfigurationAddressBits;
   int memoryAddressBits;
-  int memoryMappingAddressBits;
   int memoryConfigDecisionBit;
 
-  bool signalLoop;
+  //bool signalLoop;
 };
 
 struct DAGOrderNodes{
@@ -289,8 +283,9 @@ int ExternalMemoryByteSize(Array<ExternalMemoryInterface> interfaces); // Size o
 
 // TODO: Instead of versatComputedValues, could return something like a FUDeclaration
 //       (or something that FUDeclaration would be composed off)
-//       
-VersatComputedValues ComputeVersatValues(Accelerator* accel,bool useDMA);
+//
+
+VersatComputedValues ComputeVersatValues(AccelInfo* accel,bool useDMA);
 
 // Returns false if parameter does not exist 
 bool SetParameter(FUInstance* inst,String parameterName,String parameterValue);

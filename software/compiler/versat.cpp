@@ -230,8 +230,8 @@ void FillDeclarationWithAcceleratorValues(FUDeclaration* decl,Accelerator* accel
     }
   }
 
-  decl->baseConfig.inputDelays = val.inputDelays[0];
-  decl->baseConfig.outputLatencies = val.outputDelays[0];
+  decl->baseConfig.inputDelays = val.infos[0].inputDelays;
+  decl->baseConfig.outputLatencies = val.infos[0].outputLatencies;
   decl->baseConfig.configs = PushArray<Wire>(perm,val.configs);
   decl->baseConfig.states = PushArray<Wire>(perm,val.states);
   decl->baseConfig.order = Map(val.baseInfo,perm,[](InstanceInfo in){
@@ -290,7 +290,7 @@ void FillDeclarationWithAcceleratorValues(FUDeclaration* decl,Accelerator* accel
     decl->baseConfig.stateOffsets.max = val.states;
     decl->baseConfig.delayOffsets.max = val.delays;
     int index = 0;
-    for(InstanceInfo& info : val.infos[0]){
+    for(InstanceInfo& info : val.infos[0].info){
       if(info.level != 0) continue;
 
       if(info.isConfigStatic){
@@ -320,20 +320,20 @@ void FillDeclarationWithAcceleratorValues(FUDeclaration* decl,Accelerator* accel
     Memset(decl->configInfo,{});
 
     for(int i = 0; i < val.infos.size; i++){
-      Array<InstanceInfo> info = val.infos[i];
+      Array<InstanceInfo> info = val.infos[i].info;
 
       decl->configInfo[i].unitBelongs = belongArray;
-      decl->configInfo[i].name = val.names[i];
-      Assert(val.names[i].data != nullptr);
-      decl->configInfo[i].inputDelays = val.inputDelays[i];
-      decl->configInfo[i].outputLatencies = val.outputDelays[i];
-      decl->configInfo[i].mergeMultiplexerConfigs = val.muxConfigs[i];
+      decl->configInfo[i].name = val.infos[i].name;
+      Assert(!Empty(decl->configInfo[i].name));
+      decl->configInfo[i].inputDelays = val.infos[i].inputDelays;
+      decl->configInfo[i].outputLatencies = val.infos[i].outputLatencies;
+      decl->configInfo[i].mergeMultiplexerConfigs = val.infos[i].muxConfigs;
       
-      decl->configInfo[i].baseName = Map(val.infos[i],perm,[](InstanceInfo info){
+      decl->configInfo[i].baseName = Map(val.infos[i].info,perm,[](InstanceInfo info){
         return info.name;
       });
 
-      decl->configInfo[i].order = Map(val.infos[i],perm,[](InstanceInfo in){
+      decl->configInfo[i].order = Map(val.infos[i].info,perm,[](InstanceInfo in){
         return in.order;
       });
 
@@ -455,7 +455,7 @@ void FillDeclarationWithAcceleratorValuesNoDelay(FUDeclaration* decl,Accelerator
     decl->baseConfig.stateOffsets.max = val.states;
     decl->baseConfig.delayOffsets.max = val.delays;
     int index = 0;
-    for(InstanceInfo& info : val.infos[0]){
+    for(InstanceInfo& info : val.infos[0].info){
       if(info.level != 0) continue;
 
       if(info.isConfigStatic){
@@ -471,12 +471,12 @@ void FillDeclarationWithAcceleratorValuesNoDelay(FUDeclaration* decl,Accelerator
   }
   
   for(int i = 0; i < val.infos.size; i++){
-    Array<InstanceInfo> info = val.infos[i];
+    Array<InstanceInfo> info = val.infos[i].info;
 
     decl->configInfo[i].unitBelongs = belongArray;
-    decl->configInfo[i].name = val.names[i];
+    decl->configInfo[i].name = val.infos[i].name;
 
-    decl->configInfo[i].baseName = Map(val.infos[i],perm,[](InstanceInfo info){
+    decl->configInfo[i].baseName = Map(val.infos[i].info,perm,[](InstanceInfo info){
       return info.name;
     });
 
@@ -630,7 +630,7 @@ FUDeclaration* RegisterSubUnitBarebones(Accelerator* circuit,Arena* temp,Arena* 
     }
   }
   
-  res->instanceInfo = CalculateInstanceInfoTest(res->fixedDelayCircuit,permanent,temp);
+  res->info.baseInfo = CalculateInstanceInfoTest(res->fixedDelayCircuit,permanent,temp);
 
   return res;
 }
@@ -742,7 +742,7 @@ FUDeclaration* RegisterSubUnit(Accelerator* circuit,Arena* temp,Arena* temp2){
     }
   }
 
-  res->instanceInfo = CalculateInstanceInfoTest(res->fixedDelayCircuit,permanent,temp);
+  res->info.baseInfo = CalculateInstanceInfoTest(res->fixedDelayCircuit,permanent,temp);
   
   return res;
 }
@@ -936,95 +936,6 @@ int GetInputPortNumber(FUInstance* inputInstance){
     Assert(inputInstance->declaration == BasicDeclaration::input);
 
   return ((FUInstance*) inputInstance)->portIndex;
-}
-
-void PrintUniformInformation(FILE* out,FUDeclaration* decl){
-  fprintf(out,"Declaration: %.*s\n",UNPACK_SS(decl->name));
-  fprintf(out,"\n");
-  fprintf(out,"Inputs: %d\n",decl->NumberInputs());
-  fprintf(out,"  ");
-  for(int i = 0; i < decl->NumberInputs(); i++){
-    if(i != 0) fprintf(out,",");
-    fprintf(out,"%d",decl->baseConfig.inputDelays[i]);
-  }
-  fprintf(out,"\n");
-
-  {
-    int index = 0;
-    for(auto info : decl->configInfo){
-      fprintf(out,"%d: ",index++);
-      for(int i = 0; i < decl->NumberInputs(); i++){
-        if(i != 0) fprintf(out,",");
-        fprintf(out,"%d",info.inputDelays[i]);
-      }
-    fprintf(out,"\n");
-    }
-    fprintf(out,"\n");
-  }
-  
-  fprintf(out,"\n");
-  fprintf(out,"Outputs: %d\n",decl->NumberOutputs());
-  fprintf(out,"  ");
-  for(int i = 0; i < decl->NumberOutputs(); i++){
-    if(i != 0) fprintf(out,",");
-    fprintf(out,"%d",decl->baseConfig.outputLatencies[i]);
-  }
-  fprintf(out,"\n");
-
-  {
-    int index = 0;
-    for(auto info : decl->configInfo){
-      fprintf(out,"%d: ",index++);
-      for(int i = 0; i < decl->NumberOutputs(); i++){
-        if(i != 0) fprintf(out,",");
-        fprintf(out,"%d",info.outputLatencies[i]);
-      }
-    fprintf(out,"\n");
-    }
-    fprintf(out,"\n");
-  }
-  
-  for(ConfigurationInfo info : decl->configInfo){
-    fprintf(out,"Names:\n");
-    for(String name : info.baseName){
-      fprintf(out,"%.*s\n",UNPACK_SS(name));
-    }
-
-    fprintf(out,"\n");
-    fprintf(out,"Configs: %d\n",info.configOffsets.max);
-    for(Wire wire : info.configs){
-      fprintf(out,"  %.*s\n",UNPACK_SS(wire.name));
-    }
-#if 0 // TODO: Some bug here, temporarely disabling it for now
-    for(int i = 0; i < info.configOffsets.offsets.size; i++){
-      fprintf(out,"%d ",info.configOffsets.offsets[i]);
-    }
-    if(decl->fixedDelayCircuit){
-      FOREACH_LIST(FUInstance*,ptr,decl->fixedDelayCircuit->allocated){
-        fprintf(out,"%.*s ",UNPACK_SS(ptr->inst->name));
-      }
-      fprintf(out,"\n");
-    }
-#endif
-    
-    fprintf(out,"\n");
-    fprintf(out,"States: %d\n",info.stateOffsets.max);
-    for(Wire wire : info.states){
-      fprintf(out,"  %.*s\n",UNPACK_SS(wire.name));
-    }
-    fprintf(out,"\n");
-    fprintf(out,"Delay: %d\n",info.delayOffsets.max);
-    if(decl->staticUnits) {
-      fprintf(out,"\n");
-      fprintf(out,"StaticUnits: %d\n",decl->staticUnits->nodesUsed);
-      for(Pair<StaticId,StaticData*> p : decl->staticUnits){
-        for(Wire wire : p.second->configs){
-          fprintf(out,"%.*s_%.*s_%.*s\n",UNPACK_SS(p.first.parent->name),UNPACK_SS(p.first.name),UNPACK_SS(wire.name));
-        }
-      }
-      fprintf(out,"\n");
-    }
-  }
 }
 
 bool CheckValidName(String name){

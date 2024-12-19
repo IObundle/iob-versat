@@ -261,6 +261,7 @@ struct Time{
 Time GetTime();
 void PrintTime(Time time,const char* id);
 Time operator-(const Time& s1,const Time& s2);
+Time operator+(const Time& s1,const Time& s2);
 bool operator>(const Time& s1,const Time& s2);
 bool operator==(const Time& s1,const Time& s2);
 

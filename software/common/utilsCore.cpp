@@ -67,7 +67,7 @@ Time GetTime(){
 
   Time t = {};
   t.seconds = time.tv_sec;
-  t.microSeconds = time.tv_nsec * 1000;
+  t.microSeconds = time.tv_nsec / 1000;
 
   return t;
 }
@@ -254,9 +254,35 @@ Time operator-(const Time& s1,const Time& s2){
 
   Assert(s1 > s2 || s1 == s2);
 
-  res.seconds = s1.seconds - s2.seconds;
-  res.microSeconds = s1.microSeconds - s2.microSeconds;
+  int S1 = s1.seconds;
+  int S2 = s2.seconds;
+  int M1 = s1.microSeconds;
+  int M2 = s2.microSeconds;
+  
+  while(M1 < M2){
+    M1 += 1000000;
+    S1 -= 1;
+  }
 
+  Assert(S1 >= S2);
+  
+  res.seconds = S1 - S2;
+  res.microSeconds = M1 - M2;
+  
+  return res;
+}
+
+Time operator+(const Time& s1,const Time& s2){
+  Time res = {};
+  
+  res.seconds = s1.seconds + s2.seconds;
+  res.microSeconds = s1.microSeconds + s2.microSeconds;
+
+  if(res.microSeconds > 1000000){
+    res.seconds += res.microSeconds / 1000000;
+    res.microSeconds %= res.microSeconds;
+  }
+  
   return res;
 }
 

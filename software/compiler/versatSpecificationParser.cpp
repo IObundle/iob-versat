@@ -2251,9 +2251,9 @@ String InstantiateAddressGen(AddressGenDef def,Arena* out,Arena* temp){
     PushString(out,"   config->write_shift = %.*s;\n",UNPACK_SS(in.shiftExpression));
 
     AddressGenLoopSpecificatonSym ext = externalSpecSym[0];
-      
-    PushString(out,"   config->write_amount_minus_one = (%.*s) - 1;\n",UNPACK_SS(ext.periodExpression));
-    PushString(out,"   config->write_length = (%.*s) * sizeof(float);\n",UNPACK_SS(ext.iterationExpression));
+
+    PushString(out,"   config->write_length = (%.*s) * sizeof(float);\n",UNPACK_SS(ext.periodExpression));
+    PushString(out,"   config->write_amount_minus_one = (%.*s) - 1;\n",UNPACK_SS(ext.iterationExpression));
     PushString(out,"   config->write_addr_shift = (%.*s) * sizeof(float);\n",UNPACK_SS(ext.shiftWithoutRemovingIncrement));
   } break;
 

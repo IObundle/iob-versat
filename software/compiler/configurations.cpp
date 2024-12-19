@@ -16,7 +16,7 @@ Array<InstanceInfo>& AccelInfoIterator::GetCurrentMerge(){
   if(info->infos.size <= 1){
     return info->baseInfo;
   } else {
-    return info->infos[mergeIndex];
+    return info->infos[mergeIndex].info;
   }
 }
 
@@ -32,7 +32,7 @@ String AccelInfoIterator::GetMergeName(){
   if(info->infos.size <= 1){
     return {};
   } else {
-    return info->names[mergeIndex];
+    return info->infos[mergeIndex].name;
   }
 }
 
@@ -139,7 +139,7 @@ AccelInfoIterator StartIteration(AccelInfo* info){
   iter.info = info;
   return iter;
 }
-
+  
 CalculatedOffsets CalculateConfigOffsetsIgnoringStatics(Accelerator* accel,Arena* out){
   int size = accel->allocated.Size();
 
@@ -821,6 +821,82 @@ Array<InstanceInfo> GenerateInitialInstanceInfo(Accelerator* accel,Arena* out,Ar
   return res;
 }
 
+#if 0 
+// Allocates and only fills the level member
+Array<InstanceInfo> AllocateInitialInstanceInfo(Accelerator* accel,Arena* out){
+  auto Function = [](auto Recurse,DynamicArray<InstanceInfo>& array,Accelerator* accel,int level) -> void{
+    for(FUInstance* inst : accel->allocated){
+      InstanceInfo* elem = array.PushElem();
+      elem->level = level;
+      
+      if(inst->declaration->fixedDelayCircuit){
+        Recurse(Recurse,array,inst->declaration->fixedDelayCircuit,level + 1);
+      }
+    }
+  };
+  
+  auto build = StartArray<InstanceInfo>(out);
+
+  Function(Function,build,accel,0);
+
+  Array<InstanceInfo> res = EndArray(build);
+
+  return res;
+}
+
+void GenerateInitialInstanceInfo(AcceleratorInfoIterator iter,Arena* out,Arena* temp){
+  auto SetBaseInfo = [](InstanceInfo* elem,FUInstance* inst,int level){
+    *elem = {};
+    elem->inst = inst;
+    elem->name = inst->name;
+    elem->decl = inst->declaration;
+    elem->level = level;
+    elem->isComposite = IsTypeHierarchical(inst->declaration);
+    elem->isMerge = inst->declaration->type == FUDeclarationType_MERGED;
+    elem->isStatic = inst->isStatic; 
+    elem->isShared = inst->sharedEnable;
+    elem->sharedIndex = inst->sharedIndex;
+    elem->isMergeMultiplexer = inst->isMergeMultiplexer;
+    //elem->mergeMultiplexerId = inst->mergeMultiplexerId;
+    elem->special = inst->literal;
+    elem->id = inst->id;
+    elem->mergeIndexStart = 0;
+  };
+  
+  auto Function = [SetBaseInfo](auto Recurse,DynamicArray<InstanceInfo>& array,AcceleratorInfoIterator iter,int level) -> void{
+    for(FUInstance* inst : accel->allocated){
+      InstanceInfo* elem = array.PushElem();
+      SetBaseInfo(elem,inst,level);
+      
+      if(inst->declaration->fixedDelayCircuit){
+        Recurse(Recurse,array,inst->declaration->fixedDelayCircuit,level + 1);
+      }
+    }
+  };
+  
+  auto build = StartArray<InstanceInfo>(out);
+
+  Function(Function,build,accel,0);
+  
+  // TODO: For now keep the standard order so it is easier to compare to the current code.
+#if 0
+  DAGOrderNodes order = CalculateDAGOrder(&accel->allocated,temp);
+  for(FUInstance* inst : order.instances){
+    InstanceInfo* elem = build.PushElem();
+    elem->connectionType = inst->type;
+    SetBaseInfo(elem,inst,0);
+    if(inst->declaration->fixedDelayCircuit){
+      Function(Function,build,inst->declaration->fixedDelayCircuit,1);
+    }
+  }
+#endif
+
+  Array<InstanceInfo> res = EndArray(build);
+
+  return res;
+}
+#endif
+
 struct Node{
   InstanceInfo* unit;
   int value;
@@ -844,9 +920,9 @@ Array<InstanceInfo> CalculateInstanceInfoTest(Accelerator* accel,Arena* out,Aren
 
     // All these are basically to simplify debugging by having everything in one place.
     // They can be moved to GenerateInitialInstanceInfo.
-    unit->configSize = unit->decl->baseConfig.configs.size;
-    unit->stateSize = unit->decl->baseConfig.states.size;
-    unit->delaySize = unit->decl->baseConfig.delayOffsets.max;
+    unit->configSize = unit->decl->NumberConfigs();
+    unit->stateSize = unit->decl->NumberStates();
+    unit->delaySize = unit->decl->NumberDelays();
     unit->memMappedBitSize = unit->decl->memoryMapBits;
 
     if(unit->decl->memoryMapBits.has_value()){
@@ -871,9 +947,7 @@ Array<InstanceInfo> CalculateInstanceInfoTest(Accelerator* accel,Arena* out,Aren
 
     InstanceInfo* parent = iter.GetParentUnit();
     if(parent){
-      AccelInfo info = {};
-      info.baseInfo = parent->decl->instanceInfo;
-      AccelInfoIterator configIter = StartIteration(&info);
+      AccelInfoIterator configIter = StartIteration(&parent->decl->info);
       
       int index = 0;
       for(AccelInfoIterator it = iter; it.IsValid(); it = it.Next(),configIter = configIter.Next()){
@@ -924,7 +998,7 @@ Array<InstanceInfo> CalculateInstanceInfoTest(Accelerator* accel,Arena* out,Aren
         }
 
         if(!isNewlyShared && !unit->isStatic){
-          configIndex += unit->decl->baseConfig.configs.size;
+          configIndex += unit->decl->NumberConfigs();
         }
       }
     }
@@ -940,22 +1014,25 @@ Array<InstanceInfo> CalculateInstanceInfoTest(Accelerator* accel,Arena* out,Aren
 
     InstanceInfo* parent = iter.GetParentUnit();
     if(parent){
-      Array<int> offsets = parent->decl->baseConfig.stateOffsets.offsets;
+      AccelInfoIterator stateIter = StartIteration(&parent->decl->info);
       
       int index = 0;
-      for(AccelInfoIterator it = iter; it.IsValid(); it = it.Next()){
+      for(AccelInfoIterator it = iter; it.IsValid(); it = it.Next(),stateIter = stateIter.Next()){
         InstanceInfo* unit = it.CurrentUnit();
+        InstanceInfo* stateUnit = stateIter.CurrentUnit();
         
-        int statePos = startIndex + offsets[index];
-        
-        if(unit->stateSize){
-          unit->statePos = statePos;
-        }
+        if(stateUnit->statePos.has_value()){
+          int statePos = startIndex + stateUnit->statePos.value();
           
-        index += 1;
-        AccelInfoIterator inside = it.StepInsideOnly();
-        if(inside.IsValid()){
-          Recurse(Recurse,inside,statePos,temp);
+          if(unit->stateSize){
+            unit->statePos = statePos;
+          }
+          
+          index += 1;
+          AccelInfoIterator inside = it.StepInsideOnly();
+          if(inside.IsValid()){
+            Recurse(Recurse,inside,statePos,temp);
+          }
         }
       }
     } else {
@@ -983,19 +1060,6 @@ Array<InstanceInfo> CalculateInstanceInfoTest(Accelerator* accel,Arena* out,Aren
   // Handle memory mapping
   auto CalculateMemory = [](auto Recurse,AccelInfoIterator& iter,int startIndex,Arena* out,Arena* temp) -> void{
     BLOCK_REGION(temp);
-
-#if 0
-    InstanceInfo* parent = iter.GetParentUnit();
-    if(parent){
-      for(AccelInfoIterator it = iter; it.IsValid(); it = it.Next()){
-        AccelInfoIterator inside = it.StepInsideOnly();
-        if(inside.IsValid()){
-          Recurse(Recurse,inside,startIndex,out,temp);
-        }
-      }
-      return;
-    }
-#endif
     
     // Let the inside units calculate their memory mapped first
     for(AccelInfoIterator it = iter; it.IsValid(); it = it.Next()){
@@ -1106,22 +1170,25 @@ Array<InstanceInfo> CalculateInstanceInfoTest(Accelerator* accel,Arena* out,Aren
 
     InstanceInfo* parent = iter.GetParentUnit();
     if(parent){
-      Array<int> offsets = parent->decl->baseConfig.delayOffsets.offsets;
+      AccelInfoIterator delayIter = StartIteration(&parent->decl->info);
       
       int index = 0;
-      for(AccelInfoIterator it = iter; it.IsValid(); it = it.Next()){
+      for(AccelInfoIterator it = iter; it.IsValid(); it = it.Next(),delayIter = delayIter.Next()){
         InstanceInfo* unit = it.CurrentUnit();
+        InstanceInfo* delayUnit = delayIter.CurrentUnit();
 
-        int delayPos = startIndex + offsets[index];
+        if(delayUnit->delayPos.has_value()){
+          int delayPos = startIndex + delayUnit->delayPos.value();
         
-        if(unit->delaySize){
-          unit->delayPos = delayPos;
-        }
+          if(unit->delaySize){
+            unit->delayPos = delayPos;
+          }
           
-        index += 1;
-        AccelInfoIterator inside = it.StepInsideOnly();
-        if(inside.IsValid()){
-          Recurse(Recurse,inside,delayPos,temp);
+          index += 1;
+          AccelInfoIterator inside = it.StepInsideOnly();
+          if(inside.IsValid()){
+            Recurse(Recurse,inside,delayPos,temp);
+          }
         }
       }
     } else {
@@ -1146,25 +1213,20 @@ Array<InstanceInfo> CalculateInstanceInfoTest(Accelerator* accel,Arena* out,Aren
   iter = StartIteration(&test);
   CalculateDelayPos(CalculateDelayPos,iter,0,temp);
 
-  //DEBUG_BREAK();
   DAGOrderNodes order = CalculateDAGOrder(&accel->allocated,temp);
   CalculateDelayResult calculatedDelay = CalculateDelay(accel,order,temp);
 
   auto CalculateDelay = [](auto Recurse,AccelInfoIterator& iter,CalculateDelayResult& calculatedDelay,int startIndex,Arena* out) -> void{
     InstanceInfo* parent = iter.GetParentUnit();
     if(parent){
-      Array<int> delays = parent->decl->baseConfig.calculatedDelays;
+      AccelInfoIterator delayIter = StartIteration(&parent->decl->info);
       
       int index = 0;
-      for(AccelInfoIterator it = iter; it.IsValid(); it = it.Next()){
+      for(AccelInfoIterator it = iter; it.IsValid(); it = it.Next(),delayIter = delayIter.Next()){
         InstanceInfo* unit = it.CurrentUnit();
+        InstanceInfo* delayUnit = delayIter.CurrentUnit();
 
-        // TODO: Temporary, when code is working properly, we should be able to remove this.
-        if(index >= delays.size){
-          continue;
-        }
-          
-        int delayPos = startIndex + delays[index];
+        int delayPos = startIndex + delayUnit->baseDelay;
         unit->baseDelay = delayPos;
 
         if(unit->delaySize > 0 && !unit->isComposite){
@@ -1203,6 +1265,353 @@ Array<InstanceInfo> CalculateInstanceInfoTest(Accelerator* accel,Arena* out,Aren
   return test2;
 }
 
+void CalculateInstanceInfoTest(AccelInfoIterator initialIter,Accelerator* accel,Arena* out,Arena* temp){
+  // Calculate full name
+  for(AccelInfoIterator iter = initialIter; iter.IsValid(); iter = iter.Step()){
+    InstanceInfo* unit = iter.CurrentUnit();
+    InstanceInfo* parent = iter.GetParentUnit();
+    unit->parent = parent ? parent->decl : nullptr;
+
+    // All these are basically to simplify debugging by having everything in one place.
+    // They can be moved to GenerateInitialInstanceInfo.
+    unit->configSize = unit->decl->NumberConfigs();
+    unit->stateSize = unit->decl->NumberStates();
+    unit->delaySize = unit->decl->NumberDelays();
+    unit->memMappedBitSize = unit->decl->memoryMapBits;
+
+    if(unit->decl->memoryMapBits.has_value()){
+      unit->memMappedSize = (1 << unit->decl->memoryMapBits.value());
+    }
+    
+    // Merge stuff but for now use the default value. (Since not dealing with merged for now)
+    unit->baseName = unit->name;
+    unit->belongs = true;
+    
+    if(!parent){
+      unit->fullName = unit->name;
+      continue;
+    }
+
+    unit->fullName = PushString(out,"%.*s_%.*s",UNPACK_SS(parent->fullName),UNPACK_SS(unit->name));
+  }
+
+  // Config info stuff
+  auto CalculateConfig = [](auto Recurse,AccelInfoIterator& iter,int startIndex,Arena* temp) -> void{
+    BLOCK_REGION(temp);
+
+    InstanceInfo* parent = iter.GetParentUnit();
+    if(parent){
+      AccelInfoIterator configIter = StartIteration(&parent->decl->info);
+      
+      int index = 0;
+      for(AccelInfoIterator it = iter; it.IsValid(); it = it.Next(),configIter = configIter.Next()){
+        InstanceInfo* unit = it.CurrentUnit();
+        InstanceInfo* configUnit = configIter.CurrentUnit();
+        
+        if(configUnit->configPos.has_value()){
+          int configPos = startIndex + configUnit->configPos.value();
+        
+          if(unit->configSize && !unit->isStatic){
+            unit->configPos = configPos;
+          }
+          
+          index += 1;
+          AccelInfoIterator inside = it.StepInsideOnly();
+          if(inside.IsValid() && !unit->isStatic){
+            Recurse(Recurse,inside,configPos,temp);
+          }
+        }
+      }
+    } else {
+      TrieMap<int,int>* sharedIndexToConfig = PushTrieMap<int,int>(temp);
+      
+      int configIndex = startIndex;
+      for(AccelInfoIterator it = iter; it.IsValid(); it = it.Next()){
+        InstanceInfo* unit = it.CurrentUnit();
+
+        bool isNewlyShared = false;
+        int indexForCurrentUnit = configIndex;
+        if(unit->isShared){
+          int sharedIndex = unit->sharedIndex;
+          GetOrAllocateResult<int> data = sharedIndexToConfig->GetOrAllocate(sharedIndex);
+          if(data.alreadyExisted){
+            indexForCurrentUnit = *data.data;
+          } else {
+            *data.data = configIndex;
+            isNewlyShared = true;
+          }
+        }
+        
+        if(unit->configSize && !unit->isStatic){
+          unit->configPos = indexForCurrentUnit;
+        }
+        
+        AccelInfoIterator inside = it.StepInsideOnly();
+        if(inside.IsValid() && !unit->isStatic){
+          Recurse(Recurse,inside,indexForCurrentUnit,temp);
+        }
+
+        if(!isNewlyShared && !unit->isStatic){
+          configIndex += unit->decl->NumberConfigs();
+        }
+      }
+    }
+  };
+
+  CalculateConfig(CalculateConfig,initialIter,0,temp);
+
+  // Calculate state stuff
+  auto CalculateState = [](auto Recurse,AccelInfoIterator& iter,int startIndex,Arena* temp) -> void{
+    BLOCK_REGION(temp);
+
+    InstanceInfo* parent = iter.GetParentUnit();
+    if(parent){
+      AccelInfoIterator stateIter = StartIteration(&parent->decl->info);
+      
+      int index = 0;
+      for(AccelInfoIterator it = iter; it.IsValid(); it = it.Next(),stateIter = stateIter.Next()){
+        InstanceInfo* unit = it.CurrentUnit();
+        InstanceInfo* stateUnit = stateIter.CurrentUnit();
+        
+        if(stateUnit->statePos.has_value()){
+          int statePos = startIndex + stateUnit->statePos.value();
+          
+          if(unit->stateSize){
+            unit->statePos = statePos;
+          }
+          
+          index += 1;
+          AccelInfoIterator inside = it.StepInsideOnly();
+          if(inside.IsValid()){
+            Recurse(Recurse,inside,statePos,temp);
+          }
+        }
+      }
+    } else {
+      int stateIndex = startIndex;
+      for(AccelInfoIterator it = iter; it.IsValid(); it = it.Next()){
+        InstanceInfo* unit = it.CurrentUnit();
+
+        if(unit->stateSize){
+          unit->statePos = stateIndex;
+        }
+        
+        AccelInfoIterator inside = it.StepInsideOnly();
+        if(inside.IsValid()){
+          Recurse(Recurse,inside,stateIndex,temp);
+        }
+
+        stateIndex += unit->stateSize;
+      }
+    }
+  };
+
+  CalculateState(CalculateState,initialIter,0,temp);
+
+  // Handle memory mapping
+  auto CalculateMemory = [](auto Recurse,AccelInfoIterator& iter,int startIndex,Arena* out,Arena* temp) -> void{
+    BLOCK_REGION(temp);
+    
+    // Let the inside units calculate their memory mapped first
+    for(AccelInfoIterator it = iter; it.IsValid(); it = it.Next()){
+      AccelInfoIterator inside = it.StepInsideOnly();
+      if(inside.IsValid()){
+        Recurse(Recurse,inside,startIndex,out,temp);
+      }
+    }
+
+    auto builder = StartGrowableArray<Node*>(temp);
+    for(AccelInfoIterator it = iter; it.IsValid(); it = it.Next()){
+      InstanceInfo* unit = it.CurrentUnit();
+
+      if(unit->memMappedBitSize.has_value()){
+        Node* n = PushStruct<Node>(temp);
+        *n = (Node){unit,unit->memMappedBitSize.value()};
+        *builder.PushElem() = n;
+      }
+    }
+    Array<Node*> baseNodes = EndArray(builder);
+    
+    if(baseNodes.size == 0){
+      return;
+    }
+
+    auto Sort = [](Array<Node*>& toSort){
+      for(int i = 0; i < toSort.size; i++){
+        for(int j = i + 1; j < toSort.size; j++){
+          if(toSort[i]->value < toSort[j]->value){
+            SWAP(toSort[i],toSort[j]);
+          }
+        }
+      }
+    };
+
+    //DEBUG_BREAK();
+    Sort(baseNodes);
+
+    while(baseNodes.size > 1){
+      Node* left = baseNodes[baseNodes.size - 2];
+      Node* right = baseNodes[baseNodes.size - 1];
+      
+      Node* n = PushStruct<Node>(temp);
+      n->value = std::max(left->value,right->value) + 1;
+      n->left = left;
+      n->right = right;
+      baseNodes[baseNodes.size - 2] = n;
+      baseNodes.size -= 1;
+
+      Sort(baseNodes);
+    }
+    
+    Node* top = baseNodes[0];
+    
+    auto NodeRecurse = [](auto Recurse,Node* top,int bitAccum,int index,Arena* out) -> void{
+      if(top->left == nullptr){
+        Assert(top->right == nullptr);
+
+        InstanceInfo* info = top->unit;
+
+        auto builder = StartString(out);
+        for(int i = 0; i < index; i++){
+          builder.PushChar(GET_BIT(bitAccum,i) ? '1' : '0');
+        }
+        String decisionMask = EndString(builder);
+        PushNullByte(out);
+        info->memDecisionMask = decisionMask;
+      } else {
+        Recurse(Recurse,top->left,SET_BIT(bitAccum,index),index + 1,out);
+        Recurse(Recurse,top->right,bitAccum,index + 1,out);
+      }
+    };
+
+    NodeRecurse(NodeRecurse,top,0,0,out);
+  };
+
+  CalculateMemory(CalculateMemory,initialIter,0,out,temp);
+
+  auto BinaryToInt = [](String val) -> int{
+    int res = 0;
+    for(int c : val){
+      res *= 2;
+      res += (c == '1' ? 1 : 0);
+    }
+    return res;
+  };
+  
+  for(AccelInfoIterator iter = initialIter; iter.IsValid(); iter = iter.Step()){
+    InstanceInfo* unit = iter.CurrentUnit();
+
+    if(unit->memDecisionMask.has_value() && unit->memMappedBitSize.has_value()){
+      auto builder = StartString(out);
+      builder.PushString(unit->memDecisionMask.value());
+      for(int i = 0; i < unit->memMappedBitSize.value(); i++){
+        builder.PushChar('0');
+      }
+      unit->memMappedMask = EndString(builder);
+      PushNullByte(out);
+      
+      unit->memMapped = BinaryToInt(unit->memMappedMask.value());
+    }
+  }
+
+  // Delay pos is just basically State position without anything different, right?
+  auto CalculateDelayPos = [](auto Recurse,AccelInfoIterator& iter,int startIndex,Arena* temp) -> void{
+    BLOCK_REGION(temp);
+
+    InstanceInfo* parent = iter.GetParentUnit();
+    if(parent){
+      AccelInfoIterator delayIter = StartIteration(&parent->decl->info);
+      
+      int index = 0;
+      for(AccelInfoIterator it = iter; it.IsValid(); it = it.Next(),delayIter = delayIter.Next()){
+        InstanceInfo* unit = it.CurrentUnit();
+        InstanceInfo* delayUnit = delayIter.CurrentUnit();
+
+        if(delayUnit->delayPos.has_value()){
+          int delayPos = startIndex + delayUnit->delayPos.value();
+        
+          if(unit->delaySize){
+            unit->delayPos = delayPos;
+          }
+          
+          index += 1;
+          AccelInfoIterator inside = it.StepInsideOnly();
+          if(inside.IsValid()){
+            Recurse(Recurse,inside,delayPos,temp);
+          }
+        }
+      }
+    } else {
+      int delayIndex = startIndex;
+      for(AccelInfoIterator it = iter; it.IsValid(); it = it.Next()){
+        InstanceInfo* unit = it.CurrentUnit();
+
+        if(unit->delaySize){
+          unit->delayPos = delayIndex;
+        }
+        
+        AccelInfoIterator inside = it.StepInsideOnly();
+        if(inside.IsValid()){
+          Recurse(Recurse,inside,delayIndex,temp);
+        }
+
+        delayIndex += unit->delaySize;
+      }
+    }
+  };
+  
+  CalculateDelayPos(CalculateDelayPos,initialIter,0,temp);
+
+  auto SetDelays = [](auto Recurse,AccelInfoIterator& iter,CalculateDelayResult& calculatedDelay,int startIndex,Arena* out) -> void{
+    InstanceInfo* parent = iter.GetParentUnit();
+    if(parent){
+      AccelInfoIterator delayIter = StartIteration(&parent->decl->info);
+      
+      int index = 0;
+      for(AccelInfoIterator it = iter; it.IsValid(); it = it.Next(),delayIter = delayIter.Next()){
+        InstanceInfo* unit = it.CurrentUnit();
+        InstanceInfo* delayUnit = delayIter.CurrentUnit();
+
+        int delayPos = startIndex + delayUnit->baseDelay;
+        unit->baseDelay = delayPos;
+
+        if(unit->delaySize > 0 && !unit->isComposite){
+          unit->delay = PushArray<int>(out,unit->delaySize);
+          Memset(unit->delay,unit->baseDelay);
+        }
+        
+        index += 1;
+        AccelInfoIterator inside = it.StepInsideOnly();
+        if(inside.IsValid()){
+          Recurse(Recurse,inside,calculatedDelay,delayPos,out);
+        }
+      }
+    } else {
+      for(AccelInfoIterator it = iter; it.IsValid(); it = it.Next()){
+        InstanceInfo* unit = it.CurrentUnit();
+        
+        unit->baseDelay = calculatedDelay.nodeDelay->GetOrFail(unit->inst).value;
+
+        if(unit->delaySize > 0 && !unit->isComposite){
+          unit->delay = PushArray<int>(out,unit->delaySize);
+          Memset(unit->delay,unit->baseDelay);
+        }
+
+        AccelInfoIterator inside = it.StepInsideOnly();
+        if(inside.IsValid()){
+          Recurse(Recurse,inside,calculatedDelay,unit->baseDelay,out);
+        }
+      }
+    }
+  };
+
+  if(accel){
+    DAGOrderNodes order = CalculateDAGOrder(&accel->allocated,temp);
+    CalculateDelayResult calculatedDelay = CalculateDelay(accel,order,temp);
+    SetDelays(SetDelays,initialIter,calculatedDelay,0,out);
+  }
+}
+
 AccelInfo CalculateAcceleratorInfo(Accelerator* accel,bool recursive,Arena* out,Arena* temp){
   // TODO: Have this function return everything that needs to be arraified  
   //       Printing a GraphArray struct should tell me everything I need to know about the accelerator
@@ -1217,7 +1626,6 @@ AccelInfo CalculateAcceleratorInfo(Accelerator* accel,bool recursive,Arena* out,
 
   int totalMaxBitsize = 0;
   ArenaList<TestResult>* list = PushArenaList<TestResult>(temp);
-  Array<InstanceInfo> res = {};
   InstanceConfigurationOffsets subOffsets = {};
   bool first = true;
   int index = 0;
@@ -1226,7 +1634,6 @@ AccelInfo CalculateAcceleratorInfo(Accelerator* accel,bool recursive,Arena* out,
     *PushListElement(list) = res2;
     
     if(first){
-      res = res2.info;
       subOffsets = res2.subOffsets;
     }
 
@@ -1280,89 +1687,59 @@ AccelInfo CalculateAcceleratorInfo(Accelerator* accel,bool recursive,Arena* out,
   Array<TestResult> final = PushArrayFromList(out,list);
 
   result.infos = Map(final,out,[](TestResult t){
-    return t.info;
-  });
-  result.names = Map(final,out,[](TestResult t){
-    return t.name;
-  });
-  result.inputDelays = Map(final,out,[](TestResult t){
-    return t.inputDelay;
-  });
-  result.outputDelays = Map(final,out,[](TestResult t){
-    return t.outputLatencies;
-  });
-  result.muxConfigs = Map(final,out,[](TestResult t){
-    return t.muxConfigs;
+    MergePartition part = {};
+    part.info = t.info;
+    part.name = t.name;
+    part.inputDelays = t.inputDelay;
+    part.outputLatencies = t.outputLatencies;
+    part.muxConfigs = t.muxConfigs;
+    return part;
   });
   
-  // Merge everything back into a single unique view.
-  Array<InstanceInfo> unique = result.infos[0];
-  result.baseInfo = PushArray<InstanceInfo>(out,unique.size);
-  for(int i = 0; i < result.baseInfo.size; i++){
-    result.baseInfo[i] = unique[i]; // Copy default values
-
-    result.baseInfo[i].belongs = true; // All units belong to baseInfo
-    result.baseInfo[i].baseName = result.baseInfo[i].name;
-    
-    for(Array<InstanceInfo> infos : result.infos){
-      if(infos[i].configPos.has_value()){
-        result.baseInfo[i].configPos = infos[i].configPos.value();
-        break;
-      }
-    }
-    for(Array<InstanceInfo> infos : result.infos){
-      if(infos[i].statePos.has_value()){
-        result.baseInfo[i].statePos = infos[i].statePos.value();
-        break;
-      }
-    }
-    for(Array<InstanceInfo> infos : result.infos){
-      if(infos[i].memMapped.has_value()){
-        result.baseInfo[i].memMapped = infos[i].memMapped.value();
-        break;
-      }
-    }
-    for(Array<InstanceInfo> infos : result.infos){
-      if(infos[i].memMappedSize.has_value()){
-        result.baseInfo[i].memMappedSize = infos[i].memMappedSize.value();
-        break;
-      }
-    }
-    for(Array<InstanceInfo> infos : result.infos){
-      if(infos[i].memMappedBitSize.has_value()){
-        result.baseInfo[i].memMappedBitSize = infos[i].memMappedBitSize.value();
-        break;
-      }
-    }
-    for(Array<InstanceInfo> infos : result.infos){
-      if(infos[i].memMappedMask.has_value()){
-        result.baseInfo[i].memMappedMask = infos[i].memMappedMask.value();
-        break;
-      }
-    }
-    for(Array<InstanceInfo> infos : result.infos){
-      if(infos[i].delayPos.has_value()){
-        result.baseInfo[i].delayPos = infos[i].delayPos.value();
-        break;
-      }
-    }
-  }
+  result.baseInfo = CalculateInstanceInfoTest(accel,globalPermanent,temp);
 
 #if 1
-  //DEBUG_BREAK();
+  AccelInfo temp2 = result;
+  temp2.infos = PushArray<MergePartition>(globalPermanent,result.infos.size);
   
-  // MARKED2
-  Array<InstanceInfo> test2 = CalculateInstanceInfoTest(accel,globalPermanent,temp);
-  result.baseInfo = test2;
+  temp2.baseInfo = CalculateInstanceInfoTest(accel,globalPermanent,temp);
+  AccelInfoIterator iter = StartIteration(&temp2);
+
+  if(iter.MergeSize() > 1){
+    for(int i = 0; i < iter.MergeSize(); i++){
+      temp2.infos[i] = result.infos[i];
+      temp2.infos[i].info = GenerateInitialInstanceInfo(accel,globalPermanent,temp);
+      
+      iter.mergeIndex = i;
+    
+      CalculateInstanceInfoTest(iter,accel,globalPermanent,temp);
+    }
+  } else {
+    temp2.infos[0] = result.infos[0];
+    temp2.infos[0].info = temp2.baseInfo;
+    
+#if 0
+    DEBUG_BREAK();
+    temp2.infos[0].info = GenerateInitialInstanceInfo(accel,globalPermanent,temp);
+    for(InstanceInfo& f : temp2.infos[0].info){
+      f.belongs = true;
+    }
+    iter.mergeIndex = 0;
+    CalculateInstanceInfoTest(iter,accel,globalPermanent,temp);
+#endif
+  }
+
+  //DEBUG_BREAK();
+  result = temp2;
+  //DEBUG_BREAK();
 #else 
   Array<InstanceInfo> test2 = CalculateInstanceInfoTest(accel,globalPermanent,temp);
+  result.baseInfo = test2;
 #endif
     
-  result.memMappedBitsize = totalMaxBitsize;
+  //result.memMappedBitsize = totalMaxBitsize;
 
   std::vector<bool> seenShared;
-
-  Hashmap<StaticId,int>* staticSeen = PushHashmap<StaticId,int>(temp,1000);
 
   int memoryMappedDWords = 0;
 
@@ -1404,7 +1781,6 @@ AccelInfo CalculateAcceleratorInfo(Accelerator* accel,bool recursive,Arena* out,
 
     if(type->externalMemory.size){
       result.externalMemoryInterfaces += type->externalMemory.size;
-	  result.externalMemoryByteSize = ExternalMemoryByteSize(type->externalMemory);
     }
 
     result.signalLoop |= type->signalLoop;
@@ -1428,6 +1804,7 @@ AccelInfo CalculateAcceleratorInfo(Accelerator* accel,bool recursive,Arena* out,
     }
   }
 
+  Hashmap<StaticId,int>* staticSeen = PushHashmap<StaticId,int>(temp,1000);
   // Handle static information
   for(FUInstance* ptr : accel->allocated){
     FUInstance* inst = ptr;
@@ -1523,27 +1900,6 @@ void CheckSanity(Array<InstanceInfo> instanceInfo,Arena* temp){
     }
 #endif    
   }
-}
-
-void PrintConfigurations(FUDeclaration* type,Arena* temp){
-  ConfigurationInfo& info = type->configInfo[0];
-
-  printf("Config:\n");
-  for(Wire& wire : info.configs){
-    BLOCK_REGION(temp);
-
-    String str = Repr(&wire,temp);
-    printf("%.*s\n",UNPACK_SS(str));
-  }
-
-  printf("State:\n");
-  for(Wire& wire : info.states){
-    BLOCK_REGION(temp);
-
-    String str = Repr(&wire,temp);
-    printf("%.*s\n",UNPACK_SS(str));
-  }
-  printf("\n");
 }
 
 // HACK
@@ -1844,7 +2200,6 @@ AccelInfo CalculateAcceleratorInfoNoDelay(Accelerator* accel,bool recursive,Aren
 
   int totalMaxBitsize = 0;
   ArenaList<TestResult>* list = PushArenaList<TestResult>(temp);
-  Array<InstanceInfo> res = {};
   InstanceConfigurationOffsets subOffsets = {};
   bool first = true;
   int index = 0;
@@ -1853,7 +2208,6 @@ AccelInfo CalculateAcceleratorInfoNoDelay(Accelerator* accel,bool recursive,Aren
     *PushListElement(list) = res2;
 
     if(first){
-      res = res2.info;
       subOffsets = res2.subOffsets;
     }
   
@@ -1907,87 +2261,51 @@ AccelInfo CalculateAcceleratorInfoNoDelay(Accelerator* accel,bool recursive,Aren
   Array<TestResult> final = PushArrayFromList(out,list);
 
   result.infos = Map(final,out,[](TestResult t){
-    return t.info;
-  });
-  result.names = Map(final,out,[](TestResult t){
-    return t.name;
-  });
-  result.inputDelays = Map(final,out,[](TestResult t){
-    return t.inputDelay;
-  });
-  result.outputDelays = Map(final,out,[](TestResult t){
-    return t.outputLatencies;
-  });
-  result.muxConfigs = Map(final,out,[](TestResult t){
-    return t.muxConfigs;
+    MergePartition part = {};
+    part.info = t.info;
+    part.name = t.name;
+    part.inputDelays = t.inputDelay;
+    part.outputLatencies = t.outputLatencies;
+    part.muxConfigs = t.muxConfigs;
+    return part;
   });
   
-  // Merge everything back into a single unique view.
-  Array<InstanceInfo> unique = result.infos[0];
-  result.baseInfo = PushArray<InstanceInfo>(out,unique.size);
-  for(int i = 0; i < result.baseInfo.size; i++){
-    result.baseInfo[i] = unique[i]; // Copy default values
+  result.baseInfo = CalculateInstanceInfoTest(accel,globalPermanent,temp);
+
+#if 1
+  AccelInfo temp2 = result;
+  temp2.infos = PushArray<MergePartition>(globalPermanent,result.infos.size);
+
+  temp2.baseInfo = CalculateInstanceInfoTest(accel,globalPermanent,temp);
+  AccelInfoIterator iter = StartIteration(&temp2);
+
+  if(iter.MergeSize() > 1){
+    for(int i = 0; i < iter.MergeSize(); i++){
+      temp2.infos[i] = result.infos[i];
+      temp2.infos[i].info = GenerateInitialInstanceInfo(accel,globalPermanent,temp);
     
-    result.baseInfo[i].belongs = true; // All units belong to baseInfo
-    result.baseInfo[i].baseName = result.baseInfo[i].name;
+      iter.mergeIndex = i;
     
-    for(Array<InstanceInfo> infos : result.infos){
-      if(infos[i].configPos.has_value()){
-        result.baseInfo[i].configPos = infos[i].configPos.value();
-        break;
-      }
+      CalculateInstanceInfoTest(iter,nullptr,globalPermanent,temp);
     }
-    for(Array<InstanceInfo> infos : result.infos){
-      if(infos[i].statePos.has_value()){
-        result.baseInfo[i].statePos = infos[i].statePos.value();
-        break;
-      }
-    }
-    for(Array<InstanceInfo> infos : result.infos){
-      if(infos[i].memMapped.has_value()){
-        result.baseInfo[i].memMapped = infos[i].memMapped.value();
-        break;
-      }
-    }
-    for(Array<InstanceInfo> infos : result.infos){
-      if(infos[i].memMappedSize.has_value()){
-        result.baseInfo[i].memMappedSize = infos[i].memMappedSize.value();
-        break;
-      }
-    }
-    for(Array<InstanceInfo> infos : result.infos){
-      if(infos[i].memMappedBitSize.has_value()){
-        result.baseInfo[i].memMappedBitSize = infos[i].memMappedBitSize.value();
-        break;
-      }
-    }
-    for(Array<InstanceInfo> infos : result.infos){
-      if(infos[i].memMappedMask.has_value()){
-        result.baseInfo[i].memMappedMask = infos[i].memMappedMask.value();
-        break;
-      }
-    }
-    for(Array<InstanceInfo> infos : result.infos){
-      if(infos[i].delayPos.has_value()){
-        result.baseInfo[i].delayPos = infos[i].delayPos.value();
-        break;
-      }
-    }
+  } else {
+    temp2.infos[0] = result.infos[0];
+    temp2.infos[0].info = temp2.baseInfo;
+
+#if 0
+    temp2.infos[0].info = GenerateInitialInstanceInfo(accel,globalPermanent,temp);
+    iter.mergeIndex = 0;
+    CalculateInstanceInfoTest(iter,accel,globalPermanent,temp);
+#endif
   }
 
-  //region(temp){
-#if 1
-  // MARKED2
-  Array<InstanceInfo> test2 = CalculateInstanceInfoTest(accel,globalPermanent,temp);
-  result.baseInfo = test2;
+  result = temp2;
   //DEBUG_BREAK();
 #else 
   Array<InstanceInfo> test2 = CalculateInstanceInfoTest(accel,globalPermanent,temp);
-  //DEBUG_BREAK();
+  result.baseInfo = test2;
 #endif
   
-  result.memMappedBitsize = totalMaxBitsize;
-
   std::vector<bool> seenShared;
 
   Hashmap<StaticId,int>* staticSeen = PushHashmap<StaticId,int>(temp,1000);
@@ -2032,7 +2350,6 @@ AccelInfo CalculateAcceleratorInfoNoDelay(Accelerator* accel,bool recursive,Aren
 
     if(type->externalMemory.size){
       result.externalMemoryInterfaces += type->externalMemory.size;
-	  result.externalMemoryByteSize = ExternalMemoryByteSize(type->externalMemory);
     }
 
     result.signalLoop |= type->signalLoop;
@@ -2042,7 +2359,6 @@ AccelInfo CalculateAcceleratorInfoNoDelay(Accelerator* accel,bool recursive,Aren
 
   FUInstance* outputInstance = GetOutputInstance(&accel->allocated);
   if(outputInstance){
-    //FOREACH_LIST(Edge*,edge,accel->edges){
     EdgeIterator iter = IterateEdges(accel);
     while(iter.HasNext()){
       Edge edgeInst = iter.Next();

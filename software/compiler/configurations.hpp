@@ -32,7 +32,6 @@ struct InstanceInfo{
   FUDeclaration* parent; // D
   String fullName; // D
   bool isMergeMultiplexer; // D
-  //int mergeMultiplexerId; // D
   bool belongs; // D
   int special; // D
   int order; // Missing for now
@@ -68,31 +67,42 @@ struct InstanceConfigurationOffsets{
 struct TestResult{
   Array<InstanceInfo> info;
   InstanceConfigurationOffsets subOffsets;
-  Array<PortInstance> multiplexersPorts;
   String name;
   Array<int> muxConfigs;
   Array<int> inputDelay;
   Array<int> outputLatencies;
-  int mergeIndex;
 };
+
+struct MergePartition{
+  String name;
+  Array<InstanceInfo> info;
+
+  FUDeclaration* baseType;
+  AcceleratorMapping* mapping; // Maps from base type flattened to merged type baseCircuit
+  Set<PortInstance>*  mergeMultiplexers;
+
+  // TODO: All these are useless. We can just store the data in the units themselves.
+  Array<int> inputDelays;
+  Array<int> outputLatencies;
+  Array<int> muxConfigs; // TODO: Remove this. The data should be stored inside the mux Instance Info that it belongs to
+};
+
+// TODO: A lot of values are repeated between merge partitions and the like. Not a problem for now, maybe tackle it when things become stable. Or maybe leave it be, could be easier in future if we want to implement something more complex.
 
 struct AccelInfo{
   // An array that abstracts all the common values of any merge type into a single one. Code that does not care about dealing with merge types can access this data
-  Array<InstanceInfo> baseInfo;
+  Array<InstanceInfo> baseInfo; // This shit is already giving errors and causing bugs.
 
-  // Each array contains one value for each merge type.
-  Array<Array<InstanceInfo>> infos; // Should join names with infos
+  // The problem is how to go to remove baseInfo without spending too much time.
 
-  // Data of the accelerator "circuit" for each merge configuration.
-  // Depending on the type of the merge, the accelerator can have different latencies.
-  Array<String> names; // Merge type names
-  Array<Array<int>> inputDelays;
-  Array<Array<int>> outputDelays;
-  Array<Array<int>> muxConfigs; // The values that the multiplexer instances must be configured to in order to enable the datapath associated to the type 
+  // At the same time, I do not want to rewrite the struct generation code, because I eventually want to replace it with something better.
+
+  // The problem is that the "something" better requires better data, which I want to put inside the AccelInfo struct.
+
+  // 
   
-  int memMappedBitsize;
-  int howManyMergedUnits;
-  
+  Array<MergePartition> infos;
+    
   int inputs;
   int outputs;
 
@@ -104,8 +114,6 @@ struct AccelInfo{
   int staticBits;
   int sharedUnits;
   int externalMemoryInterfaces;
-  int externalMemoryByteSize;
-  int numberUnits;
   int numberConnections;
   
   int memoryMappedBits;
@@ -149,6 +157,33 @@ struct TypeAndNameOnly{
 
 // TODO: Since we are now following a design where we store all the information that we want in a table, maybe there is a better way of handling this portion. If all the functions that perform different computations worked from the data present in the table, the we could just pass the appropriate table and not have to deal with Partitions.
 //       Need to first see which functions depend on this approach, after cleaning up the code with the changes introduced by the table approach, and then take a second look at this.s
+
+//       The problem is that the table gives a global view of the entire configuration space, but partitions is used to give a local view of the global configuration for a given type.
+//       We first would need to change from a Array<Array<InstanceInfo>> to Array<SomeStruct> so that we could store data associated to each 
+
+// Maybe the solution would be to move the Partition logic to the AccelInfoIterator? 
+// 
+
+// NOTE: I do not want partitions. I do not want the need to have this logic being passed around while being hard to reason about it.
+
+// What I actually want is to get the indexes where a given merge unit is activated.
+// If we have 2 merge indexes, and I'm in the merge unit, I should get (0) and (1).
+// If we have 4 merge indexes, and I'm in the merge unit, I should get (0,1) and (2,3).
+//    If we then go inside the first one, and we arrive at the other merge unit, should get (0) and (1).
+//    Basically, if I'm looking at a merge unit, should get the indexes at which the unit is active.
+
+// The problem is how to handle this when going to do the generation part.
+// Do we need partitions for calculating the accelerator info of merged entities?
+// Our is it possible to generate everything beforehand, including data that allow us to simplify the process?
+
+// The thing about indexes, is that they only exist because of modules.
+// It is the fact that modules can instantiate merge units.
+// It is instantiation that leads to multiplication of the merges indexes.
+//    And instantiation does not change the values that we care about, right? Especially for the structure generation.
+// That means that if we merge 4 types, then we only need to care about 4 types. Does not matter that throught modules we might end up with 16 or 32 or any combination of numbers, we only need to look at 4 different types to generate the structures that we need, right?.
+
+// Regardless, need to start dealing with this stuff now, otherwise cannot progress. 
+
 struct Partition{
   int value;
   int max;
@@ -189,6 +224,4 @@ struct OrderedConfigurations{
 Array<InstanceInfo> ExtractFromInstanceInfoSameLevel(Array<InstanceInfo> instanceInfo,int level,Arena* out);
 
 void CheckSanity(Array<InstanceInfo> instanceInfo,Arena* temp);
-
-void PrintConfigurations(FUDeclaration* type,Arena* temp);
 

@@ -23,8 +23,8 @@ module versat_configurations #(
    parameter AXI_DATA_W = @{arch.databusDataSize},
    parameter LEN_W = 20
 )(
-   #{if versatValues.configurationBits}
-   output [@{versatValues.configurationBits-1}:0] config_data_o,
+   #{if configurationBits}
+   output [@{configurationBits-1}:0] config_data_o,
    #{else}
    // No output, accelerator does not contain configuration bits
    #{end}
@@ -48,10 +48,10 @@ module versat_configurations #(
 // Shadow -> Compute -> Config : for Compute stage  
 // Shadow -> Write -> Compute -> Config : for Write stage
 
-reg [@{versatValues.configurationBits-1}:0] configdata;
+reg [@{configurationBits-1}:0] configdata;
 
 #{if opts.shadowRegister}
-reg [@{versatValues.configurationBits-1}:0] shadow_configdata;
+reg [@{configurationBits-1}:0] shadow_configdata;
 #{end}
 
 assign config_data_o = configdata;
@@ -70,7 +70,7 @@ reg [@{wire.bitSize-1}:0] Write_@{wire.name};
     #{end}
 #{end}
 
-#{if versatValues.configurationBits}
+#{if configurationBits}
 // Shadow writing
 always @(posedge clk_i,posedge rst_i)
 begin
@@ -78,7 +78,7 @@ begin
       shadow_configdata <= {@{configurationBits}{1'b0}};
    end else if(data_write & !memoryMappedAddr) begin
       #{for info wireInfo}
-      if(address[@{versatValues.configurationAddressBits + 1}:0] == @{info.addr}) begin // @{info.addr|> Hex} @{info.wire.name}
+      if(address[@{configurationAddressBits + 1}:0] == @{info.addr}) begin // @{info.addr|> Hex} @{info.wire.name}
       #{call handleStrobe "data_wstrb" "shadow_configdata" info.wire.bitSize info.configBitStart "data_data"}
       end
       #{end}

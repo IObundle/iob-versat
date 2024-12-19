@@ -654,6 +654,9 @@ DAGOrderNodes CalculateDAGOrder(Pool<FUInstance>* instances,Arena* out){
 }
 
 bool IsUnitCombinatorial(FUInstance* instance){
+  NOT_IMPLEMENTED("Implement if needed after AccelInfo change");
+  return {};
+#if 0
   FUDeclaration* type = instance->declaration;
 
   // TODO: Could check if it's a multiple type situation and check each one to make sure.
@@ -664,6 +667,7 @@ bool IsUnitCombinatorial(FUInstance* instance){
   }
 
   return true;
+#endif
 }
 
 Array<DelayToAdd> GenerateFixDelays(Accelerator* accel,EdgeDelay* edgeDelays,Arena* out,Arena* temp){
@@ -919,15 +923,19 @@ int ExternalMemoryByteSize(Array<ExternalMemoryInterface> interfaces){
   return size;
 }
 
-VersatComputedValues ComputeVersatValues(Accelerator* accel,bool useDMA){
+VersatComputedValues ComputeVersatValues(AccelInfo* info,bool useDMA){
   VersatComputedValues res = {};
 
   int memoryMappedDWords = 0;
-  for(FUInstance* ptr : accel->allocated){
-    FUInstance* inst = ptr;
+  int delayBits = 0;
+  int configBits = 0;
+
+  // TODO: Check if we can remove the for loop over units and check if we can calculate from data stored in AccelInfo
+  for(AccelInfoIterator iter = StartIteration(info); iter.IsValid(); iter = iter.Next()){
+    FUInstance* inst = iter.CurrentUnit()->inst;
     FUDeclaration* decl = inst->declaration;
 
-    res.numberConnections += Size(ptr->allOutputs);
+    res.numberConnections += Size(inst->allOutputs);
 
     if(decl->memoryMapBits.has_value()){
       memoryMappedDWords = AlignBitBoundary(memoryMappedDWords,decl->memoryMapBits.value());
@@ -938,7 +946,7 @@ VersatComputedValues ComputeVersatValues(Accelerator* accel,bool useDMA){
 
     res.nConfigs += decl->baseConfig.configs.size;
     for(Wire& wire : decl->baseConfig.configs){
-      res.configBits += wire.bitSize;
+      configBits += wire.bitSize;
     }
 
     res.nStates += decl->baseConfig.states.size;
@@ -947,24 +955,20 @@ VersatComputedValues ComputeVersatValues(Accelerator* accel,bool useDMA){
     }
 
     res.nDelays += decl->baseConfig.delayOffsets.max;
-    res.delayBits += decl->baseConfig.delayOffsets.max * 32;
+    delayBits += decl->baseConfig.delayOffsets.max * 32;
 
     res.nUnitsIO += decl->nIOs;
 
     res.externalMemoryInterfaces += decl->externalMemory.size;
-    res.signalLoop |= decl->signalLoop;
+    //res.signalLoop |= decl->signalLoop;
   }
+
+  int staticBits = 0;
+  res.nStatics = info->statics;
+  staticBits = info->staticBits;
   
-  region(debugArena){
-    Arena temp = SubArena(debugArena,debugArena->totalAllocated / 2);
-    AccelInfo info = CalculateAcceleratorInfo(accel,true,debugArena,&temp);
-    
-    res.nStatics = info.statics;
-    res.staticBits = info.staticBits;
-  }
-  
-  res.staticBitsStart = res.configBits;
-  res.delayBitsStart = res.staticBitsStart + res.staticBits;
+  int staticBitsStart = configBits;
+  res.delayBitsStart = staticBitsStart + staticBits;
 
   // Versat specific registers are treated as a special maping (all 0's) of 1 configuration and 1 state register
   res.versatConfigs = 1;
@@ -980,18 +984,19 @@ VersatComputedValues ComputeVersatValues(Accelerator* accel,bool useDMA){
   res.nConfigs += res.versatConfigs;
   res.nStates += res.versatStates;
 
-  res.nConfigurations = res.nConfigs + res.nStatics + res.nDelays;
-  res.configurationBits = res.configBits + res.staticBits + res.delayBits;
+  int nConfigurations = res.nConfigs + res.nStatics + res.nDelays;
+  res.configurationBits = configBits + staticBits + delayBits;
 
   res.memoryMappedBytes = memoryMappedDWords * 4;
   res.memoryAddressBits = log2i(memoryMappedDWords);
 
-  res.memoryMappingAddressBits = res.memoryAddressBits;
-  res.configurationAddressBits = log2i(res.nConfigurations);
+  res.configurationAddressBits = log2i(nConfigurations);
   res.stateAddressBits = log2i(res.nStates);
-  res.stateConfigurationAddressBits = std::max(res.configurationAddressBits,res.stateAddressBits);
 
-  res.memoryConfigDecisionBit = std::max(res.stateConfigurationAddressBits,res.memoryMappingAddressBits) + 2;
+  int memoryMappingAddressBits = res.memoryAddressBits;
+  int stateConfigurationAddressBits = std::max(res.configurationAddressBits,res.stateAddressBits);
+
+  res.memoryConfigDecisionBit = std::max(stateConfigurationAddressBits,memoryMappingAddressBits) + 2;
   
   return res;
 }

@@ -369,7 +369,7 @@ wire[@{unitsMapped - 1}:0] unitRValid;
 assign wor_rvalid = (|unitRValid);
 #{end}
 
-#{if versatValues.numberConnections}
+#{if numberConnections}
 wire [31:0] #{join ", " node instances} #{set id index}
    #{join ", "  j node.outputs} #{if j} output_@{id}_@{index} #{end} #{end}
 #{end};
@@ -397,8 +397,8 @@ begin
 end
 #{end}
 
-#{if versatValues.configurationBits}
-wire [@{versatValues.configurationBits-1}:0] configdata;
+#{if configurationBits}
+wire [@{configurationBits-1}:0] configdata;
 
 versat_configurations configs(
    .config_data_o(configdata),                 
@@ -417,7 +417,7 @@ versat_configurations configs(
 );
 #{end}
 
-#{if versatValues.stateBits} wire [@{versatValues.stateBits - 1}:0] statedata; #{end}
+#{if stateBits} wire [@{stateBits - 1}:0] statedata; #{end}
 
 // State reading
 always @*
@@ -430,7 +430,7 @@ begin
       #{set inst node}
       #{set decl inst.declaration}
       #{for wire decl.baseConfig.states}
-      if(addr[@{versatValues.stateAddressBits + 1}:0] >= @{addr * 4} && addr[@{versatValues.stateAddressBits + 1}:0] < @{(addr + 1) * 4}) // @{addr * 4 |> Hex}
+      if(addr[@{stateAddressBits + 1}:0] >= @{addr * 4} && addr[@{stateAddressBits + 1}:0] < @{(addr + 1) * 4}) // @{addr * 4 |> Hex}
          stateRead = statedata[@{counter}+:@{wire.bitSize}];
       #{inc addr}
       #{set counter counter + wire.bitSize}

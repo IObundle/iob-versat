@@ -2,6 +2,7 @@
 
 #include <cstdio>
 
+#include "configurations.hpp"
 #include "accelerator.hpp"
 #include "verilogParsing.hpp"
 
@@ -65,7 +66,6 @@ struct ConfigurationInfo{
   // Copy of MergeInfo
   String name;
   Array<String> baseName;
-  FUDeclaration* baseType;
 
   // TODO: These should not be here, the wires will always be the same regardless of unit type 
   Array<Wire> configs;
@@ -80,8 +80,6 @@ struct ConfigurationInfo{
   CalculatedOffsets   delayOffsets;
   Array<int>          calculatedDelays;
   Array<int>          order;
-  AcceleratorMapping* mapping; // Maps from base type flattened to merged type baseCircuit
-  Set<PortInstance>*  mergeMultiplexers; // On merged fixedDelayCircuit. "baseCircuit"
   Array<bool>         unitBelongs;
   
   Array<int>          mergeMultiplexerConfigs;
@@ -102,6 +100,10 @@ enum FUDeclarationType{
 struct FUDeclaration{
   String name;
 
+  // These always exist, regardless of merge info 
+  Array<Wire> configs;
+  Array<Wire> states;
+
   ConfigurationInfo baseConfig;
   Array<ConfigurationInfo> configInfo; // Info for each merged view for all fixedDelayCircuit instances, even if they do not belong to the merged view (unitBelongs indicates such cases)
 
@@ -111,8 +113,10 @@ struct FUDeclaration{
   // TODO2: Because merge permeates the entire logic, there is no point having a different member to store data.
   //        baseConfig and configInfo should have been always just configInfo, with a size of 1 if no merge and non 1 if merge.
   //        We carried the same problem for AccelInfo, where we have a baseInfo and the merged infos, but in reality we should have only one member.
+
+  AccelInfo info;
   
-  Array<InstanceInfo> instanceInfo;
+  //Array<InstanceInfo> instanceInfo;
   
   Array<String> parameters; // For now, only the parameters extracted from verilog files
   
@@ -151,6 +155,9 @@ struct FUDeclaration{
   // Simple access functions
   int NumberInputs(){return baseConfig.inputDelays.size;};
   int NumberOutputs(){return baseConfig.outputLatencies.size;};
+  int NumberConfigs(){return baseConfig.configs.size;}
+  int NumberStates(){return baseConfig.states.size;}
+  int NumberDelays(){return baseConfig.delayOffsets.max;};
 };
 
 // Simple operations should also be stored here.
