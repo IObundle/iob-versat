@@ -45,7 +45,7 @@ VERSAT_DEFINE += -DPC
 
 # -rdynamic - used to allow backtraces
 $(BUILD_DIR)/%.o : $(VERSAT_COMMON_DIR)/%.cpp
-	-g++ $(VERSAT_DEFINE) -MMD -rdynamic $(VERSAT_COMMON_FLAGS) -std=c++17 -c -o $@ -DROOT_PATH=\"$(abspath ../)\" -DVERSAT_DEBUG $(GLOBAL_CFLAGS) $< $(VERSAT_COMMON_INCLUDE)
+	g++ $(VERSAT_DEFINE) -rdynamic $(VERSAT_COMMON_FLAGS) -std=c++17 -c -o $@ -DROOT_PATH=\"$(abspath ../)\" -DVERSAT_DEBUG $(GLOBAL_CFLAGS) $< $(VERSAT_COMMON_INCLUDE)
 
 VERSAT_TEMPLATES:=$(wildcard $(VERSAT_TEMPLATE_DIR)/*.tpl)
 VERSAT_TEMPLATES_OBJ:=$(BUILD_DIR)/templateData.o
@@ -101,31 +101,33 @@ $(BUILD_DIR)/templateData.hpp $(BUILD_DIR)/templateData.cpp &: $(VERSAT_TEMPLATE
 	$(BUILD_DIR)/embedFile $(BUILD_DIR)/templateData $(VERSAT_TEMPLATES)
 
 $(BUILD_DIR)/templateData.o: $(BUILD_DIR)/templateData.cpp $(BUILD_DIR)/templateData.hpp
-	-g++ -DPC -std=c++17 -MMD -MP -DVERSAT_DEBUG -DSTANDALONE -c -o $@ -g $(VERSAT_COMMON_INCLUDE) $<
+	g++ -DPC -std=c++17 -MMD -MP -DVERSAT_DEBUG -DSTANDALONE -c -o $@ -g $(VERSAT_COMMON_INCLUDE) $<
 
 $(BUILD_DIR)/embedFile: $(VERSAT_TOOLS_DIR)/embedFile.cpp $(VERSAT_COMMON_OBJ_NO_TYPE)
-	-g++ -DPC -std=c++17 -MMD -MP -DVERSAT_DEBUG -DSTANDALONE -o $@ $(VERSAT_COMMON_FLAGS) $(VERSAT_COMMON_INCLUDE) $< $(VERSAT_COMMON_OBJ_NO_TYPE)
+	g++ -DPC -std=c++17 -MMD -MP -DVERSAT_DEBUG -DSTANDALONE -o $@ $(VERSAT_COMMON_FLAGS) $(VERSAT_COMMON_INCLUDE) $< $(VERSAT_COMMON_OBJ_NO_TYPE)
+
+$(BUILD_DIR)/calculateHash: $(VERSAT_TOOLS_DIR)/calculateHash.cpp $(VERSAT_COMMON_OBJ_NO_TYPE)
+	g++ -DPC -std=c++17 -MMD -MP -DVERSAT_DEBUG -DSTANDALONE -o $@ $(VERSAT_COMMON_FLAGS) $(VERSAT_COMMON_INCLUDE) $< $(VERSAT_COMMON_OBJ_NO_TYPE)
 
 $(BUILD_DIR)/autoRepr.cpp $(BUILD_DIR)/autoRepr.hpp $(BUILD_DIR)/typeInfo.cpp: $(TYPE_INFO_HDR)
 	python3 $(VERSAT_TOOLS_DIR)/structParser.py $(BUILD_DIR) $(TYPE_INFO_HDR)
 
 $(BUILD_DIR)/typeInfo.o: $(BUILD_DIR)/typeInfo.cpp
-	-g++ -DPC -MMD -MP -std=c++17 $(VERSAT_COMMON_FLAGS) -c -o $@ $(GLOBAL_CFLAGS) $< $(VERSAT_INCLUDE)
-
-#$(BUILD_DIR)/autoRepr.o: $(BUILD_DIR)/autoRepr.cpp
-#	-g++ -DPC -MMD -MP -std=c++17 $(VERSAT_COMMON_FLAGS) -c -o $@ $(GLOBAL_CFLAGS) $< $(VERSAT_INCLUDE)
+	g++ -DPC -std=c++17 $(VERSAT_COMMON_FLAGS) -c -o $@ $(GLOBAL_CFLAGS) $< $(VERSAT_INCLUDE)
 
 $(BUILD_DIR)/%.o : $(VERSAT_COMPILER_DIR)/%.cpp $(BUILD_DIR)/templateData.hpp $(BUILD_DIR)/autoRepr.hpp
-	-g++ -MMD -MP -std=c++17 $(VERSAT_FLAGS) $(FL) $(VERSAT_COMMON_FLAGS) -c -o $@ $(GLOBAL_CFLAGS) $< $(VERSAT_INCLUDE) #-DDEFAULT_UNIT_PATHS="$(SHARED_UNITS_PATH)" 
+	g++ -MMD -std=c++17 $(VERSAT_FLAGS) $(FL) $(VERSAT_COMMON_FLAGS) -c -o $@ $(GLOBAL_CFLAGS) $< $(VERSAT_INCLUDE) #-DDEFAULT_UNIT_PATHS="$(SHARED_UNITS_PATH)" 
 
 $(shell mkdir -p $(BUILD_DIR))
 
 $(VERSAT_DIR)/versat: $(CPP_OBJ) 
-	-g++ -MMD -MP -std=c++17 $(FL) $(VERSAT_FLAGS) -o $@ $(VERSAT_COMMON_FLAGS) $(CPP_OBJ) $(VERSAT_INCLUDE) $(VERSAT_LIBS) 
+	g++ -MMD -std=c++17 $(FL) $(VERSAT_FLAGS) -o $@ $(VERSAT_COMMON_FLAGS) $(CPP_OBJ) $(VERSAT_INCLUDE) $(VERSAT_LIBS) 
 
 embedFile: $(BUILD_DIR)/templateData.hpp
 
-versat: $(VERSAT_DIR)/versat
+calculateHash: $(BUILD_DIR)/calculateHash
+
+versat: $(VERSAT_DIR)/versat $(BUILD_DIR)/calculateHash
 
 type-info: $(TYPE_INFO_HDR) $(BUILD_DIR)/autoRepr.cpp $(BUILD_DIR)/autoRepr.hpp $(BUILD_DIR)/typeInfo.cpp
 

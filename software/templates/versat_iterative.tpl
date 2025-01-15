@@ -228,7 +228,7 @@ end
          #{end}
 
          #{else}
-         #{set configStart accel.baseConfig.configOffsets.offsets[id]}
+         #{set configStart topLevel[id].configPos.val}
          #{for wire decl.configs}
          .@{wire.name}(@{accel.configs[configStart + index].name}), // @{configStart + index}
          #{end}

@@ -28,17 +28,13 @@ static FUDeclaration* RegisterCircuitInput(){
   FUDeclaration decl = {};
 
   decl.name = STRING("CircuitInput");
-  
-  // Eventually remove theses.
-  decl.baseConfig.inputDelays = Array<int>{zeros,0};
-  decl.baseConfig.outputLatencies = Array<int>{zeros,1};
 
   decl.configInfo = PushArray<ConfigurationInfo>(globalPermanent,1);
   decl.info.infos = PushArray<MergePartition>(globalPermanent,1);
-  decl.configInfo[0].inputDelays = decl.baseConfig.inputDelays;
-  decl.configInfo[0].outputLatencies = decl.baseConfig.outputLatencies;
-  decl.info.infos[0].inputDelays = decl.configInfo[0].inputDelays;
-  decl.info.infos[0].outputLatencies = decl.configInfo[0].outputLatencies;
+  decl.configInfo[0].inputDelays = Array<int>{zeros,0};
+  decl.configInfo[0].outputLatencies = Array<int>{zeros,1};
+  decl.info.infos[0].inputDelays = Array<int>{zeros,0};
+  decl.info.infos[0].outputLatencies = Array<int>{zeros,1};
   
   decl.type = FUDeclarationType_SPECIAL;
   
@@ -50,15 +46,13 @@ static FUDeclaration* RegisterCircuitOutput(){
   FUDeclaration decl = {};
 
   decl.name = STRING("CircuitOutput");
-  decl.baseConfig.inputDelays = Array<int>{zeros,50};
-  decl.baseConfig.outputLatencies = Array<int>{zeros,0};
 
   decl.configInfo = PushArray<ConfigurationInfo>(globalPermanent,1);
   decl.info.infos = PushArray<MergePartition>(globalPermanent,1);
-  decl.configInfo[0].inputDelays = decl.baseConfig.inputDelays;
-  decl.configInfo[0].outputLatencies = decl.baseConfig.outputLatencies;
-  decl.info.infos[0].inputDelays = decl.configInfo[0].inputDelays;
-  decl.info.infos[0].outputLatencies = decl.configInfo[0].outputLatencies;
+  decl.configInfo[0].inputDelays = Array<int>{zeros,50};
+  decl.configInfo[0].outputLatencies = Array<int>{zeros,0};
+  decl.info.infos[0].inputDelays = Array<int>{zeros,50};
+  decl.info.infos[0].outputLatencies = Array<int>{zeros,0};
 
   decl.type = FUDeclarationType_SPECIAL;
 
@@ -70,8 +64,12 @@ static FUDeclaration* RegisterLiteral(){
   FUDeclaration decl = {};
 
   decl.name = STRING("Literal");
-  decl.baseConfig.outputLatencies = Array<int>{zeros,1};
 
+  decl.configInfo = PushArray<ConfigurationInfo>(globalPermanent,1);
+  decl.info.infos = PushArray<MergePartition>(globalPermanent,1);
+  decl.configInfo[0].outputLatencies = Array<int>{zeros,1};
+  decl.info.infos[0].outputLatencies = Array<int>{zeros,1};
+  
   return RegisterFU(decl);
 }
 
@@ -94,31 +92,28 @@ static void RegisterOperators(){
                          {"SHL","{0}_{1} = {2} << {3}"}};
 
   FUDeclaration decl = {};
-  decl.baseConfig.inputDelays = Array<int>{zeros,1};
-  decl.baseConfig.outputLatencies = Array<int>{zeros,1};
   decl.isOperation = true;
 
   for(unsigned int i = 0; i < ARRAY_SIZE(unary); i++){
     decl.configInfo = PushArray<ConfigurationInfo>(globalPermanent,1);
     decl.info.infos = PushArray<MergePartition>(globalPermanent,1);
-    decl.configInfo[0].inputDelays = decl.baseConfig.inputDelays;
-    decl.configInfo[0].outputLatencies = decl.baseConfig.outputLatencies;
-    decl.info.infos[0].inputDelays = decl.configInfo[0].inputDelays;
-    decl.info.infos[0].outputLatencies = decl.configInfo[0].outputLatencies;
+    decl.configInfo[0].inputDelays = Array<int>{zeros,1};
+    decl.configInfo[0].outputLatencies = Array<int>{zeros,1};
+    decl.info.infos[0].inputDelays = Array<int>{zeros,1};
+    decl.info.infos[0].outputLatencies = Array<int>{zeros,1};
 
     decl.name = STRING(unary[i].name);
     decl.operation = unary[i].operation;
     RegisterFU(decl);
   }
 
-  decl.baseConfig.inputDelays = Array<int>{zeros,2};
   for(unsigned int i = 0; i < ARRAY_SIZE(binary); i++){
     decl.configInfo = PushArray<ConfigurationInfo>(globalPermanent,1);
     decl.info.infos = PushArray<MergePartition>(globalPermanent,1);
-    decl.configInfo[0].inputDelays = decl.baseConfig.inputDelays;
-    decl.configInfo[0].outputLatencies = decl.baseConfig.outputLatencies;
-    decl.info.infos[0].inputDelays = decl.configInfo[0].inputDelays;
-    decl.info.infos[0].outputLatencies = decl.configInfo[0].outputLatencies;
+    decl.configInfo[0].inputDelays = Array<int>{zeros,2};
+    decl.configInfo[0].outputLatencies = Array<int>{zeros,1};
+    decl.info.infos[0].inputDelays = Array<int>{zeros,2};
+    decl.info.infos[0].outputLatencies = Array<int>{zeros,1};
 
     decl.name = STRING(binary[i].name);
     decl.operation = binary[i].operation;

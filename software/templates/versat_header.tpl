@@ -250,7 +250,6 @@ static inline void ActivateMergedAccelerator(MergeType type){
 #{end}
    }
 
-
    VersatLoadDelay(delayBuffers[asInt]);
 }
 

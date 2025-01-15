@@ -104,7 +104,7 @@ String Repr(PortInstance* inPort,PortInstance* outPort,GraphDotFormat format,Are
     PushString(out,"\\nLat:");
   }
   if(lat){
-    PushString(out,"%d",inPort->inst->declaration->baseConfig.outputLatencies[inPort->port]);
+    PushString(out,"%d",inPort->inst->declaration->GetOutputLatencies()[inPort->port]);
   }
 
   PushString(out,"\\n->\\n");
@@ -113,7 +113,7 @@ String Repr(PortInstance* inPort,PortInstance* outPort,GraphDotFormat format,Are
     PushString(out,"\\nLat:");
   }
   if(lat){
-    PushString(out,"%d",outPort->inst->declaration->baseConfig.inputDelays[outPort->port]);
+    PushString(out,"%d",outPort->inst->declaration->GetInputDelays()[outPort->port]);
   }
 
   String res = EndString(mark);

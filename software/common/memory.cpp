@@ -53,7 +53,7 @@ void CheckMemoryStats(){
 }
 
 void AlignArena(Arena* arena,int alignment){
-  int offset = arena->used % alignment; // TODO: Get alignment info as function parameter
+  int offset = arena->used % alignment;
 
   if(offset == 0){
     return;

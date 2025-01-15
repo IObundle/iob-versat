@@ -537,7 +537,7 @@ void RegisterTypes(){
   }
   registered = true;
 
-  permanentArena = InitArena(Kilobyte(32));
+  permanentArena = InitArena(Kilobyte(64));
 
   ValueType::NUMBER = REGISTER(int);
   ValueType::BOOLEAN = REGISTER(bool);

@@ -2081,7 +2081,6 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
   }
   
   // Corrects mapping to start on the flattened circuit instead of fixed 
-  DEBUG_BREAK();
   for(Set<PortInstance>*& s : mergeMultiplexers){
     Set<PortInstance>* flattenedSet = PushSet<PortInstance>(globalPermanent,s->map->nodesUsed);
 
@@ -2120,10 +2119,6 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
     auto res = ExtractInputDelays(recon[i],reconDelay[i],0,temp,temp2);
     numberInputs = std::max(res.size,numberInputs);
   }
-
-  // TODO: HACK. Because type inputs and outputs depend on size of baseConfig input/output, put first graph here. 
-  declInst.baseConfig.inputDelays = ExtractInputDelays(recon[0],reconDelay[0],numberInputs,globalPermanent,temp);
-  declInst.baseConfig.outputLatencies = ExtractOutputLatencies(recon[0],reconDelay[0],globalPermanent,temp);
 
   FUDeclaration* decl = RegisterFU(declInst);
   decl->type = FUDeclarationType_MERGED;
@@ -2179,12 +2174,12 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
     Memset(decl->configInfo[i].baseName,{});
   }
 
-#if 1
+#if 0
   for(int i = 0; i < size; i++){
     AcceleratorMapping* map = MappingInvert(reconToAccel[i],globalPermanent); //accelToRecon[i];
     
     decl->configInfo[i].configOffsets.offsets = PushArray<int>(globalPermanent,mergedUnitsAmount);
-    decl->configInfo[i].configOffsets.max = decl->baseConfig.configOffsets.max;
+//    decl->configInfo[i].configOffsets.max = decl->baseConfig.configOffsets.max;
 
     decl->configInfo[i].inputDelays = ExtractInputDelays(recon[i],reconDelay[i],numberInputs,globalPermanent,temp);
     decl->configInfo[i].outputLatencies = ExtractOutputLatencies(recon[i],reconDelay[i],globalPermanent,temp);
@@ -2382,8 +2377,6 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
       }
     }
   }
-  
-  DEBUG_BREAK();
   
   return decl;
 }

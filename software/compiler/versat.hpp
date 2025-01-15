@@ -72,9 +72,6 @@ void FixDelays(Accelerator* accel,Hashmap<Edge,DelayInfo>* edgeDelays,Arena* tem
 //DAGOrderNodes CalculateDAGOrder(FUInstance* instances,Arena* arena);
 DAGOrderNodes CalculateDAGOrder(Pool<FUInstance>* instances,Arena* arena);
 
-// Debug
-void AssertGraphValid(FUInstance* nodes,Arena* arena);
-
 // Misc
 bool CheckValidName(String name); // Check if name can be used as identifier in verilog
 bool IsTypeHierarchical(FUDeclaration* decl);

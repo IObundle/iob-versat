@@ -481,6 +481,14 @@ int main(int argc,char* argv[]){
   test->Insert(4,8);
   test->Insert(10,20);
 
+  auto test2 = PushArray<int>(perm,5);
+
+  test2[0] = 10;
+  test2[1] = 11;
+  test2[2] = 12;
+  test2[3] = 13;
+  test2[4] = 24;
+  
   DEBUG_BREAK();
 
   GenericHashmapIterator iter = IterateHashmap(test,sizeof(Pair<char,char>),alignof(Pair<char,char>));
@@ -489,9 +497,6 @@ int main(int argc,char* argv[]){
 
     printf("%d:%d\n",pair.first,pair.second);
   }
-
-  //return 0;
-  //LEFT HERE // The problem is that the order of memory calculations is different for accelerator and top unit. Probably because unit is still taking old code path, or the Delay/NoDelay differences. Need to see.
   
   argp argp = { options, parse_opt, "SpecFile", "Dataflow to accelerator compiler. Check tutorial in https://github.com/IObundle/iob-versat to learn how to write a specification file"};
 
@@ -709,7 +714,7 @@ int main(int argc,char* argv[]){
   }
 
   FUDeclaration* type = GetTypeByName(topLevelTypeStr);
-  if(!type && !CompareString(topLevelTypeStr,"VERSAT_RESERVED_ALL_UNITS")){ // TODO
+  if(!type && !CompareString(topLevelTypeStr,"VERSAT_RESERVED_ALL_UNITS")){
     printf("Did not find the top level type: %.*s\n",UNPACK_SS(topLevelTypeStr));
     return -1;
   }
@@ -718,7 +723,7 @@ int main(int argc,char* argv[]){
   FUInstance* TOP = nullptr;
 
   if(type) type->signalLoop = true;
-
+  
   if(CompareString(topLevelTypeStr,"VERSAT_RESERVED_ALL_UNITS")){
     accel = CreateAccelerator(STRING("allVersatUnits"),AcceleratorPurpose_MODULE);
     
@@ -749,7 +754,7 @@ int main(int argc,char* argv[]){
         }
       }
     }
-
+    
     type = RegisterSubUnit(accel,temp,temp2);
     type->signalLoop = true;
 
@@ -819,33 +824,6 @@ int main(int argc,char* argv[]){
     }
   }
 
-#if 0
-  // TODO: This should be slowly phased out, since we have better tools in the debugger than actually printing stuff inside the application
-  if(globalOptions.debug){
-    String path = PushDebugPath(temp,{},STRING("allDeclarations.txt"));
-    FILE* allDeclarations = OpenFile(path,"w",FilePurpose_DEBUG_INFO);
-    DEFER_CLOSE_FILE(allDeclarations);
-    for(FUDeclaration* decl : globalDeclarations){
-      BLOCK_REGION(temp);
-      
-      if(globalDebug.outputAcceleratorInfo && decl->fixedDelayCircuit){
-        BLOCK_REGION(temp2);
-        
-        String path = PushDebugPath(temp,decl->name,STRING("stats.txt"));
-
-        FILE* stats = OpenFileAndCreateDirectories(path,"w",FilePurpose_DEBUG_INFO);
-        DEFER_CLOSE_FILE(stats);
-
-        Accelerator* test = CreateAccelerator(STRING("TEST"),AcceleratorPurpose_TEMP);
-        CreateFUInstance(test,decl,STRING("TOP"));
-        AccelInfo info = CalculateAcceleratorInfo(test,true,temp,temp2);
-
-        //PrintRepr(stats,MakeValue(&info),temp,temp2);
-      }
-    }
-  }
-#endif
-  
   if(!SetParameter(TOP,STRING("AXI_ADDR_W"),STRING("AXI_ADDR_W"))){
     printf("Error\n");
   }
@@ -912,13 +890,36 @@ int main(int argc,char* argv[]){
   Array<String> allOutputLocations = PushArrayFromList(temp,allFilesOutputted);
 
   for(FileInfo f : CollectAllFilesInfo(temp)){
+    if(f.purpose == FilePurpose_VERILOG_INCLUDE && f.mode == FileOpenMode_WRITE){
+      printf("Filename: %.*s Type: VERILOG_INCLUDE\n",UNPACK_SS(f.filepath));
+    }
     if(f.purpose == FilePurpose_VERILOG_CODE && f.mode == FileOpenMode_WRITE){
-      PRINT_STRING(f.filepath);
+      printf("Filename: %.*s Type: VERILOG_CODE\n",UNPACK_SS(f.filepath));
     }
   }
   
   return 0;
 }
+
+/*
+
+What do I have to do next?
+
+We need to reconciliate the DelayCalculation function that operates normaly and the one that uses "partitions".
+Which basically means that we need to pass a AccelInfoIterator and to build DelayCalculation on top of that.
+ 
+What this means is that the flow is gonna be something like:
+  Create an AccelInfo.
+  Populate AccelInfo with all the info that we currently have (from subunits and the likes).
+  Call DelayCalculation with an iterator for that AccelInfo.
+  
+  We might need to store on InstanceInfo a member that is an array with inputDelays and outputLatencies. DelayCalculation needs to work directly from the AccelInfo information.
+
+Basically, the best way that I can see of integrating partition code is to use the AccelInfoIterator approach. 
+
+Still need to see how things play out with merge and the likes, but realistically I think that this is the best approach. Just stuff everything into a giant table, simplify the logic as much as possible while being easy to spot mistakes/bugs by inspecting the table.
+
+*/
 
 /*
 

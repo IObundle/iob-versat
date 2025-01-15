@@ -21,11 +21,11 @@ static void SendLatencyUpwards(FUInstance* node,EdgeDelay* delays,NodeDelay* nod
     // Do not set delay for source units. Source units cannot be found in this, otherwise they wouldn't be source
     Assert(other->type != NodeType_SOURCE);
 
-    int a = inst->declaration->baseConfig.outputLatencies[info->port];
+    int a = inst->declaration->GetOutputLatencies()[info->port];
     int e = info->edgeDelay;
 
     FOREACH_LIST(ConnectionNode*,otherInfo,other->allInputs){
-      int c = other->declaration->baseConfig.inputDelays[info->instConnectedTo.port];
+      int c = other->declaration->GetInputDelays()[info->instConnectedTo.port];
 
       if(info->instConnectedTo.port == otherInfo->port &&
          otherInfo->instConnectedTo.inst == inst && otherInfo->instConnectedTo.port == info->port){
@@ -94,7 +94,7 @@ static void SendLatencyUpwards(FUInstance* node,Hashmap<Edge,DelayInfo>* delays,
     if(multipleTypes){
       a = decl->configInfo[nodePart].outputLatencies[info->port];
     } else {
-      a = inst->declaration->baseConfig.outputLatencies[info->port];
+      a = inst->declaration->GetOutputLatencies()[info->port];
     }
     
     int e = info->edgeDelay;
@@ -106,7 +106,7 @@ static void SendLatencyUpwards(FUInstance* node,Hashmap<Edge,DelayInfo>* delays,
         
         c = other->declaration->configInfo[otherPart].inputDelays[info->instConnectedTo.port];
       } else {
-        c = other->declaration->baseConfig.inputDelays[info->instConnectedTo.port];
+        c = other->declaration->GetInputDelays()[info->instConnectedTo.port];
       }
 
       if(info->instConnectedTo.port == otherInfo->port &&
@@ -129,6 +129,41 @@ static void SendLatencyUpwards(FUInstance* node,Hashmap<Edge,DelayInfo>* delays,
       }
     }
   }
+}
+
+CalculateDelayResult CalculateDelay(AccelInfoIterator top,DAGOrderNodes order,Arena* out){
+  int nodes = top.CurrentLevelSize();
+  int edges = 9999;
+
+  // These can now be arrays, with the exception of SimpleEdge
+  SimpleEdgeDelay* edgeToDelay = PushHashmap<SimpleEdge,DelayInfo>(out,edges);
+  SimplePortDelay* portDelay = PushHashmap<SimplePortInstance,DelayInfo>(out,edges);
+  SimpleNodeDelay* nodeDelay = PushHashmap<int,DelayInfo>(out,nodes);
+
+  SimpleCalculateDelayResult res = {};
+  res.edgesDelay = edgeToDelay;
+  res.nodeDelay = nodeDelay;
+  res.portDelay = portDelay;
+
+  for(AccelInfoIterator iter = top; iter.IsValid(); iter = iter.Next()){
+    nodeDelay->Insert(iter.index,{0,false});
+  }
+
+#if 0
+  EdgeIterator iter = IterateEdges(accel);
+  while(iter.HasNext()){
+    Edge edge = iter.Next();
+
+    ConnectionNode* fromOut = GetConnectionNode(edge.out.inst->allOutputs,edge.out.port,edge.in);
+    ConnectionNode* fromIn = GetConnectionNode(edge.in.inst->allInputs,edge.in.port,edge.out);
+
+    int* delayPtr = &edgeToDelay->Insert(edge,{0,false})->value;
+    
+    fromOut->delay.value = delayPtr;
+    fromIn->delay.value = delayPtr;
+  }
+#endif
+  
 }
 
 CalculateDelayResult CalculateDelay(Accelerator* accel,DAGOrderNodes order,Array<Partition> partitions,Arena* out){
@@ -447,7 +482,7 @@ CalculateDelayResult CalculateDelay(Accelerator* accel,DAGOrderNodes order,Array
         if(multipleTypes){
           a = decl->configInfo[nodePart].outputLatencies[info->port];
         } else {
-          a = inst->declaration->baseConfig.outputLatencies[info->port];
+          a = inst->declaration->GetOutputLatencies()[info->port];
         }
     
         int e = info->edgeDelay;
@@ -459,7 +494,7 @@ CalculateDelayResult CalculateDelay(Accelerator* accel,DAGOrderNodes order,Array
         
             c = other->declaration->configInfo[otherPart].inputDelays[info->instConnectedTo.port];
           } else {
-            c = other->declaration->baseConfig.inputDelays[info->instConnectedTo.port];
+            c = other->declaration->GetInputDelays()[info->instConnectedTo.port];
           }
 
           if(info->instConnectedTo.port == otherInfo->port &&
@@ -548,8 +583,8 @@ GraphPrintingContent GenerateDelayDotGraph(Accelerator* accel,CalculateDelayResu
     DelayInfo delay = delayInfo.edgesDelay->GetOrFail(*edge);
     int edgeDelay = delay.value;
     
-    int edgeOutput = edge->out.inst->declaration->baseConfig.outputLatencies[edge->out.port];
-    int edgeInput = edge->in.inst->declaration->baseConfig.inputDelays[edge->in.port];
+    int edgeOutput = edge->out.inst->declaration->GetOutputLatencies()[edge->out.port];
+    int edgeInput = edge->in.inst->declaration->GetInputDelays()[edge->in.port];
     
     String content = PushString(out,"(%d/%d/%d) %d [%d]",edgeOutput,edgeBaseDelay,edgeInput,portDelay,edgeDelay);
     String first = edge->out.inst->name;

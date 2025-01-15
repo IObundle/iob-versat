@@ -5,6 +5,11 @@
 #include "memory.hpp"
 #include "accelerator.hpp"
 
+struct SimplePortInstance{
+  int inst;
+  int port;
+};
+
 struct InstanceInfo{
   int level; // D 
   FUDeclaration* decl; // D
@@ -40,6 +45,8 @@ struct InstanceInfo{
   int id; // D
   int mergeIndexStart; // D
   FUInstance* inst; // D
+
+  Array<SimplePortInstance> inputs; 
 };
 
 struct AcceleratorInfo{
@@ -95,13 +102,6 @@ struct AccelInfo{
   Array<InstanceInfo> baseInfo; // This shit is already giving errors and causing bugs.
 
   // The problem is how to go to remove baseInfo without spending too much time.
-
-  // At the same time, I do not want to rewrite the struct generation code, because I eventually want to replace it with something better.
-
-  // The problem is that the "something" better requires better data, which I want to put inside the AccelInfo struct.
-
-  // 
-  
   Array<MergePartition> infos;
     
   int inputs;
@@ -144,10 +144,18 @@ struct AccelInfoIterator{
   Array<InstanceInfo*> GetAllSubUnits(Arena* out);
 
   // Next and step mimick gdb like commands. Does not update current, instead returning the advanced iterator
-  AccelInfoIterator Next() WARN_UNUSED; // Next unit in current level only.
-  AccelInfoIterator Step() WARN_UNUSED; // Next unit in the array. Goes down and up the levels as it progresses.
-  AccelInfoIterator StepInsideOnly() WARN_UNUSED; // Returns NonValid if non composite unit
+  WARN_UNUSED AccelInfoIterator Next(); // Next unit in current level only.
+  WARN_UNUSED AccelInfoIterator Step(); // Next unit in the array. Goes down and up the levels as it progresses.
+  WARN_UNUSED AccelInfoIterator StepInsideOnly(); // Returns NonValid if non composite unit
+
+  int CurrentLevelSize();
 };
+
+struct EdgeInfoIterator{
+  
+};
+
+Array<InstanceInfo*> GetAllSameLevelUnits(AccelInfo* info,int level,int mergeIndex,Arena* out);
 
 AccelInfoIterator StartIteration(AccelInfo* info);
 

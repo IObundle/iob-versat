@@ -43,7 +43,7 @@ bool NameExists(Accelerator* accel,String name){
   return false;
 }
 
-int GetFreeShareIndex(Accelerator* accel){  // TODO: Slow 
+int GetFreeShareIndex(Accelerator* accel){  // TODO: Slow and kinda awkard to use
   int attempt = 0; 
   while(1){
     bool found = true;
@@ -178,7 +178,6 @@ FUInstance* CopyInstance(Accelerator* accel,FUInstance* oldInstance,bool preserv
     newInst->id = oldInstance->id;
   }
   newInst->isMergeMultiplexer = oldInstance->isMergeMultiplexer;
-  //newInst->mergeMultiplexerId = oldInstance->mergeMultiplexerId;
   
   return newInst;
 }
@@ -1447,36 +1446,6 @@ void InsertUnit(Accelerator* accel,PortInstance before,PortInstance after,PortIn
   RemoveConnection(accel,before.inst,before.port,after.inst,after.port);
   ConnectUnits(newUnit,after,0);
   ConnectUnits(before,newUnit,0);
-}
-
-void AssertGraphValid(FUInstance* nodes,Arena* arena){
-  BLOCK_REGION(arena);
-
-  int size = Size(nodes);
-  Hashmap<FUInstance*,int>* seen = PushHashmap<FUInstance*,int>(arena,size);
-  Set<Pair<String,int>>* nameIdSeen = PushSet<Pair<String,int>>(arena,size);
-  
-  FOREACH_LIST(FUInstance*,ptr,nodes){
-    seen->Insert(ptr,0);
-
-    Assert(!nameIdSeen->ExistsOrInsert({ptr->name,ptr->id}));
-  }
-
-  FOREACH_LIST(FUInstance*,ptr,nodes){
-    FOREACH_LIST(ConnectionNode*,con,ptr->allInputs){
-      seen->GetOrFail(con->instConnectedTo.inst);
-    }
-
-    FOREACH_LIST(ConnectionNode*,con,ptr->allOutputs){
-      seen->GetOrFail(con->instConnectedTo.inst);
-    }
-
-    for(PortInstance& n : ptr->inputs){
-      if(n.inst){
-        seen->GetOrFail(n.inst);
-      }
-    }
-  }
 }
 
 ConnectionNode* GetConnectionNode(ConnectionNode* head,int port,PortInstance other){

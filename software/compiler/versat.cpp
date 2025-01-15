@@ -162,24 +162,20 @@ FUDeclaration* RegisterModuleInfo(ModuleInfo* info,Arena* temp){
   }
 
   memoryMapBits = EvalRange(info->memoryMappedBits,instantiated);
-  //databusAddrSize = EvalRange(info->databusAddrSize,instantiated);
   
   decl.name = info->name;
-  decl.baseConfig.inputDelays = info->inputDelays;
-  decl.baseConfig.outputLatencies = info->outputLatencies;
 
   decl.configInfo = PushArray<ConfigurationInfo>(globalPermanent,1);
   decl.info.infos = PushArray<MergePartition>(globalPermanent,1);
-  decl.configInfo[0].inputDelays = decl.baseConfig.inputDelays;
-  decl.configInfo[0].outputLatencies = decl.baseConfig.outputLatencies;
-  decl.info.infos[0].inputDelays = decl.configInfo[0].inputDelays;
-  decl.info.infos[0].outputLatencies = decl.configInfo[0].outputLatencies;
+  decl.configInfo[0].inputDelays = info->inputDelays;
+  decl.configInfo[0].outputLatencies = info->outputLatencies;
+  decl.info.infos[0].inputDelays = info->inputDelays;
+  decl.info.infos[0].outputLatencies = info->outputLatencies;
 
   decl.configs = configs;
   decl.states = states;
   decl.externalMemory = external;
   decl.numberDelays = info->nDelays;
-  decl.baseConfig.name = info->name;
   decl.nIOs = info->nIO;
 
   if(info->memoryMapped) decl.memoryMapBits = memoryMapBits;
@@ -190,8 +186,6 @@ FUDeclaration* RegisterModuleInfo(ModuleInfo* info,Arena* temp){
   if(info->isSource){
     decl.delayType = decl.delayType | DelayType::DelayType_SINK_DELAY;
   }
-
-  decl.baseConfig.configOffsets.max = info->configs.size;
 
   FUDeclaration* res = RegisterFU(decl);
 
@@ -219,7 +213,7 @@ void FillDeclarationWithAcceleratorValues(FUDeclaration* decl,Accelerator* accel
     FUInstance* inst = ptr;
     *baseNames.PushElem() = inst->name;
   }
-  decl->baseConfig.baseName = EndArray(baseNames);
+  Array<String> baseName = EndArray(baseNames);
   
   decl->nIOs = val.ios;
   if(val.isMemoryMapped){
@@ -237,9 +231,6 @@ void FillDeclarationWithAcceleratorValues(FUDeclaration* decl,Accelerator* accel
     }
   }
 
-  decl->baseConfig.inputDelays = val.infos[0].inputDelays;
-  decl->baseConfig.outputLatencies = val.infos[0].outputLatencies;
-
   if(decl->configInfo.size == 0){
     decl->configInfo = PushArray<ConfigurationInfo>(globalPermanent,val.infos.size);
   }
@@ -248,10 +239,10 @@ void FillDeclarationWithAcceleratorValues(FUDeclaration* decl,Accelerator* accel
     decl->info.infos = PushArray<MergePartition>(globalPermanent,val.infos.size);
   }
   
-  decl->configInfo[0].inputDelays = decl->baseConfig.inputDelays;
-  decl->configInfo[0].outputLatencies = decl->baseConfig.outputLatencies;
-  decl->info.infos[0].inputDelays = decl->configInfo[0].inputDelays;
-  decl->info.infos[0].outputLatencies = decl->configInfo[0].outputLatencies;
+  decl->configInfo[0].inputDelays = val.infos[0].inputDelays;
+  decl->configInfo[0].outputLatencies = val.infos[0].outputLatencies;
+  decl->info.infos[0].inputDelays = val.infos[0].inputDelays;
+  decl->info.infos[0].outputLatencies = val.infos[0].outputLatencies;
 
   decl->configs = PushArray<Wire>(perm,val.configs);
   decl->states = PushArray<Wire>(perm,val.states);
@@ -297,23 +288,7 @@ void FillDeclarationWithAcceleratorValues(FUDeclaration* decl,Accelerator* accel
   Array<bool> belongArray = PushArray<bool>(perm,accel->allocated.Size());
   Memset(belongArray,true);
 
-  {
-    decl->baseConfig.configOffsets.offsets = PushArray<int>(perm,size);
-    decl->baseConfig.configOffsets.max = val.configs;
-    decl->numberDelays = val.delays;
-    int index = 0;
-    for(InstanceInfo& info : val.infos[0].info){
-      if(info.level != 0) continue;
-
-      if(info.isConfigStatic){
-        decl->baseConfig.configOffsets.offsets[index] = -1;
-      } else {
-        decl->baseConfig.configOffsets.offsets[index] = info.configPos.value_or(-1);
-      }
-      
-      index += 1;
-    }
-  }
+  decl->numberDelays = val.delays;
 
   if(decl->info.infos.size == 0){
     decl->info.infos = PushArray<MergePartition>(globalPermanent,1);
@@ -322,7 +297,7 @@ void FillDeclarationWithAcceleratorValues(FUDeclaration* decl,Accelerator* accel
   // If only one config, set configInfo zero as equal to baseConfig in order to simplify code that uses configInfo
   if(val.infos.size == 1){
     decl->configInfo = PushArray<ConfigurationInfo>(perm,1);
-    decl->configInfo[0] = decl->baseConfig;
+    decl->configInfo[0].baseName = baseName;
   } else {
     decl->configInfo = PushArray<ConfigurationInfo>(perm,val.infos.size);
     Memset(decl->configInfo,{});
@@ -376,13 +351,6 @@ void FillDeclarationWithAcceleratorValuesNoDelay(FUDeclaration* decl,Accelerator
 
   decl->configInfo = PushArray<ConfigurationInfo>(perm,val.infos.size);
   Memset(decl->configInfo,{});
-
-  DynamicArray<String> baseNames = StartArray<String>(perm);
-  for(FUInstance* ptr : accel->allocated){
-    FUInstance* inst = ptr;
-    *baseNames.PushElem() = inst->name;
-  }
-  decl->baseConfig.baseName = EndArray(baseNames);
   
   decl->nIOs = val.ios;
   if(val.isMemoryMapped){
@@ -441,23 +409,6 @@ void FillDeclarationWithAcceleratorValuesNoDelay(FUDeclaration* decl,Accelerator
   Array<bool> belongArray = PushArray<bool>(perm,accel->allocated.Size());
   Memset(belongArray,true);
 
-  {
-    decl->baseConfig.configOffsets.offsets = PushArray<int>(perm,size);
-    decl->baseConfig.configOffsets.max = val.configs;
-    decl->numberDelays = val.delays;
-    int index = 0;
-    for(InstanceInfo& info : val.infos[0].info){
-      if(info.level != 0) continue;
-
-      if(info.isConfigStatic){
-        decl->baseConfig.configOffsets.offsets[index] = -1;
-      } else {
-        decl->baseConfig.configOffsets.offsets[index] = info.configPos.value_or(-1);
-      }
-      index += 1;
-    }
-  }
-  
   for(int i = 0; i < val.infos.size; i++){
     Array<InstanceInfo> info = val.infos[i].info;
 
@@ -837,8 +788,9 @@ FUDeclaration* RegisterIterativeUnit(Accelerator* accel,FUInstance* inst,int lat
 
   // TODO: We are not checking connections here, we are just assuming that unit is directly connected to out.
   //       Probably a bad idea but still do not have an example which would make it not ideal
+  NOT_IMPLEMENTED("Need to give a second look after cleaning up the changes to AccelInfo");
   for(int i = 0; i < declaration.NumberOutputs(); i++){
-    declaration.baseConfig.outputLatencies[i] = latency * (node->declaration->baseConfig.outputLatencies[i] + 1);
+    //declaration.baseConfig.outputLatencies[i] = latency * (node->declaration->baseConfig.outputLatencies[i] + 1);
   }
 
   // Values from iterative declaration
@@ -860,7 +812,7 @@ FUDeclaration* RegisterIterativeUnit(Accelerator* accel,FUInstance* inst,int lat
   }
 
   FUDeclaration* registeredType = RegisterFU(declaration);
-  registeredType->lat = node->declaration->baseConfig.outputLatencies[0];
+  //registeredType->lat = node->declaration->baseConfig.outputLatencies[0];
   
   // Add this units static instances (needs be done after Registering the declaration because the parent is a pointer to the declaration)
   for(FUInstance* ptr : accel->allocated){

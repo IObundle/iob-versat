@@ -122,8 +122,6 @@ struct FUInstance{
   bool isMergeMultiplexer; // TODO: Kinda of an hack for now
   //int mergeMultiplexerId;
   
-  FUInstance* next;
-
   // Calculated and updated every time a connection is added or removed
   ConnectionNode* allInputs;
   ConnectionNode* allOutputs;

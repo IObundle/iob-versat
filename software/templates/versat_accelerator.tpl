@@ -24,11 +24,11 @@ module @{accel.name} #(
    output done,
    #{end}
 
-   #{for i accel.baseConfig.inputDelays}
+   #{for i accel.info.infos[0].inputDelays}
    input [DATA_W-1:0]              in@{index},
    #{end}
 
-   #{for i accel.baseConfig.outputLatencies}
+   #{for i accel.info.infos[0].outputLatencies}
    output [DATA_W-1:0]             out@{index},
    #{end}
 
@@ -152,15 +152,15 @@ end
 #{end}
 
 #{if nCombOperations}
-reg [31:0] #{join "," node instances}#{if node.declaration.isOperation and node.declaration.baseConfig.outputLatencies[0] == 0}comb_@{node |> Identify} /* verilator isolate_assignments*/ #{end}#{end}; 
+reg [31:0] #{join "," node instances}#{if node.declaration.isOperation and node.declaration.info.infos[0].outputLatencies[0] == 0}comb_@{node |> Identify} /* verilator isolate_assignments*/ #{end}#{end}; 
 
 always @*
 begin
 #{for node instances}
    #{set decl node.declaration}
-   #{if decl.isOperation and decl.baseConfig.outputLatencies[0] == 0}
+   #{if decl.isOperation and decl.info.infos[0].outputLatencies[0] == 0}
       #{set input1 node.inputs[0]}
-      #{if decl.baseConfig.inputDelays.size == 1}
+      #{if decl.info.infos[0].inputDelays.size == 1}
          #{format decl.operation "comb" @{node |> Identify} #{call retOutputName2 instances input1}};
       #{else}
          #{set input2 node.inputs[1]}
@@ -172,13 +172,13 @@ end
 #{end}
 
 #{if nSeqOperations}
-reg [31:0] #{join "," node instances} #{if node.declaration.isOperation and node.declaration.baseConfig.outputLatencies[0] != 0} seq_@{node |> Identify} #{end}#{end}; 
+reg [31:0] #{join "," node instances} #{if node.declaration.isOperation and node.declaration.info.infos[0].outputLatencies[0] != 0} seq_@{node |> Identify} #{end}#{end}; 
 
 always @(posedge clk)
 begin
 #{for node instances}
    #{set decl node.declaration}
-   #{if decl.isOperation and decl.baseConfig.outputLatencies[0] != 0 }
+   #{if decl.isOperation and decl.info.infos[0].outputLatencies[0] != 0 }
       #{set input1 node.inputs[0]}
       #{format decl.operation "seq" @{node |> Identify} #{call retOutputName2 instances input1}};
    #{end}
@@ -220,7 +220,7 @@ end
       .@{wire.name}(@{accel.name}_@{inst.name}_@{wire.name}),
     #{end}
   #{else}
-    #{set configStart accel.baseConfig.configOffsets.offsets[id]}
+    #{set configStart topLevel[id].configPos.val}
     #{if configStart >= 0}
       #{for wire decl.configs}
       .@{wire.name}(@{accel.configs[configStart + index].name}), // @{configStart + index}

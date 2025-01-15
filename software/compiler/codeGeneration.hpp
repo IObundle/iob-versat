@@ -11,6 +11,8 @@ struct InstanceInfo;
 struct FUDeclaration;
 struct ConfigurationInfo;
 
+// TODO: Config generation could be simplified if we instead had a immediate mode like interface for the specific of the structures. Something like a list of members and unions could be representing using a start union/end union command and the likes. Would simplify struct generation, but struct information would still need to be gathered from StructInfo
+
 // Type can differ because of Merge.
 struct SingleTypeStructElement{
   String type;
@@ -19,7 +21,7 @@ struct SingleTypeStructElement{
 };
 
 struct TypeStructInfoElement{
-  Array<SingleTypeStructElement> typeAndNames; // Because of config sharing, we can have multiple elements occupying the same position.
+  Array<SingleTypeStructElement> typeAndNames; // Because of config sharing, we can have multiple elements occupying the same position. Type can also differ because of merge.
 };
 
 struct TypeStructInfo{
@@ -92,7 +94,6 @@ static bool operator==(const SubTypesInfo i0,const SubTypesInfo i1){
 struct AddressGenDef;
 extern Pool<AddressGenDef> savedAddressGen;
 
-
 // In order to get the names, I need to associate a given member to a merge index.
 // Since multiplexers can be shared accross multiple merge indexes, I need some map of some sorts.
 // One multiplexer can be used by dozens of merge indexes.
@@ -106,9 +107,7 @@ struct StructInfo{
   String name;
   FUDeclaration* type;
 
-  // First array is for the members.
-  // Second array is for different merges.
-  Array<Array<StructElement>> elements;
+  Array<StructElement> elements;
 };
 
 struct StructElement{
@@ -132,15 +131,23 @@ template<> struct std::hash<StructInfo>{
    std::size_t operator()(StructInfo const& s) const noexcept{
      std::size_t res = 0;
      res += std::hash<void*>()(s.type);
-     for(Array<StructElement> elements : s.elements){
-       for(StructElement elem : elements){
-         res += std::hash<StructElement>()(elem);
-       }
+     for(StructElement elem : s.elements){
+       res += std::hash<StructElement>()(elem);
      }
      res += std::hash<String>()(s.name);
      return res;
    }
 };
+
+static bool operator==(StructInfo& l,StructInfo& r);
+
+static bool operator==(StructElement& l,StructElement& r){
+  bool res = (*l.childStruct == *r.childStruct &&
+              l.name == r.name &&
+              l.size == r.size &&
+              l.isMergeMultiplexer == r.isMergeMultiplexer);
+  return res;
+}
 
 static bool operator==(StructInfo& l,StructInfo& r){
   if(l.elements.size != r.elements.size){
@@ -156,14 +163,6 @@ static bool operator==(StructInfo& l,StructInfo& r){
   }
 
   return (l.name == r.name);
-}
-
-static bool operator==(StructElement& l,StructElement& r){
-  bool res = (*l.childStruct == *r.childStruct &&
-              l.name == r.name &&
-              l.size == r.size &&
-              l.isMergeMultiplexer == r.isMergeMultiplexer);
-  return res;
 }
 
 // Lets not handle merge for now.

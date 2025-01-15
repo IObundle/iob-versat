@@ -22,7 +22,7 @@
 #include "accelerator.hpp"
 
 // TODO: Rework expression parsing to support error reporting similar to module diff.
-//       A simple form of synchronization after detecting an error would vastly improve parser 
+//       A simple form of synchronization after detecting an error would vastly improve error reporting
 //       Change iterative and merge to follow module def.
 //       Need to detect multiple inputs to the same port and report error.
 //       Transform is not correctly implemented.

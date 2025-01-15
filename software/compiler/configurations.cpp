@@ -134,6 +134,38 @@ AccelInfoIterator AccelInfoIterator::StepInsideOnly(){
   return {};
 }
 
+int AccelInfoIterator::CurrentLevelSize(){
+  Array<InstanceInfo>& array = GetCurrentMerge();
+  int currentLevel = array[index].level;
+
+  int size = 0;
+  for(int i = 0; i < array.size; i++){
+    if(array[i].level == currentLevel){
+      size += 1;
+    }
+  }
+
+  return size;
+}
+
+Array<InstanceInfo*> GetAllSameLevelUnits(AccelInfo* info,int level,int mergeIndex,Arena* out){
+  auto builder = StartArray<InstanceInfo*>(out);
+
+  AccelInfoIterator iter = StartIteration(info);
+  iter.mergeIndex = mergeIndex;
+
+  for(; iter.IsValid(); iter = iter.Step()){
+    InstanceInfo* unit = iter.CurrentUnit();
+
+    if(unit->level == level){
+      *builder.PushElem() = unit;
+    }
+  }
+
+  Array<InstanceInfo*> res = EndArray(builder);
+  return res;
+}
+
 AccelInfoIterator StartIteration(AccelInfo* info){
   AccelInfoIterator iter = {};
   iter.info = info;
@@ -887,7 +919,7 @@ struct Node{
 
 Array<InstanceInfo> CalculateInstanceInfoTest(Accelerator* accel,Arena* out,Arena* temp){
   Array<InstanceInfo> test2 = GenerateInitialInstanceInfo(accel,out,temp);
-
+  
   AccelInfo test = {};
   test.baseInfo = test2;
   
@@ -1241,6 +1273,60 @@ Array<InstanceInfo> CalculateInstanceInfoTest(Accelerator* accel,Arena* out,Aren
 
   iter = StartIteration(&test);
   CalculateDelay(CalculateDelay,iter,calculatedDelay,0,out);
+
+  //LEFT HERE - Just start putting graph data into this, no point in playing it safe, just put everything into this and be done with it. 
+
+#if 0
+  auto CalculatePortInstance = [](auto Recurse,Accelerator* accel,AccelInfoIterator& iter,int startIndex,Arena* temp) -> void{
+    BLOCK_REGION(temp);
+
+    InstanceInfo* parent = iter.GetParentUnit();
+    //int parentIndex = iter.GetIndex(parent);
+
+    if(parent){
+      AccelInfoIterator stateIter = StartIteration(&parent->decl->info);
+      
+      int index = 0;
+      for(AccelInfoIterator it = iter; it.IsValid(); it = it.Next(),stateIter = stateIter.Next()){
+        InstanceInfo* unit = it.CurrentUnit();
+        InstanceInfo* stateUnit = stateIter.CurrentUnit();
+        
+        if(stateUnit->statePos.has_value()){
+          int statePos = startIndex + stateUnit->statePos.value();
+          
+          if(unit->stateSize){
+            unit->statePos = statePos;
+          }
+          
+          index += 1;
+          AccelInfoIterator inside = it.StepInsideOnly();
+          if(inside.IsValid()){
+            Recurse(Recurse,accel,inside,statePos,temp);
+          }
+        }
+      }
+    } else {
+      int stateIndex = startIndex;
+      for(AccelInfoIterator it = iter; it.IsValid(); it = it.Next()){
+        InstanceInfo* unit = it.CurrentUnit();
+
+        if(unit->stateSize){
+          unit->statePos = stateIndex;
+        }
+        
+        AccelInfoIterator inside = it.StepInsideOnly();
+        if(inside.IsValid()){
+          Recurse(Recurse,accel,inside,stateIndex,temp);
+        }
+
+        stateIndex += unit->stateSize;
+      }
+    }
+  };
+
+  iter = StartIteration(&test);
+  CalculatePortInstance(CalculatePortInstance,accel,iter,0,out);
+#endif
   
   return test2;
 }

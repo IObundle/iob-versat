@@ -43,6 +43,7 @@ Array<Difference> CalculateSmallestDifference(Array<int> oldValues,Array<int> ne
 }
 
 // TODO: Can reuse SortTypes functions by receiving the Array of Arrays as an argument. Useful for memory and probably state and so on.
+#if 0
 Array<FUDeclaration*> SortTypesByConfigDependency(Array<FUDeclaration*> types,Arena* out,Arena* temp){
   BLOCK_REGION(temp);
 
@@ -100,6 +101,7 @@ Array<FUDeclaration*> SortTypesByConfigDependency(Array<FUDeclaration*> types,Ar
 
   return result;
 }
+#endif
 
 Array<FUDeclaration*> SortTypesByMemDependency(Array<FUDeclaration*> types,Arena* out,Arena* temp){
   BLOCK_REGION(temp);
@@ -159,6 +161,7 @@ Array<FUDeclaration*> SortTypesByMemDependency(Array<FUDeclaration*> types,Arena
   return result;
 }
 
+#if 0
 Array<TypeStructInfoElement> GenerateStructFromType(FUDeclaration* decl,Arena* out,Arena* temp){
   if(decl->type == FUDeclarationType_SPECIAL){
     return {};
@@ -182,7 +185,6 @@ Array<TypeStructInfoElement> GenerateStructFromType(FUDeclaration* decl,Arena* o
   Accelerator* accel = decl->fixedDelayCircuit;
   int configSize = offsets.max;
 
-  DEBUG_BREAK();
   Array<int> configAmount = PushArray<int>(temp,configSize);
   for(int i = 0; i < accel->allocated.Size(); i++){
     FUInstance* node = accel->allocated.Get(i);
@@ -231,49 +233,9 @@ Array<TypeStructInfoElement> GenerateStructFromType(FUDeclaration* decl,Arena* o
 
   return entries;
 }
+#endif
 
-static Array<TypeStructInfoElement> GenerateAddressStructFromType(FUDeclaration* decl,Arena* out){
-  if(decl->type == FUDeclarationType_SINGLE){
-    int size = 1;
-    Array<TypeStructInfoElement> entries = PushArray<TypeStructInfoElement>(out,size);
-
-    for(int i = 0; i < size; i++){
-      entries[i].typeAndNames = PushArray<SingleTypeStructElement>(out,1);
-      entries[i].typeAndNames[0].type = STRING("void*");
-      entries[i].typeAndNames[0].name = STRING("addr");
-    }
-    return entries;
-  }
-
-  int memoryMapped = 0;
-  for(FUInstance* node : decl->fixedDelayCircuit->allocated){
-    FUDeclaration* decl = node->declaration;
-
-    if(!(decl->memoryMapBits.has_value())){
-      continue;
-    }
-
-    memoryMapped += 1;
-  }
-
-  Array<TypeStructInfoElement> entries = PushArray<TypeStructInfoElement>(out,memoryMapped);
-
-  int index = 0;
-  for(FUInstance* node : decl->fixedDelayCircuit->allocated){
-    FUDeclaration* decl = node->declaration;
-
-    if(!(decl->memoryMapBits.has_value())){
-      continue;
-    }
-
-    entries[index].typeAndNames = PushArray<SingleTypeStructElement>(out,1);
-    entries[index].typeAndNames[0].type = PushString(out,"%.*sAddr",UNPACK_SS(decl->name));
-    entries[index].typeAndNames[0].name = node->name;
-    index += 1;
-  }
-  return entries;
-}
-
+#if 0
 Array<SubTypesInfo> GetSubTypesInfo(Accelerator* accel,Arena* out,Arena* temp){
   BLOCK_REGION(temp);
   
@@ -306,21 +268,16 @@ Array<SubTypesInfo> GetSubTypesInfo(Accelerator* accel,Arena* out,Arena* temp){
       info->Insert(in);
     }
   }
-
+  
   Array<SubTypesInfo> result = PushArrayFromSet(out,info);
   
   return result;
 }
-
-// How to simplify this?
-// A unit can either be merged or contain a merged unit.
-// Containing a merged unit is problematic because we might end up with multiple units of the same type but with different configuration structs.
-//
-
-// First, why are we not building on top of accel info?
+#endif
 
 // NOTE: The biggest source of complexity comes from merging, since merging affects the lower structures,
 //       causing the addition of padded members
+#if 0
 Array<TypeStructInfo> GetConfigStructInfo(Accelerator* accel,Arena* out,Arena* temp){
   BLOCK_REGION(temp);
 
@@ -428,24 +385,48 @@ Array<TypeStructInfo> GetConfigStructInfo(Accelerator* accel,Arena* out,Arena* t
   
   return structures;
 }
+#endif
 
-// What do I want???
+static Array<TypeStructInfoElement> GenerateAddressStructFromType(FUDeclaration* decl,Arena* out){
+  if(decl->type == FUDeclarationType_SINGLE){
+    int size = 1;
+    Array<TypeStructInfoElement> entries = PushArray<TypeStructInfoElement>(out,size);
 
-// From the generated struct, I need to be able to query the name of the multiplexers associated to a given merge configuration.
-//
+    for(int i = 0; i < size; i++){
+      entries[i].typeAndNames = PushArray<SingleTypeStructElement>(out,1);
+      entries[i].typeAndNames[0].type = STRING("void*");
+      entries[i].typeAndNames[0].name = STRING("addr");
+    }
+    return entries;
+  }
 
-// So I basically want something like:
-// Returns the list of names of multiplexers inside struct info. The names are the full hierarchical names necessary to access the correct value.
+  int memoryMapped = 0;
+  for(FUInstance* node : decl->fixedDelayCircuit->allocated){
+    FUDeclaration* decl = node->declaration;
 
+    if(!(decl->memoryMapBits.has_value())){
+      continue;
+    }
 
-// Array<String> GetNamedOfMergeMultiplexers(StructInfo* info,int mergeIndex,Arena* out);
+    memoryMapped += 1;
+  }
 
+  Array<TypeStructInfoElement> entries = PushArray<TypeStructInfoElement>(out,memoryMapped);
 
-// We will start simple. Start with the instantiation of a top unit that is a merged instance.
+  int index = 0;
+  for(FUInstance* node : decl->fixedDelayCircuit->allocated){
+    FUDeclaration* decl = node->declaration;
 
-// 
-Array<String> GetNameOfMergeMultiplexers(StructInfo* info,int mergeIndex,Arena* out){
-  return {};
+    if(!(decl->memoryMapBits.has_value())){
+      continue;
+    }
+
+    entries[index].typeAndNames = PushArray<SingleTypeStructElement>(out,1);
+    entries[index].typeAndNames[0].type = PushString(out,"%.*sAddr",UNPACK_SS(decl->name));
+    entries[index].typeAndNames[0].name = node->name;
+    index += 1;
+  }
+  return entries;
 }
 
 static Array<TypeStructInfo> GetMemMappedStructInfo(Accelerator* accel,Arena* out,Arena* temp){
@@ -698,13 +679,16 @@ void OutputCircuitSource(FUDeclaration* decl,FILE* file,Arena* temp,Arena* temp2
   VersatComputedValues val = ComputeVersatValues(&info,false);
   Array<String> memoryMasks = ExtractMemoryMasks(info,temp);
 
-  DEBUG_BREAK();
-
   Array<String> parameters = PushArray<String>(temp,nodes.Size());
   for(int i = 0; i < nodes.Size(); i++){
     parameters[i] = GenerateVerilogParameterization(nodes.Get(i),temp);
   }
-  
+
+  Array<InstanceInfo*> topLevelUnits = GetAllSameLevelUnits(&info,0,0,temp);
+  DEBUG_BREAK();
+  // #{set configStart accel.baseConfig.configOffsets.offsets[id]}
+
+  TemplateSetCustom("topLevel",MakeValue(&topLevelUnits));
   TemplateSetCustom("parameters",MakeValue(&parameters));
   TemplateSetNumber("unitsMapped",val.unitsMapped);
   TemplateSetNumber("numberConnections",info.numberConnections);
@@ -750,12 +734,14 @@ void OutputIterativeSource(FUDeclaration* decl,FILE* file,Arena* temp,Arena* tem
   Hashmap<StaticId,StaticData>* staticUnits = CollectStaticUnits(accel,decl,temp);
   
   Pool<FUInstance> nodes = accel->allocated;
-  //Array<FUInstance*> nodes = ListToArray(accel->allocated,temp);
   Array<String> parameters = PushArray<String>(temp,nodes.Size());
   for(int i = 0; i < nodes.Size(); i++){
     parameters[i] = GenerateVerilogParameterization(nodes.Get(i),temp);
   }
   
+  Array<InstanceInfo*> topLevelUnits = GetAllSameLevelUnits(&info,0,0,temp);
+
+  TemplateSetCustom("topLevel",MakeValue(&topLevelUnits));
   TemplateSetCustom("parameters",MakeValue(&parameters));
   TemplateSetCustom("staticUnits",MakeValue(staticUnits));
   TemplateSetCustom("accel",MakeValue(decl));
@@ -949,62 +935,66 @@ Array<Array<MuxInfo>> GetAllMuxInfo(AccelInfo* info,Arena* out,Arena* temp){
 
 // For an accelerator that contains multiple units, the top level should just be a 
 
-// We can solve the generation by using partitions.
-// But partitions is weird as fuck.
+// Now that I think about it, only the top structure "cares" about merge configs, in relation to the fact that we have to put "unions".
+// That means that we just need to put the merge multiplexers on the top struct (I think. Need to generate a test that uses multiple merges and modules and then start making everything work properly).
 
-StructInfo* GenerateConfigStruct(AccelInfoIterator iter,Array<Partition> partitions,Arena* out,Arena* temp){
+StructInfo* GenerateConfigStruct(AccelInfoIterator iter,Array<Partition> partitions,String topName,Arena* out,Arena* temp){
   StructInfo result = {};
   InstanceInfo* parent = iter.GetParentUnit();
-
-  //if(parent && parent->isMerge){
+ 
   if(parent && parent->isMerge){
     result.name = iter.GetMergeName();
   } else if(parent){
     result.name = parent->decl->name;
   } else {
-    result.name = STRING("Top");
+    result.name = topName;
   }
   
-  auto array = PushArenaList<Array<StructElement>>(temp);
+  auto list = PushArenaList<StructElement>(temp);
+  for(AccelInfoIterator it = iter; it.IsValid(); it = it.Next()){
+      
+    InstanceInfo* unit = it.CurrentUnit();
+    StructElement elem = {};
+      
+    if(!unit->configPos.has_value()){
+      continue;
+    }
 
-  if(parent && parent->isMerge){
-    //iter.GetIndexes();
-  }
-  
-  for(int i = 0; i < iter.MergeSize(); i++){
-    auto list = PushArenaList<StructElement>(temp);
-    for(AccelInfoIterator it = iter; it.IsValid(); it = it.Next()){
-      it.mergeIndex = i;
-      
-      InstanceInfo* unit = it.CurrentUnit();
-      StructElement elem = {};
-      
-      if(!unit->configPos.has_value()){
-        continue;
-      }
-      
-      elem.name = unit->baseName;
-      if(unit->isComposite){
+    elem.name = unit->baseName;
+    if(unit->isMerge){
+      for(int i = 0; i < iter.MergeSize(); i++){
         AccelInfoIterator inside = it.StepInsideOnly();
-        StructInfo* subInfo = GenerateConfigStruct(inside,partitions,out,temp);
+        inside.mergeIndex = i;
+
+        StructInfo* subInfo = GenerateConfigStruct(inside,partitions,{},out,temp);
+        elem.name = inside.GetMergeName();
         elem.childStruct = subInfo;
-      } else {
-        StructInfo* simpleSubInfo = PushStruct<StructInfo>(out);
-        simpleSubInfo->type = unit->decl;
-        simpleSubInfo->name = unit->decl->name;
-        elem.childStruct = simpleSubInfo;
+        elem.pos = unit->configPos.value();
+        elem.size = unit->configSize;
+        elem.isMergeMultiplexer = unit->isMergeMultiplexer;
+
+        *list->PushElem() = elem;
       }
-      
-      elem.pos = unit->configPos.value();
-      elem.size = unit->configSize;
-      elem.isMergeMultiplexer = unit->isMergeMultiplexer;
-      
-      *list->PushElem() = elem;
+      continue;
+    } else if(unit->isComposite){
+      AccelInfoIterator inside = it.StepInsideOnly();
+      StructInfo* subInfo = GenerateConfigStruct(inside,partitions,{},out,temp);
+      elem.childStruct = subInfo;
+    } else {
+      StructInfo* simpleSubInfo = PushStruct<StructInfo>(out);
+      simpleSubInfo->type = unit->decl;
+      simpleSubInfo->name = unit->decl->name;
+      elem.childStruct = simpleSubInfo;
     }
       
-    *array->PushElem() = PushArrayFromList(out,list);
+    elem.pos = unit->configPos.value();
+    elem.size = unit->configSize;
+    elem.isMergeMultiplexer = unit->isMergeMultiplexer;
+      
+    *list->PushElem() = elem;
   }
-  result.elements = PushArrayFromList(out,array);
+      
+  result.elements = PushArrayFromList(out,list);
 
   StructInfo* res = PushStruct<StructInfo>(out);
   *res = result;
@@ -1026,61 +1016,102 @@ Array<StructInfo*> ExtractStructs(StructInfo* structInfo,Arena* out,Arena* temp)
       return;
     }
 
-    for(Array<StructElement> elements : top->elements){
-      for(StructElement elem : elements){
-        Recurse(Recurse,elem.childStruct,map);
-      }
+    for(StructElement elem : top->elements){
+      Recurse(Recurse,elem.childStruct,map);
     }
     map->InsertIfNotExist(*top,top);
   };
-  
-  Recurse(Recurse,structInfo,info);
 
-  Array<StructInfo*> res = PushArrayFromTrieMapData(out,info);
+  if(structInfo->elements.size == 1){
+    for(StructElement elem : structInfo->elements){
+      Recurse(Recurse,elem.childStruct,info);
+    }
+  } else {
+    // For merge top level units we must also store the struct info since we need to generate the top level struct that contains the union of the merge types.
+    // NOTE: Do not know if this is the best approach, or if we should just have this function call everytime and in later functions we detect that top level is not merge and we do not generate that structure.
+    Recurse(Recurse,structInfo,info);
+  }
   
+  Array<StructInfo*> res = PushArrayFromTrieMapData(out,info);
+
   return res;
 }
 
-#if 0
-Array<TypeStructInfo> GenerateStructs(StructInfo* info,Arena* out,Arena* temp){
+#if 1
+Array<TypeStructInfo> GenerateStructs(Array<StructInfo*> info,Arena* out,Arena* temp){
   ArenaList<TypeStructInfo>* list = PushArenaList<TypeStructInfo>(temp);
 
-  auto GenerateStructRecurse = [](auto Recurse,StructInfo* top,ArenaList<TypeStructInfo>* list,Arena* out,Arena* temp) -> void {
-    if(!top){
-      return;
-    }
+  for(StructInfo* structInfo : info){
+    // Simple struct for simple types
+    if(structInfo->type){
+      Array<Wire> configs = structInfo->type->configs;
+      int size = configs.size;
 
-    for(StructElement elem : top->elements){
-      Recurse(Recurse,elem.childStruct,list,out,temp);
-    }
+      TypeStructInfo* type = list->PushElem();
+      
+      type->name = structInfo->name;
+      type->entries = PushArray<TypeStructInfoElement>(out,size);
 
-    auto builder = StartGrowableArray<TypeStructInfoElement>(out);
-    for(StructElement elem : top->elements){
-      TypeStructInfoElement m = {};
-      m.typeAndNames = PushArray<SingleTypeStructElement>(out,1);
-      m.typeAndNames[0].name = elem.name;
-
-      if(!Empty(elem.typeName)){
-        m.typeAndNames[0].type = elem.typeName;
-      } else {
-        m.typeAndNames[0].type = elem.childStruct->name;
+      for(int i = 0; i < size; i++){
+        type->entries[i].typeAndNames = PushArray<SingleTypeStructElement>(out,1);
+        type->entries[i].typeAndNames[0].name = configs[i].name;
+        type->entries[i].typeAndNames[0].type = STRING("iptr");
+        type->entries[i].typeAndNames[0].arraySize = 0;
       }
-      m.typeAndNames[0].arraySize = 0;
-
-      *builder.PushElem() = m;
-    }
-
-    TypeStructInfo* res = list->PushElem();
-    res->entries = EndArray(builder);
-
-    if(Empty(top->name)){
-      res->name = STRING("TOP");
     } else {
-      res->name = top->name;
-    }
-  };
+      TypeStructInfo* type = list->PushElem();
+      type->name = structInfo->name;
 
-  GenerateStructRecurse(GenerateStructRecurse,info,list,out,temp);
+      int size = structInfo->elements.size;
+
+      int maxPos = 0;
+      for(int i = 0; i < size; i++){
+        StructElement elem = structInfo->elements[i];
+        maxPos = std::max(maxPos,elem.pos);
+      }
+      
+      Array<int> amountOfEntriesAtPos = PushArray<int>(temp,maxPos+1);
+      for(int i = 0; i < size; i++){
+        StructElement elem = structInfo->elements[i];
+        amountOfEntriesAtPos[elem.pos] += 1;
+      }
+
+      int amountOfDifferent = 0;
+      for(int amount : amountOfEntriesAtPos){
+        if(amount){
+          amountOfDifferent += 1;
+        }
+      }
+        
+      Array<int> entryIndex = PushArray<int>(temp,maxPos+1);
+      Memset(entryIndex,-1);
+      Array<int> indexes = PushArray<int>(temp,maxPos+1);
+      
+      type->entries = PushArray<TypeStructInfoElement>(out,amountOfDifferent);
+      int indexPos = 0;
+      for(int i = 0; i < size; i++){
+        StructElement elem = structInfo->elements[i];
+        int pos = elem.pos;
+
+        int index = entryIndex[elem.pos];
+        if(index == -1){
+          entryIndex[elem.pos] = indexPos++;
+          index = entryIndex[elem.pos];
+        }
+
+        if(!type->entries[index].typeAndNames.size){
+          int amount = amountOfEntriesAtPos[pos];
+          type->entries[index].typeAndNames = PushArray<SingleTypeStructElement>(out,amount);
+        }
+
+        int subIndex = indexes[pos]++;
+        type->entries[index].typeAndNames[subIndex].name = elem.name;
+        type->entries[index].typeAndNames[subIndex].type = PushString(out,"%.*sConfig",UNPACK_SS(elem.childStruct->name));
+        type->entries[index].typeAndNames[subIndex].arraySize = 0;
+      }
+
+    }
+  }
   
   Array<TypeStructInfo> res = PushArrayFromList(out,list);
   return res;
@@ -1106,17 +1137,19 @@ void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* 
   }
 
   AccelInfo info = CalculateAcceleratorInfo(accel,true,temp,temp2);
+
+  Array<InstanceInfo*> topLevelUnits = GetAllSameLevelUnits(&info,0,0,temp);
+  
   VersatComputedValues val = ComputeVersatValues(&info,false);
   CheckSanity(info.baseInfo,temp);
   
   Array<Partition> partitions = GenerateInitialPartitions(accel,temp);
 
   AccelInfoIterator iter = StartIteration(&info);
-  StructInfo* structInfo = GenerateConfigStruct(iter,partitions,temp,temp2);
-
+  StructInfo* structInfo = GenerateConfigStruct(iter,partitions,accel->name,temp,temp2);
+  
   Array<StructInfo*> allStructs = ExtractStructs(structInfo,temp,temp2);
-  //Array<TypeStructInfo> structs = GenerateStructs(structInfo,temp,temp2);
-
+  Array<TypeStructInfo> structs = GenerateStructs(allStructs,temp,temp2);
   
   DEBUG_BREAK();
 
@@ -1264,7 +1297,8 @@ void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* 
   for(int i = 0; i < nodes.Size(); i++){
     parameters[i] = GenerateVerilogParameterization(nodes.Get(i),temp);
   }
-  
+
+  TemplateSetCustom("allUnits",MakeValue(&topLevelUnits));
   TemplateSetCustom("parameters",MakeValue(&parameters));
   TemplateSetCustom("arch",MakeValue(&globalOptions));
   TemplateSetNumber("configurationBits",val.configurationBits);
@@ -1292,6 +1326,8 @@ void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* 
   TemplateSetNumber("delaySize",DELAY_SIZE);
   TemplateSetBool("useDMA",globalOptions.useDMA);
   TemplateSetCustom("opts",MakeValue(&globalOptions));
+
+  DEBUG_BREAK();
   
   int configBit = 0;
   int addr = val.versatConfigs;
@@ -1398,9 +1434,14 @@ void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* 
   TemplateSetNumber("nStates",val.nStates);
   TemplateSetNumber("nStatics",val.nStatics);
 
-  //DEBUG_BREAK();
+  // MARK
+
+#if 0
   Array<TypeStructInfo> configStructures = GetConfigStructInfo(accel,temp2,temp);
   TemplateSetCustom("configStructures",MakeValue(&configStructures));
+#else
+  TemplateSetCustom("configStructures",MakeValue(&structs));
+#endif
   
   Array<TypeStructInfo> addressStructures = GetMemMappedStructInfo(accel,temp2,temp);
   TemplateSetCustom("addressStructures",MakeValue(&addressStructures));
@@ -1495,6 +1536,20 @@ void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* 
     Array<String> names = Map(info.infos,temp,[](MergePartition p){return p.name;});
     TemplateSetCustom("mergeNames",MakeValue(&names));
 
+    AccelInfoIterator topIter = StartIteration(&info);
+
+    for(int i = 0; i < topIter.MergeSize(); i++){
+      topIter.mergeIndex = i;
+
+      for(AccelInfoIterator iter = topIter; iter.IsValid(); iter = iter.Step()){
+        InstanceInfo* info = iter.CurrentUnit();
+
+        if(info->isMergeMultiplexer){
+          printf("%.*s\n",UNPACK_SS(info->name));
+        }
+      }
+    }
+    
     Array<Array<MuxInfo>> result = GetAllMuxInfo(&info,temp,temp2);
 
     TemplateSetCustom("mergeMux",MakeValue(&result));

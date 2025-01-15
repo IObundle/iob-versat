@@ -92,10 +92,10 @@ struct FUDeclaration{
   String name;
 
   // These always exist, regardless of merge info 
+
   Array<Wire> configs;
   Array<Wire> states;
-
-  ConfigurationInfo baseConfig;
+  
   Array<ConfigurationInfo> configInfo; // Info for each merged view for all fixedDelayCircuit instances, even if they do not belong to the merged view (unitBelongs indicates such cases)
 
   // TODO:  The idea is to phase out baseConfig and configInfo and replace them with the InstanceInfo approach
@@ -153,6 +153,15 @@ struct FUDeclaration{
   int NumberConfigs(){return configs.size;}
   int NumberStates(){return states.size;}
   int NumberDelays(){return numberDelays;}; //baseConfig.delayOffsets.max;
+
+  // 
+  Array<int> GetOutputLatencies(){
+    return info.infos[0].outputLatencies;
+  }
+
+  Array<int> GetInputDelays(){
+    return info.infos[0].inputDelays;
+  }
 
   int MaxConfigs(){
     int max = 0;

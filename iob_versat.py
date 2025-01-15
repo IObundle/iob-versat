@@ -168,6 +168,7 @@ def RunVersat(pc_emul,versat_spec,versat_top,versat_extra,build_dir,debug_path):
     output = codecs.getdecoder("unicode_escape")(result.stdout)[0]
 
     errorOutput = codecs.getdecoder("unicode_escape")(result.stderr)[0]
+    #print(output)
     print(output,file=sys.stderr)
     print(errorOutput,file=sys.stderr)
 

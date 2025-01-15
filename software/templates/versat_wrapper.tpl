@@ -167,7 +167,7 @@ extern "C" void VersatAcceleratorCreate(){
    self->rst = 0;
    self->running = 0;
 
-#{for i type.baseConfig.inputDelays.size}
+#{for i type.info.infos[0].inputDelays.size}
    self->in@{i} = 0;
 #{end}
 
