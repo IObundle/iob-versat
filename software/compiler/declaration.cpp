@@ -29,10 +29,7 @@ static FUDeclaration* RegisterCircuitInput(){
 
   decl.name = STRING("CircuitInput");
 
-  decl.configInfo = PushArray<ConfigurationInfo>(globalPermanent,1);
   decl.info.infos = PushArray<MergePartition>(globalPermanent,1);
-  decl.configInfo[0].inputDelays = Array<int>{zeros,0};
-  decl.configInfo[0].outputLatencies = Array<int>{zeros,1};
   decl.info.infos[0].inputDelays = Array<int>{zeros,0};
   decl.info.infos[0].outputLatencies = Array<int>{zeros,1};
   
@@ -47,10 +44,7 @@ static FUDeclaration* RegisterCircuitOutput(){
 
   decl.name = STRING("CircuitOutput");
 
-  decl.configInfo = PushArray<ConfigurationInfo>(globalPermanent,1);
   decl.info.infos = PushArray<MergePartition>(globalPermanent,1);
-  decl.configInfo[0].inputDelays = Array<int>{zeros,50};
-  decl.configInfo[0].outputLatencies = Array<int>{zeros,0};
   decl.info.infos[0].inputDelays = Array<int>{zeros,50};
   decl.info.infos[0].outputLatencies = Array<int>{zeros,0};
 
@@ -65,9 +59,7 @@ static FUDeclaration* RegisterLiteral(){
 
   decl.name = STRING("Literal");
 
-  decl.configInfo = PushArray<ConfigurationInfo>(globalPermanent,1);
   decl.info.infos = PushArray<MergePartition>(globalPermanent,1);
-  decl.configInfo[0].outputLatencies = Array<int>{zeros,1};
   decl.info.infos[0].outputLatencies = Array<int>{zeros,1};
   
   return RegisterFU(decl);
@@ -95,10 +87,7 @@ static void RegisterOperators(){
   decl.isOperation = true;
 
   for(unsigned int i = 0; i < ARRAY_SIZE(unary); i++){
-    decl.configInfo = PushArray<ConfigurationInfo>(globalPermanent,1);
     decl.info.infos = PushArray<MergePartition>(globalPermanent,1);
-    decl.configInfo[0].inputDelays = Array<int>{zeros,1};
-    decl.configInfo[0].outputLatencies = Array<int>{zeros,1};
     decl.info.infos[0].inputDelays = Array<int>{zeros,1};
     decl.info.infos[0].outputLatencies = Array<int>{zeros,1};
 
@@ -108,10 +97,7 @@ static void RegisterOperators(){
   }
 
   for(unsigned int i = 0; i < ARRAY_SIZE(binary); i++){
-    decl.configInfo = PushArray<ConfigurationInfo>(globalPermanent,1);
     decl.info.infos = PushArray<MergePartition>(globalPermanent,1);
-    decl.configInfo[0].inputDelays = Array<int>{zeros,2};
-    decl.configInfo[0].outputLatencies = Array<int>{zeros,1};
     decl.info.infos[0].inputDelays = Array<int>{zeros,2};
     decl.info.infos[0].outputLatencies = Array<int>{zeros,1};
 
@@ -155,6 +141,6 @@ void InitializeSimpleDeclarations(){
 }
 
 bool HasMultipleConfigs(FUDeclaration* decl){
-  bool res = (decl->configInfo.size >= 2);
+  bool res = (decl->ConfigInfoSize() >= 2);
   return res;
 }

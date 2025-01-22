@@ -151,6 +151,40 @@ size_t SpaceAvailable(Arena* arena){
   return remaining;
 }
 
+StringBuilder* StartStringBuilder(Arena* arena){
+  StringBuilder* builder = PushStruct<StringBuilder>(arena);
+  builder->arena = arena;
+  builder->head = nullptr;
+  builder->tail = nullptr;
+  
+  return builder;
+}
+
+void StringBuilder::PushString(String str){
+  StringNode* node = PushStruct<StringNode>(this->arena);
+  node->string = ::PushString(this->arena,str);
+
+  if(this->head == nullptr){
+    this->head = node;
+    this->tail = node;
+  } else {
+    this->tail->next = node;
+    this->tail = node;
+  }
+}
+
+String EndString(Arena* out,StringBuilder* builder){
+  // TODO: Calculate and preallocate the amount of memory needed to store the end string
+  //       Do this pass when we change arenas to a linked list approach.
+  DynamicString b = StartString(out);
+
+  for(StringNode* ptr = builder->head; ptr != nullptr; ptr = ptr->next){
+    b.PushString(ptr->string);
+  }
+
+  return EndString(b);
+}
+
 DynamicString StartString(Arena* arena){
   DynamicString res = {};
   res.arena = arena;

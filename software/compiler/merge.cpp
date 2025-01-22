@@ -1533,7 +1533,6 @@ Array<GraphAndMapping> GetAllBaseMergeTypes(FUDeclaration* decl,Arena* out,Arena
   Set<GraphAndMapping>* seen = PushSet<GraphAndMapping>(temp,10);
 
   if(decl->type == FUDeclarationType_MERGED){
-    //for(ConfigurationInfo info : decl->configInfo){
     for(MergePartition info : decl->info.infos){
       seen->Insert({.decl = info.baseType,.map = info.mapping,.mergeMultiplexers = info.mergeMultiplexers});
     }
@@ -1598,12 +1597,12 @@ struct MergeTypesIterator{
 
   Pair<int,int> Next(){
     Assert(currentType < types.size);
-    Assert(currentConfig < types[currentType]->configInfo.size);
+    Assert(currentConfig < types[currentType]->ConfigInfoSize());
 
     Pair<int,int> toReturn = {currentType,currentConfig};
 
     currentConfig += 1;
-    if(currentConfig >= types[currentType]->configInfo.size){
+    if(currentConfig >= types[currentType]->ConfigInfoSize()){
       currentType += 1;
       currentConfig = 0;
     }
@@ -1657,7 +1656,7 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
   
   int mergedAmount = 0;
   for(FUDeclaration* decl : types){
-    mergedAmount += std::max(decl->configInfo.size,1);
+    mergedAmount += std::max(decl->ConfigInfoSize(),1);
   }
 
   for(int i = 0; i < size; i++){
@@ -2100,7 +2099,7 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
       String filePath = PushDebugPath(temp,permanentName,fileName);
 
       GraphPrintingContent content = GenerateDelayDotGraph(recon[i],reconDelay[i],temp,debugArena);
-      String result = GenerateDotGraph(recon[i],content,temp,debugArena);
+      String result = GenerateDotGraph(content,temp,debugArena);
       OutputContentToFile(filePath,result);
     }
 
@@ -2138,9 +2137,6 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
     }
   }
 
-  decl->configInfo = PushArray<ConfigurationInfo>(globalPermanent,size);
-  Memset(decl->configInfo,{});
-
   Array<int> validIndexes = PushArray<int>(temp,actualMergedAmount);
 
   int index = 0;
@@ -2150,121 +2146,6 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
     }
   }
   validIndexes.size = index;
-  
-  for(int i = 0; i < size; i++){
-    DynamicArray<int> childToTopArr = StartArray<int>(temp);
-    for(int j = validIndexes[i]; j != -1 ; j = parents[j]){
-      *childToTopArr.PushElem() = j; 
-    }
-    Array<int> childToTop = EndArray(childToTopArr);
-      
-    DynamicString str = StartString(globalPermanent);
-    for(int i = childToTop.size - 1; i >= 0 ; i--){
-      int index = childToTop[i];
-      FUDeclaration* decl = baseCircuitType[index];
-
-      PushString(globalPermanent,decl->name);
-      if(i != 0){
-        PushString(globalPermanent,"_");
-      }
-    }
-    decl->configInfo[i].name = EndString(str);
-
-    decl->configInfo[i].baseName = PushArray<String>(globalPermanent,mergedUnitsAmount);
-    Memset(decl->configInfo[i].baseName,{});
-  }
-
-#if 0
-  for(int i = 0; i < size; i++){
-    AcceleratorMapping* map = MappingInvert(reconToAccel[i],globalPermanent); //accelToRecon[i];
-    
-    decl->configInfo[i].configOffsets.offsets = PushArray<int>(globalPermanent,mergedUnitsAmount);
-//    decl->configInfo[i].configOffsets.max = decl->baseConfig.configOffsets.max;
-
-    decl->configInfo[i].inputDelays = ExtractInputDelays(recon[i],reconDelay[i],numberInputs,globalPermanent,temp);
-    decl->configInfo[i].outputLatencies = ExtractOutputLatencies(recon[i],reconDelay[i],globalPermanent,temp);
- 
-    for(int index = 0; index < result->allocated.Size(); index++){
-      FUInstance* ptr = result->allocated.Get(index);
-      FUInstance* reconNode = MappingMapNode(map,ptr);
-      bool mapExists = reconNode != nullptr;
- 
-      // TODO: Unused members are being filled when in theory the code should work with them being negative or invalid. Code should not really on th
-      if(ptr->isMergeMultiplexer || ptr->declaration == BasicDeclaration::fixedBuffer){
-        int val = decl->baseConfig.configOffsets.offsets[index];
-        decl->configInfo[i].configOffsets.offsets[index] = val;
-
-        decl->configInfo[i].baseName[index] = ptr->name;
-      } else if(mapExists){
-        int val = decl->baseConfig.configOffsets.offsets[index];
-        decl->configInfo[i].configOffsets.offsets[index] = val;
-
-        FUInstance* originalNode = MappingMapNode(map,ptr);
-        Assert(originalNode);
-        decl->configInfo[i].baseName[index] = originalNode->name;
-      } else {
-        decl->configInfo[i].baseName[index] = ptr->name;
-        decl->configInfo[i].configOffsets.offsets[index] = -1;
-      }
-    }
-  }
-#endif
-
-  int amountOfMuxConfigs = 0;
-  for(int i = 0; i < types.size; i++){
-    if(types[i]->configInfo.size > 0){
-      amountOfMuxConfigs += types[i]->configInfo[0].mergeMultiplexerConfigs.size;
-    }
-  }
-
-  // 2 types and 24 mergedAmount.
-  // Need to produce 0 for 0-12 and 1 for the 12-24.
-  // 6 types and 24 mergedAmount.
-  // 0 for 0-4, 1 for 4-8, 2 for 8-12, 3 for 12-16 and so on.
-
-  //int divider = mergedAmount / types.size;
-  
-  if(insertedAMultiplexer){
-    MergeTypesIterator typeIter = IterateTypes(types);
-    for(int i = 0; i < size; i++){
-      int typeConfigIndex = i;
-      int typeIndex = 0;
-      int muxIndex = 0;
-      while(typeConfigIndex >= types[typeIndex]->configInfo.size){
-        typeConfigIndex -= types[typeIndex]->configInfo.size;
-        typeIndex += 1;
-        if(types[typeIndex]->configInfo.size > 1){
-          muxIndex += 1;
-        }
-      }
-
-      decl->configInfo[i].mergeMultiplexerConfigs = PushArray<int>(globalPermanent,amountOfMuxConfigs + 1);
-
-      Pair<int,int> p = typeIter.Next();
-      Array<int> typeMuxConfigs = types[p.first]->configInfo[p.second].mergeMultiplexerConfigs;
-    
-      decl->configInfo[i].mergeMultiplexerConfigs[0] = p.first; //i / divider;
-
-      // TODO: This is a little bit forced for merges of 2 and binary hierarchies.
-      //       Will probably break with other amounts. Maybe.
-      if(typeMuxConfigs.size > 0){
-        decl->configInfo[i].mergeMultiplexerConfigs[muxIndex] = typeMuxConfigs[0];
-      }
-    }
-  } else {
-    MergeTypesIterator typeIter = IterateTypes(types);
-    for(int i = 0; i < size; i++){
-      Pair<int,int> p = typeIter.Next();
-      Array<int> typeMuxConfigs = types[p.first]->configInfo[p.second].mergeMultiplexerConfigs;
-      if(typeMuxConfigs.size > 0){
-        decl->configInfo[i].mergeMultiplexerConfigs = types[p.first]->configInfo[p.second].mergeMultiplexerConfigs;
-      } else {
-        static int zero = 0;
-        Array<int> zeroArray = {&zero,1};
-        decl->configInfo[i].mergeMultiplexerConfigs = zeroArray;
-      }
-    }
-  }
 
   // Propagates merge multiplexers accross hierarchies
   for(int i = 0; i < size; i++){
@@ -2274,20 +2155,20 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
 
     int typeConfigIndex = i;
     int typeIndex = 0;
-    while(typeConfigIndex >= types[typeIndex]->configInfo.size){
-      typeConfigIndex -= types[typeIndex]->configInfo.size;
+    while(typeConfigIndex >= types[typeIndex]->ConfigInfoSize()){
+      typeConfigIndex -= types[typeIndex]->ConfigInfoSize();
       typeIndex += 1;
     }
     
     AcceleratorMapping* copyToFlatten = MappingCombine(firstMapping,mergeToFlatten[typeIndex],temp);
   }
 
-  int mergeSize = decl->configInfo.size;
+  int mergeSize = size;
   int unitSize = result->allocated.Size();
 
   decl->info.infos = PushArray<MergePartition>(globalPermanent,mergeSize);
   
-  AccelInfo accelInfo = CalculateAcceleratorInfoNoDelay(circuit,true,temp,temp2);
+  AccelInfo accelInfo = CalculateAcceleratorInfo(circuit,true,temp,temp2);
 
   for(int i = 0; i < size; i++){
     DynamicArray<int> childToTopArr = StartArray<int>(temp);
@@ -2326,10 +2207,10 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
       
       if(reconNode){
         decl->info.infos[i].info[index].baseDelay = reconDelay[i].nodeDelay->GetOrFail(reconNode).value;
-        decl->info.infos[i].info[index].order = reconToOrder[i]->GetOrFail(reconNode);
+        decl->info.infos[i].info[index].localOrder = reconToOrder[i]->GetOrFail(reconNode);
       } else {
         decl->info.infos[i].info[index].baseDelay = 0; // NOTE: Even if they do not belong, this delay is directly inserted into the header file, meaning that for now it's better if we keep everything at zero.
-        decl->info.infos[i].info[index].order = 0;
+        decl->info.infos[i].info[index].localOrder = 0;
       }
  
       Opt<int> val = accelInfo.baseInfo[index].configPos; 
@@ -2350,6 +2231,7 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
     }
   }
   
+#if 0
   for(int i = 0; i < size; i++){
     BLOCK_REGION(temp);
 
@@ -2357,8 +2239,8 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
 
     int typeConfigIndex = i;
     int typeIndex = 0;
-    while(typeConfigIndex >= types[typeIndex]->configInfo.size){
-      typeConfigIndex -= types[typeIndex]->configInfo.size;
+    while(typeConfigIndex >= types[typeIndex]->ConfigInfoSize()){
+      typeConfigIndex -= types[typeIndex]->ConfigInfoSize();
       typeIndex += 1;
     }
     
@@ -2368,7 +2250,9 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
     decl->info.infos[i].mapping = MappingInvert(copyToFlatten,globalPermanent);
     decl->info.infos[i].mergeMultiplexers = mergeMultiplexers[typeIndex];
   }
-
+#endif
+  
+#if 1
   // TODO: Quick and dirty. Will not work for complex merges, but handle them when the time comes.
   for(int i = 0; i < size; i++){
     for(InstanceInfo& info : decl->info.infos[i].info){
@@ -2377,6 +2261,82 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
       }
     }
   }
+#endif
+  
+  // 2 types and 24 mergedAmount.
+  // Need to produce 0 for 0-12 and 1 for the 12-24.
+  // 6 types and 24 mergedAmount.
+  // 0 for 0-4, 1 for 4-8, 2 for 8-12, 3 for 12-16 and so on.
+
+  //int divider = mergedAmount / types.size;
+  // This code is not currently working, which means that we are not producing the same values for the multiplexer configurations than we where doing previously. Currently, the "Quick and dirty" approach on the top is the approach being taken. Need to spent more time on the merge before tackling this part.
+#if 0  
+  if(insertedAMultiplexer){
+    MergeTypesIterator typeIter = IterateTypes(types);
+    for(int i = 0; i < size; i++){
+      int typeConfigIndex = i;
+      int typeIndex = 0;
+      int muxIndex = 0;
+      while(typeConfigIndex >= types[typeIndex]->ConfigInfoSize()){
+        typeConfigIndex -= types[typeIndex]->ConfigInfoSize();
+        typeIndex += 1;
+        if(types[typeIndex]->ConfigInfoSize() > 1){
+          muxIndex += 1;
+        }
+      }
+
+      decl->configInfo[i].mergeMultiplexerConfigs = PushArray<int>(globalPermanent,amountOfMuxConfigs + 1);
+
+      Pair<int,int> p = typeIter.Next();
+      Array<int> typeMuxConfigs = types[p.first]->configInfo[p.second].mergeMultiplexerConfigs;
+
+      // mergeMultiplexerConfig is the config value given to the multiplexer so that it
+      // forms the datapath required by the merge algorithm?
+      // If so, it should be stored inside the InstanceInfo of the multiplexer in question. Not an outside array.
+      
+      decl->configInfo[i].mergeMultiplexerConfigs[0] = p.first; //i / divider;
+      //decl->info.infos[i].muxConfigs = decl->configInfo[i].mergeMultiplexerConfigs;
+      
+      //DEBUG_BREAK();
+      
+      // TODO: This is a little bit forced for merges of 2 and binary hierarchies.
+      //       Will probably break with other amounts. Maybe.
+      if(typeMuxConfigs.size > 0){
+        decl->configInfo[i].mergeMultiplexerConfigs[muxIndex] = typeMuxConfigs[0];
+      }
+    }
+  } else {
+    MergeTypesIterator typeIter = IterateTypes(types);
+    for(int i = 0; i < size; i++){
+      Pair<int,int> p = typeIter.Next();
+      Array<int> typeMuxConfigs = types[p.first]->configInfo[p.second].mergeMultiplexerConfigs;
+      if(typeMuxConfigs.size > 0){
+        decl->configInfo[i].mergeMultiplexerConfigs = types[p.first]->configInfo[p.second].mergeMultiplexerConfigs;
+      } else {
+        static int zero = 0;
+        Array<int> zeroArray = {&zero,1};
+        decl->configInfo[i].mergeMultiplexerConfigs = zeroArray;
+      }
+    }
+  }
+#endif
+  
+#if 0
+  for(int i = 0; i < size; i++){
+    AccelInfoIterator iter = StartIteration(&decl->info);
+    iter.mergeIndex = i;
+    int muxSeen = 0;
+    for(; iter.IsValid(); iter = iter.Next()){
+      InstanceInfo* info = iter.CurrentUnit();
+
+      if(info->isMergeMultiplexer){
+        info->mergePort = decl->configInfo[i].mergeMultiplexerConfigs[muxSeen++];
+      }
+    }
+  }
+#endif
+  
+  DEBUG_BREAK();
   
   return decl;
 }

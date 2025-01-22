@@ -474,29 +474,6 @@ int main(int argc,char* argv[]){
   Arena* temp = &tempInst;
   Arena temp2Inst = InitArena(Megabyte(128));
   Arena* temp2 = &temp2Inst;
-
-  auto test = PushHashmap<char,char>(perm,5);
-
-  test->Insert(0,2);
-  test->Insert(4,8);
-  test->Insert(10,20);
-
-  auto test2 = PushArray<int>(perm,5);
-
-  test2[0] = 10;
-  test2[1] = 11;
-  test2[2] = 12;
-  test2[3] = 13;
-  test2[4] = 24;
-  
-  DEBUG_BREAK();
-
-  GenericHashmapIterator iter = IterateHashmap(test,sizeof(Pair<char,char>),alignof(Pair<char,char>));
-  while(HasNext(iter)){
-    auto pair = *(Pair<char,char>*) Next(iter);
-
-    printf("%d:%d\n",pair.first,pair.second);
-  }
   
   argp argp = { options, parse_opt, "SpecFile", "Dataflow to accelerator compiler. Check tutorial in https://github.com/IObundle/iob-versat to learn how to write a specification file"};
 
@@ -850,7 +827,7 @@ int main(int argc,char* argv[]){
 
       if(globalOptions.debug){
         GraphPrintingContent content = GenerateDefaultPrintingContent(decl->fixedDelayCircuit,temp,temp2);
-        String repr = GenerateDotGraph(decl->fixedDelayCircuit,content,temp,temp2);
+        String repr = GenerateDotGraph(content,temp,temp2);
         String debugPath = PushDebugPath(temp,decl->name,STRING("NormalGraph.dot"));
 
         FILE* file = OpenFile(debugPath,"w",FilePurpose_DEBUG_INFO);

@@ -94,7 +94,7 @@ GraphPrintingContent GenerateDefaultPrintingContent(Accelerator* accel,Arena* ou
   return content;
 }
 
-String GenerateDotGraph(Accelerator* accel,GraphPrintingContent content,Arena* out,Arena* temp){
+String GenerateDotGraph(GraphPrintingContent content,Arena* out,Arena* temp){
   auto result = StartString(out);
 
   PushString(out,"digraph view {\n\tnode [fontcolor=white,style=filled,color=\"160,60,176\"];\n");
@@ -140,7 +140,7 @@ void OutputDebugDotGraph(Accelerator* accel,String fileName,Arena* temp){
   String filePath = PushDebugPath(temp,accel->name,trueFileName);
       
   GraphPrintingContent content = GenerateDefaultPrintingContent(accel,temp,temp2);
-  String result = GenerateDotGraph(accel,content,temp,debugArena);
+  String result = GenerateDotGraph(content,temp,debugArena);
   OutputContentToFile(filePath,result);
 }
 
@@ -169,7 +169,7 @@ void OutputDebugDotGraph(Accelerator* accel,String fileName,FUInstance* highligh
   };
   
   GraphPrintingContent content = GeneratePrintingContent(accel,nodeFunction,defaultEdgeContent,temp,temp2);
-  String result = GenerateDotGraph(accel,content,temp,debugArena);
+  String result = GenerateDotGraph(content,temp,debugArena);
   OutputContentToFile(filePath,result);
 }
 
@@ -198,7 +198,7 @@ void OutputDebugDotGraph(Accelerator* accel,String fileName,Set<FUInstance*>* hi
   };
   
   GraphPrintingContent content = GeneratePrintingContent(accel,nodeFunction,defaultEdgeContent,temp,temp2);
-  String result = GenerateDotGraph(accel,content,temp,debugArena);
+  String result = GenerateDotGraph(content,temp,debugArena);
   OutputContentToFile(filePath,result);
 }
 

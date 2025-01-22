@@ -120,7 +120,6 @@ struct FUInstance{
   bool isStatic;
   bool sharedEnable;
   bool isMergeMultiplexer; // TODO: Kinda of an hack for now
-  //int mergeMultiplexerId;
   
   // Calculated and updated every time a connection is added or removed
   ConnectionNode* allInputs;

@@ -223,6 +223,22 @@ struct DynamicString{
   void PushNullByte();
 };
 
+struct StringNode{
+  StringNode* next;
+  String string;
+};
+
+struct StringBuilder{
+  Arena* arena;
+  StringNode* head;
+  StringNode* tail;
+  
+  void PushString(String str);
+};
+
+StringBuilder* StartStringBuilder(Arena* arena);
+String EndString(Arena* out,StringBuilder* builder);
+
 DynamicString StartString(Arena *arena);
 String EndString(DynamicString mark);
 

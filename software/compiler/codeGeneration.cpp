@@ -246,7 +246,7 @@ Array<SubTypesInfo> GetSubTypesInfo(Accelerator* accel,Arena* out,Arena* temp){
   
   for(FUDeclaration* type : typesUsed){
     if(type->type == FUDeclarationType_MERGED){
-      for(int i = 0; i < type->configInfo.size; i++){
+      for(int i = 0; i < type->ConfigInfoSize(); i++){
         ConfigurationInfo in = type->configInfo[i];
         SubTypesInfo res = {};
         res.type = nullptr; // in.baseType;
@@ -364,8 +364,8 @@ Array<TypeStructInfo> GetConfigStructInfo(Accelerator* accel,Arena* out,Arena* t
 
       Array<TypeStructInfoElement> merged = PushArray<TypeStructInfoElement>(out,1);
 
-      merged[0].typeAndNames = PushArray<SingleTypeStructElement>(out,decl->configInfo.size);
-      for(int i = 0; i < decl->configInfo.size; i++){
+      merged[0].typeAndNames = PushArray<SingleTypeStructElement>(out,decl->ConfigInfoSize());
+      for(int i = 0; i < decl->ConfigInfoSize(); i++){
         merged[0].typeAndNames[i] = {};
         merged[0].typeAndNames[i].type = PushString(out,"%.*sConfig",UNPACK_SS(decl->configInfo[i].name));
         merged[0].typeAndNames[i].name = decl->configInfo[i].name;
@@ -674,7 +674,7 @@ void OutputCircuitSource(FUDeclaration* decl,FILE* file,Arena* temp,Arena* temp2
   // There is no reason why OutputCircuitSource should ever need to take 2 arenas
   // AccelInfo being recalculated again is not good. We are recalculating stuff too much
   // program is still fast, but its a sign of poor architecture
-  AccelInfo info = CalculateAcceleratorInfoNoDelay(accel,true,temp,temp2);
+  AccelInfo info = CalculateAcceleratorInfo(accel,true,temp,temp2);
   //VersatComputedValues val = ComputeVersatValues(accel,false);
   VersatComputedValues val = ComputeVersatValues(&info,false);
   Array<String> memoryMasks = ExtractMemoryMasks(info,temp);
@@ -685,7 +685,6 @@ void OutputCircuitSource(FUDeclaration* decl,FILE* file,Arena* temp,Arena* temp2
   }
 
   Array<InstanceInfo*> topLevelUnits = GetAllSameLevelUnits(&info,0,0,temp);
-  DEBUG_BREAK();
   // #{set configStart accel.baseConfig.configOffsets.offsets[id]}
 
   TemplateSetCustom("topLevel",MakeValue(&topLevelUnits));
@@ -1150,8 +1149,6 @@ void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* 
   
   Array<StructInfo*> allStructs = ExtractStructs(structInfo,temp,temp2);
   Array<TypeStructInfo> structs = GenerateStructs(allStructs,temp,temp2);
-  
-  DEBUG_BREAK();
 
   // What is the best way of looking at the data?
   // For each struct, I need to see, for a given configPos, all the types and names used.
@@ -1326,8 +1323,6 @@ void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* 
   TemplateSetNumber("delaySize",DELAY_SIZE);
   TemplateSetBool("useDMA",globalOptions.useDMA);
   TemplateSetCustom("opts",MakeValue(&globalOptions));
-
-  DEBUG_BREAK();
   
   int configBit = 0;
   int addr = val.versatConfigs;
@@ -1373,7 +1368,6 @@ void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* 
   
   auto test = EndArray(arr);
   TemplateSetCustom("wireInfo",MakeValue(&test));
-  //DEBUG_BREAK();
   
   {
     FILE* s = OpenFileAndCreateDirectories(PushString(temp,"%s/versat_instance.v",hardwarePath),"w",FilePurpose_VERILOG_CODE);
@@ -1512,7 +1506,6 @@ void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* 
     
     Array<String> allStates = ExtractStates(info.baseInfo,temp2);
     Array<Pair<String,int>> allMem = ExtractMem(info.baseInfo,temp2);
-    //DEBUG_BREAK();
     
     TemplateSetNumber("delays",val.nDelays);
     TemplateSetCustom("structuredConfigs",MakeValue(&structuredConfigs));

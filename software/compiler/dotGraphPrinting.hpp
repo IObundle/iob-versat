@@ -8,7 +8,7 @@ struct Accelerator;
 struct FUInstance;
 struct Edge;
 
-// When adding new colors, also add 
+// When adding new colors, also add info in the .cpp file
 enum Color{
   Color_BLACK,
   Color_BLUE,
@@ -18,7 +18,6 @@ enum Color{
 };
 
 struct GraphPrintingNodeInfo{
-  //String outputName;
   String name;
   String content;
   Color color;
@@ -27,8 +26,8 @@ struct GraphPrintingNodeInfo{
 struct GraphPrintingEdgeInfo{
   String content;
   Color color;
-  String first;
-  String second;
+  String first; // Name of first node
+  String second; // Name of second node
 };
 
 struct GraphPrintingContent{
@@ -53,7 +52,7 @@ GraphPrintingContent GeneratePrintingContent(Accelerator* accel,NodeContent node
 Color DefaultNodeColor(FUInstance* node);
 GraphPrintingContent GenerateDefaultPrintingContent(Accelerator* accel,Arena* out,Arena* temp);
 
-String GenerateDotGraph(Accelerator* accel,GraphPrintingContent content,Arena* out,Arena* temp);
+String GenerateDotGraph(GraphPrintingContent content,Arena* out,Arena* temp);
 
 void OutputDebugDotGraph(Accelerator* accel,String fileName,Arena* temp);
 void OutputDebugDotGraph(Accelerator* accel,String fileName,FUInstance* highlight,Arena* temp);

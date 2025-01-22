@@ -10,43 +10,57 @@ struct SimplePortInstance{
   int port;
 };
 
-struct InstanceInfo{
-  int level; // D 
-  FUDeclaration* decl; // D
-  String name; // D
-  String baseName; // D
-  Opt<int> configPos; // D  
-  int isConfigStatic; // Static must be handle separately, for the top level accelerator. 
-  int configSize; // D 
-  Opt<int> statePos; // D
-  int stateSize; // D
-  Opt<iptr> memMapped; // Used on Code Gen, to create the addresses for the memories.
-  Opt<int> memMappedSize; // D
-  Opt<int> memMappedBitSize; // D
-  Opt<String> memMappedMask; // D
-  Opt<String> memDecisionMask; // D
-  Opt<int> delayPos; // D 
-  Array<int> delay; // 
-  int baseDelay; // D
-  int delaySize; // D 
-  bool isComposite; // D
-  bool isMerge;
-  bool isStatic; // D
-  bool isShared; // D
-  int sharedIndex; // D
-  FUDeclaration* parent; // D
-  String fullName; // D
-  int mergePort;
-  bool isMergeMultiplexer; // D
-  bool belongs; // D
-  int special; // D
-  int order; // Missing for now
-  NodeType connectionType; // D
-  int id; // D
-  int mergeIndexStart; // D
-  FUInstance* inst; // D
+struct SimplePortConnection{
+  int outInst;
+  int outPort;
+  int inPort;
+};
 
-  Array<SimplePortInstance> inputs; 
+// We currently just stuff everything into this struct, so it's easier to visualize all the info that we need for
+// the current accelerator.
+// Some of this data is duplicated/unnecessary, but for now we just carry on since this simplifies debugging a lot, being able to see all the info for a given accelerator directly.
+struct InstanceInfo{
+  int level;
+  FUDeclaration* decl;
+  String name;
+  String baseName;
+  Opt<int> configPos;
+  int isConfigStatic; // Static must be handle separately, for the top level accelerator. 
+  int configSize;
+  Opt<int> statePos;
+  int stateSize;
+
+  // Some of these could be removed and be computed from the others
+  Opt<iptr> memMapped; // Used on Code Gen, to create the addresses for the memories.
+  Opt<int> memMappedSize;
+  Opt<int> memMappedBitSize;
+  Opt<String> memMappedMask;
+  Opt<String> memDecisionMask;
+  Opt<int> delayPos;
+  Array<int> delay;
+  int baseDelay;
+  int delaySize;
+  bool isComposite;
+  bool isMerge;
+  bool isStatic;
+  bool isShared;
+  int sharedIndex;
+  FUDeclaration* parent;
+  String fullName;
+  int mergePort;
+  bool isMergeMultiplexer;
+  bool belongs;
+  int special;
+  int localOrder;
+  NodeType connectionType;
+  int id;
+  int mergeIndexStart;
+  FUInstance* inst;
+  Array<int> inputDelays;
+  Array<int> outputLatencies;
+  Array<int> portDelay;
+
+  Array<SimplePortConnection> inputs; 
 };
 
 struct AcceleratorInfo{
@@ -82,7 +96,7 @@ struct TestResult{
 };
 
 struct MergePartition{
-  String name;
+  String name; // For now this appears to not affect anything.
   Array<InstanceInfo> info;
 
   FUDeclaration* baseType;
@@ -99,7 +113,7 @@ struct MergePartition{
 
 struct AccelInfo{
   // An array that abstracts all the common values of any merge type into a single one. Code that does not care about dealing with merge types can access this data
-  Array<InstanceInfo> baseInfo; // This shit is already giving errors and causing bugs.
+  Array<InstanceInfo> baseInfo; // TODO: Remove baseInfo and only use infos[0]
 
   // The problem is how to go to remove baseInfo without spending too much time.
   Array<MergePartition> infos;
@@ -136,11 +150,13 @@ struct AccelInfoIterator{
   
   bool IsValid();
   
+  int GetIndex();
   int GetIndex(InstanceInfo* instance);
   
   AccelInfoIterator GetParent();
   InstanceInfo* GetParentUnit();
   InstanceInfo* CurrentUnit();
+  InstanceInfo* GetUnit(int index);
   Array<InstanceInfo*> GetAllSubUnits(Arena* out);
 
   // Next and step mimick gdb like commands. Does not update current, instead returning the advanced iterator
@@ -205,7 +221,6 @@ Array<InstanceInfo> CalculateInstanceInfoTest(Accelerator* accel,Arena* out,Aren
 int GetConfigIndexFromInstance(Accelerator* accel,FUInstance* inst);
 
 AccelInfo CalculateAcceleratorInfo(Accelerator* accel,bool recursive,Arena* out,Arena* temp);
-AccelInfo CalculateAcceleratorInfoNoDelay(Accelerator* accel,bool recursive,Arena* out,Arena* temp);
 
 CalculatedOffsets CalculateConfigOffsetsIgnoringStatics(Accelerator* accel,Arena* out);
 CalculatedOffsets CalculateConfigurationOffset(Accelerator* accel,MemType type,Arena* out);

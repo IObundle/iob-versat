@@ -165,10 +165,7 @@ FUDeclaration* RegisterModuleInfo(ModuleInfo* info,Arena* temp){
   
   decl.name = info->name;
 
-  decl.configInfo = PushArray<ConfigurationInfo>(globalPermanent,1);
   decl.info.infos = PushArray<MergePartition>(globalPermanent,1);
-  decl.configInfo[0].inputDelays = info->inputDelays;
-  decl.configInfo[0].outputLatencies = info->outputLatencies;
   decl.info.infos[0].inputDelays = info->inputDelays;
   decl.info.infos[0].outputLatencies = info->outputLatencies;
 
@@ -231,16 +228,10 @@ void FillDeclarationWithAcceleratorValues(FUDeclaration* decl,Accelerator* accel
     }
   }
 
-  if(decl->configInfo.size == 0){
-    decl->configInfo = PushArray<ConfigurationInfo>(globalPermanent,val.infos.size);
-  }
-
   if(decl->info.infos.size == 0){
     decl->info.infos = PushArray<MergePartition>(globalPermanent,val.infos.size);
   }
   
-  decl->configInfo[0].inputDelays = val.infos[0].inputDelays;
-  decl->configInfo[0].outputLatencies = val.infos[0].outputLatencies;
   decl->info.infos[0].inputDelays = val.infos[0].inputDelays;
   decl->info.infos[0].outputLatencies = val.infos[0].outputLatencies;
 
@@ -293,53 +284,6 @@ void FillDeclarationWithAcceleratorValues(FUDeclaration* decl,Accelerator* accel
   if(decl->info.infos.size == 0){
     decl->info.infos = PushArray<MergePartition>(globalPermanent,1);
   }
-  
-  // If only one config, set configInfo zero as equal to baseConfig in order to simplify code that uses configInfo
-  if(val.infos.size == 1){
-    decl->configInfo = PushArray<ConfigurationInfo>(perm,1);
-    decl->configInfo[0].baseName = baseName;
-  } else {
-    decl->configInfo = PushArray<ConfigurationInfo>(perm,val.infos.size);
-    Memset(decl->configInfo,{});
-
-    for(int i = 0; i < val.infos.size; i++){
-      Array<InstanceInfo> info = val.infos[i].info;
-
-      decl->configInfo[i].name = val.infos[i].name;
-      Assert(!Empty(decl->configInfo[i].name));
-      decl->configInfo[i].inputDelays = val.infos[i].inputDelays;
-      decl->configInfo[i].outputLatencies = val.infos[i].outputLatencies;
-
-      decl->info.infos[i].info = val.infos[i].info;
-      decl->info.infos[i].inputDelays = val.infos[i].inputDelays;
-      decl->info.infos[i].outputLatencies = val.infos[i].outputLatencies;
-
-      decl->configInfo[i].mergeMultiplexerConfigs = val.infos[i].muxConfigs;
-      
-      decl->configInfo[i].baseName = Map(val.infos[i].info,perm,[](InstanceInfo info){
-        return info.name;
-      });
-
-      {
-        decl->configInfo[i].configOffsets.offsets = PushArray<int>(perm,size);
-
-        int delayIndex = 0;
-        int index = 0;
-        for(InstanceInfo& in : info){
-          if(in.level != 0) continue;
-
-          if(in.isConfigStatic){
-            decl->configInfo[i].configOffsets.offsets[index] = -1;
-          } else {
-            decl->configInfo[i].configOffsets.offsets[index] = in.configPos.value_or(-1);
-          }
-
-          index += 1;
-        }
-        decl->configInfo[i].configOffsets.max = val.configs;
-      }
-    }
-  }
 }
 
 void FillDeclarationWithAcceleratorValuesNoDelay(FUDeclaration* decl,Accelerator* accel,Arena* temp,Arena* temp2){
@@ -347,11 +291,8 @@ void FillDeclarationWithAcceleratorValuesNoDelay(FUDeclaration* decl,Accelerator
   BLOCK_REGION(temp);
   BLOCK_REGION(temp2);
 
-  AccelInfo val = CalculateAcceleratorInfoNoDelay(accel,true,perm,temp2);
+  AccelInfo val = CalculateAcceleratorInfo(accel,true,perm,temp2);
 
-  decl->configInfo = PushArray<ConfigurationInfo>(perm,val.infos.size);
-  Memset(decl->configInfo,{});
-  
   decl->nIOs = val.ios;
   if(val.isMemoryMapped){
     decl->memoryMapBits = val.memoryMappedBits;
@@ -408,35 +349,6 @@ void FillDeclarationWithAcceleratorValuesNoDelay(FUDeclaration* decl,Accelerator
 
   Array<bool> belongArray = PushArray<bool>(perm,accel->allocated.Size());
   Memset(belongArray,true);
-
-  for(int i = 0; i < val.infos.size; i++){
-    Array<InstanceInfo> info = val.infos[i].info;
-
-    decl->configInfo[i].name = val.infos[i].name;
-
-    decl->configInfo[i].baseName = Map(val.infos[i].info,perm,[](InstanceInfo info){
-      return info.name;
-    });
-
-    {
-      decl->configInfo[i].configOffsets.offsets = PushArray<int>(perm,size);
-
-      int delayIndex = 0;
-      int index = 0;
-      for(InstanceInfo& info : info){
-        if(info.level != 0) continue;
-
-        if(info.isConfigStatic){
-          decl->configInfo[i].configOffsets.offsets[index] = -1;
-        } else {
-          decl->configInfo[i].configOffsets.offsets[index] = info.configPos.value_or(-1);
-        }
-
-        index += 1;
-      }
-      decl->configInfo[i].configOffsets.max = val.configs;
-    }
-  }
 }
 
 void FillDeclarationWithDelayType(FUDeclaration* decl){
@@ -508,7 +420,7 @@ FUDeclaration* RegisterSubUnitBarebones(Accelerator* circuit,Arena* temp,Arena* 
   decl.baseCircuit = circuit;
 
   Accelerator* copy = CopyAccelerator(decl.baseCircuit,AcceleratorPurpose_FIXED_DELAY,true,nullptr);
-
+  
   DAGOrderNodes order = CalculateDAGOrder(&copy->allocated,temp);
   CalculateDelayResult delays = CalculateDelay(copy,order,temp);
 
@@ -526,6 +438,7 @@ FUDeclaration* RegisterSubUnitBarebones(Accelerator* circuit,Arena* temp,Arena* 
   decl.fixedDelayCircuit = copy;
   decl.fixedDelayCircuit->name = decl.name;
 
+  // TODO: This can be taken out, right?
   FillDeclarationWithAcceleratorValues(&decl,decl.fixedDelayCircuit,temp,temp2);
   FillDeclarationWithDelayType(&decl);
 

@@ -62,20 +62,6 @@ inline DelayType operator|(DelayType a, DelayType b)
   }
 */
 
-struct ConfigurationInfo{
-  // Copy of MergeInfo
-  String name;
-  Array<String> baseName;
-
-  Array<int> inputDelays;
-  Array<int> outputLatencies;
-
-  // Cannot remove this until we have code generating the config structs using AccelInfo.
-  CalculatedOffsets   configOffsets;
-  
-  Array<int>          mergeMultiplexerConfigs;
-};
-
 enum FUDeclarationType{
   FUDeclarationType_SINGLE,
   FUDeclarationType_COMPOSITE,
@@ -95,17 +81,12 @@ struct FUDeclaration{
 
   Array<Wire> configs;
   Array<Wire> states;
-  
-  Array<ConfigurationInfo> configInfo; // Info for each merged view for all fixedDelayCircuit instances, even if they do not belong to the merged view (unitBelongs indicates such cases)
-
-  // TODO:  The idea is to phase out baseConfig and configInfo and replace them with the InstanceInfo approach
-  //        The InstanceInfo approach is then used inside the FUDeclaration
-
-  // TODO2: Because merge permeates the entire logic, there is no point having a different member to store data.
-  //        baseConfig and configInfo should have been always just configInfo, with a size of 1 if no merge and non 1 if merge.
-  //        We carried the same problem for AccelInfo, where we have a baseInfo and the merged infos, but in reality we should have only one member.
 
   AccelInfo info;
+
+  int ConfigInfoSize(){
+    return info.infos.size;
+  };
   
   //Array<InstanceInfo> instanceInfo;
 

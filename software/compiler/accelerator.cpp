@@ -791,7 +791,7 @@ Array<FUDeclaration*> ConfigSubTypes(Accelerator* accel,Arena* out,Arena* temp){
   
   Set<FUDeclaration*>* maps = PushSet<FUDeclaration*>(temp,99);
   
-  Array<InstanceInfo> test = CalculateAcceleratorInfoNoDelay(accel,true,temp,out).baseInfo;
+  Array<InstanceInfo> test = CalculateAcceleratorInfo(accel,true,temp,out).baseInfo;
   for(InstanceInfo& info : test){
     if(info.configSize > 0){
       maps->Insert(info.decl);
@@ -811,7 +811,7 @@ Array<FUDeclaration*> MemSubTypes(Accelerator* accel,Arena* out,Arena* temp){
   
   Set<FUDeclaration*>* maps = PushSet<FUDeclaration*>(temp,99);
 
-  Array<InstanceInfo> test = CalculateAcceleratorInfoNoDelay(accel,true,temp,out).baseInfo;
+  Array<InstanceInfo> test = CalculateAcceleratorInfo(accel,true,temp,out).baseInfo;
   for(InstanceInfo& info : test){
     if(info.memMappedSize.has_value()){
       maps->Insert(info.decl);

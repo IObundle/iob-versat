@@ -9,7 +9,6 @@ static const int DELAY_SIZE = 7;
 struct Accelerator;
 struct InstanceInfo;
 struct FUDeclaration;
-struct ConfigurationInfo;
 
 // TODO: Config generation could be simplified if we instead had a immediate mode like interface for the specific of the structures. Something like a list of members and unions could be representing using a start union/end union command and the likes. Would simplify struct generation, but struct information would still need to be gathered from StructInfo
 
@@ -57,7 +56,6 @@ struct WireInformation{
 struct SubTypesInfo{
   FUDeclaration* type;
   FUDeclaration* mergeTop;
-  ConfigurationInfo* info;
   bool isFromMerged;
   bool containsMerged;
 };
@@ -81,7 +79,7 @@ static bool operator==(const SameMuxEntities i0,const SameMuxEntities i1){
 
 template<> struct std::hash<SubTypesInfo>{
    std::size_t operator()(SubTypesInfo const& s) const noexcept{
-     std::size_t res = std::hash<void*>()(s.type) + std::hash<void*>()(s.mergeTop) + std::hash<bool>()(s.isFromMerged) + std::hash<void*>()(s.info) + std::hash<bool>()(s.containsMerged);
+     std::size_t res = std::hash<void*>()(s.type) + std::hash<void*>()(s.mergeTop) + std::hash<bool>()(s.isFromMerged) + std::hash<bool>()(s.containsMerged);
      return res;
    }
 };
