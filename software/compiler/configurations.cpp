@@ -13,11 +13,7 @@
 #include <strings.h>
 
 Array<InstanceInfo>& AccelInfoIterator::GetCurrentMerge(){
-  if(info->infos.size <= 1){
-    return info->baseInfo;
-  } else {
-    return info->infos[mergeIndex].info;
-  }
+  return info->infos[mergeIndex].info;
 }
 
 int AccelInfoIterator::MergeSize(){
@@ -506,29 +502,15 @@ Array<InstanceInfo> GenerateInitialInstanceInfo(Accelerator* accel,Arena* out,Ar
   Function(Function,build,accel,0);
   Array<InstanceInfo> res = EndArray(build);
 
-  return res;
-}
-
-struct Node{
-  InstanceInfo* unit;
-  int value;
-  // Leafs have both of these at nullptr
-  Node* left;
-  Node* right;
-}; 
-
-Array<InstanceInfo> CalculateInstanceInfoTest(Accelerator* accel,Arena* out,Arena* temp){
-  Array<InstanceInfo> test2 = GenerateInitialInstanceInfo(accel,out,temp);
-  
-  AccelInfo test = {};
-  test.baseInfo = test2;
-
-  // Save graph data:
   auto instanceToIndex = PushTrieMap<FUInstance*,int>(temp);
 
-  for(AccelInfoIterator iter = StartIteration(&test); iter.IsValid(); iter = iter.Next()){
-    int index = iter.GetIndex();
-    InstanceInfo* info = iter.CurrentUnit();
+  for(int i = 0; i < res.size; i++){
+    int index = i;
+    InstanceInfo* info = &res[i];
+    if(info->level != 0){
+      continue;
+    }
+    
     for(FUInstance* inst : accel->allocated){
       if(inst == info->inst){
         instanceToIndex->Insert(inst,index);
@@ -536,8 +518,13 @@ Array<InstanceInfo> CalculateInstanceInfoTest(Accelerator* accel,Arena* out,Aren
     }
   }
 
-  for(AccelInfoIterator iter = StartIteration(&test); iter.IsValid(); iter = iter.Next()){
-    InstanceInfo* info = iter.CurrentUnit();
+  for(int i = 0; i < res.size; i++){
+    int index = i;
+    InstanceInfo* info = &res[i];
+    if(info->level != 0){
+      continue;
+    }
+
     FUInstance* inst = info->inst;
     
     ArenaList<SimplePortConnection>* list = PushArenaList<SimplePortConnection>(temp);
@@ -555,6 +542,24 @@ Array<InstanceInfo> CalculateInstanceInfoTest(Accelerator* accel,Arena* out,Aren
     }
     info->inputs = PushArrayFromList(out,list);
   }
+  
+  return res;
+}
+
+struct Node{
+  InstanceInfo* unit;
+  int value;
+  // Leafs have both of these at nullptr
+  Node* left;
+  Node* right;
+}; 
+
+Array<InstanceInfo> CalculateInstanceInfoTest(Accelerator* accel,Arena* out,Arena* temp){
+  Array<InstanceInfo> test2 = GenerateInitialInstanceInfo(accel,out,temp);
+  
+  AccelInfo test = {};
+  test.infos = PushArray<MergePartition>(out,1);
+  test.infos[0].info = test2;
     
   // Calculate full name
   for(AccelInfoIterator iter = StartIteration(&test); iter.IsValid(); iter = iter.Step()){
@@ -740,7 +745,6 @@ Array<InstanceInfo> CalculateInstanceInfoTest(Accelerator* accel,Arena* out,Aren
       }
     };
 
-    //DEBUG_BREAK();
     Sort(baseNodes);
 
     while(baseNodes.size > 1){
@@ -858,6 +862,7 @@ Array<InstanceInfo> CalculateInstanceInfoTest(Accelerator* accel,Arena* out,Aren
   iter = StartIteration(&test);
   CalculateDelayPos(CalculateDelayPos,iter,0,temp);
 
+  // We use the old calculate delay function.
   DAGOrderNodes order = CalculateDAGOrder(&accel->allocated,temp);
   CalculateDelayResult calculatedDelay = CalculateDelay(accel,order,temp);
  
@@ -1265,7 +1270,23 @@ void CalculateInstanceInfoTest(AccelInfoIterator initialIter,Accelerator* accel,
       }
     }
   };
+  
+  // Need local order.
+  DAGOrderNodes order = CalculateDAGOrder(&accel->allocated,temp);
+  {
+    for(AccelInfoIterator it = initialIter; it.IsValid(); it = it.Next()){
+      InstanceInfo* info = it.CurrentUnit();
 
+      FUInstance* inst = info->inst;
+      for(int i = 0; i < order.instances.size; i++){
+        if(order.instances[i] == inst){
+          info->localOrder = i;
+          break;
+        }
+      }
+    }
+  }
+  
   SimpleCalculateDelayResult delays = CalculateDelay(initialIter,out,temp);
   SetDelays(SetDelays,initialIter,delays,0,out);
 }
@@ -1285,7 +1306,6 @@ AccelInfo CalculateAcceleratorInfo(Accelerator* accel,bool recursive,Arena* out,
   // MARKED
   int size = partitionSize;
   size = partitionSize;
-  result.infos = PushArray<MergePartition>(out,size);
 
   auto ExtractInputDelays = [](AccelInfoIterator top,Arena* out) -> Array<int>{
     int maxInputs = -1;
@@ -1361,55 +1381,37 @@ AccelInfo CalculateAcceleratorInfo(Accelerator* accel,bool recursive,Arena* out,
     return muxConfigs;
   };
 
-#if 1
-  AccelInfo temp2 = {};// = result;
-  temp2.infos = PushArray<MergePartition>(globalPermanent,size);
-  
-  temp2.baseInfo = CalculateInstanceInfoTest(accel,globalPermanent,temp);
-  AccelInfoIterator iter = StartIteration(&temp2);
+  if(size == 0){
+    result.infos = PushArray<MergePartition>(globalPermanent,1);
+  } else {
+    result.infos = PushArray<MergePartition>(globalPermanent,size);
+  }
+
+  AccelInfoIterator iter = StartIteration(&result);
 
   if(iter.MergeSize() > 1){
     for(int i = 0; i < iter.MergeSize(); i++){
-      temp2.infos[i] = result.infos[i]; // This part must be removed as well in order to remove result.
-      
-      temp2.infos[i].info = GenerateInitialInstanceInfo(accel,globalPermanent,temp,i);
+      // TODO: Need to fully realize what is happening here.
+      //       Is it fine to use GenerateInitial with an index of 0?.
+      //       The base info should not depend on merge, right?
+      result.infos[i].info = GenerateInitialInstanceInfo(accel,globalPermanent,temp,0);
       
       iter.mergeIndex = i;
     
       CalculateInstanceInfoTest(iter,accel,globalPermanent,temp);
-      temp2.infos[i].inputDelays = ExtractInputDelays(iter,out);
-      temp2.infos[i].outputLatencies = ExtractOutputDelays(iter,out);
-      Array<int> muxConfigs = CalculateMuxConfigs(iter,out);
-      temp2.infos[i].muxConfigs = muxConfigs; //CalculateMuxConfigs(iter,out);
+      result.infos[i].inputDelays = ExtractInputDelays(iter,out);
+      result.infos[i].outputLatencies = ExtractOutputDelays(iter,out);
+      result.infos[i].muxConfigs = CalculateMuxConfigs(iter,out);
     }
   } else {
-    temp2.infos[0] = result.infos[0];
-    
-#if 1
-    temp2.infos[0].info = GenerateInitialInstanceInfo(accel,globalPermanent,temp);
-    for(InstanceInfo& f : temp2.infos[0].info){
-      f.belongs = true;
-    }
     iter.mergeIndex = 0;
+    result.infos[0].info = GenerateInitialInstanceInfo(accel,globalPermanent,temp);
     CalculateInstanceInfoTest(iter,accel,globalPermanent,temp);
 
-    temp2.infos[0].inputDelays = ExtractInputDelays(iter,out);
-    temp2.infos[0].outputLatencies = ExtractOutputDelays(iter,out);
-    temp2.infos[0].muxConfigs = CalculateMuxConfigs(iter,out);
-#endif
+    result.infos[0].inputDelays = ExtractInputDelays(iter,out);
+    result.infos[0].outputLatencies = ExtractOutputDelays(iter,out);
+    result.infos[0].muxConfigs = CalculateMuxConfigs(iter,out);
   }
-
-  //temp2.baseInfo = temp2.infos[0].info;
-  
-  //DEBUG_BREAK();
-  
-  result = temp2;
-#else 
-  Array<InstanceInfo> test2 = CalculateInstanceInfoTest(accel,globalPermanent,temp);
-  result.baseInfo = test2;
-#endif
-    
-  //result.memMappedBitsize = totalMaxBitsize;
 
   std::vector<bool> seenShared;
 

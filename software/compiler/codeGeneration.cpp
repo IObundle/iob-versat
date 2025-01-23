@@ -764,7 +764,7 @@ void OutputVerilatorWrapper(FUDeclaration* type,Accelerator* accel,String output
   ClearTemplateEngine(); // Make sure that we do not reuse data
 
   AccelInfo info = CalculateAcceleratorInfo(accel,true,temp,temp2);
-  Array<Wire> allConfigsHeaderSide = ExtractAllConfigs(info.baseInfo,temp,temp2);
+  Array<Wire> allConfigsHeaderSide = ExtractAllConfigs(info.infos[0].info,temp,temp2);
 
   // We need to bundle config + static (type->config) only contains config, but not static
   auto arr = StartArray<Wire>(temp);
@@ -788,11 +788,11 @@ void OutputVerilatorWrapper(FUDeclaration* type,Accelerator* accel,String output
   allStaticsVerilatorSide.size = index;
   TemplateSetCustom("allStaticsVerilatorSide",MakeValue(&allStaticsVerilatorSide));
   
-  Array<TypeStructInfoElement> structuredConfigs = ExtractStructuredConfigs(info.baseInfo,temp,temp2);
+  Array<TypeStructInfoElement> structuredConfigs = ExtractStructuredConfigs(info.infos[0].info,temp,temp2);
   
   TemplateSetNumber("delays",info.delays);
   TemplateSetCustom("structuredConfigs",MakeValue(&structuredConfigs));
-  Array<String> statesHeaderSide = ExtractStates(info.baseInfo,temp);
+  Array<String> statesHeaderSide = ExtractStates(info.infos[0].info,temp);
   
   int totalExternalMemory = ExternalMemoryByteSize(type->externalMemory);
 
@@ -872,9 +872,9 @@ void OutputVerilatorMake(String topLevelName,String versatDir,Arena* temp,Arena*
 Array<Array<MuxInfo>> GetAllMuxInfo(AccelInfo* info,Arena* out,Arena* temp){
   Set<SameMuxEntities>* knownSharedIndexes = PushSet<SameMuxEntities>(temp,99);
   
-  for(InstanceInfo& f : info->baseInfo){
-  if(f.isMergeMultiplexer){
-    knownSharedIndexes->Insert({f.configPos.value(),&f});
+  for(InstanceInfo& f : info->infos[0].info){
+    if(f.isMergeMultiplexer){
+      knownSharedIndexes->Insert({f.configPos.value(),&f});
     }
   }
 
@@ -1140,7 +1140,7 @@ void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* 
   Array<InstanceInfo*> topLevelUnits = GetAllSameLevelUnits(&info,0,0,temp);
   
   VersatComputedValues val = ComputeVersatValues(&info,false);
-  CheckSanity(info.baseInfo,temp);
+  CheckSanity(info.infos[0].info,temp);
   
   Array<Partition> partitions = GenerateInitialPartitions(accel,temp);
 
@@ -1218,7 +1218,7 @@ void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* 
   Array<ExternalMemoryInterface> external = PushArray<ExternalMemoryInterface>(temp,val.externalMemoryInterfaces);
   int index = 0;
   int externalIndex = 0;
-  for(InstanceInfo& in : info.baseInfo){
+  for(InstanceInfo& in : info.infos[0].info){
     if(!in.isComposite){
       for(ExternalMemoryInterface& inter : in.decl->externalMemory){
         external[externalIndex++] = inter;
@@ -1442,7 +1442,7 @@ void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* 
   
   {
     DynamicArray<int> arr = StartArray<int>(temp);
-    for(InstanceInfo& t : info.baseInfo){
+    for(InstanceInfo& t : info.infos[0].info){
       if(!t.isComposite){
         for(int d : t.delay){
           *arr.PushElem() = d;
@@ -1502,10 +1502,10 @@ void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* 
     allStaticsVerilatorSide.size = index;
     TemplateSetCustom("allStatics",MakeValue(&allStaticsVerilatorSide));
     
-    Array<TypeStructInfoElement> structuredConfigs = ExtractStructuredConfigs(info.baseInfo,temp,temp2);
+    Array<TypeStructInfoElement> structuredConfigs = ExtractStructuredConfigs(info.infos[0].info,temp,temp2);
     
-    Array<String> allStates = ExtractStates(info.baseInfo,temp2);
-    Array<Pair<String,int>> allMem = ExtractMem(info.baseInfo,temp2);
+    Array<String> allStates = ExtractStates(info.infos[0].info,temp2);
+    Array<Pair<String,int>> allMem = ExtractMem(info.infos[0].info,temp2);
     
     TemplateSetNumber("delays",val.nDelays);
     TemplateSetCustom("structuredConfigs",MakeValue(&structuredConfigs));
@@ -1514,17 +1514,6 @@ void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* 
 
     TemplateSetBool("outputChangeDelay",false);
     TemplateSetString("accelName",accel->name);
-
-#if 0    
-    TemplateSetString("mergeMuxName",STRING(""));
-    
-    for(InstanceInfo in : info.baseInfo){
-      if(in.isMergeMultiplexer){
-        String str = PushString(temp,"ACCEL_%.*s_%.*s",UNPACK_SS(in.fullName),UNPACK_SS(in.decl->baseConfig.configs[0].name));
-        TemplateSetString("mergeMuxName",str);
-      }
-    }
-#endif
     
     Array<String> names = Map(info.infos,temp,[](MergePartition p){return p.name;});
     TemplateSetCustom("mergeNames",MakeValue(&names));

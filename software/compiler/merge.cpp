@@ -2121,7 +2121,6 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
 
   FUDeclaration* decl = RegisterFU(declInst);
   decl->type = FUDeclarationType_MERGED;
-  decl->info.baseInfo = CalculateInstanceInfoTest(decl->fixedDelayCircuit,globalPermanent,temp);
   
   decl->staticUnits = CollectStaticUnits(decl->fixedDelayCircuit,decl,globalPermanent);
   
@@ -2194,6 +2193,7 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
   for(int i = 0; i < mergeSize; i++){
     decl->info.infos[i].info = CalculateInstanceInfoTest(decl->fixedDelayCircuit,globalPermanent,temp);
 
+    // 
     decl->info.infos[i].inputDelays = ExtractInputDelays(recon[i],reconDelay[i],numberInputs,globalPermanent,temp);
     decl->info.infos[i].outputLatencies = ExtractOutputLatencies(recon[i],reconDelay[i],globalPermanent,temp);
     
@@ -2213,7 +2213,7 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
         decl->info.infos[i].info[index].localOrder = 0;
       }
  
-      Opt<int> val = accelInfo.baseInfo[index].configPos; 
+      Opt<int> val = accelInfo.infos[0].info[index].configPos; 
       decl->info.infos[i].info[index].configPos = val;
       decl->info.infos[i].info[index].baseName = ptr->name;
       decl->info.infos[i].info[index].belongs = true;
@@ -2297,8 +2297,6 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
       decl->configInfo[i].mergeMultiplexerConfigs[0] = p.first; //i / divider;
       //decl->info.infos[i].muxConfigs = decl->configInfo[i].mergeMultiplexerConfigs;
       
-      //DEBUG_BREAK();
-      
       // TODO: This is a little bit forced for merges of 2 and binary hierarchies.
       //       Will probably break with other amounts. Maybe.
       if(typeMuxConfigs.size > 0){
@@ -2335,8 +2333,6 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
     }
   }
 #endif
-  
-  DEBUG_BREAK();
   
   return decl;
 }

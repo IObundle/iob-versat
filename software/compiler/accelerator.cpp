@@ -499,7 +499,6 @@ Accelerator* Flatten(Accelerator* accel,int times,Arena* temp){
       }
 
       RemoveFUInstance(newAccel,*instPtr);
-      //AssertGraphValid(newAccel->allocated,temp);
     }
 
     toRemove.Clear();
@@ -791,7 +790,7 @@ Array<FUDeclaration*> ConfigSubTypes(Accelerator* accel,Arena* out,Arena* temp){
   
   Set<FUDeclaration*>* maps = PushSet<FUDeclaration*>(temp,99);
   
-  Array<InstanceInfo> test = CalculateAcceleratorInfo(accel,true,temp,out).baseInfo;
+  Array<InstanceInfo> test = CalculateAcceleratorInfo(accel,true,temp,out).infos[0].info;
   for(InstanceInfo& info : test){
     if(info.configSize > 0){
       maps->Insert(info.decl);
@@ -811,7 +810,7 @@ Array<FUDeclaration*> MemSubTypes(Accelerator* accel,Arena* out,Arena* temp){
   
   Set<FUDeclaration*>* maps = PushSet<FUDeclaration*>(temp,99);
 
-  Array<InstanceInfo> test = CalculateAcceleratorInfo(accel,true,temp,out).baseInfo;
+  Array<InstanceInfo> test = CalculateAcceleratorInfo(accel,true,temp,out).infos[0].info;
   for(InstanceInfo& info : test){
     if(info.memMappedSize.has_value()){
       maps->Insert(info.decl);

@@ -110,12 +110,7 @@ struct MergePartition{
 };
 
 // TODO: A lot of values are repeated between merge partitions and the like. Not a problem for now, maybe tackle it when things become stable. Or maybe leave it be, could be easier in future if we want to implement something more complex.
-
 struct AccelInfo{
-  // An array that abstracts all the common values of any merge type into a single one. Code that does not care about dealing with merge types can access this data
-  Array<InstanceInfo> baseInfo; // TODO: Remove baseInfo and only use infos[0]
-
-  // The problem is how to go to remove baseInfo without spending too much time.
   Array<MergePartition> infos;
     
   int inputs;

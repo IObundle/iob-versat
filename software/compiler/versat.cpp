@@ -168,7 +168,7 @@ FUDeclaration* RegisterModuleInfo(ModuleInfo* info,Arena* temp){
   decl.info.infos = PushArray<MergePartition>(globalPermanent,1);
   decl.info.infos[0].inputDelays = info->inputDelays;
   decl.info.infos[0].outputLatencies = info->outputLatencies;
-
+  
   decl.configs = configs;
   decl.states = states;
   decl.externalMemory = external;
@@ -194,16 +194,8 @@ void FillDeclarationWithAcceleratorValues(FUDeclaration* decl,Accelerator* accel
   BLOCK_REGION(temp);
   BLOCK_REGION(temp2);
 
-  //DEBUG_BREAK();
+  // val.infos.outputLatency is wrong here when changing the configuration stuff.
   AccelInfo val = CalculateAcceleratorInfo(accel,true,perm,temp2);
-
-#if 0
-  String path = PushDebugPath(temp,decl->name,STRING("composite_stats.txt"));
-  FILE* stats = OpenFileAndCreateDirectories(StaticFormat("%.*s",UNPACK_SS(path)),"w");
-  DEFER_CLOSE_FILE(stats);
-
-  PrintRepr(stats,MakeValue(&val),temp,temp2);
-#endif
   
   DynamicArray<String> baseNames = StartArray<String>(perm);
   for(FUInstance* ptr : accel->allocated){
@@ -227,11 +219,12 @@ void FillDeclarationWithAcceleratorValues(FUDeclaration* decl,Accelerator* accel
       externalIndex += 1;
     }
   }
-
+  
   if(decl->info.infos.size == 0){
     decl->info.infos = PushArray<MergePartition>(globalPermanent,val.infos.size);
   }
   
+  decl->info.infos[0].info = CalculateInstanceInfoTest(decl->fixedDelayCircuit,globalPermanent,temp); 
   decl->info.infos[0].inputDelays = val.infos[0].inputDelays;
   decl->info.infos[0].outputLatencies = val.infos[0].outputLatencies;
 
@@ -280,10 +273,6 @@ void FillDeclarationWithAcceleratorValues(FUDeclaration* decl,Accelerator* accel
   Memset(belongArray,true);
 
   decl->numberDelays = val.delays;
-
-  if(decl->info.infos.size == 0){
-    decl->info.infos = PushArray<MergePartition>(globalPermanent,1);
-  }
 }
 
 void FillDeclarationWithAcceleratorValuesNoDelay(FUDeclaration* decl,Accelerator* accel,Arena* temp,Arena* temp2){
@@ -396,6 +385,7 @@ void FillDeclarationWithDelayType(FUDeclaration* decl){
 // Might also be better for Flatten if we separated the process so that we do not have to deal with
 // share configs and static configs and stuff like that.
 
+// TODO: Why does this exist? Check how to integrate with the RegisterSubUnit function.
 FUDeclaration* RegisterSubUnitBarebones(Accelerator* circuit,Arena* temp,Arena* temp2){
   Arena* permanent = globalPermanent;
   BLOCK_REGION(temp);
@@ -403,10 +393,12 @@ FUDeclaration* RegisterSubUnitBarebones(Accelerator* circuit,Arena* temp,Arena* 
   String name = circuit->name;
   
   FUDeclaration decl = {};
+  decl.type = FUDeclarationType_COMPOSITE;
   decl.name = name;
 
   // TODO: This function could use some cleanup
-  
+
+  // Default parameters given to all modules. Parameters need a proper revision, but need to handle parameters going up in the hierarchy
   decl.parameters = PushArray<String>(permanent,6);
   decl.parameters[0] = STRING("ADDR_W");
   decl.parameters[1] = STRING("DATA_W");
@@ -415,21 +407,11 @@ FUDeclaration* RegisterSubUnitBarebones(Accelerator* circuit,Arena* temp,Arena* 
   decl.parameters[4] = STRING("AXI_DATA_W");
   decl.parameters[5] = STRING("LEN_W");
   
-  decl.type = FUDeclarationType_COMPOSITE;
-
   decl.baseCircuit = circuit;
 
   Accelerator* copy = CopyAccelerator(decl.baseCircuit,AcceleratorPurpose_FIXED_DELAY,true,nullptr);
-  
   DAGOrderNodes order = CalculateDAGOrder(&copy->allocated,temp);
   CalculateDelayResult delays = CalculateDelay(copy,order,temp);
-
-  int index = 0;
-  for(Pair<FUInstance*,DelayInfo*> p : delays.nodeDelay){
-    if(p.first->declaration->NumberDelays() > 0){
-      index += 1;
-    }
-  }
 
   region(temp){
     FixDelays(copy,delays.edgesDelay,temp);
@@ -472,8 +454,6 @@ FUDeclaration* RegisterSubUnitBarebones(Accelerator* circuit,Arena* temp,Arena* 
     }
   }
   
-  res->info.baseInfo = CalculateInstanceInfoTest(res->fixedDelayCircuit,permanent,temp);
-
   return res;
 }
 
@@ -521,13 +501,6 @@ FUDeclaration* RegisterSubUnit(Accelerator* circuit,Arena* temp,Arena* temp2){
   DAGOrderNodes order = CalculateDAGOrder(&circuit->allocated,temp);
   CalculateDelayResult delays = CalculateDelay(circuit,order,temp);
 
-  int index = 0;
-  for(Pair<FUInstance*,DelayInfo*> p : delays.nodeDelay){
-    if(p.first->declaration->NumberDelays() > 0){
-      index += 1;
-    }
-  }
-
   region(temp){
     OutputDebugDotGraph(circuit,STRING("BeforeFixDelay.dot"),temp);
     FixDelays(circuit,delays.edgesDelay,temp);
@@ -537,7 +510,7 @@ FUDeclaration* RegisterSubUnit(Accelerator* circuit,Arena* temp,Arena* temp2){
   decl.fixedDelayCircuit = circuit;
 
 #if 1
-  // Maybe this check should be done elsewhere
+  // TODO: Maybe this check should be done elsewhere
   for(FUInstance* ptr : circuit->allocated){
     if(ptr->multipleSamePortInputs){
       printf("Multiple inputs: %.*s\n",UNPACK_SS(name));
@@ -580,8 +553,6 @@ FUDeclaration* RegisterSubUnit(Accelerator* circuit,Arena* temp,Arena* temp2){
       res->staticUnits->InsertIfNotExist(id,data);
     }
   }
-
-  res->info.baseInfo = CalculateInstanceInfoTest(res->fixedDelayCircuit,permanent,temp);
   
   return res;
 }

@@ -88,10 +88,7 @@ struct FUDeclaration{
     return info.infos.size;
   };
   
-  //Array<InstanceInfo> instanceInfo;
-
   int numberDelays;
-  
   Array<String> parameters; // For now, only the parameters extracted from verilog files
   
   Opt<int> memoryMapBits; // 0 is a valid memory map size, so optional indicates that no memory map exists
