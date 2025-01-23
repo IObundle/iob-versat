@@ -2191,13 +2191,15 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
   }
     
   for(int i = 0; i < mergeSize; i++){
-    decl->info.infos[i].info = CalculateInstanceInfoTest(decl->fixedDelayCircuit,globalPermanent,temp);
-
-    // 
+    decl->info.infos[i].info = GenerateInitialInstanceInfo(decl->fixedDelayCircuit,globalPermanent,temp);
+    AccelInfoIterator iter = StartIteration(&decl->info);
+    iter.mergeIndex = i;
+    FillInstanceInfo(iter,globalPermanent,temp);
+    
     decl->info.infos[i].inputDelays = ExtractInputDelays(recon[i],reconDelay[i],numberInputs,globalPermanent,temp);
     decl->info.infos[i].outputLatencies = ExtractOutputLatencies(recon[i],reconDelay[i],globalPermanent,temp);
     
-    AcceleratorMapping* map = MappingInvert(reconToAccel[i],globalPermanent); //accelToRecon[i];
+    AcceleratorMapping* map = MappingInvert(reconToAccel[i],globalPermanent);
 
     // TODO: Copied directly from above, maybe later we can write better code, for now focus on making stuff work from accel info data but still giving good results.
     for(int index = 0; index < result->allocated.Size(); index++){

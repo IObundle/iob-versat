@@ -9,12 +9,6 @@
 #include "logger.hpp"
 
 /* 
-  TODO: Using fixed size for structures like hashmap and set is a bit
-  wasteful.  Would like to implement hashmap and set structures
-  that keep a pointer to an arena and can grow by allocating
-  more space (implement set using binary tree, for hashmap try
-  to find something).
-
   TODO: Right now we allocate a lot of dynamic arrays using the Push +
   PointArray form. This is error prone, a single allocation
   inside can lead to incorrect results.  Would like to formalize
@@ -38,7 +32,6 @@ int GetPageSize();
 void* AllocatePages(int pages);
 void DeallocatePages(void* ptr,int pages);
 long PagesAvailable();
-void CheckMemoryStats();
 
 #undef VERSAT_DEBUG
 

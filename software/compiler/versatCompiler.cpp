@@ -882,6 +882,14 @@ int main(int argc,char* argv[]){
 
 /*
 
+Currently we removed a lot of the cruft that we had with the baseConfig and the configInfo approach. There is probably a lot of code that can be simplified, based on the code that we already have simplified. Functions that previously worked on graph data and such could now be rewritten to work from the AccelInfo structure.
+
+I think that is the best approach, because if we make the AccelInfo the source of truth, then debugging just becomes inspecting the AccelInfo structure and seeing if anything is being miscalculated (as well as some graph inspections and the likes, but that is mostly solved by now).
+
+*/
+
+/*
+
 What do I have to do next?
 
 We need to reconciliate the DelayCalculation function that operates normaly and the one that uses "partitions".

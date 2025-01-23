@@ -162,47 +162,16 @@ struct AccelInfoIterator{
   int CurrentLevelSize();
 };
 
-struct EdgeInfoIterator{
-  
-};
-
 Array<InstanceInfo*> GetAllSameLevelUnits(AccelInfo* info,int level,int mergeIndex,Arena* out);
 
-AccelInfoIterator StartIteration(AccelInfo* info);
+AccelInfoIterator
+StartIteration(AccelInfo* info);
 
 struct TypeAndNameOnly{
   String type;
   String name;
 };
-
-// TODO: Since we are now following a design where we store all the information that we want in a table, maybe there is a better way of handling this portion. If all the functions that perform different computations worked from the data present in the table, the we could just pass the appropriate table and not have to deal with Partitions.
-//       Need to first see which functions depend on this approach, after cleaning up the code with the changes introduced by the table approach, and then take a second look at this.s
-
-//       The problem is that the table gives a global view of the entire configuration space, but partitions is used to give a local view of the global configuration for a given type.
-//       We first would need to change from a Array<Array<InstanceInfo>> to Array<SomeStruct> so that we could store data associated to each 
-
-// Maybe the solution would be to move the Partition logic to the AccelInfoIterator? 
 // 
-
-// NOTE: I do not want partitions. I do not want the need to have this logic being passed around while being hard to reason about it.
-
-// What I actually want is to get the indexes where a given merge unit is activated.
-// If we have 2 merge indexes, and I'm in the merge unit, I should get (0) and (1).
-// If we have 4 merge indexes, and I'm in the merge unit, I should get (0,1) and (2,3).
-//    If we then go inside the first one, and we arrive at the other merge unit, should get (0) and (1).
-//    Basically, if I'm looking at a merge unit, should get the indexes at which the unit is active.
-
-// The problem is how to handle this when going to do the generation part.
-// Do we need partitions for calculating the accelerator info of merged entities?
-// Our is it possible to generate everything beforehand, including data that allow us to simplify the process?
-
-// The thing about indexes, is that they only exist because of modules.
-// It is the fact that modules can instantiate merge units.
-// It is instantiation that leads to multiplication of the merges indexes.
-//    And instantiation does not change the values that we care about, right? Especially for the structure generation.
-// That means that if we merge 4 types, then we only need to care about 4 types. Does not matter that throught modules we might end up with 16 or 32 or any combination of numbers, we only need to look at 4 different types to generate the structures that we need, right?.
-
-// Regardless, need to start dealing with this stuff now, otherwise cannot progress. 
 
 struct Partition{
   int value;
@@ -210,37 +179,25 @@ struct Partition{
   int mergeIndexStart;
 };
 
-// Kinda temp having to export this function, but maybe this will become permanent. (With a new name)
-Array<InstanceInfo> CalculateInstanceInfoTest(Accelerator* accel,Arena* out,Arena* temp);
+// TODO: mergeIndex seems to be the wrong approach. Check the correct approach when trying to simplify merge.
+Array<InstanceInfo> GenerateInitialInstanceInfo(Accelerator* accel,Arena* out,Arena* temp,int mergeIndex = 0);
+void FillInstanceInfo(AccelInfoIterator initialIter,Arena* out,Arena* temp);
 
-int GetConfigIndexFromInstance(Accelerator* accel,FUInstance* inst);
+Array<InstanceInfo> CalculateInstanceInfoTest(Accelerator* accel,Arena* out,Arena* temp);
 
 AccelInfo CalculateAcceleratorInfo(Accelerator* accel,bool recursive,Arena* out,Arena* temp);
 
-CalculatedOffsets CalculateConfigOffsetsIgnoringStatics(Accelerator* accel,Arena* out);
-CalculatedOffsets CalculateConfigurationOffset(Accelerator* accel,MemType type,Arena* out);
-
 Array<Partition> GenerateInitialPartitions(Accelerator* accel,Arena* out);
 
-int GetConfigurationSize(FUDeclaration* decl,MemType type);
-
 // Array info related
+// TODO: This should be built on top of AccelInfo (taking an iterator), instead of just taking the array of instance infos.
 Array<Wire> ExtractAllConfigs(Array<InstanceInfo> info,Arena* out,Arena* temp);
 Array<String> ExtractStates(Array<InstanceInfo> info,Arena* out);
 Array<Pair<String,int>> ExtractMem(Array<InstanceInfo> info,Arena* out);
 
+// TODO: Move this to Accelerator.hpp
 void ShareInstanceConfig(FUInstance* instance, int shareBlockIndex);
 void SetStatic(Accelerator* accel,FUInstance* instance);
 
 String ReprStaticConfig(StaticId id,Wire* wire,Arena* out);
-
-struct OrderedConfigurations{
-   Array<Wire> configs;
-   Array<Wire> statics;
-   Array<Wire> delays;
-};
-
-Array<InstanceInfo> ExtractFromInstanceInfoSameLevel(Array<InstanceInfo> instanceInfo,int level,Arena* out);
-
-void CheckSanity(Array<InstanceInfo> instanceInfo,Arena* temp);
 

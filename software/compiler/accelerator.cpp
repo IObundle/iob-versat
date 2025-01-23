@@ -781,26 +781,6 @@ bool IsCombinatorial(Accelerator* accel){
   return true;
 }
 
-Array<FUDeclaration*> ConfigSubTypes(Accelerator* accel,Arena* out,Arena* temp){
-  if(accel == nullptr){
-    return {};
-  }
-  
-  BLOCK_REGION(temp);
-  
-  Set<FUDeclaration*>* maps = PushSet<FUDeclaration*>(temp,99);
-  
-  Array<InstanceInfo> test = CalculateAcceleratorInfo(accel,true,temp,out).infos[0].info;
-  for(InstanceInfo& info : test){
-    if(info.configSize > 0){
-      maps->Insert(info.decl);
-    }
-  }
-  
-  Array<FUDeclaration*> subTypes = PushArrayFromSet(out,maps);
-  return subTypes;
-}
-
 Array<FUDeclaration*> MemSubTypes(Accelerator* accel,Arena* out,Arena* temp){
   if(accel == nullptr){
     return {};
@@ -1497,8 +1477,6 @@ AcceleratorMapping* MappingSimple(Accelerator* first,Accelerator* second,int siz
     mappingArenaInst = InitArena(Megabyte(64));
     mappingArena = &mappingArenaInst; 
   }
-  
-  //Assert(size > 0);
   
   AcceleratorMapping* mapping = PushStruct<AcceleratorMapping>(out);
   mapping->inputMap = PushTrieMap<PortInstance,PortInstance>(mappingArena);

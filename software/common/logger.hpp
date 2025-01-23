@@ -24,8 +24,6 @@ enum LogLevel{
    FATAL   = 4  // Problem that cannot continue
 };
 
-//#define Log(MODULE,LEVEL,...) Log_(MODULE,LEVEL,__LINE__,__FILE__,__PRETTY_FUNCTION__,__VA_ARGS__)
-
 #define LogDebug(MODULE,...) Log_(MODULE,LogLevel::DEBUG,__LINE__,__FILE__,__PRETTY_FUNCTION__,__VA_ARGS__)
 #define LogInfo(MODULE,...) Log_(MODULE,LogLevel::INFO,__LINE__,__FILE__,__PRETTY_FUNCTION__,__VA_ARGS__)
 #define LogWarn(MODULE,...)  Log_(MODULE,LogLevel::WARN,__LINE__,__FILE__,__PRETTY_FUNCTION__,__VA_ARGS__)

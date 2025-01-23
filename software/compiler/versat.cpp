@@ -224,7 +224,10 @@ void FillDeclarationWithAcceleratorValues(FUDeclaration* decl,Accelerator* accel
     decl->info.infos = PushArray<MergePartition>(globalPermanent,val.infos.size);
   }
   
-  decl->info.infos[0].info = CalculateInstanceInfoTest(decl->fixedDelayCircuit,globalPermanent,temp); 
+  decl->info.infos[0].info = GenerateInitialInstanceInfo(decl->fixedDelayCircuit,globalPermanent,temp);
+  AccelInfoIterator iter = StartIteration(&decl->info);
+  FillInstanceInfo(iter,globalPermanent,temp);
+
   decl->info.infos[0].inputDelays = val.infos[0].inputDelays;
   decl->info.infos[0].outputLatencies = val.infos[0].outputLatencies;
 

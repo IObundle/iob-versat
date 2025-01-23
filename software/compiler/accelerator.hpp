@@ -81,10 +81,12 @@ struct DelayInfo{
   bool isAny;
 };
 
+// TODO: Would like to see if using the ConnectionNode approach makes sense. We might be able to represent the edges in a list and simplify other parts of the code. Probably best to analyze how the graph structures are being used through the code base and make a decision then. Only merge needs to perform multiple graph mutations. Everything else kinda works fine if we use a more constant approach for the graphs.
 struct ConnectionNode{
   PortInstance instConnectedTo;
   int port;
   int edgeDelay;
+  // TODO: This is bad, we are storing something that is used only by the delay calculations functions and it is not a good approach because of merge. We already have the proper solution by using the AccelInfo approach, so now the only thing left is to remove the usage of this delay. 
   EdgeDelayInfo delay; // Maybe not the best approach to calculate delay. TODO: check later
   ConnectionNode* next;
 };
@@ -270,9 +272,9 @@ bool NameExists(Accelerator* accel,String name);
 
 int GetFreeShareIndex(Accelerator* accel); // TODO: Slow 
 
-Array<FUDeclaration*> ConfigSubTypes(Accelerator* accel,Arena* out,Arena* temp);
 Array<FUDeclaration*> MemSubTypes(Accelerator* accel,Arena* out,Arena* temp);
 
+// TODO: This could work on top of AccelInfo.
 Hashmap<StaticId,StaticData>* CollectStaticUnits(Accelerator* accel,FUDeclaration* topDecl,Arena* out);
 
 int ExternalMemoryByteSize(ExternalMemoryInterface* inter);
@@ -282,6 +284,7 @@ int ExternalMemoryByteSize(Array<ExternalMemoryInterface> interfaces); // Size o
 //       (or something that FUDeclaration would be composed off)
 //
 
+// TODO: This could take in an AccelInfo
 VersatComputedValues ComputeVersatValues(AccelInfo* accel,bool useDMA);
 
 // Returns false if parameter does not exist 
@@ -306,8 +309,6 @@ Array<int> GetNumberOfInputConnections(FUInstance* node,Arena* out);
 Array<Array<PortInstance>> GetAllInputs(FUInstance* node,Arena* out);
 
 void RemoveConnection(Accelerator* accel,FUInstance* out,int outPort,FUInstance* in,int inPort);
-
-//FUInstance* RemoveUnit(FUInstance* nodes,FUInstance* unit);
 
 // Fixes edges such that unit before connected to after, are reconnected to new unit
 void InsertUnit(Accelerator* accel,PortInstance before, PortInstance after, PortInstance newUnit);

@@ -46,12 +46,6 @@ long PagesAvailable(){
   return res;
 }
 
-void CheckMemoryStats(){
-  if(pagesAllocated != pagesDeallocated){
-    LogWarn(LogModule::MEMORY,"Number of pages freed/allocated: %d/%d",pagesDeallocated,pagesAllocated);
-  }
-}
-
 void AlignArena(Arena* arena,int alignment){
   int offset = arena->used % alignment;
 

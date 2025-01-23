@@ -723,7 +723,6 @@ void OutputIterativeSource(FUDeclaration* decl,FILE* file,Arena* temp,Arena* tem
     }
   }
    
-  //VersatComputedValues val = ComputeVersatValues(accel,false);
   AccelInfo info = CalculateAcceleratorInfo(accel,true,temp,temp2); // TODO: Calculating info just for the computedData calculation is a bit wasteful.
 
   VersatComputedValues val = ComputeVersatValues(&info,false);
@@ -1140,7 +1139,6 @@ void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* 
   Array<InstanceInfo*> topLevelUnits = GetAllSameLevelUnits(&info,0,0,temp);
   
   VersatComputedValues val = ComputeVersatValues(&info,false);
-  CheckSanity(info.infos[0].info,temp);
   
   Array<Partition> partitions = GenerateInitialPartitions(accel,temp);
 
