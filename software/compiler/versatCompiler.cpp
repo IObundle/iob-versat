@@ -586,9 +586,12 @@ int main(int argc,char* argv[]){
   String topLevelTypeStr = globalOptions.topName;
 
   // Basically using a simple DAG approach to detect the modules that we only care about. We do not process modules that are not needed
-  if(specFilepath.size && !CompareString(topLevelTypeStr,"VERSAT_RESERVED_ALL_UNITS")){
-    String content = PushFile(temp,StaticFormat("%.*s",UNPACK_SS(specFilepath)));
 
+  FUDeclaration* simpleType = GetTypeByName(topLevelTypeStr);
+  
+  if(!simpleType && specFilepath.size && !CompareString(topLevelTypeStr,"VERSAT_RESERVED_ALL_UNITS")){
+    String content = PushFile(temp,StaticFormat("%.*s",UNPACK_SS(specFilepath)));
+    
     Array<TypeDefinition> types = ParseVersatSpecification(content,temp,temp2);
     int size = types.size;
     
@@ -596,7 +599,7 @@ int main(int argc,char* argv[]){
     for(int i = 0; i < size; i++){
       typeToId->Insert(types[i].base.name,i);
     }
-
+    
     if(!typeToId->Exists(topLevelTypeStr)){
       printf("Did not find the top level type: %.*s\n",UNPACK_SS(topLevelTypeStr));
       return -1;
