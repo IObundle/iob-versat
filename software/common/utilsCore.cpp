@@ -91,6 +91,11 @@ void FlushStdout(){
   fflush(stdout);
 }
 
+void OS_SetScriptPermissions(FILE* file){
+  int fileId = fileno(file);
+  fchmod(fileId,S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH);
+}
+
 bool RemoveDirectory(const char* path){
   return fs::remove_all(path) > 0;
 }

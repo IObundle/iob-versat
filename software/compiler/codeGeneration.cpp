@@ -454,7 +454,7 @@ Array<String> ExtractMemoryMasks(AccelInfo info,Arena* out){
 
     if(unit->memDecisionMask.has_value()){
       *builder.PushElem() = unit->memDecisionMask.value();
-    } else if(unit->memMappedMask.has_value()){
+    } else if(unit->memMapped.has_value()){
       *builder.PushElem() = {}; // Empty mask (happens when only one unit with mem exists, bit weird but no need to change for now);
     }
   }
@@ -674,6 +674,7 @@ void OutputCircuitSource(FUDeclaration* decl,FILE* file,Arena* temp,Arena* temp2
   // There is no reason why OutputCircuitSource should ever need to take 2 arenas
   // AccelInfo being recalculated again is not good. We are recalculating stuff too much
   // program is still fast, but its a sign of poor architecture
+  //AccelInfo info = decl->info;
   AccelInfo info = CalculateAcceleratorInfo(accel,true,temp,temp2);
   //VersatComputedValues val = ComputeVersatValues(accel,false);
   VersatComputedValues val = ComputeVersatValues(&info,false);
@@ -815,7 +816,7 @@ void OutputVerilatorWrapper(FUDeclaration* type,Accelerator* accel,String output
 #include <filesystem>
 namespace fs = std::filesystem;
 
-String GetRelativePathThatGoesFromSourceToTarget(String sourcePath,String targetPath,Arena* out,Arena* temp){
+String GetRelativePathFromSourceToTarget(String sourcePath,String targetPath,Arena* out,Arena* temp){
   fs::path source(StaticFormat("%.*s",UNPACK_SS(sourcePath)));
   fs::path target(StaticFormat("%.*s",UNPACK_SS(targetPath)));
 
@@ -842,7 +843,7 @@ void OutputVerilatorMake(String topLevelName,String versatDir,Arena* temp,Arena*
 
   String srcDir = PushString(temp,"%.*s/src",UNPACK_SS(outputPath));
 
-  String relativePath = GetRelativePathThatGoesFromSourceToTarget(globalOptions.softwareOutputFilepath,globalOptions.hardwareOutputFilepath,temp,temp2);
+  String relativePath = GetRelativePathFromSourceToTarget(globalOptions.softwareOutputFilepath,globalOptions.hardwareOutputFilepath,temp,temp2);
 
   Array<String> allFilenames = PushArray<String>(temp,globalOptions.verilogFiles.size);
   for(int i = 0; i <  globalOptions.verilogFiles.size; i++){
@@ -854,17 +855,23 @@ void OutputVerilatorMake(String topLevelName,String versatDir,Arena* temp,Arena*
   TemplateSetArray("allFilenames","String",UNPACK_SS(allFilenames));
   
   TemplateSetCustom("arch",MakeValue(&globalOptions));
-  TemplateSetString("srcDir",srcDir);
-  TemplateSetString("versatDir",versatDir);
-  TemplateSetString("verilatorRoot",globalOptions.verilatorRoot);
-  TemplateSetNumber("bitWidth",globalOptions.databusAddrSize);
   TemplateSetString("generatedUnitsLocation",relativePath);
-  TemplateSetArray("verilogFiles","String",UNPACK_SS(globalOptions.verilogFiles));
   TemplateSetArray("extraSources","String",UNPACK_SS(globalOptions.extraSources));
-  TemplateSetArray("includePaths","String",UNPACK_SS(globalOptions.includePaths));
   TemplateSetString("typename",topLevelName);
-  TemplateSetString("rootPath",STRING(fixedPath.c_str()));
   ProcessTemplate(output,comp,temp,temp2);
+
+  // TODO: Need to add some form of error checking and handling, for the case where verilator root is not found
+  // Used by make to find the verilator root of the build server
+  String getVerilatorRootScript = STRING("#!/bin/bash\nTEMP_DIR=$(mktemp -d)\n\npushd $TEMP_DIR &> /dev/null\n\necho \"module Test(); endmodule\" > Test.v\nverilator --cc Test.v &> /dev/null\n\npushd ./obj_dir &> /dev/null\nVERILATOR_ROOT=$(awk '\"VERILATOR_ROOT\" == $1 { print $3}' VTest.mk)\nrm -r $TEMP_DIR\n\necho $VERILATOR_ROOT\n");
+  {
+    String getVerilatorScriptPath = PushString(temp,"%.*s/GetVerilatorRoot.sh",UNPACK_SS(globalOptions.softwareOutputFilepath));
+    FILE* output = OpenFileAndCreateDirectories(getVerilatorScriptPath,"w",FilePurpose_MISC);
+    DEFER_CLOSE_FILE(output);
+
+    fprintf(output,"%.*s",UNPACK_SS(getVerilatorRootScript));
+    fflush(output);
+    OS_SetScriptPermissions(output);
+  }
 }
 
 // TODO: A little bit hardforced. Multiplexer info needs to be revised.
@@ -1136,9 +1143,9 @@ void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* 
 
   AccelInfo info = CalculateAcceleratorInfo(accel,true,temp,temp2);
 
-  Array<InstanceInfo*> topLevelUnits = GetAllSameLevelUnits(&info,0,0,temp);
+  DEBUG_BREAK();
   
-  VersatComputedValues val = ComputeVersatValues(&info,false);
+  VersatComputedValues val = ComputeVersatValues(&info,globalOptions.useDMA);
   
   Array<Partition> partitions = GenerateInitialPartitions(accel,temp);
 
@@ -1293,6 +1300,7 @@ void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* 
     parameters[i] = GenerateVerilogParameterization(nodes.Get(i),temp);
   }
 
+  Array<InstanceInfo*> topLevelUnits = GetAllSameLevelUnits(&info,0,0,temp);
   TemplateSetCustom("allUnits",MakeValue(&topLevelUnits));
   TemplateSetCustom("parameters",MakeValue(&parameters));
   TemplateSetCustom("arch",MakeValue(&globalOptions));
@@ -1427,7 +1435,6 @@ void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* 
   TemplateSetNumber("nStatics",val.nStatics);
 
   // MARK
-
 #if 0
   Array<TypeStructInfo> configStructures = GetConfigStructInfo(accel,temp2,temp);
   TemplateSetCustom("configStructures",MakeValue(&configStructures));
@@ -1439,6 +1446,10 @@ void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* 
   TemplateSetCustom("addressStructures",MakeValue(&addressStructures));
   
   {
+    // TODO: Need to figure out why delays are not being properly calculated.
+
+    DEBUG_BREAK();
+    
     DynamicArray<int> arr = StartArray<int>(temp);
     for(InstanceInfo& t : info.infos[0].info){
       if(!t.isComposite){

@@ -259,7 +259,7 @@ GraphPrintingContent GenerateLatencyDotGraph(AccelInfoIterator top,Array<int> or
   GraphPrintingContent result = {};
   result.edges = edgeArray;
   result.nodes = nodeArray;
-  result.graphLabel = STRING("Nodes and edges contan their global latency");
+  result.graphLabel = STRING("Nodes and edges contain their global latency (nodes also contain special)");
   
   return result;
 }
@@ -271,7 +271,7 @@ SimpleCalculateDelayResult CalculateDelay(AccelInfoIterator top,Arena* out,Arena
   }
 
   // Keyed by order
-  Array<DelayInfo> nodeDelayArray = PushArray<DelayInfo>(temp,amountOfNodes);
+  Array<DelayInfo> nodeDelayArray = PushArray<DelayInfo>(out,amountOfNodes);
   Memset(nodeDelayArray,{});
   
   Array<int> orderToIndex = PushArray<int>(temp,amountOfNodes);
@@ -286,7 +286,7 @@ SimpleCalculateDelayResult CalculateDelay(AccelInfoIterator top,Arena* out,Arena
     totalEdges += 1;
   }
 
-  Array<int> edgesDelays = PushArray<int>(temp,totalEdges);
+  Array<int> edgesDelays = PushArray<int>(out,totalEdges);
 
   // Sets latency for each edge of the node 
   auto SendLatencyUpwards = [&top,&edgesDelays,&nodeDelayArray,&orderToIndex](int orderIndex){
@@ -323,27 +323,12 @@ SimpleCalculateDelayResult CalculateDelay(AccelInfoIterator top,Arena* out,Arena
   };
   
   // Start at sources
+
   int orderIndex = 0;
-  for(; orderIndex < orderToIndex.size; orderIndex++){
-    int trueIndex = orderToIndex[orderIndex];
-    InstanceInfo* info = top.GetUnit(trueIndex);
-
-    FUInstance* node = info->inst;
-    
-    if(node->type != NodeType_SOURCE && node->type != NodeType_SOURCE_AND_SINK){
-      break;
-      //continue;
-    }
-
-    DelayInfo b = nodeDelayArray[orderIndex]; 
-
-    SendLatencyUpwards(orderIndex);
-  }
-
   for(; orderIndex < orderToIndex.size; orderIndex++){
     FUInstance* node = top.GetUnit(orderToIndex[orderIndex])->inst;
 
-    int maxEdgeLatency = 0;
+    int maxInputEdgeLatency = 0;
     int edgeIndex = 0;
     for(AccelEdgeIterator iter = IterateEdges(top); IsValid(iter); Advance(iter),edgeIndex += 1){
       SimpleEdge edge = Get(iter);
@@ -356,10 +341,10 @@ SimpleCalculateDelayResult CalculateDelay(AccelInfoIterator top,Arena* out,Arena
       }
 
       int edgeLatency = edgesDelays[edgeIndex];
-      maxEdgeLatency = std::max(maxEdgeLatency,edgeLatency);
+      maxInputEdgeLatency = std::max(maxInputEdgeLatency,edgeLatency);
     }
     
-    nodeDelayArray[orderIndex].value = maxEdgeLatency;
+    nodeDelayArray[orderIndex].value = maxInputEdgeLatency;
     nodeDelayArray[orderIndex].isAny = false;
 
     // Send latency upwards.
@@ -369,7 +354,14 @@ SimpleCalculateDelayResult CalculateDelay(AccelInfoIterator top,Arena* out,Arena
   if(globalOptions.debug){
     static int funCalls = 0;
     BLOCK_REGION(out);
-    String fileName = PushString(out,"1_out%d.dot",funCalls++);
+
+    String fileName = {};
+    if(Empty(top.accelName)){
+      fileName = PushString(out,"1_out%d.dot",funCalls++);
+    } else {
+      fileName = PushString(out,"1_out_%.*s.dot",UNPACK_SS(top.accelName));
+    }
+    
     String filePath = PushDebugPath(out,STRING("TEST"),STRING("delays"),fileName);
 
     GraphPrintingContent content = GenerateLatencyDotGraph(top,orderToIndex,nodeDelayArray,edgesDelays,temp,out);
@@ -378,6 +370,48 @@ SimpleCalculateDelayResult CalculateDelay(AccelInfoIterator top,Arena* out,Arena
     OutputContentToFile(filePath,result);
   }
 
+  // This is still the global latency per port. I think it's good
+  Array<Array<int>> inputPortDelayByOrder = PushArray<Array<int>>(out,orderToIndex.size);
+  
+  for(int i = 0; i < orderToIndex.size; i++){
+    FUInstance* node = top.GetUnit(orderToIndex[i])->inst;
+
+    int maxPortIndex = -1;
+    int edgeIndex = 0;
+    for(AccelEdgeIterator iter = IterateEdges(top); IsValid(iter); Advance(iter),edgeIndex += 1){
+      SimpleEdge edge = Get(iter);
+      int inIndex = edge.inIndex;
+
+      InstanceInfo* inInfo = top.GetUnit(inIndex);
+      FUInstance* inNode = inInfo->inst;
+      if(inNode != node){
+        continue;
+      }
+
+      maxPortIndex = std::max(maxPortIndex,edge.inPort);
+    }
+
+    if(maxPortIndex == -1){
+      inputPortDelayByOrder[i] = {};
+      continue;
+    }
+    inputPortDelayByOrder[i] = PushArray<int>(out,maxPortIndex + 1);
+
+    edgeIndex = 0;
+    for(AccelEdgeIterator iter = IterateEdges(top); IsValid(iter); Advance(iter),edgeIndex += 1){
+      SimpleEdge edge = Get(iter);
+      int inIndex = edge.inIndex;
+
+      InstanceInfo* inInfo = top.GetUnit(inIndex);
+      FUInstance* inNode = inInfo->inst;
+      if(inNode != node){
+        continue;
+      }
+
+      inputPortDelayByOrder[i][edge.inPort] = edgesDelays[edgeIndex]; 
+    }
+  }
+  
   // We have the global latency of each node and edge.
   // We now need to calculate the "extra" latency added to each edge in order to align everything together.
 
@@ -424,52 +458,18 @@ SimpleCalculateDelayResult CalculateDelay(AccelInfoIterator top,Arena* out,Arena
       edgesDelays[edgeIndex] -= minEdgeDelay;
     }
   }
-
-  Array<Array<int>> inputPortDelayByOrder = PushArray<Array<int>>(out,orderToIndex.size);
-  
-  for(int i = 0; i < orderToIndex.size; i++){
-    FUInstance* node = top.GetUnit(orderToIndex[i])->inst;
-
-    int maxPortIndex = -1;
-    int edgeIndex = 0;
-    for(AccelEdgeIterator iter = IterateEdges(top); IsValid(iter); Advance(iter),edgeIndex += 1){
-      SimpleEdge edge = Get(iter);
-      int inIndex = edge.inIndex;
-
-      InstanceInfo* inInfo = top.GetUnit(inIndex);
-      FUInstance* inNode = inInfo->inst;
-      if(inNode != node){
-        continue;
-      }
-
-      maxPortIndex = std::max(maxPortIndex,edge.inPort);
-    }
-
-    if(maxPortIndex == -1){
-      inputPortDelayByOrder[i] = {};
-      continue;
-    }
-    inputPortDelayByOrder[i] = PushArray<int>(out,maxPortIndex + 1);
-
-    edgeIndex = 0;
-    for(AccelEdgeIterator iter = IterateEdges(top); IsValid(iter); Advance(iter),edgeIndex += 1){
-      SimpleEdge edge = Get(iter);
-      int inIndex = edge.inIndex;
-
-      InstanceInfo* inInfo = top.GetUnit(inIndex);
-      FUInstance* inNode = inInfo->inst;
-      if(inNode != node){
-        continue;
-      }
-
-      inputPortDelayByOrder[i][edge.inPort] = edgesDelays[edgeIndex]; 
-    }
-  }
   
   if(globalOptions.debug){
     static int funCalls = 0;
     BLOCK_REGION(out);
-    String fileName = PushString(out,"2_out%d.dot",funCalls++);
+    
+    String fileName = {};
+    if(Empty(top.accelName)){
+      fileName = PushString(out,"2_out%d.dot",funCalls++);
+    } else {
+      fileName = PushString(out,"2_out_%.*s.dot",UNPACK_SS(top.accelName));
+    }
+
     String filePath = PushDebugPath(out,STRING("TEST"),STRING("delays"),fileName);
 
     GraphPrintingContent content = GenerateLatencyDotGraph(top,orderToIndex,nodeDelayArray,edgesDelays,temp,out);
@@ -482,9 +482,8 @@ SimpleCalculateDelayResult CalculateDelay(AccelInfoIterator top,Arena* out,Arena
   res.nodeDelayByOrder = nodeDelayArray;
   res.edgesDelay = edgesDelays;
   res.inputPortDelayByOrder = inputPortDelayByOrder;
-    
   // TODO: Missing pushing delays towards inputs and pushing delays towards outputs.
-  
+
   return res;
 }
 

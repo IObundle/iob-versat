@@ -46,8 +46,8 @@ void versat_init(int base){
 
   MEMSET(versat_base,0x0,0x80000000); // Soft reset
 
-  accelConfig = (volatile AcceleratorConfig*) (versat_base + configStart);
-  accelState  = (volatile AcceleratorState*)  (versat_base + stateStart);
+  accelConfig = (typeof(accelConfig)) (versat_base + configStart);
+  accelState  = (typeof(accelState))  (versat_base + stateStart);
   accelStatic = (volatile AcceleratorStatic*)  (versat_base + staticStart);
 
   VersatLoadDelay(delayBuffer);

@@ -618,81 +618,130 @@ void FillInstanceInfo(AccelInfoIterator initialIter,Arena* out,Arena* temp){
   CalculateState(CalculateState,initialIter,0,temp);
 
   // Handle memory mapping
-  auto CalculateMemory = [](auto Recurse,AccelInfoIterator& iter,int startIndex,Arena* out,Arena* temp) -> void{
+  auto CalculateMemory = [](auto Recurse,AccelInfoIterator& iter,iptr currentMem,Arena* out,Arena* temp) -> void{
     BLOCK_REGION(temp);
     
-    // Let the inside units calculate their memory mapped first
+    InstanceInfo* parent = iter.GetParentUnit();
+    if(parent){
+      AccelInfoIterator parentIter = StartIteration(&parent->decl->info);
+
+      for(AccelInfoIterator it = iter; it.IsValid(); it = it.Next(),parentIter = parentIter.Next()){
+        InstanceInfo* unit = it.CurrentUnit();
+        InstanceInfo* memUnit = parentIter.CurrentUnit();
+        
+        if(memUnit->memMapped.has_value()){
+          unit->memMapped = memUnit->memMapped.value() + currentMem;
+          
+          AccelInfoIterator inside = it.StepInsideOnly();
+          if(inside.IsValid()){
+            Recurse(Recurse,inside,unit->memMapped.value(),out,temp);
+          }
+        }
+      }
+    } else {
+      auto builder = StartGrowableArray<Node*>(temp);
+      for(AccelInfoIterator it = iter; it.IsValid(); it = it.Next()){
+        InstanceInfo* unit = it.CurrentUnit();
+
+        if(unit->memMappedBitSize.has_value()){
+          Node* n = PushStruct<Node>(temp);
+          *n = (Node){unit,unit->memMappedBitSize.value()};
+          *builder.PushElem() = n;
+        }
+      }
+      Array<Node*> baseNodes = EndArray(builder);
+    
+      if(baseNodes.size == 0){
+        return;
+      }
+
+      auto Sort = [](Array<Node*>& toSort){
+        for(int i = 0; i < toSort.size; i++){
+          for(int j = i + 1; j < toSort.size; j++){
+            if(toSort[i]->value < toSort[j]->value){
+              SWAP(toSort[i],toSort[j]);
+            }
+          }
+        }
+      };
+
+      Sort(baseNodes);
+
+      while(baseNodes.size > 1){
+        Node* left = baseNodes[baseNodes.size - 2];
+        Node* right = baseNodes[baseNodes.size - 1];
+      
+        Node* n = PushStruct<Node>(temp);
+        n->value = std::max(left->value,right->value) + 1;
+        n->left = left;
+        n->right = right;
+        baseNodes[baseNodes.size - 2] = n;
+        baseNodes.size -= 1;
+
+        Sort(baseNodes);
+      }
+    
+      Node* top = baseNodes[0];
+    
+      auto NodeRecurse = [](auto Recurse,Node* top,int bitAccum,int index,Arena* out) -> void{
+        auto BinaryToInt = [](String val) -> int{
+          int res = 0;
+          for(int c : val){
+            res *= 2;
+            res += (c == '1' ? 1 : 0);
+          }
+          return res;
+        };
+
+        if(top->left == nullptr){
+          Assert(top->right == nullptr);
+
+          InstanceInfo* info = top->unit;
+          
+          auto builder = StartString(out);
+          for(int i = 0; i < index; i++){
+            builder.PushChar(GET_BIT(bitAccum,i) ? '1' : '0');
+          }
+          String decisionMask = EndString(builder);
+          PushNullByte(out);
+          info->memDecisionMask = decisionMask;
+          
+          int memMapped = 0;
+          int mult = (1 << top->value);
+          for(int i = 0; i < index; i++){
+            memMapped += mult * GET_BIT(bitAccum,i);
+            mult /= 2;
+          }
+          info->memMapped = memMapped;
+        } else {
+          Recurse(Recurse,top->left,SET_BIT(bitAccum,index),index + 1,out);
+          Recurse(Recurse,top->right,bitAccum,index + 1,out);
+        }
+      };
+
+      NodeRecurse(NodeRecurse,top,0,0,out);
+
+      for(AccelInfoIterator it = iter; it.IsValid(); it = it.Next()){
+        InstanceInfo* unit = it.CurrentUnit();
+
+        if(unit->memMapped.has_value()){
+          AccelInfoIterator inside = it.StepInsideOnly();
+          Recurse(Recurse,inside,unit->memMapped.value(),out,temp);
+        }
+      }
+    }
+
+#if 0
+    // Let the inside units calculate their memory mapping first
     for(AccelInfoIterator it = iter; it.IsValid(); it = it.Next()){
+      InstanceInfo* info = top->unit;
       AccelInfoIterator inside = it.StepInsideOnly();
+      
       if(inside.IsValid()){
         Recurse(Recurse,inside,startIndex,out,temp);
       }
     }
-
-    auto builder = StartGrowableArray<Node*>(temp);
-    for(AccelInfoIterator it = iter; it.IsValid(); it = it.Next()){
-      InstanceInfo* unit = it.CurrentUnit();
-
-      if(unit->memMappedBitSize.has_value()){
-        Node* n = PushStruct<Node>(temp);
-        *n = (Node){unit,unit->memMappedBitSize.value()};
-        *builder.PushElem() = n;
-      }
-    }
-    Array<Node*> baseNodes = EndArray(builder);
-    
-    if(baseNodes.size == 0){
-      return;
-    }
-
-    auto Sort = [](Array<Node*>& toSort){
-      for(int i = 0; i < toSort.size; i++){
-        for(int j = i + 1; j < toSort.size; j++){
-          if(toSort[i]->value < toSort[j]->value){
-            SWAP(toSort[i],toSort[j]);
-          }
-        }
-      }
-    };
-
-    Sort(baseNodes);
-
-    while(baseNodes.size > 1){
-      Node* left = baseNodes[baseNodes.size - 2];
-      Node* right = baseNodes[baseNodes.size - 1];
-      
-      Node* n = PushStruct<Node>(temp);
-      n->value = std::max(left->value,right->value) + 1;
-      n->left = left;
-      n->right = right;
-      baseNodes[baseNodes.size - 2] = n;
-      baseNodes.size -= 1;
-
-      Sort(baseNodes);
-    }
-    
-    Node* top = baseNodes[0];
-    
-    auto NodeRecurse = [](auto Recurse,Node* top,int bitAccum,int index,Arena* out) -> void{
-      if(top->left == nullptr){
-        Assert(top->right == nullptr);
-
-        InstanceInfo* info = top->unit;
-
-        auto builder = StartString(out);
-        for(int i = 0; i < index; i++){
-          builder.PushChar(GET_BIT(bitAccum,i) ? '1' : '0');
-        }
-        String decisionMask = EndString(builder);
-        PushNullByte(out);
-        info->memDecisionMask = decisionMask;
-      } else {
-        Recurse(Recurse,top->left,SET_BIT(bitAccum,index),index + 1,out);
-        Recurse(Recurse,top->right,bitAccum,index + 1,out);
-      }
-    };
-
-    NodeRecurse(NodeRecurse,top,0,0,out);
+#endif    
   };
 
   CalculateMemory(CalculateMemory,initialIter,0,out,temp);
@@ -706,22 +755,6 @@ void FillInstanceInfo(AccelInfoIterator initialIter,Arena* out,Arena* temp){
     return res;
   };
   
-  for(AccelInfoIterator iter = initialIter; iter.IsValid(); iter = iter.Step()){
-    InstanceInfo* unit = iter.CurrentUnit();
-
-    if(unit->memDecisionMask.has_value() && unit->memMappedBitSize.has_value()){
-      auto builder = StartString(out);
-      builder.PushString(unit->memDecisionMask.value());
-      for(int i = 0; i < unit->memMappedBitSize.value(); i++){
-        builder.PushChar('0');
-      }
-      unit->memMappedMask = EndString(builder);
-      PushNullByte(out);
-      
-      unit->memMapped = BinaryToInt(unit->memMappedMask.value());
-    }
-  }
-
   // Delay pos is just basically State position without anything different, right?
   auto CalculateDelayPos = [](auto Recurse,AccelInfoIterator& iter,int startIndex,Arena* temp) -> void{
     BLOCK_REGION(temp);
@@ -815,24 +848,6 @@ void FillInstanceInfo(AccelInfoIterator initialIter,Arena* out,Arena* temp){
     }
   };
   
-  // Need local order.
-#if 0
-  DAGOrderNodes order = CalculateDAGOrder(&accel->allocated,temp);
-  {
-    for(AccelInfoIterator it = initialIter; it.IsValid(); it = it.Next()){
-      InstanceInfo* info = it.CurrentUnit();
-
-      FUInstance* inst = info->inst;
-      for(int i = 0; i < order.instances.size; i++){
-        if(order.instances[i] == inst){
-          info->localOrder = i;
-          break;
-        }
-      }
-    }
-  }
-#endif  
-
   SimpleCalculateDelayResult delays = CalculateDelay(initialIter,out,temp);
   SetDelays(SetDelays,initialIter,delays,0,out);
 }
@@ -935,7 +950,8 @@ AccelInfo CalculateAcceleratorInfo(Accelerator* accel,bool recursive,Arena* out,
   }
 
   AccelInfoIterator iter = StartIteration(&result);
-
+  iter.accelName = accel->name;
+  
   if(iter.MergeSize() > 1){
     for(int i = 0; i < iter.MergeSize(); i++){
       // TODO: Need to fully realize what is happening here.

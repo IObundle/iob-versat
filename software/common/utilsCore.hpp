@@ -467,6 +467,8 @@ void HexStringToHex(unsigned char* buffer,String str);
 void SeedRandomNumber(uint seed);
 uint GetRandomNumber();
 
+void OS_SetScriptPermissions(FILE* file);
+
 bool RemoveDirectory(const char* path);
 //bool CheckIfFileExists(const char* file);
 long int GetFileSize(FILE* file);

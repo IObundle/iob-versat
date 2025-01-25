@@ -29,13 +29,12 @@ struct InstanceInfo{
   int configSize;
   Opt<int> statePos;
   int stateSize;
-
+  
   // Some of these could be removed and be computed from the others
   Opt<iptr> memMapped; // Used on Code Gen, to create the addresses for the memories.
   Opt<int> memMappedSize;
   Opt<int> memMappedBitSize;
-  Opt<String> memMappedMask;
-  Opt<String> memDecisionMask;
+  Opt<String> memDecisionMask; // This is local to the accelerator
   Opt<int> delayPos;
   Array<int> delay;
   int baseDelay;
@@ -61,13 +60,6 @@ struct InstanceInfo{
   Array<int> portDelay;
 
   Array<SimplePortConnection> inputs; 
-};
-
-struct AcceleratorInfo{
-  Array<InstanceInfo> info;
-  int memSize;
-  Opt<String> name;
-  Array<int> mergeMux;
 };
 
 struct InstanceConfigurationOffsets{
@@ -134,6 +126,7 @@ struct AccelInfo{
 // NOTE: The member 'level' of InstanceInfo needs to be valid in order for this iterator to work. 
 //       Do not know how to handle merged. Should we iterate Array<InstanceInfo> and let outside code work, or do we take the accelInfo and then allow the iterator to switch between different merges and stuff?      
 struct AccelInfoIterator{
+  String accelName; // Usually for debug purposes.
   AccelInfo* info;
   int index;
   int mergeIndex;
@@ -164,8 +157,7 @@ struct AccelInfoIterator{
 
 Array<InstanceInfo*> GetAllSameLevelUnits(AccelInfo* info,int level,int mergeIndex,Arena* out);
 
-AccelInfoIterator
-StartIteration(AccelInfo* info);
+AccelInfoIterator StartIteration(AccelInfo* info);
 
 struct TypeAndNameOnly{
   String type;
@@ -182,8 +174,6 @@ struct Partition{
 // TODO: mergeIndex seems to be the wrong approach. Check the correct approach when trying to simplify merge.
 Array<InstanceInfo> GenerateInitialInstanceInfo(Accelerator* accel,Arena* out,Arena* temp,int mergeIndex = 0);
 void FillInstanceInfo(AccelInfoIterator initialIter,Arena* out,Arena* temp);
-
-Array<InstanceInfo> CalculateInstanceInfoTest(Accelerator* accel,Arena* out,Arena* temp);
 
 AccelInfo CalculateAcceleratorInfo(Accelerator* accel,bool recursive,Arena* out,Arena* temp);
 

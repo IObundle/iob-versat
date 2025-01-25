@@ -36,16 +36,24 @@ def DebugPrint(*args,**kargs):
     if(ENABLE_DEBUG_PRINT):
         print(*args,**kargs)
 
+openedFilesDict = {}
+
 def GetEntireSourceText(c: Cursor):
+    global openedFilesDict
     start = c.extent.start.offset
     end = c.extent.end.offset
 
-    # TODO(performance): Slow to keep opening and closing
-    file = open(c.extent.start.file.name,'r')
+    fileName = c.extent.start.file.name
+    if(fileName in openedFilesDict):
+        return openedFilesDict[fileName]
+
+    file = open(fileName,'r')
     file.seek(start)
     
     content = file.read(end - start + 1)
     file.close()
+
+    openedFilesDict[fileName] = content
 
     return content
 

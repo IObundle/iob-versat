@@ -2367,9 +2367,6 @@ ReconstituteResult ReconstituteGraphFromStruct(Accelerator* merged,Set<PortInsta
   }
 
 #if 1
-  //NEWLINE();
-  //PRINT_STRING(mergedInstance->name);
-  //NEWLINE();
   {
     EdgeIterator iter = IterateEdges(merged);
 

@@ -10,7 +10,6 @@ struct Options{
   
   String hardwareOutputFilepath;
   String softwareOutputFilepath;
-  String verilatorRoot;
   String debugPath;
 
   String generetaSourceListName; // TODO: Not yet implemented
