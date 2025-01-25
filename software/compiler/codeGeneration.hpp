@@ -84,11 +84,6 @@ template<> struct std::hash<SubTypesInfo>{
    }
 };
 
-static bool operator==(const SubTypesInfo i0,const SubTypesInfo i1){
-  bool res = Memcmp(&i0,&i1,1);
-  return res;
-}
-
 struct AddressGenDef;
 extern Pool<AddressGenDef> savedAddressGen;
 

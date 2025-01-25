@@ -203,7 +203,7 @@ void PreprocessVerilogFile_(String fileContent,MacroMap& macros,Array<String> in
       size_t fileSize = GetFileSize(file);
 
       Byte* mem = PushBytes(temp,fileSize + 1);
-      int amountRead = fread(mem,sizeof(char),fileSize,file);
+      size_t amountRead = fread(mem,sizeof(char),fileSize,file);
       
       if(amountRead != fileSize){
         fprintf(stderr,"Verilog Parsing, error reading the full contents of a file\n");
@@ -221,7 +221,7 @@ void PreprocessVerilogFile_(String fileContent,MacroMap& macros,Array<String> in
       
       Token emptySpace = tok->PeekWhitespace();
       if(emptySpace.size == 0){ // Function macro
-        Token arguments = tok->PeekFindIncluding(")").value();
+        /* Token arguments = */ tok->PeekFindIncluding(")").value();
         tok->AdvancePeek();
         defineName = tok->Point(mark);
       }

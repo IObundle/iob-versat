@@ -29,8 +29,7 @@
       end else if(running) begin
          if (delay == 0) begin
             done <= 1'b1;
-         end 
-         if(!done) begin
+         end else if(!done) begin
             delay <= delay - 1;
          end
       end

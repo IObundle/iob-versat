@@ -169,10 +169,11 @@ struct Partition{
   int value;
   int max;
   int mergeIndexStart;
+  FUDeclaration* decl;
 };
 
 // TODO: mergeIndex seems to be the wrong approach. Check the correct approach when trying to simplify merge.
-Array<InstanceInfo> GenerateInitialInstanceInfo(Accelerator* accel,Arena* out,Arena* temp,int mergeIndex = 0);
+Array<InstanceInfo> GenerateInitialInstanceInfo(Accelerator* accel,Arena* out,Arena* temp,Array<Partition> partitions);
 void FillInstanceInfo(AccelInfoIterator initialIter,Arena* out,Arena* temp);
 
 AccelInfo CalculateAcceleratorInfo(Accelerator* accel,bool recursive,Arena* out,Arena* temp);

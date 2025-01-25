@@ -24,25 +24,6 @@ enum DelayType {
 };
 #define CHECK_DELAY(inst,T) ((inst->declaration->delayType & T) == T)
 
-static String DelayTypeToString(DelayType type){
-  switch(type){
-  case DelayType_BASE:{
-    return STRING("DelayType_BASE");
-  } break;
-  case DelayType_SINK_DELAY:{
-    return STRING("DelayType_SINK_DELAY");
-  } break;
-  case DelayType_SOURCE_DELAY: {
-    return STRING("DelayType_SOURCE_DELAY");
-  } break;
-  case DelayType_COMPUTE_DELAY: {
-    return STRING("DelayType_COMPUTE_DELAY");
-  } break;
-  }
-
-  return {};
-}
-
 inline DelayType operator|(DelayType a, DelayType b)
 {return static_cast<DelayType>(static_cast<int>(a) | static_cast<int>(b));}
 
@@ -124,13 +105,15 @@ struct FUDeclaration{
   bool signalLoop;
 
   // Simple access functions
-  //int NumberInputs(){return baseConfig.inputDelays.size;};
   int NumberInputs(){return info.infos[0].inputDelays.size;};
-  //int NumberOutputs(){return baseConfig.outputLatencies.size;};
   int NumberOutputs(){return info.infos[0].outputLatencies.size;};
+
+  // This only works for base units.
+  // TODO: When things start settling in, need to move all these calculations to a specific file.
+  //       Any data that needs to be computed should have a simple function and all off these should be organized to be all in one file.
   int NumberConfigs(){return configs.size;}
   int NumberStates(){return states.size;}
-  int NumberDelays(){return numberDelays;}; //baseConfig.delayOffsets.max;
+  int NumberDelays(){return numberDelays;};
 
   // 
   Array<int> GetOutputLatencies(){

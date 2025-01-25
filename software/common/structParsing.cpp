@@ -487,8 +487,7 @@ StructDef ParseTemplatedStructDefinition(Tokenizer* tok,Arena* arena){
       break;
     }
 
-    //tok->AssertNextToken("typename");
-    Token type = tok->NextToken();
+    /* Token type = */ tok->NextToken();
 
     Token parameter = tok->NextToken();
 

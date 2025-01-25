@@ -752,11 +752,7 @@ Byte* GenericPoolIterator::operator*(){
 
 void DynamicString::PushChar(const char ch){
   Byte* mem = PushBytes(arena,1);
-
   *mem = ch;
-  String res = {};
-  res.data = (const char*) mem;
-  res.size = 1;
 }
 
 void DynamicString::PushString(String ss){
@@ -773,8 +769,6 @@ void DynamicString::vPushString(const char* format,va_list args){
   Assert(((size_t) size) < maximum);
 
   arena->used += (size_t) (size);
-
-  String res = STRING(buffer,size);
 }
 
 void DynamicString::PushString(const char* format,...){

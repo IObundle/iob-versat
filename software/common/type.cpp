@@ -971,7 +971,6 @@ void PrintStructDefinition(Type* type){
   Assert(IsStruct(collapsed));
 
   printf("Struct %.*s has the following members:\n",UNPACK_SS(type->name));
-  Member* member = nullptr;
   for(Member& m : collapsed->members){
 	printf("\t%.*s\n",UNPACK_SS(m.name));
   }
@@ -1820,7 +1819,6 @@ String PushUniqueRepresentation(Arena* out,ParsedType type){
   auto builder = StartString(out);
 
   PushString(out,type.baseName);
-  Type t;
   if(type.templateMembers.size){
     PushString(out,"<");
     bool first = true;
@@ -1918,8 +1916,6 @@ String GetUniqueRepresentation(String type,ModifierCount modifiers){
 }
 
 Opt<String> ParseBaseName(Tokenizer* tok,Arena* out){
-  auto mark = tok->Mark();
-
   bool containsModifier = false;
   ModifierCount count = {};
   while(!tok->Done()){

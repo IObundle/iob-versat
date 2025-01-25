@@ -42,67 +42,6 @@ Array<Difference> CalculateSmallestDifference(Array<int> oldValues,Array<int> ne
   return result;
 }
 
-// TODO: Can reuse SortTypes functions by receiving the Array of Arrays as an argument. Useful for memory and probably state and so on.
-#if 0
-Array<FUDeclaration*> SortTypesByConfigDependency(Array<FUDeclaration*> types,Arena* out,Arena* temp){
-  BLOCK_REGION(temp);
-
-  int size = types.size;
-
-  int stored = 0;
-  Array<FUDeclaration*> result = PushArray<FUDeclaration*>(out,size);
-  
-  Hashmap<FUDeclaration*,bool>* seen = PushHashmap<FUDeclaration*,bool>(temp,size);
-  Array<Array<FUDeclaration*>> subTypes = PushArray<Array<FUDeclaration*>>(temp,size);
-  Memset(subTypes,{});
-
-  for(int i = 0; i < size; i++){
-    subTypes[i] = ConfigSubTypes(types[i]->fixedDelayCircuit,temp,out);
-    seen->Insert(types[i],false);
-  }
-
-  for(int iter = 0; iter < size; iter++){
-    bool breakEarly = true;
-    for(int i = 0; i < size; i++){
-      FUDeclaration* type = types[i];
-      Array<FUDeclaration*> sub = subTypes[i];
-
-      bool* seenType = seen->Get(type);
-
-      if(seenType && *seenType){
-        continue;
-      }
-
-      bool allSeen = true;
-      for(FUDeclaration* subIter : sub){
-        bool* res = seen->Get(subIter);
-
-        if(res && !*res){
-          allSeen = false;
-          break;
-        }
-      }
-
-      if(allSeen){
-        *seenType = true;
-        result[stored++] = types[i];
-        breakEarly = false;
-      }
-    }
-
-    if(breakEarly){
-      break;
-    }
-  }
-
-  for(Pair<FUDeclaration*,bool*> p : seen){
-    Assert(*p.second);
-  }
-
-  return result;
-}
-#endif
-
 Array<FUDeclaration*> SortTypesByMemDependency(Array<FUDeclaration*> types,Arena* out,Arena* temp){
   BLOCK_REGION(temp);
 
@@ -160,232 +99,6 @@ Array<FUDeclaration*> SortTypesByMemDependency(Array<FUDeclaration*> types,Arena
 
   return result;
 }
-
-#if 0
-Array<TypeStructInfoElement> GenerateStructFromType(FUDeclaration* decl,Arena* out,Arena* temp){
-  if(decl->type == FUDeclarationType_SPECIAL){
-    return {};
-  }
-
-  if(decl->type == FUDeclarationType_SINGLE){
-    int size = decl->configs.size;
-    Array<TypeStructInfoElement> entries = PushArray<TypeStructInfoElement>(out,size);
-
-    for(int i = 0; i < size; i++){
-      entries[i].typeAndNames = PushArray<SingleTypeStructElement>(out,1);
-      entries[i].typeAndNames[0].type = STRING("iptr");
-      entries[i].typeAndNames[0].name = decl->configs[i].name;
-    }
-    return entries;
-  }
-
-  BLOCK_REGION(temp);
-
-  CalculatedOffsets& offsets = decl->baseConfig.configOffsets;
-  Accelerator* accel = decl->fixedDelayCircuit;
-  int configSize = offsets.max;
-
-  Array<int> configAmount = PushArray<int>(temp,configSize);
-  for(int i = 0; i < accel->allocated.Size(); i++){
-    FUInstance* node = accel->allocated.Get(i);
-    FUDeclaration* decl = node->declaration;
-    
-    int configOffset = offsets.offsets[i];
-    if(configOffset < 0 || configOffset >= 0x40000000){
-      continue;
-    }
-
-    int numberConfigs = decl->configs.size;
-    configAmount[configOffset] += 1; // Counts how many configs a given offset has.
-  }
-  
-  Array<int> nonZeroConfigs = GetNonZeroIndexes(configAmount,temp);
-  Hashmap<int,int>* mapOffsetToIndex = PushHashmap<int,int>(temp,nonZeroConfigs.size);
-  for(int i = 0; i < nonZeroConfigs.size; i++){
-    mapOffsetToIndex->Insert(nonZeroConfigs[i],i);
-  }
-
-  int numberEntries = nonZeroConfigs.size;
-  Array<TypeStructInfoElement> entries = PushArray<TypeStructInfoElement>(out,numberEntries);
-
-  // Allocates space for entries
-  for(int i = 0; i < numberEntries; i++){
-    entries[i].typeAndNames = PushArray<SingleTypeStructElement>(out,configAmount[nonZeroConfigs[i]]);
-  }
-  
-  Array<int> configSeen = PushArray<int>(temp,numberEntries);
-  for(int i = 0; i < accel->allocated.Size(); i++){
-    FUInstance* node = accel->allocated.Get(i);
-    FUDeclaration* decl = node->declaration;
-
-    int configOffset = offsets.offsets[i];
-    if(configOffset < 0 || configOffset >= 0x40000000){
-      continue;
-    }
-
-    Assert(offsets.offsets[i] >= 0);
-
-    int index = mapOffsetToIndex->GetOrFail(configOffset);
-    entries[index].typeAndNames[configSeen[index]].type = PushString(out,"%.*sConfig",UNPACK_SS(decl->name));
-    entries[index].typeAndNames[configSeen[index]].name = node->name;
-    configSeen[index] += 1;
-  }
-
-  return entries;
-}
-#endif
-
-#if 0
-Array<SubTypesInfo> GetSubTypesInfo(Accelerator* accel,Arena* out,Arena* temp){
-  BLOCK_REGION(temp);
-  
-  Array<FUDeclaration*> typesUsed = ConfigSubTypes(accel,out,temp);
-  typesUsed = SortTypesByConfigDependency(typesUsed,temp,out);
-
-  Set<SubTypesInfo>* info = PushSet<SubTypesInfo>(temp,99);
-  
-  for(FUDeclaration* type : typesUsed){
-    if(type->type == FUDeclarationType_MERGED){
-      for(int i = 0; i < type->ConfigInfoSize(); i++){
-        ConfigurationInfo in = type->configInfo[i];
-        SubTypesInfo res = {};
-        res.type = nullptr; // in.baseType;
-        res.mergeTop = type;
-        res.info = &type->configInfo[i];
-        res.isFromMerged = true;
- 
-        info->Insert(res); // Takes precedence over non merged types
-      }
-
-      SubTypesInfo res = {};
-      res.type = type;
-      res.containsMerged = true;
-      info->Insert(res);
-    } else {
-      SubTypesInfo in = {};
-      in.type = type;
-
-      info->Insert(in);
-    }
-  }
-  
-  Array<SubTypesInfo> result = PushArrayFromSet(out,info);
-  
-  return result;
-}
-#endif
-
-// NOTE: The biggest source of complexity comes from merging, since merging affects the lower structures,
-//       causing the addition of padded members
-#if 0
-Array<TypeStructInfo> GetConfigStructInfo(Accelerator* accel,Arena* out,Arena* temp){
-  BLOCK_REGION(temp);
-
-  Array<FUDeclaration*> typesUsed = ConfigSubTypes(accel,out,temp);
-  typesUsed = SortTypesByConfigDependency(typesUsed,temp,out);
-
-  // Get all the subtypes used (type and wether it was inside a merge or not).
-  // Inside a merge we need to create a merged view of the structure
-  Array<SubTypesInfo> subTypesInfo =  GetSubTypesInfo(accel,out,temp);
-  
-  Array<TypeStructInfo> structures = PushArray<TypeStructInfo>(out,typesUsed.size + 99); // TODO: Small hack to handle merge for now.
-  int index = 0;
-  for(SubTypesInfo subType : subTypesInfo){
-    // 
-    if(subType.isFromMerged){
-      FUDeclaration* decl = subType.mergeTop;
-      int maxOffset = decl->MaxConfigs(); // TODO: This should be equal for all merged types, no need to duplicate data
-      ConfigurationInfo& info = *subType.info;
-      CalculatedOffsets& offsets = info.configOffsets;
-        
-      Array<bool> seenIndex = PushArray<bool>(temp,offsets.max);
-        
-      for(int i = 0; i < decl->fixedDelayCircuit->allocated.Size(); i++){
-        FUInstance* node = decl->fixedDelayCircuit->allocated.Get(i);
-        int config = offsets.offsets[i];
-          
-        if(config >= 0){
-          int nConfigs = node->declaration->configs.size;
-          for(int ii = 0; ii < nConfigs; ii++){
-            seenIndex[config + ii] = true;
-          }
-        }
-      }
-        
-      ArenaList<TypeStructInfoElement>* list = PushArenaList<TypeStructInfoElement>(temp);
-        
-      int unused = 0;
-      int configNeedToSee = 0;
-      while(1){
-        int unusedToPut = 0;
-        while(configNeedToSee < maxOffset && seenIndex[configNeedToSee] == false){
-          unusedToPut += 1;
-          configNeedToSee += 1;
-          }
-
-        if(unusedToPut){
-          TypeStructInfoElement* elem = PushListElement(list);
-          *elem = {};
-          elem->typeAndNames = PushArray<SingleTypeStructElement>(out,1);
-          elem->typeAndNames[0] = {};
-          elem->typeAndNames[0].type = STRING("iptr");
-          elem->typeAndNames[0].name = PushString(out,"unused%d",unused++);
-          elem->typeAndNames[0].arraySize = unusedToPut;
-        }
-          
-        if(configNeedToSee >= maxOffset){
-          break;
-        }
-
-        for(int i = 0; i < decl->fixedDelayCircuit->allocated.Size(); i++){
-          FUInstance* node = decl->fixedDelayCircuit->allocated.Get(i);
-          int config = offsets.offsets[i];
-          if(configNeedToSee == config){
-            int nConfigs = node->declaration->configs.size;
-              
-            TypeStructInfoElement* elem = PushListElement(list);
-            elem->typeAndNames = PushArray<SingleTypeStructElement>(out,1);
-            elem->typeAndNames[0] = {};
-            elem->typeAndNames[0].type = PushString(out,"%.*sConfig",UNPACK_SS(node->declaration->name));
-            elem->typeAndNames[0].name = info.baseName[i];
-              
-            configNeedToSee += nConfigs;
-          }
-        }
-      }
-
-      Array<TypeStructInfoElement> elem = PushArrayFromList(out,list);
-      structures[index].name = PushString(out,"%.*s",UNPACK_SS(info.name));
-      structures[index].entries = elem;
-      index += 1;
-    } else if(subType.containsMerged){
-      // Contains a merged unit. 
-      FUDeclaration* decl = subType.type;
-
-      Array<TypeStructInfoElement> merged = PushArray<TypeStructInfoElement>(out,1);
-
-      merged[0].typeAndNames = PushArray<SingleTypeStructElement>(out,decl->ConfigInfoSize());
-      for(int i = 0; i < decl->ConfigInfoSize(); i++){
-        merged[0].typeAndNames[i] = {};
-        merged[0].typeAndNames[i].type = PushString(out,"%.*sConfig",UNPACK_SS(decl->configInfo[i].name));
-        merged[0].typeAndNames[i].name = decl->configInfo[i].name;
-      }
-      structures[index].name = PushString(out,"%.*s",UNPACK_SS(decl->name));
-      structures[index].entries = merged;
-      index += 1;
-    } else {
-      FUDeclaration* decl = subType.type;
-      Array<TypeStructInfoElement> val = GenerateStructFromType(decl,out,temp);
-      structures[index].name = decl->name;
-      structures[index].entries = val;
-      index += 1;
-    }
-  }
-  structures.size = index;
-  
-  return structures;
-}
-#endif
 
 static Array<TypeStructInfoElement> GenerateAddressStructFromType(FUDeclaration* decl,Arena* out){
   if(decl->type == FUDeclarationType_SINGLE){
@@ -461,89 +174,6 @@ Array<String> ExtractMemoryMasks(AccelInfo info,Arena* out){
 
   return EndArray(builder);
 }
-
-#if 0
-Array<TypeStructInfoElement> ExtractStructuredStatics(Array<InstanceInfo> info,Arena* out,Arena* temp){
-  BLOCK_REGION(temp);
-
-  Hashmap<StaticId,int>* seenStatic = PushHashmap<StaticId,int>(temp,999);
-
-  int maxConfig = 0;
-  for(InstanceInfo& in : info){
-#if 0
-    if(in.isComposite){
-      StaticId id = {};
-      id.name = in.name;
-      id.parent = in.parentDeclaration;
-      if(seenStatic->ExistsOrInsert(id)){
-        for(int i = 0; i < in.configSize; i++){
-          int config = i + in.configPos.value();
-
-          maxConfig = std::max(maxConfig,config);
-          GetOrAllocateResult<ArenaList<String>*> res = map->GetOrAllocate(config);
-
-          if(!res.alreadyExisted){
-            *res.data = PushArenaList<String>(temp);
-          }
-
-          ArenaList<String>* list = *res.data;
-          String name = PushString(out,"TOP_%.*s_%.*s_%.*s",UNPACK_SS(in.parentDeclaration->name),UNPACK_SS(in.name),UNPACK_SS(in.decl->configInfo.configs[i].name));
-
-          *PushListElement(list) = name;
-        }
-        continue;
-      }
-    }
-#endif
-
-    if(in.isComposite || !in.configPos.has_value() || in.isConfigStatic){
-      continue;
-    }
-    
-    for(int i = 0; i < in.configSize; i++){
-      int config = i + in.configPos.value();
-
-      maxConfig = std::max(maxConfig,config);
-      GetOrAllocateResult<ArenaList<String>*> res = map->GetOrAllocate(config);
-
-      if(!res.alreadyExisted){
-        *res.data = PushArenaList<String>(temp);
-      }
-    
-      ArenaList<String>* list = *res.data;
-      String name = PushString(out,"%.*s_%.*s",UNPACK_SS(in.fullName),UNPACK_SS(in.decl->configInfo.configs[i].name));
-
-      *PushListElement(list) = name;
-    }
-  }
-
-  int configSize = maxConfig + 1;
-  ArenaList<TypeStructInfoElement>* elems = PushArenaList<TypeStructInfoElement>(temp);
-  for(int i = 0; i < configSize; i++){
-    ArenaList<String>** optList = map->Get(i);
-    if(!optList){
-      continue;
-    }
-
-    ArenaList<String>* list = *optList;
-    int size = Size(list);
-
-    Array<SingleTypeStructElement> arr = PushArray<SingleTypeStructElement>(out,size);
-    int index = 0;
-    for(ListedStruct<String>* ptr = list->head; ptr; ptr = ptr->next){
-      String elem = ptr->elem;
-      arr[index].type = STRING("iptr");
-      arr[index].name = elem;
-      
-      index += 1;
-    }
-
-    PushListElement(elems)->typeAndNames = arr;
-  }
-  
-  return PushArrayFromList(out,elems);
-}
-#endif
 
 Array<TypeStructInfoElement> ExtractStructuredConfigs(Array<InstanceInfo> info,Arena* out,Arena* temp){
   BLOCK_REGION(temp);
@@ -1123,7 +753,6 @@ Array<TypeStructInfo> GenerateStructs(Array<StructInfo*> info,Arena* out,Arena* 
 }
 #endif
 
-
 void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* softwarePath,bool isSimple,Arena* temp,Arena* temp2){
   BLOCK_REGION(temp);
   BLOCK_REGION(temp2);
@@ -1141,9 +770,8 @@ void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* 
     return;
   }
 
-  AccelInfo info = CalculateAcceleratorInfo(accel,true,temp,temp2);
-
   DEBUG_BREAK();
+  AccelInfo info = CalculateAcceleratorInfo(accel,true,temp,temp2);
   
   VersatComputedValues val = ComputeVersatValues(&info,globalOptions.useDMA);
   
@@ -1155,6 +783,8 @@ void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* 
   Array<StructInfo*> allStructs = ExtractStructs(structInfo,temp,temp2);
   Array<TypeStructInfo> structs = GenerateStructs(allStructs,temp,temp2);
 
+  DEBUG_BREAK();
+  
   // What is the best way of looking at the data?
   // For each struct, I need to see, for a given configPos, all the types and names used.
   // If only one, then direct type.
@@ -1526,23 +1156,8 @@ void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* 
     
     Array<String> names = Map(info.infos,temp,[](MergePartition p){return p.name;});
     TemplateSetCustom("mergeNames",MakeValue(&names));
-
-    AccelInfoIterator topIter = StartIteration(&info);
-
-    for(int i = 0; i < topIter.MergeSize(); i++){
-      topIter.mergeIndex = i;
-
-      for(AccelInfoIterator iter = topIter; iter.IsValid(); iter = iter.Step()){
-        InstanceInfo* info = iter.CurrentUnit();
-
-        if(info->isMergeMultiplexer){
-          printf("%.*s\n",UNPACK_SS(info->name));
-        }
-      }
-    }
     
     Array<Array<MuxInfo>> result = GetAllMuxInfo(&info,temp,temp2);
-
     TemplateSetCustom("mergeMux",MakeValue(&result));
 
     GrowableArray<String> builder = StartGrowableArray<String>(temp2);

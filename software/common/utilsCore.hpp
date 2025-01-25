@@ -96,7 +96,7 @@ ALWAYS_INLINE _Once operator+(_OnceTag,F&& f){
   return _Once{};
 }
 
-#define TEMP__once(LINE) TEMPonce_ ## LINE
+#define TEMP__once(LINE) __attribute__((unused)) TEMPonce_ ## LINE
 #define TEMP_once(LINE) TEMP__once( LINE )
 #define once static _Once TEMP_once(__LINE__) = _OnceTag() + [&] // Executes once even if called multiple times
 
@@ -115,7 +115,6 @@ const char* GetFilename(const char* fullpath);
 // Use when debugging, easier to search due to the 'd' at the beginning, less confusion with non-debugging printfs
 int dprintf(const char *format, ...) __attribute__ ((format (printf, 1, 2)));
 
-static void Terminate(){fflush(stdout); exit(-1);}
 //#if defined(VERSAT_DEBUG)
 #define Assert(EXPR) \
   do { \

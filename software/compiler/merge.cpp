@@ -2191,7 +2191,7 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
   }
     
   for(int i = 0; i < mergeSize; i++){
-    decl->info.infos[i].info = GenerateInitialInstanceInfo(decl->fixedDelayCircuit,globalPermanent,temp);
+    decl->info.infos[i].info = GenerateInitialInstanceInfo(decl->fixedDelayCircuit,globalPermanent,temp,{});
     AccelInfoIterator iter = StartIteration(&decl->info);
     iter.mergeIndex = i;
     FillInstanceInfo(iter,globalPermanent,temp);
@@ -2335,6 +2335,15 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
     }
   }
 #endif
+
+  int delays = 0;
+  for(AccelInfoIterator iter = StartIteration(&decl->info); iter.IsValid(); iter = iter.Next()){
+    InstanceInfo* info = iter.CurrentUnit();
+    delays += info->delaySize;
+  }
+
+  // TODO: This is not good, I think. Number delays feels a bit off compared to the others, like config and such.
+  decl->numberDelays = delays;
   
   return decl;
 }

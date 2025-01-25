@@ -39,7 +39,6 @@ struct Module{
   bool isSource;
 };
 
-// TODO: This is a copy of Wire from configurations.hpp, but we do not include because this file should not include from the compiler code.
 template<typename T>
 struct WireTemplate{
   String name;

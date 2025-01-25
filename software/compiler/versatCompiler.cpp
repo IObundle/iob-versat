@@ -587,8 +587,6 @@ int main(int argc,char* argv[]){
   Accelerator* accel = nullptr;
   FUInstance* TOP = nullptr;
 
-  if(type) type->signalLoop = true;
-  
   if(CompareString(topLevelTypeStr,"VERSAT_RESERVED_ALL_UNITS")){
     accel = CreateAccelerator(STRING("allVersatUnits"),AcceleratorPurpose_MODULE);
     
@@ -760,6 +758,15 @@ int main(int argc,char* argv[]){
     }
     if(f.purpose == FilePurpose_VERILOG_CODE && f.mode == FileOpenMode_WRITE){
       printf("Filename: %.*s Type: VERILOG_CODE\n",UNPACK_SS(f.filepath));
+    }
+    if(f.purpose == FilePurpose_MAKEFILE && f.mode == FileOpenMode_WRITE){
+      printf("Filename: %.*s Type: MAKEFILE\n",UNPACK_SS(f.filepath));
+    }
+    if(f.purpose == FilePurpose_SOFTWARE && f.mode == FileOpenMode_WRITE){
+      printf("Filename: %.*s Type: SOFTWARE\n",UNPACK_SS(f.filepath));
+    }
+    if(f.purpose == FilePurpose_MISC && f.mode == FileOpenMode_WRITE){
+      printf("Filename: %.*s Type: MISC\n",UNPACK_SS(f.filepath));
     }
   }
 

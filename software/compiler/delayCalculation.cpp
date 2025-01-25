@@ -1,5 +1,6 @@
 #include "delayCalculation.hpp"
 
+#include "accelerator.hpp"
 #include "configurations.hpp"
 #include "debug.hpp"
 #include "declaration.hpp"
@@ -10,61 +11,6 @@
 #include "versat.hpp"
 #include "debugVersat.hpp"
 #include "versatSpecificationParser.hpp"
-
-// This function moves the latency of a node to the output edges.
-// It also takes into account the input delay of the input node.
-// Meaning that I have to get the input node, the output node and the edge to store the data needed.
-
-static void SendLatencyUpwards(FUInstance* node,EdgeDelay* delays,NodeDelay* nodeDelay){
-  DelayInfo b = nodeDelay->GetOrFail(node); 
-  FUInstance* inst = node;
-
-  FOREACH_LIST(ConnectionNode*,info,node->allOutputs){
-    FUInstance* other = info->instConnectedTo.inst;
-
-    // Do not set delay for source units. Source units cannot be found in this, otherwise they wouldn't be source
-    Assert(other->type != NodeType_SOURCE);
-
-    int a = inst->declaration->GetOutputLatencies()[info->port];
-    int e = info->edgeDelay;
-
-    FOREACH_LIST(ConnectionNode*,otherInfo,other->allInputs){
-      int c = other->declaration->GetInputDelays()[info->instConnectedTo.port];
-
-      if(info->instConnectedTo.port == otherInfo->port &&
-         otherInfo->instConnectedTo.inst == inst && otherInfo->instConnectedTo.port == info->port){
-        
-        int delay = b.value + a + e - c;
-
-        Edge edge = {};
-        edge.out = {node,info->port};
-        edge.in = {other,info->instConnectedTo.port};
-        
-        if(b.isAny || node->declaration == BasicDeclaration::buffer){
-          *otherInfo->delay.value = delay;
-          otherInfo->delay.isAny = true;
-
-          delays->GetOrFail(edge).isAny = true;
-          
-        } else {
-          *otherInfo->delay.value = delay;
-        }
-      }
-    }
-  }
-}
-
-// A quick explanation: Starting from the inputs, we associate to edges a value that indicates how much cycles data needs to be delayed in order to arrive at the needed time. Starting from inputs in a breadth firsty manner makes this work fine but I think that it is not required. This value is given by the latency of the output + delay of the edge + input delay. Afterwards, we can always move delay around (Ex: If we fix a given unit, we can increase the delay of each output edge by one if we subtract the delay of each input edge by one. We can essentially move delay from input edges to output edges).
-// NOTE: Thinking things a bit more, the number associated to the edges is not something that we want. If a node as a edge with number 0 and another with number 3, we need to add a fixed buffer of latency 3 to the edge with number 0, not the other way around. This might mean that after doing all the passes that we want, we still might need to invert everything (in this case, the edge with 0 would get a 3 and the edge with a 3 would get a zero). That is, if we still want to preserve the idea that each number associated to the edge is equal to the latency that we need to add. 
-
-// Negative value edges are ok since at the end we can renormalize everything back into positive by adding the absolute value of the lowest negative to every edge (this also works because we use positive values in the input nodes to represent delay).
-// In fact, this code could be simplified if we made the process of pushing delay from one place to another more explicit. Also TODO: We technically can use the ability of pushing delay to produce accelerators that contain less buffers. Node with many outputs we want to move delay as much as possible to it's inputs. Node with many inputs we want to move delay as much as possible to it's outputs. Currently we only favor one side because we basically just try to move delays to the outside as much as possible.
-// TODO: Simplify the code. Check if removing the breadth first and just iterating by nodes and incrementing the edges values ends up producing the same result. Basically a loop where for each node we accumulate on the respective edges the values of the delays from the nodes respective ports plus the value of the edges themselves and finally we normalize everything to start at zero. I do not see any reason why this wouldn't work.
-// TODO: Furthermode, encode the ability to push latency upwards or downwards and look into improving the circuits generated. Should also look into transforming the edge mapping from an Hashmap to an Array but still do not know if we need to map edges in this improved algorithm. (Techically we could make an auxiliary function that flattens everything and replaces edge lookups with indexes to the array.). 
-
-// Instead of an accelerator, it could take a ordered list of instances, and potentialy the max amount of edges for the hashmap instantiation.
-// Therefore abstracting from the accelerator completely and being able to be used for things like subgraphs.
-// Change later if needed.
 
 static ConnectionNode* GetConnectionNode(ConnectionNode* head,int port,PortInstance other){
   FOREACH_LIST(ConnectionNode*,con,head){
@@ -270,6 +216,9 @@ SimpleCalculateDelayResult CalculateDelay(AccelInfoIterator top,Arena* out,Arena
     amountOfNodes += 1;
   }
 
+  // TODO: There is a lot of repeated code that could be simplified, altought still need to check if we are using a good approach when it comes to the merges later on.
+  //       Furthermore, there is a lot of confusion from mixing latency vs delays, especially because we are currently using the same array to calculate delays and latencies. Maybe it would be best to split latency calculation and delay calculation into two functions and to make sure that we have the calculate delay result struct having the correct names for things (we can still return everything and let the top level code use the data as it sees fit).
+  
   // Keyed by order
   Array<DelayInfo> nodeDelayArray = PushArray<DelayInfo>(out,amountOfNodes);
   Memset(nodeDelayArray,{});
@@ -357,9 +306,9 @@ SimpleCalculateDelayResult CalculateDelay(AccelInfoIterator top,Arena* out,Arena
 
     String fileName = {};
     if(Empty(top.accelName)){
-      fileName = PushString(out,"1_out%d.dot",funCalls++);
+      fileName = PushString(out,"global_latency_%d.dot",funCalls++);
     } else {
-      fileName = PushString(out,"1_out_%.*s.dot",UNPACK_SS(top.accelName));
+      fileName = PushString(out,"global_latency_%.*s.dot",UNPACK_SS(top.accelName));
     }
     
     String filePath = PushDebugPath(out,STRING("TEST"),STRING("delays"),fileName);
@@ -412,16 +361,46 @@ SimpleCalculateDelayResult CalculateDelay(AccelInfoIterator top,Arena* out,Arena
     }
   }
   
+  // Store latency on data consuming units
+  for(int i = 0; i < orderToIndex.size; i++){
+    FUInstance* node = top.GetUnit(orderToIndex[i])->inst;
+
+    if(node->type != NodeType_SINK){
+      continue;
+    }
+
+    // For each edge in that contains that node as an output
+    int minEdgeDelay = 9999;
+    int edgeIndex = 0;
+    for(AccelEdgeIterator iter = IterateEdges(top); IsValid(iter); Advance(iter),edgeIndex += 1){
+      SimpleEdge edge = Get(iter);
+      int inIndex = edge.inIndex;
+
+      InstanceInfo* inInfo = top.GetUnit(inIndex);
+      FUInstance* inNode = inInfo->inst;
+      if(inNode != node){
+        continue;
+      }
+
+      int edgeDelay = edgesDelays[edgeIndex];
+      minEdgeDelay = std::min(minEdgeDelay,edgeDelay);
+    }
+
+    // Is this even possible?
+    Assert(minEdgeDelay != 9999);
+
+    nodeDelayArray[i].value = minEdgeDelay;
+  }
+
   // We have the global latency of each node and edge.
   // We now need to calculate the "extra" latency added to each edge in order to align everything together.
 
-  // For each node
+  // Converts global latency into edge delays
   for(int i = 0; i < orderToIndex.size; i++){
     FUInstance* node = top.GetUnit(orderToIndex[i])->inst;
 
     int nodeDelay = nodeDelayArray[i].value;
     
-    // For each edge in that contains that node as an input
     int minEdgeDelay = 9999;
     int edgeIndex = 0;
     for(AccelEdgeIterator iter = IterateEdges(top); IsValid(iter); Advance(iter),edgeIndex += 1){
@@ -458,16 +437,80 @@ SimpleCalculateDelayResult CalculateDelay(AccelInfoIterator top,Arena* out,Arena
       edgesDelays[edgeIndex] -= minEdgeDelay;
     }
   }
+
+  if(globalOptions.debug){
+    static int funCalls = 0;
+    BLOCK_REGION(out);
+
+    String fileName = {};
+    if(Empty(top.accelName)){
+      fileName = PushString(out,"edge_delays_%d.dot",funCalls++);
+    } else {
+      fileName = PushString(out,"edge_delays_%.*s.dot",UNPACK_SS(top.accelName));
+    }
+    
+    String filePath = PushDebugPath(out,STRING("TEST"),STRING("delays"),fileName);
+
+    GraphPrintingContent content = GenerateLatencyDotGraph(top,orderToIndex,nodeDelayArray,edgesDelays,temp,out);
+    
+    String result = GenerateDotGraph(content,out,debugArena);
+    OutputContentToFile(filePath,result);
+  }
   
+  // Store delays on data producing units
+  for(int i = 0; i < orderToIndex.size; i++){
+    FUInstance* node = top.GetUnit(orderToIndex[i])->inst;
+
+    if(node->type != NodeType_SOURCE && node->type != NodeType_SOURCE_AND_SINK){
+      continue;
+    }
+
+    // For each edge in that contains that node as an output
+    int minEdgeDelay = 9999;
+    int edgeIndex = 0;
+    for(AccelEdgeIterator iter = IterateEdges(top); IsValid(iter); Advance(iter),edgeIndex += 1){
+      SimpleEdge edge = Get(iter);
+      int outIndex = edge.outIndex;
+
+      InstanceInfo* outInfo = top.GetUnit(outIndex);
+      FUInstance* outNode = outInfo->inst;
+      if(outNode != node){
+        continue;
+      }
+
+      int edgeDelay = edgesDelays[edgeIndex];
+      minEdgeDelay = std::min(minEdgeDelay,edgeDelay);
+    }
+
+    // Is this even possible?
+    Assert(minEdgeDelay != 9999);
+
+    nodeDelayArray[i].value = minEdgeDelay;
+    
+    edgeIndex = 0;
+    for(AccelEdgeIterator iter = IterateEdges(top); IsValid(iter); Advance(iter),edgeIndex += 1){
+      SimpleEdge edge = Get(iter);
+      int outIndex = edge.outIndex;
+
+      InstanceInfo* outInfo = top.GetUnit(outIndex);
+      FUInstance* outNode = outInfo->inst;
+      if(outNode != node){
+        continue;
+      }
+
+      edgesDelays[edgeIndex] -= minEdgeDelay;
+    }
+  }
+
   if(globalOptions.debug){
     static int funCalls = 0;
     BLOCK_REGION(out);
     
     String fileName = {};
     if(Empty(top.accelName)){
-      fileName = PushString(out,"2_out%d.dot",funCalls++);
+      fileName = PushString(out,"final_delays_%d.dot",funCalls++);
     } else {
-      fileName = PushString(out,"2_out_%.*s.dot",UNPACK_SS(top.accelName));
+      fileName = PushString(out,"final_delays_%.*s.dot",UNPACK_SS(top.accelName));
     }
 
     String filePath = PushDebugPath(out,STRING("TEST"),STRING("delays"),fileName);
@@ -541,7 +584,6 @@ CalculateDelayResult CalculateDelay(Accelerator* accel,DAGOrderNodes order,Array
   }
 
   // Used by debug code to print graphs but nothing else, I think
-#if 1
   {
     for(int i = 0; i < order.instances.size; i++){
       FUInstance* node = order.instances[i];
@@ -553,7 +595,6 @@ CalculateDelayResult CalculateDelay(Accelerator* accel,DAGOrderNodes order,Array
       }
     }
   }
-#endif
  
   // Start at sources
   int graphs = 0;

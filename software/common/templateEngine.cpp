@@ -537,7 +537,6 @@ CompiledTemplate* CompileTemplate(String content,const char* name,Arena* out,Are
     int lineNumber = i + 1;
     Array<IndividualBlock> sep = ParseIndividualLine(line,lineNumber,temp,out);
     
-    bool containsText = false;
     bool containsCommand = false;
     bool containsExpression = false;
     bool onlyWhitespace = true;
@@ -546,8 +545,6 @@ CompiledTemplate* CompileTemplate(String content,const char* name,Arena* out,Are
       case BlockType_EXPRESSION: containsExpression = true; break;
       case BlockType_COMMAND: containsCommand = true; break;
       case BlockType_TEXT: {
-        containsText = true;
-        
         if(onlyWhitespace && !IsOnlyWhitespace(s.content)){
           onlyWhitespace = false;
         }
@@ -769,9 +766,6 @@ static Value EvalExpression(Expression* expr,Frame* frame,Arena* out){
       FatalError(StaticFormat("Tried to access member (%.*s) that does not exist for type (%.*s)",UNPACK_SS(expr->text),UNPACK_SS(object.type->name)),expr->approximateLine);
     }
 
-    Opt<Member*> member = GetMember(object.type,expr->id);
-
-    Type* fieldType = member.value()->type;
     TemplateRecord* record = PushListElement(recordList);
     record->type = TemplateRecordType_FIELD;
     record->structType = object.type;
@@ -1041,8 +1035,6 @@ static ValueAndText EvalNonBlockCommand(Command* com,Frame* previousFrame,Arena*
     String format = formatExpr.str;
 
     Tokenizer tok(format,"{}",{});
-    auto mark = StartString(outputArena);
-
     while(!tok.Done()){
       Opt<Token> simpleText = tok.PeekFindUntil("{");
 

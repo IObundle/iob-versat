@@ -194,8 +194,13 @@ void FillDeclarationWithAcceleratorValues(FUDeclaration* decl,Accelerator* accel
   BLOCK_REGION(temp);
   BLOCK_REGION(temp2);
 
-  // val.infos.outputLatency is wrong here when changing the configuration stuff.
+  // TODO: This function was mostly used to calculate the configInfo stuff, which now is gone.
+  //       Need to see how much of this code is also useful for the merge stuff.
+  //       (If after merge puts the correct values inside the accelInfo struct, if we can just call this function to compute the remaining data that needs to be computed).
+  //       We can also move some of this computation to the accelInfo struct. Just see how things play out.
+  
   AccelInfo val = CalculateAcceleratorInfo(accel,true,perm,temp2);
+  decl->info = val;
   
   DynamicArray<String> baseNames = StartArray<String>(perm);
   for(FUInstance* ptr : accel->allocated){
@@ -219,18 +224,7 @@ void FillDeclarationWithAcceleratorValues(FUDeclaration* decl,Accelerator* accel
       externalIndex += 1;
     }
   }
-  
-  if(decl->info.infos.size == 0){
-    decl->info.infos = PushArray<MergePartition>(globalPermanent,val.infos.size);
-  }
-  
-  decl->info.infos[0].info = GenerateInitialInstanceInfo(decl->fixedDelayCircuit,globalPermanent,temp);
-  AccelInfoIterator iter = StartIteration(&decl->info);
-  FillInstanceInfo(iter,globalPermanent,temp);
-
-  decl->info.infos[0].inputDelays = val.infos[0].inputDelays;
-  decl->info.infos[0].outputLatencies = val.infos[0].outputLatencies;
-
+    
   decl->configs = PushArray<Wire>(perm,val.configs);
   decl->states = PushArray<Wire>(perm,val.states);
   
