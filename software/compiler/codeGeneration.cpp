@@ -539,41 +539,9 @@ Array<Array<MuxInfo>> GetAllMuxInfo(AccelInfo* info,Arena* out,Arena* temp){
   return result;
 }
 
-// NOTE: The one thing that we can be sure of, is that the arrangement of the structs is always the same.
-//       The difference is wether the unit contains certain members (or padding)
-//       and wether the members are union or not.
-
-// What is the format that we want?
-// Because of merge, we can have structures that are different even though they represent the same module.
-// That means that a structure might point to two different but same "type" strucutures.
-// The difference in type is given by the 
-
-// We set the iter to merge N.
-// We calculate the members for merge N.
-// We set iter to merge N + 1.
-// We calculate members for merge N + 1.
-// If they are the same, we can collapse them into a single one.
-// Otherwise, need to create a union.
-
-// Let's start simple. Let's generate the view for merge 0, then generate the view for merge 1 and go from there.
-// The problem of individual merges is that we then need to join them back together in order to resolve the union part.
-//
-
-// What do I want?
-// I want to make the generated structs more data oriented, so I can then make functions to extract stuff, like the expression to access a member.
-// I also want to make the structures as simple as possible.
-// Structs are arrays of elements which are multiple or one member.
-
-// Because of this, I think that I need to change StructInfo to contain the multiple types associated to the merges.
-// Therefore, a StructInfo must have an array for each merge index.
-// We are going to make duplicates, but it is fine for now. We handle those later.
-
-// For an accelerator that contains multiple units, the top level should just be a 
-
-// Now that I think about it, only the top structure "cares" about merge configs, in relation to the fact that we have to put "unions".
-// That means that we just need to put the merge multiplexers on the top struct (I think. Need to generate a test that uses multiple merges and modules and then start making everything work properly).
-
-StructInfo* GenerateConfigStruct(AccelInfoIterator iter,Array<Partition> partitions,String topName,Arena* out,Arena* temp){
+StructInfo* GenerateConfigStruct(AccelInfoIterator iter,String topName,Arena* out,Arena* temp){
+  BLOCK_REGION(temp);
+  
   StructInfo result = {};
   InstanceInfo* parent = iter.GetParentUnit();
  
@@ -587,7 +555,6 @@ StructInfo* GenerateConfigStruct(AccelInfoIterator iter,Array<Partition> partiti
   
   auto list = PushArenaList<StructElement>(temp);
   for(AccelInfoIterator it = iter; it.IsValid(); it = it.Next()){
-      
     InstanceInfo* unit = it.CurrentUnit();
     StructElement elem = {};
       
@@ -596,24 +563,38 @@ StructInfo* GenerateConfigStruct(AccelInfoIterator iter,Array<Partition> partiti
     }
 
     elem.name = unit->baseName;
+
     if(unit->isMerge){
-      for(int i = 0; i < iter.MergeSize(); i++){
-        AccelInfoIterator inside = it.StepInsideOnly();
-        inside.mergeIndex = i;
+      auto GenerateMergeStruct = [](InstanceInfo* topUnit,AccelInfoIterator iter,Arena* out,Arena* temp) -> StructInfo*{
+        auto list = PushArenaList<StructElement>(temp);
+        StructElement elem = {};
+        for(int i = 0; i < iter.MergeSize(); i++){
+          iter.mergeIndex = i;
+        
+          StructInfo* subInfo = GenerateConfigStruct(iter,{},out,temp);
+          elem.name = iter.GetMergeName();
+          elem.childStruct = subInfo;
+          elem.pos = topUnit->configPos.value();
+          elem.size = topUnit->configSize;
+          elem.isMergeMultiplexer = topUnit->isMergeMultiplexer;
 
-        StructInfo* subInfo = GenerateConfigStruct(inside,partitions,{},out,temp);
-        elem.name = inside.GetMergeName();
-        elem.childStruct = subInfo;
-        elem.pos = unit->configPos.value();
-        elem.size = unit->configSize;
-        elem.isMergeMultiplexer = unit->isMergeMultiplexer;
+          *list->PushElem() = elem;
+        }
+        
+        StructInfo* res = PushStruct<StructInfo>(out);
+        
+        res->name = topUnit->decl->name;
+        res->elements = PushArrayFromList(out,list);
+        
+        return res;
+      };
 
-        *list->PushElem() = elem;
-      }
-      continue;
+      AccelInfoIterator inside = it.StepInsideOnly();
+      StructInfo* subInfo = GenerateMergeStruct(unit,inside,out,temp);
+      elem.childStruct = subInfo;
     } else if(unit->isComposite){
       AccelInfoIterator inside = it.StepInsideOnly();
-      StructInfo* subInfo = GenerateConfigStruct(inside,partitions,{},out,temp);
+      StructInfo* subInfo = GenerateConfigStruct(inside,{},out,temp);
       elem.childStruct = subInfo;
     } else {
       StructInfo* simpleSubInfo = PushStruct<StructInfo>(out);
@@ -625,7 +606,7 @@ StructInfo* GenerateConfigStruct(AccelInfoIterator iter,Array<Partition> partiti
     elem.pos = unit->configPos.value();
     elem.size = unit->configSize;
     elem.isMergeMultiplexer = unit->isMergeMultiplexer;
-      
+
     *list->PushElem() = elem;
   }
       
@@ -662,8 +643,6 @@ Array<StructInfo*> ExtractStructs(StructInfo* structInfo,Arena* out,Arena* temp)
       Recurse(Recurse,elem.childStruct,info);
     }
   } else {
-    // For merge top level units we must also store the struct info since we need to generate the top level struct that contains the union of the merge types.
-    // NOTE: Do not know if this is the best approach, or if we should just have this function call everytime and in later functions we detect that top level is not merge and we do not generate that structure.
     Recurse(Recurse,structInfo,info);
   }
   
@@ -672,12 +651,10 @@ Array<StructInfo*> ExtractStructs(StructInfo* structInfo,Arena* out,Arena* temp)
   return res;
 }
 
-#if 1
 Array<TypeStructInfo> GenerateStructs(Array<StructInfo*> info,Arena* out,Arena* temp){
   ArenaList<TypeStructInfo>* list = PushArenaList<TypeStructInfo>(temp);
 
   for(StructInfo* structInfo : info){
-    // Simple struct for simple types
     if(structInfo->type){
       Array<Wire> configs = structInfo->type->configs;
       int size = configs.size;
@@ -751,7 +728,6 @@ Array<TypeStructInfo> GenerateStructs(Array<StructInfo*> info,Arena* out,Arena* 
   Array<TypeStructInfo> res = PushArrayFromList(out,list);
   return res;
 }
-#endif
 
 void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* softwarePath,bool isSimple,Arena* temp,Arena* temp2){
   BLOCK_REGION(temp);
@@ -770,25 +746,29 @@ void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* 
     return;
   }
 
-  DEBUG_BREAK();
   AccelInfo info = CalculateAcceleratorInfo(accel,true,temp,temp2);
   
   VersatComputedValues val = ComputeVersatValues(&info,globalOptions.useDMA);
   
-  Array<Partition> partitions = GenerateInitialPartitions(accel,temp);
-
   AccelInfoIterator iter = StartIteration(&info);
-  StructInfo* structInfo = GenerateConfigStruct(iter,partitions,accel->name,temp,temp2);
+  StructInfo* structInfo = GenerateConfigStruct(iter,accel->name,temp,temp2);
   
   Array<StructInfo*> allStructs = ExtractStructs(structInfo,temp,temp2);
-  Array<TypeStructInfo> structs = GenerateStructs(allStructs,temp,temp2);
+  Array<int> indexes = PushArray<int>(temp,allStructs.size);
+  Memset(indexes,2);
+  for(int i = 0; i < allStructs.size; i++){
+    String name = allStructs[i]->name;
 
-  DEBUG_BREAK();
+    for(int ii = 0; ii < i; ii++){
+      String possibleDuplicate = allStructs[ii]->name;
+      if(CompareString(possibleDuplicate,name)){
+        allStructs[i]->name = PushString(temp,"%.*s_%d",UNPACK_SS(possibleDuplicate),indexes[ii]++);
+        break;
+      }
+    }
+  }
   
-  // What is the best way of looking at the data?
-  // For each struct, I need to see, for a given configPos, all the types and names used.
-  // If only one, then direct type.
-  // If multiple, then union.
+  Array<TypeStructInfo> structs = GenerateStructs(allStructs,temp,temp2);
   
   printf("ADDR_W - %d\n",val.memoryConfigDecisionBit + 1);
   if(val.nUnitsIO){

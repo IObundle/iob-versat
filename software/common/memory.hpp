@@ -100,8 +100,11 @@ NAME.totalAllocated = SIZE;
 template<typename T>
 Array<T> PushArray(Arena* arena,int size){AlignArena(arena,alignof(T)); Array<T> res = {}; res.size = size; res.data = (T*) PushBytes(arena,sizeof(T) * size); Memset(res,(T){}); return res;};
 
+inline void MemZero_(void* ptr,ssize_t size){u8* view = (u8*) ptr; for(ssize_t i = 0; i < size; i++) view[i] = 0;};
+#define MemZero(PTR,TYPE) MemZero_(PTR,sizeof(TYPE));
+
 template<typename T>
-T* PushStruct(Arena* arena){AlignArena(arena,alignof(T)); T* res = (T*) PushBytes(arena,sizeof(T)); *res = (T){};return res;};
+T* PushStruct(Arena* arena){AlignArena(arena,alignof(T)); T* res = (T*) PushBytes(arena,sizeof(T)); MemZero(res,T); *res = (T){};return res;};
 
 // Arena that allocates more blocks of memory like a list.
 struct DynamicArena{
@@ -192,6 +195,10 @@ T* GrowableArray<T>::PushElem(){
 
 template<typename T>
 Array<T> GrowableArray<T>::AsArray(){
+  if(size == 0){
+    return {};
+  }
+  
   Array<T> res = {};
   res.data = data;
   res.size = size;

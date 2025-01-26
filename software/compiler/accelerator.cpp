@@ -1270,7 +1270,7 @@ void ConnectUnitsGetEdge(FUInstance* out,int outIndex,FUInstance* in,int inIndex
   Assert(inIndex < inDecl->NumberInputs());
   Assert(outIndex < outDecl->NumberOutputs());
 
-  Assert(!FindEdge({out,outIndex},{in,inIndex}));
+  Assert(!FindEdge(out,outIndex,in,inIndex,delay));
   Accelerator* accel = out->accel;
 
   // Update graph data.

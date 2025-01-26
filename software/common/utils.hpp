@@ -329,8 +329,12 @@ bool OnlyOneElement(ArenaList<T>* list){
   
 template<typename T>
 Array<T> PushArrayFromList(Arena* out,ArenaList<T>* list){
-  DynamicArray<T> arr = StartArray<T>(out);
+  if(Empty(list)){
+    return {};
+  }
 
+  DynamicArray<T> arr = StartArray<T>(out);
+  
   FOREACH_LIST(ListedStruct<T>*,iter,list->head){
     T* ptr = arr.PushElem();
     *ptr = iter->elem;

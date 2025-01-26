@@ -2233,6 +2233,25 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
     }
   }
   
+  for(int i = 0; i < size; i++){
+    BLOCK_REGION(temp);
+
+    auto firstMapping = MappingInvert(circuitToCopy,temp);
+
+    int typeConfigIndex = i;
+    int typeIndex = 0;
+    while(typeConfigIndex >= types[typeIndex]->ConfigInfoSize()){
+      typeConfigIndex -= types[typeIndex]->ConfigInfoSize();
+      typeIndex += 1;
+    }
+    
+    AcceleratorMapping* copyToFlatten = MappingCombine(firstMapping,mergeToFlatten[typeIndex],temp);
+
+    // Need to map from flattened base type to copy of merged circuit (decl.flattenedBaseCircuit).
+    decl->info.infos[i].mapping = MappingInvert(copyToFlatten,globalPermanent);
+    decl->info.infos[i].mergeMultiplexers = mergeMultiplexers[typeIndex];
+  }
+  
 #if 0
   for(int i = 0; i < size; i++){
     BLOCK_REGION(temp);
