@@ -1408,16 +1408,6 @@ ReconstituteResult ReconstituteGraph(Accelerator* merged,Set<PortInstance>* merg
   return result;
 }
 
-FUInstance* GetInstanceByNameAndId(Accelerator* accel,String expectedName,int id){
-  for(FUInstance* inst : accel->allocated){
-    if(CompareString(inst->name,expectedName) && inst->id == id){
-      return inst;
-    }
-  }
-
-  return nullptr;
-}
-
 FUInstance* GetInstanceByName(Accelerator* accel,String name){
   for(FUInstance* inst : accel->allocated){
     if(CompareString(inst->name,name)){
@@ -1428,17 +1418,16 @@ FUInstance* GetInstanceByName(Accelerator* accel,String name){
   return nullptr;
 }
 
+// TODO: This is a bit forced. Very bug prone and we probably can do something better if we can preserve the mappings from the flattened operations and work from there.
+//       Otherwise we need to enforce some constraints to make sure that this function does not "just work" from being lucky. Because it feels like the only reason this works is because the tests are not trying hard enough to blow this up.
+
+// NOTE: I think that part of the reason why this exists in the first place is because we do not have flatten mapping info that goes accross module hierarchies. If A contains B that contains C, and C is a merged unit, we might have to map flatten C -> flatten B and flatten B -> flatten A in order to merge A.
+//       Which means that we have to flatten and keep mapping info accross hierarchies.
+//       While this function achieves the same by just looking at the names, which are mostly preserved through flattening, although this is not enforced and as such it contains a high change of bugging out for more complex workflows.
 AcceleratorMapping* MapFlattenedGraphs(Accelerator* start,FUDeclaration* endDecl,Accelerator* end,Arena* out){
   AcceleratorMapping* mapping = MappingSimple(start,end,out);
 
   BLOCK_REGION(out);
-
-  // Start is FullAESRounds
-  // endDecl is FullAES.
-  // FullAES contains flattening info.
-  //   inst->name is name of instances from FullAES.
-  //   sub->name is usually merged garbage, specially for inputs and outputs, like x_3_x_3_x_3_x_3_x_3_x_3
-  //   sub is from the base circuit so it contains inputs and outputs.
   
   for(FUInstance* inst : endDecl->baseCircuit->allocated){
     if(inst->declaration->baseCircuit){
@@ -1529,12 +1518,18 @@ AcceleratorMapping* MapFlattenedGraphs(Accelerator* start,FUDeclaration* endDecl
 
 // Recurses over composite but does not recurse lower than merged units.
 Array<GraphAndMapping> GetAllBaseMergeTypes(FUDeclaration* decl,Arena* out,Arena* temp){
+  //Assert(false);
+  
   BLOCK_REGION(temp);
+
   Set<GraphAndMapping>* seen = PushSet<GraphAndMapping>(temp,10);
 
   if(decl->type == FUDeclarationType_MERGED){
     for(MergePartition info : decl->info.infos){
-      seen->Insert({.decl = info.baseType,.map = info.mapping,.mergeMultiplexers = info.mergeMultiplexers});
+      seen->Insert({.decl = info.baseType,.map = info.baseTypeFlattenToMergedBaseCircuit,.mergeMultiplexers = info.mergeMultiplexers});
+
+      // So, we have the map to the base circuit.
+      
     }
   } else {
     // We check fixedDelayCircuit since composites preserves instantiation of merged and composite units 
@@ -1546,26 +1541,22 @@ Array<GraphAndMapping> GetAllBaseMergeTypes(FUDeclaration* decl,Arena* out,Arena
       FUDeclaration* subDecl = inst->declaration;
       
       if(subDecl->type == FUDeclarationType_MERGED){
-#if 1
+        // NOTE: This code is not being tested by the current tests, so it might not work well.
+        
         for(MergePartition info : subDecl->info.infos){
-        //for(ConfigurationInfo info : subDecl->configInfo){
-          // In here, need to map from info.mapping to decl->flattenedBaseCircuit
-          // info.baseType->flattenedBaseCircuit is 454
-          // subDecl->flattenedBaseCircuit is 471
-          // decl->flattenedBaseCircuit is 489
-          // info.mapping is 454 -> 471.
-          // Need to map to decl->flattenedBaseCircuit
-          // Need to generate 471 -> 489 map.
-          // Map subDecl->flattenedBaseCircuit to decl->flattenedBaseCircuit
+          AcceleratorMapping* subUnitBaseTypeToSubUnitCircuit = info.baseTypeFlattenToMergedBaseCircuit;
 
-          AcceleratorMapping* map = MapFlattenedGraphs(subDecl->flattenedBaseCircuit,decl,decl->flattenedBaseCircuit,out);
-          AcceleratorMapping* fullMapping = MappingCombine(info.mapping,map,globalPermanent);
+          // we have unit A that contains unit B which can have multiple partitions B1,B2,B3. We also have the mappings B1 -> B, B2 -> B and so on
+          // We create mapping B -> A.
+          // Then we map combine B1 -> B with B -> A in order to get B1 -> A.
+          // And do the same for B2 -> A and so on.
+          AcceleratorMapping* subUnitCircuitToParentCircuit = MapFlattenedGraphs(subDecl->flattenedBaseCircuit,decl,decl->flattenedBaseCircuit,out);
+          AcceleratorMapping* subUnitBaseToParent = MappingCombine(subUnitBaseTypeToSubUnitCircuit,subUnitCircuitToParentCircuit,globalPermanent);
           
-          Set<PortInstance>* trueMergeMultiplexers = MappingMapInput(map,info.mergeMultiplexers,globalPermanent);
+          Set<PortInstance>* trueMergeMultiplexers = MappingMapInput(subUnitCircuitToParentCircuit,info.mergeMultiplexers,globalPermanent);
           
-          seen->Insert({.decl = info.baseType,.map = fullMapping,.mergeMultiplexers = trueMergeMultiplexers,.fromStruct = true});
+          seen->Insert({.decl = info.baseType,.map = subUnitBaseToParent,.mergeMultiplexers = trueMergeMultiplexers,.fromStruct = true});
         }
-#endif        
       } else if(subDecl->type == FUDeclarationType_COMPOSITE ||
                 subDecl->type == FUDeclarationType_ITERATIVE){
         Array<GraphAndMapping> subTypes = GetAllBaseMergeTypes(subDecl,temp,out);
@@ -1579,41 +1570,20 @@ Array<GraphAndMapping> GetAllBaseMergeTypes(FUDeclaration* decl,Arena* out,Arena
 
   Array<GraphAndMapping> result = PushArrayFromSet(out,seen);
 
+#if 0
   for(GraphAndMapping mapping : result){
+    printf("%d -> %d\n",mapping.map->firstId,mapping.map->secondId);
+  }
+#endif
+  
+  // TODO: Problem was in here.
+  //       The problem is that we are mapping to the base circuit, but we want to map to the flattened circuit?
+  for(GraphAndMapping mapping : result){
+    //Assert(false);
+    //Assert(mapping.map->secondId == decl->baseCircuit->id);
     Assert(mapping.map->secondId == decl->flattenedBaseCircuit->id);
   }
   
-  return result;
-}
-
-struct MergeTypesIterator{
-  Array<FUDeclaration*> types;
-  int currentType;
-  int currentConfig;
-
-  bool HasNext(){
-    return currentType < types.size;
-  }
-
-  Pair<int,int> Next(){
-    Assert(currentType < types.size);
-    Assert(currentConfig < types[currentType]->ConfigInfoSize());
-
-    Pair<int,int> toReturn = {currentType,currentConfig};
-
-    currentConfig += 1;
-    if(currentConfig >= types[currentType]->ConfigInfoSize()){
-      currentType += 1;
-      currentConfig = 0;
-    }
-
-    return toReturn;
-  }
-};
-
-MergeTypesIterator IterateTypes(Array<FUDeclaration*> types){
-  MergeTypesIterator result = {};
-  result.types = types;
   return result;
 }
 
@@ -1638,6 +1608,10 @@ MergeTypesIterator IterateTypes(Array<FUDeclaration*> types){
 
 ReconstituteResult ReconstituteGraphFromStruct(Accelerator* merged,Set<PortInstance>* mergedMultiplexers,Accelerator* base,String name,AcceleratorMapping* baseToMerged,FUDeclaration* parentType,Arena* out,Arena* temp);
 
+// TODO: There is a lot of uglyness in this function, but beforehand I would like for the TestDoubleMerge test to be working otherwise run the risk of screwing up something important.
+
+//       Start be taming the mappings by giving proper names and work from there.
+
 FUDeclaration* Merge(Array<FUDeclaration*> types,
                      String name,Array<SpecificMergeNode> specifics,
                      Arena* temp,Arena* temp2,MergingStrategy strat){
@@ -1650,36 +1624,30 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
 
   int size = types.size;
   Array<Accelerator*> flatten = PushArray<Accelerator*>(temp,size);
-  Array<AcceleratorMapping*> flattenToMerge = PushArray<AcceleratorMapping*>(temp,size);
-  Array<AcceleratorMapping*> mergeToFlatten = PushArray<AcceleratorMapping*>(temp,size); 
-  Array<GraphMapping> mappings = PushArray<GraphMapping>(temp,size - 1);
+  Array<AcceleratorMapping*> flattenToMergedAccel = PushArray<AcceleratorMapping*>(temp,size);
+  Array<AcceleratorMapping*> mergedAccelToFlatten = PushArray<AcceleratorMapping*>(temp,size); 
   
   int mergedAmount = 0;
   for(FUDeclaration* decl : types){
-    mergedAmount += std::max(decl->ConfigInfoSize(),1);
+    mergedAmount += std::max(decl->MergePartitionSize(),1);
   }
 
   for(int i = 0; i < size; i++){
     flatten[i] = types[i]->flattenedBaseCircuit;
   }
-   
-  for(int i = 0; i < size - 1; i++){
-    mappings[i] = InitGraphMapping(temp);
-  }
     
   // We copy accel 1.
-  Pair<Accelerator*,AcceleratorMapping*> re = CopyAcceleratorWithMapping(flatten[0],AcceleratorPurpose_MERGE,false,globalPermanent);
+  Pair<Accelerator*,AcceleratorMapping*> firstCopy = CopyAcceleratorWithMapping(flatten[0],AcceleratorPurpose_MERGE,false,globalPermanent);
 
-  Accelerator* result = re.first;
-  AcceleratorMapping* initialMap = re.second;
-  flattenToMerge[0] = initialMap; // Maps from flattened 0 into copied accelerator. 
+  Accelerator* mergedAccel = firstCopy.first;
+  flattenToMergedAccel[0] = firstCopy.second;
   
   Array<Accelerator*> orderedAccelerators = [&](){
     DynamicArray<Accelerator*> arr = StartArray<Accelerator*>(temp);
     bool first = true;
     for(Accelerator* accel : flatten){
       if(first){
-        *arr.PushElem() = result;
+        *arr.PushElem() = mergedAccel;
       } else {
         *arr.PushElem() = accel;
       }
@@ -1702,23 +1670,23 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
   for(int i = 1; i < size; i++){
     String folderName = PushString(temp,"%.*s/Merge_%d",UNPACK_SS(name),i);
 
-    mappings[i-1] = CalculateMergeMapping(result,flatten[i],specificNodes,strat,folderName,temp,temp2);
-    MergeGraphResultExisting res = MergeGraphToExisting(result,flatten[i],mappings[i-1],folderName,temp,temp2);
+    GraphMapping map = CalculateMergeMapping(mergedAccel,flatten[i],specificNodes,strat,folderName,temp,temp2);
+    MergeGraphResultExisting res = MergeGraphToExisting(mergedAccel,flatten[i],map,folderName,temp,temp2);
 
     OutputDebugDotGraph(res.result,STRING(StaticFormat("result%d.dot",i)),temp);
 
-    flattenToMerge[i] = res.map2;
-    result = res.result;
+    flattenToMergedAccel[i] = res.map2;
+    mergedAccel = res.result;
   }
   
   // TODO: This might indicate the need to implement a bidirectional map.
   for(int i = 0; i < size; i++){
-    mergeToFlatten[i] = MappingInvert(flattenToMerge[i],temp);
+    mergedAccelToFlatten[i] = MappingInvert(flattenToMergedAccel[i],temp);
   }
 
   // Need to map from final to each input graph
   int numberOfMultipleInputs = 0;
-  for(FUInstance* ptr : result->allocated){
+  for(FUInstance* ptr : mergedAccel->allocated){
     if(ptr->multipleSamePortInputs){
       numberOfMultipleInputs += 1;
     }
@@ -1729,7 +1697,7 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
   for(int i = 0; i < size; i++){
     mapMultipleInputsToSubgraphs[i] = PushHashmap<FUInstance*,FUInstance*>(temp,numberOfMultipleInputs);
 
-    for(auto pair : flattenToMerge[i]->inputMap){ // NOTE: Is InputMap different than OutputMap?
+    for(auto pair : flattenToMergedAccel[i]->inputMap){ // NOTE: Is InputMap different than OutputMap?
       if(pair.second.inst->multipleSamePortInputs){
         mapMultipleInputsToSubgraphs[i]->Insert(pair.second.inst,pair.first.inst);
       }
@@ -1744,7 +1712,7 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
 
   FUDeclaration* muxType = GetTypeByName(STRING("CombMux8"));
 
-  EdgeIterator iter = IterateEdges(result);
+  EdgeIterator iter = IterateEdges(mergedAccel);
   while(iter.HasNext()){
     Edge edge = iter.Next();
 
@@ -1756,8 +1724,8 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
   }
 
   bool insertedAMultiplexer = false;
-  int freeShareIndex = GetFreeShareIndex(result);
-  for(FUInstance* ptr : result->allocated){
+  int freeShareIndex = GetFreeShareIndex(mergedAccel);
+  for(FUInstance* ptr : mergedAccel->allocated){
     if(ptr->multipleSamePortInputs){
       // Need to figure out which port, (which might be multiple), has the same inputs
       Array<int> portConnections = GetPortConnections(ptr,temp);
@@ -1801,7 +1769,7 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
               // Then we could use the map here, instead of searching the all inputs of the node.
               // TODO: The correct approach would be to use a Bimap to perform the mapping from final graph to inputs, and to not use the mapMultipleInputsToSubgraphs (because this is just an incomplete map, if we add a complete map we could do the same thing)
               FOREACH_LIST(ConnectionNode*,con,node->allInputs){
-                PortInstance otherPort = MappingMapOutput(flattenToMerge[ii],con->instConnectedTo);
+                PortInstance otherPort = MappingMapOutput(flattenToMergedAccel[ii],con->instConnectedTo);
 
                 FUInstance* other = otherPort.inst;
                 //FUInstance* other = MappingMap(flattenToMerge[ii],con->instConnectedTo.inst);
@@ -1822,10 +1790,10 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
         // Create multiplexer instance
         //const char* format = "versat_merge_mux_%d";
         //String str = PushString(perm,format,multiplexersAdded++);
-        String str = GetFreeMergeMultiplexerName(result,globalPermanent);
+        String str = GetFreeMergeMultiplexerName(mergedAccel,globalPermanent);
         insertedAMultiplexer = true;
         PushNullByte(globalPermanent);
-        FUInstance* multiplexer = CreateFUInstance(result,muxType,str);
+        FUInstance* multiplexer = CreateFUInstance(mergedAccel,muxType,str);
         multiplexer->isMergeMultiplexer = true;
         //multiplexer->mergeMultiplexerId = result->id;
         ShareInstanceConfig(multiplexer,freeShareIndex); // TODO: Realistic share index. Maybe add a function that allocates a free share index and we keep the next free shared index inside the accelerator.
@@ -1844,7 +1812,7 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
             PortInstance portInst = {.inst = multiplexer,.port = graphIndex};
             mergeMultiplexers[graphIndex]->Insert(portInst);
             
-            RemoveConnection(result,node.units[0].inst,node.units[0].port,node.units[1].inst,node.units[1].port);
+            RemoveConnection(mergedAccel,node.units[0].inst,node.units[0].port,node.units[1].inst,node.units[1].port);
             ConnectUnits(node.units[0],{multiplexer,graphIndex},node.delay);
           }
         }
@@ -1855,7 +1823,7 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
   }
   
   String permanentName = PushString(globalPermanent,name);
-  result->name = permanentName;
+  mergedAccel->name = permanentName;
 
   // TODO: Join the Merge and the Subunit register function common functionality into one
 
@@ -1868,15 +1836,14 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
   declInst.parameters[3] = STRING("AXI_ADDR_W");
   declInst.parameters[4] = STRING("AXI_DATA_W");
   declInst.parameters[5] = STRING("LEN_W");
-  
-  Accelerator* circuit = result;
 
-  Pair<Accelerator*,AcceleratorMapping*> r = CopyAcceleratorWithMapping(circuit,AcceleratorPurpose_BASE,true,globalPermanent);
+  Pair<Accelerator*,AcceleratorMapping*> baseCopy = CopyAcceleratorWithMapping(mergedAccel,AcceleratorPurpose_BASE,true,globalPermanent);
+
+  // Flattened and base should be the same.
+  declInst.baseCircuit = baseCopy.first;
+  declInst.flattenedBaseCircuit = declInst.baseCircuit; // Should already be flattened, I think?
   
-  declInst.baseCircuit = r.first;
-  AcceleratorMapping* circuitToCopy = r.second;
-  
-  declInst.flattenedBaseCircuit = declInst.baseCircuit; // Should already be flattened.
+  AcceleratorMapping* mergedAccelToBaseCircuit = baseCopy.second;
   
   // Output full circuit
   OutputDebugDotGraph(declInst.baseCircuit,STRING("FullCircuit.dot"),temp);
@@ -1887,7 +1854,7 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
 
   // TODO: Correct sizes
   Array<Accelerator*> recon = PushArray<Accelerator*>(temp,99);
-  Array<AcceleratorMapping*> reconToAccel = PushArray<AcceleratorMapping*>(temp,99);
+  Array<AcceleratorMapping*> reconToMergedAccel = PushArray<AcceleratorMapping*>(temp,99);
   Array<DAGOrderNodes> reconOrder = PushArray<DAGOrderNodes>(temp,99);
   Array<CalculateDelayResult> reconDelay = PushArray<CalculateDelayResult>(temp,99);
   Array<FUDeclaration*> reconBaseType = PushArray<FUDeclaration*>(temp,99);
@@ -1925,12 +1892,12 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
   while(true){
     // Init first iteration
     for(int i = 0; i < size; i++){
-      mergedAccelerators[i] = circuit;
+      mergedAccelerators[i] = mergedAccel;
       reconAccelerators[i] = nullptr;
       mergedMultiplexers[i] = mergeMultiplexers[i];
       baseCircuits[i] = flatten[i];
       baseCircuitType[i] = types[i];
-      maps[i] = flattenToMerge[i];
+      maps[i] = flattenToMergedAccel[i];
       lowestLevel[i] = false;
       resultToCircuit[i] = nullptr;
       parents[i] = -1;
@@ -2022,25 +1989,25 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
     outerIndex += 1;
 
     recon.size = toProcess;
-    reconToAccel.size = toProcess;
+    reconToMergedAccel.size = toProcess;
     reconOrder.size = toProcess;
     reconDelay.size = toProcess;
 
     Memset(recon,(Accelerator*) nullptr);
-    Memset(reconToAccel,(AcceleratorMapping*) nullptr);
+    Memset(reconToMergedAccel,(AcceleratorMapping*) nullptr);
 
     int amountOfGoods = 0;
     for(int i = 0; i < toProcess; i++){
       if(lowestLevel[i]){
         recon[amountOfGoods] = reconAccelerators[i];
-        reconToAccel[amountOfGoods] = resultToCircuit[i];
+        reconToMergedAccel[amountOfGoods] = resultToCircuit[i];
           
         amountOfGoods += 1;
       }
     }
 
     recon.size = amountOfGoods;
-    reconToAccel.size = amountOfGoods;
+    reconToMergedAccel.size = amountOfGoods;
     reconOrder.size = amountOfGoods;
     reconDelay.size = amountOfGoods;
 
@@ -2056,16 +2023,16 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
       for(DelayToAdd toAdd : delaysToAdd){
         Edge reconEdge = toAdd.edge;
 
-        PortInstance n0 = MappingMapOutput(reconToAccel[i],reconEdge.units[0]);
-        PortInstance n1 = MappingMapInput(reconToAccel[i],reconEdge.units[1]);
+        PortInstance n0 = MappingMapOutput(reconToMergedAccel[i],reconEdge.units[0]);
+        PortInstance n1 = MappingMapInput(reconToMergedAccel[i],reconEdge.units[1]);
 
         String uniqueName = PushString(globalPermanent,"%.*s_%d_%d",UNPACK_SS(toAdd.bufferName),i,outerIndex);
-        FUInstance* buffer = CreateFUInstance(circuit,BasicDeclaration::buffer,uniqueName);
-        SetStatic(circuit,buffer);
+        FUInstance* buffer = CreateFUInstance(mergedAccel,BasicDeclaration::buffer,uniqueName);
+        SetStatic(mergedAccel,buffer);
         buffersInserted += 1;
        
         // TODO: After changing mapping, do not know if we keep reconEdge port or not. 
-        InsertUnit(circuit,{n0.inst,reconEdge.units[0].port},PortInstance{n1.inst,reconEdge.units[1].port},PortInstance{buffer,0});
+        InsertUnit(mergedAccel,{n0.inst,reconEdge.units[0].port},PortInstance{n1.inst,reconEdge.units[1].port},PortInstance{buffer,0});
       }
 
       if(delaysToAdd.size > 0){
@@ -2084,7 +2051,7 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
     Set<PortInstance>* flattenedSet = PushSet<PortInstance>(globalPermanent,s->map->nodesUsed);
 
     for(PortInstance p : s){
-      flattenedSet->Insert(MappingMapInput(circuitToCopy,p));
+      flattenedSet->Insert(MappingMapInput(mergedAccelToBaseCircuit,p));
     }
 
     s = flattenedSet;
@@ -2103,12 +2070,12 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
       OutputContentToFile(filePath,result);
     }
 
-    OutputDebugDotGraph(circuit,STRING("FullCircuitFinal.dot"),temp);
+    OutputDebugDotGraph(mergedAccel,STRING("FullCircuitFinal.dot"),temp);
   }
   
-  declInst.fixedDelayCircuit = circuit;
+  declInst.fixedDelayCircuit = mergedAccel;
 
-  FillDeclarationWithAcceleratorValuesNoDelay(&declInst,circuit,temp,temp2);
+  FillDeclarationWithAcceleratorValuesNoDelay(&declInst,mergedAccel,temp,temp2);
   FillDeclarationWithDelayType(&declInst);
   
   // TODO: Kinda ugly
@@ -2124,7 +2091,7 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
   
   decl->staticUnits = CollectStaticUnits(decl->fixedDelayCircuit,decl,globalPermanent);
   
-  int mergedUnitsAmount = result->allocated.Size();
+  int mergedUnitsAmount = mergedAccel->allocated.Size();
 
   Array<Hashmap<FUInstance*,int>*> reconToOrder = PushArray<Hashmap<FUInstance*,int>*>(temp,size);
   for(int i = 0; i < reconToOrder.size; i++){
@@ -2146,28 +2113,12 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
   }
   validIndexes.size = index;
 
-  // Propagates merge multiplexers accross hierarchies
-  for(int i = 0; i < size; i++){
-    BLOCK_REGION(temp);
-
-    auto firstMapping = MappingInvert(circuitToCopy,temp);
-
-    int typeConfigIndex = i;
-    int typeIndex = 0;
-    while(typeConfigIndex >= types[typeIndex]->ConfigInfoSize()){
-      typeConfigIndex -= types[typeIndex]->ConfigInfoSize();
-      typeIndex += 1;
-    }
-    
-    AcceleratorMapping* copyToFlatten = MappingCombine(firstMapping,mergeToFlatten[typeIndex],temp);
-  }
-
   int mergeSize = size;
-  int unitSize = result->allocated.Size();
+  int unitSize = mergedAccel->allocated.Size();
 
   decl->info.infos = PushArray<MergePartition>(globalPermanent,mergeSize);
   
-  AccelInfo accelInfo = CalculateAcceleratorInfo(circuit,true,temp,temp2);
+  AccelInfo accelInfo = CalculateAcceleratorInfo(mergedAccel,true,temp,temp2);
 
   for(int i = 0; i < size; i++){
     DynamicArray<int> childToTopArr = StartArray<int>(temp);
@@ -2189,7 +2140,7 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
     decl->info.infos[i].name = EndString(str);
     decl->info.infos[i].baseType = topType[i];
   }
-    
+
   for(int i = 0; i < mergeSize; i++){
     decl->info.infos[i].info = GenerateInitialInstanceInfo(decl->fixedDelayCircuit,globalPermanent,temp,{});
     AccelInfoIterator iter = StartIteration(&decl->info);
@@ -2199,12 +2150,12 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
     decl->info.infos[i].inputDelays = ExtractInputDelays(recon[i],reconDelay[i],numberInputs,globalPermanent,temp);
     decl->info.infos[i].outputLatencies = ExtractOutputLatencies(recon[i],reconDelay[i],globalPermanent,temp);
     
-    AcceleratorMapping* map = MappingInvert(reconToAccel[i],globalPermanent);
+    AcceleratorMapping* mergedAccelToRecon = MappingInvert(reconToMergedAccel[i],globalPermanent);
 
     // TODO: Copied directly from above, maybe later we can write better code, for now focus on making stuff work from accel info data but still giving good results.
-    for(int index = 0; index < result->allocated.Size(); index++){
-      FUInstance* ptr = result->allocated.Get(index);
-      FUInstance* reconNode = MappingMapNode(map,ptr);
+    for(int index = 0; index < mergedAccel->allocated.Size(); index++){
+      FUInstance* ptr = mergedAccel->allocated.Get(index);
+      FUInstance* reconNode = MappingMapNode(mergedAccelToRecon,ptr);
       bool mapExists = reconNode != nullptr;
       
       if(reconNode){
@@ -2223,7 +2174,7 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
       if(ptr->isMergeMultiplexer || ptr->declaration == BasicDeclaration::fixedBuffer){
         // Nothing
       } else if(mapExists){
-        FUInstance* originalNode = MappingMapNode(map,ptr);
+        FUInstance* originalNode = MappingMapNode(mergedAccelToRecon,ptr);
         Assert(originalNode);
 
         decl->info.infos[i].info[index].baseName = originalNode->name;
@@ -2236,43 +2187,25 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
   for(int i = 0; i < size; i++){
     BLOCK_REGION(temp);
 
-    auto firstMapping = MappingInvert(circuitToCopy,temp);
+    AcceleratorMapping* baseCircuitToMergedAccel = MappingInvert(mergedAccelToBaseCircuit,temp);
 
+    // TODO: There is some confusing logic here to get the index for the mergedAccelToFlatten array.
+    //       We should already have the baseType inside the decl->info.infos array.
+    //       We are basically trying to find the baseType 
     int typeConfigIndex = i;
     int typeIndex = 0;
-    while(typeConfigIndex >= types[typeIndex]->ConfigInfoSize()){
-      typeConfigIndex -= types[typeIndex]->ConfigInfoSize();
+    while(typeConfigIndex >= types[typeIndex]->MergePartitionSize()){
+      typeConfigIndex -= types[typeIndex]->MergePartitionSize();
       typeIndex += 1;
     }
     
-    AcceleratorMapping* copyToFlatten = MappingCombine(firstMapping,mergeToFlatten[typeIndex],temp);
+    AcceleratorMapping* baseCircuitToFlatten = MappingCombine(baseCircuitToMergedAccel,mergedAccelToFlatten[typeIndex],temp);
 
     // Need to map from flattened base type to copy of merged circuit (decl.flattenedBaseCircuit).
-    decl->info.infos[i].mapping = MappingInvert(copyToFlatten,globalPermanent);
+    decl->info.infos[i].baseTypeFlattenToMergedBaseCircuit = MappingInvert(baseCircuitToFlatten,globalPermanent);
     decl->info.infos[i].mergeMultiplexers = mergeMultiplexers[typeIndex];
   }
-  
-#if 0
-  for(int i = 0; i < size; i++){
-    BLOCK_REGION(temp);
 
-    auto firstMapping = MappingInvert(circuitToCopy,temp);
-
-    int typeConfigIndex = i;
-    int typeIndex = 0;
-    while(typeConfigIndex >= types[typeIndex]->ConfigInfoSize()){
-      typeConfigIndex -= types[typeIndex]->ConfigInfoSize();
-      typeIndex += 1;
-    }
-    
-    AcceleratorMapping* copyToFlatten = MappingCombine(firstMapping,mergeToFlatten[typeIndex],temp);
-
-    // Need to map from flattened base type to copy of merged circuit (decl.flattenedBaseCircuit).
-    decl->info.infos[i].mapping = MappingInvert(copyToFlatten,globalPermanent);
-    decl->info.infos[i].mergeMultiplexers = mergeMultiplexers[typeIndex];
-  }
-#endif
-  
 #if 1
   // TODO: Quick and dirty. Will not work for complex merges, but handle them when the time comes.
   for(int i = 0; i < size; i++){
@@ -2362,7 +2295,19 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
   }
 
   // TODO: This is not good, I think. Number delays feels a bit off compared to the others, like config and such.
+  //       Since the code to calculate delays is the exact same as for composite units, maybe its just the fact that we are repeating stuff that does not need to be repeated. Things that work for composite should also work here.
   decl->numberDelays = delays;
+
+#if 0
+  for(MergePartition info : decl->info.infos){
+    Assert(info.baseTypeFlattenToMergedBaseCircuit->firstId == info.baseType->flattenedBaseCircuit->id);
+    Assert(info.baseTypeFlattenToMergedBaseCircuit->secondId == decl->baseCircuit->id);
+  }
+
+  DEBUG_BREAK();
+  Assert(declInst.baseCircuit == declInst.flattenedBaseCircuit);
+  Assert(decl->baseCircuit == decl->flattenedBaseCircuit);
+#endif
   
   return decl;
 }
@@ -2477,7 +2422,6 @@ ReconstituteResult ReconstituteGraphFromStruct(Accelerator* merged,Set<PortInsta
   }
 #endif
 
-  static int index = 0;
   EdgeIterator iter = IterateEdges(base);
   while(iter.HasNext()){
     Edge edgeInst = iter.Next();

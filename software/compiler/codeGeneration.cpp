@@ -1008,7 +1008,6 @@ void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* 
 
     ProcessTemplate(s,BasicTemplates::topConfigurationsTemplate,temp,temp2);
   }
-
   
   TemplateSetBool("isSimple",isSimple);
   if(isSimple){
@@ -1043,23 +1042,12 @@ void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* 
   TemplateSetNumber("nConfigs",val.nConfigs);
   TemplateSetNumber("nStates",val.nStates);
   TemplateSetNumber("nStatics",val.nStatics);
-
-  // MARK
-#if 0
-  Array<TypeStructInfo> configStructures = GetConfigStructInfo(accel,temp2,temp);
-  TemplateSetCustom("configStructures",MakeValue(&configStructures));
-#else
   TemplateSetCustom("configStructures",MakeValue(&structs));
-#endif
   
   Array<TypeStructInfo> addressStructures = GetMemMappedStructInfo(accel,temp2,temp);
   TemplateSetCustom("addressStructures",MakeValue(&addressStructures));
   
   {
-    // TODO: Need to figure out why delays are not being properly calculated.
-
-    DEBUG_BREAK();
-    
     DynamicArray<int> arr = StartArray<int>(temp);
     for(InstanceInfo& t : info.infos[0].info){
       if(!t.isComposite){

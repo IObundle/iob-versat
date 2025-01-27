@@ -330,9 +330,9 @@ Array<Partition> GenerateInitialPartitions(Accelerator* accel,Arena* out){
     FUInstance* subInst = node;
     FUDeclaration* decl = subInst->declaration;
 
-    if(subInst->declaration->ConfigInfoSize() > 1){
-      *partitionsArr.PushElem() = (Partition){.value = 0,.max = decl->ConfigInfoSize(),.mergeIndexStart = mergedPossibility,.decl = subInst->declaration};
-      mergedPossibility += log2i(decl->ConfigInfoSize());
+    if(subInst->declaration->MergePartitionSize() > 1){
+      *partitionsArr.PushElem() = (Partition){.value = 0,.max = decl->MergePartitionSize(),.mergeIndexStart = mergedPossibility,.decl = subInst->declaration};
+      mergedPossibility += log2i(decl->MergePartitionSize());
     }
   }
   Array<Partition> partitions = EndArray(partitionsArr);

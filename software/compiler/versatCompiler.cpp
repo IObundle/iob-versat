@@ -222,6 +222,45 @@ void* Next(GenericArrayIterator& iter){
   return data;
 }
 
+struct GenericTrieMapIterator{
+  void* trieMap;
+  void* ptr;
+  int sizeOfType;
+  int alignmentOfType;
+  int index;
+};
+
+GenericTrieMapIterator IterateTrieMap(void* trieMap,int sizeOfType,int alignmentOfType){
+  GenericTrieMapIterator res = {};
+  res.trieMap = trieMap;
+  res.sizeOfType = sizeOfType;
+  res.alignmentOfType = alignmentOfType;
+
+  TrieMap<int,int>* view = ((TrieMap<int,int>*) trieMap);
+
+  res.ptr = view->head;
+  
+  return res;
+}
+
+bool HasNext(GenericTrieMapIterator iter){
+  TrieMap<int,int>* view = ((TrieMap<int,int>*) iter.trieMap);
+
+  return iter.index < view->inserted;
+}
+
+void* Next(GenericTrieMapIterator& iter){
+  TrieMapNode<int,int>* ptr = (TrieMapNode<int,int>*) iter.ptr;
+
+  void* data = ((char*)ptr) + sizeof(void*) * 4;
+  TrieMapNode<int,int>* next = *(TrieMapNode<int,int>**) (((char*)data) + iter.sizeOfType);
+  iter.ptr = next;
+  
+  iter.index += 1;
+
+  return data;
+}
+
 struct GenericHashmapIterator{
   void* hashmap;
   int sizeOfType;
@@ -526,7 +565,7 @@ int main(int argc,char* argv[]){
     Work* topWork = &typeToWork->GetOrFail(topLevelTypeStr);
     topWork->calculateDelayFixedGraph = true;
     topWork->flattenWithMapping = true;
-    
+
     for(auto p : typeToWork){
       Work work = *p.second;
 
@@ -567,7 +606,9 @@ int main(int argc,char* argv[]){
       }
 #endif
 
-      if(work.flattenWithMapping){
+      // Flatten with mapping seems to be specific to modules.
+      // Merge circuits are already flatten by the way the merge is performed.
+      if(work.definition.type != DefinitionType_MERGE && work.flattenWithMapping){
         Pair<Accelerator*,SubMap*> p = Flatten2(decl->baseCircuit,99,temp);
   
         decl->flattenedBaseCircuit = p.first;
@@ -702,8 +743,6 @@ int main(int argc,char* argv[]){
   String versatDir = STRING(STRINGIFY(VERSAT_DIR));
   OutputVerilatorMake(accel->name,versatDir,temp,temp2);
 
-  ArenaList<String>* allFilesOutputted = PushArenaList<String>(temp2);
-  
   for(FUDeclaration* decl : globalDeclarations){
     BLOCK_REGION(temp);
 
@@ -726,8 +765,6 @@ int main(int argc,char* argv[]){
       }
 
       String path = PushString(temp,"%.*s/modules/%.*s.v",UNPACK_SS(globalOptions.hardwareOutputFilepath),UNPACK_SS(decl->name));
-
-      *allFilesOutputted->PushElem() = PushString(temp2,"./modules/%.*s.v",UNPACK_SS(decl->name));
       
       FILE* sourceCode = OpenFileAndCreateDirectories(path,"w",FilePurpose_VERILOG_CODE);
       DEFER_CLOSE_FILE(sourceCode);
@@ -750,8 +787,6 @@ int main(int argc,char* argv[]){
   }
   
   // This should be the last thing that we do, no further file creation can occur after this point
-  Array<String> allOutputLocations = PushArrayFromList(temp,allFilesOutputted);
-
   for(FileInfo f : CollectAllFilesInfo(temp)){
     if(f.purpose == FilePurpose_VERILOG_INCLUDE && f.mode == FileOpenMode_WRITE){
       printf("Filename: %.*s Type: VERILOG_INCLUDE\n",UNPACK_SS(f.filepath));
@@ -775,6 +810,8 @@ int main(int argc,char* argv[]){
 
 /*
 
+TODO: We where in the process of simplifying and started taming the mappings from the merge file, on our way to fix the TestDoubleMerge function.
+
 Currently we removed a lot of the cruft that we had with the baseConfig and the configInfo approach. There is probably a lot of code that can be simplified, based on the code that we already have simplified. Functions that previously worked on graph data and such could now be rewritten to work from the AccelInfo structure.
 
 I think that is the best approach, because if we make the AccelInfo the source of truth, then debugging just becomes inspecting the AccelInfo structure and seeing if anything is being miscalculated (as well as some graph inspections and the likes, but that is mostly solved by now).
@@ -785,19 +822,8 @@ I think that is the best approach, because if we make the AccelInfo the source o
 
 What do I have to do next?
 
-We need to reconciliate the DelayCalculation function that operates normaly and the one that uses "partitions".
-Which basically means that we need to pass a AccelInfoIterator and to build DelayCalculation on top of that.
- 
-What this means is that the flow is gonna be something like:
-  Create an AccelInfo.
-  Populate AccelInfo with all the info that we currently have (from subunits and the likes).
-  Call DelayCalculation with an iterator for that AccelInfo.
-  
-  We might need to store on InstanceInfo a member that is an array with inputDelays and outputLatencies. DelayCalculation needs to work directly from the AccelInfo information.
-
-Basically, the best way that I can see of integrating partition code is to use the AccelInfoIterator approach. 
-
-Still need to see how things play out with merge and the likes, but realistically I think that this is the best approach. Just stuff everything into a giant table, simplify the logic as much as possible while being easy to spot mistakes/bugs by inspecting the table.
+There is still a calculate delay function that works from the graphs instead of working from AccelInfo.
+Need to find a way of integrating this stuff, especially because the function that works from AccelInfo is simpler and probably contains the best approach.
 
 */
 
@@ -809,10 +835,6 @@ We have a member that indicates whether a unit belongs or not to a given merge i
 If we change all the calculation functions to check for the belong member and then act based on it, then we do not need to make anything special for the majority of calculation functions.
 
 The flow then becomes:
-
-Subunit register or merge register creates the starting Array<InstanceInfo>.
-We then call functions on these that look at certain members to decide what to do.
-If the functions depend on the corresponding data correctly, then as long as the starting data is correct, we should be able to successfully abstract the differences.
 
 
 TODO: Need to check the isSource member of ModuleInfo and so on. 
@@ -843,32 +865,7 @@ FUDeclaration still contains ConfigurationInfo and instanceInfo members. We stil
 
 Functions that register modules and merge do not interact in any shape or form with InstanceInfo.
 
-Overall, we only have a small part of the work done. Merge is really clubersome and we can't even test things out currently because the headers are broken. Maybe the best is to restore headers and go from there.
-
-We want to remove ConfigurationInfo from FUDeclaration.
-We need to replace it with AccelInfo.
-We need merge to generate correct accel info beforehand.
-
 Rembember: Calculating delays on the merge unit does not make sense.
            Delays can only be calculated on modules and in the recon of merge graphs.
 
  */
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

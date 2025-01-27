@@ -64,10 +64,6 @@ struct FUDeclaration{
   Array<Wire> states;
 
   AccelInfo info;
-
-  int ConfigInfoSize(){
-    return info.infos.size;
-  };
   
   int numberDelays;
   Array<String> parameters; // For now, only the parameters extracted from verilog files
@@ -115,7 +111,10 @@ struct FUDeclaration{
   int NumberStates(){return states.size;}
   int NumberDelays(){return numberDelays;};
 
-  // 
+  int MergePartitionSize(){
+    return info.infos.size;
+  };
+
   Array<int> GetOutputLatencies(){
     return info.infos[0].outputLatencies;
   }

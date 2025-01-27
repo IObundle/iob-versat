@@ -141,6 +141,6 @@ void InitializeSimpleDeclarations(){
 }
 
 bool HasMultipleConfigs(FUDeclaration* decl){
-  bool res = (decl->ConfigInfoSize() >= 2);
+  bool res = (decl->MergePartitionSize() >= 2);
   return res;
 }

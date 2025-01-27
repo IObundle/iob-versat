@@ -269,6 +269,7 @@ Token Tokenizer::PopOneToken(){
 
   Token res = storedTokens[amountStoredTokens - 1];
 
+  // TODO: Implement a proper FIFO using a read and write index instead of all this copying
   for(int i = 0; i < amountStoredTokens - 1; i++){
     storedTokens[i] = storedTokens[i+1];
   }

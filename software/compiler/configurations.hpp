@@ -92,7 +92,7 @@ struct MergePartition{
   Array<InstanceInfo> info;
 
   FUDeclaration* baseType;
-  AcceleratorMapping* mapping; // Maps from base type flattened to merged type baseCircuit
+  AcceleratorMapping* baseTypeFlattenToMergedBaseCircuit;
   Set<PortInstance>*  mergeMultiplexers;
 
   // TODO: All these are useless. We can just store the data in the units themselves.
