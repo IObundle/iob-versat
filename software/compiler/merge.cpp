@@ -1807,6 +1807,7 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
               continue;
             }
 
+            // Port N is used to select dataflow graph N.
             int graphIndex = ii;
 
             PortInstance portInst = {.inst = multiplexer,.port = graphIndex};
@@ -2138,7 +2139,6 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
       }
     }
     decl->info.infos[i].name = EndString(str);
-    decl->info.infos[i].baseType = topType[i];
   }
 
   for(int i = 0; i < mergeSize; i++){
@@ -2183,6 +2183,9 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
       }
     }
   }
+
+  // The problem is that composite units can have multiple types.
+  // If a composite instantiates two merged units, each partition will be associated to two types.
   
   for(int i = 0; i < size; i++){
     BLOCK_REGION(temp);
@@ -2201,93 +2204,73 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
     
     AcceleratorMapping* baseCircuitToFlatten = MappingCombine(baseCircuitToMergedAccel,mergedAccelToFlatten[typeIndex],temp);
 
+    decl->info.infos[i].baseType = types[typeIndex];
+
     // Need to map from flattened base type to copy of merged circuit (decl.flattenedBaseCircuit).
     decl->info.infos[i].baseTypeFlattenToMergedBaseCircuit = MappingInvert(baseCircuitToFlatten,globalPermanent);
     decl->info.infos[i].mergeMultiplexers = mergeMultiplexers[typeIndex];
   }
-
-#if 1
-  // TODO: Quick and dirty. Will not work for complex merges, but handle them when the time comes.
-  for(int i = 0; i < size; i++){
-    for(InstanceInfo& info : decl->info.infos[i].info){
-      if(info.isMergeMultiplexer){
-        info.mergePort = i;
-      }
-    }
-  }
-#endif
   
-  // 2 types and 24 mergedAmount.
-  // Need to produce 0 for 0-12 and 1 for the 12-24.
-  // 6 types and 24 mergedAmount.
-  // 0 for 0-4, 1 for 4-8, 2 for 8-12, 3 for 12-16 and so on.
+  // Current problem.
+  // We are doing merge of merged circuits.
+  // In theory, the muxs that already exist inherit their mergePort.
+  // if A = A_1 | A_2 and B = B_1 | B_2
+  // A mux will change between 0 and 1.
+  // B mux will change between 0 and 1.
 
-  //int divider = mergedAmount / types.size;
-  // This code is not currently working, which means that we are not producing the same values for the multiplexer configurations than we where doing previously. Currently, the "Quick and dirty" approach on the top is the approach being taken. Need to spent more time on the merge before tackling this part.
-#if 0  
+  // if C = A | B.
+
+  // Any mux added by C should also change between 0 and 1.
+  // (unless muxs are shared which I rather not do right now)
+  // muxs that belong to A only change between 0 and 1 and same for B.
+
+  // This code is not want I want. We are hacking things here, I need to fetch the appropriate values.
+  // Probably need something related to partitions. 
+
+  // For starters, I need a simple of checking the source of the mux.
+  // If the mux was added by C or if it came from A or B.
+
+  // We must also have a way of getting the current types and infos for the current partition.
+  // If we are in partition A_2_B_1 we should be able to get an AccelInfoIter to A2 and to B1.
+  // So we can then fetch the values that we care about.
+  // This is basically what partitions where, but instead I want to be able to get them from the accel iterator.
+
+  // TODO: Until this becomes simpler, the merge will never be "finished". The uglyness of this code is the best indicator over how good the merge implementation is.
   if(insertedAMultiplexer){
-    MergeTypesIterator typeIter = IterateTypes(types);
-    for(int i = 0; i < size; i++){
-      int typeConfigIndex = i;
-      int typeIndex = 0;
-      int muxIndex = 0;
-      while(typeConfigIndex >= types[typeIndex]->ConfigInfoSize()){
-        typeConfigIndex -= types[typeIndex]->ConfigInfoSize();
-        typeIndex += 1;
-        if(types[typeIndex]->ConfigInfoSize() > 1){
-          muxIndex += 1;
+    AccelInfoIterator iter = StartIteration(&decl->info);
+
+    for(int i = 0; i < iter.MergeSize(); i++){
+      iter.mergeIndex = i;
+      AccelInfoIterator baseIter = GetCurrentPartitionTypeAsIterator(iter,temp);
+      
+      for(AccelInfoIterator it = iter; it.IsValid(); it = it.Next()){
+        InstanceInfo* info = it.CurrentUnit();
+        if(info->isMergeMultiplexer){
+
+          bool found = false;
+          for(AccelInfoIterator ii = baseIter; ii.IsValid(); ii = ii.Next()){
+            InstanceInfo* iiInfo = ii.CurrentUnit();
+            // TODO: This kinda works because we make sure that merge mux names are never repeated, but not good either.
+            if(CompareString(iiInfo->name,info->name)){
+              info->mergePort = iiInfo->mergePort;
+              found = true;
+              break;
+            }
+          }
+
+          // For simple merges, the N input port selects dataflow graph N.
+          // The problem is that we are not iterating the types, but the amount of partitions.
+          // Need a index -> partitionIndex function.
+          
+          if(!found){
+            int partitionIndex = GetPartitionIndex(iter);
+            info->mergePort = partitionIndex;
+          }
         }
       }
-
-      decl->configInfo[i].mergeMultiplexerConfigs = PushArray<int>(globalPermanent,amountOfMuxConfigs + 1);
-
-      Pair<int,int> p = typeIter.Next();
-      Array<int> typeMuxConfigs = types[p.first]->configInfo[p.second].mergeMultiplexerConfigs;
-
-      // mergeMultiplexerConfig is the config value given to the multiplexer so that it
-      // forms the datapath required by the merge algorithm?
-      // If so, it should be stored inside the InstanceInfo of the multiplexer in question. Not an outside array.
-      
-      decl->configInfo[i].mergeMultiplexerConfigs[0] = p.first; //i / divider;
-      //decl->info.infos[i].muxConfigs = decl->configInfo[i].mergeMultiplexerConfigs;
-      
-      // TODO: This is a little bit forced for merges of 2 and binary hierarchies.
-      //       Will probably break with other amounts. Maybe.
-      if(typeMuxConfigs.size > 0){
-        decl->configInfo[i].mergeMultiplexerConfigs[muxIndex] = typeMuxConfigs[0];
-      }
-    }
-  } else {
-    MergeTypesIterator typeIter = IterateTypes(types);
-    for(int i = 0; i < size; i++){
-      Pair<int,int> p = typeIter.Next();
-      Array<int> typeMuxConfigs = types[p.first]->configInfo[p.second].mergeMultiplexerConfigs;
-      if(typeMuxConfigs.size > 0){
-        decl->configInfo[i].mergeMultiplexerConfigs = types[p.first]->configInfo[p.second].mergeMultiplexerConfigs;
-      } else {
-        static int zero = 0;
-        Array<int> zeroArray = {&zero,1};
-        decl->configInfo[i].mergeMultiplexerConfigs = zeroArray;
-      }
     }
   }
-#endif
   
-#if 0
-  for(int i = 0; i < size; i++){
-    AccelInfoIterator iter = StartIteration(&decl->info);
-    iter.mergeIndex = i;
-    int muxSeen = 0;
-    for(; iter.IsValid(); iter = iter.Next()){
-      InstanceInfo* info = iter.CurrentUnit();
-
-      if(info->isMergeMultiplexer){
-        info->mergePort = decl->configInfo[i].mergeMultiplexerConfigs[muxSeen++];
-      }
-    }
-  }
-#endif
-
   int delays = 0;
   for(AccelInfoIterator iter = StartIteration(&decl->info); iter.IsValid(); iter = iter.Next()){
     InstanceInfo* info = iter.CurrentUnit();
@@ -2297,18 +2280,6 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
   // TODO: This is not good, I think. Number delays feels a bit off compared to the others, like config and such.
   //       Since the code to calculate delays is the exact same as for composite units, maybe its just the fact that we are repeating stuff that does not need to be repeated. Things that work for composite should also work here.
   decl->numberDelays = delays;
-
-#if 0
-  for(MergePartition info : decl->info.infos){
-    Assert(info.baseTypeFlattenToMergedBaseCircuit->firstId == info.baseType->flattenedBaseCircuit->id);
-    Assert(info.baseTypeFlattenToMergedBaseCircuit->secondId == decl->baseCircuit->id);
-  }
-
-  DEBUG_BREAK();
-  Assert(declInst.baseCircuit == declInst.flattenedBaseCircuit);
-  Assert(decl->baseCircuit == decl->flattenedBaseCircuit);
-#endif
-  
   return decl;
 }
 

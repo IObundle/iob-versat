@@ -53,7 +53,6 @@ struct InstanceInfo{
   int localOrder;
   NodeType connectionType;
   int id;
-  int mergeIndexStart;
   FUInstance* inst;
   Array<int> inputDelays;
   Array<int> outputLatencies;
@@ -62,35 +61,12 @@ struct InstanceInfo{
   Array<SimplePortConnection> inputs; 
 };
 
-struct InstanceConfigurationOffsets{
-  Hashmap<StaticId,int>* staticInfo; 
-  FUDeclaration* parent;
-  String topName;
-  String baseName;
-  int configOffset;
-  int stateOffset;
-  int delayOffset;
-  int delay; // Actual delay value, not the delay offset.
-  int memOffset;
-  int level;
-  int order;
-  int* staticConfig; // This starts at 0x40000000 and at the end of the function we normalized it since we can only figure out the static position at the very end.
-  bool belongs;
-};
-
-struct TestResult{
-  Array<InstanceInfo> info;
-  InstanceConfigurationOffsets subOffsets;
-  String name;
-  Array<int> muxConfigs;
-  Array<int> inputDelay;
-  Array<int> outputLatencies;
-};
-
 struct MergePartition{
   String name; // For now this appears to not affect anything.
   Array<InstanceInfo> info;
 
+  // TODO: Composite units currently break the meaning of baseType.
+  //       Since a composite unit with 2 merged instances would have 2 base types.
   FUDeclaration* baseType;
   AcceleratorMapping* baseTypeFlattenToMergedBaseCircuit;
   Set<PortInstance>*  mergeMultiplexers;
@@ -155,16 +131,6 @@ struct AccelInfoIterator{
   int CurrentLevelSize();
 };
 
-Array<InstanceInfo*> GetAllSameLevelUnits(AccelInfo* info,int level,int mergeIndex,Arena* out);
-
-AccelInfoIterator StartIteration(AccelInfo* info);
-
-struct TypeAndNameOnly{
-  String type;
-  String name;
-};
-// 
-
 struct Partition{
   int value;
   int max;
@@ -172,13 +138,23 @@ struct Partition{
   FUDeclaration* decl;
 };
 
+AccelInfoIterator StartIteration(AccelInfo* info);
+
+// TODO: We kinda wanted to remove partitions and replace them with the AccelInfoIter approach, but the concept appears multiple times, so we probably do need to be able to represent partitions outside of the iter approach.
+Array<AccelInfoIterator> GetCurrentPartitionsAsIterators(AccelInfoIterator iter,Arena* out);
+AccelInfoIterator GetCurrentPartitionTypeAsIterator(AccelInfoIterator iter,Arena* out);
+int GetPartitionIndex(AccelInfoIterator iter);
+
+Array<InstanceInfo*> GetAllSameLevelUnits(AccelInfo* info,int level,int mergeIndex,Arena* out);
+
 // TODO: mergeIndex seems to be the wrong approach. Check the correct approach when trying to simplify merge.
 Array<InstanceInfo> GenerateInitialInstanceInfo(Accelerator* accel,Arena* out,Arena* temp,Array<Partition> partitions);
+Array<Partition> GenerateInitialPartitions(Accelerator* accel,Arena* out);
+
 void FillInstanceInfo(AccelInfoIterator initialIter,Arena* out,Arena* temp);
 
 AccelInfo CalculateAcceleratorInfo(Accelerator* accel,bool recursive,Arena* out,Arena* temp);
 
-Array<Partition> GenerateInitialPartitions(Accelerator* accel,Arena* out);
 
 // Array info related
 // TODO: This should be built on top of AccelInfo (taking an iterator), instead of just taking the array of instance infos.

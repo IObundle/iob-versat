@@ -323,15 +323,135 @@ static bool Next(Array<Partition> arr){
   return false;
 }
 
+// TODO: This function does not do what I wanted it to do.
+//       I am mixing up merge and composite. For simple merges, we can only be at a single type at any given point.
+//       Composites makes so we are currently at N types at any point, but this function is not calculating data.
+//       For a merge of merges, this function must return one type.
+Array<AccelInfoIterator> GetCurrentPartitionsAsIterators(AccelInfoIterator iter,Arena* out){
+  STACK_ARENA(temp,Kilobyte(4));
+  // TODO: This is dependent on partitions. Not sure how I feel about that.
+
+  DynamicArray<Partition> partitionsArr = StartArray<Partition>(out);
+  int mergedPossibility = 0;
+
+  // TODO: BAD
+  Hashmap<FUDeclaration*,int>* seenAmount = PushHashmap<FUDeclaration*,int>(&temp,10);
+  AccelInfo* info = iter.info;
+  for(int i = 0; i < info->infos.size; i++){
+    FUDeclaration* type = info->infos[i].baseType;
+    int amount = *seenAmount->GetOrInsert(type,0);
+    seenAmount->Insert(type,amount + 1);
+  }
+
+  Array<Partition> partitions = PushArray<Partition>(&temp,seenAmount->nodesUsed);
+  int index = 0;
+  for(Pair<FUDeclaration*,int*> p : seenAmount){
+    partitions[index].decl = p.first;
+    partitions[index].max = *p.second;
+    index += 1;
+  }
+  
+  for(int i = 0; i < iter.mergeIndex; i++){
+    Next(partitions);
+  }
+
+  Array<AccelInfoIterator> iterators = PushArray<AccelInfoIterator>(out,partitions.size);
+  for(int i = 0; i <  partitions.size; i++){
+    Partition p = partitions[i];
+
+    iterators[i] = StartIteration(&p.decl->info);
+    iterators[i].mergeIndex = p.value;
+    Assert(p.max == p.decl->info.infos.size);
+  }
+  
+  return iterators;
+}
+
+// This function returns what we want.
+// TODO: This whole thing is not good. Make it work first and check how to simplify.
+AccelInfoIterator GetCurrentPartitionTypeAsIterator(AccelInfoIterator iter,Arena* out){
+  STACK_ARENA(temp,Kilobyte(4));
+  // TODO: This is dependent on partitions. Not sure how I feel about that.
+
+  int mergeIndex = iter.mergeIndex;
+  
+  // TODO: BAD
+  Hashmap<FUDeclaration*,int>* seenAmount = PushHashmap<FUDeclaration*,int>(&temp,10);
+  AccelInfo* info = iter.info;
+  for(int i = 0; i < info->infos.size; i++){
+    FUDeclaration* type = info->infos[i].baseType;
+    int amount = *seenAmount->GetOrInsert(type,0);
+    seenAmount->Insert(type,amount + 1);
+  }
+
+  Array<Partition> partitions = PushArray<Partition>(&temp,seenAmount->nodesUsed);
+  int index = 0;
+  for(Pair<FUDeclaration*,int*> p : seenAmount){
+    partitions[index].decl = p.first;
+    partitions[index].max = *p.second;
+    index += 1;
+  }
+
+  for(Partition p : partitions){
+    if(mergeIndex < p.max){
+      FUDeclaration* type = p.decl;
+      AccelInfoIterator res = StartIteration(&type->info);
+      res.mergeIndex = mergeIndex;
+      return res;
+    } else {
+      mergeIndex -= p.max;
+    }
+  }
+
+  NOT_POSSIBLE("");
+  return {};
+}
+
+int GetPartitionIndex(AccelInfoIterator iter){
+  STACK_ARENA(temp,Kilobyte(4));
+  // TODO: This is dependent on partitions. Not sure how I feel about that.
+
+  int mergeIndex = iter.mergeIndex;
+  
+  // TODO: BAD
+  Hashmap<FUDeclaration*,int>* seenAmount = PushHashmap<FUDeclaration*,int>(&temp,10);
+  AccelInfo* info = iter.info;
+  for(int i = 0; i < info->infos.size; i++){
+    FUDeclaration* type = info->infos[i].baseType;
+    int amount = *seenAmount->GetOrInsert(type,0);
+    seenAmount->Insert(type,amount + 1);
+  }
+
+  Array<Partition> partitions = PushArray<Partition>(&temp,seenAmount->nodesUsed);
+  int index = 0;
+  for(Pair<FUDeclaration*,int*> p : seenAmount){
+    partitions[index].decl = p.first;
+    partitions[index].max = *p.second;
+    index += 1;
+  }
+
+  int partitionIndex = 0;
+  for(Partition p : partitions){
+    if(mergeIndex < p.max){
+      return partitionIndex;
+    } else {
+      mergeIndex -= p.max;
+      partitionIndex += 1;
+    }
+  }
+
+  NOT_POSSIBLE("");
+  return -1;
+}
+
 Array<Partition> GenerateInitialPartitions(Accelerator* accel,Arena* out){
   DynamicArray<Partition> partitionsArr = StartArray<Partition>(out);
   int mergedPossibility = 0;
   for(FUInstance* node : accel->allocated){
-    FUInstance* subInst = node;
-    FUDeclaration* decl = subInst->declaration;
+    FUDeclaration* decl = node->declaration;
 
-    if(subInst->declaration->MergePartitionSize() > 1){
-      *partitionsArr.PushElem() = (Partition){.value = 0,.max = decl->MergePartitionSize(),.mergeIndexStart = mergedPossibility,.decl = subInst->declaration};
+    if(decl->MergePartitionSize() > 1){
+      *partitionsArr.PushElem() = (Partition){.value = 0,.max = decl->MergePartitionSize(),.mergeIndexStart = mergedPossibility,.decl = decl};
       mergedPossibility += log2i(decl->MergePartitionSize());
     }
   }
@@ -379,7 +499,6 @@ Array<InstanceInfo> GenerateInitialInstanceInfo(Accelerator* accel,Arena* out,Ar
     elem->isMergeMultiplexer = inst->isMergeMultiplexer;
     elem->special = inst->literal;
     elem->id = inst->id;
-    elem->mergeIndexStart = 0;
     elem->inputDelays = inst->declaration->GetInputDelays();
     elem->outputLatencies = inst->declaration->GetOutputLatencies();
     elem->connectionType = inst->type;
@@ -393,7 +512,9 @@ Array<InstanceInfo> GenerateInitialInstanceInfo(Accelerator* accel,Arena* out,Ar
 
       AccelInfoIterator iter = StartIteration(&inst->declaration->info);
       if(partitions.size > 0 && inst->declaration->info.infos.size > 1){
-        iter.mergeIndex = partitions[partitionIndex++].value;
+        iter.mergeIndex = partitions[partitionIndex].value;
+        elem->outputLatencies = partitions[partitionIndex].decl->info.infos[iter.mergeIndex].outputLatencies;
+        partitionIndex += 1;
       }
       
       for(; iter.IsValid(); iter = iter.Step()){
@@ -478,6 +599,19 @@ struct Node{
   Node* right;
 }; 
 
+
+// TODO: There is a pretty big problem in this approach. When we do StartIteration on the parent, we are not
+//       properly putting the correct merge index. It should be based on the merge index of the initialIter.
+//       Because the initialIter is iterating over all the partitions and the parents iterators need to iterate
+//       over their specific partition. 
+//       The reason that this does not blow in our faces is because iteration for config, mem and the likes works fine
+//       since they are basically shared between partitons, I think. The problem is in the delay calculation, which 
+//       is not shared over partitions and is the thing that is currently bugging out.
+//       For now it is fine because the tests that require it do not have any delay on the parent, meaning that
+//       a direct copy of the delays from the FUDeclarations works fine, but otherwise will probably bug, I think.
+//
+//       The fix is simple. Do wathever it takes to have the parent iterators have the correct mergeIndex. Whatever
+//       approach that works should be fine.
 void FillInstanceInfo(AccelInfoIterator initialIter,Arena* out,Arena* temp){
   // Calculate full name
   for(AccelInfoIterator iter = initialIter; iter.IsValid(); iter = iter.Step()){
@@ -810,6 +944,8 @@ void FillInstanceInfo(AccelInfoIterator initialIter,Arena* out,Arena* temp){
   auto SetDelays = [](auto Recurse,AccelInfoIterator& iter,SimpleCalculateDelayResult& calculatedDelay,int startIndex,Arena* out) -> void{
     InstanceInfo* parent = iter.GetParentUnit();
     if(parent){
+      // TODO: Delays are weird.
+#if 0
       AccelInfoIterator delayIter = StartIteration(&parent->decl->info);
       
       int index = 0;
@@ -831,6 +967,7 @@ void FillInstanceInfo(AccelInfoIterator initialIter,Arena* out,Arena* temp){
           Recurse(Recurse,inside,calculatedDelay,delayPos,out);
         }
       }
+#endif
     } else {
       for(AccelInfoIterator it = iter; it.IsValid(); it = it.Next()){
         InstanceInfo* unit = it.CurrentUnit();
@@ -851,7 +988,7 @@ void FillInstanceInfo(AccelInfoIterator initialIter,Arena* out,Arena* temp){
       }
     }
   };
-  
+
   SimpleCalculateDelayResult delays = CalculateDelay(initialIter,out,temp);
   SetDelays(SetDelays,initialIter,delays,0,out);
 }
@@ -981,7 +1118,7 @@ AccelInfo CalculateAcceleratorInfo(Accelerator* accel,bool recursive,Arena* out,
   iter.accelName = accel->name;
   
   // MARKED
-
+  //DEBUG_BREAK_IF(CompareString(accel->name,"TestDoubleMerge_Simple"));
   if(iter.MergeSize() > 1){
     Array<Partition> partitions = GenerateInitialPartitions(accel,temp);
 
@@ -990,8 +1127,13 @@ AccelInfo CalculateAcceleratorInfo(Accelerator* accel,bool recursive,Arena* out,
       result.infos[i].info = GenerateInitialInstanceInfo(accel,globalPermanent,temp,partitions);
 
       iter.mergeIndex = i;
-    
+
+      // Set output latencies depending on the partition that we are c
+      // TODO: The problem is that we are coyping only one instance output latencies, when in reality what we want is to copy the instance info.
+      //       We already have partitions. 
+
       FillInstanceInfo(iter,globalPermanent,temp);
+
       result.infos[i].inputDelays = ExtractInputDelays(iter,out);
       result.infos[i].outputLatencies = ExtractOutputDelays(iter,out);
       result.infos[i].muxConfigs = CalculateMuxConfigs(iter,out);
