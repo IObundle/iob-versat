@@ -1,6 +1,7 @@
 
 #pragma once
 
+#include "utilsCore.hpp"
 #include "verilogParsing.hpp"
 #include "utils.hpp"
 
@@ -94,14 +95,7 @@ enum StructInfoType{
   StructInfoType_UNION_WITH_MERGE_MULTIPLEXERS
 };
 
-struct StructElement;
-
-struct StructInfo{
-  String name;
-  FUDeclaration* type;
-
-  Array<StructElement> elements;
-};
+struct StructInfo;
 
 struct StructElement{
   StructInfo* childStruct; // If nulltpr, then leaf (whose type is type)
@@ -109,6 +103,15 @@ struct StructElement{
   int pos;
   int size;
   bool isMergeMultiplexer;
+};
+
+struct StructInfo{
+  String name;
+  FUDeclaration* type;
+  StructInfo* parent;
+
+  ArenaDoubleList<StructElement>* list;
+  Array<StructElement> elements;
 };
 
 size_t HashStructInfo(StructInfo* info);
@@ -124,8 +127,8 @@ template<> struct std::hash<StructInfo>{
    std::size_t operator()(StructInfo const& s) const noexcept{
      std::size_t res = 0;
      res += std::hash<void*>()(s.type);
-     for(StructElement elem : s.elements){
-       res += std::hash<StructElement>()(elem);
+     for(DoubleLink<StructElement>* ptr = s.list ? s.list->head : nullptr; ptr; ptr = ptr->next){
+       res += std::hash<StructElement>()(ptr->elem);
      }
      res += std::hash<String>()(s.name);
      return res;
@@ -143,35 +146,26 @@ static bool operator==(StructElement& l,StructElement& r){
 }
 
 static bool operator==(StructInfo& l,StructInfo& r){
-  if(l.elements.size != r.elements.size){
+  int lSize = Size(l.list);
+  int rSize = Size(r.list);
+  
+  if(Size(l.list) != Size(r.list)){
     return false;
   }
   if(l.type != r.type){
     return false;
   }
-  for(int i = 0; i < l.elements.size; i++){
-    if(!(l.elements[i] == r.elements[i])){
+
+  DoubleLink<StructElement>* lPtr = l.list ? l.list->head : nullptr;
+  DoubleLink<StructElement>* rPtr = r.list ? r.list->head : nullptr;
+  for(; lPtr && rPtr; lPtr = lPtr->next,rPtr = rPtr->next){
+    if(!(lPtr->elem == rPtr->elem)){
       return false;
     }
   }
 
   return (l.name == r.name);
 }
-
-// Lets not handle merge for now.
-
-// Because of merge, we can potentially have different "views" of the modules structures.
-// Although they have to line up in regards to the config pos of every unit.
-// We cannot have one view have base x type in config pos 0 and another have base y type in config pos 0 as well.
-// Although we can have the config of modules shared.
-// We can have Test1MergeConfig in pos 0 and Test2MergeConfig in pos 0 at the same time (union).
-
-// The biggest problem is when the base unit of one module belongs to a merge type but not to the other base type.
-// In that case, we end up with 2 different types occupying the same position.
-
-// For now, I do not care about position difference. We could just have multiple StructElements with the same pos and then we could extract the union semantics from detecting this.
-
-// The most important part is to generate the StructElements that contain the differences. Worry about padding and union later.
 
 Array<FUDeclaration*> SortTypesByConfigDependency(Array<FUDeclaration*> types,Arena* out,Arena* temp);
 Array<FUDeclaration*> SortTypesByMemDependency(Array<FUDeclaration*> types,Arena* out,Arena* temp);

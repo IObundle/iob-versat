@@ -117,9 +117,9 @@ parse_opt (int key, char *arg,
   // TODO: Better error handling
   switch (key)
     {
-    case 'S': *PushListElement(opts->extraSources) = STRING(arg); break;
-    case 'I': *PushListElement(opts->includePaths) = STRING(arg); break;
-    case 'u': *PushListElement(opts->unitPaths) = STRING(arg); break;
+    case 'S': *opts->extraSources->PushElem() = STRING(arg); break;
+    case 'I': *opts->includePaths->PushElem() = STRING(arg); break;
+    case 'u': *opts->unitPaths->PushElem() = STRING(arg); break;
 
     case 'b': opts->options->databusDataSize = ParseInt(STRING(arg)); break;
     case 'x': opts->options->databusAddrSize = ParseInt(STRING(arg)); break;

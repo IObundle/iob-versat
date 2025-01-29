@@ -19,6 +19,8 @@ struct SimplePortConnection{
 // We currently just stuff everything into this struct, so it's easier to visualize all the info that we need for
 // the current accelerator.
 // Some of this data is duplicated/unnecessary, but for now we just carry on since this simplifies debugging a lot, being able to see all the info for a given accelerator directly.
+
+// Is the current partition index something that we can store inside a unit?
 struct InstanceInfo{
   int level;
   FUDeclaration* decl;
@@ -47,6 +49,7 @@ struct InstanceInfo{
   FUDeclaration* parent;
   String fullName;
   int mergePort;
+  int muxGroup;
   bool isMergeMultiplexer;
   bool belongs;
   int special;
@@ -57,6 +60,7 @@ struct InstanceInfo{
   Array<int> inputDelays;
   Array<int> outputLatencies;
   Array<int> portDelay;
+  int partitionIndex;
 
   Array<SimplePortConnection> inputs; 
 };

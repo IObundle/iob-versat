@@ -43,7 +43,7 @@ bool NameExists(Accelerator* accel,String name){
   return false;
 }
 
-int GetFreeShareIndex(Accelerator* accel){  // TODO: Slow and kinda awkard to use
+int GetFreeShareIndex(Accelerator* accel){
   int attempt = 0; 
   while(1){
     bool found = true;
@@ -93,6 +93,7 @@ Pair<Accelerator*,AcceleratorMapping*> CopyAcceleratorWithMapping(Accelerator* a
   for(FUInstance* inst : accel->allocated){
     FUInstance* newInst = CopyInstance(newAccel,inst,preserveIds,inst->name);
 
+    // Any of these values (from the union) is always copied.
     newInst->literal = inst->literal;
 
     if(inst->sharedEnable){

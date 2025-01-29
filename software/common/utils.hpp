@@ -61,80 +61,37 @@ struct IndexedStruct : public T{
 };
 
 template<typename T>
-struct ListedStruct{
+struct SingleLink{
   T elem;
-  ListedStruct<T>* next;
+  SingleLink<T>* next;
+};
+
+template<typename T>
+struct DoubleLink{
+  T elem;
+  DoubleLink<T>* next;
+  DoubleLink<T>* prev;
 };
 
 // A list inside an arena. Normally used with a temp arena and then converted to an array in a out arena 
 template<typename T>
 struct ArenaList{
   Arena* arena; // For now store arena inside structure. 
-  ListedStruct<T>* head;
-  ListedStruct<T>* tail;
+  SingleLink<T>* head;
+  SingleLink<T>* tail;
 
   T* PushElem();
 };
 
-// Generic list manipulation, as long as the structure has a next pointer of equal type
 template<typename T>
-T* ListGet(T* start,int index){
-   T* ptr = start;
-   for(int i = 0; i < index; i++){
-      if(ptr){
-         ptr = ptr->next;
-      }
-   }
-   return ptr;
-}
+struct ArenaDoubleList{
+  Arena* arena; // For now store arena inside structure. 
+  DoubleLink<T>* head;
+  DoubleLink<T>* tail;
 
-template<typename T>
-int ListIndex(T* start,T* toFind){
-   int i = 0;
-   FOREACH_LIST(T*,ptr,start){
-      if(ptr == toFind){
-         break;
-      }
-      i += 1;
-   }
-   return i;
-}
-
-template<typename T>
-T* ListRemove(T* start,T* toRemove){ // Returns start of new list. ToRemove is still valid afterwards
-   if(start == toRemove){
-      return start->next;
-   } else {
-      T* previous = nullptr;
-      FOREACH_LIST(T*,ptr,start){
-         if(ptr == toRemove){
-            previous->next = ptr->next;
-         }
-         previous = ptr;
-      }
-
-      return start;
-   }
-}
-
-// For now, we are not returning the "deleted" node.
-// TODO: add a free node list and change this function
-template<typename T,typename Func>
-T* ListRemoveOne(T* start,Func compareFunction){ // Only removes one and returns.
-   if(compareFunction(start)){
-      return start->next;
-   } else {
-      T* previous = nullptr;
-      FOREACH_LIST(T*,ptr,start){
-         if(compareFunction(ptr)){
-            previous->next = ptr->next;
-         }
-         previous = ptr;
-      }
-
-      return start;
-   }
-}
+  T* PushElem();
+  T* PushNode(DoubleLink<T>* node); // Does not allocate anything in the arena. Need more testing to see if this is a good approach.
+};
 
 // TODO: This function leaks memory, because it does not return the free nodes
 template<typename T,typename Func>
@@ -197,16 +154,6 @@ T* ReverseList(T* head){
 }
 
 template<typename T>
-T* ListInsertEnd(T* head,T* toAdd){
-   T* last = head;
-   FOREACH_LIST(T*,ptr,head){
-      last = ptr;
-   }
-   Assert(last->next == nullptr);
-   last->next = toAdd;
-}
-
-template<typename T>
 T* ListInsert(T* head,T* toAdd){
    if(!head){
       return toAdd;
@@ -226,32 +173,28 @@ int Size(T* start){
 }
 
 template<typename T>
-Array<IndexedStruct<T>> IndexArray(Array<T> array,Arena* out){
-   Array<IndexedStruct<T>> res = PushArray<IndexedStruct<T>>(out,array.size);
-
-   for(int i = 0; i < array.size; i++){
-      CAST_AND_DEREF(res[i],T) = array[i];
-      res[i].index = i;
-   }
-
-   return res;
-}
-
-template<typename T>
-Array<T*> ListToArray(T* head,Arena* out){
-  DynamicArray<T*> arr = StartArray<T*>(out);
-
-  int i = 0;
-  FOREACH_LIST_INDEXED(T*,ptr,head,i){
-    *arr.PushElem() = ptr;
+int Size(ArenaList<T>* list){
+  if(!list){
+    return 0;
   }
 
-  return EndArray(arr);
+  SingleLink<T>* ptr = list->head;
+
+  int count = 0;
+  while(ptr){
+    count += 1;
+    ptr = ptr->next;
+  }
+  return count;
 }
 
 template<typename T>
-int Size(ArenaList<T>* list){
-  ListedStruct<T>* ptr = list->head;
+int Size(ArenaDoubleList<T>* list){
+  if(!list){
+    return 0;
+  }
+  
+  DoubleLink<T>* ptr = list->head;
 
   int count = 0;
   while(ptr){
@@ -279,11 +222,20 @@ ArenaList<T>* PushArenaList(Arena* out){
   return res;
 }
 
+template<typename T>
+ArenaDoubleList<T>* PushArenaDoubleList(Arena* out){
+  ArenaDoubleList<T>* res = PushStruct<ArenaDoubleList<T>>(out);
+  *res = {};
+  res->arena = out;
+  
+  return res;
+}
+
 // TODO: Remove this and use PushElem member function
 template<typename T>
 T* PushListElement(ArenaList<T>* list){
   Arena* out = list->arena;
-  ListedStruct<T>* s = PushStruct<ListedStruct<T>>(out);
+  SingleLink<T>* s = PushStruct<SingleLink<T>>(out);
   *s = {};
   
   if(!list->head){
@@ -299,7 +251,71 @@ T* PushListElement(ArenaList<T>* list){
 
 template<typename T>
 T* ArenaList<T>::PushElem(){
-  return PushListElement(this);
+  SingleLink<T>* s = PushStruct<SingleLink<T>>(this->arena);
+  *s = {};
+  
+  if(!this->head){
+    this->head = s;
+    this->tail = s;
+  } else {
+    this->tail->next = s;
+    this->tail = s;
+  }
+
+  return &s->elem;
+}
+
+template<typename T>
+T* ArenaDoubleList<T>::PushElem(){
+  DoubleLink<T>* s = PushStruct<DoubleLink<T>>(this->arena);
+  *s = {};
+  
+  if(!this->head){
+    this->head = s;
+    this->tail = s;
+  } else {
+    this->tail->next = s;
+    s->prev = this->tail;
+    this->tail = s;
+  }
+
+  return &s->elem;
+}
+
+template<typename T>
+T* ArenaDoubleList<T>::PushNode(DoubleLink<T>* node){
+  if(!this->head){
+    this->head = node;
+    this->tail = node;
+  } else {
+    this->tail->next = node;
+    node->prev = this->tail;
+    this->tail = node;
+  }
+
+  return &node->elem;
+}
+
+// Returns the next node (so it is possible to continue iteration)
+template<typename T>
+DoubleLink<T>* RemoveNodeFromList(ArenaDoubleList<T>* list,DoubleLink<T>* node){
+  DoubleLink<T>* next = node->next;
+  
+  if(list->head == node){
+    list->head = node->next;
+    if(node->next) node->next->prev = nullptr;
+  } else if(list->tail == node){
+    list->tail = node->prev;
+    if(node->prev) node->prev->next = nullptr;
+  } else {
+    node->prev->next = node->next;
+    node->next->prev = node->prev;
+  }
+  
+  node->next = nullptr;
+  node->prev = nullptr;
+
+  return next;
 }
 
 template<typename T,typename P>
@@ -335,7 +351,7 @@ Array<T> PushArrayFromList(Arena* out,ArenaList<T>* list){
 
   DynamicArray<T> arr = StartArray<T>(out);
   
-  FOREACH_LIST(ListedStruct<T>*,iter,list->head){
+  FOREACH_LIST(SingleLink<T>*,iter,list->head){
     T* ptr = arr.PushElem();
     *ptr = iter->elem;
   }
@@ -482,9 +498,12 @@ Hashmap<T,int>* MapElementToIndex(Array<T> arr,Arena* out){
   return toIndex;
 }
 
-
 #include <type_traits>
 
+// This sometimes is nice to have, when we have an array of structs and want an array of one element of the structs.
+// A map with generic function however is almost never good since it's clubersome in C++ and you end up writing 
+// as much as a for but worse because small changes are harder.
+// TODO: The first use case is valid and maybe we could make it better with a macro that reduces all this boilerplate
 template<typename T,typename Func>
 Array<typename std::result_of<Func(T)>::type> Map(Array<T> array,Arena* out,Func f){
   using ST = typename std::result_of<Func(T)>::type;
@@ -494,19 +513,6 @@ Array<typename std::result_of<Func(T)>::type> Map(Array<T> array,Arena* out,Func
     *arr.PushElem() = f(t);
   }
   return EndArray(arr);
-}
-
-template<typename T,typename Func>
-Hashmap<typename std::result_of<Func(T)>::type,T>* ExtractMap(Array<T> array,Arena* out,Func f){
-  using ST = typename std::result_of<Func(T)>::type;
-
-  Hashmap<ST,T>* res = PushHashmap<ST,T>(out,array.size);
-  
-  for(T t : array){
-    res->Insert(f(t),t);
-  }
-  
-  return res;
 }
 
 template<typename T>

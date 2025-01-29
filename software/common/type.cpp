@@ -2003,7 +2003,7 @@ Opt<NameAndTemplateArguments> ParseNameAndTemplateArguments(Tokenizer* tok,Arena
       Opt<ParsedType> templateType = ParseType(tok,out);
       PROPAGATE(templateType);
 
-      *PushListElement(l) = templateType.value();
+      *l->PushElem() = templateType.value();
       
       if(tok->Done()){
         return {};
@@ -2132,6 +2132,9 @@ Opt<ParsedType> ParseType(String typeStr,Arena* out){
   //DEBUG_BREAK_IF(CompareString(typeStr,"char *"));
   Tokenizer tok(typeStr,specialCharacters,{"::"});
   auto res = ParseType(&tok,out);
+  
+  tok.IfNextToken("const");
+  
   Assert(tok.Done());
   
   return res;

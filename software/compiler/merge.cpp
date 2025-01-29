@@ -1140,6 +1140,24 @@ String GetFreeMergeMultiplexerName(Accelerator* accel,Arena* out){
   //return {};
 }
 
+int GetFreeMuxGroup(Accelerator* accel){
+  int muxGroup = 0;
+  while(1){
+    bool found = true;
+    for(FUInstance* ptr : accel->allocated){
+      if(ptr->isMergeMultiplexer && ptr->muxGroup == muxGroup){
+        muxGroup += 1;
+        found = false;
+        break;
+      }
+    }
+
+    if(found){
+      return muxGroup;
+    }
+  }
+}
+
 MergeGraphResultExisting MergeGraphToExisting(Accelerator* existing,Accelerator* flatten2,GraphMapping& graphMapping,String name,Arena* out,Arena* temp){
   BLOCK_REGION(temp);
 
@@ -1151,6 +1169,7 @@ MergeGraphResultExisting MergeGraphToExisting(Accelerator* existing,Accelerator*
   
   Hashmap<FUInstance*,FUInstance*>* map = PushHashmap<FUInstance*,FUInstance*>(out,size1 + size2);
   TrieMap<int,int>* sharedIndexMap = PushTrieMap<int,int>(temp);
+  TrieMap<int,int>* muxGroup = PushTrieMap<int,int>(temp);
   
   for(FUInstance* ptr : existing->allocated){
     map->Insert(ptr,ptr);
@@ -1176,6 +1195,13 @@ MergeGraphResultExisting MergeGraphToExisting(Accelerator* existing,Accelerator*
       String newName = inst->name;
       if(inst->isMergeMultiplexer){
         newName = GetFreeMergeMultiplexerName(existing,globalPermanent);
+
+        GetOrAllocateResult result = sharedIndexMap->GetOrAllocate(inst->muxGroup);
+        if(!result.alreadyExisted){
+          *result.data = GetFreeMuxGroup(existing);
+        }
+
+        inst->muxGroup = *result.data;
       }
       
       mappedNode = CopyInstance(existing,inst,false,newName);
@@ -1308,6 +1334,8 @@ void PrintPath(Edge* head){
   }
 }
 
+// This entire approach is so bad.
+// The only good non bug ridded approach is to keep graph reconstitutions during the entire process of expanding the graphs. 
 ReconstituteResult ReconstituteGraph(Accelerator* merged,Set<PortInstance>* mergedMultiplexers,Accelerator* base,String name,AcceleratorMapping* baseToMerged,Arena* out,Arena* temp){
   BLOCK_REGION(temp);
   Accelerator* recon = CreateAccelerator(name,AcceleratorPurpose_RECON);
@@ -1346,6 +1374,7 @@ ReconstituteResult ReconstituteGraph(Accelerator* merged,Set<PortInstance>* merg
 
     DynamicArray<Edge*> allValidPathsDyn = StartArray<Edge*>(temp);
     for(Edge* p : allPaths){
+      //PrintPath(p);
       bool valid = true;
       FOREACH_LIST(Edge*,edge,p){
         if(edge->in.inst->declaration == muxType){
@@ -1608,9 +1637,17 @@ Array<GraphAndMapping> GetAllBaseMergeTypes(FUDeclaration* decl,Arena* out,Arena
 
 ReconstituteResult ReconstituteGraphFromStruct(Accelerator* merged,Set<PortInstance>* mergedMultiplexers,Accelerator* base,String name,AcceleratorMapping* baseToMerged,FUDeclaration* parentType,Arena* out,Arena* temp);
 
-// TODO: There is a lot of uglyness in this function, but beforehand I would like for the TestDoubleMerge test to be working otherwise run the risk of screwing up something important.
+// TODO: The one thing that I still dislike heavily is the reconstitution of the graphs from the merged graphs.
+//       We are basically assuming that after having the merged graph, we can derive the reconstitutions in a fine manner. I think that this is bug/error prone.
+//       The more "correct" approach is to start with the base graphs of each type and any modification made to the merge graph is propagated to the "recon" graphs (only mux and buffers are added). This guarantees that at the end, when the merged graph is correct, the recon graphs should be too, and there is no need to find paths and do all that to get the final result.
+//       The only problem, of course, is that we are constantly carrying a bunch of graphs and one change in a graph must be correctly replicated in all the others. Also do not know if we do not arrive at some problems of coherence (like if we a mux to a graph, we are now changing the path of the graph forever. We then need to make sure that any further addition still makes sense).
 
-//       Start be taming the mappings by giving proper names and work from there.
+//       So, basically, an api/interface where we can carry a bunch of graphs and make operations on one graph which are seamlessly integrated into the other graphs (some operations, others do nothing) is what I think is the best way of simplifying the merge algorithm.
+
+//       Need to keep mappings between graphs, persist them as changes are made and make sure that no desyncs occur.
+//       The ability to merge modules that contain merge units themselves makes this harder, I think. We basically have to move that loop in the middle of merge that handles multipe recons to the start. We start by calculating all the "recons" that we need, their initial graph. 
+
+// TODO: Also, need to figure out if we can insert hierarchical merge in steps in here somehow (where we merge the upper layers, non flattened, and if we can find some mappings, we propagated that information when going down layers so that we can find cliques faster, using hierarchical information to speedup the clique finding (or even as a form of doing a faster heuristic to find a mapping without using the clique algorithm).
 
 FUDeclaration* Merge(Array<FUDeclaration*> types,
                      String name,Array<SpecificMergeNode> specifics,
@@ -1725,6 +1762,8 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
 
   bool insertedAMultiplexer = false;
   int freeShareIndex = GetFreeShareIndex(mergedAccel);
+  int muxGroup = GetFreeMuxGroup(mergedAccel);
+
   for(FUInstance* ptr : mergedAccel->allocated){
     if(ptr->multipleSamePortInputs){
       // Need to figure out which port, (which might be multiple), has the same inputs
@@ -1797,7 +1836,8 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
         multiplexer->isMergeMultiplexer = true;
         //multiplexer->mergeMultiplexerId = result->id;
         ShareInstanceConfig(multiplexer,freeShareIndex); // TODO: Realistic share index. Maybe add a function that allocates a free share index and we keep the next free shared index inside the accelerator.
-
+        multiplexer->muxGroup = muxGroup;
+        
         for(int i = 0; i < problematicEdgesInFinalGraph.size; i++){
           Edge node = problematicEdgesInFinalGraph[i];
 
@@ -2186,7 +2226,6 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
 
   // The problem is that composite units can have multiple types.
   // If a composite instantiates two merged units, each partition will be associated to two types.
-  
   for(int i = 0; i < size; i++){
     BLOCK_REGION(temp);
 
@@ -2211,61 +2250,29 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
     decl->info.infos[i].mergeMultiplexers = mergeMultiplexers[typeIndex];
   }
   
-  // Current problem.
-  // We are doing merge of merged circuits.
-  // In theory, the muxs that already exist inherit their mergePort.
-  // if A = A_1 | A_2 and B = B_1 | B_2
-  // A mux will change between 0 and 1.
-  // B mux will change between 0 and 1.
-
-  // if C = A | B.
-
-  // Any mux added by C should also change between 0 and 1.
-  // (unless muxs are shared which I rather not do right now)
-  // muxs that belong to A only change between 0 and 1 and same for B.
-
-  // This code is not want I want. We are hacking things here, I need to fetch the appropriate values.
-  // Probably need something related to partitions. 
-
-  // For starters, I need a simple of checking the source of the mux.
-  // If the mux was added by C or if it came from A or B.
-
-  // We must also have a way of getting the current types and infos for the current partition.
-  // If we are in partition A_2_B_1 we should be able to get an AccelInfoIter to A2 and to B1.
-  // So we can then fetch the values that we care about.
-  // This is basically what partitions where, but instead I want to be able to get them from the accel iterator.
-
-  // TODO: Until this becomes simpler, the merge will never be "finished". The uglyness of this code is the best indicator over how good the merge implementation is.
+  // We extract the mux configuration from the recon graphs.
+  // As long as the recon graphs are correct, this guarantees that any alteration, from merging muxs or whatever we do in the future, still works.
   if(insertedAMultiplexer){
-    AccelInfoIterator iter = StartIteration(&decl->info);
+    for(int i = 0; i <  recon.size; i++){
+      Accelerator* rec  =  recon[i];
 
-    for(int i = 0; i < iter.MergeSize(); i++){
+      auto builder = StartArray<int>(temp);
+      for(FUInstance* inst : rec->allocated){
+        if(inst->isMergeMultiplexer){
+          *builder.PushElem() = inst->allInputs->port;
+          Assert(inst->allInputs->next == nullptr);
+        }
+      }
+      Array<int> muxConfigs = EndArray(builder);
+
+      AccelInfoIterator iter = StartIteration(&decl->info);
       iter.mergeIndex = i;
-      AccelInfoIterator baseIter = GetCurrentPartitionTypeAsIterator(iter,temp);
-      
+    
+      int index = 0;
       for(AccelInfoIterator it = iter; it.IsValid(); it = it.Next()){
         InstanceInfo* info = it.CurrentUnit();
         if(info->isMergeMultiplexer){
-
-          bool found = false;
-          for(AccelInfoIterator ii = baseIter; ii.IsValid(); ii = ii.Next()){
-            InstanceInfo* iiInfo = ii.CurrentUnit();
-            // TODO: This kinda works because we make sure that merge mux names are never repeated, but not good either.
-            if(CompareString(iiInfo->name,info->name)){
-              info->mergePort = iiInfo->mergePort;
-              found = true;
-              break;
-            }
-          }
-
-          // For simple merges, the N input port selects dataflow graph N.
-          // The problem is that we are not iterating the types, but the amount of partitions.
-          // Need a index -> partitionIndex function.
-          
-          if(!found){
-            int partitionIndex = GetPartitionIndex(iter);
-            info->mergePort = partitionIndex;
-          }
+          info->mergePort = muxConfigs[info->muxGroup];
         }
       }
     }

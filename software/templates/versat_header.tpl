@@ -164,18 +164,8 @@ extern volatile @{accelName}State* accelState; // @{nStates}
 
 extern volatile AcceleratorStatic* accelStatic;
 
-#{for elem structuredConfigs}
-#{if elem.typeAndNames.size > 1}
-#{for typeAndName elem.typeAndNames}
-#define ACCEL_@{typeAndName.name} ((AcceleratorConfig*) accelConfig)->@{typeAndName.name}
-#{end}
-#{else}
-#define ACCEL_@{elem.typeAndNames[0].name} ((AcceleratorConfig*) accelConfig)->@{elem.typeAndNames[0].name}
-#{end}
-#{end}
-
 #{for elem allStatics}
-#define ACCEL_@{elem.name} accelStatics->@{elem.name}
+#define ACCEL_@{elem.name} accelStatic->@{elem.name}
 #{end}
 
 #{if isSimple}
@@ -242,10 +232,9 @@ static inline void ActivateMergedAccelerator(MergeType type){
    switch(type){
 #{for i mergeNames.size}
    case MergeType_@{mergeNames[i]}: {
-#{set mergeInfo mergeMux[i]}
-#{for muxInfo mergeInfo}
-      ACCEL_@{muxInfo.name}_sel = @{muxInfo.val};
-#{end}
+   #{for muxInfo mergeMux[i]}
+     accelConfig->@{muxInfo.name}.sel = @{muxInfo.val};
+   #{end}
    } break;
 #{end}
    }

@@ -522,7 +522,7 @@ ReprInfo GetReprInfo(Value val,Arena* out,Arena* temp){
 
         arr[index++] = GetSimplestForm(subVal.value(),out);
       }
-      *PushListElement(list) = arr;
+      *list->PushElem() = arr;
       
       Advance(&iter);
     }
@@ -537,7 +537,7 @@ ReprInfo GetReprInfo(Value val,Arena* out,Arena* temp){
     while(HasNext(iter)){
       Value subVal = GetValue(iter);
 
-      *PushListElement(list) = GetSimplestForm(subVal,out);
+      *list->PushElem() = GetSimplestForm(subVal,out);
 
       Advance(&iter);
     }
@@ -607,7 +607,7 @@ void Print(ReprInfo info,TrieSet<PrintedEntity>* seen,Arena* temp,ArenaList<Repr
     for(Array<ReprInfo> arr : info.table){
       for(ReprInfo sub : arr){
         if(sub.type == ReprInfoType_REF){
-          *PushListElement(notPrinted) = sub;
+          *notPrinted->PushElem() = sub;
         }
       }
     }      
@@ -615,7 +615,7 @@ void Print(ReprInfo info,TrieSet<PrintedEntity>* seen,Arena* temp,ArenaList<Repr
   case ReprInfoType_COLLECTION:{
     for(ReprInfo sub : info.moreRepr){
       if(sub.type == ReprInfoType_REF){
-        *PushListElement(notPrinted) = sub;
+        *notPrinted->PushElem() = sub;
       }
     }
   } break;

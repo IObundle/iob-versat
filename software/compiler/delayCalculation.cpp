@@ -916,7 +916,7 @@ GraphPrintingContent GenerateDelayDotGraph(Accelerator* accel,CalculateDelayResu
     int edgeOutput = edge->out.inst->declaration->GetOutputLatencies()[edge->out.port];
     int edgeInput = edge->in.inst->declaration->GetInputDelays()[edge->in.port];
     
-    String content = PushString(out,"(%d/%d/%d) %d [%d]",edgeOutput,edgeBaseDelay,edgeInput,portDelay,edgeDelay);
+    String content = PushString(out,"%d->%d (%d/%d/%d) %d [%d]",outPort,inPort,edgeOutput,edgeBaseDelay,edgeInput,portDelay,edgeDelay);
     String first = edge->out.inst->name;
     String second = edge->in.inst->name; 
 
@@ -929,9 +929,7 @@ GraphPrintingContent GenerateDelayDotGraph(Accelerator* accel,CalculateDelayResu
   };
 
   GraphPrintingContent result = GeneratePrintingContent(accel,NodeWithDelayContent,EdgeWithDelayContent,out,temp);
-  result.graphLabel = STRING("Nodes contain their global latency after the \':\'\nEdge Format: (<Output Latency>/<Edge delay>/<Input Delay>) <Without buffer, node lantency + edge value>  [<Buffer value, difference between without buffer and input node latency>]\nImagine reading from the output node into the input node: Node latency + edge values equals latency which we must fix by inserting buffer of value N");
-//  result.nodes = nodes;
-//  result.edges = edgeResult;
+  result.graphLabel = STRING("Nodes contain their global latency after the \':\'\nEdge Format: OutPort -> InPort (<Output Latency>/<Edge delay>/<Input Delay>) <Without buffer, node lantency + edge value>  [<Buffer value, difference between without buffer and input node latency>]\nImagine reading from the output node into the input node: Node latency + edge values equals latency which we must fix by inserting buffer of value N");
   
   return result;
 }

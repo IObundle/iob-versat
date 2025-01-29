@@ -599,11 +599,11 @@ static Module ParseModule(Tokenizer* tok,Arena* out,Arena* temp){
             Expression* expr = VerilogParseExpression(tok,out);
             Value value = Eval(expr,values);
 
-            *PushListElement(attributeList) = {attributeName,value};
+            *attributeList->PushElem() = {attributeName,value};
 
             peek = tok->PeekToken();
           } else {
-            *PushListElement(attributeList) = {attributeName,MakeValue()};
+            *attributeList->PushElem() = {attributeName,MakeValue()};
           }
 
           if(CompareString(peek,",")){
@@ -647,7 +647,7 @@ static Module ParseModule(Tokenizer* tok,Arena* out,Arena* temp){
       port.range = res;
       port.name = tok->NextToken();
 
-      *PushListElement(portList) = port;
+      *portList->PushElem() = port;
 
       peek = tok->PeekToken();
       if(CompareString(peek,")")){
@@ -715,7 +715,7 @@ Array<Module> ParseVerilogFile(String fileContent,Array<String> includeFilepaths
       Module module = ParseModule(tok,out,temp);
 
       module.isSource = isSource;
-      *PushListElement(modules) = module;
+      *modules->PushElem() = module;
 
       //isSource = false; 
       break; // For now, only parse the first module found

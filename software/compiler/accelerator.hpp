@@ -117,6 +117,7 @@ struct FUInstance{
     int literal;
     int bufferAmount;
     int portIndex;
+    int muxGroup; // Merge multiplexers that belong to the same group must also have the same config (similar to shared units, but we want to separate the share mechanism from the mechanism used to represent multiplexers groups)
   };
   int sharedIndex;
   bool isStatic;

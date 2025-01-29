@@ -498,7 +498,7 @@ Array<Block*> ConvertIndividualBlocksIntoHierarchical_(Array<IndividualBlock> bl
       block->type = individualBlock->type;
       block->line = individualBlock->line;
       block->fullText = individualBlock->content;
-      *PushListElement(blockList) = block;
+      *blockList->PushElem() = block;
     }
   }
 
@@ -557,16 +557,16 @@ CompiledTemplate* CompileTemplate(String content,const char* name,Arena* out,Are
     if(onlyNakedCommands){
       for(IndividualBlock& block : sep){
         if(block.type == BlockType_COMMAND){
-          *PushListElement(blockList) = block;
+          *blockList->PushElem() = block;
         }
         Assert(block.type != BlockType_EXPRESSION);
       }
     } else {
       for(IndividualBlock& block : sep){
-        *PushListElement(blockList) = block;
+        *blockList->PushElem() = block;
       }
 
-      *PushListElement(blockList) = {STRING("\n"),BlockType_TEXT,lineNumber};
+      *blockList->PushElem() = {STRING("\n"),BlockType_TEXT,lineNumber};
     }
   }
 
@@ -737,7 +737,7 @@ static Value EvalExpression(Expression* expr,Frame* frame,Arena* out){
     Type* type = iter.value().type;
     Opt<Value> globalOpt = GetValue(globalFrame,expr->id);
     if(globalOpt.has_value()){
-      TemplateRecord* record = PushListElement(recordList);
+      TemplateRecord* record = recordList->PushElem();
       record->type = TemplateRecordType_IDENTIFER;
       record->identifierType = type;
       record->identifierName = expr->id;
@@ -766,7 +766,7 @@ static Value EvalExpression(Expression* expr,Frame* frame,Arena* out){
       FatalError(StaticFormat("Tried to access member (%.*s) that does not exist for type (%.*s)",UNPACK_SS(expr->text),UNPACK_SS(object.type->name)),expr->approximateLine);
     }
 
-    TemplateRecord* record = PushListElement(recordList);
+    TemplateRecord* record = recordList->PushElem();
     record->type = TemplateRecordType_FIELD;
     record->structType = object.type;
     record->fieldName = expr->id;

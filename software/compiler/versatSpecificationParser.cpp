@@ -817,7 +817,7 @@ Opt<ModuleDef> ParseModuleDef(Tokenizer* tok,Arena* out,Arena* temp){
     Opt<InstanceDeclaration> optDecl = ParseInstanceDeclaration(tok,out,temp);
     PROPAGATE(optDecl); // TODO: We could try to keep going and find more errors
 
-    *PushListElement(decls) = optDecl.value();
+    *decls->PushElem() = optDecl.value();
   }
   def.declarations = PushArrayFromList(out,decls);
 
@@ -839,7 +839,7 @@ Opt<ModuleDef> ParseModuleDef(Tokenizer* tok,Arena* out,Arena* temp){
     Opt<ConnectionDef> optCon = ParseConnection(tok,out);
     PROPAGATE(optCon); // TODO: We could try to keep going and find more errors
     
-    *PushListElement(cons) = optCon.value();
+    *cons->PushElem() = optCon.value();
   }
   EXPECT(tok,"}");
   def.connections = PushArrayFromList(out,cons);
@@ -868,7 +868,7 @@ Opt<TransformDef> ParseTransformDef(Tokenizer* tok,Arena* out,Arena* temp){
     Opt<ConnectionDef> optCon = ParseConnection(tok,out);
     PROPAGATE(optCon); // TODO: We could try to keep going and find more errors
     
-    *PushListElement(cons) = optCon.value();
+    *cons->PushElem() = optCon.value();
   }
   def.connections = PushArrayFromList(out,cons);
   EXPECT(tok,"}");
@@ -1076,7 +1076,7 @@ Opt<MergeDef> ParseMerge(Tokenizer* tok,Arena* out,Arena* temp){
     Opt<TypeAndInstance> optType = ParseTypeAndInstance(tok);
     PROPAGATE(optType); // TODO: Maybe Synchronize? At this point it is a bit of a problem trying to keep the parser working
 
-    *PushListElement(declarationList) = optType.value();
+    *declarationList->PushElem() = optType.value();
 
     Token peek = tok->PeekToken();
     if(CompareString(peek,"|")){
@@ -1110,7 +1110,7 @@ Opt<MergeDef> ParseMerge(Tokenizer* tok,Arena* out,Arena* temp){
 
       EXPECT(tok,";");
 
-      *PushListElement(specList) = {leftSide.value(),rightSide.value()};
+      *specList->PushElem() = {leftSide.value(),rightSide.value()};
     }
     specNodes = PushArrayFromList(out,specList);
 
@@ -1710,7 +1710,7 @@ Array<TypeDefinition> ParseVersatSpecification(String content,Arena* out,Arena* 
         def.type = DefinitionType_MODULE;
         def.module = moduleDef.value();
 
-        *PushListElement(typeList) = def;
+        *typeList->PushElem() = def;
       } else {
         anyError = true;
       }
@@ -1722,7 +1722,7 @@ Array<TypeDefinition> ParseVersatSpecification(String content,Arena* out,Arena* 
         def.type = DefinitionType_MERGE;
         def.merge = mergeDef.value();
 
-        *PushListElement(typeList) = def;
+        *typeList->PushElem() = def;
       } else {
         anyError = true;
       }

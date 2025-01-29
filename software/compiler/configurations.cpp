@@ -198,7 +198,7 @@ Array<Wire> ExtractAllConfigs(Array<InstanceInfo> info,Arena* out,Arena* temp){
 
     if(!t.isComposite && !t.isStatic){
       for(int i = 0; i < t.configSize; i++){
-        Wire* wire = PushListElement(list);
+        Wire* wire = list->PushElem();
 
         *wire = t.decl->configs[i];
         wire->name = PushString(out,"%.*s_%.*s",UNPACK_SS(t.fullName),UNPACK_SS(t.decl->configs[i].name));
@@ -225,7 +225,7 @@ Array<Wire> ExtractAllConfigs(Array<InstanceInfo> info,Arena* out,Arena* temp){
         int skipLevel = t.level;
         seen->Insert(id);
         for(int i = 0; i < t.configSize; i++){
-          Wire* wire = PushListElement(list);
+          Wire* wire = list->PushElem();
 
           *wire = t.decl->configs[i];
           wire->name = PushString(out,"%.*s_%.*s_%.*s",UNPACK_SS(parentName),UNPACK_SS(t.name),UNPACK_SS(t.decl->configs[i].name));
@@ -235,7 +235,7 @@ Array<Wire> ExtractAllConfigs(Array<InstanceInfo> info,Arena* out,Arena* temp){
   }
 
   for(int i = 0; i < info[0].delaySize; i++){
-    Wire* wire = PushListElement(list);
+    Wire* wire = list->PushElem();
 
     wire->name = PushString(out,"TOP_Delay%d",i);
     wire->bitSize = 32;
@@ -479,6 +479,25 @@ void IncrementPartitions(Array<Partition> partitions,int amount){
   }
 }
 
+String GetName(Array<Partition> partitions,Arena* out){
+  auto builder = StartString(out);
+
+  bool first = true;
+  for(Partition p : partitions){
+    if(first){
+      first = false;
+    } else {
+      builder.PushString("_");
+    }
+
+    AccelInfo* info = &p.decl->info;
+    builder.PushString(info->infos[p.value].name);
+  }
+
+  return EndString(builder);
+}
+
+
 // TODO: Move this function to a better place
 // This function cannot return an array for merge units because we do not have the merged units info in this level.
 // This function only works for modules and for recursing the merged info to upper modules.
@@ -498,10 +517,12 @@ Array<InstanceInfo> GenerateInitialInstanceInfo(Accelerator* accel,Arena* out,Ar
     elem->sharedIndex = inst->sharedIndex;
     elem->isMergeMultiplexer = inst->isMergeMultiplexer;
     elem->special = inst->literal;
+    elem->muxGroup = inst->muxGroup;
     elem->id = inst->id;
     elem->inputDelays = inst->declaration->GetInputDelays();
     elem->outputLatencies = inst->declaration->GetOutputLatencies();
     elem->connectionType = inst->type;
+    elem->partitionIndex = 0;
   };
   
   auto Function = [SetBaseInfo](auto Recurse,DynamicArray<InstanceInfo>& array,Accelerator* accel,int level,Array<Partition> partitions) -> void{
@@ -511,9 +532,11 @@ Array<InstanceInfo> GenerateInitialInstanceInfo(Accelerator* accel,Arena* out,Ar
       SetBaseInfo(elem,inst,level);
 
       AccelInfoIterator iter = StartIteration(&inst->declaration->info);
+
       if(partitions.size > 0 && inst->declaration->info.infos.size > 1){
         iter.mergeIndex = partitions[partitionIndex].value;
         elem->outputLatencies = partitions[partitionIndex].decl->info.infos[iter.mergeIndex].outputLatencies;
+        elem->partitionIndex = partitions[partitionIndex].value;
         partitionIndex += 1;
       }
       
@@ -599,19 +622,6 @@ struct Node{
   Node* right;
 }; 
 
-
-// TODO: There is a pretty big problem in this approach. When we do StartIteration on the parent, we are not
-//       properly putting the correct merge index. It should be based on the merge index of the initialIter.
-//       Because the initialIter is iterating over all the partitions and the parents iterators need to iterate
-//       over their specific partition. 
-//       The reason that this does not blow in our faces is because iteration for config, mem and the likes works fine
-//       since they are basically shared between partitons, I think. The problem is in the delay calculation, which 
-//       is not shared over partitions and is the thing that is currently bugging out.
-//       For now it is fine because the tests that require it do not have any delay on the parent, meaning that
-//       a direct copy of the delays from the FUDeclarations works fine, but otherwise will probably bug, I think.
-//
-//       The fix is simple. Do wathever it takes to have the parent iterators have the correct mergeIndex. Whatever
-//       approach that works should be fine.
 void FillInstanceInfo(AccelInfoIterator initialIter,Arena* out,Arena* temp){
   // Calculate full name
   for(AccelInfoIterator iter = initialIter; iter.IsValid(); iter = iter.Step()){
@@ -620,7 +630,7 @@ void FillInstanceInfo(AccelInfoIterator initialIter,Arena* out,Arena* temp){
     unit->parent = parent ? parent->decl : nullptr;
 
     // All these are basically to simplify debugging by having everything in one place.
-    // They can be moved to GenerateInitialInstanceInfo.
+    // They can be moved to GenerateInitialInstanceInfo. I think. TODO
     unit->configSize = unit->decl->NumberConfigs();
     unit->stateSize = unit->decl->NumberStates();
     unit->delaySize = unit->decl->NumberDelays();
@@ -649,6 +659,7 @@ void FillInstanceInfo(AccelInfoIterator initialIter,Arena* out,Arena* temp){
     InstanceInfo* parent = iter.GetParentUnit();
     if(parent){
       AccelInfoIterator configIter = StartIteration(&parent->decl->info);
+      configIter.mergeIndex = parent->partitionIndex;
       
       int index = 0;
       for(AccelInfoIterator it = iter; it.IsValid(); it = it.Next(),configIter = configIter.Next()){
@@ -714,6 +725,7 @@ void FillInstanceInfo(AccelInfoIterator initialIter,Arena* out,Arena* temp){
     InstanceInfo* parent = iter.GetParentUnit();
     if(parent){
       AccelInfoIterator stateIter = StartIteration(&parent->decl->info);
+      stateIter.mergeIndex = parent->partitionIndex;
       
       int index = 0;
       for(AccelInfoIterator it = iter; it.IsValid(); it = it.Next(),stateIter = stateIter.Next()){
@@ -762,6 +774,7 @@ void FillInstanceInfo(AccelInfoIterator initialIter,Arena* out,Arena* temp){
     InstanceInfo* parent = iter.GetParentUnit();
     if(parent){
       AccelInfoIterator parentIter = StartIteration(&parent->decl->info);
+      parentIter.mergeIndex = parent->partitionIndex;
 
       for(AccelInfoIterator it = iter; it.IsValid(); it = it.Next(),parentIter = parentIter.Next()){
         InstanceInfo* unit = it.CurrentUnit();
@@ -868,18 +881,6 @@ void FillInstanceInfo(AccelInfoIterator initialIter,Arena* out,Arena* temp){
         }
       }
     }
-
-#if 0
-    // Let the inside units calculate their memory mapping first
-    for(AccelInfoIterator it = iter; it.IsValid(); it = it.Next()){
-      InstanceInfo* info = top->unit;
-      AccelInfoIterator inside = it.StepInsideOnly();
-      
-      if(inside.IsValid()){
-        Recurse(Recurse,inside,startIndex,out,temp);
-      }
-    }
-#endif    
   };
 
   CalculateMemory(CalculateMemory,initialIter,0,out,temp);
@@ -900,6 +901,7 @@ void FillInstanceInfo(AccelInfoIterator initialIter,Arena* out,Arena* temp){
     InstanceInfo* parent = iter.GetParentUnit();
     if(parent){
       AccelInfoIterator delayIter = StartIteration(&parent->decl->info);
+      delayIter.mergeIndex = parent->partitionIndex;
       
       int index = 0;
       for(AccelInfoIterator it = iter; it.IsValid(); it = it.Next(),delayIter = delayIter.Next()){
@@ -945,8 +947,8 @@ void FillInstanceInfo(AccelInfoIterator initialIter,Arena* out,Arena* temp){
     InstanceInfo* parent = iter.GetParentUnit();
     if(parent){
       // TODO: Delays are weird.
-#if 0
       AccelInfoIterator delayIter = StartIteration(&parent->decl->info);
+      delayIter.mergeIndex = parent->partitionIndex;
       
       int index = 0;
       for(AccelInfoIterator it = iter; it.IsValid(); it = it.Next(),delayIter = delayIter.Next()){
@@ -967,7 +969,6 @@ void FillInstanceInfo(AccelInfoIterator initialIter,Arena* out,Arena* temp){
           Recurse(Recurse,inside,calculatedDelay,delayPos,out);
         }
       }
-#endif
     } else {
       for(AccelInfoIterator it = iter; it.IsValid(); it = it.Next()){
         InstanceInfo* unit = it.CurrentUnit();
@@ -993,28 +994,10 @@ void FillInstanceInfo(AccelInfoIterator initialIter,Arena* out,Arena* temp){
   SetDelays(SetDelays,initialIter,delays,0,out);
 }
 
-String GetName(Array<Partition> partitions,Arena* out){
-  auto builder = StartString(out);
-
-  bool first = true;
-  for(Partition p : partitions){
-    if(first){
-      first = false;
-    } else {
-      builder.PushString("_");
-    }
-
-    AccelInfo* info = &p.decl->info;
-    builder.PushString(info->infos[p.value].name);
-  }
-
-  return EndString(builder);
-}
-
 AccelInfo CalculateAcceleratorInfo(Accelerator* accel,bool recursive,Arena* out,Arena* temp){
   AccelInfo result = {};
 
-  // TODO: We are removing partitions, we only care about the amount of mergePartitions, partitions themselves can be removed.
+  // TODO: Still need to check if partitions are removed or if we still need them
   Array<Partition> partitions = GenerateInitialPartitions(accel,temp);
   int partitionSize = 0;
   while(1){
@@ -1031,7 +1014,6 @@ AccelInfo CalculateAcceleratorInfo(Accelerator* accel,bool recursive,Arena* out,
   // For each partition, I should be able to get the name of all the units currently activated.
   // I do not think that I will keep partitions, but for now implement the logic first and worry about code quality later.
   
-  // MARKED
   int size = partitionSize;
 
   auto ExtractInputDelays = [](AccelInfoIterator top,Arena* out) -> Array<int>{
@@ -1123,14 +1105,10 @@ AccelInfo CalculateAcceleratorInfo(Accelerator* accel,bool recursive,Arena* out,
     Array<Partition> partitions = GenerateInitialPartitions(accel,temp);
 
     for(int i = 0; i < iter.MergeSize(); i++,Next(partitions)){
-      // We do need partitions here, I think
-      result.infos[i].info = GenerateInitialInstanceInfo(accel,globalPermanent,temp,partitions);
-
       iter.mergeIndex = i;
 
-      // Set output latencies depending on the partition that we are c
-      // TODO: The problem is that we are coyping only one instance output latencies, when in reality what we want is to copy the instance info.
-      //       We already have partitions. 
+      // We do need partitions here, I think
+      result.infos[i].info = GenerateInitialInstanceInfo(accel,globalPermanent,temp,partitions);
 
       FillInstanceInfo(iter,globalPermanent,temp);
 
