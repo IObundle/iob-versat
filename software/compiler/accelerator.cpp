@@ -677,18 +677,18 @@ Array<DelayToAdd> GenerateFixDelays(Accelerator* accel,EdgeDelay* edgeDelays,Are
   int buffersInserted = 0;
   for(auto edgePair : edgeDelays){
     Edge edge = edgePair.first;
-    int delay = edgePair.second->value;
+    DelayInfo delay = *edgePair.second;
 
-    if(delay == 0){
+    if(delay.value == 0 || delay.isAny){
       continue;
     }
 
-    Assert(delay > 0); // Cannot deal with negative delays at this stage.
+    Assert(delay.value > 0); // Cannot deal with negative delays at this stage.
 
     DelayToAdd var = {};
     var.edge = edge;
     var.bufferName = PushString(out,"buffer%d",buffersInserted++);
-    var.bufferAmount = delay - BasicDeclaration::fixedBuffer->info.infos[0].outputLatencies[0];
+    var.bufferAmount = delay.value - BasicDeclaration::fixedBuffer->info.infos[0].outputLatencies[0];
     var.bufferParameters = PushString(out,"#(.AMOUNT(%d))",var.bufferAmount);
 
     *list->PushElem() = var;
@@ -715,7 +715,7 @@ void FixDelays(Accelerator* accel,Hashmap<Edge,DelayInfo>* edgeDelays,Arena* tem
     
     FUInstance* output = edge.units[0].inst;
 
-    if(output->declaration == BasicDeclaration::buffer){
+    if(HasVariableDelay(output->declaration)){
       //output->inst->baseDelay = delay;
       edgePair.second = 0;
       continue;

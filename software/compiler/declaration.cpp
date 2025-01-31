@@ -144,3 +144,12 @@ bool HasMultipleConfigs(FUDeclaration* decl){
   bool res = (decl->MergePartitionSize() >= 2);
   return res;
 }
+
+bool HasVariableDelay(FUDeclaration* decl){
+  // Do not know how many more units of this type we are going to add. This might not be finished altought one unit is enough to handle merge
+  if(decl == BasicDeclaration::buffer){
+    return true;
+  }
+
+  return false;
+}

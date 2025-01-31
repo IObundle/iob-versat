@@ -40,7 +40,7 @@ String Repr(FUInstance* inst,GraphDotFormat format,Arena* out){
   bool id    = format & GRAPH_DOT_FORMAT_ID;
   bool delay = format & GRAPH_DOT_FORMAT_DELAY;
 
-  bool buffer = (inst->declaration == BasicDeclaration::buffer || inst->declaration == BasicDeclaration::fixedBuffer);
+  bool buffer = (HasVariableDelay(inst->declaration) || inst->declaration == BasicDeclaration::fixedBuffer);
 
   if(expl && name){
     PushString(out,"Name:");

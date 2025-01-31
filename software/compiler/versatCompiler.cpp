@@ -495,6 +495,7 @@ int main(int argc,char* argv[]){
   }
   
   // We need to do this after parsing the modules because the majority of these special types come from verilog files
+  // More robust impl would embed this files at build time to simplify setup. Only need the exe to run Versat at that point. 
   BasicDeclaration::buffer = GetTypeByName(STRING("Buffer"));
   BasicDeclaration::fixedBuffer = GetTypeByName(STRING("FixedBuffer"));
   BasicDeclaration::pipelineRegister = GetTypeByName(STRING("PipelineRegister"));
@@ -812,9 +813,11 @@ int main(int argc,char* argv[]){
 
 /*
 
-BUG: baseName is not being correctly propagated between hierarchical merges 
+BUG: Since the name of the units are copied directly to the header file, it is possible to have conflict with C reserved keywords, like const, static, and stuff like that. 
 
 There is probably a lot of cleanup left (overall and inside Merge).
+
+Need to take a look at State and Mem struct interfaces. 
 
 */
 
@@ -826,6 +829,9 @@ There is still a calculate delay function that works from the graphs instead of 
 Need to find a way of integrating this stuff, especially because the function that works from AccelInfo is simpler and probably contains the best approach.
 
 DelayType and NodeType need a revision.
+
+
+
 
 */
 

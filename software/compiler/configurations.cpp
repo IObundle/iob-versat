@@ -497,12 +497,14 @@ String GetName(Array<Partition> partitions,Arena* out){
   return EndString(builder);
 }
 
-
 // TODO: Move this function to a better place
 // This function cannot return an array for merge units because we do not have the merged units info in this level.
 // This function only works for modules and for recursing the merged info to upper modules.
 // The info needed by merge must be stored by the merge function.
 Array<InstanceInfo> GenerateInitialInstanceInfo(Accelerator* accel,Arena* out,Arena* temp,Array<Partition> partitions){
+  // Only for basic units on the top level of accel
+  // The subunits are basically copied from the sub declarations.
+  // Or they are calculated inside the Fill... function
   auto SetBaseInfo = [](InstanceInfo* elem,FUInstance* inst,int level){
     *elem = {};
     elem->inst = inst;
@@ -623,6 +625,8 @@ struct Node{
 }; 
 
 void FillInstanceInfo(AccelInfoIterator initialIter,Arena* out,Arena* temp){
+  Assert(!Empty(initialIter.accelName)); // For now, we must have some name if only to output debug info graphs and such
+  
   // Calculate full name
   for(AccelInfoIterator iter = initialIter; iter.IsValid(); iter = iter.Step()){
     InstanceInfo* unit = iter.CurrentUnit();
@@ -639,10 +643,6 @@ void FillInstanceInfo(AccelInfoIterator initialIter,Arena* out,Arena* temp){
     if(unit->decl->memoryMapBits.has_value()){
       unit->memMappedSize = (1 << unit->decl->memoryMapBits.value());
     }
-    
-    // Merge stuff but for now use the default value. (Since not dealing with merged for now)
-    //unit->baseName = unit->name;
-    unit->belongs = true;
     
     if(!parent){
       unit->fullName = unit->name;
@@ -951,7 +951,11 @@ void FillInstanceInfo(AccelInfoIterator initialIter,Arena* out,Arena* temp){
         int order = unit->localOrder;
 
         unit->baseDelay = calculatedDelay.nodeDelayByOrder[order].value;
-        unit->portDelay = CopyArray(calculatedDelay.inputPortDelayByOrder[order],out);
+        unit->portDelay = PushArray<int>(out,calculatedDelay.inputPortDelayByOrder[order].size);
+
+        for(int i = 0; i < calculatedDelay.inputPortDelayByOrder[order].size; i++){
+          unit->portDelay[i] = calculatedDelay.inputPortDelayByOrder[order][i].value;
+        }
         
         if(unit->delaySize > 0 && !unit->isComposite){
           unit->delay = PushArray<int>(out,unit->delaySize);

@@ -2057,9 +2057,12 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
     bool delayInserted = false;
     for(int i = 0; i < recon.size; i++){
       Accelerator* accel = recon[i];
-      reconOrder[i] = CalculateDAGOrder(&accel->allocated,temp);
-      reconDelay[i] = CalculateDelay(accel,reconOrder[i],temp);
 
+      // TODO: Need to see if we actually need reconOrder here or not.
+      //       After previous changes, we might get away with only calculating it on the spot. Need to check this.
+      reconOrder[i] = CalculateDAGOrder(&accel->allocated,temp);
+      reconDelay[i] = CalculateDelay(accel,temp);
+      
       Array<DelayToAdd> delaysToAdd = GenerateFixDelays(accel,reconDelay[i].edgesDelay,globalPermanent,temp);
       for(DelayToAdd toAdd : delaysToAdd){
         Edge reconEdge = toAdd.edge;
@@ -2100,6 +2103,7 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
 
   size = recon.size;
 
+  // TODO: Temp disabled because recent changes caused this to bug out but it might be ok elsewhere
   if(globalOptions.debug){
     for(int i = 0; i < size; i++){
       BLOCK_REGION(temp);
@@ -2185,6 +2189,7 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
     decl->info.infos[i].info = GenerateInitialInstanceInfo(decl->fixedDelayCircuit,globalPermanent,temp,{});
     AccelInfoIterator iter = StartIteration(&decl->info);
     iter.mergeIndex = i;
+    iter.accelName = decl->info.infos[i].name;
     FillInstanceInfo(iter,globalPermanent,temp);
     
     decl->info.infos[i].inputDelays = ExtractInputDelays(recon[i],reconDelay[i],numberInputs,globalPermanent,temp);

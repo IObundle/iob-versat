@@ -411,7 +411,7 @@ FUDeclaration* RegisterSubUnitBarebones(Accelerator* circuit,Arena* temp,Arena* 
 
   Accelerator* copy = CopyAccelerator(decl.baseCircuit,AcceleratorPurpose_FIXED_DELAY,true,nullptr);
   DAGOrderNodes order = CalculateDAGOrder(&copy->allocated,temp);
-  CalculateDelayResult delays = CalculateDelay(copy,order,temp);
+  CalculateDelayResult delays = CalculateDelay(copy,temp);
 
   region(temp){
     FixDelays(copy,delays.edgesDelay,temp);
@@ -499,7 +499,7 @@ FUDeclaration* RegisterSubUnit(Accelerator* circuit,Arena* temp,Arena* temp2){
   OutputDebugDotGraph(decl.flattenedBaseCircuit,STRING("DefaultFlattened.dot"),temp);
   
   DAGOrderNodes order = CalculateDAGOrder(&circuit->allocated,temp);
-  CalculateDelayResult delays = CalculateDelay(circuit,order,temp);
+  CalculateDelayResult delays = CalculateDelay(circuit,temp);
 
   region(temp){
     OutputDebugDotGraph(circuit,STRING("BeforeFixDelay.dot"),temp);

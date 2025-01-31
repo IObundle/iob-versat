@@ -25,7 +25,7 @@ struct InstanceInfo{
   int level;
   FUDeclaration* decl;
   String name;
-  String baseName;
+  String baseName; // NOTE: If the unit does not belong to the merge partition, the baseName will equal name
   Opt<int> configPos;
   int isConfigStatic; // Static must be handle separately, for the top level accelerator. 
   int configSize;

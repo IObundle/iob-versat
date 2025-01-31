@@ -76,10 +76,18 @@ struct EdgeDelayInfo{
   bool isAny;
 };
 
+// Need to formalize this. 
 struct DelayInfo{
   int value;
-  bool isAny;
+  bool isAny; // True if the edge can have any delay at runtime (because attached to a variable buffer). If true, the value represents the minimum amount of delay needed by the edge (we can't have negative delays, even in an isAny edge)
 };
+
+// Three possibilities. A node contains zero isAny edges. A node contains all isAny edges. A node contains some isAny edges.
+
+// First is easy. Third, the value is still the minimum of values and the node is still fixed. Second case the value is still the minimum but now the node can be isAny as well.
+
+// All this stuff just makes me think of adding a proper constraint based approach to delay calculation. Basically model this as an CSP (or we just calculate expressions that calculate everything based on the value of other expressions) (we can then calculate the value of the expressions by giving an initial input value and the inputs are propragated by the fact that every expressions is dependent on every value).
+// I think that problem is whether we actually gain anything from this. We would have greater power, but if we produce the same results, no point.
 
 // TODO: Would like to see if using the ConnectionNode approach makes sense. We might be able to represent the edges in a list and simplify other parts of the code. Probably best to analyze how the graph structures are being used through the code base and make a decision then. Only merge needs to perform multiple graph mutations. Everything else kinda works fine if we use a more constant approach for the graphs.
 struct ConnectionNode{

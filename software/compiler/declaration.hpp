@@ -155,3 +155,5 @@ FUDeclaration* GetTypeByNameOrFail(String name);
 void InitializeSimpleDeclarations();
 bool HasMultipleConfigs(FUDeclaration* decl);
 
+// Because of merge, we need units that can delay the datapath for different values depending on the datapath that is being configured.
+bool HasVariableDelay(FUDeclaration* decl);

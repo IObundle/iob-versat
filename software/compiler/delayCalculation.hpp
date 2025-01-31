@@ -30,16 +30,18 @@ struct CalculateDelayResult{
 
 struct SimpleCalculateDelayResult{
   Array<DelayInfo> nodeDelayByOrder; // Indexed by order
-  Array<int> edgesDelay;
-  Array<Array<int>> inputPortDelayByOrder;
+  Array<DelayInfo> edgesDelay;
+  Array<Array<DelayInfo>> inputPortDelayByOrder;
 };
 
 Array<int> ExtractInputDelays(Accelerator* accel,CalculateDelayResult delays,int mimimumAmount,Arena* out,Arena* temp);
 Array<int> ExtractOutputLatencies(Accelerator* accel,CalculateDelayResult delays,Arena* out,Arena* temp);
 
-// TODAY: Remove the two calls. Make a 
-CalculateDelayResult CalculateDelay(Accelerator* accel,DAGOrderNodes order,Arena* out);
-CalculateDelayResult CalculateDelay(Accelerator* accel,DAGOrderNodes order,Array<Partition> partitions,Arena* out);
+// TODO: This is very bad performance wise. We are internally creating an AccelInfo and then extracting the values from the delay calculating.
+//       Also, cannot call this function for merge accelerators, most of them will lead to errors.
+//       Need to simplefy further (Replace CalculateDelayResult with the simple version).
+//       
+CalculateDelayResult CalculateDelay(Accelerator* accel,Arena* out);
 
 CalculateDelayResult CalculateGlobalInitialLatency(Accelerator* accel);
 
