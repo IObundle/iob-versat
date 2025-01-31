@@ -559,7 +559,7 @@ DAGOrderNodes CalculateDAGOrder(Pool<FUInstance>* instances,Arena* out){
   int size = instances->Size();
 
   DAGOrderNodes res = {};
-
+  
   res.size = 0;
   res.instances = PushArray<FUInstance*>(out,size);
   res.order = PushArray<int>(out,size);
@@ -992,8 +992,6 @@ bool SetParameter(FUInstance* inst,String parameterName,String parameterValue){
 }
 
 void CalculateNodeType(FUInstance* node){
-  node->type = NodeType_UNCONNECTED;
-
   bool hasInput = (node->allInputs != nullptr);
   bool hasOutput = (node->allOutputs != nullptr);
 
@@ -1009,7 +1007,7 @@ void CalculateNodeType(FUInstance* node){
   } else if(hasOutput){
     node->type = NodeType_SOURCE;
   } else {
-    // Unconnected
+    node->type = NodeType_UNCONNECTED;
   }
 }
 

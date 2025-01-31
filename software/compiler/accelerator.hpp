@@ -285,7 +285,8 @@ int ExternalMemoryByteSize(Array<ExternalMemoryInterface> interfaces); // Size o
 //       (or something that FUDeclaration would be composed off)
 //
 
-// TODO: This could take in an AccelInfo
+// This computes the values for the top accelerator only.
+// Different of a regular accelerator because it can add more configs for DMA and other top level things
 VersatComputedValues ComputeVersatValues(AccelInfo* accel,bool useDMA);
 
 // Returns false if parameter does not exist 

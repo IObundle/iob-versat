@@ -730,7 +730,6 @@ static Value EvalExpression(Expression* expr,Frame* frame,Arena* out){
     
     if(!iter){
       LogFatal(LogModule::TEMPLATE,"Did not find '%.*s' in template '%.*s'",UNPACK_SS(expr->id),UNPACK_SS(globalTemplateName));
-      DEBUG_BREAK();
     }
 
     // Only register top frame accesses

@@ -833,44 +833,29 @@ void FillInstanceInfo(AccelInfoIterator initialIter,Arena* out,Arena* temp){
       }
     
       Node* top = baseNodes[0];
-    
-      auto NodeRecurse = [](auto Recurse,Node* top,int bitAccum,int index,Arena* out) -> void{
-        auto BinaryToInt = [](String val) -> int{
-          int res = 0;
-          for(int c : val){
-            res *= 2;
-            res += (c == '1' ? 1 : 0);
-          }
-          return res;
-        };
-
+      
+      auto NodeRecurse = [](auto Recurse,Node* top,int max,int bitAccum,Arena* out) -> void{
         if(top->left == nullptr){
           Assert(top->right == nullptr);
 
           InstanceInfo* info = top->unit;
           
           auto builder = StartString(out);
-          for(int i = 0; i < index; i++){
+          for(int i = max - 1; i >= top->value; i--){
             builder.PushChar(GET_BIT(bitAccum,i) ? '1' : '0');
           }
           String decisionMask = EndString(builder);
           PushNullByte(out);
           info->memDecisionMask = decisionMask;
-          
-          int memMapped = 0;
-          int mult = (1 << top->value);
-          for(int i = 0; i < index; i++){
-            memMapped += mult * GET_BIT(bitAccum,i);
-            mult /= 2;
-          }
-          info->memMapped = memMapped;
+
+          info->memMapped = bitAccum;
         } else {
-          Recurse(Recurse,top->left,SET_BIT(bitAccum,index),index + 1,out);
-          Recurse(Recurse,top->right,bitAccum,index + 1,out);
+          Recurse(Recurse,top->left,max,SET_BIT(bitAccum,top->left->value),out);
+          Recurse(Recurse,top->right,max,bitAccum,out);
         }
       };
 
-      NodeRecurse(NodeRecurse,top,0,0,out);
+      NodeRecurse(NodeRecurse,top,top->value,0,out);
 
       for(AccelInfoIterator it = iter; it.IsValid(); it = it.Next()){
         InstanceInfo* unit = it.CurrentUnit();
@@ -884,15 +869,6 @@ void FillInstanceInfo(AccelInfoIterator initialIter,Arena* out,Arena* temp){
   };
 
   CalculateMemory(CalculateMemory,initialIter,0,out,temp);
-
-  auto BinaryToInt = [](String val) -> int{
-    int res = 0;
-    for(int c : val){
-      res *= 2;
-      res += (c == '1' ? 1 : 0);
-    }
-    return res;
-  };
   
   // Delay pos is just basically State position without anything different, right?
   auto CalculateDelayPos = [](auto Recurse,AccelInfoIterator& iter,int startIndex,Arena* temp) -> void{
@@ -992,6 +968,121 @@ void FillInstanceInfo(AccelInfoIterator initialIter,Arena* out,Arena* temp){
 
   SimpleCalculateDelayResult delays = CalculateDelay(initialIter,out,temp);
   SetDelays(SetDelays,initialIter,delays,0,out);
+}
+
+void FillAccelInfoAfterCalculatingInstanceInfo(AccelInfo* info,Accelerator* accel,Arena* temp){
+  BLOCK_REGION(temp);
+  
+  GrowableArray<bool> seenShared = StartGrowableArray<bool>(temp);
+  
+  int memoryMappedDWords = 0;
+  int unitsMapped = 0;
+
+  // TODO: Use AccelInfoIterator
+
+  // TODO: Using info directly might make create an error if the struct was not initialized to zero.
+  
+  // Handle non-static information
+  for(FUInstance* ptr : accel->allocated){
+    FUInstance* inst = ptr;
+    FUDeclaration* type = inst->declaration;
+
+    // Check if shared
+    if(inst->sharedEnable){
+      if(!seenShared[inst->sharedIndex]){
+        info->configs += type->configs.size;
+        info->sharedUnits += 1;
+      }
+
+      seenShared[inst->sharedIndex] = true;
+    } else if(!inst->isStatic){ // Shared cannot be static
+         info->configs += type->configs.size;
+    }
+
+    if(type->memoryMapBits.has_value()){
+      info->isMemoryMapped = true;
+
+      memoryMappedDWords = AlignBitBoundary(memoryMappedDWords,type->memoryMapBits.value());
+      memoryMappedDWords += (1 << type->memoryMapBits.value());
+
+      unitsMapped += 1;
+    }
+
+    if(type == BasicDeclaration::input){
+      info->inputs += 1;
+    }
+
+    info->states += type->states.size;
+    info->delays += type->NumberDelays();
+    info->ios += type->nIOs;
+
+    if(type->externalMemory.size){
+      info->externalMemoryInterfaces += type->externalMemory.size;
+    }
+
+    info->signalLoop |= type->signalLoop;
+  }
+
+  info->memoryMappedBits = log2i(memoryMappedDWords);
+  info->unitsMapped = unitsMapped;
+  
+  FUInstance* outputInstance = GetOutputInstance(&accel->allocated);
+  if(outputInstance){
+    EdgeIterator iter = IterateEdges(accel);
+    while(iter.HasNext()){
+      Edge edgeInst = iter.Next();
+      Edge* edge = &edgeInst;
+
+      if(edge->units[0].inst == outputInstance){
+        info->outputs = std::max(info->outputs - 1,edge->units[0].port) + 1;
+      }
+      if(edge->units[1].inst == outputInstance){
+        info->outputs = std::max(info->outputs - 1,edge->units[1].port) + 1;
+      }
+    }
+  }
+
+    TrieMap<StaticId,int>* staticSeen = PushTrieMap<StaticId,int>(temp);
+  
+  // TODO: I am not sure if static info is needed by all the accelerators
+  //       or if it is only needed by the top accelerator.
+  //       For now we calculate it to make easier to debug by inspecting the data.
+  //       But need to take another look eventually
+  for(FUInstance* ptr : accel->allocated){
+    FUInstance* inst = ptr;
+    if(inst->isStatic){
+      StaticId id = {};
+
+      id.name = inst->name;
+
+      staticSeen->Insert(id,1);
+      info->statics += inst->declaration->configs.size;
+
+      for(Wire& wire : inst->declaration->configs){
+        info->staticBits += wire.bitSize;
+      }
+    }
+
+    if(IsTypeHierarchical(inst->declaration)){
+      for(Pair<StaticId,StaticData*> pair : inst->declaration->staticUnits){
+        int* possibleFind = staticSeen->Get(pair.first);
+
+        if(!possibleFind){
+          staticSeen->Insert(pair.first,1);
+          info->statics += pair.second->configs.size;
+
+          for(Wire& wire : pair.second->configs){
+            info->staticBits += wire.bitSize;
+          }
+        }
+      }
+    }
+  }
+  
+  for(FUInstance* ptr : accel->allocated){
+    FUInstance* inst = ptr;
+    info->numberConnections += Size(ptr->allOutputs);
+  }
 }
 
 AccelInfo CalculateAcceleratorInfo(Accelerator* accel,bool recursive,Arena* out,Arena* temp){
@@ -1100,7 +1191,6 @@ AccelInfo CalculateAcceleratorInfo(Accelerator* accel,bool recursive,Arena* out,
   iter.accelName = accel->name;
   
   // MARKED
-  //DEBUG_BREAK_IF(CompareString(accel->name,"TestDoubleMerge_Simple"));
   if(iter.MergeSize() > 1){
     Array<Partition> partitions = GenerateInitialPartitions(accel,temp);
 
@@ -1129,108 +1219,7 @@ AccelInfo CalculateAcceleratorInfo(Accelerator* accel,bool recursive,Arena* out,
     result.infos[0].muxConfigs = CalculateMuxConfigs(iter,out);
   }
 
-  std::vector<bool> seenShared;
+  FillAccelInfoAfterCalculatingInstanceInfo(&result,accel,temp);
 
-  int memoryMappedDWords = 0;
-
-  // Handle non-static information
-  for(FUInstance* ptr : accel->allocated){
-    FUInstance* inst = ptr;
-    FUDeclaration* type = inst->declaration;
-
-    // Check if shared
-    if(inst->sharedEnable){
-      if(inst->sharedIndex >= (int) seenShared.size()){
-        seenShared.resize(inst->sharedIndex + 1);
-      }
-
-      if(!seenShared[inst->sharedIndex]){
-        result.configs += type->configs.size;
-        result.sharedUnits += 1;
-      }
-
-      seenShared[inst->sharedIndex] = true;
-    } else if(!inst->isStatic){ // Shared cannot be static
-         result.configs += type->configs.size;
-    }
-
-    if(type->memoryMapBits.has_value()){
-      result.isMemoryMapped = true;
-
-      memoryMappedDWords = AlignBitBoundary(memoryMappedDWords,type->memoryMapBits.value());
-      memoryMappedDWords += (1 << type->memoryMapBits.value());
-    }
-
-    if(type == BasicDeclaration::input){
-      result.inputs += 1;
-    }
-
-    result.states += type->states.size;
-    result.delays += type->NumberDelays();
-    result.ios += type->nIOs;
-
-    if(type->externalMemory.size){
-      result.externalMemoryInterfaces += type->externalMemory.size;
-    }
-
-    result.signalLoop |= type->signalLoop;
-  }
-
-  result.memoryMappedBits = log2i(memoryMappedDWords);
-
-  FUInstance* outputInstance = GetOutputInstance(&accel->allocated);
-  if(outputInstance){
-    EdgeIterator iter = IterateEdges(accel);
-    while(iter.HasNext()){
-      Edge edgeInst = iter.Next();
-      Edge* edge = &edgeInst;
-
-      if(edge->units[0].inst == outputInstance){
-        result.outputs = std::max(result.outputs - 1,edge->units[0].port) + 1;
-      }
-      if(edge->units[1].inst == outputInstance){
-        result.outputs = std::max(result.outputs - 1,edge->units[1].port) + 1;
-      }
-    }
-  }
-
-  Hashmap<StaticId,int>* staticSeen = PushHashmap<StaticId,int>(temp,1000);
-  // Handle static information
-  for(FUInstance* ptr : accel->allocated){
-    FUInstance* inst = ptr;
-    if(inst->isStatic){
-      StaticId id = {};
-
-      id.name = inst->name;
-
-      staticSeen->Insert(id,1);
-      result.statics += inst->declaration->configs.size;
-
-      for(Wire& wire : inst->declaration->configs){
-        result.staticBits += wire.bitSize;
-      }
-    }
-
-    if(IsTypeHierarchical(inst->declaration)){
-      for(Pair<StaticId,StaticData*> pair : inst->declaration->staticUnits){
-        int* possibleFind = staticSeen->Get(pair.first);
-
-        if(!possibleFind){
-          staticSeen->Insert(pair.first,1);
-          result.statics += pair.second->configs.size;
-
-          for(Wire& wire : pair.second->configs){
-            result.staticBits += wire.bitSize;
-          }
-        }
-      }
-    }
-  }
-  
-  for(FUInstance* ptr : accel->allocated){
-    FUInstance* inst = ptr;
-    result.numberConnections += Size(ptr->allOutputs);
-  }
-  
   return result;
 }

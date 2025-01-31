@@ -1117,7 +1117,7 @@ Opt<MergeDef> ParseMerge(Tokenizer* tok,Arena* out,Arena* temp){
     EXPECT(tok,"}");
   }
   
-  DynamicArray<SpecificMergeNode> specificsArr = StartArray<SpecificMergeNode>(temp);
+  DynamicArray<SpecificMergeNode> specificsArr = StartArray<SpecificMergeNode>(out);
   for(SpecNode node : specNodes){
     int firstIndex = -1;
     int secondIndex = -1;

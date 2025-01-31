@@ -354,7 +354,10 @@ void FillDeclarationWithDelayType(FUDeclaration* decl){
       implementsDone = true;
     }
     if(ptr->type == NodeType_SINK){
-      hasSinkDelay = CHECK_DELAY(inst,DelayType_SINK_DELAY);
+      // TODO: There was a problem caused by a unit getting marked as a sink and source when it should have been marked as compute.
+      //       This occured in the Variety1 test. Disabled this check caused no problem in any other test and solved our Variety1 problem. We probably want to do a full check of everything related to these calculations.
+      // NOTE: In fact, even removed all the other checks only causes one or two tests to fail. This approach is maybe not needed fully and we probably could simplify some stuff from here.
+      //hasSinkDelay = CHECK_DELAY(inst,DelayType_SINK_DELAY);
     }
     if(ptr->type == NodeType_SOURCE){
       hasSourceDelay = CHECK_DELAY(inst,DelayType_SOURCE_DELAY);

@@ -151,6 +151,13 @@ struct GrowableArray{
   int size;
   int capacity;
 
+  T& operator[](int index){
+    while(size < index){
+      PushElem();
+    }
+    return data[index];
+  }
+  
   Array<T> AsArray();
   T* PushElem();
 };

@@ -26,7 +26,7 @@ FILE* OpenFileAndCreateDirectories(String path,const char* format,FilePurpose pu
   FILE* file = OpenFile(path,format,purpose);
   if(file == nullptr){
     printf("Failed to open file (%d): %.*s\n",errno,UNPACK_SS(path));
-    DEBUG_BREAK();
+    NOT_IMPLEMENTED("Probably better to return null and let code handle it");
     exit(-1);
   }
   

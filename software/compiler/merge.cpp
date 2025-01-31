@@ -2287,6 +2287,9 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
   // TODO: This is not good, I think. Number delays feels a bit off compared to the others, like config and such.
   //       Since the code to calculate delays is the exact same as for composite units, maybe its just the fact that we are repeating stuff that does not need to be repeated. Things that work for composite should also work here.
   decl->numberDelays = delays;
+
+  FillAccelInfoAfterCalculatingInstanceInfo(&decl->info,decl->fixedDelayCircuit,temp);
+  
   return decl;
 }
 

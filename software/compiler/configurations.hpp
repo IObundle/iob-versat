@@ -99,6 +99,7 @@ struct AccelInfo{
   int numberConnections;
   
   int memoryMappedBits;
+  int unitsMapped;
   bool isMemoryMapped;
   bool signalLoop;
 };
@@ -148,6 +149,7 @@ AccelInfoIterator StartIteration(AccelInfo* info);
 Array<AccelInfoIterator> GetCurrentPartitionsAsIterators(AccelInfoIterator iter,Arena* out);
 AccelInfoIterator GetCurrentPartitionTypeAsIterator(AccelInfoIterator iter,Arena* out);
 int GetPartitionIndex(AccelInfoIterator iter);
+void FillAccelInfoAfterCalculatingInstanceInfo(AccelInfo* info,Accelerator* accel,Arena* temp);
 
 Array<InstanceInfo*> GetAllSameLevelUnits(AccelInfo* info,int level,int mergeIndex,Arena* out);
 

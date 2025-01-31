@@ -937,12 +937,10 @@ SymbolicExpression* ApplyDistributivity(SymbolicExpression* expr,Arena* out,Aren
       res->negative = expr->negative;
       res->sum = PushArrayFromList(out,sums);
 
-      DEBUG_BREAK();
       return res;
       //return ApplyDistributivity(res,out,temp);
       //return ApplyDistributivity(res,out,temp);
     } else {
-      DEBUG_BREAK(); // Unexpected expr->op
       Assert(false);
     }
   } break;
@@ -1083,7 +1081,6 @@ SymbolicExpression* Normalize(SymbolicExpression* expr,Arena* out,Arena* temp){
     BLOCK_REGION(temp);
     if(print) printf("%d:\n",i);
 
-    //DEBUG_BREAK();
     next = NormalizeLiterals(current,out,temp);
     CheckIfSymbolicExpressionsShareNodes(current,next,temp);
     current = next;
@@ -1099,7 +1096,6 @@ SymbolicExpression* Normalize(SymbolicExpression* expr,Arena* out,Arena* temp){
 #endif
     
 #if 1
-    //DEBUG_BREAK();
     next = RemoveParenthesis(current,out,temp);
     CheckIfSymbolicExpressionsShareNodes(current,next,temp); // RemoveParenthesis does not recurse, so obviously this will fail
     current = next;
@@ -1152,7 +1148,6 @@ void TestPrint(Arena* temp,Arena* temp2){
     String s  =  examples[i];
     Tokenizer tok(s,"",{});
     SymbolicExpression* sym = ParseSymbolicExpression(&tok,temp,temp2);
-    //DEBUG_BREAK();
     String repr = PushRepresentation(sym,temp);
     if(!CompareString(repr,s)){
       printf("TestPrint %d failed\n Is: %.*s\n Got:%.*s\n",i,UNPACK_SS(s),UNPACK_SS(repr));
@@ -1173,7 +1168,6 @@ void TestDestributive(Arena* temp,Arena* temp2){
     Tokenizer tok(s.in,"",{});
     SymbolicExpression* sym = ParseSymbolicExpression(&tok,temp,temp2);
 
-    DEBUG_BREAK();
     SymbolicExpression* result = ApplyDistributivity(sym,temp,temp2);
     //Print(result);
     String repr = PushRepresentation(result,temp);
@@ -1202,7 +1196,6 @@ void TestRemoveParenthesis(Arena* temp,Arena* temp2){
     Tokenizer tok(s,"",{});
     SymbolicExpression* sym = ParseSymbolicExpression(&tok,temp,temp2);
 
-    DEBUG_BREAK();
     SymbolicExpression* normalized = RemoveParenthesis(sym,temp,temp2);
     Print(sym);
     Print(normalized);
@@ -1222,7 +1215,6 @@ void TestDerivative(Arena* temp,Arena* temp2){
     Tokenizer tok(s,"",{});
     SymbolicExpression* sym = ParseSymbolicExpression(&tok,temp,temp2);
 
-    DEBUG_BREAK();
     SymbolicExpression* deriveA = Derivate(sym,STRING("a"),temp,temp2);
     SymbolicExpression* deriveB = Derivate(sym,STRING("b"),temp,temp2);
 
@@ -1251,7 +1243,6 @@ void TestReplace(Arena* temp,Arena* temp2){
     Tokenizer tok2(replacingString,"",{});
     SymbolicExpression* toReplaceWith = ParseSymbolicExpression(&tok2,temp,temp2);
                                                                 
-    //DEBUG_BREAK();
     SymbolicExpression* replaced1 = SymbolicReplace(sym,STRING("a"),toReplaceWith,temp,temp2);
     SymbolicExpression* replaced2 = SymbolicReplace(sym,STRING("b"),toReplaceWith,temp,temp2);
 
@@ -1312,7 +1303,6 @@ void TestSymbolic(Arena* temp,Arena* temp2){
     //SymbolicExpression* normalized = ApplySimilarTermsAddition(sym,temp,temp2);
     //SymbolicExpression* normalized = NormalizeLiterals(sym,temp,temp2);
     SymbolicExpression* normalized = Normalize(sym,temp,temp2);
-    DEBUG_BREAK();
     Print(sym);
     Print(normalized);
     printf("\n");

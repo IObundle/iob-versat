@@ -628,6 +628,7 @@ int main(int argc,char* argv[]){
   Accelerator* accel = nullptr;
   FUInstance* TOP = nullptr;
 
+  bool isSimple = false;
   if(CompareString(topLevelTypeStr,"VERSAT_RESERVED_ALL_UNITS")){
     accel = CreateAccelerator(STRING("allVersatUnits"),AcceleratorPurpose_MODULE);
     
@@ -667,6 +668,7 @@ int main(int argc,char* argv[]){
   } else if(globalOptions.addInputAndOutputsToTop && !(type->NumberInputs() == 0 && type->NumberOutputs() == 0)){
     // TODO: This process needs to be simplified and more integrated with the approach used by versat spec.
     //       Instead of doing everything manually.
+    isSimple = true;
 
     const char* name = StaticFormat("%.*s_Simple",UNPACK_SS(topLevelTypeStr));
     accel = CreateAccelerator(STRING(name),AcceleratorPurpose_MODULE);
@@ -732,12 +734,12 @@ int main(int argc,char* argv[]){
     printf("Error\n");
   }
   SetParameter(TOP,STRING("LEN_W"),STRING("LEN_W"));
-  
+
   OutputVersatSource(accel,
                      globalOptions.hardwareOutputFilepath.data,
                      globalOptions.softwareOutputFilepath.data,
-                     globalOptions.addInputAndOutputsToTop,temp,temp2);
-
+                     isSimple,temp,temp2);
+  
   OutputVerilatorWrapper(type,accel,globalOptions.softwareOutputFilepath,temp,temp2);
 
   String versatDir = STRING(STRINGIFY(VERSAT_DIR));
@@ -810,14 +812,9 @@ int main(int argc,char* argv[]){
 
 /*
 
-TODO: We where in the process of simplifying and started taming the mappings from the merge file, on our way to fix the TestDoubleMerge function.
-
-
-Currently we removed a lot of the cruft that we had with the baseConfig and the configInfo approach. There is probably a lot of code that can be simplified, based on the code that we already have simplified. Functions that previously worked on graph data and such could now be rewritten to work from the AccelInfo structure.
-
-I think that is the best approach, because if we make the AccelInfo the source of truth, then debugging just becomes inspecting the AccelInfo structure and seeing if anything is being miscalculated (as well as some graph inspections and the likes, but that is mostly solved by now).
-
 BUG: baseName is not being correctly propagated between hierarchical merges 
+
+There is probably a lot of cleanup left (overall and inside Merge).
 
 */
 
@@ -828,47 +825,18 @@ What do I have to do next?
 There is still a calculate delay function that works from the graphs instead of working from AccelInfo.
 Need to find a way of integrating this stuff, especially because the function that works from AccelInfo is simpler and probably contains the best approach.
 
+DelayType and NodeType need a revision.
+
 */
 
 /*
-
-How to handle merge with the new accelInfoIterator.
-
-We have a member that indicates whether a unit belongs or not to a given merge instance. The belong member.
-If we change all the calculation functions to check for the belong member and then act based on it, then we do not need to make anything special for the majority of calculation functions.
-
-The flow then becomes:
 
 
 TODO: Need to check the isSource member of ModuleInfo and so on. 
 
 TODO: Because of the delay implementation, there is a possibility of allowing inter-hierarchy optimizations:
-      Think a VRead connected a reg file that uses delays to store a value per reg.
-      The normal implementation would insert a bunch of delays with an incremental value which is wasteful because we could just change reg delays.
+      Think a reg file module that is instantiated inside another module. Each reg is forced to have the same delay because we only calculate the module as a single unit, set the module delay, and when instantiating it, we take the module delay as unchangeable.
       This requires to keep track for each module which one allows this to happen and then take that into account in the delay calculation functions. Note: Input delay does not work. We are talking about delay info propagating downards accross the hiearchy while input delay propagates upwards. We can still resolve this during the register FUDeclaration by calcuting the delays of lower units inside the register of the upper unit.
-
-Problem. We are genereting the structs with the multiplexer configs inside.
-I do not like that. I want all the merge multiplexers to be at the top of accelConfig and none inside the units themselves.
-
-What I currently imagine.
-
-If we have all the information that we need inside an array of tables (where each table is associated to a merge possibility) then everything becomes so much easier to do/debug.
-
-For example, for each multiplexer, we could have a member that indicates the input port that is associated to that merge datapath.
-
-We could also store graph data inside that representation. The way in which we handle graphs is soo clubersome. 
-
-
-// Current state.
-
-We have a couple of old functions in configurations that are responsible for calculation the AccelInfo.
-The calculation of the instances for base accelerators as already been taken care of, but nothing has been done for merge instances.
-
-FUDeclaration still contains ConfigurationInfo and instanceInfo members. We still have not put AccelInfo values inside FUDeclaration and no code relies on accessing this info, with some exceptions because instanceInfo is being used somewhat.
-
-Functions that register modules and merge do not interact in any shape or form with InstanceInfo.
-
-Rembember: Calculating delays on the merge unit does not make sense.
-           Delays can only be calculated on modules and in the recon of merge graphs.
+      For this part, we would basically have to implement greater info on module connectivity (how each output interacts with each input and stuff like that).
 
  */

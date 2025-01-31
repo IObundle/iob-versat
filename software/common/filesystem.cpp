@@ -1,5 +1,6 @@
 #include "filesystem.hpp"
 #include "utils.hpp"
+#include "utilsCore.hpp"
 
 static Arena storeFileInfoArena = {};
 static ArenaList<FileInfo>* storeFileInfo;
@@ -17,7 +18,7 @@ FILE* OpenFile(String filepath,const char* mode,FilePurpose purpose){
   char pathBuffer[4096]; // Because C calls require null terminated strings, need to copy to some space to append null terminator
 
   if(filepath.size >= 4095){
-    DEBUG_BREAK(); // Is larger than 4096 a possibility that we need to handle? Probably some bug, need to see if filepaths are limitted or not.
+    NOT_IMPLEMENTED("Not sure if worth to implement something here or not");
     return nullptr;
   }
 

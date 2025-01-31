@@ -383,7 +383,6 @@ Type* GetType(String name){
     return typeExists;
   }
 
-  //DEBUG_BREAK_IF(CompareString(uniqueName,"Byte*"));
   // TODO: Replace this part with fetching data from ParsedType
   Type* res = nullptr;
   Tokenizer tok(uniqueName,"*&[]<>,",{});
@@ -452,7 +451,7 @@ Type* GetType(String name){
       tok.AssertNextToken("]");
 
       if(!CheckFormat("%d",arrayExpression)){
-        DEBUG_BREAK();
+        NOT_POSSIBLE("Or at least I do not think. We do not allow expressions here, right?");
       }
 
       int arraySize = ParseInt(arrayExpression);
@@ -657,7 +656,6 @@ String GetDefaultValueRepresentation(Value in,Arena* arena){
     if(pairFound){
       res = PushString(arena,"%.*s::%.*s",UNPACK_SS(type->name),UNPACK_SS(pairFound->first));
     } else {
-      DEBUG_BREAK();
       res = PushString(arena,"(enum %.*s:%d)",UNPACK_SS(type->name),enumValue);
     }
   } else {
@@ -694,7 +692,6 @@ Value CollapsePtrIntoStruct(Value object){
 	}
 
     if(type->pointerType == ValueType::NIL){
-      DEBUG_BREAK();
       break;
     }
 
@@ -2017,7 +2014,7 @@ Opt<NameAndTemplateArguments> ParseNameAndTemplateArguments(Tokenizer* tok,Arena
         continue;
         // Do nothing
       } else {
-        DEBUG_BREAK(); // Should not be possible
+        NOT_POSSIBLE("");
       }
     }
 
@@ -2128,8 +2125,6 @@ Opt<ParsedType> ParseType(Tokenizer* tok,Arena* out){
 }
 
 Opt<ParsedType> ParseType(String typeStr,Arena* out){
-  //DEBUG_BREAK_IF(CompareString(typeStr,"int"));
-  //DEBUG_BREAK_IF(CompareString(typeStr,"char *"));
   Tokenizer tok(typeStr,specialCharacters,{"::"});
   auto res = ParseType(&tok,out);
   

@@ -196,8 +196,7 @@ void PreprocessVerilogFile_(String fileContent,MacroMap& macros,Array<String> in
           printf("  %.*s\n",UNPACK_SS(str));
         }
 
-        DEBUG_BREAK();
-        exit(0);
+        NOT_IMPLEMENTED("Some error handling here");
       }
 
       size_t fileSize = GetFileSize(file);
@@ -293,7 +292,7 @@ void PreprocessVerilogFile_(String fileContent,MacroMap& macros,Array<String> in
       // TODO: Better error handling. Report file position.
       if(!PerformDefineSubstitution(out,macros,identifier)){
         printf("Do not recognize directive: %.*s\n",UNPACK_SS(identifier));
-        DEBUG_BREAK();
+        NOT_POSSIBLE("Some better error handling here");
       }
     }
   }
@@ -346,8 +345,6 @@ static Expression* VerilogParseAtom(Tokenizer* tok,Arena* out){
     expr->type = Expression::LITERAL;
 
     return expr;
-  } else {
-    //DEBUG_BREAK();
   }
 
   Token name = tok->NextToken();
@@ -397,7 +394,6 @@ static Expression* VerilogParseFactor(Tokenizer* tok,Arena* arena){
     tok->AssertNextToken(")");
 
     return expr;
-    //DEBUG_BREAK();
   } else {
     Expression* expr = VerilogParseAtom(tok,arena);
     return expr;

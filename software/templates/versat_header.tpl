@@ -152,9 +152,9 @@ static const int delayStart = @{(nConfigs + nStatics) |> Hex} * sizeof(iptr);
 static const int configStart = @{versatConfig |> Hex} * sizeof(iptr);
 static const int stateStart = @{versatState |> Hex} * sizeof(int);
 
+#{if configStructures.size > 0}
 static const unsigned int AcceleratorConfigSize = sizeof(@{accelName}Config);
 
-#{if nConfigs > 0}
 extern volatile @{accelName}Config* accelConfig; // @{nConfigs}
 #{end}
 

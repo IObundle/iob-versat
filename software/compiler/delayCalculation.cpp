@@ -218,7 +218,7 @@ SimpleCalculateDelayResult CalculateDelay(AccelInfoIterator top,Arena* out,Arena
 
   // TODO: There is a lot of repeated code that could be simplified, altought still need to check if we are using a good approach when it comes to the merges later on.
   //       Furthermore, there is a lot of confusion from mixing latency vs delays, especially because we are currently using the same array to calculate delays and latencies. Maybe it would be best to split latency calculation and delay calculation into two functions and to make sure that we have the calculate delay result struct having the correct names for things (we can still return everything and let the top level code use the data as it sees fit).
-
+  // TODO: Separate latency calculation from delay calculation, even if currently it seems fine, it is hard to reason about.
   // TODO: None of this code should depend on FUInstance or FUDeclaration. Only on InstanceInfo direct members.
   
   // Keyed by order
@@ -274,8 +274,7 @@ SimpleCalculateDelayResult CalculateDelay(AccelInfoIterator top,Arena* out,Arena
   };
   
   // Start at sources
-  int orderIndex = 0;
-  for(; orderIndex < orderToIndex.size; orderIndex++){
+  for(int orderIndex = 0; orderIndex < orderToIndex.size; orderIndex++){
     FUInstance* node = top.GetUnit(orderToIndex[orderIndex])->inst;
 
     int maxInputEdgeLatency = 0;
@@ -298,7 +297,10 @@ SimpleCalculateDelayResult CalculateDelay(AccelInfoIterator top,Arena* out,Arena
     nodeDelayArray[orderIndex].isAny = false;
 
     // Send latency upwards.
-    SendLatencyUpwards(orderIndex);
+
+    if(node->type != NodeType_SOURCE_AND_SINK){
+      SendLatencyUpwards(orderIndex);
+    }
   }
 
   if(globalOptions.debug){
@@ -366,7 +368,7 @@ SimpleCalculateDelayResult CalculateDelay(AccelInfoIterator top,Arena* out,Arena
   for(int i = 0; i < orderToIndex.size; i++){
     FUInstance* node = top.GetUnit(orderToIndex[i])->inst;
 
-    if(node->type != NodeType_SINK){
+    if(!(node->type == NodeType_SINK || node->type == NodeType_SOURCE_AND_SINK)){
       continue;
     }
 
@@ -462,7 +464,7 @@ SimpleCalculateDelayResult CalculateDelay(AccelInfoIterator top,Arena* out,Arena
   for(int i = 0; i < orderToIndex.size; i++){
     FUInstance* node = top.GetUnit(orderToIndex[i])->inst;
 
-    if(node->type != NodeType_SOURCE && node->type != NodeType_SOURCE_AND_SINK){
+    if(node->type != NodeType_SOURCE){
       continue;
     }
 

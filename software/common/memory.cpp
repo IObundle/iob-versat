@@ -130,7 +130,7 @@ Byte* PushBytes(Arena* arena, size_t size){
 
   if(arena->used + size > arena->totalAllocated){
     printf("[%s] Used: %zd, Size: %zd, Total: %zd\n",__PRETTY_FUNCTION__,arena->used,size,arena->totalAllocated);
-    DEBUG_BREAK();
+    NOT_IMPLEMENTED("Need to change arena to linked list approach");
     exit(0);
   }
   
@@ -231,7 +231,7 @@ String PushFile(Arena* arena,const char* filepath){
   if(!file){
     String res = {};
     printf("Failed to open file: %s\n",filepath);
-    DEBUG_BREAK();
+    NOT_IMPLEMENTED("Need to return opt and let code handle this instead. TODO");
     res.size = -1;
     return res;
   }

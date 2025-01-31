@@ -111,7 +111,6 @@ struct StructInfo{
   StructInfo* parent;
 
   ArenaDoubleList<StructElement>* list;
-  Array<StructElement> elements;
 };
 
 size_t HashStructInfo(StructInfo* info);

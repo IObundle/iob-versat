@@ -134,7 +134,7 @@ void OutputContentToFile(String filepath,String content){
   
   if(!file){
     printf("[OutputContentToFile] Error opening file: %.*s\n",UNPACK_SS(filepath));
-    DEBUG_BREAK();
+    return;
   }
 
   int res = fwrite(content.data,sizeof(char),content.size,file);

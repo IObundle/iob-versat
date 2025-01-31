@@ -298,29 +298,23 @@ void OutputCircuitSource(FUDeclaration* decl,FILE* file,Arena* temp,Arena* temp2
       SetParameter(node,STRING("LEN_W"),STRING("LEN_W"));
     }
   }
-
-  // TODO:
-  // All these should be moved off
-  // There is no reason why OutputCircuitSource should ever need to take 2 arenas
-  // AccelInfo being recalculated again is not good. We are recalculating stuff too much
-  // program is still fast, but its a sign of poor architecture
-  //AccelInfo info = decl->info;
-  AccelInfo info = CalculateAcceleratorInfo(accel,true,temp,temp2);
-  //VersatComputedValues val = ComputeVersatValues(accel,false);
+  
+  AccelInfo info = decl->info;
   VersatComputedValues val = ComputeVersatValues(&info,false);
   Array<String> memoryMasks = ExtractMemoryMasks(info,temp);
 
+  Assert(info.unitsMapped == val.unitsMapped);
+  
   Array<String> parameters = PushArray<String>(temp,nodes.Size());
   for(int i = 0; i < nodes.Size(); i++){
     parameters[i] = GenerateVerilogParameterization(nodes.Get(i),temp);
   }
 
   Array<InstanceInfo*> topLevelUnits = GetAllSameLevelUnits(&info,0,0,temp);
-  // #{set configStart accel.baseConfig.configOffsets.offsets[id]}
 
   TemplateSetCustom("topLevel",MakeValue(&topLevelUnits));
   TemplateSetCustom("parameters",MakeValue(&parameters));
-  TemplateSetNumber("unitsMapped",val.unitsMapped);
+  TemplateSetNumber("unitsMapped",info.unitsMapped);
   TemplateSetNumber("numberConnections",info.numberConnections);
 
   TemplateSetCustom("inputDecl",MakeValue(BasicDeclaration::input));
@@ -336,6 +330,9 @@ void OutputCircuitSource(FUDeclaration* decl,FILE* file,Arena* temp,Arena* temp2
 }
 
 void OutputIterativeSource(FUDeclaration* decl,FILE* file,Arena* temp,Arena* temp2){
+  // NOTE: Iteratives have not been properly maintained.
+  //       Most of this code probably will not work
+
   Accelerator* accel = decl->fixedDelayCircuit;
 
   BLOCK_REGION(temp);
@@ -353,7 +350,8 @@ void OutputIterativeSource(FUDeclaration* decl,FILE* file,Arena* temp,Arena* tem
       SetParameter(inst,STRING("LEN_W"),STRING("LEN_W"));
     }
   }
-   
+
+  // TODO: If we get iterative working again, this should just get the AccelInfo from the decl.
   AccelInfo info = CalculateAcceleratorInfo(accel,true,temp,temp2); // TODO: Calculating info just for the computedData calculation is a bit wasteful.
 
   VersatComputedValues val = ComputeVersatValues(&info,false);
@@ -640,15 +638,7 @@ Array<StructInfo*> ExtractStructs(StructInfo* structInfo,Arena* out,Arena* temp)
     map->InsertIfNotExist(*top,top);
   };
 
-  // TODO: This if is weird. What is going on around here.
-  //       Some code was changed, so maybe need to take another look when things become more stable
-  if(Size(structInfo->list) == 1){
-    for(DoubleLink<StructElement>* ptr = structInfo->list ? structInfo->list->head : nullptr; ptr; ptr = ptr->next){
-      Recurse(Recurse,ptr->elem.childStruct,info);
-    }
-  } else {
-    Recurse(Recurse,structInfo,info);
-  }
+  Recurse(Recurse,structInfo,info);
   
   Array<StructInfo*> res = PushArrayFromTrieMapData(out,info);
 
@@ -783,15 +773,18 @@ void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* 
   }
 
   AccelInfo info = CalculateAcceleratorInfo(accel,true,temp,temp2);
-
+  
   VersatComputedValues val = ComputeVersatValues(&info,globalOptions.useDMA);
   
   AccelInfoIterator iter = StartIteration(&info);
   StructInfo* structInfo = GenerateConfigStruct(iter,temp,temp2);
-
-  // We end up with an extra level that we immediatly remove. Its not needed
+  
+  // We generate an extra level, so we just remove it here.
   structInfo = structInfo->list->head->elem.childStruct;
   
+  // NOTE: We for now push all the merge muxs to the top.
+  //       It might be better to only push them to the merge struct (basically only 1 level up).
+  //       Still need more examples to see.
   PushMergeMultiplexersUpTheHierarchy(structInfo);
   Array<StructInfo*> allStructs = ExtractStructs(structInfo,temp,temp2);
 
