@@ -349,7 +349,7 @@ Array<T> PushArrayFromList(Arena* out,ArenaList<T>* list){
     return {};
   }
 
-  DynamicArray<T> arr = StartArray<T>(out);
+  auto arr = StartArray<T>(out);
   
   FOREACH_LIST(SingleLink<T>*,iter,list->head){
     T* ptr = arr.PushElem();
@@ -432,7 +432,7 @@ Array<P> PushArrayFromTrieMapData(Arena* out,TrieMap<T,P>* map){
 
 template<typename T>
 Array<T> PushArrayFromSet(Arena* out,Set<T>* set){
-  DynamicArray<T> arr = StartArray<T>(out);
+  auto arr = StartArray<T>(out);
 
   for(auto pair : set->map){
     T* ptr = arr.PushElem();
@@ -445,7 +445,7 @@ Array<T> PushArrayFromSet(Arena* out,Set<T>* set){
 
 template<typename T>
 Array<T> PushArrayFromSet(Arena* out,TrieSet<T>* set){
-  DynamicArray<T> arr = StartArray<T>(out);
+  auto arr = StartArray<T>(out);
 
   for(auto pair : set->map){
     T* ptr = arr.PushElem();
@@ -498,21 +498,14 @@ Hashmap<T,int>* MapElementToIndex(Array<T> arr,Arena* out){
   return toIndex;
 }
 
-#include <type_traits>
-
-// This sometimes is nice to have, when we have an array of structs and want an array of one element of the structs.
-// A map with generic function however is almost never good since it's clubersome in C++ and you end up writing 
-// as much as a for but worse because small changes are harder.
-// TODO: The first use case is valid and maybe we could make it better with a macro that reduces all this boilerplate
-template<typename T,typename Func>
-Array<typename std::result_of<Func(T)>::type> Map(Array<T> array,Arena* out,Func f){
-  using ST = typename std::result_of<Func(T)>::type;
-  
-  DynamicArray<ST> arr = StartArray<ST>(out);
-  for(T& t : array){
-    *arr.PushElem() = f(t);
+// If we find ourselves using this too much, maybe consider changing between AoS and SoA
+template<typename T,typename R>
+Array<R> Extract(Array<T> array,Arena* out,R T::* f){
+  Array<R> result = PushArray<R>(out,array.size);
+  for(int i = 0; i < array.size; i++){
+    result[i] = array[i].*f;
   }
-  return EndArray(arr);
+  return result;
 }
 
 template<typename T>

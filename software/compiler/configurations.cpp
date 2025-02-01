@@ -222,7 +222,6 @@ Array<Wire> ExtractAllConfigs(Array<InstanceInfo> info,Arena* out,Arena* temp){
       id.parent = parent;
       id.name = t.name;
       if(!seen->Exists(id)){
-        int skipLevel = t.level;
         seen->Insert(id);
         for(int i = 0; i < t.configSize; i++){
           Wire* wire = list->PushElem();
@@ -278,7 +277,6 @@ Array<Pair<String,int>> ExtractMem(Array<InstanceInfo> info,Arena* out){
   int index = 0;
   for(InstanceInfo& in : info){
     if(!in.isComposite && in.memMapped.has_value()){
-      FUDeclaration* decl = in.decl;
       String name = PushString(out,"%.*s_addr",UNPACK_SS(in.fullName)); 
       res[index++] = {name,(int) in.memMapped.value()};
     }
@@ -330,10 +328,6 @@ static bool Next(Array<Partition> arr){
 Array<AccelInfoIterator> GetCurrentPartitionsAsIterators(AccelInfoIterator iter,Arena* out){
   STACK_ARENA(temp,Kilobyte(4));
   // TODO: This is dependent on partitions. Not sure how I feel about that.
-
-  DynamicArray<Partition> partitionsArr = StartArray<Partition>(out);
-  int mergedPossibility = 0;
-
   // TODO: BAD
   Hashmap<FUDeclaration*,int>* seenAmount = PushHashmap<FUDeclaration*,int>(&temp,10);
   AccelInfo* info = iter.info;
@@ -574,7 +568,6 @@ Array<InstanceInfo> GenerateInitialInstanceInfo(Accelerator* accel,Arena* out,Ar
   }
 
   for(int i = 0; i < res.size; i++){
-    int index = i;
     InstanceInfo* info = &res[i];
     if(info->level != 0){
       continue;
@@ -1084,10 +1077,43 @@ void FillAccelInfoAfterCalculatingInstanceInfo(AccelInfo* info,Accelerator* acce
   }
   
   for(FUInstance* ptr : accel->allocated){
-    FUInstance* inst = ptr;
     info->numberConnections += Size(ptr->allOutputs);
   }
 }
+
+Array<int> ExtractInputDelays(AccelInfoIterator top,Arena* out){
+  int maxInputs = -1;
+  for(AccelInfoIterator iter = top; iter.IsValid(); iter = iter.Next()){
+    InstanceInfo* info = iter.CurrentUnit();
+    if(info->decl == BasicDeclaration::input){
+      maxInputs = std::max(info->special,maxInputs);
+    }
+  }
+  if(maxInputs == -1){
+    return {};
+  }
+
+  Array<int> inputDelays = PushArray<int>(out,maxInputs + 1);
+  for(AccelInfoIterator iter = top; iter.IsValid(); iter = iter.Next()){
+    InstanceInfo* info = iter.CurrentUnit();
+    if(info->decl == BasicDeclaration::input){
+      inputDelays[info->special] = info->baseDelay;
+    }
+  }
+
+  return inputDelays;
+};
+
+Array<int> ExtractOutputLatencies(AccelInfoIterator top,Arena* out){
+  for(AccelInfoIterator iter = top; iter.IsValid(); iter = iter.Next()){
+    InstanceInfo* info = iter.CurrentUnit();
+    if(info->decl == BasicDeclaration::output){
+      return CopyArray(info->portDelay,out);
+    }
+  }
+
+  return {};
+};
 
 AccelInfo CalculateAcceleratorInfo(Accelerator* accel,bool recursive,Arena* out,Arena* temp){
   AccelInfo result = {};
@@ -1111,39 +1137,6 @@ AccelInfo CalculateAcceleratorInfo(Accelerator* accel,bool recursive,Arena* out,
   
   int size = partitionSize;
 
-  auto ExtractInputDelays = [](AccelInfoIterator top,Arena* out) -> Array<int>{
-    int maxInputs = -1;
-    for(AccelInfoIterator iter = top; iter.IsValid(); iter = iter.Next()){
-      InstanceInfo* info = iter.CurrentUnit();
-      if(info->decl == BasicDeclaration::input){
-        maxInputs = std::max(info->special,maxInputs);
-      }
-    }
-    if(maxInputs == -1){
-      return {};
-    }
-
-    Array<int> inputDelays = PushArray<int>(out,maxInputs + 1);
-    for(AccelInfoIterator iter = top; iter.IsValid(); iter = iter.Next()){
-      InstanceInfo* info = iter.CurrentUnit();
-      if(info->decl == BasicDeclaration::input){
-        inputDelays[info->special] = info->baseDelay;
-      }
-    }
-
-    return inputDelays;
-  };
-
-  auto ExtractOutputDelays = [](AccelInfoIterator top,Arena* out) -> Array<int>{
-    for(AccelInfoIterator iter = top; iter.IsValid(); iter = iter.Next()){
-      InstanceInfo* info = iter.CurrentUnit();
-      if(info->decl == BasicDeclaration::output){
-        return CopyArray(info->portDelay,out);
-      }
-    }
-
-    return {};
-  };
   
   auto CalculateMuxConfigs = [](AccelInfoIterator top,Arena* out) -> Array<int>{
     STACK_ARENA(tempInst,Kilobyte(4));
@@ -1207,7 +1200,7 @@ AccelInfo CalculateAcceleratorInfo(Accelerator* accel,bool recursive,Arena* out,
       FillInstanceInfo(iter,globalPermanent,temp);
 
       result.infos[i].inputDelays = ExtractInputDelays(iter,out);
-      result.infos[i].outputLatencies = ExtractOutputDelays(iter,out);
+      result.infos[i].outputLatencies = ExtractOutputLatencies(iter,out);
       result.infos[i].muxConfigs = CalculateMuxConfigs(iter,out);
 
       String name = GetName(partitions,out);
@@ -1219,7 +1212,7 @@ AccelInfo CalculateAcceleratorInfo(Accelerator* accel,bool recursive,Arena* out,
     FillInstanceInfo(iter,globalPermanent,temp);
 
     result.infos[0].inputDelays = ExtractInputDelays(iter,out);
-    result.infos[0].outputLatencies = ExtractOutputDelays(iter,out);
+    result.infos[0].outputLatencies = ExtractOutputLatencies(iter,out);
     result.infos[0].muxConfigs = CalculateMuxConfigs(iter,out);
   }
 

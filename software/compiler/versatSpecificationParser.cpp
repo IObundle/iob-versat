@@ -72,8 +72,8 @@ bool _ExpectError(Tokenizer* tok,const char* str){
 
 void _UnexpectError(Token token){
   STACK_ARENA(temp,Kilobyte(4));
-  auto mark = StartString(&temp);
   String content = PushString(&temp,"At pos: %d:%d, did not expect to get: \"%.*s\"",token.loc.start.line,token.loc.start.column,UNPACK_SS(token));  
+  printf("%.*s\n",UNPACK_SS(content));
 }
 
 static bool IsValidIdentifier(String str){
@@ -132,8 +132,6 @@ Opt<int> ParseNumber(Tokenizer* tok){
 
   for(int i = 0; i < number.size; i++){
     if(!(number[i] >= '0' && number[i] <= '9')){
-      STACK_ARENA(temp,Kilobyte(1)); \
-      
       ReportError(tok,number,StaticFormat("%.*s is not a valid number",UNPACK_SS(number)));
       return {};
     }
@@ -293,7 +291,6 @@ SpecExpression* ParseAtom(Tokenizer* tok,Arena* out){
     expr->val = MakeValue(digit);
   } else {
     expr->type = SpecExpression::VAR;
-    auto mark = tok->Mark();
     Opt<Var> optVar = ParseVar(tok);
     PROPAGATE(optVar);
 
@@ -877,6 +874,7 @@ Opt<TransformDef> ParseTransformDef(Tokenizer* tok,Arena* out,Arena* temp){
 }
 
 FUDeclaration* ParseIterative(Tokenizer* tok,Arena* temp,Arena* temp2){
+#if 0
   Arena* perm = globalPermanent;
   tok->AssertNextToken("iterative");
 
@@ -1020,6 +1018,8 @@ FUDeclaration* ParseIterative(Tokenizer* tok,Arena* temp,Arena* temp2){
   tok->AssertNextToken("}");
 
   return RegisterIterativeUnit(iterative,unit,latency,name,temp,temp2);
+#endif
+  UNREACHABLE();
 }
 
 Opt<TypeAndInstance> ParseTypeAndInstance(Tokenizer* tok){
@@ -1027,7 +1027,7 @@ Opt<TypeAndInstance> ParseTypeAndInstance(Tokenizer* tok){
 
   CHECK_IDENTIFIER(typeName);
 
-  Token peek = tok->PeekToken();
+  tok->PeekToken();
 
   Token instanceName = {};
   if(tok->IfNextToken(":")){
@@ -1061,7 +1061,6 @@ Opt<HierarchicalName> ParseHierarchicalName(Tokenizer* tok){
 }
 
 Opt<MergeDef> ParseMerge(Tokenizer* tok,Arena* out,Arena* temp){
-  Arena* perm = globalPermanent;
   BLOCK_REGION(temp);
   
   tok->AssertNextToken("merge");
@@ -1664,12 +1663,17 @@ FUDeclaration* InstantiateModule(String content,ModuleDef def,Arena* temp,Arena*
       Assert(HasNext(out) == HasNext(in));
     }
   }
+
+  if(error){
+    // TODO: Better error handling.
+    printf("Error on InstantiateModule\n");
+  }
   
   // Care to never put 'out' inside the table
   FUInstance** outInTable = table->Get(STRING("out"));
   Assert(!outInTable);
 
-  FUDeclaration* res = RegisterSubUnitBarebones(circuit,temp,temp2);
+  FUDeclaration* res = RegisterSubUnit(circuit,temp,temp2,SubUnitOptions_BAREBONES);
   res->definitionArrays = PushArrayFromList(perm,allArrayDefinitons);
   return res;
 }
@@ -1757,19 +1761,18 @@ Array<Token> TypesUsed(TypeDefinition def,Arena* out,Arena* temp){
   case DefinitionType_MERGE: {
     // TODO: How do we deal with same types being used?
     //       Do we just ignore it?
-    Array<Token> result = Map(def.merge.declarations,out,[](TypeAndInstance def){
-      return def.typeName;
-    });
+    Array<Token> result = Extract(def.merge.declarations,out,&TypeAndInstance::typeName);
     
     return result;
   } break;
   case DefinitionType_MODULE: {
-    Array<Token> result = Map(def.module.declarations,temp,[](InstanceDeclaration decl){
-      return decl.typeName;
-    });
+    Array<Token> result = Extract(def.module.declarations,temp,&InstanceDeclaration::typeName);
 
     return Unique(result,out,temp);
   } break;
+  case DefinitionType_ITERATIVE:{
+    NOT_IMPLEMENTED("yet");
+  }; 
   default: Assert(false);
   }
 
@@ -1786,6 +1789,9 @@ FUDeclaration* InstantiateBarebonesSpecifications(String content,TypeDefinition 
   case DefinitionType_MODULE: {
     return InstantiateModule(content,def.module,temp,temp2);
   } break;
+  case DefinitionType_ITERATIVE:{
+    NOT_IMPLEMENTED("yet");
+  }; 
   default: Assert(false);
   }
 
@@ -1802,6 +1808,9 @@ FUDeclaration* InstantiateSpecifications(String content,TypeDefinition def,Arena
   case DefinitionType_MODULE: {
     return InstantiateModule(content,def.module,temp,temp2);
   } break;
+  case DefinitionType_ITERATIVE:{
+    NOT_IMPLEMENTED("yet");
+  }; 
   default: Assert(false);
   }
 

@@ -73,9 +73,10 @@ FUDeclaration* RegisterModuleInfo(ModuleInfo* info,Arena* temp){
 
   Array<ParameterExpression> instantiated = PushArray<ParameterExpression>(perm,info->defaultParameters.size);
 
-  decl.parameters = Map(info->defaultParameters,perm,[](ParameterExpression p) -> String{
-    return p.name;
-  });
+  decl.parameters = Extract(info->defaultParameters,perm,&ParameterExpression::name);
+  //decl.parameters = Map(info->defaultParameters,perm,[](ParameterExpression p) -> String{
+  //  return p.name;
+  //});
   
   for(int i = 0; i < instantiated.size; i++){
     ParameterExpression def = info->defaultParameters[i];
@@ -202,12 +203,14 @@ void FillDeclarationWithAcceleratorValues(FUDeclaration* decl,Accelerator* accel
   AccelInfo val = CalculateAcceleratorInfo(accel,true,perm,temp2);
   decl->info = val;
   
+#if 0
   DynamicArray<String> baseNames = StartArray<String>(perm);
   for(FUInstance* ptr : accel->allocated){
     FUInstance* inst = ptr;
     *baseNames.PushElem() = inst->name;
   }
   Array<String> baseName = EndArray(baseNames);
+#endif
   
   decl->nIOs = val.ios;
   if(val.isMemoryMapped){
@@ -259,82 +262,17 @@ void FillDeclarationWithAcceleratorValues(FUDeclaration* decl,Accelerator* accel
     for(Wire& wire : d->states){
       decl->states[stateIndex] = wire;
 
-      decl->states[stateIndex++].name = PushString(perm,"%.*s_%.2d",UNPACK_SS(wire.name),stateIndex);
+      decl->states[stateIndex].name = PushString(perm,"%.*s_%.2d",UNPACK_SS(wire.name),stateIndex);
+      stateIndex += 1;
     }
   }
 
-  int size = accel->allocated.Size();
   decl->signalLoop = val.signalLoop;
 
   Array<bool> belongArray = PushArray<bool>(perm,accel->allocated.Size());
   Memset(belongArray,true);
 
   decl->numberDelays = val.delays;
-}
-
-void FillDeclarationWithAcceleratorValuesNoDelay(FUDeclaration* decl,Accelerator* accel,Arena* temp,Arena* temp2){
-  Arena* perm = globalPermanent;
-  BLOCK_REGION(temp);
-  BLOCK_REGION(temp2);
-
-  AccelInfo val = CalculateAcceleratorInfo(accel,true,perm,temp2);
-
-  decl->nIOs = val.ios;
-  if(val.isMemoryMapped){
-    decl->memoryMapBits = val.memoryMappedBits;
-  }
-
-  decl->externalMemory = PushArray<ExternalMemoryInterface>(perm,val.externalMemoryInterfaces);
-  int externalIndex = 0;
-  for(FUInstance* ptr : accel->allocated){
-    Array<ExternalMemoryInterface> arr = ptr->declaration->externalMemory;
-    for(int i = 0; i < arr.size; i++){
-      decl->externalMemory[externalIndex] = arr[i];
-      decl->externalMemory[externalIndex].interface = externalIndex;
-      externalIndex += 1;
-    }
-  }
-
-  decl->configs = PushArray<Wire>(perm,val.configs);
-  decl->states = PushArray<Wire>(perm,val.states);
-  Hashmap<int,int>* staticsSeen = PushHashmap<int,int>(temp,val.sharedUnits);
-
-  int configIndex = 0;
-  int stateIndex = 0;
-  
-  // TODO: This could be done based on the config offsets.
-  //       Otherwise we are still basing code around static and shared logic when calculating offsets already does that for us.
-  for(FUInstance* ptr : accel->allocated){
-    FUInstance* inst = ptr;
-    FUDeclaration* d = inst->declaration;
-
-    if(!inst->isStatic){
-      if(inst->sharedEnable){
-        if(staticsSeen->InsertIfNotExist(inst->sharedIndex,0)){
-          for(Wire& wire : d->configs){
-            decl->configs[configIndex] = wire;
-            decl->configs[configIndex++].name = PushString(perm,"%.*s_%.*s",UNPACK_SS(inst->name),UNPACK_SS(wire.name));
-          }
-        }
-      } else {
-        for(Wire& wire : d->configs){
-          decl->configs[configIndex] = wire;
-          decl->configs[configIndex++].name = PushString(perm,"%.*s_%.*s",UNPACK_SS(inst->name),UNPACK_SS(wire.name));
-        }
-      }
-    }
-
-    for(Wire& wire : d->states){
-      decl->states[stateIndex] = wire;
-      decl->states[stateIndex++].name = PushString(perm,"%.*s_%.2d",UNPACK_SS(wire.name),stateIndex);
-    }
-  }
-
-  int size = accel->allocated.Size();
-  decl->signalLoop = val.signalLoop;
-
-  Array<bool> belongArray = PushArray<bool>(perm,accel->allocated.Size());
-  Memset(belongArray,true);
 }
 
 void FillDeclarationWithDelayType(FUDeclaration* decl){
@@ -378,171 +316,87 @@ void FillDeclarationWithDelayType(FUDeclaration* decl){
   decl->implementsDone = implementsDone;
 }
 
-// Problem: RegisterSubUnit is basically extracting all the information
-// from the graph and then is filling the FUDeclaration with all this info.
-// When it comes to merge, we do not want to do this because the information that we want might not
-// corresponds to the actual graph 1-to-1.
-// Might also be better for Flatten if we separated the process so that we do not have to deal with
-// share configs and static configs and stuff like that.
-
-// TODO: Why does this exist? Check how to integrate with the RegisterSubUnit function.
-FUDeclaration* RegisterSubUnitBarebones(Accelerator* circuit,Arena* temp,Arena* temp2){
+FUDeclaration* RegisterSubUnit(Accelerator* circuit,Arena* temp,Arena* temp2,SubUnitOptions options){
   Arena* permanent = globalPermanent;
   BLOCK_REGION(temp);
 
-  String name = circuit->name;
-  
-  FUDeclaration decl = {};
-  decl.type = FUDeclarationType_COMPOSITE;
-  decl.name = name;
-
-  // TODO: This function could use some cleanup
-
-  // Default parameters given to all modules. Parameters need a proper revision, but need to handle parameters going up in the hierarchy
-  decl.parameters = PushArray<String>(permanent,6);
-  decl.parameters[0] = STRING("ADDR_W");
-  decl.parameters[1] = STRING("DATA_W");
-  decl.parameters[2] = STRING("DELAY_W");
-  decl.parameters[3] = STRING("AXI_ADDR_W");
-  decl.parameters[4] = STRING("AXI_DATA_W");
-  decl.parameters[5] = STRING("LEN_W");
-  
-  decl.baseCircuit = circuit;
-
-  Accelerator* copy = CopyAccelerator(decl.baseCircuit,AcceleratorPurpose_FIXED_DELAY,true,nullptr);
-  DAGOrderNodes order = CalculateDAGOrder(&copy->allocated,temp);
-  CalculateDelayResult delays = CalculateDelay(copy,temp);
-
-  region(temp){
-    FixDelays(copy,delays.edgesDelay,temp);
-  }
-
-  decl.fixedDelayCircuit = copy;
-  decl.fixedDelayCircuit->name = decl.name;
-
-  // TODO: This can be taken out, right?
-  FillDeclarationWithAcceleratorValues(&decl,decl.fixedDelayCircuit,temp,temp2);
-  FillDeclarationWithDelayType(&decl);
-
-  decl.staticUnits = PushHashmap<StaticId,StaticData>(permanent,1000); // TODO: Set correct number of elements
-  int staticOffset = 0;
-  // Start by collecting all the existing static allocated units in subinstances
-  for(FUInstance* ptr : circuit->allocated){
-    FUInstance* inst = ptr;
-    if(IsTypeHierarchical(inst->declaration)){
-      for(auto pair : inst->declaration->staticUnits){
-        StaticData newData = *pair.second;
-        decl.staticUnits->InsertIfNotExist(pair.first,newData);
-      }
-    }
-  }
-
-  FUDeclaration* res = RegisterFU(decl);
-  res->baseCircuit->name = name;
-
-  // Add this units static instances (needs to be done after Registering the declaration because the parent is a pointer to the declaration)
-  for(FUInstance* ptr : circuit->allocated){
-    FUInstance* inst = ptr;
-    if(inst->isStatic){
-      StaticId id = {};
-      id.name = inst->name;
-      id.parent = res;
-
-      StaticData data = {};
-      data.configs = inst->declaration->configs;
-      res->staticUnits->InsertIfNotExist(id,data);
-    }
-  }
-  
-  return res;
-}
-
-FUDeclaration* RegisterSubUnit(Accelerator* circuit,Arena* temp,Arena* temp2){
-  Arena* permanent = globalPermanent;
-  BLOCK_REGION(temp);
-
-  // Disabled for now.
+    // Disabled for now.
 #if 0
   if(IsCombinatorial(circuit)){
     circuit = Flatten(versat,circuit,99);
   }
 #endif
-
+  
   String name = circuit->name;
-  
   FUDeclaration decl = {};
-  decl.name = name;
+  FUDeclaration* res = RegisterFU(decl);
+  res->type = FUDeclarationType_COMPOSITE;
+  res->name = name;
 
-  // TODO: Join the Merge and the Subunit register function common functionality into one
-  // NOTE: These values must match what is expected from the accelerator template.
-  //       Maybe a bit clubersome, eventually might rework this so the parameters are the set of values from the subunits
-  decl.parameters = PushArray<String>(permanent,6);
-  decl.parameters[0] = STRING("ADDR_W");
-  decl.parameters[1] = STRING("DATA_W");
-  decl.parameters[2] = STRING("DELAY_W");
-  decl.parameters[3] = STRING("AXI_ADDR_W");
-  decl.parameters[4] = STRING("AXI_DATA_W");
-  decl.parameters[5] = STRING("LEN_W");
+  // Default parameters given to all modules. Parameters need a proper revision, but need to handle parameters going up in the hierarchy
+  res->parameters = PushArray<String>(permanent,6);
+  res->parameters[0] = STRING("ADDR_W");
+  res->parameters[1] = STRING("DATA_W");
+  res->parameters[2] = STRING("DELAY_W");
+  res->parameters[3] = STRING("AXI_ADDR_W");
+  res->parameters[4] = STRING("AXI_DATA_W");
+  res->parameters[5] = STRING("LEN_W");
   
-  decl.type = FUDeclarationType_COMPOSITE;
-  
-  OutputDebugDotGraph(circuit,STRING("DefaultCircuit.dot"),temp);
+  // TODO: Need to add back the OutputDebugDotGraph calls
+  if(options == SubUnitOptions_BAREBONES){
+    res->baseCircuit = CopyAccelerator(circuit,AcceleratorPurpose_BASE,true,nullptr); 
 
-  decl.baseCircuit = CopyAccelerator(circuit,AcceleratorPurpose_BASE,true,nullptr);
-  OutputDebugDotGraph(decl.baseCircuit,STRING("DefaultCopy.dot"),temp);
+    CalculateDelayResult delays = CalculateDelay(circuit,temp);
 
-  Pair<Accelerator*,SubMap*> p = Flatten2(decl.baseCircuit,99,temp);
-  
-  decl.flattenedBaseCircuit = p.first;
-  decl.flattenMapping = p.second;
-  
-  OutputDebugDotGraph(decl.flattenedBaseCircuit,STRING("DefaultFlattened.dot"),temp);
-  
-  DAGOrderNodes order = CalculateDAGOrder(&circuit->allocated,temp);
-  CalculateDelayResult delays = CalculateDelay(circuit,temp);
+    region(temp){
+      FixDelays(circuit,delays.edgesDelay,temp);
+    }
 
-  region(temp){
-    OutputDebugDotGraph(circuit,STRING("BeforeFixDelay.dot"),temp);
-    FixDelays(circuit,delays.edgesDelay,temp);
-    OutputDebugDotGraph(circuit,STRING("AfterFixDelay.dot"),temp);
+    res->fixedDelayCircuit = circuit;
+    res->fixedDelayCircuit->name = res->name;
+  } else {
+    res->baseCircuit = CopyAccelerator(circuit,AcceleratorPurpose_BASE,true,nullptr);
+
+    Pair<Accelerator*,SubMap*> p = Flatten(res->baseCircuit,99,temp);
+  
+    res->flattenedBaseCircuit = p.first;
+    res->flattenMapping = p.second;
+  
+    CalculateDelayResult delays = CalculateDelay(circuit,temp);
+
+    region(temp){
+      //OutputDebugDotGraph(circuit,STRING("BeforeFixDelay.dot"),temp);
+      FixDelays(circuit,delays.edgesDelay,temp);
+      //OutputDebugDotGraph(circuit,STRING("AfterFixDelay.dot"),temp);
+    }
+
+    res->fixedDelayCircuit = circuit;
   }
 
-  decl.fixedDelayCircuit = circuit;
+  FillDeclarationWithAcceleratorValues(res,res->fixedDelayCircuit,temp,temp2);
+  FillDeclarationWithDelayType(res);
 
 #if 1
-  // TODO: Maybe this check should be done elsewhere
-  for(FUInstance* ptr : circuit->allocated){
-    if(ptr->multipleSamePortInputs){
-      printf("Multiple inputs: %.*s\n",UNPACK_SS(name));
-      break;
+    // TODO: Maybe this check should be done elsewhere
+    for(FUInstance* ptr : circuit->allocated){
+      if(ptr->multipleSamePortInputs){
+        printf("Multiple inputs: %.*s\n",UNPACK_SS(name));
+        break;
+      }
     }
-  }
 #endif
   
-  // Need to calculate versat data here.
-  FillDeclarationWithAcceleratorValues(&decl,circuit,temp,temp2);
-  FillDeclarationWithDelayType(&decl);
+  res->staticUnits = PushHashmap<StaticId,StaticData>(permanent,1000); // TODO: Set correct number of elements
 
-  decl.staticUnits = PushHashmap<StaticId,StaticData>(permanent,1000); // TODO: Set correct number of elements
-  int staticOffset = 0;
   // Start by collecting all the existing static allocated units in subinstances
-  for(FUInstance* ptr : circuit->allocated){
+  for(FUInstance* ptr : res->fixedDelayCircuit->allocated){
     FUInstance* inst = ptr;
     if(IsTypeHierarchical(inst->declaration)){
       for(auto pair : inst->declaration->staticUnits){
         StaticData newData = *pair.second;
-        decl.staticUnits->InsertIfNotExist(pair.first,newData);
+        res->staticUnits->InsertIfNotExist(pair.first,newData);
       }
     }
-  }
-
-  FUDeclaration* res = RegisterFU(decl);
-  res->baseCircuit->name = name;
-  res->fixedDelayCircuit->name = name;
-
-  // Add this units static instances (needs to be done after Registering the declaration because the parent is a pointer to the declaration)
-  for(FUInstance* ptr : circuit->allocated){
-    FUInstance* inst = ptr;
     if(inst->isStatic){
       StaticId id = {};
       id.name = inst->name;
@@ -553,7 +407,7 @@ FUDeclaration* RegisterSubUnit(Accelerator* circuit,Arena* temp,Arena* temp2){
       res->staticUnits->InsertIfNotExist(id,data);
     }
   }
-  
+
   return res;
 }
 
@@ -682,7 +536,6 @@ FUDeclaration* RegisterIterativeUnit(Accelerator* accel,FUInstance* inst,int lat
   declaration.fixedDelayCircuit = accel;
 
   declaration.staticUnits = PushHashmap<StaticId,StaticData>(perm,1000); // TODO: Set correct number of elements
-  int staticOffset = 0;
   // Start by collecting all the existing static allocated units in subinstances
   for(FUInstance* ptr : accel->allocated){
     FUInstance* inst = ptr;

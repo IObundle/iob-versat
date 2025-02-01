@@ -467,8 +467,6 @@ void OutputVerilatorMake(String topLevelName,String versatDir,Arena* temp,Arena*
   fs::path srcLocation = fs::current_path();
   fs::path fixedPath = fs::weakly_canonical(outputFSPath / srcLocation);
 
-  String srcDir = PushString(temp,"%.*s/src",UNPACK_SS(outputPath));
-
   String relativePath = GetRelativePathFromSourceToTarget(globalOptions.softwareOutputFilepath,globalOptions.hardwareOutputFilepath,temp,temp2);
 
   Array<String> allFilenames = PushArray<String>(temp,globalOptions.verilogFiles.size);
@@ -860,7 +858,6 @@ void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* 
   }
 
   Array<ExternalMemoryInterface> external = PushArray<ExternalMemoryInterface>(temp,val.externalMemoryInterfaces);
-  int index = 0;
   int externalIndex = 0;
   for(InstanceInfo& in : info.infos[0].info){
     if(!in.isComposite){
@@ -1152,7 +1149,8 @@ void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* 
     TemplateSetBool("outputChangeDelay",false);
     TemplateSetString("accelName",accel->name);
 
-    Array<String> names = Map(info.infos,temp,[](MergePartition p){return p.name;});
+    Array<String> names = Extract(info.infos,temp,&MergePartition::name);
+    //Array<String> names = Map(info.infos,temp,[](MergePartition p){return p.name;});
     TemplateSetCustom("mergeNames",MakeValue(&names));
     
     Array<Array<MuxInfo>> result = GetAllMuxInfo(&info,temp,temp2);

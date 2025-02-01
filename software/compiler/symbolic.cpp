@@ -23,6 +23,7 @@ int TypeToBingingStrength(SymbolicExpression* expr){
     return 4;
   } break;
   }
+  UNREACHABLE();
 }
 
 void BuildRepresentation(DynamicString& builder,SymbolicExpression* expr,bool top,int parentBindingStrength){
@@ -395,6 +396,7 @@ static SymbolicExpression* Default(SymbolicExpression* expr,Arena* out,Arena* te
     return res;
   } break;
   }
+  UNREACHABLE();
 }
 
 typedef SymbolicExpression* (*ApplyFunction)(SymbolicExpression* expr,Arena* out,Arena* temp);
@@ -436,6 +438,7 @@ SymbolicExpression* ApplyGeneric(SymbolicExpression* expr,Arena* out,Arena* temp
     return res;
   } break;
   }
+  UNREACHABLE();
 }
 
 // The main ideia is to remove negative considerations from other code and let this function handle everything.
@@ -476,10 +479,8 @@ SymbolicExpression* NormalizeNegative(SymbolicExpression* expr,Arena* out,Arena*
   } break;
   }
   
-  NOT_POSSIBLE();
+  UNREACHABLE();
 }
-
-
 
 // All functions should work recursively
 SymbolicExpression* RemoveParenthesis(SymbolicExpression* expr,Arena* out,Arena* temp){
@@ -528,6 +529,7 @@ SymbolicExpression* RemoveParenthesis(SymbolicExpression* expr,Arena* out,Arena*
     return res;
   } break;
   }
+  UNREACHABLE();
 }
 
 SymbolicExpression* NormalizeLiterals(SymbolicExpression* expr,Arena* out,Arena* temp){
@@ -618,6 +620,7 @@ SymbolicExpression* NormalizeLiterals(SymbolicExpression* expr,Arena* out,Arena*
     return copy;
   } break;
   }
+  UNREACHABLE();
 }
 
 // Must call normalizeLiteral before calling this one. 
@@ -722,6 +725,7 @@ TermsWithLiteralMultiplier CollectTermsWithLiteralMultiplier(SymbolicExpression*
     }
   } break;
   }
+  UNREACHABLE();
 }
 
 // Performs no form of normalization or canonicalization whatsoever.
@@ -766,6 +770,7 @@ bool ExpressionEqual(SymbolicExpression* left,SymbolicExpression* right){
     return true;
   }
   }
+  UNREACHABLE();
 }
 
 SymbolicExpression* ApplySimilarTermsAddition(SymbolicExpression* expr,Arena* out,Arena* temp){
@@ -855,6 +860,7 @@ SymbolicExpression* ApplySimilarTermsAddition(SymbolicExpression* expr,Arena* ou
     return sum;
   } break;
   }
+  UNREACHABLE();
 }
 
 SymbolicExpression* ApplyDistributivity(SymbolicExpression* expr,Arena* out,Arena* temp){
@@ -1068,6 +1074,7 @@ SymbolicExpression* SymbolicReplace(SymbolicExpression* base,String varToReplace
     return res;
   } break;
   }
+  UNREACHABLE();
 }
 
 SymbolicExpression* Normalize(SymbolicExpression* expr,Arena* out,Arena* temp){
@@ -1254,6 +1261,7 @@ void TestReplace(Arena* temp,Arena* temp2){
   }
 }
 
+#if 0
 void TestSymbolic(Arena* temp,Arena* temp2){
   String examples[] = {
     STRING("-((1*inputChannels)*(3-1))+1*tileWidthWithInputChannels")
@@ -1309,3 +1317,4 @@ void TestSymbolic(Arena* temp,Arena* temp2){
   }
 #endif
 }
+#endif

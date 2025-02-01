@@ -296,17 +296,17 @@ void* Next(GenericHashmapIterator& iter){
 Array<int> CalculateDAG(int maxNode,Array<Pair<int,int>> edges,int start,Arena* out,Arena* temp){
   BLOCK_REGION(temp);
 
+  int NOT_SEEN = 0; 
+  int WAIT_CHILDREN = 1;
+  int PERMANENT = 2;
+
   int size = maxNode;
   Stack<int>* toSee = PushQueue<int>(temp,size * 2);
   Array<int> marked = PushArray<int>(temp,size);
-  Memset(marked,0);
+  Memset(marked,NOT_SEEN);
   
   toSee->Push(start);
 
-  int NOT_SEEN = 0;
-  int WAIT_CHILDREN = 1;
-  int PERMANENT = 2;
-    
   DynamicArray<int> arr = StartArray<int>(out);
   while(toSee->Size()){
     int head = toSee->Pop();
@@ -317,7 +317,7 @@ Array<int> CalculateDAG(int maxNode,Array<Pair<int,int>> edges,int start,Arena* 
       continue;
     }
     
-    if(marked[head]){
+    if(marked[head] != NOT_SEEN){
       continue;
     }
 
@@ -558,7 +558,6 @@ int main(int argc,char* argv[]){
     
     for(int i : order){
       TypeDefinition type = types[i];
-      String name = type.base.name;
       GetSubWorkRequirement(typeToWork,type,temp,temp2);
     }
 
@@ -610,7 +609,7 @@ int main(int argc,char* argv[]){
       // Flatten with mapping seems to be specific to modules.
       // Merge circuits are already flatten by the way the merge is performed.
       if(work.definition.type != DefinitionType_MERGE && work.flattenWithMapping){
-        Pair<Accelerator*,SubMap*> p = Flatten2(decl->baseCircuit,99,temp);
+        Pair<Accelerator*,SubMap*> p = Flatten(decl->baseCircuit,99,temp);
   
         decl->flattenedBaseCircuit = p.first;
         decl->flattenMapping = p.second;
@@ -702,8 +701,6 @@ int main(int argc,char* argv[]){
     for(int i = 0; i < output; i++){
       ConnectUnits(TOP,i,outputs[i],0);
     }
-
-    FUInstance* node = TOP;
     
     type = RegisterSubUnit(accel,temp,temp2);
     type->definitionArrays = PushArray<Pair<String,int>>(perm,2);
@@ -817,7 +814,7 @@ BUG: Since the name of the units are copied directly to the header file, it is p
 
 There is probably a lot of cleanup left (overall and inside Merge).
 
-Need to take a look at State and Mem struct interfaces. 
+Need to take a look at State and Mem struct interfaces. State is not taking into account merge types and neither is Mem. Also need to see if we can generate the Mem as an actual structure where the programmer must use pointer arithmetic directly.
 
 */
 
@@ -825,11 +822,7 @@ Need to take a look at State and Mem struct interfaces.
 
 What do I have to do next?
 
-There is still a calculate delay function that works from the graphs instead of working from AccelInfo.
-Need to find a way of integrating this stuff, especially because the function that works from AccelInfo is simpler and probably contains the best approach.
-
 DelayType and NodeType need a revision.
-
 
 */
 

@@ -69,7 +69,6 @@ Array<DelayToAdd> GenerateFixDelays(Accelerator* accel,EdgeDelay* edgeDelays,Are
 void FixDelays(Accelerator* accel,Hashmap<Edge,DelayInfo>* edgeDelays,Arena* temp);
 
 // Accelerator merging
-//DAGOrderNodes CalculateDAGOrder(FUInstance* instances,Arena* arena);
 DAGOrderNodes CalculateDAGOrder(Pool<FUInstance>* instances,Arena* arena);
 
 // Misc
@@ -78,28 +77,32 @@ bool IsTypeHierarchical(FUDeclaration* decl);
 FUInstance* GetInputInstance(Pool<FUInstance>* nodes,int inputIndex);
 FUInstance* GetOutputInstance(Pool<FUInstance>* nodes);
 
-// Temp
-struct ModuleInfo;
 FUDeclaration* RegisterModuleInfo(ModuleInfo* info,Arena* temp);
 
 // Accelerator functions
 FUInstance* CreateFUInstance(Accelerator* accel,FUDeclaration* type,String entityName);
-Accelerator* Flatten(Accelerator* accel,int times,Arena* temp);
+Pair<Accelerator*,SubMap*> Flatten(Accelerator* accel,int times,Arena* temp);
 
 void FillDeclarationWithAcceleratorValues(FUDeclaration* decl,Accelerator* accel,Arena* temp,Arena* temp2);
-void FillDeclarationWithAcceleratorValuesNoDelay(FUDeclaration* decl,Accelerator* accel,Arena* temp,Arena* temp2); // HACK
 void FillDeclarationWithDelayType(FUDeclaration* decl);
 
 // Static and configuration sharing
 void ShareInstanceConfig(FUInstance* inst, int shareBlockIndex);
 void SetStatic(Accelerator* accel,FUInstance* inst);
 
+enum SubUnitOptions{
+  SubUnitOptions_BAREBONES,
+  SubUnitOptions_FULL
+};
+
 // Declaration functions
+
+// nocheckin: Replace RegisterFU with a AllocateFU function.
+//            We do not need anything from the declaration during registering, so might as well simplify this part.
 FUDeclaration* RegisterFU(FUDeclaration declaration);
 FUDeclaration* GetTypeByName(String str);
 FUDeclaration* RegisterIterativeUnit(Accelerator* accel,FUInstance* inst,int latency,String name,Arena* temp,Arena* temp2);
-FUDeclaration* RegisterSubUnitBarebones(Accelerator* circuit,Arena* temp,Arena* temp2);
-FUDeclaration* RegisterSubUnit(Accelerator* circuit,Arena* temp,Arena* temp2);
+FUDeclaration* RegisterSubUnit(Accelerator* circuit,Arena* temp,Arena* temp2,SubUnitOptions options = SubUnitOptions_FULL);
 
 // Helper functions, useful to implement custom units
 FUInstance* CreateOrGetInput(Accelerator* accel,String name,int portNumber);

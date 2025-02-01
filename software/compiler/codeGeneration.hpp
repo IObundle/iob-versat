@@ -145,12 +145,6 @@ static bool operator==(StructElement& l,StructElement& r){
 }
 
 static bool operator==(StructInfo& l,StructInfo& r){
-  int lSize = Size(l.list);
-  int rSize = Size(r.list);
-  
-  if(Size(l.list) != Size(r.list)){
-    return false;
-  }
   if(l.type != r.type){
     return false;
   }
@@ -163,6 +157,10 @@ static bool operator==(StructInfo& l,StructInfo& r){
     }
   }
 
+  if(!(lPtr) != !(rPtr)){
+    return false;
+  }
+  
   return (l.name == r.name);
 }
 

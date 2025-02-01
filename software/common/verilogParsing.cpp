@@ -462,14 +462,13 @@ static Value Eval(Expression* expr,ValueMap& map){
 }
 
 static Array<ParameterExpression> ParseParameters(Tokenizer* tok,ValueMap& map,Arena* arena){
-  //TODO: Add full parsing of verilog expressions, otherwise we can only handle simple "parameter name = value," expressions.
   //TODO: Add type and range to parsing
   /*
 	Range currentRange;
 	ParameterType type;
    */
 
-  PushPtr<ParameterExpression> params(arena,99); // TODO: Calculate correct amount
+  auto params = StartGrowableArray<ParameterExpression>(arena);
 
   while(1){
     Token peek = tok->PeekToken();
@@ -496,13 +495,13 @@ static Array<ParameterExpression> ParseParameters(Tokenizer* tok,ValueMap& map,A
 
       map[paramName] = val;
 
-      ParameterExpression* p = params.Push(1);
+      ParameterExpression* p = params.PushElem();
       p->name = paramName;
       p->expr = expr;
     }
   }
 
-  return params.AsArray();
+  return EndArray(params);
 }
 
 static Expression* VerilogParseExpression(Tokenizer* tok,Arena* out){
@@ -730,11 +729,11 @@ ModuleInfo ExtractModuleInfo(Module& module,Arena* out,Arena* temp){
 
   info.defaultParameters = module.parameters;
 
-  PushPtr<int> inputDelay(out,100);
-  PushPtr<int> outputLatency(out,100);
-  PushPtr<WireExpression> configs(out,1000);
-  PushPtr<WireExpression> states(out,1000);
-
+  auto outputLatency = StartGrowableArray<int>(out);
+  auto inputDelay = StartGrowableArray<int>(out);
+  auto configs = StartGrowableArray<WireExpression>(out);
+  auto states = StartGrowableArray<WireExpression>(out);
+  
   info.name = module.name;
   info.isSource = module.isSource;
 
@@ -826,7 +825,7 @@ ModuleInfo ExtractModuleInfo(Module& module,Arena* out,Arena* temp){
       int delay = 0;
       if(delayValue) delay = delayValue->number;
       
-      *inputDelay.Set(input,1) = delay;
+      inputDelay[input] = delay;
     } else if(CheckFormat("out%d",decl.name)){
       port.AssertNextToken("out");
       int output = ParseInt(port.NextToken());
@@ -835,7 +834,7 @@ ModuleInfo ExtractModuleInfo(Module& module,Arena* out,Arena* temp){
       int latency = 0;
       if(latencyValue) latency = latencyValue->number;
       
-      *outputLatency.Set(output,1) = latency;
+      outputLatency[output] = latency;
     } else if(CheckFormat("delay%d",decl.name)){
       port.AssertNextToken("delay");
       int delay = ParseInt(port.NextToken());
@@ -888,7 +887,7 @@ ModuleInfo ExtractModuleInfo(Module& module,Arena* out,Arena* temp){
     } else if(CheckFormat("done",decl.name)){
       info.hasDone = true;
     } else if(decl.type == PortDeclaration::INPUT){ // Config
-      WireExpression* wire = configs.Push(1);
+      WireExpression* wire = configs.PushElem();
 
       Value* stageValue = decl.attributes->Get(VERSAT_STAGE);
 
@@ -907,7 +906,7 @@ ModuleInfo ExtractModuleInfo(Module& module,Arena* out,Arena* temp){
       wire->isStatic = decl.attributes->Exists(VERSAT_STATIC);
       wire->stage = stage;
     } else if(decl.type == PortDeclaration::OUTPUT){ // State
-      WireExpression* wire = states.Push(1);
+      WireExpression* wire = states.PushElem();
 
       wire->bitSize = decl.range;
       wire->name = decl.name;

@@ -155,7 +155,7 @@ enum AcceleratorPurpose{
 struct Accelerator{ // Graph + data storage
   Pool<FUInstance> allocated;
   
-  DynamicArena* accelMemory; // TODO: We could remove all this because we can now build all the accelerators in place. (Add an API that functions like a Accelerator builder and at the end we lock everything into an immutable graph).
+  DynamicArena* accelMemory; // TODO: Should just add linked list to normal arena and replace this with a simple arena.
 
    // Mainly for debugging
   String name; // For debugging purposes it's useful to give accelerators a name
@@ -186,7 +186,7 @@ struct VersatComputedValues{
   int memoryMappedBytes;
 
   int nUnitsIO;
-  int numberConnections; // TODO: Same as accel
+  int numberConnections;
   int externalMemoryInterfaces;
 
   int memoryAddressBits;
@@ -282,7 +282,6 @@ int ExternalMemoryByteSize(Array<ExternalMemoryInterface> interfaces); // Size o
 //       (or something that FUDeclaration would be composed off)
 //
 
-
 // This computes the values for the top accelerator only.
 // Different of a regular accelerator because it can add more configs for DMA and other top level things
 VersatComputedValues ComputeVersatValues(AccelInfo* accel,bool useDMA);
@@ -362,7 +361,5 @@ public:
      return res;
    }
 };
-
-Pair<Accelerator*,SubMap*> Flatten2(Accelerator* accel,int times,Arena* temp);
 
 void PrintSubMappingInfo(SubMap* info);

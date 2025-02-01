@@ -19,13 +19,14 @@ struct SimplePortConnection{
 // We currently just stuff everything into this struct, so it's easier to visualize all the info that we need for
 // the current accelerator.
 // Some of this data is duplicated/unnecessary, but for now we just carry on since this simplifies debugging a lot, being able to see all the info for a given accelerator directly.
+// This approach is very slow but easier to debug since everything related to one unit is all in the same place.
+// Until I find a better way of debugging AoS, this will stay like this for a while.
 
-// Is the current partition index something that we can store inside a unit?
 struct InstanceInfo{
   int level;
   FUDeclaration* decl;
   String name;
-  String baseName; // NOTE: If the unit does not belong to the merge partition, the baseName will equal name
+  String baseName; // NOTE: If the unit does not belong to the merge partition the baseName will equal name.
   Opt<int> configPos;
   int isConfigStatic; // Static must be handle separately, for the top level accelerator. 
   int configSize;
@@ -161,6 +162,8 @@ void FillInstanceInfo(AccelInfoIterator initialIter,Arena* out,Arena* temp);
 
 AccelInfo CalculateAcceleratorInfo(Accelerator* accel,bool recursive,Arena* out,Arena* temp);
 
+Array<int> ExtractInputDelays(AccelInfoIterator top,Arena* out);
+Array<int> ExtractOutputLatencies(AccelInfoIterator top,Arena* out);
 
 // Array info related
 // TODO: This should be built on top of AccelInfo (taking an iterator), instead of just taking the array of instance infos.

@@ -8,19 +8,6 @@
 #include "utilsCore.hpp"
 #include "logger.hpp"
 
-/* 
-  TODO: Right now we allocate a lot of dynamic arrays using the Push +
-  PointArray form. This is error prone, a single allocation
-  inside can lead to incorrect results.  Would like to formalize
-  this pattern by defining a DynamicArray structure that acts
-  the same way as an ArenaList and such.  To make it less error
-  prone, add some debug info stored into the arena that records
-  whether the arena is currently being used to allocate dynamic
-  arrays and throw some error if we detect an allocation that
-  shouldn't happen.  Wrap this extra code inside a DEBUG
-  directive.
- */
-
 inline size_t Kilobyte(int val){return val * 1024;};
 inline size_t Megabyte(int val){return Kilobyte(val) * 1024;};
 inline size_t Gigabyte(int val){return Megabyte(val) * 1024;};
@@ -35,8 +22,6 @@ long PagesAvailable();
 
 #undef VERSAT_DEBUG
 
-// Care, functions that push to an arena do not clear it to zero or to any value.
-// Need to initialize the values directly.
 struct Arena{
   Byte* mem;
   size_t used;
@@ -45,7 +30,7 @@ struct Arena{
 }; 
 
 void AlignArena(Arena* arena,int alignment);
-Arena InitArena(size_t size); // Calls calloc
+Arena InitArena(size_t size);
 Arena InitLargeArena(); //
 Arena SubArena(Arena* arena,size_t size);
 void PopToSubArena(Arena* top,Arena subArena);
@@ -104,7 +89,7 @@ inline void MemZero_(void* ptr,ssize_t size){u8* view = (u8*) ptr; for(ssize_t i
 #define MemZero(PTR,TYPE) MemZero_(PTR,sizeof(TYPE));
 
 template<typename T>
-T* PushStruct(Arena* arena){AlignArena(arena,alignof(T)); T* res = (T*) PushBytes(arena,sizeof(T)); MemZero(res,T); *res = (T){};return res;};
+T* PushStruct(Arena* arena){AlignArena(arena,alignof(T)); T* res = (T*) PushBytes(arena,sizeof(T)); MemZero(res,T); return res;};
 
 // Arena that allocates more blocks of memory like a list.
 struct DynamicArena{
@@ -152,7 +137,7 @@ struct GrowableArray{
   int capacity;
 
   T& operator[](int index){
-    while(size < index){
+    while(size <= index){
       PushElem();
     }
     return data[index];
@@ -184,14 +169,12 @@ T* GrowableArray<T>::PushElem(){
 
   // Simply extend array
   if(data + capacity == (T*) PushBytes(arena,0)){
-    //printf("Extended\n");
     size += 1;
     capacity += 1;
     return PushStruct<T>(arena); // NOTE: It is possible that there exists an alignment bug hidden here, but still have not found any example that would trigger it. 
   }
 
   // Need to copy it
-  //printf("Copied\n");
   Array<T> newArray = PushArray<T>(arena,capacity * 2);
   capacity = newArray.size;
   
@@ -248,101 +231,6 @@ String EndString(Arena* out,StringBuilder* builder);
 
 DynamicString StartString(Arena *arena);
 String EndString(DynamicString mark);
-
-// A wrapper for a "push" type interface for a block of memory
-// TODO: This probably can be eliminated, very few areas of the code actually use this and we have better things to build arrays as it is.
-template<typename T>
-class PushPtr{
-public:
-  T* ptr;
-  int maximumTimes;
-  int timesPushed;
-
-  PushPtr(){
-    ptr = nullptr;
-    maximumTimes = 0;
-    timesPushed = 0;
-  }
-
-  PushPtr(Arena* arena,int maximum){
-    this->ptr = PushArray<T>(arena,maximum).data;
-    this->maximumTimes = maximum;
-    this->timesPushed = 0;
-  }
-   
-  void Init(T* ptr,int maximum){
-    this->ptr = ptr;
-    this->maximumTimes = maximum;
-    this->timesPushed = 0;
-  }
-
-  void Init(Array<T> arr){
-    this->ptr = arr.data;
-    this->maximumTimes = arr.size;
-    this->timesPushed = 0;
-  }
-
-  T* Push(int times){
-    T* res = &ptr[timesPushed];
-    timesPushed += times;
-
-    Assert(timesPushed <= maximumTimes);
-    return res;
-  }
-
-  int Mark(){
-    return timesPushed;
-  }
-
-  Array<T> PopMark(int mark){
-    int size = timesPushed - mark;
-
-    Array<T> arr = {};
-    arr.data = &ptr[timesPushed];
-    arr.size = size;
-
-    return arr;
-  }
-  
-  void PushValue(T val){
-    T* space = Push(1);
-    *space = val;
-  }
-
-  void Push(Array<T> array){
-    T* data = Push(array.size);
-
-    for(int i = 0; i < array.size; i++){
-      data[i] = array[i];
-    }
-  }
-
-  T* Set(int pos,int times){
-    T* res = &ptr[pos];
-
-    timesPushed = pos + times > timesPushed ? pos + times : timesPushed;
-    Assert(timesPushed <= maximumTimes);
-    return res;
-  }
-
-  Array<T> AsArray(){
-    Array<T> res = {};
-    res.data = ptr;
-    res.size = timesPushed;
-    return res;
-  }
-
-  void Reset(){
-    timesPushed = 0;
-  }
-
-  bool Empty(){
-    bool res = (maximumTimes == timesPushed);
-    return res;
-  }
-};
-
-template<typename T> bool Inside(PushPtr<T>* push,T* ptr);
 
 template<typename T>
 class Stack{
@@ -700,11 +588,6 @@ public:
 
 // Start of implementation
 
-template<typename T> bool Inside(PushPtr<T>* push,T* ptr){
-  bool res = (ptr >= push->ptr && ptr < (push->ptr + push->maximumTimes));
-  return res;
-}
-
 template<typename T> DynamicArray<T> StartArray(Arena* arena){
   DynamicArray<T> arr = {};
 
@@ -1050,7 +933,6 @@ TrieMap<Key,Data>* PushTrieMap(Arena* arena){
 template<typename Key,typename Data>
 Data* TrieMap<Key,Data>::Insert(Key key,Data data){
   int index = std::hash<Key>()(key);
-  int startIndex = index;
   int select = index & 3;
   if(this->childs[select] == nullptr){
     TrieMapNode<Key,Data>* node = PushStruct<TrieMapNode<Key,Data>>(arena);

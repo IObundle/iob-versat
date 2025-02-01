@@ -169,8 +169,6 @@ enum MergingStrategy{
 
 void OutputConsolidationGraph(ConsolidationGraph graph,bool onlyOutputValid,String moduleName,String fileName,Arena* temp);
 
-int ValidNodes(ConsolidationGraph graph);
-
 ConsolidationResult GenerateConsolidationGraph(Accelerator* accel1,Accelerator* accel2,ConsolidationGraphOptions options,Arena* out,Arena* temp);
 MergeGraphResult MergeGraph(Accelerator* flatten1,Accelerator* flatten2,GraphMapping& graphMapping,String name);
 void AddCliqueToMapping(GraphMapping& res,ConsolidationGraph clique);
@@ -181,15 +179,12 @@ void InsertMapping(GraphMapping& map,Edge& edge0,Edge& edge1);
 bool NodeMappingConflict(Edge edge1,Edge edge2);
 bool MappingConflict(MappingNode map1,MappingNode map2);
 ConsolidationGraph Copy(ConsolidationGraph graph,Arena* arena);
-int NodeIndex(ConsolidationGraph graph,MappingNode* node);
 
 bool MappingConflict(MappingNode map1,MappingNode map2);
 CliqueState MaxClique(ConsolidationGraph graph,int upperBound,Arena* arena,float MAX_CLIQUE_TIME);
 ConsolidationGraph GenerateConsolidationGraph(Arena* arena,Accelerator* accel1,Accelerator* accel2,ConsolidationGraphOptions options,MergingStrategy strategy);
 
 MergeGraphResult HierarchicalHeuristic(FUDeclaration* decl1,FUDeclaration* decl2,String name);
-
-int ValidNodes(ConsolidationGraph graph);
 
 BitArray* CalculateNeighborsTable(ConsolidationGraph graph,Arena* out);
 

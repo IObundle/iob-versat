@@ -252,273 +252,8 @@ Array<int> ExtractOutputLatencies(Accelerator* accel,CalculateDelayResult delays
   return outputLatencies;
 }
 
-Accelerator* Flatten(Accelerator* accel,int times,Arena* temp){
-  BLOCK_REGION(temp);
-
-  Pair<Accelerator*,AcceleratorMapping*> pair = CopyAcceleratorWithMapping(accel,AcceleratorPurpose_FLATTEN,true,temp);
-  Accelerator* newAccel = pair.first;
-  
-  Pool<FUInstance*> compositeInstances = {};
-  Pool<FUInstance*> toRemove = {};
-  std::unordered_map<StaticId,int> staticToIndex;
-
-  for(int i = 0; i < times; i++){
-    for(FUInstance* instPtr : newAccel->allocated){
-      FUInstance* inst = instPtr;
-
-      bool containsStatic = false;
-      containsStatic = inst->isStatic || inst->declaration->staticUnits != nullptr;
-      // TODO: For now we do not flatten units that are static or contain statics. It messes merge configurations and still do not know how to procceed. Need to beef merge up a bit before handling more complex cases. The problem was that after flattening statics would become shared (unions) and as such would appear in places where they where not supposed to appear.
-
-      // TODO: Maybe static and shared units configurations could be stored in a separated structure.
-      if(inst->declaration->baseCircuit && !containsStatic){
-        FUInstance** ptr = compositeInstances.Alloc();
-
-        *ptr = instPtr;
-      }
-    }
-
-    if(compositeInstances.Size() == 0){
-      break;
-    }
-
-    std::unordered_map<int,int> sharedToFirstChildIndex;
-
-    int freeSharedIndex = GetFreeShareIndex(newAccel); //(maxSharedIndex != -1 ? maxSharedIndex + 1 : 0);
-    int count = 0;
-    for(FUInstance** instPtr : compositeInstances){
-      FUInstance* inst = (*instPtr);
-
-      Assert(inst->declaration->baseCircuit);
-
-      count += 1;
-      Accelerator* circuit = inst->declaration->baseCircuit;
-      FUInstance* outputInstance = GetOutputInstance(&circuit->allocated);
-
-      int savedSharedIndex = freeSharedIndex;
-      int instSharedIndex = freeSharedIndex;
-      if(inst->sharedEnable){
-        // Flattening a shared unit
-        auto iter = sharedToFirstChildIndex.find(inst->sharedIndex);
-
-        if(iter == sharedToFirstChildIndex.end()){
-          sharedToFirstChildIndex.insert({inst->sharedIndex,freeSharedIndex});
-        } else {
-          freeSharedIndex = iter->second;
-        }
-      }
-
-      std::unordered_map<int,int> sharedToShared;
-      // Create new instance and map then
-      AcceleratorMapping* map = MappingSimple(circuit,newAccel,temp); // TODO: Leaking
-
-      for(FUInstance* ptr : circuit->allocated){
-        FUInstance* circuitInst = ptr;
-        if(circuitInst->declaration->type == FUDeclarationType_SPECIAL){
-          continue;
-        }
-
-        String newName = PushString(globalPermanent,"%.*s_%.*s",UNPACK_SS(inst->name),UNPACK_SS(circuitInst->name));
-        FUInstance* newInst = CopyInstance(newAccel,circuitInst,true,newName);
-        MappingInsertEqualNode(map,circuitInst,newInst);
-
-        if(circuitInst->isStatic){
-          bool found = false;
-          int shareIndex = 0;
-          for(auto iter : staticToIndex){
-            if(iter.first.parent == inst->declaration && CompareString(iter.first.name,circuitInst->name)){
-              found = true;
-              shareIndex = iter.second;
-              break;
-            }
-          }
-
-          if(!found){
-            shareIndex = GetFreeShareIndex(newAccel);
-
-            StaticId id = {};
-            id.name = circuitInst->name;
-            id.parent = inst->declaration;
-            staticToIndex.insert({id,shareIndex});
-          }
-
-          ShareInstanceConfig(newInst,shareIndex);
-        } else if(circuitInst->sharedEnable && inst->sharedEnable){
-          auto ptr = sharedToShared.find(circuitInst->sharedIndex);
-
-          if(ptr != sharedToShared.end()){
-            ShareInstanceConfig(newInst,ptr->second);
-          } else {
-            int newIndex = GetFreeShareIndex(newAccel);
-
-            sharedToShared.insert({circuitInst->sharedIndex,newIndex});
-
-            ShareInstanceConfig(newInst,newIndex);
-          }
-        } else if(inst->sharedEnable){ // Currently flattening instance is shared
-          ShareInstanceConfig(newInst,instSharedIndex); // Always use the same inst index
-          //freeSharedIndex = GetFreeShareIndex(newAccel);
-        } else if(circuitInst->sharedEnable){
-          auto ptr = sharedToShared.find(circuitInst->sharedIndex);
-
-          if(ptr != sharedToShared.end()){
-            ShareInstanceConfig(newInst,ptr->second);
-          } else {
-            int newIndex = freeSharedIndex;
-            
-            sharedToShared.insert({circuitInst->sharedIndex,newIndex});
-
-            ShareInstanceConfig(newInst,newIndex);
-            freeSharedIndex = GetFreeShareIndex(newAccel);
-          }
-        }
-      }
-
-      if(inst->sharedEnable && savedSharedIndex > freeSharedIndex){
-        freeSharedIndex = savedSharedIndex;
-      }
-
-      // TODO: All these iterations could be converted to a single loop where inside we check if its input,output or inernal edge
-
-      EdgeIterator iter = IterateEdges(newAccel);
-      // Add accel edges to output instances
-      while(iter.HasNext()){
-        Edge edgeInst = iter.Next();
-        Edge* edge = &edgeInst;
-        if(edge->units[0].inst == inst){
-          EdgeIterator iter2 = IterateEdges(circuit);
-          while(iter2.HasNext()){
-            Edge edge2Inst = iter2.Next();
-            Edge* circuitEdge = &edge2Inst;
-
-            if(circuitEdge->units[1].inst == outputInstance && circuitEdge->units[1].port == edge->units[0].port){
-              FUInstance* other = MappingMapOutput(map,circuitEdge->units[0]).inst;
-
-              if(other == nullptr){
-                continue;
-              }
-
-              FUInstance* out = other;
-              FUInstance* in = edge->units[1].inst;
-              int outPort = circuitEdge->units[0].port;
-              int inPort = edge->units[1].port;
-              int delay = edge->delay + circuitEdge->delay;
-
-              ConnectUnits(out,outPort,in,inPort,delay);
-            }
-          }
-        }
-      }
-
-      // Add accel edges to input instances
-      iter = IterateEdges(newAccel);
-      while(iter.HasNext()){
-        Edge edgeInst = iter.Next();
-        Edge* edge = &edgeInst;
-        if(edge->units[1].inst == inst){
-          FUInstance* circuitInst = GetInputInstance(&circuit->allocated,edge->units[1].port);
-
-          EdgeIterator iter2 = IterateEdges(circuit);
-          while(iter2.HasNext()){
-            Edge edge2Inst = iter2.Next();
-            Edge* circuitEdge = &edge2Inst;
-          
-            if(circuitEdge->units[0].inst == circuitInst){
-              FUInstance* other = MappingMapInput(map,circuitEdge->units[1]).inst;
-
-              if(other == nullptr){
-                continue;
-              }
-
-              FUInstance* out = edge->units[0].inst;
-              FUInstance* in = other;
-              int outPort = edge->units[0].port;
-              int inPort = circuitEdge->units[1].port;
-              int delay = edge->delay + circuitEdge->delay;
-
-              ConnectUnits(out,outPort,in,inPort,delay);
-            }
-          }
-        }
-      }
-
-      // Add circuit specific edges
-      iter = IterateEdges(circuit);
-      while(iter.HasNext()){
-        Edge edgeInst = iter.Next();
-        Edge* circuitEdge = &edgeInst;
-
-        FUInstance* otherInput = MappingMapOutput(map,circuitEdge->units[0]).inst;
-        FUInstance* otherOutput = MappingMapInput(map,circuitEdge->units[1]).inst;
-
-        if(otherInput == nullptr || otherOutput == nullptr){
-          continue;
-        }
-
-        FUInstance* out = otherInput;
-        FUInstance* in = otherOutput;
-        int outPort = circuitEdge->units[0].port;
-        int inPort = circuitEdge->units[1].port;
-        int delay = circuitEdge->delay;
-
-        ConnectUnits(out,outPort,in,inPort,delay);
-      }
-
-      // Add input to output specific edges
-      iter = IterateEdges(newAccel);
-      while(iter.HasNext()){
-        Edge edge1Inst = iter.Next();
-        Edge* edge1 = &edge1Inst;
-        if(edge1->units[1].inst == inst){
-          PortInstance input = edge1->units[0];
-          FUInstance* circuitInput = GetInputInstance(&circuit->allocated,edge1->units[1].port);
-
-          EdgeIterator iter2 = IterateEdges(newAccel);
-          while(iter2.HasNext()){
-            Edge edge2Inst = iter2.Next();
-            Edge* edge2 = &edge2Inst;
-            if(edge2->units[0].inst == inst){
-              PortInstance output = edge2->units[1];
-              int outputPort = edge2->units[0].port;
-
-              EdgeIterator iter3 = IterateEdges(circuit);
-              while(iter3.HasNext()){
-                Edge edge3Inst = iter3.Next();
-                Edge* circuitEdge = &edge3Inst;
-
-                if(circuitEdge->units[0].inst == circuitInput
-                   && circuitEdge->units[1].inst == outputInstance
-                   && circuitEdge->units[1].port == outputPort){
-                  int delay = edge1->delay + circuitEdge->delay + edge2->delay;
-
-                  ConnectUnits(input,output,delay);
-                }
-              }
-            }
-          }
-        }
-      }
-
-      RemoveFUInstance(newAccel,*instPtr);
-    }
-
-    toRemove.Clear();
-    compositeInstances.Clear();
-  }
-
-  OutputDebugDotGraph(newAccel,STRING("flatten.dot"),temp);
-  
-  toRemove.Clear(true);
-  compositeInstances.Clear(true);
-
-  FUDeclaration base = {};
-  newAccel->name = accel->name;
-
-  return newAccel;
-}
-
 // TODO: This functions should have actual error handling and reporting. Instead of just Asserting.
-static int Visit(PushPtr<FUInstance*>* ordering,FUInstance* node,Hashmap<FUInstance*,int>* tags){
+static int Visit(Array<FUInstance*> ordering,int& nodesFound,FUInstance* node,Hashmap<FUInstance*,int>* tags){
   int* tag = tags->Get(node);
   Assert(tag);
 
@@ -541,14 +276,14 @@ static int Visit(PushPtr<FUInstance*>* ordering,FUInstance* node,Hashmap<FUInsta
   int count = 0;
   if(node->type == NodeType_COMPUTE){
     FOREACH_LIST(ConnectionNode*,ptr,node->allInputs){
-      count += Visit(ordering,ptr->instConnectedTo.inst,tags);
+      count += Visit(ordering,nodesFound,ptr->instConnectedTo.inst,tags);
     }
   }
 
   *tag = TAG_PERMANENT_MARK;
 
   if(node->type == NodeType_COMPUTE){
-    *ordering->Push(1) = node;
+    ordering[nodesFound++] = node;
     count += 1;
   }
 
@@ -564,9 +299,7 @@ DAGOrderNodes CalculateDAGOrder(Pool<FUInstance>* instances,Arena* out){
   res.instances = PushArray<FUInstance*>(out,size);
   res.order = PushArray<int>(out,size);
 
-  PushPtr<FUInstance*> pushPtr = {};
-  pushPtr.Init(res.instances);
-
+  int nodesFound = 0;
   Hashmap<FUInstance*,int>* tags = PushHashmap<FUInstance*,int>(out,size);
 
   for(FUInstance* ptr : *instances){
@@ -574,39 +307,45 @@ DAGOrderNodes CalculateDAGOrder(Pool<FUInstance>* instances,Arena* out){
     tags->Insert(ptr,0);
   }
 
-  int mark = pushPtr.Mark();
+  int mark = res.instances.size;
   // Add source units, guaranteed to come first
   for(FUInstance* ptr : *instances){
     FUInstance* inst = ptr;
     if(ptr->type == NodeType_SOURCE || (ptr->type == NodeType_SOURCE_AND_SINK && CHECK_DELAY(inst,DelayType::DelayType_SOURCE_DELAY))){
-      *pushPtr.Push(1) = ptr;
+      res.instances[nodesFound++] = ptr;
 
       tags->Insert(ptr,TAG_PERMANENT_MARK);
     }
   }
-  res.sources = pushPtr.PopMark(mark);
+  res.sources = {};
+  res.sources.data = res.instances.data;
+  res.sources.size = nodesFound;
 
+  int computeIndexStart = nodesFound;
+  FUInstance** computeStart = res.sources.data + res.sources.size;
   // Add compute units
-  mark = pushPtr.Mark();
+  //mark = pushPtr.Mark();
   for(FUInstance* ptr : *instances){
     if(ptr->type == NodeType_UNCONNECTED){
-      *pushPtr.Push(1) = ptr;
+      res.instances[nodesFound++] = ptr;
       tags->Insert(ptr,TAG_PERMANENT_MARK);
     } else {
       int tag = tags->GetOrFail(ptr);
       if(tag == 0 && ptr->type == NodeType_COMPUTE){
-        Visit(&pushPtr,ptr,tags);
+        Visit(res.instances,nodesFound,ptr,tags);
       }
     }
   }
-  res.computeUnits = pushPtr.PopMark(mark);
+  res.computeUnits.data = computeStart;
+  res.computeUnits.size = nodesFound - computeIndexStart;
   
+  int sinkIndexStart = nodesFound;
+  FUInstance** sinkStart = res.computeUnits.data + res.computeUnits.size;
   // Add sink units
-  mark = pushPtr.Mark();
   for(FUInstance* ptr : *instances){
     FUInstance* inst = ptr;
     if(ptr->type == NodeType_SINK || (ptr->type == NodeType_SOURCE_AND_SINK && CHECK_DELAY(inst,DelayType::DelayType_SINK_DELAY))){
-      *pushPtr.Push(1) = ptr;
+      res.instances[nodesFound++] = ptr;
 
       int* tag = tags->Get(ptr);
       Assert(*tag == 0);
@@ -614,7 +353,9 @@ DAGOrderNodes CalculateDAGOrder(Pool<FUInstance>* instances,Arena* out){
       *tag = TAG_PERMANENT_MARK;
     }
   }
-  res.sinks = pushPtr.PopMark(mark);
+  res.sinks.data = sinkStart;
+  res.sinks.size = nodesFound - sinkIndexStart;
+  //res.sinks = pushPtr.PopMark(mark);
 
   for(FUInstance* ptr : *instances){
     int tag = tags->GetOrFail(ptr);
@@ -906,14 +647,12 @@ VersatComputedValues ComputeVersatValues(AccelInfo* info,bool useDMA){
   int memoryMappedDWords = 0;
   int delayBits = 0;
   int configBits = 0;
-
+  
   // TODO: Check if we can remove the for loop over units and check if we can calculate from data stored in AccelInfo
   for(AccelInfoIterator iter = StartIteration(info); iter.IsValid(); iter = iter.Next()){
     InstanceInfo* unit = iter.CurrentUnit();
     FUInstance* inst = unit->inst;
     FUDeclaration* decl = inst->declaration;
-
-    res.numberConnections += Size(inst->allOutputs);
 
     if(decl->memoryMapBits.has_value()){
       memoryMappedDWords = AlignBitBoundary(memoryMappedDWords,decl->memoryMapBits.value());
@@ -973,7 +712,9 @@ VersatComputedValues ComputeVersatValues(AccelInfo* info,bool useDMA){
   int stateConfigurationAddressBits = std::max(res.configurationAddressBits,res.stateAddressBits);
 
   res.memoryConfigDecisionBit = std::max(stateConfigurationAddressBits,memoryMappingAddressBits) + 2;
-  
+
+  res.numberConnections = info->numberConnections;
+
   return res;
 }
 
@@ -1321,16 +1062,14 @@ Array<Array<PortInstance>> GetAllInputs(FUInstance* node,Arena* out){
   return res;
 }
 
-void RemoveConnection(Accelerator* accel,PortInstance out,PortInstance in){
-  RemoveConnection(accel,out.inst,out.port,in.inst,in.port);
-}
-
 void RemoveConnection(Accelerator* accel,FUInstance* out,int outPort,FUInstance* in,int inPort){
+  // TODO: This is currently leaking. Need to add a free list to Accelerator.
+
   out->allOutputs = ListRemoveAll(out->allOutputs,[&](ConnectionNode* n){
     bool res = (n->port == outPort && n->instConnectedTo.inst == in && n->instConnectedTo.port == inPort);
     return res;
   });
-  //out->outputs = Size(out->allOutputs);
+
   FixOutputs(out);
 
   in->allInputs = ListRemoveAll(in->allInputs,[&](ConnectionNode* n){
@@ -1442,7 +1181,7 @@ void MappingCheck(AcceleratorMapping* map,Accelerator* first,Accelerator* second
   Assert(map->secondId == secondId);
 }
 
-// TODO: Not a good approach
+// TODO: Need to add list to arena in order to this be good. 
 static Arena mappingArenaInst = {};
 static Arena* mappingArena = nullptr;
 
@@ -1650,7 +1389,7 @@ Set<PortInstance>* MappingMapInput(AcceleratorMapping* map,Set<PortInstance>* se
   return result;
 }
 
-Pair<Accelerator*,SubMap*> Flatten2(Accelerator* accel,int times,Arena* temp){
+Pair<Accelerator*,SubMap*> Flatten(Accelerator* accel,int times,Arena* temp){
   BLOCK_REGION(temp);
 
   Pair<Accelerator*,AcceleratorMapping*> pair = CopyAcceleratorWithMapping(accel,AcceleratorPurpose_FLATTEN,true,temp);
@@ -1929,7 +1668,6 @@ Pair<Accelerator*,SubMap*> Flatten2(Accelerator* accel,int times,Arena* temp){
   toRemove.Clear(true);
   compositeInstances.Clear(true);
 
-  FUDeclaration base = {};
   newAccel->name = accel->name;
   
   return {newAccel,subMappingDone};

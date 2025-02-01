@@ -19,12 +19,8 @@ namespace BasicDeclaration{
 }
 
 static int zeros[99] = {};
-static Array<int> zerosArray = {zeros,99};
-
-static int ones[64] = {1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1};
 
 static FUDeclaration* RegisterCircuitInput(){
-  Arena* permanent = permanent;
   FUDeclaration decl = {};
 
   decl.name = STRING("CircuitInput");
@@ -39,7 +35,6 @@ static FUDeclaration* RegisterCircuitInput(){
 }
 
 static FUDeclaration* RegisterCircuitOutput(){
-  Arena* permanent = permanent;
   FUDeclaration decl = {};
 
   decl.name = STRING("CircuitOutput");
@@ -54,7 +49,6 @@ static FUDeclaration* RegisterCircuitOutput(){
 }
 
 static FUDeclaration* RegisterLiteral(){
-  Arena* permanent = permanent;
   FUDeclaration decl = {};
 
   decl.name = STRING("Literal");

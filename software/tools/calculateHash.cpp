@@ -39,7 +39,7 @@ int main(int argc,const char* argv[]){
 
     Tokenizer tok(content,"[]()#@!~&|^+=-*/%;><?:",{""});
 
-    u64 n = 0;
+    //u64 n = 0;
     u64 fileHash = 0;
 
     while(!tok.Done()){

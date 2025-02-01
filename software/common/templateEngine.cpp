@@ -1160,10 +1160,11 @@ void ProcessTemplate(FILE* outputFile,CompiledTemplate* compiledTemplate,Arena* 
 
   globalTemplateName = compiledTemplate->name;
 
+#ifdef DEBUG_TEMPLATE_ENGINE
   Arena recordSpaceInst = SubArena(temp,Megabyte(1));
   Arena* recordSpace = &recordSpaceInst;
-
   TrieMap<Type*,Array<bool>>* records = PushTrieMap<Type*,Array<bool>>(recordSpace);
+#endif
   
   outputArena = temp2;
   output = outputFile;
