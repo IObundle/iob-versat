@@ -37,14 +37,11 @@ struct SimpleCalculateDelayResult{
 Array<int> ExtractInputDelays(Accelerator* accel,CalculateDelayResult delays,int mimimumAmount,Arena* out,Arena* temp);
 Array<int> ExtractOutputLatencies(Accelerator* accel,CalculateDelayResult delays,Arena* out,Arena* temp);
 
+SimpleCalculateDelayResult CalculateDelay(AccelInfoIterator top,Arena* out,Arena* temp);
+
 // TODO: This is very bad performance wise. We are internally creating an AccelInfo and then extracting the values from the delay calculating.
 //       Also, cannot call this function for merge accelerators, most of them will lead to errors.
 //       Need to simplefy further (Replace CalculateDelayResult with the simple version).
-//       
 CalculateDelayResult CalculateDelay(Accelerator* accel,Arena* out);
 
-CalculateDelayResult CalculateGlobalInitialLatency(Accelerator* accel);
-
-GraphPrintingContent GenerateDelayDotGraph(Accelerator* accel,CalculateDelayResult delay,Arena* out,Arena* temp);
-
-SimpleCalculateDelayResult CalculateDelay(AccelInfoIterator top,Arena* out,Arena* temp);
+GraphPrintingContent GenerateLatencyDotGraph(AccelInfoIterator top,Array<int> orderToIndex,Array<DelayInfo> nodeDelay,Array<DelayInfo> edgeDelay,Arena* out,Arena* temp);

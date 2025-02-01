@@ -163,17 +163,6 @@ struct Accelerator{ // Graph + data storage
   AcceleratorPurpose purpose;
 };
 
-#if 0
-struct MemoryAddressMask{
-  // Repr: memoryMask ( memoryMaskSize )
-
-  
-  //int memoryMaskSize;
-  //char memoryMaskBuffer[33];
-  //char* memoryMask;
-};
-#endif
-
 struct VersatComputedValues{
   int nConfigs;
 
@@ -293,6 +282,7 @@ int ExternalMemoryByteSize(Array<ExternalMemoryInterface> interfaces); // Size o
 //       (or something that FUDeclaration would be composed off)
 //
 
+
 // This computes the values for the top accelerator only.
 // Different of a regular accelerator because it can add more configs for DMA and other top level things
 VersatComputedValues ComputeVersatValues(AccelInfo* accel,bool useDMA);
@@ -304,7 +294,6 @@ Array<Edge> GetAllEdges(Accelerator* accel,Arena* out);
 EdgeIterator IterateEdges(Accelerator* accel);
 
 // Unit connection
-Opt<Edge> FindEdge(PortInstance out,PortInstance in);
 Opt<Edge> FindEdge(FUInstance* out,int outIndex,FUInstance* in,int inIndex,int delay);
 void ConnectUnitsGetEdge(FUInstance* out,int outIndex,FUInstance* in,int inIndex,int delay = 0);
 void ConnectUnitsGetEdge(FUInstance* out,int outIndex,FUInstance* in,int inIndex,int delay,Edge* previous);

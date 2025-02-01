@@ -2103,7 +2103,9 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
 
   size = recon.size;
 
-  // TODO: Temp disabled because recent changes caused this to bug out but it might be ok elsewhere
+  // TODO: Temp disabled because removed GenerateDelayDotGraph with normal accelerator.
+  //       Need to make a pass inside this function regardless
+#if 0
   if(globalOptions.debug){
     for(int i = 0; i < size; i++){
       BLOCK_REGION(temp);
@@ -2117,6 +2119,7 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
 
     OutputDebugDotGraph(mergedAccel,STRING("FullCircuitFinal.dot"),temp);
   }
+#endif
   
   declInst.fixedDelayCircuit = mergedAccel;
 

@@ -8,10 +8,7 @@ all: versat
 include $(VERSAT_DIR)/config.mk
 
 # VERSAT PATHS
-VERSAT_HW_DIR:=$(VERSAT_DIR)/hardware
 VERSAT_SW_DIR:=$(VERSAT_DIR)/software
-VERSAT_COMP_DIR:=$(VERSAT_SW_DIR)/compiler
-VERSAT_SUBMODULES_DIR:=$(VERSAT_DIR)/submodules
 VERSAT_PC_DIR:=$(VERSAT_SW_DIR)/pc-emul
 VERSAT_TOOLS_DIR:=$(VERSAT_SW_DIR)/tools
 VERSAT_COMMON_DIR:=$(VERSAT_SW_DIR)/common
@@ -27,19 +24,9 @@ VERSAT_COMMON_SRC_NO_TYPE := $(filter-out $(patsubst %,$(VERSAT_COMMON_DIR)/%.cp
 VERSAT_COMMON_HDR_NO_TYPE := $(filter-out $(patsubst %,$(VERSAT_COMMON_DIR)/%.hpp,$(VERSAT_REQUIRE_TYPE)),$(wildcard $(VERSAT_COMMON_DIR)/*.hpp))
 VERSAT_COMMON_OBJ_NO_TYPE := $(patsubst $(VERSAT_COMMON_DIR)/%.cpp,$(BUILD_DIR)/%.o,$(VERSAT_COMMON_SRC_NO_TYPE))
 
-VERSAT_COMMON_SRC:=$(VERSAT_COMMON_SRC_NO_TYPE) $(patsubst %,$(VERSAT_COMMON_DIR)/%.cpp,$(VERSAT_REQUIRE_TYPE))
-VERSAT_COMMON_SRC+=$(BUILD_DIR)/repr.cpp
-VERSAT_COMMON_SRC+=$(BUILD_DIR)/repr.hpp
-VERSAT_COMMON_SRC+=$(BUILD_DIR)/repr.o
-
-#VERSAT_COMMON_HDR:=$(VERSAT_COMMON_HDR_NO_TYPE) $(patsubst %,$(VERSAT_COMMON_DIR)/%.hpp,$(VERSAT_REQUIRE_TYPE))
 VERSAT_COMMON_OBJ:=$(VERSAT_COMMON_OBJ_NO_TYPE) $(patsubst %,$(BUILD_DIR)/%.o,$(VERSAT_REQUIRE_TYPE))
 
 VERSAT_COMMON_INCLUDE := -I$(VERSAT_COMMON_DIR) -I$(VERSAT_SW_DIR)
-
-# After first rule, only build needed objects
-VERSAT_COMMON_DEPENDS := $(patsubst %.o,%.d,$(VERSAT_COMMON_OBJ))
--include  $(VERSAT_COMMON_DEPENDS)
 
 VERSAT_DEFINE += -DPC
 
@@ -50,33 +37,22 @@ $(BUILD_DIR)/%.o : $(VERSAT_COMMON_DIR)/%.cpp
 VERSAT_TEMPLATES:=$(wildcard $(VERSAT_TEMPLATE_DIR)/*.tpl)
 VERSAT_TEMPLATES_OBJ:=$(BUILD_DIR)/templateData.o
 
-TYPE_INFO_HDR += $(VERSAT_COMMON_DIR)/utils.hpp
-TYPE_INFO_HDR += $(VERSAT_COMMON_DIR)/utilsCore.hpp
-TYPE_INFO_HDR += $(VERSAT_COMMON_DIR)/memory.hpp
+# The fewer files the faster compilation time is
+# But the more likely is for type-info to miss something.
+
 TYPE_INFO_HDR += $(VERSAT_COMMON_DIR)/templateEngine.hpp
-TYPE_INFO_HDR += $(VERSAT_COMMON_DIR)/parser.hpp
-TYPE_INFO_HDR += $(VERSAT_COMMON_DIR)/verilogParsing.hpp
-TYPE_INFO_HDR += $(VERSAT_COMPILER_DIR)/accelerator.hpp
-TYPE_INFO_HDR += $(VERSAT_COMPILER_DIR)/versat.hpp
 TYPE_INFO_HDR += $(VERSAT_COMPILER_DIR)/declaration.hpp
-TYPE_INFO_HDR += $(VERSAT_COMPILER_DIR)/configurations.hpp
 TYPE_INFO_HDR += $(VERSAT_COMPILER_DIR)/codeGeneration.hpp
 TYPE_INFO_HDR += $(VERSAT_COMPILER_DIR)/versatSpecificationParser.hpp
 TYPE_INFO_HDR += $(VERSAT_COMPILER_DIR)/symbolic.hpp
 
-VERSAT_INCLUDE += -I$(VERSAT_PC_DIR) -I$(VERSAT_COMPILER_DIR) -I$(BUILD_DIR)/ -I$(VERSAT_COMMON_DIR)
+VERSAT_INCLUDE := -I$(VERSAT_PC_DIR) -I$(VERSAT_COMPILER_DIR) -I$(BUILD_DIR)/ -I$(VERSAT_COMMON_DIR) -I$(VERSAT_SW_DIR)
 
 VERSAT_DEBUG:=1
 
 BUILD_DIR:=$(VERSAT_DIR)/build
 
 VERSAT_LIBS:=-lstdc++ -lm -lgcc -lc -pthread -ldl
-
-#pc headers
-VERSAT_HDR+=$(wildcard $(VERSAT_PC_DIR)/*.hpp)
-VERSAT_HDR+=$(wildcard $(VERSAT_COMPILER_DIR)/*.hpp)
-
-VERSAT_INCLUDE += -I$(VERSAT_PC_DIR) -I$(VERSAT_COMPILER_DIR) -I$(BUILD_DIR)/ -I$(VERSAT_COMMON_DIR) -I$(VERSAT_SW_DIR)
 
 CPP_FILES := $(wildcard $(VERSAT_COMPILER_DIR)/*.cpp)
 VERSAT_COMPILER_OBJ := $(patsubst $(VERSAT_COMPILER_DIR)/%.cpp,$(BUILD_DIR)/%.o,$(CPP_FILES))
@@ -88,7 +64,6 @@ VERSAT_FLAGS := -rdynamic -DROOT_PATH=\"$(abspath ../)\"
 CPP_OBJ += $(VERSAT_COMMON_OBJ)
 CPP_OBJ += $(VERSAT_TEMPLATES_OBJ)
 CPP_OBJ += $(BUILD_DIR)/typeInfo.o
-#CPP_OBJ += $(BUILD_DIR)/autoRepr.o
 
 CPP_OBJ_WITHOUT_COMPILER:=$(filter-out $(BUILD_DIR)/versatCompiler.o,$(CPP_OBJ))
 
@@ -109,13 +84,13 @@ $(BUILD_DIR)/embedFile: $(VERSAT_TOOLS_DIR)/embedFile.cpp $(VERSAT_COMMON_OBJ_NO
 $(BUILD_DIR)/calculateHash: $(VERSAT_TOOLS_DIR)/calculateHash.cpp $(VERSAT_COMMON_OBJ_NO_TYPE)
 	g++ -DPC -std=c++17 -MMD -MP -DVERSAT_DEBUG -DSTANDALONE -o $@ $(VERSAT_COMMON_FLAGS) $(VERSAT_COMMON_INCLUDE) $< $(VERSAT_COMMON_OBJ_NO_TYPE)
 
-$(BUILD_DIR)/autoRepr.cpp $(BUILD_DIR)/autoRepr.hpp $(BUILD_DIR)/typeInfo.cpp: $(TYPE_INFO_HDR)
-	python3 $(VERSAT_TOOLS_DIR)/structParser.py $(BUILD_DIR) $(TYPE_INFO_HDR)
+$(BUILD_DIR)/typeInfo.cpp: $(TYPE_INFO_HDR)
+	python3 $(VERSAT_TOOLS_DIR)/structParser.py $(BUILD_DIR) $(TYPE_INFO_HDR) # -m cProfile -o temp.dat 
 
 $(BUILD_DIR)/typeInfo.o: $(BUILD_DIR)/typeInfo.cpp
 	g++ -DPC -std=c++17 $(VERSAT_COMMON_FLAGS) -c -o $@ $(GLOBAL_CFLAGS) $< $(VERSAT_INCLUDE)
 
-$(BUILD_DIR)/%.o : $(VERSAT_COMPILER_DIR)/%.cpp $(BUILD_DIR)/templateData.hpp $(BUILD_DIR)/autoRepr.hpp
+$(BUILD_DIR)/%.o : $(VERSAT_COMPILER_DIR)/%.cpp $(BUILD_DIR)/templateData.hpp
 	g++ -MMD -std=c++17 $(VERSAT_FLAGS) $(FL) $(VERSAT_COMMON_FLAGS) -c -o $@ $(GLOBAL_CFLAGS) $< $(VERSAT_INCLUDE) #-DDEFAULT_UNIT_PATHS="$(SHARED_UNITS_PATH)" 
 
 $(shell mkdir -p $(BUILD_DIR))
@@ -129,7 +104,7 @@ calculateHash: $(BUILD_DIR)/calculateHash
 
 versat: $(VERSAT_DIR)/versat $(BUILD_DIR)/calculateHash
 
-type-info: $(TYPE_INFO_HDR) $(BUILD_DIR)/autoRepr.cpp $(BUILD_DIR)/autoRepr.hpp $(BUILD_DIR)/typeInfo.cpp
+type-info: $(TYPE_INFO_HDR) $(BUILD_DIR)/typeInfo.cpp
 
 clean:
 	-rm -fr build

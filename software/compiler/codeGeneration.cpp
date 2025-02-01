@@ -300,10 +300,7 @@ void OutputCircuitSource(FUDeclaration* decl,FILE* file,Arena* temp,Arena* temp2
   }
   
   AccelInfo info = decl->info;
-  VersatComputedValues val = ComputeVersatValues(&info,false);
   Array<String> memoryMasks = ExtractMemoryMasks(info,temp);
-
-  Assert(info.unitsMapped == val.unitsMapped);
   
   Array<String> parameters = PushArray<String>(temp,nodes.Size());
   for(int i = 0; i < nodes.Size(); i++){
@@ -354,6 +351,7 @@ void OutputIterativeSource(FUDeclaration* decl,FILE* file,Arena* temp,Arena* tem
   // TODO: If we get iterative working again, this should just get the AccelInfo from the decl.
   AccelInfo info = CalculateAcceleratorInfo(accel,true,temp,temp2); // TODO: Calculating info just for the computedData calculation is a bit wasteful.
 
+  // TODO: If going back to iteratives, remove this. Only Top level should care about Versat Values.
   VersatComputedValues val = ComputeVersatValues(&info,false);
 
   Array<String> memoryMasks = ExtractMemoryMasks(info,temp);

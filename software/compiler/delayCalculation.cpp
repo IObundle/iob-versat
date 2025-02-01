@@ -12,75 +12,6 @@
 #include "debugVersat.hpp"
 #include "versatSpecificationParser.hpp"
 
-static ConnectionNode* GetConnectionNode(ConnectionNode* head,int port,PortInstance other){
-  FOREACH_LIST(ConnectionNode*,con,head){
-    if(con->port != port){
-      continue;
-    }
-    if(con->instConnectedTo == other){
-      return con;
-    }
-  }
-
-  return nullptr;
-}
-
-static void SendLatencyUpwards(FUInstance* node,Hashmap<Edge,DelayInfo>* delays,Hashmap<FUInstance*,DelayInfo>* nodeDelay,Hashmap<FUInstance*,int>* nodeToPart){
-  int b = nodeDelay->GetOrFail(node).value;
-  FUInstance* inst = node;
-  FUDeclaration* decl = inst->declaration;
-  bool multipleTypes = HasMultipleConfigs(decl);
-
-  int nodePart = nodeToPart->GetOrFail(node);
-
-  FOREACH_LIST(ConnectionNode*,info,node->allOutputs){
-    FUInstance* other = info->instConnectedTo.inst;
-
-    // Do not set delay for source units. Source units cannot be found in this, otherwise they wouldn't be source
-    Assert(other->type != NodeType_SOURCE);
-
-    int a = 0;
-
-    if(multipleTypes){
-      a = decl->info.infos[nodePart].outputLatencies[info->port];
-    } else {
-      a = inst->declaration->GetOutputLatencies()[info->port];
-    }
-    
-    int e = info->edgeDelay;
-
-    FOREACH_LIST(ConnectionNode*,otherInfo,other->allInputs){
-      int c = 0;
-      if(HasMultipleConfigs(other->declaration)){
-        int otherPart = nodeToPart->GetOrFail(other);
-        
-        c = other->declaration->info.infos[otherPart].inputDelays[info->instConnectedTo.port];
-      } else {
-        c = other->declaration->GetInputDelays()[info->instConnectedTo.port];
-      }
-
-      if(info->instConnectedTo.port == otherInfo->port &&
-         otherInfo->instConnectedTo.inst == inst && otherInfo->instConnectedTo.port == info->port){
-        
-        int delay = b + a + e - c;
-
-        Edge edge = {};
-        edge.out = {node,info->port};
-        edge.in = {other,info->instConnectedTo.port};
-
-        if(HasVariableDelay(node->declaration)){
-          *otherInfo->delay.value = delay;
-          otherInfo->delay.isAny = true;
-
-          delays->GetOrFail(edge).isAny = true;
-        } else {
-          *otherInfo->delay.value = delay;
-        }
-      }
-    }
-  }
-}
-
 struct AccelEdgeIterator{
   AccelInfoIterator iter;
   int edgeIndex;
@@ -169,50 +100,6 @@ static ConnectionNode* GetConnectionNode(SimpleEdge edge,AccelInfoIterator top){
 //         delay in a edge will eventually be resolved by adding fixed buffers to the data path.
 // Global vs local - Global values are values that apply to the entire graph and subgraphs, while local only applies to the current graph. It can also be used to represent the different between values that only make sense in a graph subset versues the entire graph.
 // 
-
-GraphPrintingContent GenerateLatencyDotGraph(AccelInfoIterator top,Array<int> orderToIndex,Array<DelayInfo> nodeDelay,Array<DelayInfo> edgeDelay,Arena* out,Arena* temp){
-  BLOCK_REGION(temp);
-
-  int size = orderToIndex.size;
-  Array<GraphPrintingNodeInfo> nodeArray = PushArray<GraphPrintingNodeInfo>(out,size);
-  for(int i = 0; i < size; i++){
-    InstanceInfo* info = top.GetUnit(orderToIndex[i]);
-    FUInstance* node = info->inst;
-    
-    nodeArray[i].name = PushString(out,node->name);
-    nodeArray[i].content = PushString(out,"%.*s:%d:%d",UNPACK_SS(node->name),nodeDelay[i].value,info->special);
-    nodeArray[i].color = Color_BLACK;
-  }
-
-  int totalEdges = 0;
-  for(AccelEdgeIterator iter = IterateEdges(top); IsValid(iter); Advance(iter)){
-    totalEdges += 1;
-  }
-
-  Array<GraphPrintingEdgeInfo> edgeArray = PushArray<GraphPrintingEdgeInfo>(out,totalEdges);
-  int edgeIndex = 0;
-  for(AccelEdgeIterator iter = IterateEdges(top); IsValid(iter); Advance(iter),edgeIndex += 1){
-    DelayInfo edgeLatency = edgeDelay[edgeIndex];
-
-    SimpleEdge edge = Get(iter);
-
-    if(edgeLatency.isAny){
-      edgeArray[edgeIndex].color = Color_BLUE;
-    } else {
-      edgeArray[edgeIndex].color = Color_BLACK;
-    }
-    edgeArray[edgeIndex].content = PushString(out,"%d",edgeLatency.value);
-    edgeArray[edgeIndex].first = nodeArray[top.GetUnit(edge.outIndex)->localOrder].name;
-    edgeArray[edgeIndex].second = nodeArray[top.GetUnit(edge.inIndex)->localOrder].name;
-  }
-    
-  GraphPrintingContent result = {};
-  result.edges = edgeArray;
-  result.nodes = nodeArray;
-  result.graphLabel = STRING("Nodes and edges contain their global latency (nodes also contain special)");
-  
-  return result;
-}
 
 SimpleCalculateDelayResult CalculateDelay(AccelInfoIterator top,Arena* out,Arena* temp){
   Assert(!Empty(top.accelName));
@@ -595,71 +482,46 @@ CalculateDelayResult CalculateDelay(Accelerator* accel,Arena* out){
   return res;
 }
 
-GraphPrintingContent GenerateDelayDotGraph(Accelerator* accel,CalculateDelayResult delayInfo,Arena* out,Arena* temp){
+GraphPrintingContent GenerateLatencyDotGraph(AccelInfoIterator top,Array<int> orderToIndex,Array<DelayInfo> nodeDelay,Array<DelayInfo> edgeDelay,Arena* out,Arena* temp){
   BLOCK_REGION(temp);
 
-  auto NodeWithDelayContent = [&](FUInstance* node,Arena* out) -> GraphInfo{
-    int delay = delayInfo.nodeDelay->GetOrFail(node).value;
-    String content = PushString(out,"%.*s:%d",UNPACK_SS(node->name),delay);
-
-    return {content,DefaultNodeColor(node)};
-  };
-
-  auto EdgeWithDelayContent = [&](Edge* edge,Arena* out) -> GraphInfo{
-    int inPort = edge->in.port;
-    int outPort = edge->out.port;
-
-    int portDelay = delayInfo.portDelay->GetOrFail(edge->in).value;
+  int size = orderToIndex.size;
+  Array<GraphPrintingNodeInfo> nodeArray = PushArray<GraphPrintingNodeInfo>(out,size);
+  for(int i = 0; i < size; i++){
+    InstanceInfo* info = top.GetUnit(orderToIndex[i]);
+    FUInstance* node = info->inst;
     
-    int edgeBaseDelay = edge->delay;
+    nodeArray[i].name = PushString(out,node->name);
+    nodeArray[i].content = PushString(out,"%.*s:%d:%d",UNPACK_SS(node->name),nodeDelay[i].value,info->special);
+    nodeArray[i].color = Color_BLACK;
+  }
 
-    DelayInfo delay = delayInfo.edgesDelay->GetOrFail(*edge);
-    int edgeDelay = delay.value;
-    
-    int edgeOutput = edge->out.inst->declaration->GetOutputLatencies()[edge->out.port];
-    int edgeInput = edge->in.inst->declaration->GetInputDelays()[edge->in.port];
-    
-    String content = PushString(out,"%d->%d (%d/%d/%d) %d [%d]",outPort,inPort,edgeOutput,edgeBaseDelay,edgeInput,portDelay,edgeDelay);
-    String first = edge->out.inst->name;
-    String second = edge->in.inst->name; 
+  int totalEdges = 0;
+  for(AccelEdgeIterator iter = IterateEdges(top); IsValid(iter); Advance(iter)){
+    totalEdges += 1;
+  }
 
-    Color color = Color_BLACK;
-    if(delay.isAny){
-     color = Color_RED;
+  Array<GraphPrintingEdgeInfo> edgeArray = PushArray<GraphPrintingEdgeInfo>(out,totalEdges);
+  int edgeIndex = 0;
+  for(AccelEdgeIterator iter = IterateEdges(top); IsValid(iter); Advance(iter),edgeIndex += 1){
+    DelayInfo edgeLatency = edgeDelay[edgeIndex];
+
+    SimpleEdge edge = Get(iter);
+
+    if(edgeLatency.isAny){
+      edgeArray[edgeIndex].color = Color_BLUE;
+    } else {
+      edgeArray[edgeIndex].color = Color_BLACK;
     }
-
-    return {content,color};
-  };
-
-  GraphPrintingContent result = GeneratePrintingContent(accel,NodeWithDelayContent,EdgeWithDelayContent,out,temp);
-  result.graphLabel = STRING("Nodes contain their global latency after the \':\'\nEdge Format: OutPort -> InPort (<Output Latency>/<Edge delay>/<Input Delay>) <Without buffer, node lantency + edge value>  [<Buffer value, difference between without buffer and input node latency>]\nImagine reading from the output node into the input node: Node latency + edge values equals latency which we must fix by inserting buffer of value N");
+    edgeArray[edgeIndex].content = PushString(out,"%d",edgeLatency.value);
+    edgeArray[edgeIndex].first = nodeArray[top.GetUnit(edge.outIndex)->localOrder].name;
+    edgeArray[edgeIndex].second = nodeArray[top.GetUnit(edge.inIndex)->localOrder].name;
+  }
+    
+  GraphPrintingContent result = {};
+  result.edges = edgeArray;
+  result.nodes = nodeArray;
+  result.graphLabel = STRING("Nodes and edges contain their global latency (nodes also contain special)");
   
   return result;
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

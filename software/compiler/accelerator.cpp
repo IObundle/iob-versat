@@ -1133,30 +1133,6 @@ bool EdgeEqualNoDelay(const Edge& e0,const Edge& e1){
   return res;
 }
 
-Opt<Edge> FindEdge(PortInstance out,PortInstance in){
-  FUDeclaration* inDecl = in.inst->declaration;
-  FUDeclaration* outDecl = out.inst->declaration;
-  
-  Assert(out.inst->accel == in.inst->accel);
-  Assert(in.port < inDecl->NumberInputs());
-  Assert(out.port < outDecl->NumberOutputs());
-
-  Accelerator* accel = out.inst->accel;
-
-  Edge toCheck = {.out = out,.in = in};
-  
-  EdgeIterator iter = IterateEdges(accel);
-  while(iter.HasNext()){
-    Edge edge = iter.Next();
-
-    if(EdgeEqualNoDelay(edge,toCheck)){
-      return edge;
-    }
-  }
-
-  return {};
-}
-
 Opt<Edge> FindEdge(FUInstance* out,int outIndex,FUInstance* in,int inIndex,int delay){
   FUDeclaration* inDecl = in->declaration;
   FUDeclaration* outDecl = out->declaration;
@@ -1218,7 +1194,6 @@ void ConnectUnits(PortInstance out,PortInstance in,int delay){
   Assert(in.port < inDecl->NumberInputs());
   Assert(out.port < outDecl->NumberOutputs());
 
-  Assert(!FindEdge(out,in));
   Accelerator* accel = out.inst->accel;
 
   // Update graph data.
