@@ -163,7 +163,7 @@ Type* RegisterTemplateMembers(String name,Array<TemplatedMember> members);
 
 // Not properly tested, probably some bugs lurking in here
 // Since majority of the type info is used by our side, not a major problem
-Type* InstantiateTemplate(String name,Arena* arena = nullptr);
+Type* InstantiateTemplate(String name,Arena* out = nullptr); // TODO: Need to do a check on the way the arena is being used here
 
 void RegisterTypes();
 void FreeTypes();
@@ -180,7 +180,7 @@ Value CollapsePtrIntoStruct(Value in);
 Value CollapseArrayIntoPtr(Value in);
 Value CollapseValue(Value val);
 
-Value ConvertValue(Value in,Type* want,Arena* arena);
+Value ConvertValue(Value in,Type* want,Arena* out);
 
 Opt<ParsedType> ParseType(String typeStr,Arena* out);
 
@@ -247,9 +247,9 @@ String GetTemplateTypeName(Arena* out){
 // NOTE: Since this function does not copy the input value, must make sure that we do not point to stack allocated data that can go out of scope. 
 template<typename T>
 Value MakeValue(T* t){
-  STACK_ARENA(temp,Kilobyte(1));
+  TEMP_REGION(temp,nullptr);
 
-  String str = GetTemplateTypeName<T>(&temp);
+  String str = GetTemplateTypeName<T>(temp);
   Value val = MakeValue(t,str);
 
   return val;

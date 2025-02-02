@@ -8,11 +8,6 @@
 #include <filesystem>
 namespace fs = std::filesystem;
 
-Arena tempInst;
-Arena* temp = &tempInst;
-Arena permInst;
-Arena* perm = &permInst;
-
 #define INCLUDE_GUARD "INCLUDED_GENERATED_%s\n"
 
 bool HasExtension(const char* filepath){
@@ -47,10 +42,13 @@ int main(int argc,const char* argv[]){
   String filename = ExtractFilenameOnly(STRING(argv[1]));
   const char* outName = filename.data;
 
-  tempInst = InitArena(Megabyte(256));
-  Arena* temp = &tempInst;
-
-  permInst = InitArena(Megabyte(64));
+  Arena inst1 = InitArena(Megabyte(64));
+  contextArenas[0] = &inst1;
+  Arena inst2 = InitArena(Megabyte(64));
+  contextArenas[1] = &inst2;
+  
+  TEMP_REGION(perm,nullptr);
+  TEMP_REGION(temp,perm);
 
   String headerPath = PushString(temp,"%s.hpp",outputPath);
   String sourcePath = PushString(temp,"%s.cpp",outputPath);

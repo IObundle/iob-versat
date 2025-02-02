@@ -65,11 +65,11 @@ bool EqualPortMapping(PortInstance p1,PortInstance p2);
 bool IsUnitCombinatorial(FUInstance* inst);
 
 // Graph fixes
-Array<DelayToAdd> GenerateFixDelays(Accelerator* accel,EdgeDelay* edgeDelays,Arena* out,Arena* temp);
-void FixDelays(Accelerator* accel,Hashmap<Edge,DelayInfo>* edgeDelays,Arena* temp);
+Array<DelayToAdd> GenerateFixDelays(Accelerator* accel,EdgeDelay* edgeDelays,Arena* out);
+void FixDelays(Accelerator* accel,Hashmap<Edge,DelayInfo>* edgeDelays);
 
 // Accelerator merging
-DAGOrderNodes CalculateDAGOrder(Pool<FUInstance>* instances,Arena* arena);
+DAGOrderNodes CalculateDAGOrder(Pool<FUInstance>* instances,Arena* out);
 
 // Misc
 bool CheckValidName(String name); // Check if name can be used as identifier in verilog
@@ -77,13 +77,13 @@ bool IsTypeHierarchical(FUDeclaration* decl);
 FUInstance* GetInputInstance(Pool<FUInstance>* nodes,int inputIndex);
 FUInstance* GetOutputInstance(Pool<FUInstance>* nodes);
 
-FUDeclaration* RegisterModuleInfo(ModuleInfo* info,Arena* temp);
+FUDeclaration* RegisterModuleInfo(ModuleInfo* info);
 
 // Accelerator functions
 FUInstance* CreateFUInstance(Accelerator* accel,FUDeclaration* type,String entityName);
-Pair<Accelerator*,SubMap*> Flatten(Accelerator* accel,int times,Arena* temp);
+Pair<Accelerator*,SubMap*> Flatten(Accelerator* accel,int times);
 
-void FillDeclarationWithAcceleratorValues(FUDeclaration* decl,Accelerator* accel,Arena* temp,Arena* temp2);
+void FillDeclarationWithAcceleratorValues(FUDeclaration* decl,Accelerator* accel);
 void FillDeclarationWithDelayType(FUDeclaration* decl);
 
 // Static and configuration sharing
@@ -101,8 +101,8 @@ enum SubUnitOptions{
 //            We do not need anything from the declaration during registering, so might as well simplify this part.
 FUDeclaration* RegisterFU(FUDeclaration declaration);
 FUDeclaration* GetTypeByName(String str);
-FUDeclaration* RegisterIterativeUnit(Accelerator* accel,FUInstance* inst,int latency,String name,Arena* temp,Arena* temp2);
-FUDeclaration* RegisterSubUnit(Accelerator* circuit,Arena* temp,Arena* temp2,SubUnitOptions options = SubUnitOptions_FULL);
+FUDeclaration* RegisterIterativeUnit(Accelerator* accel,FUInstance* inst,int latency,String name);
+FUDeclaration* RegisterSubUnit(Accelerator* circuit,SubUnitOptions options = SubUnitOptions_FULL);
 
 // Helper functions, useful to implement custom units
 FUInstance* CreateOrGetInput(Accelerator* accel,String name,int portNumber);

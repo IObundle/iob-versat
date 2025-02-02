@@ -270,7 +270,7 @@ bool NameExists(Accelerator* accel,String name);
 
 int GetFreeShareIndex(Accelerator* accel); // TODO: Slow 
 
-Array<FUDeclaration*> MemSubTypes(Accelerator* accel,Arena* out,Arena* temp);
+Array<FUDeclaration*> MemSubTypes(Accelerator* accel,Arena* out);
 
 // TODO: This could work on top of AccelInfo.
 Hashmap<StaticId,StaticData>* CollectStaticUnits(Accelerator* accel,FUDeclaration* topDecl,Arena* out);

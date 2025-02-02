@@ -1,5 +1,6 @@
 #include <cstdio>
 
+#include "memory.hpp"
 #include "parser.hpp"
 #include "utils.hpp"
 #include "utilsCore.hpp"
@@ -27,7 +28,11 @@ int main(int argc,const char* argv[]){
   }
 
   arenaInst = InitArena(Megabyte(64));
-
+  Arena inst1 = InitArena(Megabyte(64));
+  contextArenas[0] = &inst1;
+  Arena inst2 = InitArena(Megabyte(64));
+  contextArenas[1] = &inst2;
+  
   u64 hash = 0;
   i32 amountOfTokens = 0;
   for(i32 i = 0; i < argc - 1; i++){

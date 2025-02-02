@@ -47,13 +47,13 @@ typedef std::function<GraphInfo(Edge*,Arena* out)> EdgeContent;
 extern NodeContent defaultNodeContent;
 extern EdgeContent defaultEdgeContent;
 
-GraphPrintingContent GeneratePrintingContent(Accelerator* accel,NodeContent nodeFunction,EdgeContent edgeFunction,Arena* out,Arena* temp);
+GraphPrintingContent GeneratePrintingContent(Accelerator* accel,NodeContent nodeFunction,EdgeContent edgeFunction,Arena* out);
 
 Color DefaultNodeColor(FUInstance* node);
-GraphPrintingContent GenerateDefaultPrintingContent(Accelerator* accel,Arena* out,Arena* temp);
+GraphPrintingContent GenerateDefaultPrintingContent(Accelerator* accel,Arena* out);
 
-String GenerateDotGraph(GraphPrintingContent content,Arena* out,Arena* temp);
+String GenerateDotGraph(GraphPrintingContent content,Arena* out);
 
-void OutputDebugDotGraph(Accelerator* accel,String fileName,Arena* temp);
-void OutputDebugDotGraph(Accelerator* accel,String fileName,FUInstance* highlight,Arena* temp);
-void OutputDebugDotGraph(Accelerator* accel,String fileName,Set<FUInstance*>* highlight,Arena* temp);
+void OutputDebugDotGraph(Accelerator* accel,String fileName);
+void OutputDebugDotGraph(Accelerator* accel,String fileName,FUInstance* highlight);
+void OutputDebugDotGraph(Accelerator* accel,String fileName,Set<FUInstance*>* highlight);

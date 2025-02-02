@@ -83,9 +83,11 @@ bool PerformDefineSubstitution(Arena* output,MacroMap& macros,String name){
   return true;
 }
 
-void PreprocessVerilogFile_(String fileContent,MacroMap& macros,Array<String> includeFilepaths,Arena* out,Arena* temp);
+void PreprocessVerilogFile_(String fileContent,MacroMap& macros,Array<String> includeFilepaths,Arena* out);
 
-static void DoIfStatement(Tokenizer* tok,MacroMap& macros,Array<String> includeFilepaths,Arena* out,Arena* temp){
+static void DoIfStatement(Tokenizer* tok,MacroMap& macros,Array<String> includeFilepaths,Arena* out){
+  TEMP_REGION(temp,out);
+
   Token first = tok->NextToken();
   Token macroName = tok->NextToken();
 
@@ -116,14 +118,14 @@ static void DoIfStatement(Tokenizer* tok,MacroMap& macros,Array<String> includeF
     
     if(CompareString(type,"endif")){
       if(doIf){
-        PreprocessVerilogFile_(subContent,macros,includeFilepaths,out,temp);
+        PreprocessVerilogFile_(subContent,macros,includeFilepaths,out);
       }
       break;
     }
 
     if(CompareString(type,"else")){
       if(doIf){
-        PreprocessVerilogFile_(subContent,macros,includeFilepaths,out,temp);
+        PreprocessVerilogFile_(subContent,macros,includeFilepaths,out);
         doIf = false;
       } else {
         mark = tok->Mark();
@@ -135,14 +137,15 @@ static void DoIfStatement(Tokenizer* tok,MacroMap& macros,Array<String> includeF
     if(doIf) {
       if(CompareString(type,"ifdef") || CompareString(type,"ifndef") || CompareString(type,"elsif")){
         tok->Rollback(subMark); // TODO: Not good.
-        DoIfStatement(tok,macros,includeFilepaths,out,temp);
+        DoIfStatement(tok,macros,includeFilepaths,out);
       }
     }
     // otherwise must be some other directive, will be handled automatically in the Preprocess call.
   }
 }
 
-void PreprocessVerilogFile_(String fileContent,MacroMap& macros,Array<String> includeFilepaths,Arena* out,Arena* temp){
+void PreprocessVerilogFile_(String fileContent,MacroMap& macros,Array<String> includeFilepaths,Arena* out){
+  TEMP_REGION(temp,out);
   Tokenizer tokenizer = Tokenizer(fileContent, "():;[]{}`,+-/*\\\"",{});
   Tokenizer* tok = &tokenizer;
 
@@ -211,7 +214,7 @@ void PreprocessVerilogFile_(String fileContent,MacroMap& macros,Array<String> in
 
       mem[amountRead] = '\0';
 
-      PreprocessVerilogFile_(STRING((const char*) mem,fileSize),macros,includeFilepaths,out,temp);
+      PreprocessVerilogFile_(STRING((const char*) mem,fileSize),macros,includeFilepaths,out);
     } else if(CompareString(identifier,"define")){
       tok->AdvancePeek();
       
@@ -274,7 +277,7 @@ void PreprocessVerilogFile_(String fileContent,MacroMap& macros,Array<String> in
     } else if(CompareString(identifier,"timescale")){
       tok->AdvanceRemainingLine();
     } else if(CompareString(identifier,"ifdef") || CompareString(identifier,"ifndef")){
-      DoIfStatement(tok,macros,includeFilepaths,out,temp);
+      DoIfStatement(tok,macros,includeFilepaths,out);
       
     } else if(CompareString(identifier,"else")){
       NOT_POSSIBLE("All else and ends should have already been handled inside DoIf");
@@ -298,13 +301,12 @@ void PreprocessVerilogFile_(String fileContent,MacroMap& macros,Array<String> in
   }
 }
 
-String PreprocessVerilogFile(String fileContent,Array<String> includeFilepaths,Arena* out,Arena* temp){
+String PreprocessVerilogFile(String fileContent,Array<String> includeFilepaths,Arena* out){
+  TEMP_REGION(temp,out);
   MacroMap macros = {};
 
-  BLOCK_REGION(temp);
-
   auto mark = StartString(out);
-  PreprocessVerilogFile_(fileContent,macros,includeFilepaths,out,temp);
+  PreprocessVerilogFile_(fileContent,macros,includeFilepaths,out);
 
   PushString(out,STRING("\0"));
   String res = EndString(mark);
@@ -357,12 +359,12 @@ static Expression* VerilogParseAtom(Tokenizer* tok,Arena* out){
 
 static Expression* VerilogParseExpression(Tokenizer* tok,Arena* out);
 
-static Expression* VerilogParseFactor(Tokenizer* tok,Arena* arena){
+static Expression* VerilogParseFactor(Tokenizer* tok,Arena* out){
   Token peek = tok->PeekToken();
 
   if(CompareString(peek,"(")){
     tok->AdvancePeek();
-    Expression* expr = VerilogParseExpression(tok,arena);
+    Expression* expr = VerilogParseExpression(tok,out);
     tok->AssertNextToken(")");
     return expr;
   } else if(peek[0] == '$'){
@@ -377,25 +379,25 @@ static Expression* VerilogParseFactor(Tokenizer* tok,Arena* arena){
     MathFunctionDescription description = optDescription.value();
 
     // Verilog math function
-    Expression* expr = PushStruct<Expression>(arena);
+    Expression* expr = PushStruct<Expression>(out);
     *expr = {};
 
     expr->id = mathFunctionName;
     expr->type = Expression::COMMAND;
-    expr->expressions = PushArray<Expression*>(arena,description.amountOfParameters);
+    expr->expressions = PushArray<Expression*>(out,description.amountOfParameters);
 
     tok->AssertNextToken("(");
-    expr->expressions[0] = VerilogParseExpression(tok,arena);
+    expr->expressions[0] = VerilogParseExpression(tok,out);
     if(description.amountOfParameters == 2){
       tok->AssertNextToken(",");
-      expr->expressions[1] = VerilogParseExpression(tok,arena);
+      expr->expressions[1] = VerilogParseExpression(tok,out);
     }
     
     tok->AssertNextToken(")");
 
     return expr;
   } else {
-    Expression* expr = VerilogParseAtom(tok,arena);
+    Expression* expr = VerilogParseAtom(tok,out);
     return expr;
   }
 }
@@ -461,14 +463,14 @@ static Value Eval(Expression* expr,ValueMap& map){
   return MakeValue();
 }
 
-static Array<ParameterExpression> ParseParameters(Tokenizer* tok,ValueMap& map,Arena* arena){
+static Array<ParameterExpression> ParseParameters(Tokenizer* tok,ValueMap& map,Arena* out){
   //TODO: Add type and range to parsing
   /*
 	Range currentRange;
 	ParameterType type;
    */
 
-  auto params = StartGrowableArray<ParameterExpression>(arena);
+  auto params = StartGrowableArray<ParameterExpression>(out);
 
   while(1){
     Token peek = tok->PeekToken();
@@ -490,7 +492,7 @@ static Array<ParameterExpression> ParseParameters(Tokenizer* tok,ValueMap& map,A
 
       tok->AssertNextToken("=");
 
-      Expression* expr = VerilogParseExpression(tok,arena);
+      Expression* expr = VerilogParseExpression(tok,out);
       Value val = Eval(expr,map);
 
       map[paramName] = val;
@@ -551,7 +553,9 @@ static String possibleAttributesData[] = {
 };
 static Array<String> possibleAttributes = C_ARRAY_TO_ARRAY(possibleAttributesData);
 
-static Module ParseModule(Tokenizer* tok,Arena* out,Arena* temp){
+static Module ParseModule(Tokenizer* tok,Arena* out){
+  TEMP_REGION(temp,out);
+
   Module module = {};
   ValueMap values;
 
@@ -677,8 +681,8 @@ static Module ParseModule(Tokenizer* tok,Arena* out,Arena* temp){
   return module;
 }
 
-Array<Module> ParseVerilogFile(String fileContent,Array<String> includeFilepaths,Arena* out,Arena* temp){
-  BLOCK_REGION(temp);
+Array<Module> ParseVerilogFile(String fileContent,Array<String> includeFilepaths,Arena* out){
+  TEMP_REGION(temp,out);
 
   Tokenizer tokenizer = Tokenizer(fileContent,"\n:',()[]{}\"+-/*=",{"#(","+:","-:","(*","*)"});
   Tokenizer* tok = &tokenizer;
@@ -707,7 +711,7 @@ Array<Module> ParseVerilogFile(String fileContent,Array<String> includeFilepaths
     }
 
     if(CompareString(peek,"module")){
-      Module module = ParseModule(tok,out,temp);
+      Module module = ParseModule(tok,out);
 
       module.isSource = isSource;
       *modules->PushElem() = module;
@@ -722,8 +726,8 @@ Array<Module> ParseVerilogFile(String fileContent,Array<String> includeFilepaths
   return PushArrayFromList(out,modules);
 }
 
-ModuleInfo ExtractModuleInfo(Module& module,Arena* out,Arena* temp){
-  BLOCK_REGION(temp);
+ModuleInfo ExtractModuleInfo(Module& module,Arena* out){
+  TEMP_REGION(temp,out);
 
   ModuleInfo info = {};
 

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "utils.hpp"
+#include "utilsCore.hpp"
 
 struct Options{
   Array<String> verilogFiles;
@@ -44,6 +44,8 @@ struct DebugState{
 
 extern Options globalOptions;
 extern DebugState globalDebug;
+
+// Basically any data that is allocated once and preferably read-only just dump it in here.
 extern Arena* globalPermanent;
 
-Options DefaultOptions(Arena* arena);
+Options DefaultOptions(Arena* out);

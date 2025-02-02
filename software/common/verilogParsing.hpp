@@ -157,8 +157,8 @@ struct ModuleInfo{
   bool signalLoop;
 };
 
-String PreprocessVerilogFile(String fileContent,Array<String> includeFilepaths,Arena* out,Arena* temp);
-Array<Module> ParseVerilogFile(String fileContent,Array<String> includeFilepaths,Arena* out,Arena* temp); // Only handles preprocessed files
-ModuleInfo ExtractModuleInfo(Module& module,Arena* permanent,Arena* tempArena);
+String PreprocessVerilogFile(String fileContent,Array<String> includeFilepaths,Arena* out);
+Array<Module> ParseVerilogFile(String fileContent,Array<String> includeFilepaths,Arena* out); // Only handles preprocessed files
+ModuleInfo ExtractModuleInfo(Module& module,Arena* out);
 
 Value Eval(Expression* expr,Array<ParameterExpression> parameters);

@@ -53,9 +53,10 @@ int EvalRange(ExpressionRange range,Array<ParameterExpression> expressions){
 }
 
 // TODO: Need to remake this function and probably ModuleInfo has the versat compiler change is made
-FUDeclaration* RegisterModuleInfo(ModuleInfo* info,Arena* temp){
+FUDeclaration* RegisterModuleInfo(ModuleInfo* info){
+  TEMP_REGION(temp,nullptr);
+
   Arena* perm = globalPermanent;
-  BLOCK_REGION(temp);
   
   // Check same name
   for(FUDeclaration* decl : globalDeclarations){
@@ -190,17 +191,18 @@ FUDeclaration* RegisterModuleInfo(ModuleInfo* info,Arena* temp){
   return res;
 }
 
-void FillDeclarationWithAcceleratorValues(FUDeclaration* decl,Accelerator* accel,Arena* temp,Arena* temp2){
+void FillDeclarationWithAcceleratorValues(FUDeclaration* decl,Accelerator* accel){
+  TEMP_REGION(temp,nullptr);
+  TEMP_REGION(temp2,temp);
+
   Arena* perm = globalPermanent;
-  BLOCK_REGION(temp);
-  BLOCK_REGION(temp2);
 
   // TODO: This function was mostly used to calculate the configInfo stuff, which now is gone.
   //       Need to see how much of this code is also useful for the merge stuff.
   //       (If after merge puts the correct values inside the accelInfo struct, if we can just call this function to compute the remaining data that needs to be computed).
   //       We can also move some of this computation to the accelInfo struct. Just see how things play out.
   
-  AccelInfo val = CalculateAcceleratorInfo(accel,true,perm,temp2);
+  AccelInfo val = CalculateAcceleratorInfo(accel,true,perm);
   decl->info = val;
   
 #if 0
@@ -316,9 +318,11 @@ void FillDeclarationWithDelayType(FUDeclaration* decl){
   decl->implementsDone = implementsDone;
 }
 
-FUDeclaration* RegisterSubUnit(Accelerator* circuit,Arena* temp,Arena* temp2,SubUnitOptions options){
+FUDeclaration* RegisterSubUnit(Accelerator* circuit,SubUnitOptions options){
+  TEMP_REGION(temp,nullptr);
+  TEMP_REGION(temp2,temp);
+
   Arena* permanent = globalPermanent;
-  BLOCK_REGION(temp);
 
     // Disabled for now.
 #if 0
@@ -349,7 +353,7 @@ FUDeclaration* RegisterSubUnit(Accelerator* circuit,Arena* temp,Arena* temp2,Sub
     CalculateDelayResult delays = CalculateDelay(circuit,temp);
 
     region(temp){
-      FixDelays(circuit,delays.edgesDelay,temp);
+      FixDelays(circuit,delays.edgesDelay);
     }
 
     res->fixedDelayCircuit = circuit;
@@ -357,7 +361,7 @@ FUDeclaration* RegisterSubUnit(Accelerator* circuit,Arena* temp,Arena* temp2,Sub
   } else {
     res->baseCircuit = CopyAccelerator(circuit,AcceleratorPurpose_BASE,true,nullptr);
 
-    Pair<Accelerator*,SubMap*> p = Flatten(res->baseCircuit,99,temp);
+    Pair<Accelerator*,SubMap*> p = Flatten(res->baseCircuit,99);
   
     res->flattenedBaseCircuit = p.first;
     res->flattenMapping = p.second;
@@ -366,14 +370,14 @@ FUDeclaration* RegisterSubUnit(Accelerator* circuit,Arena* temp,Arena* temp2,Sub
 
     region(temp){
       //OutputDebugDotGraph(circuit,STRING("BeforeFixDelay.dot"),temp);
-      FixDelays(circuit,delays.edgesDelay,temp);
+      FixDelays(circuit,delays.edgesDelay);
       //OutputDebugDotGraph(circuit,STRING("AfterFixDelay.dot"),temp);
     }
 
     res->fixedDelayCircuit = circuit;
   }
 
-  FillDeclarationWithAcceleratorValues(res,res->fixedDelayCircuit,temp,temp2);
+  FillDeclarationWithAcceleratorValues(res,res->fixedDelayCircuit);
   FillDeclarationWithDelayType(res);
 
 #if 1
@@ -417,10 +421,11 @@ struct Connection{
   PortInstance unit;
 };
 
-FUDeclaration* RegisterIterativeUnit(Accelerator* accel,FUInstance* inst,int latency,String name,Arena* temp,Arena* temp2){
+FUDeclaration* RegisterIterativeUnit(Accelerator* accel,FUInstance* inst,int latency,String name){
+  TEMP_REGION(temp,nullptr);
+  TEMP_REGION(temp2,temp);
+
   Arena* perm = globalPermanent;
-  BLOCK_REGION(temp);
-  BLOCK_REGION(temp2);
   FUInstance* node = inst;
 
   Assert(node);
@@ -514,7 +519,7 @@ FUDeclaration* RegisterIterativeUnit(Accelerator* accel,FUInstance* inst,int lat
   declaration.name = PushString(perm,name);
   declaration.type = FUDeclarationType_ITERATIVE;
 
-  FillDeclarationWithAcceleratorValues(&declaration,accel,temp,temp2);
+  FillDeclarationWithAcceleratorValues(&declaration,accel);
 
   // Kinda of a hack, for now
 #if 0

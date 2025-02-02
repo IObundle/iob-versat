@@ -50,8 +50,8 @@ String UniqueInstanceName(FUInstance* inst,Arena* out){
   return name;
 }
 
-GraphPrintingContent GeneratePrintingContent(Accelerator* accel,NodeContent nodeFunction,EdgeContent edgeFunction,Arena* out,Arena* temp){
-  BLOCK_REGION(temp);
+GraphPrintingContent GeneratePrintingContent(Accelerator* accel,NodeContent nodeFunction,EdgeContent edgeFunction,Arena* out){
+  TEMP_REGION(temp,out);
 
   Array<Edge> edges = GetAllEdges(accel,temp);
 
@@ -86,15 +86,16 @@ GraphPrintingContent GeneratePrintingContent(Accelerator* accel,NodeContent node
   return content;
 }
 
-GraphPrintingContent GenerateDefaultPrintingContent(Accelerator* accel,Arena* out,Arena* temp){
-  GraphPrintingContent content = GeneratePrintingContent(accel,defaultNodeContent,defaultEdgeContent,out,temp);
+GraphPrintingContent GenerateDefaultPrintingContent(Accelerator* accel,Arena* out){
+  GraphPrintingContent content = GeneratePrintingContent(accel,defaultNodeContent,defaultEdgeContent,out);
 
   content.graphLabel = PushString(out,"%d",accel->id);
   
   return content;
 }
 
-String GenerateDotGraph(GraphPrintingContent content,Arena* out,Arena* temp){
+String GenerateDotGraph(GraphPrintingContent content,Arena* out){
+  TEMP_REGION(temp,out);
   auto result = StartString(out);
 
   PushString(out,"digraph view {\n\tnode [fontcolor=white,style=filled,color=\"160,60,176\"];\n");
@@ -125,34 +126,30 @@ String GenerateDotGraph(GraphPrintingContent content,Arena* out,Arena* temp){
   return EndString(result);
 }
 
-void OutputDebugDotGraph(Accelerator* accel,String fileName,Arena* temp){
+void OutputDebugDotGraph(Accelerator* accel,String fileName){
+  TEMP_REGION(temp,nullptr);
+  TEMP_REGION(temp2,temp);
+
   if(!globalOptions.debug){
     return;
   }
-
-  Arena* temp2 = debugArena;
-
-  BLOCK_REGION(temp);
-  BLOCK_REGION(temp2);
 
   String trueFileName = PushString(temp,fileName); // Make it safe to use StaticFormat outside this function
   
   String filePath = PushDebugPath(temp,accel->name,trueFileName);
       
-  GraphPrintingContent content = GenerateDefaultPrintingContent(accel,temp,temp2);
-  String result = GenerateDotGraph(content,temp,debugArena);
+  GraphPrintingContent content = GenerateDefaultPrintingContent(accel,temp);
+  String result = GenerateDotGraph(content,temp);
   OutputContentToFile(filePath,result);
 }
 
-void OutputDebugDotGraph(Accelerator* accel,String fileName,FUInstance* highlight,Arena* temp){
+void OutputDebugDotGraph(Accelerator* accel,String fileName,FUInstance* highlight){
+  TEMP_REGION(temp,nullptr);
+  TEMP_REGION(temp2,temp);
+
   if(!globalOptions.debug){
     return;
   }
-
-  Arena* temp2 = debugArena;
-
-  BLOCK_REGION(temp);
-  BLOCK_REGION(temp2);
 
   String trueFileName = PushString(temp,fileName); // Make it safe to use StaticFormat outside this function
   
@@ -168,20 +165,18 @@ void OutputDebugDotGraph(Accelerator* accel,String fileName,FUInstance* highligh
     }
   };
   
-  GraphPrintingContent content = GeneratePrintingContent(accel,nodeFunction,defaultEdgeContent,temp,temp2);
-  String result = GenerateDotGraph(content,temp,debugArena);
+  GraphPrintingContent content = GeneratePrintingContent(accel,nodeFunction,defaultEdgeContent,temp);
+  String result = GenerateDotGraph(content,temp);
   OutputContentToFile(filePath,result);
 }
 
-void OutputDebugDotGraph(Accelerator* accel,String fileName,Set<FUInstance*>* highlight,Arena* temp){
+void OutputDebugDotGraph(Accelerator* accel,String fileName,Set<FUInstance*>* highlight){
+  TEMP_REGION(temp,nullptr);
+  TEMP_REGION(temp2,temp);
+
   if(!globalOptions.debug){
     return;
   }
-
-  Arena* temp2 = debugArena;
-
-  BLOCK_REGION(temp);
-  BLOCK_REGION(temp2);
 
   String trueFileName = PushString(temp,fileName); // Make it safe to use StaticFormat outside this function
   
@@ -197,8 +192,8 @@ void OutputDebugDotGraph(Accelerator* accel,String fileName,Set<FUInstance*>* hi
     }
   };
   
-  GraphPrintingContent content = GeneratePrintingContent(accel,nodeFunction,defaultEdgeContent,temp,temp2);
-  String result = GenerateDotGraph(content,temp,debugArena);
+  GraphPrintingContent content = GeneratePrintingContent(accel,nodeFunction,defaultEdgeContent,temp);
+  String result = GenerateDotGraph(content,temp);
   OutputContentToFile(filePath,result);
 }
 

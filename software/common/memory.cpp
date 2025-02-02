@@ -15,6 +15,20 @@
 #include "intrinsics.hpp"
 #include "utilsCore.hpp"
 
+Arena* contextArenas[2];
+
+Arena* GetArena(Arena* diff){
+  if(diff == nullptr){
+    return contextArenas[0];
+  } else {
+    if(contextArenas[0] == diff){
+      return contextArenas[1];
+    } else {
+      return contextArenas[0];
+    }
+  }
+}
+
 int GetPageSize(){
   static int pageSize = 0;
 
@@ -145,9 +159,9 @@ size_t SpaceAvailable(Arena* arena){
   return remaining;
 }
 
-StringBuilder* StartStringBuilder(Arena* arena){
-  StringBuilder* builder = PushStruct<StringBuilder>(arena);
-  builder->arena = arena;
+StringBuilder* StartStringBuilder(Arena* out){
+  StringBuilder* builder = PushStruct<StringBuilder>(out);
+  builder->arena = out;
   builder->head = nullptr;
   builder->tail = nullptr;
   
@@ -209,10 +223,10 @@ String EndString(Arena* out,StringBuilder* builder){
   return res;
 }
 
-DynamicString StartString(Arena* arena){
+DynamicString StartString(Arena* out){
   DynamicString res = {};
-  res.arena = arena;
-  res.mark = &arena->mem[arena->used];
+  res.arena = out;
+  res.mark = &out->mem[out->used];
   return res;
 }
 
@@ -229,13 +243,13 @@ String EndString(DynamicString mark){
   return res;
 }
 
-String PushFile(Arena* arena,FILE* file){
+String PushFile(Arena* out,FILE* file){
   String res;
   long int size = GetFileSize(file);
 
-  AlignArena(arena,alignof(void*));
+  AlignArena(out,alignof(void*));
 
-  Byte* mem = PushBytes(arena,size);
+  Byte* mem = PushBytes(out,size);
   int amountRead = fread(mem,sizeof(Byte),size,file);
 
   if(amountRead != size){
@@ -249,12 +263,12 @@ String PushFile(Arena* arena,FILE* file){
   return res;
 }
 
-String PushFile(Arena* arena,String filepath){
-  return PushFile(arena,StaticFormat("%.*s",UNPACK_SS(filepath)));
+String PushFile(Arena* out,String filepath){
+  return PushFile(out,StaticFormat("%.*s",UNPACK_SS(filepath)));
 }
 
 //TODO: Replace return with Optional. Handle errors
-String PushFile(Arena* arena,const char* filepath){
+String PushFile(Arena* out,const char* filepath){
   FILE* file = fopen(filepath,"r");
   DEFER_CLOSE_FILE(file);
   
@@ -266,18 +280,7 @@ String PushFile(Arena* arena,const char* filepath){
     return res;
   }
 
-  String res = PushFile(arena,file);
-
-  return res;
-}
-
-String PushChar(Arena* arena,const char ch){
-  Byte* mem = PushBytes(arena,1);
-
-  *mem = ch;
-  String res = {};
-  res.data = (const char*) mem;
-  res.size = 1;
+  String res = PushFile(out,file);
 
   return res;
 }

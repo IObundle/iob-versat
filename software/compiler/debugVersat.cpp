@@ -16,8 +16,8 @@
 #include "versat.hpp"
 #include "accelerator.hpp"
 
-static void OutputGraphDotFile_(Accelerator* accel,bool collapseSameEdges,Set<FUInstance*>* highlighInstance,FILE* outputFile,Arena* temp){
-  BLOCK_REGION(temp);
+static void OutputGraphDotFile_(Accelerator* accel,bool collapseSameEdges,Set<FUInstance*>* highlighInstance,FILE* outputFile){
+  TEMP_REGION(temp,nullptr);
 
   fprintf(outputFile,"digraph accel {\n\tnode [fontcolor=white,style=filled,color=\"160,60,176\"];\n");
   for(FUInstance* ptr : accel->allocated){
@@ -93,41 +93,6 @@ static void OutputGraphDotFile_(Accelerator* accel,bool collapseSameEdges,Set<FU
   fprintf(outputFile,"}\n");
 }
 
-void OutputGraphDotFile(Accelerator* accel,bool collapseSameEdges,String filename,Arena* temp){
-  if(!globalOptions.debug){
-    return;
-  }
-
-  FILE* file = OpenFileAndCreateDirectories(filename,"w",FilePurpose_DEBUG_INFO);
-  DEFER_CLOSE_FILE(file);
-  OutputGraphDotFile_(accel,collapseSameEdges,nullptr,file,temp);
-}
-
-void OutputGraphDotFile(Accelerator* accel,bool collapseSameEdges,FUInstance* highlighInstance,String filename,Arena* temp){
-  if(!globalOptions.debug){
-    return;
-  }
-
-  BLOCK_REGION(temp);
-  Set<FUInstance*>* highlight = PushSet<FUInstance*>(temp,1);
-  highlight->Insert(highlighInstance);
-
-  FILE* file = OpenFileAndCreateDirectories(filename,"w",FilePurpose_DEBUG_INFO);
-  DEFER_CLOSE_FILE(file);
-  OutputGraphDotFile_(accel,collapseSameEdges,highlight,file,temp);
-}
-
-void OutputGraphDotFile(Accelerator* accel,bool collapseSameEdges,Set<FUInstance*>* highlight,String filename,Arena* temp){
-  if(!globalOptions.debug){
-    return;
-  }
-
-  BLOCK_REGION(temp);
-  FILE* file = OpenFileAndCreateDirectories(filename,"w",FilePurpose_DEBUG_INFO);
-  DEFER_CLOSE_FILE(file);
-  OutputGraphDotFile_(accel,collapseSameEdges,highlight,file,temp);
-}
-
 void OutputContentToFile(String filepath,String content){
   FILE* file = OpenFile(filepath,"w",FilePurpose_DEBUG_INFO);
   DEFER_CLOSE_FILE(file);
@@ -141,48 +106,14 @@ void OutputContentToFile(String filepath,String content){
   Assert(res == content.size);
 }
 
-String PushMemoryHex(Arena* arena,void* memory,int size){
-  auto mark = StartString(arena);
-
-  unsigned char* view = (unsigned char*) memory;
-
-  for(int i = 0; i < size; i++){
-    int low = view[i] % 16;
-    int high = view[i] / 16;
-
-    PushString(arena,"%c%c ",GetHex(high),GetHex(low));
-  }
-
-  return EndString(mark);
-}
-
-void OutputMemoryHex(void* memory,int size){
-  unsigned char* view = (unsigned char*) memory;
-
-  for(int i = 0; i < size; i++){
-    if(i % 16 == 0 && i != 0){
-      printf("\n");
-    }
-
-    int low = view[i] % 16;
-    int high = view[i] / 16;
-
-    printf("%c%c ",GetHex(high),GetHex(low));
-
-  }
-
-  printf("\n");
-}
-
-void OutputGraphDotFile(Accelerator* accel,bool collapseSameEdges,FUInstance* highlighInstance,CalculateDelayResult delays,String filename,Arena* temp){
+void OutputGraphDotFile(Accelerator* accel,bool collapseSameEdges,FUInstance* highlighInstance,CalculateDelayResult delays,String filename){
+  TEMP_REGION(temp,nullptr);
   if(!globalOptions.debug){
     return;
   }
 
   FILE* outputFile = OpenFileAndCreateDirectories(filename,"w",FilePurpose_DEBUG_INFO);
   DEFER_CLOSE_FILE(outputFile);
-  
-  BLOCK_REGION(temp);
 
   fprintf(outputFile,"digraph accel {\n\tnode [fontcolor=white,style=filled,color=\"160,60,176\"];\n");
   for(FUInstance* ptr : accel->allocated){

@@ -42,8 +42,8 @@ Array<Difference> CalculateSmallestDifference(Array<int> oldValues,Array<int> ne
   return result;
 }
 
-Array<FUDeclaration*> SortTypesByMemDependency(Array<FUDeclaration*> types,Arena* out,Arena* temp){
-  BLOCK_REGION(temp);
+Array<FUDeclaration*> SortTypesByMemDependency(Array<FUDeclaration*> types,Arena* out){
+  TEMP_REGION(temp,out);
 
   int size = types.size;
 
@@ -55,7 +55,7 @@ Array<FUDeclaration*> SortTypesByMemDependency(Array<FUDeclaration*> types,Arena
   Memset(subTypes,{});
 
   for(int i = 0; i < size; i++){
-    subTypes[i] = MemSubTypes(types[i]->fixedDelayCircuit,temp,out); // TODO: We can reuse the SortTypesByConfigDependency function if we change it to receive the subTypes array from outside, since the rest of the code is equal.
+    subTypes[i] = MemSubTypes(types[i]->fixedDelayCircuit,temp); // TODO: We can reuse the SortTypesByConfigDependency function if we change it to receive the subTypes array from outside, since the rest of the code is equal.
     seen->Insert(types[i],false);
   }
 
@@ -142,11 +142,11 @@ static Array<TypeStructInfoElement> GenerateAddressStructFromType(FUDeclaration*
   return entries;
 }
 
-static Array<TypeStructInfo> GetMemMappedStructInfo(Accelerator* accel,Arena* out,Arena* temp){
-  BLOCK_REGION(temp);
+static Array<TypeStructInfo> GetMemMappedStructInfo(Accelerator* accel,Arena* out){
+  TEMP_REGION(temp,out);
 
-  Array<FUDeclaration*> typesUsed = MemSubTypes(accel,out,temp);
-  typesUsed = SortTypesByMemDependency(typesUsed,temp,out);
+  Array<FUDeclaration*> typesUsed = MemSubTypes(accel,out);
+  typesUsed = SortTypesByMemDependency(typesUsed,temp);
 
   Array<TypeStructInfo> structures = PushArray<TypeStructInfo>(out,typesUsed.size);
   int index = 0;
@@ -175,8 +175,8 @@ Array<String> ExtractMemoryMasks(AccelInfo info,Arena* out){
   return EndArray(builder);
 }
 
-Array<TypeStructInfoElement> ExtractStructuredConfigs(Array<InstanceInfo> info,Arena* out,Arena* temp){
-  BLOCK_REGION(temp);
+Array<TypeStructInfoElement> ExtractStructuredConfigs(Array<InstanceInfo> info,Arena* out){
+  TEMP_REGION(temp,out);
 
   Hashmap<int,ArenaList<String>*>* map = PushHashmap<int,ArenaList<String>*>(temp,9999);
   
@@ -280,11 +280,11 @@ String GenerateVerilogParameterization(FUInstance* inst,Arena* out){
   return EndString(builder);
 }
 
-void OutputCircuitSource(FUDeclaration* decl,FILE* file,Arena* temp,Arena* temp2){
-  Accelerator* accel = decl->fixedDelayCircuit;
+void OutputCircuitSource(FUDeclaration* decl,FILE* file){
+  TEMP_REGION(temp,nullptr);
+  TEMP_REGION(temp2,temp);
 
-  BLOCK_REGION(temp);
-  BLOCK_REGION(temp2);
+  Accelerator* accel = decl->fixedDelayCircuit;
   
   ClearTemplateEngine(); // Make sure that we do not reuse data
   
@@ -323,17 +323,16 @@ void OutputCircuitSource(FUDeclaration* decl,FILE* file,Arena* temp,Arena* temp2
  
   TemplateSetCustom("instances",MakeValue(&nodes));
 
-  ProcessTemplate(file,BasicTemplates::acceleratorTemplate,temp,temp2);
+  ProcessTemplate(file,BasicTemplates::acceleratorTemplate);
 }
 
-void OutputIterativeSource(FUDeclaration* decl,FILE* file,Arena* temp,Arena* temp2){
+void OutputIterativeSource(FUDeclaration* decl,FILE* file){
+  TEMP_REGION(temp,nullptr);
+  TEMP_REGION(temp2,temp);
   // NOTE: Iteratives have not been properly maintained.
   //       Most of this code probably will not work
 
   Accelerator* accel = decl->fixedDelayCircuit;
-
-  BLOCK_REGION(temp);
-  BLOCK_REGION(temp2);
 
   ClearTemplateEngine(); // Make sure that we do not reuse data
 
@@ -349,7 +348,7 @@ void OutputIterativeSource(FUDeclaration* decl,FILE* file,Arena* temp,Arena* tem
   }
 
   // TODO: If we get iterative working again, this should just get the AccelInfo from the decl.
-  AccelInfo info = CalculateAcceleratorInfo(accel,true,temp,temp2); // TODO: Calculating info just for the computedData calculation is a bit wasteful.
+  AccelInfo info = CalculateAcceleratorInfo(accel,true,temp);
 
   // TODO: If going back to iteratives, remove this. Only Top level should care about Versat Values.
   VersatComputedValues val = ComputeVersatValues(&info,false);
@@ -380,17 +379,17 @@ void OutputIterativeSource(FUDeclaration* decl,FILE* file,Arena* temp,Arena* tem
   int lat = decl->lat;
   TemplateSetNumber("special",lat);
 
-  ProcessTemplate(file,BasicTemplates::iterativeTemplate,temp,temp2);
+  ProcessTemplate(file,BasicTemplates::iterativeTemplate);
 }
 
-void OutputVerilatorWrapper(FUDeclaration* type,Accelerator* accel,String outputPath,Arena* temp,Arena* temp2){
-  BLOCK_REGION(temp);
-  BLOCK_REGION(temp2);
+void OutputVerilatorWrapper(FUDeclaration* type,Accelerator* accel,String outputPath){
+  TEMP_REGION(temp,nullptr);
+  TEMP_REGION(temp2,temp);
 
   ClearTemplateEngine(); // Make sure that we do not reuse data
 
-  AccelInfo info = CalculateAcceleratorInfo(accel,true,temp,temp2);
-  Array<Wire> allConfigsHeaderSide = ExtractAllConfigs(info.infos[0].info,temp,temp2);
+  AccelInfo info = CalculateAcceleratorInfo(accel,true,temp);
+  Array<Wire> allConfigsHeaderSide = ExtractAllConfigs(info.infos[0].info,temp);
 
   // We need to bundle config + static (type->config) only contains config, but not static
   auto arr = StartGrowableArray<Wire>(temp);
@@ -414,7 +413,7 @@ void OutputVerilatorWrapper(FUDeclaration* type,Accelerator* accel,String output
   allStaticsVerilatorSide.size = index;
   TemplateSetCustom("allStaticsVerilatorSide",MakeValue(&allStaticsVerilatorSide));
   
-  Array<TypeStructInfoElement> structuredConfigs = ExtractStructuredConfigs(info.infos[0].info,temp,temp2);
+  Array<TypeStructInfoElement> structuredConfigs = ExtractStructuredConfigs(info.infos[0].info,temp);
   
   TemplateSetNumber("delays",info.delays);
   TemplateSetCustom("structuredConfigs",MakeValue(&structuredConfigs));
@@ -434,15 +433,16 @@ void OutputVerilatorWrapper(FUDeclaration* type,Accelerator* accel,String output
   FILE* output = OpenFileAndCreateDirectories(wrapperPath,"w",FilePurpose_SOFTWARE);
   DEFER_CLOSE_FILE(output);
 
-  CompiledTemplate* templ = CompileTemplate(versat_wrapper_template,"wrapper",temp,temp2);
-  ProcessTemplate(output,templ,temp,temp2);
+  CompiledTemplate* templ = CompileTemplate(versat_wrapper_template,"wrapper",temp);
+  ProcessTemplate(output,templ);
 }
 
 // TODO: Move all this stuff to a better place
 #include <filesystem>
 namespace fs = std::filesystem;
 
-String GetRelativePathFromSourceToTarget(String sourcePath,String targetPath,Arena* out,Arena* temp){
+String GetRelativePathFromSourceToTarget(String sourcePath,String targetPath,Arena* out){
+  TEMP_REGION(temp,out);
   fs::path source(StaticFormat("%.*s",UNPACK_SS(sourcePath)));
   fs::path target(StaticFormat("%.*s",UNPACK_SS(targetPath)));
 
@@ -451,9 +451,9 @@ String GetRelativePathFromSourceToTarget(String sourcePath,String targetPath,Are
   return PushString(out,"%s",res.c_str());
 }
 
-void OutputVerilatorMake(String topLevelName,String versatDir,Arena* temp,Arena* temp2){
-  BLOCK_REGION(temp);
-  BLOCK_REGION(temp2);
+void OutputVerilatorMake(String topLevelName,String versatDir){
+  TEMP_REGION(temp,nullptr);
+  TEMP_REGION(temp2,temp);
   
   String outputPath = globalOptions.softwareOutputFilepath;
   String verilatorMakePath = PushString(temp,"%.*s/VerilatorMake.mk",UNPACK_SS(outputPath));
@@ -461,13 +461,13 @@ void OutputVerilatorMake(String topLevelName,String versatDir,Arena* temp,Arena*
   DEFER_CLOSE_FILE(output);
   
   TemplateSetBool("traceEnabled",globalDebug.outputVCD);
-  CompiledTemplate* comp = CompileTemplate(versat_makefile_template,"makefile",temp,temp2);
+  CompiledTemplate* comp = CompileTemplate(versat_makefile_template,"makefile",temp);
     
   fs::path outputFSPath = StaticFormat("%.*s",UNPACK_SS(outputPath));
   fs::path srcLocation = fs::current_path();
   fs::path fixedPath = fs::weakly_canonical(outputFSPath / srcLocation);
 
-  String relativePath = GetRelativePathFromSourceToTarget(globalOptions.softwareOutputFilepath,globalOptions.hardwareOutputFilepath,temp,temp2);
+  String relativePath = GetRelativePathFromSourceToTarget(globalOptions.softwareOutputFilepath,globalOptions.hardwareOutputFilepath,temp);
 
   Array<String> allFilenames = PushArray<String>(temp,globalOptions.verilogFiles.size);
   for(int i = 0; i <  globalOptions.verilogFiles.size; i++){
@@ -482,7 +482,7 @@ void OutputVerilatorMake(String topLevelName,String versatDir,Arena* temp,Arena*
   TemplateSetString("generatedUnitsLocation",relativePath);
   TemplateSetArray("extraSources","String",UNPACK_SS(globalOptions.extraSources));
   TemplateSetString("typename",topLevelName);
-  ProcessTemplate(output,comp,temp,temp2);
+  ProcessTemplate(output,comp);
 
   // TODO: Need to add some form of error checking and handling, for the case where verilator root is not found
   // Used by make to find the verilator root of the build server
@@ -499,7 +499,9 @@ void OutputVerilatorMake(String topLevelName,String versatDir,Arena* temp,Arena*
 }
 
 // TODO: A little bit hardforced. Multiplexer info needs to be revised.
-Array<Array<MuxInfo>> GetAllMuxInfo(AccelInfo* info,Arena* out,Arena* temp){
+Array<Array<MuxInfo>> GetAllMuxInfo(AccelInfo* info,Arena* out){
+  TEMP_REGION(temp,out);
+
   Set<SameMuxEntities>* knownSharedIndexes = PushSet<SameMuxEntities>(temp,99);
   
   // TODO: Replace configPos with muxGroup.
@@ -534,8 +536,8 @@ Array<Array<MuxInfo>> GetAllMuxInfo(AccelInfo* info,Arena* out,Arena* temp){
   return result;
 }
 
-StructInfo* GenerateConfigStruct(AccelInfoIterator iter,Arena* out,Arena* temp){
-  BLOCK_REGION(temp);
+StructInfo* GenerateConfigStruct(AccelInfoIterator iter,Arena* out){
+  TEMP_REGION(temp,out);
   
   StructInfo* res = PushStruct<StructInfo>(out);
 
@@ -560,7 +562,7 @@ StructInfo* GenerateConfigStruct(AccelInfoIterator iter,Arena* out,Arena* temp){
 
     if(unit->isMerge){
       // Merge struct is different, we do not iterate members but instead iterate the base types.
-      auto GenerateMergeStruct =[](InstanceInfo* topUnit,AccelInfoIterator iter,Arena* out,Arena* temp)->StructInfo*{
+      auto GenerateMergeStruct =[](InstanceInfo* topUnit,AccelInfoIterator iter,Arena* out)->StructInfo*{
         auto list = PushArenaDoubleList<StructElement>(out);
         StructInfo* res = PushStruct<StructInfo>(out);
         
@@ -568,7 +570,7 @@ StructInfo* GenerateConfigStruct(AccelInfoIterator iter,Arena* out,Arena* temp){
         for(int i = 0; i < iter.MergeSize(); i++){
           iter.mergeIndex = i;
         
-          StructInfo* subInfo = GenerateConfigStruct(iter,out,temp);
+          StructInfo* subInfo = GenerateConfigStruct(iter,out);
           subInfo->parent = res;
           elem.name = iter.GetMergeName();
           elem.childStruct = subInfo;
@@ -586,12 +588,12 @@ StructInfo* GenerateConfigStruct(AccelInfoIterator iter,Arena* out,Arena* temp){
       };
 
       AccelInfoIterator inside = it.StepInsideOnly();
-      StructInfo* subInfo = GenerateMergeStruct(unit,inside,out,temp);
+      StructInfo* subInfo = GenerateMergeStruct(unit,inside,out);
       subInfo->parent = res;
       elem.childStruct = subInfo;
     } else if(unit->isComposite){
       AccelInfoIterator inside = it.StepInsideOnly();
-      StructInfo* subInfo = GenerateConfigStruct(inside,out,temp);
+      StructInfo* subInfo = GenerateConfigStruct(inside,out);
       subInfo->parent = res;
       elem.childStruct = subInfo;
     } else {
@@ -618,8 +620,8 @@ size_t HashStructInfo(StructInfo* info){
   return std::hash<StructInfo>()(*info);
 }
 
-Array<StructInfo*> ExtractStructs(StructInfo* structInfo,Arena* out,Arena* temp){
-  BLOCK_REGION(temp);
+Array<StructInfo*> ExtractStructs(StructInfo* structInfo,Arena* out){
+  TEMP_REGION(temp,out);
 
   TrieMap<StructInfo,StructInfo*>* info = PushTrieMap<StructInfo,StructInfo*>(temp);
 
@@ -641,7 +643,8 @@ Array<StructInfo*> ExtractStructs(StructInfo* structInfo,Arena* out,Arena* temp)
   return res;
 }
 
-Array<TypeStructInfo> GenerateStructs(Array<StructInfo*> info,Arena* out,Arena* temp){
+Array<TypeStructInfo> GenerateStructs(Array<StructInfo*> info,Arena* out){
+  TEMP_REGION(temp,out);
   ArenaList<TypeStructInfo>* list = PushArenaList<TypeStructInfo>(temp);
 
   for(StructInfo* structInfo : info){
@@ -751,9 +754,9 @@ void PushMergeMultiplexersUpTheHierarchy(StructInfo* top){
   }
 }
 
-void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* softwarePath,bool isSimple,Arena* temp,Arena* temp2){
-  BLOCK_REGION(temp);
-  BLOCK_REGION(temp2);
+void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* softwarePath,bool isSimple){
+  TEMP_REGION(temp,nullptr);
+  TEMP_REGION(temp2,temp);
   
   ClearTemplateEngine(); // Make sure that we do not reuse data
 
@@ -768,12 +771,12 @@ void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* 
     return;
   }
 
-  AccelInfo info = CalculateAcceleratorInfo(accel,true,temp,temp2);
+  AccelInfo info = CalculateAcceleratorInfo(accel,true,temp);
   
   VersatComputedValues val = ComputeVersatValues(&info,globalOptions.useDMA);
   
   AccelInfoIterator iter = StartIteration(&info);
-  StructInfo* structInfo = GenerateConfigStruct(iter,temp,temp2);
+  StructInfo* structInfo = GenerateConfigStruct(iter,temp);
   
   // We generate an extra level, so we just remove it here.
   structInfo = structInfo->list->head->elem.childStruct;
@@ -782,7 +785,7 @@ void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* 
   //       It might be better to only push them to the merge struct (basically only 1 level up).
   //       Still need more examples to see.
   PushMergeMultiplexersUpTheHierarchy(structInfo);
-  Array<StructInfo*> allStructs = ExtractStructs(structInfo,temp,temp2);
+  Array<StructInfo*> allStructs = ExtractStructs(structInfo,temp);
 
   Array<int> indexes = PushArray<int>(temp,allStructs.size);
   Memset(indexes,2);
@@ -798,7 +801,7 @@ void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* 
     }
   }
   
-  Array<TypeStructInfo> structs = GenerateStructs(allStructs,temp,temp2);
+  Array<TypeStructInfo> structs = GenerateStructs(allStructs,temp);
   
   printf("ADDR_W - %d\n",val.memoryConfigDecisionBit + 1);
   if(val.nUnitsIO){
@@ -905,25 +908,25 @@ void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* 
   {
     FILE* f = OpenFileAndCreateDirectories(PushString(temp,"%s/versat_external_memory_inst.vh",hardwarePath),"w",FilePurpose_VERILOG_INCLUDE);
     DEFER_CLOSE_FILE(f);
-    ProcessTemplate(f,BasicTemplates::externalInstTemplate,temp,temp2);
+    ProcessTemplate(f,BasicTemplates::externalInstTemplate);
   }
 
   {
     FILE* f = OpenFileAndCreateDirectories(PushString(temp,"%s/versat_internal_memory_wires.vh",hardwarePath),"w",FilePurpose_VERILOG_INCLUDE);
     DEFER_CLOSE_FILE(f);
-    ProcessTemplate(f,BasicTemplates::internalWiresTemplate,temp,temp2);
+    ProcessTemplate(f,BasicTemplates::internalWiresTemplate);
   }
 
   {
     FILE* f = OpenFileAndCreateDirectories(PushString(temp,"%s/versat_external_memory_port.vh",hardwarePath),"w",FilePurpose_VERILOG_INCLUDE);
     DEFER_CLOSE_FILE(f);
-    ProcessTemplate(f,BasicTemplates::externalPortTemplate,temp,temp2);
+    ProcessTemplate(f,BasicTemplates::externalPortTemplate);
   }
 
   {
     FILE* f = OpenFileAndCreateDirectories(PushString(temp,"%s/versat_external_memory_internal_portmap.vh",hardwarePath),"w",FilePurpose_VERILOG_INCLUDE);
     DEFER_CLOSE_FILE(f);
-    ProcessTemplate(f,BasicTemplates::externalInternalPortmapTemplate,temp,temp2);
+    ProcessTemplate(f,BasicTemplates::externalInternalPortmapTemplate);
  }
 
   Hashmap<StaticId,StaticData>* staticUnits = CollectStaticUnits(accel,nullptr,temp);
@@ -1021,7 +1024,7 @@ void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* 
       return;
     }
 
-    ProcessTemplate(s,BasicTemplates::topAcceleratorTemplate,temp,temp2);
+    ProcessTemplate(s,BasicTemplates::topAcceleratorTemplate);
   }
   
   {
@@ -1033,7 +1036,7 @@ void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* 
       return;
     }
 
-    ProcessTemplate(s,BasicTemplates::topConfigurationsTemplate,temp,temp2);
+    ProcessTemplate(s,BasicTemplates::topConfigurationsTemplate);
   }
   
   TemplateSetBool("isSimple",isSimple);
@@ -1071,7 +1074,7 @@ void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* 
   TemplateSetNumber("nStatics",val.nStatics);
   TemplateSetCustom("configStructures",MakeValue(&structs));
   
-  Array<TypeStructInfo> addressStructures = GetMemMappedStructInfo(accel,temp2,temp);
+  Array<TypeStructInfo> addressStructures = GetMemMappedStructInfo(accel,temp2);
   TemplateSetCustom("addressStructures",MakeValue(&addressStructures));
   
   {
@@ -1136,7 +1139,7 @@ void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* 
     allStaticsVerilatorSide.size = index;
     TemplateSetCustom("allStatics",MakeValue(&allStaticsVerilatorSide));
     
-    Array<TypeStructInfoElement> structuredConfigs = ExtractStructuredConfigs(info.infos[0].info,temp,temp2);
+    Array<TypeStructInfoElement> structuredConfigs = ExtractStructuredConfigs(info.infos[0].info,temp);
     
     Array<String> allStates = ExtractStates(info.infos[0].info,temp2);
     Array<Pair<String,int>> allMem = ExtractMem(info.infos[0].info,temp2);
@@ -1150,15 +1153,14 @@ void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* 
     TemplateSetString("accelName",accel->name);
 
     Array<String> names = Extract(info.infos,temp,&MergePartition::name);
-    //Array<String> names = Map(info.infos,temp,[](MergePartition p){return p.name;});
     TemplateSetCustom("mergeNames",MakeValue(&names));
     
-    Array<Array<MuxInfo>> result = GetAllMuxInfo(&info,temp,temp2);
+    Array<Array<MuxInfo>> result = GetAllMuxInfo(&info,temp);
     TemplateSetCustom("mergeMux",MakeValue(&result));
 
     GrowableArray<String> builder = StartGrowableArray<String>(temp2);
     for(AddressGenDef* def : savedAddressGen){
-      String res = InstantiateAddressGen(*def,temp,temp2);
+      String res = InstantiateAddressGen(*def,temp);
       *builder.PushElem() = res;
     }
     Array<String> content = EndArray(builder);
@@ -1167,6 +1169,6 @@ void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* 
     
     FILE* f = OpenFileAndCreateDirectories(PushString(temp,"%s/versat_accel.h",softwarePath),"w",FilePurpose_SOFTWARE);
     DEFER_CLOSE_FILE(f);
-    ProcessTemplate(f,BasicTemplates::acceleratorHeaderTemplate,temp,temp2);
+    ProcessTemplate(f,BasicTemplates::acceleratorHeaderTemplate);
   }
 }

@@ -69,19 +69,20 @@ static Value Identify(Value val,Arena* out){
 
 #include "templateData.hpp"
 
-void LoadTemplates(Arena* perm,Arena* temp){
-  CompiledTemplate* commonTpl = CompileTemplate(versat_common_template,"common",perm,temp);
+void LoadTemplates(Arena* perm){
+  TEMP_REGION(temp,perm);
+  CompiledTemplate* commonTpl = CompileTemplate(versat_common_template,"common",perm);
   SetIncludeHeader(commonTpl,STRING("common"));
 
-  BasicTemplates::acceleratorTemplate = CompileTemplate(versat_accelerator_template,"accel",perm,temp);
-  BasicTemplates::topAcceleratorTemplate = CompileTemplate(versat_top_instance_template,"top",perm,temp);
-  BasicTemplates::topConfigurationsTemplate = CompileTemplate(versat_configurations_template,"top_configurations",perm,temp);
-  BasicTemplates::acceleratorHeaderTemplate = CompileTemplate(versat_header_template,"header",perm,temp);
-  BasicTemplates::externalInternalPortmapTemplate = CompileTemplate(external_memory_internal_portmap_template,"ext_internal_port",perm,temp);
-  BasicTemplates::externalPortTemplate = CompileTemplate(external_memory_port_template,"ext_port",perm,temp);
-  BasicTemplates::externalInstTemplate = CompileTemplate(external_memory_inst_template,"ext_inst",perm,temp);
-  BasicTemplates::iterativeTemplate = CompileTemplate(versat_iterative_template,"iter",perm,temp);
-  BasicTemplates::internalWiresTemplate = CompileTemplate(versat_internal_memory_wires_template,"internal wires",perm,temp);
+  BasicTemplates::acceleratorTemplate = CompileTemplate(versat_accelerator_template,"accel",perm);
+  BasicTemplates::topAcceleratorTemplate = CompileTemplate(versat_top_instance_template,"top",perm);
+  BasicTemplates::topConfigurationsTemplate = CompileTemplate(versat_configurations_template,"top_configurations",perm);
+  BasicTemplates::acceleratorHeaderTemplate = CompileTemplate(versat_header_template,"header",perm);
+  BasicTemplates::externalInternalPortmapTemplate = CompileTemplate(external_memory_internal_portmap_template,"ext_internal_port",perm);
+  BasicTemplates::externalPortTemplate = CompileTemplate(external_memory_port_template,"ext_port",perm);
+  BasicTemplates::externalInstTemplate = CompileTemplate(external_memory_inst_template,"ext_inst",perm);
+  BasicTemplates::iterativeTemplate = CompileTemplate(versat_iterative_template,"iter",perm);
+  BasicTemplates::internalWiresTemplate = CompileTemplate(versat_internal_memory_wires_template,"internal wires",perm);
   
   RegisterPipeOperation(STRING("MemorySize"),[](Value val,Arena* out){
     ExternalMemoryInterface* inter = (ExternalMemoryInterface*) val.custom;
@@ -293,8 +294,8 @@ void* Next(GenericHashmapIterator& iter){
 }
 
 // Only for graphs that we know for sure are DAG
-Array<int> CalculateDAG(int maxNode,Array<Pair<int,int>> edges,int start,Arena* out,Arena* temp){
-  BLOCK_REGION(temp);
+Array<int> CalculateDAG(int maxNode,Array<Pair<int,int>> edges,int start,Arena* out){
+  TEMP_REGION(temp,out);
 
   int NOT_SEEN = 0; 
   int WAIT_CHILDREN = 1;
@@ -360,9 +361,10 @@ void Print(Work* work){
   printf("flattenWithMapping: %d\n",work->flattenWithMapping ? 1 : 0);
 }
 
-void GetSubWorkRequirement(Hashmap<String,Work>* typeToWork,TypeDefinition type,Arena* temp,Arena* temp2){
-  BLOCK_REGION(temp2);
-  Array<Token> subTypesUsed = TypesUsed(type,temp,temp2);
+void GetSubWorkRequirement(Hashmap<String,Work>* typeToWork,TypeDefinition type){
+  TEMP_REGION(temp,nullptr);
+  TEMP_REGION(temp2,temp);
+  Array<Token> subTypesUsed = TypesUsed(type,temp);
   
   for(Token tok : subTypesUsed){
     Work* work = typeToWork->Get(tok);
@@ -398,13 +400,18 @@ struct argp_option options[] =
 
 int main(int argc,char* argv[]){
   InitDebug();
-  
-  *globalPermanent = InitArena(Megabyte(128));
-  Arena* perm = globalPermanent;
+
+  Arena globalPermanentInst = InitArena(Megabyte(128));
+  globalPermanent = &globalPermanentInst;
   Arena tempInst = InitArena(Megabyte(128));
-  Arena* temp = &tempInst;
   Arena temp2Inst = InitArena(Megabyte(128));
-  Arena* temp2 = &temp2Inst;
+  
+  contextArenas[0] = &tempInst;
+  contextArenas[1] = &temp2Inst;
+
+  TEMP_REGION(temp,nullptr);
+  TEMP_REGION(temp2,temp);
+  Arena* perm = globalPermanent;
   
   argp argp = { options, parse_opt, "SpecFile", "Dataflow to accelerator compiler. Check tutorial in https://github.com/IObundle/iob-versat to learn how to write a specification file"};
 
@@ -435,7 +442,7 @@ int main(int argc,char* argv[]){
   RegisterTypes();
   
   InitializeTemplateEngine(perm);
-  LoadTemplates(perm,temp);
+  LoadTemplates(perm);
   InitializeSimpleDeclarations();
 
   globalDebug.outputAccelerator = true;
@@ -485,12 +492,12 @@ int main(int argc,char* argv[]){
       exit(-1);
     }
 
-    String processed = PreprocessVerilogFile(content,globalOptions.includePaths,temp,temp2);
-    Array<Module> modules = ParseVerilogFile(processed,globalOptions.includePaths,temp,temp2);
+    String processed = PreprocessVerilogFile(content,globalOptions.includePaths,temp);
+    Array<Module> modules = ParseVerilogFile(processed,globalOptions.includePaths,temp);
     
     for(Module& mod : modules){
-      ModuleInfo info = ExtractModuleInfo(mod,perm,temp);
-      RegisterModuleInfo(&info,temp);
+      ModuleInfo info = ExtractModuleInfo(mod,perm);
+      RegisterModuleInfo(&info);
     }
   }
   
@@ -517,7 +524,7 @@ int main(int argc,char* argv[]){
   if(!simpleType && specFilepath.size && !CompareString(topLevelTypeStr,"VERSAT_RESERVED_ALL_UNITS")){
     String content = PushFile(temp,StaticFormat("%.*s",UNPACK_SS(specFilepath)));
     
-    Array<TypeDefinition> types = ParseVersatSpecification(content,temp,temp2);
+    Array<TypeDefinition> types = ParseVersatSpecification(content,temp);
     int size = types.size;
     
     Hashmap<String,int>* typeToId = PushHashmap<String,int>(temp,size);
@@ -532,7 +539,7 @@ int main(int argc,char* argv[]){
     
     auto arr = StartGrowableArray<Pair<int,int>>(temp2);
     for(int i = 0; i < size; i++){
-      Array<Token> subTypesUsed = TypesUsed(types[i],temp,temp2);
+      Array<Token> subTypesUsed = TypesUsed(types[i],temp);
 
       for(String str : subTypesUsed){
         int* index = typeToId->Get(str);
@@ -543,7 +550,7 @@ int main(int argc,char* argv[]){
     }
     Array<Pair<int,int>> edges = EndArray(arr);
     
-    Array<int> order = CalculateDAG(size,edges,typeToId->GetOrFail(topLevelTypeStr),temp,temp2);
+    Array<int> order = CalculateDAG(size,edges,typeToId->GetOrFail(topLevelTypeStr),temp);
 
     // Represents all the work that we need to do.
     Hashmap<String,Work>* typeToWork = PushHashmap<String,Work>(temp,order.size);
@@ -558,7 +565,7 @@ int main(int argc,char* argv[]){
     
     for(int i : order){
       TypeDefinition type = types[i];
-      GetSubWorkRequirement(typeToWork,type,temp,temp2);
+      GetSubWorkRequirement(typeToWork,type);
     }
 
     // For the TOP unit, currently we do everything:
@@ -572,9 +579,9 @@ int main(int argc,char* argv[]){
       FUDeclaration* decl = nullptr;
       
       if(work.definition.type == DefinitionType_MODULE){
-        decl = InstantiateBarebonesSpecifications(content,p.second->definition,temp,temp2);
+        decl = InstantiateBarebonesSpecifications(content,p.second->definition);
       } else if(work.definition.type == DefinitionType_MERGE){
-        decl = InstantiateSpecifications(content,p.second->definition,temp,temp2);
+        decl = InstantiateSpecifications(content,p.second->definition);
       }
       decl->signalLoop = true;
       
@@ -609,7 +616,7 @@ int main(int argc,char* argv[]){
       // Flatten with mapping seems to be specific to modules.
       // Merge circuits are already flatten by the way the merge is performed.
       if(work.definition.type != DefinitionType_MERGE && work.flattenWithMapping){
-        Pair<Accelerator*,SubMap*> p = Flatten(decl->baseCircuit,99,temp);
+        Pair<Accelerator*,SubMap*> p = Flatten(decl->baseCircuit,99);
   
         decl->flattenedBaseCircuit = p.first;
         decl->flattenMapping = p.second;
@@ -660,7 +667,7 @@ int main(int argc,char* argv[]){
       }
     }
     
-    type = RegisterSubUnit(accel,temp,temp2);
+    type = RegisterSubUnit(accel);
     type->signalLoop = true;
 
     accel = CreateAccelerator(topLevelTypeStr,AcceleratorPurpose_MODULE);
@@ -702,7 +709,7 @@ int main(int argc,char* argv[]){
       ConnectUnits(TOP,i,outputs[i],0);
     }
     
-    type = RegisterSubUnit(accel,temp,temp2);
+    type = RegisterSubUnit(accel);
     type->definitionArrays = PushArray<Pair<String,int>>(perm,2);
     type->definitionArrays[0] = (Pair<String,int>){STRING("input"),input};
     type->definitionArrays[1] = (Pair<String,int>){STRING("output"),output};
@@ -736,12 +743,12 @@ int main(int argc,char* argv[]){
   OutputVersatSource(accel,
                      globalOptions.hardwareOutputFilepath.data,
                      globalOptions.softwareOutputFilepath.data,
-                     isSimple,temp,temp2);
+                     isSimple);
   
-  OutputVerilatorWrapper(type,accel,globalOptions.softwareOutputFilepath,temp,temp2);
+  OutputVerilatorWrapper(type,accel,globalOptions.softwareOutputFilepath);
 
   String versatDir = STRING(STRINGIFY(VERSAT_DIR));
-  OutputVerilatorMake(accel->name,versatDir,temp,temp2);
+  OutputVerilatorMake(accel->name,versatDir);
 
   for(FUDeclaration* decl : globalDeclarations){
     BLOCK_REGION(temp);
@@ -751,8 +758,8 @@ int main(int argc,char* argv[]){
        decl->type == FUDeclarationType_MERGED){
 
       if(globalOptions.debug){
-        GraphPrintingContent content = GenerateDefaultPrintingContent(decl->fixedDelayCircuit,temp,temp2);
-        String repr = GenerateDotGraph(content,temp,temp2);
+        GraphPrintingContent content = GenerateDefaultPrintingContent(decl->fixedDelayCircuit,temp);
+        String repr = GenerateDotGraph(content,temp);
         String debugPath = PushDebugPath(temp,decl->name,STRING("NormalGraph.dot"));
 
         FILE* file = OpenFile(debugPath,"w",FilePurpose_DEBUG_INFO);
@@ -770,9 +777,9 @@ int main(int argc,char* argv[]){
       DEFER_CLOSE_FILE(sourceCode);
 
       if(decl->type == FUDeclarationType_COMPOSITE || decl->type == FUDeclarationType_MERGED){
-        OutputCircuitSource(decl,sourceCode,temp,temp2);
+        OutputCircuitSource(decl,sourceCode);
       } else if(decl->type == FUDeclarationType_ITERATIVE){
-        OutputIterativeSource(decl,sourceCode,temp,temp2);
+        OutputIterativeSource(decl,sourceCode);
       }
     }
   }

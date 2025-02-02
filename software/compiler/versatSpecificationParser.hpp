@@ -218,11 +218,11 @@ struct AddressGenLoopSpecificatonSym{
 
 typedef Pair<HierarchicalName,HierarchicalName> SpecNode;
 
-Array<Token> TypesUsed(TypeDefinition def,Arena* out,Arena* temp);
-Array<TypeDefinition> ParseVersatSpecification(String content,Arena* out,Arena* temp);
+Array<Token> TypesUsed(TypeDefinition def,Arena* out);
+Array<TypeDefinition> ParseVersatSpecification(String content,Arena* out);
 
-FUDeclaration* InstantiateBarebonesSpecifications(String content,TypeDefinition def,Arena* temp,Arena* temp2);
-FUDeclaration* InstantiateSpecifications(String content,TypeDefinition def,Arena* temp,Arena* temp2);
+FUDeclaration* InstantiateBarebonesSpecifications(String content,TypeDefinition def);
+FUDeclaration* InstantiateSpecifications(String content,TypeDefinition def);
 
-Opt<AddressGenDef> ParseAddressGen(Tokenizer* tok,Arena* out,Arena* temp);
-String InstantiateAddressGen(AddressGenDef def,Arena* out,Arena* temp);
+Opt<AddressGenDef> ParseAddressGen(Tokenizer* tok,Arena* out);
+String InstantiateAddressGen(AddressGenDef def,Arena* out);

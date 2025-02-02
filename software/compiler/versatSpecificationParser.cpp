@@ -36,9 +36,9 @@
 //         user error that most be reported.
 
 void ReportError(String content,Token faultyToken,const char* error){
-  STACK_ARENA(temp,Kilobyte(1));
+  TEMP_REGION(temp,nullptr);
 
-  String loc = GetRichLocationError(content,faultyToken,&temp);
+  String loc = GetRichLocationError(content,faultyToken,temp);
 
   printf("\n");
   printf("%s\n",error);
@@ -52,17 +52,18 @@ void ReportError(Tokenizer* tok,Token faultyToken,const char* error){
 }
 
 bool _ExpectError(Tokenizer* tok,const char* str){
+  TEMP_REGION(temp,nullptr);
+
   Token got = tok->NextToken();
   String expected = STRING(str);
   if(!CompareString(got,expected)){
-    STACK_ARENA(temp,Kilobyte(4));
-    auto mark = StartString(&temp);
-    PushString(&temp,"Parser Error.\n Expected to find:  '");
-    PushEscapedString(&temp,expected,' ');
-    PushString(&temp,"'\n");
-    PushString(&temp,"  Got:");
-    PushEscapedString(&temp,got,' ');
-    PushString(&temp,"\n");
+    auto mark = StartString(temp);
+    PushString(temp,"Parser Error.\n Expected to find:  '");
+    PushEscapedString(temp,expected,' ');
+    PushString(temp,"'\n");
+    PushString(temp,"  Got:");
+    PushEscapedString(temp,got,' ');
+    PushString(temp,"\n");
     String text = EndString(mark);
     ReportError(tok,got,StaticFormat("%*s",UNPACK_SS(text))); \
     return true;
@@ -71,8 +72,8 @@ bool _ExpectError(Tokenizer* tok,const char* str){
 }
 
 void _UnexpectError(Token token){
-  STACK_ARENA(temp,Kilobyte(4));
-  String content = PushString(&temp,"At pos: %d:%d, did not expect to get: \"%.*s\"",token.loc.start.line,token.loc.start.column,UNPACK_SS(token));  
+  TEMP_REGION(temp,nullptr);
+  String content = PushString(temp,"At pos: %d:%d, did not expect to get: \"%.*s\"",token.loc.start.line,token.loc.start.column,UNPACK_SS(token));  
   printf("%.*s\n",UNPACK_SS(content));
 }
 
@@ -431,7 +432,8 @@ String GetActualArrayName(String baseName,int index,Arena* out){
 }
 
 // Right now, not using the full portion of PortExpression because technically we would need to instantiate multiple things. Not sure if there is a need, when a case occurs then make the change then
-PortExpression InstantiateSpecExpression(SpecExpression* root,Accelerator* circuit,InstanceTable* table,InstanceName* names,Arena* temp){
+PortExpression InstantiateSpecExpression(SpecExpression* root,Accelerator* circuit,InstanceTable* table,InstanceName* names){
+  TEMP_REGION(temp,nullptr);
   Arena* perm = globalPermanent;
   PortExpression res = {};
 
@@ -458,13 +460,11 @@ PortExpression InstantiateSpecExpression(SpecExpression* root,Accelerator* circu
     }
   }break;
   case SpecExpression::VAR:{
-    STACK_ARENA(temp,Kilobyte(1));
-
     Var var = root->var;  
     String name = var.name;
 
     if(var.isArrayAccess){
-      name = GetActualArrayName(var.name,var.index.bottom,&temp);
+      name = GetActualArrayName(var.name,var.index.bottom,globalPermanent);
     }
     
     FUInstance* inst = table->GetOrFail(name);
@@ -473,7 +473,7 @@ PortExpression InstantiateSpecExpression(SpecExpression* root,Accelerator* circu
     res.extra = var.extra;
   } break;
   case SpecExpression::OPERATION:{
-    PortExpression expr0 = InstantiateSpecExpression(root->expressions[0],circuit,table,names,temp);
+    PortExpression expr0 = InstantiateSpecExpression(root->expressions[0],circuit,table,names);
 
     // Assuming right now very simple cases, no port range and no delay range
     Assert(expr0.extra.port.start == expr0.extra.port.end);
@@ -507,7 +507,7 @@ PortExpression InstantiateSpecExpression(SpecExpression* root,Accelerator* circu
       Assert(root->expressions.size == 2);
     }
 
-    PortExpression expr1 = InstantiateSpecExpression(root->expressions[1],circuit,table,names,temp);
+    PortExpression expr1 = InstantiateSpecExpression(root->expressions[1],circuit,table,names);
 
     // Assuming right now very simple cases, no port range and no delay range
     Assert(expr1.extra.port.start == expr1.extra.port.end);
@@ -660,7 +660,8 @@ Opt<Array<VarDeclaration>> ParseModuleInputDeclaration(Tokenizer* tok,Arena* out
   return EndArray(array);
 }
 
-Opt<InstanceDeclaration> ParseInstanceDeclaration(Tokenizer* tok,Arena* out,Arena* temp){
+Opt<InstanceDeclaration> ParseInstanceDeclaration(Tokenizer* tok,Arena* out){
+  TEMP_REGION(temp,out);
   InstanceDeclaration res = {};
 
   Token potentialModifier = tok->PeekToken();
@@ -777,7 +778,8 @@ Opt<InstanceDeclaration> ParseInstanceDeclaration(Tokenizer* tok,Arena* out,Aren
 
 // Any returned String points to tokenizer content.
 // As long as tokenizer is valid, strings returned by this function are also valid.
-Opt<ModuleDef> ParseModuleDef(Tokenizer* tok,Arena* out,Arena* temp){
+Opt<ModuleDef> ParseModuleDef(Tokenizer* tok,Arena* out){
+  TEMP_REGION(temp,out);
   ModuleDef def = {};
 
   tok->AssertNextToken("module");
@@ -811,7 +813,7 @@ Opt<ModuleDef> ParseModuleDef(Tokenizer* tok,Arena* out,Arena* temp){
       break;
     }
     
-    Opt<InstanceDeclaration> optDecl = ParseInstanceDeclaration(tok,out,temp);
+    Opt<InstanceDeclaration> optDecl = ParseInstanceDeclaration(tok,out);
     PROPAGATE(optDecl); // TODO: We could try to keep going and find more errors
 
     *decls->PushElem() = optDecl.value();
@@ -844,7 +846,8 @@ Opt<ModuleDef> ParseModuleDef(Tokenizer* tok,Arena* out,Arena* temp){
   return def;
 }
 
-Opt<TransformDef> ParseTransformDef(Tokenizer* tok,Arena* out,Arena* temp){
+Opt<TransformDef> ParseTransformDef(Tokenizer* tok,Arena* out){
+  TEMP_REGION(temp,out);
   TransformDef def = {};
 
   tok->AssertNextToken("transform");
@@ -873,7 +876,9 @@ Opt<TransformDef> ParseTransformDef(Tokenizer* tok,Arena* out,Arena* temp){
   return def;
 }
 
-FUDeclaration* ParseIterative(Tokenizer* tok,Arena* temp,Arena* temp2){
+FUDeclaration* ParseIterative(Tokenizer* tok){
+  TEMP_REGION(temp,nullptr);
+  TEMP_REGION(temp2,temp);
 #if 0
   Arena* perm = globalPermanent;
   tok->AssertNextToken("iterative");
@@ -1060,8 +1065,8 @@ Opt<HierarchicalName> ParseHierarchicalName(Tokenizer* tok){
   return res;
 }
 
-Opt<MergeDef> ParseMerge(Tokenizer* tok,Arena* out,Arena* temp){
-  BLOCK_REGION(temp);
+Opt<MergeDef> ParseMerge(Tokenizer* tok,Arena* out){
+  TEMP_REGION(temp,out);
   
   tok->AssertNextToken("merge");
 
@@ -1151,7 +1156,9 @@ Opt<MergeDef> ParseMerge(Tokenizer* tok,Arena* out,Arena* temp){
   return result;
 }
 
-FUDeclaration* InstantiateMerge(MergeDef def,Arena* temp,Arena* temp2){
+FUDeclaration* InstantiateMerge(MergeDef def){
+  TEMP_REGION(temp,nullptr);
+  
   auto declArr = StartGrowableArray<FUDeclaration*>(temp);
   for(TypeAndInstance tp : def.declarations){
     FUDeclaration* decl = GetTypeByNameOrFail(tp.typeName); // TODO: Rewrite stuff so that at this point we know that the type must exist
@@ -1161,7 +1168,7 @@ FUDeclaration* InstantiateMerge(MergeDef def,Arena* temp,Arena* temp2){
 
   String name = PushString(globalPermanent,def.name);
 
-  return Merge(decl,name,def.specifics,temp,temp2);
+  return Merge(decl,name,def.specifics);
 }
 
 int GetRangeCount(Range<int> range){
@@ -1315,9 +1322,9 @@ Opt<int> ApplyTransforms(String content,int outPortStart,Array<Token> transforms
   return outPort;
 }
 
-static bool InstantiateTransform(Tokenizer* tok,TransformDef def,Arena* temp){
+static bool InstantiateTransform(Tokenizer* tok,TransformDef def){
+  TEMP_REGION(temp,nullptr);
   Arena* perm = globalPermanent;
-  BLOCK_REGION(temp);
 
   if(transformations.find(def.name) != transformations.end()){
     ReportError(tok,def.name,"Trasform already exists");
@@ -1450,7 +1457,9 @@ FUInstance* CreateFUInstanceWithParameters(Accelerator* accel,FUDeclaration* typ
   return inst;
 }
 
-FUDeclaration* InstantiateModule(String content,ModuleDef def,Arena* temp,Arena* temp2){
+FUDeclaration* InstantiateModule(String content,ModuleDef def){
+  TEMP_REGION(temp,nullptr);
+  TEMP_REGION(temp2,temp);
   Arena* perm = globalPermanent;
   Accelerator* circuit = CreateAccelerator(def.name,AcceleratorPurpose_MODULE);
 
@@ -1573,7 +1582,7 @@ FUDeclaration* InstantiateModule(String content,ModuleDef def,Arena* temp,Arena*
         name = GetActualArrayName(name,outVar.index.low,temp);
       }
       
-      PortExpression portSpecExpression = InstantiateSpecExpression(decl.expression,circuit,table,names,temp);
+      PortExpression portSpecExpression = InstantiateSpecExpression(decl.expression,circuit,table,names);
       FUInstance* inst = portSpecExpression.inst;
       String uniqueName = GetUniqueName(name,perm,names);
       inst->name = PushString(perm,uniqueName);
@@ -1673,7 +1682,7 @@ FUDeclaration* InstantiateModule(String content,ModuleDef def,Arena* temp,Arena*
   FUInstance** outInTable = table->Get(STRING("out"));
   Assert(!outInTable);
 
-  FUDeclaration* res = RegisterSubUnit(circuit,temp,temp2,SubUnitOptions_BAREBONES);
+  FUDeclaration* res = RegisterSubUnit(circuit,SubUnitOptions_BAREBONES);
   res->definitionArrays = PushArrayFromList(perm,allArrayDefinitons);
   return res;
 }
@@ -1694,11 +1703,10 @@ void Synchronize(Tokenizer* tok,BracketList<const char*> syncPoints){
 
 extern Pool<AddressGenDef> savedAddressGen; // REMOVE: Remove after proper implementation of AddressGen
 
-Array<TypeDefinition> ParseVersatSpecification(String content,Arena* out,Arena* temp){
+Array<TypeDefinition> ParseVersatSpecification(String content,Arena* out){
+  TEMP_REGION(temp,out);
   Tokenizer tokenizer = Tokenizer(content,".%=#[](){}+:;,*~-",{"->=","->",">><","><<",">>","<<","..","^="});
   Tokenizer* tok = &tokenizer;
-  
-  BLOCK_REGION(temp);
 
   ArenaList<TypeDefinition>* typeList = PushArenaList<TypeDefinition>(temp);
   
@@ -1707,7 +1715,7 @@ Array<TypeDefinition> ParseVersatSpecification(String content,Arena* out,Arena* 
     Token peek = tok->PeekToken();
 
     if(CompareString(peek,"module")){
-      Opt<ModuleDef> moduleDef = ParseModuleDef(tok,out,temp);
+      Opt<ModuleDef> moduleDef = ParseModuleDef(tok,out);
 
       if(moduleDef.has_value()){
         TypeDefinition def = {};
@@ -1719,7 +1727,7 @@ Array<TypeDefinition> ParseVersatSpecification(String content,Arena* out,Arena* 
         anyError = true;
       }
     } else if(CompareString(peek,"merge")){
-      Opt<MergeDef> mergeDef = ParseMerge(tok,out,temp);
+      Opt<MergeDef> mergeDef = ParseMerge(tok,out);
       
       if(mergeDef.has_value()){
         TypeDefinition def = {};
@@ -1731,7 +1739,7 @@ Array<TypeDefinition> ParseVersatSpecification(String content,Arena* out,Arena* 
         anyError = true;
       }
     } else if(CompareString(peek,"AddressGen")){
-      Opt<AddressGenDef> def = ParseAddressGen(tok,globalPermanent,temp);
+      Opt<AddressGenDef> def = ParseAddressGen(tok,globalPermanent);
       
       if(def.has_value()){
         AddressGenDef* buffer = savedAddressGen.Alloc();
@@ -1754,8 +1762,8 @@ Array<TypeDefinition> ParseVersatSpecification(String content,Arena* out,Arena* 
   return PushArrayFromList(out,typeList);
 }
 
-Array<Token> TypesUsed(TypeDefinition def,Arena* out,Arena* temp){
-  BLOCK_REGION(temp);
+Array<Token> TypesUsed(TypeDefinition def,Arena* out){
+  TEMP_REGION(temp,out);
 
   switch(def.type){
   case DefinitionType_MERGE: {
@@ -1768,7 +1776,7 @@ Array<Token> TypesUsed(TypeDefinition def,Arena* out,Arena* temp){
   case DefinitionType_MODULE: {
     Array<Token> result = Extract(def.module.declarations,temp,&InstanceDeclaration::typeName);
 
-    return Unique(result,out,temp);
+    return Unique(result,out);
   } break;
   case DefinitionType_ITERATIVE:{
     NOT_IMPLEMENTED("yet");
@@ -1779,15 +1787,13 @@ Array<Token> TypesUsed(TypeDefinition def,Arena* out,Arena* temp){
   return {};
 }
 
-FUDeclaration* InstantiateBarebonesSpecifications(String content,TypeDefinition def,Arena* temp,Arena* temp2){
-  BLOCK_REGION(temp);
-
+FUDeclaration* InstantiateBarebonesSpecifications(String content,TypeDefinition def){
   switch(def.type){
   case DefinitionType_MERGE: {
-    return InstantiateMerge(def.merge,temp,temp2);
+    return InstantiateMerge(def.merge);
   } break;
   case DefinitionType_MODULE: {
-    return InstantiateModule(content,def.module,temp,temp2);
+    return InstantiateModule(content,def.module);
   } break;
   case DefinitionType_ITERATIVE:{
     NOT_IMPLEMENTED("yet");
@@ -1798,15 +1804,13 @@ FUDeclaration* InstantiateBarebonesSpecifications(String content,TypeDefinition 
   return nullptr;
 }
   
-FUDeclaration* InstantiateSpecifications(String content,TypeDefinition def,Arena* temp,Arena* temp2){
-  BLOCK_REGION(temp);
-
+FUDeclaration* InstantiateSpecifications(String content,TypeDefinition def){
   switch(def.type){
   case DefinitionType_MERGE: {
-    return InstantiateMerge(def.merge,temp,temp2);
+    return InstantiateMerge(def.merge);
   } break;
   case DefinitionType_MODULE: {
-    return InstantiateModule(content,def.module,temp,temp2);
+    return InstantiateModule(content,def.module);
   } break;
   case DefinitionType_ITERATIVE:{
     NOT_IMPLEMENTED("yet");
@@ -1817,7 +1821,9 @@ FUDeclaration* InstantiateSpecifications(String content,TypeDefinition def,Arena
   return nullptr;
 }
 
-Opt<AddressGenDef> ParseAddressGen(Tokenizer* tok,Arena* out,Arena* temp){
+Opt<AddressGenDef> ParseAddressGen(Tokenizer* tok,Arena* out){
+  TEMP_REGION(temp,out);
+
   EXPECT(tok,"AddressGen");
 
   Token typeStr = tok->NextToken();
@@ -1878,7 +1884,7 @@ Opt<AddressGenDef> ParseAddressGen(Tokenizer* tok,Arena* out,Arena* temp){
     } else if(CompareString(construct,"addr")){
       EXPECT(tok,"=");
 
-      auto symbolicExpression = ParseSymbolicExpression(tok,out,temp);
+      auto symbolicExpression = ParseSymbolicExpression(tok,out);
       PROPAGATE_POINTER_OPT(symbolicExpression);
       symbolic = symbolicExpression;
       
@@ -1886,7 +1892,7 @@ Opt<AddressGenDef> ParseAddressGen(Tokenizer* tok,Arena* out,Arena* temp){
       break;
     } else {      
       EXPECT(tok,"[");
-      auto symbolicExpression = ParseSymbolicExpression(tok,out,temp);
+      auto symbolicExpression = ParseSymbolicExpression(tok,out);
       EXPECT(tok,"]");
       
       PROPAGATE_POINTER_OPT(symbolicExpression);
@@ -1895,7 +1901,7 @@ Opt<AddressGenDef> ParseAddressGen(Tokenizer* tok,Arena* out,Arena* temp){
       Token other = tok->NextToken();
 
       EXPECT(tok,"[");
-      auto symbolicExpression2 = ParseSymbolicExpression(tok,out,temp);
+      auto symbolicExpression2 = ParseSymbolicExpression(tok,out);
       EXPECT(tok,"]");
 
       EXPECT(tok,";");
@@ -1929,10 +1935,9 @@ Opt<AddressGenDef> ParseAddressGen(Tokenizer* tok,Arena* out,Arena* temp){
   return def;
 }
 
-String InstantiateAddressGen(AddressGenDef def,Arena* out,Arena* temp){
-  STACK_ARENA(temp2Inst,Kilobyte(4));
-  Arena* temp2 = &temp2Inst;
-
+String InstantiateAddressGen(AddressGenDef def,Arena* out){
+  TEMP_REGION(temp,out);
+  
   TrieSet<Token>* constants = PushTrieSet<Token>(temp);
   TrieSet<Token>* loopVariables = PushTrieSet<Token>(temp);
   
@@ -1992,7 +1997,9 @@ String InstantiateAddressGen(AddressGenDef def,Arena* out,Arena* temp){
   Reverse(loops);
 
   auto GenerateLoopExpressionPairSymbolic = [GetRepr,GetLoopSizeRepr]
-    (AddressGenDef def,Array<AddressGenFor> loops,SymbolicExpression* expr,bool ext,Arena* out,Arena* temp) -> Array<AddressGenLoopSpecificatonSym>{
+    (AddressGenDef def,Array<AddressGenFor> loops,SymbolicExpression* expr,bool ext,Arena* out) -> Array<AddressGenLoopSpecificatonSym>{
+    TEMP_REGION(temp,out);
+
     int loopSize = (loops.size + 1) / 2;
     Array<AddressGenLoopSpecificatonSym> result = PushArray<AddressGenLoopSpecificatonSym>(out,loopSize);
 
@@ -2012,9 +2019,9 @@ String InstantiateAddressGen(AddressGenDef def,Arena* out,Arena* temp){
 
       String loopSizeRepr = GetLoopSizeRepr(l0,out);
       
-      SymbolicExpression* derived = Derivate(expr,l0.loopVariable,temp,out);
-      SymbolicExpression* firstDerived = Normalize(derived,temp,out);
-      SymbolicExpression* periodSym = ParseSymbolicExpression(loopSizeRepr,temp,out);
+      SymbolicExpression* derived = Derivate(expr,l0.loopVariable,temp);
+      SymbolicExpression* firstDerived = Normalize(derived,temp);
+      SymbolicExpression* periodSym = ParseSymbolicExpression(loopSizeRepr,temp);
         
       res.periodExpression = loopSizeRepr;
       res.incrementExpression = PushRepresentation(firstDerived,out);
@@ -2025,10 +2032,10 @@ String InstantiateAddressGen(AddressGenDef def,Arena* out,Arena* temp){
           // That means that we want 4 * period with a duty of 1.
           // Basically have to reverse the division.
 
-          SymbolicExpression* templateSym = ParseSymbolicExpression(STRING("(period) / duty"),temp,out);
-          SymbolicExpression* dutyExpression = SymbolicReplace(templateSym,STRING("period"),periodSym,temp,out);
+          SymbolicExpression* templateSym = ParseSymbolicExpression(STRING("(period) / duty"),temp);
+          SymbolicExpression* dutyExpression = SymbolicReplace(templateSym,STRING("period"),periodSym,temp);
 
-          dutyExpression = SymbolicReplace(dutyExpression,STRING("duty"),duty,temp,out);
+          dutyExpression = SymbolicReplace(dutyExpression,STRING("duty"),duty,temp);
           
           result[0].dutyExpression = PushRepresentation(dutyExpression,out);
         } else {
@@ -2037,26 +2044,26 @@ String InstantiateAddressGen(AddressGenDef def,Arena* out,Arena* temp){
       }
       
       String firstEnd = GetRepr(l0.end,out);
-      SymbolicExpression* firstEndSym = ParseSymbolicExpression(firstEnd,temp,out);
+      SymbolicExpression* firstEndSym = ParseSymbolicExpression(firstEnd,temp);
 
       res.shiftWithoutRemovingIncrement = STRING("0"); // By default
       if(i * 2 + 1 < loops.size){
         AddressGenFor l1 = loops[i*2 + 1];
 
         res.iterationExpression = GetLoopSizeRepr(l1,out);
-        SymbolicExpression* derived = Normalize(Derivate(expr,l1.loopVariable,temp,out),temp,out);
+        SymbolicExpression* derived = Normalize(Derivate(expr,l1.loopVariable,temp),temp);
 
         res.shiftWithoutRemovingIncrement = PushRepresentation(derived,out);
         
         // We handle shifts very easily. We just remove the effects of all the previous period increments and then apply the shift.
         // That way we just have to calculate the derivative in relation to the shift, instead of calculating the change from a period term to a iteration term.
         // We need to subtract 1 because the period increment is only applied (period - 1) times.
-        SymbolicExpression* templateSym = ParseSymbolicExpression(STRING("-(firstIncrement * (firstEnd - 1)) + term"),temp,out);
+        SymbolicExpression* templateSym = ParseSymbolicExpression(STRING("-(firstIncrement * (firstEnd - 1)) + term"),temp);
         
-        SymbolicExpression* replaced = SymbolicReplace(templateSym,STRING("firstIncrement"),firstDerived,temp,out);
-        replaced = SymbolicReplace(replaced,STRING("firstEnd"),firstEndSym,temp,out);
-        replaced = SymbolicReplace(replaced,STRING("term"),derived,temp,out);
-        replaced = Normalize(replaced,temp,out);
+        SymbolicExpression* replaced = SymbolicReplace(templateSym,STRING("firstIncrement"),firstDerived,temp);
+        replaced = SymbolicReplace(replaced,STRING("firstEnd"),firstEndSym,temp);
+        replaced = SymbolicReplace(replaced,STRING("term"),derived,temp);
+        replaced = Normalize(replaced,temp);
         
         res.shiftExpression = PushRepresentation(replaced,out);
       } else {
@@ -2077,13 +2084,13 @@ String InstantiateAddressGen(AddressGenDef def,Arena* out,Arena* temp){
   Array<AddressGenLoopSpecificatonSym> externalSpecSym;
 
   if(def.symbolic){
-    loopSpecSymbolic = GenerateLoopExpressionPairSymbolic(def,loops,def.symbolic,false,out,temp);
+    loopSpecSymbolic = GenerateLoopExpressionPairSymbolic(def,loops,def.symbolic,false,out);
   }
   if(def.symbolicInternal){
-    internalSpecSym = GenerateLoopExpressionPairSymbolic(def,loops,def.symbolicInternal,true,out,temp);
+    internalSpecSym = GenerateLoopExpressionPairSymbolic(def,loops,def.symbolicInternal,true,out);
   }
   if(def.symbolicExternal){
-    externalSpecSym = GenerateLoopExpressionPairSymbolic(def,loops,def.symbolicExternal,true,out,temp);
+    externalSpecSym = GenerateLoopExpressionPairSymbolic(def,loops,def.symbolicExternal,true,out);
   }
 
   // Calculate start by replacing every loop variable with their initial value.
@@ -2096,12 +2103,12 @@ String InstantiateAddressGen(AddressGenDef def,Arena* out,Arena* temp){
     
     // TODO: Should be the start value, but since we only using zero, for now simplify.
     //       A lot of code needs to be moved first and we probably need more tests before we start tackling this issues anyway. Not a priority for now.
-    SymbolicExpression* toReplaceWith = ParseSymbolicExpression(STRING("0"),temp,temp2);
+    SymbolicExpression* toReplaceWith = ParseSymbolicExpression(STRING("0"),temp);
     for(AddressGenFor loop : loops){
-      current = SymbolicReplace(current,loop.loopVariable,toReplaceWith,temp,temp2);
+      current = SymbolicReplace(current,loop.loopVariable,toReplaceWith,temp);
     }
 
-    current = Normalize(current,temp,temp2);
+    current = Normalize(current,temp);
     constantExpr = PushRepresentation(current,temp);
   }
     

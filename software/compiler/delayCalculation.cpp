@@ -101,7 +101,8 @@ static ConnectionNode* GetConnectionNode(SimpleEdge edge,AccelInfoIterator top){
 // Global vs local - Global values are values that apply to the entire graph and subgraphs, while local only applies to the current graph. It can also be used to represent the different between values that only make sense in a graph subset versues the entire graph.
 // 
 
-SimpleCalculateDelayResult CalculateDelay(AccelInfoIterator top,Arena* out,Arena* temp){
+SimpleCalculateDelayResult CalculateDelay(AccelInfoIterator top,Arena* out){
+  TEMP_REGION(temp,out);
   Assert(!Empty(top.accelName));
 
   int amountOfNodes = 0;
@@ -222,9 +223,9 @@ SimpleCalculateDelayResult CalculateDelay(AccelInfoIterator top,Arena* out,Arena
     String fileName = PushString(out,"global_latency_%.*s_%d_%d.dot",UNPACK_SS(top.accelName),top.mergeIndex,funCalls++);
     String filePath = PushDebugPath(out,top.accelName,STRING("delays"),fileName);
 
-    GraphPrintingContent content = GenerateLatencyDotGraph(top,orderToIndex,nodeDelayArray,edgesDelays,temp,out);
+    GraphPrintingContent content = GenerateLatencyDotGraph(top,orderToIndex,nodeDelayArray,edgesDelays,temp);
     
-    String result = GenerateDotGraph(content,out,debugArena);
+    String result = GenerateDotGraph(content,out);
     OutputContentToFile(filePath,result);
   }
 
@@ -354,9 +355,9 @@ SimpleCalculateDelayResult CalculateDelay(AccelInfoIterator top,Arena* out,Arena
     String fileName = PushString(out,"edge_delays_%.*s_%d_%d.dot",UNPACK_SS(top.accelName),top.mergeIndex,funCalls++);
     String filePath = PushDebugPath(out,top.accelName,STRING("delays"),fileName);
 
-    GraphPrintingContent content = GenerateLatencyDotGraph(top,orderToIndex,nodeDelayArray,edgesDelays,temp,out);
+    GraphPrintingContent content = GenerateLatencyDotGraph(top,orderToIndex,nodeDelayArray,edgesDelays,temp);
     
-    String result = GenerateDotGraph(content,out,debugArena);
+    String result = GenerateDotGraph(content,out);
     OutputContentToFile(filePath,result);
   }
   
@@ -413,9 +414,9 @@ SimpleCalculateDelayResult CalculateDelay(AccelInfoIterator top,Arena* out,Arena
 
     String filePath = PushDebugPath(out,top.accelName,STRING("delays"),fileName);
 
-    GraphPrintingContent content = GenerateLatencyDotGraph(top,orderToIndex,nodeDelayArray,edgesDelays,temp,out);
+    GraphPrintingContent content = GenerateLatencyDotGraph(top,orderToIndex,nodeDelayArray,edgesDelays,temp);
     
-    String result = GenerateDotGraph(content,out,debugArena);
+    String result = GenerateDotGraph(content,out);
     OutputContentToFile(filePath,result);
   }
   
@@ -431,15 +432,15 @@ SimpleCalculateDelayResult CalculateDelay(AccelInfoIterator top,Arena* out,Arena
 }
 
 CalculateDelayResult CalculateDelay(Accelerator* accel,Arena* out){
-  STACK_ARENA(tempInst,Kilobyte(256));
+  TEMP_REGION(temp,out);
   AccelInfo info = {};
 
   info.infos = PushArray<MergePartition>(out,1);
-  info.infos[0].info = GenerateInitialInstanceInfo(accel,out,&tempInst,{});
+  info.infos[0].info = GenerateInitialInstanceInfo(accel,out,{});
 
   AccelInfoIterator top = StartIteration(&info);
   top.accelName = accel->name;
-  SimpleCalculateDelayResult delays = CalculateDelay(top,out,&tempInst);
+  SimpleCalculateDelayResult delays = CalculateDelay(top,out);
 
   EdgeDelay* edgeToDelay = PushHashmap<Edge,DelayInfo>(out,delays.edgesDelay.size);
   NodeDelay* nodeDelay = PushHashmap<FUInstance*,DelayInfo>(out,delays.nodeDelayByOrder.size);
@@ -482,8 +483,8 @@ CalculateDelayResult CalculateDelay(Accelerator* accel,Arena* out){
   return res;
 }
 
-GraphPrintingContent GenerateLatencyDotGraph(AccelInfoIterator top,Array<int> orderToIndex,Array<DelayInfo> nodeDelay,Array<DelayInfo> edgeDelay,Arena* out,Arena* temp){
-  BLOCK_REGION(temp);
+GraphPrintingContent GenerateLatencyDotGraph(AccelInfoIterator top,Array<int> orderToIndex,Array<DelayInfo> nodeDelay,Array<DelayInfo> edgeDelay,Arena* out){
+  TEMP_REGION(temp,out);
 
   int size = orderToIndex.size;
   Array<GraphPrintingNodeInfo> nodeArray = PushArray<GraphPrintingNodeInfo>(out,size);

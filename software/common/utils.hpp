@@ -507,8 +507,8 @@ Array<R> Extract(Array<T> array,Arena* out,R T::* f){
 }
 
 template<typename T>
-Array<T> Unique(Array<T> arr,Arena* out,Arena* temp){
-  BLOCK_REGION(temp);
+Array<T> Unique(Array<T> arr,Arena* out){
+  TEMP_REGION(temp,out);
 
   Set<T>* set = PushSet<T>(temp,arr.size);
   

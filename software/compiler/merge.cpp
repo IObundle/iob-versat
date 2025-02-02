@@ -201,7 +201,8 @@ bool EqualPortMapping(PortInstance p1,PortInstance p2){
   return res;
 }
 
-ConsolidationResult GenerateConsolidationGraph(Accelerator* accel0,Accelerator* accel1,ConsolidationGraphOptions options,Arena* out,Arena* temp){
+ConsolidationResult GenerateConsolidationGraph(Accelerator* accel0,Accelerator* accel1,ConsolidationGraphOptions options,Arena* out){
+  TEMP_REGION(temp,out);
   ConsolidationGraph graph = {};
 
   // Should be temp memory instead of using memory intended for the graph, but since the graph is expected to use a lot of memory and we are technically saving memory using this mapping, no major problem
@@ -578,16 +579,16 @@ void Clique(CliqueState* state,ConsolidationGraph graphArg,int index,IndexRecord
   } while((num = graph.validNodes.GetNumberBitsSet()) != 0);
 }
 
-CliqueState MaxClique(ConsolidationGraph graph,int upperBound,Arena* arena,Time MAX_CLIQUE_TIME){
+CliqueState MaxClique(ConsolidationGraph graph,int upperBound,Arena* out,Time MAX_CLIQUE_TIME){
   CliqueState state = {};
-  state.table = PushArray<int>(arena,graph.nodes.size);
-  state.clique = Copy(graph,arena); // Preserve nodes and edges, but allocates different valid nodes
+  state.table = PushArray<int>(out,graph.nodes.size);
+  state.clique = Copy(graph,out); // Preserve nodes and edges, but allocates different valid nodes
 
   graph.validNodes.Fill(0);
 
   state.start = GetTime();
   for(int i = graph.nodes.size - 1; i >= 0; i--){
-    auto mark = MarkArena(arena);
+    BLOCK_REGION(out);
 
     state.found = false;
     for(int j = i; j < graph.nodes.size; j++){
@@ -599,10 +600,8 @@ CliqueState MaxClique(ConsolidationGraph graph,int upperBound,Arena* arena,Time 
     IndexRecord record = {};
     record.index = i;
 
-    Clique(&state,graph,i,&record,1,arena,MAX_CLIQUE_TIME);
+    Clique(&state,graph,i,&record,1,out,MAX_CLIQUE_TIME);
     state.table[i] = state.max;
-
-    PopMark(mark);
 
     if(state.max == upperBound){
       break;
@@ -620,7 +619,9 @@ CliqueState MaxClique(ConsolidationGraph graph,int upperBound,Arena* arena,Time 
   return state;
 }
 
-void OutputConsolidationGraph(ConsolidationGraph graph,bool onlyOutputValid,String moduleName,String fileName,Arena* temp){
+void OutputConsolidationGraph(ConsolidationGraph graph,bool onlyOutputValid,String moduleName,String fileName){
+  TEMP_REGION(temp,nullptr);
+
   if(!globalOptions.debug){
     return;
   }
@@ -720,17 +721,17 @@ GraphMapping InitGraphMapping(Arena* out){
   return mapping;
 }
 
-GraphMapping ConsolidationGraphMapping(Accelerator* accel1,Accelerator* accel2,ConsolidationGraphOptions options,String name,Arena* temp,Arena* out){
-  BLOCK_REGION(temp);
+GraphMapping ConsolidationGraphMapping(Accelerator* accel1,Accelerator* accel2,ConsolidationGraphOptions options,String name,Arena* out){
+  TEMP_REGION(temp,out);
 
   ConsolidationResult result = {};
   region(out){
-    result = GenerateConsolidationGraph(accel1,accel2,options,temp,out);
+    result = GenerateConsolidationGraph(accel1,accel2,options,temp);
   }
   ConsolidationGraph graph = result.graph;
 
   if(globalDebug.outputConsolidationGraphs){
-    OutputConsolidationGraph(graph,true,name,STRING("ConsolidationGraph.dot"),temp);
+    OutputConsolidationGraph(graph,true,name,STRING("ConsolidationGraph.dot"));
   }
   
   GraphMapping res = InitGraphMapping(out);
@@ -766,15 +767,15 @@ GraphMapping ConsolidationGraphMapping(Accelerator* accel1,Accelerator* accel2,C
 #endif
 
   if(globalDebug.outputGraphs){
-    OutputConsolidationGraph(clique,true,name,STRING("Clique1.dot"),temp);
+    OutputConsolidationGraph(clique,true,name,STRING("Clique1.dot"));
   }
   AddCliqueToMapping(res,clique);
 
   return res;
 }
 
-static GraphMapping FirstFitGraphMapping(Accelerator* accel1,Accelerator* accel2,Arena* arena){
-  GraphMapping res = InitGraphMapping(arena);
+static GraphMapping FirstFitGraphMapping(Accelerator* accel1,Accelerator* accel2,Arena* out){
+  GraphMapping res = InitGraphMapping(out);
 
 #if 0
   FOREACH_LIST(inst,accel1->instances){
@@ -978,8 +979,8 @@ void PrintMergePossibility(Accelerator* accel1,Accelerator* accel2){
 #endif
 }
 
-static GraphMapping CalculateMergeMapping(Accelerator* accel1,Accelerator* accel2,Array<SpecificMergeNodes> specificNodes,MergingStrategy strategy,String name,Arena* temp,Arena* out){
-  BLOCK_REGION(temp);
+static GraphMapping CalculateMergeMapping(Accelerator* accel1,Accelerator* accel2,Array<SpecificMergeNodes> specificNodes,MergingStrategy strategy,String name,Arena* out){
+  TEMP_REGION(temp,out);
   
   GraphMapping graphMapping = InitGraphMapping(out);
 
@@ -1019,7 +1020,7 @@ static GraphMapping CalculateMergeMapping(Accelerator* accel1,Accelerator* accel
     options.mapNodes = false;
     options.specifics = specificNodes;
 
-    graphMapping = ConsolidationGraphMapping(accel1,accel2,options,name,temp,out);
+    graphMapping = ConsolidationGraphMapping(accel1,accel2,options,name,out);
   }break;
   case MergingStrategy::FIRST_FIT:{
     graphMapping = FirstFitGraphMapping(accel1,accel2,out);
@@ -1065,8 +1066,8 @@ int GetFreeMuxGroup(Accelerator* accel){
   }
 }
 
-MergeGraphResultExisting MergeGraphToExisting(Accelerator* existing,Accelerator* flatten2,GraphMapping& graphMapping,String name,Arena* out,Arena* temp){
-  BLOCK_REGION(temp);
+MergeGraphResultExisting MergeGraphToExisting(Accelerator* existing,Accelerator* flatten2,GraphMapping& graphMapping,String name,Arena* out){
+  TEMP_REGION(temp,out);
 
   int size1 = existing->allocated.Size();
   int size2 = flatten2->allocated.Size();
@@ -1163,13 +1164,13 @@ MergeGraphResultExisting MergeGraphToExisting(Accelerator* existing,Accelerator*
   return res;
 }
 
-Array<int> GetPortConnections(FUInstance* node,Arena* arena){
+Array<int> GetPortConnections(FUInstance* node,Arena* out){
   int maxPorts = 0;
   FOREACH_LIST(ConnectionNode*,con,node->allInputs){
     maxPorts = std::max(maxPorts,con->port);
   }
 
-  Array<int> res = PushArray<int>(arena,maxPorts + 1);
+  Array<int> res = PushArray<int>(out,maxPorts + 1);
   Memset(res,0);
 
   FOREACH_LIST(ConnectionNode*,con,node->allInputs){
@@ -1179,8 +1180,8 @@ Array<int> GetPortConnections(FUInstance* node,Arena* arena){
   return res;
 }
 
-Array<Edge*> GetAllPaths(Accelerator* accel,PortInstance start,PortInstance end,Arena* out,Arena* temp){
-  BLOCK_REGION(temp);
+Array<Edge*> GetAllPaths(Accelerator* accel,PortInstance start,PortInstance end,Arena* out){
+  TEMP_REGION(temp,out);
 
   // TODO: Maybe this happens for circuits that make loops.
   //       Something is not right, check later why does the Assert fail for the FullAESRounds
@@ -1214,7 +1215,7 @@ Array<Edge*> GetAllPaths(Accelerator* accel,PortInstance start,PortInstance end,
   for(int outPort = 0; outPort < outInst.inst->inputs.size; outPort++){
     PortInstance outInputSide = {.inst = outInst.inst,.port = outPort};
     
-    Array<Edge*> subPaths = GetAllPaths(accel,start,outInputSide,out,temp);
+    Array<Edge*> subPaths = GetAllPaths(accel,start,outInputSide,out);
     
     for(Edge* subEdge : subPaths){
       Edge* newEdge = PushStruct<Edge>(out);
@@ -1242,8 +1243,8 @@ void PrintPath(Edge* head){
 
 // This entire approach is so bad.
 // The only good non bug ridded approach is to keep graph reconstitutions during the entire process of expanding the graphs. 
-ReconstituteResult ReconstituteGraph(Accelerator* merged,TrieSet<PortInstance>* mergedMultiplexers,Accelerator* base,String name,AcceleratorMapping* baseToMerged,Arena* out,Arena* temp){
-  BLOCK_REGION(temp);
+ReconstituteResult ReconstituteGraph(Accelerator* merged,TrieSet<PortInstance>* mergedMultiplexers,Accelerator* base,String name,AcceleratorMapping* baseToMerged,Arena* out){
+  TEMP_REGION(temp,out);
   Accelerator* recon = CreateAccelerator(name,AcceleratorPurpose_RECON);
 
   MappingCheck(baseToMerged);
@@ -1275,7 +1276,7 @@ ReconstituteResult ReconstituteGraph(Accelerator* merged,TrieSet<PortInstance>* 
       continue;
     }
 
-    Array<Edge*> allPaths = GetAllPaths(merged,start,end,temp,out);
+    Array<Edge*> allPaths = GetAllPaths(merged,start,end,temp);
 
     auto allValidPathsDyn = StartGrowableArray<Edge*>(temp);
     for(Edge* p : allPaths){
@@ -1448,8 +1449,8 @@ AcceleratorMapping* MapFlattenedGraphs(Accelerator* start,FUDeclaration* endDecl
 }
 
 // Recurses over composite but does not recurse lower than merged units.
-Array<GraphAndMapping> GetAllBaseMergeTypes(FUDeclaration* decl,Arena* out,Arena* temp){
-  //Assert(false);
+Array<GraphAndMapping> GetAllBaseMergeTypes(FUDeclaration* decl,Arena* out){
+  TEMP_REGION(temp,out);
   
   BLOCK_REGION(temp);
 
@@ -1490,7 +1491,7 @@ Array<GraphAndMapping> GetAllBaseMergeTypes(FUDeclaration* decl,Arena* out,Arena
         }
       } else if(subDecl->type == FUDeclarationType_COMPOSITE ||
                 subDecl->type == FUDeclarationType_ITERATIVE){
-        Array<GraphAndMapping> subTypes = GetAllBaseMergeTypes(subDecl,temp,out);
+        Array<GraphAndMapping> subTypes = GetAllBaseMergeTypes(subDecl,temp);
 
         for(GraphAndMapping result : subTypes){
           seen->Insert(result);
@@ -1537,12 +1538,12 @@ Array<GraphAndMapping> GetAllBaseMergeTypes(FUDeclaration* decl,Arena* out,Arena
   So merges add, modules multiply.
 */
 
-ReconstituteResult ReconstituteGraphFromStruct(Accelerator* merged,TrieSet<PortInstance>* mergedMultiplexers,Accelerator* base,String name,AcceleratorMapping* baseToMerged,FUDeclaration* parentType,Arena* out,Arena* temp);
+ReconstituteResult ReconstituteGraphFromStruct(Accelerator* merged,TrieSet<PortInstance>* mergedMultiplexers,Accelerator* base,String name,AcceleratorMapping* baseToMerged,FUDeclaration* parentType,Arena* out);
 
 // TODO: The one thing that I still dislike heavily is the reconstitution of the graphs from the merged graphs.
 //       We are basically assuming that after having the merged graph, we can derive the reconstitutions in a fine manner. I think that this is bug/error prone.
 //       The more "correct" approach is to start with the base graphs of each type and any modification made to the merge graph is propagated to the "recon" graphs (only mux and buffers are added). This guarantees that at the end, when the merged graph is correct, the recon graphs should be too, and there is no need to find paths and do all that to get the final result.
-//       The only problem, of course, is that we are constantly carrying a bunch of graphs and one change in a graph must be correctly replicated in all the others. Also do not know if we do not arrive at some problems of coherence (like if we a mux to a graph, we are now changing the path of the graph forever. We then need to make sure that any further addition still makes sense).
+//       The only problem, of course, is that we are constantly carrying a bunch of graphs and one change in a graph must be correctly replicated in all the others. Also do not know if we do not arrive at some problems of coherence (like if we a mux to a graph, we are now changing the path of the graph forever. We then need to make sure that any further addition still makes sense. Ex: if X -> Y and we add mux M so that we have X->M->Y, and then we find out that we need to add a buffer B to X->Y, then I need to make sure that we either have X->M->B->Y or X->B->M->Y [but thinking more, if we add a mux, we add it everywhere where X and Y exist, so the buffer must be added to a graph where M also exist.] ).
 
 //       So, basically, an api/interface where we can carry a bunch of graphs and make operations on one graph which are seamlessly integrated into the other graphs (some operations, others do nothing) is what I think is the best way of simplifying the merge algorithm.
 
@@ -1553,13 +1554,14 @@ ReconstituteResult ReconstituteGraphFromStruct(Accelerator* merged,TrieSet<PortI
 
 FUDeclaration* Merge(Array<FUDeclaration*> types,
                      String name,Array<SpecificMergeNode> specifics,
-                     Arena* temp,Arena* temp2,MergingStrategy strat){
+                     MergingStrategy strat){
+  
+  TEMP_REGION(temp,nullptr);
+  TEMP_REGION(temp2,temp);
+
   Assert(types.size >= 2);
 
   strat = MergingStrategy::CONSOLIDATION_GRAPH;
-  
-  BLOCK_REGION(temp);
-  BLOCK_REGION(temp2);
 
   int size = types.size;
   Array<Accelerator*> flatten = PushArray<Accelerator*>(temp,size);
@@ -1609,10 +1611,10 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
   for(int i = 1; i < size; i++){
     String folderName = PushString(temp,"%.*s/Merge_%d",UNPACK_SS(name),i);
 
-    GraphMapping map = CalculateMergeMapping(mergedAccel,flatten[i],specificNodes,strat,folderName,temp,temp2);
-    MergeGraphResultExisting res = MergeGraphToExisting(mergedAccel,flatten[i],map,folderName,temp,temp2);
+    GraphMapping map = CalculateMergeMapping(mergedAccel,flatten[i],specificNodes,strat,folderName,temp2);
+    MergeGraphResultExisting res = MergeGraphToExisting(mergedAccel,flatten[i],map,folderName,temp2);
 
-    OutputDebugDotGraph(res.result,STRING(StaticFormat("result%d.dot",i)),temp);
+    OutputDebugDotGraph(res.result,STRING(StaticFormat("result%d.dot",i)));
 
     flattenToMergedAccel[i] = res.map2;
     mergedAccel = res.result;
@@ -1665,12 +1667,16 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
   }
 
   bool insertedAMultiplexer = false;
+
+  // Different usages because normal units can also be shared, but muxGroup is only for muxs
+  // We could identify different mux groups by different shared indexes but easier to debug using mux groups
   int freeShareIndex = GetFreeShareIndex(mergedAccel);
   int muxGroup = GetFreeMuxGroup(mergedAccel);
 
   // After merging everything into a single graph we fix the datapaths by inserting muxs
   // At this point we do not preserve info from the lower types.
   // We do not know which type a mux input port belongs too.
+  // Specially because at the end, we might have multiple types and subtypes reclaiming the same input port of a merge.
   // We solve this later by reconstituting the base types into the merged path created here
   // I kinda wonder if it is possible to preserve info instead of having to reconstitute later.
   // The problem is we first must find all the lower types and everytime we add something to the graph we also add the same to the recon graphs.
@@ -1687,7 +1693,6 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
 
         int numberOfMultiple = portConnections[port];
 
-        // Collect the problematic edges for this port
         Array<Edge> problematicEdgesInFinalGraph = PushArray<Edge>(temp,numberOfMultiple);
         int index = 0;
 
@@ -1722,10 +1727,7 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
                 PortInstance otherPort = MappingMapOutput(flattenToMergedAccel[ii],con->instConnectedTo);
 
                 FUInstance* other = otherPort.inst;
-                //FUInstance* other = MappingMap(flattenToMerge[ii],con->instConnectedTo.inst);
 
-                // In here, we could save edge information for the view graphs, so that we could add a multiplexer to the view graph later
-                // Do not know yet if needed.
                 if(con->port == port && other == edgeNode.units[0].inst && con->instConnectedTo.port == edgeNode.units[0].port && con->edgeDelay == edgeNode.delay){
                   inputNumberToEdgeIndex[ii] = i;
                   break;
@@ -1737,16 +1739,12 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
 
         // At this point, we know the edges that we need to remove and to replace with a multiplexer and the
         // port to which they should connect.
-        // Create multiplexer instance
-        //const char* format = "versat_merge_mux_%d";
-        //String str = PushString(perm,format,multiplexersAdded++);
         String str = GetFreeMergeMultiplexerName(mergedAccel,globalPermanent);
         insertedAMultiplexer = true;
         PushNullByte(globalPermanent);
         FUInstance* multiplexer = CreateFUInstance(mergedAccel,muxType,str);
         multiplexer->isMergeMultiplexer = true;
-        //multiplexer->mergeMultiplexerId = result->id;
-        ShareInstanceConfig(multiplexer,freeShareIndex); // TODO: Realistic share index. Maybe add a function that allocates a free share index and we keep the next free shared index inside the accelerator.
+        ShareInstanceConfig(multiplexer,freeShareIndex);
         multiplexer->muxGroup = muxGroup;
         
         for(int i = 0; i < problematicEdgesInFinalGraph.size; i++){
@@ -1778,7 +1776,6 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
   mergedAccel->name = permanentName;
 
   // TODO: Join the Merge and the Subunit register function common functionality into one
-
   FUDeclaration declInst = {};
   declInst.name = name;
   declInst.parameters = PushArray<String>(globalPermanent,6);
@@ -1798,7 +1795,7 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
   AcceleratorMapping* mergedAccelToBaseCircuit = baseCopy.second;
   
   // Output full circuit
-  OutputDebugDotGraph(declInst.baseCircuit,STRING("FullCircuit.dot"),temp);
+  OutputDebugDotGraph(declInst.baseCircuit,STRING("FullCircuit.dot"));
 
   int actualMergedAmount = mergedAmount;
   mergedAmount = size; // TODO: FOR NOW
@@ -1809,10 +1806,12 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
   Array<DAGOrderNodes> reconOrder = PushArray<DAGOrderNodes>(temp,99);
   Array<CalculateDelayResult> reconDelay = PushArray<CalculateDelayResult>(temp,99);
   
+  // TODO: Because we are also keeping the middle graphs in memory, we do not use the actualMergedAmount, but instead a value that is slightly higher (but should not be more than half, I think).
+  //       This value can be calculated beforehand but I might change the entire approach taken, so no point in looking into it right now.
   actualMergedAmount = 99;
+
   Array<FUDeclaration*> topType = PushArray<FUDeclaration*>(temp,actualMergedAmount);
 
-  // TODO: Because we are also keeping the middle graphs in memory, we do not use the actualMergedAmount, but instead a value that is slightly higher (but should not be more than half).
   Array<Accelerator*> mergedAccelerators = PushArray<Accelerator*>(temp,actualMergedAmount);
   Array<Accelerator*> reconAccelerators = PushArray<Accelerator*>(temp,actualMergedAmount);
   Array<TrieSet<PortInstance>*> mergedMultiplexers = PushArray<TrieSet<PortInstance>*>(temp,actualMergedAmount);
@@ -1857,14 +1856,14 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
 
         if(isFromStruct[i]){
           FUDeclaration* parentType = baseCircuitType[parents[i]];
-          result = ReconstituteGraphFromStruct(mergedAccelerators[i],mergedMultiplexers[i],baseCircuits[i],permanentName,maps[i],parentType,temp,temp2);
+          result = ReconstituteGraphFromStruct(mergedAccelerators[i],mergedMultiplexers[i],baseCircuits[i],permanentName,maps[i],parentType,temp);
         } else {
-          result = ReconstituteGraph(mergedAccelerators[i],mergedMultiplexers[i],baseCircuits[i],permanentName,maps[i],temp,temp2);
+          result = ReconstituteGraph(mergedAccelerators[i],mergedMultiplexers[i],baseCircuits[i],permanentName,maps[i],temp);
         }
 
         Assert(result.accel->allocated.Size() > 0);
         
-        Array<GraphAndMapping> subMerged = GetAllBaseMergeTypes(baseCircuitType[i],temp,temp2);
+        Array<GraphAndMapping> subMerged = GetAllBaseMergeTypes(baseCircuitType[i],temp);
        
         if(subMerged.size == 0){
           lowestLevel[i] = true;
@@ -1955,7 +1954,7 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
       reconOrder[i] = CalculateDAGOrder(&accel->allocated,temp);
       reconDelay[i] = CalculateDelay(accel,temp);
       
-      Array<DelayToAdd> delaysToAdd = GenerateFixDelays(accel,reconDelay[i].edgesDelay,globalPermanent,temp);
+      Array<DelayToAdd> delaysToAdd = GenerateFixDelays(accel,reconDelay[i].edgesDelay,globalPermanent);
       for(DelayToAdd toAdd : delaysToAdd){
         Edge reconEdge = toAdd.edge;
 
@@ -1987,7 +1986,7 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
   
   FUDeclaration* decl = RegisterFU(declInst);
 
-  FillDeclarationWithAcceleratorValues(decl,mergedAccel,temp,temp2);
+  FillDeclarationWithAcceleratorValues(decl,mergedAccel);
   FillDeclarationWithDelayType(decl);
 
   decl->type = FUDeclarationType_MERGED;
@@ -2037,14 +2036,13 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
         builder->PushString("_");
       }
     }
-    DEBUG_BREAK();
     decl->info.infos[i].name = EndString(globalPermanent,builder);
     
-    decl->info.infos[i].info = GenerateInitialInstanceInfo(decl->fixedDelayCircuit,globalPermanent,temp,{});
+    decl->info.infos[i].info = GenerateInitialInstanceInfo(decl->fixedDelayCircuit,globalPermanent,{});
     AccelInfoIterator iter = StartIteration(&decl->info);
     iter.mergeIndex = i;
     iter.accelName = decl->info.infos[i].name;
-    FillInstanceInfo(iter,globalPermanent,temp);
+    FillInstanceInfo(iter,globalPermanent);
 
     AcceleratorMapping* mergedAccelToRecon = MappingInvert(reconToMergedAccel[i],globalPermanent);
 
@@ -2126,14 +2124,14 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
     decl->info.infos[i].outputLatencies = ExtractOutputLatencies(iter,globalPermanent);
   }
   
-  FillAccelInfoAfterCalculatingInstanceInfo(&decl->info,decl->fixedDelayCircuit,temp);
+  FillAccelInfoAfterCalculatingInstanceInfo(&decl->info,decl->fixedDelayCircuit);
   
   return decl;
 }
 
 // TODO: Do not even remember what FromStruct even means. Need to figure out and replace with a better name. Code is confusing as it is.
-ReconstituteResult ReconstituteGraphFromStruct(Accelerator* merged,TrieSet<PortInstance>* mergedMultiplexers,Accelerator* base,String name,AcceleratorMapping* baseToMerged,FUDeclaration* parentType,Arena* out,Arena* temp){
-  BLOCK_REGION(temp);
+ReconstituteResult ReconstituteGraphFromStruct(Accelerator* merged,TrieSet<PortInstance>* mergedMultiplexers,Accelerator* base,String name,AcceleratorMapping* baseToMerged,FUDeclaration* parentType,Arena* out){
+  TEMP_REGION(temp,out);
   Accelerator* recon = CreateAccelerator(name,AcceleratorPurpose_RECON);
  
   MappingCheck(baseToMerged);
@@ -2223,7 +2221,7 @@ ReconstituteResult ReconstituteGraphFromStruct(Accelerator* merged,TrieSet<PortI
       continue;
     }
 
-    Array<Edge*> allPaths = GetAllPaths(merged,start,end,temp,out);
+    Array<Edge*> allPaths = GetAllPaths(merged,start,end,temp);
 
     auto allValidPathsDyn = StartGrowableArray<Edge*>(temp);
     for(Edge* p : allPaths){

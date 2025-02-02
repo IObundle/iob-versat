@@ -62,8 +62,8 @@ static Type* CollapseTypeUntilBase(Type* type){
 }
 
 String GetUniqueRepresentationOrFail(String name,Arena* out){
-  STACK_ARENA(temp,Kilobyte(4));
-  Opt<ParsedType> parsed = ParseType(name,&temp);
+  TEMP_REGION(temp,out);
+  Opt<ParsedType> parsed = ParseType(name,temp);
   Assert(parsed.has_value());
   
   String uniqueName = PushUniqueRepresentation(out,parsed.value());
@@ -83,8 +83,8 @@ Type* RegisterSimpleType(String name,int size,int align){
 }
 
 Type* RegisterOpaqueType(String name,Subtype subtype,int size,int align){
-  STACK_ARENA(temp,Kilobyte(4));
-  String tempName = GetUniqueRepresentationOrFail(name,&temp);
+  TEMP_REGION(temp,nullptr);
+  String tempName = GetUniqueRepresentationOrFail(name,temp);
 
   for(Type* type : types){
     if(CompareString(type->name,tempName)){
@@ -104,8 +104,8 @@ Type* RegisterOpaqueType(String name,Subtype subtype,int size,int align){
 }
 
 Type* RegisterEnum(String name,int size,int align,Array<Pair<String,int>> enumValues){
-  STACK_ARENA(temp,Kilobyte(4));
-  String tempName = GetUniqueRepresentationOrFail(name,&temp);
+  TEMP_REGION(temp,nullptr);
+  String tempName = GetUniqueRepresentationOrFail(name,temp);
 
   for(Type* type : types){
     if(CompareString(type->name,tempName)){
@@ -153,8 +153,8 @@ Type* RegisterTemplate(String baseName,Array<String> templateArgNames){
 }
 
 Type* RegisterStructMembers(String name,Array<Member> members){
-  STACK_ARENA(temp,Kilobyte(4));
-  String tempName = GetUniqueRepresentationOrFail(name,&temp);
+  TEMP_REGION(temp,nullptr);
+  String tempName = GetUniqueRepresentationOrFail(name,temp);
 
   Type* type = GetType(tempName);
 
@@ -166,8 +166,8 @@ Type* RegisterStructMembers(String name,Array<Member> members){
 }
 
 Type* RegisterTemplateMembers(String name,Array<TemplatedMember> members){
-  STACK_ARENA(temp,Kilobyte(4));
-  String tempName = GetUniqueRepresentationOrFail(name,&temp);
+  TEMP_REGION(temp,nullptr);
+  String tempName = GetUniqueRepresentationOrFail(name,temp);
 
   Type* type = GetType(tempName);
 
@@ -210,8 +210,8 @@ String GetBaseTypeName(String name){
   return res;
 }
 
-Type* InstantiateTemplate(String name,Arena* arena){
-  STACK_ARENA(temp,Kilobyte(4));
+Type* InstantiateTemplate(String name,Arena* out){
+  TEMP_REGION(temp,out);
   Tokenizer tok(name,"<>,",{});
   
   // This check probably shouldn't be here.
@@ -221,14 +221,14 @@ Type* InstantiateTemplate(String name,Arena* arena){
   }
 
   // Allocates first so that pointers to itself resolve correctly.
-  if(arena){
-    name = PushString(arena,"%.*s",UNPACK_SS(name));
+  if(out){
+    name = PushString(out,"%.*s",UNPACK_SS(name));
   }
 
   Type* newTypeAlloc = types.Alloc();
   newTypeAlloc->name = name;
   
-  Hashmap<String,String>* templateToType = PushHashmap<String,String>(&temp,16);
+  Hashmap<String,String>* templateToType = PushHashmap<String,String>(temp,16);
 
   Token baseName = tok.NextToken();
   Type* templateBase = GetSpecificType(baseName);
@@ -272,8 +272,8 @@ Type* InstantiateTemplate(String name,Arena* arena){
 
   bool mustFixRecursion = false;
   Array<Member> members = PushArray<Member>(&permanentArena,nMembers);
-  Array<int> sizes = PushArray<int>(&temp,numberPositions);
-  Array<int> align = PushArray<int>(&temp,numberPositions);
+  Array<int> sizes = PushArray<int>(temp,numberPositions);
+  Array<int> align = PushArray<int>(temp,numberPositions);
   Memset(sizes,0);
   Memset(align,0);
 
@@ -281,17 +281,17 @@ Type* InstantiateTemplate(String name,Arena* arena){
     TemplatedMember templateMember = templateBase->templateMembers[i];
     Tokenizer tok(templateMember.typeName,"*&[],<>",{});
 
-    BLOCK_REGION(&temp);
-    auto mark = StartString(&temp);
+    BLOCK_REGION(temp);
+    auto mark = StartString(temp);
 
     while(!tok.Done()){
       Token token = tok.NextToken();
 
       String* found = templateToType->Get(token);
       if(found){
-        PushString(&temp,"%.*s",UNPACK_SS(*found));
+        PushString(temp,"%.*s",UNPACK_SS(*found));
       } else {
-        PushString(&temp,"%.*s",UNPACK_SS(token));
+        PushString(temp,"%.*s",UNPACK_SS(token));
       }
     }
 
@@ -322,7 +322,7 @@ Type* InstantiateTemplate(String name,Arena* arena){
     align[templateMember.memberOffset] = std::max(align[templateMember.memberOffset],type->align);
   }
 
-  Array<int> offsets = PushArray<int>(&temp,numberPositions + 1);
+  Array<int> offsets = PushArray<int>(temp,numberPositions + 1);
   offsets[0] = 0;
   for(int i = 1; i < offsets.size; i++){
     offsets[i] = Align(offsets[i-1],align[i-1]) + sizes[i - 1];
@@ -369,14 +369,14 @@ Type* InstantiateTemplate(String name,Arena* arena){
 }
 
 Type* GetType(String name){
-  STACK_ARENA(temp,Kilobyte(4));
+  TEMP_REGION(temp,nullptr);
 
-  Opt<ParsedType> parsed = ParseType(name,&temp);
+  Opt<ParsedType> parsed = ParseType(name,temp);
   if(!parsed.has_value()){
     return nullptr;
   }
   
-  String uniqueName = PushUniqueRepresentation(&temp,parsed.value());
+  String uniqueName = PushUniqueRepresentation(temp,parsed.value());
   
   Type* typeExists = GetSpecificType(uniqueName);
   if(typeExists){
@@ -394,7 +394,7 @@ Type* GetType(String name){
     ParsedType onlyTemplate = parsed.value();
     onlyTemplate.arrayExpressions.size = 0;
     onlyTemplate.amountOfPointers = 0;
-    String onlyTemplateName = PushUniqueRepresentation(&temp,onlyTemplate);
+    String onlyTemplateName = PushUniqueRepresentation(temp,onlyTemplate);
 
     Type* onlyTemplateType = GetSpecificType(onlyTemplateName);
 
@@ -597,30 +597,30 @@ void FreeTypes(){
   types.Clear(true);
 }
  
-String GetDefaultValueRepresentation(Value in,Arena* arena){
+String GetDefaultValueRepresentation(Value in,Arena* out){
   Value val = CollapseArrayIntoPtr(in);
   Type* type = val.type;
   String res = {};
 
   if(CompareString(type->name,"long int")){
-    res = PushString(arena,"%ld",val.number);
+    res = PushString(out,"%ld",val.number);
     return res;
   } else if(type == ValueType::NUMBER){
-    res = PushString(arena,"%" PRId64,val.number);
+    res = PushString(out,"%" PRId64,val.number);
   } else if(type == ValueType::STRING || type == ValueType::CONST_STRING){
     if(val.literal){
-      res = PushString(arena,"\"%.*s\"",UNPACK_SS(val.str));
+      res = PushString(out,"\"%.*s\"",UNPACK_SS(val.str));
     } else {
-      res = PushString(arena,"%.*s",UNPACK_SS(val.str));
+      res = PushString(out,"%.*s",UNPACK_SS(val.str));
     }
   } else if(type == ValueType::CHAR){
-    res = PushString(arena,"%c",val.ch);
+    res = PushString(out,"%c",val.ch);
   } else if(type == ValueType::SIZED_STRING || val.type == ValueType::SIZED_STRING_BASE){
-    res = PushString(arena,"%.*s",UNPACK_SS(val.str));
+    res = PushString(out,"%.*s",UNPACK_SS(val.str));
   } else if(type == ValueType::BOOLEAN){
-    res = PushString(arena,"%s",val.boolean ? "true" : "false");
+    res = PushString(out,"%s",val.boolean ? "true" : "false");
   } else if(type == ValueType::SIZE_T){
-    res = PushString(arena,"%d",*(int*)val.custom);
+    res = PushString(out,"%d",*(int*)val.custom);
   } else if(type == ValueType::NIL){
     res = STRING("Nullptr");
   } else if(type->type == Subtype_POINTER){
@@ -629,9 +629,9 @@ String GetDefaultValueRepresentation(Value in,Arena* arena){
     void* ptr = *(void**) val.custom;
 
     if(ptr == nullptr){
-      res = PushString(arena,"0x0");
+      res = PushString(out,"0x0");
     } else {
-      res = PushString(arena,"%p",ptr);
+      res = PushString(out,"%p",ptr);
     }
   } else if(type->type == Subtype_TEMPLATED_INSTANCE){
     if(type->templateBase == ValueType::ARRAY){
@@ -640,9 +640,9 @@ String GetDefaultValueRepresentation(Value in,Arena* arena){
         LogFatal(LogModule::TYPE,"Not an Array");
       }
 
-      res = PushString(arena,"Array of Size:%" PRId64,size.value().number);
+      res = PushString(out,"Array of Size:%" PRId64,size.value().number);
     } else {
-      res = PushString(arena,"%.*s",UNPACK_SS(type->name)); // Return type name
+      res = PushString(out,"%.*s",UNPACK_SS(type->name)); // Return type name
     }
   } else if(type->type == Subtype_ENUM){
     int enumValue = in.number;
@@ -654,12 +654,12 @@ String GetDefaultValueRepresentation(Value in,Arena* arena){
       }
     }
     if(pairFound){
-      res = PushString(arena,"%.*s::%.*s",UNPACK_SS(type->name),UNPACK_SS(pairFound->first));
+      res = PushString(out,"%.*s::%.*s",UNPACK_SS(type->name),UNPACK_SS(pairFound->first));
     } else {
-      res = PushString(arena,"(enum %.*s:%d)",UNPACK_SS(type->name),enumValue);
+      res = PushString(out,"(enum %.*s:%d)",UNPACK_SS(type->name),enumValue);
     }
   } else {
-    res = PushString(arena,"\"[GetDefaultValueRepresentation Type:%.*s]\"",UNPACK_SS(type->name)); // Return type name
+    res = PushString(out,"\"[GetDefaultValueRepresentation Type:%.*s]\"",UNPACK_SS(type->name)); // Return type name
   }
 
   return res;
@@ -1156,8 +1156,8 @@ Type* GetBaseTypeOfIterating(Type* iterating){
       Type* keyType = type->templateArgTypes[0];
       Type* dataType = type->templateArgTypes[1];
 
-      STACK_ARENA(temp,256);
-      String pairName = PushString(&temp,"Pair<%.*s,%.*s>",UNPACK_SS(keyType->name),UNPACK_SS(dataType->name));
+      TEMP_REGION(temp,nullptr);
+      String pairName = PushString(temp,"Pair<%.*s,%.*s>",UNPACK_SS(keyType->name),UNPACK_SS(dataType->name));
 
       Type* exists = GetSpecificType(pairName);
       if(!exists){
@@ -1235,8 +1235,8 @@ Iterator Iterate(Value iterating){
       Type* keyType = type->templateArgTypes[0];
       Type* dataType = type->templateArgTypes[1];
 
-      STACK_ARENA(temp,256);
-      String pairName = PushString(&temp,"Pair<%.*s,%.*s>",UNPACK_SS(keyType->name),UNPACK_SS(dataType->name));
+      TEMP_REGION(temp,nullptr);
+      String pairName = PushString(temp,"Pair<%.*s,%.*s>",UNPACK_SS(keyType->name),UNPACK_SS(dataType->name));
 
       Type* exists = GetSpecificType(pairName);
       if(!exists){
@@ -1569,7 +1569,7 @@ Value CollapseArrayIntoPtr(Value in){
   return newValue;
 }
 
-Value ConvertValue(Value in,Type* want,Arena* arena){
+Value ConvertValue(Value in,Type* want,Arena* out){
   if(in.type == want){
     return in;
   }
@@ -1616,8 +1616,8 @@ Value ConvertValue(Value in,Type* want,Arena* arena){
     if(in.type == ValueType::STRING || in.type == ValueType::CONST_STRING){
       res = in;
       res.type = want;
-    } else if(arena){
-      res.str = GetDefaultValueRepresentation(in,arena);
+    } else if(out){
+      res.str = GetDefaultValueRepresentation(in,out);
     } else {
       NOT_IMPLEMENTED("Implement as needed");
     }
@@ -1721,14 +1721,14 @@ Value MakeValue(void* entity,String typeName){
 }
 
 // This shouldn't be here, but cannot be on parser.cpp because otherwise struct parser would fail
-Array<Value> ExtractValues(const char* format,String tok,Arena* arena){
+Array<Value> ExtractValues(const char* format,String tok,Arena* out){
   // TODO: This is pretty much a copy of CheckFormat but with small modifications
   // There should be a way to refactor into a single function, and probably less error prone
   if(!CheckFormat(format,tok)){
     return {};
   }
 
-  auto arr = StartGrowableArray<Value>(arena);
+  auto arr = StartGrowableArray<Value>(out);
 
   int tokenIndex = 0;
   for(int formatIndex = 0; 1;){
@@ -1976,7 +1976,7 @@ Opt<ParsedType> ParseType(Tokenizer* tok,Arena* out);
 Opt<NameAndTemplateArguments> ParseNameAndTemplateArguments(Tokenizer* tok,Arena* out){
   // TODO - Parse the arguments and templates. Use this function to then later take into account namespaces (add :: to the special characters and just replace the ParseType name and template with a loop that takes into account namespaces, if they exist.
   // NOTE - Like modifiers, do not let this info propagate out, just create the unique representation and save the string.
-  STACK_ARENA(temp,Kilobyte(4));
+  TEMP_REGION(temp,out);
   
   NameAndTemplateArguments result = {};
   
@@ -1987,11 +1987,11 @@ Opt<NameAndTemplateArguments> ParseNameAndTemplateArguments(Tokenizer* tok,Arena
   
   Token peek = tok->PeekToken();
   if(CompareString(peek,"<")){
-    BLOCK_REGION(&temp);
+    BLOCK_REGION(temp);
 
     tok->AdvancePeek();
 
-    ArenaList<ParsedType>* l = PushArenaList<ParsedType>(&temp);
+    ArenaList<ParsedType>* l = PushArenaList<ParsedType>(temp);
     while(1){
       if(tok->Done()){
         return {};
@@ -2045,7 +2045,7 @@ String PushUniqueRepresentation(Arena* out,NameAndTemplateArguments named){
 }
 
 Opt<ParsedType> ParseType(Tokenizer* tok,Arena* out){
-  STACK_ARENA(temp,Kilobyte(4));
+  TEMP_REGION(temp,out);
   
   ParsedType result = {};
   
@@ -2055,7 +2055,7 @@ Opt<ParsedType> ParseType(Tokenizer* tok,Arena* out){
 
   Token peek = tok->PeekToken();
   if(CompareString(peek,"::")){
-    ArenaList<NameAndTemplateArguments>* list = PushArenaList<NameAndTemplateArguments>(&temp);
+    ArenaList<NameAndTemplateArguments>* list = PushArenaList<NameAndTemplateArguments>(temp);
     while(CompareString(peek,"::")){
       tok->AdvancePeek();
       Opt<NameAndTemplateArguments> more = ParseNameAndTemplateArguments(tok,out);
@@ -2098,7 +2098,7 @@ Opt<ParsedType> ParseType(Tokenizer* tok,Arena* out){
   }
   result.amountOfPointers = pointerCount;
 
-  auto builder = PushArenaList<String>(&temp);
+  auto builder = PushArenaList<String>(temp);
   int arrayCount = 0;
   while(!tok->Done()){
     Token peek = tok->PeekToken();

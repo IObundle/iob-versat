@@ -176,8 +176,8 @@ AccelInfoIterator StartIteration(AccelInfo* info){
   return iter;
 }
 
-Array<Wire> ExtractAllConfigs(Array<InstanceInfo> info,Arena* out,Arena* temp){
-  BLOCK_REGION(temp);
+Array<Wire> ExtractAllConfigs(Array<InstanceInfo> info,Arena* out){
+  TEMP_REGION(temp,out);
 
   ArenaList<Wire>* list = PushArenaList<Wire>(temp);
   Set<StaticId>* seen = PushSet<StaticId>(temp,99);
@@ -326,10 +326,10 @@ static bool Next(Array<Partition> arr){
 //       Composites makes so we are currently at N types at any point, but this function is not calculating data.
 //       For a merge of merges, this function must return one type.
 Array<AccelInfoIterator> GetCurrentPartitionsAsIterators(AccelInfoIterator iter,Arena* out){
-  STACK_ARENA(temp,Kilobyte(4));
+  TEMP_REGION(temp,out);
   // TODO: This is dependent on partitions. Not sure how I feel about that.
   // TODO: BAD
-  Hashmap<FUDeclaration*,int>* seenAmount = PushHashmap<FUDeclaration*,int>(&temp,10);
+  Hashmap<FUDeclaration*,int>* seenAmount = PushHashmap<FUDeclaration*,int>(temp,10);
   AccelInfo* info = iter.info;
   for(int i = 0; i < info->infos.size; i++){
     FUDeclaration* type = info->infos[i].baseType;
@@ -337,7 +337,7 @@ Array<AccelInfoIterator> GetCurrentPartitionsAsIterators(AccelInfoIterator iter,
     seenAmount->Insert(type,amount + 1);
   }
 
-  Array<Partition> partitions = PushArray<Partition>(&temp,seenAmount->nodesUsed);
+  Array<Partition> partitions = PushArray<Partition>(temp,seenAmount->nodesUsed);
   int index = 0;
   for(Pair<FUDeclaration*,int*> p : seenAmount){
     partitions[index].decl = p.first;
@@ -364,13 +364,13 @@ Array<AccelInfoIterator> GetCurrentPartitionsAsIterators(AccelInfoIterator iter,
 // This function returns what we want.
 // TODO: This whole thing is not good. Make it work first and check how to simplify.
 AccelInfoIterator GetCurrentPartitionTypeAsIterator(AccelInfoIterator iter,Arena* out){
-  STACK_ARENA(temp,Kilobyte(4));
+  TEMP_REGION(temp,out);
   // TODO: This is dependent on partitions. Not sure how I feel about that.
 
   int mergeIndex = iter.mergeIndex;
   
   // TODO: BAD
-  Hashmap<FUDeclaration*,int>* seenAmount = PushHashmap<FUDeclaration*,int>(&temp,10);
+  Hashmap<FUDeclaration*,int>* seenAmount = PushHashmap<FUDeclaration*,int>(temp,10);
   AccelInfo* info = iter.info;
   for(int i = 0; i < info->infos.size; i++){
     FUDeclaration* type = info->infos[i].baseType;
@@ -378,7 +378,7 @@ AccelInfoIterator GetCurrentPartitionTypeAsIterator(AccelInfoIterator iter,Arena
     seenAmount->Insert(type,amount + 1);
   }
 
-  Array<Partition> partitions = PushArray<Partition>(&temp,seenAmount->nodesUsed);
+  Array<Partition> partitions = PushArray<Partition>(temp,seenAmount->nodesUsed);
   int index = 0;
   for(Pair<FUDeclaration*,int*> p : seenAmount){
     partitions[index].decl = p.first;
@@ -402,13 +402,13 @@ AccelInfoIterator GetCurrentPartitionTypeAsIterator(AccelInfoIterator iter,Arena
 }
 
 int GetPartitionIndex(AccelInfoIterator iter){
-  STACK_ARENA(temp,Kilobyte(4));
+  TEMP_REGION(temp,nullptr);
   // TODO: This is dependent on partitions. Not sure how I feel about that.
 
   int mergeIndex = iter.mergeIndex;
   
   // TODO: BAD
-  Hashmap<FUDeclaration*,int>* seenAmount = PushHashmap<FUDeclaration*,int>(&temp,10);
+  Hashmap<FUDeclaration*,int>* seenAmount = PushHashmap<FUDeclaration*,int>(temp,10);
   AccelInfo* info = iter.info;
   for(int i = 0; i < info->infos.size; i++){
     FUDeclaration* type = info->infos[i].baseType;
@@ -416,7 +416,7 @@ int GetPartitionIndex(AccelInfoIterator iter){
     seenAmount->Insert(type,amount + 1);
   }
 
-  Array<Partition> partitions = PushArray<Partition>(&temp,seenAmount->nodesUsed);
+  Array<Partition> partitions = PushArray<Partition>(temp,seenAmount->nodesUsed);
   int index = 0;
   for(Pair<FUDeclaration*,int*> p : seenAmount){
     partitions[index].decl = p.first;
@@ -495,7 +495,8 @@ String GetName(Array<Partition> partitions,Arena* out){
 // This function cannot return an array for merge units because we do not have the merged units info in this level.
 // This function only works for modules and for recursing the merged info to upper modules.
 // The info needed by merge must be stored by the merge function.
-Array<InstanceInfo> GenerateInitialInstanceInfo(Accelerator* accel,Arena* out,Arena* temp,Array<Partition> partitions){
+Array<InstanceInfo> GenerateInitialInstanceInfo(Accelerator* accel,Arena* out,Array<Partition> partitions){
+  TEMP_REGION(temp,out);
   // Only for basic units on the top level of accel
   // The subunits are basically copied from the sub declarations.
   // Or they are calculated inside the Fill... function
@@ -617,7 +618,8 @@ struct Node{
   Node* right;
 }; 
 
-void FillInstanceInfo(AccelInfoIterator initialIter,Arena* out,Arena* temp){
+void FillInstanceInfo(AccelInfoIterator initialIter,Arena* out){
+  TEMP_REGION(temp,out);
   Assert(!Empty(initialIter.accelName)); // For now, we must have some name if only to output debug info graphs and such
   
   // Calculate full name
@@ -646,8 +648,8 @@ void FillInstanceInfo(AccelInfoIterator initialIter,Arena* out,Arena* temp){
   }
 
   // Config info stuff
-  auto CalculateConfig = [](auto Recurse,AccelInfoIterator& iter,int startIndex,Arena* temp) -> void{
-    BLOCK_REGION(temp);
+  auto CalculateConfig = [](auto Recurse,AccelInfoIterator& iter,int startIndex) -> void{
+    TEMP_REGION(temp,nullptr);
 
     InstanceInfo* parent = iter.GetParentUnit();
     if(parent){
@@ -669,7 +671,7 @@ void FillInstanceInfo(AccelInfoIterator initialIter,Arena* out,Arena* temp){
           index += 1;
           AccelInfoIterator inside = it.StepInsideOnly();
           if(inside.IsValid() && !unit->isStatic){
-            Recurse(Recurse,inside,configPos,temp);
+            Recurse(Recurse,inside,configPos);
           }
         }
       }
@@ -699,7 +701,7 @@ void FillInstanceInfo(AccelInfoIterator initialIter,Arena* out,Arena* temp){
         
         AccelInfoIterator inside = it.StepInsideOnly();
         if(inside.IsValid() && !unit->isStatic){
-          Recurse(Recurse,inside,indexForCurrentUnit,temp);
+          Recurse(Recurse,inside,indexForCurrentUnit);
         }
 
         if(!isNewlyShared && !unit->isStatic){
@@ -709,11 +711,11 @@ void FillInstanceInfo(AccelInfoIterator initialIter,Arena* out,Arena* temp){
     }
   };
 
-  CalculateConfig(CalculateConfig,initialIter,0,temp);
+  CalculateConfig(CalculateConfig,initialIter,0);
 
   // Calculate state stuff
-  auto CalculateState = [](auto Recurse,AccelInfoIterator& iter,int startIndex,Arena* temp) -> void{
-    BLOCK_REGION(temp);
+  auto CalculateState = [](auto Recurse,AccelInfoIterator& iter,int startIndex) -> void{
+    TEMP_REGION(temp,nullptr);
 
     InstanceInfo* parent = iter.GetParentUnit();
     if(parent){
@@ -735,7 +737,7 @@ void FillInstanceInfo(AccelInfoIterator initialIter,Arena* out,Arena* temp){
           index += 1;
           AccelInfoIterator inside = it.StepInsideOnly();
           if(inside.IsValid()){
-            Recurse(Recurse,inside,statePos,temp);
+            Recurse(Recurse,inside,statePos);
           }
         }
       }
@@ -750,7 +752,7 @@ void FillInstanceInfo(AccelInfoIterator initialIter,Arena* out,Arena* temp){
         
         AccelInfoIterator inside = it.StepInsideOnly();
         if(inside.IsValid()){
-          Recurse(Recurse,inside,stateIndex,temp);
+          Recurse(Recurse,inside,stateIndex);
         }
 
         stateIndex += unit->stateSize;
@@ -758,11 +760,11 @@ void FillInstanceInfo(AccelInfoIterator initialIter,Arena* out,Arena* temp){
     }
   };
 
-  CalculateState(CalculateState,initialIter,0,temp);
+  CalculateState(CalculateState,initialIter,0);
 
   // Handle memory mapping
-  auto CalculateMemory = [](auto Recurse,AccelInfoIterator& iter,iptr currentMem,Arena* out,Arena* temp) -> void{
-    BLOCK_REGION(temp);
+  auto CalculateMemory = [](auto Recurse,AccelInfoIterator& iter,iptr currentMem,Arena* out) -> void{
+    TEMP_REGION(temp,out);
     
     InstanceInfo* parent = iter.GetParentUnit();
     if(parent){
@@ -778,7 +780,7 @@ void FillInstanceInfo(AccelInfoIterator initialIter,Arena* out,Arena* temp){
           
           AccelInfoIterator inside = it.StepInsideOnly();
           if(inside.IsValid()){
-            Recurse(Recurse,inside,unit->memMapped.value(),out,temp);
+            Recurse(Recurse,inside,unit->memMapped.value(),out);
           }
         }
       }
@@ -855,17 +857,17 @@ void FillInstanceInfo(AccelInfoIterator initialIter,Arena* out,Arena* temp){
 
         if(unit->memMapped.has_value()){
           AccelInfoIterator inside = it.StepInsideOnly();
-          Recurse(Recurse,inside,unit->memMapped.value(),out,temp);
+          Recurse(Recurse,inside,unit->memMapped.value(),out);
         }
       }
     }
   };
 
-  CalculateMemory(CalculateMemory,initialIter,0,out,temp);
+  CalculateMemory(CalculateMemory,initialIter,0,out);
   
   // Delay pos is just basically State position without anything different, right?
-  auto CalculateDelayPos = [](auto Recurse,AccelInfoIterator& iter,int startIndex,Arena* temp) -> void{
-    BLOCK_REGION(temp);
+  auto CalculateDelayPos = [](auto Recurse,AccelInfoIterator& iter,int startIndex) -> void{
+    TEMP_REGION(temp,nullptr);
 
     InstanceInfo* parent = iter.GetParentUnit();
     if(parent){
@@ -887,7 +889,7 @@ void FillInstanceInfo(AccelInfoIterator initialIter,Arena* out,Arena* temp){
           index += 1;
           AccelInfoIterator inside = it.StepInsideOnly();
           if(inside.IsValid()){
-            Recurse(Recurse,inside,delayPos,temp);
+            Recurse(Recurse,inside,delayPos);
           }
         }
       }
@@ -902,7 +904,7 @@ void FillInstanceInfo(AccelInfoIterator initialIter,Arena* out,Arena* temp){
         
         AccelInfoIterator inside = it.StepInsideOnly();
         if(inside.IsValid()){
-          Recurse(Recurse,inside,delayIndex,temp);
+          Recurse(Recurse,inside,delayIndex);
         }
 
         delayIndex += unit->delaySize;
@@ -910,7 +912,7 @@ void FillInstanceInfo(AccelInfoIterator initialIter,Arena* out,Arena* temp){
     }
   };
   
-  CalculateDelayPos(CalculateDelayPos,initialIter,0,temp);
+  CalculateDelayPos(CalculateDelayPos,initialIter,0);
 
   auto SetDelays = [](auto Recurse,AccelInfoIterator& iter,SimpleCalculateDelayResult& calculatedDelay,int startIndex,Arena* out) -> void{
     InstanceInfo* parent = iter.GetParentUnit();
@@ -963,12 +965,12 @@ void FillInstanceInfo(AccelInfoIterator initialIter,Arena* out,Arena* temp){
     }
   };
 
-  SimpleCalculateDelayResult delays = CalculateDelay(initialIter,out,temp);
+  SimpleCalculateDelayResult delays = CalculateDelay(initialIter,out);
   SetDelays(SetDelays,initialIter,delays,0,out);
 }
 
-void FillAccelInfoAfterCalculatingInstanceInfo(AccelInfo* info,Accelerator* accel,Arena* temp){
-  BLOCK_REGION(temp);
+void FillAccelInfoAfterCalculatingInstanceInfo(AccelInfo* info,Accelerator* accel){
+  TEMP_REGION(temp,nullptr);
   
   GrowableArray<bool> seenShared = StartGrowableArray<bool>(temp);
   
@@ -1115,7 +1117,8 @@ Array<int> ExtractOutputLatencies(AccelInfoIterator top,Arena* out){
   return {};
 };
 
-AccelInfo CalculateAcceleratorInfo(Accelerator* accel,bool recursive,Arena* out,Arena* temp){
+AccelInfo CalculateAcceleratorInfo(Accelerator* accel,bool recursive,Arena* out){
+  TEMP_REGION(temp,out);
   AccelInfo result = {};
 
   // TODO: Still need to check if partitions are removed or if we still need them
@@ -1139,8 +1142,7 @@ AccelInfo CalculateAcceleratorInfo(Accelerator* accel,bool recursive,Arena* out,
 
   
   auto CalculateMuxConfigs = [](AccelInfoIterator top,Arena* out) -> Array<int>{
-    STACK_ARENA(tempInst,Kilobyte(4));
-    Arena* temp = &tempInst;
+    TEMP_REGION(temp,out);
     
     // We need to take into account config sharing because it basically converts N configs into 1.
     Set<int>* seen = PushSet<int>(temp,10); // TODO: HACK, eventually this code will be removed, so no problem hacking away.
@@ -1195,9 +1197,9 @@ AccelInfo CalculateAcceleratorInfo(Accelerator* accel,bool recursive,Arena* out,
       iter.mergeIndex = i;
 
       // We do need partitions here, I think
-      result.infos[i].info = GenerateInitialInstanceInfo(accel,globalPermanent,temp,partitions);
+      result.infos[i].info = GenerateInitialInstanceInfo(accel,globalPermanent,partitions);
 
-      FillInstanceInfo(iter,globalPermanent,temp);
+      FillInstanceInfo(iter,globalPermanent);
 
       result.infos[i].inputDelays = ExtractInputDelays(iter,out);
       result.infos[i].outputLatencies = ExtractOutputLatencies(iter,out);
@@ -1208,15 +1210,15 @@ AccelInfo CalculateAcceleratorInfo(Accelerator* accel,bool recursive,Arena* out,
     }
   } else {
     iter.mergeIndex = 0;
-    result.infos[0].info = GenerateInitialInstanceInfo(accel,globalPermanent,temp,{});
-    FillInstanceInfo(iter,globalPermanent,temp);
+    result.infos[0].info = GenerateInitialInstanceInfo(accel,globalPermanent,{});
+    FillInstanceInfo(iter,globalPermanent);
 
     result.infos[0].inputDelays = ExtractInputDelays(iter,out);
     result.infos[0].outputLatencies = ExtractOutputLatencies(iter,out);
     result.infos[0].muxConfigs = CalculateMuxConfigs(iter,out);
   }
 
-  FillAccelInfoAfterCalculatingInstanceInfo(&result,accel,temp);
+  FillAccelInfoAfterCalculatingInstanceInfo(&result,accel);
 
   return result;
 }

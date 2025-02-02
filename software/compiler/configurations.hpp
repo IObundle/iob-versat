@@ -22,6 +22,7 @@ struct SimplePortConnection{
 // This approach is very slow but easier to debug since everything related to one unit is all in the same place.
 // Until I find a better way of debugging AoS, this will stay like this for a while.
 
+// TODO: Put some note explaining the required changes when inserting stuff here.
 struct InstanceInfo{
   int level;
   FUDeclaration* decl;
@@ -150,24 +151,24 @@ AccelInfoIterator StartIteration(AccelInfo* info);
 Array<AccelInfoIterator> GetCurrentPartitionsAsIterators(AccelInfoIterator iter,Arena* out);
 AccelInfoIterator GetCurrentPartitionTypeAsIterator(AccelInfoIterator iter,Arena* out);
 int GetPartitionIndex(AccelInfoIterator iter);
-void FillAccelInfoAfterCalculatingInstanceInfo(AccelInfo* info,Accelerator* accel,Arena* temp);
+void FillAccelInfoAfterCalculatingInstanceInfo(AccelInfo* info,Accelerator* accel);
 
 Array<InstanceInfo*> GetAllSameLevelUnits(AccelInfo* info,int level,int mergeIndex,Arena* out);
 
 // TODO: mergeIndex seems to be the wrong approach. Check the correct approach when trying to simplify merge.
-Array<InstanceInfo> GenerateInitialInstanceInfo(Accelerator* accel,Arena* out,Arena* temp,Array<Partition> partitions);
+Array<InstanceInfo> GenerateInitialInstanceInfo(Accelerator* accel,Arena* out,Array<Partition> partitions);
 Array<Partition> GenerateInitialPartitions(Accelerator* accel,Arena* out);
 
-void FillInstanceInfo(AccelInfoIterator initialIter,Arena* out,Arena* temp);
+void FillInstanceInfo(AccelInfoIterator initialIter,Arena* out);
 
-AccelInfo CalculateAcceleratorInfo(Accelerator* accel,bool recursive,Arena* out,Arena* temp);
+AccelInfo CalculateAcceleratorInfo(Accelerator* accel,bool recursive,Arena* out);
 
 Array<int> ExtractInputDelays(AccelInfoIterator top,Arena* out);
 Array<int> ExtractOutputLatencies(AccelInfoIterator top,Arena* out);
 
 // Array info related
 // TODO: This should be built on top of AccelInfo (taking an iterator), instead of just taking the array of instance infos.
-Array<Wire> ExtractAllConfigs(Array<InstanceInfo> info,Arena* out,Arena* temp);
+Array<Wire> ExtractAllConfigs(Array<InstanceInfo> info,Arena* out);
 Array<String> ExtractStates(Array<InstanceInfo> info,Arena* out);
 Array<Pair<String,int>> ExtractMem(Array<InstanceInfo> info,Arena* out);
 

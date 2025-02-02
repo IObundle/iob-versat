@@ -8,6 +8,13 @@
 #include "utilsCore.hpp"
 #include "logger.hpp"
 
+struct Arena;
+extern Arena* contextArenas[2];
+// Pass nullptr to get one arena, pass an arena to get a guaranteed different arena
+// Calling code must pass any arena that it contains to this function to make sure that the arena returned is different. We only receive one currently because we only expect to support out/temp flows (only 2 arenas required).
+// Credit to Ryan Fleury for this technique.
+Arena* GetArena(Arena* diff);
+
 inline size_t Kilobyte(int val){return val * 1024;};
 inline size_t Megabyte(int val){return Kilobyte(val) * 1024;};
 inline size_t Gigabyte(int val){return Megabyte(val) * 1024;};
@@ -38,11 +45,12 @@ void Reset(Arena* arena);
 void Free(Arena* arena);
 Byte* PushBytes(Arena* arena, size_t size);
 size_t SpaceAvailable(Arena* arena);
-String PushChar(Arena* arena,const char);
 String PushString(Arena* arena,int size);
 String PushString(Arena* arena,String ss);
 String PushString(Arena* arena,const char* format,...) __attribute__ ((format (printf, 2, 3)));
 String vPushString(Arena* arena,const char* format,va_list args);
+
+// TODO: This is bad. The push string functions should have a parameter if we want to push a null byte or not.
 void PushNullByte(Arena* arena);
 
 struct ArenaMark{
@@ -74,12 +82,9 @@ struct ArenaMarker{
 
 #define region(ARENA) if(ArenaMarker _marker(__LINE__){ARENA})
 
-// Do not abuse stack arenas.
-#define STACK_ARENA(NAME,SIZE) \
-   Arena NAME = {}; \
-char buffer_##NAME[SIZE]; \
-NAME.mem = (Byte*) buffer_##NAME; \
-NAME.totalAllocated = SIZE;
+#define TEMP_REGION(NAME,OUT_ARENA) \
+  Arena* NAME = GetArena(OUT_ARENA); \
+  BLOCK_REGION(NAME)
  
 // For now let PushArray also zero out
 template<typename T>

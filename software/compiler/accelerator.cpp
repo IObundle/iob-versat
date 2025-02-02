@@ -123,12 +123,12 @@ Pair<Accelerator*,AcceleratorMapping*> CopyAcceleratorWithMapping(Accelerator* a
 }
 
 Accelerator* CopyAccelerator(Accelerator* accel,AcceleratorPurpose purpose,bool preserveIds,InstanceMap* map){
-  STACK_ARENA(temp,Kilobyte(128));
-
+  TEMP_REGION(temp,nullptr);
+  
   Accelerator* newAccel = CreateAccelerator(accel->name,purpose);
 
   if(map == nullptr){
-    map = PushHashmap<FUInstance*,FUInstance*>(&temp,999);
+    map = PushHashmap<FUInstance*,FUInstance*>(temp,999);
   }
 
   // Copy of instances
@@ -187,7 +187,8 @@ void RemoveFUInstance(Accelerator* accel,FUInstance* inst){
   accel->allocated.Remove(inst);
 }
 
-Array<int> ExtractInputDelays(Accelerator* accel,CalculateDelayResult delays,int mimimumAmount,Arena* out,Arena* temp){
+Array<int> ExtractInputDelays(Accelerator* accel,CalculateDelayResult delays,int mimimumAmount,Arena* out){
+  TEMP_REGION(temp,out);
   Array<FUInstance*> inputNodes = PushArray<FUInstance*>(temp,99);
   Memset(inputNodes,{});
   
@@ -218,7 +219,8 @@ Array<int> ExtractInputDelays(Accelerator* accel,CalculateDelayResult delays,int
   return inputDelay;
 }
 
-Array<int> ExtractOutputLatencies(Accelerator* accel,CalculateDelayResult delays,Arena* out,Arena* temp){
+Array<int> ExtractOutputLatencies(Accelerator* accel,CalculateDelayResult delays,Arena* out){
+  TEMP_REGION(temp,out);
   FUInstance* outputNode = nullptr;
   int maxOutput = 0;
   for(FUInstance* ptr : accel->allocated){
@@ -412,8 +414,8 @@ bool IsUnitCombinatorial(FUInstance* instance){
 #endif
 }
 
-Array<DelayToAdd> GenerateFixDelays(Accelerator* accel,EdgeDelay* edgeDelays,Arena* out,Arena* temp){
-  BLOCK_REGION(temp);
+Array<DelayToAdd> GenerateFixDelays(Accelerator* accel,EdgeDelay* edgeDelays,Arena* out){
+  TEMP_REGION(temp,out);
 
   ArenaList<DelayToAdd>* list = PushArenaList<DelayToAdd>(temp);
   
@@ -440,8 +442,8 @@ Array<DelayToAdd> GenerateFixDelays(Accelerator* accel,EdgeDelay* edgeDelays,Are
   return PushArrayFromList(out,list);
 }
 
-void FixDelays(Accelerator* accel,Hashmap<Edge,DelayInfo>* edgeDelays,Arena* temp){
-  BLOCK_REGION(temp);
+void FixDelays(Accelerator* accel,Hashmap<Edge,DelayInfo>* edgeDelays){
+  TEMP_REGION(temp,nullptr);
 
   int buffersInserted = 0;
   for(auto edgePair : edgeDelays){
@@ -484,7 +486,7 @@ void FixDelays(Accelerator* accel,Hashmap<Edge,DelayInfo>* edgeDelays,Arena* tem
 
     InsertUnit(accel,edge.units[0],edge.units[1],PortInstance{buffer,0});
 
-    OutputDebugDotGraph(accel,STRING(StaticFormat("fixDelay_%d.dot",buffersInserted)),buffer,temp);
+    OutputDebugDotGraph(accel,STRING(StaticFormat("fixDelay_%d.dot",buffersInserted)),buffer);
 
     buffersInserted += 1;
   }
@@ -525,16 +527,17 @@ bool IsCombinatorial(Accelerator* accel){
   return true;
 }
 
-Array<FUDeclaration*> MemSubTypes(Accelerator* accel,Arena* out,Arena* temp){
+Array<FUDeclaration*> MemSubTypes(Accelerator* accel,Arena* out){
+  TEMP_REGION(temp,out);
+
   if(accel == nullptr){
     return {};
   }
-
-  BLOCK_REGION(temp);
   
   Set<FUDeclaration*>* maps = PushSet<FUDeclaration*>(temp,99);
 
-  Array<InstanceInfo> test = CalculateAcceleratorInfo(accel,true,temp,out).infos[0].info;
+  // TODO: Check if we can pass an AccelInfo instead of an accel and avoid calculating accel info here
+  Array<InstanceInfo> test = CalculateAcceleratorInfo(accel,true,temp).infos[0].info;
   for(InstanceInfo& info : test){
     if(info.memMappedSize.has_value()){
       maps->Insert(info.decl);
@@ -1100,9 +1103,10 @@ void RemoveAllConnections(FUInstance* n1,FUInstance* n2){
   RemoveAllDirectedConnections(n2,n1);
 }
 
+// TODO: Check why is this disabled? Different between this and the other remove unit function
 #if 0
 FUInstance* RemoveUnit(FUInstance* nodes,FUInstance* unit){
-  STACK_ARENA(temp,Kilobyte(32));
+  TEMP_REGION(temp,nullptr);
 
   Hashmap<FUInstance*,int>* toRemove = PushHashmap<FUInstance*,int>(&temp,100);
 
@@ -1391,8 +1395,8 @@ Set<PortInstance>* MappingMapInput(AcceleratorMapping* map,Set<PortInstance>* se
   return result;
 }
 
-Pair<Accelerator*,SubMap*> Flatten(Accelerator* accel,int times,Arena* temp){
-  BLOCK_REGION(temp);
+Pair<Accelerator*,SubMap*> Flatten(Accelerator* accel,int times){
+  TEMP_REGION(temp,nullptr);
 
   Pair<Accelerator*,AcceleratorMapping*> pair = CopyAcceleratorWithMapping(accel,AcceleratorPurpose_FLATTEN,true,temp);
   Accelerator* newAccel = pair.first;
@@ -1665,7 +1669,7 @@ Pair<Accelerator*,SubMap*> Flatten(Accelerator* accel,int times,Arena* temp){
     compositeInstances.Clear();
   }
 
-  OutputDebugDotGraph(newAccel,STRING("flatten.dot"),temp);
+  OutputDebugDotGraph(newAccel,STRING("flatten.dot"));
   
   toRemove.Clear(true);
   compositeInstances.Clear(true);

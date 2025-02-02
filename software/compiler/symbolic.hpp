@@ -46,26 +46,26 @@ struct TermsWithLiteralMultiplier{
 void Print(SymbolicExpression* expr);
 String PushRepresentation(SymbolicExpression* expr,Arena* out);
 
-SymbolicExpression* ParseSymbolicExpression(Tokenizer* tok,Arena* out,Arena* temp);
-SymbolicExpression* ParseSymbolicExpression(String content,Arena* out,Arena* temp);
+SymbolicExpression* ParseSymbolicExpression(Tokenizer* tok,Arena* out);
+SymbolicExpression* ParseSymbolicExpression(String content,Arena* out);
 
 
-SymbolicExpression* NormalizeLiterals(SymbolicExpression* expr,Arena* out,Arena* temp);
-SymbolicExpression* RemoveParenthesis(SymbolicExpression* expr,Arena* out,Arena* temp);
+SymbolicExpression* NormalizeLiterals(SymbolicExpression* expr,Arena* out);
+SymbolicExpression* RemoveParenthesis(SymbolicExpression* expr,Arena* out);
 // This function does not allocate new nodes unless it has to.
 // Meaning that memory associated to expr must be kept valid as well as the memory for the return of this function
-SymbolicExpression* CollectTerms(SymbolicExpression* expr,Arena* out,Arena* temp);
-SymbolicExpression* ApplyDistributivity(SymbolicExpression* expr,Arena* out,Arena* temp);
-SymbolicExpression* ApplySimilarTermsAddition(SymbolicExpression* expr,Arena* out,Arena* temp);
+SymbolicExpression* CollectTerms(SymbolicExpression* expr,Arena* out);
+SymbolicExpression* ApplyDistributivity(SymbolicExpression* expr,Arena* out);
+SymbolicExpression* ApplySimilarTermsAddition(SymbolicExpression* expr,Arena* out);
 
-SymbolicExpression* NormalizeLiterals(SymbolicExpression* expr,Arena* out,Arena* temp);
+SymbolicExpression* NormalizeLiterals(SymbolicExpression* expr,Arena* out);
 
-SymbolicExpression* SymbolicReplace(SymbolicExpression* base,String varToReplace,SymbolicExpression* replacingExpr,Arena* out,Arena* temp);
+SymbolicExpression* SymbolicReplace(SymbolicExpression* base,String varToReplace,SymbolicExpression* replacingExpr,Arena* out);
 
-SymbolicExpression* Normalize(SymbolicExpression* expr,Arena* out,Arena* temp);
-SymbolicExpression* Derivate(SymbolicExpression* expr,String base,Arena* out,Arena* temp);
+SymbolicExpression* Normalize(SymbolicExpression* expr,Arena* out);
+SymbolicExpression* Derivate(SymbolicExpression* expr,String base,Arena* out);
 
-void TestSymbolic(Arena* temp,Arena* temp2);
+void TestSymbolic();
 
 /*
   For now, we store additions in a array and everything else in a AST like format.

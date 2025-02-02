@@ -322,7 +322,7 @@ MemberDef* ParseMember(Tokenizer* tok,Arena* out){
   return mem;
 }
 
-Result<StructDef,String> ParseStruct(Tokenizer* tok,Arena* arena){
+Result<StructDef,String> ParseStruct(Tokenizer* tok,Arena* out){
   auto mark = tok->Mark();
 
   Token token = tok->NextToken();
@@ -431,7 +431,7 @@ Result<StructDef,String> ParseStruct(Tokenizer* tok,Arena* arena){
 	tok->keepComments = false;
 
     auto mark = tok->Mark();
-    MemberDef* member = ParseMember(tok,arena);
+    MemberDef* member = ParseMember(tok,out);
 
     if(member == nullptr){
 #if 1
@@ -475,7 +475,7 @@ Result<StructDef,String> ParseStruct(Tokenizer* tok,Arena* arena){
   return def;
 }
 
-StructDef ParseTemplatedStructDefinition(Tokenizer* tok,Arena* arena){
+StructDef ParseTemplatedStructDefinition(Tokenizer* tok,Arena* out){
   tok->AssertNextToken("template");
   tok->AssertNextToken("<");
 
@@ -491,7 +491,7 @@ StructDef ParseTemplatedStructDefinition(Tokenizer* tok,Arena* arena){
 
     Token parameter = tok->NextToken();
 
-    TemplateParamDef* newParam = PushStruct<TemplateParamDef>(arena);
+    TemplateParamDef* newParam = PushStruct<TemplateParamDef>(out);
     newParam->name = parameter;
     newParam->next = ptr;
     ptr = newParam;
@@ -509,7 +509,7 @@ StructDef ParseTemplatedStructDefinition(Tokenizer* tok,Arena* arena){
     return def; // Only parse structs
   }
 
-  Result<StructDef,String> optDef = ParseStruct(tok,arena);
+  Result<StructDef,String> optDef = ParseStruct(tok,out);
 
   if(optDef.isError){
     return {};

@@ -1,11 +1,13 @@
 #include "globals.hpp"
 
+#include "utils.hpp"
+
 Options globalOptions = {};
 DebugState globalDebug = {};
-static Arena globalPermanentInst = {};
-Arena* globalPermanent = &globalPermanentInst;
 
-Options DefaultOptions(Arena* perm){
+Arena* globalPermanent;
+
+Options DefaultOptions(Arena* out){
   Options res = {};
   res.databusDataSize = 32;
   res.databusAddrSize = 32;
@@ -18,8 +20,8 @@ Options DefaultOptions(Arena* perm){
   res.generateFSTFormat = 1;
 #endif
   
-  res.debugPath = PushString(perm,"%s/debug",GetCurrentDirectory()); // By default
-  PushNullByte(perm);
+  res.debugPath = PushString(out,"%s/debug",GetCurrentDirectory()); // By default
+  PushNullByte(out);
   
   return res;
 }
