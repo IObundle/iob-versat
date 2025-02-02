@@ -131,7 +131,7 @@ String GetAbsolutePath(const char* path,Arena* out){
 }
 
 Array<int> GetNonZeroIndexes(Array<int> arr,Arena* out){
-  DynamicArray<int> array = StartArray<int>(out);
+  auto array = StartGrowableArray<int>(out);
   for(int i = 0; i < arr.size; i++){
     if(arr[i])
       *array.PushElem() = i;

@@ -113,23 +113,6 @@ template<typename T>
 T* PushStruct(DynamicArena* arena){AlignArena(arena,alignof(T)); T* res = (T*) PushBytes(arena,sizeof(T)); return res;};
 
 template<typename T>
-struct DynamicArray{
-  ArenaMark mark;
-  Byte* nextExpectedAddress; // Simple detection if somehow the arena is used while building an array
-  
-  Array<T> AsArray();
-  T* PushElem();
-  void PushArray(Array<T> arr);
-  
-};
-
-template<typename T>
-DynamicArray<T> StartArray(Arena* arena);
-
-template<typename T>
-Array<T> EndArray(DynamicArray<T> arr);
-
-template<typename T>
 struct GrowableArray{
   Arena* arena;
   T* data;
@@ -143,6 +126,12 @@ struct GrowableArray{
     return data[index];
   }
   
+  void PushArray(Array<T> arr){
+    for(int i = 0; i < arr.size; i++){
+      *PushElem() = arr[i];
+    }
+  }
+
   Array<T> AsArray();
   T* PushElem();
 };
@@ -175,7 +164,7 @@ T* GrowableArray<T>::PushElem(){
   }
 
   // Need to copy it
-  Array<T> newArray = PushArray<T>(arena,capacity * 2);
+  Array<T> newArray = ::PushArray<T>(arena,capacity * 2);
   capacity = newArray.size;
   
   memcpy(newArray.data,data,sizeof(T) * size);
@@ -200,11 +189,11 @@ Array<T> EndArray(GrowableArray<T> arr){
   return arr.AsArray();
 }
 
+// TODO: Remove this, replace with a proper implementation of StringBuilder
 struct DynamicString{
   Arena* arena;
   Byte* mark;
 
-  // TODO: Add checks similar to DynamicArray
   void PushChar(const char);
   void PushString(int size);
   void PushString(String ss);
@@ -224,11 +213,14 @@ struct StringBuilder{
   StringNode* tail;
   
   void PushString(String str);
+  void PushString(const char* format,...) __attribute__ ((format (printf, 2, 3)));
+  void vPushString(const char* format,va_list args);
 };
 
 StringBuilder* StartStringBuilder(Arena* arena);
 String EndString(Arena* out,StringBuilder* builder);
 
+// TODO: Need to remove DynamicString and replace it with the String builder approach
 DynamicString StartString(Arena *arena);
 String EndString(DynamicString mark);
 
@@ -288,8 +280,6 @@ public:
   int FirstBitSetIndex();
   int FirstBitSetIndex(int start);
 
-  String PrintRepresentation(Arena* output);
-
   void operator&=(BitArray& other);
 
   BitIterator begin();
@@ -322,7 +312,10 @@ struct GetOrAllocateResult{
 template<typename Key,typename Data>
 struct Hashmap{
   int nodesAllocated;
-  int nodesUsed;
+  union{
+    int nodesUsed;
+    int size;
+  };
   Pair<Key,Data>** buckets;
   Pair<Key,Data>*  data;
   Pair<Key,Data>** next; // Next is separated from data, to allow easy iteration of the data
@@ -561,6 +554,8 @@ PoolInfo CalculatePoolInfo(int elemSize);
 PageInfo GetPageInfo(PoolInfo poolInfo,Byte* page);
 
 // A vector like class except no reallocations. Useful for storing entities that cannot be reallocated (so we can store pointers to them directly).
+// While we could build this on top of an arena, this container uses mapped pages proprieties to work, so it needs to be standalone.
+// TODO: There is a problem with the interface and the usage of this class. While we want to use this as a vector, we also want to guarantee that data is never moved. This means that Removing an elem cannot do it by copying. Because of this, when we iterate a Pool, we need to be able to handle units in the middle being removed, which prevents the iteration from being fast. A Pool where Remove does not exist would be much faster than a Pool that allows removing elements. I think it would be better to add a Pool that does not allow Remove and let the programmer use a fast Pool (in fact, I already got a problem when using the slow Pool before, so this is needed).
 template<typename T>
 struct Pool{
   Byte* mem; // TODO: replace with PoolHeader instead of using Byte and casting
@@ -587,59 +582,6 @@ public:
 };
 
 // Start of implementation
-
-template<typename T> DynamicArray<T> StartArray(Arena* arena){
-  DynamicArray<T> arr = {};
-
-  AlignArena(arena,alignof(T));
-
-  arr.mark = MarkArena(arena);
-  arr.nextExpectedAddress = PushBytes(arena,0);
-  
-  return arr;
-}
-
-template<typename T> Array<T> DynamicArray<T>::AsArray(){
-  Byte* data = mark.mark;
-  int size = &mark.arena->mem[mark.arena->used] - data;
-
-  Assert(size >= 0);
-  Assert(size % sizeof(T) == 0); // Ensures data is properly aligned
-  
-  Array<T> res = {};
-  res.data = (T*) data;
-  res.size = size / sizeof(T);
-
-  return res;
-}
-
-template<typename T> T* DynamicArray<T>::PushElem(){
-  if(nextExpectedAddress != PushBytes(this->mark.arena,0)){
-    printf("Error, Arena associated to dynamic array was changed before Array was finished\n");
-    Assert(nextExpectedAddress == PushBytes(this->mark.arena,0));
-  };
-  
-  T* res = PushStruct<T>(this->mark.arena);
-
-  nextExpectedAddress = PushBytes(this->mark.arena,0);
-  
-  return res;
-}
-
-template<typename T> void DynamicArray<T>::PushArray(Array<T> arr){
-  for(int i = 0; i < arr.size; i++){
-    *PushElem() = arr[i];
-  }
-}
-
-template<typename T> Array<T> EndArray(DynamicArray<T> arr){
-  if(arr.nextExpectedAddress != PushBytes(arr.mark.arena,0)){
-    printf("Error, Arena associated to dynamic array was changed before Array was finished\n");
-    Assert(arr.nextExpectedAddress == PushBytes(arr.mark.arena,0));
-  };
-
-  return arr.AsArray();
-}
 
 template<typename Key,typename Data>
 bool HashmapIterator<Key,Data>::operator!=(HashmapIterator& iter){

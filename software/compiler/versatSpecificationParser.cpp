@@ -229,7 +229,7 @@ Opt<VarGroup> ParseVarGroup(Tokenizer* tok,Arena* out){
   if(CompareString(peek,"{")){
     tok->AdvancePeek();
 
-    DynamicArray<Var> arr = StartArray<Var>(out);
+    auto arr = StartGrowableArray<Var>(out);
     while(!tok->Done()){
       Var* var = arr.PushElem();
       Opt<Var> optVar = ParseVar(tok);
@@ -582,7 +582,7 @@ Opt<VarDeclaration> ParseVarDeclaration(Tokenizer* tok){
 }
 
 Array<Token> CheckAndParseConnectionTransforms(Tokenizer* tok,Arena* out){
-  DynamicArray<Token> arr = StartArray<Token>(out);
+  auto arr = StartGrowableArray<Token>(out);
   while(!tok->Done()){
     auto mark = tok->Mark();
     Token first = tok->NextToken();
@@ -634,7 +634,7 @@ Opt<ConnectionDef> ParseConnection(Tokenizer* tok,Arena* out){
 }
 
 Opt<Array<VarDeclaration>> ParseModuleInputDeclaration(Tokenizer* tok,Arena* out){
-  DynamicArray<VarDeclaration> array = StartArray<VarDeclaration>(out);
+  auto array = StartGrowableArray<VarDeclaration>(out);
 
   EXPECT(tok,"(");
 
@@ -704,7 +704,7 @@ Opt<InstanceDeclaration> ParseInstanceDeclaration(Tokenizer* tok,Arena* out,Aren
 
     EXPECT(tok,"{");
 
-    DynamicArray<VarDeclaration> array = StartArray<VarDeclaration>(out);
+    auto array = StartGrowableArray<VarDeclaration>(out);
     
     while(!tok->Done()){
       String peek = tok->PeekToken();
@@ -1116,7 +1116,7 @@ Opt<MergeDef> ParseMerge(Tokenizer* tok,Arena* out,Arena* temp){
     EXPECT(tok,"}");
   }
   
-  DynamicArray<SpecificMergeNode> specificsArr = StartArray<SpecificMergeNode>(out);
+  auto specificsArr = StartGrowableArray<SpecificMergeNode>(out);
   for(SpecNode node : specNodes){
     int firstIndex = -1;
     int secondIndex = -1;
@@ -1152,7 +1152,7 @@ Opt<MergeDef> ParseMerge(Tokenizer* tok,Arena* out,Arena* temp){
 }
 
 FUDeclaration* InstantiateMerge(MergeDef def,Arena* temp,Arena* temp2){
-  DynamicArray<FUDeclaration*> declArr = StartArray<FUDeclaration*>(temp);
+  auto declArr = StartGrowableArray<FUDeclaration*>(temp);
   for(TypeAndInstance tp : def.declarations){
     FUDeclaration* decl = GetTypeByNameOrFail(tp.typeName); // TODO: Rewrite stuff so that at this point we know that the type must exist
     *declArr.PushElem() = decl;

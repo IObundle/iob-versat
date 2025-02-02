@@ -307,7 +307,7 @@ Array<int> CalculateDAG(int maxNode,Array<Pair<int,int>> edges,int start,Arena* 
   
   toSee->Push(start);
 
-  DynamicArray<int> arr = StartArray<int>(out);
+  auto arr = StartGrowableArray<int>(out);
   while(toSee->Size()){
     int head = toSee->Pop();
 
@@ -530,7 +530,7 @@ int main(int argc,char* argv[]){
       return -1;
     }
     
-    DynamicArray<Pair<int,int>> arr = StartArray<Pair<int,int>>(temp2);
+    auto arr = StartGrowableArray<Pair<int,int>>(temp2);
     for(int i = 0; i < size; i++){
       Array<Token> subTypesUsed = TypesUsed(types[i],temp,temp2);
 

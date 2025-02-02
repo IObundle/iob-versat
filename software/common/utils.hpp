@@ -349,7 +349,7 @@ Array<T> PushArrayFromList(Arena* out,ArenaList<T>* list){
     return {};
   }
 
-  auto arr = StartArray<T>(out);
+  auto arr = StartGrowableArray<T>(out);
   
   FOREACH_LIST(SingleLink<T>*,iter,list->head){
     T* ptr = arr.PushElem();
@@ -432,28 +432,26 @@ Array<P> PushArrayFromTrieMapData(Arena* out,TrieMap<T,P>* map){
 
 template<typename T>
 Array<T> PushArrayFromSet(Arena* out,Set<T>* set){
-  auto arr = StartArray<T>(out);
+  auto arr = PushArray<T>(out,set->map->nodesUsed);
 
+  int index = 0;
   for(auto pair : set->map){
-    T* ptr = arr.PushElem();
-    *ptr = pair.first;
+    arr[index++] = pair.first;
   }
 
-  Array<T> res = EndArray(arr);
-  return res;
+  return arr;
 }
 
 template<typename T>
 Array<T> PushArrayFromSet(Arena* out,TrieSet<T>* set){
-  auto arr = StartArray<T>(out);
+  auto arr = PushArray<T>(out,set->map->nodesUsed);
 
+  int index = 0;
   for(auto pair : set->map){
-    T* ptr = arr.PushElem();
-    *ptr = pair.first;
+    arr[index++] = pair.first;
   }
 
-  Array<T> res = EndArray(arr);
-  return res;
+  return arr;
 }
 
 template<typename T>

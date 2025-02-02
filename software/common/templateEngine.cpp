@@ -807,13 +807,9 @@ static String EvalBlockCommand(Block* block,Frame* previousFrame,Arena* temp){
 
       // TODO: the format of the text becomes hard to read and there's
       //       little that can be done because we have little control
-      //       in regards to the output arena usage.  Output arena
-      //       should just be passed as a parameter and we should call
-      //       eval using temp as the outputArena and then do some
-      //       processing to format it better (detect if multiple
-      //       lines or not, try to preserve whitespace if multiline
-      //       and stuff like that) and only then push it into the
-      //       output arena.
+      //       in regards to the output arena usage. We could just have a 2 step
+      //       approach where we just have a more complex builder process that allow us to 
+      //       perform more logic over the text blocks
       bool outputSeparator = false;
       for(Block* ptr : block->innerBlocks){
         String text = Eval(ptr,frame,temp);

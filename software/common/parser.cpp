@@ -900,7 +900,7 @@ Array<String> Split(String content,char sep,Arena* out){
   int index = 0;
   int size = content.size;
 
-  DynamicArray<String> arr = StartArray<String>(out);
+  auto arr = StartGrowableArray<String>(out);
   
   while(1){
     int start = index;
@@ -1179,7 +1179,7 @@ TokenizerTemplate* CreateTokenizerTemplate(Arena* out,const char* singleChars,Br
   TokenizerTemplate* tmpl = PushStruct<TokenizerTemplate>(out);
   *tmpl = {};
 
-  DynamicArray<Trie> arr = StartArray<Trie>(out);
+  auto arr = StartGrowableArray<Trie>(out);
 
   Trie* topTrie = arr.PushElem();
   *topTrie = {};

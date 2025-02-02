@@ -1728,7 +1728,7 @@ Array<Value> ExtractValues(const char* format,String tok,Arena* arena){
     return {};
   }
 
-  DynamicArray<Value> arr = StartArray<Value>(arena);
+  auto arr = StartGrowableArray<Value>(arena);
 
   int tokenIndex = 0;
   for(int formatIndex = 0; 1;){

@@ -269,23 +269,23 @@ ConsolidationResult GenerateConsolidationGraph(Accelerator* accel0,Accelerator* 
   }
 #endif
 
+  //auto nodes = StartGrowableArray<MappingNode>(out);
+  
   // Insert specific mappings first (the first mapping nodes are the specifics)
 #if 0
   for(int i = 0; i < options.nSpecifics; i++){
     SpecificMergeNodes specific = options.specifics[i];
 
-    MappingNode* node = PushStruct<MappingNode>(out);
+    MappingNode* node = nodes.PushElem()
 
     node->type = MappingNode::NODE;
     node->nodes.instances[0] = specific.instA;
     node->nodes.instances[1] = specific.instB;
-
-    graph.nodes.size += 1;
   }
 #endif
 
-  DynamicArray<MappingNode> nodes = StartArray<MappingNode>(out);
-
+  auto nodes = StartGrowableArray<MappingNode>(out);
+  
 #if 1
   // Check possible edge mapping
   Array<Edge> accel0Edges = GetAllEdges(accel0,temp);
@@ -332,13 +332,9 @@ ConsolidationResult GenerateConsolidationGraph(Accelerator* accel0,Accelerator* 
         }
       }
 
-      MappingNode* space = nodes.PushElem();
-
-      *space = node;
-      graph.nodes.size += 1;
+      *nodes.PushElem() = node;
     }
   }
-  graph.nodes = EndArray(nodes);
 #endif
 
   // Check node mapping
@@ -404,15 +400,14 @@ ConsolidationResult GenerateConsolidationGraph(Accelerator* accel0,Accelerator* 
           continue;
         }
 #endif
-
-        MappingNode* space = PushStruct<MappingNode>(out);
-
-        *space = node;
-        graph.nodes.size += 1;
+        
+        *nodes.PushElem() = node;
       }
     }
   }
 #endif
+
+  graph.nodes = EndArray(nodes);
 
 #if 0
   printf("Size (MB):%d ",((graph.nodes.size / 8) * graph.nodes.size) / Megabyte(1));
@@ -1282,7 +1277,7 @@ ReconstituteResult ReconstituteGraph(Accelerator* merged,TrieSet<PortInstance>* 
 
     Array<Edge*> allPaths = GetAllPaths(merged,start,end,temp,out);
 
-    DynamicArray<Edge*> allValidPathsDyn = StartArray<Edge*>(temp);
+    auto allValidPathsDyn = StartGrowableArray<Edge*>(temp);
     for(Edge* p : allPaths){
       //PrintPath(p);
       bool valid = true;
@@ -1587,7 +1582,7 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
   flattenToMergedAccel[0] = firstCopy.second;
   
   Array<Accelerator*> orderedAccelerators = [&](){
-    DynamicArray<Accelerator*> arr = StartArray<Accelerator*>(temp);
+    auto arr = StartGrowableArray<Accelerator*>(temp);
     bool first = true;
     for(Accelerator* accel : flatten){
       if(first){
@@ -1601,7 +1596,7 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
   }();
                                             
   Array<SpecificMergeNodes> specificNodes = [&](){
-    auto arr = StartArray<SpecificMergeNodes>(temp); // For now, only use specifics for two graphs.
+    auto arr = StartGrowableArray<SpecificMergeNodes>(temp); // For now, only use specifics for two graphs.
     for(SpecificMergeNode node : specifics){
       // For now this only works for two graphs
       FUInstance* left = GetInstanceByName(orderedAccelerators[node.firstIndex],node.firstName);
@@ -2026,23 +2021,24 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
   for(int i = 0; i < mergeSize; i++){
     BLOCK_REGION(temp);
 
-    DynamicArray<int> childToTopArr = StartArray<int>(temp);
+    auto childToTopArr = StartGrowableArray<int>(temp);
     for(int j = validIndexes[i]; j != -1 ; j = parents[j]){
       *childToTopArr.PushElem() = j; 
     }
     Array<int> childToTop = EndArray(childToTopArr);
-      
-    DynamicString str = StartString(globalPermanent);
+
+    auto builder = StartStringBuilder(temp);
     for(int i = childToTop.size - 1; i >= 0 ; i--){
       int index = childToTop[i];
       FUDeclaration* decl = baseCircuitType[index];
 
-      PushString(globalPermanent,decl->name);
+      builder->PushString(decl->name);
       if(i != 0){
-        PushString(globalPermanent,"_");
+        builder->PushString("_");
       }
     }
-    decl->info.infos[i].name = EndString(str);
+    DEBUG_BREAK();
+    decl->info.infos[i].name = EndString(globalPermanent,builder);
     
     decl->info.infos[i].info = GenerateInitialInstanceInfo(decl->fixedDelayCircuit,globalPermanent,temp,{});
     AccelInfoIterator iter = StartIteration(&decl->info);
@@ -2085,7 +2081,7 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
     if(insertedAMultiplexer){
       Accelerator* rec = recon[i];
 
-      auto builder = StartArray<int>(temp);
+      auto builder = StartGrowableArray<int>(temp);
       for(FUInstance* inst : rec->allocated){
         if(inst->isMergeMultiplexer){
           *builder.PushElem() = inst->allInputs->port;
@@ -2229,7 +2225,7 @@ ReconstituteResult ReconstituteGraphFromStruct(Accelerator* merged,TrieSet<PortI
 
     Array<Edge*> allPaths = GetAllPaths(merged,start,end,temp,out);
 
-    DynamicArray<Edge*> allValidPathsDyn = StartArray<Edge*>(temp);
+    auto allValidPathsDyn = StartGrowableArray<Edge*>(temp);
     for(Edge* p : allPaths){
       bool valid = true;
       FOREACH_LIST(Edge*,edge,p){

@@ -167,16 +167,46 @@ void StringBuilder::PushString(String str){
   }
 }
 
-String EndString(Arena* out,StringBuilder* builder){
-  // TODO: Calculate and preallocate the amount of memory needed to store the end string
-  //       Do this pass when we change arenas to a linked list approach.
-  DynamicString b = StartString(out);
+void StringBuilder::vPushString(const char* format,va_list args){
+  StringNode* node = PushStruct<StringNode>(this->arena);
+  node->string = ::vPushString(this->arena,format,args);
 
+  if(this->head == nullptr){
+    this->head = node;
+    this->tail = node;
+  } else {
+    this->tail->next = node;
+    this->tail = node;
+  }
+}
+
+void StringBuilder::PushString(const char* format,...){
+  va_list args;
+  va_start(args,format);
+
+  vPushString(format,args);
+
+  va_end(args);
+}
+
+String EndString(Arena* out,StringBuilder* builder){
+  int totalSize = 0;
   for(StringNode* ptr = builder->head; ptr != nullptr; ptr = ptr->next){
-    b.PushString(ptr->string);
+    totalSize += ptr->string.size;
   }
 
-  return EndString(b);
+  Byte* data = PushBytes(out,totalSize);
+
+  String res = {};
+  res.data = (const char*) data;
+  res.size = totalSize;
+  
+  for(StringNode* ptr = builder->head; ptr != nullptr; ptr = ptr->next){
+    memcpy(data,ptr->string.data,ptr->string.size);
+    data += ptr->string.size;
+  }
+
+  return res;
 }
 
 DynamicString StartString(Arena* arena){
@@ -599,21 +629,6 @@ int BitArray::FirstBitSetIndex(int start){
   }
   Assert(false); // Not correct but good for the current needs
   return -1;
-}
-
-String BitArray::PrintRepresentation(Arena* output){
-  auto mark = StartString(output);
-  for(int i =  0; i < this->bitSize; i++){
-    int val = Get(i);
-
-    if(val){
-      PushString(output,STRING("1"));
-    } else {
-      PushString(output,STRING("0"));
-    }
-  }
-  String res = EndString(mark);
-  return res;
 }
 
 void BitArray::operator&=(BitArray& other){

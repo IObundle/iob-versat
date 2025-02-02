@@ -153,7 +153,7 @@ int AccelInfoIterator::CurrentLevelSize(){
 }
 
 Array<InstanceInfo*> GetAllSameLevelUnits(AccelInfo* info,int level,int mergeIndex,Arena* out){
-  auto builder = StartArray<InstanceInfo*>(out);
+  auto builder = StartGrowableArray<InstanceInfo*>(out);
 
   AccelInfoIterator iter = StartIteration(info);
   iter.mergeIndex = mergeIndex;
@@ -439,7 +439,7 @@ int GetPartitionIndex(AccelInfoIterator iter){
 }
 
 Array<Partition> GenerateInitialPartitions(Accelerator* accel,Arena* out){
-  DynamicArray<Partition> partitionsArr = StartArray<Partition>(out);
+  auto partitionsArr = StartGrowableArray<Partition>(out);
   int mergedPossibility = 0;
   for(FUInstance* node : accel->allocated){
     FUDeclaration* decl = node->declaration;
@@ -521,7 +521,7 @@ Array<InstanceInfo> GenerateInitialInstanceInfo(Accelerator* accel,Arena* out,Ar
     elem->partitionIndex = 0;
   };
   
-  auto Function = [SetBaseInfo](auto Recurse,DynamicArray<InstanceInfo>& array,Accelerator* accel,int level,Array<Partition> partitions) -> void{
+  auto Function = [SetBaseInfo](auto Recurse,GrowableArray<InstanceInfo>& array,Accelerator* accel,int level,Array<Partition> partitions) -> void{
     int partitionIndex = 0;
     for(FUInstance* inst : accel->allocated){
       InstanceInfo* elem = array.PushElem();
@@ -546,7 +546,7 @@ Array<InstanceInfo> GenerateInitialInstanceInfo(Accelerator* accel,Arena* out,Ar
     }
   };
   
-  auto build = StartArray<InstanceInfo>(out);
+  auto build = StartGrowableArray<InstanceInfo>(out);
 
   Function(Function,build,accel,0,partitions);
   Array<InstanceInfo> res = EndArray(build);

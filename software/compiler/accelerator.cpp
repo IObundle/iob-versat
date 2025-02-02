@@ -300,6 +300,8 @@ DAGOrderNodes CalculateDAGOrder(Pool<FUInstance>* instances,Arena* out){
   res.order = PushArray<int>(out,size);
 
   int nodesFound = 0;
+  
+  // NOTE: Could replace Hashmap with an array and add a Pool function to get the index from a ptr.
   Hashmap<FUInstance*,int>* tags = PushHashmap<FUInstance*,int>(out,size);
 
   for(FUInstance* ptr : *instances){
@@ -777,7 +779,7 @@ void FixOutputs(FUInstance* node){
 }
 
 Array<Edge> GetAllEdges(Accelerator* accel,Arena* out){
-  DynamicArray<Edge> arr = StartArray<Edge>(out);
+  auto arr = StartGrowableArray<Edge>(out);
   for(FUInstance* ptr : accel->allocated){
     FOREACH_LIST(ConnectionNode*,con,ptr->allOutputs){
       Edge edge = {};

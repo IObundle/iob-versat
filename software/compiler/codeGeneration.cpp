@@ -25,7 +25,7 @@ Array<Difference> CalculateSmallestDifference(Array<int> oldValues,Array<int> ne
 
   int size = oldValues.size;
 
-  DynamicArray<Difference> arr = StartArray<Difference>(out);
+  auto arr = StartGrowableArray<Difference>(out);
   for(int i = 0; i < size; i++){
     int oldVal = oldValues[i];
     int newVal = newValues[i];
@@ -161,7 +161,7 @@ static Array<TypeStructInfo> GetMemMappedStructInfo(Accelerator* accel,Arena* ou
 }
 
 Array<String> ExtractMemoryMasks(AccelInfo info,Arena* out){
-  auto builder = StartArray<String>(out);
+  auto builder = StartGrowableArray<String>(out);
   for(AccelInfoIterator iter = StartIteration(&info); iter.IsValid(); iter = iter.Next()){
     InstanceInfo* unit = iter.CurrentUnit();
 
@@ -393,7 +393,7 @@ void OutputVerilatorWrapper(FUDeclaration* type,Accelerator* accel,String output
   Array<Wire> allConfigsHeaderSide = ExtractAllConfigs(info.infos[0].info,temp,temp2);
 
   // We need to bundle config + static (type->config) only contains config, but not static
-  auto arr = StartArray<Wire>(temp);
+  auto arr = StartGrowableArray<Wire>(temp);
   for(Wire& config : type->configs){
     *arr.PushElem() = config;
   }
@@ -970,7 +970,7 @@ void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* 
   int configBit = 0;
   int addr = val.versatConfigs;
   
-  auto arr = StartArray<WireInformation>(temp);
+  auto arr = StartGrowableArray<WireInformation>(temp);
   for(auto n : nodes){
     for(Wire w : n->declaration->configs){
       WireInformation info = {};
@@ -1075,7 +1075,7 @@ void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* 
   TemplateSetCustom("addressStructures",MakeValue(&addressStructures));
   
   {
-    DynamicArray<int> arr = StartArray<int>(temp);
+    auto arr = StartGrowableArray<int>(temp);
     for(InstanceInfo& t : info.infos[0].info){
       if(!t.isComposite){
         for(int d : t.delay){
@@ -1091,7 +1091,7 @@ void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* 
       int i = 0;
       for(int ii = 0; ii <  info.infos.size; ii++){
         Array<InstanceInfo> allInfos = info.infos[ii].info;
-        DynamicArray<int> arr = StartArray<int>(temp);
+        auto arr = StartGrowableArray<int>(temp);
         for(InstanceInfo& t : allInfos){
           if(!t.isComposite){
             for(int d : t.delay){
@@ -1106,7 +1106,7 @@ void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* 
     TemplateSetCustom("mergedDelays",MakeValue(&allDelays));
     TemplateSetNumber("amountMerged",allDelays.size);
 
-    DynamicArray<DifferenceArray> diffArray = StartArray<DifferenceArray>(temp2);
+    auto diffArray = StartGrowableArray<DifferenceArray>(temp2);
     for(int oldIndex = 0; oldIndex < allDelays.size; oldIndex++){
       for(int newIndex = 0; newIndex < allDelays.size; newIndex++){
         if(oldIndex == newIndex){

@@ -26,9 +26,9 @@ int TypeToBingingStrength(SymbolicExpression* expr){
   UNREACHABLE();
 }
 
-void BuildRepresentation(DynamicString& builder,SymbolicExpression* expr,bool top,int parentBindingStrength){
+void BuildRepresentation(StringBuilder* builder,SymbolicExpression* expr,bool top,int parentBindingStrength){
   if(expr->negative){
-    builder.PushString("-");
+    builder->PushString("-");
   }
 
   int bindingStrength = TypeToBingingStrength(expr);
@@ -36,28 +36,28 @@ void BuildRepresentation(DynamicString& builder,SymbolicExpression* expr,bool to
   //bind = true;
   switch(expr->type){
   case SymbolicExpressionType_VARIABLE: {
-    builder.PushString("%.*s",UNPACK_SS(expr->variable));
+    builder->PushString("%.*s",UNPACK_SS(expr->variable));
   } break;
   case SymbolicExpressionType_LITERAL: {
-    builder.PushString("%d",expr->literal);
+    builder->PushString("%d",expr->literal);
   } break;
   case SymbolicExpressionType_OP: {
     bool hasNonOpSon = (expr->left->type != SymbolicExpressionType_OP && expr->right->type != SymbolicExpressionType_OP);
     if(hasNonOpSon && !top && bind){
-      builder.PushString("(");
+      builder->PushString("(");
     }
 
     BuildRepresentation(builder,expr->left,false,bindingStrength);
 
-    builder.PushString("%c",expr->op);
+    builder->PushString("%c",expr->op);
     
     BuildRepresentation(builder,expr->right,false,bindingStrength);
     if(hasNonOpSon && !top && bind){
-      builder.PushString(")");
+      builder->PushString(")");
     }
   } break;
   case SymbolicExpressionType_ARRAY: {
-    builder.PushString("(");
+    builder->PushString("(");
 
     bool first = true;
     for(SymbolicExpression* s : expr->sum){
@@ -65,7 +65,7 @@ void BuildRepresentation(DynamicString& builder,SymbolicExpression* expr,bool to
         if(s->negative && expr->op == '+'){
           //builder.PushString("-"); // Do not print anything  because we already printed the '-'
         } else {
-          builder.PushString("%c",expr->op);
+          builder->PushString("%c",expr->op);
         }
       } else {
         //if(s->negative && expr->op == '+'){
@@ -75,17 +75,18 @@ void BuildRepresentation(DynamicString& builder,SymbolicExpression* expr,bool to
       BuildRepresentation(builder,s,false,bindingStrength);
       first = false;
     }
-    builder.PushString(")");
+    builder->PushString(")");
   } break;
   }
 }
 
 String PushRepresentation(SymbolicExpression* expr,Arena* out){
-  auto builder = StartString(out);
+  STACK_ARENA(temp,Kilobyte(4));
+  auto builder = StartStringBuilder(&temp);
 
   BuildRepresentation(builder,expr,true,0);
 
-  return EndString(builder);
+  return EndString(out,builder);
 }
 
 void Print(SymbolicExpression* expr){
@@ -324,7 +325,7 @@ SymbolicExpression* ParseSymbolicExpression(String content,Arena* out,Arena* tem
 }
 
 Array<SymbolicExpression*> GetAllExpressions(SymbolicExpression* top,Arena* out){
-  auto GetAllExpressionsRecurse = [](auto recurse,SymbolicExpression* expr,DynamicArray<SymbolicExpression*>& arr) -> void{
+  auto GetAllExpressionsRecurse = [](auto recurse,SymbolicExpression* expr,GrowableArray<SymbolicExpression*>& arr) -> void{
     *arr.PushElem() = expr;
 
     switch(expr->type){
@@ -342,7 +343,7 @@ Array<SymbolicExpression*> GetAllExpressions(SymbolicExpression* top,Arena* out)
     }
   };
  
-  auto builder = StartArray<SymbolicExpression*>(out);
+  auto builder = StartGrowableArray<SymbolicExpression*>(out);
   GetAllExpressionsRecurse(GetAllExpressionsRecurse,top,builder);
 
   return EndArray(builder);
@@ -1019,7 +1020,7 @@ SymbolicExpression* Derivate(SymbolicExpression* expr,String base,Arena* out,Are
         
         SymbolicExpression* derivative = Derivate(oneTerm,base,out,temp);
         
-        auto builder = StartArray<SymbolicExpression*>(out);
+        auto builder = StartGrowableArray<SymbolicExpression*>(out);
         *builder.PushElem() = derivative;
         builder.PushArray(otherTerms);
         auto sumArray = EndArray(builder);
