@@ -30,9 +30,9 @@ struct CalculateDelayResult{
 
 // Nodes indexed by order, edges indexed by index returned from EdgeIterator
 struct SimpleCalculateDelayResult{
-  Array<DelayInfo> nodeDelayByOrder;
-  Array<DelayInfo> edgesDelay;
-  Array<Array<DelayInfo>> inputPortDelayByOrder;
+  Array<DelayInfo> nodeBaseLatencyByOrder;
+  Array<DelayInfo> edgesExtraDelay;
+  Array<Array<DelayInfo>> inputPortBaseLatencyByOrder;
 };
 
 SimpleCalculateDelayResult CalculateDelay(AccelInfoIterator top,Arena* out);
@@ -42,4 +42,4 @@ SimpleCalculateDelayResult CalculateDelay(AccelInfoIterator top,Arena* out);
 //       Need to simplefy further (Replace CalculateDelayResult with the simple version).
 CalculateDelayResult CalculateDelay(Accelerator* accel,Arena* out);
 
-GraphPrintingContent GenerateLatencyDotGraph(AccelInfoIterator top,Array<int> orderToIndex,Array<DelayInfo> nodeDelay,Array<DelayInfo> edgeDelay,Arena* out);
+GraphPrintingContent GenerateLatencyDotGraph(AccelInfoIterator top,Array<int> orderToIndex,Array<DelayInfo> nodeLatencyByOrder,Array<DelayInfo> edgeLatency,Arena* out);

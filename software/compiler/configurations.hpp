@@ -40,8 +40,8 @@ struct InstanceInfo{
   Opt<int> memMappedBitSize;
   Opt<String> memDecisionMask; // This is local to the accelerator
   Opt<int> delayPos;
-  Array<int> delay;
-  int baseDelay;
+  Array<int> extraDelay;
+  int baseNodeDelay;
   int delaySize;
   bool isComposite;
   bool isMerge;

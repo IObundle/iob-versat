@@ -926,12 +926,12 @@ void FillInstanceInfo(AccelInfoIterator initialIter,Arena* out){
         InstanceInfo* unit = it.CurrentUnit();
         InstanceInfo* delayUnit = delayIter.CurrentUnit();
 
-        int delayPos = startIndex + delayUnit->baseDelay;
-        unit->baseDelay = delayPos;
+        int delayPos = startIndex + delayUnit->baseNodeDelay;
+        unit->baseNodeDelay = delayPos;
 
         if(unit->delaySize > 0 && !unit->isComposite){
-          unit->delay = PushArray<int>(out,unit->delaySize);
-          Memset(unit->delay,unit->baseDelay);
+          unit->extraDelay = PushArray<int>(out,unit->delaySize);
+          Memset(unit->extraDelay,unit->baseNodeDelay);
         }
         
         index += 1;
@@ -945,21 +945,21 @@ void FillInstanceInfo(AccelInfoIterator initialIter,Arena* out){
         InstanceInfo* unit = it.CurrentUnit();
         int order = unit->localOrder;
 
-        unit->baseDelay = calculatedDelay.nodeDelayByOrder[order].value;
-        unit->portDelay = PushArray<int>(out,calculatedDelay.inputPortDelayByOrder[order].size);
+        unit->baseNodeDelay = calculatedDelay.nodeBaseLatencyByOrder[order].value;
+        unit->portDelay = PushArray<int>(out,calculatedDelay.inputPortBaseLatencyByOrder[order].size);
 
-        for(int i = 0; i < calculatedDelay.inputPortDelayByOrder[order].size; i++){
-          unit->portDelay[i] = calculatedDelay.inputPortDelayByOrder[order][i].value;
+        for(int i = 0; i < calculatedDelay.inputPortBaseLatencyByOrder[order].size; i++){
+          unit->portDelay[i] = calculatedDelay.inputPortBaseLatencyByOrder[order][i].value;
         }
         
         if(unit->delaySize > 0 && !unit->isComposite){
-          unit->delay = PushArray<int>(out,unit->delaySize);
-          Memset(unit->delay,unit->baseDelay);
+          unit->extraDelay = PushArray<int>(out,unit->delaySize);
+          Memset(unit->extraDelay,unit->baseNodeDelay);
         }
 
         AccelInfoIterator inside = it.StepInsideOnly();
         if(inside.IsValid()){
-          Recurse(Recurse,inside,calculatedDelay,unit->baseDelay,out);
+          Recurse(Recurse,inside,calculatedDelay,unit->baseNodeDelay,out);
         }
       }
     }
@@ -1099,7 +1099,7 @@ Array<int> ExtractInputDelays(AccelInfoIterator top,Arena* out){
   for(AccelInfoIterator iter = top; iter.IsValid(); iter = iter.Next()){
     InstanceInfo* info = iter.CurrentUnit();
     if(info->decl == BasicDeclaration::input){
-      inputDelays[info->special] = info->baseDelay;
+      inputDelays[info->special] = info->baseNodeDelay;
     }
   }
 

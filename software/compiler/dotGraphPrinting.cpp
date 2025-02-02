@@ -36,7 +36,7 @@ GraphInfo DefaultEdgeContent(Edge* edge,Arena* out){
   int inPort = edge->in.port;
   int outPort = edge->out.port;
 
-  String content = PushString(out,"%d -> %d",outPort,inPort);
+  String content = PushString(out,"%d -> %d:%d",outPort,inPort,edge->delay);
 
   return {content,Color_BLACK};
 }

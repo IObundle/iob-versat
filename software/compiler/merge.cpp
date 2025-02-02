@@ -1216,12 +1216,24 @@ Array<Edge*> GetAllPaths(Accelerator* accel,PortInstance start,PortInstance end,
     PortInstance outInputSide = {.inst = outInst.inst,.port = outPort};
     
     Array<Edge*> subPaths = GetAllPaths(accel,start,outInputSide,out);
+
+    // TODO: A little bit slow. This approach is a bit problematic.
+    EdgeIterator iter = IterateEdges(accel);
+    int edgeDelay = 0;
+    while(iter.HasNext()){
+      Edge edge = iter.Next();
+      
+      if(edge.out == start && edge.in == outInputSide){
+        edgeDelay = edge.delay;
+      }
+    }
     
     for(Edge* subEdge : subPaths){
       Edge* newEdge = PushStruct<Edge>(out);
       *newEdge = edge;
+      newEdge->delay = edgeDelay;
       newEdge->next = subEdge;
-
+      
       *allPaths->PushElem() = newEdge;
     }
   }
@@ -1237,7 +1249,7 @@ Array<Edge*> GetAllPaths(Accelerator* accel,PortInstance start,PortInstance end,
 
 void PrintPath(Edge* head){
   FOREACH_LIST(Edge*,e,head){
-    printf("%.*s:%d -> %.*s:%d\n",UNPACK_SS(e->units[0].inst->name),e->units[0].port,UNPACK_SS(e->units[1].inst->name),e->units[1].port);
+    printf("%.*s:%d -[%d]> %.*s:%d\n",UNPACK_SS(e->units[0].inst->name),e->units[0].port,e->delay,UNPACK_SS(e->units[1].inst->name),e->units[1].port);
   }
 }
 
@@ -1304,7 +1316,7 @@ ReconstituteResult ReconstituteGraph(Accelerator* merged,TrieSet<PortInstance>* 
         PortInstance node1 = edgeOnMerged->units[1];
         GetOrAllocateResult<FUInstance*> res0 = instancesAdded->GetOrAllocate(node0.inst);
         GetOrAllocateResult<FUInstance*> res1 = instancesAdded->GetOrAllocate(node1.inst);
-      
+        
         if(!res0.alreadyExisted){
           PortInstance optOriginal = MappingMapOutput(mergedToBase,node0);
 
@@ -1315,7 +1327,7 @@ ReconstituteResult ReconstituteGraph(Accelerator* merged,TrieSet<PortInstance>* 
         
           *res0.data = CopyInstance(recon,node0.inst,true,name);
         
-          MappingInsertEqualNode(accelToRecon,node0.inst,*res0.data); // We are using equal node here. 
+          MappingInsertEqualNode(accelToRecon,node0.inst,*res0.data);
         }
       
         if(!res1.alreadyExisted){
@@ -1501,12 +1513,6 @@ Array<GraphAndMapping> GetAllBaseMergeTypes(FUDeclaration* decl,Arena* out){
   }
 
   Array<GraphAndMapping> result = PushArrayFromSet(out,seen);
-
-#if 0
-  for(GraphAndMapping mapping : result){
-    printf("%d -> %d\n",mapping.map->firstId,mapping.map->secondId);
-  }
-#endif
   
   // TODO: Problem was in here.
   //       The problem is that we are mapping to the base circuit, but we want to map to the flattened circuit?
@@ -2015,6 +2021,15 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
 
   int mergeSize = size;
 
+  if(globalOptions.debug){
+    for(int i = 0; i < size; i++){
+      BLOCK_REGION(temp);
+      String fileName = PushString(temp,"finalRecon_%d.dot",i);
+      String filePath = PushDebugPath(temp,permanentName,fileName);
+      OutputDebugDotGraph(recon[i],fileName);
+    }
+  }
+  
   // At this point we start filling AccelInfo
   decl->info.infos = PushArray<MergePartition>(globalPermanent,mergeSize);
   for(int i = 0; i < mergeSize; i++){
@@ -2052,10 +2067,10 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
       bool mapExists = reconNode != nullptr;
       
       if(reconNode){
-        decl->info.infos[i].info[index].baseDelay = reconDelay[i].nodeDelay->GetOrFail(reconNode).value;
+        decl->info.infos[i].info[index].baseNodeDelay = reconDelay[i].nodeDelay->GetOrFail(reconNode).value;
         decl->info.infos[i].info[index].localOrder = reconToOrder[i]->GetOrFail(reconNode);
       } else {
-        decl->info.infos[i].info[index].baseDelay = 0; // NOTE: Even if they do not belong, this delay is directly inserted into the header file, meaning that for now it's better if we keep everything at zero.
+        decl->info.infos[i].info[index].baseNodeDelay = 0; // NOTE: Even if they do not belong, this delay is directly inserted into the header file, meaning that for now it's better if we keep everything at zero.
         decl->info.infos[i].info[index].localOrder = 0;
       }
  

@@ -444,7 +444,7 @@ Array<T> PushArrayFromSet(Arena* out,Set<T>* set){
 
 template<typename T>
 Array<T> PushArrayFromSet(Arena* out,TrieSet<T>* set){
-  auto arr = PushArray<T>(out,set->map->nodesUsed);
+  auto arr = PushArray<T>(out,set->map->inserted);
 
   int index = 0;
   for(auto pair : set->map){

@@ -1081,7 +1081,7 @@ void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* 
     auto arr = StartGrowableArray<int>(temp);
     for(InstanceInfo& t : info.infos[0].info){
       if(!t.isComposite){
-        for(int d : t.delay){
+        for(int d : t.extraDelay){
           *arr.PushElem() = d;
         }
       }
@@ -1097,7 +1097,7 @@ void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* 
         auto arr = StartGrowableArray<int>(temp);
         for(InstanceInfo& t : allInfos){
           if(!t.isComposite){
-            for(int d : t.delay){
+            for(int d : t.extraDelay){
               *arr.PushElem() = d;
             }
           }

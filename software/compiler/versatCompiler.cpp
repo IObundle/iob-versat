@@ -622,7 +622,7 @@ int main(int argc,char* argv[]){
         decl->flattenMapping = p.second;
       }
 
-      Print(p.second);
+      //Print(p.second);
     }
   }
 
