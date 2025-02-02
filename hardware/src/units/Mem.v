@@ -1,7 +1,5 @@
 `timescale 1ns / 1ps
 
-`define COMPLEX_INTERFACE
-
 (* source *) module Mem #(
    parameter DATA_W        = 32,
    parameter SIZE_W        = 32,
@@ -163,7 +161,7 @@
 
    //address generators
 
-   AddressGen #(
+   AddressGen2 #(
       .ADDR_W(ADDR_W),
       .DATA_W(SIZE_W)
    ) addrgenA (
@@ -177,11 +175,15 @@
       .incr_i  (incrA),
       .delay_i (delay0),
 
-`ifdef COMPLEX_INTERFACE
       .iterations_i(iterA),
       .duty_i      (dutyA),
       .shift_i     (shiftA),
-`endif
+
+      .period2_i(per2A),
+      .incr2_i(incr2A),
+
+      .iterations2_i(iter2A),
+      .shift2_i(shift2A),
 
       //outputs 
       .valid_o(enA_int),
@@ -192,7 +194,7 @@
       .done_o (doneA)
    );
 
-   AddressGen #(
+   AddressGen2 #(
       .ADDR_W(ADDR_W),
       .DATA_W(SIZE_W)
    ) addrgenB (
@@ -206,11 +208,15 @@
       .incr_i  (incrB),
       .delay_i (delay1),
 
-`ifdef COMPLEX_INTERFACE
       .iterations_i(iterB),
       .duty_i      (dutyB),
       .shift_i     (shiftB),
-`endif
+
+      .period2_i(per2B),
+      .incr2_i(incr2B),
+
+      .iterations2_i(iter2B),
+      .shift2_i(shift2B),
 
       //outputs 
       .valid_o(enB),
