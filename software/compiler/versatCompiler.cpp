@@ -827,9 +827,19 @@ Need to take a look at State and Mem struct interfaces. State is not taking into
 
 /*
 
-What do I have to do next?
+TODO?
 
 DelayType and NodeType need a revision.
+
+The hardware is full of sloppy code.
+   Start standardizing and pulling up modules that abstract common functionality.
+   Maybe look into generating a verilog testbench for individual units that performs a number of tests depending on the interfaces that the unit provides.
+      Should be easy, just one more template.
+
+There are a dozens of TODOs scathered all over the codebase. Start by fixing some of them.
+
+Generated code does not take into account parameters when it should.
+   Some wires are given fixed sizes when they depend on verilog parameters. 
 
 */
 
