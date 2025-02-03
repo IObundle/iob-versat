@@ -802,3 +802,86 @@ void DynamicString::PushNullByte(){
   Byte* res = PushBytes(arena,1);
   *res = '\0';
 }
+
+
+GenericArrayIterator IterateArray(void* array,int sizeOfType,int alignmentOfType){
+  GenericArrayIterator res = {};
+  res.array = array;
+  res.sizeOfType = sizeOfType;
+  res.alignmentOfType = alignmentOfType;
+
+  return res;
+}
+
+bool HasNext(GenericArrayIterator iter){
+  void** arrayData = (void**) iter.array;
+  int* size = (int*) (arrayData + 1);
+
+  return iter.index < *size;
+}
+
+void* Next(GenericArrayIterator& iter){
+  void** arrayData = (void**) iter.array;
+  void* arrayStart = (void*) arrayData[0]; 
+
+  char* view = (char*) arrayStart;
+  void* data = (void*) &view[iter.index * iter.sizeOfType];
+  iter.index += 1;
+  
+  return data;
+}
+
+GenericTrieMapIterator IterateTrieMap(void* trieMap,int sizeOfType,int alignmentOfType){
+  GenericTrieMapIterator res = {};
+  res.trieMap = trieMap;
+  res.sizeOfType = sizeOfType;
+  res.alignmentOfType = alignmentOfType;
+
+  TrieMap<int,int>* view = ((TrieMap<int,int>*) trieMap);
+
+  res.ptr = view->head;
+  
+  return res;
+}
+
+bool HasNext(GenericTrieMapIterator iter){
+  TrieMap<int,int>* view = ((TrieMap<int,int>*) iter.trieMap);
+
+  return iter.index < view->inserted;
+}
+
+void* Next(GenericTrieMapIterator& iter){
+  TrieMapNode<int,int>* ptr = (TrieMapNode<int,int>*) iter.ptr;
+
+  void* data = ((char*)ptr) + sizeof(void*) * 4;
+  TrieMapNode<int,int>* next = *(TrieMapNode<int,int>**) (((char*)data) + iter.sizeOfType);
+  iter.ptr = next;
+  
+  iter.index += 1;
+
+  return data;
+}
+
+GenericHashmapIterator IterateHashmap(void* hashmap,int sizeOfType,int alignmentOfType){
+  GenericHashmapIterator res = {};
+  res.hashmap = hashmap;
+  res.sizeOfType = sizeOfType;
+  res.alignmentOfType = alignmentOfType;
+
+  return res;
+}
+
+bool HasNext(GenericHashmapIterator iter){
+  Hashmap<int,int>* view = ((Hashmap<int,int>*) iter.hashmap);
+
+  return iter.index < view->nodesUsed;
+}
+
+void* Next(GenericHashmapIterator& iter){
+  Hashmap<int,int>* view = ((Hashmap<int,int>*) iter.hashmap);
+
+  char* arrayView = (char*) view->data;
+  void* data = (void*) &arrayView[iter.index * iter.sizeOfType];
+  iter.index += 1;
+  return data;
+}

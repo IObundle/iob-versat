@@ -1,6 +1,9 @@
+#include <argp.h>
 #include <unordered_map>
 #include <sys/wait.h>
 #include <ftw.h>
+
+// TODO: Eventually need to find a way of detecting superfluous includes or something to the same effect. Maybe possible change to a unity build althoug the main problem to solve is organization.
 
 #include "debugVersat.hpp"
 #include "declaration.hpp"
@@ -21,6 +24,7 @@
 #include "dotGraphPrinting.hpp"
 #include "versatSpecificationParser.hpp"
 #include "symbolic.hpp"
+#include "parser.hpp"
 
 #include <filesystem>
 namespace fs = std::filesystem;
@@ -32,8 +36,6 @@ namespace fs = std::filesystem;
 
 // TODO: Small fix for common template. Works for now 
 void SetIncludeHeader(CompiledTemplate* tpl,String name);
-
-#include "parser.hpp"
 
 static Value HexValue(Value in,Arena* out){
   static char buffer[128];
@@ -98,200 +100,6 @@ void LoadTemplates(Arena* perm){
   });
 }
 
-#include <argp.h>
-
-struct OptionsGather{
-  ArenaList<String>* verilogFiles;
-  ArenaList<String>* extraSources;
-  ArenaList<String>* includePaths;
-  ArenaList<String>* unitPaths;
-
-  Options* options;
-};
-
-static int
-parse_opt (int key, char *arg,
-           argp_state *state)
-{
-  OptionsGather* opts = (OptionsGather*) state->input;
-
-  // TODO: Better error handling
-  switch (key)
-    {
-    case 'S': *opts->extraSources->PushElem() = STRING(arg); break;
-    case 'I': *opts->includePaths->PushElem() = STRING(arg); break;
-    case 'u': *opts->unitPaths->PushElem() = STRING(arg); break;
-
-    case 'b': opts->options->databusDataSize = ParseInt(STRING(arg)); break;
-    case 'x': opts->options->databusAddrSize = ParseInt(STRING(arg)); break;
-
-    case 'd': opts->options->useDMA = true; break;
-    case 'D': opts->options->architectureHasDatabus = true; break;
-    case 's': opts->options->addInputAndOutputsToTop = true; break;
-
-    case 'p': opts->options->copyUnitsConvenience = true; break;
-    case 'L': opts->options->generetaSourceListName = STRING(arg); break;
-
-    case 'g': opts->options->debugPath = STRING(arg); opts->options->debug = true; break;
-    case 't': opts->options->topName = STRING(arg); break;
-    case 'o': opts->options->hardwareOutputFilepath = STRING(arg); break;
-    case 'O': opts->options->softwareOutputFilepath = STRING(arg); break;
-      
-    case ARGP_KEY_ARG: opts->options->specificationFilepath = STRING(arg); break;
-    case ARGP_KEY_END: break;
-    }
-  return 0;
-}
-
-template<typename Key,typename Data>
-struct MyHashmapIterator{
-  HashmapIterator<Key,Data> iter;
-  HashmapIterator<Key,Data> end;
-
-  bool HasNext(){
-    return (iter != end);
-  };
-
-  Pair<Key,Data*> Next(){
-    auto res = *iter;
-    ++iter;
-    return res;
-  };
-};
-
-template<typename Key,typename Data>
-MyHashmapIterator<Key,Data> Iterate(Hashmap<Key,Data>* hashmap){
-  MyHashmapIterator<Key,Data> res = {};
-
-  res.iter = begin(hashmap);
-  res.end  = end(hashmap);
-  return res;
-}
-
-template<typename Key,typename Data>
-MyHashmapIterator<Key,Data> Iterate(Hashmap<Key,Data>& hashmap){
-  MyHashmapIterator<Key,Data> res = {};
-
-  res.iter = begin(&hashmap);
-  res.end  = end(&hashmap);
-  return res;
-}
-
-template struct MyHashmapIterator<int,int>;
-template MyHashmapIterator<int,int> Iterate(Hashmap<int,int>* hashmap);
-template MyHashmapIterator<int,int> Iterate(Hashmap<int,int>& hashmap);
-
-template struct MyHashmapIterator<String,Array<Token>>;
-template MyHashmapIterator<String,Array<Token>> Iterate(Hashmap<String,Array<Token>>* hashmap);
-template MyHashmapIterator<String,Array<Token>> Iterate(Hashmap<String,Array<Token>>& hashmap);
-
-struct GenericArrayIterator{
-  void* array;
-  int sizeOfType;
-  int alignmentOfType;
-  int index;
-};
-
-GenericArrayIterator IterateArray(void* array,int sizeOfType,int alignmentOfType){
-  GenericArrayIterator res = {};
-  res.array = array;
-  res.sizeOfType = sizeOfType;
-  res.alignmentOfType = alignmentOfType;
-
-  return res;
-}
-
-bool HasNext(GenericArrayIterator iter){
-  //Array<int>* view = (*(Array<int>**) iter.array);
-  void** arrayData = (void**) iter.array;
-  int* size = (int*) (arrayData + 1);
-
-  return iter.index < *size;
-}
-
-void* Next(GenericArrayIterator& iter){
-  //Array<int>* view = (*(Array<int>**) iter.array);
-  //void* arrayStart = (void*) view->data; 
-
-  void** arrayData = (void**) iter.array;
-  void* arrayStart = (void*) arrayData[0]; 
-
-  char* view = (char*) arrayStart;
-  void* data = (void*) &view[iter.index * iter.sizeOfType];
-  iter.index += 1;
-  
-  return data;
-}
-
-struct GenericTrieMapIterator{
-  void* trieMap;
-  void* ptr;
-  int sizeOfType;
-  int alignmentOfType;
-  int index;
-};
-
-GenericTrieMapIterator IterateTrieMap(void* trieMap,int sizeOfType,int alignmentOfType){
-  GenericTrieMapIterator res = {};
-  res.trieMap = trieMap;
-  res.sizeOfType = sizeOfType;
-  res.alignmentOfType = alignmentOfType;
-
-  TrieMap<int,int>* view = ((TrieMap<int,int>*) trieMap);
-
-  res.ptr = view->head;
-  
-  return res;
-}
-
-bool HasNext(GenericTrieMapIterator iter){
-  TrieMap<int,int>* view = ((TrieMap<int,int>*) iter.trieMap);
-
-  return iter.index < view->inserted;
-}
-
-void* Next(GenericTrieMapIterator& iter){
-  TrieMapNode<int,int>* ptr = (TrieMapNode<int,int>*) iter.ptr;
-
-  void* data = ((char*)ptr) + sizeof(void*) * 4;
-  TrieMapNode<int,int>* next = *(TrieMapNode<int,int>**) (((char*)data) + iter.sizeOfType);
-  iter.ptr = next;
-  
-  iter.index += 1;
-
-  return data;
-}
-
-struct GenericHashmapIterator{
-  void* hashmap;
-  int sizeOfType;
-  int alignmentOfType;
-  int index;
-};
-
-GenericHashmapIterator IterateHashmap(void* hashmap,int sizeOfType,int alignmentOfType){
-  GenericHashmapIterator res = {};
-  res.hashmap = hashmap;
-  res.sizeOfType = sizeOfType;
-  res.alignmentOfType = alignmentOfType;
-
-  return res;
-}
-
-bool HasNext(GenericHashmapIterator iter){
-  Hashmap<int,int>* view = ((Hashmap<int,int>*) iter.hashmap);
-
-  return iter.index < view->nodesUsed;
-}
-
-void* Next(GenericHashmapIterator& iter){
-  Hashmap<int,int>* view = ((Hashmap<int,int>*) iter.hashmap);
-
-  char* arrayView = (char*) view->data;
-  void* data = (void*) &arrayView[iter.index * iter.sizeOfType];
-  iter.index += 1;
-  return data;
-}
 
 // Only for graphs that we know for sure are DAG
 Array<int> CalculateDAG(int maxNode,Array<Pair<int,int>> edges,int start,Arena* out){
@@ -376,6 +184,49 @@ void GetSubWorkRequirement(Hashmap<String,Work>* typeToWork,TypeDefinition type)
     work->calculateDelayFixedGraph = true;
     work->flattenWithMapping = true;
   }
+}
+
+struct OptionsGather{
+  ArenaList<String>* verilogFiles;
+  ArenaList<String>* extraSources;
+  ArenaList<String>* includePaths;
+  ArenaList<String>* unitPaths;
+
+  Options* options;
+};
+
+static int
+parse_opt (int key, char *arg,
+           argp_state *state)
+{
+  OptionsGather* opts = (OptionsGather*) state->input;
+
+  // TODO: Better error handling
+  switch (key)
+    {
+    case 'S': *opts->extraSources->PushElem() = STRING(arg); break;
+    case 'I': *opts->includePaths->PushElem() = STRING(arg); break;
+    case 'u': *opts->unitPaths->PushElem() = STRING(arg); break;
+
+    case 'b': opts->options->databusDataSize = ParseInt(STRING(arg)); break;
+    case 'x': opts->options->databusAddrSize = ParseInt(STRING(arg)); break;
+
+    case 'd': opts->options->useDMA = true; break;
+    case 'D': opts->options->architectureHasDatabus = true; break;
+    case 's': opts->options->addInputAndOutputsToTop = true; break;
+
+    case 'p': opts->options->copyUnitsConvenience = true; break;
+    case 'L': opts->options->generetaSourceListName = STRING(arg); break;
+
+    case 'g': opts->options->debugPath = STRING(arg); opts->options->debug = true; break;
+    case 't': opts->options->topName = STRING(arg); break;
+    case 'o': opts->options->hardwareOutputFilepath = STRING(arg); break;
+    case 'O': opts->options->softwareOutputFilepath = STRING(arg); break;
+      
+    case ARGP_KEY_ARG: opts->options->specificationFilepath = STRING(arg); break;
+    case ARGP_KEY_END: break;
+    }
+  return 0;
 }
 
 // TODO: Better error handling

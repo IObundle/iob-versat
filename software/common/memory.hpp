@@ -586,6 +586,63 @@ public:
   int MemoryUsage();
 };
 
+
+template<typename Key,typename Data>
+struct MyHashmapIterator{
+  HashmapIterator<Key,Data> iter;
+  HashmapIterator<Key,Data> end;
+
+  bool HasNext(){
+    return (iter != end);
+  };
+
+  Pair<Key,Data*> Next(){
+    auto res = *iter;
+    ++iter;
+    return res;
+  };
+};
+
+template<typename Key,typename Data>
+MyHashmapIterator<Key,Data> Iterate(Hashmap<Key,Data>* hashmap){
+  MyHashmapIterator<Key,Data> res = {};
+
+  res.iter = begin(hashmap);
+  res.end  = end(hashmap);
+  return res;
+}
+
+template<typename Key,typename Data>
+MyHashmapIterator<Key,Data> Iterate(Hashmap<Key,Data>& hashmap){
+  MyHashmapIterator<Key,Data> res = {};
+
+  res.iter = begin(&hashmap);
+  res.end  = end(&hashmap);
+  return res;
+}
+
+struct GenericArrayIterator{
+  void* array;
+  int sizeOfType;
+  int alignmentOfType;
+  int index;
+};
+
+struct GenericTrieMapIterator{
+  void* trieMap;
+  void* ptr;
+  int sizeOfType;
+  int alignmentOfType;
+  int index;
+};
+
+struct GenericHashmapIterator{
+  void* hashmap;
+  int sizeOfType;
+  int alignmentOfType;
+  int index;
+};
+
 // Start of implementation
 
 template<typename Key,typename Data>
