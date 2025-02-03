@@ -68,7 +68,6 @@ AccelInfoIterator AccelInfoIterator::GetParent(){
   }
 
   NOT_POSSIBLE("Any valid AccelInfo should never reach this point");
-  return {};
 }
 
 InstanceInfo* AccelInfoIterator::GetParentUnit(){
@@ -398,7 +397,6 @@ AccelInfoIterator GetCurrentPartitionTypeAsIterator(AccelInfoIterator iter,Arena
   }
 
   NOT_POSSIBLE("");
-  return {};
 }
 
 int GetPartitionIndex(AccelInfoIterator iter){
@@ -435,7 +433,6 @@ int GetPartitionIndex(AccelInfoIterator iter){
   }
 
   NOT_POSSIBLE("");
-  return -1;
 }
 
 Array<Partition> GenerateInitialPartitions(Accelerator* accel,Arena* out){

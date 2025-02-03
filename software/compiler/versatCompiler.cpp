@@ -646,20 +646,9 @@ int main(int argc,char* argv[]){
   
   // This should be the last thing that we do, no further file creation can occur after this point
   for(FileInfo f : CollectAllFilesInfo(temp)){
-    if(f.purpose == FilePurpose_VERILOG_INCLUDE && f.mode == FileOpenMode_WRITE){
-      printf("Filename: %.*s Type: VERILOG_INCLUDE\n",UNPACK_SS(f.filepath));
-    }
-    if(f.purpose == FilePurpose_VERILOG_CODE && f.mode == FileOpenMode_WRITE){
-      printf("Filename: %.*s Type: VERILOG_CODE\n",UNPACK_SS(f.filepath));
-    }
-    if(f.purpose == FilePurpose_MAKEFILE && f.mode == FileOpenMode_WRITE){
-      printf("Filename: %.*s Type: MAKEFILE\n",UNPACK_SS(f.filepath));
-    }
-    if(f.purpose == FilePurpose_SOFTWARE && f.mode == FileOpenMode_WRITE){
-      printf("Filename: %.*s Type: SOFTWARE\n",UNPACK_SS(f.filepath));
-    }
-    if(f.purpose == FilePurpose_MISC && f.mode == FileOpenMode_WRITE){
-      printf("Filename: %.*s Type: MISC\n",UNPACK_SS(f.filepath));
+    if(f.purpose != FilePurpose_DEBUG_INFO && f.mode == FileOpenMode_WRITE){
+      const char* type = FilePurpose_Name(f.purpose);
+      printf("Filename: %.*s Type: %s\n",UNPACK_SS(f.filepath),type);
     }
   }
 

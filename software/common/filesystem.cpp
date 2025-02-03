@@ -5,6 +5,18 @@
 static Arena storeFileInfoArena = {};
 static ArenaList<FileInfo>* storeFileInfo;
 
+const char* FilePurpose_Name(FilePurpose p){
+  switch(p){
+  case FilePurpose_VERILOG_CODE: return "VERILOG_CODE";
+  case FilePurpose_VERILOG_INCLUDE: return "VERILOG_INCLUDE";
+  case FilePurpose_MAKEFILE: return "MAKEFILE";
+  case FilePurpose_SOFTWARE: return "SOFTWARE";
+  case FilePurpose_MISC: return "MISC";
+  case FilePurpose_DEBUG_INFO: return "DEBUG_INFO";
+  }
+  NOT_POSSIBLE();
+}
+
 static void CheckOrInitArena(){
   if(storeFileInfoArena.mem == nullptr){
     storeFileInfoArena = InitArena(Megabyte(1)); // Simple and effective, more robust code would probably change to a growable arena or something similar.
@@ -35,7 +47,8 @@ FILE* OpenFile(String filepath,const char* mode,FilePurpose purpose){
     fileMode = FileOpenMode_READ;
   } else if((mode[0] == 'w' && mode[1]  == 'r' && mode[2]  == '\0')||
             (mode[0] == 'r' && mode[1]  == 'w' && mode[2]  == '\0')){
-    fileMode = FileOpenMode_READ_WRITE;
+    Assert(false);
+    //fileMode = FileOpenMode_READ_WRITE;
   }
  
   FILE* file = fopen(pathBuffer,mode);

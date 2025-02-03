@@ -1024,7 +1024,7 @@ FUDeclaration* ParseIterative(Tokenizer* tok){
 
   return RegisterIterativeUnit(iterative,unit,latency,name,temp,temp2);
 #endif
-  UNREACHABLE();
+  NOT_POSSIBLE();
 }
 
 Opt<TypeAndInstance> ParseTypeAndInstance(Tokenizer* tok){
@@ -1204,7 +1204,6 @@ Pair<ConnectionType,int> GetConnectionInfo(Var var){
   }
 
   NOT_POSSIBLE("Every condition should have been checked by now");
-  return {};
 }
 
 bool IsValidGroup(VarGroup group){

@@ -8,10 +8,7 @@
 Arena arenaInst;
 Arena* arena = &arenaInst;
 
-u64 HashString(String data){
-  // djb2
-  u64 hash = 5381;
-
+inline u64 HashString(String data,u64 hash){
   for(int i = 0; i < data.size; i++){
     hash = ((hash << 5) + hash) + data[i];
   }
@@ -33,7 +30,8 @@ int main(int argc,const char* argv[]){
   Arena inst2 = InitArena(Megabyte(64));
   contextArenas[1] = &inst2;
   
-  u64 hash = 0;
+  // djb2
+  u64 hash = 5381;
   i32 amountOfTokens = 0;
   for(i32 i = 0; i < argc - 1; i++){
     const char* filepath = argv[i + 1];
@@ -42,19 +40,16 @@ int main(int argc,const char* argv[]){
 
     String content = PushFile(arena,filepath);
 
-    Tokenizer tok(content,"[]()#@!~&|^+=-*/%;><?:",{""});
-
-    //u64 n = 0;
-    u64 fileHash = 0;
+    Tokenizer tok(content,"`~!@#$%^&*()_-+=[{]}\\|;:'\",<.>/?",{""});
 
     while(!tok.Done()){
       Token token = tok.NextToken();
 
-      fileHash = fileHash ^ HashString(token);
+      for(int i = 0; i < token.size; i++){
+        hash = ((hash << 5) + hash) + token.data[i];
+      }
       amountOfTokens += 1;
     }
-
-    hash = hash ^ fileHash; 
   }
 
   printf("%d:%lu\n",amountOfTokens,hash);

@@ -155,10 +155,9 @@ if(_){ \
 // If possible use argument to put a simple string indicating the error that must likely occured
 // We do not print it for now but useful for long lasting code.
 #define NOT_IMPLEMENTED(...) do{ printf("%s:%d:1: error: Not implemented: %s",__FILE__,__LINE__,__PRETTY_FUNCTION__); fflush(stdout); Assert(false); } while(0) // Doesn't mean that something is necessarily future planned
-#define NOT_POSSIBLE(...) DEBUG_BREAK()
+#define NOT_POSSIBLE(...) do{DEBUG_BREAK(); __builtin_unreachable();} while(0)
 #define UNHANDLED_ERROR(...) do{ fflush(stdout); Assert(false); } while(0) // Know it's an error, but only exit, for now
 #define USER_ERROR(...) do{ fflush(stdout); exit(0); } while(0) // User error and program does not try to repair or keep going (report error before and exit)
-#define UNREACHABLE(...) do{Assert(false); __builtin_unreachable();} while(0)
 
 #define FOREACH_LIST(TYPE,ITER,START) for(TYPE ITER = START; ITER; ITER = ITER->next)
 #define FOREACH_LIST_INDEXED(TYPE,ITER,START,INDEX) for(TYPE ITER = START; ITER; ITER = ITER->next,INDEX += 1)

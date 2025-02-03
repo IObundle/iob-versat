@@ -1045,7 +1045,6 @@ String GetFreeMergeMultiplexerName(Accelerator* accel,Arena* out){
   }
 
   NOT_POSSIBLE();
-  //return {};
 }
 
 int GetFreeMuxGroup(Accelerator* accel){

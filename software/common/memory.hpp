@@ -987,7 +987,6 @@ Data* TrieMap<Key,Data>::Insert(Key key,Data data){
   }
   
   NOT_POSSIBLE("Should not reach here");
-  return nullptr;
 }
 
 template<typename Key,typename Data>
@@ -1038,7 +1037,6 @@ Data* TrieMap<Key,Data>::InsertIfNotExist(Key key,Data data){
   }
 
   NOT_POSSIBLE("Should not reach here");
-  return nullptr;
 }
   
 template<typename Key,typename Data>
@@ -1066,7 +1064,6 @@ Data* TrieMap<Key,Data>::Get(Key key){
   }
 
   NOT_POSSIBLE("Should not reach here");
-  return nullptr;
 }
 
 template<typename Key,typename Data>

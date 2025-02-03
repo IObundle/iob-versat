@@ -15,6 +15,8 @@ enum FilePurpose{
   FilePurpose_DEBUG_INFO
 };
 
+const char* FilePurpose_Name(FilePurpose p);
+
 enum FileOpenMode{
   FileOpenMode_READ,
   FileOpenMode_WRITE,
