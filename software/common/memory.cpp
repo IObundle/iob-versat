@@ -166,76 +166,52 @@ size_t SpaceAvailable(Arena* arena){
 StringBuilder* StartStringBuilder(Arena* out){
   StringBuilder* builder = PushStruct<StringBuilder>(out);
   builder->arena = out;
-  builder->head = nullptr;
-  builder->tail = nullptr;
+
+  // Simpler to preallocate one node, very rare for a StringBuilder to be started and not used once
+  builder->head = PushStruct<StringNode>(out);
+  builder->tail = builder->head;
   
   return builder;
 }
 
-void StringBuilder::PushString(String str){
-  StringNode* node = PushStruct<StringNode>(this->arena);
-  node->string = ::PushString(this->arena,str);
+void StringBuilder::PushString(String string){
+  StringNode* ptr = this->tail;
+  
+  String str = string;
+  while(1){
+    i16 toCopyAmount = MIN(str.size,(STRING_NODE_SIZE - ptr->used));
+    memcpy(&ptr->buffer[ptr->used],str.data,toCopyAmount);
 
-  if(this->head == nullptr){
-    this->head = node;
-    this->tail = node;
-  } else {
-    this->tail->next = node;
-    this->tail = node;
+    str.data += toCopyAmount;
+    str.size -= toCopyAmount;
+    ptr->used += toCopyAmount;
+    
+    if(ptr->used == STRING_NODE_SIZE){
+      ptr->next = PushStruct<StringNode>(arena);
+      ptr = ptr->next;
+    }
+
+    if(str.size == 0){
+      break;
+    }
   }
+
+  this->tail = ptr;
 }
 
 // TODO: Performance will drop if this gets called repeatedly and in contexts where we are constantly pushing chars
 //       Need to start tracking that sort of stuff in debug mode.
 void StringBuilder::PushChar(char ch){
-  StringNode* node = PushStruct<StringNode>(this->arena);
-
-  Byte* data = PushBytes(this->arena,1);
-  *data = ch;
-  
-  node->string.data = (const char*) data;
-  node->string.size = 1;
-  
-  if(this->head == nullptr){
-    this->head = node;
-    this->tail = node;
-  } else {
-    this->tail->next = node;
-    this->tail = node;
-  }
+  String str = {};
+  str.data = &ch;
+  str.size = 1;
+  PushString(str);
 }
 
 void StringBuilder::vPushString(const char* format,va_list args){
-  StringNode* node = PushStruct<StringNode>(this->arena);
-  node->string = ::vPushString(this->arena,format,args);
-
-  if(this->head == nullptr){
-    this->head = node;
-    this->tail = node;
-  } else {
-    this->tail->next = node;
-    this->tail = node;
-  }
-}
-
-void StringBuilder::RemoveLastNode(){
-  if(!this->head){
-    return;
-  }
-
-  if(this->head->next == nullptr){
-    this->head = nullptr;
-    this->tail = nullptr;
-  }
-  
-  for(StringNode* ptr = this->head; ptr; ptr = ptr->next){
-    if(ptr->next->next == nullptr){
-      Assert(ptr->next == this->tail);
-      ptr->next = nullptr;
-      this->tail = ptr->next;
-      break;
-    }
-  }
+  TEMP_REGION(temp,arena);
+  String toPush = ::vPushString(temp,format,args);
+  PushString(toPush);
 }
 
 void StringBuilder::PushString(const char* format,...){
@@ -250,7 +226,7 @@ void StringBuilder::PushString(const char* format,...){
 String EndString(Arena* out,StringBuilder* builder){
   int totalSize = 0;
   for(StringNode* ptr = builder->head; ptr != nullptr; ptr = ptr->next){
-    totalSize += ptr->string.size;
+    totalSize += ptr->used;
   }
 
   Byte* data = PushBytes(out,totalSize);
@@ -260,10 +236,10 @@ String EndString(Arena* out,StringBuilder* builder){
   res.size = totalSize;
   
   for(StringNode* ptr = builder->head; ptr != nullptr; ptr = ptr->next){
-    memcpy(data,ptr->string.data,ptr->string.size);
-    data += ptr->string.size;
+    memcpy(data,ptr->buffer,ptr->used);
+    data += ptr->used;
   }
-
+  
   return res;
 }
 

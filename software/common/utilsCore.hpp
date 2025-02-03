@@ -22,6 +22,9 @@
 #define TWO_DIGIT(x,y) (CI(x) * 10 + CI(y))
 #define COMPILE_TIME (TWO_DIGIT(__TIME__[0],__TIME__[1]) * 3600 + TWO_DIGIT(__TIME__[3],__TIME__[4]) * 60 + TWO_DIGIT(__TIME__[6],__TIME__[7]))
 
+#define MIN(A,B) ((A) < (B) ? (A) : (B))
+#define MAX(A,B) ((A) > (B) ? (A) : (B))
+
 #define ALIGN_DOWN(val,size) (val & (~(size - 1)))
 
 // Helper functions named after bitsize. If using byte size, use the X(val,size) functions

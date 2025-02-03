@@ -800,6 +800,7 @@ static String EvalBlockCommand(Block* block,Frame* previousFrame,Arena* out){
     Value iterating = EvalExpression(com->expressions[2],frame,temp);
     int index = 0;
     bool removeLastOutputSeperator = false;
+    ArenaList<String>* strings = PushArenaList<String>(temp);
     for(Iterator iter = Iterate(iterating); HasNext(iter); index += 1,Advance(&iter)){
       CreateValue(frame,STRING("index"),MakeValue(index));
       
@@ -811,26 +812,29 @@ static String EvalBlockCommand(Block* block,Frame* previousFrame,Arena* out){
       //       in regards to the output arena usage. We could just have a 2 step
       //       approach where we just have a more complex builder process that allow us to 
       //       perform more logic over the text blocks
-      
+     
       bool outputSeparator = false;
       for(Block* ptr : block->innerBlocks){
         String text = Eval(ptr,frame,temp);
         
         if(IsOnlyWhitespace(text)){
         } else {
-          builder->PushString(text);
+          *strings->PushElem() = text;
           outputSeparator = true;
         }
       }
 
       if(outputSeparator){
-        builder->PushString("%.*s",separator.str.size,separator.str.data);
+        *strings->PushElem() = PushString(temp,"%.*s",separator.str.size,separator.str.data);
         removeLastOutputSeperator = true;
       }
     }
 
-    if(removeLastOutputSeperator){
-      builder->RemoveLastNode();
+    for(auto ptr = strings->head; ptr; ptr = ptr->next){
+      builder->PushString(ptr->elem);
+      if(removeLastOutputSeperator && ptr->next && ptr->next->next == nullptr){
+        break;
+      }
     }
   } break;
   case CommandType_FOR:{
