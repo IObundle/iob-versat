@@ -195,19 +195,6 @@ Array<T> EndArray(GrowableArray<T> arr){
   return arr.AsArray();
 }
 
-// TODO: Remove this, replace with a proper implementation of StringBuilder
-struct DynamicString{
-  Arena* arena;
-  Byte* mark;
-
-  void PushChar(const char);
-  void PushString(int size);
-  void PushString(String ss);
-  void PushString(const char* format,...) __attribute__ ((format (printf, 2, 3)));
-  void vPushString(const char* format,va_list args);
-  void PushNullByte();
-};
-
 struct StringNode{
   StringNode* next;
   String string;
@@ -226,14 +213,13 @@ struct StringBuilder{
   void PushString(String str);
   void PushString(const char* format,...) __attribute__ ((format (printf, 2, 3)));
   void vPushString(const char* format,va_list args);
+
+  // TODO: Only used by template engine, probably better to rewrite template engine instead of forcing this ugliness down
+  void RemoveLastNode();
 };
 
 StringBuilder* StartStringBuilder(Arena* arena);
 String EndString(Arena* out,StringBuilder* builder);
-
-// TODO: Need to remove DynamicString and replace it with the String builder approach
-DynamicString StartString(Arena *arena);
-String EndString(DynamicString mark);
 
 template<typename T>
 class Stack{

@@ -4,6 +4,8 @@
 
 struct Expression;
 
+// TODO: We are overcopying stuff since the removal of DynamicString. Maybe change to pass a StringBuilder to every function and stop returning strings, (for 'join' we need to do something more specific but should be fine).
+
 enum CommandType{
   CommandType_JOIN = 0,
   CommandType_FOR,

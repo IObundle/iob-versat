@@ -108,8 +108,8 @@ static Frame* CreateFrame(Frame* previous,Arena* out){
   return frame;
 }
 
-static String Eval(Block* block,Frame* frame);
-static ValueAndText EvalNonBlockCommand(Command* com,Frame* frame);
+static String Eval(Block* block,Frame* frame,Arena* out);
+static ValueAndText EvalNonBlockCommand(Command* com,Frame* frame,Arena* out);
 static Expression* ParseExpression(Tokenizer* tok,Arena* out);
 
 // Static variables
@@ -117,7 +117,6 @@ static bool debugging = false;
 static Frame globalFrameInst = {};
 static Frame* globalFrame = &globalFrameInst;
 static FILE* output;
-static Arena* outputArena;
 
 static void FatalError(const char* reason,int approximateLine){
   printf("Template: error on template (%.*s:%d):\n",UNPACK_SS(globalTemplateName),approximateLine);
@@ -723,7 +722,7 @@ static Value EvalExpression(Expression* expr,Frame* frame,Arena* out){
 
     Assert(!com->definition->isBlockType);
 
-    val = EvalNonBlockCommand(com,frame).val;
+    val = EvalNonBlockCommand(com,frame,out).val;
   } break;
   case Expression::IDENTIFIER:{
     Opt<Value> iter = GetValue(frame,expr->id);
@@ -780,10 +779,11 @@ static Value EvalExpression(Expression* expr,Frame* frame,Arena* out){
   return val;
 }
 
-static String EvalBlockCommand(Block* block,Frame* previousFrame){
-  TEMP_REGION(temp,nullptr);
+static String EvalBlockCommand(Block* block,Frame* previousFrame,Arena* out){
+  TEMP_REGION(temp,out);
   Command* com = block->command;
-  auto mark = StartString(outputArena);
+
+  StringBuilder* builder = StartStringBuilder(temp);
 
   Assert(com->definition->isBlockType);
 
@@ -811,25 +811,26 @@ static String EvalBlockCommand(Block* block,Frame* previousFrame){
       //       in regards to the output arena usage. We could just have a 2 step
       //       approach where we just have a more complex builder process that allow us to 
       //       perform more logic over the text blocks
+      
       bool outputSeparator = false;
       for(Block* ptr : block->innerBlocks){
-        String text = Eval(ptr,frame);
-
+        String text = Eval(ptr,frame,temp);
+        
         if(IsOnlyWhitespace(text)){
-          outputArena->used -= text.size;
         } else {
+          builder->PushString(text);
           outputSeparator = true;
         }
       }
 
       if(outputSeparator){
-        PushString(outputArena,"%.*s",separator.str.size,separator.str.data);
+        builder->PushString("%.*s",separator.str.size,separator.str.data);
         removeLastOutputSeperator = true;
       }
     }
 
     if(removeLastOutputSeperator){
-      outputArena->used -= separator.str.size;
+      builder->RemoveLastNode();
     }
   } break;
   case CommandType_FOR:{
@@ -846,7 +847,7 @@ static String EvalBlockCommand(Block* block,Frame* previousFrame){
       SetValue(frame,id,val);
 
       for(Block* ptr : block->innerBlocks){
-        Eval(ptr,frame); // Push on stack
+        builder->PushString(Eval(ptr,frame,temp));
       }
     }
   } break;
@@ -860,13 +861,13 @@ static String EvalBlockCommand(Block* block,Frame* previousFrame){
         if(ptr->type == BlockType_COMMAND && ptr->command->definition->type == CommandType_ELSE){
           break;
         }
-        Eval(ptr,frame); // Push on stack
+        builder->PushString(Eval(ptr,frame,temp));
       }
     } else {
       bool sawElse = false;
       for(Block* ptr : block->innerBlocks){
         if(sawElse){
-          Eval(ptr,frame); // Push on stack
+          builder->PushString(Eval(ptr,frame,temp));
         }
 
         if(ptr->type == BlockType_COMMAND && ptr->command->definition->type == CommandType_ELSE){
@@ -886,7 +887,7 @@ static String EvalBlockCommand(Block* block,Frame* previousFrame){
     }
 
     for(Block* ptr : block->innerBlocks){
-      Eval(ptr,frame); // Push on stack
+      builder->PushString(Eval(ptr,frame,temp));
     }
 
     debugging = false;
@@ -895,7 +896,7 @@ static String EvalBlockCommand(Block* block,Frame* previousFrame){
     Frame* frame = CreateFrame(previousFrame,temp);
     while(ConvertValue(EvalExpression(com->expressions[0],frame,temp),ValueType::BOOLEAN,nullptr).boolean){
       for(Block* ptr : block->innerBlocks){
-        Eval(ptr,frame); // Push on stack
+        builder->PushString(Eval(ptr,frame,temp));
       }
     }
   } break;
@@ -917,10 +918,9 @@ static String EvalBlockCommand(Block* block,Frame* previousFrame){
   } break;
   case CommandType_DEBUG_MESSAGE:{
     Frame* frame = CreateFrame(previousFrame,temp);
-    BLOCK_REGION(outputArena);
 
     for(Block* ptr : block->innerBlocks){
-      String result = Eval(ptr,frame); // Push on stack
+      String result = Eval(ptr,frame,temp); // Push on stack
       printf("%.*s\n",UNPACK_SS(result));
     }
   } break;
@@ -937,14 +937,15 @@ static String EvalBlockCommand(Block* block,Frame* previousFrame){
     NOT_POSSIBLE("NonBlock command"); // TODO: Maybe join eval non block with block together.
   }
 
-  String res = EndString(mark);
+  String res = EndString(out,builder);
   return res;
 }
 
-static ValueAndText EvalNonBlockCommand(Command* com,Frame* previousFrame){
-  TEMP_REGION(temp,nullptr);
+static ValueAndText EvalNonBlockCommand(Command* com,Frame* previousFrame,Arena* out){
+  TEMP_REGION(temp,out);
   Value val = MakeValue();
-  auto mark = StartString(outputArena);
+
+  StringBuilder* builder = StartStringBuilder(temp);
 
   Assert(!com->definition->isBlockType);
   switch(com->definition->type){
@@ -985,7 +986,7 @@ static ValueAndText EvalNonBlockCommand(Command* com,Frame* previousFrame){
     // Get compiled template and evaluate it.
     CompiledTemplate* templ = savedTemplate;
     for(Block* block : templ->blocks){
-      Eval(block,previousFrame);
+      builder->PushString(Eval(block,previousFrame,temp));
     }
   } break;
   case CommandType_CALL:{
@@ -1010,7 +1011,7 @@ static ValueAndText EvalNonBlockCommand(Command* com,Frame* previousFrame){
     }
 
     for(Block* ptr : func->blocks){
-      Eval(ptr,frame);
+      builder->PushString(Eval(ptr,frame,temp));
     }
 
     optVal = GetValue(frame,STRING("return"));
@@ -1041,7 +1042,7 @@ static ValueAndText EvalNonBlockCommand(Command* com,Frame* previousFrame){
 
       tok.AdvancePeekBad(simpleText.value());
 
-      PushString(outputArena,simpleText.value());
+      builder->PushString(simpleText.value());
 
       if(tok.Done()){
         break;
@@ -1057,7 +1058,7 @@ static ValueAndText EvalNonBlockCommand(Command* com,Frame* previousFrame){
 
       Value val = ConvertValue(EvalExpression(com->expressions[index + 1],frame,temp),ValueType::SIZED_STRING,temp);
 
-      PushString(outputArena,val.str);
+      builder->PushString(val.str);
     }
   } break;
   case CommandType_DEBUG_BREAK:{
@@ -1080,34 +1081,36 @@ static ValueAndText EvalNonBlockCommand(Command* com,Frame* previousFrame){
 
   ValueAndText res = {};
   res.val = val;
-  res.text = EndString(mark);
+  res.text = EndString(out,builder);
 
   return res;
 }
 
-static String Eval(Block* block,Frame* frame){
-  TEMP_REGION(temp,nullptr);
+static String Eval(Block* block,Frame* frame,Arena* out){
+  TEMP_REGION(temp,out);
 
-  auto mark = StartString(outputArena);
+  auto builder = StartStringBuilder(temp);
 
   switch(block->type){
   case BlockType_COMMAND:{
     if(block->command->definition->isBlockType){
-      EvalBlockCommand(block,frame);
+      builder->PushString(EvalBlockCommand(block,frame,temp));
     } else {
-      EvalNonBlockCommand(block->command,frame);
+      ValueAndText valText = EvalNonBlockCommand(block->command,frame,temp);
+      builder->PushString(valText.text);
     }
   }break;
   case BlockType_EXPRESSION:{
     Value val = EvalExpression(block->expression,frame,temp);
-    GetDefaultValueRepresentation(val,outputArena);
+    builder->PushString(GetDefaultValueRepresentation(val,temp));
   } break;
   case BlockType_TEXT:{
-    PushString(outputArena,block->textBlock);
+    builder->PushString(block->textBlock);
   } break;
   }
 
-  String res = EndString(mark);
+  String res = EndString(out,builder);
+  
   Assert(res.size >= 0);
   return res;
 }
@@ -1165,17 +1168,16 @@ void ProcessTemplate(FILE* outputFile,CompiledTemplate* compiledTemplate){
   TrieMap<Type*,Array<bool>>* records = PushTrieMap<Type*,Array<bool>>(recordSpace);
 #endif
   
-  outputArena = temp2;
   output = outputFile;
 
-  auto markOutput = StartString(outputArena);
+  auto builder = StartStringBuilder(temp);
   
   Frame* top = CreateFrame(globalFrame,temp);
   for(Block* block : compiledTemplate->blocks){
     BLOCK_REGION(debugArena);
     recordList = PushArenaList<TemplateRecord>(debugArena);
 
-    Eval(block,top);
+    builder->PushString(Eval(block,top,temp));
 
 #ifdef DEBUG_TEMPLATE_ENGINE
     for(ListedStruct<TemplateRecord>* ptr = recordList->head; ptr; ptr = ptr->next){
@@ -1198,7 +1200,7 @@ void ProcessTemplate(FILE* outputFile,CompiledTemplate* compiledTemplate){
 #endif
   }
 
-  String fullText = EndString(markOutput);
+  String fullText = EndString(temp2,builder);
   String treated = RemoveRepeatedNewlines(fullText,temp);
   fprintf(output,"%.*s",UNPACK_SS(treated));
   fflush(output);

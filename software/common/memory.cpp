@@ -218,6 +218,26 @@ void StringBuilder::vPushString(const char* format,va_list args){
   }
 }
 
+void StringBuilder::RemoveLastNode(){
+  if(!this->head){
+    return;
+  }
+
+  if(this->head->next == nullptr){
+    this->head = nullptr;
+    this->tail = nullptr;
+  }
+  
+  for(StringNode* ptr = this->head; ptr; ptr = ptr->next){
+    if(ptr->next->next == nullptr){
+      Assert(ptr->next == this->tail);
+      ptr->next = nullptr;
+      this->tail = ptr->next;
+      break;
+    }
+  }
+}
+
 void StringBuilder::PushString(const char* format,...){
   va_list args;
   va_start(args,format);
@@ -242,26 +262,6 @@ String EndString(Arena* out,StringBuilder* builder){
   for(StringNode* ptr = builder->head; ptr != nullptr; ptr = ptr->next){
     memcpy(data,ptr->string.data,ptr->string.size);
     data += ptr->string.size;
-  }
-
-  return res;
-}
-
-DynamicString StartString(Arena* out){
-  DynamicString res = {};
-  res.arena = out;
-  res.mark = &out->mem[out->used];
-  return res;
-}
-
-String EndString(DynamicString mark){
-  Arena* arena = mark.arena;
-  String res = {};
-  res.size = &arena->mem[arena->used] - mark.mark;
-  if(Empty(res)){ // Put data as NULL if size 0, probably less error prone. Not sure.
-    res.data = nullptr;
-  } else {
-    res.data = (char*) mark.mark;
   }
 
   return res;
@@ -789,44 +789,6 @@ Byte* GenericPoolIterator::operator*(){
 
   return val;
 }
-
-// Dynamic String
-
-void DynamicString::PushChar(const char ch){
-  Byte* mem = PushBytes(arena,1);
-  *mem = ch;
-}
-
-void DynamicString::PushString(String ss){
-  String res = ::PushString(this->arena,ss.size);
-  memcpy((void*) res.data,ss.data,ss.size);
-}
-
-void DynamicString::vPushString(const char* format,va_list args){
-  char* buffer = (char*) &arena->mem[arena->used];
-  size_t maximum = arena->totalAllocated - arena->used;
-  int size = vsnprintf(buffer,maximum,format,args);
-
-  Assert(size >= 0);
-  Assert(((size_t) size) < maximum);
-
-  arena->used += (size_t) (size);
-}
-
-void DynamicString::PushString(const char* format,...){
-  va_list args;
-  va_start(args,format);
-
-  vPushString(format,args);
-
-  va_end(args);
-}
-
-void DynamicString::PushNullByte(){
-  Byte* res = PushBytes(arena,1);
-  *res = '\0';
-}
-
 
 GenericArrayIterator IterateArray(void* array,int sizeOfType,int alignmentOfType){
   GenericArrayIterator res = {};
