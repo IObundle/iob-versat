@@ -517,7 +517,8 @@ Array<Block*> ConvertIndividualBlocksIntoHierarchical(Array<IndividualBlock> blo
 
 CompiledTemplate* CompileTemplate(String content,const char* name,Arena* out){
   TEMP_REGION(temp,out);
-  auto mark = StartString(out);
+
+  auto startMemoryUsed = MemoryUsage(out);
 
   String storedName = PushString(out,STRING(name));
   globalTemplateName = storedName;
@@ -573,9 +574,8 @@ CompiledTemplate* CompileTemplate(String content,const char* name,Arena* out){
   Array<IndividualBlock> blocks = PushArrayFromList(out,blockList);
   Array<Block*> results = ConvertIndividualBlocksIntoHierarchical(blocks,out);
 
-  String totalMemory = EndString(mark);
   res->blocks = results;
-  res->totalMemoryUsed = totalMemory.size;
+  res->totalMemoryUsed = MemoryUsage(out) - startMemoryUsed;
   res->content = content;
   res->name = storedName;
 

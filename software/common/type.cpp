@@ -278,24 +278,26 @@ Type* InstantiateTemplate(String name,Arena* out){
   Memset(align,0);
 
   for(int i = 0; i < templateBase->templateMembers.size; i++){
+    TEMP_REGION(temp2,temp);
+    BLOCK_REGION(temp);
+
     TemplatedMember templateMember = templateBase->templateMembers[i];
     Tokenizer tok(templateMember.typeName,"*&[],<>",{});
 
-    BLOCK_REGION(temp);
-    auto mark = StartString(temp);
+    auto builder = StartStringBuilder(temp2);
 
     while(!tok.Done()){
       Token token = tok.NextToken();
 
       String* found = templateToType->Get(token);
       if(found){
-        PushString(temp,"%.*s",UNPACK_SS(*found));
+        builder->PushString("%.*s",UNPACK_SS(*found));
       } else {
-        PushString(temp,"%.*s",UNPACK_SS(token));
+        builder->PushString("%.*s",UNPACK_SS(token));
       }
     }
 
-    String trueType = EndString(mark);
+    String trueType = EndString(temp,builder);
     String baseType = GetBaseTypeName(trueType);
 
     // TODO: This feels a bit like a hack. But it does work. Maybe it's fine with a bit of a cleanup and comments
@@ -1813,31 +1815,33 @@ String ExtractTypeNameFromPrettyFunction(String prettyFunctionFormat,Arena* out)
 }
 
 String PushUniqueRepresentation(Arena* out,ParsedType type){
-  auto builder = StartString(out);
+  TEMP_REGION(temp,out);
+  auto builder = StartStringBuilder(temp);
 
-  PushString(out,type.baseName);
+  builder->PushString(type.baseName);
   if(type.templateMembers.size){
-    PushString(out,"<");
+    builder->PushString("<");
     bool first = true;
     for(ParsedType t : type.templateMembers){
       if(first){
         first = false;
       } else {
-        PushString(out,",");
+        builder->PushString(",");
       }
-      PushUniqueRepresentation(out,t);
+      String uniqueRepr = PushUniqueRepresentation(temp,t);
+      builder->PushString(uniqueRepr);
     }
-    PushString(out,">");
+    builder->PushString(">");
   }
 
   for(int i = 0; i < type.amountOfPointers; i++){
-    PushString(out,STRING("*"));
+    builder->PushString(STRING("*"));
   }
   for(String expr : type.arrayExpressions){
-    PushString(out,"[%.*s]",UNPACK_SS(expr));
+    builder->PushString("[%.*s]",UNPACK_SS(expr));
   }
   
-  return EndString(builder);
+  return EndString(out,builder);
 }
 
 const char* specialCharacters = "*&[]<>,";
@@ -2066,15 +2070,15 @@ Opt<ParsedType> ParseType(Tokenizer* tok,Arena* out){
       peek = tok->PeekToken();
     }
     
-    auto builder = StartString(out);
-    PushUniqueRepresentation(out,first.value());
+    auto builder = StartStringBuilder(temp);
+    builder->PushString(PushUniqueRepresentation(temp,first.value()));
 
     for(auto p = list->head; p; p = p->next){
-      PushString(out,STRING("::"));
-      PushUniqueRepresentation(out,p->elem);
+      builder->PushString(STRING("::"));
+      builder->PushString(PushUniqueRepresentation(temp,p->elem));
     }
 
-    result.baseName = EndString(builder);
+    result.baseName = EndString(out,builder);
   } else {
     result.baseName = PushUniqueRepresentation(out,first.value());
   }

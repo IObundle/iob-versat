@@ -43,6 +43,7 @@ Arena SubArena(Arena* arena,size_t size);
 void PopToSubArena(Arena* top,Arena subArena);
 void Reset(Arena* arena);
 void Free(Arena* arena);
+size_t MemoryUsage(Arena* arena);
 Byte* PushBytes(Arena* arena, size_t size);
 size_t SpaceAvailable(Arena* arena);
 String PushString(Arena* arena,int size);
@@ -217,6 +218,8 @@ struct StringBuilder{
   StringNode* head;
   StringNode* tail;
   
+  void PushChar(char ch);
+
   void PushString(String str);
   void PushString(const char* format,...) __attribute__ ((format (printf, 2, 3)));
   void vPushString(const char* format,va_list args);

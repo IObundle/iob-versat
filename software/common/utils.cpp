@@ -86,24 +86,26 @@ Opt<Array<String>> GetAllFilesInsideDirectory(String dirPath,Arena* out){
 }
 
 String PushEscapedString(Arena* out,String toEscape,char spaceSubstitute){
-  auto mark = StartString(out);
+  TEMP_REGION(temp,out);
+
+  auto builder = StartStringBuilder(out);
 
   for(int i = 0; i < toEscape.size; i++){
     switch(toEscape[i]){
-    case '\a': PushString(out,STRING("\\a")); break;
-    case '\b': PushString(out,STRING("\\b")); break;
-    case '\r': PushString(out,STRING("\\r")); break;
-    case '\f': PushString(out,STRING("\\f")); break;
-    case '\t': PushString(out,STRING("\\t")); break;
-    case '\n': PushString(out,STRING("\\n")); break;
-    case '\0': PushString(out,STRING("\\0")); break;
-    case '\v': PushString(out,STRING("\\v")); break;
-    case ' ': *PushBytes(out,1) = spaceSubstitute; break;
-    default:  *PushBytes(out,1) = toEscape[i]; break;
+    case '\a': builder->PushString(STRING("\\a")); break;
+    case '\b': builder->PushString(STRING("\\b")); break;
+    case '\r': builder->PushString(STRING("\\r")); break;
+    case '\f': builder->PushString(STRING("\\f")); break;
+    case '\t': builder->PushString(STRING("\\t")); break;
+    case '\n': builder->PushString(STRING("\\n")); break;
+    case '\0': builder->PushString(STRING("\\0")); break;
+    case '\v': builder->PushString(STRING("\\v")); break;
+    case ' ': builder->PushChar(spaceSubstitute); break;
+    default:  builder->PushChar(toEscape[i]); break;
     }
   }
 
-  String res = EndString(mark);
+  String res = EndString(out,builder);
   return res;
 }
 

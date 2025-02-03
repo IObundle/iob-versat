@@ -127,6 +127,10 @@ void Free(Arena* arena){
   arena->used = 0;
 }
 
+size_t MemoryUsage(Arena* arena){
+  return arena->used;
+}
+
 ArenaMark MarkArena(Arena* arena){
   ArenaMark mark = {};
   mark.arena = arena;
@@ -172,6 +176,26 @@ void StringBuilder::PushString(String str){
   StringNode* node = PushStruct<StringNode>(this->arena);
   node->string = ::PushString(this->arena,str);
 
+  if(this->head == nullptr){
+    this->head = node;
+    this->tail = node;
+  } else {
+    this->tail->next = node;
+    this->tail = node;
+  }
+}
+
+// TODO: Performance will drop if this gets called repeatedly and in contexts where we are constantly pushing chars
+//       Need to start tracking that sort of stuff in debug mode.
+void StringBuilder::PushChar(char ch){
+  StringNode* node = PushStruct<StringNode>(this->arena);
+
+  Byte* data = PushBytes(this->arena,1);
+  *data = ch;
+  
+  node->string.data = (const char*) data;
+  node->string.size = 1;
+  
   if(this->head == nullptr){
     this->head = node;
     this->tail = node;

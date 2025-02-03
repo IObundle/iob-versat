@@ -983,15 +983,17 @@ String TrimWhitespaces(String in){
 }
 
 String PushPointingString(Arena* out,int startPos,int size){
-  auto mark = StartString(out);
+  TEMP_REGION(temp,out);
+  StringBuilder* builder = StartStringBuilder(temp);
+
   for(int i = 0; i < startPos; i++){
-    PushString(out," ");
+    builder->PushString(" ");
   }
   for(int i = 0; i < size; i++){
-    PushString(out,"^");
+    builder->PushString("^");
   }
-  String res = EndString(mark);
-  return res;
+
+  return EndString(out,builder);
 }
 
 int GetTokenPositionInside(String text,Token token){
@@ -1275,19 +1277,20 @@ String GetFullLineForGivenToken(String content,Token token){
 }
 
 String GetRichLocationError(String content,Token got,Arena* out){
-  auto mark = StartString(out);
+  TEMP_REGION(temp,out);
+  StringBuilder* builder = StartStringBuilder(temp);
 
   String fullLine = GetFullLineForGivenToken(content,got);
   int line = got.loc.start.line;
   int columnIndex = got.loc.start.column - 1;
 
-  PushString(out,"%6d | %.*s\n",line,UNPACK_SS(fullLine));
-  PushString(out,"      "); // 6 spaces to match the 6 digits above
-  PushString(out," | ");
+  builder->PushString("%6d | %.*s\n",line,UNPACK_SS(fullLine));
+  builder->PushString("      "); // 6 spaces to match the 6 digits above
+  builder->PushString(" | ");
 
   PushPointingString(out,columnIndex,got.size);
 
-  return EndString(mark);
+  return EndString(out,builder);
 }
 
 Array<Token> DivideContentIntoTokens(Tokenizer* tok,Arena* out){

@@ -144,7 +144,6 @@ Accelerator* CopyAccelerator(Accelerator* accel,AcceleratorPurpose purpose,bool 
       newInst->isStatic = inst->isStatic;
     }
     newInst->isMergeMultiplexer = inst->isMergeMultiplexer;
-    //newInst->mergeMultiplexerId = inst->mergeMultiplexerId;
     
     map->Insert(inst,newInst);
   }
@@ -328,7 +327,6 @@ DAGOrderNodes CalculateDAGOrder(Pool<FUInstance>* instances,Arena* out){
   int computeIndexStart = nodesFound;
   FUInstance** computeStart = res.sources.data + res.sources.size;
   // Add compute units
-  //mark = pushPtr.Mark();
   for(FUInstance* ptr : *instances){
     if(ptr->type == NodeType_UNCONNECTED){
       res.instances[nodesFound++] = ptr;
@@ -359,7 +357,6 @@ DAGOrderNodes CalculateDAGOrder(Pool<FUInstance>* instances,Arena* out){
   }
   res.sinks.data = sinkStart;
   res.sinks.size = nodesFound - sinkIndexStart;
-  //res.sinks = pushPtr.PopMark(mark);
 
   for(FUInstance* ptr : *instances){
     int tag = tags->GetOrFail(ptr);
@@ -461,7 +458,6 @@ void FixDelays(Accelerator* accel,Hashmap<Edge,DelayInfo>* edgeDelays){
     FUInstance* output = edge.units[0].inst;
 
     if(HasVariableDelay(output->declaration)){
-      //output->inst->baseDelay = delay;
       edgePair.second = 0;
       continue;
     }
@@ -1022,7 +1018,6 @@ void ConnectUnitsGetEdge(FUInstance* out,int outIndex,FUInstance* in,int inIndex
 
     outputNode->allOutputs = ListInsert(outputNode->allOutputs,con);
     outputNode->outputs[outIndex] = true;
-    //outputNode->outputs += 1;
   }
 
   // Add info to inputNode
@@ -1295,7 +1290,6 @@ PortInstance MappingMapInput(AcceleratorMapping* mapping,PortInstance toMap){
   return *ptr;
 }
 
-
 PortInstance MappingMapOutput(AcceleratorMapping* mapping,PortInstance toMap){
   int id = toMap.inst->accel->id;
 
@@ -1537,7 +1531,6 @@ Pair<Accelerator*,SubMap*> Flatten(Accelerator* accel,int times){
       }
 
       // TODO: All these iterations could be converted to a single loop where inside we check if its input,output or inernal edge
-
       EdgeIterator iter = IterateEdges(newAccel);
       // Add accel edges to output instances
       while(iter.HasNext()){
