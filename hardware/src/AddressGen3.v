@@ -64,8 +64,6 @@ wire perCond = (((per + 1) == period_i) || (period_i == 0));
 
 wire [5:0] cases = {iter3Cond,per3Cond,iter2Cond,per2Cond,iterCond,perCond};
 
-wire [ADDR_W-1:0] debugAddr = ({1'b0,addr_o[ADDR_W-2:0]} >> OFFSET_W);
-
 /* TODO:
    
    The address generation can be decoupled, but it is better if we separate it into individual modules.

@@ -21,7 +21,6 @@ module MemoryReader #(
    input               s_valid_i,
    output              s_ready_o,
    input  [ADDR_W-1:0] s_addr_i,
-   input               start_over_i,
 
    // Master
    output reg              m_valid_o,
@@ -56,11 +55,6 @@ module MemoryReader #(
          if (s_transfer && !m_last_i) begin
             m_valid_o <= 1'b1;
             last_addr <= s_addr_i;
-         end
-
-         if(start_over_i) begin
-            m_valid_o <= 1'b0;
-            last_addr <= 0;
          end
       end
    end
