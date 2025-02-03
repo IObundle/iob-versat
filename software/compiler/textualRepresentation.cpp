@@ -9,7 +9,8 @@ String UniqueRepr(FUInstance* inst,Arena* out){
 }
 
 String Repr(FUInstance* inst,GraphDotFormat format,Arena* out){
-  auto mark = StartString(out);
+  TEMP_REGION(temp,out);
+  auto builder = StartStringBuilder(temp);
 
   FUInstance* instance = (FUInstance*) inst;
 
@@ -22,39 +23,39 @@ String Repr(FUInstance* inst,GraphDotFormat format,Arena* out){
   bool buffer = (HasVariableDelay(inst->declaration) || inst->declaration == BasicDeclaration::fixedBuffer);
 
   if(expl && name){
-    PushString(out,"Name:");
+    builder->PushString("Name:");
   }
   if(name){
-    PushString(out,"%.*s",UNPACK_SS(inst->name));
+    builder->PushString("%.*s",UNPACK_SS(inst->name));
   }
   if(expl && type){
-    PushString(out,"\\nType:");
+    builder->PushString("\\nType:");
   }
   if(type){
-    PushString(out,"%.*s",UNPACK_SS(inst->declaration->name));
+    builder->PushString("%.*s",UNPACK_SS(inst->declaration->name));
   }
   if(expl && id){
-    PushString(out,"\\nId:");
+    builder->PushString("\\nId:");
   }
   if(id){
-    PushString(out,"%d",inst->id);
+    builder->PushString("%d",inst->id);
   }
   if(expl && delay){
     if(buffer){
-      PushString(out,"\\nBuffer:");
+      builder->PushString("\\nBuffer:");
     } else {
-      PushString(out,"\\nDelay:");
+      builder->PushString("\\nDelay:");
     }
   }
   if(delay){
     if(buffer){
-      PushString(out,"%d",instance->bufferAmount);
+      builder->PushString("%d",instance->bufferAmount);
     } else {
-      PushString(out,"0");
+      builder->PushString("0");
     }
   }
 
-  String res = EndString(mark);
+  String res = EndString(out,builder);
   return res;
 }
 
@@ -67,72 +68,76 @@ String Repr(FUDeclaration* decl,Arena* out){
 }
 
 String Repr(PortInstance* inPort,PortInstance* outPort,GraphDotFormat format,Arena* out){
-  auto mark = StartString(out);
+  TEMP_REGION(temp,out);
+  auto builder = StartStringBuilder(temp);
 
   bool expl = format & GRAPH_DOT_FORMAT_EXPLICIT;
   bool lat  = format & GRAPH_DOT_FORMAT_LATENCY;
 
-  Repr(inPort,format,out);
+  builder->PushString(Repr(inPort,format,temp));
 
   if(expl && lat){
-    PushString(out,"\\nLat:");
+    builder->PushString("\\nLat:");
   }
   if(lat){
-    PushString(out,"%d",inPort->inst->declaration->GetOutputLatencies()[inPort->port]);
+    builder->PushString("%d",inPort->inst->declaration->GetOutputLatencies()[inPort->port]);
   }
 
-  PushString(out,"\\n->\\n");
-  Repr(outPort,format,out);
+  builder->PushString("\\n->\\n");
+  builder->PushString(Repr(outPort,format,temp));
   if(expl && lat){
-    PushString(out,"\\nLat:");
+    builder->PushString("\\nLat:");
   }
   if(lat){
-    PushString(out,"%d",outPort->inst->declaration->GetInputDelays()[outPort->port]);
+    builder->PushString("%d",outPort->inst->declaration->GetInputDelays()[outPort->port]);
   }
 
-  String res = EndString(mark);
+  String res = EndString(out,builder);
   return res;
 }
 
 String Repr(PortInstance* port,GraphDotFormat format,Arena* out){
-  auto mark = StartString(out);
+  TEMP_REGION(temp,out);
+  auto builder = StartStringBuilder(temp);
 
-  Repr(port->inst,GRAPH_DOT_FORMAT_NAME,out);
+  builder->PushString(Repr(port->inst,GRAPH_DOT_FORMAT_NAME,temp));
 
   bool expl = format & GRAPH_DOT_FORMAT_EXPLICIT;
 
   if(expl){
-    PushString(out,"_Port:");
+    builder->PushString("_Port:");
   }
-  PushString(out,":%d",port->port);
+  builder->PushString(":%d",port->port);
 
-  String res = EndString(mark);
+  String res = EndString(out,builder);
   return res;
 }
 
 String Repr(Edge* edge,GraphDotFormat format,Arena* out){
-  auto mark = StartString(out);
+  TEMP_REGION(temp,out);
+  auto builder = StartStringBuilder(temp);
 
   format |= GRAPH_DOT_FORMAT_NAME;
 
-  Repr(&edge->units[0],format,out);
-  PushString(out," -- ");
-  Repr(&edge->units[1],format,out);
+  builder->PushString(Repr(&edge->units[0],format,temp));
+  builder->PushString(" -- ");
+  builder->PushString(Repr(&edge->units[1],format,temp));
 
-  String res = EndString(mark);
+  String res = EndString(out,builder);
   return res;
 }
 
 String Repr(MergeEdge* node,GraphDotFormat format,Arena* out){
-  auto mark = StartString(out);
+  TEMP_REGION(temp,out);
+  auto builder = StartStringBuilder(temp);
 
   format |= GRAPH_DOT_FORMAT_NAME;
 
-  Repr(node->instances[0],format,out);
-  PushString(out," -- ");
-  Repr(node->instances[1],format,out);
+  builder->PushString(Repr(node->instances[0],format,temp));
+  builder->PushString(" -- ");
+  builder->PushString(Repr(node->instances[1],format,temp));
 
-  String name = EndString(mark);
+  String name = EndString(out,builder);
 
   return name;
 }
@@ -144,14 +149,16 @@ String Repr(MappingNode* node,Arena* out){
   if(node->type == MappingNode::NODE){
     name = Repr(&node->nodes,format,out);
   } else if(node->type == MappingNode::EDGE){
+    TEMP_REGION(temp,out);
+    auto builder = StartStringBuilder(temp);
+
     Edge e0 = node->edges[0];
     Edge e1 = node->edges[1];
 
-    auto mark = StartString(out);
-    Repr(&e0,format,out);
-    PushString(out," // ");
-    Repr(&e1,format,out);
-    name = EndString(mark);
+    builder->PushString(Repr(&e0,format,temp));
+    builder->PushString(" // ");
+    builder->PushString(Repr(&e1,format,temp));
+    name = EndString(out,builder);
   } else {
     NOT_IMPLEMENTED("Implement as needed");
   }

@@ -244,6 +244,7 @@ Array<TypeStructInfoElement> ExtractStructuredConfigs(Array<InstanceInfo> info,A
 }
 
 String GenerateVerilogParameterization(FUInstance* inst,Arena* out){
+  TEMP_REGION(temp,out);
   FUDeclaration* decl = inst->declaration;
   Array<String> parameters = decl->parameters;
   int size = parameters.size;
@@ -254,8 +255,8 @@ String GenerateVerilogParameterization(FUInstance* inst,Arena* out){
   
   auto mark = MarkArena(out);
   
-  auto builder = StartString(out);
-  PushString(out,"#(");
+  auto builder = StartStringBuilder(temp);
+  builder->PushString("#(");
   bool insertedOnce = false;
   for(int i = 0; i < size; i++){
     ParameterValue v = inst->parameterValues[i];
@@ -266,19 +267,19 @@ String GenerateVerilogParameterization(FUInstance* inst,Arena* out){
     }
 
     if(insertedOnce){
-      PushString(out,",");
+      builder->PushString(",");
     }
-    PushString(out,".%.*s(%.*s)",UNPACK_SS(parameter),UNPACK_SS(v.val));
+    builder->PushString(".%.*s(%.*s)",UNPACK_SS(parameter),UNPACK_SS(v.val));
     insertedOnce = true;
   }
-  PushString(out,")");
+  builder->PushString(")");
 
   if(!insertedOnce){
     PopMark(mark);
     return {};
   }
 
-  return EndString(builder);
+  return EndString(out,builder);
 }
 
 void OutputCircuitSource(FUDeclaration* decl,FILE* file){
@@ -931,7 +932,17 @@ void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* 
     ProcessTemplate(f,BasicTemplates::externalInternalPortmapTemplate);
  }
 
-  Hashmap<StaticId,StaticData>* staticUnits = CollectStaticUnits(&info,temp);
+  Hashmap<StaticId,StaticData>* oldUnits = CollectStaticUnits(&info,temp);
+
+  // NOCHECKIN
+  Hashmap<StaticId,StaticData>* CollectStaticUnits(Accelerator*,FUDeclaration*,Arena*); 
+  Hashmap<StaticId,StaticData>* staticUnits = CollectStaticUnits(accel,nullptr,temp); 
+
+  // TODO: We need to fix static values calculation in relation to AccelInfo.
+  //LEFT HERE
+  
+  DEBUG_BREAK();
+
   TemplateSetCustom("staticUnits",MakeValue(staticUnits));
   
   Array<String> memoryMasks = ExtractMemoryMasks(info,temp);

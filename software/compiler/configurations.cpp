@@ -471,21 +471,22 @@ void IncrementPartitions(Array<Partition> partitions,int amount){
 }
 
 String GetName(Array<Partition> partitions,Arena* out){
-  auto builder = StartString(out);
+  TEMP_REGION(temp,out);
+  auto builder = StartStringBuilder(temp);
 
   bool first = true;
   for(Partition p : partitions){
     if(first){
       first = false;
     } else {
-      builder.PushString("_");
+      builder->PushString("_");
     }
 
     AccelInfo* info = &p.decl->info;
-    builder.PushString(info->infos[p.value].name);
+    builder->PushString(info->infos[p.value].name);
   }
 
-  return EndString(builder);
+  return EndString(out,builder);
 }
 
 // TODO: Move this function to a better place
@@ -828,15 +829,16 @@ void FillInstanceInfo(AccelInfoIterator initialIter,Arena* out){
       
       auto NodeRecurse = [](auto Recurse,Node* top,int max,int bitAccum,Arena* out) -> void{
         if(top->left == nullptr){
+          TEMP_REGION(temp,out);
           Assert(top->right == nullptr);
 
           InstanceInfo* info = top->unit;
           
-          auto builder = StartString(out);
+          auto builder = StartStringBuilder(temp);
           for(int i = max - 1; i >= top->value; i--){
-            builder.PushChar(GET_BIT(bitAccum,i) ? '1' : '0');
+            builder->PushChar(GET_BIT(bitAccum,i) ? '1' : '0');
           }
-          String decisionMask = EndString(builder);
+          String decisionMask = EndString(out,builder);
           PushNullByte(out);
           info->memDecisionMask = decisionMask;
 

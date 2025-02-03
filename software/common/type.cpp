@@ -2029,23 +2029,24 @@ Opt<NameAndTemplateArguments> ParseNameAndTemplateArguments(Tokenizer* tok,Arena
 }
 
 String PushUniqueRepresentation(Arena* out,NameAndTemplateArguments named){
-  auto builder = StartString(out);
-  PushString(out,named.baseName);
+  TEMP_REGION(temp,out);
+  auto builder = StartStringBuilder(temp);
+  builder->PushString(named.baseName);
   if(named.templateMembers.size){
-    PushString(out,"<");
+    builder->PushString("<");
     bool first = true;
     for(ParsedType t : named.templateMembers){
       if(first){
         first = false;
       } else {
-        PushString(out,",");
+        builder->PushString(",");
       }
-      PushUniqueRepresentation(out,t);
+      builder->PushString(PushUniqueRepresentation(temp,t));
     }
-    PushString(out,">");
+    builder->PushString(">");
   }
 
-  return EndString(builder);
+  return EndString(out,builder);
 }
 
 Opt<ParsedType> ParseType(Tokenizer* tok,Arena* out){

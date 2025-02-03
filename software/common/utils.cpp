@@ -1,4 +1,5 @@
 #include "utils.hpp"
+#include "memory.hpp"
 
 #include <dirent.h>
 
@@ -143,21 +144,22 @@ Array<int> GetNonZeroIndexes(Array<int> arr,Arena* out){
 }
 
 String JoinStrings(Array<String> strings,String separator,Arena* out){
+  TEMP_REGION(temp,out);
   if(strings.size == 1){
     return PushString(out,strings[0]);
   }
 
   bool first = true;
-  auto builder = StartString(out);
+  auto builder = StartStringBuilder(temp);
   for(String str : strings){
     if(first){
       first = false;
     } else {
-      PushString(out,separator);
+      builder->PushString(separator);
     }
 
-    PushString(out,str);
+    builder->PushString(str);
   }
 
-  return EndString(builder);
+  return EndString(out,builder);
 }

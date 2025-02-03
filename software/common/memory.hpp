@@ -213,13 +213,16 @@ struct StringNode{
   String string;
 };
 
+// Change implementation to allocate chunks that contain up to 1024 or similar sizes in a linked list and which tries to fill one chuck before moving to the next. Otherwise small strings will just annihilate performance
 struct StringBuilder{
   Arena* arena;
   StringNode* head;
   StringNode* tail;
-  
-  void PushChar(char ch);
 
+  void PushExistingString(String str); // Does not allocate space or copy str. str must remain valid until EndString, normal pattern is starting a string builder and then calling a function that outputs a string to this arena, by using this function we save one string copy.
+
+  // Allocate and copy strings using the arena provided. EndString joins all these into one final string in the out arena
+  void PushChar(char ch);
   void PushString(String str);
   void PushString(const char* format,...) __attribute__ ((format (printf, 2, 3)));
   void vPushString(const char* format,va_list args);

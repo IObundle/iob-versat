@@ -51,7 +51,7 @@ Opt<MathFunctionDescription> GetMathFunction(String name){
   return {};
 }
 
-bool PerformDefineSubstitution(Arena* output,MacroMap& macros,String name){
+bool PerformDefineSubstitution(StringBuilder* builder,MacroMap& macros,String name){
   auto iter = macros.find(name);
   if(iter == macros.end()){
     return false;
@@ -67,27 +67,25 @@ bool PerformDefineSubstitution(Arena* output,MacroMap& macros,String name){
       break;
     } else {
       inside.AdvancePeekBad(peek.value());
-      PushString(output,peek.value());
+      builder->PushString(peek.value());
 
       inside.AssertNextToken("`");
 
       Token name = inside.NextToken();
 
-      PerformDefineSubstitution(output,macros,name);
+      PerformDefineSubstitution(builder,macros,name);
     }
   }
 
   Token finish = inside.Finish();
-  PushString(output,finish);
+  builder->PushString(finish);
 
   return true;
 }
 
-void PreprocessVerilogFile_(String fileContent,MacroMap& macros,Array<String> includeFilepaths,Arena* out);
+void PreprocessVerilogFile_(String fileContent,MacroMap& macros,Array<String> includeFilepaths,StringBuilder* builder);
 
-static void DoIfStatement(Tokenizer* tok,MacroMap& macros,Array<String> includeFilepaths,Arena* out){
-  TEMP_REGION(temp,out);
-
+static void DoIfStatement(Tokenizer* tok,MacroMap& macros,Array<String> includeFilepaths,StringBuilder* builder){
   Token first = tok->NextToken();
   Token macroName = tok->NextToken();
 
@@ -118,14 +116,14 @@ static void DoIfStatement(Tokenizer* tok,MacroMap& macros,Array<String> includeF
     
     if(CompareString(type,"endif")){
       if(doIf){
-        PreprocessVerilogFile_(subContent,macros,includeFilepaths,out);
+        PreprocessVerilogFile_(subContent,macros,includeFilepaths,builder);
       }
       break;
     }
 
     if(CompareString(type,"else")){
       if(doIf){
-        PreprocessVerilogFile_(subContent,macros,includeFilepaths,out);
+        PreprocessVerilogFile_(subContent,macros,includeFilepaths,builder);
         doIf = false;
       } else {
         mark = tok->Mark();
@@ -137,25 +135,24 @@ static void DoIfStatement(Tokenizer* tok,MacroMap& macros,Array<String> includeF
     if(doIf) {
       if(CompareString(type,"ifdef") || CompareString(type,"ifndef") || CompareString(type,"elsif")){
         tok->Rollback(subMark); // TODO: Not good.
-        DoIfStatement(tok,macros,includeFilepaths,out);
+        DoIfStatement(tok,macros,includeFilepaths,builder);
       }
     }
     // otherwise must be some other directive, will be handled automatically in the Preprocess call.
   }
 }
 
-void PreprocessVerilogFile_(String fileContent,MacroMap& macros,Array<String> includeFilepaths,Arena* out){
-  TEMP_REGION(temp,out);
+void PreprocessVerilogFile_(String fileContent,MacroMap& macros,Array<String> includeFilepaths,StringBuilder* builder){
   Tokenizer tokenizer = Tokenizer(fileContent, "():;[]{}`,+-/*\\\"",{});
   Tokenizer* tok = &tokenizer;
 
   while(!tok->Done()){
-    PushString(out,tok->PeekWhitespace());
+    builder->PushString(tok->PeekWhitespace());
     Token peek = tok->PeekToken();
 
     if(!CompareString(peek,"`")){
       tok->AdvancePeek();
-      PushString(out,peek);
+      builder->PushString(peek);
       
       continue;
     }
@@ -204,6 +201,8 @@ void PreprocessVerilogFile_(String fileContent,MacroMap& macros,Array<String> in
 
       size_t fileSize = GetFileSize(file);
 
+      TEMP_REGION(temp,builder->arena);
+
       Byte* mem = PushBytes(temp,fileSize + 1);
       size_t amountRead = fread(mem,sizeof(char),fileSize,file);
       
@@ -214,7 +213,7 @@ void PreprocessVerilogFile_(String fileContent,MacroMap& macros,Array<String> in
 
       mem[amountRead] = '\0';
 
-      PreprocessVerilogFile_(STRING((const char*) mem,fileSize),macros,includeFilepaths,out);
+      PreprocessVerilogFile_(STRING((const char*) mem,fileSize),macros,includeFilepaths,builder);
     } else if(CompareString(identifier,"define")){
       tok->AdvancePeek();
       
@@ -277,7 +276,7 @@ void PreprocessVerilogFile_(String fileContent,MacroMap& macros,Array<String> in
     } else if(CompareString(identifier,"timescale")){
       tok->AdvanceRemainingLine();
     } else if(CompareString(identifier,"ifdef") || CompareString(identifier,"ifndef")){
-      DoIfStatement(tok,macros,includeFilepaths,out);
+      DoIfStatement(tok,macros,includeFilepaths,builder);
       
     } else if(CompareString(identifier,"else")){
       NOT_POSSIBLE("All else and ends should have already been handled inside DoIf");
@@ -293,7 +292,7 @@ void PreprocessVerilogFile_(String fileContent,MacroMap& macros,Array<String> in
       tok->AdvancePeek();
 
       // TODO: Better error handling. Report file position.
-      if(!PerformDefineSubstitution(out,macros,identifier)){
+      if(!PerformDefineSubstitution(builder,macros,identifier)){
         printf("Do not recognize directive: %.*s\n",UNPACK_SS(identifier));
         NOT_POSSIBLE("Some better error handling here");
       }
@@ -305,11 +304,11 @@ String PreprocessVerilogFile(String fileContent,Array<String> includeFilepaths,A
   TEMP_REGION(temp,out);
   MacroMap macros = {};
 
-  auto mark = StartString(out);
-  PreprocessVerilogFile_(fileContent,macros,includeFilepaths,out);
+  auto builder = StartStringBuilder(temp);
+  PreprocessVerilogFile_(fileContent,macros,includeFilepaths,builder);
 
   PushString(out,STRING("\0"));
-  String res = EndString(mark);
+  String res = EndString(out,builder);
 
   return res;
 }

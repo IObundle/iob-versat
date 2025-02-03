@@ -1118,7 +1118,8 @@ void InitializeTemplateEngine(Arena* perm){
 }
 
 String RemoveRepeatedNewlines(String text,Arena* out){
-  auto mark = StartString(out);
+  TEMP_REGION(temp,out);
+  auto builder = StartStringBuilder(temp);
   int state = 0;
   for(int i = 0; i < text.size; i++){
     switch(state){
@@ -1126,7 +1127,7 @@ String RemoveRepeatedNewlines(String text,Arena* out){
       if(text[i] == '\n'){
         state = 1;
       }
-      PushString(out,"%c",text[i]);
+      builder->PushString("%c",text[i]);
     } break;
     case 1: {
       if(text[i] == '\n'){
@@ -1134,12 +1135,12 @@ String RemoveRepeatedNewlines(String text,Arena* out){
       } else {
         state = 0;
       }
-      PushString(out,"%c",text[i]);
+      builder->PushString("%c",text[i]);
     } break;
     case 2:{
       if(text[i] == '\n'){
       } else {
-        PushString(out,"%c",text[i]);
+        builder->PushString("%c",text[i]);
         if(!std::isspace(text[i])){
           state = 0;
         }
@@ -1148,7 +1149,7 @@ String RemoveRepeatedNewlines(String text,Arena* out){
     }
   }
 
-  return EndString(mark);
+  return EndString(out,builder);
 }
 
 void ProcessTemplate(FILE* outputFile,CompiledTemplate* compiledTemplate){

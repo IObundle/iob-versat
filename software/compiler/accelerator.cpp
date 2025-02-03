@@ -558,6 +558,7 @@ Hashmap<StaticId,StaticData>* CollectStaticUnits(AccelInfo* info,Arena* out){
   return staticUnits;
 }
 
+// NOCHECKIN
 Hashmap<StaticId,StaticData>* CollectStaticUnits(Accelerator* accel,FUDeclaration* topDecl,Arena* out){
   Hashmap<StaticId,StaticData>* staticUnits = PushHashmap<StaticId,StaticData>(out,999);
 

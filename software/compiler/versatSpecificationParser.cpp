@@ -57,14 +57,15 @@ bool _ExpectError(Tokenizer* tok,const char* str){
   Token got = tok->NextToken();
   String expected = STRING(str);
   if(!CompareString(got,expected)){
-    auto mark = StartString(temp);
-    PushString(temp,"Parser Error.\n Expected to find:  '");
-    PushEscapedString(temp,expected,' ');
-    PushString(temp,"'\n");
-    PushString(temp,"  Got:");
-    PushEscapedString(temp,got,' ');
-    PushString(temp,"\n");
-    String text = EndString(mark);
+    
+    auto builder = StartStringBuilder(temp);
+    builder->PushString("Parser Error.\n Expected to find:  '");
+    builder->PushString(PushEscapedString(temp,expected,' '));
+    builder->PushString("'\n");
+    builder->PushString("  Got:");
+    builder->PushString(PushEscapedString(temp,got,' '));
+    builder->PushString("\n");
+    String text = EndString(temp,builder);
     ReportError(tok,got,StaticFormat("%*s",UNPACK_SS(text))); \
     return true;
   }
@@ -1982,15 +1983,16 @@ String InstantiateAddressGen(AddressGenDef def,Arena* out){
   }; 
   
   auto GetLoopSizeRepr = [GetRepr](AddressGenFor f,Arena* out){
-    auto builder = StartString(out);
+    TEMP_REGION(temp,out);
+    auto builder = StartStringBuilder(temp);
 
-    PushString(out,"(");
-    GetRepr(f.end,out);
-    PushString(out," - ");
-    GetRepr(f.start,out);
-    PushString(out,")");
+    builder->PushString("(");
+    builder->PushString(GetRepr(f.end,temp));
+    builder->PushString(" - ");
+    builder->PushString(GetRepr(f.start,temp));
+    builder->PushString(")");
 
-    return EndString(builder);
+    return EndString(out,builder);
   };
 
   Reverse(loops);
@@ -2111,34 +2113,34 @@ String InstantiateAddressGen(AddressGenDef def,Arena* out){
     constantExpr = PushRepresentation(current,temp);
   }
     
-  auto builder = StartString(out);
+  auto builder = StartStringBuilder(temp);
   
-  PushString(out,"#ifdef ADDRESS_GEN_%.*s\n",UNPACK_SS(def.name));
-  PushString(out,"static int LoopSize_%.*s(int temp",UNPACK_SS(def.name));
+  builder->PushString("#ifdef ADDRESS_GEN_%.*s\n",UNPACK_SS(def.name));
+  builder->PushString("static int LoopSize_%.*s(int temp",UNPACK_SS(def.name));
   for(Token t : constants){
-    PushString(out,",int %.*s",UNPACK_SS(t));
+    builder->PushString(",int %.*s",UNPACK_SS(t));
   }
-  PushString(out,"){\n");
+  builder->PushString("){\n");
 
-  PushString(out,"   return 1");
+  builder->PushString("   return 1");
   for(AddressGenFor f : loops){
     String repr = GetLoopSizeRepr(f,temp);
-    PushString(out," * %.*s",UNPACK_SS(repr));
+    builder->PushString(" * %.*s",UNPACK_SS(repr));
   }
-  PushString(out,";\n");
-  PushString(out,"}\n\n\n");
+  builder->PushString(";\n");
+  builder->PushString("}\n\n\n");
 
   // TODO: All these different types should be removed and a generic approach used. The only difference is the logic for VRead/VWrite different usages (output vs access memory) and the fact that the units have differences in the name of the signals, which is not a reason to have multiple different types. Need to map loop to name
   switch(def.type){
   case AddressGenType_MEM:{
-    PushString(out,"static void Configure_%.*s(volatile Generator3Config* config",UNPACK_SS(def.name));
+    builder->PushString("static void Configure_%.*s(volatile Generator3Config* config",UNPACK_SS(def.name));
     for(Token t : constants){
-      PushString(out,",int %.*s",UNPACK_SS(t));
+      builder->PushString(",int %.*s",UNPACK_SS(t));
     }
-    PushString(out,"){\n");
+    builder->PushString("){\n");
 
     if(!Empty(constantExpr)){
-      PushString(out,"   config->start = %.*s;\n",UNPACK_SS(constantExpr));
+      builder->PushString("   config->start = %.*s;\n",UNPACK_SS(constantExpr));
     }
     
     for(int i = 0; i < loopSpecSymbolic.size; i++){
@@ -2146,57 +2148,57 @@ String InstantiateAddressGen(AddressGenDef def,Arena* out){
 
       char loopIndex = (i == 0) ? ' ' : '1' + i;
       
-      PushString(out,"   config->period%c = %.*s;\n",loopIndex,UNPACK_SS(l.periodExpression));
-      PushString(out,"   config->incr%c = %.*s;\n",loopIndex,UNPACK_SS(l.incrementExpression));
+      builder->PushString("   config->period%c = %.*s;\n",loopIndex,UNPACK_SS(l.periodExpression));
+      builder->PushString("   config->incr%c = %.*s;\n",loopIndex,UNPACK_SS(l.incrementExpression));
 
       if(!Empty(l.dutyExpression)){
-        PushString(out,"   config->duty = %.*s;\n",UNPACK_SS(l.dutyExpression));
+        builder->PushString("   config->duty = %.*s;\n",UNPACK_SS(l.dutyExpression));
       }
-      PushString(out,"   config->iterations%c = %.*s;\n",loopIndex,UNPACK_SS(l.iterationExpression));
-      PushString(out,"   config->shift%c = %.*s;\n",loopIndex,UNPACK_SS(l.shiftExpression));
+      builder->PushString("   config->iterations%c = %.*s;\n",loopIndex,UNPACK_SS(l.iterationExpression));
+      builder->PushString("   config->shift%c = %.*s;\n",loopIndex,UNPACK_SS(l.shiftExpression));
     }
   } break;
   case AddressGenType_VREAD_LOAD:{
-    PushString(out,"static void Configure_%.*s(volatile VReadMultipleConfig* config",UNPACK_SS(def.name));
+    builder->PushString("static void Configure_%.*s(volatile VReadMultipleConfig* config",UNPACK_SS(def.name));
 
     for(Token t : constants){
       if(CompareString(t,"ext")){
-        PushString(out,",iptr %.*s",UNPACK_SS(t));
+        builder->PushString(",iptr %.*s",UNPACK_SS(t));
       } else {
-        PushString(out,",int %.*s",UNPACK_SS(t));
+        builder->PushString(",int %.*s",UNPACK_SS(t));
       }
     }
-    PushString(out,"){\n");
+    builder->PushString("){\n");
 
     Assert(!Empty(def.externalName)); // TODO: Probably a parser error or something. Weird to see it here
-    PushString(out,"   config->ext_addr = %.*s;\n",UNPACK_SS(def.externalName));
+    builder->PushString("   config->ext_addr = %.*s;\n",UNPACK_SS(def.externalName));
     
     AddressGenLoopSpecificatonSym in = internalSpecSym[0];
 
-    PushString(out,"   config->read_per = %.*s;\n",UNPACK_SS(in.periodExpression));
-    PushString(out,"   config->read_incr = %.*s;\n",UNPACK_SS(in.incrementExpression));
+    builder->PushString("   config->read_per = %.*s;\n",UNPACK_SS(in.periodExpression));
+    builder->PushString("   config->read_incr = %.*s;\n",UNPACK_SS(in.incrementExpression));
 
-    PushString(out,"   config->read_duty = %.*s;\n",UNPACK_SS(in.dutyExpression));
-    PushString(out,"   config->read_iter = %.*s;\n",UNPACK_SS(in.iterationExpression));
-    PushString(out,"   config->read_shift = %.*s;\n",UNPACK_SS(in.shiftExpression));
+    builder->PushString("   config->read_duty = %.*s;\n",UNPACK_SS(in.dutyExpression));
+    builder->PushString("   config->read_iter = %.*s;\n",UNPACK_SS(in.iterationExpression));
+    builder->PushString("   config->read_shift = %.*s;\n",UNPACK_SS(in.shiftExpression));
 
     //for(int i = 0; i < externalSpec.size; i++){
     AddressGenLoopSpecificatonSym ext = externalSpecSym[0];
-    PushString(out,"   config->read_length = (%.*s) * sizeof(float);\n",UNPACK_SS(ext.periodExpression));
-    PushString(out,"   config->read_amount_minus_one = (%.*s) - 1;\n",UNPACK_SS(ext.iterationExpression));
-    PushString(out,"   config->read_addr_shift = (%.*s) * sizeof(float);\n",UNPACK_SS(ext.shiftWithoutRemovingIncrement));
+    builder->PushString("   config->read_length = (%.*s) * sizeof(float);\n",UNPACK_SS(ext.periodExpression));
+    builder->PushString("   config->read_amount_minus_one = (%.*s) - 1;\n",UNPACK_SS(ext.iterationExpression));
+    builder->PushString("   config->read_addr_shift = (%.*s) * sizeof(float);\n",UNPACK_SS(ext.shiftWithoutRemovingIncrement));
   } break;
 
   case AddressGenType_VREAD_OUTPUT:{
     // TODO: Basically a copy of MEM but with the different named signals, since MEM has slight differences in naming conventions.
-    PushString(out,"static void Configure_%.*s(volatile VReadMultipleConfig* config",UNPACK_SS(def.name));
+    builder->PushString("static void Configure_%.*s(volatile VReadMultipleConfig* config",UNPACK_SS(def.name));
     for(Token t : constants){
-      PushString(out,",int %.*s",UNPACK_SS(t));
+      builder->PushString(",int %.*s",UNPACK_SS(t));
     }
-    PushString(out,"){\n");
+    builder->PushString("){\n");
     
     if(!Empty(constantExpr)){
-      PushString(out,"   config->output_start = %.*s;\n",UNPACK_SS(constantExpr));
+      builder->PushString("   config->output_start = %.*s;\n",UNPACK_SS(constantExpr));
     }
 
     for(int i = 0; i < loopSpecSymbolic.size; i++){
@@ -2204,27 +2206,27 @@ String InstantiateAddressGen(AddressGenDef def,Arena* out){
 
       char loopIndex = (i == 0) ? ' ' : '1' + i;
       
-      PushString(out,"   config->output_per%c = %.*s;\n",loopIndex,UNPACK_SS(l.periodExpression));
-      PushString(out,"   config->output_incr%c = %.*s;\n",loopIndex,UNPACK_SS(l.incrementExpression));
+      builder->PushString("   config->output_per%c = %.*s;\n",loopIndex,UNPACK_SS(l.periodExpression));
+      builder->PushString("   config->output_incr%c = %.*s;\n",loopIndex,UNPACK_SS(l.incrementExpression));
 
       if(!Empty(l.dutyExpression)){
-        PushString(out,"   config->output_duty = %.*s;\n",UNPACK_SS(l.dutyExpression));
+        builder->PushString("   config->output_duty = %.*s;\n",UNPACK_SS(l.dutyExpression));
       }
-      PushString(out,"   config->output_iter%c = %.*s;\n",loopIndex,UNPACK_SS(l.iterationExpression));
-      PushString(out,"   config->output_shift%c = %.*s;\n",loopIndex,UNPACK_SS(l.shiftExpression));
+      builder->PushString("   config->output_iter%c = %.*s;\n",loopIndex,UNPACK_SS(l.iterationExpression));
+      builder->PushString("   config->output_shift%c = %.*s;\n",loopIndex,UNPACK_SS(l.shiftExpression));
     }
   } break;
 
   case AddressGenType_VWRITE_INPUT:{
     // TODO: Basically a copy of VREAD_OUTPUT and MEM but with the different named signals, since MEM has slight differences in naming conventions.
-    PushString(out,"static void Configure_%.*s(volatile VWriteMultipleConfig* config",UNPACK_SS(def.name));
+    builder->PushString("static void Configure_%.*s(volatile VWriteMultipleConfig* config",UNPACK_SS(def.name));
     for(Token t : constants){
-      PushString(out,",int %.*s",UNPACK_SS(t));
+      builder->PushString(",int %.*s",UNPACK_SS(t));
     }
-    PushString(out,"){\n");
+    builder->PushString("){\n");
 
     if(!Empty(constantExpr)){
-      PushString(out,"   config->input_start = %.*s;\n",UNPACK_SS(constantExpr));
+      builder->PushString("   config->input_start = %.*s;\n",UNPACK_SS(constantExpr));
     }
     
     for(int i = 0; i < loopSpecSymbolic.size; i++){
@@ -2232,51 +2234,51 @@ String InstantiateAddressGen(AddressGenDef def,Arena* out){
 
       char loopIndex = (i == 0) ? ' ' : '1' + i;
       
-      PushString(out,"   config->input_per%c = %.*s;\n",loopIndex,UNPACK_SS(l.periodExpression));
-      PushString(out,"   config->input_incr%c = %.*s;\n",loopIndex,UNPACK_SS(l.incrementExpression));
+      builder->PushString("   config->input_per%c = %.*s;\n",loopIndex,UNPACK_SS(l.periodExpression));
+      builder->PushString("   config->input_incr%c = %.*s;\n",loopIndex,UNPACK_SS(l.incrementExpression));
 
       if(!Empty(l.dutyExpression)){
-        PushString(out,"   config->input_duty = %.*s;\n",UNPACK_SS(l.dutyExpression));
+        builder->PushString("   config->input_duty = %.*s;\n",UNPACK_SS(l.dutyExpression));
       }
-      PushString(out,"   config->input_iter%c = %.*s;\n",loopIndex,UNPACK_SS(l.iterationExpression));
-      PushString(out,"   config->input_shift%c = %.*s;\n",loopIndex,UNPACK_SS(l.shiftExpression));
+      builder->PushString("   config->input_iter%c = %.*s;\n",loopIndex,UNPACK_SS(l.iterationExpression));
+      builder->PushString("   config->input_shift%c = %.*s;\n",loopIndex,UNPACK_SS(l.shiftExpression));
     }
   } break;
 
   case AddressGenType_VWRITE_STORE:{
-    PushString(out,"static void Configure_%.*s(volatile VWriteMultipleConfig* config",UNPACK_SS(def.name));
+    builder->PushString("static void Configure_%.*s(volatile VWriteMultipleConfig* config",UNPACK_SS(def.name));
 
     for(Token t : constants){
       if(CompareString(t,"ext")){
-        PushString(out,",iptr %.*s",UNPACK_SS(t));
+        builder->PushString(",iptr %.*s",UNPACK_SS(t));
       } else {
-        PushString(out,",int %.*s",UNPACK_SS(t));
+        builder->PushString(",int %.*s",UNPACK_SS(t));
       }
     }
-    PushString(out,"){\n");
+    builder->PushString("){\n");
 
     Assert(!Empty(def.externalName)); // TODO: Probably a parser error or something. Weird to see it here
-    PushString(out,"   config->ext_addr = %.*s;\n",UNPACK_SS(def.externalName));
+    builder->PushString("   config->ext_addr = %.*s;\n",UNPACK_SS(def.externalName));
     
     AddressGenLoopSpecificatonSym in = internalSpecSym[0]; 
-    PushString(out,"   config->write_per = %.*s;\n",UNPACK_SS(in.periodExpression));
-    PushString(out,"   config->write_incr = %.*s;\n",UNPACK_SS(in.incrementExpression));
-    PushString(out,"   config->write_duty = %.*s;\n",UNPACK_SS(in.dutyExpression));
-    PushString(out,"   config->write_iter = %.*s;\n",UNPACK_SS(in.iterationExpression));
-    PushString(out,"   config->write_shift = %.*s;\n",UNPACK_SS(in.shiftExpression));
+    builder->PushString("   config->write_per = %.*s;\n",UNPACK_SS(in.periodExpression));
+    builder->PushString("   config->write_incr = %.*s;\n",UNPACK_SS(in.incrementExpression));
+    builder->PushString("   config->write_duty = %.*s;\n",UNPACK_SS(in.dutyExpression));
+    builder->PushString("   config->write_iter = %.*s;\n",UNPACK_SS(in.iterationExpression));
+    builder->PushString("   config->write_shift = %.*s;\n",UNPACK_SS(in.shiftExpression));
 
     AddressGenLoopSpecificatonSym ext = externalSpecSym[0];
 
-    PushString(out,"   config->write_length = (%.*s) * sizeof(float);\n",UNPACK_SS(ext.periodExpression));
-    PushString(out,"   config->write_amount_minus_one = (%.*s) - 1;\n",UNPACK_SS(ext.iterationExpression));
-    PushString(out,"   config->write_addr_shift = (%.*s) * sizeof(float);\n",UNPACK_SS(ext.shiftWithoutRemovingIncrement));
+    builder->PushString("   config->write_length = (%.*s) * sizeof(float);\n",UNPACK_SS(ext.periodExpression));
+    builder->PushString("   config->write_amount_minus_one = (%.*s) - 1;\n",UNPACK_SS(ext.iterationExpression));
+    builder->PushString("   config->write_addr_shift = (%.*s) * sizeof(float);\n",UNPACK_SS(ext.shiftWithoutRemovingIncrement));
   } break;
 
   }
-  PushString(out,"}\n");
+  builder->PushString("}\n");
   
-  PushString(out,"#endif // ADDRESS_GEN_%.*s\n\n",UNPACK_SS(def.name));
+  builder->PushString("#endif // ADDRESS_GEN_%.*s\n\n",UNPACK_SS(def.name));
   
-  return EndString(builder);
+  return EndString(out,builder);
 }
 
