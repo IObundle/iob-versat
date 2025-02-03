@@ -55,7 +55,8 @@ Array<FUDeclaration*> SortTypesByMemDependency(Array<FUDeclaration*> types,Arena
   Memset(subTypes,{});
 
   for(int i = 0; i < size; i++){
-    subTypes[i] = MemSubTypes(types[i]->fixedDelayCircuit,temp); // TODO: We can reuse the SortTypesByConfigDependency function if we change it to receive the subTypes array from outside, since the rest of the code is equal.
+    subTypes[i] = MemSubTypes(&types[i]->info,temp);
+    //subTypes[i] = MemSubTypes(types[i]->fixedDelayCircuit,temp); // TODO: We can reuse the SortTypesByConfigDependency function if we change it to receive the subTypes array from outside, since the rest of the code is equal.
     seen->Insert(types[i],false);
   }
 
@@ -142,10 +143,10 @@ static Array<TypeStructInfoElement> GenerateAddressStructFromType(FUDeclaration*
   return entries;
 }
 
-static Array<TypeStructInfo> GetMemMappedStructInfo(Accelerator* accel,Arena* out){
+static Array<TypeStructInfo> GetMemMappedStructInfo(AccelInfo* info,Arena* out){
   TEMP_REGION(temp,out);
 
-  Array<FUDeclaration*> typesUsed = MemSubTypes(accel,out);
+  Array<FUDeclaration*> typesUsed = MemSubTypes(info,out);
   typesUsed = SortTypesByMemDependency(typesUsed,temp);
 
   Array<TypeStructInfo> structures = PushArray<TypeStructInfo>(out,typesUsed.size);
@@ -355,7 +356,7 @@ void OutputIterativeSource(FUDeclaration* decl,FILE* file){
 
   Array<String> memoryMasks = ExtractMemoryMasks(info,temp);
 
-  Hashmap<StaticId,StaticData>* staticUnits = CollectStaticUnits(accel,decl,temp);
+  Hashmap<StaticId,StaticData>* staticUnits = CollectStaticUnits(&info,temp);
   
   Pool<FUInstance> nodes = accel->allocated;
   Array<String> parameters = PushArray<String>(temp,nodes.Size());
@@ -402,7 +403,8 @@ void OutputVerilatorWrapper(FUDeclaration* type,Accelerator* accel,String output
   int index = 0;
   Array<Wire> allStaticsVerilatorSide = PushArray<Wire>(temp,999); // TODO: Correct size
   
-  Hashmap<StaticId,StaticData>* staticUnits = CollectStaticUnits(accel,type,temp);  
+  Hashmap<StaticId,StaticData>* staticUnits = CollectStaticUnits(&info,temp);
+  //Hashmap<StaticId,StaticData>* staticUnits = CollectStaticUnits(accel,type,temp);  
   for(Pair<StaticId,StaticData*> p : staticUnits){
     for(Wire& config : p.second->configs){
       allStaticsVerilatorSide[index] = config;
@@ -929,7 +931,7 @@ void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* 
     ProcessTemplate(f,BasicTemplates::externalInternalPortmapTemplate);
  }
 
-  Hashmap<StaticId,StaticData>* staticUnits = CollectStaticUnits(accel,nullptr,temp);
+  Hashmap<StaticId,StaticData>* staticUnits = CollectStaticUnits(&info,temp);
   TemplateSetCustom("staticUnits",MakeValue(staticUnits));
   
   Array<String> memoryMasks = ExtractMemoryMasks(info,temp);
@@ -1073,8 +1075,8 @@ void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* 
   TemplateSetNumber("nStates",val.nStates);
   TemplateSetNumber("nStatics",val.nStatics);
   TemplateSetCustom("configStructures",MakeValue(&structs));
-  
-  Array<TypeStructInfo> addressStructures = GetMemMappedStructInfo(accel,temp2);
+
+  Array<TypeStructInfo> addressStructures = GetMemMappedStructInfo(&info,temp2);
   TemplateSetCustom("addressStructures",MakeValue(&addressStructures));
   
   {

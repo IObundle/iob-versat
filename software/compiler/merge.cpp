@@ -1996,8 +1996,6 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
   FillDeclarationWithDelayType(decl);
 
   decl->type = FUDeclarationType_MERGED;
-  
-  decl->staticUnits = CollectStaticUnits(decl->fixedDelayCircuit,decl,globalPermanent);
 
   Array<Hashmap<FUInstance*,int>*> reconToOrder = PushArray<Hashmap<FUInstance*,int>*>(temp,size);
   for(int i = 0; i < reconToOrder.size; i++){
@@ -2138,7 +2136,21 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
     decl->info.infos[i].inputDelays = ExtractInputDelays(iter,globalPermanent);
     decl->info.infos[i].outputLatencies = ExtractOutputLatencies(iter,globalPermanent);
   }
-  
+
+  // Need to set the parent decl after registering stuff.
+  // TODO: Need to simplify this part in here and inside the register module. Have the accelInfo calculation take parent decl.
+  {
+  AccelInfoIterator iter = StartIteration(&decl->info);
+  for(int i = 0; i < iter.MergeSize(); i++){
+    for(AccelInfoIterator it = iter; it.IsValid(); it = it.Next()){
+      it.mergeIndex = i;
+      it.CurrentUnit()->parent = decl;
+    }
+  }
+  }
+    
+  decl->staticUnits = CollectStaticUnits(&decl->info,globalPermanent);
+
   FillAccelInfoAfterCalculatingInstanceInfo(&decl->info,decl->fixedDelayCircuit);
   
   return decl;

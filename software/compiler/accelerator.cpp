@@ -527,17 +527,12 @@ bool IsCombinatorial(Accelerator* accel){
   return true;
 }
 
-Array<FUDeclaration*> MemSubTypes(Accelerator* accel,Arena* out){
+Array<FUDeclaration*> MemSubTypes(AccelInfo* info,Arena* out){
   TEMP_REGION(temp,out);
-
-  if(accel == nullptr){
-    return {};
-  }
   
   Set<FUDeclaration*>* maps = PushSet<FUDeclaration*>(temp,99);
 
-  // TODO: Check if we can pass an AccelInfo instead of an accel and avoid calculating accel info here
-  Array<InstanceInfo> test = CalculateAcceleratorInfo(accel,true,temp).infos[0].info;
+  Array<InstanceInfo> test = info->infos[0].info;
   for(InstanceInfo& info : test){
     if(info.memMappedSize.has_value()){
       maps->Insert(info.decl);
@@ -546,6 +541,25 @@ Array<FUDeclaration*> MemSubTypes(Accelerator* accel,Arena* out){
   
   Array<FUDeclaration*> subTypes = PushArrayFromSet(out,maps);
   return subTypes;
+}
+
+Hashmap<StaticId,StaticData>* CollectStaticUnits(AccelInfo* info,Arena* out){
+  Hashmap<StaticId,StaticData>* staticUnits = PushHashmap<StaticId,StaticData>(out,999);
+
+  for(AccelInfoIterator iter = StartIteration(info); iter.IsValid(); iter = iter.Step()){
+    InstanceInfo* info = iter.CurrentUnit();
+    if(info->isStatic){
+      StaticId id = {};
+      id.name = info->name;
+      id.parent = info->parent;
+
+      StaticData data = {};
+      data.configs = info->decl->configs;
+      staticUnits->InsertIfNotExist(id,data);
+    }
+  }
+
+  return staticUnits;
 }
 
 Hashmap<StaticId,StaticData>* CollectStaticUnits(Accelerator* accel,FUDeclaration* topDecl,Arena* out){

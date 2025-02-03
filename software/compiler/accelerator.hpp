@@ -268,12 +268,12 @@ FUInstance*  CopyInstance(Accelerator* newAccel,FUInstance* oldInstance,bool pre
 
 bool NameExists(Accelerator* accel,String name);
 
-int GetFreeShareIndex(Accelerator* accel); // TODO: Slow 
+int GetFreeShareIndex(Accelerator* accel);
 
-Array<FUDeclaration*> MemSubTypes(Accelerator* accel,Arena* out);
+Array<FUDeclaration*> MemSubTypes(AccelInfo* info,Arena* out);
 
 // TODO: This could work on top of AccelInfo.
-Hashmap<StaticId,StaticData>* CollectStaticUnits(Accelerator* accel,FUDeclaration* topDecl,Arena* out);
+Hashmap<StaticId,StaticData>* CollectStaticUnits(AccelInfo* info,Arena* out);
 
 int ExternalMemoryByteSize(ExternalMemoryInterface* inter);
 int ExternalMemoryByteSize(Array<ExternalMemoryInterface> interfaces); // Size of a simple memory mapping.
