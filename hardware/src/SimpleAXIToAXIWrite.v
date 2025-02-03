@@ -23,13 +23,13 @@ module SimpleAXItoAXIWrite #(
 
    localparam OFFSET_W = $clog2(AXI_DATA_W / 8);
 
-   localparam [2:0] axi_size = (AXI_DATA_W == 16   ? 3'b001 : 
-                             AXI_DATA_W == 32   ? 3'b010 :
-                             AXI_DATA_W == 64   ? 3'b011 :
-                             AXI_DATA_W == 128  ? 3'b100 :
-                             AXI_DATA_W == 256  ? 3'b101 :
-                             AXI_DATA_W == 512  ? 3'b110 : 
-                             AXI_DATA_W == 1024 ? 3'b111 : 3'b000);
+   localparam [2:0] axi_size = ((AXI_DATA_W == 16)   ? 3'b001 : 
+                                (AXI_DATA_W == 32)   ? 3'b010 :
+                                (AXI_DATA_W == 64)   ? 3'b011 :
+                                (AXI_DATA_W == 128)  ? 3'b100 :
+                                (AXI_DATA_W == 256)  ? 3'b101 :
+                                (AXI_DATA_W == 512)  ? 3'b110 : 
+                                (AXI_DATA_W == 1024) ? 3'b111 : 3'b000);
 
    reg                                         [         2:0] state;
    wire                                                       burst_ready_in;
@@ -39,7 +39,7 @@ module SimpleAXItoAXIWrite #(
 
    reg                                         [OFFSET_W-1:0] stored_offset;
 
-   burst_split #(
+   BurstSplit #(
       .DATA_W(AXI_DATA_W)
    ) split (
       .offset_i(stored_offset),
@@ -66,7 +66,7 @@ module SimpleAXItoAXIWrite #(
 
    reg [(AXI_DATA_W/8)-1:0] initial_strb, final_strb;
 
-   transfer_controller #(
+   AXITransferController #(
       .AXI_ADDR_W(AXI_ADDR_W),
       .AXI_DATA_W(AXI_DATA_W),
       .AXI_LEN_W(AXI_LEN_W),
@@ -103,7 +103,7 @@ module SimpleAXItoAXIWrite #(
    assign axi_awprot_o  = 'b010;
    assign axi_awqos_o   = 'h0;
 
-   reg [AXI_DATA_W/8-1:0] wstrb;
+   reg [(AXI_DATA_W/8)-1:0] wstrb;
    //assign axi_wdata_o = m_wdata_i;
    assign axi_wstrb_o  = wstrb;
 
@@ -156,7 +156,7 @@ module SimpleAXItoAXIWrite #(
                      wstrb          <= initial_strb;
                   end else begin
                      wstrb <= ~0;
-                     if (write_axi_len == 0 && write_last_transfer_next) begin
+                     if ((write_axi_len == 0) && write_last_transfer_next) begin
                         wstrb <= final_strb;
                      end
                   end
@@ -166,7 +166,7 @@ module SimpleAXItoAXIWrite #(
                if (axi_wvalid_o && axi_wready_i) begin
                   counter <= counter + 1;
 
-                  if ((counter + 1 == axi_awlen_o) && write_last_transfer) begin
+                  if (((counter + 1) == axi_awlen_o) && write_last_transfer) begin
                      wstrb <= final_strb;
                   end else begin
                      wstrb <= ~0;

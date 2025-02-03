@@ -163,7 +163,7 @@
 
    //address generators
 
-   MyAddressGen #(
+   AddressGen #(
       .ADDR_W(ADDR_W),
       .DATA_W(SIZE_W)
    ) addrgenA (
@@ -187,10 +187,12 @@
       .valid_o(enA_int),
       .ready_i(1'b1),
       .addr_o (addrA_int),
+      .store_o(),
+
       .done_o (doneA)
    );
 
-   MyAddressGen #(
+   AddressGen #(
       .ADDR_W(ADDR_W),
       .DATA_W(SIZE_W)
    ) addrgenB (
@@ -214,52 +216,10 @@
       .valid_o(enB),
       .ready_i(1'b1),
       .addr_o (addrB_int),
+      .store_o(),
+
       .done_o (doneB)
    );
-
-   /*
-   xaddrgen2 #(.MEM_ADDR_W(ADDR_W)) addrgen2A (
-            .clk(clk),
-            .rst(rst),
-            .run(run),
-            .iterations(iterA),
-            .period(perA),
-            .duty(dutyA),
-            .start(startA),
-            .shift(shiftA),
-            .incr(incrA),
-            .delay(delay0[9:0]),
-            .iterations2(iter2A),
-            .period2(per2A),
-            .shift2(shift2A),
-            .incr2(incr2A),
-            .addr(addrA_int),
-            .mem_en(enA_int),
-            .done(doneA)
-            );
-   */
-
-   /*
-   xaddrgen2 #(.MEM_ADDR_W(ADDR_W)) addrgen2B (
-            .clk(clk),
-            .rst(rst),
-            .run(run),
-            .iterations(iterB),
-            .period(perB),
-            .duty(dutyB),
-            .start(startB),
-            .shift(shiftB),
-            .incr(incrB),
-            .delay(delay1[9:0]),
-            .iterations2(iter2B),
-            .period2(per2B),
-            .shift2(shift2B),
-            .incr2(incr2B),
-            .addr(addrB_int),
-            .mem_en(enB),
-            .done(doneB)
-            );
-   */
 
    //define addresses based on ext and rvrs
    assign addrA      = valid ? addr[ADDR_W-1:0] : (extA ? in0[ADDR_W-1:0] : addrA_int2[ADDR_W-1:0]);

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "utils.hpp"
+#include "utilsCore.hpp"
 
 struct Options{
   Array<String> verilogFiles;
@@ -10,14 +10,16 @@ struct Options{
   
   String hardwareOutputFilepath;
   String softwareOutputFilepath;
-  String verilatorRoot;
   String debugPath;
+
+  String generetaSourceListName; // TODO: Not yet implemented
   
   String specificationFilepath;
   String topName;
-  int addrSize; // AXI_ADDR_W - used to be bitSize
-  int dataSize; // AXI_DATA_W
+  int databusAddrSize; // AXI_ADDR_W - used to be bitSize
+  int databusDataSize; // AXI_DATA_W
 
+  bool copyUnitsConvenience; // TODO: Not yet implemented
   bool addInputAndOutputsToTop;
   bool debug;
   bool shadowRegister;
@@ -42,4 +44,8 @@ struct DebugState{
 
 extern Options globalOptions;
 extern DebugState globalDebug;
+
+// Basically any data that is allocated once and preferably read-only just dump it in here.
 extern Arena* globalPermanent;
+
+Options DefaultOptions(Arena* out);

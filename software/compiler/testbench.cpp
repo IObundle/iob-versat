@@ -16,23 +16,22 @@ void HandleError(int sig){
 #if 0
 
 void FuzzVersatSpecification(Versat* versat){
-   Arena* temp = &versat->temp;
-   BLOCK_REGION(temp);
+  TEMP_REGION(temp);
 
-   String toFuzz = STRING("module toFuzzTest ( x ) { # x -> out : 0 ; }");
+  String toFuzz = STRING("module toFuzzTest ( x ) { # x -> out : 0 ; }");
 
-   time_t t;
-   seed = (unsigned) time(&t);
+  time_t t;
+  seed = (unsigned) time(&t);
 
-   #if 0
-   seed = 1674883351;
-   #endif // 0
+#if 0
+  seed = 1674883351;
+#endif // 0
 
-   fuzzed = FuzzText(toFuzz,temp,seed);
-   printf("%.*s\n",UNPACK_SS(fuzzed));
+  fuzzed = FuzzText(toFuzz,temp,seed);
+  printf("%.*s\n",UNPACK_SS(fuzzed));
 
-   SetDebugSignalHandler(HandleError);
-   ParseVersatSpecification(versat,fuzzed);
+  SetDebugSignalHandler(HandleError);
+  ParseVersatSpecification(versat,fuzzed);
 }
 
 void TestVersatSide(Versat* versat){

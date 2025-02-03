@@ -88,12 +88,6 @@ typedef struct {
   };
 } AcceleratorDelay;
 
-typedef struct{
-#{for name namedStates}
-  int @{name};
-#{end}
-} AcceleratorState;
-
 static const int memMappedStart = @{memoryMappedBase |> Hex};
 static const int versatAddressSpace = 2 * @{memoryMappedBase |> Hex};
 
@@ -105,7 +99,7 @@ extern iptr versat_base;
 //       function that sets the versat_base variable.  It is for this
 //       reason that the address info for every unit is a define. Addr
 //       variables must be instantiated only after calling
-//       versat_base.
+//       versat_init.
 
 // Base address for each memory mapped unit
 #{for pair namedMem}
@@ -158,7 +152,9 @@ static const int delayStart = @{(nConfigs + nStatics) |> Hex} * sizeof(iptr);
 static const int configStart = @{versatConfig |> Hex} * sizeof(iptr);
 static const int stateStart = @{versatState |> Hex} * sizeof(int);
 
-#{if nConfigs > 0}
+#{if configStructures.size > 0}
+static const unsigned int AcceleratorConfigSize = sizeof(@{accelName}Config);
+
 extern volatile @{accelName}Config* accelConfig; // @{nConfigs}
 #{end}
 
@@ -166,7 +162,11 @@ extern volatile @{accelName}Config* accelConfig; // @{nConfigs}
 extern volatile @{accelName}State* accelState; // @{nStates}
 #{end}
 
-extern volatile AcceleratorStatic* accelStatics;
+extern volatile AcceleratorStatic* accelStatic;
+
+#{for elem allStatics}
+#define ACCEL_@{elem.name} accelStatic->@{elem.name}
+#{end}
 
 #{if isSimple}
 // Simple input and output connection for simple accelerators
@@ -174,28 +174,6 @@ extern volatile AcceleratorStatic* accelStatics;
 #define NumberSimpleOutputs @{simpleOutputs}
 #define SimpleInputStart ((iptr*) accelConfig)
 #define SimpleOutputStart ((int*) accelState)
-#{end}
-
-#{for elem structuredConfigs}
-#{if elem.typeAndNames.size > 1}
-#{for typeAndName elem.typeAndNames}
-#define ACCEL_@{typeAndName.name} ((AcceleratorConfig*) accelConfig)->@{typeAndName.name}
-#{end}
-#{else}
-#define ACCEL_@{elem.typeAndNames[0].name} ((AcceleratorConfig*) accelConfig)->@{elem.typeAndNames[0].name}
-#{end}
-#{end}
-
-#{for elem allStatics}
-#define ACCEL_@{elem.name} accelStatics->@{elem.name}
-#{end}
-
-#{for i delays}
-#define ACCEL_TOP_Delay@{i} ((AcceleratorConfig*) accelConfig)->TOP_Delay@{i}
-#{end}
-
-#{for name namedStates}
-#define ACCEL_@{name} ((AcceleratorState*) accelState)->@{name}
 #{end}
 
 #{if mergeNames.size > 1}
@@ -254,14 +232,12 @@ static inline void ActivateMergedAccelerator(MergeType type){
    switch(type){
 #{for i mergeNames.size}
    case MergeType_@{mergeNames[i]}: {
-#{set mergeInfo mergeMux[i]}
-#{for muxInfo mergeInfo}
-      ACCEL_@{muxInfo.name}_sel = @{muxInfo.val};
-#{end}
+   #{for muxInfo mergeMux[i]}
+     accelConfig->@{muxInfo.name}.sel = @{muxInfo.val};
+   #{end}
    } break;
 #{end}
    }
-
 
    VersatLoadDelay(delayBuffers[asInt]);
 }
@@ -270,6 +246,10 @@ static inline void ActivateMergedAccelerator(MergeType type){
 }
 #endif
 
+#{end}
+
+#{for a addrGen}
+@{a}
 #{end}
 
 #endif // INCLUDED_VERSAT_ACCELERATOR_HEADER

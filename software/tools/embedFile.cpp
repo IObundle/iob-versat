@@ -1,16 +1,12 @@
 #include <cstdio>
 
+#include "filesystem.hpp"
 #include "parser.hpp"
 #include "utils.hpp"
 #include "utilsCore.hpp"
 
 #include <filesystem>
 namespace fs = std::filesystem;
-
-Arena tempInst;
-Arena* temp = &tempInst;
-Arena permInst;
-Arena* perm = &permInst;
 
 #define INCLUDE_GUARD "INCLUDED_GENERATED_%s\n"
 
@@ -46,13 +42,19 @@ int main(int argc,const char* argv[]){
   String filename = ExtractFilenameOnly(STRING(argv[1]));
   const char* outName = filename.data;
 
-  tempInst = InitArena(Megabyte(256));
-  Arena* temp = &tempInst;
+  Arena inst1 = InitArena(Megabyte(64));
+  contextArenas[0] = &inst1;
+  Arena inst2 = InitArena(Megabyte(64));
+  contextArenas[1] = &inst2;
+  
+  TEMP_REGION(perm,nullptr);
+  TEMP_REGION(temp,perm);
 
-  permInst = InitArena(Megabyte(64));
-
-  FILE* headerFile = OpenFileAndCreateDirectories(StaticFormat("%s.hpp",outputPath),"w");
-  FILE* sourceFile = OpenFileAndCreateDirectories(StaticFormat("%s.cpp",outputPath),"w");
+  String headerPath = PushString(temp,"%s.hpp",outputPath);
+  String sourcePath = PushString(temp,"%s.cpp",outputPath);
+  
+  FILE* headerFile = OpenFileAndCreateDirectories(headerPath,"w",FilePurpose_MISC);
+  FILE* sourceFile = OpenFileAndCreateDirectories(sourcePath,"w",FilePurpose_MISC);
   DEFER_CLOSE_FILE(headerFile);
   DEFER_CLOSE_FILE(sourceFile);
   
@@ -75,8 +77,15 @@ int main(int argc,const char* argv[]){
 
     Tokenizer tok(filename,"./",{});
 
+#if 0
+    while(!tok.Done()){
+      Token token = tok.NextToken();
+      printf("%.*s\n",UNPACK_SS(token));
+    }
+#endif
+
     Token path = tok.PeekFindIncludingLast("/").value();
-    tok.AdvancePeek(path);
+    tok.AdvancePeekBad(path);
 
     String variable = tok.NextToken();
 

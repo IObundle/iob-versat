@@ -1,5 +1,7 @@
 #include "declaration.hpp"
 
+#include "configurations.hpp"
+#include "globals.hpp"
 #include "versat.hpp"
 
 Pool<FUDeclaration> globalDeclarations;
@@ -17,43 +19,43 @@ namespace BasicDeclaration{
 }
 
 static int zeros[99] = {};
-static Array<int> zerosArray = {zeros,99};
-
-static int ones[64] = {1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1};
 
 static FUDeclaration* RegisterCircuitInput(){
-  Arena* permanent = permanent;
   FUDeclaration decl = {};
 
   decl.name = STRING("CircuitInput");
-  decl.baseConfig.inputDelays = Array<int>{zeros,0};
-  decl.baseConfig.outputLatencies = Array<int>{zeros,1};
-  //decl.delayType = DelayType::DelayType_SOURCE_DELAY;
+
+  decl.info.infos = PushArray<MergePartition>(globalPermanent,1);
+  decl.info.infos[0].inputDelays = Array<int>{zeros,0};
+  decl.info.infos[0].outputLatencies = Array<int>{zeros,1};
+  
   decl.type = FUDeclarationType_SPECIAL;
   
   return RegisterFU(decl);
 }
 
 static FUDeclaration* RegisterCircuitOutput(){
-  Arena* permanent = permanent;
   FUDeclaration decl = {};
 
   decl.name = STRING("CircuitOutput");
-  decl.baseConfig.inputDelays = Array<int>{zeros,50};
-  decl.baseConfig.outputLatencies = Array<int>{zeros,0};
-  //decl.delayType = DelayType::DelayType_SINK_DELAY;
+
+  decl.info.infos = PushArray<MergePartition>(globalPermanent,1);
+  decl.info.infos[0].inputDelays = Array<int>{zeros,50};
+  decl.info.infos[0].outputLatencies = Array<int>{zeros,0};
+
   decl.type = FUDeclarationType_SPECIAL;
 
   return RegisterFU(decl);
 }
 
 static FUDeclaration* RegisterLiteral(){
-  Arena* permanent = permanent;
   FUDeclaration decl = {};
 
   decl.name = STRING("Literal");
-  decl.baseConfig.outputLatencies = Array<int>{zeros,1};
 
+  decl.info.infos = PushArray<MergePartition>(globalPermanent,1);
+  decl.info.infos[0].outputLatencies = Array<int>{zeros,1};
+  
   return RegisterFU(decl);
 }
 
@@ -63,31 +65,36 @@ static void RegisterOperators(){
     const char* operation;
   };
 
-  Operation unary[] =  {{"NOT","{0}_{1} = ~{2}"},
-                        {"NEG","{0}_{1} = -{2}"}};
-  Operation binary[] = {{"XOR","{0}_{1} = {2} ^ {3}"},
+  Operation unary[] =  {{"NOT" ,"{0}_{1} = ~{2}"},
+                        {"NEG" ,"{0}_{1} = -{2}"}};
+  Operation binary[] = {{"XOR" ,"{0}_{1} = {2} ^ {3}"},
                          {"ADD","{0}_{1} = {2} + {3}"},
                          {"SUB","{0}_{1} = {2} - {3}"},
                          {"AND","{0}_{1} = {2} & {3}"},
-                         {"OR"  ,"{0}_{1} = {2} | {3}"},
+                         {"OR" ,"{0}_{1} = {2} | {3}"},
                          {"RHR","{0}_{1} = ({2} >> {3}) | ({2} << (32 - {3}))"}, // TODO: Only for 32 bits
                          {"SHR","{0}_{1} = {2} >> {3}"},
                          {"RHL","{0}_{1} = ({2} << {3}) | ({2} >> (32 - {3}))"}, // TODO: Only for 32 bits
                          {"SHL","{0}_{1} = {2} << {3}"}};
 
   FUDeclaration decl = {};
-  decl.baseConfig.inputDelays = Array<int>{zeros,1};
-  decl.baseConfig.outputLatencies = Array<int>{zeros,1};
   decl.isOperation = true;
 
   for(unsigned int i = 0; i < ARRAY_SIZE(unary); i++){
+    decl.info.infos = PushArray<MergePartition>(globalPermanent,1);
+    decl.info.infos[0].inputDelays = Array<int>{zeros,1};
+    decl.info.infos[0].outputLatencies = Array<int>{zeros,1};
+
     decl.name = STRING(unary[i].name);
     decl.operation = unary[i].operation;
     RegisterFU(decl);
   }
 
-  decl.baseConfig.inputDelays = Array<int>{zeros,2};
   for(unsigned int i = 0; i < ARRAY_SIZE(binary); i++){
+    decl.info.infos = PushArray<MergePartition>(globalPermanent,1);
+    decl.info.infos[0].inputDelays = Array<int>{zeros,2};
+    decl.info.infos[0].outputLatencies = Array<int>{zeros,1};
+
     decl.name = STRING(binary[i].name);
     decl.operation = binary[i].operation;
     RegisterFU(decl);
@@ -128,6 +135,15 @@ void InitializeSimpleDeclarations(){
 }
 
 bool HasMultipleConfigs(FUDeclaration* decl){
-  bool res = (decl->configInfo.size >= 2);
+  bool res = (decl->MergePartitionSize() >= 2);
   return res;
+}
+
+bool HasVariableDelay(FUDeclaration* decl){
+  // Do not know how many more units of this type we are going to add. This might not be finished altought one unit is enough to handle merge
+  if(decl == BasicDeclaration::buffer){
+    return true;
+  }
+
+  return false;
 }

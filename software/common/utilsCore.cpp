@@ -1,3 +1,4 @@
+#include "filesystem.hpp"
 #include "utils.hpp"
 #include "utilsCore.hpp"
 
@@ -18,6 +19,22 @@
 #include <cerrno>
 
 namespace fs = std::filesystem;
+
+int dprintf(const char *format, ...){
+  va_list args;
+  va_start (args, format);
+  int result = vprintf (format, args);
+  va_end (args);  
+  return result;
+}
+
+String Offset(String base,int amount){
+  String res = base;
+  res.data += amount;
+  res.size -= amount;
+
+  return res;
+}
 
 char* StaticFormat(const char* format,...){
   static const int BUFFER_SIZE = 1024*4;
@@ -50,7 +67,7 @@ Time GetTime(){
 
   Time t = {};
   t.seconds = time.tv_sec;
-  t.microSeconds = time.tv_nsec * 1000;
+  t.microSeconds = time.tv_nsec / 1000;
 
   return t;
 }
@@ -74,19 +91,13 @@ void FlushStdout(){
   fflush(stdout);
 }
 
-bool RemoveDirectory(const char* path){
-  return fs::remove_all(path) > 0;
+void OS_SetScriptPermissions(FILE* file){
+  int fileId = fileno(file);
+  fchmod(fileId,S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH);
 }
 
-long int GetFileSize(FILE* file){
-  long int mark = ftell(file);
-
-  fseek(file,0,SEEK_END);
-  long int size = ftell(file);
-
-  fseek(file,mark,SEEK_SET);
-
-  return size;
+bool RemoveDirectory(const char* path){
+  return fs::remove_all(path) > 0;
 }
 
 String ExtractFilenameOnly(String filepath){
@@ -103,6 +114,17 @@ String ExtractFilenameOnly(String filepath){
   return res;
 }
 
+long int GetFileSize(FILE* file){
+  long int mark = ftell(file);
+
+  fseek(file,0,SEEK_END);
+  long int size = ftell(file);
+
+  fseek(file,mark,SEEK_SET);
+
+  return size;
+}
+
 char* GetCurrentDirectory(){
   // TODO: Maybe receive arena and remove use of static buffer
   static char buffer[PATH_MAX];
@@ -114,34 +136,6 @@ char* GetCurrentDirectory(){
 
 void MakeDirectory(const char* path){
   mkdir(path, S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
-}
-
-FILE* OpenFileAndCreateDirectories(const char* path,const char* format){
-  char buffer[PATH_MAX];
-  memset(buffer,0,PATH_MAX);
-
-  for(int i = 0; path[i]; i++){
-    buffer[i] = path[i];
-
-    if(path[i] == '/'){
-      DIR* dir = opendir(buffer);
-      if(!dir && errno == ENOENT){
-        MakeDirectory(buffer);
-      }
-      if(dir){
-        closedir(dir);
-      }
-    }
-  }
-
-  FILE* file = fopen(buffer,format);
-  if(file == nullptr){
-    printf("Failed to open file (%d): %s\n",errno,path);
-    DEBUG_BREAK();
-    exit(-1);
-  }
-  
-  return file;
 }
 
 void CreateDirectories(const char* path){
@@ -265,9 +259,35 @@ Time operator-(const Time& s1,const Time& s2){
 
   Assert(s1 > s2 || s1 == s2);
 
-  res.seconds = s1.seconds - s2.seconds;
-  res.microSeconds = s1.microSeconds - s2.microSeconds;
+  int S1 = s1.seconds;
+  int S2 = s2.seconds;
+  int M1 = s1.microSeconds;
+  int M2 = s2.microSeconds;
+  
+  while(M1 < M2){
+    M1 += 1000000;
+    S1 -= 1;
+  }
 
+  Assert(S1 >= S2);
+  
+  res.seconds = S1 - S2;
+  res.microSeconds = M1 - M2;
+  
+  return res;
+}
+
+Time operator+(const Time& s1,const Time& s2){
+  Time res = {};
+  
+  res.seconds = s1.seconds + s2.seconds;
+  res.microSeconds = s1.microSeconds + s2.microSeconds;
+
+  if(res.microSeconds > 1000000){
+    res.seconds += res.microSeconds / 1000000;
+    res.microSeconds %= res.microSeconds;
+  }
+  
   return res;
 }
 
@@ -673,6 +693,10 @@ bool CompareString(String str1,const char* str2){
 bool CompareString(const char* str1,const char* str2){
   bool res = (strcmp(str1,str2) == 0);
   return res;
+}
+
+bool Empty(String str){
+  return (str.size == 0);
 }
 
 int CompareStringOrdered(String str1,String str2){

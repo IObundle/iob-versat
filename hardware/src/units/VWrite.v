@@ -1,9 +1,10 @@
 `timescale 1ns / 1ps
 
 module VWrite #(
+   parameter SIZE_W     = 32,
    parameter DATA_W     = 32,
-   parameter ADDR_W     = 14,
-   parameter PERIOD_W   = 12, // Must be 2 less than ADDR_W (boundary of 4) (for 32 bit DATA_W)
+   parameter ADDR_W     = 20,
+   parameter PERIOD_W   = 18, // Must be 2 less than ADDR_W (boundary of 4) (for 32 bit DATA_W)
    parameter AXI_ADDR_W = 32,
    parameter AXI_DATA_W = 32,
    parameter DELAY_W    = 7,
@@ -38,42 +39,38 @@ module VWrite #(
    output [    DATA_W-1:0] ext_2p_data_out_0,
 
    // configurations
-   input [AXI_ADDR_W-1:0] ext_addr,
-   input [  PERIOD_W-1:0] perA,
-   input [    ADDR_W-1:0] incrA,
-   input [     LEN_W-1:0] length,
+   (* versat_stage="Write" *) input [AXI_ADDR_W-1:0] ext_addr,
+   (* versat_stage="Write" *) input [  PERIOD_W-1:0] write_per,
+   (* versat_stage="Write" *) input [    ADDR_W-1:0] write_incr,
+   (* versat_stage="Write" *) input [PERIOD_W-1:0]   write_duty,
+
+   (* versat_stage="Write" *) input [  ADDR_W-1:0]   write_iter,
+   (* versat_stage="Write" *) input [  ADDR_W-1:0]   write_shift,
+
+   (* versat_stage="Write" *) input [     LEN_W-1:0] write_length,
+   (* versat_stage="Write" *) input                  write_enabled,
+
    input                  pingPong,
 
-   // configurations
-`ifdef COMPLEX_INTERFACE
-   input [PERIOD_W-1:0] dutyA,
-   input [  ADDR_W-1:0] int_addr,
-   input [  ADDR_W-1:0] iterA,
-   input [  ADDR_W-1:0] shiftA,
-`endif
+   input [  ADDR_W-1:0] input_iter,
+   input [PERIOD_W-1:0] input_per,
+   input [PERIOD_W-1:0] input_duty,
+   input [  ADDR_W-1:0] input_start,
+   input [  ADDR_W-1:0] input_shift,
+   input [  ADDR_W-1:0] input_incr,
 
-   input [  ADDR_W-1:0] iterB,
-   input [PERIOD_W-1:0] perB,
-   input [PERIOD_W-1:0] dutyB,
-   input [  ADDR_W-1:0] startB,
-   input [  ADDR_W-1:0] shiftB,
-   input [  ADDR_W-1:0] incrB,
-   input [ DELAY_W-1:0] delay0,    // delayB
-   input                reverseB,
-   input                extB,
-   input [  ADDR_W-1:0] iter2B,
-   input [PERIOD_W-1:0] per2B,
-   input [  ADDR_W-1:0] shift2B,
-   input [  ADDR_W-1:0] incr2B,
+   input [  ADDR_W-1:0] input_iter2,
+   input [PERIOD_W-1:0] input_per2,
+   input [  ADDR_W-1:0] input_shift2,
+   input [  ADDR_W-1:0] input_incr2,
 
-   input enableWrite
+   input [ DELAY_W-1:0] delay0
 );
 
    assign databus_addr_0  = ext_addr;
    assign databus_wstrb_0 = ~0;
-   assign databus_len_0   = length;
+   assign databus_len_0   = write_length;
 
-   wire gen_done;
    reg  doneWrite; // Databus write part
    reg  doneStore;
    wire doneStore_int;
@@ -84,7 +81,7 @@ module VWrite #(
          doneWrite <= 1'b1;
          doneStore <= 1'b1;
       end else if (run) begin
-         doneWrite <= !enableWrite;
+         doneWrite <= !write_enabled;
          doneStore <= 1'b0;
       end else if (running) begin
          doneStore <= doneStore_int;
@@ -92,34 +89,8 @@ module VWrite #(
       end
    end
 
-   function [ADDR_W-1:0] reverseBits;
-      input [ADDR_W-1:0] word;
-      integer i;
-
-      begin
-         for (i = 0; i < ADDR_W; i = i + 1) reverseBits[i] = word[ADDR_W-1-i];
-      end
-   endfunction
-
-   reg              pingPongState;
-
-   reg [ADDR_W-1:0] startA;
-   always @* begin
-      startA           = 0;
-      startA[ADDR_W-1] = pingPong ? !pingPongState : 0;
-   end
-
-   wire [ 1:0] direction = 2'b10;
-   wire [DELAY_W-1:0] delayA = 0;
-
-   // port addresses and enables
-   wire [ADDR_W-1:0] addrB, addrB_int, addrB_int2;
-
-   wire [ADDR_W-1:0] startB_inst = pingPong ? {pingPongState, startB[ADDR_W-2:0]} : startB;
-
-   // data inputs
-   wire rnw;
-   wire [DATA_W-1:0] data_out;
+   // Ping pong and related logic for the initial address
+   reg pingPongState;
 
    // Ping pong 
    always @(posedge clk, posedge rst) begin
@@ -127,49 +98,60 @@ module VWrite #(
       else if (run) pingPongState <= pingPong ? (!pingPongState) : 1'b0;
    end
 
+   //wire [ADDR_W-1:0] write_start = {pingPong && !pingPongState , {(ADDR_W-1){1'b0}}};
+
+   // port addresses and enables
+   wire [ADDR_W-1:0] store_addr_temp;
+   wire [ADDR_W-1:0] input_start_inst = {pingPong && pingPongState, input_start[ADDR_W-2:0]};
+
    // mem enables output by addr gen
-   wire enB;
+   wire store_en,do_store;
 
-   // write enables
-   wire wrB = (enB & ~extB);  //addrgen on & input on & input isn't address
-
-   wire [DATA_W-1:0] data_to_wrB = in0;
+   wire [DATA_W-1:0] store_data = in0;
 
    wire gen_valid, gen_ready;
-   wire [ADDR_W-1:0] gen_addr;
+   wire [ADDR_W-1:0] gen_addr_temp;
 
-   localparam DIFF = AXI_DATA_W / DATA_W;
-   localparam DIFF_BIT_W = $clog2(DIFF);
-
-   SimpleAddressGen #(
+   AddressGen3 #(
       .ADDR_W(ADDR_W),
       .DATA_W(AXI_DATA_W),
       .PERIOD_W(PERIOD_W)
    ) addrgenWrite (
       .clk_i(clk),
       .rst_i(rst),
-      .run_i(run && enableWrite),
+      .run_i(run && write_enabled),
 
       //configurations 
-      .period_i(perA),
-      .delay_i (delayA),
-      .start_i (startA),
-      .incr_i  (incrA),
+      .period_i(write_per),
+      .delay_i (0),
+      .start_i (0),
+      //.start_i (write_start),
+      .incr_i  (write_incr),
+      .iterations_i(write_iter),
+      .duty_i      (write_duty),
+      .shift_i     (write_shift),
 
-`ifdef COMPLEX_INTERFACE
-      .iterations_i(iterA),
-      .duty_i      (dutyA),
-      .shift_i     (shiftA),
-`endif
+      .period2_i(0),
+      .incr2_i(0),
+      .iterations2_i(0),
+      .shift2_i(0),
+
+      .period3_i(0),
+      .incr3_i(0),
+      .iterations3_i(0),
+      .shift3_i(0),
 
       //outputs 
       .valid_o(gen_valid),
       .ready_i(gen_ready),
-      .addr_o (gen_addr),
-      .done_o (gen_done)
+      .addr_o (gen_addr_temp),
+      .store_o(),
+      .done_o ()
    );
 
-   SimpleAddressGen #(
+   wire [ADDR_W-1:0] gen_addr = {pingPong ? !pingPongState : gen_addr_temp[ADDR_W-1],gen_addr_temp[ADDR_W-2:0]};
+
+   AddressGen3 #(
       .ADDR_W(ADDR_W),
       .DATA_W(DATA_W),
       .DELAY_W(DELAY_W),
@@ -180,48 +162,35 @@ module VWrite #(
       .run_i(run),
 
       //configurations 
-      .period_i(perB),
+      .period_i(input_per),
       .delay_i (delay0),
-      .start_i (startB_inst),
-      .incr_i  (incrB),
+      .start_i ({1'b0,input_start[ADDR_W-2:0]}),
+      //.start_i (input_start_inst),
+      .incr_i  (input_incr),
 
-`ifdef COMPLEX_INTERFACE
-      .iterations_i(iterB),
-      .duty_i      (dutyB),
-      .shift_i     (shiftB),
-`endif
+      .iterations_i(input_iter),
+      .duty_i      (input_duty),
+      .shift_i     (input_shift),
+
+      .period2_i(input_per2),
+      .incr2_i(input_incr2),
+      .iterations2_i(input_iter2),
+      .shift2_i(input_shift2),
+
+      .period3_i(0),
+      .incr3_i(0),
+      .iterations3_i(0),
+      .shift3_i(0),
 
       //outputs 
-      .valid_o(enB),
+      .valid_o(store_en),
       .ready_i(1'b1),
-      .addr_o (addrB_int),
+      .addr_o (store_addr_temp),
+      .store_o(do_store),
       .done_o (doneStore_int)
    );
 
-   /*
-    xaddrgen2 #(.MEM_ADDR_W(ADDR_W)) addrgen2B (
-                       .clk(clk),
-                       .rst(rst),
-                       .run(run),
-                       .iterations(iterB),
-                       .period(perB),
-                       .duty(dutyB),
-                       .start(startB_inst),
-                       .shift(shiftB),
-                       .incr(incrB),
-                       .delay(delay0[9:0]),
-                       .iterations2(iter2B),
-                       .period2(per2B),
-                       .shift2(shift2B),
-                       .incr2(incr2B),
-                       .addr(addrB_int),
-                       .mem_en(enB),
-                       .done(doneStore_int)
-                       );
-   */
-
-   assign addrB_int2 = addrB_int;  //(reverseB ? reverseBits(addrB_int) : addrB_int) << OFFSET_W;
-   assign addrB      = addrB_int2;
+   wire [ADDR_W-1:0] store_addr = {pingPong ? pingPongState : store_addr_temp[ADDR_W-1],store_addr_temp[ADDR_W-2:0]};
 
    wire                  read_en;
    wire [    ADDR_W-1:0] read_addr;
@@ -254,38 +223,27 @@ module VWrite #(
       .rst_i(rst)
    );
 
-   /*
-   wire [ADDR_W-1:0] true_read_addr;
-   generate
-   if(AXI_DATA_W == 32) begin
-   assign true_read_addr = read_addr;
-   end   
-   else if(AXI_DATA_W == 64) begin
-   assign true_read_addr = (read_addr >> 1);      
-   end
-   else if(AXI_DATA_W == 128) begin
-   assign true_read_addr = (read_addr >> 2);      
-   end
-   else if(AXI_DATA_W == 256) begin
-   assign true_read_addr = (read_addr >> 3);      
-   end
-   else if(AXI_DATA_W == 512) begin
-   assign true_read_addr = (read_addr >> 4);      
-   end else begin
-      initial begin $display("NOT IMPLEMENTED\n"); $finish(); end
-   end
-   endgenerate
-   */
-
    assign databus_valid_0   = (m_valid & !doneWrite);
 
-   assign ext_2p_write_0    = wrB;
-   assign ext_2p_addr_out_0 = addrB;
-   assign ext_2p_data_out_0 = data_to_wrB;
+   assign ext_2p_write_0    = store_en && do_store;
+   assign ext_2p_addr_out_0 = store_addr;
+   assign ext_2p_data_out_0 = store_data;
 
    assign ext_2p_read_0     = read_en;
    assign ext_2p_addr_in_0  = read_addr;
    assign read_data         = ext_2p_data_in_0;
 
-endmodule  // VWrite
+   // Reports most common errors
+   always @* begin
+      if(pingPong && gen_addr_temp[ADDR_W-1]) begin
+         $display("%m: Overflow of memory when using PingPong for reading");
+      end
+      if(pingPong && store_addr_temp[ADDR_W-1]) begin
+         $display("%m: Overflow of write memory when using PingPong for outputting");
+      end
+      if(pingPong && input_start[ADDR_W-1]) begin
+         $display("%m: Last bit of output start ignored when using PingPong");
+      end
+   end
 
+endmodule  // VWrite

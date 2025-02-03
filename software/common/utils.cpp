@@ -5,6 +5,34 @@
 #include <filesystem>
 namespace fs = std::filesystem;
 
+FILE* OpenFileAndCreateDirectories(String path,const char* format,FilePurpose purpose){
+  char buffer[PATH_MAX];
+  memset(buffer,0,PATH_MAX);
+
+  for(int i = 0; i < path.size; i++){
+    buffer[i] = path[i];
+
+    if(path[i] == '/'){
+      DIR* dir = opendir(buffer);
+      if(!dir && errno == ENOENT){
+        MakeDirectory(buffer);
+      }
+      if(dir){
+        closedir(dir);
+      }
+    }
+  }
+
+  FILE* file = OpenFile(path,format,purpose);
+  if(file == nullptr){
+    printf("Failed to open file (%d): %.*s\n",errno,UNPACK_SS(path));
+    NOT_IMPLEMENTED("Probably better to return null and let code handle it");
+    exit(-1);
+  }
+  
+  return file;
+}
+
 Opt<Array<String>> GetAllFilesInsideDirectory(String dirPath,Arena* out){
    DIR* dir = opendir(StaticFormat("%.*s",UNPACK_SS(dirPath))); // Make sure it's zero terminated
 
@@ -103,11 +131,31 @@ String GetAbsolutePath(const char* path,Arena* out){
 }
 
 Array<int> GetNonZeroIndexes(Array<int> arr,Arena* out){
-  DynamicArray<int> array = StartArray<int>(out);
+  auto array = StartGrowableArray<int>(out);
   for(int i = 0; i < arr.size; i++){
     if(arr[i])
       *array.PushElem() = i;
   }
 
   return EndArray(array);
+}
+
+String JoinStrings(Array<String> strings,String separator,Arena* out){
+  if(strings.size == 1){
+    return PushString(out,strings[0]);
+  }
+
+  bool first = true;
+  auto builder = StartString(out);
+  for(String str : strings){
+    if(first){
+      first = false;
+    } else {
+      PushString(out,separator);
+    }
+
+    PushString(out,str);
+  }
+
+  return EndString(builder);
 }

@@ -8,24 +8,12 @@
 #include "utilsCore.hpp"
 #include "logger.hpp"
 
-/* 
-  TODO: Using fixed size for structures like hashmap and set is a bit
-  wasteful.  Would like to implement hashmap and set structures
-  that keep a pointer to an arena and can grow by allocating
-  more space (implement set using binary tree, for hashmap try
-  to find something).
-
-  TODO: Right now we allocate a lot of dynamic arrays using the Push +
-  PointArray form. This is error prone, a single allocation
-  inside can lead to incorrect results.  Would like to formalize
-  this pattern by defining a DynamicArray structure that acts
-  the same way as an ArenaList and such.  To make it less error
-  prone, add some debug info stored into the arena that records
-  whether the arena is currently being used to allocate dynamic
-  arrays and throw some error if we detect an allocation that
-  shouldn't happen.  Wrap this extra code inside a DEBUG
-  directive.
- */
+struct Arena;
+extern Arena* contextArenas[2];
+// Pass nullptr to get one arena, pass an arena to get a guaranteed different arena
+// Calling code must pass any arena that it contains to this function to make sure that the arena returned is different. We only receive one currently because we only expect to support out/temp flows (only 2 arenas required).
+// Credit to Ryan Fleury for this technique.
+Arena* GetArena(Arena* diff);
 
 inline size_t Kilobyte(int val){return val * 1024;};
 inline size_t Megabyte(int val){return Kilobyte(val) * 1024;};
@@ -38,26 +26,18 @@ int GetPageSize();
 void* AllocatePages(int pages);
 void DeallocatePages(void* ptr,int pages);
 long PagesAvailable();
-void CheckMemoryStats();
 
 #undef VERSAT_DEBUG
 
-// Care, functions that push to an arena do not clear it to zero or to any value.
-// Need to initialize the values directly.
 struct Arena{
   Byte* mem;
   size_t used;
   size_t totalAllocated;
   size_t maximum;
-
-  // TODO: Locked could be an enum for all the cases, like dynamic array and string. That way we could actually check if we are doing anything bad (Check inside a PushString if we are inside a DynamicArray section, for example).
-  bool locked; // Certain constructs [like DynamicArray] "lock" arena preventing the arena from being used by other functions.
 }; 
 
-#define VERSAT_DEBUG
-
 void AlignArena(Arena* arena,int alignment);
-Arena InitArena(size_t size); // Calls calloc
+Arena InitArena(size_t size);
 Arena InitLargeArena(); //
 Arena SubArena(Arena* arena,size_t size);
 void PopToSubArena(Arena* top,Arena subArena);
@@ -65,11 +45,12 @@ void Reset(Arena* arena);
 void Free(Arena* arena);
 Byte* PushBytes(Arena* arena, size_t size);
 size_t SpaceAvailable(Arena* arena);
-String PushChar(Arena* arena,const char);
 String PushString(Arena* arena,int size);
 String PushString(Arena* arena,String ss);
 String PushString(Arena* arena,const char* format,...) __attribute__ ((format (printf, 2, 3)));
 String vPushString(Arena* arena,const char* format,va_list args);
+
+// TODO: This is bad. The push string functions should have a parameter if we want to push a null byte or not.
 void PushNullByte(Arena* arena);
 
 struct ArenaMark{
@@ -83,10 +64,10 @@ void PopMark(ArenaMark mark);
 // TODO: Maybe add Optional to indicate error opening file
 //       In general error handling is pretty lacking overall.
 String PushFile(Arena* arena,FILE* file);
+String PushFile(Arena* arena,String filepath);
 String PushFile(Arena* arena,const char* filepath);
 
-class ArenaMarker{
-public:
+struct ArenaMarker{
   ArenaMark mark;
   
   ArenaMarker(Arena* arena){this->mark = MarkArena(arena);};
@@ -101,19 +82,19 @@ public:
 
 #define region(ARENA) if(ArenaMarker _marker(__LINE__){ARENA})
 
-// Do not abuse stack arenas.
-#define STACK_ARENA(NAME,SIZE) \
-   Arena NAME = {}; \
-char buffer_##NAME[SIZE]; \
-NAME.mem = (Byte*) buffer_##NAME; \
-NAME.totalAllocated = SIZE;
+#define TEMP_REGION(NAME,OUT_ARENA) \
+  Arena* NAME = GetArena(OUT_ARENA); \
+  BLOCK_REGION(NAME)
  
 // For now let PushArray also zero out
 template<typename T>
-Array<T> PushArray(Arena* arena,int size){AlignArena(arena,alignof(T)); Array<T> res = {}; res.size = size; res.data = (T*) PushBytes(arena,sizeof(T) * size); Memset(res,{}); return res;};
+Array<T> PushArray(Arena* arena,int size){AlignArena(arena,alignof(T)); Array<T> res = {}; res.size = size; res.data = (T*) PushBytes(arena,sizeof(T) * size); Memset(res,(T){}); return res;};
+
+inline void MemZero_(void* ptr,ssize_t size){u8* view = (u8*) ptr; for(ssize_t i = 0; i < size; i++) view[i] = 0;};
+#define MemZero(PTR,TYPE) MemZero_(PTR,sizeof(TYPE));
 
 template<typename T>
-T* PushStruct(Arena* arena){AlignArena(arena,alignof(T)); T* res = (T*) PushBytes(arena,sizeof(T)); return res;};
+T* PushStruct(Arena* arena){AlignArena(arena,alignof(T)); T* res = (T*) PushBytes(arena,sizeof(T)); MemZero(res,T); return res;};
 
 // Arena that allocates more blocks of memory like a list.
 struct DynamicArena{
@@ -137,123 +118,137 @@ template<typename T>
 T* PushStruct(DynamicArena* arena){AlignArena(arena,alignof(T)); T* res = (T*) PushBytes(arena,sizeof(T)); return res;};
 
 template<typename T>
-struct DynamicArray{
-  ArenaMark mark;
+struct GrowableArray{
+  Arena* arena;
+  T* data;
+  int size;
+  int capacity;
+
+  T& operator[](int index){
+    while(size <= index){
+      PushElem();
+    }
+    return data[index];
+  }
   
-  ~DynamicArray();
+  void PushArray(Array<T> arr){
+    for(int i = 0; i < arr.size; i++){
+      *PushElem() = arr[i];
+    }
+  }
 
   Array<T> AsArray();
   T* PushElem();
 };
 
 template<typename T>
-DynamicArray<T> StartArray(Arena* arena);
+GrowableArray<T> StartGrowableArray(Arena* arena,int startCapacity = 1){
+  GrowableArray<T> res = {};
+
+  res.arena = arena;
+  res.data = PushArray<T>(arena,startCapacity).data;
+  res.size = 0;
+  res.capacity = startCapacity;
+
+  return res;
+}
 
 template<typename T>
-Array<T> EndArray(DynamicArray<T> arr);
+T* GrowableArray<T>::PushElem(){
+  // TODO: Still need to handle alignment problems, if they appear
+  
+  if(size < capacity){
+    return &data[size++];
+  }
 
+  // Simply extend array
+  if(data + capacity == (T*) PushBytes(arena,0)){
+    size += 1;
+    capacity += 1;
+    return PushStruct<T>(arena); // NOTE: It is possible that there exists an alignment bug hidden here, but still have not found any example that would trigger it. 
+  }
+
+  // Need to copy it
+  Array<T> newArray = ::PushArray<T>(arena,capacity * 2);
+  capacity = newArray.size;
+  
+  memcpy(newArray.data,data,sizeof(T) * size);
+  data = newArray.data;
+  return &data[size++];
+}
+
+template<typename T>
+Array<T> GrowableArray<T>::AsArray(){
+  if(size == 0){
+    return {};
+  }
+  
+  Array<T> res = {};
+  res.data = data;
+  res.size = size;
+  return res;
+}
+
+template<typename T>
+Array<T> EndArray(GrowableArray<T> arr){
+  return arr.AsArray();
+}
+
+// TODO: Remove this, replace with a proper implementation of StringBuilder
 struct DynamicString{
   Arena* arena;
   Byte* mark;
+
+  void PushChar(const char);
+  void PushString(int size);
+  void PushString(String ss);
+  void PushString(const char* format,...) __attribute__ ((format (printf, 2, 3)));
+  void vPushString(const char* format,va_list args);
+  void PushNullByte();
 };
 
+struct StringNode{
+  StringNode* next;
+  String string;
+};
+
+struct StringBuilder{
+  Arena* arena;
+  StringNode* head;
+  StringNode* tail;
+  
+  void PushString(String str);
+  void PushString(const char* format,...) __attribute__ ((format (printf, 2, 3)));
+  void vPushString(const char* format,va_list args);
+};
+
+StringBuilder* StartStringBuilder(Arena* arena);
+String EndString(Arena* out,StringBuilder* builder);
+
+// TODO: Need to remove DynamicString and replace it with the String builder approach
 DynamicString StartString(Arena *arena);
 String EndString(DynamicString mark);
 
-// A wrapper for a "push" type interface for a block of memory
-// TODO: This probably can be eleminated, very few areas of the code actually use this.
 template<typename T>
-class PushPtr{
+class Stack{
 public:
-  T* ptr;
-  int maximumTimes;
-  int timesPushed;
+  Array<T> array;
+  int used;
 
-  PushPtr(){
-    ptr = nullptr;
-    maximumTimes = 0;
-    timesPushed = 0;
-  }
-
-  PushPtr(Arena* arena,int maximum){
-    this->ptr = PushArray<T>(arena,maximum).data;
-    this->maximumTimes = maximum;
-    this->timesPushed = 0;
-  }
-   
-  void Init(T* ptr,int maximum){
-    this->ptr = ptr;
-    this->maximumTimes = maximum;
-    this->timesPushed = 0;
-  }
-
-  void Init(Array<T> arr){
-    this->ptr = arr.data;
-    this->maximumTimes = arr.size;
-    this->timesPushed = 0;
-  }
-
-  T* Push(int times){
-    T* res = &ptr[timesPushed];
-    timesPushed += times;
-
-    Assert(timesPushed <= maximumTimes);
-    return res;
-  }
-
-  int Mark(){
-    return timesPushed;
-  }
-
-  Array<T> PopMark(int mark){
-    int size = timesPushed - mark;
-
-    Array<T> arr = {};
-    arr.data = &ptr[timesPushed];
-    arr.size = size;
-
-    return arr;
-  }
-  
-  void PushValue(T val){
-    T* space = Push(1);
-    *space = val;
-  }
-
-  void Push(Array<T> array){
-    T* data = Push(array.size);
-
-    for(int i = 0; i < array.size; i++){
-      data[i] = array[i];
-    }
-  }
-
-  T* Set(int pos,int times){
-    T* res = &ptr[pos];
-
-    timesPushed = pos + times > timesPushed ? pos + times : timesPushed;
-    Assert(timesPushed <= maximumTimes);
-    return res;
-  }
-
-  Array<T> AsArray(){
-    Array<T> res = {};
-    res.data = ptr;
-    res.size = timesPushed;
-    return res;
-  }
-
-  void Reset(){
-    timesPushed = 0;
-  }
-
-  bool Empty(){
-    bool res = (maximumTimes == timesPushed);
-    return res;
-  }
+  int Size(){return used;};
+  void Push(T t){array[used++] = t;};
+  T Pop(){Assert(used > 0); return array[--used];};
 };
 
-template<typename T> bool Inside(PushPtr<T>* push,T* ptr);
+template<typename T>
+Stack<T>* PushQueue(Arena* out,int maxSize){
+  Stack<T>* res = PushStruct<Stack<T>>(out);
+  *res = {};
+  
+  res->array = PushArray<T>(out,maxSize);
+
+  return res;
+}
 
 class BitArray;
 
@@ -290,8 +285,6 @@ public:
   int FirstBitSetIndex();
   int FirstBitSetIndex(int start);
 
-  String PrintRepresentation(Arena* output);
-
   void operator&=(BitArray& other);
 
   BitIterator begin();
@@ -320,11 +313,14 @@ struct GetOrAllocateResult{
   bool alreadyExisted;
 };
 
-// An hashmap implementation for arenas. Does not allocate any memory after construction and also iterates by order of insertion. Construct with PushHashmap function
+// An hashmap implementation for arenas. Does not allocate any memory after construction (fixed max size) and also iterates by order of insertion. Construct with PushHashmap function
 template<typename Key,typename Data>
 struct Hashmap{
   int nodesAllocated;
-  int nodesUsed;
+  union{
+    int nodesUsed;
+    int size;
+  };
   Pair<Key,Data>** buckets;
   Pair<Key,Data>*  data;
   Pair<Key,Data>** next; // Next is separated from data, to allow easy iteration of the data
@@ -332,7 +328,7 @@ struct Hashmap{
   // Pair<Key,Data>* bucketsData[nodesAllocated];
   // Pair<Key,Data>* nextArray[nodesAllocated];
   // Pair<Key,Data> dataData[nodesAllocated];
-
+  
   // Construct by calling PushHashmap
   
   Data* Insert(Key key,Data data);
@@ -425,7 +421,7 @@ struct TrieMapIterator{
 
   bool operator!=(TrieMapIterator& iter);
   void operator++();
-  Pair<Key,Data>& operator*(); // Care when changing values of Key, can only change values that do not change Hash value or equality otherwise TrieMap stops working
+  Pair<Key,Data> operator*(); // TODO: Put data as a pointer, to allow code to change it if needed
 };
 
 template<typename Key,typename Data>
@@ -529,6 +525,10 @@ struct GenericPoolIterator{
   Byte* operator*();
 };
 
+GenericPoolIterator IteratePool(void* pool,int sizeOfType,int alignmentOfType);
+bool HasNext(GenericPoolIterator iter);
+void* Next(GenericPoolIterator& iter);
+
 template<typename T> class Pool;
 
 template<typename T>
@@ -550,6 +550,7 @@ public:
 
   bool HasNext(){return (page != nullptr);};
   bool operator!=(PoolIterator& iter);
+  bool operator==(PoolIterator& iter);
   void operator++();
   T* operator*();
 };
@@ -558,6 +559,8 @@ PoolInfo CalculatePoolInfo(int elemSize);
 PageInfo GetPageInfo(PoolInfo poolInfo,Byte* page);
 
 // A vector like class except no reallocations. Useful for storing entities that cannot be reallocated (so we can store pointers to them directly).
+// While we could build this on top of an arena, this container uses mapped pages proprieties to work, so it needs to be standalone.
+// TODO: There is a problem with the interface and the usage of this class. While we want to use this as a vector, we also want to guarantee that data is never moved. This means that Removing an elem cannot do it by copying. Because of this, when we iterate a Pool, we need to be able to handle units in the middle being removed, which prevents the iteration from being fast. A Pool where Remove does not exist would be much faster than a Pool that allows removing elements. I think it would be better to add a Pool that does not allow Remove and let the programmer use a fast Pool (in fact, I already got a problem when using the slow Pool before, so this is needed).
 template<typename T>
 struct Pool{
   Byte* mem; // TODO: replace with PoolHeader instead of using Byte and casting
@@ -583,70 +586,64 @@ public:
   int MemoryUsage();
 };
 
+
+template<typename Key,typename Data>
+struct MyHashmapIterator{
+  HashmapIterator<Key,Data> iter;
+  HashmapIterator<Key,Data> end;
+
+  bool HasNext(){
+    return (iter != end);
+  };
+
+  Pair<Key,Data*> Next(){
+    auto res = *iter;
+    ++iter;
+    return res;
+  };
+};
+
+template<typename Key,typename Data>
+MyHashmapIterator<Key,Data> Iterate(Hashmap<Key,Data>* hashmap){
+  MyHashmapIterator<Key,Data> res = {};
+
+  res.iter = begin(hashmap);
+  res.end  = end(hashmap);
+  return res;
+}
+
+template<typename Key,typename Data>
+MyHashmapIterator<Key,Data> Iterate(Hashmap<Key,Data>& hashmap){
+  MyHashmapIterator<Key,Data> res = {};
+
+  res.iter = begin(&hashmap);
+  res.end  = end(&hashmap);
+  return res;
+}
+
+struct GenericArrayIterator{
+  void* array;
+  int sizeOfType;
+  int alignmentOfType;
+  int index;
+};
+
+struct GenericTrieMapIterator{
+  void* trieMap;
+  void* ptr;
+  int sizeOfType;
+  int alignmentOfType;
+  int index;
+};
+
+struct GenericHashmapIterator{
+  void* hashmap;
+  int sizeOfType;
+  int alignmentOfType;
+  int index;
+};
+
 // Start of implementation
-
-template<typename T> bool Inside(PushPtr<T>* push,T* ptr){
-  bool res = (ptr >= push->ptr && ptr < (push->ptr + push->maximumTimes));
-  return res;
-}
-
-template<typename T> DynamicArray<T> StartArray(Arena* arena){
-  DynamicArray<T> arr = {};
-
-  AlignArena(arena,alignof(T));
-
-  arr.mark = MarkArena(arena);
-
-#ifdef VERSAT_DEBUG
-  arena->locked = true;
-#endif
-
-  return arr;
-}
-
-template<typename T>
-DynamicArray<T>::~DynamicArray(){
-  // Unlocking the arena must be done in the destructor as well otherwise
-  // a return of function would leave the arena locked for good.
-#ifdef VERSAT_DEBUG
-  mark.arena->locked = false;
-#endif
-}
-
-template<typename T> Array<T> DynamicArray<T>::AsArray(){
-  Byte* data = mark.mark;
-  int size = &mark.arena->mem[mark.arena->used] - data;
-
-  Assert(size >= 0);
-  Assert(size % sizeof(T) == 0); // Ensures data is properly aligned
-  
-  Array<T> res = {};
-  res.data = (T*) data;
-  res.size = size / sizeof(T);
-
-  return res;
-}
-
-template<typename T> T* DynamicArray<T>::PushElem(){
-#ifdef VERSAT_DEBUG
-  Assert(mark.arena->locked);
-  mark.arena->locked = false;
-#endif
-
-  T* res = PushStruct<T>(this->mark.arena);
-
-#ifdef VERSAT_DEBUG
-  mark.arena->locked = true;
-#endif
-
-  return res;
-}
-  
-template<typename T> Array<T> EndArray(DynamicArray<T> arr){
-  arr.mark.arena->locked = false;
-  
-  return arr.AsArray();
-}
 
 template<typename Key,typename Data>
 bool HashmapIterator<Key,Data>::operator!=(HashmapIterator& iter){
@@ -834,7 +831,7 @@ Data* Hashmap<Key,Data>::Get(Key key){
 
   int mask = this->nodesAllocated - 1;
   int index = std::hash<Key>()(key) & mask; // Size is power of 2
-
+  
   Pair<Key,Data>* ptr = this->buckets[index];
   for(; ptr;){
     if(ptr->key == key){ // Same key
@@ -940,7 +937,6 @@ TrieMap<Key,Data>* PushTrieMap(Arena* arena){
 template<typename Key,typename Data>
 Data* TrieMap<Key,Data>::Insert(Key key,Data data){
   int index = std::hash<Key>()(key);
-  int startIndex = index;
   int select = index & 3;
   if(this->childs[select] == nullptr){
     TrieMapNode<Key,Data>* node = PushStruct<TrieMapNode<Key,Data>>(arena);
@@ -1012,7 +1008,6 @@ Data* TrieMap<Key,Data>::InsertIfNotExist(Key key,Data data){
     inserted += 1;
     return &node->pair.second;
   } else if(this->childs[select]->pair.key == key){
-    inserted += 1;
     return &this->childs[select]->pair.second;
   }
 
@@ -1033,7 +1028,6 @@ Data* TrieMap<Key,Data>::InsertIfNotExist(Key key,Data data){
       inserted += 1;
       return &node->pair.second;
     } else if(current->childs[select]->pair.first == key) {
-      inserted += 1;
       return &current->childs[select]->pair.second;
     } else {
       current = current->childs[select];
@@ -1154,7 +1148,7 @@ void TrieMapIterator<Key,Data>::operator++(){
 }
 
 template<typename Key,typename Data>
-Pair<Key,Data>& TrieMapIterator<Key,Data>::operator*(){
+Pair<Key,Data> TrieMapIterator<Key,Data>::operator*(){
   return this->ptr->pair;
 }
 
@@ -1319,6 +1313,13 @@ void PoolIterator<T>::Init(Pool<T>* pool,Byte* page){
 template<typename T>
 bool PoolIterator<T>::operator!=(PoolIterator<T>& iter){
   bool res = this->page != iter.page; // We only care about for ranges, so no need to be specific
+
+  return res;
+}
+
+template<typename T>
+bool PoolIterator<T>::operator==(PoolIterator<T>& iter){
+  bool res = this->page == iter.page; // We only care about for ranges, so no need to be specific
 
   return res;
 }

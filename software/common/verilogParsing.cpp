@@ -8,6 +8,49 @@
 #include "utils.hpp"
 #include "utilsCore.hpp"
 
+typedef Value (*MathFunction)(Value f,Value g);
+
+struct MathFunctionDescription{
+  String name;
+  int amountOfParameters;
+  MathFunction func;
+};
+#define MATH_FUNC(...) [](Value f,Value g) -> Value{__VA_ARGS__}
+
+static MathFunctionDescription verilogMathFunctions[] = {
+  {STRING("clog2"),1,MATH_FUNC(return MakeValue(log2i(f.number));)},
+  {STRING("ln"),1},
+  {STRING("log"),1},
+  {STRING("exp"),1},
+  {STRING("sqrt"),1},
+  {STRING("pow"),2},
+  {STRING("floor"),1},
+  {STRING("ceil"),1},
+  {STRING("sin"),1},
+  {STRING("cos"),1},
+  {STRING("tan"),1},
+  {STRING("asin"),1},
+  {STRING("acos"),1},
+  {STRING("atan"),1},
+  {STRING("atan2"),2},
+  {STRING("hypot"),2},
+  {STRING("sinh"),1},
+  {STRING("cosh"),1},
+  {STRING("tanh"),1},
+  {STRING("asinh"),1},
+  {STRING("acosh"),1},
+  {STRING("atanh"),1}
+};
+
+Opt<MathFunctionDescription> GetMathFunction(String name){
+  for(int i = 0; i < ARRAY_SIZE(verilogMathFunctions); i++){
+    if(CompareString(verilogMathFunctions[i].name,name)){
+      return verilogMathFunctions[i];
+    }
+  }
+  return {};
+}
+
 bool PerformDefineSubstitution(Arena* output,MacroMap& macros,String name){
   auto iter = macros.find(name);
   if(iter == macros.end()){
@@ -23,7 +66,7 @@ bool PerformDefineSubstitution(Arena* output,MacroMap& macros,String name){
     if(!peek.has_value()){
       break;
     } else {
-      inside.AdvancePeek(peek.value());
+      inside.AdvancePeekBad(peek.value());
       PushString(output,peek.value());
 
       inside.AssertNextToken("`");
@@ -40,9 +83,11 @@ bool PerformDefineSubstitution(Arena* output,MacroMap& macros,String name){
   return true;
 }
 
-void PreprocessVerilogFile_(String fileContent,MacroMap& macros,Array<String> includeFilepaths,Arena* out,Arena* temp);
+void PreprocessVerilogFile_(String fileContent,MacroMap& macros,Array<String> includeFilepaths,Arena* out);
 
-static void DoIfStatement(Tokenizer* tok,MacroMap& macros,Array<String> includeFilepaths,Arena* out,Arena* temp){
+static void DoIfStatement(Tokenizer* tok,MacroMap& macros,Array<String> includeFilepaths,Arena* out){
+  TEMP_REGION(temp,out);
+
   Token first = tok->NextToken();
   Token macroName = tok->NextToken();
 
@@ -73,14 +118,14 @@ static void DoIfStatement(Tokenizer* tok,MacroMap& macros,Array<String> includeF
     
     if(CompareString(type,"endif")){
       if(doIf){
-        PreprocessVerilogFile_(subContent,macros,includeFilepaths,out,temp);
+        PreprocessVerilogFile_(subContent,macros,includeFilepaths,out);
       }
       break;
     }
 
     if(CompareString(type,"else")){
       if(doIf){
-        PreprocessVerilogFile_(subContent,macros,includeFilepaths,out,temp);
+        PreprocessVerilogFile_(subContent,macros,includeFilepaths,out);
         doIf = false;
       } else {
         mark = tok->Mark();
@@ -92,15 +137,16 @@ static void DoIfStatement(Tokenizer* tok,MacroMap& macros,Array<String> includeF
     if(doIf) {
       if(CompareString(type,"ifdef") || CompareString(type,"ifndef") || CompareString(type,"elsif")){
         tok->Rollback(subMark); // TODO: Not good.
-        DoIfStatement(tok,macros,includeFilepaths,out,temp);
+        DoIfStatement(tok,macros,includeFilepaths,out);
       }
     }
     // otherwise must be some other directive, will be handled automatically in the Preprocess call.
   }
 }
 
-void PreprocessVerilogFile_(String fileContent,MacroMap& macros,Array<String> includeFilepaths,Arena* out,Arena* temp){
-  Tokenizer tokenizer = Tokenizer(fileContent, "()`,+-/*\\\"",{});
+void PreprocessVerilogFile_(String fileContent,MacroMap& macros,Array<String> includeFilepaths,Arena* out){
+  TEMP_REGION(temp,out);
+  Tokenizer tokenizer = Tokenizer(fileContent, "():;[]{}`,+-/*\\\"",{});
   Tokenizer* tok = &tokenizer;
 
   while(!tok->Done()){
@@ -108,16 +154,16 @@ void PreprocessVerilogFile_(String fileContent,MacroMap& macros,Array<String> in
     Token peek = tok->PeekToken();
 
     if(!CompareString(peek,"`")){
-      tok->AdvancePeek(peek);
+      tok->AdvancePeek();
       PushString(out,peek);
       
       continue;
     }
-    tok->AdvancePeek(peek);
+    tok->AdvancePeek();
     
     Token identifier = tok->PeekToken();
     if(CompareString(identifier,"include")){
-      tok->AdvancePeek(identifier);
+      tok->AdvancePeek();
       tok->AssertNextToken("\"");
 
       Token fileName = tok->NextFindUntil("\"").value();
@@ -128,7 +174,7 @@ void PreprocessVerilogFile_(String fileContent,MacroMap& macros,Array<String> in
       FILE* file = nullptr;
       for(String str : includeFilepaths){
         std::string string(str.data,str.size);
-
+        
         std::string filepath;
         if(string.back() == '/'){
           filepath = string + filename;
@@ -136,7 +182,7 @@ void PreprocessVerilogFile_(String fileContent,MacroMap& macros,Array<String> in
           filepath = string + '/' + filename;
         }
 
-        file = fopen(filepath.c_str(),"r");
+        file = fopen(filepath.c_str(),"r"); // For now, do not change to OpenFile. This code needs to be partially rewritten anyway.
 
         if(file){
           break;
@@ -153,14 +199,13 @@ void PreprocessVerilogFile_(String fileContent,MacroMap& macros,Array<String> in
           printf("  %.*s\n",UNPACK_SS(str));
         }
 
-        DEBUG_BREAK();
-        exit(0);
+        NOT_IMPLEMENTED("Some error handling here");
       }
 
       size_t fileSize = GetFileSize(file);
 
       Byte* mem = PushBytes(temp,fileSize + 1);
-      int amountRead = fread(mem,sizeof(char),fileSize,file);
+      size_t amountRead = fread(mem,sizeof(char),fileSize,file);
       
       if(amountRead != fileSize){
         fprintf(stderr,"Verilog Parsing, error reading the full contents of a file\n");
@@ -169,17 +214,17 @@ void PreprocessVerilogFile_(String fileContent,MacroMap& macros,Array<String> in
 
       mem[amountRead] = '\0';
 
-      PreprocessVerilogFile_(STRING((const char*) mem,fileSize),macros,includeFilepaths,out,temp);
+      PreprocessVerilogFile_(STRING((const char*) mem,fileSize),macros,includeFilepaths,out);
     } else if(CompareString(identifier,"define")){
-      tok->AdvancePeek(identifier);
+      tok->AdvancePeek();
       
       auto mark = tok->Mark();
       Token defineName = tok->NextToken();
       
       Token emptySpace = tok->PeekWhitespace();
       if(emptySpace.size == 0){ // Function macro
-        Token arguments = tok->PeekFindIncluding(")").value();
-        tok->AdvancePeek(arguments);
+        /* Token arguments = */ tok->PeekFindIncluding(")").value();
+        tok->AdvancePeek();
         defineName = tok->Point(mark);
       }
 
@@ -212,11 +257,11 @@ void PreprocessVerilogFile_(String fileContent,MacroMap& macros,Array<String> in
           }
 
           if(hasSlice){
-            tok->AdvancePeek(line);
+            tok->AdvancePeekBad(line);
             body = tok->Point(mark);
             line = tok->PeekRemainingLine();
           } else {
-            tok->AdvancePeek(line);
+            tok->AdvancePeekBad(line);
             body = tok->Point(mark);
             break;
           }
@@ -225,16 +270,14 @@ void PreprocessVerilogFile_(String fileContent,MacroMap& macros,Array<String> in
 
       macros[defineName] = body;
     } else if(CompareString(identifier,"undef")){
-      tok->AdvancePeek(identifier);
+      tok->AdvancePeek();
       Token defineName = tok->NextToken();
 
       macros.erase(defineName);
     } else if(CompareString(identifier,"timescale")){
-      Token line = tok->PeekRemainingLine();
-
-      tok->AdvancePeek(line);
+      tok->AdvanceRemainingLine();
     } else if(CompareString(identifier,"ifdef") || CompareString(identifier,"ifndef")){
-      DoIfStatement(tok,macros,includeFilepaths,out,temp);
+      DoIfStatement(tok,macros,includeFilepaths,out);
       
     } else if(CompareString(identifier,"else")){
       NOT_POSSIBLE("All else and ends should have already been handled inside DoIf");
@@ -242,25 +285,28 @@ void PreprocessVerilogFile_(String fileContent,MacroMap& macros,Array<String> in
       NOT_POSSIBLE("All else and ends should have already been handled inside DoIf");
     } else if(CompareString(identifier,"elsif")){
       NOT_POSSIBLE("All else and ends should have already been handled inside DoIf");
+    } else if(CompareString(identifier,"resetall")){
+      macros.clear();
+    } else if(CompareString(identifier,"undefineall")){
+      macros.clear();
     } else {
-      tok->AdvancePeek(identifier);
+      tok->AdvancePeek();
 
       // TODO: Better error handling. Report file position.
       if(!PerformDefineSubstitution(out,macros,identifier)){
         printf("Do not recognize directive: %.*s\n",UNPACK_SS(identifier));
-        DEBUG_BREAK();
+        NOT_POSSIBLE("Some better error handling here");
       }
     }
   }
 }
 
-String PreprocessVerilogFile(String fileContent,Array<String> includeFilepaths,Arena* out,Arena* temp){
+String PreprocessVerilogFile(String fileContent,Array<String> includeFilepaths,Arena* out){
+  TEMP_REGION(temp,out);
   MacroMap macros = {};
 
-  BLOCK_REGION(temp);
-
   auto mark = StartString(out);
-  PreprocessVerilogFile_(fileContent,macros,includeFilepaths,out,temp);
+  PreprocessVerilogFile_(fileContent,macros,includeFilepaths,out);
 
   PushString(out,STRING("\0"));
   String res = EndString(mark);
@@ -276,16 +322,25 @@ static Expression* VerilogParseAtom(Tokenizer* tok,Arena* out){
 
   if(IsNum(peek[0])){
     int res = ParseInt(peek);
-    tok->AdvancePeek(peek);
+    tok->AdvancePeek();
 
+    peek = tok->PeekToken();
+    if(CompareString(peek,"'")){
+      tok->AdvancePeek();
+      Token actualValue = tok->NextToken();
+      actualValue.data += 1;
+      actualValue.size -= 1;
+      res = ParseInt(actualValue);
+    }
+    
     expr->val = MakeValue(res);
     expr->type = Expression::LITERAL;
 
     return expr;
   } else if(peek[0] == '"'){
-    tok->AdvancePeek(peek);
+    tok->AdvancePeek();
     Token str = tok->PeekFindUntil("\"").value();
-    tok->AdvancePeek(str);
+    tok->AdvancePeek();
     tok->AssertNextToken("\"");
 
     expr->val = MakeValue(str);
@@ -304,16 +359,45 @@ static Expression* VerilogParseAtom(Tokenizer* tok,Arena* out){
 
 static Expression* VerilogParseExpression(Tokenizer* tok,Arena* out);
 
-static Expression* VerilogParseFactor(Tokenizer* tok,Arena* arena){
+static Expression* VerilogParseFactor(Tokenizer* tok,Arena* out){
   Token peek = tok->PeekToken();
 
   if(CompareString(peek,"(")){
-    tok->AdvancePeek(peek);
-    Expression* expr = VerilogParseExpression(tok,arena);
+    tok->AdvancePeek();
+    Expression* expr = VerilogParseExpression(tok,out);
     tok->AssertNextToken(")");
     return expr;
+  } else if(peek[0] == '$'){
+    tok->AdvancePeek();
+
+    String mathFunctionName = Offset(peek,1);
+    
+    Opt<MathFunctionDescription> optDescription = GetMathFunction(mathFunctionName);
+    
+    Assert(optDescription.has_value());
+
+    MathFunctionDescription description = optDescription.value();
+
+    // Verilog math function
+    Expression* expr = PushStruct<Expression>(out);
+    *expr = {};
+
+    expr->id = mathFunctionName;
+    expr->type = Expression::COMMAND;
+    expr->expressions = PushArray<Expression*>(out,description.amountOfParameters);
+
+    tok->AssertNextToken("(");
+    expr->expressions[0] = VerilogParseExpression(tok,out);
+    if(description.amountOfParameters == 2){
+      tok->AssertNextToken(",");
+      expr->expressions[1] = VerilogParseExpression(tok,out);
+    }
+    
+    tok->AssertNextToken(")");
+
+    return expr;
   } else {
-    Expression* expr = VerilogParseAtom(tok,arena);
+    Expression* expr = VerilogParseAtom(tok,out);
     return expr;
   }
 }
@@ -352,7 +436,23 @@ static Value Eval(Expression* expr,ValueMap& map){
   case Expression::LITERAL:{
     return expr->val;
   }break;
-  case Expression::COMMAND:
+  case Expression::COMMAND:{ // Called Command but for verilog it is actually a math function call
+    String functionName = expr->id;
+
+    Expression* argument = expr->expressions[0];
+    MathFunctionDescription optDescription = GetMathFunction(functionName).value();
+
+    if(!optDescription.func){
+      printf("Verilog Math function not currently implemented: %.*s",UNPACK_SS(functionName));
+      exit(0);
+    }
+
+    // NOTE: For now, hardcoded to 1 argument functions
+    Value argumentValue = Eval(argument,map);
+    Value result = optDescription.func(argumentValue,MakeValue());
+    
+    return result;
+  } break;
   case Expression::ARRAY_ACCESS:
   case Expression::MEMBER_ACCESS:
   case Expression::UNDEFINED:
@@ -363,52 +463,47 @@ static Value Eval(Expression* expr,ValueMap& map){
   return MakeValue();
 }
 
-static Array<ParameterExpression> ParseParameters(Tokenizer* tok,ValueMap& map,Arena* arena){
-  //TODO: Add full parsing of verilog expressions, otherwise we can only handle simple "parameter name = value," expressions.
+static Array<ParameterExpression> ParseParameters(Tokenizer* tok,ValueMap& map,Arena* out){
   //TODO: Add type and range to parsing
   /*
 	Range currentRange;
 	ParameterType type;
    */
 
-  PushPtr<ParameterExpression> params(arena,99); // TODO: Calculate correct amount
-
-  //Array<DefaultParameters> params =
-  //ValueMap parameters;
+  auto params = StartGrowableArray<ParameterExpression>(out);
 
   while(1){
     Token peek = tok->PeekToken();
 
     if(CompareString(peek,"parameter")){
-      tok->AdvancePeek(peek);
+      tok->AdvancePeek();
       // Parse optional type info and range
       continue;
     } else if(CompareString(peek,")")){
       break;
     } else if(CompareString(peek,";")){ // To parse inside module parameters, technically wrong but harmless
-         tok->AdvancePeek(peek);
+         tok->AdvancePeek();
          break;
     } else if(CompareString(peek,",")){
-      tok->AdvancePeek(peek);
+      tok->AdvancePeek();
       continue;
     } else { // Must be a parameter assignment
-         Token paramName = tok->NextToken();
+      Token paramName = tok->NextToken();
 
-         tok->AssertNextToken("=");
+      tok->AssertNextToken("=");
 
-         Expression* expr = VerilogParseAtom(tok,arena);
-         Value val = Eval(expr,map);
+      Expression* expr = VerilogParseExpression(tok,out);
+      Value val = Eval(expr,map);
 
-         map[paramName] = val;
+      map[paramName] = val;
 
-         ParameterExpression* p = params.Push(1);
-         p->name = paramName;
-         p->expr = expr;
-         //parameters[paramName] = val;
+      ParameterExpression* p = params.PushElem();
+      p->name = paramName;
+      p->expr = expr;
     }
   }
 
-  return params.AsArray();
+  return EndArray(params);
 }
 
 static Expression* VerilogParseExpression(Tokenizer* tok,Arena* out){
@@ -449,14 +544,18 @@ static ExpressionRange ParseRange(Tokenizer* tok,ValueMap& map,Arena* out){
 
 #define VERSAT_LATENCY STRING("versat_latency")
 #define VERSAT_STATIC  STRING("versat_static")
+#define VERSAT_STAGE  STRING("versat_stage")
 
 static String possibleAttributesData[] = {
   VERSAT_LATENCY,
-  VERSAT_STATIC
+  VERSAT_STATIC,
+  VERSAT_STAGE
 };
 static Array<String> possibleAttributes = C_ARRAY_TO_ARRAY(possibleAttributesData);
 
-static Module ParseModule(Tokenizer* tok,Arena* out,Arena* temp){
+static Module ParseModule(Tokenizer* tok,Arena* out){
+  TEMP_REGION(temp,out);
+
   Module module = {};
   ValueMap values;
 
@@ -466,100 +565,100 @@ static Module ParseModule(Tokenizer* tok,Arena* out,Arena* temp){
 
   Token peek = tok->PeekToken();
   if(CompareString(peek,"#(")){
-    tok->AdvancePeek(peek);
+    tok->AdvancePeek();
     module.parameters = ParseParameters(tok,values,out);
     tok->AssertNextToken(")");
   }
 
   tok->AssertNextToken("(");
+  if(!tok->IfPeekToken(")")){
+  
+    ArenaList<PortDeclaration>* portList = PushArenaList<PortDeclaration>(temp);
+    // Parse ports
+    while(!tok->Done()){
+      peek = tok->PeekToken();
 
-  ArenaList<PortDeclaration>* portList = PushArenaList<PortDeclaration>(temp);
-  // Parse ports
-  while(!tok->Done()){
-    peek = tok->PeekToken();
-
-    PortDeclaration port;
-    ArenaList<Pair<String,Value>>* attributeList = PushArenaList<Pair<String,Value>>(temp);
-    //Hashmap<String,Value>* attributes = 
+      PortDeclaration port;
+      ArenaList<Pair<String,Value>>* attributeList = PushArenaList<Pair<String,Value>>(temp);
+      //Hashmap<String,Value>* attributes = 
     
-    if(CompareString(peek,"(*")){
-      tok->AdvancePeek(peek);
-      while(1){
-        Token attributeName = tok->NextToken();
+      if(CompareString(peek,"(*")){
+        tok->AdvancePeek();
+        while(1){
+          Token attributeName = tok->NextToken();
 
-        if(!Contains(possibleAttributes,(String) attributeName)){
-          printf("ERROR: Do not know attribute named: %.*s\n",UNPACK_SS(attributeName));
-          exit(-1);
-        }
-
-        peek = tok->PeekToken();
-        if(CompareString(peek,"=")){
-          tok->AdvancePeek(peek);
-          Expression* expr = VerilogParseExpression(tok,out);
-          Value value = Eval(expr,values);
+          if(!Contains(possibleAttributes,(String) attributeName)){
+            printf("ERROR: Do not know attribute named: %.*s\n",UNPACK_SS(attributeName));
+            exit(-1);
+          }
 
           peek = tok->PeekToken();
+          if(CompareString(peek,"=")){
+            tok->AdvancePeek();
+            Expression* expr = VerilogParseExpression(tok,out);
+            Value value = Eval(expr,values);
 
-          *PushListElement(attributeList) = {attributeName,value};
-          //port.attributes[attributeName] = value;
-        } else {
-          *PushListElement(attributeList) = {attributeName,MakeValue()};
-          //port.attributes[attributeName] = MakeValue();
+            *attributeList->PushElem() = {attributeName,value};
+
+            peek = tok->PeekToken();
+          } else {
+            *attributeList->PushElem() = {attributeName,MakeValue()};
+          }
+
+          if(CompareString(peek,",")){
+            tok->AdvancePeek();
+            continue;
+          }
+          if(CompareString(peek,"*)")){
+            tok->AdvancePeek();
+            break;
+          }
         }
+      }
+      port.attributes = PushHashmapFromList(out,attributeList);
 
-        if(CompareString(peek,",")){
-          tok->AdvancePeek(peek);
+      Token portType = tok->NextToken();
+      if(CompareString(portType,"input")){
+        port.type = PortDeclaration::INPUT;
+      } else if(CompareString(portType,"output")){
+        port.type = PortDeclaration::OUTPUT;
+      } else if(CompareString(portType,"inout")){
+        port.type = PortDeclaration::INOUT;
+      } else {
+        UNHANDLED_ERROR("TODO: Should be a handled error");
+      }
+
+      // TODO: Add a new function to parser to "ignore" the following list of tokens (loop every time until it doesn't find one from the list), and replace this function here with reg and all the different types it can be
+      while(1){
+        peek = tok->PeekToken();
+        if(CompareString("reg",peek)){
+          tok->AdvancePeek();
           continue;
         }
-        if(CompareString(peek,"*)")){
-          tok->AdvancePeek(peek);
-          break;
+        if(CompareString("signed",peek)){
+          tok->AdvancePeek();
+          continue;
         }
+        break;
       }
-    }
-    port.attributes = PushHashmapFromList(out,attributeList);
 
-    Token portType = tok->NextToken();
-    if(CompareString(portType,"input")){
-      port.type = PortDeclaration::INPUT;
-    } else if(CompareString(portType,"output")){
-      port.type = PortDeclaration::OUTPUT;
-    } else if(CompareString(portType,"inout")){
-      port.type = PortDeclaration::INOUT;
-    } else {
-      UNHANDLED_ERROR("TODO: Should be a handled error");
-    }
+      ExpressionRange res = ParseRange(tok,values,out);
+      port.range = res;
+      port.name = tok->NextToken();
 
-    // TODO: Add a new function to parser to "ignore" the following list of tokens (loop every time until it doesn't find one from the list), and replace this function here with reg and all the different types it can be
-    while(1){
+      *portList->PushElem() = port;
+
       peek = tok->PeekToken();
-      if(CompareString("reg",peek)){
-        tok->AdvancePeek(peek);
-        continue;
+      if(CompareString(peek,")")){
+        tok->AdvancePeek();
+        break;
       }
-      if(CompareString("signed",peek)){
-        tok->AdvancePeek(peek);
-        continue;
-      }
-      break;
+
+      tok->AssertNextToken(",");
     }
-
-    ExpressionRange res = ParseRange(tok,values,out);
-    port.range = res;
-    port.name = tok->NextToken();
-
-    *PushListElement(portList) = port;
-
-    peek = tok->PeekToken();
-    if(CompareString(peek,")")){
-      tok->AdvancePeek(peek);
-      break;
-    }
-
-    tok->AssertNextToken(",");
+    module.ports = PushArrayFromList(out,portList);
   }
-  module.ports = PushArrayFromList(out,portList);
-
+  
   // Any inside module parameters
 #if 0
   while(1){
@@ -577,15 +676,15 @@ static Module ParseModule(Tokenizer* tok,Arena* out,Arena* temp){
 #endif
 
   Token skip = tok->PeekFindIncluding("endmodule").value();
-  tok->AdvancePeek(skip);
+  tok->AdvancePeekBad(skip);
 
   return module;
 }
 
-Array<Module> ParseVerilogFile(String fileContent,Array<String> includeFilepaths,Arena* out,Arena* temp){
-  BLOCK_REGION(temp);
+Array<Module> ParseVerilogFile(String fileContent,Array<String> includeFilepaths,Arena* out){
+  TEMP_REGION(temp,out);
 
-  Tokenizer tokenizer = Tokenizer(fileContent,"\n:,()[]{}\"+-/*=",{"#(","+:","-:","(*","*)"});
+  Tokenizer tokenizer = Tokenizer(fileContent,"\n:',()[]{}\"+-/*=",{"#(","+:","-:","(*","*)"});
   Tokenizer* tok = &tokenizer;
 
   ArenaList<Module>* modules = PushArenaList<Module>(temp);
@@ -595,7 +694,7 @@ Array<Module> ParseVerilogFile(String fileContent,Array<String> includeFilepaths
     Token peek = tok->PeekToken();
 
     if(CompareString(peek,"(*")){
-      tok->AdvancePeek(peek);
+      tok->AdvancePeek();
 
       Token attribute = tok->NextToken();
       if(CompareString(attribute,"source")){
@@ -612,33 +711,33 @@ Array<Module> ParseVerilogFile(String fileContent,Array<String> includeFilepaths
     }
 
     if(CompareString(peek,"module")){
-      Module module = ParseModule(tok,out,temp);
+      Module module = ParseModule(tok,out);
 
       module.isSource = isSource;
-      *PushListElement(modules) = module;
+      *modules->PushElem() = module;
 
-      isSource = false;
+      //isSource = false; 
       break; // For now, only parse the first module found
     }
 
-    tok->AdvancePeek(peek);
+    tok->AdvancePeek();
   }
 
   return PushArrayFromList(out,modules);
 }
 
-ModuleInfo ExtractModuleInfo(Module& module,Arena* out,Arena* temp){
-  BLOCK_REGION(temp);
+ModuleInfo ExtractModuleInfo(Module& module,Arena* out){
+  TEMP_REGION(temp,out);
 
   ModuleInfo info = {};
 
   info.defaultParameters = module.parameters;
 
-  PushPtr<int> inputDelay(out,100);
-  PushPtr<int> outputLatency(out,100);
-  PushPtr<WireExpression> configs(out,1000);
-  PushPtr<WireExpression> states(out,1000);
-
+  auto outputLatency = StartGrowableArray<int>(out);
+  auto inputDelay = StartGrowableArray<int>(out);
+  auto configs = StartGrowableArray<WireExpression>(out);
+  auto states = StartGrowableArray<WireExpression>(out);
+  
   info.name = module.name;
   info.isSource = module.isSource;
 
@@ -730,7 +829,7 @@ ModuleInfo ExtractModuleInfo(Module& module,Arena* out,Arena* temp){
       int delay = 0;
       if(delayValue) delay = delayValue->number;
       
-      *inputDelay.Set(input,1) = delay;
+      inputDelay[input] = delay;
     } else if(CheckFormat("out%d",decl.name)){
       port.AssertNextToken("out");
       int output = ParseInt(port.NextToken());
@@ -739,7 +838,7 @@ ModuleInfo ExtractModuleInfo(Module& module,Arena* out,Arena* temp){
       int latency = 0;
       if(latencyValue) latency = latencyValue->number;
       
-      *outputLatency.Set(output,1) = latency;
+      outputLatency[output] = latency;
     } else if(CheckFormat("delay%d",decl.name)){
       port.AssertNextToken("delay");
       int delay = ParseInt(port.NextToken());
@@ -792,16 +891,29 @@ ModuleInfo ExtractModuleInfo(Module& module,Arena* out,Arena* temp){
     } else if(CheckFormat("done",decl.name)){
       info.hasDone = true;
     } else if(decl.type == PortDeclaration::INPUT){ // Config
-         WireExpression* wire = configs.Push(1);
+      WireExpression* wire = configs.PushElem();
 
-         wire->bitSize = decl.range;
-         wire->name = decl.name;
-         wire->isStatic = decl.attributes->Exists(VERSAT_STATIC);
+      Value* stageValue = decl.attributes->Get(VERSAT_STAGE);
+
+      VersatStage stage = VersatStage_COMPUTE;
+      
+      if(stageValue && stageValue->type == ValueType::STRING){
+        if(CompareString(stageValue->str,"Write")){
+          stage = VersatStage_WRITE;
+        } else if(CompareString(stageValue->str,"Read")){
+          stage = VersatStage_READ;
+        } 
+      }
+      
+      wire->bitSize = decl.range;
+      wire->name = decl.name;
+      wire->isStatic = decl.attributes->Exists(VERSAT_STATIC);
+      wire->stage = stage;
     } else if(decl.type == PortDeclaration::OUTPUT){ // State
-         WireExpression* wire = states.Push(1);
+      WireExpression* wire = states.PushElem();
 
-         wire->bitSize = decl.range;
-         wire->name = decl.name;
+      wire->bitSize = decl.range;
+      wire->name = decl.name;
     } else {
       NOT_IMPLEMENTED("Implemented as needed, so far all if cases handles all cases so we should never reach here");
     }

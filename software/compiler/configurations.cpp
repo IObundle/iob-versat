@@ -3,6 +3,7 @@
 #include "accelerator.hpp"
 #include "debug.hpp"
 #include "declaration.hpp"
+#include "globals.hpp"
 #include "memory.hpp"
 #include "parser.hpp"
 #include "utils.hpp"
@@ -11,107 +12,172 @@
 #include "textualRepresentation.hpp"
 #include <strings.h>
 
-CalculatedOffsets CalculateConfigOffsetsIgnoringStatics(Accelerator* accel,Arena* out){
-  int size = Size(accel->allocated);
+Array<InstanceInfo>& AccelInfoIterator::GetCurrentMerge(){
+  return info->infos[mergeIndex].info;
+}
 
-  Array<int> array = PushArray<int>(out,size);
-
-  BLOCK_REGION(out);
-
-  Hashmap<int,int>* sharedConfigs = PushHashmap<int,int>(out,size);
-
-  int index = 0;
-  int offset = 0;
-  FOREACH_LIST_INDEXED(FUInstance*,ptr,accel->allocated,index){
-    FUInstance* inst = ptr;
-
-    // TODO: Temporarely set this to comment. Do not know what it affects.
-    // Assert(!(inst->sharedEnable && inst->isStatic));
-
-    int numberConfigs = inst->declaration->baseConfig.configs.size;
-    if(numberConfigs == 0){
-      array[index] = -1;
-      continue;
-    }
-    
-    if(inst->sharedEnable){
-      int sharedIndex = inst->sharedIndex;
-      GetOrAllocateResult<int> possibleAlreadyShared = sharedConfigs->GetOrAllocate(sharedIndex);
-
-      if(possibleAlreadyShared.alreadyExisted){
-        array[index] = *possibleAlreadyShared.data;
-        continue;
-      } else {
-        *possibleAlreadyShared.data = offset;
-      }
-    }
-    
-    if(inst->isStatic){
-      array[index] = -1; // TODO: Changed this, make sure no bug occurs from this
-      //array[index] = 0x40000000;
-    } else {
-      array[index] = offset;
-      offset += numberConfigs;
-    }
+int AccelInfoIterator::MergeSize(){
+  if(info->infos.size){
+    return info->infos.size;
+  } else {
+    return 1;
   }
+}
 
-  CalculatedOffsets res = {};
-  res.offsets = array;
-  res.max = offset;
+String AccelInfoIterator::GetMergeName(){
+  if(info->infos.size <= 1){
+    return {};
+  } else {
+    return info->infos[mergeIndex].name;
+  }
+}
 
+bool AccelInfoIterator::IsValid(){
+  bool res = (info && index >= 0 && index < GetCurrentMerge().size);
   return res;
 }
 
-int GetConfigurationSize(FUDeclaration* decl,MemType type){
-  int size = 0;
+int AccelInfoIterator::GetIndex(){
+  return GetIndex(CurrentUnit());
+}
 
-  switch(type){
-  case MemType::CONFIG:{
-    size = decl->baseConfig.configs.size;
-  }break;
-  case MemType::DELAY:{
-    size = decl->baseConfig.delayOffsets.max;
-  }break;
-  case MemType::STATE:{
-    size = decl->baseConfig.states.size;
-  }break;
-  case MemType::STATIC:{
-  }break;
+// TODO: Might not work with merge indexes
+int AccelInfoIterator::GetIndex(InstanceInfo* instance){
+  int i = (instance - &GetCurrentMerge()[0]);
+  Assert(i < GetCurrentMerge().size);
+  return i;
+}
+
+AccelInfoIterator AccelInfoIterator::GetParent(){
+  if(!IsValid() || this->index == 0){
+    return {};
+  }
+
+  int currentLevel = GetCurrentMerge()[this->index].level;
+  if(currentLevel == 0){
+    return {};
+  }
+
+  for(int i = this->index - 1; i >= 0; i--){
+    if(GetCurrentMerge()[i].level < currentLevel){
+      Assert(GetCurrentMerge()[i].level == currentLevel - 1);
+      AccelInfoIterator res = *this;
+      res.index = i;
+      return res;
+    }
+  }
+
+  NOT_POSSIBLE("Any valid AccelInfo should never reach this point");
+  return {};
+}
+
+InstanceInfo* AccelInfoIterator::GetParentUnit(){
+  AccelInfoIterator iter = GetParent();
+  if(!iter.IsValid()){
+    return nullptr;
+  }
+
+  return iter.CurrentUnit();
+}
+
+InstanceInfo* AccelInfoIterator::CurrentUnit(){
+  return &GetCurrentMerge()[index];
+}
+
+InstanceInfo* AccelInfoIterator::GetUnit(int indexParam){
+  return &GetCurrentMerge()[indexParam];
+}
+
+AccelInfoIterator AccelInfoIterator::Next(){
+  if(!IsValid()){
+    return {};
+  }
+
+  int currentLevel = GetCurrentMerge()[index].level;
+  for(int i = index + 1; i < GetCurrentMerge().size; i++){
+    int level = GetCurrentMerge()[i].level; 
+    if(level == currentLevel){
+      AccelInfoIterator toReturn = *this;
+      toReturn.index = i;
+      return toReturn;
+    }
+    if(level < currentLevel){
+      return {};
+    }
+  }
+
+  return {};
+}
+
+AccelInfoIterator AccelInfoIterator::Step(){
+  if(!IsValid()){
+    return {};
+  }
+
+  if(this->index + 1 >= GetCurrentMerge().size){
+    return {};
+  }
+  
+  AccelInfoIterator toReturn = *this;
+  toReturn.index = this->index + 1;
+  return toReturn;
+}
+
+AccelInfoIterator AccelInfoIterator::StepInsideOnly(){
+  if(!IsValid()){
+    return {};
+  }
+
+  int currentLevel = GetCurrentMerge()[index].level;
+  if(index + 1 < GetCurrentMerge().size && GetCurrentMerge()[index + 1].level > currentLevel){
+    AccelInfoIterator toReturn = *this;
+    toReturn.index = index + 1;
+    return toReturn;
+  }
+
+  return {};
+}
+
+int AccelInfoIterator::CurrentLevelSize(){
+  Array<InstanceInfo>& array = GetCurrentMerge();
+  int currentLevel = array[index].level;
+
+  int size = 0;
+  for(int i = 0; i < array.size; i++){
+    if(array[i].level == currentLevel){
+      size += 1;
+    }
   }
 
   return size;
 }
 
-CalculatedOffsets CalculateConfigurationOffset(Accelerator* accel,MemType type,Arena* out){
-  if(type == MemType::CONFIG){
-    return CalculateConfigOffsetsIgnoringStatics(accel,out);
+Array<InstanceInfo*> GetAllSameLevelUnits(AccelInfo* info,int level,int mergeIndex,Arena* out){
+  auto builder = StartGrowableArray<InstanceInfo*>(out);
+
+  AccelInfoIterator iter = StartIteration(info);
+  iter.mergeIndex = mergeIndex;
+
+  for(; iter.IsValid(); iter = iter.Step()){
+    InstanceInfo* unit = iter.CurrentUnit();
+
+    if(unit->level == level){
+      *builder.PushElem() = unit;
+    }
   }
 
-  Array<int> array = PushArray<int>(out,Size(accel->allocated));
-
-  BLOCK_REGION(out);
-
-  int index = 0;
-  int offset = 0;
-  FOREACH_LIST(FUInstance*,ptr,accel->allocated){
-    FUInstance* inst = ptr;
-    array[index] = offset;
-
-    int size = GetConfigurationSize(inst->declaration,type);
-
-    offset += size;
-    index += 1;
-  }
-
-  CalculatedOffsets res = {};
-  res.offsets = array;
-  res.max = offset;
-
+  Array<InstanceInfo*> res = EndArray(builder);
   return res;
 }
 
-Array<Wire> ExtractAllConfigs(Array<InstanceInfo> info,Arena* out,Arena* temp){
-  BLOCK_REGION(temp);
+AccelInfoIterator StartIteration(AccelInfo* info){
+  AccelInfoIterator iter = {};
+  iter.info = info;
+  return iter;
+}
+
+Array<Wire> ExtractAllConfigs(Array<InstanceInfo> info,Arena* out){
+  TEMP_REGION(temp,out);
 
   ArenaList<Wire>* list = PushArenaList<Wire>(temp);
   Set<StaticId>* seen = PushSet<StaticId>(temp,99);
@@ -132,10 +198,10 @@ Array<Wire> ExtractAllConfigs(Array<InstanceInfo> info,Arena* out,Arena* temp){
 
     if(!t.isComposite && !t.isStatic){
       for(int i = 0; i < t.configSize; i++){
-        Wire* wire = PushListElement(list);
+        Wire* wire = list->PushElem();
 
-        *wire = t.decl->baseConfig.configs[i];
-        wire->name = PushString(out,"%.*s_%.*s",UNPACK_SS(t.fullName),UNPACK_SS(t.decl->baseConfig.configs[i].name));
+        *wire = t.decl->configs[i];
+        wire->name = PushString(out,"%.*s_%.*s",UNPACK_SS(t.fullName),UNPACK_SS(t.decl->configs[i].name));
       }
     }
   }
@@ -156,20 +222,19 @@ Array<Wire> ExtractAllConfigs(Array<InstanceInfo> info,Arena* out,Arena* temp){
       id.parent = parent;
       id.name = t.name;
       if(!seen->Exists(id)){
-        int skipLevel = t.level;
         seen->Insert(id);
         for(int i = 0; i < t.configSize; i++){
-          Wire* wire = PushListElement(list);
+          Wire* wire = list->PushElem();
 
-          *wire = t.decl->baseConfig.configs[i];
-          wire->name = PushString(out,"%.*s_%.*s_%.*s",UNPACK_SS(parentName),UNPACK_SS(t.name),UNPACK_SS(t.decl->baseConfig.configs[i].name));
+          *wire = t.decl->configs[i];
+          wire->name = PushString(out,"%.*s_%.*s_%.*s",UNPACK_SS(parentName),UNPACK_SS(t.name),UNPACK_SS(t.decl->configs[i].name));
         }
       }
     }
   }
 
   for(int i = 0; i < info[0].delaySize; i++){
-    Wire* wire = PushListElement(list);
+    Wire* wire = list->PushElem();
 
     wire->name = PushString(out,"TOP_Delay%d",i);
     wire->bitSize = 32;
@@ -182,7 +247,7 @@ Array<String> ExtractStates(Array<InstanceInfo> info,Arena* out){
   int count = 0;
   for(InstanceInfo& in : info){
     if(!in.isComposite && in.statePos.has_value()){
-      count += in.decl->baseConfig.states.size;
+      count += in.decl->states.size;
     }
   }
 
@@ -191,7 +256,7 @@ Array<String> ExtractStates(Array<InstanceInfo> info,Arena* out){
   for(InstanceInfo& in : info){
     if(!in.isComposite && in.statePos.has_value()){
       FUDeclaration* decl = in.decl;
-      for(Wire& wire : decl->baseConfig.states){
+      for(Wire& wire : decl->states){
         res[index++] = PushString(out,"%.*s_%.*s",UNPACK_SS(in.fullName),UNPACK_SS(wire.name)); 
       }
     }
@@ -212,7 +277,6 @@ Array<Pair<String,int>> ExtractMem(Array<InstanceInfo> info,Arena* out){
   int index = 0;
   for(InstanceInfo& in : info){
     if(!in.isComposite && in.memMapped.has_value()){
-      FUDeclaration* decl = in.decl;
       String name = PushString(out,"%.*s_addr",UNPACK_SS(in.fullName)); 
       res[index++] = {name,(int) in.memMapped.value()};
     }
@@ -239,7 +303,7 @@ String ReprStaticConfig(StaticId id,Wire* wire,Arena* out){
 // TODO: There is probably a better way of simplifying the logic used here.
 // NOTE: The logic for static and shared configs is hard to decouple and simplify. I found no other way of doing this, other than printing the result for a known set of circuits and make small changes at atime.
 
-bool Next(Array<Partition> arr){
+static bool Next(Array<Partition> arr){
   for(int i = 0; i < arr.size; i++){
     Partition& par = arr[i];
 
@@ -257,16 +321,132 @@ bool Next(Array<Partition> arr){
   return false;
 }
 
-Array<Partition> GenerateInitialPartitions(Accelerator* accel,Arena* out){
-  DynamicArray<Partition> partitionsArr = StartArray<Partition>(out);
-  int mergedPossibility = 0;
-  FOREACH_LIST(FUInstance*,node,accel->allocated){
-    FUInstance* subInst = node;
-    FUDeclaration* decl = subInst->declaration;
+// TODO: This function does not do what I wanted it to do.
+//       I am mixing up merge and composite. For simple merges, we can only be at a single type at any given point.
+//       Composites makes so we are currently at N types at any point, but this function is not calculating data.
+//       For a merge of merges, this function must return one type.
+Array<AccelInfoIterator> GetCurrentPartitionsAsIterators(AccelInfoIterator iter,Arena* out){
+  TEMP_REGION(temp,out);
+  // TODO: This is dependent on partitions. Not sure how I feel about that.
+  // TODO: BAD
+  Hashmap<FUDeclaration*,int>* seenAmount = PushHashmap<FUDeclaration*,int>(temp,10);
+  AccelInfo* info = iter.info;
+  for(int i = 0; i < info->infos.size; i++){
+    FUDeclaration* type = info->infos[i].baseType;
+    int amount = *seenAmount->GetOrInsert(type,0);
+    seenAmount->Insert(type,amount + 1);
+  }
 
-    if(subInst->declaration->configInfo.size > 1){
-      mergedPossibility += log2i(decl->configInfo.size);
-      *partitionsArr.PushElem() = (Partition){.value = 0,.max = decl->configInfo.size};
+  Array<Partition> partitions = PushArray<Partition>(temp,seenAmount->nodesUsed);
+  int index = 0;
+  for(Pair<FUDeclaration*,int*> p : seenAmount){
+    partitions[index].decl = p.first;
+    partitions[index].max = *p.second;
+    index += 1;
+  }
+  
+  for(int i = 0; i < iter.mergeIndex; i++){
+    Next(partitions);
+  }
+
+  Array<AccelInfoIterator> iterators = PushArray<AccelInfoIterator>(out,partitions.size);
+  for(int i = 0; i <  partitions.size; i++){
+    Partition p = partitions[i];
+
+    iterators[i] = StartIteration(&p.decl->info);
+    iterators[i].mergeIndex = p.value;
+    Assert(p.max == p.decl->info.infos.size);
+  }
+  
+  return iterators;
+}
+
+// This function returns what we want.
+// TODO: This whole thing is not good. Make it work first and check how to simplify.
+AccelInfoIterator GetCurrentPartitionTypeAsIterator(AccelInfoIterator iter,Arena* out){
+  TEMP_REGION(temp,out);
+  // TODO: This is dependent on partitions. Not sure how I feel about that.
+
+  int mergeIndex = iter.mergeIndex;
+  
+  // TODO: BAD
+  Hashmap<FUDeclaration*,int>* seenAmount = PushHashmap<FUDeclaration*,int>(temp,10);
+  AccelInfo* info = iter.info;
+  for(int i = 0; i < info->infos.size; i++){
+    FUDeclaration* type = info->infos[i].baseType;
+    int amount = *seenAmount->GetOrInsert(type,0);
+    seenAmount->Insert(type,amount + 1);
+  }
+
+  Array<Partition> partitions = PushArray<Partition>(temp,seenAmount->nodesUsed);
+  int index = 0;
+  for(Pair<FUDeclaration*,int*> p : seenAmount){
+    partitions[index].decl = p.first;
+    partitions[index].max = *p.second;
+    index += 1;
+  }
+
+  for(Partition p : partitions){
+    if(mergeIndex < p.max){
+      FUDeclaration* type = p.decl;
+      AccelInfoIterator res = StartIteration(&type->info);
+      res.mergeIndex = mergeIndex;
+      return res;
+    } else {
+      mergeIndex -= p.max;
+    }
+  }
+
+  NOT_POSSIBLE("");
+  return {};
+}
+
+int GetPartitionIndex(AccelInfoIterator iter){
+  TEMP_REGION(temp,nullptr);
+  // TODO: This is dependent on partitions. Not sure how I feel about that.
+
+  int mergeIndex = iter.mergeIndex;
+  
+  // TODO: BAD
+  Hashmap<FUDeclaration*,int>* seenAmount = PushHashmap<FUDeclaration*,int>(temp,10);
+  AccelInfo* info = iter.info;
+  for(int i = 0; i < info->infos.size; i++){
+    FUDeclaration* type = info->infos[i].baseType;
+    int amount = *seenAmount->GetOrInsert(type,0);
+    seenAmount->Insert(type,amount + 1);
+  }
+
+  Array<Partition> partitions = PushArray<Partition>(temp,seenAmount->nodesUsed);
+  int index = 0;
+  for(Pair<FUDeclaration*,int*> p : seenAmount){
+    partitions[index].decl = p.first;
+    partitions[index].max = *p.second;
+    index += 1;
+  }
+
+  int partitionIndex = 0;
+  for(Partition p : partitions){
+    if(mergeIndex < p.max){
+      return partitionIndex;
+    } else {
+      mergeIndex -= p.max;
+      partitionIndex += 1;
+    }
+  }
+
+  NOT_POSSIBLE("");
+  return -1;
+}
+
+Array<Partition> GenerateInitialPartitions(Accelerator* accel,Arena* out){
+  auto partitionsArr = StartGrowableArray<Partition>(out);
+  int mergedPossibility = 0;
+  for(FUInstance* node : accel->allocated){
+    FUDeclaration* decl = node->declaration;
+
+    if(decl->MergePartitionSize() > 1){
+      *partitionsArr.PushElem() = (Partition){.value = 0,.max = decl->MergePartitionSize(),.mergeIndexStart = mergedPossibility,.decl = decl};
+      mergedPossibility += log2i(decl->MergePartitionSize());
     }
   }
   Array<Partition> partitions = EndArray(partitionsArr);
@@ -293,1201 +473,581 @@ void IncrementPartitions(Array<Partition> partitions,int amount){
   }
 }
 
-static InstanceInfo GetInstanceInfo(FUInstance* node,FUDeclaration* parentDeclaration,InstanceConfigurationOffsets offsets,Arena* out){
-  FUInstance* inst = node;
-  String topName = inst->name;
-  if(offsets.topName.size != 0){
-    topName = PushString(out,"%.*s_%.*s",UNPACK_SS(offsets.topName),UNPACK_SS(inst->name));
-  }
-    
-  FUDeclaration* topDecl = inst->declaration;
-  InstanceInfo info = {};
-  info = {};
+String GetName(Array<Partition> partitions,Arena* out){
+  auto builder = StartString(out);
 
-  info.name = inst->name;
-  info.baseName = offsets.baseName;
-  info.fullName = topName;
-  info.decl = topDecl;
-  info.isStatic = inst->isStatic; 
-  info.isShared = inst->sharedEnable;
-  info.sharedIndex = inst->sharedIndex;
-  info.level = offsets.level;
-  info.isComposite = IsTypeHierarchical(topDecl);
-  info.parent = parentDeclaration;
-  info.baseDelay = offsets.delay;
-  info.isMergeMultiplexer = inst->isMergeMultiplexer;
-  info.mergeMultiplexerId = inst->mergeMultiplexerId;
-  info.belongs = offsets.belongs;
-  info.special = inst->literal;
-  info.order = offsets.order;
-  info.connectionType = node->type;
-  info.id = node->id;
-  
-  if(topDecl->memoryMapBits.has_value()){
-    info.memMappedSize = (1 << topDecl->memoryMapBits.value());
-    info.memMappedBitSize = topDecl->memoryMapBits.value();
-    info.memMapped = AlignBitBoundary(offsets.memOffset,topDecl->memoryMapBits.value());
-    info.memMappedMask = BinaryRepr(info.memMapped.value(),32,out);
-  }
-
-  info.configSize = topDecl->baseConfig.configs.size;
-  info.stateSize = topDecl->baseConfig.states.size;
-  info.delaySize = topDecl->baseConfig.delayOffsets.max;
-
-  bool containsConfigs = info.configSize;
-  bool configIsStatic = false;
-  if(containsConfigs){
-    if(inst->isStatic){
-      configIsStatic = true;
-      StaticId id = {offsets.parent,inst->name};
-      if(offsets.staticInfo->Exists(id)){
-        info.configPos = offsets.staticInfo->GetOrFail(id);
-      } else {
-        int config = *offsets.staticConfig;
-
-        offsets.staticInfo->Insert(id,config);
-        info.configPos = config;
-
-        *offsets.staticConfig += info.configSize;
-      }
-    } else if(offsets.configOffset >= 0x40000000){
-      configIsStatic = true;
-      info.configPos = offsets.configOffset;
-    } else {
-      info.configPos = offsets.configOffset;
-    } 
-  }
-
-  if(topDecl->baseConfig.states.size){
-    info.statePos = offsets.stateOffset;
-  }
-
-  if(topDecl->baseConfig.delayOffsets.max){
-    info.delayPos = offsets.delayOffset;
-  }
-
-  // ConfigPos being null has meaning and in some portions of the code indicates wether the unit belongs or not.
-  // TODO: This part is very confusing. Code should depend directly on belongs.
-  if(!offsets.belongs){
-    info.configPos = {}; // The whole code is ugly, rewrite after putting everything working
-  }
-    
-  info.isConfigStatic = configIsStatic;
-  
-  int nDelays = topDecl->baseConfig.delayOffsets.max;
-  if(nDelays > 0 && !info.isComposite){
-    info.delay = PushArray<int>(out,nDelays);
-    // Assert(offsets.delay >= 0); // TODO: Temp
-    Memset(info.delay,offsets.delay);
-  }
-  
-  return info;
-}
-
-AcceleratorInfo TransformGraphIntoArrayRecurse(FUInstance* node,FUDeclaration* parentDecl,InstanceConfigurationOffsets offsets,Opt<Partition> partition,Arena* out,Arena* temp){
-  // This prevents us from fully using arenas because we are pushing more data than the actual structures that we keep track of. If this was hierarchical, we would't have this problem.
-  AcceleratorInfo res = {};
-
-  FUInstance* inst = node;
-  InstanceInfo top = GetInstanceInfo(node,parentDecl,offsets,out);
-  
-  FUDeclaration* topDecl = inst->declaration;
-  if(!IsTypeHierarchical(topDecl)){
-    Array<InstanceInfo> arr = PushArray<InstanceInfo>(out,1);
-    arr[0] = top;
-    res.info = arr;
-    res.memSize = top.memMappedSize.value_or(0);
-    return res;
-  }
-
-  ArenaList<InstanceInfo>* instanceList = PushArenaList<InstanceInfo>(out); 
-  *PushListElement(instanceList) = top;
-
-  if(top.memMapped.has_value()){
-    offsets.memOffset = top.memMapped.value();
-  }
-  // Composite instance
-  int delayIndex = 0;
-  int index = 0;
-
-  int part = 0;
-  Array<Partition> subPartitions = {};
-  if(partition.has_value()){
-    part = partition.value().value;
-    subPartitions = GenerateInitialPartitions(inst->declaration->fixedDelayCircuit,temp);
-    IncrementPartitions(subPartitions,part);
-  }
-  
-  bool changedConfigFromStatic = false;
-  int savedConfig = offsets.configOffset;
-  int subOffsetsConfig = offsets.configOffset;
-  if(inst->isStatic){
-    changedConfigFromStatic = true;
-    StaticId id = {offsets.parent,inst->name};
-    if(offsets.staticInfo->Exists(id)){
-      subOffsetsConfig = offsets.staticInfo->GetOrFail(id);
-    } else if(offsets.configOffset <= 0x40000000){
-      int config = *offsets.staticConfig;
-      *offsets.staticConfig += inst->declaration->configInfo[part].configOffsets.offsets[index];
-
-      offsets.staticInfo->Insert(id,config);
-
-      subOffsetsConfig = config;
-    } else {
-      changedConfigFromStatic = false; // Already inside a static, act as if it was in a non static context
-    }
-  }
-  
-  int partitionIndex = 0;
-  FOREACH_LIST_INDEXED(FUInstance*,subInst,inst->declaration->fixedDelayCircuit->allocated,index){
-    bool containsConfig = subInst->declaration->baseConfig.configs.size; // TODO: When  doing partition might need to put index here instead of 0
-    
-    InstanceConfigurationOffsets subOffsets = offsets;
-    subOffsets.level += 1;
-    subOffsets.topName = top.fullName;
-    subOffsets.parent = topDecl;
-    subOffsets.configOffset = subOffsetsConfig;
-    
-    // Bunch of static logic
-    subOffsets.configOffset += inst->declaration->configInfo[part].configOffsets.offsets[index];
-    subOffsets.stateOffset += inst->declaration->configInfo[part].stateOffsets.offsets[index];
-    subOffsets.delayOffset += inst->declaration->configInfo[part].delayOffsets.offsets[index];
-    subOffsets.belongs = inst->declaration->configInfo[part].unitBelongs[index];
-    subOffsets.baseName = inst->declaration->configInfo[part].baseName[index];
-    subOffsets.order = inst->declaration->configInfo[part].order[index];
-    
-    if(subInst->declaration->baseConfig.delayOffsets.max > 0){
-      subOffsets.delay = offsets.delay + inst->declaration->configInfo[part].calculatedDelays[index];
-    }
-
-    if(subInst->declaration->memoryMapBits.has_value()){
-      res.memSize = AlignBitBoundary(res.memSize,subInst->declaration->memoryMapBits.value());
-    }
-
-    subOffsets.memOffset = offsets.memOffset + res.memSize;
-
-    Opt<Partition> subPart = {};
-    if(subInst->declaration->configInfo.size > 1){
-      subPart = subPartitions[partitionIndex++];
-    }
-
-    AcceleratorInfo info = TransformGraphIntoArrayRecurse(subInst,inst->declaration,subOffsets,subPart,temp,out);
-    
-    res.memSize += info.memSize;
-    
-    for(InstanceInfo& f : info.info){
-      *PushListElement(instanceList) = f;
-    }
-  }
-
-  res.info = PushArrayFromList(out,instanceList);
-  res.memSize = top.memMappedSize.value_or(0);
-
-  Assert(part <= inst->declaration->configInfo.size);
-  res.name = inst->declaration->configInfo[part].name;
-  res.mergeMux = inst->declaration->configInfo[part].mergeMultiplexerConfigs;
-  
-  return res;
-}
-
-// For now I'm going to make this function return everything
-
-// TODO: This should call all the Calculate* functions and then put everything together.
-//       We are complication this more than needed. We already have all the logic needed to do this.
-//       The only thing that we actually need to do is to recurse, access data from configInfo (or calculate if at the top) and them put them all together.
-
-// TODO: Offer a recursive option and a non recursive option. 
-
-// NOTE: I could: Have a function that recurses and counts how many nodes there are.
-//       Allocates the Array of instance info.
-//       We can then fill everything by computing configInfo and stuff at the top and accessing fudeclaration configInfos as we go down.
-
-TestResult CalculateOneInstance(Accelerator* accel,bool recursive,Array<Partition> partitions,Arena* out,Arena* temp){
-  ArenaList<InstanceInfo>* infoList = PushArenaList<InstanceInfo>(temp);
-  Hashmap<StaticId,int>* staticInfo = PushHashmap<StaticId,int>(temp,500);
-
-  // TODO: This is being recalculated multiple times if we have various partitions. Move out when this function starts stabilizing.
-  CalculatedOffsets configOffsets = CalculateConfigOffsetsIgnoringStatics(accel,out);
-  CalculatedOffsets delayOffsets = CalculateConfigurationOffset(accel,MemType::DELAY,out);
-
-  DAGOrderNodes order = CalculateDAGOrder(accel->allocated,temp);
-  CalculateDelayResult calculatedDelay = CalculateDelay(accel,order,partitions,temp);
-
-  if(globalOptions.debug){
-    BLOCK_REGION(out);
-    auto builder = StartString(out); 
-    PushString(out,"CalculateOneInstance_");
-    bool first = true;
-    for(Partition p : partitions){
-      if(!first){
-        PushString(out,"_");
-      }
-      PushString(out,"%d",p.value);
-    }
-    PushString(out,".dot");
-    
-    String fileName = EndString(builder);
-    String filePath = PushDebugPath(temp,accel->name,fileName);
-
-    GraphPrintingContent content = GenerateDelayDotGraph(accel,calculatedDelay,out,temp);
-    String result = GenerateDotGraph(accel,content,out,temp);
-    OutputContentToFile(filePath,result);
-  }
-  
-  Hashmap<FUInstance*,int>* toOrder = MapElementToIndex(order.instances,temp);
-
-  Array<FUInstance*> inputNodes = PushArray<FUInstance*>(temp,99);
-
-  Array<int> inputDelays = ExtractInputDelays(accel,calculatedDelay,0,out,temp);
-  Array<int> outputLatencies = ExtractOutputLatencies(accel,calculatedDelay,out,temp);
-  
-  int partitionIndex = 0;
-  int staticConfig = 0x40000000; // TODO: Make this more explicit
-  int index = 0;
-  InstanceConfigurationOffsets subOffsets = {};
-  subOffsets.topName = {};
-  subOffsets.staticConfig = &staticConfig;
-  subOffsets.staticInfo = staticInfo;
-  subOffsets.belongs = true;
-  ArenaList<String>* names = PushArenaList<String>(temp);
-  ArenaList<Array<int>>* muxValues = PushArenaList<Array<int>>(temp);
-  ArenaList<PortInstance>* mergeMultiplexers = PushArenaList<PortInstance>(temp);
-  FOREACH_LIST_INDEXED(FUInstance*,node,accel->allocated,index){
-    FUInstance* subInst = node;
-
-    Opt<Partition> part = {};
-    if(subInst->declaration->configInfo.size > 1){
-      part = partitions[partitionIndex];
-    }
-    
-    subOffsets.configOffset = configOffsets.offsets[index];
-    subOffsets.delayOffset = delayOffsets.offsets[index];
-    subOffsets.delay = calculatedDelay.nodeDelay->GetOrFail(node).value;
-    subOffsets.order = toOrder->GetOrFail(node);
-    
-    if(recursive){
-      AcceleratorInfo info = TransformGraphIntoArrayRecurse(node,nullptr,subOffsets,part,temp,out);
-
-      if(info.name.has_value()){
-        String elem = info.name.value();
-
-        if(!IsOnlyWhitespace(elem)){
-          *names->PushElem() = elem;
-        }
-      }
-
-      if(info.mergeMux.size > 0){
-        *muxValues->PushElem() = info.mergeMux;
-      }
-      
-      //if(info.
-      
-      subOffsets.memOffset += info.memSize;
-      subOffsets.memOffset = AlignBitBoundary(subOffsets.memOffset,log2i(info.memSize));
-      
-      for(InstanceInfo& f : info.info){
-        *PushListElement(infoList) = f;
-      }
-    } else {
-      // TODO: Recursive does not work well because we do not have name info.
-      //       Without name info other parts of the code base cannot use the non recursive option.
-      InstanceInfo top = GetInstanceInfo(node,nullptr,subOffsets,out);
-
-      subOffsets.memOffset += top.memMappedSize.value_or(0);
-      subOffsets.memOffset = AlignBitBoundary(subOffsets.memOffset,log2i(top.memMappedSize.value_or(1)));
-      
-      *PushListElement(infoList) = top;
-    }
-
-    if(subInst->declaration->configInfo.size > 1){
-      partitionIndex += 1;
-    }
-  }
-  Array<InstanceInfo> res = PushArrayFromList<InstanceInfo>(out,infoList);
-  TestResult result = {};
-  result.info = res;
-  result.subOffsets = subOffsets;
-  result.inputDelay = inputDelays;
-  result.outputLatencies = outputLatencies;
-  
-  Array<String> nameList = PushArrayFromList(temp,names);
-  
-  auto mark = StartString(out);
   bool first = true;
-  for(String name : nameList){
+  for(Partition p : partitions){
     if(first){
       first = false;
     } else {
-      PushString(out,"_");
+      builder.PushString("_");
     }
-    PushString(out,name);
-  }
-  result.name = EndString(mark);
 
-  auto b = StartArray<int>(out);
-  FOREACH_LIST(ListedStruct<Array<int>>*,ptr,muxValues->head){
-    for(int i : ptr->elem){
-      *b.PushElem() = i;
-    }
+    AccelInfo* info = &p.decl->info;
+    builder.PushString(info->infos[p.value].name);
   }
-  result.muxConfigs = EndArray(b);
-  
-  return result;
+
+  return EndString(builder);
 }
 
 // TODO: Move this function to a better place
 // This function cannot return an array for merge units because we do not have the merged units info in this level.
 // This function only works for modules and for recursing the merged info to upper modules.
 // The info needed by merge must be stored by the merge function.
+Array<InstanceInfo> GenerateInitialInstanceInfo(Accelerator* accel,Arena* out,Array<Partition> partitions){
+  TEMP_REGION(temp,out);
+  // Only for basic units on the top level of accel
+  // The subunits are basically copied from the sub declarations.
+  // Or they are calculated inside the Fill... function
+  auto SetBaseInfo = [](InstanceInfo* elem,FUInstance* inst,int level){
+    *elem = {};
+    elem->inst = inst;
+    elem->name = inst->name;
+    elem->baseName = inst->name; // Remember this function only sets basic units, so the baseName is just the name.
+    elem->decl = inst->declaration;
+    elem->level = level;
+    elem->isComposite = IsTypeHierarchical(inst->declaration);
+    elem->isMerge = inst->declaration->type == FUDeclarationType_MERGED;
+    elem->isStatic = inst->isStatic;
+    elem->isShared = inst->sharedEnable;
+    elem->sharedIndex = inst->sharedIndex;
+    elem->isMergeMultiplexer = inst->isMergeMultiplexer;
+    elem->special = inst->literal;
+    elem->muxGroup = inst->muxGroup;
+    elem->id = inst->id;
+    elem->inputDelays = inst->declaration->GetInputDelays();
+    elem->outputLatencies = inst->declaration->GetOutputLatencies();
+    elem->connectionType = inst->type;
+    elem->partitionIndex = 0;
+  };
+  
+  auto Function = [SetBaseInfo](auto Recurse,GrowableArray<InstanceInfo>& array,Accelerator* accel,int level,Array<Partition> partitions) -> void{
+    int partitionIndex = 0;
+    for(FUInstance* inst : accel->allocated){
+      InstanceInfo* elem = array.PushElem();
+      SetBaseInfo(elem,inst,level);
 
-AccelInfo CalculateAcceleratorInfo(Accelerator* accel,bool recursive,Arena* out,Arena* temp){
-  // TODO: Have this function return everything that needs to be arraified  
-  //       Printing a GraphArray struct should tell me everything I need to know about the accelerator
-  AccelInfo result = {};
+      AccelInfoIterator iter = StartIteration(&inst->declaration->info);
 
-  //BLOCK_REGION(temp); MARKED - Some bug occurs, probably because the function is a mess and we have no idea how memory is actually being used.
-  Array<Partition> partitions = GenerateInitialPartitions(accel,temp);
+      if(partitions.size > 0 && inst->declaration->info.infos.size > 1){
+        iter.mergeIndex = partitions[partitionIndex].value;
+        elem->outputLatencies = partitions[partitionIndex].decl->info.infos[iter.mergeIndex].outputLatencies;
+        elem->partitionIndex = partitions[partitionIndex].value;
+        partitionIndex += 1;
+      }
+      
+      for(; iter.IsValid(); iter = iter.Step()){
+        InstanceInfo* subUnit = iter.CurrentUnit();
+        InstanceInfo* elem = array.PushElem();
 
-  int totalMaxBitsize = 0;
-  ArenaList<TestResult>* list = PushArenaList<TestResult>(temp);
-  Array<InstanceInfo> res = {};
-  InstanceConfigurationOffsets subOffsets = {};
-  bool first = true;
-  int index = 0;
-  while(1){
-    TestResult res2 = CalculateOneInstance(accel,recursive,partitions,out,temp);
-    *PushListElement(list) = res2;
+        *elem = *subUnit;
+        elem->level += 1;
+      }
+    }
+  };
+  
+  auto build = StartGrowableArray<InstanceInfo>(out);
+
+  Function(Function,build,accel,0,partitions);
+  Array<InstanceInfo> res = EndArray(build);
+
+  auto instanceToIndex = PushTrieMap<FUInstance*,int>(temp);
+
+  for(int i = 0; i < res.size; i++){
+    int index = i;
+    InstanceInfo* info = &res[i];
+    if(info->level != 0){
+      continue;
+    }
     
-    if(first){
-      res = res2.info;
-      subOffsets = res2.subOffsets;
-    }
-  
-    int maxMemBitsize = log2i(subOffsets.memOffset);
-    if(maxMemBitsize > 0){
-      for(InstanceInfo& info : res2.info){
-        if(info.memMapped.has_value()){
-          String& memMask = info.memMappedMask.value();
-
-          memMask.data += 32 - maxMemBitsize;
-          memMask.size = maxMemBitsize;
-        }
+    for(FUInstance* inst : accel->allocated){
+      if(inst == info->inst){
+        instanceToIndex->Insert(inst,index);
       }
     }
+  }
 
-    if(first){
-      totalMaxBitsize = maxMemBitsize;
+  for(int i = 0; i < res.size; i++){
+    InstanceInfo* info = &res[i];
+    if(info->level != 0){
+      continue;
     }
+
+    FUInstance* inst = info->inst;
     
-    FUDeclaration* maxConfigDecl = nullptr;
-    int maxConfig = 0;
-    for(InstanceInfo& inst : res2.info){
-      if(inst.configPos.has_value()){
-        int val = inst.configPos.value();
-        if(val < 0x40000000){
-          if(val > maxConfig){
-            maxConfig = val;
-            maxConfigDecl = inst.decl;
-          }
-        }
-      }
-    }
-
-    if(maxConfigDecl){
-      int totalConfigSize = maxConfig + maxConfigDecl->baseConfig.configOffsets.max;
-      for(InstanceInfo& inst : res2.info){
-        if(inst.configPos.has_value()){
-          int val = inst.configPos.value();
-          if(val >= 0x40000000){
-            inst.configPos = val - 0x40000000 + totalConfigSize;
-          }
-        }
-      }
-    }
-
-    first = false;
-    if(!Next(partitions)){
-      break;
-    }
-  }
-  Array<TestResult> final = PushArrayFromList(out,list);
-
-  result.infos = Map(final,out,[](TestResult t){
-    return t.info;
-  });
-  result.names = Map(final,out,[](TestResult t){
-    return t.name;
-  });
-  result.inputDelays = Map(final,out,[](TestResult t){
-    return t.inputDelay;
-  });
-  result.outputDelays = Map(final,out,[](TestResult t){
-    return t.outputLatencies;
-  });
-  result.muxConfigs = Map(final,out,[](TestResult t){
-    return t.muxConfigs;
-  });
-  
-  // Merge everything back into a single unique view.
-  Array<InstanceInfo> unique = result.infos[0];
-  result.baseInfo = PushArray<InstanceInfo>(out,unique.size);
-  for(int i = 0; i < result.baseInfo.size; i++){
-    result.baseInfo[i] = unique[i]; // Copy default values
-
-    result.baseInfo[i].belongs = true; // All units belong to baseInfo
-    result.baseInfo[i].baseName = result.baseInfo[i].name;
+    ArenaList<SimplePortConnection>* list = PushArenaList<SimplePortConnection>(temp);
     
-    for(Array<InstanceInfo> infos : result.infos){
-      if(infos[i].configPos.has_value()){
-        result.baseInfo[i].configPos = infos[i].configPos.value();
-        break;
-      }
+    FOREACH_LIST(ConnectionNode*,ptr,inst->allInputs){
+      FUInstance* out = ptr->instConnectedTo.inst;
+      int outPort = ptr->instConnectedTo.port;
+
+      int outIndex = instanceToIndex->GetOrFail(out);
+
+      SimplePortConnection* portInst = list->PushElem();
+      portInst->outInst = outIndex;
+      portInst->outPort = outPort;
+      portInst->inPort = ptr->port;
     }
-    for(Array<InstanceInfo> infos : result.infos){
-      if(infos[i].statePos.has_value()){
-        result.baseInfo[i].statePos = infos[i].statePos.value();
-        break;
-      }
-    }
-    for(Array<InstanceInfo> infos : result.infos){
-      if(infos[i].memMapped.has_value()){
-        result.baseInfo[i].memMapped = infos[i].memMapped.value();
-        break;
-      }
-    }
-    for(Array<InstanceInfo> infos : result.infos){
-      if(infos[i].memMappedSize.has_value()){
-        result.baseInfo[i].memMappedSize = infos[i].memMappedSize.value();
-        break;
-      }
-    }
-    for(Array<InstanceInfo> infos : result.infos){
-      if(infos[i].memMappedBitSize.has_value()){
-        result.baseInfo[i].memMappedBitSize = infos[i].memMappedBitSize.value();
-        break;
-      }
-    }
-    for(Array<InstanceInfo> infos : result.infos){
-      if(infos[i].memMappedMask.has_value()){
-        result.baseInfo[i].memMappedMask = infos[i].memMappedMask.value();
-        break;
-      }
-    }
-    for(Array<InstanceInfo> infos : result.infos){
-      if(infos[i].delayPos.has_value()){
-        result.baseInfo[i].delayPos = infos[i].delayPos.value();
-        break;
-      }
-    }
-  }
-  
-  result.memMappedBitsize = totalMaxBitsize;
-
-  std::vector<bool> seenShared;
-
-  Hashmap<StaticId,int>* staticSeen = PushHashmap<StaticId,int>(temp,1000);
-
-  int memoryMappedDWords = 0;
-
-  // Handle non-static information
-  FOREACH_LIST(FUInstance*,ptr,accel->allocated){
-    FUInstance* inst = ptr;
-    FUDeclaration* type = inst->declaration;
-
-    // Check if shared
-    if(inst->sharedEnable){
-      if(inst->sharedIndex >= (int) seenShared.size()){
-        seenShared.resize(inst->sharedIndex + 1);
-      }
-
-      if(!seenShared[inst->sharedIndex]){
-        result.configs += type->baseConfig.configs.size;
-        result.sharedUnits += 1;
-      }
-
-      seenShared[inst->sharedIndex] = true;
-    } else if(!inst->isStatic){ // Shared cannot be static
-         result.configs += type->baseConfig.configs.size;
-    }
-
-    if(type->memoryMapBits.has_value()){
-      result.isMemoryMapped = true;
-
-      memoryMappedDWords = AlignBitBoundary(memoryMappedDWords,type->memoryMapBits.value());
-      memoryMappedDWords += (1 << type->memoryMapBits.value());
-    }
-
-    if(type == BasicDeclaration::input){
-      result.inputs += 1;
-    }
-
-    result.states += type->baseConfig.states.size;
-    result.delays += type->baseConfig.delayOffsets.max;
-    result.ios += type->nIOs;
-
-    if(type->externalMemory.size){
-      result.externalMemoryInterfaces += type->externalMemory.size;
-	  result.externalMemoryByteSize = ExternalMemoryByteSize(type->externalMemory);
-    }
-
-    result.signalLoop |= type->signalLoop;
+    info->inputs = PushArrayFromList(out,list);
   }
 
-  result.memoryMappedBits = log2i(memoryMappedDWords);
+  DAGOrderNodes order = CalculateDAGOrder(&accel->allocated,temp);
+  {
+    for(int index = 0; index < res.size; index++){
+      InstanceInfo* info = &res[index];
 
-  FUInstance* outputInstance = GetOutputInstance(accel->allocated);
-  if(outputInstance){
-    EdgeIterator iter = IterateEdges(accel);
-    while(iter.HasNext()){
-      Edge edgeInst = iter.Next();
-      Edge* edge = &edgeInst;
-
-      if(edge->units[0].inst == outputInstance){
-        result.outputs = std::max(result.outputs - 1,edge->units[0].port) + 1;
-      }
-      if(edge->units[1].inst == outputInstance){
-        result.outputs = std::max(result.outputs - 1,edge->units[1].port) + 1;
-      }
-    }
-  }
-
-  // Handle static information
-  FOREACH_LIST(FUInstance*,ptr,accel->allocated){
-    FUInstance* inst = ptr;
-    if(inst->isStatic){
-      StaticId id = {};
-
-      id.name = inst->name;
-
-      staticSeen->Insert(id,1);
-      result.statics += inst->declaration->baseConfig.configs.size;
-
-      for(Wire& wire : inst->declaration->baseConfig.configs){
-        result.staticBits += wire.bitSize;
-      }
-    }
-
-    if(IsTypeHierarchical(inst->declaration)){
-      for(Pair<StaticId,StaticData*> pair : inst->declaration->staticUnits){
-        int* possibleFind = staticSeen->Get(pair.first);
-
-        if(!possibleFind){
-          staticSeen->Insert(pair.first,1);
-          result.statics += pair.second->configs.size;
-
-          for(Wire& wire : pair.second->configs){
-            result.staticBits += wire.bitSize;
-          }
+      FUInstance* inst = info->inst;
+      for(int i = 0; i < order.instances.size; i++){
+        if(order.instances[i] == inst){
+          info->localOrder = i;
+          break;
         }
       }
     }
   }
   
-  FOREACH_LIST(FUInstance*,ptr,accel->allocated){
-    FUInstance* inst = ptr;
-    result.numberConnections += Size(ptr->allOutputs);
-  }
-  
-  return result;
+  return res;
 }
 
-Array<InstanceInfo> ExtractFromInstanceInfoSameLevel(Array<InstanceInfo> instanceInfo,int level,Arena* out){
-  DynamicArray<InstanceInfo> arr = StartArray<InstanceInfo>(out);
-  for(InstanceInfo& info : instanceInfo){
-    if(info.level == level){
-      *arr.PushElem() = info;
+struct Node{
+  InstanceInfo* unit;
+  int value;
+  // Leafs have both of these at nullptr
+  Node* left;
+  Node* right;
+}; 
+
+void FillInstanceInfo(AccelInfoIterator initialIter,Arena* out){
+  TEMP_REGION(temp,out);
+  Assert(!Empty(initialIter.accelName)); // For now, we must have some name if only to output debug info graphs and such
+  
+  // Calculate full name
+  for(AccelInfoIterator iter = initialIter; iter.IsValid(); iter = iter.Step()){
+    InstanceInfo* unit = iter.CurrentUnit();
+    InstanceInfo* parent = iter.GetParentUnit();
+    unit->parent = parent ? parent->decl : nullptr;
+
+    // All these are basically to simplify debugging by having everything in one place.
+    // They can be moved to GenerateInitialInstanceInfo. I think. TODO
+    unit->configSize = unit->decl->NumberConfigs();
+    unit->stateSize = unit->decl->NumberStates();
+    unit->delaySize = unit->decl->NumberDelays();
+    unit->memMappedBitSize = unit->decl->memoryMapBits;
+
+    if(unit->decl->memoryMapBits.has_value()){
+      unit->memMappedSize = (1 << unit->decl->memoryMapBits.value());
     }
+    
+    if(!parent){
+      unit->fullName = unit->name;
+      continue;
+    }
+
+    unit->fullName = PushString(out,"%.*s_%.*s",UNPACK_SS(parent->fullName),UNPACK_SS(unit->name));
   }
 
-  return EndArray(arr);
-}
+  // Config info stuff
+  auto CalculateConfig = [](auto Recurse,AccelInfoIterator& iter,int startIndex) -> void{
+    TEMP_REGION(temp,nullptr);
 
-void CheckSanity(Array<InstanceInfo> instanceInfo,Arena* temp){
-  // TODO: Add more conditions here as bugs appear that break this
-
-  Array<bool> inputsSeen = PushArray<bool>(temp,999);
-  Memset(inputsSeen,false);
-
-  bool outputSeen = false;
-
-  BLOCK_REGION(temp);
-  for(int i = 0; ; i++){
-    Array<InstanceInfo> sameLevel = ExtractFromInstanceInfoSameLevel(instanceInfo,i,temp);
-    
-    if(sameLevel.size == 0){
-      break;
-    }
-
-    if(i == 0){
-      for(InstanceInfo& info : sameLevel){
-        if(info.decl == BasicDeclaration::input){
-          Assert(!inputsSeen[info.special]);
-          inputsSeen[info.special] = true;
-        }
-        if(info.decl == BasicDeclaration::output){
-          // TODO: For now this does not work because merge joins names together, causing out to become out_out and so on.
-          //Assert(CompareString(info.name,"out"));
-          Assert(!outputSeen);
-          outputSeen = true;
-        }
-      }
+    InstanceInfo* parent = iter.GetParentUnit();
+    if(parent){
+      AccelInfoIterator configIter = StartIteration(&parent->decl->info);
+      configIter.mergeIndex = parent->partitionIndex;
+      
+      int index = 0;
+      for(AccelInfoIterator it = iter; it.IsValid(); it = it.Next(),configIter = configIter.Next()){
+        InstanceInfo* unit = it.CurrentUnit();
+        InstanceInfo* configUnit = configIter.CurrentUnit();
         
-    }
-    
-    // All same level instances must continuously increase mem mapped values 
-    int lastMem = -1;
-    for(InstanceInfo& info : sameLevel){
-      if(info.memMapped.has_value()){
-        int mem = info.memMapped.value(); 
-        Assert(mem > lastMem);
-        lastMem = info.memMapped.value();
-      }
-    }
-  }
-}
-
-void PrintConfigurations(FUDeclaration* type,Arena* temp){
-  ConfigurationInfo& info = type->configInfo[0];
-
-  printf("Config:\n");
-  for(Wire& wire : info.configs){
-    BLOCK_REGION(temp);
-
-    String str = Repr(&wire,temp);
-    printf("%.*s\n",UNPACK_SS(str));
-  }
-
-  printf("State:\n");
-  for(Wire& wire : info.states){
-    BLOCK_REGION(temp);
-
-    String str = Repr(&wire,temp);
-    printf("%.*s\n",UNPACK_SS(str));
-  }
-  printf("\n");
-}
-
-
-// HACK
-// HACK
-// HACK
-// HACK
-// HACK
-// HACK
-
-
-static InstanceInfo GetInstanceInfoNoDelay(FUInstance* node,FUDeclaration* parentDeclaration,InstanceConfigurationOffsets offsets,Arena* out){
-  FUInstance* inst = node;
-  String topName = inst->name;
-  if(offsets.topName.size != 0){
-    topName = PushString(out,"%.*s_%.*s",UNPACK_SS(offsets.topName),UNPACK_SS(inst->name));
-  }
-    
-  FUDeclaration* topDecl = inst->declaration;
-  InstanceInfo info = {};
-  info = {};
-
-  info.name = inst->name;
-  info.baseName = offsets.baseName;
-  info.fullName = topName;
-  info.decl = topDecl;
-  info.isStatic = inst->isStatic; 
-  info.isShared = inst->sharedEnable;
-  info.sharedIndex = inst->sharedIndex;
-  info.level = offsets.level;
-  info.isComposite = IsTypeHierarchical(topDecl);
-  info.parent = parentDeclaration;
-  info.baseDelay = offsets.delay;
-  info.isMergeMultiplexer = inst->isMergeMultiplexer;
-  info.mergeMultiplexerId = inst->mergeMultiplexerId;
-  info.belongs = offsets.belongs;
-  info.special = inst->literal;
-  info.connectionType = node->type;
-
-  Assert(info.baseDelay >= 0);
-  
-  if(topDecl->memoryMapBits.has_value()){
-    info.memMappedSize = (1 << topDecl->memoryMapBits.value());
-    info.memMappedBitSize = topDecl->memoryMapBits.value();
-    info.memMapped = AlignBitBoundary(offsets.memOffset,topDecl->memoryMapBits.value());
-    info.memMappedMask = BinaryRepr(info.memMapped.value(),32,out);
-  }
-
-  info.configSize = topDecl->baseConfig.configs.size;
-  info.stateSize = topDecl->baseConfig.states.size;
-  info.delaySize = topDecl->baseConfig.delayOffsets.max;
-
-  bool containsConfigs = info.configSize;
-  bool configIsStatic = false;
-  if(containsConfigs){
-    if(inst->isStatic){
-      configIsStatic = true;
-      StaticId id = {offsets.parent,inst->name};
-      if(offsets.staticInfo->Exists(id)){
-        info.configPos = offsets.staticInfo->GetOrFail(id);
-      } else {
-        int config = *offsets.staticConfig;
-
-        offsets.staticInfo->Insert(id,config);
-        info.configPos = config;
-
-        *offsets.staticConfig += info.configSize;
-      }
-    } else if(offsets.configOffset >= 0x40000000){
-      configIsStatic = true;
-      info.configPos = offsets.configOffset;
-    } else {
-      info.configPos = offsets.configOffset;
-    } 
-  }
-
-  if(topDecl->baseConfig.states.size){
-    info.statePos = offsets.stateOffset;
-  }
-
-  if(topDecl->baseConfig.delayOffsets.max){
-    info.delayPos = offsets.delayOffset;
-  }
-
-  // ConfigPos being null has meaning and in some portions of the code indicates wether the unit belongs or not.
-  // TODO: This part is very confusing. Code should depend directly on belongs.
-  if(!offsets.belongs){
-    info.configPos = {}; // The whole code is ugly, rewrite after putting everything working
-  }
-    
-  info.isConfigStatic = configIsStatic;
- 
-  return info;
-}
-
-AcceleratorInfo TransformGraphIntoArrayRecurseNoDelay(FUInstance* node,FUDeclaration* parentDecl,InstanceConfigurationOffsets offsets,Partition partition,Arena* out,Arena* temp){
-  // This prevents us from fully using arenas because we are pushing more data than the actual structures that we keep track of. If this was hierarchical, we would't have this problem.
-  AcceleratorInfo res = {};
-
-  FUInstance* inst = node;
-  InstanceInfo top = GetInstanceInfoNoDelay(node,parentDecl,offsets,out);
-  
-  FUDeclaration* topDecl = inst->declaration;
-  if(!IsTypeHierarchical(topDecl)){
-    Array<InstanceInfo> arr = PushArray<InstanceInfo>(out,1);
-    arr[0] = top;
-    res.info = arr;
-    res.memSize = top.memMappedSize.value_or(0);
-    return res;
-  }
-
-  ArenaList<InstanceInfo>* instanceList = PushArenaList<InstanceInfo>(out); 
-  *PushListElement(instanceList) = top;
-
-  if(top.memMapped.has_value()){
-    offsets.memOffset = top.memMapped.value();
-  }
-  // Composite instance
-  int delayIndex = 0;
-  int index = 0;
-
-  int part = partition.value;
-  
-  bool changedConfigFromStatic = false;
-  int savedConfig = offsets.configOffset;
-  int subOffsetsConfig = offsets.configOffset;
-  if(inst->isStatic){
-    changedConfigFromStatic = true;
-    StaticId id = {offsets.parent,inst->name};
-    if(offsets.staticInfo->Exists(id)){
-      subOffsetsConfig = offsets.staticInfo->GetOrFail(id);
-    } else if(offsets.configOffset <= 0x40000000){
-      int config = *offsets.staticConfig;
-      *offsets.staticConfig += inst->declaration->configInfo[part].configOffsets.offsets[index];
-
-      offsets.staticInfo->Insert(id,config);
-
-      subOffsetsConfig = config;
-    } else {
-      changedConfigFromStatic = false; // Already inside a static, act as if it was in a non static context
-    }
-  }
-  
-  FOREACH_LIST_INDEXED(FUInstance*,subNode,inst->declaration->fixedDelayCircuit->allocated,index){
-    FUInstance* subInst = subNode;
-    bool containsConfig = subInst->declaration->baseConfig.configs.size; // TODO: When  doing partition might need to put index here instead of 0
-    
-    InstanceConfigurationOffsets subOffsets = offsets;
-    subOffsets.level += 1;
-    subOffsets.topName = top.fullName;
-    subOffsets.parent = topDecl;
-    subOffsets.configOffset = subOffsetsConfig;
-    
-    // Bunch of static logic
-    subOffsets.configOffset += inst->declaration->configInfo[part].configOffsets.offsets[index];
-    subOffsets.stateOffset += inst->declaration->configInfo[part].stateOffsets.offsets[index];
-    subOffsets.delayOffset += inst->declaration->configInfo[part].delayOffsets.offsets[index];
-    subOffsets.belongs = inst->declaration->configInfo[part].unitBelongs[index];
-    subOffsets.baseName = inst->declaration->configInfo[part].baseName[index];
-
-    if(subInst->declaration->memoryMapBits.has_value()){
-      res.memSize = AlignBitBoundary(res.memSize,subInst->declaration->memoryMapBits.value());
-    }
-
-    subOffsets.memOffset = offsets.memOffset + res.memSize;
-
-    Partition zero = {}; // For now do not divide partition
-    AcceleratorInfo info = TransformGraphIntoArrayRecurseNoDelay(subNode,inst->declaration,subOffsets,zero,temp,out);
-    
-    res.memSize += info.memSize;
-    
-    for(InstanceInfo& f : info.info){
-      *PushListElement(instanceList) = f;
-    }
-  }
-
-  res.info = PushArrayFromList(out,instanceList);
-  res.memSize = top.memMappedSize.value_or(0);
-
-  Assert(part <= inst->declaration->configInfo.size);
-  res.name = inst->declaration->configInfo[part].name;
-  res.mergeMux = inst->declaration->configInfo[part].mergeMultiplexerConfigs;
-  
-  return res;
-}
-
-// For now I'm going to make this function return everything
-
-// TODO: This should call all the Calculate* functions and then put everything together.
-//       We are complicating this more than needed. We already have all the logic needed to do this.
-//       The only thing that we actually need to do is to recurse, access data from configInfo (or calculate if at the top) and them put them all together.
-
-// TODO: Offer a recursive option and a non recursive option. 
-
-// NOTE: I could: Have a function that recurses and counts how many nodes there are.
-//       Allocates the Array of instance info.
-//       We can then fill everything by computing configInfo and stuff at the top and accessing fudeclaration configInfos as we go down.
-
-TestResult CalculateOneInstanceNoDelay(Accelerator* accel,bool recursive,Array<Partition> partitions,Arena* temp,Arena* out){
-  ArenaList<InstanceInfo>* infoList = PushArenaList<InstanceInfo>(temp);
-  Hashmap<StaticId,int>* staticInfo = PushHashmap<StaticId,int>(temp,500);
-
-  // TODO: This is being recalculated multiple times if we have various partitions. Move out when this function starts stabilizing.
-  CalculatedOffsets configOffsets = CalculateConfigOffsetsIgnoringStatics(accel,out);
-  CalculatedOffsets delayOffsets = CalculateConfigurationOffset(accel,MemType::DELAY,out);
-
-  int partitionIndex = 0;
-  int staticConfig = 0x40000000; // TODO: Make this more explicit
-  int index = 0;
-  InstanceConfigurationOffsets subOffsets = {};
-  subOffsets.topName = {};
-  subOffsets.staticConfig = &staticConfig;
-  subOffsets.staticInfo = staticInfo;
-  subOffsets.belongs = true;
-  ArenaList<String>* names = PushArenaList<String>(temp);
-  ArenaList<Array<int>>* muxValues = PushArenaList<Array<int>>(temp);
-  FOREACH_LIST_INDEXED(FUInstance*,node,accel->allocated,index){
-    FUInstance* subInst = node;
-
-    Partition part = {};
-    if(subInst->declaration->configInfo.size > 1){
-      part = partitions[partitionIndex];
-    }
-    
-    subOffsets.configOffset = configOffsets.offsets[index];
-    subOffsets.delayOffset = delayOffsets.offsets[index];
-
-    if(recursive){
-      AcceleratorInfo info = TransformGraphIntoArrayRecurseNoDelay(node,nullptr,subOffsets,part,temp,out);
-
-      if(info.name.has_value()){
-        String elem = info.name.value();
-
-        if(!IsOnlyWhitespace(elem)){
-          *names->PushElem() = elem;
-        }
-      }
-
-      if(info.mergeMux.size > 0){
-        *muxValues->PushElem() = info.mergeMux;
-      }
-      
-      subOffsets.memOffset += info.memSize;
-      subOffsets.memOffset = AlignBitBoundary(subOffsets.memOffset,log2i(info.memSize));
-      
-      for(InstanceInfo& f : info.info){
-        *PushListElement(infoList) = f;
-      }
-    } else {
-      InstanceInfo top = GetInstanceInfoNoDelay(node,nullptr,subOffsets,out);
-
-      subOffsets.memOffset += top.memMappedSize.value_or(0);
-      subOffsets.memOffset = AlignBitBoundary(subOffsets.memOffset,log2i(top.memMappedSize.value_or(1)));
-      
-      *PushListElement(infoList) = top;
-    }
-
-    if(subInst->declaration->configInfo.size > 1){
-      partitionIndex += 1;
-    }
-  }
-  Array<InstanceInfo> res = PushArrayFromList<InstanceInfo>(out,infoList);
-  TestResult result = {};
-  result.info = res;
-  result.subOffsets = subOffsets;
-
-  Array<String> nameList = PushArrayFromList(temp,names);
-  
-  auto mark = StartString(out);
-  bool first = true;
-  for(String name : nameList){
-    if(first){
-      first = false;
-    } else {
-      PushString(out,"_");
-    }
-    PushString(out,name);
-  }
-  result.name = EndString(mark);
-
-  auto b = StartArray<int>(out);
-  FOREACH_LIST(ListedStruct<Array<int>>*,ptr,muxValues->head){
-    for(int i : ptr->elem){
-      *b.PushElem() = i;
-    }
-  }
-  result.muxConfigs = EndArray(b);
-  
-  return result;
-}
-
-// TODO: Move this function to a better place
-// This function cannot return an array for merge units because we do not have the merged units info in this level.
-// This function only works for modules and for recursing the merged info to upper modules.
-// The info needed by merge must be stored by the merge function.
-
-AccelInfo CalculateAcceleratorInfoNoDelay(Accelerator* accel,bool recursive,Arena* out,Arena* temp){
-  // TODO: Have this function return everything that needs to be arraified  
-  //       Printing a GraphArray struct should tell me everything I need to know about the accelerator
-  AccelInfo result = {};
-
-  // MARKED - Some bug occurs, probably because the function is a mess and we have no idea 
-  //BLOCK_REGION(temp);
-  
-  DynamicArray<Partition> partitionsArr = StartArray<Partition>(temp);
-  int mergedPossibility = 0;
-  FOREACH_LIST(FUInstance*,node,accel->allocated){
-    FUInstance* subInst = node;
-    FUDeclaration* decl = subInst->declaration;
-
-    if(subInst->declaration->configInfo.size > 1){
-      mergedPossibility += log2i(decl->configInfo.size);
-      *partitionsArr.PushElem() = (Partition){.value = 0,.max = decl->configInfo.size};
-    }
-  }
-  Array<Partition> partitions = EndArray(partitionsArr);
-
-  int totalMaxBitsize = 0;
-  ArenaList<TestResult>* list = PushArenaList<TestResult>(temp);
-  Array<InstanceInfo> res = {};
-  InstanceConfigurationOffsets subOffsets = {};
-  bool first = true;
-  int index = 0;
-  while(1){
-    TestResult res2 = CalculateOneInstanceNoDelay(accel,recursive,partitions,temp,out);
-    *PushListElement(list) = res2;
-
-    if(first){
-      res = res2.info;
-      subOffsets = res2.subOffsets;
-    }
-  
-    int maxMemBitsize = log2i(subOffsets.memOffset);
-    if(maxMemBitsize > 0){
-      for(InstanceInfo& info : res2.info){
-        if(info.memMapped.has_value()){
-          String& memMask = info.memMappedMask.value();
-
-          memMask.data += 32 - maxMemBitsize;
-          memMask.size = maxMemBitsize;
-        }
-      }
-    }
-
-    if(first){
-      totalMaxBitsize = maxMemBitsize;
-    }
-    
-    FUDeclaration* maxConfigDecl = nullptr;
-    int maxConfig = 0;
-    for(InstanceInfo& inst : res2.info){
-      if(inst.configPos.has_value()){
-        int val = inst.configPos.value();
-        if(val < 0x40000000){
-          if(val > maxConfig){
-            maxConfig = val;
-            maxConfigDecl = inst.decl;
+        if(configUnit->configPos.has_value()){
+          int configPos = startIndex + configUnit->configPos.value();
+        
+          if(unit->configSize && !unit->isStatic){
+            unit->configPos = configPos;
+          }
+          
+          index += 1;
+          AccelInfoIterator inside = it.StepInsideOnly();
+          if(inside.IsValid() && !unit->isStatic){
+            Recurse(Recurse,inside,configPos);
           }
         }
       }
-    }
+    } else {
+      TrieMap<int,int>* sharedIndexToConfig = PushTrieMap<int,int>(temp);
+      
+      int configIndex = startIndex;
+      for(AccelInfoIterator it = iter; it.IsValid(); it = it.Next()){
+        InstanceInfo* unit = it.CurrentUnit();
 
-    if(maxConfigDecl){
-      int totalConfigSize = maxConfig + maxConfigDecl->baseConfig.configOffsets.max;
-      for(InstanceInfo& inst : res2.info){
-        if(inst.configPos.has_value()){
-          int val = inst.configPos.value();
-          if(val >= 0x40000000){
-            inst.configPos = val - 0x40000000 + totalConfigSize;
+        bool isNewlyShared = false;
+        int indexForCurrentUnit = configIndex;
+        if(unit->isShared){
+          int sharedIndex = unit->sharedIndex;
+          GetOrAllocateResult<int> data = sharedIndexToConfig->GetOrAllocate(sharedIndex);
+          if(data.alreadyExisted){
+            indexForCurrentUnit = *data.data;
+          } else {
+            *data.data = configIndex;
+            isNewlyShared = true;
           }
+        }
+        
+        if(unit->configSize && !unit->isStatic){
+          unit->configPos = indexForCurrentUnit;
+        }
+        
+        AccelInfoIterator inside = it.StepInsideOnly();
+        if(inside.IsValid() && !unit->isStatic){
+          Recurse(Recurse,inside,indexForCurrentUnit);
+        }
+
+        if(!isNewlyShared && !unit->isStatic){
+          configIndex += unit->decl->NumberConfigs();
         }
       }
     }
+  };
 
-    first = false;
-    if(!Next(partitions)){
-      break;
+  CalculateConfig(CalculateConfig,initialIter,0);
+
+  // Calculate state stuff
+  auto CalculateState = [](auto Recurse,AccelInfoIterator& iter,int startIndex) -> void{
+    TEMP_REGION(temp,nullptr);
+
+    InstanceInfo* parent = iter.GetParentUnit();
+    if(parent){
+      AccelInfoIterator stateIter = StartIteration(&parent->decl->info);
+      stateIter.mergeIndex = parent->partitionIndex;
+      
+      int index = 0;
+      for(AccelInfoIterator it = iter; it.IsValid(); it = it.Next(),stateIter = stateIter.Next()){
+        InstanceInfo* unit = it.CurrentUnit();
+        InstanceInfo* stateUnit = stateIter.CurrentUnit();
+        
+        if(stateUnit->statePos.has_value()){
+          int statePos = startIndex + stateUnit->statePos.value();
+          
+          if(unit->stateSize){
+            unit->statePos = statePos;
+          }
+          
+          index += 1;
+          AccelInfoIterator inside = it.StepInsideOnly();
+          if(inside.IsValid()){
+            Recurse(Recurse,inside,statePos);
+          }
+        }
+      }
+    } else {
+      int stateIndex = startIndex;
+      for(AccelInfoIterator it = iter; it.IsValid(); it = it.Next()){
+        InstanceInfo* unit = it.CurrentUnit();
+
+        if(unit->stateSize){
+          unit->statePos = stateIndex;
+        }
+        
+        AccelInfoIterator inside = it.StepInsideOnly();
+        if(inside.IsValid()){
+          Recurse(Recurse,inside,stateIndex);
+        }
+
+        stateIndex += unit->stateSize;
+      }
     }
-  }
-  Array<TestResult> final = PushArrayFromList(out,list);
+  };
 
-  result.infos = Map(final,out,[](TestResult t){
-    return t.info;
-  });
-  result.names = Map(final,out,[](TestResult t){
-    return t.name;
-  });
-  result.inputDelays = Map(final,out,[](TestResult t){
-    return t.inputDelay;
-  });
-  result.outputDelays = Map(final,out,[](TestResult t){
-    return t.outputLatencies;
-  });
-  result.muxConfigs = Map(final,out,[](TestResult t){
-    return t.muxConfigs;
-  });
-  
-  // Merge everything back into a single unique view.
-  Array<InstanceInfo> unique = result.infos[0];
-  result.baseInfo = PushArray<InstanceInfo>(out,unique.size);
-  for(int i = 0; i < result.baseInfo.size; i++){
-    result.baseInfo[i] = unique[i]; // Copy default values
+  CalculateState(CalculateState,initialIter,0);
 
-    result.baseInfo[i].belongs = true; // All units belong to baseInfo
-    result.baseInfo[i].baseName = result.baseInfo[i].name;
+  // Handle memory mapping
+  auto CalculateMemory = [](auto Recurse,AccelInfoIterator& iter,iptr currentMem,Arena* out) -> void{
+    TEMP_REGION(temp,out);
     
-    for(Array<InstanceInfo> infos : result.infos){
-      if(infos[i].configPos.has_value()){
-        result.baseInfo[i].configPos = infos[i].configPos.value();
-        break;
+    InstanceInfo* parent = iter.GetParentUnit();
+    if(parent){
+      AccelInfoIterator parentIter = StartIteration(&parent->decl->info);
+      parentIter.mergeIndex = parent->partitionIndex;
+
+      for(AccelInfoIterator it = iter; it.IsValid(); it = it.Next(),parentIter = parentIter.Next()){
+        InstanceInfo* unit = it.CurrentUnit();
+        InstanceInfo* memUnit = parentIter.CurrentUnit();
+        
+        if(memUnit->memMapped.has_value()){
+          unit->memMapped = memUnit->memMapped.value() + currentMem;
+          
+          AccelInfoIterator inside = it.StepInsideOnly();
+          if(inside.IsValid()){
+            Recurse(Recurse,inside,unit->memMapped.value(),out);
+          }
+        }
+      }
+    } else {
+      auto builder = StartGrowableArray<Node*>(temp);
+      for(AccelInfoIterator it = iter; it.IsValid(); it = it.Next()){
+        InstanceInfo* unit = it.CurrentUnit();
+
+        if(unit->memMappedBitSize.has_value()){
+          Node* n = PushStruct<Node>(temp);
+          *n = (Node){unit,unit->memMappedBitSize.value()};
+          *builder.PushElem() = n;
+        }
+      }
+      Array<Node*> baseNodes = EndArray(builder);
+    
+      if(baseNodes.size == 0){
+        return;
+      }
+
+      auto Sort = [](Array<Node*>& toSort){
+        for(int i = 0; i < toSort.size; i++){
+          for(int j = i + 1; j < toSort.size; j++){
+            if(toSort[i]->value < toSort[j]->value){
+              SWAP(toSort[i],toSort[j]);
+            }
+          }
+        }
+      };
+
+      Sort(baseNodes);
+
+      while(baseNodes.size > 1){
+        Node* left = baseNodes[baseNodes.size - 2];
+        Node* right = baseNodes[baseNodes.size - 1];
+      
+        Node* n = PushStruct<Node>(temp);
+        n->value = std::max(left->value,right->value) + 1;
+        n->left = left;
+        n->right = right;
+        baseNodes[baseNodes.size - 2] = n;
+        baseNodes.size -= 1;
+
+        Sort(baseNodes);
+      }
+    
+      Node* top = baseNodes[0];
+      
+      auto NodeRecurse = [](auto Recurse,Node* top,int max,int bitAccum,Arena* out) -> void{
+        if(top->left == nullptr){
+          Assert(top->right == nullptr);
+
+          InstanceInfo* info = top->unit;
+          
+          auto builder = StartString(out);
+          for(int i = max - 1; i >= top->value; i--){
+            builder.PushChar(GET_BIT(bitAccum,i) ? '1' : '0');
+          }
+          String decisionMask = EndString(builder);
+          PushNullByte(out);
+          info->memDecisionMask = decisionMask;
+
+          info->memMapped = bitAccum;
+        } else {
+          Recurse(Recurse,top->left,max,SET_BIT(bitAccum,top->left->value),out);
+          Recurse(Recurse,top->right,max,bitAccum,out);
+        }
+      };
+
+      NodeRecurse(NodeRecurse,top,top->value,0,out);
+
+      for(AccelInfoIterator it = iter; it.IsValid(); it = it.Next()){
+        InstanceInfo* unit = it.CurrentUnit();
+
+        if(unit->memMapped.has_value()){
+          AccelInfoIterator inside = it.StepInsideOnly();
+          Recurse(Recurse,inside,unit->memMapped.value(),out);
+        }
       }
     }
-    for(Array<InstanceInfo> infos : result.infos){
-      if(infos[i].statePos.has_value()){
-        result.baseInfo[i].statePos = infos[i].statePos.value();
-        break;
-      }
-    }
-    for(Array<InstanceInfo> infos : result.infos){
-      if(infos[i].memMapped.has_value()){
-        result.baseInfo[i].memMapped = infos[i].memMapped.value();
-        break;
-      }
-    }
-    for(Array<InstanceInfo> infos : result.infos){
-      if(infos[i].memMappedSize.has_value()){
-        result.baseInfo[i].memMappedSize = infos[i].memMappedSize.value();
-        break;
-      }
-    }
-    for(Array<InstanceInfo> infos : result.infos){
-      if(infos[i].memMappedBitSize.has_value()){
-        result.baseInfo[i].memMappedBitSize = infos[i].memMappedBitSize.value();
-        break;
-      }
-    }
-    for(Array<InstanceInfo> infos : result.infos){
-      if(infos[i].memMappedMask.has_value()){
-        result.baseInfo[i].memMappedMask = infos[i].memMappedMask.value();
-        break;
-      }
-    }
-    for(Array<InstanceInfo> infos : result.infos){
-      if(infos[i].delayPos.has_value()){
-        result.baseInfo[i].delayPos = infos[i].delayPos.value();
-        break;
-      }
-    }
-  }
+  };
+
+  CalculateMemory(CalculateMemory,initialIter,0,out);
   
-  result.memMappedBitsize = totalMaxBitsize;
+  // Delay pos is just basically State position without anything different, right?
+  auto CalculateDelayPos = [](auto Recurse,AccelInfoIterator& iter,int startIndex) -> void{
+    TEMP_REGION(temp,nullptr);
 
-  std::vector<bool> seenShared;
+    InstanceInfo* parent = iter.GetParentUnit();
+    if(parent){
+      AccelInfoIterator delayIter = StartIteration(&parent->decl->info);
+      delayIter.mergeIndex = parent->partitionIndex;
+      
+      int index = 0;
+      for(AccelInfoIterator it = iter; it.IsValid(); it = it.Next(),delayIter = delayIter.Next()){
+        InstanceInfo* unit = it.CurrentUnit();
+        InstanceInfo* delayUnit = delayIter.CurrentUnit();
 
-  Hashmap<StaticId,int>* staticSeen = PushHashmap<StaticId,int>(temp,1000);
+        if(delayUnit->delayPos.has_value()){
+          int delayPos = startIndex + delayUnit->delayPos.value();
+        
+          if(unit->delaySize){
+            unit->delayPos = delayPos;
+          }
+          
+          index += 1;
+          AccelInfoIterator inside = it.StepInsideOnly();
+          if(inside.IsValid()){
+            Recurse(Recurse,inside,delayPos);
+          }
+        }
+      }
+    } else {
+      int delayIndex = startIndex;
+      for(AccelInfoIterator it = iter; it.IsValid(); it = it.Next()){
+        InstanceInfo* unit = it.CurrentUnit();
 
+        if(unit->delaySize){
+          unit->delayPos = delayIndex;
+        }
+        
+        AccelInfoIterator inside = it.StepInsideOnly();
+        if(inside.IsValid()){
+          Recurse(Recurse,inside,delayIndex);
+        }
+
+        delayIndex += unit->delaySize;
+      }
+    }
+  };
+  
+  CalculateDelayPos(CalculateDelayPos,initialIter,0);
+
+  auto SetDelays = [](auto Recurse,AccelInfoIterator& iter,SimpleCalculateDelayResult& calculatedDelay,int startIndex,Arena* out) -> void{
+    InstanceInfo* parent = iter.GetParentUnit();
+    if(parent){
+      // TODO: Delays are weird.
+      AccelInfoIterator delayIter = StartIteration(&parent->decl->info);
+      delayIter.mergeIndex = parent->partitionIndex;
+      
+      int index = 0;
+      for(AccelInfoIterator it = iter; it.IsValid(); it = it.Next(),delayIter = delayIter.Next()){
+        InstanceInfo* unit = it.CurrentUnit();
+        InstanceInfo* delayUnit = delayIter.CurrentUnit();
+
+        int delayPos = startIndex + delayUnit->baseNodeDelay;
+        unit->baseNodeDelay = delayPos;
+
+        if(unit->delaySize > 0 && !unit->isComposite){
+          unit->extraDelay = PushArray<int>(out,unit->delaySize);
+          Memset(unit->extraDelay,unit->baseNodeDelay);
+        }
+        
+        index += 1;
+        AccelInfoIterator inside = it.StepInsideOnly();
+        if(inside.IsValid()){
+          Recurse(Recurse,inside,calculatedDelay,delayPos,out);
+        }
+      }
+    } else {
+      for(AccelInfoIterator it = iter; it.IsValid(); it = it.Next()){
+        InstanceInfo* unit = it.CurrentUnit();
+        int order = unit->localOrder;
+
+        unit->baseNodeDelay = calculatedDelay.nodeBaseLatencyByOrder[order].value;
+        unit->portDelay = PushArray<int>(out,calculatedDelay.inputPortBaseLatencyByOrder[order].size);
+
+        for(int i = 0; i < calculatedDelay.inputPortBaseLatencyByOrder[order].size; i++){
+          unit->portDelay[i] = calculatedDelay.inputPortBaseLatencyByOrder[order][i].value;
+        }
+        
+        if(unit->delaySize > 0 && !unit->isComposite){
+          unit->extraDelay = PushArray<int>(out,unit->delaySize);
+          Memset(unit->extraDelay,unit->baseNodeDelay);
+        }
+
+        AccelInfoIterator inside = it.StepInsideOnly();
+        if(inside.IsValid()){
+          Recurse(Recurse,inside,calculatedDelay,unit->baseNodeDelay,out);
+        }
+      }
+    }
+  };
+
+  SimpleCalculateDelayResult delays = CalculateDelay(initialIter,out);
+  SetDelays(SetDelays,initialIter,delays,0,out);
+}
+
+void FillAccelInfoAfterCalculatingInstanceInfo(AccelInfo* info,Accelerator* accel){
+  TEMP_REGION(temp,nullptr);
+  
+  GrowableArray<bool> seenShared = StartGrowableArray<bool>(temp);
+  
   int memoryMappedDWords = 0;
+  int unitsMapped = 0;
 
+  // TODO: Use AccelInfoIterator
+
+  // TODO: Using info directly might make create an error if the struct was not initialized to zero.
+  
   // Handle non-static information
-  FOREACH_LIST(FUInstance*,ptr,accel->allocated){
+  for(FUInstance* ptr : accel->allocated){
     FUInstance* inst = ptr;
     FUDeclaration* type = inst->declaration;
 
     // Check if shared
     if(inst->sharedEnable){
-      if(inst->sharedIndex >= (int) seenShared.size()){
-        seenShared.resize(inst->sharedIndex + 1);
-      }
-
       if(!seenShared[inst->sharedIndex]){
-        result.configs += type->baseConfig.configs.size;
-        result.sharedUnits += 1;
+        info->configs += type->configs.size;
+        info->sharedUnits += 1;
       }
 
       seenShared[inst->sharedIndex] = true;
     } else if(!inst->isStatic){ // Shared cannot be static
-         result.configs += type->baseConfig.configs.size;
+         info->configs += type->configs.size;
     }
 
     if(type->memoryMapBits.has_value()){
-      result.isMemoryMapped = true;
+      info->isMemoryMapped = true;
 
       memoryMappedDWords = AlignBitBoundary(memoryMappedDWords,type->memoryMapBits.value());
       memoryMappedDWords += (1 << type->memoryMapBits.value());
+
+      unitsMapped += 1;
     }
 
     if(type == BasicDeclaration::input){
-      result.inputs += 1;
+      info->inputs += 1;
     }
 
-    result.states += type->baseConfig.states.size;
-    result.delays += type->baseConfig.delayOffsets.max;
-    result.ios += type->nIOs;
+    info->states += type->states.size;
+    info->delays += type->NumberDelays();
+    info->ios += type->nIOs;
 
     if(type->externalMemory.size){
-      result.externalMemoryInterfaces += type->externalMemory.size;
-	  result.externalMemoryByteSize = ExternalMemoryByteSize(type->externalMemory);
+      info->externalMemoryInterfaces += type->externalMemory.size;
     }
 
-    result.signalLoop |= type->signalLoop;
+    info->signalLoop |= type->signalLoop;
   }
 
-  result.memoryMappedBits = log2i(memoryMappedDWords);
-
-  FUInstance* outputInstance = GetOutputInstance(accel->allocated);
+  info->memoryMappedBits = log2i(memoryMappedDWords);
+  info->unitsMapped = unitsMapped;
+  
+  FUInstance* outputInstance = GetOutputInstance(&accel->allocated);
   if(outputInstance){
-    //FOREACH_LIST(Edge*,edge,accel->edges){
     EdgeIterator iter = IterateEdges(accel);
     while(iter.HasNext()){
       Edge edgeInst = iter.Next();
       Edge* edge = &edgeInst;
 
       if(edge->units[0].inst == outputInstance){
-        result.outputs = std::max(result.outputs - 1,edge->units[0].port) + 1;
+        info->outputs = std::max(info->outputs - 1,edge->units[0].port) + 1;
       }
       if(edge->units[1].inst == outputInstance){
-        result.outputs = std::max(result.outputs - 1,edge->units[1].port) + 1;
+        info->outputs = std::max(info->outputs - 1,edge->units[1].port) + 1;
       }
     }
   }
 
-  // Handle static information
-  FOREACH_LIST(FUInstance*,ptr,accel->allocated){
+    TrieMap<StaticId,int>* staticSeen = PushTrieMap<StaticId,int>(temp);
+  
+  // TODO: I am not sure if static info is needed by all the accelerators
+  //       or if it is only needed by the top accelerator.
+  //       For now we calculate it to make easier to debug by inspecting the data.
+  //       But need to take another look eventually
+  for(FUInstance* ptr : accel->allocated){
     FUInstance* inst = ptr;
     if(inst->isStatic){
       StaticId id = {};
@@ -1495,10 +1055,10 @@ AccelInfo CalculateAcceleratorInfoNoDelay(Accelerator* accel,bool recursive,Aren
       id.name = inst->name;
 
       staticSeen->Insert(id,1);
-      result.statics += inst->declaration->baseConfig.configs.size;
+      info->statics += inst->declaration->configs.size;
 
-      for(Wire& wire : inst->declaration->baseConfig.configs){
-        result.staticBits += wire.bitSize;
+      for(Wire& wire : inst->declaration->configs){
+        info->staticBits += wire.bitSize;
       }
     }
 
@@ -1508,23 +1068,157 @@ AccelInfo CalculateAcceleratorInfoNoDelay(Accelerator* accel,bool recursive,Aren
 
         if(!possibleFind){
           staticSeen->Insert(pair.first,1);
-          result.statics += pair.second->configs.size;
+          info->statics += pair.second->configs.size;
 
           for(Wire& wire : pair.second->configs){
-            result.staticBits += wire.bitSize;
+            info->staticBits += wire.bitSize;
           }
         }
       }
     }
   }
   
-  FOREACH_LIST(FUInstance*,ptr,accel->allocated){
-    FUInstance* inst = ptr;
-    result.numberConnections += Size(ptr->allOutputs);
+  for(FUInstance* ptr : accel->allocated){
+    info->numberConnections += Size(ptr->allOutputs);
   }
-  
-  return result;
 }
 
+Array<int> ExtractInputDelays(AccelInfoIterator top,Arena* out){
+  int maxInputs = -1;
+  for(AccelInfoIterator iter = top; iter.IsValid(); iter = iter.Next()){
+    InstanceInfo* info = iter.CurrentUnit();
+    if(info->decl == BasicDeclaration::input){
+      maxInputs = std::max(info->special,maxInputs);
+    }
+  }
+  if(maxInputs == -1){
+    return {};
+  }
 
+  Array<int> inputDelays = PushArray<int>(out,maxInputs + 1);
+  for(AccelInfoIterator iter = top; iter.IsValid(); iter = iter.Next()){
+    InstanceInfo* info = iter.CurrentUnit();
+    if(info->decl == BasicDeclaration::input){
+      inputDelays[info->special] = info->baseNodeDelay;
+    }
+  }
 
+  return inputDelays;
+};
+
+Array<int> ExtractOutputLatencies(AccelInfoIterator top,Arena* out){
+  for(AccelInfoIterator iter = top; iter.IsValid(); iter = iter.Next()){
+    InstanceInfo* info = iter.CurrentUnit();
+    if(info->decl == BasicDeclaration::output){
+      return CopyArray(info->portDelay,out);
+    }
+  }
+
+  return {};
+};
+
+AccelInfo CalculateAcceleratorInfo(Accelerator* accel,bool recursive,Arena* out){
+  TEMP_REGION(temp,out);
+  AccelInfo result = {};
+
+  // TODO: Still need to check if partitions are removed or if we still need them
+  Array<Partition> partitions = GenerateInitialPartitions(accel,temp);
+  int partitionSize = 0;
+  while(1){
+    partitionSize += 1;
+    
+    if(!Next(partitions)){
+      break;
+    }
+  }
+
+  // Accel might contain multiple merged units.
+  // Each merged unit is responsible for adding "partitions"
+  // Each "partition" is equivalent to "activating" a given merge type for a given merge unit.
+  // For each partition, I should be able to get the name of all the units currently activated.
+  // I do not think that I will keep partitions, but for now implement the logic first and worry about code quality later.
+  
+  int size = partitionSize;
+
+  
+  auto CalculateMuxConfigs = [](AccelInfoIterator top,Arena* out) -> Array<int>{
+    TEMP_REGION(temp,out);
+    
+    // We need to take into account config sharing because it basically converts N configs into 1.
+    Set<int>* seen = PushSet<int>(temp,10); // TODO: HACK, eventually this code will be removed, so no problem hacking away.
+    
+    int amountOfMuxConfigs = 0;
+    for(AccelInfoIterator iter = top; iter.IsValid(); iter = iter.Step()){
+      InstanceInfo* info = iter.CurrentUnit();
+      if(info->isMergeMultiplexer){
+        if(seen->Exists(info->configPos.value())){
+          continue;
+        }
+        amountOfMuxConfigs += 1;
+        seen->Insert(info->configPos.value());
+      }
+    }
+
+    if(amountOfMuxConfigs == 0){
+      return {};
+    }
+    
+    seen = PushSet<int>(temp,10); // TODO: HACK, eventually this code will be removed, so no problem hacking away.
+    Array<int> muxConfigs = PushArray<int>(out,amountOfMuxConfigs);
+    int index = 0;
+    for(AccelInfoIterator iter = top; iter.IsValid(); iter = iter.Step()){
+      InstanceInfo* info = iter.CurrentUnit();
+      if(info->isMergeMultiplexer){
+        if(seen->Exists(info->configPos.value())){
+          continue;
+        }
+        muxConfigs[index++] = info->mergePort;
+        seen->Insert(info->configPos.value());
+      }
+    }
+    
+    return muxConfigs;
+  };
+
+  if(size == 0){
+    result.infos = PushArray<MergePartition>(globalPermanent,1);
+  } else {
+    result.infos = PushArray<MergePartition>(globalPermanent,size);
+  }
+
+  AccelInfoIterator iter = StartIteration(&result);
+  iter.accelName = accel->name;
+  
+  // MARKED
+  if(iter.MergeSize() > 1){
+    Array<Partition> partitions = GenerateInitialPartitions(accel,temp);
+
+    for(int i = 0; i < iter.MergeSize(); i++,Next(partitions)){
+      iter.mergeIndex = i;
+
+      // We do need partitions here, I think
+      result.infos[i].info = GenerateInitialInstanceInfo(accel,globalPermanent,partitions);
+
+      FillInstanceInfo(iter,globalPermanent);
+
+      result.infos[i].inputDelays = ExtractInputDelays(iter,out);
+      result.infos[i].outputLatencies = ExtractOutputLatencies(iter,out);
+      result.infos[i].muxConfigs = CalculateMuxConfigs(iter,out);
+
+      String name = GetName(partitions,out);
+      result.infos[i].name = name;
+    }
+  } else {
+    iter.mergeIndex = 0;
+    result.infos[0].info = GenerateInitialInstanceInfo(accel,globalPermanent,{});
+    FillInstanceInfo(iter,globalPermanent);
+
+    result.infos[0].inputDelays = ExtractInputDelays(iter,out);
+    result.infos[0].outputLatencies = ExtractOutputLatencies(iter,out);
+    result.infos[0].muxConfigs = CalculateMuxConfigs(iter,out);
+  }
+
+  FillAccelInfoAfterCalculatingInstanceInfo(&result,accel);
+
+  return result;
+}

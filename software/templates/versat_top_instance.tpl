@@ -1,4 +1,4 @@
-`include "versat_defs.vh"
+`timescale 1ns / 1ps
 
 #{include "versat_common.tpl"}
 
@@ -9,13 +9,13 @@
 
 #{set databusCounter 0}
 
-`timescale 1ns / 1ps
+`include "versat_defs.vh"
 
 module versat_instance #(
       parameter ADDR_W = 32,
       parameter DATA_W = 32,
       parameter AXI_ADDR_W = 32,
-      parameter AXI_DATA_W = 32,
+      parameter AXI_DATA_W = @{arch.databusDataSize},
       parameter LEN_W = 20
    )
    (
@@ -183,8 +183,16 @@ begin
 end
 
 wire run = (canRun && canRun1);
+wire pre_run_pulse = (canRun && !canRun1); // One cycle before run is asserted
 
 assign done = (!(|runCounter) && (&unitDone));
+
+reg lastCycleDone;
+
+always @(posedge clk)
+begin
+    lastCycleDone <= done;
+end
 
 reg running;
 
@@ -361,7 +369,7 @@ wire[@{unitsMapped - 1}:0] unitRValid;
 assign wor_rvalid = (|unitRValid);
 #{end}
 
-#{if versatValues.numberConnections}
+#{if numberConnections}
 wire [31:0] #{join ", " node instances} #{set id index}
    #{join ", "  j node.outputs} #{if j} output_@{id}_@{index} #{end} #{end}
 #{end};
@@ -379,100 +387,37 @@ begin
    memoryMappedEnable = {@{unitsMapped}{1'b0}};
    if(data_valid & memoryMappedAddr)
    begin
-   #{set counter 0}
-   #{for node instances}
-   #{set inst node}
-   #{if inst.declaration.memoryMapBits}
-      #{if memoryMasks[counter].memoryMaskSize}
-      if(address[@{memoryAddressBits - 1}:@{memoryAddressBits - memoryMasks[counter].memoryMaskSize}] == @{memoryAddressBits - inst.declaration.memoryMapBits}'b@{memoryMasks[counter].memoryMask}) // @{memoryMappedBase * 4 + inst.memMapped * 4 |> Hex}
-         memoryMappedEnable[@{counter}] = 1'b1;
-      #{else}
-      memoryMappedEnable[0] = 1'b1;
-      #{end}
-   #{inc counter}
-   #{end}
-   #{end}
+   #{for memoryDecisionMask memoryMasks}
+     #{if memoryDecisionMask.size}
+   if(address[@{memoryAddressBits - 1}-:@{memoryDecisionMask.size}] == @{memoryDecisionMask.size}'b@{memoryDecisionMask})
+     #{end}
+     memoryMappedEnable[@{index}] = 1'b1;
+   #{end}      
    end
 end
 #{end}
 
-#{if versatValues.configurationBits} reg [@{versatValues.configurationBits-1}:0] configdata; #{end}
-#{if opts.shadowRegister} reg [@{versatValues.configurationBits-1}:0] shadow_configdata; #{end}
+#{if configurationBits}
+wire [@{configurationBits-1}:0] configdata;
 
-#{set configReg "configdata"}
-#{if opts.shadowRegister}
-     #{set configReg "shadow_configdata"}
+versat_configurations configs(
+   .config_data_o(configdata),                 
+
+   .memoryMappedAddr(memoryMappedAddr),
+   .data_write(data_write),
+
+   .address(address),
+   .data_wstrb(data_wstrb),
+   .data_data(data_data),
+
+   .change_config_pulse(pre_run_pulse),
+
+   .clk_i(clk),
+   .rst_i(rst_int)
+);
 #{end}
 
-#{if versatValues.configurationBits}
-// Config writing
-always @(posedge clk,posedge rst_int)
-begin
-   if(rst_int) begin
-      @{configReg} <= {@{configurationBits}{1'b0}};
-   end else if(data_write & !memoryMappedAddr) begin
-      // Config
-      #{set counter 0}
-      #{set addr versatConfig}
-      #{for node instances}
-      #{set inst node}
-      #{set decl inst.declaration}
-      #{for wire decl.baseConfig.configs}
-      if(address[@{versatValues.configurationAddressBits + 1}:0] == @{addr * 4}) begin // @{addr * 4 |> Hex} @{wire.name}
-      #{set size wire.bitSize}
-      #{set wstrb 0}
-      #{set wstrbAmount 0}
-      #{while size > 0}
-      #{set amount 8}
-      #{if size < 8} #{set amount size} #{end}
-      if(data_wstrb[@{wstrb}]) @{configReg}[@{counter + wstrbAmount}+:@{amount}] <= data_data[@{wstrbAmount}+:@{amount}];
-      #{set size (size - 8)}
-      #{inc wstrb}
-      #{set wstrbAmount (wstrbAmount + amount)}
-      #{end}
-      end
-      #{inc addr}
-      #{set counter counter + wire.bitSize}
-      #{end}
-      #{end}
-
-      // Static
-      #{for unit staticUnits} #{for wire unit.data.configs}
-      if(address[@{versatValues.configurationAddressBits + 1}:0] == @{addr * 4}) // @{addr * 4 |> Hex}
-         // TODO: Need to also take into account strobes
-         #{if unit.first.parent}
-         @{configReg}[@{counter}+:@{wire.bitSize}] <= data_data[@{wire.bitSize - 1}:0]; //  @{unit.first.parent.name}_@{unit.first.name}_@{wire.name}
-         #{else}
-         configdata[@{counter}+:@{wire.bitSize}] <= data_data[@{wire.bitSize - 1}:0]; //  @{unit.first.name}_@{wire.name}
-         #{end}
-      #{inc addr} #{set counter counter + wire.bitSize}
-      #{end} #{end}
-
-      // Delays
-      #{for node instances} #{set inst node} #{set decl inst.declaration}
-      #{for i decl.baseConfig.delayOffsets.max}
-      // TODO: Need to also take into account strobes
-      if(address[@{versatValues.configurationAddressBits + 1}:0] == @{addr * 4}) // @{addr * 4 |> Hex}
-         @{configReg}[@{counter}+:@{delaySize}] <= data_data[@{delaySize-1}:0]; // Delay
-      #{inc addr} #{set counter counter + delaySize}
-      #{end} #{end}
-   end
-end
-#{end}
-
-#{if opts.shadowRegister}
-always @(posedge clk,posedge rst_int)
-begin
-   if(rst_int) begin
-      configdata <= 0;
-   end else if(canRun) begin
-      configdata <= shadow_configdata;
-   end
-end
-
-#{end}
-
-#{if versatValues.stateBits} wire [@{versatValues.stateBits - 1}:0] statedata; #{end}
+#{if stateBits} wire [@{stateBits - 1}:0] statedata; #{end}
 
 // State reading
 always @*
@@ -484,8 +429,8 @@ begin
       #{for node instances}
       #{set inst node}
       #{set decl inst.declaration}
-      #{for wire decl.baseConfig.states}
-      if(addr[@{versatValues.stateAddressBits + 1}:0] >= @{addr * 4} && addr[@{versatValues.stateAddressBits + 1}:0] < @{(addr + 1) * 4}) // @{addr * 4 |> Hex}
+      #{for wire decl.states}
+      if(addr[@{stateAddressBits + 1}:0] >= @{addr * 4} && addr[@{stateAddressBits + 1}:0] < @{(addr + 1) * 4}) // @{addr * 4 |> Hex}
          stateRead = statedata[@{counter}+:@{wire.bitSize}];
       #{inc addr}
       #{set counter counter + wire.bitSize}
@@ -495,15 +440,15 @@ begin
 end
 
 #{if nCombOperations}
-reg [31:0] #{join "," node instances} #{if node.declaration.isOperation and node.declaration.baseConfig.outputLatencies[0] == 0} comb_@{node |> Identify} #{end}#{end}; 
+reg [31:0] #{join "," node instances} #{if node.declaration.isOperation and node.declaration.info.infos[0].outputLatencies[0] == 0} comb_@{node |> Identify} #{end}#{end}; 
 
 always @*
 begin
 #{for node ordered}
    #{set decl node.declaration}
-   #{if decl.isOperation and decl.baseConfig.outputLatencies[0] == 0}
+   #{if decl.isOperation and decl.info.infos[0].outputLatencies[0] == 0}
       #{set input1 node.inputs[0]}
-      #{if decl.baseConfig.inputDelays.size == 1}
+      #{if decl.info.infos[0].inputDelays.size == 1}
          #{format decl.operation "comb" @{node |> Identify} #{call retOutputName2 instances input1}};
       #{else}
          #{set input2 node.inputs[1]}
@@ -515,13 +460,13 @@ end
 #{end}
 
 #{if nSeqOperations}
-reg [31:0] #{join "," node instances} #{if node.declaration.isOperation and node.declaration.baseConfig.outputLatencies[0] != 0} seq_@{node |> Identify} #{end}#{end}; 
+reg [31:0] #{join "," node instances} #{if node.declaration.isOperation and node.declaration.info.infos[0].outputLatencies[0] != 0} seq_@{node |> Identify} #{end}#{end}; 
 
 always @(posedge clk)
 begin
 #{for node instances}
    #{set decl node.declaration}
-   #{if decl.isOperation and decl.baseConfig.outputLatencies[0] != 0 }
+   #{if decl.isOperation and decl.info.infos[0].outputLatencies[0] != 0 }
       #{set input1 node.inputs[0]}
       #{format decl.operation "seq" @{node |> Identify} #{call retOutputName2 instances input1}};
    #{end}
@@ -543,7 +488,7 @@ end
 #{set inst node}
 #{set decl inst.declaration}
    #{if (decl != inputDecl and decl != outputDecl and !decl.isOperation)}
-      @{decl.name} @{inst.parameters} @{inst |> Identify}_@{counter} (
+      @{decl.name} @{parameters[index]} @{inst |> Identify}_@{counter} (
          #{for j node.outputs} #{if j}
             .out@{index}(output_@{id}_@{index}),
          #{else}
@@ -559,7 +504,7 @@ end
          #{end}
          #{end}
 
-         #{for wire decl.baseConfig.configs}
+         #{for wire decl.configs}
          #{if decl.type}
             .@{wire.name}(configdata[@{configDataIndex}+:@{wire.bitSize}]),
          #{else}
@@ -576,7 +521,7 @@ end
          #{end}
          #{end}
 
-         #{for i decl.baseConfig.delayOffsets.max}
+         #{for i decl.numberDelays}
             .delay@{i}(configdata[@{delayStart + (delaySeen * delaySize)}+:@{delaySize}]),
          #{inc delaySeen}
          #{end}
@@ -604,7 +549,7 @@ end
          #{inc externalCounter}
          #{end}
 
-         #{for wire decl.baseConfig.states}
+         #{for wire decl.states}
          #{if decl.type}
             .@{wire.name}(statedata[@{stateDataIndex}+:@{wire.bitSize}]),
          #{else}

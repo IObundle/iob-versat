@@ -48,6 +48,26 @@ struct MappingNode{ // Mapping (edge to edge or node to node)
   enum {NODE,EDGE} type;
 };
 
+
+struct GraphAndMapping{
+  FUDeclaration* decl;
+  AcceleratorMapping* map;
+  Set<PortInstance>* mergeMultiplexers;
+  bool fromStruct;
+};
+
+template<> class std::hash<GraphAndMapping>{
+public:
+   std::size_t operator()(GraphAndMapping const& s) const noexcept{
+     std::size_t res = (std::size_t) s.decl;
+     return res;
+   }
+};
+
+static bool operator==(const GraphAndMapping& g0,const GraphAndMapping& g1){
+  return (g0.decl == g1.decl);
+}
+
 inline bool operator==(const MappingNode& node0,const MappingNode& node1){
   if(node0.type != node1.type){
     return false;
@@ -100,6 +120,16 @@ struct CliqueState{
   bool found;
 };
 
+struct OverheadCount{
+  int muxes;
+  int buffers;
+};
+
+struct ReconstituteResult{
+  Accelerator* accel;
+  AcceleratorMapping* accelToRecon;
+};
+
 struct IsCliqueResult{
   bool result;
   int failedIndex;
@@ -137,35 +167,29 @@ enum MergingStrategy{
   FIRST_FIT
 };
 
-void OutputConsolidationGraph(ConsolidationGraph graph,bool onlyOutputValid,String moduleName,String fileName,Arena* temp);
+void OutputConsolidationGraph(ConsolidationGraph graph,bool onlyOutputValid,String moduleName,String fileName);
 
-int ValidNodes(ConsolidationGraph graph);
-
-ConsolidationResult GenerateConsolidationGraph(Accelerator* accel1,Accelerator* accel2,ConsolidationGraphOptions options,Arena* out,Arena* temp);
+ConsolidationResult GenerateConsolidationGraph(Accelerator* accel1,Accelerator* accel2,ConsolidationGraphOptions options,Arena* out);
 MergeGraphResult MergeGraph(Accelerator* flatten1,Accelerator* flatten2,GraphMapping& graphMapping,String name);
 void AddCliqueToMapping(GraphMapping& res,ConsolidationGraph clique);
 
 void InsertMapping(GraphMapping& map,Edge& edge0,Edge& edge1);
-//void Clique(CliqueState* state,ConsolidationGraph graphArg,int index,IndexRecord* record,int size,Arena* arena);
 
 bool NodeMappingConflict(Edge edge1,Edge edge2);
 bool MappingConflict(MappingNode map1,MappingNode map2);
-ConsolidationGraph Copy(ConsolidationGraph graph,Arena* arena);
-int NodeIndex(ConsolidationGraph graph,MappingNode* node);
+ConsolidationGraph Copy(ConsolidationGraph graph,Arena* out);
 
 bool MappingConflict(MappingNode map1,MappingNode map2);
-CliqueState MaxClique(ConsolidationGraph graph,int upperBound,Arena* arena,float MAX_CLIQUE_TIME);
-ConsolidationGraph GenerateConsolidationGraph(Arena* arena,Accelerator* accel1,Accelerator* accel2,ConsolidationGraphOptions options,MergingStrategy strategy);
+CliqueState MaxClique(ConsolidationGraph graph,int upperBound,Arena* out,float MAX_CLIQUE_TIME);
+ConsolidationGraph GenerateConsolidationGraph(Arena* out,Accelerator* accel1,Accelerator* accel2,ConsolidationGraphOptions options,MergingStrategy strategy);
 
 MergeGraphResult HierarchicalHeuristic(FUDeclaration* decl1,FUDeclaration* decl2,String name);
-
-int ValidNodes(ConsolidationGraph graph);
 
 BitArray* CalculateNeighborsTable(ConsolidationGraph graph,Arena* out);
 
 IsCliqueResult IsClique(ConsolidationGraph graph);
 
-ConsolidationGraph ParallelMaxClique(ConsolidationGraph graph,int upperBound,Arena* arena,float MAX_CLIQUE_TIME);
+ConsolidationGraph ParallelMaxClique(ConsolidationGraph graph,int upperBound,Arena* out,float MAX_CLIQUE_TIME);
 
 String MappingNodeIdentifier(MappingNode* node,Arena* memory);
 MergeGraphResult HierarchicalMergeAccelerators(Accelerator* accel1,Accelerator* accel2,String name);
@@ -175,5 +199,5 @@ FUDeclaration* MergeAccelerators(FUDeclaration* accel1,FUDeclaration* accel2,Str
 
 FUDeclaration* Merge(Array<FUDeclaration*> types,
                      String name,Array<SpecificMergeNode> specifics,
-                     Arena* temp,Arena* temp2,MergingStrategy strat = MergingStrategy::CONSOLIDATION_GRAPH);
+                     MergingStrategy strat = MergingStrategy::CONSOLIDATION_GRAPH);
 

@@ -88,7 +88,7 @@ module LookupTable #(
          end else begin
             addr_0_reg <= in0[ADDR_W-1:0];
          end
-         addr_1_reg <= in1[ADDR_W-1:0];;
+         addr_1_reg <= in1[ADDR_W-1:0];
       end
    end
 

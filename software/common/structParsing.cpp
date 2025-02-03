@@ -15,27 +15,27 @@ void SkipQualifiers(Tokenizer* tok){
     Token peek = tok->PeekToken();
 
     if(CompareString(peek,"const")){
-      tok->AdvancePeek(peek);
+      tok->AdvancePeek();
       continue;
     }
     if(CompareString(peek,"volatile")){
-      tok->AdvancePeek(peek);
+      tok->AdvancePeek();
       continue;
     }
     if(CompareString(peek,"static")){
-      tok->AdvancePeek(peek);
+      tok->AdvancePeek();
       continue;
     }
     if(CompareString(peek,"inline")){
-      tok->AdvancePeek(peek);
+      tok->AdvancePeek();
       continue;
     }
     if(CompareString(peek,"public:")){
-      tok->AdvancePeek(peek);
+      tok->AdvancePeek();
       continue;
     }
     if(CompareString(peek,"private:")){
-      tok->AdvancePeek(peek);
+      tok->AdvancePeek();
       continue;
     }
 
@@ -61,7 +61,7 @@ String ParseFundamentalType(Tokenizer* tok){
     bool doContinue = false;
     for(String& str : accepted){
       if(CompareString(name,str)){
-        tok->AdvancePeek(name);
+        tok->AdvancePeek();
         doContinue = true;
         break;
       }
@@ -89,13 +89,13 @@ String ParseSimpleType(Tokenizer* tok){
   // Namespaces
   Token peek = tok->PeekToken();
   while(CompareString(peek,"::")){
-    tok->AdvancePeek(peek);
+    tok->AdvancePeek();
     tok->NextToken();
     peek = tok->PeekToken();
   }
 
   if(CompareString(peek,"<")){ // Template
-    tok->AdvancePeek(peek);
+    tok->AdvancePeek();
 
     while(1){
       ParseSimpleType(tok);
@@ -103,9 +103,9 @@ String ParseSimpleType(Tokenizer* tok){
       Token peek = tok->PeekToken();
 
       if(CompareString(peek,",")){
-        tok->AdvancePeek(peek);
+        tok->AdvancePeek();
       } else if(CompareString(peek,">")){
-        tok->AdvancePeek(peek);
+        tok->AdvancePeek();
         break;
       }
     }
@@ -125,7 +125,7 @@ String ParseSimpleFullType(Tokenizer* tok){
 
   Token peek = tok->PeekToken();
   while(CompareString(peek,"*") || CompareString(peek,"&")){
-    tok->AdvancePeek(peek);
+    tok->AdvancePeek();
 
     peek = tok->PeekToken();
   }
@@ -150,19 +150,19 @@ EnumDef ParseEnum(Tokenizer* tok){
   auto valuesMark = tok->Mark();
   String values = {};
   if(CompareString(peek,"{")){
-    tok->AdvancePeek(peek);
+    tok->AdvancePeek();
 
     while(1){
       Token peek = tok->PeekToken();
 
       if(CompareString(peek,"}")){
-        tok->AdvancePeek(peek);
+        tok->AdvancePeek();
 
         values = tok->Point(valuesMark);
         break;
       }
       if(CompareString(peek,",")){
-        tok->AdvancePeek(peek);
+        tok->AdvancePeek();
       }
 
       /*Token enumMemberName = */ tok->NextToken();
@@ -170,7 +170,7 @@ EnumDef ParseEnum(Tokenizer* tok){
       Token value = {};
       peek = tok->PeekToken();
       if(CompareString(peek,"=")){
-        tok->AdvancePeek(peek);
+        tok->AdvancePeek();
 
         value = tok->NextToken();
       }
@@ -272,17 +272,15 @@ MemberDef* ParseMember(Tokenizer* tok,Arena* out){
 
     auto arraysMark = tok->Mark();
     if(CompareString(peek,"[")){
-      tok->AdvancePeek(peek);
+      tok->AdvancePeek();
       /*Token arrayExpression =*/ tok->NextFindUntil("]");
       tok->AssertNextToken("]");
  
       def.arrays = tok->Point(arraysMark);
     } else if(CompareString(peek,"(")){
-      Token advanceList = tok->PeekIncludingDelimiterExpression({"("},{")"},0).value();
-      tok->AdvancePeek(advanceList);
+      tok->AdvanceDelimiterExpression({"("},{")"},0);
       if(!tok->IfNextToken(";")){
-        Token advanceFunctionBody = tok->PeekIncludingDelimiterExpression({"{"},{"}"},0).value();
-        tok->AdvancePeek(advanceFunctionBody);
+        tok->AdvanceDelimiterExpression({"{"},{"}"},0);
         tok->IfNextToken(";"); // Consume any extra ';'
       }
 
@@ -324,7 +322,7 @@ MemberDef* ParseMember(Tokenizer* tok,Arena* out){
   return mem;
 }
 
-Result<StructDef,String> ParseStruct(Tokenizer* tok,Arena* arena){
+Result<StructDef,String> ParseStruct(Tokenizer* tok,Arena* out){
   auto mark = tok->Mark();
 
   Token token = tok->NextToken();
@@ -344,7 +342,7 @@ Result<StructDef,String> ParseStruct(Tokenizer* tok,Arena* arena){
 
     token = tok->PeekToken();
     while(CompareString(token,"::")){
-      tok->AdvancePeek(token);
+      tok->AdvancePeek();
       tok->NextToken();
       token = tok->PeekToken();
     }
@@ -382,7 +380,7 @@ Result<StructDef,String> ParseStruct(Tokenizer* tok,Arena* arena){
   tok->keepComments = true; // TODO: A little bit hacky to get the Repr to work. Need to do this before hand because the peek goes over if it's the first comment.
   Token peek = tok->PeekToken();
   if(CompareString(peek,"}")){
-    tok->AdvancePeek(peek);
+    tok->AdvancePeek();
     def.fullExpression = tok->Point(mark);
 
     return def;
@@ -394,7 +392,7 @@ Result<StructDef,String> ParseStruct(Tokenizer* tok,Arena* arena){
 
     //printf("Attemp to parse a member: %.*s\n",UNPACK_SS(token));
     if(CompareString(token,";")){
-      tok->AdvancePeek(token);
+      tok->AdvancePeek();
       continue;
     }
     
@@ -402,17 +400,17 @@ Result<StructDef,String> ParseStruct(Tokenizer* tok,Arena* arena){
 	//       Or maybe the data was not being caried over.
 	//printf("%.*s %.*s\n",UNPACK_SS(name),UNPACK_SS(token));
     if(CompareString(token,"}")){
-      tok->AdvancePeek(token);
+      tok->AdvancePeek();
 	  break;
     } else if(CompareString(token,STRING("//"))){ // The // symbol and the /* */ must be part of the special chars of the tokenizer
-	  tok->AdvancePeek(token);
+	  tok->AdvancePeek();
 
 	  Token specialType = tok->NextToken();
       
 	  if(CompareString(specialType,"Repr")){
         tok->AssertNextToken(":");
         Token formatString = tok->PeekRemainingLine();
-        tok->AdvancePeek(formatString);
+        tok->AdvancePeekBad(formatString);
 
 		if(def.representationFormat.size){
 		  LogWarn(LogModule::PARSER,"Struct already has a representation format: %.*s",UNPACK_SS(name));
@@ -421,7 +419,8 @@ Result<StructDef,String> ParseStruct(Tokenizer* tok,Arena* arena){
 		continue;
 	  } else {
 		// We are in a normal comment
-        tok->AdvancePeek(tok->PeekRemainingLine());
+        tok->AdvanceRemainingLine();
+        //tok->AdvancePeekBad(tok->PeekRemainingLine());
 		tok->NextFindUntil("\n");
 		continue;
 	  }
@@ -432,7 +431,7 @@ Result<StructDef,String> ParseStruct(Tokenizer* tok,Arena* arena){
 	tok->keepComments = false;
 
     auto mark = tok->Mark();
-    MemberDef* member = ParseMember(tok,arena);
+    MemberDef* member = ParseMember(tok,out);
 
     if(member == nullptr){
 #if 1
@@ -476,7 +475,7 @@ Result<StructDef,String> ParseStruct(Tokenizer* tok,Arena* arena){
   return def;
 }
 
-StructDef ParseTemplatedStructDefinition(Tokenizer* tok,Arena* arena){
+StructDef ParseTemplatedStructDefinition(Tokenizer* tok,Arena* out){
   tok->AssertNextToken("template");
   tok->AssertNextToken("<");
 
@@ -488,12 +487,11 @@ StructDef ParseTemplatedStructDefinition(Tokenizer* tok,Arena* arena){
       break;
     }
 
-    //tok->AssertNextToken("typename");
-    Token type = tok->NextToken();
+    /* Token type = */ tok->NextToken();
 
     Token parameter = tok->NextToken();
 
-    TemplateParamDef* newParam = PushStruct<TemplateParamDef>(arena);
+    TemplateParamDef* newParam = PushStruct<TemplateParamDef>(out);
     newParam->name = parameter;
     newParam->next = ptr;
     ptr = newParam;
@@ -511,7 +509,7 @@ StructDef ParseTemplatedStructDefinition(Tokenizer* tok,Arena* arena){
     return def; // Only parse structs
   }
 
-  Result<StructDef,String> optDef = ParseStruct(tok,arena);
+  Result<StructDef,String> optDef = ParseStruct(tok,out);
 
   if(optDef.isError){
     return {};

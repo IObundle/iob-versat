@@ -1,5 +1,4 @@
 #{set size external.size}
-
 #{for ext external}
 #{set i index}
 #{if ext.type}

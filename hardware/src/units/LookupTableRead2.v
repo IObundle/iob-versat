@@ -155,7 +155,7 @@ module LookupTableRead2 #(
    wire [ADDR_W-1:0] gen_addr;
    wire              gen_done;
 
-   MyAddressGen #(
+   AddressGen #(
       .ADDR_W  (ADDR_W),
       .DATA_W  (AXI_DATA_W),
       .PERIOD_W(ADDR_W)
@@ -177,6 +177,8 @@ module LookupTableRead2 #(
       .valid_o(),
       .ready_i(gen_ready),
       .addr_o (gen_addr),
+      .store_o(),
+
       .done_o (gen_done)
    );
 
@@ -197,23 +199,22 @@ module LookupTableRead2 #(
       end
    end
 
-   MemoryWriter #(
-      .ADDR_W(ADDR_W),
-      .DATA_W(AXI_DATA_W)
+   JoinTwoHandshakes #(
+      .FIRST_DATA_W(ADDR_W),
+      .SECOND_DATA_W(AXI_DATA_W)
    ) writer (
-      .gen_valid_i(gen_valid),
-      .gen_ready_o(gen_ready),
-      .gen_addr_i (gen_addr),
+      .first_valid_i(gen_valid),
+      .first_ready_o(gen_ready),
+      .first_data_i(gen_addr),
 
-      // Slave connected to data source
-      .data_valid_i(databus_ready_0),
-      .data_ready_o(databus_valid_0),
-      .data_in_i   (databus_rdata_0),
+      .second_valid_i(databus_ready_0),
+      .second_ready_o(databus_valid_0),
+      .second_data_i(databus_rdata_0),
 
-      // Connect to memory
-      .mem_enable_o(write_en),
-      .mem_addr_o  (write_addr),
-      .mem_data_o  (write_data),
+      .result_valid_o(write_en),
+      .result_ready_i(1'b1),
+      .result_first_data_o(write_addr),
+      .result_second_data_o(write_data),
 
       .clk_i(clk),
       .rst_i(rst)

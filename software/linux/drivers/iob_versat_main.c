@@ -101,7 +101,7 @@ static int module_mmap(struct file* file, struct vm_area_struct* vma){
       return -EIO;
    }
 
-   // TODO: Zero out the pages.
+   // TODO: Zero out the pages or check if the kernel already does
    virtual_mem = page_address(page); //alloc_mapable_pages(pages); 
    printk(KERN_INFO "Virtual Address %px\n",virtual_mem);
 

@@ -1,6 +1,7 @@
 import clang
 from clang.cindex import Cursor, Index, Config, CursorKind, TranslationUnit, TypeKind
 import sys
+import copy
 
 import traceback
 from inspect import currentframe
@@ -35,18 +36,23 @@ def DebugPrint(*args,**kargs):
     if(ENABLE_DEBUG_PRINT):
         print(*args,**kargs)
 
+openedFilesDict = {}
+
 def GetEntireSourceText(c: Cursor):
+    global openedFilesDict
     start = c.extent.start.offset
     end = c.extent.end.offset
 
-    # TODO(performance): Slow to keep opening and closing
-    file = open(c.extent.start.file.name,'r')
-    file.seek(start)
-    
-    content = file.read(end - start + 1)
-    file.close()
+    fileName = c.extent.start.file.name
+    content = None
+    if(fileName in openedFilesDict):
+        content = openedFilesDict[fileName]
+    else:
+        with open(fileName,'r') as file:
+            content = file.read()
+            openedFilesDict[fileName] = content
 
-    return content
+    return content[start:end]
 
 class TemplateArgument:
     def __init__(self,name):
@@ -266,7 +272,6 @@ def MakeTypeFromCursor(c: Cursor):
 
         name = c.spelling
         members,templateParameters,inheritBase = ParseMembers(c,0,isUnion)
-        #print(name,amountOfFields)
 
         parsedStruct = Struct(name,members,templateParameters,inheritBase,c.brief_comment,GetEntireSourceText(c),c.type.is_pod(),isUnion)
         allTypes[name] = parsedStruct
@@ -313,23 +318,6 @@ def PrintRecurse(c: Cursor,indent = 0):
     for n in c.get_children():
         PrintRecurse(n, indent + 2)
 
-'''
-def InsertIfNotExists(key,data):
-    global allTypes
-    try:
-        val = allTypes[key]
-        if val == None or val == UNKNOWN:
-            if val != UNKNOWN and data == UNKNOWN:
-                print(f"[{LineNumber()}] Trying to insert unknown type that already exists {key}:{val}")
-                sys.exit(1)
-            allTypes[key] = data
-    except:
-        allTypes[key] = data
-'''
-
-#def GetSimplestType(t):
-#    return t.get_canonical().get_class_type()
-
 def GetIndex(iter,index):
     i = 0
     for d in iter:
@@ -356,8 +344,6 @@ def ParseMembers(c,startPosition,isUnion):
         if(n.kind == CursorKind.TEMPLATE_TYPE_PARAMETER):
             templateParameters.append(n.spelling)
         if(n.kind == CursorKind.CXX_BASE_SPECIFIER):
-            #inheritBase = n.spelling
-            #print(inheritBase)
             inheritBase = GetIndex(n.get_children(),0).spelling
         if(n.kind == CursorKind.FIELD_DECL):
             if ENABLE_PRINT:
@@ -386,6 +372,14 @@ def Recurse(c: Cursor, indent=0):
             for n in c.get_children():
                 PrintRecurse(n, indent + 2)
 
+def Recurse2(c: Cursor, indent=0):
+    goodCursors = []
+    if(GoodLocation(c)):
+        if(c.kind in [CursorKind.STRUCT_DECL,CursorKind.CLASS_DECL,CursorKind.CLASS_TEMPLATE,CursorKind.ENUM_DECL,CursorKind.UNION_DECL,CursorKind.TYPEDEF_DECL]):
+            goodCursors.append(c)
+
+    return goodCursors
+
 class Counter:
     def __init__(self):
         self.counter = 0
@@ -395,6 +389,21 @@ class Counter:
         self.counter += 1
         return val
 
+def Unique(l,comp):
+    toRemoveIndex = []
+    for i,x in enumerate(l):
+        for j,y in enumerate(l[i+1:]):
+            if(comp(x,y)):
+                #print(x.spelling,y.spelling,i+j,l[i].spelling,l[i+1+j].spelling)
+                toRemoveIndex.append(i+j+1)
+
+    copied = copy.copy(l)
+    for i in list(sorted(list(set(toRemoveIndex))))[::-1]:
+        #print(i)
+        del copied[i]
+
+    return copied
+
 if __name__ == "__main__":
     output_path = sys.argv[1]
     files = sys.argv[2:]
@@ -402,14 +411,16 @@ if __name__ == "__main__":
     headers = [x.split("/")[-1] for x in files]
     index = Index.create()
     # TODO: Need to receive args from above
-    args = ['-x', 'c++', '-std=c++17', '-fparse-all-comments', '-I../../software/common', '-I../../software']
+    args = ['-x', 'c++', '-std=c++17', '-Isoftware/common']
 
-    for file in files:
-        tu = TranslationUnit.from_source(file, args,options=TranslationUnit.PARSE_INCLUDE_BRIEF_COMMENTS_IN_CODE_COMPLETION)
+    #print(files)
 
-        for n in tu.cursor.get_children():
-            Recurse(n)
-        #break
+    if True:
+        for file in files:
+            tu = TranslationUnit.from_source(file, args,options=TranslationUnit.PARSE_INCLUDE_BRIEF_COMMENTS_IN_CODE_COMPLETION)
+
+            for n in tu.cursor.get_children():
+                Recurse(n)
 
     intType = allTypes["int"]
     pointerT = Pointer("T*",TemplateArgument("T"))
@@ -425,7 +436,10 @@ if __name__ == "__main__":
     for name,s in allTypes.items():
         if(s.Type() == STRUCT and s.inheritBase):
             if(s.inheritBase == "T"): continue
-            elem = allTypes[s.inheritBase]
+            name = s.inheritBase
+            if("struct" in s.inheritBase):
+                name = s.inheritBase.replace("struct","").strip()
+            elem = allTypes[name]
 
             maxSize = max(x.position for x in elem.members)
 
@@ -433,13 +447,6 @@ if __name__ == "__main__":
                 member.position += maxSize + 1
 
             s.members = elem.members + s.members
-
-    #del allTypes["AcceleratorMapping"]
-    #del allTypes["TrieMap"]
-    #del allTypes["TrieMapNode"]
-    #del allTypes["TrieMapIterator"]
-    #del allTypes["TrieSet"]
-    #del allTypes["TrieSetIterator"]
 
     enumStructures = {}
     structStructures = {}
@@ -454,11 +461,17 @@ if __name__ == "__main__":
             typedefStructures[name] = data
         elif((data.Type() == STRUCT or data.Type() == UNION) and len(data.templateParameters) == 0 and len(data.members) > 0):
             structStructures[name] = data
-        elif(data.Type() in [BASE,POINTER]):
+        elif(data.Type() in [BASE,POINTER,ARRAY]):
             pass
         else:
             print(f"Missing a type: {name}:{data.Type()}\n")
             #sys.exit(-1)
+
+    #print(structStructures["MuxInfo"])
+    #print()
+    #print()
+    #print(structStructures["WireInformation"])
+    #sys.exit()
 
     typeInfoFile = open(output_path + "/typeInfo.cpp","w")
 
@@ -489,7 +502,7 @@ if __name__ == "__main__":
         typeInfoFile.write(f"static Pair<String,int> {name}Data[] = " + "{" + enumString + "};\n")
         typeInfoFile.write("\n")
 
-        typeInfoFile.write(f"RegisterEnum(STRING(\"{name}\"),C_ARRAY_TO_ARRAY({name}Data));\n")
+        typeInfoFile.write(f"RegisterEnum(STRING(\"{name}\"),sizeof({name}),alignof({name}),C_ARRAY_TO_ARRAY({name}Data));\n")
         typeInfoFile.write("\n")
 
     counter = Counter()
@@ -584,255 +597,6 @@ if __name__ == "__main__":
     typeInfoFile.write("}\n")
 
     typeInfoFile.close()
-
-    #
-    #
-    #
-
-    reprSource = open(output_path + "/autoRepr.cpp","w")
-    reprHeader = open(output_path + "/autoRepr.hpp","w")
-
-    reprSource.write("// File auto generated by structParser.py\n")
-    reprHeader.write("// File auto generated by structParser.py\n")
-
-    reprHeader.write("#pragma once\n\n")
-    
-    for file in files:
-        lastSep = file.rfind("/")
-        reprHeader.write(f"#include \"{file[lastSep+1:]}\"\n")
-        #reprSource.write(f"#include \"{file}\"\n")
-    reprSource.write("#include \"autoRepr.hpp\"\n")
-    reprSource.write("\n")
-
-    '''
-    def CheckDeriveFormat(struct):
-        comment = struct.comments
-        if not comment:
-            return False
-        if("Derive" in comment and "Format" in comment):
-            return True
-        return False
-
-    reprSource.write("template<typename T>\n")
-    reprSource.write("String GetRepr(T** pointer,Arena* out){\n")
-    reprSource.write("  return PushString(out,\"%p\",pointer);\n")
-    reprSource.write("}\n")
-
-    simpleFormats = [("int","d"),
-                     ("long int","ld"),
-                     ("size_t","zd"),
-                     ("unsigned int","u"),
-                     ("float","f"),
-                     ("double","f"),
-                     ("char","c")]
-
-    for formType,form in simpleFormats:
-        reprSource.write(f"String GetRepr({formType}* val,Arena* out)" + "{\n")
-        reprSource.write(f"  return PushString(out,\"%{form}\",*val);\n")
-        reprSource.write("}\n")
-
-    reprSource.write("String GetRepr(bool* boolean,Arena* out){\n")
-    reprSource.write("  return PushString(out,\"%d\",*boolean ? 1 : 0);\n")
-    reprSource.write("}\n")
-
-    reprSource.write("String GetRepr(String* str,Arena* out){\n")
-    reprSource.write("  return PushString(out,*str);\n")
-    reprSource.write("}\n")
-
-    reprSource.write("template<typename T>\n")
-    reprSource.write("String GetRepr(Opt<T>* optional,Arena* out){\n")
-    reprSource.write("  Opt<T> opt = *optional;\n")
-    reprSource.write("  if(opt.has_value()){\n")
-    reprSource.write("    return GetRepr(&opt.value(),out);\n")
-    reprSource.write("  } else {\n")
-    reprSource.write("    return PushString(out,STRING(\"-\"));\n")
-    reprSource.write("  }\n")
-    reprSource.write("}\n")
-
-    reprSource.write("""template<typename T>
-String GetRepr(Pool<T>* pool,Arena* out){
-  auto mark = StartString(out);
-  PushString(out,"(");
-  bool first = true;
-  for(T* t : *pool){
-    if(first){
-      first = false;
-    } else {
-      PushString(out,",");
-    }
-    GetRepr(t,out);
-  }
-  return EndString(mark);
-}
-""")
-
-    reprSource.write("""String GetRepr(FUDeclaration** decl,Arena* out){
-        if(*decl){
-            return PushString(out,(*decl)->name);
-        } else{
-            return PushString(out,"-");
-        }
-    }
-""")
-
-    reprSource.write("""String GetRepr(Array<int>* arr,Arena* out){
-      auto mark = StartString(out);
-      PushString(out,"(");
-      bool first = true;
-      for(int t : *arr){
-        if(first){
-          first = false;
-        } else {
-          PushString(out,",");
-        }
-        GetRepr(&t,out);
-      }
-      PushString(out,")");
-      return EndString(mark);
-    }
-""")
-
-    reprSource.write("template<typename T>\n")
-    reprSource.write("String GetRepr(Array<T>* arr,Arena* out){\n")
-    reprSource.write("  return PushString(out,\"(array:%d)\",arr->size);\n")
-    reprSource.write("}\n")
-
-
-    reprSource.write("template<typename T>\n")
-    reprSource.write("String GetRepr(Range<T>* range,Arena* out){\n")
-    reprSource.write("  return PushString(out,STRING(\"(range)\"));\n")
-    reprSource.write("}\n")
-
-    structsToOutput = []
-    typesToSee = set()
-
-    notPrintingList = ["SpecExpression","MappingNode","ConsolidationResult",
-                       "MergeEdge","MemoryAddressMask","Type",
-                       "TypeIterator","Iterator","Expression",
-                       "Trie","CommandDefinition","Block","TemplateRecord",
-                       "IndividualBlock","PortDeclaration","ExternalMemoryID","ExternalMemoryInfo",
-                       "PortEdge","MappingEdge","Accelerator","InstanceNode","DelayToAdd","Edge","AcceleratorMapping"]
-
-    def CheckIfPrinting(struct):
-        if(struct.name in notPrintingList):
-            return False
-
-        if(CheckDeriveFormat(struct) or struct.isPOD):
-            return True
-        return False
-
-    for name,s in structStructures.items():
-        if(CheckIfPrinting(s)):
-            structsToOutput.append(s)
-
-    for s in structsToOutput:
-        for member in s.members:
-            typesToSee.add(member.type)
-
-    reprHeader.write("\n")
-    '''
-
-    for name,s in enumStructures.items():
-        if(s.IsUnnamed()):
-            continue
-
-        reprHeader.write(f"String GetRepr({name}* e,Arena* out);\n")
-
-        reprSource.write(f"String GetRepr({name}* e,Arena* out)" + "{\n")
-        reprSource.write("  switch(*e){\n")
-
-        for value in s.values:
-            reprSource.write(f"  case {name}::{value}: return PushString(out,STRING(\"{value}\"));\n")
-        reprSource.write("  }\n")
-        reprSource.write("  return STRING(\"NOT POSSIBLE ENUM VALUE\");\n")
-        reprSource.write("}\n")
-
-    '''
-    def NormalRepr(structure,header,source):
-        header.write(f"String GetRepr({name}* s,Arena* out);\n")
-
-        source.write(f"String GetRepr({name}* s,Arena* out)" + "{\n")
-        source.write("  auto mark = StartString(out);\n")
-
-        for member in s.members:
-            if(member.type.Type() == ENUM and member.type.IsUnnamed()):
-                continue
-            source.write(f"  GetRepr(&s->{member.name},out);\n")
-
-        source.write("  String result = EndString(mark);\n")
-        source.write("  return result;\n}\n")
-
-    for name,s in structStructures.items():
-        if(CheckIfPrinting(s)):
-            NormalRepr(s,reprHeader,reprSource)
-
-    reprHeader.write("\n")
-
-    for name,s in structStructures.items():
-        if(CheckIfPrinting(s)):
-            reprHeader.write(f"Array<String> GetAllRepr({name}* s,Arena* out);\n")
-
-            reprSource.write(f"Array<String> GetAllRepr({name}* s,Arena* out)" + "{\n")
-            reprSource.write(f"  Array<String> arr = PushArray<String>(out,{len(s.members)});\n")
-
-            index = 0
-            for member in s.members:
-                if(member.type.Type() == ENUM and member.type.IsUnnamed()):
-                    continue
-                reprSource.write(f"  arr[{index}] = GetRepr(&s->{member.name},out);\n")
-                index += 1
-
-            reprSource.write("  return arr;\n}\n")
-
-    reprHeader.write("\n")
-
-    for name,s in structStructures.items():
-        if(CheckIfPrinting(s)):
-            reprHeader.write(f"String GetFullRepr({name}* s,Arena* out);\n")
-
-            reprSource.write(f"String GetFullRepr({name}* s,Arena* out)" + "{\n")
-            reprSource.write("  auto mark = StartString(out);\n")
-
-            index = 0
-            for member in s.members:
-                if(member.type.Type() == ENUM and member.type.IsUnnamed()):
-                    continue
-                reprSource.write(f"  PushString(out,\"{member.name}:\");\n")
-                reprSource.write(f"  GetRepr(&s->{member.name},out);\n")
-                reprSource.write(f"  PushString(out,\"\\n\");\n")
-                index += 1
-
-            reprSource.write("  String result = EndString(mark);\n")
-            reprSource.write("  return result;\n}\n")
-
-    reprHeader.write("\n")
-
-    for name,s in structStructures.items():
-        if(CheckIfPrinting(s)):
-            reprHeader.write(f"Array<String> GetFields({name}* marker,Arena* out);\n")
-
-            reprSource.write(f"Array<String> GetFields({name}* marker,Arena* out)" + "{\n")
-            reprSource.write(f"  Array<String> arr = PushArray<String>(out,{len(s.members)});\n")
-
-            index = 0
-            for member in s.members:
-                if(member.type.Type() == ENUM and member.type.IsUnnamed()):
-                    continue
-                reprSource.write(f"  arr[{index}] = STRING(\"{member.name}\");\n")
-                index += 1
-
-            reprSource.write("  return arr;\n}\n")
-
-    reprHeader.write("\n")
-
-    reprSource.close()
-    reprHeader.close()
-
-    for name,x in allTypes.items():
-        if(x.Type() == STRUCT and not x.isPOD):
-            print(x.name)
-    '''
-    #print(allTypes)
 
 # TODO() - Removing the printing of unnamed enums is not needed (we could have code that prints it) and it messes the allocated array
 

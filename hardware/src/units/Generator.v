@@ -1,7 +1,8 @@
 `timescale 1ns / 1ps
 
 module Generator #(
-   parameter PERIOD_W = 16
+   parameter PERIOD_W = 16,
+   parameter DELAY_W = 7
 ) (
    input clk,
    input rst,
@@ -17,7 +18,7 @@ module Generator #(
    input [          31:0] shift,
    input [          31:0] incr,
 
-   input [31:0] delay0,
+   input [DELAY_W-1:0] delay0,
 
    //outputs 
    (* versat_latency = 0 *)
@@ -29,9 +30,10 @@ module Generator #(
 
    assign out0 = genOut;  //done ? off_value : genOut;
 
-   MyAddressGen #(
+   AddressGen #(
       .ADDR_W  (32),
       .DATA_W  (8),
+      .DELAY_W (DELAY_W),
       .PERIOD_W(PERIOD_W)
    ) addrGen (
       .clk_i(clk),
@@ -52,6 +54,7 @@ module Generator #(
       .valid_o(),
       .ready_i(1'b1),
       .addr_o (genOut),
+      .store_o(),
 
       .done_o(done)
    );

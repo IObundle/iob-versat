@@ -14,6 +14,12 @@ struct CompiledTemplate;
 
 typedef Range<Expression*> ExpressionRange;
 
+enum VersatStage{
+  VersatStage_COMPUTE, // The default is Compute
+  VersatStage_READ,
+  VersatStage_WRITE
+};
+
 struct PortDeclaration{
   Hashmap<String,Value>* attributes;
   ExpressionRange range;
@@ -33,11 +39,11 @@ struct Module{
   bool isSource;
 };
 
-// TODO: This is a copy of Wire from configurations.hpp, but we do not include because this file should not include from the compiler code.
 template<typename T>
 struct WireTemplate{
   String name;
   T bitSize;
+  VersatStage stage;
   bool isStatic; // This is only used by the verilog parser (?) to store info. TODO: Use a different structure in the verilog parser which contains this and remove from Wire   
 };
 
@@ -151,8 +157,8 @@ struct ModuleInfo{
   bool signalLoop;
 };
 
-String PreprocessVerilogFile(String fileContent,Array<String> includeFilepaths,Arena* out,Arena* temp);
-Array<Module> ParseVerilogFile(String fileContent,Array<String> includeFilepaths,Arena* out,Arena* temp); // Only handles preprocessed files
-ModuleInfo ExtractModuleInfo(Module& module,Arena* permanent,Arena* tempArena);
+String PreprocessVerilogFile(String fileContent,Array<String> includeFilepaths,Arena* out);
+Array<Module> ParseVerilogFile(String fileContent,Array<String> includeFilepaths,Arena* out); // Only handles preprocessed files
+ModuleInfo ExtractModuleInfo(Module& module,Arena* out);
 
 Value Eval(Expression* expr,Array<ParameterExpression> parameters);

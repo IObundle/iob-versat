@@ -48,6 +48,7 @@ namespace BasicTemplates{
   extern CompiledTemplate* acceleratorTemplate;
   extern CompiledTemplate* iterativeTemplate;
   extern CompiledTemplate* topAcceleratorTemplate;
+  extern CompiledTemplate* topConfigurationsTemplate;
   extern CompiledTemplate* acceleratorHeaderTemplate;
   extern CompiledTemplate* externalInternalPortmapTemplate;
   extern CompiledTemplate* externalPortTemplate;
@@ -64,49 +65,44 @@ bool EqualPortMapping(PortInstance p1,PortInstance p2);
 bool IsUnitCombinatorial(FUInstance* inst);
 
 // Graph fixes
-Array<DelayToAdd> GenerateFixDelays(Accelerator* accel,EdgeDelay* edgeDelays,Arena* out,Arena* temp);
-void FixDelays(Accelerator* accel,Hashmap<Edge,DelayInfo>* edgeDelays,Arena* temp);
+Array<DelayToAdd> GenerateFixDelays(Accelerator* accel,EdgeDelay* edgeDelays,Arena* out);
+void FixDelays(Accelerator* accel,Hashmap<Edge,DelayInfo>* edgeDelays);
 
 // Accelerator merging
-DAGOrderNodes CalculateDAGOrder(FUInstance* instances,Arena* arena);
-
-// Debug
-void AssertGraphValid(FUInstance* nodes,Arena* arena);
+DAGOrderNodes CalculateDAGOrder(Pool<FUInstance>* instances,Arena* out);
 
 // Misc
 bool CheckValidName(String name); // Check if name can be used as identifier in verilog
 bool IsTypeHierarchical(FUDeclaration* decl);
-FUInstance* GetInputInstance(FUInstance* nodes,int inputIndex);
-FUInstance* GetOutputInstance(FUInstance* nodes);
+FUInstance* GetInputInstance(Pool<FUInstance>* nodes,int inputIndex);
+FUInstance* GetOutputInstance(Pool<FUInstance>* nodes);
 
-// Temp
-struct ModuleInfo;
-FUDeclaration* RegisterModuleInfo(ModuleInfo* info,Arena* temp);
-
-// Versat functions
-
-void ParseVersatSpecification(String content,Arena* temp,Arena* temp2);
-void ParseVersatSpecificationFromFilepath(String filepath,Arena* temp,Arena* temp2);
+FUDeclaration* RegisterModuleInfo(ModuleInfo* info);
 
 // Accelerator functions
 FUInstance* CreateFUInstance(Accelerator* accel,FUDeclaration* type,String entityName);
-Accelerator* Flatten(Accelerator* accel,int times,Arena* temp);
+Pair<Accelerator*,SubMap*> Flatten(Accelerator* accel,int times);
 
-void FillDeclarationWithAcceleratorValues(FUDeclaration* decl,Accelerator* accel,Arena* temp,Arena* temp2);
-void FillDeclarationWithAcceleratorValuesNoDelay(FUDeclaration* decl,Accelerator* accel,Arena* temp,Arena* temp2); // HACK
+void FillDeclarationWithAcceleratorValues(FUDeclaration* decl,Accelerator* accel);
 void FillDeclarationWithDelayType(FUDeclaration* decl);
 
 // Static and configuration sharing
 void ShareInstanceConfig(FUInstance* inst, int shareBlockIndex);
 void SetStatic(Accelerator* accel,FUInstance* inst);
 
+enum SubUnitOptions{
+  SubUnitOptions_BAREBONES,
+  SubUnitOptions_FULL
+};
+
 // Declaration functions
+
+// nocheckin: Replace RegisterFU with a AllocateFU function.
+//            We do not need anything from the declaration during registering, so might as well simplify this part.
 FUDeclaration* RegisterFU(FUDeclaration declaration);
 FUDeclaration* GetTypeByName(String str);
-FUDeclaration* RegisterIterativeUnit(Accelerator* accel,FUInstance* inst,int latency,String name,Arena* temp,Arena* temp2);
-FUDeclaration* RegisterSubUnit(Accelerator* circuit,Arena* temp,Arena* temp2);
-
-void PrintDeclaration(FILE* out,FUDeclaration* decl,Arena* temp,Arena* temp2);
+FUDeclaration* RegisterIterativeUnit(Accelerator* accel,FUInstance* inst,int latency,String name);
+FUDeclaration* RegisterSubUnit(Accelerator* circuit,SubUnitOptions options = SubUnitOptions_FULL);
 
 // Helper functions, useful to implement custom units
 FUInstance* CreateOrGetInput(Accelerator* accel,String name,int portNumber);
@@ -114,7 +110,5 @@ FUInstance* CreateOrGetOutput(Accelerator* accel);
 
 // Helper functions to create sub accelerators
 int GetInputPortNumber(FUInstance* inputInstance);
-
-void TestVersatSide(); // Calls tests from versat side
 
 #include "typeSpecifics.inl"

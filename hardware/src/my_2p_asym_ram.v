@@ -41,8 +41,8 @@ module my_2p_asym_ram #(
    wire [MINDATA_W-1:0] data_rd[N-1:0];
 
    //instantiate N symmetric RAM blocks and connect them to the buses
-   genvar i;
    generate
+   genvar i;
       for (i = 0; i < N; i = i + 1) begin : ramInst
          iob_ram_2p #(
             .DATA_W(MINDATA_W),

@@ -4,6 +4,8 @@
 #{include "versat_common.tpl"}
 #include <new>
 
+#include <cstdint>
+
 #include <cassert>
 #define Assert(x) assert(x)
 
@@ -69,6 +71,28 @@ static const int INITIAL_MEMORY_LATENCY = 5;
 static const int MEMORY_LATENCY = 0;
 
 typedef char Byte;
+
+#if 0
+typedef struct{
+#{for elem structuredConfigs}
+#{if elem.typeAndNames.size > 1}
+  union{
+#{for typeAndName elem.typeAndNames}
+    @{typeAndName.type} @{typeAndName.name};
+#{end}
+  };
+#{else}
+  @{elem.typeAndNames[0].type} @{elem.typeAndNames[0].name};
+#{end}
+#{end}
+} AcceleratorConfig;
+#endif
+
+typedef struct{
+#{for name namedStates}
+  int @{name};
+#{end}
+} AcceleratorState;
 
 // Everything is statically allocated
 static constexpr int totalExternalMemory = @{totalExternalMemory};
@@ -143,7 +167,7 @@ extern "C" void VersatAcceleratorCreate(){
    self->rst = 0;
    self->running = 0;
 
-#{for i type.baseConfig.inputDelays.size}
+#{for i type.info.infos[0].inputDelays.size}
    self->in@{i} = 0;
 #{end}
 
@@ -179,22 +203,22 @@ if(SimulateDatabus){
       if(access->latencyCounter > 0){
          access->latencyCounter -= 1;
       } else {
-         #{set dataType #{call IntName opts.dataSize}}
+         #{set dataType #{call IntName opts.databusDataSize}}
          @{dataType}* ptr = (@{dataType}*) (self->databus_addr_@{i});
 
          if(self->databus_wstrb_@{i} == 0){
             if(ptr == nullptr){
-            #{if opts.dataSize > 64}
-            for(int i = 0; i < (@{opts.dataSize} / sizeof(int)); i++){
+            #{if opts.databusDataSize > 64}
+            for(int i = 0; i < (@{opts.databusDataSize} / sizeof(int32_t)); i++){
                self->databus_rdata_@{i}[i] = 0xfeeffeef;
             }
             #{else}
                self->databus_rdata_@{i} = 0xfeeffeef; // Feed bad data if not set (in pc-emul is needed otherwise segfault)
             #{end}
             } else {
-            #{if opts.dataSize > 64}
-               for(int i = 0; i < (@{opts.dataSize} / sizeof(int)); i++){
-                   self->databus_rdata_@{i}[i] = ptr[access->counter].i[i];
+            #{if opts.databusDataSize > 64}
+               for(int i = 0; i < (@{opts.databusDataSize} / sizeof(int)); i++){
+                   self->databus_rdata_@{i}[i] = ptr[access->counter + i];
                }
             #{else}
                self->databus_rdata_@{i} = ptr[access->counter];
@@ -202,9 +226,9 @@ if(SimulateDatabus){
             }
          } else { // self->databus_wstrb_@{i} != 0
             if(ptr != nullptr){
-            #{if opts.dataSize > 64}
-               for(int i = 0; i < (@{opts.dataSize} / sizeof(int)); i++){
-                  ptr[access->counter].i[i] = self->databus_wdata_@{i}[i];
+            #{if opts.databusDataSize > 64}
+               for(int i = 0; i < (@{opts.databusDataSize} / sizeof(int)); i++){
+                  ptr[access->counter + i] = self->databus_wdata_@{i}[i];
                }
             #{else}
                ptr[access->counter] = self->databus_wdata_@{i};
@@ -221,7 +245,11 @@ if(SimulateDatabus){
             access->counter = 0;
             self->databus_last_@{i} = 1;
          } else {
-            access->counter += 1;
+         #{if opts.databusDataSize > 64}
+             access->counter += (@{opts.databusDataSize} / sizeof(int));
+         #{else}
+             access->counter += 1;
+         #{end}
          }
 
          access->latencyCounter = MEMORY_LATENCY;
@@ -399,10 +427,10 @@ if(SimulateDatabus){
 #{end}
 
 // TODO: Technically only need to do this at the end of an accelerator run, do not need to do this every single update
-#{if type.baseConfig.states}
+#{if type.states}
 AcceleratorState* state = &stateBuffer;
-#{for i type.baseConfig.states.size}
-#{set wire type.baseConfig.states[i]}
+#{for i type.states.size}
+#{set wire type.states[i]}
    state->@{statesHeader[i]} = self->@{wire.name};
 #{end}
 #{end}
@@ -439,9 +467,9 @@ AcceleratorConfig* config = (AcceleratorConfig*) &configBuffer;
 AcceleratorStatic* statics = (AcceleratorStatic*) &staticBuffer;
 
 #{for wire allConfigsVerilatorSide}
- #{if configsHeader[index].bitSize != 64}
+  #{if configsHeader[index].bitSize != 64}
 
-#if 0
+#if 1
   once{
      if((long long int) config->TOP_@{wire.name} >= ((long long int) 1 << @{configsHeader[index].bitSize})){
       printf("[Once] Warning, configuration value contains more bits\n");
@@ -450,8 +478,27 @@ AcceleratorStatic* statics = (AcceleratorStatic*) &staticBuffer;
     }
   };
 #endif
-#{end}
+  #{end}
+
+  #{if wire.stage == 1} //READ
   self->@{wire.name} = config->TOP_@{wire.name};
+  #{end}
+
+  #{if wire.stage == 0} // COMPUTED
+  static iptr COMPUTED_@{wire.name} = 0;
+  self->@{wire.name} = COMPUTED_@{wire.name};
+  COMPUTED_@{wire.name} = config->TOP_@{wire.name};
+  #{end}
+
+
+  #{if wire.stage == 2} //WRITE
+  static iptr COMPUTED_@{wire.name} = 0;
+  static iptr WRITE_@{wire.name} = 0;
+
+  self->@{wire.name} = COMPUTED_@{wire.name};
+  COMPUTED_@{wire.name} = WRITE_@{wire.name};
+  WRITE_@{wire.name} = config->TOP_@{wire.name};
+  #{end}
 #{end}
 #{end}
 
@@ -459,8 +506,8 @@ AcceleratorStatic* statics = (AcceleratorStatic*) &staticBuffer;
   self->@{wire.name} = statics->@{wire.name};
 #{end}
 
-#{if type.baseConfig.delayOffsets.max}
-#{for i type.baseConfig.delayOffsets.max}
+#{if type.numberDelays}
+#{for i type.numberDelays}
   //self->delay@{i} = accelDelay.TOP_Delay@{i};
 #{end}
 #{end}
@@ -504,8 +551,8 @@ extern "C" void VersatAcceleratorSimulate(){
   for(int i = 0; !IsDone() ; i++){
     InternalUpdateAccelerator();
 
-    if(i >= 10000){
-      printf("Accelerator simulation has surpassed 10000 cycles for a single run\n");
+    if(i >= 10000000){
+      printf("Accelerator simulation has surpassed 10000000 cycles for a single run\n");
       printf("Assuming that the accelerator is stuck in a never ending loop\n");
       printf("Terminating simulation\n");
       fflush(stdout);
@@ -588,9 +635,9 @@ extern "C" void VersatSignalLoop(){
 }
 
 extern "C" void VersatLoadDelay(const unsigned int* delayBuffer){
-  #{if type.baseConfig.delayOffsets.max}
+  #{if type.numberDelays}
   V@{type.name}* self = dut;
-    #{for i type.baseConfig.delayOffsets.max}
+    #{for i type.numberDelays}
   self->delay@{i} = delayBuffer[@{i}];
     #{end}
    self->eval();

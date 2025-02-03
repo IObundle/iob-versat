@@ -6,6 +6,7 @@
 
 #include <algorithm>
 
+#include "filesystem.hpp"
 #include "globals.hpp"
 #include "memory.hpp"
 #include "type.hpp"
@@ -15,11 +16,11 @@
 #include "versat.hpp"
 #include "accelerator.hpp"
 
-static void OutputGraphDotFile_(Accelerator* accel,bool collapseSameEdges,Set<FUInstance*>* highlighInstance,FILE* outputFile,Arena* temp){
-  BLOCK_REGION(temp);
+static void OutputGraphDotFile_(Accelerator* accel,bool collapseSameEdges,Set<FUInstance*>* highlighInstance,FILE* outputFile){
+  TEMP_REGION(temp,nullptr);
 
   fprintf(outputFile,"digraph accel {\n\tnode [fontcolor=white,style=filled,color=\"160,60,176\"];\n");
-  FOREACH_LIST(FUInstance*,ptr,accel->allocated){
+  for(FUInstance* ptr : accel->allocated){
     FUInstance* inst = ptr;
     String id = UniqueRepr(inst,temp);
     String name = Repr(inst,globalDebug.dotFormat,temp);
@@ -47,7 +48,7 @@ static void OutputGraphDotFile_(Accelerator* accel,bool collapseSameEdges,Set<FU
   Hashmap<Pair<FUInstance*,FUInstance*>,int>* seen = PushHashmap<Pair<FUInstance*,FUInstance*>,int>(temp,size);
 
   // TODO: Consider adding a true same edge counter, that collects edges with equal delay and then represents them on the graph as a pair, using [portStart-portEnd]
-  FOREACH_LIST(FUInstance*,ptr,accel->allocated){
+  for(FUInstance* ptr : accel->allocated){
     FUInstance* out = ptr;
 
     FOREACH_LIST(ConnectionNode*,con,ptr->allOutputs){
@@ -92,99 +93,30 @@ static void OutputGraphDotFile_(Accelerator* accel,bool collapseSameEdges,Set<FU
   fprintf(outputFile,"}\n");
 }
 
-void OutputGraphDotFile(Accelerator* accel,bool collapseSameEdges,String filename,Arena* temp){
-  if(!globalOptions.debug){
-    return;
-  }
-
-  FILE* file = OpenFileAndCreateDirectories(StaticFormat("%.*s",UNPACK_SS(filename)),"w");
-  DEFER_CLOSE_FILE(file);
-  OutputGraphDotFile_(accel,collapseSameEdges,nullptr,file,temp);
-}
-
-void OutputGraphDotFile(Accelerator* accel,bool collapseSameEdges,FUInstance* highlighInstance,String filename,Arena* temp){
-  if(!globalOptions.debug){
-    return;
-  }
-
-  BLOCK_REGION(temp);
-  Set<FUInstance*>* highlight = PushSet<FUInstance*>(temp,1);
-  highlight->Insert(highlighInstance);
-
-  FILE* file = OpenFileAndCreateDirectories(StaticFormat("%.*s",UNPACK_SS(filename)),"w");
-  DEFER_CLOSE_FILE(file);
-  OutputGraphDotFile_(accel,collapseSameEdges,highlight,file,temp);
-}
-
-void OutputGraphDotFile(Accelerator* accel,bool collapseSameEdges,Set<FUInstance*>* highlight,String filename,Arena* temp){
-  if(!globalOptions.debug){
-    return;
-  }
-
-  BLOCK_REGION(temp);
-  FILE* file = OpenFileAndCreateDirectories(StaticFormat("%.*s",UNPACK_SS(filename)),"w");
-  DEFER_CLOSE_FILE(file);
-  OutputGraphDotFile_(accel,collapseSameEdges,highlight,file,temp);
-}
-
 void OutputContentToFile(String filepath,String content){
-  FILE* file = fopen(StaticFormat("%.*s",UNPACK_SS(filepath)),"w");
+  FILE* file = OpenFile(filepath,"w",FilePurpose_DEBUG_INFO);
   DEFER_CLOSE_FILE(file);
   
   if(!file){
     printf("[OutputContentToFile] Error opening file: %.*s\n",UNPACK_SS(filepath));
-    DEBUG_BREAK();
+    return;
   }
 
   int res = fwrite(content.data,sizeof(char),content.size,file);
   Assert(res == content.size);
 }
 
-String PushMemoryHex(Arena* arena,void* memory,int size){
-  auto mark = StartString(arena);
-
-  unsigned char* view = (unsigned char*) memory;
-
-  for(int i = 0; i < size; i++){
-    int low = view[i] % 16;
-    int high = view[i] / 16;
-
-    PushString(arena,"%c%c ",GetHex(high),GetHex(low));
-  }
-
-  return EndString(mark);
-}
-
-void OutputMemoryHex(void* memory,int size){
-  unsigned char* view = (unsigned char*) memory;
-
-  for(int i = 0; i < size; i++){
-    if(i % 16 == 0 && i != 0){
-      printf("\n");
-    }
-
-    int low = view[i] % 16;
-    int high = view[i] / 16;
-
-    printf("%c%c ",GetHex(high),GetHex(low));
-
-  }
-
-  printf("\n");
-}
-
-void OutputGraphDotFile(Accelerator* accel,bool collapseSameEdges,FUInstance* highlighInstance,CalculateDelayResult delays,String filename,Arena* temp){
+void OutputGraphDotFile(Accelerator* accel,bool collapseSameEdges,FUInstance* highlighInstance,CalculateDelayResult delays,String filename){
+  TEMP_REGION(temp,nullptr);
   if(!globalOptions.debug){
     return;
   }
 
-  FILE* outputFile = OpenFileAndCreateDirectories(StaticFormat("%.*s",UNPACK_SS(filename)),"w");
+  FILE* outputFile = OpenFileAndCreateDirectories(filename,"w",FilePurpose_DEBUG_INFO);
   DEFER_CLOSE_FILE(outputFile);
-  
-  BLOCK_REGION(temp);
 
   fprintf(outputFile,"digraph accel {\n\tnode [fontcolor=white,style=filled,color=\"160,60,176\"];\n");
-  FOREACH_LIST(FUInstance*,ptr,accel->allocated){
+  for(FUInstance* ptr : accel->allocated){
     FUInstance* inst = ptr;
     String id = UniqueRepr(inst,temp);
     String name = Repr(inst,globalDebug.dotFormat,temp);

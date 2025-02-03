@@ -32,15 +32,10 @@ typedef uint64_t uint64;
 iptr versat_base;
 static bool enableDMA;
 
+// TODO: Need to dephase typeof, it is a gnu extension, not valid C until version C23 which is recent to support
 typeof(accelConfig) accelConfig  = 0;
 typeof(accelState)  accelState   = 0;
-volatile AcceleratorStatic*  accelStatics = 0;
-
-#if 0
-volatile AcceleratorConfig*  accelConfig  = 0;
-volatile AcceleratorState*   accelState   = 0;
-volatile AcceleratorStatic*  accelStatics = 0;
-#endif
+typeof(accelStatic) accelStatic = 0;
 
 void versat_init(int base){
   versat_base = (iptr) base;
@@ -51,9 +46,9 @@ void versat_init(int base){
 
   MEMSET(versat_base,0x0,0x80000000); // Soft reset
 
-  accelConfig = (volatile AcceleratorConfig*) (versat_base + configStart);
-  accelState  = (volatile AcceleratorState*)  (versat_base + stateStart);
-  accelStatics = (volatile AcceleratorStatic*)  (versat_base + staticStart);
+  accelConfig = (typeof(accelConfig)) (versat_base + configStart);
+  accelState  = (typeof(accelState))  (versat_base + stateStart);
+  accelStatic = (volatile AcceleratorStatic*)  (versat_base + staticStart);
 
   VersatLoadDelay(delayBuffer);
 }

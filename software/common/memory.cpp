@@ -15,6 +15,20 @@
 #include "intrinsics.hpp"
 #include "utilsCore.hpp"
 
+Arena* contextArenas[2];
+
+Arena* GetArena(Arena* diff){
+  if(diff == nullptr){
+    return contextArenas[0];
+  } else {
+    if(contextArenas[0] == diff){
+      return contextArenas[1];
+    } else {
+      return contextArenas[0];
+    }
+  }
+}
+
 int GetPageSize(){
   static int pageSize = 0;
 
@@ -46,14 +60,8 @@ long PagesAvailable(){
   return res;
 }
 
-void CheckMemoryStats(){
-  if(pagesAllocated != pagesDeallocated){
-    LogWarn(LogModule::MEMORY,"Number of pages freed/allocated: %d/%d",pagesDeallocated,pagesAllocated);
-  }
-}
-
 void AlignArena(Arena* arena,int alignment){
-  int offset = arena->used % alignment; // TODO: Get alignment info as function parameter
+  int offset = arena->used % alignment;
 
   if(offset == 0){
     return;
@@ -68,7 +76,12 @@ Arena InitArena(size_t size){
   arena.used = 0;
   arena.totalAllocated = size;
   arena.mem = (Byte*) calloc(size,sizeof(Byte));
-  Assert(arena.mem);
+  
+  if(arena.mem == nullptr){
+    fprintf(stderr,"Error allocating memory. Make sure enough memory is available\n");
+    exit(1);
+  }
+
   Assert(IS_ALIGNED_64(arena.mem));
 
   return arena;
@@ -127,15 +140,12 @@ void PopMark(ArenaMark mark){
 }
 
 Byte* PushBytes(Arena* arena, size_t size){
-#ifdef VERSAT_DEBUG
-  Assert(!arena->locked);
-#endif
-
   Byte* ptr = &arena->mem[arena->used];
 
   if(arena->used + size > arena->totalAllocated){
     printf("[%s] Used: %zd, Size: %zd, Total: %zd\n",__PRETTY_FUNCTION__,arena->used,size,arena->totalAllocated);
-    DEBUG_BREAK();
+    NOT_IMPLEMENTED("Need to change arena to linked list approach");
+    exit(0);
   }
   
   arena->used += size;
@@ -149,10 +159,74 @@ size_t SpaceAvailable(Arena* arena){
   return remaining;
 }
 
-DynamicString StartString(Arena* arena){
+StringBuilder* StartStringBuilder(Arena* out){
+  StringBuilder* builder = PushStruct<StringBuilder>(out);
+  builder->arena = out;
+  builder->head = nullptr;
+  builder->tail = nullptr;
+  
+  return builder;
+}
+
+void StringBuilder::PushString(String str){
+  StringNode* node = PushStruct<StringNode>(this->arena);
+  node->string = ::PushString(this->arena,str);
+
+  if(this->head == nullptr){
+    this->head = node;
+    this->tail = node;
+  } else {
+    this->tail->next = node;
+    this->tail = node;
+  }
+}
+
+void StringBuilder::vPushString(const char* format,va_list args){
+  StringNode* node = PushStruct<StringNode>(this->arena);
+  node->string = ::vPushString(this->arena,format,args);
+
+  if(this->head == nullptr){
+    this->head = node;
+    this->tail = node;
+  } else {
+    this->tail->next = node;
+    this->tail = node;
+  }
+}
+
+void StringBuilder::PushString(const char* format,...){
+  va_list args;
+  va_start(args,format);
+
+  vPushString(format,args);
+
+  va_end(args);
+}
+
+String EndString(Arena* out,StringBuilder* builder){
+  int totalSize = 0;
+  for(StringNode* ptr = builder->head; ptr != nullptr; ptr = ptr->next){
+    totalSize += ptr->string.size;
+  }
+
+  Byte* data = PushBytes(out,totalSize);
+
+  String res = {};
+  res.data = (const char*) data;
+  res.size = totalSize;
+  
+  for(StringNode* ptr = builder->head; ptr != nullptr; ptr = ptr->next){
+    memcpy(data,ptr->string.data,ptr->string.size);
+    data += ptr->string.size;
+  }
+
+  return res;
+}
+
+DynamicString StartString(Arena* out){
   DynamicString res = {};
-  res.arena = arena;
-  res.mark = &arena->mem[arena->used];
+  res.arena = out;
+  res.mark = &out->mem[out->used];
   return res;
 }
 
@@ -160,7 +234,7 @@ String EndString(DynamicString mark){
   Arena* arena = mark.arena;
   String res = {};
   res.size = &arena->mem[arena->used] - mark.mark;
-  if(res.size == 0){ // Put data as NULL if size 0, probably less error prone. Not sure.
+  if(Empty(res)){ // Put data as NULL if size 0, probably less error prone. Not sure.
     res.data = nullptr;
   } else {
     res.data = (char*) mark.mark;
@@ -169,13 +243,13 @@ String EndString(DynamicString mark){
   return res;
 }
 
-String PushFile(Arena* arena,FILE* file){
+String PushFile(Arena* out,FILE* file){
   String res;
   long int size = GetFileSize(file);
 
-  AlignArena(arena,alignof(void*));
+  AlignArena(out,alignof(void*));
 
-  Byte* mem = PushBytes(arena,size);
+  Byte* mem = PushBytes(out,size);
   int amountRead = fread(mem,sizeof(Byte),size,file);
 
   if(amountRead != size){
@@ -189,31 +263,24 @@ String PushFile(Arena* arena,FILE* file){
   return res;
 }
 
+String PushFile(Arena* out,String filepath){
+  return PushFile(out,StaticFormat("%.*s",UNPACK_SS(filepath)));
+}
+
 //TODO: Replace return with Optional. Handle errors
-String PushFile(Arena* arena,const char* filepath){
+String PushFile(Arena* out,const char* filepath){
   FILE* file = fopen(filepath,"r");
   DEFER_CLOSE_FILE(file);
   
   if(!file){
     String res = {};
     printf("Failed to open file: %s\n",filepath);
-    DEBUG_BREAK();
+    NOT_IMPLEMENTED("Need to return opt and let code handle this instead. TODO");
     res.size = -1;
     return res;
   }
 
-  String res = PushFile(arena,file);
-
-  return res;
-}
-
-String PushChar(Arena* arena,const char ch){
-  Byte* mem = PushBytes(arena,1);
-
-  *mem = ch;
-  String res = {};
-  res.data = (const char*) mem;
-  res.size = 1;
+  String res = PushFile(out,file);
 
   return res;
 }
@@ -514,7 +581,8 @@ int BitArray::FirstBitSetIndex(){
 }
 
 int BitArray::FirstBitSetIndex(int start){
-#ifdef VERSAT_DEBUG
+  // TODO: For now I want correctness, find the bug to trailing zero.
+  //#ifdef VERSAT_DEBUG
   int correct = 0;
   for(int i = start; i < this->bitSize; i++){
     if(Get(i)){
@@ -522,8 +590,8 @@ int BitArray::FirstBitSetIndex(int start){
       break;
     }
   }
-  return correct; // TODO: For now I want correctness, find the bug to trailing zero.
-#endif
+  return correct;
+//#endif
 
   Assert(start < this->bitSize);
   int i = ALIGN_UP_32(start - 31);
@@ -566,21 +634,6 @@ int BitArray::FirstBitSetIndex(int start){
   return -1;
 }
 
-String BitArray::PrintRepresentation(Arena* output){
-  auto mark = StartString(output);
-  for(int i =  0; i < this->bitSize; i++){
-    int val = Get(i);
-
-    if(val){
-      PushString(output,STRING("1"));
-    } else {
-      PushString(output,STRING("0"));
-    }
-  }
-  String res = EndString(mark);
-  return res;
-}
-
 void BitArray::operator&=(BitArray& other){
   Assert(this->bitSize == other.bitSize);
 
@@ -610,6 +663,28 @@ BitIterator BitArray::end(){
   iter.currentByte = bitSize/ 8;
   iter.currentBit = bitSize % 8;
   return iter;
+}
+
+GenericPoolIterator IteratePool(void* pool,int sizeOfType,int alignmentOfType){
+  GenericPoolIterator iter = {};
+  if(pool == nullptr){
+    return iter;
+  }
+  
+  Byte* mem = *(Byte**) pool;
+  iter.Init(mem,sizeOfType);
+
+  return iter;
+}
+
+bool HasNext(GenericPoolIterator iter){
+  return iter.HasNext();
+}
+
+void* Next(GenericPoolIterator& iter){
+  void* res = *iter;
+  ++iter;
+  return res;
 }
 
 PoolInfo CalculatePoolInfo(int elemSize){
@@ -689,4 +764,124 @@ Byte* GenericPoolIterator::operator*(){
   Assert(pageInfo.bitmap[index] & (1 << bit));
 
   return val;
+}
+
+// Dynamic String
+
+void DynamicString::PushChar(const char ch){
+  Byte* mem = PushBytes(arena,1);
+  *mem = ch;
+}
+
+void DynamicString::PushString(String ss){
+  String res = ::PushString(this->arena,ss.size);
+  memcpy((void*) res.data,ss.data,ss.size);
+}
+
+void DynamicString::vPushString(const char* format,va_list args){
+  char* buffer = (char*) &arena->mem[arena->used];
+  size_t maximum = arena->totalAllocated - arena->used;
+  int size = vsnprintf(buffer,maximum,format,args);
+
+  Assert(size >= 0);
+  Assert(((size_t) size) < maximum);
+
+  arena->used += (size_t) (size);
+}
+
+void DynamicString::PushString(const char* format,...){
+  va_list args;
+  va_start(args,format);
+
+  vPushString(format,args);
+
+  va_end(args);
+}
+
+void DynamicString::PushNullByte(){
+  Byte* res = PushBytes(arena,1);
+  *res = '\0';
+}
+
+
+GenericArrayIterator IterateArray(void* array,int sizeOfType,int alignmentOfType){
+  GenericArrayIterator res = {};
+  res.array = array;
+  res.sizeOfType = sizeOfType;
+  res.alignmentOfType = alignmentOfType;
+
+  return res;
+}
+
+bool HasNext(GenericArrayIterator iter){
+  void** arrayData = (void**) iter.array;
+  int* size = (int*) (arrayData + 1);
+
+  return iter.index < *size;
+}
+
+void* Next(GenericArrayIterator& iter){
+  void** arrayData = (void**) iter.array;
+  void* arrayStart = (void*) arrayData[0]; 
+
+  char* view = (char*) arrayStart;
+  void* data = (void*) &view[iter.index * iter.sizeOfType];
+  iter.index += 1;
+  
+  return data;
+}
+
+GenericTrieMapIterator IterateTrieMap(void* trieMap,int sizeOfType,int alignmentOfType){
+  GenericTrieMapIterator res = {};
+  res.trieMap = trieMap;
+  res.sizeOfType = sizeOfType;
+  res.alignmentOfType = alignmentOfType;
+
+  TrieMap<int,int>* view = ((TrieMap<int,int>*) trieMap);
+
+  res.ptr = view->head;
+  
+  return res;
+}
+
+bool HasNext(GenericTrieMapIterator iter){
+  TrieMap<int,int>* view = ((TrieMap<int,int>*) iter.trieMap);
+
+  return iter.index < view->inserted;
+}
+
+void* Next(GenericTrieMapIterator& iter){
+  TrieMapNode<int,int>* ptr = (TrieMapNode<int,int>*) iter.ptr;
+
+  void* data = ((char*)ptr) + sizeof(void*) * 4;
+  TrieMapNode<int,int>* next = *(TrieMapNode<int,int>**) (((char*)data) + iter.sizeOfType);
+  iter.ptr = next;
+  
+  iter.index += 1;
+
+  return data;
+}
+
+GenericHashmapIterator IterateHashmap(void* hashmap,int sizeOfType,int alignmentOfType){
+  GenericHashmapIterator res = {};
+  res.hashmap = hashmap;
+  res.sizeOfType = sizeOfType;
+  res.alignmentOfType = alignmentOfType;
+
+  return res;
+}
+
+bool HasNext(GenericHashmapIterator iter){
+  Hashmap<int,int>* view = ((Hashmap<int,int>*) iter.hashmap);
+
+  return iter.index < view->nodesUsed;
+}
+
+void* Next(GenericHashmapIterator& iter){
+  Hashmap<int,int>* view = ((Hashmap<int,int>*) iter.hashmap);
+
+  char* arrayView = (char*) view->data;
+  void* data = (void*) &arrayView[iter.index * iter.sizeOfType];
+  iter.index += 1;
+  return data;
 }

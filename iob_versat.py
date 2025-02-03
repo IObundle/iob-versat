@@ -67,7 +67,7 @@ class iob_versat(iob_module):
                 {
                     "name": "ADDR_W",
                     "type": "P",
-                    "val": "`IOB_TIMER_SWREG_ADDR_W",
+                    "val": "`IOB_VERSAT_SWREG_ADDR_W",
                     "min": "NA",
                     "max": "NA",
                     "descr": "Address bus width",
@@ -166,6 +166,11 @@ def RunVersat(pc_emul,versat_spec,versat_top,versat_extra,build_dir,debug_path):
 
     returnCode = result.returncode
     output = codecs.getdecoder("unicode_escape")(result.stdout)[0]
+
+    errorOutput = codecs.getdecoder("unicode_escape")(result.stderr)[0]
+    #print(output)
+    print(output,file=sys.stderr)
+    print(errorOutput,file=sys.stderr)
 
     if(returnCode != 0):
         print("Failed to generate accelerator\n",file=sys.stderr)

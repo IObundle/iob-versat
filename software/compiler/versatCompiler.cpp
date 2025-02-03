@@ -1,11 +1,17 @@
+#include <argp.h>
 #include <unordered_map>
 #include <sys/wait.h>
 #include <ftw.h>
 
+// TODO: Eventually need to find a way of detecting superfluous includes or something to the same effect. Maybe possible change to a unity build althoug the main problem to solve is organization.
+
 #include "debugVersat.hpp"
 #include "declaration.hpp"
+#include "filesystem.hpp"
 #include "globals.hpp"
+#include "logger.hpp"
 #include "memory.hpp"
+#include "structParsing.hpp"
 #include "utilsCore.hpp"
 #include "versat.hpp"
 #include "utils.hpp"
@@ -16,379 +22,20 @@
 #include "codeGeneration.hpp"
 #include "accelerator.hpp"
 #include "dotGraphPrinting.hpp"
+#include "versatSpecificationParser.hpp"
+#include "symbolic.hpp"
+#include "parser.hpp"
+
+#include <filesystem>
+namespace fs = std::filesystem;
 
 // TODO: For some reason, in the makefile we cannot stringify the arguments that we want to
 //       Do not actually want to do these preprocessor things. Fix the makefile so that it passes as a string
 #define DO_STRINGIFY(ARG) #ARG
 #define STRINGIFY(ARG) DO_STRINGIFY(ARG)
 
-Opt<String> GetFileFormatFromPath(String filename){
-  int size = filename.size;
-  for(int i = 0; i < filename.size; i++){
-    char ch = filename[size - i - 1];
-    if(ch == '.'){
-      String res = (String){&filename[size - i],i};
-      return res;
-    }
-    if(ch == '/'){
-      break;
-    }
-  }
-
-  return Opt<String>();
-}
-
-#if 0
-// TODO: There is no reason to use small arguments. -d should just be -DMA. -D should just be -Databus and so on.
-// TODO: Rewrite to either use argparse or some lib parsing, or just parse ourselves but simplify adding more options and report errors.
-Options* ParseCommandLineOptions(int argc,char* argv[],Arena* out,Arena* temp){
-  Options* opts = PushStruct<Options>(out);
-  opts->dataSize = 32; // By default.
-  opts->addrSize = 32;
-
-  opts->debugPath = PushString(out,"%s/debug",GetCurrentDirectory()); // By default
-  PushNullByte(out);
-  
-  ArenaList<String>* verilogFiles = PushArenaList<String>(temp);
-  ArenaList<String>* extraSources = PushArenaList<String>(temp);
-  ArenaList<String>* includePaths = PushArenaList<String>(temp);
-  ArenaList<String>* unitPaths = PushArenaList<String>(temp);
-  
-  for(int i = 1; i < argc; i++){
-    String str = STRING(argv[i]);
-
-    Opt<String> formatOpt = GetFileFormatFromPath(str);
-
-    // TODO: Verilator does not actually need the source files for non top units. It only needs a include path to the folder that contains the sources and the verilog file of the top module. This could be removed. But also need to test further.
-    if(str.size >= 2 && str[0] == '-' && str[1] == 'S'){
-      if(str.size == 2){
-        if(i + 1 >= argc){
-          printf("Missing argument\n");
-          exit(-1);
-        }
-        *PushListElement(extraSources) = GetAbsolutePath(argv[i + 1],out);
-        i += 1;
-      } else {
-        *PushListElement(extraSources) = GetAbsolutePath(&str.data[2],out);
-      }
-
-      continue;
-    }
-
-	if(str.size > 3 && str[0] == '-' && str[1] == 'b' && str[2] == '='){
-	  Tokenizer tok(str,"=",{});
-
-	  tok.AssertNextToken("-b");
-	  tok.AssertNextToken("=");
-	  Token dataSize = tok.NextToken();
-	  Assert(tok.Done());
-
-	  int size = ParseInt(dataSize); // TODO: Should check for errors, probably have ParseInt return an optional
-	  opts->dataSize = size;
-	}
-
-    // TODO: This code indicates that we need an "arquitecture" generic portion of code
-    //       Things should be parameterizable
-    if(str.size >= 4 && str[0] == '-' && str[1] == 'x' && str[2] == '3' && str[3] == '2'){
-      Assert(str.size == 4);
-
-      opts->addrSize = 32;
-      continue;
-    }
-
-    if(str.size >= 4 && str[0] == '-' && str[1] == 'x' && str[2] == '6' && str[3] == '4'){
-      Assert(str.size == 4);
-
-      opts->addrSize = 64;
-      continue;
-    }
-
-    if(str.size >= 4 && str[0] == '-' && str[1] == '-' && str[2] == 'V' && str[3] == 'R'){
-      Assert(str.size == 4);
-
-      opts->verilatorRoot = STRING(argv[i+1]);
-      i += 1;
-      continue;
-    }
-
-    if(str.size >= 2 && str[0] == '-' && str[1] == 'd'){
-      Assert(str.size == 2);
-      opts->useDMA = true;
-    }
-
-    if(str.size >= 2 && str[0] == '-' && str[1] == 'D'){
-      Assert(str.size == 2);
-      opts->architectureHasDatabus = true;
-    }
-
-    if(str.size >= 2 && str[0] == '-' && str[1] == 'I'){
-      if(str.size == 2){
-        if(i + 1 >= argc){
-          printf("Missing argument\n");
-          exit(-1);
-        }
-        *PushListElement(includePaths) = GetAbsolutePath(argv[i + 1],out);
-        i += 1;
-      } else {
-        *PushListElement(includePaths) = GetAbsolutePath(&str.data[2],out);
-      }
-
-      continue;
-    }
-
-    if(str.size >= 2 && str[0] == '-' && str[1] == 'T'){
-      if(i + 1 >= argc){
-        printf("Missing argument\n");
-        exit(-1);
-      }
-      opts->topName = STRING(argv[i + 1]);
-      i += 1;
-      continue;
-    }
-
-    if(str.size >= 2 && str[0] == '-' && str[1] == 's'){
-      opts->addInputAndOutputsToTop = true;
-      continue;
-    }
-
-#if 0
-    if(str.size >= 2 && str[0] == '-' && str[1] == 'g'){
-      opts->debug = true;
-      continue;
-    }
-#endif
-    
-    if(str.size >= 2 && str[0] == '-' && str[1] == 'O'){
-      if(i + 1 >= argc){
-        printf("Missing argument\n");
-        exit(-1);
-      }
-
-      String unitPath = GetAbsolutePath(argv[i+1],out);
-      PushNullByte(out);
-
-      *PushListElement(unitPaths) = unitPath;
-      i += 1;
-      continue;
-    }
-
-    if(str.size >= 2 && str[0] == '-' && str[1] == 'A'){
-      if(i + 1 >= argc){
-        printf("Missing argument\n");
-        exit(-1);
-      }
-
-      opts->debug = true;
-
-      String debugPath = GetAbsolutePath(argv[i+1],out);
-      PushNullByte(out);
-     
-      opts->debugPath = debugPath;
-      PushNullByte(out);
-
-      i += 1;
-      continue;
-    }
-
-    if(str.size >= 2 && str[0] == '-' && str[1] == 'o'){
-      if(i + 1 >= argc){
-        printf("Missing argument\n");
-        exit(-1);
-      }
-      opts->hardwareOutputFilepath = GetAbsolutePath(argv[i+1],out);
-      PushNullByte(out);
-      i += 1;
-      continue;
-    }
-
-    if(str.size >= 2 && str[0] == '-' && str[1] == 'H'){
-      if(i + 1 >= argc){
-        printf("Missing argument\n");
-        exit(-1);
-      }
-      opts->softwareOutputFilepath = GetAbsolutePath(argv[i+1],out);
-      PushNullByte(out);
-      i += 1;
-      continue;
-    }
-    
-    if(formatOpt){
-      String format = formatOpt.value();
-      if(CompareString(format,"v")){
-        *PushListElement(verilogFiles) = GetAbsolutePath(argv[i],out);
-        continue;
-      } else { // Assume to be the specification file, for now
-        if(opts->specificationFilepath.size){
-          printf("Error, multiple specification files specified, not supported for now\n");
-          exit(-1);
-        }
-
-        opts->specificationFilepath = STRING(argv[i]);
-      }
-      continue;
-    }
-  }
-
-  opts->verilogFiles = PushArrayFromList(out,verilogFiles);
-  opts->extraSources = PushArrayFromList(out,extraSources);
-  opts->includePaths = PushArrayFromList(out,includePaths);
-  opts->unitPaths = PushArrayFromList(out,unitPaths);
-  
-  return opts;
-}
-#endif
-
-// These Call* functions are a bit hardcoded in functionality. I do not expect to call other programs often so no need to abstract for now.
-void CallVerilator(const char* unitPath,const char* outputPath){
-   pid_t pid = fork();
-  
-   char* const verilatorArgs[] = {
-      (char*) "verilator",
-      (char*) "--cc",
-      (char*) "-Mdir",
-      (char*) outputPath,
-      (char*) unitPath,
-      nullptr
-   };
-
-  // TODO: These errors should be cleaned up. Good for debugging but user should not care about internals of the compiler
-   if(pid < 0){
-     fprintf(stderr,"Error calling fork\n");
-     exit(-1);
-   } else if(pid == 0){
-     execvp("verilator",verilatorArgs);
-     printf("Error calling execvp for verilator: %s\n",strerror(errno));
-   } else {
-     int status;
-     wait(&status);
-
-     if(status != 0){
-       printf("There was a problem calling verilator\n");
-       printf("Versat might not produce correct results\n");
-     }
-   }  
-}
-
-String CallMakefile(const char* makePath,const char* action,Arena* out){
-  int pipeRead[2];
-  int res = pipe(pipeRead);
-
-  if(res == -1){
-    fprintf(stderr,"Problem creating pipe\n");
-    exit(-1);
-  }
-  
-  pid_t pid = fork();
-  
-  char* const makeArgs[] = {
-    (char*) "make",
-    (char*) "--no-print-directory",
-    (char*) "-C",
-    (char*) makePath,
-    (char*) action,
-    nullptr
-  };
-
-  if(pid < 0){
-    printf("Error calling fork\n");
-  } else if(pid == 0){
-    dup2(pipeRead[1],STDOUT_FILENO);
-
-    execvp("make",makeArgs);
-    printf("Error calling execvp for verilator: %s\n",strerror(errno));
-  } else {
-    int status;
-    wait(&status);
-
-    auto mark = StartString(out);
-    size_t maximumAllowed = SpaceAvailable(out);
-    int res = read(pipeRead[0],mark.mark,maximumAllowed);
-
-    PushBytes(out,res);
-    String result = EndString(mark);
-    return result;
-  }
-
-  return {};
-}
-
-String GetVerilatorRoot(Arena* out,Arena* temp){
-  // We currently get verilator root by running verilator over a simple example and extracting the VERILATOR_ROOT value from the makefile generated by it. It's the way I find to be the more consistent one, since the location of the verilator executable might not be inside the bin folder of VERILATOR_ROOT (happened once with an installation from apt-get for version 4.X).
-  BLOCK_REGION(temp);
-
-  int res = 0;
-
-  // TODO: This way of getting a temporary folder is not the most portable. See "mkdtemp"
-  String tempDir = PushString(temp,"/tmp/versatTmp_%d",getpid());
-  PushNullByte(temp);
-  const char* tempDirC = tempDir.data;
-  
-  res = mkdir(tempDirC,0770);
-  if(res == -1 && errno != EEXIST){
-    printf("Problem making tmp directory errno: %d\n",errno);
-    exit(-1);
-  }
-
-  String testFile = PushString(temp,"`timescale 1ns / 1ps\nmodule Test(); endmodule");
-  PushNullByte(temp);
- 
-  FILE* f = fopen(StaticFormat("%.*s/Test.v",UNPACK_SS(tempDir)),"w");
-  if(f == nullptr){
-    printf("Error creating file\n");
-    exit(-1);
-  }
-  
-  size_t sizeWritten = fwrite(testFile.data,sizeof(char),testFile.size,f);
-
-  if(sizeWritten != testFile.size){
-    printf("Did not write as many bytes as expected\n");
-    exit(-1);
-  }
-
-  fflush(f);
-  fclose(f);
-  
-  CallVerilator(StaticFormat("%.*s/Test.v",UNPACK_SS(tempDir)),tempDirC);
-
-  String fileContent = PushFile(temp,StaticFormat("%.*s/VTest.mk",UNPACK_SS(tempDir)));
-
-  if(fileContent.size <= 0){
-    printf("Problem opening verilator generated file\n");
-    exit(-1);
-  }
-
-  Tokenizer tok(fileContent,"=",{":="});
-
-  String root = {};
-  while(!tok.Done()){
-    Opt<Token> possible = tok.PeekFindIncluding("VERILATOR_ROOT");
-
-    if(!possible.has_value()){
-      printf("Couldn't find the location of verilator root\n");
-      exit(-1);
-    }
-
-    tok.AdvancePeek(possible.value());
-
-    Token peek = tok.PeekToken();
-    if(CompareString(peek,"=") || CompareString(peek,":=")){
-      tok.AdvancePeek(peek);
-      String token = tok.NextToken();
-
-      root = PushString(out,"%.*s",UNPACK_SS(token));
-      break;
-    }
-  }
-  
-  RemoveDirectory(tempDirC);
-  
-  return root;
-}
-
 // TODO: Small fix for common template. Works for now 
 void SetIncludeHeader(CompiledTemplate* tpl,String name);
-
-#include "parser.hpp"
 
 static Value HexValue(Value in,Arena* out){
   static char buffer[128];
@@ -405,11 +52,18 @@ static Value HexValue(Value in,Arena* out){
 }
 
 static Value Identify(Value val,Arena* out){
-  Assert(val.type == GetType(STRING("FUInstance*")));
-  
-  FUInstance** instPtr = (FUInstance**) val.custom;
-  FUInstance* inst = *instPtr;
+  //Assert(val.type == GetType(STRING("FUInstance*")));
 
+  FUInstance* inst;
+  if(val.type == GetType(STRING("FUInstance*"))){
+    FUInstance** instPtr = (FUInstance**) val.custom;
+    inst = *instPtr;
+  } else if(val.type == GetType(STRING("FUInstance"))){
+    inst = (FUInstance*) val.custom;
+  } else {
+    Assert(false);
+  }
+  
   String ret = PushString(out,"%.*s_%d",UNPACK_SS(inst->name),inst->id);
   
   return MakeValue(ret);
@@ -417,19 +71,21 @@ static Value Identify(Value val,Arena* out){
 
 #include "templateData.hpp"
 
-void LoadTemplates(Arena* perm,Arena* temp){
-  CompiledTemplate* commonTpl = CompileTemplate(versat_common_template,"common",perm,temp);
+void LoadTemplates(Arena* perm){
+  TEMP_REGION(temp,perm);
+  CompiledTemplate* commonTpl = CompileTemplate(versat_common_template,"common",perm);
   SetIncludeHeader(commonTpl,STRING("common"));
 
-  BasicTemplates::acceleratorTemplate = CompileTemplate(versat_accelerator_template,"accel",perm,temp);
-  BasicTemplates::topAcceleratorTemplate = CompileTemplate(versat_top_instance_template,"top",perm,temp);
-  BasicTemplates::acceleratorHeaderTemplate = CompileTemplate(versat_header_template,"header",perm,temp);
-  BasicTemplates::externalInternalPortmapTemplate = CompileTemplate(external_memory_internal_portmap_template,"ext_internal_port",perm,temp);
-  BasicTemplates::externalPortTemplate = CompileTemplate(external_memory_port_template,"ext_port",perm,temp);
-  BasicTemplates::externalInstTemplate = CompileTemplate(external_memory_inst_template,"ext_inst",perm,temp);
-  BasicTemplates::iterativeTemplate = CompileTemplate(versat_iterative_template,"iter",perm,temp);
-  BasicTemplates::internalWiresTemplate = CompileTemplate(versat_internal_memory_wires_template,"internal wires",perm,temp);
-
+  BasicTemplates::acceleratorTemplate = CompileTemplate(versat_accelerator_template,"accel",perm);
+  BasicTemplates::topAcceleratorTemplate = CompileTemplate(versat_top_instance_template,"top",perm);
+  BasicTemplates::topConfigurationsTemplate = CompileTemplate(versat_configurations_template,"top_configurations",perm);
+  BasicTemplates::acceleratorHeaderTemplate = CompileTemplate(versat_header_template,"header",perm);
+  BasicTemplates::externalInternalPortmapTemplate = CompileTemplate(external_memory_internal_portmap_template,"ext_internal_port",perm);
+  BasicTemplates::externalPortTemplate = CompileTemplate(external_memory_port_template,"ext_port",perm);
+  BasicTemplates::externalInstTemplate = CompileTemplate(external_memory_inst_template,"ext_inst",perm);
+  BasicTemplates::iterativeTemplate = CompileTemplate(versat_iterative_template,"iter",perm);
+  BasicTemplates::internalWiresTemplate = CompileTemplate(versat_internal_memory_wires_template,"internal wires",perm);
+  
   RegisterPipeOperation(STRING("MemorySize"),[](Value val,Arena* out){
     ExternalMemoryInterface* inter = (ExternalMemoryInterface*) val.custom;
     int byteSize = ExternalMemoryByteSize(inter);
@@ -444,8 +100,91 @@ void LoadTemplates(Arena* perm,Arena* temp){
   });
 }
 
-#include <argp.h>
 
+// Only for graphs that we know for sure are DAG
+Array<int> CalculateDAG(int maxNode,Array<Pair<int,int>> edges,int start,Arena* out){
+  TEMP_REGION(temp,out);
+
+  int NOT_SEEN = 0; 
+  int WAIT_CHILDREN = 1;
+  int PERMANENT = 2;
+
+  int size = maxNode;
+  Stack<int>* toSee = PushQueue<int>(temp,size * 2);
+  Array<int> marked = PushArray<int>(temp,size);
+  Memset(marked,NOT_SEEN);
+  
+  toSee->Push(start);
+
+  auto arr = StartGrowableArray<int>(out);
+  while(toSee->Size()){
+    int head = toSee->Pop();
+
+    if(marked[head] == WAIT_CHILDREN){
+      marked[head] = PERMANENT;
+      *arr.PushElem() = head;
+      continue;
+    }
+    
+    if(marked[head] != NOT_SEEN){
+      continue;
+    }
+
+    bool firstSon = true;
+    for(auto p : edges){
+      if(p.first == head){
+        if(!marked[p.second]){
+          if(firstSon){
+            firstSon = false;
+            marked[head] = WAIT_CHILDREN;
+            // Basically using the stack to accomplish two things. Store the children and to store another visit to the parent node, which is now marked with WAIT_CHILDREN and we only arrive at this after we have seen all the children.
+            // The parent node can only be visit after all the children have been visited, since we are working on graphs that we know are DAG. 
+            toSee->Push(head); // So we are sure to reach the WAIT_CHILDREN check
+          }
+          toSee->Push(p.second);
+        }
+      }
+    }
+
+    // No sons
+    if(firstSon == true){
+      marked[head] = PERMANENT;
+      *arr.PushElem() = head;
+    }
+  }
+  return EndArray(arr);
+}
+
+// This structure needs to represent the entire work that is required to perform 
+struct Work{
+  TypeDefinition definition;
+
+  bool calculateDelayFixedGraph;
+  bool flattenWithMapping;
+};
+
+void Print(Work* work){
+  printf("Name: %.*s\n",UNPACK_SS(work->definition.base.name));
+  printf("calculateDelayFixedGraph: %d\n",work->calculateDelayFixedGraph ? 1 : 0);
+  printf("flattenWithMapping: %d\n",work->flattenWithMapping ? 1 : 0);
+}
+
+void GetSubWorkRequirement(Hashmap<String,Work>* typeToWork,TypeDefinition type){
+  TEMP_REGION(temp,nullptr);
+  TEMP_REGION(temp2,temp);
+  Array<Token> subTypesUsed = TypesUsed(type,temp);
+  
+  for(Token tok : subTypesUsed){
+    Work* work = typeToWork->Get(tok);
+    if(!work){
+      continue;
+    }
+
+    // For now, assume that we want everything
+    work->calculateDelayFixedGraph = true;
+    work->flattenWithMapping = true;
+  }
+}
 
 struct OptionsGather{
   ArenaList<String>* verilogFiles;
@@ -462,20 +201,24 @@ parse_opt (int key, char *arg,
 {
   OptionsGather* opts = (OptionsGather*) state->input;
 
+  // TODO: Better error handling
   switch (key)
     {
-    case 'S': *PushListElement(opts->extraSources) = STRING(arg); break;
-    case 'I': *PushListElement(opts->includePaths) = STRING(arg); break;
-    case 'u': *PushListElement(opts->unitPaths) = STRING(arg); break;
+    case 'S': *opts->extraSources->PushElem() = STRING(arg); break;
+    case 'I': *opts->includePaths->PushElem() = STRING(arg); break;
+    case 'u': *opts->unitPaths->PushElem() = STRING(arg); break;
 
-    case 'b': opts->options->dataSize = ParseInt(STRING(arg)); break;
-    case 'x': opts->options->addrSize = ParseInt(STRING(arg)); break;
+    case 'b': opts->options->databusDataSize = ParseInt(STRING(arg)); break;
+    case 'x': opts->options->databusAddrSize = ParseInt(STRING(arg)); break;
 
     case 'd': opts->options->useDMA = true; break;
     case 'D': opts->options->architectureHasDatabus = true; break;
     case 's': opts->options->addInputAndOutputsToTop = true; break;
 
-    case 'g': opts->options->debugPath = STRING(arg); break;
+    case 'p': opts->options->copyUnitsConvenience = true; break;
+    case 'L': opts->options->generetaSourceListName = STRING(arg); break;
+
+    case 'g': opts->options->debugPath = STRING(arg); opts->options->debug = true; break;
     case 't': opts->options->topName = STRING(arg); break;
     case 'o': opts->options->hardwareOutputFilepath = STRING(arg); break;
     case 'O': opts->options->softwareOutputFilepath = STRING(arg); break;
@@ -486,50 +229,50 @@ parse_opt (int key, char *arg,
   return 0;
 }
 
+// TODO: Better error handling
+struct argp_option options[] =
+  {
+    { 0, 'S',"File", 0, "Extra sources"},
+    { 0, 'b',"Size", 0, "Databus size connected to external memory (8,16,default:32,64,128,256)"},
+    { 0, 'x',"Size", 0, "Address size (default:32,64)"},
+    { 0, 'd', 0,     0, "Use DMA"},
+    { 0, 'D', 0,     0, "Architecture has databus"},
+    { 0, 'I',"Path", 0, "Include paths"},
+    { 0, 't',"Name", 0, "Top unit name"},
+    { 0, 'p', 0,     0, "Versat also copies the source files of the units, including custom ones"},
+    { 0, 'L',"Name", 0, "Writes to a file a list of all files generated by Versat"},
+    { 0, 's', 0,     0, "Insert consts and regs if Top unit contains inputs and outputs"},
+    { 0, 'u',"Path", 0, "Units path"},
+    { 0, 'g',"Path", OPTION_HIDDEN, "Debug path"},
+    { 0, 'o',"Path", 0, "Hardware output path"},
+    { 0, 'O',"Path", 0, "Software output path"},
+    { 0 }
+  };
+
 int main(int argc,char* argv[]){
   InitDebug();
 
-  *globalPermanent = InitArena(Megabyte(128));
+  Arena globalPermanentInst = InitArena(Megabyte(128));
+  globalPermanent = &globalPermanentInst;
+  Arena tempInst = InitArena(Megabyte(128));
+  Arena temp2Inst = InitArena(Megabyte(128));
+  
+  contextArenas[0] = &tempInst;
+  contextArenas[1] = &temp2Inst;
 
+  TEMP_REGION(temp,nullptr);
+  TEMP_REGION(temp2,temp);
   Arena* perm = globalPermanent;
   
-  Arena tempInst = InitArena(Megabyte(128));
-  Arena* temp = &tempInst;
-  Arena temp2Inst = InitArena(Megabyte(128));
-  Arena* temp2 = &temp2Inst;
-
-  // Better error handling
-  struct argp_option options[] =
-    {
-      { 0, 'S',"File", 0, "Extra sources"},
-      { 0, 'b',"Size", 0, "Databus size (8,16,default:32,64)"},
-      { 0, 'x',"Size", 0, "Address size (default:32,64)"},
-      { 0, 'd', 0,     0, "Use DMA"},
-      { 0, 'D', 0,     0, "Architecture has databus"},
-      { 0, 'I',"Path", 0, "Include paths"},
-      { 0, 't',"Name", 0, "Top unit name"},
-      { 0, 's', 0,     0, "Insert consts and regs if Top unit contains inputs and outputs"},
-      { 0, 'u',"Path", 0, "Units path"},
-      { 0, 'g',"Path", OPTION_HIDDEN, "Debug path"},
-      { 0, 'o',"Path", 0, "Hardware output path"},
-      { 0, 'O',"Path", 0, "Software output path"},
-      { 0 }
-    };
   argp argp = { options, parse_opt, "SpecFile", "Dataflow to accelerator compiler. Check tutorial in https://github.com/IObundle/iob-versat to learn how to write a specification file"};
 
   OptionsGather gather = {};
-
   gather.verilogFiles = PushArenaList<String>(temp);
   gather.extraSources = PushArenaList<String>(temp);
   gather.includePaths = PushArenaList<String>(temp);
   gather.unitPaths = PushArenaList<String>(temp);
 
-  globalOptions.dataSize = 32;
-  globalOptions.addrSize = 32;
-
-  globalOptions.debugPath = PushString(perm,"%s/debug",GetCurrentDirectory()); // By default
-  PushNullByte(perm);
-
+  globalOptions = DefaultOptions(perm);
   gather.options = &globalOptions;
 
   if(argp_parse(&argp, argc, argv, 0, 0, &gather) != 0){
@@ -537,55 +280,28 @@ int main(int argc,char* argv[]){
     return -1;
   }
 
+  if(Empty(globalOptions.topName)){
+    printf("Need to specify top unit with -t\n");
+    exit(-1);
+  }
+
   globalOptions.verilogFiles = PushArrayFromList(perm,gather.verilogFiles);
   globalOptions.extraSources = PushArrayFromList(perm,gather.extraSources);
   globalOptions.includePaths = PushArrayFromList(perm,gather.includePaths);
   globalOptions.unitPaths = PushArrayFromList(perm,gather.unitPaths);
-
-  // Check options 
-  if(globalOptions.topName.size == 0){
-    printf("Need to specific top unit with -t\n");
-    exit(-1);
-  }
   
   RegisterTypes();
   
   InitializeTemplateEngine(perm);
-  LoadTemplates(perm,temp);
+  LoadTemplates(perm);
   InitializeSimpleDeclarations();
-  
-  MakeDirectory(globalOptions.debugPath.data);
-  
-  // TODO: Variable buffers are currently broken. Due to removing statics saved configurations.
-  //       When reimplementing this (if we eventually do) separate buffers configs from static buffers.
-  //       There was never any point in having both together.
-  globalOptions.useFixedBuffers = true;
-  globalOptions.shadowRegister = true; 
-  globalOptions.disableDelayPropagation = true;
 
   globalDebug.outputAccelerator = true;
-  globalDebug.outputVersat = true;
-
-  globalDebug.outputConsolidationGraphs = false;
-
-#if 0
-  globalDebug.dotFormat = GRAPH_DOT_FORMAT_NAME;
-#if 1
-  globalDebug.outputGraphs = true;
   globalDebug.outputAcceleratorInfo = true;
-#endif
+  globalDebug.outputVersat = true;
+  globalDebug.outputGraphs = true;
+  globalDebug.outputConsolidationGraphs = true;
   globalDebug.outputVCD = true;
-#endif
-  
-#ifdef USE_FST_FORMAT
-  globalOptions.generateFSTFormat = 1;
-#endif
-
-  globalOptions.verilatorRoot = GetVerilatorRoot(perm,temp);
-  if(globalOptions.verilatorRoot.size == 0){
-    fprintf(stderr,"Versat could not find verilator. Check that it is installed\n");
-    return -1;
-  }
 
   // Collect all verilog source files.
   Array<String> allVerilogFiles = {};
@@ -616,27 +332,28 @@ int main(int argc,char* argv[]){
 
     allVerilogFiles = PushArrayFromSet(perm,allVerilogFilesSet);
   }
-  globalOptions.verilogFiles = allVerilogFiles; // TODO: Kind of an hack. We lose information about file origin
+  globalOptions.verilogFiles = allVerilogFiles; // TODO: Kind of an hack. We lose information about file origin (from user vs from us)
   
-  // Parse verilog files and register as simple units
-  for(String file : globalOptions.verilogFiles){
-    String content = PushFile(temp,StaticFormat("%.*s",UNPACK_SS(file)));
+  // Parse verilog files and register all the simple units.
+  for(String filepath : globalOptions.verilogFiles){
+    String content = PushFile(temp,filepath);
 
-    if(content.size == 0){
-      printf("Failed to open file %.*s\n. Exiting\n",UNPACK_SS(file));
+    if(Empty(content)){
+      printf("Failed to open file %.*s\n. Exiting\n",UNPACK_SS(filepath));
       exit(-1);
     }
 
-    String processed = PreprocessVerilogFile(content,globalOptions.includePaths,temp,temp2);
-    Array<Module> modules = ParseVerilogFile(processed,globalOptions.includePaths,temp,temp2);
+    String processed = PreprocessVerilogFile(content,globalOptions.includePaths,temp);
+    Array<Module> modules = ParseVerilogFile(processed,globalOptions.includePaths,temp);
     
     for(Module& mod : modules){
-      ModuleInfo info = ExtractModuleInfo(mod,perm,temp);
-      RegisterModuleInfo(&info,temp);
+      ModuleInfo info = ExtractModuleInfo(mod,perm);
+      RegisterModuleInfo(&info);
     }
   }
   
-  // We need to do this after parsing the modules because the majority of these special types come from verilog files.
+  // We need to do this after parsing the modules because the majority of these special types come from verilog files
+  // More robust impl would embed this files at build time to simplify setup. Only need the exe to run Versat at that point. 
   BasicDeclaration::buffer = GetTypeByName(STRING("Buffer"));
   BasicDeclaration::fixedBuffer = GetTypeByName(STRING("FixedBuffer"));
   BasicDeclaration::pipelineRegister = GetTypeByName(STRING("PipelineRegister"));
@@ -650,12 +367,118 @@ int main(int argc,char* argv[]){
   String specFilepath = globalOptions.specificationFilepath;
   String topLevelTypeStr = globalOptions.topName;
 
-  if(specFilepath.size){
-    ParseVersatSpecificationFromFilepath(specFilepath,temp,temp2);
+  // Basically using a simple DAG approach to detect the modules that we only care about. We do not process modules that are not needed
+
+  // TODO: Simplify this part. 
+  FUDeclaration* simpleType = GetTypeByName(topLevelTypeStr);
+  
+  if(!simpleType && specFilepath.size && !CompareString(topLevelTypeStr,"VERSAT_RESERVED_ALL_UNITS")){
+    String content = PushFile(temp,StaticFormat("%.*s",UNPACK_SS(specFilepath)));
+    
+    Array<TypeDefinition> types = ParseVersatSpecification(content,temp);
+    int size = types.size;
+    
+    Hashmap<String,int>* typeToId = PushHashmap<String,int>(temp,size);
+    for(int i = 0; i < size; i++){
+      typeToId->Insert(types[i].base.name,i);
+    }
+    
+    if(!typeToId->Exists(topLevelTypeStr)){
+      printf("Did not find the top level type: %.*s\n",UNPACK_SS(topLevelTypeStr));
+      return -1;
+    }
+    
+    auto arr = StartGrowableArray<Pair<int,int>>(temp2);
+    for(int i = 0; i < size; i++){
+      Array<Token> subTypesUsed = TypesUsed(types[i],temp);
+
+      for(String str : subTypesUsed){
+        int* index = typeToId->Get(str);
+        if(index){
+          *arr.PushElem() = {i,*index};
+        }
+      }
+    }
+    Array<Pair<int,int>> edges = EndArray(arr);
+    
+    Array<int> order = CalculateDAG(size,edges,typeToId->GetOrFail(topLevelTypeStr),temp);
+
+    // Represents all the work that we need to do.
+    Hashmap<String,Work>* typeToWork = PushHashmap<String,Work>(temp,order.size);
+
+    for(int i : order){
+      Work work = {};
+      String name = types[i].base.name;
+      work.definition = types[i];
+      
+      typeToWork->Insert(name,work);
+    }
+    
+    for(int i : order){
+      TypeDefinition type = types[i];
+      GetSubWorkRequirement(typeToWork,type);
+    }
+
+    // For the TOP unit, currently we do everything:
+    Work* topWork = &typeToWork->GetOrFail(topLevelTypeStr);
+    topWork->calculateDelayFixedGraph = true;
+    topWork->flattenWithMapping = true;
+
+    for(auto p : typeToWork){
+      Work work = *p.second;
+
+      FUDeclaration* decl = nullptr;
+      
+      if(work.definition.type == DefinitionType_MODULE){
+        decl = InstantiateBarebonesSpecifications(content,p.second->definition);
+      } else if(work.definition.type == DefinitionType_MERGE){
+        decl = InstantiateSpecifications(content,p.second->definition);
+      }
+      decl->signalLoop = true;
+      
+#if 0
+      if(work.calculateDelayFixedGraph){
+        Accelerator* copy = CopyAccelerator(decl->baseCircuit,AcceleratorPurpose_FIXED_DELAY,true,nullptr);
+
+        DAGOrderNodes order = CalculateDAGOrder(&copy->allocated,temp);
+        CalculateDelayResult delays = CalculateDelay(copy,order,temp);
+
+        decl->baseConfig.calculatedDelays = PushArray<int>(perm,delays.nodeDelay->nodesUsed);
+        Memset(decl->baseConfig.calculatedDelays,0);
+        int index = 0;
+        for(Pair<FUInstance*,DelayInfo*> p : delays.nodeDelay){
+          if(p.first->declaration->baseConfig.delayOffsets.max > 0){
+            decl->baseConfig.calculatedDelays[index] = p.second->value;
+            index += 1;
+          }
+        }
+
+        region(temp){
+          FixDelays(copy,delays.edgesDelay,temp);
+        }
+
+        decl->fixedDelayCircuit = copy;
+        decl->fixedDelayCircuit->name = decl->name;
+
+        FillDeclarationWithDelayType(decl);
+      }
+#endif
+
+      // Flatten with mapping seems to be specific to modules.
+      // Merge circuits are already flatten by the way the merge is performed.
+      if(work.definition.type != DefinitionType_MERGE && work.flattenWithMapping){
+        Pair<Accelerator*,SubMap*> p = Flatten(decl->baseCircuit,99);
+  
+        decl->flattenedBaseCircuit = p.first;
+        decl->flattenMapping = p.second;
+      }
+
+      //Print(p.second);
+    }
   }
 
   FUDeclaration* type = GetTypeByName(topLevelTypeStr);
-  if(!type){
+  if(!type && !CompareString(topLevelTypeStr,"VERSAT_RESERVED_ALL_UNITS")){
     printf("Did not find the top level type: %.*s\n",UNPACK_SS(topLevelTypeStr));
     return -1;
   }
@@ -663,9 +486,48 @@ int main(int argc,char* argv[]){
   Accelerator* accel = nullptr;
   FUInstance* TOP = nullptr;
 
-  type->signalLoop = true;
+  bool isSimple = false;
+  if(CompareString(topLevelTypeStr,"VERSAT_RESERVED_ALL_UNITS")){
+    accel = CreateAccelerator(STRING("allVersatUnits"),AcceleratorPurpose_MODULE);
+    
+    FUDeclaration* constType = GetTypeByName(STRING("Const"));
+    FUDeclaration* regType = GetTypeByName(STRING("Reg"));
 
-  if(globalOptions.addInputAndOutputsToTop && !(type->NumberInputs() == 0 && type->NumberOutputs() == 0)){
+    int constsAdded = 0;
+    int regsAdded = 0;
+    for(FUDeclaration* decl : globalDeclarations){
+      if(decl->type == FUDeclarationType_SINGLE){
+        int input = decl->NumberInputs();
+        int output = decl->NumberOutputs();
+
+        FUInstance* testUnit = CreateFUInstance(accel,decl,decl->name);
+        
+        for(int i = 0; i < input; i++){
+          String name = PushString(perm,"const%d",constsAdded++);
+          FUInstance* inUnit = CreateFUInstance(accel,constType,name);
+
+          ConnectUnits(inUnit,0,testUnit,i);
+        }
+
+        for(int i = 0; i < output; i++){
+          String name = PushString(perm,"reg%d",regsAdded++);
+          FUInstance* outUnit = CreateFUInstance(accel,regType,name);
+
+          ConnectUnits(testUnit,i,outUnit,0);
+        }
+      }
+    }
+    
+    type = RegisterSubUnit(accel);
+    type->signalLoop = true;
+
+    accel = CreateAccelerator(topLevelTypeStr,AcceleratorPurpose_MODULE);
+    TOP = CreateFUInstance(accel,type,STRING("TOP"));
+  } else if(globalOptions.addInputAndOutputsToTop && !(type->NumberInputs() == 0 && type->NumberOutputs() == 0)){
+    // TODO: This process needs to be simplified and more integrated with the approach used by versat spec.
+    //       Instead of doing everything manually.
+    isSimple = true;
+
     const char* name = StaticFormat("%.*s_Simple",UNPACK_SS(topLevelTypeStr));
     accel = CreateAccelerator(STRING(name),AcceleratorPurpose_MODULE);
     
@@ -677,7 +539,7 @@ int main(int argc,char* argv[]){
 
     FUDeclaration* constType = GetTypeByName(STRING("TestConst"));
     FUDeclaration* regType = GetTypeByName(STRING("Reg"));
-
+    
     // We need to create input and outputs first before instance
     // to guarantee that the configs and states are at the beginning of the accelerator structs
     for(int i = 0; i < input; i++){
@@ -697,10 +559,12 @@ int main(int argc,char* argv[]){
     for(int i = 0; i < output; i++){
       ConnectUnits(TOP,i,outputs[i],0);
     }
-
-    FUInstance* node = TOP;
     
-    type = RegisterSubUnit(accel,temp,temp2);
+    type = RegisterSubUnit(accel);
+    type->definitionArrays = PushArray<Pair<String,int>>(perm,2);
+    type->definitionArrays[0] = (Pair<String,int>){STRING("input"),input};
+    type->definitionArrays[1] = (Pair<String,int>){STRING("output"),output};
+
     type->signalLoop = true;
     
     name = StaticFormat("%.*s_Simple",UNPACK_SS(topLevelTypeStr));
@@ -722,41 +586,20 @@ int main(int argc,char* argv[]){
     }
   }
 
-  // Disable debug for now
-  if(globalOptions.debug){
-    String path = PushDebugPath(temp,{},STRING("allDeclarations.txt"));
-    FILE* allDeclarations = fopen(StaticFormat("%.*s",UNPACK_SS(path)),"w");
-    DEFER_CLOSE_FILE(allDeclarations);
-    for(FUDeclaration* decl : globalDeclarations){
-      BLOCK_REGION(temp);
-      
-      if(globalDebug.outputAcceleratorInfo && decl->fixedDelayCircuit){
-        BLOCK_REGION(temp2);
-        
-        String path = PushDebugPath(temp,decl->name,STRING("stats.txt"));
-
-        FILE* stats = OpenFileAndCreateDirectories(StaticFormat("%.*s",UNPACK_SS(path)),"w");
-        DEFER_CLOSE_FILE(stats);
-
-        Accelerator* test = CreateAccelerator(STRING("TEST"),AcceleratorPurpose_TEMP);
-        CreateFUInstance(test,decl,STRING("TOP"));
-        AccelInfo info = CalculateAcceleratorInfo(test,true,temp,temp2);
-        
-        PrintRepr(stats,MakeValue(&info),temp,temp2);
-      }
-    }
+  if(!SetParameter(TOP,STRING("AXI_ADDR_W"),STRING("AXI_ADDR_W"))){
+    printf("Error\n");
   }
-  
-  TOP->parameters = STRING("#(.AXI_ADDR_W(AXI_ADDR_W),.LEN_W(LEN_W))");
+  SetParameter(TOP,STRING("LEN_W"),STRING("LEN_W"));
+
   OutputVersatSource(accel,
                      globalOptions.hardwareOutputFilepath.data,
                      globalOptions.softwareOutputFilepath.data,
-                     globalOptions.addInputAndOutputsToTop,temp,perm);
-
-  OutputVerilatorWrapper(type,accel,globalOptions.softwareOutputFilepath,temp,perm);
+                     isSimple);
+  
+  OutputVerilatorWrapper(type,accel,globalOptions.softwareOutputFilepath);
 
   String versatDir = STRING(STRINGIFY(VERSAT_DIR));
-  OutputVerilatorMake(accel->name,versatDir,temp,temp2);
+  OutputVerilatorMake(accel->name,versatDir);
 
   for(FUDeclaration* decl : globalDeclarations){
     BLOCK_REGION(temp);
@@ -766,11 +609,11 @@ int main(int argc,char* argv[]){
        decl->type == FUDeclarationType_MERGED){
 
       if(globalOptions.debug){
-        GraphPrintingContent content = GenerateDefaultPrintingContent(decl->fixedDelayCircuit,temp,temp2);
-        String repr = GenerateDotGraph(decl->fixedDelayCircuit,content,temp,temp2);
+        GraphPrintingContent content = GenerateDefaultPrintingContent(decl->fixedDelayCircuit,temp);
+        String repr = GenerateDotGraph(content,temp);
         String debugPath = PushDebugPath(temp,decl->name,STRING("NormalGraph.dot"));
 
-        FILE* file = fopen(StaticFormat("%.*s",UNPACK_SS(debugPath)),"w");
+        FILE* file = OpenFile(debugPath,"w",FilePurpose_DEBUG_INFO);
         DEFER_CLOSE_FILE(file);
         if(!file){
           printf("Error opening file for debug outputting: %.*s\n",UNPACK_SS(debugPath));
@@ -778,18 +621,45 @@ int main(int argc,char* argv[]){
           fwrite(repr.data,sizeof(char),repr.size,file);
         }
       }
-      
-      String path = PushString(temp,"%.*s/modules/%.*s.v",UNPACK_SS(globalOptions.hardwareOutputFilepath),UNPACK_SS(decl->name));
-      PushNullByte(temp);
 
-      FILE* sourceCode = OpenFileAndCreateDirectories(StaticFormat("%.*s",UNPACK_SS(path)),"w");
+      String path = PushString(temp,"%.*s/modules/%.*s.v",UNPACK_SS(globalOptions.hardwareOutputFilepath),UNPACK_SS(decl->name));
+      
+      FILE* sourceCode = OpenFileAndCreateDirectories(path,"w",FilePurpose_VERILOG_CODE);
       DEFER_CLOSE_FILE(sourceCode);
 
       if(decl->type == FUDeclarationType_COMPOSITE || decl->type == FUDeclarationType_MERGED){
-        OutputCircuitSource(decl,sourceCode,temp,perm);
+        OutputCircuitSource(decl,sourceCode);
       } else if(decl->type == FUDeclarationType_ITERATIVE){
-        OutputIterativeSource(decl,sourceCode,temp,perm);
+        OutputIterativeSource(decl,sourceCode);
       }
+    }
+  }
+
+  // TODO: We probably need to move this to a better place since we also need to copy include files in order to separate build from setup. We need a lot of file copying and it's probably best to put all in one place.
+  fs::path hardwareDestinationPath(StaticFormat("%.*s",UNPACK_SS(globalOptions.hardwareOutputFilepath)));
+  auto options = fs::copy_options::update_existing;
+  for(String filepath : globalOptions.verilogFiles){
+    fs::path path(StaticFormat("%.*s",UNPACK_SS(filepath)));
+    
+    fs::copy(path,hardwareDestinationPath,options);
+  }
+  
+  // This should be the last thing that we do, no further file creation can occur after this point
+  for(FileInfo f : CollectAllFilesInfo(temp)){
+    if(f.purpose == FilePurpose_VERILOG_INCLUDE && f.mode == FileOpenMode_WRITE){
+      printf("Filename: %.*s Type: VERILOG_INCLUDE\n",UNPACK_SS(f.filepath));
+    }
+    if(f.purpose == FilePurpose_VERILOG_CODE && f.mode == FileOpenMode_WRITE){
+      printf("Filename: %.*s Type: VERILOG_CODE\n",UNPACK_SS(f.filepath));
+    }
+    if(f.purpose == FilePurpose_MAKEFILE && f.mode == FileOpenMode_WRITE){
+      printf("Filename: %.*s Type: MAKEFILE\n",UNPACK_SS(f.filepath));
+    }
+    if(f.purpose == FilePurpose_SOFTWARE && f.mode == FileOpenMode_WRITE){
+      printf("Filename: %.*s Type: SOFTWARE\n",UNPACK_SS(f.filepath));
+    }
+    if(f.purpose == FilePurpose_MISC && f.mode == FileOpenMode_WRITE){
+      printf("Filename: %.*s Type: MISC\n",UNPACK_SS(f.filepath));
     }
   }
 
@@ -798,30 +668,40 @@ int main(int argc,char* argv[]){
 
 /*
 
+BUG: Since the name of the units are copied directly to the header file, it is possible to have conflict with C reserved keywords, like const, static, and stuff like that. 
+
+There is probably a lot of cleanup left (overall and inside Merge).
+
+Need to take a look at State and Mem struct interfaces. State is not taking into account merge types and neither is Mem. Also need to see if we can generate the Mem as an actual structure where the programmer must use pointer arithmetic directly.
+
+*/
+
+/*
+
+TODO?
+
+DelayType and NodeType need a revision.
+
+The hardware is full of sloppy code.
+   Start standardizing and pulling up modules that abstract common functionality.
+   Maybe look into generating a verilog testbench for individual units that performs a number of tests depending on the interfaces that the unit provides.
+      Should be easy, just one more template.
+
+There are a dozens of TODOs scathered all over the codebase. Start by fixing some of them.
+
+Generated code does not take into account parameters when it should.
+   Some wires are given fixed sizes when they depend on verilog parameters. 
+
+*/
+
+/*
+
+
 TODO: Need to check the isSource member of ModuleInfo and so on. 
 
 TODO: Because of the delay implementation, there is a possibility of allowing inter-hierarchy optimizations:
-      Think a VRead connected a reg file that uses delays to store a value per reg.
-      The normal implementation would insert a bunch of delays with an incremental value which is wasteful because we could just change reg delays.
+      Think a reg file module that is instantiated inside another module. Each reg is forced to have the same delay because we only calculate the module as a single unit, set the module delay, and when instantiating it, we take the module delay as unchangeable.
       This requires to keep track for each module which one allows this to happen and then take that into account in the delay calculation functions. Note: Input delay does not work. We are talking about delay info propagating downards accross the hiearchy while input delay propagates upwards. We can still resolve this during the register FUDeclaration by calcuting the delays of lower units inside the register of the upper unit.
+      For this part, we would basically have to implement greater info on module connectivity (how each output interacts with each input and stuff like that).
 
  */
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

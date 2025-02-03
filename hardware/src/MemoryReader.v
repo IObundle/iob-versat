@@ -1,6 +1,18 @@
 `timescale 1ns / 1ps
 
-// Axi like interface 
+/*
+
+Receives addresses in the slave interface
+Reads memory content (memory connected to the mem_ wirew)
+Writes data through the master interface
+
+This module is intended to function as a simple adapter.
+Connect a address generator on one side and connect this to the other and it should work fine.
+TODO: To make this easier to use, the m_last_i signals should get through. The Slave interface is really poor compared to what is actually expected.
+      A proper slave probable uses more logic but it simplifies the code a lot more.
+
+*/
+
 module MemoryReader #(
    parameter ADDR_W = 32,
    parameter DATA_W = 32
@@ -29,7 +41,7 @@ module MemoryReader #(
    wire s_transfer = (s_valid_i && s_ready_o);
    wire m_transfer = (m_valid_o && m_ready_i);
 
-   reg                                         [ADDR_W-1:0] last_addr;
+   reg [ADDR_W-1:0] last_addr;
 
    always @(posedge clk_i, posedge rst_i) begin
       if (rst_i) begin

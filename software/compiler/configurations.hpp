@@ -5,83 +5,88 @@
 #include "memory.hpp"
 #include "accelerator.hpp"
 
+struct SimplePortInstance{
+  int inst;
+  int port;
+};
+
+struct SimplePortConnection{
+  int outInst;
+  int outPort;
+  int inPort;
+};
+
+// We currently just stuff everything into this struct, so it's easier to visualize all the info that we need for
+// the current accelerator.
+// Some of this data is duplicated/unnecessary, but for now we just carry on since this simplifies debugging a lot, being able to see all the info for a given accelerator directly.
+// This approach is very slow but easier to debug since everything related to one unit is all in the same place.
+// Until I find a better way of debugging AoS, this will stay like this for a while.
+
+// TODO: Put some note explaining the required changes when inserting stuff here.
 struct InstanceInfo{
   int level;
   FUDeclaration* decl;
   String name;
-  String baseName;
+  String baseName; // NOTE: If the unit does not belong to the merge partition the baseName will equal name.
   Opt<int> configPos;
-  int isConfigStatic;
+  int isConfigStatic; // Static must be handle separately, for the top level accelerator. 
   int configSize;
   Opt<int> statePos;
   int stateSize;
-  Opt<iptr> memMapped;
+  
+  // Some of these could be removed and be computed from the others
+  Opt<iptr> memMapped; // Used on Code Gen, to create the addresses for the memories.
   Opt<int> memMappedSize;
   Opt<int> memMappedBitSize;
-  Opt<String> memMappedMask;
+  Opt<String> memDecisionMask; // This is local to the accelerator
   Opt<int> delayPos;
-  Array<int> delay;
-  int baseDelay;
+  Array<int> extraDelay;
+  int baseNodeDelay;
   int delaySize;
   bool isComposite;
+  bool isMerge;
   bool isStatic;
   bool isShared;
   int sharedIndex;
   FUDeclaration* parent;
   String fullName;
+  int mergePort;
+  int muxGroup;
   bool isMergeMultiplexer;
-  int mergeMultiplexerId;
   bool belongs;
   int special;
-  int order;
+  int localOrder;
   NodeType connectionType;
   int id;
-};
-
-struct AcceleratorInfo{
-  Array<InstanceInfo> info;
-  int memSize;
-  Opt<String> name;
-  Array<int> mergeMux;
-};
-
-struct InstanceConfigurationOffsets{
-  Hashmap<StaticId,int>* staticInfo; 
-  FUDeclaration* parent;
-  String topName;
-  String baseName;
-  int configOffset;
-  int stateOffset;
-  int delayOffset;
-  int delay; // Actual delay value, not the delay offset.
-  int memOffset;
-  int level;
-  int order;
-  int* staticConfig; // This starts at 0x40000000 and at the end of the function we normalized it since we can only figure out the static position at the very end.
-  bool belongs;
-};
-
-struct TestResult{
-  Array<InstanceInfo> info;
-  InstanceConfigurationOffsets subOffsets;
-  Array<PortInstance> multiplexersPorts;
-  String name;
-  Array<int> muxConfigs;
-  Array<int> inputDelay;
+  FUInstance* inst;
+  Array<int> inputDelays;
   Array<int> outputLatencies;
+  Array<int> portDelay;
+  int partitionIndex;
+
+  Array<SimplePortConnection> inputs; 
 };
 
+struct MergePartition{
+  String name; // For now this appears to not affect anything.
+  Array<InstanceInfo> info;
+
+  // TODO: Composite units currently break the meaning of baseType.
+  //       Since a composite unit with 2 merged instances would have 2 base types.
+  FUDeclaration* baseType;
+  AcceleratorMapping* baseTypeFlattenToMergedBaseCircuit;
+  Set<PortInstance>*  mergeMultiplexers;
+
+  // TODO: All these are useless. We can just store the data in the units themselves.
+  Array<int> inputDelays;
+  Array<int> outputLatencies;
+  Array<int> muxConfigs; // TODO: Remove this. The data should be stored inside the mux Instance Info that it belongs to
+};
+
+// TODO: A lot of values are repeated between merge partitions and the like. Not a problem for now, maybe tackle it when things become stable. Or maybe leave it be, could be easier in future if we want to implement something more complex.
 struct AccelInfo{
-  Array<Array<InstanceInfo>> infos; // Should join names with infos
-  Array<InstanceInfo> baseInfo;
-  Array<String> names;
-  Array<Array<int>> inputDelays;
-  Array<Array<int>> outputDelays;
-  Array<Array<int>> muxConfigs;
-  
-  int memMappedBitsize;
-  int howManyMergedUnits;
-  
+  Array<MergePartition> infos;
+    
   int inputs;
   int outputs;
 
@@ -93,56 +98,83 @@ struct AccelInfo{
   int staticBits;
   int sharedUnits;
   int externalMemoryInterfaces;
-  int externalMemoryByteSize;
-  int numberUnits;
   int numberConnections;
   
   int memoryMappedBits;
+  int unitsMapped;
   bool isMemoryMapped;
   bool signalLoop;
 };
 
-struct TypeAndNameOnly{
-  String type;
-  String name;
+// NOTE: The member 'level' of InstanceInfo needs to be valid in order for this iterator to work. 
+//       Do not know how to handle merged. Should we iterate Array<InstanceInfo> and let outside code work, or do we take the accelInfo and then allow the iterator to switch between different merges and stuff?      
+struct AccelInfoIterator{
+  String accelName; // Usually for debug purposes.
+  AccelInfo* info;
+  int index;
+  int mergeIndex;
+
+  Array<InstanceInfo>& GetCurrentMerge();
+  int MergeSize();
+
+  String GetMergeName();
+  
+  bool IsValid();
+  
+  int GetIndex();
+  int GetIndex(InstanceInfo* instance);
+  
+  AccelInfoIterator GetParent();
+  InstanceInfo* GetParentUnit();
+  InstanceInfo* CurrentUnit();
+  InstanceInfo* GetUnit(int index);
+  Array<InstanceInfo*> GetAllSubUnits(Arena* out);
+
+  // Next and step mimick gdb like commands. Does not update current, instead returning the advanced iterator
+  WARN_UNUSED AccelInfoIterator Next(); // Next unit in current level only.
+  WARN_UNUSED AccelInfoIterator Step(); // Next unit in the array. Goes down and up the levels as it progresses.
+  WARN_UNUSED AccelInfoIterator StepInsideOnly(); // Returns NonValid if non composite unit
+
+  int CurrentLevelSize();
 };
 
 struct Partition{
   int value;
   int max;
+  int mergeIndexStart;
+  FUDeclaration* decl;
 };
 
-int GetConfigIndexFromInstance(Accelerator* accel,FUInstance* inst);
+AccelInfoIterator StartIteration(AccelInfo* info);
 
-AccelInfo CalculateAcceleratorInfo(Accelerator* accel,bool recursive,Arena* out,Arena* temp);
-AccelInfo CalculateAcceleratorInfoNoDelay(Accelerator* accel,bool recursive,Arena* out,Arena* temp);
+// TODO: We kinda wanted to remove partitions and replace them with the AccelInfoIter approach, but the concept appears multiple times, so we probably do need to be able to represent partitions outside of the iter approach.
+Array<AccelInfoIterator> GetCurrentPartitionsAsIterators(AccelInfoIterator iter,Arena* out);
+AccelInfoIterator GetCurrentPartitionTypeAsIterator(AccelInfoIterator iter,Arena* out);
+int GetPartitionIndex(AccelInfoIterator iter);
+void FillAccelInfoAfterCalculatingInstanceInfo(AccelInfo* info,Accelerator* accel);
 
-CalculatedOffsets CalculateConfigOffsetsIgnoringStatics(Accelerator* accel,Arena* out);
-CalculatedOffsets CalculateConfigurationOffset(Accelerator* accel,MemType type,Arena* out);
+Array<InstanceInfo*> GetAllSameLevelUnits(AccelInfo* info,int level,int mergeIndex,Arena* out);
 
+// TODO: mergeIndex seems to be the wrong approach. Check the correct approach when trying to simplify merge.
+Array<InstanceInfo> GenerateInitialInstanceInfo(Accelerator* accel,Arena* out,Array<Partition> partitions);
 Array<Partition> GenerateInitialPartitions(Accelerator* accel,Arena* out);
 
-int GetConfigurationSize(FUDeclaration* decl,MemType type);
+void FillInstanceInfo(AccelInfoIterator initialIter,Arena* out);
+
+AccelInfo CalculateAcceleratorInfo(Accelerator* accel,bool recursive,Arena* out);
+
+Array<int> ExtractInputDelays(AccelInfoIterator top,Arena* out);
+Array<int> ExtractOutputLatencies(AccelInfoIterator top,Arena* out);
 
 // Array info related
-Array<Wire> ExtractAllConfigs(Array<InstanceInfo> info,Arena* out,Arena* temp);
+// TODO: This should be built on top of AccelInfo (taking an iterator), instead of just taking the array of instance infos.
+Array<Wire> ExtractAllConfigs(Array<InstanceInfo> info,Arena* out);
 Array<String> ExtractStates(Array<InstanceInfo> info,Arena* out);
 Array<Pair<String,int>> ExtractMem(Array<InstanceInfo> info,Arena* out);
 
+// TODO: Move this to Accelerator.hpp
 void ShareInstanceConfig(FUInstance* instance, int shareBlockIndex);
 void SetStatic(Accelerator* accel,FUInstance* instance);
 
 String ReprStaticConfig(StaticId id,Wire* wire,Arena* out);
-
-struct OrderedConfigurations{
-   Array<Wire> configs;
-   Array<Wire> statics;
-   Array<Wire> delays;
-};
-
-Array<InstanceInfo> ExtractFromInstanceInfoSameLevel(Array<InstanceInfo> instanceInfo,int level,Arena* out);
-
-void CheckSanity(Array<InstanceInfo> instanceInfo,Arena* temp);
-
-void PrintConfigurations(FUDeclaration* type,Arena* temp);
 

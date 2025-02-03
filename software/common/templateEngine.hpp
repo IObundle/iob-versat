@@ -116,21 +116,20 @@ struct CompiledTemplate{
 };
 
 struct Value;
-typedef Value (*PipeFunction)(Value in,Arena* temp);
+typedef Value (*PipeFunction)(Value in,Arena* out);
 void RegisterPipeOperation(String name,PipeFunction func);
 
 void InitializeTemplateEngine(Arena* perm);
 
-void ProcessTemplate(FILE* outputFile,CompiledTemplate* compiledTemplate,Arena* temp,Arena* temp2);
-CompiledTemplate* CompileTemplate(String content,const char* name,Arena* out,Arena* temp);
+void ProcessTemplate(FILE* outputFile,CompiledTemplate* compiledTemplate);
+CompiledTemplate* CompileTemplate(String content,const char* name,Arena* out);
 
-Array<TemplateRecord> RecordTypesAndFieldsUsed(CompiledTemplate* compiled,Arena* out,Arena* temp); // Quick way of checking useless values 
+Array<TemplateRecord> RecordTypesAndFieldsUsed(CompiledTemplate* compiled,Arena* out); // Quick way of checking useless values 
 
 Hashmap<String,Value>* GetAllTemplateValues();
 void ClearTemplateEngine();
 
 void TemplateSetCustom(const char* id,Value val);
-//void TemplateSetCustom(const char* id,void* entity,const char* typeName);
 void TemplateSetNumber(const char* id,int number);
 void TemplateSet(const char* id,void* ptr);
 void TemplateSetString(const char* id,const char* str);

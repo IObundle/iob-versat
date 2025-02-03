@@ -96,9 +96,11 @@ ALWAYS_INLINE _Once operator+(_OnceTag,F&& f){
   return _Once{};
 }
 
-#define TEMP__once(LINE) TEMPonce_ ## LINE
+#define TEMP__once(LINE) __attribute__((unused)) TEMPonce_ ## LINE
 #define TEMP_once(LINE) TEMP__once( LINE )
-#define once static _Once TEMP_once(__LINE__) = _OnceTag() + [&]() // Executes once even if called multiple times
+#define once static _Once TEMP_once(__LINE__) = _OnceTag() + [&] // Executes once even if called multiple times
+
+#define WARN_UNUSED __attribute__((warn_unused_result))
 
 void PrintStacktrace();
 
@@ -107,10 +109,12 @@ const char* GetFilename(const char* fullpath);
 // Quick print functions used when doing "print" debugging
 #define NEWLINE() do{ printf("\n"); fflush(stdout);} while(0)
 #define LOCATION() do{ printf("%s:%d\n",GetFilename(__FILE__),__LINE__); fflush(stdout);} while(0)
-#define PRINTF_WITH_LOCATION(...) do{ printf("%s:%d-",__FILE__,__LINE__); printf(__VA_ARGS__); FlushStdout();} while(0)
+#define PRINTF_WITH_LOCATION(...) do{ printf("%s:%d-",__FILE__,__LINE__); printf(__VA_ARGS__); fflush(stdout);} while(0)
 #define PRINT_STRING(STR) do{ printf("%.*s\n",UNPACK_SS((STR))); fflush(stdout);} while(0)
 
-static void Terminate(){fflush(stdout); exit(-1);}
+// Use when debugging, easier to search due to the 'd' at the beginning, less confusion with non-debugging printfs
+int dprintf(const char *format, ...) __attribute__ ((format (printf, 1, 2)));
+
 //#if defined(VERSAT_DEBUG)
 #define Assert(EXPR) \
   do { \
@@ -178,9 +182,73 @@ typedef intptr_t iptr;
 typedef uintptr_t uptr;
 typedef unsigned int uint;
 
+// Using std::optional is a pain when debugging 
+// This simple class basically does the same and much easier to debug
 template<typename T>
-using Opt = std::optional<T>;
+struct Opt{
+  T val;
+  bool hasVal;
+
+  Opt():val{},hasVal(false){};
+  Opt(std::nullopt_t):val{},hasVal(false){};
+  Opt(T t):val(t),hasVal(true){};
+  
+  Opt<T>& operator=(T& t){
+    hasVal = true;
+    val = t;
+    return *this;
+  };
+
+  Opt<T>& operator=(std::nullopt_t){
+    hasVal = false;
+    return *this;
+  };
+
+  bool operator!(){return !hasVal;};
+
+  // Match the std interface to make it easier to replace if needed
+  bool has_value(){return hasVal;};
+  T& value() & {assert(hasVal);return val;};
+  T&& value() && {assert(hasVal);return std::move(val);};
+  T value_or(T other){return hasVal ? val : other;};
+}; 
+
+#if 0
+// Optimized Opt for pointers, but not tested yet and test benchs not currently working.
+// 
+template<typename T>
+struct Opt<T*>{
+  T* val;
+
+  Opt():val(nullptr){};
+  Opt(std::nullopt_t):val(nullptr){};
+  Opt(T* t):val(t){};
+
+  Opt<T>& operator=(T& t){
+    val = t;
+    return *this;
+  };
+
+  Opt<T>& operator=(std::nullopt_t){
+    val = nullptr;
+    return *this;
+  };
+
+  bool operator!(){return !val;};
+
+  // Match the std interface to make it easier to replace if needed
+  bool has_value(){return (val != nullptr);};
+  T& value() & {assert(val);return val;};
+  T&& value() && {assert(val);return std::move(val);};
+  T value_or(T other){return this->has_value() ? val : other;};
+};
+#endif
+
+//template<typename T>
+//using Opt = std::optional<T>;
 #define PROPAGATE(OPTIONAL) if(!(OPTIONAL).has_value()){return {};}
+#define PROPAGATE_POINTER(PTR) if((PTR) == nullptr){return (nullptr);}
+#define PROPAGATE_POINTER_OPT(PTR) if((PTR) == nullptr){return {};}
 
 template<typename T>
 using BracketList = std::initializer_list<T>;
@@ -194,6 +262,7 @@ struct Time{
 Time GetTime();
 void PrintTime(Time time,const char* id);
 Time operator-(const Time& s1,const Time& s2);
+Time operator+(const Time& s1,const Time& s2);
 bool operator>(const Time& s1,const Time& s2);
 bool operator==(const Time& s1,const Time& s2);
 
@@ -244,15 +313,16 @@ public:
    inline T& operator*(){return *ptr;};
 };
 
-// This struct is associated to a gdb pretty printer.
+template<typename T> struct Array;
+
 template<typename T>
 struct Array{
   T* data;
   int size;
-
+  
   inline T& operator[](int index) const {Assert(index >= 0);Assert(index < size); return data[index];}
-  ArrayIterator<T> begin(){return ArrayIterator<T>{data};};
-  ArrayIterator<T> end(){return ArrayIterator<T>{data + size};};
+  ArrayIterator<T> begin() const{return ArrayIterator<T>{data};};
+  ArrayIterator<T> end() const{return ArrayIterator<T>{data + size};};
 };
 
 typedef Array<const char> String;
@@ -266,6 +336,8 @@ inline String STRING(const char* str){return (String){str,(int) strlen(str)};}
 inline String STRING(const char* str,int size){return (String){str,size};}
 inline String STRING(const unsigned char* str){return (String){(const char*)str,(int) strlen((const char*) str)};}
 inline String STRING(const unsigned char* str,int size){return (String){(const char*)str,size};}
+
+String Offset(String base,int amount);
 
 template<> class std::hash<String>{
 public:
@@ -394,12 +466,13 @@ void HexStringToHex(unsigned char* buffer,String str);
 void SeedRandomNumber(uint seed);
 uint GetRandomNumber();
 
+void OS_SetScriptPermissions(FILE* file);
+
 bool RemoveDirectory(const char* path);
 //bool CheckIfFileExists(const char* file);
 long int GetFileSize(FILE* file);
 char* GetCurrentDirectory();
 void MakeDirectory(const char* path);
-FILE* OpenFileAndCreateDirectories(const char* path,const char* format);
 void CreateDirectories(const char* path);
 String ExtractFilenameOnly(String filepath);
 String PathGoUp(char* pathBuffer);
@@ -412,6 +485,8 @@ bool CompareString(const char* str1,String str2);
 bool CompareString(String str1,const char* str2);
 bool CompareString(const char* str1,const char* str2);
 
+bool Empty(String str);
+
 // If strings are equal up until a given size, returns a order so that smallest comes first
 int CompareStringOrdered(String str1,String str2);
 
@@ -419,16 +494,6 @@ char GetHexadecimalChar(int value);
 unsigned char* GetHexadecimal(const unsigned char* text, int str_size); // Helper function to display result
 
 bool IsAlpha(char ch);
-
-// Simulate c++23 feature
-template<typename T>
-Opt<T> OrElse(Opt<T> first,Opt<T> elseOpt){
-   if(first){
-      return first;
-   } else {
-      return elseOpt;
-   }
-}
 
 template<typename T>
 inline void Memset(T* buffer,T elem,int bufferSize){
@@ -473,6 +538,17 @@ inline unsigned char SelectByte(int val,int index){
    return conv.asChar;
 }
 
+template<typename T>
+Array<T> Offset(Array<T> in,int amount){
+  Array<T> res = in;
+  if(amount < in.size){
+    in.data += amount;
+    in.size -= amount;
+  } else {
+    return {};
+  }
+}
+
 static inline bool Contains(String str,char ch){
    for(int i = 0; i < str.size; i++){
       if(str.data[i] == ch){
@@ -480,6 +556,14 @@ static inline bool Contains(String str,char ch){
       }
    }
    return false;
+}
+
+
+template<typename T>
+inline void Reverse(Array<T>& arr){
+  for(int i = 0; i < arr.size / 2; i++){
+    SWAP(arr[i],arr[arr.size - 1 - i]);
+  }
 }
 
 template<typename T>

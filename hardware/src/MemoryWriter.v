@@ -1,5 +1,16 @@
 `timescale 1ns / 1ps
 
+/*
+
+Receives addresses from an address generator
+Receives data from a data source
+Writes the data to the memory at the given addresses
+
+Like the Memory Reader, not implementing the full interfaces prevents this unit from abstracting away more logic than it could.
+The VRead unit contains 10 more lines of logic that are not needed if this unit was capable of detecting a m_last
+
+*/
+
 module MemoryWriter #(
    parameter ADDR_W = 32,
    parameter DATA_W = 32

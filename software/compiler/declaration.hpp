@@ -2,12 +2,14 @@
 
 #include <cstdio>
 
+#include "configurations.hpp"
 #include "accelerator.hpp"
 #include "verilogParsing.hpp"
 
 //struct FUInstance;
 struct FUDeclaration;
 struct Edge;
+struct InstanceInfo;
 
 typedef Hashmap<FUInstance*,FUInstance*> InstanceMap;
 typedef Hashmap<Edge,Edge> EdgeMap;
@@ -21,25 +23,6 @@ enum DelayType {
   DelayType_COMPUTE_DELAY      = 0x4
 };
 #define CHECK_DELAY(inst,T) ((inst->declaration->delayType & T) == T)
-
-static String DelayTypeToString(DelayType type){
-  switch(type){
-  case DelayType_BASE:{
-    return STRING("DelayType_BASE");
-  } break;
-  case DelayType_SINK_DELAY:{
-    return STRING("DelayType_SINK_DELAY");
-  } break;
-  case DelayType_SOURCE_DELAY: {
-    return STRING("DelayType_SOURCE_DELAY");
-  } break;
-  case DelayType_COMPUTE_DELAY: {
-    return STRING("DelayType_COMPUTE_DELAY");
-  } break;
-  }
-
-  return {};
-}
 
 inline DelayType operator|(DelayType a, DelayType b)
 {return static_cast<DelayType>(static_cast<int>(a) | static_cast<int>(b));}
@@ -60,32 +43,6 @@ inline DelayType operator|(DelayType a, DelayType b)
   }
 */
 
-struct ConfigurationInfo{
-  // Copy of MergeInfo
-  String name;
-  Array<String> baseName;
-  FUDeclaration* baseType;
-
-  // TODO: These should not be here, the wires will always be the same regardless of unit type 
-  Array<Wire> configs;
-  Array<Wire> states;
-
-  Array<int> inputDelays;
-  Array<int> outputLatencies;
-  
-  // Calculated offsets are an array that associate the given FUInstance inside the fixedDelayCircuit allocated member into the corresponding index of the configuration array. For now, static units are given a value near 0x40000000 (their configuration comes from the staticUnits hashmap). Units without any config are given a value of -1.
-  CalculatedOffsets   configOffsets;
-  CalculatedOffsets   stateOffsets;
-  CalculatedOffsets   delayOffsets;
-  Array<int>          calculatedDelays;
-  Array<int>          order;
-  AcceleratorMapping* mapping; // Maps from base type flattened to merged type baseCircuit
-  Set<PortInstance>*  mergeMultiplexers; // On merged fixedDelayCircuit. "baseCircuit"
-  Array<bool>         unitBelongs;
-  
-  Array<int>          mergeMultiplexerConfigs;
-};
-
 enum FUDeclarationType{
   FUDeclarationType_SINGLE,
   FUDeclarationType_COMPOSITE,
@@ -98,16 +55,25 @@ enum FUDeclarationType{
 
 // TODO: There is a lot of crux between parsing and creating the FUDeclaration for composite accelerators 
 //       the FUDeclaration should be composed of something that is in common to all of them.
-// A declaration is the instantiation of a type
 struct FUDeclaration{
   String name;
 
-  ConfigurationInfo baseConfig;
-  Array<ConfigurationInfo> configInfo; // Info for each merged view for all fixedDelayCircuit instances, even if they do not belong to the merged view (unitBelongs indicates such cases)
+  // These always exist, regardless of merge info 
+
+  Array<Wire> configs;
+  Array<Wire> states;
+
+  AccelInfo info;
+  
+  int numberDelays;
+  Array<String> parameters; // For now, only the parameters extracted from verilog files
   
   Opt<int> memoryMapBits; // 0 is a valid memory map size, so optional indicates that no memory map exists
   int nIOs;
-  
+
+  // Either we have the FUDeclaration be a instantiation of a FUType
+  // Or we have the memory keep the values in a expression format.
+  Array<ExternalMemoryInterfaceExpression> externalExpressionMemory;
   Array<ExternalMemoryInterface> externalMemory;
 
   // Stores different accelerators depending on properties we want
@@ -125,6 +91,8 @@ struct FUDeclaration{
   //       the info is all contained inside the units themselves and inside the calculated offsets
   Hashmap<StaticId,StaticData>* staticUnits;
 
+  Array<Pair<String,int>> definitionArrays;
+  
   FUDeclarationType type;
   DelayType delayType;
 
@@ -132,9 +100,39 @@ struct FUDeclaration{
   bool implementsDone;
   bool signalLoop;
 
-// Simple access functions
-  int NumberInputs(){return baseConfig.inputDelays.size;};
-  int NumberOutputs(){return baseConfig.outputLatencies.size;};
+  // Simple access functions
+  int NumberInputs(){return info.infos[0].inputDelays.size;};
+  int NumberOutputs(){return info.infos[0].outputLatencies.size;};
+
+  // This only works for base units.
+  // TODO: When things start settling in, need to move all these calculations to a specific file.
+  //       Any data that needs to be computed should have a simple function and all off these should be organized to be all in one file.
+  int NumberConfigs(){return configs.size;}
+  int NumberStates(){return states.size;}
+  int NumberDelays(){return numberDelays;};
+
+  int MergePartitionSize(){
+    return info.infos.size;
+  };
+
+  Array<int> GetOutputLatencies(){
+    return info.infos[0].outputLatencies;
+  }
+
+  Array<int> GetInputDelays(){
+    return info.infos[0].inputDelays;
+  }
+
+  int MaxConfigs(){
+    int max = 0;
+    for(AccelInfoIterator iter = StartIteration(&this->info); iter.IsValid(); iter = iter.Next()){
+      InstanceInfo* unit = iter.CurrentUnit();
+      if(unit->configPos.has_value()){
+        max = std::max(max,unit->configPos.value());
+      }
+    }
+    return max + 1;
+  }
 };
 
 // Simple operations should also be stored here.
@@ -157,3 +155,5 @@ FUDeclaration* GetTypeByNameOrFail(String name);
 void InitializeSimpleDeclarations();
 bool HasMultipleConfigs(FUDeclaration* decl);
 
+// Because of merge, we need units that can delay the datapath for different values depending on the datapath that is being configured.
+bool HasVariableDelay(FUDeclaration* decl);

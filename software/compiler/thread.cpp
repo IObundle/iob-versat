@@ -159,9 +159,9 @@ void TerminatePool(bool force){
    }
 }
 
-WorkGroup* PushWorkGroup(Arena* arena,int numberWork){
-   WorkGroup* work = PushStruct<WorkGroup>(arena);
-   work->tasks = PushArray<Task>(arena,numberWork);
+WorkGroup* PushWorkGroup(Arena* out,int numberWork){
+   WorkGroup* work = PushStruct<WorkGroup>(out);
+   work->tasks = PushArray<Task>(out,numberWork);
 
    return work;
 }

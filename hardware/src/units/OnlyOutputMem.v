@@ -70,7 +70,7 @@ module OnlyOutputMem #(
 
    //address generators
 
-   MyAddressGen #(
+   AddressGen #(
       .ADDR_W(ADDR_W),
       .DATA_W(SIZE_W)
    ) addrgenA (
@@ -94,6 +94,8 @@ module OnlyOutputMem #(
       .valid_o(enA),
       .ready_i(1'b1),
       .addr_o (addrA),
+      .store_o(), // TODO: Handle duty
+
       .done_o (doneA)
    );
    

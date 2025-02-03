@@ -3,6 +3,7 @@
 #include <cstring>
 #include <cctype>
 
+#include "memory.hpp"
 #include "utils.hpp"
 #include "utilsCore.hpp"
 
@@ -65,10 +66,11 @@ Tokenizer::Tokenizer(String content,const char* singleChars,BracketList<const ch
 ,end(content.data + content.size)
 ,line(1)
 ,column(1)
+,amountStoredTokens(0)
 {
   keepWhitespaces = false;
   keepComments = false;
-  Arena leaky = InitArena(Kilobyte(16));
+  leaky = InitArena(Kilobyte(16));
   std::vector<const char*> specials;
 
   this->tmpl = CreateTokenizerTemplate(&leaky,singleChars,specialCharsList);
@@ -80,13 +82,21 @@ Tokenizer::Tokenizer(String content,TokenizerTemplate* tmpl)
 ,end(content.data + content.size)
 ,line(1)
 ,column(1)
+,amountStoredTokens(0)
 {
   keepWhitespaces = false;
   keepComments = false;
+  leaky = {};
   this->tmpl = tmpl;
 }
 
-Token Tokenizer::PeekToken(){
+Tokenizer::~Tokenizer(){
+  if(leaky.mem){
+    Free(&leaky);
+  }
+}
+
+Token Tokenizer::ParseToken(){
   ConsumeWhitespace();
 
   // Only returns strings that are fully specified in the tokenizer template.
@@ -162,7 +172,6 @@ Token Tokenizer::PeekToken(){
       const char* start = peek;
       peek++;
 
-      Trie* currentTrie = &tmpl->subTries[0];
       while(peek < end){
         u16 val = tmpl->subTries[0].array[*peek];
         if(val == TOKEN_GOOD){
@@ -226,21 +235,64 @@ Token Tokenizer::PeekToken(){
     }
   }
 
-  tok = STRING(start,(int) (peek - start)); 
+  tok = STRING(ptr,(int) (peek - ptr)); 
   tok.loc.end = {.line = this->line,.column = this->column + tok.size};
   return tok;
 }
 
-Token Tokenizer::NextToken(){
-  Token res = PeekToken();
+void Tokenizer::AdvanceOneToken(){
+  Assert(amountStoredTokens < MAX_STORED_TOKENS);
 
-  if(res.size > 0){
-    AdvancePeek(res);
+  Token tok = ParseToken();
+  if(tok.size == 0){
+    return;
   }
+
+  ptr = tok.data + tok.size;
+  storedTokens[amountStoredTokens++] = tok;
+}
+
+Token Tokenizer::PeekToken(int index){
+  if(Done()){ // TODO: SLOW
+    return {};
+  }
+
+  while(index >= amountStoredTokens){
+    AdvanceOneToken();
+  }
+
+  return storedTokens[index];
+}
+
+Token Tokenizer::PopOneToken(){
+  Assert(amountStoredTokens > 0);
+
+  Token res = storedTokens[amountStoredTokens - 1];
+
+  // TODO: Implement a proper FIFO using a read and write index instead of all this copying
+  for(int i = 0; i < amountStoredTokens - 1; i++){
+    storedTokens[i] = storedTokens[i+1];
+  }
+
+  amountStoredTokens -= 1;
+  
   return res;
+}
+
+Token Tokenizer::NextToken(){
+  if(amountStoredTokens == 0){
+    AdvanceOneToken();
+  }
+
+  Token tok = PeekToken();
+  AdvancePeek();
+  Assert(tok.size > 0);
+  return tok;
 };
 
 String Tokenizer::PeekCurrentLine(){
+  const char* ptr = GetCurrentPtr();
+
   // Get start of the line
   const char* lineStart = ptr;
   if(lineStart[0] == '\n'){
@@ -270,7 +322,24 @@ String Tokenizer::PeekCurrentLine(){
   return fullLine;
 }
 
+void Tokenizer::AdvanceRemainingLine(){
+  const char* ptr = GetCurrentPtr();
+  
+  const char* lineEnd = ptr;
+  while(lineEnd < this->end){
+    if(*lineEnd == '\n'){
+      break;
+    }
+    lineEnd += 1;
+  }
+
+  this->ptr = lineEnd + 1;
+  this->amountStoredTokens = 0;
+}
+
 Token Tokenizer::PeekRemainingLine(){
+  const char* ptr = GetCurrentPtr();
+
   const char* lineStart = ptr;
   if(*lineStart == '\n'){
     String res = {ptr,1};
@@ -305,61 +374,6 @@ Token Tokenizer::PeekRemainingLine(){
   //tok.loc.end.column = this->column + fullLine.size;
   
   return tok;
-}
-
-String Tokenizer::GetFullLineForGivenToken(Token token){
-  // TODO: Use location info to simplify this function.
-  const char* insideLine = token.data;
-  
-  const char* start = insideLine;
-  while(start >= this->start){
-    if(start == this->start){
-      break;
-    }
-
-    if(*start == '\n'){
-      start += 1;
-      break;
-    }
-
-    start -= 1;
-  }
-
-  const char* end = insideLine;
-  while(end <= this->end){
-    if(end == this->end){
-      end -= 1;
-      break;
-    }
-
-    if(*end == '\n'){
-      end -= 1;
-      break;
-    }
-
-    end += 1;
-  }
-
-  String res = {};
-  res.data = start;
-  res.size = end - start + 1;
-  return res;
-}
-
-String Tokenizer::GetRichLocationError(Token got,Arena* out){
-  auto mark = StartString(out);
-
-  String fullLine = GetFullLineForGivenToken(got);
-  int line = got.loc.start.line;
-  int columnIndex = got.loc.start.column - 1;
-
-  PushString(out,"%6d | %.*s\n",got.loc.start.line,UNPACK_SS(fullLine));
-  PushString(out,"      "); // 6 spaces to match the 6 digits above
-  PushString(out," | ");
-
-  PushPointingString(out,columnIndex,got.size);
-
-  return EndString(mark);
 }
 
 Token Tokenizer::AssertNextToken(const char* str){
@@ -405,7 +419,7 @@ Opt<Token> Tokenizer::PeekFindUntil(const char* str){
     if(CompareString(peek,toFind)){
       break;
     }
-    AdvancePeek(peek);
+    AdvancePeek();
   }
 
   Token result = Point(mark);
@@ -417,6 +431,8 @@ Opt<Token> Tokenizer::PeekFindUntil(const char* str){
 Opt<Token> Tokenizer::PeekFindIncluding(const char* str){
   auto mark = Mark();
 
+  //__asm__("int3");
+  
   String toFind = STRING(str);
   while(1){
     if(Done()){
@@ -424,8 +440,8 @@ Opt<Token> Tokenizer::PeekFindIncluding(const char* str){
       return {};
     }
     
-    Token peek = NextToken();
-    if(CompareString(peek,toFind)){
+    Token token = NextToken();
+    if(CompareString(token,toFind)){
       break;
     }
   }
@@ -448,7 +464,7 @@ Opt<Token> Tokenizer::PeekFindIncludingLast(const char* str){
     }
 
     foundAtLeastOne = true;
-    AdvancePeek(peek.value());
+    AdvancePeekBad(peek.value());
   }
 
   if(!foundAtLeastOne){
@@ -465,7 +481,7 @@ Opt<Token> Tokenizer::NextFindUntil(const char* str){
   Opt<Token> token = PeekFindUntil(str);
   PROPAGATE(token);
   
-  AdvancePeek(token.value());
+  AdvancePeekBad(token.value());
 
   return token;
 }
@@ -522,7 +538,7 @@ bool Tokenizer::IfNextToken(const char* str){
   Token peek = PeekToken();
 
   if(CompareString(peek,str)){
-    AdvancePeek(peek);
+    AdvancePeek();
     return true;
   }
 
@@ -556,7 +572,17 @@ Token Tokenizer::PeekWhitespace(){
   return token;
 }
 
+const char* Tokenizer::GetCurrentPtr(){
+  if(amountStoredTokens > 0){
+    return storedTokens[0].data;
+  } else {
+    return ptr;
+  }
+}
+
 Token Tokenizer::Finish(){
+  const char* ptr = GetCurrentPtr();
+  
   Token token = {};
   token.data = ptr;
   token.size = end - ptr;
@@ -574,12 +600,15 @@ Token Tokenizer::Finish(){
   token.loc.end.line = this->line;
   token.loc.end.column = this->column;
 
-  ptr = end;
-
+  this->ptr = end;
+  this->amountStoredTokens = 0;
+  
   return token;
 }
 
 TokenizerMark Tokenizer::Mark(){
+  const char* ptr = GetCurrentPtr();
+
   TokenizerMark mark = {};
   mark.ptr = ptr;
   mark.pos.line = line;
@@ -588,25 +617,58 @@ TokenizerMark Tokenizer::Mark(){
 }
 
 Token Tokenizer::Point(TokenizerMark mark){
-  Assert(this->ptr >= mark.ptr);
+  const char* ptr = GetCurrentPtr();
+
+  Assert(ptr >= mark.ptr);
 
   Token token = {};
   token.loc.start = mark.pos;
   token.loc.end.line = this->line;
   token.loc.end.column = this->column;
   token.data = mark.ptr;
-  token.size = this->ptr - mark.ptr;
+  token.size = ptr - mark.ptr;
 
   return token;
 }
 
 void Tokenizer::Rollback(TokenizerMark mark){
-  this->ptr = mark.ptr;
   this->line = mark.pos.line;
   this->column = mark.pos.column;
+  this->ptr = mark.ptr;
+  this->amountStoredTokens = 0;
 }
 
-void Tokenizer::AdvancePeek(Token tok){
+String Tokenizer::GetContent(){
+  return (String){.data = this->start,.size = (int) (this->end - this->start)};
+}
+
+void Tokenizer::AdvancePeek(int amount){
+  Assert(amount > 0);
+  Token tok = {};
+  for(int i = 0; i < amount; i++){
+    if(amountStoredTokens == 0){
+      AdvanceOneToken();
+    }
+    tok = PopOneToken();
+  }
+  
+  // Some sanity checks, especially because we still have not locked in wether zero tokens should be returned or if we should return optionals and so on.
+  if(tok.loc.end.line == 0){
+    Assert(tok.loc.end.column == 0);
+  }
+  if(tok.loc.end.column == 0){
+    Assert(tok.loc.end.line == 0);
+  }
+  if(tok.data == nullptr){
+    Assert(tok.size == 0);
+  }
+  
+  if(tok.loc.end.line > 0) this->line = tok.loc.end.line;
+  if(tok.loc.end.column > 0) this->column = tok.loc.end.column;
+  //if(tok.size > 0 && tok.data != nullptr) ptr = &tok.data[tok.size];
+}
+
+void Tokenizer::AdvancePeekBad(Token tok){
   // Some sanity checks, especially because we still have not locked in wether zero tokens should be returned or if we should return optionals and so on.
   if(tok.loc.end.line == 0){
     Assert(tok.loc.end.column == 0);
@@ -621,9 +683,15 @@ void Tokenizer::AdvancePeek(Token tok){
   if(tok.loc.end.line > 0) this->line = tok.loc.end.line;
   if(tok.loc.end.column > 0) this->column = tok.loc.end.column;
   if(tok.size > 0 && tok.data != nullptr) ptr = &tok.data[tok.size];
+
+  amountStoredTokens = 0;
 }
 
 bool Tokenizer::Done(){
+  if(amountStoredTokens){
+    return false;
+  }
+
   auto mark = Mark();
 
   ConsumeWhitespace();
@@ -717,7 +785,7 @@ Opt<Token> Tokenizer::PeekUntilDelimiterExpression(BracketList<const char*> open
       }
     }
 
-    AdvancePeek(tok);
+    AdvancePeek();
   }
 
   // Did not find the closing expression.
@@ -725,24 +793,32 @@ Opt<Token> Tokenizer::PeekUntilDelimiterExpression(BracketList<const char*> open
   return {};
 }
 
-Opt<Token> Tokenizer::PeekIncludingDelimiterExpression(BracketList<const char*> open,BracketList<const char*> close, int numberOpenSeen){
-  auto pos = Mark();
+bool Tokenizer::AdvanceDelimiterExpression(BracketList<const char*> open,BracketList<const char*> close, int numberOpenSeen){
+  int count = numberOpenSeen;
 
-  Opt<Token> until = PeekUntilDelimiterExpression(open,close,numberOpenSeen);
+  bool end = false;
+  while(!(end || Done())){
+    Token token = NextToken();
 
-  if(!until.has_value()){
-    return until;
+    for(const char* str : open){
+      if(CompareString(token,str)){
+        count += 1;
+        break;
+      }
+    }
+
+    for(const char* str : close){
+      if(CompareString(token,str)){
+        count -= 1;
+        if(count == 0){
+          end = true;
+        }
+        break;
+      }
+    }
   }
   
-  AdvancePeek(until.value());
-  NextToken();
-
-  // TODO: Assert that NextToken belongs to close
-  
-  Token res = Point(pos);
-  Rollback(pos);
-
-  return res;  
+  return true;
 }
 
 String PushString(Arena* out,Token token){
@@ -824,7 +900,7 @@ Array<String> Split(String content,char sep,Arena* out){
   int index = 0;
   int size = content.size;
 
-  DynamicArray<String> arr = StartArray<String>(out);
+  auto arr = StartGrowableArray<String>(out);
   
   while(1){
     int start = index;
@@ -1103,7 +1179,7 @@ TokenizerTemplate* CreateTokenizerTemplate(Arena* out,const char* singleChars,Br
   TokenizerTemplate* tmpl = PushStruct<TokenizerTemplate>(out);
   *tmpl = {};
 
-  DynamicArray<Trie> arr = StartArray<Trie>(out);
+  auto arr = StartGrowableArray<Trie>(out);
 
   Trie* topTrie = arr.PushElem();
   *topTrie = {};
@@ -1155,3 +1231,73 @@ TokenizerTemplate* CreateTokenizerTemplate(Arena* out,const char* singleChars,Br
   
   return tmpl;
 }
+
+String GetFullLineForGivenToken(String content,Token token){
+  // TODO: Use location info to simplify this function.
+  const char* insideLine = token.data;
+
+  const char* contentStart = content.data;
+  const char* contentEnd = content.data + content.size;
+  
+  const char* start = insideLine;
+  while(start >= contentStart){
+    if(start == contentStart){
+      break;
+    }
+
+    if(*start == '\n'){
+      start += 1;
+      break;
+    }
+
+    start -= 1;
+  }
+
+  const char* end = insideLine;
+  while(end <= contentEnd){
+    if(end == contentEnd){
+      end -= 1;
+      break;
+    }
+
+    if(*end == '\n'){
+      end -= 1;
+      break;
+    }
+
+    end += 1;
+  }
+
+  String res = {};
+  res.data = start;
+  res.size = end - start + 1;
+  return res;
+}
+
+String GetRichLocationError(String content,Token got,Arena* out){
+  auto mark = StartString(out);
+
+  String fullLine = GetFullLineForGivenToken(content,got);
+  int line = got.loc.start.line;
+  int columnIndex = got.loc.start.column - 1;
+
+  PushString(out,"%6d | %.*s\n",line,UNPACK_SS(fullLine));
+  PushString(out,"      "); // 6 spaces to match the 6 digits above
+  PushString(out," | ");
+
+  PushPointingString(out,columnIndex,got.size);
+
+  return EndString(mark);
+}
+
+Array<Token> DivideContentIntoTokens(Tokenizer* tok,Arena* out){
+  auto res = StartGrowableArray<Token>(out);
+
+  while(!tok->Done()){
+    *res.PushElem() = tok->NextToken();
+  }
+
+  return EndArray(res);
+}
+
+

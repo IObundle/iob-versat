@@ -31,7 +31,7 @@
       #{set res "in" # inst2.portIndex}
    #{else}
       #{if decl2.isOperation}
-         #{if decl2.baseConfig.outputLatencies[0] == 0}
+         #{if decl2.info.infos[0].outputLatencies[0] == 0}
             #{set res "comb_" # inst2 |> Identify}
          #{else}
             #{set res "seq_" # inst2 |> Identify}
@@ -55,7 +55,7 @@
       #{set res "in" # inst2.portIndex}
    #{else}
       #{if decl2.isOperation}
-         #{if decl2.baseConfig.outputLatencies[0] == 0}
+         #{if decl2.info.infos[0].outputLatencies[0] == 0}
             #{set res "comb_" # inst2 |> Identify}
          #{else}
             #{set res "seq_" # inst2 |> Identify}
@@ -97,7 +97,7 @@
    #{set nCombOperations 0}
    #{for node instances}
       #{if node.declaration.isOperation}
-         #{if node.declaration.baseConfig.outputLatencies[0] == 0}
+         #{if node.declaration.info.infos[0].outputLatencies[0] == 0}
             #{inc nCombOperations}
          #{end}
       #{end}
@@ -109,7 +109,7 @@
    #{set nSeqOperations 0}
    #{for node instances}
       #{if node.declaration.isOperation}
-         #{if node.declaration.baseConfig.outputLatencies[0] != 0}
+         #{if node.declaration.info.infos[0].outputLatencies[0] != 0}
             #{inc nSeqOperations}
          #{end}
       #{end}
@@ -118,21 +118,15 @@
 #{end}
 
 #{define IntName count}
-#{set name "int"}
+#{set name "int32_t"}
 #{if count == 8}
-#{set name "int8"}
+#{set name "int8_t"}
 #{end}
 #{if count == 16}
-#{set name "int16"}
+#{set name "int16_t"}
 #{end}
 #{if count == 64}
-#{set name "int64"}
-#{end}
-#{if count == 128}
-#{set name "Int128"}
-#{end}
-#{if count == 256}
-#{set name "Int256"}
+#{set name "int64_t"}
 #{end}
 #{return name}
 #{end}

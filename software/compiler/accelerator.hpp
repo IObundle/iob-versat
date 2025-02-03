@@ -4,13 +4,13 @@
 
 #include "utils.hpp"
 #include "memory.hpp"
-//#include "configurations.hpp"
 #include "verilogParsing.hpp"
 
 struct FUInstance;
 struct FUDeclaration;
 struct Accelerator;
 struct Edge;
+struct AccelInfo;
 
 typedef Hashmap<FUInstance*,FUInstance*> InstanceMap;
 typedef Hashmap<Edge,Edge> EdgeMap;
@@ -71,28 +71,30 @@ inline bool operator==(const Edge& e0,const Edge& e1){
   return (EdgeEqualNoDelay(e0,e1) && e0.delay == e1.delay);
 }
 
-typedef Array<Edge> Path;
-typedef Hashmap<Edge,Path> PathMap;
-
-struct GenericGraphMapping{
-  InstanceMap* nodeMap;
-  PathMap* edgeMap;
-};
-
 struct EdgeDelayInfo{
   int* value;
   bool isAny;
 };
 
+// Need to formalize this. 
 struct DelayInfo{
   int value;
-  bool isAny;
+  bool isAny; // True if the edge can have any delay at runtime (because attached to a variable buffer). If true, the value represents the minimum amount of delay needed by the edge (we can't have negative delays, even in an isAny edge)
 };
 
+// Three possibilities. A node contains zero isAny edges. A node contains all isAny edges. A node contains some isAny edges.
+
+// First is easy. Third, the value is still the minimum of values and the node is still fixed. Second case the value is still the minimum but now the node can be isAny as well.
+
+// All this stuff just makes me think of adding a proper constraint based approach to delay calculation. Basically model this as an CSP (or we just calculate expressions that calculate everything based on the value of other expressions) (we can then calculate the value of the expressions by giving an initial input value and the inputs are propragated by the fact that every expressions is dependent on every value).
+// I think that problem is whether we actually gain anything from this. We would have greater power, but if we produce the same results, no point.
+
+// TODO: Would like to see if using the ConnectionNode approach makes sense. We might be able to represent the edges in a list and simplify other parts of the code. Probably best to analyze how the graph structures are being used through the code base and make a decision then. Only merge needs to perform multiple graph mutations. Everything else kinda works fine if we use a more constant approach for the graphs.
 struct ConnectionNode{
   PortInstance instConnectedTo;
   int port;
   int edgeDelay;
+  // TODO: This is bad, we are storing something that is used only by the delay calculations functions and it is not a good approach because of merge. We already have the proper solution by using the AccelInfo approach, so now the only thing left is to remove the usage of this delay. 
   EdgeDelayInfo delay; // Maybe not the best approach to calculate delay. TODO: check later
   ConnectionNode* next;
 };
@@ -105,12 +107,17 @@ enum NodeType{
   NodeType_SOURCE_AND_SINK
 };
 
+struct ParameterValue{
+  String val; // Mostly a placeholder for now. Eventually want a better way of handling parameters and expression of parameters
+};
+
 struct FUInstance{
   String name;
 
-  // This should be versat side only, but it's easier to have them here for now
-  String parameters; // TODO: Actual parameter structure
+  Array<ParameterValue> parameterValues; // Associates a value to the corresponding parameter on the associated FUDeclaration
+
   Accelerator* accel;
+
   FUDeclaration* declaration;
   int id;
 
@@ -118,22 +125,19 @@ struct FUInstance{
     int literal;
     int bufferAmount;
     int portIndex;
+    int muxGroup; // Merge multiplexers that belong to the same group must also have the same config (similar to shared units, but we want to separate the share mechanism from the mechanism used to represent multiplexers groups)
   };
   int sharedIndex;
   bool isStatic;
   bool sharedEnable;
   bool isMergeMultiplexer; // TODO: Kinda of an hack for now
-  int mergeMultiplexerId;
   
-  FUInstance* next;
-
   // Calculated and updated every time a connection is added or removed
   ConnectionNode* allInputs;
   ConnectionNode* allOutputs;
   Array<PortInstance> inputs;
   Array<bool> outputs;
 
-  //int outputs;
   bool multipleSamePortInputs;
   NodeType type;
 };
@@ -141,18 +145,17 @@ struct FUInstance{
 enum AcceleratorPurpose{
   AcceleratorPurpose_TEMP,
   AcceleratorPurpose_BASE,
+  AcceleratorPurpose_FIXED_DELAY,
   AcceleratorPurpose_FLATTEN,
   AcceleratorPurpose_MODULE,
   AcceleratorPurpose_RECON,
   AcceleratorPurpose_MERGE
 };
 
-// TODO: Memory leaks can be fixed by having a global InstanceNode and FUInstance Pool and a global dynamic arena for everything else.
 struct Accelerator{ // Graph + data storage
-  FUInstance* allocated;
-  FUInstance* lastAllocated;
+  Pool<FUInstance> allocated;
   
-  DynamicArena* accelMemory; // TODO: We could remove all this because we can now build all the accelerators in place. (Add an API that functions like a Accelerator builder and at the end we lock everything into an immutable graph).
+  DynamicArena* accelMemory; // TODO: Should just add linked list to normal arena and replace this with a simple arena.
 
    // Mainly for debugging
   String name; // For debugging purposes it's useful to give accelerators a name
@@ -160,31 +163,18 @@ struct Accelerator{ // Graph + data storage
   AcceleratorPurpose purpose;
 };
 
-struct MemoryAddressMask{
-  // Repr: memoryMask ( memoryMaskSize )
-
-  int memoryMaskSize;
-  char memoryMaskBuffer[33];
-  char* memoryMask;
-};
-
 struct VersatComputedValues{
   int nConfigs;
-  int configBits;
 
   int versatConfigs;
   int versatStates;
 
   int nStatics;
-  int staticBits;
-  int staticBitsStart;
 
   int nDelays;
-  int delayBits;
   int delayBitsStart;
 
   // Configurations = config + static + delays
-  int nConfigurations;
   int configurationBits;
   int configurationAddressBits;
 
@@ -196,15 +186,13 @@ struct VersatComputedValues{
   int memoryMappedBytes;
 
   int nUnitsIO;
-  int numberConnections; // TODO: Same as accel
+  int numberConnections;
   int externalMemoryInterfaces;
 
-  int stateConfigurationAddressBits;
   int memoryAddressBits;
-  int memoryMappingAddressBits;
   int memoryConfigDecisionBit;
 
-  bool signalLoop;
+  //bool signalLoop;
 };
 
 struct DAGOrderNodes{
@@ -226,7 +214,8 @@ struct AcceleratorMapping{
 };
 
 struct EdgeIterator{
-  FUInstance* currentNode;
+  PoolIterator<FUInstance> currentNode;
+  PoolIterator<FUInstance> end;
   ConnectionNode* currentPort;
   
   bool HasNext();
@@ -271,8 +260,6 @@ enum MemType{
    STATIC
 };
 
-Accelerator* GetAcceleratorById(int id);
-
 Accelerator* CreateAccelerator(String name,AcceleratorPurpose purpose);
 
 Pair<Accelerator*,AcceleratorMapping*> CopyAcceleratorWithMapping(Accelerator* accel,AcceleratorPurpose purpose,bool preserveIds,Arena* out);
@@ -283,10 +270,9 @@ bool NameExists(Accelerator* accel,String name);
 
 int GetFreeShareIndex(Accelerator* accel); // TODO: Slow 
 
-Array<FUDeclaration*> AllNonSpecialSubTypes(Accelerator* accel,Arena* out,Arena* temp);
-Array<FUDeclaration*> ConfigSubTypes(Accelerator* accel,Arena* out,Arena* temp);
-Array<FUDeclaration*> MemSubTypes(Accelerator* accel,Arena* out,Arena* temp);
+Array<FUDeclaration*> MemSubTypes(Accelerator* accel,Arena* out);
 
+// TODO: This could work on top of AccelInfo.
 Hashmap<StaticId,StaticData>* CollectStaticUnits(Accelerator* accel,FUDeclaration* topDecl,Arena* out);
 
 int ExternalMemoryByteSize(ExternalMemoryInterface* inter);
@@ -294,19 +280,24 @@ int ExternalMemoryByteSize(Array<ExternalMemoryInterface> interfaces); // Size o
 
 // TODO: Instead of versatComputedValues, could return something like a FUDeclaration
 //       (or something that FUDeclaration would be composed off)
-//       
-VersatComputedValues ComputeVersatValues(Accelerator* accel,bool useDMA);
+//
+
+// This computes the values for the top accelerator only.
+// Different of a regular accelerator because it can add more configs for DMA and other top level things
+VersatComputedValues ComputeVersatValues(AccelInfo* accel,bool useDMA);
+
+// Returns false if parameter does not exist 
+bool SetParameter(FUInstance* inst,String parameterName,String parameterValue);
 
 Array<Edge> GetAllEdges(Accelerator* accel,Arena* out);
 EdgeIterator IterateEdges(Accelerator* accel);
 
 // Unit connection
-Opt<Edge> FindEdge(PortInstance out,PortInstance in);
 Opt<Edge> FindEdge(FUInstance* out,int outIndex,FUInstance* in,int inIndex,int delay);
 void ConnectUnitsGetEdge(FUInstance* out,int outIndex,FUInstance* in,int inIndex,int delay = 0);
 void ConnectUnitsGetEdge(FUInstance* out,int outIndex,FUInstance* in,int inIndex,int delay,Edge* previous);
 void ConnectUnitsIfNotConnected(FUInstance* out,int outIndex,FUInstance* in,int inIndex,int delay = 0);
-void  ConnectUnits(FUInstance* out,int outIndex,FUInstance* in,int inIndex,int delay = 0);
+void ConnectUnits(FUInstance* out,int outIndex,FUInstance* in,int inIndex,int delay = 0);
 void ConnectUnits(PortInstance out,PortInstance in,int delay = 0);
 
 void CalculateNodeType(FUInstance* node);
@@ -316,7 +307,6 @@ Array<int> GetNumberOfInputConnections(FUInstance* node,Arena* out);
 Array<Array<PortInstance>> GetAllInputs(FUInstance* node,Arena* out);
 
 void RemoveConnection(Accelerator* accel,FUInstance* out,int outPort,FUInstance* in,int inPort);
-FUInstance* RemoveUnit(FUInstance* nodes,FUInstance* unit);
 
 // Fixes edges such that unit before connected to after, are reconnected to new unit
 void InsertUnit(Accelerator* accel,PortInstance before, PortInstance after, PortInstance newUnit);
@@ -324,8 +314,6 @@ void InsertUnit(Accelerator* accel,PortInstance before, PortInstance after, Port
 bool IsCombinatorial(Accelerator* accel);
 
 void ConnectUnits(PortInstance out,PortInstance in,int delay);
-
-void PrintAllInstances(Accelerator* accel);
 
 void MappingCheck(AcceleratorMapping* map);
 void MappingCheck(AcceleratorMapping* map,Accelerator* first,Accelerator* second);
@@ -344,7 +332,6 @@ void MappingPrintAll(AcceleratorMapping* map);
 FUInstance* MappingMapNode(AcceleratorMapping* mapping,FUInstance* inst);
 
 Set<PortInstance>* MappingMapInput(AcceleratorMapping* map,Set<PortInstance>* set,Arena* out);
-Set<PortInstance>* MappingMapOutput(AcceleratorMapping* map,Set<PortInstance>* set,Arena* out);
 
 struct SubMappingInfo{
   FUDeclaration* subDeclaration;
@@ -375,9 +362,4 @@ public:
    }
 };
 
-Pair<Accelerator*,SubMap*> Flatten2(Accelerator* accel,int times,Arena* temp);
-
 void PrintSubMappingInfo(SubMap* info);
-
-
-

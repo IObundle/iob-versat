@@ -8,6 +8,7 @@
 #include "type.hpp"
 
 struct Command;
+struct Tokenizer;
 
 // TODO: The entire code base reuses "Expression" in a lot of different situations while in reality every single Expression should be unique for the given file/module. 
 struct Expression{
@@ -41,6 +42,13 @@ struct Token : public String{
   }
 };
 
+template<> class std::hash<Token>{
+public:
+   std::size_t operator()(Token const& s) const noexcept{
+     return std::hash<String>()(s);
+   }
+};
+
 struct FindFirstResult{
   String foundFirst;
   Token peekFindNotIncluded;
@@ -59,16 +67,22 @@ struct TokenizerMark{
   Cursor pos;
 };
 
+#define MAX_STORED_TOKENS 4
+
 struct Tokenizer{
   const char* start;
   const char* ptr;
   const char* end;
   TokenizerTemplate* tmpl;
+  Arena leaky;
+  
+  Token storedTokens[MAX_STORED_TOKENS];
 
   // Line and column start at one. Subtract one to get zero based indexes
   int line;
   int column;
-
+  char amountStoredTokens;
+  
   // TODO: This should technically be part of the Tokenizer template
   bool keepWhitespaces;
   bool keepComments;
@@ -76,33 +90,37 @@ struct Tokenizer{
 private:
 
   void ConsumeWhitespace();
-
+  Token ParseToken();
+  void AdvanceOneToken();
+  Token PopOneToken();
+  const char* GetCurrentPtr();
+  
 public:
-
-  String GetFullLineForGivenToken(Token token);
   
   // TODO: Need to make a function that returns a location for a given token, so that I can return a good error message for the token not being the expected on. The function accepts a token and either returns a string or returns some structure that contains all the info needed to output such text.
   
   // TODO: Make some asserts. Special chars should not contain empty chars
   Tokenizer(String content,const char* singleChars,BracketList<const char*> specialChars); // Content must remain valid through the entire parsing process
   Tokenizer(String content,TokenizerTemplate* tmpl); // Content must remain valid. Tokenizer makes no copies
-  Token PeekToken();
+  ~Tokenizer();
+
+  Token PeekToken(int index = 0);
   Token NextToken();
 
-  String GetRichLocationError(Token got,Arena* out);
   Token AssertNextToken(const char* str);
 
   String PeekCurrentLine(); // Get full line (goes backwards until start of line and peeks until newline).
   Token PeekRemainingLine(); // Does not go back. 
   
   bool IfPeekToken(const char* str);
-  bool IfNextToken(const char* str);
+  bool IfNextToken(const char* str); // Only does "next" if token matches str
 
+  // All these calls are not very good. No point having a tokenizer if we just skip the tokenization process
   Opt<Token> PeekFindUntil(const char* str);
   Opt<Token> PeekFindIncluding(const char* str);
   Opt<Token> PeekFindIncludingLast(const char* str);
   Opt<Token> NextFindUntil(const char* str);
-
+  
   Opt<FindFirstResult> FindFirst(BracketList<const char*> strings);
 
   Token PeekWhitespace();
@@ -112,9 +130,13 @@ public:
   TokenizerMark Mark();
   Token Point(TokenizerMark mark);
   void Rollback(TokenizerMark mark);
+  String GetContent();
   
-  void AdvancePeek(Token tok);
+  void AdvancePeek(int amount = 1);
+  void AdvancePeekBad(Token token);
 
+  void AdvanceRemainingLine();
+  
   bool Done(); // If more tokens, returns false. Can return true even if it contains more text (but no more tokens)
 
   bool IsSpecialOrSingle(String toTest);
@@ -123,7 +145,9 @@ public:
 
   // For expressions where there is a open and a closing delimiter (think '{ { } }') and need to check where the matching close delimiter is.
   Opt<Token> PeekUntilDelimiterExpression(BracketList<const char*> open,BracketList<const char*> close, int numberOpenSeen);
-  Opt<Token> PeekIncludingDelimiterExpression(BracketList<const char*> open,BracketList<const char*> close, int numberOpenSeen);
+
+  // For expressions where there is a open and a closing delimiter (think '{ { } }') and need to advance such expressions (mostly to skip some checkions while parsing is still not fully complete)
+  bool AdvanceDelimiterExpression(BracketList<const char*> open,BracketList<const char*> close, int numberOpenSeen);
 };
 
 bool IsOnlyWhitespace(String tok);
@@ -144,6 +168,11 @@ int GetTokenPositionInside(String text,Token token); // Does not compare strings
 
 int CountSubstring(String str,String substr);
 
+String GetFullLineForGivenToken(String content,Token token);
+String GetRichLocationError(String content,Token got,Arena* out);
+
+Array<Token> DivideContentIntoTokens(Tokenizer* tok,Arena* out);
+
 // This functions should check for errors. Also these functions should return an error if they do not parse everything. Something like "3a" should flag an error for ParseInt, instead of just returning 3. Either they consume everything or it's an error
 int ParseInt(String str);
 double ParseDouble(String str);
@@ -151,6 +180,16 @@ float ParseFloat(String str);
 bool IsNum(char ch);
 
 TokenizerTemplate* CreateTokenizerTemplate(Arena* out,const char* singleChars,BracketList<const char*> specialChars);
+
+struct TemplateMarker{
+  TokenizerTemplate* previousTemplate;
+  Tokenizer* tok;
+
+  TemplateMarker(Tokenizer* tok,TokenizerTemplate* newTemplate){this->tok = tok; previousTemplate = tok->SetTemplate(newTemplate);};
+  ~TemplateMarker(){tok->SetTemplate(previousTemplate);};
+}; 
+
+#define TOKENIZER_REGION(TOK,TMPL) TemplateMarker _marker(__LINE__)(TOK,TMPL)
 
 /* Generic expression parser. The ExpressionType struct needs to have the following members with the following types:
      Array<ExpressionType> expressions;
@@ -190,7 +229,7 @@ ExpressionType* ParseOperationType_(Tokenizer* tok,OperationList* operators,Pars
       const char* elem = operators->op[i];
 
       if(CompareString(peek,elem)){
-        tok->AdvancePeek(peek);
+        tok->AdvancePeek();
         ExpressionType* expr = PushStruct<ExpressionType>(out);
         *expr = {};
         expr->expressions = PushArray<ExpressionType*>(out,2);
