@@ -89,7 +89,7 @@ Opt<Array<String>> GetAllFilesInsideDirectory(String dirPath,Arena* out){
 String PushEscapedString(Arena* out,String toEscape,char spaceSubstitute){
   TEMP_REGION(temp,out);
 
-  auto builder = StartStringBuilder(out);
+  auto builder = StartString(out);
 
   for(int i = 0; i < toEscape.size; i++){
     switch(toEscape[i]){
@@ -134,7 +134,7 @@ String GetAbsolutePath(const char* path,Arena* out){
 }
 
 Array<int> GetNonZeroIndexes(Array<int> arr,Arena* out){
-  auto array = StartGrowableArray<int>(out);
+  auto array = StartArray<int>(out);
   for(int i = 0; i < arr.size; i++){
     if(arr[i])
       *array.PushElem() = i;
@@ -150,7 +150,7 @@ String JoinStrings(Array<String> strings,String separator,Arena* out){
   }
 
   bool first = true;
-  auto builder = StartStringBuilder(temp);
+  auto builder = StartString(temp);
   for(String str : strings){
     if(first){
       first = false;

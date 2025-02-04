@@ -58,7 +58,7 @@ bool _ExpectError(Tokenizer* tok,const char* str){
   String expected = STRING(str);
   if(!CompareString(got,expected)){
     
-    auto builder = StartStringBuilder(temp);
+    auto builder = StartString(temp);
     builder->PushString("Parser Error.\n Expected to find:  '");
     builder->PushString(PushEscapedString(temp,expected,' '));
     builder->PushString("'\n");
@@ -231,7 +231,7 @@ Opt<VarGroup> ParseVarGroup(Tokenizer* tok,Arena* out){
   if(CompareString(peek,"{")){
     tok->AdvancePeek();
 
-    auto arr = StartGrowableArray<Var>(out);
+    auto arr = StartArray<Var>(out);
     while(!tok->Done()){
       Var* var = arr.PushElem();
       Opt<Var> optVar = ParseVar(tok);
@@ -583,7 +583,7 @@ Opt<VarDeclaration> ParseVarDeclaration(Tokenizer* tok){
 }
 
 Array<Token> CheckAndParseConnectionTransforms(Tokenizer* tok,Arena* out){
-  auto arr = StartGrowableArray<Token>(out);
+  auto arr = StartArray<Token>(out);
   while(!tok->Done()){
     auto mark = tok->Mark();
     Token first = tok->NextToken();
@@ -635,7 +635,7 @@ Opt<ConnectionDef> ParseConnection(Tokenizer* tok,Arena* out){
 }
 
 Opt<Array<VarDeclaration>> ParseModuleInputDeclaration(Tokenizer* tok,Arena* out){
-  auto array = StartGrowableArray<VarDeclaration>(out);
+  auto array = StartArray<VarDeclaration>(out);
 
   EXPECT(tok,"(");
 
@@ -685,7 +685,7 @@ Opt<InstanceDeclaration> ParseInstanceDeclaration(Tokenizer* tok,Arena* out){
         res.negateShareNames = true;
       }
 
-      auto toShare = StartGrowableArray<Token>(out);
+      auto toShare = StartArray<Token>(out);
       while(!tok->Done()){
         Token name = tok->NextToken();
         CHECK_IDENTIFIER(name);
@@ -706,7 +706,7 @@ Opt<InstanceDeclaration> ParseInstanceDeclaration(Tokenizer* tok,Arena* out){
 
     EXPECT(tok,"{");
 
-    auto array = StartGrowableArray<VarDeclaration>(out);
+    auto array = StartArray<VarDeclaration>(out);
     
     while(!tok->Done()){
       String peek = tok->PeekToken();
@@ -1122,7 +1122,7 @@ Opt<MergeDef> ParseMerge(Tokenizer* tok,Arena* out){
     EXPECT(tok,"}");
   }
   
-  auto specificsArr = StartGrowableArray<SpecificMergeNode>(out);
+  auto specificsArr = StartArray<SpecificMergeNode>(out);
   for(SpecNode node : specNodes){
     int firstIndex = -1;
     int secondIndex = -1;
@@ -1160,7 +1160,7 @@ Opt<MergeDef> ParseMerge(Tokenizer* tok,Arena* out){
 FUDeclaration* InstantiateMerge(MergeDef def){
   TEMP_REGION(temp,nullptr);
   
-  auto declArr = StartGrowableArray<FUDeclaration*>(temp);
+  auto declArr = StartArray<FUDeclaration*>(temp);
   for(TypeAndInstance tp : def.declarations){
     FUDeclaration* decl = GetTypeByNameOrFail(tp.typeName); // TODO: Rewrite stuff so that at this point we know that the type must exist
     *declArr.PushElem() = decl;
@@ -1984,7 +1984,7 @@ String InstantiateAddressGen(AddressGenDef def,Arena* out){
   
   auto GetLoopSizeRepr = [GetRepr](AddressGenFor f,Arena* out){
     TEMP_REGION(temp,out);
-    auto builder = StartStringBuilder(temp);
+    auto builder = StartString(temp);
 
     builder->PushString("(");
     builder->PushString(GetRepr(f.end,temp));
@@ -2113,7 +2113,7 @@ String InstantiateAddressGen(AddressGenDef def,Arena* out){
     constantExpr = PushRepresentation(current,temp);
   }
     
-  auto builder = StartStringBuilder(temp);
+  auto builder = StartString(temp);
   
   builder->PushString("#ifdef ADDRESS_GEN_%.*s\n",UNPACK_SS(def.name));
   builder->PushString("static int LoopSize_%.*s(int temp",UNPACK_SS(def.name));

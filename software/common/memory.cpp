@@ -163,7 +163,7 @@ size_t SpaceAvailable(Arena* arena){
   return remaining;
 }
 
-StringBuilder* StartStringBuilder(Arena* out){
+StringBuilder* StartString(Arena* out){
   StringBuilder* builder = PushStruct<StringBuilder>(out);
   builder->arena = out;
 

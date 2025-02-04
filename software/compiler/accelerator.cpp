@@ -793,7 +793,7 @@ void FixOutputs(FUInstance* node){
 }
 
 Array<Edge> GetAllEdges(Accelerator* accel,Arena* out){
-  auto arr = StartGrowableArray<Edge>(out);
+  auto arr = StartArray<Edge>(out);
   for(FUInstance* ptr : accel->allocated){
     FOREACH_LIST(ConnectionNode*,con,ptr->allOutputs){
       Edge edge = {};

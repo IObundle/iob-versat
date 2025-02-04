@@ -96,7 +96,7 @@ GraphPrintingContent GenerateDefaultPrintingContent(Accelerator* accel,Arena* ou
 
 String GenerateDotGraph(GraphPrintingContent content,Arena* out){
   TEMP_REGION(temp,out);
-  auto result = StartStringBuilder(temp);
+  auto result = StartString(temp);
 
   result->PushString("digraph view {\n\tnode [fontcolor=white,style=filled,color=\"160,60,176\"];\n");
 

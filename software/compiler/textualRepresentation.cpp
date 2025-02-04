@@ -10,7 +10,7 @@ String UniqueRepr(FUInstance* inst,Arena* out){
 
 String Repr(FUInstance* inst,GraphDotFormat format,Arena* out){
   TEMP_REGION(temp,out);
-  auto builder = StartStringBuilder(temp);
+  auto builder = StartString(temp);
 
   FUInstance* instance = (FUInstance*) inst;
 
@@ -69,7 +69,7 @@ String Repr(FUDeclaration* decl,Arena* out){
 
 String Repr(PortInstance* inPort,PortInstance* outPort,GraphDotFormat format,Arena* out){
   TEMP_REGION(temp,out);
-  auto builder = StartStringBuilder(temp);
+  auto builder = StartString(temp);
 
   bool expl = format & GRAPH_DOT_FORMAT_EXPLICIT;
   bool lat  = format & GRAPH_DOT_FORMAT_LATENCY;
@@ -98,7 +98,7 @@ String Repr(PortInstance* inPort,PortInstance* outPort,GraphDotFormat format,Are
 
 String Repr(PortInstance* port,GraphDotFormat format,Arena* out){
   TEMP_REGION(temp,out);
-  auto builder = StartStringBuilder(temp);
+  auto builder = StartString(temp);
 
   builder->PushString(Repr(port->inst,GRAPH_DOT_FORMAT_NAME,temp));
 
@@ -115,7 +115,7 @@ String Repr(PortInstance* port,GraphDotFormat format,Arena* out){
 
 String Repr(Edge* edge,GraphDotFormat format,Arena* out){
   TEMP_REGION(temp,out);
-  auto builder = StartStringBuilder(temp);
+  auto builder = StartString(temp);
 
   format |= GRAPH_DOT_FORMAT_NAME;
 
@@ -129,7 +129,7 @@ String Repr(Edge* edge,GraphDotFormat format,Arena* out){
 
 String Repr(MergeEdge* node,GraphDotFormat format,Arena* out){
   TEMP_REGION(temp,out);
-  auto builder = StartStringBuilder(temp);
+  auto builder = StartString(temp);
 
   format |= GRAPH_DOT_FORMAT_NAME;
 
@@ -150,7 +150,7 @@ String Repr(MappingNode* node,Arena* out){
     name = Repr(&node->nodes,format,out);
   } else if(node->type == MappingNode::EDGE){
     TEMP_REGION(temp,out);
-    auto builder = StartStringBuilder(temp);
+    auto builder = StartString(temp);
 
     Edge e0 = node->edges[0];
     Edge e1 = node->edges[1];

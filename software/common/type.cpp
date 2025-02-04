@@ -284,7 +284,7 @@ Type* InstantiateTemplate(String name,Arena* out){
     TemplatedMember templateMember = templateBase->templateMembers[i];
     Tokenizer tok(templateMember.typeName,"*&[],<>",{});
 
-    auto builder = StartStringBuilder(temp2);
+    auto builder = StartString(temp2);
 
     while(!tok.Done()){
       Token token = tok.NextToken();
@@ -1730,7 +1730,7 @@ Array<Value> ExtractValues(const char* format,String tok,Arena* out){
     return {};
   }
 
-  auto arr = StartGrowableArray<Value>(out);
+  auto arr = StartArray<Value>(out);
 
   int tokenIndex = 0;
   for(int formatIndex = 0; 1;){
@@ -1816,7 +1816,7 @@ String ExtractTypeNameFromPrettyFunction(String prettyFunctionFormat,Arena* out)
 
 String PushUniqueRepresentation(Arena* out,ParsedType type){
   TEMP_REGION(temp,out);
-  auto builder = StartStringBuilder(temp);
+  auto builder = StartString(temp);
 
   builder->PushString(type.baseName);
   if(type.templateMembers.size){
@@ -2030,7 +2030,7 @@ Opt<NameAndTemplateArguments> ParseNameAndTemplateArguments(Tokenizer* tok,Arena
 
 String PushUniqueRepresentation(Arena* out,NameAndTemplateArguments named){
   TEMP_REGION(temp,out);
-  auto builder = StartStringBuilder(temp);
+  auto builder = StartString(temp);
   builder->PushString(named.baseName);
   if(named.templateMembers.size){
     builder->PushString("<");
@@ -2071,7 +2071,7 @@ Opt<ParsedType> ParseType(Tokenizer* tok,Arena* out){
       peek = tok->PeekToken();
     }
     
-    auto builder = StartStringBuilder(temp);
+    auto builder = StartString(temp);
     builder->PushString(PushUniqueRepresentation(temp,first.value()));
 
     for(auto p = list->head; p; p = p->next){

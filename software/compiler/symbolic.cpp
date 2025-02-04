@@ -83,7 +83,7 @@ void BuildRepresentation(StringBuilder* builder,SymbolicExpression* expr,bool to
 String PushRepresentation(SymbolicExpression* expr,Arena* out){
   TEMP_REGION(temp,out);
   
-  auto builder = StartStringBuilder(temp);
+  auto builder = StartString(temp);
   BuildRepresentation(builder,expr,true,0);
   return EndString(out,builder);
 }
@@ -342,7 +342,7 @@ Array<SymbolicExpression*> GetAllExpressions(SymbolicExpression* top,Arena* out)
     }
   };
  
-  auto builder = StartGrowableArray<SymbolicExpression*>(out);
+  auto builder = StartArray<SymbolicExpression*>(out);
   GetAllExpressionsRecurse(GetAllExpressionsRecurse,top,builder);
 
   return EndArray(builder);
@@ -663,7 +663,7 @@ TermsWithLiteralMultiplier CollectTermsWithLiteralMultiplier(SymbolicExpression*
   case SymbolicExpressionType_ARRAY:{    
     SymbolicExpression* literal = nullptr;
 
-    auto builder = StartGrowableArray<SymbolicExpression*>(out); 
+    auto builder = StartArray<SymbolicExpression*>(out); 
     for(SymbolicExpression* s : expr->sum){
       if(s->type == SymbolicExpressionType_LITERAL){
         Assert(literal == nullptr);
@@ -1023,7 +1023,7 @@ SymbolicExpression* Derivate(SymbolicExpression* expr,String base,Arena* out){
         
         SymbolicExpression* derivative = Derivate(oneTerm,base,out);
         
-        auto builder = StartGrowableArray<SymbolicExpression*>(out);
+        auto builder = StartArray<SymbolicExpression*>(out);
         *builder.PushElem() = derivative;
         builder.PushArray(otherTerms);
         auto sumArray = EndArray(builder);

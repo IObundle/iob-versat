@@ -900,7 +900,7 @@ Array<String> Split(String content,char sep,Arena* out){
   int index = 0;
   int size = content.size;
 
-  auto arr = StartGrowableArray<String>(out);
+  auto arr = StartArray<String>(out);
   
   while(1){
     int start = index;
@@ -984,7 +984,7 @@ String TrimWhitespaces(String in){
 
 String PushPointingString(Arena* out,int startPos,int size){
   TEMP_REGION(temp,out);
-  StringBuilder* builder = StartStringBuilder(temp);
+  StringBuilder* builder = StartString(temp);
 
   for(int i = 0; i < startPos; i++){
     builder->PushString(" ");
@@ -1181,7 +1181,7 @@ TokenizerTemplate* CreateTokenizerTemplate(Arena* out,const char* singleChars,Br
   TokenizerTemplate* tmpl = PushStruct<TokenizerTemplate>(out);
   *tmpl = {};
 
-  auto arr = StartGrowableArray<Trie>(out);
+  auto arr = StartArray<Trie>(out);
 
   Trie* topTrie = arr.PushElem();
   *topTrie = {};
@@ -1278,7 +1278,7 @@ String GetFullLineForGivenToken(String content,Token token){
 
 String GetRichLocationError(String content,Token got,Arena* out){
   TEMP_REGION(temp,out);
-  StringBuilder* builder = StartStringBuilder(temp);
+  StringBuilder* builder = StartString(temp);
 
   String fullLine = GetFullLineForGivenToken(content,got);
   int line = got.loc.start.line;
@@ -1294,7 +1294,7 @@ String GetRichLocationError(String content,Token got,Arena* out){
 }
 
 Array<Token> DivideContentIntoTokens(Tokenizer* tok,Arena* out){
-  auto res = StartGrowableArray<Token>(out);
+  auto res = StartArray<Token>(out);
 
   while(!tok->Done()){
     *res.PushElem() = tok->NextToken();

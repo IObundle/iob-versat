@@ -304,7 +304,7 @@ String PreprocessVerilogFile(String fileContent,Array<String> includeFilepaths,A
   TEMP_REGION(temp,out);
   MacroMap macros = {};
 
-  auto builder = StartStringBuilder(temp);
+  auto builder = StartString(temp);
   PreprocessVerilogFile_(fileContent,macros,includeFilepaths,builder);
 
   PushString(out,STRING("\0"));
@@ -469,7 +469,7 @@ static Array<ParameterExpression> ParseParameters(Tokenizer* tok,ValueMap& map,A
 	ParameterType type;
    */
 
-  auto params = StartGrowableArray<ParameterExpression>(out);
+  auto params = StartArray<ParameterExpression>(out);
 
   while(1){
     Token peek = tok->PeekToken();
@@ -732,10 +732,10 @@ ModuleInfo ExtractModuleInfo(Module& module,Arena* out){
 
   info.defaultParameters = module.parameters;
 
-  auto outputLatency = StartGrowableArray<int>(out);
-  auto inputDelay = StartGrowableArray<int>(out);
-  auto configs = StartGrowableArray<WireExpression>(out);
-  auto states = StartGrowableArray<WireExpression>(out);
+  auto outputLatency = StartArray<int>(out);
+  auto inputDelay = StartArray<int>(out);
+  auto configs = StartArray<WireExpression>(out);
+  auto states = StartArray<WireExpression>(out);
   
   info.name = module.name;
   info.isSource = module.isSource;

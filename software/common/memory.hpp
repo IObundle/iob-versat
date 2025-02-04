@@ -143,7 +143,7 @@ struct GrowableArray{
 };
 
 template<typename T>
-GrowableArray<T> StartGrowableArray(Arena* arena,int startCapacity = 1){
+GrowableArray<T> StartArray(Arena* arena,int startCapacity = 1){
   GrowableArray<T> res = {};
 
   res.arena = arena;
@@ -214,7 +214,7 @@ struct StringBuilder{
   void vPushString(const char* format,va_list args);
 };
 
-StringBuilder* StartStringBuilder(Arena* arena);
+StringBuilder* StartString(Arena* arena);
 String EndString(Arena* out,StringBuilder* builder);
 
 template<typename T>

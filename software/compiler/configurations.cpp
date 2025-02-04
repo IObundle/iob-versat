@@ -152,7 +152,7 @@ int AccelInfoIterator::CurrentLevelSize(){
 }
 
 Array<InstanceInfo*> GetAllSameLevelUnits(AccelInfo* info,int level,int mergeIndex,Arena* out){
-  auto builder = StartGrowableArray<InstanceInfo*>(out);
+  auto builder = StartArray<InstanceInfo*>(out);
 
   AccelInfoIterator iter = StartIteration(info);
   iter.mergeIndex = mergeIndex;
@@ -436,7 +436,7 @@ int GetPartitionIndex(AccelInfoIterator iter){
 }
 
 Array<Partition> GenerateInitialPartitions(Accelerator* accel,Arena* out){
-  auto partitionsArr = StartGrowableArray<Partition>(out);
+  auto partitionsArr = StartArray<Partition>(out);
   int mergedPossibility = 0;
   for(FUInstance* node : accel->allocated){
     FUDeclaration* decl = node->declaration;
@@ -472,7 +472,7 @@ void IncrementPartitions(Array<Partition> partitions,int amount){
 
 String GetName(Array<Partition> partitions,Arena* out){
   TEMP_REGION(temp,out);
-  auto builder = StartStringBuilder(temp);
+  auto builder = StartString(temp);
 
   bool first = true;
   for(Partition p : partitions){
@@ -545,7 +545,7 @@ Array<InstanceInfo> GenerateInitialInstanceInfo(Accelerator* accel,Arena* out,Ar
     }
   };
   
-  auto build = StartGrowableArray<InstanceInfo>(out);
+  auto build = StartArray<InstanceInfo>(out);
 
   Function(Function,build,accel,0,partitions);
   Array<InstanceInfo> res = EndArray(build);
@@ -783,7 +783,7 @@ void FillInstanceInfo(AccelInfoIterator initialIter,Arena* out){
         }
       }
     } else {
-      auto builder = StartGrowableArray<Node*>(temp);
+      auto builder = StartArray<Node*>(temp);
       for(AccelInfoIterator it = iter; it.IsValid(); it = it.Next()){
         InstanceInfo* unit = it.CurrentUnit();
 
@@ -834,7 +834,7 @@ void FillInstanceInfo(AccelInfoIterator initialIter,Arena* out){
 
           InstanceInfo* info = top->unit;
           
-          auto builder = StartStringBuilder(temp);
+          auto builder = StartString(temp);
           for(int i = max - 1; i >= top->value; i--){
             builder->PushChar(GET_BIT(bitAccum,i) ? '1' : '0');
           }
@@ -971,7 +971,7 @@ void FillInstanceInfo(AccelInfoIterator initialIter,Arena* out){
 void FillAccelInfoAfterCalculatingInstanceInfo(AccelInfo* info,Accelerator* accel){
   TEMP_REGION(temp,nullptr);
   
-  GrowableArray<bool> seenShared = StartGrowableArray<bool>(temp);
+  GrowableArray<bool> seenShared = StartArray<bool>(temp);
   
   int memoryMappedDWords = 0;
   int unitsMapped = 0;

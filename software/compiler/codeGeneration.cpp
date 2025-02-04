@@ -25,7 +25,7 @@ Array<Difference> CalculateSmallestDifference(Array<int> oldValues,Array<int> ne
 
   int size = oldValues.size;
 
-  auto arr = StartGrowableArray<Difference>(out);
+  auto arr = StartArray<Difference>(out);
   for(int i = 0; i < size; i++){
     int oldVal = oldValues[i];
     int newVal = newValues[i];
@@ -162,7 +162,7 @@ static Array<TypeStructInfo> GetMemMappedStructInfo(AccelInfo* info,Arena* out){
 }
 
 Array<String> ExtractMemoryMasks(AccelInfo info,Arena* out){
-  auto builder = StartGrowableArray<String>(out);
+  auto builder = StartArray<String>(out);
   for(AccelInfoIterator iter = StartIteration(&info); iter.IsValid(); iter = iter.Next()){
     InstanceInfo* unit = iter.CurrentUnit();
 
@@ -255,7 +255,7 @@ String GenerateVerilogParameterization(FUInstance* inst,Arena* out){
   
   auto mark = MarkArena(out);
   
-  auto builder = StartStringBuilder(temp);
+  auto builder = StartString(temp);
   builder->PushString("#(");
   bool insertedOnce = false;
   for(int i = 0; i < size; i++){
@@ -394,7 +394,7 @@ void OutputVerilatorWrapper(FUDeclaration* type,Accelerator* accel,String output
   Array<Wire> allConfigsHeaderSide = ExtractAllConfigs(info.infos[0].info,temp);
 
   // We need to bundle config + static (type->config) only contains config, but not static
-  auto arr = StartGrowableArray<Wire>(temp);
+  auto arr = StartArray<Wire>(temp);
   for(Wire& config : type->configs){
     *arr.PushElem() = config;
   }
@@ -775,6 +775,7 @@ void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* 
   }
 
   AccelInfo info = CalculateAcceleratorInfo(accel,true,temp);
+  DEBUG_BREAK();
   
   VersatComputedValues val = ComputeVersatValues(&info,globalOptions.useDMA);
   
@@ -939,9 +940,6 @@ void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* 
   Hashmap<StaticId,StaticData>* staticUnits = CollectStaticUnits(accel,nullptr,temp); 
 
   // TODO: We need to fix static values calculation in relation to AccelInfo.
-  //LEFT HERE
-  
-  DEBUG_BREAK();
 
   TemplateSetCustom("staticUnits",MakeValue(staticUnits));
   
@@ -986,7 +984,7 @@ void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* 
   int configBit = 0;
   int addr = val.versatConfigs;
   
-  auto arr = StartGrowableArray<WireInformation>(temp);
+  auto arr = StartArray<WireInformation>(temp);
   for(auto n : nodes){
     for(Wire w : n->declaration->configs){
       WireInformation info = {};
@@ -1091,7 +1089,7 @@ void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* 
   TemplateSetCustom("addressStructures",MakeValue(&addressStructures));
   
   {
-    auto arr = StartGrowableArray<int>(temp);
+    auto arr = StartArray<int>(temp);
     for(InstanceInfo& t : info.infos[0].info){
       if(!t.isComposite){
         for(int d : t.extraDelay){
@@ -1107,7 +1105,7 @@ void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* 
       int i = 0;
       for(int ii = 0; ii <  info.infos.size; ii++){
         Array<InstanceInfo> allInfos = info.infos[ii].info;
-        auto arr = StartGrowableArray<int>(temp);
+        auto arr = StartArray<int>(temp);
         for(InstanceInfo& t : allInfos){
           if(!t.isComposite){
             for(int d : t.extraDelay){
@@ -1122,7 +1120,7 @@ void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* 
     TemplateSetCustom("mergedDelays",MakeValue(&allDelays));
     TemplateSetNumber("amountMerged",allDelays.size);
 
-    auto diffArray = StartGrowableArray<DifferenceArray>(temp2);
+    auto diffArray = StartArray<DifferenceArray>(temp2);
     for(int oldIndex = 0; oldIndex < allDelays.size; oldIndex++){
       for(int newIndex = 0; newIndex < allDelays.size; newIndex++){
         if(oldIndex == newIndex){
@@ -1171,7 +1169,7 @@ void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* 
     Array<Array<MuxInfo>> result = GetAllMuxInfo(&info,temp);
     TemplateSetCustom("mergeMux",MakeValue(&result));
 
-    GrowableArray<String> builder = StartGrowableArray<String>(temp2);
+    GrowableArray<String> builder = StartArray<String>(temp2);
     for(AddressGenDef* def : savedAddressGen){
       String res = InstantiateAddressGen(*def,temp);
       *builder.PushElem() = res;

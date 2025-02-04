@@ -783,7 +783,7 @@ static String EvalBlockCommand(Block* block,Frame* previousFrame,Arena* out){
   TEMP_REGION(temp,out);
   Command* com = block->command;
 
-  StringBuilder* builder = StartStringBuilder(temp);
+  StringBuilder* builder = StartString(temp);
 
   Assert(com->definition->isBlockType);
 
@@ -949,7 +949,7 @@ static ValueAndText EvalNonBlockCommand(Command* com,Frame* previousFrame,Arena*
   TEMP_REGION(temp,out);
   Value val = MakeValue();
 
-  StringBuilder* builder = StartStringBuilder(temp);
+  StringBuilder* builder = StartString(temp);
 
   Assert(!com->definition->isBlockType);
   switch(com->definition->type){
@@ -1093,7 +1093,7 @@ static ValueAndText EvalNonBlockCommand(Command* com,Frame* previousFrame,Arena*
 static String Eval(Block* block,Frame* frame,Arena* out){
   TEMP_REGION(temp,out);
 
-  auto builder = StartStringBuilder(temp);
+  auto builder = StartString(temp);
 
   switch(block->type){
   case BlockType_COMMAND:{
@@ -1126,7 +1126,7 @@ void InitializeTemplateEngine(Arena* perm){
 
 String RemoveRepeatedNewlines(String text,Arena* out){
   TEMP_REGION(temp,out);
-  auto builder = StartStringBuilder(temp);
+  auto builder = StartString(temp);
   int state = 0;
   for(int i = 0; i < text.size; i++){
     switch(state){
@@ -1174,7 +1174,7 @@ void ProcessTemplate(FILE* outputFile,CompiledTemplate* compiledTemplate){
   
   output = outputFile;
 
-  auto builder = StartStringBuilder(temp);
+  auto builder = StartString(temp);
   
   Frame* top = CreateFrame(globalFrame,temp);
   for(Block* block : compiledTemplate->blocks){
