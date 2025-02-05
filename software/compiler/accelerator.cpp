@@ -544,7 +544,7 @@ Hashmap<StaticId,StaticData>* CollectStaticUnits(AccelInfo* info,Arena* out){
 
   for(AccelInfoIterator iter = StartIteration(info); iter.IsValid(); iter = iter.Step()){
     InstanceInfo* info = iter.CurrentUnit();
-    if(info->isStatic){
+    if(info->isGloballyStatic){
       StaticId id = {};
       id.name = info->name;
       id.parent = info->parent;

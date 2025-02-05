@@ -20,17 +20,29 @@ struct SimplePortConnection{
 // the current accelerator.
 // Some of this data is duplicated/unnecessary, but for now we just carry on since this simplifies debugging a lot, being able to see all the info for a given accelerator directly.
 // This approach is very slow but easier to debug since everything related to one unit is all in the same place.
-// Until I find a better way of debugging AoS, this will stay like this for a while.
+// Until I find a better way of debugging (visualizing) SoA, this will stay like this for a while.
 
 // TODO: Put some note explaining the required changes when inserting stuff here.
 struct InstanceInfo{
   int level;
   FUDeclaration* decl;
+  FUDeclaration* parent;
+
+  int id;
   String name;
   String baseName; // NOTE: If the unit does not belong to the merge partition the baseName will equal name.
-  Opt<int> configPos;
+  String fullName;
+
+  Opt<int> globalConfigPos;
+  Opt<int> localConfigPos;
   int isConfigStatic; // Static must be handle separately, for the top level accelerator. 
   int configSize;
+
+  bool isStatic;
+  bool isGloballyStatic;
+  bool isShared;
+  int sharedIndex;
+
   Opt<int> statePos;
   int stateSize;
   
@@ -39,30 +51,30 @@ struct InstanceInfo{
   Opt<int> memMappedSize;
   Opt<int> memMappedBitSize;
   Opt<String> memDecisionMask; // This is local to the accelerator
+
   Opt<int> delayPos;
   Array<int> extraDelay;
   int baseNodeDelay;
   int delaySize;
+
   bool isComposite;
   bool isMerge;
-  bool isStatic;
-  bool isShared;
-  int sharedIndex;
-  FUDeclaration* parent;
-  String fullName;
+
+  // Sepcific to merge muxs
+  bool isMergeMultiplexer;
   int mergePort;
   int muxGroup;
-  bool isMergeMultiplexer;
+
   bool belongs;
   int special;
   int localOrder;
-  NodeType connectionType;
-  int id;
   FUInstance* inst;
+
+  NodeType connectionType;
   Array<int> inputDelays;
   Array<int> outputLatencies;
   Array<int> portDelay;
-  int partitionIndex;
+  int partitionIndex; // What does this do?
 
   Array<SimplePortConnection> inputs; 
 };
@@ -80,7 +92,6 @@ struct MergePartition{
   // TODO: All these are useless. We can just store the data in the units themselves.
   Array<int> inputDelays;
   Array<int> outputLatencies;
-  Array<int> muxConfigs; // TODO: Remove this. The data should be stored inside the mux Instance Info that it belongs to
 };
 
 // TODO: A lot of values are repeated between merge partitions and the like. Not a problem for now, maybe tackle it when things become stable. Or maybe leave it be, could be easier in future if we want to implement something more complex.
@@ -148,10 +159,7 @@ struct Partition{
 AccelInfoIterator StartIteration(AccelInfo* info);
 
 // TODO: We kinda wanted to remove partitions and replace them with the AccelInfoIter approach, but the concept appears multiple times, so we probably do need to be able to represent partitions outside of the iter approach.
-Array<AccelInfoIterator> GetCurrentPartitionsAsIterators(AccelInfoIterator iter,Arena* out);
-AccelInfoIterator GetCurrentPartitionTypeAsIterator(AccelInfoIterator iter,Arena* out);
-int GetPartitionIndex(AccelInfoIterator iter);
-void FillAccelInfoAfterCalculatingInstanceInfo(AccelInfo* info,Accelerator* accel);
+void FillAccelInfoFromCalculatedInstanceInfo(AccelInfo* info,Accelerator* accel);
 
 Array<InstanceInfo*> GetAllSameLevelUnits(AccelInfo* info,int level,int mergeIndex,Arena* out);
 
@@ -161,6 +169,7 @@ Array<Partition> GenerateInitialPartitions(Accelerator* accel,Arena* out);
 
 void FillInstanceInfo(AccelInfoIterator initialIter,Arena* out);
 
+// This function does not perform calculations that are only relevant to the top accelerator (like static units configs and such).
 AccelInfo CalculateAcceleratorInfo(Accelerator* accel,bool recursive,Arena* out);
 
 Array<int> ExtractInputDelays(AccelInfoIterator top,Arena* out);

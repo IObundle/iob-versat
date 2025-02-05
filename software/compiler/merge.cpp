@@ -2150,7 +2150,7 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
     
   decl->staticUnits = CollectStaticUnits(&decl->info,globalPermanent);
 
-  FillAccelInfoAfterCalculatingInstanceInfo(&decl->info,decl->fixedDelayCircuit);
+  FillAccelInfoFromCalculatedInstanceInfo(&decl->info,decl->fixedDelayCircuit);
   
   return decl;
 }

@@ -220,7 +220,7 @@ end
       .@{wire.name}(@{accel.name}_@{inst.name}_@{wire.name}),
     #{end}
   #{else}
-    #{set configStart topLevel[id].configPos.val}
+    #{set configStart topLevel[id].globalConfigPos.val}
     #{if configStart >= 0}
       #{for wire decl.configs}
       .@{wire.name}(@{accel.configs[configStart + index].name}), // @{configStart + index}

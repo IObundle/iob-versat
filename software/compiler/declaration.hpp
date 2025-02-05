@@ -127,8 +127,8 @@ struct FUDeclaration{
     int max = 0;
     for(AccelInfoIterator iter = StartIteration(&this->info); iter.IsValid(); iter = iter.Next()){
       InstanceInfo* unit = iter.CurrentUnit();
-      if(unit->configPos.has_value()){
-        max = std::max(max,unit->configPos.value());
+      if(unit->globalConfigPos.has_value()){
+        max = std::max(max,unit->globalConfigPos.value());
       }
     }
     return max + 1;

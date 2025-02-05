@@ -183,12 +183,12 @@ Array<TypeStructInfoElement> ExtractStructuredConfigs(Array<InstanceInfo> info,A
   
   int maxConfig = 0;
   for(InstanceInfo& in : info){
-    if(in.isComposite || !in.configPos.has_value() || in.isConfigStatic){
+    if(in.isComposite || !in.globalConfigPos.has_value() || in.isConfigStatic){
       continue;
     }
     
     for(int i = 0; i < in.configSize; i++){
-      int config = i + in.configPos.value();
+      int config = i + in.globalConfigPos.value();
 
       maxConfig = std::max(maxConfig,config);
       GetOrAllocateResult<ArenaList<String>*> res = map->GetOrAllocate(config);
@@ -501,44 +501,6 @@ void OutputVerilatorMake(String topLevelName,String versatDir){
   }
 }
 
-// TODO: A little bit hardforced. Multiplexer info needs to be revised.
-Array<Array<MuxInfo>> GetAllMuxInfo(AccelInfo* info,Arena* out){
-  TEMP_REGION(temp,out);
-
-  Set<SameMuxEntities>* knownSharedIndexes = PushSet<SameMuxEntities>(temp,99);
-  
-  // TODO: Replace configPos with muxGroup.
-  for(InstanceInfo& f : info->infos[0].info){
-    if(f.isMergeMultiplexer){
-      knownSharedIndexes->Insert({f.configPos.value(),&f});
-    }
-  }
-
-  Array<SameMuxEntities> listOfSharedIndexes = PushArrayFromSet(temp,knownSharedIndexes);
-  Array<Array<MuxInfo>> result = PushArray<Array<MuxInfo>>(out,info->infos.size);
-
-  for(int i = 0; i < result.size; i++){
-    result[i] = PushArray<MuxInfo>(out,info->infos[i].muxConfigs.size);
-
-    Assert(listOfSharedIndexes.size == info->infos[i].muxConfigs.size);
-
-    for(int ii = 0; ii < info->infos[i].muxConfigs.size; ii++){
-      MuxInfo r = {};
-
-      SameMuxEntities ent = listOfSharedIndexes[ii];
-      
-      r.val = info->infos[i].muxConfigs[ii];
-      r.configIndex = ent.configPos;  //associatedInfo.first->configPos.value();
-      r.info = ent.info;
-      r.name = r.info->baseName;
-      
-      result[i][ii] = r;
-    }
-  }
-  
-  return result;
-}
-
 StructInfo* GenerateConfigStruct(AccelInfoIterator iter,Arena* out){
   TEMP_REGION(temp,out);
   
@@ -557,7 +519,7 @@ StructInfo* GenerateConfigStruct(AccelInfoIterator iter,Arena* out){
     InstanceInfo* unit = it.CurrentUnit();
     StructElement elem = {};
       
-    if(!unit->configPos.has_value()){
+    if(!unit->globalConfigPos.has_value()){
       continue;
     }
 
@@ -577,7 +539,7 @@ StructInfo* GenerateConfigStruct(AccelInfoIterator iter,Arena* out){
           subInfo->parent = res;
           elem.name = iter.GetMergeName();
           elem.childStruct = subInfo;
-          elem.pos = topUnit->configPos.value();
+          elem.pos = topUnit->globalConfigPos.value();
           elem.size = topUnit->configSize;
           elem.isMergeMultiplexer = topUnit->isMergeMultiplexer;
 
@@ -607,7 +569,7 @@ StructInfo* GenerateConfigStruct(AccelInfoIterator iter,Arena* out){
       elem.childStruct = simpleSubInfo;
     }
       
-    elem.pos = unit->configPos.value();
+    elem.pos = unit->globalConfigPos.value();
     elem.size = unit->configSize;
     elem.isMergeMultiplexer = unit->isMergeMultiplexer;
 
@@ -775,6 +737,52 @@ void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* 
   }
 
   AccelInfo info = CalculateAcceleratorInfo(accel,true,temp);
+
+#if 0
+  {
+    AccelInfoIterator iter = StartIteration(&info);
+    for(int i = 0; i < iter.MergeSize(); i++){
+      AccelInfoIterator it = iter;
+      it.mergeIndex = i;
+
+      TrieMap<StaticId,int>* statics = PushTrieMap<StaticId,int>(temp);
+
+      int currentStaticIndex = info.configs;
+      for(; it.IsValid(); it = it.Step()){
+        InstanceInfo* unit = it.CurrentUnit();
+        InstanceInfo* parent = it.GetParentUnit(); 
+
+        if(unit->configSize == 0){
+          continue;
+        }
+        
+        bool firstStaticSeen = parent ? unit->isStatic && !parent->isStatic : unit->isStatic;
+
+        if(firstStaticSeen || (unit->isStatic && !unit->localConfigPos.has_value())){
+          StaticId id = {};
+          id.parent = parent ? parent->decl : nullptr;
+          id.name = unit->name;
+
+          GetOrAllocateResult<int> result = statics->GetOrAllocate(id);
+          int configPos = 0;
+          if(result.alreadyExisted){
+            configPos =  *result.data;
+          } else {
+            configPos = currentStaticIndex;
+            currentStaticIndex += unit->configSize;
+          }
+          
+          *result.data = configPos;
+          unit->globalConfigPos = configPos;
+        } else if(unit->isGloballyStatic){
+          int trueConfigPos = parent->globalConfigPos.value() + unit->localConfigPos.value();
+          unit->globalConfigPos = trueConfigPos;
+        }
+      }
+    }
+  }
+#endif
+
   DEBUG_BREAK();
   
   VersatComputedValues val = ComputeVersatValues(&info,globalOptions.useDMA);
@@ -933,15 +941,16 @@ void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* 
     ProcessTemplate(f,BasicTemplates::externalInternalPortmapTemplate);
  }
 
-  Hashmap<StaticId,StaticData>* oldUnits = CollectStaticUnits(&info,temp);
-
+#if 0
+  Hashmap<StaticId,StaticData>* staticUnits = CollectStaticUnits(&info,temp);
+  TemplateSetCustom("staticUnits",MakeValue(staticUnits));
+#else
   // NOCHECKIN
   Hashmap<StaticId,StaticData>* CollectStaticUnits(Accelerator*,FUDeclaration*,Arena*); 
   Hashmap<StaticId,StaticData>* staticUnits = CollectStaticUnits(accel,nullptr,temp); 
-
-  // TODO: We need to fix static values calculation in relation to AccelInfo.
-
   TemplateSetCustom("staticUnits",MakeValue(staticUnits));
+#endif
+  // TODO: We need to fix static values calculation in relation to AccelInfo.
   
   Array<String> memoryMasks = ExtractMemoryMasks(info,temp);
 
@@ -1166,8 +1175,36 @@ void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* 
     Array<String> names = Extract(info.infos,temp,&MergePartition::name);
     TemplateSetCustom("mergeNames",MakeValue(&names));
     
-    Array<Array<MuxInfo>> result = GetAllMuxInfo(&info,temp);
-    TemplateSetCustom("mergeMux",MakeValue(&result));
+    auto ExtractMuxInfo = [](AccelInfoIterator iter,Arena* out){
+      TEMP_REGION(temp,out);
+
+      TrieSet<int>* seen = PushTrieSet<int>(temp);
+
+      auto builder = StartArray<MuxInfo>(out);
+      for(; iter.IsValid(); iter = iter.Step()){
+        InstanceInfo* info = iter.CurrentUnit();
+        if(info->isMergeMultiplexer && !seen->Exists(info->globalConfigPos.value())){
+          MuxInfo* res = builder.PushElem();
+
+          res->configIndex = info->globalConfigPos.value();
+          res->val = info->mergePort;
+          res->name = info->baseName;
+          res->info = info;
+        }
+      }
+
+      return EndArray(builder);
+    };
+    
+    AccelInfoIterator iter = StartIteration(&info);
+    Array<Array<MuxInfo>> muxInfo = PushArray<Array<MuxInfo>>(temp,iter.MergeSize());
+    for(int i = 0; i < iter.MergeSize(); i++){
+      AccelInfoIterator it = iter;
+      it.mergeIndex = i;
+      muxInfo[i] = ExtractMuxInfo(it,temp);
+    }
+    
+    TemplateSetCustom("mergeMux",MakeValue(&muxInfo));
 
     GrowableArray<String> builder = StartArray<String>(temp2);
     for(AddressGenDef* def : savedAddressGen){

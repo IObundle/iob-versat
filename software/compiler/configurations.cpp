@@ -191,11 +191,11 @@ Array<Wire> ExtractAllConfigs(Array<InstanceInfo> info,Arena* out){
       continue;
     }
 
-    if(t.isStatic){
+    if(t.isGloballyStatic){
       skipLevel = t.level;
     }
 
-    if(!t.isComposite && !t.isStatic){
+    if(!t.isComposite && !t.isGloballyStatic){
       for(int i = 0; i < t.configSize; i++){
         Wire* wire = list->PushElem();
 
@@ -213,7 +213,7 @@ Array<Wire> ExtractAllConfigs(Array<InstanceInfo> info,Arena* out){
       continue;
     }
       
-    if(t.parent && t.isStatic){
+    if(t.parent && t.isGloballyStatic){
       FUDeclaration* parent = t.parent;
       String parentName = parent->name;
 
@@ -299,9 +299,6 @@ String ReprStaticConfig(StaticId id,Wire* wire,Arena* out){
   return identifier;
 }
 
-// TODO: There is probably a better way of simplifying the logic used here.
-// NOTE: The logic for static and shared configs is hard to decouple and simplify. I found no other way of doing this, other than printing the result for a known set of circuits and make small changes at atime.
-
 static bool Next(Array<Partition> arr){
   for(int i = 0; i < arr.size; i++){
     Partition& par = arr[i];
@@ -320,121 +317,6 @@ static bool Next(Array<Partition> arr){
   return false;
 }
 
-// TODO: This function does not do what I wanted it to do.
-//       I am mixing up merge and composite. For simple merges, we can only be at a single type at any given point.
-//       Composites makes so we are currently at N types at any point, but this function is not calculating data.
-//       For a merge of merges, this function must return one type.
-Array<AccelInfoIterator> GetCurrentPartitionsAsIterators(AccelInfoIterator iter,Arena* out){
-  TEMP_REGION(temp,out);
-  // TODO: This is dependent on partitions. Not sure how I feel about that.
-  // TODO: BAD
-  Hashmap<FUDeclaration*,int>* seenAmount = PushHashmap<FUDeclaration*,int>(temp,10);
-  AccelInfo* info = iter.info;
-  for(int i = 0; i < info->infos.size; i++){
-    FUDeclaration* type = info->infos[i].baseType;
-    int amount = *seenAmount->GetOrInsert(type,0);
-    seenAmount->Insert(type,amount + 1);
-  }
-
-  Array<Partition> partitions = PushArray<Partition>(temp,seenAmount->nodesUsed);
-  int index = 0;
-  for(Pair<FUDeclaration*,int*> p : seenAmount){
-    partitions[index].decl = p.first;
-    partitions[index].max = *p.second;
-    index += 1;
-  }
-  
-  for(int i = 0; i < iter.mergeIndex; i++){
-    Next(partitions);
-  }
-
-  Array<AccelInfoIterator> iterators = PushArray<AccelInfoIterator>(out,partitions.size);
-  for(int i = 0; i <  partitions.size; i++){
-    Partition p = partitions[i];
-
-    iterators[i] = StartIteration(&p.decl->info);
-    iterators[i].mergeIndex = p.value;
-    Assert(p.max == p.decl->info.infos.size);
-  }
-  
-  return iterators;
-}
-
-// This function returns what we want.
-// TODO: This whole thing is not good. Make it work first and check how to simplify.
-AccelInfoIterator GetCurrentPartitionTypeAsIterator(AccelInfoIterator iter,Arena* out){
-  TEMP_REGION(temp,out);
-  // TODO: This is dependent on partitions. Not sure how I feel about that.
-
-  int mergeIndex = iter.mergeIndex;
-  
-  // TODO: BAD
-  Hashmap<FUDeclaration*,int>* seenAmount = PushHashmap<FUDeclaration*,int>(temp,10);
-  AccelInfo* info = iter.info;
-  for(int i = 0; i < info->infos.size; i++){
-    FUDeclaration* type = info->infos[i].baseType;
-    int amount = *seenAmount->GetOrInsert(type,0);
-    seenAmount->Insert(type,amount + 1);
-  }
-
-  Array<Partition> partitions = PushArray<Partition>(temp,seenAmount->nodesUsed);
-  int index = 0;
-  for(Pair<FUDeclaration*,int*> p : seenAmount){
-    partitions[index].decl = p.first;
-    partitions[index].max = *p.second;
-    index += 1;
-  }
-
-  for(Partition p : partitions){
-    if(mergeIndex < p.max){
-      FUDeclaration* type = p.decl;
-      AccelInfoIterator res = StartIteration(&type->info);
-      res.mergeIndex = mergeIndex;
-      return res;
-    } else {
-      mergeIndex -= p.max;
-    }
-  }
-
-  NOT_POSSIBLE("");
-}
-
-int GetPartitionIndex(AccelInfoIterator iter){
-  TEMP_REGION(temp,nullptr);
-  // TODO: This is dependent on partitions. Not sure how I feel about that.
-
-  int mergeIndex = iter.mergeIndex;
-  
-  // TODO: BAD
-  Hashmap<FUDeclaration*,int>* seenAmount = PushHashmap<FUDeclaration*,int>(temp,10);
-  AccelInfo* info = iter.info;
-  for(int i = 0; i < info->infos.size; i++){
-    FUDeclaration* type = info->infos[i].baseType;
-    int amount = *seenAmount->GetOrInsert(type,0);
-    seenAmount->Insert(type,amount + 1);
-  }
-
-  Array<Partition> partitions = PushArray<Partition>(temp,seenAmount->nodesUsed);
-  int index = 0;
-  for(Pair<FUDeclaration*,int*> p : seenAmount){
-    partitions[index].decl = p.first;
-    partitions[index].max = *p.second;
-    index += 1;
-  }
-
-  int partitionIndex = 0;
-  for(Partition p : partitions){
-    if(mergeIndex < p.max){
-      return partitionIndex;
-    } else {
-      mergeIndex -= p.max;
-      partitionIndex += 1;
-    }
-  }
-
-  NOT_POSSIBLE("");
-}
-
 Array<Partition> GenerateInitialPartitions(Accelerator* accel,Arena* out){
   auto partitionsArr = StartArray<Partition>(out);
   int mergedPossibility = 0;
@@ -448,6 +330,14 @@ Array<Partition> GenerateInitialPartitions(Accelerator* accel,Arena* out){
   }
   Array<Partition> partitions = EndArray(partitionsArr);
   return partitions;
+}
+
+int PartitionSize(Array<Partition> parts){
+  int size = 1;
+  for(Partition p : parts){
+    size *= p.max;
+  }
+  return size;
 }
 
 bool IncrementSinglePartition(Partition* part){
@@ -508,6 +398,7 @@ Array<InstanceInfo> GenerateInitialInstanceInfo(Accelerator* accel,Arena* out,Ar
     elem->isComposite = IsTypeHierarchical(inst->declaration);
     elem->isMerge = inst->declaration->type == FUDeclarationType_MERGED;
     elem->isStatic = inst->isStatic;
+    elem->isGloballyStatic = inst->isStatic;
     elem->isShared = inst->sharedEnable;
     elem->sharedIndex = inst->sharedIndex;
     elem->isMergeMultiplexer = inst->isMergeMultiplexer;
@@ -619,6 +510,17 @@ struct Node{
 void FillInstanceInfo(AccelInfoIterator initialIter,Arena* out){
   TEMP_REGION(temp,out);
   Assert(!Empty(initialIter.accelName)); // For now, we must have some name if only to output debug info graphs and such
+
+  for(AccelInfoIterator iter = initialIter; iter.IsValid(); iter = iter.Step()){
+    InstanceInfo* parent = iter.GetParentUnit();
+    if(parent){
+      InstanceInfo* unit = iter.CurrentUnit();
+
+      if(parent->isGloballyStatic){
+        unit->isGloballyStatic = true;
+      }
+    }
+  }
   
   // Calculate full name
   for(AccelInfoIterator iter = initialIter; iter.IsValid(); iter = iter.Step()){
@@ -646,6 +548,7 @@ void FillInstanceInfo(AccelInfoIterator initialIter,Arena* out){
   }
 
   // Config info stuff
+  // Remember that, since the instance info of subunits was copied directly from the accel info of the declaration, values for configs can be incorrect from the existance of shared and static configs in the top level units.
   auto CalculateConfig = [](auto Recurse,AccelInfoIterator& iter,int startIndex) -> void{
     TEMP_REGION(temp,nullptr);
 
@@ -659,16 +562,18 @@ void FillInstanceInfo(AccelInfoIterator initialIter,Arena* out){
         InstanceInfo* unit = it.CurrentUnit();
         InstanceInfo* configUnit = configIter.CurrentUnit();
         
-        if(configUnit->configPos.has_value()){
-          int configPos = startIndex + configUnit->configPos.value();
-        
-          if(unit->configSize && !unit->isStatic){
-            unit->configPos = configPos;
+        if(configUnit->globalConfigPos.has_value()){
+          int configPos = startIndex + configUnit->globalConfigPos.value();
+
+          if(unit->isGloballyStatic){
+            unit->globalConfigPos = {};
+          } else if(unit->configSize){
+            unit->globalConfigPos = configPos;
           }
           
           index += 1;
           AccelInfoIterator inside = it.StepInsideOnly();
-          if(inside.IsValid() && !unit->isStatic){
+          if(inside.IsValid()){
             Recurse(Recurse,inside,configPos);
           }
         }
@@ -693,24 +598,35 @@ void FillInstanceInfo(AccelInfoIterator initialIter,Arena* out){
           }
         }
         
-        if(unit->configSize && !unit->isStatic){
-          unit->configPos = indexForCurrentUnit;
+        if(unit->isGloballyStatic){
+          unit->globalConfigPos = {};
+        } else if(unit->configSize){
+          unit->globalConfigPos = indexForCurrentUnit;
+          unit->localConfigPos = indexForCurrentUnit;
         }
-        
+
         AccelInfoIterator inside = it.StepInsideOnly();
-        if(inside.IsValid() && !unit->isStatic){
+        if(inside.IsValid() && !unit->isGloballyStatic){
           Recurse(Recurse,inside,indexForCurrentUnit);
         }
 
-        if(!isNewlyShared && !unit->isStatic){
+        if(!isNewlyShared && !unit->isGloballyStatic){
           configIndex += unit->decl->NumberConfigs();
         }
       }
     }
   };
-
+  
   CalculateConfig(CalculateConfig,initialIter,0);
 
+  // TODO: This is to make sure but should be removed eventually.
+  for(AccelInfoIterator it = initialIter; it.IsValid(); it = it.Step()){
+    InstanceInfo* info = it.CurrentUnit();
+    if(info->isGloballyStatic){
+      info->globalConfigPos = {};
+    }
+  }
+  
   // Calculate state stuff
   auto CalculateState = [](auto Recurse,AccelInfoIterator& iter,int startIndex) -> void{
     TEMP_REGION(temp,nullptr);
@@ -759,7 +675,7 @@ void FillInstanceInfo(AccelInfoIterator initialIter,Arena* out){
   };
 
   CalculateState(CalculateState,initialIter,0);
-
+  
   // Handle memory mapping
   auto CalculateMemory = [](auto Recurse,AccelInfoIterator& iter,iptr currentMem,Arena* out) -> void{
     TEMP_REGION(temp,out);
@@ -968,7 +884,7 @@ void FillInstanceInfo(AccelInfoIterator initialIter,Arena* out){
   SetDelays(SetDelays,initialIter,delays,0,out);
 }
 
-void FillAccelInfoAfterCalculatingInstanceInfo(AccelInfo* info,Accelerator* accel){
+void FillAccelInfoFromCalculatedInstanceInfo(AccelInfo* info,Accelerator* accel){
   TEMP_REGION(temp,nullptr);
   
   GrowableArray<bool> seenShared = StartArray<bool>(temp);
@@ -1120,78 +1036,22 @@ AccelInfo CalculateAcceleratorInfo(Accelerator* accel,bool recursive,Arena* out)
   TEMP_REGION(temp,out);
   AccelInfo result = {};
 
-  // TODO: Still need to check if partitions are removed or if we still need them
-  Array<Partition> partitions = GenerateInitialPartitions(accel,temp);
-  int partitionSize = 0;
-  while(1){
-    partitionSize += 1;
-    
-    if(!Next(partitions)){
-      break;
-    }
-  }
-
   // Accel might contain multiple merged units.
-  // Each merged unit is responsible for adding "partitions"
+  // Each merged unit is responsible for adding a merge "partitions"
   // Each "partition" is equivalent to "activating" a given merge type for a given merge unit.
-  // For each partition, I should be able to get the name of all the units currently activated.
-  // I do not think that I will keep partitions, but for now implement the logic first and worry about code quality later.
   
-  int size = partitionSize;
+  // TODO: Still need to check if partitions are removed or if we still need them
+  //       We can also embed partitions inside the AccelInfo.
+  Array<Partition> partitions = GenerateInitialPartitions(accel,temp);
+  int size = PartitionSize(partitions);
 
-  
-  auto CalculateMuxConfigs = [](AccelInfoIterator top,Arena* out) -> Array<int>{
-    TEMP_REGION(temp,out);
-    
-    // We need to take into account config sharing because it basically converts N configs into 1.
-    Set<int>* seen = PushSet<int>(temp,10); // TODO: HACK, eventually this code will be removed, so no problem hacking away.
-    
-    int amountOfMuxConfigs = 0;
-    for(AccelInfoIterator iter = top; iter.IsValid(); iter = iter.Step()){
-      InstanceInfo* info = iter.CurrentUnit();
-      if(info->isMergeMultiplexer){
-        if(seen->Exists(info->configPos.value())){
-          continue;
-        }
-        amountOfMuxConfigs += 1;
-        seen->Insert(info->configPos.value());
-      }
-    }
-
-    if(amountOfMuxConfigs == 0){
-      return {};
-    }
-    
-    seen = PushSet<int>(temp,10); // TODO: HACK, eventually this code will be removed, so no problem hacking away.
-    Array<int> muxConfigs = PushArray<int>(out,amountOfMuxConfigs);
-    int index = 0;
-    for(AccelInfoIterator iter = top; iter.IsValid(); iter = iter.Step()){
-      InstanceInfo* info = iter.CurrentUnit();
-      if(info->isMergeMultiplexer){
-        if(seen->Exists(info->configPos.value())){
-          continue;
-        }
-        muxConfigs[index++] = info->mergePort;
-        seen->Insert(info->configPos.value());
-      }
-    }
-    
-    return muxConfigs;
-  };
-
-  if(size == 0){
-    result.infos = PushArray<MergePartition>(globalPermanent,1);
-  } else {
-    result.infos = PushArray<MergePartition>(globalPermanent,size);
-  }
+  Assert(size != 0);
+  result.infos = PushArray<MergePartition>(globalPermanent,size);
 
   AccelInfoIterator iter = StartIteration(&result);
   iter.accelName = accel->name;
   
-  // MARKED
-  if(iter.MergeSize() > 1){
-    Array<Partition> partitions = GenerateInitialPartitions(accel,temp);
-
+  if(size > 1){
     for(int i = 0; i < iter.MergeSize(); i++,Next(partitions)){
       iter.mergeIndex = i;
 
@@ -1202,8 +1062,7 @@ AccelInfo CalculateAcceleratorInfo(Accelerator* accel,bool recursive,Arena* out)
 
       result.infos[i].inputDelays = ExtractInputDelays(iter,out);
       result.infos[i].outputLatencies = ExtractOutputLatencies(iter,out);
-      result.infos[i].muxConfigs = CalculateMuxConfigs(iter,out);
-
+ 
       String name = GetName(partitions,out);
       result.infos[i].name = name;
     }
@@ -1214,10 +1073,9 @@ AccelInfo CalculateAcceleratorInfo(Accelerator* accel,bool recursive,Arena* out)
 
     result.infos[0].inputDelays = ExtractInputDelays(iter,out);
     result.infos[0].outputLatencies = ExtractOutputLatencies(iter,out);
-    result.infos[0].muxConfigs = CalculateMuxConfigs(iter,out);
   }
 
-  FillAccelInfoAfterCalculatingInstanceInfo(&result,accel);
+  FillAccelInfoFromCalculatedInstanceInfo(&result,accel);
 
   return result;
 }
