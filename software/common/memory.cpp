@@ -39,6 +39,12 @@ int GetPageSize(){
   return pageSize;
 }
 
+int AlignToNextPage(int amount){
+  int pages = ((amount - 1) / GetPageSize()) + 1;
+  int aligned = pages * GetPageSize();
+  return aligned;
+}
+
 static int pagesAllocated = 0;
 static int pagesDeallocated = 0;
 
@@ -223,22 +229,32 @@ void StringBuilder::PushString(const char* format,...){
   va_end(args);
 }
 
-String EndString(Arena* out,StringBuilder* builder){
+String EndString(Arena* out,StringBuilder* builder,bool addFinalNullByte){
   int totalSize = 0;
   for(StringNode* ptr = builder->head; ptr != nullptr; ptr = ptr->next){
     totalSize += ptr->used;
   }
 
+  if(addFinalNullByte){
+    totalSize += 1;
+  }
+  
   Byte* data = PushBytes(out,totalSize);
 
   String res = {};
   res.data = (const char*) data;
   res.size = totalSize;
+
+  if(addFinalNullByte){
+    res.size -= 1;
+  }
   
   for(StringNode* ptr = builder->head; ptr != nullptr; ptr = ptr->next){
     memcpy(data,ptr->buffer,ptr->used);
     data += ptr->used;
   }
+
+  *data = '\0';
   
   return res;
 }
@@ -690,10 +706,32 @@ void* Next(GenericPoolIterator& iter){
 PoolInfo CalculatePoolInfo(int elemSize){
   PoolInfo info = {};
 
-  info.unitsPerFullPage = (GetPageSize() - sizeof(PoolHeader)) / elemSize;
-  info.bitmapSize = RoundUpDiv(info.unitsPerFullPage,8);
-  info.unitsPerPage = (GetPageSize() - sizeof(PoolHeader) - info.bitmapSize) / elemSize;
-  info.pageGranuality = 1;
+  int minAmount = 8; // Should it be variable? Probably need more time using Pool to check if we do need to do anything extra here.
+
+  // Because the bitmap depends on the amount of units that exist, we first calculate a minimum size then calculate the amount of units that we can actually fit into that size.
+  auto CalculateBlockSize = [elemSize](int amountOfUnits){
+    int size = AlignToNextPage(amountOfUnits * elemSize + sizeof(PoolHeader) + RoundUpDiv(amountOfUnits,8));
+    return size;
+  };
+
+  int minBlockSize = CalculateBlockSize(minAmount);
+  int minPagesPerBlock = minBlockSize / GetPageSize();
+
+  // TODO: Stupid way of calculating true size for the given minimum.
+  int amount = minAmount + 1;
+  for(; true ; amount += 1){
+    int blockSize = CalculateBlockSize(amount);
+    int pagesPerBlock = blockSize / GetPageSize();
+
+    if(pagesPerBlock != minPagesPerBlock){
+      amount -= 1;
+      break;
+    }
+  }
+
+  info.unitsPerPageBlock = amount;
+  info.bitmapSize = RoundUpDiv(amount,8);
+  info.pagesPerBlock = CalculateBlockSize(amount) / GetPageSize();
 
   return info;
 }
@@ -701,7 +739,7 @@ PoolInfo CalculatePoolInfo(int elemSize){
 PageInfo GetPageInfo(PoolInfo poolInfo,Byte* page){
   PageInfo info = {};
 
-  info.header = (PoolHeader*) (page + poolInfo.pageGranuality * GetPageSize() - sizeof(PoolHeader));
+  info.header = (PoolHeader*) (page + poolInfo.pagesPerBlock * GetPageSize() - sizeof(PoolHeader));
   info.bitmap = (Byte*) info.header - poolInfo.bitmapSize;
 
   return info;
@@ -739,7 +777,7 @@ void GenericPoolIterator::operator++(){
       bit = 7;
     }
 
-    if(index * 8 + (7 - bit) >= poolInfo.unitsPerPage){
+    if(index * 8 + (7 - bit) >= poolInfo.unitsPerPageBlock){
       index = 0;
       bit = 7;
       page = pageInfo.header->nextPage;

@@ -52,6 +52,7 @@ struct WireInformation{
   Wire wire;
   int addr;
   int configBitStart;
+  bool isStatic;
 };
 
 struct SubTypesInfo{

@@ -467,29 +467,28 @@ AcceleratorConfig* config = (AcceleratorConfig*) &configBuffer;
 AcceleratorStatic* statics = (AcceleratorStatic*) &staticBuffer;
 
 #{for wire allConfigsVerilatorSide}
-  #{if configsHeader[index].bitSize != 64}
+  #{if wire.bitSize != 64}
 
 #if 1
   once{
-     if((long long int) config->TOP_@{wire.name} >= ((long long int) 1 << @{configsHeader[index].bitSize})){
+     if((long long int) @{wire.source}@{wire.name} >= ((long long int) 1 << @{wire.bitSize})){
       printf("[Once] Warning, configuration value contains more bits\n");
       printf("set than the hardware unit is capable of handling\n");
-      printf("Name: %s, BitSize: %d, Value: 0x%lx\n","@{configsHeader[index].name}",@{configsHeader[index].bitSize},config->@{configsHeader[index].name});
+      printf("Name: %s, BitSize: %d, Value: 0x%lx\n","@{wire.name}",@{wire.bitSize},@{wire.source}@{wire.name});
     }
   };
 #endif
   #{end}
 
   #{if wire.stage == 1} //READ
-  self->@{wire.name} = config->TOP_@{wire.name};
+  self->@{wire.name} = @{wire.source}@{wire.name};
   #{end}
 
   #{if wire.stage == 0} // COMPUTED
   static iptr COMPUTED_@{wire.name} = 0;
   self->@{wire.name} = COMPUTED_@{wire.name};
-  COMPUTED_@{wire.name} = config->TOP_@{wire.name};
+  COMPUTED_@{wire.name} = @{wire.source}@{wire.name};
   #{end}
-
 
   #{if wire.stage == 2} //WRITE
   static iptr COMPUTED_@{wire.name} = 0;
@@ -497,13 +496,9 @@ AcceleratorStatic* statics = (AcceleratorStatic*) &staticBuffer;
 
   self->@{wire.name} = COMPUTED_@{wire.name};
   COMPUTED_@{wire.name} = WRITE_@{wire.name};
-  WRITE_@{wire.name} = config->TOP_@{wire.name};
+  WRITE_@{wire.name} = @{wire.source}@{wire.name};
   #{end}
 #{end}
-#{end}
-
-#{for wire allStaticsVerilatorSide}
-  self->@{wire.name} = statics->@{wire.name};
 #{end}
 
 #{if type.numberDelays}

@@ -544,39 +544,13 @@ Hashmap<StaticId,StaticData>* CollectStaticUnits(AccelInfo* info,Arena* out){
 
   for(AccelInfoIterator iter = StartIteration(info); iter.IsValid(); iter = iter.Step()){
     InstanceInfo* info = iter.CurrentUnit();
-    if(info->isGloballyStatic){
+    if(info->isStatic){
       StaticId id = {};
       id.name = info->name;
       id.parent = info->parent;
 
       StaticData data = {};
       data.configs = info->decl->configs;
-      staticUnits->InsertIfNotExist(id,data);
-    }
-  }
-
-  return staticUnits;
-}
-
-// NOCHECKIN
-Hashmap<StaticId,StaticData>* CollectStaticUnits(Accelerator* accel,FUDeclaration* topDecl,Arena* out){
-  Hashmap<StaticId,StaticData>* staticUnits = PushHashmap<StaticId,StaticData>(out,999);
-
-  for(FUInstance* ptr : accel->allocated){
-    FUInstance* inst = ptr;
-    if(IsTypeHierarchical(inst->declaration)){
-      for(auto pair : inst->declaration->staticUnits){
-        StaticData newData = *pair.second;
-        staticUnits->InsertIfNotExist(pair.first,newData);
-      }
-    }
-    if(inst->isStatic){
-      StaticId id = {};
-      id.name = inst->name;
-      id.parent = topDecl;
-
-      StaticData data = {};
-      data.configs = inst->declaration->configs;
       staticUnits->InsertIfNotExist(id,data);
     }
   }

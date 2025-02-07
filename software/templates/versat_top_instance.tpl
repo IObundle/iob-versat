@@ -400,6 +400,12 @@ end
 #{if configurationBits}
 wire [@{configurationBits-1}:0] configdata;
 
+#{for info wireInfo}
+#{if info.isStatic}
+wire [@{info.wire.bitSize-1}:0] @{info.wire.name};
+#{end}
+#{end}
+
 versat_configurations configs(
    .config_data_o(configdata),                 
 
@@ -411,6 +417,12 @@ versat_configurations configs(
    .data_data(data_data),
 
    .change_config_pulse(pre_run_pulse),
+
+#{for info wireInfo}
+#{if info.isStatic}
+   .@{info.wire.name}(@{info.wire.name}),
+#{end}
+#{end}
 
    .clk_i(clk),
    .rst_i(rst_int)
@@ -516,8 +528,7 @@ end
          #{for unit decl.staticUnits}
          #{set id unit.first}
          #{for wire unit.second.configs}
-            .@{id.parent.name}_@{id.name}_@{wire.name}(configdata[@{staticDataIndex}+:@{wire.bitSize}]),
-         #{set staticDataIndex staticDataIndex + wire.bitSize}
+            .@{id.parent.name}_@{id.name}_@{wire.name}(@{id.parent.name}_@{id.name}_@{wire.name}),
          #{end}
          #{end}
 

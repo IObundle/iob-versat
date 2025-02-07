@@ -226,6 +226,25 @@ struct EdgeIterator{
 template<typename T> struct WireTemplate;
 typedef WireTemplate<int> Wire;
 
+// TODO: Kinda not good, need to look at the wrapper again to simplif this part.
+//       Too many stuff is dependent on explicit data and complications are starting to pile up.
+struct WireExtra{
+  String source;
+  String source2;
+  String name;
+  int bitSize;
+  VersatStage stage;
+  bool isStatic;
+
+  WireExtra& operator=(Wire& w){
+    this->stage = w.stage;
+    this->bitSize = w.bitSize;
+    this->isStatic = w.isStatic;
+    this->name = w.name;
+    return *this;
+  }
+};
+
 struct StaticId{
    FUDeclaration* parent;
    String name;

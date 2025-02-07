@@ -22,6 +22,7 @@ inline size_t Gigabyte(int val){return Megabyte(val) * 1024;};
 inline size_t BitSizeToByteSize(int bitSize){return ((bitSize + 7) / 8);};
 inline size_t BitSizeToDWordSize(int bitSize){return ((bitSize + 31) / 32);};
 
+int AlignToNextPage(int amount);
 int GetPageSize();
 void* AllocatePages(int pages);
 void DeallocatePages(void* ptr,int pages);
@@ -215,7 +216,7 @@ struct StringBuilder{
 };
 
 StringBuilder* StartString(Arena* arena);
-String EndString(Arena* out,StringBuilder* builder);
+String EndString(Arena* out,StringBuilder* builder,bool addFinalNullByte = false);
 
 template<typename T>
 class Stack{
@@ -401,6 +402,7 @@ struct TrieMapNode{
   TrieMapNode<Key,Data>* childs[4];
   Pair<Key,Data> pair;
   TrieMapNode<Key,Data>* next;
+  bool valid;
 };
 
 template<typename Key,typename Data>
@@ -419,7 +421,7 @@ struct TrieMap{
   Arena* arena;
   TrieMapNode<Key,Data>* head;
   TrieMapNode<Key,Data>* tail;
-  int inserted;
+  int inserted; // Technically size, not a total count of how many where inserted
   
   Data* Insert(Key key,Data data);
   Data* InsertIfNotExist(Key key,Data data);
@@ -429,6 +431,9 @@ struct TrieMap{
   Data& GetOrFail(Key key);
   GetOrAllocateResult<Data> GetOrAllocate(Key key); // More efficient way for the Get, check if null, Insert pattern
 
+  bool Remove(Key key);
+  void RemoveOrFail(Key key);
+  
   bool Exists(Key key);
 
   __attribute__((noinline)) Array<Pair<Key,Data>> AsArray(Arena* out);
@@ -486,10 +491,9 @@ struct PoolHeader{
 };
 
 struct PoolInfo{
-  int unitsPerFullPage;
+  int unitsPerPageBlock;
   int bitmapSize;
-  int unitsPerPage;
-  int pageGranuality;
+  int pagesPerBlock;
 };
 
 struct PageInfo{
@@ -555,13 +559,13 @@ struct Pool{
   PoolInfo info;
 public:
   T* Alloc();
-  T* Alloc(int index); // Returns nullptr if element already allocated at given position
+  T* Alloc(int index); // Not used and complicates Pool implementation, but for now we keep it.
   void Remove(T* elem);
 
   T* Get(int index); // Returns nullptr if element not allocated (call Alloc(int index) to allocate)
   T& GetOrFail(int index);
   Byte* GetMemoryPtr();
-
+  
   int Size();
   void Clear(bool clearMemory = false);
   Pool<T> Copy();
@@ -923,51 +927,39 @@ TrieMap<Key,Data>* PushTrieMap(Arena* arena){
 }
 
 template<typename Key,typename Data>
+using ChildrenPtr = TrieMapNode<Key,Data>*[4];
+  
+template<typename Key,typename Data>
 Data* TrieMap<Key,Data>::Insert(Key key,Data data){
   int index = std::hash<Key>()(key);
-  int select = index & 3;
-  if(this->childs[select] == nullptr){
-    TrieMapNode<Key,Data>* node = PushStruct<TrieMapNode<Key,Data>>(arena);
-    *node = {};
-    node->pair.first = key;
-    node->pair.second = data;
-    this->childs[select] = node;
-    
-    if(!this->head){
-      this->head = node;
-      this->tail = node;
-    } else {
-      this->tail->next = node;
-      this->tail = node;
-    }
-    inserted += 1;
-    return &node->pair.second;
-  } else if(this->childs[select]->pair.key == key){
-    this->childs[select]->pair.data = data;
-    return &this->childs[select]->pair.data;
-  }
 
-  index >>= 2;
+  TrieMapNode<Key,Data>* (*current)[4] = &this->childs;
 
-  TrieMapNode<Key,Data>* current = (TrieMapNode<Key,Data>*) this->childs[select];
   for(; 1; index >>= 2){
     int select = index & 3;
-    if(current->childs[select] == nullptr){
-        TrieMapNode<Key,Data>* node = PushStruct<TrieMapNode<Key,Data>>(arena);
-        *node = {};
-        node->pair.first = key;
-        node->pair.second = data;
+    if((*current)[select] == nullptr || !(*current)[select]->valid){
+      TrieMapNode<Key,Data>* node = PushStruct<TrieMapNode<Key,Data>>(arena);
+      *node = {};
+      node->pair.first = key;
+      node->pair.second = data;
+      node->valid = true;
+
+      if(!this->head){
+        this->head = node;
+        this->tail = node;
+      } else {
         this->tail->next = node;
         this->tail = node;
+      }
 
-        current->childs[select] = node;
-        inserted += 1;
-        return &node->pair.second;
-    } else if(current->childs[select]->pair.first == key){
-      current->childs[select]->pair.second = data;
-      return &current->childs[select]->pair.second;
+      (*current)[select] = node;
+      inserted += 1;
+      return &node->pair.second;
+    } else if((*current)[select]->pair.first == key){
+      (*current)[select]->pair.second = data;
+      return &(*current)[select]->pair.second;
     } else {
-      current = current->childs[select];
+      current = &((*current)[select]->childs);
     }
   }
   
@@ -977,47 +969,32 @@ Data* TrieMap<Key,Data>::Insert(Key key,Data data){
 template<typename Key,typename Data>
 Data* TrieMap<Key,Data>::InsertIfNotExist(Key key,Data data){
   int index = std::hash<Key>()(key);
-  int select = index & 3;
-  if(this->childs[select] == nullptr){
-    TrieMapNode<Key,Data>* node = PushStruct<TrieMapNode<Key,Data>>(arena);
-    *node = {};
-    node->pair.first = key;
-    node->pair.second = data;
-    this->childs[select] = node;
-    
-    if(!this->head){
-      this->head = node;
-      this->tail = node;
-    } else {
-      this->tail->next = node;
-      this->tail = node;
-    }
-    inserted += 1;
-    return &node->pair.second;
-  } else if(this->childs[select]->pair.key == key){
-    return &this->childs[select]->pair.second;
-  }
 
-  index >>= 2;
-  
-  TrieMapNode<Key,Data>* current = (TrieMapNode<Key,Data>*) this->childs[select];
+  TrieMapNode<Key,Data>* (*current)[4] = &this->childs;
   for(; 1; index >>= 2){
     int select = index & 3;
-    if(current->childs[select] == nullptr){
+    if((*current)[select] == nullptr || !(*current)[select]->valid){
       TrieMapNode<Key,Data>* node = PushStruct<TrieMapNode<Key,Data>>(arena);
       *node = {};
       node->pair.first = key;
       node->pair.second = data;
-      this->tail->next = node;
-      this->tail = node;
+      node->valid = true;
 
-      current->childs[select] = node;
+      if(!this->head){
+        this->head = node;
+        this->tail = node;
+      } else {
+        this->tail->next = node;
+        this->tail = node;
+      }
+      
+      (*current)[select] = node;
       inserted += 1;
       return &node->pair.second;
-    } else if(current->childs[select]->pair.first == key) {
-      return &current->childs[select]->pair.second;
+    } else if((*current)[select]->pair.first == key) {
+      return &(*current)[select]->pair.second;
     } else {
-      current = current->childs[select];
+      current = &((*current)[select]->childs);
     }
   }
 
@@ -1027,24 +1004,16 @@ Data* TrieMap<Key,Data>::InsertIfNotExist(Key key,Data data){
 template<typename Key,typename Data>
 Data* TrieMap<Key,Data>::Get(Key key){
   int index = std::hash<Key>()(key);
-  int select = index & 3;
-  if(this->childs[select] == nullptr){
-    return nullptr;
-  } else if(this->childs[select]->pair.key == key){
-    return &this->childs[select]->pair.second;
-  }
 
-  index >>= 2;
-  
-  TrieMapNode<Key,Data>* current = (TrieMapNode<Key,Data>*) this->childs[select];
+  TrieMapNode<Key,Data>* (*current)[4] = &this->childs;
   for(; 1; index >>= 2){
     int select = index & 3;
-    if(current->childs[select] == nullptr){
+    if((*current)[select] == nullptr){
       return nullptr;
-    } else if(current->childs[select]->pair.first == key) {
-      return &current->childs[select]->pair.second;
+    } else if((*current)[select]->valid && (*current)[select]->pair.first == key) {
+      return &(*current)[select]->pair.second;
     } else {
-      current = current->childs[select];
+      current = &((*current)[select]->childs);
     }
   }
 
@@ -1085,6 +1054,60 @@ GetOrAllocateResult<Data> TrieMap<Key,Data>::GetOrAllocate(Key key){
   }
   
   return res;
+}
+
+template<typename Key,typename Data>
+bool TrieMap<Key,Data>::Remove(Key key){
+  if(!head){
+    Assert(!tail);
+    return false;
+  }
+  
+  TrieMapNode<Key,Data>* node = nullptr;
+  TrieMapNode<Key,Data>* previous = nullptr;
+  bool found = false;
+  if(head->pair.key == key && head->valid){
+    node = head;
+    found = true;
+  } else {
+    for(node = head; node; node = node->next){
+      if(node->valid && node->pair.key == key){
+        found = true;
+        break;
+      }
+      previous = node;
+    }
+  }
+
+  if(!found){
+    return false;
+  }
+  
+  if(!previous){
+    if(head == tail){
+      head = nullptr;
+      tail = nullptr;
+    } else {
+      head = node->next;
+    }
+  } else if(node == tail){
+    previous->next = nullptr;
+    tail = previous;
+  } else{
+    previous->next = node->next;
+  }
+  
+  node->valid = false;
+  node->next = nullptr;
+  this->inserted -= 1;
+  
+  return true;
+}
+
+template<typename Key,typename Data>
+void TrieMap<Key,Data>::RemoveOrFail(Key key){
+  bool res = Remove(key);
+  Assert(res);
 }
 
 template<typename Key,typename Data>
@@ -1320,7 +1343,7 @@ void PoolIterator<T>::Advance(){
     bit = 7;
   }
 
-  if(index * 8 + (7 - bit) >= info.unitsPerPage){
+  if(index * 8 + (7 - bit) >= info.unitsPerPageBlock){
     index = 0;
     bit = 7;
     page = pageInfo.header->nextPage;
@@ -1358,59 +1381,34 @@ T* PoolIterator<T>::operator*(){
   return val;
 }
 
-#if 0
-template<typename T>
-Pool<T>::Pool()
-:mem(nullptr)
-,allocated(0)
-,endSize(0)
-{
-
-}
-
-template<typename T>
-Pool<T>::~Pool(){
-  Byte* ptr = mem;
-  while(ptr){
-    PageInfo page = GetPageInfo(info,ptr);
-
-    Byte* nextPage = page.header->nextPage;
-
-    DeallocatePages(ptr,1);
-
-    ptr = nextPage;
-  }
-}
-#endif
-
 template<typename T>
 T* Pool<T>::Alloc(){
   static int bitmask[] = {0x80,0xc0,0xe0,0xf0,0xf8,0xfc,0xfe,0xff};
 
   if(!mem){
-    mem = (Byte*) AllocatePages(1);
     info = CalculatePoolInfo(sizeof(T));
+    mem = (Byte*) AllocatePages(info.pagesPerBlock);
   }
 
   int fullIndex = 0;
   Byte* ptr = mem;
   PageInfo page = GetPageInfo(info,ptr);
-  while(page.header->allocatedUnits == info.unitsPerPage){
+  while(page.header->allocatedUnits == info.unitsPerPageBlock){
     if(!page.header->nextPage){
-      page.header->nextPage = (Byte*) AllocatePages(1);
+      page.header->nextPage = (Byte*) AllocatePages(info.pagesPerBlock);
     }
 
     ptr = page.header->nextPage;
     page = GetPageInfo(info,ptr);
-    fullIndex += info.unitsPerPage;
+    fullIndex += info.unitsPerPageBlock;
   }
 
   T* view = (T*) ptr;
-  for(int index = 0; index * 8 < info.unitsPerPage; index += 1){
+  for(int index = 0; index * 8 < info.unitsPerPageBlock; index += 1){
     u8 val = (u8) page.bitmap[index];
 
-    if(info.unitsPerPage - index * 8 < 8){
-      if(val == bitmask[(info.unitsPerPage - 1) % 8]){
+    if(info.unitsPerPageBlock - index * 8 < 8){
+      if(val == bitmask[(info.unitsPerPageBlock - 1) % 8]){
         continue;
       }
     } else {
@@ -1441,20 +1439,20 @@ T* Pool<T>::Alloc(){
 template<typename T>
 T* Pool<T>::Alloc(int index){
   if(!mem){
-    mem = (Byte*) AllocatePages(1);
     info = CalculatePoolInfo(sizeof(T));
+    mem = (Byte*) AllocatePages(info.pagesPerBlock);
   }
 
   Byte* ptr = mem;
   PageInfo page = GetPageInfo(info,ptr);
-  while(index >= info.unitsPerPage){
+  while(index >= info.unitsPerPageBlock){
     if(!page.header->nextPage){
-      page.header->nextPage = (Byte*) AllocatePages(1);
+      page.header->nextPage = (Byte*) AllocatePages(info.pagesPerBlock);
     }
 
     ptr = page.header->nextPage;
     page = GetPageInfo(info,ptr);
-    index -= info.unitsPerPage;
+    index -= info.unitsPerPageBlock;
   }
 
   int bitmapIndex = index / 8;
@@ -1485,7 +1483,7 @@ T* Pool<T>::Get(int index){
 
     ptr = page.header->nextPage;
     page = GetPageInfo(info,ptr);
-    index -= info.unitsPerPage;
+    index -= info.unitsPerPageBlock;
   }
 
   int bitmapIndex = index / 8;

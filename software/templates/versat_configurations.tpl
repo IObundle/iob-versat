@@ -38,6 +38,12 @@ module versat_configurations #(
 
    input change_config_pulse,
 
+#{for info wireInfo}
+#{if info.isStatic}
+   output [@{info.wire.bitSize-1}:0] @{info.wire.name},
+#{end}
+#{end}
+
    input clk_i,
    input rst_i
 );
@@ -147,5 +153,11 @@ begin
 #{end}
    end
 end
+
+#{for info wireInfo}
+#{if info.isStatic}
+assign @{info.wire.name} = configdata[@{info.configBitStart}+:@{info.wire.bitSize}];
+#{end}
+#{end}
 
 endmodule

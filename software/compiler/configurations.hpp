@@ -32,7 +32,8 @@ struct InstanceInfo{
   String name;
   String baseName; // NOTE: If the unit does not belong to the merge partition the baseName will equal name.
   String fullName;
-
+  
+  Opt<int> globalStaticPos; // Separating static from global makes stuff simpler. If mixing together, do not forget that struct generation cares about source of configPos.
   Opt<int> globalConfigPos;
   Opt<int> localConfigPos;
   int isConfigStatic; // Static must be handle separately, for the top level accelerator. 

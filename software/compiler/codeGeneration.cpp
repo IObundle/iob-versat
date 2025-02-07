@@ -390,22 +390,14 @@ void OutputVerilatorWrapper(FUDeclaration* type,Accelerator* accel,String output
 
   ClearTemplateEngine(); // Make sure that we do not reuse data
 
+  // TODO: We could just move this to the OutputVersatSource (rename it to output top level or something).
+  //       Save one AccelInfo recalculation
   AccelInfo info = CalculateAcceleratorInfo(accel,true,temp);
-  Array<Wire> allConfigsHeaderSide = ExtractAllConfigs(info.infos[0].info,temp);
-
-  // We need to bundle config + static (type->config) only contains config, but not static
-  auto arr = StartArray<Wire>(temp);
-  for(Wire& config : type->configs){
-    *arr.PushElem() = config;
-  }
-  Array<Wire> allConfigsVerilatorSide = EndArray(arr);
-  TemplateSetCustom("allConfigsVerilatorSide",MakeValue(&allConfigsVerilatorSide));
 
   int index = 0;
   Array<Wire> allStaticsVerilatorSide = PushArray<Wire>(temp,999); // TODO: Correct size
-  
-  Hashmap<StaticId,StaticData>* staticUnits = CollectStaticUnits(&info,temp);
-  //Hashmap<StaticId,StaticData>* staticUnits = CollectStaticUnits(accel,type,temp);  
+
+  Hashmap<StaticId,StaticData>* staticUnits = CollectStaticUnits(&info,temp);  
   for(Pair<StaticId,StaticData*> p : staticUnits){
     for(Wire& config : p.second->configs){
       allStaticsVerilatorSide[index] = config;
@@ -414,8 +406,25 @@ void OutputVerilatorWrapper(FUDeclaration* type,Accelerator* accel,String output
     }
   }
   allStaticsVerilatorSide.size = index;
-  TemplateSetCustom("allStaticsVerilatorSide",MakeValue(&allStaticsVerilatorSide));
   
+  // We need to bundle config + static (type->config) only contains config, but not static
+  auto arr = StartArray<WireExtra>(temp);
+  for(Wire& config : type->configs){
+    WireExtra* ptr = arr.PushElem();
+    *ptr = config;
+    ptr->source = STRING("config->TOP_");
+    ptr->source2 = STRING("config->");
+  }
+  for(Wire& staticWire : allStaticsVerilatorSide){
+    WireExtra* ptr = arr.PushElem();
+    *ptr = staticWire;
+    ptr->source = STRING("statics->");
+    ptr->source2 = STRING("statics->");
+  }
+  Array<WireExtra> allConfigsVerilatorSide = EndArray(arr);
+
+  TemplateSetCustom("allConfigsVerilatorSide",MakeValue(&allConfigsVerilatorSide));
+
   Array<TypeStructInfoElement> structuredConfigs = ExtractStructuredConfigs(info.infos[0].info,temp);
   
   TemplateSetNumber("delays",info.delays);
@@ -424,7 +433,6 @@ void OutputVerilatorWrapper(FUDeclaration* type,Accelerator* accel,String output
   
   int totalExternalMemory = ExternalMemoryByteSize(type->externalMemory);
 
-  TemplateSetCustom("configsHeader",MakeValue(&allConfigsHeaderSide));
   TemplateSetCustom("statesHeader",MakeValue(&statesHeaderSide));
   TemplateSetCustom("namedStates",MakeValue(&statesHeaderSide));
   TemplateSetNumber("totalExternalMemory",totalExternalMemory);
@@ -738,7 +746,6 @@ void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* 
 
   AccelInfo info = CalculateAcceleratorInfo(accel,true,temp);
 
-#if 0
   {
     AccelInfoIterator iter = StartIteration(&info);
     for(int i = 0; i < iter.MergeSize(); i++){
@@ -773,17 +780,14 @@ void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* 
           }
           
           *result.data = configPos;
-          unit->globalConfigPos = configPos;
+          unit->globalStaticPos = configPos;
         } else if(unit->isGloballyStatic){
-          int trueConfigPos = parent->globalConfigPos.value() + unit->localConfigPos.value();
-          unit->globalConfigPos = trueConfigPos;
+          int trueConfigPos = parent->globalStaticPos.value() + unit->localConfigPos.value();
+          unit->globalStaticPos = trueConfigPos;
         }
       }
     }
   }
-#endif
-
-  DEBUG_BREAK();
   
   VersatComputedValues val = ComputeVersatValues(&info,globalOptions.useDMA);
   
@@ -941,17 +945,10 @@ void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* 
     ProcessTemplate(f,BasicTemplates::externalInternalPortmapTemplate);
  }
 
-#if 0
+  // TODO: A lot of cruft in this function
   Hashmap<StaticId,StaticData>* staticUnits = CollectStaticUnits(&info,temp);
   TemplateSetCustom("staticUnits",MakeValue(staticUnits));
-#else
-  // NOCHECKIN
-  Hashmap<StaticId,StaticData>* CollectStaticUnits(Accelerator*,FUDeclaration*,Arena*); 
-  Hashmap<StaticId,StaticData>* staticUnits = CollectStaticUnits(accel,nullptr,temp); 
-  TemplateSetCustom("staticUnits",MakeValue(staticUnits));
-#endif
-  // TODO: We need to fix static values calculation in relation to AccelInfo.
-  
+
   Array<String> memoryMasks = ExtractMemoryMasks(info,temp);
 
   Pool<FUInstance> nodes = accel->allocated;
@@ -992,7 +989,10 @@ void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* 
   
   int configBit = 0;
   int addr = val.versatConfigs;
-  
+
+  // Join configs statics and delays into a single array.
+  // Simplifies the code gen, since we generate the same code regardless of the wire origin.
+  // Only wire, position and stuff like that matters
   auto arr = StartArray<WireInformation>(temp);
   for(auto n : nodes){
     for(Wire w : n->declaration->configs){
@@ -1012,6 +1012,7 @@ void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* 
       info.configBitStart = configBit;
       configBit += w.bitSize;
       info.addr = 4 * addr++;
+      info.isStatic = true;
       *arr.PushElem() = info;
     }
   }
@@ -1146,7 +1147,7 @@ void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* 
     }
     Array<DifferenceArray> differenceArray = EndArray(diffArray);
     TemplateSetCustom("differences",MakeValue(&differenceArray));
-    
+
     int index = 0;
     Array<Wire> allStaticsVerilatorSide = PushArray<Wire>(temp,999); // TODO: Correct size
     for(Pair<StaticId,StaticData*> p : staticUnits){

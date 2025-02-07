@@ -165,6 +165,7 @@ Type* RegisterTemplateMembers(String name,Array<TemplatedMember> members);
 // Since majority of the type info is used by our side, not a major problem
 Type* InstantiateTemplate(String name,Arena* out = nullptr); // TODO: Need to do a check on the way the arena is being used here
 
+void InitTypeSystem();
 void RegisterTypes();
 void FreeTypes();
 

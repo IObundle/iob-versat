@@ -531,6 +531,12 @@ void RegisterParsedTypes();
   RegisterOpaqueType(STRING(#NEW),Subtype_TYPEDEF,sizeof(NEW),alignof(NEW)); \
   RegisterTypedef(STRING(#OLD),STRING(#NEW))
 
+void InitTypeSystem(){
+  if(permanentArena.mem == nullptr){
+    permanentArena = InitArena(Kilobyte(64));
+  }
+}
+
 void RegisterTypes(){
   static bool registered = false;
   if(registered){
@@ -538,7 +544,7 @@ void RegisterTypes(){
   }
   registered = true;
 
-  permanentArena = InitArena(Kilobyte(64));
+  InitTypeSystem();
 
   ValueType::NUMBER = REGISTER(int);
   ValueType::BOOLEAN = REGISTER(bool);

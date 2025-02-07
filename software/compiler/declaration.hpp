@@ -87,8 +87,7 @@ struct FUDeclaration{
   
   int lat; // TODO: For now this is only for iterative units. Would also useful to have a standardized way of computing this from the graph and then compute it when needed. 
   
-  // TODO: this is probably not needed, only used for verilog generation (which could be calculated inside the code generation functions)
-  //       the info is all contained inside the units themselves and inside the calculated offsets
+  // TODO: We do not need static units, but we want all the static wires and info like their size. It is helpful for code generation. We do not care about config pos since it only matters for the top level accelerator.
   Hashmap<StaticId,StaticData>* staticUnits;
 
   Array<Pair<String,int>> definitionArrays;
