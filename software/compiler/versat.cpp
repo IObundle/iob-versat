@@ -214,7 +214,7 @@ void FillDeclarationWithAcceleratorValues(FUDeclaration* decl,Accelerator* accel
   Array<String> baseName = EndArray(baseNames);
 #endif
   
-  decl->nIOs = val.ios;
+  decl->nIOs = val.nIOs;
   if(val.isMemoryMapped){
     decl->memoryMapBits = val.memoryMappedBits;
   }

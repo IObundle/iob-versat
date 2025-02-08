@@ -55,13 +55,6 @@ struct WireInformation{
   bool isStatic;
 };
 
-struct SubTypesInfo{
-  FUDeclaration* type;
-  FUDeclaration* mergeTop;
-  bool isFromMerged;
-  bool containsMerged;
-};
-
 struct SameMuxEntities{
   int configPos;
   InstanceInfo* info;
@@ -79,23 +72,12 @@ static bool operator==(const SameMuxEntities i0,const SameMuxEntities i1){
   return res;
 }
 
-template<> struct std::hash<SubTypesInfo>{
-   std::size_t operator()(SubTypesInfo const& s) const noexcept{
-     std::size_t res = std::hash<void*>()(s.type) + std::hash<void*>()(s.mergeTop) + std::hash<bool>()(s.isFromMerged) + std::hash<bool>()(s.containsMerged);
-     return res;
-   }
-};
-
 struct AddressGenDef;
 extern Pool<AddressGenDef> savedAddressGen;
 
 // In order to get the names, I need to associate a given member to a merge index.
 // Since multiplexers can be shared accross multiple merge indexes, I need some map of some sorts.
 // One multiplexer can be used by dozens of merge indexes.
-enum StructInfoType{
-  StructInfoType_UNION_WITH_MERGE_MULTIPLEXERS
-};
-
 struct StructInfo;
 
 struct StructElement{
@@ -165,12 +147,8 @@ static bool operator==(StructInfo& l,StructInfo& r){
   return (l.name == r.name);
 }
 
-Array<FUDeclaration*> SortTypesByConfigDependency(Array<FUDeclaration*> types,Arena* out);
 Array<FUDeclaration*> SortTypesByMemDependency(Array<FUDeclaration*> types,Arena* out);
-Array<TypeStructInfoElement> GenerateStructFromType(FUDeclaration* decl,Arena* out);
 
 void OutputCircuitSource(FUDeclaration* decl,FILE* file);
 void OutputIterativeSource(FUDeclaration* decl,FILE* file);
-void OutputVerilatorWrapper(FUDeclaration* type,Accelerator* accel,String outputPath);
-void OutputVerilatorMake(String topLevelName,String versatDir);
-void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* softwarePath,bool isSimple);
+void OutputTopLevelFiles(Accelerator* accel,FUDeclaration* topLevelDecl,const char* hardwarePath,const char* softwarePath,bool isSimple);

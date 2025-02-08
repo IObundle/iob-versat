@@ -163,6 +163,9 @@ struct Accelerator{ // Graph + data storage
   AcceleratorPurpose purpose;
 };
 
+// NOTE: These values are specific to the top accelerator only. They differ because of stuff like DMA, the config interface for the accelerator and so on.
+//       Any change that is specific to the top unit should change these values. More config space and things like that can be 'reserved' by changing the config values here and the same holds true for all the other interfaces.
+//       Code that does not care about the top level unit should just use the values found in AccelInfo.
 struct VersatComputedValues{
   int nConfigs;
 
@@ -187,10 +190,13 @@ struct VersatComputedValues{
 
   int nUnitsIO;
   int numberConnections;
-  int externalMemoryInterfaces;
 
   int memoryAddressBits;
   int memoryConfigDecisionBit;
+
+  // External memories, not memory mapped.
+  int externalMemoryInterfaces;
+  int totalExternalMemory;  
 
   //bool signalLoop;
 };

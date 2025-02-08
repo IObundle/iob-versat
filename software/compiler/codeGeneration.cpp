@@ -384,70 +384,6 @@ void OutputIterativeSource(FUDeclaration* decl,FILE* file){
   ProcessTemplate(file,BasicTemplates::iterativeTemplate);
 }
 
-void OutputVerilatorWrapper(FUDeclaration* type,Accelerator* accel,String outputPath){
-  TEMP_REGION(temp,nullptr);
-  TEMP_REGION(temp2,temp);
-
-  ClearTemplateEngine(); // Make sure that we do not reuse data
-
-  // TODO: We could just move this to the OutputVersatSource (rename it to output top level or something).
-  //       Save one AccelInfo recalculation
-  AccelInfo info = CalculateAcceleratorInfo(accel,true,temp);
-
-  int index = 0;
-  Array<Wire> allStaticsVerilatorSide = PushArray<Wire>(temp,999); // TODO: Correct size
-
-  Hashmap<StaticId,StaticData>* staticUnits = CollectStaticUnits(&info,temp);  
-  for(Pair<StaticId,StaticData*> p : staticUnits){
-    for(Wire& config : p.second->configs){
-      allStaticsVerilatorSide[index] = config;
-      allStaticsVerilatorSide[index].name = ReprStaticConfig(p.first,&config,temp);
-      index += 1;
-    }
-  }
-  allStaticsVerilatorSide.size = index;
-  
-  // We need to bundle config + static (type->config) only contains config, but not static
-  auto arr = StartArray<WireExtra>(temp);
-  for(Wire& config : type->configs){
-    WireExtra* ptr = arr.PushElem();
-    *ptr = config;
-    ptr->source = STRING("config->TOP_");
-    ptr->source2 = STRING("config->");
-  }
-  for(Wire& staticWire : allStaticsVerilatorSide){
-    WireExtra* ptr = arr.PushElem();
-    *ptr = staticWire;
-    ptr->source = STRING("statics->");
-    ptr->source2 = STRING("statics->");
-  }
-  Array<WireExtra> allConfigsVerilatorSide = EndArray(arr);
-
-  TemplateSetCustom("allConfigsVerilatorSide",MakeValue(&allConfigsVerilatorSide));
-
-  Array<TypeStructInfoElement> structuredConfigs = ExtractStructuredConfigs(info.infos[0].info,temp);
-  
-  TemplateSetNumber("delays",info.delays);
-  TemplateSetCustom("structuredConfigs",MakeValue(&structuredConfigs));
-  Array<String> statesHeaderSide = ExtractStates(info.infos[0].info,temp);
-  
-  int totalExternalMemory = ExternalMemoryByteSize(type->externalMemory);
-
-  TemplateSetCustom("statesHeader",MakeValue(&statesHeaderSide));
-  TemplateSetCustom("namedStates",MakeValue(&statesHeaderSide));
-  TemplateSetNumber("totalExternalMemory",totalExternalMemory);
-  TemplateSetCustom("opts",MakeValue(&globalOptions));
-  TemplateSetCustom("type",MakeValue(type));
-  TemplateSetBool("trace",globalDebug.outputVCD);
-
-  String wrapperPath = PushString(temp,"%.*s/wrapper.cpp",UNPACK_SS(outputPath));
-  FILE* output = OpenFileAndCreateDirectories(wrapperPath,"w",FilePurpose_SOFTWARE);
-  DEFER_CLOSE_FILE(output);
-
-  CompiledTemplate* templ = CompileTemplate(versat_wrapper_template,"wrapper",temp);
-  ProcessTemplate(output,templ);
-}
-
 // TODO: Move all this stuff to a better place
 #include <filesystem>
 namespace fs = std::filesystem;
@@ -460,53 +396,6 @@ String GetRelativePathFromSourceToTarget(String sourcePath,String targetPath,Are
   fs::path res = fs::relative(target,source);
 
   return PushString(out,"%s",res.c_str());
-}
-
-void OutputVerilatorMake(String topLevelName,String versatDir){
-  TEMP_REGION(temp,nullptr);
-  TEMP_REGION(temp2,temp);
-  
-  String outputPath = globalOptions.softwareOutputFilepath;
-  String verilatorMakePath = PushString(temp,"%.*s/VerilatorMake.mk",UNPACK_SS(outputPath));
-  FILE* output = OpenFileAndCreateDirectories(verilatorMakePath,"w",FilePurpose_MAKEFILE);
-  DEFER_CLOSE_FILE(output);
-  
-  TemplateSetBool("traceEnabled",globalDebug.outputVCD);
-  CompiledTemplate* comp = CompileTemplate(versat_makefile_template,"makefile",temp);
-    
-  fs::path outputFSPath = StaticFormat("%.*s",UNPACK_SS(outputPath));
-  fs::path srcLocation = fs::current_path();
-  fs::path fixedPath = fs::weakly_canonical(outputFSPath / srcLocation);
-
-  String relativePath = GetRelativePathFromSourceToTarget(globalOptions.softwareOutputFilepath,globalOptions.hardwareOutputFilepath,temp);
-
-  Array<String> allFilenames = PushArray<String>(temp,globalOptions.verilogFiles.size);
-  for(int i = 0; i <  globalOptions.verilogFiles.size; i++){
-    String filepath  =  globalOptions.verilogFiles[i];
-    fs::path path(StaticFormat("%.*s",UNPACK_SS(filepath)));
-    allFilenames[i] = PushString(temp,"%s",path.filename().c_str());
-  }
-
-  TemplateSetArray("allFilenames","String",UNPACK_SS(allFilenames));
-  
-  TemplateSetCustom("arch",MakeValue(&globalOptions));
-  TemplateSetString("generatedUnitsLocation",relativePath);
-  TemplateSetArray("extraSources","String",UNPACK_SS(globalOptions.extraSources));
-  TemplateSetString("typename",topLevelName);
-  ProcessTemplate(output,comp);
-
-  // TODO: Need to add some form of error checking and handling, for the case where verilator root is not found
-  // Used by make to find the verilator root of the build server
-  String getVerilatorRootScript = STRING("#!/bin/bash\nTEMP_DIR=$(mktemp -d)\n\npushd $TEMP_DIR &> /dev/null\n\necho \"module Test(); endmodule\" > Test.v\nverilator --cc Test.v &> /dev/null\n\npushd ./obj_dir &> /dev/null\nVERILATOR_ROOT=$(awk '\"VERILATOR_ROOT\" == $1 { print $3}' VTest.mk)\nrm -r $TEMP_DIR\n\necho $VERILATOR_ROOT\n");
-  {
-    String getVerilatorScriptPath = PushString(temp,"%.*s/GetVerilatorRoot.sh",UNPACK_SS(globalOptions.softwareOutputFilepath));
-    FILE* output = OpenFileAndCreateDirectories(getVerilatorScriptPath,"w",FilePurpose_MISC);
-    DEFER_CLOSE_FILE(output);
-
-    fprintf(output,"%.*s",UNPACK_SS(getVerilatorRootScript));
-    fflush(output);
-    OS_SetScriptPermissions(output);
-  }
 }
 
 StructInfo* GenerateConfigStruct(AccelInfoIterator iter,Arena* out){
@@ -727,23 +616,12 @@ void PushMergeMultiplexersUpTheHierarchy(StructInfo* top){
   }
 }
 
-void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* softwarePath,bool isSimple){
+void OutputTopLevelFiles(Accelerator* accel,FUDeclaration* topLevelDecl,const char* hardwarePath,const char* softwarePath,bool isSimple){
   TEMP_REGION(temp,nullptr);
   TEMP_REGION(temp2,temp);
   
   ClearTemplateEngine(); // Make sure that we do not reuse data
-
-  // No need for templating, small file
-  FILE* c = OpenFileAndCreateDirectories(PushString(temp,"%s/versat_defs.vh",hardwarePath),"w",FilePurpose_VERILOG_INCLUDE);
-  FILE* f = OpenFileAndCreateDirectories(PushString(temp,"%s/versat_undefs.vh",hardwarePath),"w",FilePurpose_VERILOG_INCLUDE);
-  DEFER_CLOSE_FILE(c);
-  DEFER_CLOSE_FILE(f);
   
-  if(!c || !f){
-    printf("Error creating file, check if filepath is correct: %s\n",hardwarePath);
-    return;
-  }
-
   AccelInfo info = CalculateAcceleratorInfo(accel,true,temp);
 
   {
@@ -791,6 +669,56 @@ void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* 
   
   VersatComputedValues val = ComputeVersatValues(&info,globalOptions.useDMA);
   
+  // TODO: A lot of cruft in this function
+  Hashmap<StaticId,StaticData>* staticUnits = CollectStaticUnits(&info,temp);
+  TemplateSetCustom("staticUnits",MakeValue(staticUnits));
+  int index = 0;
+  Array<Wire> allStaticsVerilatorSide = PushArray<Wire>(temp,999); // TODO: Correct size
+  for(Pair<StaticId,StaticData*> p : staticUnits){
+    for(Wire& config : p.second->configs){
+      allStaticsVerilatorSide[index] = config;
+      allStaticsVerilatorSide[index].name = ReprStaticConfig(p.first,&config,temp);
+      index += 1;
+    }
+  }
+  allStaticsVerilatorSide.size = index;
+
+  // All these are common to all the following templates usages
+  // Since templates only check if data exists at runtime, we want to pass data using C code as much as possible
+  // (Because any change to the structs leads to a compile error instead of a runtime error).
+  // This is not enforced and its fine if we get a few template errors. Since the tests are fast
+  // we likely wont have many problems with this approach.
+
+  // NOTE: A good weekend project would be to compile templates into C code. We would have to specify the types of the inputs and the compilation would check if the types agree or not. This would also help find unused stuff by using normal C ETAGS stuff
+  // NOTE2: Also we would remove all the need to provide iterations inside the type stuff. We probably want to remove type stuff from this project, since it's not robust enough.
+  // NOTE3: Furthermore, all the stuff like iterations and representation would be done in C code, which is good because we would not need to implement generic code to iterate data.
+  // NOTE4: Also a speed boost, since compilation of templates would be done at build time instead.
+  // TODO: If free time this should be a weekend project since we are basically just making a different backend.
+  TemplateSetString("typeName",accel->name);
+
+  // Dependent on val.
+  TemplateSetNumber("configurationBits",val.configurationBits);
+  TemplateSetNumber("stateBits",val.stateBits);
+  TemplateSetNumber("stateAddressBits",val.stateAddressBits);
+  TemplateSetNumber("configurationAddressBits",val.configurationAddressBits);
+  TemplateSetNumber("numberConnections",val.numberConnections);
+  TemplateSetNumber("delayStart",val.delayBitsStart);
+  TemplateSetNumber("nIO",val.nUnitsIO);
+  TemplateSetNumber("unitsMapped",val.unitsMapped);
+  TemplateSetNumber("memoryMappedBytes",val.memoryMappedBytes);
+  TemplateSetNumber("memoryConfigDecisionBit",val.memoryConfigDecisionBit);
+  TemplateSetNumber("versatConfig",val.versatConfigs);
+  TemplateSetNumber("versatState",val.versatStates);
+  TemplateSetNumber("memoryAddressBits",val.memoryAddressBits);
+  TemplateSetNumber("memoryMappedBase",1 << val.memoryConfigDecisionBit);
+  TemplateSetNumber("nConfigs",val.nConfigs);
+  TemplateSetNumber("nStates",val.nStates);
+  TemplateSetNumber("nStatics",val.nStatics);
+  TemplateSetNumber("delays",val.nDelays);
+  TemplateSetNumber("totalExternalMemory",val.totalExternalMemory);
+
+  TemplateSetCustom("arch",MakeValue(&globalOptions));
+  
   AccelInfoIterator iter = StartIteration(&info);
   StructInfo* structInfo = GenerateConfigStruct(iter,temp);
   
@@ -803,6 +731,7 @@ void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* 
   PushMergeMultiplexersUpTheHierarchy(structInfo);
   Array<StructInfo*> allStructs = ExtractStructs(structInfo,temp);
 
+  
   Array<int> indexes = PushArray<int>(temp,allStructs.size);
   Memset(indexes,2);
   for(int i = 0; i < allStructs.size; i++){
@@ -818,52 +747,69 @@ void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* 
   }
   
   Array<TypeStructInfo> structs = GenerateStructs(allStructs,temp);
-  
+
+  // NOTE: This data is printed so it can be captured by the IOB python setup.
+  // TODO: Probably want a more robust way of doing this. Eventually want to printout some stats so we can
+  //       actually visualize what we are producing.
   printf("ADDR_W - %d\n",val.memoryConfigDecisionBit + 1);
   if(val.nUnitsIO){
     printf("HAS_AXI - True\n");
   }
 
-  fprintf(c,"`define NUMBER_UNITS %d\n",accel->allocated.Size());
-  fprintf(f,"`undef  NUMBER_UNITS\n");
-  fprintf(c,"`define CONFIG_W %d\n",val.configurationBits);
-  fprintf(f,"`undef  CONFIG_W\n");
-  fprintf(c,"`define STATE_W %d\n",val.stateBits);
-  fprintf(f,"`undef  STATE_W\n");
-  fprintf(c,"`define MAPPED_UNITS %d\n",val.unitsMapped);
-  fprintf(f,"`undef  MAPPED_UNITS\n");
-  fprintf(c,"`define MAPPED_BIT %d\n",val.memoryConfigDecisionBit);
-  fprintf(f,"`undef  MAPPED_BIT\n");
-  fprintf(c,"`define nIO %d\n",val.nUnitsIO);
-  fprintf(f,"`undef  nIO\n");
-  fprintf(c,"`define LEN_W %d\n",20);
-  fprintf(f,"`undef  LEN_W\n");
-
-  if(globalOptions.architectureHasDatabus){
-    fprintf(c,"`define VERSAT_ARCH_HAS_IO 1\n");
-    fprintf(f,"`undef  VERSAT_ARCH_HAS_IO\n");
-  }
-
-  if(info.inputs || info.outputs){
-    fprintf(c,"`define EXTERNAL_PORTS\n");
-    fprintf(f,"`undef  EXTERNAL_PORTS\n");
-  }
-
-  if(val.nUnitsIO){
-    fprintf(c,"`define VERSAT_IO\n");
-    fprintf(f,"`undef  VERSAT_IO\n");
-  }
-
-  if(val.externalMemoryInterfaces){
-    fprintf(c,"`define VERSAT_EXTERNAL_MEMORY\n");
-    fprintf(f,"`undef  VERSAT_EXTERNAL_MEMORY\n");
-  }
-
-  if(globalOptions.exportInternalMemories){
-    fprintf(c,"`define VERSAT_EXPORT_EXTERNAL_MEMORY\n");
-    fprintf(f,"`undef  VERSAT_EXPORT_EXTERNAL_MEMORY\n");
-  }
+  // Verilog includes for parameters and such
+  {
+    // No need for templating, small file
+    FILE* c = OpenFileAndCreateDirectories(PushString(temp,"%s/versat_defs.vh",hardwarePath),"w",FilePurpose_VERILOG_INCLUDE);
+    FILE* f = OpenFileAndCreateDirectories(PushString(temp,"%s/versat_undefs.vh",hardwarePath),"w",FilePurpose_VERILOG_INCLUDE);
+    DEFER_CLOSE_FILE(c);
+    DEFER_CLOSE_FILE(f);
   
+    if(!c || !f){
+      printf("Error creating file, check if filepath is correct: %s\n",hardwarePath);
+      return;
+    }
+
+    fprintf(c,"`define NUMBER_UNITS %d\n",accel->allocated.Size());
+    fprintf(f,"`undef  NUMBER_UNITS\n");
+    fprintf(c,"`define CONFIG_W %d\n",val.configurationBits);
+    fprintf(f,"`undef  CONFIG_W\n");
+    fprintf(c,"`define STATE_W %d\n",val.stateBits);
+    fprintf(f,"`undef  STATE_W\n");
+    fprintf(c,"`define MAPPED_UNITS %d\n",val.unitsMapped);
+    fprintf(f,"`undef  MAPPED_UNITS\n");
+    fprintf(c,"`define MAPPED_BIT %d\n",val.memoryConfigDecisionBit);
+    fprintf(f,"`undef  MAPPED_BIT\n");
+    fprintf(c,"`define nIO %d\n",val.nUnitsIO);
+    fprintf(f,"`undef  nIO\n");
+    fprintf(c,"`define LEN_W %d\n",20);
+    fprintf(f,"`undef  LEN_W\n");
+
+    if(globalOptions.architectureHasDatabus){
+      fprintf(c,"`define VERSAT_ARCH_HAS_IO 1\n");
+      fprintf(f,"`undef  VERSAT_ARCH_HAS_IO\n");
+    }
+
+    if(info.inputs || info.outputs){
+      fprintf(c,"`define EXTERNAL_PORTS\n");
+      fprintf(f,"`undef  EXTERNAL_PORTS\n");
+    }
+
+    if(val.nUnitsIO){
+      fprintf(c,"`define VERSAT_IO\n");
+      fprintf(f,"`undef  VERSAT_IO\n");
+    }
+
+    if(val.externalMemoryInterfaces){
+      fprintf(c,"`define VERSAT_EXTERNAL_MEMORY\n");
+      fprintf(f,"`undef  VERSAT_EXTERNAL_MEMORY\n");
+    }
+
+    if(globalOptions.exportInternalMemories){
+      fprintf(c,"`define VERSAT_EXPORT_EXTERNAL_MEMORY\n");
+      fprintf(f,"`undef  VERSAT_EXPORT_EXTERNAL_MEMORY\n");
+    }
+  }
+    
   // Output configuration file
   DAGOrderNodes order = CalculateDAGOrder(&accel->allocated,temp);
   Array<FUInstance*> ordered = order.instances;
@@ -945,10 +891,6 @@ void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* 
     ProcessTemplate(f,BasicTemplates::externalInternalPortmapTemplate);
  }
 
-  // TODO: A lot of cruft in this function
-  Hashmap<StaticId,StaticData>* staticUnits = CollectStaticUnits(&info,temp);
-  TemplateSetCustom("staticUnits",MakeValue(staticUnits));
-
   Array<String> memoryMasks = ExtractMemoryMasks(info,temp);
 
   Pool<FUInstance> nodes = accel->allocated;
@@ -958,23 +900,7 @@ void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* 
   }
 
   Array<InstanceInfo*> topLevelUnits = GetAllSameLevelUnits(&info,0,0,temp);
-  TemplateSetCustom("allUnits",MakeValue(&topLevelUnits));
   TemplateSetCustom("parameters",MakeValue(&parameters));
-  TemplateSetCustom("arch",MakeValue(&globalOptions));
-  TemplateSetNumber("configurationBits",val.configurationBits);
-  TemplateSetNumber("stateBits",val.stateBits);
-  TemplateSetNumber("stateAddressBits",val.stateAddressBits);
-  TemplateSetNumber("configurationAddressBits",val.configurationAddressBits);
-  TemplateSetNumber("numberConnections",val.numberConnections);
-  TemplateSetNumber("delayStart",val.delayBitsStart);
-  TemplateSetNumber("nIO",val.nUnitsIO);
-  TemplateSetNumber("unitsMapped",val.unitsMapped);
-  TemplateSetNumber("memoryMappedBytes",val.memoryMappedBytes);
-  TemplateSetNumber("memoryConfigDecisionBit",val.memoryConfigDecisionBit);
-  TemplateSetNumber("configurationBits",val.configurationBits);
-  TemplateSetNumber("versatConfig",val.versatConfigs);
-  TemplateSetNumber("versatState",val.versatStates);
-  TemplateSetNumber("memoryAddressBits",val.memoryAddressBits);
   TemplateSetCustom("inputDecl",MakeValue(BasicDeclaration::input));
   TemplateSetCustom("outputDecl",MakeValue(BasicDeclaration::output));
   TemplateSetNumber("nInputs",info.inputs);
@@ -989,7 +915,8 @@ void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* 
   
   int configBit = 0;
   int addr = val.versatConfigs;
-
+  
+  // TODO: We are still relying on explicit data contained inside the 
   // Join configs statics and delays into a single array.
   // Simplifies the code gen, since we generate the same code regardless of the wire origin.
   // Only wire, position and stuff like that matters
@@ -1035,7 +962,8 @@ void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* 
   
   auto test = EndArray(arr);
   TemplateSetCustom("wireInfo",MakeValue(&test));
-  
+
+  // Top accelerator
   {
     FILE* s = OpenFileAndCreateDirectories(PushString(temp,"%s/versat_instance.v",hardwarePath),"w",FilePurpose_VERILOG_CODE);
     DEFER_CLOSE_FILE(s);
@@ -1047,7 +975,8 @@ void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* 
 
     ProcessTemplate(s,BasicTemplates::topAcceleratorTemplate);
   }
-  
+
+  // Top configurations
   {
     FILE* s = OpenFileAndCreateDirectories(PushString(temp,"%s/versat_configurations.v",hardwarePath),"w",FilePurpose_VERILOG_CODE);
     DEFER_CLOSE_FILE(s);
@@ -1089,15 +1018,12 @@ void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* 
     }
   }
 
-  TemplateSetNumber("memoryMappedBase",1 << val.memoryConfigDecisionBit);
-  TemplateSetNumber("nConfigs",val.nConfigs);
-  TemplateSetNumber("nStates",val.nStates);
-  TemplateSetNumber("nStatics",val.nStatics);
   TemplateSetCustom("configStructures",MakeValue(&structs));
 
   Array<TypeStructInfo> addressStructures = GetMemMappedStructInfo(&info,temp2);
   TemplateSetCustom("addressStructures",MakeValue(&addressStructures));
-  
+
+  // Accelerator header
   {
     auto arr = StartArray<int>(temp);
     for(InstanceInfo& t : info.infos[0].info){
@@ -1147,17 +1073,6 @@ void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* 
     }
     Array<DifferenceArray> differenceArray = EndArray(diffArray);
     TemplateSetCustom("differences",MakeValue(&differenceArray));
-
-    int index = 0;
-    Array<Wire> allStaticsVerilatorSide = PushArray<Wire>(temp,999); // TODO: Correct size
-    for(Pair<StaticId,StaticData*> p : staticUnits){
-      for(Wire& config : p.second->configs){
-        allStaticsVerilatorSide[index] = config;
-        allStaticsVerilatorSide[index].name = ReprStaticConfig(p.first,&config,temp);
-        index += 1;
-      }
-    }
-    allStaticsVerilatorSide.size = index;
     TemplateSetCustom("allStatics",MakeValue(&allStaticsVerilatorSide));
     
     Array<TypeStructInfoElement> structuredConfigs = ExtractStructuredConfigs(info.infos[0].info,temp);
@@ -1165,13 +1080,11 @@ void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* 
     Array<String> allStates = ExtractStates(info.infos[0].info,temp2);
     Array<Pair<String,int>> allMem = ExtractMem(info.infos[0].info,temp2);
     
-    TemplateSetNumber("delays",val.nDelays);
     TemplateSetCustom("structuredConfigs",MakeValue(&structuredConfigs));
     TemplateSetCustom("namedStates",MakeValue(&allStates));
     TemplateSetCustom("namedMem",MakeValue(&allMem));
 
     TemplateSetBool("outputChangeDelay",false);
-    TemplateSetString("accelName",accel->name);
 
     Array<String> names = Extract(info.infos,temp,&MergePartition::name);
     TemplateSetCustom("mergeNames",MakeValue(&names));
@@ -1219,5 +1132,112 @@ void OutputVersatSource(Accelerator* accel,const char* hardwarePath,const char* 
     FILE* f = OpenFileAndCreateDirectories(PushString(temp,"%s/versat_accel.h",softwarePath),"w",FilePurpose_SOFTWARE);
     DEFER_CLOSE_FILE(f);
     ProcessTemplate(f,BasicTemplates::acceleratorHeaderTemplate);
+  }
+
+  // Verilator Wrapper (.cpp file that controls simulation)
+  {
+    Pool<FUInstance> nodes = accel->allocated;
+
+    // We need to bundle config + static (type->config) only contains config, but not static
+    // TODO: This is not good. Eventually need to take a look at what is happening inside the wrapper.
+    auto arr = StartArray<WireExtra>(temp);
+    for(auto n : nodes){
+      for(Wire config : n->declaration->configs){
+        WireExtra* ptr = arr.PushElem();
+        *ptr = config;
+        ptr->source = STRING("config->TOP_");
+        ptr->source2 = STRING("config->");
+      }
+    }
+    for(Wire& staticWire : allStaticsVerilatorSide){
+      WireExtra* ptr = arr.PushElem();
+      *ptr = staticWire;
+      ptr->source = STRING("statics->");
+      ptr->source2 = STRING("statics->");
+    }
+    Array<WireExtra> allConfigsVerilatorSide = EndArray(arr);
+
+    auto builder = StartArray<ExternalMemoryInterface>(temp);
+    for(AccelInfoIterator iter = StartIteration(&info); iter.IsValid(); iter = iter.Next()){
+      for(ExternalMemoryInterface& inter : iter.CurrentUnit()->decl->externalMemory){
+        *builder.PushElem() = inter;
+      }
+    }
+    auto external = EndArray(builder);
+
+    Array<String> allStates = ExtractStates(info.infos[0].info,temp2);
+  
+    TemplateSetCustom("allConfigsVerilatorSide",MakeValue(&allConfigsVerilatorSide));
+
+    Array<TypeStructInfoElement> structuredConfigs = ExtractStructuredConfigs(info.infos[0].info,temp);
+  
+    TemplateSetNumber("delays",info.delays);
+    TemplateSetCustom("structuredConfigs",MakeValue(&structuredConfigs));
+    TemplateSetCustom("states",MakeValue(&topLevelDecl->states));
+    Array<String> statesHeaderSide = ExtractStates(info.infos[0].info,temp);
+  
+    TemplateSetCustom("statesHeader",MakeValue(&statesHeaderSide));
+    TemplateSetCustom("namedStates",MakeValue(&statesHeaderSide));
+    TemplateSetNumber("nInputs",info.inputs);
+    TemplateSetCustom("opts",MakeValue(&globalOptions));
+    TemplateSetBool("implementsDone",info.implementsDone);
+
+    TemplateSetNumber("memoryMapBits",info.memoryMappedBits);
+    TemplateSetNumber("nIOs",info.nIOs);
+    TemplateSetBool("trace",globalDebug.outputVCD);
+    TemplateSetBool("signalLoop",info.signalLoop);
+    TemplateSetNumber("numberDelays",info.delays);
+    TemplateSetNumber("numberDelays",info.delays);
+    TemplateSetCustom("externalMemory",MakeValue(&external));
+  
+    String wrapperPath = PushString(temp,"%.*s/wrapper.cpp",UNPACK_SS(globalOptions.softwareOutputFilepath));
+    FILE* output = OpenFileAndCreateDirectories(wrapperPath,"w",FilePurpose_SOFTWARE);
+    DEFER_CLOSE_FILE(output);
+
+    CompiledTemplate* templ = CompileTemplate(versat_wrapper_template,"wrapper",temp);
+    ProcessTemplate(output,templ);
+  }
+
+  // Makefile file for verilator
+  {
+    String outputPath = globalOptions.softwareOutputFilepath;
+    String verilatorMakePath = PushString(temp,"%.*s/VerilatorMake.mk",UNPACK_SS(outputPath));
+    FILE* output = OpenFileAndCreateDirectories(verilatorMakePath,"w",FilePurpose_MAKEFILE);
+    DEFER_CLOSE_FILE(output);
+  
+    TemplateSetBool("traceEnabled",globalDebug.outputVCD);
+    CompiledTemplate* comp = CompileTemplate(versat_makefile_template,"makefile",temp);
+    
+    fs::path outputFSPath = StaticFormat("%.*s",UNPACK_SS(outputPath));
+    fs::path srcLocation = fs::current_path();
+    fs::path fixedPath = fs::weakly_canonical(outputFSPath / srcLocation);
+
+    String relativePath = GetRelativePathFromSourceToTarget(globalOptions.softwareOutputFilepath,globalOptions.hardwareOutputFilepath,temp);
+
+    Array<String> allFilenames = PushArray<String>(temp,globalOptions.verilogFiles.size);
+    for(int i = 0; i <  globalOptions.verilogFiles.size; i++){
+      String filepath  =  globalOptions.verilogFiles[i];
+      fs::path path(StaticFormat("%.*s",UNPACK_SS(filepath)));
+      allFilenames[i] = PushString(temp,"%s",path.filename().c_str());
+    }
+
+    TemplateSetArray("allFilenames","String",UNPACK_SS(allFilenames));
+  
+    TemplateSetString("generatedUnitsLocation",relativePath);
+    TemplateSetArray("extraSources","String",UNPACK_SS(globalOptions.extraSources));
+    ProcessTemplate(output,comp);
+
+    // TODO: Need to add some form of error checking and handling, for the case where verilator root is not found
+    // Used by make to find the verilator root of the build server
+    String getVerilatorRootScript = STRING("#!/bin/bash\nTEMP_DIR=$(mktemp -d)\n\npushd $TEMP_DIR &> /dev/null\n\necho \"module Test(); endmodule\" > Test.v\nverilator --cc Test.v &> /dev/null\n\npushd ./obj_dir &> /dev/null\nVERILATOR_ROOT=$(awk '\"VERILATOR_ROOT\" == $1 { print $3}' VTest.mk)\nrm -r $TEMP_DIR\n\necho $VERILATOR_ROOT\n");
+    {
+      String getVerilatorScriptPath = PushString(temp,"%.*s/GetVerilatorRoot.sh",UNPACK_SS(globalOptions.softwareOutputFilepath));
+      FILE* output = OpenFileAndCreateDirectories(getVerilatorScriptPath,"w",FilePurpose_MISC);
+      DEFER_CLOSE_FILE(output);
+
+      fprintf(output,"%.*s",UNPACK_SS(getVerilatorRootScript));
+      fflush(output);
+      OS_SetScriptPermissions(output);
+    }
   }
 }

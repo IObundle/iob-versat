@@ -43,7 +43,7 @@ typedef struct{
 #{for name namedStates}
   int @{name};
 #{end}
-} @{accelName}State;
+} @{typeName}State;
 
 // Address
 
@@ -143,7 +143,7 @@ void ConfigSimulateDatabus(bool value);
 #endif
 
 // Needed by PC-EMUL to correctly simulate the design, embedded compiler should remove these symbols from firmware because not used by them 
-static const char* acceleratorTypeName = "@{accelName}";
+static const char* acceleratorTypeName = "@{typeName}";
 static bool isSimpleAccelerator = @{isSimple};
 static bool acceleratorSupportsDMA = @{useDMA};
 
@@ -153,13 +153,13 @@ static const int configStart = @{versatConfig |> Hex} * sizeof(iptr);
 static const int stateStart = @{versatState |> Hex} * sizeof(int);
 
 #{if configStructures.size > 0}
-static const unsigned int AcceleratorConfigSize = sizeof(@{accelName}Config);
+static const unsigned int AcceleratorConfigSize = sizeof(@{typeName}Config);
 
-extern volatile @{accelName}Config* accelConfig; // @{nConfigs}
+extern volatile @{typeName}Config* accelConfig; // @{nConfigs}
 #{end}
 
 #{if nStates > 0}
-extern volatile @{accelName}State* accelState; // @{nStates}
+extern volatile @{typeName}State* accelState; // @{nStates}
 #{end}
 
 extern volatile AcceleratorStatic* accelStatic;

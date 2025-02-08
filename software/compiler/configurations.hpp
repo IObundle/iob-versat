@@ -105,7 +105,7 @@ struct AccelInfo{
   int configs;
   int states;
   int delays;
-  int ios;
+  int nIOs;
   int statics;
   int staticBits;
   int sharedUnits;
@@ -116,6 +116,7 @@ struct AccelInfo{
   int unitsMapped;
   bool isMemoryMapped;
   bool signalLoop;
+  bool implementsDone;
 };
 
 // NOTE: The member 'level' of InstanceInfo needs to be valid in order for this iterator to work. 

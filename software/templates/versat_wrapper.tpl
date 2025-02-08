@@ -32,8 +32,8 @@ static VerilatedVcdC* tfp = NULL;
 VerilatedContext* contextp = new VerilatedContext;
 #{end}
 
-#include "V@{type.name}.h"
-static V@{type.name}* dut = NULL;
+#include "V@{typeName}.h"
+static V@{typeName}* dut = NULL;
 
 extern bool CreateVCD;
 extern bool SimulateDatabus;
@@ -100,7 +100,7 @@ static Byte externalMemory[totalExternalMemory];
 static AcceleratorConfig configBuffer = {};
 static AcceleratorState stateBuffer = {};
 static AcceleratorStatic staticBuffer = {};
-static DatabusAccess databusBuffer[@{type.nIOs}] = {}; 
+static DatabusAccess databusBuffer[@{nIOs}] = {}; 
 
 extern "C" void InitializeVerilator(){
 #{if trace}       
@@ -139,7 +139,7 @@ extern "C" void VersatAcceleratorCreate(){
    }
 #{end}
 
-   V@{type.name}* self = new V@{type.name}();
+   V@{typeName}* self = new V@{typeName}();
 
    if(dut){
       printf("Initialize function is being called multiple times\n");
@@ -167,7 +167,7 @@ extern "C" void VersatAcceleratorCreate(){
    self->rst = 0;
    self->running = 0;
 
-#{for i type.info.infos[0].inputDelays.size}
+#{for i nInputs}
    self->in@{i} = 0;
 #{end}
 
@@ -189,10 +189,10 @@ static void InternalUpdateAccelerator(){
 
    cyclesDone += 1;
 
-   V@{type.name}* self = dut;
+   V@{typeName}* self = dut;
 
    // Databus must be updated before memories because databus could drive memories but memories "cannot" drive databus (in the sense that databus acts like a master if connected directly to memories but memories do not act like a master when connected to a databus. The unit logic is the one that acts like a master)
-#{for i type.nIOs}
+#{for i nIOs}
 if(SimulateDatabus){
    self->databus_ready_@{i} = 0;
    self->databus_last_@{i} = 0;
@@ -261,7 +261,7 @@ if(SimulateDatabus){
 #{end}
    
    baseAddress = 0;
-#{for external type.externalMemory}
+#{for external externalMemory}
    #{set id external.interface}
    #{if external.type}
    // DP
@@ -322,7 +322,7 @@ if(SimulateDatabus){
    // Memory Read
 {
    baseAddress = 0;
-#{for external type.externalMemory}
+#{for external externalMemory}
    #{set id external.interface}
    #{if external.type}
    // DP
@@ -374,7 +374,7 @@ if(SimulateDatabus){
 // Memory write
 {
    baseAddress = 0;
-#{for external type.externalMemory}
+#{for external externalMemory}
    #{set id external.interface}
    #{if external.type}
    {
@@ -427,19 +427,18 @@ if(SimulateDatabus){
 #{end}
 
 // TODO: Technically only need to do this at the end of an accelerator run, do not need to do this every single update
-#{if type.states}
+#{if states.size}
 AcceleratorState* state = &stateBuffer;
-#{for i type.states.size}
-#{set wire type.states[i]}
-   state->@{statesHeader[i]} = self->@{wire.name};
+#{for i states.size}
+   state->@{statesHeader[i]} = self->@{states[i].name};
 #{end}
 #{end}
 }
 
 static bool IsDone(){
-  V@{type.name}* self = dut;
+  V@{typeName}* self = dut;
 
-#{if type.implementsDone}
+#{if implementsDone}
 bool done = self->done;
 #{else}
 bool done = true;
@@ -460,7 +459,7 @@ Once operator+(_OnceTag t,F&& f){
 #define once static Once TEMP_once(__LINE__) = _OnceTag() + [&]()
 
 static void InternalStartAccelerator(){
-   V@{type.name}* self = dut;
+   V@{typeName}* self = dut;
 
 #{if structuredConfigs.size}
 AcceleratorConfig* config = (AcceleratorConfig*) &configBuffer;
@@ -501,13 +500,13 @@ AcceleratorStatic* statics = (AcceleratorStatic*) &staticBuffer;
 #{end}
 #{end}
 
-#{if type.numberDelays}
-#{for i type.numberDelays}
+#{if numberDelays}
+#{for i numberDelays}
   //self->delay@{i} = accelDelay.TOP_Delay@{i};
 #{end}
 #{end}
 
-#{for i type.nIOs}
+#{for i nIOs}
 {
    databusBuffer[@{i}].latencyCounter = INITIAL_MEMORY_LATENCY;
 }
@@ -526,7 +525,7 @@ AcceleratorStatic* statics = (AcceleratorStatic*) &staticBuffer;
 }
 
 static void InternalEndAccelerator(){
-  V@{type.name}* self = dut;
+  V@{typeName}* self = dut;
 
   self->running = 0;
 
@@ -559,15 +558,15 @@ extern "C" void VersatAcceleratorSimulate(){
 }
 
 extern "C" int MemoryAccess(int address,int value,int write){
-  #{if type.memoryMapBits}
+  #{if memoryMapBits}
    
-  V@{type.name}* self = dut;
+  V@{typeName}* self = dut;
 
   if(write){
     self->valid = 1;
     self->wstrb = 0xf;
 
-    #{if type.memoryMapBits != 0}
+    #{if memoryMapBits != 0}
       self->addr = address;
     #{end}
       self->wdata = value;
@@ -578,7 +577,7 @@ extern "C" int MemoryAccess(int address,int value,int write){
 
       self->valid = 0;
       self->wstrb = 0x00;
-      #{if type.memoryMapBits != 0}
+      #{if memoryMapBits != 0}
       self->addr = 0x00000000;
       #{end}
       
@@ -590,7 +589,7 @@ extern "C" int MemoryAccess(int address,int value,int write){
    } else {
       self->valid = 1;
       self->wstrb = 0x0;
-    #{if type.memoryMapBits != 0}
+    #{if memoryMapBits != 0}
       self->addr = address;
     #{end}
 
@@ -603,7 +602,7 @@ extern "C" int MemoryAccess(int address,int value,int write){
       int res = self->rdata;
 
       self->valid = 0;
-    #{if type.memoryMapBits != 0}
+    #{if memoryMapBits != 0}
       self->addr = 0;
     #{end}
 
@@ -619,8 +618,8 @@ extern "C" int MemoryAccess(int address,int value,int write){
 }
 
 extern "C" void VersatSignalLoop(){
-#{if type.signalLoop}
-   V@{type.name}* self = dut;
+#{if signalLoop}
+   V@{typeName}* self = dut;
 
    self->signal_loop = 1;
    InternalUpdateAccelerator();
@@ -630,9 +629,9 @@ extern "C" void VersatSignalLoop(){
 }
 
 extern "C" void VersatLoadDelay(const unsigned int* delayBuffer){
-  #{if type.numberDelays}
-  V@{type.name}* self = dut;
-    #{for i type.numberDelays}
+  #{if numberDelays}
+  V@{typeName}* self = dut;
+    #{for i numberDelays}
   self->delay@{i} = delayBuffer[@{i}];
     #{end}
    self->eval();

@@ -632,18 +632,21 @@ int ExternalMemoryByteSize(Array<ExternalMemoryInterface> interfaces){
 }
 
 VersatComputedValues ComputeVersatValues(AccelInfo* info,bool useDMA){
+  TEMP_REGION(temp,nullptr);
   VersatComputedValues res = {};
 
   int memoryMappedDWords = 0;
   int delayBits = 0;
   int configBits = 0;
   
+  auto builder = StartArray<ExternalMemoryInterface>(temp);
+  
   // TODO: Check if we can remove the for loop over units and check if we can calculate from data stored in AccelInfo
   for(AccelInfoIterator iter = StartIteration(info); iter.IsValid(); iter = iter.Next()){
     InstanceInfo* unit = iter.CurrentUnit();
     FUInstance* inst = unit->inst;
     FUDeclaration* decl = inst->declaration;
-
+    
     if(decl->memoryMapBits.has_value()){
       memoryMappedDWords = AlignBitBoundary(memoryMappedDWords,decl->memoryMapBits.value());
       memoryMappedDWords += 1 << decl->memoryMapBits.value();
@@ -664,9 +667,14 @@ VersatComputedValues ComputeVersatValues(AccelInfo* info,bool useDMA){
     res.nDelays += unit->delaySize;
     delayBits += unit->delaySize * DELAY_SIZE;
 
-    res.nUnitsIO += decl->nIOs;
     res.externalMemoryInterfaces += decl->externalMemory.size;
+
+    if(decl->externalMemory.size){
+      builder.PushArray(decl->externalMemory);
+    }
   }
+  Array<ExternalMemoryInterface> allExternalMemories = EndArray(builder);
+  res.totalExternalMemory = ExternalMemoryByteSize(allExternalMemories);
 
   int staticBits = 0;
   res.nStatics = info->statics;
@@ -679,6 +687,7 @@ VersatComputedValues ComputeVersatValues(AccelInfo* info,bool useDMA){
   res.versatConfigs = 1;
   res.versatStates = 1;
 
+  res.nUnitsIO = info->nIOs;
   if(useDMA){
     res.versatConfigs += 4;
     res.versatStates += 4;
@@ -702,9 +711,9 @@ VersatComputedValues ComputeVersatValues(AccelInfo* info,bool useDMA){
   int stateConfigurationAddressBits = std::max(res.configurationAddressBits,res.stateAddressBits);
 
   res.memoryConfigDecisionBit = std::max(stateConfigurationAddressBits,memoryMappingAddressBits) + 2;
-
+  
   res.numberConnections = info->numberConnections;
-
+  
   return res;
 }
 

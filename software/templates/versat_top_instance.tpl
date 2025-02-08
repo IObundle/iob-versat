@@ -435,7 +435,7 @@ versat_configurations configs(
 always @*
 begin
    stateRead = 32'h0;
-   if(valid & !we & !memoryMappedAddr) begin // This if could be removed, stateRead could be updated every time, the if just adds unnecesary logic, but easier to debug, I guess
+   if(valid & !we & !memoryMappedAddr) begin
       #{set counter 0}
       #{set addr versatState}
       #{for node instances}

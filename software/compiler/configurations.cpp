@@ -928,7 +928,7 @@ void FillAccelInfoFromCalculatedInstanceInfo(AccelInfo* info,Accelerator* accel)
 
     info->states += type->states.size;
     info->delays += type->NumberDelays();
-    info->ios += type->nIOs;
+    info->nIOs += type->nIOs;
 
     if(type->externalMemory.size){
       info->externalMemoryInterfaces += type->externalMemory.size;
@@ -995,6 +995,7 @@ void FillAccelInfoFromCalculatedInstanceInfo(AccelInfo* info,Accelerator* accel)
   
   for(FUInstance* ptr : accel->allocated){
     info->numberConnections += Size(ptr->allOutputs);
+    info->implementsDone |= ptr->declaration->implementsDone;
   }
 }
 

@@ -591,15 +591,10 @@ int main(int argc,char* argv[]){
   }
   SetParameter(TOP,STRING("LEN_W"),STRING("LEN_W"));
 
-  OutputVersatSource(accel,
+  OutputTopLevelFiles(accel,type,
                      globalOptions.hardwareOutputFilepath.data,
                      globalOptions.softwareOutputFilepath.data,
                      isSimple);
-  
-  OutputVerilatorWrapper(type,accel,globalOptions.softwareOutputFilepath);
-
-  String versatDir = STRING(STRINGIFY(VERSAT_DIR));
-  OutputVerilatorMake(accel->name,versatDir);
 
   for(FUDeclaration* decl : globalDeclarations){
     BLOCK_REGION(temp);
