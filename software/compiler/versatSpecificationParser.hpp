@@ -74,7 +74,6 @@ struct InstanceDeclaration{
   Array<Pair<String,String>> parameters;
   Array<Token> shareNames;
   bool negateShareNames;
-  //String parameters;
 };
 
 struct ConnectionDef{

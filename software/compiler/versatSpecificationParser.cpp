@@ -680,11 +680,14 @@ Opt<InstanceDeclaration> ParseInstanceDeclaration(Tokenizer* tok,Arena* out){
     CHECK_IDENTIFIER(res.typeName);
 
     if(tok->IfNextToken("(")){
+#if 0
       res.negateShareNames = false;
       if(tok->IfNextToken("~")){
         res.negateShareNames = true;
       }
+#endif
 
+      // TODO: For now, we assume that every wire specified inside the spec file is a negative (remove share).
       auto toShare = StartArray<Token>(out);
       while(!tok->Done()){
         Token name = tok->NextToken();
@@ -1445,7 +1448,7 @@ static bool InstantiateTransform(Tokenizer* tok,TransformDef def){
 
 FUInstance* CreateFUInstanceWithParameters(Accelerator* accel,FUDeclaration* type,String name,InstanceDeclaration decl){
   FUInstance* inst = CreateFUInstance(accel,type,name);
-
+  
   for(auto pair : decl.parameters){
     bool result = SetParameter(inst,pair.first,pair.second);
 
@@ -1521,6 +1524,21 @@ FUDeclaration* InstantiateModule(String content,ModuleDef def){
 
             table->Insert(actualName,inst);
             ShareInstanceConfig(inst,shareIndex);
+
+            for(Token partialShareName : decl.shareNames){
+              bool foundOne = false;
+              for(int ii = 0; ii < inst->declaration->configs.size; ii++){
+                if(inst->declaration->configs[ii].name == partialShareName){
+                  inst->isSpecificConfigShared[ii] = false;
+                  foundOne = true;
+                }
+              }
+
+              if(!foundOne){
+                // TODO: Add location to the warnings using the data stored in the tokens.
+                printf("Warning, inst '%.*s' of type '%.*s' does not have configuration of name '%.*s' to share\n",UNPACK_SS(inst->name),UNPACK_SS(inst->declaration->name),UNPACK_SS(partialShareName));
+              }
+            }
           }
         } else {
           FUInstance* input = CreateOrGetInput(circuit,varDecl.name,insertedInputs++);
@@ -1682,6 +1700,12 @@ FUDeclaration* InstantiateModule(String content,ModuleDef def){
   FUInstance** outInTable = table->Get(STRING("out"));
   Assert(!outInTable);
 
+  // TODO: We have the parsing working correctly. I think the best way of approaching this is to first rewrite the config code to use the array everywhere (remove the configPos variable and replace it with an array for each configuration inside a unit).
+  //       When we have everything working and the normal tests also passing after the change, only then can we try to add the partial share test and start working towards that.
+  //       Two things that I probably will have to do: augment the debugger to display arrays using a newline (occupy more vertical space still inside the same column row).
+  //       Change most of the code that used configPos and configSize to use values directly.
+  //       After the change, each config should have it's own config position. The config code cannot assume that everything works continuous (although normal units will probably not change). 
+  
   FUDeclaration* res = RegisterSubUnit(circuit,SubUnitOptions_BAREBONES);
   res->definitionArrays = PushArrayFromList(perm,allArrayDefinitons);
   return res;

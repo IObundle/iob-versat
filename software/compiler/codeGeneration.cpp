@@ -1023,6 +1023,9 @@ void OutputTopLevelFiles(Accelerator* accel,FUDeclaration* topLevelDecl,const ch
   Array<TypeStructInfo> addressStructures = GetMemMappedStructInfo(&info,temp2);
   TemplateSetCustom("addressStructures",MakeValue(&addressStructures));
 
+  // TODO: There is a lot of repeated code here, but probably will remain until I make the template engine change to work at compile time.
+  Array<TypeStructInfoElement> structuredConfigs = ExtractStructuredConfigs(info.infos[0].info,temp);
+
   // Accelerator header
   {
     auto arr = StartArray<int>(temp);
@@ -1074,8 +1077,6 @@ void OutputTopLevelFiles(Accelerator* accel,FUDeclaration* topLevelDecl,const ch
     Array<DifferenceArray> differenceArray = EndArray(diffArray);
     TemplateSetCustom("differences",MakeValue(&differenceArray));
     TemplateSetCustom("allStatics",MakeValue(&allStaticsVerilatorSide));
-    
-    Array<TypeStructInfoElement> structuredConfigs = ExtractStructuredConfigs(info.infos[0].info,temp);
     
     Array<String> allStates = ExtractStates(info.infos[0].info,temp2);
     Array<Pair<String,int>> allMem = ExtractMem(info.infos[0].info,temp2);
@@ -1165,11 +1166,9 @@ void OutputTopLevelFiles(Accelerator* accel,FUDeclaration* topLevelDecl,const ch
     }
     auto external = EndArray(builder);
 
-    Array<String> allStates = ExtractStates(info.infos[0].info,temp2);
-  
     TemplateSetCustom("allConfigsVerilatorSide",MakeValue(&allConfigsVerilatorSide));
 
-    Array<TypeStructInfoElement> structuredConfigs = ExtractStructuredConfigs(info.infos[0].info,temp);
+    //Array<TypeStructInfoElement> structuredConfigs = ExtractStructuredConfigs(info.infos[0].info,temp);
   
     TemplateSetNumber("delays",info.delays);
     TemplateSetCustom("structuredConfigs",MakeValue(&structuredConfigs));

@@ -61,6 +61,16 @@ int GetFreeShareIndex(Accelerator* accel){
   }
 }
 
+void ShareInstanceConfig(FUInstance* inst, int shareBlockIndex){
+  inst->sharedIndex = shareBlockIndex;
+  inst->sharedEnable = true;
+  Memset(inst->isSpecificConfigShared,true);
+}
+
+void SetStatic(Accelerator* accel,FUInstance* inst){
+  inst->isStatic = true;
+}
+
 FUInstance* CreateFUInstance(Accelerator* accel,FUDeclaration* type,String name){
   static int globalID = 0;
   String storedName = PushString(accel->accelMemory,name);
@@ -80,6 +90,9 @@ FUInstance* CreateFUInstance(Accelerator* accel,FUDeclaration* type,String name)
   inst->accel = accel;
   inst->declaration = type;
   inst->id = globalID++;
+
+  inst->isSpecificConfigShared = PushArray<bool>(globalPermanent,type->configs.size);
+  Memset(inst->isSpecificConfigShared,false);
   
   return inst;
 }
@@ -93,17 +106,6 @@ Pair<Accelerator*,AcceleratorMapping*> CopyAcceleratorWithMapping(Accelerator* a
   for(FUInstance* inst : accel->allocated){
     FUInstance* newInst = CopyInstance(newAccel,inst,preserveIds,inst->name);
 
-    // Any of these values (from the union) is always copied.
-    newInst->literal = inst->literal;
-
-    if(inst->sharedEnable){
-      ShareInstanceConfig(newInst,inst->sharedIndex);
-    }
-    if(inst->isStatic){
-      newInst->isStatic = inst->isStatic;
-    }
-    newInst->isMergeMultiplexer = inst->isMergeMultiplexer;
-    
     MappingInsertEqualNode(map,inst,newInst);
   }
 
@@ -135,15 +137,6 @@ Accelerator* CopyAccelerator(Accelerator* accel,AcceleratorPurpose purpose,bool 
   for(FUInstance* ptr : accel->allocated){
     FUInstance* inst = ptr;
     FUInstance* newInst = CopyInstance(newAccel,inst,preserveIds,inst->name);
-
-    newInst->literal = inst->literal;
-    if(inst->sharedEnable){
-      ShareInstanceConfig(newInst,inst->sharedIndex);
-    }
-    if(inst->isStatic){
-      newInst->isStatic = inst->isStatic;
-    }
-    newInst->isMergeMultiplexer = inst->isMergeMultiplexer;
     
     map->Insert(inst,newInst);
   }
@@ -171,8 +164,17 @@ FUInstance* CopyInstance(Accelerator* accel,FUInstance* oldInstance,bool preserv
   for(int i = 0; i < newInst->parameterValues.size; i++){
     newInst->parameterValues[i] = oldInstance->parameterValues[i];
   }
-
+  
+  // Any of the union values is copied here.
   newInst->portIndex = oldInstance->portIndex;
+
+  if(oldInstance->sharedEnable){
+    ShareInstanceConfig(newInst,oldInstance->sharedIndex);
+  }
+  if(oldInstance->isStatic){
+    newInst->isStatic = oldInstance->isStatic;
+  }
+  newInst->isMergeMultiplexer = oldInstance->isMergeMultiplexer;
   
   if(preserveIds){
     newInst->id = oldInstance->id;
@@ -1455,6 +1457,8 @@ Pair<Accelerator*,SubMap*> Flatten(Accelerator* accel,int times){
         }
 
         String newName = PushString(globalPermanent,"%.*s_%.*s",UNPACK_SS(inst->name),UNPACK_SS(circuitInst->name));
+
+        // We are copying the instance but some differences are gonna happen in relation to static and config sharing. 
         FUInstance* newInst = CopyInstance(newAccel,circuitInst,true,newName);
         MappingInsertEqualNode(map,circuitInst,newInst);
 
@@ -1493,7 +1497,6 @@ Pair<Accelerator*,SubMap*> Flatten(Accelerator* accel,int times){
           }
         } else if(inst->sharedEnable){ // Currently flattening instance is shared
           ShareInstanceConfig(newInst,instSharedIndex); // Always use the same inst index
-          //freeSharedIndex = GetFreeShareIndex(newAccel);
         } else if(circuitInst->sharedEnable){
           auto ptr = sharedToShared.find(circuitInst->sharedIndex);
 

@@ -160,7 +160,6 @@ struct Partition{
 
 AccelInfoIterator StartIteration(AccelInfo* info);
 
-// TODO: We kinda wanted to remove partitions and replace them with the AccelInfoIter approach, but the concept appears multiple times, so we probably do need to be able to represent partitions outside of the iter approach.
 void FillAccelInfoFromCalculatedInstanceInfo(AccelInfo* info,Accelerator* accel);
 
 Array<InstanceInfo*> GetAllSameLevelUnits(AccelInfo* info,int level,int mergeIndex,Arena* out);
@@ -179,13 +178,9 @@ Array<int> ExtractOutputLatencies(AccelInfoIterator top,Arena* out);
 
 // Array info related
 // TODO: This should be built on top of AccelInfo (taking an iterator), instead of just taking the array of instance infos.
-Array<Wire> ExtractAllConfigs(Array<InstanceInfo> info,Arena* out);
 Array<String> ExtractStates(Array<InstanceInfo> info,Arena* out);
 Array<Pair<String,int>> ExtractMem(Array<InstanceInfo> info,Arena* out);
 
-// TODO: Move this to Accelerator.hpp
-void ShareInstanceConfig(FUInstance* instance, int shareBlockIndex);
-void SetStatic(Accelerator* accel,FUInstance* instance);
 
 String ReprStaticConfig(StaticId id,Wire* wire,Arena* out);
 

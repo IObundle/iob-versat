@@ -175,73 +175,6 @@ AccelInfoIterator StartIteration(AccelInfo* info){
   return iter;
 }
 
-Array<Wire> ExtractAllConfigs(Array<InstanceInfo> info,Arena* out){
-  TEMP_REGION(temp,out);
-
-  ArenaList<Wire>* list = PushArenaList<Wire>(temp);
-  Set<StaticId>* seen = PushSet<StaticId>(temp,99);
-
-  // TODO: This implementation of skipLevel is a bit shabby.
-  int skipLevel = -1;
-  for(InstanceInfo& t : info){
-    if(t.level <= skipLevel){
-      skipLevel = -1;
-    }
-    if(skipLevel != -1 && t.level > skipLevel){
-      continue;
-    }
-
-    if(t.isGloballyStatic){
-      skipLevel = t.level;
-    }
-
-    if(!t.isComposite && !t.isGloballyStatic){
-      for(int i = 0; i < t.configSize; i++){
-        Wire* wire = list->PushElem();
-
-        *wire = t.decl->configs[i];
-        wire->name = PushString(out,"%.*s_%.*s",UNPACK_SS(t.fullName),UNPACK_SS(t.decl->configs[i].name));
-      }
-    }
-  }
-  skipLevel = -1;
-  for(InstanceInfo& t : info){
-    if(t.level <= skipLevel){
-      skipLevel = -1;
-    }
-    if(skipLevel != -1 && t.level > skipLevel){
-      continue;
-    }
-      
-    if(t.parent && t.isGloballyStatic){
-      FUDeclaration* parent = t.parent;
-      String parentName = parent->name;
-
-      StaticId id = {};
-      id.parent = parent;
-      id.name = t.name;
-      if(!seen->Exists(id)){
-        seen->Insert(id);
-        for(int i = 0; i < t.configSize; i++){
-          Wire* wire = list->PushElem();
-
-          *wire = t.decl->configs[i];
-          wire->name = PushString(out,"%.*s_%.*s_%.*s",UNPACK_SS(parentName),UNPACK_SS(t.name),UNPACK_SS(t.decl->configs[i].name));
-        }
-      }
-    }
-  }
-
-  for(int i = 0; i < info[0].delaySize; i++){
-    Wire* wire = list->PushElem();
-
-    wire->name = PushString(out,"TOP_Delay%d",i);
-    wire->bitSize = 32;
-  }
-  
-  return PushArrayFromList<Wire>(out,list);
-}
-
 Array<String> ExtractStates(Array<InstanceInfo> info,Arena* out){
   int count = 0;
   for(InstanceInfo& in : info){
@@ -282,15 +215,6 @@ Array<Pair<String,int>> ExtractMem(Array<InstanceInfo> info,Arena* out){
   }
 
   return res;
-}
-
-void ShareInstanceConfig(FUInstance* inst, int shareBlockIndex){
-  inst->sharedIndex = shareBlockIndex;
-  inst->sharedEnable = true;
-}
-
-void SetStatic(Accelerator* accel,FUInstance* inst){
-  inst->isStatic = true;
 }
 
 String ReprStaticConfig(StaticId id,Wire* wire,Arena* out){

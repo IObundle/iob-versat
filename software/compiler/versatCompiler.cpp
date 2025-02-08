@@ -662,6 +662,14 @@ Need to take a look at State and Mem struct interfaces. State is not taking into
 
 /*
 
+Features:
+
+The template engine could be updated to compile at build time, offer compile time checks instead of runtime and simplify data management since we could pass and use C code to access and iterate the data. This means that passing large structures is preferebly instead of doing what we do now where we want to minimize data passing this way. Read the NOTEs that are contained inside the OutputTopLevelFiles.
+
+*/
+
+/*
+
 TODO?
 
 DelayType and NodeType need a revision.

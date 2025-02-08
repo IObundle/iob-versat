@@ -128,6 +128,7 @@ struct FUInstance{
     int muxGroup; // Merge multiplexers that belong to the same group must also have the same config (similar to shared units, but we want to separate the share mechanism from the mechanism used to represent multiplexers groups)
   };
   int sharedIndex;
+  Array<bool> isSpecificConfigShared;
   bool isStatic;
   bool sharedEnable;
   bool isMergeMultiplexer; // TODO: Kinda of an hack for now
@@ -294,6 +295,8 @@ FUInstance*  CopyInstance(Accelerator* newAccel,FUInstance* oldInstance,bool pre
 bool NameExists(Accelerator* accel,String name);
 
 int GetFreeShareIndex(Accelerator* accel);
+void ShareInstanceConfig(FUInstance* instance, int shareBlockIndex);
+void SetStatic(Accelerator* accel,FUInstance* instance);
 
 Array<FUDeclaration*> MemSubTypes(AccelInfo* info,Arena* out);
 
