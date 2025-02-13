@@ -402,6 +402,22 @@ String GetRelativePathFromSourceToTarget(String sourcePath,String targetPath,Are
   return PushString(out,"%s",res.c_str());
 }
 
+// TODO: Move to a better place
+bool ContainsPartialShare(InstanceInfo* info){
+  bool seenFalse = false;
+  bool seenTrue = false;
+  for(bool b : info->individualWiresShared){
+    if(b){
+      seenTrue = true;
+    }
+    if(!b){
+      seenFalse = true;
+    }
+  }
+
+  return (seenTrue && seenFalse);
+}
+
 StructInfo* GenerateConfigStruct(AccelInfoIterator iter,Arena* out){
   TEMP_REGION(temp,out);
   
@@ -414,6 +430,10 @@ StructInfo* GenerateConfigStruct(AccelInfoIterator iter,Arena* out){
   } else if(parent){
     res->name = parent->decl->name;
   }
+
+  // TODO: HACK
+  static StructInfo integer = {};
+  integer.name = STRING("iptr");
   
   auto list = PushArenaDoubleList<StructElement>(out);
   for(AccelInfoIterator it = iter; it.IsValid(); it = it.Next()){
@@ -463,14 +483,75 @@ StructInfo* GenerateConfigStruct(AccelInfoIterator iter,Arena* out){
       subInfo->parent = res;
       elem.childStruct = subInfo;
     } else {
-      StructInfo* simpleSubInfo = PushStruct<StructInfo>(out);
-      simpleSubInfo->type = unit->decl;
-      simpleSubInfo->name = unit->decl->name;
-      simpleSubInfo->parent = res;
-      elem.childStruct = simpleSubInfo;
+      if(ContainsPartialShare(unit)){
+        StructInfo* simpleSubInfo = PushStruct<StructInfo>(out);
+        simpleSubInfo->type = unit->decl;
+        simpleSubInfo->isSimpleType = true;
+
+        Array<Wire> configs = unit->decl->configs;
+        
+        ArenaDoubleList<StructElement>* elements = PushArenaDoubleList<StructElement>(out);
+        int index = 0;
+
+        Array<int> localPos = unit->individualWiresLocalConfigPos;
+        for(Wire w : configs){
+          StructElement* elem = elements->PushElem();
+          elem->name = w.name;
+          elem->pos = localPos[index++];
+          elem->isMergeMultiplexer = false;
+          elem->size = 1;
+          elem->childStruct = &integer;
+        }
+        
+        simpleSubInfo->name = unit->decl->name;
+        simpleSubInfo->parent = res;
+        simpleSubInfo->list = elements;
+        elem.childStruct = simpleSubInfo;
+        
+        //DEBUG_BREAK();
+      } else {
+        // MARKED
+
+        // NOTE: We are currently generating all the info, instead of bottoming out at a simple unit and then carrying decl info forward.
+
+#if 1
+        StructInfo* simpleSubInfo = PushStruct<StructInfo>(out);
+        simpleSubInfo->type = unit->decl;
+        simpleSubInfo->isSimpleType = true;
+        
+        Array<Wire> configs = unit->decl->configs;
+        
+        ArenaDoubleList<StructElement>* elements = PushArenaDoubleList<StructElement>(out);
+        int index = 0;
+        for(Wire w : configs){
+          StructElement* elem = elements->PushElem();
+          elem->name = w.name;
+          elem->pos = index++;
+          elem->isMergeMultiplexer = false;
+          elem->size = 1;
+          elem->childStruct = &integer;
+        }
+        
+        simpleSubInfo->name = unit->decl->name;
+        simpleSubInfo->parent = res;
+        simpleSubInfo->list = elements;
+        elem.childStruct = simpleSubInfo;
+#else
+        StructInfo* simpleSubInfo = PushStruct<StructInfo>(out);
+        simpleSubInfo->type = unit->decl;
+        simpleSubInfo->name = unit->decl->name;
+        simpleSubInfo->parent = res;
+        elem.childStruct = simpleSubInfo;
+#endif
+      }
     }
       
+#if 1
     elem.pos = unit->globalConfigPos.value();
+#else
+    elem.pos = unit->globalConfigPos.value();
+#endif
+
     elem.size = unit->configSize;
     elem.isMergeMultiplexer = unit->isMergeMultiplexer;
 
@@ -483,6 +564,7 @@ StructInfo* GenerateConfigStruct(AccelInfoIterator iter,Arena* out){
 }
 
 size_t HashStructInfo(StructInfo* info){
+  if(!info) { return 0;};
   return std::hash<StructInfo>()(*info);
 }
 
@@ -499,6 +581,10 @@ Array<StructInfo*> ExtractStructs(StructInfo* structInfo,Arena* out){
     for(DoubleLink<StructElement>* ptr = top->list ? top->list->head : nullptr; ptr; ptr = ptr->next){
       Recurse(Recurse,ptr->elem.childStruct,map);
     }
+    // TODO: HACK
+    if(top->name == STRING("iptr")){
+      return;
+    }
     map->InsertIfNotExist(*top,top);
   };
 
@@ -514,72 +600,135 @@ Array<TypeStructInfo> GenerateStructs(Array<StructInfo*> info,Arena* out){
   ArenaList<TypeStructInfo>* list = PushArenaList<TypeStructInfo>(temp);
 
   for(StructInfo* structInfo : info){
-    if(structInfo->type){
-      Array<Wire> configs = structInfo->type->configs;
-      int size = configs.size;
+    TypeStructInfo* type = list->PushElem();
+    type->name = structInfo->name;
 
-      TypeStructInfo* type = list->PushElem();
-      
-      type->name = structInfo->name;
-      type->entries = PushArray<TypeStructInfoElement>(out,size);
-
-      for(int i = 0; i < size; i++){
-        type->entries[i].typeAndNames = PushArray<SingleTypeStructElement>(out,1);
-        type->entries[i].typeAndNames[0].name = configs[i].name;
-        type->entries[i].typeAndNames[0].type = STRING("iptr");
-        type->entries[i].typeAndNames[0].arraySize = 0;
-      }
-    } else {
-      TypeStructInfo* type = list->PushElem();
-      type->name = structInfo->name;
-
-      int maxPos = 0;
-      for(DoubleLink<StructElement>* ptr = structInfo->list ? structInfo->list->head : nullptr; ptr; ptr = ptr->next){
-        StructElement elem = ptr->elem;
-        maxPos = std::max(maxPos,elem.pos);
-      }
-      
-      Array<int> amountOfEntriesAtPos = PushArray<int>(temp,maxPos+1);
-      for(DoubleLink<StructElement>* ptr = structInfo->list ? structInfo->list->head : nullptr; ptr; ptr = ptr->next){
-        StructElement elem = ptr->elem;
-        amountOfEntriesAtPos[elem.pos] += 1;
-      }
-
-      int amountOfDifferent = 0;
-      for(int amount : amountOfEntriesAtPos){
-        if(amount){
-          amountOfDifferent += 1;
-        }
-      }
-        
-      Array<int> entryIndex = PushArray<int>(temp,maxPos+1);
-      Memset(entryIndex,-1);
-      Array<int> indexes = PushArray<int>(temp,maxPos+1);
-      
-      type->entries = PushArray<TypeStructInfoElement>(out,amountOfDifferent);
-      int indexPos = 0;
-      for(DoubleLink<StructElement>* ptr = structInfo->list ? structInfo->list->head : nullptr; ptr; ptr = ptr->next){
-        StructElement elem = ptr->elem;
-        int pos = elem.pos;
-
-        int index = entryIndex[elem.pos];
-        if(index == -1){
-          entryIndex[elem.pos] = indexPos++;
-          index = entryIndex[elem.pos];
-        }
-
-        if(!type->entries[index].typeAndNames.size){
-          int amount = amountOfEntriesAtPos[pos];
-          type->entries[index].typeAndNames = PushArray<SingleTypeStructElement>(out,amount);
-        }
-
-        int subIndex = indexes[pos]++;
-        type->entries[index].typeAndNames[subIndex].name = elem.name;
-        type->entries[index].typeAndNames[subIndex].type = PushString(out,"%.*sConfig",UNPACK_SS(elem.childStruct->name));
-        type->entries[index].typeAndNames[subIndex].arraySize = 0;
-      }
-
+    int minPos = 9999;
+    int maxPos = 0;
+    for(DoubleLink<StructElement>* ptr = structInfo->list ? structInfo->list->head : nullptr; ptr; ptr = ptr->next){
+      StructElement elem = ptr->elem;
+      minPos = MIN(minPos,elem.pos);
+      maxPos = MAX(maxPos,elem.pos + elem.size);
     }
+
+    // TODO: Kinda of an hack but not really? We are using global position for everything else. But for simple types we basically have local position, which is what we want. Not sure about everything else though. Are simple types the only ones that care/needed local position and everything else can work from local pos?
+    if(structInfo->isSimpleType){
+      minPos = 0;
+    }
+    
+    DEBUG_BREAK_IF(minPos != 0);
+    
+    Array<int> amountOfEntriesAtPos = PushArray<int>(temp,maxPos);
+    for(DoubleLink<StructElement>* ptr = structInfo->list ? structInfo->list->head : nullptr; ptr; ptr = ptr->next){
+      StructElement elem = ptr->elem;
+      amountOfEntriesAtPos[elem.pos] += 1;
+    }
+
+    int amountOfDifferent = 0;
+    for(int amount : amountOfEntriesAtPos){
+      if(amount){
+        amountOfDifferent += 1;
+      }
+    }
+
+    Array<int> entryIndex = PushArray<int>(temp,maxPos);
+    Memset(entryIndex,-1);
+    Array<int> indexes = PushArray<int>(temp,maxPos);
+
+    Array<bool> validPositions = PushArray<bool>(temp,maxPos);
+    Array<bool> startPositionsOnly = PushArray<bool>(temp,maxPos);
+    
+    for(DoubleLink<StructElement>* ptr = structInfo->list ? structInfo->list->head : nullptr; ptr; ptr = ptr->next){
+      StructElement elem = ptr->elem;
+
+      startPositionsOnly[elem.pos] = true;
+      for(int i = elem.pos; i < elem.pos + elem.size; i++){
+        validPositions[i] = true;
+      }
+    }
+
+    auto builder = StartArray<IndexInfo>(temp);
+    for(int i = minPos; i < maxPos; i++){
+      if(!validPositions[i]){
+        *builder.PushElem() = {true,i,0};
+      } else if(startPositionsOnly[i]){
+        *builder.PushElem() = {false,i,amountOfEntriesAtPos[i]};
+      }
+    }
+    Array<IndexInfo> indexInfo = EndArray(builder);
+
+    // TODO: This could just be an array.
+    TrieMap<int,int>* positionToIndex = PushTrieMap<int,int>(temp);
+    for(int i = 0; i < indexInfo.size; i++){
+      IndexInfo info = indexInfo[i];
+      if(!info.isPadding){
+        positionToIndex->Insert(info.pos,i);
+      }
+    }
+    
+#if 0
+    int paddingToAdd = 0;
+    for(bool b : validPositions){
+      if(!b){
+        paddingToAdd += 1;
+      }
+    }
+#endif
+    
+    type->entries = PushArray<TypeStructInfoElement>(out,indexInfo.size);
+
+    for(int i = 0; i < indexInfo.size; i++){
+      IndexInfo info = indexInfo[i];
+      type->entries[i].typeAndNames = PushArray<SingleTypeStructElement>(out,info.amountOfEntries);
+    }
+    
+    int indexPos = 0;
+    int paddingAdded = 0;
+    for(DoubleLink<StructElement>* ptr = structInfo->list ? structInfo->list->head : nullptr; ptr;){
+      StructElement elem = ptr->elem;
+      int pos = elem.pos;
+
+      int index = positionToIndex->GetOrFail(pos);
+#if 0      
+      int index = entryIndex[elem.pos];
+      if(index == -1){
+        entryIndex[elem.pos] = indexPos++;
+        index = entryIndex[elem.pos];
+      }
+#endif
+      
+#if 0
+      if(!type->entries[index].typeAndNames.size){
+        int amount = amountOfEntriesAtPos[pos];
+        type->entries[index].typeAndNames = PushArray<SingleTypeStructElement>(out,amount);
+      }
+#endif
+      
+      int subIndex = indexes[pos]++;
+      type->entries[index].typeAndNames[subIndex].name = elem.name;
+
+      // TODO: HACK
+      if(elem.childStruct->name == STRING("iptr")){
+        type->entries[index].typeAndNames[subIndex].type = STRING("iptr");
+      } else {
+        type->entries[index].typeAndNames[subIndex].type = PushString(out,"%.*sConfig",UNPACK_SS(elem.childStruct->name));
+      }
+      type->entries[index].typeAndNames[subIndex].arraySize = 0;
+
+      ptr = ptr->next;
+    }
+
+    for(int i = 0; i < indexInfo.size; i++){
+      IndexInfo info = indexInfo[i];
+      if(info.isPadding){
+        int pos = info.pos;
+        type->entries[pos].typeAndNames = PushArray<SingleTypeStructElement>(out,1);
+        type->entries[pos].typeAndNames[0].type = STRING("iptr");
+        type->entries[pos].typeAndNames[0].name = PushString(out,"padding_%d",paddingAdded++);
+      }
+    }
+    
+    DEBUG_BREAK();
   }
   
   Array<TypeStructInfo> res = PushArrayFromList(out,list);
@@ -588,7 +737,7 @@ Array<TypeStructInfo> GenerateStructs(Array<StructInfo*> info,Arena* out){
 
 void PushMergeMultiplexersUpTheHierarchy(StructInfo* top){
   auto PushMergesUp = [](StructInfo* parent,StructInfo* child) -> void{
-    if(child->list == nullptr || child->list->head == nullptr){
+    if(child == nullptr || child->list == nullptr || child->list->head == nullptr){
       return;
     }
 
@@ -627,8 +776,9 @@ void OutputTopLevelFiles(Accelerator* accel,FUDeclaration* topLevelDecl,const ch
   ClearTemplateEngine(); // Make sure that we do not reuse data
   
   AccelInfo info = CalculateAcceleratorInfo(accel,true,temp);
+
+  DEBUG_BREAK();
   FillStaticInfo(&info);
-  
   
   VersatComputedValues val = ComputeVersatValues(&info,globalOptions.useDMA);
   
@@ -708,7 +858,7 @@ void OutputTopLevelFiles(Accelerator* accel,FUDeclaration* topLevelDecl,const ch
       }
     }
   }
-  
+
   Array<TypeStructInfo> structs = GenerateStructs(allStructs,temp);
 
   // NOTE: This data is printed so it can be captured by the IOB python setup.

@@ -27,7 +27,7 @@ struct InstanceInfo{
   int level;
   FUDeclaration* decl;
   FUDeclaration* parent;
-
+  
   int id;
   String name;
   String baseName; // NOTE: If the unit does not belong to the merge partition the baseName will equal name.
@@ -38,6 +38,7 @@ struct InstanceInfo{
   Opt<int> localConfigPos;
 
   Array<int> individualWiresGlobalConfigPos;
+  Array<int> individualWiresLocalConfigPos;
   Array<bool> individualWiresShared;
   
   int isConfigStatic; // Static must be handle separately, for the top level accelerator. 

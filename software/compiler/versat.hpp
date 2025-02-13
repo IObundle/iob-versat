@@ -83,7 +83,7 @@ FUDeclaration* RegisterModuleInfo(ModuleInfo* info);
 FUInstance* CreateFUInstance(Accelerator* accel,FUDeclaration* type,String entityName);
 Pair<Accelerator*,SubMap*> Flatten(Accelerator* accel,int times);
 
-void FillDeclarationWithAcceleratorValues(FUDeclaration* decl,Accelerator* accel);
+void FillDeclarationWithAcceleratorValues(FUDeclaration* decl,Accelerator* accel,Arena* out);
 void FillDeclarationWithDelayType(FUDeclaration* decl);
 
 // Static and configuration sharing

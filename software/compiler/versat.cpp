@@ -191,35 +191,26 @@ FUDeclaration* RegisterModuleInfo(ModuleInfo* info){
   return res;
 }
 
-void FillDeclarationWithAcceleratorValues(FUDeclaration* decl,Accelerator* accel){
-  TEMP_REGION(temp,nullptr);
+void FillDeclarationWithAcceleratorValues(FUDeclaration* decl,Accelerator* accel,Arena* out){
+  TEMP_REGION(temp,out);
   TEMP_REGION(temp2,temp);
 
-  Arena* perm = globalPermanent;
+  //Arena* perm = globalPermanent;
 
   // TODO: This function was mostly used to calculate the configInfo stuff, which now is gone.
   //       Need to see how much of this code is also useful for the merge stuff.
   //       (If after merge puts the correct values inside the accelInfo struct, if we can just call this function to compute the remaining data that needs to be computed).
   //       We can also move some of this computation to the accelInfo struct. Just see how things play out.
   
-  AccelInfo val = CalculateAcceleratorInfo(accel,true,perm);
+  AccelInfo val = CalculateAcceleratorInfo(accel,true,out);
   decl->info = val;
-  
-#if 0
-  DynamicArray<String> baseNames = StartArray<String>(perm);
-  for(FUInstance* ptr : accel->allocated){
-    FUInstance* inst = ptr;
-    *baseNames.PushElem() = inst->name;
-  }
-  Array<String> baseName = EndArray(baseNames);
-#endif
-  
+ 
   decl->nIOs = val.nIOs;
   if(val.isMemoryMapped){
     decl->memoryMapBits = val.memoryMappedBits;
   }
 
-  decl->externalMemory = PushArray<ExternalMemoryInterface>(perm,val.externalMemoryInterfaces);
+  decl->externalMemory = PushArray<ExternalMemoryInterface>(out,val.externalMemoryInterfaces);
   int externalIndex = 0;
   for(FUInstance* ptr : accel->allocated){
     Array<ExternalMemoryInterface> arr = ptr->declaration->externalMemory;
@@ -230,13 +221,41 @@ void FillDeclarationWithAcceleratorValues(FUDeclaration* decl,Accelerator* accel
     }
   }
     
-  decl->configs = PushArray<Wire>(perm,val.configs);
-  decl->states = PushArray<Wire>(perm,val.states);
+  decl->configs = PushArray<Wire>(out,val.configs);
+  decl->states = PushArray<Wire>(out,val.states);
   
   Hashmap<int,int>* staticsSeen = PushHashmap<int,int>(temp,val.sharedUnits);
 
   int configIndex = 0;
   int stateIndex = 0;
+
+#if 1
+  for(AccelInfoIterator iter = StartIteration(&val); iter.IsValid(); iter = iter.Step()){
+    InstanceInfo* unit = iter.CurrentUnit();
+    bool isSimple = !unit->isComposite;
+
+    if(unit->isGloballyStatic){
+      continue;
+    }
+
+    for(int i = 0; i < unit->individualWiresGlobalConfigPos.size; i++){
+      int globalPos = unit->individualWiresGlobalConfigPos[i];
+
+      if(globalPos < 0){
+        continue;
+      }
+      
+      if(!Empty(decl->configs[globalPos].name)){
+        continue;
+      }
+
+      FUDeclaration* d = unit->decl;
+      Wire wire = d->configs[i];
+      decl->configs[configIndex] = wire;
+      decl->configs[configIndex++].name = PushString(out,"%.*s_%.*s",UNPACK_SS(unit->name),UNPACK_SS(wire.name));
+    }
+  }
+#endif
   
   // TODO: This could be done based on the config offsets.
   //       Otherwise we are still basing code around static and shared logic when calculating offsets already does that for us.
@@ -244,34 +263,36 @@ void FillDeclarationWithAcceleratorValues(FUDeclaration* decl,Accelerator* accel
     FUInstance* inst = ptr;
     FUDeclaration* d = inst->declaration;
 
+#if 0
     if(!inst->isStatic){
       if(inst->sharedEnable){
         if(staticsSeen->InsertIfNotExist(inst->sharedIndex,0)){
           for(Wire& wire : d->configs){
             decl->configs[configIndex] = wire;
-            decl->configs[configIndex++].name = PushString(perm,"%.*s_%.*s",UNPACK_SS(inst->name),UNPACK_SS(wire.name));
+            decl->configs[configIndex++].name = PushString(out,"%.*s_%.*s",UNPACK_SS(inst->name),UNPACK_SS(wire.name));
           }
         }
       } else {
         for(Wire& wire : d->configs){
           decl->configs[configIndex] = wire;
 
-          decl->configs[configIndex++].name = PushString(perm,"%.*s_%.*s",UNPACK_SS(inst->name),UNPACK_SS(wire.name));
+          decl->configs[configIndex++].name = PushString(out,"%.*s_%.*s",UNPACK_SS(inst->name),UNPACK_SS(wire.name));
         }
       }
     }
-
+#endif
+    
     for(Wire& wire : d->states){
       decl->states[stateIndex] = wire;
 
-      decl->states[stateIndex].name = PushString(perm,"%.*s_%.2d",UNPACK_SS(wire.name),stateIndex);
+      decl->states[stateIndex].name = PushString(out,"%.*s_%.2d",UNPACK_SS(wire.name),stateIndex);
       stateIndex += 1;
     }
   }
 
   decl->signalLoop = val.signalLoop;
 
-  Array<bool> belongArray = PushArray<bool>(perm,accel->allocated.Size());
+  Array<bool> belongArray = PushArray<bool>(out,accel->allocated.Size());
   Memset(belongArray,true);
 
   decl->numberDelays = val.delays;
@@ -377,7 +398,7 @@ FUDeclaration* RegisterSubUnit(Accelerator* circuit,SubUnitOptions options){
     res->fixedDelayCircuit = circuit;
   }
 
-  FillDeclarationWithAcceleratorValues(res,res->fixedDelayCircuit);
+  FillDeclarationWithAcceleratorValues(res,res->fixedDelayCircuit,permanent);
   FillDeclarationWithDelayType(res);
 
 #if 1
@@ -519,7 +540,7 @@ FUDeclaration* RegisterIterativeUnit(Accelerator* accel,FUInstance* inst,int lat
   declaration.name = PushString(perm,name);
   declaration.type = FUDeclarationType_ITERATIVE;
 
-  FillDeclarationWithAcceleratorValues(&declaration,accel);
+  FillDeclarationWithAcceleratorValues(&declaration,accel,globalPermanent);
 
   // Kinda of a hack, for now
 #if 0

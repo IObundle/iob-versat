@@ -41,6 +41,12 @@ struct DifferenceArray{
   Array<Difference> differences;
 };
 
+struct IndexInfo{
+  bool isPadding;
+  int pos;
+  int amountOfEntries;
+};
+
 struct MuxInfo{
   int configIndex;
   int val;
@@ -82,25 +88,34 @@ struct StructInfo;
 
 struct StructElement{
   StructInfo* childStruct; // If nulltpr, then leaf (whose type is type)
+  // TODO: We could put a Type* here, so that later we can handle different sizes (char,short,int,etc).
+  //       Instead of just having childStruct point to a StructInfo("iptr");
   String name;
-  int pos;
+  int pos; // This is local pos (inside the struct).
   int size;
   bool isMergeMultiplexer;
+  //bool isPadding;
 };
 
 struct StructInfo{
   String name;
-  FUDeclaration* type;
+  FUDeclaration* type; // TODO: isSimpleType is intended to replace this. We treat simple units the same way, where each element points to a StructElement. The most basic struct element is gonna be the iptr, which is the leaf, although we still do not have a proper way of representing this in the codebase. Check TODO inside StructElement.
   StructInfo* parent;
-
+  bool isSimpleType;
+  
   ArenaDoubleList<StructElement>* list;
 };
 
 size_t HashStructInfo(StructInfo* info);
 
 template<> struct std::hash<StructElement>{
-   std::size_t operator()(StructElement const& s) const noexcept{
-     std::size_t res = HashStructInfo(s.childStruct) + std::hash<String>()(s.name) + s.size + (s.isMergeMultiplexer ? 1 : 0);
+  std::size_t operator()(StructElement const& s) const noexcept{
+    std::size_t res = std::hash<String>()(s.name) + s.size + (s.isMergeMultiplexer ? 1 : 0);
+    if(s.childStruct == nullptr){
+      res += s.pos;
+    } else{
+      res += HashStructInfo(s.childStruct);
+    }
      return res;
    }
 };
@@ -124,6 +139,7 @@ static bool operator==(StructElement& l,StructElement& r){
               l.name == r.name &&
               l.size == r.size &&
               l.isMergeMultiplexer == r.isMergeMultiplexer);
+    
   return res;
 }
 
@@ -132,10 +148,19 @@ static bool operator==(StructInfo& l,StructInfo& r){
     return false;
   }
 
+  if(l.isSimpleType != r.isSimpleType){
+    return false;
+  }
+
+  bool simpleType = l.isSimpleType;
+  
   DoubleLink<StructElement>* lPtr = l.list ? l.list->head : nullptr;
   DoubleLink<StructElement>* rPtr = r.list ? r.list->head : nullptr;
   for(; lPtr && rPtr; lPtr = lPtr->next,rPtr = rPtr->next){
     if(!(lPtr->elem == rPtr->elem)){
+      return false;
+    }
+    if(simpleType && lPtr->elem.pos != rPtr->elem.pos){
       return false;
     }
   }

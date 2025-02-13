@@ -1991,7 +1991,7 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
   
   FUDeclaration* decl = RegisterFU(declInst);
 
-  FillDeclarationWithAcceleratorValues(decl,mergedAccel);
+  FillDeclarationWithAcceleratorValues(decl,mergedAccel,globalPermanent);
   FillDeclarationWithDelayType(decl);
 
   decl->type = FUDeclarationType_MERGED;

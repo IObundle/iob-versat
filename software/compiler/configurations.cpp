@@ -359,6 +359,7 @@ Array<InstanceInfo> GenerateInitialInstanceInfo(Accelerator* accel,Arena* out,Ar
 
     // NOTE: Care when using arrays, these must be copied individually for each subunit (check below)
     elem->individualWiresGlobalConfigPos = PushArray<int>(out,inst->declaration->NumberConfigs());
+    elem->individualWiresLocalConfigPos = PushArray<int>(out,inst->declaration->NumberConfigs());
   };
   
   // NOTE: This function fills all the subunits that belong to composite units.
@@ -501,9 +502,14 @@ void FillInstanceInfo(AccelInfoIterator initialIter,Arena* out){
     unit->fullName = PushString(out,"%.*s_%.*s",UNPACK_SS(parent->fullName),UNPACK_SS(unit->name));
   }
 
+  // TODO: Move to a better place
+  auto GetSharedIndex = [](int unitSharedIndex,int wireIndex){
+    return ((unitSharedIndex & 0x0000ffff) << 16 | (wireIndex & 0x0000ffff)); 
+  };
+
   // Config info stuff
   // Remember that, since the instance info of subunits was copied directly from the accel info of the declaration, values for configs can be incorrect from the existance of shared and static configs in the top level units.
-  auto CalculateConfig = [](auto Recurse,AccelInfoIterator& iter,int startIndex,Arena* out) -> void{
+  auto CalculateConfig = [GetSharedIndex](auto Recurse,AccelInfoIterator& iter,int startIndex,Arena* out) -> void{
     TEMP_REGION(temp,nullptr);
 
     InstanceInfo* parent = iter.GetParentUnit();
@@ -558,10 +564,6 @@ void FillInstanceInfo(AccelInfoIterator initialIter,Arena* out){
       if(0){
         TrieMap<int,int>* sharedWireIndexToConfig = PushTrieMap<int,int>(temp);
       
-        auto GetSharedIndex = [](int unitSharedIndex,int wireIndex){
-          return ((unitSharedIndex & 0x0000ffff) << 16 | (wireIndex & 0x0000ffff)); 
-        };
-
         int wireIndex = startIndex;
         for(AccelInfoIterator it = iter; it.IsValid(); it = it.Next()){
           InstanceInfo* unit = it.CurrentUnit();
@@ -617,7 +619,6 @@ void FillInstanceInfo(AccelInfoIterator initialIter,Arena* out){
         
           if(unit->isGloballyStatic){
             unit->globalConfigPos = {};
-            unit->localConfigPos = indexForCurrentUnit;
           } else if(unit->configSize){
             unit->globalConfigPos = indexForCurrentUnit;
             unit->localConfigPos = indexForCurrentUnit;
@@ -636,8 +637,157 @@ void FillInstanceInfo(AccelInfoIterator initialIter,Arena* out){
     }
   };
   
-  CalculateConfig(CalculateConfig,initialIter,0,globalPermanent);
+  CalculateConfig(CalculateConfig,initialIter,0,out);
 
+  auto CalculateAmountOfLevels = [](AccelInfo* info){
+    int maxLevelSeen = 0;
+    for(AccelInfoIterator iter = StartIteration(info); iter.IsValid(); iter = iter.Step()){
+      InstanceInfo* info = iter.CurrentUnit();
+      maxLevelSeen = MAX(maxLevelSeen,info->level);
+    }
+    return maxLevelSeen + 1;
+  };
+
+  auto CalculateAmountOfUnitsPerLevel = [CalculateAmountOfLevels](AccelInfo* info,Arena* out) -> Array<int>{
+    int amountOfLevels = CalculateAmountOfLevels(info);
+
+    Array<int> amountOfUnits = PushArray<int>(out,amountOfLevels);
+    for(AccelInfoIterator iter = StartIteration(info); iter.IsValid(); iter = iter.Step()){
+      InstanceInfo* info = iter.CurrentUnit();
+      amountOfUnits[info->level] += 1;
+    }
+
+    return amountOfUnits;
+  };
+  
+  auto GetIteratorsForEachLevel = [CalculateAmountOfLevels,CalculateAmountOfUnitsPerLevel](AccelInfo* info,Arena* out) -> Array<Array<AccelInfoIterator>>{
+    TEMP_REGION(temp,out);
+
+    auto amountOfUnitsPerLevel = CalculateAmountOfUnitsPerLevel(info,temp);
+    int amountOfLevels = amountOfUnitsPerLevel.size;
+    
+    Array<Array<AccelInfoIterator>> iterators = PushArray<Array<AccelInfoIterator>>(out,amountOfLevels);
+    for(int level = 0; level < amountOfLevels; level++){
+      iterators[level] = PushArray<AccelInfoIterator>(out,amountOfUnitsPerLevel[level]);
+    }
+    
+    Array<int> indexPerLevel = PushArray<int>(temp,amountOfLevels);
+
+    for(AccelInfoIterator iter = StartIteration(info); iter.IsValid(); iter = iter.Step()){
+      InstanceInfo* info = iter.CurrentUnit();
+      int level = info->level;
+      int currentIndex = indexPerLevel[level];
+      
+      iterators[level][currentIndex] = iter;
+      
+      indexPerLevel[level] += 1;
+    }
+
+    return iterators;
+  };
+
+  auto allIteratorsPerLevel = GetIteratorsForEachLevel(initialIter.info,temp);
+  int levels = allIteratorsPerLevel.size;
+
+  for(AccelInfoIterator iter = initialIter; iter.IsValid(); iter = iter.Step()){
+    InstanceInfo* unit = iter.CurrentUnit();
+    if(unit->isGloballyStatic){
+      for(int i = 0; i < unit->individualWiresLocalConfigPos.size; i++){
+        unit->individualWiresLocalConfigPos[i] = -1;
+      }
+    }
+  }
+  
+  DEBUG_BREAK();
+  if(levels > 0){
+    for(int level = levels - 2; levels > 1; levels--){
+      for(AccelInfoIterator iter : allIteratorsPerLevel[level]){
+        // Each iter points to either a simple unit or a composite unit of level.
+        // TODO: Maybe we just want composite units here. Change the function to only return iterators for composite units.
+        TrieMap<int,int>* sharedWireIndexToConfig = PushTrieMap<int,int>(temp);
+
+        int wireIndex = 0;
+        for(AccelInfoIterator it = iter.StepInsideOnly(); it.IsValid(); it = it.Next()){
+          InstanceInfo* unit = it.CurrentUnit();
+          
+          bool isNewlyShared = false;
+          for(int i = 0; i < unit->individualWiresLocalConfigPos.size; i++){
+            if(unit->isGloballyStatic){
+              unit->individualWiresLocalConfigPos[i] = -1;
+            } else {
+              int indexForCurrentWire = wireIndex;
+              if(unit->individualWiresShared[i]){
+                int sharedIndex = GetSharedIndex(unit->sharedIndex,i);
+                GetOrAllocateResult<int> data = sharedWireIndexToConfig->GetOrAllocate(sharedIndex);
+                if(data.alreadyExisted){
+                  indexForCurrentWire = *data.data;
+                } else {
+                  *data.data = wireIndex;
+                  isNewlyShared = true;
+                  wireIndex += 1;
+                }
+              } else {
+                wireIndex += 1;
+              }
+
+              unit->individualWiresLocalConfigPos[i] = indexForCurrentWire;
+            }
+          }
+        }
+      }
+    }
+
+    // The top level is handled differently. We do not iterate the children, we iterate the iterators.
+    TrieMap<int,int>* sharedWireIndexToConfig = PushTrieMap<int,int>(temp);
+    int wireIndex = 0;
+    for(AccelInfoIterator iter : allIteratorsPerLevel[0]){
+      InstanceInfo* unit = iter.CurrentUnit();
+          
+      bool isNewlyShared = false;
+      for(int i = 0; i < unit->individualWiresLocalConfigPos.size; i++){
+        if(unit->isGloballyStatic){
+          unit->individualWiresLocalConfigPos[i] = -1;
+        } else {
+          int indexForCurrentWire = wireIndex;
+          if(unit->individualWiresShared[i]){
+            int sharedIndex = GetSharedIndex(unit->sharedIndex,i);
+            GetOrAllocateResult<int> data = sharedWireIndexToConfig->GetOrAllocate(sharedIndex);
+            if(data.alreadyExisted){
+              indexForCurrentWire = *data.data;
+            } else {
+              *data.data = wireIndex;
+              isNewlyShared = true;
+              wireIndex += 1;
+            }
+          } else {
+            wireIndex += 1;
+          }
+
+          unit->individualWiresLocalConfigPos[i] = indexForCurrentWire;
+        }
+      }
+    }
+  }
+
+  for(AccelInfoIterator it = initialIter; it.IsValid(); it = it.Step()){
+    InstanceInfo* unit = it.CurrentUnit();
+    InstanceInfo* parent = it.GetParentUnit();
+
+    if(unit->isGloballyStatic){
+      continue;
+    }
+    
+    for(int i = 0; i < unit->individualWiresLocalConfigPos.size; i++){
+      if(parent){
+        int parentPos = parent->globalConfigPos.value();
+
+        unit->individualWiresGlobalConfigPos[i] = unit->individualWiresLocalConfigPos[i] + parentPos;
+      } else {
+        unit->individualWiresGlobalConfigPos[i] = unit->individualWiresLocalConfigPos[i];
+      }
+    }
+  }
+  
   // TODO: This is to make sure but should be removed eventually.
   for(AccelInfoIterator it = initialIter; it.IsValid(); it = it.Step()){
     InstanceInfo* info = it.CurrentUnit();
@@ -645,38 +795,6 @@ void FillInstanceInfo(AccelInfoIterator initialIter,Arena* out){
       info->globalConfigPos = {};
     }
   }
-
-  // TODO: This will probably break when we add more complex cases.
-  //       We probably want to rewrite the code to take a level approach.
-  //       We start by calculating the values of the lowest level. We can also store data inside the parent unit (things like the updated config size in order to properly reflect the lower level calculations).
-  //       We then go up the levels, calculating each level as we go.
-  //       It would also be helpful to have a function that returns an array of AccelInfoIters for each level.
-  //       
-  //DEBUG_BREAK();
-  // A easy way of fixing wire configs.
-#if 0
-  AccelInfoIterator iter = initialIter;
-  iter.index = iter.GetCurrentMerge().size - 1;
-  for(; iter.IsValid(); iter = iter.ReverseStep()){
-    InstanceInfo* parent = iter.CurrentUnit();
-    if(parent->isComposite){
-      TEMP_REGION(temp,out);
-
-      TrieSet<int>* seen = PushTrieSet<int>(temp);
-      AccelInfoIterator inside = iter.StepInsideOnly();
-      for(AccelInfoIterator it = inside; it.IsValid(); it = it.Step()){
-        InstanceInfo* info = it.CurrentUnit();
-
-        for(int i : info->individualWiresGlobalConfigPos){
-          seen->Insert(i);
-        }
-      }
-
-      parent->individualWiresGlobalConfigPos = PushArrayFromSet(globalPermanent,seen);
-      parent->configSize = parent->individualWiresGlobalConfigPos.size;
-    }
-  }
-#endif
   
   // Calculate state stuff
   auto CalculateState = [](auto Recurse,AccelInfoIterator& iter,int startIndex) -> void{
@@ -972,6 +1090,7 @@ void FillStaticInfo(AccelInfo* info){
         *result.data = configPos;
         unit->globalStaticPos = configPos;
       } else if(unit->isGloballyStatic){
+        DEBUG_BREAK_IF(CompareString(unit->name,"ch"));
         int trueConfigPos = parent->globalStaticPos.value() + unit->localConfigPos.value();
         unit->globalStaticPos = trueConfigPos;
       }
@@ -990,6 +1109,20 @@ void FillAccelInfoFromCalculatedInstanceInfo(AccelInfo* info,Accelerator* accel)
   // TODO: Use AccelInfoIterator
 
   // TODO: Using info directly might make create an error if the struct was not initialized to zero.
+
+  TrieSet<int>* configsSeen = PushTrieSet<int>(temp);
+
+  AccelInfoIterator iter = StartIteration(info);
+  for(;iter.IsValid(); iter = iter.Step()){
+    InstanceInfo* info = iter.CurrentUnit();
+    for(int i : info->individualWiresGlobalConfigPos){
+      if(i >= 0){
+        configsSeen->Insert(i);
+      }
+    }
+  }
+
+  info->configs = configsSeen->map->inserted;
   
   // Handle non-static information
   for(FUInstance* ptr : accel->allocated){
@@ -999,13 +1132,13 @@ void FillAccelInfoFromCalculatedInstanceInfo(AccelInfo* info,Accelerator* accel)
     // Check if shared
     if(inst->sharedEnable){
       if(!seenShared[inst->sharedIndex]){
-        info->configs += type->configs.size;
+        //info->configs += type->configs.size;
         info->sharedUnits += 1;
       }
 
       seenShared[inst->sharedIndex] = true;
     } else if(!inst->isStatic){ // Shared cannot be static
-         info->configs += type->configs.size;
+      //info->configs += type->configs.size;
     }
 
     if(type->memoryMapBits.has_value()){
@@ -1142,7 +1275,7 @@ AccelInfo CalculateAcceleratorInfo(Accelerator* accel,bool recursive,Arena* out)
   int size = PartitionSize(partitions);
 
   Assert(size != 0);
-  result.infos = PushArray<MergePartition>(globalPermanent,size);
+  result.infos = PushArray<MergePartition>(out,size);
 
   AccelInfoIterator iter = StartIteration(&result);
   iter.accelName = accel->name;
@@ -1152,9 +1285,9 @@ AccelInfo CalculateAcceleratorInfo(Accelerator* accel,bool recursive,Arena* out)
       iter.mergeIndex = i;
 
       // We do need partitions here, I think
-      result.infos[i].info = GenerateInitialInstanceInfo(accel,globalPermanent,partitions);
+      result.infos[i].info = GenerateInitialInstanceInfo(accel,out,partitions);
 
-      FillInstanceInfo(iter,globalPermanent);
+      FillInstanceInfo(iter,out);
 
       result.infos[i].inputDelays = ExtractInputDelays(iter,out);
       result.infos[i].outputLatencies = ExtractOutputLatencies(iter,out);
@@ -1164,8 +1297,8 @@ AccelInfo CalculateAcceleratorInfo(Accelerator* accel,bool recursive,Arena* out)
     }
   } else {
     iter.mergeIndex = 0;
-    result.infos[0].info = GenerateInitialInstanceInfo(accel,globalPermanent,{});
-    FillInstanceInfo(iter,globalPermanent);
+    result.infos[0].info = GenerateInitialInstanceInfo(accel,out,{});
+    FillInstanceInfo(iter,out);
 
     result.infos[0].inputDelays = ExtractInputDelays(iter,out);
     result.infos[0].outputLatencies = ExtractOutputLatencies(iter,out);
