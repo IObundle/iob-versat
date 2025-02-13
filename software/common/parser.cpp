@@ -910,7 +910,11 @@ Array<String> Split(String content,char sep,Arena* out){
     int end = index; // content[end] is either sep or last character.
     
     String line = {};
-    if(index >= size){
+    if(start >= size){
+      break;
+    } else if(index >= size){
+      line = {&content[start],end - start + 1};
+      *arr.PushElem() = line;
       break;
     } else if(content[index] == sep){
       line = {&content[start],end - start};

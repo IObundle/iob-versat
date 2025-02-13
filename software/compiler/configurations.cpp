@@ -137,6 +137,20 @@ AccelInfoIterator AccelInfoIterator::StepInsideOnly(){
   return {};
 }
 
+AccelInfoIterator AccelInfoIterator::ReverseStep(){
+  if(!IsValid()){
+    return {};
+  }
+
+  if(this->index - 1 < 0){
+    return {};
+  }
+  
+  AccelInfoIterator toReturn = *this;
+  toReturn.index = this->index - 1;
+  return toReturn;
+}
+
 int AccelInfoIterator::CurrentLevelSize(){
   Array<InstanceInfo>& array = GetCurrentMerge();
   int currentLevel = array[index].level;
@@ -172,6 +186,13 @@ Array<InstanceInfo*> GetAllSameLevelUnits(AccelInfo* info,int level,int mergeInd
 AccelInfoIterator StartIteration(AccelInfo* info){
   AccelInfoIterator iter = {};
   iter.info = info;
+  return iter;
+}
+
+AccelInfoIterator StartIterationFromEnding(AccelInfo* info){
+  AccelInfoIterator iter = {};
+  iter.info = info;
+  iter.index = iter.GetCurrentMerge().size - 1;
   return iter;
 }
 
@@ -312,7 +333,7 @@ Array<InstanceInfo> GenerateInitialInstanceInfo(Accelerator* accel,Arena* out,Ar
   // Only for basic units on the top level of accel
   // The subunits are basically copied from the sub declarations.
   // Or they are calculated inside the Fill... function
-  auto SetBaseInfo = [](InstanceInfo* elem,FUInstance* inst,int level){
+  auto SetBaseInfo = [](InstanceInfo* elem,FUInstance* inst,int level,Arena* out){
     *elem = {};
     elem->inst = inst;
     elem->name = inst->name;
@@ -324,6 +345,7 @@ Array<InstanceInfo> GenerateInitialInstanceInfo(Accelerator* accel,Arena* out,Ar
     elem->isStatic = inst->isStatic;
     elem->isGloballyStatic = inst->isStatic;
     elem->isShared = inst->sharedEnable;
+    elem->isSpecificConfigShared = inst->isSpecificConfigShared;
     elem->sharedIndex = inst->sharedIndex;
     elem->isMergeMultiplexer = inst->isMergeMultiplexer;
     elem->special = inst->literal;
@@ -333,13 +355,19 @@ Array<InstanceInfo> GenerateInitialInstanceInfo(Accelerator* accel,Arena* out,Ar
     elem->outputLatencies = inst->declaration->GetOutputLatencies();
     elem->connectionType = inst->type;
     elem->partitionIndex = 0;
+    elem->individualWiresShared = inst->isSpecificConfigShared;
+
+    // NOTE: Care when using arrays, these must be copied individually for each subunit (check below)
+    elem->individualWiresGlobalConfigPos = PushArray<int>(out,inst->declaration->NumberConfigs());
   };
   
-  auto Function = [SetBaseInfo](auto Recurse,GrowableArray<InstanceInfo>& array,Accelerator* accel,int level,Array<Partition> partitions) -> void{
+  // NOTE: This function fills all the subunits that belong to composite units.
+  //       Care must be taken when having arrays inside InstanceInfos, these need to be copied individually otherwise we are changing data for the subunits declarations as well.
+  auto Function = [SetBaseInfo](auto Recurse,GrowableArray<InstanceInfo>& array,Accelerator* accel,int level,Array<Partition> partitions,Arena* out) -> void{
     int partitionIndex = 0;
     for(FUInstance* inst : accel->allocated){
       InstanceInfo* elem = array.PushElem();
-      SetBaseInfo(elem,inst,level);
+      SetBaseInfo(elem,inst,level,out);
 
       AccelInfoIterator iter = StartIteration(&inst->declaration->info);
 
@@ -355,6 +383,8 @@ Array<InstanceInfo> GenerateInitialInstanceInfo(Accelerator* accel,Arena* out,Ar
         InstanceInfo* elem = array.PushElem();
 
         *elem = *subUnit;
+        elem->individualWiresGlobalConfigPos = CopyArray(subUnit->individualWiresGlobalConfigPos,out);
+        Memset(elem->individualWiresGlobalConfigPos,0);
         elem->level += 1;
       }
     }
@@ -362,7 +392,7 @@ Array<InstanceInfo> GenerateInitialInstanceInfo(Accelerator* accel,Arena* out,Ar
   
   auto build = StartArray<InstanceInfo>(out);
 
-  Function(Function,build,accel,0,partitions);
+  Function(Function,build,accel,0,partitions,out);
   Array<InstanceInfo> res = EndArray(build);
 
   auto instanceToIndex = PushTrieMap<FUInstance*,int>(temp);
@@ -473,75 +503,140 @@ void FillInstanceInfo(AccelInfoIterator initialIter,Arena* out){
 
   // Config info stuff
   // Remember that, since the instance info of subunits was copied directly from the accel info of the declaration, values for configs can be incorrect from the existance of shared and static configs in the top level units.
-  auto CalculateConfig = [](auto Recurse,AccelInfoIterator& iter,int startIndex) -> void{
+  auto CalculateConfig = [](auto Recurse,AccelInfoIterator& iter,int startIndex,Arena* out) -> void{
     TEMP_REGION(temp,nullptr);
 
     InstanceInfo* parent = iter.GetParentUnit();
     if(parent){
-      AccelInfoIterator configIter = StartIteration(&parent->decl->info);
-      configIter.mergeIndex = parent->partitionIndex;
-      
-      int index = 0;
-      for(AccelInfoIterator it = iter; it.IsValid(); it = it.Next(),configIter = configIter.Next()){
-        InstanceInfo* unit = it.CurrentUnit();
-        InstanceInfo* configUnit = configIter.CurrentUnit();
+      if(0){
+        AccelInfoIterator configIter = StartIteration(&parent->decl->info);
+        configIter.mergeIndex = parent->partitionIndex;
         
-        if(configUnit->globalConfigPos.has_value()){
-          int configPos = startIndex + configUnit->globalConfigPos.value();
+        // NOTE: This only makes sense for non composite units, right?
+        for(AccelInfoIterator it = iter; it.IsValid(); it = it.Next(),configIter = configIter.Next()){
+          InstanceInfo* unit = it.CurrentUnit();
+          InstanceInfo* configUnit = configIter.CurrentUnit();
 
-          if(unit->isGloballyStatic){
-            unit->globalConfigPos = {};
-          } else if(unit->configSize){
-            unit->globalConfigPos = configPos;
+          for(int i = 0; i < unit->individualWiresGlobalConfigPos.size; i++){
+            int wirePos = startIndex + configUnit->individualWiresGlobalConfigPos[i];
+            
+            if(unit->isGloballyStatic){
+              unit->individualWiresGlobalConfigPos[i] = -1;
+            } else if(unit->configSize){
+              unit->individualWiresGlobalConfigPos[i] = wirePos;
+            }
           }
+        }
+      }
+      
+      // MARKED: Old simple config
+      if(1){
+        AccelInfoIterator configIter = StartIteration(&parent->decl->info);
+        configIter.mergeIndex = parent->partitionIndex;
+      
+        for(AccelInfoIterator it = iter; it.IsValid(); it = it.Next(),configIter = configIter.Next()){
+          InstanceInfo* unit = it.CurrentUnit();
+          InstanceInfo* configUnit = configIter.CurrentUnit();
+        
+          if(configUnit->globalConfigPos.has_value()){
+            int configPos = startIndex + configUnit->globalConfigPos.value();
+
+            if(unit->isGloballyStatic){
+              unit->globalConfigPos = {};
+            } else if(unit->configSize){
+              unit->globalConfigPos = configPos;
+            }
           
-          index += 1;
-          AccelInfoIterator inside = it.StepInsideOnly();
-          if(inside.IsValid()){
-            Recurse(Recurse,inside,configPos);
+            AccelInfoIterator inside = it.StepInsideOnly();
+            if(inside.IsValid()){
+              Recurse(Recurse,inside,configPos,out);
+            }
           }
         }
       }
     } else {
-      TrieMap<int,int>* sharedIndexToConfig = PushTrieMap<int,int>(temp);
+      if(0){
+        TrieMap<int,int>* sharedWireIndexToConfig = PushTrieMap<int,int>(temp);
       
-      int configIndex = startIndex;
-      for(AccelInfoIterator it = iter; it.IsValid(); it = it.Next()){
-        InstanceInfo* unit = it.CurrentUnit();
+        auto GetSharedIndex = [](int unitSharedIndex,int wireIndex){
+          return ((unitSharedIndex & 0x0000ffff) << 16 | (wireIndex & 0x0000ffff)); 
+        };
 
-        bool isNewlyShared = false;
-        int indexForCurrentUnit = configIndex;
-        if(unit->isShared){
-          int sharedIndex = unit->sharedIndex;
-          GetOrAllocateResult<int> data = sharedIndexToConfig->GetOrAllocate(sharedIndex);
-          if(data.alreadyExisted){
-            indexForCurrentUnit = *data.data;
-          } else {
-            *data.data = configIndex;
-            isNewlyShared = true;
+        int wireIndex = startIndex;
+        for(AccelInfoIterator it = iter; it.IsValid(); it = it.Next()){
+          InstanceInfo* unit = it.CurrentUnit();
+          
+          bool isNewlyShared = false;
+          for(int i = 0; i < unit->individualWiresGlobalConfigPos.size; i++){
+            if(unit->isGloballyStatic){
+              unit->individualWiresGlobalConfigPos[i] = -1;
+            } else {
+              int indexForCurrentWire = wireIndex;
+              if(unit->individualWiresShared[i]){
+                int sharedIndex = GetSharedIndex(unit->sharedIndex,i);
+                GetOrAllocateResult<int> data = sharedWireIndexToConfig->GetOrAllocate(sharedIndex);
+                if(data.alreadyExisted){
+                  indexForCurrentWire = *data.data;
+                } else {
+                  *data.data = wireIndex;
+                  isNewlyShared = true;
+                  wireIndex += 1;
+                }
+              } else {
+                wireIndex += 1;
+              }
+
+              unit->individualWiresGlobalConfigPos[i] = indexForCurrentWire;
+            }
           }
+          
         }
+      }
+      
+      // MARKED - Old single pos share
+      if(1){
+        TrieMap<int,int>* sharedIndexToConfig = PushTrieMap<int,int>(temp);
+      
+        int configIndex = startIndex;
+        for(AccelInfoIterator it = iter; it.IsValid(); it = it.Next()){
+          InstanceInfo* unit = it.CurrentUnit();
+
+          bool isNewlyShared = false;
+
+          int indexForCurrentUnit = configIndex;
+          if(unit->isShared){
+            int sharedIndex = unit->sharedIndex;
+            GetOrAllocateResult<int> data = sharedIndexToConfig->GetOrAllocate(sharedIndex);
+            if(data.alreadyExisted){
+              indexForCurrentUnit = *data.data;
+            } else {
+              *data.data = configIndex;
+              isNewlyShared = true;
+            }
+          }
         
-        if(unit->isGloballyStatic){
-          unit->globalConfigPos = {};
-        } else if(unit->configSize){
-          unit->globalConfigPos = indexForCurrentUnit;
-          unit->localConfigPos = indexForCurrentUnit;
-        }
+          if(unit->isGloballyStatic){
+            unit->globalConfigPos = {};
+            unit->localConfigPos = indexForCurrentUnit;
+          } else if(unit->configSize){
+            unit->globalConfigPos = indexForCurrentUnit;
+            unit->localConfigPos = indexForCurrentUnit;
+          }
 
-        AccelInfoIterator inside = it.StepInsideOnly();
-        if(inside.IsValid() && !unit->isGloballyStatic){
-          Recurse(Recurse,inside,indexForCurrentUnit);
-        }
+          AccelInfoIterator inside = it.StepInsideOnly();
+          if(inside.IsValid() && !unit->isGloballyStatic){
+            Recurse(Recurse,inside,indexForCurrentUnit,out);
+          }
 
-        if(!isNewlyShared && !unit->isGloballyStatic){
-          configIndex += unit->decl->NumberConfigs();
+          if(!isNewlyShared && !unit->isGloballyStatic){
+            configIndex += unit->decl->NumberConfigs();
+          }
         }
       }
     }
   };
   
-  CalculateConfig(CalculateConfig,initialIter,0);
+  CalculateConfig(CalculateConfig,initialIter,0,globalPermanent);
 
   // TODO: This is to make sure but should be removed eventually.
   for(AccelInfoIterator it = initialIter; it.IsValid(); it = it.Step()){
@@ -550,6 +645,38 @@ void FillInstanceInfo(AccelInfoIterator initialIter,Arena* out){
       info->globalConfigPos = {};
     }
   }
+
+  // TODO: This will probably break when we add more complex cases.
+  //       We probably want to rewrite the code to take a level approach.
+  //       We start by calculating the values of the lowest level. We can also store data inside the parent unit (things like the updated config size in order to properly reflect the lower level calculations).
+  //       We then go up the levels, calculating each level as we go.
+  //       It would also be helpful to have a function that returns an array of AccelInfoIters for each level.
+  //       
+  //DEBUG_BREAK();
+  // A easy way of fixing wire configs.
+#if 0
+  AccelInfoIterator iter = initialIter;
+  iter.index = iter.GetCurrentMerge().size - 1;
+  for(; iter.IsValid(); iter = iter.ReverseStep()){
+    InstanceInfo* parent = iter.CurrentUnit();
+    if(parent->isComposite){
+      TEMP_REGION(temp,out);
+
+      TrieSet<int>* seen = PushTrieSet<int>(temp);
+      AccelInfoIterator inside = iter.StepInsideOnly();
+      for(AccelInfoIterator it = inside; it.IsValid(); it = it.Step()){
+        InstanceInfo* info = it.CurrentUnit();
+
+        for(int i : info->individualWiresGlobalConfigPos){
+          seen->Insert(i);
+        }
+      }
+
+      parent->individualWiresGlobalConfigPos = PushArrayFromSet(globalPermanent,seen);
+      parent->configSize = parent->individualWiresGlobalConfigPos.size;
+    }
+  }
+#endif
   
   // Calculate state stuff
   auto CalculateState = [](auto Recurse,AccelInfoIterator& iter,int startIndex) -> void{
@@ -806,6 +933,50 @@ void FillInstanceInfo(AccelInfoIterator initialIter,Arena* out){
 
   SimpleCalculateDelayResult delays = CalculateDelay(initialIter,out);
   SetDelays(SetDelays,initialIter,delays,0,out);
+}
+
+void FillStaticInfo(AccelInfo* info){
+  TEMP_REGION(temp,nullptr);
+  AccelInfoIterator iter = StartIteration(info);
+  for(int i = 0; i < iter.MergeSize(); i++){
+    AccelInfoIterator it = iter;
+    it.mergeIndex = i;
+
+    TrieMap<StaticId,int>* statics = PushTrieMap<StaticId,int>(temp);
+
+    int currentStaticIndex = info->configs;
+    for(; it.IsValid(); it = it.Step()){
+      InstanceInfo* unit = it.CurrentUnit();
+      InstanceInfo* parent = it.GetParentUnit(); 
+
+      if(unit->configSize == 0){
+        continue;
+      }
+        
+      bool firstStaticSeen = parent ? unit->isStatic && !parent->isStatic : unit->isStatic;
+
+      if(firstStaticSeen || (unit->isStatic && !unit->localConfigPos.has_value())){
+        StaticId id = {};
+        id.parent = parent ? parent->decl : nullptr;
+        id.name = unit->name;
+
+        GetOrAllocateResult<int> result = statics->GetOrAllocate(id);
+        int configPos = 0;
+        if(result.alreadyExisted){
+          configPos =  *result.data;
+        } else {
+          configPos = currentStaticIndex;
+          currentStaticIndex += unit->configSize;
+        }
+          
+        *result.data = configPos;
+        unit->globalStaticPos = configPos;
+      } else if(unit->isGloballyStatic){
+        int trueConfigPos = parent->globalStaticPos.value() + unit->localConfigPos.value();
+        unit->globalStaticPos = trueConfigPos;
+      }
+    }
+  }
 }
 
 void FillAccelInfoFromCalculatedInstanceInfo(AccelInfo* info,Accelerator* accel){

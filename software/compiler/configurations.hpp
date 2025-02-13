@@ -36,14 +36,20 @@ struct InstanceInfo{
   Opt<int> globalStaticPos; // Separating static from global makes stuff simpler. If mixing together, do not forget that struct generation cares about source of configPos.
   Opt<int> globalConfigPos;
   Opt<int> localConfigPos;
+
+  Array<int> individualWiresGlobalConfigPos;
+  Array<bool> individualWiresShared;
+  
   int isConfigStatic; // Static must be handle separately, for the top level accelerator. 
   int configSize;
 
   bool isStatic;
   bool isGloballyStatic;
+
   bool isShared;
   int sharedIndex;
-
+  Array<bool> isSpecificConfigShared;
+  
   Opt<int> statePos;
   int stateSize;
   
@@ -148,6 +154,8 @@ struct AccelInfoIterator{
   WARN_UNUSED AccelInfoIterator Step(); // Next unit in the array. Goes down and up the levels as it progresses.
   WARN_UNUSED AccelInfoIterator StepInsideOnly(); // Returns NonValid if non composite unit
 
+  // Going in reverse might be helpful to simplify code. Sometimes it is capable of removing recursing entirely, although it takes a bit to get used to.
+  WARN_UNUSED AccelInfoIterator ReverseStep();
   int CurrentLevelSize();
 };
 
@@ -159,6 +167,7 @@ struct Partition{
 };
 
 AccelInfoIterator StartIteration(AccelInfo* info);
+AccelInfoIterator StartIterationFromEnding(AccelInfo* info);
 
 void FillAccelInfoFromCalculatedInstanceInfo(AccelInfo* info,Accelerator* accel);
 
@@ -169,6 +178,7 @@ Array<InstanceInfo> GenerateInitialInstanceInfo(Accelerator* accel,Arena* out,Ar
 Array<Partition> GenerateInitialPartitions(Accelerator* accel,Arena* out);
 
 void FillInstanceInfo(AccelInfoIterator initialIter,Arena* out);
+void FillStaticInfo(AccelInfo* info);
 
 // This function does not perform calculations that are only relevant to the top accelerator (like static units configs and such).
 AccelInfo CalculateAcceleratorInfo(Accelerator* accel,bool recursive,Arena* out);

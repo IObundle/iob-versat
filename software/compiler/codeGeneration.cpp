@@ -188,8 +188,12 @@ Array<TypeStructInfoElement> ExtractStructuredConfigs(Array<InstanceInfo> info,A
     }
     
     for(int i = 0; i < in.configSize; i++){
+// NOCHECKIN
+#if 1
       int config = i + in.globalConfigPos.value();
-
+#else
+      int config = in.individualWiresGlobalConfigPos[i];
+#endif
       maxConfig = std::max(maxConfig,config);
       GetOrAllocateResult<ArenaList<String>*> res = map->GetOrAllocate(config);
 
@@ -623,49 +627,8 @@ void OutputTopLevelFiles(Accelerator* accel,FUDeclaration* topLevelDecl,const ch
   ClearTemplateEngine(); // Make sure that we do not reuse data
   
   AccelInfo info = CalculateAcceleratorInfo(accel,true,temp);
-
-  {
-    AccelInfoIterator iter = StartIteration(&info);
-    for(int i = 0; i < iter.MergeSize(); i++){
-      AccelInfoIterator it = iter;
-      it.mergeIndex = i;
-
-      TrieMap<StaticId,int>* statics = PushTrieMap<StaticId,int>(temp);
-
-      int currentStaticIndex = info.configs;
-      for(; it.IsValid(); it = it.Step()){
-        InstanceInfo* unit = it.CurrentUnit();
-        InstanceInfo* parent = it.GetParentUnit(); 
-
-        if(unit->configSize == 0){
-          continue;
-        }
-        
-        bool firstStaticSeen = parent ? unit->isStatic && !parent->isStatic : unit->isStatic;
-
-        if(firstStaticSeen || (unit->isStatic && !unit->localConfigPos.has_value())){
-          StaticId id = {};
-          id.parent = parent ? parent->decl : nullptr;
-          id.name = unit->name;
-
-          GetOrAllocateResult<int> result = statics->GetOrAllocate(id);
-          int configPos = 0;
-          if(result.alreadyExisted){
-            configPos =  *result.data;
-          } else {
-            configPos = currentStaticIndex;
-            currentStaticIndex += unit->configSize;
-          }
-          
-          *result.data = configPos;
-          unit->globalStaticPos = configPos;
-        } else if(unit->isGloballyStatic){
-          int trueConfigPos = parent->globalStaticPos.value() + unit->localConfigPos.value();
-          unit->globalStaticPos = trueConfigPos;
-        }
-      }
-    }
-  }
+  FillStaticInfo(&info);
+  
   
   VersatComputedValues val = ComputeVersatValues(&info,globalOptions.useDMA);
   
@@ -689,10 +652,11 @@ void OutputTopLevelFiles(Accelerator* accel,FUDeclaration* topLevelDecl,const ch
   // This is not enforced and its fine if we get a few template errors. Since the tests are fast
   // we likely wont have many problems with this approach.
 
-  // NOTE: A good weekend project would be to compile templates into C code. We would have to specify the types of the inputs and the compilation would check if the types agree or not. This would also help find unused stuff by using normal C ETAGS stuff
-  // NOTE2: Also we would remove all the need to provide iterations inside the type stuff. We probably want to remove type stuff from this project, since it's not robust enough.
-  // NOTE3: Furthermore, all the stuff like iterations and representation would be done in C code, which is good because we would not need to implement generic code to iterate data.
-  // NOTE4: Also a speed boost, since compilation of templates would be done at build time instead.
+  // NOTE: Either compile to C or we create a proper backend to emit Verilog code and C code (and keep templates for things like makefiles and such).
+  // NOTE2: Need to run some tests to verify which is easier to code in and to maintain. I like the templates since it is helpful to see the structure of the generated code. It is also easier to organize the generic code with the specific code.
+  //       I am not a fan of C printfs or C++ ostreams, mainly because it is more difficult to organize the code and because we have to worry about escaping stuff (although maybe not as big as a problem, since verilog and C do not have a lot to escape).
+  //       I am also not a fan of emitting code. It is more stable but I lose the ability to see directly how the general code will look like. Trading stability for easy of prototyping and changing things.
+  
   // TODO: If free time this should be a weekend project since we are basically just making a different backend.
   TemplateSetString("typeName",accel->name);
 
@@ -731,7 +695,6 @@ void OutputTopLevelFiles(Accelerator* accel,FUDeclaration* topLevelDecl,const ch
   PushMergeMultiplexersUpTheHierarchy(structInfo);
   Array<StructInfo*> allStructs = ExtractStructs(structInfo,temp);
 
-  
   Array<int> indexes = PushArray<int>(temp,allStructs.size);
   Memset(indexes,2);
   for(int i = 0; i < allStructs.size; i++){
@@ -915,6 +878,8 @@ void OutputTopLevelFiles(Accelerator* accel,FUDeclaration* topLevelDecl,const ch
   
   int configBit = 0;
   int addr = val.versatConfigs;
+
+  DEBUG_BREAK();
   
   // TODO: We are still relying on explicit data contained inside the 
   // Join configs statics and delays into a single array.
@@ -1093,18 +1058,17 @@ void OutputTopLevelFiles(Accelerator* accel,FUDeclaration* topLevelDecl,const ch
     auto ExtractMuxInfo = [](AccelInfoIterator iter,Arena* out){
       TEMP_REGION(temp,out);
 
-      TrieSet<int>* seen = PushTrieSet<int>(temp);
-
       auto builder = StartArray<MuxInfo>(out);
       for(; iter.IsValid(); iter = iter.Step()){
         InstanceInfo* info = iter.CurrentUnit();
-        if(info->isMergeMultiplexer && !seen->Exists(info->globalConfigPos.value())){
-          MuxInfo* res = builder.PushElem();
-
-          res->configIndex = info->globalConfigPos.value();
-          res->val = info->mergePort;
-          res->name = info->baseName;
-          res->info = info;
+        if(info->isMergeMultiplexer){
+          int muxGroup = info->muxGroup;
+          if(!builder[muxGroup].info){
+            builder[muxGroup].configIndex = info->globalConfigPos.value();
+            builder[muxGroup].val = info->mergePort;
+            builder[muxGroup].name = info->baseName;
+            builder[muxGroup].info = info;
+          }
         }
       }
 
