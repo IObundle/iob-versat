@@ -189,7 +189,7 @@ Array<TypeStructInfoElement> ExtractStructuredConfigs(Array<InstanceInfo> info,A
     
     for(int i = 0; i < in.configSize; i++){
 // NOCHECKIN
-#if 1
+#if 0
       int config = i + in.globalConfigPos.value();
 #else
       int config = in.individualWiresGlobalConfigPos[i];
@@ -329,6 +329,13 @@ void OutputCircuitSource(FUDeclaration* decl,FILE* file){
  
   TemplateSetCustom("instances",MakeValue(&nodes));
 
+  Array<Wire> configs = decl->configs;
+  Array<Array<int>> wireIndexByInstance = Extract(info.infos[0].info,temp,&InstanceInfo::individualWiresGlobalConfigPos);
+
+  TemplateSetCustom("configs",MakeValue(&configs));
+  TemplateSetCustom("wireIndex",MakeValue(&wireIndexByInstance));
+  
+  DEBUG_BREAK();
   ProcessTemplate(file,BasicTemplates::acceleratorTemplate);
 }
 

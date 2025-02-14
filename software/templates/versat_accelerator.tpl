@@ -220,11 +220,10 @@ end
       .@{wire.name}(@{accel.name}_@{inst.name}_@{wire.name}),
     #{end}
   #{else}
-    #{set configStart topLevel[id].globalConfigPos.val}
-    #{if configStart >= 0}
-      #{for wire decl.configs}
-      .@{wire.name}(@{accel.configs[configStart + index].name}), // @{configStart + index}
-      #{end}
+    #{set indexes wireIndex[id]}
+    #{for ind indexes}
+     #{set wire configs[ind]}
+     .@{decl.configs[index].name}(@{accel.configs[ind].name}), // @{ind}
     #{end}
   #{end}
 
