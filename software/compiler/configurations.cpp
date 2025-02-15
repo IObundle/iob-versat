@@ -794,7 +794,15 @@ void FillInstanceInfo(AccelInfoIterator initialIter,Arena* out){
       info->globalConfigPos = {};
     }
   }
-  
+
+  // TODO: Kinda of an hack because global config and individual wires still not converged
+  for(AccelInfoIterator it = initialIter; it.IsValid(); it = it.Step()){
+    InstanceInfo* info = it.CurrentUnit();
+    if(info->individualWiresGlobalConfigPos.size == 1){
+      info->globalConfigPos = info->individualWiresGlobalConfigPos[0];
+    }
+  }
+
   // Calculate state stuff
   auto CalculateState = [](auto Recurse,AccelInfoIterator& iter,int startIndex) -> void{
     TEMP_REGION(temp,nullptr);

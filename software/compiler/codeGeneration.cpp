@@ -645,10 +645,22 @@ Array<TypeStructInfo> GenerateStructs(Array<StructInfo*> info,Arena* out){
     }
 
     // TODO: Kinda of an hack but not really? We are using global position for everything else. But for simple types we basically have local position, which is what we want. Not sure about everything else though. Are simple types the only ones that care/needed local position and everything else can work from local pos?
-    if(structInfo->isSimpleType){
+    if(structInfo->isUnique){
+      // NOTE: Because the struct is simple, we are normalizing position to start at zero.
+      //       The code is not good but we are just hacking stuff until we get something working.
+      // TODO: This obviously needs a second pass
+      for(DoubleLink<StructElement>* ptr = structInfo->list ? structInfo->list->head : nullptr; ptr; ptr = ptr->next){
+        ptr->elem.pos -= structInfo->globalPos;
+      }
+      
+      maxPos -= structInfo->globalPos;
+      minPos = 0;
+
+    } else if(structInfo->isSimpleType){
       minPos = 0;
     }
-    
+
+    Assert(maxPos > minPos);
     DEBUG_BREAK_IF(minPos != 0);
     
     Array<int> amountOfEntriesAtPos = PushArray<int>(temp,maxPos);
@@ -757,7 +769,7 @@ void PushMergeMultiplexersUpTheHierarchy(StructInfo* top){
 
     PushMergeMultiplexersUpTheHierarchy(child);
     
-    for(DoubleLink<StructElement>* childPtr = child->list->head; childPtr; ){
+    for(DoubleLink<StructElement>* childPtr = child->list->head; childPtr;){
       if(childPtr->elem.isMergeMultiplexer){
         DoubleLink<StructElement>* node = childPtr;
         childPtr = RemoveNodeFromList(child->list,node);
@@ -776,10 +788,17 @@ void PushMergeMultiplexersUpTheHierarchy(StructInfo* top){
         childPtr = childPtr->next;
       }
     }
+
   };
   
-  for(DoubleLink<StructElement>* ptr = top->list->head; ptr; ptr = ptr->next){
+  for(DoubleLink<StructElement>* ptr = top->list->head; ptr;){
     PushMergesUp(top,ptr->elem.childStruct);
+
+    if(ptr->elem.childStruct->list && Empty(ptr->elem.childStruct->list)){
+      ptr = RemoveNodeFromList(top->list,ptr);
+    } else {
+      ptr = ptr->next;
+    }
   }
 }
 
@@ -791,8 +810,50 @@ void OutputTopLevelFiles(Accelerator* accel,FUDeclaration* topLevelDecl,const ch
   
   AccelInfo info = CalculateAcceleratorInfo(accel,true,temp);
 
-  DEBUG_BREAK();
   FillStaticInfo(&info);
+
+  AccelInfoIterator iter = StartIteration(&info);
+  StructInfo* structInfo = GenerateConfigStruct(iter,temp);
+  
+  // We generate an extra level, so we just remove it here.
+  structInfo = structInfo->list->head->elem.childStruct;
+  
+  // NOTE: We for now push all the merge muxs to the top.
+  //       It might be better to only push them to the merge struct (basically only 1 level up).
+  //       Still need more examples to see.
+  DEBUG_BREAK();
+  PushMergeMultiplexersUpTheHierarchy(structInfo);
+  Array<StructInfo*> allStructs = ExtractStructs(structInfo,temp);
+
+  Array<int> indexes = PushArray<int>(temp,allStructs.size);
+  Memset(indexes,2);
+  for(int i = 0; i < allStructs.size; i++){
+    String name = allStructs[i]->name;
+    
+    for(int ii = 0; ii < i; ii++){
+      String possibleDuplicate = allStructs[ii]->name;
+      if(CompareString(possibleDuplicate,name)){
+        allStructs[i]->name = PushString(temp,"%.*s_%d",UNPACK_SS(possibleDuplicate),indexes[ii]++);
+        allStructs[i]->isUnique = true;
+        //allStructs[i]->globalPos = 
+        break;
+      }
+    }
+  }
+
+  // NOTE: We iterate again over the struct infos to check if any elem contains an unique struct.
+  //       We then set the global position for that struct only.
+  //       We probably need to remake this part, since this seems to be kinda of an hack.
+  for(auto ptr = structInfo->list->head; ptr; ptr = ptr->next){
+    StructElement& elem = ptr->elem;
+    if(elem.childStruct->isUnique){
+      elem.childStruct->globalPos = elem.pos;
+    }
+  }
+  
+  DEBUG_BREAK();
+
+  Array<TypeStructInfo> structs = GenerateStructs(allStructs,temp);
   
   VersatComputedValues val = ComputeVersatValues(&info,globalOptions.useDMA);
   
@@ -847,34 +908,6 @@ void OutputTopLevelFiles(Accelerator* accel,FUDeclaration* topLevelDecl,const ch
 
   TemplateSetCustom("arch",MakeValue(&globalOptions));
   
-  AccelInfoIterator iter = StartIteration(&info);
-  StructInfo* structInfo = GenerateConfigStruct(iter,temp);
-  
-  // We generate an extra level, so we just remove it here.
-  structInfo = structInfo->list->head->elem.childStruct;
-  
-  // NOTE: We for now push all the merge muxs to the top.
-  //       It might be better to only push them to the merge struct (basically only 1 level up).
-  //       Still need more examples to see.
-  PushMergeMultiplexersUpTheHierarchy(structInfo);
-  Array<StructInfo*> allStructs = ExtractStructs(structInfo,temp);
-
-  Array<int> indexes = PushArray<int>(temp,allStructs.size);
-  Memset(indexes,2);
-  for(int i = 0; i < allStructs.size; i++){
-    String name = allStructs[i]->name;
-
-    for(int ii = 0; ii < i; ii++){
-      String possibleDuplicate = allStructs[ii]->name;
-      if(CompareString(possibleDuplicate,name)){
-        allStructs[i]->name = PushString(temp,"%.*s_%d",UNPACK_SS(possibleDuplicate),indexes[ii]++);
-        break;
-      }
-    }
-  }
-
-  Array<TypeStructInfo> structs = GenerateStructs(allStructs,temp);
-
   // NOTE: This data is printed so it can be captured by the IOB python setup.
   // TODO: Probably want a more robust way of doing this. Eventually want to printout some stats so we can
   //       actually visualize what we are producing.

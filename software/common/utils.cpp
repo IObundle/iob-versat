@@ -163,3 +163,53 @@ String JoinStrings(Array<String> strings,String separator,Arena* out){
 
   return EndString(out,builder);
 }
+
+GenericArenaListIterator IterateArenaList(void* list,int sizeOfType,int alignmentOfType){
+  GenericArenaListIterator res = {};
+
+  SingleLink<int>* head = *(SingleLink<int>**) list;
+
+  res.ptr = head;
+  res.sizeOfType = sizeOfType;
+  res.alignmentOfType = alignmentOfType;
+
+  return res;
+}
+
+bool HasNext(GenericArenaListIterator iter){
+  return (iter.ptr != nullptr);
+}
+
+void* Next(GenericArenaListIterator& iter){
+  char* view = (char*) iter.ptr;
+  view += sizeof(void*);
+  
+  iter.ptr = iter.ptr->next;
+  
+  return view;
+}
+
+GenericArenaDoubleListIterator IterateArenaDoubleList(void* list,int sizeOfType,int alignmentOfType){
+  GenericArenaDoubleListIterator res = {};
+
+  DoubleLink<int>* head = *(DoubleLink<int>**) list;
+
+  res.ptr = head;
+  res.sizeOfType = sizeOfType;
+  res.alignmentOfType = alignmentOfType;
+
+  return res;
+}
+
+bool HasNext(GenericArenaDoubleListIterator iter){
+  return (iter.ptr != nullptr);
+}
+
+void* Next(GenericArenaDoubleListIterator& iter){
+  char* view = (char*) iter.ptr;
+  view += sizeof(void*) * 2;
+  
+  iter.ptr = iter.ptr->next;
+  
+  return view;
+}

@@ -62,35 +62,49 @@ struct IndexedStruct : public T{
 
 template<typename T>
 struct SingleLink{
-  T elem;
   SingleLink<T>* next;
+  T elem;
 };
 
 template<typename T>
 struct DoubleLink{
-  T elem;
   DoubleLink<T>* next;
   DoubleLink<T>* prev;
+  T elem;
 };
 
 // A list inside an arena. Normally used with a temp arena and then converted to an array in a out arena 
 template<typename T>
 struct ArenaList{
-  Arena* arena; // For now store arena inside structure. 
   SingleLink<T>* head;
   SingleLink<T>* tail;
+  Arena* arena; // For now store arena inside structure. 
 
   T* PushElem();
 };
 
 template<typename T>
 struct ArenaDoubleList{
-  Arena* arena; // For now store arena inside structure. 
   DoubleLink<T>* head;
   DoubleLink<T>* tail;
+  Arena* arena; // For now store arena inside structure. 
 
   T* PushElem();
   T* PushNode(DoubleLink<T>* node); // Does not allocate anything in the arena. Need more testing to see if this is a good approach.
+};
+
+struct GenericArenaListIterator{
+  SingleLink<int>* ptr; // The type of T is irrelevant, since pointer size is always the same
+  int sizeOfType;
+  int alignmentOfType;
+  int index;
+};
+
+struct GenericArenaDoubleListIterator{
+  DoubleLink<int>* ptr; // The type of T is irrelevant, since pointer size is always the same
+  int sizeOfType;
+  int alignmentOfType;
+  int index;
 };
 
 // TODO: This function leaks memory, because it does not return the free nodes
@@ -315,6 +329,11 @@ DoubleLink<T>* RemoveNodeFromList(ArenaDoubleList<T>* list,DoubleLink<T>* node){
   node->next = nullptr;
   node->prev = nullptr;
 
+  if(list->head == nullptr || list->tail == nullptr){
+    list->head = nullptr;
+    list->tail = nullptr;
+  }
+  
   return next;
 }
 
@@ -333,6 +352,12 @@ Hashmap<T,P>* PushHashmapFromList(Arena* out,ArenaList<Pair<T,P>>* list){
 
 template<typename T>
 bool Empty(ArenaList<T>* list){
+  bool empty = (list->head == nullptr);
+  return empty;
+}
+
+template<typename T>
+bool Empty(ArenaDoubleList<T>* list){
   bool empty = (list->head == nullptr);
   return empty;
 }

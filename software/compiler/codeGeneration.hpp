@@ -99,6 +99,10 @@ struct StructInfo{
   String name;
   FUDeclaration* type; // TODO: isSimpleType is intended to replace this. We treat simple units the same way, where each element points to a StructElement. The most basic struct element is gonna be the iptr, which is the leaf, although we still do not have a proper way of representing this in the codebase. Check TODO inside StructElement.
   StructInfo* parent;
+
+  int globalPos;
+  bool isUnique; // Usually for structs with partial share or merge that are one of a kind (because of padding and such).
+  
   bool isSimpleType;
   
   ArenaDoubleList<StructElement>* list;
