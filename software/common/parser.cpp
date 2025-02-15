@@ -946,6 +946,28 @@ bool Contains(String str,const char* toCheck){
   return false;
 }
 
+bool StartsWith(String toSearch,String starter){
+  if(starter.size > toSearch.size){
+    return false;
+  }
+  for(int i = 0; i < starter.size; i++){
+    if(toSearch[i] != starter[i]){
+      return false;
+    }
+  }
+  return true;
+}
+
+String OffsetString(String str,int amount){
+  if(amount > str.size){
+    return {};
+  }
+  String res = str;
+  res.data += amount;
+  res.size -= amount;
+  return res;
+}
+
 String TrimLeftWhitespaces(String in){
   const char* start = in.data;
   const char* end = &in.data[in.size-1];
@@ -1307,4 +1329,28 @@ Array<Token> DivideContentIntoTokens(Tokenizer* tok,Arena* out){
   return EndArray(res);
 }
 
+Opt<Token> FindLastUntil(Tokenizer* tok,const char* toFind){
+  auto mark = tok->Mark();
+  String toFindStr = STRING(toFind);
+  Opt<Token> bestFind = {};
+  while(!tok->Done()){
+    Token peek = tok->PeekToken();
+    if(CompareString(peek,toFindStr)){
+      bestFind = tok->Point(mark);
+    }
+    tok->AdvancePeek();
+  }
+  return bestFind;
+}
 
+// TODO: Move this to a better place
+Opt<Token> ExtractTemplateArguments(String content){
+  Tokenizer tok(content,"<>",{});
+  Opt<Token> result = tok.NextFindUntil("<");
+  if(!result.has_value()){
+    return {};
+  }
+  tok.AssertNextToken("<");
+  
+  return FindLastUntil(&tok,">");
+}

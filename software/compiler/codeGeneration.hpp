@@ -11,8 +11,6 @@ struct Accelerator;
 struct InstanceInfo;
 struct FUDeclaration;
 
-// TODO: Config generation could be simplified if we instead had a immediate mode like interface for the specific of the structures. Something like a list of members and unions could be representing using a start union/end union command and the likes. Would simplify struct generation, but struct information would still need to be gathered from StructInfo
-
 // Type can differ because of Merge.
 struct SingleTypeStructElement{
   String type;

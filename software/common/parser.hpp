@@ -152,9 +152,13 @@ public:
 
 bool IsOnlyWhitespace(String tok);
 bool Contains(String str,const char* toCheck);
+bool StartsWith(String toSearch,String starter);
+
+String OffsetString(String str,int amount);
 
 bool CheckFormat(const char* format,String tok);
 Array<Value> ExtractValues(const char* format,String tok,Arena* arena);
+
 
 Array<String> Split(String content,char sep,Arena* out); // For now only split over one char. 
 
@@ -172,6 +176,7 @@ String GetFullLineForGivenToken(String content,Token token);
 String GetRichLocationError(String content,Token got,Arena* out);
 
 Array<Token> DivideContentIntoTokens(Tokenizer* tok,Arena* out);
+Opt<Token> FindLastUntil(Tokenizer* tok,const char* toFind);
 
 // This functions should check for errors. Also these functions should return an error if they do not parse everything. Something like "3a" should flag an error for ParseInt, instead of just returning 3. Either they consume everything or it's an error
 int ParseInt(String str);

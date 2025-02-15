@@ -223,7 +223,7 @@ end
     #{set indexes wireIndex[id]}
     #{for ind indexes}
      #{set wire configs[ind]}
-     .@{decl.configs[index].name}(@{accel.configs[ind].name}), // @{ind}
+      .@{decl.configs[index].name}(@{accel.configs[ind].name}), // @{ind}
     #{end}
   #{end}
 

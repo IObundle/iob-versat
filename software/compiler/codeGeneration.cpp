@@ -330,10 +330,21 @@ void OutputCircuitSource(FUDeclaration* decl,FILE* file){
   TemplateSetCustom("instances",MakeValue(&nodes));
 
   Array<Wire> configs = decl->configs;
+  
+  Array<InstanceInfo*> allSameLevel = GetAllSameLevelUnits(&info,0,0,temp);
+
+  auto builder = StartArray<Array<int>>(temp);
+
+  for(InstanceInfo* p : allSameLevel){
+    *builder.PushElem() = p->individualWiresGlobalConfigPos;
+  }
+  Array<Array<int>> wireIndexByInstanceGood = EndArray(builder);
+  
   Array<Array<int>> wireIndexByInstance = Extract(info.infos[0].info,temp,&InstanceInfo::individualWiresGlobalConfigPos);
 
   TemplateSetCustom("configs",MakeValue(&configs));
-  TemplateSetCustom("wireIndex",MakeValue(&wireIndexByInstance));
+  //TemplateSetCustom("wireIndex",MakeValue(&wireIndexByInstance));
+  TemplateSetCustom("wireIndex",MakeValue(&wireIndexByInstanceGood));
   
   DEBUG_BREAK();
   ProcessTemplate(file,BasicTemplates::acceleratorTemplate);
@@ -553,13 +564,28 @@ StructInfo* GenerateConfigStruct(AccelInfoIterator iter,Arena* out){
       }
     }
       
-#if 1
+    // NOTE: We are getting our elem pos from the global config pos, but this approch is starting to behind the wire values.
+    
+#if 0
     elem.pos = unit->globalConfigPos.value();
+    elem.size = unit->configSize;
 #else
-    elem.pos = unit->globalConfigPos.value();
+    int minPos = INT_MAX;
+    int maxPos = 0;
+    for(int i : unit->individualWiresGlobalConfigPos){
+      minPos = MIN(minPos,i);
+      maxPos = MAX(maxPos,i);
+    }
+    minPos = unit->globalConfigPos.value(); // NOTE: We need the global config pos in order to generate the struct unions currently (we do not have the ability to check if a range overlaps and to generate unions accordingly).
+
+    // I think that the code that generates the structure is to weak to handle proper data coming from this function, but I'm still working on the kinks with the whole thing, so for now we just power through and see what happens.
+    
+    elem.pos = minPos;
+    elem.size = maxPos - minPos + 1;
+
+    Assert(elem.size > 0);
 #endif
 
-    elem.size = unit->configSize;
     elem.isMergeMultiplexer = unit->isMergeMultiplexer;
 
     *list->PushElem() = elem;
@@ -673,15 +699,6 @@ Array<TypeStructInfo> GenerateStructs(Array<StructInfo*> info,Arena* out){
       }
     }
     
-#if 0
-    int paddingToAdd = 0;
-    for(bool b : validPositions){
-      if(!b){
-        paddingToAdd += 1;
-      }
-    }
-#endif
-    
     type->entries = PushArray<TypeStructInfoElement>(out,indexInfo.size);
 
     for(int i = 0; i < indexInfo.size; i++){
@@ -696,20 +713,6 @@ Array<TypeStructInfo> GenerateStructs(Array<StructInfo*> info,Arena* out){
       int pos = elem.pos;
 
       int index = positionToIndex->GetOrFail(pos);
-#if 0      
-      int index = entryIndex[elem.pos];
-      if(index == -1){
-        entryIndex[elem.pos] = indexPos++;
-        index = entryIndex[elem.pos];
-      }
-#endif
-      
-#if 0
-      if(!type->entries[index].typeAndNames.size){
-        int amount = amountOfEntriesAtPos[pos];
-        type->entries[index].typeAndNames = PushArray<SingleTypeStructElement>(out,amount);
-      }
-#endif
       
       int subIndex = indexes[pos]++;
       type->entries[index].typeAndNames[subIndex].name = elem.name;
@@ -733,6 +736,10 @@ Array<TypeStructInfo> GenerateStructs(Array<StructInfo*> info,Arena* out){
         type->entries[pos].typeAndNames[0].type = STRING("iptr");
         type->entries[pos].typeAndNames[0].name = PushString(out,"padding_%d",paddingAdded++);
       }
+    }
+
+    for(int i = 0; i < type->entries.size; i++){
+      Assert(type->entries[i].typeAndNames.size > 0);
     }
     
     DEBUG_BREAK();

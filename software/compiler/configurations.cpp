@@ -639,20 +639,20 @@ void FillInstanceInfo(AccelInfoIterator initialIter,Arena* out){
   
   CalculateConfig(CalculateConfig,initialIter,0,out);
 
-  auto CalculateAmountOfLevels = [](AccelInfo* info){
+  auto CalculateAmountOfLevels = [](AccelInfoIterator initialIter){
     int maxLevelSeen = 0;
-    for(AccelInfoIterator iter = StartIteration(info); iter.IsValid(); iter = iter.Step()){
+    for(AccelInfoIterator iter = initialIter; iter.IsValid(); iter = iter.Step()){
       InstanceInfo* info = iter.CurrentUnit();
       maxLevelSeen = MAX(maxLevelSeen,info->level);
     }
     return maxLevelSeen + 1;
   };
 
-  auto CalculateAmountOfUnitsPerLevel = [CalculateAmountOfLevels](AccelInfo* info,Arena* out) -> Array<int>{
-    int amountOfLevels = CalculateAmountOfLevels(info);
+  auto CalculateAmountOfUnitsPerLevel = [CalculateAmountOfLevels](AccelInfoIterator initialIter,Arena* out) -> Array<int>{
+    int amountOfLevels = CalculateAmountOfLevels(initialIter);
 
     Array<int> amountOfUnits = PushArray<int>(out,amountOfLevels);
-    for(AccelInfoIterator iter = StartIteration(info); iter.IsValid(); iter = iter.Step()){
+    for(AccelInfoIterator iter = initialIter; iter.IsValid(); iter = iter.Step()){
       InstanceInfo* info = iter.CurrentUnit();
       amountOfUnits[info->level] += 1;
     }
@@ -660,10 +660,10 @@ void FillInstanceInfo(AccelInfoIterator initialIter,Arena* out){
     return amountOfUnits;
   };
   
-  auto GetIteratorsForEachLevel = [CalculateAmountOfLevels,CalculateAmountOfUnitsPerLevel](AccelInfo* info,Arena* out) -> Array<Array<AccelInfoIterator>>{
+  auto GetIteratorsForEachLevel = [CalculateAmountOfLevels,CalculateAmountOfUnitsPerLevel](AccelInfoIterator initialIter,Arena* out) -> Array<Array<AccelInfoIterator>>{
     TEMP_REGION(temp,out);
 
-    auto amountOfUnitsPerLevel = CalculateAmountOfUnitsPerLevel(info,temp);
+    auto amountOfUnitsPerLevel = CalculateAmountOfUnitsPerLevel(initialIter,temp);
     int amountOfLevels = amountOfUnitsPerLevel.size;
     
     Array<Array<AccelInfoIterator>> iterators = PushArray<Array<AccelInfoIterator>>(out,amountOfLevels);
@@ -673,7 +673,7 @@ void FillInstanceInfo(AccelInfoIterator initialIter,Arena* out){
     
     Array<int> indexPerLevel = PushArray<int>(temp,amountOfLevels);
 
-    for(AccelInfoIterator iter = StartIteration(info); iter.IsValid(); iter = iter.Step()){
+    for(AccelInfoIterator iter = initialIter; iter.IsValid(); iter = iter.Step()){
       InstanceInfo* info = iter.CurrentUnit();
       int level = info->level;
       int currentIndex = indexPerLevel[level];
@@ -686,7 +686,7 @@ void FillInstanceInfo(AccelInfoIterator initialIter,Arena* out){
     return iterators;
   };
 
-  auto allIteratorsPerLevel = GetIteratorsForEachLevel(initialIter.info,temp);
+  auto allIteratorsPerLevel = GetIteratorsForEachLevel(initialIter,temp);
   int levels = allIteratorsPerLevel.size;
 
   for(AccelInfoIterator iter = initialIter; iter.IsValid(); iter = iter.Step()){
@@ -698,7 +698,6 @@ void FillInstanceInfo(AccelInfoIterator initialIter,Arena* out){
     }
   }
   
-  DEBUG_BREAK();
   if(levels > 0){
     for(int level = levels - 2; levels > 1; levels--){
       for(AccelInfoIterator iter : allIteratorsPerLevel[level]){

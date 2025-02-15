@@ -25,6 +25,10 @@
 #define MIN(A,B) ((A) < (B) ? (A) : (B))
 #define MAX(A,B) ((A) > (B) ? (A) : (B))
 
+// TODO: We probably want to standardize some of these. Do it right. Care about overflow and stuff like that
+//       Either that or use values from C or something.
+#define INT_MAX ((1<<30) + ((1<<30) - 1))
+
 #define ALIGN_DOWN(val,size) (val & (~(size - 1)))
 
 // Helper functions named after bitsize. If using byte size, use the X(val,size) functions
