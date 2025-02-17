@@ -37,6 +37,7 @@ struct InstanceInfo{
   Opt<int> globalConfigPos;
   Opt<int> localConfigPos;
 
+  Array<int> individualWiresGlobalStaticPos;
   Array<int> individualWiresGlobalConfigPos;
   Array<int> individualWiresLocalConfigPos;
   Array<bool> individualWiresShared;

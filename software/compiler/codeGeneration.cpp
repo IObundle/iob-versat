@@ -188,12 +188,8 @@ Array<TypeStructInfoElement> ExtractStructuredConfigs(Array<InstanceInfo> info,A
     }
     
     for(int i = 0; i < in.configSize; i++){
-// NOCHECKIN
-#if 0
-      int config = i + in.globalConfigPos.value();
-#else
       int config = in.individualWiresGlobalConfigPos[i];
-#endif
+
       maxConfig = std::max(maxConfig,config);
       GetOrAllocateResult<ArenaList<String>*> res = map->GetOrAllocate(config);
 
@@ -346,7 +342,6 @@ void OutputCircuitSource(FUDeclaration* decl,FILE* file){
   //TemplateSetCustom("wireIndex",MakeValue(&wireIndexByInstance));
   TemplateSetCustom("wireIndex",MakeValue(&wireIndexByInstanceGood));
   
-  DEBUG_BREAK();
   ProcessTemplate(file,BasicTemplates::acceleratorTemplate);
 }
 
@@ -753,8 +748,6 @@ Array<TypeStructInfo> GenerateStructs(Array<StructInfo*> info,Arena* out){
     for(int i = 0; i < type->entries.size; i++){
       Assert(type->entries[i].typeAndNames.size > 0);
     }
-    
-    DEBUG_BREAK();
   }
   
   Array<TypeStructInfo> res = PushArrayFromList(out,list);
@@ -814,47 +807,59 @@ void OutputTopLevelFiles(Accelerator* accel,FUDeclaration* topLevelDecl,const ch
 
   AccelInfoIterator iter = StartIteration(&info);
   StructInfo* structInfo = GenerateConfigStruct(iter,temp);
-  
-  // We generate an extra level, so we just remove it here.
-  structInfo = structInfo->list->head->elem.childStruct;
-  
-  // NOTE: We for now push all the merge muxs to the top.
-  //       It might be better to only push them to the merge struct (basically only 1 level up).
-  //       Still need more examples to see.
-  DEBUG_BREAK();
-  PushMergeMultiplexersUpTheHierarchy(structInfo);
-  Array<StructInfo*> allStructs = ExtractStructs(structInfo,temp);
 
-  Array<int> indexes = PushArray<int>(temp,allStructs.size);
-  Memset(indexes,2);
-  for(int i = 0; i < allStructs.size; i++){
-    String name = allStructs[i]->name;
+  Array<TypeStructInfo> structs = {};
+
+  // If we only contain static configs, this will appear empty.
+  if(!Empty(structInfo->list)){
+    // We generate an extra level, so we just remove it here.
+    structInfo = structInfo->list->head->elem.childStruct;
+  
+    // NOTE: We for now push all the merge muxs to the top.
+    //       It might be better to only push them to the merge struct (basically only 1 level up).
+    //       Still need more examples to see.
+    PushMergeMultiplexersUpTheHierarchy(structInfo);
+    Array<StructInfo*> allStructs = ExtractStructs(structInfo,temp);
+
+    Array<int> indexes = PushArray<int>(temp,allStructs.size);
+    Memset(indexes,2);
+    for(int i = 0; i < allStructs.size; i++){
+      String name = allStructs[i]->name;
     
-    for(int ii = 0; ii < i; ii++){
-      String possibleDuplicate = allStructs[ii]->name;
-      if(CompareString(possibleDuplicate,name)){
-        allStructs[i]->name = PushString(temp,"%.*s_%d",UNPACK_SS(possibleDuplicate),indexes[ii]++);
-        allStructs[i]->isUnique = true;
-        //allStructs[i]->globalPos = 
-        break;
+      for(int ii = 0; ii < i; ii++){
+        String possibleDuplicate = allStructs[ii]->name;
+        if(CompareString(possibleDuplicate,name)){
+          allStructs[i]->name = PushString(temp,"%.*s_%d",UNPACK_SS(possibleDuplicate),indexes[ii]++);
+          allStructs[i]->isUnique = true;
+          //allStructs[i]->globalPos = 
+          break;
+        }
       }
     }
-  }
 
-  // NOTE: We iterate again over the struct infos to check if any elem contains an unique struct.
-  //       We then set the global position for that struct only.
-  //       We probably need to remake this part, since this seems to be kinda of an hack.
-  for(auto ptr = structInfo->list->head; ptr; ptr = ptr->next){
-    StructElement& elem = ptr->elem;
-    if(elem.childStruct->isUnique){
-      elem.childStruct->globalPos = elem.pos;
-    }
-  }
-  
-  DEBUG_BREAK();
+    // NOTE: We iterate again over the struct infos to check if any elem contains an unique struct.
+    //       We then set the global position for that struct only.
+    //       We probably need to remake this part, since this seems to be kinda of an hack.
 
-  Array<TypeStructInfo> structs = GenerateStructs(allStructs,temp);
-  
+    auto Recurse = [](auto Recurse,StructInfo* info) -> void{
+      if(!info || !info->list || Empty(info->list)){
+        return;
+      }
+    
+      for(auto ptr = info->list->head; ptr; ptr = ptr->next){
+        StructElement& elem = ptr->elem;
+        if(elem.childStruct->isUnique){
+          elem.childStruct->globalPos = elem.pos;
+        }
+        Recurse(Recurse,elem.childStruct);
+      }
+    };
+
+    Recurse(Recurse,structInfo);
+
+    structs = GenerateStructs(allStructs,temp);
+  }
+    
   VersatComputedValues val = ComputeVersatValues(&info,globalOptions.useDMA);
   
   // TODO: A lot of cruft in this function
@@ -1075,8 +1080,6 @@ void OutputTopLevelFiles(Accelerator* accel,FUDeclaration* topLevelDecl,const ch
   
   int configBit = 0;
   int addr = val.versatConfigs;
-
-  DEBUG_BREAK();
   
   // TODO: We are still relying on explicit data contained inside the 
   // Join configs statics and delays into a single array.
