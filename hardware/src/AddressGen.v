@@ -57,7 +57,7 @@ module AddressGen #(
          done_o        <= 1'b1;
       end else if (run_i) begin
          delay_counter <= delay_i;
-         addr_o        <= start_i;
+         addr_o        <= (start_i << OFFSET_W);
          iter          <= 0;
          per           <= 0;
          valid       <= 0;

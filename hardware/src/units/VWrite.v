@@ -121,6 +121,9 @@ module VWrite #(
       .rst_i(rst),
       .run_i(run && write_enabled),
 
+      .ignore_first_i(0),
+      .keep_updating_address_i(0),
+
       //configurations 
       .period_i(write_per),
       .delay_i (0),
@@ -160,6 +163,9 @@ module VWrite #(
       .clk_i(clk),
       .rst_i(rst),
       .run_i(run),
+
+      .ignore_first_i(0),
+      .keep_updating_address_i(0),
 
       //configurations 
       .period_i(input_per),

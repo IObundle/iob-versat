@@ -118,6 +118,9 @@ module VRead #(
       .clk_i(clk),
       .rst_i(rst),
       .run_i(run && read_enabled),
+      
+      .ignore_first_i(0),
+      .keep_updating_address_i(0),
 
       //configurations 
       .period_i(read_per),
@@ -160,6 +163,9 @@ module VRead #(
       .clk_i(clk),
       .rst_i(rst),
       .run_i(run),
+
+      .ignore_first_i(0),
+      .keep_updating_address_i(0),
 
       //configurations 
       .period_i(output_per),

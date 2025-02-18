@@ -11,6 +11,9 @@ module AddressGen3 #(
 
    input run_i,
 
+   input ignore_first_i, // Treat as this is bias vread, for now
+   input keep_updating_address_i,
+
    //configurations 
    input        [  ADDR_W - 1:0] start_i,
    input        [PERIOD_W - 1:0] duty_i,
@@ -59,6 +62,8 @@ wire per3Cond = (((per3 + 1) == period3_i) || (period3_i == 0));
 wire iter2Cond = (((iter2 + 1) == iterations2_i) || (iterations2_i == 0));
 wire per2Cond = (((per2 + 1) == period2_i) || (period2_i == 0));
 
+//wire true_iterations = (ignore ? iterations_i + 1 : iterations_i);
+
 wire iterCond = (((iter + 1) == iterations_i) || (iterations_i == 0));
 wire perCond = (((per + 1) == period_i) || (period_i == 0));
 
@@ -74,7 +79,9 @@ wire [5:0] cases = {iter3Cond,per3Cond,iter2Cond,per2Cond,iterCond,perCond};
 
 */
 
-assign store_o = (per < duty_i);
+reg ignore;
+
+assign store_o = (per < duty_i && !ignore);
 
 always @(posedge clk_i,posedge rst_i) begin
    if (rst_i) begin
@@ -92,9 +99,9 @@ always @(posedge clk_i,posedge rst_i) begin
       done_o        <= 1'b1;
    end else if (run_i) begin
       delay_counter <= delay_i;
-      addr_o        <= start_i;
-      addr2         <= start_i;
-      addr3         <= start_i;
+      addr_o        <= (start_i << OFFSET_W);
+      addr2         <= (start_i << OFFSET_W);
+      addr3         <= (start_i << OFFSET_W);
       iter          <= 0;
       iter2         <= 0;
       iter3         <= 0;
@@ -103,6 +110,7 @@ always @(posedge clk_i,posedge rst_i) begin
       per3          <= 0;
       valid_o       <= 0;
       done_o        <= 1'b0;
+      ignore        <= ignore_first_i;
       if (delay_i == 0) begin
          valid_o <= 1'b1;
       end
@@ -112,50 +120,64 @@ always @(posedge clk_i,posedge rst_i) begin
    end else if (valid_o && ready_i) begin
       casez(cases)
       6'b?????0: begin
-         if (per < duty_i) begin
+         if (per < duty_i && (!ignore)) begin
             addr_o <= addr_o + (incr_i << OFFSET_W);
          end
          per <= per + 1;         
       end
       6'b????01: begin
-         addr_o <= addr_o + (shift_i << OFFSET_W);
+         if(!ignore)
+            addr_o <= addr_o + (shift_i << OFFSET_W);
          per    <= 0;
+         ignore <= 0;
          iter   <= iter + 1;
       end
       6'b???011: begin
-         addr_o <= addr2 + (incr2_i << OFFSET_W);
-         addr2  <= addr2 + (incr2_i << OFFSET_W);
+         if(!ignore) begin
+            addr_o <= addr2 + (incr2_i << OFFSET_W);
+            addr2  <= addr2 + (incr2_i << OFFSET_W);
+         end
          per    <= 0;
          iter   <= 0;
+         ignore <= 0;
          per2   <= per2 + 1;
       end
       6'b??0111: begin
-         addr_o <= addr2 + (shift2_i << OFFSET_W);
-         addr2  <= addr2 + (shift2_i << OFFSET_W);
+         if(!ignore) begin
+            addr_o <= addr2 + (shift2_i << OFFSET_W);
+            addr2  <= addr2 + (shift2_i << OFFSET_W);
+         end
          per    <= 0;
          iter   <= 0;
          per2   <= 0;
+         ignore <= 0;
          iter2  <= iter2 + 1;
       end
       6'b?01111: begin
-         addr_o <= addr3 + (incr3_i << OFFSET_W);
-         addr2  <= addr3 + (incr3_i << OFFSET_W);
-         addr3  <= addr3 + (incr3_i << OFFSET_W);
+         if(!ignore) begin
+            addr_o <= addr3 + (incr3_i << OFFSET_W);
+            addr2  <= addr3 + (incr3_i << OFFSET_W);
+            addr3  <= addr3 + (incr3_i << OFFSET_W);
+         end
          per    <= 0;
          iter   <= 0;
          per2   <= 0;
          iter2  <= 0;
+         ignore <= 0;
          per3   <= per3 + 1;
       end
       6'b011111: begin
-         addr_o <= addr3 + (shift3_i << OFFSET_W);
-         addr2  <= addr3 + (shift3_i << OFFSET_W);
-         addr3  <= addr3 + (shift3_i << OFFSET_W);
+         if(!ignore) begin
+            addr_o <= addr3 + (shift3_i << OFFSET_W);
+            addr2  <= addr3 + (shift3_i << OFFSET_W);
+            addr3  <= addr3 + (shift3_i << OFFSET_W);
+         end
          per    <= 0;
          iter   <= 0;
          per2   <= 0;
          iter2  <= 0;
          per3   <= 0;
+         ignore <= 0;
          iter3  <= iter3 + 1;
       end
       6'b111111: begin

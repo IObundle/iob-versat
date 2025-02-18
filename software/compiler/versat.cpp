@@ -110,7 +110,7 @@ FUDeclaration* RegisterModuleInfo(ModuleInfo* info){
 
       expr->type = Expression::LITERAL;
       expr->id = def.name;
-      expr->val = MakeValue(16);
+      expr->val = MakeValue(20); // TODO: Lenght and all manner of parameters that need to be propagated need a good look at. It's becoming clubersome to deal it.
 
       def.expr = expr;
     }

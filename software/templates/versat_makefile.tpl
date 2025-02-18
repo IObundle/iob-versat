@@ -33,7 +33,7 @@ createVerilatorObjects: V@{typeName}.h wrapper.o
 #./obj_dir/V@{typeName}_classes.mk: V@{typeName}.h
 
 V@{typeName}.h: $(HARDWARE_SRC)
-	verilator --report-unoptflat -GAXI_ADDR_W=@{arch.databusAddrSize} -GAXI_DATA_W=@{arch.databusDataSize} -GLEN_W=16 -CFLAGS "-O2 -march=native" @{TRACE_TYPE} --cc $(HARDWARE_SRC) $(INCLUDE) --top-module $(TYPE_NAME)
+	verilator --report-unoptflat -GAXI_ADDR_W=@{arch.databusAddrSize} -GAXI_DATA_W=@{arch.databusDataSize} -GLEN_W=20 -CFLAGS "-O2 -march=native" @{TRACE_TYPE} --cc $(HARDWARE_SRC) $(INCLUDE) --top-module $(TYPE_NAME)
 	$(MAKE) -C ./obj_dir -f V@{typeName}.mk
 	cp ./obj_dir/*.h ./
 

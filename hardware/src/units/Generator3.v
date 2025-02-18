@@ -55,6 +55,9 @@ module Generator3 #(
 
       .run_i(run),
 
+      .ignore_first_i(0),
+      .keep_updating_address_i(0),
+
       //configurations 
       .iterations_i(iterations),
       .shift_i     (shift),

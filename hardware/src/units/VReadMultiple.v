@@ -41,6 +41,8 @@ module VReadMultiple #(
    (* versat_stage="Read" *) input [AXI_ADDR_W-1:0] ext_addr,
    (* versat_stage="Read" *) input                  pingPong,
 
+   (* versat_stage="Read" *) input [  ADDR_W-1:0] read_start,
+
    (* versat_stage="Read" *) input [  PERIOD_W-1:0] read_per,
    (* versat_stage="Read" *) input [    ADDR_W-1:0] read_incr,
    (* versat_stage="Read" *) input [PERIOD_W-1:0]   read_duty,
@@ -68,6 +70,9 @@ module VReadMultiple #(
    input [PERIOD_W-1:0] output_per3,
    input [  ADDR_W-1:0] output_shift3,
    input [  ADDR_W-1:0] output_incr3,
+
+   input [ 20-1:0]      output_extra_delay,
+   input                output_ignore_first,
 
    input [DELAY_W-1:0] delay0
 );
@@ -159,10 +164,13 @@ PerformNReads #(
       .rst_i(rst),
       .run_i(run && read_enabled),
 
+      .ignore_first_i(0),
+      .keep_updating_address_i(0),
+
       //configurations 
       .period_i(read_per),
       .delay_i (0),
-      .start_i (0),
+      .start_i (read_start),
       .incr_i  (read_incr),
 
       .iterations_i(read_iter),
@@ -190,20 +198,24 @@ PerformNReads #(
    wire [ADDR_W-1:0] gen_addr = {pingPong ? !pingPongState : gen_addr_temp[ADDR_W-1],gen_addr_temp[ADDR_W-2:0]};
 
    // mem enables output by addr gen
-   wire output_enabled;
+   wire output_enabled,output_store;
 
    AddressGen3 #(
       .ADDR_W(ADDR_W),
       .DATA_W(DATA_W),
-      .PERIOD_W(PERIOD_W)
+      .PERIOD_W(PERIOD_W),
+      .DELAY_W(21)
    ) addrgenOutput (
       .clk_i(clk),
       .rst_i(rst),
       .run_i(run),
 
+      .ignore_first_i(output_ignore_first),
+      .keep_updating_address_i(1),
+
       //configurations 
       .period_i(output_per),
-      .delay_i (delay0),
+      .delay_i ({13'b0,delay0} + output_extra_delay),
       .start_i ({1'b0,output_start[ADDR_W-2:0]}),
       .incr_i  (output_incr),
 
@@ -225,11 +237,30 @@ PerformNReads #(
       .valid_o(output_enabled),
       .ready_i(1'b1),
       .addr_o (output_addr_temp),
-      .store_o(),
+      .store_o(output_store),
       .done_o (doneOutput_int)
    );
 
-   wire [ADDR_W-1:0] output_addr = {pingPong ? pingPongState : output_addr_temp[ADDR_W-1],output_addr_temp[ADDR_W-2:0]};
+   reg [ADDR_W-1:0] last_output_addr;
+
+   always @(posedge clk,posedge rst) begin
+      if(rst) begin
+         last_output_addr <= 0;
+      end 
+      else if(output_enabled && output_store) begin
+         last_output_addr <= output_addr_temp;
+      end
+   end
+
+   //wire [ADDR_W-1:0] true_output_addr = output_ignore_first ? last_output_addr : output_addr_temp;
+   wire [ADDR_W-1:0] true_output_addr = output_addr_temp;
+
+   /*
+      Basically, I need to have VRead simulate a initial loop of 17 but then go back to looping 16.
+
+   */
+
+   wire [ADDR_W-1:0] output_addr = {pingPong ? pingPongState : true_output_addr[ADDR_W-1],true_output_addr[ADDR_W-2:0]};
 
    wire                  write_en;
    wire [    ADDR_W-1:0] write_addr;
@@ -318,7 +349,7 @@ PerformNReads #(
       if(pingPong && gen_addr_temp[ADDR_W-1]) begin
          $display("%m: Overflow of memory when using PingPong for reading");
       end
-      if(pingPong && output_addr_temp[ADDR_W-1]) begin
+      if(pingPong && true_output_addr[ADDR_W-1]) begin
          $display("%m: Overflow of write memory when using PingPong for outputting");
       end
       if(pingPong && output_start[ADDR_W-1]) begin

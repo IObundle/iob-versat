@@ -40,6 +40,7 @@ module VWriteMultiple #(
 
    // configurations
    (* versat_stage="Write" *) input [AXI_ADDR_W-1:0] ext_addr,
+   (* versat_stage="Write" *) input [    ADDR_W-1:0] write_start,
    (* versat_stage="Write" *) input [  PERIOD_W-1:0] write_per,
    (* versat_stage="Write" *) input [    ADDR_W-1:0] write_incr,
    (* versat_stage="Write" *) input [PERIOD_W-1:0]   write_duty,
@@ -65,6 +66,9 @@ module VWriteMultiple #(
    input [PERIOD_W-1:0] input_per2,
    input [  ADDR_W-1:0] input_shift2,
    input [  ADDR_W-1:0] input_incr2,
+
+   input                input_ignore_first,
+   input [ 20-1:0]      input_extra_delay,
 
    input [ DELAY_W-1:0] delay0
 );
@@ -161,11 +165,14 @@ PerformNWrites #(
       .rst_i(rst),
       .run_i(run && write_enabled),
 
+      .ignore_first_i(0),
+      .keep_updating_address_i(0),
+
       //configurations 
       .period_i(write_per),
       .delay_i (0),
-      .start_i (0),
-      //.start_i (write_start),
+      //.start_i (0),
+      .start_i (write_start),
       .incr_i  (write_incr),
       .iterations_i(write_iter),
       .duty_i      (write_duty),
@@ -194,16 +201,19 @@ PerformNWrites #(
    AddressGen3 #(
       .ADDR_W(ADDR_W),
       .DATA_W(DATA_W),
-      .DELAY_W(DELAY_W),
+      .DELAY_W(21),
       .PERIOD_W(PERIOD_W)
    ) addrgenStore (
       .clk_i(clk),
       .rst_i(rst),
       .run_i(run),
 
+      .ignore_first_i(input_ignore_first),
+      .keep_updating_address_i(0),
+
       //configurations 
       .period_i(input_per),
-      .delay_i (delay0),
+      .delay_i ({13'b0,delay0} + input_extra_delay),
       .start_i ({1'b0,input_start[ADDR_W-2:0]}),
       //.start_i (input_start_inst),
       .incr_i  (input_incr),
