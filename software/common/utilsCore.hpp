@@ -27,7 +27,9 @@
 
 // TODO: We probably want to standardize some of these. Do it right. Care about overflow and stuff like that
 //       Either that or use values from C or something.
+#ifndef INT_MAX
 #define INT_MAX ((1<<30) + ((1<<30) - 1))
+#endif
 
 #define ALIGN_DOWN(val,size) (val & (~(size - 1)))
 

@@ -18,7 +18,7 @@ VERSAT_COMPILER_DIR:=$(VERSAT_SW_DIR)/compiler
 BUILD_DIR:=$(VERSAT_DIR)/build
 _a := $(shell mkdir -p $(BUILD_DIR)) # Creates the folder
 
-VERSAT_REQUIRE_TYPE:=type verilogParsing templateEngine
+VERSAT_REQUIRE_TYPE:=type templateEngine
 
 VERSAT_ALL_HEADERS := $(wildcard $(VERSAT_COMMON_DIR)/*.hpp) $(wildcard $(VERSAT_COMPILER_DIR)/*.hpp)
 VERSAT_COMMON_SRC_NO_TYPE := $(filter-out $(patsubst %,$(VERSAT_COMMON_DIR)/%.cpp,$(VERSAT_REQUIRE_TYPE)),$(wildcard $(VERSAT_COMMON_DIR)/*.cpp))
@@ -30,10 +30,6 @@ VERSAT_COMMON_OBJ:=$(VERSAT_COMMON_OBJ_NO_TYPE) $(patsubst %,$(BUILD_DIR)/%.o,$(
 VERSAT_COMMON_INCLUDE := -I$(VERSAT_COMMON_DIR) -I$(VERSAT_SW_DIR)
 
 VERSAT_DEFINE += -DPC
-
-# -rdynamic - used to allow backtraces
-$(BUILD_DIR)/%.o : $(VERSAT_COMMON_DIR)/%.cpp
-	g++ $(VERSAT_DEFINE) -rdynamic $(VERSAT_COMMON_FLAGS) -std=c++17 -c -o $@ -DROOT_PATH=\"$(abspath ../)\" -DVERSAT_DEBUG $(GLOBAL_CFLAGS) $< $(VERSAT_COMMON_INCLUDE)
 
 VERSAT_TEMPLATES:=$(wildcard $(VERSAT_TEMPLATE_DIR)/*.tpl)
 VERSAT_TEMPLATES_OBJ:=$(BUILD_DIR)/templateData.o
@@ -92,9 +88,11 @@ $(BUILD_DIR)/typeInfo.o: $(BUILD_DIR)/typeInfo.cpp $(VERSAT_ALL_HEADERS)
 	g++ -DPC -std=c++17 $(VERSAT_COMMON_FLAGS) -c -o $@ $(GLOBAL_CFLAGS) $< $(VERSAT_INCLUDE)
 
 $(BUILD_DIR)/%.o : $(VERSAT_COMPILER_DIR)/%.cpp $(BUILD_DIR)/templateData.hpp $(VERSAT_ALL_HEADERS)
-	g++ -MMD -std=c++17 $(VERSAT_FLAGS) $(FL) $(VERSAT_COMMON_FLAGS) -c -o $@ $(GLOBAL_CFLAGS) $< $(VERSAT_INCLUDE) #-DDEFAULT_UNIT_PATHS="$(SHARED_UNITS_PATH)" 
+	g++ -MMD -std=c++17 $(VERSAT_FLAGS) $(FL) $(VERSAT_COMMON_FLAGS) -c -o $@ $(GLOBAL_CFLAGS) $< $(VERSAT_INCLUDE)
 
-$(shell mkdir -p $(BUILD_DIR))
+# -rdynamic - used to allow backtraces
+$(BUILD_DIR)/%.o : $(VERSAT_COMMON_DIR)/%.cpp $(VERSAT_ALL_HEADERS)
+	g++ $(VERSAT_DEFINE) -rdynamic $(VERSAT_COMMON_FLAGS) -std=c++17 -c -o $@ -DROOT_PATH=\"$(abspath ../)\" -DVERSAT_DEBUG $(GLOBAL_CFLAGS) $< $(VERSAT_COMMON_INCLUDE)
 
 $(VERSAT_DIR)/versat: $(CPP_OBJ) $(VERSAT_ALL_HEADERS)
 	g++ -MMD -std=c++17 $(FL) $(VERSAT_FLAGS) -o $@ $(VERSAT_COMMON_FLAGS) $(CPP_OBJ) $(VERSAT_INCLUDE) $(VERSAT_LIBS) 

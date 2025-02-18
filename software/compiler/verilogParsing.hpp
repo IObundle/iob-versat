@@ -1,18 +1,20 @@
 #pragma once
 
-#include <vector>
+//#include <vector>
 #include <unordered_map>
 
 #include "utils.hpp"
 #include "parser.hpp"
 
-typedef std::unordered_map<String,Value> ValueMap;
-typedef std::unordered_map<String,String> MacroMap;
-
 struct Arena;
 struct CompiledTemplate;
 
 typedef Range<Expression*> ExpressionRange;
+
+struct MacroDefinition{
+  String content;
+  Array<String> functionArguments;
+};
 
 enum VersatStage{
   VersatStage_COMPUTE, // The default is Compute

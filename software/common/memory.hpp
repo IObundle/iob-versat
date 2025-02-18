@@ -433,6 +433,8 @@ struct TrieMap{
 
   bool Remove(Key key);
   void RemoveOrFail(Key key);
+
+  void Clear(); // TODO: Not properly tested.
   
   bool Exists(Key key);
 
@@ -1110,6 +1112,17 @@ void TrieMap<Key,Data>::RemoveOrFail(Key key){
   Assert(res);
 }
 
+template<typename Key,typename Data>
+void TrieMap<Key,Data>::Clear(){
+  for(auto* node = head; node; node = node->next){
+    node->valid = false;
+  }
+  
+  this->head = nullptr;
+  this->tail = nullptr;
+  this->inserted = 0;
+}
+  
 template<typename Key,typename Data>
 bool TrieMap<Key,Data>::Exists(Key key){
   Data* data = Get(key);

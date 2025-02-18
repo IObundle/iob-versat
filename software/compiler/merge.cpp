@@ -809,46 +809,6 @@ static GraphMapping FirstFitGraphMapping(Accelerator* accel1,Accelerator* accel2
   return res;
 }
 
-void OrderedMatch(std::vector<FUInstance*>& order1,std::vector<FUInstance*>& order2,InstanceMap& map,int orderOffset){
-  UNHANDLED_ERROR("Implement if needed");
-#if 0
-  auto iter1 = order1.begin();
-  auto iter2 = order2.begin();
-
-  // Match same order
-  for(; iter1 != order1.end() && iter2 != order2.end();){
-    FUInstance* inst1 = *iter1;
-    FUInstance* inst2 = *iter2;
-
-    int val1 = inst1->graphData->order;
-    int val2 = inst1->graphData->order;
-
-    if(abs(val1 - val2) <= orderOffset && inst1->declaration == inst2->declaration){
-      Assert(!inst1->tag);
-      Assert(!inst2->tag);
-
-      inst1->tag = 1;
-      inst2->tag = 1;
-
-      map.insert({inst2,inst1});
-
-      ++iter1;
-      ++iter2;
-      continue;
-    }
-
-    if(compare(inst1,inst2)){
-      ++iter1;
-    } else if(!compare(inst1,inst2)){
-      ++iter2;
-    } else {
-      ++iter1;
-      ++iter2;
-    }
-  }
-#endif
-}
-
 OverheadCount CountOverheadUnits(Accelerator* accel){
   OverheadCount res = {};
 

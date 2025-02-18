@@ -51,14 +51,20 @@ Opt<MathFunctionDescription> GetMathFunction(String name){
   return {};
 }
 
-bool PerformDefineSubstitution(StringBuilder* builder,MacroMap& macros,String name){
-  auto iter = macros.find(name);
-  if(iter == macros.end()){
+bool PerformDefineSubstitution(StringBuilder* builder,TrieMap<String,MacroDefinition>* macros,String name){
+  MacroDefinition* def = macros->Get(name);
+  
+  if(!def){
     return false;
   }
 
-  String subs = iter->second;
+  String subs = def->content;
 
+  // TODO: Right now, we are not performing substitution for function macros.
+  //       Stuff kinda works because we only care about verilog interfaces and currently we do not have any
+  //       unit that uses function macros inside the interfaces.
+  //       Eventually must fix this.
+  
   Tokenizer inside(subs,"`",{});
   while(!inside.Done()){
     Opt<Token> peek = inside.PeekFindUntil("`");
@@ -83,9 +89,9 @@ bool PerformDefineSubstitution(StringBuilder* builder,MacroMap& macros,String na
   return true;
 }
 
-void PreprocessVerilogFile_(String fileContent,MacroMap& macros,Array<String> includeFilepaths,StringBuilder* builder);
+void PreprocessVerilogFile_(String fileContent,TrieMap<String,MacroDefinition>* macros,Array<String> includeFilepaths,StringBuilder* builder);
 
-static void DoIfStatement(Tokenizer* tok,MacroMap& macros,Array<String> includeFilepaths,StringBuilder* builder){
+static void DoIfStatement(Tokenizer* tok,TrieMap<String,MacroDefinition>* macros,Array<String> includeFilepaths,StringBuilder* builder){
   Token first = tok->NextToken();
   Token macroName = tok->NextToken();
 
@@ -98,7 +104,7 @@ static void DoIfStatement(Tokenizer* tok,MacroMap& macros,Array<String> includeF
     UNHANDLED_ERROR("TODO: Make this a handled error");
   }
 
-  bool exists = (macros.find(macroName) != macros.end());
+  bool exists = macros->Exists(macroName);
   bool doIf = (compareVal == exists);
 
   // Try to find the edges of the if construct (else, endif or, if find another if recurse.)
@@ -142,7 +148,7 @@ static void DoIfStatement(Tokenizer* tok,MacroMap& macros,Array<String> includeF
   }
 }
 
-void PreprocessVerilogFile_(String fileContent,MacroMap& macros,Array<String> includeFilepaths,StringBuilder* builder){
+void PreprocessVerilogFile_(String fileContent,TrieMap<String,MacroDefinition>* macros,Array<String> includeFilepaths,StringBuilder* builder){
   Tokenizer tokenizer = Tokenizer(fileContent, "():;[]{}`,+-/*\\\"",{});
   Tokenizer* tok = &tokenizer;
 
@@ -216,15 +222,17 @@ void PreprocessVerilogFile_(String fileContent,MacroMap& macros,Array<String> in
       PreprocessVerilogFile_(STRING((const char*) mem,fileSize),macros,includeFilepaths,builder);
     } else if(CompareString(identifier,"define")){
       tok->AdvancePeek();
-      
+
       auto mark = tok->Mark();
       Token defineName = tok->NextToken();
       
       Token emptySpace = tok->PeekWhitespace();
+
       if(emptySpace.size == 0){ // Function macro
-        /* Token arguments = */ tok->PeekFindIncluding(")").value();
-        tok->AdvancePeek();
-        defineName = tok->Point(mark);
+        // TODO: We need proper argument handling.
+        Opt<Token> arguments = tok->PeekFindIncluding(")");
+
+        tok->AdvancePeekBad(arguments.value());
       }
 
       FindFirstResult search = tok->FindFirst({"\n","//","\\"}).value();
@@ -267,12 +275,12 @@ void PreprocessVerilogFile_(String fileContent,MacroMap& macros,Array<String> in
         }
       }
 
-      macros[defineName] = body;
+      macros->Insert(defineName,{body,{}});
     } else if(CompareString(identifier,"undef")){
       tok->AdvancePeek();
       Token defineName = tok->NextToken();
 
-      macros.erase(defineName);
+      macros->Remove(defineName);
     } else if(CompareString(identifier,"timescale")){
       tok->AdvanceRemainingLine();
     } else if(CompareString(identifier,"ifdef") || CompareString(identifier,"ifndef")){
@@ -285,9 +293,9 @@ void PreprocessVerilogFile_(String fileContent,MacroMap& macros,Array<String> in
     } else if(CompareString(identifier,"elsif")){
       NOT_POSSIBLE("All else and ends should have already been handled inside DoIf");
     } else if(CompareString(identifier,"resetall")){
-      macros.clear();
+      macros->Clear();
     } else if(CompareString(identifier,"undefineall")){
-      macros.clear();
+      macros->Clear();
     } else {
       tok->AdvancePeek();
 
@@ -302,7 +310,8 @@ void PreprocessVerilogFile_(String fileContent,MacroMap& macros,Array<String> in
 
 String PreprocessVerilogFile(String fileContent,Array<String> includeFilepaths,Arena* out){
   TEMP_REGION(temp,out);
-  MacroMap macros = {};
+
+  TrieMap<String,MacroDefinition>* macros = PushTrieMap<String,MacroDefinition>(temp);
 
   auto builder = StartString(temp);
   PreprocessVerilogFile_(fileContent,macros,includeFilepaths,builder);
@@ -401,7 +410,7 @@ static Expression* VerilogParseFactor(Tokenizer* tok,Arena* out){
   }
 }
 
-static Value Eval(Expression* expr,ValueMap& map){
+static Value Eval(Expression* expr,TrieMap<String,Value>* map){
   switch(expr->type){
   case Expression::OPERATION:{
     Value val1 = Eval(expr->expressions[0],map);
@@ -430,7 +439,13 @@ static Value Eval(Expression* expr,ValueMap& map){
     }
   }break;
   case Expression::IDENTIFIER:{
-    return map[expr->id];
+    Value* val = map->Get(expr->id);
+    if(!map){
+      printf("Error, did not find parameter %.*s\n",UNPACK_SS(expr->id));
+      NOT_IMPLEMENTED("Need to also report file position and stuff like that, similar to parser tokenizer error");
+    }
+    
+    return *val;
   }break;
   case Expression::LITERAL:{
     return expr->val;
@@ -462,7 +477,7 @@ static Value Eval(Expression* expr,ValueMap& map){
   return MakeValue();
 }
 
-static Array<ParameterExpression> ParseParameters(Tokenizer* tok,ValueMap& map,Arena* out){
+static Array<ParameterExpression> ParseParameters(Tokenizer* tok,TrieMap<String,Value>* map,Arena* out){
   //TODO: Add type and range to parsing
   /*
 	Range currentRange;
@@ -494,7 +509,7 @@ static Array<ParameterExpression> ParseParameters(Tokenizer* tok,ValueMap& map,A
       Expression* expr = VerilogParseExpression(tok,out);
       Value val = Eval(expr,map);
 
-      map[paramName] = val;
+      map->Insert(paramName,val);
 
       ParameterExpression* p = params.PushElem();
       p->name = paramName;
@@ -511,7 +526,7 @@ static Expression* VerilogParseExpression(Tokenizer* tok,Arena* out){
   return res;
 }
 
-static ExpressionRange ParseRange(Tokenizer* tok,ValueMap& map,Arena* out){
+static ExpressionRange ParseRange(Tokenizer* tok,Arena* out){
   static Expression zeroExpression = {};
 
   Token peek = tok->PeekToken();
@@ -556,7 +571,8 @@ static Module ParseModule(Tokenizer* tok,Arena* out){
   TEMP_REGION(temp,out);
 
   Module module = {};
-  ValueMap values;
+
+  TrieMap<String,Value>* values = PushTrieMap<String,Value>(temp);
 
   tok->AssertNextToken("module");
 
@@ -579,7 +595,6 @@ static Module ParseModule(Tokenizer* tok,Arena* out){
 
       PortDeclaration port;
       ArenaList<Pair<String,Value>>* attributeList = PushArenaList<Pair<String,Value>>(temp);
-      //Hashmap<String,Value>* attributes = 
     
       if(CompareString(peek,"(*")){
         tok->AdvancePeek();
@@ -641,7 +656,7 @@ static Module ParseModule(Tokenizer* tok,Arena* out){
         break;
       }
 
-      ExpressionRange res = ParseRange(tok,values,out);
+      ExpressionRange res = ParseRange(tok,out);
       port.range = res;
       port.name = tok->NextToken();
 
