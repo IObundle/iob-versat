@@ -74,7 +74,7 @@ struct InstanceInfo{
   int mergePort;
   int muxGroup;
 
-  bool belongs;
+  bool doesNotBelong; // For merge units, if true then this unit does not actually exist for the given partition
   int special;
   int localOrder;
   FUInstance* inst;

@@ -520,8 +520,6 @@ StructInfo* GenerateConfigStruct(AccelInfoIterator iter,Arena* out){
         simpleSubInfo->parent = res;
         simpleSubInfo->list = elements;
         elem.childStruct = simpleSubInfo;
-        
-        //DEBUG_BREAK();
       } else {
         // MARKED
 
@@ -582,7 +580,8 @@ StructInfo* GenerateConfigStruct(AccelInfoIterator iter,Arena* out){
 #endif
 
     elem.isMergeMultiplexer = unit->isMergeMultiplexer;
-
+    elem.doesNotBelong = unit->doesNotBelong;
+    
     *list->PushElem() = elem;
   }
       
@@ -631,7 +630,7 @@ Array<TypeStructInfo> GenerateStructs(Array<StructInfo*> info,Arena* out){
     TypeStructInfo* type = list->PushElem();
     type->name = structInfo->name;
 
-    int minPos = 9999;
+    int minPos = INT_MAX;
     int maxPos = 0;
     for(DoubleLink<StructElement>* ptr = structInfo->list ? structInfo->list->head : nullptr; ptr; ptr = ptr->next){
       StructElement elem = ptr->elem;
@@ -639,7 +638,7 @@ Array<TypeStructInfo> GenerateStructs(Array<StructInfo*> info,Arena* out){
       maxPos = MAX(maxPos,elem.pos + elem.size);
     }
 
-    // TODO: Kinda of an hack but not really? We are using global position for everything else. But for simple types we basically have local position, which is what we want. Not sure about everything else though. Are simple types the only ones that care/needed local position and everything else can work from local pos?
+    // TODO: Kinda of an hack but not really? We are using global position for everything else. But for simple types what we need is local position, which is what we currently have. 
     if(structInfo->isUnique){
       // NOTE: Because the struct is simple, we are normalizing position to start at zero.
       //       The code is not good but we are just hacking stuff until we get something working.
@@ -656,7 +655,6 @@ Array<TypeStructInfo> GenerateStructs(Array<StructInfo*> info,Arena* out){
     }
 
     Assert(maxPos > minPos);
-    DEBUG_BREAK_IF(minPos != 0);
     
     Array<int> amountOfEntriesAtPos = PushArray<int>(temp,maxPos);
     for(DoubleLink<StructElement>* ptr = structInfo->list ? structInfo->list->head : nullptr; ptr; ptr = ptr->next){
@@ -724,6 +722,10 @@ Array<TypeStructInfo> GenerateStructs(Array<StructInfo*> info,Arena* out){
       int subIndex = indexes[pos]++;
       type->entries[index].typeAndNames[subIndex].name = elem.name;
 
+      if(elem.doesNotBelong){
+        type->entries[index].typeAndNames[subIndex].name = PushString(out,"padding_%d",paddingAdded++);
+      }
+      
       // TODO: HACK
       if(elem.childStruct->name == STRING("iptr")){
         type->entries[index].typeAndNames[subIndex].type = STRING("iptr");
@@ -831,7 +833,6 @@ void OutputTopLevelFiles(Accelerator* accel,FUDeclaration* topLevelDecl,const ch
         if(CompareString(possibleDuplicate,name)){
           allStructs[i]->name = PushString(temp,"%.*s_%d",UNPACK_SS(possibleDuplicate),indexes[ii]++);
           allStructs[i]->isUnique = true;
-          //allStructs[i]->globalPos = 
           break;
         }
       }

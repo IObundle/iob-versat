@@ -92,7 +92,7 @@ struct StructElement{
   int pos; // This is local pos (inside the struct).
   int size;
   bool isMergeMultiplexer;
-  //bool isPadding;
+  bool doesNotBelong;
 };
 
 struct StructInfo{
