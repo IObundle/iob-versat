@@ -2057,32 +2057,39 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
     iter.accelName = decl->info.infos[i].name;
     FillInstanceInfo(iter,globalPermanent);
 
+    Array<InstanceInfo*> instanceInfos = GetAllSameLevelUnits(&decl->info,0,i,temp);
+    
     AcceleratorMapping* mergedAccelToRecon = MappingInvert(reconToMergedAccel[i],globalPermanent);
+
+    // NOTE: Even though we flatten the accelerators, there is no guarantee that we are dealing with the lowest level of units available. Flatten does not always goes towards the lowest level.
 
     for(int index = 0; index < mergedAccel->allocated.Size(); index++){
       FUInstance* ptr = mergedAccel->allocated.Get(index);
       FUInstance* reconNode = MappingMapNode(mergedAccelToRecon,ptr);
       bool mapExists = reconNode != nullptr;
       
+      InstanceInfo* instance = instanceInfos[index];
+
       if(reconNode){
-        decl->info.infos[i].info[index].baseNodeDelay = reconDelay[i].nodeDelay->GetOrFail(reconNode).value;
-        decl->info.infos[i].info[index].localOrder = reconToOrder[i]->GetOrFail(reconNode);
+        instance->baseNodeDelay = reconDelay[i].nodeDelay->GetOrFail(reconNode).value;
+        instance->localOrder = reconToOrder[i]->GetOrFail(reconNode);
       } else {
-        decl->info.infos[i].info[index].baseNodeDelay = 0; // NOTE: Even if they do not belong, this delay is directly inserted into the header file, meaning that for now it's better if we keep everything at zero.
-        decl->info.infos[i].info[index].localOrder = 0;
+        instance->baseNodeDelay = 0; // NOTE: Even if they do not belong, this delay is directly inserted into the header file, meaning that for now it's better if we keep everything at zero.
+        instance->localOrder = 0;
       }
- 
-      decl->info.infos[i].info[index].baseName = ptr->name;
+     
+      instance->baseName = ptr->name;
 
       if(ptr->isMergeMultiplexer || ptr->declaration == BasicDeclaration::fixedBuffer){
         // Nothing
       } else if(mapExists){
         FUInstance* originalNode = MappingMapNode(mergedAccelToRecon,ptr);
         Assert(originalNode);
+        Assert(originalNode->declaration == ptr->declaration);
 
-        decl->info.infos[i].info[index].baseName = originalNode->name;
+        instance->baseName = originalNode->name;
       } else {
-        decl->info.infos[i].info[index].doesNotBelong = true;
+        instance->doesNotBelong = true;
       }
     }
 

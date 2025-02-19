@@ -805,6 +805,8 @@ void OutputTopLevelFiles(Accelerator* accel,FUDeclaration* topLevelDecl,const ch
   
   AccelInfo info = CalculateAcceleratorInfo(accel,true,temp);
 
+  DEBUG_BREAK();
+  
   FillStaticInfo(&info);
 
   AccelInfoIterator iter = StartIteration(&info);
