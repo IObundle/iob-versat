@@ -366,9 +366,14 @@ FUDeclaration* RegisterSubUnit(Accelerator* circuit,SubUnitOptions options){
   res->parameters[3] = STRING("AXI_ADDR_W");
   res->parameters[4] = STRING("AXI_DATA_W");
   res->parameters[5] = STRING("LEN_W");
-  
-  // TODO: Need to add back the OutputDebugDotGraph calls
-  if(options == SubUnitOptions_BAREBONES){
+
+  if(circuit->allocated.Size() == 0){
+    res->baseCircuit = circuit;
+    res->fixedDelayCircuit = circuit;
+
+    return res;
+  } else if(options == SubUnitOptions_BAREBONES){
+    // TODO: Need to add back the OutputDebugDotGraph calls
     res->baseCircuit = CopyAccelerator(circuit,AcceleratorPurpose_BASE,true,nullptr); 
 
     CalculateDelayResult delays = CalculateDelay(circuit,temp);
@@ -390,9 +395,7 @@ FUDeclaration* RegisterSubUnit(Accelerator* circuit,SubUnitOptions options){
     CalculateDelayResult delays = CalculateDelay(circuit,temp);
 
     region(temp){
-      //OutputDebugDotGraph(circuit,STRING("BeforeFixDelay.dot"),temp);
       FixDelays(circuit,delays.edgesDelay);
-      //OutputDebugDotGraph(circuit,STRING("AfterFixDelay.dot"),temp);
     }
 
     res->fixedDelayCircuit = circuit;

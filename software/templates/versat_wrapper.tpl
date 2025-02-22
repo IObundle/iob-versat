@@ -33,6 +33,10 @@ VerilatedContext* contextp = new VerilatedContext;
 #{end}
 
 #include "V@{typeName}.h"
+#{if simulateLoops}
+#include "VSuperAddress.h"
+#{end}
+
 static V@{typeName}* dut = NULL;
 
 extern bool CreateVCD;
@@ -618,6 +622,143 @@ extern "C" void VersatLoadDelay(const unsigned int* delayBuffer){
     #{end}
    self->eval();
   #{end}
+}
+
+int SimulateAddressGen(iptr* arrayToFill,int arraySize,AddressGenArguments args){
+   static VSuperAddress* self = nullptr;
+
+   Verilated::traceEverOn(true);
+
+   // Could also create and destroy everytime to make sure that we start fresh.
+   if(self == nullptr){
+      self = new VSuperAddress();
+   }
+
+   VerilatedVcdC* tfp = new VerilatedVcdC;
+   self->trace(tfp, 99);
+   tfp->open("loop.vcd");
+
+#define TRACE() self->eval(); \
+   tfp->dump(contextp->time()); \
+   contextp->timeInc(2);
+
+#define UP() self->clk_i = 1; \
+    TRACE(); \
+    self->clk_i = 0; \
+    TRACE();
+
+   // These wires can always be set to these value.
+   self->delay_i = 0;
+   self->ignore_first_i = 0;
+   self->data_ready_i = 1;
+   self->data_valid_i = 1;
+   self->reading = 1; // TODO: Does this make a difference? Also not like this existing in hardware either
+   self->databus_ready = 1;
+   self->ready_i = 1;
+
+   self->run_i = 0;
+   self->clk_i = 0;
+   self->rst_i = 0;
+
+   self->start_i = args.start;
+   self->duty_i = args.duty;
+   self->period_i = args.period;
+   self->incr_i = args.incr;
+   self->iterations_i = args.iterations;
+   self->shift_i = args.shift;
+   self->period2_i = args.period2;
+   self->incr2_i = args.incr2;
+   self->iterations2_i = args.iterations2;
+   self->shift2_i = args.shift2;
+   self->period3_i = args.period3;
+   self->incr3_i = args.incr3;
+   self->iterations3_i = args.iterations3;
+   self->shift3_i = args.shift3;
+   self->databus_length = args.length;
+   self->start_address_i = args.start_address;
+   self->address_shift_i = args.addr_shift;
+   self->count_i = args.amount_minus_one + 1;
+
+   TRACE();
+
+   self->clk_i = 1;
+   TRACE();
+
+   self->clk_i = 0;
+   self->run_i = 1;
+
+   TRACE();
+
+   self->clk_i = 1;
+ 
+   TRACE();
+
+   self->run_i = 0;
+   self->databus_last = 0;
+
+   self->clk_i = 0;
+   TRACE();
+
+   int loops = 0;
+   int arrayIndex = 0;
+   while(!self->doneDatabus){
+      self->databus_last = 0;
+      while(!self->databus_valid){
+          UP();
+          loops += 1;
+          if(loops > 10000){
+            printf("Failed on A\n");
+            goto end;
+          }
+      }
+
+      // At this point databus is valid for the first time
+
+      int transferLength = self->databus_len / 4; // AXI_DATA_W
+      iptr databus_initial_addr = self->databus_addr;
+
+      for(int i = 0; i < transferLength; i++){
+          if(i == transferLength - 1){
+            self->databus_last = 1;
+          }
+ 
+          while(!self->databus_valid){
+             UP();
+             loops += 1;
+             if(loops > 10000){
+                 printf("Failed on B\n");
+                 goto end;
+             }
+          }
+
+          if(arrayIndex < arraySize){
+              arrayToFill[arrayIndex++] = databus_initial_addr + i * 4; // DATA_W
+          }
+
+          UP();
+      }
+
+      self->databus_last = 0;
+      UP();
+
+      loops += 1;
+      if(loops > 10000){
+        printf("Failed on C\n");
+        goto end;
+      }
+   }
+
+end:
+
+   UP();
+   UP();
+   UP();
+   UP();
+   UP();
+
+   //tfp->close();
+
+   return arrayIndex;
 }
 
 #undef UPDATE

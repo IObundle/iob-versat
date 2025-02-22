@@ -12,7 +12,6 @@ module AddressGen3 #(
    input run_i,
 
    input ignore_first_i, // Treat as this is bias vread, for now
-   input keep_updating_address_i,
 
    //configurations 
    input        [  ADDR_W - 1:0] start_i,
@@ -39,153 +38,72 @@ module AddressGen3 #(
    input        [ DELAY_W - 1:0] delay_i,
 
    //outputs 
-   output reg                valid_o,
-   input                     ready_i,
-   output reg [ADDR_W - 1:0] addr_o,
-   output                    store_o,
+   output                valid_o,
+   input                 ready_i,
+   output [ADDR_W - 1:0] addr_o,
+   output                store_o,
 
-   output reg done_o
+   output  done_o
 );
 
-localparam OFFSET_W = $clog2(DATA_W / 8);
+   SuperAddress #(
+      .ADDR_W(ADDR_W),
+      .PERIOD_W(PERIOD_W),
+      .DELAY_W(DELAY_W),
+      .DATA_W(DATA_W)
+      ) reader (
+      .clk_i(clk_i),
+      .rst_i(rst_i),
+      .run_i(run_i),
+      .done_o(done_o),
 
-reg                                           [   DELAY_W-1:0] delay_counter;
+      .ignore_first_i(ignore_first_i),
 
-reg                                           [  ADDR_W - 1:0] iter,iter2,iter3;
-reg                                           [PERIOD_W - 1:0] per,per2,per3;
+      //configurations 
+      .period_i(period_i),
+      .delay_i (delay_i),
+      .start_i (start_i),
+      .incr_i  (incr_i),
 
-reg [ADDR_W-1:0] addr2,addr3;
+      .iterations_i(iterations_i),
+      .duty_i      (duty_i),
+      .shift_i     (shift_i),
 
-wire iter3Cond = (((iter3 + 1) == iterations3_i) || (iterations3_i == 0));
-wire per3Cond = (((per3 + 1) == period3_i) || (period3_i == 0));
+      .period2_i(period2_i),
+      .incr2_i(incr2_i),
+      .iterations2_i(iterations2_i),
+      .shift2_i(shift2_i),
 
-wire iter2Cond = (((iter2 + 1) == iterations2_i) || (iterations2_i == 0));
-wire per2Cond = (((per2 + 1) == period2_i) || (period2_i == 0));
+      .period3_i(period3_i),
+      .incr3_i(incr3_i),
+      .iterations3_i(iterations3_i),
+      .shift3_i(shift3_i),
 
-//wire true_iterations = (ignore ? iterations_i + 1 : iterations_i);
+      .doneDatabus(),
+      .doneAddress(),
 
-wire iterCond = (((iter + 1) == iterations_i) || (iterations_i == 0));
-wire perCond = (((per + 1) == period_i) || (period_i == 0));
+      //outputs 
+      .valid_o(valid_o),
+      .ready_i(ready_i),
+      .addr_o (addr_o),
+      .store_o(store_o),
 
-wire [5:0] cases = {iter3Cond,per3Cond,iter2Cond,per2Cond,iterCond,perCond};
+      .databus_ready(1'b1),
+      .databus_valid(),
+      .databus_addr(),
+      .databus_len(),
+      .databus_last(1'b1),
 
-/* TODO:
-   
-   The address generation can be decoupled, but it is better if we separate it into individual modules.
-   Because we must take into account future iter and per conditions.
-   The idea of "runnning one ahead" does not work if we only take into account per. 
+      // Data interface
+      .data_valid_i(1'b1),
+      .data_ready_i(1'b1),
+      .reading(1'b1),
+      .data_last_o(),
 
-   Basically need a module that implements per and iter logic only. We can then implement three of them if needed
-
-*/
-
-reg ignore;
-
-assign store_o = (per < duty_i && !ignore);
-
-always @(posedge clk_i,posedge rst_i) begin
-   if (rst_i) begin
-      delay_counter <= 0;
-      addr_o        <= 0;
-      addr2         <= 0;
-      addr3         <= 0;
-      iter          <= 0;
-      iter2         <= 0;
-      iter3         <= 0;
-      per           <= 0;
-      per2          <= 0;
-      per3          <= 0;
-      valid_o       <= 0;
-      done_o        <= 1'b1;
-   end else if (run_i) begin
-      delay_counter <= delay_i;
-      addr_o        <= (start_i << OFFSET_W);
-      addr2         <= (start_i << OFFSET_W);
-      addr3         <= (start_i << OFFSET_W);
-      iter          <= 0;
-      iter2         <= 0;
-      iter3         <= 0;
-      per           <= 0;
-      per2          <= 0;
-      per3          <= 0;
-      valid_o       <= 0;
-      done_o        <= 1'b0;
-      ignore        <= ignore_first_i;
-      if (delay_i == 0) begin
-         valid_o <= 1'b1;
-      end
-   end else if (|delay_counter) begin
-      delay_counter <= delay_counter - 1;
-      valid_o       <= (delay_counter == 1);
-   end else if (valid_o && ready_i) begin
-      casez(cases)
-      6'b?????0: begin
-         if (per < duty_i && (!ignore)) begin
-            addr_o <= addr_o + (incr_i << OFFSET_W);
-         end
-         per <= per + 1;         
-      end
-      6'b????01: begin
-         if(!ignore)
-            addr_o <= addr_o + (shift_i << OFFSET_W);
-         per    <= 0;
-         ignore <= 0;
-         iter   <= iter + 1;
-      end
-      6'b???011: begin
-         if(!ignore) begin
-            addr_o <= addr2 + (incr2_i << OFFSET_W);
-            addr2  <= addr2 + (incr2_i << OFFSET_W);
-         end
-         per    <= 0;
-         iter   <= 0;
-         ignore <= 0;
-         per2   <= per2 + 1;
-      end
-      6'b??0111: begin
-         if(!ignore) begin
-            addr_o <= addr2 + (shift2_i << OFFSET_W);
-            addr2  <= addr2 + (shift2_i << OFFSET_W);
-         end
-         per    <= 0;
-         iter   <= 0;
-         per2   <= 0;
-         ignore <= 0;
-         iter2  <= iter2 + 1;
-      end
-      6'b?01111: begin
-         if(!ignore) begin
-            addr_o <= addr3 + (incr3_i << OFFSET_W);
-            addr2  <= addr3 + (incr3_i << OFFSET_W);
-            addr3  <= addr3 + (incr3_i << OFFSET_W);
-         end
-         per    <= 0;
-         iter   <= 0;
-         per2   <= 0;
-         iter2  <= 0;
-         ignore <= 0;
-         per3   <= per3 + 1;
-      end
-      6'b011111: begin
-         if(!ignore) begin
-            addr_o <= addr3 + (shift3_i << OFFSET_W);
-            addr2  <= addr3 + (shift3_i << OFFSET_W);
-            addr3  <= addr3 + (shift3_i << OFFSET_W);
-         end
-         per    <= 0;
-         iter   <= 0;
-         per2   <= 0;
-         iter2  <= 0;
-         per3   <= 0;
-         ignore <= 0;
-         iter3  <= iter3 + 1;
-      end
-      6'b111111: begin
-         done_o  <= 1'b1;
-         valid_o <= 0;
-      end
-      endcase
-   end
-end
+      .count_i(0),
+      .start_address_i(0),
+      .address_shift_i(0),
+      .databus_length(0)
+   );
 
 endmodule  // MyAddressGen

@@ -33,6 +33,11 @@ void Tokenizer::ConsumeWhitespace(){
       continue;
     }
 
+    // Only one character left, cannot be a comment
+    if(ptr + 1 >= end){
+      return;
+    }
+
     if(!keepComments){
       if(ptr[0] == '/' && ptr[1] == '/'){
         while(ptr < end && *ptr != '\n') ptr += 1;

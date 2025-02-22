@@ -24,10 +24,10 @@ INCLUDE := -I$(HARDWARE_FOLDER)
 all: libaccel.a
 
 # Joins wrapper with verilator object files into a library
-libaccel.a: V@{typeName}.h wrapper.o createVerilatorObjects
+libaccel.a: V@{typeName}.h wrapper.o createVerilatorObjects #{if simulateLoops} VSuperAddress.h #{end}
 	ar -rcs libaccel.a wrapper.o $(wildcard ./obj_dir/*.o)
 
-createVerilatorObjects: V@{typeName}.h wrapper.o
+createVerilatorObjects: V@{typeName}.h wrapper.o #{if simulateLoops} VSuperAddress.h #{end}
 	$(MAKE) verilatorObjects
 
 #./obj_dir/V@{typeName}_classes.mk: V@{typeName}.h
@@ -37,7 +37,14 @@ V@{typeName}.h: $(HARDWARE_SRC)
 	$(MAKE) -C ./obj_dir -f V@{typeName}.mk
 	cp ./obj_dir/*.h ./
 
-wrapper.o: V@{typeName}.h wrapper.cpp
+#{if simulateLoops}
+VSuperAddress.h: $(HARDWARE_SRC)
+	verilator --report-unoptflat -GAXI_ADDR_W=@{arch.databusAddrSize} -GAXI_DATA_W=@{arch.databusDataSize} -GLEN_W=20 -CFLAGS "-O2 -march=native" @{TRACE_TYPE} --cc $(HARDWARE_FOLDER)/SuperAddress.v $(INCLUDE) --top-module SuperAddress
+	$(MAKE) -C ./obj_dir -f VSuperAddress.mk
+	cp ./obj_dir/*.h ./
+#{end}
+
+wrapper.o: V@{typeName}.h VSuperAddress.h wrapper.cpp  #{if simulateLoops} VSuperAddress.h #{end}
 	g++ -std=c++17 -march=native -O2 -g -c -o wrapper.o -I $(VERILATOR_ROOT)/include $(abspath wrapper.cpp)
 
 # Created after calling verilator. Need to recall make to have access to the variables 

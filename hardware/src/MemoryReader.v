@@ -3,7 +3,7 @@
 /*
 
 Receives addresses in the slave interface
-Reads memory content (memory connected to the mem_ wirew)
+Reads memory content (memory connected to the mem_ wire)
 Writes data through the master interface
 
 This module is intended to function as a simple adapter.

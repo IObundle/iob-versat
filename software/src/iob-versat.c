@@ -170,6 +170,7 @@ void ConfigEnableDMA(bool value){
 
 void ConfigCreateVCD(bool value){}
 void ConfigSimulateDatabus(bool value){}
+int SimulateAddressGen(iptr* arrayToFill,int arraySize,AddressGenArguments args){return 0;}
 
 void VersatLoadDelay(const unsigned int* buffer){
   void* delayBase = (void*) (versat_base + delayStart);

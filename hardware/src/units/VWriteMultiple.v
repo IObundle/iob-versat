@@ -73,10 +73,6 @@ module VWriteMultiple #(
    input [ DELAY_W-1:0] delay0
 );
 
-   //assign databus_addr_0  = ext_addr;
-   //assign databus_wstrb_0 = ~0;
-   //assign databus_len_0   = write_length;
-
    //reg  doneWrite; // Databus write part
    wire transferDone;
    reg  doneStore;
@@ -85,40 +81,6 @@ module VWriteMultiple #(
 
    wire data_valid,data_ready,data_last;
    wire [AXI_DATA_W-1:0] data_data;
-
-PerformNWrites #(
-   .AXI_ADDR_W(AXI_ADDR_W),
-   .AXI_DATA_W(AXI_DATA_W),
-   .LEN_W(LEN_W),
-   .COUNT_W(ADDR_W)
-) nWriter (
-   // Connect directly to databus interface
-   .databus_ready(databus_ready_0),
-   .databus_valid(databus_valid_0),
-   .databus_addr(databus_addr_0),
-   .databus_rdata(databus_rdata_0),
-   .databus_wdata(databus_wdata_0),
-   .databus_wstrb(databus_wstrb_0),
-   .databus_len(databus_len_0),
-   .databus_last(databus_last_0),
-
-   // Data interface
-   .data_valid_i(data_valid),
-   .data_ready_o(data_ready),
-   .data_data_i(data_data),
-   .data_last_o(data_last),
-
-   .count_i(write_amount_minus_one + 1),
-   .start_address_i(ext_addr),
-   .address_shift_i(write_addr_shift),
-   .write_length(write_length),
-
-   .run_i(run && write_enabled),
-   .done_o(transferDone),
-
-   .clk_i(clk),
-   .rst_i(rst)
-);   
 
    always @(posedge clk, posedge rst) begin
       if (rst) begin
@@ -156,17 +118,21 @@ PerformNWrites #(
    wire gen_valid, gen_ready;
    wire [ADDR_W-1:0] gen_addr_temp;
 
-   AddressGen3 #(
+   SuperAddress #(
+      .AXI_ADDR_W(AXI_ADDR_W),
+      .AXI_DATA_W(AXI_DATA_W),
+      .LEN_W(LEN_W),
+      .COUNT_W(ADDR_W),
       .ADDR_W(ADDR_W),
-      .DATA_W(AXI_DATA_W),
+      .DATA_W(SIZE_W),
       .PERIOD_W(PERIOD_W)
-   ) addrgenWrite (
+      ) writer (
       .clk_i(clk),
       .rst_i(rst),
       .run_i(run && write_enabled),
+      .done_o(transferDone),
 
       .ignore_first_i(0),
-      .keep_updating_address_i(0),
 
       //configurations 
       .period_i(write_per),
@@ -188,13 +154,36 @@ PerformNWrites #(
       .iterations3_i(0),
       .shift3_i(0),
 
+      .doneDatabus(),
+      .doneAddress(),
+
       //outputs 
       .valid_o(gen_valid),
       .ready_i(gen_ready),
       .addr_o (gen_addr_temp),
       .store_o(),
-      .done_o ()
+
+      .databus_ready(databus_ready_0),
+      .databus_valid(databus_valid_0),
+      .databus_addr(databus_addr_0),
+      .databus_len(databus_len_0),
+      .databus_last(databus_last_0),
+
+      // Data interface
+      .data_valid_i(data_valid),
+      .data_ready_i(),
+      .reading(1'b0),
+      .data_last_o(data_last),
+
+      .count_i(write_amount_minus_one + 1),
+      .start_address_i(ext_addr),
+      .address_shift_i(write_addr_shift),
+      .databus_length(write_length)
    );
+
+   assign data_ready = databus_ready_0;
+   assign databus_wstrb_0 = 4'b1111;
+   assign databus_wdata_0 = data_data; 
 
    wire [ADDR_W-1:0] gen_addr = {pingPong ? !pingPongState : gen_addr_temp[ADDR_W-1],gen_addr_temp[ADDR_W-2:0]};
 
@@ -209,7 +198,6 @@ PerformNWrites #(
       .run_i(run),
 
       .ignore_first_i(input_ignore_first),
-      .keep_updating_address_i(0),
 
       //configurations 
       .period_i(input_per),
@@ -272,8 +260,6 @@ PerformNWrites #(
       .clk_i(clk),
       .rst_i(rst)
    );
-
-   //assign databus_valid_0   = (m_valid & !doneWrite);
 
    assign ext_2p_write_0    = store_en && do_store;
    assign ext_2p_addr_out_0 = store_addr;

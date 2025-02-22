@@ -356,7 +356,7 @@ void OutputIterativeSource(FUDeclaration* decl,FILE* file){
   ClearTemplateEngine(); // Make sure that we do not reuse data
 
   Assert(globalDebug.outputAccelerator); // Because FILE is created outside, code should not call this function if flag is set
-  
+
   for(FUInstance* ptr : accel->allocated){
     FUInstance* inst = ptr;
     if(inst->declaration->nIOs){
@@ -862,7 +862,7 @@ void OutputTopLevelFiles(Accelerator* accel,FUDeclaration* topLevelDecl,const ch
 
     structs = GenerateStructs(allStructs,temp);
   }
-    
+
   VersatComputedValues val = ComputeVersatValues(&info,globalOptions.useDMA);
   
   // TODO: A lot of cruft in this function
@@ -1025,6 +1025,7 @@ void OutputTopLevelFiles(Accelerator* accel,FUDeclaration* topLevelDecl,const ch
     }
   }
 
+  // TODO: Base this on the AccelInfo approach.
   int staticStart = 0;
   for(FUInstance* ptr : accel->allocated){
     FUDeclaration* decl = ptr->declaration;
@@ -1207,6 +1208,9 @@ void OutputTopLevelFiles(Accelerator* accel,FUDeclaration* topLevelDecl,const ch
     Array<int> delays = EndArray(arr);
     TemplateSetCustom("delay",MakeValue(&delays));
 
+    // TODO: We eventually only want to put this as true if we output at least one address gen.
+    TemplateSetBool("simulateLoops",true);
+        
     Array<Array<int>> allDelays = PushArray<Array<int>>(temp,info.infos.size);
     if(info.infos.size >= 2){
       int i = 0;
@@ -1373,6 +1377,9 @@ void OutputTopLevelFiles(Accelerator* accel,FUDeclaration* topLevelDecl,const ch
   
     TemplateSetBool("traceEnabled",globalDebug.outputVCD);
     CompiledTemplate* comp = CompileTemplate(versat_makefile_template,"makefile",temp);
+
+    // TODO: We eventually only want to put this as true if we output at least one address gen.
+    TemplateSetBool("simulateLoops",true);
     
     fs::path outputFSPath = StaticFormat("%.*s",UNPACK_SS(outputPath));
     fs::path srcLocation = fs::current_path();

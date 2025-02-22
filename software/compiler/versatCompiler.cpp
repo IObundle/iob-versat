@@ -654,6 +654,9 @@ int main(int argc,char* argv[]){
 
 BUG: Since the name of the units are copied directly to the header file, it is possible to have conflict with C reserved keywords, like const, static, and stuff like that. 
 
+BUG: An empty accelerator is crashing versat. We do not need to do anything special, generate an empty accelerator or just give an error (an empty accelerator would just be the dma at that point, right?).
+     - Regardless, generating an empty accelerator might be a good way of testing whether the generated code is capable of handling empty structs (empty config, empty state, empty static, empty mem, etc.) because other accelerators might have one of these interfaces empty and in theory the empty accelerator would have all of them empty and as such we could test everything here.
+
 There is probably a lot of cleanup left (overall and inside Merge).
 
 Need to take a look at State and Mem struct interfaces. State is not taking into account merge types and neither is Mem. Also need to see if we can generate the Mem as an actual structure where the programmer must use pointer arithmetic directly.
@@ -662,9 +665,24 @@ Need to take a look at State and Mem struct interfaces. State is not taking into
 
 /*
 
+Generated code does not take into account parameters when it should.
+- Some wires are given fixed sizes when they depend on verilog parameters. 
+
+Debugability:
+
+- We kinda lost the .dot files generated in order to help debug graph algorithms. Its not a big deal now but eventually would like to have them back, as the .dot files are the only proper way we currently have of debugging graph operations (which I do not think we will be doing much soon, but eventually need to address this).
+
 Features:
 
-The template engine could be updated to compile at build time, offer compile time checks instead of runtime and simplify data management since we could pass and use C code to access and iterate the data. This means that passing large structures is preferebly instead of doing what we do now where we want to minimize data passing this way. Read the NOTEs that are contained inside the OutputTopLevelFiles.
+- The template engine could be updated to compile at build time, offer compile time checks instead of runtime and simplify data management since we could pass and use C code to access and iterate the data. This means that passing large structures is preferebly instead of doing what we do now where we want to minimize data passing this way. Read the NOTEs that are contained inside the OutputTopLevelFiles.
+
+- The Address gen are kinda adhoc in the generated code. Need to find a way of binding them to the accelerator that uses them (some declaration inside the module/merge that indicates to Versat that the address gen is intended to be used for that unit.). As a consequence of this, we might need to generate different address gens for different structs because of merge. I think I have a good enough merge backbone to implement this in a couple of days, but I also would probably like to finalize the static portion before progressing to tackle this problem.
+
+Wrapper:
+
+- The databus does not take into consideration the strobe of the databus.
+
+
 
 */
 

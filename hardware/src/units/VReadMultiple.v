@@ -91,39 +91,6 @@ module VReadMultiple #(
    wire data_valid,data_ready;
    wire [AXI_DATA_W-1:0] data_data;
 
-PerformNReads #(
-   .AXI_ADDR_W(AXI_ADDR_W),
-   .AXI_DATA_W(AXI_DATA_W),
-   .LEN_W(LEN_W),
-   .COUNT_W(ADDR_W)
-) nReader (
-   // Connect directly to databus interface
-   .databus_ready(databus_ready_0),
-   .databus_valid(databus_valid_0),
-   .databus_addr(databus_addr_0),
-   .databus_rdata(databus_rdata_0),
-   .databus_wdata(databus_wdata_0),
-   .databus_wstrb(databus_wstrb_0),
-   .databus_len(databus_len_0),
-   .databus_last(databus_last_0),
-
-   // Data interface
-   .data_valid_o(data_valid),
-   .data_ready_i(data_ready),
-   .data_data_o(data_data),
-
-   .count_i(read_amount_minus_one + 1),
-   .start_address_i(ext_addr),
-   .address_shift_i(read_addr_shift),
-   .read_length(read_length),
-
-   .run_i(run && read_enabled),
-   .done_o(transferDone),
-
-   .clk_i(clk),
-   .rst_i(rst)
-);   
-
    always @(posedge clk, posedge rst) begin
       if (rst) begin
          doneOutput <= 1'b1;
@@ -154,18 +121,21 @@ PerformNReads #(
 //      else if (run && read_enabled) databus_addr_0 <= ext_addr;
 //   end
 
-
-   AddressGen3 #(
+   SuperAddress #(
+      .AXI_ADDR_W(AXI_ADDR_W),
+      .AXI_DATA_W(AXI_DATA_W),
+      .LEN_W(LEN_W),
+      .COUNT_W(ADDR_W),
       .ADDR_W(ADDR_W),
       .DATA_W(SIZE_W),
       .PERIOD_W(PERIOD_W)
-   ) addrgenRead (
+      ) reader (
       .clk_i(clk),
       .rst_i(rst),
       .run_i(run && read_enabled),
+      .done_o(transferDone),
 
       .ignore_first_i(0),
-      .keep_updating_address_i(0),
 
       //configurations 
       .period_i(read_per),
@@ -187,13 +157,37 @@ PerformNReads #(
       .iterations3_i(0),
       .shift3_i(0),
 
+      .doneDatabus(),
+      .doneAddress(),
+
       //outputs 
       .valid_o(gen_valid),
       .ready_i(gen_ready),
       .addr_o (gen_addr_temp),
       .store_o(),
-      .done_o ()
+
+      .databus_ready(databus_ready_0),
+      .databus_valid(databus_valid_0),
+      .databus_addr(databus_addr_0),
+      .databus_len(databus_len_0),
+      .databus_last(databus_last_0),
+
+      // Data interface
+      .data_valid_i(1'b0),
+      .data_ready_i(data_ready),
+      .reading(1'b1),
+      .data_last_o(),
+
+      .count_i(read_amount_minus_one + 1),
+      .start_address_i(ext_addr),
+      .address_shift_i(read_addr_shift),
+      .databus_length(read_length)
    );
+
+assign databus_wdata_0 = 0;
+assign databus_wstrb_0 = 0;
+assign data_valid = databus_ready_0;
+assign data_data = databus_rdata_0;
 
    wire [ADDR_W-1:0] gen_addr = {pingPong ? !pingPongState : gen_addr_temp[ADDR_W-1],gen_addr_temp[ADDR_W-2:0]};
 
@@ -211,7 +205,6 @@ PerformNReads #(
       .run_i(run),
 
       .ignore_first_i(output_ignore_first),
-      .keep_updating_address_i(1),
 
       //configurations 
       .period_i(output_per),

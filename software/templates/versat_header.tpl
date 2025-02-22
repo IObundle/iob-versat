@@ -138,6 +138,26 @@ void ConfigEnableDMA(bool value);
 void ConfigCreateVCD(bool value);
 void ConfigSimulateDatabus(bool value); 
 
+// PC-Emul side function only that allow us to simulate what addresses a V unit would access, instead of having to run the accelerator and having to inspect the VCD file, we can simulate it at pc-emul.
+#{if simulateLoops}
+typedef struct{
+   iptr ext_addr;
+        
+   iptr start;
+   iptr duty;
+
+   iptr period ,incr ,iterations ,shift;
+   iptr period2,incr2,iterations2,shift2;
+   iptr period3,incr3,iterations3,shift3;
+
+   iptr amount_minus_one;
+   iptr start_address; // Replaced by ext_addr? Need to see how the units use this.
+   iptr addr_shift;
+   iptr length; 
+} AddressGenArguments;
+
+int SimulateAddressGen(iptr* arrayToFill,int arraySize,AddressGenArguments args);
+
 #ifdef __cplusplus
 } // extern "C"
 #endif
