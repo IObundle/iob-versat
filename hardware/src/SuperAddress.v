@@ -239,9 +239,8 @@ CountNLoops #(.COUNT_W(COUNT_W)) counter(
 
 assign doneDatabus = (state == 2'b0);
 
-reg databus_valid_reg; // Allows data_ready to propragate
-//assign databus_valid = data_ready_i;
-assign databus_valid = reading ? (databus_valid_reg && data_ready_i) : data_valid_i; // Testing this one
+reg databus_valid_reg; // Allows data_ready to propagate
+assign databus_valid = (state == 2'b10) && (reading ? (databus_valid_reg && data_ready_i) : data_valid_i);
 
 always @(posedge clk_i,posedge rst_i) begin
    if(rst_i) begin
