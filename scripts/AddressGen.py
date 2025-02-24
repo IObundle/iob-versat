@@ -547,7 +547,7 @@ def PrintParameters(parameterList):
             print(f"{base[index%4]}{(index // 4) + 1}: {param}")
 
 if __name__ == "__main__":
-    # If python version is too low, just remove mathc and comment out stuff when needed 
+    # If python version is too low, just remove match and comment out stuff when needed 
     match 1:
         case 1: listOfAddresses = Pre([0, 1, 2])
         case 2: listOfAddresses = Pre([0,1,2,10,11,12,20,21,22])

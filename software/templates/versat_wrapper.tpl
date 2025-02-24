@@ -624,6 +624,28 @@ extern "C" void VersatLoadDelay(const unsigned int* delayBuffer){
   #{end}
 }
 
+iptr SimulateAddressPosition(iptr start_address,iptr amount_minus_one,iptr length,iptr addr_shift,int index){
+  iptr address = start_address;
+  iptr lengthAsTransfers = length / 4; // size of AXI_DATA_W;
+  int current = index;
+
+  //printf("%p %p %p %p %d\n",start_address,amount_minus_one,length,addr_shift,index);
+
+  for(int i = 0; i < amount_minus_one + 1; i++){
+     if(current < lengthAsTransfers){
+       iptr actualAddress = (address + 4 * current);
+       //printf("Return %p\n",actualAddress);
+       return actualAddress;
+     } else {
+       address += addr_shift;
+       current -= lengthAsTransfers;
+     }
+  }
+
+  printf("SimulateAddressPosition reached a not possible state\n");
+  return 0;
+}
+
 int SimulateAddressGen(iptr* arrayToFill,int arraySize,AddressGenArguments args){
    static VSuperAddress* self = nullptr;
 
@@ -638,8 +660,10 @@ int SimulateAddressGen(iptr* arrayToFill,int arraySize,AddressGenArguments args)
    self->trace(tfp, 99);
    tfp->open("loop.vcd");
 
+   bool doTrace = false;
+   
 #define TRACE() self->eval(); \
-   tfp->dump(contextp->time()); \
+   if(doTrace) {tfp->dump(contextp->time());} \
    contextp->timeInc(2);
 
 #define UP() self->clk_i = 1; \
@@ -699,6 +723,30 @@ int SimulateAddressGen(iptr* arrayToFill,int arraySize,AddressGenArguments args)
    self->clk_i = 0;
    TRACE();
 
+   // Maybe waiting for the databus is not needed.
+   int loops = 0;
+   int arrayIndex = 0;
+   while(!self->doneAddress){
+      while(!self->valid_o){
+          UP();
+          loops += 1;
+          if(loops > 10000){
+            printf("Failed on A\n");
+            goto end;
+          }
+      }
+      
+      if(self->store_o){
+        iptr addr = self->addr_o; // DATA_W 
+        if(arrayIndex < arraySize){
+          arrayToFill[arrayIndex++] = SimulateAddressPosition(args.start_address,args.amount_minus_one,args.length,args.addr_shift,addr);
+        }
+      }
+
+      UP();
+   }
+
+#if 0
    int loops = 0;
    int arrayIndex = 0;
    while(!self->doneDatabus){
@@ -747,6 +795,7 @@ int SimulateAddressGen(iptr* arrayToFill,int arraySize,AddressGenArguments args)
         goto end;
       }
    }
+#endif
 
 end:
 

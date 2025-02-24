@@ -2214,17 +2214,18 @@ String InstantiateAddressGen(AddressGenDef def,Arena* out){
     builder->PushString("}\n");
     
     // TODO: This is kinda of hardcoded, but since we will eventually have to deal with address generation when trying to integrate this with merged accelertors, we will only handle this then.
+    // TODO: We are also putting the output values here.
     // Start of simulation
     builder->PushString("static int Simulate_%.*s(iptr* arrayToFill,int arrayMaxSize,volatile VReadMultipleConfig* config){\n",UNPACK_SS(def.name));
     builder->PushString("   AddressGenArguments args = {};\n");
 
     builder->PushString("   args.start_address = config->ext_addr;\n");
     builder->PushString("   args.ext_addr = config->ext_addr;\n");
-    builder->PushString("   args.period = config->read_per;\n");
-    builder->PushString("   args.incr = config->read_incr;\n");
-    builder->PushString("   args.duty = config->read_duty;\n");
-    builder->PushString("   args.iterations = config->read_iter;\n");
-    builder->PushString("   args.shift = config->read_shift;\n");
+    builder->PushString("   args.period = config->output_per;\n");
+    builder->PushString("   args.incr = config->output_incr;\n");
+    builder->PushString("   args.duty = config->output_duty;\n");
+    builder->PushString("   args.iterations = config->output_iter;\n");
+    builder->PushString("   args.shift = config->output_shift;\n");
     builder->PushString("   args.length = config->read_length;\n");
     builder->PushString("   args.amount_minus_one = config->read_amount_minus_one;\n");
     builder->PushString("   args.addr_shift = config->read_addr_shift;\n");
