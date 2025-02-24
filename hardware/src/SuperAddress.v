@@ -8,10 +8,10 @@
 module SuperAddress #(
    parameter AXI_ADDR_W = 32,
    parameter AXI_DATA_W = 32,
+   parameter DATA_W   = 32,
    parameter ADDR_W   = 10,
    parameter PERIOD_W = 10,
    parameter DELAY_W  = 7,
-   parameter DATA_W   = 8,
    parameter LEN_W      = 8,
    parameter COUNT_W    = 8
 ) (

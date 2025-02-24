@@ -737,7 +737,7 @@ int SimulateAddressGen(iptr* arrayToFill,int arraySize,AddressGenArguments args)
       }
       
       if(self->store_o){
-        iptr addr = self->addr_o; // DATA_W 
+        iptr addr = self->addr_o / 4; // DATA_W 
         if(arrayIndex < arraySize){
           arrayToFill[arrayIndex++] = SimulateAddressPosition(args.start_address,args.amount_minus_one,args.length,args.addr_shift,addr);
         }
