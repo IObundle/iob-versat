@@ -863,7 +863,29 @@ void OutputTopLevelFiles(Accelerator* accel,FUDeclaration* topLevelDecl,const ch
     structs = GenerateStructs(allStructs,temp);
   }
 
+  auto PrettyPrintMemory = [](int val){
+    if(val < 1024){
+      printf("%d bytes",val);
+    } else if(val < Megabyte(1)){
+      int leftover = val % 1024;
+      printf("%d.%.3d kilobytes",val / 1024,leftover);
+    } else if(val < Gigabyte(1)){
+      int leftover = val % (1024 * 1024);
+      
+      printf("%d.%.3d megabytes",val / (1024 * 1024),leftover);
+    } else {
+      int leftover = val % (1024 * 1024 * 1024);
+      printf("%d.%.3d gigabytes",val / (1024 * 1024 * 1024),leftover);
+    }
+  };
+
   VersatComputedValues val = ComputeVersatValues(&info,globalOptions.useDMA);
+  printf("Some stats\n");
+  printf("Config bits used: %d\n",val.configurationBits);
+  printf("State  bits used: %d\n",val.stateBits);
+  printf("External memory used: ");
+  PrettyPrintMemory(val.totalExternalMemory);
+  printf("\n");
   
   // TODO: A lot of cruft in this function
   Hashmap<StaticId,StaticData>* staticUnits = CollectStaticUnits(&info,temp);
