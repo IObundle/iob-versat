@@ -67,11 +67,20 @@ struct PortExpression{
   ConnectionExtra extra;
 };
 
+enum InstanceDeclarationType{
+  InstanceDeclarationType_NONE,
+  InstanceDeclarationType_STATIC,
+  InstanceDeclarationType_SHARE_CONFIG
+};
+
+// TODO: It's kinda bad to group stuff this way. Just because the spec parser groups everything, does not mean that we need to preserve the grouping. We could just parse once and create N different instance declarations for each instance (basically flattening the declarations) instead of preserving this grouping and probably simplifying stuff a bit.
+//       The problem is that we would have to put some sharing logic inside the parser. Idk. Push through and see later if any change is needed.
 struct InstanceDeclaration{
-  enum {NONE,STATIC,SHARE_CONFIG} modifier;
+  InstanceDeclarationType modifier;
   Token typeName;
-  Array<VarDeclaration> declarations;
+  Array<VarDeclaration> declarations; // share(config) groups can have multiple different declarations. TODO: It is kinda weird that inside the syntax, the share allows groups of instances to be declared while this does not happen elsewhere. Not enought to warrant a look for now, but keep in mind for later.
   Array<Pair<String,String>> parameters;
+  Array<Token> addressGenUsed;
   Array<Token> shareNames;
   bool negateShareNames;
 };
@@ -189,10 +198,6 @@ struct AddressGenTerm{
   Array<Token> constants;
 };
 
-struct AddressGen{
-  
-};
-
 struct AddressGenLoopSpecificaton{
   String iterationExpression;
   String incrementExpression;
@@ -215,6 +220,19 @@ struct AddressGenLoopSpecificatonSym{
   String shiftWithoutRemovingIncrement; // Shift as if period did not change addr. Useful for current implementation of VRead/VWrites
 };
 
+struct AddressGen{
+  AddressGenType type;
+
+  Array<AddressGenLoopSpecificatonSym> loopSpecSymbolic;
+  Array<AddressGenLoopSpecificatonSym> internalSpecSym;
+  Array<AddressGenLoopSpecificatonSym> externalSpecSym;
+  String constantExpr;
+  String externalName;
+  String name;
+  Array<Token> constants;
+  Array<String> loopRepr;
+};
+
 typedef Pair<HierarchicalName,HierarchicalName> SpecNode;
 
 Array<Token> TypesUsed(TypeDefinition def,Arena* out);
@@ -225,3 +243,6 @@ FUDeclaration* InstantiateSpecifications(String content,TypeDefinition def);
 
 Opt<AddressGenDef> ParseAddressGen(Tokenizer* tok,Arena* out);
 String InstantiateAddressGen(AddressGenDef def,Arena* out);
+
+AddressGen InstantiateAddressGenOnly(AddressGenDef def,Arena* out);
+String InstantiateAddressGen(AddressGen gen,String typeStructName,Arena* out);

@@ -2077,7 +2077,20 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
         instance->baseNodeDelay = 0; // NOTE: Even if they do not belong, this delay is directly inserted into the header file, meaning that for now it's better if we keep everything at zero.
         instance->localOrder = 0;
       }
-     
+
+      // These map directly from the merged accelerator into the flattenedBaseType per type used.
+      // Not sure if this works all the time though. How does it handle complex merges?
+      // TODO: Need to check if this works for more complex mappings and if so, rename this to a better name.
+      if(maps[i]){
+        AcceleratorMapping* inverted = MappingInvert(maps[i],temp);
+        FUInstance* test = MappingMapNode(inverted,ptr);
+
+        if(test){
+          instance->addressGenUsed = test->addressGenUsed;
+          //DEBUG_BREAK();
+        }
+      }
+      
       instance->baseName = ptr->name;
 
       if(ptr->isMergeMultiplexer || ptr->declaration == BasicDeclaration::fixedBuffer){
@@ -2088,6 +2101,7 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
         Assert(originalNode->declaration == ptr->declaration);
 
         instance->baseName = originalNode->name;
+        //instance->addressGenUsed = originalNode->addressGenUsed;
       } else {
         instance->doesNotBelong = true;
       }

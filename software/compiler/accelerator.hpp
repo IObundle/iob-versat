@@ -139,6 +139,8 @@ struct FUInstance{
   Array<PortInstance> inputs;
   Array<bool> outputs;
 
+  Array<String> addressGenUsed;
+  
   bool multipleSamePortInputs;
   NodeType type;
 };

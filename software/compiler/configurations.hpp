@@ -16,6 +16,12 @@ struct SimplePortConnection{
   int inPort;
 };
 
+
+// How does this work?
+
+// Data that is carried directly from the units is set inside GenerateInitialInstanceInfo
+// Data that is computed from graph / data that depends on other units is calculated inside FillInstanceInfo
+
 // We currently just stuff everything into this struct, so it's easier to visualize all the info that we need for
 // the current accelerator.
 // Some of this data is duplicated/unnecessary, but for now we just carry on since this simplifies debugging a lot, being able to see all the info for a given accelerator directly.
@@ -86,6 +92,7 @@ struct InstanceInfo{
   int partitionIndex; // What does this do?
 
   Array<SimplePortConnection> inputs; 
+  Array<String> addressGenUsed;
 };
 
 struct MergePartition{

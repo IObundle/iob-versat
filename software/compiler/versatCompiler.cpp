@@ -657,6 +657,8 @@ BUG: Since the name of the units are copied directly to the header file, it is p
 BUG: An empty accelerator is crashing versat. We do not need to do anything special, generate an empty accelerator or just give an error (an empty accelerator would just be the dma at that point, right?).
      - Regardless, generating an empty accelerator might be a good way of testing whether the generated code is capable of handling empty structs (empty config, empty state, empty static, empty mem, etc.) because other accelerators might have one of these interfaces empty and in theory the empty accelerator would have all of them empty and as such we could test everything here.
 
+BUG: Partial share is missing in the spec parser for multiple units with different names. Only working for arrays.
+
 There is probably a lot of cleanup left (overall and inside Merge).
 
 Need to take a look at State and Mem struct interfaces. State is not taking into account merge types and neither is Mem. Also need to see if we can generate the Mem as an actual structure where the programmer must use pointer arithmetic directly.
@@ -678,11 +680,15 @@ Features:
 
 - The Address gen are kinda adhoc in the generated code. Need to find a way of binding them to the accelerator that uses them (some declaration inside the module/merge that indicates to Versat that the address gen is intended to be used for that unit.). As a consequence of this, we might need to generate different address gens for different structs because of merge. I think I have a good enough merge backbone to implement this in a couple of days, but I also would probably like to finalize the static portion before progressing to tackle this problem.
 
+- We could implement a shared delay as well as config. To make it even more powerful, we could make it so we could share the delay of some units and the config of others and have it overlap somewhat. How I would represent that in syntax I do not know.
+
 Wrapper:
 
 - The databus does not take into consideration the strobe of the databus.
 
+Parser:
 
+- I should be able to use write: "share config Type unit[N];", instead of having to write: "share config Type{ unit[N]; }"
 
 */
 

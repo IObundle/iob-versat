@@ -168,9 +168,13 @@ FUInstance* CopyInstance(Accelerator* accel,FUInstance* oldInstance,bool preserv
   // Any of the union values is copied here.
   newInst->portIndex = oldInstance->portIndex;
 
-  if(oldInstance->sharedEnable){
-    ShareInstanceConfig(newInst,oldInstance->sharedIndex);
+  newInst->sharedEnable = oldInstance->sharedEnable;
+  newInst->sharedIndex = oldInstance->sharedIndex;
+
+  for(int i = 0; i < oldInstance->isSpecificConfigShared.size; i++){
+    newInst->isSpecificConfigShared[i] = oldInstance->isSpecificConfigShared[i];
   }
+  
   if(oldInstance->isStatic){
     newInst->isStatic = oldInstance->isStatic;
   }
@@ -180,6 +184,7 @@ FUInstance* CopyInstance(Accelerator* accel,FUInstance* oldInstance,bool preserv
     newInst->id = oldInstance->id;
   }
   newInst->isMergeMultiplexer = oldInstance->isMergeMultiplexer;
+  newInst->addressGenUsed = oldInstance->addressGenUsed;
   
   return newInst;
 }

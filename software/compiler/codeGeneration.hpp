@@ -77,7 +77,7 @@ static bool operator==(const SameMuxEntities i0,const SameMuxEntities i1){
 }
 
 struct AddressGenDef;
-extern Pool<AddressGenDef> savedAddressGen;
+extern Pool<AddressGenDef> addressGens;
 
 // In order to get the names, I need to associate a given member to a merge index.
 // Since multiplexers can be shared accross multiple merge indexes, I need some map of some sorts.
@@ -102,6 +102,7 @@ struct StructInfo{
 
   int globalPos;
   bool isUnique; // Usually for structs with partial share or merge that are one of a kind (because of padding and such).
+  InstanceInfo* infoThatGeneratedThis;
   
   bool isSimpleType;
   

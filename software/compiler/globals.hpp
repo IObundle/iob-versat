@@ -1,6 +1,10 @@
 #pragma once
 
 #include "utilsCore.hpp"
+#include "memory.hpp"
+
+struct AddressGenDef;
+struct FUDeclaration;
 
 struct Options{
   Array<String> verilogFiles;
@@ -47,5 +51,8 @@ extern DebugState globalDebug;
 
 // Basically any data that is allocated once and preferably read-only just dump it in here.
 extern Arena* globalPermanent;
+
+extern Pool<FUDeclaration> globalDeclarations;
+extern Pool<AddressGenDef> addressGens;
 
 Options DefaultOptions(Arena* out);

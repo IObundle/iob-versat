@@ -147,8 +147,6 @@ namespace BasicDeclaration{
   extern FUDeclaration* pipelineRegister;
 }
 
-extern Pool<FUDeclaration> globalDeclarations;
-
 FUDeclaration* GetTypeByName(String str);
 FUDeclaration* GetTypeByNameOrFail(String name);
 void InitializeSimpleDeclarations();

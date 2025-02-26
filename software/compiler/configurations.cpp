@@ -356,7 +356,8 @@ Array<InstanceInfo> GenerateInitialInstanceInfo(Accelerator* accel,Arena* out,Ar
     elem->connectionType = inst->type;
     elem->partitionIndex = 0;
     elem->individualWiresShared = inst->isSpecificConfigShared;
-
+    elem->addressGenUsed = inst->addressGenUsed;
+    
     // NOTE: Care when using arrays, these must be copied individually for each subunit (check below)
     // TODO: I do not remember if number configs is correct at this stage or not.
     //       Check and write some comment here if so

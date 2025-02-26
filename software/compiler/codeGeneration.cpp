@@ -18,7 +18,7 @@
 #include "versatSpecificationParser.hpp"
 
 // TODO: REMOVE: Remove after proper implementation of AddressGenerators
-Pool<AddressGenDef> savedAddressGen;
+Pool<AddressGenDef> addressGens;
 
 Array<Difference> CalculateSmallestDifference(Array<int> oldValues,Array<int> newValues,Arena* out){
   Assert(oldValues.size == newValues.size); // For now
@@ -470,6 +470,9 @@ StructInfo* GenerateConfigStruct(AccelInfoIterator iter,Arena* out){
           iter.mergeIndex = i;
         
           StructInfo* subInfo = GenerateConfigStruct(iter,out);
+
+          // NOTE: I think that this is the only instance where we cannot associate the instance info to the structInfo.
+          //subInfo->infoThatGeneratedThis = iter.CurrentUnit();
           subInfo->parent = res;
           elem.name = iter.GetMergeName();
           elem.childStruct = subInfo;
@@ -489,15 +492,18 @@ StructInfo* GenerateConfigStruct(AccelInfoIterator iter,Arena* out){
       AccelInfoIterator inside = it.StepInsideOnly();
       StructInfo* subInfo = GenerateMergeStruct(unit,inside,out);
       subInfo->parent = res;
+      subInfo->infoThatGeneratedThis = unit;
       elem.childStruct = subInfo;
     } else if(unit->isComposite){
       AccelInfoIterator inside = it.StepInsideOnly();
       StructInfo* subInfo = GenerateConfigStruct(inside,out);
       subInfo->parent = res;
+      subInfo->infoThatGeneratedThis = unit;
       elem.childStruct = subInfo;
     } else {
       if(ContainsPartialShare(unit)){
         StructInfo* simpleSubInfo = PushStruct<StructInfo>(out);
+        simpleSubInfo->infoThatGeneratedThis = unit;
         simpleSubInfo->type = unit->decl;
         simpleSubInfo->isSimpleType = true;
 
@@ -527,6 +533,7 @@ StructInfo* GenerateConfigStruct(AccelInfoIterator iter,Arena* out){
 
 #if 1
         StructInfo* simpleSubInfo = PushStruct<StructInfo>(out);
+        simpleSubInfo->infoThatGeneratedThis = unit;
         simpleSubInfo->type = unit->decl;
         simpleSubInfo->isSimpleType = true;
         
@@ -813,7 +820,8 @@ void OutputTopLevelFiles(Accelerator* accel,FUDeclaration* topLevelDecl,const ch
   StructInfo* structInfo = GenerateConfigStruct(iter,temp);
 
   Array<TypeStructInfo> structs = {};
-
+  Array<StructInfo*> allStructs = {};
+  
   // If we only contain static configs, this will appear empty.
   if(!Empty(structInfo->list)){
     // We generate an extra level, so we just remove it here.
@@ -823,7 +831,7 @@ void OutputTopLevelFiles(Accelerator* accel,FUDeclaration* topLevelDecl,const ch
     //       It might be better to only push them to the merge struct (basically only 1 level up).
     //       Still need more examples to see.
     PushMergeMultiplexersUpTheHierarchy(structInfo);
-    Array<StructInfo*> allStructs = ExtractStructs(structInfo,temp);
+    allStructs = ExtractStructs(structInfo,temp);
 
     Array<int> indexes = PushArray<int>(temp,allStructs.size);
     Memset(indexes,2);
@@ -862,7 +870,7 @@ void OutputTopLevelFiles(Accelerator* accel,FUDeclaration* topLevelDecl,const ch
 
     structs = GenerateStructs(allStructs,temp);
   }
-
+  
   auto PrettyPrintMemory = [](int val){
     if(val < 1024){
       printf("%d bytes",val);
@@ -1314,13 +1322,58 @@ void OutputTopLevelFiles(Accelerator* accel,FUDeclaration* topLevelDecl,const ch
     
     TemplateSetCustom("mergeMux",MakeValue(&muxInfo));
 
-    GrowableArray<String> builder = StartArray<String>(temp2);
-    for(AddressGenDef* def : savedAddressGen){
-      String res = InstantiateAddressGen(*def,temp);
-      *builder.PushElem() = res;
+    
+    TrieSet<Pair<String,String>>* structNameAndAddressGen = PushTrieSet<Pair<String,String>>(temp);
+
+    // By getting the info directly from the structs, we make sure that we are always generating the functions needed for each possible structure that gets created/changed due to partial share or merge.
+    // Address gen is therefore capable of handling all the struct modifing features as long as they are properly implemented inside structInfo.
+    for(StructInfo* structInfo : allStructs){
+      InstanceInfo* info = structInfo->infoThatGeneratedThis;
+
+      // NOTE: This happens to merged struct infos. It does not make sense to save an instance info for these cases
+      if(!info){
+        continue;
+      }
+      
+      //Assert(info); // We must always have an info because we are extracting values from some unit, right? Otherwise where would we get the wire names and stuff like that?
+
+      String typeName = structInfo->name;
+
+      for(String addressGenName : info->addressGenUsed){
+        structNameAndAddressGen->Insert({typeName,addressGenName});
+      }
     }
+    
+    auto GetAddressGen = [](String addressGenName) -> AddressGenDef*{
+      for(AddressGenDef* def : addressGens){
+        if(CompareString(def->name,addressGenName)){
+          return  def;
+        }
+      }
+      return nullptr;
+    };
+    
+    GrowableArray<String> builder = StartArray<String>(temp2);
+
+    for(Pair<String,String> p : structNameAndAddressGen){
+      String structName = p.first;
+      String addressGenName = p.second;
+      
+      AddressGenDef* def = GetAddressGen(addressGenName);
+
+      if(!def){
+        printf("Did not find address gen with name: %.*s\n",UNPACK_SS(addressGenName));
+      } else {
+        AddressGen gen = InstantiateAddressGenOnly(*def,temp);
+        String res = InstantiateAddressGen(gen,structName,temp);
+
+        *builder.PushElem() = res;
+      }
+    }
+
     Array<String> content = EndArray(builder);
 
+    DEBUG_BREAK();
     TemplateSetCustom("addrGen",MakeValue(&content));
     
     FILE* f = OpenFileAndCreateDirectories(PushString(temp,"%s/versat_accel.h",softwarePath),"w",FilePurpose_SOFTWARE);
@@ -1361,8 +1414,6 @@ void OutputTopLevelFiles(Accelerator* accel,FUDeclaration* topLevelDecl,const ch
 
     TemplateSetCustom("allConfigsVerilatorSide",MakeValue(&allConfigsVerilatorSide));
 
-    //Array<TypeStructInfoElement> structuredConfigs = ExtractStructuredConfigs(info.infos[0].info,temp);
-  
     TemplateSetNumber("delays",info.delays);
     TemplateSetCustom("structuredConfigs",MakeValue(&structuredConfigs));
     TemplateSetCustom("states",MakeValue(&topLevelDecl->states));

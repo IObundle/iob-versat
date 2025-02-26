@@ -227,6 +227,15 @@ Array<T> CopyArray(Array<T> arr,Arena* out){
   return res;
 }
 
+template<typename T,typename D>
+Array<T> CopyArray(Array<D> arr,Arena* out){
+  Array<T> res = PushArray<T>(out,arr.size);
+  for(int i = 0; i < arr.size; i++){
+    res[i] = arr[i];
+  }
+  return res;
+}
+
 template<typename T>
 ArenaList<T>* PushArenaList(Arena* out){
   ArenaList<T>* res = PushStruct<ArenaList<T>>(out);
