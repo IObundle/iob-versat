@@ -7,6 +7,8 @@
 #include "debug.hpp"
 #include "merge.hpp"
 
+#include "embeddedData.hpp"
+
 typedef Hashmap<String,FUInstance*> InstanceTable;
 typedef Set<String> InstanceName;
 
@@ -169,15 +171,6 @@ struct AddressGenFor{
   Token loopVariable;
   IdOrNumber start;
   IdOrNumber end;
-};
-
-// A bit hardcoded for the moment but I just want something that works for now, still need more uses until we see how to progress the AddressGen code
-enum AddressGenType{
-  AddressGenType_MEM,
-  AddressGenType_VREAD_LOAD,
-  AddressGenType_VREAD_OUTPUT,
-  AddressGenType_VWRITE_INPUT,
-  AddressGenType_VWRITE_STORE
 };
 
 struct SymbolicExpression;

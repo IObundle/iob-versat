@@ -5,6 +5,82 @@
 #include "utils.hpp"
 #include "utilsCore.hpp"
 
+// TODO: Support numbers inside tables. Support more levels of data hierarchies.
+//       More importantly, implement stuff as they are needed. No point in trying to push for anything complex right now.
+
+void ReportError(String content,Token faultyToken,const char* error){
+  TEMP_REGION(temp,nullptr);
+
+  String loc = GetRichLocationError(content,faultyToken,temp);
+
+  printf("\n");
+  printf("%s\n",error);
+  printf("%.*s\n",UNPACK_SS(loc));
+  printf("\n");
+}
+
+void ReportError(Tokenizer* tok,Token faultyToken,const char* error){
+  String content = tok->GetContent();
+  ReportError(content,faultyToken,error);
+}
+
+static bool IsValidIdentifier(String str){
+  auto CheckSingle = [](char ch){
+    return ((ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || ch == '_');
+  };
+
+  if(str.size <= 0){
+    return false;
+  }
+
+  if(!CheckSingle(str.data[0])){
+    return false;
+  }
+
+  for(int i = 1; i < str.size; i++){
+    char ch = str.data[i];
+    if(!CheckSingle(ch) && !(ch >= '0' && ch <= '9')){
+      return false;
+    }
+  }
+
+  return true;
+}
+
+#define CheckIdentifier(ID) \
+  if(!IsValidIdentifier(ID)){ \
+    ReportError(tok,ID,StaticFormat("identifier '%.*s' is not a valid name",UNPACK_SS(ID))); \
+    return {}; \
+  }
+
+bool _ExpectError(Tokenizer* tok,const char* str){
+  TEMP_REGION(temp,nullptr);
+
+  Token got = tok->NextToken();
+  String expected = STRING(str);
+  if(!CompareString(got,expected)){
+    
+    auto builder = StartString(temp);
+    builder->PushString("Parser Error.\n Expected to find:  '");
+    builder->PushString(PushEscapedString(temp,expected,' '));
+    builder->PushString("'\n");
+    builder->PushString("  Got:");
+    builder->PushString(PushEscapedString(temp,got,' '));
+    builder->PushString("\n");
+    String text = EndString(temp,builder);
+    ReportError(tok,got,StaticFormat("%*s",UNPACK_SS(text))); \
+    return true;
+  }
+  return false;
+}
+
+#define AssertToken(TOKENIZER,STR) \
+  do{ \
+    if(_ExpectError(TOKENIZER,STR)){ \
+      return {}; \
+    } \
+  } while(0)
+
 struct EnumDef{
   String name;
   Array<Pair<String,String>> valuesNamesWithValuesIfExist;
@@ -34,24 +110,31 @@ struct TableDef{
   Array<Array<DataValue*>> dataTable;
 };
 
+struct MapDef{
+  String name;
+  Array<Pair<String,DataValue*>> maps;
+  bool isDefineMap;
+};
+
 struct Defs{
   Array<EnumDef*> enums;
   Array<TableDef*> tables;
+  Array<MapDef*> maps;
 };
-
-#define AssertToken(TOKENIZER,STR) (TOKENIZER)->AssertNextToken(STR)
 
 EnumDef* ParseEnum(Tokenizer* tok,Arena* out){
   TEMP_REGION(temp,out);
   AssertToken(tok,"enum");
 
-  String enumTypeName = tok->NextToken();
+  Token enumTypeName = tok->NextToken();
+  CheckIdentifier(enumTypeName);
 
   AssertToken(tok,"{");
 
   auto memberList = PushArenaList<Pair<String,String>>(temp);
   while(!tok->Done()){
-    String name = tok->NextToken();
+    Token name = tok->NextToken();
+    CheckIdentifier(name);
 
     String fullValue = {};
     if(tok->IfNextToken("=")){
@@ -86,6 +169,7 @@ EnumDef* ParseEnum(Tokenizer* tok,Arena* out){
 
 TypeDef* ParseTypeDef(Tokenizer* tok,Arena* out){
   Token name = tok->NextToken();
+  CheckIdentifier(name);
 
   bool isArray = false;
   if(tok->IfNextToken("[")){
@@ -135,15 +219,17 @@ TableDef* ParseTable(Tokenizer* tok,Arena* out){
   AssertToken(tok,"table");
 
   Token tableStructName = tok->NextToken();
+  CheckIdentifier(tableStructName);
 
   AssertToken(tok,"(");
 
   auto typeList = PushArenaList<Pair<TypeDef*,Token>>(temp);
   while(!tok->Done()){
     TypeDef* def = ParseTypeDef(tok,out);
-
-    Token name = tok->NextToken();
     
+    Token name = tok->NextToken();
+    CheckIdentifier(name);
+
     *typeList->PushElem() = {def,name};
     
     bool seenComma = tok->IfNextToken(",");
@@ -191,10 +277,56 @@ TableDef* ParseTable(Tokenizer* tok,Arena* out){
 
   return def;
 }
+
+MapDef* ParseMap(Tokenizer* tok,Arena* out){
+  TEMP_REGION(temp,out);
+
+  Token type = tok->NextToken();
+  bool isDefineMap = false;
+
+  if(CompareString(type,"define_map")){
+    isDefineMap = true;
+  } else if(CompareString(type,"map")){
+    ReportError(tok,type,"Not implemented yet");
+  } else {
+    printf("Should not be possible to reach this point\n");
+    DEBUG_BREAK();
+  }
   
-void ReportError(Token tok,const char* error){
-  printf("%s",error);
-  printf("    Token: %.*s\n",UNPACK_SS(tok));
+  //AssertToken(tok,"map");
+
+  Token mapName = tok->NextToken();
+  CheckIdentifier(mapName);
+
+  AssertToken(tok,"{");
+
+  auto memberList = PushArenaList<Pair<String,DataValue*>>(temp);
+  while(!tok->Done()){
+    Token name = tok->NextToken();
+    CheckIdentifier(name);
+
+    AssertToken(tok,":");
+
+    DataValue* data = ParseValue(tok,out);
+    
+    *memberList->PushElem() = {name,data};
+
+    tok->IfNextToken(",");
+
+    if(tok->IfPeekToken("}")){
+      break;
+    }
+  }
+
+  AssertToken(tok,"}");
+  AssertToken(tok,";");
+
+  MapDef* res = PushStruct<MapDef>(out);
+  res->name = mapName;
+  res->maps = PushArrayFromList(out,memberList);
+  res->isDefineMap = isDefineMap;
+  
+  return res;
 }
 
 Defs* ParseContent(String content,Arena* out){
@@ -204,6 +336,7 @@ Defs* ParseContent(String content,Arena* out){
   
   auto enumList = PushArenaList<EnumDef*>(temp);
   auto tableList = PushArenaList<TableDef*>(temp);
+  auto mapList = PushArenaList<MapDef*>(temp);
 
   while(!tok->Done()){
     Token peek = tok->PeekToken();
@@ -214,8 +347,11 @@ Defs* ParseContent(String content,Arena* out){
     } else if(CompareString(peek,"table")){
       TableDef* def = ParseTable(tok,out);
       *tableList->PushElem() = def;
+    } else if(CompareString(peek,"map") || CompareString(peek,"define_map")){
+      MapDef* def = ParseMap(tok,out);
+      *mapList->PushElem() = def;
     } else {
-      ReportError(peek,"Unexpected token at global scope");
+      ReportError(tok,peek,"Unexpected token at global scope");
       tok->AdvancePeek();
     }
   }
@@ -223,7 +359,8 @@ Defs* ParseContent(String content,Arena* out){
   Defs* defs = PushStruct<Defs>(out);
   defs->enums = PushArrayFromList(out,enumList);
   defs->tables = PushArrayFromList(out,tableList);
-
+  defs->maps = PushArrayFromList(out,mapList);
+  
   return defs;
 }
 
@@ -262,8 +399,12 @@ int main(int argc,const char* argv[]){
     }
 
     DEFER_CLOSE_FILE(header);
+
+    fprintf(header,"// File auto generated by embedData tool\n");
+    
+    fprintf(header,"#pragma once\n\n");
   
-    fprintf(header,"#include \"utils.hpp\"\n");
+    fprintf(header,"#include \"utilsCore.hpp\"\n");
 
     fprintf(header,"\n// Enum definition\n\n");
 
@@ -325,7 +466,23 @@ int main(int argc,const char* argv[]){
 
       fprintf(header,"extern Array<%.*s_GenType> %.*s;\n",UNPACK_SS(name),UNPACK_SS(name));
     }
-  }
+
+    fprintf(header,"\n// Define Maps (the arrays store the data, not the keys)\n\n");
+
+    for(MapDef* def : defs->maps){
+      if(!def->isDefineMap){
+        continue;
+      }
+
+      for(Pair<String,DataValue*> p : def->maps){
+        // TODO: Only implement for single type. Waht would an array define map look like?
+        Assert(p.second->type == DataValueType_SINGLE);
+        fprintf(header,"#define %.*s STRING(\"%.*s\")\n",UNPACK_SS(p.first),UNPACK_SS(p.second->asStr));
+      }
+
+      fprintf(header,"\nextern Array<String> %.*s;\n\n",UNPACK_SS(def->name));
+    }
+  } // header
   
   {
     FILE* source = fopen(StaticFormat("%.*s",UNPACK_SS(sourceName)),"w");
@@ -334,6 +491,8 @@ int main(int argc,const char* argv[]){
       return -1;
     }
     DEFER_CLOSE_FILE(source);
+
+    fprintf(source,"// File auto generated by embedData tool\n");
 
     String headerFilenameOnly = ExtractFilenameOnly(headerName);
     fprintf(source,"#include \"%.*s\"\n",UNPACK_SS(headerFilenameOnly));
@@ -353,7 +512,7 @@ int main(int argc,const char* argv[]){
           String name = p.second;
 
           if(val->type == DataValueType_ARRAY){
-            fprintf(source,"static %.*s %.*s_aux%d[] = {\n",UNPACK_SS(typeDef->name),UNPACK_SS(name),i);
+            fprintf(source,"static %.*s %.*s_%.*s_aux%d[] = {\n",UNPACK_SS(typeDef->name),UNPACK_SS(def->structTypename),UNPACK_SS(name),i);
 
             bool first = true;
             for(DataValue* child : val->asArray){
@@ -409,7 +568,7 @@ int main(int argc,const char* argv[]){
           } else if(val->type == DataValueType_SINGLE){
             fprintf(source,"STRING(\"%.*s\")",UNPACK_SS(val->asStr));
           } else {
-            fprintf(source,"%.*s_aux%d",UNPACK_SS(name),i);
+            fprintf(source,"%.*s_%.*s_aux%d",UNPACK_SS(def->structTypename),UNPACK_SS(name),i);
           }
           
           first = false;
@@ -427,6 +586,29 @@ int main(int argc,const char* argv[]){
     for(TableDef* def : defs->tables){
       String n = def->structTypename;
       fprintf(source,"Array<%.*s_GenType> %.*s = {%.*s_Raw,ARRAY_SIZE(%.*s_Raw)};\n",UNPACK_SS(n),UNPACK_SS(n),UNPACK_SS(n),UNPACK_SS(n));
+    }
+
+    fprintf(source,"\n// Define Maps arrays\n\n");
+
+    for(MapDef* def : defs->maps){
+      if(!def->isDefineMap){
+        continue;
+      }
+
+      fprintf(source,"static String %.*s_Raw[] = {\n",UNPACK_SS(def->name));
+      bool first = true;
+      for(Pair<String,DataValue*> p : def->maps){
+        // TODO: Only implement for single type. Waht would an array define map look like?
+        Assert(p.second->type == DataValueType_SINGLE);
+        if(!first){
+          fprintf(source,",\n");
+        }
+        fprintf(source,"  %.*s",UNPACK_SS(p.first));
+        first = false;
+      }
+      fprintf(source,"\n};\n");
+
+      fprintf(source,"Array<String> %.*s = {%.*s_Raw,ARRAY_SIZE(%.*s_Raw)};\n",UNPACK_SS(def->name),UNPACK_SS(def->name),UNPACK_SS(def->name));
     }
   } // source
     

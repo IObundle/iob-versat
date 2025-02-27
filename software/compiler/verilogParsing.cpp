@@ -8,6 +8,8 @@
 #include "utils.hpp"
 #include "utilsCore.hpp"
 
+#include "embeddedData.hpp"
+
 typedef Value (*MathFunction)(Value f,Value g);
 
 struct MathFunctionDescription{
@@ -556,17 +558,6 @@ static ExpressionRange ParseRange(Tokenizer* tok,Arena* out){
   return res;
 }
 
-#define VERSAT_LATENCY STRING("versat_latency")
-#define VERSAT_STATIC  STRING("versat_static")
-#define VERSAT_STAGE  STRING("versat_stage")
-
-static String possibleAttributesData[] = {
-  VERSAT_LATENCY,
-  VERSAT_STATIC,
-  VERSAT_STAGE
-};
-static Array<String> possibleAttributes = C_ARRAY_TO_ARRAY(possibleAttributesData);
-
 static Module ParseModule(Tokenizer* tok,Arena* out){
   TEMP_REGION(temp,out);
 
@@ -755,7 +746,7 @@ ModuleInfo ExtractModuleInfo(Module& module,Arena* out){
   info.name = module.name;
   info.isSource = module.isSource;
 
-  Hashmap<ExternalMemoryID,ExternalMemoryInfo>* external = PushHashmap<ExternalMemoryID,ExternalMemoryInfo>(temp,100);
+  auto* external = PushTrieMap<ExternalMemoryID,ExternalMemoryInfo>(temp);
 
   for(PortDeclaration decl : module.ports){
     Tokenizer port(decl.name,"",{"in","out","delay","done","rst","clk","run","running","databus"});
@@ -872,23 +863,14 @@ ModuleInfo ExtractModuleInfo(Module& module,Arena* out){
         info.databusAddrSize = decl.range;
       }
 
-#if 0
-      info.addrTop = decl.top;
-      info.addrBottom = decl.bottom;
-
-      if(info.addrTop) {
-        PrintExpression(info.addrTop);
-      }
-#endif
-
       info.nIO = val[1].number;
       info.doesIO = true;
-    } else if(  CheckFormat("rvalid",decl.name)
-				|| CheckFormat("valid",decl.name)
-				|| CheckFormat("addr",decl.name)
-				|| CheckFormat("rdata",decl.name)
-				|| CheckFormat("wdata",decl.name)
-				|| CheckFormat("wstrb",decl.name)){
+    } else if(CheckFormat("rvalid",decl.name)
+		   || CheckFormat("valid",decl.name)
+		   || CheckFormat("addr",decl.name)
+		   || CheckFormat("rdata",decl.name)
+		   || CheckFormat("wdata",decl.name)
+		   || CheckFormat("wstrb",decl.name)){
       info.memoryMapped = true;
 
       if(CheckFormat("addr",decl.name)){
@@ -942,9 +924,9 @@ ModuleInfo ExtractModuleInfo(Module& module,Arena* out){
     info.nIO += 1;
   }
 
-  Array<ExternalMemoryInterfaceExpression> interfaces = PushArray<ExternalMemoryInterfaceExpression>(out,external->nodesUsed);
+  Array<ExternalMemoryInterfaceExpression> interfaces = PushArray<ExternalMemoryInterfaceExpression>(out,external->inserted);
   int index = 0;
-  for(Pair<ExternalMemoryID,ExternalMemoryInfo*> pair : external){
+  for(Pair<ExternalMemoryID,ExternalMemoryInfo> pair : external){
     ExternalMemoryInterfaceExpression& inter = interfaces[index++];
 
     inter.interface = pair.first.interface;
@@ -952,11 +934,11 @@ ModuleInfo ExtractModuleInfo(Module& module,Arena* out){
 
 	switch(inter.type){
 	case ExternalMemoryType::TWO_P:{
-	  inter.tp = pair.second->tp;
+	  inter.tp = pair.second.tp;
 	} break;
 	case ExternalMemoryType::DP:{
-	  inter.dp[0] = pair.second->dp[0];
-	  inter.dp[1] = pair.second->dp[1];
+	  inter.dp[0] = pair.second.dp[0];
+	  inter.dp[1] = pair.second.dp[1];
 	}break;
 	}
   }

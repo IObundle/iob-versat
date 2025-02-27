@@ -21,6 +21,7 @@ _a := $(shell mkdir -p $(BUILD_DIR)) # Creates the folder
 VERSAT_REQUIRE_TYPE:=type templateEngine
 
 VERSAT_ALL_HEADERS := $(wildcard $(VERSAT_COMMON_DIR)/*.hpp) $(wildcard $(VERSAT_COMPILER_DIR)/*.hpp)
+VERSAT_ALL_HEADERS += $(VERSAT_SW_DIR)/versat_defs.txt # Kinda of an hack
 VERSAT_COMMON_SRC_NO_TYPE := $(filter-out $(patsubst %,$(VERSAT_COMMON_DIR)/%.cpp,$(VERSAT_REQUIRE_TYPE)),$(wildcard $(VERSAT_COMMON_DIR)/*.cpp))
 VERSAT_COMMON_HDR_NO_TYPE := $(filter-out $(patsubst %,$(VERSAT_COMMON_DIR)/%.hpp,$(VERSAT_REQUIRE_TYPE)),$(wildcard $(VERSAT_COMMON_DIR)/*.hpp))
 VERSAT_COMMON_OBJ_NO_TYPE := $(patsubst $(VERSAT_COMMON_DIR)/%.cpp,$(BUILD_DIR)/%.o,$(VERSAT_COMMON_SRC_NO_TYPE))
@@ -42,6 +43,7 @@ TYPE_INFO_HDR += $(VERSAT_COMPILER_DIR)/declaration.hpp
 TYPE_INFO_HDR += $(VERSAT_COMPILER_DIR)/codeGeneration.hpp
 TYPE_INFO_HDR += $(VERSAT_COMPILER_DIR)/versatSpecificationParser.hpp
 TYPE_INFO_HDR += $(VERSAT_COMPILER_DIR)/symbolic.hpp
+TYPE_INFO_HDR += $(BUILD_DIR)/embeddedData.hpp
 
 VERSAT_INCLUDE := -I$(VERSAT_PC_DIR) -I$(VERSAT_COMPILER_DIR) -I$(BUILD_DIR)/ -I$(VERSAT_COMMON_DIR) -I$(VERSAT_SW_DIR)
 
