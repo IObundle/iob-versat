@@ -61,6 +61,7 @@ VERSAT_FLAGS := -rdynamic -DROOT_PATH=\"$(abspath ../)\"
 CPP_OBJ += $(VERSAT_COMMON_OBJ)
 CPP_OBJ += $(VERSAT_TEMPLATES_OBJ)
 CPP_OBJ += $(BUILD_DIR)/typeInfo.o
+CPP_OBJ += $(BUILD_DIR)/embeddedData.o
 
 CPP_OBJ_WITHOUT_COMPILER:=$(filter-out $(BUILD_DIR)/versatCompiler.o,$(CPP_OBJ))
 
@@ -81,6 +82,9 @@ $(BUILD_DIR)/embedFile: $(VERSAT_TOOLS_DIR)/embedFile.cpp $(VERSAT_COMMON_OBJ_NO
 $(BUILD_DIR)/calculateHash: $(VERSAT_TOOLS_DIR)/calculateHash.cpp $(VERSAT_COMMON_OBJ_NO_TYPE) $(VERSAT_ALL_HEADERS)
 	g++ -DPC -std=c++17 -MMD -MP -DVERSAT_DEBUG -DSTANDALONE -o $@ $(VERSAT_COMMON_FLAGS) $(VERSAT_COMMON_INCLUDE) $< $(VERSAT_COMMON_OBJ_NO_TYPE)
 
+$(BUILD_DIR)/embedData: $(VERSAT_TOOLS_DIR)/embedData.cpp $(VERSAT_COMMON_OBJ_NO_TYPE) $(VERSAT_ALL_HEADERS)
+	g++ -DPC -std=c++17 -MMD -MP -DVERSAT_DEBUG -DSTANDALONE -o $@ $(VERSAT_COMMON_FLAGS) $(VERSAT_COMMON_INCLUDE) $< $(VERSAT_COMMON_OBJ_NO_TYPE)
+
 $(BUILD_DIR)/typeInfo.cpp: $(TYPE_INFO_HDR) $(VERSAT_ALL_HEADERS)
 	python3 $(VERSAT_TOOLS_DIR)/structParser.py $(BUILD_DIR) $(TYPE_INFO_HDR) # -m cProfile -o temp.dat 
 
@@ -97,9 +101,19 @@ $(BUILD_DIR)/%.o : $(VERSAT_COMMON_DIR)/%.cpp $(VERSAT_ALL_HEADERS)
 $(VERSAT_DIR)/versat: $(CPP_OBJ) $(VERSAT_ALL_HEADERS)
 	g++ -MMD -std=c++17 $(FL) $(VERSAT_FLAGS) -o $@ $(VERSAT_COMMON_FLAGS) $(CPP_OBJ) $(VERSAT_INCLUDE) $(VERSAT_LIBS) 
 
+$(BUILD_DIR)/embeddedData.o: $(BUILD_DIR)/embeddedData.cpp $(BUILD_DIR)/embeddedData.hpp
+	g++ -DPC -std=c++17 $(VERSAT_COMMON_FLAGS) -c -o $@ $(GLOBAL_CFLAGS) $< $(VERSAT_INCLUDE)
+
+$(BUILD_DIR)/embeddedData.hpp $(BUILD_DIR)/embeddedData.cpp: $(BUILD_DIR)/embedData
+	$(BUILD_DIR)/embedData ./software/versat_defs.txt $(BUILD_DIR)/embeddedData
+
 embedFile: $(BUILD_DIR)/templateData.hpp
 
 calculateHash: $(BUILD_DIR)/calculateHash
+
+embedData: $(BUILD_DIR)/embedData
+
+testEmbedData: $(BUILD_DIR)/embeddedData.hpp
 
 versat: $(VERSAT_DIR)/versat $(BUILD_DIR)/calculateHash
 

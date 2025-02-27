@@ -244,5 +244,5 @@ FUDeclaration* InstantiateSpecifications(String content,TypeDefinition def);
 Opt<AddressGenDef> ParseAddressGen(Tokenizer* tok,Arena* out);
 String InstantiateAddressGen(AddressGenDef def,Arena* out);
 
-AddressGen InstantiateAddressGenOnly(AddressGenDef def,Arena* out);
+AddressGen CompileAddressGenDef(AddressGenDef def,Arena* out);
 String InstantiateAddressGen(AddressGen gen,String typeStructName,Arena* out);

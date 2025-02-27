@@ -1,0 +1,38 @@
+// This file is used as a repository of data.
+// A tool runs at compile time to extract all these data and to generate code files.
+// Stuff like enums, tables of data and the like are easier to define here.
+// Especially because we use certain structures that make it difficult to quickly define literal expressions
+// (Ex: hard in C to define a literal expression of Array<String>)
+// We can also use this data to generate other helpful code.
+// Unless specified otherwise, this file is the source of truth for large amounts of configurable Versat data.
+// It should be easy to change the way versat interprets different types of wires and such by changing stuff here.
+
+// Note: Currently everything is a string. Whether the output is the string or the name depends on the types given.
+//       Using "" to allow escaping values is currently not supported.
+
+// Note: I do not want to spend much time trying to beef up the parser of these files. Most errors are just gonna 
+//       be asserts, segfaults and the likes so be careful changing stuff in here.
+
+// Note: Some of these generate code that uses some predefined naming conventions.
+//       Ex: Tables generate an array of structs whose name is the name defined here with the first letter uppercase. 
+//           The name of the variable is the same except the first letter is downcase. 
+//           (Basically "table Test(...)" produces the code "Array<Test> test = ...")
+
+// Note: The code should be agnostic to the actual containers. I do not want to see an "Array<String>" even though it is 
+//       basically what we produce. Part of this approach is to abstract the actual containers used. 
+
+// TODO: Support numbers inside tables. Support more levels of data hierarchies.
+//       More importantly, implement stuff as they are needed. No point in trying to push for anything complex right now.
+
+enum AddressGenType{
+   AddressGenType_MEM = 0,
+   AddressGenType_VREAD_LOAD,
+   AddressGenType_VREAD_OUTPUT,
+   AddressGenType_VWRITE_INPUT,
+   AddressGenType_VWRITE_STORE,
+};
+
+table AddressGenWireNames(AddressGenType type,String[] names){
+   AddressGenType_MEM         : {Test,Test2},
+   AddressGenType_VREAD_LOAD  : {Test,Test2,Test3},
+};

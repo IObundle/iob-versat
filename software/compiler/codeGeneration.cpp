@@ -1322,7 +1322,6 @@ void OutputTopLevelFiles(Accelerator* accel,FUDeclaration* topLevelDecl,const ch
     
     TemplateSetCustom("mergeMux",MakeValue(&muxInfo));
 
-    
     TrieSet<Pair<String,String>>* structNameAndAddressGen = PushTrieSet<Pair<String,String>>(temp);
 
     // By getting the info directly from the structs, we make sure that we are always generating the functions needed for each possible structure that gets created/changed due to partial share or merge.
@@ -1334,8 +1333,6 @@ void OutputTopLevelFiles(Accelerator* accel,FUDeclaration* topLevelDecl,const ch
       if(!info){
         continue;
       }
-      
-      //Assert(info); // We must always have an info because we are extracting values from some unit, right? Otherwise where would we get the wire names and stuff like that?
 
       String typeName = structInfo->name;
 
@@ -1364,7 +1361,9 @@ void OutputTopLevelFiles(Accelerator* accel,FUDeclaration* topLevelDecl,const ch
       if(!def){
         printf("Did not find address gen with name: %.*s\n",UNPACK_SS(addressGenName));
       } else {
-        AddressGen gen = InstantiateAddressGenOnly(*def,temp);
+        // TODO: Address gen only needs to be compiled once.
+        //       We should move this to the top level as the compilation can fail and proper error reported is needed
+        AddressGen gen = CompileAddressGenDef(*def,temp);
         String res = InstantiateAddressGen(gen,structName,temp);
 
         *builder.PushElem() = res;
@@ -1373,7 +1372,6 @@ void OutputTopLevelFiles(Accelerator* accel,FUDeclaration* topLevelDecl,const ch
 
     Array<String> content = EndArray(builder);
 
-    DEBUG_BREAK();
     TemplateSetCustom("addrGen",MakeValue(&content));
     
     FILE* f = OpenFileAndCreateDirectories(PushString(temp,"%s/versat_accel.h",softwarePath),"w",FilePurpose_SOFTWARE);

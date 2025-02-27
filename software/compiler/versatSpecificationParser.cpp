@@ -2214,12 +2214,10 @@ String InstantiateAddressGen(AddressGen gen,String typeStructName,Arena* out){
   }
   builder->PushString("}\n");
   
-  //builder->PushString("#endif // ADDRESS_GEN_%.*s\n\n",UNPACK_SS(name));
-  
   return EndString(out,builder);
 }
 
-AddressGen InstantiateAddressGenOnly(AddressGenDef def,Arena* out){
+AddressGen CompileAddressGenDef(AddressGenDef def,Arena* out){
   TEMP_REGION(temp,out);
   
   TrieSet<Token>* constants = PushTrieSet<Token>(temp);

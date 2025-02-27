@@ -159,7 +159,6 @@ String OffsetString(String str,int amount);
 bool CheckFormat(const char* format,String tok);
 Array<Value> ExtractValues(const char* format,String tok,Arena* arena);
 
-
 Array<String> Split(String content,char sep,Arena* out); // For now only split over one char. 
 
 String TrimLeftWhitespaces(String in);
