@@ -22,12 +22,12 @@ typedef struct {
   union{
 #{for typeAndName entry.typeAndNames}
 #{if typeAndName.arraySize > 1}
-  @{typeAndName.type} @{typeAndName.name}[@{typeAndName.arraySize}];
+    @{typeAndName.type} @{typeAndName.name}[@{typeAndName.arraySize}];
 #{else}
-  @{typeAndName.type} @{typeAndName.name};
+    @{typeAndName.type} @{typeAndName.name};
 #{end}
 #{end}
-};
+  };
 #{else}
 #{if entry.typeAndNames[0].arraySize > 1}
   @{entry.typeAndNames[0].type} @{entry.typeAndNames[0].name}[@{entry.typeAndNames[0].arraySize}];

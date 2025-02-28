@@ -1323,23 +1323,6 @@ void OutputTopLevelFiles(Accelerator* accel,FUDeclaration* topLevelDecl,const ch
     TemplateSetCustom("mergeMux",MakeValue(&muxInfo));
 
     TrieSet<Pair<String,String>>* structNameAndAddressGen = PushTrieSet<Pair<String,String>>(temp);
-
-    // By getting the info directly from the structs, we make sure that we are always generating the functions needed for each possible structure that gets created/changed due to partial share or merge.
-    // Address gen is therefore capable of handling all the struct modifing features as long as they are properly implemented inside structInfo.
-    for(StructInfo* structInfo : allStructs){
-      InstanceInfo* info = structInfo->infoThatGeneratedThis;
-
-      // NOTE: This happens to merged struct infos. It does not make sense to save an instance info for these cases
-      if(!info){
-        continue;
-      }
-
-      String typeName = structInfo->name;
-
-      for(String addressGenName : info->addressGenUsed){
-        structNameAndAddressGen->Insert({typeName,addressGenName});
-      }
-    }
     
     auto GetAddressGen = [](String addressGenName) -> AddressGenDef*{
       for(AddressGenDef* def : addressGens){
@@ -1349,8 +1332,39 @@ void OutputTopLevelFiles(Accelerator* accel,FUDeclaration* topLevelDecl,const ch
       }
       return nullptr;
     };
+
+    // By getting the info directly from the structs, we make sure that we are always generating the functions needed for each possible structure that gets created/changed due to partial share or merge.
+    // Address gen is therefore capable of handling all the struct modifing features as long as they are properly implemented inside structInfo.
     
     GrowableArray<String> builder = StartArray<String>(temp2);
+
+    for(StructInfo* structInfo : allStructs){
+      InstanceInfo* info = structInfo->infoThatGeneratedThis;
+      
+      // NOTE: This happens to merged struct infos. It does not make sense to save an instance info for these cases
+      if(!info){
+        continue;
+      }
+
+      String typeName = structInfo->name;
+
+      for(String addressGenName : info->addressGenUsed){
+
+        AddressGenDef* def = GetAddressGen(addressGenName);
+        if(!def){
+          printf("Did not find address gen with name: %.*s\n",UNPACK_SS(addressGenName));
+        } else {
+          // TODO: Address gen only needs to be compiled once.
+          //       We should move this to the top level as the compilation can fail and proper error reported is needed
+          AddressGen gen = CompileAddressGenDef(*def,temp);
+          String res = InstantiateGenericAddressGen(gen,typeName,temp);
+
+          *builder.PushElem() = res;
+        }
+        
+        structNameAndAddressGen->Insert({typeName,addressGenName});
+      }
+    }
 
     for(Pair<String,String> p : structNameAndAddressGen){
       String structName = p.first;

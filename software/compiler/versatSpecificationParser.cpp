@@ -2003,6 +2003,228 @@ Opt<AddressGenDef> ParseAddressGen(Tokenizer* tok,Arena* out){
   return def;
 }
 
+String InstantiateGenericAddressGen(AddressGen gen,String typeStructName,Arena* out){
+  TEMP_REGION(temp,out);
+
+  Array<AddressGenLoopSpecificatonSym> loopSpecSymbolic = gen.loopSpecSymbolic;
+  Array<AddressGenLoopSpecificatonSym> internalSpecSym = gen.internalSpecSym;
+  Array<AddressGenLoopSpecificatonSym> externalSpecSym = gen.externalSpecSym;
+
+  String constantExpr = gen.constantExpr;
+  Array<Token> constants = gen.constants;
+
+  String name = gen.name;
+  String externalName = gen.externalName;
+  AddressGenType type = gen.type;
+  
+  auto PushFunctionNameAndFirstArgument = [](StringBuilder* builder,const char* type,String addressGenName,String structName) -> void {
+    //builder->PushString("static void ");
+    builder->PushString("%s_",type);
+    builder->PushString("%.*s(volatile %.*sConfig* config",UNPACK_SS(addressGenName),UNPACK_SS(structName));
+  };
+  
+  auto builder = StartString(temp);
+
+  builder->PushString("#ifdef __cplusplus\n");
+
+#if 0
+  builder->PushString("static int LoopSize_%.*s_%.*s(int temp",UNPACK_SS(name),UNPACK_SS(typeStructName));
+  for(Token t : constants){
+    builder->PushString(",int %.*s",UNPACK_SS(t));
+  }
+  builder->PushString("){\n");
+
+  builder->PushString("   return 1");
+  for(String repr : gen.loopRepr){
+    builder->PushString(" * %.*s",UNPACK_SS(repr));
+  }
+
+  builder->PushString(";\n");
+  builder->PushString("}\n\n\n");
+#endif
+  
+  // TODO: All these different types should be removed and a generic approach used. The only difference is the logic for VRead/VWrite different usages (output vs access memory) and the fact that the units have differences in the name of the signals, which is not a reason to have multiple different types. Need to map loop to name
+  switch(type){
+  case AddressGenType_MEM:{
+    builder->PushString("static void ");
+    PushFunctionNameAndFirstArgument(builder,"Configure",name,typeStructName);
+    //builder->PushString("static void Configure_%.*s(volatile %.*sConfig* config",UNPACK_SS(name),UNPACK_SS(typeStructName));
+    for(Token t : constants){
+      builder->PushString(",int %.*s",UNPACK_SS(t));
+    }
+    builder->PushString("){\n");
+
+    if(!Empty(constantExpr)){
+      builder->PushString("   config->start = %.*s;\n",UNPACK_SS(constantExpr));
+    }
+    
+    for(int i = 0; i < loopSpecSymbolic.size; i++){
+      AddressGenLoopSpecificatonSym l = loopSpecSymbolic[i]; 
+
+      char loopIndex = (i == 0) ? ' ' : '1' + i;
+      
+      builder->PushString("   config->period%c = %.*s;\n",loopIndex,UNPACK_SS(l.periodExpression));
+      builder->PushString("   config->incr%c = %.*s;\n",loopIndex,UNPACK_SS(l.incrementExpression));
+
+      if(!Empty(l.dutyExpression)){
+        builder->PushString("   config->duty = %.*s;\n",UNPACK_SS(l.dutyExpression));
+      }
+      builder->PushString("   config->iterations%c = %.*s;\n",loopIndex,UNPACK_SS(l.iterationExpression));
+      builder->PushString("   config->shift%c = %.*s;\n",loopIndex,UNPACK_SS(l.shiftExpression));
+    }
+  } break;
+  case AddressGenType_VREAD_LOAD:{
+    builder->PushString("static void ");
+    PushFunctionNameAndFirstArgument(builder,"Configure",name,typeStructName);
+    //builder->PushString("static void Configure_%.*s(volatile %.*sConfig* config",UNPACK_SS(name),UNPACK_SS(typeStructName));
+
+    for(Token t : constants){
+      if(CompareString(t,"ext")){
+        builder->PushString(",iptr %.*s",UNPACK_SS(t));
+      } else {
+        builder->PushString(",int %.*s",UNPACK_SS(t));
+      }
+    }
+    builder->PushString("){\n");
+
+    Assert(!Empty(externalName)); // TODO: Probably a parser error or something. Weird to see it here
+    builder->PushString("   config->ext_addr = %.*s;\n",UNPACK_SS(externalName));
+    
+    AddressGenLoopSpecificatonSym in = internalSpecSym[0];
+
+    builder->PushString("   config->read_per = %.*s;\n",UNPACK_SS(in.periodExpression));
+    builder->PushString("   config->read_incr = %.*s;\n",UNPACK_SS(in.incrementExpression));
+
+    builder->PushString("   config->read_duty = %.*s;\n",UNPACK_SS(in.dutyExpression));
+    builder->PushString("   config->read_iter = %.*s;\n",UNPACK_SS(in.iterationExpression));
+    builder->PushString("   config->read_shift = %.*s;\n",UNPACK_SS(in.shiftExpression));
+
+    //for(int i = 0; i < externalSpec.size; i++){
+    AddressGenLoopSpecificatonSym ext = externalSpecSym[0];
+    builder->PushString("   config->read_length = (%.*s) * sizeof(float);\n",UNPACK_SS(ext.periodExpression));
+    builder->PushString("   config->read_amount_minus_one = (%.*s) - 1;\n",UNPACK_SS(ext.iterationExpression));
+    builder->PushString("   config->read_addr_shift = (%.*s) * sizeof(float);\n",UNPACK_SS(ext.shiftWithoutRemovingIncrement));
+    builder->PushString("}\n");
+    
+    // TODO: This is kinda of hardcoded, but since we will eventually have to deal with address generation when trying to integrate this with merged accelertors, we will only handle this then.
+    // TODO: We are also putting the output values here.
+    // Start of simulation
+#if 0
+    builder->PushString("static int Simulate_%.*s_%.*s(iptr* arrayToFill,int arrayMaxSize,volatile %.*sConfig* config){\n",UNPACK_SS(name),UNPACK_SS(typeStructName),UNPACK_SS(typeStructName));
+    builder->PushString("   AddressGenArguments args = {};\n");
+
+    builder->PushString("   args.start_address = config->ext_addr;\n");
+    builder->PushString("   args.ext_addr = config->ext_addr;\n");
+    builder->PushString("   args.period = config->output_per;\n");
+    builder->PushString("   args.incr = config->output_incr;\n");
+    builder->PushString("   args.duty = config->output_duty;\n");
+    builder->PushString("   args.iterations = config->output_iter;\n");
+    builder->PushString("   args.shift = config->output_shift;\n");
+    builder->PushString("   args.length = config->read_length;\n");
+    builder->PushString("   args.amount_minus_one = config->read_amount_minus_one;\n");
+    builder->PushString("   args.addr_shift = config->read_addr_shift;\n");
+
+    builder->PushString("   return SimulateAddressGen(arrayToFill,arrayMaxSize,args);\n");
+#endif
+    
+  } break;
+
+  case AddressGenType_VREAD_OUTPUT:{
+    // TODO: Basically a copy of MEM but with the different named signals, since MEM has slight differences in naming conventions.
+    builder->PushString("static void ");
+    PushFunctionNameAndFirstArgument(builder,"Configure",name,typeStructName);
+    for(Token t : constants){
+      builder->PushString(",int %.*s",UNPACK_SS(t));
+    }
+    builder->PushString("){\n");
+    
+    if(!Empty(constantExpr)){
+      builder->PushString("   config->output_start = %.*s;\n",UNPACK_SS(constantExpr));
+    }
+
+    for(int i = 0; i < loopSpecSymbolic.size; i++){
+      AddressGenLoopSpecificatonSym l = loopSpecSymbolic[i]; 
+
+      char loopIndex = (i == 0) ? ' ' : '1' + i;
+      
+      builder->PushString("   config->output_per%c = %.*s;\n",loopIndex,UNPACK_SS(l.periodExpression));
+      builder->PushString("   config->output_incr%c = %.*s;\n",loopIndex,UNPACK_SS(l.incrementExpression));
+
+      if(!Empty(l.dutyExpression)){
+        builder->PushString("   config->output_duty = %.*s;\n",UNPACK_SS(l.dutyExpression));
+      }
+      builder->PushString("   config->output_iter%c = %.*s;\n",loopIndex,UNPACK_SS(l.iterationExpression));
+      builder->PushString("   config->output_shift%c = %.*s;\n",loopIndex,UNPACK_SS(l.shiftExpression));
+    }
+  } break;
+
+  case AddressGenType_VWRITE_INPUT:{
+    // TODO: Basically a copy of VREAD_OUTPUT and MEM but with the different named signals, since MEM has slight differences in naming conventions.
+    builder->PushString("static void ");
+    PushFunctionNameAndFirstArgument(builder,"Configure",name,typeStructName);
+    for(Token t : constants){
+      builder->PushString(",int %.*s",UNPACK_SS(t));
+    }
+    builder->PushString("){\n");
+
+    if(!Empty(constantExpr)){
+      builder->PushString("   config->input_start = %.*s;\n",UNPACK_SS(constantExpr));
+    }
+    
+    for(int i = 0; i < loopSpecSymbolic.size; i++){
+      AddressGenLoopSpecificatonSym l = loopSpecSymbolic[i]; 
+
+      char loopIndex = (i == 0) ? ' ' : '1' + i;
+      
+      builder->PushString("   config->input_per%c = %.*s;\n",loopIndex,UNPACK_SS(l.periodExpression));
+      builder->PushString("   config->input_incr%c = %.*s;\n",loopIndex,UNPACK_SS(l.incrementExpression));
+
+      if(!Empty(l.dutyExpression)){
+        builder->PushString("   config->input_duty = %.*s;\n",UNPACK_SS(l.dutyExpression));
+      }
+      builder->PushString("   config->input_iter%c = %.*s;\n",loopIndex,UNPACK_SS(l.iterationExpression));
+      builder->PushString("   config->input_shift%c = %.*s;\n",loopIndex,UNPACK_SS(l.shiftExpression));
+    }
+  } break;
+
+  case AddressGenType_VWRITE_STORE:{
+    builder->PushString("static void ");
+    PushFunctionNameAndFirstArgument(builder,"Configure",name,typeStructName);
+
+    for(Token t : constants){
+      if(CompareString(t,"ext")){
+        builder->PushString(",iptr %.*s",UNPACK_SS(t));
+      } else {
+        builder->PushString(",int %.*s",UNPACK_SS(t));
+      }
+    }
+    builder->PushString("){\n");
+
+    Assert(!Empty(externalName)); // TODO: Probably a parser error or something. Weird to see it here
+    builder->PushString("   config->ext_addr = %.*s;\n",UNPACK_SS(externalName));
+    
+    AddressGenLoopSpecificatonSym in = internalSpecSym[0]; 
+    builder->PushString("   config->write_per = %.*s;\n",UNPACK_SS(in.periodExpression));
+    builder->PushString("   config->write_incr = %.*s;\n",UNPACK_SS(in.incrementExpression));
+    builder->PushString("   config->write_duty = %.*s;\n",UNPACK_SS(in.dutyExpression));
+    builder->PushString("   config->write_iter = %.*s;\n",UNPACK_SS(in.iterationExpression));
+    builder->PushString("   config->write_shift = %.*s;\n",UNPACK_SS(in.shiftExpression));
+
+    AddressGenLoopSpecificatonSym ext = externalSpecSym[0];
+
+    builder->PushString("   config->write_length = (%.*s) * sizeof(float);\n",UNPACK_SS(ext.periodExpression));
+    builder->PushString("   config->write_amount_minus_one = (%.*s) - 1;\n",UNPACK_SS(ext.iterationExpression));
+    builder->PushString("   config->write_addr_shift = (%.*s) * sizeof(float);\n",UNPACK_SS(ext.shiftWithoutRemovingIncrement));
+  } break;
+
+  }
+  builder->PushString("}\n");
+
+  builder->PushString("#endif //__cplusplus\n");
+  
+  return EndString(out,builder);
+}
+
 String InstantiateAddressGen(AddressGen gen,String typeStructName,Arena* out){
   TEMP_REGION(temp,out);
 

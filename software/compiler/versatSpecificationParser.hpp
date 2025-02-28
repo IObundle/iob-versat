@@ -238,4 +238,10 @@ Opt<AddressGenDef> ParseAddressGen(Tokenizer* tok,Arena* out);
 String InstantiateAddressGen(AddressGenDef def,Arena* out);
 
 AddressGen CompileAddressGenDef(AddressGenDef def,Arena* out);
+
+// Kinda of an hack to use C++ method overloading to simplify name resolution.
+// Generates function with the name of the address gen but a different type for each different struct type that exists.
+String InstantiateGenericAddressGen(AddressGen gen,String typeStructName,Arena* out);
+
+
 String InstantiateAddressGen(AddressGen gen,String typeStructName,Arena* out);

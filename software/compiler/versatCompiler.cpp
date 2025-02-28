@@ -360,7 +360,7 @@ int main(int argc,char* argv[]){
       RegisterModuleInfo(&info);
     }
   }
-  
+
   // We need to do this after parsing the modules because the majority of these special types come from verilog files
   // More robust impl would embed this files at build time to simplify setup. Only need the exe to run Versat at that point. 
   BasicDeclaration::buffer = GetTypeByName(STRING("Buffer"));
