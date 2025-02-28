@@ -29,7 +29,11 @@ What I should tackle first:
 
 static ArenaList<TemplateRecord>* recordList;
 static String globalTemplateName = {}; // The current name that is being parsed / evaluated. For error reporting reasons. TODO: Do not like it, not a big deal for now. Only change if needed
-extern Array<Pair<String,String>> templateNameToContent; // TODO: Kinda of a quick hack to make this work. Need to revise the way templates are done
+Array<Pair<String,String>> templateNameToContent; // TODO: Kinda of a quick hack to make this work. Need to revise the way templates are done
+
+void SetTemplateNameToContent(Array<Pair<String,String>> val){
+  templateNameToContent = val;
+}
 
 static std::unordered_map<String,PipeFunction> pipeFunctions;
 

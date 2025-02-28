@@ -7,6 +7,10 @@
 
 // TODO: Support numbers inside tables. Support more levels of data hierarchies.
 //       More importantly, implement stuff as they are needed. No point in trying to push for anything complex right now.
+// TODO: Implement special code for bit flags (needed currently by the AddressGen code).
+//       Do not know yet if I want them to be enum, need to test how easy C++ lets enum bit flags work.
+// TODO: Embed file could just become part of the embed data approach. No point in having two different approaches. Altought the embed data approach would need to become more generic
+//       in order to do what the embed file approach does in a data oriented manner.
 
 void ReportError(String content,Token faultyToken,const char* error){
   TEMP_REGION(temp,nullptr);

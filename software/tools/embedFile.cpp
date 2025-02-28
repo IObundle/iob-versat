@@ -153,9 +153,9 @@ int main(int argc,const char* argv[]){
   }
   fprintf(sourceFile,"};\n\n");
 
-  fprintf(sourceFile,"Array<Pair<String,String>> templateNameToContent = {templateNameToContentData,%d};\n\n",templatesFound);
+  fprintf(sourceFile,"Array<Pair<String,String>> generated_templateNameToContent = {templateNameToContentData,%d};\n\n",templatesFound);
 
-  fprintf(headerFile,"extern Array<Pair<String,String>> templateNameToContent;\n\n");
+  fprintf(headerFile,"extern Array<Pair<String,String>> generated_templateNameToContent;\n\n");
 
   fprintf(headerFile,"#endif //" INCLUDE_GUARD,outName);
 

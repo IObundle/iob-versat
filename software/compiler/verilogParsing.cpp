@@ -748,9 +748,11 @@ ModuleInfo ExtractModuleInfo(Module& module,Arena* out){
 
   auto* external = PushTrieMap<ExternalMemoryID,ExternalMemoryInfo>(temp);
 
+
+  
   for(PortDeclaration decl : module.ports){
     Tokenizer port(decl.name,"",{"in","out","delay","done","rst","clk","run","running","databus"});
-
+    
     if(CompareString("signal_loop",decl.name)){
       info.signalLoop = true;
     } else if(CheckFormat("ext_dp_%s_%d_port_%d",decl.name)){

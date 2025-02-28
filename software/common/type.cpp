@@ -580,9 +580,28 @@ void RegisterTypes(){
   // TODO: Problem here when changing 
   REGISTER_TYPEDEF(long,intptr_t);
   REGISTER_TYPEDEF(unsigned long,uintptr_t);
-  
-  RegisterParsedTypes();
 
+#if 0  
+  //RegisterParsedTypes();
+#ifndef SIMPLE_TYPES
+  ValueType::POOL = GetTypeOrFail(STRING("Pool"));
+  ValueType::ARRAY = GetTypeOrFail(STRING("Array"));
+  ValueType::STD_VECTOR = GetTypeOrFail(STRING("std::vector"));
+  ValueType::HASHMAP = GetTypeOrFail(STRING("Hashmap"));
+  ValueType::SIZED_STRING = GetTypeOrFail(STRING("String"));
+  ValueType::SIZED_STRING_BASE = GetTypeOrFail(STRING("Array<const char>"));
+
+  Type* normalTemplateFunction = GetTypeOrFail(STRING("TemplateFunction"));
+  if(normalTemplateFunction){
+    ValueType::TEMPLATE_FUNCTION = GetPointerType(normalTemplateFunction);
+  }
+#endif
+#endif
+}
+
+#undef REGISTER
+
+void AfterRegisteringParsedTypes(){
 #ifndef SIMPLE_TYPES
   ValueType::POOL = GetTypeOrFail(STRING("Pool"));
   ValueType::ARRAY = GetTypeOrFail(STRING("Array"));
@@ -597,8 +616,6 @@ void RegisterTypes(){
   }
 #endif
 }
-
-#undef REGISTER
 
 void FreeTypes(){
   Free(&permanentArena);

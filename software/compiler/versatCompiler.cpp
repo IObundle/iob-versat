@@ -252,6 +252,9 @@ struct argp_option options[] =
 int main(int argc,char* argv[]){
   InitDebug();
 
+  void SetTemplateNameToContent(Array<Pair<String,String>> val); // Kinda of an hack.
+  SetTemplateNameToContent(generated_templateNameToContent);
+  
   Arena globalPermanentInst = InitArena(Megabyte(128));
   globalPermanent = &globalPermanentInst;
   Arena tempInst = InitArena(Megabyte(128));
@@ -291,6 +294,12 @@ int main(int argc,char* argv[]){
   globalOptions.unitPaths = PushArrayFromList(perm,gather.unitPaths);
   
   RegisterTypes();
+
+  void RegisterParsedTypes();
+  RegisterParsedTypes();
+
+  void AfterRegisteringParsedTypes();
+  AfterRegisteringParsedTypes();
   
   InitializeTemplateEngine(perm);
   LoadTemplates(perm);

@@ -35,7 +35,7 @@ pkgs.stdenv.mkDerivation rec {
   enableParallelBuilding = true;
 
   buildPhase = ''
-    make -j versat
+    make -j 8 versat
   '';
 
   installPhase = ''
