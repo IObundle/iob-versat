@@ -51,7 +51,7 @@ module AddressGen3 #(
       .PERIOD_W(PERIOD_W),
       .DELAY_W(DELAY_W),
       .DATA_W(DATA_W),
-      .LEW_W(1),
+      .LEN_W(1),
       .COUNT_W(1),
       .AXI_ADDR_W(1)
       ) reader (
