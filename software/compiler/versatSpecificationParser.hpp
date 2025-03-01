@@ -243,5 +243,4 @@ AddressGen CompileAddressGenDef(AddressGenDef def,Arena* out);
 // Generates function with the name of the address gen but a different type for each different struct type that exists.
 String InstantiateGenericAddressGen(AddressGen gen,String typeStructName,Arena* out);
 
-
 String InstantiateAddressGen(AddressGen gen,String typeStructName,Arena* out);

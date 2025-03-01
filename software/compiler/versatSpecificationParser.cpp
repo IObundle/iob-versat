@@ -2003,6 +2003,7 @@ Opt<AddressGenDef> ParseAddressGen(Tokenizer* tok,Arena* out){
   return def;
 }
 
+// TODO: This function and the non generic instantiate need to be merged into the same flow.
 String InstantiateGenericAddressGen(AddressGen gen,String typeStructName,Arena* out){
   TEMP_REGION(temp,out);
 
@@ -2104,12 +2105,16 @@ String InstantiateGenericAddressGen(AddressGen gen,String typeStructName,Arena* 
     builder->PushString("   config->read_length = (%.*s) * sizeof(float);\n",UNPACK_SS(ext.periodExpression));
     builder->PushString("   config->read_amount_minus_one = (%.*s) - 1;\n",UNPACK_SS(ext.iterationExpression));
     builder->PushString("   config->read_addr_shift = (%.*s) * sizeof(float);\n",UNPACK_SS(ext.shiftWithoutRemovingIncrement));
+
+    builder->PushString("   config->read_enabled = 1;\n");
+    builder->PushString("   config->pingPong = 1;\n");
+
+#if 0
     builder->PushString("}\n");
     
     // TODO: This is kinda of hardcoded, but since we will eventually have to deal with address generation when trying to integrate this with merged accelertors, we will only handle this then.
     // TODO: We are also putting the output values here.
     // Start of simulation
-#if 0
     builder->PushString("static int Simulate_%.*s_%.*s(iptr* arrayToFill,int arrayMaxSize,volatile %.*sConfig* config){\n",UNPACK_SS(name),UNPACK_SS(typeStructName),UNPACK_SS(typeStructName));
     builder->PushString("   AddressGenArguments args = {};\n");
 
@@ -2215,6 +2220,10 @@ String InstantiateGenericAddressGen(AddressGen gen,String typeStructName,Arena* 
     builder->PushString("   config->write_length = (%.*s) * sizeof(float);\n",UNPACK_SS(ext.periodExpression));
     builder->PushString("   config->write_amount_minus_one = (%.*s) - 1;\n",UNPACK_SS(ext.iterationExpression));
     builder->PushString("   config->write_addr_shift = (%.*s) * sizeof(float);\n",UNPACK_SS(ext.shiftWithoutRemovingIncrement));
+
+    builder->PushString("   config->write_enabled = 1;\n");
+    builder->PushString("   config->pingPong = 1;\n");
+
   } break;
 
   }
@@ -2322,6 +2331,9 @@ String InstantiateAddressGen(AddressGen gen,String typeStructName,Arena* out){
     builder->PushString("   config->read_length = (%.*s) * sizeof(float);\n",UNPACK_SS(ext.periodExpression));
     builder->PushString("   config->read_amount_minus_one = (%.*s) - 1;\n",UNPACK_SS(ext.iterationExpression));
     builder->PushString("   config->read_addr_shift = (%.*s) * sizeof(float);\n",UNPACK_SS(ext.shiftWithoutRemovingIncrement));
+    builder->PushString("   config->read_enabled = 1;\n");
+    builder->PushString("   config->pingPong = 1;\n");
+
     builder->PushString("}\n");
     
     // TODO: This is kinda of hardcoded, but since we will eventually have to deal with address generation when trying to integrate this with merged accelertors, we will only handle this then.
@@ -2425,6 +2437,9 @@ String InstantiateAddressGen(AddressGen gen,String typeStructName,Arena* out){
     builder->PushString("   config->write_duty = %.*s;\n",UNPACK_SS(in.dutyExpression));
     builder->PushString("   config->write_iter = %.*s;\n",UNPACK_SS(in.iterationExpression));
     builder->PushString("   config->write_shift = %.*s;\n",UNPACK_SS(in.shiftExpression));
+
+    builder->PushString("   config->write_enabled = 1;\n");
+    builder->PushString("   config->pingPong = 1;\n");
 
     AddressGenLoopSpecificatonSym ext = externalSpecSym[0];
 
