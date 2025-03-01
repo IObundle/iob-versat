@@ -691,9 +691,16 @@ Features:
 
 - We could implement a shared delay as well as config. To make it even more powerful, we could make it so we could share the delay of some units and the config of others and have it overlap somewhat. How I would represent that in syntax I do not know.
 
+- When using address gen and when having to deal with sharing, what we actually want is to share the address gen variables.
+  - If I have an address gen of X(a,b) what I actually want is to tell the tool to share a or share b or both or none.
+    - Otherwise we are forcing the user to always keep in mind how the actual config wires our how the address gen code maps to the unit itself.
+
 Wrapper:
 
 - The databus does not take into consideration the strobe of the databus.
+
+- Remove the while from the simulate function.
+  -  Also put in a comment. We cannot have any "while" inside the wrapper. Every function must be guarantee to end, even if it just a for loop of 1 million iterations that then ends by reporting an error to the user.
 
 Parser:
 

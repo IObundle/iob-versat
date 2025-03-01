@@ -8,7 +8,7 @@ module VReadMultiple #(
    parameter AXI_ADDR_W = 32,
    parameter AXI_DATA_W = 32,
    parameter DELAY_W    = 7,
-   parameter LEN_W      = 8
+   parameter LEN_W      = 16
 ) (
    input clk,
    input rst,
@@ -121,6 +121,8 @@ module VReadMultiple #(
 //      else if (run && read_enabled) databus_addr_0 <= ext_addr;
 //   end
 
+   wire [ADDR_W-1:0] constant1 = 1;
+
    SuperAddress #(
       .AXI_ADDR_W(AXI_ADDR_W),
       .AXI_DATA_W(AXI_DATA_W),
@@ -128,18 +130,19 @@ module VReadMultiple #(
       .COUNT_W(ADDR_W),
       .ADDR_W(ADDR_W),
       .DATA_W(SIZE_W),
-      .PERIOD_W(PERIOD_W)
+      .PERIOD_W(PERIOD_W),
+      .DELAY_W(1)
       ) reader (
       .clk_i(clk),
       .rst_i(rst),
       .run_i(run && read_enabled),
       .done_o(transferDone),
 
-      .ignore_first_i(0),
+      .ignore_first_i(1'b0),
 
       //configurations 
       .period_i(read_per),
-      .delay_i (0),
+      .delay_i (1'b0),
       .start_i (read_start),
       .incr_i  (read_incr),
 
@@ -147,15 +150,15 @@ module VReadMultiple #(
       .duty_i      (read_duty),
       .shift_i     (read_shift),
 
-      .period2_i(0),
-      .incr2_i(0),
-      .iterations2_i(0),
-      .shift2_i(0),
+      .period2_i({PERIOD_W{1'b0}}),
+      .incr2_i({20{1'b0}}),
+      .iterations2_i({20{1'b0}}),
+      .shift2_i({20{1'b0}}),
 
-      .period3_i(0),
-      .incr3_i(0),
-      .iterations3_i(0),
-      .shift3_i(0),
+      .period3_i({PERIOD_W{1'b0}}),
+      .incr3_i({20{1'b0}}),
+      .iterations3_i({20{1'b0}}),
+      .shift3_i({20{1'b0}}),
 
       .doneDatabus(),
       .doneAddress(),
@@ -178,7 +181,7 @@ module VReadMultiple #(
       .reading(1'b1),
       .data_last_o(),
 
-      .count_i(read_amount_minus_one + 1),
+      .count_i(read_amount_minus_one + constant1),
       .start_address_i(ext_addr),
       .address_shift_i(read_addr_shift),
       .databus_length(read_length)

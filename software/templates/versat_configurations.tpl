@@ -30,7 +30,7 @@ module versat_configurations #(
    #{end}
 
    input memoryMappedAddr,
-   input [DATA_W-1:0] data_write,
+   input data_write,
 
    input [ADDR_W-1:0] address,
    input [(DATA_W/8)-1:0] data_wstrb,

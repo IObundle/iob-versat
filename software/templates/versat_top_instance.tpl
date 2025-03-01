@@ -406,8 +406,10 @@ wire [@{info.wire.bitSize-1}:0] @{info.wire.name};
 #{end}
 #{end}
 
-versat_configurations configs(
-   .config_data_o(configdata),                 
+versat_configurations #(
+   .ADDR_W(ADDR_W)
+   ) configs(
+   .config_data_o(configdata),
 
    .memoryMappedAddr(memoryMappedAddr),
    .data_write(data_write),

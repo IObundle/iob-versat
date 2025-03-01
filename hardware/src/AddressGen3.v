@@ -50,7 +50,10 @@ module AddressGen3 #(
       .ADDR_W(ADDR_W),
       .PERIOD_W(PERIOD_W),
       .DELAY_W(DELAY_W),
-      .DATA_W(DATA_W)
+      .DATA_W(DATA_W),
+      .LEW_W(1),
+      .COUNT_W(1),
+      .AXI_ADDR_W(1)
       ) reader (
       .clk_i(clk_i),
       .rst_i(rst_i),
@@ -100,10 +103,10 @@ module AddressGen3 #(
       .reading(1'b1),
       .data_last_o(),
 
-      .count_i(0),
-      .start_address_i(0),
-      .address_shift_i(0),
-      .databus_length(0)
+      .count_i(1'b0),
+      .start_address_i(1'b0),
+      .address_shift_i(1'b0),
+      .databus_length(1'b0)
    );
 
 endmodule  // MyAddressGen

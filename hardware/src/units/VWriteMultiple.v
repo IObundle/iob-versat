@@ -8,7 +8,7 @@ module VWriteMultiple #(
    parameter AXI_ADDR_W = 32,
    parameter AXI_DATA_W = 32,
    parameter DELAY_W    = 7,
-   parameter LEN_W      = 8
+   parameter LEN_W      = 16
 ) (
    input clk,
    input rst,
@@ -125,18 +125,19 @@ module VWriteMultiple #(
       .COUNT_W(ADDR_W),
       .ADDR_W(ADDR_W),
       .DATA_W(SIZE_W),
-      .PERIOD_W(PERIOD_W)
+      .PERIOD_W(PERIOD_W),
+      .DELAY_W(1)
       ) writer (
       .clk_i(clk),
       .rst_i(rst),
       .run_i(run && write_enabled),
       .done_o(transferDone),
 
-      .ignore_first_i(0),
+      .ignore_first_i(1'b0),
 
       //configurations 
       .period_i(write_per),
-      .delay_i (0),
+      .delay_i (1'b0),
       //.start_i (0),
       .start_i (write_start),
       .incr_i  (write_incr),
@@ -144,15 +145,15 @@ module VWriteMultiple #(
       .duty_i      (write_duty),
       .shift_i     (write_shift),
 
-      .period2_i(0),
-      .incr2_i(0),
-      .iterations2_i(0),
-      .shift2_i(0),
+      .period2_i({PERIOD_W{1'b0}}),
+      .incr2_i({20{1'b0}}),
+      .iterations2_i({20{1'b0}}),
+      .shift2_i({20{1'b0}}),
 
-      .period3_i(0),
-      .incr3_i(0),
-      .iterations3_i(0),
-      .shift3_i(0),
+      .period3_i({PERIOD_W{1'b0}}),
+      .incr3_i({20{1'b0}}),
+      .iterations3_i({20{1'b0}}),
+      .shift3_i({20{1'b0}}),
 
       .doneDatabus(),
       .doneAddress(),
@@ -171,11 +172,11 @@ module VWriteMultiple #(
 
       // Data interface
       .data_valid_i(data_valid),
-      .data_ready_i(),
+      .data_ready_i(1'b1),
       .reading(1'b0),
       .data_last_o(data_last),
 
-      .count_i(write_amount_minus_one + 1),
+      .count_i(write_amount_minus_one + 19'b1),
       .start_address_i(ext_addr),
       .address_shift_i(write_addr_shift),
       .databus_length(write_length)
@@ -190,7 +191,7 @@ module VWriteMultiple #(
    AddressGen3 #(
       .ADDR_W(ADDR_W),
       .DATA_W(DATA_W),
-      .DELAY_W(21),
+      .DELAY_W(20),
       .PERIOD_W(PERIOD_W)
    ) addrgenStore (
       .clk_i(clk),
@@ -215,10 +216,10 @@ module VWriteMultiple #(
       .iterations2_i(input_iter2),
       .shift2_i(input_shift2),
 
-      .period3_i(0),
-      .incr3_i(0),
-      .iterations3_i(0),
-      .shift3_i(0),
+      .period3_i({PERIOD_W{1'b0}}),
+      .incr3_i({20{1'b0}}),
+      .iterations3_i({20{1'b0}}),
+      .shift3_i({20{1'b0}}),
 
       //outputs 
       .valid_o(store_en),
