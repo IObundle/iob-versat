@@ -76,11 +76,13 @@ static const int MEMORY_LATENCY = 0;
 
 typedef char Byte;
 
+#if 0
 typedef struct{
 #{for name namedStates}
   int @{name};
 #{end}
 } AcceleratorState;
+#endif
 
 // Everything is statically allocated
 static constexpr int totalExternalMemory = @{totalExternalMemory};

@@ -431,6 +431,110 @@ bool ContainsPartialShare(InstanceInfo* info){
   return (seenTrue && seenFalse);
 }
 
+// TODO: Do not know if we need to merge the config and state flows.
+//       But something should be done about the integer hack below.
+//       Feels kinda weird. Some changes in the data structures might simplify the code somewhat.
+StructInfo* GenerateStateStruct(AccelInfoIterator iter,Arena* out){
+  TEMP_REGION(temp,out);
+
+  StructInfo* res = PushStruct<StructInfo>(out);
+
+  InstanceInfo* parent = iter.GetParentUnit();
+  if(parent){
+    res->name = parent->decl->name;
+  }
+
+  // TODO: HACK
+  static StructInfo integer = {};
+  integer.name = STRING("iptr");
+  
+  auto list = PushArenaDoubleList<StructElement>(out);
+  for(AccelInfoIterator it = iter; it.IsValid(); it = it.Next()){
+    InstanceInfo* unit = it.CurrentUnit();
+    StructElement elem = {};
+
+    if(!unit->statePos.has_value()){
+      continue;
+    }
+
+    elem.name = unit->baseName;
+
+    if(unit->isMerge){
+      auto GenerateMergeStruct = [](InstanceInfo* topUnit,AccelInfoIterator iter,Arena* out)->StructInfo*{
+        auto list = PushArenaDoubleList<StructElement>(out);
+        StructInfo* res = PushStruct<StructInfo>(out);
+        
+        StructElement elem = {};
+        for(int i = 0; i < iter.MergeSize(); i++){
+          iter.mergeIndex = i;
+        
+          StructInfo* subInfo = GenerateStateStruct(iter,out);
+
+          // NOTE: Why config version does not do this?
+          //       
+          subInfo->name = iter.GetMergeName();
+          
+          subInfo->parent = res;
+          elem.name = iter.GetMergeName();
+          elem.childStruct = subInfo;
+          elem.pos = topUnit->statePos.value();
+          elem.size = topUnit->stateSize;
+
+          *list->PushElem() = elem;
+        }
+        
+        res->name = topUnit->decl->name;
+        res->list = list;
+        
+        return res;
+      };
+
+      AccelInfoIterator inside = it.StepInsideOnly();
+      StructInfo* subInfo = GenerateMergeStruct(unit,inside,out);
+      subInfo->parent = res;
+      subInfo->infoThatGeneratedThis = unit;
+      elem.childStruct = subInfo;
+    } else if(unit->isComposite){
+      AccelInfoIterator inside = it.StepInsideOnly();
+      StructInfo* subInfo = GenerateStateStruct(inside,out);
+      subInfo->parent = res;
+      subInfo->infoThatGeneratedThis = unit;
+      elem.childStruct = subInfo;
+    } else {
+      StructInfo* simpleSubInfo = PushStruct<StructInfo>(out);
+
+      simpleSubInfo->name = unit->decl->name;
+      simpleSubInfo->parent = res;
+      simpleSubInfo->isSimpleType = true;
+
+      ArenaDoubleList<StructElement>* elements = PushArenaDoubleList<StructElement>(out);
+      int index = 0;
+      Array<Wire> states = unit->decl->states;
+      for(Wire w : states){
+        StructElement* elem = elements->PushElem();
+        elem->name = w.name;
+        elem->pos = index++;
+        elem->isMergeMultiplexer = false;
+        elem->size = 1;
+        elem->childStruct = &integer;
+      }
+      simpleSubInfo->list = elements;
+      
+      elem.childStruct = simpleSubInfo;
+    }
+    
+    elem.pos = unit->statePos.value();
+    elem.size = unit->stateSize;
+    elem.doesNotBelong = unit->doesNotBelong;
+    
+    *list->PushElem() = elem;
+  }
+  
+  res->list = list;
+  
+  return res;
+}
+
 StructInfo* GenerateConfigStruct(AccelInfoIterator iter,Arena* out){
   TEMP_REGION(temp,out);
   
@@ -530,8 +634,8 @@ StructInfo* GenerateConfigStruct(AccelInfoIterator iter,Arena* out){
         // MARKED
 
         // NOTE: We are currently generating all the info, instead of bottoming out at a simple unit and then carrying decl info forward.
+        //       This is probably the approach to go, so just refactor the code to carry out this approach
 
-#if 1
         StructInfo* simpleSubInfo = PushStruct<StructInfo>(out);
         simpleSubInfo->infoThatGeneratedThis = unit;
         simpleSubInfo->type = unit->decl;
@@ -554,22 +658,11 @@ StructInfo* GenerateConfigStruct(AccelInfoIterator iter,Arena* out){
         simpleSubInfo->parent = res;
         simpleSubInfo->list = elements;
         elem.childStruct = simpleSubInfo;
-#else
-        StructInfo* simpleSubInfo = PushStruct<StructInfo>(out);
-        simpleSubInfo->type = unit->decl;
-        simpleSubInfo->name = unit->decl->name;
-        simpleSubInfo->parent = res;
-        elem.childStruct = simpleSubInfo;
-#endif
       }
     }
       
     // NOTE: We are getting our elem pos from the global config pos, but this approch is starting to behind the wire values.
     
-#if 0
-    elem.pos = unit->globalConfigPos.value();
-    elem.size = unit->configSize;
-#else
     int minPos = INT_MAX;
     int maxPos = 0;
     for(int i : unit->individualWiresGlobalConfigPos){
@@ -584,7 +677,6 @@ StructInfo* GenerateConfigStruct(AccelInfoIterator iter,Arena* out){
     elem.size = maxPos - minPos + 1;
 
     Assert(elem.size > 0);
-#endif
 
     elem.isMergeMultiplexer = unit->isMergeMultiplexer;
     elem.doesNotBelong = unit->doesNotBelong;
@@ -629,7 +721,8 @@ Array<StructInfo*> ExtractStructs(StructInfo* structInfo,Arena* out){
   return res;
 }
 
-Array<TypeStructInfo> GenerateStructs(Array<StructInfo*> info,Arena* out){
+// typeString - Config or State
+Array<TypeStructInfo> GenerateStructs(Array<StructInfo*> info,String typeString,bool useIptr /* TODO: HACK */,Arena* out){
   TEMP_REGION(temp,out);
   ArenaList<TypeStructInfo>* list = PushArenaList<TypeStructInfo>(temp);
 
@@ -735,9 +828,13 @@ Array<TypeStructInfo> GenerateStructs(Array<StructInfo*> info,Arena* out){
       
       // TODO: HACK
       if(elem.childStruct->name == STRING("iptr")){
-        type->entries[index].typeAndNames[subIndex].type = STRING("iptr");
+        if(useIptr) {
+          type->entries[index].typeAndNames[subIndex].type = STRING("iptr");
+        } else {
+          type->entries[index].typeAndNames[subIndex].type = STRING("int");
+        }
       } else {
-        type->entries[index].typeAndNames[subIndex].type = PushString(out,"%.*sConfig",UNPACK_SS(elem.childStruct->name));
+        type->entries[index].typeAndNames[subIndex].type = PushString(out,"%.*s%.*s",UNPACK_SS(elem.childStruct->name),UNPACK_SS(typeString));
       }
       type->entries[index].typeAndNames[subIndex].arraySize = 0;
 
@@ -749,7 +846,13 @@ Array<TypeStructInfo> GenerateStructs(Array<StructInfo*> info,Arena* out){
       if(info.isPadding){
         int pos = info.pos;
         type->entries[pos].typeAndNames = PushArray<SingleTypeStructElement>(out,1);
-        type->entries[pos].typeAndNames[0].type = STRING("iptr");
+
+        // TODO: HACK
+        if(useIptr) {
+          type->entries[pos].typeAndNames[0].type = STRING("iptr");
+        } else {
+          type->entries[pos].typeAndNames[0].type = STRING("int");
+        }
         type->entries[pos].typeAndNames[0].name = PushString(out,"padding_%d",paddingAdded++);
       }
     }
@@ -811,12 +914,48 @@ void OutputTopLevelFiles(Accelerator* accel,FUDeclaration* topLevelDecl,const ch
   ClearTemplateEngine(); // Make sure that we do not reuse data
   
   AccelInfo info = CalculateAcceleratorInfo(accel,true,temp);
-
-  DEBUG_BREAK();
-  
   FillStaticInfo(&info);
 
   AccelInfoIterator iter = StartIteration(&info);
+
+  DEBUG_BREAK();
+
+  StructInfo* stateStructInfo = GenerateStateStruct(iter,temp);
+
+  Array<StructInfo*> allStateStructs = {};
+  Array<TypeStructInfo> stateStructs = {};
+
+  if(!Empty(stateStructInfo->list)){
+    // We generate an extra level, so we just remove it here.
+    // 
+    // NOTE: Do not have a clue why this happens.
+    //       The struct code generation stuff is good enough and contains a decent amount of tests, so I might be able to simplify it a little if I take another look at it.
+    //       NOTE: However, since we still are not sure how to proceed in relation to how Versat is gonna work in the future (how to make it simpler to configure), it might be best to hold off.
+    stateStructInfo = stateStructInfo->list->head->elem.childStruct;
+
+    // 
+    allStateStructs = ExtractStructs(stateStructInfo,temp);
+
+    Array<int> indexes = PushArray<int>(temp,allStateStructs.size);
+    Memset(indexes,2);
+    for(int i = 0; i < allStateStructs.size; i++){
+      String name = allStateStructs[i]->name;
+      
+      for(int ii = 0; ii < i; ii++){
+        String possibleDuplicate = allStateStructs[ii]->name;
+
+        // NOTE: The fact that we are doing string comparison is kinda bad.
+        if(CompareString(possibleDuplicate,name)){
+          allStateStructs[i]->name = PushString(temp,"%.*s_%d",UNPACK_SS(possibleDuplicate),indexes[ii]++);
+          allStateStructs[i]->isUnique = true;
+          break;
+        }
+      }
+    }
+
+    stateStructs = GenerateStructs(allStateStructs,STRING("State"),false,temp);
+  }
+  
   StructInfo* structInfo = GenerateConfigStruct(iter,temp);
 
   Array<TypeStructInfo> structs = {};
@@ -837,9 +976,28 @@ void OutputTopLevelFiles(Accelerator* accel,FUDeclaration* topLevelDecl,const ch
     Memset(indexes,2);
     for(int i = 0; i < allStructs.size; i++){
       String name = allStructs[i]->name;
-    
+
+#if 1
+      if(allStructs[i]->infoThatGeneratedThis && allStructs[i]->infoThatGeneratedThis->isShared){
+        bool isPartialShared = false;
+
+        for(bool b : allStructs[i]->infoThatGeneratedThis->isSpecificConfigShared){
+          if(!b){
+            isPartialShared = true;
+            break;
+          }
+        }
+
+        if(allStructs[i]->infoThatGeneratedThis && isPartialShared){
+          allStructs[i]->isUnique = true;
+        }
+      }
+#endif
+      
       for(int ii = 0; ii < i; ii++){
         String possibleDuplicate = allStructs[ii]->name;
+
+        // NOTE: The fact that we are doing string comparison is kinda bad.
         if(CompareString(possibleDuplicate,name)){
           allStructs[i]->name = PushString(temp,"%.*s_%d",UNPACK_SS(possibleDuplicate),indexes[ii]++);
           allStructs[i]->isUnique = true;
@@ -868,7 +1026,7 @@ void OutputTopLevelFiles(Accelerator* accel,FUDeclaration* topLevelDecl,const ch
 
     Recurse(Recurse,structInfo);
 
-    structs = GenerateStructs(allStructs,temp);
+    structs = GenerateStructs(allStructs,STRING("Config"),true,temp);
   }
   
   auto PrettyPrintMemory = [](int val){
@@ -1219,6 +1377,8 @@ void OutputTopLevelFiles(Accelerator* accel,FUDeclaration* topLevelDecl,const ch
 
   TemplateSetCustom("configStructures",MakeValue(&structs));
 
+  TemplateSetCustom("stateStructures",MakeValue(&stateStructs));
+
   Array<TypeStructInfo> addressStructures = GetMemMappedStructInfo(&info,temp2);
   TemplateSetCustom("addressStructures",MakeValue(&addressStructures));
 
@@ -1281,6 +1441,7 @@ void OutputTopLevelFiles(Accelerator* accel,FUDeclaration* topLevelDecl,const ch
     TemplateSetCustom("allStatics",MakeValue(&allStaticsVerilatorSide));
     
     Array<String> allStates = ExtractStates(info.infos[0].info,temp2);
+
     Array<Pair<String,int>> allMem = ExtractMem(info.infos[0].info,temp2);
     
     TemplateSetCustom("structuredConfigs",MakeValue(&structuredConfigs));

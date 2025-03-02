@@ -39,11 +39,38 @@ typedef struct {
 } @{type.name}Config;
 #{end}
 
+// State
+
+#{for type stateStructures}
+#define VERSAT_DEFINED_@{type.name}
+typedef struct {
+#{for entry type.entries}
+#{if entry.typeAndNames.size > 1}
+  union{
+#{for typeAndName entry.typeAndNames}
+#{if typeAndName.arraySize > 1}
+    @{typeAndName.type} @{typeAndName.name}[@{typeAndName.arraySize}];
+#{else}
+    @{typeAndName.type} @{typeAndName.name};
+#{end}
+#{end}
+  };
+#{else}
+#{if entry.typeAndNames[0].arraySize > 1}
+  @{entry.typeAndNames[0].type} @{entry.typeAndNames[0].name}[@{entry.typeAndNames[0].arraySize}];
+#{else}
+  @{entry.typeAndNames[0].type} @{entry.typeAndNames[0].name};
+#{end}
+#{end}
+#{end}
+} @{type.name}State;
+#{end}
+
 typedef struct{
 #{for name namedStates}
   int @{name};
 #{end}
-} @{typeName}State;
+} AcceleratorState;
 
 // Address
 
@@ -178,8 +205,10 @@ static const unsigned int AcceleratorConfigSize = sizeof(@{typeName}Config);
 extern volatile @{typeName}Config* accelConfig; // @{nConfigs}
 #{end}
 
-#{if nStates > 0}
+#{if stateStructures.size > 0}
 extern volatile @{typeName}State* accelState; // @{nStates}
+#{else}
+extern volatile AcceleratorState* accelState; // @{nStates}
 #{end}
 
 extern volatile AcceleratorStatic* accelStatic;
