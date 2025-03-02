@@ -1,14 +1,19 @@
 #include <cstdio>
 
+#include "debug.hpp"
 #include "memory.hpp"
 #include "parser.hpp"
 #include "utils.hpp"
 #include "utilsCore.hpp"
 
+// TODO: We are trying to be "clever" with the fact that we only parse stuff and then let outside code act on it, but I think that I just want to make stuff as simple as possible. If the parser sees a enum it immediatly registers it and the parsing code can immediatly check if a type already exists or not. I do not see the need to make this code respect lexer/parser/compiler boundaries because we immediatly fail and force the programmer to change if any parsing problem occurs. No need to synchronize or keep parsing or anything like that, just make sure that we fail fast.
+
 // TODO: Support numbers inside tables. Support more levels of data hierarchies.
 //       More importantly, implement stuff as they are needed. No point in trying to push for anything complex right now.
 // TODO: Implement special code for bit flags (needed currently by the AddressGen code).
 //       Do not know yet if I want them to be enum, need to test how easy C++ lets enum bit flags work.
+//       If C++ is giving trouble, generate the code needed to support easy bit operations.
+
 // TODO: Embed file could just become part of the embed data approach. No point in having two different approaches. Altought the embed data approach would need to become more generic
 //       in order to do what the embed file approach does in a data oriented manner.
 
@@ -18,9 +23,12 @@ void ReportError(String content,Token faultyToken,const char* error){
   String loc = GetRichLocationError(content,faultyToken,temp);
 
   printf("\n");
+  printf("%.*s\n",UNPACK_SS(faultyToken));
   printf("%s\n",error);
   printf("%.*s\n",UNPACK_SS(loc));
   printf("\n");
+
+  DEBUG_BREAK();
 }
 
 void ReportError(Tokenizer* tok,Token faultyToken,const char* error){
@@ -108,16 +116,24 @@ struct DataValue{
   };
 };
 
+struct Parameter{
+  TypeDef* type;
+  Token name;
+};
+
 struct TableDef{
   String structTypename;
-  Array<Pair<TypeDef*,Token>> typeList;
+  Array<Parameter> parameterList;
   Array<Array<DataValue*>> dataTable;
 };
 
 struct MapDef{
   String name;
-  Array<Pair<String,DataValue*>> maps;
+  Array<Parameter> parameterList;
+  Array<Array<DataValue*>> dataTable;
   bool isDefineMap;
+  bool isEnumMap; // One parameter is an enum, the other is not.
+  bool isBijection;
 };
 
 struct Defs{
@@ -125,6 +141,17 @@ struct Defs{
   Array<TableDef*> tables;
   Array<MapDef*> maps;
 };
+
+Pool<EnumDef> globalEnums = {};
+
+static bool IsEnum(String name){
+  for(EnumDef* def : globalEnums){
+    if(def->name == name){
+      return true;
+    }
+  }
+  return false;
+}
 
 EnumDef* ParseEnum(Tokenizer* tok,Arena* out){
   TEMP_REGION(temp,out);
@@ -144,7 +171,9 @@ EnumDef* ParseEnum(Tokenizer* tok,Arena* out){
     if(tok->IfNextToken("=")){
       auto mark = tok->Mark();
 
-      while(!tok->Done() && !tok->IfPeekToken(",")){
+      // TODO: Proper enum parsing otherwise we are going to run into errors constantly.
+      //       But need to see what kinda of expressions we are expected to support as well.
+      while(!tok->Done() && !tok->IfPeekToken(",") && !tok->IfPeekToken("}")){
         tok->AdvancePeek();
       }
 
@@ -164,7 +193,8 @@ EnumDef* ParseEnum(Tokenizer* tok,Arena* out){
   AssertToken(tok,"}");
   AssertToken(tok,";");
 
-  EnumDef* res = PushStruct<EnumDef>(out);
+  EnumDef* res = globalEnums.Alloc();
+  //EnumDef* res = PushStruct<EnumDef>(out);
   res->name = enumTypeName;
   res->valuesNamesWithValuesIfExist = PushArrayFromList(out,memberList);
 
@@ -218,16 +248,11 @@ DataValue* ParseValue(Tokenizer* tok,Arena* out){
   return val;
 }
 
-TableDef* ParseTable(Tokenizer* tok,Arena* out){
+Array<Parameter> ParseParameterList(Tokenizer* tok,Arena* out){
   TEMP_REGION(temp,out);
-  AssertToken(tok,"table");
-
-  Token tableStructName = tok->NextToken();
-  CheckIdentifier(tableStructName);
-
   AssertToken(tok,"(");
 
-  auto typeList = PushArenaList<Pair<TypeDef*,Token>>(temp);
+  auto typeList = PushArenaList<Parameter>(temp);
   while(!tok->Done()){
     TypeDef* def = ParseTypeDef(tok,out);
     
@@ -236,27 +261,29 @@ TableDef* ParseTable(Tokenizer* tok,Arena* out){
 
     *typeList->PushElem() = {def,name};
     
-    bool seenComma = tok->IfNextToken(",");
-    
     if(tok->IfPeekToken(")")){
       break;
     }
+
+    bool seenComma = tok->IfNextToken(",");
   }
   AssertToken(tok,")");
 
-  Array<Pair<TypeDef*,Token>> defs = PushArrayFromList(out,typeList);
-  Assert(defs.size > 0);
+  Array<Parameter> defs = PushArrayFromList(out,typeList);
+  return defs;
+}
 
-  AssertToken(tok,"{");
-  
+Array<Array<DataValue*>> ParseDataTable(Tokenizer* tok,int expectedColumns,Arena* out){
+  TEMP_REGION(temp,out);
+
   auto valueTableList = PushArenaList<Array<DataValue*>>(temp);
   while(!tok->Done()){
     auto valueList = PushArenaList<DataValue*>(temp);
-    for(int i = 0; i < defs.size; i++){
+    for(int i = 0; i < expectedColumns; i++){
       DataValue* val = ParseValue(tok,out);
       *valueList->PushElem() = val;
 
-      if(i != defs.size - 1){
+      if(i != expectedColumns - 1){
         AssertToken(tok,":");
       }
     }
@@ -271,13 +298,30 @@ TableDef* ParseTable(Tokenizer* tok,Arena* out){
     }
   }
 
+  return PushArrayFromList(out,valueTableList);
+}
+
+TableDef* ParseTable(Tokenizer* tok,Arena* out){
+  TEMP_REGION(temp,out);
+  AssertToken(tok,"table");
+
+  Token tableStructName = tok->NextToken();
+  CheckIdentifier(tableStructName);
+
+  Array<Parameter> defs = ParseParameterList(tok,out);
+  Assert(defs.size > 0);
+  
+  AssertToken(tok,"{");
+
+  Array<Array<DataValue*>> table = ParseDataTable(tok,defs.size,out);
+
   AssertToken(tok,"}");
   AssertToken(tok,";");
   
   TableDef* def = PushStruct<TableDef>(out);
   def->structTypename = tableStructName;
-  def->typeList = defs;
-  def->dataTable = PushArrayFromList(out,valueTableList);
+  def->parameterList = defs;
+  def->dataTable = table;
 
   return def;
 }
@@ -291,46 +335,61 @@ MapDef* ParseMap(Tokenizer* tok,Arena* out){
   if(CompareString(type,"define_map")){
     isDefineMap = true;
   } else if(CompareString(type,"map")){
-    ReportError(tok,type,"Not implemented yet");
+    isDefineMap = false;
   } else {
     printf("Should not be possible to reach this point\n");
     DEBUG_BREAK();
   }
-  
-  //AssertToken(tok,"map");
 
   Token mapName = tok->NextToken();
   CheckIdentifier(mapName);
 
-  AssertToken(tok,"{");
-
-  auto memberList = PushArenaList<Pair<String,DataValue*>>(temp);
-  while(!tok->Done()){
-    Token name = tok->NextToken();
-    CheckIdentifier(name);
-
-    AssertToken(tok,":");
-
-    DataValue* data = ParseValue(tok,out);
+  if(!isDefineMap){
+    Array<Parameter> parameters = ParseParameterList(tok,out);
+    Assert(parameters.size > 0);
     
-    *memberList->PushElem() = {name,data};
+    AssertToken(tok,"{");
 
-    tok->IfNextToken(",");
+    Array<Array<DataValue*>> table = ParseDataTable(tok,parameters.size,out);
+    
+    AssertToken(tok,"}");
+    AssertToken(tok,";");
 
-    if(tok->IfPeekToken("}")){
-      break;
+    MapDef* res = PushStruct<MapDef>(out);
+    res->parameterList = parameters;
+    res->name = mapName;
+    res->dataTable = table;
+    res->isDefineMap = isDefineMap;
+
+    if(parameters.size == 2){
+      // TODO: This can be more complicated. We can only have true bijection if the normal map and the reverse are both well defined functions. For now assuming that any table of 2 elements is a bijection and be done with it.
+      res->isBijection = true;
+
+      if((IsEnum(parameters[0].type->name) && !IsEnum(parameters[1].type->name)) ||
+         (IsEnum(parameters[1].type->name) && !IsEnum(parameters[0].type->name))){
+        res->isEnumMap = true;
+      }
     }
+    
+    return res;
+  } else if(isDefineMap){
+    AssertToken(tok,"{");
+
+    Array<Array<DataValue*>> table = ParseDataTable(tok,2,out);
+
+    AssertToken(tok,"}");
+    AssertToken(tok,";");
+
+    MapDef* res = PushStruct<MapDef>(out);
+    res->name = mapName;
+    res->dataTable = table;
+    res->isDefineMap = isDefineMap;
+
+    return res;
   }
 
-  AssertToken(tok,"}");
-  AssertToken(tok,";");
-
-  MapDef* res = PushStruct<MapDef>(out);
-  res->name = mapName;
-  res->maps = PushArrayFromList(out,memberList);
-  res->isDefineMap = isDefineMap;
-  
-  return res;
+  NOT_POSSIBLE();
+  return nullptr;
 }
 
 Defs* ParseContent(String content,Arena* out){
@@ -368,6 +427,17 @@ Defs* ParseContent(String content,Arena* out){
   return defs;
 }
 
+String DefaultRepr(DataValue* val,TypeDef* type,Arena* out){
+  if(IsEnum(type->name)){
+    return val->asStr;
+  } else if(val->type == DataValueType_SINGLE){
+    return PushString(out,"STRING(\"%.*s\")",UNPACK_SS(val->asStr));
+  }
+
+  NOT_IMPLEMENTED("yet");
+  return {};
+}
+
 // 0 - exe name
 // 1 - definition file
 // 2 - output name
@@ -376,6 +446,8 @@ int main(int argc,const char* argv[]){
     fprintf(stderr,"Need at least 3 arguments: <exe> <defFile> <outputFilename> \n");
     return -1;
   }
+
+  InitDebug();
   
   const char* defFilePath = argv[1];
   const char* outputPath = argv[2];
@@ -436,9 +508,9 @@ int main(int argc,const char* argv[]){
 
     for(TableDef* def : defs->tables){
       fprintf(header,"struct %.*s_GenType {\n",UNPACK_SS(def->structTypename));
-      for(Pair<TypeDef*,Token> p : def->typeList){
-        TypeDef* typeDef = p.first;
-        String name = p.second;
+      for(Parameter p : def->parameterList){
+        TypeDef* typeDef = p.type;
+        String name = p.name;
       
         if(typeDef->isArray){
           fprintf(header,"  Array<%.*s> %.*s;\n",UNPACK_SS(typeDef->name),UNPACK_SS(name));
@@ -478,13 +550,48 @@ int main(int argc,const char* argv[]){
         continue;
       }
 
-      for(Pair<String,DataValue*> p : def->maps){
+      for(Array<DataValue*> p : def->dataTable){
         // TODO: Only implement for single type. Waht would an array define map look like?
-        Assert(p.second->type == DataValueType_SINGLE);
-        fprintf(header,"#define %.*s STRING(\"%.*s\")\n",UNPACK_SS(p.first),UNPACK_SS(p.second->asStr));
+        
+        Assert(p[1]->type == DataValueType_SINGLE);
+        fprintf(header,"#define %.*s STRING(\"%.*s\")\n",UNPACK_SS(p[0]->asStr),UNPACK_SS(p[1]->asStr));
       }
 
       fprintf(header,"\nextern Array<String> %.*s;\n\n",UNPACK_SS(def->name));
+    }
+
+    fprintf(header,"// Normal Maps\n\n");
+
+    for(MapDef* def : defs->maps){
+      // TODO: All these exist because we are just trying to implement something quickly right now, but when the time comes implement this.
+      if(def->isDefineMap){
+        continue;
+      }
+      if(!def->isEnumMap){
+        continue;
+      }
+      if(!def->isBijection){
+        continue;
+      }
+
+      {
+        int from = 0;
+        int to = 1;
+      
+        Parameter pFrom = def->parameterList[from];
+        Parameter pTo = def->parameterList[to];
+      
+        fprintf(header,"Opt<%.*s> META_%.*s_Map(%.*s);\n",UNPACK_SS(pTo.type->name),UNPACK_SS(def->name),UNPACK_SS(pFrom.type->name));
+      }
+      {
+        int from = 1;
+        int to = 0;
+      
+        Parameter pFrom = def->parameterList[from];
+        Parameter pTo = def->parameterList[to];
+        
+        fprintf(header,"Opt<%.*s> META_%.*s_ReverseMap(%.*s);\n",UNPACK_SS(pTo.type->name),UNPACK_SS(def->name),UNPACK_SS(pFrom.type->name));
+      }
     }
   } // header
   
@@ -511,9 +618,9 @@ int main(int argc,const char* argv[]){
 
         for(int ii = 0; ii <  row.size; ii++){
           DataValue* val  =  row[ii];
-          Pair<TypeDef*,Token> p =  def->typeList[ii];
-          TypeDef* typeDef = p.first;
-          String name = p.second;
+          Parameter p =  def->parameterList[ii];
+          TypeDef* typeDef = p.type;
+          String name = p.name;
 
           if(val->type == DataValueType_ARRAY){
             fprintf(source,"static %.*s %.*s_%.*s_aux%d[] = {\n",UNPACK_SS(typeDef->name),UNPACK_SS(def->structTypename),UNPACK_SS(name),i);
@@ -534,15 +641,6 @@ int main(int argc,const char* argv[]){
     }
 
     fprintf(source,"\n// Raw C array Tables\n\n");
-
-    auto IsEnum = [defs](String name) -> bool{
-      for(EnumDef* def : defs->enums){
-        if(def->name == name){
-          return true;
-        }
-      }
-      return false;
-    };
     
     for(TableDef* def : defs->tables){
       fprintf(source,"static %.*s_GenType %.*s_Raw[] = {\n",UNPACK_SS(def->structTypename),UNPACK_SS(def->structTypename));
@@ -559,22 +657,21 @@ int main(int argc,const char* argv[]){
         bool first = true;
         for(int ii = 0; ii <  row.size; ii++){
           DataValue* val  =  row[ii];
-          Pair<TypeDef*,Token> p =  def->typeList[ii];
-          TypeDef* typeDef = p.first;
-          String name = p.second;
+          Parameter p =  def->parameterList[ii];
+          TypeDef* typeDef = p.type;
+          String name = p.name;
 
           if(!first){
             fprintf(source,",");
           }
 
-          if(IsEnum(typeDef->name)){
-            fprintf(source,"%.*s",UNPACK_SS(val->asStr));
-          } else if(val->type == DataValueType_SINGLE){
-            fprintf(source,"STRING(\"%.*s\")",UNPACK_SS(val->asStr));
+          if(IsEnum(typeDef->name) || val->type == DataValueType_SINGLE){
+            String repr = DefaultRepr(val,typeDef,temp);
+            fprintf(source,"%.*s",UNPACK_SS(repr));
           } else {
             fprintf(source,"%.*s_%.*s_aux%d",UNPACK_SS(def->structTypename),UNPACK_SS(name),i);
           }
-          
+
           first = false;
         }
         fprintf(source,"}");
@@ -601,18 +698,90 @@ int main(int argc,const char* argv[]){
 
       fprintf(source,"static String %.*s_Raw[] = {\n",UNPACK_SS(def->name));
       bool first = true;
-      for(Pair<String,DataValue*> p : def->maps){
+      for(Array<DataValue*> p : def->dataTable){
         // TODO: Only implement for single type. Waht would an array define map look like?
-        Assert(p.second->type == DataValueType_SINGLE);
+        Assert(p[1]->type == DataValueType_SINGLE);
         if(!first){
           fprintf(source,",\n");
         }
-        fprintf(source,"  %.*s",UNPACK_SS(p.first));
+        fprintf(source,"  %.*s",UNPACK_SS(p[0]->asStr));
         first = false;
       }
       fprintf(source,"\n};\n");
 
       fprintf(source,"Array<String> %.*s = {%.*s_Raw,ARRAY_SIZE(%.*s_Raw)};\n",UNPACK_SS(def->name),UNPACK_SS(def->name),UNPACK_SS(def->name));
+    }
+
+    fprintf(source,"\n// Normal Maps\n\n");
+
+    for(MapDef* def : defs->maps){
+      // TODO: All these exist because we are just trying to implement something quickly right now, but when the time comes implement this.
+      if(def->isDefineMap){
+        continue;
+      }
+      if(!def->isEnumMap){
+        continue;
+      }
+      if(!def->isBijection){
+        continue;
+      }
+
+      {
+        int from = 0;
+        int to = 1;
+      
+        Parameter pFrom = def->parameterList[from];
+        Parameter pTo = def->parameterList[to];
+
+        // TODO: Currently assuming that the first member is the enum.
+        //       This is important because we are generating a switch statement based on the enum type
+        Assert(IsEnum(pFrom.type->name));
+
+        // TODO: Check if the table members are actually values of the enum or not.
+      
+        fprintf(source,"Opt<%.*s> META_%.*s_Map(%.*s val){\n",UNPACK_SS(pTo.type->name),UNPACK_SS(def->name),UNPACK_SS(pFrom.type->name));
+      
+        fprintf(source,"  switch(val){\n");
+
+        for(Array<DataValue*> rows : def->dataTable){
+          DataValue* fFrom = rows[from];
+          DataValue* fTo = rows[to];
+        
+          String dFrom = DefaultRepr(fFrom,pFrom.type,temp);
+          String dTo = DefaultRepr(fTo,pTo.type,temp);
+
+          fprintf(source,"    case %.*s: return %.*s;\n",UNPACK_SS(dFrom),UNPACK_SS(dTo));
+        }
+
+        fprintf(source,"    default: return {};\n");
+      
+        fprintf(source,"  }\n");
+        fprintf(source,"  return {};\n");
+        fprintf(source,"}\n");
+      }
+      
+      {
+        int from = 1;
+        int to = 0;
+      
+        Parameter pFrom = def->parameterList[from];
+        Parameter pTo = def->parameterList[to];
+
+        fprintf(source,"Opt<%.*s> META_%.*s_ReverseMap(%.*s val){\n",UNPACK_SS(pTo.type->name),UNPACK_SS(def->name),UNPACK_SS(pFrom.type->name));
+
+        for(Array<DataValue*> rows : def->dataTable){
+          DataValue* fFrom = rows[from];
+          DataValue* fTo = rows[to];
+        
+          String dFrom = DefaultRepr(fFrom,pFrom.type,temp);
+          String dTo = DefaultRepr(fTo,pTo.type,temp);
+
+          fprintf(source,"  if(val == %.*s){return %.*s;}\n",UNPACK_SS(dFrom),UNPACK_SS(dTo));
+        }
+      
+        fprintf(source,"  return {};\n");
+        fprintf(source,"}\n");
+      }
     }
   } // source
     

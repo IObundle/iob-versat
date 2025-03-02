@@ -1112,6 +1112,30 @@ Opt<MergeDef> ParseMerge(Tokenizer* tok,Arena* out){
   
   tok->AssertNextToken("merge");
 
+  Array<Token> mergeModifiers = {};
+  if(tok->IfNextToken("(")){
+    auto tokenList = PushArenaList<Token>(temp);
+    
+    while(!tok->Done()){
+      Token peek = tok->PeekToken();
+      
+      if(CompareString(peek,")")){
+        break;
+      }
+
+      CHECK_IDENTIFIER(peek);
+      *tokenList->PushElem() = peek;
+
+      tok->AdvancePeek();
+      
+      tok->IfNextToken(",");
+    }
+
+    mergeModifiers = PushArrayFromList(out,tokenList);
+    
+    EXPECT(tok,")");
+  }
+
   Token mergeName = tok->NextToken();
   CHECK_IDENTIFIER(mergeName);
   
@@ -1194,6 +1218,7 @@ Opt<MergeDef> ParseMerge(Tokenizer* tok,Arena* out){
   result.name = mergeName;
   result.declarations = declarations;
   result.specifics = specifics;
+  result.mergeModifiers = mergeModifiers;
   
   return result;
 }
@@ -1210,7 +1235,25 @@ FUDeclaration* InstantiateMerge(MergeDef def){
 
   String name = PushString(globalPermanent,def.name);
 
-  return Merge(decl,name,def.specifics);
+  bool error = false;
+  MergeModifier modifier = MergeModifier_NONE;
+  DEBUG_BREAK();
+  for(Token t : def.mergeModifiers){
+    Opt<MergeModifier> parsed = META_mergeModifiers_ReverseMap(t);
+
+    if(!parsed.has_value()){
+      printf("Error, merge does not support option: %.*s\n",UNPACK_SS(t));
+      error = true;
+    }
+
+    modifier = (MergeModifier) (modifier | parsed.value());
+  }
+
+  if(error){
+    return nullptr;
+  }
+  
+  return Merge(decl,name,def.specifics,modifier);
 }
 
 int GetRangeCount(Range<int> range){

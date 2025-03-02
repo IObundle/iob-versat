@@ -199,5 +199,5 @@ FUDeclaration* MergeAccelerators(FUDeclaration* accel1,FUDeclaration* accel2,Str
 
 FUDeclaration* Merge(Array<FUDeclaration*> types,
                      String name,Array<SpecificMergeNode> specifics,
-                     MergingStrategy strat = MergingStrategy::CONSOLIDATION_GRAPH);
+                     MergeModifier = MergeModifier_NO_UNIT_MERGED,MergingStrategy strat = MergingStrategy::CONSOLIDATION_GRAPH);
 

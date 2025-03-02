@@ -98,6 +98,9 @@ $(VERSAT_DIR)/versat: $(CPP_OBJ) $(VERSAT_ALL_HEADERS)
 
 versat: $(VERSAT_DIR)/versat $(BUILD_DIR)/calculateHash
 
+debug-embed-data: $(BUILD_DIR)/embedData
+	gdb --args $(BUILD_DIR)/embedData $(VERSAT_SW_DIR)/versat_defs.txt $(BUILD_DIR)/embeddedData
+
 clean:
 	-rm -fr build
 	-rm -f *.a versat versat.d

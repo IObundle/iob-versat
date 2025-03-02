@@ -1533,7 +1533,7 @@ ReconstituteResult ReconstituteGraphFromStruct(Accelerator* merged,TrieSet<PortI
 
 FUDeclaration* Merge(Array<FUDeclaration*> types,
                      String name,Array<SpecificMergeNode> specifics,
-                     MergingStrategy strat){
+                     MergeModifier modifier,MergingStrategy strat){
   
   TEMP_REGION(temp,nullptr);
   TEMP_REGION(temp2,temp);
@@ -1589,8 +1589,15 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
 
   for(int i = 1; i < size; i++){
     String folderName = PushString(temp,"%.*s/Merge_%d",UNPACK_SS(name),i);
+    
+    GraphMapping map = {};
 
-    GraphMapping map = CalculateMergeMapping(mergedAccel,flatten[i],specificNodes,strat,folderName,temp2);
+    if(modifier & MergeModifier_NO_UNIT_MERGED){
+      map = InitGraphMapping(temp); // Empty map
+    } else { 
+      map = CalculateMergeMapping(mergedAccel,flatten[i],specificNodes,strat,folderName,temp2);
+    }
+    
     MergeGraphResultExisting res = MergeGraphToExisting(mergedAccel,flatten[i],map,folderName,temp2);
 
     OutputDebugDotGraph(res.result,STRING(StaticFormat("result%d.dot",i)));

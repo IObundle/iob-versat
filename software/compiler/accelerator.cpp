@@ -645,6 +645,7 @@ VersatComputedValues ComputeVersatValues(AccelInfo* info,bool useDMA){
   int memoryMappedDWords = 0;
   int delayBits = 0;
   int configBits = 0;
+  int numberUnits = 0;
   
   auto builder = StartArray<ExternalMemoryInterface>(temp);
   
@@ -680,16 +681,26 @@ VersatComputedValues ComputeVersatValues(AccelInfo* info,bool useDMA){
       builder.PushArray(decl->externalMemory);
     }
   }
+
+  for(AccelInfoIterator iter = StartIteration(info); iter.IsValid(); iter = iter.Step()){
+    InstanceInfo* unit = iter.CurrentUnit();
+    if(!unit->isComposite){
+      numberUnits += 1;
+    }
+  }    
+
   Array<ExternalMemoryInterface> allExternalMemories = EndArray(builder);
   res.totalExternalMemory = ExternalMemoryByteSize(allExternalMemories);
 
   int staticBits = 0;
   res.nStatics = info->statics;
   staticBits = info->staticBits;
+
+  res.nUnits = numberUnits;
   
   int staticBitsStart = configBits;
   res.delayBitsStart = staticBitsStart + staticBits;
-
+  
   // Versat specific registers are treated as a special maping (all 0's) of 1 configuration and 1 state register
   res.versatConfigs = 1;
   res.versatStates = 1;

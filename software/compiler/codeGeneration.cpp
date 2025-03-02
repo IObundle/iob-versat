@@ -1047,11 +1047,13 @@ void OutputTopLevelFiles(Accelerator* accel,FUDeclaration* topLevelDecl,const ch
 
   VersatComputedValues val = ComputeVersatValues(&info,globalOptions.useDMA);
   printf("Some stats\n");
-  printf("Config bits used: %d\n",val.configurationBits);
-  printf("State  bits used: %d\n",val.stateBits);
-  printf("External memory used: ");
+  printf("CONFIG_BITS: %d\n",val.configurationBits);
+  printf("STATE_BITS: %d\n",val.stateBits);
+  printf("MEM_USED: ");
   PrettyPrintMemory(val.totalExternalMemory);
   printf("\n");
+
+  printf("UNITS: %d\n",val.nUnits);
   
   // TODO: A lot of cruft in this function
   Hashmap<StaticId,StaticData>* staticUnits = CollectStaticUnits(&info,temp);

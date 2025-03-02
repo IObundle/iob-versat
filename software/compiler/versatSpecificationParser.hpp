@@ -125,6 +125,7 @@ struct TransformDef : public DefBase{
 struct MergeDef : public DefBase{
   Array<TypeAndInstance> declarations;
   Array<SpecificMergeNode> specifics;
+  Array<Token> mergeModifiers;
 };
 
 enum DefinitionType{

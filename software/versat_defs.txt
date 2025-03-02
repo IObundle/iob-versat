@@ -41,6 +41,15 @@ table AddressGenWireNames(AddressGenType type,String[] names){
 
 };
 
+enum MergeModifier{
+   MergeModifier_NONE           = 0x0,
+   MergeModifier_NO_UNIT_MERGED = 0x1
+};
+
+map mergeModifiers(MergeModifier m,String name){
+   MergeModifier_NO_UNIT_MERGED : NoUnitMerged
+};
+
 define_map possibleAttributes{
    VERSAT_LATENCY : versat_latency,
    VERSAT_STATIC  : versat_static,

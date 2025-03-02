@@ -180,6 +180,8 @@ struct VersatComputedValues{
   int nDelays;
   int delayBitsStart;
 
+  int nUnits;
+  
   // Configurations = config + static + delays
   int configurationBits;
   int configurationAddressBits;
