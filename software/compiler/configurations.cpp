@@ -511,144 +511,6 @@ void FillInstanceInfo(AccelInfoIterator initialIter,Arena* out){
     return ((unitSharedIndex & 0x0000ffff) << 16 | (wireIndex & 0x0000ffff)); 
   };
 
-  // Config info stuff
-  // Remember that, since the instance info of subunits was copied directly from the accel info of the declaration, values for configs can be incorrect from the existance of shared and static configs in the top level units.
-  auto CalculateConfig = [GetSharedIndex](auto Recurse,AccelInfoIterator& iter,int startIndex,Arena* out) -> void{
-    TEMP_REGION(temp,nullptr);
-
-    InstanceInfo* parent = iter.GetParentUnit();
-    if(parent){
-      if(0){
-        AccelInfoIterator configIter = StartIteration(&parent->decl->info);
-        configIter.mergeIndex = parent->partitionIndex;
-        
-        // NOTE: This only makes sense for non composite units, right?
-        for(AccelInfoIterator it = iter; it.IsValid(); it = it.Next(),configIter = configIter.Next()){
-          InstanceInfo* unit = it.CurrentUnit();
-          InstanceInfo* configUnit = configIter.CurrentUnit();
-
-          for(int i = 0; i < unit->individualWiresGlobalConfigPos.size; i++){
-            int wirePos = startIndex + configUnit->individualWiresGlobalConfigPos[i];
-            
-            if(unit->isGloballyStatic){
-              unit->individualWiresGlobalConfigPos[i] = -1;
-            } else if(unit->configSize){
-              unit->individualWiresGlobalConfigPos[i] = wirePos;
-            }
-          }
-        }
-      }
-      
-      // MARKED: Old simple config
-      if(1){
-        AccelInfoIterator configIter = StartIteration(&parent->decl->info);
-        configIter.mergeIndex = parent->partitionIndex;
-      
-        for(AccelInfoIterator it = iter; it.IsValid(); it = it.Next(),configIter = configIter.Next()){
-          InstanceInfo* unit = it.CurrentUnit();
-          InstanceInfo* configUnit = configIter.CurrentUnit();
-        
-          if(configUnit->globalConfigPos.has_value()){
-            int configPos = startIndex + configUnit->globalConfigPos.value();
-
-            if(unit->isGloballyStatic){
-              unit->globalConfigPos = {};
-            } else if(unit->configSize){
-              unit->globalConfigPos = configPos;
-            }
-          
-            AccelInfoIterator inside = it.StepInsideOnly();
-            if(inside.IsValid()){
-              Recurse(Recurse,inside,configPos,out);
-            }
-          }
-        }
-      }
-    } else {
-      if(0){
-        TrieMap<int,int>* sharedWireIndexToConfig = PushTrieMap<int,int>(temp);
-      
-        int wireIndex = startIndex;
-        for(AccelInfoIterator it = iter; it.IsValid(); it = it.Next()){
-          InstanceInfo* unit = it.CurrentUnit();
-          
-          bool isNewlyShared = false;
-          for(int i = 0; i < unit->individualWiresGlobalConfigPos.size; i++){
-            if(unit->isGloballyStatic){
-              unit->individualWiresGlobalConfigPos[i] = -1;
-            } else {
-              int indexForCurrentWire = wireIndex;
-              if(unit->individualWiresShared[i]){
-                int sharedIndex = GetSharedIndex(unit->sharedIndex,i);
-                GetOrAllocateResult<int> data = sharedWireIndexToConfig->GetOrAllocate(sharedIndex);
-                if(data.alreadyExisted){
-                  indexForCurrentWire = *data.data;
-                } else {
-                  *data.data = wireIndex;
-                  isNewlyShared = true;
-                  wireIndex += 1;
-                }
-              } else {
-                wireIndex += 1;
-              }
-
-              unit->individualWiresGlobalConfigPos[i] = indexForCurrentWire;
-            }
-          }
-          
-        }
-      }
-      
-      // MARKED - Old single pos share
-      if(1){
-        TrieMap<int,int>* sharedIndexToConfig = PushTrieMap<int,int>(temp);
-      
-        int configIndex = startIndex;
-        for(AccelInfoIterator it = iter; it.IsValid(); it = it.Next()){
-          InstanceInfo* unit = it.CurrentUnit();
-
-          if(unit->configSize == 0){
-            continue;
-          }
-          
-          bool isNewlyShared = false;
-
-          int indexForCurrentUnit = configIndex;
-          if(unit->isShared){
-            int sharedIndex = unit->sharedIndex;
-            GetOrAllocateResult<int> data = sharedIndexToConfig->GetOrAllocate(sharedIndex);
-            if(data.alreadyExisted){
-              indexForCurrentUnit = *data.data;
-            } else {
-              *data.data = configIndex;
-              isNewlyShared = true;
-            }
-          }
-        
-          if(unit->isGloballyStatic){
-            unit->globalConfigPos = {};
-          } else if(unit->configSize){
-            unit->globalConfigPos = indexForCurrentUnit;
-            unit->localConfigPos = indexForCurrentUnit;
-          }
-
-          AccelInfoIterator inside = it.StepInsideOnly();
-          if(inside.IsValid() && !unit->isGloballyStatic){
-            Recurse(Recurse,inside,indexForCurrentUnit,out);
-          }
-
-          if(!isNewlyShared && !unit->isGloballyStatic){
-            configIndex += unit->decl->NumberConfigs();
-          }
-        }
-      }
-    }
-  };
-
-#if 1
-  CalculateConfig(CalculateConfig,initialIter,0,out);
-#endif
-
   auto CalculateAmountOfLevels = [](AccelInfoIterator initialIter){
     int maxLevelSeen = 0;
     for(AccelInfoIterator iter = initialIter; iter.IsValid(); iter = iter.Step()){
@@ -710,8 +572,6 @@ void FillInstanceInfo(AccelInfoIterator initialIter,Arena* out){
   // If the calculation of the configs is correct, we could just have a first phase storing the global config pos inside each unit for starters.
   // Then do the bottom to up fix up.
   
-  // How do we handle share at the top level? Actually the same way we handle share at any level, I think.
-  
   // Go from top to bottom to put global config pos.
   // Go from bottom to top to calculate true global config.
   // NOTE: Do we need to go bottom -> top? Could we just have an iterator use step and be done with it?
@@ -721,9 +581,8 @@ void FillInstanceInfo(AccelInfoIterator initialIter,Arena* out){
   {
     TrieMap<int,int>* sharedWireIndexToConfig = PushTrieMap<int,int>(temp);
     TrieMap<int,int>* sharedIndexToConfig = PushTrieMap<int,int>(temp);
-
-    // Also need to share the config pos of the individual units.
-    
+    TrieMap<int,int>* firstAllocatedWire = PushTrieMap<int,int>(temp);
+      
     int globalConfigPos = 0;
     for(AccelInfoIterator iter : allIteratorsPerLevel[0]){
       InstanceInfo* unit = iter.CurrentUnit();
@@ -738,29 +597,16 @@ void FillInstanceInfo(AccelInfoIterator initialIter,Arena* out){
         continue;
       }
 
-      if(unit->configSize > 0){
-        if(unit->isShared){
-          int sharedIndex = unit->sharedIndex;
-          GetOrAllocateResult<int> data = sharedIndexToConfig->GetOrAllocate(sharedIndex);
-
-          if(data.alreadyExisted){
-            unit->globalConfigPos = *data.data;
-          } else {
-            *data.data = globalConfigPos;
-            unit->globalConfigPos = globalConfigPos;
-          }
-        } else {
-          unit->globalConfigPos = globalConfigPos;
-        }
-      }
-      
       for(int i = 0; i < unit->individualWiresLocalConfigPos.size; i++){
         int indexForCurrentWire = globalConfigPos;
+        bool didShare = false;
         if(unit->individualWiresShared[i]){
           int sharedIndex = GetSharedIndex(unit->sharedIndex,i);
           GetOrAllocateResult<int> data = sharedWireIndexToConfig->GetOrAllocate(sharedIndex);
+
           if(data.alreadyExisted){
             indexForCurrentWire = *data.data;
+            didShare = true;
           } else {
             *data.data = globalConfigPos;
             globalConfigPos += 1;
@@ -770,16 +616,32 @@ void FillInstanceInfo(AccelInfoIterator initialIter,Arena* out){
         }
 
         unit->individualWiresLocalConfigPos[i] = indexForCurrentWire;
-        // For the top level, might as well just fill in the global pos. Equal to local pos.
-        // NOTE: We can do this because static is only applied to units and not to individual wires.
-        //       I'm pretty sure that we could extend the static logic for individiual wires as well.
-        // 
+
+        // The first wire value is also the first local config position for the unit.
+        // Except if we share configs, in which case the local config position is equal to the first shared unit local config pos.
+        // This way, we can generate structs individually but with padding internally to line up the data correctly.
+        if(i == 0){
+          if(unit->isShared){
+            GetOrAllocateResult<int> data = firstAllocatedWire->GetOrAllocate(unit->sharedIndex);
+            if(!data.alreadyExisted){
+              *data.data = indexForCurrentWire;
+            }
+
+            unit->localConfigPos = *data.data;
+          } else {
+            unit->localConfigPos = indexForCurrentWire;
+          }
+        }
+      
         unit->individualWiresGlobalConfigPos[i] = indexForCurrentWire;
       }
+
+      // Store global pos already because for top level localPos == globalPos
+      unit->globalConfigPos = unit->localConfigPos;
     }
   }
-
-  // Afterwards, we propagate the information downwards by iterating per level.
+  
+  // Afterwards, we propagate the information downwards by iterating per level in order to calculate the global pos
   for(int level = 0; level < allIteratorsPerLevel.size; level++){
     for(AccelInfoIterator iter : allIteratorsPerLevel[level]){
       InstanceInfo* parent = iter.CurrentUnit();
@@ -804,10 +666,17 @@ void FillInstanceInfo(AccelInfoIterator initialIter,Arena* out){
             unit->individualWiresGlobalConfigPos[i] = -1;
           }
         }
+
+        if(configUnit->localConfigPos.has_value()){
+          unit->globalConfigPos = parentGlobalPos + configUnit->localConfigPos.value();
+        }
       }
     }
   }
 
+  // TODO: Because of the approach taken for the configs, we might be able to write the following functions easier, by using the accelerator iterators we have previously calculated.
+  //       There is not much point doing this however unless we feel like there is a need for it. The code works fine and I do not think we are even simplifying stuff. Both approaches seem equal in terms of complexity.
+  
   // Calculate state stuff
   auto CalculateState = [](auto Recurse,AccelInfoIterator& iter,int startIndex) -> void{
     TEMP_REGION(temp,nullptr);

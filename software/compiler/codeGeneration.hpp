@@ -79,59 +79,38 @@ static bool operator==(const SameMuxEntities i0,const SameMuxEntities i1){
 struct AddressGenDef;
 extern Pool<AddressGenDef> addressGens;
 
-// In order to get the names, I need to associate a given member to a merge index.
-// Since multiplexers can be shared accross multiple merge indexes, I need some map of some sorts.
-// One multiplexer can be used by dozens of merge indexes.
 struct StructInfo;
 
 struct StructElement{
-  StructInfo* childStruct; // If nulltpr, then leaf (whose type is type)
+  StructInfo* childStruct; // If nulltpr, then leaf
+
   // TODO: We could put a Type* here, so that later we can handle different sizes (char,short,int,etc).
   //       Instead of just having childStruct point to a StructInfo("iptr");
+
   String name;
-  int pos; // This is local pos (inside the struct).
+  int localPos; // Inside the struct info that contains this element
   int size;
   bool isMergeMultiplexer;
-  bool doesNotBelong;
+  bool doesNotBelong; // Leads to padding being added. From merge 
 };
 
 struct StructInfo{
   String name;
-  FUDeclaration* type; // TODO: isSimpleType is intended to replace this. We treat simple units the same way, where each element points to a StructElement. The most basic struct element is gonna be the iptr, which is the leaf, although we still do not have a proper way of representing this in the codebase. Check TODO inside StructElement.
-  StructInfo* parent;
-
-  int globalPos;
-  bool isUnique; // Usually for structs with partial share or merge that are one of a kind (because of padding and such).
   InstanceInfo* infoThatGeneratedThis;
-  
-  bool isSimpleType;
-  
-  ArenaDoubleList<StructElement>* list;
+  ArenaDoubleList<StructElement>* memberList;
 };
 
 size_t HashStructInfo(StructInfo* info);
 
 template<> struct std::hash<StructElement>{
   std::size_t operator()(StructElement const& s) const noexcept{
-    std::size_t res = std::hash<String>()(s.name) + s.size + (s.isMergeMultiplexer ? 1 : 0);
-    if(s.childStruct == nullptr){
-      res += s.pos;
-    } else{
+    std::size_t res = std::hash<String>()(s.name) + s.size + s.localPos + (s.isMergeMultiplexer ? 1 : 0);
+
+    if(s.childStruct != nullptr){
       res += HashStructInfo(s.childStruct);
     }
-     return res;
-   }
-};
-
-template<> struct std::hash<StructInfo>{
-   std::size_t operator()(StructInfo const& s) const noexcept{
-     std::size_t res = 0;
-     res += std::hash<void*>()(s.type);
-     for(DoubleLink<StructElement>* ptr = s.list ? s.list->head : nullptr; ptr; ptr = ptr->next){
-       res += std::hash<StructElement>()(ptr->elem);
-     }
-     res += std::hash<String>()(s.name);
-     return res;
+    
+    return res;
    }
 };
 
@@ -141,38 +120,37 @@ static bool operator==(StructElement& l,StructElement& r){
   bool res = (*l.childStruct == *r.childStruct &&
               l.name == r.name &&
               l.size == r.size &&
+              l.localPos == r.localPos &&
               l.isMergeMultiplexer == r.isMergeMultiplexer);
-    
+  
   return res;
 }
 
+template<> struct std::hash<StructInfo>{
+   std::size_t operator()(StructInfo const& s) const noexcept{
+     std::size_t res = 0;
+     for(DoubleLink<StructElement>* ptr = s.memberList ? s.memberList->head : nullptr; ptr; ptr = ptr->next){
+       res += std::hash<StructElement>()(ptr->elem);
+     }
+     res += std::hash<String>()(s.name);
+     return res;
+   }
+};
+
 static bool operator==(StructInfo& l,StructInfo& r){
-  if(l.type != r.type){
+  if(!(l.name == r.name)){
     return false;
   }
-
-  if(l.isSimpleType != r.isSimpleType){
-    return false;
-  }
-
-  bool simpleType = l.isSimpleType;
   
-  DoubleLink<StructElement>* lPtr = l.list ? l.list->head : nullptr;
-  DoubleLink<StructElement>* rPtr = r.list ? r.list->head : nullptr;
+  DoubleLink<StructElement>* lPtr = l.memberList ? l.memberList->head : nullptr;
+  DoubleLink<StructElement>* rPtr = r.memberList ? r.memberList->head : nullptr;
   for(; lPtr && rPtr; lPtr = lPtr->next,rPtr = rPtr->next){
     if(!(lPtr->elem == rPtr->elem)){
       return false;
     }
-    if(simpleType && lPtr->elem.pos != rPtr->elem.pos){
-      return false;
-    }
   }
 
-  if(!(lPtr) != !(rPtr)){
-    return false;
-  }
-  
-  return (l.name == r.name);
+  return true;
 }
 
 Array<FUDeclaration*> SortTypesByMemDependency(Array<FUDeclaration*> types,Arena* out);

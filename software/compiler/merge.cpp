@@ -2063,11 +2063,11 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
     iter.mergeIndex = i;
     iter.accelName = decl->info.infos[i].name;
     FillInstanceInfo(iter,globalPermanent);
-
+    
     Array<InstanceInfo*> instanceInfos = GetAllSameLevelUnits(&decl->info,0,i,temp);
     
     AcceleratorMapping* mergedAccelToRecon = MappingInvert(reconToMergedAccel[i],globalPermanent);
-
+    
     // NOTE: Even though we flatten the accelerators, there is no guarantee that we are dealing with the lowest level of units available. Flatten does not always goes towards the lowest level.
 
     for(int index = 0; index < mergedAccel->allocated.Size(); index++){
@@ -2094,7 +2094,6 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
 
         if(test){
           instance->addressGenUsed = test->addressGenUsed;
-          //DEBUG_BREAK();
         }
       }
       

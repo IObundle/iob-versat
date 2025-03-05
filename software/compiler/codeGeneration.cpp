@@ -339,7 +339,6 @@ void OutputCircuitSource(FUDeclaration* decl,FILE* file){
   Array<Array<int>> wireIndexByInstance = Extract(info.infos[0].info,temp,&InstanceInfo::individualWiresGlobalConfigPos);
 
   TemplateSetCustom("configs",MakeValue(&configs));
-  //TemplateSetCustom("wireIndex",MakeValue(&wireIndexByInstance));
   TemplateSetCustom("wireIndex",MakeValue(&wireIndexByInstanceGood));
   
   ProcessTemplate(file,BasicTemplates::acceleratorTemplate);
@@ -457,6 +456,11 @@ StructInfo* GenerateStateStruct(AccelInfoIterator iter,Arena* out){
       continue;
     }
 
+    int parentGlobalStatePos = 0;
+    if(parent){
+      parentGlobalStatePos = parent->statePos.value();
+    }
+    
     elem.name = unit->baseName;
 
     if(unit->isMerge){
@@ -471,66 +475,61 @@ StructInfo* GenerateStateStruct(AccelInfoIterator iter,Arena* out){
           StructInfo* subInfo = GenerateStateStruct(iter,out);
 
           // NOTE: Why config version does not do this?
-          //       
           subInfo->name = iter.GetMergeName();
           
-          subInfo->parent = res;
           elem.name = iter.GetMergeName();
           elem.childStruct = subInfo;
-          elem.pos = topUnit->statePos.value();
+          elem.localPos = 0;
           elem.size = topUnit->stateSize;
 
           *list->PushElem() = elem;
         }
         
         res->name = topUnit->decl->name;
-        res->list = list;
+        res->memberList = list;
         
         return res;
       };
 
       AccelInfoIterator inside = it.StepInsideOnly();
       StructInfo* subInfo = GenerateMergeStruct(unit,inside,out);
-      subInfo->parent = res;
       subInfo->infoThatGeneratedThis = unit;
       elem.childStruct = subInfo;
     } else if(unit->isComposite){
       AccelInfoIterator inside = it.StepInsideOnly();
       StructInfo* subInfo = GenerateStateStruct(inside,out);
-      subInfo->parent = res;
       subInfo->infoThatGeneratedThis = unit;
       elem.childStruct = subInfo;
     } else {
       StructInfo* simpleSubInfo = PushStruct<StructInfo>(out);
 
       simpleSubInfo->name = unit->decl->name;
-      simpleSubInfo->parent = res;
-      simpleSubInfo->isSimpleType = true;
-
+      
       ArenaDoubleList<StructElement>* elements = PushArenaDoubleList<StructElement>(out);
       int index = 0;
       Array<Wire> states = unit->decl->states;
       for(Wire w : states){
         StructElement* elem = elements->PushElem();
         elem->name = w.name;
-        elem->pos = index++;
+        elem->localPos = index++;
         elem->isMergeMultiplexer = false;
         elem->size = 1;
         elem->childStruct = &integer;
       }
-      simpleSubInfo->list = elements;
+      simpleSubInfo->memberList = elements;
       
       elem.childStruct = simpleSubInfo;
     }
-    
-    elem.pos = unit->statePos.value();
+
+    // TODO: Kinda of an hack because we do not have local state pos the same way we have local config pos.
+    elem.localPos = unit->statePos.value() - parentGlobalStatePos;
     elem.size = unit->stateSize;
     elem.doesNotBelong = unit->doesNotBelong;
     
     *list->PushElem() = elem;
   }
   
-  res->list = list;
+  res->memberList = list;
   
   return res;
 }
@@ -552,6 +551,7 @@ StructInfo* GenerateConfigStruct(AccelInfoIterator iter,Arena* out){
   static StructInfo integer = {};
   integer.name = STRING("iptr");
   
+  // This function returns one struct info.
   auto list = PushArenaDoubleList<StructElement>(out);
   for(AccelInfoIterator it = iter; it.IsValid(); it = it.Next()){
     InstanceInfo* unit = it.CurrentUnit();
@@ -560,7 +560,10 @@ StructInfo* GenerateConfigStruct(AccelInfoIterator iter,Arena* out){
     if(!unit->globalConfigPos.has_value()){
       continue;
     }
-
+    
+    int globalPos = unit->globalConfigPos.value();
+    int unitLocalPos = unit->localConfigPos.value();
+    
     elem.name = unit->baseName;
 
     if(unit->isMerge){
@@ -575,12 +578,9 @@ StructInfo* GenerateConfigStruct(AccelInfoIterator iter,Arena* out){
         
           StructInfo* subInfo = GenerateConfigStruct(iter,out);
 
-          // NOTE: I think that this is the only instance where we cannot associate the instance info to the structInfo.
-          //subInfo->infoThatGeneratedThis = iter.CurrentUnit();
-          subInfo->parent = res;
           elem.name = iter.GetMergeName();
           elem.childStruct = subInfo;
-          elem.pos = topUnit->globalConfigPos.value();
+          elem.localPos = 0; // Zero because the merge struct is basically a wrapper. 
           elem.size = topUnit->configSize;
           elem.isMergeMultiplexer = topUnit->isMergeMultiplexer;
 
@@ -588,29 +588,29 @@ StructInfo* GenerateConfigStruct(AccelInfoIterator iter,Arena* out){
         }
         
         res->name = topUnit->decl->name;
-        res->list = list;
+        res->memberList = list;
         
         return res;
       };
 
       AccelInfoIterator inside = it.StepInsideOnly();
+
       StructInfo* subInfo = GenerateMergeStruct(unit,inside,out);
-      subInfo->parent = res;
       subInfo->infoThatGeneratedThis = unit;
       elem.childStruct = subInfo;
     } else if(unit->isComposite){
       AccelInfoIterator inside = it.StepInsideOnly();
       StructInfo* subInfo = GenerateConfigStruct(inside,out);
-      subInfo->parent = res;
       subInfo->infoThatGeneratedThis = unit;
       elem.childStruct = subInfo;
     } else {
+      // NOTE: We are generating the sub struct info directly here instead of recursing.
+      Array<int> localPos = unit->individualWiresLocalConfigPos;
+      
       if(ContainsPartialShare(unit)){
         StructInfo* simpleSubInfo = PushStruct<StructInfo>(out);
         simpleSubInfo->infoThatGeneratedThis = unit;
-        simpleSubInfo->type = unit->decl;
-        simpleSubInfo->isSimpleType = true;
-
+        
         Array<Wire> configs = unit->decl->configs;
         
         ArenaDoubleList<StructElement>* elements = PushArenaDoubleList<StructElement>(out);
@@ -620,26 +620,24 @@ StructInfo* GenerateConfigStruct(AccelInfoIterator iter,Arena* out){
         for(Wire w : configs){
           StructElement* elem = elements->PushElem();
           elem->name = w.name;
-          elem->pos = localPos[index++];
+          elem->localPos = localPos[index++] - unitLocalPos;
+
+          Assert(elem->localPos >= 0);
+          
           elem->isMergeMultiplexer = false;
           elem->size = 1;
           elem->childStruct = &integer;
         }
         
         simpleSubInfo->name = unit->decl->name;
-        simpleSubInfo->parent = res;
-        simpleSubInfo->list = elements;
+        simpleSubInfo->memberList = elements;
         elem.childStruct = simpleSubInfo;
       } else {
-        // MARKED
+        // NOTE: This structure should be the same accross all the invocations of this function, since we are just generating the struct of a simple type without any struct wide modifications (like partial share or merge).
 
-        // NOTE: We are currently generating all the info, instead of bottoming out at a simple unit and then carrying decl info forward.
-        //       This is probably the approach to go, so just refactor the code to carry out this approach
-
+        // NOTE: As such, we can detect in here wether we are generating something that already exists or not. Instead of using the TrieMap approach later in the ExtractStructs.
         StructInfo* simpleSubInfo = PushStruct<StructInfo>(out);
         simpleSubInfo->infoThatGeneratedThis = unit;
-        simpleSubInfo->type = unit->decl;
-        simpleSubInfo->isSimpleType = true;
         
         Array<Wire> configs = unit->decl->configs;
         
@@ -648,33 +646,28 @@ StructInfo* GenerateConfigStruct(AccelInfoIterator iter,Arena* out){
         for(Wire w : configs){
           StructElement* elem = elements->PushElem();
           elem->name = w.name;
-          elem->pos = index++;
+          elem->localPos = localPos[index++] - unitLocalPos;
+
+          Assert(elem->localPos >= 0);
+
           elem->isMergeMultiplexer = false;
           elem->size = 1;
           elem->childStruct = &integer;
         }
         
         simpleSubInfo->name = unit->decl->name;
-        simpleSubInfo->parent = res;
-        simpleSubInfo->list = elements;
+        simpleSubInfo->memberList = elements;
         elem.childStruct = simpleSubInfo;
       }
     }
-      
-    // NOTE: We are getting our elem pos from the global config pos, but this approch is starting to behind the wire values.
-    
-    int minPos = INT_MAX;
+
     int maxPos = 0;
-    for(int i : unit->individualWiresGlobalConfigPos){
-      minPos = MIN(minPos,i);
+    for(int i : unit->individualWiresLocalConfigPos){
       maxPos = MAX(maxPos,i);
     }
-    minPos = unit->globalConfigPos.value(); // NOTE: We need the global config pos in order to generate the struct unions currently (we do not have the ability to check if a range overlaps and to generate unions accordingly).
 
-    // I think that the code that generates the structure is to weak to handle proper data coming from this function, but I'm still working on the kinks with the whole thing, so for now we just power through and see what happens.
-    
-    elem.pos = minPos;
-    elem.size = maxPos - minPos + 1;
+    elem.localPos = unitLocalPos;
+    elem.size = maxPos - unitLocalPos + 1;
 
     Assert(elem.size > 0);
 
@@ -684,7 +677,7 @@ StructInfo* GenerateConfigStruct(AccelInfoIterator iter,Arena* out){
     *list->PushElem() = elem;
   }
       
-  res->list = list;
+  res->memberList = list;
   
   return res;
 }
@@ -704,7 +697,7 @@ Array<StructInfo*> ExtractStructs(StructInfo* structInfo,Arena* out){
       return;
     }
 
-    for(DoubleLink<StructElement>* ptr = top->list ? top->list->head : nullptr; ptr; ptr = ptr->next){
+    for(DoubleLink<StructElement>* ptr = top->memberList ? top->memberList->head : nullptr; ptr; ptr = ptr->next){
       Recurse(Recurse,ptr->elem.childStruct,map);
     }
     // TODO: HACK
@@ -730,63 +723,32 @@ Array<TypeStructInfo> GenerateStructs(Array<StructInfo*> info,String typeString,
     TypeStructInfo* type = list->PushElem();
     type->name = structInfo->name;
 
-    int minPos = INT_MAX;
     int maxPos = 0;
-    for(DoubleLink<StructElement>* ptr = structInfo->list ? structInfo->list->head : nullptr; ptr; ptr = ptr->next){
+    for(DoubleLink<StructElement>* ptr = structInfo->memberList ? structInfo->memberList->head : nullptr; ptr; ptr = ptr->next){
       StructElement elem = ptr->elem;
-      minPos = MIN(minPos,elem.pos);
-      maxPos = MAX(maxPos,elem.pos + elem.size);
+      maxPos = MAX(maxPos,elem.localPos + elem.size);
     }
-
-    // TODO: Kinda of an hack but not really? We are using global position for everything else. But for simple types what we need is local position, which is what we currently have. 
-    if(structInfo->isUnique){
-      // NOTE: Because the struct is simple, we are normalizing position to start at zero.
-      //       The code is not good but we are just hacking stuff until we get something working.
-      // TODO: This obviously needs a second pass
-      for(DoubleLink<StructElement>* ptr = structInfo->list ? structInfo->list->head : nullptr; ptr; ptr = ptr->next){
-        ptr->elem.pos -= structInfo->globalPos;
-      }
-      
-      maxPos -= structInfo->globalPos;
-      minPos = 0;
-
-    } else if(structInfo->isSimpleType){
-      minPos = 0;
-    }
-
-    Assert(maxPos > minPos);
     
     Array<int> amountOfEntriesAtPos = PushArray<int>(temp,maxPos);
-    for(DoubleLink<StructElement>* ptr = structInfo->list ? structInfo->list->head : nullptr; ptr; ptr = ptr->next){
+    for(DoubleLink<StructElement>* ptr = structInfo->memberList ? structInfo->memberList->head : nullptr; ptr; ptr = ptr->next){
       StructElement elem = ptr->elem;
-      amountOfEntriesAtPos[elem.pos] += 1;
+      amountOfEntriesAtPos[elem.localPos] += 1;
     }
-
-    int amountOfDifferent = 0;
-    for(int amount : amountOfEntriesAtPos){
-      if(amount){
-        amountOfDifferent += 1;
-      }
-    }
-
-    Array<int> entryIndex = PushArray<int>(temp,maxPos);
-    Memset(entryIndex,-1);
-    Array<int> indexes = PushArray<int>(temp,maxPos);
 
     Array<bool> validPositions = PushArray<bool>(temp,maxPos);
     Array<bool> startPositionsOnly = PushArray<bool>(temp,maxPos);
     
-    for(DoubleLink<StructElement>* ptr = structInfo->list ? structInfo->list->head : nullptr; ptr; ptr = ptr->next){
+    for(DoubleLink<StructElement>* ptr = structInfo->memberList ? structInfo->memberList->head : nullptr; ptr; ptr = ptr->next){
       StructElement elem = ptr->elem;
 
-      startPositionsOnly[elem.pos] = true;
-      for(int i = elem.pos; i < elem.pos + elem.size; i++){
+      startPositionsOnly[elem.localPos] = true;
+      for(int i = elem.localPos; i < elem.localPos + elem.size; i++){
         validPositions[i] = true;
       }
     }
 
     auto builder = StartArray<IndexInfo>(temp);
-    for(int i = minPos; i < maxPos; i++){
+    for(int i = 0; i < maxPos; i++){
       if(!validPositions[i]){
         *builder.PushElem() = {true,i,0};
       } else if(startPositionsOnly[i]){
@@ -810,12 +772,14 @@ Array<TypeStructInfo> GenerateStructs(Array<StructInfo*> info,String typeString,
       IndexInfo info = indexInfo[i];
       type->entries[i].typeAndNames = PushArray<SingleTypeStructElement>(out,info.amountOfEntries);
     }
+
+    Array<int> indexes = PushArray<int>(temp,maxPos);
     
     int indexPos = 0;
     int paddingAdded = 0;
-    for(DoubleLink<StructElement>* ptr = structInfo->list ? structInfo->list->head : nullptr; ptr;){
+    for(DoubleLink<StructElement>* ptr = structInfo->memberList ? structInfo->memberList->head : nullptr; ptr;){
       StructElement elem = ptr->elem;
-      int pos = elem.pos;
+      int pos = elem.localPos;
 
       int index = positionToIndex->GetOrFail(pos);
       
@@ -866,28 +830,36 @@ Array<TypeStructInfo> GenerateStructs(Array<StructInfo*> info,String typeString,
   return res;
 }
 
+// If parent elem has a local config pos of 5
+// And mux elem has a local config pos of 3,
+// Then the local config pos of the mux element in the top element is 8, right?
+
 void PushMergeMultiplexersUpTheHierarchy(StructInfo* top){
-  auto PushMergesUp = [](StructInfo* parent,StructInfo* child) -> void{
-    if(child == nullptr || child->list == nullptr || child->list->head == nullptr){
+  auto PushMergesUp = [](StructInfo* parent,StructElement* parentElem,StructInfo* child) -> void{
+    if(child == nullptr || child->memberList == nullptr || child->memberList->head == nullptr){
       return;
     }
 
     PushMergeMultiplexersUpTheHierarchy(child);
     
-    for(DoubleLink<StructElement>* childPtr = child->list->head; childPtr;){
+    for(DoubleLink<StructElement>* childPtr = child->memberList->head; childPtr;){
       if(childPtr->elem.isMergeMultiplexer){
         DoubleLink<StructElement>* node = childPtr;
-        childPtr = RemoveNodeFromList(child->list,node);
+
+        int nodeActualPos = parentElem->localPos + childPtr->elem.localPos;
+        
+        childPtr = RemoveNodeFromList(child->memberList,node);
 
         // TODO: We should do a full comparison.
-        //       For now only name because I alredy know muxes will have different names if different.
+        //       For now only name because I already know muxes will have different names if different.
         bool sameName = false;
-        for(DoubleLink<StructElement>* parentPtr = parent->list->head; parentPtr; parentPtr = parentPtr->next){
+        for(DoubleLink<StructElement>* parentPtr = parent->memberList->head; parentPtr; parentPtr = parentPtr->next){
           sameName |= CompareString(parentPtr->elem.name,node->elem.name);
         }
 
         if(!sameName){
-          parent->list->PushNode(node);
+          node->elem.localPos = nodeActualPos;
+          parent->memberList->PushNode(node);
         }
       } else {
         childPtr = childPtr->next;
@@ -896,11 +868,11 @@ void PushMergeMultiplexersUpTheHierarchy(StructInfo* top){
 
   };
   
-  for(DoubleLink<StructElement>* ptr = top->list->head; ptr;){
-    PushMergesUp(top,ptr->elem.childStruct);
+  for(DoubleLink<StructElement>* ptr = top->memberList->head; ptr;){
+    PushMergesUp(top,&ptr->elem,ptr->elem.childStruct);
 
-    if(ptr->elem.childStruct->list && Empty(ptr->elem.childStruct->list)){
-      ptr = RemoveNodeFromList(top->list,ptr);
+    if(ptr->elem.childStruct->memberList && Empty(ptr->elem.childStruct->memberList)){
+      ptr = RemoveNodeFromList(top->memberList,ptr);
     } else {
       ptr = ptr->next;
     }
@@ -918,24 +890,18 @@ void OutputTopLevelFiles(Accelerator* accel,FUDeclaration* topLevelDecl,const ch
 
   AccelInfoIterator iter = StartIteration(&info);
 
-  DEBUG_BREAK();
-
   StructInfo* stateStructInfo = GenerateStateStruct(iter,temp);
 
   Array<StructInfo*> allStateStructs = {};
   Array<TypeStructInfo> stateStructs = {};
 
-  if(!Empty(stateStructInfo->list)){
+  if(!Empty(stateStructInfo->memberList)){
     // We generate an extra level, so we just remove it here.
-    // 
-    // NOTE: Do not have a clue why this happens.
-    //       The struct code generation stuff is good enough and contains a decent amount of tests, so I might be able to simplify it a little if I take another look at it.
-    //       NOTE: However, since we still are not sure how to proceed in relation to how Versat is gonna work in the future (how to make it simpler to configure), it might be best to hold off.
-    stateStructInfo = stateStructInfo->list->head->elem.childStruct;
+    stateStructInfo = stateStructInfo->memberList->head->elem.childStruct;
 
-    // 
     allStateStructs = ExtractStructs(stateStructInfo,temp);
 
+    // TODO: Maybe turn into a function together with the code below
     Array<int> indexes = PushArray<int>(temp,allStateStructs.size);
     Memset(indexes,2);
     for(int i = 0; i < allStateStructs.size; i++){
@@ -944,10 +910,9 @@ void OutputTopLevelFiles(Accelerator* accel,FUDeclaration* topLevelDecl,const ch
       for(int ii = 0; ii < i; ii++){
         String possibleDuplicate = allStateStructs[ii]->name;
 
-        // NOTE: The fact that we are doing string comparison is kinda bad.
+        // TODO: The fact that we are doing string comparison is kinda bad.
         if(CompareString(possibleDuplicate,name)){
           allStateStructs[i]->name = PushString(temp,"%.*s_%d",UNPACK_SS(possibleDuplicate),indexes[ii]++);
-          allStateStructs[i]->isUnique = true;
           break;
         }
       }
@@ -962,69 +927,32 @@ void OutputTopLevelFiles(Accelerator* accel,FUDeclaration* topLevelDecl,const ch
   Array<StructInfo*> allStructs = {};
   
   // If we only contain static configs, this will appear empty.
-  if(!Empty(structInfo->list)){
+  if(!Empty(structInfo->memberList)){
     // We generate an extra level, so we just remove it here.
-    structInfo = structInfo->list->head->elem.childStruct;
+    structInfo = structInfo->memberList->head->elem.childStruct;
   
     // NOTE: We for now push all the merge muxs to the top.
     //       It might be better to only push them to the merge struct (basically only 1 level up).
     //       Still need more examples to see.
     PushMergeMultiplexersUpTheHierarchy(structInfo);
+    
     allStructs = ExtractStructs(structInfo,temp);
-
+    
     Array<int> indexes = PushArray<int>(temp,allStructs.size);
     Memset(indexes,2);
     for(int i = 0; i < allStructs.size; i++){
       String name = allStructs[i]->name;
-
-#if 1
-      if(allStructs[i]->infoThatGeneratedThis && allStructs[i]->infoThatGeneratedThis->isShared){
-        bool isPartialShared = false;
-
-        for(bool b : allStructs[i]->infoThatGeneratedThis->isSpecificConfigShared){
-          if(!b){
-            isPartialShared = true;
-            break;
-          }
-        }
-
-        if(allStructs[i]->infoThatGeneratedThis && isPartialShared){
-          allStructs[i]->isUnique = true;
-        }
-      }
-#endif
       
       for(int ii = 0; ii < i; ii++){
         String possibleDuplicate = allStructs[ii]->name;
 
-        // NOTE: The fact that we are doing string comparison is kinda bad.
+        // TODO: The fact that we are doing string comparison is kinda bad.
         if(CompareString(possibleDuplicate,name)){
           allStructs[i]->name = PushString(temp,"%.*s_%d",UNPACK_SS(possibleDuplicate),indexes[ii]++);
-          allStructs[i]->isUnique = true;
           break;
         }
       }
     }
-
-    // NOTE: We iterate again over the struct infos to check if any elem contains an unique struct.
-    //       We then set the global position for that struct only.
-    //       We probably need to remake this part, since this seems to be kinda of an hack.
-
-    auto Recurse = [](auto Recurse,StructInfo* info) -> void{
-      if(!info || !info->list || Empty(info->list)){
-        return;
-      }
-    
-      for(auto ptr = info->list->head; ptr; ptr = ptr->next){
-        StructElement& elem = ptr->elem;
-        if(elem.childStruct->isUnique){
-          elem.childStruct->globalPos = elem.pos;
-        }
-        Recurse(Recurse,elem.childStruct);
-      }
-    };
-
-    Recurse(Recurse,structInfo);
 
     structs = GenerateStructs(allStructs,STRING("Config"),true,temp);
   }

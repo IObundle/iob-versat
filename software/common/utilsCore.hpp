@@ -194,9 +194,12 @@ typedef unsigned int uint;
 // This simple class basically does the same and much easier to debug
 template<typename T>
 struct Opt{
+  // Use the functions because the Opt for pointers does not contain hasVal
+private:
   T val;
   bool hasVal;
-
+  
+public:
   Opt():val{},hasVal(false){};
   Opt(std::nullopt_t):val{},hasVal(false){};
   Opt(T t):val(t),hasVal(true){};
@@ -221,23 +224,23 @@ struct Opt{
   T value_or(T other){return hasVal ? val : other;};
 }; 
 
-#if 0
-// Optimized Opt for pointers, but not tested yet and test benchs not currently working.
-// 
+// Optimized Opt for pointers, takes same space so if compiler is smart there should not be any cost to this.
 template<typename T>
 struct Opt<T*>{
+private:
   T* val;
 
+public:
   Opt():val(nullptr){};
   Opt(std::nullopt_t):val(nullptr){};
   Opt(T* t):val(t){};
 
-  Opt<T>& operator=(T& t){
+  Opt<T*>& operator=(T& t){
     val = t;
     return *this;
   };
 
-  Opt<T>& operator=(std::nullopt_t){
+  Opt<T*>& operator=(std::nullopt_t){
     val = nullptr;
     return *this;
   };
@@ -246,11 +249,10 @@ struct Opt<T*>{
 
   // Match the std interface to make it easier to replace if needed
   bool has_value(){return (val != nullptr);};
-  T& value() & {assert(val);return val;};
-  T&& value() && {assert(val);return std::move(val);};
-  T value_or(T other){return this->has_value() ? val : other;};
+  T*& value() & {assert(val);return val;};
+  T*&& value() && {assert(val);return std::move(val);};
+  T* value_or(T* other){return this->has_value() ? val : other;};
 };
-#endif
 
 //template<typename T>
 //using Opt = std::optional<T>;
@@ -262,6 +264,7 @@ template<typename T>
 using BracketList = std::initializer_list<T>;
 
 // TODO: Time needs to be rewritted because we no longer need to support firmware code
+//       Probably can use the C time now but need to see first.
 struct Time{
    u64 microSeconds;
    u64 seconds;
@@ -299,17 +302,6 @@ public:
 #define timeRegion(ID) if(TimeIt _timeRegion(__LINE__){ID})
 
 #define timeRegionIf(ID,COND) if(TimeIt _timeRegion(__LINE__){ID,COND})
-
-// Can use break to end time region early. Not sure if useful, for now use the if trick
-//#define timeRegion(ID) for(struct{TimeIt m;bool flag;} _timeRegion(__LINE__) = {ID,true}; _timeRegion(__LINE__).flag; _timeRegion(__LINE__).flag = false)
-
-/*
-template<typename F>
-ALWAYS_INLINE void operator+(TimeIt&& timer,F&& f){
-   f();
-}
-#define timeRegion(ID) TimeIt(ID) + [&]()
-*/
 
 template<typename T>
 class ArrayIterator{

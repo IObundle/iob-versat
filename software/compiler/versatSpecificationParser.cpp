@@ -1237,7 +1237,7 @@ FUDeclaration* InstantiateMerge(MergeDef def){
 
   bool error = false;
   MergeModifier modifier = MergeModifier_NONE;
-  DEBUG_BREAK();
+
   for(Token t : def.mergeModifiers){
     Opt<MergeModifier> parsed = META_mergeModifiers_ReverseMap(t);
 
