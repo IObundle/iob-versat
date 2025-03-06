@@ -1465,7 +1465,6 @@ void OutputTopLevelFiles(Accelerator* accel,FUDeclaration* topLevelDecl,const ch
     TemplateSetCustom("mergeMux",MakeValue(&muxInfo));
 
     TrieSet<Pair<String,AddressGenDef*>>* structNameAndAddressGen = PushTrieSet<Pair<String,AddressGenDef*>>(temp);
-    TrieSet<Pair<String,AddressGenDef*>>* originalStructNameAndAddressGen = PushTrieSet<Pair<String,AddressGenDef*>>(temp);
     
     auto GetAddressGen = [](String addressGenName) -> AddressGenDef*{
       for(AddressGenDef* def : addressGens){
@@ -1493,7 +1492,6 @@ void OutputTopLevelFiles(Accelerator* accel,FUDeclaration* topLevelDecl,const ch
           printf("Did not find address gen with name: %.*s\n",UNPACK_SS(addressGenName));
         } else {
           structNameAndAddressGen->Insert({typeName,def});
-          originalStructNameAndAddressGen->Insert({originalName,def});
         }
       }
     }
@@ -1503,7 +1501,8 @@ void OutputTopLevelFiles(Accelerator* accel,FUDeclaration* topLevelDecl,const ch
 
     GrowableArray<String> builder = StartArray<String>(temp2);
 
-    for(Pair<String,AddressGenDef*> p : originalStructNameAndAddressGen){
+    // Generic uses C++ method overloading to have the same name but handle all the struct types.
+    for(Pair<String,AddressGenDef*> p : structNameAndAddressGen){
       String structName = p.first;
       AddressGenDef* def = p.second;
 
