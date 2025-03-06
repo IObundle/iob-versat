@@ -493,12 +493,10 @@ StructInfo* GenerateStateStruct(AccelInfoIterator iter,Arena* out){
 
       AccelInfoIterator inside = it.StepInsideOnly();
       StructInfo* subInfo = GenerateMergeStruct(unit,inside,out);
-      subInfo->infoThatGeneratedThis = unit;
       elem.childStruct = subInfo;
     } else if(unit->isComposite){
       AccelInfoIterator inside = it.StepInsideOnly();
       StructInfo* subInfo = GenerateStateStruct(inside,out);
-      subInfo->infoThatGeneratedThis = unit;
       elem.childStruct = subInfo;
     } else {
       StructInfo* simpleSubInfo = PushStruct<StructInfo>(out);
@@ -588,6 +586,7 @@ StructInfo* GenerateConfigStructRecurse(AccelInfoIterator iter,TrieMap<StructInf
         }
         
         res->name = topUnit->decl->name;
+        res->originalName = res->name;
         res->memberList = list;
         
         return res;
@@ -596,12 +595,12 @@ StructInfo* GenerateConfigStructRecurse(AccelInfoIterator iter,TrieMap<StructInf
       AccelInfoIterator inside = it.StepInsideOnly();
 
       StructInfo* subInfo = GenerateMergeStruct(unit,inside,generatedStructs,out);
-      subInfo->infoThatGeneratedThis = unit;
+      unit->structInfo = subInfo;
       elem.childStruct = subInfo;
     } else if(unit->isComposite){
       AccelInfoIterator inside = it.StepInsideOnly();
       StructInfo* subInfo = GenerateConfigStructRecurse(inside,generatedStructs,out);
-      subInfo->infoThatGeneratedThis = unit;
+      unit->structInfo = subInfo;
       elem.childStruct = subInfo;
     } else {
       // NOTE: We are generating the sub struct info directly here instead of recursing.
@@ -609,8 +608,6 @@ StructInfo* GenerateConfigStructRecurse(AccelInfoIterator iter,TrieMap<StructInf
       
       if(ContainsPartialShare(unit)){
         StructInfo simpleSubInfo = {};
-
-        simpleSubInfo.infoThatGeneratedThis = unit;
         
         Array<Wire> configs = unit->decl->configs;
         
@@ -631,6 +628,7 @@ StructInfo* GenerateConfigStructRecurse(AccelInfoIterator iter,TrieMap<StructInf
         }
         
         simpleSubInfo.name = unit->decl->name;
+        simpleSubInfo.originalName = unit->decl->name;
         simpleSubInfo.memberList = elements;
 
         auto res = generatedStructs->GetOrAllocate(simpleSubInfo);
@@ -642,14 +640,12 @@ StructInfo* GenerateConfigStructRecurse(AccelInfoIterator iter,TrieMap<StructInf
         }
 
         elem.childStruct = *res.data;
+        unit->structInfo = *res.data;
       } else {
         // NOTE: This structure should be the same accross all the invocations of this function, since we are just generating the struct of a simple type without any struct wide modifications (like partial share or merge).
 
         // NOTE: As such, we can detect in here wether we are generating something that already exists or not. Instead of using the TrieMap approach later in the ExtractStructs.
         StructInfo simpleSubInfo = {};
-        //StructInfo* simpleSubInfo = &simpleSubInfoInst;
-
-        simpleSubInfo.infoThatGeneratedThis = unit;
         
         Array<Wire> configs = unit->decl->configs;
         
@@ -668,6 +664,7 @@ StructInfo* GenerateConfigStructRecurse(AccelInfoIterator iter,TrieMap<StructInf
         }
         
         simpleSubInfo.name = unit->decl->name;
+        simpleSubInfo.originalName = unit->decl->name;
         simpleSubInfo.memberList = elements;
 
         auto res = generatedStructs->GetOrAllocate(simpleSubInfo);
@@ -679,6 +676,7 @@ StructInfo* GenerateConfigStructRecurse(AccelInfoIterator iter,TrieMap<StructInf
         }
 
         elem.childStruct = *res.data;
+        unit->structInfo = *res.data;
       }
     }
 
@@ -698,6 +696,7 @@ StructInfo* GenerateConfigStructRecurse(AccelInfoIterator iter,TrieMap<StructInf
     *list->PushElem() = elem;
   }
       
+  res->originalName = res->name;
   res->memberList = list;
   
   return res;
@@ -952,8 +951,17 @@ void OutputTopLevelFiles(Accelerator* accel,FUDeclaration* topLevelDecl,const ch
 
     stateStructs = GenerateStructs(allStateStructs,STRING("State"),false,temp);
   }
+
+  // NOTE: We do this to generate all the struct infos for all the merge partitions, but realistically only one is needed. Maybe a bit overforced or maybe we just do not have enough info to see if this is actually "good" or not. Just feels a bit weird, thats all.
+  StructInfo* structInfo = nullptr;
+  for(int i = 0; i < iter.MergeSize(); i++){
+    iter.mergeIndex = i;
   
-  StructInfo* structInfo = GenerateConfigStruct(iter,temp);
+    StructInfo* inf = GenerateConfigStruct(iter,temp);
+    if(!structInfo){
+      structInfo = inf;
+    }
+  }
 
   Array<TypeStructInfo> structs = {};
   Array<StructInfo*> allStructs = {};
@@ -1445,7 +1453,8 @@ void OutputTopLevelFiles(Accelerator* accel,FUDeclaration* topLevelDecl,const ch
     
     TemplateSetCustom("mergeMux",MakeValue(&muxInfo));
 
-    TrieSet<Pair<String,String>>* structNameAndAddressGen = PushTrieSet<Pair<String,String>>(temp);
+    TrieSet<Pair<String,AddressGenDef*>>* structNameAndAddressGen = PushTrieSet<Pair<String,AddressGenDef*>>(temp);
+    TrieSet<Pair<String,AddressGenDef*>>* originalStructNameAndAddressGen = PushTrieSet<Pair<String,AddressGenDef*>>(temp);
     
     auto GetAddressGen = [](String addressGenName) -> AddressGenDef*{
       for(AddressGenDef* def : addressGens){
@@ -1456,59 +1465,55 @@ void OutputTopLevelFiles(Accelerator* accel,FUDeclaration* topLevelDecl,const ch
       return nullptr;
     };
 
-    // By getting the info directly from the structs, we make sure that we are always generating the functions needed for each possible structure that gets created/changed due to partial share or merge.
-    // Address gen is therefore capable of handling all the struct modifing features as long as they are properly implemented inside structInfo.
-    
-    GrowableArray<String> builder = StartArray<String>(temp2);
+    for(AccelInfoIterator iter = StartIteration(&info); iter.IsValid(); iter = iter.Step()){
+      InstanceInfo* unit = iter.CurrentUnit();
 
-    for(StructInfo* structInfo : allStructs){
-      InstanceInfo* info = structInfo->infoThatGeneratedThis;
-      
-      // NOTE: This happens to merged struct infos. It does not make sense to save an instance info for these cases
-      if(!info){
-        continue;
-      }
-
-      String typeName = structInfo->name;
-
-      for(String addressGenName : info->addressGenUsed){
-
+      for(String addressGenName : unit->addressGenUsed){
+        Assert(unit->structInfo); // If using address gen, need to have a valid struct info otherwise cannot proceed
+        Assert(!Empty(unit->structInfo->name));
+        Assert(!Empty(unit->structInfo->originalName));
+        
+        String typeName = unit->structInfo->name;
+        String originalName = unit->structInfo->originalName;
+        
         AddressGenDef* def = GetAddressGen(addressGenName);
+
         if(!def){
           printf("Did not find address gen with name: %.*s\n",UNPACK_SS(addressGenName));
         } else {
-          // TODO: Address gen only needs to be compiled once.
-          //       We should move this to the top level as the compilation can fail and proper error reported is needed
-          AddressGen gen = CompileAddressGenDef(*def,temp);
-          String res = InstantiateGenericAddressGen(gen,typeName,temp);
-
-          *builder.PushElem() = res;
+          structNameAndAddressGen->Insert({typeName,def});
+          originalStructNameAndAddressGen->Insert({originalName,def});
         }
-        
-        structNameAndAddressGen->Insert({typeName,addressGenName});
       }
     }
+    
+    // By getting the info directly from the structs, we make sure that we are always generating the functions needed for each possible structure that gets created/changed due to partial share or merge.
+    // Address gen is therefore capable of handling all the struct modifing features as long as they are properly implemented inside structInfo.
 
-    for(Pair<String,String> p : structNameAndAddressGen){
+    GrowableArray<String> builder = StartArray<String>(temp2);
+
+    for(Pair<String,AddressGenDef*> p : originalStructNameAndAddressGen){
       String structName = p.first;
-      String addressGenName = p.second;
-      
-      AddressGenDef* def = GetAddressGen(addressGenName);
+      AddressGenDef* def = p.second;
 
-      if(!def){
-        printf("Did not find address gen with name: %.*s\n",UNPACK_SS(addressGenName));
-      } else {
-        // TODO: Address gen only needs to be compiled once.
-        //       We should move this to the top level as the compilation can fail and proper error reported is needed
-        AddressGen gen = CompileAddressGenDef(*def,temp);
-        String res = InstantiateAddressGen(gen,structName,temp);
+      AddressGen gen = CompileAddressGenDef(*def,temp);
+      String res = InstantiateGenericAddressGen(gen,structName,temp);
 
-        *builder.PushElem() = res;
-      }
+      *builder.PushElem() = res;
+    }
+
+    for(Pair<String,AddressGenDef*> p : structNameAndAddressGen){
+      String structName = p.first;
+      AddressGenDef* def = p.second;
+
+      AddressGen gen = CompileAddressGenDef(*def,temp);
+      String res = InstantiateAddressGen(gen,structName,temp);
+
+      *builder.PushElem() = res;
     }
 
     Array<String> content = EndArray(builder);
-
+    
     TemplateSetCustom("addrGen",MakeValue(&content));
     
     FILE* f = OpenFileAndCreateDirectories(PushString(temp,"%s/versat_accel.h",softwarePath),"w",FilePurpose_SOFTWARE);

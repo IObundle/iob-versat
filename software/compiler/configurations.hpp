@@ -16,6 +16,7 @@ struct SimplePortConnection{
   int inPort;
 };
 
+struct StructInfo;
 
 // How does this work?
 
@@ -93,6 +94,8 @@ struct InstanceInfo{
 
   Array<SimplePortConnection> inputs; 
   Array<String> addressGenUsed;
+
+  StructInfo* structInfo;
 };
 
 struct MergePartition{

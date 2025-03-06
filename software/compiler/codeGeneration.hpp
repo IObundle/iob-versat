@@ -96,7 +96,10 @@ struct StructElement{
 
 struct StructInfo{
   String name;
-  InstanceInfo* infoThatGeneratedThis;
+  String originalName; // NOTE: kinda wathever, mainly used to generate generic address gens.
+
+  // As such, it appears that the easiest way of doing stuff is to store struct info inside the InstanceInfo and not the other way around.
+  
   ArenaDoubleList<StructElement>* memberList;
 };
 
