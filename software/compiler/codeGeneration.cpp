@@ -533,16 +533,14 @@ StructInfo* GenerateStateStruct(AccelInfoIterator iter,Arena* out){
 }
 
 StructInfo* GenerateConfigStructRecurse(AccelInfoIterator iter,TrieMap<StructInfo,StructInfo*>* generatedStructs,Arena* out){
-  TEMP_REGION(temp,out);
-  
-  StructInfo* res = PushStruct<StructInfo>(out);
+  StructInfo res = {};//PushStruct<StructInfo>(out);
 
   InstanceInfo* parent = iter.GetParentUnit();
  
   if(parent && parent->isMerge){
-    res->name = iter.GetMergeName();
+    res.name = iter.GetMergeName();
   } else if(parent){
-    res->name = parent->decl->name;
+    res.name = parent->decl->name;
   }
 
   // TODO: HACK
@@ -568,7 +566,7 @@ StructInfo* GenerateConfigStructRecurse(AccelInfoIterator iter,TrieMap<StructInf
       // Merge struct is different, we do not iterate members but instead iterate the base types.
       auto GenerateMergeStruct =[](InstanceInfo* topUnit,AccelInfoIterator iter,TrieMap<StructInfo,StructInfo*>* generatedStructs,Arena* out)->StructInfo*{
         auto list = PushArenaDoubleList<StructElement>(out);
-        StructInfo* res = PushStruct<StructInfo>(out);
+        StructInfo res = {}; //PushStruct<StructInfo>(out);
         
         StructElement elem = {};
         for(int i = 0; i < iter.MergeSize(); i++){
@@ -585,22 +583,28 @@ StructInfo* GenerateConfigStructRecurse(AccelInfoIterator iter,TrieMap<StructInf
           *list->PushElem() = elem;
         }
         
-        res->name = topUnit->decl->name;
-        res->originalName = res->name;
-        res->memberList = list;
+        res.name = topUnit->decl->name;
+        res.originalName = res.name;
+        res.memberList = list;
+
+        auto result = generatedStructs->GetOrAllocate(res);
+        if(!result.alreadyExisted){
+          StructInfo* allocated = PushStruct<StructInfo>(out);
+          *allocated = res;
+          
+          *result.data = allocated;
+        }
         
-        return res;
+        return *result.data;
       };
 
       AccelInfoIterator inside = it.StepInsideOnly();
 
       StructInfo* subInfo = GenerateMergeStruct(unit,inside,generatedStructs,out);
-      unit->structInfo = subInfo;
       elem.childStruct = subInfo;
     } else if(unit->isComposite){
       AccelInfoIterator inside = it.StepInsideOnly();
       StructInfo* subInfo = GenerateConfigStructRecurse(inside,generatedStructs,out);
-      unit->structInfo = subInfo;
       elem.childStruct = subInfo;
     } else {
       // NOTE: We are generating the sub struct info directly here instead of recursing.
@@ -640,7 +644,6 @@ StructInfo* GenerateConfigStructRecurse(AccelInfoIterator iter,TrieMap<StructInf
         }
 
         elem.childStruct = *res.data;
-        unit->structInfo = *res.data;
       } else {
         // NOTE: This structure should be the same accross all the invocations of this function, since we are just generating the struct of a simple type without any struct wide modifications (like partial share or merge).
 
@@ -676,7 +679,6 @@ StructInfo* GenerateConfigStructRecurse(AccelInfoIterator iter,TrieMap<StructInf
         }
 
         elem.childStruct = *res.data;
-        unit->structInfo = *res.data;
       }
     }
 
@@ -692,14 +694,24 @@ StructInfo* GenerateConfigStructRecurse(AccelInfoIterator iter,TrieMap<StructInf
 
     elem.isMergeMultiplexer = unit->isMergeMultiplexer;
     elem.doesNotBelong = unit->doesNotBelong;
+
+    unit->structInfo = elem.childStruct;
     
     *list->PushElem() = elem;
   }
       
-  res->originalName = res->name;
-  res->memberList = list;
+  res.originalName = res.name;
+  res.memberList = list;
+
+  auto result = generatedStructs->GetOrAllocate(res);
+  if(!result.alreadyExisted){
+    StructInfo* allocated = PushStruct<StructInfo>(out);
+    *allocated = res;
+          
+    *result.data = allocated;
+  }
   
-  return res;
+  return *result.data;
 }
 
 StructInfo* GenerateConfigStruct(AccelInfoIterator iter,Arena* out){
@@ -707,8 +719,18 @@ StructInfo* GenerateConfigStruct(AccelInfoIterator iter,Arena* out){
 
   // NOTE: It is important that same structs are "shared" because later we might change the name of the struct in order to avoid naming conflicts and by sharing the same struct every "user" of that struct gets updated at the same time.
   TrieMap<StructInfo,StructInfo*>* generatedStructs = PushTrieMap<StructInfo,StructInfo*>(temp);
+
+  StructInfo* result = GenerateConfigStructRecurse(iter,generatedStructs,out);
+
+  for(; iter.IsValid(); iter = iter.Step()){
+    InstanceInfo* unit = iter.CurrentUnit();
+
+    if(unit->structInfo){
+      unit->structInfo = generatedStructs->GetOrFail(*unit->structInfo);
+    }
+  }
   
-  return GenerateConfigStructRecurse(iter,generatedStructs,out);
+  return result;
 }
   
 size_t HashStructInfo(StructInfo* info){
@@ -861,10 +883,7 @@ Array<TypeStructInfo> GenerateStructs(Array<StructInfo*> info,String typeString,
   return res;
 }
 
-// If parent elem has a local config pos of 5
-// And mux elem has a local config pos of 3,
-// Then the local config pos of the mux element in the top element is 8, right?
-
+// NOTE: Does sharing the struct info cause problems here?
 void PushMergeMultiplexersUpTheHierarchy(StructInfo* top){
   auto PushMergesUp = [](StructInfo* parent,StructElement* parentElem,StructInfo* child) -> void{
     if(child == nullptr || child->memberList == nullptr || child->memberList->head == nullptr){
@@ -952,16 +971,8 @@ void OutputTopLevelFiles(Accelerator* accel,FUDeclaration* topLevelDecl,const ch
     stateStructs = GenerateStructs(allStateStructs,STRING("State"),false,temp);
   }
 
-  // NOTE: We do this to generate all the struct infos for all the merge partitions, but realistically only one is needed. Maybe a bit overforced or maybe we just do not have enough info to see if this is actually "good" or not. Just feels a bit weird, thats all.
-  StructInfo* structInfo = nullptr;
-  for(int i = 0; i < iter.MergeSize(); i++){
-    iter.mergeIndex = i;
-  
-    StructInfo* inf = GenerateConfigStruct(iter,temp);
-    if(!structInfo){
-      structInfo = inf;
-    }
-  }
+  // NOTE: This function also fills the instance info member of the acceleratorInfo. This function only fills the first partition, but I think that it is fine because that is the only one we use. We generate the same structs either way.
+  StructInfo* structInfo = GenerateConfigStruct(iter,temp);
 
   Array<TypeStructInfo> structs = {};
   Array<StructInfo*> allStructs = {};
