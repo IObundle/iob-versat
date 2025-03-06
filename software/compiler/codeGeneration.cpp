@@ -534,7 +534,7 @@ StructInfo* GenerateStateStruct(AccelInfoIterator iter,Arena* out){
   return res;
 }
 
-StructInfo* GenerateConfigStruct(AccelInfoIterator iter,Arena* out){
+StructInfo* GenerateConfigStructRecurse(AccelInfoIterator iter,TrieMap<StructInfo,StructInfo*>* generatedStructs,Arena* out){
   TEMP_REGION(temp,out);
   
   StructInfo* res = PushStruct<StructInfo>(out);
@@ -568,7 +568,7 @@ StructInfo* GenerateConfigStruct(AccelInfoIterator iter,Arena* out){
 
     if(unit->isMerge){
       // Merge struct is different, we do not iterate members but instead iterate the base types.
-      auto GenerateMergeStruct =[](InstanceInfo* topUnit,AccelInfoIterator iter,Arena* out)->StructInfo*{
+      auto GenerateMergeStruct =[](InstanceInfo* topUnit,AccelInfoIterator iter,TrieMap<StructInfo,StructInfo*>* generatedStructs,Arena* out)->StructInfo*{
         auto list = PushArenaDoubleList<StructElement>(out);
         StructInfo* res = PushStruct<StructInfo>(out);
         
@@ -576,7 +576,7 @@ StructInfo* GenerateConfigStruct(AccelInfoIterator iter,Arena* out){
         for(int i = 0; i < iter.MergeSize(); i++){
           iter.mergeIndex = i;
         
-          StructInfo* subInfo = GenerateConfigStruct(iter,out);
+          StructInfo* subInfo = GenerateConfigStructRecurse(iter,generatedStructs,out);
 
           elem.name = iter.GetMergeName();
           elem.childStruct = subInfo;
@@ -595,12 +595,12 @@ StructInfo* GenerateConfigStruct(AccelInfoIterator iter,Arena* out){
 
       AccelInfoIterator inside = it.StepInsideOnly();
 
-      StructInfo* subInfo = GenerateMergeStruct(unit,inside,out);
+      StructInfo* subInfo = GenerateMergeStruct(unit,inside,generatedStructs,out);
       subInfo->infoThatGeneratedThis = unit;
       elem.childStruct = subInfo;
     } else if(unit->isComposite){
       AccelInfoIterator inside = it.StepInsideOnly();
-      StructInfo* subInfo = GenerateConfigStruct(inside,out);
+      StructInfo* subInfo = GenerateConfigStructRecurse(inside,generatedStructs,out);
       subInfo->infoThatGeneratedThis = unit;
       elem.childStruct = subInfo;
     } else {
@@ -608,8 +608,9 @@ StructInfo* GenerateConfigStruct(AccelInfoIterator iter,Arena* out){
       Array<int> localPos = unit->individualWiresLocalConfigPos;
       
       if(ContainsPartialShare(unit)){
-        StructInfo* simpleSubInfo = PushStruct<StructInfo>(out);
-        simpleSubInfo->infoThatGeneratedThis = unit;
+        StructInfo simpleSubInfo = {};
+
+        simpleSubInfo.infoThatGeneratedThis = unit;
         
         Array<Wire> configs = unit->decl->configs;
         
@@ -629,15 +630,26 @@ StructInfo* GenerateConfigStruct(AccelInfoIterator iter,Arena* out){
           elem->childStruct = &integer;
         }
         
-        simpleSubInfo->name = unit->decl->name;
-        simpleSubInfo->memberList = elements;
-        elem.childStruct = simpleSubInfo;
+        simpleSubInfo.name = unit->decl->name;
+        simpleSubInfo.memberList = elements;
+
+        auto res = generatedStructs->GetOrAllocate(simpleSubInfo);
+        if(!res.alreadyExisted){
+          StructInfo* allocated = PushStruct<StructInfo>(out);
+          *allocated = simpleSubInfo;
+          
+          *res.data = allocated;
+        }
+
+        elem.childStruct = *res.data;
       } else {
         // NOTE: This structure should be the same accross all the invocations of this function, since we are just generating the struct of a simple type without any struct wide modifications (like partial share or merge).
 
         // NOTE: As such, we can detect in here wether we are generating something that already exists or not. Instead of using the TrieMap approach later in the ExtractStructs.
-        StructInfo* simpleSubInfo = PushStruct<StructInfo>(out);
-        simpleSubInfo->infoThatGeneratedThis = unit;
+        StructInfo simpleSubInfo = {};
+        //StructInfo* simpleSubInfo = &simpleSubInfoInst;
+
+        simpleSubInfo.infoThatGeneratedThis = unit;
         
         Array<Wire> configs = unit->decl->configs;
         
@@ -655,9 +667,18 @@ StructInfo* GenerateConfigStruct(AccelInfoIterator iter,Arena* out){
           elem->childStruct = &integer;
         }
         
-        simpleSubInfo->name = unit->decl->name;
-        simpleSubInfo->memberList = elements;
-        elem.childStruct = simpleSubInfo;
+        simpleSubInfo.name = unit->decl->name;
+        simpleSubInfo.memberList = elements;
+
+        auto res = generatedStructs->GetOrAllocate(simpleSubInfo);
+        if(!res.alreadyExisted){
+          StructInfo* allocated = PushStruct<StructInfo>(out);
+          *allocated = simpleSubInfo;
+          
+          *res.data = allocated;
+        }
+
+        elem.childStruct = *res.data;
       }
     }
 
@@ -682,6 +703,15 @@ StructInfo* GenerateConfigStruct(AccelInfoIterator iter,Arena* out){
   return res;
 }
 
+StructInfo* GenerateConfigStruct(AccelInfoIterator iter,Arena* out){
+  TEMP_REGION(temp,out);
+
+  // NOTE: It is important that same structs are "shared" because later we might change the name of the struct in order to avoid naming conflicts and by sharing the same struct every "user" of that struct gets updated at the same time.
+  TrieMap<StructInfo,StructInfo*>* generatedStructs = PushTrieMap<StructInfo,StructInfo*>(temp);
+  
+  return GenerateConfigStructRecurse(iter,generatedStructs,out);
+}
+  
 size_t HashStructInfo(StructInfo* info){
   if(!info) { return 0;};
   return std::hash<StructInfo>()(*info);
@@ -690,6 +720,7 @@ size_t HashStructInfo(StructInfo* info){
 Array<StructInfo*> ExtractStructs(StructInfo* structInfo,Arena* out){
   TEMP_REGION(temp,out);
 
+  // NOTE: Because we share the structs that are equal, we could technically implement this as just a pointer triemap, insteado of hashing the entire struct. That is because we are sure that the same pointer is equivalent to same struct, but for now leave this as it is.
   TrieMap<StructInfo,StructInfo*>* info = PushTrieMap<StructInfo,StructInfo*>(temp);
 
   auto Recurse = [](auto Recurse,StructInfo* top,TrieMap<StructInfo,StructInfo*>* map) -> void {
@@ -704,6 +735,7 @@ Array<StructInfo*> ExtractStructs(StructInfo* structInfo,Arena* out){
     if(top->name == STRING("iptr")){
       return;
     }
+    
     map->InsertIfNotExist(*top,top);
   };
 
