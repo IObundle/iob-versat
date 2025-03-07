@@ -18,8 +18,11 @@
 //           The name of the variable is the same except the first letter is downcase. 
 //           (Basically "table Test(...)" produces the code "Array<Test> test = ...")
 
-// Note: The code should be agnostic to the actual containers. I do not want to see an "Array<String>" even though it is 
-//       basically what we produce. Part of this approach is to abstract the actual containers used. String is fine, but Array,Hashmap and so on is not.
+// Note: The data encoded here should be agnostic to the actual containers. I do not want to see an "Array<String>" even though it is basically what we produce in the final code
+//       Part of this approach is to abstract the actual containers used. String is fine, but Array,Hashmap and so on is not.
+//       At the same time, stuff like Set is also fine since we are not actually describing the container used but the fact that we are dealing with a list of unique values. (Where order does not matter for the matter of equality, for example)
+
+// TODO: Map should be able to map multiple data into multiple data. Something like map M(A a,B b : C c,D d,E e) to describe a 2 to 3 map.
 
 enum AddressGenType{
    AddressGenType_MEM          = 0x01,
@@ -29,16 +32,25 @@ enum AddressGenType{
    AddressGenType_VWRITE_STORE = 0x10,
 };
 
-// Maybe change to map
+// Maybe change to map, although not sure how to do the reverse map from String[] to enum.
 table AddressGenWireNames(AddressGenType type,String[] names){
    AddressGenType_MEM          : {iterA,perA,dutyA,startA,shiftA,incrA,reverseA,extA,in0_wr,iter2A,per2A,shift2A,incr2A,
                                   iterB,perB,dutyB,startB,shiftB,incrB,reverseB,extB,in1_wr,iter2B,per2B,shift2B,incr2B},
 
-   AddressGenType_VREAD_LOAD   : {ext_addr,pingPong,read_start,read_per,read_incr,read_duty,read_iter,read_shift,read_amount_minus_one,read_length,read_addr_shift,read_enabled},
-   AddressGenType_VREAD_OUTPUT : {output_iter,output_per,output_duty,output_start,output_shift,output_incr,output_iter2,output_per2,output_shift2,output_incr2,output_iter3,output_per3,output_shift3,output_incr3,output_extra_delay,output_ignore_first},
+   AddressGenType_VREAD_LOAD   : {ext_addr,pingPong,read_start,read_per,read_incr,read_duty,read_iter,read_shift,
+                                  read_amount_minus_one,read_length,read_addr_shift,read_enabled},
 
-   AddressGenType_VWRITE_INPUT : {ext_addr,pingPong,write_start,write_per,write_incr,write_duty,write_iter,write_shift,write_amount_minus_one,write_length,write_addr_shift,write_enabled},
-   AddressGenType_VWRITE_STORE : {input_iter,input_per,input_duty,input_start,input_shift,input_incr,input_iter2,input_per2,input_shift2,input_incr2,input_extra_delay,input_ignore_first},
+   AddressGenType_VREAD_OUTPUT : {output_duty,output_start,output_extra_delay,output_ignore_first
+                                  output_iter, output_per, output_shift, output_incr,
+                                  output_iter2,output_per2,output_shift2,output_incr2,
+                                  output_iter3,output_per3,output_shift3,output_incr3},
+
+   AddressGenType_VWRITE_INPUT : {ext_addr,pingPong,write_start,write_per,write_incr,write_duty,write_iter,write_shift,
+                                  write_amount_minus_one,write_length,write_addr_shift,write_enabled},
+
+   AddressGenType_VWRITE_STORE : {input_duty,input_start,input_extra_delay,input_ignore_first,
+                                  input_iter, input_per, input_shift, input_incr,
+                                  input_iter2,input_per2,input_shift2,input_incr2},
 };
 
 enum MergeModifier{
