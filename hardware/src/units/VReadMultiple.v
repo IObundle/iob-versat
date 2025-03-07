@@ -3,8 +3,8 @@
 module VReadMultiple #(
    parameter SIZE_W     = 32,
    parameter DATA_W     = 32,
-   parameter ADDR_W     = 20,
-   parameter PERIOD_W   = 18, // Must be 2 less than ADDR_W (boundary of 4) (for 32 bit DATA_W)
+   parameter ADDR_W     = 17,
+   parameter PERIOD_W   = 15, // Must be 2 less than ADDR_W (boundary of 4) (for 32 bit DATA_W)
    parameter AXI_ADDR_W = 32,
    parameter AXI_DATA_W = 32,
    parameter DELAY_W    = 7,
@@ -151,14 +151,14 @@ module VReadMultiple #(
       .shift_i     (read_shift),
 
       .period2_i({PERIOD_W{1'b0}}),
-      .incr2_i({20{1'b0}}),
-      .iterations2_i({20{1'b0}}),
-      .shift2_i({20{1'b0}}),
+      .incr2_i({ADDR_W{1'b0}}),
+      .iterations2_i({ADDR_W{1'b0}}),
+      .shift2_i({ADDR_W{1'b0}}),
 
       .period3_i({PERIOD_W{1'b0}}),
-      .incr3_i({20{1'b0}}),
-      .iterations3_i({20{1'b0}}),
-      .shift3_i({20{1'b0}}),
+      .incr3_i({ADDR_W{1'b0}}),
+      .iterations3_i({ADDR_W{1'b0}}),
+      .shift3_i({ADDR_W{1'b0}}),
 
       .doneDatabus(),
       .doneAddress(),
@@ -340,17 +340,37 @@ assign data_data = databus_rdata_0;
    assign ext_2p_read_0     = output_enabled;
    assign ext_2p_addr_in_0  = addr_out;
 
+   reg reportedA;
+   reg reportedB;
+   reg reportedC;
+
    // Reports most common errors
-   always @* begin
-      if(pingPong && gen_addr_temp[ADDR_W-1]) begin
+   always @(posedge clk) begin
+      if(run) begin
+         reportedA <= 1'b0;
+      end else if(pingPong && gen_addr_temp[ADDR_W-1] && reportedA == 1'b0) begin
          $display("%m: Overflow of memory when using PingPong for reading");
-      end
-      if(pingPong && true_output_addr[ADDR_W-1]) begin
-         $display("%m: Overflow of write memory when using PingPong for outputting");
-      end
-      if(pingPong && output_start[ADDR_W-1]) begin
-         $display("%m: Last bit of output start ignored when using PingPong");
+         reportedA <= 1'b1;
       end
    end
+
+   always @(posedge clk) begin
+      if(run) begin
+         reportedB <= 1'b0;
+      end else if(pingPong && true_output_addr[ADDR_W-1] && reportedB == 1'b0) begin
+         $display("%m: Overflow of write memory when using PingPong for outputting");
+         reportedB <= 1'b1;
+      end
+   end
+
+   always @(posedge clk) begin
+      if(run) begin
+         reportedC <= 1'b0;
+      end else if(pingPong && output_start[ADDR_W-1] && reportedC == 1'b0) begin
+         $display("%m: Last bit of output start ignored when using PingPong");
+         reportedC <= 1'b1;
+      end
+   end
+
 
 endmodule

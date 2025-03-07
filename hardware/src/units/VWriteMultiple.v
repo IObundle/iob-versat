@@ -3,8 +3,8 @@
 module VWriteMultiple #(
    parameter SIZE_W     = 32,
    parameter DATA_W     = 32,
-   parameter ADDR_W     = 20,
-   parameter PERIOD_W   = 18, // Must be 2 less than ADDR_W (boundary of 4) (for 32 bit DATA_W)
+   parameter ADDR_W     = 6,
+   parameter PERIOD_W   = 4, // Must be 2 less than ADDR_W (boundary of 4) (for 32 bit DATA_W)
    parameter AXI_ADDR_W = 32,
    parameter AXI_DATA_W = 32,
    parameter DELAY_W    = 7,
@@ -118,6 +118,8 @@ module VWriteMultiple #(
    wire gen_valid, gen_ready;
    wire [ADDR_W-1:0] gen_addr_temp;
 
+   wire [ADDR_W-1:0] constant1 = 1;
+
    SuperAddress #(
       .AXI_ADDR_W(AXI_ADDR_W),
       .AXI_DATA_W(AXI_DATA_W),
@@ -146,14 +148,14 @@ module VWriteMultiple #(
       .shift_i     (write_shift),
 
       .period2_i({PERIOD_W{1'b0}}),
-      .incr2_i({20{1'b0}}),
-      .iterations2_i({20{1'b0}}),
-      .shift2_i({20{1'b0}}),
+      .incr2_i({ADDR_W{1'b0}}),
+      .iterations2_i({ADDR_W{1'b0}}),
+      .shift2_i({ADDR_W{1'b0}}),
 
       .period3_i({PERIOD_W{1'b0}}),
-      .incr3_i({20{1'b0}}),
-      .iterations3_i({20{1'b0}}),
-      .shift3_i({20{1'b0}}),
+      .incr3_i({ADDR_W{1'b0}}),
+      .iterations3_i({ADDR_W{1'b0}}),
+      .shift3_i({ADDR_W{1'b0}}),
 
       .doneDatabus(),
       .doneAddress(),
@@ -176,7 +178,7 @@ module VWriteMultiple #(
       .reading(1'b0),
       .data_last_o(data_last),
 
-      .count_i(write_amount_minus_one + 19'b1),
+      .count_i(write_amount_minus_one + constant1),
       .start_address_i(ext_addr),
       .address_shift_i(write_addr_shift),
       .databus_length(write_length)
@@ -217,9 +219,9 @@ module VWriteMultiple #(
       .shift2_i(input_shift2),
 
       .period3_i({PERIOD_W{1'b0}}),
-      .incr3_i({20{1'b0}}),
-      .iterations3_i({20{1'b0}}),
-      .shift3_i({20{1'b0}}),
+      .incr3_i({ADDR_W{1'b0}}),
+      .iterations3_i({ADDR_W{1'b0}}),
+      .shift3_i({ADDR_W{1'b0}}),
 
       //outputs 
       .valid_o(store_en),
@@ -270,16 +272,35 @@ module VWriteMultiple #(
    assign ext_2p_addr_in_0  = read_addr;
    assign read_data         = ext_2p_data_in_0;
 
+   reg reportedA;
+   reg reportedB;
+   reg reportedC;
+
    // Reports most common errors
-   always @* begin
-      if(pingPong && gen_addr_temp[ADDR_W-1]) begin
+   always @(posedge clk) begin
+      if(run) begin
+         reportedA <= 1'b0;
+      end else if(pingPong && gen_addr_temp[ADDR_W-1] && reportedA == 1'b0) begin
          $display("%m: Overflow of memory when using PingPong for reading");
+         reportedA <= 1'b1;
       end
-      if(pingPong && store_addr_temp[ADDR_W-1]) begin
+   end
+
+   always @(posedge clk) begin
+      if(run) begin
+         reportedB <= 1'b0;
+      end else if(pingPong && store_addr_temp[ADDR_W-1] && reportedB == 1'b0) begin
          $display("%m: Overflow of write memory when using PingPong for outputting");
+         reportedB <= 1'b1;
       end
-      if(pingPong && input_start[ADDR_W-1]) begin
+   end
+
+   always @(posedge clk) begin
+      if(run) begin
+         reportedC <= 1'b0;
+      end else if(pingPong && input_start[ADDR_W-1] && reportedC == 1'b0) begin
          $display("%m: Last bit of output start ignored when using PingPong");
+         reportedC <= 1'b1;
       end
    end
 
