@@ -270,13 +270,15 @@ static inline void ChangeDelay(int oldDelay,int newDelay){
 #{end}
 
 static inline void ActivateMergedAccelerator(MergeType type){
-   static int lastLoaded = -1;
+   // TODO: Cannot use static here otherwise multiple includes do not see any change and do not change the accelerator.
+   // NOTE: Need to decide if we want to do this or if it's the programmer on top that needs to do this.
+   //static int lastLoaded = -1;
    int asInt = (int) type;
    
-   if(lastLoaded == asInt){
-     return;
-   }
-   lastLoaded = asInt;
+   //if(lastLoaded == asInt){
+   //  return;
+   //}
+   //lastLoaded = asInt;
 
    switch(type){
 #{for i mergeNames.size}
