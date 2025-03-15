@@ -1,0 +1,720 @@
+TLDR:
+
+   When given a complex address gen, containing multiple loops, we need to be able to simplify it into a single or double loop because that is the amount of loops that are good for memory transfers.
+
+   Unless very specific conditions occur, it is almost impossible to perform this reduction without reading more values than its needed. Basically, in order to fit the data read into a maximum of two loops, we need to calculate the smallest cover function, that reads all the values of the original loop (and some extra values that are basically waste).
+
+   This can always be made. For starters, any combination of M loops can be converted into a single loop by calculating the maximum value possible and then creating a loop that iterates that max amount of times.
+
+   However, the more important ability is to start with a complex set of M loops and from them reduce them into a set of N loops (N < M) and with either 1 or 2 loops that read data (the N loops are internal, they read from the internal memory).
+
+   This can be performed in the following way:
+
+   Consider the loops that access the external memory as the external access and the internal loop as the internal access.
+   If the external access is given directly (as if the memory could be accessed one value at a time, without burst), then the external access is gonna be composed of multiple loops (M) and a complex expression of M variables and some compile-time/runtime variables. The internal access loop also exists but it is basically a simple sequence starting at zero with an increment of one.
+
+   From this starting point, we can remove one loop from the external access and add one loop to the internal access so that everything still lines up and the address gen unit still gives the correct values.
+
+   For starters, if the innermost variable of the external access expression is multipled by a constant, then we most start by removing that constant. It is as if the external access contained one extra loop.
+
+   Ex: external: for x 0..2 : addr = 10 * x. internal: for x 0..2 : addr = x;
+
+   This can be converted into:
+
+       external: for x 0..11 : addr = x. internal: for x 0..2 : addr = 10 * x;
+
+   Note that, in this example, we decided to lower the loop instead of implementing the transfer as multiple transfers.
+      In this case, we could just do multiple transfers and nothing would need to change. Both the original external and internal accesses are fine as they are.
+
+      The actual problem with multiple transfers is that for more complex cases this cannot be done. We must start by removing the constant of the innermost loop and then we must remove loops until we end up with two of them, and only then can we do the loops using two transfers.
+
+
+
+/*
+
+// Now what do I need? I need a really hard example that abuses the loops.
+
+// VRead that generates  0, 1, 2,
+                        10,11,12,
+                        20,21,22,
+                         1, 2, 3,
+                        11,12,13,
+                        21,22,23,
+                         2, 3, 4,
+                        12,13,14,
+                        22,23,24,
+                        10,11,12,
+                        20,21,22,
+                        30,31,32,
+                        11,12,13,
+                        21,22,23,
+                        31,32,33,
+                        12,13,14,
+                        22,23,24,
+                        32,33,34
+
+
+// The best vread data loading config would load 0,1,2,3,4,10,11,12,13,14,20,21,22,23,24,30,31,32,33,34.
+// This means that we need to generate a 4 loads starting at 0,10,20,30 and with a size of 5.
+
+// Inside the memory, the mapping is then:
+
+0 <-> 0
+1 <-> 1
+2 <-> 2
+3 <-> 3
+4 <-> 4
+5 <-> 10
+6 <-> 11
+7 <-> 12
+8 <-> 13
+9 <-> 14
+10 <-> 20
+11 <-> 21
+12 <-> 22
+13 <-> 23
+14 <-> 24
+15 <-> 30
+16 <-> 31
+17 <-> 32
+18 <-> 33
+19 <-> 34
+
+// And the actual values that we need to generate is:
+
+ 0, 1, 2,
+ 5, 6, 7,
+10,11,12,
+ 1, 2, 3,
+ 6, 7, 8,
+11,12,13,
+ 2, 3, 4,
+ 7, 8, 9,
+12,13,14,
+ 5, 6 ,7,
+10,11,12,
+15,16,17,
+ 6, 7, 8,
+11,12,13,
+16,17,18,
+ 7, 8, 9,
+12,13,14,
+17,18,19
+
+// D and K control the first value 
+AddressGen ConvVRead(imageWidth = 5,kernelSize = 3,windowX = 3,windowY = 2)
+   for wY in 0..windowY
+   for wX in 0..windowX
+   for y in 0..kernelSize
+   for x in 0..kernelSize
+   // This is the address inside the internal memory of the VUnit.
+   // This address already been mapped to work in memory that is "linear"
+   addr = (imageWidth * wY) + wX + y * imageWidth + x 
+
+//// VRead that generates  0, 1, 2,
+                        10,11,12,
+                        20,21,22,
+                         1, 2, 3,
+                        11,12,13,
+                        21,22,23,
+                         2, 3, 4,
+                        12,13,14,
+                        22,23,24,
+                        10,11,12,
+                        20,21,22,
+                        30,31,32,
+                        11,12,13,
+                        21,22,23,
+                        31,32,33,
+                        12,13,14,
+                        22,23,24,
+                        32,33,34
+
+
+AddressGen ConvVReadMem(ext,imageWidth = 10,kernelSize = 3,windowX = 3,windowY = 2)
+   for wY in 0..windowY
+   for wX in 0..windowX
+   for y in 0..kernelSize
+   for x in 0..kernelSize
+   addr = ext[(imageWidth * wY) + wX + y * imageWidth + x]
+
+y  = 1, x = 0 -> 10
+y  = 2, x = 0 -> 20
+wX = 1        ->  1
+wX = 1, y = 1 -> 11
+wX = 1, y = 2 -> 21
+wX = 2        ->  2
+wX = 2, y = 1 -> 12
+wX = 2, y = 2 -> 22
+wY = 1,       -> 10
+
+// How do we extract the memory loading phase from this?
+
+   If I have equation in the form:
+
+      A * X + B, where X is a constant and B ranges from [0,X[, then I can simplify this equation into:
+         B where B ranges from [0,A * X[.
+
+   Obviously I can also do the inverse:
+
+      If I have the equation B where B ranges from [0,A * X[, then I can rewrite the equation into the form:
+
+         A * X + B where B ranges from [0,X[
+
+   Is it possible to perform more simplifications like these?
+
+for z 0..3
+for y 0..3
+for x 0..3
+addr = z * 9 + y * 3 + x
+
+can be converted into
+
+for z 0..3
+for xy 0..9
+addr = z * 9 + xy
+
+can be converted into
+
+for xyz 0..27
+addr = xyz.
+
+If we have 
+
+for y 0..3
+for z 0..3
+for x 0..3
+addr = x + y * 3 + z
+
+this gives:
+
+0,1,2,1,2,3,2,3,4,3,4,5,4,5,6,5,6,7,6,7,8,7,8,9,8,9,10
+
+Can we make any simplification here?
+
+Simplification can be made.
+
+for y 0..9
+for x 0..3
+addr = y + x
+
+So, basically, we can merge loops if the variable range is equal to a good value.
+
+
+// We need to generate a simple input loop and a simple output loop.
+
+Lets imagine that we have a linear function that can be decomposed into addition of linear functions.
+
+   a1 * c1 + a2 * c2 + a3 * c3 + ... + an * cn.
+
+We want to be able to transform a M loop count into a N loop count.
+
+for s in range(0,6)
+   for k in range(0,6)
+      for w in range(0,3):
+         for z in range(0,2):
+            for y in range(0,3):
+               for x in range(0,3):
+                  a = w * 16 + z * 100 + y * 10 + x
+
+N to 2
+N to 3
+N to M (M <= N).
+
+# Two loops cover the 3 loops 
+
+for y in range(0,2):
+   for x in range(0,23):
+      b = y * 100 + x
+
+0,1,2,3,4,5,6,7,8,9,10,11,12,13,..,22,100,101,102,103,104,...,122
+
+
+We can convert
+
+for y 0..3:
+for x 0..3:
+addr = y * 3 + x
+
+into 
+
+for xy 0..9
+addr = xy.
+
+because we know the values for the constant of y and the range of x.
+
+What can we do if we slightly change things?
+
+for y 0..3:
+for x 0..4:
+addr = y * 3 + x
+
+Gives us:
+
+   0,1,2,3,3,4,5,6,6,7,8,9
+
+This cannot be converted into a single loop. It must be two loops.
+
+for y 0..3:
+for x 0..2:
+addr = y * 3 + x
+
+Gives us:
+
+   0,1,3,4,6,7
+
+This cannot be converted into a single loop. It must be two loops.
+
+We need to generate functions that are larger, because the main problem is not fetching the data needed (small loops).
+Exact loops are not possible otherwise they would fit into two loops. If more than two then we are forced to fetch more data than needed to do everything in a single run.
+
+About cover.
+
+Cover is the problem of converting M loops into N loops where N < M.
+This is only possible because the cover is allowed to generate more values than required.
+
+for z 0..2:
+for y 0..3:
+for x 0..2:
+addr = z * 7 + y * 3 + x
+
+Gives us:
+   0,1,3,4,6,7,7,8,10,11,13,14.
+
+Best Cover.
+
+   0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15. - 16 values read in one transfer
+
+To get the best cover we need to transform all the loops into a single one:
+
+for z 0..2:
+for y 0..3:
+for x 0..2:
+addr = z * 7 + y * 3 + x
+
+This sequence in contained inside 
+
+for z 0..2:
+for y 0..3:
+for x 0..3:
+addr = z * 7 + y * 3 + x
+
+which is equal to
+
+for z 0..2:
+for xy 0..9:
+addr = z * 7 + yx
+
+which gives us:
+
+   0,1,2,3,4,5,6,7,8,9,7,8,9,10,11,12,13,14,15 - 2 transfers of 8 values.
+
+
+Basically, we can calculate the "cover" of a function by slowing figuring out covering functions and performing loop collapsing when possible.
+
+Hard example
+
+for z 0..2:
+for y 0..2:
+for x 0..2:
+addr = z * 101 + y * 57 + x * 13
+
+Gives us the sequence:
+
+   0,13,57,70,101,114,158,171
+
+The best multiloop sequence is to read 22 values in 4 iterations with a shift of 29 (22 * 4 is 88 values):
+   Is it possible to change the original until we reach something close to this?
+
+
+
+We could read 172 values. (Very bad).
+   
+   0,1,2,3,4,5,6,7,8,9,10,11,12,13,
+   57,58,59,...,70,
+
+We could read 70 values twice (total of 140, better)
+   
+We could read 34 values 4 times (total of 136)
+   Can we shift stuff around to improve this?
+
+   0-35
+   48-83
+   96-131
+   144-179
+
+22 4 29.
+   
+   0-22
+   51-73
+   95-
+
+for z 0..2:
+for y 0..2:
+for x 0..2:
+addr = z * 101 + y * 57 + x * 13
+
+We need to read values one by one, meaning that we need to remove the constant from X.
+
+for z 0..2:
+for y 0..2:
+for x 0..2:
+addr = z * 101 + y * 57 + x * 13
+
+becomes
+
+for z 0..2:
+for y 0..2:
+for x 0..14: // Only 14 because x goes 0 and 1, not 2. Still need to care about wether the values are contained or not.
+addr = z * 101 + y * 57 + x
+
+The easiest way of proceding from here is to remove the y loop by incorporating it into the X loop.
+
+for z 0..2:
+for y 0..2:
+for x 0..14:
+addr = z * 101 + y * 57 + x
+
+becomes:
+
+for z 0..2:
+for xy 0..71:
+addr = z * 101 + xy
+
+In this case, we read 70 values twice for a total of 140 values.
+This is the value that we reached in the beginning.
+
+The best value loop is 22 values in 4 iterations with a shift of 29 (22 * 4 is 88 values).
+
+4 iterations contain a bit more weight than 2 iterations, meaning that it might not be a complete blowout in terms of performance.
+However, the 4 iterations will, without a doubt, save more memory and reduces bandwith regardless, meaning that it is still perferred.
+
+Regardless, this feels like the approach to take.
+
+for z 0..2:
+for y 0..2:
+for x 0..2:
+addr = z * 101 + y * 57 + x * 13
+
+becomes 
+
+for z 0..2:
+for xy 0..71:
+addr = z * 101 + xy
+
+What about something like:
+
+for z 0..2:
+for y 0..2:
+for x 0..2:
+addr = z * 57 + y * 101 + x * 13
+
+Values are: 0,13,101,114,57,70,158,170.
+   
+While the address generated are different and go up and down, nothing stop us from reordering stuff and generating the same values than the previous example.
+The problem is that we then need to keep track of this fact when we generate the 
+
+
+
+
+for z 0..2:
+for y 0..2:
+for x 0..2:
+addr = z * 101 + y * 57 + x * 13
+
+Memory access if directly:
+
+   0,13,57,70,101,114,158,171
+
+And address generation is:
+
+   0,1,2,3,4,5,6,7
+
+After the first transformation, we end up with:
+
+for z 0..2:
+for y 0..2:
+for x 0..14:
+addr = z * 101 + y * 57 + x
+
+Memory access becomes:
+
+   0-13,57-70,101-114,158-171 (4 loops, burst is 13, inner loop has shift of 34 and outer loop as shift of 101.)
+
+   52 values are read.
+
+     0,  1,  2,  3,  4,  5,  6,  7,  8,  9, 10, 11, 12, 13,
+    57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70,
+   101,102,103,104,105,106,107,108,109,110,111,112,113,114,
+   158,159,160,161,162,163,164,165,166,167,168,169,170,171
+
+    0, 1, 2, 3, 4, 5, 6, 7, 8, 9,10,11,12,13,
+   14,15,16,17,18,19,20,21,22,23,24,25,26,27,
+   28,29,30,31,32,33,34,35,36,37,38,39,40,41,
+   42,43,44,45,46,47,48,49,50,51,52,53,54,55
+
+The address generation becomes:
+
+   0,13,14,27,28,41,42,55
+
+Address gen was:
+
+for x 0..8
+   addr = x
+
+and now becomes
+
+for y 0..4
+for x 0..2
+   addr = y + 13 * x
+
+Derive is:
+
+   13,1,13,1,13,1,13
+
+We need two loops to do address generation.
+Memory access is using three loops (two if we do not include the burst).
+
+If we apply the old transformation:
+
+for z 0..2:
+for xy 0..71:
+addr = z * 101 + xy
+
+Memory access becomes:
+   
+   // Two transfers of burst of 71.
+   0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,...,70,
+   101,102,103,104,105,106,107,108,109,110,111,112,113,114,115,...,171
+
+Address gen becomes:
+   
+   0,13,57,70, 71, 84,128,141
+
+Derive is:
+
+   13,44,13,1,13,44,13
+
+for z 0..2:
+for y 0..2:
+for x 0..2:
+   addr = z + y * 57 + x * 13
+
+Memory access is:
+
+for y 0..2
+for x 0..71
+   addr = y * 101 + x
+
+
+
+Original:
+
+External access (look at this like an array index access. This is the address used to access RAM)
+
+for z 0..2:
+for y 0..2:
+for x 0..2:
+addr = z * 101 + y * 57 + x * 13
+
+Internal access:
+
+for x 0..8:
+addr = x
+
+
+== First transformation ==
+
+Notes: Because memory access needs to use a burst approach, we basically have 4 loops of external access requirements.
+The first transformation removes the constant on the innermost loop so we can implement the innermost loop as a burst read.
+
+External access:
+
+for z 0..2:
+for y 0..2:
+for x 0..14:
+addr = z * 101 + y * 57 + x
+
+How does this affect internal access?
+The 13 is moved to the constant of the innermost loop and a new loop is added with an increment of 1 and a division of 4 (so that the innermost loops is only 2).
+
+Internal access:
+
+for y 0..4
+for x 0..2
+   addr = y + 13 * x
+
+== Second transformation ==
+
+There is no special way of removing any loop present. Especially because the remaining constants are prime numbers.
+The innermost is the burst so it's already good. The second loop is removed by just forcing the innermost loop to fetch all the values in the present range.
+
+External access:
+
+for y 0..2
+for x 0..71
+   addr = y * 101 + x
+
+How does this affect internal access?
+A new loop is addded with an increment of 1. This divides the outerloop again by 2. The outerloop gets the constant from the external access.
+
+Internal access:
+
+for z 0..2:
+for y 0..2:
+for x 0..2:
+   addr = z + y * 57 + x * 13
+
+== Potential third transformation.
+
+We could technically keep going and create a single loop external access.
+Just like before, since there is no special approach that we can take, we just have the loop take all the possible addresses.
+We know that this is 172 because y and x is bounded. Otherwise, if we know that the y constant is greater than the x bound then we could just do:
+
+External access:
+
+for x 0..172
+   addr = x
+
+How does this affect internal access?
+No new loop is added. We cannot divide the outerloop anymore as each loop must have a minimum of size 2 unless it's a single loop.
+The constant from the external access is still added to the outermost loop.
+
+Internal access:
+
+for z 0..2:
+for y 0..2:
+for x 0..2:
+   addr = z * 101 + y * 57 + x * 13
+
+Realistically, the code should be architectured so that we start with an external access and an internal access loop and then we have functions that allow us to remove loops from one and add them to the other.
+
+Also need more examples.
+
+Finally, how do I handle the fact that I potentially do not have access to direct values?
+   Even if I do not know the values, I should be able to do something if I know where they are bigger or smaller than certain other values.
+
+
+
+Simple example
+
+for y 0..3
+for x 0..3
+addr = y * 3 + x
+
+can be converted into 
+
+for x 0..9
+addr = x
+
+(address is simple linear)
+
+what about
+
+for y 0..A
+for x 0..3
+addr = y * 3 + x
+
+this gets converted into
+
+for x 0..(3 * A)
+addr = x
+
+(address is simple linear as well)
+
+what about 
+
+for y 0..3
+for x 0..A
+addr = y * 3 + x
+
+this gets converted into
+
+A == 3 then simple case already done previously.
+
+A  < 3 then do 
+
+(potential case A == 2)
+
+external :
+
+for x 0..(3 * A)
+addr = x
+
+0,1,3,4,6,7
+
+linear was 
+
+for x 0..(3*3) // One 3 is the loop the other 3 is the constant.
+addr = x
+
+but it most become
+for y 0..3
+for x 0..A
+addr = y * 3 + x
+
+or something like that.
+
+A  > 3 then do 
+
+(potential case A == 4)
+
+external: 
+
+for x 0..(3 * 3 + A)
+addr = x
+
+for y 0..3
+for x 0..A
+addr = y * 3 + x
+
+What about
+
+for y 0..3
+for x 0..3
+addr = y * A + x
+
+A < 3, A == 3 and A > 3 should also be possible.
+The most interesting is the A > 3 case. That case gives us the choice of using 2 external loops.
+
+For 2 loops, the change is simple.
+The external loop is gonna become a one transfer loop and the internal loop becomes the exact same 
+
+
+Now, how do I handle this in the code?
+
+If we are pushing this stuff into the runtime, then the runtime is just gonna be filled with a bunch of if elses and whatnot.
+   This is not a problem. We can compile all these expressions at runtime and save stuff into a struct that defines a invocation for a given set of parameters.
+   We can also add extra info inside the spec parsing stage to define the bounds and relations between variables, allowing versat the ability to make optimizations at compile time instead.
+
+if(A < 3){
+   if(B < 5){
+      ...
+   } ...
+} else if(A == 3) {
+   ...
+} else {
+   ...
+}
+
+
+
+
+Extra consideration
+
+For the example:
+
+for z 0..2:
+for y 0..2:
+for x 0..2:
+addr = z * 101 + y * 57 + x * 13
+
+The approach that we took lets us generate code that performs 2 transfers of 71 values (total 142 values).
+
+But by running a script, I found that the absolute best is reading 22 values 4 times with a shift of 29 (total of 88 values)
+
+Now, the problem is that, in this example, everything is given. Everything is a constant and in order to find this values we ended up searching the problem space until finding the best combination.
+
+The only way of implementing this approach is if we give Versat all the info that we need. We could generate these tight transfers as long as Versat was given all the info needed.
+
+Furthermore, I feel like somewhere there must be more "optimizations" that we can find that generate tight transfers even when using more abstract approaches. So far, the only "optimization" is being able to merge loops of the special type (y * A + x when x goes from 0 to A). There most be some more clever tricks that we can use to extract better performance.

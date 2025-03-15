@@ -1939,19 +1939,13 @@ Opt<AddressGenDef> ParseAddressGen(Tokenizer* tok,Arena* out){
 
   Token typeStr = tok->NextToken();
 
-  AddressGenType type;
-  if(CompareString(typeStr,"Mem")){
-    type = AddressGenType_MEM;
-  } else if(CompareString(typeStr,"VReadLoad")){
-    type = AddressGenType_VREAD_LOAD;
-  } else if(CompareString(typeStr,"VReadOutput")){
-    type = AddressGenType_VREAD_OUTPUT;
-  } else if(CompareString(typeStr,"VWriteInput")){
-    type = AddressGenType_VWRITE_INPUT;
-  } else if(CompareString(typeStr,"VWriteStore")){
-    type = AddressGenType_VWRITE_STORE;
+  Opt<AddressGenType> addressGenOpt = META_addressGenType_ReverseMap(typeStr);
+  if(!addressGenOpt.has_value()){
+    printf("Error, %.*s is not a valid Address gen configuration\n",UNPACK_SS(typeStr));
+    return {};
   }
-
+  AddressGenType type = addressGenOpt.value();
+  
   Token name = tok->NextToken();
   CHECK_IDENTIFIER(name);
 
@@ -2491,6 +2485,33 @@ String InstantiateAddressGen(AddressGen gen,String typeStructName,Arena* out){
     builder->PushString("   config->write_addr_shift = (%.*s) * sizeof(float);\n",UNPACK_SS(ext.shiftWithoutRemovingIncrement));
   } break;
 
+  case AddressGenType_READ:{
+    builder->PushString("static void ");
+    PushFunctionNameAndFirstArgument(builder,"Configure",name,typeStructName);
+
+    for(Token t : constants){
+      if(CompareString(t,"ext")){
+        builder->PushString(",iptr %.*s",UNPACK_SS(t));
+      } else {
+        builder->PushString(",int %.*s",UNPACK_SS(t));
+      }
+    }
+    builder->PushString("){\n");
+
+    AddressGenLoopSpecificatonSym in = internalSpecSym[0];
+    AddressGenLoopSpecificatonSym ext = externalSpecSym[0];
+
+    builder->PushString("   config->output_per = %.*s;\n",UNPACK_SS(in.periodExpression));
+    builder->PushString("   config->output_incr = %.*s;\n",UNPACK_SS(in.incrementExpression));
+    
+    builder->PushString("   config->read_per = %.*s;\n",UNPACK_SS(in.periodExpression));
+    builder->PushString("   config->read_incr = %.*s;\n",UNPACK_SS(in.incrementExpression));
+
+    builder->PushString("   config->read_length = (%.*s) * sizeof(int);\n",UNPACK_SS(ext.periodExpression));
+    builder->PushString("   config->read_amount_minus_one = 0;\n");
+    
+  } break;
+    
   }
   builder->PushString("}\n");
   

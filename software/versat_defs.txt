@@ -30,6 +30,16 @@ enum AddressGenType{
    AddressGenType_VREAD_OUTPUT = 0x04,
    AddressGenType_VWRITE_INPUT = 0x08,
    AddressGenType_VWRITE_STORE = 0x10,
+   AddressGenType_READ         = 0x20,
+};
+
+map addressGenType(AddressGenType t,String name){
+   AddressGenType_MEM : Mem,
+   AddressGenType_VREAD_LOAD   : VReadLoad,
+   AddressGenType_VREAD_OUTPUT : VReadOutput,
+   AddressGenType_VWRITE_INPUT : VWriteInput,
+   AddressGenType_VWRITE_STORE : VWriteStore,
+   AddressGenType_READ : Read
 };
 
 // Maybe change to map, although not sure how to do the reverse map from String[] to enum.
@@ -51,6 +61,8 @@ table AddressGenWireNames(AddressGenType type,String[] names){
    AddressGenType_VWRITE_STORE : {input_duty,input_start,input_extra_delay,input_ignore_first,
                                   input_iter, input_per, input_shift, input_incr,
                                   input_iter2,input_per2,input_shift2,input_incr2},
+
+   AddressGenType_READ         : {test}   
 };
 
 enum MergeModifier{

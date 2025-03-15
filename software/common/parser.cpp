@@ -1319,7 +1319,7 @@ String GetRichLocationError(String content,Token got,Arena* out){
   builder->PushString("      "); // 6 spaces to match the 6 digits above
   builder->PushString(" | ");
 
-  PushPointingString(out,columnIndex,got.size);
+  builder->PushString(PushPointingString(temp,columnIndex,got.size));
 
   return EndString(out,builder);
 }
