@@ -259,13 +259,19 @@ int main(int argc,char* argv[]){
   globalPermanent = &globalPermanentInst;
   Arena tempInst = InitArena(Megabyte(128));
   Arena temp2Inst = InitArena(Megabyte(128));
-  
+
   contextArenas[0] = &tempInst;
   contextArenas[1] = &temp2Inst;
 
   TEMP_REGION(temp,nullptr);
   TEMP_REGION(temp2,temp);
   Arena* perm = globalPermanent;
+
+#if 1
+  TestSymbolic();
+
+  //return 0;
+#endif
   
   argp argp = { options, parse_opt, "SpecFile", "Dataflow to accelerator compiler. Check tutorial in https://github.com/IObundle/iob-versat to learn how to write a specification file"};
 

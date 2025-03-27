@@ -176,6 +176,8 @@ struct AddressGenFor{
 
 struct SymbolicExpression;
 
+// TODO: if we are moving into a single representation for address gen, then must of this will be "removed"
+//       for now, keep things at it is.
 struct AddressGenDef{
   Array<Token> inputs;
   Array<AddressGenForDef> loops;

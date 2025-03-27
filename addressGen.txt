@@ -718,3 +718,45 @@ Now, the problem is that, in this example, everything is given. Everything is a 
 The only way of implementing this approach is if we give Versat all the info that we need. We could generate these tight transfers as long as Versat was given all the info needed.
 
 Furthermore, I feel like somewhere there must be more "optimizations" that we can find that generate tight transfers even when using more abstract approaches. So far, the only "optimization" is being able to merge loops of the special type (y * A + x when x goes from 0 to A). There most be some more clever tricks that we can use to extract better performance.
+
+
+
+
+
+
+
+
+
+
+
+Lets standardize everything.
+
+If I have an external loop of the form
+
+for ...
+for x 0..A:
+   addr = ... + B * X
+
+then I can convert it into an external loop of the form
+
+for ...
+for x 0..B*A:
+   addr = ... + X
+
+and an internal loop of the form:
+
+for x 0..A:
+   addr = B * X 
+
+Approach:
+
+Because all this stuff is kinda not defined and there is a lot of potential to try new things, I want an interface where I can just derive new address access expressions from old ones (kinda like the approach used inside the symbolic expressions, where the interface basically generates new symbolic expressions by executing rules that generate new symbolic expressions.)
+
+Remember, start simple and go from there.
+
+The flow now must be something like:
+
+From the address gen, we generate an internal expression and an external expression.
+From those expressions we then generate the C code that configures the units.
+
+If we are considering pushing complexity into the C code, then this might change eventually.

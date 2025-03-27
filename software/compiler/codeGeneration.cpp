@@ -14,6 +14,8 @@
 #include "textualRepresentation.hpp"
 #include "globals.hpp"
 #include "configurations.hpp"
+#include "addressGen.hpp"
+#include "symbolic.hpp"
 
 #include "versatSpecificationParser.hpp"
 
@@ -1516,10 +1518,53 @@ void OutputTopLevelFiles(Accelerator* accel,FUDeclaration* topLevelDecl,const ch
       String structName = p.first;
       AddressGenDef* def = p.second;
 
-      AddressGen gen = CompileAddressGenDef(*def,temp);
-      String res = InstantiateAddressGen(gen,structName,temp);
+      if(def->type == AddressGenType_READ){
+        // MARK
+        AddressAccess initial = {};
 
-      *builder.PushElem() = res;
+        initial.externalLoops = PushArray<LoopDefinition>(temp,def->loops.size);
+        for(int i = 0; i <  def->loops.size; i++){
+          AddressGenForDef loop  =  def->loops[i];
+          
+          initial.externalLoops[i].loopVariableName = PushString(temp,loop.loopVariable);
+          initial.externalLoops[i].start = ParseSymbolicExpression(loop.start,temp);
+          initial.externalLoops[i].end = ParseSymbolicExpression(loop.end,temp);
+        }
+        
+        // Builds expression for the internal address which is basically just a multiplication of all the loops sizes
+        SymbolicExpression* loopExpression = PushLiteral(temp,1);
+        for(AddressGenForDef loop : def->loops){
+          SymbolicExpression* start = ParseSymbolicExpression(loop.start,temp);
+          SymbolicExpression* end = ParseSymbolicExpression(loop.end,temp);
+          
+          SymbolicExpression* diff = SymbolicSub(end,start,temp);
+
+          loopExpression = SymbolicMult(loopExpression,diff,temp);
+        }
+        //SymbolicExpression* finalExpression = loopExpression;
+        SymbolicExpression* finalExpression = Normalize(loopExpression,temp);
+        
+        initial.internalLoops = PushArray<LoopDefinition>(temp,1);
+        initial.internalLoops[0].loopVariableName = STRING("x");
+        initial.internalLoops[0].start = PushLiteral(temp,0);
+        initial.internalLoops[0].end = finalExpression;
+
+        initial.externalAddress = Normalize(def->symbolic,temp);
+        initial.internalAddress = PushVariable(temp,STRING("x"));
+
+        AddressAccess* final = ShiftExternalToInternal(&initial,6,2,temp);
+        
+        //GenerateAddressGen(
+
+        //DEBUG_BREAK();
+        //LEFT HERE;
+      } else {
+        AddressGen gen = CompileAddressGenDef(*def,temp);
+
+        String res = InstantiateAddressGen(gen,structName,temp);
+
+        *builder.PushElem() = res;
+      }
     }
 
     Array<String> content = EndArray(builder);

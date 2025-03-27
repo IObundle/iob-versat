@@ -2484,33 +2484,6 @@ String InstantiateAddressGen(AddressGen gen,String typeStructName,Arena* out){
     builder->PushString("   config->write_amount_minus_one = (%.*s) - 1;\n",UNPACK_SS(ext.iterationExpression));
     builder->PushString("   config->write_addr_shift = (%.*s) * sizeof(float);\n",UNPACK_SS(ext.shiftWithoutRemovingIncrement));
   } break;
-
-  case AddressGenType_READ:{
-    builder->PushString("static void ");
-    PushFunctionNameAndFirstArgument(builder,"Configure",name,typeStructName);
-
-    for(Token t : constants){
-      if(CompareString(t,"ext")){
-        builder->PushString(",iptr %.*s",UNPACK_SS(t));
-      } else {
-        builder->PushString(",int %.*s",UNPACK_SS(t));
-      }
-    }
-    builder->PushString("){\n");
-
-    AddressGenLoopSpecificatonSym in = internalSpecSym[0];
-    AddressGenLoopSpecificatonSym ext = externalSpecSym[0];
-
-    builder->PushString("   config->output_per = %.*s;\n",UNPACK_SS(in.periodExpression));
-    builder->PushString("   config->output_incr = %.*s;\n",UNPACK_SS(in.incrementExpression));
-    
-    builder->PushString("   config->read_per = %.*s;\n",UNPACK_SS(in.periodExpression));
-    builder->PushString("   config->read_incr = %.*s;\n",UNPACK_SS(in.incrementExpression));
-
-    builder->PushString("   config->read_length = (%.*s) * sizeof(int);\n",UNPACK_SS(ext.periodExpression));
-    builder->PushString("   config->read_amount_minus_one = 0;\n");
-    
-  } break;
     
   }
   builder->PushString("}\n");
@@ -2590,7 +2563,7 @@ AddressGen CompileAddressGenDef(AddressGenDef def,Arena* out){
     // TODO: Need to normalize and push the entire expression into a division.
     //       So we can then always extract a duty
     SymbolicExpression* duty = nullptr;
-    if(expr->type == SymbolicExpressionType_OP){
+    if(expr->type == SymbolicExpressionType_DIV){
       duty = expr->right;
       expr = expr->left;
     }
@@ -2681,7 +2654,7 @@ AddressGen CompileAddressGenDef(AddressGenDef def,Arena* out){
   String constantExpr = {};
   if(def.symbolic){
     SymbolicExpression* current = def.symbolic;
-    if(current->type == SymbolicExpressionType_OP){
+    if(current->type == SymbolicExpressionType_DIV){
       current = current->left;
     }
     
