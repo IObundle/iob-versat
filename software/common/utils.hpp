@@ -552,6 +552,42 @@ Array<T> Unique(Array<T> arr,Arena* out){
   return PushArrayFromSet(out,set);
 }
 
+template<typename T>
+Array<T> RemoveElement(Array<T> in,int index,Arena* out){
+  if(in.size <= 1){
+    return {};
+  }
+  
+  Array<T> res = PushArray<T>(out,in.size - 1);
+
+  int inserted = 0;
+  for(int i = 0; i < in.size; i++){
+    if(i == index){
+      continue;
+    }
+
+    res[inserted++] = in[i];
+  }
+
+  return res;
+}
+
+template<typename T>
+Array<T> AddElement(Array<T> in,int indexNewElement,Arena* out){
+  Array<T> res = PushArray<T>(out,in.size + 1);
+
+  int inserted = 0;
+  for(int i = 0; i < in.size; i++){
+    if(i == indexNewElement){
+      res[inserted++] = {};
+    }
+
+    res[inserted++] = in[i];
+  }
+
+  return res;
+}
+
 // Given [A,B,C], returns [(A,[B,C]),(B,[A,C]),(C,[A,B])] and so on
 template<typename T>
 Array<Pair<T,Array<T>>> AssociateOneToOthers(Array<T> arr,Arena* out){

@@ -2044,6 +2044,9 @@ Opt<AddressGenDef> ParseAddressGen(Tokenizer* tok,Arena* out){
 String InstantiateGenericAddressGen(AddressGen gen,String typeStructName,Arena* out){
   TEMP_REGION(temp,out);
 
+  // TODO: HACK, REMOVE this when advanced address gen starts coming together
+  if(gen.type == AddressGenType_READ){ return {};};
+  
   Array<AddressGenLoopSpecificatonSym> loopSpecSymbolic = gen.loopSpecSymbolic;
   Array<AddressGenLoopSpecificatonSym> internalSpecSym = gen.internalSpecSym;
   Array<AddressGenLoopSpecificatonSym> externalSpecSym = gen.externalSpecSym;
@@ -2269,6 +2272,55 @@ String InstantiateGenericAddressGen(AddressGen gen,String typeStructName,Arena* 
   builder->PushString("#endif //__cplusplus\n");
   
   return EndString(out,builder);
+}
+
+String InstantiateAccess(ExternalMemoryAccess external,Array<AddressGenLoopSpecificatonSym> internal,Arena* out){
+  TEMP_REGION(temp,out);
+
+  auto builder = StartString(temp);
+
+  builder->PushString("static void Configure(volatile VReadMultipleConfig* config,iptr ext){\n");
+  builder->PushString("   \n");
+  builder->PushString("   config->ext_addr = ext;\n");
+
+  builder->PushString("   config->read_per = %.*s;\n",UNPACK_SS(external.totalTransferSize));
+  builder->PushString("   config->read_duty = %.*s;\n",UNPACK_SS(external.totalTransferSize));
+  builder->PushString("   config->read_incr = 1;\n");
+
+  builder->PushString("   config->read_iter = 0;\n");
+  builder->PushString("   config->read_shift = 0;\n");
+
+  builder->PushString("   config->read_length = (%.*s) * sizeof(float);\n",UNPACK_SS(external.length));
+  builder->PushString("   config->read_amount_minus_one = %.*s;\n",UNPACK_SS(external.amountMinusOne));
+  builder->PushString("   config->read_addr_shift = (%.*s) * sizeof(float);\n",UNPACK_SS(external.addrShift));
+  builder->PushString("   config->read_enabled = 1;\n");
+  builder->PushString("   config->pingPong = 1;\n");
+
+  builder->PushString("   \n\n");
+
+  builder->PushString("   config->output_start = 0;\n");
+
+  for(int i = 0; i < internal.size; i++){
+    AddressGenLoopSpecificatonSym l = internal[i]; 
+
+    char loopIndex = (i == 0) ? ' ' : '1' + i;
+      
+    builder->PushString("   config->output_per%c = %.*s;\n",loopIndex,UNPACK_SS(l.periodExpression));
+    builder->PushString("   config->output_incr%c = %.*s;\n",loopIndex,UNPACK_SS(l.incrementExpression));
+
+    if(!Empty(l.dutyExpression)){
+      builder->PushString("   config->output_duty = %.*s;\n",UNPACK_SS(l.dutyExpression));
+    }
+    builder->PushString("   config->output_iter%c = %.*s;\n",loopIndex,UNPACK_SS(l.iterationExpression));
+    builder->PushString("   config->output_shift%c = %.*s;\n",loopIndex,UNPACK_SS(l.shiftExpression));
+  }
+
+  builder->PushString("}\n");
+  
+  
+  String result = EndString(out,builder);
+
+  return result;
 }
 
 String InstantiateAddressGen(AddressGen gen,String typeStructName,Arena* out){
@@ -2529,6 +2581,9 @@ AddressGen CompileAddressGenDef(AddressGenDef def,Arena* out){
 
     loops[i] = result;
   }
+  
+  // Loops go from outermost to innermost and we want to work the other way.
+  Reverse(loops);
 
   auto GetRepr = [](IdOrNumber n,Arena* out){
     if(n.isId){
@@ -2551,10 +2606,8 @@ AddressGen CompileAddressGenDef(AddressGenDef def,Arena* out){
     return EndString(out,builder);
   };
 
-  Reverse(loops);
-
-  auto GenerateLoopExpressionPairSymbolic = [GetRepr,GetLoopSizeRepr]
-    (AddressGenDef def,Array<AddressGenFor> loops,SymbolicExpression* expr,bool ext,Arena* out) -> Array<AddressGenLoopSpecificatonSym>{
+  auto GenerateLoopExpressionPairSymbolic = [GetRepr,GetLoopSizeRepr](Array<AddressGenFor> loops,
+                                                                      SymbolicExpression* expr,bool ext,Arena* out) -> Array<AddressGenLoopSpecificatonSym>{
     TEMP_REGION(temp,out);
 
     int loopSize = (loops.size + 1) / 2;
@@ -2564,8 +2617,8 @@ AddressGen CompileAddressGenDef(AddressGenDef def,Arena* out){
     //       So we can then always extract a duty
     SymbolicExpression* duty = nullptr;
     if(expr->type == SymbolicExpressionType_DIV){
-      duty = expr->right;
-      expr = expr->left;
+      duty = expr->bottom;
+      expr = expr->top;
     }
     
     for(int i = 0; i < loopSize; i++){
@@ -2641,13 +2694,13 @@ AddressGen CompileAddressGenDef(AddressGenDef def,Arena* out){
   Array<AddressGenLoopSpecificatonSym> externalSpecSym;
 
   if(def.symbolic){
-    loopSpecSymbolic = GenerateLoopExpressionPairSymbolic(def,loops,def.symbolic,false,out);
+    loopSpecSymbolic = GenerateLoopExpressionPairSymbolic(loops,def.symbolic,false,out);
   }
   if(def.symbolicInternal){
-    internalSpecSym = GenerateLoopExpressionPairSymbolic(def,loops,def.symbolicInternal,true,out);
+    internalSpecSym = GenerateLoopExpressionPairSymbolic(loops,def.symbolicInternal,true,out);
   }
   if(def.symbolicExternal){
-    externalSpecSym = GenerateLoopExpressionPairSymbolic(def,loops,def.symbolicExternal,true,out);
+    externalSpecSym = GenerateLoopExpressionPairSymbolic(loops,def.symbolicExternal,true,out);
   }
 
   // Calculate start by replacing every loop variable with their initial value.
@@ -2655,7 +2708,7 @@ AddressGen CompileAddressGenDef(AddressGenDef def,Arena* out){
   if(def.symbolic){
     SymbolicExpression* current = def.symbolic;
     if(current->type == SymbolicExpressionType_DIV){
-      current = current->left;
+      current = current->top;
     }
     
     // TODO: Should be the start value, but since we only using zero, for now simplify.
@@ -2683,6 +2736,181 @@ AddressGen CompileAddressGenDef(AddressGenDef def,Arena* out){
   for(int i = 0; i < loops.size; i++){
     res.loopRepr[i] = GetLoopSizeRepr(loops[i],out);
   }
+  
+  return res;
+}
+
+ExternalMemoryAccess CompileExternalMemoryAccess(SingleAddressAccess* access,Arena* out){
+  TEMP_REGION(temp,out);
+
+  int size = access->loops.size;
+
+  Assert(size <= 2);
+  // Maybe add some assert to check if the innermost loop contains a constant of 1.
+  //Assert(Constant(access) == 1);
+
+  ExternalMemoryAccess result = {};
+
+  LoopDefinition inner = access->loops[access->loops.size - 1];
+  LoopDefinition outer = access->loops[0];
+
+  auto GetLoopSize = [](LoopDefinition def,Arena* out,bool removeOne = false) -> SymbolicExpression*{
+    TEMP_REGION(temp,out);
+
+    SymbolicExpression* diff = SymbolicSub(def.end,def.start,temp);
+    
+    if(removeOne){
+      diff = SymbolicSub(diff,PushLiteral(temp,1),temp);
+    }
+
+    SymbolicExpression* final = Normalize(diff,out);
+    return final;
+  };
+  
+  auto GetLoopSizeRepr = [GetLoopSize](LoopDefinition def,Arena* out,bool removeOne = false){
+    TEMP_REGION(temp,out);
+    return PushRepresentation(GetLoopSize(def,temp,removeOne),out);
+  };
+
+  if(size == 1){
+    result.length = GetLoopSizeRepr(inner,out);
+    result.totalTransferSize = result.length;
+    result.amountMinusOne = STRING("0");
+    result.addrShift = STRING("0");
+  } else {
+    // TODO: A bit repetitive, could use some cleanup
+    SymbolicExpression* outerLoopSize = GetLoopSize(outer,temp);
+    
+    result.length = GetLoopSizeRepr(inner,out);
+    result.amountMinusOne = GetLoopSizeRepr(outer,out,true);
+
+    SymbolicExpression* derived = Normalize(Derivate(access->address,outer.loopVariableName,temp),temp);
+
+    result.addrShift = PushRepresentation(derived,out);
+
+    SymbolicExpression* all = Normalize(SymbolicMult(GetLoopSize(inner,temp),outerLoopSize,temp),temp);
+
+    result.totalTransferSize = PushRepresentation(all,out);
+  }
+  
+  return result;
+}
+
+Array<AddressGenLoopSpecificatonSym> CompileAddressGenDef(SingleAddressAccess* access,Arena* out){
+  TEMP_REGION(temp,out);
+  
+  auto GetLoopSize = [](LoopDefinition def,Arena* out,bool removeOne = false) -> SymbolicExpression*{
+    TEMP_REGION(temp,out);
+
+    SymbolicExpression* diff = SymbolicSub(def.end,def.start,temp);
+    
+    if(removeOne){
+      diff = SymbolicSub(diff,PushLiteral(temp,1),temp);
+    }
+
+    SymbolicExpression* final = Normalize(diff,temp);
+    return final;
+  };
+  
+  auto GetLoopSizeRepr = [GetLoopSize](LoopDefinition def,Arena* out,bool removeOne = false){
+    TEMP_REGION(temp,out);
+    return PushRepresentation(GetLoopSize(def,temp,removeOne),out);
+  };
+  
+  auto GenerateLoopExpressionPairSymbolic = [GetLoopSizeRepr](Array<LoopDefinition> loops,
+                                                              SymbolicExpression* expr,bool ext,Arena* out) -> Array<AddressGenLoopSpecificatonSym>{
+    TEMP_REGION(temp,out);
+
+    int loopSize = (loops.size + 1) / 2;
+    Array<AddressGenLoopSpecificatonSym> result = PushArray<AddressGenLoopSpecificatonSym>(out,loopSize);
+
+    // TODO: Need to normalize and push the entire expression into a division.
+    //       So we can then always extract a duty
+    SymbolicExpression* duty = nullptr;
+    if(expr->type == SymbolicExpressionType_DIV){
+      duty = expr->bottom;
+      expr = expr->top;
+    }
+    
+    for(int i = 0; i < loopSize; i++){
+      LoopDefinition l0 = loops[i*2];
+
+      AddressGenLoopSpecificatonSym& res = result[i];
+      res = {};
+
+      String loopSizeRepr = GetLoopSizeRepr(l0,out);
+      
+      SymbolicExpression* derived = Derivate(expr,l0.loopVariableName,temp);
+      SymbolicExpression* firstDerived = Normalize(derived,temp);
+      SymbolicExpression* periodSym = ParseSymbolicExpression(loopSizeRepr,temp);
+        
+      res.periodExpression = loopSizeRepr;
+      res.incrementExpression = PushRepresentation(firstDerived,out);
+
+      if(i == 0){
+        if(duty){
+          // For an expression where increment is something like 1/4.
+          // That means that we want 4 * period with a duty of 1.
+          // Basically have to reorder the division.
+
+#if 0
+          SymbolicExpression* templateSym = ParseSymbolicExpression(STRING("period / duty"),temp);
+          SymbolicExpression* dutyExpression = SymbolicReplace(templateSym,STRING("period"),periodSym,temp);
+
+          dutyExpression = SymbolicReplace(dutyExpression,STRING("duty"),duty,temp);
+#endif
+          
+          SymbolicExpression* dutyExpression = SymbolicDiv(periodSym,duty,temp);
+
+          result[0].dutyExpression = PushRepresentation(dutyExpression,out);
+        } else {
+          result[0].dutyExpression = PushString(out,PushRepresentation(loops[0].end,temp)); // For now, do not care too much about duty. Use a full duty
+        }
+      }
+      
+      String firstEnd = PushRepresentation(l0.end,out);
+      SymbolicExpression* firstEndSym = ParseSymbolicExpression(firstEnd,temp);
+
+      res.shiftWithoutRemovingIncrement = STRING("0"); // By default
+      if(i * 2 + 1 < loops.size){
+        LoopDefinition l1 = loops[i*2 + 1];
+
+        res.iterationExpression = GetLoopSizeRepr(l1,out);
+        SymbolicExpression* derived = Normalize(Derivate(expr,l1.loopVariableName,temp),temp);
+
+        res.shiftWithoutRemovingIncrement = PushRepresentation(derived,out);
+        
+        // We handle shifts very easily. We just remove the effects of all the previous period increments and then apply the shift.
+        // That way we just have to calculate the derivative in relation to the shift, instead of calculating the change from a period term to a iteration term.
+        // We need to subtract 1 because the period increment is only applied (period - 1) times.
+        SymbolicExpression* templateSym = ParseSymbolicExpression(STRING("-(firstIncrement * (firstEnd - 1)) + term"),temp);
+        
+        SymbolicExpression* replaced = SymbolicReplace(templateSym,STRING("firstIncrement"),firstDerived,temp);
+        replaced = SymbolicReplace(replaced,STRING("firstEnd"),firstEndSym,temp);
+        replaced = SymbolicReplace(replaced,STRING("term"),derived,temp);
+        replaced = Normalize(replaced,temp);
+        
+        res.shiftExpression = PushRepresentation(replaced,out);
+      } else {
+        if(ext){
+          res.iterationExpression = STRING("1");
+        } else {
+          res.iterationExpression = STRING("0");
+        }
+        res.shiftExpression = STRING("0");
+      }
+    }
+
+    return result;
+  };
+  
+  auto copy = CopyArray(access->loops,temp);
+  
+  Reverse(copy);
+
+  Array<AddressGenLoopSpecificatonSym> res = GenerateLoopExpressionPairSymbolic(copy,access->address,true,out);
+
+  DEBUG_BREAK();
   
   return res;
 }

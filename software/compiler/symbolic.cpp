@@ -48,16 +48,16 @@ void BuildRepresentation(StringBuilder* builder,SymbolicExpression* expr,bool to
     builder->PushString("%d",expr->literal);
   } break;
   case SymbolicExpressionType_DIV: {
-    bool hasNonOpSon = (expr->left->type != SymbolicExpressionType_DIV && expr->right->type != SymbolicExpressionType_DIV);
+    bool hasNonOpSon = (expr->top->type != SymbolicExpressionType_DIV && expr->bottom->type != SymbolicExpressionType_DIV);
     if(hasNonOpSon && !top && bind){
       builder->PushString("(");
     }
 
-    BuildRepresentation(builder,expr->left,false,bindingStrength);
+    BuildRepresentation(builder,expr->top,false,bindingStrength);
 
     builder->PushString("/");
     
-    BuildRepresentation(builder,expr->right,false,bindingStrength);
+    BuildRepresentation(builder,expr->bottom,false,bindingStrength);
     if(hasNonOpSon && !top && bind){
       builder->PushString(")");
     }
@@ -140,8 +140,8 @@ static void PrintAST(SymbolicExpression* expr,int level = 0){
   case SymbolicExpressionType_DIV:{
     printf("OP: DIV\n");
 
-    PrintAST(expr->left,level + 1);
-    PrintAST(expr->right,level + 1);
+    PrintAST(expr->top,level + 1);
+    PrintAST(expr->bottom,level + 1);
   } break;
   }
 
@@ -159,8 +159,8 @@ int Evaluate(SymbolicExpression* expr,Hashmap<String,int>* values){
     return values->GetOrFail(expr->variable);
   } break;
   case SymbolicExpressionType_DIV:{
-    int left = Evaluate(expr->left,values);
-    int right = Evaluate(expr->right,values);
+    int left = Evaluate(expr->top,values);
+    int right = Evaluate(expr->bottom,values);
 
     if(right == 0){
       PRINTF_WITH_LOCATION("Division by zero");
@@ -296,6 +296,16 @@ SymbolicExpression* SymbolicMult(SymbolicExpression* left,SymbolicExpression* ri
   return res;
 }
 
+SymbolicExpression* SymbolicDiv(SymbolicExpression* top,SymbolicExpression* bottom,Arena* out){
+  SymbolicExpression* res = PushStruct<SymbolicExpression>(out);
+  res->type = SymbolicExpressionType_DIV;
+
+  res->top = top;
+  res->bottom = bottom;
+
+  return res;
+}
+  
 static SymbolicExpression* ParseTerm(Tokenizer* tok,Arena* out){
   Token token = tok->NextToken();
   
@@ -384,8 +394,8 @@ static SymbolicExpression* ParseDiv(Tokenizer* tok,Arena* out){
     SymbolicExpression* expr = PushStruct<SymbolicExpression>(out);
 
     expr->type = SymbolicExpressionType_DIV;
-    expr->left = current;
-    expr->right = ParseMul(tok,out);
+    expr->top = current;
+    expr->bottom = ParseMul(tok,out);
 
     current = expr;
   }
@@ -469,8 +479,8 @@ Array<SymbolicExpression*> GetAllExpressions(SymbolicExpression* top,Arena* out)
       }
     } break;
     case SymbolicExpressionType_DIV:{
-      recurse(recurse,expr->left,arr);
-      recurse(recurse,expr->right,arr);
+      recurse(recurse,expr->top,arr);
+      recurse(recurse,expr->bottom,arr);
     } break;
     case SymbolicExpressionType_LITERAL:;
     case SymbolicExpressionType_VARIABLE:;
@@ -526,8 +536,8 @@ SymbolicExpression* SymbolicDeepCopy(SymbolicExpression* expr,Arena* out){
   } break;
   case SymbolicExpressionType_DIV:{
     SymbolicExpression* res = CopyExpression(expr,out);
-    res->left = SymbolicDeepCopy(expr->left,out);
-    res->right = SymbolicDeepCopy(expr->right,out);
+    res->top = SymbolicDeepCopy(expr->top,out);
+    res->bottom = SymbolicDeepCopy(expr->bottom,out);
     
     return res;
   } break;
@@ -573,8 +583,8 @@ SymbolicExpression* ApplyNonRecursive(SymbolicExpression* expr,Arena* out,ApplyN
   } break;
   case SymbolicExpressionType_DIV:{
     SymbolicExpression* res = CopyExpression(expr,out);
-    res->left = ApplyNonRecursive(expr->left,out,Function);
-    res->right = ApplyNonRecursive(expr->right,out,Function); 
+    res->top = ApplyNonRecursive(expr->top,out,Function);
+    res->bottom = ApplyNonRecursive(expr->bottom,out,Function); 
 
     res = Function(res,out);
     
@@ -605,8 +615,8 @@ SymbolicExpression* ApplyGeneric(SymbolicExpression* expr,Arena* out,ApplyFuncti
   } break;
   case SymbolicExpressionType_DIV:{
     SymbolicExpression* res = CopyExpression(expr,out);
-    res->left = Function(expr->left,out);
-    res->right = Function(expr->right,out); 
+    res->top = Function(expr->top,out);
+    res->bottom = Function(expr->bottom,out); 
 
     return res;
   } break;
@@ -668,8 +678,8 @@ SymbolicExpression* RemoveParenthesis(SymbolicExpression* expr,Arena* out){
   } break;
   case SymbolicExpressionType_DIV:{
     SymbolicExpression* res = CopyExpression(expr,out);
-    res->left = RemoveParenthesis(expr->left,out);
-    res->right = RemoveParenthesis(expr->right,out);
+    res->top = RemoveParenthesis(expr->top,out);
+    res->bottom = RemoveParenthesis(expr->bottom,out);
     return res;
   } break;
   case SymbolicExpressionType_SUM: // fallthrough
@@ -851,9 +861,19 @@ SymbolicExpression* NormalizeLiterals(SymbolicExpression* expr,Arena* out){
     }
   } break;
   case SymbolicExpressionType_DIV:{
+
+    if(expr->top->type == SymbolicExpressionType_LITERAL
+       && expr->bottom->type == SymbolicExpressionType_LITERAL){
+
+      if(expr->top->literal % expr->bottom->literal == 0){
+        SymbolicExpression* res = PushLiteral(out,expr->top->literal / expr->bottom->literal);
+        return res;
+      }
+    }
+    
     SymbolicExpression* copy = CopyExpression(expr,out);
-    copy->left = NormalizeLiterals(expr->left,out);
-    copy->right = NormalizeLiterals(expr->right,out);
+    copy->top = NormalizeLiterals(expr->top,out);
+    copy->bottom = NormalizeLiterals(expr->bottom,out);
     return copy;
   } break;
   }
@@ -943,8 +963,8 @@ TermsWithLiteralMultiplier CollectTermsWithLiteralMultiplier(SymbolicExpression*
     mul->sum = PushArray<SymbolicExpression*>(out,1);
     mul->sum[0] = thisCopy;
     
-    if(expr->left->type == SymbolicExpressionType_LITERAL){
-      SymbolicExpression* cp = CopyExpression(expr->left,out);
+    if(expr->top->type == SymbolicExpressionType_LITERAL){
+      SymbolicExpression* cp = CopyExpression(expr->top,out);
       cp->negative = (cp->negative != expr->negative);
 
       result.literal = cp;
@@ -952,7 +972,7 @@ TermsWithLiteralMultiplier CollectTermsWithLiteralMultiplier(SymbolicExpression*
       
       return result;
     } else {
-      SymbolicExpression* cp = CopyExpression(expr->left,out);
+      SymbolicExpression* cp = CopyExpression(expr->top,out);
       cp->negative = (cp->negative != expr->negative);
 
       result.literal = PushLiteral(out,1,expr->negative);
@@ -986,7 +1006,7 @@ bool ExpressionEqual(SymbolicExpression* left,SymbolicExpression* right){
   case SymbolicExpressionType_LITERAL: return (GetLiteralValue(left) == GetLiteralValue(right));
   case SymbolicExpressionType_VARIABLE: return CompareString(left->variable,right->variable);
   case SymbolicExpressionType_DIV: {
-    return ExpressionEqual(left->left,right->left) && ExpressionEqual(left->right,right->right);
+    return ExpressionEqual(left->top,right->top) && ExpressionEqual(left->bottom,right->bottom);
   }
   case SymbolicExpressionType_SUM:
   case SymbolicExpressionType_MUL: {
@@ -1185,8 +1205,8 @@ SymbolicExpression* ApplyDistributivity(SymbolicExpression* expr,Arena* out){
     // TODO: Division can be distributed, right?  But still not sure if we need it, we do want to move division up but need to see more usecases before starting looking at this.
     
     SymbolicExpression* res = CopyExpression(expr,out);
-    res->left = ApplyDistributivity(expr->left,out);
-    res->right = ApplyDistributivity(expr->right,out);
+    res->top = ApplyDistributivity(expr->top,out);
+    res->bottom = ApplyDistributivity(expr->bottom,out);
     
     return res;
   } break;
@@ -1281,8 +1301,8 @@ SymbolicExpression* SymbolicReplace(SymbolicExpression* base,String varToReplace
   }
   case SymbolicExpressionType_DIV:{
     SymbolicExpression* res = CopyExpression(base,out);
-    res->left = SymbolicReplace(base->left,varToReplace,replacingExpr,out);
-    res->right = SymbolicReplace(base->right,varToReplace,replacingExpr,out); 
+    res->top = SymbolicReplace(base->top,varToReplace,replacingExpr,out);
+    res->bottom = SymbolicReplace(base->bottom,varToReplace,replacingExpr,out); 
 
     return res;
   } break;
@@ -1441,6 +1461,10 @@ Opt<SymbolicExpression*> GetMultExpressionAssociatedTo(SymbolicExpression* expr,
       }
     }
 
+    if(foundIndex == -1){
+      return {};
+    }
+    
     if(size == 1){
       return ApplyNegation(PushLiteral(out,1),expr->negative);
     }

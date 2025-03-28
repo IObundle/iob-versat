@@ -22,8 +22,13 @@ struct SymbolicExpression{
   // All these should be inside a union. Not handling this for now
   int literal;
   String variable;
-  SymbolicExpression* left;
-  SymbolicExpression* right;
+
+  // For div, imagine a fraction expression
+  struct {
+    SymbolicExpression* top;
+    SymbolicExpression* bottom;
+  };
+  
   Array<SymbolicExpression*> sum;
 };
 
@@ -49,6 +54,7 @@ SymbolicExpression* PushVariable(Arena* out,String name,bool negate = false);
 SymbolicExpression* SymbolicAdd(SymbolicExpression* left,SymbolicExpression* right,Arena* out);
 SymbolicExpression* SymbolicSub(SymbolicExpression* left,SymbolicExpression* right,Arena* out);
 SymbolicExpression* SymbolicMult(SymbolicExpression* left,SymbolicExpression* right,Arena* out);
+SymbolicExpression* SymbolicDiv(SymbolicExpression* top,SymbolicExpression* bottom,Arena* out);
 
 SymbolicExpression* ParseSymbolicExpression(Tokenizer* tok,Arena* out);
 SymbolicExpression* ParseSymbolicExpression(String content,Arena* out);

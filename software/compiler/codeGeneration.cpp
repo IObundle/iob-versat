@@ -1522,13 +1522,16 @@ void OutputTopLevelFiles(Accelerator* accel,FUDeclaration* topLevelDecl,const ch
         // MARK
         AddressAccess initial = {};
 
-        initial.externalLoops = PushArray<LoopDefinition>(temp,def->loops.size);
+        initial.external = PushStruct<SingleAddressAccess>(temp);
+        initial.internal = PushStruct<SingleAddressAccess>(temp);
+        
+        initial.external->loops = PushArray<LoopDefinition>(temp,def->loops.size);
         for(int i = 0; i <  def->loops.size; i++){
           AddressGenForDef loop  =  def->loops[i];
           
-          initial.externalLoops[i].loopVariableName = PushString(temp,loop.loopVariable);
-          initial.externalLoops[i].start = ParseSymbolicExpression(loop.start,temp);
-          initial.externalLoops[i].end = ParseSymbolicExpression(loop.end,temp);
+          initial.external->loops[i].loopVariableName = PushString(temp,loop.loopVariable);
+          initial.external->loops[i].start = ParseSymbolicExpression(loop.start,temp);
+          initial.external->loops[i].end = ParseSymbolicExpression(loop.end,temp);
         }
         
         // Builds expression for the internal address which is basically just a multiplication of all the loops sizes
@@ -1544,20 +1547,23 @@ void OutputTopLevelFiles(Accelerator* accel,FUDeclaration* topLevelDecl,const ch
         //SymbolicExpression* finalExpression = loopExpression;
         SymbolicExpression* finalExpression = Normalize(loopExpression,temp);
         
-        initial.internalLoops = PushArray<LoopDefinition>(temp,1);
-        initial.internalLoops[0].loopVariableName = STRING("x");
-        initial.internalLoops[0].start = PushLiteral(temp,0);
-        initial.internalLoops[0].end = finalExpression;
+        initial.internal->loops = PushArray<LoopDefinition>(temp,1);
+        initial.internal->loops[0].loopVariableName = STRING("x");
+        initial.internal->loops[0].start = PushLiteral(temp,0);
+        initial.internal->loops[0].end = finalExpression;
 
-        initial.externalAddress = Normalize(def->symbolic,temp);
-        initial.internalAddress = PushVariable(temp,STRING("x"));
+        initial.external->address = Normalize(def->symbolic,temp);
+        initial.internal->address = PushVariable(temp,STRING("x"));
 
         AddressAccess* final = ShiftExternalToInternal(&initial,6,2,temp);
-        
-        //GenerateAddressGen(
 
-        //DEBUG_BREAK();
-        //LEFT HERE;
+        ExternalMemoryAccess ext = CompileExternalMemoryAccess(final->external,temp);
+        
+        Array<AddressGenLoopSpecificatonSym> internal = CompileAddressGenDef(final->internal,temp);
+
+        String res = InstantiateAccess(ext,internal,temp);
+
+        *builder.PushElem() = res;
       } else {
         AddressGen gen = CompileAddressGenDef(*def,temp);
 

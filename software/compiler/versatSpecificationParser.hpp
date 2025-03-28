@@ -176,7 +176,7 @@ struct AddressGenFor{
 
 struct SymbolicExpression;
 
-// TODO: if we are moving into a single representation for address gen, then must of this will be "removed"
+// TODO: if we are moving into a single representation for address gen, then most of this will be "removed"
 //       for now, keep things at it is.
 struct AddressGenDef{
   Array<Token> inputs;
@@ -202,6 +202,13 @@ struct AddressGenLoopSpecificaton{
   String nonPeriodEnd;
   String nonPeriodVal;
   bool isPeriodType;
+};
+
+struct ExternalMemoryAccess{
+  String totalTransferSize;
+  String length;
+  String amountMinusOne;
+  String addrShift;
 };
 
 struct AddressGenLoopSpecificatonSym{
@@ -247,3 +254,9 @@ AddressGen CompileAddressGenDef(AddressGenDef def,Arena* out);
 String InstantiateGenericAddressGen(AddressGen gen,String typeStructName,Arena* out);
 
 String InstantiateAddressGen(AddressGen gen,String typeStructName,Arena* out);
+
+#include "addressGen.hpp"
+
+ExternalMemoryAccess CompileExternalMemoryAccess(SingleAddressAccess* access,Arena* out);
+Array<AddressGenLoopSpecificatonSym> CompileAddressGenDef(SingleAddressAccess* access,Arena* out);
+String InstantiateAccess(ExternalMemoryAccess ext,Array<AddressGenLoopSpecificatonSym> internal,Arena* out);
