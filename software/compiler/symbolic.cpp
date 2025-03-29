@@ -268,6 +268,14 @@ SymbolicExpression* SymbolicAdd(SymbolicExpression* left,SymbolicExpression* rig
   return res;
 }
 
+SymbolicExpression* SymbolicAdd(Array<SymbolicExpression*> terms,Arena* out){
+  SymbolicExpression* res = PushStruct<SymbolicExpression>(out);
+  res->type = SymbolicExpressionType_SUM;
+  res->sum = CopyArray(terms,out);
+  
+  return res;
+}
+  
 SymbolicExpression* SymbolicSub(SymbolicExpression* left,SymbolicExpression* right,Arena* out){
   // TODO: We are always creating a new node even when it might be possible not to.
   //       Assuming that the normalization function is capable of collapsing everything into one, this should not pose a problem, as long as we normalize the end result, but not sure and nevertheless this is a bit slower.
@@ -292,6 +300,33 @@ SymbolicExpression* SymbolicMult(SymbolicExpression* left,SymbolicExpression* ri
 
   res->sum[0] = left;
   res->sum[1] = right;
+
+  return res;
+}
+
+SymbolicExpression* SymbolicMult(Array<SymbolicExpression*> terms,Arena* out){
+  if(terms.size == 1){
+    return SymbolicDeepCopy(terms[0],out);
+  }
+
+  SymbolicExpression* res = PushStruct<SymbolicExpression>(out);
+  res->type = SymbolicExpressionType_MUL;
+  res->sum = CopyArray(terms,out);
+  
+  return res;
+}
+
+SymbolicExpression* SymbolicMult(Array<SymbolicExpression*> terms,SymbolicExpression* extra,Arena* out){
+  if(terms.size == 0){
+    return SymbolicDeepCopy(extra,out);
+  }
+
+  SymbolicExpression* res = PushStruct<SymbolicExpression>(out);
+  res->type = SymbolicExpressionType_MUL;
+  res->sum = PushArray<SymbolicExpression*>(out,terms.size + 1);
+
+  Memcpy(res->sum,terms);
+  res->sum[terms.size] = SymbolicDeepCopy(extra,out);
 
   return res;
 }
@@ -509,10 +544,16 @@ void CheckIfSymbolicExpressionsShareNodes(SymbolicExpression* left,SymbolicExpre
   }
 }
 
-// Children are not copied, since they must come from the recursive function logic
+// Children are not copied in this, check deep copy function
 static SymbolicExpression* CopyExpression(SymbolicExpression* in,Arena* out){
   SymbolicExpression* res = PushStruct<SymbolicExpression>(out);
   *res = *in;
+
+  // Need to copy the string, the string memory is our responsibility.
+  if(in->type == SymbolicExpressionType_VARIABLE){
+    res->variable = PushString(out,res->variable);
+  }
+  
   return res;
 }
 
@@ -861,20 +902,63 @@ SymbolicExpression* NormalizeLiterals(SymbolicExpression* expr,Arena* out){
     }
   } break;
   case SymbolicExpressionType_DIV:{
+    auto GetMultPartition = [](SymbolicExpression* expr,Arena* out) -> MultPartition{
+      MultPartition res = {};
 
-    if(expr->top->type == SymbolicExpressionType_LITERAL
-       && expr->bottom->type == SymbolicExpressionType_LITERAL){
-
-      if(expr->top->literal % expr->bottom->literal == 0){
-        SymbolicExpression* res = PushLiteral(out,expr->top->literal / expr->bottom->literal);
+      switch(expr->type){
+      case SymbolicExpressionType_LITERAL:{
+        res.base = expr;
         return res;
+      } break;
+      case SymbolicExpressionType_MUL:{
+        for(int i = 0; i <  expr->sum.size; i++){
+          SymbolicExpression* child  =  expr->sum[i];
+          if(child->type == SymbolicExpressionType_LITERAL){
+            res.base = child;
+            res.leftovers = RemoveElement(expr->sum,i,out);
+            
+            return res;
+          }
+        }
+      } break;
+      }
+
+      return res;
+    };
+    
+    SymbolicExpression* top = NormalizeLiterals(expr->top,out);
+    SymbolicExpression* bottom = NormalizeLiterals(expr->bottom,out);
+    
+    MultPartition topLiteral = GetMultPartition(top,out);
+    MultPartition bottomLiteral = GetMultPartition(bottom,out);
+
+    // NOTE: Not properly tested. Care when using divs.
+    if(topLiteral.base && bottomLiteral.base){
+      int top = topLiteral.base->literal;
+      int bottom = bottomLiteral.base->literal;
+
+      if(top % bottom == 0){
+        SymbolicExpression* literalResult = PushLiteral(out,top / bottom);
+
+        if(bottomLiteral.leftovers.size){
+          SymbolicExpression* newBottom = SymbolicMult(bottomLiteral.leftovers,out);
+          SymbolicExpression* newTop = SymbolicMult(topLiteral.leftovers,literalResult,out);
+
+          return SymbolicDiv(newTop,newBottom,out);
+        } else {
+          SymbolicExpression* newTop = SymbolicMult(topLiteral.leftovers,literalResult,out);
+          return newTop;
+        }
+      } else {
+        // Nothing we can do, we do not support decimal values.
       }
     }
-    
+
     SymbolicExpression* copy = CopyExpression(expr,out);
-    copy->top = NormalizeLiterals(expr->top,out);
-    copy->bottom = NormalizeLiterals(expr->bottom,out);
+    copy->top = top;
+    copy->bottom = bottom;
     return copy;
+
   } break;
   }
   NOT_POSSIBLE();

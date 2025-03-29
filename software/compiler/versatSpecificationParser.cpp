@@ -1951,22 +1951,26 @@ Opt<AddressGenDef> ParseAddressGen(Tokenizer* tok,Arena* out){
 
   Array<Token> inputsArr = {};
   if(tok->IfNextToken("(")){
-    ArenaList<Token>* inputs = PushArenaList<Token>(temp);
+    if(tok->IfNextToken(")")){
+      // Nothing
+    } else {
+      ArenaList<Token>* inputs = PushArenaList<Token>(temp);
 
-    while(!tok->Done()){
-      Token name = tok->NextToken();
-      CHECK_IDENTIFIER(name);
-      *inputs->PushElem() = name;
+      while(!tok->Done()){
+        Token name = tok->NextToken();
+        CHECK_IDENTIFIER(name);
+        *inputs->PushElem() = name;
       
-      if(tok->IfNextToken(",")){
-        continue;
-      } else {
-        break;
+        if(tok->IfNextToken(",")){
+          continue;
+        } else {
+          break;
+        }
       }
-    }
 
-    inputsArr = PushArrayFromList(out,inputs);
-    EXPECT(tok,")");
+      inputsArr = PushArrayFromList(out,inputs);
+      EXPECT(tok,")");
+    }
   }
 
   ArenaList<AddressGenForDef>* loops = PushArenaList<AddressGenForDef>(temp);
@@ -2910,7 +2914,7 @@ Array<AddressGenLoopSpecificatonSym> CompileAddressGenDef(SingleAddressAccess* a
 
   Array<AddressGenLoopSpecificatonSym> res = GenerateLoopExpressionPairSymbolic(copy,access->address,true,out);
 
-  DEBUG_BREAK();
+  //DEBUG_BREAK();
   
   return res;
 }

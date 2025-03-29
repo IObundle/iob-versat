@@ -52,8 +52,11 @@ SymbolicExpression* PushLiteral(Arena* out,int value,bool negate = false);
 SymbolicExpression* PushVariable(Arena* out,String name,bool negate = false);
 
 SymbolicExpression* SymbolicAdd(SymbolicExpression* left,SymbolicExpression* right,Arena* out);
+SymbolicExpression* SymbolicAdd(Array<SymbolicExpression*> terms,Arena* out);
 SymbolicExpression* SymbolicSub(SymbolicExpression* left,SymbolicExpression* right,Arena* out);
 SymbolicExpression* SymbolicMult(SymbolicExpression* left,SymbolicExpression* right,Arena* out);
+SymbolicExpression* SymbolicMult(Array<SymbolicExpression*> terms,Arena* out);
+SymbolicExpression* SymbolicMult(Array<SymbolicExpression*> terms,SymbolicExpression* extra,Arena* out);
 SymbolicExpression* SymbolicDiv(SymbolicExpression* top,SymbolicExpression* bottom,Arena* out);
 
 SymbolicExpression* ParseSymbolicExpression(Tokenizer* tok,Arena* out);

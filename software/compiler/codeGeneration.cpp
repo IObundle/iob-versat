@@ -1522,6 +1522,8 @@ void OutputTopLevelFiles(Accelerator* accel,FUDeclaration* topLevelDecl,const ch
         // MARK
         AddressAccess initial = {};
 
+        initial.inputVariableNames = CopyArray<String>(def->inputs,temp);
+        
         initial.external = PushStruct<SingleAddressAccess>(temp);
         initial.internal = PushStruct<SingleAddressAccess>(temp);
         
@@ -1688,3 +1690,4 @@ void OutputTopLevelFiles(Accelerator* accel,FUDeclaration* topLevelDecl,const ch
     }
   }
 }
+

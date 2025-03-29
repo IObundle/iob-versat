@@ -552,6 +552,23 @@ Array<T> Unique(Array<T> arr,Arena* out){
   return PushArrayFromSet(out,set);
 }
 
+// Compares arrays directly, no "set" semantics or nothing. Mostly for simple tests where we need to check if different functions return the exact same values to confirm correctness.
+template<typename T>
+bool Equal(Array<T> left,Array<T> right){
+  if(left.size != right.size){
+    return false;
+  }
+
+  int size = left.size;
+  for(int i = 0; i < size; i++){
+    if(!(left[i] == right[i])){
+      return false; 
+    }
+  }
+  
+  return true;
+}
+
 template<typename T>
 Array<T> RemoveElement(Array<T> in,int index,Arena* out){
   if(in.size <= 1){

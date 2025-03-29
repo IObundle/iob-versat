@@ -14,6 +14,7 @@ struct LoopDefinition{
   SymbolicExpression* end;
 };
 
+// TODO: This sucks. We would like for 0 to be the innermost and size-1 to be the outermost. Makes more sense logically.
 struct SingleAddressAccess{
   // 0 is the outermost loop, size - 1 is the innermost.
   Array<LoopDefinition> loops;
