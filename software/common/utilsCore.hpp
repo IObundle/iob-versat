@@ -542,8 +542,9 @@ template<typename T>
 Array<T> Offset(Array<T> in,int amount){
   Array<T> res = in;
   if(amount < in.size){
-    in.data += amount;
-    in.size -= amount;
+    res.data += amount;
+    res.size -= amount;
+    return res;
   } else {
     return {};
   }

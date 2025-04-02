@@ -1523,18 +1523,16 @@ void OutputTopLevelFiles(Accelerator* accel,FUDeclaration* topLevelDecl,const ch
         AddressAccess initial = {};
 
         initial.inputVariableNames = CopyArray<String>(def->inputs,temp);
+
+        auto loopVarBuilder = StartArray<String>(temp);
         
-        initial.external = PushStruct<SingleAddressAccess>(temp);
-        initial.internal = PushStruct<SingleAddressAccess>(temp);
-        
-        initial.external->loops = PushArray<LoopDefinition>(temp,def->loops.size);
         for(int i = 0; i <  def->loops.size; i++){
           AddressGenForDef loop  =  def->loops[i];
-          
-          initial.external->loops[i].loopVariableName = PushString(temp,loop.loopVariable);
-          initial.external->loops[i].start = ParseSymbolicExpression(loop.start,temp);
-          initial.external->loops[i].end = ParseSymbolicExpression(loop.end,temp);
+
+          *loopVarBuilder.PushElem() = PushString(temp,loop.loopVariable);
         }
+
+        Array<String> loopVars = EndArray(loopVarBuilder);
         
         // Builds expression for the internal address which is basically just a multiplication of all the loops sizes
         SymbolicExpression* loopExpression = PushLiteral(temp,1);
@@ -1546,23 +1544,51 @@ void OutputTopLevelFiles(Accelerator* accel,FUDeclaration* topLevelDecl,const ch
 
           loopExpression = SymbolicMult(loopExpression,diff,temp);
         }
-        //SymbolicExpression* finalExpression = loopExpression;
         SymbolicExpression* finalExpression = Normalize(loopExpression,temp);
-        
-        initial.internal->loops = PushArray<LoopDefinition>(temp,1);
-        initial.internal->loops[0].loopVariableName = STRING("x");
-        initial.internal->loops[0].start = PushLiteral(temp,0);
-        initial.internal->loops[0].end = finalExpression;
 
-        initial.external->address = Normalize(def->symbolic,temp);
-        initial.internal->address = PushVariable(temp,STRING("x"));
+        initial.internal = PushLoopLinearSumSimpleVar(STRING("x"),PushLiteral(temp,1),PushLiteral(temp,0),finalExpression,temp);
+
+        Print(initial.internal);
+        printf("\n");
+        
+        SymbolicExpression* normalized = Normalize(def->symbolic,temp);
+
+        // Break apart the external into the LoopLinearSum structure.
+        LoopLinearSum* expr = PushLoopLinearSumEmpty(temp);
+        
+        for(String str : loopVars){
+          normalized = Group(normalized,str,temp);
+        }
+        
+        for(int i = 0; i < loopVars.size; i++){
+          String var = loopVars[i];
+
+          Opt<SymbolicExpression*> termOpt = GetMultExpressionAssociatedTo(normalized,var,temp); 
+
+          SymbolicExpression* term = termOpt.value_or(nullptr);
+          if(!term){
+            term = PushLiteral(temp,0);
+          }
+          
+          AddressGenForDef loop  =  def->loops[i];
+          
+          SymbolicExpression* loopStart = ParseSymbolicExpression(loop.start,temp);
+          SymbolicExpression* loopEnd = ParseSymbolicExpression(loop.end,temp);
+          
+          LoopLinearSum* sum = PushLoopLinearSumSimpleVar(loop.loopVariable,term,loopStart,loopEnd,temp);
+          expr = AddLoopLinearSum(sum,expr,temp);
+        }
+        
+        printf("\nUsing loop linear sum\n");
+        Print(expr);
+        printf("\n");
+
+        initial.external = expr;
 
         AddressAccess* final = ShiftExternalToInternal(&initial,6,2,temp);
-
         ExternalMemoryAccess ext = CompileExternalMemoryAccess(final->external,temp);
-        
         Array<AddressGenLoopSpecificatonSym> internal = CompileAddressGenDef(final->internal,temp);
-
+        
         String res = InstantiateAccess(ext,internal,temp);
 
         *builder.PushElem() = res;

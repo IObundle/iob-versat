@@ -574,9 +574,11 @@ Array<T> RemoveElement(Array<T> in,int index,Arena* out){
   if(in.size <= 1){
     return {};
   }
+
+  Assert(index < in.size);
   
   Array<T> res = PushArray<T>(out,in.size - 1);
-
+  
   int inserted = 0;
   for(int i = 0; i < in.size; i++){
     if(i == index){

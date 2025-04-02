@@ -257,6 +257,8 @@ String InstantiateAddressGen(AddressGen gen,String typeStructName,Arena* out);
 
 #include "addressGen.hpp"
 
+ExternalMemoryAccess CompileExternalMemoryAccess(LoopLinearSum* access,Arena* out);
 ExternalMemoryAccess CompileExternalMemoryAccess(SingleAddressAccess* access,Arena* out);
 Array<AddressGenLoopSpecificatonSym> CompileAddressGenDef(SingleAddressAccess* access,Arena* out);
+Array<AddressGenLoopSpecificatonSym> CompileAddressGenDef(LoopLinearSum* access,Arena* out);
 String InstantiateAccess(ExternalMemoryAccess ext,Array<AddressGenLoopSpecificatonSym> internal,Arena* out);
